@@ -28,6 +28,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const PACK = path.join(ROOT, "assets", "pack");
 const MANIFEST = path.join(PACK, "manifest.json");
 const BUDGET_BYTES = 8 * 1024 * 1024;         // must match tools/gen/assets.mjs
+const HD_BUDGET_BYTES = 12 * 1024 * 1024;     // the desktop hd tier's own budget, must match tools/gen/assets.mjs
 const ALLOWED = new Set(["CC0", "CC0-1.0", "Apex26-Procedural"]);
 // What every pack-strip createImageBitmap must ask for (see the P1 test below).
 const STRAIGHT_BITMAP = { premultiplyAlpha: "none", colorSpaceConversion: "none" };
@@ -72,15 +73,44 @@ test("GLTF accessors stay inside their declared bufferView and reject invalid st
   assert.throws(() => gltf.toMesh(makeGlb(100)), /GLTF: accessor exceeds bufferView bounds/);
 });
 
-function assetLoader(overrides = {}) {
+// gfxHi: also load the lazy EXTREME bundle (js/render/shared/gfx-hi.js: GfxHi.hd is the packHd gate).
+function assetLoader(overrides = {}, { gfxHi = false } = {}) {
   const vm = require("node:vm");
   const sandbox = { ...overrides };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   seedLog(sandbox);
+  if (gfxHi) vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/gfx-hi.js"), "utf8"), sandbox, { filename: absSrc("js/render/shared/gfx-hi.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/assets.js"), "utf8"), sandbox, { filename: absSrc("js/render/shared/assets.js") });
   return sandbox.Assets;
 }
+
+test("a remembered pack index starts the named model fetch before the manifest returns", async () => {
+  const urls = [];
+  let releaseManifest;
+  const manifestGate = new Promise((resolve) => { releaseManifest = resolve; });
+  const md5 = "a".repeat(32);
+  const store = { "apex26.packIndex": JSON.stringify({ models: { box: { file: "models/box.bin", md5 } } }) };
+  const assets = assetLoader({
+    localStorage: {
+      getItem: (k) => (k in store ? store[k] : null),
+      setItem: (k, v) => { store[k] = String(v); },
+    },
+    fetch(url) {
+      urls.push(String(url));
+      if (String(url).endsWith("manifest.json")) {
+        return manifestGate.then(() => ({ ok: true, json: async () => ({ models: { box: { file: "models/box.bin", md5 } } }) }));
+      }
+      return Promise.resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
+    },
+  });
+  const pending = assets.loadModelsFor('bakedModel("box")');
+  await new Promise((r) => setImmediate(r));
+  assert.ok(urls.some((u) => u.includes("models/box.bin?h=" + md5)), "model bytes are requested while the manifest is still in flight: " + urls.join(" "));
+  releaseManifest();
+  assert.equal(await pending, 0, "a body that is not an AX26 model resolves as a miss, not a throw");
+  assert.equal(urls.filter((u) => u.includes("models/box.bin")).length, 1, "a matching md5 reuses the early body");
+});
 
 test("asset loader shares an in-flight manifest across boot consumers", async () => {
   let requests = 0, resolveFetch;
@@ -279,6 +309,36 @@ test("a normal decode failure keeps the albedo upload and closes its bitmaps", a
   assert.equal(maps.length, 1);
   assert.equal(maps[0].albedo.id, "albedo");
   assert.equal(maps[0].normal, null);
+});
+
+// Hunt 2026-11-18 (2) row 9 (#5699): the albedo upload fails while the normal strip is still decoding. Its bitmaps
+// land after the catch ran _discardLoad(albedo, normal = null): they must still be closed.
+test("an albedo upload failure closes the normal strip's bitmaps when they land", async () => {
+  const bitmaps = [];
+  let releaseNormal;
+  const normalGate = new Promise((r) => { releaseNormal = r; });
+  const assets = assetLoader({
+    async fetch(url) {
+      return url.endsWith("manifest.json")
+        ? { ok: true, json: async () => ({ materials: { size: 2, albedo: "a.png", normal: "n.png", layers: [{ mat: 1, scale: 1 }] } }) }
+        : { ok: true, blob: async () => ({ size: 16, normal: url.endsWith("n.png") }) };
+    },
+    async createImageBitmap(blob) {
+      if (blob.normal) await normalGate;
+      const b = { normal: !!blob.normal, closed: 0, close() { this.closed++; } };
+      bitmaps.push(b);
+      return b;
+    },
+  });
+  assets.init({ createTextureArray() { return null; }, setMaterialMaps() {} });
+  assert.equal(await assets.load(), false);
+  assert.equal(assets.state().error, "albedo-upload");
+  releaseNormal();
+  for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
+  const normals = bitmaps.filter((b) => b.normal);
+  assert.ok(normals.length > 0, "the normal strip decoded after the failure");
+  assert.deepEqual(normals.map((b) => b.closed), normals.map(() => 1), "every late normal bitmap closed exactly once");
+  assert.deepEqual(bitmaps.filter((b) => !b.normal).map((b) => b.closed), [1], "albedo closed by _discardLoad");
 });
 
 test("unload during parallel downloads rejects the stale generation before any decode", async () => {
@@ -872,7 +932,7 @@ test("WGX and TLX take pack bytes from Assets.readLayerBytes, not a 2D-canvas ge
 // scheduled until every layer has landed), the bind held back while pending, byte parity with the sync path, and the
 // fallback to readbackTextureLayers when the async call returns null (or apex26.tlxPackAsync=0).
 async function tlxPackRig(mock, { nullAsync = false, ls = {} } = {}) {
-  const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.core.min.js")).href);
+  const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.core.min.js")).href);
   const TLX = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
   const a = TLX.indexOf("      function readbackTextureLayers(size, images, n, data) {");
   const b = TLX.indexOf("      // CSS-box observation is shared", a);
@@ -888,7 +948,7 @@ async function tlxPackRig(mock, { nullAsync = false, ls = {} } = {}) {
   // eslint-disable-next-line no-new-func
   const gfx = new Function("THREE", "Assets", "localStorage", "lit", "OffscreenCanvas", `"use strict";
     let matPlaceAlbedo = null, matPlaceNormal = null, matOwnedAlbedo = null, matOwnedNormal = null;
-    let materialArrayDetail = null; const renderer = {};   // materialArrayAnisotropy(): no renderer cap here -> 1
+    let materialArrayDetail = null; const renderer = {}, _detailOpt = () => false;   // materialArrayAnisotropy(): no renderer cap here -> 1
     ${TLX.slice(a, b)}
     ${fnSource(TLX, "function materialArrayAnisotropy() {")}
     return { ${fnSource(TLX, "createTextureArray(size, images, layers) {")}, ${fnSource(TLX, "setMaterialMaps(maps) {")} };`)(
@@ -983,7 +1043,16 @@ test("P4 (TLX #2149): the fallbacks — async null and apex26.tlxPackAsync=0 tak
   const t = r.gfx.createTextureArray(size, tlxImages(size, 5), n);
   assert.equal(await t.ready, true);
   assert.equal(t.image.data[5 * page], 201, "the layer the scratch FBO refused came from the 2d round-trip");
-  assert.equal(t.image.data[0], 128, "an absent layer keeps the neutral grey");
+  for (const layer of [0, 3, 15]) {
+    for (let offset = layer * page; offset < (layer + 1) * page; offset += 4) {
+      assert.deepEqual([...t.image.data.subarray(offset, offset + 4)], [128, 128, 128, 255]);
+    }
+  }
+  // A supplied but truncated raw layer never overwrites its staging page.
+  // Publishing its zero-filled texels would suppress the loader's retry.
+  const partial = r.gfx.createTextureArray(size, [new Uint8Array(page).fill(13), new Uint8Array(1)], n);
+  assert.equal(await partial.ready, false);
+  assert.equal(partial.version, 0);
   // Nothing landed at all: ready false and the token freed — assets.js reads that as an upload failure.
   const none = await tlxPackRig(makeAsyncGl({ waitFails: true }));
   const e = none.gfx.createTextureArray(size, [, layerImage(1, size)], n);
@@ -1022,6 +1091,50 @@ test("the material pack takes the low tier under Save-Data or 2G (#3110 F2)", as
   assert.ok(sd.strips.length && sd.strips.every((u) => /128/.test(u)), "only 128 px strips fetched: " + sd.strips);
   assert.equal((await run({ saveData: false, effectiveType: "2g" })).tier, "low", "2G takes the low tier");
   assert.equal((await run({ saveData: true }, { tier: "high" })).tier, "high", "an explicit tier still wins");
+});
+
+test("packHd: the 512 px tier loads only on a desktop TLX with the feature on, and never under Save-Data", async () => {
+  const run = async ({ backend = "three", feature = true, mobile = false, hdInManifest = true, connection, tier, throws, hi = true } = {}) => {
+    const urls = [];
+    const assets = assetLoader({
+      navigator: connection === undefined ? {} : { connection },
+      GfxQuality: { current: () => "extreme", feature: (n) => { if (throws) throw new Error("boom"); return n === "packHd" && feature; } },
+      async fetch(url) {
+        urls.push(url);
+        return url.endsWith("manifest.json")
+          ? { ok: true, json: async () => ({ materials: {
+              size: 4, albedo: "a256.png", normal: "n256.png", layers: [{ mat: 1, scale: 1 }],
+              low: { size: 2, albedo: "a128.png", normal: "n128.png", layers: [{ mat: 1, scale: 1 }] },
+              ...(hdInManifest ? { hd: { size: 8, albedo: "a512.png", normal: "n512.png", layers: [{ mat: 1, scale: 1 }] } } : {}),
+            } }) }
+          : { ok: true, blob: async () => ({ size: 16 }) };
+      },
+      async createImageBitmap() { return { close() {} }; },
+    }, { gfxHi: hi });
+    const sizes = [];
+    assets.init({ backend, isMobile: mobile, createTextureArray(size) { sizes.push(size); return {}; }, setMaterialMaps() {} });
+    await assets.load(tier ? { tier } : undefined);
+    return { tier: assets.state().tier, sizes, strips: urls.filter((u) => /\.png$/.test(u)).map((u) => u.split("/").pop()) };
+  };
+  const on = await run();
+  assert.equal(on.tier, "hd");
+  assert.deepEqual(on.strips.sort(), ["a512.png", "n512.png"], "only the hd strips are fetched");
+  assert.ok(on.sizes.every((s) => s === 8), "arrays built at the hd size");
+  for (const [why, o] of [["feature off", { feature: false }], ["GLX", { backend: "glx" }], ["WGX", { backend: "webgpu" }],
+    ["a phone", { mobile: true }], ["no hd in the manifest", { hdInManifest: false }], ["GfxQuality throws", { throws: true }],
+    ["no GfxHi bundle (ULTRA path)", { hi: false }]]) {
+    const r = await run(o);
+    assert.notEqual(r.tier, "hd", why);
+    assert.ok(!r.strips.some((u) => /512/.test(u)), why + ": no hd strip fetched");
+  }
+  assert.equal((await run({ connection: { saveData: true } })).tier, "low", "Save-Data still wins");
+  assert.equal((await run({ tier: "high" })).tier, "high", "an explicit tier wins over the feature");
+  assert.equal((await run({ feature: false, tier: "hd" })).tier, "hd", "an explicit hd tier loads it (A/B)");
+});
+
+test("packHd: a failed hd load retries at 256 px, not at 512 px again", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/render/shared/assets.js"), "utf8");
+  assert.match(src, /_lastWant === "hd" \? \{ tier: "high" \}/);
 });
 
 test("unload invalidates an in-flight pack upload and frees its partial texture", async () => {
@@ -1162,6 +1275,17 @@ test("the shader's layer count matches the MAT table size", () => {
   const wgx = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgx.js"), "utf8");
   assert.match(wgx, new RegExp(`MAT_TEX_LAYERS = ${MAT_N}\\b`), "WGX material resources must cover all MAT ids");
   assert.match(wgx, /size: \[1, 1, MAT_TEX_LAYERS\]/, "WGX fallback arrays must have the full material depth");
+  // The literals the skill's workflow.md used to call "NOT pinned": the top MAT id (MAT_N - 1) and the vec4 count.
+  const top = MAT_N - 1;
+  const wgsl = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgsl-chunks.js"), "utf8");
+  const pins = [
+    [tlx, `clamp\\(mid, float\\(0\\.0\\), float\\(${top}\\.0\\)\\)`, "tsl-lit.js matTexLayer clamp must end at the top MAT id"],
+    [wgsl, `mid > ${top}\\b`, "wgsl-chunks.js mid bound must be the top MAT id"],
+    [wgsl, `struct MatScaleU \\{ s : array<vec4<f32>, ${Math.ceil(MAT_N / 4)}> \\};`, "MatScaleU must hold all MAT scales"],
+    [lit, `mid > ${top}\\b`, "glsl-lit.js mid bound must be the top MAT id"],
+  ];
+  const unpinned = pins.filter(([src, re]) => !new RegExp(re).test(src)).map(([, , why]) => why);
+  assert.deepEqual(unpinned, []);
 });
 
 test("shader sources parse as JS (no stray backticks in GLSL comments)", () => {
@@ -1214,7 +1338,7 @@ test("bake-synthetic produces a dual-tier Apex26-Procedural pack with no network
       credits: [],
     }));
     const r = cp.spawnSync(process.execPath,
-      [path.join(ROOT, "tools", "gen", "assets.mjs"), "bake-synthetic"],
+      [path.join(ROOT, "tools", "gen", "assets.mjs"), "bake-synthetic", "--no-hd"],
       { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8" });
     assert.equal(r.status, 0, `bake-synthetic failed:\n${r.stdout}\n${r.stderr}`);
     const m = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
@@ -1222,13 +1346,51 @@ test("bake-synthetic produces a dual-tier Apex26-Procedural pack with no network
     assert.ok(m.materials.low && m.materials.low.size === 128, "default bake must include low 128");
     assert.ok(fs.existsSync(path.join(dir, m.materials.albedo)));
     assert.ok(fs.existsSync(path.join(dir, m.materials.low.albedo)));
+    // --no-hd: the 512 px desktop tier costs ~4x this whole bake; the next test covers it at small sizes.
+    assert.equal(m.materials.hd, undefined, "--no-hd writes no hd tier");
     assert.ok(m.materials.layers.length >= 10, "expected the SCALES table layers");
     for (const L of m.materials.layers) {
       assert.equal(L.licence, "Apex26-Procedural", `${L.id} must be procedural`);
-      assert.match(L.source, /^procedural:/);
+      assert.equal(L.source, "procedural:tools/gen/assets.mjs");
     }
     assert.ok(m.models.keep, "bake-synthetic must preserve models");
     assert.ok(m.env["*|day"], "bake-synthetic must preserve env");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("bake-synthetic --hd writes a hashed, separately budgeted hd tier that verify accepts", () => {
+  // The default bake adds hd at HD_SIZE (512); baked here at 32 + 64 so the test stays fast.
+  assert.match(TOOL_SRC, /const HD_SIZE = 512;/);
+  assert.match(TOOL_SRC, /intArg\(args, "--hd", only \? 0 : HD_SIZE\)/, "the default bake (no --size) includes hd");
+  const os = require("node:os");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-synth-hd-"));
+  try {
+    fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ version: 1, materials: null, models: {}, env: {}, credits: [] }));
+    const tool = path.join(ROOT, "tools", "gen", "assets.mjs"), env = { ...process.env, APEX_PACK_DIR: dir };
+    const r = cp.spawnSync(process.execPath, [tool, "bake-synthetic", "--size", "32", "--hd", "64"], { env, encoding: "utf8" });
+    assert.equal(r.status, 0, `bake-synthetic --hd failed:\n${r.stdout}\n${r.stderr}`);
+    const m = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
+    const hd = m.materials.hd;
+    assert.equal(m.materials.size, 32);
+    assert.ok(hd && hd.size === 64, "hd tier at the --hd size");
+    for (const which of ["albedo", "normal"]) {
+      assert.ok(fs.existsSync(path.join(dir, hd[which])), `hd ${which} strip written`);
+      assert.match(hd[`${which}Md5`] || "", /^[0-9a-f]{32}$/, `hd ${which} hashed`);
+      assert.notEqual(hd[which], m.materials[which], "hd strips are their own files");
+    }
+    assert.deepEqual(hd.layers.map((L) => [L.mat, L.scale, L.source]), m.materials.layers.map((L) => [L.mat, L.scale, L.source]));
+    const v = cp.spawnSync(process.execPath, [tool, "verify"], { env, encoding: "utf8" });
+    assert.equal(v.status, 0, `verify on the hd bake:\n${v.stdout}\n${v.stderr}`);
+    assert.match(v.stdout, /hd tier \d+ KB \/ 12 MB/, "verify counts the hd tier on its own budget");
+    // A tampered hd strip fails verify like any other strip.
+    fs.appendFileSync(path.join(dir, hd.albedo), Buffer.from([0]));
+    const bad = cp.spawnSync(process.execPath, [tool, "verify"], { env, encoding: "utf8" });
+    assert.notEqual(bad.status, 0);
+    assert.match(bad.stderr, /materials\.hd: mat-albedo-64\.png/);
+    const tooSmall = cp.spawnSync(process.execPath, [tool, "bake-synthetic", "--size", "32", "--hd", "32"], { env, encoding: "utf8" });
+    assert.notEqual(tooSmall.status, 0, "an hd size not above the high tier is refused");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -1276,7 +1438,8 @@ test("every referenced file exists and the strip is the right height",
   { skip: !hasPack && "no pack installed" }, () => {
   const mats = manifest.materials;
   for (const f of [mats.albedo, mats.normal,
-                   mats.low && mats.low.albedo, mats.low && mats.low.normal].filter(Boolean)) {
+                   mats.low && mats.low.albedo, mats.low && mats.low.normal,
+                   mats.hd && mats.hd.albedo, mats.hd && mats.hd.normal].filter(Boolean)) {
     const p = path.join(PACK, f);
     assert.ok(fs.existsSync(p), `missing ${f}`);
     // PNG signature + IHDR width/height, so a truncated or wrong-shaped
@@ -1286,7 +1449,8 @@ test("every referenced file exists and the strip is the right height",
     const w = b.readUInt32BE(16), h = b.readUInt32BE(20);
     // Each variant declares its own size; a strip must be square-per-layer and
     // exactly 17 layers tall whichever tier it belongs to.
-    const expect = (mats.low && (f === mats.low.albedo || f === mats.low.normal)) ? mats.low.size : mats.size;
+    const expect = (mats.low && (f === mats.low.albedo || f === mats.low.normal)) ? mats.low.size
+      : (mats.hd && (f === mats.hd.albedo || f === mats.hd.normal)) ? mats.hd.size : mats.size;
     assert.equal(w, expect, `${f} width ${w} != declared size ${expect}`);
     assert.equal(h, expect * MAT_N,
       `${f} height ${h} != size*${MAT_N} (${expect * MAT_N}) — the filmstrip must have one slot per MAT id`);
@@ -1296,19 +1460,31 @@ test("every referenced file exists and the strip is the right height",
 });
 
 test("pack stays inside the clone-time budget", { skip: !hasPack && "no pack installed" }, () => {
-  let bytes = 0;
+  // The desktop hd strips (materials.hd, EXTREME only) carry their own budget; everything else counts here.
+  const hd = manifest.materials && manifest.materials.hd;
+  const hdFiles = new Set(hd ? [hd.albedo, hd.normal].filter(Boolean).map((f) => path.join(PACK, f)) : []);
+  let bytes = 0, hdBytes = 0;
   const walk = (d) => {
     for (const e of fs.readdirSync(d, { withFileTypes: true })) {
       // `src/` is the author-time fetch cache (gitignored) — verify() already
       // ignores it; counting it here would fail every local bake-material run.
       if (e.name === "src") continue;
       const p = path.join(d, e.name);
-      if (e.isDirectory()) walk(p); else bytes += fs.statSync(p).size;
+      if (e.isDirectory()) walk(p);
+      else if (hdFiles.has(p)) hdBytes += fs.statSync(p).size;
+      else bytes += fs.statSync(p).size;
     }
   };
   walk(PACK);
   assert.ok(bytes <= BUDGET_BYTES,
     `pack is ${(bytes / 1048576).toFixed(2)} MB, budget is ${(BUDGET_BYTES / 1048576).toFixed(0)} MB`);
+  assert.ok(hdBytes <= HD_BUDGET_BYTES,
+    `hd tier is ${(hdBytes / 1048576).toFixed(2)} MB, its budget is ${(HD_BUDGET_BYTES / 1048576).toFixed(0)} MB`);
+});
+
+test("the two budgets match the bake tool", () => {
+  assert.match(TOOL_SRC, /const BUDGET_BYTES = 8 \* 1024 \* 1024;/);
+  assert.match(TOOL_SRC, /const HD_BUDGET_BYTES = 12 \* 1024 \* 1024;/);
 });
 
 test("bake-synthetic-models drops retired procedural bins and keeps CC0 imports", () => {
@@ -1511,9 +1687,9 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", async () => {
     assert.match(brick.source, /generated:.*#1,0/);
 
     const { encodePNG, decodePNG } = await import("../../tools/gen/assets.mjs");
-    const readMobile = async () => {
+    const readMobile = async (extra = {}) => {
       const uploads = [], requests = [];
-      const assets = assetLoader({ Blob, DecompressionStream, Uint8Array, Float32Array, DataView, ArrayBuffer,
+      const assets = assetLoader({ Blob, DecompressionStream, Uint8Array, Float32Array, DataView, ArrayBuffer, ...extra,
         async fetch(url) {
           // The base content-addresses pack URLs (`?h=<md5>`); key the file by its path.
           const bare = url.split("?")[0];
@@ -1534,6 +1710,17 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", async () => {
     assert.deepEqual(lowControl.uploads[0].brick,
       [...decodePNG(fs.readFileSync(path.join(dir, man.materials.low.albedo))).rgba.subarray(2 * 4 * 4 * 4, 3 * 4 * 4 * 4)]);
     const oldLow = fs.readFileSync(path.join(dir, man.materials.low.albedo));
+    // #5225: on a phone only GRAPHICS: LOW keeps the low tier; MEDIUM (the phone
+    // default) and HIGH take the high tier (#4702 lifted HIGH alone).
+    const onHigh = await readMobile({ GfxQuality: { current: () => "high" } });
+    assert.equal(onHigh.state.tier, "high");
+    assert.equal(onHigh.uploads[0].size, 8);
+    const onMedium = await readMobile({ GfxQuality: { current: () => "medium" } });
+    assert.equal(onMedium.state.tier, "high", "a phone on GRAPHICS: MEDIUM takes the 256 px tier (#5225)");
+    assert.equal(onMedium.uploads[0].size, 8);
+    const onLow = await readMobile({ GfxQuality: { current: () => "low" } });
+    assert.equal(onLow.state.tier, "low", "GRAPHICS: LOW on a phone keeps the 128 px tier");
+    assert.equal(onLow.uploads[0].size, 4);
 
     // Retain another layer's provenance plus unrelated records during a patch.
     const other = { mat: 1, id: "concrete", scale: 1.25, source: "procedural:keep", licence: "CC0", author: "Fixture" };
@@ -1566,7 +1753,7 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", async () => {
     const verified = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "verify"],
       { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8", timeout: 10000 });
     assert.equal(verified.status, 0, verified.stderr || verified.stdout);
-    assert.match(verified.stdout, /verify: OK/);
+    assert.equal(verified.stdout, "pack: 0 KB / 8 MB budget\nverify: OK\n");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -1885,6 +2072,115 @@ function assetRequestClock() {
   };
 }
 
+// #5555 finding 1: REQUEST_MS is a whole-transfer deadline, so on a slow link the 256 px strip times out and the
+// one same-tier retry timed out again: procedural tarmac for the session. A timed-out load retries at 128 px.
+test("#5555: a pack load that ran out its transfer deadline retries on the low tier; a dropped request keeps its tier", async () => {
+  const manifest = { materials: { size: 4, albedo: "hi.png", layers: [{ mat: 1, scale: 1 }],
+    low: { size: 2, albedo: "lo.png", layers: [{ mat: 1, scale: 1 }] } } };
+  const world = (strip) => {
+    const clock = assetRequestClock(), urls = [], sizes = [];
+    const assets = assetLoader({ ...clock, AbortController,
+      async fetch(url) {
+        if (url.endsWith("manifest.json")) return { ok: true, json: async () => manifest };
+        urls.push(String(url).replace(/^.*\/|\?.*$/g, ""));
+        return strip(urls.length);
+      },
+      async createImageBitmap() { return { close() {} }; },
+    });
+    assets.init({ createTextureArray: (size) => { sizes.push(size); return {}; }, setMaterialMaps() {} });
+    return { assets, clock, urls, sizes };
+  };
+  const good = { ok: true, blob: async () => ({ size: 1 }) };
+
+  const slow = world((n) => (n === 1 ? new Promise(() => {}) : good));   // the first strip never finishes
+  const boot = slow.assets.load();
+  for (let i = 0; i < 20 && !slow.urls.length; i++) await new Promise((r) => setImmediate(r));
+  assert.deepEqual(slow.urls, ["hi.png"], "boot asks for the 256 px strip");
+  slow.clock.fire(15000);
+  assert.equal(await boot, false);
+  assert.match(slow.assets.state().error, /^asset request timed out: .*hi\.png/);
+  assert.equal(slow.assets.retry(), true);
+  assert.equal(await slow.assets.load(), true, "the retry lands");
+  assert.deepEqual(slow.urls, ["hi.png", "lo.png"], "the retry asks for the 128 px strip, not the one that timed out");
+  assert.equal(slow.assets.state().tier, "low");
+  assert.deepEqual(slow.sizes, [2]);
+
+  const flaky = world((n) => { if (n === 1) throw new TypeError("Failed to fetch"); return good; });
+  assert.equal(await flaky.assets.load(), false);
+  assert.equal(flaky.assets.retry(), true);
+  assert.equal(await flaky.assets.load(), true);
+  assert.deepEqual(flaky.urls, ["hi.png", "hi.png"], "a dropped request is not a slow link: same tier");
+  assert.equal(flaky.assets.state().tier, "high");
+});
+
+// #5561: the pack tier follows a GRAPHICS preset change, but the re-upload only happens off track. The real
+// GfxQuality and the real Assets in one context; the page is a fake body (data-race), #pausemenu and observer.
+test("#5561: a preset change swaps the pack tier in a menu, waits for the pause card while driving, and never reloads a matching tier", async () => {
+  const vm = require("node:vm");
+  const manifest = { materials: { size: 4, albedo: "hi.png", layers: [{ mat: 1, scale: 1 }],
+    low: { size: 2, albedo: "lo.png", layers: [{ mat: 1, scale: 1 }] } } };
+  const urls = [], sizes = [], maps = [], observers = [];
+  const body = { dataset: {} }, pm = { hidden: true };
+  const sandbox = { AbortController, setTimeout, clearTimeout, GLX: { isMobile: true },
+    document: { readyState: "complete", body, getElementById: (id) => (id === "pausemenu" ? pm : null) },
+    MutationObserver: class { constructor(cb) { this.cb = cb; this.live = true; observers.push(this); } observe() {} disconnect() { this.live = false; } },
+    async fetch(url) {
+      if (String(url).endsWith("manifest.json")) return { ok: true, json: async () => manifest };
+      urls.push(String(url).replace(/^.*\/|\?.*$/g, ""));
+      return { ok: true, blob: async () => ({ size: 1 }) };
+    },
+    async createImageBitmap() { return { close() {} }; } };
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  seedLog(sandbox);
+  for (const f of ["js/perf/quality-preset.js", "js/render/shared/assets.js"]) vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sandbox, { filename: absSrc(f) });
+  const Q = vm.runInContext("GfxQuality", sandbox), assets = sandbox.Assets;
+  assets.init({ isMobile: true, createTextureArray: (size) => { sizes.push(size); return {}; }, setMaterialMaps: (m) => maps.push(m ? "set" : "clear") });
+  const settle = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
+  const fire = () => observers.filter((o) => o.live).forEach((o) => o.cb());
+
+  Q.set("low");
+  assert.equal(await assets.load(), true);
+  assert.equal(assets.state().tier, "low", "a phone that boots on GRAPHICS: LOW takes 128 px");
+
+  // 1. In a menu (no race): the change reloads at once.
+  Q.set("medium"); await settle();
+  assert.equal(assets.state().tier, "high");
+  assert.deepEqual(urls, ["lo.png", "hi.png"]);
+  assert.deepEqual(sizes, [2, 4]);
+  assert.deepEqual(maps, ["set", "clear", "set"], "the old arrays are dropped before the new tier uploads");
+
+  // 2. Same tier (MEDIUM -> HIGH are both 256 px): no reload.
+  Q.set("high"); await settle();
+  assert.deepEqual(urls, ["lo.png", "hi.png"]);
+  assert.equal(maps.length, 3);
+
+  // 3. Driving (race on, pause card hidden): deferred, then applied when the pause card opens.
+  body.dataset.race = "1";
+  Q.set("low"); await settle();
+  assert.equal(assets.state().tier, "high", "nothing is swapped on a driven frame");
+  assert.equal(urls.length, 2);
+  pm.hidden = false; fire(); await settle();
+  assert.equal(assets.state().tier, "low", "the pause card applies the waiting change");
+  assert.deepEqual(urls, ["lo.png", "hi.png", "lo.png"]);
+  assert.equal(observers.filter((o) => o.live).length, 0, "the watch ends once applied");
+
+  // Changed while driving and never paused: applied when the race ends.
+  pm.hidden = true;
+  Q.set("medium"); await settle();
+  assert.equal(assets.state().tier, "low");
+  fire(); await settle();
+  assert.equal(assets.state().tier, "low", "still driving: an unrelated attribute change applies nothing");
+  delete body.dataset.race; fire(); await settle();
+  assert.equal(assets.state().tier, "high");
+
+  // A forced tier (the slow-link retry, __apex.assetLoad(tier)) is not undone by the preset.
+  assets.unload();
+  assert.equal(await assets.load({ tier: "low" }), true);
+  assert.equal(assets.followQuality(), false);
+  assert.equal(assets.state().tier, "low");
+});
+
 test("shared model fetch and body deadlines settle stalled work and permit both readiness routes to retry", async () => {
   for (const phase of ["fetch", "body"]) for (const source of [undefined, 'bakedModel("box")']) {
     const clock = assetRequestClock(), stalled = deferredAssetDownload();
@@ -2081,7 +2377,7 @@ test("unknown bake flag is refused before rewriting the pack", () => {
   const r = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "bake-synthetic", "--dry-run"],
     { encoding: "utf8" });
   assert.notEqual(r.status, 0, "bake-synthetic --dry-run must exit non-zero");
-  assert.match(r.stderr, /unknown flag --dry-run/, `expected unknown-flag error, got:\n${r.stderr}`);
+  assert.equal(r.stderr, "error: unknown flag --dry-run (accepted: --size --hd --no-hd --models)\n", `expected unknown-flag error, got:\n${r.stderr}`);
 });
 
 test("assets.mjs --help prints usage and exits 0", () => {
@@ -2162,10 +2458,10 @@ test("glTF supplied normals match transformed triangle normals for rotations, no
     const c20 = (b * f - c * e) * id, c21 = (c * d - a * f) * id, c22 = (a * e - b * d) * id;
     return [c00 * n[0] + c10 * n[1] + c20 * n[2], c01 * n[0] + c11 * n[1] + c21 * n[2], c02 * n[0] + c12 * n[1] + c22 * n[2]];
   }
-  const oracleSource = source.replace(/const nx = normals\[i \* 3\][\s\S]*?nrmOut\.push\(x \/ l, y \/ l, z \/ l\);/, `
+  const oracleSource = source.replace(/const nx = normals\[i \* 3\], ny = normals\[i \* 3 \+ 1\], nz = normals\[i \* 3 \+ 2\];[\s\S]*?nrm\[o\] = x \/ l; nrm\[o \+ 1\] = y \/ l; nrm\[o \+ 2\] = z \/ l;/, `
     const n = normalOracle(world, [normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]]);
     const l = (Math.hypot(n[0], n[1], n[2]) || 1) * nSign;
-    nrmOut.push(n[0] / l, n[1] / l, n[2] / l);`);
+    nrm[o] = n[0] / l; nrm[o + 1] = n[1] / l; nrm[o + 2] = n[2] / l;`);
   assert.notEqual(oracleSource, source, "oracle substitution must reach the supplied-normal emission");
   const oracle = vm.runInNewContext(oracleSource + ";GLTF", { ArrayBuffer, DataView, Uint8Array, Float32Array, Uint16Array, Uint32Array, TextDecoder, normalOracle, Log: { enabled: () => false } }, { filename: absSrc("js/render/shared/gltf.js") });
   const glb = (nodes, supplied) => {
@@ -2357,4 +2653,245 @@ test("model admission tail drops decoded payloads across cache generations", asy
   assert.ok(second.pos.length); assert.notStrictEqual(second, first);
   assert.equal(downloads, 2, "next generation obtains its own model");
   assert.equal(await assets.decodeTail(), null);
+});
+
+
+test("GLTF missing normals preserve hard edges, colours and mirrored winding", () => {
+  const gltf = vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/render/shared/gltf.js"), "utf8") + ";GLTF",
+    { ArrayBuffer, DataView, Uint8Array, Float32Array, Uint16Array, Uint32Array, TextDecoder, Log: { enabled: () => false } }, { filename: absSrc("js/render/shared/gltf.js") });
+  // Two perpendicular triangles share an edge. Smooth normals are observably wrong.
+  const floats = new Float32Array([0,0,0, 1,0,0, 0,1,0, 0,0,1,
+    1,0,0, 0,1,0, 0,0,1, 1,1,0]);
+  const authored = new Float32Array([0,0,1, 0,0,1, 0,0,1, 0,0,1]);
+  const bin = Buffer.concat([Buffer.from(floats.buffer), Buffer.from(new Uint16Array([0,1,2, 0,3,1]).buffer), Buffer.from(authored.buffer)]);
+  for (const sx of [1, -2]) {
+    const json = { asset: { version: "2.0" }, buffers: [{ byteLength: bin.length }],
+      bufferViews: [{buffer:0,byteLength:48}, {buffer:0,byteOffset:48,byteLength:48}, {buffer:0,byteOffset:96,byteLength:12}, {buffer:0,byteOffset:108,byteLength:48}],
+      accessors: [{bufferView:0,componentType:5126,count:4,type:"VEC3"}, {bufferView:1,componentType:5126,count:4,type:"VEC3"}, {bufferView:2,componentType:5123,count:6,type:"SCALAR"}, {bufferView:3,componentType:5126,count:4,type:"VEC3"}, {bufferView:2,componentType:5123,count:3,type:"SCALAR"}],
+      meshes: [{ primitives: [{attributes:{POSITION:0,COLOR_0:1},indices:2}, {attributes:{POSITION:0,COLOR_0:1,NORMAL:3},indices:4}] }],
+      nodes: [{mesh:0,scale:[sx,3,0.5]}], scenes: [{nodes:[0]}] };
+    const j = Buffer.from(JSON.stringify(json)), padded = Buffer.concat([j,Buffer.alloc((4-j.length%4)%4,32)]);
+    const out = Buffer.alloc(28+padded.length+bin.length);
+    out.writeUInt32LE(0x46546c67,0); out.writeUInt32LE(2,4); out.writeUInt32LE(out.length,8);
+    out.writeUInt32LE(padded.length,12); out.writeUInt32LE(0x4e4f534a,16); padded.copy(out,20);
+    out.writeUInt32LE(bin.length,20+padded.length); out.writeUInt32LE(0x004e4942,24+padded.length); bin.copy(out,28+padded.length);
+    const mesh = gltf.toMesh(Uint8Array.from(out).buffer);
+    assert.equal(mesh.pos.length,30,"six split corners followed by four authored-normal vertices");
+    assert.deepEqual(Array.from(mesh.idx.slice(6)).sort((a,b) => a-b), [6,7,8], "next primitive starts after emitted corners, not source vertices");
+    assert.ok(mesh.nrm.slice(18).every((n,i) => n === authored[i]), "next primitive retains its supplied normals (signed zero is equivalent)");
+    assert.deepEqual(Array.from(mesh.pos.slice(18)), [0,0,0, sx,0,0, 0,3,0, 0,0,0.5], "next primitive has its own transformed vertices");
+    for (let t=0;t<2;t++) for (let k=0;k<3;k++) {
+      const v=mesh.idx[t*3+k], n=Array.from(mesh.nrm.slice(v*3,v*3+3));
+      assert.ok(n.every((x,a) => Math.abs(x - (t===0?[0,0,1]:[0,1,0])[a]) < 1e-7),"each face has its geometric normal, including a reflected node");
+    }
+    assert.deepEqual(Array.from(mesh.col), [1,0,0, 0,1,0, 0,0,1, 1,0,0, 1,1,0, 0,1,0, 1,0,0, 0,1,0, 0,0,1, 1,1,0], "duplicated corners and following primitive retain source colours");
+  }
+});
+
+test("GLX material ownership preserves reused textures and releases aliases once", () => {
+  const source = fs.readFileSync(path.join(ROOT, "js/render/glx/glx.js"), "utf8");
+  const deleted = [], forgotten = [], alive = new Set();
+  const ctx = vm.createContext({
+    _matGen: 0, matAlbedoTex: null, matNormalTex: null, MAT_TEX_LAYERS: 17,
+    matTexScales: new Float32Array(17), _texForget: t => forgotten.push(t),
+    gl: { deleteTexture(t) { assert.ok(alive.delete(t), "texture cannot be deleted twice"); deleted.push(t); } },
+  });
+  ctx.ctxGone = () => false;
+  const bind = vm.runInContext(fnSource(source, "function freeTexture(t)") + "\n" + fnSource(source, "function setMaterialMaps(maps)") + ";setMaterialMaps", ctx, { filename: absSrc("js/render/glx/glx.js") });
+  for (let cycle = 0; cycle < 3; cycle++) {
+    const a = { cycle, kind: "a" }, n = { cycle, kind: "n" };
+    alive.add(a); alive.add(n);
+    bind({ albedo: a, normal: n, scales: [0,2] });
+    bind({ albedo: a, normal: n, scales: [0,5] });
+    assert.ok(alive.has(a) && alive.has(n), "same-token scale update retains live GPU objects");
+    assert.equal(ctx.matTexScales[1], 5);
+    bind({ albedo: n, normal: n, scales: [0,3] });
+    assert.ok(!alive.has(a) && alive.has(n), "moving a texture between slots preserves ownership");
+    bind(null); bind(null);
+    assert.equal(alive.size, 0);
+  }
+  assert.equal(deleted.length, 6);
+  assert.deepEqual(forgotten, deleted, "census forget matches actual retirement once per texture");
+});
+
+// ---------------------------------------------------------------------------
+// Pack hygiene (front half, adjacent to #4028 — does not touch the GPU load
+// path). data/packs/model-index.json classifies every committed model key;
+// js/assets/pack-index.mjs prunes a remembered apex26.packIndex-shaped object
+// against a live manifest so dead keys / stale md5s cannot linger.
+// ---------------------------------------------------------------------------
+const ROLE_INDEX_PATH = path.join(ROOT, "data", "packs", "model-index.json");
+const { diffRoleIndex } =
+  await import(pathToFileURL(path.join(ROOT, "js/assets/pack-index.mjs")).href);
+
+function sceneryPlacedModelIds() {
+  const ids = new Set();
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith(".js")) {
+        for (const line of fs.readFileSync(p, "utf8").split("\n")) {
+          if (/^\s*\/\//.test(line) || /^\s*\*/.test(line)) continue;
+          for (const m of line.matchAll(/bakedModel\(\s*["']([^"']+)["']/g)) ids.add(m[1]);
+        }
+      }
+    }
+  };
+  walk(path.join(ROOT, "js", "circuits"));
+  return ids;
+}
+
+async function rememberedAfter(stored, live) {
+  const store = stored === undefined ? {} : { "apex26.packIndex": JSON.stringify(stored) };
+  const assets = assetLoader({
+    localStorage: { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } },
+    fetch: async () => ({ ok: true, json: async () => live }),
+  });
+  assert.deepEqual(await assets.manifest(), live);
+  return JSON.parse(store["apex26.packIndex"] || "null");
+}
+
+test("the shipped rememberPack prunes dead keys, stale md5s and junk fields from apex26.packIndex", async () => {
+  const live = {
+    models: {
+      keep: { file: "models/keep.bin", md5: "a".repeat(32), verts: 3 },
+      renamed: { file: "models/renamed.bin", md5: "b".repeat(32) },
+      noMd5: { file: "models/x.bin" },
+      badMd5: { file: "models/y.bin", md5: "zz" },
+      noFile: { md5: "f".repeat(32) },
+    },
+  };
+  const remembered = {
+    version: 99,
+    extra: true,
+    models: {
+      keep: { file: "models/keep.bin", md5: "a".repeat(32) },
+      gone: { file: "models/gone.bin", md5: "c".repeat(32) },
+      renamed: { file: "models/old.bin", md5: "b".repeat(32) },
+      staleHash: { file: "models/keep.bin", md5: "d".repeat(32) },
+      bad: { file: "models/keep.bin", md5: "not-an-md5" },
+    },
+  };
+  const expect = { models: {
+    keep: { file: "models/keep.bin", md5: "a".repeat(32) },
+    renamed: { file: "models/renamed.bin", md5: "b".repeat(32) },
+  } };
+  assert.deepEqual(await rememberedAfter(remembered, live), expect, "only the live manifest's content-addressed rows survive");
+  assert.deepEqual(await rememberedAfter(undefined, live), expect, "a first visit stores the same rows");
+});
+
+test("a manifest with no models empties the remembered index instead of keeping the last pack's guesses", async () => {
+  const remembered = { models: { gone: { file: "models/gone.bin", md5: "c".repeat(32) } } };
+  assert.deepEqual(await rememberedAfter(remembered, { version: 2 }), { models: {} });
+  assert.deepEqual(await rememberedAfter(remembered, { models: null }), { models: {} });
+});
+
+test("diffRoleIndex reads a null manifest or index as empty, never throws", () => {
+  const idx = { models: { a: { role: "placed" }, b: { role: "bogus" } } };
+  assert.deepEqual(diffRoleIndex(idx, null), { indexOnly: ["a", "b"], liveOnly: [], badRole: ["b:bogus"] });
+  assert.deepEqual(diffRoleIndex(null, { models: { c: {} } }), { indexOnly: [], liveOnly: ["c"], badRole: [] });
+  assert.deepEqual(diffRoleIndex({}, {}), { indexOnly: [], liveOnly: [], badRole: [] });
+});
+
+test("data/packs/model-index.json covers every committed model key once",
+  { skip: !hasPack && "no pack installed" }, () => {
+  assert.ok(fs.existsSync(ROLE_INDEX_PATH), "data/packs/model-index.json missing");
+  const roleIndex = JSON.parse(fs.readFileSync(ROLE_INDEX_PATH, "utf8"));
+  assert.equal(roleIndex.version, 1);
+  assert.deepEqual(roleIndex.roles, ["placed", "kit_catalog", "nature_bake"]);
+  const diff = diffRoleIndex(roleIndex, manifest, roleIndex.roles);
+  assert.deepEqual(diff.indexOnly, [], "index lists keys the manifest dropped");
+  assert.deepEqual(diff.liveOnly, [], "manifest grew keys the role index misses");
+  assert.deepEqual(diff.badRole, [], "every index row needs a known role");
+});
+
+test("placed role keys are the scenery bakedModel literals; catalog keys are not placed",
+  { skip: !hasPack && "no pack installed" }, () => {
+  const roleIndex = JSON.parse(fs.readFileSync(ROLE_INDEX_PATH, "utf8"));
+  const placed = sceneryPlacedModelIds();
+  const indexedPlaced = Object.entries(roleIndex.models)
+    .filter(([, rec]) => rec.role === "placed")
+    .map(([id]) => id)
+    .sort();
+  assert.deepEqual(indexedPlaced, [...placed].filter((id) => manifest.models[id]).sort(),
+    "placed role must match non-comment bakedModel(\"…\") ids that exist in the pack");
+  for (const id of placed) {
+    assert.ok(manifest.models[id], `scenery places unknown pack key "${id}"`);
+    assert.equal(roleIndex.models[id].role, "placed", `${id} is placed in scenery`);
+  }
+  for (const [id, rec] of Object.entries(roleIndex.models)) {
+    if (rec.role === "placed") continue;
+    assert.equal(placed.has(id), false,
+      `${id} is role ${rec.role} but scenery still calls bakedModel("${id}")`);
+  }
+});
+
+test("pack models/ has no orphan bins outside the manifest index",
+  { skip: !hasPack && "no pack installed" }, () => {
+  const dir = path.join(PACK, "models");
+  const keyed = new Set(Object.values(manifest.models || {}).map((rec) => path.basename(rec.file)));
+  const orphans = fs.readdirSync(dir).filter((f) => f.endsWith(".bin") && !keyed.has(f));
+  assert.deepEqual(orphans, [], "orphan bins are dead pack weight — drop or register them");
+});
+
+// #2501: MeshBuilder's cylinder and cone were wound inside out (clockwise seen
+// from outside) while its box is counter-clockwise, the renderers' front face.
+test("synth-models MeshBuilder winds box, cylinder and cone counter-clockwise outward", async () => {
+  const { MeshBuilder } = await import(pathToFileURL(path.join(ROOT, "tools", "gen", "synth-models.mjs")).href);
+  const shapes = {
+    box: (M) => M.box(1, 2, 3, 2, 3, 4, [1, 1, 1], 0),
+    cyl: (M) => M.cyl(1, 2, 3, 0.9, 2.2, [1, 1, 1], 0, 8),
+    cone: (M) => M.cone(1, 2, 3, 1.5, 0, 3, [1, 1, 1], 0, 8),
+    frustum: (M) => M.cone(1, 2, 3, 1.5, 0.5, 3, [1, 1, 1], 0, 6),
+  };
+  for (const [name, make] of Object.entries(shapes)) {
+    const M = MeshBuilder(); make(M);
+    const { pos, nrm, idx } = M.toMesh(0);
+    const v = (i) => [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]];
+    let wrong = 0;
+    for (let t = 0; t < idx.length; t += 3) {
+      const [a, b, c] = [v(idx[t]), v(idx[t + 1]), v(idx[t + 2])];
+      const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], w = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+      const f = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+      const n = [0, 1, 2].map((k) => nrm[idx[t] * 3 + k] + nrm[idx[t + 1] * 3 + k] + nrm[idx[t + 2] * 3 + k]);
+      if (Math.hypot(...f) < 1e-9) continue;   // a cone's apex triangles have no area and no facing
+      if (f[0] * n[0] + f[1] * n[1] + f[2] * n[2] <= 0) wrong++;
+    }
+    assert.equal(wrong, 0, `${name}: ${wrong} of ${idx.length / 3} triangles face against their vertex normals`);
+  }
+});
+
+// #2501: resizeBilinear gave the first upscaled row/column a negative weight,
+// and the extrapolated value wrapped in the Uint8 buffer.
+test("resizeBilinear clamps to the edge when upscaling: no negative weights, no wrapped bytes", async () => {
+  const { resizeBilinear } = await import(pathToFileURL(path.join(ROOT, "tools", "gen", "assets.mjs")).href);
+  const px = (...v) => Buffer.from(v.flatMap((g) => [g, g, g, 255]));
+  const row = resizeBilinear(px(0, 255), 2, 1, 4, 1);
+  assert.deepEqual([...row].filter((_, i) => i % 4 === 0), [0, 64, 191, 255], "edge pixels clamp to the source edge");
+  const col = resizeBilinear(px(10, 250), 1, 2, 1, 4);
+  assert.deepEqual([...col].filter((_, i) => i % 4 === 0), [10, 70, 190, 250]);
+  // Every output stays inside the source range (a convex blend), at any ratio.
+  const src = px(0, 255, 0, 255, 255, 0, 255, 0, 0);
+  const big = resizeBilinear(src, 3, 3, 7, 7);
+  for (let i = 0; i < big.length; i += 4) assert.ok(big[i] >= 0 && big[i] <= 255 && big[i + 3] === 255);
+  assert.equal(big[0], 0, "the corner is the source corner");
+  assert.equal(big[(7 * 7 - 1) * 4], 0);
+  // Downscaling is unchanged (no sample falls outside the source).
+  assert.deepEqual([...resizeBilinear(px(0, 100, 200, 255), 4, 1, 2, 1)].filter((_, i) => i % 4 === 0), [50, 228]);
+});
+
+// #5629: sw.js answers the manifest from the cache at once only under the PAGE's
+// build key, so the loader must send the shell's own build, and nothing else.
+test("the manifest is asked for under the page's build, bare without one", async () => {
+  for (const [build, want] of [[1695, "assets/pack/manifest.json?b=1695"], [0, "assets/pack/manifest.json"], ["x", "assets/pack/manifest.json"]]) {
+    const requests = [];
+    const assets = assetLoader({
+      __APEX_BUILD: build,
+      async fetch(url) { requests.push(url); return { ok: true, json: async () => ({}) }; },
+    });
+    assets.init({ createTextureArray() { return {}; }, setMaterialMaps() {} });
+    await assets.load();
+    assert.equal(requests[0], want);
+  }
 });

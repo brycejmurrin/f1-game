@@ -24,13 +24,14 @@ function driver(dur = 80, r = 1600, speedKmh = 200) {
   return { loc, car };
 }
 
-test("a DPR change under unchanged boxes refits the map canvas as well as the chart", async () => {
+async function openPopup(drs = 12) {
   const dom = makeDom();
   const timers = new Map(), frames = new Map(), observers = [];
   let nextId = 0;
   const makeElement = dom.document.createElement;
   dom.document.createElement = (tag) => {
     const node = makeElement(tag);
+    node.ownerDocument = dom.document;
     if (tag === "canvas") {
       const drawing = new Proxy({}, { get: (target, key) => target[key] || (() => {}) });
       node.getContext = () => drawing;
@@ -60,7 +61,7 @@ test("a DPR change under unchanged boxes refits the map canvas as well as the ch
     { num: 3, name: "Comparison Driver", code: "CMP", color: "0000ff" }
   ];
   const trace = driver(80);
-  trace.car.forEach((sample) => Object.assign(sample, { gear: 7, throttle: 80, brake: 0, rpm: 10000, drs: 12 }));
+  trace.car.forEach((sample) => Object.assign(sample, { gear: 7, throttle: 80, brake: 0, rpm: 10000, drs }));
   const meta = { sessionKey: 7, meetingKey: 1, name: "Race", type: "Race" };
   const context = vm.createContext({
     document: dom.document,
@@ -71,7 +72,7 @@ test("a DPR change under unchanged boxes refits the map canvas as well as the ch
     cancelAnimationFrame(id) { frames.delete(id); },
     ResizeObserver: class {
       constructor(cb) { this.cb = cb; this.disconnected = false; observers.push(this); }
-      observe() {}
+      observe(node) { (this.targets ||= new Set()).add(node); }
       disconnect() { this.disconnected = true; }
     },
     F1API: {
@@ -103,7 +104,11 @@ test("a DPR change under unchanged boxes refits the map canvas as well as the ch
   for (let i = 0; i < 12; i++) await Promise.resolve();
   for (const [id, fn] of timers) { timers.delete(id); fn(); }
 
-  const popup = dom.document.querySelector(".dh-tpopup");
+  return { popup: dom.document.querySelector(".dh-tpopup"), observers, frames, context };
+}
+
+test("a DPR change under unchanged boxes refits the map canvas as well as the chart", async () => {
+  const { popup, observers, frames, context } = await openPopup();
   assert.ok(popup && popup.open);
   const chart = popup.querySelector(".dh-canvas"), map = popup.querySelector(".dh-canvas.dh-map");
   assert.ok(chart && map);
@@ -121,4 +126,34 @@ test("a DPR change under unchanged boxes refits the map canvas as well as the ch
   for (const [id, fn] of frames) { frames.delete(id); fn(); }
   assert.equal(chart.width, cw * 3, "the chart refits to the new ratio");
   assert.equal(map.width, mw * 3, "and so does the map canvas");
+});
+
+// W23 #6: 2026 car_data has `drs: null` on every sample (no DRS in the 2026
+// rules): the popup built a DRS legend toggle, gauge pill and channel anyway.
+test("a lap with no DRS values gets no DRS gauge or legend toggle; a lap with them keeps both", async () => {
+  // One toggle per channel (compare mode: the both-drivers label button), named by its title.
+  const labels = (popup) => popup.querySelectorAll(".dh-legend-item").map((b) => b.title)
+    .filter((t) => / for both drivers$/.test(t)).map((t) => t.slice("Show / hide ".length, -" for both drivers".length));
+  const none = (await openPopup(null)).popup;
+  assert.equal(none.querySelector(".dh-gdrscell"), null, "no DRS pill for 2026");
+  assert.equal(labels(none).filter((t) => t === "DRS").length, 0, "no DRS legend toggle");
+  assert.ok(labels(none).length > 0, "the other channel toggles are still built");
+  const some = (await openPopup(12)).popup;
+  assert.ok(some.querySelector(".dh-gdrscell"), "a 2025 lap keeps the pill");
+  assert.equal(labels(some).filter((t) => t === "DRS").length, 1);
+});
+
+test("column-only resizing refits the telemetry map", async () => {
+  const { popup, observers, frames } = await openPopup();
+  const main = popup.querySelector(".dh-telem-main"), side = popup.querySelector(".dh-telem-side");
+  const observer = observers.find(item => item.targets.has(side));
+  assert.ok(observer && observer.targets.has(main));
+  const map = popup.querySelector(".dh-map");
+  main._rect = { width: 392, height: 400, left: 0, top: 0 };
+  side._rect = { width: 180, height: 400, left: 0, top: 0 };
+  observer.cb([{ target: side }]);
+  for (const [id, fn] of frames) { frames.delete(id); fn(); }
+  assert.equal(map.width, (180 - 24) * 2);
+  assert.equal(map.height, map.width);
+  assert.equal(popup.open, true, "arranging playback leaves its native dialog open");
 });

@@ -78,6 +78,56 @@ test("every circuit's authored turn table resolves — an unread table is a sile
     "fix the pair against the built centreline, or drop the entry and let ZONE_COUNT own it");
 });
 
+// THE SOURCED FIXTURE. tests/data/aero-zones-fia-2026.json carries, per
+// circuit, the zone count and (where def.turns is the FIA 2026 numbering) the
+// [fromTurn, toTurn] pairs read off the FIA Race Director's 2026 event map, with
+// the document URL. The module must agree with it — the old checks compared the
+// table with a selection derived from the table itself.
+const FIA = JSON.parse(fs.readFileSync(new URL("../data/aero-zones-fia-2026.json", import.meta.url), "utf8")).circuits;
+
+test("every fixture row names its source document, and only a provisional row may lack a 2026 one", () => {
+  const bad = [];
+  for (const [id, row] of Object.entries(FIA)) {
+    if (!Number.isInteger(row.count) || row.count < 0) bad.push(`${id}: count ${row.count}`);
+    if (row.status === "fia-2026" && !/^https:\/\/www\.fia\.com\/system\/files\/decision-document\/2026_/.test(row.doc || ""))
+      bad.push(`${id}: fia-2026 row without a 2026 fia.com document`);
+    if (row.status !== "fia-2026" && row.status !== "provisional") bad.push(`${id}: status ${row.status}`);
+    if (row.pairs && row.pairs.length !== row.count) bad.push(`${id}: ${row.pairs.length} pairs for count ${row.count}`);
+  }
+  assert.deepEqual(bad, []);
+});
+
+test("ZONE_COUNT and AERO_ZONE_TURNS agree with the FIA 2026 fixture", () => {
+  const bad = [];
+  for (const [id, row] of Object.entries(FIA)) {
+    if (AeroZones.ZONE_COUNT[id] !== row.count) bad.push(`${id}: ZONE_COUNT ${AeroZones.ZONE_COUNT[id]} != FIA ${row.count}`);
+    if (row.pairs && JSON.stringify(AeroZones.AERO_ZONE_TURNS[id]) !== JSON.stringify(row.pairs))
+      bad.push(`${id}: AERO_ZONE_TURNS ${JSON.stringify(AeroZones.AERO_ZONE_TURNS[id])} != FIA ${JSON.stringify(row.pairs)}`);
+  }
+  assert.deepEqual(bad, [], "js/physics/aero-zones.js disagrees with the sourced FIA fixture");
+});
+
+test("the built zones are the FIA ones: the right count, each starting after its FIA corner and ending before the next", () => {
+  const bad = [];
+  for (const [id, row] of Object.entries(FIA)) {
+    const def = Tracks.LIST.find((t) => t.id === id);
+    if (!def) { bad.push(`${id}: no such circuit`); continue; }
+    const tr = centreline(def), L = tr.total;
+    const zones = AeroZones.zonesFor(tr);
+    if (zones.length !== row.count) { bad.push(`${id}: built ${zones.length} zones, FIA ${row.count}`); continue; }
+    for (const [from, to] of row.pairs || []) {
+      const a = def.turns[from - 1] * L;
+      let b = def.turns[to - 1] * L; if (b <= a) b += L;
+      const hit = zones.some((z) => {
+        let s = z.start; while (s < a - 1e-6) s += L;
+        return s + z.len <= b + 1e-6 && z.len > 0;
+      });
+      if (!hit) bad.push(`${id}: no built zone between T${from} and T${to}`);
+    }
+  }
+  assert.deepEqual(bad, []);
+});
+
 test("the discard warning is observable here (mutation: one pair that bounds nothing)", () => {
   const def = Tracks.LIST.find((t) => t.id === "monza");
   const saved = AeroZones.AERO_ZONE_TURNS.monza;

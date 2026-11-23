@@ -1,0 +1,1 @@
+Fixed: Time Trial shows two actions in the pit box. WORK ON CAR opens the parts garage and lets you return to the same run. END SESSION finishes the run in the garage, where VIEW RESULTS opens the lap sheet.

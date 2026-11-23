@@ -1,5 +1,7 @@
 # Repository size — October 2026
 
+Summary: Full-history measurements, partial-clone guidance, and the October 19 local rewrite rehearsal: clone-pack savings, retained PR objects, changed commit identities and signature loss.
+
 What makes a clone of this repository big, measured on FULL history with
 `.github/workflows/repo-size.yml` (`tools/ci/repo-size.mjs`). Dated: re-run the
 workflow for current numbers.

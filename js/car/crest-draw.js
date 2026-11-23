@@ -22,15 +22,20 @@ const LiveryCrests = (function () {
     // 384 px and simplified to a few tenths of a percent is already smoother than
     // a curve anyone would fit to it, and a straight-line path needs no curve
     // support here or in the offline rasteriser that measures these.
-    function tracePath(ctx, f, d) {
+    // Parsed once per `d` (perf P6, #4546) into [op, x, y]; tracePath replays
+    // them, so the canvas call sequence is unchanged.
+    const OP_M = 0, OP_L = 1, OP_Z = 2;
+    const _pathCache = new Map(), PATH_CACHE_MAX = 512;
+    function parsePath(d) {
       let i = 0, cmd = "";
+      const ops = [];
+      let stuck = null;
       const num = () => {
         while (i < d.length && (d[i] === " " || d[i] === ",")) i++;
         const st = i;
         while (i < d.length && "-+.0123456789eE".indexOf(d[i]) >= 0) i++;
         return parseFloat(d.slice(st, i));
       };
-      ctx.beginPath();
       // EVERY ITERATION MUST CONSUME A CHARACTER. Two branches here could spin
       // forever on input this parser does not handle, and an infinite loop in a
       // livery build is the worst failure shape the game has: the tab locks with
@@ -53,18 +58,37 @@ const LiveryCrests = (function () {
       // garage wall, picker tiles), so the next regeneration is the risk.
       let guard = d.length * 4 + 16;   // no legal path needs four passes per char
       while (i < d.length) {
-        if (guard-- <= 0) { Log.warn("car", "tracePath: no progress in '" + d.slice(0, 40) + "' at " + i); break; }
+        if (guard-- <= 0) { stuck = "tracePath: no progress in '" + d.slice(0, 40) + "' at " + i; break; }
         const c = d[i];
         if (c === " " || c === ",") { i++; continue; }
         if (c >= "A" && c <= "Z") { cmd = c; i++; }
         else if (!(c >= "0" && c <= "9") && "-+.".indexOf(c) < 0) { i++; continue; }   // lowercase / unknown: skip it
-        if (cmd === "Z") { ctx.closePath(); cmd = ""; continue; }
+        if (cmd === "Z") { ops.push(OP_Z, 0, 0); cmd = ""; continue; }
         const before = i;
         const x = num(), y = num();
         if (i === before) { i++; continue; }              // num() consumed nothing
         if (!isFinite(x) || !isFinite(y)) continue;
-        if (cmd === "M") { ctx.moveTo(f.X(x), f.Y(y)); cmd = "L"; }
-        else ctx.lineTo(f.X(x), f.Y(y));
+        if (cmd === "M") { ops.push(OP_M, x, y); cmd = "L"; }
+        else ops.push(OP_L, x, y);
+      }
+      // A stuck path warns once, when it is first parsed; later traces replay
+      // the ops it did produce, exactly as the old parser drew up to the break.
+      if (stuck) Log.warn("car", stuck);
+      return Float64Array.from(ops);
+    }
+    function tracePath(ctx, f, d) {
+      let ops = _pathCache.get(d);
+      if (!ops) {
+        ops = parsePath(d);
+        if (_pathCache.size >= PATH_CACHE_MAX) _pathCache.delete(_pathCache.keys().next().value);
+        _pathCache.set(d, ops);
+      }
+      ctx.beginPath();
+      for (let k = 0; k < ops.length; k += 3) {
+        const op = ops[k];
+        if (op === OP_Z) ctx.closePath();
+        else if (op === OP_M) ctx.moveTo(f.X(ops[k + 1]), f.Y(ops[k + 2]));
+        else ctx.lineTo(f.X(ops[k + 1]), f.Y(ops[k + 2]));
       }
     }
 

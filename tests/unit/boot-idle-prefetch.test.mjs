@@ -80,11 +80,12 @@ test("raceAssets microtask kicks scenery; idle injects lights", async () => {
     globalThis.__raceAssets = lb.raceAssets;
   `, ctx);
   ctx.__raceAssets();
-  assert.equal(idles.length, 3, "lights + race-session + audio-prefetch on idle");
+  assert.equal(idles.length, 4, "lights + race-session + results-sheet + audio-prefetch on idle");
   const lightIdle = idles.find((i) => i.opts && i.opts.timeout === 8000);
   assert.ok(lightIdle, "lights idle at 8000ms");
   assert.ok(idles.some((i) => i.opts && i.opts.timeout === 9000), "race-session idle at 9000ms");
   assert.ok(idles.some((i) => i.opts && i.opts.timeout === 12000), "audio HTTP prefetch idle at 12000ms");
+  assert.ok(idles.some((i) => i.opts && i.opts.timeout === 9500), "results-sheet idle at 9500ms");
   await new Promise((r) => queueMicrotask(r));
   assert.equal(lightLoads, 0, "lights not yet");
   await lightIdle.fn();
@@ -318,9 +319,9 @@ test("raceAssets skips the lighting, race-session and audio prefetches under Sav
     await new Promise((r) => setTimeout(r, 0));
     return { idles: idles.sort((a, b) => a - b), sceneryKicks };
   };
-  assert.deepEqual((await run(undefined)).idles, [8000, 9000, 12000], "no Network Information API: unchanged");
-  assert.deepEqual((await run({ saveData: false, effectiveType: "4g" })).idles, [8000, 9000, 12000], "a normal link prefetches");
-  assert.deepEqual((await run({ saveData: false, effectiveType: "3g" })).idles, [8000, 9000, 12000], "3G still prefetches");
+  assert.deepEqual((await run(undefined)).idles, [8000, 9000, 9500, 12000], "no Network Information API: unchanged");
+  assert.deepEqual((await run({ saveData: false, effectiveType: "4g" })).idles, [8000, 9000, 9500, 12000], "a normal link prefetches");
+  assert.deepEqual((await run({ saveData: false, effectiveType: "3g" })).idles, [8000, 9000, 9500, 12000], "3G still prefetches");
   const sd = await run({ saveData: true, effectiveType: "4g" });
   // #3110 F2: the lights skip too — startRace awaits ensureLightPresets when they are absent.
   assert.deepEqual(sd.idles, [], "Save-Data: no idle prefetch at all");

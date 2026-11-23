@@ -35,8 +35,8 @@ Peraltada line survives as real **banking** into the final corners (6° at
 | 0.00 | R | near | Main grandstand: long tall stepped box, grey seats + festive banner trim |
 | 0.02 | L | near | Pit/paddock block: low wide white box with flat roof slab |
 | 0.06 | both | mid | **DRS Mixhuca park corridor**: dense forestEdge / hedge — park before city |
-| 0.12 | R | near | Turn 1 right-hander grandstand: stepped seating box, big red/white kerb |
-| 0.20 | both | mid | Moises Solana Esses stands: low thin seating boxes flanking flat infield |
+| 0.248 | L | near | Turn 1 right-hander grandstand (outside; built T1 0.257): stepped seating box, big red/white kerb |
+| 0.58–0.60 | R | mid | Moises Solana Esses stands (terrace on the outside of T7; Esses are T7–T11, 0.58–0.69): low thin seating boxes flanking flat infield |
 | 0.34 | L | far | Distant city sprawl (pushed back): low pale skyline behind park green |
 | 0.42 | R | near | Horquilla hairpin: wide grey runoff box, tight kerb, small fan stand box |
 | 0.55 | both | mid | Park greenery + sports facility: green grass plane + scattered low boxes |
@@ -92,3 +92,9 @@ Mexican GP signage/crowd, and paddock suite identity.
 Note for a future pass: *cactus would be wrong here.* The Autódromo Hermanos
 Rodríguez is inside the urban Magdalena Mixhuca sports park at 2,240 m, not in
 desert — the generic "Mexico = cacti" instinct should be resisted.
+
+## Turn numbers (2026-11-11, #5316 leftovers)
+
+Source: F1 live-timing circuit corner markers (`https://api.multiviewer.app/api/v1/circuits/65/2026`, the data FastF1 `get_circuit_info()` reads), fitted onto the built centreline by `tools/track/official-corners.cjs` (rms 4.9 m), checked against the FIA 2026 event circuit map (17 turns). Each `turns[k-1]` is the built curvature apex nearest official marker k (corner-frames: 0 turn offenders).
+
+T1-T14 were right. T15 (the Foro Sol left flick, 0.8909) was missing; old T15/T16 were official T16/T17; old T17 was the Peraltada's tail. Peraltada = T17, one apex. The Foro signage block was labelled 'Peraltada' but dresses T12-T13: relabelled.

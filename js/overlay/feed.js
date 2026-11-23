@@ -56,17 +56,22 @@ const OverlayFeed = (function () {
   const _wrap = [];
   function battle(ranked, vScale) {
     if (!ranked || ranked.length < 2) return null;
-    const n = ranked.length;
-    while (_wrap.length < n) _wrap.push({ key: null, prog: 0, speed: 0 });
-    if (_wrap.length !== n) _wrap.length = n;
-    for (let i = 0; i < n; i++) {
+    // Only cars with a finite progress enter the fight scan. Coercing NaN /
+    // missing prog to 0 made every no-prog pair look like a 0.00 s BATTLE
+    // (TV / incomplete ranked rows), which then painted "0.00s" on the overlay.
+    let n = 0;
+    for (let i = 0; i < ranked.length; i++) {
       const c = ranked[i];
-      const w = _wrap[i];
+      if (!Number.isFinite(c.prog)) continue;
+      if (_wrap.length <= n) _wrap.push({ key: null, prog: 0, speed: 0 });
+      const w = _wrap[n++];
       w.key = c;
       // Bracket writes: the display-only source scan forbids dot-assign of progress and speed.
-      w["prog"] = Number.isFinite(c.prog) ? c.prog : 0;
+      w["prog"] = c.prog;
       w["speed"] = Number.isFinite(c.speed) ? c.speed : 0;
     }
+    if (n < 2) return null;
+    if (_wrap.length !== n) _wrap.length = n;
     _wrap.sort((a, b) => b.prog - a.prog);
     let fight = null;
     if (typeof Broadcast !== "undefined" && Broadcast && Broadcast.battles) {
@@ -76,17 +81,30 @@ const OverlayFeed = (function () {
       for (let i = 1; i < n; i++) {
         const a = _wrap[i - 1], b = _wrap[i];
         const gapS = (a.prog - b.prog) / Math.max(b.speed || 0, floor);
-        if (gapS >= 0 && gapS < 1 && (!fight || gapS < fight.gapS)) fight = { ahead: a.key, key: b.key, gapS };
+        if (Number.isFinite(gapS) && gapS >= 0 && gapS < 1 && (!fight || gapS < fight.gapS)) fight = { ahead: a.key, key: b.key, gapS };
       }
     }
-    // Copy out. The pool is overwritten on the next battle().
-    return fight ? {
+    // Copy out. The pool is overwritten on the next battle(). Refuse a
+    // non-finite gapS so the painter never writes "NaNs".
+    return fight && Number.isFinite(fight.gapS) ? {
       ahead: codeOf(fight.ahead),
       behind: codeOf(fight.key),
       gapS: +fight.gapS.toFixed(3),
     } : null;
   }
 
+  function battleFrom(b) {
+    return b && b.ahead != null && b.behind != null && Number.isFinite(b.gapS)
+      ? { ahead: String(b.ahead), behind: String(b.behind), gapS: +b.gapS.toFixed(3) } : null;
+  }
+
+  // Progress fallback only when both cars expose finite prog — otherwise
+  // `?? (0-0)/speed` invented a 0.000 interval and the tower flashed "+0.00"
+  // for a missing / NaN intervalS (brief rows with no prog, or a NaN field).
+  function fromProg(aheadProg, behindProg, speed) {
+    if (!Number.isFinite(aheadProg) || !Number.isFinite(behindProg)) return null;
+    return +((aheadProg - behindProg) / speed).toFixed(3);
+  }
   function rowsFrom(ranked) {
     const rows = [], lead = ranked && ranked[0];
     for (let i = 0; ranked && i < ranked.length; i++) {
@@ -96,10 +114,11 @@ const OverlayFeed = (function () {
         pos: Number.isFinite(c.pos) ? c.pos : i + 1,
         code: codeOf(c),
         team: teamOf(c),
-        interval: i ? number(c.intervalS) ?? +(((ahead.prog || 0) - (c.prog || 0)) / speed).toFixed(3) : null,
-        gap: i ? number(c.gapToLeaderS) ?? +(((lead.prog || 0) - (c.prog || 0)) / speed).toFixed(3) : null,
+        interval: i ? number(c.intervalS) ?? fromProg(ahead.prog, c.prog, speed) : null,
+        gap: i ? number(c.gapToLeaderS) ?? fromProg(lead.prog, c.prog, speed) : null,
         tyre: tyreOf(c),
         pit: !!(c.pit || c.inPit),
+        out: !!(c.out || c.retired),
         you: !!(c.you || c.isPlayer),
       });
     }
@@ -127,7 +146,9 @@ const OverlayFeed = (function () {
         if (!rows) rows = rowsFrom(ranked);
         return rows;
       },
-      battle: battle(ranked, input.vScale),
+      // A caller with no progress/speed per car (the game-page publisher reads
+      // field() brief rows) passes its own battle, or null; the scan is for cars.
+      battle: input.battle !== undefined ? battleFrom(input.battle) : battle(ranked, input.vScale),
       sectors: sectorFrame(input.sectorLast, input.sectorBests, input.fieldSectorBests),
       caption: input.caption && input.caption.id != null ? {
         n: input.caption.n == null ? null : String(input.caption.n),
@@ -142,7 +163,7 @@ const OverlayFeed = (function () {
   function sameRow(a, b) {
     return a.pos === b.pos && a.code === b.code && a.team === b.team
       && a.interval === b.interval && a.gap === b.gap && a.tyre === b.tyre
-      && a.pit === b.pit && a.you === b.you;
+      && a.pit === b.pit && a.out === b.out && a.you === b.you;
   }
   function sameRows(a, b) {
     if (a === b) return true;
@@ -196,8 +217,13 @@ const OverlayFeed = (function () {
           }
           if (f.caption && f.caption.id !== captionId) out.caption = f.caption;
           else if (!f.caption && previous.caption) out.caption = null;
-          if (leftRace && out.battle === undefined) out.battle = null;
-        } else if (leftRace && out.battle == null) {
+          // Always overwrite — an unchanged fight is omitted above, and a
+          // changed gap would otherwise ship a live battle on a results/idle
+          // patch (the old `=== undefined` guard only covered the omit case).
+          if (leftRace) out.battle = null;
+        } else if (leftRace) {
+          // Full frame spreads f.battle from the still-ranked field; force null
+          // so a full tick that coincides with the flag cannot re-arm BATTLE.
           out.battle = null;
         }
         if (full) lastFull = at;

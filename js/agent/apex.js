@@ -2,7 +2,7 @@
 const ApexApi = (function () {
   "use strict";
 
-function create(G) {
+function create(G, restoreFreePlaySelection) {
 // race()/tt() hand back a descriptor that is ALSO awaitable. startRace() awaits
 // ensureScenery() — the scenery closure is LAZY_SCENERY and Tracks.build is
 // synchronous — so an unawaited start lets the hook claim success while the
@@ -16,9 +16,11 @@ function create(G) {
 // RACE ORDER and the SLIP BUDGET live in agentview.js (loaded first, LAZY_AGENT)
 // so obs()/physState() and world() cannot drift apart (#2172).
 const raceOrder = (cars) => AgentView.raceOrder(cars);
+const trackIndex = (ref) => typeof ref === "number" ? ref : Tracks.LIST.findIndex(t => t.id === ref);
 const finiteOrNil = (v) => v === undefined || v === null || (typeof v === "number" && isFinite(v));
 // update(NaN) wrote NaN into every car, and an infinite n never returned.
 const stepArgs = (dt, n) => [Number.isFinite(dt) && dt >= 0 ? dt : 1 / 60, Number.isFinite(n) && n >= 0 ? Math.floor(n) : 1];
+const simArgs = (dt, n) => ApexLobby.simSteps(...stepArgs(dt, n));   // whole 1/60 steps (apex-lobby.js)
 // The three UI scales take a PERCENT. A fraction (1.6) or junk used to be
 // snapped and SAVED: uiScale(1.6) stored 40 %, uiScale("abc") the default.
 // null still resets; undefined reads.
@@ -49,10 +51,12 @@ function settled(promise, out) {
 // post-reset snapshots at the same seed, and tests/specs/agent-determinism.spec.js
 // is the guard that keeps it honest.
 const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "onKerb",
-  "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0", "_secValid",
+  "wheelLock", "brakeTF", "brakeTR", "brakeFade", "_absF", "_tcR", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0", "_secValid",
   "_lapTimeAtLine", "_recross", "incidentInvalidLap", "passSide", "passBest", "offroad", "queueT", "_qOf", "trailT", "_trOf", "_trYT", "_trYS",
   "towing", "wake", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_coachAssisted", "brakeStab", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
-  "kerbSndT", "kerbHapT", "_cueConditionGrip", "_cueCornering", "_cueBraking",
+  "kerbSndT", "kerbHapT", "_cueConditionGrip", "_cueCornering", "_cueBraking", "stallT",
+  // #1628 wheel state: rim speeds and slip ratios re-seed from c.speed (WheelState.ensure) on the next step.
+  "vwF", "vwR", "kappaF", "kappaR", "_wsV",
   // The AI brake look-ahead cache (perf hunt 2 S6): one object per car, keyed on
   // the node window; refilled lazily by updateCarBrakePlan, so a cold car is
   // simply without it (CarFields predeclares it undefined).
@@ -70,11 +74,14 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   // telemetry getter, collide.js's pre-collision speed read, and this file's
   // own tyres() hook), so undefined is a tolerated input.
   "_preColSpd", "_tyreLoad", "brakeDemand", "throttleDemand", "steerCommand",
+  // Collide's per-step punt budget (#5894) and the stopped-car hazard (clean-room 39/40).
+  "_puntGot", "stillT", "_hzOf", "_hzSide",
   "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
   "frontUtil", "rearUtil", "slipFront", "slipRear", "lateralAccel", "inPitLane",
   // `errCount` counts AI mistakes within ONE race, so a cold car has none (a
-  // short rollout rarely trips a mistake, so a leak goes unnoticed).
-  "errCount", "pitWorked",
+  // short rollout rarely trips a mistake, so a leak goes unnoticed). `aiHeadV`, the speed the AI heading was
+  // last written at (game.js AI_HEAD_JUMP, #5338): undefined on a cold car, which its `!= null` read takes as no jump.
+  "errCount", "pitWorked", "aiHeadV",
   // The lazy `c.passPlan || (c.passPlan = {})` cache in game.js's
   // overtake-attempt block survives reset() untouched, and
   // `!c.passPlan || c.passPlan.side` (same file) reads `.side` straight off it
@@ -104,16 +111,18 @@ function apiHook(base, path, fix) {
   return F1API.request(base + path, 0, { cache: false });
 }
 
-const noAudio = () => (typeof GameAudio === "undefined"
-  ? { ok: false, error: "no_audio", message: "GameAudio is not loaded", fix: "reload the page" }
+// The eager title stub (js/audio/stub.js, `_stub: true`) counts as not loaded: it has no
+// profiles()/voices()/tune(), so a hook reading them threw at the title.
+const noAudio = () => (typeof GameAudio === "undefined" || GameAudio._stub
+  ? { ok: false, error: "no_audio", message: "GameAudio is not loaded (title stub)", fix: "start a race, or open a menu that loads audio" }
   : null);
 // Stable bindings (functions + consts) from the game.js closure.
 const { els, smp, smp2, gfx, canvas, GAME_LAPS, TT_LAPS, LONG_GRIP,
-        applyRaceSettings, camVantage, endRace, gridUp, gripMult, isErsDeploying,
+        applyRaceSettings, camVantage, gridUp, gripMult, isErsDeploying,
         copyLightTune, loadCarModel, loadTrack, persistLightTune, refreshLightTunePanel,
         restoreLightTune,
         rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
-        startRace, startWeatherArc, update, wrapS } = G;
+        startRace, startWeatherArc, wrapS } = G;
 // Deferred: openCareer is declared below the G literal in game.js, so it arrives
 // as an arrow and must be read through G rather than destructured here.
 const openCareer = (...a) => G.openCareer(...a);
@@ -122,7 +131,7 @@ const { TUNE_DEFS, LT } = LightTune;
 
 // The agent-facing view (js/agent/agentview.js). Composed here rather than
 // bolted onto this file: __apex stays a flat dev console, world()/trackInfo()
-// are the layer an LLM agent reads. See docs/AGENT-WORLD-API.md.
+// are the layer an LLM agent reads. See docs/DEBUG-HOOKS.md.
 const agentView = AgentView.create(G);
 
 
@@ -141,7 +150,7 @@ function simCareerRound() {
   for (let i = 0; i < rows.length; i++) {
     const car = byId.get(rows[i].driverId);
     if (!car) continue;
-    car.gridPos = i + 1;
+    car.gridPos = i + 1; delete car.classified; delete car.dsq;   // this simulated round owns its result
     if (car.dnfAt != null) { car.retired = true; car.dnf = car.dnfWhy; car.dnfAt = null; }
     const rt = DriverRatings.get(car.code, car.tier, Career.devFor(car.team && car.team.id, car.seat));
     // Race day is not qualifying. Pace order is a strong prior; craft is how much
@@ -235,9 +244,12 @@ function placeFromTrack(car, sampled) {
   car.head = Math.atan2(sampled.t[0], sampled.t[2]);
 }
 
+let apexSeed = null;   // the last seed an agent set through seed(n) / reset(…, seed)
+const simTick = (d) => ApexLobby.tick(G, d);   // one step()/act() tick (apex-lobby.js)
 const api = {
-  // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m)
-  jump(frac, speed, lateral) {
+  // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m). DELETES the lap in
+  // progress (60 m before the line then across it set a 2.97 s best); {keepLap:true} for fixtures.
+  jump(frac, speed, lateral, opts) {
     if (!G.player || !G.track) return false;
     // A non-finite argument would write NaN into prog/s/speed, and the whole field
     // sort and every later physState read goes with it: refuse before touching state.
@@ -253,8 +265,8 @@ const api = {
     // teleport under updateCarAdvance's 20 m threshold (pole → jump(0) is 14 m)
     // was banked into prog a second time and crossed the line: lap 0 → 1.
     G.player.s = sNew; G.player._prevS = sNew;
-    if (lateral !== undefined) G.player.x = lateral;
-    if (speed !== undefined) G.player.speed = speed;
+    if (lateral != null) G.player.x = lateral;
+    if (speed != null) G.player.speed = speed;
     Tracks.sample(G.track, G.player.s, smp);
     placeFromTrack(G.player, smp);
     G.player.vLat = 0; G.player.yawRateCur = 0;
@@ -262,7 +274,8 @@ const api = {
     // Left alone, a wedge-then-jump sequence carries ~3 s of rescueT into the
     // new spot and fires a surprise auto-rescue mid-drive (measured).
     G.player.rescueT = 0; G.player.wallT = 0; G.player.wasOnWall = false;
-    G.player.wrongT = 0; G.player.wrongWay = false; G.player.offT = 0;
+    G.player.wrongT = 0; G.player.wrongWay = false; G.player.offT = 0; G.player.offCut = false;
+    if (!(opts && opts.keepLap)) G.player.incidentInvalidLap = true;
     // Sync render-interpolation anchors so lerpS(rPrevS,s,alpha)==s regardless of
     // renderAlpha — the WORLD pair too: playerAnchor()/renderPosOf() draw the
     // HUMAN car from those, so without them it stays lerp'd toward the
@@ -367,7 +380,7 @@ const api = {
     // The player's world position is derived from s/x, so re-anchor through the
     // same path park() uses rather than trusting stale px/pz.
     const me = (o.cars || []).find((r) => r.me);
-    if (me && G.track.total) this.jump(me.s / G.track.total, me.speed, me.x);
+    if (me && G.track.total) this.jump(me.s / G.track.total, me.speed, me.x, { keepLap: true });   // a re-anchor, not a teleport
     if (G.player) { G.frozen = true; snapGameCam(); }
     return { restored: true, cars: placed, skipped, cam: o.cam && o.cam.mode,
              teamMatches: (() => { const p = G.cars && G.cars.find((c) => c.isPlayer);
@@ -386,12 +399,16 @@ const api = {
     // harness needs to read a result correctly. `practice` is derived (a Time
     // Trial is always one), so it is NOT the same question as session === "tt".
     practice: G.practice, duel: G.duel,
-    raceQuali: !!G.raceQuali, raceGrid: G.raceGrid,
-    lapsTarget: G.lapsTarget,
+    raceQuali: !!G.raceQuali, raceGrid: G.raceGrid, lapsTarget: G.lapsTarget,
     sectors: G.track && G.track.def && G.track.def.sectors ? G.track.def.sectors.slice() : null,
     turns: G.track && G.track.def && G.track.def.turns ? G.track.def.turns.length : null,
+    // tickBody's holds: while `warming`, real frames charge neither the countdown nor
+    // physics; go() skips the lights, so wait for liveTicks past go() and !warming
+    // before driving a rendered race (#4253). step() is not held.
+    ...(({ warming, liveTicks }) => ({ warming, liveTicks }))(G.cameraDampingState()),
   }),
   garageCam: () => ({
+    exterior: typeof GaragePrebuild !== "undefined" && GaragePrebuild.instance() ? GaragePrebuild.instance().state().exterior : null,
     on: G.setupPreviewOn, spin: G.setupPreviewSpin,
     az: G.setupPreviewAz, el: G.setupPreviewEl, dist: G.setupPreviewDist,
     // dist is the ZOOM's stored distance; effDist is what the camera actually
@@ -526,7 +543,7 @@ const api = {
   // "+ = right" comment was backwards), half-width hw (m), speed (m/s), arc s.
   probe() {
     if (!G.player || !G.track) return null;
-    const lineAt = (s) => { const ln = TrackLine.at(G.track, wrapS(s)); return ln.x * ln.w; };
+    const lineAt = (s) => TrackLine.at(G.track, wrapS(s)).x;
     Tracks.sample(G.track, G.player.s, smp);
     let angle = 0;
     if (G.player.head != null) {
@@ -543,7 +560,8 @@ const api = {
       hw: smp.hw,
       speed: G.player.speed, s: G.player.s,
       // The racing-line assist's pursuit target (game.js updateCar): the AI
-      // line x*w at the same speed-scaled look-ahead. Where the line IS — the
+      // line x at the same speed-scaled look-ahead (lineW scales the pull, not
+      // the target). Where the line IS — the
       // corner's sign alone says nothing (past an apex the line is outside).
       lineAhead: G.track.line ? lineAt(G.player.s + Math.min(90, Math.max(25, Math.abs(G.player.speed) * 0.9))) : null,
     };
@@ -578,11 +596,14 @@ const api = {
       maxTilt: Input.maxTilt,          // TILT SENSITIVITY (deg for full lock)
       deadzone: Input.deadzone,        // fixed dead zone (deg) — no longer a slider
       tiltCutoff: Input.minCutoff,     // STEER SMOOTHING (One-Euro min-cutoff, Hz)
+      wheelState: typeof WheelState !== "undefined" && WheelState.enabled(), brakeThermal: typeof WheelState !== "undefined" && WheelState.thermalEnabled(),   // #1628 torque-balanced wheels; #1577 brake fade (needs it)
     };
   },
-  physState() {
+  // physState({lite:true}) — the METRICS overlay's 4 Hz read: no coach.status() (driving: undefined).
+  physState(o) {
     if (!G.player || G.player.px == null) return null;
     if (!G.track) return { error: "no track" };   // a stepped rebuild / menu flyby drop nulls the track while px survives
+    const dAx = typeof DamageHandling !== "undefined" ? DamageHandling.axles() : null;
     const slip = Math.atan2(G.player.vLat || 0, Math.max(1, G.player.speed));
     Tracks.sample(G.track, G.player.s, smp);
     const { axFrac, slipFactor } = AgentView.slipBudget(G.player, LONG_GRIP, gripMult());
@@ -595,17 +616,21 @@ const api = {
       wrongWay: !!G.player.wrongWay, rescueT: G.player.rescueT || 0, lap: G.player.lap,
       axEstSm: +(G.player.axEstSm ?? 0).toFixed(2),
       axFrac: +axFrac.toFixed(3),
-      slipFactor: +slipFactor.toFixed(3), driving: G.coach.status(),
+      slipFactor: +slipFactor.toFixed(3), driving: o && o.lite ? undefined : G.coach.status(),
       // The DRIVEN axle's circle after the brake-bias re-split (player-forces
       // c.slipFactor) — not the whole-car budget above. null before a tick.
       drivenSlip: G.player.slipFactor != null ? +G.player.slipFactor.toFixed(3) : null,
       brakeBias: G.player.brakeBias != null ? +G.player.brakeBias.toFixed(3) : null,   // the SETUP sheet's split (null = BB_REF)
-      aeroX: +(G.player.aeroX || 0).toFixed(3),
+      aeroX: +(G.player.aeroX || 0).toFixed(3), brakeFade: G.player.brakeFade != null ? +G.player.brakeFade.toFixed(3) : null, brakeTemp: G.player.brakeTF != null ? { f: Math.round(G.player.brakeTF), r: Math.round(G.player.brakeTR) } : null,   // #1577 opt-in: °C/axle + kept brake fraction
       xOn: !!G.player.xOn, xArmed: !!G.player.xArmed,
       vmaxNow: +(G.player._vmaxNow || 0).toFixed(3),
       towing: +(G.player.towing || 0).toFixed(3),   // player slipstream 0..1 — folded into vmaxNow
       wake: +(G.player.wake || 0).toFixed(3),       // dirty air 0..1 — the grip penalty, positions-only
       aeroGrip: +(G.player._aeroGrip || 0).toFixed(4),
+      // DAMAGE → HANDLING (#1578): per-axle grip ratio from damage (1 = none; always 1 with the opt-in OFF).
+      damageAxF: dAx ? +dAx.f.toFixed(4) : 1,
+      damageAxR: dAx ? +dAx.r.toFixed(4) : 1,
+      damageHandling: typeof DamageHandling !== "undefined" && DamageHandling.isEnabled(),
       aeroDf: +G.aeroDfMult(G.player).toFixed(3),
       aeroLoad: +(G.player.aeroLoad != null ? G.player.aeroLoad : 0.5).toFixed(3),
       xVmaxGain: +G.xVmaxGain(G.player).toFixed(4),
@@ -636,6 +661,8 @@ const api = {
     // The AI's strategy, when it has one: what it plans to do and why it last
     // deviated. Null for the player, who plans their own race.
     if (out && c) { out.plan = c.pitPlan || null; out.why = c.pitWhy || ""; }
+    // The lane's net cost at racing speed: the figure the STRATEGY row shows.
+    if (out && G.pits.lossS) out.lossS = +G.pits.lossS().toFixed(2);
     // THE STOP, SEEN — crew mesh facts + how many frames submitted it since
     // the last read (pitCrewDrawn clears). A browser spec asserts both the
     // people count and a positive draw while the car is in its box.
@@ -681,10 +708,11 @@ const api = {
     const c = o.car != null ? (G.cars || [])[o.car] : G.player;
     return G.tyres.info(c);
   },
-  // DISPLAY-ONLY damage readout (js/race/damage.js) for car `i` (default: the
-  // player): {fwL, fwR, rw, floor, knock, hits, worst, shown}. `hit` books a
-  // synthetic impact {long, lat, sev} in the car's frame (+long nose, +lat right);
-  // "reset" repairs. Nothing in physics reads it — a screenshot/test door only.
+  // Damage readout (js/race/damage.js) for car `i` (default: the player):
+  // {fwL, fwR, rw, floor, knock, hits, worst, shown}. `hit` books a synthetic
+  // impact {long, lat, sev} in the car's frame (+long nose, +lat right); "reset"
+  // repairs. Visual by default; with RACE SETTINGS DAMAGE = HANDLING
+  // (apex26.damageHandling) it reaches the local car's handling via DamageHandling.forCar.
   damage(i, hit) {
     const c = i != null ? (G.cars || [])[i] : G.player;
     if (!c || typeof Damage === "undefined") return null;
@@ -692,6 +720,11 @@ const api = {
     else if (hit && typeof hit === "object") Damage.apply(Damage.get(c), +hit.long || 0, +hit.lat || 0, +hit.sev || 0);
     return Damage.state(c);
   },
+  // The manual sector ERS plan (#1580, js/race/energy-plan.js): ["manual"|"deploy"|"save"] × 3.
+  // ersPlan() reads it; ersPlan([...]) sets it for this session (not persisted) and returns
+  // {plan, ok} — ok false keeps the old plan. MANUAL ×3 is the neutral, shipped plan.
+  ersPlan(p) { const ok = p === undefined ? true : EnergyPlan.setPlan(p); return { plan: EnergyPlan.plan(), ok, neutral: EnergyPlan.isNeutral() }; },
+  ersForecast(o) { return EnergyPlan.report(G.player, o); },   // ERS energy forecast (#1629): battery per sector exit + confidence; {override:[dE ×3], reset}
   setPhysics(o) {
     o = o || {};
     // Reject a poisoned patch atomically; existing finite floors remain compatible.
@@ -720,6 +753,9 @@ const api = {
     if (o.maxTilt != null) Input.setTiltSensitivity(o.maxTilt);
     if (o.deadzone != null) Input.setTiltDeadzone(o.deadzone);
     if (o.tiltCutoff != null) Input.setTiltSmoothing(o.tiltCutoff);
+    // #1628: the wheel-state gate for this session only (the player's stored choice is untouched).
+    if (o.wheelState != null && typeof WheelState !== "undefined") WheelState.setEnabled(o.wheelState === true, false);
+    if (o.brakeThermal != null && typeof WheelState !== "undefined") WheelState.setThermal(o.brakeThermal === true, false);
     return this.tuning();
   },
 
@@ -729,7 +765,7 @@ const api = {
     return { speed: G.player.speed };
   },
 
-  // spin(deg) — add a heading offset to the player (degrees, +CW viewed from above).
+  // spin(deg) — add a heading offset to the player (degrees, + = nose LEFT, CCW viewed from above).
   // Simulates a snap-oversteer or a scripted orientation change. Zeroes lateral
   // velocity and yaw rate after rotating so the car doesn't immediately un-spin.
   // Use spin(180) to face the wrong way, spin(-45) for a 45° drift setup.
@@ -854,7 +890,7 @@ const api = {
   rival(dProg, dx) {
     if (!G.player || !G.track) return false;
     const ai = G.cars.find((c) => !c.isPlayer);
-    if (!ai) return false;
+    if (!ai || !finiteOrNil(dProg) || !finiteOrNil(dx)) return false;
     ai.prog = G.player.prog + (dProg || 0);
     ai.s = wrapS(G.player.s + (dProg || 0));
     ai.x = G.player.x + (dx || 0);
@@ -866,8 +902,8 @@ const api = {
   rivals(list) {
     if (!G.player || !G.track) return false;
     const ai = G.cars.filter((c) => !c.isPlayer);
-    const used = [];
-    (Array.isArray(list) ? list : []).forEach((spec, i) => {
+    const used = []; list = Array.isArray(list) ? list : []; if (!list.every((q) => q && finiteOrNil(q.dProg) && finiteOrNil(q.dx) && finiteOrNil(q.speed))) return false;   // refuse before moving anyone
+    list.forEach((spec, i) => {
       const c = ai[i];
       if (!c) return;
       c.prog = G.player.prog + (spec.dProg || 0);
@@ -906,7 +942,8 @@ const api = {
   // diff that matters.
   carState: () => G.cars.map((c) => {
     const o = {};
-    for (const k in c) { const v = c[k]; if (typeof v === "number" || typeof v === "boolean") o[k] = v; }
+    // A non-finite number (best = Infinity before a lap is set) is null: JSON would turn it into null anyway.
+    for (const k in c) { const v = c[k]; if (typeof v === "boolean") o[k] = v; else if (typeof v === "number") o[k] = Number.isFinite(v) ? v : null; }
     return o;
   }),
   cars: () => G.cars.map((c, i) => ({
@@ -995,12 +1032,12 @@ const api = {
   // "quali", opened qualifying instead of the grid, and read as "did not reach
   // the grid". Absent leaves the rule alone; an unknown name is ignored.
   race(trackRef, timeOfDay, weather, opts) {
-    const i = typeof trackRef === "number"
-      ? trackRef
-      : Tracks.LIST.findIndex((t) => t.id === trackRef);
-    if (i == null || i < 0 || i >= Tracks.LIST.length) return false;
-    G.trackIdx = i;
+    const i = trackIndex(trackRef);
+    if (!Tracks.LIST[i]) return false;
+    const leavingCareer = G.flow === "career";
     G.seasonMode = false;
+    if (leavingCareer) restoreFreePlaySelection();
+    G.trackIdx = i;   // the requested circuit overrides the restored free-play circuit
     G.timeTrial = false;
     G.raceLaps = (opts && opts.laps > 0) ? (opts.laps | 0) : GAME_LAPS;
     // End the previous session's weather arc FIRST: startRace's restoreBase() puts a live MIXED
@@ -1020,10 +1057,8 @@ const api = {
   // without race() await this first — same gate as ensureScenery / startRace.
   ensureCircuit: (idx) => (G.ensureCircuit ? G.ensureCircuit(idx) : Promise.resolve()),
   tt(trackRef, timeOfDay) {
-    const i = typeof trackRef === "number"
-      ? trackRef
-      : Tracks.LIST.findIndex((t) => t.id === trackRef);
-    if (i == null || i < 0 || i >= Tracks.LIST.length) return false;
+    const i = trackIndex(trackRef);
+    if (!Tracks.LIST[i]) return false;
     G.trackIdx = i;
     G.seasonMode = false;
     G.timeTrial = true;
@@ -1174,22 +1209,12 @@ const api = {
     await Assets.load(tier ? { tier } : {});
     return Assets.state();
   },
-  // texCensus() — RESIDENT texture bytes, by kind, from the active backend.
-  //
-  // It exists because the biggest texture number in the game — ~147 MB of
-  // livery atlases, about ten times the packed world geometry — is otherwise
-  // arithmetic nothing can confirm or refute. Read it on a full grid before
-  // touching any resolution policy.
-  //
-  // `excludes` is not decoration — it names what the census does NOT count
-  // (render targets: shadow maps, post chain, env cube), so a total can never
-  // be mistaken for the whole picture. `supported:false` means the active
-  // backend has no census (WGX/TLX); that is a normal state, not an error, and
-  // it reads as such rather than as a measured zero.
+  // Resident GPU memory by kind. Each backend lists its own coverage in excludes.
+  // Unavailable instrumentation returns null totals; an available but empty census returns zero.
   texCensus: () => (gfx && gfx.texCensus
     ? gfx.texCensus()
     : { supported: false, bytes: null, count: null,
-        error: "the active backend has no texture census (GLX only)" }),
+        error: "the active backend has no texture census" }),
   matTex(v) {
     if (v !== undefined) {
       setLightTune("matTexMix", Math.max(0, Math.min(1, +v || 0)));
@@ -1234,14 +1259,8 @@ const api = {
   },
   clearInput() { G._testInput = null; },
   step(dt, n) {
-    const [d, count] = stepArgs(dt, n);
-    for (let i = 0; i < count; i++) {
-      // Keep the render-interpolation anchors in sync: the render-driven loop
-      // snapshots them before each step, so a manual pump must too or a frozen
-      // render afterwards lerps toward a stale pre-teleport pose.
-      AgentView.syncRenderAnchors(G.cars);
-      update(d);
-    }
+    const [d, count] = simArgs(dt, n);
+    for (let i = 0; i < count; i++) simTick(d);
   },
   // Deterministic tilt emulation for the autopilot harness. `step(deg, dt)` runs a
   // raw tilt angle (deg) through the real tilt pipeline (One-Euro filter + dead
@@ -1265,22 +1284,16 @@ const api = {
     const ok = !!(G.redFlagRestart && G.redFlagRestart());
     return ok ? { state: G.state } : false;
   },
-  // Trigger the race-results screen cleanly, as if all cars crossed the line.
-  finishRace() {
+  // Trigger results as if all cars finished. Default = today's instant sheet;
+  // {ceremony:true} arms RaceCeremony when eligible (js/race/ceremony.js).
+  // A retirement never crosses the line (finishThrough); finishT only when raceT > 0.5.
+  finishRace(opts) {
     if (!G.track || G.state === "results" || G.state === "menu") return false;
-    // A retirement never crosses the line: it stays unfinished and classifies
-    // behind everyone who did, which is the order endRace() builds for a real
-    // flag. Waving one home here would hand a parked car a finish and points.
-    // go() floors raceT at 0.5 s; stamping that as finishT prints
-    // OFFICIAL WINNER ELAPSED 0:00.500 on every harness open. Only attach a
-    // finish clock when the race has actually run past that floor — finishT
-    // 0 omits the official elapsed line (results-sheet correctedFinish).
-    const ran = Number.isFinite(G.raceT) ? G.raceT : 0;
-    const clock = ran > 0.5 ? ran : 0;
-    G.cars.forEach((c) => { if (!c.finished && !c.retired) { c.finished = true; c.finishT = clock; } });
-    endRace(raceOrder(G.cars));
-    return { state: G.state };
+    // G.endRace at CALL time, not the boot capture: RealRace wraps G.endRace (a script DSQ must survive).
+    return RaceCeremony.finishThrough(G, (o) => G.endRace(o), raceOrder, opts);
   },
+  // RaceCeremony status / seek / skip (Esc = SKIP once the host UI wires it).
+  ceremony(arg) { return RaceCeremony.apexCall(arg); },
 
   freeze(v) {
     if (v === undefined) return G.frozen;
@@ -1418,6 +1431,7 @@ const api = {
       sunColor: G.frame.sunColor && G.frame.sunColor.slice(),
       exposure: G.frame.exposure != null ? G.frame.exposure : 1,
       numLights: L ? L.length / 15 : 0,
+      brakeSpillLights: G.frame.brakeSpillCount || 0,
       meanLampRGB,
       // The per-chunk twin of meanLampRGB: the mean colour of the lamp set the
       // CHUNKED meshes are lit from. It tracks LAMP LEVEL, TEMPERATURE,
@@ -1446,7 +1460,6 @@ const api = {
       perChunkHeld: (() => {
         if (!(+LT.perChunkLights > 0)) return null;          // player has it off
         if (G.frame.perChunkLights > 0) return null;         // actually running
-        if (gfx && gfx.hasPerChunkLights === false) return "backend";
         try { if (localStorage.getItem("apex26.perChunkOff") === "1") return "latch"; } catch (_) { /* no storage */ }
         if (typeof PerfGov !== "undefined" && PerfGov.autoShed && PerfGov.autoShed() >= 2) return "tier";
         return "day";   // the flood branch never ran: daylight with no daytime lamps
@@ -1571,7 +1584,9 @@ const api = {
   //   caution(true|false) or caution({enabled}) → switch the whole layer, the
   //     SAME door the CAUTIONS race setting uses (so the chips cannot go stale
   //     against it). Turning it off drops any flag already flying.
+  //   caution({force: 0-3, cause}) → fly that flag by script (RaceControl.hold); force:0 releases.
   caution(arg) {
+    if (arg && typeof arg === "object" && arg.force !== undefined && G.holdCaution) G.holdCaution(arg.force | 0, arg.cause);
     if (typeof arg === "boolean") G.setCautionEnabled(arg);
     else if (arg && typeof arg === "object" && arg.enabled !== undefined)
       G.setCautionEnabled(!!arg.enabled);
@@ -1628,8 +1643,10 @@ const api = {
   // js/perf/governor.js) rather than a hardcoded 16.7 ms; it rises to match an
   // external cap like iOS Low Power Mode's 30 fps throttle instead of forever
   // judging that device against a 60 fps target it cannot reach.
+  // renderScale({lite:true}) skips frameTimes (PerfGov.frameStats copies and sorts its 2048-frame ring). `effective`: ApexLifecycle.effectiveRes (#5166).
   renderScale(v) {
-    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), lookPostShed: !!(PerfGov.lookPostShed && PerfGov.lookPostShed()), phoneSlowLatch: !!(PerfGov.phoneSlowLatch && PerfGov.phoneSlowLatch()), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), frameTimes: PerfGov.frameStats(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile(), tierHold: PerfGov.tierHold() };
+    const lite = !!(v && v.lite === true);
+    if (v === undefined || lite) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), lookPostShed: !!(PerfGov.lookPostShed && PerfGov.lookPostShed()), phoneSlowLatch: !!(PerfGov.phoneSlowLatch && PerfGov.phoneSlowLatch()), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), frameTimes: lite ? undefined : PerfGov.frameStats(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile(), tierHold: PerfGov.tierHold(), effective: typeof ApexLifecycle === "undefined" ? null : ApexLifecycle.effectiveRes(gfx, canvas) };
     if (v === true) { PerfGov.setAutoRes(true); return this.renderScale(); }
     // A FRACTION, 0.5..1 (the opposite unit to uiScale). Unchecked, "auto"
     // reached GLX/WGX as NaN (Math.max(0.5, NaN) is NaN: a NaN-sized buffer)
@@ -1684,6 +1701,7 @@ const api = {
       if (o && o.measure !== undefined) PerfSpans.measure(o.measure);
       if (o && o.on !== undefined) PerfSpans.on(o.on);
     }
+    if (o && o.lite) return this.renderScale(o);   // perf({lite:true}): the overlay's read, no frameTimes / span report
     const base = this.renderScale();
     if (typeof PerfSpans === "undefined" || !(PerfSpans.isOn() || o)) return base;
     return Object.assign(base, PerfSpans.report(), { gpu: this.gpuTimer() });
@@ -1692,6 +1710,22 @@ const api = {
   uiScale(v) { return badPct("uiScale", v) || G.setScale("uiScale", "--ui-scale", v); },
   hudScale(v) { return badPct("hudScale", v) || G.setScale("hudScale", "--hud-scale", v); },
   btnScale(v) { return badPct("btnScale", v) || G.setScale("hudBtnScale", "--hud-btn-scale", v); },
+
+  // SHEET FIT (UI contract 2026-11-06 rule 8; the alias PR B deferred until PR C owned this file), read-only: one sheet's
+  // measured layout as numbers, SheetShape.layoutProbe verbatim. `sel` = a selector or an element; none = the first
+  // painted .sheet / .fit-managed. null when nothing matches or nothing is painted.
+  sheetFit(sel) {
+    if (typeof SheetShape === "undefined" || !SheetShape.layoutProbe) return null;
+    let el = sel && typeof sel === "object" ? sel : null;
+    if (typeof sel === "string") el = document.querySelector(sel);
+    else if (sel == null) {
+      for (const c of document.querySelectorAll(".sheet, .fit-managed")) {
+        const r = c.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) { el = c; break; }
+      }
+    }
+    return el ? SheetShape.layoutProbe(el) : null;
+  },
 
   safeMode(v) {
     if (v === undefined) return { strikes: PerfGov.strikes(), tierFloor: PerfGov.tierFloor(), tier: PerfGov.tier() };
@@ -1821,11 +1855,8 @@ const api = {
       G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     }
     if (input !== undefined) G._testInput = input || null;
-    const [d, count] = stepArgs(dt, n);
-    for (let i = 0; i < count; i++) {
-      AgentView.syncRenderAnchors(G.cars);   // all six, exactly as step() does
-      update(d);
-    }
+    const [d, count] = simArgs(dt, n);
+    for (let i = 0; i < count; i++) simTick(d);
     return this.obs();
   },
 
@@ -1917,11 +1948,12 @@ const api = {
     if (!G.track || !G.cars[idx]) return false;
     const c = G.cars[idx];
     if (c.isPlayer) return false;
+    if (!finiteOrNil(frac) || !finiteOrNil(speed) || !finiteOrNil(x)) return false;   // same NaN refusal as jump()
     const f01 = ((((frac != null ? frac : 0)) % 1) + 1) % 1;   // keep s and prog coupled
     c.s = c._prevS = wrapS(f01 * G.track.total);
     c.prog = ((c.lap || 0) - 1) * G.track.total + c.s;   // the engine's (lap-1)*L + s (see NetPlay's prog rebuild)
-    if (x     !== undefined) { c.x = x; c.xVis = x; }
-    if (speed !== undefined) c.speed = speed;
+    if (x     != null) { c.x = x; c.xVis = x; }
+    if (speed != null) c.speed = speed;
     c.vLat = 0; c.yawRateCur = 0;
     Tracks.sample(G.track, c.s, smp2);
     placeFromTrack(c, smp2);
@@ -1930,7 +1962,7 @@ const api = {
     // placed after a wedge brings ~3 s of rescueT with it and auto-rescues
     // itself somewhere it was never stuck.
     c.rescueT = 0; c.wallT = 0; c.wasOnWall = false;
-    c.wrongT = 0; c.wrongWay = false; c.offT = 0;
+    c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.offCut = false;
     // rPrevHead with the rest: without it the yaw interpolator tweens from the
     // old heading and the car visibly swings into place over a frame.
     AgentView.syncRenderAnchors(c);
@@ -2045,14 +2077,17 @@ const api = {
     return out;
   },
 
-  seed(n) { if (n !== undefined && Number.isFinite(n)) G.seed = n; return G.seed; },
+  seed(n, stream) { if (stream === true) return G.simSeed(undefined, true); if (n !== undefined && Number.isFinite(n)) { G.seed = n; apexSeed = n; } return G.seed; },   // stream true: read the sim RNG position, no draw (R3-01)
 
   reset(frac, speed, x, seed) {
     if (!G.track || !G.player) return false;
     // NaN into prog/s/speed/x survives every later tick (the field sort reads prog): refuse first.
     if (![frac, speed, x, seed].every(finiteOrNil)) return false;
     G.resetEpisodeOwners();   // clear takeovers, held flags and debris before reusing car indexes
-    if (seed !== undefined) G.seed = seed;
+    // A seedless reset() replays the last seed an agent SET (seed(n) / reset(...,seed)): the setter
+    // rewinds the stream. Never seeded through __apex: the stream continues, as before.
+    if (seed !== undefined) apexSeed = seed;
+    if (apexSeed !== null) G.seed = apexSeed;
     gridUp();   // also clears finPos / retired / dnf / dnfAt / dnfWhy
     // RE-ARM retirements exactly as startRaceBody does, minus its raceIndex++:
     // the round stays put, so the (seed, round, driver) hash replans the SAME
@@ -2120,7 +2155,7 @@ const api = {
       // across consecutive post-reset snapshots and names what leaked. This
       // loop runs last, so a second list or a zeroing block ahead of it is
       // dead code. Add to EPISODE_TRANSIENTS; never a second list.
-      c.lane = c.lanePref != null ? c.lanePref : 0;
+      c.lane = c.lanePref != null ? c.lanePref : 0; c.laneClr = 0;
       c._prevS = c.s;
       // Reset to `undefined`, never `delete`: a delete (of a non-last key) drops all 22 cars to V8 dictionary
       // mode (undoes PERF-HUNT-2 #1), and an absent key reads the same as an undefined one (car-fields.js header).
@@ -2209,6 +2244,15 @@ const api = {
   //   __apex.audioTune({ pitch: 1.1 })        // clamped into range, returns the tune
   //   __apex.audioProfile("cockpit")          // returns the profile actually set
   //   __apex.audioLayer("wind", false)        // returns the layer map
+  // hudSecFlash() — the HUD's sector-flash state (js/ui/hud.js GameHud.secFlash(): the _secFlash timers, the
+  // last flashed sector and raceT), read-only. Tells "flashSector() never ran" from "ran but never painted".
+  // { ok:false, error:"no_seam" } until GameHud exposes it.
+  hudSecFlash() {
+    if (typeof GameHud === "undefined" || typeof GameHud.secFlash !== "function") {
+      return { ok: false, error: "no_seam", message: "GameHud.secFlash() is not in this build" };
+    }
+    return GameHud.secFlash();
+  },
   audio() {
     return noAudio() || { ok: true, profile: GameAudio.profile(), profiles: GameAudio.profiles(),
       voice: GameAudio.voiceName(), voices: GameAudio.voices(),
@@ -2335,7 +2379,7 @@ const api = {
       document.body.appendChild(el);
       el._t = setInterval(() => {
         try {
-          const r = this.renderScale();
+          const r = this.renderScale({ lite: true });
           const g = this.gpuTimer();
           const a = (typeof Assets !== "undefined") ? Assets.state() : null;
           el.textContent =
@@ -2467,7 +2511,7 @@ const api = {
       physState: safe(() => this.physState()),
       timing: safe(() => this.timing()),
       gpuTimer: safe(() => this.gpuTimer()),
-      // Console errors are not captured retroactively — see docs/CONSOLE-RECIPES.md
+      // Console errors are not captured retroactively — see docs/DEBUG-HOOKS.md
       // for the one-liner that installs a collector BEFORE reproducing a bug.
       errors: safe(() => (window.__apexErrors || []).slice(-40), []),
       // Counted rather than swallowed by index.html's handler. A non-zero count

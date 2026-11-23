@@ -6,12 +6,11 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["hockenheim"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
-        px, pz, pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
-        sponsorHoarding, cameraTower, seat, forestEdge, terrace, bleacher,
-        addBox, addCyl, addPrism, addCone } = api;
+        sponsorHoarding, cameraTower, seat, forestEdge,
+        addBox, addCyl, addPrism, bakedModel } = api;
 
       const tiltBasis = (a, ang) => {
         const c = Math.cos(ang), s = Math.sin(ang);
@@ -207,7 +206,7 @@
         }, { required: true });
       }
 
-      // Südtribüne — largest permanent stand: T15 / Südkurve up the main
+      // Südtribüne — largest permanent stand: T17 / Südkurve up the main
       // straight toward Haupttribüne. Official data-facts lists South Grandstand;
       // thef1spectator details A–H + Oberrang mid section. Positive rake (rows
       // rise away from the track). Side -1 meets Main at start/finish.
@@ -428,9 +427,13 @@
         for (const [r0, r1] of runs(s0, s1, 1)) guardrail(r0, r1, 1, 7, [0.80, 0.81, 0.83]);
       }
       guardrail(0.78, 0.06, 1, 4.0, [0.85, 0.85, 0.88]);
-      fence(0.80, 0.05, -1, 9, 4, [0.74, 0.76, 0.80]);
+      // 10.3, not 9: no wall in front, so a car's side reached 10.1 m (the 9 m run-off + its
+      // half-width) and drove 1.1 m into the fence. Run-off unchanged (#5998).
+      fence(0.80, 0.05, -1, 10.3, 4, [0.74, 0.76, 0.80]);
       fence(0.845, 0.965, 1, 10, 4, [0.74, 0.76, 0.80]);
-      fence(0.43, 0.49, -1, 8, 4, [0.74, 0.76, 0.80]);
+      // 10.3, not 8: no wall in front on this forest stretch, so a car's side
+      // reached 10.1 m and drove 2.1 m into the fence (#6007).
+      fence(0.43, 0.49, -1, 10.3, 4, [0.74, 0.76, 0.80]);
 
       for (const s of [0.14, 0.22, 0.29, 0.52, 0.68, 0.75]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
@@ -494,4 +497,10 @@
       cameraTower(K(0.838), 1, 8, { h: 17 });
       cameraTower(K(0.918), -1, 8, { h: 15 });
       cameraTower(K(0.470), 1, 10, { h: 14 });   // Spitzkehre, the other TV vantage
+      // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
+      // bakedModel is a pure enhancement (false when the pack lacks the id) and
+      // carries its own road guard; ids stay string literals so ensureScenery
+      // fetches them. Tents behind the paddock, TV camera pods at the big corners.
+      for (const s of [0.965, 0.985, 0.01]) bakedModel("k_tentlong", K(s), -1, 95, { scale: 2.4 });
+      for (const s of [0.1875, 0.4635, 0.657, 0.883]) bakedModel("k_camera_exclusive", K(s), 1, 13, { scale: 3 });
     };

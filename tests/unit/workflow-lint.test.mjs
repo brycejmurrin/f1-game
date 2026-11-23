@@ -15,14 +15,19 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { lintWorkflows } from "../../tools/check/workflow-lint.mjs";
 import { ROOT, requireBins, resolveBin } from "../../tools/lib/lint-bins.mjs";
+import { requireTool } from "../helpers/require-tool.mjs";
 
 const FIX = "tests/fixtures/workflow-lint";
+// Absent: skip loudly and count it (`# skipped N: <tool> missing` at exit); a FAILURE under
+// APEX_REQUIRE_LINT_BINS=1 (the CI `lints` job) or APEX_REQUIRE_TOOLS naming the tool.
+const gates = new Map();
 const need = (tool) => {
-  if (resolveBin(tool)) return false;
-  const msg = `${tool} not installed - NOT CHECKED (bash tools/env/install-lint-bins.sh ${tool})`;
-  if (requireBins([])) assert.fail(msg);
-  console.error(`SKIP workflow-lint.test: ${msg}`);
-  return msg;
+  if (!gates.has(tool)) {
+    const gate = requireTool(tool, !!resolveBin(tool), { strict: requireBins([]), hint: `bash tools/env/install-lint-bins.sh ${tool}` });
+    if (gate.missing) console.error(`SKIP workflow-lint.test: ${gate.reason}`);
+    gates.set(tool, gate);
+  }
+  return gates.get(tool).skip();
 };
 const row = (rows, tool) => rows.find((r) => r.tool === tool);
 

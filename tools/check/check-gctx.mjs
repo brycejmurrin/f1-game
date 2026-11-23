@@ -27,7 +27,9 @@
  * of manifest modules that actually export a create() taking a ctx.
  *
  * LEG 2, USAGE (needs tsc; skipped with a notice when absent). eslint-scope
- * resolves every reference to each module's own `create(ctx)` parameter — a
+ * resolves every reference to each module's own `create(ctx)` parameter, to the
+ * parameter of every same-file helper the ctx is handed to, and to the parameter
+ * of every cross-file entry `X.fn(ctx)` (scanCtxEntries, #5980) — a
  * scope-accurate resolution, NOT a `\bG\.` grep, so a local named `ctx` (the 2D
  * canvas context in the minimap) cannot masquerade as the façade. Each resolved
  * member read, member write and `const {…} = ctx` destructure is emitted into a
@@ -72,6 +74,7 @@ const parse = (src) => espree.parse(src, { ecmaVersion: 2022, loc: true, range: 
 // this suite costing ~2 s and ~8 s inside test:tooling-fast.
 const astCache = new Map();
 let factoryCache = null;
+let entryCache = null;
 const parseFile = (rel) => {
   if (!astCache.has(rel)) astCache.set(rel, parse(read(rel)));
   return astCache.get(rel);
@@ -86,22 +89,49 @@ const parseFile = (rel) => {
 // keeps this inside its budget: parsing is the whole cost, and without it every
 // circuit and shader file would go through espree for nothing.
 // (docs/research/TREE-RESTRUCTURE-2026-09.md §Phase 2 — tools rewritten before the move.)
-const CREATE_DEF = /\bfunction\s+create\s*\(\s*[A-Za-z_$]/;
+// Both spellings of the factory: `function create(G) {` and the method shorthand
+// `create(G) {` (or `create: function (G)`) inside the module's returned object —
+// js/perf/soak-run.js and bench-run.js use the latter and were silently unchecked
+// while only the first was recognised.
+const CREATE_DEF = /\bfunction\s+create\s*\(\s*[A-Za-z_$]|^\s*create\s*(?::\s*function\s*)?\(\s*[A-Za-z_$][\w$]*\s*\)\s*\{/m;
 let moduleCache = null;
-const moduleFiles = () => {
-  if (moduleCache) return moduleCache;
+let rosterCache = null;
+/** Every rostered js/ file that is code (not circuit data), before the create() prefilter. */
+const rosteredFiles = () => {
+  if (rosterCache) return rosterCache;
   const data = new Set([...MANIFEST.CIRCUITS.map(MANIFEST.circuitPath), ...MANIFEST.LAZY_SCENERY]);
   const rostered = [
     ...MANIFEST.FULL, ...Object.values(MANIFEST.DEFERRED).flat(), ...MANIFEST.LAZY_AGENT,
-    ...MANIFEST.LAZY_RACE, ...(MANIFEST.LAZY_RACE_SESSION || []),
+    ...MANIFEST.LAZY_RACE, ...(MANIFEST.LAZY_RACE_SESSION || []), ...(MANIFEST.LAZY_GARAGE_EXTERIOR || []),
     ...(MANIFEST.LAZY_AUDIO || []), ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
     ...(MANIFEST.LAZY_EDITOR || []),
     ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-    ...(MANIFEST.LAZY_CAREER_UI || []),
+    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_GFX_HI || []),
+    ...(MANIFEST.LAZY_PERF || []),
+    ...(MANIFEST.LAZY_REAL_RACE || []),
+    ...(MANIFEST.LAZY_LEARN || []),
   ];
-  moduleCache = rostered.filter((rel) => rel !== GAME && !data.has(rel) && CREATE_DEF.test(read(rel)));
+  rosterCache = rostered.filter((rel) => rel !== GAME && !data.has(rel));
+  return rosterCache;
+};
+const moduleFiles = () => {
+  if (moduleCache) return moduleCache;
+  moduleCache = rosteredFiles().filter((rel) => CREATE_DEF.test(read(rel)));
   return moduleCache;
 };
+
+/**
+ * The function node is a module factory `create(<ident>)`: a declaration or named
+ * expression `function create(G)`, OR the value of a `create` property — method
+ * shorthand `create(G) {…}`, `create: function (G) {…}` or `create: (G) => …`.
+ */
+function isCreateFn(n, parent) {
+  if (n.type !== "FunctionDeclaration" && n.type !== "FunctionExpression" && n.type !== "ArrowFunctionExpression") return false;
+  if (!n.params.length || n.params[0].type !== "Identifier") return false;
+  if (n.id && n.id.name === "create") return true;
+  return Boolean(parent && parent.type === "Property" && parent.value === n && !parent.computed
+    && ((parent.key.type === "Identifier" && parent.key.name === "create") || parent.key.value === "create"));
+}
 
 function walk(node, visit, parent = null) {
   if (!node || typeof node !== "object") return;
@@ -277,13 +307,12 @@ export function scanRealFactories() {
     walk(ast, (n, p) => { if (p) parents.set(n, p); });
     const sm = escope.analyze(ast, { ecmaVersion: 2022, sourceType: "script" });
     const ctxVars = [];
-    walk(ast, (n) => {
+    walk(ast, (n, parent) => {
       if (rel === GAME && n.type === "VariableDeclarator" && n.id.type === "Identifier"
           && n.id.name === "G" && n.init && n.init.type === "ObjectExpression") {
         for (const s of sm.scopes) { const v = s.variables.find((x) => x.name === "G" && x.defs.some((d) => d.node === n)); if (v) ctxVars.push(v); }
       }
-      if ((n.type === "FunctionDeclaration" || n.type === "FunctionExpression" || n.type === "ArrowFunctionExpression")
-          && n.id && n.id.name === "create" && n.params.length && n.params[0].type === "Identifier") {
+      if (isCreateFn(n, parent)) {
         const scope = sm.acquire(n);
         const v = scope && scope.variables.find((x) => x.name === n.params[0].name);
         if (v) ctxVars.push(v);
@@ -311,46 +340,399 @@ export function scanRealFactories() {
 // ── Leg 2: what the modules actually take off the façade ─────────────────────
 
 /**
- * Every ctx member reference in one module, resolved through eslint-scope from
- * the `create()` parameter binding rather than matched by name.
- * Returns [{ kind: "read"|"write"|"destructure", names, line }].
+ * The closure of ctx bindings from `seeds`, through eslint-scope. THE CTX GETS
+ * ALIASED: js/physics/incident-sim.js holds a module-level `let G = null` and its
+ * create(ctx) does `G = ctx`, so following only the parameter binding missed every
+ * one of that file's façade reads. Followed transitively:
+ *   - `G = ctx` assignments and `const x = ctx` declarations;
+ *   - SAME-FILE HELPERS (#5980): ctx as argument k of a call whose callee resolves
+ *     to a function declared in this file (a FunctionDeclaration or a function-valued
+ *     `const`) binds that function's parameter k. cooldown-lap.js's create(G) hands
+ *     G to `sessionEligible(G)`, and every read in there was unchecked.
+ * A member-expression stash (`this.ctx = ctx`) is not followed and does not occur in js/.
  */
-export function collectUsage(rel, source = null) {
+function ctxClosure(seeds, { sm, parents, resolved }) {
+  const out = [];
+  const seen = new Set();
+  const add = (v) => { if (v && !seen.has(v)) { seen.add(v); out.push(v); } };
+  const variableForDef = (id) => sm.scopes.flatMap((s) => s.variables)
+    .find((x) => x.defs.some((d) => d.name === id));
+  for (const v of seeds) add(v);
+  for (let i = 0; i < out.length; i++) {
+    for (const ref of out[i].references) {
+      const id = ref.identifier;
+      const p = parents.get(id);
+      if (!p) continue;
+      if (p.type === "AssignmentExpression" && p.right === id && p.left.type === "Identifier") add(resolved.get(p.left));
+      else if (p.type === "VariableDeclarator" && p.init === id && p.id.type === "Identifier") add(variableForDef(p.id));
+      else if (p.type === "CallExpression" && p.callee.type === "Identifier") {
+        const k = p.arguments.indexOf(id);
+        const fnVar = k >= 0 ? resolved.get(p.callee) : null;
+        if (!fnVar || fnVar.defs.length !== 1) continue;
+        const d = fnVar.defs[0];
+        const fn = d.type === "FunctionName" ? d.node
+          : d.type === "Variable" && d.node.init && /Function/.test(d.node.init.type) ? d.node.init : null;
+        add(paramVar(sm, fn, k));
+      }
+    }
+  }
+  return out;
+}
+
+/** The scope variable of parameter `k` of function node `fn`, when it is a plain Identifier. */
+function paramVar(sm, fn, k) {
+  if (!fn || !fn.params || !fn.params[k] || fn.params[k].type !== "Identifier") return null;
+  const scope = sm.acquire(fn);
+  return scope ? scope.variables.find((x) => x.name === fn.params[k].name) || null : null;
+}
+
+/**
+ * The parameter bindings of the named entry functions `[{fn, argIndex}]` in one
+ * file: a FunctionDeclaration, a `const fn = function/arrow`, or a non-computed
+ * `fn` property whose value is a function (method shorthand included). Every
+ * same-named definition is bound. Returns {vars, missing: [{fn, argIndex}]}.
+ */
+function entryParams(ast, sm, entries) {
+  const vars = [];
+  const missing = [];
+  for (const e of entries) {
+    const found = [];
+    walk(ast, (n, parent) => {
+      if (!/Function/.test(n.type)) return;
+      const named = (n.type === "FunctionDeclaration" && n.id && n.id.name === e.fn)
+        || (parent && parent.type === "VariableDeclarator" && parent.init === n && parent.id.type === "Identifier" && parent.id.name === e.fn)
+        || (parent && parent.type === "Property" && parent.value === n && !parent.computed
+          && ((parent.key.type === "Identifier" && parent.key.name === e.fn) || parent.key.value === e.fn));
+      if (!named) return;
+      const v = paramVar(sm, n, e.argIndex);
+      if (v) found.push(v);
+    });
+    if (found.length) vars.push(...found); else missing.push(e);
+  }
+  return { vars, missing };
+}
+
+const analysisCache = new Map();
+function analyzeFile(rel) {
+  if (analysisCache.has(rel)) return analysisCache.get(rel);
+  const out = analyzeAst(parseFile(rel));
+  analysisCache.set(rel, out);
+  return out;
+}
+function analyzeAst(ast) {
+  const parents = new Map();
+  walk(ast, (n, p) => { if (p) parents.set(n, p); });
+  const sm = escope.analyze(ast, { ecmaVersion: 2022, sourceType: "script" });
+  const resolved = new Map();
+  for (const s of sm.scopes) for (const r of s.references) if (r.resolved) resolved.set(r.identifier, r.resolved);
+  return { ast, parents, sm, resolved };
+}
+
+/**
+ * Cross-file ctx entries (#5980): every `X.<fn>(…, ctx, …)` call — any member
+ * name, any argument index — where ctx resolves (ctxClosure) to game.js's `const G`
+ * or to a binding that already holds the ctx, and X is a rostered module global.
+ * `const factory = X` is followed one hop, and `Reflect.apply(X.fn, X, [ctx])`
+ * is read as `X.fn(ctx)` (broadcast.js's TvGraphics hand-off). Transitive, as a
+ * worklist: a file is re-scanned whenever it gains an entry.
+ *
+ * This is NOT the GameModuleFactory roster: scanRealFactories() stays the
+ * create-only map the parity leg asserts against the `declare const` lines. An
+ * entry only widens what the USAGE leg scans: ApexCam/ApexTrack/ApexLobby/
+ * ApexNet.hooks(G, …), TvGraphics.create(G), the ceremony's helpers.
+ * Returns { byFile: Map(rel -> [{global, fn, argIndex, at}]), rows: [...] }.
+ */
+export function scanCtxEntries() {
+  if (entryCache) return entryCache;
+  const fileOf = new Map();
+  for (const rel of rosteredFiles()) { const g = moduleGlobal(rel); if (g && !fileOf.has(g)) fileOf.set(g, rel); }
+  const createFiles = new Set(ctxModuleFiles());
+  const byFile = new Map();
+  const rows = [];
+  const queue = [GAME, ...createFiles];
+  const queued = new Set(queue);
+  const aliasOf = (idNode, resolved) => {
+    const v = resolved.get(idNode);
+    if (v && v.defs.length === 1 && v.defs[0].type === "Variable") {
+      const init = v.defs[0].node.init;
+      if (init && init.type === "Identifier") return init.name;
+    }
+    return idNode.name;
+  };
+  while (queue.length) {
+    const rel = queue.shift();
+    queued.delete(rel);
+    const { ast, parents, sm, resolved } = analyzeFile(rel);
+    const seeds = [];
+    walk(ast, (n, parent) => {
+      if (rel === GAME && n.type === "VariableDeclarator" && n.id.type === "Identifier"
+          && n.id.name === "G" && n.init && n.init.type === "ObjectExpression") {
+        for (const sc of sm.scopes) { const v = sc.variables.find((x) => x.name === "G" && x.defs.some((d) => d.node === n)); if (v) seeds.push(v); }
+      }
+      if (createFiles.has(rel) && isCreateFn(n, parent)) seeds.push(paramVar(sm, n, 0));
+    });
+    seeds.push(...entryParams(ast, sm, byFile.get(rel) || []).vars);
+    for (const v of ctxClosure(seeds, { sm, parents, resolved })) {
+      for (const ref of v.references) {
+        const id = ref.identifier;
+        const p = parents.get(id);
+        if (!p) continue;
+        let member = null, k = -1;
+        if (p.type === "CallExpression" && p.callee.type === "MemberExpression") {
+          k = p.arguments.indexOf(id); member = p.callee;
+        } else if (p.type === "ArrayExpression") {
+          const call = parents.get(p);
+          if (call && call.type === "CallExpression" && call.arguments[2] === p && call.callee.type === "MemberExpression"
+              && call.callee.object.type === "Identifier" && call.callee.object.name === "Reflect"
+              && call.callee.property.name === "apply") { k = p.elements.indexOf(id); member = call.arguments[0]; }
+        }
+        let g = null, fn = null;
+        if (p.type === "CallExpression" && p.callee.type === "Identifier") {
+          // `const { fn } = Y; … fn(ctx)` — a same-file call through another module's export.
+          k = p.arguments.indexOf(id);
+          const src = k >= 0 ? destructuredSource(resolved.get(p.callee)) : null;
+          if (src) { g = src.global; fn = src.key; }
+        } else if (k >= 0 && member && member.type === "MemberExpression" && !member.computed
+            && member.object.type === "Identifier" && member.property.type === "Identifier") {
+          g = aliasOf(member.object, resolved); fn = member.property.name;
+        }
+        if (!g) continue;
+        let target = fileOf.get(g);
+        if (!target) continue;                    // a built-in or an unrostered name: not a module hand-off
+        // A module that re-exports `fn` by `const { fn } = Y` hands the entry on to Y.
+        const re = reexportOf(target, fn);
+        if (re && fileOf.has(re)) { g = re; target = fileOf.get(re); }
+        const body = fileOf.get(g + "Body");
+        if (body && lazyBodyEntry(analyzeFile(target), parseFile(body), g, fn)) {
+          g += "Body"; target = body;
+        }
+        if (fn === "create" && k === 0 && createFiles.has(target)) continue;   // the factory roster already seeds it
+        const list = byFile.get(target) || [];
+        if (list.some((e) => e.fn === fn && e.argIndex === k)) continue;
+        const row = { global: g, fn, argIndex: k, at: `${rel}:${id.loc.start.line}`, rel: target };
+        list.push(row); byFile.set(target, list); rows.push(row);
+        if (!queued.has(target)) { queued.add(target); queue.push(target); }
+      }
+    }
+  }
+  entryCache = { byFile, rows };
+  return entryCache;
+}
+
+/** The module global a destructure reads from: `= Y` or `= Y.create(…)` (netplay.js takes QualiWire.create(EV)). */
+function sourceGlobal(init) {
+  if (!init) return null;
+  if (init.type === "Identifier") return init.name;
+  if (init.type === "CallExpression" && init.callee.type === "MemberExpression" && init.callee.object.type === "Identifier") return init.callee.object.name;
+  return null;
+}
+
+/** `{global, key}` when variable `v` is bound by `const { key: v } = Global` (or `= Global.create(…)`), else null. */
+function destructuredSource(v) {
+  if (!v || v.defs.length !== 1 || v.defs[0].type !== "Variable") return null;
+  const decl = v.defs[0].node;
+  if (decl.id.type !== "ObjectPattern" || !sourceGlobal(decl.init)) return null;
+  const prop = decl.id.properties.find((pr) => pr.type === "Property" && pr.value === v.defs[0].name);
+  if (!prop || prop.computed || prop.key.type !== "Identifier") return null;
+  return { global: sourceGlobal(decl.init), key: prop.key.name };
+}
+
+/** The global `rel` re-exports `fn` from (`const { fn } = Y` or `= Y.create(…)`) when it defines no `fn` function itself, else null. */
+function reexportOf(rel, fn) {
+  const { ast, sm } = analyzeFile(rel);
+  if (!entryParams(ast, sm, [{ fn, argIndex: 0 }]).missing.length) return null;
+  let out = null;
+  walk(ast, (n) => {
+    if (out || n.type !== "VariableDeclarator" || n.id.type !== "ObjectPattern" || !sourceGlobal(n.init)) return;
+    if (n.id.properties.some((pr) => pr.type === "Property" && !pr.computed && pr.key.type === "Identifier" && pr.key.name === fn)) out = sourceGlobal(n.init);
+  });
+  return out;
+}
+
+/** Resolve only an exported rest forwarder that passes its entire argument list
+ * to the same member. A Body sibling or a same-named method alone proves nothing.
+ * The injected bodyApi() shape also requires the body's Global._bind(GlobalBody). */
+export function lazyBodyEntry(shell, body, global, member) {
+  const { ast, parents, resolved } = typeof shell === "string" ? analyzeAst(parse(shell)) : shell;
+  const bodyAst = typeof body === "string" ? parse(body) : body;
+  const bodyName = global + "Body";
+  const bound = bodyAst.body.some(stmt => {
+    const call = stmt.expression, callee = call?.callee;
+    return call?.type === "CallExpression" && callee?.type === "MemberExpression" && !callee.computed
+      && callee.object.name === global && callee.property.name === "_bind" && call.arguments[0]?.name === bodyName;
+  });
+  const initOf = id => {
+    const def = resolved.get(id)?.defs[0];
+    return def?.type === "FunctionName" ? def.node : def?.node.init;
+  };
+  // A registered lazy body can be reached through a zero-argument getter.
+  // Only accept a getter of the very binding that _bind assigns its argument to.
+  const boundSlots = new Set();
+  if (bound) walk(ast, n => {
+    if (n.type !== "FunctionDeclaration" || n.id?.name !== "_bind" || n.params.length !== 1) return;
+    walk(n.body, write => {
+      if (write.type === "AssignmentExpression" && write.operator === "=" && write.left.type === "Identifier"
+          && resolved.get(write.right)?.defs[0]?.name === n.params[0]) boundSlots.add(resolved.get(write.left));
+    });
+  });
+  boundSlots.delete(undefined);
+  // Only follow a result that the wrapper returns, either immediately or
+  // through its readiness promise. A call inside a stored callback may never run.
+  function returnedBy(call, fn) {
+    let value = call;
+    while (value) {
+      let owner = parents.get(value);
+      if (owner?.type === "ReturnStatement") {
+        while (owner && !/Function/.test(owner.type)) owner = parents.get(owner);
+      } else if (owner?.type !== "ArrowFunctionExpression" || owner.body !== value) return false;
+      if (owner === fn) return true;
+      const chain = parents.get(owner);
+      if (chain?.type !== "CallExpression" || chain.callee.type !== "MemberExpression"
+          || chain.callee.property.name !== "then" || chain.arguments[0] !== owner) return false;
+      value = chain;
+    }
+    return false;
+  }
+  function forwards(fn, key) {
+    if (fn?.params?.length !== 1 || fn.params[0].type !== "RestElement") return false;
+    let matched = false;
+    walk(fn.body, call => {
+      const target = call.callee, spread = call.arguments?.[0];
+      if (call.type !== "CallExpression" || target.type !== "MemberExpression" || call.arguments.length !== 1
+          || spread.type !== "SpreadElement" || resolved.get(spread.argument)?.defs[0]?.name !== fn.params[0].argument) return;
+      const same = target.computed ? (target.property.value === member || (key && resolved.get(target.property)?.defs[0]?.name === key))
+        : target.property.name === member;
+      if (!same || !returnedBy(call, fn)) return;
+      const obj = target.object;
+      if (obj.type === "Identifier" && obj.name === bodyName && !resolved.has(obj)) matched = true;
+      if (obj.type === "CallExpression" && !obj.arguments.length) {
+        const getter = initOf(obj.callee);
+        if (getter?.params?.length === 0 && boundSlots.has(resolved.get(getter.body))) matched = true;
+      }
+    });
+    return matched;
+  }
+  function memberValue(value, loopKey) {
+    if (value?.type === "Identifier") value = initOf(value);
+    if (value?.type !== "CallExpression") return forwards(value);
+    const arg = value.arguments[0], factory = initOf(value.callee);
+    if (value.arguments.length !== 1 || !factory?.params || factory.params.length !== 1) return false;
+    if (arg.value !== member && !(loopKey && resolved.get(arg)?.defs[0]?.name === loopKey)) return false;
+    return forwards(factory.body, factory.params[0]);
+  }
+  // Find the module's actual exported object and any map spread into it.
+  const decl = ast.body.flatMap(s => s.declarations || []).find(d => d.id.name === global);
+  const init = decl?.init;
+  const returns = init?.callee?.body?.body?.filter(n => n.type === "ReturnStatement").map(n => n.argument) || [init];
+  const inspecting = new Set();
+  function fromMap(id) {
+    const map = resolved.get(id);
+    if (!map || inspecting.has(map)) return undefined;
+    inspecting.add(map);
+    let value;
+    const initial = initOf(id);
+    if (initial?.type === "ObjectExpression") value = fromObject(initial);
+    walk(ast, n => {
+      const lhs = n.left;
+      if (n.type !== "AssignmentExpression" || n.operator !== "=" || lhs.type !== "MemberExpression" || resolved.get(lhs.object) !== map) return;
+      if ((!lhs.computed && lhs.property.name === member) || (lhs.computed && lhs.property.value === member)) {
+        value = memberValue(n.right);
+      } else if (lhs.computed) {
+        const key = resolved.get(lhs.property)?.defs[0]?.name;
+        const loop = key && parents.get(parents.get(parents.get(key)));
+        if (loop?.type === "ForOfStatement" && loop.right.elements?.some(e => e?.value === member)) value = memberValue(n.right, key);
+      }
+    });
+    inspecting.delete(map);
+    return value;
+  }
+  function fromObject(obj) {
+    // Object properties overwrite from left to right. A later explicit
+    // method must keep its own ctx seed even when an earlier spread forwards.
+    for (const prop of [...(obj?.properties || [])].reverse()) {
+      if (prop.type === "SpreadElement") {
+        const value = fromMap(prop.argument);
+        if (value !== undefined) return value;
+      } else if (!prop.computed && (prop.key.name ?? prop.key.value) === member) return memberValue(prop.value);
+    }
+  }
+  return returns.some(out => (out?.type === "Identifier" ? fromMap(out) : fromObject(out)) === true);
+}
+
+/** How collectUsage() seeds a real file: its create() when it is a ctx factory, plus its entries. */
+function usageOptions(rel) {
+  return { create: ctxModuleFiles().includes(rel), entries: scanCtxEntries().byFile.get(rel) || [] };
+}
+
+/** Every file the usage leg scans: the ctx factories, then the files reached only through an entry. */
+export function usageFiles() {
+  const files = ctxModuleFiles();
+  const extra = [...scanCtxEntries().byFile.keys()].filter((rel) => !files.includes(rel)).sort();
+  return [...files, ...extra];
+}
+
+/**
+ * Hand-offs the usage leg knowingly does NOT follow. Named, not guessed: the
+ * argument is not a ctx binding the scope walk can resolve.
+ */
+export const UNCOVERED_ENTRIES = Object.freeze([
+  "js/core/lazy-bundles.js: CrowdAudio.bind(ctxOrNull()) — the ctx arrives as a call result, not a binding",
+]);
+
+/** The UNCOVERED_ENTRIES row that names this entry, if any (an explicit, reasoned exception). */
+const uncoveredRow = (rel, global, fn) => UNCOVERED_ENTRIES.find((u) => u.startsWith(`${rel}: ${global}.${fn}(`));
+
+/** Every entry must bind a parameter in its target file, or its G use is unchecked. */
+export function entryCoverage() {
+  const problems = [];
+  for (const [rel, list] of scanCtxEntries().byFile) {
+    const { ast, sm } = analyzeFile(rel);
+    for (const e of entryParams(ast, sm, list).missing) {
+      const row = list.find((x) => x.fn === e.fn && x.argIndex === e.argIndex);
+      if (uncoveredRow(rel, row.global, e.fn)) continue;   // named in UNCOVERED_ENTRIES, printed as "not followed"
+      problems.push(`${rel}: \`${row.global}.${e.fn}\` receives the ctx as argument ${e.argIndex} (${row.at}) but no \`${e.fn}\` function with a plain parameter there was found — its G use is unchecked`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * Every ctx member reference in one module, resolved through eslint-scope from
+ * the `create()` parameter binding (and any cross-file entry binding,
+ * scanCtxEntries()) rather than matched by name. `opts` = {create, entries:
+ * [{fn, argIndex}]}; omitted, a real file is seeded from the scans and a fixture
+ * `source` from its create() alone.
+ * Returns [{ kind: "read"|"write"|"destructure"|"els…", names, line }].
+ */
+export function collectUsage(rel, source = null, opts = null) {
   const ast = source == null ? parseFile(rel) : parse(source);
   const parents = new Map();
   walk(ast, (n, p) => { if (p) parents.set(n, p); });
   const sm = escope.analyze(ast, { ecmaVersion: 2022, sourceType: "script" });
 
-  // identifier node -> the variable it resolves to, for alias-following below.
+  // identifier node -> the variable it resolves to, for alias-following.
   const resolved = new Map();
   for (const s of sm.scopes) for (const r of s.references) if (r.resolved) resolved.set(r.identifier, r.resolved);
 
-  const ctxVars = [];
-  const seen = new Set();
-  const add = (v) => { if (v && !seen.has(v)) { seen.add(v); ctxVars.push(v); } };
   const elsVars = [];
   const elsSeen = new Set();
   const addEls = (v) => { if (v && !elsSeen.has(v)) { elsSeen.add(v); elsVars.push(v); } };
   const variableForDef = (id) => sm.scopes.flatMap((s) => s.variables)
     .find((x) => x.defs.some((d) => d.name === id));
-  walk(ast, (n) => {
-    if ((n.type === "FunctionDeclaration" || n.type === "FunctionExpression" || n.type === "ArrowFunctionExpression")
-        && n.id && n.id.name === "create" && n.params.length && n.params[0].type === "Identifier") {
+  const o = opts || (source == null ? usageOptions(rel) : { create: true, entries: [] });
+  const seeds = [];
+  if (o.create) {
+    walk(ast, (n, parent) => {
+      if (!isCreateFn(n, parent)) return;
       const scope = sm.acquire(n);
-      if (!scope) return;
-      add(scope.variables.find((x) => x.name === n.params[0].name));
-    }
-  });
+      if (scope) seeds.push(scope.variables.find((x) => x.name === n.params[0].name));
+    });
+  }
+  seeds.push(...entryParams(ast, sm, o.entries || []).vars);
+  const ctxVars = ctxClosure(seeds, { sm, parents, resolved });
 
   const hits = [];
-  // Queue, not a fixed list: THE CTX GETS ALIASED. js/physics/incident-sim.js holds a
-  // module-level `let G = null` and its create(ctx) does `G = ctx`, so following
-  // only the parameter binding missed every one of that file's façade reads —
-  // a checker that silently covers less than it claims. Assignments and
-  // `const x = ctx` declarations are followed transitively; a member-expression
-  // stash (`this.ctx = ctx`) is not, and does not occur in js/.
-  for (let i = 0; i < ctxVars.length; i++) {
-    const v = ctxVars[i];
+  for (const v of ctxVars) {
     for (const ref of v.references) {
       const id = ref.identifier;
       const p = parents.get(id);
@@ -386,13 +768,11 @@ export function collectUsage(rel, source = null) {
           if (prop.key.name === "els" && prop.value.type === "Identifier") addEls(variableForDef(prop.value));
         }
         if (names.length) hits.push({ kind: "destructure", names, line: id.loc.start.line });
-      } else if (p.type === "AssignmentExpression" && p.right === id && p.left.type === "Identifier") {
-        add(resolved.get(p.left));            // `G = ctx` inside create()
-      } else if (p.type === "VariableDeclarator" && p.init === id && p.id.type === "Identifier") {
-        add(variableForDef(p.id));
       }
-      // Anything else (the whole ctx passed on, `ctx[expr]`, …) carries no member
-      // name and is not checkable here. `ctx[expr]` is extinct in js/ (Phase 0).
+      // Aliases and helper arguments were followed by ctxClosure(). Anything else
+      // (the whole ctx passed to another module, `ctx[expr]`, …) carries no member
+      // name here; a cross-file hand-off is scanCtxEntries()' row, not this loop's.
+      // `ctx[expr]` is extinct in js/ (Phase 0).
     }
   }
   // Follow local aliases of `G.els`, including `const { els } = G`, so nested
@@ -445,9 +825,36 @@ export function ctxModuleFiles() {
   });
 }
 
+/**
+ * Coverage: every global really handed the ctx (scanRealFactories) must resolve to
+ * a rostered file that ctxModuleFiles() keeps AND whose create() parameter
+ * collectUsage() binds. A factory spelled in a shape the scanners do not
+ * recognise would otherwise be counted in the roster while its G use went
+ * unchecked. Returns problem strings ([] when every factory is covered).
+ */
+export function factoryCoverage() {
+  const checked = new Set(ctxModuleFiles());
+  const fileOf = new Map();
+  for (const rel of rosteredFiles()) { const g = moduleGlobal(rel); if (g && !fileOf.has(g)) fileOf.set(g, rel); }
+  const problems = [];
+  for (const [g, at] of scanRealFactories()) {
+    const rel = fileOf.get(g);
+    if (!rel) { problems.push(`${at}: \`${g}.create(ctx)\` is called but no rostered file defines \`${g}\` — its G use is unchecked`); continue; }
+    if (!checked.has(rel)) { problems.push(`${rel}: \`${g}\` receives the ctx (${at}) but its create() is not in a shape the usage leg scans`); continue; }
+    if (!hasCreateBinding(rel)) problems.push(`${rel}: \`${g}\` receives the ctx (${at}) but no create(<param>) binding was resolved`);
+  }
+  return problems;
+}
+
+function hasCreateBinding(rel) {
+  let found = false;
+  walk(parseFile(rel), (n, parent) => { if (!found && isCreateFn(n, parent)) found = true; });
+  return found;
+}
+
 /** Generated shadow: the usage above, typed against GameCtx. */
-export function emitShadow() {
-  const files = ctxModuleFiles();
+export function emitShadow(units = null) {
+  const list = units || usageFiles().map((rel) => ({ rel, hits: collectUsage(rel) }));
   const out = [
     "// GENERATED by tools/check/check-gctx.mjs — do not edit, do not commit.",
     "// One function per module; every statement is a G reference lifted from the",
@@ -461,8 +868,7 @@ export function emitShadow() {
   const map = [];                       // generated line (1-based) -> "rel:line"
   const push = (text, origin) => { out.push(text); map[out.length] = origin; };
   let total = 0;
-  for (const rel of files) {
-    const hits = collectUsage(rel);
+  for (const { rel, hits } of list) {
     if (!hits.length) continue;
     total += hits.length;
     push(`function ${rel.replace(/[^A-Za-z0-9]/g, "_")}(G: GameCtx): void {`, null);
@@ -478,7 +884,7 @@ export function emitShadow() {
     push("}", null);
     push("", null);
   }
-  return { text: out.join("\n") + "\n", map, sites: total, files: files.length };
+  return { text: out.join("\n") + "\n", map, sites: total, files: list.length };
 }
 
 /**
@@ -494,7 +900,7 @@ export function emitShadow() {
  */
 export function deadMembers() {
   const used = new Set();
-  for (const rel of ctxModuleFiles()) for (const h of collectUsage(rel)) {
+  for (const rel of usageFiles()) for (const h of collectUsage(rel)) {
     if (h.kind.startsWith("els")) used.add("els");
     else for (const n of h.names) used.add(n);
   }
@@ -526,11 +932,11 @@ const TSCONFIG = {
   files: ["usage.ts"],
 };
 
-export function runTsc() {
+export function runTsc(shadow = null, outDir = OUT_DIR) {
   const tsc = findTsc();
   if (!tsc) return { skipped: true, reason: "no TypeScript resolvable (no node_modules/typescript, no tsc on PATH)" };
-  const shadow = emitShadow();
-  const dir = path.join(ROOT, OUT_DIR);
+  if (!shadow) shadow = emitShadow();
+  const dir = path.join(ROOT, outDir);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "usage.ts"), shadow.text);
   fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify(TSCONFIG, null, 2) + "\n");
@@ -543,7 +949,7 @@ export function runTsc() {
     const m = /^(?:.*[\\/])?usage\.ts\((\d+),\d+\): (.+)$/.exec(l);
     if (m) {
       const origin = shadow.map[Number(m[1])];
-      errors.push(`${origin || `${OUT_DIR}/usage.ts:${m[1]}`}: ${m[2]}`);
+      errors.push(`${origin || `${outDir}/usage.ts:${m[1]}`}: ${m[2]}`);
     } else if (l.trim()) errors.push(l);
   }
   return { skipped: false, how: tsc.how, sites: shadow.sites, errors, ok: r.status === 0 && !errors.length };
@@ -578,7 +984,9 @@ export function checkParity() {
   const realFac = scanRealFactories();
   for (const [g, at] of realFac) if (!declared.has(g)) problems.push(`${at}: \`${g}.create(ctx)\` is called but ${DTS} has no \`declare const ${g}: GameModuleFactory;\``);
   for (const g of declared) if (!realFac.has(g)) problems.push(`${DTS}: \`declare const ${g}: GameModuleFactory\` matches no \`${g}.create(ctx)\` call site`);
-  return { problems, memberCount: real.members.size, factoryCount: realFac.size };
+  problems.push(...factoryCoverage());
+  problems.push(...entryCoverage());
+  return { problems, memberCount: real.members.size, factoryCount: realFac.size, entryCount: scanCtxEntries().rows.length };
 }
 
 function main() {
@@ -590,7 +998,7 @@ function main() {
     console.log(JSON.stringify({ ...parity, tsc: ts, ok: !failed }, null, 2));
     process.exit(failed ? 1 : 0);
   }
-  console.log(`G surface: ${parity.memberCount} members, ${parity.factoryCount} create(ctx) modules`);
+  console.log(`G surface: ${parity.memberCount} members, ${parity.factoryCount} create(ctx) modules, ${parity.entryCount} cross-file ctx entries`);
   if (parity.problems.length) {
     console.log(`\nFAÇADE DRIFT (${parity.problems.length}):`);
     for (const p of parity.problems) console.log("  " + p);
@@ -606,6 +1014,8 @@ function main() {
     for (const e of ts.errors) console.log("  " + e);
     if (ts.ok) console.log("  clean");
   }
+  console.log(`\nnot followed (${UNCOVERED_ENTRIES.length}):`);
+  for (const u of UNCOVERED_ENTRIES) console.log("  " + u);
   process.exit(failed ? 1 : 0);
 }
 

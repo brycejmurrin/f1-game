@@ -96,10 +96,10 @@ test("#2181: queued runs are examined FIRST — 35 in-progress runs no longer hi
   assert.equal(v.verdict, "hold");
   assert.equal(v.truncated, true, "10 in-progress runs were not examined");
   assert.ok(v.reasons.some((r) => /^queued jobs ≥50 \(a lower bound\) ≥ 10$/.test(r)), v.reasons.join("|"));
-  for (const s of ["queued", "in_progress"])
+  for (const s of ["queued", "in_progress", "pending"])
     assert.ok(f.calls.includes(`actions/runs?status=${s}&per_page=100&page=1`), `lists ${s} runs (REST status filter)`);
-  // 2026-10-26: pending / requested / waiting RUNS hold no runner; their three list calls were dropped.
-  for (const s of ["pending", "requested", "waiting"])
+  // 2026-10-26: requested / waiting RUNS hold no runner; their list calls were dropped.
+  for (const s of ["requested", "waiting"])
     assert.ok(!f.calls.some((q) => q.startsWith(`actions/runs?status=${s}&`)), `no ${s} run list`);
   assert.ok(f.calls.indexOf("actions/runs?status=queued&per_page=100&page=1") < f.calls.indexOf("actions/runs?status=in_progress&per_page=100&page=1"));
 });
@@ -158,18 +158,14 @@ test("#2182: pushTargets reads the destination branch of every git push in a com
   assert.equal(pushTargets("git status", cur), null, "no push at all");
 });
 
-test("#2182: pushStartsCi — only a ready PR or a draft labelled run-ci starts CI; unknown answers never skip", () => {
+test("#2182: pushStartsCi — every open PR starts CI, a draft included (2026-11-03: no opt-in); unknown answers never skip", () => {
   const pulls = (list) => (q) => { assert.match(q, /^pulls\?head=brycejmurrin:[^&]+&state=open&per_page=10$/); return { json: list }; };
   assert.equal(pushStartsCi("cursor/x", pulls([])).ci, false);
   assert.match(pushStartsCi("cursor/x", pulls([])).why, /no open PR/);
-  assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [] }])).ci, false);
-  assert.match(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [] }])).why, /#7 is a draft without run-ci/);
-  assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [{ name: "run-ci" }] }])).ci, true);
-  // The self-serve body marker (2026-10-26): a line that starts `CI: run` opts a draft in like the label.
-  assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [], body: "## Goal\r\nCI: run\r\n" }])).ci, true);
-  assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [], body: "CI: run" }])).why, "cursor/x: PR #7 (draft, CI: run)");
-  assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [], body: "put `CI: run` in the body" }])).ci, false,
-    "a mid-line quote of the marker is not the marker");
+  assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [] }])).ci, true, "a draft push runs the fast tier");
+  assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [] }])).why, "cursor/x: PR #7 (draft: fast tier)");
+  assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [], body: "CI: run" }])).why, "cursor/x: PR #7 (draft: fast tier)",
+    "the retired body marker changes nothing");
   assert.equal(pushStartsCi("cursor/x", pulls([{ number: 8, draft: false, labels: [] }])).ci, true);
   assert.equal(pushStartsCi("claude/f1-game-project-26h3ng", () => assert.fail("no lookup")).ci, true, "the deploy branch always starts a run (pages.yml, the train)");
   assert.equal(pushStartsCi("cursor/x", () => ({ error: "HTTP 502" })).ci, null, "a failed lookup is unknown");
@@ -184,15 +180,12 @@ test("#2182: pushStartsCi — only a ready PR or a draft labelled run-ci starts 
 
 test("the written status file is gitignored and the docs cite the tool and JOBS", () => {
   assert.match(fs.readFileSync(path.join(ROOT, ".gitignore"), "utf8"), /^apex-status\/$/m);
-  const agents = fs.readFileSync(path.join(ROOT, "AGENTS.md"), "utf8");
-  assert.match(agents, /tools\/ci\/queue-depth\.mjs/);
-  assert.doesNotMatch(agents, />15 runs/);
-  for (const f of ["cursor-plugins/apex-f1-game/skills/apex-ci-and-pages-watch/SKILL.md",
-    "cursor-plugins/apex-f1-game/skills/apex-cloud-agent-launch/SKILL.md"]) {
-    const s = fs.readFileSync(path.join(ROOT, f), "utf8");
-    assert.match(s, /queue-depth\.mjs/, f);
-    assert.doesNotMatch(s, />15 runs/, f);
-  }
+  // AGENTS.md dropped the gauge sentence on 2026-11-03 (plan §4.4); the path-scoped CI rule is its one live home.
+  const rule = fs.readFileSync(path.join(ROOT, ".claude/rules/ci-tools.md"), "utf8");
+  assert.match(rule, /tools\/ci\/queue-depth\.mjs/);
+  assert.doesNotMatch(rule, />15 runs/);
+  assert.doesNotMatch(fs.readFileSync(path.join(ROOT, "AGENTS.md"), "utf8"), />15 runs/);
+  // The cursor-plugins/ copies this loop also read were deleted 2026-11-10 (W17: loaded by nothing).
 });
 
 // #2266: on 2026-10-15 ~17:30Z only 7–12 Linux jobs ran while 25–36 sat queued
@@ -224,11 +217,11 @@ test("#2266: running, queued and the oldest-queued age are reported; a starved q
   assert.match(reportLine(mac), /; 5 Linux running\)$/);
 });
 
-test("2026-10-26: only queued and in_progress runs are listed; a waiting run (environment gate) holds no runner", () => {
+test("2026-10-26: a waiting run (environment gate) is not listed; queued, in_progress and pending are", () => {
   // #2266 listed `waiting` runs too; the one environment here (github-pages) has no
-  // reviewers or wait timer, so a run never waits on it, and pending/requested
-  // runs hold no runner. Three list calls per gauge for nothing (system audit §7).
-  assert.deepEqual(RUN_STATUSES, ["queued", "in_progress"]);
+  // reviewers or wait timer, so a run never waits on it, and requested runs hold
+  // no runner (system audit §7). `pending` is back since 2026-11-20 (next test).
+  assert.deepEqual(RUN_STATUSES, ["queued", "in_progress", "pending"]);
   const f = fakeApi({ waiting: [{ id: 77, status: "waiting" }], queued: [{ id: 78, status: "queued" }] }, () => many(3, "queued"));
   const v = measure({ request: f.request });
   assert.ok(!f.calls.includes("actions/runs?status=waiting&per_page=100&page=1"));
@@ -293,4 +286,15 @@ test("--wait: 124 on timeout with the last trend; an API error retries, three in
   assert.equal(flaky.code, 0, "two errors then readings: keep polling");
   const down = await waitForOk({ minutes: 30, intervalS: 30, measureFn: () => ({ error: "HTTP 502" }), ...clock() });
   assert.equal(down.code, 3);
+});
+
+test("2026-11-20: a CI run reads `pending` while its lane legs run: their in_progress jobs are counted", () => {
+  // Run 44744533398 read status `pending` with 6 selected legs in_progress (14:58Z);
+  // the gauge listed only queued/in_progress runs and said 9 Linux in flight while 24+ ran.
+  const legs = [...Array.from({ length: 6 }, () => job("in_progress")), ...Array.from({ length: 20 }, () => job("pending"))];
+  const f = fakeApi({ pending: [{ id: 44744533398, status: "pending" }] }, () => legs);
+  const v = measure({ request: f.request });
+  assert.equal(v.linux.running, 6, "a pending run's running legs hold runners");
+  assert.equal(v.laneWaiting, 20, "its lane-waiting legs are counted apart");
+  assert.equal(v.verdict, "ok");
 });

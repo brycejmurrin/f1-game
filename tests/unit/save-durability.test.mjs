@@ -10,10 +10,13 @@ const src = (file) => fs.readFileSync(new URL("../../" + file, import.meta.url),
 // A transactional async fixture: readwrite transactions commit in creation
 // order, requests can enqueue more work, and aborts never publish staged puts.
 function database() {
-  const dbs = new Map(), handles = []; let failures = 0;
+  const dbs = new Map(), handles = []; let failures = 0, losses = 0, down = false;
   return {
     dbs, handles, failNext() { failures++; },
+    // iOS: the next transaction dies with UnknownError and the handle is dead; no close event.
+    loseNext() { losses++; }, down(on) { down = on; },
     open(name) {
+      if (down) { const r = {}; queueMicrotask(() => { if (r.onerror) r.onerror(); }); return r; }
       if (!dbs.has(name)) dbs.set(name, new Map());
       const stores = dbs.get(name); let tail = Promise.resolve();
       let closed = false;
@@ -26,16 +29,23 @@ function database() {
           const tx = { oncomplete: null, onerror: null, onabort: null };
           const operations = []; let active = false, busy = false, staged;
           const fail = mode === "readwrite" && failures > 0; if (fail) failures--;
+          const lose = !fail && losses > 0; if (lose) { losses--; closed = true; }
+          const gone = Object.assign(Error("Connection to Indexed Database server lost. Refresh the page to try again."), { name: "UnknownError" });
           const finish = () => {
             if (operations.length || busy) { drain(); return; }
-            if (fail) { if (tx.onabort) tx.onabort(); }
+            if (lose) { tx.error = gone; if (tx.onabort) tx.onabort({ target: tx }); }
+            else if (fail) { if (tx.onabort) tx.onabort(); }
             else { if (mode === "readwrite") stores.set(s, staged); if (tx.oncomplete) tx.oncomplete(); }
             release();
           };
           const drain = () => {
             if (!active || busy) return; busy = true;
             queueMicrotask(() => {
-              while (operations.length) { const [r, fn] = operations.shift(); r.result = fn(); if (r.onsuccess) r.onsuccess(); }
+              while (operations.length) {
+                const [r, fn] = operations.shift();
+                if (lose) { r.error = gone; if (r.onerror) r.onerror({ target: r }); continue; }
+                r.result = fn(); if (r.onsuccess) r.onsuccess();
+              }
               busy = false; setImmediate(finish);
             });
           };
@@ -151,8 +161,9 @@ test("storage health and lazy restore history survive denied getters and recover
 test("restore history is bounded per slot, captures only explicit boundaries and never fills primary storage", async () => {
   const h = boot(); await h.store.mirror.ready; const p = points(h); const before = h.disk.size;
   assert.equal((await p.capture("driver", 0, save(), { reason: "autosave" })).ok, false);
+  assert.equal((await p.capture("driver", 0, save(), { reason: "import" })).reason, "explicit-boundary-required", "no caller passes the bare import boundary");
   for (let r = 0; r < 5; r++) assert.equal((await p.capture("driver", 0, save(r), { reason: "round" })).durable, true);
-  await p.capture("myteam", 1, save(9, "myteam"), { reason: "import" });
+  await p.capture("myteam", 1, save(9, "myteam"), { reason: "before-import" });
   assert.deepEqual(Array.from((await p.list("driver", 0)).items, (x) => x.summary.round), [4, 3, 2]);
   assert.equal((await p.list("myteam", 1)).items.length, 1); assert.equal(h.disk.size, before);
   assert.equal((await p.capture("driver", 0, { ...save(), large: "x".repeat(70000) }, { reason: "round" })).ok, false);
@@ -178,6 +189,24 @@ test("confirmed restore saves a replacement checkpoint and the selected progress
   assert.equal(h.store.get("career.driver.0").season.round, 1);
   assert.ok((await p.list("driver", 0)).items.some((x) => x.summary.round === 5 && x.reason === "before-restore")); await h.store.mirrorFlush();
 });
+test("round capture validates history only until the retained slots are full", async () => {
+  const h = boot(); await h.store.mirror.ready;
+  const p = points(h);
+  const capture = (round) => p.capture("driver", 0, save(round), { reason: "round" });
+  for (const round of [1, 2, 3]) assert.ok((await capture(round)).durable);
+  const history = () => h.idb.dbs.get("apex26-restore-points").get("slots").get("driver.0").items;
+  const oldest = history()[2].json;
+  let oldestReads = 0;
+  h.c.JSON = { stringify: JSON.stringify, parse(raw) {
+    if (raw === oldest) oldestReads++;
+    return JSON.parse(raw);
+  } };
+  assert.ok((await capture(4)).durable);
+  assert.equal(oldestReads, 0, "the evicted snapshot never needs to be parsed or migrated");
+  history()[1].json = "{invalid";
+  assert.ok((await capture(5)).durable);
+  assert.deepEqual(Array.from((await p.list("driver", 0)).items, (x) => x.summary.round), [5, 4, 2]);
+});
 test("history transaction abort leaves prior points intact and reports unavailable history", async () => {
   const h = boot(); await h.store.mirror.ready; const p = points(h);
   await p.capture("driver", 0, save(1), { reason: "round" }); h.idb.failNext();
@@ -196,6 +225,17 @@ test("storage health reports measured categories; cleanup preserves every author
   for (const k of ["setup.ferrari", "career.driver.0", "ghost.monza", "customTracks", "customTeam"]) assert.equal(h.disk.get("apex26." + k), "xx");
   assert.equal(h.store.writeFailed(), "QuotaExceededError");
 });
+test("storage health groups inputGhost with Laps and ghosts", async () => {
+  const h = boot(); await h.store.mirror.ready;
+  vm.runInContext(src("js/ui/save-health.js") + ";globalThis.Health=SaveHealth", h.c, { filename: absSrc("js/ui/save-health.js") });
+  for (const k of ["ghost.monza", "inputGhost.v1", "ttlb.monza"]) h.disk.set("apex26." + k, "xx");
+  const r = await h.c.Health.inspect({ store: h.store, localStorage: h.storage });
+  const laps = r.categories.find((x) => x.name === "Laps and ghosts");
+  assert.ok(laps, "Laps and ghosts category present");
+  assert.equal(laps.keys, 3, "ghost + inputGhost + ttlb");
+  const other = r.categories.find((x) => x.name === "Other settings and data");
+  assert.equal(other ? other.keys : 0, 0, "inputGhost must not ghost under Other");
+});
 test("storage-health UI does no measurements or prompts until opened, and remains operable", async () => {
   const dom = makeDom(); let estimates = 0, prompts = 0;
   const h = boot(); await h.store.mirror.ready;
@@ -203,10 +243,43 @@ test("storage-health UI does no measurements or prompts until opened, and remain
   vm.runInContext(src("js/ui/save-health.js") + ";globalThis.Health=SaveHealth", h.c, { filename: absSrc("js/ui/save-health.js") });
   const host = dom.byId("test-health-host"), handle = h.c.Health.mount(host, { store: h.store });
   assert.equal(estimates, 0); assert.equal(prompts, 0);
-  const toggle = handle.root.children[0], panel = handle.root.children[1];
-  assert.equal(panel.hidden, true); toggle.onclick(); await tick();
-  assert.equal(panel.hidden, false); assert.equal(estimates, 1); assert.equal(prompts, 0);
-  assert.equal(toggle.getAttribute("aria-expanded"), "true"); toggle.onclick(); assert.equal(panel.hidden, true);
+  const fold = handle.root;
+  assert.equal(fold.tagName, "DETAILS"); assert.equal(fold.children[0].tagName, "SUMMARY");
+  assert.equal(!!fold.open, false);
+  fold.open = true; dom.dispatch(fold, { type: "toggle" }); await tick();
+  assert.equal(estimates, 1); assert.equal(prompts, 0);
+  fold.open = false; dom.dispatch(fold, { type: "toggle" }); await tick();
+  assert.equal(estimates, 1);
+});
+test("cancelling a career restore keeps both rows and returns focus without applying a save", async () => {
+  const h = boot(); await h.store.mirror.ready;
+  const dom = makeDom(); h.c.document = dom.document;
+  vm.runInContext(src("js/ui/save-health.js") + ";globalThis.Health=SaveHealth", h.c, { filename: absSrc("js/ui/save-health.js") });
+  const items = [2, 1].map(round => ({ id: String(round), at: round, reason: "round", summary: { year: 2026, round } }));
+  let lists = 0, restores = 0;
+  const api = {
+    async list() { lists++; return { ok: true, items }; },
+    async preview(f, i, id) { return { ok: true, point: items.find(item => item.id === id).summary }; },
+    async restore() { restores++; return { ok: true, durable: true }; }
+  };
+  const health = h.c.Health.mount(dom.byId("health-cancel"), { store: h.store, restorePoints: api });
+  const history = health.root.children[1].children.at(-1);
+  const [, slot, show, list] = history.children;
+  slot.value = "driver.0";
+  await show.onclick();
+  const rows = Array.from(list.children);
+  assert.equal(rows.length, 2);
+  await rows[1].onclick();
+  const cancel = list.children[0].children.at(-1);
+  assert.equal(cancel.textContent, "CANCEL");
+  assert.equal(dom.document.activeElement, cancel);
+  cancel.onclick();
+  assert.deepEqual(list.children, rows);
+  assert.equal(dom.document.activeElement, rows[1]);
+  assert.equal(restores, 0);
+  assert.equal(lists, 1);
+  await rows[0].onclick();
+  assert.equal(list.children[0].children[1].textContent, "RESTORE THIS POINT");
 });
 test("storage health tolerates denied storage getters and keeps report and cleanup controls usable", async () => {
   const h = boot(); await h.store.mirror.ready;
@@ -316,7 +389,7 @@ test('older capture completion cannot overwrite newer failure health, and UI lab
   const dom = makeDom(); h.c.document = dom.document;
   vm.runInContext(src('js/ui/save-health.js') + ';globalThis.Health=SaveHealth', h.c, { filename: absSrc("js/ui/save-health.js") });
   const handle = h.c.Health.mount(dom.byId('health-history-owner'), { store: h.store, restorePoints: p });
-  handle.root.children[0].onclick(); await tick();
+  handle.root.open = true; dom.dispatch(handle.root, { type: "toggle" }); await tick();
   const text = n => n.textContent + [...(n.children || [])].map(text).join(' ');
   assert.match(text(handle.root), /restore point unavailable \(invalid-or-too-large\)/);
   assert.match(text(handle.root), /Primary save status is separate/);
@@ -496,5 +569,102 @@ test("SAVE RETRY heals unrelated settings in a read-only career tab and still re
     assert.deepEqual(notices, ["SAVE RESTORED"]);
     assert.equal(h.store.writeFailed(), null);
     await h.store.mirrorFlush();
+  }
+});
+
+// #4997 — iOS WebKit drops IndexedDB connections behind a suspended Home Screen
+// app. The close event is not reliable there (WebKit bugs 273827, 277615): the
+// first sign is transaction() throwing InvalidStateError or an UnknownError abort.
+test("restore points reopen after a dropped connection: close event, silent InvalidStateError, UnknownError abort", async () => {
+  const drops = {
+    "close event": (db) => db.forceClose(true),
+    "silent drop": (db) => db.forceClose(false),
+    "UnknownError abort": (_db, idb) => idb.loseNext(),
+  };
+  for (const [label, drop] of Object.entries(drops)) {
+    const h = boot(); await h.store.mirror.ready; const p = points(h);
+    assert.equal((await p.capture("driver", 0, save(1), { reason: "round" })).durable, true);
+    const before = h.idb.handles.length, old = h.idb.handles[before - 1];
+    drop(old, h.idb);
+    const r = await p.capture("driver", 0, save(2), { reason: "round" });
+    assert.equal(r.ok && r.durable, true, label + ": the round capture lands on a fresh connection");
+    assert.equal(h.idb.handles.length, before + 1, label + ": the dead handle is never reused");
+    assert.equal(p.health()[0].state, "saved", label);
+    const listed = await p.list("driver", 0);
+    assert.deepEqual(listed.items.map((x) => x.summary.round), [2, 1], label + ": the earlier point survives");
+    // A read is the first operation to find the next drop.
+    drop(h.idb.handles[h.idb.handles.length - 1], h.idb);
+    const again = await p.list("driver", 0);
+    assert.equal(again.ok, true, label + ": VIEW RESTORE POINTS reads after a drop");
+    assert.equal(again.items.length, 2, label);
+  }
+});
+test("a RESTORE after a dropped connection still keeps its before-restore point", async () => {
+  const h = boot({ navigator: undefined }); await h.store.mirror.ready; const p = points(h, { inCareer: () => false });
+  assert.equal(h.store.write("career.driver.0", save(1)).ok, true);
+  await p.capture("driver", 0, save(1), { reason: "round" });
+  h.store.write("career.driver.0", save(4));
+  const id = (await p.list("driver", 0)).items[0].id;
+  h.idb.handles[h.idb.handles.length - 1].forceClose(false);
+  const token = await p.preview("driver", 0, id);
+  assert.equal(token.ok, true);
+  h.idb.handles[h.idb.handles.length - 1].forceClose(false);
+  const done = await p.restore(token);
+  assert.equal(done.ok, true, JSON.stringify(done));
+  assert.equal(h.store.get("career.driver.0").season.round, 1);
+  assert.ok((await p.list("driver", 0)).items.some((x) => x.reason === "before-restore" && x.summary.round === 4));
+  await h.store.mirrorFlush();
+});
+test("restore points fail closed while IndexedDB cannot be reopened, keep prior points, and recover without a reload", async () => {
+  const h = boot(); await h.store.mirror.ready; const p = points(h);
+  await p.capture("driver", 0, save(1), { reason: "round" });
+  h.idb.handles[h.idb.handles.length - 1].forceClose(false); h.idb.down(true);
+  const lost = await p.capture("driver", 0, save(2), { reason: "round" });
+  assert.equal(lost.ok, false); assert.equal(lost.durable, false); assert.equal(lost.reason, "history-unavailable");
+  assert.equal(p.health()[0].state, "unavailable");
+  assert.equal((await p.list("driver", 0)).ok, false);
+  h.idb.down(false);
+  assert.equal((await p.capture("driver", 0, save(3), { reason: "round" })).durable, true);
+  assert.deepEqual((await p.list("driver", 0)).items.map((x) => x.summary.round), [3, 1]);
+});
+test("mirror treats an UnknownError abort as a dead connection: the batch is kept and lands on a reopened handle", async () => {
+  const h = boot(); await h.store.mirror.ready;
+  h.block(true); h.store.write("career.driver.0", save(8));
+  h.idb.loseNext();
+  assert.equal(await h.store.mirrorFlush(), false);
+  assert.equal(h.store.mirror.pending, 1, "the only durable copy of a quota-refused save is retained");
+  assert.equal(h.store.mirror.supported, false, "the dead handle is forgotten");
+  assert.equal(await h.store.mirrorFlush(), true);
+  assert.equal(h.idb.handles.length, 2);
+  assert.equal(JSON.parse(h.idb.dbs.get("apex26-store").get("kv").get("apex26.career.driver.0").v).season.round, 8);
+  const next = boot({ idb: h.idb }); await next.store.mirror.ready;
+  assert.equal(next.store.get("career.driver.0").season.round, 8, "the save survives the next launch");
+});
+
+test("write failure announces recovery immediately, then augments the still-open warning when Files loads", async () => {
+  const source = src("js/ui/select-screen.js");
+  const start = source.indexOf('const saveWarning = $("save-warning");');
+  const end = source.indexOf("const retrySave =", start);
+  const script = new vm.Script(source.slice(start, end), {filename: absSrc("js/ui/select-screen.js")});
+  for (const recover of [true, false]) {
+    const h = boot(), dom = makeDom();
+    await h.store.mirror.ready;
+    const banner = dom.byId("save-warning");
+    banner.hidden = true;
+    let done, loads = 0, mounts = 0;
+    h.c.$ = id => dom.byId(id);
+    h.c.SettingsExport = { ready() { loads++; return new Promise(resolve => { done = resolve; }); } };
+    script.runInContext(h.c);
+    assert.equal(loads, 0, "a healthy title does not need the Files bundle");
+    h.block(true);
+    h.store.write("testSetting", 1);
+    h.store.write("otherSetting", 2);
+    assert.equal(banner.hidden, false);
+    assert.equal(loads, 1);
+    assert.match(dom.byId("save-warning-detail").textContent, /QuotaExceededError/);
+    if (recover) vm.runInContext("hideSaveWarning()", h.c);
+    h.c.SaveHealth = { mount(node) { assert.equal(node, banner); mounts++; } };
+    done(true); await tick();
+    assert.equal(mounts, recover ? 0 : 1);
   }
 });

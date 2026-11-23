@@ -7,14 +7,13 @@
 (window.TrackScenery = window.TrackScenery || {})["madrid"] =
   function (api) {
       const {
-        K, lapBounds, out, MAT, seat, n, px, pz, hw, pyMin, night, hash, anchor, vadd,
+      lapBounds, out, MAT, seat, n, pyMin, night, hash, anchor, vadd,
         onTrack, modelGroup, overheadSpan, groundPatch, groundedSegments,
         addBox, addCyl, addPrism, addFrustum,
         ridge, floodMast, tree, bush, hedge,
         billboard, marshalPost, wall, fence, guardrail, tyreWall,
         grandstandEx, cameraTower, broadcastCompound, sponsorHoarding,
-        runoffApron, recordBarrier, groundUnder, indexSolid,
-      } = api;
+        runoffApron, recordBarrier, groundUnder, indexSolid } = api;
 
       const WHITE = [0.92, 0.93, 0.94];
       const OFFWHITE = [0.86, 0.86, 0.83];
@@ -515,8 +514,10 @@
       // grandstand numbers (9/9A/10/…) are UNCERTAIN vs turn mapping — place
       // by the banked sector only, no numbered labels.
       //
-      // Inside of the mid-bowl arc is side −1 (centroid probe). Thin the old
-      // inside ring below so props-tris stays under the ratchet.
+      // The bowl is Curve 12, the 207° RIGHT built 0.42-0.50 (def bankZones[0]
+      // cites the mapping), so its inside is side +1 and its outside −1. Until
+      // 2026-11-18 all of this stood on the 67° left at 0.68-0.845 (#5316).
+      // Thin the inside ring below so props-tris stays under the ratchet.
       function emitMonumentalStands(stage, a, side) {
         const b = basis(a);
         const IN = -side; // +a.r * IN faces the track
@@ -558,7 +559,7 @@
           [0.28, 2.6, 62], MADRID_RED, b);
         addBox(stage, vadd(vadd(a.c, a.r, IN * 0.28), a.u, 1.4),
           [0.16, 0.4, 62], GOLD, b);
-        // Flood masts on the rim (brief s≈0.80 — cool-white dual-arm).
+        // Flood masts on the rim (cool-white dual-arm).
         for (const along of [-24, 0, 24]) {
           const foot = vadd(vadd(a.c, a.t, along), a.r, side * 13.2);
           seat.cyl(stage, foot, 0.28, 28, STEEL, 5, b);
@@ -570,8 +571,22 @@
         stage._mat = 0;
       }
       {
-        const side = -1;
-        const a = anchor(at(0.76), side, 18);
+        // Gap 26, not 18: the 72 m box is a chord on the inside of a ~116 m
+        // radius arc (sagitta ~5.6 m), so at 18 its ends reached the road.
+        // The anchor is the BANKED road's low inside edge carried outwards, and
+        // the terrain climbs back from it: seat the stand on the ground under
+        // its centre so the front tiers are not buried.
+        const side = 1;
+        let a = anchor(at(0.46), side, 26);
+        if (a) {
+          // Highest ground under the front row: its two ends and its middle.
+          let top = a.c[1];
+          for (const along of [-31, 0, 31]) {
+            const p = vadd(a.c, a.t, along), gy = groundUnder(p[0], p[2]);
+            if (gy != null) top = Math.max(top, gy);
+          }
+          a = { c: [a.c[0], top, a.c[2]], r: a.r, u: a.u, t: a.t };
+        }
         if (a && !onTrack(a.c[0], a.c[2], 12)) {
           const b = basis(a);
           modelGroup("madrid-monumental-stands", {
@@ -580,31 +595,32 @@
         }
       }
 
-      // Outside (+1) bowl ring stays dense (Motor Sport: ~45k grandstand on the
-      // outside). Inside (−1) is thinned — the hero modelGroup above owns the
+      // Outside (−1) bowl ring stays dense (Motor Sport: ~45k grandstand on the
+      // outside). Inside (+1) is thinned — the hero modelGroup above owns the
       // mid-bowl; keep entry/exit shoulders only so tris stay under the ratchet.
+      const MONU0 = 0.415, MONU1 = 0.505;   // the built Curve 12 arc, entry → exit
       for (const side of [-1, 1]) {
         let i = 0;
-        const step = side === -1 ? 0.014 : 0.0062;
-        for (let f = 0.680; f <= 0.845; f += step, i++) {
+        const step = side === 1 ? 0.014 : 0.0062;
+        for (let f = MONU0; f <= MONU1; f += step, i++) {
           // Skip the inside mid-bowl where madrid-monumental-stands sits.
-          if (side === -1 && f >= 0.725 && f <= 0.800) continue;
-          const id = side === 1 && i === 11
+          if (side === 1 && f >= 0.437 && f <= 0.483) continue;
+          const id = side === -1 && i === 7
             ? "madrid-monumental"
             : `madrid-monumental-${side < 0 ? "l" : "r"}-${i}`;
           monumentalStand(id, f, side, 16, false);
         }
       }
       for (let i = 0; i < 3; i++) {
-        monumentalArcade(`madrid-monumental-arcade-${i}`, 0.705 + i * 0.05, 1);
+        monumentalArcade(`madrid-monumental-arcade-${i}`, 0.425 + i * 0.035, -1);
       }
-      for (const frac of [0.70, 0.74, 0.78, 0.82]) {
+      for (const frac of [0.42, 0.445, 0.475, 0.50]) {
         const k = at(frac);
-        floodMast(k, 1, 44, { h: 34, cool: true, pool: false });
+        floodMast(k, -1, 44, { h: 34, cool: true, pool: false });
         // Inside masts near the hero are part of the modelGroup; keep only the
-        // entry/exit rim lights on −1 so we do not double-stack.
-        if (frac <= 0.70 || frac >= 0.82)
-          floodMast(k, -1, 44, { h: 34, cool: true, pool: false });
+        // entry/exit rim lights on +1 so we do not double-stack.
+        if (frac <= 0.42 || frac >= 0.50)
+          floodMast(k, 1, 44, { h: 34, cool: true, pool: false });
       }
 
       // ── THE BANKING, MADE VISIBLE ───────────────────────────────────────
@@ -629,11 +645,11 @@
       // ~1 m over the racing line (measure-props-over-road went 1.03 → 1.97).
       // 10 m bays at twice the station count cover the same ground and follow
       // the curve. Same lesson as the pit bays and the main grandstand above.
-      for (let f = 0.712; f <= 0.812; f += 0.0074) {
+      for (let f = 0.425; f <= 0.495; f += 0.0074) {
         runoffApron(at(f), 1, 6.0, [11, 0.3, 10], [0.44, 0.42, 0.40]);
         runoffApron(at(f), -1, 6.0, [11, 0.3, 10], [0.44, 0.42, 0.40]);
       }
-      for (let f = 0.688; f <= 0.838; f += 0.0088) {
+      for (let f = 0.418; f <= 0.502; f += 0.0088) {
         for (const side of [-1, 1]) {
           const a = anchor(at(f), side, 9.5);
           if (!a) continue;
@@ -697,7 +713,9 @@
       }
 
       const bunkerPts = [];
-      for (let f = 0.35; f <= 0.55; f += 0.003)
+      // Ends at 0.405, before the Curve 10/11 chicane: past it the inside (+1)
+      // verge is La Monumental's (it ran on to 0.55, through the bowl).
+      for (let f = 0.35; f <= 0.405; f += 0.003)
         bunkerPts.push({ k: at(f), side: 1, dist: 4.5 });
       groundedSegments({
         id: "madrid-el-bunker",
@@ -708,7 +726,7 @@
       });
       function bunkerSlotBand(yBase, thick, col) {
         const pts = [];
-        for (let f = 0.35; f <= 0.55; f += 0.006) pts.push(at(f));
+        for (let f = 0.35; f <= 0.405; f += 0.006) pts.push(at(f));
         for (let i = 0; i < pts.length - 1; i++) {
           const a = anchor(pts[i], 1, 4.75);
           const b2 = anchor(pts[i + 1], 1, 4.75);
@@ -732,7 +750,7 @@
       // frontage holds continuously instead of flashing empty for two beats.
       const urbanRanges = [
         [0.11, 0.30, [0.76, 0.73, 0.68]],
-        [0.30, 0.48, [0.70, 0.71, 0.72]],
+        [0.30, 0.41, [0.70, 0.71, 0.72]],   // stops at the bowl (0.415)
         [0.55, 0.68, [0.72, 0.70, 0.66]],
       ];
       let blockId = 0;
@@ -869,7 +887,7 @@
 
       // Warm terrain-conforming plazas and pelouse replace broad flat land boxes.
       for (const [frac, side, gap, col] of [
-        [0.20, -1, 10, STRAW], [0.50, 1, 12, STRAW_DARK],
+        [0.20, -1, 10, STRAW], [0.76, -1, 12, STRAW_DARK],
         [0.88, 1, 11, STRAW], [0.93, -1, 12, STONE],
       ]) {
         groundPatch(at(frac), side, gap, [28, 0.24, 48], col, {
@@ -950,9 +968,10 @@
         // — 22 coplanar pairs). Leave gaps at the main turn clusters.
         wall(0.88, 0.98, side, 2.6, 1.25, CONCRETE, 0.48);
         wall(0.06, 0.20, side, 2.6, 1.25, CONCRETE, 0.48);
-        wall(0.22, 0.48, side, 2.6, 1.25, CONCRETE, 0.48);
+        wall(0.22, 0.41, side, 2.6, 1.25, CONCRETE, 0.48);
+        guardrail(0.41, 0.48, side, 4.8, [0.80, 0.81, 0.83]);   // La Monumental: open, as the old bowl was
         guardrail(0.54, 0.86, side, 4.8, [0.80, 0.81, 0.83]);
-        fence(0.02, 0.50, side, 3.2, 2.7, [0.58, 0.60, 0.63]);
+        fence(0.02, 0.41, side, 3.2, 2.7, [0.58, 0.60, 0.63]);
         // DRIVING LIMIT, NOT GEOMETRY. The city dressingExclusions that cut the
         // prop budget (CI-4) also dropped the city-front blockAt tightenings
         // that kept wallStats().tightFrac above 0.9 (0.901 → 0.872). The wall
@@ -976,14 +995,14 @@
       sponsorHoarding(0.615, 0.645, 1, 6, { h: 1.3, style: "panel" });
       // Madrid GP hoarding densify (sheet-03: missing trackside banners).
       sponsorHoarding(0.08, 0.11, -1, 6.5, { h: 1.4, style: "panel" });
-      sponsorHoarding(0.48, 0.52, 1, 6.5, { h: 1.4, style: "panel" });
+      sponsorHoarding(0.51, 0.54, 1, 6.5, { h: 1.4, style: "panel" });
       // Was 0.88–0.92 side +1 gap 6.2: that run sat on the same along-track
       // nodes as hedge(0.84, 0.94, 1, 9) and their ±t end faces coplanar-fought
       // (4 pairs / 2 spots, 4.0 mm, 2.4 m² — coplanar-audit 8 > baseline 6).
       sponsorHoarding(0.26, 0.30, 1, 6.2, { h: 1.3, style: "panel" });
-      sponsorHoarding(0.74, 0.78, -1, 7.0, { h: 1.5, style: "panel" });
+      sponsorHoarding(0.445, 0.475, 1, 7.0, { h: 1.5, style: "panel" });   // bowl inside
       cameraTower(at(0.078), 1, 20, { h: 16 });
-      cameraTower(at(0.75), -1, 56, { h: 18 });
+      cameraTower(at(0.46), 1, 56, { h: 18 });   // bowl inside
       broadcastCompound(at(0.965), -1, 75, { vans: 3, dishes: 2, mastH: 9 });
       // Second compound further out — gap 28 clipped neonTower / buried into verge.
       broadcastCompound(at(0.015), 1, 42, { vans: 2, dishes: 1, mastH: 7 });
@@ -1045,7 +1064,12 @@
 
       // Sparse, deliberate furniture keeps the dry Castilian venue readable.
       hedge(0.12, 0.24, -1, 8, 1.3, OLIVE);
-      hedge(0.84, 0.94, 1, 9, 1.3, OLIVE);
+      // Leave breaks at the inside of the three closing-sector bends.
+      // The tighter verge radius makes adjacent rectangular hedge sections overlap.
+      hedge(0.84, 0.848, 1, 9, 1.3, OLIVE);
+      hedge(0.856, 0.866, 1, 9, 1.3, OLIVE);
+      hedge(0.881, 0.922, 1, 9, 1.3, OLIVE);
+      hedge(0.934, 0.94, 1, 9, 1.3, OLIVE);
       // Castilian scrub fields: sparse olive shrub scatter over the straw
       // plains (brief s≈0.20 L and s≈0.96 L) — clustered, never near the edge.
       for (let i = 0; i < 22; i++) {
@@ -1072,7 +1096,7 @@
         billboard(k, side, 7.5, 8 + hash(k) * 3, 4.2 + hash(k + 3) * 1.2,
           GP_COLS[ci % GP_COLS.length]);
         marshalPost(k, -side, 4.5);
-        if (frac < 0.50) tree(k, side, 14, 6 + hash(k) * 2.5, OLIVE);
+        if (frac < 0.41) tree(k, side, 14, 6 + hash(k) * 2.5, OLIVE);   // no tree in the bowl
         else bush(k, side, 13, OLIVE);
       }
 

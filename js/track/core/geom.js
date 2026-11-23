@@ -165,21 +165,29 @@ const TrackGeom = (function () {
       const v = verts[i];
       if (!v || !__isFinite(v[0]) || !__isFinite(v[1]) || !__isFinite(v[2])) return false;
     }
-    let nv = norm(cross(
-      [verts[1][0] - verts[0][0], verts[1][1] - verts[0][1], verts[1][2] - verts[0][2]],
-      [verts[2][0] - verts[0][0], verts[2][1] - verts[0][1], verts[2][2] - verts[0][2]]));
+    const a = verts[0], b = verts[1], c = verts[2];
+    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
+    const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const len = __M.hypot(nx, ny, nz) || 1;
+    nx /= len; ny /= len; nz /= len;
+    let reverse = false;
     if (ref) {
       let fx = 0, fy = 0, fz = 0;
       for (const v of verts) { fx += v[0]; fy += v[1]; fz += v[2]; }
       fx = fx / verts.length - ref[0]; fy = fy / verts.length - ref[1]; fz = fz / verts.length - ref[2];
-      if (nv[0] * fx + nv[1] * fy + nv[2] * fz < 0) { verts = verts.slice().reverse(); nv = [-nv[0], -nv[1], -nv[2]]; }
+      if (nx * fx + ny * fy + nz * fz < 0) { reverse = true; nx = -nx; ny = -ny; nz = -nz; }
     }
     const base = out.pos.length / 3;
     // out._matAt (optional): a per-vertex material callback (x, y, z) -> id,
     // the wind-sway weight path (swayMatAt). out._mat stays the primitive's id
     // for every CPU reader (float-audit / clip-audit record out._mat per op).
     const m = out._mat || 0, mm = out.mat, mAt = out._matAt || null;
-    for (const v of verts) { out.pos.push(v[0], v[1], v[2]); out.nrm.push(nv[0], nv[1], nv[2]); out.col.push(col[0], col[1], col[2]); if (mm) mm.push(mAt ? mAt(v[0], v[1], v[2]) : m); }
+    for (let i = 0; i < verts.length; i++) {
+      const v = verts[reverse ? verts.length - 1 - i : i];
+      out.pos.push(v[0], v[1], v[2]); out.nrm.push(nx, ny, nz); out.col.push(col[0], col[1], col[2]);
+      if (mm) mm.push(mAt ? mAt(v[0], v[1], v[2]) : m);
+    }
     for (let i = 1; i < verts.length - 1; i++) out.idx.push(base, base + i, base + i + 1);
   }
   const vadd = (p, v, s) => [p[0] + v[0] * s, p[1] + v[1] * s, p[2] + v[2] * s];
@@ -211,9 +219,11 @@ const TrackGeom = (function () {
     const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
     const ap = vadd(c, u, h), ref = vadd(c, u, h * 0.35);
     const ring = (a) => vadd(vadd(c, r, __M.cos(a) * rad), f, __M.sin(a) * rad);
+    let p0 = ring(0);
     for (let i = 0; i < seg; i++) {
-      const p0 = ring(i / seg * 6.2832), p1 = ring((i + 1) / seg * 6.2832);
+      const p1 = ring((i + 1) / seg * 6.2832);
       emit(out, [p0, p1, ap], col, ref);
+      p0 = p1;
     }
   }
 
@@ -223,25 +233,26 @@ const TrackGeom = (function () {
     const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
     const ref = vadd(c, u, h * 0.5), top = vadd(c, u, h);
     const lo = (a) => vadd(vadd(c, r, __M.cos(a) * rad), f, __M.sin(a) * rad);
+    let p0 = lo(0), q0 = vadd(p0, u, h);
     for (let i = 0; i < seg; i++) {
-      const a0 = i / seg * 6.2832, a1 = (i + 1) / seg * 6.2832;
-      // lo(a0)/lo(a1) once each — side + cap shared the same ring ends 3×.
-      const p0 = lo(a0), p1 = lo(a1), q0 = vadd(p0, u, h), q1 = vadd(p1, u, h);
+      const p1 = lo((i + 1) / seg * 6.2832), q1 = vadd(p1, u, h);
       emit(out, [p0, p1, q1, q0], col, ref);
       emit(out, [q0, q1, top], col, ref);
+      p0 = p1; q0 = q1;
     }
   }
 
   function addFrustum(out, c, rBase, rTop, h, col, seg, basis) {
     seg = seg || 8;
     const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
-    const ref = vadd(c, u, h * 0.5);
-    const lo = (a) => vadd(vadd(c, r, __M.cos(a) * rBase), f, __M.sin(a) * rBase);
-    const hi = (a) => vadd(vadd(vadd(c, u, h), r, __M.cos(a) * rTop), f, __M.sin(a) * rTop);
+    const ref = vadd(c, u, h * 0.5), top = vadd(c, u, h);
+    const at = (base, radius, cos, sin) => vadd(vadd(base, r, cos * radius), f, sin * radius);
+    let p0 = at(c, rBase, 1, 0), q0 = at(top, rTop, 1, 0);
     for (let i = 0; i < seg; i++) {
-      const a0 = i / seg * 6.2832, a1 = (i + 1) / seg * 6.2832;
-      const p0 = lo(a0), p1 = lo(a1), q0 = hi(a0), q1 = hi(a1);
+      const angle = (i + 1) / seg * 6.2832, cos = __M.cos(angle), sin = __M.sin(angle);
+      const p1 = at(c, rBase, cos, sin), q1 = at(top, rTop, cos, sin);
       emit(out, [p0, p1, q1, q0], col, ref);
+      p0 = p1; q0 = q1;
     }
   }
 
@@ -279,8 +290,7 @@ const TrackGeom = (function () {
     const zoneAt = (fy, i) => {
       const fr = fy / h + (h2(i, 99) - 0.5) * 0.07;
       if (fr > snowline + 0.04) return MAT.SNOW;
-      if (fr > snowline - 0.16) return MAT.ROCK;
-      if (fr > 0.34) return MAT.ROCK;
+      if (fr > snowline - 0.16 || fr > 0.34) return MAT.ROCK;
       return lowMat;
     };
     const colAt = (fy, i) => {

@@ -17,11 +17,14 @@ function boot() {
     document: { addEventListener(t, f) { (listeners[t] ||= []).push(f); }, removeEventListener() {}, getElementById: el, querySelector: el, querySelectorAll: () => [], hidden: false, body: el() } };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ['js/core/mat4.js', 'js/input/tilt-roll.js', 'js/input/bindings.js', 'js/input/pad-menu.js', 'js/input/haptics.js', 'js/input/hold-buttons.js', 'js/input/controller-profiles.js', 'js/input/input.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  for (const f of ['js/core/mat4.js', 'js/input/tilt-roll.js', 'js/input/bindings.js', 'js/input/pad-menu.js', 'js/input/haptics.js', 'js/input/pedal-travel.js', 'js/input/hold-buttons.js', 'js/input/controller-profiles.js', 'js/input/input.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext('Input', ctx), Profiles = vm.runInContext('ControllerProfiles', ctx);
   Input.init(el());
   const drive = (pad) => { state.pads = [pad]; (listeners.gamepadconnected || []).forEach((fn) => fn({ gamepad: pad })); clock.t += 17; Input.poll(); };
-  return { Input, Profiles, drive, storage, clock, state };
+  return { Input, Profiles, drive, storage, clock, state, disconnect(p) {
+    state.pads = state.pads.filter((device) => device !== p);
+    listeners.gamepaddisconnected.forEach((fn) => fn({ gamepad: p }));
+  } };
 }
 const pad = (id, mapping = 'standard') => ({ id, index: 0, connected: true, mapping, axes: [0, 0, 0, 0], buttons: Array.from({ length: 20 }, () => ({ pressed: false, value: 0 })) });
 test('empty snapshots neutralize axes without replaying held actions on recovery', () => {
@@ -55,6 +58,22 @@ test('real Input wheel→pad→wheel restores both axes/buttons, and reset chang
   assert.equal(I.controllerProfile().label, 'My wheel'); assert.equal(storage.get('padProfiles').devices.length, 2);
   assert.equal(I.resetControllerProfile(), true); assert.equal(I.getPadAxisMap().steer, 0);
   drive(pad('Standard pad')); assert.equal(I.getPadMap().camera[0], 18);
+});
+test('default axis state follows the sanitized map, profile switches and resets', () => {
+  const { Input: I, drive } = boot();
+  const wheel = pad('Wheel', ''), standard = pad('Pad');
+  drive(wheel);
+  assert.equal(I.padAxesAreDefault(), true);
+  I.setPadAxisMap({ steer: -0, throttle: Infinity, pedalInvert: 2 });
+  assert.equal(I.padAxesAreDefault(), true);
+  I.setPadAxisMap({ brakeFar: 0 });
+  assert.equal(I.padAxesAreDefault(), false);
+  drive(standard);
+  assert.equal(I.padAxesAreDefault(), true);
+  drive(wheel);
+  assert.equal(I.padAxesAreDefault(), false);
+  assert.equal(I.resetControllerProfile(), true);
+  assert.equal(I.padAxesAreDefault(), true);
 });
 test('profile map survives fresh manager/boot and preserves unclaimed legacy for only first physical device', () => {
   const { Profiles: P } = boot(), data = new Map(); let current = { axes: { steer: 3 }, buttons: { camera: [19, null] } };
@@ -147,4 +166,187 @@ test('pedal initialization belongs to each connected controller and axis map', (
   assert.ok(I.brakeLevel() > .4);
   I.setPadAxisMap({ steer: 0, throttle: 1, brake: 3 }); I.poll();
   assert.equal(I.throttleLevel(), 0, 'a newly mapped axis starts uninitialized');
+});
+
+test('a reconnect in the same slot requires a release before repeating a held action', () => {
+  const { Input: I, drive, disconnect } = boot(), p = pad('wireless');
+  p.buttons[8] = { pressed: true, value: 1 };
+  drive(p);
+  assert.equal(I.consumeCameraCycle(), true);
+  disconnect(p);
+  I.poll();
+  drive(p);
+  assert.equal(I.consumeCameraCycle(), false);
+  p.buttons[8] = { pressed: false, value: 0 }; I.poll();
+  p.buttons[8] = { pressed: true, value: 1 }; I.poll();
+  assert.equal(I.consumeCameraCycle(), true);
+});
+
+test('profile replacement keeps an unclaimed legacy wheel map reserved for the wheel', () => {
+  const { Input: I, drive, storage } = boot();
+  storage.set('padAxes', { steer: 3 });
+  drive(pad('standard first'));
+  I.setControllerProfiles({ devices: [], legacyClaimed: false });
+  assert.equal(I.getPadAxisMap().steer, 0, 'the standard controller keeps its standard axis');
+  assert.equal(I.getControllerProfiles().legacyClaimed, false);
+  drive(pad('wheel later', ''));
+  assert.equal(I.getPadAxisMap().steer, 3);
+});
+
+test('polling reads each idle spare button once while still recognizing its first press', () => {
+  const { Input: I, drive, state } = boot(), active = pad('driver'), spare = pad('spare');
+  spare.index = 1;
+  let reads = 0, down = false;
+  spare.buttons[8] = { get pressed() { reads++; return down; }, value: 0 };
+  drive(active); state.pads = [active, spare]; I.poll();
+  reads = 0; I.poll();
+  assert.equal(reads, 1, 'one button snapshot per poll for an idle spare');
+  down = true; I.poll();
+  assert.equal(I.controllerProfile().id, spare.id, 'a rising button still claims the active slot');
+});
+
+test('identical pads on different slots do not share latched gas or D-pad steering', () => {
+  const { Input: I, drive, state, clock } = boot(), a = pad('Xbox'), b = pad('Xbox');
+  b.index = 1; I.setHoldMode({ throttle: 'toggle' });
+  drive(a); state.pads = [a, b];
+  I.poll();
+  a.buttons[0] = a.buttons[15] = { pressed: true, value: 1 };
+  for (let i = 0; i < 30; i++) { clock.t += 17; I.poll(); I.steer(1 / 60); }
+  assert.equal(I.throttleLevel(), 1);
+  assert.ok(I.debugState().pad.steer > .5);
+  b.buttons[8] = { pressed: true, value: 1 }; clock.t += 17; I.poll();
+  assert.equal(I.throttleLevel(), 0, 'incoming device never toggled its throttle');
+  assert.equal(I.debugState().pad.steer, 0, 'incoming pad has neutral D-pad');
+});
+
+test('an unavailable wheel pedal axis is neutral until fresh travel is observed', () => {
+  const { Input: I, drive } = boot(), wheel = pad('wheel', '');
+  I.setPadAxisMap({ steer: 0, throttle: 3 });
+  wheel.axes[3] = -1; drive(wheel);
+  wheel.axes[3] = 1; I.poll(); assert.equal(I.throttleLevel(), 1);
+  for (const invalid of [undefined, NaN]) {
+    wheel.axes[3] = invalid; I.poll(); assert.equal(I.throttleLevel(), 0);
+    wheel.axes[3] = 0; I.poll(); assert.equal(I.throttleLevel(), 0);
+    wheel.axes[3] = -1; I.poll(); wheel.axes[3] = 0; I.poll();
+    assert.ok(I.throttleLevel() > .4, 'valid centred sample after calibration is half travel');
+  }
+});
+
+test('square-gate stick diagonals stay within the radial free-look range', () => {
+  const { Input: I, drive } = boot(), p = pad('square gate');
+  p.axes[2] = 1; p.axes[3] = -1; drive(p);
+  const { x, y } = I.lookStick();
+  assert.ok(Math.abs(Math.hypot(x, y) - 1) < 1e-9);
+  assert.equal(x, -y);
+});
+
+test('a truncated snapshot preserves steering calibration and produces neutral steering', () => {
+  const { Input: I, drive } = boot(), wheel = pad('calibrated wheel', '');
+  I.setPadAxisMap({ steer: 3 });
+  drive(wheel);
+  wheel.axes[3] = .2;
+  assert.equal(I.calibratePad(), true);
+  wheel.axes.length = 2;
+  I.poll();
+  assert.equal(I.debugState().pad.steer, 0);
+  assert.equal(I.parkedPadPreview().steer, 0);
+  assert.equal(I.calibratePad(), false, 'missing axis cannot overwrite calibration');
+  assert.equal(I.padRestStore()[wheel.id], .2);
+  wheel.axes[3] = .2; I.poll();
+  assert.equal(I.debugState().pad.steer, 0, 'rest is still centred when the axis returns');
+});
+
+/* Pad-menu deadzone + hold-repeat timing (InputPadMenu via real Input.poll).
+ * Pins PAD_NAV_DEADZONE / PAD_NAV_DELAY_MS / PAD_NAV_REPEAT_MS through behaviour —
+ * a stick past ~0.22 navigates; held directions wait ~450 ms then repeat ~130 ms. */
+function bootPadMenu() {
+  const keys = [];
+  const state = { now: 1000, anyOpen: false, top: null, pad: null };
+  const listeners = {};
+  const el = () => ({ addEventListener() {}, removeEventListener() {}, style: {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, setAttribute() {}, getAttribute: () => null, removeAttribute() {}, children: [], getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 300 }), setPointerCapture() {}, releasePointerCapture() {}, hasPointerCapture: () => false });
+  const sb = {
+    Math, Object, Array, Number, isFinite, JSON, Map, Set, Date, String,
+    performance: { now: () => state.now },
+    navigator: { getGamepads: () => (state.pad ? [state.pad] : []) },
+    screen: {},
+    GameStore: { store: { get: (_k, d) => d, set() { return true; } } },
+    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
+    addEventListener: (t, f) => { (listeners[t] ||= []).push(f); },
+    removeEventListener() {}, dispatchEvent() {}, setTimeout: () => 0, clearTimeout() {},
+    matchMedia: () => ({ matches: false, addEventListener() {} }),
+    KeyboardEvent: class { constructor(type, init) { this.type = type; Object.assign(this, init || {}); } },
+    Event: class { constructor(type, init) { this.type = type; Object.assign(this, init || {}); } },
+    UiLayers: {
+      anyOpen: () => state.anyOpen,
+      navOpen: () => state.anyOpen,
+      top: () => state.top,
+    },
+    MenuNav: { activeLayer: () => state.top, FOCUSABLE: "button,input,select" },
+    document: {
+      addEventListener(t, f) { (listeners[t] ||= []).push(f); },
+      removeEventListener() {},
+      getElementById: el, querySelector: el, querySelectorAll: () => [],
+      hidden: false, body: el(), activeElement: null,
+      dispatchEvent(e) { if (e && e.key) keys.push(e.key); return true; },
+    },
+  };
+  sb.window = sb;
+  const ctx = vm.createContext(sb);
+  for (const f of ['js/core/mat4.js', 'js/input/tilt-roll.js', 'js/input/bindings.js', 'js/input/pad-menu.js', 'js/input/haptics.js', 'js/input/pedal-travel.js', 'js/input/hold-buttons.js', 'js/input/controller-profiles.js', 'js/input/input.js']) {
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  }
+  const Input = vm.runInContext('Input', ctx);
+  Input.init(el());
+  const mkPad = (ax = 0, ax2 = 0) => ({
+    id: 'menu pad', index: 0, connected: true, mapping: 'standard',
+    axes: [ax, 0, ax2, 0],
+    buttons: Array.from({ length: 20 }, () => ({ pressed: false, value: 0 })),
+  });
+  state.pad = mkPad(0);
+  (listeners.gamepadconnected || []).forEach((fn) => fn({ gamepad: state.pad }));
+  Input.poll();
+  const take = () => keys.splice(0);
+  return { Input, state, mkPad, take };
+}
+
+test('menu stick deadzone: ~0.15 rests, ~0.3 navigates', () => {
+  const { Input, state, mkPad, take } = bootPadMenu();
+  state.anyOpen = true;
+  state.top = { id: 'pause', contains: () => true };
+  state.pad = mkPad(0);
+  Input.poll();
+  assert.deepEqual(take(), ['ArrowDown'], 'opening a menu seeds focus once');
+  state.pad = mkPad(0.15);
+  Input.poll();
+  assert.deepEqual(take(), [], '0.15 stays inside the menu stick deadzone');
+  state.pad = mkPad(0.30);
+  Input.poll();
+  assert.deepEqual(take(), ['ArrowRight'], '0.30 clears the deadzone and navigates');
+});
+
+test('held menu direction waits ~450 ms then repeats every ~130 ms', () => {
+  const { Input, state, mkPad, take } = bootPadMenu();
+  state.anyOpen = true;
+  state.top = { id: 'pause', contains: () => true };
+  state.pad = mkPad(0);
+  Input.poll();
+  take();
+  state.pad = mkPad(0.30);
+  Input.poll();
+  assert.deepEqual(take(), ['ArrowRight'], 'first deflection moves once');
+  state.now += 400;
+  Input.poll();
+  assert.deepEqual(take(), [], 'no repeat before the initial ~450 ms delay');
+  state.now += 60;
+  Input.poll();
+  assert.deepEqual(take(), ['ArrowRight'], 'first repeat after ~450 ms');
+  state.now += 100;
+  Input.poll();
+  assert.deepEqual(take(), [], 'repeat cadence is not every frame');
+  state.now += 40;
+  Input.poll();
+  assert.deepEqual(take(), ['ArrowRight'], 'subsequent repeats land about every ~130 ms');
+  state.pad = mkPad(0);
+  Input.poll();
+  assert.deepEqual(take(), [], 'releasing the stick stops repeats immediately');
 });

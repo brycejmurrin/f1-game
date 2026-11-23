@@ -10,7 +10,8 @@
 //   - Everything else (audio/sfx under assets/, the Jolpica/OpenF1 API is
 //     cross-origin and never touched) is cached opportunistically the first
 //     time it's fetched, so a full offline install follows naturally from one
-//     normal play session.
+//     normal play session — and each deploy's install carries those entries
+//     into its new generation (carryRuntime, #5007), so it survives the sweep.
 //
 // Cache name embeds version.json's build number. There is no manual cache
 // bump: the deploy (pages.yml) stamps the build and content-hashes every `?v=`
@@ -20,11 +21,27 @@ const CACHE_PREFIX = "apex26-";
 // RECORDED VOICES LIVE OUTSIDE THE GENERATIONS (audit4 B8). A voice pack is 2-7 MB
 // and unversioned; filed into apex26-<build> it was re-written into every new
 // generation and doubled while a prior settled one was retained. cacheBuild()
-// reads this name as NaN, so the stale sweep never deletes it; the shell's own
-// recovery reset (index.html, every apex26-* name) still clears it.
+// reads this name as NaN, so the stale sweep never deletes it; index.html's own
+// recovery reset deletes one failed asset per apex26-<n> and leaves apex26-voice (#4479).
 const VOICE_CACHE = CACHE_PREFIX + "voice";
+// VOICE_CACHE IS A BOUNDED LRU of voice ids (#4219 B): a persona is ~14-18 MB and
+// assets/voice ~111 MB, so every pack ever ensured must not stay forever. Keep
+// the 6 most recently WRITTEN ids (four role defaults + room for a custom pick);
+// an evicted id loses its .json, .bin and .opus.bin together. Recency is the
+// Cache.keys() insertion order (https://w3c.github.io/ServiceWorker/#cache-keys;
+// a re-put moves a key to the end). An ETag-equal response skips its write, so
+// a pack in steady use keeps its slot only until 6 newer ids land; a miss is
+// just a network re-download. Pruned after a put, never on the read path.
+const VOICE_KEEP_IDS = 6;
 // A navigation / version.json fetch races this before the cache answers.
 const NAV_RACE_MS = 3000;
+// A plain shell navigation that HAS a cached shell stops waiting for the network here: on a link that does not
+// answer, an installed app opened to 3 s of nothing. The shell's own version guard still reloads onto a newer build
+// when version.json comes through. With no cached shell (the first launch) the full race above still applies.
+const SHELL_RACE_MS = 1000;
+// A `?b=` bust with NO cached shell at or above b has nothing to fall back to, so
+// a 3 s fail-fast only dropped a slow-but-alive fetch (#4924); it waits this long.
+const BUST_WAIT_MS = 15000;
 // An OPTIONAL precache asset is abandoned (and aborted) after this long.
 const OPTIONAL_ASSET_MS = 4000;
 // A dev host serves the committed shell, whose asset tags all read `?v=dev`
@@ -42,24 +59,54 @@ const offlineRetries = new Map();
 // Default chosen backend at install: TLX (three) is the shipped picker default.
 // GLX stays in the required pool separately. Scenery + data/net are the
 // background pool, fetched after it (download priority only — see install).
-// WGX stays in the optional Set (gen-shell lockstep with DEFERRED) but is
-// skipped at install — explicit opt-in; fetch handler runtime-caches on use.
+// Runtime-only doors (WGX, track designer, XR, camera editors) stay in the
+// optional Set for gen-shell lockstep with DEFERRED/LAZY_*, but are skipped at
+// install — explicit opt-in; fetch handler runtime-caches on use.
+// @gen-shell:sw-required-lazy
+const REQUIRED_LAZY = ["js/career/career-backup.js","js/career/career-planning-ui.js","js/career/career-ui.js"];
+// /@gen-shell:sw-required-lazy
+const PACK_MANIFEST_KEY_PREFIX = "assets/pack/manifest.json?b=";
 function isInstallCriticalOptional(u) {
-  return /^js\/render\/three\//.test(u) || /^vendor\/three-/.test(u);
+  return /^js\/render\/three\//.test(u) || /^vendor\/three-/.test(u) || u.startsWith(PACK_MANIFEST_KEY_PREFIX);
 }
 // Default-off / explicit opt-in: still seeded in `optional` when gen-shell
-// requires lockstep (WGX), but never install-precached. Hand-authored vendors
-// (Rapier, jsQR, trystero) are omitted from the Set entirely — same outcome.
+// requires lockstep, but never install-precached. WGX + LAZY_EDITOR / LAZY_XR /
+// LAZY_CAM_EDITOR (~510 KB raw) are title doors a race session never opens.
+// Hand-authored vendors (Rapier, jsQR, trystero) are omitted from the Set
+// entirely — same outcome.
 function isRuntimeOnlyOptional(u) {
-  return /^js\/render\/webgpu\//.test(u);
+  return /^js\/render\/webgpu\//.test(u)
+    || /^js\/editor\//.test(u)
+    || /^js\/xr\//.test(u)
+    || /^js\/camera\/(tuner-panel|flyby-editor)\.js$/.test(u);
 }
-// Is this navigation the game's own shell? Any *.html page other than
-// index.html is a different document and must never be answered with the game.
+// Each Learn lesson has its own index.html; it must never boot the game as a fallback.
 function isShellDocument(url) {
+  if (/\/learn\/[^/]+\/index\.html$/.test(url.pathname)) return false;
   return /\/index\.html$/.test(url.pathname) || !/\.[A-Za-z0-9]+$/.test(url.pathname);
 }
 function isBackgroundOptional(u) {
   return !isInstallCriticalOptional(u) && !isRuntimeOnlyOptional(u);
+}
+
+// KILL SWITCH. A deploy whose version.json carries `"swKill": true` retires
+// this worker: on the next version.json it sees (the page's boot guard and
+// UpdateCheck read it on every launch and foreground) it unregisters itself and
+// deletes every apex26-* cache, voice included; a fresh install under the flag
+// refuses to install, so the re-registration the shell makes is a no-op. Remove
+// the flag in a later deploy and the next launch installs normally. Only a
+// worker that already has this code can honour it.
+let _killed = false;
+const isKillFlag = (v) => !!(v && v.swKill === true);
+async function killWorker() {
+  if (_killed) return;
+  _killed = true;
+  swLog("warn", "kill switch: version.json asked this worker to retire; unregistering and clearing caches");
+  try { if (self.registration && typeof self.registration.unregister === "function") await self.registration.unregister(); }
+  catch (e) { swLog("warn", "kill switch: unregister failed: " + errMsg(e)); }
+  const names = (await caches.keys()).filter((n) => n.startsWith(CACHE_PREFIX));
+  await Promise.all(names.map((n) => caches.delete(n)));
+  invalidateCacheOrder();
 }
 
 let _cacheNamePromise = null;
@@ -75,6 +122,7 @@ function currentCacheName() {
       return r.json();
     })
     .then((v) => {
+      if (isKillFlag(v)) throw new Error("Service worker retired by version.json swKill");
       const build = Number(v && v.build);
       if (!Number.isSafeInteger(build) || build <= 0) throw new Error("Invalid deployed build");
       _cacheNameKnown = CACHE_PREFIX + build;
@@ -135,7 +183,7 @@ function cacheBuild(name) {
 //
 // THE ORDER IS COMPUTED ONCE PER WORKER, not per request: `caches.keys()` plus
 // two marker lookups per generation ran on EVERY cache-first fetch — a boot's
-// ~150 script requests paid for ~150 identical sorts. The order changes only
+// ~300 script requests paid for ~300 identical sorts. The order changes only
 // when this worker changes the cache set or a marker (install, activate, the
 // sweep, a fetch opening a generation it has not seen) or learns the current
 // name, so `_cacheOrder` is keyed on `_cacheNameKnown` and dropped by
@@ -180,15 +228,23 @@ async function openCache(name) {
   if (!known || !known.includes(name)) invalidateCacheOrder();
   return caches.open(name);
 }
-async function matchPreferCurrent(req) {
+async function matchPreferCurrent(req, accept) {
   let ordered;
-  try { ordered = await cacheOrder(); } catch (_) { return caches.match(req); }
+  try { ordered = await cacheOrder(); } catch (_) { ordered = []; }
   for (const name of ordered) {
     const hit = await caches.match(req, { cacheName: name });
-    if (hit) return hit;
+    if (hit && (!accept || await accept(hit))) return hit;
   }
-  // Only a cache the memoised order never listed can answer here.
-  try { return await caches.match(req); } catch (_) { return undefined; }
+  try {
+    // A different worker may have created a new generation since the order was
+    // memoised. A rejected legacy entry can mask that new hit in an all-cache lookup.
+    if (!accept) return await caches.match(req);
+    for (const name of await caches.keys()) {
+      if (ordered.includes(name)) continue;
+      const hit = await caches.match(req, { cacheName: name });
+      if (hit && await accept(hit)) return hit;
+    }
+  } catch (_) { /* cache unavailable: let the caller use the network */ }
 }
 
 // THE CACHED SHELL, ONLY WHEN IT IS AT LEAST BUILD `b`: the first generation
@@ -215,15 +271,21 @@ async function shellAtLeast(b) {
 // OPPORTUNISTIC SWEEP. `activate` deletes older generations once, but a worker
 // that outlives a deploy — or a fetch that opened a newer build's cache before
 // that build's worker installed — leaves stale apex26-* caches behind until
-// the next activate. Swept from the fetch path, at most once per worker
-// lifetime once it succeeds, under the same rules `activate` keeps:
+// the next activate. Swept from the fetch path under the same rules `activate`
+// keeps:
 //   - only when the CURRENT generation finished its install (never strand a
 //     client on an incomplete cache — the test holds activate to that too), and
 //   - only generations OLDER than the current one (and never the single prior
 //     SETTLED generation while a window client remains — #2194 lazy ?v= keys):
 //     a worker whose memoised name is stale must never delete the newer cache
 //     the next worker is installing into.
-let _sweepDone = false, _sweepBusy = false;
+// A sweep that had to KEEP that predecessor (a window was still open) does not
+// latch done. Asset fetches stay quiet; the next navigation rechecks. Once
+// matchAll is empty the predecessor goes. Latching done on the first sweep
+// left that generation on disk for the rest of the worker's life, which is
+// the common case: the first fetch happens while the tab that installed it
+// is still open.
+let _sweepDone = false, _sweepBusy = false, _sweepHeld = false;
 async function sweepStaleCaches() {
   const name = _cacheNameKnown;
   const build = cacheBuild(name);
@@ -262,10 +324,16 @@ async function sweepStaleCaches() {
   });
   await Promise.all(stale.map((k) => caches.delete(k)));
   if (stale.length) invalidateCacheOrder();
-  _sweepDone = true;
+  // Held, not done: a later navigation retries once the windows are gone.
+  // Done: nothing older remains that a closed tab would still need.
+  if (retainPrev) _sweepHeld = true;
+  else { _sweepHeld = false; _sweepDone = true; }
 }
-function maybeSweep(event) {
+function maybeSweep(event, navigate) {
   if (_sweepDone || _sweepBusy || !_cacheNameKnown) return;
+  // The predecessor is retained for an open window. Recheck on navigation
+  // only — an asset fetch must not walk caches.keys() again.
+  if (_sweepHeld && !navigate) return;
   _sweepBusy = true;
   event.waitUntil(sweepStaleCaches().catch((e) => { swLog("warn", "stale-cache sweep failed: " + errMsg(e)); }).finally(() => { _sweepBusy = false; }));
 }
@@ -284,15 +352,19 @@ async function precacheAssetLists() {
     "icons/icon-192.png",
     "icons/icon-512.png",
     "icons/icon-maskable-512.png",
+    // Manifest shortcuts (Quick race / Daily / Next GP / Controller / Garage)
+    // all share this 96px icon. OS usually fetches it at install, but an
+    // offline re-open of the installed app still asks the SW for it (audit4 L7).
+    "icons/shortcut-96.png",
     // In-game APP ICON picker sets (appearance-opts.js).
     ...["A", "B", "C", "D", "E", "F"].flatMap((s) => ["icons/shortcuts/" + s + "/favicon-32.png", "icons/shortcuts/" + s + "/apple-touch-180.png"]),
     // The vendored three.js island TLX imports at runtime. Hand-authored
     // because it is reached through the importmap, not a <script> tag, so
     // the parser below cannot see it. OPTIONAL: an install must not fail
     // over a backend most sessions never select.
-    "vendor/three-0.186.1/three.webgpu.min.js",
-    "vendor/three-0.186.1/three.core.min.js",
-    "vendor/three-0.186.1/three.tsl.min.js",
+    "vendor/three-0.187.0/three.webgpu.min.js",
+    "vendor/three-0.187.0/three.core.min.js",
+    "vendor/three-0.187.0/three.tsl.min.js",
     // jsQR / Rapier / trystero are NOT install-precached. Each is default-off
     // or path-only (QR scan, apex26.debris==="1", room code): ~2.5 MB that a
     // title/garage/race session never needs. Fetch-miss still cache.put on
@@ -306,13 +378,14 @@ async function precacheAssetLists() {
     "assets/fonts/titillium-web-latin-600-normal.woff2",
     "assets/fonts/titillium-web-latin-700-normal.woff2",
     "assets/fonts/titillium-web-latin-700-italic.woff2",
-    "assets/fonts/barlow-condensed-latin-500-normal.woff2",
     "assets/fonts/barlow-condensed-latin-600-normal.woff2",
     "assets/fonts/barlow-condensed-latin-700-normal.woff2",
     "assets/fonts/saira-apex26-800-italic.woff2",
     // @gen-shell:sw-optional
     // ROOT PAGES — answered offline under their own URL, never by the game shell
     "controller.html",
+    // Shared companion scripts outside the game shell
+    "js/ui/companion-return.js",
     // DEFERRED renderer backends (no <script> tag; injected on opt-in)
     "js/render/glx/shaders/glsl-chunks.js",
     "js/render/glx/shaders/glsl-lit.js",
@@ -335,16 +408,103 @@ async function precacheAssetLists() {
     "js/render/webgpu/wgx.js",
     "js/render/three/tsl-chunks.js",
     "js/render/three/tsl-viewport.js",
+    "js/render/three/tsl-carsurf.js",
     "js/render/three/tsl-lit.js",
     "js/render/three/tsl-sky.js",
     "js/render/three/tsl-fx.js",
+    "js/render/three/tsl-gi.js",
     "js/render/three/tsl-post.js",
+    "js/render/three/tsl-aa.js",
     "js/render/three/tlx-shadow.js",
     "js/render/three/tlx-chunked.js",
     "js/render/three/tlx-post.js",
+    "js/render/three/tlx-mem.js",
     "js/render/three/tlx.js",
-    // LAZY_RACE + LAZY_CIRCUIT + LAZY_SCENERY — race payload; a miss builds a bare/meta circuit offline
+    // LAZY_RACE — race payload every race needs
+    "js/data/garage-entrance-motion.js",
+    "js/garage/entrance-motion.js",
     "js/lighting/presets.js",
+    "js/garage/garage-data.js",
+    "js/garage/arrival-rows.js",
+    "js/garage/hi-prims.js",
+    // LAZY_RACE_SESSION — pit/radio/reliability behind startRace (title boots stub)
+    "js/input/touch-button-actions.js",
+    "js/data/garage-departure-motion.js",
+    "js/garage/departure-wheels.js",
+    "js/race/reliability.js",
+    "js/race/damage.js",
+    "js/race/damage-handling.js",
+    "js/race/duel.js",
+    "js/race/session-records.js",
+    "js/race/pit-geom.js",
+    "js/race/pit-lane.js",
+    "js/race/engineer.js",
+    "js/race/radio-lines.js",
+    "js/race/race-facts.js",
+    "js/race/spotter.js",
+    "js/race/race-radio.js",
+    "js/race/start-lights.js",
+    "js/race/marshal-panels.js",
+    "js/race/flying-start.js",
+    "js/race/jump-start-penalty.js",
+    "js/ui/podium-beat.js",
+    "js/race/podium-beat.js",
+    "js/race/parc-ferme.js",
+    "js/race/cooldown-lap.js",
+    "js/race/ceremony.js",
+    "js/race/stopped-cars.js",
+    "js/race/retired-card.js",
+    "js/race/driving-coach.js",
+    "js/ui/hud-inputs.js",
+    // LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build
+    "js/render/shared/mesh-detail.js",
+    "js/track/scenery/models.js",
+    "js/track/scenery/themes.js",
+    "js/track/scenery/landmark-kit.js",
+    "js/track/scenery/circuit-kit.js",
+    "js/track/core/hidden-faces.js",
+    "js/track/scenery/landforms.js",
+    "js/track/scenery/nature.js",
+    "js/track/scenery/stands.js",
+    "js/track/scenery/structures.js",
+    "js/track/scenery/facade.js",
+    "js/track/scenery/city.js",
+    "js/track/scenery/identity.js",
+    "js/track/scenery/pits.js",
+    "js/track/scenery/venue.js",
+    "js/track/scenery/guards.js",
+    "js/track/scenery/api-wrap.js",
+    "js/track/scenery/region.js",
+    "js/track/scenery/detail.js",
+    "js/track/scenery/build-props.js",
+    // LAZY_GARAGE_EXTERIOR — optional selected-circuit pit slice
+    "js/garage/exterior-geometry.js",
+    "js/garage/exterior.js",
+    // LAZY_AUDIO — engine/panel/voice behind first sound gesture or race start
+    "js/audio/signal.js",
+    "js/audio/soundtrack.js",
+    "js/audio/race-mix-audition.js",
+    "js/audio/radio-fx.js",
+    "js/audio/tone-model.js",
+    "js/audio/ers-layer.js",
+    "js/audio/mix-duck.js",
+    "js/audio/engine.js",
+    "js/audio/music-lib.js",
+    "js/audio/spotify.js",
+    "js/audio/rivals.js",
+    "js/audio/crowd.js",
+    "js/audio/car-sfx.js",
+    "js/audio/voice-pack.js",
+    "js/audio/battle-earcon.js",
+    "js/audio/radio-voice.js",
+    "js/audio/announcer-recorded.js",
+    "js/audio/announcer.js",
+    "js/audio/panel.js",
+    "js/audio/driving-cues.js",
+    // LAZY_WORKER — worker entry scripts (new Worker, never a page tag)
+    "js/track/build-worker.js",
+    "js/workers/bitmap-decode-worker.js",
+    // LAZY_CIRCUIT + LAZY_SCENERY — per-circuit payload; a miss builds a bare/meta circuit offline
     "js/circuits/bahrain.js",
     "js/circuits/monaco.js",
     "js/circuits/silverstone.js",
@@ -449,55 +609,6 @@ async function precacheAssetLists() {
     "js/circuits/scenery/buddh.js",
     "js/circuits/scenery/mont_tremblant.js",
     "js/circuits/scenery/mosport.js",
-    // LAZY_RACE_SESSION — pit/radio/reliability behind startRace (title boots stub)
-    "js/race/reliability.js",
-    "js/race/damage.js",
-    "js/race/duel.js",
-    "js/race/session-records.js",
-    "js/race/pit-lane.js",
-    "js/race/engineer.js",
-    "js/race/radio-lines.js",
-    "js/race/race-facts.js",
-    "js/race/spotter.js",
-    "js/race/race-radio.js",
-    "js/race/start-lights.js",
-    "js/race/marshal-panels.js",
-    "js/race/flying-start.js",
-    "js/race/jump-start-penalty.js",
-    // LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build
-    "js/track/scenery/models.js",
-    "js/track/scenery/themes.js",
-    "js/track/scenery/landmark-kit.js",
-    "js/track/scenery/circuit-kit.js",
-    "js/track/core/hidden-faces.js",
-    "js/track/scenery/nature.js",
-    "js/track/scenery/structures.js",
-    "js/track/scenery/city.js",
-    "js/track/scenery/identity.js",
-    "js/track/scenery/pits.js",
-    "js/track/scenery/venue.js",
-    "js/track/scenery/guards.js",
-    "js/track/scenery/build-props.js",
-    // LAZY_AUDIO — engine/panel/voice behind first sound gesture or race start
-    "js/audio/signal.js",
-    "js/audio/soundtrack.js",
-    "js/audio/race-mix-audition.js",
-    "js/audio/radio-fx.js",
-    "js/audio/tone-model.js",
-    "js/audio/ers-layer.js",
-    "js/audio/engine.js",
-    "js/audio/music-lib.js",
-    "js/audio/spotify.js",
-    "js/audio/rivals.js",
-    "js/audio/crowd.js",
-    "js/audio/car-sfx.js",
-    "js/audio/voice-pack.js",
-    "js/audio/battle-earcon.js",
-    "js/audio/radio-voice.js",
-    "js/audio/announcer-recorded.js",
-    "js/audio/announcer.js",
-    "js/audio/panel.js",
-    "js/audio/driving-cues.js",
     // LAZY_DATA — the data hub bundle behind the DATA button
     "js/data/tab-utils.js",
     "js/data/api-transport.js",
@@ -509,9 +620,12 @@ async function precacheAssetLists() {
     "js/data/telemetry.js",
     "js/data/export.js",
     "js/data/schedule.js",
+    "js/data/ics.js",
     "js/data/standings.js",
     "js/data/results.js",
     "js/data/live.js",
+    "js/data/real-race-script.js",
+    "js/data/real-race-fetch.js",
     "js/data/real-race-tab.js",
     "js/data/hub.js",
     // LAZY_NET — the multiplayer stack behind VS FRIEND
@@ -521,20 +635,25 @@ async function precacheAssetLists() {
     "js/net/sdp.js",
     "js/net/qr.js",
     "js/net/scan.js",
+    "js/net/ice.js",
     "js/net/transport.js",
     "js/net/handshake.js",
     "js/net/lobby-codes.js",
     "js/net/lobby-roster.js",
     "js/net/lobby-settings.js",
+    "js/net/interp.js",
     "js/net/snapshot.js",
     "js/net/session.js",
+    "js/net/quali-wire.js",
+    "js/net/strategy-wire.js",
     "js/net/spectate.js",
     "js/net/netplay.js",
     "js/net/lobby.js",
+    "js/input/phone-pad-codec.js",
+    "js/ui/touch-button-settings.js",
+    "js/input/phone-pad-page.js",
     "js/input/phone-pad.js",
-    // LAZY_WORKER — worker entry scripts (new Worker, never a page tag)
-    "js/track/build-worker.js",
-    "js/workers/bitmap-decode-worker.js",
+    "js/net/phone-pairing-ui.js",
     // LAZY_EDITOR — the track designer behind the TRACK DESIGNER door
     "js/editor/shape.js",
     "js/editor/stamps.js",
@@ -546,6 +665,7 @@ async function precacheAssetLists() {
     "js/editor/scenery-preview.js",
     "js/editor/canvas.js",
     "js/editor/elev-presets.js",
+    "js/editor/zones.js",
     "js/editor/profile.js",
     "js/editor/selection-panel.js",
     "js/editor/followup-tools.js",
@@ -561,17 +681,59 @@ async function precacheAssetLists() {
     "js/xr/apex-xr.js",
     "js/xr/xr-ui.js",
     // LAZY_CAM_EDITOR — camera tuner + flyby shot editor panels
+    "js/lighting/tuner-panel.js",
     "js/camera/tuner-panel.js",
     "js/camera/flyby-editor.js",
     // LAZY_CAREER_UI — CAREER screen behind the title CAREER door
+    "js/career/career-backup.js",
     "js/career/career-planning-ui.js",
     "js/career/career-ui.js",
-    // LEARN — lesson iframes and their bare dependencies
+    // LAZY_UI_PRESETS — APPEARANCE LAYOUT PRESET row behind the first APPEARANCE enter
+    "js/ui/desktop-graphics.js",
+    "js/ui/screen-regions.js",
+    "js/ui/screen-placement.js",
+    "js/ui/screen-arranger.js",
+    "js/ui/hud-layout-editor.js",
+    "js/ui/dock-toolbar.js",
+    "js/ui/hud-arrange.js",
+    "js/ui/look-avail.js",
+    "js/ui/layout-presets.js",
+    "js/ui/appearance-arrangement-picker.js",
+    "js/ui/appearance-studio-ui.js",
+    "js/ui/photo-studio-ui.js",
+    // LAZY_SAVES_DATA — SAVES & DATA body (collect / apply / files UI) behind the SettingsExport façade
+    "js/ui/save-health.js",
+    "js/ui/progress-backup.js",
+    "js/ui/settings-export-body.js",
+    // LAZY_RESULTS_SHEET — results / TT / standings DOM behind startRace
+    "js/share/share-card-data.js",
+    "js/share/share-card-layout.js",
+    "js/share/share-card.js",
+    "js/share/share-card-chips.js",
+    "js/ui/results-sheet.js",
+    "js/ui/quali-sheet.js",
+    // LAZY_GFX_HI — desktop EXTREME / CINEMA detail, fetched beside the backend when GfxQuality.detail() >= 2
+    "js/render/shared/gfx-hi.js",
+    "js/car/car-hero.js",
+    // LAZY_PERF — BENCHMARK / PHONE TEST rig, idle-loaded after boot
+    "js/perf/soak-run.js",
+    "js/perf/gpu-test-run.js",
+    "js/perf/phone-recorder.js",
+    "js/perf/bench-capture.js",
+    "js/perf/bench-run.js",
+    "js/perf/metrics-panel.js",
+    // LAZY_REAL_RACE — the Data Hub real-race engine (JUMP IN / WATCH / HIGHLIGHTS)
+    "js/race/tv-graphics.js",
+    "js/ui/watch-transport.js",
+    "js/race/real-replay.js",
+    "js/race/real-race-pace.js",
+    "js/race/real-race.js",
+    // LEARN — the Learn modal and bare lesson assets
+    "js/ui/learn-door.js",
     "learn/appearance.js",
     "learn/aero/index.html",
     "learn/aero/style.css",
     "learn/aero/lab.js",
-    "js/physics/consts.js",
     "learn/vsc/index.html",
     "learn/vsc/style.css",
     "learn/vsc/model.js",
@@ -617,11 +779,11 @@ async function precacheAssetLists() {
     }
   }
   // Cache API put during install makes V8 build a "full" code cache of every
-  // script (v8.dev). These three are LAZY_AGENT (no <script> tag) — belt and
+  // script (v8.dev). LAZY_AGENT files have no <script> tag — belt and
   // suspenders if a tag is re-added. Do NOT add them to optional: that is
   // still an install-time put. Fetch-miss still cache.put on first use.
   // @gen-shell:sw-lazy-agent
-  const LAZY_AGENT = ["js/agent/agentview-raster.js","js/agent/agentview-corners.js","js/agent/agentview.js","js/agent/apex-net.js","js/agent/apex-cam.js","js/agent/apex-track.js","js/agent/apex-lobby.js","js/agent/apex-gpu-capture.js","js/agent/apex-lifecycle.js","js/agent/apex.js"];
+  const LAZY_AGENT = ["js/render/shared/puddles.js","js/agent/agentview-raster.js","js/agent/agentview-corners.js","js/agent/agentview.js","js/agent/apex-net.js","js/agent/apex-cam.js","js/agent/apex-track.js","js/agent/apex-lobby.js","js/agent/apex-gpu-capture.js","js/agent/apex-lifecycle.js","js/perf/three-inspector.js","js/agent/apex.js","js/agent/apex-bridge.js","js/agent/bridge-link.js"];
   // /@gen-shell:sw-lazy-agent
   for (const u of [...essential]) {
     if (LAZY_AGENT.some((p) => u.includes(p))) essential.delete(u);
@@ -637,10 +799,10 @@ async function precacheAssetLists() {
 // and the optionals are version-pinned by PATH (the content-named woff2s) — which is the exact condition the fetch handler below
 // already relies on when it says a cache hit is always correct without
 // revalidation. `cache: "no-store"` here contradicted that and made a cold
-// first visit download the whole app TWICE: ~5.8 MB for the page's own 145
-// script tags, then the same ~5.8 MB again for the install, in parallel, on one
-// connection. Nothing in the history justifies it — it arrived inside an
-// unrelated commit and no comment defends it.
+// first visit download the whole app TWICE: the page's own ~310 script tags
+// (~3.3 MB raw on a measured live shell) then the same bytes again for the
+// install, in parallel, on one connection. Nothing in the history justifies
+// it — it arrived inside an unrelated commit and no comment defends it.
 //
 // The application shell is still fetched with `no-store` (see
 // precacheAssetLists) because index.html is the one genuinely mutable document
@@ -687,6 +849,124 @@ async function reuseHashed(cache, url) {
   } catch (_) { return false; }   // the network path below still runs
 }
 
+// A PATH-PINNED FILE ANOTHER GENERATION HOLDS IS NOT DOWNLOADED AGAIN EITHER (#5007).
+// `vendor/<name>-<x.y.z>/` and the content-named fonts change only by changing
+// the path, so the copy any apex26-* cache keeps is this deploy's file. Before
+// this, the three.js island (~1.2 MB raw) re-downloaded at every deploy.
+const PATH_PINNED = /^(?:vendor\/[a-z0-9_-]+-\d+\.\d+\.\d+\/|assets\/fonts\/[^/?]+\.woff2$)/;
+async function reusePinned(cache, url) {
+  if (!PATH_PINNED.test(url) || url.includes("?")) return false;
+  try {
+    const old = await caches.match(url);
+    if (!old || !old.ok) return false;
+    await cache.put(url, old);
+    return true;
+  } catch (_) { return false; }   // the network path still runs
+}
+
+// RUNTIME ENTRIES OUTLIVE A DEPLOY (#5007). Sfx, the baked pack (`?h=<md5>`),
+// streamed music and opt-in vendors (Rapier, jsQR, trystero) are cached on
+// first use, never by install, so each new generation started without them and
+// the sweep deleted the only copy: offline lost them, online re-downloaded them
+// (~2.5 MB pack + sfx) after every deploy. Install carries them forward from the
+// older generations it is about to replace, each checked against the network
+// with its own validators so a changed or deleted file is not kept forever:
+//   304 → the cached bytes are current: copied, no body crosses the network;
+//   200 → changed: a bare URL stores the fresh body (it IS the file now), a
+//         `?h=` URL is dropped (Pages ignores the query, so those bytes are a
+//         different hash than the key names);
+//   other status → gone from the deploy: dropped;
+//   no answer → kept as is (the copy was good when written; offline beats none).
+// An explicit If-None-Match / If-Modified-Since with cache "no-store" hands the
+// 304 to script (https://fetch.spec.whatwg.org/ — HTTP-network-or-cache fetch);
+// a 200 whose validator equals the stored one counts as unchanged too.
+// Voices live in VOICE_CACHE (never swept); everything else under /assets/ or
+// /vendor/ is a runtime class. Shell, ?v= script keys and markers are not
+// carried: install lists those itself.
+const CARRY_POOL = 4;
+function isCarriedRuntime(url) {
+  if (url.origin !== self.location.origin) return false;
+  const p = url.pathname;
+  if (p.includes("/assets/voice/") || isBuildKeyedManifest(url)) return false;
+  return p.includes("/assets/") || p.includes("/vendor/");
+}
+async function carryEntry(cache, req, old) {
+  const url = new URL(req.url);
+  const etag = old.headers.get("ETag"), modified = old.headers.get("Last-Modified");
+  if (!etag && !modified) {
+    // Nothing to ask with: only an address that names its content is safe to keep.
+    const rel = url.href.slice(new URL("./", self.location.href).href.length);
+    if (url.search || PATH_PINNED.test(rel)) await cache.put(req, old);
+    return;
+  }
+  const headers = {};
+  if (etag) headers["If-None-Match"] = etag;
+  if (modified) headers["If-Modified-Since"] = modified;
+  let timeout = null;
+  const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+  try {
+    const expired = new Promise((resolve) => {
+      timeout = setTimeout(() => { if (ctrl) ctrl.abort(); resolve(null); }, OPTIONAL_ASSET_MS);
+    });
+    const init = { cache: "no-store", headers, priority: "low" };
+    if (ctrl) init.signal = ctrl.signal;
+    let res = null;
+    try { res = await Promise.race([fetch(url.href, init), expired]); } catch (_) { res = null; }
+    if (!res) { await cache.put(req, old); return; }               // no answer: keep
+    // Unchanged: a 304, or a 200 carrying the same validator (an engine that
+    // answered the conditional from its own HTTP cache instead of passing the
+    // 304 through still reports the stored ETag / Last-Modified).
+    const same = res.status === 304 || (res.ok && (etag ? res.headers.get("ETag") === etag : res.headers.get("Last-Modified") === modified));
+    if (same) { await cache.put(req, old); return; }
+    if (res.ok && !url.search) await cache.put(req, res);          // changed: the new file
+  } finally { if (timeout !== null) clearTimeout(timeout); }
+}
+async function carryRuntime(cache, name) {
+  const build = cacheBuild(name);
+  const sources = (await caches.keys())
+    .filter((k) => cacheBuild(k) > 0 && cacheBuild(k) < build)
+    .sort((a, b) => cacheBuild(b) - cacheBuild(a));
+  // Keep one job per URL. For a hashed key, keep older candidates in order:
+  // a legacy worker could have cached a rebaked file under the original hash.
+  const jobs = new Map();
+  for (const k of sources) {
+    const src = await caches.open(k);
+    for (const req of await src.keys()) {
+      const url = new URL(req.url);
+      if (!isCarriedRuntime(url)) continue;
+      const job = jobs.get(req.url);
+      if (!job) jobs.set(req.url, { req, hash: isHashedPackRequest(url) ? url.search.slice(3) : null, older: [src] });
+      else if (job.hash) job.older.push(src);
+    }
+  }
+  await pooled([...jobs.values()], CARRY_POOL, async ({ req, hash, older }) => {
+    try {
+      let current;
+      try { current = await cache.match(req); } catch (_) { if (!hash) return; }
+      if (current) {
+        if (!hash) return;
+        // An older active worker can also pre-fill the incoming generation.
+        const checked = await checkedCachedPack(current, hash);
+        if (checked) {
+          if (checked !== current) await cache.put(req, checked);
+          return;
+        }
+      }
+      for (const src of older) {
+        let old = await src.match(req).catch(() => undefined);
+        if (!old || !old.ok) continue;
+        if (hash) {
+          old = await checkedCachedPack(old, hash);
+          if (!old) continue;
+        }
+        // The newest valid candidate owns the HTTP validator decision, even a deletion.
+        await carryEntry(cache, req, old);
+        return;
+      }
+    } catch (_) { /* one entry never fails the install */ }
+  });
+}
+
 async function cacheOptionalAsset(cache, url, verifyGeneration = false) {
   let timeout = null;
   const ctrl = typeof AbortController === "function" ? new AbortController() : null;
@@ -697,13 +977,17 @@ async function cacheOptionalAsset(cache, url, verifyGeneration = false) {
         resolve(null);
       }, OPTIONAL_ASSET_MS);
     });
-    const res = await Promise.race([fetch(url, ctrl ? { signal: ctrl.signal } : undefined), expired]);
+    // priority:"low" — a background precache must not compete with the page's own
+    // loads; an engine without Fetch Priority ignores the unknown member
+    // (https://developer.mozilla.org/en-US/docs/Web/API/RequestInit#priority).
+    const init = { priority: "low" };
+    if (url.startsWith(PACK_MANIFEST_KEY_PREFIX)) init.cache = "no-store";
+    if (ctrl) init.signal = ctrl.signal;
+    const res = await Promise.race([fetch(url, init), expired]);
     if (res && res.ok) {
       // Retried scripts need a stamped generation; every stamped response is
       // verified, including initial optional installs. Bound body/hash work too.
-      // Aero Lab is an unversioned standalone page and loads this same-origin
-      // dependency as a bare script, like its lab.js sibling under learn/.
-      if (verifyGeneration && /^js\//.test(url) && url !== "js/physics/consts.js" && !/\?v=([0-9a-f]{12})$/.test(url)) return false;
+      if (verifyGeneration && /^js\//.test(url) && !/\?v=([0-9a-f]{12})$/.test(url)) return false;
       const checked = await Promise.race([verifyHashedResponse(url, res).then(() => true), expired]);
       if (!checked) return false;
       await cache.put(url, res); return true;
@@ -742,14 +1026,14 @@ self.addEventListener("install", (event) => {
     // Career UI is also required: an update must not replace working offline
     // career access with a shell whose strict lazy group was not fully cached.
     // Stamp these files exactly as ScriptLoader requests them.
-    const isRequiredLazy = (u) => /^js\/render\/glx\//.test(u) || /^js\/career\/career-(planning-ui|ui)\.js$/.test(u);
+    const isRequiredLazy = (u) => /^js\/render\/glx\//.test(u) || REQUIRED_LAZY.includes(u);
     const isShell = (u) => u === "./" || u === "index.html";
     // A lazy file's key: its content hash from the shell's map, else the build.
     const lazyV = urls.lazyV || new Map();
     const stampKey = (u) => u + "?v=" + (lazyV.get(u) || build);
     const required = urls.essential.filter((u) => !isShell(u)).concat(urls.optional.filter(isRequiredLazy).map(stampKey));
     await Promise.all(["./", "index.html"].map((u) => cache.put(u, urls.shellResponse())));
-    await pooled(required, 6, async (u) => { if (!(await reuseHashed(cache, u))) await cacheRequiredAsset(cache, u); });
+    await pooled(required, 6, async (u) => { if (!(await reuseHashed(cache, u)) && !(await reusePinned(cache, u))) await cacheRequiredAsset(cache, u); });
     await cache.put(INSTALL_COMPLETE_URL, new Response("complete"));
     invalidateCacheOrder();   // a marker is a rank input (computeCacheOrder)
     // The DEFERRED backends are the one group in `optional` that is NOT pinned
@@ -767,21 +1051,27 @@ self.addEventListener("install", (event) => {
     // so it must be SEEDED under that key: the DEFERRED backends, and now the
     // race payload (light-presets + the per-circuit scenery closures) too.
     // Stamp regex covers ScriptLoader injects: DEFERRED + LAZY_* incl. js/race/
-    // (LAZY_RACE_SESSION) and js/workers/ (bitmap-decode). Keep both path classes.
+    // (LAZY_RACE_SESSION), js/workers/ (bitmap-decode), and the phone-pad trio
+    // (codec, page, session — all three are injected, none is a shell tag).
+    // Keep both path classes.
     // The stamp is the deploy's CONTENT HASH where the shell's map names one
     // (stampKey above), so an unchanged file keeps its key across deploys.
+    // Seed the new build's own manifest before activation. Carrying the older
+    // manifest or relying on the first online boot loses the pack after an update.
+    const packManifest = PACK_MANIFEST_KEY_PREFIX + build;
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui)\.js$|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/(?:phone-pad(?:-codec|-page)?|touch-button-actions)\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|touch-button-settings|appearance-(?:studio-ui|arrangement-picker)|companion-return|photo-studio-ui|results-sheet|quali-sheet|watch-transport|progress-backup|save-health|settings-export-body|learn-door|hud-inputs|screen-(regions|placement|arranger)|hud-arrange|hud-layout-editor|desktop-graphics|dock-toolbar)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/(presets|tuner-panel)\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
-          // GLX and career UI went in `required`; WGX is runtime-only (opt-in).
+          // GLX and career UI went in `required`; runtime-only doors are skipped.
           return !isRequiredLazy(bare) && !isRuntimeOnlyOptional(bare);
-        });
+        }).concat(packManifest);
     // INSTALL-CRITICAL first (chosen backend = TLX + three.js), then the
-    // BACKGROUND pool (scenery / data / net — not WGX), then SETTLED, then
-    // skipWaiting. The order of the pools is a download priority, nothing
-    // more: skipWaiting() only SETS A FLAG, and the browser reads it after
-    // every install extend-lifetime promise has settled
+    // BACKGROUND pool (in the seed's order: race-entry bundles, then circuits +
+    // scenery, then data / net — not runtime-only doors), then
+    // SETTLED, then skipWaiting. The order of the pools is a download priority,
+    // nothing more: skipWaiting() only SETS A FLAG, and the browser reads it
+    // after every install extend-lifetime promise has settled
     // (https://w3c.github.io/ServiceWorker/ — Install, then Try Activate). A
     // skipWaiting between the pools — the old layout — activated nothing early
     // and only read as if it did; activation always followed SETTLED.
@@ -790,9 +1080,14 @@ self.addEventListener("install", (event) => {
     let optionalMissed = 0, firstMissed = "";
     for (const pool of [critical, background]) {
       await pooled(pool, 4, async (u) => {
-        if (!(await reuseHashed(cache, u)) && !(await cacheOptionalAsset(cache, u)) && !optionalMissed++) firstMissed = u;
+        if (!(await reuseHashed(cache, u)) && !(await reusePinned(cache, u)) && !(await cacheOptionalAsset(cache, u)) && !optionalMissed++) firstMissed = u;
       });
     }
+    // Runtime-only doors (WGX, designer, XR, camera editors) are never fetched
+    // here, but a door the player opened keeps its file across a deploy that
+    // left its content hash alone (#5007): a CacheStorage copy, never the network.
+    await pooled(urls.optional.filter(isRuntimeOnlyOptional).map(stampKey), 4, (u) => reuseHashed(cache, u));
+    try { await carryRuntime(cache, name); } catch (e) { swLog("warn", "runtime carry: " + errMsg(e)); }
     if (optionalMissed) swLog("warn", "precache: " + optionalMissed + " of " + stamped.length + " optional assets not cached (first: " + firstMissed + ")");
     await cache.put(OFFLINE_STATUS_URL, new Response(JSON.stringify({
       build: Number(build), required: ["./", "index.html", ...required], optional: stamped,
@@ -911,7 +1206,22 @@ async function offlineStatus() {
 // .bin pairs from voice-pack.js).
 // `fixedCache` (voice): write there, skip the write when the cached copy carries
 // the same ETag, and read it before the generations (older ones hold legacy copies).
-function packNetworkFirst(event, req, fixedCache) {
+// A voice key's id is its file name up to the first dot: george-radio.json,
+// george-radio.bin and george-radio.opus.bin are one id.
+function voiceIdOf(req) {
+  return new URL(req.url).pathname.split("/").pop().split(".")[0];
+}
+async function pruneVoiceCache(cache) {
+  const keys = await cache.keys();
+  const last = new Map();   // id -> index of its newest key
+  keys.forEach((r, i) => last.set(voiceIdOf(r), i));
+  if (last.size <= VOICE_KEEP_IDS) return;
+  const keep = new Set([...last].sort((a, b) => b[1] - a[1]).slice(0, VOICE_KEEP_IDS).map((e) => e[0]));
+  await Promise.all(keys.filter((r) => !keep.has(voiceIdOf(r))).map((r) => cache.delete(r)));
+}
+// `staleFirst` (the build-keyed pack manifest, isBuildKeyedManifest): a cached
+// copy answers at once and the network revalidates behind it.
+function packNetworkFirst(event, req, fixedCache, staleFirst) {
   let cacheWrite = Promise.resolve();
   const network = fetch(req).then((res) => {
     if (res && res.ok) {
@@ -926,6 +1236,7 @@ function packNetworkFirst(event, req, fixedCache) {
         }
         const cache = await openCache(fixedCache || await currentCacheName());
         await cache.put(req, copy);
+        if (fixedCache === VOICE_CACHE) await pruneVoiceCache(cache).catch(() => {});
       })().catch(noteCacheWriteFail);
     }
     return res;
@@ -936,6 +1247,7 @@ function packNetworkFirst(event, req, fixedCache) {
     const cached = fixedCache
       ? caches.match(req, { cacheName: fixedCache }).then((hit) => hit || matchPreferCurrent(req))
       : matchPreferCurrent(req);
+    if (staleFirst) { const early = await cached; if (early) return early; }
     const timeout = new Promise((resolve) => setTimeout(() => resolve(null), NAV_RACE_MS));
     try {
       const res = await Promise.race([network, timeout]);
@@ -949,7 +1261,7 @@ function packNetworkFirst(event, req, fixedCache) {
 }
 
 // Content-addressed pack files: assets.js asks for `assets/pack/<file>?h=<md5>`
-// with the md5 the (network-first) manifest records. The URL IS the content, so
+// with the md5 the manifest records. The URL names the content, so
 // a cached copy is always right and no revalidation round trip is owed; a
 // rebake changes the md5, hence the URL, hence misses the old entry.
 const PACK_HASHED = /^\?h=[0-9a-f]{32}$/;
@@ -957,19 +1269,99 @@ function isHashedPackRequest(url) {
   return PACK_HASHED.test(url.search) && url.pathname.includes("/assets/pack/") &&
     !url.pathname.endsWith("/manifest.json");
 }
-function packCacheFirst(event, req) {
+
+// The baked manifest uses MD5 to identify bytes. Web Crypto has no MD5, so
+// compute the RFC 1321 digest here before returning or storing a cache miss.
+const MD5_SHIFTS = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21];
+const MD5_CONSTANTS = Int32Array.from({ length: 64 }, (_, i) => Math.floor(2 ** 32 * Math.abs(Math.sin(i + 1))));
+function packDigest(bytes) {
+  const body = new DataView(bytes);
+  const state = new Int32Array([0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476]);
+  const words = new Int32Array(16);
+  function processBlock(input, offset) {
+    for (let i = 0; i < 16; i++) words[i] = input.getInt32(offset + i * 4, true);
+    let a = state[0], b = state[1], c = state[2], d = state[3];
+    for (let i = 0; i < 64; i++) {
+      let mix, word;
+      if (i < 16) { mix = (b & c) | (~b & d); word = i; }
+      else if (i < 32) { mix = (d & b) | (~d & c); word = (5 * i + 1) % 16; }
+      else if (i < 48) { mix = b ^ c ^ d; word = (3 * i + 5) % 16; }
+      else { mix = c ^ (b | ~d); word = (7 * i) % 16; }
+      const shift = MD5_SHIFTS[(i >> 4) * 4 + (i % 4)];
+      const sum = (a + mix + MD5_CONSTANTS[i] + words[word]) | 0;
+      a = d;
+      d = c;
+      c = b;
+      b = (b + ((sum << shift) | (sum >>> (32 - shift)))) | 0;
+    }
+    state[0] += a; state[1] += b; state[2] += c; state[3] += d;
+  }
+  const end = bytes.byteLength - bytes.byteLength % 64;
+  for (let offset = 0; offset < end; offset += 64) processBlock(body, offset);
+  const remainder = bytes.byteLength - end;
+  const tail = new Uint8Array(remainder < 56 ? 64 : 128);
+  tail.set(new Uint8Array(bytes, end));
+  tail[remainder] = 0x80;
+  const padded = new DataView(tail.buffer);
+  const bits = bytes.byteLength * 8;
+  padded.setUint32(tail.length - 8, bits, true);
+  padded.setUint32(tail.length - 4, Math.floor(bits / 2 ** 32), true);
+  for (let offset = 0; offset < tail.length; offset += 64) processBlock(padded, offset);
+  let hex = "";
+  for (const word of state) {
+    for (let shift = 0; shift < 32; shift += 8) hex += ((word >>> shift) & 0xff).toString(16).padStart(2, "0");
+  }
+  return hex;
+}
+// Stamp only copies admitted to CacheStorage. A retained legacy generation
+// (or a newer cache opened early by its old worker) may contain unverified bytes.
+const VERIFIED_PACK_HEADER = "X-Apex-Verified-Pack-MD5";
+async function verifiedPackCopy(response, hash) {
+  const body = await response.clone().arrayBuffer();
+  if (packDigest(body) !== hash) return null;
+  const copy = new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
+  copy.headers.set(VERIFIED_PACK_HEADER, hash);
+  return copy;
+}
+async function checkedCachedPack(response, hash) {
+  if (response.headers.get(VERIFIED_PACK_HEADER) === hash) return response;
+  try { return await verifiedPackCopy(response, hash); } catch (_) { return null; }
+}
+// THE PACK MANIFEST UNDER THE PAGE'S BUILD (#5629): assets.js asks for
+// `assets/pack/manifest.json?b=<shell build>`. One deploy ships one manifest, so
+// a copy cached under that key was this build's (or, when the fetch crossed a
+// deploy, the newer one, which network-first served as well): it answers at
+// once and the network revalidates behind it, instead of a stalled link holding
+// the pack — and the models waiting on it — for NAV_RACE_MS. The key is the
+// shell's build, not this worker's memoised version.json read, so a worker that
+// outlived a deploy cannot hand the new shell the old layer index. A new build
+// asks a new key, so the key is never carried into the next generation.
+const PACK_BUILD_KEY = /^\?b=[1-9][0-9]{0,9}$/;
+function isBuildKeyedManifest(url) {
+  return PACK_BUILD_KEY.test(url.search) && url.pathname.endsWith("/assets/pack/manifest.json");
+}
+function packCacheFirst(event, req, hash) {
   let cacheWrite = Promise.resolve();
+  function store(copy) {
+    cacheWrite = (async () => {
+      const cache = await openCache(await currentCacheName());
+      await cache.put(req, copy);
+    })().catch(noteCacheWriteFail);
+  }
   const response = (async () => {
-    const hit = await matchPreferCurrent(req);
+    const hit = await matchPreferCurrent(req, async (candidate) => {
+      const checked = await checkedCachedPack(candidate, hash);
+      if (!checked) return false;
+      if (checked !== candidate) store(checked);   // warm hits need neither a body read nor a digest
+      return true;
+    }).catch(() => undefined);
     if (hit) return hit;
     try {
       const res = await fetch(req);
       if (res && res.ok) {
-        const copy = res.clone();
-        cacheWrite = (async () => {
-          const cache = await openCache(await currentCacheName());
-          await cache.put(req, copy);
-        })().catch(noteCacheWriteFail);
+        const checked = await verifiedPackCopy(res, hash);
+        if (!checked) return Response.error();
+        store(checked);
       }
       return res;
     } catch (_) { return Response.error(); }
@@ -989,7 +1381,8 @@ self.addEventListener("fetch", (event) => {
   // the guard is here so that stays true if it ever does.
   if (url.protocol !== "http:" && url.protocol !== "https:") return;
   if (url.origin !== self.location.origin) return;   // never touch cross-origin (Jolpica/OpenF1 data hub)
-  maybeSweep(event);
+  if (_killed) return;   // retired: the network answers until this page navigates away
+  maybeSweep(event, req.mode === "navigate");
 
   // STREAMED MUSIC ASKS FOR BYTE RANGES (perf-memory M-4b). A phone plays
   // assets/music/ through an <audio> element (js/audio/soundtrack.js
@@ -1042,6 +1435,12 @@ self.addEventListener("fetch", (event) => {
     // https://developer.mozilla.org/en-US/docs/Web/API/Request/cache
     let cacheWrite = Promise.resolve();
     const network = fetch(req, { cache: isVersion || isShellBust ? "no-store" : "no-cache" }).then((res) => {
+      if (res && res.ok && isVersion) {
+        // The kill switch is read off the version.json the page already asks for.
+        const copy = res.clone();
+        cacheWrite = copy.json().then((v) => { if (isKillFlag(v)) return killWorker(); }, () => {})
+          .catch((e) => swLog("warn", "kill switch failed: " + errMsg(e)));
+      }
       if (res && res.ok && !isVersion && url.search === "") {
         // Clone before the page can consume the body. Maintenance belongs to
         // waitUntil, so generation lookup and slow puts cannot delay navigation.
@@ -1064,7 +1463,6 @@ self.addEventListener("fetch", (event) => {
     // Register during dispatch, including when a cache fallback wins the race.
     event.waitUntil(network.then(() => cacheWrite, () => undefined));
     event.respondWith((async () => {
-      const timeout = new Promise((resolve) => setTimeout(() => resolve(null), NAV_RACE_MS));
       const online = typeof navigator !== "undefined" && navigator.onLine;
       // FAIL FAST ONLY WHERE A STALE ANSWER IS WORSE THAN NO ANSWER: version.json
       // (a stale build number makes the shell guard skip its reload) and the
@@ -1082,8 +1480,20 @@ self.addEventListener("fetch", (event) => {
       // page offline and on a slow link, for good.
       const bustShell = isShellBust ? await shellAtLeast(url.searchParams.get("b")) : undefined;
       const failFast = online && (isVersion || (isShellBust && !bustShell));
+      const timeout = new Promise((resolve) => setTimeout(() => resolve(null), isShellBust && !bustShell ? BUST_WAIT_MS : NAV_RACE_MS));
       try {
-        const res = await Promise.race([network, timeout]);
+        let res;
+        if (req.mode === "navigate" && !isShellBust && isShellDocument(url)) {
+          const early = new Promise((resolve) => setTimeout(() => resolve(undefined), SHELL_RACE_MS));
+          res = await Promise.race([network, early]);
+          if (res === undefined) {
+            const bare = new URL(url.href);
+            bare.search = ""; bare.hash = "";
+            const shell = (await matchPreferCurrent(req)) || (url.search && await matchPreferCurrent(bare.href)) || (await matchPreferCurrent("index.html"));
+            if (shell) return shell;
+            res = await Promise.race([network, timeout]);
+          }
+        } else res = await Promise.race([network, timeout]);
         if (res && res.ok) return res;
         if (res == null && failFast) return Response.error();
       } catch (_) {
@@ -1105,7 +1515,10 @@ self.addEventListener("fetch", (event) => {
       // (controller.html — the "Phone controller" shortcut and the QR landing
       // page — bench.html, cockpit-view.html) that lost the race used to open
       // the game instead; let its late network answer win, else fail honestly.
-      if (isShellDocument(url)) return (await matchPreferCurrent("index.html")) || Response.error();
+      if (isShellDocument(url)) {
+        const shell = await matchPreferCurrent("index.html");
+        if (shell) return shell;
+      }
       try { const late = await network; if (late) return late; } catch (_) { /* offline: nothing to show */ }
       return Response.error();
     })());
@@ -1120,10 +1533,11 @@ self.addEventListener("fetch", (event) => {
   // revalidation makes an unchanged file a 304), the cache when the network
   // fails or a cached copy exists and the network is slower than NAV_RACE_MS.
   // The exception is a `?h=<md5>` file (isHashedPackRequest): content-addressed,
-  // so cache-first. The manifest that names the hashes stays network-first.
+  // so cache-first. The build-keyed manifest also answers from cache while
+  // revalidating in the background.
   if (url.pathname.includes("/assets/pack/") && !DEV_HOST) {
-    if (isHashedPackRequest(url)) packCacheFirst(event, req);
-    else packNetworkFirst(event, req);
+    if (isHashedPackRequest(url)) packCacheFirst(event, req, url.search.slice(3));
+    else packNetworkFirst(event, req, null, isBuildKeyedManifest(url));
     return;
   }
 

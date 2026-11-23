@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "montreal",
+    revision: 2,
     pit: { side: -1 },   // the pit complex (TrackPit): left of the main straight
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 0.1 m off centreline, 2 nodes past vertex 0.
@@ -24,7 +25,7 @@
       { kind: "foliage", s0: 0, s1: 1 },
       // Foldbacks need a furniture-free envelope on both sides.
       { kinds: ["lighting"], s0: 0.05, s1: 0.09 },   // T1-T2 foldback
-      { kinds: ["lighting"], s0: 0.55, s1: 0.59 },   // hairpin foldback
+      { kinds: ["lighting"], s0: 0.60, s1: 0.64 },   // T10 hairpin foldback (apex turns[9] 0.6178)
     ],
     pal: { zenith: [0.30, 0.50, 0.82], horizon: [0.74, 0.80, 0.86], grass: [0.24, 0.50, 0.20], runoff: [0.18, 0.38, 0.16], fogDensity: 0.0014, sunDir: [0.5134360308102702, 0.6067880364121376, 0.6067880364121376], sun: [1, 0.92, 0.78], sunColor: [1, 0.9, 0.76] },
     // Racing-frame fracs (scenery-frame values +0.8598), so each bank sits on
@@ -32,15 +33,24 @@
     bankZones: [
       { frac: 0.0769, angleDeg: 3.0, widthM: 120 },   // T2
       { frac: 0.2296, angleDeg: 3.0, widthM: 120 },   // T5
-      { frac: 0.3041, angleDeg: 3.0, widthM: 110 },   // T7-T8
-      { frac: 0.4734, angleDeg: 3.0, widthM: 90 },    // T10-T11
-      { frac: 0.6197, angleDeg: 3.0, widthM: 80 },    // the hairpin
+      { frac: 0.3041, angleDeg: 3.0, widthM: 110 },   // T7
+      { frac: 0.4734, angleDeg: 3.0, widthM: 90 },    // T9
+      { frac: 0.6197, angleDeg: 3.0, widthM: 80 },    // T10, the hairpin
     ],
+    // Formula 1's Montréal elevation trace (Highs and lows, 2016) has 5.2 m of
+    // relief, cresting between T2 and T3 and bottoming between T12 and T13.
+    // Approximate heights relative to start/finish at equal lap intervals.
+    // Overlapping cosine lobes interpolate adjacent heights smoothly.
     elevations: [
-      { s: 0.4846, halfM: 220, rise: 1.25 },   // s re-keyed (0.52, 0.115, 0.755) so each bump stays put without the 0.915 frame
-      { s: 0.0796, halfM: 300, rise: 2.2 },
-      { s: 0.7196, halfM: 260, rise: -1.0 },
-    ],
+      0.0, 0.0, 0.3, 0.6, 1.3, 4.1, 5.0, 4.7, 4.5, 1.8, 0.1, 0.3,
+      0.3, 0.5, 1.9, 3.3, 3.6, 3.6, 3.6, 3.6, 3.7, 3.7, 3.8, 3.2,
+      3.1, 3.1, 3.0, 3.0, 2.9, 2.8, 2.7, 2.7, 1.7, 1.7, 1.0, 0.3,
+      0.1, -0.1, -0.2, -0.1, 0.1, 0.2, 0.3, 0.3, -0.1, -0.1, -0.1, -0.1,
+    ].map((rise, i, heights) => ({
+      s: (0.0198 + i / heights.length) % 1, // fromRaw subtracts startFrac
+      halfM: 4347 / heights.length,
+      rise,
+    })),
     flatTerrain: true,
     terrainOuter: 70,
 
@@ -48,8 +58,16 @@
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
+    // APPROXIMATE, not the FIA timing lines: the FIA 2026 Canadian GP circuit map
+    // puts S1/S2 at ~0.250 / 0.571 of the lap (#5316 CIRC3-05). Moving them
+    // changes saved sector bests; kept until that is decided.
     sectors: [0.277, 0.607],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.3, 0.62])
-    turns: [0.0603, 0.0768, 0.1698, 0.1808, 0.2288, 0.2883, 0.3038, 0.3113, 0.4633, 0.4728, 0.4793, 0.6178, 0.6488, 0.8983],
+    // turns[]: the FIA 2026 Canadian GP numbering (14 turns; F1 live-timing corner
+    // markers fitted onto this centreline, rms 5.6 m), one built apex per number:
+    // T1-T2 Senna S, T3-T4, T5 kink, T6-T7, T8-T9 chicane, T10 L'Épingle hairpin
+    // (r ≈ 16 m), T11 exit kink, T12 the gentle right kink on the Casino straight
+    // (a sub-PEAK_K kink here, r ≈ 1300 m), T13-T14 the final chicane.
+    turns: [0.0603, 0.0768, 0.1698, 0.1808, 0.2337, 0.2883, 0.3038, 0.4633, 0.4728, 0.6178, 0.6488, 0.7369, 0.8983, 0.9052],
     furniture: { tree: "fir",   fol: [0.20, 0.42, 0.23], lamp: "none" },  // lush island maple/conifer
     kit: { marshal: "hut",       rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },
     standSet: ["alu", "steel", "teal"],  // teal is the park's own colour (COL.basinTeal)

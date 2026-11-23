@@ -4,7 +4,13 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "spa",
-    pit: { side: -1 },   // the pit complex (TrackPit): left of the main straight
+    revision: 2,
+    // The pit complex (TrackPit) is on the driver's RIGHT of the main straight:
+    // FIA "2026 Belgian Grand Prix - Competition Notes - Circuit Map, Pit Lane
+    // Drawing, Emergency Exits Map and Red Zone" (v4, 16.07.26) — the pit lane
+    // leaves at the Bus Stop, runs inside the start straight and rejoins inside
+    // La Source; the drawing puts the F1 garages on the far side of the lane.
+    pit: { side: 1 },
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 1.9 m off centreline; = trace vertex 0.
     // A start line is always on a straight: docs/tracks/START-LINES.md.
@@ -33,25 +39,26 @@
     // the knot rises and the lap closes on itself. Knot j sits at s = j/64 in
     // this def's AUTHORING frame — tracks.js / def.js remap it (fmap about
     // sceneryStartFrac, then + _sceneryShift): racing ≈ s − 0.0298.
-    // Rises are a least-squares fit to SRTM 30 m over the bacinger trace
-    // (Open Topo Data, 2026-10-04, 5-tap smoothed for canopy noise), with the
-    // Eau Rouge/Raidillon section authored where 30 m pixels blunt the climb:
-    // La Source (+5 m) → DESCENT to the Eau Rouge floor (racing ≈0.14, −25 m)
-    // → Raidillon peaks ≈18 % (racing ≈0.165) → Kemmel climbs to Les Combes
-    // (≈0.36, +51 m, the summit) → down through Bruxelles/Pouhon to Stavelot
-    // (≈0.71, −49 m) → back up via Blanchimont to the Bus Stop. Relief ≈101 m.
-    // Refit: scratch tooling, not shipped — re-derive from SRTM, keep 64 knots.
-    // Knots 12/13 eased by 1-2 m (-11/3 → -10/1) so the steepest 20 m of
-    // Raidillon reads 17.7 %, under the 18 % the real climb tops out at
-    // (circuit-def-fields pins it).
-    elevations: [-3, -1, 0, 2, 4, 2, -1, -4, -8, -10, -10, -16, -10, 1, 5, 8, 10, 13, 16, 17, 19, 20, 23, 24, 25, 27, 25, 22, 20, 15, 12, 9,
+    // The broad profile follows SRTM. Around Eau Rouge, knots 7–17 fit the
+    // SPW 2021–22 0.5 m terrain model along the built road and Leclerc's 2024
+    // qualifying lap (OpenF1 session 9570); 2025 qualifying checks the fit.
+    // These are overlapping basis coefficients. At racing fractions 0.1331,
+    // 0.1491 and 0.1631 the pavement rises about 0, 13 and 23 m from the first
+    // station. Les Combes and Stavelot set the whole-lap relief (~101 m).
+    // https://geoservices.wallonie.be/arcgis/rest/services/RELIEF/WALLONIE_MNT_2021_2022/MapServer
+    elevations: [-3, -1, 0, 2, 4, 2, -1, -8, -5.2, -14.3, -9, -19.8, 9.1, -9.3, 11.9, -2.6, 15.2, 4.7, 16, 17, 19, 20, 23, 24, 25, 27, 25, 22, 20, 15, 12, 9,
       5, 1, -2, -5, -10, -15, -18, -20, -20, -19, -19, -20, -21, -21, -23, -25, -25, -23, -22, -20, -17, -16, -15, -13, -11, -10, -7, -5, -5, -2, -3, -5]
       .map((rise, j) => ({ s: j / 64, halfM: 217, rise })),
     bankZones: [
       { frac: 0.1854, angleDeg: 5.0, widthM: 130 },   // Raidillon
       { frac: 0.3685, angleDeg: 3.0, widthM: 80 },    // Les Combes
-      { frac: 0.4531, angleDeg: 4.0, widthM: 170 },   // Bruxelles
-      { frac: 0.5648, angleDeg: 6.0, widthM: 160 },   // Pouhon
+      // SPW 2021–22 LiDAR MNT (0.5 m), measured across the central 6 m of
+      // pavement. Bruxelles has about 2–3° inward crossfall. Pouhon carries
+      // roughly 2–3° through both left apexes and the link between them.
+      // https://geoportail.wallonie.be/catalogue/a004e570-99d6-4fe5-b83d-49b774409278.html
+      { turn: 8, angleDeg: 2.8, widthM: 470 },       // Bruxelles
+      { turn: 10, angleDeg: 2.6, widthM: 580 },      // Pouhon, first apex
+      { turn: 11, angleDeg: 2.7, widthM: 580 },      // Pouhon, second apex
       { frac: 0.6626, angleDeg: 3.5, widthM: 140 },   // Fagnes
       { frac: 0.7277, angleDeg: 3.5, widthM: 100 },   // Campus
       { frac: 0.7576, angleDeg: 6.0, widthM: 150 },   // Stavelot
@@ -59,19 +66,24 @@
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
+    // sectors/turns: sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.28, 0.68],
-    // 2025 Belgian GP map (Formula 1; event 25–27 July, consulted 2026-10-19):
-    // https://www.formula1.com/en/racing/2025/belgium
-    // Nineteen physical bends: Eau Rouge/Raidillon 2L/3R/4L, Les Combes
-    // 5R/6L/7R, Bruxelles 8R, Pouhon 10L/11L, Fagnes 12R/13L,
-    // Stavelot 14R/15R, Blanchimont 16L/17L, Bus Stop 18R/19L.
-    // Stations identify bends on the existing built trace, not surveyed GPS
-    // apex coordinates. Keep the road, elevation and authored bank centres.
-    turns: [0.0350, 0.1307, 0.1430, 0.1615, 0.3260, 0.3370, 0.3595, 0.4168, 0.4500, 0.5225, 0.5567, 0.6230, 0.6505, 0.6855, 0.7150, 0.8152, 0.8653, 0.9435, 0.9515],
-    furniture: { tree: "fir",   fol: [0.14, 0.31, 0.21], lamp: "none" },  // dark Ardennes spruce, blue-green
+    // turns: FIA 2026 event-map numbering — "2026 Belgian Grand Prix -
+    // Competition Notes - Circuit Map, Pit Lane Drawing, Emergency Exits Map
+    // and Red Zone" (FIA decision document, v4 issued 16.07.26), p.2, 19
+    // corners: La Source 1R, Eau Rouge/Raidillon 2L/3R/4L, Les Combes
+    // 5R/6L/7R, Bruxelles 8R, 9L, Pouhon 10L/11L, Fagnes 12R/13L, 14R/15R,
+    // Blanchimont 16L/17L, Bus Stop 18R/19L. One apex per FIA corner, each
+    // the built centreline's |curvature| peak for that bend (not surveyed GPS).
+    // T8 Bruxelles stays on its 0.4168 station (the corner's other curvature
+    // peak, 0.4105, is 44 m away; tests/specs/foundation/spa.js pins the
+    // station matched to the F1 map within 25 m).
+    turns: [0.0351, 0.1307, 0.1434, 0.1618, 0.3258, 0.3374, 0.3598, 0.4168, 0.4502, 0.5227, 0.5567, 0.6200, 0.6505, 0.6857, 0.7150, 0.8152, 0.8653, 0.9436, 0.9516],
+    // bakedPines ON (#6037): pack pine_lod0 has a real crown again (foliage ≥ wood); recovers #5782's
+    // Spa instanced-batch win. The crown gate in baked-model-instancing.test.mjs keeps the flag honest.
+    furniture: { tree: "fir", fol: [0.14, 0.31, 0.21], lamp: "none", bakedPines: true },  // shared authored/forest pine registry
     kit: { marshal: "cabin",     rail: "doubleArmco", fence: "leaning",   tyre: "stack",   board: "panel",     gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     standSet: ["darkSteel", "steel", "concrete"],
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,

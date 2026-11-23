@@ -1,5 +1,7 @@
 # TUMFTM racetrack-database → Apex track designer
 
+Summary: TUMFTM racetrack-database (LGPL-3.0): designer CSV importer, roster overlap vs the three missing DTM layouts, and why upstream racelines are NOT wired into TrackLine/AI (bake already min-curvature).
+
 Assessment + importer note, 2026-10-01.
 
 Upstream: [TUMFTM/racetrack-database](https://github.com/TUMFTM/racetrack-database)

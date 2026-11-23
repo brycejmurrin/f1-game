@@ -294,7 +294,16 @@ function snap(ids) {
 if (require.main === module) {
   const argv = process.argv.slice(2);
   const asJson = argv.includes("--json");
-  const wanted = argv.filter((a) => !a.startsWith("--"));
+  // A typo'd id or flag used to be skipped, so `--json monzza` printed [] and
+  // exited 0: a clean result for a circuit nobody checked.
+  const badFlag = argv.filter((a) => a.startsWith("-") && a !== "--json");
+  const wanted = argv.filter((a) => !a.startsWith("-"));
+  const unknown = wanted.filter((id) => !START[id]);
+  if (badFlag.length || unknown.length) {
+    console.error(`startline-snap: ${badFlag.length ? `unknown flag ${badFlag.join(" ")}` : `no located start line for ${unknown.join(" ")}`}` +
+      `\nusage: node tools/track/startline-snap.cjs [id ...] [--json]   (ids: ${Object.keys(START).join(" ")})`);
+    process.exit(2);
+  }
   const ids = wanted.length ? wanted : Object.keys(START);
   const rows = snap(ids);
 

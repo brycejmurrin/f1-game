@@ -115,12 +115,7 @@ const fightDist = (gap) => Math.sqrt(Math.max(0, gap) / K);
 const ck = (ix, iz) => ix * 4000003 + iz;
 const span = (p) => Math.max(p.maxX - p.minX, p.maxY - p.minY, p.maxZ - p.minZ);
 
-// An in-plane basis derived from the normal ALONE, so two faces that pass the
-// SAME_FACING test get the same axes and their extents are directly comparable.
-// Needed because scenery is laid on the track's Frenet basis: a stand on a
-// diagonal straight is axis-aligned to nothing, and measuring its face by AABB
-// axes returns the ground FOOTPRINT (len x len) instead of the face (len x
-// height) — off by an order of magnitude on exactly the biggest offenders.
+// Orthonormal axes for measuring projected face area in square metres.
 function planeBasis(n) {
   const up = Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
   let e1 = [n[1] * up[2] - n[2] * up[1], n[2] * up[0] - n[0] * up[2], n[0] * up[1] - n[1] * up[0]];
@@ -128,6 +123,21 @@ function planeBasis(n) {
   e1 = [e1[0] / l, e1[1] / l, e1[2] / l];
   const e2 = [n[1] * e1[2] - n[2] * e1[1], n[2] * e1[0] - n[0] * e1[2], n[0] * e1[1] - n[1] * e1[0]];
   return [e1, e2];
+}
+
+// Project the original world vertices, retaining cheap bounds for hull clipping.
+function projectFace(pos, start, end, normal) {
+  const [e1, e2] = planeBasis(normal), pts = [];
+  let a1 = Infinity, b1 = -Infinity, a2 = Infinity, b2 = -Infinity;
+  for (let v = start; v < end; v += 3) {
+    const x = pos[v], y = pos[v + 1], z = pos[v + 2];
+    const u = e1[0] * x + e1[1] * y + e1[2] * z;
+    const w = e2[0] * x + e2[1] * y + e2[2] * z;
+    pts.push(u, w);
+    a1 = Math.min(a1, u); b1 = Math.max(b1, u);
+    a2 = Math.min(a2, w); b2 = Math.max(b2, w);
+  }
+  return { u1: [a1, b1], u2: [a2, b2], pts };
 }
 
 // ---------------------------------------------------------------------------
@@ -146,11 +156,9 @@ function facesOf(p, pos, nrm) {
     const len = Math.hypot(nx, ny, nz);
     if (len > 1e-6 && j - i >= 9) {         // >= 3 verts, real normal
       const ux = nx / len, uy = ny / len, uz = nz / len;
-      const [e1, e2] = planeBasis([ux, uy, uz]);
       let dMin = Infinity, dMax = -Infinity, dSum = 0, n = 0, cx = 0, cy = 0, cz = 0;
       let mnx = Infinity, mny = Infinity, mnz = Infinity;
       let mxx = -Infinity, mxy = -Infinity, mxz = -Infinity;
-      let a1 = Infinity, b1 = -Infinity, a2 = Infinity, b2 = -Infinity;
       for (let v = i; v < j; v += 3) {
         const x = pos[v], y = pos[v + 1], z = pos[v + 2];
         const d = ux * x + uy * y + uz * z;
@@ -159,24 +167,13 @@ function facesOf(p, pos, nrm) {
         if (x < mnx) mnx = x; if (x > mxx) mxx = x;
         if (y < mny) mny = y; if (y > mxy) mxy = y;
         if (z < mnz) mnz = z; if (z > mxz) mxz = z;
-        const u1 = e1[0] * x + e1[1] * y + e1[2] * z;
-        const u2 = e2[0] * x + e2[1] * y + e2[2] * z;
-        if (u1 < a1) a1 = u1; if (u1 > b1) b1 = u1;
-        if (u2 < a2) a2 = u2; if (u2 > b2) b2 = u2;
       }
       // A fan whose vertices do not share a plane is not a face.
       if (dMax - dMin <= PLANAR_TOL) {
-        // The face's OWN points in the shared plane's axes, kept so the overlap
-        // below can be the real thing rather than a bounding rectangle — see
-        // overlapArea(). Extents stay for the cheap reject.
-        const pts = [];
-        for (let v = i; v < j; v += 3) {
-          const x = pos[v], y = pos[v + 1], z = pos[v + 2];
-          pts.push(e1[0] * x + e1[1] * y + e1[2] * z, e2[0] * x + e2[1] * y + e2[2] * z);
-        }
-        out.push({ pi: p.__i, n: [ux, uy, uz], d: dSum / n, c: [cx / n, cy / n, cz / n],
-                   mn: [mnx, mny, mnz], mx: [mxx, mxy, mxz],
-                   u1: [a1, b1], u2: [a2, b2], pts });
+        const normal = [ux, uy, uz];
+        out.push({ pi: p.__i, n: normal, d: dSum / n, c: [cx / n, cy / n, cz / n],
+                   mn: [mnx, mny, mnz], mx: [mxx, mxy, mxz], pos, start: i, end: j,
+                   ...projectFace(pos, i, j, normal) });
       }
     }
     i = j;
@@ -255,6 +252,10 @@ const polyArea = (p) => {
 // the cheap reject — if the rectangles miss, the hulls cannot meet — and the
 // exact figure is the intersection of the two convex hulls.
 function overlapArea(a, b) {
+  // Accepted normals can differ slightly. Independent axes rotate world-space
+  // positions about the origin, inventing overlap between distant adjacent panels.
+  if (a.n && b.pos && a.n.some((v, i) => v !== b.n[i]))
+    b = projectFace(b.pos, b.start, b.end, a.n);
   const o1 = Math.min(a.u1[1], b.u1[1]) - Math.max(a.u1[0], b.u1[0]);
   const o2 = Math.min(a.u2[1], b.u2[1]) - Math.max(a.u2[0], b.u2[0]);
   if (o1 <= 0 || o2 <= 0) return 0;
@@ -470,13 +471,25 @@ function main() {
   const wantJson = argv.includes("--json");
   const wantGate = argv.includes("--gate");
   const why = argv.includes("--why");
+  // --json promises ONE JSON document on stdout: --why's call-site report is
+  // text, and printed between the per-circuit rows and the JSON it made the
+  // stream unparseable. Refuse the pair; --gate's verdict goes to stderr below.
+  if (wantJson && why) { console.error("coplanar-audit: --why is a text report; run it without --json"); process.exit(2); }
 
   const env = buildContext();
-  const ids = argv.includes("--all")
-    ? require("../lib/circuit-scope.cjs").scope(env.Tracks.LIST.map((d) => d.id))   // APEX_CIRCUITS narrows --all
-    // Skip any token consumed as a flag's VALUE, or `--site <file>.js:<line>`
-    // is read as a track id.
-    : idsFrom(argv);
+  const scopeLib = require("../lib/circuit-scope.cjs");
+  const roster = env.Tracks.LIST.map((d) => d.id);
+  let ids;
+  try {
+    ids = argv.includes("--all")
+      ? scopeLib.scopeAll(roster, "coplanar-audit")   // APEX_CIRCUITS narrows --all; a scope matching nothing throws
+      // Skip any token consumed as a flag's VALUE, or `--site <file>.js:<line>`
+      // is read as a track id.
+      : scopeLib.requireKnown(idsFrom(argv), roster, "coplanar-audit");
+    // `--gate` with no ids used to print "all 0 circuit(s) within the coplanar
+    // baseline" and exit 0: a gate that checked nothing.
+    if (!ids.length) throw new Error("coplanar-audit: no circuits named — pass <id>… or --all");
+  } catch (e) { console.error(e.message); process.exit(2); }
 
   // --both --json: the default sweep AND the --overhead sweep from ONE build per
   // circuit, as { default: [...], overhead: [...] } — each array exactly what
@@ -575,7 +588,7 @@ function main() {
     const grew = out.filter((r) => r.spots > (base[r.id] || 0))
       .map((r) => `${r.id}: ${r.spots} spots > baseline ${base[r.id] || 0}`);
     if (grew.length) { console.error("\ncoplanar faces grew:\n  " + grew.join("\n  ")); process.exit(1); }
-    console.log(`\n✓ all ${out.length} circuit(s) within the coplanar baseline`);
+    (wantJson ? console.error : console.log)(`\n✓ all ${out.length} circuit(s) within the coplanar baseline`);
   }
 }
 

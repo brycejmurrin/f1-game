@@ -1,0 +1,20 @@
+{
+  "why": "SRO/IGTC 2023 Kyalami 9 Hour briefing notes p. 8 (https://www.intercontinentalgtchallenge.com/documents/notice/3374/2023+Kyalami+9+hr+V1+Briefing+Notes.pdf), the anticlockwise lap the def runs since #5316 CIRC2-05: T1 The Kink, T2 Crowthorne, T3-4 Jukskei Sweep, T5 Barbeque, T6 Sunset, T7 Clubhouse, T8-9 The Esses, T10 Leeukop, T11 (unnamed), T12 Mineshaft, T13-14 The Crocodiles, T15 Cheetah, T16 Ingwe. Each is one def.turns[] entry on a built curvature peak (2026-11-18).",
+  "names": {
+    "The Kink": 1,
+    "Kink": 1,
+    "Crowthorne": 2,
+    "Jukskei Sweep": 3,
+    "Jukskei": 3,
+    "Barbeque": 5,
+    "Barbecue": 5,
+    "Sunset": 6,
+    "Clubhouse": 7,
+    "Esses": 8,
+    "Leeukop": 10,
+    "Mineshaft": 12,
+    "Crocodiles": 13,
+    "Cheetah": 15,
+    "Ingwe": 16
+  }
+}

@@ -67,7 +67,7 @@ const MULTI_GLOBAL = {
   ],
   // Title-boot race-session stub; ensureRaceSession() reinjects via `var`.
   "js/race/session-stub.js": [
-    "Damage", "Duel", "FlyingStart", "JumpStartPenalty", "MarshalPanels", "PitLane", "RaceEngineer",
+    "Damage", "DamageHandling", "Duel", "FlyingStart", "JumpStartPenalty", "MarshalPanels", "PitLane", "RaceCeremony", "RaceEngineer",
     "RaceFacts", "RaceRadio", "RadioLines", "Reliability", "SessionRecords",
     "Spotter", "StartLights",
   ],
@@ -80,13 +80,13 @@ const MULTI_GLOBAL = {
 // adds the writer (e.g. a new shader file merging into GLXShaders).
 const SHARED_GLOBALS = {
   GLXShaders: 4,  // shaders/lit|sky|fx|post.js each merge their GLSL sources in
-  TLXShaders: 9,  // the three/ TSL family does the same for the deferred backend
+  TLXShaders: 11,  // the three/ TSL family does the same for the deferred backend
   // LAZY_AUDIO reinjection: stub.js then the real module (cap 2 each).
   GameAudio: 2, GameAudioSignal: 2, GameAudioSoundtrack: 2, GameAudioRadioFx: 2,
   GameAudioToneModel: 2, CarSfx: 2, ErsLayer: 2, RivalAudio: 2, VoicePack: 2,
   RecordedAnnouncer: 2, DrivingCues: 2, RadioVoice: 2, Announcer: 2, AudioPanel: 2,
   // LAZY_RACE_SESSION reinjection: session-stub.js then the real module (cap 2).
-  Damage: 2, Duel: 2, FlyingStart: 2, JumpStartPenalty: 2, MarshalPanels: 2, PitLane: 2, RaceEngineer: 2,
+  Damage: 2, DamageHandling: 2, Duel: 2, FlyingStart: 2, JumpStartPenalty: 2, MarshalPanels: 2, PitLane: 2, RaceCeremony: 2, RaceEngineer: 2,
   RaceFacts: 2, RaceRadio: 2, RadioLines: 2, Reliability: 2, SessionRecords: 2,
   Spotter: 2, StartLights: 2,
 };
@@ -115,7 +115,7 @@ const GROWABLE_GLOBALS = {
 const KNOWN_EXTERNAL_READS = {
   "js/render/shared/compatibility-recovery.js": ["__APEX_BUILD", "__apexErrors"], // Shell-owned build id and diagnostic ring (index.html), preserved in the recovery card.
   "js/camera/cockpit-preview.js": ["CockpitPreviewFrame"], // Runtime export in the isolated same-origin cockpit-view.html iframe; parent reads only after its load event, not a second eval-time module global.
-  "js/ui/loading-screen.js": ["__apexFullIntro"], // harness opt-in (page.addInitScript) to player-pace intro under navigator.webdriver; isAutomation() reads it, garage-out-before-card.spec sets it
+  "js/ui/loading-card.js": ["__apexFullIntro"], // harness opt-in (page.addInitScript) to player-pace intro under navigator.webdriver; isAutomation() reads it, garage-out-before-card.spec sets it
   "js/ui/layers.js": ["HTMLDialogElement"], // Browser native dialog prototype; typeof-guarded opening-order tracking, absent in VM mocks.
   "js/track/core/def.js": ["CircuitElevations"],  // tools/gen/bake-elevation.mjs output; typeof-guarded feature probe (moved from tracks.js with elevationAt)
   "js/editor/custom-tracks.js": ["TrackDesigner", "TrackCodec"], // the LAZY_EDITOR screen and codec; typeof-guarded, reached only after ensureEditor() loaded the bundle
@@ -135,10 +135,14 @@ const KNOWN_EXTERNAL_READS = {
   "js/perf/governor.js": ["__APEX_BUILD"],            // index.html inline shell script sets these —
   "js/agent/apex.js": ["__APEX_BUILD", "__apexErrors", "__apexROLoops"],   // the shell is outside the manifest,
   "js/game.js": ["__APEX_BUILD", "__apexReportError", "scheduler"], // shell build id + error card; scheduler.yield (Chrome 129+) typeof-guarded in startRaceBody, Safari → setTimeout(0)
-  "js/perf/race-entry-profile.js": ["scheduler"], // afterPaint yield on UI Start Race (Chrome 129+); typeof-guarded, else rAF+setTimeout / Promise.resolve
+  // visor-optics.js and race-entry-profile.js once listed "G"/"loadingScreen" here: both are function-scoped consts in
+  // game.js's IIFE, so those typeof reads were always false (#5964, #5965). game.js now hands them in (bind/bindGame).
+  "js/perf/race-entry-profile.js": ["scheduler"], // afterPaint yield
   "js/car/car-draw.js": ["scheduler"], // warmCarAssetsAsync's step yield (Chrome 129+, perf hunt 4 F3.3); typeof-guarded, else setTimeout(0)
   "js/track/tracks.js": ["scheduler"], // buildPaced's task yield between slices under the race cover (pace.rafEvery, B·H14); typeof-guarded, else setTimeout(0)
-  "js/render/shared/assets.js": ["scheduler"], // strip-decode yield (Chrome 129+); typeof-guarded, else queueMicrotask / setTimeout(0)
+  "js/render/shared/assets.js": ["scheduler", "__APEX_BUILD"], // strip-decode yield (Chrome 129+); typeof-guarded, else queueMicrotask / setTimeout(0); the pack manifest is asked for under the shell build (`?b=`, #5629)
+  "js/ui/update-check.js": ["__apexGuardOk"],   // index.html's boot version guard: set only when its version.json read succeeded (#4925)
+  "js/render/renderer-boot.js": ["__APEX_BUILD"], // the canary's retirement record names the build that retired the pick (#4995)
   "js/core/script-loader.js": ["__APEX_BUILD"], // the shell stamps dynamically injected asset URLs
   "js/core/lazy-bundles.js": ["__TEST_MODE", "__APEX_BUILD", "scheduler"], // Playwright agent-surface flag; prefetch URL stamp; scheduler.yield (Chrome 129+) typeof-guarded in ensureAudio, Safari → setTimeout(0)
   "js/car/input-ghost.js": ["__APEX_BUILD"],   // envelope stamps the shell build id (index.html inline)
@@ -262,6 +266,7 @@ test("positive control: an unscannable site is reported unless baselined", () =>
 const WINDOW_WRITES = {
   __APEX_BUILD: "js/career/career-backup.js",      // the shell's build id, stamped into every save/file envelope
   __apex: "tools/shot/agent.mjs",                   // the dev API itself (game.js binds ApexApi)
+  __apexGuardOk: "js/ui/update-check.js",          // the boot guard read version.json → UpdateCheck's throttle starts at boot (#4925)
   __apexErrors: "js/agent/apex.js",                 // index.html's error ring → __apex health
   __apexROLoops: "js/agent/apex.js",                // index.html's ResizeObserver loop counter → health roLoops
   __apexReportError: "js/game.js",                  // the shell's visible error card

@@ -8,6 +8,12 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const P = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs").PATHS;
+const PRELOAD = {
+  "js/track/scenery/nature.js": ["js/track/scenery/landforms.js"],
+  "js/track/scenery/structures.js": ["js/track/scenery/stands.js"],
+  "js/track/scenery/city.js": ["js/track/scenery/facade.js"],
+  "js/track/scenery/circuit-kit.js": ["js/track/scenery/landmark-kit.js"],
+};
 function load(file, name, globals = {}) {
   const sandbox = { console, Math, Array, Object, Number, Map, Set, ...globals };
   sandbox.window = sandbox;
@@ -16,6 +22,12 @@ function load(file, name, globals = {}) {
     fs.readFileSync(path.join(ROOT, "js/core/log.js"), "utf8").replace(/^const\b/gm, "var"),
     ctx, { filename: absSrc("js/core/log.js") },
   );
+  for (const pre of PRELOAD[file] || []) {
+    vm.runInContext(
+      fs.readFileSync(path.join(ROOT, pre), "utf8").replace(/^const\b/gm, "var"),
+      ctx, { filename: absSrc(pre) },
+    );
+  }
   const source = fs.readFileSync(path.join(ROOT, file), "utf8").replace(/^const\b/gm, "var");
   vm.runInContext(source, ctx, { filename: absSrc(file) });
   return sandbox[name];
@@ -53,7 +65,8 @@ test("SceneryThemes exposes only the immutable public operations", () => {
 });
 
 test("SceneryThemes variant selection is stable and bounded", () => {
-  const Themes = load(P.SCENERY_THEMES, "SceneryThemes");
+  const Hash32 = load("js/core/hash32.js", "Hash32");
+  const Themes = load(P.SCENERY_THEMES, "SceneryThemes", { Hash32 });
   const choices = ["flat", "sawtooth", "cantilever"];
   const first = Themes.variant("spa", "pit-roof", 3, choices);
   assert.equal(first, Themes.variant("spa", "pit-roof", 3, choices));
@@ -836,9 +849,13 @@ test("Sector M fascia attaches to track-facing walls and canopy fits its declare
   circuits.interlagos(api);
   assert.equal(parts.length, 5, "all authored facade parts remain");
   const [lower, upper, yellow, green, canopy] = parts;
-  assert.ok(anchors.some(a => a.k === 1 && a.side === -1 && a.gap === 62));
+  // The tribuna stands opposite the pits: +1 since the FIA 2026 pit-lane
+  // drawing moved Interlagos's pits to -1 (2026-11-10); the track-facing wall
+  // is the one toward x = 0 on either side.
+  const trib = anchors.find(a => a.k === 1 && a.gap === 62);
+  assert.ok(trib && trib.side === 1, `tribuna anchor ${JSON.stringify(trib)}`);
   for (const [wall, band] of [[lower, yellow], [upper, green]]) {
-    const face = wall.center[0] + wall.size[0] / 2;
+    const face = wall.center[0] - trib.side * wall.size[0] / 2;
     assert.ok(band.center[0] - band.size[0] / 2 < face && band.center[0] + band.size[0] / 2 > face);
     for (const axis of [1, 2]) assert.ok(Math.abs(band.center[axis] - wall.center[axis]) + band.size[axis] / 2 <= wall.size[axis] / 2);
   }
@@ -1202,10 +1219,11 @@ function dayBuildingHarness(rejectMass) {
     massBlocked: () => false, massAdd: () => {},
     terrainYAt: () => null, treeInFootprint: () => false,
     note: () => {}, noteSuppressed: () => {},
-    instance: (key, spec, builder, meta) => {
+    instance: (key, spec, builder, meta, opts) => {
       kinds.push(meta && meta.kind);
       let mat; builder({ mat: (id) => { mat = id; }, box: () => {} });
-      (meta && meta.kind === "buildingMass" ? masses : others).push({ key, mat });
+      const reg = ((opts && opts.buf) || out)._mat || 0;
+      (meta && meta.kind === "buildingMass" ? masses : others).push({ key, mat, reg, kind: meta && meta.kind });
       if (rejectMass && meta && meta.kind === "buildingMass") return 0;
       // Real instance() returns landed prim count; addBox's void return is not a vote.
       Geom.addBox(out, spec.o, spec.s, spec.col || [0.5, 0.5, 0.5], [spec.r, spec.u, spec.t]);
@@ -1275,8 +1293,7 @@ test("neonTower resets out._mat when a rejected body section returns early", () 
 test("a day wall mass carries its facade material into the instanced model (H27)", () => {
   // The canonical mesh an instanced batch uploads has no out._mat register to
   // inherit, so a bare shared "unit-box" drew every city mass at mat 0 in a
-  // browser. The mass model is keyed and stamped by its facadeMat id; facade
-  // detail boxes stay on the shared unstamped model.
+  // browser. The mass model is keyed and stamped by its facadeMat id.
   const h = dayBuildingHarness(false);
   h.build();
   assert.ok(h.masses.length > 0, "the wall mass is instanced");
@@ -1284,5 +1301,23 @@ test("a day wall mass carries its facade material into the instanced model (H27)
     assert.ok(m.mat > 0, `mass model stamps a facade material (got ${m.mat})`);
     assert.equal(m.key, "unit-box:" + m.mat, "one model per material id");
   }
-  assert.ok(h.others.every((o) => o.key === "unit-box" && o.mat === undefined), "detail boxes stay on the shared unit-box");
+});
+
+test("facade detail boxes carry the material register they were called under (H27 siblings)", () => {
+  // Rails, mullions and panes went through a bare unit-box: inline they took
+  // out._mat (the wall's brick/stone/concrete, or GLASS for panes) and
+  // instanced they drew mat 0 — 45,344 nodes fleet-wide before the fix.
+  const h = dayBuildingHarness(false);
+  h.build();
+  const details = h.others.filter((o) => /facade|windowPane/.test(o.kind || ""));
+  assert.ok(details.length > 0, "the day grid emits details");
+  for (const d of details) {
+    if (d.reg) {
+      assert.equal(d.mat, d.reg, `${d.kind}: model stamps the register (${d.reg})`);
+      assert.equal(d.key, "unit-box:" + d.reg, `${d.kind}: keyed by material`);
+    } else {
+      assert.equal(d.key, "unit-box", `${d.kind}: mat-0 detail stays on the shared model`);
+    }
+  }
+  assert.ok(details.some((d) => d.reg > 0), "at least one detail is textured (rails take the wall material)");
 });

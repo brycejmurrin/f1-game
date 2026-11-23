@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- @gen-shell:csp -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JBy1q0kcKSe1ARXNWbLxHVfkaxok6O0+yCEsUNACT2A=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<!-- /@gen-shell:csp -->
 <title>Apex 26 — frame cost bench</title>
 <!--
   WHY THIS EXISTS, AND WHY IT IS A SEPARATE PAGE.
@@ -47,7 +50,13 @@
   main { padding:16px 20px 40px; max-width:1100px; }
   button { font:inherit; background:#16161f; color:var(--fg); border:1px solid var(--line);
            border-radius:6px; padding:9px 16px; cursor:pointer; }
-  button:hover:not(:disabled) { border-color:var(--accent); }
+  @media (hover: hover) and (pointer: fine) {
+    button:hover:not(:disabled) { border-color:var(--accent); }
+  }
+  @media (pointer: coarse), (hover: none) {
+    html { touch-action: manipulation; }
+    label select, label input[type=number] { font-size: 16px; }
+  }
   button:disabled { opacity:.45; cursor:default; }
   label { color:var(--dim); font-size:12px; margin-right:14px; }
   select, input[type=number] { font:inherit; background:#16161f; color:var(--fg);
@@ -194,8 +203,6 @@ function measureIn(win, ms) {
   });
 }
 
-// One thing off per phase. `set` runs in the game window; `restore` puts it back
-// so the next phase starts from BASELINE again rather than compounding.
 // One thing off per phase. Each phase declares the lightTune KEYS it touches;
 // the runner snapshots their LIVE values before setting and puts exactly those
 // back afterwards, so the next phase starts from BASELINE again.
@@ -402,10 +409,15 @@ async function run() {
   // Pin scale and kill the governor. Without this every phase moves the tier and
   // the numbers describe the governor, not the renderer.
   apex.renderScale(1);
+  // Backend account. GLX has no `.backend` property and no `__tlx` hook
+  // (lsp_callers __tlx → symbol not found; TLX retired). The old readers always
+  // fell through to a hardcoded "webgl2" / null. Read backendState().api
+  // instead — the same shape __apex.diag() uses (js/render/glx/glx.js).
+  const gfxState = gval(win, "GLX && typeof GLX.backendState === 'function' && GLX.backendState()");
   const env = {
     build: (win.document.querySelector('meta[name="apex-build"]') || {}).content || null,
     sha: (win.document.querySelector('meta[name="apex-sha"]') || {}).content || null,
-    backend: gval(win, "GLX && GLX.backend") || (gval(win, "GLX && GLX.__tlx") ? "three" : "webgl2"),
+    backend: (gfxState && gfxState.api) || "unknown",
     ua: navigator.userAgent,
     dpr: window.devicePixelRatio,
     canvas: (() => { try { const c = win.document.getElementById("game"); return c.width + "x" + c.height; } catch (e) { return null; } })(),
@@ -425,11 +437,9 @@ async function run() {
     // stopped trying to climb back. tier() is a max() of all three, so only the
     // parts tell you which one is binding.
     perf: (() => { try { return apex.perf(); } catch (e) { return { err: String(e.message).slice(0, 80) }; } })(),
-    // WHICH BACKEND THREE ACTUALLY BOUND, and whether the canvas ended up
-    // alpha-composited. `canvasAlpha: true` is the see-through-car defect,
-    // read back off the live context rather than inferred from what we asked
-    // for. Null means three bound WebGPU and there is no gl to ask.
-    three: gval(win, "GLX && GLX.__tlx ? GLX.__tlx.backendState() : null"),
+    // Live GLX account (api, softPresent, softwareGL, …). Kept under `gfx`
+    // rather than the retired `three` / `__tlx` names.
+    gfx: gfxState || null,
   };
 
   // SAY WHAT WAS ACTUALLY MEASURED. The iframe is a fraction of the screen, so

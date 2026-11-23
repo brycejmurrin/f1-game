@@ -183,7 +183,7 @@ async function quitToMenu(page) {
   await page.waitForSelector("#pausemenu:not([hidden])", { timeout: 60000 });
   const t0 = Date.now();
   await page.locator("#pm-quit").click({ timeout: 30000 });
-  await sleep(250);
+  await sleep(400);   // > PauseOpts.ARM_MIN_MS: a younger real press is a swallowed double tap
   await page.locator("#pm-quit").click({ timeout: 30000 });
   await setPhase(page, "quit");
   await page.waitForFunction(

@@ -54,6 +54,11 @@ test("jsconfig.json makes js/ one script project with checkJs off", () => {
   assert.equal(cfg.compilerOptions.allowJs, true);
   assert.equal(cfg.compilerOptions.noEmit, true);
   assert.equal(cfg.compilerOptions.checkJs, false, "checkJs on reports ~39k strict errors (docs/notes/LSP-MCP-2026-10-18.md)");
+  // Match tsconfig.checkjs.json so // @ts-check files are not drowned in TS7006 /
+  // empty-object TS2339 noise under apex-lsp's jsconfig project (CHECKJS-ROLLOUT).
+  assert.equal(cfg.compilerOptions.noImplicitAny, false);
+  assert.equal(cfg.compilerOptions.strictNullChecks, true);
+  assert.deepEqual(cfg.compilerOptions.types, []);
   assert.ok(cfg.include.includes("js/**/*.js"));
 });
 
@@ -122,6 +127,8 @@ test("MCP client: definition, references and symbols on the real tree", { timeou
   assert.ok(+/^(\d+) uses/.exec(lerp.content[0].text)[1] >= 50, "aliased helpers have far more callers than alias lines");
   // A case slip gets a suggestion, not a guess.
   assert.match((await c.call("lsp_definition", { symbol: "Tlx" })).content[0].text, /did you mean TLX \(js\/render\/three\/tlx\.js:\d+\)\?$/);
+  // A game.js IIFE local is not on GameCtx: the façade miss names the next call.
+  assert.match((await c.call("lsp_definition", { symbol: "G.updateCar" })).content[0].text, /has no member updateCar; .*try lsp_symbols updateCar/);
 
   const pos = await c.call("lsp_definition", { file: "js/ui/select-screen.js", line: 1, column: 1 });
   assert.equal(pos.isError, false, pos.content[0].text);
@@ -143,9 +150,9 @@ test("MCP client: pipeline isolation and freeze/assign exports", { timeout: 6000
   ]);
   assert.deepEqual(queued.map(r => r.isError), [false, true, false]);
   assert.match(queued[2].content[0].text, /function forTeam/);
-  const frozenExport = await c.call("lsp_definition", { symbol: "FlybyOverrides.resolve", body: true });
-  assert.equal(frozenExport.isError, false, frozenExport.content[0].text);
-  assert.match(frozenExport.content[0].text, /js\/data\/flyby-overrides\.js:127:.*function resolve/);
+  const windowExport = await c.call("lsp_definition", { symbol: "CssZoom.of", body: true });
+  assert.equal(windowExport.isError, false, windowExport.content[0].text);
+  assert.match(windowExport.content[0].text, /js\/ui\/css-zoom\.js:35:.*function of/);
   // Pipeline the three assigned-export lookups (independent heads).
   const assigned = await Promise.all(["SHADOW_VS", "LIT_VS", "SKY_VS"].map(member =>
     c.call("lsp_definition", { symbol: `GLXShaders.${member}` })));
@@ -153,6 +160,40 @@ test("MCP client: pipeline isolation and freeze/assign exports", { timeout: 6000
     assert.equal(assigned[i].isError, false, assigned[i].content[0].text);
     assert.match(assigned[i].content[0].text, new RegExp(["SHADOW_VS", "LIT_VS", "SKY_VS"][i]));
   }
+});
+
+// Field test 2026-10-30 regressions on the real tree (scratch/mcp-field-lsp-debugger-gateway.md A).
+// Rows are parsed, not regex-pinned: the checker's own answers are the ground truth.
+test("MCP client: wrapS callers keep same-file uses, bounds-checked positions, Tracks.curvature [def]", { timeout: 60000 }, async () => {
+  const c = await sharedMcp();
+  // The game-loop wrapS (exported as G.wrapS), located through the checker, not a source read.
+  const sym = (await c.call("lsp_symbols", { query: "wrapS", limit: 50 })).content[0].text;
+  const decl = /^wrapS {2}function {2}(js\/game\.js):(\d+):(\d+)$/m.exec(sym);
+  assert.ok(decl, sym);
+  const at = { file: decl[1], line: +decl[2], column: +decl[3] };
+  const hudLines = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8").replace(/\n$/, "").split("\n");
+  const [callers, inFile, past, beyond, refs] = await Promise.all([
+    c.call("lsp_callers", { ...at, limit: 2000 }),
+    c.call("lsp_references", { ...at, includeDeclaration: false, format: "concise", limit: 2000 }),
+    c.call("lsp_hover", { file: "js/ui/hud.js", line: 1, column: hudLines[0].length + 50 }),
+    c.call("lsp_definition", { file: "js/ui/hud.js", line: 999999 }),
+    c.call("lsp_references", { symbol: "Tracks.curvature", limit: 2000 }),
+  ]);
+  const rows = r => r.content[0].text.split("\n").slice(1).map(l => /^(\S+?):\d+(?::\d+)? {2}(?:\[(\w+)\])?/.exec(l)).filter(Boolean).map(m => ({ file: m[1], tag: m[2] }));
+  const uses = rows(inFile).filter(r => r.file === at.file && r.tag === "use").length;
+  const total = +/^(\d+) uses/.exec(callers.content[0].text)?.[1], callerFiles = new Set(rows(callers).map(r => r.file));
+  assert.ok(uses >= 10, `lsp_references finds the in-file uses (${uses})`);
+  assert.ok(callerFiles.has(at.file), `same-file callers survive the G.wrapS re-anchor: ${callers.content[0].text.slice(0, 300)}`);
+  assert.ok(callerFiles.size > 1 && total > uses, `${total} uses: the ${uses} in ${at.file} plus the exported G.wrapS uses elsewhere`);
+  assert.equal(past.isError, true);
+  assert.equal(past.content[0].text, `line 1 of js/ui/hud.js has ${hudLines[0].length} characters; column ${hudLines[0].length + 50} is past its end`);
+  assert.equal(beyond.isError, true);
+  assert.equal(beyond.content[0].text, `js/ui/hud.js has ${hudLines.length} lines; line 999999 is out of range`);
+  // The declaration behind Tracks' destructured re-export is a row, and the header names it
+  // (never presenting the use-site anchor as the answer).
+  assert.deepEqual(rows(refs).filter(r => r.tag === "def").map(r => r.file), ["js/track/core/spline.js"]);
+  // Notes may follow (2026-11-20: refs now count uses reached through destructures, as callers did).
+  assert.equal(/; declared at ([^\s;)]+):\d+:\d+[;)]/.exec(refs.content[0].text.split("\n")[0])?.[1], "js/track/core/spline.js");
 });
 
 test("tsc --lsp starts on the first call, exits when idle, and restarts on demand", { timeout: 60000 }, async () => {
@@ -292,8 +333,14 @@ test("lsp-hint.py: builtins and lowercase heads stay quiet; option values are no
   for (const loud of [{ tool_name: "Bash", tool_input: { command: "rg -t js GameHud js/" } }, { tool_name: "Bash", tool_input: { command: "grep -A 3 GameHud js/ui" } },
     { tool_name: "Bash", tool_input: { command: "grep -rn -e Tracks.curvature js" } }, { tool_name: "Grep", tool_input: { pattern: "G\\.player" } },
     { tool_name: "Grep", tool_input: { pattern: "GameHud", path: "./js/ui" } }, { tool_name: "Grep", tool_input: { pattern: "GameHud", path: "." } },
-    { tool_name: "Bash", tool_input: { command: "grep -rn GameHud | head" } }])
+    { tool_name: "Bash", tool_input: { command: "grep -rn GameHud | head" } },
+    // 2026-11-20 transcript survey (docs/notes/LSP-AND-TOOL-USAGE-2026-11-20.md): alternations, and camelCase locals in js/.
+    { tool_name: "Bash", tool_input: { command: "grep -rn 'chainWindowRaf\\|XrBoot' js" } }, { tool_name: "Bash", tool_input: { command: "grep -n 'penaltyWhy' js/ui/results-sheet.js" } },
+    { tool_name: "Grep", tool_input: { pattern: "wrapS", path: "js/track/core/spline.js" } }, { tool_name: "Bash", tool_input: { command: "rg -n 'mirrorMips|TEXTURE_MAX_LEVEL' js/render" } }])
     assert.equal(hint(loud), true, JSON.stringify(loud));
+  // camelCase only inside an explicit js/ search; prose words never.
+  for (const quiet of [{ tool_name: "Grep", tool_input: { pattern: "wrapS", path: "tools" } }, { tool_name: "Bash", tool_input: { command: "grep -rn 'the race\\|a lap' js/ui" } }])
+    assert.equal(hint(quiet), false, JSON.stringify(quiet));
 });
 
 test("advertised argument constraints and JSON-RPC envelopes fail before starting tsc", async () => {

@@ -124,7 +124,9 @@ test("wheel mesh call sites pass the ink and the editor has the row (source pins
   const draw = read("js/car/car-draw.js");
   // `, wt.surf` is the RIM FINISH surface (livery-paint-zones.test.mjs), passed after the ink; car3d passes its
   // PH_RIM stand-in, which CarMaterials.finishPass resolves to that surface (garage-finish-remap.test.mjs).
-  assert.equal((draw.match(/wt\.ink(, wt\.surf)?\)/g) || []).length, 4, "car-draw: player + field, front + rear");
+  // Player wheels carry axle-specific wear after the detail level. Rivals end at the detail level.
+  const wheelArgs = Array.from(draw.matchAll(/(?:playerWheelVisual|wheel), wt\.ink, wt\.surf, ([^)]+)\)/g), match => match[1]);
+  assert.deepEqual(wheelArgs.sort(), ["pd, frontWear", "pd, rearWear", "rd", "rd"]);
   assert.equal((read("js/car/car3d.js").match(/wheelStyle, wt\.ink(, wt\.surf|, PH_RIM)?\)/g) || []).length, 2);
   assert.match(read("js/camera/cockpit-preview.js"), /visual\.wheels,wt\.ink(,wt\.surf)?\)/);
   assert.match(read("js/garage/livery-design-editor.js"), /section\("WHEELS & BRAKES"[^\n]*"sidewallInk"/);

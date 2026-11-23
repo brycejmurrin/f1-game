@@ -1,0 +1,29 @@
+{
+  "//": "Child → parent messages and the parent action each kind requires (.claude/agents/README.md §Parent and child). parent-protocol.test.mjs parses each `message` to `kind` and asserts the README's action verb for it.",
+  "kinds": ["blocked", "question", "collision", "scope", "checkpoint"],
+  "actions": {
+    "blocked": "fact, re-scope or stop, recorded in the Plan",
+    "question": "answer from the repo or the Plan, else decide and record; never forwarded to Bryce from an unattended run",
+    "collision": "ONE owner for the path, told to both children",
+    "scope": "OWNED re-sent in full",
+    "checkpoint": "git merge --no-ff, the child's verify command, reply merged <sha>"
+  },
+  "messages": [
+    { "message": "B1: blocked — tests/groups.json is FORBIDDEN but the new test needs a group row", "kind": "blocked", "name": "B1" },
+    { "message": "A2: question — keep live-run-check.mjs or delete it with test-bg group mode? my pick: keep", "kind": "question", "name": "A2" },
+    { "message": "hooks-agents: collision — tests/unit/skill-progressive.test.mjs is B2's OWNED glob; I need lines 478-496", "kind": "collision", "name": "hooks-agents" },
+    { "message": "A4: scope — the fix needs .github/workflows/ci.yml, outside OWNED", "kind": "scope", "name": "A4" },
+    { "message": "B1: checkpoint — 3f2a1c4 hooks slimmed; node --test tests/unit/bash-guard-hardening.test.mjs -> pass 7/7", "kind": "checkpoint", "name": "B1" },
+    { "message": "B1: checkpoint — abc1234 (verify: node --test tests/unit/x.test.mjs -> 12 pass)", "kind": "checkpoint", "name": "B1" }
+  ],
+  "not_messages": [
+    "starting now on the hooks",
+    "B1: done — all good",
+    "B1 blocked: no colon form",
+    "blocked — missing the sender name"
+  ],
+  "reports": [
+    { "report": "WORKER B1: DONE\nbranch: cursor/x-1 @ 0123abc   (worktree /w)\nchanged: a\nverified: node --test a -> pass\nnot run: none\nnext: merge", "status": "DONE", "name": "B1", "branch": "cursor/x-1", "sha": "0123abc" },
+    { "report": "WORKER A3: BLOCKED\nbranch: cursor/y-2 @ deadbeef1\nchanged: -\nverified: none\nnot run: all\nnext: decide X", "status": "BLOCKED", "name": "A3", "branch": "cursor/y-2", "sha": "deadbeef1" }
+  ]
+}

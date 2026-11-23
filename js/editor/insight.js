@@ -424,6 +424,6 @@ const TrackInsight = (function () {
       return { n: i + 1, sApex: frac * tr.total, dir: curvature < 0 ? -1 : curvature > 0 ? 1 : 0 };
     });
   }
-  return { memoryCards, THRESH, speedProfile, bands, corners, passingZones, longestStraight, fia, totdSeed, dayKey, fromCircuit, verticalG, features, score, rate };
+  return { memoryCards, THRESH, speedProfile, bands, corners, passingZones, fia, totdSeed, dayKey, fromCircuit, verticalG, score, rate };
 })();
 Object.freeze(TrackInsight);

@@ -554,6 +554,6 @@ const LampBake = (function () {
   // LIVE-ONLY lane (TLX's per-chunk lamp texture) key on it.
   function gen() { return _bake ? _bake.gen | 0 : 0; }
 
-  return { bake, forTrack, prebake, reset, shadowCol, liveOnlyAt, gen, budget, toHalf, MAX_TEXELS, DESKTOP_TEXELS, TILE, NO_GROUND, LO_HEIGHT, LO_COS };
+  return { bake, forTrack, prebake, reset, shadowCol, liveOnlyAt, gen, budget, toHalf, MAX_TEXELS, DESKTOP_TEXELS, TILE };
 })();
 Object.freeze(LampBake);

@@ -80,8 +80,11 @@ function jsFiles(dir, out = []) {
   }
   return out;
 }
-// Always-loaded code: not a lazy bundle (it holds the real objects), not the stubs.
-const SOURCES = jsFiles("js").filter((f) => !LAZY.has(f) && !STUBS.includes(f)).map((rel) => ({
+// Always-loaded code: not a lazy bundle (it holds the real objects), not the stubs. Plus the coach body (#4748): it is
+// the LAST file of LAZY_RACE_SESSION and its façade paints it the moment it evaluates, before onRaceSessionReady
+// swaps G.pits off the stub instance, so its pit reads must be ones the stub answers.
+const STUB_READERS = ["js/race/driving-coach.js"];
+const SOURCES = jsFiles("js").filter((f) => (!LAZY.has(f) || STUB_READERS.includes(f)) && !STUBS.includes(f)).map((rel) => ({
   rel,
   // Strip comments so prose naming a method is not read as a call site.
   src: readFileSync(join(ROOT, rel), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1"),
@@ -175,14 +178,12 @@ test("RadioVoice.inert() carries sayPreRace like the real inert (loading-screen 
   assert.equal(stubGlobal("RadioVoice").inert().sayPreRace("x", 1, 0), false);
 });
 
-test("the stub AudioPanel paints a saved SOUND OFF on the title button before the real panel lands", () => {
-  // Until the first gesture loads LAZY_AUDIO, index.html's static "SOUND ON" is all the player sees: a
-  // muted player reloaded to a button that claimed the opposite, and tapping it turned the sound ON.
+test("the stub AudioPanel paints the saved master state on the muted title shell", () => {
   const mk = (soundOn) => {
     // The label carries no ♪ text glyph any more: the note is a CSS mask on
     // #soundbtn::before (U+266A is in no bundled font). This mock is the bare
     // button contract the stub writer has always assumed.
-    const btn = { textContent: "SOUND ON", attrs: { "aria-pressed": "true" }, setAttribute(k, v) { this.attrs[k] = v; } };
+    const btn = { textContent: "SOUND OFF", attrs: { "aria-pressed": "false" }, setAttribute(k, v) { this.attrs[k] = v; } };
     stubGlobal("AudioPanel").create({ els: { soundbtn: btn }, store: G0.store, soundOn });
     return btn;
   };
@@ -192,4 +193,25 @@ test("the stub AudioPanel paints a saved SOUND OFF on the title button before th
   const on = mk(true);
   assert.equal(on.textContent, "SOUND ON");
   assert.equal(on.attrs["aria-pressed"], "true");
+});
+
+// The pre-unlock "SOUND ON" press asks to hear the game: it loads the bundle and
+// stays ON (Bryce 21:39Z, option A; clean-room fix 46 over #5900.2).
+test("the stub AudioPanel's first SOUND ON press loads the audio bundle and stays ON", async () => {
+  const P = stubGlobal("AudioPanel"), was = P._ensure;
+  let loads = 0;
+  P._ensure = () => { loads++; return Promise.resolve(); };
+  try {
+    const writes = [];
+    const store = { get: (k, d) => d, set: (k, v) => { writes.push([k, v]); } };
+    const btn = { textContent: "SOUND ON", attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, onclick: null };
+    const G = { els: { soundbtn: btn }, store, soundOn: true };
+    P.create(G);
+    btn.onclick();
+    await Promise.resolve(); await Promise.resolve();
+    assert.equal(loads, 1, "the first press loads the audio bundle");
+    assert.equal(G.soundOn, true, "and keeps sound on");
+    assert.equal(btn.textContent, "SOUND ON");
+    assert.deepEqual(writes.filter(([k]) => k === "sound"), [["sound", true]], "it saves sound=true, never a mute");
+  } finally { P._ensure = was; }
 });

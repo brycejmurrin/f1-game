@@ -1,0 +1,38 @@
+name: TLX chunk-merge hardware timing
+
+# One measurement job per relevant PR. This deliberately excludes unrelated renderer edits.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [claude/f1-game-project-26h3ng]
+    paths:
+      - ".github/workflows/chunk-merge-timing.yml"
+      - "tools/gfx/chunk-merge-timing.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chunk-merge-timing-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  timing:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft || startsWith(github.head_ref, 'train/') }}
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex
+      - name: Install full Chromium
+        run: npx playwright install chromium
+      - name: Measure sequential hardware arms
+        run: node tools/gfx/chunk-merge-timing.mjs artifacts/chunk-merge-timing/census.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: chunk-merge-timing-macos
+          path: artifacts/chunk-merge-timing/census.json

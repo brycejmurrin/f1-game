@@ -6,13 +6,13 @@
  * ran its whole distance on the oscillator fallback. setEngine() now restarts
  * the engine once, the first time it sees samples it is not using.
  *
- * js/audio/engine.js has no other node harness: this is a fake AudioContext just
+ * This harness uses a fake AudioContext just
  * wide enough for createCtx/startEngine/setEngine/stopEngine (every node is a
  * generic connect/start/stop object with AudioParam-shaped fields). The fetch
- * of the two sample files is held back until the test releases it.
+ * of the engine sample is held back until the test releases it.
  *
  * Run: node --test tests/unit/audio-sample-upgrade.test.mjs
- *   APEX_AUDIO_SRC=<path> evaluates another copy of audio.js (old-code proof).
+ *   APEX_AUDIO_SRC=<path> evaluates another copy of engine.js (old-code proof).
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -24,7 +24,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC_PATH = process.env.APEX_AUDIO_SRC || path.join(ROOT, "js/audio/engine.js");
-const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js"].map((file) =>
+const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/mix-duck.js"].map((file) =>
   fs.readFileSync(path.join(ROOT, file), "utf8"))
   .concat(fs.readFileSync(SRC_PATH, "utf8")).join("\n").replace(/^const\b/gm, "var");
 
@@ -98,6 +98,63 @@ test("an engine started on the synth voice upgrades to the samples once they dec
   GameAudio.setEngine(0.7, 0, false, 0.7, 5, {});
   GameAudio.setEngine(0.8, 0, false, 0.8, 6, {});
   assert.equal(counts.src, srcAfter, "one restart, not one per frame");
+});
+
+test("engine sample work belongs to the context that requested it", async (t) => {
+  for (const stage of ["fetch", "decode-first", "decode-last", "decode-reject"]) {
+    await t.test(stage, async () => {
+      let clock = 1000, template;
+      const contexts = [], requests = [], warnings = [];
+      const flush = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
+      const { GameAudio: A, ctx } = boot({
+        Date: { now: () => clock },
+        Log: { info() {}, debug() {}, warn: (...args) => warnings.push(args), enabled: () => false },
+        fetch: () => new Promise((resolve) => requests.push(() => resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }))),
+        AudioContext: function () {
+          const owner = { ...template, state: "running", decodes: [], copies: [],
+            close() { this.state = "closed"; return Promise.resolve(); },
+            decodeAudioData(ab, resolve, reject) { this.decodes.push({ resolve, reject }); },
+            createBuffer(ch, len, sr) {
+              const buf = template.createBuffer(ch, len, sr); this.copies.push(buf); return buf;
+            },
+          };
+          contexts.push(owner); return owner;
+        },
+      });
+      template = ctx;
+      A.setMusicEnabled(false); A.init(); A.startEngine();
+      const old = contexts[0];
+      if (stage !== "fetch") { requests[0](); await flush(); assert.equal(old.decodes.length, 1); }
+      old.state = "interrupted";
+      A.init(); clock += 1000; A.init();
+      assert.equal(contexts.length, 2, "a later gesture replaces the stalled context");
+      const fresh = contexts[1], before = fresh.copies.length;
+      if (stage === "fetch") {
+        requests[0](); await flush();
+        assert.equal(fresh.decodes.length, 0, "old fetch cannot decode on the replacement context");
+        assert.equal(old.decodes.length, 0, "old fetch cannot decode on the retired context either");
+      } else if (stage !== "decode-last") {
+        if (stage === "decode-reject") old.decodes[0].reject(new Error("retired decode"));
+        else old.decodes[0].resolve(sampleBuf(4, 4000));
+        await flush();
+        assert.equal(A.debug().samplesReady, false, "obsolete completion cannot publish readiness");
+        assert.equal(fresh.copies.length, before, "obsolete completion cannot allocate a loop copy");
+        assert.equal(warnings.length, 0, "retired failure is not a current audio failure");
+      }
+      requests[1](); await flush();
+      assert.equal(fresh.decodes.length, 1);
+      fresh.decodes[0].resolve(sampleBuf(4, 8000)); await flush();
+      assert.equal(A.debug().samplesReady, true, "replacement decode still publishes");
+      assert.equal(fresh.copies.length, before + 1);
+      if (stage === "decode-last") {
+        old.decodes[0].resolve(sampleBuf(4, 4000)); await flush();
+        assert.equal(fresh.copies.length, before + 1, "late obsolete decode cannot replace the fresh loop");
+      }
+      A.setEngine(0.6, 0, false, 0.6, 4, {});
+      assert.equal(A.debug().usingSamples, true, "the live engine upgrades after its own decode");
+      A.stopEngine();
+    });
+  }
 });
 
 test("music PCM cache: a phone keeps only the playing track, desktop the two most recent", async () => {
@@ -207,6 +264,63 @@ test("streamed music keeps the soundtrack contract: resume offset, ended -> next
   assert.equal(el.paused, true);
   assert.ok(el.released >= 1, "an explicit stop drops the src (decoder and buffered bytes)");
   assert.equal(GameAudio.currentTrackId(), null, "and the soundtrack reports itself stopped");
+});
+
+// #5584 finding 2: nothing listened for the element's `pause`, so a platform pause with the page visible left
+// musicOn && musicStreaming true and resumeMusic returned early: silence, and a track that never advanced.
+test("a pause the game did not ask for lets resume replay the stream at the kept position; our own pauses do not arm it", () => {
+  const A = fakeAudio();
+  const { GameAudio } = boot({ Audio: A.Audio, GLX: { isMobile: true } });
+  GameAudio.init();
+  GameAudio.playTrackId("builtin:song2");
+  const el = A.els[0];
+  assert.equal(typeof el.onpause, "function", "the stream listens for pause");
+  el.duration = 180; el.currentTime = 42;
+  const plays = el.plays;
+  GameAudio.startMusic(0);
+  assert.equal(el.plays, plays, "precondition: a live stream is left alone by resume");
+  el.onpause();                                             // a stale event: the element is playing
+  GameAudio.startMusic(0);
+  assert.equal(el.plays, plays, "a pause event on a PLAYING element (queued by our own track change) arms nothing");
+  el.paused = true; el.ended = true; el.onpause();          // the pause that precedes `ended`
+  GameAudio.startMusic(0);
+  assert.equal(el.plays, plays, "a track's natural end is not a foreign pause");
+  el.ended = false; el.onpause();                           // the platform paused it, page visible
+  assert.equal(GameAudio.currentTrackId(), "builtin:song2", "the soundtrack still owns the track");
+  GameAudio.startMusic(0);
+  assert.equal(el.plays, plays + 1, "resume plays the stream again");
+  assert.equal(el.paused, false);
+  assert.match(el.src, /song2\.mp3$/, "the same track");
+  el.currentTime = 0; el.onloadedmetadata();
+  assert.equal(el.currentTime, 42, "from where the platform stopped it");
+  // The platform resumed it by itself after a pause: `playing` makes the stream live again, so resume leaves it alone.
+  el.paused = true; el.onpause(); el.paused = false; el.onplaying();
+  const again = el.plays;
+  GameAudio.startMusic(0);
+  assert.equal(el.plays, again, "a stream the platform restarted is not restarted a second time");
+  GameAudio.setMusicEnabled(false);
+  assert.equal(el.onpause, null, "an explicit stop drops the handler before its own pause()");
+});
+
+// #5584 finding 3: an installed app offline streams nothing; the soundtrack must say so instead of naming a track.
+test("a whole list that fails reports musicStalled until something plays or MUSIC is switched", () => {
+  const A = fakeAudio();
+  const { GameAudio } = boot({ Audio: A.Audio, GLX: { isMobile: true } });
+  GameAudio.init();
+  GameAudio.playTrackId("builtin:song2");
+  const el = A.els[0];
+  assert.equal(GameAudio.musicStalled(), false);
+  el.error = { code: 4 }; el.onerror();
+  assert.equal(GameAudio.musicStalled(), false, "one dead track skips; the list is not dead yet");
+  for (let i = 0; i < 12 && GameAudio.currentTrackId(); i++) el.onerror();
+  assert.equal(GameAudio.currentTrackId(), null, "precondition: every track failed and the soundtrack stopped");
+  assert.equal(GameAudio.musicStalled(), true, "and it says so");
+  GameAudio.playTrackId("builtin:song2"); A.els[0].onplaying();
+  assert.equal(GameAudio.musicStalled(), false, "a track that plays clears it");
+  for (let i = 0; i < 12 && GameAudio.currentTrackId(); i++) A.els[0].onerror();
+  assert.equal(GameAudio.musicStalled(), true);
+  GameAudio.setMusicEnabled(false);
+  assert.equal(GameAudio.musicStalled(), false, "MUSIC OFF is the player's choice, not a fault");
 });
 
 test("master limiter: one compressor sits between master and the destination", () => {

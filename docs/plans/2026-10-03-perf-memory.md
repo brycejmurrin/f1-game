@@ -1,5 +1,7 @@
 # Memory and performance — how we find the next wins, and the wins we already see
 
+> **Process: AGENTS.md governs.** This plan predates the current loop. Where it says to arm auto-merge, merge on green, sync or push through `deploy.mjs`, or run browser specs locally, ignore it: open a DRAFT PR, CI runs the tiers on it (`node tools/ci/remote-group.mjs <group>` for a whole group), and the `land` label is the only way work lands (AGENTS.md §The loop, §Coordination; skill `steward`).
+
 Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — the instruments exist (js/perf/soak-run.js, race-entry-profile.js, spans.js); Phase II/III code changes were not re-audited.
 
 Status when written: **PLAN** (docs-only). Follows the track-switch leak fix (#773,
@@ -7,7 +9,7 @@ Status when written: **PLAN** (docs-only). Follows the track-switch leak fix (#7
 field LOD (#810) and the race hot-path pass (#779). Ship branch:
 `claude/f1-game-project-26h3ng`; one PR per slice, drafts until the gate
 (AGENTS.md §The loop), at most two PRs on auto-merge at a time (AGENTS.md
-§Concurrent PRs, merge pacing). A path written with `<new>` is a PROPOSED
+§Coordination). A path written with `<new>` is a PROPOSED
 file, as in the models plan.
 
 The crash this protects against is the phone one: iOS Safari kills a tab that

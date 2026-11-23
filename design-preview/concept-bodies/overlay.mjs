@@ -1,7 +1,7 @@
 // Our car's silhouette and part edges drawn over the concept sheet through the camera solved from it
 // (solve-cam.mjs). node design-preview/concept-bodies/overlay.mjs <body> front|rear <out.png> [team]
 // Sections are coloured so the mismatch reads per part: chassis/nose cyan, sidepods magenta, engineCover yellow.
-import fs from "node:fs"; import sharp from "sharp";
+import sharp from "sharp";
 const { build } = await import("./fit-probe.mjs");
 const [id, view, out, team] = process.argv.slice(2);
 const CAM = {

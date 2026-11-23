@@ -17,9 +17,9 @@ passing specs red — a 120 s timeout AND an assertion miss (`dynamic player sha
 read a stale-frame transform, delta 694 vs `< 5`). Both passed clean solo. So:
 
 - **Check `node tools/ci/test-bg.mjs --status` before you render here.** If a group
-  is running, wait — or accept you will re-run its false-fails solo.
+  is running, wait for its `= run` line — a red it produced beside your page is suspect.
 - **Park to `about:blank` (`navigate_page`) the moment you're done**, so the warm
-  page doesn't tax the next `test-solo`.
+  page doesn't tax the next Playwright run.
 - **"The moment you're done" is a promise you WILL break once you get absorbed in
   something else — make parking a precondition of starting a Playwright run, not
   a thing you remember to do first.** MEASURED 2026-08-13: after a multi-shot MCP

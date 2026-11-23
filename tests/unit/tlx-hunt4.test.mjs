@@ -26,7 +26,7 @@ const SHADOW = read("js/render/three/tlx-shadow.js");
 installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
 if (!globalThis.localStorage) globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
-const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.webgpu.min.js")).href);
+const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.webgpu.min.js")).href);
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/three/tsl-chunks.js",
   "js/render/three/tsl-lit.js", "js/render/three/tlx-shadow.js"])
@@ -96,10 +96,11 @@ async function rig(t, ls = {}) {
     ${SRC.streams}
     return { createInstancedBatch, updateInstances, _writeInstanceMatrices, _mirOf, _coAppend, _coRuns, ensureStream, wrapStream, uploadStream,
       materialFor, resetRecs, drawList, usage: _instUsage, usageOf: _instUsageOf, aiOn: _aiInst,
-      _coDrop, _dropQueue, flushDropped, warm: (p) => { _warmPending = p; } };`);
+      _coDrop, _dropQueue, flushDropped, warm: (p) => { _warmPending = p; }, instShow: _instShow };`);
   const R = mk(THREE, TSL, scene, renderer, camera, { getItem: (k) => (k in ls ? ls[k] : null) }, lit, globalThis);
   const bytes = (fn) => { fg.reset(); fn(); return fg.bytes.bufferSubData; };
-  const render = () => renderer.render(scene, camera);
+  // #3104 F3: tlx.js lists the visible registry members under instRoot at every visibility settle; so does this render.
+  const render = () => { R.instShow(); renderer.render(scene, camera); };
   return { fg, renderer, scene, camera, R, lit, bytes, render };
 }
 
@@ -286,7 +287,7 @@ test("#2150: freeing a coalesced source releases its run's RenderObjects (and qu
   assert.equal(ob2, 1); assert.equal(vw2, 1); assert.equal(listeners(rec2.mat), before);
 });
 
-test("A-H1: the InstancedMesh families keep Dynamic — the real caster, redrawn by one pass after a rewrite, still reaches the GPU", async (t) => {
+test("A-H1: the InstancedMesh families keep Dynamic — the real caster, redrawn by one pass after a rewrite, still reaches the GPU (Stream does too on r187)", async (t) => {
   // The tlxAttrInst=0 fallback batch is a padded InstancedMesh: Dynamic matrices, Stream tint (a named attribute).
   const fb = await rig(t, { "apex26.tlxAttrInst": "0" });
   const ib = batchOf(fb, 8);
@@ -308,7 +309,9 @@ test("A-H1: the InstancedMesh families keep Dynamic — the real caster, redrawn
   const forced = await casterBytes(t, THREE.StreamDrawUsage);
   t.diagnostic(`caster forced to Stream: sun ${forced.sun} B, lamp ${forced.lamp} B, lamp again ${forced.again} B`);
   assert.equal(forced.lamp, 9 * 64, "a pass's first draw of the frame is relayed under Stream too");
-  assert.equal(forced.again, 0, "Stream: the rewrite before the second draw never reaches the GPU — the reason casters stay Dynamic");
+  // r186 relayed the matrices once per frame, so Stream's second draw uploaded 0 B and drew stale rows; r187 reads the
+  // columns from instanceMatrix's own buffer, so the rewrite's range reaches the GPU under Stream too (tlx-hunt4c).
+  assert.equal(forced.again, 9 * 64, "r187: under Stream the rewrite before the second draw reaches the GPU (its range)");
 });
 // One frame of the real caster: { sun, lamp, again } bufferSubData bytes; `usage` forces every InstancedBufferAttribute's.
 async function casterBytes(t, usage) {

@@ -27,7 +27,8 @@ const CustomLiveries = (function () {
     const nextSuffix = new Map();
     const remap = new Map();
     let repaired = 0;
-    const liveries = (Array.isArray(rows) ? rows : []).map((liv) => {
+    // Import path too: null / non-object rows must not reach `liv.id` (#4651).
+    const liveries = (Array.isArray(rows) ? rows : []).filter((liv) => liv && typeof liv === "object").map((liv) => {
       const original = liv.id;
       if (!catalogIds.has(original) && !claimed.has(original)) { claimed.add(original); return liv; }
       const stem = ((original || "custom") + "_imported").slice(0, 64);
@@ -78,21 +79,53 @@ const CustomLiveries = (function () {
       const owner = identityOwner(teamId);
       return owner ? owner.identityValue(key, fallback) : store.get(key, fallback);
     }
-    function setIdentityValue(teamId, key, value) {
+    function setIdentityValue(teamId, key, value, options) {
       const owner = identityOwner(teamId);
       // A refused slot write must never fall through into the global GP paint.
-      return owner ? owner.setIdentityValue(key, value) : store.set(key, value);
+      return owner ? owner.setIdentityValue(key, value) : store.set(key, value, options);
     }
     function getLiveryId(teamId) { return identityValue(teamId, "livery." + teamId, "default"); }
-    function saveLiveryId(teamId, id) { return setIdentityValue(teamId, "livery." + teamId, id); }
+    function saveLiveryId(teamId, id) { return setIdentityValue(teamId, "livery." + teamId, id, { requireDurable: true }); }
     // Player-created liveries, stored per team as [{id,name,c1,c2,stripe?}].
     function getCustomLiveries(teamId) {
       // A MY TEAM identity captured before any livery was saved holds null here, not the [] fallback;
       // concat(null) puts a null row in the list and resolveLivery's find throws on it.
       const v = identityValue(teamId, "livery.custom." + teamId, []);
-      return Array.isArray(v) ? v : [];
+      return Array.isArray(v) ? v.filter((l) => l && typeof l === "object") : [];
     }
     function setCustomLiveries(teamId, arr) { return setIdentityValue(teamId, "livery.custom." + teamId, arr); }
+    function saveAndFitLivery(teamId, oldId, liv) {
+      const listKey = "livery.custom." + teamId, fitKey = "livery." + teamId;
+      const existing = getCustomLiveries(teamId);
+      const replacing = existing.some(row => row.id === oldId);
+      const withoutCandidate = existing.filter(row => row.id !== liv.id);
+      const staged = withoutCandidate.concat([liv]);
+      const final = replacing ? withoutCandidate.map(row => row.id === oldId ? liv : row) : staged;
+      const owner = identityOwner(teamId);
+      if (owner) return { ok: owner.setIdentityValues({ [listKey]: final, [fitKey]: liv.id }) };
+      // The two GP keys commit separately. Both ids resolve until the new fit
+      // commits, even if the page closes or storage refuses every later write.
+      const durable = { requireDurable: true };
+      if (!store.set(listKey, staged, durable)) return { ok: false };
+      if (!store.set(fitKey, liv.id, durable)) {
+        store.set(listKey, existing, durable);   // best effort; the original is present either way
+        return { ok: false };
+      }
+      const keptCopy = replacing && !store.set(listKey, final, durable);
+      return { ok: true, keptCopy };
+    }
+    function removeCustomLivery(teamId, id) {
+      const listKey = "livery.custom." + teamId, fitKey = "livery." + teamId;
+      const rows = getCustomLiveries(teamId).filter(row => row.id !== id);
+      const fitted = getLiveryId(teamId) === id;
+      const owner = identityOwner(teamId);
+      if (owner) return owner.setIdentityValues(fitted ? { [listKey]: rows, [fitKey]: "default" } : { [listKey]: rows });
+      const durable = { requireDurable: true };
+      if (fitted && !store.set(fitKey, "default", durable)) return false;
+      if (store.set(listKey, rows, durable)) return true;
+      if (fitted) store.set(fitKey, id, durable);   // both the old paint and default remain available
+      return false;
+    }
     // Full paint-job list for a team: catalog (default + specials + universal) + the
     // player's own creations.
     function getLiveries(team) { return Liveries.forTeam(team).concat(getCustomLiveries(team.id)); }
@@ -174,8 +207,8 @@ const CustomLiveries = (function () {
     // Car3D uses for `wingC` when it builds the baked front/rear wing planes, so the
     // moveable active-aero flap drawn over the crown matches the wing it belongs to
     // instead of being a differently-coloured bolt-on.
-    function wingColorOf(team) {
-      const liv = resolveLivery(team);
+    function wingColorOf(team) { return wingColorOfLivery(resolveLivery(team), team); }
+    function wingColorOfLivery(liv, team) {
       // The moveable elements ARE the wing's own top flaps, so they take the wing's
       // own colour — Car3D paints the baked cascade with exactly this fallback
       // chain (`wingC`). Tinting them to stand out would make the car two-tone
@@ -183,9 +216,23 @@ const CustomLiveries = (function () {
       return liv.wingCarbon === "carbon" ? CarMaterials.CARBON : (liv.wing || liv.c2 || team.color2);
     }
 
+    // The team's FACTORY paint job, resolved as resolveLivery resolves "default",
+    // whatever this phone has fitted (#5037: a friend's car that sent no livery,
+    // and another team's AI car, race in it). Memoised per team on store.rev.
+    const _factoryCache = new Map();
+    function factoryLivery(team) {
+      const c = _factoryCache.get(team.id);
+      if (c && c.rev === store.rev && c.team === team) return c.val;
+      const liv = Liveries.forTeam(team)[0];
+      const val = liv ? pickLivery(migrateLivery(liv)) : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
+      _factoryCache.set(team.id, { val, rev: store.rev, team });
+      return val;
+    }
+
+    // migrateLivery stays local: resolveLivery calls it; no caller reads api.migrateLivery.
     return {
-      getLiveryId, saveLiveryId, getCustomLiveries, setCustomLiveries,
-      getLiveries, resolveLivery, wingColorOf, pickLivery, migrateLivery,
+      getLiveryId, saveLiveryId, getCustomLiveries, setCustomLiveries, saveAndFitLivery, removeCustomLivery,
+      getLiveries, resolveLivery, factoryLivery, wingColorOf, wingColorOfLivery, pickLivery,
       get livDraftOverride() { return livDraftOverride; },
       set livDraftOverride(v) { livDraftOverride = v; },
     };

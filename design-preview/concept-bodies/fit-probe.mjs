@@ -1,13 +1,12 @@
 // Fit probe (round 3): ray-cast a build and list each part section's skin crossings, so a join is
 // a pair of numbers (gap > 0 floats, overlap = seated). ROUND=1 for the rounded build.
-// node -e 'import("./design-preview/bodies/fit-probe.mjs").then(({build,cast})=>console.log(cast(build("highnose"),"y",0.06,2.45)))'
+// node -e 'import("./design-preview/concept-bodies/fit-probe.mjs").then(({build,cast})=>console.log(cast(build("highnose"),"y",0.06,2.45)))'
 import fs from "node:fs";
 const _rf = fs.readFileSync;
 fs.readFileSync = function (f, ...r) { const o = _rf.call(fs, f, ...r); return String(f).endsWith("car3d.js") && typeof o === "string" ? o.replace("return { name: sec.name, vertices", "return { name: sec.name, from: sec.from, to: sec.to, vertices") : o; };
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 const shade = !!process.env.ROUND;
 const { Car3D, Parts, Teams } = loadParts(shade ? { shade: true } : undefined);
-export { Teams };
 export function build(id, teamId = "mclaren") {
   const t = Teams.LIST.find((x) => x.id === teamId);
   const T = Parts.getVisualTiers(Parts.getFactorySetup(t), t);

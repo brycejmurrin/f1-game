@@ -10,7 +10,8 @@ import cp from "node:child_process";
 import path from "node:path";
 import { parse as parseYAML } from "yaml";
 import { report } from "../../tools/ci/ci-coverage.mjs";
-import { ciWorkflow, pagesWorkflow, selectJob, selectedJob, selectStep, PR_ACTIVE, LABEL_OK, EDIT_OK } from "../helpers/ci-workflow.mjs";
+import { ciWorkflow, pagesWorkflow, selectJob, selectedJob, selectStep } from "../helpers/ci-workflow.mjs";
+import { DOCS_FAST_TEST_FILES } from "../../tools/ci/docs-fast-tests.mjs";
 
 test("every path a ci.yml change filter names still exists", () => {
   // The job filters are `grep -qE` alternations over the changed-file list, and
@@ -61,9 +62,10 @@ test("the change-aware gate blocks pushes, pull requests AND the deploy gate", (
   // `schedule` too: the nightly's change-aware lane (every spec the last day
   // of merges routed; tools/ci/ci-resolve-before.sh).
   // 2026-10-15: the job also plans the node slices (was unit-plan), so it runs whenever the node
-  // matrix does (`fast_tier_run == ''`); the spec selection keeps its own event test on the step.
-  assert.ok(selectJob.includes(`if: \${{ ${PR_ACTIVE} && ${LABEL_OK} && ${EDIT_OK} && (inputs.fast_tier_run == '' || github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || inputs.concurrency_key != '') }}`),
-    "the select job carries the shared draft/label/edit gate, then its own clause");
+  // matrix does: always (the dead fast_tier_run input went 2026-11-10); the spec selection keeps its own
+  // event test on the step.
+  assert.equal(parseYAML(ciWorkflow).jobs.select.if, undefined,
+    "the select job always runs (no draft/label/edit gate since 2026-11-03, no fast_tier_run since 2026-11-10)");
   // The JOB and the selection STEP never exclude the deploy gate; the ship
   // filter step inside the same job legitimately sits out the fast tier.
   const selectJobIf = (selectJob.match(/^    if: (.*)$/m) || [])[1] || "";
@@ -189,7 +191,7 @@ test("docs-guards.yml is retired; ci.yml's pull_request stays unfiltered and tes
   assert.ok(pushIgnore.at < pagesOn.indexOf("  schedule:"), "the one paths-ignore list must be the push one");
   assert.doesNotMatch(onBlock, /^\s+paths-ignore:/m, "ci.yml carries no paths-ignore list at all: no push trigger, an unfiltered pull_request");
   const prBlock = onBlock.slice(onBlock.indexOf("  pull_request:"), onBlock.indexOf("  schedule:"));
-  assert.ok(prBlock.includes("types: [opened, synchronize, reopened, ready_for_review, labeled, edited]"), "the pull_request block was sliced whole");
+  assert.ok(prBlock.includes("types: [opened, synchronize, reopened, ready_for_review]"), "the pull_request block was sliced whole");
   assert.doesNotMatch(prBlock, /paths(-ignore)?:/,
     "ci.yml's pull_request must not be path-filtered: a prose-only PR that starts no run can never satisfy the required check");
 
@@ -198,8 +200,9 @@ test("docs-guards.yml is retired; ci.yml's pull_request stays unfiltered and tes
   // guards job covers a prose PR with no second workflow.
   const groups = JSON.parse(fs.readFileSync(new URL("../groups.json", import.meta.url), "utf8"));
   const files = groups.groups["test:docs-guards"]?.files || [];
-  for (const must of ["docs-integrity", "generated-docs", "agent-config", "skill-progressive", "hooks-documented"]) {
-    assert.ok(files.includes(`tests/unit/${must}.test.mjs`), `test:docs-guards must run ${must}`);
+  // It covers at least the shared docs-only list (tools/ci/docs-fast-tests.mjs, #5461).
+  for (const must of DOCS_FAST_TEST_FILES) {
+    assert.ok(files.includes(must), `test:docs-guards must run ${must}`);
   }
   const fast = new Set(groups.toolingFast.filter((f) => !f.startsWith("//")));
   const notFast = files.filter((f) => !fast.has(f) && f !== "tests/unit/environment-json.test.mjs");
@@ -216,8 +219,8 @@ test("ci-verdict is the always-run aggregator every other job feeds", () => {
   assert.ok(body, "ci-verdict job missing");
   // The required-check display name stays the stable `CI` on every real run;
   // only a label-noise run (all jobs skipped, #2184) is named otherwise.
-  assert.match(body, /^    name: \$\{\{ \(github\.event_name == 'pull_request' && github\.event\.action == 'labeled' && [^\n]* && 'CI label event \(ignored\)' \|\| [^\n]*'CI draft \(opted out\)' \|\| \(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\) && 'CI \(draft fast tier\)' \|\| 'CI' \}\}$/m,
-    "the required-check display name must be the stable `CI` on a non-draft run; a draft fast tier is named apart (#2664)");
+  assert.match(body, /^    name: \$\{\{ \(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\) && 'CI \(draft fast tier\)' \|\| 'CI' \}\}$/m,
+    "the required-check display name is the stable `CI` on a non-draft run; a draft fast tier is named apart (#2664)");
   assert.match(body, /^    if: \$\{\{ !cancelled\(\) \}\}$/m, "runs (never skips) on every non-cancelled run: a skipped job is named by the raw expression (P9)");
   assert.match(body, /run: node tools\/ci\/ci-verdict\.mjs/);
   assert.match(body, /NEEDS: \$\{\{ toJSON\(needs\) \}\}/);
@@ -232,10 +235,8 @@ test("ci-verdict is the always-run aggregator every other job feeds", () => {
   // loses no rule (the API showed 12 fast-tier names on 2026-10-04).
   const parsed = parseYAML(ciWorkflow);
   const needs = new Set(parsed.jobs["ci-verdict"].needs);
-  // ONE exemption, by name: draft-ci-skipped is the opt-out notice, not a
-  // verdict. (poke-train, the train's dispatcher, was the other until
-  // 2026-10-16: pages.yml runs on push now, CI/CD review #2333 finding 3.)
-  const NOT_A_VERDICT = new Set(["draft-ci-skipped"]);
+  // No exemption since 2026-11-03: draft-ci-skipped (the opt-out notice) is gone; poke-train went on 2026-10-16.
+  const NOT_A_VERDICT = new Set();
   for (const [id, job] of Object.entries(parsed.jobs)) {
     if (id === "ci-verdict") continue;
     if (NOT_A_VERDICT.has(id)) {
@@ -270,6 +271,8 @@ test("selected-verdict reds on ANY dropped spec, and owns the carry-forward once
     "junit download/stage/carry may never decide the verdict by throwing");
   const decideStep = job.steps.find((st) => st.name === "One answer for the change-aware gate");
   assert.ok(decideStep && decideStep["continue-on-error"] !== true, "the verdict step decides");
+  // #5403: the verdict is handed the plan, so a planned spec with no junit testcase reds a green matrix.
+  assert.equal(decideStep.env?.SHARDS, "${{ needs.select.outputs.shards }}", "selected-verdict must read the select job's plan");
   // …and no `selected` shard saves it any more (one key per run, one writer).
   const selected = parseYAML(ciWorkflow).jobs.selected;
   assert.ok(!selected.steps.some((st) => /cache\/save/.test(st.uses || "")), "a shard must not race for the carry-forward key");
@@ -283,7 +286,7 @@ test("select plans the node-suites matrix and can skip unused slices (unit-plan 
   assert.ok(plan, "the node-slice plan step is gone from select");
   assert.match(plan.run, /node tools\/ci\/pick-unit-slices\.mjs/);
   assert.match(plan.run, /--github-output/);
-  assert.equal(plan.if, "${{ inputs.fast_tier_run == '' }}", "the plan runs exactly when the node matrix does");
+  assert.equal(plan.if, undefined, "the plan always runs, as the node matrix does");
   // A draft asks for the needed rows only; every other event keeps all six.
   assert.match(String(plan.env.NEEDED_ONLY), /github\.event_name == 'pull_request'/);
   assert.match(plan.run, /FLAG="--needed-only"/);
@@ -304,28 +307,29 @@ test("select plans the node-suites matrix and can skip unused slices (unit-plan 
   // Decisions D1/D2 (the CI selection plan, PR #2560 §6): no draft
   // (run-ci or not) and no Pages call runs the node slices; ready PRs, the
   // nightly and dispatch do.
-  assert.ok(nodeIf.includes("&& !(github.event_name == 'pull_request' && github.event.pull_request.draft) &&"),
-    "node-suites skips every draft, run-ci included");
+  assert.ok(nodeIf.includes("!(github.event_name == 'pull_request' && github.event.pull_request.draft) &&"),
+    "node-suites skips every draft, every draft, now that drafts otherwise run");
   assert.match(nodeIf, /inputs\.concurrency_key == ''/, "node-suites skips on the Pages call");
   const steps = node.split(/\n      - /).slice(1);
   const setup = steps.filter((st) => /^uses: actions\/checkout@|^uses: \.\/\.github\/actions\/setup-apex|^name: Plan the slices for this diff/.test(st));
   assert.equal(setup.length, 3, "checkout, setup-apex and the plan step");
   assert.doesNotMatch(node, /reuse-draft-fast\.sh|steps\.reuse\./, "no draft run exists to reuse, so node-suites asks no reuse question");
   for (const st of setup) assert.match(st, /\n        if: matrix\.needed != 'false'/, "an unneeded row skips: " + st.split("\n")[0]);
-  assert.match(node, /if \[ "\$\{\{ matrix\.needed \}\}" = "false" \]; then[\s\S]*?exit 0/, "the suites step exits 0 for an unneeded row");
+  assert.match(node, /NEEDED: \$\{\{ matrix\.needed \}\}/, "matrix.needed reaches the suites step through env");
+  assert.match(node, /if \[ "\$NEEDED" = "false" \]; then[\s\S]*?exit 0/, "the suites step exits 0 for an unneeded row");
   assert.match(node, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.slices\) \}\}/);
-  const driving = (ciWorkflow.split("\n  driving-model:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
-  assert.match(driving, /^    needs: \[select\]$/m);
-  assert.match(driving, /needs\.select\.outputs\.driving == 'true'/);
-  assert.match(driving, /^    if: .*inputs\.concurrency_key == ''/m, "driving-model skips on the Pages call (decision D2)");
-  // No plumbing job is left in front of the fast tier: every job that used to
-  // wait on `reuse-draft` asks the question itself, as a step.
   const jobs = parseYAML(ciWorkflow).jobs;
+  const driving = jobs["driving-model"];
+  assert.deepEqual(driving.needs, ["select"]);
+  const traces = driving.steps.find((step) => step.name === "Characterization traces");
+  assert.ok(traces, "the routed driving job must execute its characterization");
+  assert.equal(traces.if, undefined, "draft reuse cannot skip characterization");
+  // The draft, ready and Pages routing expressions are exercised in ci-ship-filter-geometry.
   for (const id of ["reuse-draft", "unit-plan", "ship-filter", "renderer-filter", "xr-filter"]) assert.ok(!jobs[id], `${id} is a step now, not a job`);
-  for (const id of ["guards-a", "guards-b", "guards-c", "guards-d", "sweeps-parts", "driving-model"]) {
+  for (const id of ["guards-a", "guards-b", "guards-c", "guards-d", "sweeps-parts"]) {
     const st = jobs[id].steps.find((x) => x.id === "reuse");
     assert.ok(st && /reuse-draft-fast\.sh/.test(st.run), `${id} asks the reuse question itself`);
-    assert.deepEqual(jobs[id].permissions, { contents: "read", actions: "read" }, `${id} needs actions:read for the runs lookup`);
+    assert.deepEqual(jobs[id].permissions, { contents: "read", actions: "read", checks: "read" }, `${id} needs actions:read for the runs lookup and checks:read for the draft run's guards record`);
   }
   assert.equal(jobs.guards.steps.length, 1, "the aggregator only joins the halves (no checkout, no npm ci)");
   assert.deepEqual(jobs.guards.needs, ["guards-a", "guards-b", "guards-c", "guards-d"]);
@@ -408,4 +412,40 @@ test("XR filter executes renderer, lazy-roster and emulated-spec changes while s
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("the nightly's over-budget pool: schedule-only 12 jobs, PR plans keep the default, and a full pool drops nothing", async () => {
+  // 2026-11-20: three red nightlies; 44739348355 redded only because the 9-job pool was full and the plan DROPPED
+  // two routed specs (docs/notes/CI-CRON-DELAY-2026-11-20.md, select-specs NIGHTLY_OVER_BUDGET_SHARDS).
+  const sel = await import("../../tools/ci/select-specs.mjs");
+  const { declaredTests } = await import("../../tools/ci/select-budget.mjs");
+  assert.equal(sel.MAX_OVER_BUDGET_SHARDS, 9, "PR, train and dispatch plans keep today's cap");
+  assert.ok(sel.NIGHTLY_OVER_BUDGET_SHARDS > sel.MAX_OVER_BUDGET_SHARDS);
+  // ci.yml passes the nightly cap on `schedule` alone (a group dispatch carries concurrency_key and keeps 9) …
+  const env = ciWorkflow.match(/^ {10}OVER_BUDGET_SHARDS: (.+)$/m);
+  assert.ok(env, "the select step sets OVER_BUDGET_SHARDS");
+  assert.equal(env[1], `\${{ github.event_name == 'schedule' && !inputs.concurrency_key && '${sel.NIGHTLY_OVER_BUDGET_SHARDS}' || '' }}`);
+  // … and the step script hands it to the selector only when set (its own flag line, expanded by bash).
+  const line = selectStep.split("\n").find((l) => l.includes("OVER_BUDGET_SHARDS:+"));
+  const expand = (v) => cp.spawnSync("bash", ["-c", `set -- ${line.replace(/--json.*$/, "")}; echo "$*"`],
+    { encoding: "utf8", env: { ...process.env, OVER_BUDGET_SHARDS: v } }).stdout.trim();
+  assert.equal(expand("12"), "--over-budget-shards 12");
+  assert.equal(expand(""), "", "unset on every other event: the selector keeps its default");
+  // A pool of 12 declared-slow routed specs at 330 s each (3960 s, 11 jobs' worth): the default cap drops one,
+  // the nightly's cap runs every one.
+  const all = fs.readdirSync("tests/specs").filter((f) => f.endsWith(".spec.js")).map((f) => "tests/specs/" + f);
+  const slow = all.filter((f) => sel.maxDeclaredTimeout(f) > sel.SELECTED_GATE.perTestTimeoutSec * 1000
+    && !sel.FIXED_GATE_SPECS.has(f) && !sel.MANUAL_OPT_IN_SPECS.has(f)).slice(0, 16);
+  assert.equal(slow.length, 16, "the tree still has 16 declared-slow specs for the fixture");
+  const db = { specs: Object.fromEntries(slow.map((f) => [f,
+    { s: [1, 2, 3].map((i) => [`2026-11-0${i}T00:00:00Z`, "llvmpipe", 330, declaredTests(f)]) }])) };
+  const plan = (overBudgetShards) => sel.fit(slow, 1, { db, overBudgetShards, overflowShards: 0, spillShards: 0, includeTwinned: true });
+  assert.ok(plan(sel.MAX_OVER_BUDGET_SHARDS).overBudgetSpecs.length > 0, "fixture: the default pool is full");
+  const nightly = plan(sel.NIGHTLY_OVER_BUDGET_SHARDS);
+  assert.deepEqual(nightly.overBudgetSpecs, [], "the nightly's pool drops no routed spec");
+  assert.ok(nightly.overBudgetRun.reduce((n, s) => n + s.sec, 0) <= sel.NIGHTLY_OVER_BUDGET_SHARDS * sel.TARGET_SHARD_SEC);
+  // The real nightly shape (a whole-suite route on the committed timings) drops nothing at the nightly cap.
+  const real = sel.select(undefined, 60, { files: ["tests/helpers/fixtures.js"], overflowShards: 12, staleFirst: true,
+    overBudgetShards: sel.NIGHTLY_OVER_BUDGET_SHARDS });
+  assert.deepEqual(real.overBudgetSpecs, [], "a whole-suite nightly plan drops no routed spec");
 });

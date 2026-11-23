@@ -75,3 +75,63 @@ test("every literal Log.<level>(ns, …) namespace is declared in Log.NAMESPACES
     "undeclared Log namespace — add it to NAMESPACES in js/core/log.js " +
     "(or use an existing one): " + bad.join(", "));
 });
+
+test("an undefined or function argument is recorded as text, not a blank (hunt 2026-11-02)", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/core/log.js"), "utf8");
+  const ctx = vm.createContext({ console, Date, performance: { now: () => 0 } });
+  vm.runInContext(src + "\n;globalThis.__L = Log;", ctx, { filename: absSrc("js/core/log.js") });
+  ctx.__L.error("game", "v=", undefined, () => 1);
+  const rec = ctx.__L.records().pop();
+  assert.equal(rec.msg, "v= undefined () => 1");
+});
+
+// Hunt #5779: LEVELS is an object literal, so an inherited key (`constructor`,
+// `toString`, `__proto__`) parsed as a level — a function — every threshold
+// comparison went NaN and all logging fell silent.
+test("Log.level ignores Object.prototype keys as level names", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/core/log.js"), "utf8");
+  const ctx = vm.createContext({ console, Date, performance: { now: () => 0 } });
+  vm.runInContext(src + "\n;globalThis.__Log = Log;", ctx, { filename: absSrc("js/core/log.js") });
+  const Log = ctx.__Log;
+  const base = Log.level();
+  for (const bad of ["constructor", "toString", "__proto__", "hasOwnProperty", "buffer:constructor", "track:toString"]) {
+    assert.deepEqual(JSON.parse(JSON.stringify(Log.level(bad))), JSON.parse(JSON.stringify(base)), bad);
+  }
+  assert.equal(Log.level().console, "warn");
+  assert.equal(Log.level("debug").console, "debug", "a real level still parses");
+});
+
+test("Log buffer is a fixed ring: wrap keeps newest-last order; an overflow emit shifts nothing (perf hunt, #5823)", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/core/log.js"), "utf8");
+  assert.equal(/bufHead[\s\S]*buf\[bufHead\][\s\S]*bufHead = \(bufHead \+ 1\) % RING/.test(src), true);
+  const ctx = vm.createContext({ console, Date, performance: { now: () => 0 } });
+  vm.runInContext(src + "\n;globalThis.__L = Log;", ctx, { filename: absSrc("js/core/log.js") });
+  const L = ctx.__L;
+  L.level("buffer:debug");
+  L.clear();
+  const RING = 500, N = 40000;
+  for (let i = 0; i < RING + 25; i++) L.debug("game", "m" + i);
+  const rec = L.records();
+  assert.equal(rec.length, RING);
+  assert.equal(rec[0].msg, "m25");
+  assert.equal(rec[rec.length - 1].msg, "m" + (RING + 24));
+  assert.equal(L.records({ limit: 3 }).map((r) => r.msg).join(","), "m522,m523,m524");
+  L.clear();
+  assert.equal(L.records().length, 0);
+  // Why the ring beats push+shift is an operation count, not a stopwatch: a full Array's shift() moves all RING
+  // slots on every overflow emit. Timing two loops with performance.now() tied under load (3.4 ms vs 3.4 ms, #5823),
+  // so count the context's own Array moves instead: an overflow emit must make none.
+  const moves = vm.runInContext(`(() => {
+    const n = { shift: 0, splice: 0, unshift: 0 };
+    for (const k of Object.keys(n)) { const f = Array.prototype[k]; Array.prototype[k] = function (...a) { n[k]++; return f.apply(this, a); }; }
+    return n;
+  })()`, ctx);
+  vm.runInContext("[1, 2].shift()", ctx);
+  assert.equal(moves.shift, 1, "the counter sees a shift in the Log's context (the check can fail)");
+  moves.shift = 0;
+  L.level("buffer:debug");
+  L.clear();
+  for (let i = 0; i < N; i++) L.debug("game", "x".repeat(64) + i);
+  assert.equal(L.records().length, RING);
+  assert.deepEqual({ ...moves }, { shift: 0, splice: 0, unshift: 0 }, `${N} overflow emits moved no Array slots`);
+});

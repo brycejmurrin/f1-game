@@ -1,1 +1,0 @@
-Fixed: forcing the mobile tier (apex26.forceMobileTier=1) on a software or paravirtual WebGPU adapter (lavapipe, the macOS CI runner) no longer presents to the native canvas and loses the GPU device; a real handset UA is unchanged.

@@ -21,7 +21,7 @@ import { Lsp, callTool } from "./lsp-mcp.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 // q, the apex-lsp call, the regex a correct answer contains, the grep an agent would run first.
-export const QUESTIONS = [
+const QUESTIONS = [
   { q: "Where is Liveries.forTeam implemented?", tool: ["lsp_definition", { symbol: "Liveries.forTeam" }], answer: /js\/car\/liveries\.js:\d+:\d+ {2}\[def\] function forTeam\(/, grep: "grep -rn 'Liveries\\.forTeam' js" },
   { q: "Where is Tracks.curvature implemented (through the re-export)?", tool: ["lsp_definition", { symbol: "Tracks.curvature" }], answer: /js\/track\/core\/spline\.js:\d+:\d+ {2}\[def\] function curvature\(/, grep: "grep -rn 'Tracks\\.curvature' js" },
   { q: "Where is GameHud declared?", tool: ["lsp_definition", { symbol: "GameHud" }], answer: /js\/ui\/hud\.js:2:\d+ {2}\[def\] const GameHud/, grep: "grep -rn 'GameHud' js" },
@@ -33,6 +33,13 @@ export const QUESTIONS = [
   { q: "What does the Ghost module export?", tool: ["lsp_outline", { symbol: "Ghost" }], answer: /Ghost {2}:\d+ {2}IIFE module: \d+ exported[^]*\[export\] hasGhost/, grep: "grep -n 'return {' -A6 js/car/ghost.js" },
   { q: "Show the body of Liveries.forTeam.", tool: ["lsp_definition", { symbol: "Liveries.forTeam", body: true, maxLines: 12 }], answer: /function forTeam\(team\) \{\n.*const def = /, grep: "grep -n 'function forTeam' -A12 js/car/liveries.js" },
   { q: "Who uses Ghost (a CommonJS-flagged global)?", tool: ["lsp_references", { symbol: "Ghost", files: true }], answer: /js\/race\/session-records\.js \d+/, grep: "grep -rln '\\bGhost\\b' js" },
+  // 2026-11-20 (docs/notes/LSP-AND-TOOL-USAGE-2026-11-20.md): each answered wrong or "0 uses" before that lane.
+  { q: "Where is ApexRoster.DEFERRED (a self.X global)?", tool: ["lsp_definition", { symbol: "ApexRoster.DEFERRED" }], answer: /js\/roster\.js:\d+:\d+ {2}\[def\] DEFERRED:/, grep: "grep -rn 'DEFERRED' js/roster.js" },
+  { q: "Who calls a factory-instance method (pits.update via PitLane.create)?", tool: ["lsp_callers", { symbol: "pits.update" }], answer: /js\/game\.js:\d+ {2}updateCar /, grep: "grep -rn 'pits\\.update' js" },
+  { q: "Where is LoopHealth.recover used (an inline-script caller)?", tool: ["lsp_references", { symbol: "LoopHealth.recover" }], answer: /index\.html:\d+/, grep: "grep -rn 'LoopHealth\\.recover' js index.html" },
+  { q: "Who reads penaltyWhy (a property only ever set on untyped objects)?", tool: ["lsp_references", { symbol: "penaltyWhy", format: "concise" }], answer: /^[1-9]\d* references in [1-9]\d* files[^\n]*text matches of \.penaltyWhy[^]*js\/ui\/results-sheet\.js:\d+:\d+ {2}\[use\]/, grep: "grep -rn 'penaltyWhy' js" },
+  // Round 3 (the stress-test open items): each answered a subset or the wrong file before.
+  { q: "Who uses TrackSpline.curvature, through the Tracks re-export too?", tool: ["lsp_references", { symbol: "TrackSpline.curvature", files: true }], answer: /\njs\/game\.js \d+\n/, grep: "grep -rn 'curvature' js" },
   { q: "Does a missing member answer honestly?", tool: ["lsp_definition", { symbol: "GameHud.noSuchMember" }], answer: /has no member noSuchMember/, grep: "grep -rn 'GameHud\\.noSuchMember' js" },
 ];
 

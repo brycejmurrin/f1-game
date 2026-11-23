@@ -17,6 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
@@ -27,20 +28,23 @@ seedLogGlobal();
 // The modules under test, as globals — each is a "use strict" IIFE assigning one.
 const load = (rel, name) => eval(read(rel) + ";" + name);
 globalThis.NetBytes = load("js/net/bytes.js", "NetBytes");
+const NetIce = load("js/net/ice.js", "NetIce");             // transport calls NetIce.create() at eval
 const NetTransport = globalThis.NetTransport = load("js/net/transport.js", "NetTransport");
 const TiltRoll = globalThis.TiltRoll = load("js/input/tilt-roll.js", "TiltRoll");
+globalThis.PedalTravel = load("js/input/pedal-travel.js", "PedalTravel");
+globalThis.TouchButtonActions = load("js/input/touch-button-actions.js", "TouchButtonActions");
+globalThis.PhonePadCodec = load("js/input/phone-pad-codec.js", "PhonePadCodec");
+globalThis.PhonePadPage = load("js/input/phone-pad-page.js", "PhonePadPage");
 const PhonePad = globalThis.PhonePad = load("js/input/phone-pad.js", "PhonePad");
 
-// phonePadDash is the sampler the game paints the wheel from. It is nested in PlatformSession.create(G), so
-// the test cuts it out of the source and runs it over a stub G — the flags are asserted, not the text.
+const PAIRING_UI = "js/net/phone-pairing-ui.js";
+function loadPairingUI(ctx) {
+  return vm.runInContext(read(PAIRING_UI) + ";PhonePairingUI", ctx, { filename: absSrc(PAIRING_UI) });
+}
 function phonePadDash(G, controls) {
-  const src = read("js/ui/platform-session.js");
-  const a = src.indexOf("function phonePadDash()");
-  const fnSrc = src.slice(a, src.indexOf("\n}\n", a) + 3);
-  const ctx = vm.createContext({ PhonePad, MAX_RPM: 12000, IDLE_RPM: 4000,
-    G: { recordControls: () => controls, aeroZones: [1], dashKph: (v) => v, cars: [], cautionLevel: () => 0, lapsTarget: 5, state: "race", ...G } });
-  vm.runInContext(fnSrc + "\n;this.f = phonePadDash;", ctx, { filename: absSrc("js/ui/platform-session.js") });
-  return ctx.f();
+  const ctx = vm.createContext({ PhonePad, PhysicsConsts: { MAX_RPM: 12000, IDLE_RPM: 4000 } });
+  return loadPairingUI(ctx).dash({ recordControls: () => controls, aeroZones: [1], dashKph: (v) => v, cars: [],
+    cautionLevel: () => 0, lapsTarget: 5, state: "race", ...G });
 }
 const player = { gear: 3, speed: 50, rpm: 6000, lap: 1, rank: 2, energy: 0.5, team: null, lastLap: 0 };
 const manual = { gearsManual: true, autoThrottle: false };
@@ -84,7 +88,7 @@ function bootInput() {
   const src = (f) => read(f).replace(/^const\b/gm, "var");
   vm.runInContext(src("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(src("js/input/tilt-roll.js"), ctx, { filename: absSrc("js/input/tilt-roll.js") });
-  for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
+  for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"])
     vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   let paused = 0;
@@ -225,6 +229,29 @@ test("TiltRoll: the roll the phone sends is the roll the game would have read it
   assert.equal(TiltRoll.rollDeg(0, 20, -270), TiltRoll.rollDeg(0, 20, 90), "a negative angle wraps");
 });
 
+test("TiltRoll.screenAngle reads window.orientation before screen.orientation.angle, -90 as 270 (audit W26 row 9)", () => {
+  // iOS 16.4 Safari: landscape-right reported screen.orientation.angle 90 where Android
+  // Chrome reports 270 (WebKit bug 254863; w3c screen-orientation #247); window.orientation
+  // (-90) was right. The old order returned 90 and reversed tilt steering in that landscape.
+  const withGlobals = (g) => {
+    const ctx = vm.createContext({ Math, Number, ...g });
+    vm.runInContext(read("js/input/tilt-roll.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/input/tilt-roll.js") });
+    return vm.runInContext("TiltRoll", ctx);
+  };
+  const ios = withGlobals({ window: { orientation: -90 }, screen: { orientation: { angle: 90 } } });
+  assert.equal(ios.screenAngle(), 270, "the live globals: the legacy number wins and is normalised");
+  const android = withGlobals({ window: {}, screen: { orientation: { angle: 270 } } });
+  assert.equal(android.screenAngle(), 270, "no window.orientation: the screen API");
+  const lean = (R) => R.rollDeg(20, 0, R.screenAngle());
+  assert.ok(Math.abs(lean(ios) - lean(android)) < 1e-9 && lean(ios) < 0, "one lean, one sign on both phones: " + lean(ios));
+  const A = TiltRoll.screenAngle;
+  assert.equal(A({ orientation: 90 }, { orientation: { angle: 270 } }), 90, "the numeric legacy value is preferred");
+  assert.equal(A({ orientation: 0 }, { orientation: { angle: 90 } }), 0, "0 is a reading, not an absence");
+  assert.equal(A({ orientation: "90" }, { orientation: { angle: 90 } }), 90, "a non-number falls through to the screen API");
+  assert.equal(A({ orientation: NaN }, { orientation: { angle: -90 } }), 270, "both normalised to 0..359");
+  assert.equal(A(null, null), 0, "nothing reported: portrait");
+});
+
 // ---------------------------------------------------------------------------
 // The desktop half against the real Input
 // ---------------------------------------------------------------------------
@@ -275,11 +302,13 @@ test("the phone's pedals reach throttle()/braking() and their travel reaches the
   assert.equal(Input.throttle(), false); assert.equal(Input.braking(), false);
   phone.thr = 0.8; frame();
   assert.equal(Input.throttle(), true);
-  assert.equal(Input.throttleLevel(), 0.8, "an on-screen pedal reports how far it is pressed");
+  // The 0.1 resting-thumb dead zone is RESCALED like the pad's (padPedalLevel), not a gate.
+  const lvl = (v) => (v - 0.1) / 0.9;
+  assert.ok(Math.abs(Input.throttleLevel() - lvl(0.8)) < 1e-12, "an on-screen pedal reports how far it is pressed, past the dead zone");
   phone.thr = 0; phone.brk = 0.35; frame();
   assert.equal(Input.throttle(), false);
   assert.equal(Input.braking(), true);
-  assert.equal(Input.brakeLevel(), 0.35);
+  assert.ok(Math.abs(Input.brakeLevel() - lvl(0.35)) < 1e-12);
   phone.brk = 0.05; frame();
   assert.equal(Input.braking(), false, "a resting thumb (< 0.1) is not a brake");
   phone.brk = 0; phone.held = PhonePad.HELD.lookBack; frame();
@@ -463,9 +492,10 @@ test("the dash reaches the phone ~15 Hz on the unreliable channel and paints the
   frame();
   assert.equal(phone.huds.length, 0, "a sampler returning null sends nothing");
   dash.value = { gear: 5, kmh: 241, rpm: 0.8, lap: 2, laps: 10, pos: 3, cars: 20, ers: 0.4,
-    flags: PhonePad.DASH.otArmed | PhonePad.DASH.xOpen, caution: 0, lastLapMs: 88123, state: "race", team: "#dc0000" };
+    flags: PhonePad.DASH.otArmed | PhonePad.DASH.xOpen, caution: 0, lastLapMs: 88123, state: "race", team: "#dc0000", grip: "spin" };
   for (let i = 0; i < 60; i++) frame();    // one second of frames
   assert.ok(phone.huds.length >= 12 && phone.huds.length <= 17, `about 15 dash packets a second, got ${phone.huds.length}`);
+  assert.equal(phone.huds.at(-1).grip, "spin", "capability hello enables the host grip cue");
   const sent = link.stats().huds;
   assert.ok(sent >= phone.huds.length && sent - phone.huds.length <= 1, `sent ${sent}, received ${phone.huds.length} — the last one may still be on the wire`);
   const el = lcd();
@@ -645,7 +675,8 @@ test("menu pad: the phone's nav events land on the gamepad's menu seam (arrows, 
 function fakeEl() {
   const listeners = {};
   const el = {
-    children: [], append(...nodes) { this.children.push(...nodes); }, setAttribute() {},
+    children: [], append(...nodes) { this.children.push(...nodes); },
+    attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, removeAttribute(k) { delete this.attrs[k]; },
     textContent: "", disabled: false, value: "", style: { setProperty(k, v) { this[k] = v; } },
     classes: new Set(),
     addEventListener(t, f) { (listeners[t] ||= []).push(f); },
@@ -656,6 +687,65 @@ function fakeEl() {
   el.classList = { add: (c) => el.classes.add(c), remove: (c) => el.classes.delete(c), toggle: (c, on) => (on ? el.classes.add(c) : el.classes.delete(c)) };
   return el;
 }
+
+test("phone pedals use the selected response independently, and carry it across a pedal handoff", () => {
+  const oldDoc = globalThis.document, events = {}, dom = { gas: fakeEl(), brake: fakeEl() };
+  dom.gas.getBoundingClientRect = () => ({ left: 100, right: 190, top: 0, bottom: 200 });
+  dom.brake.getBoundingClientRect = () => ({ left: 0, right: 90, top: 0, bottom: 200 });
+  globalThis.document = { addEventListener(type, fn) { (events[type] ||= []).push(fn); }, elementFromPoint: x => x < 91 ? dom.brake : dom.gas };
+  let ctl;
+  try {
+    ctl = PhonePad.pad(dom);
+    const gas = (type, x, y, pointerId = 7) => dom.gas.dispatch(type, { pointerId, clientX: x, clientY: y });
+    gas("pointerdown", 120, 100);
+    gas("pointermove", 60, 100);
+    assert.equal(ctl.state().brk, 0, "fresh profiles keep their legacy capture when dragging across the other pedal");
+    assert.equal(ctl.state().thr, 1);
+    gas("pointerup", 60, 100);
+    PedalTravel.setButtonProfile("gas", { press: "progressive", travel: 40 });
+    assert.equal(dom.gas.attrs["data-touch-response"], undefined, "progressive Gas leaves the idle face clear");
+    assert.equal(dom.brake.attrs["data-touch-response"], undefined);
+    PedalTravel.setButtonProfile("gas", { feedback: false, slideCurve: "fine" });
+    assert.equal(dom.gas.attrs["data-touch-response"], undefined);
+    PedalTravel.setButtonProfile("brake", { slide: "ease" });
+    gas("pointerdown", 120, 100);
+    assert.equal(ctl.state().thr, PedalTravel.MIN);
+    assert.ok(dom.gas.classes.has("feedback-off"));
+    gas("pointermove", 132, 116);
+    assert.ok(Math.abs(ctl.state().thr - 0.34) < 1e-10, "half of the slide distance builds a quarter of the remaining throttle");
+    gas("pointermove", 144, 132);
+    assert.equal(ctl.state().thr, 1, "40 pixels diagonally gives full throttle");
+    gas("pointermove", 120, 100);
+    assert.equal(ctl.state().thr, PedalTravel.MIN, "returning to touchdown eases throttle");
+    gas("pointermove", 60, 100);
+    assert.equal(ctl.state().thr, 0);
+    assert.equal(ctl.state().brk, PedalTravel.MIN, "brake crossover has its own response");
+    gas("pointermove", 20, 100);
+    assert.equal(ctl.state().brk, 1);
+    for (const fn of events.pointercancel) fn({ pointerId: 7 });
+    assert.equal(ctl.state().brk, 0);
+    dom.brake.dispatch("pointerdown", { clientX: 20, clientY: 100 });
+    assert.equal(ctl.state().brk, 1, "fresh brake press keeps its independent instant style");
+    assert.ok(!dom.brake.classes.has("feedback-off"));
+  } finally {
+    ctl?.cancel(); PedalTravel.resetButtonProfile("gas"); PedalTravel.resetButtonProfile("brake");
+    if (oldDoc === undefined) delete globalThis.document; else globalThis.document = oldDoc;
+  }
+});
+
+test("paired phones receive grip feedback only on the pedal reported by the host", () => {
+  const dom = { gas: fakeEl(), brake: fakeEl() };
+  const state = { state: "race", flags: 0, grip: "spin" };
+  assert.equal(JSON.parse(PhonePad.encodeHud(state)).length, 14, "legacy phones keep the original dash format");
+  for (const grip of ["spin", "slip", "lock", ""]) {
+    const packet = PhonePad.decodeHud(PhonePad.encodeHud({ ...state, grip }, true));
+    PhonePad.paintHud(dom, packet);
+    assert.equal(dom.gas.classes.has("grip-cue"), grip === "spin" || grip === "slip");
+    assert.equal(dom.brake.classes.has("grip-cue"), grip === "lock");
+  }
+  PhonePad.paintHud(dom, { ...state, flags: PhonePad.DASH.paused });
+  assert.ok(!dom.gas.classes.has("grip-cue"));
+});
 
 test("pad(): GAS and BRAKE keep the strongest contact and clear travel on release or blur", () => {
   const previous = { document: globalThis.document, window: globalThis.window };
@@ -786,8 +876,11 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   const ok = await ctl.connect("abc234");
   assert.deepEqual(ok, { ok: true });
   assert.deepEqual(seen, ["swap:ABC234", "accept:OFFER"], "the code is normalised, the offer answered");
-  assert.ok(ctl.state().linked && dom.body.classes.has("linked"), "the wheel shows once the channel is open");
+  assert.ok(ctl.state().linked && dom.body.classes.has("awaiting") && !dom.body.classes.has("linked"),
+    "the channel is open, but no wheel until the game's first dash says which surface it wants");
   const frame = () => { clock.t += STEP; ctl.pump(); link.pump(); desk.Input.steer(); };
+  frame(); frame();
+  assert.ok(dom.body.classes.has("linked") && !dom.body.classes.has("awaiting"), "the first dash shows the wheel");
   // GAS: STAMP THEN EASE, the game's own touch pedals' gesture (hold-buttons.js wireHold).
   // RE-PINNED DELIBERATELY (R3-PHONE-2): this used to assert "a thumb 2/3 down the zone is
   // 2/3 travel" — an absolute mapping that gave a thumb aimed at a ~150 px pedal's label half
@@ -801,15 +894,15 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   assert.equal(dom.gas.style["--travel"], "1.00", "the fill shows the travel it sends");
   dom.gas.dispatch("pointermove", { clientY: 100 + 200 * 0.1 - 45 });   // slid 45 px up
   for (let i = 0; i < 3; i++) frame();
-  const eased = 1 - (45 - 12) / 90;
-  assert.ok(Math.abs(desk.Input.throttleLevel() - eased) < 0.02, `eased to ~${eased.toFixed(2)}, got ${desk.Input.throttleLevel()}`);
+  const eased = 1 - (45 - 12) / 90, easedLvl = (eased - 0.1) / 0.9;   // the host rescales past its 0.1 dead zone
+  assert.ok(Math.abs(desk.Input.throttleLevel() - easedLvl) < 0.02, `eased to ~${eased.toFixed(2)}, got ${desk.Input.throttleLevel()}`);
   assert.equal(dom.gas.style["--travel"], eased.toFixed(2));
   dom.gas.dispatch("pointermove", { clientY: 100 + 200 * 0.1 + 60 });   // back down past the landing point: full again
   for (let i = 0; i < 3; i++) frame();
   assert.equal(desk.Input.throttleLevel(), 1);
   dom.gas.dispatch("pointermove", { clientY: -500 });   // dragged far off the top: the floor, not a release
   for (let i = 0; i < 3; i++) frame();
-  assert.ok(desk.Input.throttle() && Math.abs(desk.Input.throttleLevel() - 0.12) < 0.02, `floor ${desk.Input.throttleLevel()}`);
+  assert.ok(desk.Input.throttle() && Math.abs(desk.Input.throttleLevel() - (0.12 - 0.1) / 0.9) < 0.02, `floor ${desk.Input.throttleLevel()}`);
   assert.ok(dom.gas.classes.has("on"));
   dom.gas.dispatch("pointerup", {});
   for (let i = 0; i < 3; i++) frame();
@@ -897,10 +990,16 @@ test("pad(): a lost lift on the menu stick or a held arrow is caught by the all-
   padEnd.pump(0); hostEnd.pump(0);
   const clock = desk.clock;
   const link = PhonePad.link(hostEnd, { input: desk.Input, pump: false, now: () => clock.t, hud: () => null });
-  const docL = {};
+  const docL = {}, touchOpts = {};
   const hadDoc = Object.prototype.hasOwnProperty.call(globalThis, "document");
   const prevDoc = globalThis.document;
-  globalThis.document = { hidden: false, visibilityState: "visible", addEventListener(t, f) { (docL[t] ||= []).push(f); } };
+  globalThis.document = {
+    hidden: false, visibilityState: "visible",
+    addEventListener(t, f, opts) {
+      (docL[t] ||= []).push(f);
+      if (t === "touchend" || t === "touchcancel") touchOpts[t] = opts;
+    },
+  };
   try {
     const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(),
       center: fakeEl(), rim: fakeEl(), buttons: Object.fromEntries(PhonePad.EVENTS.map((k) => [k, fakeEl()])), hud: lcd() };
@@ -912,6 +1011,8 @@ test("pad(): a lost lift on the menu stick or a held arrow is caught by the all-
       swap: async (o) => { const ans = await o.reply("OFFER"); return ans ? { ok: true } : { ok: false, error: "reply_failed" }; },
       acceptInvite: async () => ({ ok: true, code: "ANSWER" }),
     } });
+    assert.deepEqual(touchOpts.touchend, { capture: true, passive: true }, "touchend release net is passive (no scroll/tap latency)");
+    assert.deepEqual(touchOpts.touchcancel, { capture: true, passive: true }, "touchcancel release net is passive");
     assert.deepEqual(await ctl.connect("abc234"), { ok: true });
     const frame = () => { clock.t += STEP; ctl.pump(); link.pump(); };
     const fire = (t, ev) => { for (const f of docL[t] || []) f(ev); };
@@ -944,6 +1045,52 @@ test("pad(): a lost lift on the menu stick or a held arrow is caught by the all-
   }
 });
 
+test("pad(): a second finger on a held D-pad arrow does not stop the first (hunt input-touch)", async () => {
+  const desk = bootInput();
+  const [padEnd, hostEnd] = NetTransport.loopback({ latencyMs: 2, rnd: NetTransport.seededRnd(11) });
+  padEnd.pump(0); hostEnd.pump(0);
+  const clock = desk.clock;
+  const link = PhonePad.link(hostEnd, { input: desk.Input, pump: false, now: () => clock.t, hud: () => null });
+  const hadDoc = Object.prototype.hasOwnProperty.call(globalThis, "document");
+  const prevDoc = globalThis.document;
+  globalThis.document = { hidden: false, visibilityState: "visible", addEventListener() {} };
+  try {
+    const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(),
+      buttons: Object.fromEntries(PhonePad.EVENTS.map((k) => [k, fakeEl()])) };
+    const timers = fakeTimers();
+    const ctl = PhonePad.pad(dom, { now: () => clock.t, timers, deps: {
+      rtc: () => padEnd, prefetchIce: async () => null, normalise: (c) => String(c).toUpperCase(), valid: (c) => c.length === 6,
+      swap: async (o) => { const ans = await o.reply("OFFER"); return ans ? { ok: true } : { ok: false, error: "reply_failed" }; },
+      acceptInvite: async () => ({ ok: true, code: "ANSWER" }),
+    } });
+    assert.deepEqual(await ctl.connect("abc234"), { ok: true });
+    const frame = () => { clock.t += STEP; ctl.pump(); link.pump(); };
+    const btn = dom.buttons.navUp;
+    btn.dispatch("pointerdown", { pointerId: 7 });
+    for (let i = 0; i < 2; i++) frame();
+    const before = link.stats().events;
+    // Second contact on the same arrow, then lift — used to clear `on` and kill the repeater.
+    btn.dispatch("pointerdown", { pointerId: 8 });
+    btn.dispatch("pointerup", { pointerId: 8 });
+    assert.ok(btn.classes.has("on"), "first thumb still paints pressed");
+    // Same cadence as the menu-pad repeater pin above (delay 380, then 110).
+    timers.advance(379); for (let i = 0; i < 2; i++) frame();
+    assert.equal(link.stats().events, before, "nothing before the delay");
+    timers.advance(1); timers.advance(220); for (let i = 0; i < 3; i++) frame();
+    assert.equal(link.stats().events, before + 2, "repeater keeps firing after the second finger lifts");
+    assert.ok(timers.pending() > 0, "repeat timer still armed");
+    btn.dispatch("pointerup", { pointerId: 7 });
+    assert.ok(!btn.classes.has("on"));
+    const after = link.stats().events;
+    timers.advance(1000); for (let i = 0; i < 2; i++) frame();
+    assert.equal(link.stats().events, after, "first lift stops the repeater");
+    assert.equal(timers.pending(), 0, "and no timer left behind");
+    link.close(); frame();
+  } finally {
+    if (hadDoc) globalThis.document = prevDoc; else delete globalThis.document;
+  }
+});
+
 // ---------------------------------------------------------------------------
 // The desktop's pairing flow: host() with the signalling stood in for, onto the
 // loopback wire — the phase machine, the QR hand-off, the lost-link cleanup.
@@ -966,6 +1113,8 @@ function hostHarness(over = {}) {
     createInvite: async () => ({ ok: true, code: "OFFER" }),
     acceptAnswer: async () => ({ ok: true }),
     hostRoom: async (o) => { room.onJoiner = o.onJoiner; room.onFail = o.onFail; room.token = o.token; return { ok: true, stop: room.stop }; },
+    // The player taps ALLOW at once (the ALLOW / REJECT gate has its own tests below).
+    confirm: () => { ui.asked = (ui.asked || 0) + 1; return { result: Promise.resolve(true), dismiss() {} }; },
   }, over);
   // host() reads the page's Input; the harness's is handed through the global.
   globalThis.Input = desk.Input;
@@ -1068,7 +1217,7 @@ test("host(): a linked phone whose WIRE dies is hosted again on the SAME code; t
   assert.equal(g.ctl.state().phase, "waiting");
   g.room.onFail({ error: "timeout", message: "Nobody joined." });
   assert.equal(g.ctl.state().phase, "failed"); assert.equal(g.ui.lostN, 1, "the page restores its camera and button");
-  assert.match(g.ui.said.at(-1), /^!Nobody joined/);
+  assert.equal(g.ui.said.at(-1), "!Nobody joined.");   // the room service's own message, passed through
   g.ctl.cancel();
   assert.equal(pairs[1][1].status, "closed", "cancel closes the re-link's transport too");
 });
@@ -1173,6 +1322,8 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   assert.ok(MANIFEST.FULL.indexOf("js/input/tilt-roll.js") < MANIFEST.FULL.indexOf("js/input/input.js"),
     "tilt-roll loads before input.js, which calls it");
   assert.ok(MANIFEST.LAZY_NET.includes("js/input/phone-pad.js"), "the desktop half loads with the net stack");
+  assert.deepEqual([MANIFEST.FULL, MANIFEST.LAZY_NET, MANIFEST.CONTROLLER].map(list => list.includes(PAIRING_UI)), [false, true, false],
+    "desktop pairing UI only loads on the desktop after the network bundle is requested");
   const { STAGE_ROOT_FILES } = await import("../../tools/desktop/stage-files.mjs");
   assert.ok(STAGE_ROOT_FILES.includes("controller.html"),
     "controller.html must be in the shared stage allow-list (tools/desktop/stage-files.mjs)");
@@ -1187,25 +1338,35 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   assert.match(gameJs, /function syncPointerKind\(\) \{[\s\S]*?\$\("mb-phonepad"\)\.hidden = !touch;[\s\S]*?\$\("pm-phonepad-go"\)\.hidden = !touch;/,
     "both doors flip with the live pointer kind");
   assert.match(gameJs, /location\.assign\(new URL\("controller\.html", location\.href\)\.href\)/, "the door is a navigation beside index.html");
-  // A linked phone is the wheel, so the screen shows VISOR (the cockpit eye past the drawn wheel)
-  // while it drives, and the player's own camera comes back when the phone is gone.
-  assert.match(gameJs, /const VISOR_CAM = CamModes\.CAM_MODES\.findIndex\(\(c\) => c\.id === "visor"\)/, "the visor mode is looked up by id, never by index");
-  assert.match(gameJs, /linked: \(\) => \{[\s\S]*?if \(VISOR_CAM >= 0 && G.camMode !== VISOR_CAM\) \{ phonePadCam = G.camMode; G\.setCamMode\(VISOR_CAM, \{ persist: false \}\); \}/, "linking switches to VISOR (not saved as the player's camera) and remembers the camera it left");
-  assert.match(gameJs, /phonePad\.cancel\(\);\s+phonePad = null;[\s\S]{0,200}?if \(phonePadCam >= 0 && G.camMode === VISOR_CAM\) G\.setCamMode\(phonePadCam\);/, "UNPAIR PHONE restores that camera too (cancel() never calls lost())");
-  assert.match(gameJs, /lost: \(\) => \{[\s\S]*?if \(phonePadCam >= 0 && G.camMode === VISOR_CAM\) G\.setCamMode\(phonePadCam\);/, "losing the phone restores that camera, unless the player cycled away");
   assert.match(gameJs, /\$\("mb-phonepad"\)\.onclick = goPhonePad;[\s\S]*?\$\("pm-phonepad-go"\)\.onclick = goPhonePad;/, "both doors wired");
   // The face keys (OT/BOOST/AERO/CAM/RADIO/LOOK/RESET/PAUSE) are thumb-sized:
   // never under a 48px tap target, growing with the phone's height; the
   // screen is the flex child that gives way.
-  assert.match(page, /#keys button \{ padding: 0; min-height: clamp\(48px, 14vh, 80px\); font-weight: 800; font-size: clamp\(12px, 3\.2vh, 18px\);/, "thumb-sized keys");
-  assert.match(page, /#keys \.wide \{[^}]*min-height: clamp\(36px, 9vh, 52px\)/, "the CENTRE TILT bar grows too");
+  assert.match(page, /#keys button \{ padding: 0; min-height: clamp\(48px, 16vh, 88px\); font-weight: 800; font-size: clamp\(12px, 3\.6vh, 20px\);/, "thumb-sized keys");
+  // #5801: CENTRE TILT, the steering pick and the link health share ONE 44px bar
+  // inside the face; the wheel grid has no bottom row, so the dash, keys and
+  // pedals get the height. Health is a dot that spells itself out only when bad.
+  // Exact values, read off the page's own rules (rule(sel) is that selector's block).
+  const rule = (sel) => { const i = page.indexOf("  " + sel + " {"); return i < 0 ? "" : page.slice(i, page.indexOf("}", i)); };
+  const val = (sel, prop) => (rule(sel).match(new RegExp("[{;]\\s*" + prop + ": ([^;]+);")) || [])[1];
+  assert.deepEqual({
+    rows: val("#ctl", "grid-template-rows"), bar: val("#phone-input-options", "height"), select: val("#steering-mode", "min-height"),
+    selectFont: val("#steering-mode", "font"), goodDot: val('#input-health[data-state="good"]', "font-size"),
+    dash: val("#screen", "container-type"), gear: val("#h-gear", "font-size"), speed: val("#h-speed", "font-size"),
+    order: [...page.matchAll(/id="(keys|phone-input-options|b-center|steering-mode|input-health|link|right)"/g)].map((m) => m[1]),
+    stateTag: read("js/input/phone-pad-page.js").includes("dom.health.dataset.state = h.state"),
+  }, {
+    rows: "minmax(0, 1fr)", bar: "44px", select: "44px", selectFont: "700 16px/1 var(--font-ui)", goodDot: "0",
+    dash: "size", gear: "min(clamp(48px, 22vh, 120px), 50cqh)", speed: "min(clamp(28px, 11vh, 60px), 30cqh)",
+    order: ["keys", "phone-input-options", "b-center", "steering-mode", "input-health", "link", "right"],
+    stateTag: true,
+  }, "#5801: one 44px pad bar (CENTRE TILT, a 16px select, a health dot) under the keys, no bottom row; the dash digits cap on its height");
   assert.match(page, /#screen \{ flex: 1 1 0; min-height: 0;/, "the screen gives way, the keys do not");
   // The MENU PAD is its own screen: hidden until body.menu, when the wheel
   // hides instead; the D-pad, SELECT/BACK and both PAUSE buttons are wired.
   assert.match(page, /#menupad \{ position: absolute; inset: 0; display: none;/, "the pad screen is hidden on the wheel");
   assert.match(page, /body\.linked\.menu #menupad \{ display: grid; \}/, "and shows, linked, in a menu");
   assert.match(page, /body\.menu #ctl \{ display: none; \}/, "while the wheel goes");
-  assert.match(page, /#ctl, #ctl \*, #menupad, #menupad \* \{ touch-action: none; \}/, "the pad refuses browser gestures too");
   assert.match(page, /pause: \[\$\("b-pause"\), \$\("b-pause-menu"\)\]/, "PAUSE on the wheel and on the pad");
   assert.match(page, /navSelect: \$\("b-navSelect"\), navBack: \$\("b-navBack"\)/, "SELECT and BACK wired");
   assert.match(page, /mtitle: \$\("mp-title"\)/, "the pad's title is painted from the dash");
@@ -1231,16 +1392,17 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
     if (spec.startsWith("three")) continue;
     assert.equal(padMap[spec], target, `controller.html's importmap must carry "${spec}" exactly as index.html does`);
   }
-  assert.doesNotMatch(read("js/input/phone-pad.js"), /getElementById|querySelector\(/, "the module never looks an id up — controller.html hands elements in");
+  for (const f of ["js/input/phone-pad.js", "js/input/phone-pad-codec.js", "js/input/phone-pad-page.js"])
+    assert.doesNotMatch(read(f), /getElementById|querySelector\(/, f + " never looks an id up — controller.html hands elements in");
   for (const id of ["h-gear", "h-speed", "h-lap", "h-pos", "h-ers", "h-flag", "h-ot", "h-aero", "h-last", "leds", "screen", "rim",
                     "b-shiftUp", "b-shiftDown", "b-ot-big", "b-boost-big", "b-overtake", "b-boost", "b-aero", "b-camera", "b-radio", "b-look", "b-recover", "b-pause", "b-center", "gas", "brake",
                     "menupad", "dpad", "dpad-hub", "b-navUp", "b-navDown", "b-navLeft", "b-navRight", "mp-mid", "mp-title", "b-pause-menu", "ab", "b-navSelect", "b-navBack"]) {
     assert.ok(page.includes(`id="${id}"`), `controller.html declares #${id}, which its inline script hands to PhonePad.pad`);
   }
   assert.equal((page.match(/<div id="leds"[^>]*>((?:<span><\/span>)+)/) || [])[1]?.length, 15 * "<span></span>".length, "fifteen rev LEDs");
-  const game = read("js/ui/platform-session.js");
-  assert.match(game, /hud: phonePadDash/, "game.js hands the dash sampler to PhonePad.host");
-  assert.match(game, /function phonePadDash\(\)[\s\S]*G\.dashKph\(p\.speed\)[\s\S]*G\.cautionLevel\(\)/, "the sampler reads the HUD's own fields");
+  const sample = phonePadDash({ player, dashKph: (speed) => speed * 3.6, cautionLevel: () => 2 }, manual);
+  assert.equal(sample.kmh, player.speed * 3.6);
+  assert.equal(sample.caution, 2);
 });
 
 test("controller.html's pre-paint look gives a fresh phone the GAME's defaults (R3-PHONE-7)", () => {
@@ -1249,7 +1411,7 @@ test("controller.html's pre-paint look gives a fresh phone the GAME's defaults (
   const app = read("js/ui/appearance-opts.js");
   const def = (k) => (app.match(new RegExp(`store\\.get\\(${k},\\s*"(\\w+)"\\)`)) || [])[1];
   const game = { uiTheme: def("K_THEME"), menuAccent: def("K_MENU"), textSize: def("K_TEXT"), uiContrast: def("K_CONTRAST") };
-  assert.deepEqual(game, { uiTheme: "dark", menuAccent: "ember", textSize: "large", uiContrast: "high" }, "appearance-opts defaults moved: update controller.html with them");
+  assert.deepEqual(game, { uiTheme: "dark", menuAccent: "ember", textSize: "normal", uiContrast: "off" }, "appearance-opts defaults moved: update controller.html with them");
   // controller.html's first inline script, run against a phone that never saved a look.
   const page = read("controller.html");
   const script = page.match(/<script>\s*(\/\/ THE PLAYER'S LOOK[\s\S]*?)<\/script>/)[1];
@@ -1260,10 +1422,10 @@ test("controller.html's pre-paint look gives a fresh phone the GAME's defaults (
     return el.dataset;
   };
   // The page writes no data-text-size for "normal" and no data-ui-contrast unless "high", like appearance-opts.
-  assert.deepEqual({ ...run({}) }, { uiTheme: "dark", menuAccent: "ember", textSize: "large", uiContrast: "high" },
-    "a phone with nothing saved wears LARGE text, HIGH contrast and the ember accent, as the game does");
-  assert.deepEqual({ ...run({ "apex26.textSize": "normal", "apex26.uiContrast": "off", "apex26.menuAccent": "cyan" }) },
-    { uiTheme: "dark", menuAccent: "cyan" }, "a saved choice still wins over the defaults");
+  assert.deepEqual({ ...run({}) }, { uiTheme: "dark", menuAccent: "ember" },
+    "a fresh controller follows the game appearance");
+  assert.deepEqual({ ...run({ "apex26.textSize": "large", "apex26.uiContrast": "high", "apex26.menuAccent": "cyan" }) },
+    { uiTheme: "dark", menuAccent: "cyan", textSize: "large", uiContrast: "high" }, "a saved choice still wins over the defaults");
 });
 
 test("the Android shell holds a permission for every device API the web code calls (R3-ARCHITECTURE-12)", () => {
@@ -1320,8 +1482,10 @@ test('closed phone sessions ignore late packets and open callbacks', () => {
 
 test('a phone connecting before hostRoom returns still closes the late room without losing the link', async () => {
   let resolve, callbacks, stopped = 0;
-  const h = hostHarness({hostRoom: o => {callbacks=o;return new Promise(r=>{resolve=r;});}});
+  const h = hostHarness({hostRoom: o => {callbacks=o;return new Promise(r=>{resolve=r;});}, freshMs: -1});   // outside the fresh window: the ALLOW path
   await settle(); await callbacks.onJoiner(null,'ANSWER');
+  assert.equal(h.ctl.state().phase,'confirming','the channel is up, the phone waits for ALLOW');
+  await settle();
   assert.equal(h.ctl.state().phase,'linked');
   resolve({ok:true,stop(){stopped++;}}); await settle();
   assert.equal(stopped,1); assert.equal(h.ctl.state().phase,'linked');
@@ -1341,6 +1505,7 @@ test("PlatformSession: out of a race (no player) the dash still goes out, so the
     PhonePad: { ...PhonePad, padUrl: () => "https://apex.test/controller.html",
       host(options) { sample = options.hud; return { cancel() {} }; } },
   });
+  loadPairingUI(context);
   const source = fs.readFileSync(new URL("../../js/ui/platform-session.js", import.meta.url), "utf8");
   vm.runInContext(source, context);
   vm.runInContext("PlatformSession.create(G, { ensureNet: () => Promise.resolve(true) }).wirePhone();", context);
@@ -1465,15 +1630,16 @@ test("wheel pedal axes never feed onboard free-look; an ordinary right stick sti
 });
 
 test("PlatformSession: STOP cancels a pending phone load and a fresh attempt owns its host", async () => {
-  const elements = new Map(), loads = [], hosts = [];
-  const G = { els: {}, store: {}, camMode: 1, announce() {}, setCamMode(i) { this.camMode = i; },
+  const elements = new Map(), loads = [], hosts = [], cameras = [];
+  const G = { els: {}, store: {}, camMode: 1, announce() {}, setCamMode(i, options) { this.camMode = i; cameras.push({ i, persist: options?.persist }); },
     $(id) { if (!elements.has(id)) elements.set(id, fakeEl()); return elements.get(id); } };
-  const context = vm.createContext({ G, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: "visor" }] },
+  const context = vm.createContext({ G, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "chase" }, { id: "visor" }] },
     ensureNet: () => new Promise((resolve) => loads.push(resolve)),
     PhonePad: { padUrl: () => "https://apex.test/controller.html", host(options) {
       const h = { cancelled: 0, options, cancel() { h.cancelled++; } }; hosts.push(h); return h;
     } },
   });
+  loadPairingUI(context);
   vm.runInContext(read("js/ui/platform-session.js"), context, { filename: absSrc("js/ui/platform-session.js") });
   vm.runInContext("PlatformSession.create(G, { ensureNet }).wirePhone();", context);
   const btn = G.$("pm-phonepad"), box = G.$("pm-phonepad-box");
@@ -1487,12 +1653,18 @@ test("PlatformSession: STOP cancels a pending phone load and a fresh attempt own
   assert.equal(hosts.length, 0);
   loads[2](true); await settle();
   assert.equal(hosts.length, 1, "only the newest start creates a host");
-  hosts[0].options.linked(); assert.equal(G.camMode, 0, "a linked phone switches to visor");
+  hosts[0].options.linked(); assert.deepEqual(cameras.at(-1), { i: 2, persist: false }, "visor is found by id and the temporary change is not saved");
   btn.onclick();
   assert.equal(G.camMode, 1, "UNPAIR restores the prior camera");
   assert.equal(hosts[0].cancelled, 1, "STOP owns and cancels the sole host");
   assert.equal(box.hidden, true);
-  btn.onclick(); loads[3](false); await settle();
+  btn.onclick(); loads[3](true); await settle();
+  hosts[1].options.linked(); hosts[1].options.lost();
+  assert.equal(G.camMode, 1, "losing the phone restores the previous camera");
+  btn.onclick(); loads[4](true); await settle();
+  hosts[2].options.linked(); G.setCamMode(0); hosts[2].options.lost();
+  assert.equal(G.camMode, 0, "a camera chosen by the player after linking is preserved");
+  btn.onclick(); loads[5](false); await settle();
   assert.equal(btn.textContent, "STEER THIS GAME WITH A PHONE", "a load failure offers retry, not a misleading STOP");
 });
 
@@ -1513,9 +1685,11 @@ test("host(): private relay swaps one offer/answer and the linked phone can driv
   assert.equal(h.ctl.state().phase, "linked"); assert.equal(h.ui.linkedN, 1);
   assert.ok(request.token.cancelled, "linking stops the rendezvous");
   h.clock.t = 100;
-  h.padEnd.send(NetTransport.STATE, PhonePad.encodeSample({ seq: 0, thr: 0.8, brk: 0, roll: 0, held: 0 }));
+  const wire = PhonePad.encodeSample({ seq: 0, thr: 0.8, brk: 0, roll: 0, held: 0 });
+  h.padEnd.send(NetTransport.STATE, wire);
   h.hostEnd.pump(100);
-  assert.ok(h.Input.throttleLevel() > 0.79, "the accepted answer installs the real Input link");
+  // The exact remote pedal: the wire's throttle past the 0.1 travel threshold, rescaled (W26 row 8).
+  assert.equal(h.Input.throttleLevel(), (PhonePad.decodeSample(wire).thr - 0.1) / 0.9, "the accepted answer installs the real Input link");
   h.ctl.cancel(); assert.equal(h.hostEnd.status, "closed"); assert.equal(h.Input.remoteActive(), false);
 });
 
@@ -1570,10 +1744,10 @@ test("host(): private exchange and unreadable-answer failures release their tran
   }
 });
 
-function wakePad(over = {}) {
+function wakePad(over = {}, extra = {}) {
   const events = {}, requests = [], transports = [], timeouts = [];
   const sb = { URL, URLSearchParams, Promise, Log: { info() {}, warn() {} }, NetTransport,
-    setInterval: () => 1, clearInterval() {},
+    setInterval: extra.interval || (() => 1), clearInterval() {},
     // Recorded, never run: a test fires one by hand (the re-dial backoff).
     setTimeout: (fn, ms) => { timeouts.push({ fn, ms, cleared: false }); return timeouts.length; },
     clearTimeout(id) { if (timeouts[id - 1]) timeouts[id - 1].cleared = true; },
@@ -1586,16 +1760,19 @@ function wakePad(over = {}) {
     addEventListener(t, fn) { (events[t] ||= []).push(fn); },
   };
   sb.window = sb;
+  if (extra.location) sb.location = extra.location;
+  if (extra.sensor) { sb.DeviceOrientationEvent = {}; sb.TiltRoll = TiltRoll; }
   const ctx = vm.createContext(sb);
-  vm.runInContext(read("js/input/phone-pad.js"), ctx, { filename: absSrc("js/input/phone-pad.js") });
+  for (const f of ["js/input/pedal-travel.js", "js/input/touch-button-actions.js", "js/input/phone-pad-codec.js", "js/input/phone-pad-page.js", "js/input/phone-pad.js"])
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const P = vm.runInContext("PhonePad", ctx);
-  const dom = { connect: fakeEl(), body: fakeEl(), status: fakeEl() };
-  const ctl = P.pad(dom, { deps: {
+  const dom = { connect: fakeEl(), body: fakeEl(), status: fakeEl(), ...(extra.codeIn ? { codeIn: fakeEl() } : {}) };
+  const ctl = P.pad(dom, { href: extra.location ? extra.location.href : undefined, deps: {
     privateRelay: () => false, normalise: (c) => c, valid: () => true, prefetchIce: async () => {},
     rtc: () => {
       let close;
       const t = { status: "open", send: () => true, pump() {}, onMessage() {}, onClose(f) { close = f; },
-        close() { t.status = "closed"; if (close) close(); } };
+        close(why) { t.status = "closed"; if (close) close(why); } };
       transports.push(t); return t;
     }, swap: async () => ({ ok: true }), ...over,
   } });
@@ -1604,7 +1781,7 @@ function wakePad(over = {}) {
     return { releases: 0, addEventListener(_t, fn) { onRelease = fn; },
       release() { this.releases++; return Promise.resolve(); }, signal() { if (onRelease) onRelease(); } };
   };
-  return { ctl, dom, requests, transports, timeouts, lock, doc: sb.document, fire: (t) => { for (const fn of events[t] || []) fn(); } };
+  return { ctl, dom, requests, transports, timeouts, lock, doc: sb.document, fire: (t, e) => { for (const fn of events[t] || []) fn(e); } };
 }
 
 test("phone wake lock is released on pairing failure, including acquisition arriving after failure", async () => {
@@ -1641,6 +1818,8 @@ test("page exit cancels pending pairing; its late lock and answer cannot affect 
   const first = h.ctl.connect("ABC234"); await settle();
   h.fire("pagehide");
   assert.equal(h.transports[0].status, "closed");
+  h.fire("pageshow"); await settle();
+  assert.equal(swaps, 1, "a first pairing cancelled by page exit is not retried");
   await h.ctl.connect("ABC234");
   const current = h.lock(); h.requests[1].resolve(current); await settle();
   const stale = h.lock(); h.requests[0].resolve(stale); finish({ ok: true });
@@ -1721,6 +1900,7 @@ test('PlatformSession MAKE NEW CODE cancels the current owner before replacement
     $(id) { if (!nodes.has(id)) nodes.set(id, fakeEl()); return nodes.get(id); } };
   const context = vm.createContext({ G, Date, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: 'visor' }] },
     PhonePad: { padUrl: () => 'https://apex.test/controller.html', host(options) { const id = hosts.length; order.push('host' + id); const h = { options, cancel() { order.push('cancel' + id); options.recovery({ phase: 'cancelled', publicRelay: true }); } }; hosts.push(h); return h; } } });
+  loadPairingUI(context);
   vm.runInContext(read('js/ui/platform-session.js'), context, { filename: absSrc("js/ui/platform-session.js") });
   vm.runInContext('PlatformSession.create(G, { ensureNet: async () => true }).wirePhone()', context);
   G.$('pm-phonepad').onclick(); await settle();
@@ -1905,20 +2085,45 @@ test("phone touch steering restores the remaining held arrow and ignores old-key
   } finally { ctl.cancel(); }
 });
 
-test("last-touch fallback releases fingers while preserving keyboard pedals and steering", async () => {
+test("last-touch fallback releases fingers while preserving keyboard pedals and steering", async (t) => {
   const previous = { document: globalThis.document, window: globalThis.window };
   const listeners = {};
   globalThis.document = { hidden: false, addEventListener(type, fn) { (listeners[type] ||= []).push(fn); } };
   globalThis.window = { addEventListener() {} };
-  let receive, closed, ctl;
-  const transport = { status: "open", onMessage(f) { receive = f; }, onOpen() {}, onClose(f) { closed = f; }, send() { return true; }, pump() {}, close() { this.status = "closed"; if (closed) closed("local"); } };
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  let ctl;
+  const [transport, host] = NetTransport.loopback({ latencyMs: 0 });
+  transport.pump(0); host.pump(0);
+  const samples = [];
+  host.onMessage((channel, data) => { if (channel === NetTransport.STATE) samples.push(PhonePad.decodeSample(data)); });
   const dom = { gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(), steer: fakeEl() };
   const documentEvent = (type, event) => { for (const fn of listeners[type] || []) fn(event); };
   try {
-    ctl = PhonePad.pad(dom, { deps: { rtc: () => transport, prefetchIce: async () => null, normalise: (c) => c, valid: () => true, privateRelay: () => false, swap: async () => ({ ok: true }) } });
+    ctl = PhonePad.pad(dom, { now: () => 0, deps: { rtc: () => transport, prefetchIce: async () => null, normalise: (c) => c, valid: () => true, privateRelay: () => false, swap: async () => ({ ok: true }) } });
     await ctl.connect("ABC234");
-    receive("event", PhonePad.encodeHello("host", false, true));
-    ctl.setSteeringMode("touch");
+    host.send(NetTransport.EVENT, PhonePad.encodeHello("host", false, true));
+    ctl.pump();
+    for (const type of ["touchend", "touchcancel"]) documentEvent(type, { touches: [] });
+    host.pump(0);
+    assert.equal(samples.length, 0, "idle touch cleanup sends no state");
+    t.mock.timers.tick(PhonePad.HEARTBEAT_MS);
+    host.pump(0);
+    assert.equal(samples.length, 1, "the periodic heartbeat still sends while idle");
+
+    assert.equal(ctl.setSteeringMode("touch"), true);
+    for (const release of ["pointerup", "touchend"]) {
+      dom.steer.dispatch("pointerdown", { pointerId: 0, clientX: 10 });
+      dom.steer.dispatch("pointermove", { pointerId: 0, clientX: 50 });
+      assert.equal(ctl.state().steer, 1);
+      host.pump(0);
+      const before = samples.length;
+      if (release === "pointerup") dom.steer.dispatch(release, { pointerId: 0 });
+      else documentEvent(release, { touches: [] });
+      documentEvent("touchend", { touches: [] });
+      host.pump(0);
+      assert.equal(samples.length, before + 1, release + " sends one immediate release sample");
+      assert.equal(samples.at(-1).steer, 0);
+    }
     dom.gas.dispatch("keydown", { key: " " });
     dom.brake.dispatch("keydown", { key: "Enter" });
     dom.steer.dispatch("keydown", { key: "ArrowLeft" });
@@ -1984,9 +2189,15 @@ test("menu stick survives WebKit capture transfer but releases when hidden", () 
   const timers = fakeTimers();
   let ctl;
   try {
+    // Arrange Scale 200%: visual width 100px, local width 50px.
+    dom.stick.offsetWidth = 50;
     ctl = PhonePad.pad(dom, { timers });
     dom.stick.dispatch("pointerdown", { pointerId: 21, pointerType: "touch", clientX: 95, clientY: 200 });
     assert.equal(timers.pending(), 1);
+    assert.equal(dom.nub.style.transform, "translate(13.8px,0.0px)", "the nub paints at 55% of the visual radius");
+    for (const fn of winListeners.resize || []) fn();
+    assert.equal(timers.pending(), 0, "rotation invalidates the cached stick box and stops held navigation");
+    dom.stick.dispatch("pointerdown", { pointerId: 21, pointerType: "touch", clientX: 95, clientY: 200 });
     dom.gas.dispatch("pointerdown", { pointerId: 22, pointerType: "touch", clientY: 200 });
     dom.stick.dispatch("lostpointercapture", { pointerId: 21 });
     assert.equal(timers.pending(), 1, "another finger stealing capture does not end the held direction");
@@ -2081,4 +2292,744 @@ test("touch steering: strip width read once per gesture, aria-valuenow an intege
     steer.dispatch("pointerup", { pointerId: 5 });
     assert.equal(aria[aria.length - 1], "0");
   } finally { ctl.cancel(); }
+});
+
+// ---------------------------------------------------------------------------
+// Audit W26 row 11 (2026-11-10): who may steer. ALLOW / REJECT on the game's
+// screen before a phone is accepted, a re-link bound to the admitted peer, the
+// phone kept off destructive menu controls, and the phone page's re-dial
+// answering a NEWER offer on a fresh transport (js/net swap `reanswer`).
+// ---------------------------------------------------------------------------
+
+// A confirm the test answers by hand: { answer(ok), dismissed }.
+function handConfirm() {
+  const asks = [];
+  const confirm = (text) => {
+    let settleIt;
+    const a = { text, dismissed: 0, result: new Promise((r) => { settleIt = r; }) };
+    a.answer = (ok) => settleIt(ok);
+    a.dismiss = () => { a.dismissed++; settleIt(false); };
+    asks.push(a);
+    return a;
+  };
+  return { asks, confirm };
+}
+const PEER_A = "a".repeat(32), PEER_B = "b".repeat(32);
+
+test("host(): an answered phone is DEAF until ALLOW on the game screen; REJECT closes it; cancel dismisses the ask (W26 row 11a)", async () => {
+  // STALE: freshMs -1 puts every code outside decision B's fresh-code window, so the gate asks.
+  const STALE = { freshMs: -1 };
+  const c = handConfirm();
+  const h = hostHarness({ confirm: c.confirm, ...STALE });
+  await settle(); await h.room.onJoiner(null, "ANSWER"); await settle();
+  assert.equal(h.ctl.state().phase, "confirming");
+  assert.equal(c.asks.length, 1); assert.equal(h.ui.linkedN, 0, "not linked before the player says so");
+  assert.equal(h.ui.said.at(-1), "A phone connected — tap ALLOW on this screen to let it steer, or REJECT.");
+  assert.equal(h.room.stopped, 1, "one phone per room: the room closes while it asks");
+  h.clock.t = 100;
+  h.padEnd.send(NetTransport.STATE, PhonePad.encodeSample({ seq: 0, thr: 1, brk: 0, roll: 25, held: 0 }));
+  h.padEnd.send(NetTransport.EVENT, PhonePad.encodeEvent("navSelect"));
+  h.hostEnd.pump(50);
+  assert.equal(h.Input.remoteActive(), false, "its samples do not reach Input");
+  assert.equal(h.Input.throttle(), false);
+  assert.ok(h.ctl.state().stats.gated >= 2 && h.ctl.state().stats.admitted === false, JSON.stringify(h.ctl.state().stats));
+  c.asks[0].answer(true); await settle();
+  assert.equal(h.ctl.state().phase, "linked"); assert.equal(h.ui.linkedN, 1);
+  h.padEnd.send(NetTransport.STATE, PhonePad.encodeSample({ seq: 1, thr: 0.8, brk: 0, roll: 0, held: 0 }));
+  h.hostEnd.pump(100);
+  assert.ok(h.Input.throttle() && h.Input.throttleLevel() > 0.7, "ALLOWed: the phone drives");
+  h.ctl.cancel();
+
+  const r = handConfirm();
+  const no = hostHarness({ confirm: r.confirm, ...STALE });
+  await settle(); await no.room.onJoiner(null, "ANSWER"); await settle();
+  r.asks[0].answer(false); await settle();
+  assert.equal(no.ctl.state().phase, "lost"); assert.equal(no.ui.lostN, 1);
+  assert.equal(no.hostEnd.status, "closed", "a rejected phone's transport is closed");
+  assert.equal(no.ui.said.at(-1), "!Phone rejected — press STEER THIS GAME WITH A PHONE for a new code.");   // "!" = say(…, bad)
+  assert.equal(no.ui.linkedN, 0);
+
+  const d = handConfirm();
+  const gone = hostHarness({ confirm: d.confirm, ...STALE });
+  await settle(); await gone.room.onJoiner(null, "ANSWER"); await settle();
+  gone.ctl.cancel();
+  assert.equal(d.asks[0].dismissed, 1, "STOP PAIRING takes the ALLOW card down");
+  const e = handConfirm();
+  const drop = hostHarness({ confirm: e.confirm, ...STALE });
+  await settle(); await drop.room.onJoiner(null, "ANSWER"); await settle();
+  drop.padEnd.close(); await settle();
+  assert.equal(e.asks[0].dismissed, 1, "a phone that leaves while asked takes the card with it");
+  assert.equal(drop.ctl.state().phase, "lost");
+});
+
+test("host(): a re-link from the ALLOWed phone is let back in; another peer on the same code is asked again (W26 row 11b)", async () => {
+  const c = handConfirm();
+  const pairs = [];
+  const rtc = () => { const p = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(40 + pairs.length) }); p[0].pump(0); p[1].pump(0); pairs.push(p); return p[1]; };
+  const drop = ([padEnd, hostEnd]) => { padEnd.status = hostEnd.status = "closed"; hostEnd._emit("close", "failed"); padEnd._emit("close", "failed"); };
+  const hello = (p, id) => { p[0].send(NetTransport.EVENT, PhonePad.encodeHello("pad", false, true, id)); p[1].pump(10); };
+  const h = hostHarness({ rtc, confirm: c.confirm });
+  await settle(); await h.room.onJoiner(null, "ANSWER"); await settle();
+  assert.equal(c.asks.length, 0, "decision B: the first phone on the code this screen just minted is not asked");
+  hello(pairs[0], PEER_A);   // the phone names itself after it was admitted: still bound to this link
+  assert.equal(h.ctl.state().phase, "linked");
+  drop(pairs[0]); await settle();
+  assert.equal(h.ctl.state().phase, "waiting", "the same code is hosted again");
+  await h.room.onJoiner(null, "ANSWER-2"); await settle();
+  assert.equal(h.ctl.state().phase, "connecting", "the re-link waits for the phone to name itself");
+  hello(pairs[1], PEER_A); await settle();
+  assert.equal(h.ctl.state().phase, "linked"); assert.equal(c.asks.length, 0, "the same phone's re-link is not asked");
+  drop(pairs[1]); await settle();
+  await h.room.onJoiner(null, "ANSWER-3"); await settle();
+  hello(pairs[2], PEER_B); await settle();
+  assert.equal(h.ctl.state().phase, "confirming", "a different peer answering the re-hosted code is asked, fresh or not");
+  assert.equal(c.asks.length, 1);
+  h.clock.t = 100;
+  pairs[2][0].send(NetTransport.STATE, PhonePad.encodeSample({ seq: 0, thr: 1, brk: 0, roll: 0, held: 0 }));
+  pairs[2][1].pump(20);
+  assert.equal(h.Input.remoteActive(), false, "and it cannot drive while asked");
+  h.ctl.cancel();
+});
+
+test("the codec carries the page's peer id in its hello, hex only (W26 row 11b)", () => {
+  const id = PhonePadCodec.makePeerId();
+  assert.equal(id.length, 32);
+  assert.equal(Buffer.from(id, "hex").toString("hex"), id, "128 bits of lowercase hex: it survives a hex round-trip");
+  assert.notEqual(PhonePadCodec.makePeerId(), id);
+  assert.equal(PhonePad.decodeEvent(PhonePad.encodeHello("pad", false, true, id)).id, id);
+  assert.equal(PhonePad.decodeEvent(PhonePad.encodeHello("pad", false, true, "<script>")).id, undefined, "a junk id is dropped at encode");
+  assert.equal(PhonePad.decodeEvent(JSON.stringify({ t: "hi", side: "pad", p: 1, id: "zz" })).id, undefined, "and at decode");
+  assert.deepEqual(PhonePad.decodeEvent(PhonePad.encodeHello("host", false, true)), { t: "hi", side: "host", p: 1, haptics: false, steer: true, ack: true }, "no id: the hello is unchanged");
+});
+
+test("link(): with admit() the channel is open but deaf, its haptics and dash wait, and a refusal closes it as 'rejected' (W26 row 11a)", async () => {
+  const real = bootInput();
+  let hap = null;
+  const desk = { clock: real.clock, Input: Object.assign(Object.create(real.Input), {
+    setRemoteHaptics(fn) { hap = fn || null; real.Input.setRemoteHaptics(fn); }, remoteHaptics: () => hap }) };
+  const [padEnd, hostEnd] = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(12) });
+  padEnd.pump(0); hostEnd.pump(0);
+  let verdict, seenPeer = null, closedWhy = null, admitted = 0;
+  const huds = [];
+  padEnd.onMessage((ch, d) => { if (ch === NetTransport.STATE) huds.push(d); });
+  const link = PhonePad.link(hostEnd, { input: desk.Input, pump: false, now: () => desk.clock.t, doc: null, hud: () => ({ gear: 3, kmh: 100, state: "race" }),
+    admit: (p) => { seenPeer = p; return new Promise((r) => { verdict = r; }); },
+    onAdmitted: () => { admitted++; }, onClose: (why) => { closedWhy = why; } });
+  padEnd.send(NetTransport.EVENT, PhonePad.encodeHello("pad", true, true, PEER_A));
+  desk.clock.t = 100; hostEnd.pump(10); link.pump(); padEnd.pump(100);
+  assert.equal(seenPeer.id, PEER_A, "the hello names the peer"); assert.equal(seenPeer.fp, null, "a loopback has no DTLS fingerprint");
+  assert.equal(desk.Input.remoteHaptics(), null, "no buzzing a phone nobody allowed");
+  assert.equal(huds.filter((d) => d.startsWith('["H"')).length, 0, "no dash to it either");
+  verdict(true); await settle();
+  assert.equal(admitted, 1); assert.equal(typeof desk.Input.remoteHaptics(), "function");
+  assert.equal(link.stats().admitted, true);
+
+  const [p2, h2] = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(13) });
+  p2.pump(0); h2.pump(0);
+  PhonePad.link(h2, { input: desk.Input, pump: false, doc: null, admit: () => false, onClose: (why) => { closedWhy = why; } });
+  await settle();
+  assert.equal(closedWhy, "rejected"); assert.equal(h2.status, "closed");
+  link.close();
+});
+
+test("ALLOW / REJECT card: touch-sized, fits a phone landscape, ignores a synthetic click (W26 row 11a)", async () => {
+  const mk = (tag) => {
+    const n = { tagName: tag.toUpperCase(), style: {}, attrs: {}, kids: [], listeners: {}, parentNode: null, textContent: "", id: "",
+      setAttribute(k, v) { this.attrs[k] = String(v); },
+      appendChild(c) { c.parentNode = this; this.kids.push(c); return c; },
+      removeChild(c) { this.kids = this.kids.filter((k) => k !== c); c.parentNode = null; },
+      addEventListener(t, f) { (this.listeners[t] ||= []).push(f); },
+      click(e) { for (const f of this.listeners.click || []) f(e); } };
+    return n;
+  };
+  const doc = { body: mk("body"), createElement: mk };
+  const ask = PhonePad.askOnScreen(doc, "A phone joined.");
+  const box = doc.body.kids[0];
+  assert.equal(box.attrs.role, "alertdialog"); assert.equal(box.style.position, "fixed");
+  const card = box.kids[0];
+  assert.ok(parseInt(card.style.maxWidth, 10) <= 440 && card.style.maxHeight === "100%" && card.style.overflow === "auto", "fits 844x390 and scrolls if it must");
+  const buttons = card.kids[2].kids;
+  assert.deepEqual(buttons.map((b) => b.textContent), ["ALLOW", "REJECT"]);
+  for (const b of buttons) assert.ok(parseInt(b.style.minHeight, 10) >= 44 && parseInt(b.style.minWidth, 10) >= 44, "touch targets >= 44 px");
+  let settled = null; ask.result.then((v) => { settled = v; });
+  buttons[0].click({ isTrusted: false }); await settle();
+  assert.equal(settled, null, "the phone's SELECT is a synthetic click: not an ALLOW");
+  assert.equal(doc.body.kids.length, 1);
+  buttons[0].click({ isTrusted: true }); await settle();
+  assert.equal(settled, true); assert.equal(doc.body.kids.length, 0, "the card goes away");
+  const no = PhonePad.askOnScreen(doc, "x"); doc.body.kids[0].kids[0].kids[2].kids[1].click({ isTrusted: true });
+  assert.equal(await no.result, false);
+  assert.equal(await PhonePad.askOnScreen(null, "x").result, false, "no screen to ask on: nobody is allowed");
+});
+
+test("menu pad: a PHONE's SELECT will not press RESET / DELETE / IMPORT; XR (the local player) and plain buttons still do (W26 row 11c)", () => {
+  const { Input, sb } = bootInput();
+  const btn = (props) => ({ tagName: "BUTTON", disabled: false, clicks: 0, click() { this.clicks++; }, matches: () => true,
+    dispatchEvent: () => true, getAttribute(k) { return (this.attrs || {})[k] ?? null; }, ...props });
+  const all = [];
+  const layer = { tagName: "DIV", contains: (n) => all.includes(n), dispatchEvent: () => true };
+  sb.MenuNav = { activeLayer: () => layer, FOCUSABLE: "button" };
+  sb.UiLayers = { top: () => layer, navOpen: () => true, anyOpen: () => true };
+  const press = (b) => { all.push(b); sb.document.activeElement = b; return Input.remoteEvent("navSelect"); };
+  const blocked = [
+    btn({ id: "pm-keys-reset", textContent: "RESET KEYS" }),
+    btn({ className: "cr-slot-del armed", textContent: "DELETE?" }),
+    btn({ textContent: "IMPORT SHARE CODE" }),
+    btn({ id: "fb-del", textContent: "DEL" }),
+    btn({ textContent: "OK", dataset: { destructive: "" } }),
+    { ...btn({}), tagName: "INPUT", type: "file" },
+  ];
+  for (const b of blocked) { assert.equal(press(b), false, "refused: " + (b.textContent || b.type)); assert.equal(b.clicks, 0); }
+  const allowed = [btn({ textContent: "RESUME" }), btn({ id: "hud-delta", textContent: "DELTA" }), btn({ textContent: "CLEARANCE MODEL" }),
+    btn({ textContent: "RESET KEYS", dataset: { destructive: "false" } })];
+  for (const b of allowed) { assert.equal(press(b), true); assert.equal(b.clicks, 1, "pressed: " + b.textContent); }
+  sb.performance = { now: () => 500 };
+  Input.remoteSample({ source: "xr", steer: 0, thr: 0, brk: 0 });
+  const local = blocked[0]; local.clicks = 0;
+  assert.equal(press(local), true); assert.equal(local.clicks, 1, "the XR controllers are the player in the room");
+});
+
+test("pad(): a re-dial passes reanswer and answers a NEWER offer on a FRESH transport, the session moving with it (W26 row 11)", async () => {
+  const made = [];
+  const fake = () => {
+    const t = { status: "connecting", sent: [], closed: 0, handlers: {},
+      onMessage(f) { t.handlers.message = f; }, onClose(f) { t.handlers.close = f; }, onOpen(f) { t.handlers.open = f; },
+      close() { t.closed++; t.status = "closed"; }, send(ch, d) { t.sent.push(d); return true; }, pump() { return 0; },
+      stats: () => ({ connection: t.status === "open" ? "connected" : "new" }) };
+    made.push(t); return t;
+  };
+  let swapOpts = null;
+  const accepted = [];
+  const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), buttons: {}, hud: lcd() };
+  const ctl = PhonePad.pad(dom, { peerId: PEER_A, deps: {
+    rtc: fake, prefetchIce: async () => null, normalise: (c) => String(c).toUpperCase(), valid: (c) => c.length === 6,
+    swap: async (o) => { swapOpts = o; const ans = await o.reply("OFFER-1"); return ans ? { ok: true } : { ok: false, error: "reply_failed" }; },
+    acceptInvite: async (t, invite) => { accepted.push([made.indexOf(t), invite]); return { ok: true, code: "ANS-" + invite }; },
+  } });
+  try {
+    assert.deepEqual(await ctl.connect("abc234"), { ok: true });
+    assert.equal(swapOpts.reanswer, true, "the swap is asked to hand over a newer offer");
+    assert.equal(swapOpts.token.cancelled, false, "still listening while the first answer is unconnected");
+    // The relay replayed the dead link's offer; the game posts a newer one.
+    assert.equal(await swapOpts.reply("OFFER-2"), "ANS-OFFER-2");
+    assert.deepEqual(accepted, [[0, "OFFER-1"], [1, "OFFER-2"]], "an answered connection never takes a second offer");
+    assert.equal(made[0].closed, 1, "the superseded transport is closed");
+    assert.equal(ctl.state().linked, true, "the session moved to the fresh transport");
+    made[1].status = "open"; made[1].handlers.open();
+    assert.ok(dom.body.classes.has("awaiting"), "and it opens there");
+    made[1].handlers.message(NetTransport.STATE, PhonePad.encodeHud({ gear: 0, kmh: 0, rpm: 0, lap: 0, laps: 0, pos: 0, cars: 0, ers: 0, flags: 0, caution: 0, lastLapMs: 0, state: "menu", team: "" }));
+    assert.ok(dom.body.classes.has("linked") && !dom.body.classes.has("awaiting"), "the game's first dash shows its surface");
+    assert.equal(JSON.parse(made[1].sent[0]).id, PEER_A, "its hello names the page");
+    assert.equal(swapOpts.token.cancelled, true, "a link that is up stops the rendezvous");
+    assert.equal(await swapOpts.reply("OFFER-3"), null, "an open link keeps its offer");
+    assert.equal(made.length, 2);
+    made[0].handlers.close && made[0].handlers.close("local");
+    assert.equal(ctl.state().linked, true, "the superseded session's close is not a drop");
+  } finally { ctl.cancel(); }
+});
+
+// ---------------------------------------------------------------------------
+// #5739 (hunt 2026-11-18): the ALLOW card pauses a running race, a page that
+// goes away suspends (the game re-hosts), an answer to a consumed offer has a
+// deadline, and a new #pad= link into an open tab is read.
+// ---------------------------------------------------------------------------
+
+test("#5739 row 3: host() tells the shell the ALLOW card is coming BEFORE it covers the screen", async () => {
+  const c = handConfirm();
+  const order = [];
+  const h = hostHarness({ confirm: (t) => { order.push("confirm"); return c.confirm(t); }, freshMs: -1 });   // a code outside the fresh window asks
+  h.ui.asking = () => order.push("asking");
+  await settle(); await h.room.onJoiner(null, "ANSWER"); await settle();
+  assert.equal(h.ctl.state().phase, "confirming");
+  assert.deepEqual(order, ["asking", "confirm"]);
+  c.asks[0].answer(true); await settle();
+  assert.equal(h.ctl.state().phase, "linked");
+  assert.deepEqual(order, ["asking", "confirm"], "ALLOW itself asks nothing more");
+  h.ctl.cancel();
+});
+
+test("#5739 row 3: PlatformSession pauses a running SOLO race under the ALLOW card — not a net race, a menu, or a paused race", async () => {
+  const elements = new Map(), hosts = [], pauses = [];
+  const G = { els: {}, store: {}, camMode: 1, state: "race", paused: false, announce() {}, setCamMode(i) { this.camMode = i; },
+    netPlay: { active: () => false },
+    $(id) { if (!elements.has(id)) elements.set(id, fakeEl()); return elements.get(id); } };
+  const context = vm.createContext({ G, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: "visor" }] },
+    ensureNet: () => Promise.resolve(true), setPaused: (p, why) => { pauses.push([p, why]); G.paused = p; },
+    PhonePad: { padUrl: () => "https://apex.test/controller.html", host(options) { const h = { options, cancel() {} }; hosts.push(h); return h; } },
+  });
+  loadPairingUI(context);
+  vm.runInContext(read("js/ui/platform-session.js"), context, { filename: absSrc("js/ui/platform-session.js") });
+  vm.runInContext("PlatformSession.create(G, { ensureNet, setPaused }).wirePhone();", context);
+  G.$("pm-phonepad").onclick(); await settle();
+  assert.equal(hosts.length, 1);
+  const asking = hosts[0].options.asking;
+  asking();
+  assert.deepEqual(pauses, [[true, "phone-confirm"]], "solo race: paused under the card");
+  asking();
+  assert.equal(pauses.length, 1, "already paused: no second pause");
+  G.paused = false; G.state = "count"; asking();
+  assert.deepEqual(pauses.at(-1), [true, "phone-confirm"], "the countdown pauses too");
+  G.paused = false; G.state = "menu"; asking();
+  G.state = "race"; G.netPlay.active = () => true; asking();
+  assert.equal(pauses.length, 2, "a menu or a VS FRIEND race is never paused");
+});
+
+test("#5739 row 4: a pad that SUSPENDS (page going away) is re-hosted on the same code; a plain close is still final", async () => {
+  const pairs = [];
+  const rtc = () => { const p = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(70 + pairs.length) }); p[0].pump(0); p[1].pump(0); pairs.push(p); return p[1]; };
+  const h = hostHarness({ rtc });
+  h.ui.relinkN = 0; h.ui.relinking = () => h.ui.relinkN++;
+  await settle(); await h.room.onJoiner(null, "ANSWER"); await settle();
+  assert.equal(h.ctl.state().phase, "linked");
+  const src = { roll: () => 0, thr: () => 0, brk: () => 0, held: () => 0 };
+  const pad = PhonePad.padSession(pairs[0][0], src, { heartbeat: false, now: () => h.clock.t });
+  pad.sendSuspend(); pad.close();
+  pairs[0][1].pump(1e6); await settle();
+  assert.equal(h.ctl.state().phase, "waiting", "the room is open again, not lost");
+  assert.equal(h.ctl.state().code, "ABC234");
+  assert.equal(h.ui.relinkN, 1); assert.equal(h.ui.lostN, 0);
+  assert.equal(pairs.length, 2, "a fresh transport for the re-dial");
+  assert.deepEqual(PhonePad.decodeEvent(PhonePadCodec.encodeSuspend()), { t: "sus" });
+  await h.room.onJoiner(null, "ANSWER-2"); await settle();
+  assert.equal(h.ctl.state().phase, "linked");
+  pairs[1][0].close(); pairs[1][1].pump(1e6); await settle();
+  assert.equal(h.ctl.state().phase, "lost", "no suspend first: the phone's goodbye stays final");
+  assert.equal(h.ui.lostN, 1);
+});
+
+test("#5739 row 4: pagehide on a LINKED controller sends suspend, and pageshow re-dials the same code", async () => {
+  const wires = [], swaps = [];
+  const h = wakePad({
+    rtc: () => {
+      let onClose;
+      const t = { status: "open", sent: [], send(ch, d) { t.sent.push(d); return true; }, pump() {}, onMessage() {}, onOpen() {}, onClose(f) { onClose = f; },
+        close() { if (t.status === "closed") return; t.status = "closed"; if (onClose) onClose("local"); } };
+      wires.push(t); return t;
+    },
+    swap: async (o) => { swaps.push(o.code); return { ok: true }; },
+  });
+  await h.ctl.connect("ABC234");
+  assert.equal(h.ctl.state().linked, true);
+  h.fire("pagehide");
+  assert.ok(wires[0].sent.includes('{"t":"sus"}'), "the game is told this is a suspend, not an unpair");
+  assert.equal(wires[0].status, "closed");
+  assert.equal(h.ctl.state().linked, false);
+  assert.equal(h.dom.status.textContent, "Link paused — reconnecting when this page is back…");
+  assert.equal(h.dom.connect.disabled, false);
+  h.fire("pageshow"); await settle();
+  assert.deepEqual(swaps, ["ABC234", "ABC234"], "the same code, no CONNECT tap");
+  assert.equal(h.ctl.state().linked, true);
+  h.ctl.cancel();
+});
+
+test("returning to tilt after touch steering waits for a fresh sensor reading", async () => {
+  let receive, heartbeat;
+  const samples = [];
+  const h = wakePad({ rtc: () => ({
+    status: "open", pump() {}, close() {}, onClose() {}, onMessage(fn) { receive = fn; },
+    send(channel, data) {
+      if (channel === NetTransport.STATE) samples.push(PhonePad.decodeSample(data));
+      return true;
+    },
+  }) }, { sensor: true, interval(fn) { heartbeat = fn; return 1; } });
+  try {
+    await h.ctl.connect("ABC234");
+    receive("event", PhonePad.encodeHello("host", false, true));
+    h.fire("deviceorientation", { beta: 0, gamma: 35 });
+    assert.equal(h.ctl.setSteeringMode("tilt"), true);
+    heartbeat();
+    assert.equal(samples.at(-1).roll, 35, "keeping the same mode preserves its current reading");
+
+    assert.equal(h.ctl.setSteeringMode("touch"), true);
+    h.fire("deviceorientation", { beta: 0, gamma: 0 });
+    heartbeat();
+    assert.equal(samples.at(-1).steer, 0, "the touch axis owns steering");
+    assert.equal(h.ctl.setSteeringMode("tilt"), true);
+    assert.equal(samples.at(-1).roll, null, "the handoff packet cannot revive the previous tilt");
+    heartbeat();
+    assert.equal(samples.at(-1).roll, null);
+    h.fire("deviceorientation", { beta: 0, gamma: -20 });
+    heartbeat();
+    assert.equal(samples.at(-1).roll, -20, "a fresh tilt reading restores motion steering");
+  } finally { h.ctl.cancel(); }
+});
+
+test("the phone heartbeat releases tilt on background and redial until a fresh reading", async () => {
+  const streams = [];
+  let heartbeat;
+  const h = wakePad({ rtc: () => {
+    let close;
+    const samples = [];
+    streams.push(samples);
+    return { status: "open", pump() {}, onMessage() {}, onClose(fn) { close = fn; },
+      send(channel, data) {
+        if (channel === NetTransport.STATE) samples.push(PhonePad.decodeSample(data));
+        return true;
+      },
+      close() { this.status = "closed"; close("local"); } };
+  } }, { sensor: true, interval(fn) { heartbeat = fn; return 1; } });
+  await h.ctl.connect("ABC234");
+  h.fire("deviceorientation", { beta: 0, gamma: 35 });
+  heartbeat();
+  assert.equal(streams[0].at(-1).roll, 35);
+  h.fire("touchend", { touches: [] });
+  heartbeat();
+  assert.equal(streams[0].at(-1).roll, 35, "lifting the last finger preserves motion steering");
+
+  h.doc.hidden = true; h.doc.visibilityState = "hidden"; h.fire("visibilitychange");
+  h.fire("deviceorientation", { beta: 0, gamma: 45 });
+  heartbeat();
+  assert.equal(streams[0].at(-1).roll, null, "a hidden sensor event cannot renew stale steering");
+  h.fire("pagehide");
+  h.doc.hidden = false; h.doc.visibilityState = "visible"; h.fire("pageshow"); await settle();
+  heartbeat();
+  assert.equal(streams[1][0].roll, null, "the new link starts without a steering owner");
+  h.fire("deviceorientation", { beta: 0, gamma: -20 });
+  heartbeat();
+  assert.equal(streams[1].at(-1).roll, -20, "the next visible sensor event restores steering");
+  h.ctl.cancel();
+});
+
+for (const stage of ["hidden", "backoff", "negotiating"]) {
+  test(`pagehide preserves the established phone pairing during reconnect: ${stage}`, async () => {
+    const codes = [];
+    let resolveOld;
+    const h = wakePad({ swap: async ({ code }) => {
+      codes.push(code);
+      if (codes.length === 2 && stage === "backoff") return { ok: false, error: "expired" };
+      if (codes.length === 2 && stage === "negotiating") return new Promise(r => { resolveOld = r; });
+      return { ok: true };
+    } });
+    await h.ctl.connect("ABC234");
+    if (stage === "hidden") h.doc.visibilityState = "hidden";
+    h.transports[0].close("disconnected"); await settle();
+    const beforeHide = stage === "hidden" ? 1 : 2;
+    assert.equal(codes.length, beforeHide);
+    h.doc.visibilityState = "hidden"; h.fire("pagehide");
+    h.doc.visibilityState = "visible"; h.fire("pageshow"); h.fire("visibilitychange"); await settle();
+    if (resolveOld) { resolveOld({ ok: false, error: "expired" }); await settle(); }
+    assert.deepEqual(codes, Array(beforeHide + 1).fill("ABC234"));
+    assert.equal(h.ctl.state().linked, true);
+    assert.equal(h.timeouts.some(t => !t.cleared && t.ms === 5000), false);
+    h.ctl.cancel();
+  });
+}
+
+test("explicit cancel while waiting to reconnect keeps the controller unpaired on return", async () => {
+  let swaps = 0;
+  const h = wakePad({ swap: async () => { swaps++; return { ok: true }; } });
+  await h.ctl.connect("ABC234");
+  h.doc.visibilityState = "hidden";
+  h.transports[0].close("disconnected"); await settle();
+  h.ctl.cancel(); h.fire("pagehide");
+  h.doc.visibilityState = "visible"; h.fire("pageshow"); await settle();
+  assert.equal(swaps, 1);
+  assert.equal(h.ctl.state().linked, false);
+});
+
+test("page exit after publishing the first answer but before RTC opens cancels pairing", async () => {
+  const wires = [], codes = [];
+  const h = wakePad({
+    rtc: () => {
+      const wire = { status: "connecting", send: () => false, pump() {}, onMessage() {}, onOpen() {}, onClose() {},
+        close() { wire.status = "closed"; } };
+      wires.push(wire); return wire;
+    },
+    acceptInvite: async () => ({ ok: true, code: "ANSWER" }),
+    swap: async o => { codes.push(o.code); return { ok: !!await o.reply("OFFER") }; },
+  });
+  assert.equal((await h.ctl.connect("ABC234")).ok, true);
+  h.fire("pagehide"); h.fire("pageshow"); await settle();
+  assert.deepEqual(codes, ["ABC234"]);
+  assert.equal(wires[0].status, "closed");
+  assert.equal(h.dom.connect.disabled, false);
+});
+
+test("#5739 row 5: an answer whose link never opens ends at the connect deadline, says so and frees CONNECT", async () => {
+  const wires = [];
+  const h = wakePad({
+    rtc: () => {
+      const t = { status: "connecting", send: () => false, pump() {}, onMessage() {}, onOpen() {}, onClose() {},
+        close() { t.status = "closed"; } };
+      wires.push(t); return t;
+    },
+    acceptInvite: async () => ({ ok: true, code: "ANSWER" }),
+    swap: async (o) => { const code = await o.reply("OFFER"); return { ok: !!code }; },
+  });
+  const r = await h.ctl.connect("ABC234");
+  assert.equal(r.ok, true, "the swap resolved: an answer was published");
+  assert.equal(h.dom.connect.disabled, true, "waiting on the transport");
+  const deadline = h.timeouts.filter((t) => !t.cleared && t.ms === 15000);
+  assert.equal(deadline.length, 1, "one 15 s connect deadline armed");
+  deadline[0].fn(); await settle();
+  assert.equal(h.dom.connect.disabled, false, "CONNECT works again");
+  assert.equal(h.dom.status.textContent, "The game is not offering that code any more — choose MAKE NEW CODE in its phone-controller settings, then CONNECT.");
+  assert.equal(wires[0].status, "closed", "the dead transport is closed");
+  assert.equal(h.ctl.state().linked, false);
+
+  // A link that opens in time clears its deadline: nothing fires later.
+  const ok = wakePad({ acceptInvite: async () => ({ ok: true, code: "ANSWER" }),
+    swap: async (o) => { const code = await o.reply("OFFER"); return { ok: !!code }; } });
+  await ok.ctl.connect("ABC234");
+  assert.equal(ok.ctl.state().linked, true);
+  assert.equal(ok.timeouts.filter((t) => !t.cleared && t.ms === 15000).length, 0, "an opened link has no live deadline");
+  ok.ctl.cancel();
+});
+
+test("#5739 row 6: a hash-only #pad= navigation into an open controller tab is read", async () => {
+  const location = { href: "https://apex.test/controller#pad=AAAA2345" };
+  const swaps = [];
+  let hang;
+  const h = wakePad({ swap: (o) => { swaps.push(o.code); return swaps.length === 1 ? new Promise((r) => { hang = r; }) : Promise.resolve({ ok: true }); } },
+    { location, codeIn: true });
+  assert.equal(h.dom.codeIn.value, "AAAA2345");
+  const first = h.ctl.connect(h.dom.codeIn.value); await settle();
+  assert.deepEqual(swaps, ["AAAA2345"], "dialing the OLD code");
+  location.href = "https://apex.test/controller#pad=BBBB2345";
+  h.fire("hashchange");
+  assert.equal(h.dom.codeIn.value, "BBBB2345", "the code box follows the new link");
+  assert.equal(h.dom.status.textContent, "Tap CONNECT to pair with the game.");
+  assert.equal(h.dom.connect.disabled, false, "the old dial was stopped");
+  hang({ ok: true });
+  assert.equal((await first).error, "cancelled");
+  await h.ctl.connect(h.dom.codeIn.value);
+  assert.deepEqual(swaps, ["AAAA2345", "BBBB2345"]);
+  assert.equal(h.ctl.state().linked, true);
+  h.fire("hashchange");
+  assert.equal(h.dom.codeIn.value, "BBBB2345", "the same link again changes nothing");
+  h.ctl.cancel();
+});
+
+/* PAIRED FROM SETTINGS (Bryce, 2026-11-20): "it connects and on my phone it shows the wheel
+ * display but buttons don't work until on desktop I leave settings go to title and have to
+ * click a pop up to allow connection. Once I allow then my phone switched to menu navigation
+ * mode." Three defects, one test each: the ALLOW card was a <body> child under the modal
+ * Settings <dialog> (top layer), so it was hidden and inert until Settings closed; the phone
+ * showed its default wheel before the game had admitted it (no dash yet); and the desktop
+ * had no title door to the pairing at all. */
+test("ALLOW card opens in the TOP LAYER, over an open modal Settings, and Escape does not answer it", async () => {
+  const topLayer = [];
+  const mk = (tag) => {
+    const n = { tagName: tag.toUpperCase(), style: {}, attrs: {}, kids: [], listeners: {}, parentNode: null, textContent: "", id: "", open: false,
+      setAttribute(k, v) { this.attrs[k] = String(v); },
+      appendChild(c) { c.parentNode = this; this.kids.push(c); return c; },
+      removeChild(c) { this.kids = this.kids.filter((k) => k !== c); c.parentNode = null; },
+      addEventListener(t, f) { (this.listeners[t] ||= []).push(f); },
+      fire(t, e) { for (const f of this.listeners[t] || []) f(e); },
+      click(e) { this.fire("click", e); } };
+    if (n.tagName === "DIALOG") {
+      n.showModal = function () { if (!this.parentNode) throw new Error("not connected"); this.open = true; topLayer.push(this); };
+      n.close = function () { this.open = false; topLayer.splice(topLayer.indexOf(this), 1); };
+    }
+    return n;
+  };
+  const doc = { body: mk("body"), createElement: mk };
+  const settings = mk("dialog"); settings.id = "pmsettings"; doc.body.appendChild(settings); settings.showModal();
+  const ask = PhonePad.askOnScreen(doc, "A phone joined with this game's room code. Let it steer this game?");
+  const box = doc.body.kids.at(-1);
+  assert.equal(box.tagName, "DIALOG", "the card is a dialog of its own");
+  assert.equal(topLayer.at(-1), box, "shown modal AFTER Settings: it is on top of it, not under it");
+  let prevented = 0; box.fire("cancel", { preventDefault() { prevented++; } });
+  assert.equal(prevented, 1, "Escape is not an answer");
+  // modal.js shows a dialog from a MutationObserver: the pause menu that asking() opened lands AFTER the card.
+  const pause = mk("dialog"); pause.id = "pausemenu"; doc.body.appendChild(pause); pause.showModal();
+  assert.equal(topLayer.at(-1), pause, "(the late pause menu is over the card for a moment)");
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(topLayer.at(-1), box, "a tick later the card is raised back over it");
+  const allow = box.kids[0].kids[2].kids[0];
+  let settled = null; ask.result.then((v) => { settled = v; });
+  allow.click({ isTrusted: true }); await settle();
+  assert.equal(settled, true);
+  assert.equal(box.open, false); assert.deepEqual(topLayer, [settings, pause], "ALLOW takes the card out of the top layer; the screens under it stay");
+});
+
+test("the phone's surface follows the game's screen from the first frame it is admitted: no dead wheel, menu pad in menus, wheel in a race", async () => {
+  const desk = bootInput();
+  const [padEnd, hostEnd] = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(21) });
+  padEnd.pump(0); hostEnd.pump(0);
+  const clock = desk.clock;
+  const screen = { state: "menu", paused: false };
+  const dashOf = () => ({ gear: 0, kmh: 0, rpm: 0, lap: 0, laps: 0, pos: 0, cars: 0, ers: 0, flags: screen.paused ? PhonePad.DASH.paused : 0,
+    caution: 0, lastLapMs: 0, state: screen.state, team: "" });
+  let allow;
+  const link = PhonePad.link(hostEnd, { input: desk.Input, pump: false, now: () => clock.t, hud: dashOf, doc: null,
+    admit: () => new Promise((r) => { allow = r; }) });
+  const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), buttons: {}, hud: lcd() };
+  const ctl = PhonePad.pad(dom, { now: () => clock.t, timers: fakeTimers(), deps: {
+    rtc: () => padEnd, prefetchIce: async () => null, normalise: (c) => String(c).toUpperCase(), valid: (c) => c.length === 6,
+    swap: async (o) => { const ans = await o.reply("OFFER"); return ans ? { ok: true } : { ok: false, error: "reply_failed" }; },
+    acceptInvite: async () => ({ ok: true, code: "ANSWER" }),
+  } });
+  try {
+    assert.deepEqual(await ctl.connect("abc234"), { ok: true });
+    const frame = () => { clock.t += STEP; ctl.pump(); link.pump(); padEnd.pump(clock.t); hostEnd.pump(clock.t); };
+    for (let i = 0; i < 6; i++) frame();
+    assert.ok(dom.body.classes.has("awaiting"), "open but not admitted: the page waits");
+    assert.ok(!dom.body.classes.has("linked"), "and shows no wheel or pad the game would ignore");
+    assert.equal(dom.status.textContent, "Connected — waiting for the game… If it asks, tap ALLOW on its screen.", "it says what to do on the game's screen");
+    allow(true); await settle();
+    frame(); frame();
+    assert.ok(dom.body.classes.has("linked") && !dom.body.classes.has("awaiting"), "admitted: the controls appear");
+    assert.ok(dom.hud.body.classes.has("menu"), "the game is on a menu: the first surface is the MENU PAD, not the wheel");
+    screen.state = "race";
+    for (let i = 0; i < 8; i++) frame();
+    assert.ok(!dom.hud.body.classes.has("menu"), "a race starts: the wheel");
+    screen.paused = true;
+    for (let i = 0; i < 8; i++) frame();
+    assert.ok(dom.hud.body.classes.has("menu"), "paused: the menu pad drives the pause menu");
+    screen.paused = false; screen.state = "results";
+    for (let i = 0; i < 8; i++) frame();
+    assert.ok(dom.hud.body.classes.has("menu"), "the race ends: back to the menu pad");
+  } finally { ctl.cancel(); link.close(); }
+});
+
+test("PlatformSession: the desktop's title door PHONE CONTROLLER opens Settings › CONTROLS and starts the pairing once", async () => {
+  const elements = new Map(), hosts = [], pages = [];
+  const G = { els: {}, store: {}, camMode: 1, announce() {}, setCamMode(i) { this.camMode = i; },
+    $(id) { if (!elements.has(id)) elements.set(id, fakeEl()); return elements.get(id); } };
+  const context = vm.createContext({ G, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: "visor" }] },
+    openSettingsPage: (p) => pages.push(p),
+    PhonePad: { padUrl: () => "https://apex.test/controller.html", host(options) { const h = { cancelled: 0, options, cancel() { h.cancelled++; } }; hosts.push(h); return h; } },
+  });
+  loadPairingUI(context);
+  vm.runInContext(read("js/ui/platform-session.js"), context, { filename: absSrc("js/ui/platform-session.js") });
+  vm.runInContext("PlatformSession.create(G, { ensureNet: () => Promise.resolve(true), openSettingsPage }).wirePhone();", context);
+  const door = G.$("mb-steerphone");
+  assert.equal(typeof door.onclick, "function", "the title door is wired");
+  door.onclick(); await settle();
+  assert.deepEqual(pages, ["controls"], "it opens the CONTROLS page");
+  assert.equal(hosts.length, 1, "and starts the pairing: the code and QR are up");
+  assert.equal(G.$("pm-phonepad").textContent, "STOP PAIRING");
+  door.onclick(); await settle();
+  assert.equal(hosts.length, 1, "a second click shows the running pairing, it does not restart it");
+  assert.equal(hosts[0].cancelled, 0);
+
+});
+
+test("host(): decision B — the first phone on a code this screen just minted steers with no ALLOW; an old code still asks", async () => {
+  const clock = { t: 1_000_000 };
+  const c = handConfirm();
+  const h = hostHarness({ confirm: c.confirm, now: () => clock.t });
+  await settle(); await h.room.onJoiner(null, "ANSWER"); await settle();
+  assert.equal(c.asks.length, 0, "no ALLOW card for the pairing the player just started");
+  assert.equal(h.ctl.state().phase, "linked"); assert.equal(h.ui.linkedN, 1);
+  h.clock.t = 100;
+  h.padEnd.send(NetTransport.STATE, PhonePad.encodeSample({ seq: 0, thr: 1, brk: 0, roll: 0, held: 0 }));
+  h.hostEnd.pump(50);
+  assert.ok(h.Input.remoteActive() && h.Input.throttle(), "its inputs are accepted at once");
+  await h.room.onJoiner(null, "SECOND-ANSWER"); await settle();
+  assert.equal(c.asks.length, 0, "a second answer to the same code is ignored outright (one phone per room), never admitted");
+  assert.equal(h.ctl.state().phase, "linked"); assert.equal(h.ui.linkedN, 1, "the first phone keeps the link");
+  h.ctl.cancel();
+
+  const clock2 = { t: 1_000_000 };
+  const o = handConfirm();
+  const old = hostHarness({ confirm: o.confirm, now: () => clock2.t });
+  await settle();
+  clock2.t += 5 * 60000 + 1;   // the code was shown more than five minutes ago
+  await old.room.onJoiner(null, "ANSWER"); await settle();
+  assert.equal(old.ctl.state().phase, "confirming", "a code past the fresh window is asked");
+  assert.equal(o.asks.length, 1);
+  old.ctl.cancel();
+});
+
+test("paired absolute brake uses its full physical length and releases immediately", () => {
+  const dom = { gas: fakeEl(), brake: fakeEl() };
+  let boundsReads = 0;
+  dom.brake.getBoundingClientRect = () => {
+    boundsReads++; return { left: 80, top: 20, right: 180, bottom: 220, width: 100, height: 200 };
+  };
+  let ctl;
+  try {
+    PedalTravel.setButtonProfile("brake", { sliderEdge: "bottom", press: "instant", buildMs: 500, slideCurve: "quick" });
+    ctl = PhonePad.pad(dom);
+    const sample = (type, y) => dom.brake.dispatch(type, { pointerId: 9, clientX: 110, clientY: y });
+    sample("pointerdown", 70);
+    assert.equal(ctl.state().brk, 0.25);
+    for (const [y, level] of [[120, 0.5], [170, 0.75], [220, 1], [0, 0], [120, 0.5]]) {
+      sample("pointermove", y);
+      assert.equal(ctl.state().brk, level);
+    }
+    assert.equal(boundsReads, 1);
+    sample("pointerup", 120);
+    assert.equal(ctl.state().brk, 0);
+  } finally { ctl?.cancel(); PedalTravel.resetButtonProfile("brake"); }
+});
+
+test("Appearance controller demos keep editor gestures free of motion permission requests", () => {
+  const scripts = [...read("controller.html").matchAll(/<script>([\s\S]*?)<\/script>/g)];
+  for (const [search, expected] of [["?arrange=wheel&demo=wheel", 0], ["?arrange=menupad&demo=menu", 0],
+    ["?demo=menu", 0], ["?demo=wheel", 1]]) {
+    const dom = makeDom();
+    let start, prompts = 0;
+    const window = { addEventListener(type, fn) { if (type === "DOMContentLoaded") start = fn; } };
+    const ctl = { armSensor() { prompts++; return Promise.resolve(true); } };
+    vm.runInNewContext(scripts.at(-1)[1], {window, document:dom.document, location:{search}, URLSearchParams,
+      performance:{now:() => 0}, requestAnimationFrame(){}, NetTransport:{}, PhonePad:{pad:() => ctl}, PhonePadPage:{layout(){}}},
+      { filename: absSrc("controller.html") });
+    start();
+    for (const target of [dom.byId("b-layout"), dom.byId("arrange-bar"), dom.byId("layout-sheet")]) {
+      dom.dispatch(target, {type:"pointerdown", bubbles:true});
+    }
+    dom.body.classList.add("arranging");
+    dom.dispatch(dom.byId("gas"), {type:"pointerdown", bubbles:true});
+    assert.equal(prompts, 0, search + " editing");
+    dom.body.classList.remove("arranging");
+    dom.dispatch(dom.byId("gas"), {type:"pointerdown", bubbles:true});
+    assert.equal(prompts, expected, search + " driving");
+  }
+});
+
+test("Appearance waits for the landscape wheel or menu pad before opening its editor once", () => {
+  for (const id of ["wheel", "menupad"]) {
+    const dom = makeDom(), events = dom.makeElement("div");
+    const wheel = dom.byId("ctl"), menu = dom.byId("menupad"), launch = dom.byId("lay-arrange");
+    // Both surfaces have boxes even when the portrait rotation card covers them.
+    wheel.getClientRects = menu.getClientRects = () => [{}];
+    dom.body.classList.add("linked");
+    if (id === "menupad") dom.body.classList.add("menu");
+    const originalQuery = dom.document.querySelector;
+    dom.document.getElementById = key => originalQuery("#" + key);
+    const frames = [], mediaEvents = dom.makeElement("div");
+    let portrait = true, opened = 0;
+    launch.onclick = () => { opened++; };
+    const matchMedia = query => ({
+      get matches() { return query.includes("portrait") ? portrait : !portrait; },
+      addEventListener:mediaEvents.addEventListener, removeEventListener:mediaEvents.removeEventListener
+    });
+    const win = { ScreenArranger:{open(target) { assert.equal(target, "menupad"); opened++; return true; }},
+      matchMedia, addEventListener:events.addEventListener, removeEventListener:events.removeEventListener,
+      get innerWidth() { return portrait ? 390 : 844; }, get innerHeight() { return portrait ? 844 : 390; } };
+    const flush = () => { while (frames.length) frames.shift()(); };
+    vm.runInNewContext(read("js/ui/screen-regions.js"), { window:win, document:dom.document, matchMedia,
+      URLSearchParams, location:{search:"?arrange=" + id}, queueMicrotask:fn => fn(), requestAnimationFrame:fn => frames.push(fn),
+      MutationObserver:class { observe(){} disconnect(){} }
+    }, { filename:absSrc("js/ui/screen-regions.js") });
+    flush();
+    assert.equal(opened, 0, "portrait " + id);
+    portrait = false;
+    dom.dispatch(mediaEvents, {type:"change"}); dom.dispatch(events, {type:"resize"});
+    flush();
+    assert.equal(opened, 1, "landscape " + id);
+    dom.dispatch(mediaEvents, {type:"change"}); dom.dispatch(events, {type:"resize"});
+    flush();
+    assert.equal(opened, 1);
+  }
+});
+
+test("companion previews return to the opening game or use the Appearance link when closing is unavailable", () => {
+  const rel = "js/ui/companion-return.js";
+  const script = new vm.Script(read(rel), { filename: absSrc(rel) });
+  for (const [search, canClose] of [["?arrange=pair", true], ["?arrange=broadcast", false], ["?demo=wheel", false]]) {
+    const link = Object.assign(new EventTarget(), { hidden: true, href: "https://game.test/?settings=appearance" });
+    const assigned = [];
+    const window = { closed: false, close() { this.closed = canClose; } };
+    const location = { search, assign: url => assigned.push(url) };
+    script.runInNewContext({ document: { getElementById: () => link }, location, window, URLSearchParams, setTimeout: fn => fn() });
+    const preview = new URLSearchParams(search).has("arrange");
+    assert.equal(link.hidden, !preview);
+    link.dispatchEvent(new Event("click", { cancelable:true }));
+    assert.equal(window.closed, preview && canClose);
+    assert.deepEqual(assigned, preview && !canClose ? [link.href] : []);
+  }
 });

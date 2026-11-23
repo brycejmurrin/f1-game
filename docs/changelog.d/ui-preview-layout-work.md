@@ -1,1 +1,0 @@
-Fixed: Appearance choices, presets and resets refresh their preview once after the final state is ready; Undo immediately clears the preset highlight. HUD readouts that already fit their slot avoid redundant zero-offset writes and repeated measurements while retaining collision and resize handling.

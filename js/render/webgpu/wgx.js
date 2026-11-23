@@ -79,13 +79,6 @@ const WGX = (function () {
   // clipped. Column-major of row-basis diag(1,1,·)+row2=(0,0,.5,.5). Applied to the
   // uploaded viewProj (lit) and lightVP (shadow); NOT to invViewProj (sky rays).
   const Z01 = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,0.5,0, 0,0,0.5,1]);
-  // Inverse of Z01 (column-major): maps a WebGPU clip (z 0..1) back to GL clip
-  // (z -1..1). Needed to build the SSAO invProj: the depth buffer stores
-  // Z01·viewProj z, so reconstructing view pos from it uses
-  // invProjW = invProj_gl · Z01INV (see _writeFrame). Row2 inverse of
-  // z'=0.5z+0.5w is z=2z'-w.
-  const Z01INV = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,2,0, 0,0,-1,1]);
-
   // Post shader/FX registries (separate files; may be absent when the
   // backend is loaded standalone — post/FX then stay disabled and the frame
   // falls back to the tonemap blit rather than failing WGX.create()).
@@ -152,30 +145,13 @@ const WGX = (function () {
   // smaller than 16384 at CAP 24 — overflow warns and falls back to global).
   const TRACK_LIGHT_CAP = 1024;                         // lights (64 B each -> 65536 B)
   const CHUNK_IDX_CAP = 16384;                          // u32 indices (65536 B)
-  const BLIT_BYTES = _CH.BLIT_UNIFORM_BYTES | 0;        // 48
+  const BLIT_BYTES = _CH.BLIT_UNIFORM_BYTES | 0;        // 96
 
-  // Keyed on the DEVICE (IS_MOBILE), not the memory tier — the same key
-  // js/render/glx/shadow.js uses, and for its reason: GRAPHICS: HIGH on a phone
-  // must not 4x the snap-cache redraw cost (terrain+road+whole city re-rasterised
-  // into the map every ~10 m of travel). This read MOBILE_TIER, which handed a
-  // HIGH-tier phone a 2048² map GLX would never give it — 12 MB of jetsam-counted
-  // GPU memory plus the redraw stall, on the least-ready backend.
-  const SHADOW_SIZE = WGX_LITE ? 1024 : 2048;          // sun depth-map resolution
-  const CAR_SHADOW_SIZE = 1024;                         // dynamic car-only shadow map (matches GLX)
-  // The dynamic CAR shadow map is DESKTOP-ONLY in GLX (js/render/glx/shadow.js
-  // creates carTex only `if (ok && !core.IS_MOBILE)` — "a per-frame pass is the
-  // HIGH-tier lag, not a memory cap"). WGX allocated the full 1024² depth texture
-  // on EVERY tier and only gated the PASS, and gated it on MOBILE_TIER — so a
-  // phone paid 4 MB for a texture nothing ever rendered into, and a HIGH-tier
-  // phone additionally ran a whole-car depth pass per frame that GLX refuses on
-  // any phone. Shrink the texture to 1×1 on phones: binding 8 stays a valid
-  // depth texture (the layout demands one), and the shader never samples it
-  // because params6.y (SHD.carArmed) stays 0 with the pass gated off below.
-  const CAR_SHADOW_ALLOC = WGX_LITE ? 1 : CAR_SHADOW_SIZE;
-  // Static graph batches set the high-water mark; dense circuits exceed 40.
+  // Sun / car / lamp map sizes live in WGXShadow.init (wgx-shadow.js). The
+  // frame UBO's PCF texel (d[74]) reads SHD.SHADOW_SIZE so it cannot drift
+  // from the depth texture. Static graph batches set the high-water mark;
+  // dense circuits exceed 40.
   const SHADOW_SLOTS = MAX_DRAWS;
-  const SHADOW_MODEL_STRIDE = 256;                      // dynamic-offset alignment
-  const SHADOW_MODEL_F32_STRIDE = SHADOW_MODEL_STRIDE >> 2; // 64 — pad to minUniformBufferOffsetAlignment
 
   // A 4th attr on the ribbon VBO zeroed (and broke pos fetch) on
   // SwiftShader-Dawn — including 4095-vert pieces. mat+trk live in the
@@ -237,7 +213,6 @@ const WGX = (function () {
     ],
   };
   const MAT_TEX_LAYERS = 17;
-  const LAMP_SHADOW_SIZE = WGX_LITE ? 1 : 512;
   // WebGPU allows sampleCount 1 or 4 — ONLY. (w3.org/TR/webgpu: "sampleCount
   // must be either 1 or 4"; Dawn agrees, 4 being the one portable MSAA level.)
   // Desktop GRAPHICS: ULTRA keeps 4×; every other preset (and unset = the
@@ -250,7 +225,8 @@ const WGX = (function () {
   try {
     let _p = localStorage.getItem("apex26.gfxPreset");
     try { _p = JSON.parse(_p); } catch (_) { /* raw string */ }
-    _wgxMsaa4 = _p === "ultra" || (_p == null && localStorage.getItem("apex26.gfxHigh") === "1");
+    _wgxMsaa4 = _p === "ultra" || _p === "extreme" || (_p == null && localStorage.getItem("apex26.gfxHigh") === "1");
+    if (typeof GfxQuality !== "undefined" && GfxQuality.option) _wgxMsaa4 = GfxQuality.option("msaa", _wgxMsaa4);
   } catch (_) { /* blocked storage: the cheaper of the two */ }
   let MSAA_COUNT = WGX_LITE ? 1 : (_wgxMsaa4 ? 4 : 1);
 
@@ -332,6 +308,17 @@ const WGX = (function () {
     return out;
   }
 
+  // Right-multiply an inverse GL projection by the inverse depth remap.
+  // WebGPU z reconstructs as GL 2z-w, so only columns 2 and 3 change.
+  function _remapInverseDepth(out, m) {
+    for (let r = 0; r < 4; r++) {
+      out[r] = m[r];
+      out[4 + r] = m[4 + r];
+      out[8 + r] = 2 * m[8 + r];
+      out[12 + r] = m[12 + r] - m[8 + r];
+    }
+  }
+
   //    Gribb–Hartmann from a COLUMN-MAJOR view-proj; inside = a*x+b*y+c*z+d >= 0.
   const _fcPlanes = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
                      new Float32Array(4), new Float32Array(4), new Float32Array(4)];
@@ -344,6 +331,9 @@ const WGX = (function () {
     const initActive = () => !initOwner || initOwner.active;
     if (!initActive()) return null;
     if (typeof navigator === "undefined" || !navigator.gpu) return null;
+    // A new device's account starts clean: the module-scope pair outlives a failed create for the post-mortem read,
+    // but a second create kept the first's count, so past GPU_ERR_LOG_CAP it never logged again (#5699 row 23).
+    _gpuErrors = 0; _gpuFirstMsg = null;
     // No WGSL sources -> no renderer. Refuse BEFORE touching the canvas, so the
     // GLX fallback can still attach a webgl2 context to it.
     if (!_Chunks || !_Chunks.LIT || !_Chunks.SKY || !_Chunks.BLIT || !_Chunks.SHADOW) {
@@ -389,7 +379,8 @@ const WGX = (function () {
         // runtime output probe's loss ladder to GLX, which renders fine.
         // `soft(ware|pipe)` not bare `soft` — that substring matched any
         // "Microsoft" description.
-        _softAdapterLocal = !!(adapter.isFallbackAdapter
+        // Chrome 136+ reports the fallback flag on GPUAdapterInfo; Chrome 140 removed GPUAdapter.isFallbackAdapter.
+        _softAdapterLocal = !!((info && info.isFallbackAdapter) || adapter.isFallbackAdapter
             || /HeadlessChrome/i.test(ua)
             || /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft(ware|pipe)/.test(infoBlob));
       } catch (_) { /* treat as hardware */ }
@@ -493,7 +484,8 @@ const WGX = (function () {
     // away. A frozen frame the player can navigate out of beats a reload loop.
     let _lost = false;
     let _capReq = null;
-    function _rejectCapture(reason) {
+    function _rejectCapture(reason, owner) {
+      if (owner && _capReq?.owner !== owner) return;
       const req = _capReq; _capReq = null;
       if (req) req.reject(new Error(reason || "device lost"));
     }
@@ -618,7 +610,7 @@ const WGX = (function () {
     // Same-page GLX fallback must not inherit a soft GPU canvas or a live
     // device: tear them down before every post-soft _fail so #game is free
     // for webgl2 and the orphaned offscreen node is gone.
-    let _cssSizeCache = null, _pageListenersOff = null;
+    let /** @type {ReturnType<typeof CanvasCssSize.create> | null} */ _cssSizeCache = null, _pageListenersOff = null;
     function _bootFail(reason) {
       try { if (_pageListenersOff) _pageListenersOff(); } catch (_) { /* no document events */ }   // TLX _createUndo parity
       try { if (_cssSizeCache) _cssSizeCache.dispose(); } catch (_) { /* observer already gone */ }
@@ -880,7 +872,7 @@ const WGX = (function () {
     // once GPU_ERR_QUIET_FRAMES presents pass with no error. As lifetime
     // counters, eight one-off errors in three frames hours apart (a freed-decal
     // bind, say) "persisted" and reloaded the phone a rung down mid-race
-    // (2026-09-24). _gpuErrors stays the lifetime total WGX.gpuErrors() reports.
+    // (2026-09-24). _gpuErrors stays this device's total WGX.gpuErrors() reports.
     const GPU_ERR_QUIET_FRAMES = 2;
     let _gpuErrRun = 0;
     try {
@@ -942,7 +934,6 @@ const WGX = (function () {
     const _TONE_IDS = ["acesA", "acesB", "acesC", "acesD", "acesE", "whitePoint"];
     const _TONE_STANDIN = Object.freeze({ acesA: 2.51, acesB: 0.03, acesC: 2.43, acesD: 0.59, acesE: 0.14, whitePoint: 1 });
     const skyData   = new Float32Array(WGSLChunks.SKY_UNIFORM_BYTES / 4);
-    const _vpGpu    = new Float32Array(16);   // Z01-remapped viewProj upload scratch
     const _projZ01  = new Float32Array(16);   // Z01·P scratch (off-axis garage/setup)
     const _viewScratch = new Float32Array(16); // V = invProj·viewProj scratch
     const _grInvTmp = new Float32Array(16);   // godray invVP mul scratch (was per-frame new)
@@ -955,7 +946,7 @@ const WGX = (function () {
     // day), the trackLightSBO generation, and the chunkIdxSBO segment
     // allocator (WeakMap chunks-array -> {base, table} + append cursor).
     let framePerChunk = 0, frameAllLights = null, frameRoadChunkLamps = 0, frameAllLightsGen = -1;
-    let _tlSrc = null, _tlCapPrev = -1, _tlGen = -1, _tlUpT = -1;
+    let _tlSrc = null, _tlStaticGen = -1, _tlCapPrev = -1, _tlGen = -1, _tlUpT = -1;
     // A VALUES-only change of the baked track set (allLightsGen: lamp flicker,
     // the warm-up ramp, a LAMPS slider) re-uploads at most this often. The
     // shipped flicker (lampFlicker 0.011-0.10, def 0.10) moves the gen EVERY
@@ -967,8 +958,7 @@ const WGX = (function () {
     const TL_VALUES_DT = 1 / 30;
     // Memo for the armed-shadow-lamp position -> absolute index scan in _writeFrame.
     let _asAL = null, _asX = 0, _asY = 0, _asZ = 0, _asIdx = -1, _asGen = -1;
-    // Which source array _tlScratch's STATIC lanes were packed from.
-    let _tlFullPack = null, _tlLoGen = -1;   // + the lamp bake gen its LIVE-ONLY lane (cone.w) came from
+    let _tlLoGen = -1;   // + the lamp bake gen its LIVE-ONLY lane (cone.w) came from
     const _tlScratch = new Float32Array(TRACK_LIGHT_CAP * 16);
     let frameLights = null, frameNL = 0;   // this frame's stride-15 light array (lamp-mask cull)
     // Lamp-mask generation keys, per pass kind (0 forward/env, 1 mirror): each pass's last
@@ -980,7 +970,7 @@ const WGX = (function () {
     // view-proj the depth buffer was rasterised with — every FX embeds it so its
     // clip-z matches the scene depth; frameInvProjW is the WebGPU-convention
     // inverse projection for SSAO view-pos reconstruction.
-    const frameVPGpu = new Float32Array(16);
+    const frameVPGpu = frameData.subarray(0, 16);   // FX reads the same matrix uploaded for lit draws
     const frameInvProjW = new Float32Array(16);
     let frameSunDir = null, frameSunColor = null, frameProjRaw = null,
       frameTune = null,
@@ -999,9 +989,9 @@ const WGX = (function () {
     // Size of the variant cache at the first present() — the boundary between
     // "built during boot" and "built while driving".
     let _pipeAtFirstPresent = -1;
-    let SHD = null;   // WGXShadow.init — sun/car/lamp + blocker
-    let CHK = null;   // WGXChunked.init — culled chunked meshes
-    let PST = null;   // WGXPost.init — post pipeline build
+    let /** @type {ReturnType<typeof WGXShadow.init> | null} */ SHD = null;   // WGXShadow.init — sun/car/lamp + blocker
+    let /** @type {ReturnType<typeof WGXChunked.init> | null} */ CHK = null;   // WGXChunked.init — culled chunked meshes
+    let /** @type {ReturnType<typeof WGXPost.init> | null} */ PST = null;   // WGXPost.init — post pipeline build
 
     // Shadow-pass objects.
     let envCubeView = null, ssrView = null;   // env-probe cube + SSR placeholders until their passes run
@@ -1009,6 +999,7 @@ const WGX = (function () {
     //   so lacquered car paint mirrors the actual surroundings when the CAR ENV
     //   REFLECTION tuner is on. Off by default (carEnvCube=0 ⇒ analytic sky only). ──
     const ENV_SIZE = 64;
+    const ENV_LOD_MAX = 2.5;   // wgsl-chunks.js envCube taps: rough (<= 1) * 2.5
     const ENV_CULL_M = 150;
     // Face cameras. WebGPU render-to-texture is y-DOWN (framebuffer row 0 is
     // NDC top) where GL's is y-up, so GLX's GL-correct up-vectors store every
@@ -1043,19 +1034,28 @@ const WGX = (function () {
     function _halfTexW(w, h, data) {
       const tex = device.createTexture({ size: [w, h], format: "rgba16float",
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
-      device.queue.writeTexture({ texture: tex }, data, { bytesPerRow: w * 8, rowsPerImage: h }, { width: w, height: h });
+      try { device.queue.writeTexture({ texture: tex }, data, { bytesPerRow: w * 8, rowsPerImage: h }, { width: w, height: h }); }
+      catch (e) { tex.destroy(); throw e; }
       return tex;
     }
     function _syncLampBake(lb) {
       if (!lb || lb === _bakeSrcW || !lb.data || !lb.indir) return;
-      const tex = _halfTexW(lb.atlasW, lb.atlasH * 2, lb.data);     // diffuse + bounce atlas halves
-      const idx = _halfTexW(lb.tilesX, lb.tilesY, lb.indir);        // tile -> slot (textureLoad)
+      let tex = null, idx = null;
+      const oldView = lampBakeView, oldIdxView = lampBakeIdxView;
+      try {
+        tex = _halfTexW(lb.atlasW, lb.atlasH * 2, lb.data);   // diffuse + bounce
+        idx = _halfTexW(lb.tilesX, lb.tilesY, lb.indir);      // tile -> slot
+        lampBakeView = tex.createView(); lampBakeIdxView = idx.createView();
+        _rebuildFrameBG();   // builds both groups before publishing either
+      } catch (e) {
+        lampBakeView = oldView; lampBakeIdxView = oldIdxView;
+        if (tex) tex.destroy(); if (idx) idx.destroy();
+        throw e;
+      }
       const old = _bakeTexW, oldIdx = _bakeIdxW;
-      _bakeTexW = tex; lampBakeView = tex.createView(); _bakeSrcW = lb;
-      _bakeIdxW = idx; lampBakeIdxView = idx.createView();
-      _rebuildFrameBG();
-      if (old) old.destroy();
-      if (oldIdx) oldIdx.destroy();
+      _bakeTexW = tex; _bakeIdxW = idx; _bakeSrcW = lb;
+      if (old) _retiredBufs.push(old);
+      if (oldIdx) _retiredBufs.push(oldIdx);
     }
     // Bake off ~2 s (GLX bindLampBake _bakeOffN): rebind the placeholder, then
     // retire the light map — destroyed after this frame's submit, never while
@@ -1136,7 +1136,8 @@ const WGX = (function () {
     let pSkid = null, skidUBO = null, skidFxBG = null, skidVBO = null,
         _skidCap = 0, _skidScratch = null;
     let pLine = null, lineUBO = null, lineFxBG = null, lineVBO = null, _lineCap = 0;   // DRIVING LINE ribbon
-    const _lineU = new Float32Array(24);   // LineU: viewProj (16) + params (4) + params2 (4)
+    const LINE_COLS_F1 = [0.10, 0.95, 0.35, 1.00, 0.72, 0.10, 1.00, 0.12, 0.10];   // opts.cols fallback (F1 GREEN)
+    const _lineU = new Float32Array(36);   // LineU: viewProj (16) + params (4) + params2 (4) + 3 colour vec4 (12)
     let pGlow = null, glowUBO = null, glowFxBG = null, glowVBO = null,
         _glowCap = 0, _glowScratch = null;
     let pDecal = null, decalUBO = null, fxDecalLayout = null;
@@ -2127,6 +2128,7 @@ const WGX = (function () {
       const css = _cssSizeCache.read();
       let pw = Math.max(1, Math.round(css.width * dpr));
       let ph = Math.max(1, Math.round(css.height * dpr));
+      if (_cssSizeCache?.photoSize) { pw = _cssSizeCache.photoSize.width; ph = _cssSizeCache.photoSize.height; }
       // CLAMP UNIFORMLY. Clamping each axis on its own changed the RATIO, not
       // just the resolution, and `aspect = w / h` below feeds every projection
       // matrix and the frustum cull distance. The ceiling is lower than it
@@ -2728,39 +2730,39 @@ const WGX = (function () {
           _mipPipes.set(tex.format, pipe);
         }
         if (!_mipSamp) _mipSamp = device.createSampler({ magFilter: "linear", minFilter: "linear" });
-        // Views + bind groups on an immutable texture are stable. Rebuilding
-        // the full ladder every call was 72 createView + 36 createBindGroup
-        // per 6-face env cycle (~every 6 frames with CAR ENV REFLECTION on).
-        // Cache the ladder on the texture — it dies with the texture.
+        // Mirror and probe mips are recorded repeatedly. Reuse their views, bindings and
+        // attachment descriptors for the lifetime of that texture. Uploaded atlases run once.
         let ladder = tex.__wgxMipLadder;
         if (!ladder || ladder.length !== nLay * (levels - 1)) {
           ladder = [];
+          const layout = pipe.getBindGroupLayout(0);
           for (let layer = 0; layer < nLay; layer++) {
+            let srcView = tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1,
+              baseMipLevel: 0, mipLevelCount: 1 });
             for (let level = 1; level < levels; level++) {
-              const srcView = tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1,
-                baseMipLevel: level - 1, mipLevelCount: 1 });
               const dstView = tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1,
                 baseMipLevel: level, mipLevelCount: 1 });
-              ladder.push({ dstView, bg: device.createBindGroup({
-                layout: pipe.getBindGroupLayout(0),
-                entries: [{ binding: 0, resource: srcView }, { binding: 1, resource: _mipSamp }],
-              }) });
+              const bg = device.createBindGroup({ layout,
+                entries: [{ binding: 0, resource: srcView }, { binding: 1, resource: _mipSamp }] });
+              const pass = { colorAttachments: [{ view: dstView, loadOp: "clear",
+                clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] };
+              ladder.push({ bg, pass });
+              srcView = dstView;
             }
           }
-          tex.__wgxMipLadder = ladder;
+          if (intoEnc) tex.__wgxMipLadder = ladder;
         }
         const enc = intoEnc || device.createCommandEncoder();
         for (let i = 0; i < ladder.length; i++) {
           const st = ladder[i];
-          const p = enc.beginRenderPass({ colorAttachments: [{ view: st.dstView, loadOp: "clear",
-            clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
+          const p = enc.beginRenderPass(st.pass);
           p.setPipeline(pipe); p.setBindGroup(0, st.bg); p.draw(3); p.end();
         }
         if (!intoEnc) device.queue.submit([enc.finish()]);
       } catch (_) { /* mip blit is best-effort; caller still has mip 0 */ }
     }
 
-    // Interleave [pos3, nrm3, col3] (stride 36) + a side array [mat, s, x, hw].
+    // Packed pos/nrm/colour (stride 28) + a side array [mat, s, x, hw].
     function _interleave(data) {
       const pos = toF32(data.pos), nrm = toF32(data.nrm), col = toF32(data.col);
       const vCount = pos.length / 3;
@@ -3038,7 +3040,8 @@ const WGX = (function () {
         _allocFail("createTexMesh", e);
         return { _wgx: "texmesh", _phase: 4 };
       }
-      return { _wgx: "texmesh", vbuf, ibuf, count: idx.length, indexFormat: idx instanceof Uint32Array ? "uint32" : "uint16" };
+      // pos / uv / idx kept: drawMirrorGlass bounds the glass's mirror LOD from them (perf hunt 6, PostCommon.mipFootprintLod).
+      return { _wgx: "texmesh", vbuf, ibuf, count: idx.length, indexFormat: idx instanceof Uint32Array ? "uint32" : "uint16", pos, uv, idx };
     }
 
     // Chunked mesh: spatial XZ cells with AABBs (port of GLX.createChunkedMesh).
@@ -3170,13 +3173,11 @@ const WGX = (function () {
         if (v) _viewScratch.set(v);
         else _mul4(_viewScratch, ipj, vp);   // V = inv(P)·(P·V)
         _mul4(_projZ01, Z01, pj);       // P′ = Z01·P
-        _mul4(_vpGpu, _projZ01, _viewScratch);
+        _mul4(frameVPGpu, _projZ01, _viewScratch);
       } else {
-        _mul4(_vpGpu, Z01, vp);   // GL clip (z -1..1) -> WebGPU clip (z 0..1)
+        _mul4(frameVPGpu, Z01, vp);   // GL clip (z -1..1) -> WebGPU clip (z 0..1)
       }
 
-      d.set(_vpGpu, 0);
-      frameVPGpu.set(_vpGpu);   // persistent copy for the FX passes (post/fx)
       const eye = f.eye || [0,0,0], sd = f.sunDir || [0.3,0.6,0.5], sc = f.sunColor || [1,0.95,0.9];
       // Post/FX frame extras.
       frameSunDir = f.sunDir || null;
@@ -3185,7 +3186,7 @@ const WGX = (function () {
       frameSunVS = f.sunViewDir || null;
       frameUpVS = f.upViewDir || null;
       frameTime = f.time != null ? f.time : 0;
-      if (f.invProj && f.invProj.length >= 16) { _mul4(frameInvProjW, f.invProj, Z01INV); frameHaveProj = true; }
+      if (f.invProj && f.invProj.length >= 16) { _remapInverseDepth(frameInvProjW, f.invProj); frameHaveProj = true; }
       else frameHaveProj = false;
       const T = f.tune || null;
       frameTune = T;
@@ -3245,7 +3246,7 @@ const WGX = (function () {
       const _mSh = (T && T.moonShadow != null ? T.moonShadow : 0.25) * (f.moonGate || 0);
       if (_mSh > _hf) _hf = _mSh;
       d[73] = ((T && T.shadowStr != null) ? T.shadowStr : 1.15) * _hf;
-      d[74] = 1 / SHADOW_SIZE;    // texel size for PCF
+      d[74] = 1 / SHD.SHADOW_SIZE;    // texel size for PCF — same source as the depth map
       d[75] = (T && T.shadowBias != null) ? T.shadowBias : 0.001;   // SHADOW BIAS knob (same 0.001 fallback as GLX)
       // params3 (floats 76..79): live tuner knobs the LIT material blocks consume.
       d[76] = (T && T.bounceK     != null) ? T.bounceK     : 0.04;  // BOUNCE (per-lamp bounce-fill strength, == GLX uBounceK; NOT ambient)
@@ -3341,7 +3342,7 @@ const WGX = (function () {
       // is ONE buffer refilled in place (js/lighting/frame-lights.js), so a
       // rebuild:true edit (LAMP DENSITY, POOL RADIUS) re-orders it under the same
       // identity. A hit is therefore re-checked against the record it names (O(1));
-      // a cached miss (-1) holds only while allLightsGen stands still. GLX keys
+      // a cached miss holds across RGB-only changes until the static set changes. GLX keys
       // the same lookup on the LampChunks table (chunked.js _shadowAllIdx).
       // Never in the mirror: the forward slot names another lamp there.
       let _absShadowIdx = -1;
@@ -3351,18 +3352,26 @@ const WGX = (function () {
         const so = SHD.lampIdx * 15;
         const lx = L[so], ly = L[so + 1], lz = L[so + 2];
         const ho = _asIdx * 15;
+        const positionGen = f.allLightsStaticGen ?? f.allLightsGen;
         if (_AL === _asAL && lx === _asX && ly === _asY && lz === _asZ &&
-            (_asIdx >= 0 ? _AL[ho] === lx && _AL[ho + 1] === ly && _AL[ho + 2] === lz : _asGen === f.allLightsGen)) {
+            (_asIdx >= 0 ? _AL[ho] === lx && _AL[ho + 1] === ly && _AL[ho + 2] === lz : _asGen === positionGen)) {
           _absShadowIdx = _asIdx;
         } else {
           for (let p = 0; p < _AL.length; p += 15) {
             if (_AL[p] === lx && _AL[p + 1] === ly && _AL[p + 2] === lz) { _absShadowIdx = p / 15; break; }
           }
-          _asAL = _AL; _asX = lx; _asY = ly; _asZ = lz; _asIdx = _absShadowIdx; _asGen = f.allLightsGen;
+          _asAL = _AL; _asX = lx; _asY = ly; _asZ = lz; _asIdx = _absShadowIdx; _asGen = positionGen;
         }
       }
       d[140] = _absShadowIdx;
       d[141] = (T && T.puddles != null) ? T.puddles : 1.0;   // params10.y: PUDDLES knob (GLX uPuddles, TLX U.puddles)
+      // WIND knobs → LIT vs_main (foliage sway): params10.zw = unit direction in
+      // world xz, pitBox.z = speed scale. Same defaults as GLX uWind / TLX U.wind.
+      {
+        const wd = ((T && T.windDir != null) ? T.windDir : 35) * (Math.PI / 180);
+        d[142] = Math.cos(wd);
+        d[143] = Math.sin(wd);
+      }
       // pitLane (floats 144..147, off 576): the PAINTED pit lane — entry s,
       // window length, pit side, lap length. Mirrors GLX's uPitLane. A null
       // frame.pitLane writes a zero LENGTH, which is what roadMarkings tests,
@@ -3374,8 +3383,11 @@ const WGX = (function () {
         // pitBox (floats 148..151, off 592): YOUR box — how far into the window
         // it sits and half its length. A zero halfLen is "no box", the same
         // length-0-means-absent convention pitLane's y uses one slot up.
+        // z carries windSpeed for FOLIAGE sway (roadMarkings reads only xy).
         const pb = f.pitBox;
-        d[148] = pb ? pb[0] : 0; d[149] = pb ? pb[1] : 0; d[150] = 0; d[151] = 0;
+        d[148] = pb ? pb[0] : 0; d[149] = pb ? pb[1] : 0;
+        d[150] = (T && T.windSpeed != null) ? T.windSpeed : 1.0;
+        d[151] = 0;
       }
       // bakeA/B/C/D (floats 152..167, off 608): BAKED LAMP POOLS — GLX bindLampBake.
       {
@@ -3410,6 +3422,7 @@ const WGX = (function () {
       const _hasLB = typeof LampBake !== "undefined";
       if (nL > 0) {
         const ld = lightData;
+        const spillStart = L.length / 15 - (f.brakeSpillCount || 0);
         for (let i = 0; i < nL; i++) {
           const o = i * 15, b = i * 16, q = i * 4;
           if (snap[q] !== L[o] || snap[q+1] !== L[o+1] || snap[q+2] !== L[o+2] || snap[q+3] !== L[o+6]) {
@@ -3419,7 +3432,7 @@ const WGX = (function () {
           ld[b+4]  = L[o+3];  ld[b+5]  = L[o+4];  ld[b+6]  = L[o+5];  ld[b+7]  = L[o+12]; // col.rgb, bleed
           ld[b+8]  = L[o+7];  ld[b+9]  = L[o+8];  ld[b+10] = L[o+9];  ld[b+11] = L[o+13]; // dir.xyz, volW
           ld[b+12] = L[o+10]; ld[b+13] = L[o+11]; ld[b+14] = L[o+14];                    // cosIn, cosOut, glareW
-          ld[b+15] = _hasLB ? LampBake.liveOnlyAt(L, o) : 0;                               // LIVE-ONLY (not baked)
+          ld[b+15] = i >= spillStart ? 1 : _hasLB ? LampBake.liveOnlyAt(L, o) : 0;                               // LIVE-ONLY (not baked)
         }
         device.queue.writeBuffer(lightSBO, 0, lightData, 0, nL * 16);
       }
@@ -3433,24 +3446,12 @@ const WGX = (function () {
       frameRoadChunkLamps = +f.roadChunkLamps || 0;
       frameAllLightsGen = +f.allLightsGen || 0;
       frameAllLights = f.allLights || null;
-      // (Re)upload the baked track set when the (lights identity, knob) pair
-      // moves — rgb × knob applied here ONCE (per-chunk sets render raw baked
-      // records × the knob dimmer; no twilight ramp/flicker, GLX parity), so
-      // the buffer is static until the next bake. A moved pair also resets
-      // the chunkIdx segment allocator: every mesh re-appends on next draw.
-      // (frame.allLights is ONE reused buffer, so identity rarely moves: the
-      // allocator also rewinds in freeChunkedMesh when the last mesh holding a
-      // segment is freed — wgx-chunked.js — or each track build would leak.)
-      // Re-upload when the SET changes (identity/knob) or when its VALUES change
-      // (allLightsGen — flicker, warm-up, a LAMPS slider). The two are kept
-      // apart deliberately: the segment allocator below may only be reset for
-      // the former. Gen moves every frame while flicker runs, and resetting the
-      // allocator there would re-bake every chunk table every frame.
-      // The knob is deliberately NOT in this key: the loop below copies AL
-      // verbatim, so a knob move cannot change one byte here. It moves only the
-      // per-chunk TABLES, and only via capFor() — 1000 slider steps, <=17 caps.
+      // A new source or a static refill of the shared buffer must update the
+      // records and chunk segments immediately. RGB-only changes are paced.
+      // The slider only changes the table cap, never the packed lamp records.
       const _tlCap = (typeof LampChunks !== "undefined") ? LampChunks.capFor(framePerChunk) : 0;
-      const _tlSetMoved = _tlSrc !== frameAllLights;
+      const staticGen = +f.allLightsStaticGen || 0;
+      const _tlSetMoved = _tlSrc !== frameAllLights || _tlStaticGen !== staticGen;
       const _lbGen = f.lampBake ? f.lampBake.gen | 0 : 0;
       // Values-only: the same set and bake, only rgb moved — paced by TL_VALUES_DT
       // on the frame clock (frame.time, game.js's render clock). A clock that went
@@ -3468,7 +3469,7 @@ const WGX = (function () {
         // between frames and only need writing when the SET changes. Gen moves
         // every frame under flicker or the warm-up ramp; keying on it alone would
         // rewrite all 16 lanes of up to TRACK_LIGHT_CAP 1024 records to change three.
-        if (_tlFullPack !== AL || _tlLoGen !== _lbGen) {
+        if (_tlSetMoved || _tlLoGen !== _lbGen) {
           for (let i = 0; i < tn; i++) {
             const o = i * 15, b = i * 16;
             td[b]    = AL[o];        td[b+1]  = AL[o+1];      td[b+2]  = AL[o+2];  td[b+3]  = AL[o+6];
@@ -3477,7 +3478,7 @@ const WGX = (function () {
             td[b+12] = AL[o+10];     td[b+13] = AL[o+11];     td[b+14] = AL[o+14];
             td[b+15] = _hasLB ? LampBake.liveOnlyAt(AL, o) : 0;
           }
-          _tlFullPack = AL; _tlLoGen = _lbGen;
+          _tlLoGen = _lbGen;
         }
         for (let i = 0; i < tn; i++) {
           const o = i * 15, b = i * 16;
@@ -3487,7 +3488,7 @@ const WGX = (function () {
         // contiguous range and the upload itself cannot shrink. Only the CPU
         // pack does — which is the half that scales with lamp count.
         if (tn > 0) device.queue.writeBuffer(trackLightSBO, 0, td, 0, tn * 16);
-        _tlSrc = frameAllLights; _tlGen = frameAllLightsGen; _tlUpT = frameTime;
+        _tlSrc = frameAllLights; _tlStaticGen = staticGen; _tlGen = frameAllLightsGen; _tlUpT = frameTime;
       }
       // Allocator tracks the TABLES: reset on a set or CAP change, never on a
       // colour-only gen bump (tables key on positions, which flicker leaves
@@ -3554,7 +3555,7 @@ const WGX = (function () {
       device.queue.writeBuffer(skyUBO, 0, skyData);
     }
 
-    let encoder = null, litPass = null, currentView = null, _drawSlot = 0;
+    let encoder = null, litPass = null, currentView = null, _drawSlot = 0, _drawOverflowWarned = false;
     function begin(frame) {
       _presentCount++;   // frame counter for the GPU-error cap (errors are attributed to the frame they arrive in)
       if (_gpuErrLastPresent >= 0 && _presentCount - _gpuErrLastPresent > GPU_ERR_QUIET_FRAMES) { _gpuErrFrames = 0; _gpuErrRun = 0; }
@@ -3705,6 +3706,7 @@ const WGX = (function () {
       // unclamped length would write past drawRing's end — a synchronous
       // OperationError inside present() reads as a device strike.
       device.queue.writeBuffer(drawUBO, 0, drawRing, 0, Math.min(_drawSlot, MAX_DRAWS) * DRAW_F32_STRIDE);
+      if (_drawSlot > MAX_DRAWS && !_drawOverflowWarned) { _drawOverflowWarned = true; Log.warn("gfx", "WGX draw ring overflow: " + (_drawSlot - MAX_DRAWS) + " draw(s) dropped past " + MAX_DRAWS); }
     }
     function _flushQuadFxUBO() {
       if (!quadFxUBO || _fxQuadSlot <= 0) return;
@@ -3761,7 +3763,7 @@ const WGX = (function () {
         pass.__ib = buf; pass.__ibf = fmt;
       }
     }
-    // Slot 0 = pos/nrm/col (stride 36), slot 1 = instance.
+    // Slot 0 = packed pos/nrm/colour (stride 28), slot 1 = instance.
     // Group 2 = mat+trk storage (vertex_index). Road draws bind the piece's
     // authored buffer; bury/floor keep the world LUT (magic 12345).
     function _bindLitVerts(pass, vbuf, instBuf, attrBG, authored) {
@@ -3917,7 +3919,10 @@ const WGX = (function () {
     let _envInitFailed = false;   // a partial envInit is never retried: see the catch
     function envInit() {
       if (envCubeTex || _envInitFailed) return;
-      const envMips = Math.floor(Math.log2(ENV_SIZE)) + 1;
+      // Perf hunt 5 W1: every envCube tap is textureSampleLevel(.., rough * 2.5) with rough <= 1 after the SAA
+      // clamp (wgsl-chunks.js), so a trilinear tap reads level 3 at most. Levels 4-6 of the 64 px cube were built
+      // and never read: 18 of the ladder's 36 passes per cube (the census's 64x64/rgba16float wide-frame rows).
+      const envMips = Math.min(Math.floor(Math.log2(ENV_SIZE)) + 1, Math.ceil(ENV_LOD_MAX) + 1);
       try {
         envCubeTex = device.createTexture({
           size: [ENV_SIZE, ENV_SIZE, 6], dimension: "2d", format: SCENE_FORMAT,
@@ -4019,19 +4024,20 @@ const WGX = (function () {
         _envFrame.cullDist = _envSvCull;
         _envFrame = null;
       }
-      if (!envCubeTex || !litPass || !_envEncoder) return;
+      if (!envCubeTex || !litPass || !_envEncoder) return false;
       _flushLitRings();
       litPass.end();
+      _envFacesMask |= 1 << face;
+      // Regenerate mips EVERY completed cube (GLX/TLX parity). Gating this on
+      // !_envProbeLive left mip0 updating while higher LODs froze at the first
+      // capture — lacquer roughness LOD stayed at the start-line reflection.
+      // W3: recorded into the face's own encoder, after its pass (queue order kept): one submit, not two.
+      if (_envFacesMask === 63) _generateMips(envCubeTex, 6, _envEncoder);
       device.queue.submit([_envEncoder.finish()]);
       litPass = null; encoder = null; _envEncoder = null;
       _activeFrameBG = frameBindGroup;
-      _envFacesMask |= 1 << face;
       if (_envFacesMask === 63) {
         _envFacesMask = 0;
-        // Regenerate mips EVERY completed cube (GLX/TLX parity). Gating this on
-        // !_envProbeLive left mip0 updating while higher LODs froze at the first
-        // capture — lacquer roughness LOD stayed at the start-line reflection.
-        _generateMips(envCubeTex, 6);
         if (!_envProbeLive) {
           _envProbeLive = true;
           envCubeView = envSampleView;   // main frame group now mirrors the real world
@@ -4055,9 +4061,17 @@ const WGX = (function () {
     // the composite reads at the level params.z names, through _mirSamp
     // (mipmapFilter linear — linearSampler has none). _generateMips rebuilds the
     // chain after each mirror submit.
-    let mirSampleView = null, _mirSamp = null;
+    // Perf hunt 6 (the WGX twin of hunt 5 F1): mipLevelCount is what a tap reads, not the full chain. The inset's
+    // explicit lod reads floor(lod)..floor(lod)+1; the glass's implicit LOD, bounded per draw by
+    // PostCommon.mipFootprintLod (_mirGlassLod: session max), reads up to ceil(lod + 0.25) + 1. Unbounded twice in
+    // a row (or no CPU arrays) latches the full chain; one unbounded frame does not; a zero viewProj is no bound.
+    // Grow-only: mirrorBegin re-allocates when the count it needs exceeds the target's. As on TLX, the frame that
+    // first raises the need (a glass's first bound, a rect change on a skipped mirror frame) reads the old count once.
+    let mirSampleView = null, _mirSamp = null, _mirGlassLod = -Infinity, _mirGlassInf = 0;
+    const _mirBox = [0, 0, 0, 0];
     let _mirPassSeq = 0;   // bumped per mirrorBegin: a batch's mirror instance view is valid only for the pass that culled it
-    let _mirEncoder = null, _mirDead = false, _mirRect = null, _mirRenders = 0, _mirComposites = 0, _mirFlip = true;   // flip false: the broadcast PiP
+    let _mirFreeze = false;
+    let _mirEncoder = null, _mirDead = false, _mirRect = null, _mirRenders = 0, _mirComposites = 0, _mirFlip = true, _mirAllocs = 0;   // flip false: the broadcast PiP
     let _mirInPass = 0, _mirDone = false;   // P2: insets drawn inside the final pass; this frame's inset is already drawn
     let _mirUBO = null, _mirBG = null;
     // The live glass's group (drawMirrorGlass): built lazily on mirSampleView,
@@ -4069,22 +4083,40 @@ const WGX = (function () {
       try { if (mirDepthTex) mirDepthTex.destroy(); } catch (_) { /* already invalid */ }
       mirTex = mirView = mirSampleView = mirDepthTex = mirDepthView = null; _mirBG = null; _mirGlassBG = null; mirW = mirH = 0; _mirRenders = 0;
     }
+    // The inset's pixel rect in the present target (the composite's viewport), or null when none is drawn.
+    function _mirInsetBox() {
+      if (!_mirRect) return null;
+      const cw = wantSpatialUpscale() ? presentW : width, ch = wantSpatialUpscale() ? presentH : height;
+      const x = Math.round(_mirRect[0] * cw), y = Math.round(_mirRect[1] * ch);
+      const w = Math.min(cw - x, Math.round(_mirRect[2] * cw)), h = Math.min(ch - y, Math.round(_mirRect[3] * ch));
+      if (w < 2 || h < 2 || x < 0 || y < 0) return null;
+      _mirBox[0] = x; _mirBox[1] = y; _mirBox[2] = w; _mirBox[3] = h;
+      return _mirBox;
+    }
+    const _mirLodFor = (tw, th, b) => Math.max(0, Math.log2(Math.max(tw / b[2], th / b[3])));
+    function _mirLevels(w, h) {
+      const full = Math.floor(Math.log2(Math.max(w, h))) + 1, b = _mirInsetBox();
+      if (_mirGlassLod === Infinity) return full;
+      let need = b ? Math.floor(_mirLodFor(w, h, b)) + 2 : 1;
+      if (_mirGlassLod > -Infinity) need = Math.max(need, Math.ceil(_mirGlassLod + 0.25) + 1);
+      return Math.max(1, Math.min(full, need));
+    }
     function mirrorBegin(frame, w, h) {
       // litPass/encoder set = begin() already ran this frame (or a probe face
       // is open): refuse rather than steal the pass.
       if (_lost || WGX_MINIMAL || _mirDead || !skyPipeline || litPass || encoder) return false;
       w = Math.max(16, Math.min(1024, w | 0)); h = Math.max(8, Math.min(512, h | 0));
-      if (!mirTex || w !== mirW || h !== mirH) {
-        _mirrorFree();
+      const lv = _mirLevels(w, h);
+      if (!mirTex || w !== mirW || h !== mirH || lv > mirTex.mipLevelCount) {
+        _mirrorFree();   // a grow drops the views, both bind groups and (with the texture) its __wgxMipLadder
         try {
-          mirTex = device.createTexture({ size: [w, h], format: SCENE_FORMAT,
-            mipLevelCount: Math.floor(Math.log2(Math.max(w, h))) + 1,
+          mirTex = device.createTexture({ size: [w, h], format: SCENE_FORMAT, mipLevelCount: lv,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
           mirView = mirTex.createView({ baseMipLevel: 0, mipLevelCount: 1 });
           mirSampleView = mirTex.createView();
           mirDepthTex = device.createTexture({ size: [w, h], format: DEPTH_FORMAT, usage: _transientRenderUsage() });   // P6: clear + discard only
           mirDepthView = mirDepthTex.createView();
-          mirW = w; mirH = h;
+          mirW = w; mirH = h; _mirAllocs++;   // lifetime: _mirRenders restarts on each (GPU hunt 3)
         } catch (e) {
           _mirrorFree(); _mirDead = true;
           try { Log.warn("gfx", "WGX mirror allocation failed — mirror off:", e && e.message); } catch (_) { /* harness */ }
@@ -4096,6 +4128,7 @@ const WGX = (function () {
       const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
       if (SHD) SHD.flushPending();   // this frame's shadow maps land before the mirror samples them
       _mirPassSeq++;
+      _mirFreeze = !!frame.mirrorFreezeInstanced;
       _mirEncoder = device.createCommandEncoder();
       litPass = _mirEncoder.beginRenderPass({
         colorAttachments: [{ view: mirView, clearValue: { r: fc[0], g: fc[1], b: fc[2], a: 1 },
@@ -4137,16 +4170,15 @@ const WGX = (function () {
       if (pass && !_insetInPass) return;
       if (_mirDone) return;
       if (!_mirRect || !mirSampleView || !_mirRenders || !blitPipeline || !currentView || !encoder) return;
-      const cw = wantSpatialUpscale() ? presentW : width, ch = wantSpatialUpscale() ? presentH : height;
-      const x = Math.round(_mirRect[0] * cw), y = Math.round(_mirRect[1] * ch);
-      const w = Math.min(cw - x, Math.round(_mirRect[2] * cw)), h = Math.min(ch - y, Math.round(_mirRect[3] * ch));
-      if (w < 2 || h < 2 || x < 0 || y < 0) return;
+      const b = _mirInsetBox();
+      if (!b) return;
+      const x = b[0], y = b[1], w = b[2], h = b[3];
       if (!_mirUBO) _mirUBO = device.createBuffer({ size: BLIT_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       if (!_mirSamp) _mirSamp = device.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear" });
       if (!_mirBG) _mirBG = device.createBindGroup({ layout: blitPipeline.getBindGroupLayout(0), entries: [
         { binding: 0, resource: mirSampleView }, { binding: 1, resource: _mirSamp }, { binding: 2, resource: { buffer: _mirUBO } }] });
       // z = the mip level for this minification (target texels per rect pixel, log2).
-      const lod = Math.max(0, Math.log2(Math.max(mirW / w, mirH / h)));
+      const lod = _mirLodFor(mirW, mirH, b);
       _blitParams(_mirData, exposure, T);
       _mirData[1] = _mirFlip ? 1 : 0; _mirData[2] = lod;   // y = flip left-right (0: the broadcast PiP)
       if (o) {
@@ -4203,6 +4235,12 @@ const WGX = (function () {
       _setIB(litPass, mesh.ibuf, mesh.indexFormat);
       litPass.drawIndexed(mesh.count);
       _mirGlass++;
+      if (_mirGlassLod < Infinity && (frameVPGpu[11] !== 0 || frameVPGpu[15] !== 0)) {   // Z01 leaves the x/y/w rows as GL's
+        const l = !mesh.pos || !mesh.uv ? Infinity
+          : PostCommon.mipFootprintLod(mesh.pos, mesh.uv, mesh.idx, model, frameVPGpu, width, height, mirW, mirH);
+        if (l < Infinity) { _mirGlassInf = 0; _mirGlassLod = Math.max(_mirGlassLod, l); }
+        else if (++_mirGlassInf >= 2 || !(l === l) || !mesh.pos) _mirGlassLod = Infinity;
+      }
       return true;
     }
 
@@ -4241,7 +4279,8 @@ const WGX = (function () {
       const r = PostCommon.sunScreen(frameSunDir, frameViewProj, frameSunColor, _sunScr);
       if (!r.visible) return null;
       // GL NDC (y-up) -> texture-space uv (y-down), matching POST_VS.
-      const ux = r.ndcx * 0.5 + 0.5, uy = 0.5 - r.ndcy * 0.5;
+      // Compare the same f32 UV the composite receives, including its y flip.
+      const ux = Math.fround(r.ndcx * 0.5 + 0.5), uy = Math.fround(0.5 - r.ndcy * 0.5);
       _sunOut.ux = ux; _sunOut.uy = uy; _sunOut.flare = r.flare; _sunOut.shaft = r.shaft;
       _sunOut.onScreen = ux >= 0 && ux <= 1 && uy >= 0 && uy <= 1;
       return _sunOut;
@@ -4253,10 +4292,10 @@ const WGX = (function () {
     // frame encoder; _capFinish maps after onSubmittedWorkDone. Optional
     // readback oracle — visible #game is the soft-present 2D blit; prefer
     // gfx-probe.mjs for the primary visible-canvas gate. One request in flight.
-    function capturePixels() {
+    function capturePixels(owner) {
       if (_lost) return Promise.reject(new Error("device lost"));
       if (_capReq) return Promise.reject(new Error("capture already pending"));
-      return new Promise((resolve, reject) => { _capReq = { resolve, reject }; });
+      return new Promise((resolve, reject) => { _capReq = { resolve, reject, owner }; });
     }
     // Encode the readback copy into the FRAME'S OWN encoder (call just before
     // its finish/submit), then start the map after submit. Split in two
@@ -4404,9 +4443,9 @@ const WGX = (function () {
         : PostCommon.knob(o.tune, "carReflect");   // TUNE_DEFS default (0.05) — same read as _carRefl below
       const _ssrEarly = !!(frameHaveProj && _ssrReady && (
         _ssrStrEarly > 0.001 || _carReflEarly > 0.001));
-      const _slEarly = frameSunColor
-        ? Math.max(frameSunColor[0], frameSunColor[1], frameSunColor[2]) : 1;
-      const _flareEarly = !!(frameSunDir && frameSunDir[1] > -0.02 && _slEarly > 0.35);
+      const sun = _sunScreen();
+      const flareStr = sun ? Math.fround(sun.flare * (o.flareMul != null ? o.flareMul : 1)) : 0;
+      const _flareEarly = sun && sun.onScreen && flareStr > 0;
       const _needDepth = _haveAOEarly || _haveGREarly || _ssrEarly || _flareEarly;
       if (_needDepth && _passSamples > 1 && pDepthResolve && depthMSView && depthView) {
         try {
@@ -4464,7 +4503,6 @@ const WGX = (function () {
       // frame, where _texW is still 0.
       const tw = _texW || width, th = _texH || height;
       const halfW = Math.max(1, tw >> 1), halfH = Math.max(1, th >> 1);
-      const sun = _sunScreen();
       const sunUVx = sun ? sun.ux : -2, sunUVy = sun ? sun.uy : -2;
 
       //    by COMPOSITE this same present() (binding 8). Skipped when po.reflect and car-paint SSR are both off.
@@ -4554,7 +4592,7 @@ const WGX = (function () {
         const invVP = lastFrame && lastFrame.invViewProj;
         if (invVP && invVP.length >= 16) {
           _grInvTmp.set(invVP.length === 16 ? invVP : (invVP.length > 16 && invVP.subarray ? invVP.subarray(0, 16) : IDENT));
-          _mul4(s.subarray(0, 16), _grInvTmp, Z01INV);
+          _remapInverseDepth(s, _grInvTmp);
         } else s.set(IDENT, 0);
         s.set(SHD.rendered ? SHD.shadowLVPData : IDENT, 16);
         s.set(lampArmed ? SHD.lampShadowLVPData : IDENT, 32);
@@ -4663,7 +4701,6 @@ const WGX = (function () {
         const s = postScratch;
         // Normalise mip-chain accumulation to keep the tuned bloom energy (GLX).
         const bloomNorm = bloomAmt > 0 ? bloomAmt * 1.25 / Math.max(useLv - 1, 1) : 0;
-        const flareStr = sun ? sun.flare * (o.flareMul != null ? o.flareMul : 1) : 0;
         // SCREEN SUN-SHAFT: p0.z scales ONLY the composite radial bloom shaft
         // (GLX uSunShaft). Volumetric god-ray is added unscaled in WGSL.
         // GATED ON bloomAmt: the shaft pass READS THE BLOOM CHAIN (GLX
@@ -5041,7 +5078,9 @@ const WGX = (function () {
       const n = (matrices && matrices.length) ? (matrices.length / 16) | 0 : 0;
       const packed = new Float32Array(n * 20);
       for (let i = 0; i < n; i++) {
-        packed.set(matrices.subarray ? matrices.subarray(i * 16, i * 16 + 16) : matrices.slice(i * 16, i * 16 + 16), i * 20);
+        // Build the GPU instance row directly; a circuit can have thousands of these matrices.
+        const source = i * 16, target = i * 20;
+        for (let k = 0; k < 16; k++) packed[target + k] = matrices[source + k];
         if (colors && colors.length) {
           packed[i * 20 + 16] = colors[i * 3];
           packed[i * 20 + 17] = colors[i * 3 + 1];
@@ -5103,6 +5142,7 @@ const WGX = (function () {
       // cell-set key made the main and mirror culls evict each other every frame (a full repack + writeBuffer
       // per batch per pass, measured 43/frame on Monza). The mirror gets its own pack, buffer and key.
       const tb = (!shadow && _mirEncoder && _mirrorView(batch)) || batch;
+      if (tb !== batch && InstCells.holdMirror(tb, _mirPassSeq, _mirFreeze)) return tb.visible;
       let samePack = !shadow && !!tb._cullPlanes && InstCells.sameRadial(tb, eye, cd, fog);
       if (samePack) {
         let po = 0;
@@ -5377,8 +5417,12 @@ const WGX = (function () {
       _lineU[16] = (opts && opts.speed) || 0;
       _lineU[17] = opts && opts.cornersOnly ? 1 : 0;
       _lineU[18] = 1.6;                     // emissive strength: a constant, no producer sends one
-      _lineU[19] = opts && opts.palette ? 1 : 0;   // colour-blind palette (params.w)
+      _lineU[19] = 0;                              // params.w spare (was the 0|1 palette flag)
       _lineU[20] = (opts && opts.opacity) || 1;    // LINE OPACITY (params2.x)
+      // LINE COLOUR (DrivingLine.PALETTES): onPace / lift / brake rgb into the
+      // colOnPace / colLift / colBrake vec4s at floats 24 / 28 / 32; F1 GREEN when absent.
+      const lc = (opts && opts.cols) || LINE_COLS_F1;
+      for (let k = 0; k < 3; k++) { const o = 24 + k * 4; _lineU[o] = lc[k * 3]; _lineU[o + 1] = lc[k * 3 + 1]; _lineU[o + 2] = lc[k * 3 + 2]; }
       device.queue.writeBuffer(lineUBO, 0, _lineU);
       _setPipe(litPass, pLine);
       _setBG0(litPass, lineFxBG);
@@ -5873,6 +5917,7 @@ const WGX = (function () {
     return {
       init() { return true; },
       resize,
+      setPhotoCaptureSize(size) { _cssSizeCache.photoSize = size; resize(); },
       setRenderScale,
       getRenderScale() { return renderScale; },
       setSpatialUpscale,
@@ -5899,6 +5944,7 @@ const WGX = (function () {
       freeMesh,
       freeChunkedMesh,
       freeTexture,
+      flushTexPool() {},            // TLX-only retired-texture pool; nothing to flush here
       // texCensus: GLX-only. Declared ABSENT rather than left off, because
       // game.js installs a backend by descriptor-copy onto GLX and an absent
       // NAME would keep GLX's own function — which would then run against a
@@ -5932,8 +5978,13 @@ const WGX = (function () {
       mirrorEnd,
       mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; _mirFlip = flip !== false; },
       mirrorState: () => ({ ready: !!mirTex && _mirRenders > 0, dead: _mirDead, w: mirW, h: mirH, hdr: true,
-        renders: _mirRenders, composites: _mirComposites, inPass: _mirInPass, glass: _mirGlass, rect: _mirRect, flip: _mirFlip }),
+        renders: _mirRenders, allocs: _mirAllocs, composites: _mirComposites, inPass: _mirInPass, glass: _mirGlass, rect: _mirRect, flip: _mirFlip,
+        mips: mirTex ? mirTex.mipLevelCount : 0, glassLod: _mirGlassLod }),
       drawMirrorGlass,
+      // Quit-to-menu (#4219): destroy both textures and drop the composite / glass bind groups naming them
+      // (_mirrorFree; WebKit holds a destroyed texture while a bind group references it). mirrorBegin re-allocates.
+      releaseMirror() { if (_mirEncoder) return false; _mirrorFree(); return true; },
+      get envProbeOptOut() { return WGX_MINIMAL || WGX_LITE || _envInitFailed || _lost; },
       envProbeReady() { return _envProbeLive; },
       envProbeReset,
 
@@ -5979,14 +6030,8 @@ const WGX = (function () {
       gpuMs,
       createInstancedBatch,
       cullInstances,
-      // NOT IMPLEMENTED, declared rather than omitted: an absent name would let
-      // descriptor-copy keep GLX's own closure and run it against a null device
-      // (backend-surface-parity.test.mjs). DebrisWorld feature-tests this and
-      // keeps its per-body loop here, which is exactly what WGX ships today —
-      // so this is a perf gap, never a correctness one. Porting it means
-      // expanding the caller's stride-16 matrices into WGX's stride-20 instance
-      // layout (16 matrix + 3 colour + pad) and deciding what the colour lanes
-      // mean for a batch created without srcColors. docs/PERF-FINDINGS.md 2h.
+      instPerPass: true,   // rear and main views retain separate packs
+      // Expands caller matrices into the stride-20 matrix/colour instance layout.
       updateInstances,
       drawInstanced,
       freeInstancedBatch,
@@ -6010,6 +6055,8 @@ const WGX = (function () {
       // container's pixel oracle (tools/gfx/wgx-capture.mjs); WGX-only, so the
       // backend-surface-parity test imposes nothing on GLX/TLX for it.
       capturePixels,
+      // The caller gave up on a pending capture (photo studio's timeout): free the one slot (#5743 P3).
+      cancelCapture: (why, owner) => _rejectCapture(why || "capture cancelled", owner),
       awaitSoftPresent,
       invalidateSoftPresent,
       holdSoftPresent,

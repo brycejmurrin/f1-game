@@ -4,7 +4,15 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "hungaroring",
-    pit: { side: -1 },   // the pit complex (TrackPit): the paddock is on the left of the main straight
+    revision: 2,
+    // FIA 2026 Doc 5 circuit map + pit-lane drawing put the pits on the driver's RIGHT
+    // (infield, the lane leaves on the inside of the right-hand T14). The authored
+    // pit building, paddock, broadcast and kits sit on +1 with it; the covered main
+    // tribune and the T1 / Pit Exit stands face them on -1 (scenery/hungaroring.js).
+    pit: { side: 1 },
+    // Its own covered main tribune faces the pits on -1 (scenery coveredMainTribune);
+    // the generic 7-box -1 pit-straight stand would stand in front of it.
+    ownPitStraight: true,
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 1.7 m off centreline; = trace vertex 0.
     // A start line is always on a straight: docs/tracks/START-LINES.md.
@@ -24,27 +32,32 @@
     ],
     terrainOuter: 90,
     pal: { zenith: [0.55, 0.62, 0.78], horizon: [0.78, 0.72, 0.58], fog: [0.72, 0.68, 0.55], fogDensity: 0.0022, grass: [0.42, 0.40, 0.22], runoff: [0.58, 0.50, 0.34], ambientSky: [0.62, 0.58, 0.50], ambientGround: [0.40, 0.36, 0.28], sunDir: [0.7401805851129838, 0.587790464648546, 0.3265502581380811], sun: [1.0, 0.94, 0.78], sunColor: [1.0, 0.94, 0.78] },
-    // Elevation from SRTM bake in js/track/circuit-elevations.js
+    // SRTM elevation with a qualifying-trace correction through the T2–T4 basin
     // (`node tools/gen/bake-elevation.mjs hungaroring`). Three authored cosine
     // bumps left ~59% of the lap dead-flat between the T1 plunge and mid-sector
     // crest — stair-step basin. hasRealElevation(id) ignores elevations keys.
+    // bankZones: { turn } rows anchor on the curated racing-frame apex (turns[]);
+    // five of the six { frac } rows built a corner early (#5652, corner-frames.cjs).
     bankZones: [
-      { frac: 0.1888, angleDeg: 3.0, widthM: 100 },   // T1 downhill right
-      { frac: 0.2961, angleDeg: 3.5, widthM: 150 },   // T2
-      { frac: 0.3474, angleDeg: 6.0, widthM: 90 },    // T4 — the banked left
-      { frac: 0.5197, angleDeg: 3.0, widthM: 170 },   // hilltop sweep
-      { frac: 0.8506, angleDeg: 3.0, widthM: 70 },    // T11
-      { frac: 0.9624, angleDeg: 3.5, widthM: 190 },   // final long right
+      { turn: 2,  angleDeg: 3.0, widthM: 100 },       // T2 downhill right
+      { turn: 3,  angleDeg: 3.5, widthM: 150 },       // T3 exit / T4 approach (built at T3 on base too)
+      { turn: 4,  angleDeg: 6.0, widthM: 90 },        // T4 — the banked left
+      { turn: 7,  angleDeg: 3.0, widthM: 170 },       // hilltop sweep (near T7)
+      { turn: 13, angleDeg: 3.0, widthM: 70 },        // T13
+      { turn: 14, angleDeg: 3.5, widthM: 190 },       // T14 — the final long right
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
+    // sectors/turns: sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.32, 0.68],
-    // FIA 2025 map topology checked against the built racing centreline.
-    // T2/T14 have several curvature peaks but each is ONE physical corner;
-    // retain both chicane corners T6/T7 and the distinct left-hand T10.
+    // turns: one apex per numbered corner T1-T14 of the FIA 2026 event map (Hungarian
+    // GP Doc 5 "Circuit Map, Pit Lane Drawing, Emergency Exits Map and Red Zone",
+    // 23 July 2026), checked against the built racing centreline. The map also labels
+    // two kinks with suffixes, not counted here: T1A, the right-hand kink on the run
+    // from T1 to T2 (racing ~0.12-0.14), and T12A, the left bend into the T13 hairpin
+    // (racing ~0.81). T2/T14 have several curvature peaks but each is ONE corner.
     turns: [0.0898, 0.1989, 0.2502, 0.3602, 0.4225, 0.4922, 0.4995, 0.5408, 0.5710, 0.6159, 0.6627, 0.7544, 0.8240, 0.8818],
     furniture: { tree: "broad", fol: [0.44, 0.44, 0.19], lamp: "none", sparse: true, treeCrown: "columnar" },  // dry straw-olive, dusty bowl
     kit: { marshal: "hut",       rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },

@@ -86,6 +86,7 @@ const GarageSurfaceOutline = (() => {
     }
     return { set, clear, draw, active: () => field };
   }
-  return Object.freeze({ FIELDS, contour, create });
+  // FIELDS stays module-local (only set() filters the tint key against it).
+  return Object.freeze({ contour, create });
 })();
 Object.freeze(GarageSurfaceOutline);

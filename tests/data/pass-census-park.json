@@ -1,0 +1,706 @@
+{
+ "_doc": "pass-census --park exact baselines (#4783 row 1): per pass the [min, max] draw calls and triangles per render on a parked, frozen frame, and three's memory counters. Built by `node tools/gfx/pass-census-lib.mjs --collect`; never hand-edited. No tolerance: a diff is a change in what the frame draws.",
+ "source": {
+  "run": "45000459060",
+  "sha": "6f13ee4feba8504603d7b842c5e3486bdfba366a",
+  "adapter": "perf-census-webgpu.yml on ubuntu-latest; adapterInfo vendor google, architecture swiftshader (software WebGPU)"
+ },
+ "cells": {
+  "monaco|chase|desktop|webgpu|at0.1": {
+   "passes": {
+    "TLXPostLDR 640x360": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "output 640x360": {
+     "calls": [
+      29,
+      29
+     ],
+     "tris": [
+      158251,
+      158251
+     ]
+    },
+    "rt 160x90": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 20x11": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 256x256": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      16824,
+      16824
+     ]
+    },
+    "rt 320x180": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 40x22": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 640x360": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 80x45": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    }
+   },
+   "memory": {
+    "renderTargets": 15
+   }
+  },
+  "monaco|chase|mobile|webgpu|at0.1": {
+   "passes": {
+    "TLXPostLDR 640x360": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "output 640x360": {
+     "calls": [
+      29,
+      29
+     ],
+     "tris": [
+      147513,
+      147513
+     ]
+    },
+    "rt 160x90": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 320x180": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 640x360": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 80x45": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    }
+   },
+   "memory": {
+    "renderTargets": 9
+   }
+  },
+  "monaco|helmet|desktop|webgpu|at0.1": {
+   "passes": {
+    "TLXPostLDR 640x360": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "output 233x67": {
+     "calls": [
+      10,
+      10
+     ],
+     "tris": [
+      30019,
+      30019
+     ]
+    },
+    "output 640x360": {
+     "calls": [
+      30,
+      30
+     ],
+     "tris": [
+      153041,
+      153041
+     ]
+    },
+    "rt 160x90": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 20x11": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 256x256": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      15496,
+      15496
+     ]
+    },
+    "rt 320x180": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 40x22": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 640x360": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 80x45": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    }
+   },
+   "memory": {
+    "renderTargets": 16
+   }
+  },
+  "monaco|helmet|mobile|webgpu|at0.1": {
+   "passes": {
+    "TLXPostLDR 640x360": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "output 140x40": {
+     "calls": [
+      10,
+      10
+     ],
+     "tris": [
+      25243,
+      25243
+     ]
+    },
+    "output 640x360": {
+     "calls": [
+      30,
+      30
+     ],
+     "tris": [
+      142303,
+      142303
+     ]
+    },
+    "rt 160x90": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 320x180": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 640x360": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 80x45": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    }
+   },
+   "memory": {
+    "renderTargets": 10
+   }
+  },
+  "monza|chase|desktop|webgpu|at0.1": {
+   "passes": {
+    "TLXPostLDR 640x360": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "output 640x360": {
+     "calls": [
+      30,
+      30
+     ],
+     "tris": [
+      119347,
+      119347
+     ]
+    },
+    "rt 160x90": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 20x11": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 256x256": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      16824,
+      16824
+     ]
+    },
+    "rt 320x180": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 40x22": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 640x360": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 80x45": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    }
+   },
+   "memory": {
+    "renderTargets": 15
+   }
+  },
+  "monza|chase|mobile|webgpu|at0.1": {
+   "passes": {
+    "TLXPostLDR 640x360": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "output 640x360": {
+     "calls": [
+      30,
+      30
+     ],
+     "tris": [
+      118651,
+      118651
+     ]
+    },
+    "rt 160x90": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 320x180": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 640x360": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 80x45": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    }
+   },
+   "memory": {
+    "renderTargets": 9
+   }
+  },
+  "monza|helmet|desktop|webgpu|at0.1": {
+   "passes": {
+    "TLXPostLDR 640x360": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "output 233x67": {
+     "calls": [
+      10,
+      10
+     ],
+     "tris": [
+      15704,
+      15704
+     ]
+    },
+    "output 640x360": {
+     "calls": [
+      31,
+      31
+     ],
+     "tris": [
+      113332,
+      113332
+     ]
+    },
+    "rt 160x90": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 20x11": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 256x256": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      15496,
+      15496
+     ]
+    },
+    "rt 320x180": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 40x22": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 640x360": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 80x45": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    }
+   },
+   "memory": {
+    "renderTargets": 16
+   }
+  },
+  "monza|helmet|mobile|webgpu|at0.1": {
+   "passes": {
+    "TLXPostLDR 640x360": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "output 140x40": {
+     "calls": [
+      10,
+      10
+     ],
+     "tris": [
+      15636,
+      15636
+     ]
+    },
+    "output 640x360": {
+     "calls": [
+      31,
+      31
+     ],
+     "tris": [
+      112636,
+      112636
+     ]
+    },
+    "rt 160x90": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 320x180": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 640x360": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    },
+    "rt 80x45": {
+     "calls": [
+      1,
+      1
+     ],
+     "tris": [
+      1,
+      1
+     ]
+    }
+   },
+   "memory": {
+    "renderTargets": 10
+   }
+  }
+ }
+}

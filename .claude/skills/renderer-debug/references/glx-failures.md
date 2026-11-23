@@ -11,17 +11,12 @@ Load from the SKILL.md index when the task needs this detail.
 
 ### Shadow acne / detached shadows
 
-The lit shader combines a slope-scale bias with the SHADOW BIAS tuner knob
-(`sampleShadow` in `js/render/glx/shaders/glsl-lit.js`):
-
-```glsl
-float slopeBias = t * 1.5 * (sqrt(1.0 - cosTheta * cosTheta) / cosTheta);
-float biasTerm = clamp(slopeBias, 0.0005, 0.004) + uShadowBias * 0.5;
-float z = sc.z - biasTerm * (uShadowRange / 80.0);   // static map only; the car map uses biasTerm * uCarBiasScale
-```
+The lit shader combines a clamped slope-scale bias (`slopeBias`) with the SHADOW BIAS
+tuner knob into `biasTerm` (`sampleShadow` in `js/render/glx/shaders/glsl-lit.js`); the
+static map scales it by `uShadowRange`, the car map by `uCarBiasScale`.
 
 `t` = `uShadowTexel` (1/SHADOW_SIZE; `SHADOW_SIZE` in `glx/shadow.js`, uploaded as `1/SHD.SIZE` in glx.js). Bias scales with SHADOW DISTANCE
-(`uShadowRange`, def 80): acne that appears only after raising that knob is the
+(`uShadowRange`): acne that appears only after raising that knob is the
 first thing to check. Chunk: `sampleShadow`, not `glsl-chunks.js`. Uniform
 locations: the `"uShadowRange"` entry of the lit uniform-name list in `glx.js`; uploads
 are the `uf1(litU.uShadow…)` calls there (`T.shadowBias`, `T.shadowRange`).
@@ -29,8 +24,8 @@ are the `uf1(litU.uShadow…)` calls there (`T.shadowBias`, `T.shadowRange`).
 (BROWSER-ONLY run; `list` is static). Static, no browser: `node --test tests/unit/shadow-pass-depth.test.mjs`
 (light-VP depth span; a too-tight near/far also reads as missing/odd shadows).
 
-Acne on flat surfaces → raise the SHADOW BIAS slider (`uShadowBias`, TUNE_DEFS
-def 0.001, **max 0.004**). Peter-Panning (shadows detach from feet) → lower it.
+Acne on flat surfaces → raise the SHADOW BIAS slider (`uShadowBias`; def and max in
+its `shadowBias` entry in `js/lighting/knobs.js`). Peter-Panning (shadows detach from feet) → lower it.
 Do NOT hand-edit the clamp constants first; the tuner knob exists for this.
 
 ### Shadow shimmer / edge flicker while driving
@@ -57,14 +52,13 @@ then `po.bloom = _bloom * LT.bloomMul`, `po.threshold = clamp(_thresh + LT.thres
 -> `shaders/glsl-post.js` BRIGHT_FS and COMPOSITE_FS (`c += bloomSample*uBloomAmt*bloomMask*uExposure`,
 then HDR grade, then ACES). The knobs are the SAME registry on TLX/WGX (`js/lighting/knobs.js`).
 
-1. Static, no browser: read the shipped values for the case.
-   `grep -n -A30 '"singapore|night|dry"' js/lighting/presets.js | grep -E 'bloom|thresh|exposure'`
-   (singapore night ships bloomMul 1.405, bloomKnee 0.72, exposureMul 0.8 — already a heavy look).
-   Compare to defs in `js/lighting/knobs.js` (bloomMul 1, threshOff 0, bloomKnee 0.5, exposureMul 1).
+1. Static, no browser: read the shipped values for the case — the `"<track>|<tod>|<weather>"`
+   entry in `js/lighting/presets.js` (e.g. `grep -n -A30 '"singapore|night|dry"' js/lighting/presets.js`;
+   a knob the entry omits stays at its def). Compare to each knob's `def` in `js/lighting/knobs.js`.
    A preset/knob value far off def IS the tuner answer; fix by editing the profile (lighting-tuner).
 2. BROWSER-ONLY: `node tools/shot/apex-eval.mjs singapore "(a.setTimeOfDay('night'), a.lightTune())" --raw --backend webgl2`
    — a stale `localStorage apex26.lightTune` outranks presets; then re-run with
-   `lightTune({bloomMul:1,threshOff:0,bloomKnee:0.5,exposureMul:1})` and `GLX.hdrMode()`.
+   `lightTune({...})` setting `bloomMul`/`threshOff`/`bloomKnee`/`exposureMul` to their `knobs.js` defs, and `GLX.hdrMode()`.
 3. BROWSER-ONLY discriminator: same track/time on `--backend three` (TLX). Knobs and `po.*` are
    shared, so TLX fine + GLX blown out at identical knobs = GLX defect (post.js upload, BRIGHT_FS/COMPOSITE_FS,
    float target); both blown out = tuner/preset/game.js values. Knobs at def and still blown = shader.

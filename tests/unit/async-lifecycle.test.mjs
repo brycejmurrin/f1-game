@@ -127,6 +127,7 @@ function audioPanelHarness({ voiceUI = false } = {}) {
     for (const id of ['as-voices','as-ann-voice']) { const host = makeNode('div'); host.appendChild(makeNode('p')); nodes.set(id,host); }
     G.radio = { available:()=>true, voiceList:()=>voices, tuneFor:ch=>({name:'',pitch:1,rate:1,...tunes[ch]}),
       setTune:(ch,patch)=>{tunes[ch]={...tunes[ch],...patch};}, setPackOn:v=>{recorded=v;}, packOn:()=>recorded,
+      recordedVoices:()=>[{id:"local",name:"Local"}], recordedVoice:()=>"local",
       setEnabled(){}, unlock(){}, stop(){}, setVolume:v=>v, preview:ch=>{calls.push('preview:'+ch);} };
     G.announcer = {available:()=>true,enabled:()=>false,stop(){},setEnabled(){},sample(){calls.push('ann-sample');}};
   }
@@ -134,7 +135,7 @@ function audioPanelHarness({ voiceUI = false } = {}) {
   seedDom(context);   // the closed-fold summaries paint through Dom.paintFold
   vm.runInContext(`${audioPanelSource}\nglobalThis.__panel = AudioPanel;`, context,
     { filename: absSrc("js/audio/panel.js") });
-  return { panel: context.__panel.create(G), G, nodes, calls, writes, wired, voices, tunes };
+  return { panel: context.__panel.create(G), G, nodes, calls, writes, wired, voices, tunes, GameAudio };
 }
 
 test("audio boot restore keeps saved master sound off when music is on", () => {
@@ -171,6 +172,23 @@ test("master sound off cancels pending announcements and every recorded channel"
   assert.ok(calls.includes("radio-stop"));
   assert.ok(calls.includes("ann-stop"));
   assert.ok(calls.includes("pack-stop"));
+});
+
+// Clean-room fix 46: SOUND ON is the label before any audio exists, so the first
+// press must unlock and stay on, not mute and save the mute.
+test("the first SOUND ON press before audio has played unlocks instead of muting", () => {
+  for (const ctx of [null, { state: "suspended", currentTime: 0 }, { state: "running", currentTime: 0.05 }]) {
+    const { panel, G, nodes, writes, GameAudio } = audioPanelHarness(); panel.init();
+    GameAudio.context = () => ctx;
+    {
+      G.soundOn = true;
+      nodes.get("soundbtn").onclick();
+      assert.equal(G.soundOn, true, JSON.stringify(ctx));
+      assert.notEqual(writes.get("sound"), false, "no mute is saved");
+      if (ctx) { ctx.state = "running"; ctx.currentTime = 5; }
+      if (ctx) { nodes.get("soundbtn").onclick(); assert.equal(G.soundOn, false, "once audio has played, a press mutes"); }
+    }
+  }
 });
 
 test("music and SFX enable clicks also unlock a saved-off master synchronously", () => {
@@ -301,14 +319,16 @@ test("an IndexedDB open that succeeds after timeout closes its orphan handle", a
 });
 
 function musicLibraryFixture({ failReads = 0, failWrites = 0, deferWrites = false } = {}) {
+  let loseWrites = 0, down = false;
   const rows = [], connections = [], pending = [], playlist = new Map(), revoked = [];
   let reads = 0, urlCount = 0, nextId = 1;
   const context = vm.createContext({
     document: { readyState: "loading", addEventListener() {}, getElementById: () => null },
     indexedDB: { open() {
       const request = {};
+      if (down) { queueMicrotask(() => request.onerror()); return request; }
       const db = { closed: false, close() { this.closed = true; }, transaction(_store, mode) {
-        if (this.closed) throw new Error("InvalidStateError: closed connection");
+        if (this.closed) throw Object.assign(new Error("closed connection"), { name: "InvalidStateError" });
         const transaction = {};
         transaction.objectStore = () => ({
           getAll() {
@@ -322,6 +342,11 @@ function musicLibraryFixture({ failReads = 0, failWrites = 0, deferWrites = fals
           add(record) {
             const result = {};
             const finish = () => {
+              if (loseWrites-- > 0) {
+                db.closed = true;
+                transaction.error = Object.assign(new Error("Connection to Indexed Database server lost. Refresh the page to try again."), { name: "UnknownError" });
+                transaction.onabort(); return;
+              }
               if (failWrites-- > 0) {
                 transaction.error = Object.assign(new Error("quota exceeded"), { name: "QuotaExceededError" });
                 transaction.onabort(); return;
@@ -345,7 +370,8 @@ function musicLibraryFixture({ failReads = 0, failWrites = 0, deferWrites = fals
     setTimeout, clearTimeout,
   });
   context.window = context; seedLog(context); vm.runInContext(musicSource, context);
-  return { lib: context.MusicLib, rows, connections, pending, playlist, revoked, reads: () => reads, urls: () => urlCount };
+  return { lib: context.MusicLib, rows, connections, pending, playlist, revoked, reads: () => reads, urls: () => urlCount,
+    loseWrite() { loseWrites = 1; }, down(on) { down = on; } };
 }
 
 test("music imports serialize across calls until their transactions commit", async () => {
@@ -386,9 +412,45 @@ test("a quota-aborted music import releases its duplicate reservation for a queu
   const file = { name: "Retry.mp3", type: "audio/mpeg", size: 123 };
   const [failed, recovered] = await Promise.all([f.lib.add([file]), f.lib.add([file])]);
   assert.equal(failed.added, 0); assert.equal(failed.skipped, 1);
-  assert.match(failed.errors[0], /no room left/);
+  assert.equal(failed.errors[0], "Retry.mp3: no room left in this browser's storage");
   assert.equal(recovered.added, 1); assert.equal(recovered.skipped, 0);
   assert.equal(f.rows.length, 1); assert.equal(f.lib.count(), 1); assert.equal(f.urls(), 1); assert.equal(f.playlist.size, 1);
+});
+
+// #4997 — iOS WebKit drops the connection behind a suspended Home Screen app,
+// usually without a close event (WebKit bugs 273827, 277615).
+test("music library reopens after iOS drops the connection: close event, silent InvalidStateError, UnknownError abort", async () => {
+  const drops = {
+    "close event": (f) => { f.connections[0].closed = true; f.connections[0].onclose(); },
+    "silent drop": (f) => { f.connections[0].closed = true; },
+    "UnknownError abort": (f) => f.loseWrite(),
+  };
+  for (const [label, drop] of Object.entries(drops)) {
+    const f = musicLibraryFixture(); await f.lib.init();
+    assert.equal((await f.lib.add([{ name: "Before.mp3", type: "audio/mpeg", size: 100 }])).added, 1);
+    drop(f);
+    assert.equal(f.lib.available(), true, label + ": the saved library is still there");
+    assert.equal(f.lib.count(), 1, label + ": loaded tracks stay listed");
+    const result = await f.lib.add([{ name: "After.mp3", type: "audio/mpeg", size: 200 }]);
+    assert.equal(result.added, 1, label + ": " + result.errors.join(" "));
+    assert.equal(f.connections.length, 2, label + ": one fresh connection, the dead one is never reused");
+    assert.equal(f.rows.length, 2, label + ": exactly one copy is written"); assert.equal(f.playlist.size, 2, label);
+    assert.equal(f.lib.available(), true, label);
+  }
+});
+
+test("music library says why an upload failed while storage cannot be reopened, then recovers without a reload", async () => {
+  const f = musicLibraryFixture(); await f.lib.init();
+  await f.lib.add([{ name: "Before.mp3", type: "audio/mpeg", size: 100 }]);
+  f.connections[0].closed = true; f.down(true);
+  const failed = await f.lib.add([{ name: "Lost.mp3", type: "audio/mpeg", size: 200 }]);
+  assert.equal(failed.added, 0); assert.equal(failed.skipped, 1);
+  assert.equal(failed.errors[0], "Lost.mp3 could not be saved: storage was disconnected. Close and reopen the app, then try again");
+  assert.equal(f.lib.available(), false); assert.equal(f.lib.count(), 1, "the loaded track stays in the list");
+  f.down(false);
+  const recovered = await f.lib.add([{ name: "Lost.mp3", type: "audio/mpeg", size: 200 }]);
+  assert.equal(recovered.added, 1, recovered.errors.join(" "));
+  assert.equal(f.lib.available(), true); assert.equal(f.rows.length, 2); assert.equal(f.lib.count(), 2);
 });
 
 test("music library invalidates a version-changed connection and reopens for the next import", async () => {
@@ -430,7 +492,7 @@ test("a timed-out API fetch releases the shared queue", async () => {
     await new Promise((resolve) => setImmediate(resolve));
   }
 
-  assert.match(firstError.message, /timed out/);
+  assert.equal(firstError.message, "Request timed out for https://api.openf1.org/v1/weather?session_key=1");
   assert.equal(calls.length, 2);
   await second;
 });
@@ -464,7 +526,7 @@ test("a response whose BODY stalls still times out and releases the queue", asyn
     timers.shift()();
     await new Promise((resolve) => setImmediate(resolve));
   }
-  assert.match(firstError.message, /timed out/, "a stalled body is a timeout, not a hang");
+  assert.equal(firstError.message, "Request timed out for https://api.openf1.org/v1/weather?session_key=1", "a stalled body is a timeout, not a hang");
   assert.equal(calls.length, 2, "the next request is not stuck behind it");
   await second;
 });
@@ -491,7 +553,7 @@ test("API auth failures never fall back to stale cached data", async () => {
 
   await assert.rejects(context.__api.weather(7, 0), (err) => {
     assert.equal(err.status, 403);
-    assert.match(err.message, /Not authenticated/);
+    assert.equal(err.message, "Not authenticated");
     return true;
   });
 });
@@ -544,6 +606,10 @@ test("LIVE session time copy agrees with the status badge", () => {
   assert.equal(live._sessionTimeLabel(meta, "LIVE", fmt), "Started [2026-09-18T10:00:00Z]");
   assert.equal(live._sessionTimeLabel(meta, "COMPLETED", fmt), "Started [2026-09-18T10:00:00Z]");
   assert.equal(live._sessionTimeLabel({}, "COMPLETED", fmt), "");
+  // Hunt #5694 I2: a session from another year names its year.
+  const now = Date.parse("2026-11-18T12:00:00Z");
+  assert.equal(live._sessionTimeLabel({ dateStart: "2023-11-26T13:00:00Z" }, "COMPLETED", fmt, now), "Started [2023-11-26T13:00:00Z], 2023");
+  assert.equal(live._sessionTimeLabel({ dateStart: "2026-11-01T13:00:00Z" }, "COMPLETED", fmt, now), "Started [2026-11-01T13:00:00Z]");
 });
 
 test("LIVE split panes can shrink without creating modal-wide horizontal overflow", () => {
@@ -603,7 +669,7 @@ test("LIVE position/interval requests use watermarks and never touch localStorag
   live._mergeIntervalBatch(state, gaps);
 
   assert.equal(h.calls[0], "https://api.openf1.org/v1/position?session_key=999");
-  assert.match(h.calls[1], /position\?session_key=999&date%3E=2026-07-26T14%3A44%3A00Z$/);
+  assert.equal(h.calls[1], "https://api.openf1.org/v1/position?session_key=999&date%3E=2026-07-26T14%3A44%3A00Z");
   assert.equal(state.positionCursor, "2026-07-26T14:44:30Z");
   assert.equal(state.intervals[44], 0);
   assert.deepEqual(h.sets, [], "LIVE history/deltas must remain memory-only");
@@ -621,7 +687,10 @@ test("snapshot and delta classification share row mapping while retaining their 
   const intervals = [
     { driver_number: 44, gap_to_leader: 0, date: newer },
     { driver_number: 4, gap_to_leader: " +1 LAP ", date: newer },
-    { driver_number: 4, gap_to_leader: 3, date: older }
+    { driver_number: 4, gap_to_leader: 3, date: older },
+    // Austin 2026 race (session 11396) also emits "+2 LAPS". parseFloat of that
+    // string is 2 — the same class of bug gapValue exists to stop for "+1 LAP".
+    { driver_number: 7, gap_to_leader: "+2 LAPS", date: newer }
   ];
   const h = dataApiHarness([positions, positions, intervals, intervals, [], [], [], []]);
   const snapshot = await h.api.positions(7, 0);
@@ -632,7 +701,9 @@ test("snapshot and delta classification share row mapping while retaining their 
   const gaps = await h.api.intervals(7, 0);
   const gapDelta = await h.api.liveIntervals(7, older);
   assert.equal(gaps[4], "+1 LAP");
+  assert.equal(gaps[7], "+2 LAPS");
   assert.equal(gapDelta.values[4], gaps[4]);
+  assert.equal(gapDelta.values[7], "+2 LAPS");
   assert.equal(gapDelta.values[44], 0);
   assert.equal(gapDelta.cursor, newer);
   assert.equal(await h.api.positions(7, 0), null);
@@ -663,24 +734,106 @@ test('voice volume and auditions remain available with automatic radio and annou
   nodes.get('as-v-coach-test').onclick(); assert.ok(calls.includes('preview:coach'));
 });
 
-test('choosing a system voice for a race channel switches source, but the announcer pick leaves it alone', () => {
-  // Every race channel has a recorded voice (RadioVoice.PACK_VOICE), so a pick
-  // for any of them is choosing SYSTEM; the announcer's pick reads the pre-race
-  // show, and RECORDED keeps the recorded commentator in the race.
-  for (const ch of ['radio','coach','control']) {
-    const {G,nodes,wired,tunes}=audioPanelHarness({voiceUI:true});
-    G.soundOn=true; wired.get('as-radio').write('off');
-    const ann=nodes.get('as-v-announcer');ann.value='First';ann.onchange();
-    assert.equal(G.radio.packOn(),true, 'announcer pick keeps RECORDED');
-    const sel=nodes.get('as-v-'+ch);sel.value='First';sel.onchange();
-    assert.equal(G.radio.packOn(),false, ch+' pick selects SYSTEM'); assert.equal(tunes[ch].name,'First');
+function voiceChoices(select) {
+  return select.children.flatMap(group => group.children).map(option => option.value);
+}
+
+test("race voice source controls the race selectors independently of the announcer", () => {
+  const { G, nodes, wired, tunes } = audioPanelHarness({ voiceUI: true });
+  G.soundOn = true;
+  wired.get("as-radio").write("off");
+  const announcer = nodes.get("as-v-announcer");
+  announcer.value = "First";
+  announcer.onchange();
+  assert.equal(G.radio.packOn(), true);
+
+  const channels = ["radio", "coach", "control"];
+  for (const channel of channels) {
+    assert.deepEqual(voiceChoices(nodes.get("as-v-" + channel)), ["recorded:local"]);
+  }
+  wired.get("as-rpack").write("sys");
+  for (const channel of channels) {
+    const select = nodes.get("as-v-" + channel);
+    assert.ok(voiceChoices(select).includes("First"));
+    assert.ok(!voiceChoices(select).includes("recorded:local"));
+    select.value = "First";
+    select.onchange();
+    assert.equal(tunes[channel].name, "First");
+    assert.equal(G.radio.packOn(), false);
+  }
+  wired.get("as-rpack").write("rec");
+  assert.equal(G.radio.packOn(), true);
+  assert.ok(voiceChoices(nodes.get("as-v-radio")).includes("recorded:local"));
+  assert.ok(voiceChoices(nodes.get("as-v-announcer")).includes("First"));
+});
+
+test("same-size voice-list replacements refresh both settings selectors", () => {
+  const { G, nodes, wired, voices } = audioPanelHarness({ voiceUI: true });
+  G.soundOn = true;
+  wired.get("as-rpack").write("sys");
+  voices[0] = { name: "Replacement", lang: "en-GB" };
+  wired.get("as-radio").write("off");
+  for (const id of ["as-v-radio", "as-v-announcer"]) {
+    assert.ok(voiceChoices(nodes.get(id)).includes("Replacement"), id);
   }
 });
 
-test('same-size voice-list replacements refresh both settings selectors', () => {
-  const {G,nodes,wired,voices}=audioPanelHarness({voiceUI:true});
-  G.soundOn=true; wired.get('as-radio').write('off');
-  voices[0]={name:'Replacement',lang:'en-GB'};
-  wired.get('as-radio').write('off');
-  for(const id of ['as-v-radio','as-v-announcer']) assert.ok(nodes.get(id).children.flatMap(o=>o.children || [o]).some(o=>o.value==='Replacement'),id);
+// W23 #4: the badge used a guessed length (race 4 h, others 2 h) though OpenF1
+// sends date_end. The window is OpenF1's own: start − 30 min … end + 30 min.
+test("LIVE badge window is date_start − 30 min to date_end + 30 min when date_end is known", () => {
+  const live = liveMergeHelpers();
+  const meta = { type: "Practice", dateStart: "2026-11-08T14:00:00Z", dateEnd: "2026-11-08T15:00:00Z" };
+  const at = (iso) => live._sessionStatus(meta, Date.parse(iso));
+  assert.equal(at("2026-11-08T13:29:00Z"), "UPCOMING");
+  assert.equal(at("2026-11-08T13:31:00Z"), "LIVE", "OpenF1 locks out 30 min before the start");
+  assert.equal(at("2026-11-08T15:29:00Z"), "LIVE");
+  assert.equal(at("2026-11-08T15:31:00Z"), "COMPLETED", "a 1 h session is over at end + 30 min, not start + 2 h");
+  const race = { type: "Race", dateStart: "2026-11-08T17:00:00Z", dateEnd: "2026-11-08T19:00:00Z" };
+  assert.equal(live._sessionStatus(race, Date.parse("2026-11-08T19:45:00Z")), "COMPLETED", "not the 4 h guess");
+  assert.equal(live._sessionTimeLabel(meta, "LIVE", (v) => v, Date.parse("2026-11-08T13:45:00Z")),
+    "Starts 2026-11-08T14:00:00Z", "inside the pre-start window the time still reads Starts");
+});
+
+test("mapSession carries OpenF1's date_end", async () => {
+  const h = dataApiHarness([[{ session_key: 11412, meeting_key: 1299, session_name: "Race", session_type: "Race",
+    date_start: "2026-11-08T17:00:00+00:00", date_end: "2026-11-08T19:00:00+00:00", year: 2026 }]]);
+  const s = await h.api.latestSession(0);
+  assert.equal(s.dateEnd, "2026-11-08T19:00:00+00:00");
+});
+
+test("a COMPLETED session's first LIVE build reads the cached snapshots, and their cursor seeds the deltas", async () => {
+  const older = "2026-07-26T14:43:00Z", newer = "2026-07-26T14:44:00Z";
+  const h = dataApiHarness([
+    [{ driver_number: 44, position: 1, date: older }, { driver_number: 4, position: 2, date: newer }],
+    [{ driver_number: 44, gap_to_leader: 0, date: older }, { driver_number: 4, gap_to_leader: 1.5, date: newer }],
+    [], [],
+  ]);
+  const live = liveMergeHelpers();
+  const state = { positionCursor: null, intervalCursor: null, positions: new Map(), intervals: {} };
+  let feed = live._liveFeedRequests(h.api, 7, state, "COMPLETED");
+  live._mergePositionBatch(state, await feed.position);
+  live._mergeIntervalBatch(state, await feed.interval);
+  assert.equal(h.calls[0], "https://api.openf1.org/v1/position?session_key=7", "the snapshot URL (the cached reader)");
+  assert.equal(h.calls[1], "https://api.openf1.org/v1/intervals?session_key=7");
+  assert.equal(state.positionCursor, newer, "the snapshot seeds the position cursor");
+  assert.equal(state.intervalCursor, newer, "the snapshot seeds the interval cursor");
+  assert.equal(state.positions.size, 2);
+  // A rebuild inside the TTL is served from the cache: no new download.
+  const again = live._liveFeedRequests(h.api, 7, { positionCursor: null, intervalCursor: null }, "COMPLETED");
+  await again.position; await again.interval;
+  assert.equal(h.calls.length, 2, "a second build of a finished session does not re-download the whole session");
+  // Later refreshes are deltas from the seeded cursor.
+  feed = live._liveFeedRequests(h.api, 7, state, "COMPLETED");
+  await feed.position; await feed.interval;
+  assert.equal(h.calls[2], "https://api.openf1.org/v1/position?session_key=7&date%3E=2026-07-26T14%3A44%3A00Z");
+  assert.equal(h.calls[3], "https://api.openf1.org/v1/intervals?session_key=7&date%3E=2026-07-26T14%3A44%3A00Z");
+});
+
+test("a LIVE (running) session never reads the cached snapshot", async () => {
+  const h = dataApiHarness([[], []]);
+  const live = liveMergeHelpers();
+  const feed = live._liveFeedRequests(h.api, 8, { positionCursor: null, intervalCursor: null }, "LIVE");
+  await feed.position; await feed.interval;
+  assert.deepEqual(h.sets, [], "delta reads stay uncached");
+  assert.equal(h.calls.length, 2);
 });

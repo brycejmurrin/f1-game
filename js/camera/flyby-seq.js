@@ -1,18 +1,12 @@
 "use strict";
 /* Apex 26 — FLYBY SHOT SEQUENCER: the pre-race loading screen's camera.
  *
- * WHAT IT REPLACES. The menu camera was one continuous crawl: `s` advanced with
- * the wall clock and camVantage("cinematic") solved a broadcast rig around it.
- * That rig has no idea what is standing beside the track — its only lateral
- * guard, `corr`, is applied on STREET circuits and is Infinity everywhere else —
- * so on an open circuit the eye sat 22 m off the racing line and flew through
- * whatever was there. Reported as "the flyby goes through a building".
- *
  * WHAT A SHOT IS. A list of shots, each a move from one camera pose to another
  * over a duration. Poses are TRACK-RELATIVE and anchored on landmarks, never on
  * world coordinates:
  *
  *   { at: "start"|"pole"|"grid"|"corner", n, off, x, y }   along the lap
+ *   { at: "pitexit", off, x, y }                           the pit-exit line (track.pit.sOut)
  *   { at: "centre", bear, distR, yR }                      the whole circuit
  *   { at: "landmark", rank, bear, distK, yK }              this circuit's own
  *
@@ -81,16 +75,13 @@ const FlybySeq = (function () {
     return (k % 2 === 0 ? -1 : 1) * Math.min((_gs.hw || 7) * 0.4, 3);
   }
 
-  /* HOW THE FLYBY IS RENDERED, not where it is pointed — and the reason those
-   * two live in the same file. The shots are VISTAS: a crane 190 m up looking
-   * down a 5.8 km circuit is nothing like a chase cam 8 m behind a car, so the
-   * cinematic renders with the far plane pushed out and the fog thinned, the
-   * way photo mode does.
-   *
+  /* HOW THE FLYBY IS RENDERED (kept beside where it is pointed). The shots are
+   * VISTAS: a crane 190 m up over a 5.8 km circuit is not a chase cam, so the
+   * cinematic pushes the far plane out and thins the fog, as photo mode does.
    * BOTH ENDS READ THESE: the live screen (js/game.js's flyby branch) and the
-   * EDITOR's preview (__apex.flybyCam, through dbgCam). With separate far clip
-   * and fog (6000 m / 15 % vs gameplay's 900 m / 100 %) the same shot is clear
-   * in the editor and a wall of haze on the loading screen. */
+   * EDITOR's preview (__apex.flybyCam, through dbgCam); separate far clip and
+   * fog (6000 m / 15 % vs gameplay's 900 m / 100 %) would show a clear shot in
+   * the editor and a wall of haze on the loading screen. */
   const FAR = 6000;               // metres of far clip — a whole circuit, not a corner
   const FOG = 0.15;               // × the session's fog density (photo mode's value)
   // Near plane. Pinned rather than inherited: gameplay picks 0.3 for cockpit and
@@ -100,142 +91,19 @@ const FlybySeq = (function () {
   // a metre of a crane, and 0.9:6000 is the better ratio of the two.
   const NEAR = 0.9;
 
-  /** Props that a camera must not be inside. The registry also records ridges,
-   *  bushes and sparse `structure` hulls whose `fill` says they are mostly air
-   *  (a 56 m x 1.3 m "structure" at 5 % fill is a run of kerbing, not a wall);
-   *  treating those as solid would shove the camera into the sky on every shot. */
-  const SOLID = ["building", "grandstand", "tower", "motorhome", "gantry", "pit", "garage"];
-  const MIN_FILL = 0.25;          // a `structure` below this is scattered parts, not a mass
-  const MIN_H = 3;                // and anything shorter than this cannot swallow a camera
-
-  function isSolid(r) {
-    if (!r || !(r.h >= MIN_H)) return false;
-    if (SOLID.indexOf(r.kind) !== -1) return true;
-    return r.kind === "structure" && (r.fill || 0) >= MIN_FILL;
-  }
-
-  /** The solid subset, computed once per built track and cached ON the track, so
-   *  it dies with the world it describes rather than in a map nobody clears. */
-  function blockers(track) {
-    if (track._fbSolid) return track._fbSolid;
-    const out = [];
-    const list = track.props && track.props.list;
-    if (list) for (let i = 0; i < list.length; i++) if (isSolid(list[i])) out.push(list[i]);
-    track._fbSolid = out;
-    return out;
-  }
-
-  /** The record containing this point, or null. Boxes are centre + size, and the
-   *  margin inflates them so the eye clears a facade rather than grazing it. */
-  /* A GRID INDEX over a box list, so a clearance test touches the few boxes
-     near a point instead of every one. The planner tests every sample of every
-     candidate eye against every solid and every tall tree; Monza's turn-first
-     (~1,500 trees) took 1.35 s to plan and Suzuka's up to 3.4 s — a freeze at
-     the cut, on every load now that vary() builds new shots. Candidates come
-     back in LIST ORDER, which both tests depend on (first hit; sequential
-     lifts), so a plan is identical to the full scan. */
-  const GRID_CELL = 32;
-  function boxGrid(list) {
-    const cells = new Map();
-    for (let i = 0; i < list.length; i++) {
-      const r = list[i];
-      const x0 = Math.floor((r.x - r.w / 2) / GRID_CELL), x1 = Math.floor((r.x + r.w / 2) / GRID_CELL);
-      const z0 = Math.floor((r.z - r.d / 2) / GRID_CELL), z1 = Math.floor((r.z + r.d / 2) / GRID_CELL);
-      for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
-        const k = ix * 100003 + iz;
-        let a = cells.get(k);
-        if (!a) cells.set(k, a = []);
-        a.push(i);
-      }
-    }
-    return cells;
-  }
-  const _near = [], byIndex = (a, b) => a - b;
-  function nearBoxes(cells, x, z, m) {
-    _near.length = 0;
-    const x0 = Math.floor((x - m) / GRID_CELL), x1 = Math.floor((x + m) / GRID_CELL);
-    const z0 = Math.floor((z - m) / GRID_CELL), z1 = Math.floor((z + m) / GRID_CELL);
-    let many = 0;
-    for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
-      const a = cells.get(ix * 100003 + iz);
-      if (a) { many++; for (let j = 0; j < a.length; j++) _near.push(a[j]); }
-    }
-    if (many > 1) {
-      _near.sort(byIndex);
-      let w = 0;
-      for (let j = 0; j < _near.length; j++) if (!j || _near[j] !== _near[j - 1]) _near[w++] = _near[j];
-      _near.length = w;
-    }
-    return _near;
-  }
-
-  function insideProp(track, p, margin) {
-    const b = blockers(track), m = margin || 0;
-    const near = nearBoxes(track._fbSolidGrid || (track._fbSolidGrid = boxGrid(b)), p[0], p[2], m);
-    for (let n = 0; n < near.length; n++) {
-      const r = b[near[n]];
-      if (Math.abs(p[0] - r.x) < r.w / 2 + m &&
-          Math.abs(p[2] - r.z) < r.d / 2 + m &&
-          p[1] > r.y - r.h / 2 - m && p[1] < r.y + r.h / 2 + m) return r;
-    }
-    return null;
-  }
-
-  /** THE ROAD IS ALWAYS CLEAR, so a shot that runs down it is never lifted.
-   *  The props registry stores AXIS-ALIGNED boxes, and a long structure at an
-   *  angle to the world axes gets a box far bigger than itself: Bahrain's main
-   *  grandstand is 143 m long and lies at an angle, so its box reaches across
-   *  the start straight. The closing shot, 0.85 m up the centreline, was
-   *  therefore "inside a grandstand" and got lifted 21 m into a crane — the one
-   *  shot whose whole point is being low. Cars drive that line at 300 km/h; if
-   *  the geometry says a camera cannot be there, the geometry is wrong. */
-  function onRoadPose(pose) {
-    return pose && pose.at !== "centre" && pose.at !== "landmark" &&
-      Math.abs(pose.x || 0) <= 8 && (pose.y || 0) <= 6;
-  }
-
-  /** LIFT, never shove sideways. A lateral escape would need a direction the
-   *  shot cannot know (both ways may be blocked), and it would swing the framing;
-   *  going over the top keeps the subject in the same part of the screen and is
-   *  always available. Bounded so a bad shot reads as a high shot, not as orbit. */
-  const CLEAR_M = 2.5;            // metres over a roof the eye is lifted to
-  function clearEye(track, eye, margin) {
-    const m = margin === undefined ? CLEAR_M : margin;
-    for (let i = 0; i < 4; i++) {
-      const hit = insideProp(track, eye, m);
-      if (!hit) break;
-      eye[1] = hit.y + hit.h / 2 + m;
-    }
-    return eye;
-  }
-
-  /** NEVER BELOW THE GROUND. `centre` and `landmark` heights are measured from
-   *  a centroid and a prop's middle, not from the ground under the eye, so on a
-   *  hillside (or over a road that runs above the anchor) nothing else stops an
-   *  eye being authored underground: Red Bull Ring's rank-0 landmark is a 34 m
-   *  tower standing in a valley, and landmark1 put the eye 6.1 m below the start
-   *  straight on every sample. Terrain where there is terrain, the road where
-   *  the eye is over it. Part of the PLANNED lift (profileOf), so the camera
-   *  rises into the floor smoothly instead of popping up onto it. */
-  const FLOOR = 1.5;
-  const _fl = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
-  function groundAt(track, x, z, y) {
-    let g = Tracks.terrainY ? Tracks.terrainY(track, x, z) : null;
-    if (g == null || !isFinite(g)) g = -Infinity;
-    const pr = Tracks.project(track, x, z, null, y);
-    if (pr) {
-      Tracks.sample(track, pr.s, _fl);
-      if (Math.abs(pr.lat) <= (_fl.hw || 10) + 2 && _fl.p[1] > g) g = _fl.p[1];
-    }
-    return g;
-  }
-  function floorEye(track, eye) {
-    const g = groundAt(track, eye[0], eye[2], eye[1]);
-    if (eye[1] < g + FLOOR) eye[1] = g + FLOOR;
-    return eye;
-  }
-
-  // ---- what this circuit looks like ----------------------------------------
+  /* SOLID PROPS, THE LIFT, AND THE GROUND FLOOR live in FlybyClear.
+     Thin wrappers keep the planner's bare names and the exported FlybySeq
+     surface that other modules and tests still call. boxGrid / nearBoxes /
+     groundAt stay internal — only the clearance helpers need the public names. */
+  function isSolid(r) { return FlybyClear.isSolid(r); }
+  function blockers(track) { return FlybyClear.blockers(track); }
+  function boxGrid(list) { return FlybyClear.boxGrid(list); }
+  function nearBoxes(cells, x, z, m) { return FlybyClear.nearBoxes(cells, x, z, m); }
+  function insideProp(track, p, margin) { return FlybyClear.insideProp(track, p, margin); }
+  function onRoadPose(pose) { return FlybyClear.onRoadPose(pose); }
+  function clearEye(track, eye, margin) { return FlybyClear.clearEye(track, eye, margin); }
+  function groundAt(track, x, z, y) { return FlybyClear.groundAt(track, x, z, y); }
+  function floorEye(track, eye) { return FlybyClear.floorEye(track, eye); }
 
   /* TERRAIN IS NOT A LANDMARK. Ranked by raw volume the answer is always the
      scenery nobody came to see: Spa's biggest props are 240 m mountains and
@@ -289,8 +157,8 @@ const FlybySeq = (function () {
       // ON the road is not beside it: a box whose centre is within LM_EDGE of
       // the road edge straddles the track (a bridge, an overhead sign), and its
       // "track side" is the tarmac under it.
-      const pr = Tracks.project(track, r.x, r.z);
-      if (pr) {
+      const pr = Tracks.project(track, r.x, r.z, null, null, _pr);
+      if (pr && isFinite(pr.s)) {
         Tracks.sample(track, pr.s, _smp);
         if (Math.abs(pr.lat) - (_smp.hw || 10) < LM_EDGE) continue;
       }
@@ -367,8 +235,6 @@ const FlybySeq = (function () {
     track._fbBounds = { x: cx, y: cy, z: cz, rad: rad, pts: pts, face: face };
     return track._fbBounds;
   }
-
-  // ---- anchors -------------------------------------------------------------
 
   function wrapS(track, s) {
     const total = track.total || 1;
@@ -543,11 +409,13 @@ const FlybySeq = (function () {
       case "grid": return wrapS(track, total - POLE_BACK - (Math.min(GRID_ROWS, _gridSize) - 1) * GRID_SPACING + off);
       case "corner": return wrapS(track, cornerS(track, pose.n || 1) + off);
       case "slot": return wrapS(track, total - POLE_BACK - slotIndex(pose) * GRID_SPACING + off);
+      case "pitexit": return wrapS(track, (track.pit && isFinite(track.pit.sOut) ? track.pit.sOut : 0) + off);
       default: return wrapS(track, off);          // "start" — the line is s = 0 by construction
     }
   }
 
   const _smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+  const _pr = { s: 0, lat: 0, k: 0, heading: 0, dist: 0 };
 
   /** The bearing from a landmark to its nearest stretch of track — what a
    *  landmark `bear` of 0 means. Shot from that side, the circuit sits between
@@ -580,8 +448,8 @@ const FlybySeq = (function () {
   function lmNear(track, r) {
     const cache = track._fbLmNear || (track._fbLmNear = new Map());
     if (cache.has(r)) return cache.get(r);
-    const pr = Tracks.project(track, r.x, r.z);
-    const d = pr ? Math.abs(pr.lat) : 0;
+    const pr = Tracks.project(track, r.x, r.z, null, null, _pr);
+    const d = pr && isFinite(pr.lat) ? Math.abs(pr.lat) : 0;
     cache.set(r, d);
     return d;
   }
@@ -648,11 +516,8 @@ const FlybySeq = (function () {
     // radius, so one establishing shot frames Monaco and Spa alike.
     if (pose.at === "centre") {
       const b = bounds(track);
-      // CLAMPED, because a multiple of the radius alone is a satellite. Monza's
-      // lap radius is ~800 m, so 0.85 of it put the eye 680 m up and the
-      // establishing shot became a map of the circuit with no scenery, no
-      // scale and nothing to recognise. These bounds are what a helicopter
-      // shot actually lives in.
+      // CLAMPED: a multiple of the radius alone is a satellite (Monza, 0.85 of
+      // ~800 m = 680 m up, a map with no scenery). These bounds are a helicopter's.
       // ZERO MEANS THE CENTROID. The clamps are for a camera; the establishing
       // shots' LOOK pose is {distR: 0, yR: 0}, "at the middle of the lap", and
       // clamping it too aimed every one of them at a point 200 m out towards the
@@ -706,7 +571,6 @@ const FlybySeq = (function () {
     return out;
   }
 
-  // ---- the inverse: a world point back to a pose ---------------------------
   //
   // THE FREE CAMERA'S "COPY AS FLYBY POSE". A camera flown to a good spot is a
   // world point, and a world point is exactly what a shot list must not hold
@@ -736,7 +600,7 @@ const FlybySeq = (function () {
   }
 
   function trackPose(track, p, opts) {
-    const pr = Tracks.project(track, p[0], p[2]);
+    const pr = Tracks.project(track, p[0], p[2], null, null, _pr);
     // project() measures `lat` along the interpolated right vector from the
     // nearest point on the node CHORD, but that vector is not square to the
     // chord inside a corner, and posePoint() walks it from sample(s). At 18 m
@@ -818,7 +682,7 @@ const FlybySeq = (function () {
       const nl = opts.rank == null ? nearestLandmark(track, p) : null;
       pose = landmarkPose(track, p, opts.rank != null ? opts.rank : (nl ? nl.rank : 0));
     } else if (at === "auto") {
-      const pr = Tracks.project(track, p[0], p[2]);
+      const pr = Tracks.project(track, p[0], p[2], null, null, _pr);
       const trackMax = opts.trackMax == null ? 80 : opts.trackMax;
       if (pr.dist > trackMax) {
         const nl = nearestLandmark(track, p);
@@ -853,8 +717,6 @@ const FlybySeq = (function () {
     };
   }
 
-  // ---- easing --------------------------------------------------------------
-
   const EASE = {
     linear: (u) => u,
     in: (u) => u * u,
@@ -866,17 +728,12 @@ const FlybySeq = (function () {
     return p && p.at !== "centre" && p.at !== "landmark";
   }
 
-  /** A MOVE ALONG THE TRACK FOLLOWS THE TRACK. Interpolating two track-anchored
-   *  poses as world points draws a straight line between them, which cuts every
-   *  corner in between: the closing grid shot runs ~200 m from behind the back
-   *  row to the line, and at Bahrain that chord left the road by up to 49 m —
-   *  a shot authored as "up the middle of the grid" ended up in the run-off.
-   *  Track-anchored pairs therefore interpolate in TRACK space (arc, lateral,
-   *  height) and convert once, which also handles a move that crosses the
-   *  start line, where the raw arc numbers jump by a lap.
-   *
-   *  A pair that is not track-anchored (the whole-circuit and landmark orbits)
-   *  has no arc to walk, so those still interpolate as world points. */
+  /** A MOVE ALONG THE TRACK FOLLOWS THE TRACK. A world-space lerp between two
+   *  track-anchored poses cuts every corner (Bahrain's ~200 m closing grid shot
+   *  left the road by up to 49 m), so such pairs interpolate in TRACK space (arc,
+   *  lateral, height) and convert once; that also handles a move across the start
+   *  line, where raw arc numbers jump by a lap. Pairs that are not track-anchored
+   *  (whole-circuit and landmark orbits) still interpolate as world points. */
   function lerpPose(track, a, b, u, out) {
     if (trackAnchored(a) && trackAnchored(b)) {
       const total = track.total || 1;
@@ -901,8 +758,6 @@ const FlybySeq = (function () {
   }
   const _pa = [0, 0, 0], _pb = [0, 0, 0];
 
-  // ---- the shipped sequence ------------------------------------------------
-
   /* NINE SHOTS OVER FLY_MS (24 s), ~2.4-3.1 s each. Durations stay fractions
      so retuning the budget rebalances all of them rather than truncating the
      last.
@@ -923,16 +778,23 @@ const FlybySeq = (function () {
        grid        up the aisle between the columns, ending among the front
                    rows with the start gantry ahead */
   const DEFAULT = [
+    // RACE START (#4745 C): the player's menu car rolls out of the pit lane (rollHero), broadcast-only.
+    {
+      id: "pit-exit", dur: 0.07, ease: "out", roll: "pitexit",
+      eye: [{ at: "pitexit", off: -34, x: 0, y: 1.5 }, { at: "pitexit", off: -20, x: 0, y: 1.3 }],
+      look: [{ at: "pitexit", off: 6, x: 0, y: 0.8 }, { at: "pitexit", off: 26, x: 0, y: 0.8 }],
+      fov: [44, 38],
+    },
     // ---- establish: where are we -------------------------------------------
     {
-      id: "wide", dur: 0.09, ease: "inOut", sway: 0.35,
+      id: "wide", dur: 0.07, ease: "inOut", sway: 0.35,
       eye: [{ at: "centre", bear: -0.30, distR: 1.10, yR: 0.36 },
             { at: "centre", bear: -0.12, distR: 1.00, yR: 0.32 }],
       look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0, yR: 0 }],
       fov: [36, 38],
     },
     {
-      id: "wide2", dur: 0.08, ease: "inOut", sway: 0.25,
+      id: "wide2", dur: 0.06, ease: "inOut", sway: 0.25,
       eye: [{ at: "centre", bear: 2.35, distR: 0.80, yR: 0.30 },
             { at: "centre", bear: 2.55, distR: 0.70, yR: 0.25 }],
       look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0, yR: 0 }],
@@ -940,14 +802,14 @@ const FlybySeq = (function () {
     },
     // ---- this circuit in particular ----------------------------------------
     {
-      id: "landmark1", dur: 0.09, ease: "inOut",
+      id: "landmark1", dur: 0.08, ease: "inOut",
       eye: [{ at: "landmark", rank: 0, bear: -0.28, distK: 1.7, yK: -0.15, y: 12 },
             { at: "landmark", rank: 0, bear: -0.08, distK: 1.5, yK: -0.1, y: 12 }],
       look: [{ at: "landmark", rank: 0, distK: 0, yK: 0.2 }, { at: "landmark", rank: 0, distK: 0, yK: 0.25 }],
       fov: [38, 40],
     },
     {
-      id: "landmark2", dur: 0.08, ease: "inOut",
+      id: "landmark2", dur: 0.07, ease: "inOut",
       eye: [{ at: "landmark", rank: 1, bear: 0.30, distK: 1.8, yK: -0.1, y: 12 },
             { at: "landmark", rank: 1, bear: 0.10, distK: 1.6, yK: -0.05, y: 12 }],
       look: [{ at: "landmark", rank: 1, distK: 0, yK: 0.15 }, { at: "landmark", rank: 1, distK: 0, yK: 0.2 }],
@@ -987,28 +849,22 @@ const FlybySeq = (function () {
     // The road draws without slope-scaled depth bias (PR #248), so the grid can
     // be filmed from ahead of pole.
     {
-      id: "grid-walk", dur: 0.08, ease: "inOut",
-      // THE GRID WALK: head height, a slow dolly up the aisle between the
-      // staggered rows (the pole anchor is the centreline) — the TV walk before
-      // the formation lap. Numbered slots: a grid too small to fill them (time
-      // trial, duel) leaves it out.
-      // FROM THE BACK HALF, looking up the field: walked from between rows 5
-      // and 6 it kept 20-26 % of the grid in frame on every circuit (frame
-      // report, 2026-10-04) — the rest were behind the lens. From behind row
-      // 14, 14-15 of the 22 are ahead of it, stacked up towards the lights.
-      // The look stays on ONE column (slots 4 and 2, both left): 4 -> 3
-      // crossed the aisle mid-shot, a 6 m lateral swing no squeeze can slow.
+      id: "grid-walk", dur: 0.07, ease: "inOut",
+      // THE GRID WALK: head height, a slow dolly up the aisle (the pole anchor
+      // is the centreline); a grid too small for the numbered slots (time trial,
+      // duel) leaves it out. From the BACK half: from rows 5-6 only 20-26 % of
+      // the grid stayed in frame (frame report, 2026-10-04); behind row 14,
+      // 14-15 of 22 are ahead. The look stays on ONE column (slots 4 and 2):
+      // 4 -> 3 crossed the aisle, a 6 m swing no squeeze can slow.
       eye: [{ at: "pole", off: -118, x: 0, y: 1.7 }, { at: "pole", off: -110, x: 0, y: 1.7 }],
       look: [{ at: "slot", n: 4, off: 0, x: 0, y: 0.6 }, { at: "slot", n: 2, off: 0, x: 0, y: 0.6 }],
       fov: [50, 46],
     },
     {
       id: "grid-crane", dur: 0.09, ease: "inOut",
-      // A slow crane up behind the back row, long lens: the whole field stacked
-      // up towards the lights.
-      // On the aisle's line and tight behind the last row: from 6 m left and
-      // 38 m back, Bahrain's crane stood by the final bend and filmed its
-      // trackside hoarding across two thirds of the frame.
+      // A slow crane behind the back row, long lens, on the aisle's line and tight
+      // behind the last row (from 6 m left, 38 m back Bahrain's crane filmed its
+      // trackside hoarding across two thirds of the frame).
       eye: [{ at: "grid", off: -16, x: -1, y: 2.2 }, { at: "grid", off: -8, x: 0, y: 5.8 }],
       // Aimed at MID-GRID, not at pole: a grid that runs out of the final bend
       // (Bahrain's) puts pole round the corner, and the sightline to it crossed
@@ -1018,21 +874,19 @@ const FlybySeq = (function () {
     },
     {
       id: "grid-front", dur: 0.10, ease: "inOut",
-      // THE FRONT ROW, FROM THE START LINE, looking back down the grid: pole
-      // big in frame and the field stacked behind it. Close and a little off
-      // the aisle — measured with frame-report across eight circuits, 40+ m
-      // out on a long lens left the cars at 1-2 % of the frame and put the
-      // eye inside Bahrain's and Istanbul's main grandstands.
+      // THE FRONT ROW, FROM THE START LINE, looking back down the grid: pole big,
+      // the field behind. Close and a little off the aisle: 40+ m out on a long
+      // lens left the cars at 1-2 % of the frame and the eye inside Bahrain's and
+      // Istanbul's grandstands (frame-report, eight circuits).
       eye: [{ at: "pole", off: 14, x: 3.5, y: 2.2 }, { at: "pole", off: 10, x: 2.5, y: 1.8 }],
       look: [{ at: "pole", off: -12, x: 0, y: 0.6 }, { at: "pole", off: -12, x: 0, y: 0.6 }],
       fov: [40, 40],
     },
     {
       id: "grid-mine", dur: 0.12, ease: "out",
-      // YOUR CAR, in the slot the race starts you from (menuGridCars seats the
-      // field as gridUp will, and tells FlybySeq which slot is yours): a low
-      // push-in from two rows back that settles just behind the car, looking
-      // past it at the lights — the frame the race's own camera takes over from.
+      // YOUR CAR, in the slot the race starts you from (menuGridCars tells
+      // FlybySeq which): a low push-in from two rows back, looking past it at the
+      // lights — the frame the race's own camera takes over from.
       eye: [{ at: "slot", n: "player", off: -22, x: 0, y: 1.9 }, { at: "slot", n: "player", off: -9, x: 0, y: 1.5 }],
       look: [{ at: "slot", n: "player", off: 6, x: 0, y: 0.9 }, { at: "start", off: 30, x: 0, y: 1.2 }],
       fov: [36, 40],
@@ -1044,18 +898,14 @@ const FlybySeq = (function () {
     return (lit - 0.5) / 3;
   }
 
-  // ---- solve ---------------------------------------------------------------
-
   const _eye = [0, 0, 0], _tgt = [0, 0, 0];
   const _out = { eye: _eye, tgt: _tgt, fov: 50, index: 0, id: "", cut: false, lift: 0, corner: 0 };
 
-  /* ONE CAR THROUGH EACH CORNER SHOT. The menu field is scenery, not a
-     simulation: move the player's menu model along the baked racing line while a turn is on
-     air, then put it back on its grid box before the finale. The apex is the
-     midpoint by construction; speedAt supplies both the travel window and the
-     displayed wheel/body speed. This is broadcast-only and never runs on the
-     player's physics state or after the menu hands over to the countdown. The
-     player's model is deliberate: the field renderer culls rivals more than
+  /* ONE CAR THROUGH EACH CORNER SHOT. The menu field is scenery: the player's
+     menu model drives the baked racing line while a turn is on air, then goes
+     back to its grid box. The apex is the midpoint; speedAt gives the travel
+     window and displayed speed. Broadcast-only: never the player's physics, never
+     after the countdown. The player's model, because the field renderer culls rivals more than
      550 m from the grid-seated player, while it always keeps that model. */
   let _heroCars = null, _hero = null, _heroHome = null;
   function restoreHero() {
@@ -1081,13 +931,24 @@ const FlybySeq = (function () {
     let s = apexS + (Math.max(0, Math.min(1, t)) - 0.5) * apexV * Math.max(0, seconds || 0);
     s %= track.total; if (s < 0) s += track.total;
     const line = TrackLine.at(track, s), v = DrivingLine.speedAt(s);
+    return placeHero(track, s, line && isFinite(line.x) ? line.x : 0, v > 0 ? v : apexV);
+  }
+  function placeHero(track, s, x, speed) {
     Tracks.sample(track, s, _heroSmp);
-    const x = line && isFinite(line.x) ? line.x : 0;
     _hero.s = _hero.rPrevS = s; _hero.x = _hero.rPrevX = _hero.xVis = x;
     _hero.px = _hero.rPrevPx = _heroSmp.p[0] + _heroSmp.r[0] * x;
     _hero.pz = _hero.rPrevPz = _heroSmp.p[2] + _heroSmp.r[2] * x;
-    _hero.speed = v > 0 ? v : apexV;
+    _hero.speed = speed;
     return _hero;
+  }
+
+  /** Menu model along the pit-exit road, -30..+28 m of the line; restoreHero() undoes it. */
+  function rollHero(track, t, cars) {
+    if (cars !== undefined) setHeroCars(cars);
+    if (!_hero || !track || !track.pit || !isFinite(track.pit.sOut) || typeof TrackLine === "undefined" || typeof Tracks === "undefined") return null;
+    const s = wrapS(track, track.pit.sOut - 30 + 58 * Math.max(0, Math.min(1, t)));
+    const lane = Tracks.pitLaneAt ? Tracks.pitLaneAt(track, s) : null;
+    return placeHero(track, s, lane && isFinite(lane.centre) ? lane.centre : 0, 22);
   }
 
   /** The camera at `u` (0..1) through the whole sequence. Returns a POOLED
@@ -1096,12 +957,11 @@ const FlybySeq = (function () {
    *
    *  Beyond 1 the sequence holds on its last frame rather than looping: the
    *  screen is skippable, so a player who waits should not see it restart. */
-  /** Plan `shots` before they play: a cold corner plan is a visible stall at its
-   *  cut (up to ~0.2 s desktop, ~1 s on a phone). The opening WARM_NOW shots are
-   *  planned at once and the rest one per timer slice, so the RACE! tap does not
-   *  pay for shots 20 s away. Plans go straight into planShot's cache — never
-   *  through solve(), whose cut tracking a background call would disturb. A newer
-   *  warm() (the next load) retires an unfinished one. */
+  /** Plan `shots` before they play: a cold corner plan stalls at its cut (~0.2 s
+   *  desktop, ~1 s phone). The opening WARM_NOW shots are planned at once, the rest
+   *  one per timer slice. Plans go into planShot's cache, never through solve()
+   *  (whose cut tracking a background call would disturb). A newer warm() retires
+   *  an unfinished one. */
   const WARM_NOW = 2;
   let _warmGen = 0;
   function warm(track, shots) {
@@ -1210,18 +1070,29 @@ const FlybySeq = (function () {
     // number by now), or 0. The loading card marks it on its map (airCorner).
     const k = shotCorner(shot);
     _out.corner = _airCorner = typeof k === "number" && k > 0 ? k : 0;
+    const reduced = reducedMotion();
     if (_out.corner) driveHero(track, cornerS(track, _out.corner), t, dur / total * _flyS);
+    else if (shot.roll === "pitexit" && track.pit && !reduced) rollHero(track, t);   // reduced motion: the car waits on its box
     else restoreHero();
-    const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
     const sway = swayAt(shot, t, reduced);
     if (sway) {
       let dx = _tgt[0] - _eye[0], dz = _tgt[2] - _eye[2], dl = Math.hypot(dx, dz) || 1;
       dx /= dl; dz /= dl; _eye[0] -= dz * sway; _eye[2] += dx * sway;
     }
-    syncPresentation(presentation(u, list, reduced), _out.cut);
+    syncPresentation(presentation(u, list, reduced, on), _out.cut);
     return _out;
   }
   let _lastIdx = -1, _airCorner = 0;
+  // Reduce-motion MediaQueryList cached once (perf P6); its .matches stays live.
+  let _reduceMq = null;
+  function reducedMotion() {
+    if (!_reduceMq) {
+      if (typeof matchMedia === "undefined") return false;
+      _reduceMq = matchMedia("(prefers-reduced-motion: reduce)");
+      if (!_reduceMq) return false;
+    }
+    return !!_reduceMq.matches;
+  }
   /** The turn number the last solve() filmed, 0 for none (a grid, landmark or
    *  whole-circuit shot). Read by js/ui/loading-screen.js: shotAt() knows the
    *  shot's name but not its corner, which only exists once bindCorners() has
@@ -1296,7 +1167,7 @@ const FlybySeq = (function () {
       gap = Math.max(gap, Math.hypot(_lp[0] - _lq[0], _lp[1] - _lq[1], _lp[2] - _lq[2]));
       _lq[0] = _lp[0]; _lq[1] = _lp[1]; _lq[2] = _lp[2];
     }
-    const m = CLEAR_M + gap / 2 + 0.25;
+    const m = FlybyClear.CLEAR_M + gap / 2 + 0.25;
     for (let j = 0; j <= LIFT_N; j++) {
       lerpPose(track, eye0, eye1, j / LIFT_N, _lp);
       const y0 = _lp[1];
@@ -1378,6 +1249,9 @@ const FlybySeq = (function () {
      sample, never below SIGHT_MIN of the authored lead. */
   const SIGHT_EDGE = 1, SIGHT_MIN = 0.3;
   const _sa = [0, 0, 0], _sb = [0, 0, 0], _sm = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+  // sightOff's own project bag — separate from module `_pr` so a nested
+  // landmark score during planning cannot clobber a mid-segment projection.
+  const _prSight = { s: 0, lat: 0, k: 0, heading: 0, dist: 0 };
   function arcDelta(track, a, b) {
     const total = track.total || 1;
     let d = anchorS(track, b) - anchorS(track, a);
@@ -1410,8 +1284,8 @@ const FlybySeq = (function () {
       while (dl < -total / 2) dl += total;
       for (let k = 1; k <= 8; k++) {
         const f = k / 8;
-        const pr = Tracks.project(track, _sa[0] + (_sb[0] - _sa[0]) * f, _sa[2] + (_sb[2] - _sa[2]) * f, se + dl * f);
-        if (!pr) continue;
+        const pr = Tracks.project(track, _sa[0] + (_sb[0] - _sa[0]) * f, _sa[2] + (_sb[2] - _sa[2]) * f, se + dl * f, null, _prSight);
+        if (!pr || !isFinite(pr.s)) continue;
         Tracks.sample(track, pr.s, _sm);
         const off = Math.abs(pr.lat) - (_sm.hw || 10);
         if (off > worst) worst = off;
@@ -1489,8 +1363,10 @@ const FlybySeq = (function () {
     return out;
   }
   const DIP_MS = 150, REDUCED_DIP_MS = 300;
-  function presentation(u, shots, reduced) {
-    const on = shotAt(u, shots), cuts = boundaries(shots);
+  // `on` (optional): the caller's shotAt(u, shots).
+  function presentation(u, shots, reduced, on) {
+    if (!on) on = shotAt(u, shots);
+    const cuts = boundaries(shots);
     let near = Infinity;
     for (const cut of cuts) near = Math.min(near, Math.abs((+u || 0) - cut) * _flyS * 1000);
     const dipMs = reduced ? REDUCED_DIP_MS : DIP_MS;
@@ -1807,13 +1683,11 @@ const FlybySeq = (function () {
    *  report does not score a lap's in-frame share, so without this the cheapest
    *  high eye on Spa framed a third of the lap where the authored one framed
    *  62 %. LAP_SLACK of the authored share is free. */
-  // …and for the road it thins: an eye high enough to see over the trees sees
-  // a thinner ribbon, and Jeddah's and Vegas's raised framings kept a third of
-  // their lap's cover (the report's SUBJECT_SMALL, 0.5 %). The planner's lap
-  // cover is only roughly on the report's scale, so it pays twice: as a RATIO
-  // to the plain framing it would replace (under LAP_THIN of it, LAP_THIN_K a
-  // unit) and under LAP_COVER of the frame (a margin over the report's 0.5 %:
-  // Spa's raised wide reads 0.76 here, 1.0-1.3 there; Jeddah's 0.47 and 0.3).
+  // …and for the road it thins: a high eye sees a thinner ribbon (Jeddah's and
+  // Vegas's raised framings kept a third of their lap cover; the report's
+  // SUBJECT_SMALL is 0.5 %). The planner's cover is only roughly on the report's
+  // scale, so it pays twice: as a RATIO to the plain framing it replaces (under
+  // LAP_THIN of it, LAP_THIN_K a unit) and under LAP_COVER of the frame.
   const LAP_SLACK = 0.08, LAP_LOSS = 200, LAP_TILT = 60, W_HIGH_VIS = 0.6, LAP_THIN = 0.5, LAP_THIN_K = 100, LAP_COVER = 0.006;
   function lapLoss(j0, j, cand, rate) {
     if (!(cand && cand.aim)) return 0;
@@ -2023,8 +1897,9 @@ const FlybySeq = (function () {
      one shot per id: an unconditional DEFAULT entry, or the matching variant
      with the most when-keys when the session qualifies. Night variants sit
      closer and lower so trackside lamps near the camera light the frame
-     (Phase 3.1). Catalog extras live in FlybyOverrides.WHEN so DEFAULT's
-     duration sum stays 1 for the bake. */
+     (Phase 3.1). Only an authored list carries them now: the shipped
+     night/wet catalog (FlybyOverrides) never reached a session and was
+     removed (#5995; revive it from git history). */
   const WHEN_KEYS = ["night", "wet"];
   function isNight(info) {
     const tod = info && info.tod, track = info && (info.track || info.def);
@@ -2048,8 +1923,7 @@ const FlybySeq = (function () {
     return n;
   }
   /** True when `shot` still matches the shipped DEFAULT framing for its id —
-   *  a circuit signature (FlybyOverrides patch) must not be displaced by a
-   *  generic night/wet variant. */
+   *  an authored signature must not be displaced by a generic night/wet variant. */
   function isStockShot(shot) {
     if (!shot || !shot.id) return false;
     const stock = DEFAULT.find((s) => s && s.id === shot.id);
@@ -2057,24 +1931,14 @@ const FlybySeq = (function () {
     const key = (s) => JSON.stringify({ eye: s.eye, look: s.look, fov: s.fov, dur: s.dur, ease: s.ease });
     return key(shot) === key(stock);
   }
-  /** Pick the playable list for this session. Pure: never mutates `list`.
-   *  `list` may already be a catalog (DEFAULT + when: entries) or a patched
-   *  DEFAULT; FlybyOverrides.WHEN is folded in when absent. */
+  /** Pick the playable list for this session. Pure: never mutates `list`,
+   *  which may be a catalog (shots plus when: entries). */
   function select(list, info) {
     if (!Array.isArray(list) || !list.length) return list || [];
     const session = info || {};
-    let extras = null;
-    try {
-      if (typeof FlybyOverrides !== "undefined" && FlybyOverrides && Array.isArray(FlybyOverrides.WHEN))
-        extras = FlybyOverrides.WHEN;
-    } catch (_) { extras = null; }
-    const catalog = list.slice();
-    if (extras && extras.length && !list.some((s) => s && s.when)) {
-      for (let i = 0; i < extras.length; i++) catalog.push(extras[i]);
-    }
     const order = [], best = new Map();
-    for (let i = 0; i < catalog.length; i++) {
-      const shot = catalog[i];
+    for (let i = 0; i < list.length; i++) {
+      const shot = list[i];
       if (!shot || typeof shot !== "object") continue;
       if (!whenMatch(shot.when, session)) continue;
       const id = shot.id || ("#" + i);
@@ -2088,13 +1952,6 @@ const FlybySeq = (function () {
     }
     return order.map((id) => best.get(id));
   }
-  /* Session for select() when vary() is called with no info. raceIntro /
-     menuFinish cannot pass tod/weather without a game.js edit (wave OWNED
-     boundary), so callers that know the session — flyby.mjs, tests, and a
-     future one-line raceIntro hook — call setSession(info) first. */
-  let _session = null;
-  function setSession(info) { _session = info && typeof info === "object" ? info : null; }
-  function sessionInfo() { return _session || {}; }
   /* A DIFFERENT FLYBY EACH LOAD. The same nine shots on the fifth load of a
      circuit is a loading screen; the same LANGUAGE redrawn is a broadcast.
      vary() jitters the establishing bearings, sometimes films the second
@@ -2104,10 +1961,8 @@ const FlybySeq = (function () {
      seed is the same flyby, which is what the test holds it to. */
   const VARY_ROLES = ["first", "lore", "slowest", "fastest", "mid", "late"];
   function vary(list, seed, fit) {
-    // Fold night/wet variants in, then pick for this session — raceIntro and
-    // menuFinish only call vary(DEFAULT), so select() has to live here to reach
-    // the loading flyby without a game.js edit (wave OWNED boundary).
-    list = select(list || DEFAULT, sessionInfo());
+    // One shot per id; a when: variant needs a session, and vary() has none.
+    list = select(list || DEFAULT, null);
     if (fit !== false) list = list.filter(fitsGrid);   // durations renormalise in solve(); the menu passes false (the race's grid is not known yet)
     let h = (seed >>> 0) || 1;
     const rnd = () => { h ^= h << 13; h >>>= 0; h ^= h >>> 17; h ^= h << 5; h >>>= 0; return h / 4294967296; };
@@ -2133,13 +1988,13 @@ const FlybySeq = (function () {
   function reset() { _lastIdx = -1; _airCorner = 0; }
 
   return {
-    solve, shotAt, warmProgress, airCorner, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
-    landmarks, bounds, landmarkScore, lmBase, landmarkFallback, planShot, treeBlockers,
-    anchorS, posePoint, cornerS, cornerSide, cornerTurn, lmFace,
-    poseFromWorld, shotFromView, nearestCorner, select, setSession, whenMatch, isNight, isWet, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, withoutGrid, bindCorners, warm, cancelWarm, setDuration, planSteps,
-    boundaries, presentation, swayAt, setHeroCars, driveHero, gridProgress,
-    DEFAULT, GRID_SHOTS, EASE,
-    POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX, PARA_MAX,
+    solve, shotAt, warmProgress, airCorner, reset, clearEye, floorEye, insideProp, blockers, isSolid, onRoadPose,
+    landmarks, bounds, lmBase, landmarkFallback, planShot,
+    anchorS, posePoint, cornerS, cornerSide, cornerTurn,
+    poseFromWorld, shotFromView, select, whenMatch, isNight, isWet, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, withoutGrid, bindCorners, warm, cancelWarm, setDuration, planSteps,
+    boundaries, presentation, swayAt, setHeroCars, driveHero, rollHero, gridProgress,
+    DEFAULT, GRID_SHOTS,
+    FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX, PARA_MAX,
   };
 })();
 Object.freeze(FlybySeq);

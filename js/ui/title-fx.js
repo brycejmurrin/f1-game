@@ -1,55 +1,26 @@
 /* Apex 26 — TitleFx: title-screen motion, wash and the background drawing.
 
-   REDUCE MOTION lives under SETTINGS › ACCESSIBILITY (js/ui/a11y-opts.js
-   builds the row); TITLE INTRO / MENU WASH / TITLE ART / REPLAY INTRO sit in
-   APPEARANCE › TITLE SCREEN, whose summary js/ui/title-layout.js paints
-   through onChange().
-
-   REDUCE MOTION: AUTO / ON / OFF (stored apex26.motion: "auto" | "reduce" |
-   "off"; legacy "on" reads as AUTO). AUTO follows prefers-reduced-motion
-   live; ON always reduces; OFF never reduces (overrides the OS). Effective
-   mode() is still "on" | "reduce" for every caller that keys off motion.
-   Lands on <html data-motion="reduce"> — absent when motion is on — so CSS
-   keys off ONE attribute, and so does the race: js/game.js drops the camera
-   shake and the pre-race cinematic, js/ui/loading-screen.js the flyby.
-
-   TITLE INTRO: FULL / QUICK / OFF. How long (and whether) the first-show
-   title reveal runs. Lands on <html data-title-intro>. Unset is FULL.
-   REDUCED motion still drops the intro at once. QUICK halves the CSS
-   timeline via scoped --dur-* / --intro-* tokens under #overlay[data-intro].
-
-   MENU WASH: FULL / SOFT / OFF. The red radial on #overlay plus its grain.
-   Lands on <html data-menu-wash>. Unset is FULL (the shipped look).
-
-   TITLE ART: ON / SOFT / OFF. Controls the #title-car line drawing behind the
-   title menu via <html data-title-art>. Unset is ON (the shipped look).
-
-   Five small jobs on #overlay (the title screen):
-     * motion / intro / wash / title-art attributes (index.html's inline boot
-       sets the FIRST answers before first paint; this file owns every later
-       one);
-     * the intro, ONCE: CSS keys off #overlay[data-intro]. The shell ships the
-       attribute; this file takes it off after introHoldMs() once the overlay
-       is first visible. REDUCED and INTRO OFF take it off at once. replay()
-       is the one way to see it again (also wired to #pm-replay-intro) — and
-       still works under INTRO OFF as a one-shot preview;
-     * #overlay[data-paused] while the tab is hidden;
-     * a light confirm tap on a title .bigbtn via Input.vibrate.
+   Accessibility owns the REDUCE MOTION row. Appearance › Title Screen owns
+   intro, wash, art, button style and replay. The shell reads saved choices
+   before first paint. TitleFx updates them at runtime and notifies TitleLayout.
 
    Needs GameStore at eval (HARD_EDGES). Input and SettingRow are read at call
    time only. */
 const TitleFx = (function () {
   "use strict";
 
-  const KEY = "motion";              // apex26.motion — json: "auto" | "reduce" | "off" (legacy "on" → auto)
-  const KEY_INTRO = "titleIntro";    // apex26.titleIntro — json: "full" | "quick" | "off" | unset
-  const KEY_WASH = "menuWash";       // apex26.menuWash — json: "full" | "soft" | "off" | unset
-  const KEY_ART = "titleArt";        // apex26.titleArt — json: "on" | "soft" | "off" | unset
+  const KEY = "motion";
+  const KEY_INTRO = "titleIntro";
+  const KEY_WASH = "menuWash";
+  const KEY_ART = "titleArt";
+  const KEY_STYLE = "titleButtonStyle";
+  const BUTTON_STYLES = [["auto", "AUTO"], ["racing", "RACING"], ["flat", "FLAT"]];
+  const STYLE_ROW = "pm-titlebuttonstyle";
   // UI labels AUTO / ON / OFF; stored tokens auto / reduce / off (reduce = always reduce).
   const MOTION = [["auto", "AUTO"], ["reduce", "ON"], ["off", "OFF"]];
   const INTROS = [["full", "FULL"], ["quick", "QUICK"], ["off", "OFF"]];
-  const WASHES = [["full", "FULL"], ["soft", "SOFT"], ["off", "OFF"]];
-  const ARTS = [["on", "ON"], ["soft", "SOFT"], ["off", "OFF"]];
+  const WASHES = [["full", "FULL"], ["medium", "MEDIUM"], ["soft", "SOFT"], ["off", "OFF"]];
+  const ARTS = [["on", "ON"], ["medium", "MEDIUM"], ["soft", "SOFT"], ["off", "OFF"]];
   // Hold windows: FULL covers the CSS timeline (~2.5 s); QUICK matches the
   // halved --intro-* / --dur-* tokens under data-title-intro="quick".
   const INTRO_MS = { full: 2800, quick: 1200, off: 0 };
@@ -60,13 +31,9 @@ const TitleFx = (function () {
   const byId = (id) => (typeof document !== "undefined" ? document.getElementById(id) : null);
   const overlay = () => byId("overlay");
   let introTimer = 0;
-  // TITLE INTRO / MENU WASH / TITLE ART listeners: the TITLE SCREEN fold's
-  // summary (js/ui/title-layout.js) repaints when one of them moves.
   const subs = [];
   function onChange(fn) { if (typeof fn === "function") subs.push(fn); }
-  // A title look changed: tell the subscribers (TitleLayout's TITLE SCREEN
-  // summary), and show the title screen through the settings page for a
-  // moment (js/ui/screen-looks.js; it peeks only while SETTINGS is open).
+  // Refresh the title summary and briefly preview the changed setting.
   const changed = () => {
     for (const fn of subs) fn();
     if (typeof ScreenLooks !== "undefined") ScreenLooks.peek("title", ScreenLooks.PEEK_MS);
@@ -76,11 +43,13 @@ const TitleFx = (function () {
   // Stored choice for REDUCE MOTION. Legacy "on" (old MOTION: ON) maps to AUTO
   // so an OS that asks for reduced motion still wins for those saves; "reduce"
   // stays ON (always reduce); "off" is the new override.
+  let choiceRev, choiceRawRev, savedChoice;
   function choice() {
+    if (store.rev !== undefined && choiceRev === store.rev && choiceRawRev === store.rawRev) return savedChoice;
     const v = store.get(KEY, null);
-    if (v === "reduce") return "reduce";
-    if (v === "off") return "off";
-    return "auto";   // null, "auto", legacy "on", garbage
+    choiceRev = store.rev; choiceRawRev = store.rawRev;
+    savedChoice = v === "reduce" || v === "off" ? v : "auto";
+    return savedChoice;
   }
   // Effective motion for CSS / race callers: "reduce" | "on".
   function mode() {
@@ -94,16 +63,13 @@ const TitleFx = (function () {
     if (v === "quick" || v === "off") return v;
     return "full";
   }
-  function washMode() {
-    const v = store.get(KEY_WASH, null);
-    if (v === "soft" || v === "off") return v;
-    return "full";
+  const strength = (v, fallback) => v === "medium" || v === "soft" || v === "off" ? v : fallback;
+  const washMode = () => strength(store.get(KEY_WASH, null), "full");
+  const artMode = () => strength(store.get(KEY_ART, null), "on");
+  function normalizeButtonStyle(v) {
+    return v === "racing" || v === "flat" ? v : "auto";
   }
-  function artMode() {
-    const v = store.get(KEY_ART, null);
-    if (v === "soft" || v === "off") return v;
-    return "on";
-  }
+  function buttonStyle() { return normalizeButtonStyle(store.get(KEY_STYLE, null)); }
   function introHoldMs() {
     return INTRO_MS[introMode()] || INTRO_MS.full;
   }
@@ -139,11 +105,18 @@ const TitleFx = (function () {
     if (a === "on") delete root.dataset.titleArt;
     else root.dataset.titleArt = a;
   }
+  function applyButtonStyle() {
+    if (!root || !root.dataset) return;
+    const style = buttonStyle();
+    if (style === "auto") delete root.dataset.titleButtonStyle;
+    else root.dataset.titleButtonStyle = style;
+  }
   function apply() {
     applyMotion();
     applyIntro();
     applyWash();
     applyArt();
+    applyButtonStyle();
   }
 
   function setChoice(v) {
@@ -168,7 +141,7 @@ const TitleFx = (function () {
     return introMode();
   }
   function setWash(v) {
-    const next = (v === "soft" || v === "off") ? v : "full";
+    const next = strength(v, "full");
     store.set(KEY_WASH, next);
     applyWash();
     if (typeof SettingRow !== "undefined" && SettingRow.paint) SettingRow.paint("pm-menuwash", washMode());
@@ -176,12 +149,20 @@ const TitleFx = (function () {
     return washMode();
   }
   function setArt(v) {
-    const next = (v === "soft" || v === "off") ? v : "on";
+    const next = strength(v, "on");
     store.set(KEY_ART, next);
     applyArt();
     if (typeof SettingRow !== "undefined" && SettingRow.paint) SettingRow.paint("pm-titleart", artMode());
     changed();
     return artMode();
+  }
+
+  function setButtonStyle(v) {
+    store.set(KEY_STYLE, normalizeButtonStyle(v));
+    applyButtonStyle();
+    if (typeof SettingRow !== "undefined" && SettingRow.paint) SettingRow.paint(STYLE_ROW, buttonStyle());
+    changed();
+    return buttonStyle();
   }
 
   // Hold the intro for one pass, then drop to the resting title for good.
@@ -218,7 +199,7 @@ const TitleFx = (function () {
     if (typeof Input !== "undefined" && Input.vibrate) Input.vibrate(8);
   }
 
-  function initUI() {
+  function initUI(gate) {
     const ov = overlay();
     if (ov) {
       if (mode() === "reduce" || introMode() === "off") endIntro();
@@ -241,7 +222,8 @@ const TitleFx = (function () {
       if (document.visibilityState === "hidden") ov.setAttribute("data-paused", "");
       else ov.removeAttribute("data-paused");
     });
-    wireRows();
+    // #4798 gate: rows only
+    if (gate) gate(wireRows); else wireRows();
   }
 
   // TITLE SCREEN fold rows under SETTINGS › APPEARANCE. REDUCE MOTION is
@@ -269,6 +251,20 @@ const TitleFx = (function () {
         write: (v) => setArt(v),
       });
     }
+    const body = byId("pm-titlescreen-body");
+    if (body && !byId(STYLE_ROW)) {
+      const row = SettingRow.build(STYLE_ROW, "TITLE BUTTON STYLE");
+      const help = document.createElement("p");
+      help.id = STYLE_ROW + "-help";
+      help.className = "adv-help";
+      help.textContent = "AUTO adapts to the screen. Choose RACING for angled buttons or FLAT for straight buttons in both orientations.";
+      row.sel.setAttribute("aria-describedby", help.id);
+      body.insertBefore(row.row, body.firstChild);
+      body.insertBefore(help, row.row.nextSibling);
+    }
+    if (byId(STYLE_ROW)) {
+      SettingRow.wire(STYLE_ROW, { values: BUTTON_STYLES, read: buttonStyle, write: setButtonStyle });
+    }
     const replayBtn = byId("pm-replay-intro");
     if (replayBtn && !replayBtn._wired) {
       replayBtn._wired = true;
@@ -284,13 +280,13 @@ const TitleFx = (function () {
   // after this file, so only a document that is already COMPLETE wires now.
   if (typeof document !== "undefined") {
     if (document.readyState === "complete") initUI();
-    else document.addEventListener("DOMContentLoaded", initUI, { once: true });
+    else document.addEventListener("DOMContentLoaded", () => initUI(typeof SettingsNav !== "undefined" ? SettingsNav.lazy : null), { once: true });
   }
 
   return {
     KEY, KEY_INTRO, KEY_WASH, KEY_ART, MOTION, INTROS, WASHES, ARTS, INTRO_MS,
     choice, mode, introMode, washMode, artMode, introHoldMs,
-    set, setChoice, setIntro, setWash, setArt, onChange,
+    set, setChoice, setIntro, setWash, setArt, buttonStyle, setButtonStyle, onChange,
     apply, applyMotion, applyIntro, applyWash, applyArt, replay, initUI, wireRows,
   };
 })();

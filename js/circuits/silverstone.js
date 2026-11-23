@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "silverstone",
+    revision: 2, // measured longitudinal profile changes comparable lap times
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 1.2 m off centreline at the Wing; vertex 0 is the OLD National pit straight, 1.3 km away.
     // A start line is always on a straight: docs/tracks/START-LINES.md.
@@ -43,7 +44,7 @@
     // emergently from the forces the car made). Real 2026 rate / the 0.0493 s/lap
     // mean of the seven measured circuits — docs/research/TYRE-STRATEGY-DESIGN.md §5.5.
     tyreSeverity: 0.89,  // Britain 0.044 s/lap
-    sunAzimBias: 0.28,   // high-summer northern sun, gentle SW tilt over the old airfield
+    sunAzimBias: 0.28, // art-directed day-sun yaw offset (rad, atmosphere.js) — not a compass bearing
     baseHW: 8,
     sceneryCoordinates: "racing",
     terrainOuter: 110,
@@ -54,27 +55,35 @@
     ],
     // British overcast (ATM.britishOvercast) — pale grey-blue sky, lush grass, soft fog.
     pal: { zenith: [0.55, 0.62, 0.72], horizon: [0.72, 0.76, 0.82], grass: [0.16, 0.40, 0.18], runoff: [0.26, 0.36, 0.21], fog: [0.68, 0.72, 0.78], fogDensity: 0.0020, sunDir: [0.42010419876354255, 0.5521369469463703, 0.7201786264517872], sun: [0.92, 0.94, 0.96], sunColor: [0.92, 0.94, 0.96], ambientSky: [0.58, 0.62, 0.70], ambientGround: [0.30, 0.34, 0.28] },
-    // Source-trace fractions; built centreline peaks +7.04 m at racing s≈0.269 and dips -7.13 m at s≈0.703 (trackProfile, 2026-10-15; the old 0.12/0.55 note was wrong).
+    // Closed-loop fit to OpenF1 2024 British qualifying car Z, session 9554:
+    // fastest completed laps for Russell, Hamilton and Norris, interpolated by
+    // distance and combined by median. F1 reports 11.3 m relief and a drop
+    // from Stowe to Vale. These 36 overlapping cosine knots are source-frame
+    // heights about the lap mean. https://api.openf1.org/v1/laps?session_key=9554&driver_number=63
     elevations: [
-      { s: 0.7669, halfM: 420, rise: 7 },
-      { s: 0.1969, halfM: 480, rise: -7 },
-    ],
+      1.16, 1.06, 1.75, 2.91, 1.05, 1.62, 1.76, -0.63, 0.07, -0.8, -0.77, -2.51,
+      -1.24, 1.73, -2.27, -3.04, -1.9, -3.59, -3.64, -2.36, -1.03, -0.5, 0.86, 1.22,
+      1.73, 1.77, 1.62, 1.6, 1.94, 1.03, -0.62, 1.07, -0.44, -0.7, -0.03, 0.13,
+    ].map((rise, j) => ({ s: j / 36, halfM: 324.76, rise })),
     bankZones: [
-      { frac: 0.6536, angleDeg: 4.0, widthM: 110 },   // Loop (engine 0.177)
-      { frac: 0.8391, angleDeg: 3.5, widthM: 190 },   // Luffield (engine 0.362)
-      { frac: 0.9992, angleDeg: 4.5, widthM: 150 },   // Copse (engine 0.523)
-      { frac: 0.1628, angleDeg: 3.5, widthM: 150 },   // Becketts (engine 0.686)
-      { frac: 0.3333, angleDeg: 4.0, widthM: 200 },   // Stowe (engine 0.857)
-      { frac: 0.4270, angleDeg: 3.5, widthM: 200 },   // Vale/Club (engine 0.950)
-      { frac: 0.5468, angleDeg: 3.0, widthM: 100 },   // Abbey (engine 0.070)
+      { frac: 0.6536, angleDeg: 4.0, widthM: 110 },   // Loop
+      { frac: 0.8391, angleDeg: 3.5, widthM: 190 },   // Luffield
+      { frac: 0.9992, angleDeg: 4.5, widthM: 150 },   // Copse
+      { frac: 0.1628, angleDeg: 3.5, widthM: 150 },   // Becketts
+      { frac: 0.3333, angleDeg: 4.0, widthM: 200 },   // Stowe
+      { frac: 0.4270, angleDeg: 3.5, widthM: 200 },   // Vale/Club
+      { frac: 0.5468, angleDeg: 3.0, widthM: 100 },   // Abbey
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
+    // sectors: sector splits; turns: one apex per corner in the FIA 2026 event-map
+    // numbering (FIA "2026 British Grand Prix - Circuit Map, Pit Lane Drawing, Emergency
+    // Exits Map and Red Zone", p.2, T1 Abbey .. T18), turns[0] = T1, each at the built
+    // centreline curvature peak (Copse T9: midpoint of its twin peaks). RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.3, 0.62],
-    turns: [0.0705, 0.1095, 0.1526, 0.1780, 0.2101, 0.3402, 0.3620, 0.4199, 0.5229, 0.6140, 0.6324, 0.6612, 0.6838, 0.7105, 0.8556, 0.9384, 0.9507, 0.9802],  // Abbey Farm Village Loop Aintree Brooklands Luffield Woodcote Copse Maggotts Becketts(3) Chapel Stowe Vale Club(2) — curvature-peak apexes
+    turns: [0.0705, 0.1095, 0.1533, 0.1766, 0.2101, 0.3415, 0.3628, 0.4203, 0.5229, 0.6146, 0.6324, 0.6605, 0.6865, 0.7118, 0.8569, 0.9384, 0.9507, 0.9808],  // T1 Abbey, T2 Farm, T3 Village, T4 Loop, T5 Aintree, T6 Brooklands, T7 Luffield, T8 Woodcote, T9 Copse, T10 Maggotts, T11-T13 Becketts, T14 Chapel, T15 Stowe, T16 Vale, T17-T18 Club
     furniture: { tree: "broad", fol: [0.28, 0.45, 0.22], lamp: "post", treeCrown: "vase" },  // English oak copses, mid-green. 22% of "broad" crowns turn autumn gold/rust (build-props.js plantTree); set furniture.autumn: 0 once PR #2075 lands. Every other species costs +2.6% props tris (over the ratchet).
     kit: { marshal: "cabin",     rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     standSet: ["navy", "steel", "alu"],  // Silverstone blue

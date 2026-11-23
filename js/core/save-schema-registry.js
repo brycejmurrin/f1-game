@@ -39,10 +39,15 @@ const SaveSchemaRegistry = (function () {
     { re: /^parts\./, owner: "js/garage/setup-sheet.js", lane: "json", v: 1, validate: validators.json },
     { re: /^livery\./, owner: "js/car/custom-liveries.js", lane: "json", v: 1, validate: validators.json },
     { re: /^setup\./, owner: "js/garage/setup-tune.js", lane: "json", v: 1, validate: validators.json },
+    // A career's own sheet (#5036): careerSetup.<flavour>.<slot>.<team>, the tune plus the career seed.
+    { re: /^careerSetup\.(driver|myteam)\.[0-2]\.[A-Za-z0-9_-]{1,64}$/, owner: "js/garage/setup-tune.js", lane: "json", v: 1, validate: validators.json },
+    // Named garage sheets (js/garage/setup-presets.js). Must precede any looser
+    // setup.* consumer; the write-site scan used to skip *presets.js entirely.
+    { re: /^setupPresets\./, owner: "js/garage/setup-presets.js", lane: "json", v: 1, validate: validators.json },
     { re: /^ttlb\./, owner: "js/core/store.js", lane: "json", v: 2, validate: validators.ttlb },
     { re: /^career\.(driver|myteam)\.[0-2]$/, owner: "js/career/career.js", lane: "json", v: 1, validate: validators.career },
     { re: /^api\./, owner: "js/data/api-transport.js", lane: "json", v: 1, validate: validators.disposable },
-    { re: /^realrace\./, owner: "js/data/real-race-tab.js", lane: "json", v: 1, validate: validators.disposable },
+    { re: /^realrace\./, owner: "js/data/real-race-fetch.js", lane: "json", v: 1, validate: validators.disposable },
     { re: /^ghost\./, owner: "js/car/ghost.js", lane: "json", v: 1, validate: validators.json },
     { re: /^pitPlan\./, owner: "js/race/pit-lane.js", lane: "json", v: 1, validate: validators.json },
     { re: /^spotify\./, owner: "js/audio/spotify.js", lane: "raw", v: 1, validate: validators.rawScalar },
@@ -69,6 +74,7 @@ const SaveSchemaRegistry = (function () {
     "devApi": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "driver": entry("js/garage/setup-sheet.js", "json", 1, "json"),
     "envProbeOff": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    "stallLatch": entry("js/perf/loop-health.js", "raw", 1, "rawScalar"),
     "renderRate": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag, #2652)", "raw", 1, "rawScalar"),
     "thermalDrift": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag, #2652)", "raw", 1, "rawScalar"),
     "incidentLog": entry("js/race/race-insights.js", "json", 1, "json"),
@@ -82,6 +88,7 @@ const SaveSchemaRegistry = (function () {
     "gfxBackendProbe": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "gfxDebug": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "inspector": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    "bridgeToken": entry("js/agent/apex-bridge.js (device-only GitHub token for the phone bridge; never exported)", "raw", 1, "rawScalar"),
     "gpuCapture": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag, #2964 Spector/webgl-lint)", "raw", 1, "rawScalar"),
     "gfxTlxFail": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "gfxWgxFail": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
@@ -100,6 +107,7 @@ const SaveSchemaRegistry = (function () {
     "instCellCache": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "installChipSeen": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "iosInstallSeen": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    "iosWakeNoteSeen": entry("js/ui/platform-session.js (iOS 16.4-18.3 Home Screen wake-lock note, once)", "raw", 1, "rawScalar"),
     "liveryAsync": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "marbleGrip": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "mirrorInstEvery": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
@@ -120,8 +128,10 @@ const SaveSchemaRegistry = (function () {
     "spatialUpscaleGather": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "ssrDayGate": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "stallWatch": entry("js/perf/loop-health.js (?stallwatch=1 forces the stall watchdog under automation)", "raw", 1, "rawScalar"),
+    "swRaceShed": entry("js/render/three/tlx.js (hand-set: \"1\" forces the software-GL race scale/tier cut, \"0\" keeps full res)", "raw", 1, "rawScalar"),
     "team": entry("js/garage/setup-sheet.js", "json", 1, "json"),
     "titleWarm": entry("js/perf/title-warm.js (the build whose title warm completed; a phone skips it on that build)", "raw", 1, "rawScalar"),
+    "tlxAgx": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxAoFold": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxArrayNearest": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxAttrInst": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
@@ -130,6 +140,8 @@ const SaveSchemaRegistry = (function () {
     "tlxChunkMerge": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxChunkRelease": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxCoalesce": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    "tlxCsmCars": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    "tlxCsmDither": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxDepthDiscard": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxDrawWarm": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxDynUsage": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
@@ -162,20 +174,23 @@ const SaveSchemaRegistry = (function () {
     "tlxViz": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxWarmFx": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "tlxWarmPlus": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
-    // Written by tlx.js itself: WebKit's per-device kill switch (the failure reason); RESET RENDERER clears it.
+    // tlx.js: WebKit's per-device kill switch (the failure reason); RESET RENDERER clears it.
     "tlxWebKitGL": entry("js/render/three/tlx.js", "raw", 1, "rawScalar"),
     "track": entry("js/game.js", "json", 1, "json"),
     "trackFilter": entry("js/ui/select-screen.js", "json", 1, "json"),
     "trackId": entry("js/game.js", "json", 1, "string"),
     "turn": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "turnApi": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    "wheelAssist": entry("js/physics/wheel-state.js (ABS/TC level; default off)", "raw", 1, "rawScalar"),
     "wheelState": entry("js/physics/wheel-state.js (opt-in #1628; default OFF)", "raw", 1, "rawScalar"),
+    "brakeThermal": entry("js/physics/wheel-state.js (opt-in #1577 brake temperature and fade; default OFF)", "raw", 1, "rawScalar"),
     "wgxCapture": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "wgxInsetInPass": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "wgxPackAsync": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "wgxTransient": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     onboarded: entry("js/ui/onboard.js", "json", 1, "json"),
     onboardRaces: entry("js/ui/onboard.js", "json", 1, "json"),
+    onboardRaceBase: entry("js/ui/onboard.js", "json", 1, "json"),
     customTracks: entry("js/editor/custom-tracks.js", "json", 1, "json"),
     customTrackDraft: entry("js/editor/custom-tracks.js", "json", 1, "json"),
     customTrackDraftPrev: entry("js/editor/custom-tracks.js", "json", 1, "json"),
@@ -186,19 +201,25 @@ const SaveSchemaRegistry = (function () {
     crashSeen: entry("js/perf/governor.js", "raw", 1, "rawScalar"),
     crashSeenBuild: entry("js/perf/governor.js", "raw", 1, "rawScalar"),
     benchRun: entry("js/perf/bench-run.js", "raw", 1, "string"),   // BENCHMARK plan + last results (JSON text), across its reloads
-    benchCapture: entry("js/perf/bench-capture.js", "raw", 1, "string"),   // BENCHMARK leg breadcrumb (JSON text): what led up to a reload that killed the leg
+    benchCapture: entry("js/perf/bench-capture.js", "raw", 1, "string"),   // BENCHMARK leg breadcrumb (JSON text) before a reload that killed the leg
     customLogo: entry("js/career/custom-team.js", "json", 1, "json"),
     carSmooth: entry("js/car/car-shade.js", "raw", 1, "rawScalar"),
     freecamMarks: entry("js/camera/photo-kit.js", "json", 1, "json"),
     gfxBootBound: entry("js/render/renderer-boot.js", "raw", 1, "rawScalar"),
+    // Last pack's model files: a return visit fetches them before the manifest; RESET RENDERER drops the hint.
+    packIndex: entry("js/render/shared/assets.js", "raw", 1, "string"),
     gfxProbeStrikes: entry("js/render/renderer-boot.js", "raw", 1, "rawScalar"),
+    // "<backend>:<build>" left when the boot canary's second strike picks webgl2 (#4995); SETTINGS reads it.
+    gfxRetired: entry("js/render/renderer-boot.js", "raw", 1, "rawScalar"),
     "inputGhost.v1": entry("js/car/input-ghost.js", "json", 1, "json"),
     lastSession: entry("js/ui/share-code.js", "json", 1, "json"),
     logLevel: entry("js/core/log.js", "raw", 1, "rawScalar"),
-    photoBackground: entry("js/ui/photo-studio.js", "json", 1, "json"),
+    photoBackground: entry("js/ui/photo-studio.js", "raw", 1, "string"),
     rendezvous: entry("js/net/rendezvous.js", "raw", 1, "rawScalar"),
     seasonCfg: entry("js/career/season-cal.js", "json", 1, "season"),
+    setupTrialRecover: entry("js/garage/setup-trials.js", "json", 1, "json"),
     shareUndo: entry("js/ui/share-code.js", "json", 1, "json"),
+    xrCaps: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),
     xrEnterPending: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),
     xrPrevBackend: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),
   };
@@ -242,8 +263,10 @@ const SaveSchemaRegistry = (function () {
     return null;
   }
 
+  // PREFIX / EXACT / validators stay module-private: resolve/validateKey/
+  // ingestSettingsSpec are the only external seams (save-schema-registry tests).
   return {
-    PREFIX, EXACT, validators, resolve, validateKey, noteWrite, ingestSettingsSpec,
+    resolve, validateKey, noteWrite, ingestSettingsSpec,
     get strict() { return strict; },
     set strict(v) { strict = !!v; },
     get settingsSpec() { return _settings; },

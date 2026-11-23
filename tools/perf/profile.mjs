@@ -9,8 +9,8 @@
 // spans  PerfSpans (js/perf/spans.js) over a deterministic scenario: race(track), go(), jump(), throttle plus
 //        a frame-indexed steer sine, N rendered frames. Prints p50/p95/p99/max ms per span. Also records the
 //        rAF cadence ("raf"), which exists on every ref, so --base works on a ref that predates the spans.
-// cpu    wraps tools/shot/profile-gameloop.mjs (V8 sampling profile, top self time).
-// hitch  wraps tools/gfx/frame-hitch.mjs (per-rAF cost, spike period).
+// cpu    wraps tools/shot/profile-gameloop.mjs (V8 sampling profile, top self time); no measurement controls.
+// hitch  wraps tools/gfx/frame-hitch.mjs (per-rAF cost, spike period); --frames N means max(10, round(N/6)) seconds, --capture restores readback.
 // step   the physics/AI step alone in real Chromium V8 (headless(true): no render, no SwiftShader in the timing):
 //        seed 42 before race creation, reset(seed 42) + throttle, --warm steps for the JIT, then --steps timed in batches of 10 (performance.now
 //        is coarse); prints ms/step p50/p95/p99 and checks the rounded field digest across --base arms.
@@ -18,8 +18,8 @@
 //        to five, and the Node VM (game-vm.cjs) over-weights global lookups ~6x (docs/notes/PERF-SCENE-CPU-2026-10-20.md).
 //        --cpu-throttle N: CDP Emulation.setCPUThrottlingRate(N) for the whole page (phone-class CPU, e.g. 4 or 6).
 // trace  CDP Tracing → artifacts/profiles/*.json, open in ui.perfetto.dev or the Chrome Performance panel (spans: User Timing "apex:*", one DevTools track per phase in group "Apex 26").
-// --repeat N    N fresh pages; reports the median of each stat and the spread (max-min) across repeats.
-// --base <ref>  same scenario on an ephemeral git worktree at <ref>; prints a delta table. A delta inside the
+// --repeat N    (spans/step only) N fresh pages; reports the median of each stat and the spread (max-min) across repeats.
+// --base <ref>  (spans/step only) same scenario on an ephemeral git worktree at <ref>; prints a delta table. A delta inside the
 //               spread is "noise", never a win; with fewer than 3 repeats every verdict is "unproven"; the raf row is cadence, informational only.
 // SwiftShader caveat: CPU JS cost is meaningful, GPU/fill numbers are not (the "render" span includes the synchronous
 // software-raster wait; physics/ai/collide/hud are the reliable rows) (docs/notes/PROFILER-DESIGN-2026-10-16.md).
@@ -29,16 +29,23 @@ import { fileURLToPath } from "node:url";
 import { spawnSync, execFileSync } from "node:child_process";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 import { exitIfHelp, parseFlags } from "../lib/cli-args.mjs";
-import { aggregate, diff, formatDiff, formatTable, intervalStats, supportsCaptureKey, profileScenario, profileScenarioSignature, profileComparability } from "./lib.mjs";
+import { aggregate, diff, formatDiff, formatTable, intervalStats, supportsCaptureKey, profileScenario, profileScenarioSignature, profileComparability, profileOptionProblem } from "./lib.mjs";
 const CAPTURE_SRC = ["js/render/three/tlx.js", "js/render/glx/glx.js", "js/render/webgpu/wgx.js"];   // where a ref reads the apex26.wgxCapture switch
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const OUT = join(ROOT, "artifacts/profiles");
 const argv = process.argv.slice(2);
-exitIfHelp(argv, `profile — spans | cpu | hitch | trace, with --repeat and --base A/B
+exitIfHelp(argv, `profile — spans | cpu | hitch | trace | step; repeat/base A/B in spans/step only
 
-  node tools/perf/profile.mjs <track> [--mode spans|cpu|hitch|trace|step] [--frames N] [--steps N] [--warm N] [--repeat N] [--base <ref>] [--json] [--capture]
+  node tools/perf/profile.mjs <track> [--mode spans|cpu|hitch|trace|step] [--frames N] [--steps N] [--warm N] [--repeat N] [--base <ref>] [--cpu-throttle N] [--json] [--capture]
 
+Controls by mode:
+  spans: frames, repeat, base, json, capture
+  cpu: none (one raw CPU profile)
+  hitch: frames (max(10, round(N/6)) seconds), capture
+  trace: frames, capture
+  step: steps, warm, repeat, base, json, capture, cpu-throttle
+Boolean switches json/capture/help take no assigned value.
 Default track vegas, mode spans, frames 40, repeat 1. Output: artifacts/profiles/.`);
 parseFlags(argv, ["--mode", "--frames", "--steps", "--warm", "--repeat", "--base", "--json", "--capture", "--cpu-throttle", "--help"]);
 
@@ -53,6 +60,14 @@ const VALUED = new Set(["--mode", "--frames", "--steps", "--warm", "--repeat", "
 const positional = argv.filter((a, i) => !a.startsWith("--") && !VALUED.has(argv[i - 1]));
 const track = positional[0] || "vegas";
 const mode = flag("--mode", "spans");
+const explicit = argv.filter(arg => arg.startsWith("--"))
+  .map(arg => arg.slice(2).split("=")[0]).filter(name => name !== "mode" && name !== "help");
+const problem = profileOptionProblem(mode, explicit);
+const assignedBoolean = argv.find(arg => /^--(json|capture|help)=/.test(arg));
+if (problem || assignedBoolean) {
+  console.error("profile: " + (problem || `${assignedBoolean.split("=")[0]} takes no assigned value; use the bare switch`));
+  process.exit(2);
+}
 const frames = Math.max(10, +flag("--frames", 40) || 40);
 const repeat = Math.max(1, +flag("--repeat", 1) || 1);
 const steps = Math.max(100, +flag("--steps", 3000) || 3000), warm = Math.max(0, +flag("--warm", 3000) || 0);
@@ -213,7 +228,11 @@ function withWorktree(ref, fn) {
 
 function wrap(script, args) {
   const r = spawnSync("node", [join(ROOT, script), ...args], { cwd: ROOT, stdio: "inherit" });
-  process.exitCode = r.status || 0;
+  // spawnSync has no numeric status when launch fails or a signal ends the
+  // child. Neither outcome establishes a completed profile.
+  if (r.error) console.error(`profile child ${script} failed: ${r.error.message}`);
+  else if (r.signal) console.error(`profile child ${script} terminated by ${r.signal}`);
+  process.exitCode = r.status ?? 1;
 }
 
 async function runTrace() {
@@ -247,7 +266,7 @@ async function runTrace() {
 
 try {
   if (mode === "cpu") wrap("tools/shot/profile-gameloop.mjs", [track]);
-  else if (mode === "hitch") wrap("tools/gfx/frame-hitch.mjs", [track, "--seconds", String(Math.max(10, Math.round(frames / 6)))]);
+  else if (mode === "hitch") wrap("tools/gfx/frame-hitch.mjs", [track, "--seconds", String(Math.max(10, Math.round(frames / 6))), ...(argv.includes("--capture") ? ["--capture"] : [])]);
   else if (mode === "trace") await runTrace();
   else if (mode === "step") {
     mkdirSync(OUT, { recursive: true });

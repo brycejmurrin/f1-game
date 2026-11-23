@@ -1,1 +1,0 @@
-Fixed: Monza park hedges no longer share side planes along the west-park lake, and Curva Grande / Parabolica foliage no longer punches the hedge band or the steel grandstand — coplanar spots and clip-severe both drop below their saturating baselines (#3374).

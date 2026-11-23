@@ -2,7 +2,7 @@
 const SetupUI = (function () {
   "use strict";
 
-function create(G) {
+function create(G, customLiv) {
 Log.info("ui", "SetupUI.create");
 const tuneExperiments = SetupExperiments.create(G, (team) => renderStatBars($("cs-stats-inner"), team));
 let surfaceControls = null;
@@ -18,7 +18,7 @@ function propIf(el, k, v) {
 // Stable helpers from the game.js closure.
 const { $, els, cssCol, store, arrToHex, hexToArr,
         getTeamParts, saveTeamParts, getLiveryId, saveLiveryId,
-        getCustomLiveries, setCustomLiveries, getLiveries, invalidateDecalTextures } = G;
+        getCustomLiveries, getLiveries, invalidateDecalTextures } = G;
 
 // The stat list and the display curve now live in Parts, because the in-world
 // stats board on the garage wall reads the same numbers and a second copy of
@@ -77,6 +77,7 @@ function renderStatBars(container, team) {
 // rail's selected tab not the first one and LIVERY 14th behind a horizontal scroll.
 let csVisitGeneration = 0;
 let csActiveCat = null;   // id of the tab currently open in the GARAGE
+const livSaveIds = new WeakMap();   // one candidate per draft, including retries after a refused fit
 let csLivCreating = false; // livery creator panel open?
 let csLivDraft = null;     // { name, c1, c2, stripe } while editing a new paint job
 let csLivDirty = null;     // () => unsaved design edits? (set with the editor, cleared with the draft)
@@ -170,7 +171,7 @@ const LIV_ROW_HINT = {
   patternRotation: "ROTATION — turn the artwork within its painted area. Wrap sides remain aligned with the crown.",
   patternStretch: "LENGTH STRETCH — compress or extend the artwork along the engine cover.",
   patternWeight: "LINE WEIGHT — thickness of contour, honeycomb, wave, herringbone, circuit and speed-line strokes, and of the keylines on the tartan, bordered-stripe, spearhead, deck-split and keyline-split layouts.",
-  decalNoseTip: "NOSE TIP — the contrast cap on the last 280 mm of the nose.",
+  decalNoseTip: "NOSE TIP — the cap on the last 280 mm of the nose: the NOSE CAP colour when set, else the accent.",
   decalCockpit: "COCKPIT SIDE — the driver's three-letter code beside the cockpit.",
   decalPodTop: "SIDEPOD TOP — the main sponsor along the top of each sidepod.",
   decalHalo: "HALO TOP — a sponsor along the halo's crown bar (not shown under a faired or fenced halo).",
@@ -319,14 +320,21 @@ function framePreset(name) {
 function activateCsCat(id, focus) {
   if (csActiveCat !== id) {
     csActiveCat = id;
-    store.set("garageTab", id);
-    if (G.soundOn) GameAudio.uiTick();
+    // Browse section previews this category, then restores the original tab.
+    // A preview must not persist a tab choice or move the player's camera.
+    const preview = $("screen-arranger")?.open;
+    if (!preview) {
+      store.set("garageTab", id);
+      if (G.soundOn) GameAudio.uiTick();
+    }
     buildSetup();
     const pane = $("cs-options"); if (pane) pane.scrollTop = 0;
     // LIVERY is about the wall crest as much as the paint chips: frame FRONT
     // on the category change only, never again while the tab stays open.
-    if (id === "livery") framePreset("front");
-    else if (CAT_VIEW[id]) framePreset(CAT_VIEW[id]);
+    if (!preview) {
+      if (id === "livery") framePreset("front");
+      else if (CAT_VIEW[id]) framePreset(CAT_VIEW[id]);
+    }
   }
   if (focus) {
     const tab = document.getElementById(csTabId(id));
@@ -395,7 +403,7 @@ function csLabel(text) {
 // skipped. Crew and mood tables are bare ids, so their names live here.
 const CREW_NAMES = { classic: "CLASSIC", sculpted: "SCULPTED", pitstop: "PIT STOP", workshop: "WORKSHOP", welcome: "WELCOME" };
 const MOOD_NAMES = { shipped: "STANDARD", broadcast: "BROADCAST", night: "NIGHT", showroom: "SHOWROOM", daylight: "DAYLIGHT",
-  inspection: "INSPECTION", goldenhour: "GOLDEN HOUR", endurance: "ENDURANCE" };
+  inspection: "INSPECTION", goldenhour: "GOLDEN HOUR", endurance: "ENDURANCE", podium: "PODIUM", rain: "RAIN DAY", neon: "NEON NIGHT" };
 function lookRowSpecs() {
   const out = [];
   if (typeof GaragePrims !== "undefined" && GaragePrims.LOOK_IDS)
@@ -576,6 +584,7 @@ function syncGarageExitChrome() {
 }
 
 function buildSetup() {
+  clearTimeout(csLivSearchTimer); csLivSearchTimer = 0;   // #4928: this rebuild already reads csLivQuery
   clearSurfaceControls();
   if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end();
   syncGarageExitChrome();
@@ -619,8 +628,9 @@ function buildSetup() {
   const spent = Parts.getCost(parts, team);
   const remaining = cap - spent;
 
-  $("cs-team").textContent = team.name.toUpperCase();
-
+  const teamEl = $("cs-team");
+  teamEl.textContent = team.name.toUpperCase();
+  teamEl.title = team.name;
 
   const budgetEl = $("cs-budget");
   const budgetFill = $("cs-budget-fill");
@@ -671,14 +681,17 @@ function buildSetup() {
   tabs.textContent = "";
   tabs.setAttribute("role", "tablist");
   tabs.setAttribute("aria-label", "Garage categories");
+  // The two tiers are layout only: a tablist owns tabs and nothing else, so a
+  // role=group row cut every tab off from its tablist (axe aria-required-parent;
+  // Lighthouse a11y 88 on the Garage, UI hunt 3). data-tier names the row for tests.
   const primaryTabs = document.createElement("div");
   primaryTabs.className = "cs-tab-row";
-  primaryTabs.setAttribute("role", "group");
-  primaryTabs.setAttribute("aria-label", "Performance categories");
+  primaryTabs.setAttribute("role", "none");
+  primaryTabs.dataset.tier = "Performance categories";
   const secondaryTabs = document.createElement("div");
   secondaryTabs.className = "cs-tab-row";
-  secondaryTabs.setAttribute("role", "group");
-  secondaryTabs.setAttribute("aria-label", "Finishing and setup categories");
+  secondaryTabs.setAttribute("role", "none");
+  secondaryTabs.dataset.tier = "Finishing and setup categories";
   tabs.append(primaryTabs, secondaryTabs);
   const appendTab = (id, tab) => (SECONDARY_CATS.has(id) ? secondaryTabs : primaryTabs).appendChild(tab);
   {
@@ -695,6 +708,12 @@ function buildSetup() {
   {
     const custom = getLiveryId(team.id) !== "default";
     appendTab("livery", pseudoTab("livery", "LIVERY", custom ? "CUSTOM" : "DEFAULT", custom));
+  }
+  // Keep the active chip in the stacked strip's scrollport after a rebuild
+  // (portrait / short landscape hide most of the 15 categories off-screen).
+  {
+    const activeTab = tabs.querySelector('[role="tab"][aria-selected="true"]');
+    if (activeTab) activeTab.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
 
   const optsEl = $("cs-options");
@@ -738,8 +757,7 @@ function buildSetup() {
     row.dataset.csCat = activeCat.id;
     row.addEventListener("focus", () => showComparison(opt));
     row.addEventListener("pointerenter", (ev) => {
-      if (ev.pointerType === "touch") return;
-      if (typeof matchMedia === "function" && matchMedia("(hover: none)").matches) return;
+      if (ev.pointerType === "touch" || !matchMedia("(hover: hover) and (pointer: fine)").matches) return;
       showComparison(opt);
     });
 
@@ -747,7 +765,7 @@ function buildSetup() {
 
     const main = document.createElement("div"); main.className = "cs-opt-main";
     const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name";
-    nameRow.appendChild(document.createTextNode(opt.label));
+    nameRow.appendChild(document.createTextNode(Parts.optLabel(activeCat.id, opt)));
     const badges = [];
     // Leads the row: on a wet compound it is the only badge that explains why
     // all four stat chips are pointing down.
@@ -843,7 +861,7 @@ function buildSetup() {
         return;
       }
       p[activeCat.id] = opt.id;
-      saveTeamParts(team.id, p);
+      if (saveTeamParts(team.id, p) === false) { reject(); return; }   // a conflicted career save refuses the fit: no blip, nothing shown as fitted (#5044)
       if (G.soundOn && !_blipped) GameAudio.uiSelect();
       buildSetup();
       if (CAT_VIEW[activeCat.id]) framePreset(CAT_VIEW[activeCat.id]);   // show the part
@@ -905,14 +923,39 @@ let csLivQuery = "";           // #3339: filter string sticky across rebuilds
 // End/Home can land past content-visibility; phone collapsed for scroll). Once
 // the player toggles, the boolean sticks across rebuilds.
 let csLivFactoryOpen = null;
+// #4928: sticky across rebuilds WITHIN one visit and one team only; the hide
+// observer and a team change reset it. The debounce timer is module-level so a
+// later rebuild (a row tap, CREATE, ✎, a close) cancels the stale one.
+let csLivQueryTeam = null;
+let csLivSearchTimer = 0;
+function resetLivSearch() {
+  csLivQuery = ""; csLivFactoryOpen = null; csLivQueryTeam = null;
+  clearTimeout(csLivSearchTimer); csLivSearchTimer = 0;
+}
+// #5224: a card's bitmap = its shape's CSS box x DPR (was a fixed 112x80).
+const livBox = { big: [144, 69], small: [38, 24] };
+function livSwatchPx(boxW, boxH, dpr) {
+  const d = dpr > 0 ? dpr : 1, w = Math.max(1, boxW || 1), h = Math.max(1, boxH || 1), m = Math.max(w, h);
+  const k = Math.max(16 / m, Math.min(d, 384 / m));
+  return { w: Math.round(w * k), h: Math.round(h * k) };
+}
+function fitLivSwatches(container, team) {
+  if (typeof LiveryTex === "undefined") return;
+  const sws = [...container.querySelectorAll(".cs-liv-row .cs-liv-swatch")], livs = getLiveries(team);
+  const shape = (sw) => sw.closest(".cs-liv-factory") ? "small" : "big";
+  for (const s in livBox) {   // measure before writes; box x CssZoom
+    const e = sws.find((sw) => shape(sw) === s), z = e && window.CssZoom ? CssZoom.of(e) : 1;
+    if (e && e.clientWidth) livBox[s] = [e.clientWidth * z, e.clientHeight * z];
+  }
+  for (const sw of sws) {
+    const b = livBox[shape(sw)], px = livSwatchPx(b[0], b[1], globalThis.devicePixelRatio), id = sw.closest("[data-cs-livery]").dataset.csLivery;
+    const c = LiveryTex.swatchCanvas(team.id, livs.find((l) => l.id === id), px.w, px.h, livBuild);
+    c.ariaHidden = "true"; sw.prepend(c);
+  }
+}
 function livSwatch(team, liv, tags) {
   const sw = document.createElement("span"); sw.className = "cs-liv-swatch";
-  if (typeof LiveryTex !== "undefined" && LiveryTex.swatchCanvas) {
-    // The card adopts last build's painted canvas when the look is unchanged (LiveryTex.swatchCanvas).
-    const c = LiveryTex.swatchCanvas(team.id, liv, 112, 80, livBuild);
-    c.setAttribute("aria-hidden", "true");
-    sw.appendChild(c);
-  } else {
+  if (typeof LiveryTex === "undefined") {
     sw.style.background = "linear-gradient(120deg, " + cssCol(liv.c1) + " 0 56%, " + cssCol(liv.c2) + " 56% 100%)";
     if (liv.stripe) {
       const st = document.createElement("span"); st.className = "cs-liv-stripe";
@@ -935,6 +978,11 @@ function livSwatch(team, liv, tags) {
 // tuner's .tune-row markup (DOM only, no new classes), a RAKE readout, and a
 function buildTuneOptions(container, team) { tuneExperiments.build(container, team); }
 
+function paintStatus(text) {
+  const note = document.createElement("p"); note.className = "cs-opt-desc";
+  note.setAttribute("role", "status"); note.textContent = text;
+  const list = $("cs-options"); list.insertBefore(note, list.firstChild);
+}
 function makeLiveryRow(team, liv, cur, isCustom) {
   const active = liv.id === cur;
   const row = document.createElement("button");
@@ -984,9 +1032,9 @@ function makeLiveryRow(team, liv, cur, isCustom) {
       // one tap from destroying a one-of-a-kind paint job with no undo.
       if (G.soundOn) GameAudio.uiTick();
       G.armConfirm(del, "✕?", () => {
-        setCustomLiveries(team.id, getCustomLiveries(team.id).filter((l) => l.id !== liv.id));
-        if (active) saveLiveryId(team.id, "default");
+        const removed = customLiv.removeCustomLivery(team.id, liv.id);
         buildSetup();
+        if (!removed) paintStatus("Could not delete this paint job. It is still in your library.");
       });
     };
     rowWrap.appendChild(del);
@@ -1013,9 +1061,10 @@ function makeLiveryRow(team, liv, cur, isCustom) {
 
   row.onclick = () => {
     if (active) return;
-    saveLiveryId(team.id, liv.id);
-    if (G.soundOn) GameAudio.uiSelect();
+    const fitted = saveLiveryId(team.id, liv.id) !== false;
+    if (G.soundOn) { if (fitted) GameAudio.uiSelect(); else GameAudio.uiReject(); }
     buildSetup();
+    if (!fitted) paintStatus("Could not fit this paint job. Your previous selection is still fitted.");
     // IDs can come from imported paint jobs: compare data, never interpolate
     // an untrusted id into a CSS selector.
     const choices = $("cs-options")?.querySelectorAll("[data-cs-livery]") || [];
@@ -1034,8 +1083,10 @@ function buildLiveryOptions(container, team) {
   livBuild++;
   const cur = getLiveryId(team.id);
   const customIds = new Set(getCustomLiveries(team.id).map((l) => l.id));
+  if (csLivQueryTeam !== team.id) { resetLivSearch(); csLivQueryTeam = team.id; }
   const q = String(csLivQuery || "").trim().toLowerCase();
-  const match = (liv) => !q || String(liv.name || "").toLowerCase().includes(q) || String(liv.id || "").toLowerCase().includes(q);
+  // The FITTED row always shows, whatever the query (#4928).
+  const match = (liv) => !q || liv.id === cur || String(liv.name || "").toLowerCase().includes(q) || String(liv.id || "").toLowerCase().includes(q);
 
   // #3339: search + collapse factory finishes so phone scroll is not ~25 screens.
   {
@@ -1048,12 +1099,14 @@ function buildLiveryOptions(container, team) {
     search.value = csLivQuery;
     search.autocomplete = "off";
     search.onclick = (e) => e.stopPropagation();
-    let searchTimer = 0;
     search.oninput = () => {
       csLivQuery = search.value;
       // Debounce rebuild so each keystroke is not a full swatch pass.
-      clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => {
+      clearTimeout(csLivSearchTimer);
+      csLivSearchTimer = setTimeout(() => {
+        csLivSearchTimer = 0;
+        const cs = $("carsetup");
+        if (csLivCreating || csActiveCat !== "livery" || !cs || cs.hidden) return;
         const caret = search.selectionStart;
         buildSetup();
         const again = $("cs-options")?.querySelector(".cs-liv-search");
@@ -1128,6 +1181,7 @@ function buildLiveryOptions(container, team) {
     fold.appendChild(grid);
     container.appendChild(fold);
   }
+  fitLivSwatches(container, team);
 }
 
 function buildLiveryCreator(container, team) {
@@ -1159,7 +1213,7 @@ function buildLiveryCreator(container, team) {
   // not a number; NUMBER FONT and the mark colours are always live (the nose
   // number and its crest head paint on every car), so they carry no dep.
   const deps = [];
-  let designTools = null;
+  let /** @type {ReturnType<typeof GarageLiveryDesignEditor.attach> | null} */ designTools = null;
   const needFin = () => (d.finShape || "standard") !== "none";
   const NO_FIN = "Needs a tail fin — pick a FIN SHAPE other than NONE";
   const wheelParts = Parts.getVisualTiers(getTeamParts(team.id), team);
@@ -1504,6 +1558,13 @@ function buildLiveryCreator(container, team) {
   // An edited design is never one press from gone: CANCEL (and Escape, below) arms first.
   cancel.onclick = () => { if (designTools && designTools.dirty()) G.armConfirm(cancel, "DISCARD EDITS?", discard); else discard(); };
   const save = document.createElement("button"); save.type = "button"; save.className = "cs-liv-ed-save"; save.textContent = "SAVE & FIT";
+  const saveStatus = document.createElement("p"); saveStatus.className = "cs-opt-desc"; saveStatus.setAttribute("role", "status"); saveStatus.hidden = true;
+  const retrySave = () => {
+    saveStatus.hidden = false;
+    saveStatus.textContent = "Could not finish saving and fitting. Your draft is still open. Retry SAVE & FIT.";
+    save.textContent = "RETRY SAVE & FIT";
+    if (G.soundOn) GameAudio.uiReject();
+  };
   save.onclick = () => {
     const now = Teams.LIST[G.teamIdx];
     if (team.id !== csLivTeamId || !now || now.id !== csLivTeamId) { discardLivDraft(); buildSetup(); return; }   // the team changed under the editor
@@ -1512,18 +1573,20 @@ function buildLiveryCreator(container, team) {
     // meshes with the new atlas — a mismatched car with no error. A new id
     // makes every id-keyed cache miss naturally; bounded caches evict the
     // orphans, and saveLiveryId below re-points the selection.
-    const id = "custom_" + livIdCounter();
+    let id = livSaveIds.get(d);
+    if (!id) {
+      const ids = new Set(getLiveries(team).map(row => row.id));
+      do { id = "custom_" + livIdCounter(); } while (ids.has(id));
+      livSaveIds.set(d, id);
+    }
     const liv = { id, name: (d.name || "").trim() || "Custom", c1: hexToArr(d.c1), c2: hexToArr(d.c2) };
     Object.assign(liv, livDraftTo(d, false));
-    const existing = getCustomLiveries(team.id);
-    // Another tab may already have replaced/deleted the old id. Keep its work
-    // and save this draft as a new copy rather than fitting an unstored id.
-    const replacing = csLivEditId && existing.some((l) => l.id === csLivEditId);
-    setCustomLiveries(team.id, replacing ? existing.map((l) => (l.id === csLivEditId ? liv : l)) : existing.concat([liv]));
-    saveLiveryId(team.id, id);
+    const result = customLiv.saveAndFitLivery(team.id, csLivEditId, liv);
+    if (!result.ok) { retrySave(); return; }
     csLivCreating = false; csLivDraft = null; csLivEditId = null; endLivPreview(team);
     if (G.soundOn) GameAudio.uiSelect();
     buildSetup();
+    if (result.keptCopy) paintStatus("New paint fitted. The previous copy was kept. Use its Delete button to remove it.");
     focusFitted();
   };
   btns.append(cancel, save);
@@ -1533,6 +1596,7 @@ function buildLiveryCreator(container, team) {
     changed: applyPreview, flush: flushLivPreview, preview: (value) => livePreviewDraft(team, value),
     pillRow, spineRow, bodyRow, nameRow, markNote, saveRow: btns, teamId: team.id, scrollRoot: container,
   });
+  wrap.insertBefore(saveStatus, btns);
   csLivDirty = designTools ? designTools.dirty : null;
   container.appendChild(wrap);
   applyPreview();
@@ -1645,6 +1709,10 @@ function openSetup() {
   const cs = $("carsetup");
   const generation = ++csVisitGeneration;
   tuneExperiments.visit(Teams.LIST[G.teamIdx]);
+  // Exit chrome (hide BACK, stretch DONE) must match the label openGarage set
+  // BEFORE the sheet paints. Waiting for buildSetup() let the two-button foot
+  // show first and jump when syncGarageExitChrome ran — the CLOSE tap missed.
+  syncGarageExitChrome();
   cs.hidden = false;
   G.setupPreviewOn = true;
   cs.setAttribute("aria-busy", "true");
@@ -1679,16 +1747,17 @@ function discardLivDraft() {
 }
 if (typeof MutationObserver === "function") {
   const cs = $("carsetup");
-  if (cs) new MutationObserver(() => { if (cs.hidden) { ++csVisitGeneration; cs.removeAttribute("aria-busy"); clearSurfaceControls(); if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end(); discardLivDraft(); tuneExperiments.close(); } })
+  if (cs) new MutationObserver(() => { if (cs.hidden) { ++csVisitGeneration; cs.removeAttribute("aria-busy"); clearSurfaceControls(); if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end(); discardLivDraft(); resetLivSearch(); tuneExperiments.close(); } })
     .observe(cs, { attributes: true, attributeFilter: ["hidden"] });
 }
 // ESCAPE IS ONE LEVEL. With the paint editor open, Escape pressed the garage's
 // door (data-esc-close="cs-back"): the GARAGE closed and discardLivDraft() threw
 // the unsaved design away. The editor claims the key first, as the camera panel
-// does (setup-camera.js, registered earlier, so an open panel still shuts first):
+// does. This listener registers BEFORE setup-camera.js's (game.js creates SetupUI
+// first), so it stands down while that panel is open: one key, one layer (#5045).
 // Escape is the editor's CANCEL, which arms before discarding edits.
 window.addEventListener("keydown", (e) => {
-  if (e.key !== "Escape" || !csLivCreating || !G.setupPreviewOn
+  if (e.key !== "Escape" || !csLivCreating || !G.setupPreviewOn || ($("cs-cam-panel") && !$("cs-cam-panel").hidden)
       || document.querySelector("dialog[open], dialog.screen:not([hidden])")) return;
   const cancel = document.querySelector("#carsetup .cs-liv-ed-cancel");
   if (!cancel) return;

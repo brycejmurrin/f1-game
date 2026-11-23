@@ -106,8 +106,11 @@ test("muted ERS preserves pitch through its fade, sleeps while inputs move, and 
   }
   frame(0.8, 0.3, { boostTune: 1 });
   assert.equal(E.inspect().deployHz, E.deployHz(0.8, 1));
-  assert.equal(E.inspect().harvestHz, E.harvestHz(0.3));
+  // #5052: deploying at 0.8 harvests nothing, so the harvest pitch is not re-aimed for a silent layer…
   assert.ok(order.indexOf("frequency") < order.lastIndexOf("gain"), "new pitch arrives before continuous gain opens");
+  frame(0, 0.3);
+  // …and it is aimed again the first frame the harvest is audible (before its gain, same frame).
+  assert.equal(E.inspect().harvestHz, E.harvestHz(0.3));
   assert.equal(created(), nodes, "no oscillator restart or graph allocation");
   frame(0.4, 0.7, { layerOn: false });
   const rapid = freqs.map((p) => p.sets);
@@ -243,7 +246,7 @@ test("GameAudio.setEngine drives the layer through the init/update hook", async 
   const files = [
     "js/core/mat4.js",
     "js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js",
-    "js/audio/radio-fx.js", "js/audio/ers-layer.js", "js/audio/engine.js",
+    "js/audio/radio-fx.js", "js/audio/ers-layer.js", "js/audio/mix-duck.js", "js/audio/engine.js",
   ];
   for (const f of files) {
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc(f) });

@@ -112,3 +112,28 @@ test("the ratcheted dynamic-read count matches the tree", () => {
     `${counts.dynamic} dynamic id reads against a ceiling of ${entry.ceiling ?? entry} — ` +
     "each one is a lookup no static check can verify; convert it to a literal or raise the ceiling deliberately");
 });
+
+test("companion return belongs to both standalone shells and does not exempt other readers", () => {
+  const tmp = mkTmpDir("apex-companion-hosts-");
+  const id = "companion-appearance-return";
+  const shells = ["controller.html", "overlay.html"];
+  const markup = '<a id="' + id + '">Back to Appearance</a>';
+  const readId = 'document.getElementById("' + id + '");';
+  try {
+    fs.mkdirSync(path.join(tmp, "js/ui"), { recursive: true });
+    fs.writeFileSync(path.join(tmp, "js/ui/companion-return.js"), readId);
+    fs.writeFileSync(path.join(tmp, "index.html"), markup);
+    for (const shell of shells) fs.writeFileSync(path.join(tmp, shell), markup);
+    assert.deepEqual(scan(tmp).missing, []);
+    for (const shell of shells) {
+      fs.writeFileSync(path.join(tmp, shell), "");
+      const [missing] = scan(tmp).missing;
+      assert.equal(missing.id, id);
+      assert.deepEqual(missing.hosts, [shell]);
+      fs.writeFileSync(path.join(tmp, shell), markup);
+    }
+    fs.writeFileSync(path.join(tmp, "index.html"), "");
+    fs.writeFileSync(path.join(tmp, "js/ui/title-menu.js"), readId);
+    assert.deepEqual(scan(tmp).missing, [{id, site:"js/ui/title-menu.js:1"}]);
+  } finally { fs.rmSync(tmp, { recursive:true, force:true }); }
+});

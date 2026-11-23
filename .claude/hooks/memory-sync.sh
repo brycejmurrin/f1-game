@@ -1,233 +1,43 @@
 #!/bin/bash
-# memory-sync.sh restore|save — make Claude Code's AUTO MEMORY survive a cloud
-# container (2026-09-24; research in docs/notes/AGENT-MEMORY.md).
+# memory-sync.sh restore — put the tracked auto memory (.claude/memory/) where the CLI reads it, at the START of a
+# session (SessionStart). One way: the repo copy fills the live dir. A cloud container starts empty every time, and
+# the CLI turns auto memory off in remote sessions unless CLAUDE_CODE_DISABLE_AUTO_MEMORY is falsy (settings.json
+# sets "0"); `autoMemoryDirectory` cannot point here from a checked-in settings file. The live dir is keyed on the
+# MAIN checkout (every worktree shares one), non-alphanumerics replaced by '-'.
 #
-# Auto memory lives at <config>/projects/<sanitized repo root>/memory/ — a
-# MEMORY.md index plus one topic file per memory — and is machine-local. A cloud
-# session's container is reclaimed afterwards, so it started empty every time;
-# the CLI also turns auto memory OFF in remote sessions unless
-# CLAUDE_CODE_DISABLE_AUTO_MEMORY is falsy (.claude/settings.json sets "0").
-# `autoMemoryDirectory` cannot fix the location from here: the CLI ignores it in
-# the checked-in settings and requires an absolute path. So the tracked copy is
-# .claude/memory/ and this hook moves files between the two:
-#
-#   restore (SessionStart, from session-start.sh) and
-#   save    (PostToolUse on Write|Edit, and Stop) both run ONE three-way sync
-#           against a BASELINE — a copy of every file as of the last sync, in
-#           artifacts/.memory-base/ — so each side's own edits are told apart:
-#             * unchanged here, changed in the repo  → repo wins (refresh);
-#             * changed here, unchanged in the repo  → live wins (saved, so it
-#               rides the session's next commit);
-#             * changed on both sides → MEMORY.md is line-merged (sessions add
-#               index lines at once); a topic file keeps the REPO copy and the
-#               conflict is reported, never overwritten;
-#             * a deletion propagates only from the side that made it;
-#             * after HEAD moved (checkout, merge), a memory missing from the
-#               repo is a deletion only if a commit in HEAD's history deleted
-#               it; otherwise the branch simply never had it, so the live copy
-#               stays and is written back to ride this branch's next commit,
-#               and MEMORY.md keeps the live index lines the branch lacks
-#               (2026-10-15, #2128: a memory committed on one topic branch
-#               vanished from the live dir on the next checkout) — unless a
-#               commit since the merge-base with the old HEAD removed them
-#               (2026-10-18, #2873: a committed dedupe came back). The
-#               baseline records HEAD in .head to tell a move from an edit.
-#             * unavailable ancestry/history after HEAD moves defers the sync,
-#               preserving all three copies and reporting recovery guidance;
-#               missing history never proves a branch never had a memory.
-#           Until 2026-10-02 save copied every differing live file over the
-#           repo and deleted repo files the session lacked: a resumed session,
-#           whose live dir predated a branch checkout, reverted other sessions'
-#           memories twice in one day. tests/unit/memory-sync.test.mjs pins it.
-#
-# Cloud only (CLAUDE_CODE_REMOTE=true) unless APEX_MEMORY_SYNC=1: on a laptop the
-# live dir already persists and holds personal memories that must not be copied
-# into a shared repo. Always exits 0 — a memory hiccup never blocks a turn.
-
-MODE="${1:-save}"
-INPUT=$(cat 2>/dev/null || true)
-ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+# Only on a new session: the hook input's `source` (https://code.claude.com/docs/en/hooks §SessionStart: startup,
+# resume, clear, compact, fork) must be "startup" when it is given, so a resume or a compaction never rewrites a
+# memory written mid-session. And a live file changed AFTER the last restore (newer than $LIVE/.restored) is kept,
+# not overwritten; the line names it, so a memory worth keeping is copied into .claude/memory/ and committed
+# (`node tools/env/apex-memory.mjs`, docs/notes/AGENT-MEMORY.md). No save back. Cloud only
+# (CLAUDE_CODE_REMOTE=true) unless APEX_MEMORY_SYNC=1: a laptop's live dir already persists and holds personal
+# memories that must not be overwritten. Always exits 0.
+[ "${1:-restore}" = restore ] || exit 0
+INPUT=""
+[ -t 0 ] || INPUT=$(timeout 2 cat 2>/dev/null)
+SOURCE=$(printf '%s' "$INPUT" | python3 -c 'import json,sys
+try: print(str(json.load(sys.stdin).get("source") or ""))
+except Exception: print("")' 2>/dev/null)
+[ -z "$SOURCE" ] || [ "$SOURCE" = startup ] || exit 0
 [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || [ "${APEX_MEMORY_SYNC:-}" = "1" ] || exit 0
-
-# The live dir is keyed on the MAIN checkout (every worktree of a repo shares
-# one), with every non-alphanumeric character replaced by '-'.
+ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 COMMON=$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
 MAIN=$([ -n "$COMMON" ] && dirname "$COMMON" || echo "$ROOT")
 LIVE="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/$(printf '%s' "$MAIN" | sed 's/[^A-Za-z0-9]/-/g')/memory"
 REPO="$MAIN/.claude/memory"
-BASE="$MAIN/artifacts/.memory-base"
-
-MODE_OK=0
-case "$MODE" in restore|save|unmark) MODE_OK=1 ;; esac
-[ "$MODE_OK" = 1 ] || exit 0
-
-# H2 (retro 2026-10-17, #2662): the synced files are tracked, so every save dirtied the tree
-# and the global Stop hook nagged about files the agent must not touch. `assume-unchanged`
-# hides them from `git diff`/`status`; bash-guard.sh runs `unmark` before any git verb that
-# reads or rewrites the index (add, commit, checkout, merge ...), so a memory edit still rides
-# the session's next commit and a checkout is never refused. restore/save re-mark.
-mark_memory() {
-  git -C "$MAIN" ls-files -z -- .claude/memory 2>/dev/null \
-    | xargs -0 -r git -C "$MAIN" update-index "$1" 2>/dev/null || true
-}
-if [ "$MODE" = unmark ]; then mark_memory --no-assume-unchanged; exit 0; fi
-
-if [ "$MODE" = save ] && [ -n "$INPUT" ]; then
-  # PostToolUse: act only when the edited file is inside the live dir.
-  FILE=$(printf '%s' "$INPUT" | python3 -c 'import json,sys
-try: print((json.load(sys.stdin).get("tool_input") or {}).get("file_path") or "")
-except Exception: print("")' 2>/dev/null)
-  if [ -n "$FILE" ]; then case "$FILE" in "$LIVE"/*) ;; *) exit 0 ;; esac; fi
-fi
-
-mkdir -p "$LIVE" "$REPO" "$BASE" 2>/dev/null || exit 0
-mark_memory --no-assume-unchanged   # the sync compares real files
-HEAD_NOW=$(git -C "$MAIN" rev-parse HEAD 2>/dev/null || true)
-HOOK_EVENT=$(printf '%s' "$INPUT" | python3 -c 'import json,sys
-try:
-    event = json.load(sys.stdin).get("hook_event_name")
-    if event in ("PostToolUse", "Stop"): print(event)
-except (ValueError, AttributeError): pass' 2>/dev/null)
-LIVE="$LIVE" REPO="$REPO" BASE="$BASE" MODE="$MODE" MAIN="$MAIN" HEAD_NOW="$HEAD_NOW" HOOK_EVENT="$HOOK_EVENT" python3 - <<'PY' || true
-import json, os, shutil, subprocess, sys
-live, repo, base, mode = (os.environ[k] for k in ("LIVE", "REPO", "BASE", "MODE"))
-main, head = os.environ["MAIN"], os.environ["HEAD_NOW"]
-try:
-    with open(os.path.join(base, ".head"), encoding="utf-8") as h: prev_head = h.read().strip()
-except OSError: prev_head = None
-moved = prev_head is not None and prev_head != head
-class HistoryUnknown(Exception): pass
-def history(*args):
-    try:
-        r = subprocess.run(["git", "-C", main, *args], capture_output=True, text=True)
-    except OSError as e:
-        raise HistoryUnknown("git history query could not run") from e
-    if r.returncode != 0:
-        raise HistoryUnknown("git " + args[0] + " could not establish memory history")
-    return r.stdout
-def deleted_in_history(f):
-    """False requires complete history; an empty shallow log is inconclusive."""
-    deleted = history("log", "-1", "--diff-filter=D", "--format=%H", head, "--",
-                      os.path.relpath(os.path.join(repo, f), main)).strip()
-    if deleted: return True
-    if history("rev-parse", "--is-shallow-repository").strip() != "false":
-        raise HistoryUnknown("shallow history cannot establish whether a missing topic was retired")
-    return False
-def removed_by_commits(f, merge_base):
-    """Deliberate removals since the known common ancestor, never a failed diff."""
-    d = history("diff", "-U0", merge_base, head, "--",
-                os.path.relpath(os.path.join(repo, f), main))
-    return {x[1:] for x in d.splitlines() if x.startswith("-") and not x.startswith("---")}
-def read(d, f):
-    p = os.path.join(d, f)
-    try:
-        with open(p, encoding="utf-8") as h: return h.read()
-    except OSError: return None
-def write(d, f, text):
-    with open(os.path.join(d, f), "w", encoding="utf-8") as h: h.write(text)
-def drop(d, f):
-    try: os.remove(os.path.join(d, f))
-    except OSError: pass
-def merge_index(b, l, r):
-    """Line merge for MEMORY.md: the repo's lines, minus those this session
-    removed, plus the lines this session added (appended, in its order)."""
-    bl, ll = (b or "").splitlines(), l.splitlines()
-    removed = {x for x in bl if x not in ll}
-    added = [x for x in ll if x not in bl]
-    out = [x for x in r.splitlines() if x not in removed]
-    out += [x for x in added if x not in out]
-    return "\n".join(out) + "\n"
-names = {f for d in (live, repo, base) for f in os.listdir(d) if f.endswith(".md")}
-# Resolve every history-dependent decision before touching any memory or baseline.
-# A shallow checkout or missing old object must not turn "unknown" into
-# "branch never had it" and resurrect a reviewed retirement. Keep LIVE for
-# recovery, REPO authoritative, and the old baseline/HEAD so retry stays safe.
-deleted, removed = {}, {}
-if moved:
-    try:
-        merge_base = history("merge-base", prev_head, head).strip()
-        if not merge_base: raise HistoryUnknown("no common ancestor is available")
-        for f in sorted(names):
-            b, l, r = read(base, f), read(live, f), read(repo, f)
-            if l != r and l == b and r != b and l is not None:
-                if f == "MEMORY.md" and r is not None:
-                    removed[f] = removed_by_commits(f, merge_base)
-                elif r is None:
-                    deleted[f] = deleted_in_history(f)
-    except HistoryUnknown as e:
-        print("memory: WARNING sync deferred (" + str(e) + "); kept live, repo and baseline unchanged. "
-              "Restore the previous HEAD object/common ancestry (deepen or unshallow a shallow clone), "
-              "then retry memory-sync.sh restore; do not delete the baseline.")
-        sys.exit(0)
-n_in = n_out = 0
-conflicts = []
-for f in sorted(names):
-    b, l, r = read(base, f), read(live, f), read(repo, f)
-    if l == r:                                  # in step: record it
-        if l is None: drop(base, f)
-        else: write(base, f, l)
-        continue
-    live_changed, repo_changed = l != b, r != b
-    if live_changed and not repo_changed:       # this session's edit or delete
-        if l is None: drop(repo, f)
-        else: write(repo, f, l)
-        n_out += 1; final = l
-    elif repo_changed and not live_changed and moved and l is not None and (
-            (r is None and not deleted[f]) or f == "MEMORY.md"):
-        # HEAD moved: a branch that never had this memory is not a deletion,
-        # and an index line the branch lacks is not a removal (#2128).
-        if r is None: final = l
-        else:
-            rl, gone = r.splitlines(), removed[f]
-            final = "\n".join(rl + [x for x in l.splitlines() if x not in rl and x not in gone]) + "\n"
-        write(repo, f, final)
-        if final != l: write(live, f, final); n_in += 1
-        n_out += 1
-    elif repo_changed and not live_changed:     # someone else's: take it
-        if r is None: drop(live, f)
-        else: write(live, f, r)
-        n_in += 1; final = r
-    elif f == "MEMORY.md" and l is not None and r is not None:
-        final = merge_index(b, l, r)
-        write(live, f, final); write(repo, f, final)
-        n_in += 1; n_out += 1
-    elif live_changed and repo_changed and (l is None or r is None):
-        # Edit vs delete (#2901): honour the deletion on both sides and report
-        # CONFLICT — never write the surviving side onto the deleted side
-        # (that silently resurrected the file).
-        conflicts.append(f + " (delete vs edit)")
-        drop(live, f); drop(repo, f)
-        if l is None: n_out += 1
-        if r is None: n_in += 1
-        final = None
-    else:                                       # both changed a topic file
-        conflicts.append(f)
-        if r is not None: write(live, f, r)     # never overwrite the shared copy
-        final = r
-    if final is None: drop(base, f)
-    else: write(base, f, final)
-write(base, ".head", head + "\n")
-if mode == "restore" or n_in or n_out or conflicts:
-    msg = f"memory: {n_in} in from .claude/memory/, {n_out} out"
-    if conflicts:
-        dels = [c for c in conflicts if "delete vs edit" in c]
-        both = [c for c in conflicts if "delete vs edit" not in c]
-        if both:
-            msg += "; CONFLICT kept the repo copy of " + ", ".join(both) + " (re-apply your edit)"
-        if dels:
-            msg += "; CONFLICT delete vs edit — honoured delete for " + ", ".join(dels)
-    event = os.environ.get("HOOK_EVENT")
-    # https://code.claude.com/docs/en/hooks: exit-0 plain stdout is ignored
-    # on these events. Surface conflicts only; routine saves stay silent.
-    if event == "PostToolUse":
-        if conflicts:
-            print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": msg}}))
-    elif event == "Stop":
-        # Stop additionalContext continues the conversation. A user-facing
-        # systemMessage preserves this advisory hook's nonblocking stop.
-        if conflicts: print(json.dumps({"systemMessage": msg}))
-    else:
-        print(msg)  # SessionStart and standalone CLI keep their plain output.
-PY
-mark_memory --assume-unchanged
+[ -d "$REPO" ] || exit 0
+mkdir -p "$LIVE" 2>/dev/null || exit 0
+STAMP="$LIVE/.restored"
+n=0; kept=()
+for f in "$REPO"/*.md; do
+  [ -f "$f" ] || continue
+  live="$LIVE/$(basename "$f")"
+  cmp -s "$f" "$live" && continue
+  if [ -f "$live" ] && [ -f "$STAMP" ] && [ "$live" -nt "$STAMP" ]; then kept+=("$(basename "$f")"); continue; fi
+  cp -f "$f" "$LIVE/" 2>/dev/null && n=$((n + 1))
+done
+touch "$STAMP" 2>/dev/null
+msg="memory: $n in from .claude/memory/ (repo fills the live dir; edit memories there)"
+[ ${#kept[@]} -gt 0 ] && msg="$msg; KEPT live edits newer than the last restore, differing from the repo: ${kept[*]} (copy into .claude/memory/ and commit to keep them)"
+echo "$msg"
 exit 0

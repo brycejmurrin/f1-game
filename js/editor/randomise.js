@@ -197,6 +197,6 @@ const TrackRandom = (function () {
     return last;
   }
 
-  return { generate, generateValid, pushApart, fixAngles, longestStraight, STYLES, designSeed, designOne, rank, design, mutate };
+  return { generate, generateValid, fixAngles, longestStraight, STYLES, designSeed, designOne, rank, design, mutate };
 })();
 Object.freeze(TrackRandom);

@@ -1,0 +1,1 @@
+Fixed: Reduced helmet visor repainting as the touch HUD updates and cut repeated work when drawing rain beads, sun rays and floodlights. Refraction maps now build faster, and only compatible presentation paths read the visor layers. Visor highlights now follow the live bloom and glare settings during normal races.

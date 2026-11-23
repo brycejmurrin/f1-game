@@ -19,23 +19,18 @@ function memStore(init = {}) {
 }
 
 function loadCaptions(store, extra = {}) {
+  const strip = {
+    hidden: true,
+    parts: { ".cap-who": { textContent: "" }, ".cap-text": { textContent: "" }, ".cap-side": { textContent: "", hidden: true } },
+    querySelector(sel) { return this.parts[sel] || null; },
+    setAttribute() {},
+  };
   const doc = {
     documentElement: { style: { setProperty() {}, removeProperty() {} }, dataset: {}, removeAttribute() {} },
     readyState: "complete",
     addEventListener() {},
     getElementById(id) {
-      if (id === "captions") {
-        return {
-          hidden: true,
-          querySelector(sel) {
-            if (sel === ".cap-who") return { textContent: "" };
-            if (sel === ".cap-text") return { textContent: "" };
-            if (sel === ".cap-side") return { textContent: "", hidden: true };
-            return null;
-          },
-          setAttribute() {},
-        };
-      }
+      if (id === "captions") return strip;
       if (id === "ld-caption") {
         return {
           hidden: true,
@@ -62,7 +57,7 @@ function loadCaptions(store, extra = {}) {
   ctx.window = ctx;
   vm.createContext(ctx);
   vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx);
-  return ctx.Captions;
+  return Object.assign({ __strip: strip }, ctx.Captions);   // Captions is frozen
 }
 
 test("source never names Tracks, curvature, or player.", () => {
@@ -110,4 +105,78 @@ test("large caption scale fits phone-landscape width budget at 38ch", () => {
   const css = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
   assert.match(css, /max-width: min\(440px, calc\(var\(--caption-ch, 38\) \* 1ch \+ 4rem\)\)/);
   assert.equal(C.TEXT_CH_MAX, 38);
+});
+
+// #captions sits outside #hud: nothing else hid a spotter call, so the last one
+// stayed on screen through the finish and over the menus.
+test("spotter strip auto-hides after its hold, and each call re-arms the timer", () => {
+  const timers = new Map();
+  let next = 1;
+  const C = loadCaptions(memStore(), {
+    setTimeout: (fn, ms) => { timers.set(next, { fn, ms }); return next++; },
+    clearTimeout: (id) => { timers.delete(id); },
+  });
+  const strip = C.__strip;
+  C.onSpotter("Car left", "car left");
+  assert.equal(strip.hidden, false);
+  assert.equal(timers.size, 1);
+  C.onSpotter("Clear", "clear");
+  assert.equal(timers.size, 1, "the previous hold is cleared, not stacked");
+  const [{ fn, ms }] = [...timers.values()];
+  assert.ok(ms >= 2000 && ms <= 3000, "hold is ~2.5 s");
+  fn();
+  assert.equal(strip.hidden, true, "the strip hides when its hold ends");
+});
+
+test("clear() hides the strip and drops a pending hold (race reset / quit to menu)", () => {
+  const timers = new Map();
+  let next = 1;
+  const C = loadCaptions(memStore(), {
+    setTimeout: (fn) => { timers.set(next, fn); return next++; },
+    clearTimeout: (id) => { timers.delete(id); },
+  });
+  C.onSpotter("Three wide", "three wide");
+  assert.equal(C.__strip.hidden, false);
+  C.clear();
+  assert.equal(C.__strip.hidden, true);
+  assert.equal(timers.size, 0);
+});
+
+test("the loading caption re-fits the loading card on show and on hide (UI scaling contract gap 22)", () => {
+  let fits = 0;
+  const C = loadCaptions(memStore({ captions: "on" }), { LoadingScreen: { fitCard() { fits++; } } });
+  C.onAnnouncerLine("Radio check.");
+  assert.equal(fits, 1, "shown: the card measures itself around the caption");
+  C.announcerDone();
+  assert.equal(fits, 2, "hidden: and grows back");
+  const bare = loadCaptions(memStore({ captions: "on" }));
+  bare.onAnnouncerLine("Radio check.");   // no LoadingScreen global (a page without the screen): no throw
+});
+
+test("SPOKEN ONLY captions only the lines actually heard; ON captions every line (#5946 2A)", () => {
+  const on = loadCaptions(memStore({ captions: "on" }));
+  on.onSpotter("Car left", "car left");
+  on.onAnnouncerLine("Welcome to Monza.");
+  assert.equal(on.ring().length, 2, "ON captions a line whether or not it was voiced");
+
+  const store = memStore({ captions: "spoken", sound: true });   // SOUND ships off (game.js): this player turned it on
+  const C = loadCaptions(store);
+  C.onSpotter("Car left", "car left");
+  C.onAnnouncerLine("Welcome to Monza.");
+  assert.equal(C.ring().length, 0, "a source that reports no voice line is not captioned");
+  assert.equal(C.__strip.hidden, true);
+  C.onSpotter("Car left", "car left", true);
+  C.onAnnouncerLine("Welcome to Monza.", true);
+  assert.equal(C.ring().length, 2, "a heard line is captioned");
+  assert.equal(C.__strip.hidden, false);
+
+  store.set("volRadio", 0);
+  C.onSpotter("Clear", "clear", true);
+  assert.equal(C.ring().length, 2, "a line that plays with VOICE VOLUME at 0 is not heard");
+  store.set("volRadio", 0.8); store.set("sound", false);
+  C.onAnnouncerLine("Lights out.", true);
+  assert.equal(C.ring().length, 2, "…nor one with master SOUND off");
+  store.set("sound", true);
+  C.onAnnouncerLine("Lights out.", true);
+  assert.equal(C.ring().length, 3);
 });

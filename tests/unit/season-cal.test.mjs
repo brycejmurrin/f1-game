@@ -43,7 +43,7 @@ function trackDefs() {
 // `const SeasonCal` lands in the context's global LEXICAL scope, not on the
 // global object — read it back by evaluating its name (same shape as
 // career-settle.test.mjs).
-function load(stored0, tracks0) {
+function load(stored0, tracks0, extra) {
   const stored = new Map(Object.entries(stored0 || {}));
   const subscribers = [];
   const revisions = new Map();
@@ -70,6 +70,7 @@ function load(stored0, tracks0) {
     },
     Tracks: tracks,
     Teams: { POINTS },
+    ...(extra || {}),
   });
   seedLog(ctx);
   seedSaveMigrate(ctx);   // season-cal delegates roundMap/finishMap to SaveMigrate
@@ -254,6 +255,17 @@ test("unchanged setup preserves the first qualifying grid without writing the sa
   assert.equal(changed.season.config.laps, 10);
 });
 
+test("a refused save (invalid) is not inherited by a no-op APPLY as STORAGE IS FULL", () => {
+  const { S } = load();
+  S.engage("season");
+  const season = S.restart();
+  assert.equal(S.save(null).durable, false, "invalid save is refused");
+  const result = S.applyConfig({ ...S.config(), trackIds: [...S.config().trackIds] });
+  assert.equal(result.ok, true);
+  assert.equal(result.season, season);
+  assert.equal(result.durable, true, "nothing was written, so nothing is session-only");
+});
+
 test("unchanged setup preserves round and sprint progress, and session-only save status", () => {
   for (const progress of [{ round: 2 }, { round: 0, stage: "race" }]) {
     const { S, writes, store } = load({ seasonCfg: { sprint: true } });
@@ -298,7 +310,7 @@ test("setup comparison uses saved rules, not mutable preferences, and compares e
   S.save(season);
   const saved = season.config;
   for (const change of [{ trackIds: [...saved.trackIds].reverse() }, { quali: false }, { sprint: true },
-    { sprintIds: ["monza"] }, { laps: 10 }, { points: "classic" }, { flPoint: true }, { drop: 2 }]) {
+    { sprint: "rounds", sprintIds: ["monza"] }, { laps: 10 }, { points: "classic" }, { flPoint: true }, { drop: 2 }]) {
     assert.equal(S.matchesConfig(season, { ...saved, ...change }), false, JSON.stringify(change));
   }
   S.setConfig({ ...saved, laps: 10 });
@@ -703,7 +715,7 @@ test("a race nobody took the flag in pays the shortened-race scale by the leader
   assert.equal(pay(1, 10).pts.d0 || 0, 0, "under two laps: no points");
   assert.deepEqual([0, 4, 5].map((i) => pay(2, 10).pts["d" + i] || 0), [6, 1, 0], "2 laps to 25 %: column 1, top five");
   assert.deepEqual([0, 8, 9].map((i) => pay(4, 10).pts["d" + i] || 0), [13, 1, 0], "25-50 %: column 2, top nine");
-  assert.deepEqual([0, 3, 9].map((i) => pay(5, 10).pts["d" + i] || 0), [19, 10, 1], "50-75 %: column 3");
+  assert.deepEqual([0, 3, 6, 9].map((i) => pay(5, 10).pts["d" + i] || 0), [19, 9, 5, 1], "50-75 %: column 3 (19-14-12-9-8-6-5-3-2-1)");
   assert.equal(pay(8, 10).pts.d0, 25, "75 % or more: the full table");
   assert.equal(pay(null).pts.d0, 25, "a race that saw the flag is never shortened");
   assert.equal(pay(4, 10, "d0").lastFl, undefined, "no fastest-lap point below 50 %");
@@ -825,7 +837,7 @@ test("2026 REAL: exactly the six real sprint weekends, per round", () => {
 
 test("2026 REAL leaves the other presets and old configs exactly as they were", () => {
   const { S, tracks } = load();
-  assert.deepEqual([...S.PRESETS.map((p) => p.id)], ["full", "real2026", "12", "8", "5", "classics"]);
+  assert.deepEqual([...S.PRESETS.map((p) => p.id)], ["real2026", "full", "12", "8", "5", "classics"]);
   assert.deepEqual(JSON.parse(JSON.stringify(S.preset("full"))), { trackIds: tracks.SEASON.map((t) => t.id) },
     "a calendar preset sets no format");
   assert.deepEqual([...S.preset("8").trackIds], tracks.SEASON.map((t) => t.id).slice(0, 8));
@@ -884,6 +896,30 @@ test("the 2026 REAL calendar names its rounds as raced: Bahrain GP at Sepang, Ba
   // An edited calendar is no longer 2026 as raced: the circuit's own name again.
   assert.equal(S.applyConfig(S.preset("full")).ok, true);
   assert.equal(S.gpName(byId("sepang")), byId("sepang").gp || "");
+});
+
+// Clean-room fix 43: a CAREER on the real-2026 calendar listed two "Spanish GP"
+// rounds and a "Malaysian GP" at Sepang, because the 2026 names were applied in
+// season mode only. A career races Career.calendar(), so the test is that list.
+test("a career on the 2026 REAL calendar uses the same Grand Prix names as season mode", () => {
+  const tracks = realTracks();
+  const byId = (id) => tracks.LIST.find((t) => t.id === id);
+  const real = REAL_ORDER.map(byId);
+  const { S } = load(null, tracks, { Career: { calendar: () => real } });
+  S.engage("career");
+  assert.equal(S.gpName(byId("sepang")), "Bahrain GP");
+  assert.equal(S.gpName(byId("catalunya")), "Barcelona-Catalunya GP");
+  assert.equal(S.gpName(byId("monza")), byId("monza").gp || "");
+  // An explicit calendar (the next-race card passes the career's) decides alone.
+  assert.equal(S.gpName(byId("sepang"), REAL_ORDER), "Bahrain GP");
+  assert.equal(S.gpName(byId("sepang"), REAL_ORDER.slice(1)), byId("sepang").gp || "", "an edited calendar keeps the circuit's name");
+  // A career on the 24-round default calendar is not 2026 as raced.
+  const { S: D } = load(null, tracks, { Career: { calendar: () => tracks.SEASON } });
+  D.engage("career");
+  assert.equal(D.gpName(byId("sepang")), byId("sepang").gp || "");
+  // A quick race (flow "gp") keeps the circuit's own name.
+  const { S: Q } = load(null, tracks, { Career: { calendar: () => real } });
+  assert.equal(Q.gpName(byId("sepang")), byId("sepang").gp || "");
 });
 
 // ── bug hunt 2026-09-29: persistence ──────────────────────────────────────────
@@ -962,6 +998,29 @@ test("a season with an unknown circuit races the stored round's circuit and is n
   assert.equal(whole.S.save(w).ok, true);
 });
 
+test("returning to the menu after a season finale preserves a calendar this build could not read whole", async () => {
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  for (const futureRound of [true, false]) {
+    const trackIds = ["monza", "monaco"];
+    if (futureRound) trackIds.push("future-track");
+    const saved = { round: 1, pts: { d0: 25 }, teamPts: {}, driverCodes: {}, config: { trackIds } };
+    const g = await createGame({ carMeshes: false, storage: { season: saved } });
+    try {
+      const { G } = g, S = g.sandbox.SeasonCal;
+      G.flow = "season";
+      G.season = S.load();
+      assert.equal(S.award(G.season, field(2)), "race");
+      assert.equal(S.save(G.season).ok, !futureRound);
+      G.els.resNext.onclick();
+      assert.equal(G.els.results.dataset.resultsView, "champion");
+      G.els.resNext.onclick();
+      assert.equal(G.state, "menu");
+      const disk = JSON.parse(g.sandbox.localStorage.getItem("apex26.season"));
+      assert.deepEqual(disk, futureRound ? saved : null);
+    } finally { g.close(); }
+  }
+});
+
 test("a calendar shrunk by an unknown circuit keeps roundPts aligned with the remapped round", () => {
   // resume() re-read `round` as the known circuits raced but left roundPts on
   // the stored indexes: netPts (dropped scores) read the wrong rounds, and the
@@ -992,9 +1051,25 @@ test("rankTeams: points, then the team's tier, then the id — one order for eve
   assert.match(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), /SeasonCal\.rankTeams\(career\.season, a\.id, b\.id\)/);
 });
 
-test("boot's migrate-and-save never writes back a season load() refused (game.js)", () => {
-  const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
-  assert.match(game, /season = GameStore\.migrateSeasonPoints\(season\); if \(!SeasonCal\.lastLoadLossy\(\)\) SeasonCal\.save\(season, \{ migration: true \}\);/);
+test("boot's migrate-and-save never writes back a season load() refused (game.js)", async () => {
+  // The REAL boot in the game VM over a stored season naming a circuit this
+  // build does not know: the stored calendar survives byte for byte, and boot
+  // does not even try to save the lossy read (no refused save, no warning).
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  const lossy = { round: 1, pts: { d0: 25 }, teamPts: {}, driverCodes: {}, config: { trackIds: ["monza", "monaco", "nosuch"] } };
+  const writes = [];
+  const g = await createGame({ carMeshes: false, storage: { season: lossy }, onSandbox(sandbox) {
+    const ls = sandbox.localStorage, set = ls.setItem.bind(ls);
+    ls.setItem = (k, v) => { if (k === "apex26.season") writes.push(v); return set(k, v); };
+  } });
+  try {
+    const SC = g.sandbox.SeasonCal;
+    assert.equal(SC.lastLoadLossy(), true, "boot's load() read the unknown circuit as lossy");
+    assert.equal(writes.length, 0, "boot wrote nothing to apex26.season");
+    assert.deepEqual(JSON.parse(g.sandbox.localStorage.getItem("apex26.season")), lossy, "the stored season keeps its unknown circuit");
+    assert.notEqual(SC.saveStatus().reason, "unknown circuit", "boot never attempted to save the lossy read");
+    assert.equal(g.record.console.filter(([, m]) => /SeasonCal\.save refused/.test(m)).length, 0, "no refused-save warning at boot");
+  } finally { g.close(); }
 });
 
 test("mid-weekend reads the season's own config: the title menu (flow gp) still says AFTER THE SPRINT", () => {
@@ -1106,8 +1181,8 @@ test("the champion is the season.pts leader even when that seat is no longer on 
   };
   const ctx = vm.createContext({ document: { createElement: mk }, SeasonCal: S, Teams: { LIST: [], POINTS }, GameAudio: {} });
   seedLog(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8") + ";this.GameResults = GameResults;", ctx, { filename: absSrc("js/ui/results-sheet.js") });
-  ctx.GameResults.create(G).buildChampion();
+  vm.runInContext(readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8") + ";this.GameResultsSheet = GameResultsSheet;", ctx, { filename: absSrc("js/ui/results-sheet.js") });
+  ctx.GameResultsSheet.create(G).buildChampion();
   assert.deepEqual(said, ["YOU IS WORLD CHAMPION!"], "the table leader, not the best car on the final grid");
   const ranking = els.resultsTable.children.find((r) => r.getAttribute("role") === "list"
     && r.getAttribute("aria-label") === "Final driver standings");
@@ -1199,4 +1274,70 @@ test("netPts is bounded by the stored per-round row, not by season.round (bug-hu
   // a row shorter than keep never produces NaN
   const short = { round: 2e7, pts: { d0: 3 }, roundPts: { d0: [3] }, config: { drop: 1, trackIds: ["a", "b", "c", "d"] } };
   assert.equal(S.netPts(short, "d0"), 3);
+});
+
+// ── #5877 (decision B): the player's points follow the player ───────────────────
+// Points are keyed by seat (teamId:driverIndex) and the team setting is shared with
+// single races, so a team change left the player's points on the old seat for the AI
+// now in it. game.js's grid build calls seatPlayer(season, player.driverId) in a season.
+function seatField(ids, player) {
+  return ids.map((id) => ({ driverId: id, code: id === player ? "YOU" : id.toUpperCase().slice(0, 3),
+    team: { id: id.split(":")[0] }, finished: true, retired: false, isPlayer: id === player }));
+}
+
+test("a team change moves the player's points to the new seat; the displaced AI keeps its own", () => {
+  const { S } = load();
+  S.engage("season");
+  const season = S.blank();
+  assert.equal(S.seatPlayer(season, "redbull:0"), false, "the first grid adopts the seat");
+  S.award(season, seatField(["haas:0", "redbull:0", "ferrari:0"], "redbull:0"));   // P2 for the player, 18
+  const mine = season.pts["redbull:0"], theirs = season.pts["haas:0"];
+  assert.ok(mine > 0 && theirs > 0);
+  assert.equal(S.seatPlayer(season, "haas:0"), true, "switching to Haas moves the tally");
+  assert.equal(season.pts["haas:0"], mine, "the player's points are on the seat they now drive");
+  assert.equal(season.pts["redbull:0"], undefined, "the AI back in the Red Bull has none of them");
+  assert.equal(season.pts["haas:0:parked"], theirs, "the Haas driver the player displaced keeps theirs");
+  assert.equal(season.driverCodes["haas:0"], "YOU");
+  assert.equal(season.driverCodes["haas:0:parked"], "HAA");
+  assert.equal(JSON.stringify(season.finishes["haas:0"]), "[null,1]", "the P2 countback moved too");
+  assert.equal(S.seatPlayer(season, "redbull:0"), true, "and back again");
+  assert.equal(season.pts["redbull:0"], mine);
+  assert.equal(season.pts["haas:0"], theirs, "the Haas driver is back in the Haas with their points");
+  assert.equal(season.pts["haas:0:parked"], undefined);
+  assert.equal(season.you, "redbull:0");
+});
+
+test("a save from before #5877 (no `you`) adopts the current seat without moving a point", () => {
+  const { S } = load({ season: { round: 1, pts: { "redbull:0": 18, "haas:0": 25 }, teamPts: {}, driverCodes: {}, finishes: {}, roundPts: {} } });
+  S.engage("season");
+  const season = S.load();
+  assert.equal(season.you, undefined);
+  assert.equal(S.seatPlayer(season, "redbull:0"), false);
+  assert.deepEqual({ ...season.pts }, { "redbull:0": 18, "haas:0": 25 }, "nothing reset, nothing moved");
+  assert.equal(season.you, "redbull:0");
+  const again = S.resume(JSON.parse(JSON.stringify(season)));
+  assert.equal(again.you, "redbull:0", "the seat survives a save round trip");
+});
+
+test("hunt #5694 B1: sprintIds is a set over the calendar — order, stale ids and mode do not change the setup", () => {
+  const { S, tracks } = load();
+  const ids = tracks.SEASON.map((t) => t.id);
+  const [a, b, c] = [ids[1], ids[3], ids[5]];
+  const base = { ...S.config(), trackIds: ids, sprint: "rounds" };
+  const n = S.normalize({ ...base, sprintIds: [c, a, "nowhere", b] });
+  assert.deepEqual([...n.sprintIds], [a, b, c], "calendar order, unknown id dropped");
+  assert.deepEqual([...S.normalize({ ...base, trackIds: [a, c], sprintIds: [b, c] }).sprintIds], [c],
+    "an id no longer in the calendar is dropped");
+  assert.deepEqual([...S.normalize({ ...base, sprint: false, sprintIds: [a] }).sprintIds], []);
+  assert.deepEqual([...S.normalize({ ...base, sprint: true, sprintIds: [a] }).sprintIds], []);
+  S.engage("season");
+  S.setConfig({ ...base, sprintIds: [a, b] });
+  const season = S.restart();
+  S.save(season);
+  assert.equal(S.matchesConfig(season, { ...base, sprintIds: [b, a] }), true, "SPRINT→GP→SPRINT reorder is a no-op");
+  assert.equal(S.matchesConfig(season, { ...base, sprintIds: [a] }), false, "dropping a sprint round is a change");
+  S.setConfig({ ...base, sprint: false, sprintIds: [] });
+  const off = S.restart();
+  S.save(off);
+  assert.equal(S.matchesConfig(off, { ...base, sprint: false, sprintIds: [a] }), true, "a stale id with sprints off is a no-op");
 });

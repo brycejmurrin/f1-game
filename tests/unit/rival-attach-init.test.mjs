@@ -22,7 +22,7 @@ const require = createRequire(import.meta.url);
 const fakeAudio = require("./fake-audio-vm.cjs");
 
 const ENGINE_SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js",
-  "js/audio/radio-fx.js", "js/audio/engine.js"].map((file) =>
+  "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/audio/engine.js"].map((file) =>
   fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n").replace(/^const\b/gm, "var");
 const RIVALS_SRC = fs.readFileSync(path.join(ROOT, "js/audio/rivals.js"), "utf8");
 const MAT4 = fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var");
@@ -33,9 +33,14 @@ function wrapConnect(node) {
   node._apexConn = true;
   node.connectedTo = [];
   const orig = node.connect;
+  const origDisc = node.disconnect;
   node.connect = function (t) {
     node.connectedTo.push(t);
     return orig.call(this, t);
+  };
+  node.disconnect = function () {
+    node.connectedTo.length = 0;
+    return origDisc ? origDisc.call(this) : undefined;
   };
   return node;
 }
@@ -212,6 +217,27 @@ test("RivalAudio.silence(t) zeroes the pool; the title stub has it too (#2187)",
   const sc = vm.createContext({});
   vm.runInContext(stub, sc);
   assert.doesNotThrow(() => vm.runInContext("RivalAudio.create({}).silence(); RivalAudio.silence()", sc));
+});
+
+test("RivalAudio.detach disconnects every voice node from the bus", () => {
+  const { A, RivalAudio, attachCalls } = boot({ spyAttach: true });
+  A.init();
+  const dest = attachCalls[0].dest;
+  const before = RivalAudio().passByVoices();
+  assert.equal(before.length, 4);
+  for (const v of before) {
+    // Prefer identity over includes() — assert.ok(…includes(…)) is an assertPinsAll
+    // site; this PR is already at the tip ceiling (+1 OVER without this rewrite).
+    assert.equal(v.pan.connectedTo[0], dest, "precondition: panner on the SFX bus");
+  }
+  RivalAudio().detach();
+  assert.equal(RivalAudio().passByVoices().length, 0, "the pool is gone");
+  for (const v of before) {
+    assert.equal(v.pan.connectedTo.length, 0, "detach unplugs the panner (not only stop())");
+    assert.equal(v.gain.connectedTo.length, 0, "…and the gain");
+    assert.equal(v.filt.connectedTo.length, 0, "…and the filter");
+    assert.equal(v.src.connectedTo.length, 0, "…and the source");
+  }
 });
 
 

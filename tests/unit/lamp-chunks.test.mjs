@@ -253,8 +253,8 @@ test("a full drag costs ONE bake, not one per input event", () => {
   // inner binding, so wrap by re-running the source with a counting shim.
   const src = readFileSync(join(ROOT, SRC_PATH), "utf8");
   const Counted = new Function(
-    DEPS + "\n" + src.replace("function buildTable(lights, chunks, knob) {",
-                "function buildTable(lights, chunks, knob) { globalThis.__bakes = (globalThis.__bakes || 0) + 1;")
+    DEPS + "\n" + src.replace("function buildTable(lights, chunks, knob, capMax) {",
+                "function buildTable(lights, chunks, knob, capMax) { globalThis.__bakes = (globalThis.__bakes || 0) + 1;")
     + "; return LampChunks;")();
   globalThis.__bakes = 0;
   for (let k = 0; k <= 1.0001; k += 0.001) Counted.resolve(lights, chunks, Math.round(k * 1000) / 1000);
@@ -269,7 +269,7 @@ test("a full drag costs ONE bake, not one per input event", () => {
  * GLX binds a chunk's list per draw and WGX passes (offset, count) in a
  * per-draw uniform. THREE HAS NEITHER — every visible chunk is drawn from one
  * pooled mesh sharing ONE material, so there is nowhere to put a per-chunk
- * value. (Checked in vendor/three-0.186.1 rather than assumed:
+ * value. (Checked in vendor/three-0.187.0 rather than assumed:
  * `nodeUniformDrawId` is declared only when `object.isBatchedMesh` and set only
  * in the BatchedMesh branch of WebGLBackend._draw, so `drawIndex` reads nothing
  * from a plain Mesh.) What three CAN read is positionWorld — and the chunks are
@@ -456,33 +456,51 @@ function liftBlock(src, head) {
 /** A `let <name> ...` state line tlx.js declares for the block ("" if absent:
  *  the behavioural assertions below, not a missing name, are the verdict). */
 function liftDecl(src, name) {
-  const m = src.match(new RegExp(`^\\s*let ${name}\\b[^\\n]*$`, "m"));
+  const m = src.match(new RegExp(`^\\s*(?:let|const) ${name}\\b[^\\n]*$`, "m"));
   return m ? m[0] : "";
 }
-function tlxLampGrid() {
+function tlxLampGrid(countReads = false) {
   const TLX = readFileSync(join(ROOT, "js/render/three/tlx.js"), "utf8");
   const block = liftBlock(TLX, "if (lit && lit.setLampGrid) {");
   const src = readFileSync(join(ROOT, SRC_PATH), "utf8");
   const LC = new Function(
-    DEPS + "\n" + src.replace("function buildTable(lights, chunks, knob) {",
-                "function buildTable(lights, chunks, knob) { __n.bakes++;")
+    DEPS + "\n" + src.replace("function buildTable(lights, chunks, knob, capMax) {",
+                "function buildTable(lights, chunks, knob, capMax) { __n.bakes++;")
     + "; return LampChunks;")
   ;
-  const n = { bakes: 0, grids: 0 };
+  const n = { bakes: 0, grids: 0, tints: 0 };
   globalThis.__n = n;
   const LampChunksC = LC();
-  const lit = { setLampGrid: (g) => { if (g) n.grids++; return true; }, setLampGridColors: () => {} };
-  const decls = [liftDecl(TLX, "_lgKey"), liftDecl(TLX, "_lgChs")].join("\n");
-  const run = new Function("LampChunks", "Log", "lit", `
+  const lit = { setLampGrid: (g) => { if (g) n.grids++; return true; }, setLampGridColors: () => { n.tints++; } };
+  const decls = [liftDecl(TLX, "_lgKey"), liftDecl(TLX, "_lgChs"), liftDecl(TLX, "_lgGroups")].join("\n");
+  // The block reads LightBudget.bakeChunk() (EXTREME lightsHi): the real budget, detail 0 here.
+  const LB = new Function(DEPS + "; return LightBudget;")();
+  // Use the real record pool and submission/reset paths so a small frame can
+  // reuse the slots of a much larger one, exactly as it does after the grid.
+  const pool = TLX.slice(TLX.indexOf("const _recPool = [];"), TLX.indexOf("function pushRec("));
+  const reads = { count: 0, scanning: false };
+  const records = countReads ? new Proxy([], { get(arr, key) {
+    if (reads.scanning && typeof key === "string" && /^\d+$/.test(key)) reads.count++;
+    return arr[key];
+  } }) : [];
+  const run = new Function("LampChunks", "Log", "lit", "records", "reads", "LightBudget", `
     ${decls}
-    let frameAllLightsGen = 0, _lgGen = -1, _lampGridState = null;
-    let frameAllLights = null, framePerChunk = 0, drawList = null;
-    return function (dl, AL, knob) {
-      drawList = dl; frameAllLights = AL; framePerChunk = knob;
+    ${pool.replace("const _recPool = [];", "const _recPool = records;")}
+    const _roadSplitOn = false;
+    ${liftBlock(TLX, "function pushRec(")}
+    ${liftBlock(TLX, "function resetRecs(")}
+    let frameAllLightsGen = 0, frameAllLightsStaticGen = 0, _lgGen = -1, _lgStaticGen = -1, _lampGridState = null;
+    let frameAllLights = null, framePerChunk = 0;
+    return function (dl, AL, knob, valueGen = 0, staticGen = 0) {
+      resetRecs();
+      for (const rec of dl) pushRec(rec.geo, null, null, 0, 1, 0, rec.chunked, null);
+      frameAllLights = AL; framePerChunk = knob; frameAllLightsGen = valueGen; frameAllLightsStaticGen = staticGen;
+      reads.count = 0; reads.scanning = true;
       ${block}
+      reads.scanning = false;
       return _lampGridState;
-    };`)(LampChunksC, { info() {} }, lit);
-  return { run, n };
+    };`)(LampChunksC, { info() {} }, lit, records, reads, LB);
+  return { run, n, reads };
 }
 
 test("TLX lamp grid: a PER-CHUNK LAMPS drag bakes once and re-grids only per cap", () => {
@@ -515,6 +533,87 @@ test("TLX lamp grid: a PER-CHUNK LAMPS drag bakes once and re-grids only per cap
   } finally {
     delete globalThis.__n;
   }
+});
+
+test("a replacement lamp-cell group of the same size invalidates the TLX grid", () => {
+  const { run, n } = tlxLampGrid();
+  const lamps = lampSet([[0, 0, 0, 50]]);
+  const group = (gx) => [{ min: [gx * 72, 0, 0], max: [gx * 72 + 1, 1, 1], gx, gz: 0 }];
+  const drawList = [{ chunked: { chunks: group(0) } }, { chunked: { chunks: group(1) } }];
+  try {
+    assert.equal(run(drawList, lamps, 1).gw, 2);
+    drawList[1].chunked.chunks = group(4);
+    assert.equal(run(drawList, lamps, 1).gw, 5);
+    drawList[1].chunked.lampCells = group(6);
+    assert.equal(run(drawList, lamps, 1).gw, 7);
+    drawList[1].chunked.lampCells = group(7);
+    assert.equal(run(drawList, lamps, 1).gw, 8);
+    assert.equal(n.bakes, 4);
+  } finally { delete globalThis.__n; }
+});
+
+test("TLX refreshes lamp geometry across in-place source refills and only tints on colour changes", () => {
+  const { run, n } = tlxLampGrid();
+  const lamps = lampSet([[0, 0, 0, 10]]);
+  const draws = [{ chunked: { chunks: [{ gx: 0, gz: 0, min: [0, 0, 0], max: [1, 1, 1] }] } }];
+  try {
+    assert.equal(run(draws, lamps, 1, 1, 1).idx, 1);
+    lamps[3] *= 0.5;
+    assert.equal(run(draws, lamps, 1, 2, 1).idx, 1);
+    assert.deepEqual(n, { grids: 1, bakes: 1, tints: 1 });
+    lamps[0] = 100;
+    assert.equal(run(draws, lamps, 1, 3, 2).idx, 0, "moved lamp no longer reaches the cell");
+    lamps[6] = 110;
+    assert.equal(run(draws, lamps, 1, 4, 3).idx, 1);
+    lamps[8] = 1;
+    run(draws, lamps, 1, 5, 4);
+    assert.deepEqual(n, { grids: 4, bakes: 3, tints: 1 }, "beam direction refreshes the lamp texture while membership stays cached");
+  } finally { delete globalThis.__n; }
+});
+
+test("TLX lamp scans visit only submitted chunked records after a high-water frame", () => {
+  const { run, n, reads } = tlxLampGrid(true);
+  const lamps = lampSet([[0, 0, 0, 10]]);
+  const chunk = (gx) => ({ chunked: { cellSize: 72, chunks: [{ min: [gx * 72, 0, 0], max: [gx * 72 + 1, 1, 1], gx, gz: 0 }] } });
+  const frame = [chunk(0), {}, chunk(1)];
+  try {
+    run(Array.from({ length: 400 }, () => ({})), null, 0);
+    assert.equal(reads.count, 0, "no chunked geography was submitted");
+    assert.equal(run(frame, lamps, 1).recs, 2);
+    assert.equal(reads.count, 4, "two chunks for discovery and two for the rebuild");
+    assert.equal(run(frame, lamps, 1).chunks, 2);
+    assert.equal(reads.count, 2, "cached frame visits only the live chunks");
+    assert.equal(run([{}], lamps, 1).chunks, 0);
+    assert.equal(reads.count, 0, "prior frame's chunk slots are inactive");
+    assert.equal(n.bakes, 1);
+  } finally { delete globalThis.__n; }
+});
+
+test("TLX fills the active lamp, index and grid data without clearing texture capacity", () => {
+  const source = readFileSync(join(ROOT, "js/render/three/tsl-lit.js"), "utf8");
+  let clearWrites = 0;
+  class CountedTexture extends Float32Array {
+    fill(value) { clearWrites += this.length; return super.fill(value); }
+  }
+  const texture = (n) => ({ image: { data: new CountedTexture(n) } });
+  const gpu = { LAMPS: 1024, IDXW: 256, G: 256, lampTex: texture(1024 * 16),
+    idxTex: texture(256 * 256), gridTex: texture(256 * 256 * 2) };
+  const uniforms = { lgOn: {}, lgCell: {}, lgIdxW: {}, lgOrigin: { value: { set() {} } }, lgSize: { value: { set() {} } } };
+  const upload = new Function("LGRID", "U", "LampChunks", liftBlock(source, "function setLampGrid(info)") + ";return setLampGrid;")(gpu, uniforms, LampChunks);
+  const lights = lampSet([[0, 0, 0, 100], [72, 0, 0, 50]]);
+  for (const coords of [[0, 1, 2], [1], [0, 2]]) {
+    const cells = coords.map(gx => ({ gx, gz: gx % 2, min: [gx * 72, 0, 0], max: [gx * 72 + 1, 1, 1] }));
+    const table = LampChunks.resolve(lights, cells, 1), grid = LampChunks.buildGrid(table, cells);
+    assert.equal(upload({ lights, table, grid, cell: 72 }), true);
+    for (let z = 0; z < grid.gh; z++) {
+      assert.deepEqual(Array.from(gpu.gridTex.image.data.subarray(z * gpu.G * 2, (z * gpu.G + grid.gw) * 2)),
+        Array.from(grid.data.subarray(z * grid.gw * 2, (z + 1) * grid.gw * 2)));
+    }
+    const indices = grid.concat || table.concat;
+    assert.deepEqual(Array.from(gpu.idxTex.image.data.subarray(0, indices.length)), Array.from(indices));
+    for (let i = 0; i < lights.length / 15; i++) assert.equal(gpu.lampTex.image.data[16 * i + 3], lights[i * 15 + 6]);
+  }
+  assert.equal(clearWrites, 0, "active data is overwritten and bounds exclude the remaining texels");
 });
 
 /* ── ChunkBins: the chunk key the lamp grid decodes ──────────────────────────
@@ -557,6 +656,13 @@ test("ChunkBins.bin: centroid cells, vertex AABBs, emission order, absolute indi
   assert.deepEqual([o.mn, o.mx], [[0, 0, 0], [10, 1, 10]]);
   assert.deepEqual([...e.idx], [3, 4, 5]);
   assert.deepEqual([e.mn, e.mx], [[60, -1, 0], [110, 2, 5]], "the AABB is the vertices', so it may leave its own cell");
+});
+
+test("the rear-view inset has its own lamp cap, and the phone budget stays the measured floor", () => {
+  const LightBudget = new Function(readFileSync(join(ROOT, "js/render/shared/light-budget.js"), "utf8") + "\nreturn LightBudget;")();
+  assert.equal(LightBudget.MIRROR, 8);
+  assert.equal(LightBudget.MOBILE, 24);
+  assert.ok(LightBudget.MIRROR < LightBudget.MOBILE);
 });
 
 test("the GLX and TLX chunked builders bin through ChunkBins (no private copy of the key)", () => {

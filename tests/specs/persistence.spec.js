@@ -108,7 +108,7 @@ test.describe("persistence failure is visible", () => {
     // the console in one identical line and hides whatever the player was
     // actually reporting. Repeats go to the ring buffer instead.
     const warned = consoleLines.filter((l) => /localStorage .*failed/.test(l));
-    expect(warned.length).toBeLessThanOrEqual(1);
+    expect(warned.length).toBe(1);
     const buffered = await page.evaluate(() =>
       window.__apex.logs({ ns: "game" }).filter((x) => /localStorage .*failed/.test(x.msg)).length);
     expect(buffered).toBeGreaterThan(1);

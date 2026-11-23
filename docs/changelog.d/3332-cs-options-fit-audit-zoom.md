@@ -1,1 +1,0 @@
-Fixed: garage `#cs-options` fit-audit no longer reports a phantom ~6px horizontal overflow at UI SIZE 75% — the audit mixed visual `getBoundingClientRect` with unzoomed padding under `.sheet` `zoom` (#3332).

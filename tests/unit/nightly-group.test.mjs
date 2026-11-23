@@ -97,7 +97,10 @@ test("the two un-ratcheted audit aliases still point at a suite that DOES gate t
   // The reason test:float and test:clip may sit unscheduled is that the same
   // audit runs, ratcheted, inside test:sweeps. If that stopped being true the
   // reason would be false and the group really would be uncovered.
-  const sweeps = String(PKG.scripts["test:sweeps"] || "");
+  // The roster is tests/groups.json's (package.json's line is a wrapper since #5427); the
+  // script must still be that group's runner.
+  assert.equal(PKG.scripts["test:sweeps"], "node tools/ci/run-group.mjs test:sweeps");
+  const sweeps = GROUPS["test:sweeps"].files;
   for (const [group, suite] of [["test:float", "tests/unit/scenery-grounding.test.mjs"],
                                 ["test:clip", "tests/unit/prop-clipping.test.mjs"]]) {
     assert.ok(group in UNSCHEDULED, `${group} left UNSCHEDULED — re-check this pair`);
@@ -139,4 +142,19 @@ test("the CLI prints GROUP=<bare name>, which is what ci.yml's `npm run test:$GR
   assert.ok(m, `expected GROUP=<name>, got ${JSON.stringify(out)}`);
   assert.ok(!m[1].startsWith("test:"), `ci.yml prefixes test: itself, so the CLI must not — got ${m[1]}`);
   assert.ok(ROTATION.map(bare).includes(m[1]), `${m[1]} is not in the rotation`);
+});
+
+test("main guard fires when the script path needs URL-encoding (#4481)", async () => {
+  const { mkdtempSync, cpSync, rmSync } = fs;
+  const os = await import("node:os");
+  const dir = mkdtempSync(path.join(os.tmpdir(), "nightly dir "));   // a space → %20 in import.meta.url
+  try {
+    const root = path.resolve(import.meta.dirname, "..", "..");
+    fs.mkdirSync(path.join(dir, "tools", "ci"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "tests"), { recursive: true });
+    cpSync(path.join(root, "tools/ci/nightly-group.mjs"), path.join(dir, "tools/ci/nightly-group.mjs"));
+    cpSync(path.join(root, "tests/groups.json"), path.join(dir, "tests/groups.json"));
+    const out = execFileSync(process.execPath, [path.join(dir, "tools/ci/nightly-group.mjs"), "--day=3"], { encoding: "utf8" });
+    assert.equal(out.split("=")[0], "GROUP");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

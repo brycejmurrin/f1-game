@@ -12,4 +12,4 @@ Every design-preview session (D-lanes: bodies, finishes, aero, wheels, liveriesâ
 
 **Why:** Bryce, 2026-10-19 22:27Z: "Make sure all Design sessions make artifacts which we improve and iterate on".
 
-**How to apply:** put this in every design-lane launch brief; relay Bryce's feedback by design id; never let a lane start a fresh artifact per round. See [[preview-must-look-different]].
+**How to apply:** a design session (or the issue/brief that launches one) keeps one artifact URL for its whole life and records it in the PR's Hand-off block; Bryce's feedback arrives as artifact comments or PR comments keyed by design id; never start a fresh artifact per round. See [[preview-must-look-different]].

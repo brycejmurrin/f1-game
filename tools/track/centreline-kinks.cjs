@@ -15,6 +15,9 @@ const gate = args.includes("--gate"), update = args.includes("--update");
 const ids = args.filter((a) => !a.startsWith("--"));
 
 const Tracks = buildContext(null, { quiet: true });
+// A named id that is no circuit used to measure nothing and pass (`nosuch --gate` exited 0).
+try { require("../lib/circuit-scope.cjs").requireKnown(ids, Tracks.LIST.map((d) => d.id), "centreline-kinks"); }
+catch (e) { console.error(e.message); process.exit(2); }
 const doc = JSON.parse(fs.readFileSync(FILE, "utf8"));
 const measured = {}, over = [];
 for (const def of Tracks.LIST) {

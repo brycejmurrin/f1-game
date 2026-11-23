@@ -37,6 +37,64 @@ export function capOverride(ls) {
   return v != null && v !== "0" ? v : null;
 }
 
+/** The desktop detail level CENSUS_LS forces (apex26.gfxDetail=1|2, the last one wins), else 0. */
+export function lsDetail(ls) {
+  let d = 0;
+  for (const kv of String(ls || "").split(/\s+/)) {
+    const m = kv.match(/^apex26\.gfxDetail=(.*)$/);
+    if (m) d = m[1] === "1" || m[1] === "2" ? +m[1] : 0;
+  }
+  return d;
+}
+
+// Features a census scene cannot run whatever the build: declared, each with its reason and the condition that
+// lifts it. Everything else that the level turns on must report ran=true, or name why it has no signal.
+export const TIER_SKIPS = Object.freeze({
+  lampShadows: { why: "needs a night build (the floodlight maps only exist with baked lamps)", unless: (o) => o.night },
+});
+
+/** The real test of the desktop tiers (docs/notes/TIER-CENSUS-TEST-2026-11-20.md), TLX WebGPU leg only: when the
+ *  dispatch forced a detail level, every feature that level turns on must have RUN. A feature whose build threw
+ *  falls back to today's path and still reads gpuErrors=0, so on=true + ran=false is a FAIL naming it. Gated only on
+ *  a hardware, non-software, non-lite adapter on three's WebGPU backend; elsewhere the rows are information. */
+export function tierGate(g, { hardware = false, level = 0 } = {}) {
+  const rows = [], bad = [];
+  if (!(level > 0)) return { rows, bad };
+  const gfx = g.gfx || {}, be = gfx.backendState || {}, rec = gfx.tiers;
+  const night = /night/i.test(String(g.timeOfDay || ""));
+  const why = !hardware ? "census found no hardware adapter" : be.softAdapter !== false ? `softAdapter=${be.softAdapter}`
+    : be.liteGpu ? "liteGpu (the lite lab builds no extras)" : be.api !== "webgpu" ? `api=${be.api} (the extras are built for WebGPU)` : "";
+  const gate = !why;
+  if (!rec || !rec.features) {
+    rows.push(`${IND}tiers: NO RECORD — ${gfx.tiersError || "the leg wrote no gfx.tiers"}`);
+    if (gate) bad.push(`detail ${level} was asked but NO tiers record came back — the silent-fallback check would pass vacuously${gfx.tiersError ? " — " + gfx.tiersError : ""}`);
+    return { rows, bad };
+  }
+  const have = rec.detail + (rec.cinema && rec.detail >= 2 ? 1 : 0), order = rec.shedOrder || [];
+  rows.push(`${IND}tiers: detail=${rec.detail} (asked ${level}) shed=${rec.shed}/${order.length} cinema=${rec.cinema ? 1 : 0} tod=${g.timeOfDay || "?"}` +
+    (gate ? "  GATED" : `  informational: ${why}`));
+  if (rec.detail !== level) (gate ? bad : []).push(`detail ${level} was asked (ls apex26.gfxDetail) but GfxQuality.detail() reports ${rec.detail} — the level never applied`);
+  const offLevel = [], shed = [];
+  for (const [name, f] of Object.entries(rec.features)) {
+    const i = order.indexOf(name);
+    if (f.need > have) { offLevel.push(name); continue; }
+    // Shed by the governor, unless the run holds the extras (apex26.gfxHoldExtras=1): then feature() still
+    // answers on and the feature is judged like any other.
+    if (i >= 0 && i >= order.length - rec.shed && !f.on) { shed.push(name); continue; }
+    const skip = TIER_SKIPS[name];
+    let state;
+    if (!f.on) { state = "GATE OFF — feature() answers false at this level"; if (gate) bad.push(`tiers: ${name} is off at detail ${rec.detail} although the level turns it on (feature() answered false)`); }
+    else if (f.ran === true) state = "ran";
+    else if (skip && !skip.unless({ night })) state = `skipped — ${skip.why}`;
+    else if (f.ran === false) { state = "DID NOT RUN — silent fallback to today's path"; if (gate) bad.push(`tiers: ${name} is on at detail ${rec.detail} but did NOT run — its build fell back silently`); }
+    else state = `no signal — ${f.why || "?"}`;
+    rows.push(`${IND}  ${name.padEnd(12)} need=${f.need} on=${f.on ? 1 : 0} ran=${f.ran == null ? "-" : f.ran ? 1 : 0}  ${state}`);
+  }
+  if (shed.length) rows.push(`${IND}  shed by the governor: ${shed.join(" ")}`);
+  if (offLevel.length) rows.push(`${IND}  above this level: ${offLevel.join(" ")}`);
+  return { rows, bad };
+}
+
 /** Read census-<image>.json and game-<leg>-<image>.json from dir; an absent or
  *  unparseable file is null (the gate then names it). */
 export function readArtifacts(dir, image) {
@@ -47,7 +105,7 @@ export function readArtifacts(dir, image) {
 }
 
 /** The whole verdict: { rows, bad }. `cap` is capOverride(CENSUS_LS). */
-export function verdict({ image, census, legs, cap = null }) {
+export function verdict({ image, census, legs, cap = null, level = 0 }) {
   // Only a machine the census called hardware can be held to the hardware
   // expectations; a software image legitimately reports softAdapter true and
   // a skipped (blank) env probe.
@@ -71,7 +129,7 @@ export function verdict({ image, census, legs, cap = null }) {
     const file = `game-${path3}-${image}.json`;
     const g = legs[path3];
     if (!g) { bad.push(`${path3}: ${file} missing — the check produced nothing`); continue; }
-    const r = legReport(path3, g, { hardware, cap });
+    const r = legReport(path3, g, { hardware, cap, level });
     rows.push(...r.rows);
     bad.push(...r.bad);
   }
@@ -81,7 +139,7 @@ export function verdict({ image, census, legs, cap = null }) {
 }
 
 /** One leg: its report rows and its gate failures. */
-export function legReport(path3, g, { hardware, cap = null }) {
+export function legReport(path3, g, { hardware, cap = null, level = 0 }) {
   const rows = [], bad = [];
   const gfx = g.gfx || {}, env = gfx.envState || {}, be = gfx.backendState || {};
   // The two TLX legs are three.js BY CONSTRUCTION (--backend three), so they
@@ -140,6 +198,13 @@ export function legReport(path3, g, { hardware, cap = null }) {
       ? `${path3}: TLX is soft-blitting (GPU readback + putImageData every frame) on a hardware adapter with apex26.wgxCapture=0 pinned — the pin is no longer honoured, and every number on this leg timed the readback`
       : `${path3}: NO softBlit reported on a hardware TLX leg — the present-path check would pass vacuously`);
   }
+  // #4783 rows 4 and 6: TLX on WebGPU (Bryce's path). The WGX leg is its own renderer and labels nothing this way.
+  if (path3 === "webgpu") {
+    for (const r of [uploadGate(g, { hardware }), shadowGate(g, { hardware }), tierGate(g, { hardware, level })]) {
+      rows.push(...r.rows);
+      bad.push(...r.bad.map((b) => `${path3}: ${b}`));
+    }
+  }
   if (path3 === "wgx") {
     rows.push(`${IND}wgx:   bound=${gfx.wgx} softPresent=${gfx.wgxSoftPresent} headlessUa=${gfx.headlessUa}` +
       (cap != null ? ` (apex26.wgxCapture=${cap} from the dispatch ls overrides the native pin — soft-present is not gated)` : ""));
@@ -155,6 +220,73 @@ export function legReport(path3, g, { hardware, cap = null }) {
         : `wgx: NO softPresent state reported for a bound WGX — the swapchain check would pass vacuously${gfx.wgxSoftPresentError ? " — " + String(gfx.wgxSoftPresentError).slice(0, 160) : ""}`);
     }
   }
+  return { rows, bad };
+}
+
+/** #4783 row 4: writeBuffer per uniform group on the TLX WebGPU leg. Three invariants, each one something the
+ *  renderer's design promises (tsl-lit.js SHARED_UNIFORMS, tlx.js backendState), checked against what the leg counted:
+ *    object   three refreshes an object-group block at most once per draw, so object writes a frame <= draws a frame.
+ *             (Not "== draws x stride": three skips an unchanged block, run 42943667972 wrote 33.66 a frame.)
+ *    render   the shared frame block is one buffer per program, written at most once per pass, so render-group writes
+ *             a frame <= programs x the most passes any frame encoded.
+ *    rUbo     three's uniform-buffer bytes are flat over a PARKED window. A driven window brings meshes into view
+ *             (81.3 -> 98.3 KB over 20 beats in that run), so there it is reported and pass-census --park gates it.
+ *  Gated on hardware only, like every other row. An ABSENT count fails rather than passing vacuously when the leg
+ *  itself proves the recorder ran (it counted gpu.writeBuffer calls); a leg with no WebGPU work at all says NOT MEASURED. */
+export function uploadGate(g, { hardware = false } = {}) {
+  const rows = [], bad = [];
+  const groups = Array.isArray(g.uploadGroups) ? g.uploadGroups : null;
+  const draws = g.draws && typeof g.draws.perFrame === "number" ? g.draws.perFrame : null;
+  const of = (name) => (groups || []).find((r) => r.group === name) || null;
+  const strides = (r) => (Array.isArray(r.sizes) && r.sizes.length ? " strides " + r.sizes.map(([b, n]) => `${b}Bx${n}`).join(",") : "");
+  if (!groups) {
+    rows.push(`${IND}ubo-w: NOT MEASURED — ${(g.uploadGroups && g.uploadGroups.note) || "the leg wrote no writeBuffer groups"}`);
+    if (hardware && g.gpuWork && g.gpuWork["gpu.writeBuffer"] > 0) bad.push(`NO writeBuffer groups recorded beside ${g.gpuWork["gpu.writeBuffer"]} counted writeBuffer calls — the uniform-write gates would pass vacuously`);
+    return { rows, bad };
+  }
+  const obj = of("object"), ren = of("render");
+  if (obj) {
+    rows.push(`${IND}ubo-w: object ${obj.nPerFrame}/f ${obj.kbPerFrame}KB vs draws ${draws != null ? draws + "/f (" + Math.round(100 * obj.nPerFrame / (draws || 1)) + "%)" : "?"}${strides(obj)}`);
+    if (hardware && draws == null) bad.push("NO draw count recorded — the object-group write bound would pass vacuously");
+    else if (hardware && obj.nPerFrame > draws) bad.push(`object-group writes ${obj.nPerFrame}/f exceed draws ${draws}/f — an object block is written more than once per draw`);
+  } else rows.push(`${IND}ubo-w: no object-group write in the window`);
+  if (ren) {
+    const progs = Math.max(0, ...(g.beats || []).map((b) => (b && b.mm && +b.mm.progs) || 0));
+    const passes = g.passes && typeof g.passes.maxPasses === "number" ? g.passes.maxPasses : null;
+    const bound = progs > 0 && passes != null ? progs * passes : null;
+    rows.push(`${IND}       render ${ren.nPerFrame}/f ${ren.kbPerFrame}KB vs bound ${bound != null ? `${bound} (${progs} programs x ${passes} passes)` : "?"}${strides(ren)}`);
+    if (hardware && bound == null) bad.push("NO program or pass count recorded — the render-group write bound would pass vacuously");
+    else if (hardware && ren.nPerFrame > bound) bad.push(`render-group writes ${ren.nPerFrame}/f exceed ${bound} (${progs} programs x ${passes} passes) — the shared frame block is written more than once per program per pass`);
+  } else rows.push(`${IND}       no render-group write in the window`);
+  const ubo = (g.beats || []).map((b) => b && b.ubo).filter((u) => u && typeof u.kb === "number");
+  if (ubo.length >= 4) {
+    const half = ubo.slice(Math.floor(ubo.length / 2)), lo = Math.min(...half.map((u) => u.kb)), hi = Math.max(...half.map((u) => u.kb));
+    const parked = !!(g.race && g.race.drive === false);
+    rows.push(`${IND}       rUbo ${ubo[0].kb} -> ${ubo[ubo.length - 1].kb} KB over ${ubo.length} beats, second half ${lo}..${hi} KB` +
+      (parked ? "" : "  (driven window: reported, not gated; pass-census --park gates the parked frame)"));
+    if (hardware && parked && lo !== hi) bad.push(`rUboKB is not flat on a parked window: ${lo}..${hi} KB over the second half of the beats`);
+  } else rows.push(`${IND}       rUbo: fewer than 4 beats reported memState().rUboKB`);
+  return { rows, bad };
+}
+
+/** #4783 row 6: a shadow-map pass on WebGPU stores no colour. The WebGL2 twin is tlx-shadow.js S.colorDiscards; here
+ *  the evidence is the beginRenderPass inventory (frame-hitch analyseDepthTargets): every pass whose depth attachment
+ *  is a square of side >= 256 must have no colour attachment, or only ones whose storeOp is "discard". `colorPcss`
+ *  (the one case a shadow map's colour is read) is WebGL2-only (tlx-shadow.js: `!isWebGPU && ...`), so on this leg
+ *  there is no exemption to apply. */
+export function shadowGate(g, { hardware = false } = {}) {
+  const rows = [], bad = [];
+  const dt = g.depthTargets;
+  if (!dt || !Array.isArray(dt.rows)) {
+    rows.push(`${IND}shadow: NOT MEASURED — ${(dt && dt.note) || "the leg wrote no depth-target inventory"}`);
+    if (hardware && g.passOps && Array.isArray(g.passOps.rows)) bad.push("NO depth-target inventory recorded beside a pass inventory — the shadow-target discard check would pass vacuously");
+    return { rows, bad };
+  }
+  const shadow = dt.rows.filter((r) => r.shadow);
+  if (!shadow.length) { rows.push(`${IND}shadow: no shadow-map pass in the window (${dt.rows.length} depth-target kinds, none square >= 256)`); return { rows, bad }; }
+  const stores = (r) => r.color !== "none" && r.color.split("+").some((a) => !a.endsWith(">discard"));
+  rows.push(`${IND}shadow: ` + shadow.slice(0, 6).map((r) => `${r.perFrame}/f ${r.depth} colour=${r.color}`).join(" | "));
+  for (const r of shadow.filter(stores)) bad.push(`shadow-map pass ${r.depth} stores a colour attachment (${r.color}, ${r.perFrame}/f) — nothing reads it on WebGPU`);
   return { rows, bad };
 }
 
@@ -217,6 +349,35 @@ function detailRows(path3, g, { tlxLeg }) {
       (_p.wideCostRatio != null ? `  cost ${_p.wideCostRatio}x normal (${_p.wideMeanMs} vs ${_p.normalMeanMs}ms) spikeEnrich ${_p.spikeEnrichmentOnWide}x` : ""));
   }
   if (_pk && _pk.verdict) rows.push(`${IND}kinds: ${_pk.verdict}`);
+  // THE STORE INVENTORY (#2649): submits and stored/discarded attachments a frame, then the passes.
+  const _po = g.passOps;
+  if (_po && _po.rows) {
+    rows.push(`${IND}store: submits=${_po.medianSubmits} stored=${_po.storedPerFrame}/f discarded=${_po.discardedPerFrame}/f`);
+    for (const r of _po.rows.slice(0, 16)) rows.push(`${IND}  ${String(r.perFrame).padStart(5)}x ${r.pass}`);
+  }
+  // THE UPLOAD SITES (perf hunt 6): writes and KB a frame by class, then the top five call sites.
+  const _up = g.uploadsSummary;
+  if (_up && _up.rows) {
+    rows.push(`${IND}uploads: ${_up.callsPerFrame} calls/f ${_up.kbPerFrame} KB/f — ` +
+      _up.groups.map((c) => `${c.cls} ${Math.round(c.share * 100)}%`).join(" "));
+    for (const r of _up.rows.slice(0, 5)) rows.push(`${IND}  ${String(r.kbPerFrame).padStart(7)} KB/f ${String(r.nPerFrame).padStart(5)}x ${r.site.slice(0, 160)}`);
+  }
+  // GPU hunt 3: every writeBuffer by buffer group (unsampled), then the mirror and churn rates over the window.
+  if (Array.isArray(g.uploadGroups)) rows.push(`${IND}ugroups: ` + g.uploadGroups.slice(0, 8).map((r) => `${r.group} ${r.nPerFrame}/f ${r.kbPerFrame}KB`).join(" | "));
+  // #4710: who created a buffer or a texture inside the window (unsampled), and when the mirror target re-allocated.
+  const _ca = g.createAttribution;
+  if (_ca && _ca.rows) {
+    rows.push(`${IND}creates: ${_ca.buffersPerFrame} createBuffer/f ${_ca.texturesPerFrame} createTexture/f over ${_ca.frames} frames (${_ca.creates} calls${_ca.unattributed ? ", " + _ca.unattributed + " past the site cap" : ""})`);
+    for (const r of _ca.rows.slice(0, 8)) rows.push(`${IND}  ${String(r.perFrame).padStart(6)}/f ${String(r.n).padStart(4)}x ${String(r.kb).padStart(8)} KB  ${r.site.slice(0, 220)}`);
+  }
+  const _ma = g.mirrorAllocs;
+  if (_ma && _ma.events) rows.push(`${IND}mirallocs: ${_ma.allocs} over ${_ma.beats} beats` + (_ma.events.length ? " — " + _ma.events.map((e) => `beat ${e.beat} +${e.allocs} ${e.sizeChanged ? e.from + " -> " + e.to : "SAME " + e.to}`).join("; ") : ""));
+  // #4783 row 3: the requested WebGPU bytes at the end of the window (descriptors, not driver residency).
+  const _gm = g.gpuMem;
+  if (_gm && _gm.cat) rows.push(`${IND}gpumem: textures ${_gm.texMB} MB (${_gm.tex}) buffers ${_gm.bufMB} MB (${_gm.buffers}) — ` + _gm.cat.slice(0, 5).map((c) => `${c.k} ${c.mb}MB x${c.n}`).join(" | "));
+  const _mw = g.mirrorWindow;
+  if (_mw && !_mw.note) rows.push(`${IND}mirror: drawn ${_mw.drawnPerFrame}/f glass ${_mw.glassPerFrame}/f renders ${_mw.rendersPerFrame}/f allocs ${_mw.allocs}` +
+    ` rung ${(_mw.quality || []).join(">")}` + (_mw.churnPerFrame ? " churn " + Object.entries(_mw.churnPerFrame).map(([k, v]) => `${k}=${v}/f`).join(" ") : ""));
   // PIPELINE COMPILES: only a compile count separates "allocate faster" from
   // "warm the programs" (run 197).
   const _w = g.gpuWork;
@@ -532,7 +693,7 @@ export function main(argv = process.argv.slice(2), env = process.env) {
   }
   if (!o.image) { console.error("census-verdict: no image (--image or IMAGE)"); return 2; }
   const { census, legs } = readArtifacts(o.dir, o.image);
-  const { rows, bad } = verdict({ image: o.image, census, legs, cap: capOverride(o.ls) });
+  const { rows, bad } = verdict({ image: o.image, census, legs, cap: capOverride(o.ls), level: lsDetail(o.ls) });
   if (o.summary) { try { fs.appendFileSync(o.summary, rows.join("\n") + "\n"); } catch (_) { /* summary is best-effort */ } }
   console.log(rows.join("\n"));
   for (const b of bad) console.error(`::error::REAL-GPU GATE: ${b}`);

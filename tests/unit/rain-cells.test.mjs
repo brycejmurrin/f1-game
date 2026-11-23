@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { fakeG } from "../helpers/fake-g.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -33,14 +34,14 @@ function boot() {
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/physics/tyre-model.js", "js/race/rain-cells.js", "js/race/weather-arc.js"])
     vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   let wa = null;
-  const G = {
+  const G = fakeG({
     raceWeather: "dry", soundOn: false, state: "race", raceT: 0, headlessMode: false,
     track: { total: TOTAL, def: { sectors: [0.3, 0.7] } }, player: { s: 0 },
     announce() {}, applyRaceSettings() {}, simSeed: () => 1, raceRound: 0, lapsTarget: 10, raceLaps: 10,
     trackWetness: () => wa.wetness(),
-    isWetRoad: () => wa.wetness() >= 0.25, isRaining: () => wa.wetness() >= 0.72, initRainDrops() {},
+    isWetRoad: () => wa.wetness() >= 0.25, initRainDrops() {},
     frame: { wetness: 0 },
-  };
+  });
   wa = ctx.WeatherArc.create(G, { isTimeTrial: () => false, isQuali: () => false });
   const at = (t) => { G.raceT = t; wa.tick(0); };
   return { G, wa, RC: ctx.RainCells, TM: ctx.TyreModel, at };
@@ -223,7 +224,8 @@ test("frame.wetness follows the CAMERA's position under a local shower", () => {
 
 test("source guards: gripMult reads the surface at the car, tread advice the lap mean; manifest order", () => {
   const game = gameSource();
-  assert.match(game, /function gripMult\(c\) \{ return TyreModel\.weatherGrip\(c \? \(c\.tread == null \? TyreModel\.treadFor\(raceWeather, trackWetness\(\)\) : c\.tread\) : 0, c && wxArc \? wxArc\.wetnessAt\(c\.s\) : trackWetness\(\)\); \}/);
+  // TyreModel.carGrip: the sentinel's tread on the lap mean; a wear-off car following the weather (#5253) on the best tread for the surface.
+  assert.match(game, /function gripMult\(c\) \{ return TyreModel\.carGrip\(c, raceWeather, trackWetness\(\), c && wxArc \? wxArc\.wetnessAt\(c\.s, c\.x\) : trackWetness\(\)\); \}/);
   assert.match(game, /function trackWetness\(\) \{ return wxArc \? wxArc\.wetness\(\)/);
   const man = read("tools/manifest.cjs");
   assert.ok(man.indexOf('"js/race/rain-cells.js"') >= 0 && man.indexOf('"js/race/rain-cells.js"') < man.indexOf('"js/race/weather-arc.js"'));

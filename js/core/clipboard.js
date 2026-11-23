@@ -55,8 +55,9 @@ const ApexClipboard = (function () {
   /**
    * Write text to the clipboard. Always resolves (never rejects) to a boolean.
    * @param {string} text
-   * @param {{ preferSync?: boolean }} [opts] preferSync: try execCommand first
+   * @param {{ preferSync?: boolean, mayFallback?: () => boolean }} [opts] preferSync: try execCommand first
    *   (tuner / free-cam panels that already selected a visible field).
+   *   mayFallback lets callers withdraw a copy before the textarea fallback takes focus.
    * @returns {Promise<boolean>}
    */
   function write(text, opts) {
@@ -70,7 +71,11 @@ const ApexClipboard = (function () {
       const syncOk = copySelection();
       return tryWriteText(payload).then((asyncOk) => syncOk || asyncOk);
     }
-    return tryWriteText(payload).then((asyncOk) => asyncOk || fallbackWrite(payload));
+    return tryWriteText(payload).then((asyncOk) => {
+      if (asyncOk) return true;
+      try { if (opts && opts.mayFallback && !opts.mayFallback()) return false; } catch (_) { return false; }
+      return fallbackWrite(payload);
+    });
   }
 
   async function read() {
@@ -80,6 +85,8 @@ const ApexClipboard = (function () {
     return navigator.clipboard.readText();
   }
 
-  return { write, read, fallbackWrite, copySelection };
+  // fallbackWrite is internal (write()'s http/WebKit path); copySelection is
+  // public for results-sheet / preferSync callers that already selected a field.
+  return { write, read, copySelection };
 })();
 Object.freeze(ApexClipboard);

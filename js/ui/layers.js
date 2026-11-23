@@ -14,12 +14,16 @@ window.UiLayers = (function () {
   const DEFS = [
     { id: "overlay", gate: false },
     // Built on demand; owns focus and driving-key gating while pieces stay draggable.
-    { id: "hud-arrange-bar" },
+    // TRANSIENT: absent until their lazy editor first opens; each builder sets its own
+    // data-esc-close (tests/unit/menu-a11y-audit.test.mjs; the live door: appearance-orientation.spec.js).
+    { id: "hud-arrange-bar", transient: true },
+    { id: "ceremony-podium", transient: true },
+    { id: "screen-arranger", transient: true },
     /* The rotate blocker: an opaque z-9000 fixed div shown MID-RACE (unique
        among these layers), self-gated by CSS media queries rather than the
        hidden attribute. gate: false is load-bearing three ways — Escape must
        still pause the race (anyOpen() stays false), arrows must not be
-       swallowed as menu nav gating, and gateEls() must not pay a per-frame
+       swallowed as menu nav gating, and input gating must not pay a per-frame
        measure for an element that never carries `hidden`. Being in DEFS at
        all is what lets TopModal's focus containment see it as top(): before
        this entry, Tab walked out of the blocker into #pausebtn and the
@@ -71,15 +75,19 @@ window.UiLayers = (function () {
   ];
 
   const LAYER_IDS = DEFS.map((d) => d.id);
+  const TRANSIENT_IDS = DEFS.filter((d) => d.transient).map((d) => d.id);
 
-  /* `:not([hidden])` belongs IN the selector rather than in a filter after it.
-     Every one of these is opened and closed with the hidden attribute, so
-     mid-race the query matches nothing and no element is ever measured. That is
-     the hot path: a held arrow key repeats keydown ~30x a second, and the
-     version that measured them all first forced a style recalc on every
-     repeat. */
-  const sel = (defs) => defs.map((d) => `#${d.id}:not([hidden])`).join(",");
-  const ALL_SEL = sel(DEFS);
+  /* Open layers by id (0.01 ms) — a 36-id comma querySelectorAll walks the whole
+     tree (3.6 ms at 5.3k nodes, uihunt4 #6) — in DOCUMENT order, which breaks
+     z-index ties (the later element paints on top) and DEFS order does not promise. */
+  function byIds(ids) {
+    const out = [];
+    for (const id of ids) { const el = document.getElementById(id); if (el) out.push(el); }
+    return out;
+  }
+  function layerEls() {
+    return byIds(LAYER_IDS).filter((el) => !el.hidden).sort((a, b) => (a.compareDocumentPosition ? (a.compareDocumentPosition(b) & 4 ? -1 : 1) : 0));
+  }
 
   function shown(el) {
     if (!el || el.hidden) return false;
@@ -188,8 +196,8 @@ window.UiLayers = (function () {
      Rank a :modal layer even at 0×0: Chromium can drop its box after the
      hidden→showModal seam, and shownLayer would then pick the screen behind. */
   /* MEMOISED like navOpen() (audit4 UB2): pad-menu's padNavPoll asks top() EVERY
-     FRAME while a pad is in a menu, and each live call is a 36-selector
-     querySelectorAll plus :modal plus a getComputedStyle per open layer. The same
+     FRAME while a pad is in a menu, and each live call is layerEls()
+     plus a :modal query plus a getComputedStyle per open layer. The same
      observer drops the memo (navDirty), a second one sees any `open` attribute in
      the document (showModal on a dynamic dialog), and a detached answer is never
      returned. Drain BEFORE computing, and return the local: draining after it
@@ -212,7 +220,7 @@ window.UiLayers = (function () {
     let bestModal = false;
     // Dynamic nested dialogs (telemetry) own focus, arrows and paging too.
     // Keep the native selector separate for engines without :modal support.
-    let layers = Array.from(document.querySelectorAll(ALL_SEL));
+    let layers = layerEls();
     try { layers = layers.concat(Array.from(document.querySelectorAll(":modal"))); } catch (_) { /* older engine */ }
     const uniq = Array.from(new Set(layers));
     // A live :modal always wins ranking. Skip non-modals entirely then so
@@ -240,35 +248,23 @@ window.UiLayers = (function () {
     return best;
   }
 
-  /* Resolved by ID rather than by document query, because THIS one is called
-     from the frame loop. Input.poll() -> pollGamepad() runs every frame (before
-     the paused gate, so on menus too) and asks anyOpen() on every one — and
-     a 24-selector comma list passed to querySelectorAll misses
-     Blink's single-selector fast paths and walks the element tree
-     instead. `#id:not([hidden])` is exactly `getElementById(id)` plus an
-     `el.hidden` test, so 24 map lookups give the identical answer without the
-     walk. Cached lazily and re-resolved whenever an entry is missing, so a
-     layer that has not been created yet is picked up as soon as it exists.
+  // Some input gates only exist while their editor is open. Cache each mounted
+  // node independently so a missing editor doesn't rebuild the shell every poll.
+  const gateIds = DEFS.filter((d) => d.gate !== false).map((d) => d.id);
+  const gateNodes = new Array(gateIds.length).fill(null);
 
-     top() deliberately keeps its querySelectorAll: it ranks by z-index and
-     relies on DOCUMENT ORDER to break ties ("the LATER element, which is the
-     one painted on top"), which DEFS order does not promise. The pad poll asks it
-     every frame, so it is memoised behind navDirty (see top()). */
-  let _gateEls = null;
-  function gateEls() {
-    if (_gateEls) {
-      for (let i = 0; i < _gateEls.length; i++) if (!_gateEls[i].isConnected) { _gateEls = null; break; }
+  function refreshGateNodes() {
+    let changed = false;
+    for (let i = 0; i < gateIds.length; i++) {
+      const previous = gateNodes[i];
+      if (previous && previous.isConnected) continue;
+      const node = document.getElementById(gateIds[i]) || null;
+      if (node === previous) continue;
+      gateNodes[i] = node;
+      navWatch(node, true);
+      changed = true;
     }
-    if (!_gateEls) {
-      const ids = DEFS.filter((d) => d.gate !== false).map((d) => d.id);
-      const els = [];
-      for (const id of ids) { const el = document.getElementById(id); if (el) els.push(el); }
-      // Only cache once every gated layer exists; before that, re-resolve each
-      // call so a late-built layer is never permanently missed.
-      if (els.length === ids.length) _gateEls = els;
-      return els;
-    }
-    return _gateEls;
+    return changed;
   }
 
   /* anyOpen() walks every gated layer and may call shownLayer() (layout).
@@ -289,19 +285,19 @@ window.UiLayers = (function () {
   const clock = () => (typeof performance !== "undefined" && performance.now ? performance.now() : 0);
 
   function anyOpenLive() {
-    const els = gateEls();
-    for (let i = 0; i < els.length; i++) {
-      const el = els[i];
-      if (el.hidden) continue;          // the cheap test, first
+    for (let i = 0; i < gateNodes.length; i++) {
+      const el = gateNodes[i];
+      if (!el || el.hidden) continue;          // the cheap test, first
       if (shownLayer(el)) return true;
     }
     return false;
   }
 
   function anyOpen() {
+    navDirty();
     if (!navObs) return anyOpenLive();
     const now = clock();
-    if (gateMemo !== null && now - gateMemoAt < NAV_MEMO_MS && !navDirty()) return gateMemo;
+    if (gateMemo !== null && now - gateMemoAt < NAV_MEMO_MS) return gateMemo;
     gateMemo = anyOpenLive();
     gateMemoAt = now;
     return gateMemo;
@@ -357,11 +353,11 @@ window.UiLayers = (function () {
   }
 
   function navDirty() {
+    // Mounts and removals can precede every observed attribute mutation.
+    if (refreshGateNodes()) navStale = true;
     if (!navObs) return true;
     if (navObs.takeRecords().length) navStale = true;
     if (openObs && openObs.takeRecords().length) navStale = true;
-    // Layers created since the last look join the watch before the memo is trusted.
-    for (const el of gateEls()) navWatch(el, true);
     navWatch(document.getElementById("overlay"), true);
     navWatch(document.getElementById("rotate-device"), true);
     const stale = navStale;
@@ -398,5 +394,5 @@ window.UiLayers = (function () {
   }
   function inRace() { return !!(raceGetter && raceGetter()); }
 
-  return { LAYER_IDS, top, anyOpen, navOpen, shown, inRace, setRaceGetter, trackDialog };
+  return { LAYER_IDS, TRANSIENT_IDS, top, anyOpen, navOpen, shown, inRace, setRaceGetter, trackDialog };
 })();

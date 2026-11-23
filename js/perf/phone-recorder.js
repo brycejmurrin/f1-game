@@ -74,7 +74,10 @@ const PhoneRecorder = (function () {
       const v = o[k];
       if (typeof v === "number" && Number.isFinite(v)) { out[prefix + k] = r2(v); n++; }
       else if (typeof v === "boolean") { out[prefix + k] = v; n++; }
-      else if (v && typeof v === "object" && !Array.isArray(v) && depth < 1) numericLeaves(v, out, prefix + k + ".", depth + 1);
+      else if (v && typeof v === "object" && !Array.isArray(v) && depth < 1) {
+        numericLeaves(v, out, prefix + k + ".", depth + 1);
+        n = Object.keys(out).length;
+      }
     }
     return out;
   }
@@ -85,7 +88,6 @@ const PhoneRecorder = (function () {
     return s[s.length >> 1];
   }
 
-  // ---- live readers (every one guarded: the recorder must never throw) -----
   function probeGl() {
     const out = { ok: false };
     if (typeof document === "undefined") return out;
@@ -196,10 +198,9 @@ const PhoneRecorder = (function () {
     return env;
   }
 
-  // ---- the recorder: a state machine driven by frame(nowMs) ----------------
   function create(env) {
     env = env || liveEnv();
-    let on = false; let rec = null; let quick = false;
+    let on = false; let rec = null; let quick = false; let owner;
     let t0 = 0; let lastSampleAt = 0; let framesSince = 0; let totalFrames = 0;
     let lastFrameAt = 0; let deltas = [];
     let lastGateSample = null, lastRateKey = null;
@@ -244,6 +245,7 @@ const PhoneRecorder = (function () {
     }
     function start(opts) {
       if (on) return false;
+      owner = opts && opts.owner;
       quick = !!(opts && opts.quick);
       if (env.spans) env.spans(true);
       on = true; t0 = env.now(); lastSampleAt = t0; framesSince = 0; totalFrames = 0; lastFrameAt = 0; deltas = [];
@@ -255,8 +257,10 @@ const PhoneRecorder = (function () {
       sample("start");
       return true;
     }
-    function stop() {
-      if (!on) return false;
+    function stop(requester) {
+      // A manual STOP or SHARE can end any recording. A soak may end only its own.
+      if (!on || (requester !== undefined && requester !== owner)) return false;
+      owner = undefined;
       sample("stop");
       rec.endedAt = new Date(env.wall()).toISOString();
       rec.durationMin = r2((env.now() - t0) / 60000);
@@ -289,7 +293,7 @@ const PhoneRecorder = (function () {
     }
     function adopt(txt) {   // a previous recording read back from storage
       const o = safe(() => JSON.parse(txt), null);
-      if (!o || o.schema !== SCHEMA || on) return false;
+      if (!o || o.schema !== SCHEMA || !Array.isArray(o.samples) || !Array.isArray(o.events) || on) return false;
       rec = o; return true;
     }
     // A finished sub-run (GPU TEST, gpu-test-run.js) files its result on the record; SHARE carries it.
@@ -302,7 +306,6 @@ const PhoneRecorder = (function () {
     };
   }
 
-  // ---- SHARE / COPY --------------------------------------------------------
   function fileName(rec) {
     const stamp = String((rec && rec.startedAt) || "").replace(/[-:]/g, "").replace(/\..*$/, "").replace("T", "-");
     return "apex26-soak-" + (stamp || "run") + ".json";
@@ -310,6 +313,7 @@ const PhoneRecorder = (function () {
   // The panel keeps one fallback link. Replacing it must release the old
   // recording blob; keep the current URL usable, and allow the browser the
   // same 10 s read window as the other export flows before revoking an old one.
+  /** @type {(() => void) | null} */
   let releaseDownload = null;
   function download(text, name, d) {
     const doc = (d && d.doc) || (typeof document !== "undefined" ? document : null);
@@ -363,7 +367,6 @@ const PhoneRecorder = (function () {
     return Promise.resolve(viaTextarea());
   }
 
-  // ---- panel + REC badge ---------------------------------------------------
   let _rec = null; let _raf = 0; let _badge = null; let _ui = null; let _lastBadgeSec = -1;
 
   function recorder() { return _rec || (_rec = create()); }
@@ -512,10 +515,10 @@ const PhoneRecorder = (function () {
   init();
 
   return {
-    KEY, SCHEMA, QUICK_MS, HOWTO_AB, HOWTO_GPU, SAMPLE_MS, WINDOW_FRAMES, CADENCE_FRAMES, MAX_SAMPLES, HOWTO,
+    SCHEMA, SAMPLE_MS, WINDOW_FRAMES, CADENCE_FRAMES, MAX_SAMPLES, HOWTO,
     create, liveEnv, numericLeaves, fileName, share, copy, download, mount,
-    start: () => { const ok = recorder().start(); kick(); paintBadge(); paintUI(); return ok; },
-    stop: () => { const ok = recorder().stop(); paintBadge(); paintUI(); return ok; },
+    start: (owner) => { const ok = recorder().start({ owner }); kick(); paintBadge(); paintUI(); return ok; },
+    stop: (owner) => { const ok = recorder().stop(owner); paintBadge(); paintUI(); return ok; },
     attach: (key, val) => recorder().attach(key, val),
     isOn: () => recorder().isOn(), json: () => recorder().serialize(),
   };

@@ -4,9 +4,26 @@
 import { test, expect } from "@playwright/test";
 import { BOOT_MS, test as journeyTest } from "../helpers/fixtures.js";
 import { pinFactorySeat } from "../helpers/factory-seat.js";
+import { saveSharedCard } from "../helpers/share-card.js";
 import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
+import { settleLayout } from "../../tools/ui/explorer/transitions.mjs";
 
 const LANDSCAPE = { width: 844, height: 390 };
+
+// #3892: the armed label must fit its own cell — one box, nothing clipped, and
+// no overlap with any other pause button (the old "RESTART — TAP AGAIN" wrapped
+// and its second line hid under the next row at 844x390).
+const armedFit = (page, id) => page.evaluate((id) => {
+  const b = document.getElementById(id);
+  const r = b.getBoundingClientRect();
+  // Every visible pause button: STRATEGY sits in a nested row, not the stack.
+  const hit = [...document.querySelectorAll("#pausemenu button")]
+    .filter((o) => o !== b && !o.contains(b) && !b.contains(o) && o.checkVisibility())
+    .map((o) => ({ id: o.id, r: o.getBoundingClientRect() }))
+    .filter(({ r: o }) => o.left < r.right - 0.5 && r.left < o.right - 0.5 && o.top < r.bottom - 0.5 && r.top < o.bottom - 0.5)
+    .map((o) => o.id);
+  return { clipped: b.scrollHeight > b.clientHeight || b.scrollWidth > b.clientWidth, hit };
+}, id);
 
 journeyTest.describe("Practice return journeys — phone landscape", () => {
   // Keep literal test(...) calls visible to the static CI budget counter.
@@ -28,6 +45,109 @@ journeyTest.describe("Practice return journeys — phone landscape", () => {
   test.afterEach(async ({ pageErrors, consoleLines }) => {
     expect(pageErrors).toEqual([]);
     expect(consoleLines.filter(line => line.startsWith("error:"))).toEqual([]);
+  });
+
+  test("personal Daily history, practice pathway and energy review are reachable by touch", async ({ page }, testInfo) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    await page.evaluate(({ today, yesterday }) => localStorage.setItem("apex26.daily.v1", JSON.stringify({
+      days: { [today]: { best: 70, classes: { standard: { best: 71.2 }, open: { best: 70 } } }, [yesterday]: { best: 72 } },
+      streak: { count: 2, last: today },
+    })), { today, yesterday });
+    await page.reload();
+    await page.waitForFunction(() => !!window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.headless(true));
+    expect(await page.evaluate('AppearanceOpts.setHelp("off")')).toBe("off");
+    await expect(page.locator("html")).toHaveAttribute("data-menu-help", "off");
+    const homeGeometry = await page.locator("#menu-buttons").evaluate(el => ({
+      height: el.clientHeight, scrollHeight: el.scrollHeight,
+      doors: [...el.querySelectorAll("button")].map(node => [node.id, node.offsetWidth, node.offsetHeight]),
+    }));
+    expect(homeGeometry.scrollHeight, "Home still fits before opening personal history").toBeLessThanOrEqual(homeGeometry.height + 1);
+    await expect(page.locator("#menu-buttons #daily-history")).toHaveCount(0);
+    await page.locator("#mb-saves").tap();
+    await expect(page.locator("#pm-panel-files")).toBeVisible();
+    await expect(page.locator("#daily-history")).toBeVisible();
+    await page.locator("#daily-history > summary").tap();
+    await expect(page.locator("html")).toHaveAttribute("data-menu-help", "off");
+    await expect(page.locator("#daily-history-list")).toBeVisible();
+    await expect(page.locator("#daily-history")).toContainText(today);
+    await expect(page.locator("#daily-history")).toContainText(yesterday);
+    await expect(page.locator("#daily-history")).toContainText("1:11.200");
+    await expect(page.locator("#daily-history")).toContainText("legacy / mixed classes");
+    const dailyFit = await page.locator("#daily-history").evaluate(el => ({
+      clipped: el.scrollWidth > el.clientWidth + 1,
+      tapHeight: el.querySelector("summary").getBoundingClientRect().height,
+    }));
+    expect(dailyFit.clipped).toBe(false);
+    expect(dailyFit.tapHeight).toBeGreaterThanOrEqual(44);
+    await testInfo.attach("daily-history-phone", { body: await page.screenshot(), contentType: "image/png" });
+    await page.locator("#daily-history > summary").tap();
+    await page.locator("#pm-settings-close").tap();
+    await expect(page.locator("#pmsettings")).toBeHidden();
+    expect(await page.locator("#menu-buttons").evaluate(el => ({
+      height: el.clientHeight, scrollHeight: el.scrollHeight,
+      doors: [...el.querySelectorAll("button")].map(node => [node.id, node.offsetWidth, node.offsetHeight]),
+    })), "Saves and Data must return the same Home geometry").toEqual(homeGeometry);
+
+    await page.locator("#mb-practice").tap();
+    await page.locator("#sel-go").tap();
+    await page.locator("#rs-go").tap();
+    await page.waitForFunction(() => window.__apex.info().state === "race", null, { polling: 100, timeout: BOOT_MS });
+    await expect(page.locator("#loading")).toBeHidden();
+    await page.locator("#pausebtn").tap();
+    await page.locator("#pm-practice").tap();
+    await page.locator("#pm-practice-pathway > summary").tap();
+    await expect(page.locator("#pm-practice-pathway")).toContainText("not verified drill completion");
+    await page.locator("#pm-practice-pathway").getByRole("button", { name: "CHOOSE 2. Brake release into a turn", exact: true }).tap();
+    await expect(page.locator("#pm-drill-sel")).toHaveValue("trail");
+    await page.locator("#pm-practice-pathway").getByRole("checkbox").first().check();
+    await expect(page.locator("#pm-practice-pathway").getByRole("checkbox").first()).toBeChecked();
+    await testInfo.attach("practice-pathway-phone", { body: await page.screenshot(), contentType: "image/png" });
+    await page.locator("#pm-settings-close").tap();
+    await page.locator("#pm-review").tap();
+    await page.locator("#pm-last-lap-energy > summary").tap();
+    await expect(page.locator("#pm-last-lap-energy")).toContainText("Complete one full clean lap");
+    await testInfo.attach("energy-review-phone", { body: await page.screenshot(), contentType: "image/png" });
+  });
+
+  // ROW 3 (2026-11-10): at 844x390 the full brief filled the hero section, so
+  // the still flexed to nothing — #sel-map-btn painted at y 330-405 against a
+  // 390 viewport, the TURNS / LENGTH band rose over the GOAL row and the foot
+  // cut it. The section never scrolls on the phone card, so every part must be
+  // on screen, above the foot, and GOAL clear of the numbers.
+  test("the Practice picker fits the phone: map, GOAL and the numbers on screen, apart", async ({ page }) => {
+    await page.locator("#mb-practice").tap();
+    await expect(page.locator("#select-title")).toHaveText("PRACTICE");
+    await expect(page.locator("#practice-brief")).toBeVisible();
+    await expect(page.locator("#practice-goal-row")).toBeVisible();
+    await expect(page.locator("#sel-inner")).toHaveAttribute("data-density", "compact");
+    const stats = ["#sel-preview-meta > div:nth-child(2)", "#sel-preview-meta > div:nth-child(3)"];
+    for (const sel of stats) await expect(page.locator(sel)).toBeVisible();
+    const settled = await page.evaluate(settleLayout, { root: "#sel-inner" });
+    expect(settled.stable, "the picker layout settled").toBe(true);
+    const fit = await page.evaluate((stats) => {
+      const box = (sel) => {
+        const r = document.querySelector(sel).getBoundingClientRect();
+        return { sel, top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+      };
+      return {
+        vh: innerHeight, vw: innerWidth,
+        foot: box("#sel-inner > .sheet-foot"),
+        map: box("#sel-map-btn"), goal: box("#practice-goal-row"),
+        stats: stats.map(box),
+      };
+    }, stats);
+    const overlap = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+    for (const r of [fit.map, fit.goal, ...fit.stats]) {
+      expect(r.top, `${r.sel} top inside the viewport`).toBeGreaterThanOrEqual(0);
+      expect(r.bottom, `${r.sel} bottom inside the viewport`).toBeLessThanOrEqual(fit.vh);
+      expect(r.bottom, `${r.sel} clear of the foot`).toBeLessThanOrEqual(fit.foot.top + 0.5);
+      expect(r.left, `${r.sel} left inside the viewport`).toBeGreaterThanOrEqual(0);
+      expect(r.right, `${r.sel} right inside the viewport`).toBeLessThanOrEqual(fit.vw);
+    }
+    for (const s of fit.stats) expect(overlap(fit.goal, s), `GOAL row overlaps ${s.sel}`).toBe(false);
+    expect(fit.goal.bottom, "GOAL sits above the still").toBeLessThanOrEqual(fit.map.top + 0.5);
   });
 
   test("cancelling Practice twice leaves ordinary TT and Race pickers usable", async ({ page }) => {
@@ -77,9 +197,11 @@ journeyTest.describe("Practice return journeys — phone landscape", () => {
       // It distinguishes a real restart from merely dismissing the pause card.
       await page.evaluate(() => window.__apex.setLap(2));
       await page.locator("#pm-restart").tap();
-      await expect(page.locator("#pm-restart")).toHaveText("RESTART — TAP AGAIN");
+      await expect(page.locator("#pm-restart")).toHaveText("TAP AGAIN");
+      expect(await armedFit(page, "pm-restart")).toEqual({ clipped: false, hit: [] });
       expect(await page.evaluate(() => window.__apex.timing().lap)).toBe(2);
       await expect(page.locator("#pausemenu")).toBeVisible();
+      await page.waitForFunction(() => PauseOpts.armAge() >= PauseOpts.ARM_MIN_MS, null, { polling: 100, timeout: 5000 });   // a younger real tap is a double tap
       await page.locator("#pm-restart").tap();
       await expect.poll(() => page.evaluate(() => window.__apex.timing()?.lap), { timeout: BOOT_MS }).toBe(0);
       await expect(page.locator("#pausemenu")).toBeHidden();
@@ -95,9 +217,11 @@ journeyTest.describe("Practice return journeys — phone landscape", () => {
 
       await page.locator("#pausebtn").tap();
       await page.locator("#pm-quit").tap();
-      await expect(page.locator("#pm-quit")).toHaveText("QUIT TO MENU — TAP AGAIN");
+      await expect(page.locator("#pm-quit")).toHaveText("TAP AGAIN");
+      expect(await armedFit(page, "pm-quit")).toEqual({ clipped: false, hit: [] });
       await expect(page.locator("#pausemenu")).toBeVisible();
       await expect(page.locator("#overlay")).toBeHidden();
+      await page.waitForFunction(() => PauseOpts.armAge() >= PauseOpts.ARM_MIN_MS, null, { polling: 100, timeout: 5000 });   // a younger real tap is a double tap
       await page.locator("#pm-quit").tap();
       await expect(page.locator("#overlay")).toBeVisible();
       for (const selector of ["#pausemenu", "#loading", "#results", "#race-settings", "#select"])
@@ -160,6 +284,25 @@ test.describe("Time Trial — mode flags", () => {
     await parkUntilHudReadable(page);
     await expect(page.locator("#hud-pos")).toHaveText("TT");
   });
+});
+
+test("opening a shared lap stages a plausible rival and refuses an impossible one", async ({ page }) => {
+  // Legacy uncompressed links omit the optional hash. Both links cover Monza;
+  // only the claimed time and corresponding timestamps change.
+  function monzaLink(time) {
+    const fractions = Array.from({ length: 11 }, (_, i) => i / 10);
+    const body = { v: 1, kind: "ghost", track: "monza", time,
+      t: fractions.map(f => f * time), s: fractions.map(f => Math.round(f * 5793)), x: fractions.map(() => 0) };
+    return "ghost=APXG1.p." + Buffer.from(JSON.stringify(body)).toString("base64url");
+  }
+  await page.goto("/#" + monzaLink(10));
+  await expect(page).toHaveURL(url => !url.hash, { timeout: BOOT_MS });
+  await expect(page.locator("#mb-tt")).toBeVisible();
+  expect(await page.evaluate(() => GhostShare.guest())).toBeNull();
+
+  await page.evaluate(hash => { location.hash = hash; }, monzaLink(100));
+  await expect(page.locator("#select")).toBeVisible();
+  expect(await page.evaluate(() => GhostShare.hasGuest("monza") && GhostShare.guest()?.ghost.time)).toBe(100);
 });
 
 test.describe("Time Trial — daily picker flow", () => {
@@ -250,11 +393,11 @@ async function ghostSaved(page, trackId) {
       // Run the real countdown from the grid, then cross once to begin the
       // flying lap. Sampling staged points makes the regression deterministic.
       window.__apex.step(1 / 60, 480);
-      window.__apex.jump(0.999, 80, 0);
+      window.__apex.jump(0.999, 80, 0, { keepLap: true });
       window.__apex.step(1 / 60, 10);
 
       for (const frac of [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.999]) {
-        window.__apex.jump(frac, 80, 0);
+        window.__apex.jump(frac, 80, 0, { keepLap: true });
         window.__apex.step(1 / 60, frac === 0.999 ? 10 : 4);
       }
 
@@ -307,7 +450,7 @@ test.describe("Time Trial — sector splits", () => {
     await enterTT(page);
     const result = await page.evaluate(() => {
       window.__apex.go();
-      window.__apex.jump(0.999, 80, 0);
+      window.__apex.jump(0.999, 80, 0, { keepLap: true });
       window.__apex.step(1 / 60, 10);
       return {
         timing: window.__apex.timing(),
@@ -327,7 +470,7 @@ test.describe("Time Trial — sector splits", () => {
       window.__apex.go();
       // Already on a flying lap — the S3→S1 wrap must stamp the split.
       window.__apex.setLap(1);
-      window.__apex.jump(0.999, 80, 0);
+      window.__apex.jump(0.999, 80, 0, { keepLap: true });
       window.__apex.step(1 / 60, 10);
       return {
         timing: window.__apex.timing(),
@@ -348,6 +491,14 @@ test.describe("Time Trial — sector splits", () => {
     // announces anything — the banner was removed as self-evident — but it still
     // teleports the car, which would move it off the boundary this test needs.)
     await page.evaluate(async () => {
+      // LATCH the flash: .sec-flash lives ~3 HUD ticks (~300 ms, _secFlash
+      // 0.35 at -0.1 a tick), short enough for a polled read to miss. A
+      // MutationObserver sees every class change on the strip.
+      window.__secFlashSeen = false;
+      const strip = document.getElementById("hud-sectors");
+      if (strip) new MutationObserver(() => {
+        if (strip.querySelector(".sec-flash, .sec-flash-pb, .sec-flash-slow")) window.__secFlashSeen = true;
+      }).observe(strip, { subtree: true, attributes: true, attributeFilter: ["class"] });
       window.__apex.headless(true);
       window.__apex.go();
       const sec = window.__apex.info().sectors || [1 / 3, 2 / 3];
@@ -362,13 +513,54 @@ test.describe("Time Trial — sector splits", () => {
       window.__apex.headless(false);
     });
 
-    const split = await page.evaluate(() => {
-      const last = window.__apex.sectorState().last;
-      const flash = document.querySelector("#hud-sectors .sec-flash, #hud-sectors .sec-flash-pb");
-      return { s1: last[0], flashed: !!flash };
-    });
+    const split = await page.evaluate(() => ({ s1: window.__apex.sectorState().last[0] }));
     expect(split.s1).not.toBeNull();
     expect(split.s1).toBeGreaterThan(0);
+    // The strip must FLASH for the crossing (`flashed` used to be computed and
+    // never asserted). game.js flashes a sector of >= 2 s on a flying lap
+    // (setLap(1) above; VM-measured S1 2.8 s). A first version polled for the
+    // class and missed its ~300 ms life on CI (run 42766757935); the observer
+    // latch installed before the crossing cannot.
+    expect(split.s1, "S1 under the 2 s flash gate — no flash is due").toBeGreaterThanOrEqual(2);
+    // The HUD paints only from the rAF loop, and updateHud returns early while
+    // G.frozen (js/ui/hud.js); act() steps physics without clearing it. So the
+    // page must be live for the flash to paint: record what the crossing left,
+    // unfreeze, and give rAF time with the observer armed.
+    const hudState = await page.evaluate(() => ({
+      frozen: window.__apex.freeze(),
+      hudHidden: !!(document.getElementById("hud") && document.getElementById("hud").hidden)
+        || document.body.classList.contains("hud-hidden"),
+      docHidden: document.hidden === true,
+      // The seam (#5296 GameHud.secFlash + #5339 __apex.hudSecFlash): calls = flashSector
+      // calls, painted = HUD ticks that set .sec-flash (asserted after the unfreeze below).
+      secFlash: typeof window.__apex.hudSecFlash === "function" ? window.__apex.hudSecFlash() : "absent",
+    }));
+    // Gate on frames DRAWN, not wall time (as results-flow does, #5442): CI run
+    // 42981194015 saw calls 1 / painted 0 / flash still 0.35 after a 5 s wall
+    // window, i.e. no HUD tick at all. The HUD ticks once per drawn race frame
+    // and the flash lives 3 ticks (0.35 at -0.1), so 8 drawn frames with no
+    // paint is a real HUD miss; fewer means the box drew nothing (not a verdict).
+    const frame0 = await page.evaluate(() => window.__apex.cameraState().renderFrame);
+    await page.evaluate(() => window.__apex.freeze(false));
+    await page.waitForFunction((f0) => {
+      const s = window.__apex.hudSecFlash();
+      return (s && s.painted >= 1) || window.__apex.cameraState().renderFrame >= f0 + 8;
+    }, frame0, { polling: 100, timeout: 0 });
+    const flashed = await page.evaluate(() => window.__secFlashSeen === true);
+    const [secFlashAfter, frame1] = await page.evaluate(() => [
+      typeof window.__apex.hudSecFlash === "function" ? window.__apex.hudSecFlash() : "absent",
+      window.__apex.cameraState().renderFrame]);
+    test.info().annotations.push({ type: "sector-flash-latched", description: JSON.stringify({ flashed, hudState, secFlashAfter, frame0, frame1 }) });
+    // The flash is asserted on the seam (W32 row 10): GameHud.secFlash()
+    // counts flashSector() calls and the HUD ticks that set .sec-flash, in the
+    // same branch that toggles the class. calls 0 = game.js never flashed the
+    // crossing; painted 0 = flashed but the HUD never painted it (both game
+    // bugs). The DOM latch stays an annotation only: before the seam it latched
+    // nothing on CI (run 42827414372, job 129870057425), and a miss with
+    // painted > 0 points at the observer, not the game.
+    expect(secFlashAfter, "__apex.hudSecFlash() seam missing").toEqual(expect.objectContaining({ last: 0 }));
+    expect(secFlashAfter.calls, "game.js never called hud.flashSector for the S1 crossing").toBeGreaterThanOrEqual(1);
+    expect(secFlashAfter.painted, `flashSector ran but the HUD never painted .sec-flash in ${frame1 - frame0} drawn frames`).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -387,6 +579,21 @@ test.describe("Time Trial — results panel", () => {
     await expect(page.locator("#results")).toBeVisible({ timeout: 5000 });
     const title = await page.locator("#results-title").innerText();
     expect(title).toContain("TIME TRIAL");
+  });
+
+  test("a personal-best ghost puts a SHARE CARD chip on TT results (#1547)", async ({ page }) => {
+    await enterTT(page);
+    await page.evaluate(() => window.__apex.park(0));
+    // A synthetic 80 s lap at 20 Hz becomes the stored best (Ghost is a page global).
+    await page.evaluate(() => {
+      Ghost.startLap();
+      const length = window.__apex.info().total;
+      for (let i = 0; i <= 1600; i++) Ghost.record(i / 20, length * i / 1600, 0);
+      Ghost.finishLap(80, null);
+    });
+    await page.evaluate(() => window.__apex.finishRace());
+    await expect(page.locator("#results")).toBeVisible({ timeout: 5000 });
+    await saveSharedCard(page, "#res-ghost-card", /^apex26-lap-[a-z0-9-]+\.png$/);
   });
 
   test("TRY AGAIN button shown in TT results", async ({ page }) => {
@@ -423,7 +630,10 @@ test.describe("Time Trial — results panel", () => {
       Ghost.finishLap(75);
       window.__apex.finishRace();
     });
+    // Arm-then-confirm (#5672): the first tap only arms; the second clears.
     await page.getByRole("button", { name: "✕ CLEAR GHOST" }).click();
+    await expect(page.locator("#res-ghost-clear")).toHaveText("TAP AGAIN TO CLEAR");
+    await page.locator("#res-ghost-clear").click();
     expect(await page.evaluate(() => GameStore.ttBoard("monza",null).length)).toBe(1);
     await page.locator("#res-next").click();
     await page.evaluate(() => window.__apex.park(0.1));
@@ -519,6 +729,15 @@ for (const device of [
       await press("#pm-settings-close");
       await sessionPage("pm-review");
       await expect(page.locator("#pm-coach-summary")).toContainText(/no tips|0 tips/i);
+      const trace = page.locator('#pm-driving-trace');
+      await expect(trace).toBeHidden();
+      await press('#pm-technical-data > summary');
+      await expect(trace).toBeVisible();
+      await trace.scrollIntoViewIfNeeded();
+      const fits = await trace.evaluate(e => e.scrollWidth <= e.clientWidth + 1 && e.scrollHeight <= e.clientHeight + 1);
+      expect(fits).toBe(true);
+      await press('#pm-technical-data > summary');
+      await expect(trace).toBeHidden();
       await press("#pm-settings-close");
       await expect(page.locator("#pausemenu")).toBeVisible();
       await press("#pm-howto");
@@ -553,14 +772,22 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
       await document.fonts.ready;
     }, device.safe);
     const press = async selector => device.touch ? page.locator(selector).tap() : page.locator(selector).click();
-    const rows = [];
+    const rows = [], helpSettlements = [];
 
     try {
-      for (const pct of [40,80,100,130,150,200]) {
+      // A PHONE'S UI SIZE STOPS AT 50 % (#5452; 70 under #5235. js/ui/scale.js phoneUi: coarse pointer and a short side
+      // <= 500 px); a tablet and a desktop keep the full 40 %. The slider's own `min` is the contract, so it is asserted.
+      const uiMin = device.touch && Math.min(device.viewport.width, device.viewport.height) <= 500 ? 50 : 40;
+      for (const pct of [uiMin,80,100,130,150,200]) {
         await press('#mb-settings'); await press('#pm-open-appearance');
-        await page.locator('#pm-uiscale').evaluate((e,n) => { e.value=String(n); e.dispatchEvent(new Event('input',{bubbles:true})); }, pct);
+        await expect(page.locator('#pm-uiscale'), `${device.name}: UI SIZE minimum`).toHaveAttribute('min', String(uiMin));
+        await page.locator('#pm-uiscale').evaluate((e,n) => { e.value=String(n); e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true})); }, pct);
         await expect(page.locator('#pm-uiscale')).toHaveValue(String(pct));
-        await press('#pm-settings-close'); await press('#pm-open-driving');
+        await press('#pm-settings-close');
+        const drivingDoor = page.locator('#pm-open-driving');
+        await expect(drivingDoor).toBeVisible();
+        await drivingDoor.scrollIntoViewIfNeeded();
+        await press('#pm-open-driving');
         await expect(page.locator('#pm-panel-driving')).toBeVisible();
         await page.waitForFunction(() => document.getElementById('pmsettings-inner').dataset.shape, null, {polling:100});
         // The shipped coach default is generated policy and may be ON. This
@@ -600,54 +827,19 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         expect(m.docOverflow).toBeLessThanOrEqual(1); expect(m.paneOverflow).toBeLessThanOrEqual(1);
         expect(m.paneHeight).toBeGreaterThan(70);
         if ([100,150,200].includes(pct)) await page.screenshot({path:info.outputPath(`driving-${pct}.png`)});
-        // Search retains access to unavailable session controls from title,
-        // where their disabled state and explanation still need to fit.
         await press('#pm-settings-close');
-        const searchPage = async id => {
-          await page.getByRole('searchbox', {name:'Find a setting'}).fill(id);
-          await press('[data-setting-result="'+id+'"]');
-        };
-        for (const [id, route] of [['pm-practice-panel','practice'],['pm-pit-panel','strategy']]) {
-          await searchPage(route);
-          await expect(page.locator('#'+id)).toHaveAttribute('open','');
-          if (id === 'pm-practice-panel') {
-            await expect(page.locator('#pm-practice-set')).toBeVisible();
-            await expect(page.locator('#pm-practice-set')).toBeDisabled();
-            // NOT the exact wording. This is a LAYOUT cell — the assertions here
-            // exist so an overflow measurement cannot pass on hidden content —
-            // and the sentence itself belongs to the practice feature, which
-            // rewrote it when checkpoints stopped being Time-Trial-only ("solo
-            // Time Trial" became "a Time Trial, or … armed for practice"). What
-            // this test needs is that the DISABLED case still explains itself,
-            // so match the branch, not the prose.
-            await expect(page.locator('#pm-practice-state')).toContainText(/checkpoints are available/i);
-            await page.locator('#pm-practice-state').scrollIntoViewIfNeeded();
-          } else {
-            await expect(page.locator('#pm-pit-choice-sel')).toBeVisible();
-            await expect(page.locator('#pm-pit-choice-sel')).toBeDisabled();
-            await page.locator('#pm-pit-help').scrollIntoViewIfNeeded();
-          }
-          const expanded=await measure('#pmsettings');
-          expect(expanded.overflow,`${id} at ${pct}%`).toEqual([]);
-          expect(expanded.smallTargets,`${id} at ${pct}%`).toEqual([]);
-          expect(expanded.paneOverflow).toBeLessThanOrEqual(1);
-          await press('#pm-settings-close');
-          await expect(page.locator('#pm-settings-index')).toBeVisible();
+        const search = page.getByRole('searchbox', {name:'Find a setting'});
+        for (const route of ['practice', 'strategy', 'review']) {
+          await search.fill(route);
+          await press('[data-setting-result="'+route+'"]');
+          await expect(page.locator('[data-settings-search] [role="status"]')).toContainText(/pause during a session/i);
+          await expect(page.locator('#pm-panel-'+route)).toBeHidden();
+          await expect(search).toBeVisible();
+          const results = await measure('#pmsettings');
+          expect(results.overflow, route+' at '+pct+'%').toEqual([]);
+          expect(results.smallTargets, route+' at '+pct+'%').toEqual([]);
+          expect(results.paneOverflow).toBeLessThanOrEqual(1);
         }
-        await searchPage('review');
-        await expect(page.locator('#pm-coach-summary')).toContainText(/no tips|0 tips/i);
-        await expect(page.locator('#pm-session-review')).toHaveAttribute('open','');
-        await expect(page.locator('#pm-driving-trace')).toBeHidden();
-        await expect(page.locator('#pm-technical-data')).not.toHaveAttribute('open','');
-        await press('#pm-technical-data > summary');
-        await expect(page.locator('#pm-driving-trace')).toBeVisible();
-        await page.locator('#pm-driving-trace').scrollIntoViewIfNeeded();
-        const action=await page.locator('#pm-driving-trace').evaluate(e=>({w:e.clientWidth,sw:e.scrollWidth,h:e.clientHeight,sh:e.scrollHeight}));
-        expect(action.sw).toBeLessThanOrEqual(action.w+1); expect(action.sh).toBeLessThanOrEqual(action.h+1);
-        await press('#pm-technical-data > summary');
-        await expect(page.locator('#pm-driving-trace')).toBeHidden();
-        await press('#pm-settings-close');
-        await expect(page.locator('#pm-driving-trace')).toBeHidden();
         await page.getByRole('searchbox', {name:'Find a setting'}).fill(''); await expect(page.locator('#pm-settings-index')).toBeVisible();
         await press('#pm-settings-close'); await expect(page.locator('#pmsettings')).toBeHidden();
         // phone-browser-landscape + UI SIZE 200%: #mb-help can resolve while its
@@ -658,19 +850,15 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         await expect(page.locator('#overlay')).toBeVisible();
         await page.locator('#mb-help').scrollIntoViewIfNeeded();
         await press('#mb-help');
-        // The sheet reopens with the shape/density it had at the PREVIOUS UI
-        // SIZE; SheetShape reclassifies it a frame or two later (fit cap, then
-        // density). An anchor jump taken before that lands in the old layout,
-        // and the reflow then carries #htp-driving out of the pane (desktop
-        // 200%, run 38985530584: wide rail -> compact strip, ratio 0). Jump
-        // only once a classify pass changes nothing.
-        await page.waitForFunction(() => {
-          const el = document.getElementById('howtoplay-inner');
-          if (!el || !el.dataset.shape || !el.dataset.density) return false;
-          const before = el.dataset.shape + '|' + el.dataset.density;
-          window.SheetShape.reclassify();
-          return before === el.dataset.shape + '|' + el.dataset.density;
-        }, null, {polling:100, timeout:10000});
+        // At 200%, the side rail can become a chip strip after reopening.
+        // Observed pane width changed 900 -> 1252 and scroll extent 12872 ->
+        // 8506 (report44573). One unchanged shape/density pass did not establish
+        // a quiet reading pane. Observe actual geometry before the real click;
+        // the bounded observer does not force classification or move the target.
+        const settlement = await page.evaluate(settleLayout, { root: '#howtoplay .pane' });
+        helpSettlements.push({ pct, settlement });
+        expect(settlement.stable, `Help reading pane at ${pct}%`).toBe(true);
+        expect(settlement.truncated, `Help reading pane sample at ${pct}%`).toBe(false);
         await press('#htp-contents a[href="#htp-driving"]');
         await expect(page.locator('#htp-driving')).toBeInViewport();
         await expect(page.locator('#htp-contents a[href="#htp-driving"]')).toHaveAttribute('aria-current','true');
@@ -685,6 +873,7 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         await press('#htp-close'); await expect(page.locator('#overlay')).toBeVisible();
       }
     } finally {
+      await info.attach('help-pane-settlements.json',{body:JSON.stringify(helpSettlements,null,2),contentType:'application/json'});
       await info.attach('zoom-measurements.json',{body:JSON.stringify(rows,null,2),contentType:'application/json'});
     }
     expect(errors).toEqual([]);

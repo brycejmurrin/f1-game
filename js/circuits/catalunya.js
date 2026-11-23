@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "catalunya",
+    revision: 2,
     classic: true,
     reverse: false,
     // The trace opens on the ~990 m main straight (measured, curvature < 0.0008 from frac 0.935), and its first vertex IS the
@@ -46,32 +47,38 @@
       runoff:        [0.62, 0.48, 0.32],
       sunDir:        [0.40, 0.70, 0.28],
     },
+    // OpenF1 2024 Spanish qualifying, session 9535, Norris lap 11. Relative height
+    // every 1/64 of a closed XY racing lap. Two overlapping knot intervals smooth
+    // the position feed. Half-amplitude weights sum to one around the lap.
+    // F1 reports 29.6 m between the T1 low point and the crest after T12.
     elevations: [
-      { s: 0.2876, halfM: 380, rise: 7.0 },    // climb through Renault/Repsol
-      { s: 0.5476, halfM: 420, rise: 11.0 },   // high ground before Campsa
-      { s: 0.7276, halfM: 400, rise: -9.0 },   // Campsa drop into La Caixa
-      { s: 0.9676, halfM: 360, rise: -6.0 },   // dip along the pit straight
-    ],
+      0, 0.1, -0, -0, -0.3, -1.1, -2.5, -4.2, -5.7, -6.6, -7.4, -8.3, -7.3, -4.4, -1.1, 1.9,
+      4.4, 5.9, 6.9, 8, 9, 10, 11, 11.7, 12.8, 13.1, 12.2, 10.8, 8.8, 5.3, 0.8, -2.8,
+      -5.2, -5.7, -4.6, -2.1, 2.2, 6.5, 10.8, 14.4, 16.4, 16.3, 15.5, 14.7, 13.8, 12.9, 12.1, 11.3,
+      11.5, 13.1, 15.8, 18.7, 20.7, 21.5, 20.6, 17.9, 14.1, 10.5, 7, 4.5, 2.9, 1.9, 0.8, 0.1,
+    ].map((height, i) => ({ s: i / 64, halfM: 4653 / 32, rise: height / 2 })),
     hwZones: [
       { s0: 0.290, s1: 0.335, hw: 6.4, ease: 0.012 },  // Seat / Wurth chicane
       { s0: 0.660, s1: 0.705, hw: 6.3, ease: 0.012 },  // La Caixa hairpin
       { s0: 0.9504, s1: 0.9946, hw: 6.5, ease: 0.012 },  // final chicane complex (index; arc 0.905-0.955)
     ],
     bankZones: [
-      { turn: 2, angleDeg: 3.5, widthM: 120 },   // Elf (T1); re-seated frac 0.1976 (was 72 m off any apex)
-      { frac: 0.3726, angleDeg: 4.0, widthM: 130 },   // Repsol
-      { turn: 8, angleDeg: 4.5, widthM: 150 },   // Campsa; re-seated frac 0.6376 (was 133 m off any apex)
-      { turn: 14, angleDeg: 3.0, widthM: 120 },   // Europcar; re-seated frac 0.9376 (was 70 m off any apex)
+      { turn: 1, angleDeg: 3.5, widthM: 120 },   // Elf (FIA T1 = turns[0]); was turn: 2, which resolved onto the T2 left
+      { turn: 4, angleDeg: 4.0, widthM: 130 },   // Repsol (FIA T4 = turns[3]); was frac: 0.3726, 128 m past the built apex on the exit
+      { turn: 9, angleDeg: 4.5, widthM: 150 },   // Campsa (FIA T9 = turns[8])
+      { turn: 14, angleDeg: 3.0, widthM: 120 },   // final corner (FIA T14 = turns[13])
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
-    // re-seats turns when the start line moves.
-    // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
-    // researched real turn count. No researched sectors — consumers fall back to thirds.
+    // sectors/turns: RACING-LAP fractions (post startFrac/reverse), never fmap'd —
+    // tools/track/rotate-markings.cjs re-seats turns when the start line moves.
+    // turns: one apex per corner of the FIA 2026 event-map numbering (FIA "2026 Barcelona-Catalunya
+    // Grand Prix - Competition Notes - Circuit Map, Pit Lane Drawing and Emergency Exits Map", 14 corners),
+    // turns[0] = FIA T1, each at the curvature peak of that corner on THIS centreline: T1 Elf R, T2 L,
+    // T3 long R, T4 Repsol R, T5 Seat L, T6 L, T7 L, T8 R, T9 Campsa R, T10 La Caixa L, T11 L, T12 R,
+    // T13 R, T14 final R. FIA straight-mode zones start after T14, T3 exit, T5 and T9.
     sectors: [0.322, 0.666],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.1576, 0.1821, 0.3446, 0.3511, 0.4321, 0.4416, 0.5251, 0.6091, 0.7266, 0.7841, 0.7911, 0.7996, 0.8061, 0.9226],
+    turns: [0.1582, 0.1823, 0.2261, 0.3448, 0.4325, 0.4841, 0.5254, 0.5451, 0.6088, 0.7266, 0.7549, 0.8057, 0.8581, 0.9226],
     furniture: { tree: "stonePine",   fol: [0.16, 0.32, 0.17], lamp: "post",  lc: [0.96, 0.96, 1.0], sparse: true },  // thin Catalan umbrella pine
     kit: { marshal: "kiosk",     rail: "wArmco",      fence: "leaning",   tyre: "stack",   board: "monopole",  gantry: "portal",     camera: "lattice",   hoarding: "panel" },
     standSet: ["pastel", "concrete", "terracotta"],  // bleached white render, warm Catalan trim

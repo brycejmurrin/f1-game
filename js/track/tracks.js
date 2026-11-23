@@ -20,38 +20,38 @@ const Tracks = (function () {
   // designer's) is built by the same code as a script-tag circuit.
   const { elevationAt, hasRealElevation, fromRaw } = TrackDef;
 
-  /** Centreline only, no meshes. `opts.line === false` skips ONLY the racing-line bake (~75 %
-   *  of the time): tr.line = null, lineW/lineCorners/… absent — the designer's preview build. */
-  // D·DP5 preview cache: adoptPreviewCenterline or {line:false,preview:true} only; key
-  // includes hwZones/baseHW; hydrate forgets. Plain line:false must not auto-store.
+  // Adopted or explicitly primed centrelines serve the picker and garage; TrackMaps caches finished maps.
   const previewCL = new Map();
   function previewKey(def) {
-    if (!def || !def.id) return null;
-    const n = (def.path && def.path.pts && def.path.pts.length) || (def.points && def.points.length) || 0;
+    if (!def?.id) return null;
+    const n = def.path?.pts?.length || def.points?.length || 0;
     let zones = "";
-    if (def.hwZones && def.hwZones.length) try { zones = JSON.stringify(def.hwZones); } catch (_) { zones = "hz"; }
-    return def.id + "\0" + (def.reverse ? "1" : "0") + "\0" + n + "\0"
-      + (def.baseHW != null ? String(def.baseHW) : "") + "\0" + zones;
+    if (def.hwZones?.length) try { zones = JSON.stringify(def.hwZones); } catch (_) { zones = "hz"; }
+    return [def.id, def.reverse ? 1 : 0, n, def.baseHW ?? "", zones].join("\0");
   }
   function forgetPreviewCenterline(id) {
     if (id == null) { previewCL.clear(); return; }
     for (const k of previewCL.keys()) if (k.startsWith(id + "\0")) previewCL.delete(k);
   }
-  function adoptPreviewCenterline(def, track) {
-    const key = previewKey(def);
+  function adoptPreviewCenterline(def, track, key = previewKey(def)) {
     if (!key || !track) return false;
     track.def = def;
+    previewCL.delete(key);
     previewCL.set(key, track);
+    if (previewCL.size > 2) previewCL.delete(previewCL.keys().next().value);
     return true;
   }
   function buildCenterline(def, opts) {
-    const key = opts && opts.line === false ? previewKey(def) : null;
-    if (key && previewCL.has(key)) {
-      const hit = previewCL.get(key); // shallow clone — callers null bankP on one copy
+    const key = opts?.line === false ? previewKey(def) : null;
+    const hit = key && previewCL.get(key);
+    if (hit) {
+      adoptPreviewCenterline(def, hit, key);
+      // undefined means the 2-D map skipped this bake; null is a baked flat road.
+      if (opts.banking !== false && hit.bankP === undefined) hit.bankP = bankingProfile(hit);
       return Object.assign({}, hit, { meshes: hit.meshes || {} });
     }
     const track = buildCenterlineFresh(def, opts);
-    if (key && opts && opts.preview === true) previewCL.set(key, track);
+    if (key && opts.preview === true) adoptPreviewCenterline(def, track, key);
     return track;
   }
   function buildCenterlineFresh(def, opts) {
@@ -126,7 +126,10 @@ const Tracks = (function () {
     const dress = def._sceneryShift || 0;
     const bridges = def.bridges;
     if (bridges) for (const b of bridges) {
-      const cs = ((b.s + dress) % 1) * total;
+      // wrap01 — same idiom as TrackSurface.profile's bridge carve; bare `% 1`
+      // is fine for the authored [0,1) range but disagrees if a float ever
+      // undershoots (JS % keeps the dividend's sign).
+      const cs = TrackSpace.wrap01(b.s + dress) * total;
       for (let k = 0; k < n; k++) {
         let d = Math.abs(k * ds - cs);
         d = Math.min(d, total - d);                 // wrap-around distance
@@ -136,16 +139,16 @@ const Tracks = (function () {
     // elevation changes — terrain follows road (unlike BRIDGES where gY stays flat)
     const elevs = def.elevations;
     if (elevs) for (const e of elevs) {
-      const cs = ((e.s + dress) % 1) * total;
+      const cs = TrackSpace.wrap01(e.s + dress) * total;
       for (let k = 0; k < n; k++) {
         let d = Math.abs(k * ds - cs);
         d = Math.min(d, total - d);
         if (d < e.halfM) py[k] += e.rise * 0.5 * (1 + Math.cos(Math.PI * d / e.halfM));
       }
     }
-    // Low-amplitude ripple (3 harmonics, whole cycles/lap for seam continuity);
-    // amp scales with relief (0.14–0.42 m cap); seeded off circuit id for ghosts.
-    if (def.undulate !== false) {
+    // Custom designs opt into this seeded ripple to preserve their road and ghosts.
+    // Shipped circuits use the surveyed or authored road heights above.
+    if (def.undulate === true) {
       let lo = Infinity, hi = -Infinity;
       for (let k = 0; k < n; k++) { if (py[k] < lo) lo = py[k]; if (py[k] > hi) hi = py[k]; }
       const relief = hi - lo;
@@ -192,30 +195,8 @@ const Tracks = (function () {
     // it — findCorners/bankingProfile call curvature(), which now indexes this.
     track.curv = new Float32Array(n);
     { const cds = total / n; for (let k = 0; k < n; k++) track.curv[k] = curvatureRaw(track, k * cds); }
-    // ── THE PIT LANE IS REAL TARMAC, NOT A STRIP CARVED OUT OF THE ROAD ──────
-    // Painted INSIDE the racing surface, the lane eats 3.2 m of the road's
-    // width, so a narrow circuit races on less road because a pit lane
-    // exists. Widen the road across the pit window instead, by exactly the
-    // lane's width, so the racing surface is untouched and the lane is new
-    // tarmac beyond the racing edge.
-    //
-    // WHY HERE: the curvature LUT is baked two lines up and the mesh is not
-    // built until build(), so this is the one seam where the window can be
-    // derived from the arc AND still reach the road, the kerbs and the banking.
-    //
-    // WHY SYMMETRIC: `hw` is ONE half-width per node and every consumer — mesh,
-    // kerbs, banking, sampling, projection — builds from +/-hw about the
-    // centreline. A one-sided widening needs a centreline-offset array threaded
-    // through all of them, which is a different change. Widening both sides is
-    // what this engine can express, and it is not a fudge: real pit straights
-    // ARE wide, and the extra room on the far side is the start/finish straight
-    // getting the width it should have had.
-    //
-    // The taper matters more than the width. A step in `hw` is a step in the
-    // road mesh, the kerb line and the racing-line LUT all at once, so the
-    // window opens and closes over PIT_TAPER metres.
     if (opts && opts.line === false) track.line = null; else TrackLine.bake(track);   // the racing line LUT (track.line / lineW / lineCorners), from curv + hw
-    track.bankP = bankingProfile(track);
+    if (opts?.banking !== false) track.bankP = bankingProfile(track);
     return track;
   }
 
@@ -324,6 +305,9 @@ const Tracks = (function () {
     // don't inject one: the Node-VM build guard (tools/track/verify-track.cjs) and the
     // VM tests, which install a stub GLX global instead of an opts.gfx.
     track._gfx = G;
+    // Desktop DETAIL (js/track/scenery/detail.js, lazy): sets track._detail / _detailFeatures and returns this
+    // build's hooks (X.far / road / xz / inst / floor); null (detail 0) or no TrackDetail = today's world.
+    const X = typeof TrackDetail !== "undefined" && TrackDetail.attach(track, opts);
     // Keep the upload block scoped; the precondition at entry guarantees it runs.
     {
       track.geometryDiagnostics = [];
@@ -360,10 +344,15 @@ const Tracks = (function () {
         return { pos: [], nrm: [], col: [], idx: [], mat: [] };
       };
       const floorGeo = safe("floor", buildFloor(track)); lap("floor", "geo"); yield track; _t = _now();
-      track.meshes.floor = G.createMesh(floorGeo); lap("floor", "up"); yield track; _t = _now();
+      // farTerrain uploads the floor after the props (X.floor: its hills keep clear of them); today's slot otherwise.
+      if (!(X && X.far)) track.meshes.floor = G.createMesh(floorGeo);
+      lap("floor", "up"); yield track; _t = _now();
       const roadGeo = safe("road", buildRoad(track)); roadGeo._keepPositions = true; roadGeo._keepFullGeometry = keepGeometry;
       lap("road", "geo"); yield track; _t = _now();
-      track.roadGeo = roadGeo; buildRibbon(roadGeo, "road"); lap("road", "up"); yield track; _t = _now();
+      // kerbProfile: the DRAWN road carries the profiled kerbs (X.road; track.roadDrawGeo for a later re-chunk);
+      // track.roadGeo (debris collider, agent, shadow caster) stays the flat-kerb geometry every level shares.
+      track.roadGeo = roadGeo; buildRibbon(X ? X.road(roadGeo) : roadGeo, "road");
+      lap("road", "up"); yield track; _t = _now();
       const terrainGeo = yield* inner(buildTerrainSteps(track));
       const terrainSafe = safe("terrain", terrainGeo); terrainSafe._keepPositions = true; terrainSafe._keepFullGeometry = keepGeometry;
       lap("terrain", "geo"); yield track; _t = _now();
@@ -371,11 +360,11 @@ const Tracks = (function () {
       lap("terrain", "up"); yield track; _t = _now();
       const _props = TrackBuildProps.buildSteps ? yield* inner(TrackBuildProps.buildSteps(track)) : TrackBuildProps.build(track);
       lap("props", "geo"); yield track; _t = _now();
-      // AFTER buildProps: the scenery kept out of the complex (onRoadHit), so
-      // opening the driving boundary across it puts nothing in a car's path.
-      TrackPit.openBoundary(track); TrackBuildProps.featherAfterOpen(track);
-      const propsGeo = safe("props", TrackModels.sealGeometry(_props.out));
-      track.propsGeo = propsGeo;
+      // AFTER buildProps: the scenery kept out of the complex (onRoadHit), so opening the driving boundary across it puts
+      // nothing in a car's path. Untimed yields between whole sub-phases (perf hunt 7: one 100-215 VM ms step).
+      let _ps; TrackPit.openBoundary(track); TrackBuildProps.featherAfterOpen(track); _ps = _now(); yield; _t += _now() - _ps;
+      const _sealed = TrackModels.sealGeometry(_props.out); _ps = _now(); yield; _t += _now() - _ps;
+      const propsGeo = safe("props", _sealed); track.propsGeo = propsGeo; _ps = _now(); yield; _t += _now() - _ps;
       // The tallest prop above its own ground: what the sun shadow map's depth
       // span must hold (js/render/shared/shadow-pass.js sunSpan). Measured before
       // the upload may drop the positions.
@@ -413,6 +402,8 @@ const Tracks = (function () {
       // WEBGL_multi_draw is the lever; if it is slower, vertices bind and the
       // query overhead is the thing to fix. Either answer closes a question
       // that has been guessed at twice.
+      // farTerrain's flat-under-props mask (props, glass, water), sampled before an upload may drop the positions.
+      X && X.xz(propsGeo, _props);
       let _unchunked = false;
       try { _unchunked = localStorage.getItem("apex26.propsUnchunked") === "1"; } catch (_) { /* no storage */ }
       track.meshes.props = (G.createChunkedMesh && !_unchunked)
@@ -429,7 +420,8 @@ const Tracks = (function () {
           // Pushed as each one lands, not assigned after the map: a throw or an
           // abandon part-way can then free the batches already on the GPU.
           const pb = track.meshes.propBatches = [];
-          for (const b of batches) pb.push(G.createInstancedBatch(b.geo, b.matrices, b.colors, { cellSize: 72 }));
+          // X.inst: the crowd3d figures' options (TLX's CROWD LIFE vertex stage) and farTerrain's mask.
+          for (const b of batches) pb.push(G.createInstancedBatch(b.geo, b.matrices, b.colors, X ? X.inst(b) : { cellSize: 72 }));
         }
       }
       lap("batches", "up"); yield track; _t = _now();
@@ -446,6 +438,7 @@ const Tracks = (function () {
       lap("glassWater", "geo"); yield track; _t = _now();
       track.meshes.glass = G.createChunkedMesh ? G.createChunkedMesh(glassGeo, 72) : G.createMesh(glassGeo);
       track.meshes.water = G.createMesh(waterGeo);
+      X && X.floor(floorGeo);   // farTerrain's deferred floor, inside the trim lap (its yield follows)
       track.meshes.gate = G.createMesh(safe("gate", buildGate(track)));
       track.meshes.startline = G.createMesh(safe("startline", buildStartLine(track)));
       lap("trim", "up"); yield track; _t = _now();
@@ -514,9 +507,14 @@ const Tracks = (function () {
     const m = t && t.meshes, ck = !!gfx.freeChunkedMesh;
     if (!m) return;
     for (const h of [m.floor, m.road, m.terrain, m.gate, m.startline]) gfx.freeMesh(h);
-    if (ck) { gfx.freeChunkedMesh(m.props); if (m.roadChunked) gfx.freeChunkedMesh(m.roadChunked); if (m.terrainChunked) gfx.freeChunkedMesh(m.terrainChunked); }
-    else gfx.freeMesh(m.props);
-    if (m.glass) { if (ck) gfx.freeChunkedMesh(m.glass); else gfx.freeMesh(m.glass); }
+    if (ck) {
+      gfx.freeChunkedMesh(m.props);
+      if (m.roadChunked) gfx.freeChunkedMesh(m.roadChunked);
+      if (m.terrainChunked) gfx.freeChunkedMesh(m.terrainChunked);
+      if (m.glass) gfx.freeChunkedMesh(m.glass);
+      if (gfx.flushChunkedOwnership) gfx.flushChunkedOwnership();
+    } else gfx.freeMesh(m.props);
+    if (m.glass && !ck) { gfx.freeMesh(m.glass); }
     if (m.water) gfx.freeMesh(m.water);
     if (m.propBatches && gfx.freeInstancedBatch) { for (const b of m.propBatches) gfx.freeInstancedBatch(b); m.propBatches = null; }
   }
@@ -840,12 +838,14 @@ const Tracks = (function () {
     const m = track && track.meshes;
     if (!m) return false;
     const ch = m[which + "Chunked"];
-    return !!(ch && ch.chunks && ch.chunks.length);
+    if (ch && ch.chunks && ch.chunks.length) return true;
+    return which === "road" && !!m.road && !!track._gfx && track._gfx.chunkedTrackCoords === false;
   }
   function dropRibbonCpuIfReady(track, opts) {
     if (!track || track._ribbonCpuDropped || (opts && opts.retainGeometry) || (opts && opts.retainRibbonCpu) || keepGeometry) return;
     if (!track.roadGeo || !track.terrainGeo) return;
     if (!ribbonGpuSettled(track, "road") || !ribbonGpuSettled(track, "terrain")) return;
+    track.roadDrawGeo = null;   // kerbProfile's drawn road: chunked by now (or never will be)
     for (const geo of [track.roadGeo, track.terrainGeo]) {
       geo.nrm = geo.col = geo.mat = null;
       // A main-thread build's push-grown arrays carry slack; typed as the worker posts them (build-worker.js typedRibbon).

@@ -4,22 +4,29 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "jeddah",
+    revision: 2,
     reverse: false, // real-world CW/CCW direction
-    // Start on the main straight before T1 (LEFT ~256 m): was 0.9625 on the T27 bend.
-    // Scenery/authored fracs stay on the old origin until re-anchored by hand.
-    startFrac: 0.9160,
-    sceneryStartFrac: 0.9625,
+    // Start/finish on the pit straight AFTER the T27 hairpin, ~250 m before the
+    // T1 apex (#5507; evidence docs/tracks/START-LINES.md §jeddah). The line needs
+    // a control point, so path.pts[1] is one added ON the pts[0]-pts[2] chord
+    // (re-add it, and re-derive both fracs, if the trace is ever re-imported).
+    // 0.9160 (2026-10-18) was 288 m BEFORE T27: its "first left" was T27, not T1.
+    // Still on the OLD authoring origin (index 146 of 152; the engine adds
+    // _sceneryShift ~0.8676): bankZones { frac } rows, elevations[].s,
+    // dressingExclusions s0/s1 and every bare frac in scenery/jeddah.js. On the
+    // RACING (start-line) origin: sectors, turns and bankZones { turn } rows.
+    startFrac: 0.00658,
+    sceneryStartFrac: 0.9605,
     name: "JEDDAH",
     gp: "Saudi Arabian GP",
     country: "Saudi Arabia",
     night: true,
     theme: "street_night",
     street: true,
-    // The pit complex (TrackPit): the STREET one on the inside (corniche side)
-    // by the permanent pit building. No bays: the trace's corners sit against
-    // the line (above), so the window is 190 m and compresses the row's pitch
-    // under a bay — the boxes are painted at 10 m and the kit building stands
-    // behind the garage line until the corner table is surveyed.
+    // The pit complex (TrackPit): the STREET one on the left (-1), where
+    // OSM way 1121870473 runs the real lane. bays: false is kept from the old
+    // 190 m window (tests pin the bay-less row): the boxes are painted and the
+    // kit building in scenery/jeddah.js stands behind the garage line.
     pit: { mode: "street", side: -1, bays: false },
     barrierGap: 3.4,
     terrainOuter: 28,
@@ -41,10 +48,14 @@
       { frac: 0.1825, angleDeg: 3.0, widthM: 90 },
       { frac: 0.2662, angleDeg: 3.0, widthM: 160 },
       { frac: 0.3188, angleDeg: 3.0, widthM: 160 },
-      { frac: 0.4792, angleDeg: 7.0, widthM: 240 },   // banked left onto the north loop
-      { frac: 0.5552, angleDeg: 6.0, widthM: 200 },   // banked sweeper
+      // T13 left hairpin. Tilke reports 12% crossfall (~7 degrees).
+      { turn: 13, angleDeg: 7.0, widthM: 240 },
+      // The sweeper after the banked left, by turn index: the old { frac: 0.5552 }
+      // built 80 m past the T14 apex, inside this row's own 200 m width.
+      { turn: 14, angleDeg: 6.0, widthM: 200 },       // banked sweeper
       { frac: 0.6110, angleDeg: 3.0, widthM: 120 },
-      { frac: 0.9981, angleDeg: 6.0, widthM: 120 },   // banked final right
+      // The final hairpin by turn index (the authored { frac: 0.9981 } spot).
+      { turn: 27, angleDeg: 6.0, widthM: 120 },       // banked final corner
     ],
     elevations: [
       { s: 0.16, halfM: 520, rise: 1.5 },
@@ -54,11 +65,15 @@
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
-    // re-seats turns when the start line moves.
+    // sectors: idealised thirds from the line, never rotated (START-LINES.md §6).
+    // turns[]: the FIA numbering (27 turns; F1 live-timing corner markers fitted
+    // onto this centreline, rms 4.7 m), one built |k| peak per number
+    // (tools/track/corner-frames.cjs), within 25 m of its marker except T5 (40 m,
+    // the tighter of two rights) and the long sweeps T18 (60 m) and T20 (72 m).
+    // T1-T2 the left-right chicane, T13 the banked left, T22-T24 the last esses,
+    // T27 the final hairpin (r ~ 29 m). RACING fracs.
     sectors: [0.28, 0.62],
-    turns: [0.0176, 0.0671, 0.1891, 0.3641, 0.3736, 0.3971, 0.4481, 0.4576, 0.4681, 0.4776, 0.4916, 0.5106, 0.5201, 0.5446, 0.5611, 0.6706, 0.6781, 0.6866, 0.6991, 0.7466, 0.7696, 0.7851, 0.7961, 0.8031, 0.8301, 0.9796, 0.9961],
+    turns: [0.0403, 0.0494, 0.0727, 0.1240, 0.1338, 0.1682, 0.1870, 0.1955, 0.2208, 0.2370, 0.2532, 0.2721, 0.3539, 0.4097, 0.4455, 0.4623, 0.4799, 0.5058, 0.5481, 0.5708, 0.6162, 0.6545, 0.6714, 0.6942, 0.7429, 0.7994, 0.8656],
     // Jeddah night: pale grey concrete rail (not solid green) + green/gold day accents
     barrier: { a: [0.95, 0.95, 0.96], b: [0.05, 0.52, 0.28], c: [0.95, 0.80, 0.12], night: [0.42, 0.44, 0.48], tyre: [0.05, 0.52, 0.28] },
     furniture: { tree: "none",  fol: [0.22, 0.44, 0.20], lamp: "arm",   lc: [1.0, 0.88, 0.60] },
@@ -70,7 +85,7 @@
                  dayPal: ["sand", "cream", "white", "ochre", "stone", "tan", "paleblue"] },
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
     // recentred, one lap, open loop. tools/track/import-circuit-path.mjs regenerates it.
-    path: { len: 6203, pts: [[-243,-878],[-102.2,-466.3],[-98.3,-462],[-81.8,-457],[-55,-468.9],[-46.3,-466.8],[-38.6,-462.9],[-32.6,-454.7],[-29.3,-443.4],[-34.9,-411.6],[-58.6,-337.5],[-61.1,-326.7],[-61.6,-305.4],[-52.3,-246.8],[-20.8,-62],[-18.1,-24.5],[-11.5,-12.1],[21.2,0.8],[36.7,10.5],[48.8,20.9],[65.2,47.1],[74,73.2],[75.5,105.1],[71,129.8],[64.1,144.2],[41.5,178.4],[33.3,197.1],[29.5,216.6],[31.9,246.4],[43.6,296.6],[57.8,318.8],[66.8,326.4],[88.4,341.4],[99.3,349.5],[107.3,358.6],[113.3,381.4],[111.6,477.9],[108.3,498.9],[87.5,525.7],[71,537.1],[32.2,550.9],[21,556.9],[7.6,578.5],[0.3,621.3],[-6.3,655.2],[-21.3,703.7],[-32.5,733.7],[-40.5,783.6],[-43.2,817.3],[-41.8,855.3],[-36.7,1005],[-25.3,1198.5],[-20.9,1210.9],[-9.7,1226.6],[4.6,1236.4],[26.5,1244.1],[48.6,1240.7],[63.1,1233.1],[78,1223],[90.4,1199.7],[96.5,1167.7],[95,1139],[89.3,1115.9],[56.3,1058.1],[38.6,1030.8],[23.9,991.1],[18.2,966],[14.1,931],[15.2,903.8],[18.6,872.2],[29.5,839],[42.2,810.9],[59.6,777.1],[73.8,744.7],[80,709.2],[79.6,685],[79.6,666.2],[86.3,652.1],[96.5,640],[112.4,631],[146.8,620.8],[171,600.3],[182.2,581.9],[186.4,566.2],[192,534.9],[193.4,499.2],[193.4,474.9],[191.1,447.7],[186.8,418.8],[174.8,382.6],[143.8,315.9],[122.7,264.8],[111.8,221.4],[107,182.7],[108.6,145.4],[110.7,122.6],[110.3,73.6],[107.5,59.7],[104.3,37.2],[91.1,-3.1],[79.2,-28.6],[63,-55.9],[36.8,-97.7],[19.1,-129.5],[5.7,-163.2],[-8.2,-214.1],[-12.7,-251.7],[-14.9,-294],[-13.7,-332.7],[-9.3,-368],[-1,-415.1],[4.1,-431.5],[8.7,-446.4],[7.7,-459.9],[3.9,-473.6],[-6.4,-488.6],[-17.5,-498.5],[-43.6,-519.9],[-56.6,-535.8],[-68.6,-557.7],[-86.1,-638.3],[-86.3,-659.1],[-78.4,-683.2],[-61.4,-715],[-5.5,-824.4],[8.1,-858.2],[19,-897.2],[23,-924.8],[24.7,-949.8],[19.8,-1006.9],[5.2,-1063.7],[-4.3,-1098.3],[-13.9,-1131.6],[-26.5,-1172.9],[-45.7,-1216.7],[-74,-1268.6],[-93.9,-1297],[-119,-1329.7],[-154,-1370.1],[-199.5,-1410.5],[-242.1,-1439.3],[-331.3,-1501.6],[-355.9,-1511.8],[-372.3,-1507.3],[-386.7,-1498.1],[-395.8,-1482.3],[-394.9,-1465.6],[-371.5,-1361.3],[-326.7,-1145.8],[-303.5,-1063.2],[-281.8,-995]] },
+    path: { len: 6203, pts: [[-243,-878],[-184.7,-707.6],[-102.2,-466.3],[-98.3,-462],[-81.8,-457],[-55,-468.9],[-46.3,-466.8],[-38.6,-462.9],[-32.6,-454.7],[-29.3,-443.4],[-34.9,-411.6],[-58.6,-337.5],[-61.1,-326.7],[-61.6,-305.4],[-52.3,-246.8],[-20.8,-62],[-18.1,-24.5],[-11.5,-12.1],[21.2,0.8],[36.7,10.5],[48.8,20.9],[65.2,47.1],[74,73.2],[75.5,105.1],[71,129.8],[64.1,144.2],[41.5,178.4],[33.3,197.1],[29.5,216.6],[31.9,246.4],[43.6,296.6],[57.8,318.8],[66.8,326.4],[88.4,341.4],[99.3,349.5],[107.3,358.6],[113.3,381.4],[111.6,477.9],[108.3,498.9],[87.5,525.7],[71,537.1],[32.2,550.9],[21,556.9],[7.6,578.5],[0.3,621.3],[-6.3,655.2],[-21.3,703.7],[-32.5,733.7],[-40.5,783.6],[-43.2,817.3],[-41.8,855.3],[-36.7,1005],[-25.3,1198.5],[-20.9,1210.9],[-9.7,1226.6],[4.6,1236.4],[26.5,1244.1],[48.6,1240.7],[63.1,1233.1],[78,1223],[90.4,1199.7],[96.5,1167.7],[95,1139],[89.3,1115.9],[56.3,1058.1],[38.6,1030.8],[23.9,991.1],[18.2,966],[14.1,931],[15.2,903.8],[18.6,872.2],[29.5,839],[42.2,810.9],[59.6,777.1],[73.8,744.7],[80,709.2],[79.6,685],[79.6,666.2],[86.3,652.1],[96.5,640],[112.4,631],[146.8,620.8],[171,600.3],[182.2,581.9],[186.4,566.2],[192,534.9],[193.4,499.2],[193.4,474.9],[191.1,447.7],[186.8,418.8],[174.8,382.6],[143.8,315.9],[122.7,264.8],[111.8,221.4],[107,182.7],[108.6,145.4],[110.7,122.6],[110.3,73.6],[107.5,59.7],[104.3,37.2],[91.1,-3.1],[79.2,-28.6],[63,-55.9],[36.8,-97.7],[19.1,-129.5],[5.7,-163.2],[-8.2,-214.1],[-12.7,-251.7],[-14.9,-294],[-13.7,-332.7],[-9.3,-368],[-1,-415.1],[4.1,-431.5],[8.7,-446.4],[7.7,-459.9],[3.9,-473.6],[-6.4,-488.6],[-17.5,-498.5],[-43.6,-519.9],[-56.6,-535.8],[-68.6,-557.7],[-86.1,-638.3],[-86.3,-659.1],[-78.4,-683.2],[-61.4,-715],[-5.5,-824.4],[8.1,-858.2],[19,-897.2],[23,-924.8],[24.7,-949.8],[19.8,-1006.9],[5.2,-1063.7],[-4.3,-1098.3],[-13.9,-1131.6],[-26.5,-1172.9],[-45.7,-1216.7],[-74,-1268.6],[-93.9,-1297],[-119,-1329.7],[-154,-1370.1],[-199.5,-1410.5],[-242.1,-1439.3],[-331.3,-1501.6],[-355.9,-1511.8],[-372.3,-1507.3],[-386.7,-1498.1],[-395.8,-1482.3],[-394.9,-1465.6],[-371.5,-1361.3],[-326.7,-1145.8],[-303.5,-1063.2],[-281.8,-995]] },
   }
   );
 })();

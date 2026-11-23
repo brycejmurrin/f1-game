@@ -38,7 +38,7 @@ function placeholderSvg(width) {
   );
 }
 
-export async function makeIcons() {
+async function makeIcons() {
   if (!fs.existsSync(SRC)) {
     throw new Error(`make-icons: missing ${SRC}`);
   }

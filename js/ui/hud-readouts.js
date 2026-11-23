@@ -1,6 +1,7 @@
 /* Apex 26 — the race HUD's derived readouts, kept out of js/ui/hud.js.
    Pure helpers plus two small stateful pieces GameHud owns one of each:
      lapsApart   — a gap of a lap or more reads "+1L", not ~90 s of distance ÷ speed
+     gapClock    — the ▲/▼ chip's time gap at a timing line both cars crossed
      gapDecimals / fmtGapSec / fmtGap — shared gap spelling (2 dp under ~10 s)
      energy      — the ERS store as MJ (PhysicsConsts.ES_MJ) and deploy/harvest state
      bbText      — the brake-bias chip ("BB 56%")
@@ -67,13 +68,16 @@ const HudReadouts = (function () {
     return "idle";
   }
 
-  /** {text, label} for the ENERGY bar: "3.2 MJ" in the bar, words for a reader. */
+  /** {text, label} for the ENERGY bar: "3.2 MJ" in the bar, words for a reader.
+   *  The ▼/▲ state glyph is NOT in the text (#4270 §5): css/hud.css draws it as
+   *  #hud-energy-n::before from #hud-energy[data-ers], idle keeping the slot
+   *  unseen, so the label never changes width or text length (hud.js hlKey keys
+   *  on that length; a changed key is a full fit). */
   function energy(e, st) {
     const mj = Math.max(0, Math.min(1, Number.isFinite(e) ? e : 0)) * esMJ();
     const n = mj.toFixed(1);
-    const glyph = st === "deploy" ? "▼ " : st === "harvest" ? "▲ " : "";
     const word = st === "deploy" ? ", deploying" : st === "harvest" ? ", harvesting" : "";
-    return { text: glyph + n + " MJ", label: "Energy " + n + " megajoules" + word };
+    return { text: n + " MJ", label: "Energy " + n + " megajoules" + word };
   }
 
   /** "BB 56%" / "BB 56.5%" from c.brakeBias (front share, 0..1; null = ref). */
@@ -136,23 +140,16 @@ const HudReadouts = (function () {
 
   // BLUE FLAG. The AI yields (AiDrive.letPassCase in js/game.js) to a chaser a
   // HALF LAP or more up in progress inside 9 m; the flag marshal shows it a
-  // little earlier, at about a second. Same lapping test, a time window.
-  const BLUE_S = 1.2;
-  /** The car that should be let through, or null. */
-  function blueFlag(player, cars, L, vFloor) {
-    if (!player || !cars || !(L > 0) || player.finished || player.retired) return null;
-    let best = null, bestD = Infinity;
-    for (let i = 0; i < cars.length; i++) {
-      const o = cars[i];
-      if (!o || o === player || o.retired || o.finished) continue;
-      const up = o.prog - player.prog;
-      if (!(up > L * 0.5)) continue;
-      // Metres the lapping car is physically BEHIND the player on the road.
-      const back = ((player.prog - o.prog) % L + L) % L;
-      if (back <= 0 || back >= bestD) continue;
-      if (back / Math.max(o.speed || 0, vFloor || 1) <= BLUE_S) { best = o; bestD = back; }
-    }
-    return best;
+  // little earlier, at about a second. The test is SportingRegs.blueFlagCar's.
+  const BLUE_S = 1.2, BLUE_HOLD_S = 1.6;   // BLUE_S mirrors SportingRegs BLUE_GAP_S (exported for readers)
+  const _blueOpts = { total: 0, vFloor: 0 };
+  /** The car that should be let through, or null. `held` (the car flagged last tick) keeps
+   *  its flag out to BLUE_HOLD_S: a lapper hovering at 1.2 s blinked the chip every corner,
+   *  and each flip re-ran the HUD fit twice (perf hunt 8). */
+  function blueFlag(player, cars, L, vFloor, held) {
+    if (typeof SportingRegs === "undefined" || !SportingRegs.blueFlagCar) return null;
+    _blueOpts.total = L; _blueOpts.vFloor = vFloor || 1;
+    return SportingRegs.blueFlagCar(player, cars, _blueOpts, held, BLUE_HOLD_S);
   }
 
   // THE BEST LAP AS TIME-AT-DISTANCE. Only a time-trial ghost was recorded per
@@ -252,6 +249,18 @@ const HudReadouts = (function () {
     return { tick, reset };
   }
 
+  // ONE BLINK CLOCK. Each HUD `pulse` (css/hud.css: OT armed, ERS, VSC, pit cue,
+  // limits, the 0.4 s redline) began its own phase when its class landed, so two
+  // warnings on screen together blinked out of step (DEFECT-LEDGER item H). Pinning
+  // every pulse's startTime to the document timeline's zero puts them on one
+  // clock: the 0.8 s pulses share a phase and the redline is their harmonic.
+  function syncPulse(e) {
+    const el = e.target;
+    if (e.animationName !== "pulse" || !el || typeof el.getAnimations !== "function") return;
+    for (const a of el.getAnimations()) if (a.animationName === "pulse" && a.startTime !== 0) a.startTime = 0;
+  }
+  if (typeof document !== "undefined" && typeof document.addEventListener === "function") document.addEventListener("animationstart", syncPulse, true);
+
   function cbCuesOn() {
     return typeof A11yOpts !== "undefined" && A11yOpts.cuesOn && A11yOpts.cuesOn();
   }
@@ -300,8 +309,71 @@ const HudReadouts = (function () {
     } else if (el.dataset.flagCue != null) delete el.dataset.flagCue;
   }
 
-  return { lapsApart, lapGapText, gapDecimals, fmtGapSec, fmtGap, GAP_FINE_LT,
-    ersState, energy, bbText, blueFlag, lapTrace, speaker, BLUE_S,
+  /* THE GAP IS A TIME GAP (#5678). distance ÷ the player's own speed doubled at every brake zone for a car
+     a few hundred metres up the road (PER 5.2 → 13.2 → 7.9 → 18.0 s in 40 s at Monaco). Real timing takes
+     the interval at a line both cars crossed: this clock keeps each car's crossing time of LINES timing
+     lines per lap (prog / step, interpolated between samples), so the gap moves only when the cars do.
+     The live reading is "how long ago the car ahead was where the car behind is now".
+     A ring of LINES + 4 covers a lap — beyond that the chip reads "+1L" (lapsApart). */
+  const LINES = 256;
+  function gapClock() {
+    const N = LINES + 4, cars = new Map();
+    let step = 0;
+    /** Record `car` at progress `prog` (m) at race time `T` (s); lap length `L` sets the line spacing. */
+    function sample(car, prog, T, L) {
+      if (!(L > 0) || !Number.isFinite(prog) || !Number.isFinite(T)) return;
+      if (L / LINES !== step) { step = L / LINES; cars.clear(); }
+      const c = cars.get(car);
+      if (!c) {
+        cars.set(car, { p: prog, t: T, k: new Float64Array(N).fill(NaN), at: new Float64Array(N) });
+        return;
+      }
+      // A rewind or re-grid invalidates all crossings. The line keys guard every timestamp read.
+      if (prog < c.p - 1 || T < c.t) {
+        c.k.fill(NaN); c.p = prog; c.t = T;
+        return;
+      }
+      for (let i = Math.floor(c.p / step) + 1, e = Math.floor(prog / step); i <= e; i++) {
+        const j = ((i % N) + N) % N;
+        c.k[j] = i; c.at[j] = c.t + (T - c.t) * (i * step - c.p) / (prog - c.p);
+      }
+      c.p = prog; c.t = T;
+    }
+    const at = (car, i) => { const c = cars.get(car), j = ((i % N) + N) % N; return c && c.k[j] === i ? c.at[j] : NaN; };
+    /** Seconds since `front` was where `back` is now (its crossings either side, interpolated): a stopped car's gap
+     *  grows with the clock. The interval at the last shared line before `front` crosses the next; else NaN.
+     *  `laps`: whole laps `front` is up on `back` by race distance, so a car on another lap is read at the same
+     *  TRACK point (REL's lapped rows), not a lap's worth of seconds. */
+    function gap(front, back, laps) {
+      const c = cars.get(back);
+      if (!c || !(step > 0)) return NaN;
+      const i = Math.floor(c.p / step), sh = (laps | 0) * LINES, a = at(front, i + sh), b = at(front, i + sh + 1);
+      const d = b >= a ? c.t - (a + (b - a) * (c.p / step - i)) : at(back, i) - a;
+      return d >= 0 ? d : NaN;
+    }
+    /** gap(front, back), or `fallback` while there is none (distance ÷ speed until both cars cross a line). */
+    const gapOr = (front, back, fallback, laps) => { const g = gap(front, back, laps); return g >= 0 ? g : fallback; };
+    return { sample, gap, gapOr, reset: () => cars.clear() };
+  }
+
+  /** THE one race clock: hud.js samples and resets it each HUD tick; the chips, RELATIVE and STRATEGY read it. */
+  const gaps = gapClock();
+  // GAP_FINE_LT stays module-local (gapDecimals only).
+  /** One in-pit predicate (REL tyre cell, STRATEGY rival/behind): any pitState but "none" (lane, box, out). */
+  function inPit(car) { return !!(car && car.pitState && car.pitState !== "none"); }
+  // Wheel state measures longitudinal spin directly. In the classic model use
+  // the same rear-versus-front grip limits as the rear-slide haptic.
+  function pedalGrip(car, wheelModelActive) {
+    if (!car) return "";
+    if (car.brakeDemand > 0) return car.wheelLock > 0.25 ? "lock" : "";
+    if (!(car.throttleDemand > 0)) return "";
+    if (wheelModelActive) return car.wheelSpin > 0.25 ? "spin" : "";
+    if (typeof TyreModel === "undefined") return "";
+    const rear = car.rearUtil * TyreModel.CURVE_PEAK_X / TyreModel.CURVE_HOLD_R;
+    return rear > 1 && rear > car.frontUtil ? "slip" : "";
+  }
+  return { inPit, pedalGrip, lapsApart, lapGapText, gapDecimals, fmtGapSec, fmtGap,
+    ersState, energy, bbText, blueFlag, lapTrace, speaker, BLUE_S, gapClock, gaps,
     spdUnits, spdUnit, spdDigits, spdPlate, KPH_PER_MPH,
     sectorTimingKind, flagCueKind, paintSectorRow, paintFlag };
 })();

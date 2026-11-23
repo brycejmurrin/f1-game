@@ -61,7 +61,7 @@ const CanvasCssSize = (() => {
       observer = null; watched = false;
     }
 
-    return { read, markDirty, dispose };
+    return { read, markDirty, dispose, photoSize: null };
   }
 
   return { create };

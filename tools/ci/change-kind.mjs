@@ -8,8 +8,21 @@ import path from "node:path";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-const DOCS = [/^docs\//, /\.md$/, /^\.claude\//, /^\.cursor\//, /^\.codex\//];
-const isDocs = (f) => DOCS.some((re) => re.test(f));
+// PROSE, NOT "UNDER AN AGENT DIRECTORY". The agent trees hold executable config
+// as well as prose: .claude/hooks/*.sh, .claude/settings*.json, skill scripts
+// (*.mjs), .codex/config.toml, .cursor/hooks.json, .cursor/mcp.json. A blanket
+// /^\.claude\// classified a hook edit as "docs" and skipped the guard tests
+// that exec it. So under .claude/, .cursor/ and .codex/ only Markdown (.md, and
+// Cursor's .mdc rules) is prose, and hook/git-hook trees are never prose, even
+// a README in them — when unsure, the diff selects MORE.
+const NEVER_DOCS = [/^\.claude\/hooks\//, /^\.claude\/settings[^/]*\.json$/, /^\.githooks\//,
+  /^\.cursor\/hooks/, /^\.codex\/hooks/];
+const AGENT_PROSE = /^\.(claude|cursor|codex)\/.*\.(md|mdc)$/;
+const isDocs = (f) => {
+  if (NEVER_DOCS.some((re) => re.test(f))) return false;
+  if (/^\.(claude|cursor|codex)\//.test(f)) return AGENT_PROSE.test(f);
+  return /^docs\//.test(f) || /\.md$/.test(f);
+};
 const isCss = (f) => /^css\//.test(f);
 
 /** @param {string[]} files */
@@ -21,9 +34,44 @@ export function changeKind(files) {
   return "code";
 }
 
-function changedSince(ref) {
-  return execFileSync("git", ["diff", "--name-only", ref], { cwd: ROOT, encoding: "utf8" })
-    .split("\n").filter(Boolean);
+// These Node entry points report PR/CI state and have no browser, build or test-runner
+// consumers. Keep this list exact: tools/ci also owns Playwright setup and selection.
+const REPORT_NAMES = ["ci-watch", "pr-board", "queue-depth", "session-status"];
+const REPORT_PATHS = new Set(REPORT_NAMES.flatMap((name) =>
+  [`tools/ci/${name}.mjs`, `tests/unit/${name}.test.mjs`]));
+
+export function readyBrowserExempt(files) {
+  return files.length > 0 && files.every((f) => REPORT_PATHS.has(f)
+    || /^(?:README|AGENTS|CLAUDE|CHANGELOG)\.md$/.test(f)
+    || /^docs\/.*\.md$/u.test(f));
+}
+
+/** Parse `git diff --name-status -z` into unique paths, rename/copy sources
+ *  included (ledger M36). Local twin of tools/lib/changed-files.mjs
+ *  parseNameStatusZ — kept here so this module does not import that helper
+ *  (importing it rewrites tests/data/impact-map.json, owned by open CI PRs). */
+function parseNameStatusZ(out) {
+  const f = String(out || "").split("\0");
+  if (f[f.length - 1] === "") f.pop();
+  const paths = [];
+  for (let i = 0; i < f.length;) {
+    const status = f[i++];
+    const two = /^[RC]/.test(status);
+    const a = f[i++];
+    if (a !== undefined && a !== "") paths.push(a);
+    if (two) { const b = f[i++]; if (b !== undefined && b !== "") paths.push(b); }
+  }
+  return [...new Set(paths)];
+}
+
+/** Paths changed since `ref`, rename/copy sources included (ledger M36).
+ *  `--name-only` would list only the destination of a `git mv` and mis-classify
+ *  a moved circuit as docs-only. */
+export function changedSince(ref, { cwd = ROOT, run = execFileSync } = {}) {
+  const out = run("git", ["diff", "--name-status", "-z", "-M", ref], {
+    cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024,
+  });
+  return parseNameStatusZ(out);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

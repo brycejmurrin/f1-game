@@ -68,7 +68,7 @@ const REKEYED = [
   ["portimao", 2, 0.820, 0.870],
   ["sochi", 1, 0.520, 0.565],
   ["sochi", 2, 0.790, 0.835],
-  ["kyalami", 2, 0.105, 0.150],        // Crowthorne (reverse circuit: authored in the source frame)
+  ["kyalami", 2, 0.894, 0.940],        // T16 Ingwe (source-frame zone; the same narrowing as before the 2026-11-18 direction flip)
   ["watkins_glen", 0, 0.070, 0.115],   // Turn 1 / the 90
   ["watkins_glen", 2, 0.880, 0.925],   // the Anvil
 ];
@@ -109,7 +109,7 @@ test("every curated turn inside a re-keyed zone's window dips the road within 60
 // no frame puts a turn inside them either, so there is no corner to move them
 // to. Do not add an entry to make a re-keyed zone pass — re-key it.
 const NO_TURN_NEARBY = new Set([
-  "istanbul:0", "portimao:1", "jacarepagua:1",
+  "istanbul:0", "jacarepagua:1",
 ]);
 
 test("every hwZone narrows within 150 m of a curated turn, or is a reviewed exception", () => {

@@ -1,0 +1,112 @@
+name: Knowledge GC
+
+# Weekly docs/notes retention (docs/plans/2026-11-03-agent-surface-reset.md §4.9,
+# D-001): `node tools/docs/knowledge-gc.mjs --apply` archives every note nothing
+# live has cited for 21 days (git mv + link repointing + NOTES-INDEX regen), and
+# the diff lands as ONE reviewed PR, never as a hook surprise. A run is a no-op
+# while an earlier gc PR is still open or when nothing is stale.
+#
+# Same shape as ratchets-fold.yml: a per-run `bot/knowledge-gc-<run_id>` branch,
+# a PR into the deploy branch opened with LAND_TOKEN (.github/actions/open-bot-pr;
+# without LAND_TOKEN it dispatches ci.yml on the branch) — a PR opened with GITHUB_TOKEN starts no `pull_request` run, but
+# workflow_dispatch always does ("events triggered by the GITHUB_TOKEN will not
+# create a new workflow run ... workflow_dispatch and repository_dispatch events
+# always create workflow runs":
+# https://docs.github.com/en/actions/concepts/security/github_token).
+# gh pr create: https://cli.github.com/manual/gh_pr_create; the schedule can be
+# delayed under load (https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule),
+# so the minute is off the hour and nothing depends on the exact time.
+#
+# Syntax: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions
+# (on.schedule cron is UTC, runs from the default branch; permissions per job).
+
+on:
+  schedule:
+    - cron: "23 7 * * 1"   # Mondays 07:23 UTC
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Cite-or-archive window in days"
+        required: false
+        default: "21"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write    # the "gc PR needs a hand" issue when gh pr create is refused
+
+concurrency:
+  group: knowledge-gc
+  cancel-in-progress: false
+
+jobs:
+  gc:
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write   # workflow_dispatch of ci.yml on the gc branch (the PR's CI)
+    runs-on: ubuntu-latest
+    # LAND_TOKEN can be scoped to the deploy branch in this environment; until then the repo secret serves.
+    environment:
+      name: land
+      deployment: false
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: claude/f1-game-project-26h3ng
+          persist-credentials: false   # npm ci runs below: the token goes to the one push below, not .git/config
+
+      - uses: ./.github/actions/setup-apex
+
+      - name: Skip while a gc PR is open
+        id: open
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          n="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json headRefName --jq '[.[] | select(.headRefName | startswith("bot/knowledge-gc"))] | length')"
+          echo "open gc PRs: $n"
+          echo "n=$n" >> "$GITHUB_OUTPUT"
+
+      - name: Archive stale notes and push the branch
+        id: gc
+        if: steps.open.outputs.n == '0'
+        env:
+          DAYS: ${{ inputs.days || '21' }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          case "$DAYS" in ''|*[!0-9]*) echo "::error::days must be a number"; exit 2 ;; esac
+          node tools/docs/knowledge-gc.mjs --apply "--days=$DAYS" | tee gc.log
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "nothing stale"; exit 0
+          fi
+          # The retention guard and the link checks must agree with the move before a PR exists.
+          node --test tests/unit/knowledge-retention.test.mjs tests/unit/docs-integrity.test.mjs
+          git config user.name "apex-knowledge-gc-bot"
+          git config user.email "noreply@anthropic.com"
+          GC_BRANCH="bot/knowledge-gc-${GITHUB_RUN_ID}"
+          git checkout -b "$GC_BRANCH"
+          git add -A docs
+          git commit -m "docs(notes): archive notes nothing live cites (knowledge-gc)
+
+          $(cat gc.log)"
+          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" push origin "$GC_BRANCH"
+          PR_BODY="Scheduled retention pass (docs/plans/2026-11-03-agent-surface-reset.md §4.9, D-001): $(grep -c '^archive ' gc.log || true) note(s) nothing live cited for $DAYS days moved to docs/archive/notes/ with their links repointed; NOTES-INDEX regenerated. Opened by .github/workflows/knowledge-gc.yml on branch \`$GC_BRANCH\`. Cite a note from the doc, skill, tool or test that uses it to keep it live."
+          { echo "branch=$GC_BRANCH"; echo "body<<APEX_PR_BODY_EOF"; echo "$PR_BODY"; echo "APEX_PR_BODY_EOF"; } >> "$GITHUB_OUTPUT"
+
+      # The PR opens with LAND_TOKEN, the token land.yml uses for its PR operations: this repository does not let
+      # the default token create PRs (issue #5177). Without LAND_TOKEN the default token tries, and a refusal
+      # fails the job and opens (or, after a day, re-pings) one issue: .github/actions/open-bot-pr.
+      - name: Open the PR
+        if: steps.gc.outputs.branch != ''
+        uses: ./.github/actions/open-bot-pr
+        with:
+          branch: ${{ steps.gc.outputs.branch }}
+          title: "docs(notes): weekly knowledge-gc archive"
+          body: ${{ steps.gc.outputs.body }}
+          issue-title: "knowledge-gc PR needs a hand (bot/knowledge-gc)"
+          what: weekly knowledge-gc
+          pr-token: ${{ secrets.LAND_TOKEN }}
+          github-token: ${{ github.token }}

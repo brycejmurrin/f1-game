@@ -92,6 +92,11 @@ test("pins vTop/vStd/aStd/gearHi/rpmFor across PACE values (pre-refactor)", () =
         "rpm g=" + row.g + " s=" + row.s + " pace=" + g.pace);
     }
   }
+  // PACE === 1 (OVERALL SPEED notch 14) is the identity for aStd — not the
+  // retired "pace 5" notch of the old piecewise-linear slider.
+  env.setPACE(1);
+  assert.equal(env.api.aStd(3.5), 3.5);
+  assert.equal(env.api.aStd(-2), -2);
 });
 
 test("pins X-mode / ERS / aeroDfMult car snaps (pace-invariant; pre-refactor)", () => {
@@ -133,4 +138,18 @@ test("paceRef caches per cars identity and track.n", () => {
   assert.equal(env.api.paceRef().length, 8);
   env.setCars([]);
   assert.equal(env.api.paceRef().length, 12);
+});
+
+// #5791 decision B: an AI car's X-mode trade reads the NEUTRAL wing, whatever its own; a human
+// car (and a synthetic {aeroLoad} such as the garage bench) keeps its own — the player's trade is unchanged.
+test("X-mode: an AI car (human === false) trades at the neutral wing; a human keeps its own", () => {
+  const { api } = load();
+  const mid = { aeroLoad: 0.5, aeroX: 1 };
+  for (const fn of ["xVmaxGain", "xDfLoss", "xCoastCut", "aeroDfMult"]) {
+    for (const w of [0, 0.19, 1]) {
+      assert.equal(api[fn]({ aeroLoad: w, aeroX: 1, human: false }), api[fn](mid), `${fn}: AI at wing ${w} reads the neutral wing`);
+      assert.equal(api[fn]({ aeroLoad: w, aeroX: 1, human: true }), api[fn]({ aeroLoad: w, aeroX: 1 }), `${fn}: a human at wing ${w} keeps its own`);
+    }
+  }
+  assert.ok(api.xVmaxGain({ aeroLoad: 1, human: true }) > api.xVmaxGain({ aeroLoad: 0, human: true }), "the player's big wing still gains more from opening");
 });

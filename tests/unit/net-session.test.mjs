@@ -23,14 +23,20 @@ const load = (rel, name) => eval(fs.readFileSync(path.join(ROOT, rel), "utf8") +
 // (a strict-mode direct eval keeps its own declarations to itself).
 globalThis.M4 = load("js/core/mat4.js", "M4");
 globalThis.NetBytes = load("js/net/bytes.js", "NetBytes");   // transport.js binds it at call time
+const NetIce = load("js/net/ice.js", "NetIce");             // transport calls NetIce.create() at eval
 const NetTransport = load("js/net/transport.js", "NetTransport");
 // session.js shares NetSnapshot's ONE toView() rather than keeping a second
 // copy that can drift. Loading it is not optional decoration: without it every
 // state packet throws inside the message handler, the transport swallows the
 // throw (a handler bug must not read as a disconnect), and the session simply
 // never syncs its clock — a failure mode with no error message at all.
+const NetInterp = load("js/net/interp.js", "NetInterp");
 const NetSnapshot = load("js/net/snapshot.js", "NetSnapshot");
 const NetSession = load("js/net/session.js", "NetSession");
+// netplay.js calls both create() while it evaluates. The delivery test below
+// builds NetPlay with new Function, which resolves these names on the global.
+globalThis.QualiWire = load("js/net/quali-wire.js", "QualiWire");
+globalThis.StrategyWire = load("js/net/strategy-wire.js", "StrategyWire");
 
 const seededRnd = (seed) => {
   let s = (seed >>> 0) || 1;
@@ -520,6 +526,28 @@ test("autoPong answers only PINGs, and refuses a transport it cannot use", () =>
   assert.equal(NetSession.autoPong({}), false, "a thing with no onMessage/send is not a transport");
 });
 
+test("a second NetSession.create on one endpoint replaces the prior session handler", () => {
+  // onMessage only pushes; without the replace, re-create stacked decode
+  // handlers and every STATE/EVENT fired twice. autoPong must still keep its push.
+  const [ta] = NetTransport.loopback({ latencyMs: 0, rnd: seededRnd(91) });
+  const first = NetSession.create({ transport: ta, pingEveryMs: 100 });
+  const second = NetSession.create({ transport: ta, pingEveryMs: 100 });
+  const firstEvents = [], secondEvents = [];
+  first.onEvent("ping-test", (d) => firstEvents.push(d));
+  second.onEvent("ping-test", (d) => secondEvents.push(d));
+  const sessionHandlers = ta._handlers.message.filter((fn) => fn && fn._netSessionMsg);
+  assert.equal(sessionHandlers.length, 1, "exactly one session message binder");
+  // Deliver an EVENT through the wire-shaped path the binder owns.
+  const payload = JSON.stringify({ t: "ping-test", d: { n: 1 } });
+  for (const fn of ta._handlers.message) {
+    if (fn && fn._netSessionMsg) fn(NetTransport.EVENT, payload, 0);
+  }
+  assert.equal(firstEvents.length, 0, "the replaced first session does not see the event");
+  assert.equal(secondEvents.length, 1, "the live session receives it once");
+  first.close();
+  second.close();
+});
+
 // The handshake rides the SAME unreliable channel as the snapshots, and a
 // snapshot is not handed to the game until synced() — so on a lossy link the
 // rival simply does not appear, with no error and nothing on screen, for as
@@ -603,6 +631,57 @@ test("a PONG for a ping we never sent, or with a forged t0, is not a clock sampl
 });
 
 // ── round 9: the PONG's hold is not path, and a local close() is "local" ─────
+test("a single low-RTT outlier PONG cannot steal the offset before a step run confirms", () => {
+  // clockStepRun exists so one disagreeing sample is not a step. Before the
+  // hold-out fix, that sample still entered `samples`, and lowest-RTT election
+  // made it `best` immediately — a hostile or post-suspend PONG with a tiny
+  // RTT and a wild offset poisoned every peer timestamp until it aged out.
+  const { near, far, T0 } = bareFarEnd();
+  // Fast cadence so every tPing pump emits a PING; the receive pump may emit
+  // another, which we leave unanswered (takePing only matches the one we echo).
+  const session = NetSession.create({
+    transport: near, pingEveryMs: 1, syncPingEveryMs: 1, clockStepRun: 3,
+  });
+  const pong = (id, t0, t1, t2) => {
+    const dv = new DataView(new ArrayBuffer(29));
+    dv.setUint8(0, NetSession.PONG); dv.setUint32(1, id >>> 0);
+    dv.setFloat64(5, t0); dv.setFloat64(13, t1); dv.setFloat64(21, t2);
+    return new Uint8Array(dv.buffer);
+  };
+  let lastPing = null;
+  const realSend = near.send.bind(near);
+  near.send = (channel, data) => {
+    const ok = realSend(channel, data);
+    if (channel === NetTransport.STATE && data && data.byteLength >= 13) {
+      const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+      if (dv.getUint8(0) === NetSession.PING) lastPing = { id: dv.getUint32(1), t0: dv.getFloat64(5) };
+    }
+    return ok;
+  };
+  const exchange = (tPing, skew, rtt) => {
+    lastPing = null;
+    session.pump(tPing);
+    far.pump(tPing);
+    assert.ok(lastPing, "pump must emit a PING");
+    const { id, t0 } = lastPing;
+    // Peer stamps chosen so offset≈skew and measured rtt≈rtt (hold 0).
+    far.send(NetTransport.STATE, pong(id, t0, t0 + skew + rtt / 2, t0 + skew + rtt / 2));
+    session.pump(tPing + rtt);
+  };
+  for (let i = 0; i < 3; i++) exchange(T0 + i * 200, 0, 100);
+  assert.equal(session.synced(), true);
+  assert.equal(session.offset(), 0, "precondition: offset 0");
+  assert.equal(session.rtt(), 100, "precondition: rtt 100");
+  // One disagreeing PONG: offset +5000, rtt 2 — would win lowest-RTT if admitted.
+  exchange(T0 + 800, 5000, 2);
+  assert.equal(session.offset(), 0, "one outlier must not become best");
+  // Two more matching outliers complete the step run → offset moves to +5000.
+  exchange(T0 + 1000, 5000, 2);
+  exchange(T0 + 1200, 5000, 2);
+  assert.ok(Math.abs(session.offset() - 5000) < 5,
+    `three agreeing outliers confirm the step, got ${session.offset()}`);
+});
+
 test("a reply held by the peer for a frame does not bias the clock offset", () => {
   // The PONG used to carry only t1 (the PING's arrival); the reply left at
   // the peer's next pump, and that hold was counted as path and split

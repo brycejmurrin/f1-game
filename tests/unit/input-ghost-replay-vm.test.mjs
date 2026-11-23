@@ -1,5 +1,5 @@
 /* input-ghost-replay-vm.test.mjs — open-loop inputs recorded with a seed
- * replay byte-identically through InputGhost.atStep → __apex.setInput.
+ * replay byte-identically through the stored tape (decodeStep) → __apex.setInput.
  *
  * Pose Ghost is visual-only. This gate proves the deterministic input envelope
  * (seed + FIXED_DT + quantized controls) drives the same player distance when
@@ -11,6 +11,17 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+
+// The stored tape, decoded the way a replay would read it (the in-module
+// replay cursor was test-only and was removed, #3109 row 15).
+function stepAt(IG, i) {
+  const g = IG.envelope();
+  if (!g || !IG.compatible(g) || !g.steer.length) return null;
+  const n = g.steer.length, k = i < 0 ? 0 : (i >= n ? n - 1 : i | 0);
+  const s = IG.decodeStep(g.steer[k], g.flags[k], g.v >= 2 ? g.throttle[k] : undefined, g.v >= 2 ? g.brake[k] : undefined);
+  if (g.v === 3) Object.assign(s, { steer: g.rawSteer[k], throttleLevel: g.rawThrottle[k], brakeLevel: g.rawBrake[k] });
+  return s;
+}
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -41,7 +52,7 @@ test("InputGhost open-loop pack replays identically under one seed", () => {
   const IG = g.sandbox.InputGhost;
   assert.ok(IG, "InputGhost must load as a sandbox global");
 
-  // Build a short open-loop tape the same way TT would (quantize → store → atStep).
+  // Build a short open-loop tape the same way TT would (quantize → store → decode).
   IG.setTrack("monza");
   IG.startLap({
     seed: 99,
@@ -63,10 +74,9 @@ test("InputGhost open-loop pack replays identically under one seed", () => {
   }
   assert.equal(IG.finishLap(3.0), true);
   assert.equal(IG.compatible(IG.envelope()), true);
-  assert.equal(IG.beginReplay(), true);
 
   const packed = [];
-  for (let i = 0; i < IG.steps(); i++) packed.push(IG.atStep(i));
+  for (let i = 0; i < IG.steps(); i++) packed.push(stepAt(IG, i));
 
   const original = episodeFromInputs(99, raw);
   const a = episodeFromInputs(99, packed);
@@ -117,9 +127,8 @@ test("native TT fixed-tick tape captures lossless pedals, initial state and auxi
     assert.equal(tape.initialState.car.s, initialS);
     assert.equal(tape.initialState.seed, 919); assert.ok(Number.isFinite(tape.initialState.rngState));
     assert.ok(tape.context, "setup/physics/control configuration remains attached");
-    assert.equal(IG.beginReplay(), false, "auxiliary actions require explicit native adapter acknowledgement");
-    assert.equal(IG.beginReplay({ nativeControls: true }), true);
-    const controls = Array.from({ length: IG.steps() }, (_, i) => IG.atStep(i));
+    assert.ok(tape.replayControls, "auxiliary actions name the native adapter a replay needs");
+    const controls = Array.from({ length: IG.steps() }, (_, i) => stepAt(IG, i));
     assert.equal(controls[7].overtake, true); assert.equal(controls[12].shiftUp, true);
     A.reset(0.02, 55, 0, tape.initialState.seed);
     Object.assign(G.player, tape.initialState.car);

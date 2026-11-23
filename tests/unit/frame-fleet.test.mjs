@@ -125,3 +125,35 @@ test("assertFleet refuses a single-circuit report and junk", () => {
   assert.throws(() => FF.assertFleet(null, "b.json"), /not a fleet record/);
   assert.ok(FF.assertFleet(fleetOf({}), "c.json"));
 });
+
+// ---- the fleet's exit code (2026-11-10) ------------------------------------
+// `frame-report --fleet` with EVERY circuit's child failing printed
+// "0/2 circuits" and exited 0, so a caller reading the status saw a pass. A
+// circuit that was not judged fails the sweep; the JSON is still printed.
+test("fleetExitCode: any circuit not judged (or none at all) is a red", async () => {
+  const { fleetExitCode } = await import("../../tools/shot/frame-report.mjs");
+  assert.equal(fleetExitCode({ tracks: { monza: { frames: [], meanScore: 80 } } }), 0);
+  assert.equal(fleetExitCode({ tracks: { monza: { frames: [] }, spa: { error: "exit 1" } } }), 1);
+  assert.equal(fleetExitCode({ tracks: { monza: { error: "x" }, spa: { error: "y" } } }), 1);
+  assert.equal(fleetExitCode({ tracks: {} }), 1, "an empty fleet judged nothing");
+});
+
+test("frame-report --fleet whose every child fails exits non-zero and still prints its JSON", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const { spawnSync } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "frame-fleet-test-"));
+  try {
+    const bad = path.join(dir, "bad-shots.json");
+    fs.writeFileSync(bad, "{bad");                       // every child refuses it
+    const r = spawnSync(process.execPath, ["tools/shot/frame-report.mjs", "--fleet", "--tracks", "monza,spa",
+      "--shots", bad, "--out", path.join(dir, "fleet.json"), "--json"], { cwd: ROOT, encoding: "utf8", timeout: 60000 });
+    assert.equal(r.status, 1, r.stderr);
+    const rec = JSON.parse(r.stdout);
+    assert.deepEqual(Object.keys(rec.tracks), ["monza", "spa"]);
+    assert.ok(Object.values(rec.tracks).every((e) => e.error), "both circuits errored");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

@@ -313,6 +313,9 @@ const TrackModels = (function () {
       }
       appendBuffer(out, stage, id);
       diagnostics.emitted.push({ id, required, vertices, kind });
+      // The emitted box, for a later placer that must yield to it (the
+      // pit-straight crowd, build-props.js): modelGroup claims no mass.
+      if (actual && ctx.onEmitted) ctx.onEmitted(id, actual);
       return true;
     }
 
@@ -388,7 +391,11 @@ const TrackModels = (function () {
         const lat = supportGap + sw / 2 + 0.12;
         const under = deckUnder;           // deck underside above the road datum
         for (const side of [-1, 1]) {
-          const foot = ctx.groundPoint(frame.k, side, lat, ctx.groundHeight(frame.k, lat));
+          // `side` reaches the surface profile's pit flattening and berm lift
+          // (heightAt(k, dist, side)); without it a leg on the pit side was
+          // seated 0.05-0.10 m under the surface it stands on (measured across
+          // the roster 2026-11-10: never above it, so never floating).
+          const foot = ctx.groundPoint(frame.k, side, lat, ctx.groundHeight(frame.k, lat, side));
           if (!finiteArray(foot, 3)) continue;
           // Base-anchored box would be wrong here: box() centres its `c`. Span
           // foot -> deck underside, with 0.3 m of embed at the bottom and a
@@ -399,6 +406,41 @@ const TrackModels = (function () {
           box(stage, [foot[0], foot[1] - 0.3 + h / 2, foot[2]],
               [sw, h, spec.depth != null ? spec.depth : 1.4],
               spec.supportColor || spec.color, [frame.r, frame.u, frame.t]);
+        }
+      }
+      // EXTREME props detail: a gantry-sized span (no soffit, a slim deck) shows its truss —
+      // top and bottom chords, verticals and alternating diagonals on both faces, a hair
+      // proud of the deck — and bolted base plates under its legs. Bridges keep their slab.
+      if (propsHi(ctx.track) && !soffit && thickness <= 1.2 && depth <= 2.5 && span <= 60) {
+        const bs = [frame.r, frame.u, frame.t], tc = spec.supportColor || spec.color;
+        const steel = Array.isArray(tc) ? [tc[0] * 0.85, tc[1] * 0.85, tc[2] * 0.88] : [0.2, 0.2, 0.22];
+        const nb = Math.max(4, Math.round(span / 1.8)), bay = span / nb;
+        const P = (x, y, f) => {
+          const c = at(lift + y);
+          return [c[0] + frame.r[0] * x + frame.t[0] * f, c[1] + frame.r[1] * x + frame.t[1] * f, c[2] + frame.r[2] * x + frame.t[2] * f];
+        };
+        const ht = thickness / 2 - 0.06;
+        for (const fs of [-1, 1]) {
+          const f = fs * (depth / 2 + 0.05);
+          for (const y of [ht, -ht]) box(stage, P(0, y, f), [span, 0.12, 0.10], steel, bs);   // chords
+          for (let i = 0; i <= nb; i++) box(stage, P(-span / 2 + i * bay, 0, f), [0.08, thickness - 0.1, 0.08], steel, bs);
+          for (let i = 0; i < nb; i++) {
+            const x0 = -span / 2 + i * bay, g = (i & 1) ? 1 : -1;
+            const a = P(x0, -g * ht, f), b2 = P(x0 + bay, g * ht, f);
+            const d = [b2[0] - a[0], b2[1] - a[1], b2[2] - a[2]], L = __M.hypot(d[0], d[1], d[2]);
+            if (!(L > 0.05)) continue;
+            const ax = [d[0] / L, d[1] / L, d[2] / L], t = frame.t;
+            const s1 = [ax[1] * t[2] - ax[2] * t[1], ax[2] * t[0] - ax[0] * t[2], ax[0] * t[1] - ax[1] * t[0]];
+            box(stage, [(a[0] + b2[0]) / 2, (a[1] + b2[1]) / 2, (a[2] + b2[2]) / 2], [0.07, L, 0.07], steel, [s1, ax, t]);
+          }
+        }
+        if (spec.supports !== false && ctx.groundHeight && ctx.groundPoint) {
+          const sw = (spec.supportWidth != null ? spec.supportWidth : 0.8) * 0.9;
+          for (const side of [-1, 1]) {
+            const lat = supportGap + sw / 2 + 0.12;
+            const foot = ctx.groundPoint(frame.k, side, lat, ctx.groundHeight(frame.k, lat, side));
+            if (finiteArray(foot, 3)) box(stage, [foot[0], foot[1] + 0.03, foot[2]], [sw + 0.5, 0.06, depth + 0.5], steel, bs);
+          }
         }
       }
       appendBuffer(out, stage, id);
@@ -454,7 +496,7 @@ const TrackModels = (function () {
         let emitted = 0;
         try { for (let i = 0; i < samples; i++) {
           const dist = (spec.gap || 0) + depth * (i + 0.5);
-          const y = ctx.groundHeight(spec.k || 0, dist);
+          const y = ctx.groundHeight(spec.k || 0, dist, spec.side);
           if (!Number.isFinite(y)) continue;
           const center = [dist * (spec.side || 1), y - spec.size[1] / 2, 0];
           if (box(out, center, [depth, spec.size[1], spec.size[2]], spec.color, spec.basis)) emitted++;
@@ -485,7 +527,7 @@ const TrackModels = (function () {
       const lift = (1 + patchSeq++ % 5) * minSep;
       const midDist = gap + sz[0] / 2;
       const mid = [px[k] + r[0] * side * (hw[k] + midDist),
-        ctx.groundHeight(k, midDist), pz[k] + r[2] * side * (hw[k] + midDist)];
+        ctx.groundHeight(k, midDist, side), pz[k] + r[2] * side * (hw[k] + midDist)];
       const suppress = (em, pit) => (diagnostics.suppressed.push({
         id, required: pit ? false : required,
         reason: (pit ? (em ? "emitted footprint " : "") + "superseded by the pit complex"
@@ -495,8 +537,20 @@ const TrackModels = (function () {
         const v = preflight({ center, size, basis });
         return v === true ? null : v;
       };
+      // Only the pit complex drops a patch whole. A ROAD hit falls through to
+      // the per-cell guard below, which keeps the clear cells: the whole-box
+      // test (the capsule widened by the patch) dropped 53 of qatar's 620
+      // verges, 45 of which never touch the tarmac (#5080).
       const hit = reject(mid, sz, [r, u, t]);
-      if (hit !== null) return suppress(false, hit === "pit");
+      if (hit === "pit") return suppress(false, true);
+      // …but rejBox skips a box whose top is >0.3 m under the road, so a
+      // drape cell UNDER an embanked road passed it (montreal-park-lawn-r-10:
+      // 30 cells 1.6 m under the hairpin). In a patch the road hit, a cell
+      // must also clear the road's footprint height-blind, centre and corners.
+      // A patch the road missed keeps the old per-cell test exactly.
+      const onRoad = hit === false && ctx.onRoad
+        ? (q, c) => ctx.onRoad(c[0], c[2], 0) || q.some((p) => ctx.onRoad(p[0], p[2], 0))
+        : () => false;
       const cuts = [gap];
       const rails = ctx.rails || [];
       for (const d of rails) if (d > gap + 0.25 && d < gap + sz[0] - 0.25) cuts.push(d);
@@ -512,7 +566,7 @@ const TrackModels = (function () {
       for (let j = 0; j <= rows; j++) for (let i = 0; i <= cols; i++) {
         const o = side * (hw[k] + cuts[i]), f = (j / rows - 0.5) * sz[2];
         const x = px[k] + r[0] * o + t[0] * f, z = pz[k] + r[2] * o + t[2] * f;
-        const g = terrainAt(x, z), y = (g != null ? g : ctx.groundHeight(k, cuts[i])) + lift;
+        const g = terrainAt(x, z), y = (g != null ? g : ctx.groundHeight(k, cuts[i], side)) + lift;
         top.push([x, y, z]); bot.push([x, y - sz[1], z]);
       }
       const cellB = [normFn([r[0], 0, r[2]]), UPV, normFn([t[0], 0, t[2]])];
@@ -523,7 +577,7 @@ const TrackModels = (function () {
         const q = quad(i, j), hi = Math.max(q[0][1], q[1][1], q[2][1], q[3][1]);
         const lo = Math.min(q[0][1], q[1][1], q[2][1], q[3][1]) - sz[1];
         const c = [(q[0][0] + q[2][0]) / 2, (lo + hi) / 2, (q[0][2] + q[2][2]) / 2];
-        if (reject(c, [cuts[i + 1] - cuts[i], hi - lo, sz[2] / rows], cellB) === null) {
+        if (reject(c, [cuts[i + 1] - cuts[i], hi - lo, sz[2] / rows], cellB) === null && !onRoad(q, c)) {
           keep[j * cols + i] = 1; kept++;
         }
       }
@@ -559,7 +613,7 @@ const TrackModels = (function () {
       const height = spec.height || 1;
       const width = spec.width || 0.25;
       const ground = (k, side, dist) => {
-        const y = ctx.groundHeight(k, dist || 0);
+        const y = ctx.groundHeight(k, dist || 0, side);
         if (!Number.isFinite(y)) return null;
         return ctx.groundPoint ? ctx.groundPoint(k, side || 1, dist || 0, y) : [(dist || 0), y, k];
       };
@@ -798,6 +852,48 @@ const TrackModels = (function () {
     return { drape, drapeRun };
   }
 
-  return { create, validateGeometry, scratch, sealGeometry, drapeKit };
+  // PROPS DETAIL — the EXTREME desktop tier's `propsHi` feature (js/perf/quality-preset.js FEATURES).
+  // GfxQuality does not exist inside the build worker, so the flag rides the BUILD CONFIG: the
+  // built track carries it as track._detailFeatures (the scenery ctx's detailFeatures). Absent
+  // (HIGH and below, every phone, every VM harness that does not ask) = false, and every emitter
+  // keeps today's exact bytes. Every owner (structures, city, pits, overheadSpan) asks HERE, so the
+  // wiring is this one line. HI_NEAR (m beyond the road edge) is the distance cut: a prop placed
+  // farther out keeps today's mesh at any detail.
+  //
+  // Sources for the hi-detail shapes (structures.js, city.js, pits.js, models.js):
+  //   W-beam rail on steel posts at 1.905 m with ~0.2 m blockouts — FHWA standard drawings M617-10/-11
+  //     (highways.dot.gov/federal-lands/std-drawings/Std617-11.pdf); MwRSF 203 mm blockout note.
+  //   TecPro block ~1.5 m long x 1.2 m high x 0.6 m deep, strapped in a chain —
+  //     en.wikipedia.org/wiki/Tecpro_barrier; TecPro F1 booklet (kartcom.com BookletTecproF12013.pdf).
+  //   Catch-fence: steel posts, mesh with longitudinal cables (can.ltd.uk geotechnical catch fences);
+  //     a cranked top leaning toward the hazard (ibstock.co.uk chainlink cranked top post).
+  //   Low-poly architecture reads real by silhouette and shadow-catching depth: bevel/chamfer the
+  //     corners, recess the windows and give frames real depth, keep detail where it is seen
+  //     (creativebloq.com how-make-low-poly-buildings-games; 80.lv tips-on-creating-stylized-3d-content).
+  const HI_NEAR = 45;
+  function propsHi(track) {
+    const f = track && track._detailFeatures;
+    return !!(f && f.propsHi);
+  }
+
+  // The hi rail profiles every propsHi owner shares (structures.js guardrail, build-props.js street panels).
+  // W-beam (canonical, unit length along t), `d` = the track-facing sign: two crests proud, the valley set
+  // back, rolled lips top and bottom (FHWA M617, ~0.31 m deep section); x0 shifts the whole section along d.
+  function wBeam(rec, d, yc, k, col, x0) {
+    const dk = [col[0] * 0.82, col[1] * 0.82, col[2] * 0.84], o = x0 || 0;
+    rec.box([o + d * 0.05, yc + 0.125 * k, 0], [0.09, 0.15 * k, 1], col);   // upper crest
+    rec.box([o + d * 0.05, yc - 0.125 * k, 0], [0.09, 0.15 * k, 1], col);   // lower crest
+    rec.box([o, yc, 0], [0.07, 0.11 * k, 1], dk);                           // valley, set back
+    for (const sg of [-1, 1])
+      rec.box([o + d * -0.01, yc + sg * 0.215 * k, 0], [0.06, 0.03 * k, 1], dk);   // rolled lips
+  }
+  // Steel C-post set behind the rail (the track face is `d`).
+  function cPost(rec, d, h, yb, col) {
+    rec.box([-d * 0.17, yb + h / 2, 0], [0.15, h, 0.06], col);              // web
+    for (const sg of [-1, 1])
+      rec.box([-d * 0.10, yb + h / 2, sg * 0.055], [0.06, h, 0.02], col);  // flanges
+  }
+
+  return { create, validateGeometry, scratch, sealGeometry, drapeKit, propsHi, HI_NEAR, wBeam, cPost };
 })();
 Object.freeze(TrackModels);

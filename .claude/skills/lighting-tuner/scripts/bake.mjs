@@ -9,7 +9,7 @@
 // Accepts either the full `window.LightPresets = {…};` the panel exports, or a
 // bare `{…}` object. The export is strict JSON; hand-edited JS object literals
 // (unquoted keys) are tolerated via a fallback. Validates shape (keys are
-// "track|tod|weather" or "*", values are {knobId:number}) before writing, then
+// badProfileKey's shapes, values {knobId:number}) before writing, then
 // replaces the assignment in js/lighting/presets.js. It does NOT touch the
 // shell: committed tags stay ?v=dev and the deploy stamps hashes (see the tail
 // of this file). Does NOT commit — the skill drives review + push.

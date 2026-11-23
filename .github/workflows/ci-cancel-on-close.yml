@@ -1,49 +1,20 @@
 name: Cancel CI of a closed PR
 
-# A CLOSED OR MERGED PR'S QUEUED CI IS PURE WASTE (2026-10-15). With ~77 open
-# PRs against 40 Linux slots, 17 CI runs were still queued (one for 175 min)
-# for PRs already closed or merged — 15 circuit-survey PRs closed in a batch —
-# while the deploy branch's own CI and Pages train starved behind them. Nothing
-# cancels a PR's run when the PR closes: ci.yml's PR group only cancels on the
-# NEXT push to the same head.ref, and a closed PR gets none.
-#
-# Two mechanisms, cheapest first:
-# 1. This workflow's run joins ci.yml's PR concurrency group,
-#    `ci-<pull_request.head.ref>` (ci.yml resolves to exactly that for a
-#    pull_request event), with cancel-in-progress. Concurrency groups are
-#    repository-wide across workflows, so creating this run cancels that PR's
-#    pending or running CI at once — no runner needed for the cancel itself.
-#    https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
-#    ("…any previously in-progress or pending job will be canceled, regardless
-#    of the workflow"; read 2026-10-15)
-# 2. One seconds-long job then cancels whatever else is still queued or
-#    running for that branch from a pull_request event (Docs guards, a
-#    straggler), via the REST API.
-#    https://docs.github.com/en/rest/actions/workflow-runs#cancel-a-workflow-run
-#
-# Reopening the PR starts a fresh CI run in the same group, so nothing is lost.
-# tests/unit/ci-guard-tools.test.mjs pins the group string against ci.yml.
-#
-# NOT FOLDED INTO pages.yml (audit4 D1 / ci-train F10, 2026-10-26). Its value is
-# its trigger: `pull_request: closed` joins the closed PR's own concurrency
-# group, which no job in pages.yml (push / schedule / dispatch) can do. Zero
-# failures is the expected signal of a cancel-only workflow, not dead weight;
-# ~76 runs a day of about 0.1 min each.
-
+# Cleanup never joins ci.yml's concurrency group. GitHub admits a replay of an
+# old close before any runner can check whether the PR has since reopened.
+# Use the base workflow for fork closes too. The job runs only inline shell,
+# does no checkout, and only cancels PR runs created before this closure.
 on:
-  pull_request:
+  pull_request_target:   # zizmor: ignore[dangerous-triggers] no checkout or execution of PR code
     types: [closed]
 
-concurrency:
-  group: ci-${{ github.event.pull_request.head.ref }}
-  cancel-in-progress: true
-
-permissions:
-  actions: write
-  contents: read
+permissions: {}
 
 jobs:
   cancel-stragglers:
+    permissions:
+      pull-requests: read
+      actions: write
     name: Cancel the closed PR's other runs
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -53,17 +24,28 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           BRANCH: ${{ github.event.pull_request.head.ref }}
-          SELF: ${{ github.run_id }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR: ${{ github.event.pull_request.number }}
+          CLOSED_AT: ${{ github.event.pull_request.closed_at }}
         run: |
           set -euo pipefail
-          # Every live status the List-runs API accepts; pending/waiting/requested
-          # runs hold a concurrency slot too (#2266 taught queue-depth the same).
-          # https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-repository
+          pr=$(gh api "repos/$REPO/pulls/$PR")
+          if ! jq -e '.state == "closed" and .closed_at == env.CLOSED_AT and (.closed_at | type == "string")' <<<"$pr" >/dev/null; then
+            echo "PR #$PR reopened or closed again since this event"
+            exit 0
+          fi
           for st in queued in_progress pending waiting requested; do
-            gh api -X GET "repos/$REPO/actions/runs" -f branch="$BRANCH" -f event=pull_request -f status="$st" -f per_page=100 \
-              --jq '.workflow_runs[] | "\(.id) \(.name)"' | while read -r id name; do
-              [ "$id" = "$SELF" ] && continue
-              echo "cancel $id ($name)"
+            ids=$(gh api --paginate -X GET "repos/$REPO/actions/runs" -f branch="$BRANCH" -f event=pull_request -f status="$st" -f per_page=100 |
+              jq -r '.workflow_runs[] | select(.head_repository.full_name == env.HEAD_REPO)
+                | select((.created_at | type == "string") and .created_at < env.CLOSED_AT)
+                | select(.run_attempt == 1 or ((.run_started_at | type == "string") and .run_started_at < env.CLOSED_AT))
+                | select(if (.pull_requests | length) == 0 then .head_sha == env.HEAD_SHA
+                         else all(.pull_requests[]; .number == (env.PR | tonumber)) end)
+                | .id')
+            while read -r id; do
+              [ -n "$id" ] || continue
+              echo "cancel $id"
               gh api -X POST "repos/$REPO/actions/runs/$id/cancel" >/dev/null || echo "  (already finishing)"
-            done
+            done <<<"$ids"
           done

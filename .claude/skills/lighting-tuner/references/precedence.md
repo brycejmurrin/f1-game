@@ -1,0 +1,32 @@
+# Lighting precedence, layers and fan-out
+
+## Precedence, lowest → highest (a later layer wins)
+
+1. `TUNE_DEFS.def` (`js/lighting/knobs.js`)
+2. shipped `js/lighting/presets.js` `"*"`
+3. shipped `"*|tod|wx"` (shared stamp, e.g. `"*|night|dry"`)
+4. shipped `"track|tod|weather"`
+5. shipped `"*|tod"` — when `condLayer` in `js/lighting/profiles.js` says it applies (all presets/device classes)
+6. localStorage `"*"`
+7. localStorage **`track|tod|weather`**
+
+`__apex.lightTune()` reads the resolved knobs; `lightTune({ id: value })` sets one live.
+
+## Which layer to edit
+
+- One-track complaint → that track's `"<id>|tod|wx"` row.
+- `"*|tod|wx"` stamp or `lightCopy()` → EVERY circuit; only for a fleet complaint, named in the PR.
+- Just one number to change, no blob → hand-edit that key ([bake.md](bake.md)).
+- `applyRaceSettings` (`js/lighting/atmosphere.js`) only for STRUCTURAL changes.
+
+## localStorage and live sliders
+
+Live slider edits write the **current condition** key (`set()` → `profiles[keyFor(id, key())]` in
+`js/lighting/profiles.js`; sun knobs land in the `|dry` slot), not global `"*"`; `lightTune()`
+persists the same way. localStorage (`apex26.lightTune`) outranks shipped presets — RESET in the
+LIGHTING TUNER (`reset()`) drops the current track/tod/weather and the legacy player `"*"` layer.
+
+## One condition, every circuit
+
+`__apex.lightCopy()` spreads knobs tuned here (merged) across `Tracks.LIST`; `lightCopy("look")`
+sends every live value. Both persist and return `undo` — `lightCopy({undo})` reverts the fan-out.

@@ -18,8 +18,8 @@ const BOOT_STEP_MS = Number(src.match(/let ms = (\d+);/)?.[1] || 15000);
 const settle = () => new Promise((r) => setImmediate(r));
 
 const gfxSeam = vm.runInNewContext(readFileSync(new URL("../../js/render/gfx.js", import.meta.url), "utf8") + ";Gfx");
-function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = false, ownerProtocol = false, requestAdapter } = {}) {
-  const ls = new Map(stored ? [["apex26.gfxBackend", stored]] : []), ss = new Map();
+function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = false, ownerProtocol = false, requestAdapter,
+  ls = new Map(stored ? [["apex26.gfxBackend", stored]] : []), ss = new Map(), onReload, build } = {}) {
   const timers = [], warns = [], calls = [];
   const ctx = vm.createContext({
     console, Promise,
@@ -28,7 +28,7 @@ function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = fals
     sessionStorage: { getItem: (k) => (ss.has(k) ? ss.get(k) : null), setItem: (k, v) => ss.set(k, String(v)), removeItem: (k) => ss.delete(k) },
     ApexXR: { bootPick: () => null, detect: xrDetect || (async () => {}) },
     navigator: { gpu: { requestAdapter: requestAdapter || (async () => ({})) } },
-    location: { reload() { throw new Error("no reload expected"); } },
+    location: { reload() { if (!onReload) throw new Error("no reload expected"); onReload(); } },
     document: { createElement: () => ({}), head: { appendChild() {} } },
     Event: class { constructor(type) { this.type = type; } },
     GLX: noGLX ? {} : { init: () => { calls.push("GLX.init"); return true; } },
@@ -40,6 +40,7 @@ function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = fals
     clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].live = false; },
   });
   ctx.window = ctx;
+  if (build) ctx.__APEX_BUILD = build;
   ctx.dispatchEvent = () => true;
   vm.runInContext(src.replace(/^const\b/gm, "var"), ctx);
   const rb = vm.runInContext("RendererBoot", ctx).create({
@@ -88,6 +89,36 @@ test("an XR capability probe that never settles does not hold the boot", async (
   assert.ok(h.warns.some((m) => /XR capability probe gave no answer/.test(m)));
 });
 
+// #5599: a requestAdapter() that never answers (the eval-time kick AND the probe) is bounded by caps alone. Since #5699 a
+// slow adapter on the unset default still gets TLX's own try after the probe's 4 s cap; a TLX create() that then hangs
+// too (it would ask the GPU process itself) is cut by the step cap and GLX takes the canvas. Each wait is one armed
+// cap, armed in turn, and none is left live. (CI's ~75 s boots were a main thread the browser blocked, which no timer
+// can cap; the spec-side cure is shipped-defaults.spec.js's own browser per test.)
+test("unset default: a requestAdapter() that never answers reaches GLX on the probe cap, then TLX's step cap", async () => {
+  let asks = 0;
+  const h = boot({ stored: null, requestAdapter: () => { asks++; return new Promise(() => {}); }, gfxCreate: () => new Promise(() => {}) });
+  const started = h.rb.start();
+  let done = false;
+  started.then(() => { done = true; });
+  await settle();
+  assert.equal(done, false, "premise: start() waits on the probe");
+  const live = () => h.timers.filter((t) => t.live && t.ms >= 1000).map((t) => t.ms);
+  assert.deepEqual(live(), [4000], "the probe's cap is the only wait armed");
+  h.fire(4000);
+  await settle();
+  assert.equal(done, false, "TLX gets its own try after the probe cap (#5699)");
+  assert.deepEqual(h.calls, ["tlx.js"], "TLX's group is fetched once, GLX not yet touched");
+  assert.deepEqual(live(), [BOOT_STEP_MS], "the hung create() is bounded by the step cap alone");
+  h.fire(BOOT_STEP_MS);
+  const r = await started;
+  assert.equal(r.gfx !== null, true, "GLX bound");
+  assert.equal(r.bound, false);
+  assert.deepEqual(h.calls, ["tlx.js", "GLX.init"], "GLX takes the canvas");
+  assert.equal(asks, 1, "the eval-time request is the probe's: boot asks the GPU process once");
+  assert.equal(h.ss.get("apex26.gfxAdapterWhy"), "requestAdapter() gave no answer in 4 s");
+  assert.deepEqual(live(), [], "no cap left live");
+});
+
 test("steps that settle in time are untouched and leave no live timer", async () => {
   const h = boot({ gfxCreate: async () => ({ api: "three" }), loadBackend: async (files) => { h.calls.push(...files); } });
   const r = await h.rb.start();
@@ -116,8 +147,8 @@ test("missing GLX fallback script is bounded and failed fetch resolves unavailab
 });
 
 for (const claimed of [false, true]) test(`timed-out alternate relinquishes publication and prevents competing claim (alreadyClaimed=${claimed})`, async () => {
-  let owner, finish;
-  const h=boot({ownerProtocol:true,gfxCreate:async (_, opts)=>{
+  let owner, finish, reloads = 0;
+  const h=boot({ownerProtocol:true,onReload:()=>reloads++,gfxCreate:async (_, opts)=>{
     owner=opts.initOwner;
     if(claimed) owner.canvas.getContext("webgpu");
     await new Promise(r=>{finish=r;});
@@ -127,8 +158,72 @@ for (const claimed of [false, true]) test(`timed-out alternate relinquishes publ
   const pending=h.rb.start(); await settle(); h.fire(BOOT_STEP_MS); const result=await pending;
   assert.equal(owner.active,false);
   if(claimed) assert.equal(result,null,"claimed timeout refuses same-page binding"); else assert.equal(result.bound,false);
-  assert.equal(h.calls.includes("GLX.init"),!claimed,"claimed canvas takes existing safe reload/refusal path");
+  assert.equal(h.calls.includes("GLX.init"),!claimed,"a claimed canvas is never handed to GLX on this page");
+  assert.equal(reloads,claimed?1:0,"#4577: a claimed hang reloads once into GLX instead of Graphics unavailable");
+  assert.equal(h.calls.includes("unavailable"),false,"no Graphics unavailable panel on either path");
+  assert.equal(h.ss.get("apex26.gfxClaimFail"),claimed?"1":undefined,"the reload rides the claim-fail latch");
   finish();await settle();assert.equal(result && result.bound,claimed ? null : false,"late backend never publishes");
+});
+
+// #4577: the claimed-hang reload shares the claim-fail latch, so it can never loop. The reloaded
+// tab consumes the latch and binds GLX without claiming; a second hang (here: the latch already
+// set when the hanging boot ran, the shape blocked or replayed storage would take) does NOT reload.
+function claimedHang(opts) {
+  return boot({ ownerProtocol: true, ...opts, gfxCreate: async (_, o) => { o.initOwner.canvas.getContext("webgpu"); return new Promise(() => {}); } });
+}
+test("a claimed hang reloads once; the reloaded tab binds GLX and keeps the hang's strike", async () => {
+  const ls = new Map([["apex26.gfxBackend", "three"]]), ss = new Map();
+  let reloads = 0;
+  const h1 = claimedHang({ ls, ss, onReload: () => reloads++ });
+  const p1 = h1.rb.start(); await settle(); h1.fire(BOOT_STEP_MS);
+  assert.equal(await p1, null);
+  assert.equal(reloads, 1);
+  assert.equal(ls.get("apex26.gfxBackendProbe"), "three", "the hang's canary stays armed across the reload");
+  const h2 = boot({ ls, ss, gfxCreate: async () => { throw new Error("the reloaded tab must not claim again"); } });
+  const r2 = await h2.rb.start();
+  assert.equal(r2.bound, false);
+  assert.deepEqual(h2.calls, ["GLX.init"], "the reload attaches GLX");
+  assert.equal(ss.has("apex26.gfxClaimFail"), false, "the latch is consumed");
+  assert.equal(ls.get("apex26.gfxBackendProbe"), "three", "the next cold start strikes the hang, as for an unclaimed one");
+  assert.equal(ls.get("apex26.gfxBackend"), "three", "the pick is untouched");
+});
+test("a claimed refusal reloads once, disarms the canary, and the next cold boot takes no strike (#4817)", async () => {
+  const ls = new Map([["apex26.gfxBackend", "three"]]), ss = new Map();
+  let reloads = 0;
+  const h1 = boot({ ls, ss, ownerProtocol: true, onReload: () => reloads++, gfxCreate: async (_, o) => { o.initOwner.canvas.getContext("webgpu"); return null; } });
+  assert.equal(await h1.rb.start(), null);
+  assert.equal(reloads, 1);
+  assert.equal(ls.has("apex26.gfxBackendProbe"), false, "a refusal is a live tab: canary disarmed");
+  const h2 = boot({ ls, ss, gfxCreate: async () => { throw new Error("the reloaded tab must not claim again"); } });
+  assert.equal((await h2.rb.start()).bound, false);
+  assert.equal(ls.has("apex26.gfxBackendProbe"), false);
+  const h3 = boot({ ls, ss });
+  await h3.rb.start();
+  assert.equal(ls.has("apex26.gfxProbeStrikes"), false, "no strike on the next cold boot");
+  assert.equal(ls.get("apex26.gfxBackend"), "three", "the pick survives");
+});
+// W11 (audit finding 3): TLX's WebGL2 leg claims "webgl2", not "webgpu". Its clean refusal takes the same reload
+// (#4851), never "Graphics unavailable" and never a same-page GLX on the context three just let go of.
+test("a claimed WebGL2 refusal (TLX's WebGL2 leg) also reloads once into GLX, not Graphics unavailable", async () => {
+  const ls = new Map([["apex26.gfxBackend", "three"]]), ss = new Map();
+  let reloads = 0;
+  const h = boot({ ls, ss, ownerProtocol: true, onReload: () => reloads++, gfxCreate: async (_, o) => { o.initOwner.canvas.getContext("webgl2"); return null; } });
+  assert.equal(await h.rb.start(), null);
+  assert.equal(reloads, 1);
+  assert.deepEqual(h.calls.filter((c) => c === "unavailable" || c === "GLX.init"), [], "no panel, no same-page GLX");
+  assert.equal(ss.get("apex26.gfxClaimFail"), "1", "behind the claim-fail latch");
+  assert.equal(ls.has("apex26.gfxBackendProbe"), false, "a refusal disarms the canary");
+});
+test("a second claimed hang does NOT reload: the latch is the only way back in", async () => {
+  // The reloaded tab cannot hang again: it consumed the latch and never hands the canvas over
+  // (asserted above). What is left is a hang whose latch cannot stick — storage that drops the
+  // write. Reloading there would replay the hang forever, so it must show the panel instead.
+  const ss = new Map();
+  ss.set = function () { return this; };   // writes vanish, reads see nothing
+  const h = claimedHang({ ss, onReload: () => assert.fail("a hang without a readable latch reloaded") });
+  const p = h.rb.start(); await settle(); h.fire(BOOT_STEP_MS);
+  assert.equal(await p, null);
+  assert.deepEqual(h.calls.filter((c) => c === "unavailable"), ["unavailable"], "Graphics unavailable, once");
 });
 
 test("known asynchronous GPU failure gets one compatibility card with explicit guarded recovery", async () => {
@@ -169,7 +264,7 @@ test("known asynchronous GPU failure gets one compatibility card with explicit g
   const recovery = vm.runInContext(readFileSync(new URL("../../js/render/shared/compatibility-recovery.js", import.meta.url), "utf8") + ";GfxRecovery", context);
   let backend = { api: "webgpu" };
   const ui = recovery.create({ document: doc, backendState: () => backend, clipboard: async (text) => { copied.push(JSON.parse(text)); return true; } });
-  const err = { message: "Instance dropped in popErrorScope", stack: "OperationError at vendor/three-0.186.1/three.webgpu.min.js:2:10" };
+  const err = { message: "Instance dropped in popErrorScope", stack: "OperationError at vendor/three-0.187.0/three.webgpu.min.js:2:10" };
   assert.equal(ui.handle("rejection", new Error("fetch failed")), false);
   assert.equal(ui.handle("rejection", { message: err.message, stack: "app.js:1" }), false);
   assert.equal(ui.handle("rejection", err), true);
@@ -180,6 +275,11 @@ test("known asynchronous GPU failure gets one compatibility card with explicit g
   assert.equal(ui.state().occurrences, 9);
   const modal = doc.createElement("dialog"); modal.open = true; dialogs.push(modal); doc.body.appendChild(modal);
   toggleLayer({ target: modal, newState: "open" });
+  const layersBeforeDetails = layers.length;
+  const details = card.children[card.children.length - 1];
+  toggleLayer({ target: details, newState: "open" });
+  toggleLayer({ target: details, newState: "closed" });
+  assert.equal(layers.length, layersBeforeDetails, "DETAILS inside the card does not hide and reshow the popover");
   assert.equal(card.parentNode, modal, "recovery is inside the modal, not inert behind it");
   assert.equal(layers[layers.length - 1], card, "recovery is promoted above a later modal");
   const otherPopover = doc.createElement("aside"); otherPopover.showPopover();
@@ -204,6 +304,40 @@ test("known asynchronous GPU failure gets one compatibility card with explicit g
   assert.equal(reloads, 1);
   backend = { api: "webgl2" };
   assert.equal(ui.handle("rejection", err), false, "no universal GPU-failure classification");
+});
+
+test("a known WebGPU failure is claimed in capture so the raw overlay does not also run", () => {
+  const listeners = [];
+  const context = vm.createContext({
+    console, Promise, Log: { info() {} },
+    GLX: { backendState: () => ({ api: "webgpu" }) },
+    document: {
+      body: { appendChild() {}, children: [] },
+      createElement() {
+        return { style: {}, dataset: {}, children: [], hidden: false, setAttribute() {}, appendChild() {}, focus() {},
+          showPopover() {}, hidePopover() {} };
+      },
+      addEventListener() {},
+      querySelectorAll: () => [],
+    },
+    addEventListener(type, fn, capture) { listeners.push({ type, fn, capture }); },
+    __apexErrors: [],
+  });
+  context.window = context;
+  vm.runInContext(readFileSync(new URL("../../js/render/shared/compatibility-recovery.js", import.meta.url), "utf8"), context, { filename: absSrc("js/render/shared/compatibility-recovery.js") });
+  const hook = listeners.find((l) => l.type === "unhandledrejection" && l.capture === true);
+  assert.ok(hook, "the recovery hook listens in the capture phase");
+  let stopped = false;
+  hook.fn({
+    reason: { message: "Instance dropped in popErrorScope", stack: "at vendor/three-0.187.0/three.webgpu.min.js:2:10" },
+    preventDefault() {},
+    stopImmediatePropagation() { stopped = true; },
+  });
+  assert.equal(stopped, true, "a known failure stops the shell's bubble overlay");
+  assert.equal(context.__apexErrors.length, 1, "the diagnostic ring still records the failure");
+  stopped = false;
+  hook.fn({ reason: new Error("ordinary rejection"), preventDefault() {}, stopImmediatePropagation() { stopped = true; } });
+  assert.equal(stopped, false, "an unrelated rejection still reaches the shell");
 });
 
 // #2285: a WGX/TLX pick that lands on GLX must say WHY, on the console and in
@@ -232,6 +366,24 @@ test("a SLOW adapter on a WGX pick still tries WGX, and a refusal names the slow
   const ok = boot({ stored: "webgpu", requestAdapter: () => new Promise(() => {}), gfxCreate: async () => ({ api: "webgpu" }) });
   const s2 = ok.rb.start(); await settle(); ok.fire(4000);
   assert.equal((await s2).bound, true, "and binds when WGX answers");
+});
+
+// Hunt 2026-11-18 (2) row 4 (#5699): the UNSET default (Bryce's iPhone) treated a slow adapter as absent and bound
+// GLX for the session. Like the WGX pick above, it now still tries TLX; a null adapter still keeps GLX.
+test("a SLOW adapter on the unset default still tries TLX; a null one keeps GLX", async () => {
+  let created = 0;
+  const h = boot({ stored: null, requestAdapter: () => new Promise(() => {}), gfxCreate: async () => { created++; return { api: "three" }; } });
+  const started = h.rb.start();
+  await settle();
+  h.fire(4000);
+  const r = await started;
+  assert.equal(created, 1, "TLX gets its own try after the 4 s cap");
+  assert.equal(r.bound, true);
+  assert.equal(h.ss.get("apex26.gfxAdapterWhy"), "requestAdapter() gave no answer in 4 s", "the boot probe's miss is still recorded");
+  let created2 = 0;
+  const none = boot({ stored: null, requestAdapter: async () => null, gfxCreate: async () => { created2++; return { api: "three" }; } });
+  assert.equal((await none.rb.start()).bound, false);
+  assert.equal(created2, 0, "a null adapter never fetches three");
 });
 
 test("a create() that refuses without its own reason still records one", async () => {
@@ -316,4 +468,58 @@ test("an explicit THREE pick whose early adapter hangs or rejects hands null aft
   const bad = boot({ stored: "three", requestAdapter: () => Promise.reject(new Error("refused")), gfxCreate: async (_c, opts) => { seen2 = opts.adapter; return { api: "three" }; } });
   assert.equal((await bad.rb.start()).bound, true);
   assert.equal(seen2, null, "a rejected early adapter rides as null");
+});
+
+// #5942: BOOT_STEP_MS wraps Gfx.create(), and TLX's create() includes the ~1.16 MB three island import.
+// Two slow first loads on cellular struck the canary twice and retired three for good. A create() that
+// times out while the owner says the vendor import is still downloading is a network stall: no strike.
+function stalledImport(ls) {
+  return boot({ ownerProtocol: true, ls, gfxCreate: (_, opts) => { opts.initOwner.importing_(true); return new Promise(() => {}); } });
+}
+test("#5942: two create() timeouts during the three import, then a good boot: three is not retired", async () => {
+  const ls = new Map([["apex26.gfxBackend", "three"]]);
+  for (let i = 0; i < 2; i++) {
+    const h = stalledImport(ls);
+    const started = h.rb.start(); await settle(); h.fire(BOOT_STEP_MS);
+    const r = await started;
+    assert.equal(r.bound, false, "this boot falls through to GLX");
+    assert.equal(ls.has("apex26.gfxBackendProbe"), false, "a download stall disarms the canary: no strike");
+    assert.ok(h.warns.some((m) => /three module download gave no answer/.test(m)), "the reason names the download");
+  }
+  assert.equal(ls.get("apex26.gfxBackend"), "three", "the pick survives");
+  assert.equal(ls.has("apex26.gfxRetired"), false);
+  assert.equal(ls.has("apex26.gfxProbeStrikes"), false, "no strike was recorded");
+  let tried = 0;
+  const good = boot({ ls, gfxCreate: async () => { tried++; return { api: "three" }; } });
+  const r = await good.rb.start();
+  assert.equal(tried, 1, "the next boot still tries three");
+  assert.equal(r.bound, true);
+});
+
+test("#5942: a create() that hangs AFTER the import still strikes (real-hang protection intact)", async () => {
+  const ls = new Map([["apex26.gfxBackend", "three"]]);
+  // hang (armed) → strike 1, GLX this boot → hang again (armed) → strike 2 retires.
+  for (let i = 0; i < 4; i++) {
+    const h = boot({ ownerProtocol: true, ls, gfxCreate: (_, opts) => {
+      opts.initOwner.importing_(true); opts.initOwner.importing_(false); return new Promise(() => {}); } });
+    const started = h.rb.start(); await settle(); h.fire(BOOT_STEP_MS); await started;
+  }
+  assert.equal(ls.get("apex26.gfxBackend"), "webgl2", "two armed boots retire a device that hangs in init");
+  assert.match(ls.get("apex26.gfxRetired") || "", /^three:/);
+});
+
+test("#5942: a retirement expires on a new build with one strike left; the same build keeps it", async () => {
+  const retiredLs = () => new Map([["apex26.gfxBackend", "webgl2"], ["apex26.gfxRetired", "three:1700"]]);
+  let tried = 0;
+  const create = async () => { tried++; return { api: "three" }; };
+  const same = boot({ ls: retiredLs(), build: 1700, gfxCreate: create });
+  assert.equal((await same.rb.start()).bound, false, "same build: still retired");
+  assert.equal(tried, 0);
+  assert.equal(same.ls.get("apex26.gfxRetired"), "three:1700");
+  const next = boot({ ls: retiredLs(), build: 1701, gfxCreate: create });
+  assert.equal((await next.rb.start()).bound, true, "a new build tries three again");
+  assert.equal(tried, 1);
+  assert.equal(next.ls.get("apex26.gfxBackend"), "three");
+  assert.equal(next.ls.has("apex26.gfxRetired"), false);
+  assert.equal(next.ls.get("apex26.gfxProbeStrikes"), "three:1", "one strike left: a backend that still dies re-retires on its first kill");
 });

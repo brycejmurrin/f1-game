@@ -6,7 +6,6 @@
  * repo-root version.json. Sets APEX_APP_VERSION for extraMetadata.
  *
  *   node scripts/set-version.mjs
- *   node scripts/set-version.mjs --json
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -51,10 +50,5 @@ function apply() {
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  const out = apply();
-  if (process.argv.includes("--json") || !process.stdout.isTTY) {
-    console.log(JSON.stringify(out));
-  } else {
-    console.log(JSON.stringify(out));
-  }
+  console.log(JSON.stringify(apply()));
 }

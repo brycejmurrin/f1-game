@@ -8,7 +8,7 @@
 //        tlx-m8-singapore-night-{tlx,glx}.png shafts / glow / bloom
 //        tlx-m8-monza-viz-ssao.png            SSAO bisect blit (TLX)
 // Runs SEQUENTIALLY (one browser at a time) — shared-box etiquette.
-// Patterns follow spike/capture.mjs (free-port server, preinstalled Chromium).
+// Patterns follow the deleted spike/capture.mjs (free-port server, preinstalled Chromium; git history).
 
 import { createRequire } from "node:module";
 import { existsSync, mkdirSync, createReadStream, statSync, writeFileSync } from "node:fs";
@@ -16,6 +16,7 @@ import { createServer as createNetServer } from "node:net";
 import { createServer as createHttpServer } from "node:http";
 import { join, normalize, extname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { chromiumPath } from "../tools/lib/chromium-path.mjs";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url)).replace(/\/$/, "");
 const require = createRequire(ROOT + "/");
@@ -26,11 +27,9 @@ mkdirSync(OUT, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const VP = { width: 960, height: 540 };
 
-function chromePath() {
-  for (const p of ["/opt/pw-browsers/chromium", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"])
-    if (existsSync(p)) return p;
-  return undefined;
-}
+// Kept as chromePath so the f1-dev-tools audit can stub it in a VM; delegates to
+// the shared Playwright Chromium resolver (revision-aware, not a pinned literal).
+function chromePath() { return chromiumPath(); }
 function freePort() {
   return new Promise((res, rej) => {
     const s = createNetServer();
@@ -45,7 +44,7 @@ async function startServer() {
   const port = await freePort();
   // Containment compares against ROOT + sep, never the bare prefix: without the
   // separator a sibling directory that merely SHARES the prefix (…/f1-game-extra)
-  // passes the check. spike/capture.mjs already guards it this way.
+  // passes the check. The deleted spike/capture.mjs guarded it this way.
   const root = ROOT + sep;
   const server = createHttpServer((req, res) => {
     try {

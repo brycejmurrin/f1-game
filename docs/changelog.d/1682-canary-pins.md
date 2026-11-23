@@ -1,1 +1,0 @@
-Improved: gfx-backend-canary preference, latch-clear and recovery pins assert behaviour (VM / css-rules) instead of quoting source; a shrink-only `assert.match` ratchet tracks the remaining count under tests/unit (#1682).

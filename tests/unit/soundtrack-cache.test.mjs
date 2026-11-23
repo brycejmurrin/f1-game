@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs"; import path from "node:path"; import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
-const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"].map((file) =>
+const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/audio/engine.js"].map((file) =>
   fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n").replace(/^const\b/gm, "var");
 const param = (v) => ({ value: v, setTargetAtTime() {}, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, cancelScheduledValues() {} });
 function boot(opts = {}) {
@@ -34,12 +34,18 @@ function boot(opts = {}) {
   const fetched = [], decoded = [], mediaEls = [];
   const sb = { Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date: opts.Date || Date, Error, parseFloat, parseInt, isFinite, Float32Array,
     Log: { info() {}, warn(...a) { if (opts.log) console.log("  Log.warn:", a.join(" ")); }, debug() {}, error() {} },
-    document: { addEventListener(type, fn) { listeners[type] = fn; }, hidden: !!opts.hidden }, addEventListener() {}, removeEventListener() {},
+    document: { addEventListener(type, fn) { listeners[type] = fn; }, hidden: !!opts.hidden },
+    addEventListener(type, fn) { listeners[type] = fn; }, removeEventListener() {},
     setTimeout: (fn, ms) => { if (typeof fn === "function") return setTimeout(fn, ms || 0); return 0; },
     clearTimeout: (id) => { if (id) clearTimeout(id); },
     navigator: opts.userActivation ? { userActivation: opts.userActivation } : {},
     AudioContext: function () { return createContext(); },
-    fetch: (url) => { fetched.push(url); const ab = new ArrayBuffer(8); ab.url = url; return Promise.resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(Object.assign(new ArrayBuffer(/^blob:/.test(url) && opts.bytes || 8), { _url: url })) }); } };
+    AbortController,
+    fetch: (url, init) => {
+      fetched.push(url);
+      if (opts.fetch) return opts.fetch(url, init);
+      return Promise.resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(Object.assign(new ArrayBuffer(/^blob:/.test(url) && opts.bytes || 8), { _url: url })) });
+    } };
   if (opts.Audio) sb.Audio = opts.Audio;
   if (opts.perf) sb.performance = opts.perf;
   sb.window = sb;
@@ -62,6 +68,122 @@ function boot(opts = {}) {
   };
 }
 const flush = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
+
+test("switching from a streamed upload to a decoded track releases the previous media source", async () => {
+  class Audio {
+    pause() {}
+    play() { return Promise.resolve(); }
+    removeAttribute() { this.src = ""; }
+    load() {}
+  }
+  const { A, mediaEls } = boot({ Audio, mediaSource: true });
+  A.init(); await flush();
+  A.addTracks([{ id: "user:stream", name: "stream", url: "blob:stream" }]);
+  assert.ok(A.playTrackId("user:stream"));
+  assert.equal(mediaEls[0].src, "blob:stream");
+  assert.ok(A.playTrackId("builtin:song2"));
+  await flush();
+  assert.equal(mediaEls[0].src, "", "the dormant media element releases its decoder and upload");
+  assert.equal(A.currentTrackId(), "builtin:song2");
+});
+
+test("changing tracks aborts the superseded download without restarting the selected one", async () => {
+  const requests = [];
+  const { A, decoded } = boot({
+    fetch(url, init) {
+      if (!url.startsWith("assets/music/")) return Promise.resolve({ ok: false, status: 404 });
+      return new Promise((resolve) => { requests.push({ url, signal: init?.signal, resolve }); });
+    },
+  });
+  A.init(); await flush();
+  A.playTrackId("builtin:song2");
+  A.playTrackId("builtin:song3");
+  A.playTrackId("builtin:song3");
+  assert.deepEqual(requests.map((r) => [r.url, r.signal?.aborted]), [
+    ["assets/music/song2.mp3", true], ["assets/music/song3.mp3", false],
+  ]);
+  const bodiesRead = [];
+  for (const req of requests) req.resolve({ ok: true, arrayBuffer() {
+    bodiesRead.push(req.url);
+    return Promise.resolve(Object.assign(new ArrayBuffer(8), { _url: req.url }));
+  } });
+  await flush();
+  assert.deepEqual(bodiesRead, ["assets/music/song3.mp3"]);
+  assert.deepEqual(decoded, ["assets/music/song3.mp3"]);
+});
+
+test("a recently replayed decoded track survives the next cache eviction", async () => {
+  const { A, decoded } = boot();
+  A.init(); await flush();
+  for (const name of ["song2", "song3", "song2", "song4", "song2"]) {
+    assert.ok(A.playTrackId("builtin:" + name));
+    await flush();
+  }
+  assert.equal(decoded.filter((url) => url.endsWith("/song2.mp3")).length, 1, "the newest cache hit is kept");
+});
+
+test("a delayed natural end repeats a single decoded song from its first sample", async () => {
+  const { A, contexts, started, decoded } = boot();
+  A.init(); await flush();
+  const id = "user:repeat";
+  A.addTracks([{ id, name: "repeat", url: "blob:repeat" }]);
+  A.setMusicSource("user");
+  assert.ok(A.playTrackId(id));
+  await flush();
+  const old = started.at(-1);
+  contexts[0].currentTime = old.buffer.duration + 0.25;
+  old.onended();
+  assert.notEqual(started.at(-1), old);
+  assert.deepEqual(started.at(-1).startArgs, [0, 0]);
+  assert.equal(decoded.filter((url) => url === "blob:repeat").length, 1);
+});
+
+test("hide freezes the decoded playback offset even when the context keeps running", async () => {
+  const { A, contexts, started, document, listeners } = boot();
+  A.init(); await flush();
+  assert.ok(A.playTrackId("builtin:song2"));
+  await flush();
+  const ctx = contexts[0];
+  ctx.suspend = () => Promise.reject(new Error("device refused background suspend"));
+  ctx.currentTime = 1.25;
+  document.hidden = true;
+  listeners.visibilitychange();
+  await flush();
+  ctx.currentTime = 2.75;
+  document.hidden = false;
+  listeners.visibilitychange();
+  await flush();
+  assert.deepEqual(started.at(-1).startArgs, [0, 1.25]);
+});
+
+test("a superseded stream cannot skip the replacement or arm a gesture retry", async () => {
+  const attempts = [];
+  class Audio {
+    pause() {}
+    play() {
+      return new Promise((resolve, reject) => { attempts.push({ url: this.src, resolve, reject }); });
+    }
+    removeAttribute() { this.src = ""; }
+    load() {}
+  }
+  const { A, mediaEls, listeners } = boot({ Audio, mediaSource: true });
+  A.init(); await flush();
+  A.addTracks(["first", "second"].map((name) => ({ id: "user:" + name, name, url: "blob:" + name })));
+  assert.ok(A.playTrackId("user:first"));
+  const oldEnded = mediaEls[0].onended;
+  const oldError = mediaEls[0].onerror;
+  assert.ok(A.playTrackId("user:second"));
+  oldEnded();
+  oldError();
+  attempts[0].reject(Object.assign(new Error("late autoplay refusal"), { name: "NotAllowedError" }));
+  attempts[1].resolve();
+  await flush();
+  listeners.touchend({ type: "touchend", isTrusted: true });
+  assert.deepEqual(attempts.map((attempt) => attempt.url), ["blob:first", "blob:second"]);
+  assert.equal(A.currentTrackId(), "user:second");
+  assert.equal(mediaEls.length, 1, "both tracks share the unlocked element");
+  A.stopMusic();
+});
 
 test("removeTrack frees its LRU slot: a live cached buffer is not evicted early", async () => {
   const { A, decoded } = boot();

@@ -40,3 +40,39 @@ export function changedPaths(args = [], { cwd = ROOT, run = execFileSync } = {})
   const out = run("git", ["diff", "--name-status", "-z", "-M", ...args], { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   return parseNameStatusZ(out);
 }
+
+/** Untracked, not-ignored paths (`git ls-files --others --exclude-standard`).
+ *  A new file is invisible to `git diff <base>` until `git add`, and AGENTS.md's
+ *  loop runs the selectors BEFORE staging (audit W6, 2026-11-10). */
+export function untrackedPaths({ cwd = ROOT, run = execFileSync } = {}) {
+  const out = run("git", ["ls-files", "--others", "--exclude-standard", "-z"], { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  return String(out || "").split("\0").filter(Boolean);
+}
+
+/** The diff base a branch's selection is measured against: the merge-base of
+ *  HEAD with `origin/<branch>`, else with the local `<branch>`. Null when
+ *  neither resolves (a shallow or unfetched clone): callers must REFUSE then,
+ *  never fall back to HEAD~1 — the last commit's selection read as green for
+ *  the whole branch (audit W6, 2026-11-10). git's stderr is swallowed: the
+ *  caller prints one "no deploy base" line instead of a `fatal:` per ref. */
+export function resolveDeployBase(branch, { cwd = ROOT, run = execFileSync } = {}) {
+  for (const ref of [`origin/${branch}`, branch]) {
+    try {
+      const sha = String(run("git", ["merge-base", "HEAD", ref], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }) || "").trim();
+      if (sha) return { ref, sha };
+    } catch (_) { /* try the next ref */ }
+  }
+  return null;
+}
+
+/** The refusal text when resolveDeployBase answers null. */
+export function noDeployBaseMessage(branch, tool) {
+  return `[${tool}] no deploy base: neither origin/${branch} nor ${branch} resolves to a merge-base with HEAD — nothing selected, nothing verified.\n`
+    + `  Fetch it (\`git fetch origin ${branch}\`; a shallow clone needs \`git fetch --unshallow\`) or name the files / --since <ref> explicitly.`;
+}
+
+/** Paths changed against `base` in the WORKING TREE (committed, staged and
+ *  unstaged edits) plus untracked files, rename sources included. */
+export function changedWithUntracked(base, opts = {}) {
+  return [...new Set([...changedPaths([base], opts), ...untrackedPaths(opts)])];
+}

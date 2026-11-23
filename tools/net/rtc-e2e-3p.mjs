@@ -32,6 +32,16 @@
 import { fileURLToPath } from "node:url";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log("usage: node tools/net/rtc-e2e-3p.mjs\n  Three peers over real WebRTC in one room (host + two guests, the relay). Launches Chromium; minutes.\n  Exit 0 = all three race and each sees the other two; 1 = failure. Not for subagents (AGENTS.md rule 10).");
+  process.exit(0);
+}
+// Refuse BEFORE starting the static server: launchChromium refuses under
+// APEX_SUBAGENT too, but only after the server was already up (#5712).
+if (process.env.APEX_SUBAGENT) {
+  console.error("a subagent never starts a browser (AGENTS.md rule 10; APEX_SUBAGENT is set): report rtc-e2e-3p as NOT RUN.");
+  process.exit(1);
+}
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
 const PORT = 4468;                       // separate port; browser runs stay serialized
 const alive = async () => {
@@ -167,7 +177,7 @@ if ((await guests()) < 2) await die(`only ${await guests()} guest(s) connected, 
 log(el(), `\n*** THREE PEERS IN ONE ROOM at ${el()} ***`);
 
 // ---- race ----------------------------------------------------------------
-await Promise.all([A, B, C].map((p) => p.evaluate(() => window.__apex.lobbyReady(true))));
+await Promise.all([A, B, C].map((p) => p.evaluate(() => window.__apex.lobbyReady(true, true))));
 // WAIT for readiness to arrive before pressing start. startFromRoom() refuses
 // unless every peer's READY has actually landed, and these are real
 // connections — saying "ready" and the host KNOWING it are separated by a real

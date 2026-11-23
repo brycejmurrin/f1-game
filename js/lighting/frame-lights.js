@@ -24,8 +24,40 @@ const _tlPool = [];
 // every slot for track lamps. The red spill on the road is a decal
 // (CarMesh.drawTailGlow). Reused buffer: this runs every lit frame.
 const _tlGlowBuf = [];
+// EXTREME lightsHi (GfxHi, lazy): the bound backend compiled past MAX. Only GfxHi lets it (LightBudget.setSlots),
+// so while this is false every budget below is today's expression exactly.
+function _hb() { return LightBudget.slots() > LightBudget.MAX; }
+function _hiExtra() { return _hb() ? GfxHi.hiExtra(tierShed) : 0; }   // the slots above MAX this frame may use
 function tailLightsEmit() { return +LT.tailLightEmit > 0; }
-function appendCarTailLights(frame, track, cars, player, mobileTier) {
+// Two short-range emitters at the front discs. Sample the interpolated wheel
+// basis only on hot, dark frames that actually have space in the live budget.
+const _brakeMat = new Float32Array(16);
+const _brakeOnly = [];
+function brakeSpillIntensity(frame, player) {
+  // Axle thermals are optional. With them off, follow the same stored heat
+  // and cooldown as the visible brake rings, including replay playback.
+  const thermal = Number.isFinite(player.brakeTF) && typeof WheelState !== "undefined" &&
+    WheelState.enabled() && WheelState.thermalEnabled();
+  const hot = thermal ? (player.brakeTF - 600) / 400 : ((player.brakeHeat || 0) - 0.4) / 0.6;
+  const heat = _clampNum(hot, 0, 1);
+  return 4 * heat * heat * frame.brakeSpillEnabled;
+}
+function appendBrakeSpill(frame, player, groundPose, wheels, intensity) {
+  const m = groundPose(player, _brakeMat);
+  for (const wheel of wheels) {
+    if (!wheel.front) continue;
+    const { x, y, z } = wheel;
+    frame.lights.push(m[12] + x*m[0] + y*m[4] + z*m[8], m[13] + x*m[1] + y*m[5] + z*m[9],
+      m[14] + x*m[2] + y*m[6] + z*m[10], intensity, intensity * 0.19, intensity * 0.025,
+      2.6, 0, -1, 0, -0.75, -1, 1, 0, 0); // wide spill, no volumetrics or lens flare
+  }
+  frame.brakeSpillCount = 2;
+  frame.tailCount += 2; // per-chunk and mirror consumers carry the moving suffix; shadows skip it
+}
+function appendCarTailLights(frame, track, cars, player, mobileTier, groundPose, wheels) {
+  frame.brakeSpillCount = 0;
+  const spill = frame.brakeSpillEnabled && player && groundPose && wheels && !mobileTier ? brakeSpillIntensity(frame, player) : 0;
+  if (!frame.lights && spill) { _brakeOnly.length = 0; frame.lights = _brakeOnly; }
   const L = frame.lights;
   frame.glowLights = L;
   const emit = tailLightsEmit();
@@ -61,7 +93,7 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
   _tlSel.length = _tlN;      // drop stale entries from earlier (busier) frames
   _tlSel.sort(_byDistAsc);   // hoisted comparator, shared with setFrameLights
   const nT = Math.min(_tlSel.length, 5);
-  if (nT <= 0) return;
+  if (nT <= 0 && !spill) return;
   // Paint mode: no slot is taken, nothing is evicted — the records land in the
   // glow-only copy, after the lamps, exactly where the emit path puts them.
   let T = L;
@@ -103,9 +135,10 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
   // GLX.init / WGX.create / TLX.create): TLX-lite compiles a 16-slot loop, and
   // measuring room against 48 there meant the tail-lights appended below never
   // reached the shader at all.
-  const SLOTS = tierShed(Math.min(mobileTier ? LightBudget.MOBILE : LightBudget.MAX, LightBudget.slots()));
-  const room = SLOTS - ((L.length / 15) | 0);
-  if (emit && room < nT && L.length >= nT * 15) L.length -= (nT - room) * 15;
+  const SLOTS = tierShed(Math.min(mobileTier ? LightBudget.MOBILE : LightBudget.MAX + _hiExtra(), LightBudget.slots()));
+  const dynamic = (emit ? nT : 0) + (spill ? 2 : 0);
+  if (dynamic) L.length = Math.min(L.length, Math.max(0, SLOTS - dynamic) * 15);
+  frame.tailStart = L.length / 15;
   // TAIL-LIGHT FADE: ease the glow out over the last `tailFade` m before the range
   // cutoff so a car doesn't pop in/out abruptly as it drifts past the limit. 0 =
   // hard cutoff (as-shipped), so the fade term is 1 for every selected car.
@@ -130,10 +163,11 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
       4.5 * tlm, 0.14 * tlm, 0.10 * tlm,
       8 * (1 + bAmt * 0.45), dx, dy, dz, 0.5, -0.2, 0.12, 0.25, 0.4);
   }
-  if (!emit) return;   // paint mode: tailStart/tailCount stay the empty range set above
-  // The nT tail-lights are the LAST nT records — after any trim above.
-  frame.tailCount = nT;
-  frame.tailStart = ((L.length / 15) | 0) - nT;
+  if (emit) {
+    frame.tailCount = nT;
+    frame.tailStart = ((L.length / 15) | 0) - nT;
+  }
+  if (spill) appendBrakeSpill(frame, player, groundPose, wheels, spill);
 }
 
 // Cull the track light set to the nearest CAP lamps (shader max 48; traffic uses
@@ -151,7 +185,7 @@ const _lightScaleBuf = [];
 // _allLightsGen is the change signal for consumers that cache by identity
 // (WGX's trackLightSBO upload) — it moves when the VALUES move.
 const _allLightsBuf = [];
-let _allLightsGen = 0;
+let _allLightsGen = 0, _allLightsStaticGen = 0;
 // frame.lampSetGen: moves when the lamp SET or its SCALE moves (a new source
 // array, a length change, a new time-of-day / LAMP LEVEL scale) and never for
 // flicker or warm-up. game.js's env-probe hold latches on it: latched on
@@ -197,9 +231,16 @@ if (typeof document !== "undefined" && document.addEventListener)
 // ~40 % of setFrameLights with flicker on). -1 = not yet computed.
 let _hshC = new Float32Array(0);
 function _hshOf(o) {
-  if (o >= _hshC.length) { const nc = new Float32Array(Math.max(o + 1, _hshC.length * 2, 1024)).fill(-1); nc.set(_hshC); _hshC = nc; }
-  let h = _hshC[o];
-  if (h < 0) { const x = Math.sin((o + 13) * 91.17) * 43758.5453; h = _hshC[o] = x - Math.floor(x); }
+  // Each source record spans 15 numbers, but only one cached hash.
+  const lamp = o / 15;
+  if (lamp >= _hshC.length) {
+    const next = new Float32Array(Math.max(lamp + 1, _hshC.length * 2, 1024));
+    next.set(_hshC);
+    next.fill(-1, _hshC.length);
+    _hshC = next;
+  }
+  let h = _hshC[lamp];
+  if (h < 0) { const x = Math.sin((o + 13) * 91.17) * 43758.5453; h = _hshC[lamp] = x - Math.floor(x); }
   return h;
 }
 // Per-lamp rgb factor scratch: [0..2] flicker × breathe × warm-up tint (what the
@@ -284,12 +325,15 @@ function lampCap(carCount, mobileTier) {
   // ...and never above the bound backend's slot count (LightBudget.slots()):
   // appendCarTailLights evicts against SLOTS, so a cap above it would only
   // be trimmed again there.
+  // EXTREME lightsHi: `hi` is the slots above MAX this frame (80 at full HI, sliding to 0 on a shed;
+  // always 0 at detail 0). LAMP COUNT keeps its 8-slot tail-light reserve on top (40 + 80 = 120).
+  const hi = _hiExtra();
   let cap = Math.min(
     // LAMP COUNT applies with traffic in BOTH tail-light modes: it is a player
     // slider (and a per-fragment cost), not only the tail-light reserve. Paint
     // mode's gain is that no lamp is EVICTED for a tail-light (appendCarTailLights).
-    carCount > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 40) : LightBudget.MAX,
-    mobileTier ? LightBudget.MOBILE : LightBudget.MAX,
+    carCount > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 40) + hi : LightBudget.MAX + hi,
+    mobileTier ? LightBudget.MOBILE : LightBudget.MAX + hi,
     LightBudget.slots());
   // Shed the nearest-lamp budget under PerfGov load before the fragment loop
   // pays for distant slots (tier 1 drops env probe; tier 2 drops lamp shadow).
@@ -309,7 +353,9 @@ function lampCap(carCount, mobileTier) {
 // one at a time through the guard band and return through the entry ramp.
 const SHED_HOLD_MS = 1500, SHED_DOWN = 16, SHED_UP = 32, GLOW_FADE_S = 0.4;
 let _shTier = 0, _shTierT = -1e9, _shHeld = 0, _shLim = NaN, _shT = NaN, _glowF = 1;
-function _shedLimit(tier) { return tier >= 2 ? LightBudget.MOBILE : tier >= 1 ? 32 : LightBudget.MAX; }
+// Tier 0 is MAX, or GfxHi.frameMax() (the lightsHi slots). A lightsHi shed drops it 128 -> 48 at once and the
+// limit slides down at 160/s above MAX (about half a second), SHED_DOWN below.
+function _shedLimit(tier) { return tier >= 2 ? LightBudget.MOBILE : tier >= 1 ? 32 : _hb() ? GfxHi.frameMax() : LightBudget.MAX; }
 function _shedTick() {
   const now = typeof performance !== "undefined" ? performance.now() : Date.now();
   if (now === _shT) return;
@@ -319,7 +365,7 @@ function _shedTick() {
   const target = _shedLimit(_shHeld);
   const dt = _shT === _shT ? Math.min(0.25, Math.max(0, (now - _shT) * 0.001)) : 1e9;
   if (_shLim !== _shLim) _shLim = target;
-  else if (_shLim > target) _shLim = Math.max(target, _shLim - SHED_DOWN * dt);
+  else if (_shLim > target) _shLim = Math.max(target, _shLim - (_shLim > LightBudget.MAX ? 160 : SHED_DOWN) * dt);
   else if (_shLim < target) _shLim = Math.min(target, _shLim + SHED_UP * dt);
   // Halos are dropped outright at tier >= 3 (game.js drawGlow); fade them instead.
   const gT = _shHeld >= 3 ? 0 : 1, gStep = dt / GLOW_FADE_S;
@@ -331,6 +377,7 @@ function tierShed(cap) {
   _shedTick();
   return Math.min(cap, Math.ceil(_shLim));
 }
+function _lim() { _shedTick(); return _shLim; }   // GfxHi.chunkCap's view of the slide
 // Halo strength multiplier under the held governor tier (1 = full, 0 = off).
 function glowFade() {
   if (typeof PerfGov === "undefined") return 1;
@@ -365,8 +412,13 @@ function _fillAllLights(frame, src, sr, sg, sb, fl, tNow) {
   const out = _allLightsBuf;
   const n = src.length;
   const fresh = _alSrc !== src || _alLen !== n;
-  if (!fresh && tNow != null && fl === _alFl && sr === _alR && sg === _alG && sb === _alB
-      && out.length === n && tNow - _alT >= 0 && tNow - _alT < _AL_MIN_DT) {
+  if (fresh) _allLightsStaticGen++;
+  frame.allLightsStaticGen = _allLightsStaticGen;
+  // DIRTY-ONLY (R2-2, #3104): the steady factor (flicker 0 and warm-up done; 52 preset
+  // rows ship lampFlicker 0) is a constant, so the same source and scale
+  // mean nothing moved: skip the whole-set re-tint outright, not every 50 ms.
+  if (!fresh && fl === _alFl && sr === _alR && sg === _alG && sb === _alB && out.length === n
+      && (fl === _flSteadyFn || (tNow != null && tNow - _alT >= 0 && tNow - _alT < _AL_MIN_DT))) {
     frame.allLights = out;
     frame.allLightsGen = _allLightsGen;
     return;
@@ -424,11 +476,13 @@ function _rankSet(S, src, count, CAP, eye, fwd, sr, sg, sb, fl, tNow, out) {
   const dist2 = edx * edx + edy * edy + edz * edz;
   const ageMs = (tNow - S.rankT) * 1000;
   // Distance OR time budget: reuse while inside both. Standstill skips age so a
-  // parked viewpoint does not rebuild on the clock alone.
+  // parked viewpoint does not rebuild on the clock alone. LAMP CULL FADE is no
+  // key: membership never reads it (only _cullBand below does, every call), and
+  // a weather blend walks it every frame for 25 s (R2-4, #3104).
   const withinDist = dist2 < _RANK_EYE_EPS2;
   const withinAge = dist2 < _RANK_STILL2 || ageMs < _RANK_MAX_MS;
   const reuseRank = S.rankSrc === src && S.rankCap === CAP && S.rankCount === count
-    && S.rankReach === reach && S.rankBias === bias && S.rankFade === fade
+    && S.rankReach === reach && S.rankBias === bias
     && heap.length > 0
     && withinDist && withinAge
     && (fdx * fdx + fdz * fdz) < _RANK_FWD_EPS2;
@@ -552,7 +606,7 @@ function _rankSet(S, src, count, CAP, eye, fwd, sr, sg, sb, fl, tNow, out) {
     S.rankEyeX = eye[0]; S.rankEyeY = eye[1]; S.rankEyeZ = eye[2];
     S.rankFwdX = ux; S.rankFwdZ = uz;
     S.rankGRef = gRef; S.rankDEdge = dEdge; S.rankTrunc = truncated;
-    S.rankReach = reach; S.rankBias = bias; S.rankFade = fade;
+    S.rankReach = reach; S.rankBias = bias;
     S.rankT = tNow;
   }
   const _cullBand = gRef * fade;
@@ -600,7 +654,7 @@ function _rankSet(S, src, count, CAP, eye, fwd, sr, sg, sb, fl, tNow, out) {
 function _rankState() {
   return { heap: [], buf: [], lum: [], rankSrc: null, rankCap: -1, rankCount: -1,
     rankEyeX: NaN, rankEyeY: NaN, rankEyeZ: NaN, rankFwdX: NaN, rankFwdZ: NaN,
-    rankGRef: 1, rankDEdge: 1, rankTrunc: false, rankReach: NaN, rankBias: NaN, rankFade: NaN,
+    rankGRef: 1, rankDEdge: 1, rankTrunc: false, rankReach: NaN, rankBias: NaN,
     rankT: -1e9,
     entrySrc: null, entryLvl: new Float32Array(0), entryStamp: new Uint32Array(0), entryFrame: 1, entryT: 0 };
 }
@@ -630,6 +684,9 @@ function release() {
   // release(). Null every pool car and drop the selection list.
   for (let i = 0; i < _tlPool.length; i++) _tlPool[i].c = null;
   _tlSel.length = 0;
+  // Flicker hash table grows with the largest lamp offset this session; drop it
+  // on track switch so a dense night circuit does not keep ~N×4 bytes forever.
+  _hshC = new Float32Array(0);
 }
 /** THE MIRROR'S LAMPS. frame.lights is ranked for the FORWARD camera, and that
  *  ranking pushes lamps behind it down the list (lampBehindBias) — exactly the
@@ -672,6 +729,7 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   // Reserve slots for car tail lights: appendCarTailLights fills AFTER this
   // cull, against the same budget (see lampCap).
   const CAP = lampCap(cars.length, mobileTier);
+  frame.chunkLampCap = _hb() ? GfxHi.chunkCap(_lim) : 0;   // lightsHi cell cap; 0 = tsl-lit keeps its own
   // scale may be a scalar (uniform dim) or a [r,g,b] vector (time-of-day brightness
   // + warmth: dim & warm at twilight, full & neutral at deep night).
   let sr = Array.isArray(scale) ? scale[0] : (scale == null ? 1 : scale);

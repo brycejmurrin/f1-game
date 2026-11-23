@@ -38,12 +38,8 @@
    or x-height would not hold the boxes. It also leaves the populated `.hud-top`
    string 18% NARROWER than Rajdhani (206.2 -> 169.2 px at 14px), which is slack
    in exactly the place docs/notes/HUD-TABULAR-DIGITS.md says the fit pass fights
-   for it. The three weights mirror Rajdhani's; 800 still synth-bolds from 700. */
-@font-face {
-  font-family: "Barlow Condensed"; font-style: normal; font-weight: 500;
-  font-display: swap; size-adjust: 91.9%;
-  src: url("../assets/fonts/barlow-condensed-latin-500-normal.woff2") format("woff2");
-}
+   for it. Shipped weights are the ones CSS actually asks for (600/700); 500 had
+   no live font-weight:500 consumer. 800 still synth-bolds from 700. */
 @font-face {
   font-family: "Barlow Condensed"; font-style: normal; font-weight: 600;
   font-display: swap; size-adjust: 91.9%;
@@ -54,5 +50,13 @@
   font-display: swap; size-adjust: 91.9%;
   src: url("../assets/fonts/barlow-condensed-latin-700-normal.woff2") format("woff2");
 }
+
+/* EVERY NUMBER HOLDS STILL (design pass 3E). Barlow's default digits are
+   proportional (274-484 per 1000 em; the font-digits test data), so a lap
+   time or a gap drawn without tnum wobbles as it counts. Inherited from body:
+   Titillium's digits are already uniform, so this changes only Barlow (and
+   the Saira wordmark), and it reaches the 26 --font-hud rules that never set
+   it. A rule that wants proportional figures still says so (.res-settle-v). */
+body { font-variant-numeric: tabular-nums; }
 
 } /* @layer hud */

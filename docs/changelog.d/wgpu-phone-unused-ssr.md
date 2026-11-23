@@ -1,1 +1,0 @@
-Fixed: The WebGPU backup skips constructing the unused screen-space reflection shader, pipeline and uniform buffer on phone/WebKit and forced-lite tiers. Desktop reflections and the existing phone rendering policy are preserved.

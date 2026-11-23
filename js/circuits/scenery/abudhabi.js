@@ -6,13 +6,13 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["abudhabi"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, px, py, pz, pyMin, place, prop, groundPlane, addBox, seat,
-        anchor, onTrack, hash, vadd, building, motorhome, tower, grandstand, grandstandEx, billboard,
-        gantry, palm, bush, hedge, addCyl, addCone, addFrustum, addPrism,
+      const { K, lapBounds, out, MAT, pyMin, place, addBox, seat,
+        anchor, onTrack, hash, vadd, building, motorhome, tower, grandstandEx, billboard,
+        gantry, palm, bush, hedge, addCyl, addCone, addFrustum,
         fence, guardrail, tyreWall, marshalPost, wall, along, recordBarrier,
-        cityFront, forestEdge, backdrop, mountain, ferrisWheel, landmarkKit,
+        cityFront, backdrop, mountain, ferrisWheel, landmarkKit,
         modelGroup, overheadSpan, waterSurface, waterBand, groundPatch, circuitKit,
-        bleacher, sailCanopy, floodMast, underpassPortal } = api;
+        bleacher, sailCanopy, floodMast } = api;
 
       const LED_TEAL  = [0.20, 0.85, 0.95];
       const LED_MAG   = [0.95, 0.18, 0.72];
@@ -213,7 +213,7 @@
       }
 
       grandstandEx(sl(0.077), -1, 8, 70, null, null,
-        { livery: "sandstone", tiers: 1, roof: "flat", endWalls: true });
+        { livery: "sandstone", tiers: 1, roof: "flat" });
       ledFascia(sl(0.077), -1, 8, 70, 1);
       billboard(R(0.077), -1, 10, 18, 11, LED_TEAL);
 
@@ -266,24 +266,15 @@
         const side = (i % 2) ? 1 : -1;
         const tk = K(0.34 + i * 0.006);
         tower(tk, side, 16, 4, 34, { col: DARK, seg: 4, cap: true, capCol: FLOOD });
-        // Primary light pool — bright oval disc on the ground under the mast
-        const pa = anchor(tk, side, 16);
-        addCyl(out, vadd(pa.c, pa.u, 0.1), 9, 0.25, POOL, 10, [pa.r, pa.u, pa.t]);
-        // Softer halo ring around the pool
-        addCyl(out, vadd(pa.c, pa.u, 0.05), 16, 0.12, POOL_SOFT, 10, [pa.r, pa.u, pa.t]);
       }
       // Floodlights ringing the pit straight on the grandstand side (the pits
       // are +1). Shared floodMast: it REGISTERS its lens, so these light the
       // straight at night instead of standing over painted pool discs.
-      for (let i = 0; i < 6; i++) floodMast(R(0.006 + i * 0.012), -1, 20, { h: 36 });
-      // Hairpin floodlights — both sides with pools
+      for (let i = 0; i < 6; i++) floodMast(R(0.006 + i * 0.012), -1, 20, { h: 36, pool: false });
+      // Emit light from the mast heads on both sides of the hairpin.
       for (const side of [-1, 1])
-        for (let i = 0; i < 3; i++) {
-          const tk = R(HP - 0.014 + i * 0.014);
-          tower(tk, side, 18, 4, 34, { col: DARK, seg: 4, cap: true, capCol: FLOOD });
-          const pa = anchor(tk, side, 18);
-          addCyl(out, vadd(pa.c, pa.u, 0.1), 9, 0.25, POOL, 10, [pa.r, pa.u, pa.t]);
-        }
+        for (let i = 0; i < 3; i++)
+          floodMast(R(HP - 0.014 + i * 0.014), side, 18, { h: 34, pool: false });
 
       grandstandEx(0.42, -1, 9, 80, null, null,
         { livery: "darkSteel", tiers: 1, roof: "truss", endWalls: true });
@@ -310,28 +301,34 @@
       {
         // All content relative to ONE far anchor — re-anchoring closer to the
         // road made child prims fail "emitted footprint rejected".
-        const a0 = anchor(K(0.62), 1, 58);
+        const a0 = anchor(K(0.62), 1, 132);
         if (!onTrack(a0.c[0], a0.c[2], 24)) {
-          const b0 = [a0.r, a0.u, a0.t];
+          // Moor the boats level on the flat waterBand, clear of the shoreline.
+          const span = Math.hypot(a0.t[0], a0.t[2]);
+          const alongDock = [a0.t[0] / span, 0, a0.t[2] / span];
+          const acrossDock = [a0.r[0], 0, a0.r[2]];
+          const up = [0, 1, 0];
+          const waterline = [a0.c[0], pyMin - 0.82, a0.c[2]];
+          const b0 = [acrossDock, up, alongDock];
           modelGroup("abudhabi-marina", {
-            center: vadd(a0.c, a0.u, 4), size: [32, 14, 100], basis: b0,
+            center: vadd(waterline, up, 4), size: [32, 14, 100], basis: b0,
           }, (stage) => {
             for (let i = 0; i < 8; i++) {
               const tOff = (i - 3.5) * 11;
               const rOff = (i % 3) * 6;
-              const hc = vadd(vadd(a0.c, a0.t, tOff), a0.r, rOff);
+              const hc = vadd(vadd(waterline, alongDock, tOff), acrossDock, rOff);
               const big = (i % 5 === 0) ? 1.3 : (i % 2 === 0 ? 1.05 : 0.85);
-              addBox(stage, vadd(hc, a0.u, 1.1 * big), [4.0 * big, 2.0 * big, 10 * big],
+              addBox(stage, vadd(hc, up, 0.8 * big), [4.0 * big, 2.0 * big, 10 * big],
                 [0.94, 0.95, 0.96], b0);
-              seat.cyl(stage, vadd(hc, a0.u, 2.1 * big), 0.16, 10 * big,
+              seat.cyl(stage, vadd(hc, up, 1.8 * big), 0.16, 10 * big,
                 [0.86, 0.88, 0.92], 4, b0);
-              addBox(stage, vadd(hc, a0.u, 0.35), [4.4 * big, 0.3, 10.5 * big],
+              addBox(stage, vadd(hc, up, 0.35), [4.4 * big, 0.3, 10.5 * big],
                 [1.0, 0.85, 0.50], b0);
             }
             for (let i = 0; i < 5; i++) {
-              const p = vadd(a0.c, a0.t, (i - 2) * 16);
+              const p = vadd(waterline, alongDock, (i - 2) * 16);
               addCyl(stage, p, 0.35, 3.0, [0.72, 0.54, 0.28], 6, b0);
-              addBox(stage, vadd(p, a0.u, 3.3), [1.4, 0.7, 1.4], [0.85, 0.22, 0.12], b0);
+              addBox(stage, vadd(p, up, 3.3), [1.4, 0.7, 1.4], [0.85, 0.22, 0.12], b0);
             }
           }, { required: true });
         }
@@ -385,13 +382,6 @@
         addBox(out, vadd(a.c, a.u, 5.5), [1.4, 1.2, 1.4], WARM, [a.r, a.u, a.t]);
         // Pool raised to 0.14 (was 0.08): new gap-24 verge buried the old disc.
         addCyl(out, vadd(a.c, a.u, 0.14), 3.5, 0.28, [0.96, 0.82, 0.44], 8, [a.r, a.u, a.t]);
-      }
-
-      // Water reflection streaks — fewer, seated just under the water surface
-      // (was 8×2 buried boxes; cut to 4 to drop buried below baseline).
-      for (let i = 0; i < 4; i++) {
-        const ak = anchor(K(0.54 + i * 0.045), 1, 26 + (i % 2) * 8);
-        addBox(out, vadd(ak.c, ak.u, -0.12), [48, 0.28, 2.2], [1.0, 0.86, 0.44], [ak.r, ak.u, ak.t]);
       }
 
       grandstandEx(0.78, -1, 8, 100, null, null, { livery: "sandstone", roof: "truss", endWalls: true });
@@ -678,8 +668,8 @@
       ledFascia(0.22, -1, 8, 80, 1);
       grandstandEx(0.36, 1, 8, 60, null, null, { livery: "teal", roof: "cantilever" });           // NORTH
       ledFascia(0.36, 1, 8, 60, 1);
-      grandstandEx(0.48, -1, 8, 60, null, null, { livery: "darkSteel", roof: "truss" });          // SOUTH
-      ledFascia(0.48, -1, 8, 60, 1);
+      // Use the stand’s attached fascia so its trim follows the truss roof.
+      grandstandEx(0.48, -1, 8, 60, null, null, { livery: "darkSteel", roof: "truss", fasciaCol: LED_TEAL });
       // f58 survey: gap-8 bleacher sat in the paved run-off. Seat it further
       // back (gap 22) so the apron stays clear.
       if (typeof bleacher === "function") {
@@ -700,8 +690,8 @@
         });
       } else {
         grandstandEx(0.828, -1, 16, 60, null, null, { livery: "sandstone", roof: "flat" });
+        ledFascia(0.828, -1, 16, 60, 1);
       }
-      ledFascia(0.828, -1, 16, 60, 1);
       grandstandEx(sl(0.92), -1, 8, 60, null, null, { livery: "darkSteel", roof: "cantilever" });     // MAIN
       ledFascia(sl(0.92), -1, 8, 60, 1);
 
@@ -811,12 +801,15 @@
       guardrail(0.05, 0.18, -1, 6, [0.75, 0.77, 0.80]);
       guardrail(0.32, 0.42, 1, 6, [0.75, 0.77, 0.80]);
       guardrail(0.90, 0.99, -1, 6, [0.75, 0.77, 0.80]);
-      // Tyre-wall stacks at the tight corner exits (hairpin + final chicane)
-      tyreWall(sl(HP - 0.02), sl(HP + 0.02), 1, 5, LED_TEAL);
+      // Tyre-wall stacks at the tight corner exits, keyed off def.turns[] (racing frame, via sl()).
+      // +k is a LEFT turn, whose outside is the right (+1).
+      const TW_T34 = (api.def.turns[2] + api.def.turns[3]) / 2;   // north hairpin T3-T4 (left)
+      const TW_T16 = api.def.turns[15];                           // final corner T16 (right)
+      tyreWall(sl(TW_T34 - 0.02), sl(TW_T34 + 0.02), 1, 5, LED_TEAL);   // T3-T4 is a left: the outside is +1
       // inside of the curve: caps overlap at R_in ~34 m, so only the straights either side
-      tyreWall(sl(HP - 0.028), sl(HP - 0.015), -1, 5, LED_AMBER);
-      tyreWall(sl(HP + 0.015), sl(HP + 0.028), -1, 5, LED_AMBER);
-      tyreWall(sl(0.935), sl(0.968), -1, 5, LED_MAG);   // T16 is a right: the outside is -1
+      tyreWall(sl(TW_T34 - 0.028), sl(TW_T34 - 0.015), -1, 5, LED_AMBER);
+      tyreWall(sl(TW_T34 + 0.015), sl(TW_T34 + 0.028), -1, 5, LED_AMBER);
+      tyreWall(sl(TW_T16 - 0.011), sl(TW_T16 + 0.022), -1, 5, LED_MAG);   // T16 is a right: the outside is -1
       tyreWall(sl(0.05), sl(0.085), -1, 5, LED_TEAL);
       // Marshal posts (orange roof + flag pole) spaced around the lap.
       // Skip 0.60–0.72 (marina camera corridor) — a post at gap 7 filled f67.
@@ -856,13 +849,10 @@
           // Gap 23.2 / deeper 0.25: separates from the gap-12 pit fascia (flatCoplanar).
           place(R(0.006 + i * 0.011), 1, 23.2, [11.4, 1.4, 30.4], [1.0, 0.95, 0.80], 0.25);
         }
-        // Paddock floodlight masts — taller, with large light pools below
+        // Paddock floodlight masts
         for (let i = 0; i < 7; i++) {
           const tk = R(0.010 + i * 0.010 + (i >= 4 ? 0.010 : 0));
           tower(tk, 1, 50, 5, 32, { col: DARK, seg: 4, cap: true, capCol: FLOOD });
-          const pa = anchor(tk, 1, 50);
-          addCyl(out, vadd(pa.c, pa.u, 0.1), 12, 0.30, POOL, 12, [pa.r, pa.u, pa.t]);
-          addCyl(out, vadd(pa.c, pa.u, 0.04), 22, 0.18, POOL_SOFT, 12, [pa.r, pa.u, pa.t]);   // 0.12 lay 2 cm under grade
         }
       }
 
@@ -898,9 +888,10 @@
       }
 
       hedge(0.10, 0.18, -1, 12, 2.2, [0.16, 0.22, 0.14]);
-      // Marina hedge pulled off the jetty band (was gap 13 overlapping jetty
-      // decks → flatCoplanar).
-      hedge(0.64, 0.72, 1, 20, 2.0, [0.16, 0.22, 0.14]);
+      // Leave breaks in the marina hedge at the two tight inside bends,
+      // where a continuous row of 20 m-offset hedge segments folds onto itself.
+      for (const [start, end] of [[0.64, 0.647], [0.655, 0.670], [0.679, 0.72]])
+        hedge(start, end, 1, 20, 2.0, [0.16, 0.22, 0.14]);
       // low shrub clusters at safe distances
       for (let i = 0; i < 16; i++) {
         const s = i / 16;

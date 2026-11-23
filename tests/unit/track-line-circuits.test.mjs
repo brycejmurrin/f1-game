@@ -9,13 +9,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRequire } from "node:module";
+import fs from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require2 = createRequire(import.meta.url);
 const { buildContext } = require2("../../tools/track/verify-track.cjs");
 const Tracks = buildContext();
 // Relative use only — the same model on both sides of every comparison, so
 // no absolute speed here reaches anything (PHYSICS.md §curvature channels).
-const LAT = 22, VMAX = 72, MARGIN = 1.2;
+// The cornering, top-speed, brake and accel budgets are the DRIVING LINE's own
+// build() fallbacks (DrivingLine.DEFAULTS), read from the module, not copied.
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+function loadDrivingLine() {
+  const sandbox = { Math, Float32Array, console, M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) } };
+  sandbox.window = sandbox;
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/driving-line.js"), "utf8"), ctx,
+    { filename: absSrc("js/render/shared/driving-line.js") });
+  return vm.runInContext("DrivingLine", ctx, { filename: "track-line-circuits:evaluate" });
+}
+const DL = loadDrivingLine().DEFAULTS;
+const LAT = DL.latMax, VMAX = DL.vTop, MARGIN = 1.2;
 
 function build(id) {
   const def = Tracks.LIST.find((d) => d.id === id);
@@ -24,6 +41,10 @@ function build(id) {
 }
 // The offset curve's curvature, exactly — the expression the bake minimises.
 const lineCurv = (t) => Tracks._vmContext.TrackLine.lineCurvature(t);
+// The centreline in the SAME frame: the node geometry the line is relaxed
+// against (track.lineRoadK, line.js roadK), not track.curv's ±12 m smoothing,
+// which reads every hairpin gentler than the road and so flattered the road.
+const roadCurv = (t) => t.lineRoadK || t.curv;
 const cornerTime = (k, n, ds) => {
   let s = 0;
   for (let i = 0; i < n; i++) s += ds / Math.min(VMAX, Math.sqrt(LAT / Math.max(Math.abs(k[i]), 1e-5)));
@@ -34,7 +55,7 @@ const cornerTime = (k, n, ds) => {
 // corner EXIT counts. cornerTime is grip-limited at every node and cannot see
 // one; on the street circuits it reads the relaxed line as a hair slower than
 // the centreline while this reads it 7-11 % faster (tools/track/line-audit.mjs).
-const BRAKE = 22 * 0.85, ACCEL = 7;
+const BRAKE = DL.brake * DL.brakeMul, ACCEL = DL.accel;
 function lapTime(k, n, ds) {
   const v = new Float64Array(n);
   for (let i = 0; i < n; i++) v[i] = Math.min(VMAX, Math.sqrt(LAT / Math.max(Math.abs(k[i]), 1e-5)));
@@ -61,7 +82,7 @@ for (const id of ["monza", "spa", "silverstone"]) {
     // 0.5 m/m across a 4 m node: Monza's first chicane measures 0.46 (the road
     // itself turns 90° there); the knot bake's overlap lurches were 0.58–0.68.
     assert.ok(maxStep <= 0.5 * ds + 1e-6, `${id}: a ${maxStep.toFixed(2)} m step between nodes (${(maxStep / ds).toFixed(2)} m/m)`);
-    const tLine = cornerTime(lineCurv(t), n, ds), tRoad = cornerTime(t.curv, n, ds);
+    const tLine = cornerTime(lineCurv(t), n, ds), tRoad = cornerTime(roadCurv(t), n, ds);
     assert.ok(tLine <= tRoad, `${id}: the line's own curvature costs ${tLine.toFixed(1)} s of corner time against the centreline's ${tRoad.toFixed(1)} s`);
   });
 }
@@ -74,7 +95,7 @@ for (const id of ["monza", "spa", "silverstone", "monaco", "baku", "singapore", 
   test(`${id}: under a brake/accel budget the line is at least 5 % faster than the centreline`, () => {
     const t = build(id);
     const n = t.n, ds = t.total / n;
-    const lLine = lapTime(lineCurv(t), n, ds), lRoad = lapTime(t.curv, n, ds);
+    const lLine = lapTime(lineCurv(t), n, ds), lRoad = lapTime(roadCurv(t), n, ds);
     assert.ok(lLine <= 0.95 * lRoad, `${id}: ${lLine.toFixed(1)} s on the line against ${lRoad.toFixed(1)} s on the centreline (${(100 * (1 - lLine / lRoad)).toFixed(2)} %)`);
   });
 }

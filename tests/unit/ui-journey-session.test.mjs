@@ -56,9 +56,20 @@ test("landscape --fit-at uses zoom-correct data-shape selector (not @media orien
 
 test("Race Setup preserves requested size and scrolls the focused task", () => {
   const css = read("css/race-setup.css");
+  // Race Setup never shrinks the requested UI SIZE around fixed chrome (ui-scale.spec.js "Race setup adaptive task"
+  // pins appliedZoom = the requested scale at 667x320 and 844x390 @ 200 %): --fit-at 0 and zoom straight from --ui-scale.
+  // The sibling fit floor (db5f8a89, 220) painted 1.382 there and was red on that pin; it would paint 1.0 at 844x390.
   assert.match(css, /#race-settings > \.sheet\s*\{[^}]*--fit-at:\s*0px/);
-  assert.match(css, /#race-settings > \.sheet:is\(\[data-density="compact"\], \[data-shape="tall"\]\)\s*\{[^}]*overflow-y:\s*auto/);
-  assert.match(css, /#race-settings > \.sheet:is\(\[data-density="compact"\], \[data-shape="tall"\]\) > #rs-body\s*\{[^}]*overflow:\s*visible/);
+  assert.match(css, /#race-settings > \.sheet\s*\{[^}]*--_sheet-z:\s*var\(--ui-scale\)/);
+  assert.match(css, /#race-settings > \.sheet\s*\{[^}]*zoom:\s*var\(--ui-scale\)/, "the race sheet zooms by the requested size");
+  assert.doesNotMatch(css, /#race-settings[^{]*\{[^}]*--sheet-scale/, "no fit cap reaches the race sheet's zoom");
+  // #5153 gap 16: a compact WIDE sheet (a landscape phone) keeps head and START RACE fixed and scrolls #rs-body
+  // (UI contract 2026-11-06 rule 3). A TALL sheet is one page-scroller — and so is a sheet too SHORT for that fixed
+  // chrome: measured 667x320 at UI 200 %, 152 own px of room left #rs-body 36 own px. SheetShape writes data-page
+  // from --page-at (220, the siblings' wide-shape floor) against the host's room in the sheet's own units.
+  assert.match(css, /#race-settings > \.sheet\s*\{[^}]*--page-at:\s*220px/);
+  assert.match(css, /#race-settings > \.sheet:is\(\[data-shape="tall"\], \[data-page="on"\]\)\s*\{[^}]*overflow-y:\s*auto/);
+  assert.match(css, /#race-settings > \.sheet:is\(\[data-shape="tall"\], \[data-page="on"\]\) > #rs-body\s*\{[^}]*overflow:\s*visible/);
 });
 
 test("standings body uses local leftover height, not a viewport svh cap", () => {

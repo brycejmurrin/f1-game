@@ -19,14 +19,7 @@ Dry sandy shoulders rather than kerbing everywhere.
 
 ## 3. Elevation
 
-**This is the circuit.** ~47 m of relief, and the shape matters more than the
-number: the start line sits at the HIGHEST point of the lap, the track falls
-continuously for the first ~1.8 km to ~45 m below the line just before Moss
-Corner, then climbs without relief for the remaining ~2.1 km back to the line.
-"A tale of two tracks — an accelerated fast descent for the first 2 km followed
-by an unceasing uphill endurance test back to the finish."
-
-The steepest single pitch is the plunge into Clayton.
+The 1 m Natural Resources Canada lidar surface spans 50.8 m. It crests near the pit straight at 93.4% of the lap and bottoms out on the approach to Moss Corner at 44.3%. Clayton drops 12.8 m from 14.95% to 18% of the lap, and the approach to Moss drops 15.1 m from 38.56% to 44.2%. The surveyed GP course was widened and resurfaced after its F1 era. [NRCan survey](https://datacube.services.geo.ca/pgstac/api/collections/hrdem-lidar/items/ON-2016-17-Peterborough-1m)
 
 ## 4. Landmarks & surroundings by lap position
 

@@ -207,6 +207,16 @@ test("edits mode with nothing tuned copies nothing and says so", () => {
   assert.equal(resolved(h, "monza", "dusk", "wet", "keyMul"), 1);
 });
 
+test("a saved local edit that matches a new shipped preset still copies without a global override", () => {
+  const h = loadStore({
+    presets: { "bahrain|dusk|wet": { keyMul: 0.7 } },
+    saved: { "bahrain|dusk|wet": { keyMul: 0.7 } },
+  });
+  assert.equal(h.store.tuned(), 1);
+  assert.equal(h.store.copyToTracks("edits").knobs, 1);
+  assert.equal(resolved(h, "spa", "dusk", "wet", "keyMul"), 0.7);
+});
+
 test("undo restores every target exactly, including the ones that had no profile", () => {
   const h = loadStore();
   h.state.go("monza", "dusk", "wet");
@@ -335,13 +345,31 @@ test("a reapply knob re-runs applyRaceSettings in a race but not from the menu",
   defs.push({ id: APPLY, def: 0, min: -1, max: 1 });
   h.state.applied = 0; h.store.set(APPLY, 0.5);
   assert.equal(h.state.applied, 1, "race: scene re-derived once");
+  h.state.applied = 0; h.store.set(APPLY, 0.5);
+  assert.equal(h.state.applied, 0, "a no-op rewrite of the same value must not re-apply");
   for (const mode of ["menu", "select"]) {
     h.state.mode = mode; h.state.applied = 0; h.store.set(APPLY, -0.5);
     assert.equal(h.state.applied, 0, mode + ": no race settings to apply yet");
   }
 });
 
-test("tuned() counts the condition's overrides and reset() clears them (and the global layer)", () => {
+test("a no-op set of a rebuild or reinitRain knob does not invalidate again", () => {
+  const h = loadStore();
+  const tr = h.state.liveTracks.bahrain;
+  tr._lights = ["x"]; tr._alwaysLights = ["y"];
+  h.store.set("ssrWetMul", 1.4);   // rebuild:true in the fixture registry
+  assert.equal(tr._lights, null, "first rebuild nulls the lamp cache");
+  tr._lights = ["x"]; tr._alwaysLights = ["y"];
+  h.store.set("ssrWetMul", 1.4);
+  assert.deepEqual([tr._lights, tr._alwaysLights], [["x"], ["y"]], "same value again leaves caches");
+  h.state.wetRoad = true; h.state.rainInits = 0;
+  h.store.set("rainCount", 900);
+  assert.equal(h.state.rainInits, 1);
+  h.store.set("rainCount", 900);
+  assert.equal(h.state.rainInits, 1, "same rainCount again does not re-seed");
+});
+
+test("tuned() counts the condition's overrides and reset() clears them (the global layer stays, #5990)", () => {
   const h = loadStore({ saved: { lampLevel: 0.9 } });          // player "*" layer
   assert.equal(h.store.tuned(), 0, "the global layer is not this condition's edit");
   h.store.set("keyMul", 1.5); h.store.set("ssrWetMul", 1.4);
@@ -350,7 +378,8 @@ test("tuned() counts the condition's overrides and reset() clears them (and the 
   assert.equal(h.store.tuned(), 2);
   h.store.reset();
   assert.equal(h.store.tuned(), 0);
-  assert.equal("bahrain|dusk|wet" in h.store.profiles, false);
-  assert.equal("*" in h.store.profiles, false, "reset also clears the player global layer");
+  assert.deepEqual(Object.keys(h.store.profiles["bahrain|dusk|wet"] || {}).filter((id) => id !== "lampLevel"), [],
+    "the condition's edits are gone (a lampLevel left there is the shipped value, masking the global layer)");
+  assert.deepEqual({ ...h.store.profiles["*"] }, { lampLevel: 0.9 }, "reset keeps the player global layer for the other conditions");
   assert.equal(h.store.profiles["monza|dusk|wet"].keyMul, 0.4, "another condition's edit survives");
 });

@@ -5,6 +5,9 @@
 # one status line to stdout (which lands in context), nothing else.
 #
 # Skips: APEX_SKIP_SESSION_INSTALL=1 (any host), or a missing package.json.
+# APEX_SESSION_START_DRY=1 changes nothing on disk (no install, no git config, no build, no browser): each step
+# reports what it would do, so tests can drive the real script.
+# The install is bounded (timeout 120 inside the hook's 300 s): a killed install still prints the line below.
 
 ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 cd "$ROOT" || exit 0
@@ -15,17 +18,53 @@ mkdir -p artifacts/logs
 [ "${APEX_SKIP_SESSION_INSTALL:-}" = "1" ] && exit 0
 
 status=()
+DRY="${APEX_SESSION_START_DRY:-}"
 
-# node_modules is stale when the lockfile is newer than npm's own stamp.
+# node_modules is stale when the lockfile is newer than npm's own stamp. `npm ci` installs exactly the lockfile;
+# one retry only for a transient network error (a blind re-run of a failed install fixed nothing).
 if [ ! -f node_modules/.package-lock.json ] || [ package-lock.json -nt node_modules/.package-lock.json ]; then
-  if PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --no-audit --no-fund >artifacts/session-install.log 2>&1 \
-     || { mkdir -p artifacts && PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --no-audit --no-fund >artifacts/session-install.log 2>&1; }; then
-    status+=("npm install: done")
+  npm_ci() { PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 timeout -k 5 120 npm ci --no-audit --no-fund >artifacts/session-install.log 2>&1; }
+  if [ -n "$DRY" ]; then
+    status+=("npm ci: would run (dry)")
   else
-    status+=("npm install: FAILED (artifacts/session-install.log)")
+    npm_ci; rc=$?
+    if [ "$rc" != 0 ] && [ "$rc" != 124 ] && [ "$rc" != 137 ] && grep -Eq 'ECONNRESET|ETIMEDOUT|EAI_AGAIN' artifacts/session-install.log 2>/dev/null; then
+      npm_ci; rc=$?
+    fi
+    case "$rc" in
+      0) status+=("npm ci: done") ;;
+      124|137) status+=("npm ci: TIMED OUT after 120 s (artifacts/session-install.log) — run npm ci as a background task") ;;
+      *) status+=("npm ci: FAILED (artifacts/session-install.log)") ;;
+    esac
   fi
 else
   status+=("node_modules: fresh")
+fi
+
+# THE COMMIT GATE IS GIT'S HOOK (2026-10-28, Bryce: "Yes, split it"):
+# .githooks/pre-commit runs test:guards for every host, so it must be armed even
+# when node_modules was fresh and npm's "prepare" did not run. RELATIVE, so each
+# linked worktree runs its own tree's copy (an absolute path into the main
+# checkout ran ITS hook for every worktree; red-team R15). bash-guard.sh refuses
+# an agent's own hooksPath write; this hook is the sanctioned setter.
+if [ -f .githooks/pre-commit ]; then
+  hp=$(git config --get core.hooksPath 2>/dev/null || true)
+  if [ "$hp" != ".githooks" ]; then
+    if [ -n "$DRY" ]; then
+      status+=("hooksPath: would set .githooks (was ${hp:-unset}; dry)")
+    elif git config core.hooksPath .githooks 2>/dev/null; then
+      status+=("hooksPath: .githooks (was ${hp:-unset})")
+    else
+      status+=("hooksPath: FAILED to set .githooks (${hp:-unset}) — commits will be refused; run npm run prepare")
+    fi
+  fi
+fi
+
+# The served generated files are gitignored (AGENTS.md rule 11, 2026-10-28): a fresh
+# clone has none and a pull can stale them. Every session, not only on install;
+# ~0.1 s, node builtins only, writes nothing when they are current. Silent on success.
+if [ -z "$DRY" ] && [ -f tools/gen/ensure-built.mjs ] && ! node tools/gen/ensure-built.mjs --quiet >artifacts/session-ensure-built.log 2>&1; then
+  status+=("built files: FAILED (artifacts/session-ensure-built.log)")
 fi
 
 # Reuse the same executable as the harness and MCP wrapper, including system
@@ -38,7 +77,7 @@ fi
 
 if [ -n "$CHROMIUM" ] && [ -f "$CHROMIUM" ] && [ -x "$CHROMIUM" ]; then
   status+=("Chromium: present ($CHROMIUM)")
-elif [ "${APEX_SKIP_BROWSER_INSTALL:-}" = "1" ]; then
+elif [ "${APEX_SKIP_BROWSER_INSTALL:-}" = "1" ] || [ -n "$DRY" ]; then
   status+=("Chromium: MISSING (install skipped)")
 elif bash "$ROOT/tools/env/install-browsers.sh" >artifacts/session-browsers.log 2>&1; then
   status+=("Chromium: installed")
@@ -55,9 +94,8 @@ else
 fi
 
 # ORIENTATION IN THE SAME LINE (2026-09-16): the branch, its distance from
-# the deploy tip, the dirty count, the load and whether a Playwright run is
-# already live — the four or five calls every session used to spend before
-# its first real one. Best effort; a missing remote ref prints "?".
+# the deploy tip, the dirty count and the load — the calls every session used
+# to spend before its first real one. Best effort; a missing remote ref prints "?".
 DEPLOY_BRANCH="claude/f1-game-project-26h3ng"
 branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")
 if git rev-parse --verify -q "origin/$DEPLOY_BRANCH" >/dev/null 2>&1; then
@@ -67,13 +105,12 @@ else
 fi
 dirty=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
 load=$(cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo "?")
-live=$(python3 "$ROOT/.claude/hooks/live-run.py" "$ROOT" 2>/dev/null)
-if [ -n "$live" ]; then pw="LIVE ($live) — no js/css edits"; else pw="none"; fi
-status+=("branch $branch (ahead/behind deploy tip $ab, dirty $dirty)" "loadavg $load" "playwright $pw")
-# Auto memory (cloud only; see memory-sync.sh): put .claude/memory/ back where
-# the CLI reads it, before the first prompt is built.
-mem=$("$ROOT/.claude/hooks/memory-sync.sh" restore </dev/null 2>/dev/null)
-[ -n "$mem" ] && status+=("$mem")
+status+=("branch $branch (ahead/behind deploy tip $ab, dirty $dirty)" "loadavg $load")
+# An open guard hatch is named at every start (it lifts protect-files / context-cap for the main session).
+for h in .claude/allow-protected .claude/allow-context-cap; do
+  [ -e "$h" ] && status+=("HATCH ACTIVE: $h (remove it when the assigned edit is done)")
+done
+# Auto memory restore is its own SessionStart entry (settings.json: memory-sync.sh restore).
 # The gate ladder's sizes (AGENTS.md rule 3). Measured, never committed:
 # committed digits made every two test-adding PRs conflict (2026-09-30).
 lad=$(timeout 10 node "$ROOT/tools/gen/gen-ladder-figures.mjs" 2>/dev/null)

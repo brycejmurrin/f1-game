@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { brycePhone } from "../lib/bryce-phone.mjs";
 import { resolveUIProfile } from "../lib/ui-device-profile.mjs";
 // menu-fit — audit every menu screen for cramped / clipped layout at a given
 // @doc DEPRECATED except `--safe=` (arbitrary notch insets); use `ui/layout-audit.mjs` for menu fit at a viewport.
@@ -14,9 +15,9 @@ import { resolveUIProfile } from "../lib/ui-device-profile.mjs";
 // Touch-only at every viewport size. Use layout-audit's viewport catalog for
 // desktop comparisons; changing WxH here does not change the input profile.
 //
-//   node tools/ui/menu-fit.mjs                 # default 852x393 (iPhone 15 Pro landscape)
+//   node tools/ui/menu-fit.mjs                 # default 852x393 (iPhone 15 landscape)
 //   node tools/ui/menu-fit.mjs 844x390 390x844 932x430
-//   node tools/ui/menu-fit.mjs 852x393 --safe=59,0,59,21   # simulate notch insets (l,t,r,b)
+//   node tools/ui/menu-fit.mjs 852x393 --safe=59,0,59,20   # simulate notch insets (l,t,r,b)
 //   node tools/ui/menu-fit.mjs 852x393 --scale=100,130,150 # ...at each interface size
 //
 // --safe is the point of this tool. Headless Chromium reports every
@@ -58,10 +59,10 @@ For desktop comparisons, use tools/ui/layout-audit.mjs and its viewport catalog.
 Browser-only otherwise; use layout-audit.mjs --list for a no-browser catalog.`);
 const safeArg = argv.find((a) => a.startsWith("--safe="));
 const dims = argv.filter((a) => !a.startsWith("--"));
-const sizes = (dims.length ? dims : ["852x393"]).map((s) => {
+const sizes = dims.length ? dims.map((s) => {
   const [w, h] = s.split("x").map(Number);
   return { width: w, height: h };
-});
+}) : [brycePhone({ profile: false }).viewport];
 // [left, top, right, bottom] → a :root override injected before first paint.
 const SAFE = safeArg ? safeArg.slice(7).split(",").map(Number) : null;
 const SAFE_CSS = SAFE
@@ -146,10 +147,12 @@ const SCREENS = [
      window.__apex.race('bahrain');
      await until('#pausemenu', 6000).catch(() => {});
      window.__apex.park(0.1);
-     const rd = document.getElementById('rotate-device'); if (rd) rd.hidden = true;
+     // The portrait rotate gate is CSS-gated (body.in-race:not(.rotate-ok)), never
+     // force-hidden: take its own door, RACE IN PORTRAIT, as a player would.
+     const rr = document.getElementById('rotate-race'); if (rr) rr.click();
      document.getElementById('pausemenu').hidden = false;
      document.getElementById('pm-settings').click();
-     document.getElementById('pm-open-display').click();
+     document.getElementById('pm-open-visual').click();
      document.querySelector('#pm-visual-tuners > summary').click();
      document.getElementById('pm-lighting').click();
      await until('#lt-rows .tune-row', 6000).catch(() => {});
@@ -336,7 +339,9 @@ async function shot(page, file) {
           if (name === "pause") {
             await page.evaluate(() => {
               window.__apex.park(0.1);
-              const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
+              // Rotate gate: its own door (RACE IN PORTRAIT → body.rotate-ok), not
+              // `hidden = true` on a CSS-gated layer (tools/ui/ui-reset.mjs NEVER_HIDE).
+              const rr = document.getElementById("rotate-race"); if (rr) rr.click();
               document.getElementById("pausemenu").hidden = false;
             });
             await sleep(300);

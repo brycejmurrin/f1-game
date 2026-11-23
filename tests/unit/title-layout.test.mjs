@@ -21,7 +21,7 @@ const SHELL = read("index.html");
 const CSS = read("css/responsive.css");
 const plain = (o) => JSON.parse(JSON.stringify(o));
 
-function boot(stored = {}, { shape = "wide", editor = false, fx = null } = {}) {
+function boot(stored = {}, { shape = "wide", editor = false, fx = null, raf = false, viewport = {} } = {}) {
   const dom = makeDom();
   const panel = dom.byId("pm-panel-appearance");
   // The shell's TITLE SCREEN fold: summary + body, REPLAY INTRO last in the body.
@@ -40,7 +40,7 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null } = {}) {
     for (const id of ["title-car", "menu-brand", "menu-buttons"]) overlay.appendChild(dom.byId(id));
     dom.byId("menu-buttons").appendChild(dom.byId("mb-race"));
     dom.byId("tl-editor").hidden = true;
-    dom.byId("tl-editor").appendChild(dom.byId("tl-done"));
+    dom.byId("tl-editor").appendChild(dom.makeElement("button", "tl-done"));
   }
   // The settings page and the title screen, so ScreenLooks' PEEK (which only
   // runs while SETTINGS is open, and only for a title screen that is up) has both.
@@ -50,8 +50,9 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null } = {}) {
   const get = dom.document.getElementById;
   dom.document.getElementById = (id) => (dom.has(id) ? get(id) : null);
   const data = Object.assign({}, stored);
-  const store = { get: (k, d) => (k in data ? data[k] : d), set: (k, v) => { if (v === null) delete data[k]; else data[k] = v; } };
-  const timers = [];
+  const writes = [];   // every store.set: a synchronous localStorage write + subscriber notify on a phone
+  const store = { get: (k, d) => (k in data ? data[k] : d), set: (k, v) => { writes.push(k); if (v === null) delete data[k]; else data[k] = v; } };
+  const timers = [], frames = [], winOn = {};
   const observers = [];
   class MutationObserver {
     constructor(fn) { this.fn = fn; observers.push(this); }
@@ -60,9 +61,11 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null } = {}) {
   const sb = {
     document: dom.document, GameStore: { store }, Log: { info() {}, warn() {} }, MutationObserver,
     setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {},
-    innerWidth: 1000, innerHeight: 500,
+    innerWidth: 1000, innerHeight: 500, addEventListener: (n, fn) => (winOn[n] ||= []).push(fn),
   };
+  Object.assign(sb, viewport);
   if (fx) sb.TitleFx = fx;   // js/ui/title-fx.js's three title looks (loads first in the shell)
+  if (raf) { sb.requestAnimationFrame = (fn) => frames.push(fn); sb.cancelAnimationFrame = (n) => { frames[n - 1] = null; }; }
   sb.window = sb;
   const ctx = vm.createContext(sb);
   for (const f of ["js/ui/setting-row.js", "js/ui/title-layout.js", "js/ui/screen-looks.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
@@ -73,7 +76,10 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null } = {}) {
     for (const o of observers) if (o.target === dom.body && o.opts.attributeFilter.includes("data-shape")) o.fn();
   };
   const mutated = (el) => { for (const o of observers) if (o.target === el) o.fn(); };
-  return { dom, M, data, panel, titleBody, html: dom.documentElement, timers, rotate, mutated };
+  /** Run the queued animation frames (raf: true boots only). */
+  const tick = () => { const todo = frames.splice(0); for (const fn of todo) if (fn) fn(); };
+  const pagehide = () => { for (const fn of winOn.pagehide || []) fn(); };
+  return { dom, M, ctx, data, writes, pagehide, panel, titleBody, html: dom.documentElement, timers, rotate, mutated, tick };
 }
 
 test("normalize clamps every field and reads junk as shipped", () => {
@@ -124,20 +130,43 @@ test("index.html's first-paint copy writes exactly what the module writes", () =
   const A = { btns: { x: -10, y: 5, size: 120, width: 40 }, title: { x: 3, y: -4, size: 80 }, art: { x: 0, y: 12, size: 150 }, layout: "stack", side: "swap" };
   const B = { btns: { x: 0, y: 0, size: 100, width: 0 }, title: { x: 0, y: 0, size: 100 }, art: { x: 20, y: 0, size: 100 }, layout: "row", side: "auto" };
   // v1 (one layout, both shapes), a v2 pair, and a v2 with only the portrait shape custom.
-  const cases = [A, B, { v: 2, wide: A, tall: B }, { v: 2, tall: A }];
-  for (const stored of cases) for (const shape of ["wide", "tall"]) {
-    const { M, html } = boot({ titleLayout: stored }, { shape });
+  const cases = [null, A, B, { v: 2, wide: A, tall: B }, { v: 2, tall: A }];
+  const phone = { innerWidth: 852, innerHeight: 393, matchMedia: q => ({ matches: q === "(pointer: coarse)" }) };
+  for (const stored of cases) for (const shape of ["wide", "tall"]) for (const viewport of [{}, phone]) {
+    const { M, html } = boot({ titleLayout: stored }, { shape, viewport });
     const de = { style: { _d: {}, setProperty(k, v) { this._d[k] = v; } }, dataset: {} };
     const sb = { localStorage: { getItem: (k) => (k === "apex26.titleLayout" ? JSON.stringify(stored) : null) }, document: { documentElement: de }, JSON,
       b: { getAttribute: (k) => (k === "data-shape" ? shape : null) } };
-    vm.runInContext(m[1], vm.createContext(sb));
+    vm.runInContext(m[1], vm.createContext({ ...sb, ...viewport }), { filename: absSrc("index.html") });
     const why = `${JSON.stringify(stored).slice(0, 40)}… on ${shape}`;
-    assert.deepEqual(de.style._d, plain(html.style._decls), "same tokens: " + why);
-    assert.deepEqual(de.dataset, plain(html.dataset), "same attributes: " + why);
+    const titleTokens = Object.fromEntries(Object.entries(html.style._decls).filter(([key]) => key.startsWith("--tl-")));
+    assert.deepEqual(de.style._d, titleTokens, "same tokens: " + why);
+    const titleAttrs = Object.fromEntries(Object.entries(html.dataset).filter(([key]) => key.startsWith("title")));
+    assert.deepEqual(de.dataset, titleAttrs, "same attributes: " + why);
     const want = M.isDefault(M.current()) ? {} : plain(M.vars(M.current()));
     assert.deepEqual(de.style._d, want, "and both are TitleLayout.vars of the shape's layout: " + why);
   }
   assert.ok(SHELL.indexOf("// Title layout: apex26.titleLayout") > SHELL.indexOf('b.setAttribute("data-shape"'), "it runs after data-shape is known");
+});
+
+test("factory phone title layouts follow rotation and reset while tablets retain the base layout", () => {
+  const viewport = { innerWidth: 852, innerHeight: 393, matchMedia: q => ({ matches: q === "(pointer: coarse)" }) };
+  const { M, rotate, html, data } = boot({}, { viewport });
+  const profile = JSON.parse(read("tests/data/phone-appearance-2026-11-20.json")).settings.appearance.titleLayout;
+  const wide = profile.wide;
+  assert.deepEqual(plain(M.current()), wide);
+  rotate("tall");
+  assert.equal(html.style.getPropertyValue("--tl-btns-size"), "1.05");
+  assert.equal(html.dataset.titleBtnw, undefined);
+  M.set({ btns: { size: 155 } });
+  rotate("wide");
+  assert.deepEqual(plain(M.current()), wide);
+  assert.equal(M.current("tall").btns.size, 155);
+  M.resetShape("tall");
+  assert.deepEqual(plain(M.current("tall")), profile.tall);
+  assert.equal(data.titleLayout, undefined);
+  const tablet = boot({}, { viewport: { ...viewport, innerWidth: 1024, innerHeight: 768 } });
+  assert.deepEqual(plain(tablet.M.current()), plain(tablet.M.DEFAULT));
 });
 
 test("v1 → v2: a one-layout store is BOTH shapes, and the next write keeps the untouched shape", () => {
@@ -220,8 +249,21 @@ test("editor: the fold's button trades the settings page for the title screen an
   assert.equal(html.hasAttribute("data-tl-edit"), true);
   const bar = dom.byId("tl-editor");
   assert.equal(bar.hidden, false);
-  assert.deepEqual(bar.children.map((c) => c.id), ["tl-piece", "tl-size-dn", "tl-size-up", "tl-width-dn", "tl-width-up", "tl-reset-piece", "tl-done", "tl-handle"], "DONE adopted into the bar");
-  assert.equal(dom.byId("tl-piece").textContent, "BUTTONS · LANDSCAPE · 100% · AUTO WIDTH");
+  const panel = dom.byId("tl-adjustments"), toggle = dom.byId("tl-adjust");
+  assert.deepEqual(bar.children.filter(c => !c.hidden && c.tagName === "BUTTON").map(c => c.id),
+    ["tl-piece", "tl-adjust", "tl-cancel", "tl-done"]);
+  assert.equal(panel.hidden, true);
+  assert.equal(toggle.getAttribute("aria-expanded"), "false");
+  toggle.click();
+  assert.equal(panel.hidden, false);
+  assert.equal(toggle.getAttribute("aria-controls"), panel.id);
+  assert.equal(toggle.getAttribute("aria-expanded"), "true");
+  assert.equal(panel.contains(dom.byId("tl-width-up")), true);
+  assert.equal(dom.byId("tl-piece").textContent, "BUTTONS");
+  assert.equal(dom.byId("tl-values").textContent, "LANDSCAPE · 100% · AUTO WIDTH");
+  dom.byId("tl-dock").click(); assert.equal(bar.hasAttribute("data-top"), true);
+  dom.byId("tl-dock").click(); assert.equal(bar.hasAttribute("data-top"), false);
+  toggle.click(); assert.equal(panel.hidden, true);
   assert.equal(dom.byId("menu-buttons").hasAttribute("data-tl-sel"), true, "the buttons start selected");
   const art = dom.byId("tl-art");
   assert.equal(art.parentNode, dom.byId("overlay"), "the drawing's proxy lives in #overlay, under the doors");
@@ -235,24 +277,27 @@ test("editor: the fold's button trades the settings page for the title screen an
 });
 
 test("editor: a pointer drag moves a piece in screen percent, the corner handle sizes it, and door clicks are swallowed", () => {
-  const { dom, data, html } = editing();
+  const { dom, M, data, html } = editing();
   const btns = dom.byId("menu-buttons");
   const d = ptr(dom, btns, "pointerdown", 500, 400);
   assert.equal(d.defaultPrevented, true, "no focus, no text selection");
   ptr(dom, btns, "pointermove", 600, 350);
-  assert.equal(data.titleLayout.wide.btns.x, 10, "100 px of 1000 is 10vw");
-  assert.equal(data.titleLayout.wide.btns.y, -10, "-50 px of 500 is -10vh");
+  assert.equal(html.style.getPropertyValue("--tl-btns-x"), "10vw", "100 px of 1000 is 10vw, painted live");
+  assert.equal(html.style.getPropertyValue("--tl-btns-y"), "-10vh", "-50 px of 500 is -10vh");
+  assert.equal(data.titleLayout, undefined, "stored only when the finger lifts");
   ptr(dom, btns, "pointermove", 650, 400, 2);
-  assert.equal(data.titleLayout.wide.btns.x, 10, "another pointer does not steer it");
+  assert.equal(html.style.getPropertyValue("--tl-btns-x"), "10vw", "another pointer does not steer it");
   ptr(dom, btns, "pointerup", 600, 350);
+  assert.equal(M.current().btns.x, 10);
+  assert.equal(M.current().btns.y, -10);
   ptr(dom, btns, "pointermove", 900, 350);
-  assert.equal(data.titleLayout.wide.btns.x, 10, "released");
+  assert.equal(M.current().btns.x, 10, "released");
   assert.equal(html.style.getPropertyValue("--tl-btns-x"), "10vw");
   // The corner handle: twice as far from the centre is twice the size.
   ptr(dom, dom.byId("tl-handle"), "pointerdown", 600, 500);
   ptr(dom, dom.byId("tl-handle"), "pointermove", 700, 600);
   ptr(dom, dom.byId("tl-handle"), "pointerup", 700, 600);
-  assert.equal(data.titleLayout.wide.btns.size, 200);
+  assert.equal(M.current().btns.size, 200);
   // The drawing, through its proxy; dragging selects it.
   const art = dom.byId("tl-art");
   ptr(dom, art, "pointerdown", 100, 400);
@@ -260,42 +305,159 @@ test("editor: a pointer drag moves a piece in screen percent, the corner handle 
   assert.equal(btns.hasAttribute("data-tl-sel"), false);
   ptr(dom, art, "pointermove", 100 - 2000, 400);
   ptr(dom, art, "pointerup", 0, 0);
-  assert.equal(data.titleLayout.wide.art.x, -50, "clamped");
+  assert.equal(M.current().art.x, -50, "clamped");
   assert.equal(dom.byId("tl-width-up").disabled, true, "WIDTH is the buttons' alone");
   const click = { type: "click", bubbles: true };
   dom.dispatch(dom.byId("mb-race"), click);
   assert.ok(click.defaultPrevented && click.propagationStopped, "a door's click is swallowed while editing");
 });
 
+test("editor: a drag paints once per frame and writes the store once, at Apply (#4933)", () => {
+  const { dom, M, writes, html, tick } = editing({}, { raf: true });
+  const btns = dom.byId("menu-buttons");
+  writes.length = 0;
+  ptr(dom, btns, "pointerdown", 500, 400);
+  for (let i = 1; i <= 20; i++) {
+    ptr(dom, btns, "pointermove", 500 + i * 5, 400);
+    if (i % 2 === 0) { tick(); assert.equal(html.style.getPropertyValue("--tl-btns-x"), i / 2 + "vw", "frame " + i / 2 + " paints the latest pointer"); }
+  }
+  assert.deepEqual(writes, [], "no store write while the finger is down");
+  ptr(dom, btns, "pointermove", 610, 400);
+  ptr(dom, btns, "pointerup", 610, 400);
+  assert.deepEqual(writes, [], "release ends the gesture without accepting the session");
+  assert.equal(M.current().btns.x, 11, "the unpainted last move is not lost");
+  dom.byId("tl-done").click();
+  tick();
+  assert.deepEqual(writes, ["titleLayout"], "a cancelled frame writes nothing later");
+  // A slider: every input paints, the release (`change`) stores once.
+  const { dom: d2, writes: w2, html: h2 } = boot();
+  const y = d2.byId("pm-tl-btns-y");
+  for (const v of ["1", "2", "3", "4"]) { y.value = v; d2.dispatch(y, { type: "input" }); }
+  assert.equal(h2.style.getPropertyValue("--tl-btns-y"), "4vh");
+  assert.deepEqual(w2, [], "no write per input event");
+  d2.dispatch(y, { type: "change" });
+  assert.deepEqual(w2, ["titleLayout"]);
+});
+
+test("leaving the page mid-gesture stores what is on screen", () => {
+  const { dom, data, pagehide } = boot();
+  const x = dom.byId("pm-tl-btns-x");
+  x.value = "-12"; dom.dispatch(x, { type: "input" });   // a reload before the thumb's release
+  assert.equal(data.titleLayout, undefined);
+  pagehide();
+  assert.equal(data.titleLayout.wide.btns.x, -12);
+});
+
+test("a live draft never masks a store write made by someone else (Undo, a profile)", () => {
+  const { M, data } = boot();
+  M.set({ btns: { x: 12 } }, undefined, true);
+  assert.equal(M.current().btns.x, 12, "the draft paints and reads back");
+  data.titleLayout = { v: 2, wide: { btns: { x: -7 } } };   // AppearanceStudio's undo writes the store
+  assert.equal(M.current().btns.x, -7, "the newer store value wins");
+  assert.equal(M.commit(), false, "and the stale draft is dropped, not saved over it");
+  assert.equal(M.current().btns.x, -7);
+});
+
 test("editor: keys nudge, size and cycle the pieces; the bar's steps and RESET PIECE", () => {
-  const { dom, data } = editing({}, { shape: "tall" });
+  const { dom, M, data } = editing({}, { shape: "tall" });
   const right = key(dom, "ArrowRight");
   assert.equal(right.defaultPrevented, true, "the key is the editor's");
   key(dom, "ArrowDown"); key(dom, "ArrowDown");
-  assert.deepEqual([data.titleLayout.tall.btns.x, data.titleLayout.tall.btns.y], [1, 2], "arrows move 1% (the portrait shape)");
-  assert.equal(data.titleLayout.wide, undefined, "landscape untouched");
+  assert.deepEqual([M.current().btns.x, M.current().btns.y], [1, 2], "arrows move 1% (the portrait shape)");
+  assert.equal(data.titleLayout, undefined, "edits stay in the draft");
   key(dom, "+"); key(dom, "=");
-  assert.equal(data.titleLayout.tall.btns.size, 110);
+  assert.equal(M.current().btns.size, 110);
   key(dom, "-");
-  assert.equal(data.titleLayout.tall.btns.size, 105);
+  assert.equal(M.current().btns.size, 105);
   key(dom, "]");
   assert.equal(dom.byId("menu-brand").hasAttribute("data-tl-sel"), true, "]: the title");
   key(dom, "["); key(dom, "[");
   assert.equal(dom.byId("tl-art").hasAttribute("data-tl-sel"), true, "[ back round to the drawing");
   assert.equal(key(dom, "Tab").defaultPrevented, undefined, "Tab is left to the browser: the bar stays reachable");
   key(dom, "ArrowLeft");
-  assert.equal(data.titleLayout.tall.art.x, -1);
-  assert.equal(key(dom, "Escape").defaultPrevented, undefined, "Escape is left to data-esc-close (DONE)");
+  assert.equal(M.current().art.x, -1);
+  assert.equal(key(dom, "Escape").defaultPrevented, undefined, "Escape is left to data-esc-close (Cancel)");
   key(dom, "]");
+  dom.byId("tl-adjust").click();
   dom.byId("tl-size-up").click();
-  assert.equal(data.titleLayout.tall.btns.size, 110);
+  assert.equal(M.current().btns.size, 110);
   dom.byId("tl-width-up").click();
-  assert.equal(data.titleLayout.tall.btns.width, 25, "from AUTO, the width the buttons have now (200 px of 1000) plus a step");
+  assert.equal(M.current().btns.width, 25, "from AUTO, the width the buttons have now (200 px of 1000) plus a step");
   dom.byId("tl-width-dn").click(); dom.byId("tl-width-dn").click();
-  assert.equal(data.titleLayout.tall.btns.width, 0, "under 20% is AUTO again");
+  assert.equal(M.current().btns.width, 0, "under 20% is AUTO again");
   dom.byId("tl-reset-piece").click();
-  assert.deepEqual(plain(data.titleLayout.tall.btns), { x: 0, y: 0, size: 100, width: 0 }, "RESET PIECE");
-  assert.equal(data.titleLayout.tall.art.x, -1, "and only that piece");
+  assert.deepEqual(plain(M.current().btns), { x: 0, y: 0, size: 100, width: 0 }, "RESET PIECE");
+  assert.equal(M.current().art.x, -1, "and only that piece");
+});
+
+test("title entry restores its opener and discards canceled drafts", () => {
+  const { dom, M, timers, data } = boot({}, { editor: true });
+  dom.byId("pmsettings").hidden = true;
+  const opener = dom.byId("mb-race");
+  M.enter(opener);
+  dom.byId("tl-adjust").click();
+  dom.byId("tl-right").click();
+  assert.equal(M.current().btns.x, 1);
+  dom.byId("tl-undo").click();
+  assert.equal(M.current().btns.x, 0);
+  dom.byId("tl-step").click();
+  dom.byId("tl-down").click();
+  assert.equal(M.current().btns.y, 5);
+  dom.byId("tl-cancel").click();
+  assert.equal(data.titleLayout, undefined);
+  assert.equal(M.current().btns.y, 0);
+  assert.equal(dom.byId("pmsettings").hidden, true);
+  timers.at(-1).fn();
+  assert.equal(dom.document.activeElement, opener);
+});
+
+test("phone sliders expose every width step, Auto and the current orientation's reset values", () => {
+  let repaint;
+  const short = { matches: true, addEventListener: (_, fn) => { repaint = fn; } };
+  const viewport = { innerWidth: 852, innerHeight: 393, matchMedia: q => q === "(pointer: coarse)" ? { matches: true } : short };
+  const { dom, M, rotate } = boot({}, { viewport });
+  const width = dom.byId("pm-tl-btns-width"), size = dom.byId("pm-tl-btns-size");
+  assert.deepEqual([size.value, width.value], ["106", "25"]);
+  for (const part of ["btns", "title", "art"]) {
+    assert.equal(dom.byId("pm-tl-" + part + "-size-v").textContent, "100%");
+    assert.equal(dom.byId("pm-tl-" + part + "-size").getAttribute("aria-valuetext"), "100%");
+  }
+  const art = dom.byId("pm-tl-art-size");
+  art.value = "85"; dom.dispatch(art, { type: "input" }); dom.dispatch(art, { type: "change" });
+  assert.equal(M.current().art.size, 85);
+  assert.equal(art.getAttribute("aria-valuetext"), "98.84%");
+  assert.equal(width.getAttribute("aria-describedby"), "pm-tl-width-help");
+  assert.match(dom.byId("pm-tl-width-help").textContent, /54% to 80%/);
+  assert.equal(dom.byId("pm-tl-btns-width-v").textContent, "25");
+  width.focus();
+  for (const requested of [24, 23, 22, 21, 20, 19, 20, 100]) {
+    width.value = String(requested);
+    dom.dispatch(width, { type: "input" });
+    dom.dispatch(width, { type: "change" });
+    const value = requested === 19 ? 0 : requested;
+    assert.equal(M.current().btns.width, value);
+    assert.equal(width.value, String(requested));
+    assert.equal(width.getAttribute("aria-valuetext"), value ? value + " on the column split scale" : "Auto, use automatic width");
+  }
+  dom.byId("pm-tl-reset-shape").click();
+  assert.equal(width.value, "25", "a reset also repaints the focused range");
+  rotate("tall");
+  assert.deepEqual([size.value, width.value, width.getAttribute("aria-valuetext")], ["105", width.min, "Auto, use automatic width"]);
+  assert.equal(size.getAttribute("aria-valuetext"), "100%");
+  rotate("wide");
+  assert.equal(width.value, "25");
+  short.matches = false;
+  repaint();
+  assert.equal(dom.byId("pm-tl-btns-width-v").textContent, "25%");
+  assert.equal(width.getAttribute("aria-valuetext"), "25 percent of screen width requested");
+});
+
+test("editor width nudges reach the minimum before Auto from an off-step percentage", () => {
+  const { dom, M } = editing({ titleLayout: { v: 2, wide: { btns: { width: 22 } } } });
+  dom.byId("tl-width-dn").click();
+  assert.equal(M.current().btns.width, 20);
+  dom.byId("tl-width-dn").click();
+  assert.equal(M.current().btns.width, 0);
 });
 
 test("editor: DONE gives the settings page back, opens the fold and focuses its button; mid-race it cannot open", () => {
@@ -322,7 +484,11 @@ test("editor: DONE gives the settings page back, opens the fold and focuses its 
   dom.byId("overlay").hidden = true; mutated(dom.byId("overlay"));
   assert.equal(dom.byId("pm-tl-edit").disabled, true, "disabled mid-race (#overlay hidden)");
   assert.equal(M.enter(), false);
-  assert.match(SHELL, /<div id="tl-editor" role="region" aria-label="Title layout editor" data-esc-close="tl-done" hidden>\s*<button id="tl-done" type="button">DONE<\/button>\s*<\/div>/);
+  // The shell's door is the static Apply until the editor builds Cancel, which then owns Escape
+  // (menu-keyboard.spec.js: every layer's data-esc-close names a real control from boot).
+  assert.match(SHELL, /<div id="tl-editor" role="region" aria-label="Title layout editor" data-esc-close="tl-done" hidden>\s*<button id="tl-done" type="button">Apply<\/button>\s*<\/div>/);
+  assert.equal(dom.byId("tl-editor").getAttribute("data-esc-close"), "tl-cancel", "the built editor's Escape discards");
+  assert.equal(dom.byId("tl-cancel").tagName, "BUTTON");
 });
 
 test("the APPEARANCE fold: built inside TITLE SCREEN before REPLAY INTRO, sliders store and PEEK, choices wire, RESET clears", () => {
@@ -340,8 +506,10 @@ test("the APPEARANCE fold: built inside TITLE SCREEN before REPLAY INTRO, slider
   dom.dispatch(x, { type: "pointerdown" });
   assert.equal(html.dataset.appearancePeek, "title", "holding a slider shows the title screen (ScreenLooks' peek)");
   x.value = "-25"; dom.dispatch(x, { type: "input" });
+  assert.equal(html.style.getPropertyValue("--tl-btns-x"), "-25vw", "an input paints");
+  assert.equal(data.titleLayout, undefined, "…and waits for the release to store");
+  dom.dispatch(x, { type: "change" });
   assert.equal(data.titleLayout.wide.btns.x, -25, "stored for the shape the screen is in");
-  assert.equal(html.style.getPropertyValue("--tl-btns-x"), "-25vw");
   assert.equal(dom.byId("pm-tl-btns-x-v").textContent, "25% left");
   assert.equal(sum.textContent, "TITLE LAYOUT · CUSTOM");
   timers.at(-1).fn();
@@ -371,9 +539,33 @@ test("CSS: every TITLE LAYOUT rule is gated on a custom layout (or the peek) and
   // Gated at the front, or (inside the large-landscape block, whose selectors
   // must START with the density guard) by a :where(:root[data-title-side]) clause.
   for (const s of sels) assert.match(s, /^(:root\[data-title-(layout|btnw|btns|side)|:root\[data-tl-edit\]|:root\[data-appearance-peek(="title")?\]|:where\(body:not\(\[data-density="compact"\]\)\):where\(:root\[data-title-side="swap"\] \*\))/, `gated: ${s}`);
-  assert.match(block, /:root\[data-title-layout\] #menu-buttons \{[^}]*translate: var\(--tl-btns-x, 0\) var\(--tl-btns-y, 0\)/);
-  assert.match(block, /zoom: calc\(var\(--ui-scale\) \* var\(--tl-btns-size, 1\)\)/);
+  // The player's offset plus the fit's clamp, the player's size times the fit (#5150).
+  assert.match(block, /:root\[data-title-layout\] #menu-buttons \{[^}]*translate: calc\(var\(--tl-btns-x, 0px\) \+ var\(--tf-dx, 0px\)\) calc\(var\(--tl-btns-y, 0px\) \+ var\(--tf-dy, 0px\)\)/);
+  assert.match(block, /zoom: calc\(var\(--ui-scale\) \* var\(--tl-btns-size, 1\) \* var\(--tf, 1\)\)/);
+  assert.match(block, /:root\[data-title-layout\] #menu-brand \{[^}]*zoom: calc\(var\(--ui-scale\) \* var\(--tl-title-size, 1\) \* var\(--tf, 1\)\)/);
   assert.match(block, /#title-car \{[^}]*scale: var\(--tl-art-size, 1\)/);
+});
+
+test("CSS: WIDTH keeps the Home grid centred on its column even when wider than it (#4529 part 3)", () => {
+  const block = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+  const rule = (sel) => {
+    const at = block.indexOf(sel + " {");
+    assert.ok(at > 0, `rule ${sel}`);
+    return block.slice(at, block.indexOf("}", at));
+  };
+  // Portrait, measured 2026-11-11 at 393x852: a centred grid item wider than
+  // its column pinned to the start edge, so WIDTH 100 painted 12..405px. One
+  // width token feeds both the width and a symmetric margin, start-aligned.
+  const base = rule(":root[data-title-btnw] #menu-buttons");
+  assert.match(base, /--_tl-bw: calc\(var\(--tl-btns-w, 100\) \* var\(--vwz\) \/ var\(--tl-btns-size, 1\) \/ var\(--tf, 1\)\)/);
+  assert.match(base, /width: var\(--_tl-bw\)/);
+  assert.match(base, /justify-self: start/);
+  assert.match(base, /margin-inline: calc\(\(100% - var\(--_tl-bw\)\) \/ 2\)/);
+  assert.doesNotMatch(base, /justify-self: center/);
+  // The compact-landscape floor (#5167) moves the TOKEN, so its margin follows its width.
+  const floor = rule(':root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons');
+  assert.match(floor, /--_tl-bw: max\(100%, calc\(/);
+  assert.doesNotMatch(floor, /(^|[^-])width:/);
 });
 
 /* ── APPEARANCE: one TITLE SCREEN fold, UI SIZE under READABILITY ────────── */
@@ -396,7 +588,7 @@ test("shell: UI SIZE lives in APPEARANCE › READABILITY, before TEXT SIZE, and 
   assert.match(look, /<h5 class="pm-group-h" id="pm-uiscale-h">UI SIZE <b id="pm-uiscale-v">/, "a sub-heading of READABILITY");
   const help = look.match(/<p id="pm-uiscale-help"[^>]*>([^<]*)<\/p>/)[1];
   assert.ok(!/below/.test(help), "no 'HUD fold below': the HUD fold is on another page now");
-  assert.match(help, /DISPLAY › HUD/);
+  assert.match(help, /HUD &amp; CAMERA/);
   assert.match(SHELL, /id="pm-open-appearance"[^>]*>APPEARANCE&hellip;<small>[^<]*UI size/, "the door names it");
 });
 
@@ -415,10 +607,10 @@ test("shell: every title-screen knob sits in ONE TITLE SCREEN fold; REDUCE MOTIO
   assert.match(readCssSource("css/components.css"), /#pm-titlescreen-body,\s*#pm-titlelayout-body \{[^}]*flex-direction: column/, "the body is a column like the sub-fold's");
 });
 
-test("TITLE SCREEN summary: SHIPPED only while the layout AND TitleFx's three looks are shipped", () => {
-  const looks = { intro: "full", wash: "full", art: "on" };
+test("TITLE SCREEN summary: SHIPPED only while the layout AND TitleFx's appearance settings are shipped", () => {
+  const looks = { intro: "full", wash: "full", art: "on", style: "auto" };
   const subs = [];
-  const fx = { introMode: () => looks.intro, washMode: () => looks.wash, artMode: () => looks.art, onChange: (fn) => subs.push(fn) };
+  const fx = { introMode: () => looks.intro, washMode: () => looks.wash, artMode: () => looks.art, buttonStyle: () => looks.style, onChange: (fn) => subs.push(fn) };
   const { dom, M } = boot({}, { fx });
   const sum = dom.byId("pm-titlescreen-sum");
   assert.equal(sum.textContent, "TITLE SCREEN · SHIPPED");
@@ -428,17 +620,17 @@ test("TITLE SCREEN summary: SHIPPED only while the layout AND TitleFx's three lo
   assert.equal(sum.textContent, "TITLE SCREEN · CUSTOM", "a layout slider");
   dom.byId("pm-tl-reset").click();
   assert.equal(sum.textContent, "TITLE SCREEN · SHIPPED", "RESET ALL");
-  for (const [k, v] of [["intro", "quick"], ["wash", "off"], ["art", "soft"]]) {
+  for (const [k, v] of [["intro", "quick"], ["wash", "off"], ["art", "soft"], ["style", "racing"]]) {
     looks[k] = v; subs[0]();
     assert.equal(sum.textContent, "TITLE SCREEN · CUSTOM", `${k} ${v}`);
     assert.equal(M.screenShipped(), false);
-    looks[k] = { intro: "full", wash: "full", art: "on" }[k]; subs[0]();
+    looks[k] = { intro: "full", wash: "full", art: "on", style: "auto" }[k]; subs[0]();
     assert.equal(sum.textContent, "TITLE SCREEN · SHIPPED");
   }
   const custom = boot({ titleLayout: { v: 2, tall: { side: "swap" } } }, { fx });
   assert.equal(custom.dom.byId("pm-titlescreen-sum").textContent, "TITLE SCREEN · CUSTOM", "painted at build, either shape counts");
   const tfx = read("js/ui/title-fx.js");
-  for (const f of ["setIntro", "setWash", "setArt"])
+  for (const f of ["setIntro", "setWash", "setArt", "setButtonStyle"])
     assert.match(tfx, new RegExp(`function ${f}\\(v\\) \\{[^}]*changed\\(\\);`), `${f} tells the listeners`);
   assert.doesNotMatch(tfx.match(/function set\(v\) \{[^}]*\}/)[0], /changed\(\)/, "MOTION is not a title-screen knob");
 });
@@ -457,4 +649,334 @@ test("the home-scene motion chip cannot steal HOW TO PLAY at compact 200%", () =
   const css = read("css/experience.css");
   assert.match(css, /#home-motion:disabled\s*\{\s*pointer-events:\s*none/);
   assert.match(css, /#home-motion\s*\{[^}]*zoom:\s*var\(--ui-compact-brand-scale\)/s);
+});
+
+// #5385: the offset clamp reads what PAINTS. The doors are skewX(-6deg), so a door's drawn box overhangs the cluster's
+// layout box by ~2.3 px a side; at UI SIZE 50-61 on his phone (852x393, inset 59) the right column painted to 795.3
+// against the 793 safe edge. The fit pulls the cluster back by the overhang, not by its layout box alone.
+test("the offset clamp keeps the skewed doors' painted edge inside the safe box (#5385)", () => {
+  const { dom, M, ctx } = boot({}, { editor: true });
+  const ov = dom.byId("overlay"), mb = dom.byId("menu-buttons"), door = dom.byId("mb-race");
+  door.className = "bigbtn";
+  const rect = (l, t, w, h) => ({ left: l, top: t, right: l + w, bottom: t + h, width: w, height: h, x: l, y: t });
+  ov.getBoundingClientRect = () => rect(0, 0, 852, 393);
+  mb.getBoundingClientRect = () => rect(327.5, 8, 465.5, 300);   // the layout box ends exactly at 852 - 59
+  Object.defineProperty(mb, "offsetHeight", { value: 300, configurable: true });
+  door.getBoundingClientRect = () => rect(559.7, 8, 235.6, 44);  // its skewed drawn box: right 795.3
+  mb.querySelectorAll = (sel) => (sel === ".bigbtn" ? [door] : []);
+  ctx.getComputedStyle = () => ({ paddingLeft: "59px", paddingRight: "59px", paddingTop: "8px", paddingBottom: "21px", getPropertyValue: () => "" });
+  M.fit();
+  assert.equal(mb.style.getPropertyValue("--tf-dx"), "-2.3px", "pulled in by the 2.3 px the skew overhangs");
+});
+
+test("screen arrangement cancels a captured drag, isolates rotated drafts and restores invoking focus", () => {
+  const dom = makeDom();
+  const root = dom.byId("career");
+  const region = root.appendChild(dom.makeElement("div", "calendar"));
+  const rect = {left:10, top:10, right:210, bottom:110, width:200, height:100};
+  let rectReads = 0, frames = 0, paints = 0, writes = 0, selections = 0;
+  root.matches = () => false;
+  const add = region.classList.add;
+  region.classList.add = name => { selections++; add(name); };
+  region.getClientRects = () => [rect];
+  region.getBoundingClientRect = () => { rectReads++; return rect; };
+  const invoker = root.appendChild(dom.makeElement("button"));
+  invoker.getClientRects = () => [rect];
+  const events = dom.makeElement("div");
+  const stored = {landscape:{}, portrait:{}};
+  let side = "landscape", live, frame;
+  const legacy = [];
+  const win = {
+    addEventListener: events.addEventListener, removeEventListener: events.removeEventListener,
+    ScreenRegions: {career:{root:"#career", label:"Career", regions:{calendar:{selector:"#calendar", label:"Calendar"}}}},
+    ScreenPlacement: {
+      fieldValue:(_prop, value) => value,
+      orientation:() => side, read:(id, dir) => stored[dir], save:(id, dir, map) => { writes++; stored[dir] = plain(map); },
+      resetLegacy:(id, mode) => { legacy.push(mode); return true; },
+      apply:(id, map) => { paints++; live = plain(map); }
+    }
+  };
+  dom.document.createElement = tag => {
+    const el = dom.makeElement(tag);
+    if (tag === "dialog") Object.assign(el, {showModal(){}, close(){}, setPointerCapture(){}});
+    return el;
+  };
+  vm.runInNewContext(read("js/ui/screen-arranger.js"), {
+    window:win, document:dom.document, innerWidth:1000, innerHeight:500,
+    MutationObserver:class { observe(){} disconnect(){} },
+    requestAnimationFrame:fn => { frames++; frame = fn; return 1; }, cancelAnimationFrame:() => { frame = null; }
+  });
+  function open() {
+    assert.equal(win.ScreenArranger.open("career", invoker), true);
+    return dom.document.querySelector("#screen-arranger");
+  }
+  let dialog = open();
+  function button(text) { return dialog.querySelectorAll("button").find(el => el.textContent === text); }
+  const pointer = (type, px) => dom.dispatch(dialog, {
+    type, pointerId:7, isPrimary:true, button:0, clientX:px, clientY:50
+  });
+  pointer("pointerdown", 50);
+  const before = { rectReads, frames, paints, selections };
+  for (let px = 51; px <= 150; px++) pointer("pointermove", px);
+  assert.equal(frames - before.frames, 1, "100 moves queue one frame");
+  assert.equal(paints, before.paints);
+  frame();
+  assert.equal(live.calendar.x, 10);
+  assert.equal(paints - before.paints, 1);
+  assert.equal(rectReads, before.rectReads, "drag paints reuse touchdown geometry");
+  assert.equal(selections, before.selections, "drag paints leave the selection outline in place");
+  assert.equal(writes, 0);
+  pointer("pointercancel", 150);
+  assert.deepEqual(live, {});
+  assert.deepEqual(stored.landscape, {});
+  pointer("pointerdown", 50);
+  pointer("pointermove", 100);
+  frame();
+  const paintsAtRelease = paints;
+  pointer("pointerup", 100);
+  assert.equal(paints, paintsAtRelease, "a release at the painted position does not repaint");
+  button("Undo").click();
+  assert.deepEqual(live, {});
+  dom.dispatch(events, {type:"keydown", key:"ArrowUp", altKey:true, shiftKey:true, target:button("Up"), stopImmediatePropagation(){}});
+  assert.equal(live.calendar.y, -5);
+  side = "portrait";
+  dom.dispatch(events, {type:"resize"});
+  assert.deepEqual(live, {});
+  button("Copy from landscape").click();
+  assert.equal(live.calendar.y, -5);
+  button("Reset region").click();
+  assert.deepEqual(live, {});
+  button("Undo").click();
+  assert.equal(live.calendar.y, -5);
+  button("Apply").click();
+  assert.deepEqual(stored.portrait, stored.landscape);
+  assert.equal(stored.landscape.calendar.y, -5);
+  assert.equal(dom.document.activeElement, invoker);
+  dialog = open();
+  button("Reset screen").click();
+  assert.deepEqual(live, {});
+  dom.dispatch(events, {type:"keydown", key:"Escape", stopImmediatePropagation(){}});
+  assert.equal(live.calendar.y, -5);
+  assert.equal(dom.document.activeElement, invoker);
+  assert.deepEqual(legacy, ["preview", "restore"]);
+  dialog = open();
+  button("Reset screen").click();
+  button("Undo").click();
+  assert.equal(live.calendar.y, -5);
+  button("Apply").click();
+  assert.deepEqual(legacy.slice(-2), ["preview", "restore"]);
+  assert.equal(stored.portrait.calendar.y, -5);
+  dialog = open();
+  button("Reset screen").click();
+  button("Apply").click();
+  assert.deepEqual(legacy.slice(-2), ["preview", "save"]);
+  assert.deepEqual(stored, {portrait:{}, landscape:{}});
+
+  // Garage category and all-category controls can name the same real panel.
+  // Start from an unrelated selected region and tap the shared surface.
+  const adjacent = root.appendChild(dom.makeElement("div", "other"));
+  adjacent.getClientRects = () => [rect];
+  adjacent.getBoundingClientRect = () => ({...rect, left:400, right:600});
+  win.ScreenRegions.career.regions = {
+    other: {selector:"#other", label:"Other"},
+    general: {selector:"#calendar", label:"All option panels"},
+    specific: {selector:"#calendar", label:"Team options"}
+  };
+  dialog = open();
+  const selection = dialog.querySelector("select");
+  pointer("pointerdown", 50);
+  assert.equal(selection.value, "specific");
+  pointer("pointerup", 50);
+  selection.value = "general";
+  dom.dispatch(selection, {type:"change"});
+  pointer("pointerdown", 50);
+  assert.equal(selection.value, "general");
+  pointer("pointercancel", 50);
+  button("Cancel").click();
+});
+
+// title-menu-rotation:470 (iPhone 14 portrait, UI SIZE 200): the phone's PHONE_TALL
+// seed sets data-title-layout, whose zoom rule read --ui-scale 2 x 1.05 = 2.1 and
+// pushed the doors 414 px into a 390 px screen. Compact keeps its shipped cap
+// (measured after: 1.3125 = 1.25 x 1.05, no door off-screen).
+test("a title layout on a compact screen scales the shipped compact cap, not the raw UI SIZE", async () => {
+  const { cssRules, decl } = await import("../helpers/css-rules.mjs");
+  const rules = cssRules(CSS);
+  const at = (part) => decl(rules, `:root[data-title-layout] :where(body[data-density="compact"]) ${part}`, "zoom");
+  assert.equal(at("#menu-buttons"), "calc(var(--ui-compact-scale) * var(--tl-btns-size, 1) * var(--tf, 1))");
+  assert.equal(at("#menu-brand"), "calc(var(--ui-compact-brand-scale) * var(--tl-title-size, 1) * var(--tf, 1))");
+  // Later in the sheet at the same specificity, so it beats the raw --ui-scale rule.
+  assert.ok(CSS.indexOf(':where(body[data-density="compact"]) #menu-buttons') > CSS.indexOf(":root[data-title-layout] #menu-buttons {"));
+});
+
+test("the arranger browses tabs, disclosures and scrollable regions without invoking gameplay actions", () => {
+  const dom = makeDom(), root = dom.byId("datahub");
+  const owningSheet = dom.document.body.appendChild(dom.makeElement("section"));
+  root.parentNode.removeChild(root); owningSheet.appendChild(root);
+  root.matches = selector => selector === "#datahub";
+  function child(tag, parent, id, title) {
+    const el = parent.appendChild(dom.makeElement(tag, id));
+    el.textContent = title;
+    el.getClientRects = () => [{}];
+    return el;
+  }
+  const pane = child("section", root, "panel", "");
+  pane._rect = {top:0, left:0, right:200, bottom:100, width:200, height:100};
+  pane.scrollHeight = 400;
+  const list = child("nav", pane, "tabs", "");
+  list.setAttribute("role", "tablist");
+  const first = child("button", list, "first", "Overview");
+  const next = child("button", list, "next", "Telemetry");
+  const locked = child("button", list, "locked", "Locked");
+  const quit = child("button", pane, "quit", "Quit");
+  let quitClicks = 0;
+  quit.addEventListener("click", () => { quitClicks++; });
+  for (const tab of [first, next, locked]) {
+    tab.setAttribute("role", "tab");
+    tab.setAttribute("aria-controls", "panel");
+    tab.addEventListener("click", () => {
+      for (const t of [first, next, locked]) t.setAttribute("aria-selected", String(t === tab));
+    });
+  }
+  first.click();
+  locked.disabled = true;
+  const details = child("details", pane, "fold", "");
+  details.open = false;
+  child("summary", details, "", "Drivers");
+  child("div", details, "roster", "");
+  const eventHost = dom.makeElement("div");
+  const win = {
+    addEventListener: eventHost.addEventListener, removeEventListener: eventHost.removeEventListener,
+    ScreenRegions: {datahub:{root:"#datahub", label:"Data Hub", regions:{
+      panel:{selector:"#panel", label:"Data"}, roster:{selector:"#roster", label:"Roster"}, lazy:{selector:"#lazy", label:"Loaded data"}
+    }}},
+    ScreenPlacement: {orientation:() => "portrait", read:() => ({}), apply(){}}
+  };
+  let changed, repaint;
+  dom.document.createElement = tag => {
+    const el = dom.makeElement(tag);
+    if (tag === "dialog") Object.assign(el, {showModal(){}, close(){}});
+    return el;
+  };
+  vm.runInNewContext(read("js/ui/screen-arranger.js"), {
+    window:win, document:dom.document, innerWidth:390, innerHeight:844,
+    getComputedStyle:() => ({overflowY:"auto"}),
+    MutationObserver:class { constructor(fn){changed=fn;} observe(){} disconnect(){} },
+    requestAnimationFrame:fn => {repaint=fn; return 1;}, cancelAnimationFrame(){}
+  }, { filename: absSrc("js/ui/screen-arranger.js") });
+  assert.equal(win.ScreenArranger.open("datahub", first), true);
+  const dialog = dom.document.querySelector("#screen-arranger");
+  const button = name => dialog.querySelectorAll("button").find(el => el.textContent === name);
+  button("Controls").click();
+  const selects = dialog.querySelectorAll("select");
+  const regions = selects.find(el => el.getAttribute("aria-label") === "Region");
+  const browse = selects.find(el => el.querySelectorAll("option").some(o => o.textContent === "Choose a section"));
+  const titles = select => select.querySelectorAll("option").map(o => o.textContent);
+  function choose(title) {
+    browse.value = browse.querySelectorAll("option").find(o => o.textContent === title).value;
+    dom.dispatch(browse, {type:"change"});
+  }
+  assert.deepEqual(titles(regions), ["Data"]);
+  assert.ok(!titles(browse).includes("Tab · Locked") && !titles(browse).includes("Quit"));
+  choose("Tab · Telemetry");
+  assert.equal(next.getAttribute("aria-selected"), "true");
+  choose("Open Drivers");
+  assert.deepEqual(titles(regions), ["Data", "Roster"]);
+  const lazy = child("section", pane, "lazy", "");
+  changed([{type:"childList",target:pane,addedNodes:[lazy],removedNodes:[]}]);
+  repaint();
+  assert.deepEqual(titles(regions), ["Data", "Roster", "Loaded data"]);
+  button("Scroll down").click();
+  assert.equal(pane.scrollTop, 75);
+  button("Cancel").click();
+  assert.equal(details.open, false);
+  assert.equal(first.getAttribute("aria-selected"), "true");
+  assert.equal(quitClicks, 0);
+  assert.equal(win.ScreenArranger.open("datahub", first), true);
+  owningSheet.setAttribute("hidden", "");
+  changed([{type:"attributes", target:owningSheet, attributeName:"hidden"}]);
+  assert.equal(dom.document.querySelector("#screen-arranger"), null, "hiding the owning sheet cancels its nested editor");
+  assert.equal(win.ScreenArranger.open("datahub", first), false, "a hidden page cannot reopen the editor");
+});
+
+test("the closed shared arranger leaves live race controls and telemetry outside its observers", () => {
+  const dom = makeDom();
+  const home = dom.byId("overlay");
+  const doors = home.appendChild(dom.makeElement("div", "menu-buttons"));
+  const hud = dom.byId("hud-dock");
+  const gas = hud.appendChild(dom.makeElement("button", "btn-throttle"));
+  const tower = dom.byId("timing-tower");
+  const lap = tower.appendChild(dom.makeElement("output", "lap-time"));
+  dom.document.getElementById = id => dom.document.querySelector("#" + id);
+  const query = dom.document.querySelector;
+  dom.document.querySelector = selector => selector === "#overlay #menu-buttons" ? doors : query(selector);
+  const watched = [];
+  let frames = 0, restores = 0;
+  const win = { ScreenPlacement: { restore() { restores++; } } };
+  vm.runInNewContext(read("js/ui/screen-regions.js"), {
+    document:dom.document, window:win, URLSearchParams, location:{search:""},
+    queueMicrotask:fn => fn(), requestAnimationFrame:() => ++frames,
+    MutationObserver:class { observe(node, options) { watched.push({node, options}); } }
+  }, { filename: absSrc("js/ui/screen-regions.js") });
+  assert.ok(watched.some(({node,options}) => node === dom.body && options.childList));
+  for (const {node,options} of watched) {
+    assert.ok(!(options.subtree && (node.contains(gas) || node.contains(lap))), "HUD descendants cannot trigger an arrangement scan");
+    assert.notEqual(node, gas);
+    assert.notEqual(node, lap);
+  }
+  const initialRestores = restores;
+  for (let i = 0; i < 100; i++) {
+    dom.dispatch(gas, {type:"pointermove", bubbles:true});
+    lap.textContent = String(i);
+  }
+  assert.equal(restores, initialRestores);
+  assert.equal(frames, 0);
+  assert.equal(win.ScreenArranger, undefined);
+});
+
+test("photo joystick Diameter measures the real disc and preserves its label and sibling", () => {
+  const dom = makeDom(), root = dom.byId("photo-controls"), events = dom.makeElement("div");
+  root.matches = selector => selector === "#photo-controls";
+  const rect = width => ({ left: 0, top: 0, right: width, bottom: width, width, height: width });
+  for (const id of ["move", "look"]) {
+    const wrap = root.appendChild(dom.makeElement("div", id));
+    wrap.getClientRects = () => [rect(180)];
+    wrap.getBoundingClientRect = () => rect(180);
+    const ring = wrap.appendChild(dom.makeElement("div"));
+    ring.className = "pc-stick";
+    ring.getBoundingClientRect = () => rect(id === "move" ? 100 : 120);
+  }
+  const button = root.appendChild(dom.makeElement("button"));
+  const saved = { move: { x: 4, width: 20 }, look: { scale: 1.2 } };
+  let preview;
+  const regions = Object.fromEntries(["move", "look"].map(id => [id, { label: id, selector: "#" + id, diameter: ".pc-stick" }]));
+  const win = {
+    addEventListener: events.addEventListener, removeEventListener: events.removeEventListener,
+    ScreenRegions: { "photo-controls": { label: "Photo controls", root: "#photo-controls", regions } },
+    ScreenPlacement: { fieldValue: (_, val) => val, orientation: () => "landscape",
+      read: () => saved, apply: (_, value) => { preview = plain(value); } }
+  };
+  dom.document.createElement = tag => {
+    const el = dom.makeElement(tag);
+    if (tag === "dialog") Object.assign(el, { showModal(){}, close(){} });
+    return el;
+  };
+  vm.runInNewContext(read("js/ui/screen-arranger.js"), {
+    window:win, document:dom.document, innerWidth:1000, innerHeight:500,
+    MutationObserver: class { observe(){} disconnect(){} }, requestAnimationFrame: () => 1, cancelAnimationFrame(){}
+  }, { filename: absSrc("js/ui/screen-arranger.js") });
+  button.getClientRects = () => [{width:44, height:44}];
+  assert.ok(win.ScreenArranger.open("photo-controls", button));
+  const dialog = dom.document.querySelector("#screen-arranger");
+  const control = label => dialog.querySelectorAll("button").find(el => el.textContent === label);
+  const step = dialog.querySelectorAll("select").find(el => el.querySelectorAll("option").some(o => o.textContent === "Fine"));
+  step.value = "1";
+  assert.equal(control("Width +").hidden, true);
+  assert.equal(control("Height +").hidden, true);
+  assert.equal(control("Diameter +").hidden, false);
+  control("Diameter +").click();
+  assert.deepEqual(preview, { move: { x: 4, diameter: 21 }, look: { scale: 1.2 } });
+  control("Undo").click();
+  assert.deepEqual(preview, saved);
+  control("Cancel").click();
 });

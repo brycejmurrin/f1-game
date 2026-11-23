@@ -1,0 +1,267 @@
+/* lazy-bundles-getcontext.test.mjs — getContext before G exists (#3888 race).
+ *
+ * LazyBundles.create arms capture listeners immediately; if renderer boot aborts
+ * before game.js assigns G, deps.getContext() throws ReferenceError on every tap.
+ * ctxOrNull() must swallow that, and restoreOnEngine must not latch audioRestored
+ * until the store is reachable.
+ *
+ * Run: node --test tests/unit/lazy-bundles-getcontext.test.mjs
+ */
+import test from "node:test";
+import assert from "node:assert/strict";
+import vm from "node:vm";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { absSrc } from "../helpers/abs-src.mjs";
+
+const ROOT = new URL("../../", import.meta.url);
+const read = (rel) => readFileSync(new URL(rel, ROOT), "utf8");
+const manifest = createRequire(import.meta.url)("../../tools/manifest.cjs");
+const loaderSrc = read("js/core/script-loader.js");
+const bundlesSrc = read("js/core/lazy-bundles.js");
+
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+function world({ getContext, globals = {}, roster = {} } = {}) {
+  const injected = new Map(), evalErrors = [];
+  const ctx = vm.createContext({
+    console, Promise, setTimeout, clearTimeout, queueMicrotask, URLSearchParams,
+    ApexRoster: {
+      DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [], LAZY_RACE: [],
+      LAZY_RACE_SESSION: [], LAZY_RACE_SESSION_EDGES: [],
+      LAZY_AUDIO: manifest.LAZY_AUDIO, LAZY_AUDIO_EDGES: manifest.LAZY_AUDIO_EDGES,
+      LAZY_TRACK_BUILD: [], LAZY_TRACK_BUILD_EDGES: [],
+      LAZY_DATA: [], LAZY_DATA_EDGES: [], LAZY_NET: [], LAZY_NET_EDGES: [],
+      SCENERY_DIR: "js/circuits/scenery", ...roster,
+    },
+    localStorage: { getItem() { return null; } },
+    navigator: { userAgent: "apex-game-vm", userActivation: { hasBeenActive: true } },
+    location: { search: "", hostname: "example.com" },
+    Log: { warn() {}, info() {}, error() {}, debug() {} },
+    els: {},
+    TrackBuildProps: { build() {} }, TrackModels: {}, TrackHiddenFaces: {},
+    Tracks: { LIST: [{ id: "monza" }], circuitPayloadResident: () => true, hydrate: () => true },
+    ...globals,
+  });
+  ctx.window = ctx;
+  const listeners = [];
+  ctx.addEventListener = (type, fn, capture) => { listeners.push({ type, fn, capture: !!capture }); };
+  ctx.removeEventListener = (type, fn, capture) => {
+    const cap = !!capture;
+    for (let i = listeners.length - 1; i >= 0; i--) {
+      const l = listeners[i];
+      if (l.type === type && l.fn === fn && l.capture === cap) listeners.splice(i, 1);
+    }
+  };
+  ctx.dispatchEvent = (ev) => {
+    for (const { type, fn, capture } of listeners) {
+      if (type === ev.type && capture) fn(ev);
+    }
+    for (const { type, fn, capture } of listeners) {
+      if (type === ev.type && !capture) fn(ev);
+    }
+    return true;
+  };
+  ctx.document = {
+    createElement() { return { dataset: {}, remove() {} }; },
+    head: { appendChild(el) {
+      if (el.rel === "prefetch" || el.rel === "preload") return;
+      const rel = el.src.replace(/\?.*$/, "");
+      injected.set(rel, (injected.get(rel) || 0) + 1);
+      setTimeout(() => {
+        try { vm.runInContext(el.__body || "", ctx, { filename: absSrc(rel) }); }
+        catch (e) { evalErrors.push(rel + ": " + e.message); }
+        el.onload();
+      }, 0);
+    } },
+  };
+  vm.runInContext(
+    loaderSrc + "\n" + bundlesSrc + "\nthis.ScriptLoader = ScriptLoader; this.LazyBundles = LazyBundles;",
+    ctx,
+    { filename: absSrc("js/core/lazy-bundles.js") },
+  );
+  const sl = ctx.ScriptLoader.create();
+  const lb = ctx.LazyBundles.create({
+    els: {},
+    loadBackendScripts: (files, edges, opts) => sl.load(files, edges, opts),
+    applyLightTuneIfReady() {},
+    onAudioReady() {},
+    getContext,
+  });
+  return { ctx, lb, injected, evalErrors };
+}
+
+function tdError(name) {
+  const err = new ReferenceError("Cannot access '" + name + "' before initialization");
+  err.name = "ReferenceError";
+  return err;
+}
+
+test("audio gesture listeners: getContext ReferenceError does not escape on click/keydown", async () => {
+  const w = world({
+    getContext: () => { throw tdError("G"); },
+    globals: {
+      GameAudio: {
+        _stub: false,
+        init() {},
+        context: () => ({ state: "running" }),
+      },
+    },
+  });
+  const types = ["click", "keydown", "pointerup", "touchend"];
+  for (const type of types) {
+    assert.doesNotThrow(() => {
+      w.ctx.dispatchEvent({ type, isTrusted: true, key: type === "keydown" ? "a" : undefined });
+    }, type);
+  }
+  await tick();
+  assert.deepEqual(w.evalErrors, []);
+});
+
+test("restoreOnEngine: a pre-G restore is retried once getContext returns a store", async () => {
+  let restoreCalls = 0;
+  const store = {
+    get(k, def) {
+      if (k === "volMusic") return 0.5;
+      if (k === "volSfx") return 0.6;
+      if (k === "radioFocusDb") return 0;
+      if (k === "volRadio") return 0.8;
+      return def;
+    },
+  };
+  const G = { soundOn: true, store, camMode: 0, musicEnabled: true, radio: { setVolume() {} } };
+  const engineSrc = `
+    var GameAudio = {
+      _stub: false,
+      init() {},
+      setEnabled(v) { globalThis.__enabled = v; },
+      setMusicVolume() {}, setSfxVolume() {},
+      context: () => ({ state: "suspended" }),
+    };
+  `;
+  const panelSrc = "var AudioPanel = { create() {} };";
+  const w = world({
+    getContext: () => {
+      restoreCalls++;
+      if (restoreCalls <= 1) throw tdError("G");
+      return G;
+    },
+    globals: {
+      GameAudio: { _stub: true, init() {} },
+      AudioPanel: { init() {} },
+      CamModes: { CAM_MODES: [{ id: "chase" }] },
+    },
+    roster: {
+      LAZY_AUDIO: ["js/audio/engine.js", "js/audio/panel.js"],
+      LAZY_AUDIO_EDGES: [["js/audio/engine.js", "js/audio/panel.js"]],
+    },
+  });
+  w.ctx.document.head.appendChild = function append(el) {
+    if (el.rel === "prefetch" || el.rel === "preload") return;
+    const rel = el.src.replace(/\?.*$/, "");
+    el.__body = rel.endsWith("engine.js") ? engineSrc : panelSrc;
+    setTimeout(() => {
+      vm.runInContext(el.__body, w.ctx, { filename: absSrc(rel) });
+      el.onload();
+    }, 0);
+  };
+
+  assert.equal(await w.lb.ensureAudio(), true);
+  assert.equal(w.ctx.__enabled, true, "restore runs once getContext succeeds during load");
+  assert.ok(restoreCalls >= 2, "getContext was retried across ready callbacks");
+});
+
+test("raceAssets: getContext ReferenceError does not reject the scenery prefetch", async () => {
+  const rejections = [];
+  const onRej = (e) => rejections.push(String((e && e.reason && e.reason.message) || e));
+  process.on("unhandledRejection", onRej);
+  try {
+    const w = world({
+      getContext: () => { throw tdError("G"); },
+      globals: { Tracks: { LIST: [{ id: "monza" }], circuitPayloadResident: () => false, hydrate: () => true } },
+    });
+    w.lb.raceAssets();
+    await tick(); await tick(); await tick();
+    await new Promise((r) => setTimeout(r, 50));
+    assert.deepEqual(rejections, []);
+  } finally {
+    process.off("unhandledRejection", onRej);
+  }
+});
+
+// #4978 row 2: the perf rig (LAZY_PERF) left the boot wall. bootPerfRig loads it at idle, or at once when
+// BenchRun's multi-reload plan waits to resume, and runs game.js's SoakRun/BenchRun create(G) once it lands.
+function perfWorld({ resume, fail = 0 }) {
+  const idle = [], loads = [], binds = [], sets = [];
+  let drops = fail;
+  const ctx = vm.createContext({
+    console, Promise, setTimeout, clearTimeout, queueMicrotask, URLSearchParams,
+    ApexRoster: {
+      DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [], LAZY_RACE: [],
+      LAZY_RACE_SESSION: [], LAZY_RACE_SESSION_EDGES: [], LAZY_AUDIO: [], LAZY_AUDIO_EDGES: [],
+      LAZY_TRACK_BUILD: [], LAZY_TRACK_BUILD_EDGES: [], LAZY_DATA: [], LAZY_DATA_EDGES: [], LAZY_NET: [], LAZY_NET_EDGES: [],
+      LAZY_PERF: manifest.LAZY_PERF, LAZY_PERF_EDGES: manifest.LAZY_PERF_EDGES, SCENERY_DIR: "js/circuits/scenery",
+    },
+    localStorage: { getItem: (k) => (resume && k === "apex26.benchRun" ? '{"legs":[]}' : null) },
+    requestIdleCallback: (fn) => { idle.push(fn); },
+    navigator: { userAgent: "apex-game-vm" }, location: { search: "", hostname: "example.com" },
+    Log: { warn() {}, info() {}, error() {}, debug() {} },
+    document: { createElement() { return { dataset: {}, remove() {} }; }, head: { appendChild() {} } },
+    addEventListener() {}, removeEventListener() {},
+  });
+  ctx.window = ctx;
+  vm.runInContext(loaderSrc + "\n" + bundlesSrc + "\nthis.LazyBundles = LazyBundles;", ctx, { filename: absSrc("js/core/lazy-bundles.js") });
+  const lb = ctx.LazyBundles.create({ els: {}, applyLightTuneIfReady() {}, onAudioReady() {}, getContext: () => null,
+    loadBackendScripts: async (files, edges, opts) => {
+      loads.push(files.slice()); sets.push(opts && opts.loaded);
+      if (drops-- > 0) return false;   // script-loader's strict failure: resolves false, never rejects
+      ctx.SoakRun = {}; ctx.BenchRun = {}; return true;
+    } });
+  return { lb, ctx, idle, loads, sets, binds, bind: () => binds.push("bound") };
+}
+
+test("#4978 row 2: the perf rig is lazy — idle-loaded, bound once on landing", async () => {
+  assert.ok(manifest.LAZY_PERF.includes("js/perf/bench-run.js") && !manifest.FULL.includes("js/perf/bench-run.js"));
+  const w = perfWorld({ resume: false });
+  await w.lb.bootPerfRig(w.bind);
+  assert.equal(w.loads.length, 0, "no BENCHMARK plan waiting: nothing loads on the boot path");
+  assert.equal(w.idle.length, 1, "the rig is scheduled for idle");
+  w.idle[0]();
+  await w.lb.ensurePerfRig(); await w.lb.ensurePerfRig();
+  assert.deepEqual(w.loads, [manifest.LAZY_PERF], "one inject of the whole rig");
+  assert.deepEqual(w.binds, ["bound"], "SoakRun/BenchRun.create(G) run once, after the bundle lands");
+});
+
+test("#4978 row 2: a BENCHMARK plan waiting across a reload loads the rig at once (BenchRun.KEY resume)", async () => {
+  const w = perfWorld({ resume: true });
+  await w.lb.bootPerfRig(w.bind);
+  assert.equal(w.loads.length, 1, "apex26.benchRun present: the rig loads on boot, not at idle");
+  assert.deepEqual(w.binds, ["bound"], "BenchRun.create runs so resume() picks the plan up");
+});
+
+// #5555 finding 3: one dropped LAZY_PERF request used to latch a resolved-false promise, so BENCHMARK,
+// PHONE TEST and the METRICS panel stayed dead until a reload. The next ask must load and bind.
+test("#5555: a failed perf-rig load is not latched — the next ensurePerfRig loads and binds", async () => {
+  const w = perfWorld({ resume: false, fail: 1 });
+  await w.lb.bootPerfRig(w.bind);
+  w.idle[0]();
+  assert.equal(await w.lb.ensurePerfRig(), false, "the idle load dropped a file");
+  assert.deepEqual(w.binds, [], "nothing to bind yet");
+  assert.equal(await w.lb.ensurePerfRig(), true, "the next ask fetches again");
+  assert.equal(w.loads.length, 2);
+  assert.deepEqual(w.binds, ["bound"], "SoakRun/BenchRun.create(G) run once the rig lands");
+  assert.equal(await w.lb.ensurePerfRig(), true);
+  assert.equal(w.loads.length, 2, "a landed rig is memoised");
+  assert.equal(typeof w.sets[0].has, "function", "the loader gets a `loaded` set, so a retry never re-injects a file that evaluated");
+  assert.equal(w.sets[1], w.sets[0], "the same set on the retry");
+});
+
+// #5555 finding 4: the global is a factory; consumers outside game.js reach the instance through live().
+test("#5555: the LazyBundles global is { create, live } and live() is the instance create() returned", () => {
+  const w = perfWorld({ resume: false });
+  assert.deepEqual(Object.keys(w.ctx.LazyBundles).sort(), ["create", "live"]);
+  assert.equal(w.ctx.LazyBundles.live(), w.lb);
+  assert.equal(typeof w.lb.ensurePerfRig, "function");
+  assert.equal(typeof w.lb.wantAgentSurface, "function");
+  assert.equal(w.ctx.LazyBundles.ensurePerfRig, undefined, "no loader hangs off the factory");
+});

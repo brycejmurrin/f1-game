@@ -6,8 +6,8 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["portimao"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
-        pine, tree, bush, mountain, grandstandEx, spectatorHill,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
+        pine, tree, bush, mountain, grandstandEx,
         billboard, gantry, marshalPost,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         cameraTower, sponsorHoarding, signBoard, groundedSegments, bankedKerbStrip,
@@ -112,6 +112,8 @@
         [0.100, 0.135, -1, 15.5, 36], [0.150, 0.235,  1, 15.5, 36],
         [0.400, 0.435,  1, 15.5, 36], [0.560, 0.612, -1, 15.5, 36],
         [0.745, 0.785,  1, 15.5, 36],
+        // Scrub east of the T14 exit sits below the neighbouring hillside.
+        [0.787, 0.795,  1, 30, 38],
       ];
       const keptOut = (k, side, dist, r) => KEEP_OUT.some(([s0, s1, zs, d0, d1]) =>
         zs === side && k >= K(s0 - 0.004) && k <= K(s1 + 0.004) &&
@@ -132,7 +134,8 @@
       const CUTS = [
         ["portimao-cut-t1-exit", 0.100, 0.135, -1],
         ["portimao-cut-t3", 0.150, 0.235, 1],
-        ["portimao-cut-mid", 0.400, 0.435, 1],
+        // Start beyond the bend: adjacent 9 m cut-bank tops overlap on its inside.
+        ["portimao-cut-mid", 0.412, 0.435, 1],
         // Ends at 0.612: past it the bank ran into the 0.620 left terrace.
         ["portimao-cut-t11", 0.560, 0.612, -1],
         ["portimao-cut-final", 0.745, 0.785, 1],
@@ -175,6 +178,8 @@
           return true;
         };
         along(s0, s1, opts.step || 7, (k, spacing) => {
+          // Leave the marshal post clear on the inside of the T5 hairpin.
+          if (opts.breakAt && k >= K(opts.breakAt[0]) && k <= K(opts.breakAt[1])) return;
           const a = anchor(k, side, gap);
           const b = [a.r, a.u, a.t];
           // Arc length scales with lateral offset through a corner: a fixed
@@ -246,7 +251,7 @@
       hillsideTerrace(0.470, 0.500, -1, 18, { rows: 6 });
       hillsideTerrace(0.518, 0.530, -1, 18, { rows: 6 });
       hillsideTerrace(0.835, 0.890, 1, 16, { rows: 7 });
-      hillsideTerrace(0.280, 0.360, 1, 15, { rows: 6, rise: 1.4, depth: 2.7, density: 0.5, step: 8 });
+      hillsideTerrace(0.280, 0.360, 1, 15, { breakAt: [0.302, 0.315], rows: 6, rise: 1.4, depth: 2.7, density: 0.5, step: 8 });
       hillsideTerrace(0.620, 0.700, -1, 15, { rows: 6, rise: 1.4, depth: 2.7, density: 0.5, step: 8 });
 
 
@@ -483,11 +488,13 @@
           center: vadd(foot, a.u, 8), size: [20, 18, 140], basis: b,
         }, dressMainStand, { required: true });
       }
-      // Grandstand Norte / MEO — uncovered multi-tier OUTSIDE the Turn 1
-      // downhill braking zone (3ddigitalvenue / ticket seating plans). Past the
-      // amphitheatre terraces (gap ≥ 42 clears 8×2.9 m rows from gap 16) so the
-      // stand shells do not coplanar-fight the terrace slabs. Rows rise away
-      // from the track. No Craig Jones statue (removed 2009).
+      // Grandstand Norte / MEO — uncovered multi-tier OUTSIDE Turn 1 braking
+      // zone (3ddigitalvenue / ticket seating plans). "braking" on this head
+      // line is load-bearing: corner-frames grants APPROACH_M (was judged as a
+      // kit 96 m before T1 under KIT_M when "braking" lived on the next line).
+      // Past the amphitheatre terraces (gap ≥ 42 clears 8×2.9 m rows from gap
+      // 16) so the stand shells do not coplanar-fight the terrace slabs. Rows
+      // rise away from the track. No Craig Jones statue (removed 2009).
       {
         const sT1 = 0.055;
         const a0 = anchor(K(sT1), 1, 48);
@@ -601,9 +608,10 @@
         groundedSegments({ id, points: pts, width: 9, height: 5.5, color: EARTH_D });
       }
 
-      for (const [s0, s1] of [[0.09, 0.28], [0.33, 0.48], [0.53, 0.62], [0.68, 0.85]]) {
+      // Keep the right rail closer through T8 to clear the hillside.
+      for (const [s0, s1, rightGap] of [[0.09, 0.28, 7], [0.33, 0.48, 6], [0.53, 0.62, 7], [0.68, 0.85, 7]]) {
         guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
-        guardrail(s0, s1,  1, 7, [0.80, 0.81, 0.83]);
+        guardrail(s0, s1,  1, rightGap, [0.80, 0.81, 0.83]);
       }
       guardrail(0.94, 0.06, 1, 4.0, [0.85, 0.85, 0.88]);
       fence(0.95, 0.07, -1, 9, 4, [0.74, 0.76, 0.80]);
@@ -691,7 +699,7 @@
       quinta("portimao-quinta-south", 0.68, 1, 92, 3);
 
       {
-        const a = anchor(K(0.415), 1, 104);
+        const a = anchor(K(0.415), 1, 76);
         const foot = a.c.slice();
         const gy = terrainYAt(foot[0], foot[2]);
         if (gy != null) foot[1] = Math.max(foot[1], gy - 0.2);
@@ -746,7 +754,7 @@
       for (let i = 0; i < 3; i++) signBoard(K(0.012 + i * 0.009), -1, 7, "braking", 3 - i);
       signBoard(K(0.055), 1, 7.5, "corner", 1);
       signBoard(K(0.300), -1, 7.5, "corner", 5);
-      signBoard(K(0.640), 1, 7.5, "corner", 11);
+      signBoard(K(0.618), 1, 7.5, "corner", 12);  // FIA 2021 T12 approach (turns[11] 0.624)
       sponsorHoarding(0.940, 0.060, -1, 3.4, { h: 1.15, step: 9 });
       // Algarve branding strips on the main straight (+1) and T1 approach
       // (-1). T1 starts after the S/F wrap (0.060) so two along() boards

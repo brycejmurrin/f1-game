@@ -150,10 +150,24 @@ const AgentCorners = (function () {
     function roadShapeAt(s, entryS, exitS, dir) {
       const track = G.track, out = {};
 
-      let bankRad = 0;
-      const bk = Tracks.banking ? Tracks.banking(track, wrapS(s), 0) : null;
-      if (bk && bk.roll) bankRad = bk.roll;
-      else if (Tracks.bankAngle) bankRad = Tracks.bankAngle(track, wrapS(s)) || 0;
+      // The PEAK roll over the corner, not the roll at the detector's apex:
+      // a bank zone does not centre on that s (Zandvoort T3 read 9.9° at the
+      // apex where its 18° zone peaks at 17.7°, #5712). Signed, so the camber
+      // test below still reads the side the road tilts to.
+      const rollAt = (q) => {
+        const bk = Tracks.banking ? Tracks.banking(track, wrapS(q), 0) : null;
+        if (bk && bk.roll) return bk.roll;
+        return Tracks.bankAngle ? (Tracks.bankAngle(track, wrapS(q)) || 0) : 0;
+      };
+      let bankRad = rollAt(s);
+      if (entryS != null && exitS != null) {
+        let span = exitS - entryS; if (span < 0) span += track.total;
+        const n = Math.max(1, Math.ceil(span / 2));
+        for (let i = 0; i <= n; i++) {
+          const r = rollAt(entryS + span * i / n);
+          if (Math.abs(r) > Math.abs(bankRad)) bankRad = r;
+        }
+      }
       const bankDeg = r1(bankRad * 180 / Math.PI);
       out.bankingDeg = bankDeg;
       if (Math.abs(bankDeg) < 1.5 || (dir !== "L" && dir !== "R")) {
@@ -165,18 +179,23 @@ const AgentCorners = (function () {
       }
 
       const a = entryS != null ? entryS : s - 40, b = exitS != null ? exitS : s + 40;
+      const L = track.total;
       Tracks.sample(track, wrapS(a), scr); const y0 = scr.p[1];
       Tracks.sample(track, wrapS(b), scr); const y1 = scr.p[1];
-      const run = Math.max(Math.abs(b - a), 1);
+      // entryS/exitS are wrapS'd: a start-line corner has a > b, so the short
+      // arc is (b - a + L), not abs(b - a) (~a full lap of "level").
+      let run = b - a; if (run < 0) run += L;
+      run = Math.max(run, 1);
       const grade = (y1 - y0) / run * 100;
       out.gradientPct = r1(grade);
       out.elevation = grade > 1.5 ? "uphill" : grade < -1.5 ? "downhill" : "level";
 
       // Kerbs are per-node flags; report which sides carry one through the corner.
       if (track.kerbL && track.kerbR) {
-        const nn = track.n, L = track.total;
+        const nn = track.n;
         let kl = 0, kr = 0, samples = 0;
-        for (let d = a; d <= b; d += 5) {
+        for (let off = 0; off <= run; off += 5) {
+          const d = a + off;
           const k = Math.floor((((d % L) + L) % L) / L * nn) % nn;
           if (track.kerbL[k]) kl++;
           if (track.kerbR[k]) kr++;
@@ -216,14 +235,21 @@ const AgentCorners = (function () {
     // The single field an agent cannot derive from k and hw but can act on
     // immediately. Distance is measured to the corner's ENTRY, not its apex —
     // by the apex the decision has already been made.
+    // Distance to a corner entry, folded so "just past the line into a wrap
+    // corner" stays a small negative (in it) instead of ~total ahead.
+    function entryDist(entryS, s, total) {
+      let d = ((entryS - s) % total + total) % total; // [0, total)
+      if (d > total - 20) d -= total;                 // ≤20 m past entry → in it
+      return d;
+    }
+
     function nextCorner(s, speed) {
       const list = corners();
       if (!list.length) return null;
       const total = G.track.total;
       let best = null, bestD = Infinity;
       for (const c of list) {
-        let d = c.entryS - s;
-        if (d < -20) d += total;              // small negative = we're in it
+        const d = entryDist(c.entryS, s, total);
         if (d < bestD) { bestD = d; best = c; }
       }
       if (!best) return null;
@@ -266,9 +292,7 @@ const AgentCorners = (function () {
       if (!list.length) return [];
       const total = G.track.total;
       const rows = list.map((c) => {
-        let d = c.entryS - s;
-        if (d < -20) d += total;
-        return { c, d };
+        return { c, d: entryDist(c.entryS, s, total) };
       }).sort((a, b) => a.d - b.d).slice(0, Math.max(1, n | 0));
       return rows.map(({ c, d }) => {
         const vApex = Math.sqrt(LAT_GRIP * Math.min(c.radiusM, 2000));

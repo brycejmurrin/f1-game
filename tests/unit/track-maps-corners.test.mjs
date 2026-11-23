@@ -216,3 +216,48 @@ test("the outline cache drops custom revisions Tracks.LIST no longer lists", () 
   }
   assert.deepEqual([...TrackMaps.cachedIds()].sort(), ["custom-rev19", "monza"], "only the listed revision and the shipped circuit");
 });
+
+// Clean-room fix 44: each curated turn searched a fixed ±50 m for its apex, so in
+// a chicane two turns snapped to the same point (26 pairs under 3 m apart across
+// the roster: Monza T1/T2, Sochi T2/T3, Suzuka T16/T17, Monaco T10/T11 ...) and
+// one took the other's direction, class and flyby target. The window is now half
+// the gap to the neighbouring turn.
+test("no two curated turns resolve to the same apex", () => {
+  const { Tracks, TrackMaps } = loadTrackMaps();
+  const doubled = [];
+  let circuits = 0;
+  for (const t of Tracks.LIST) {
+    if (!t.turns || t.turns.length < 2) continue;
+    const crns = TrackMaps.corners(t);
+    if (!crns || !crns.length) continue;
+    circuits++;
+    assert.equal(crns.length, t.turns.length, t.id + ": one marker per curated turn");
+    const total = Tracks.buildCenterline(t, { line: false }).total;
+    for (let i = 0; i < crns.length; i++) {
+      const a = crns[i], b = crns[(i + 1) % crns.length];
+      const d = Math.abs(((b.f - a.f) % 1 + 1.5) % 1 - 0.5) * total;
+      if (d < 3) doubled.push(`${t.id} T${a.n}/T${b.n} ${d.toFixed(1)} m`);
+    }
+  }
+  assert.ok(circuits > 40, "precondition: the curated circuits were found, got " + circuits);
+  assert.deepEqual(doubled, []);
+});
+
+test("cold 2-D map uses the same corner and elevation data without baking banking", () => {
+  const { Tracks, TrackMaps } = loadTrackMaps();
+  const def = Tracks.LIST.find(t => t.id === "zandvoort");
+  const build = Tracks.buildCenterline;
+  let observed;
+  Tracks.buildCenterline = (d, opts) => (observed = build(d, opts));
+  const snapshot = () => [
+    TrackMaps.outline(def), TrackMaps.corners(def), TrackMaps.direction(def),
+    TrackMaps.elevRange(def), TrackMaps.drsZones(def)
+  ];
+  const map = snapshot();
+  assert.ok(map[0].length > 2);
+  assert.equal(observed.bankP, undefined);
+  TrackMaps.invalidate(def.id);
+  Tracks.buildCenterline = (d, opts) => (observed = build(d, { ...opts, banking: true }));
+  assert.deepEqual(snapshot(), map);
+  assert.ok(observed.bankP);
+});

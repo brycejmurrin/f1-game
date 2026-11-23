@@ -17,6 +17,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import * as espree from "espree";
 import { scanSource, audit, CAPTURE_HARNESSES } from "../../tools/ci/assert-audit.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -177,4 +178,64 @@ test("every tests/unit suite is scanned and none is vacuous or swallowing", () =
   const swallows = rows.flatMap((r) => r.tests.filter((t) => t.swallow > 0)
     .map((t) => `${r.file}:${t.line} ${t.title}`));
   assert.deepEqual(swallows, [], "a tests/unit test swallows a rejection");
+});
+
+// titleOf() keeps a Literal or a TemplateLiteral and drops every other title
+// expression. The ratchet above only grades tests scanSource returned, so
+// test(name, () => {}) never appears in `all` and can assert nothing forever.
+// A template literal is the title form the scanner already records.
+const TITLE_TEST_FNS = new Set(["test", "sharedTest", "it"]);
+const TITLE_MODS = new Set(["only", "skip", "fixme", "serial", "parallel", "slow"]);
+
+function titleCallee(node) {
+  let cur = node;
+  const mods = [];
+  while (cur.type === "MemberExpression" && !cur.computed && cur.property.type === "Identifier") {
+    mods.unshift(cur.property.name);
+    cur = cur.object;
+  }
+  return cur.type === "Identifier" ? { base: cur.name, mods } : null;
+}
+
+function walkTitleAst(node, fn) {
+  if (!node || typeof node !== "object") return;
+  if (Array.isArray(node)) { for (const n of node) walkTitleAst(n, fn); return; }
+  fn(node);
+  for (const k of Object.keys(node)) {
+    if (k === "loc" || k === "range" || k === "start" || k === "end") continue;
+    walkTitleAst(node[k], fn);
+  }
+}
+
+test("every tests/unit test() is visible to the vacuity scan", () => {
+  const dir = path.join(ROOT, "tests/unit");
+  const missed = [];
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".test.mjs")).sort()) {
+    const src = fs.readFileSync(path.join(dir, f), "utf8");
+    const scanned = scanSource(src, "tests/unit/" + f);
+    if (scanned.parseError) {
+      missed.push(`tests/unit/${f}: ${scanned.parseError}`);
+      continue;
+    }
+    const seen = new Map();
+    for (const t of scanned.tests) seen.set(t.line, (seen.get(t.line) || 0) + 1);
+    const ast = espree.parse(src, { ecmaVersion: "latest", sourceType: "module", loc: true });
+    const declared = new Map();
+    walkTitleAst(ast, (n) => {
+      if (n.type !== "CallExpression") return;
+      const r = titleCallee(n.callee);
+      if (!r || !TITLE_TEST_FNS.has(r.base)) return;
+      if (r.mods.includes("describe") || !r.mods.every((m) => TITLE_MODS.has(m))) return;
+      const body = [...n.arguments].reverse().find(
+        (a) => a && (a.type === "ArrowFunctionExpression" || a.type === "FunctionExpression"));
+      if (!body) return;
+      declared.set(n.loc.start.line, (declared.get(n.loc.start.line) || 0) + 1);
+    });
+    for (const [line, count] of declared) {
+      if ((seen.get(line) || 0) < count) {
+        missed.push(`tests/unit/${f}:${line} scanSource drops a test whose title is not a literal or template — use a template literal title`);
+      }
+    }
+  }
+  assert.deepEqual(missed, []);
 });

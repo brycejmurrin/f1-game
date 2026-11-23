@@ -13,11 +13,13 @@ import { loadCar, farBody } from "../../tools/car/tri-census.mjs";
 const M = loadCar(undefined, true);
 const { Car3D, Parts, Teams, CarGeometry } = M;
 const TARGET = 1500;
-const body = () => {
+const body = (extra) => {
   const team = Teams.LIST[0];
-  return Car3D.build([0.72, 0.72, 0.72], [0.72, 0.72, 0.72], { field: true, silhouette: true, noDriver: true,
-    noWheels: true, livery: {}, smooth: false, parts: Parts.getVisualTiers(Parts.getFactorySetup(team), team) });
+  return Car3D.build([0.72, 0.72, 0.72], [0.72, 0.72, 0.72], Object.assign({ field: true, silhouette: true, noDriver: true,
+    noWheels: true, livery: {}, smooth: false, parts: Parts.getVisualTiers(Parts.getFactorySetup(team), team) }, extra));
 };
+// The algorithm tests want the pre-LOD mesh. The race draws body() with no extra.
+const dense = () => body({ noSharedLod: true });
 const box = (o) => {
   const b = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
   for (let i = 0; i < o.pos.length; i += 3) for (let k = 0; k < 3; k++) { b[k] = Math.min(b[k], o.pos[i + k]); b[3 + k] = Math.max(b[3 + k], o.pos[i + k]); }
@@ -25,7 +27,7 @@ const box = (o) => {
 };
 
 test("the far body decimates under the target and stays a valid mesh", () => {
-  const full = body(), n = full.idx.length;
+  const full = dense(), n = full.idx.length;
   assert.ok(n / 3 > TARGET, "the shared body is bigger than the target (else this test is vacuous): " + n / 3);
   const d = CarGeometry.decimate(full, TARGET);
   assert.equal(full.idx.length, n, "the input is left alone");
@@ -41,7 +43,7 @@ test("the far body decimates under the target and stays a valid mesh", () => {
 });
 
 test("the silhouette survives: same bounding box within 3 %, and the result is deterministic", () => {
-  const full = body(), d = CarGeometry.decimate(full, TARGET), d2 = CarGeometry.decimate(body(), TARGET);
+  const full = dense(), d = CarGeometry.decimate(full, TARGET), d2 = CarGeometry.decimate(dense(), TARGET);
   const a = box(full), b = box(d);
   for (let k = 0; k < 3; k++) {
     const ext = a[3 + k] - a[k];
@@ -49,6 +51,29 @@ test("the silhouette survives: same bounding box within 3 %, and the result is d
   }
   assert.deepEqual(Array.from(d2.idx), Array.from(d.idx));
   assert.deepEqual(Array.from(d2.pos), Array.from(d.pos));
+});
+
+test("the shipped shared rival is one paint surface inside the LOD budget", () => {
+  const full = dense(), lod = body();
+  const tris = lod.idx.length / 3, verts = lod.pos.length / 3;
+  assert.ok(tris <= CarGeometry.SHARED_BODY_TRIS && tris >= CarGeometry.SHARED_BODY_TRIS * 0.85,
+    `shared rival ${tris} tris, budget ${CarGeometry.SHARED_BODY_TRIS}`);
+  assert.ok(verts * 2 < full.pos.length / 3, `verts ${verts} should be under half of ${full.pos.length / 3}`);
+  assert.equal(new Set(lod.mat).size, 1);
+  assert.equal(lod.mat[0], CarGeometry.SHARED_PAINT);
+  assert.equal(lod._releaseCpuMirror, true, "the silhouette flag survives the new mesh");
+  const a = box(full), b = box(lod);
+  for (let k = 0; k < 3; k++) {
+    const ext = a[3 + k] - a[k];
+    assert.ok(Math.abs(b[k] - a[k]) <= ext * 0.03 && Math.abs(b[3 + k] - a[3 + k]) <= ext * 0.03, "axis " + k);
+  }
+  const far = CarGeometry.decimate(lod, TARGET);
+  assert.ok(far.idx.length / 3 <= TARGET && far.idx.length / 3 >= TARGET * 0.5, "the 250 m step still fits");
+  const team = Teams.LIST[0];
+  const near = Car3D.build(team.color, team.color2, { field: true, noWheels: true, noDriver: true, smooth: false,
+    livery: {}, parts: Parts.getVisualTiers(Parts.getFactorySetup(team), team) });
+  assert.ok(new Set(near.mat).size > 1, "a near rival keeps its surfaces");
+  assert.ok(near.idx.length / 3 > CarGeometry.SHARED_BODY_TRIS, "a near rival is not the shared LOD");
 });
 
 test("a body already under the target comes back untouched", () => {

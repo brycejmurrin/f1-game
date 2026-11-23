@@ -9,13 +9,13 @@ reaches for these first. They are not bloat.
 | `Tracks.curvature()` on the player with assists off | The arc must not reach the driver. | physics-contract-auditor; `docs/PHYSICS.md` columns |
 | `dt` clamp, `steps < 5`, `renderAlpha` | Tab-resume tunneling, spiral of death, stutter. | `docs/notes/ENGINEERING-PRACTICE-NOTES.md` §1 |
 | Split `updateCar()` or `render()` | Continuous integration / one draw; inventing a struct risks characterization. | `docs/ARCHITECTURE.md` §Reorg |
-| Extract garage preview "because it's big" | ~15 new `G` accessors — moves coupling, does not remove it. Sort by **boundary crossings**, not lines. | same §, 2026-08 table |
+| Extract a block "because it's big" | A carve that needs many new `G` accessors moves coupling, does not remove it. Sort by **boundary crossings**, not lines (the garage preview went out in 2026-09 through the car-drawing seam, not as an accessor-heavy extract). | `docs/ARCHITECTURE.md` §Extraction lessons |
 | IIFE → `import`/`export` | No ES modules (vendored three.js only). | `tests/unit/global-registry.test.mjs` |
 | Delete a bug-explaining comment | The one growth the size ratchet tolerates (`codeLines` ignores it). The comment **is** the test the suite cannot write. | `docs/notes/CEILING-HISTORY.md` header |
 | Delete a `catch` without the why-comment | `bareCatches` ratchet: an empty catch needs the sentence. | `tests/data/ratchets.json`, `tools/check/tree-counts.mjs` |
 | Restore `other-file.js:412` citations | Ceiling is 0. Cite the **symbol**. | `tests/unit/comment-citations.test.mjs` |
 | Raise a ceiling so the extract "fits" | Ratchet exists because extraction happened once and the file grew back. | `ARCHITECTURE.md`; ratchets slack rule |
-| Copy constants out instead of moving them | aerozones leftover; settings then `ReferenceError`. `grep` the old names. | `ARCHITECTURE.md` § leftovers |
+| Copy constants out instead of moving them | aerozones leftover; settings then `ReferenceError`. `grep` the old names. | `docs/ARCHITECTURE.md` §Extraction lessons |
 | Flatten `HARD_EDGES` / script order | Eval-time destructure order is load-bearing. | `tools/manifest.cjs`, `load-order.test.mjs` |
 | "Fix" seeded float associativity / lockstep net | Same-machine reproducibility only; peers have authority. | ENGINEERING-PRACTICE-NOTES §2 |
 | Put a skill under `.cursor/skills/` | Second tree = CLAUDE.md vs AGENTS.md drift again. | `skill-progressive.test.mjs` |
@@ -29,5 +29,5 @@ reaches for these first. They are not bloat.
 | "Fewer lines is simpler" | Nested ternaries and deleted comments are how characterization went red. |
 | "This comment is obvious" | If it names a fixed bug, a column, or a leftover — keep it. |
 | "I'll extract render later" | Do not start. Take cohesive blocks **around** it. |
-| "The auditor can chrome-start" | Never hand a subagent a browser run. Parent uses mcp-probe. |
+| "The hunter can chrome-start" | Never hand a subagent a browser run. Parent uses mcp-probe. |
 | "I'll bump the ceiling and extract next PR" | Next PR never comes. Lower now or do not extract. |

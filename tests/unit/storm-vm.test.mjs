@@ -14,7 +14,9 @@ import vm from "node:vm";
 const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
 
 let g;
-before(async () => { g = await createGame({ track: "monza" }); });
+// A remembered dry solo setup: RACE SETTINGS keeps the dry start these arcs are written from
+// (a fresh store opens a solo GP on the owner draft, storm / dusk / mixed, RaceSettings.DEFAULT_DRAFT).
+before(async () => { g = await createGame({ track: "monza", storage: { raceDraft: { weather: "dry", tod: "default", mixed: true, laps: "3" } } }); });
 after(() => g?.close());
 
 /** A race on `wx`; the agent's race() knows only the five pre-storm names, so a storm is set live before the green. */

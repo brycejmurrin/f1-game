@@ -53,6 +53,8 @@ async function hostLobby(game) {
   vm.runInContext(src("net/lobby-codes.js").replace(/^const\b/gm, "var"), context, { filename: absSrc("js/net/lobby-codes.js") });
   vm.runInContext(src("net/lobby-roster.js").replace(/^const\b/gm, "var"), context, { filename: absSrc("js/net/lobby-roster.js") });
   vm.runInContext(src("net/lobby-settings.js").replace(/^const\b/gm, "var"), context, { filename: absSrc("js/net/lobby-settings.js") });
+  vm.runInContext(src("net/quali-wire.js"), context, { filename: absSrc("js/net/quali-wire.js") });
+  vm.runInContext(src("net/strategy-wire.js"), context, { filename: absSrc("js/net/strategy-wire.js") });
   context.NetPlay = vm.runInContext(src("net/netplay.js") + ";NetPlay", context, { filename: absSrc("js/net/netplay.js") });
   const writes = [];
   const sessions = [];

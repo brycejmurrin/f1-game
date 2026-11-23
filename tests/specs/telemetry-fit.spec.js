@@ -4,15 +4,22 @@
 // the trace takes the free width, and the whole body scrolls as ONE column so
 // the last row (map key, legend toggles) is reachable above the bottom edge.
 // Notch insets are injected (headless reports env(safe-area-inset-*) as 0).
+import { BRYCE_WINDOWS, readProfile } from "../../tools/lib/bryce-phone.mjs";
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
 
+// The legacy LOAD SETTINGS export (TEXT large): the UI scaling contract (PR #5154) measures at it.
+// It is the October 2026 LEGACY export (tools/lib/bryce-phone.mjs `legacy`: HUD 155, BUTTON 245), a heavy fixture, not his phone today.
+const LEGACY_PROFILE = readProfile("legacy");
+
+const { width, height, insets } = BRYCE_WINDOWS.standalone;
+const ownerLandscape = { w: width, h: height, sal: insets.left, sar: insets.right, sat: insets.top, sab: insets.bottom };
 const VIEWS = [
-  { name: "landscape-852x393", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 },
+  { name: "landscape-852x393", ...ownerLandscape },
   { name: "portrait-390x844", w: 390, h: 844, sal: 0, sar: 0, sat: 47, sab: 34 },
 ];
 
-async function openCompare(page, v) {
+async function openTrace(page, v, drivers, arrange = false) {
   await page.addInitScript((css) => {
     const add = () => { const s = document.createElement("style"); s.textContent = css; document.head.appendChild(s); };
     document.head ? add() : document.addEventListener("DOMContentLoaded", add, { once: true });
@@ -48,18 +55,27 @@ async function openCompare(page, v) {
       carData: (sk, n) => Promise.resolve(lap(base[n]).car),
       locationData: (sk, n) => Promise.resolve(lap(base[n]).loc),
     });
-    document.getElementById("dh-tab-telemetry").click();
   });
+  if (arrange) {
+    await page.locator("#dh-close-btn").click();
+    await page.locator("#mb-settings").click();
+    await page.locator("#pm-open-appearance").click();
+    await page.getByLabel("Screen to arrange").selectOption("telemetry-detail");
+    await page.locator(".arrange-route").click();
+  } else {
+    await page.locator("#dh-tab-telemetry").click();
+  }
   const chips = page.locator(".dh-dchip");
   await expect(chips.first()).toBeVisible();
-  for (const code of ["VER", "STR", "HUL"]) await chips.filter({ hasText: code }).first().click();
-  await page.locator(".dh-livebtn", { hasText: "COMPARE 3 LAPS" }).evaluate((b) => b.click());
+  for (const code of drivers) await chips.filter({ hasText: code }).first().click();
+  const label = drivers.length === 1 ? "LOAD FASTEST LAP" : `COMPARE ${drivers.length} LAPS`;
+  await page.locator(".dh-livebtn", { hasText: label }).evaluate((b) => b.click());
   await expect(page.locator(".dh-tpopup[open] .dh-dash")).toBeVisible();
   await expect(page.locator(".dh-tpopup[open] canvas.dh-map")).toBeVisible();
 }
 
 async function checkFit(page, v) {
-      await openCompare(page, v);
+      await openTrace(page, v, ["VER", "STR", "HUL"]);
       const r = await page.evaluate((ins) => {
         const q = (s) => /** @type {HTMLElement[]} */ ([...document.querySelectorAll(s)]);
         const box = (e) => e.getBoundingClientRect();
@@ -112,4 +128,184 @@ test.describe("landscape 852x393 notch", () => {
 test.describe("portrait 390x844", () => {
   test.use({ viewport: { width: VIEWS[1].w, height: VIEWS[1].h }, hasTouch: true });
   test("telemetry compare view is not clipped, overlapped or narrower than its column", async ({ page }) => { await checkFit(page, VIEWS[1]); });
+  test("browser Back closes the trace before the Data Hub and restores the selected driver", async ({ page }) => {
+    await openTrace(page, VIEWS[1], ["VER"]);
+    const hub = page.locator("#datahub");
+    await page.evaluate(() => history.back());
+    await expect(page.locator(".dh-tpopup")).toHaveCount(0);
+    await expect(hub).toBeVisible();
+    await expect(hub.locator(".dh-dchip", { hasText: "VER" })).toBeFocused();
+    await expect.poll(() => page.evaluate(() => history.state?.apexBack)).toBe(1);
+    await page.evaluate(() => history.back());
+    await expect(hub).toHaveAttribute("hidden", "");
+  });
+});
+
+/* ── THE DATA HUB HEAD on a phone held sideways (UI contract gap 15, PR #5156) ──
+ * The contract's windows: A an iPhone 15 (notch left, home indicator), C the
+ * measured 283 px Safari tab, D a notch-less 844x390. At
+ * every cell the head is ONE row — title, the tab strip, ⋯, ✕ — the ✕ is the
+ * LAST thing on it, and the strip is the row's scroller (nowrap, overflow-x
+ * auto, pan-x) instead of wrapping under the title or pushing ✕ off the card.
+ * Measured 2026-11-07 (probe at the export): ✕ right 775 of 793 safe (A), card
+ * bottom 275 of 283 (C), one row in all 15 cells. */
+const HEAD_WINDOWS = [
+  { name: "A 852x393 notch", ...ownerLandscape },
+  { name: "C 852x283 Safari toolbar", w: 852, h: 283, sal: 59, sar: 59, sat: 0, sab: BRYCE_WINDOWS["safari-short"].insets.bottom },
+  { name: "D 844x390", w: 844, h: 390, sal: 47, sar: 47, sat: 0, sab: 21 },
+];
+// [textSize, uiScale %]: the export's own (large, UI 109 % by the coarse-pointer default), then the grid.
+const HEAD_KNOBS = [["large", null], ["normal", 100], ["large", 100], ["normal", 130], ["large", 130]];
+
+async function openHubAtExport(page, v) {
+  await page.addInitScript((css) => {
+    const add = () => { const s = document.createElement("style"); s.textContent = css; document.head.appendChild(s); };
+    document.head ? add() : document.addEventListener("DOMContentLoaded", add, { once: true });
+  }, `:root{--sal:${v.sal}px!important;--sat:${v.sat}px!important;--sar:${v.sar}px!important;--sab:${v.sab}px!important}`);
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+  const imp = await page.evaluate((d) => SettingsExport.applySettings(d, {}), LEGACY_PROFILE);
+  expect(imp.ok, "owner export imports: " + JSON.stringify(imp)).toBe(true);
+  await page.reload();
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => window.__apex.headless(true));
+  await page.click("#mb-data");
+  await page.waitForSelector("#datahub:not([hidden])");
+  await page.waitForFunction(() => document.querySelectorAll("#datahub .dh-tabs .dh-tab").length > 3, null, { polling: 100, timeout: 30000 });
+}
+
+async function setKnobs(page, text, ui) {
+  await page.evaluate(async ([t, u]) => {
+    if (window.AppearanceOpts && typeof AppearanceOpts.setTextSize === "function") AppearanceOpts.setTextSize(t);
+    if (t === "normal") delete document.documentElement.dataset.textSize; else document.documentElement.dataset.textSize = t;
+    if (u != null) window.__apex.uiScale(u);
+    const raf2 = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    if (window.SheetShape) SheetShape.reclassify();
+    await raf2();
+    if (window.SheetShape) SheetShape.reclassify();
+    await raf2();
+  }, [text, ui]);
+}
+
+const HEAD = () => {
+  const head = document.querySelector("#datahub .dh-card > .sheet-head");
+  const vis = (el) => !el.hidden && getComputedStyle(el).display !== "none";
+  const kids = [...head.children].filter(vis);
+  const mid = (el) => { const r = el.getBoundingClientRect(); return Math.round(r.top + r.height / 2); };
+  const strip = head.querySelector(".dh-tabs"), close = head.querySelector(".dh-close");
+  const cs = getComputedStyle(strip);
+  const tabs = [...strip.querySelectorAll(".dh-tab")].filter(vis);
+  const last = kids.reduce((a, b) => (b.getBoundingClientRect().right > a.getBoundingClientRect().right ? b : a));
+  const card = document.querySelector("#datahub .dh-card").getBoundingClientRect(), cr = close.getBoundingClientRect();
+  return { rows: new Set(kids.map(mid)).size, tabRows: new Set(tabs.map(mid)).size, tabs: tabs.length, lastIsClose: last === close,
+    wrap: cs.flexWrap, overflowX: cs.overflowX, touch: cs.touchAction, stripFits: strip.scrollWidth <= strip.clientWidth + 1,
+    closeRight: cr.right, cardLeft: card.left, cardRight: card.right, cardTop: card.top, cardBottom: card.bottom, vw: innerWidth, vh: innerHeight,
+    ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(), text: document.documentElement.dataset.textSize || "normal" };
+};
+
+for (const v of HEAD_WINDOWS) {
+  test.describe(`data hub head · ${v.name}`, () => {
+    test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
+    test("one row, ✕ last, the tab strip scrolls — at the owner's export and across TEXT SIZE x UI SIZE", async ({ page }) => {
+      test.setTimeout(120000);
+      await openHubAtExport(page, v);
+      for (const [text, ui] of HEAD_KNOBS) {
+        await setKnobs(page, text, ui);
+        const h = await page.evaluate(HEAD);
+        const cell = `${v.name} · text ${text} · UI ${ui ?? "export"} (${h.ui}/${h.text})`;
+        expect(h.tabs, cell + ": tabs present").toBeGreaterThan(3);
+        expect(h.rows, cell + ": the head is ONE row (title, strip, ⋯, ✕)").toBe(1);
+        expect(h.tabRows, cell + ": no tab wrapped to a second line").toBe(1);
+        expect(h.lastIsClose, cell + ": ✕ is the last thing on the row").toBe(true);
+        expect(h.wrap, cell + ": the strip does not wrap").toBe("nowrap");
+        expect(h.overflowX, cell + ": the strip is the scroller").toBe("auto");
+        expect(h.touch, cell + ": a finger pans the strip sideways").toBe("pan-x");
+        expect(h.closeRight, cell + ": ✕ inside the right safe inset").toBeLessThanOrEqual(h.vw - v.sar + 1);
+        expect(h.cardLeft, cell + ": card clear of the notch").toBeGreaterThanOrEqual(v.sal - 1);
+        expect(h.cardRight, cell + ": card inside the right inset").toBeLessThanOrEqual(h.vw - v.sar + 1);
+        expect(h.cardTop, cell + ": card below the top inset").toBeGreaterThanOrEqual(v.sat - 1);
+        expect(h.cardBottom, cell + ": card above the home indicator").toBeLessThanOrEqual(h.vh - v.sab + 1);
+      }
+    });
+  });
+}
+
+/* ── THE TELEMETRY PLAYER'S ✕ on a phone held sideways (#5069) ──
+ * The player's only exit painted 37x52 at 844x390 (a compact `width: 34px` rule
+ * outranked the hub's --tap-paint ✕). At the owner's export and at UI SIZE 200%
+ * it is a 44 px target on both axes, and the trace is reachable: the popup body
+ * is the scroller, so the chart's bottom scrolls inside it.
+ * Measured 2026-11-10 (probe at the export): ✕ 52x52 at every cell; body
+ * scrollHeight 738 / clientHeight 213 at 200%. */
+async function openFastestLap(page) {
+  await page.waitForFunction(() => typeof F1API !== "undefined" && document.getElementById("dh-tab-telemetry"), null, { polling: 100 });
+  await page.evaluate(() => {
+    const SESSION = { sessionKey: 9999, meetingKey: 1234, year: 2026, name: "Race", type: "Race", circuit: "Singapore", country: "Singapore" };
+    const t0 = 1e12, dur = 95.1, car = [], loc = [];
+    for (let i = 0; i * 0.1 <= dur; i++) { const t = i * 0.1, a = (t / dur) * 2 * Math.PI;
+      car.push({ t, date: t0 + t * 1000, speed: 200 + 90 * Math.sin(a * 3), throttle: 50 + 50 * Math.sin(a * 2), brake: 0, gear: 6, rpm: 11000, drs: 8 }); }
+    for (let i = 0; i * 0.27 <= dur; i++) { const t = i * 0.27, a = (t / dur) * 2 * Math.PI;
+      loc.push({ x: 3000 + 1600 * Math.cos(a), y: 4000 + 1400 * Math.sin(a), date: t0 + t * 1000 }); }
+    const none = () => Promise.resolve([]);
+    Object.assign(F1API, {
+      schedule: none, driverStandings: none, constructorStandings: none, sessionResult: none, stints: none, pits: none,
+      latestSession: () => Promise.resolve(SESSION),
+      meetings: () => Promise.resolve([{ meetingKey: 1234, name: "Singapore GP", year: 2026 }]),
+      sessionsForMeeting: () => Promise.resolve([SESSION]),
+      sessionDrivers: () => Promise.resolve([{ num: 4, code: "NOR", name: "Lando Norris", color: "F47600", team: "McLaren" }]),
+      fastestLap: () => Promise.resolve({ lapNumber: 60, lapDuration: dur, s1: 28.792, s2: 41.089, s3: 27.174, dateStart: new Date(t0).toISOString() }),
+      carData: () => Promise.resolve(car), locationData: () => Promise.resolve(loc),
+    });
+    document.getElementById("dh-tab-telemetry").click();
+  });
+  await page.locator(".dh-dchip").filter({ hasText: "NOR" }).first().click();
+  await page.locator(".dh-livebtn", { hasText: "LOAD FASTEST LAP" }).evaluate((b) => b.click());
+  await expect(page.locator(".dh-tpopup[open] canvas[aria-label^='Telemetry trace chart']")).toBeVisible();
+}
+
+for (const v of [HEAD_WINDOWS[2], HEAD_WINDOWS[0]]) {
+  test.describe(`telemetry player ✕ · ${v.name}`, () => {
+    test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
+    for (const ui of [null, 200]) {
+      test(`the close ✕ is ≥ 44 px on both axes and the trace is reachable · UI ${ui ?? "export"}`, async ({ page }) => {
+        await openHubAtExport(page, v);
+        if (ui != null) await setKnobs(page, "large", ui);
+        await openFastestLap(page);
+        const r = await page.evaluate(() => {
+          const close = document.querySelector(".dh-tpopup[open] .dh-close").getBoundingClientRect();
+          const body = document.querySelector(".dh-tpopup[open] .dh-tpopup-body");
+          const chart = document.querySelector(".dh-tpopup[open] canvas[aria-label^='Telemetry trace chart']");
+          chart.scrollIntoView({ block: "end" });
+          const c = chart.getBoundingClientRect(), b = body.getBoundingClientRect();
+          return { w: close.width, h: close.height, chartBottom: c.bottom, bodyBottom: b.bottom, chartTop: c.top, bodyTop: b.top };
+        });
+        const cell = `${v.name} · UI ${ui ?? "export"}`;
+        expect(r.w, cell + ": ✕ width").toBeGreaterThanOrEqual(44);
+        expect(r.h, cell + ": ✕ height").toBeGreaterThanOrEqual(44);
+        expect(r.chartBottom, cell + ": the trace's bottom scrolls into the popup body").toBeLessThanOrEqual(r.bodyBottom + 1);
+        expect(r.chartBottom, cell + ": and is on screen").toBeGreaterThan(r.bodyTop);
+      });
+    }
+  });
+}
+
+test("arranging the wide telemetry trace resizes the rendered column and Apply keeps the preview width", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await openTrace(page, { sat: 0, sar: 0, sab: 0, sal: 0 }, ["VER", "STR"], true);
+  const detail = page.locator("dialog.dh-tpopup");
+  const column = detail.locator(".dh-telem-main");
+  await expect(page.locator("body")).toHaveAttribute("data-width", "wide");
+  const width = () => column.evaluate(node => node.getBoundingClientRect().width);
+  const initial = await width();
+  const editor = page.locator("#screen-arranger[open]");
+  await editor.getByLabel("Region", { exact: true }).selectOption("charts");
+  await editor.getByRole("button", { name: "Controls", exact: true }).click();
+  await editor.getByRole("button", { name: "Width −", exact: true }).click();
+  await expect(column).toHaveCSS("flex-grow", "0");
+  const adjusted = await width();
+  expect(adjusted).toBeLessThan(initial - 5);
+  await editor.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  expect(await width()).toBeCloseTo(adjusted, 0);
+  await expect(detail.locator("#dh-tpopup-close")).toBeVisible();
 });

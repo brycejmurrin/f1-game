@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import {readFileSync} from "node:fs";
+import { absSrc } from "../helpers/abs-src.mjs";
 const root = new URL("../../", import.meta.url);
 function setup(options = {}) {
   const ctx = vm.createContext({Math:options.math || Math,Number,Object,WeakMap,
@@ -12,12 +13,13 @@ function setup(options = {}) {
     vm.runInContext(readFileSync(new URL(path,root),"utf8"),ctx);
   const geometry=vm.runInContext("ContactGeometry",ctx);
   const ai=vm.runInContext("AiDrive",ctx);
+  const Collide=vm.runInContext("Collide",ctx);
   const G={track:{total:1000},player:null,netPlay:{owns:c=>!!c.remote},PACE:1,raceT:0,
     wrapS:s=>(s%1000+1000)%1000,worldFromTrack:(s,x)=>({x,z:s})};
-  const collision=vm.runInContext("Collide",ctx).create(G,options.onEffect || (()=>{}));
-  return {geometry,collision,G,ai};
+  const collision=Collide.create(G,options.onEffect || (()=>{}));
+  return {geometry,collision,G,ai,Collide};
 }
-const {geometry:C,ai:AI}=setup();
+const {geometry:C,ai:AI,Collide}=setup();
 const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-8,`${a} != ${b}`);
 test("SAT rejects rotated bounding-box overlap without touching bodywork",()=>{
   assert.equal(C.overlap(3,-3,Math.PI/3,Math.PI/3),null);
@@ -220,6 +222,27 @@ test("SAT reuses body trigonometry without changing axis construction",()=>{
   assert.ok(calls<=12,`four swept axes repeated body trigonometry: ${calls}`);
 });
 
+test("a proven near miss is checked once in small and bucketed fields", () => {
+  for (const count of [2, 22]) {
+    let trig = 0;
+    const math = Object.create(Math);
+    for (const key of ["sin", "cos"]) math[key] = angle => { trig++; return Math[key](angle); };
+    const { collision } = setup({ math });
+    const field = Array.from({ length: count }, (_, i) => car(i * 30, 25));
+    const [a, b] = field;
+    a.human = true; a.yawVis = 0.8;
+    b.prog = b.s = 1; b.x = 6;  // same longitudinal bucket, clear laterally
+    collision.resolveCollisions([], 1 / 60);
+    trig = 0;
+    assert.equal(collision.pairContact(a, b), null);
+    const oneCheck = trig;
+    assert.ok(oneCheck > 0);
+    trig = 0;
+    collision.resolveCollisions(field, 1 / 60);
+    assert.equal(trig, oneCheck, `unmoved near miss rechecked in a ${count}-car field`);
+  }
+});
+
 test("pair extents share trig while preserving nonfinite yaw semantics",()=>{
   let calls=0;
   const math=Object.create(Math);
@@ -233,12 +256,58 @@ test("pair extents share trig while preserving nonfinite yaw semantics",()=>{
   assert.ok(contact);assert.equal(contact.penLong,4.8-1);assert.equal(contact.penLat,2-.5);
   // D·DP7: unyawed pairs take the LCAR/WCAR closed form — zero trig, same pens.
   assert.equal(calls,0,`unyawed pair still paid extent trigonometry: ${calls}`);
-  // Extents intentionally use yawVis || 0; bodyAngle separately rejects
-  // infinity. Reusing bodyAngle here would silently change this contract.
+  // extentAngle shares bodyAngle's Number.isFinite gate: Infinity is not a
+  // yaw, so the pair stays on the unyawed closed form (finite pens). The old
+  // `yawVis || 0` kept Infinity and wrote NaN into penLong/penLat.
   a.yawVis=Infinity;
   const nonfinite=collision.pairContact(a,b);
-  assert.ok(nonfinite);assert.ok(Number.isNaN(nonfinite.penLong));assert.ok(Number.isNaN(nonfinite.penLat));
+  assert.ok(nonfinite);assert.equal(nonfinite.penLong,4.8-1);assert.equal(nonfinite.penLat,2-.5);
   assert.equal(nonfinite.oriented,false);
+});
+
+// Infinity yawVis used to NaN both cars' prog/s through extentAngle → pairContact
+// → rear-end correction (cos/sin(Infinity)). Fixed dt, seeded poses.
+test("Infinity yawVis does not NaN car positions",()=>{
+  const {collision}=setup(),a=car(0,30),b=car(4,0,.5);
+  a.human=true;a.yawVis=Infinity;
+  collision.resolveCollisions([a,b],1/60);
+  assert.ok(Number.isFinite(a.prog)&&Number.isFinite(a.s)&&Number.isFinite(a.x),`a became nonfinite: prog=${a.prog} s=${a.s} x=${a.x}`);
+  assert.ok(Number.isFinite(b.prog)&&Number.isFinite(b.s)&&Number.isFinite(b.x),`b became nonfinite: prog=${b.prog} s=${b.s} x=${b.x}`);
+});
+
+// A large heading change in one step used to set sweepEligible=false and skip
+// the whole sweep, so a fast car at low fps tunnelled through a parked rival.
+// Twist now falls back to an axis-aligned TOI instead of skipping.
+test("a large yaw step at low fps still catches a swept contact",()=>{
+  const {collision,G}=setup(),a=car(0,600),b=car(9,0);
+  a.human=true;a.yawVis=0.7;
+  collision.resolveCollisions([a,b],0.05);
+  a.prog=a.s=30;a.yawVis=0.9;G.raceT=0.05;
+  collision.resolveCollisions([a,b],0.05);
+  assert.ok(a.prog<b.prog,`tunnelled at 20 fps: a at ${a.prog}, b at ${b.prog}`);
+  assert.ok(b.prog-a.prog>2,`pair still heavily overlapped: gap=${b.prog-a.prog}`);
+  assert.ok(Number.isFinite(a.prog)&&Number.isFinite(b.prog));
+});
+
+// parkedAhead used to keep the minimum signed arc, so the retirement furthest
+// behind inside the window always beat a nearer car ahead or beside. The AI
+// then aimed around the wrong car. Nearest is absolute arc distance.
+test("parkedAhead keeps the nearest retirement inside the window",()=>{
+  const L=5000,reach=80,pk=s=>({s});
+  const pick=(s,parked)=>Collide.parkedAhead({s},parked,L,reach);
+  const farBehind=pk(100-4.5),nearBehind=pk(100-0.4),nearAhead=pk(102),farAhead=pk(140);
+  assert.equal(pick(100,[farBehind,nearBehind]),nearBehind);
+  assert.equal(pick(100,[nearBehind,farBehind]),nearBehind);
+  assert.equal(pick(100,[farBehind,nearAhead]),nearAhead);
+  assert.equal(pick(100,[nearAhead,farAhead]),nearAhead);
+  assert.equal(pick(100,[nearBehind]),nearBehind);
+  assert.equal(pick(100,[nearBehind,farAhead]),nearBehind);
+  assert.equal(pick(100,[]),null);
+  assert.equal(pick(100,[pk(100-Collide.LCAR)]),null,"a full car length behind is already past");
+  assert.equal(pick(100,[pk(100+reach)]),null,"the reach bound is exclusive");
+  const across=pk(L-1),justAhead=pk(4);
+  assert.equal(pick(2,[across,justAhead]),justAhead,"a car across the start line must not hide a closer one ahead");
+  assert.equal(pick(2,[justAhead,across]),justAhead);
 });
 
 test("unyawed pairContact matches the trig extents Object.is for a grid of poses",()=>{
@@ -257,4 +326,28 @@ test("unyawed pairContact matches the trig extents Object.is for a grid of poses
       assert.ok(Object.is(ct.penLat,penLat),`penLat ${ct.penLat} vs ${penLat} at dX=${dX}`);
     }
   }
+});
+test("AI aim stays a pad inside the pit / exit wall line the contact clamp uses (#5997)",()=>{
+  const ctx=vm.createContext({Math,Number,Object,WeakMap,TrackPit:{EXIT_WALL_W:.75},
+    Tracks:{wallAt:()=>100,postLimits(){}}});
+  vm.runInContext(readFileSync(new URL("js/physics/contact-geometry.js",root),"utf8"),ctx,{filename:absSrc("js/physics/contact-geometry.js")});
+  const CG=vm.runInContext("ContactGeometry",ctx);
+  const n=100,hw=new Array(n).fill(6),v=new Array(n).fill(0),w=new Array(n).fill(0);
+  for(let k=10;k<20;k++)v[k]=1;                       // the pit wall beside the lane
+  for(let k=20;k<30;k++){v[k]=.5;w[k]=1;}             // the exit road: wall still standing
+  for(let k=30;k<40;k++){v[k]=.2;w[k]=.5;}            // the wall has ended
+  const tr={total:1000,n,hw,pit:{painted:false,side:1,v,w,sOut:200,exitRoadM:150,bands:{verge:2},off:{fastIn:1}}};
+  const lim={r:0,l:0,laneMin:0,side:0};
+  for(const s of [150,250]){
+    CG.wallLimits(tr,s,0,lim,null);
+    close(CG.pitWallX(tr,s),lim.r);                    // the same line the clamp holds
+    close(CG.pitWallAim(tr,s,s,lim.r+3),lim.r-.35);    // an aim across it comes back inside
+    assert.equal(CG.pitWallAim(tr,s,s,-2),-2);         // the far side of the road is untouched
+  }
+  assert.equal(CG.pitWallX(tr,350),0);                 // no wall: no limit
+  assert.equal(CG.pitWallAim(tr,350,350,5.9),5.9);
+  close(CG.pitWallAim(tr,350,250,5.9),CG.pitWallX(tr,250)-.35);   // the wall a lead ahead counts
+  tr.pit.side=-1;CG.wallLimits(tr,150,0,lim,null);
+  close(CG.pitWallAim(tr,150,150,-9),-(lim.l-.35));    // mirrored on a left-hand pit
+  tr.pit.painted=true;assert.equal(CG.pitWallAim(tr,150,150,5.9),5.9);   // painted lane: no wall
 });

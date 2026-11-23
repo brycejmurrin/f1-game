@@ -10,13 +10,20 @@ const SceneryCity = (function () {
   // same mass replayed inline got its brick/stone/concrete layer (H27). One model
   // per material id keeps the batch count at the 3-4 facadeMat can return.
   const massBox = (mat) => (rec) => { rec.mat(mat); unitBox(rec); };
+  // Every facade DETAIL (rail, mullion, pane, neon trim) has the same need: it
+  // inherited out._mat / glassBuf._mat inline but drew mat 0 instanced (45,344
+  // nodes fleet-wide, 2026-11-10). matBox(m) keys one model per material — the
+  // register the target buffer holds at the call — so both paths agree.
+  // tools/track/graph-parity.cjs asserts zero inherited-material nodes.
+  const matKey = (m) => m ? UNIT_BOX + ":" + m : UNIT_BOX;
+  const matBox = (m) => m ? massBox(m) : unitBox;
 
   function create(ctx) {
     const { out, glassBuf, def, theme, NIGHT, MAT, lod,
             seat,
             addBox, addCyl, addCone, addFrustum, addPrism, addPyramid,
             rejBox, blockAt, onTrack, hash, vadd, kitOf,
-            anchor, along, massBlocked, massAdd, terrainYAt, treeInFootprint } = ctx;
+            anchor, along, massBlocked, massAdd, terrainYAt, treeInFootprint, norm } = ctx;
     Log.info("scenery", "scenery-city dress " + (def && def.id));
     const { WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY } = TrackSceneryData;
 
@@ -49,8 +56,11 @@ const SceneryCity = (function () {
       return under >= 2;
     };
     // A unit-box facade detail, skipped when sunk() says it is inside the hill.
-    const detail = (spec, meta, opt) =>
-      sunk(spec.o, [spec.r, spec.u, spec.t], spec.s) ? 0 : ctx.instance(UNIT_BOX, spec, unitBox, meta, opt);
+    const detail = (spec, meta, opt) => {
+      if (sunk(spec.o, [spec.r, spec.u, spec.t], spec.s)) return 0;
+      const m = ((opt && opt.buf) || out)._mat || 0;
+      return ctx.instance(matKey(m), spec, matBox(m), meta, opt);
+    };
 
     const facadeMat = (rgb) => {
       const r = rgb[0], g = rgb[1], b = rgb[2];
@@ -62,102 +72,43 @@ const SceneryCity = (function () {
       return MAT.CONCRETE;
     };
 
-    const neonFacade = (mid, bb, side, sw, sh, sd, neon, seed, neonAmt) => {
-      const u = bb[1];
-      const frameCol = [0.12, 0.12, 0.15];                       // dark structural frame
-      const dark = [0.035, 0.035, 0.055];                        // unlit glass pane
-      const warm = [1.0, 0.80, 0.46];
-      const nc = [neon[0] * 0.95, neon[1] * 0.95, neon[2] * 0.95];
-      const litShare = 0.20 + neonAmt * 0.08, neonShare = neonAmt * 0.7;
-      const rows = lod(Math.max(4, Math.min(10, Math.round(sh / 4.4))), 3);   // perf: coarser window grid (was 15 / 3.4); mobile LOD via lod()
-      const fh = sh / rows, frameT = 0.30, railH = Math.max(0.4, fh * 0.24), winH = Math.max(0.5, fh - railH);
-      const drawFace = (nAxis, nSign, nHalf, wAxis, faceW, sOff, simple) => {
-        const nVec = bb[nAxis], wVec = bb[wAxis];
-        // Spend the secondary-face detail budget on nearby venue facilities.
-        const cols = simple ? 2 : lod(Math.max(2, Math.min(6, Math.round(faceW / 3.3))), 2);
-        const rowN = simple ? lod(Math.max(2, Math.min(6, Math.round(sh / 6.4))), 2) : rows;
-        const fhh = sh / rowN, winHH = Math.max(0.5, fhh - railH);
-        const fBase = vadd(mid, nVec, nSign * (nHalf + 0.34));
-        const mBase = vadd(mid, nVec, nSign * (nHalf + 0.29));
-        const nBase = vadd(mid, nVec, nSign * (nHalf + 0.40));
-        const gBase = vadd(mid, nVec, nSign * (nHalf + 0.05 + 0.04));
-        const dim = (thin, hgt, wid) => { const a = [0, 0, 0]; a[nAxis] = thin; a[1] = hgt; a[wAxis] = wid; return a; };
-        out._mat = MAT.METAL;
-        // perf: every other rail. i=0 SKIPPED: that rail sits exactly on the
-        // section's bottom face, so on every stacked massing (neonTower's
-        // `tiered` and `podium`, which abut with `yb += th`) it lands in the
-        // same plane as the rail on the top face of the section below —
-        // same-facing, gap 0, the whole rail area fighting at any distance
-        // (vegas 2026-09-22: 138 of 184 coplanar pairs, up to 16.3 m2 each).
-        // At ground level it is buried in the pavement, so nothing visible is
-        // lost; the TOP rail stays, which is the one that reads as a cornice.
-        if (!simple) for (let i = 2; i <= rowN; i += 2)
-          detail({ o: vadd(fBase, u, (i / rowN - 0.5) * sh), r: bb[0], u: bb[1], t: bb[2],
-              s: dim(frameT, railH, faceW * 1.005), col: frameCol },
-            { kind: "facadeRail" });
-        for (let c = 0; c < cols; c++) {
-          const cx = (-0.5 + (c + 0.5) / cols) * faceW;
-          for (let ri = 0; ri < rowN; ri++) {
-            const ry = (-0.5 + (ri + 0.5) / rowN) * sh;
-            let col = dark, lit = false;
-            if (hash(seed + sOff + c * 12.9 + ri * 7.3) < litShare) {
-              lit = true;
-              const tw = 0.65 + hash(seed + sOff + c * 5.5 + ri * 2.2) * 0.5;
-              col = hash(seed + sOff + c * 3.1 + ri * 1.7) < neonShare
-                ? [nc[0] * tw, nc[1] * tw, nc[2] * tw] : [warm[0] * tw, warm[1] * tw, warm[2] * tw];
-            }
-            const toGlass = !lit && !simple;
-            if (toGlass) glassBuf._mat = MAT.GLASS; else out._mat = 0;   // lit panes stay untextured (pure emissive read)
-            detail({ o: vadd(vadd(gBase, wVec, cx), u, ry),
-                r: bb[0], u: bb[1], t: bb[2],
-                s: dim(0.08, winHH, (faceW / cols) * 0.82),
-                col },
-              { kind: "windowPane" },
-              { buf: toGlass ? glassBuf : out });
-            if (toGlass) glassBuf._mat = 0;
-          }
+    // EXTREME props detail (TrackModels.propsHi; sources in models.js). The day facade grid gains
+    // real depth: window jambs splitting each bay in the reveal between pane and spandrel rail,
+    // a two-step cornice under the roofline, chamfered corner piers, and balconies on a hash.
+    // Every piece is a detail() unit box (instanced, sunk-checked) or a guarded primitive.
+    const HI = typeof TrackModels !== "undefined" && TrackModels.propsHi(ctx.track);   // VM harnesses may omit models.js
+    const hiFacade = (p, b, k, side, yBase, sw, sh, sd, rows, fh, railH, winH, nm, mull) => {
+      const jBase = vadd(p.c, p.r, -side * (sw / 2 + 0.20));
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c <= nm; c++) {
+          const off = -sd / 2 + ((c + 0.5) / (nm + 1)) * sd;
+          detail({ o: vadd(vadd(jBase, p.u, yBase + (r + 0.5) * fh), p.t, off), r: p.r, u: p.u, t: p.t,
+              s: [0.26, winH, 0.16], col: mull }, { kind: "facadeMullion", k, side });
         }
-        out._mat = MAT.METAL;
-        if (simple) { out._mat = 0; return; }
-        const nm = Math.max(1, Math.min(3, cols - 1));   // perf: fewer mullions (was 5)
-        for (let c = 1; c <= nm; c++)
-          detail({ o: vadd(mBase, wVec, (-0.5 + c / (nm + 1)) * faceW), r: bb[0], u: bb[1], t: bb[2],
-              s: dim(frameT, sh, 0.4), col: frameCol },
-            { kind: "facadeMullion" });
-        if (neonAmt > 0.3) {
-          const ST = Math.min(0.4, faceW * 0.04);
-          for (const dr of [-1, 1])
-            detail({ o: vadd(nBase, wVec, dr * faceW * 0.5), r: bb[0], u: bb[1], t: bb[2],
-                s: dim(frameT * 1.05, sh * 0.96, ST), col: nc },
-              { kind: "facadeNeon" });
-          // The crown band's underside must clear every rail's by MIN_SEP: the
-          // two overlap in plan, and at rowN = 4 the top rail's bottom (0.5 sh
-          // - 0.12 sh/rowN) landed 1 cm from the band's (0.471 sh) — 319 flat
-          // coplanar pairs on baku/jeddah/vegas. Step the band down clear of
-          // any rail face it would share a plane with.
-          const bandH = Math.min(0.5, sh * 0.018);
-          let bandC = sh * 0.48;
-          const clash = (c) => {
-            for (let i = 2; i <= rowN; i += 2) {
-              const ry = (i / rowN - 0.5) * sh;
-              if (Math.abs((c - bandH / 2) - (ry - railH / 2)) < 0.05 ||
-                  Math.abs((c + bandH / 2) - (ry + railH / 2)) < 0.05) return true;
-            }
-            return false;
-          };
-          for (let tries = 0; tries < 3 && clash(bandC); tries++) bandC -= 0.08;
-          detail({ o: vadd(nBase, u, bandC), r: bb[0], u: bb[1], t: bb[2],
-              s: dim(frameT * 1.1, bandH, faceW), col: nc },
-            { kind: "facadeNeon" });
+      }
+      const top = yBase + sh;
+      detail({ o: vadd(p.c, p.u, top - 0.30), r: p.r, u: p.u, t: p.t,
+          s: [sw + 1.24, 0.42, sd * 1.02 + 0.6], col: mull }, { kind: "facadeRail", k, side });
+      detail({ o: vadd(p.c, p.u, top - 0.62), r: p.r, u: p.u, t: p.t,
+          s: [sw + 1.12, 0.12, sd * 1.02 + 0.48], col: mull }, { kind: "facadeRail", k, side });
+      const rr = norm([p.r[0] + p.t[0], p.r[1] + p.t[1], p.r[2] + p.t[2]]);
+      const tt = norm([p.t[0] - p.r[0], p.t[1] - p.r[1], p.t[2] - p.r[2]]);
+      for (const sr of [-1, 1]) for (const st of [-1, 1])
+        detail({ o: vadd(vadd(vadd(p.c, p.r, sr * sw / 2), p.t, st * sd / 2), p.u, yBase + (sh - 0.9) / 2 + 0.02),
+            r: rr, u: p.u, t: tt, s: [0.86, sh - 0.94, 0.86], col: mull }, { kind: "facadeMullion", k, side });
+      if (rows < 3 || hash(k * 2.3 + side * 5.1 + yBase * 0.37) > 0.45) return;
+      const bw = sd / (nm + 1) * 0.8, slabX = -side * (sw / 2 + 1.13), railX = -side * (sw / 2 + 1.69);
+      for (let r = 1; r < rows; r++) {
+        for (const c of [0, nm]) {
+          const off = -sd / 2 + ((c + 0.5) / (nm + 1)) * sd, y = yBase + r * fh + railH / 2 + 0.07;
+          const at = (x, dy) => vadd(vadd(vadd(p.c, p.r, x), p.t, off), p.u, y + dy);
+          detail({ o: at(slabX, 0), r: p.r, u: p.u, t: p.t, s: [1.2, 0.14, bw], col: mull }, { kind: "facadeRail", k, side });
+          detail({ o: at(railX, 0.52), r: p.r, u: p.u, t: p.t, s: [0.08, 0.92, bw], col: mull }, { kind: "facadeRail", k, side });
         }
-        out._mat = 0;
-      };
-      drawFace(0, -side, sw / 2, 2, sd, 0, false);   // track-facing facade: full detail
-      drawFace(2, 1, sd / 2, 0, sw, 137, true);      // +t side: simple
-      drawFace(2, -1, sd / 2, 0, sw, 311, true);     // -t side: simple
-      // No back-face panes: the solid UNIT_BOX mass already closes all four
-      // walls; dressing the rear adds tris without fixing open faces.
+      }
     };
+    // Curtain wall: js/track/scenery/facade.js. detail() stays here for the day grid.
+    const neonFacade = SceneryFacade.create(ctx, detail);
     const building = (k, side, gap, w, h, d, opts) => {
       opts = opts || {};
       // Swapped-argument heuristic for HAND-PLACED calls only: cityFront's
@@ -215,6 +166,8 @@ const SceneryCity = (function () {
         : [0.34, 0.40, 0.50];
       const glass = nightLit ? litGlass : dayGlass;
       const floorH = opts.floor || 4.0;
+      // EXTREME props detail, near the road only (TrackModels.HI_NEAR): farther blocks keep today's mesh.
+      const hiNear = HI && !nightLit && gap < TrackModels.HI_NEAR;
       const section = (yBase, sw, sh, sd) => {
         if (nightLit) {
           // NIGHT = a dark neutral-grey concrete mass (NOT tinted by the neon, so
@@ -223,9 +176,10 @@ const SceneryCity = (function () {
           const lum = (body[0] + body[1] + body[2]) / 3;
           const bv = lum > 0.4 ? 0.22 : 0.15;
           const bodyTint = [bv, bv, bv * 1.12];
-          const ok = ctx.instance(UNIT_BOX,
+          const nm0 = out._mat || 0;
+          const ok = ctx.instance(matKey(nm0),
             { o: vadd(p.c, p.u, yBase + sh / 2), r: p.r, u: p.u, t: p.t, s: [sw, sh, sd], col: bodyTint },
-            unitBox, { kind: "buildingMass", k, side }) > 0;
+            matBox(nm0), { kind: "buildingMass", k, side }) > 0;
           if (ok === false) return false;
           neonFacade(vadd(p.c, p.u, yBase + sh / 2), b, side, sw, sh, sd, winBase, k * 7.1 + side * 3.3, theme === "street_night" ? 0.85 : 0.32);
           return ok;
@@ -300,6 +254,7 @@ const SceneryCity = (function () {
               s: [0.5, sh - 0.08, sd * 1.02], col: dayMull },
             { kind: "facadeMullion", k, side });
         }
+        if (hiNear) hiFacade(p, b, k, side, yBase, sw, sh, sd, rows, fh, railH, winH, nm, dayMull);
         out._mat = 0; glassBuf._mat = 0;
         return ok;
       };
@@ -403,6 +358,22 @@ const SceneryCity = (function () {
           }
         }
         // else: clean chamfered cap, no finial
+        if (hiNear && h < 40) {
+          // Hi roof plant: a water tank on legs with its conical lid, and two vent stacks,
+          // all inside the cap's top disc (radius capR * 0.45).
+          const rr = capR * 0.45, tr = Math.min(1.2, rr * 0.35);
+          if (rr > 1.2) {
+            const ang = hash(k * 8.7 + side * 4.4) * 6.2832;
+            const tc = vadd(vadd(vadd(p.c, p.u, topY), p.r, Math.cos(ang) * rr * 0.45), p.t, Math.sin(ang) * rr * 0.45);
+            const steel = [0.42, 0.42, 0.45];
+            for (const [dr, dt] of [[-1, -1], [-1, 1], [1, -1], [1, 1]])
+              addCyl(out, vadd(vadd(vadd(tc, p.r, dr * tr * 0.6), p.t, dt * tr * 0.6), p.u, -0.1), 0.06, 1.3, steel, 4, b);
+            addCyl(out, vadd(tc, p.u, 1.1), tr, tr * 1.6, [0.48, 0.40, 0.32], 8, b);
+            addCone(out, vadd(tc, p.u, 1.1 + tr * 1.6), tr * 1.05, tr * 0.5, [0.36, 0.30, 0.25], 8, b);
+            for (const sg of [-1, 1])
+              addCyl(out, vadd(vadd(vadd(p.c, p.u, topY - 0.1), p.r, -Math.cos(ang) * rr * 0.5), p.t, sg * rr * 0.3), 0.18, 1.6, steel, 6, b);
+          }
+        }
       }
       // Night signage: a bright HDR neon band wrapping the crown of lit buildings
       // — the casino / strip glow. Hue varies per building (warm gold, ice cyan,
@@ -813,9 +784,16 @@ const SceneryCity = (function () {
       const awnDist = w * 0.42;
       const awnC = vadd(vadd(p.c, p.r, faceOff - side * awnDist), p.u, loH * 0.92);
       const awning = addBox(out, awnC, [0.05, 0.10, d * 0.9], opts.awning || [0.20, 0.22, 0.26], b);
+      // Each post stands on the ground under it, not the road frame: cota's
+      // 60 m body runs onto rising ground and its end posts were 2.1 and
+      // 6.2 m under the terrain (#5088). A post whose ground is above the
+      // awning has nothing to hold up there and is left out.
       if (awning !== false) for (const e of [-1, 1]) {
-        const postC = vadd(vadd(vadd(p.c, p.r, faceOff - side * awnDist), p.t, e * d * 0.42), p.u, -0.2);
-        addCyl(out, postC, 0.05, loH * 0.92 + 0.25, [0.35, 0.35, 0.38], 4, b);
+        const topC = vadd(vadd(vadd(p.c, p.r, faceOff - side * awnDist), p.t, e * d * 0.42), p.u, loH * 0.92 - 0.05);
+        const gy = terrainYAt(topC[0], topC[2]);
+        const base = Number.isFinite(gy) ? gy - 0.2 : topC[1] - (loH * 0.92 + 0.25) * p.u[1];
+        const len = (topC[1] - base) / Math.max(0.5, p.u[1]);
+        if (len > 0.3) addCyl(out, vadd(topC, p.u, -len), 0.05, len, [0.35, 0.35, 0.38], 4, b);
       }
       // Roof AC / satellite unit.
       if (hh > 0.25) addBox(out, vadd(p.c, p.u, h + 0.3), [w * 0.28, 0.5, d * 0.20], [0.55, 0.56, 0.58], b);
@@ -865,6 +843,7 @@ const SceneryCity = (function () {
         ctx.instance(`billboard-post|${h}|${st}|${postCol.join(",")}`,
           { o: vadd(p.c, p.t, o), r: p.r, u: p.u, t: p.t },
           (rec) => {
+            rec.mat(0);   // never inherit a leaked out._mat (graph-parity matInherit)
             if (st === "monopole" || st === "tower") {
               rec.cyl([0, -0.4, 0], 0.42, h + 0.4, postCol, 8);                 // one fat column
               rec.box([0, h + 0.1, 0], [0.9, 0.5, 1.6], postCol);               // panel bracket

@@ -17,14 +17,18 @@ function element(tag) {
 }
 
 function setup({ raf, events = [], startT }) {
-  const body = element("body"), frames = [];
+  const body = element("body"), frames = [], cancelled = [];
   const sandbox = { document: { body, createElement: element, activeElement: null }, RealReplay: { LEAD_S: 8 } };
-  if (raf) sandbox.requestAnimationFrame = (fn) => frames.push(fn);
+  if (raf) {
+    sandbox.requestAnimationFrame = (fn) => { frames.push(fn); return frames.length; };
+    sandbox.cancelAnimationFrame = (id) => { cancelled.push(id); if (frames[id - 1]) frames[id - 1] = null; };
+  }
   const ctx = vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/watch-transport.js", import.meta.url), "utf8"), ctx);
   const W = vm.runInContext("WatchTransport", ctx);
   const seeks = [], actions = [], state = { T: 0, duration: 100, paused: true, speed: 1, follow: "AAA", broadcast: { auto: true, locked: false, manual: false } };
   const api = { describe: () => ({ name: "GP", startT, drivers: [{ code: "AAA", name: "Alpha" }], events, speeds: [1] }), status: () => state,
+    isPausedAt: (t) => state.paused && state.T === t,
     setPaused() {}, setSpeed() {}, follow() {},
     setLocked(v) { actions.push(["lock", v]); state.broadcast.locked = v; },
     setAuto(v) { actions.push(["auto", v]); state.broadcast.auto = v; if (v) { state.broadcast.locked = false; state.broadcast.manual = false; } },
@@ -33,7 +37,7 @@ function setup({ raf, events = [], startT }) {
     seek: (v) => { seeks.push(v); state.T = v; } };
   const ui = W.create({ camMode: 0 }, api); ui.start();
   const find = (key, p = body) => p.dataset.wt === key ? p : p.children.map((n) => find(key, n)).find(Boolean);
-  return { ui, seeks, actions, state, frames, find, flush: () => frames.splice(0).forEach((f) => f()) };
+  return { ui, seeks, actions, state, frames, cancelled, find, flush: () => frames.splice(0).forEach((f) => { if (f) f(); }) };
 }
 
 test("WATCH director buttons include their visible labels in their accessible names across ownership changes", () => {
@@ -116,11 +120,27 @@ test("50 scrub `input` events cost at most one seek (one paint) before the next 
   t.ui.stop();
 });
 
+test("releasing a painted scrub avoids a duplicate pose while paused and commits the live clock", () => {
+  const t = setup({ raf: true });
+  const seek = t.find("seek");
+  function drag(v) { seek.value = String(v); seek.dispatch("input"); t.flush(); }
+  drag(50); seek.dispatch("change");
+  assert.deepEqual(t.seeks, [50], "release at the painted time needs no second seek");
+  drag(51); seek.value = "52"; seek.dispatch("change");
+  assert.deepEqual(t.seeks, [50, 51, 52], "release can supply a final value between frames");
+  t.state.paused = false;
+  drag(60); t.state.T += 0.1; seek.dispatch("change");
+  assert.deepEqual(t.seeks.slice(-2), [60, 60], "restore the chosen time if playback advanced");
+  t.ui.stop();
+});
+
 test("a frame that fires after stop() seeks nothing", () => {
   const t = setup({ raf: true });
   const seek = t.find("seek");
   seek.value = "7"; seek.dispatch("input");
+  assert.equal(t.frames.length, 1, "scrub armed one rAF");
   t.ui.stop();
+  assert.deepEqual(t.cancelled, [1], "stop() cancelAnimationFrames the scrub");
   t.flush();
   assert.deepEqual(t.seeks, []);
 });

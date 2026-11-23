@@ -1,5 +1,7 @@
 # electron-builder 26 packaging notes (2026-09-29)
 
+Summary: Desktop packaging on electron-builder 26 (pinned in `desktop/package.json`): the fetched docs behind the NSIS, `extraResources` and asar options, and why not the 27 alpha.
+
 Task 25 / desktop packaging. Training-data memory of flags is not evidence;
 these URLs were fetched this session.
 

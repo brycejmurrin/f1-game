@@ -1,5 +1,7 @@
 # Device Farm iPhone runs, analysed: what 35 sessions proved, what was noise, what to run next (2026-10-24)
 
+Summary: Every AWS Device Farm iPhone session analysed: what proved real, what was noise, what to run next (A·Y1).
+
 A·Y1 (Fleet A analyst, OrchA 31's lane). Bryce, 2026-10-24 ~00:10Z: "spawn 3 fable sessions to hunt for bugs and
 perf improvements and analyze our aws runs and results". This note reads EVERY AWS Device Farm iPhone session to
 date and turns them into ranked, evidence-backed next steps for phone performance. It is read-only: no device

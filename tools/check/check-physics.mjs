@@ -2,10 +2,26 @@
 // @skill tune-physics
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 import { fileURLToPath } from "node:url";
+import path from "node:path";
 
 const LAUNCH_ARGS = ["--use-angle=swiftshader", "--enable-unsafe-webgpu"];
 const POLL = { polling: 100, timeout: 8000 };
 let BASE = "http://127.0.0.1/";
+
+// THE VERDICTS, pure. Each probe printed PASS/FAIL and the tool still exited 0
+// on a FAIL, so a caller reading the exit code saw every probe pass. A probe
+// now returns its verdict and the exit code is 1 when it is false.
+const realErrors = (errs) => errs.filter((e) => !e.includes("favicon"));
+/** Banked track: finite state, > 50 m forward, no console errors. */
+export const bankVerdict = ({ finite, gained, errs = [] }) => !!finite && gained > 50 && realErrors(errs).length === 0;
+/** Throttle held: finite state and > 50 m forward (not stuck or spinning). */
+export const gripVerdict = ({ finite, totalGain }) => !!finite && totalGain > 50;
+/** Every sampled speed stays inside hw + 8 (an empty sample is not a pass). */
+export const roadfollowVerdict = (res) => Array.isArray(res) && res.length > 0 && res.every((r) => r.widest < r.limit);
+/** No input into a corner must run the car wide: > 1.5 m of drift. */
+export const steerVerdict = ({ noSteer }) => noSteer > 1.5;
+/** A probe's verdict -> the process exit code. */
+export const exitCodeFor = (pass) => (pass === true ? 0 : 1);
 
 async function checkBank(browser) {
   const ctx = await browser.newContext({ viewport: { width: 900, height: 506 } });
@@ -29,9 +45,10 @@ async function checkBank(browser) {
   }
   console.log("console errors:", errs.filter((e)=>!e.includes("favicon")).slice(0,4));
   console.log("finite:", finite, " progress:", gained.toFixed(1), "m");
-  console.log(finite && gained > 50 && errs.filter((e)=>!e.includes("favicon")).length === 0
-    ? "PASS: banked track drives stably, no errors" : "FAIL");
+  const pass = bankVerdict({ finite, gained, errs });
+  console.log(pass ? "PASS: banked track drives stably, no errors" : "FAIL");
   await ctx.close();
+  return pass;
 }
 
 async function checkGrip(browser) {
@@ -65,9 +82,11 @@ async function checkGrip(browser) {
   console.log("total progress over ~3s holding throttle:", totalGain.toFixed(1), "m");
   // finite state = no NaN/blow-up; >50 m forward = not stuck/spinning in place
   // (holding throttle into Turn 1 runs wide onto grass, so it won't hit full speed).
-  console.log(finite && totalGain > 50 ? "PASS: stable, continuous forward motion with combined-slip"
-                                       : "FAIL: instability or stuck");
+  const pass = gripVerdict({ finite, totalGain });
+  console.log(pass ? "PASS: stable, continuous forward motion with combined-slip"
+                   : "FAIL: instability or stuck");
   await ctx.close();
+  return pass;
 }
 
 async function checkRoadfollow(browser) {
@@ -95,7 +114,10 @@ async function checkRoadfollow(browser) {
     return out;
   });
   for (const r of res) console.log(`speed ${r.v}: widest ${r.widest}  (limit hw+8=${r.limit}, wall hw+9=${(r.hw+9).toFixed(1)}) ${r.widest < r.limit ? "OK road-follow holds" : "runs to runoff/wall"}`);
+  const pass = roadfollowVerdict(res);
+  console.log(pass ? "PASS: road-follow holds at every speed" : "FAIL: runs to runoff/wall");
   await ctx.close();
+  return pass;
 }
 
 async function checkSteer(browser) {
@@ -131,13 +153,17 @@ async function checkSteer(browser) {
   const steerIn = await run("STEER IN ", "KeyA");   // steer left toward apex
   const steerOut = await run("STEER OUT", "KeyD");   // steer right (wrong way)
 
-  console.log(noSteer > 1.5 ? "PASS: not steering runs you wide (not on-rails)"
-                            : "FAIL: car still follows the corner without input");
+  const pass = steerVerdict({ noSteer });
+  console.log(pass ? "PASS: not steering runs you wide (not on-rails)"
+                   : "FAIL: car still follows the corner without input");
   console.log("Steering clearly changes the line: in=" + steerIn.toFixed(1) +
               " vs out=" + steerOut.toFixed(1) + " vs none=" + noSteer.toFixed(1));
+  return pass;
 }
 
 const CHECKS = { bank: checkBank, grip: checkGrip, roadfollow: checkRoadfollow, steer: checkSteer };
+const IS_MAIN = !!process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+if (IS_MAIN) {
 const which = process.argv[2];
 if (which === "--help" || which === "-h") {
   console.log(`usage: node tools/check/check-physics.mjs <${Object.keys(CHECKS).join("|")}>   (boots Chromium)`);
@@ -152,7 +178,8 @@ const srv = await startStaticServer(ROOT);
 BASE = srv.url.replace(/\/?$/, "");
 try {
   const browser = await launchChromium({ args: LAUNCH_ARGS });
-  await CHECKS[which](browser);
+  process.exitCode = exitCodeFor(await CHECKS[which](browser));
 } finally {
   await shutdown();
+}
 }

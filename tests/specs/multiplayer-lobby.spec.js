@@ -26,8 +26,9 @@
 // lobbyFake(true) used to establish. The invite-link test keeps its two real
 // navigations: a link OPENING the game is its subject.
 
-import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { sharedTest as test, test as touchTest, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { lobbyReset } from "../helpers/shared-page.js";
+import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -103,28 +104,6 @@ test.describe("VS FRIEND lobby", () => {
     // Something must be said either way — a silent screen is the one outcome
     // that leaves a player with nothing to do.
     await expect(page.locator("#vs-status")).not.toHaveText("");
-  });
-
-  test("a junk code is refused with an explanation, not a stack trace", async ({ page }) => {
-    await menu(page);
-    await page.click("#mb-vs");
-    await page.click("#vs-join");
-    // The code is validated BEFORE the connection is touched, so this reports
-    // the real problem ("that isn't an Apex code") rather than a generic
-    // transport error the player could do nothing about.
-    await page.fill("#vs-invite-in", "not-a-real-code");
-    await page.click("#vs-make-answer");
-    await expect(page.locator("#vs-status")).toHaveClass(/vs-error/);
-    const msg = await page.textContent("#vs-status");
-    expect(msg).toMatch(/apex invite code/i);
-  });
-
-  test("an empty box asks for the code rather than failing silently", async ({ page }) => {
-    await menu(page);
-    await page.click("#mb-vs");
-    await page.click("#vs-join");
-    await page.click("#vs-make-answer");
-    await expect(page.locator("#vs-status")).toHaveClass(/vs-error/);
   });
 
   test("a short final wrapped fragment reaches the real invite decoder through buttons and paste", async ({ page, pageErrors }) => {
@@ -331,4 +310,46 @@ test.describe("VS FRIEND lobby", () => {
       expect(out.ok).toBe(false);
       expect(out.status).toMatch(/nothing to share/i);
     });
+});
+
+// The shared-page fixture intentionally has one pointer profile. These two
+// validation cases need a fresh touch context to reproduce the phone clipping.
+touchTest.describe("Invite validation on touch", () => {
+  touchTest.use(uiTestOptions({ touch: true, viewport: LANDSCAPE, deviceScaleFactor: 1 }));
+  async function visibleInviteError(page) {
+    const proof = await page.waitForFunction(() => {
+      const status = document.getElementById("vs-status"), body = document.getElementById("vs-body");
+      if (!status || !body || !status.classList.contains("vs-error")) return false;
+      const r = status.getBoundingClientRect(), b = body.getBoundingClientRect();
+      return r.top >= Math.max(0, b.top) - 1 && r.bottom <= Math.min(innerHeight, b.bottom) + 1
+        ? { error: true, visible: true } : false;
+    }, null, { polling: 100, timeout: 10000 });
+    return proof.jsonValue();
+  }
+  touchTest("a junk code is refused with an explanation, not a stack trace", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
+    await menu(page);
+    await page.click("#mb-vs");
+    await page.click("#vs-join");
+    // The code is validated BEFORE the connection is touched, so this reports
+    // the real problem ("that isn't an Apex code") rather than a generic
+    // transport error the player could do nothing about.
+    await page.fill("#vs-invite-in", "not-a-real-code");
+    await page.click("#vs-make-answer");
+    expect(await visibleInviteError(page)).toEqual({ error: true, visible: true });
+    const msg = await page.textContent("#vs-status");
+    expect(msg).toMatch(/apex invite code/i);
+  });
+
+  touchTest("an empty box asks for the code rather than failing silently", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
+    await menu(page);
+    await page.click("#mb-vs");
+    await page.click("#vs-join");
+    await page.click("#vs-make-answer");
+    expect(await visibleInviteError(page)).toEqual({ error: true, visible: true });
+  });
+
 });

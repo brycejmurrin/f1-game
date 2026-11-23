@@ -19,9 +19,12 @@ const Teams = (function () {
   // `raised` keeps the flank tall enough for the `lockup` side design) — and
   // the rest keep the fin-less `dorsal` cover. Body shapes (pods, undercut,
   // airbox) live in the FACTORY_PRESETS engine recipes in js/car/parts.js and
-  // the nose in Car3D.TEAM_STYLE. NAMES are constructor names only: no title
-  // sponsor (Petronas, HP) in a display name — the data hub matches the API's
-  // names by `short` (js/data/hub.js TEAM_KEYS), never by `name`.
+  // the nose in Car3D.TEAM_STYLE. NAMES carry no title sponsor (Petronas,
+  // HP); a constructor's own brand ("Mercedes-AMG", "Scuderia Ferrari") may
+  // stay — the data hub matches the API's names by `short` (js/data/hub.js
+  // TEAM_KEYS), never by `name`. Baseline: the line-up at the 2026 season
+  // opener (Albert Park); later-season substitutes are not listed, and
+  // DriverRatings has no row for them.
   //
   // ONE `livery:` key per team: two sessions each adding one merged without a
   // conflict, the later duplicate key silently won and the earlier design
@@ -324,9 +327,11 @@ const Teams = (function () {
   const CTRL = /[\u0000-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩]/g;
   function cleanText(v, fb, n, upper) {
     if (typeof v !== "string") return fb;
-    let s = v.replace(CTRL, "").trim().slice(0, n).trim();
+    // Uppercase BEFORE the cut ("ß" grows to "SS") and cut by code point, so an
+    // emoji is never halved into a lone surrogate (#5046).
+    let s = v.replace(CTRL, "").trim();
     if (upper) s = s.toUpperCase();
-    return s || fb;
+    return Array.from(s).slice(0, n).join("").trim() || fb;
   }
   const isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
   const fin = (v) => typeof v === "number" && Number.isFinite(v);

@@ -57,6 +57,9 @@ const TrackGraph = (function () {
     const models = new Map();   // key -> { key, ops, geo, verts, aabb }
     const nodes = [];
     let dropped = 0;
+    // replay() sets this when an unstamped op inherits a non-zero out._mat (city
+    // facades, H27's sibling); instance() keeps it per node. See recorder().
+    let inheritHit = false;
     // BAKED-MESH placements (build-props bakedModel): a pack model placed N
     // times used to be N copies in the props soup. Here it is one compacted
     // geometry per key plus [x, y, z, yaw, scale] records, and batches() turns
@@ -66,8 +69,11 @@ const TrackGraph = (function () {
 
     function recorder(ops) {
       // undefined = "inherit whatever out._mat holds at replay time". out._mat is
-      // a persistent register, so a helper that never sets it (marshalPost) must
-      // keep inheriting; forcing 0 here would silently untexture those props.
+      // a persistent register; forcing 0 here would silently untexture inline
+      // props whose caller set it. But the canonical (instanced) mesh bakes an
+      // unstamped op as 0, so a builder whose call site holds a non-zero
+      // register must stamp it with rec.mat() — stats().matInherit counts the
+      // ones that do not, and tools/track/graph-parity.cjs asserts zero.
       let mat, sway;
       const push = (op) => { op.mat = mat; if (sway) op.sway = sway; ops.push(op); return true; };
       return {
@@ -197,6 +203,7 @@ const TrackGraph = (function () {
       for (const op of m.ops) {
         const c = xform(place, op.c);
         if (op.mat !== undefined) out._mat = op.mat;
+        else if (out._mat) inheritHit = true;
         // Sway weight rides on out._matAt for this op only; cleared below so the
         // next baked emitter never inherits a crown's callback (and the track
         // record stays structured-cloneable — build-worker posts it whole).
@@ -246,6 +253,7 @@ const TrackGraph = (function () {
       }
       const m = model(key, build);
       if (!m.ops.length) { dropped++; return 0; }
+      inheritHit = false;
       // A pine is one object. Lower crown tiers can hit a doubled-back ribbon
       // (Fuji 120R / 300R / 30R-45R) while the trunk and upper cones clear it,
       // so the soup kept 10–28 m unsupported cones. Dry-run the guards; if any
@@ -301,6 +309,7 @@ const TrackGraph = (function () {
           // `instancedOnly` half of batches() below is what reads it.
           inst: skipFuse,
           meta: meta || null,
+          matInherit: inheritHit,
         });
         if (prefer && !skipFuse) {
           out._replayVerdicts = verd; out._vIdx = 0;
@@ -480,6 +489,13 @@ const TrackGraph = (function () {
         const e = byKind[kind];
         e.reuse = e.uniqueVerts > 0 ? e.fusedVerts / e.uniqueVerts : 0;
       }
+      // Inline/instanced mat mismatches by model; must be 0 (graph-parity).
+      const matInherit = { nodes: 0, byModel: {} };
+      for (const node of nodes) {
+        if (!node.matInherit) continue;
+        matInherit.nodes++;
+        matInherit.byModel[node.model] = (matInherit.byModel[node.model] || 0) + 1;
+      }
       let mModels = 0, mInst = 0, mUnique = 0, mFused = 0;
       for (const m of meshes.values()) {
         if (!m.places.length) continue;
@@ -494,6 +510,7 @@ const TrackGraph = (function () {
         fusedVerts: fused,            // what the soup costs today
         reuse: unique > 0 ? fused / unique : 0,
         byKind,
+        matInherit,
       };
     }
 

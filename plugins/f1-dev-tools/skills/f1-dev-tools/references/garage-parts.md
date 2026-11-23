@@ -29,7 +29,7 @@ Use exact discovered IDs rather than guessing category names, part values, team 
 
 ## Audits and bounded sweeps
 
-Use browser-free `apex_car_audit {"check":"ladder"}` to detect dominated parts, or `check:"crest"` with optional teams for legibility checks. Where the schema supports it, ladder accepts `categories` and canonical `team` to focus scope. These checks do not establish every geometry/view is visually correct.
+Use the browser-free `node tools/car/parts-ladder.mjs --json` to detect dominated parts, or `node tools/car/crest-sweep.mjs [teamId ...] --json` for legibility checks (the `apex_car_audit` wrap left 2026-11-03). Read each CLI's `--help` for the category and team filters it supports. These checks do not establish every geometry/view is visually correct.
 
 For rendered parts coverage, use `apex_job_start` with `kind:"parts_sweep"` and discovered `categories`/`team` filters; inspect the current schema and preview a dry run first. Define a small category/team/view budget before starting. Follow the returned job via `apex_job_status`; use current cancellation operation and wait for process exit if stopping early. Livery contrast is another bounded job, not a reason to run the full sweep by default. Label skipped teams, parts, views, backends and entitlement cases explicitly.
 

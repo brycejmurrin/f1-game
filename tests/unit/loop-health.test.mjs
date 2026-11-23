@@ -21,13 +21,14 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const SRC = fs.readFileSync(path.join(ROOT, "js/perf/loop-health.js"), "utf8");
 
 /** Fresh LoopHealth in a VM. `clock.t` is what performance.now() returns. */
-function load(clock = { t: 0 }) {
+function load(clock = { t: 0 }, extra = {}) {
   const errors = [];
   const ctx = {
     performance: { now: () => clock.t },
     Date: { now: () => clock.t },
     Math,
     console,
+    ...extra,
   };
   vm.createContext(ctx);
   seedLog(ctx);
@@ -135,9 +136,16 @@ test("a stopped loop does not expire its tally on a later quiet clean", () => {
 
 // ── #3510 stall watchdog ────────────────────────────────────────────────────
 /** LoopHealth with the browser surfaces the watchdog acts through. */
-function loadStall({ webdriver = false, search = "", reloadsSpent = null, ua = "Mozilla/5.0" } = {}) {
-  const clock = { t: 0 }, calls = { tier: [], reload: 0 }, ls = new Map(), ss = new Map();
+function loadStall(opts = {}) {
+  const {
+    webdriver = false, search = "", reloadsSpent = null, ua = "Mozilla/5.0",
+    softwareGL = false, swRaceShed = true, handoffCover = false, introBudgetLeft = 0,
+    loadingPhase = "", envProbeOff = false, perChunkOff = false,
+  } = opts;
+  const clock = { t: opts.t0 || 0 }, calls = { tier: [], reload: 0 }, ls = new Map(Object.entries(opts.seed || {})), ss = new Map();
   if (reloadsSpent != null) ss.set("apex26.stallReloads", String(reloadsSpent));
+  if (envProbeOff) ls.set("apex26.envProbeOff", "1");
+  if (perChunkOff) ls.set("apex26.perChunkOff", "1");
   const store = (m) => ({ getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) });
   const listeners = {};
   const cover = { hidden: true };
@@ -145,20 +153,33 @@ function loadStall({ webdriver = false, search = "", reloadsSpent = null, ua = "
   const doc = {
     visibilityState: "visible",
     addEventListener: (n, f) => { listeners[n] = f; },
-    getElementById: (id) => (id === "loading" ? cover : id === "carsetup" ? carsetup : null),
+    // A real Document method: called unbound (`const g = document.getElementById; g(id)`) it
+    // throws "Illegal invocation", so the stub does too — an arrow let the unbound call pass.
+    getElementById(id) {
+      if (this !== doc) throw new TypeError("Illegal invocation");
+      return id === "loading" ? cover : id === "carsetup" ? carsetup : null;
+    },
   };
   const ctx = {
     performance: { now: () => clock.t }, Date: { now: () => clock.t }, Math, console,
     navigator: { webdriver, userAgent: ua }, document: doc, location: { search, reload: () => { calls.reload++; } },
     localStorage: store(ls), sessionStorage: store(ss),
-    PerfGov: { setUserTier: (n) => calls.tier.push(n) },
+    PerfGov: { setUserTier: (n) => calls.tier.push(n), softwareRaster: () => softwareGL },
+    PostCommon: { softwareRaceShed: (gl, nav, knob) => gl && !(knob === "0") && (knob === "1" || (nav && !nav.webdriver && !/apex-game-vm/.test(nav.userAgent || ""))) },
+    G: { state: "menu" },
+    RaceEntryProfile: {
+      stallHandoffCover: () => opts.handoffCover === true,
+      introBudgetLeft: () => introBudgetLeft,
+    },
+    loadingScreen: { phase: () => loadingPhase },
   };
+  if (swRaceShed === false) ctx.PostCommon.softwareRaceShed = () => false;
   vm.createContext(ctx);
   seedLog(ctx);
   vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/perf/loop-health.js") });
   const frames = (n, ms) => { for (let i = 0; i < n; i++) { clock.t += ms; ctx.LoopHealth.clean(); } };
   const hide = (hidden) => { doc.visibilityState = hidden ? "hidden" : "visible"; listeners.visibilitychange && listeners.visibilitychange(); };
-  return { LoopHealth: ctx.LoopHealth, frames, hide, calls, ls, ss, cover, carsetup };
+  return { LoopHealth: ctx.LoopHealth, frames, hide, calls, ls, ss, cover, carsetup, ctx };
 }
 
 test("stall: a glacial loop sheds at SHED_RUN, then reloads once to the menu notice", () => {
@@ -212,6 +233,28 @@ test("stall: off under automation unless ?stallwatch=1 forces it", () => {
   assert.deepEqual(on.calls.tier, [4]);
 });
 
+test("stall: ?stallwatch=0 turns it off for a probe browser that is not flagged as automation", () => {
+  const off = loadStall({ search: "?stallwatch=0" });
+  off.frames(20, 3000);
+  assert.deepEqual(off.calls.tier, []);
+  assert.equal(off.calls.reload, 0);
+  assert.equal(off.LoopHealth.state().stall.watching, false);
+  const forced = loadStall({ search: "?stallwatch=1&stallwatch=0" });
+  forced.frames(5, 3000);
+  assert.deepEqual(forced.calls.tier, [4], "an explicit force-on still wins");
+});
+
+test("stallWatch(false) persists an explicit OFF choice through a fresh module load", () => {
+  const h = loadStall();
+  assert.equal(h.LoopHealth.stallWatch(), true);
+  assert.equal(h.LoopHealth.stallWatch(false), false);
+  assert.equal(h.ls.get("apex26.stallWatch"), "0");
+  vm.runInContext(SRC.replace(/^const\b/gm, "var"), h.ctx, { filename: absSrc("js/perf/loop-health.js") });
+  assert.equal(h.ctx.LoopHealth.stallWatch(), false, "OFF survives reconstruction on a normal browser");
+  assert.equal(h.ctx.LoopHealth.stallWatch(true), true);
+  assert.equal(h.ls.get("apex26.stallWatch"), "1");
+});
+
 test("stall: under the loading cover the shed waits and the reload needs a 30-frame run", () => {
   const h = loadStall();
   h.cover.hidden = false;
@@ -247,7 +290,10 @@ test("stall: #race-settings (PREPARING…) uses the same relaxed cover as #loadi
   const doc = {
     visibilityState: "visible",
     addEventListener: (n, f) => { listeners[n] = f; },
-    getElementById: (id) => (id === "loading" ? cover : id === "carsetup" ? { hidden: true } : id === "race-settings" ? raceSettings : null),
+    getElementById(id) {
+      if (this !== doc) throw new TypeError("Illegal invocation");   // as a browser's Document does
+      return id === "loading" ? cover : id === "carsetup" ? { hidden: true } : id === "race-settings" ? raceSettings : null;
+    },
   };
   const ctx = {
     performance: { now: () => clock.t }, Date: { now: () => clock.t }, Math, console,
@@ -273,4 +319,120 @@ test("stall: off in the node game VM (webdriver false, apex-game-vm UA)", () => 
   h.frames(20, 3000);
   assert.deepEqual(h.calls.tier, []);
   assert.equal(h.LoopHealth.state().stall.watching, false);
+});
+
+test("stall: software raster skips reload with act budget-sw (race path)", () => {
+  const h = loadStall({ softwareGL: true });
+  h.frames(1, 16);
+  h.frames(4, 2500);
+  h.frames(6, 2500);
+  assert.equal(h.calls.reload, 0);
+  assert.equal(h.LoopHealth.state().stall.act, "budget-sw");
+  assert.equal(h.ss.get("apex26.stallReloads"), undefined);
+});
+
+test("stall: menu path on software raster skips reload without swRaceShed knob", () => {
+  const h = loadStall({ softwareGL: true, swRaceShed: false });
+  assert.equal(h.ctx.G.state, "menu");
+  h.frames(1, 16);
+  h.frames(10, 2500);
+  assert.equal(h.calls.reload, 0, "garage-close class: no cover, ten slow frames, no reload");
+  assert.equal(h.LoopHealth.state().stall.act, "budget-sw");
+  assert.equal(h.ss.get("apex26.ctxLostNotice"), undefined, "no ctx-lost notice latch without reload");
+});
+
+test("stall: hardware path still reloads once after the shed", () => {
+  const h = loadStall({ softwareGL: false });
+  h.frames(1, 16);
+  h.frames(10, 2500);
+  assert.equal(h.calls.reload, 1);
+  assert.equal(h.LoopHealth.state().stall.act, "reload");
+});
+
+test("stall: count state uses the relaxed 30-frame reload budget", () => {
+  const h = loadStall({ handoffCover: true });
+  h.frames(1, 16);
+  h.frames(29, 2500);
+  assert.equal(h.calls.reload, 0, "twenty-nine glacial frames during countdown are not enough");
+  h.frames(1, 2500);
+  assert.equal(h.calls.reload, 1, "thirty glacial frames under handoff cover still recover once");
+});
+
+test("stall: lighter renderer already latched skips a second reload", () => {
+  const h = loadStall({ envProbeOff: true, perChunkOff: true });
+  h.frames(11, 2500);
+  assert.equal(h.calls.reload, 0);
+  assert.equal(h.LoopHealth.state().stall.act, "budget");
+});
+
+// #4994: at the cap nothing scheduled another frame, so the loop stayed dead for
+// the life of the page — on an installed PWA that is a force-quit.
+test("recover(): a stopped loop re-arms one window rAF and forgets the tally (#4994)", () => {
+  let chained = 0;
+  const { LoopHealth } = load({ t: 0 }, { XrBoot: { chainWindowRaf() { chained++; return true; } } });
+  assert.equal(LoopHealth.recover(), false, "a live loop has nothing to recover");
+  assert.equal(chained, 0, "and must not be handed a second rAF chain");
+  for (let i = 0; i < 8; i++) LoopHealth.fault(new Error("boom"));
+  assert.equal(LoopHealth.state().stopped, true);
+  assert.equal(LoopHealth.recover(), true);
+  assert.equal(chained, 1, "exactly one frame is scheduled");
+  const s = LoopHealth.state();
+  assert.deepEqual([s.stopped, s.run, s.faults, s.recoveries], [false, 0, 0, 1]);
+  // The fault is still there: the cap is reached again and the loop stops again.
+  for (let i = 1; i <= 7; i++) assert.equal(LoopHealth.fault(new Error("boom")), true, `fault ${i} after a recovery survives`);
+  assert.equal(LoopHealth.fault(new Error("boom")), false);
+  assert.equal(LoopHealth.state().stopped, true);
+});
+
+test("recover(): stays stopped when no frame could be scheduled", () => {
+  for (const XrBoot of [undefined, { chainWindowRaf: () => false }, { chainWindowRaf() { throw new Error("no rAF"); } }]) {
+    const { LoopHealth } = load({ t: 0 }, XrBoot ? { XrBoot } : {});
+    for (let i = 0; i < 8; i++) LoopHealth.fault(new Error("boom"));
+    assert.equal(LoopHealth.recover(), false);
+    assert.equal(LoopHealth.state().stopped, true, "a card that says the loop stopped must stay true");
+  }
+});
+
+// #5899: THE WATCHDOG'S LATCH LAPSES. One stall on one bad load used to set envProbeOff / perChunkOff for good: only
+// RESET or __apex.envProbe() cleared them. The reload now stamps apex26.stallLatch "<ms>:<strikes>" and the next boot
+// after 3^strikes days clears both keys (a repeat stall re-latches for longer). A context-loss latch has no stamp.
+const DAY = 864e5;
+const glacial = (h) => { h.frames(1, 16); h.frames(10, 2500); };
+test("stall latch: the reload stamps its latch with the time and a first strike", () => {
+  const h = loadStall({ t0: 5 * DAY });
+  glacial(h);
+  assert.equal(h.calls.reload, 1);
+  assert.equal(h.ls.get("apex26.envProbeOff"), "1");
+  const [at, n] = h.ls.get("apex26.stallLatch").split(":").map(Number);
+  assert.ok(at > 5 * DAY && at < 6 * DAY, "stamped with the reload time");
+  assert.equal(n, 1, "first strike");
+});
+test("stall latch: a boot inside 3 days keeps it, a boot after clears both keys", () => {
+  const latched = { "apex26.envProbeOff": "1", "apex26.perChunkOff": "1", "apex26.stallLatch": `${DAY}:1` };
+  const inside = loadStall({ t0: DAY + 3 * DAY - 1, seed: latched });
+  assert.equal(inside.ls.get("apex26.envProbeOff"), "1", "still inside the first strike's window");
+  assert.equal(inside.ls.get("apex26.perChunkOff"), "1");
+  const after = loadStall({ t0: DAY + 3 * DAY + 1, seed: latched });
+  assert.equal(after.ls.has("apex26.envProbeOff"), false, "one bad load is not a downgrade for good");
+  assert.equal(after.ls.has("apex26.perChunkOff"), false);
+  assert.equal(after.ls.get("apex26.stallLatch"), "0:1", "lapsed, the strike count remembered");
+});
+test("stall latch: a repeat stall after a lapse counts a second strike and holds 9 days", () => {
+  const h = loadStall({ t0: 10 * DAY, seed: { "apex26.stallLatch": "0:1" } });
+  glacial(h);
+  assert.equal(h.calls.reload, 1);
+  const stamp = h.ls.get("apex26.stallLatch");
+  assert.equal(stamp.split(":")[1], "2");
+  const at = Number(stamp.split(":")[0]);
+  const seed = { "apex26.envProbeOff": "1", "apex26.perChunkOff": "1", "apex26.stallLatch": stamp };
+  assert.equal(loadStall({ t0: at + 8 * DAY, seed }).ls.get("apex26.envProbeOff"), "1", "a second strike outlasts 3 days");
+  assert.equal(loadStall({ t0: at + 9 * DAY + 1, seed }).ls.has("apex26.envProbeOff"), false, "and lapses after 9");
+});
+test("stall latch: a context-loss latch (no stamp) and a lapsed stamp are never cleared", () => {
+  const loss = { "apex26.envProbeOff": "1", "apex26.perChunkOff": "1" };
+  const h = loadStall({ t0: 400 * DAY, seed: loss });
+  assert.equal(h.ls.get("apex26.envProbeOff"), "1", "a device that lost its context keeps the lighter renderer");
+  assert.equal(h.ls.get("apex26.perChunkOff"), "1");
+  const later = loadStall({ t0: 400 * DAY, seed: { ...loss, "apex26.stallLatch": "0:1" } });
+  assert.equal(later.ls.get("apex26.envProbeOff"), "1", "a loss latch written after a lapse is not the watchdog's to clear");
 });

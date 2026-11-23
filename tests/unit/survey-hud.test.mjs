@@ -256,9 +256,7 @@ test("manifest + game.js boot hook + css-play screen are wired", () => {
   assert.doesNotMatch(game, /SurveyHud\.holdChrome\(/);
   assert.doesNotMatch(game, /SurveyHud\.openPause\(/);
   const mod = read("js/ui/survey-hud.js");
-  assert.match(mod, /function boot\(/);
   assert.match(mod, /webglcontextlost/);
-  assert.match(mod, /holdChrome/);
   const play = read("tools/ui/css-play.mjs");
   assert.match(play, /surveyHud:\s*true/);
   assert.match(play, /APEX_SURVEY_HUD=1/);
@@ -267,3 +265,20 @@ test("manifest + game.js boot hook + css-play screen are wired", () => {
   assert.match(read("index.html"), /js\/ui\/survey-hud\.js\?v=dev/);
 });
 
+
+test("#5032: a player's origin ignores the flag: a share link's &APEX_SURVEY_HUD=1 never hides their screens", () => {
+  const share = { search: "", hash: "#vs=abc&APEX_SURVEY_HUD=1", hostname: "brycejmurrin.github.io" };
+  assert.equal(SH.enabled(share, memStore({ APEX_SURVEY_HUD: "1" })), false);
+  assert.equal(SH.enabled({ ...share, search: "?APEX_SURVEY_HUD=1" }, null), false);
+  assert.equal(SH.enabled({ ...share, hostname: "127.0.0.1" }, null), true, "the survey tools' local server keeps it");
+  // In the page the gate is the agent surface's own (LazyBundles.wantAgentSurface).
+  // #5555: that gate lives on the instance behind live(), never on the factory global.
+  let want = false;
+  const sb = { URLSearchParams, LazyBundles: { create() {}, live: () => ({ wantAgentSurface: () => want }) } };
+  vm.runInNewContext(read("js/ui/survey-hud.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/survey-hud.js") });
+  const fx = fakeDom();
+  assert.equal(sb.SurveyHud.boot({ ...fx, location: { search: "?APEX_SURVEY_HUD=1", hash: "", hostname: "127.0.0.1" }, localStorage: memStore() }), false);
+  assert.equal(fx.els.hud.hidden, true);
+  want = true;
+  assert.equal(sb.SurveyHud.boot({ ...fx, location: { search: "?APEX_SURVEY_HUD=1", hash: "" }, localStorage: memStore() }), true);
+});

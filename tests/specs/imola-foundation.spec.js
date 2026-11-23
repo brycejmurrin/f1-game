@@ -11,13 +11,14 @@ async function imolaDayDiag(racePage) {
   await loadImola(racePage);
   return racePage.evaluate(() => {
     const profile = window.__apex.trackProfile(500);
-    const at = (frac) => profile[Math.round(frac * (profile.length - 1))].y;
+    const at = (frac) => profile[Math.round(frac * profile.length)].y - profile[0].y;
     const ys = profile.map((point) => point.y);
     const shoulderGaps = [];
     for (let i = 0; i < 240; i++) {
       const frac = i / 240;
       for (const lat of [-10, 10]) {
-        const gap = window.__apex.groundY(frac, lat).gap;
+        // Measure protrusion above the banked road edge at this shoulder.
+        const gap = window.__apex.groundY(frac, lat).overRoad;
         if (gap != null) shoulderGaps.push({ frac, lat, gap });
       }
     }
@@ -28,16 +29,8 @@ async function imolaDayDiag(racePage) {
       walls: window.__apex.wallStats(),
       shoulderGaps,
       elevation: {
-        // Probes sit on the corners in the RACING frame (js/circuits/imola.js turns[]).
-        // The previous probes (0.66 / 0.848 / 0.994 / 0.148 / 0.310) pinned the pre-fix
-        // elevations, which the engine consumed unshifted so each hill sat ~half a lap off
-        // its corner (+16 m at Tamburello, +14 m at Rivazza, flat 0.40-0.75).
-        //   flat approach  0.30  (Villeneuve -> Tosa, near-flat first third)
-        //   Piratella crest 0.467 (y 11.9)
-        //   Acque Minerali hollow 0.567 (y -6.6)
-        //   Variante Alta crest 0.683 (y 20.9)
-        //   Rivazza shoulder 0.80 (y 5.0, falling to the line)
-        flatApproach: at(0.30),
+        // OpenF1 session 9983, timed laps of cars 1 and 81, relative to the line.
+        approach: at(0.30),
         piratella: at(0.467),
         acqueMinerali: at(0.567),
         varianteAlta: at(0.683),
@@ -92,12 +85,16 @@ test.describe("Imola track-owned foundation", () => {
     expect(result.walls.anyNaN).toBe(false);
     expect(result.walls.minOverHw).toBeGreaterThan(0);
     expect(result.walls.tightFrac).toBeGreaterThan(0.3);
-    expect(Math.abs(result.elevation.flatApproach)).toBeLessThan(0.5);
-    expect(result.elevation.piratella).toBeGreaterThan(10);
-    expect(result.elevation.acqueMinerali).toBeLessThan(-5);
-    expect(result.elevation.varianteAlta).toBeGreaterThan(15);
-    expect(result.elevation.rivazza).toBeGreaterThan(3);
-    expect(result.elevation.range).toBeGreaterThan(25);
+    for (const [station, metres] of Object.entries({
+      approach: 5.35, piratella: 32.6, acqueMinerali: 11.4, varianteAlta: 29.5,
+      rivazza: 18.3, range: 34.4,
+    })) {
+      expect(Math.abs(result.elevation[station] - metres), station).toBeLessThan(1.5);
+    }
+    // Null gaps (inside the road carve) are dropped above, so an all-null ladder
+    // would leave an empty list that passes. All 480 shoulder probes read
+    // terrain (headless VM, 2026-11-10); 400 is the floor.
+    expect(result.shoulderGaps.length).toBeGreaterThanOrEqual(400);
     expect(result.shoulderGaps.filter((sample) => sample.gap > 0.18)).toEqual([]);
 
     await loadImola(racePage, "night");

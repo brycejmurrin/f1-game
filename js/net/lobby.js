@@ -9,6 +9,7 @@ const NetLobby = (function () {
     const $ = (id) => document.getElementById(id);
     const transports = new Map();
     let transport = null;                  // the pending one, mid-handshake
+    let raceHeld = false, tearingDown = false; // stop("local") after finishStart ≠ peer leave
     let nextGuestId = 0;
     let codeRoom = null;
     // The room code we closed while a guest's answer negotiates, and must
@@ -25,6 +26,7 @@ const NetLobby = (function () {
     let pendingId = null;
     const MAX_GUESTS = 3;
     let role = null;
+    let backBtn = null;                  // the lobby's BACK, built beside CLOSE by wire()
     const EVICT_GRACE_MS = 1500;         // removeGuest: wait this long for the guest's close (its ack)
     const hostEvictingIds = new Set();   // guest ids the host is removing (stay in room, fresh code)
     let hostRemovedMe = false;           // guest: host sent LEFT { evicted } before the transport died
@@ -100,6 +102,13 @@ const NetLobby = (function () {
     function show(step) {
       const e = els();
       for (const k of ["pick", "hosting", "joining", "room", "code"]) if (e[k]) e[k].hidden = (k !== step);
+      // BACK is offered wherever there is a step to go back to: any
+      // HOST/JOIN/code sub-step, and the pick INVITE ANOTHER shows in a room.
+      if (backBtn) backBtn.hidden = step === "room" || (step === "pick" && !transports.size);
+      // Escape and the back gesture press whatever BACK the screen shows, the
+      // way the garage arrival swaps its door (UI hunt 3: Escape on HOST threw
+      // the whole lobby away while the on-screen BACK stepped back).
+      if (e.screen) e.screen.setAttribute("data-esc-close", backBtn && !backBtn.hidden ? "vs-back" : "vs-close");
       focusInto(e[step]);
     }
     const shownStep = (e) => ["pick", "hosting", "joining", "room", "code"].map((k) => e[k]).find((x) => x && !x.hidden);
@@ -111,9 +120,10 @@ const NetLobby = (function () {
       return {
         team: team.id,
         driver: G.driverIdx || 0,
-        parts: setup,   // no livery: no peer ever read it, and a custom one cannot be built from an id
+        parts: setup,   // no livery here: this is also what an invite CODE carries (helloProfile adds it)
       };
     }
+    const helloProfile = () => LobbyRoster.withLivery(localProfile(), G);   // HELLO alone carries the paint job (#5037)
 
     // Turn a peer's declared ids into multipliers, locally. Falls back to the
     // team's factory numbers if anything about the setup does not resolve —
@@ -216,7 +226,7 @@ const NetLobby = (function () {
         return null;
       }
       const id = pendingId;
-      transport.onClose(() => {
+      transport.onClose((why) => {
         // Belt and braces: the transport that emitted close has already
         // released itself, but close it BEFORE the map delete so a future
         // close-emitter that does not self-release cannot leak past
@@ -231,12 +241,13 @@ const NetLobby = (function () {
         const s = sessions.get(id);
         if (s) { try { s.close(); } catch (e) { /* already gone */ } }
         sessions.delete(id);
-        _peers.delete(id); _ready.delete(id); _verify.delete(id);
+        _peers.delete(id); _ready.delete(id); _verify.delete(id); _verified.delete(id);
         clashDrop(id);
         // Never connected: waitForOpen() just said which failure it was; this ran inside its dropPending() and overwrote it.
         if (!wasIn) { Log.info("net", "pending transport closed " + id); return; }
-        Log.info("net", "peer leave " + id);
         if (hostEvictingIds.has(id)) hostEvictingIds.delete(id);
+        if (tearingDown) return;
+        Log.info("net", "peer leave " + id + (why ? " " + why : ""));
         session = [...sessions.values()][0] || null;
         // OCCUPANCY IS TRANSPORTS, NOT LOBBY SESSIONS. finishStart() hands the
         // sessions map to NetPlay and clears it, but leaves transports up for
@@ -255,6 +266,8 @@ const NetLobby = (function () {
           // roomState().peers and would wait forever for a lap the gone host
           // can no longer relay (2p never saw it — no relayed roster).
           _peers.clear(); _ready.clear(); selfReady = false; clashClear();
+          if (raceHeld && why === "local") { raceHeld = false; return; } // local quit (in/after race): onStop restores
+          raceHeld = false;
           if (racing) {
             say(role === "guest" ? "Host left — rivals are now AI. Keep racing." : "Connection closed.", true);
           } else if (wasHostEvict && role === "host") {
@@ -262,7 +275,7 @@ const NetLobby = (function () {
             // waiting room, free the seat, and rotate the room code so the
             // evicted player cannot walk back in on the old one.
             selfReady = false;
-            _verify.delete(id);
+            _verify.delete(id); _verified.delete(id);
             if (G.setNetRoom) G.setNetRoom(true);
             // Only a CODE room rotates: a link/QR room never advertised one, and
             // minting it here left a public code up to expire later (H3-7).
@@ -349,11 +362,12 @@ const NetLobby = (function () {
     }
 
     function teardown() {
+      tearingDown = true; raceHeld = false;
       consumeHandledInvite(); stopPoll();
-      clearInterval(pumpTimer);
-      pumpTimer = null;
+      clearInterval(pumpTimer); pumpTimer = null;
       for (const timer of rosterTimers.values()) clearTimeout(timer);
       rosterTimers.clear();
+      changedRuleNames = [];
       settingsAccepted = true; settingsNeedsReady = false; settingsRevision = 0; settingsFingerprint = null;
       clearFailReason();
       // onJoiner stamps codeReopen before waitForOpen; a failed ICE then
@@ -362,15 +376,11 @@ const NetLobby = (function () {
       codeReopen = null;
       clearTimeout(codeReopenTimer); codeReopenTimer = null;
       for (const s of sessions.values()) { try { s.close(); } catch (e) { /* already gone */ } }
-      sessions.clear();
-      session = null;
+      sessions.clear(); session = null;
       for (const t of transports.values()) { try { t.close(); } catch (e) { /* already gone */ } }
-      transports.clear(); _verify.clear();
+      transports.clear(); _verify.clear(); _verified.clear();
       if (transport) { try { transport.close(); } catch (e) { /* already gone */ } }
-      transport = null;
-      pendingId = null;
-      nextGuestId = 0;
-      hostRemovedMe = false;
+      transport = null; pendingId = null; nextGuestId = 0; hostRemovedMe = false; tearingDown = false;
     }
 
     // "It didn't work" is not an answer a player can act on, and the two ways
@@ -410,8 +420,10 @@ const NetLobby = (function () {
             + " in the console to see which relay answered — if none did, set"
             + " apex26.turnApi to a credentials URL of your own. Racing over"
             + " the same Wi-Fi works meanwhile."
-          : " No relay is configured at all. Race over the same Wi-Fi, or set"
-            + " apex26.turnApi to a credentials URL.");
+          // No relay, by Bryce's decision (#5313, 2026-11-11): say so plainly.
+          : " This network cannot connect you directly, and there is no relay"
+            + " server to go around it. Put both phones on the same Wi-Fi, or"
+            + " switch one to mobile data, then start a new invite.");
     }
 
     function waitForOpen() {
@@ -544,11 +556,16 @@ const NetLobby = (function () {
       say("Connected.");
       transports.set(id, t);
       if (transport === t) { transport = null; pendingId = null; }
+      // A code join keeps hearing offers until it connects (swap reanswer): stop it.
+      if (role === "guest" && codeWait) { codeWait.cancelled = true; codeWait = null; }
       const made = NetSession.create({ transport: t });
       sessions.set(id, made);
       if (typeof NetRendezvous !== "undefined" && NetRendezvous.verifyFor) NetRendezvous.verifyFor(t.pc).then((v) => {
-        if (v && transports.get(id) === t) { _verify.set(id, v); say("Connected. Check both screens show code " + v + "."); renderRoom(); }
-      });
+        if (!v || transports.get(id) !== t) return;
+        _verify.set(id, v); _verified.delete(id);   // unticked: READY waits for CODES MATCH (#5313)
+        say("Connected. Check both screens show code " + v + ", then tap CODES MATCH.");
+        if (selfReady) setReady(false); else renderRoom();
+      }).catch((e) => { Log.warn("net", "verify code failed:", e && e.message); });
       if (codeRoom && codeRoom.rotate) { try { codeRoom.rotate(null); } catch (e) { /* the room is already gone */ } }
       reopenRoom(transports.size < MAX_GUESTS);
       session = [...sessions.values()][0];
@@ -558,13 +575,9 @@ const NetLobby = (function () {
         for (const s of allSessions()) s.pump(now);
       }, 25);
 
-      // PER-CONNECTION RATE LIMIT on the two events a peer can fire at will.
-      // Every HELLO re-renders the room, re-resolves seat clashes and — on
-      // the host — is RELAYED to every other guest; every READY re-renders.
-      // Nothing legitimate sends more than a handful a second (a seat clash
-      // settles in one round trip), so past HELLO_RATE in a rolling second
-      // the rest are dropped on the floor. Separate windows per event.
-      const helloTimes = [], readyTimes = [], qualiTimes = [];
+      // Keep separate rolling windows for expensive room updates.
+      // Guests coalesce relay traffic, while the host caps each sender.
+      const helloTimes = [], readyTimes = [], qualiTimes = [], settingsTimes = [], qabortTimes = [];
       const rosterWindows = new Map(), pendingRoster = new Map();
       const underRate = (times, limit = HELLO_RATE) => {
         const now = performance.now();
@@ -587,27 +600,27 @@ const NetLobby = (function () {
           if (rosterWindows.size >= 2 * (MAX_GUESTS + 1)) return;
           rosterWindows.set(key, []);
         }
-        const window = rosterWindows.get(key);
-        if (underRate(window)) { pendingRoster.delete(key); apply(data); return; }
+        applyLatest(key, rosterWindows.get(key), data, apply);
+      }
+      function applyLatest(key, window, data, apply) {
+        if (underRate(window)) {
+          if (pendingRoster.delete(key)) { clearTimeout(rosterTimers.get(key)); rosterTimers.delete(key); }
+          apply(data); return;
+        }
         pendingRoster.set(key, data);
         if (rosterTimers.has(key)) return;
         const timer = setTimeout(() => {
           rosterTimers.delete(key);
           if (sessions.get(id) !== made || !pendingRoster.has(key)) return;
           const latest = pendingRoster.get(key); pendingRoster.delete(key);
-          window.length = 0; underRate(window); apply(latest);
+          applyLatest(key, window, latest, apply);
         }, Math.max(1, EVENT_WINDOW_MS - (performance.now() - window[0]) + 1));
         rosterTimers.set(key, timer);
       }
-      // The LATEST hello wins, not the first: a profile is re-sent every time
-      // someone changes team or livery in the waiting room, and keeping the
-      // first would race the rival's car in whatever they happened to be
-      // driving when the connection opened.
-      // Filed under the id of the CONNECTION it arrived on, never a `from` in
-      // the payload. With three guests every profile would otherwise collide
-      // into one slot — and a peer that can name itself is a peer that can name
-      // somebody else.
+      // Refresh the profile when a driver changes seat or livery. The host
+      // keys it by connection so a guest cannot claim another driver's ID.
       made.onEvent(NetPlay.EV.HELLO, (p) => rosterEvent("hello", p, (p) => {
+        p = LobbyRoster.cleanHello(p);
         if (!p) { renderRoom(); return; }
         // WHOSE profile this is. On the host, always the connection it came in
         // on — a guest that could name itself could name somebody else. On a
@@ -644,7 +657,27 @@ const NetLobby = (function () {
         resolveSeatClash();
         renderRoom();
       }, helloTimes));
-      made.onEvent(NetPlay.EV.SETTINGS, (d) => { if (role === "guest") applySettings(d); });
+      // The host sends complete snapshots. After a burst, the final revision
+      // must reach the guest or its READY can never match the host's grid.
+      /** @type {(() => void) | null} */
+      let pendingStart = null;
+      function receiveSettings(d) {
+        applySettings(d);
+        const start = pendingStart; pendingStart = null;
+        if (start) start();
+      }
+      made.onEvent(NetPlay.EV.SETTINGS, (d) => {
+        if (role === "guest") applyLatest("settings", settingsTimes, d, receiveSettings);
+      });
+      // A GO follows its SETTINGS on the ordered channel. Preserve that
+      // order across throttling, even when the snapshot repeats approved rules.
+      function onGuestStart(type, start) {
+        made.onEvent(type, (d) => {
+          if (role !== "guest") return;
+          if (pendingRoster.has("settings")) pendingStart = () => start(d);
+          else start(d);
+        });
+      }
       made.onEvent(NetPlay.EV.READY, (d) => rosterEvent("ready", d, (d) => {
         // Mirror HELLO: guests have no peer link, so the host must relay READY
         // with `from`. Key by who the ready belongs to, not the connection id
@@ -665,16 +698,15 @@ const NetLobby = (function () {
         }
         renderRoom();
       }, readyTimes));
-      made.onEvent(NetPlay.EV.GO, (d) => {
-        if (role !== "guest") return;
-        if (!settingsAccepted || settingsNeedsReady || (d && d.revision != null && (d.revision !== settingsRevision || !selfReady))) {
+      onGuestStart(NetPlay.EV.GO, (d) => {
+        if (!settingsCurrent() || settingsNeedsReady || (d && d.revision != null && (d.revision !== settingsRevision || !selfReady))) {
           say("Review the host’s race settings and press READY before starting.", true); return;
         }
         beginRace();
       });
       // A guest that left the quali sheet never reaches finishStart on its own; the host's qgo is its GO.
-      made.onEvent(QGO, () => {
-        if (role !== "guest" || !qualiAborted || !settingsAccepted) return;
+      onGuestStart(QGO, () => {
+        if (!qualiAborted || !settingsCurrent() || settingsNeedsReady) return;
         qualiAborted = false;
         close();
         finishStart();
@@ -713,21 +745,20 @@ const NetLobby = (function () {
       // same reasoning as HELLO above), and seat exclusivity makes team:seat
       // a driver identity; the id format is seasonDriverId's
       // (js/core/store.js): "team:driver". No profile yet means no claim —
-      // HELLO is sent at connect, long before anyone can drive a lap. On a
-      // guest there is nothing to narrow to: its one connection is the host's,
-      // and the host legitimately speaks for the whole field.
+      // HELLO is sent at connect, long before anyone can drive a lap. A guest's
+      // one connection is the host's, which speaks for the whole (seated) field.
       // NEVER THE LOCAL SEAT, either role: a peer whose HELLO claimed this
       // player's team:seat (or a relay naming it) must not post a time over
       // the one this player drives — qualiDriven() would take it as theirs.
       function sendersOwnDriver(d) {
         const me = Teams.LIST[G.teamIdx] || Teams.LIST[0];
         if (me && d.driverId === me.id + ":" + (G.driverIdx || 0)) return false;
-        if (role !== "host") return true;
-        // Per-connection QUALI+QLIVE cap (host relays each event to every guest).
-        if (!underRate(qualiTimes, QUALI_RATE)) return false;
-        const p = _peers.get(id);
-        return !!(p && p.team && d.driverId != null
-          && d.driverId === p.team + ":" + (p.driver || 0));
+        // Per-connection QUALI+QLIVE cap; a guest's one link relays the room, and
+        // only a driver some HELLO seated is accepted (#5012).
+        if (!underRate(qualiTimes, role === "host" ? QUALI_RATE : NetPlay.QUALI_GUEST_RATE)) return false;
+        if (role !== "host") return [..._peers.values()].some((p) => p && typeof p.team === "string" && d.driverId === p.team + ":" + (p.driver || 0));
+        const seat = heldSeat(id);
+        return !!(seat && d.driverId != null && d.driverId === seat);
       }
       // QUALI and the lap in progress (QLIVE): the receivers live in NetPlay
       // (bindQuali — ONE validation site for both phases); only the sender
@@ -743,18 +774,20 @@ const NetLobby = (function () {
         }
       });
       // Guest abortQuali → host grades that HELLO's driver no-time (relayed QUALI).
+      // Rate-gated per connection like QUALI: each one is relayed to every other guest.
       made.onEvent(QABORT, () => {
         if (role !== "host" || !friendQualifying) return;
-        const p = _peers.get(id);
-        if (!p || !p.team) return;
-        const q = { driverId: p.team + ":" + (p.driver || 0), t: Infinity, noTime: true };
+        if (!underRate(qabortTimes, QABORT_RATE)) return;
+        const seat = heldSeat(id);
+        if (!seat) return;
+        const q = { driverId: seat, t: Infinity, noTime: true };
         if (G.onPeerQuali) G.onPeerQuali(q);
         for (const [other, sess] of sessions) {
           if (other !== id) try { sess.sendEvent(NetPlay.EV.QUALI, { driverId: q.driverId, t: null, noTime: true }); } catch (e) { /* departing peer */ }
         }
         say("A player left qualifying — their time is set to none.");
       });
-      made.sendEvent(NetPlay.EV.HELLO, Object.assign(localProfile(), role === "host" ? { rank: joinRank(id) } : null));
+      made.sendEvent(NetPlay.EV.HELLO, Object.assign(helloProfile(), role === "host" ? { rank: joinRank(id) } : null));
       if (role === "host") {
         publishSettings();
         // Existing READY before this connection opened (host + earlier guests).
@@ -774,11 +807,16 @@ const NetLobby = (function () {
     const HELLO_RATE = 5, EVENT_WINDOW_MS = NetPlay.EVENT_WINDOW_MS;   // per connection, per event
     const QUALI_RATE = NetPlay.QUALI_RATE;          // QUALI + QLIVE together, per connection
     const QABORT = "qabort";   // guest→host "left quali sheet" (lobby-local until netplay owns it)
+    const QABORT_RATE = 2;     // per connection, per window: a guest leaves the sheet once
     const QGO = "qgo";         // host→guest "quali is over, I am starting the race" (additive: old clients ignore the type)
     let qualiAborted = false;  // this guest backed out of friend quali and is waiting in the room for the host
     const _peers = new Map();
     const _ready = new Map();
     const _verify = new Map();   // connection id -> 4-letter code from both DTLS fingerprints
+    // Ids whose code this player ticked CODES MATCH for: READY waits for every one (#5313).
+    const _verified = new Set();
+    const unverified = () => [..._verify.keys()].filter((id) => !_verified.has(id));
+    const confirmCode = (id) => _verify.has(id) && (_verified.add(id), renderRoom(), true);
     const firstPeer = () => (_peers.size ? [..._peers.values()][0] : null);
     const peerIds = () => new Set([..._peers.keys(), ..._ready.keys()]);
     // Everyone has to be ready, and there has to BE somebody: an empty room
@@ -803,6 +841,7 @@ const NetLobby = (function () {
     let selfReady = false;
     let settingsRevision = 0, settingsFingerprint = null, settingsAccepted = true, settingsNeedsReady = false;
     const rosterTimers = new Map();
+    const settingsCurrent = () => settingsAccepted && !rosterTimers.has("settings");
 
     function openRoom() {
       // ONLY A FRESH ROOM STARTS UNREADY. openRoom() is onConnected()'s last
@@ -824,7 +863,7 @@ const NetLobby = (function () {
         : "The host is picking the race. Choose your car.");
     }
 
-    const { GRID_LABEL, RULES, own, normaliseSettings, circuitPayload, installCircuit } = LobbySettings;
+    const { raceRuleRows, roomOnly, RULES, own, normaliseSettings, circuitPayload, installCircuit } = LobbySettings;
     const customPicked = () => LobbySettings.customPicked(G);
 
     function publishSettings() {
@@ -877,31 +916,21 @@ const NetLobby = (function () {
       return broadcast(NetPlay.EV.SETTINGS, Object.assign(snapshot, { revision: settingsRevision }));
     }
 
-    // ROOM RULES ARE IN MEMORY ONLY. G.raceTyreWear / G.raceReliability are
-    // the PERSISTING setters (store "tyreWear" / "reliability"), so a guest's
-    // own saved choice was overwritten for good by any room it joined. The
-    // race reads the in-memory value; the save is put back exactly as it was
-    // (unset stays unset). The other rules' G setters do not touch the store.
-    function roomOnly(key, apply) {
-      const st = G.store;
-      const before = st && st.get ? st.get(key, undefined) : undefined;
-      apply();
-      if (!st) return;
-      if (before === undefined) { if (st.rawDel) st.rawDel(key); }
-      else if (st.set) st.set(key, before);
-    }
-
     // A GUEST GETS ITS OWN RULES BACK when the room or the race is over: the
     // host's overwrote them in memory and nothing put them back. RULES lives
     // on LobbySettings; wxArc restores to "no plan" (its getter would draw one).
     let ownRules = null;
+    let soloDuel = null;
+    let changedRuleNames = [];
     function restoreOwnRules() {
       const snap = ownRules;
-      if (!snap || (G.netPlay && G.netPlay.active && G.netPlay.active())) return false;   // never mid-race
+      if (G.netPlay && G.netPlay.active && G.netPlay.active()) return false;   // never mid-race
+      if (soloDuel !== null) { G.duel = soloDuel; soloDuel = null; }
+      if (!snap) return false;
       ownRules = null;
       for (const [, prop, key] of RULES) {
         if (!own(snap, prop) || snap[prop] === undefined) continue;
-        if (key) roomOnly(key, () => { G[prop] = snap[prop]; }); else G[prop] = snap[prop];
+        if (key) roomOnly(G.store, key, () => { G[prop] = snap[prop]; }); else G[prop] = snap[prop];
       }
       G.wxArcPlan = null;
       return true;
@@ -922,9 +951,11 @@ const NetLobby = (function () {
       if (d.revision != null && (!Number.isSafeInteger(d.revision) || d.revision < 0)) { settingsAccepted = false; settingsNeedsReady = true; if (selfReady) setReady(false); return false; }
       const revision = d.revision == null ? 0 : d.revision;
       const fingerprint = JSON.stringify(next);
+      if (settingsAccepted && settingsFingerprint !== null && fingerprint === settingsFingerprint && revision === settingsRevision) return true;   // unchanged: no rebuild
       if (settingsFingerprint === null || fingerprint !== settingsFingerprint || revision !== settingsRevision) {
         settingsNeedsReady = true; _ready.clear(); if (selfReady) setReady(false);
       }
+      const previousRows = settingsAccepted && settingsFingerprint !== null ? new Map(raceRuleRows(G)) : null;
       settingsRevision = revision; settingsFingerprint = fingerprint; settingsAccepted = true;
       if (!ownRules) { ownRules = {}; for (const [, prop] of RULES) ownRules[prop] = G[prop]; }
       if (own(next, "circuit")) {
@@ -946,12 +977,15 @@ const NetLobby = (function () {
       if (own(next, "weather")) G.raceWeather = next.weather;
       if (own(next, "tod")) G.raceTimeOfDay = next.tod;
       if (own(next, "difficulty")) G.difficulty = next.difficulty;
-      if (own(next, "tyres")) roomOnly("tyreWear", () => { G.raceTyreWear = next.tyres; });
-      if (own(next, "reliab")) roomOnly("reliability", () => { G.raceReliability = next.reliab; });
-      if (own(next, "dirtyAir")) roomOnly("dirtyAir", () => { G.raceDirtyAir = next.dirtyAir; });
-      if (own(next, "aiPace")) roomOnly("aiPace", () => { G.aiPace = next.aiPace; });
+      if (own(next, "tyres")) roomOnly(G.store, "tyreWear", () => { G.raceTyreWear = next.tyres; });
+      if (own(next, "reliab")) roomOnly(G.store, "reliability", () => { G.raceReliability = next.reliab; });
+      if (own(next, "dirtyAir")) roomOnly(G.store, "dirtyAir", () => { G.raceDirtyAir = next.dirtyAir; });
+      if (own(next, "aiPace")) roomOnly(G.store, "aiPace", () => { G.aiPace = next.aiPace; });
       if (own(next, "seed")) G.seed = next.seed;           // rewinds the sim stream: pre-race only, by construction
       if (own(next, "round")) G.raceRound = next.round;
+      if (previousRows) {
+        changedRuleNames = raceRuleRows(G).filter(([name, value]) => previousRows.get(name) !== value).map(([name]) => name);
+      }
       renderRoom();
       return true;
     }
@@ -962,7 +996,7 @@ const NetLobby = (function () {
       // the garage, and what goes on the wire should be the seat you end up in
       // rather than the one you are about to be moved out of. When it fires it
       // sends the hello itself, so this must not send a second.
-      if (what === "car") { if (!resolveSeatClash()) broadcast(NetPlay.EV.HELLO, localProfile()); }
+      if (what === "car") { if (!resolveSeatClash()) broadcast(NetPlay.EV.HELLO, helloProfile()); }
       else publishSettings();
       if (selfReady) setReady(false);
       renderRoom();
@@ -971,10 +1005,12 @@ const NetLobby = (function () {
 
     function setReady(v) {
       selfReady = !!v;
-      if (role === "guest" && !settingsAccepted) {
+      if (role === "guest" && !settingsCurrent()) {
         selfReady = false; if (v) say("Waiting for the host’s complete race settings before READY.", true);
       }
-      if (selfReady) settingsNeedsReady = false;
+      const unticked = selfReady && unverified()[0];
+      if (unticked) { selfReady = false; say("Check that both screens show code " + _verify.get(unticked) + ", then tap CODES MATCH before READY.", true); }
+      if (selfReady) { settingsNeedsReady = false; changedRuleNames = []; }
       if (sessions.size) broadcast(NetPlay.EV.READY, { ready: selfReady, revision: settingsRevision });
       renderRoom();
     }
@@ -1003,6 +1039,12 @@ const NetLobby = (function () {
       if (role === "host") return joinRank(id);
       const p = _peers.get(id);
       return p && p.from != null ? (p.rank || 0) : 0;   // untagged = the host
+    }
+
+    // The seat a host-side connection may speak for (LobbyRoster.heldSeat).
+    function heldSeat(id) {
+      const me = Teams.LIST[G.teamIdx] || Teams.LIST[0];
+      return LobbyRoster.heldSeat(_peers, id, me ? me.id + ":" + (G.driverIdx || 0) : null, joinRank);
     }
 
     // A guest yields to the host and to guests that joined EARLIER, never to
@@ -1077,7 +1119,7 @@ const NetLobby = (function () {
       const seatTxt = now.driver + (now.team ? " (" + now.team + ")" : "");
       say(onCustom ? (mineTeam.legends ? "LEGENDS" : "MY TEAM") + " cars only exist on your own screen — you're driving " + seatTxt + " for this race."
                    : was.driver + " was taken — you're driving " + seatTxt + ".");
-      broadcast(NetPlay.EV.HELLO, localProfile());
+      broadcast(NetPlay.EV.HELLO, helloProfile());
       if (selfReady) setReady(false);
       const garage = $("carsetup");
       if (garage && !garage.hidden && G.buildSetup) G.buildSetup();
@@ -1159,25 +1201,15 @@ const NetLobby = (function () {
       const e = els();
       if (!e.roomStep || e.roomStep.hidden) return;
       const host = role === "host";
-      const track = (Tracks.LIST && Tracks.LIST[G.trackIdx]) || null;
-      const WX_LABEL = { dry: "Dry", wet: "Wet", rain: "Rain", overcast: "Overcast", fog: "Fog" };
-      const arc = G.raceChangeable && G.wxArcPlan;
-      const wx = (WX_LABEL[G.raceWeather] || "Mixed") + (arc && WX_LABEL[arc.to] ? " → " + WX_LABEL[arc.to] : "");
-      const tod = G.raceTimeOfDay && G.raceTimeOfDay !== "default"
-        ? G.raceTimeOfDay.charAt(0).toUpperCase() + G.raceTimeOfDay.slice(1) : "Default";
       if (e.raceSummary) {
         const frag = document.createDocumentFragment();
-        frag.appendChild(summaryRow("Circuit", track ? (track.name || track.id) : "—"));
-        frag.appendChild(summaryRow("Laps", G.raceLaps));
-        frag.appendChild(summaryRow("Qualifying lap", G.raceQuali ? "On" : "Off"));
-        frag.appendChild(summaryRow("Grid", GRID_LABEL[G.raceGrid] || (G.raceQuali ? "Qualifying lap" : "Pace order")));
-        frag.appendChild(summaryRow("Weather", wx));
-        frag.appendChild(summaryRow("Time", tod));
+        for (const [label, value] of raceRuleRows(G)) frag.appendChild(summaryRow(label, value));
         replace(e.raceSummary, frag);
       }
       if (e.editRace) e.editRace.hidden = !host;
       if (e.raceNote) {
         e.raceNote.textContent = host ? ""
+          : changedRuleNames.length ? "Host changed " + changedRuleNames.join(", ") + ". Review the rules and mark Ready again."
           : "The host chooses the circuit and conditions. If they leave, their rivals continue as AI.";
         e.raceNote.hidden = host;
       }
@@ -1236,10 +1268,11 @@ const NetLobby = (function () {
     function verifyRow(el, id) {
       const v = _verify.get(id);
       if (!v) return el;
-      const tag = span("", v);
+      const ok = _verified.has(id), tag = span("", ok ? v + " ✓" : v);
       tag.dataset.verify = v;
       tag.title = "Verification code: it must match the code on their screen";
       el.appendChild(tag);
+      if (!ok) el.appendChild(LobbyRoster.verifyButton(id, v, confirmCode));
       // The host's Remove button is hostRemoveRow's — one per row, which also
       // covers "their screen shows a different code" (a middleman).
       return el;
@@ -1254,9 +1287,9 @@ const NetLobby = (function () {
         try { sess.sendEvent(NetPlay.EV.LEFT, { evicted: true }); } catch (e) { /* leaving */ }
       }
       Log.info("net", "host removed " + id);
-      // ACK BEFORE CLOSE: shutdown() drops the SCTP queue (pc.close()), so a
-      // LEFT sent and closed in one breath never reaches the guest, who then
-      // reads "The host left the room". The guest closes its own end on
+      // ACK BEFORE CLOSE: shutdown("local") lingers only ~500 ms for the SCTP
+      // queue, so a LEFT sent and closed in one breath can still miss a slow
+      // guest, who then reads "The host left the room". The guest closes on
       // LEFT { evicted } — that close is the ack; EVICT_GRACE_MS is the
       // fallback for a guest that never answers.
       if (!sess) { try { t.close(); } catch (e) { /* its close handler is the cleanup */ } return true; }
@@ -1300,6 +1333,12 @@ const NetLobby = (function () {
     }
 
     let friendQualifying = false;
+    function qualifyingFailed() {
+      cancel();
+      if (G.quitToMenu) G.quitToMenu();
+      if (G.announce) G.announce("COULD NOT START QUALIFYING — BACK TO MENU", 4, "info");
+    }
+
     function beginRace() {
       // BOTH peers start the sim stream from its seed: the guest was rewound by
       // applySettings, but the host sat wherever its earlier races left it, so
@@ -1307,6 +1346,8 @@ const NetLobby = (function () {
       // different AI fields on the two screens. Re-setting the seed resets the
       // stream only (simSeed keeps _simSeed, which luckSeed reads).
       G.seed = G.seed;
+      if (soloDuel === null) soloDuel = !!G.duel;
+      G.duel = false;   // qualifying and the race both use the full room grid
       qualiAborted = false;
       if (G.raceQuali && G.openQualiForNet) {
         friendQualifying = true;
@@ -1318,16 +1359,17 @@ const NetLobby = (function () {
           G.flow = "gp";
           opened = G.openQualiForNet(finishStart);   // calls back when TO THE GRID is pressed
         } catch (e) {
-          friendQualifying = false;
-          say("Could not start qualifying: " + (e && e.message), true);
+          qualifyingFailed();
           return;
         }
         close();         // the sheet is the screen now — but the SESSION stays open
         // Prepare failure leaves friendQualifying true; cancel if sheet stays hidden.
+        const generation = operationGeneration;
+        const stillOpening = () => operationCurrent(generation) && friendQualifying;
         Promise.resolve(opened).then(() => {
           const sheet = $("quali");
-          if (friendQualifying && sheet && sheet.hidden) cancel();
-        }, () => {});
+          if (stillOpening() && sheet && sheet.hidden) qualifyingFailed();
+        }, () => { if (stillOpening()) qualifyingFailed(); });
         return;
       }
       finishStart();
@@ -1357,7 +1399,6 @@ const NetLobby = (function () {
         // or a time trial. flow/session are the authority (js/game.js).
         G.flow = "gp";
         G.session = "race";
-        G.duel = false;   // the room's grid is every peer's; a duel would trim the host's to two cars
         // startRace is ASYNC (it awaits ensureScenery) — without the await,
         // netPlay.start() below ran before makeCars()/gridUp(): on a fresh
         // page G.cars was [] (no_slot → cancel → quitToMenu, the friend race
@@ -1401,13 +1442,13 @@ const NetLobby = (function () {
       session = null;                    // owned by NetPlay now
       sessions.clear();
       if (!started.ok) {
-        say(started.message || "Could not start the session.", true);
+        raceHeld = false; say(started.message || "Could not start the session.", true);
         // q-go already cleared qualiNetDone, so quitToMenu would not cancel.
         cancel();
         if (G.quitToMenu) G.quitToMenu();
         return;
       }
-      if (role === "host") G.netPlay.hostStart();
+      raceHeld = true; if (role === "host") G.netPlay.hostStart();
       close();
     }
 
@@ -1506,6 +1547,12 @@ const NetLobby = (function () {
     // acceptAnswer's signalingState check (NetHandshake.acceptAnswer): a
     // connection that has already taken an offer is past "stable".
     let answering = null;        // the transport an answer is being built for
+    function inviteError(message, result) {
+      say(message, true);
+      const body = $("vs-body");
+      if (body) body.scrollTop = body.scrollHeight;
+      return result;
+    }
     async function makeAnswer(codeIn) {
       const e = els();
       // The button reads the box, and the box holds whatever got there — a
@@ -1516,13 +1563,13 @@ const NetLobby = (function () {
       const code = typeof resolved === "string" ? resolved : await resolved;
       if (!operationCurrent(readingGen)) return cancelledResult();
       if (e.inviteIn) e.inviteIn.value = code;
-      if (!code.trim()) { say("Paste their invite code first.", true); return { ok: false, error: "empty" }; }
+      if (!code.trim()) return inviteError("Paste their invite code first.", { ok: false, error: "empty" });
       // Shape first, connection second: a typo is refused as a typo even while
       // join() is still waiting on the ICE prefetch (the transport arrives up
       // to ICE_WAIT_MS after the tap). Transport-first reports "That attempt
       // has ended" for junk and races every slow network.
       const peek = NetHandshake.peekCode ? NetHandshake.peekCode(code) : { ok: true };
-      if (!peek.ok) { say(peek.message, true); return { ok: false, error: peek.error, message: peek.message }; }
+      if (!peek.ok) return inviteError(peek.message, { ok: false, error: peek.error, message: peek.message });
       // A join still waiting on the relay credentials is not "no connection":
       // wait for the transport it is about to build (joinP, above join()).
       if (!transport && joinP) {
@@ -1554,7 +1601,7 @@ const NetLobby = (function () {
       }
       if (!operationCurrent(gen) || transport !== pending) return cancelledResult();
       if (!res.ok) { say(res.message || "That invite could not be read.", true); return res; }
-      NetHandshake.consumeInviteUrl(); if (res.peer) _peers.set(PEER_ONE, res.peer);
+      NetHandshake.consumeInviteUrl(); if (res.peer) _peers.set(PEER_ONE, LobbyRoster.cleanCodeProfile(res.peer));
       if (e.answer) e.answer.value = res.code;
       if (e.answerHint) e.answerHint.hidden = false;
       if (e.answerActions) e.answerActions.hidden = false;
@@ -1598,7 +1645,7 @@ const NetLobby = (function () {
       // ALSO left a phantom "peer" entry that no session ever answers for —
       // so peersReady() could never be true and START was unreachable. Found
       // by tools/net/rtc-e2e-3p, which is the only thing that can see it.
-      if (res.peer) _peers.set(id || PEER_ONE, res.peer);
+      if (res.peer) _peers.set(id || PEER_ONE, LobbyRoster.cleanCodeProfile(res.peer));
       waitForOpen();
       return res;
     }
@@ -1637,14 +1684,14 @@ const NetLobby = (function () {
       if (e.codeInputWrap) e.codeInputWrap.hidden = mode !== "input";
       const privateRelay = NetRendezvous.usingPrivateRelay();
       if (e.codeIn) {
-        e.codeIn.maxLength = privateRelay ? 64 : 8;
-        e.codeIn.placeholder = privateRelay ? "Paste their 32-character token" : "ABC234";
+        e.codeIn.maxLength = privateRelay ? 64 : 12;   // 8 letters plus the spaces or dashes a reader types
+        e.codeIn.placeholder = privateRelay ? "Paste their 32-character token" : "ABCD2345";
         e.codeIn.setAttribute("aria-label", privateRelay ? "Private room token" : "Room code");
       }
       if (e.codeValue) e.codeValue.setAttribute("data-private", String(privateRelay));
     }
 
-    // Paint the six-letter (or private) code into #vs-code-value and arm
+    // Paint the eight-letter (or private) code into #vs-code-value and arm
     // SHARE/COPY only when the invite is live on the relay. A code shown
     // earlier during createInvite left guests burning JOIN_TIMEOUT on an
     // empty topic while the host still said "Preparing…".
@@ -1731,7 +1778,7 @@ const NetLobby = (function () {
             // onConnected() reopens the code for the next arrival; its expiry
             // (HOST_TIMEOUT_MS ≈ 120 s) later is not a failure of a room that is already full.
             // A quiet room is the waiting room (rotated after a remove): host copy,
-            // never nostr's guest "Check the six characters…" (H3-7; closed PR #3535).
+            // never nostr's guest "Check the letters…" (H3-7; closed PR #3535).
             if (r.error === "expired" && (sessions.size || watcherArmed || opts.quiet)) {
               const msg = "The room code has expired — INVITE ANOTHER makes a new one.";
               tagFailReason("expired", msg);
@@ -1739,7 +1786,7 @@ const NetLobby = (function () {
               return;
             }
             // Nobody in, nothing watching: take the dead code down, in host copy
-            // (nostr's is the GUEST's "Check the six characters…") (#2200).
+            // (nostr's is the GUEST's "Check the letters…") (#2200).
             if (r.error === "expired" && !opts.quiet) {
               const msg = "The room code expired — tap NEW CODE for another.";
               paintHostCode(""); tagFailReason("expired", msg); say(msg, true);
@@ -1806,7 +1853,7 @@ const NetLobby = (function () {
               if (acc.error !== "already_answered" && acc.error !== "wrong_offer") say(acc.message || "That answer could not be read.", true);
               return;
             }
-            if (acc.peer) _peers.set(id, acc.peer);
+            if (acc.peer) _peers.set(id, LobbyRoster.cleanCodeProfile(acc.peer));
             // CLOSE THE ROOM WHILE THIS ANSWER NEGOTIATES, REOPEN ONCE IT IS UP.
             //
             // Historically this got Trystero's own RTCPeerConnection out of
@@ -1862,7 +1909,7 @@ const NetLobby = (function () {
       const acc = await NetHandshake.acceptAnswer(initialTransport, got.payload);
       if (!operationCurrent(gen) || transport !== initialTransport) return cancelledResult();
       if (!acc.ok) { say(acc.message || "That answer could not be read.", true); return acc; }
-      if (acc.peer) _peers.set(pendingId || PEER_ONE, acc.peer);
+      if (acc.peer) _peers.set(pendingId || PEER_ONE, LobbyRoster.cleanCodeProfile(acc.peer));
       waitForOpen();
       return { ok: true, code };
     }
@@ -1877,13 +1924,13 @@ const NetLobby = (function () {
       if (!NetRendezvous.valid(code)) {
         say(NetRendezvous.usingPrivateRelay()
           ? "Private rooms need a new 32-character token. Ask the host to share a new token, or use the invite link."
-          : "That is not a room code — six letters and numbers.", true);
+          : "That is not a room code — eight letters and numbers (six from an older version).", true);
         return { ok: false, error: "bad_code" };
       }
       await readyIce();
       if (!operationCurrent(gen)) return cancelledResult();
       if (!newTransport("guest")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
-      const pending = transport;
+      let pending = transport;   // replaced when a newer offer is answered (reply, below)
       say("Looking for that room…");
       codeWait = { cancelled: false };
       let answered = null;
@@ -1898,12 +1945,32 @@ const NetLobby = (function () {
       let found = false;
       const done = await NetRendezvous.swap({
         code, slot: "answer", want: "offer", token: codeWait,
+        // A relay can replay an offer the host already used for somebody else:
+        // answer a newer one the host posts while ours is still unconnected.
+        reanswer: true,
+        onFail: (r) => { if (r && r.advisory && operationCurrent(gen) && !transports.has(pid)) say(r.message, true); },
         onTick: () => {
           if (!operationCurrent(gen) || found || watching || transports.has(pid)) return;
           say("Looking for that room… (code " + code + ")");
         },
         reply: async (inviteCode) => {
           if (!operationCurrent(gen) || transport !== pending) return null;
+          if (answered && answered.ok) {
+            // A NEWER offer while the first answer is unconnected. Connected (or
+            // connecting on DTLS) means the first was the live one: keep it.
+            const st = pending.stats ? pending.stats() : null;
+            if (transports.has(pid) || pending.status === "open" || (st && st.connection === "connected")) return null;
+            // An answered pc cannot take a second offer: a fresh one answers it.
+            if (!newTransport("guest")) return null;
+            pending = transport;
+            const res = await NetHandshake.acceptInvite(pending, inviteCode, localProfile());
+            if (!operationCurrent(gen) || transport !== pending) return null;
+            if (!res.ok) return null;
+            if (res.peer) _peers.set(PEER_ONE, LobbyRoster.cleanCodeProfile(res.peer));
+            answered = res;
+            waitForOpen();   // the watcher on the dropped transport ended with it
+            return res.code;
+          }
           found = true;
           say("Found it — answering…");
           // Default gather (waitForIce re-check + null-candidate end). A short
@@ -1912,7 +1979,7 @@ const NetLobby = (function () {
           const res = await NetHandshake.acceptInvite(pending, inviteCode, localProfile());
           if (!operationCurrent(gen) || transport !== pending) return null;
           if (!res.ok) { answered = res; return null; }
-          if (res.peer) _peers.set(PEER_ONE, res.peer);
+          if (res.peer) _peers.set(PEER_ONE, LobbyRoster.cleanCodeProfile(res.peer));
           answered = res;
           watch();
           return res.code;
@@ -2148,7 +2215,7 @@ const NetLobby = (function () {
         invalidateOperations();
         const privateRelay = NetRendezvous.usingPrivateRelay();
         showCodeStep("input", privateRelay ? "Paste their private room token" : "Enter their code",
-          privateRelay ? "Paste all 32 characters shared by your friend. Both players need the same private relay configured." : "Six letters and numbers.");
+          privateRelay ? "Paste all 32 characters shared by your friend. Both players need the same private relay configured." : "Eight letters and numbers (six from an older version).");
         const box = $("vs-code-in");
         if (box) { box.value = ""; box.focus(); }
       });
@@ -2159,23 +2226,46 @@ const NetLobby = (function () {
         return handOff({ title: "Apex 26", text: "Race me on Apex 26 — " + (NetRendezvous.usingPrivateRelay() ? "private room token " : "room code ") + c }, c);
       });
       on("vs-start", tiltToo(startFromRoom));
+      // In a room, a sub-step steps back to the room: abandon the half-built
+      // invite, keep the guests. A camera never outlives the step that opened it.
+      const backToRoom = () => {
+        invalidateOperations(); stopScan(); dropPending(); stopCodeWait();
+        if (codeParked) { codeReopen = codeParked; codeParked = null; reopenRoom(transports.size < MAX_GUESTS); }
+        show("room"); renderRoom(); say("");
+      };
       on("vs-close", () => {
         const e = els();
-        const inRoom = transports.size > 0;
-        const onSubStep = !!(e.roomStep && e.roomStep.hidden);
-        if (inRoom && onSubStep) {
-          invalidateOperations();
-          stopScan();         // a camera never outlives the step that opened it
-          dropPending();      // abandon the half-built invite, keep the room
-          stopCodeWait();
-          if (codeParked) { codeReopen = codeParked; codeParked = null; reopenRoom(transports.size < MAX_GUESTS); }
-          show("room");
-          renderRoom();
-          say("");
-          return;
-        }
+        if (transports.size > 0 && e.roomStep && e.roomStep.hidden) { backToRoom(); return; }
         cancel();
+        // A friend's link that arrived while this room was up was deferred, and the
+        // status line said CLOSE opens it: do that now, so it is neither lost nor
+        // left in the URL to prefill JOIN on the next launch (#5739 row 2).
+        const waiting = deferredInvite; deferredInvite = null;
+        if (waiting && NetHandshake.inviteFromUrl() === waiting) openFromUrl();
       });
+      // BACK from a HOST / JOIN / code step with nobody connected: tear down
+      // only this attempt (cancel() minus the close) and return to the choice.
+      // Built beside CLOSE at wire time (the renderer-picker addBtn pattern);
+      // show() owns its visibility.
+      const close = $("vs-close");
+      if (!backBtn && close && close.parentNode) {
+        backBtn = document.createElement("button");
+        backBtn.type = "button"; backBtn.id = "vs-back"; backBtn.className = "bigbtn alt"; backBtn.textContent = "BACK";
+        backBtn.hidden = true;
+        close.parentNode.insertBefore(backBtn, close);
+      }
+      if (backBtn) backBtn.onclick = () => {
+        if (transports.size > 0) { backToRoom(); return; }
+        invalidateOperations(); stopScan(); stopCodeWait();
+        codeReopen = null; codeParked = null;
+        teardown(); role = null; resetSteps();
+        // An emptied room's INVITE ANOTHER hid the JOIN routes and left the
+        // room flag up; with nobody connected the pick is a fresh start, as open().
+        if (G.setNetRoom) G.setNetRoom(false);
+        if ($("vs-join")) $("vs-join").hidden = false;
+        if ($("vs-code-join")) $("vs-code-join").hidden = false;
+        show("pick"); say("");
+      };
       // A paste straight into the box runs too, so all four routes in behave
       // the same. Deferred a tick because the value is not in the textarea yet
       // while the paste event is being dispatched.
@@ -2216,6 +2306,7 @@ const NetLobby = (function () {
     // down by a link — the fragment waits for the player instead.
     let hashWired = false;
     let urlInvite = null;          // the code last opened from the URL
+    let deferredInvite = null;     // a link that arrived while in a room: CLOSE opens it
     function openFromUrl() {
       const code = NetHandshake.inviteFromUrl();
       if (!code) return false;
@@ -2230,9 +2321,10 @@ const NetLobby = (function () {
       const hosting = role === "host" && (!!transport || !!codeRoom);
       if (racing || session || transports.size > 0 || hosting) {
         Log.info("net", "lobby invite link ignored: " + (racing ? "racing" : "in a room"));
+        if (!racing && e.screen && !e.screen.hidden) { deferredInvite = code; say("A friend's invite link arrived — CLOSE this room to join it."); }
         return false;
       }
-      urlInvite = code;
+      urlInvite = code; deferredInvite = null;
       // open() can refuse (title sheet already up); do not join() into a hidden lobby.
       if (!open()) return false;
       join();
@@ -2249,6 +2341,7 @@ const NetLobby = (function () {
       watchForOpen: waitForOpen,
       roomChanged, setReady, startFromRoom, removeGuest,
       verifyCodes: () => Object.fromEntries(_verify),
+      confirmCode, unverifiedCodes: () => unverified().length,
       // Mint a further invite without disturbing the room. Host only, capped.
       inviteAnother,
       peerSeats,

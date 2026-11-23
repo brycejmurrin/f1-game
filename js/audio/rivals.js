@@ -63,10 +63,42 @@ var RivalAudio = (() => {
   function passByPan(lat, arc) {
     return PAN_MAX * Math.max(-1, Math.min(1, (+lat || 0) / Math.max(3, Math.abs(+arc || 0) + 3)));
   }
-  function aimParam(param, target, t, tau) {
+  // URL labs (?lab=a,b): read once at module eval. No store key.
+  // Absent/garbled → false. Used for the OFF switch below (noRivalEps).
+  function labOn(name) {
+    try {
+      if (typeof location === "undefined" || !location) return false;
+      const v = new URLSearchParams(location.search).get("lab");
+      return !!v && v.split(",").some((s) => s.trim() === name);
+    } catch (e) { return false; }
+  }
+  // Pass-by aim epsilon — ON BY DEFAULT (was the opt-in LAB rivalEps; perf hunt
+  // 7/9 measured 639 → 26 setTargetAtTime over 600 drift frames, ~9.2 → ~1.3
+  // calls/frame). Thresholds sit under the level / pitch / image JNDs below.
+  // Off switch for one release: ?lab=noRivalEps
+  // A slow drift re-aims only when the target moved past a per-param threshold.
+  // The cache holds the LAST ISSUED target, so drift accumulates until it
+  // crosses (error bounded by the threshold), and a large step issues at once.
+  // A target of exactly 0 always lands (a voice going silent).
+  const EPS_ON = !labOn("noRivalEps");
+  // gain: 3 % relative ≈ 0.26 dB, well under the ~1 dB level JND; the 5e-4 floor
+  // is -66 dBFS, inaudible under the engine (GAIN_PEAK 0.07 ≈ -23 dBFS).
+  const EPS_GAIN = { abs: 5e-4, rel: 0.03 };
+  // playbackRate: 0.5 % ≈ 8.6 cents. Pitch JND is ~5-10 cents for pure tones and
+  // far coarser for lowpassed noise; the whoosh has no tonal partials.
+  const EPS_RATE = { abs: 0, rel: 0.005 };
+  // pan: 0.01 of the ±1 equal-power pan ≈ 0.9° of image shift, under the ~1-2°
+  // minimum audible angle for frontal sources (coarser at the sides).
+  const EPS_PAN = { abs: 0.01, rel: 0 };
+  // lowpass cutoff: 1 % ≈ 17 cents of corner; the spectral-edge JND on
+  // broadband noise is ~3-5 %.
+  const EPS_CUT = { abs: 0, rel: 0.01 };
+  function aimParam(param, target, t, tau, eps) {
     if (!param || typeof param.setTargetAtTime !== "function") return;
     const prev = param._apexPassTgt;
     if (prev === target || (prev !== undefined && Math.abs(prev - target) < 1e-4)) return;
+    if (eps && prev !== undefined && target !== 0 &&
+        Math.abs(prev - target) < Math.max(eps.abs, eps.rel * Math.abs(target))) return;
     param.setTargetAtTime(target, t, tau);
     param._apexPassTgt = target;
   }
@@ -79,12 +111,16 @@ var RivalAudio = (() => {
     return buf;
   }
   const slots = Array.from({ length: SLOTS },
-    () => ({ lat: 0, arc: 0, wx: null, wz: null, rev: 0, approach: 0, relativeSpeed: 0, dist: 0, voice: "", slot: 0, car: null }));
+    () => ({ lat: 0, arc: 0, wx: null, wz: null, rev: 0, approach: 0, relativeSpeed: 0, dist: 0, voice: "", slot: 0, car: null, net: false, key: -1 }));
   const _wScratch = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
+  // Reused [x, z] — callers copy the numbers before the next collect()/emitFieldSfx.
+  const _xzOut = [0, 0];
   function worldXZ(track, s, x) {
     if (!track || s == null || typeof Tracks === "undefined" || !Tracks.sample) return null;
     Tracks.sample(track, s, _wScratch);
-    return [_wScratch.p[0] + _wScratch.r[0] * (x || 0), _wScratch.p[2] + _wScratch.r[2] * (x || 0)];
+    _xzOut[0] = _wScratch.p[0] + _wScratch.r[0] * (x || 0);
+    _xzOut[1] = _wScratch.p[2] + _wScratch.r[2] * (x || 0);
+    return _xzOut;
   }
   const out = [];
 
@@ -95,7 +131,7 @@ var RivalAudio = (() => {
   // order) and stash dest on the stub as _pendingAttach; we consume it below.
   const pending = (typeof RivalAudio !== "undefined" && RivalAudio._pendingAttach) || null;
   const voiced = new Array(SLOTS).fill(false);
-  let actx = null, voices = null, mix = 1;
+  let actx = null, voices = null, mix = 1, outDest = null, idled = false;
 
   function attach(ctx, bus) {
     if (!ctx) return;
@@ -103,6 +139,8 @@ var RivalAudio = (() => {
     if (voices) detach();
     actx = ctx;
     const dest = bus || ctx.destination;
+    outDest = dest;
+    idled = false;
     const noise = noiseBuffer(ctx);
     voices = [];
     for (let i = 0; i < SLOTS; i++) {
@@ -140,12 +178,12 @@ var RivalAudio = (() => {
       // A car holding station is not a continuous full-volume fly-by.
       const motion = 0.12 + 0.88 * Math.min(1, r.relativeSpeed / 45);
       v.level = passByGain(dist, r.arc) * motion;
-      aimParam(v.gain.gain, v.level * mix, t, 0.10);
-      aimParam(v.src.playbackRate, passByDoppler(r.approach), t, 0.08);
-      aimParam(v.pan.pan, passByPan(r.lat, r.arc), t, 0.06);
+      aimParam(v.gain.gain, v.level * mix, t, 0.10, EPS_ON ? EPS_GAIN : undefined);
+      aimParam(v.src.playbackRate, passByDoppler(r.approach), t, 0.08, EPS_ON ? EPS_RATE : undefined);
+      aimParam(v.pan.pan, passByPan(r.lat, r.arc), t, 0.06, EPS_ON ? EPS_PAN : undefined);
       const cut = Math.max(700, Math.min(2400,
         2400 * Math.pow(REF / Math.max(dist, REF), 0.35)));
-      aimParam(v.filt.frequency, cut, t, 0.12);
+      aimParam(v.filt.frequency, cut, t, 0.12, EPS_ON ? EPS_CUT : undefined);
       v.dist = dist;
       v.key = r.key;
     }
@@ -187,9 +225,30 @@ var RivalAudio = (() => {
       const v = voices[i];
       try { if (v.gain.gain) v.gain.gain.setTargetAtTime(0, t, 0.06); } catch (e) { /* gone */ }
       try { v.src.stop(t + 0.3); } catch (e) { /* already stopped */ }
+      // Disconnect now (CrowdAudio.detach shape). stop() alone leaves the
+      // panner wired into the bus until GC; a closed/suspended context may
+      // never fire onended, and a rebuild must not leave dead whoosh nodes
+      // rendering into the old focus bus.
+      for (const n of [v.src, v.filt, v.gain, v.pan]) {
+        try { if (n && n.disconnect) n.disconnect(); } catch (e) { /* closed ctx */ }
+      }
     }
     voices = null;
     actx = null;
+    outDest = null;
+    idled = false;
+  }
+
+  // Audio idle, on by default (#5053; engine.js owns the switch and the timing: LAB_AUDIO_IDLE).
+  // idle(true) unplugs each voice's panner from the bus once its fade is done;
+  // idle(false) plugs it back. Same nodes, same ctx: nothing is rebuilt.
+  function idle(on) {
+    if (!voices || !outDest || !!on === idled) return;
+    for (let i = 0; i < voices.length; i++) {
+      const p = voices[i].pan;
+      try { if (on) p.disconnect(); else p.connect(outDest); } catch (e) { /* torn down */ }
+    }
+    idled = !!on;
   }
 
   function passByState() {
@@ -224,8 +283,6 @@ var RivalAudio = (() => {
       if (!player || !track || !cars || player.s == null) { applyPassBy(out); return out; }
       const lapLen = track.total, half = lapLen * 0.5;
       let n = 0;
-      // Net ownership is read once per call, not per car (collect runs every frame).
-      const np = G.netPlay, npLive = !!(np && np.active && np.active() && np.owns);
       for (let ci = 0; ci < cars.length; ci++) {
         const c = cars[ci];
         const retired = typeof ReplayBuf !== "undefined" && ReplayBuf.audioRetired ? ReplayBuf.audioRetired(c) : c.retired;
@@ -240,13 +297,18 @@ var RivalAudio = (() => {
         let at = n < SLOTS ? n++ : SLOTS - 1;
         while (at > 0 && slots[at - 1].dist > dist) {
           const prev = slots[at - 1], cur = slots[at];
-          cur.lat = prev.lat; cur.arc = prev.arc; cur.wx = prev.wx; cur.wz = prev.wz; cur.rev = prev.rev;
-          cur.relativeSpeed = prev.relativeSpeed; cur.approach = prev.approach; cur.dist = prev.dist; cur.voice = prev.voice; cur.car = prev.car;
-          cur.net = prev.net; cur.key = prev.key;
+          cur.lat = prev.lat; cur.arc = prev.arc; cur.dist = prev.dist; cur.key = prev.key;
           at--;
         }
         const slot = slots[at];
-        slot.lat = lat; slot.arc = arc; slot.dist = dist; slot.car = c;
+        slot.lat = lat; slot.arc = arc; slot.dist = dist; slot.key = ci;
+      }
+      // Only the nearest four need world coordinates, engine data and ownership.
+      // Net ownership is read once per call, not per car (collect runs every frame).
+      const np = G.netPlay, npLive = !!(np && np.active && np.active() && np.owns);
+      for (let i = 0; i < n; i++) {
+        const slot = slots[i], c = cars[slot.key];
+        slot.car = c;
         if (c.px != null && c.pz != null) { slot.wx = c.px; slot.wz = c.pz; }
         else {
           const w = worldXZ(track, c.s, c.x);
@@ -263,12 +325,9 @@ var RivalAudio = (() => {
         // arc 0 stepped the pitch by ~300 cents across 0.2 m of arc as a car
         // came past. Lateral speed is not tracked (track-frame x is a position).
         slot.relativeSpeed = Math.abs((c.speed || 0) - (player.speed || 0));
-        slot.approach = -(arc / Math.max(dist, 1e-3)) * ((c.speed || 0) - (player.speed || 0));
+        slot.approach = -(slot.arc / Math.max(slot.dist, 1e-3)) * ((c.speed || 0) - (player.speed || 0));
         // Net-owned rivals get heavier pitch smoothing in engine.js; solo AI stays snappy.
         slot.net = npLive && !!np.owns(c);
-        // Index in G.cars (`cars` is G.cars) — read-only. Do not call G.wireId here: it caches c._wireId and
-        // episode-transients.test.mjs expects that field absent after reset().
-        slot.key = ci;
       }
       // Bind voices for the ENGINE note count only. Pass-by still aims all SLOTS;
       // cars past the engine cap keep a high slot index so setRivals ignores them
@@ -311,15 +370,17 @@ var RivalAudio = (() => {
       if (!player || typeof GameAudio === "undefined" || !GameAudio.fieldContact) return;
       const track = G.track, cars = G.cars;
       if (!track || !cars) return;
+      let top;
       for (let i = 0; i < cars.length; i++) {
         const c = cars[i];
         if (!c || c === player || c.isPlayer || c.retired) continue;
         const lock = +c.wheelLock || 0;
         const skid = +c.skidIntensity || 0;
         const inten = Math.max(lock, skid > 0.45 ? skid : 0);
+        if (!(inten > 0.35)) continue;
         // Pace-safe crawl gate: fraction of vTop, not a raw m/s literal (vstd-lint).
-        const top = (G.vTop && G.vTop()) || 1;
-        if (!(inten > 0.35) || Math.abs(+c.speed || 0) / top < 0.08) continue;
+        top ??= (G.vTop && G.vTop()) || 1;
+        if (Math.abs(+c.speed || 0) / top < 0.08) continue;
         let wx = c.px, wz = c.pz;
         if (wx == null || wz == null) {
           const w = worldXZ(track, c.s, c.x);
@@ -330,7 +391,7 @@ var RivalAudio = (() => {
       }
     }
 
-    return { collect, emitFieldSfx, attach, tick: collect, detach, silence, passByState, passByVoices };
+    return { collect, emitFieldSfx, attach, detach, silence, passByState, passByVoices };
   }
 
   /** Wet-spray wake: nearest rival ahead within 40 m → 0..1 (1 = on your gearbox).
@@ -355,5 +416,5 @@ var RivalAudio = (() => {
     try { if (pending.mix != null) setMix(pending.mix); attach(pending.ctx, pending.dest); } catch (e) { /* stub dest already gone */ }
   }
 
-  return { create, attach, detach, silence, setMix, sprayAhead, passByGain, passByDoppler, passByPan, passByVoices, SLOTS };
+  return { create, attach, detach, silence, setMix, sprayAhead, passByVoices, idle };
 })();

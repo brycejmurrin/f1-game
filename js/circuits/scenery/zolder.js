@@ -40,7 +40,7 @@
         guardrail, fence, tyreWall, marshalPost, cameraTower,
         broadcastCompound, billboard, sponsorHoarding,
         motorhome, groundPatch, ridge, mountain,
-        modelGroup, vadd, addBox, addCyl, addCone, addFrustum,
+        modelGroup, vadd, addBox, addCyl,
         MAT, indexSolid } = api;
 
       const { K } = api;            // the contract's frac -> node index (normalised for negatives)
@@ -476,7 +476,7 @@
       // Scrutineering / race-control shed at the back of the yard.
       // Gap 90: frame debt sits Sterrenwacht on this fold at gap 72 — a shed
       // at 66 shared volume with the clubhouse (building×modelGroup @ ~0.60).
-      building(K(sl(0.024)), 1, 90, 14, 5.4, 18, { wall: GREY });
+      building(K(sl(0.026)), 1, 90, 14, 5.4, 18, { wall: GREY });
       // Solid keep-out so deferred roadside firs and any late pine skip the shed.
       if (typeof indexSolid === "function")
         indexSolid(sl(0.010), sl(0.040), 1, 78, 28);

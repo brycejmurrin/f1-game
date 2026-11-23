@@ -1,5 +1,7 @@
 # Tooling consolidation — 2026-10-26
 
+Summary: Tooling consolidation from the 2026-10-26 system audit (lane S6, PR #3785): what changed, why, what was measured.
+
 System audit 2026-10-26 §7 ("Tooling and generated files") and "Remove or
 simplify", implemented on PR #3785 (lane S6). This note says what changed, why,
 and what was measured or read. It is the one home for these decisions; the tools'

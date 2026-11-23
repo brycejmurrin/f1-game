@@ -15,6 +15,9 @@ const TracksideCams = (function () {
   const FOV_SPAN = 16;         // metres of circuit the lens is framed to hold
   const _smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
   const _eye = [0, 0, 0], _tgt = [0, 0, 0];
+  // Pooled pose bag: vantage copies eye/tgt/fov synchronously. Callers that
+  // compare two pose() results must snapshot scalars (fov/index) first.
+  const _poseOut = { eye: _eye, tgt: _tgt, fov: FOV, index: 0, count: 0, n: 0, cut: false };
 
   function wrapS(track, s) {
     const L = track.total || 1;
@@ -127,8 +130,12 @@ const TracksideCams = (function () {
     let fov = 2 * Math.atan((FOV_SPAN * 0.5) / dist) * (180 / Math.PI);
     if (fov < FOV_FAR) fov = FOV_FAR;
     if (fov > FOV_NEAR) fov = FOV_NEAR;
-    return { eye: _eye, tgt: _tgt, fov: fov, index: idx, count: cams.length, n: c.n, cut: cut };
+    _poseOut.fov = fov; _poseOut.index = idx; _poseOut.count = cams.length; _poseOut.n = c.n; _poseOut.cut = cut;
+    return _poseOut;
   }
+
+  /** A restart / seek is a CUT: forget the held cam so hysteresis cannot keep the old one. */
+  function reset(track) { if (track) track._tsIdx = 0; }
 
   function status(track) {
     if (!track) return { count: 0, index: 0 };
@@ -136,5 +143,5 @@ const TracksideCams = (function () {
     return { count: cams.length, index: track._tsIdx | 0, n: cams.length ? cams[track._tsIdx | 0].n : 0 };
   }
 
-  return Object.freeze({ build, pick, pose, status, FENCE, HEIGHT, HYST_M, FOV });
+  return Object.freeze({ build, pick, pose, reset, status, FENCE, HEIGHT, HYST_M, FOV });
 })();

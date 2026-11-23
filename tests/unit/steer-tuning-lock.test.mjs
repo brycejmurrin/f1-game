@@ -9,19 +9,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/input/steer-tuning.js"), "utf8");
 
-/** Same linear map as lockFromSlider in steer-tuning.js. */
-function lockFromSlider(v) {
-  return 0.18 + (0.435 - 0.18) * (v - 1) / 9;
-}
-
-test("lockFromSlider source: notch 7 is 0.35 rad (NORMAL / STANDARD steerLock)", () => {
-  assert.match(SRC, /function lockFromSlider\(v\)\s*\{\s*return 0\.18 \+ \(0\.435 - 0\.18\) \* \(v - 1\) \/ 9; \}/);
-  assert.ok(Math.abs(lockFromSlider(7) - 0.35) < 1e-9, `notch 7 = ${lockFromSlider(7)} rad`);
-  assert.ok(Math.abs(lockFromSlider(5) - 0.293333) < 0.001, "notch 5 ~0.293");
-  assert.ok(Math.abs(lockFromSlider(10) - 0.435) < 1e-9, "notch 10 = 0.435");
-});
-
-/** The REAL touchRangeFromSlider, cut out of the source (brace-balanced) and evaluated. */
+/** The REAL slider maps, cut out of the source (brace-balanced) and evaluated. */
 function extractFn(name) {
   const at = SRC.indexOf(`function ${name}(`);
   assert.ok(at >= 0, `${name} not found in steer-tuning.js`);
@@ -33,6 +21,14 @@ function extractFn(name) {
   return new Function(`${SRC.slice(at, i + 1)}; return ${name};`)();
 }
 
+test("lockFromSlider (the real one): notch 7 is 0.35 rad (NORMAL / STANDARD steerLock)", () => {
+  const lockFromSlider = extractFn("lockFromSlider");
+  assert.ok(Math.abs(lockFromSlider(7) - 0.35) < 1e-9, `notch 7 = ${lockFromSlider(7)} rad`);
+  assert.ok(Math.abs(lockFromSlider(5) - 0.293333) < 0.001, "notch 5 ~0.293");
+  assert.ok(Math.abs(lockFromSlider(1) - 0.18) < 1e-9, "notch 1 = 0.18");
+  assert.ok(Math.abs(lockFromSlider(10) - 0.435) < 1e-9, "notch 10 = 0.435");
+});
+
 test("touchRangeFromSlider: notch 5 is input.js TOUCH_RANGE_FRAC 0.12, ends 0.24 / 0.06, monotonic", () => {
   const f = extractFn("touchRangeFromSlider");
   const inputSrc = fs.readFileSync(path.join(ROOT, "js/input/input.js"), "utf8");
@@ -42,4 +38,17 @@ test("touchRangeFromSlider: notch 5 is input.js TOUCH_RANGE_FRAC 0.12, ends 0.24
   assert.ok(Math.abs(f(1) - 0.24) < 1e-12, `notch 1 = ${f(1)}`);
   assert.ok(Math.abs(f(10) - 0.06) < 1e-12, `notch 10 = ${f(10)}`);
   for (let v = 1; v < 10; v++) assert.ok(f(v + 1) < f(v), `not decreasing at notch ${v}: ${f(v)} -> ${f(v + 1)}`);
+});
+
+// #5900: apex26.tiltDeg reached the ADVANCED fold's innerHTML as stored text (clamp passes a string
+// through). The fold painter escapes its labels; a stored string is coerced to a number first.
+test("the fold summary escapes its labels, so a stored tiltDeg string never becomes markup", async () => {
+  const vm = await import("node:vm");
+  const ctx = vm.createContext({ WeakMap, String });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/dom.js"), "utf8") + ";this.Dom=Dom;", ctx,
+    { filename: path.join(ROOT, "js/ui/dom.js") });
+  const target = { innerHTML: "" };
+  ctx.Dom.paintFold(target, [["k", "FEEL"], ["val", "TILT <img src=x onerror=alert(1)>"]]);
+  assert.equal(target.innerHTML, '<span data-fold="k">FEEL</span><span data-fold="sep"> · </span>'
+    + '<span data-fold="val">TILT &#60;img src=x onerror=alert(1)&#62;</span>');
 });

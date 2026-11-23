@@ -18,7 +18,7 @@ function load() {
                    "js/car/livery-design.js", "js/car/livery-graphics.js", "js/car/livery-stations.js", "js/car/crest-draw.js",
                    "js/car/liverytex.js", "js/car/helmets.js", "js/car/car-geometry.js", "js/car/car-wheels.js",
                    "js/car/car-material-shade.js", "js/car/car-materials.js", "js/car/car-shade.js",
-                   "js/car/car-body-geom.js", "js/car/car3d.js", "js/car/car-mesh.js"])
+                   "js/car/car-body-geom.js", "js/car/car3d.js", "js/car/cockpit-rig.js", "js/car/car-mesh.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: path.join(ROOT, f) });
   const grab = (n) => vm.runInContext(n, ctx);
   return { S: grab("LiveryStations"), T: grab("LiveryTex"), Car3D: grab("Car3D"), CarMesh: grab("CarMesh"),
@@ -163,6 +163,9 @@ test("driver code comes from the race number, else the team short name", () => {
   assert.equal(M.S.driverCode("mercedes", 63), "RUS");
   assert.equal(M.S.driverCode("ferrari", 44), "HAM");
   assert.ok(/^[A-Z]{3}$/.test(M.S.driverCode("ferrari", 999)), "falls back to a 3-letter short name");
+  // resolveRaceNumber returns numberOverride as-is; a string must still resolve.
+  assert.equal(M.S.driverCode("mercedes", "63"), "RUS");
+  assert.equal(M.T.driverCode("ferrari", "44"), "HAM");
 });
 
 test("each station has a livery ON / OFF, and OFF paints nothing in its region", () => {

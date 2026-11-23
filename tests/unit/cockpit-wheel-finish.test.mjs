@@ -25,6 +25,7 @@ function loadMesh() {
   vm.createContext(ctx);
   for (const f of ["js/core/mat4.js", "js/physics/consts.js"]) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   vm.runInContext(read("js/car/car-materials.js") + "\n;this.CarMaterials = CarMaterials;", ctx, { filename: absSrc("js/car/car-materials.js") });
+  vm.runInContext(read("js/car/cockpit-rig.js"), ctx, { filename: absSrc("js/car/cockpit-rig.js") });
   vm.runInContext(read("js/car/car-mesh.js") + "\n;this.CarMesh = CarMesh;", ctx, { filename: absSrc("js/car/car-mesh.js") });
   ctx.CarMesh.init({ createMesh(d) { const m = { d }; made.push(m); return m; }, freeMesh(m) { freed.push(m); } });
   return { CarMesh: ctx.CarMesh, made, freed, ctx };
@@ -108,6 +109,27 @@ test("the shipped wheel is Bryce's pick A: lacquered carbon, black rubber grips,
   const alloy = d.mat.findIndex((m) => m === 29);
   assert.deepEqual(Array.from(d.col.slice(alloy * 3, alloy * 3 + 3), (v) => +v.toFixed(2)), [0.62, 0.63, 0.66], "alloy reads bright, not the old dark fasteners");
   assert.notEqual(CarMesh.cockpitWheelOpts({ roughness: 0.88 }).roughness, 0.88, "drawn with the finish opts, not the rig's card");
+});
+
+// _rigBar takes the optional surface id _rigRounded / _rigTube take: the endurance wheel's two lower carbon
+// braces (cockpit-rig.js _wheelRimF1, ..., CARB, 21) are born carbon (21), as its carbon plates are, so a
+// finish remaps them as structure instead of leaving them generic panel (26).
+test("the endurance wheel's lower carbon braces are carbon structure, not panel", () => {
+  const { CarMesh } = loadMesh();
+  const braces = (finish) => {
+    CarMesh.wheelFinish(finish);
+    const d = CarMesh.getCockpitWheel(LIV, "endurance").d, got = [];
+    for (let v = 0; v < d.mat.length; v++) {
+      const x = Math.abs(d.pos[v * 3]), y = d.pos[v * 3 + 1];
+      if (x > 0.07 && x < 0.13 && y < -0.08 && y > -0.13 && Math.abs(d.col[v * 3] - 0.09) < 1e-6) got.push(d.mat[v]);
+    }
+    return got;
+  };
+  const stock = braces("stock");
+  assert.ok(stock.length >= 48, "two braces, 24 vertices each (plus any carbon plate edge in the box)");
+  assert.ok(stock.every((m) => m === 21), "born carbon (21)");
+  assert.ok(braces("suede").every((m) => m === CarMesh.WHEEL_FINISHES.suede.structure), "a finish remaps them as structure");
+  CarMesh.wheelFinish(CarMesh.WHEEL_DEFAULT);
 });
 
 test("every wheel finish is a surface remap of the same geometry; stock is today's wheel", () => {

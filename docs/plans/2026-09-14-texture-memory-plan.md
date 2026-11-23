@@ -79,7 +79,7 @@ three's retained counts on the TLX leg only.
 - Modify: `js/render/glx/glx.js` (record dimensions + format per `createTexture`
   / `createTextureArray`, freed on `deleteTexture`)
 - Modify: `js/agent/agentview.js` (expose `texCensus()`)
-- Modify: `docs/DEBUG-HOOKS.md`, `docs/AGENT-WORLD-API.md`
+- Modify: `docs/DEBUG-HOOKS.md`, `docs/DEBUG-HOOKS.md`
 - Add: a new texture-census suite under `tests/unit/` (this plan creates it;
   it is deliberately not named as a live path until it exists)
 

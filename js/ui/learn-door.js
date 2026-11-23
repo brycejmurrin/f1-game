@@ -7,26 +7,12 @@ const LearnDoor = (function () {
     { id: "vsc", title: "VSC Pit Strategy", description: "Pit timing, tyre life & track position" },
   ];
 
-  function create(G) {
-    const menu = G.$("menu-buttons");
-    if (!menu) return;
+  let dialog;
+  let frame;
 
-    const door = document.createElement("button");
-    door.className = "bigbtn alt minibtn";
-    door.textContent = "LEARN";
-    door.id = "mb-learn";
-    door.type = "button";
-    door.setAttribute("aria-haspopup", "dialog");
-    menu.appendChild(door);
-
-    let dialog;
-    let frame;
-    door.addEventListener("click", () => {
-      if (G.state !== "menu" || UiLayers.top()?.id !== "overlay") return;
-      if (!dialog) build();
-      if (G.soundOn) GameAudio.uiSelect();
-      dialog.hidden = false;
-    });
+  function open(door) {
+    if (!dialog) build();
+    dialog.hidden = false;
 
     function build() {
       dialog = Dom.el("dialog", "screen dim");
@@ -65,7 +51,6 @@ const LearnDoor = (function () {
       }
       frame = document.createElement("iframe");
       frame.id = "learn-lab";
-      frame.title = "Aero Lab";
       frame.hidden = true;
       body.append(index, frame);
 
@@ -101,6 +86,6 @@ const LearnDoor = (function () {
     }
   }
 
-  return { create };
+  return { open };
 })();
 Object.freeze(LearnDoor);

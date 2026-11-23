@@ -1,5 +1,8 @@
 /* Apex 26 — ZOLDER circuit definition (data only). Retired circuit (`classic: true`).
-   Belgian GP 1973-1984. Pine heath in Limburg; Gilles Villeneuve was killed here in qualifying in 1982.
+   Belgian GP 1973, 1975-1982 and 1984 (not 1974 or 1983). Pine heath in Limburg; Gilles Villeneuve was killed here in qualifying in 1982.
+   LAYOUT: this trace is the MODERN (2002-present, ~4.01 km) circuit with its
+   chicanes, not the ~4.26 km layout the Belgian GP used 1975-1984, which no
+   longer exists on the ground (docs/tracks/zolder.md, geometry caveat).
 
    Centreline: OpenStreetMap (ODbL-1.0), stitched by tools/track/stitch-osm-ring.mjs
    and projected by tools/track/import-circuit-path.mjs. The bacinger/f1-circuits
@@ -13,6 +16,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "zolder",
+    revision: 2,
     classic: true,
     // Projected trace winding is CCW for a clockwise circuit — the x axis is
     // negated by the projection, so it mirrors handedness. Calibrated against
@@ -30,6 +34,8 @@
     // sceneryStartFrac keeps the dressing on the v0 origin it was authored
     // against, so props, landmarks and corner boards stay on their real corners
     // while only the line and grid move.
+    // Do NOT move it past the left-right chicane after the 580 m straight: that
+    // chicane is T1, not the final one (verdict 2026-11-11, docs/tracks/zolder.md).
     startFrac: 0.1226,
     sceneryStartFrac: 0.0000,
     name: "ZOLDER",
@@ -69,6 +75,8 @@
     // fall back to thirds.
     sectors: [0.36, 0.613],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
     turns: [0.0240, 0.0376, 0.1911, 0.2771, 0.4105, 0.5591, 0.7066, 0.7230, 0.7675, 0.8790],
+    // Flemish DHMV II lidar transects across 8 m of the modern asphalt.
+    bankZones: [{ turn: 4, angleDeg: 2.5, widthM: 160 }, { turn: 9, angleDeg: 3.8, widthM: 145 }],
     furniture: { tree: "fir", fol: [0.15, 0.31, 0.19], lamp: "none" },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
     standSet: ["concrete", "steel", "darkSteel"],

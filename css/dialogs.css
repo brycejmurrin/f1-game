@@ -5,7 +5,9 @@
    --fit-at (where set) inherits onto the inner .sheet so classifyFit can
    shrink the sheet at 200% UI size. Landscape is a viewport fact. */
 #pausemenu   { --sheet-w: 420px; --fit-at: 260px; }
-#pmsettings  { --sheet-w: 760px; }
+/* Cap lives in css/settings.css (1020, zoom-safe). Keep a fallback here for
+   the brief window before settings.css applies. */
+#pmsettings  { --sheet-w: 1020px; }
 /* The HUD SIZE sample: a picture of a hud-box that zooms by the same RAW
    --hud-scale the dock takes, so the slider's drag visibly resizes it —
    every real cluster is hidden while this .dim sheet is open (css/hud.css's
@@ -54,6 +56,13 @@
 }
 #results     { --sheet-w: 760px; --fit-at: 300px; }
 #standings   { --sheet-w: 760px; --fit-at: 300px; }
+@media (min-width: 1680px) {
+  #results, #standings { --sheet-w: min(var(--menu-fit-sheet), calc(100vw - 80px)); }
+  #pausemenu { --sheet-w: min(var(--menu-fit-pause), calc(100vw - 48px)); }
+}
+@media (min-width: 2400px) {
+  #results, #standings { --sheet-w: min(var(--menu-fit-sheet-wide), calc(100vw - 96px)); }
+}
 /* Help uses a term rail beside a readable description column. At the old 700px
    cap long explanations wrapped heavily; 1000px uses available desktop width
    while viewport fitting still protects constrained/high-scale sheets. */
@@ -183,7 +192,6 @@ body:has(> #howtoplay:not([hidden])) #pmsettings {
 }
 #pm-quit {
   color: color-mix(in oklab, var(--red) 62%, #fff);
-  margin-top: calc(var(--gap) * 0.5);
   border-top-color: var(--plate-line);
   position: relative;
 }
@@ -243,21 +251,24 @@ body:has(> #howtoplay:not([hidden])) #pmsettings {
    iPhone (734x343, layout-audit 2026-10-05) RESUME painted 39 tall and
    RESTART / SETTINGS / QUIT 36 — under the 52 touch floor. The body already
    scrolls, so the taller doors scroll; RESUME stays the first button. */
-@media (orientation: landscape) and (max-height: 500px) {
-  #pausemenu .sheet-body.stack > button:not(.as-tbtn) {
-    min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
-    padding-block: 3px;
-  }
-  #pausemenu #pm-resume { min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale))); }
-  #pm-race-context { padding-block: 1px; }
-  #pm-race-context :is(span, small) { display: none; }
-  /* The RACE TOOLS tray's compact gap/floors live in css/experience.css, after
-     the tray's own (overlays-layer) base rules: written here they lost to them. */
-  #pm-now-card, #pm-build { display: none; }
-  #pausemenu .sheet-body {
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
+/* Keyed on the body tier (compact + wide in own px, the phone card's own key in
+   css/overlays.css) rather than the raw `(orientation: landscape) and
+   (max-height: 500px)`: that band was zoom-blind (UI contract 2026-11-06 §7
+   gap 24, handed to #5153 PR D). */
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet-body.stack > button:not(.as-tbtn) {
+  min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  padding-block: 3px;
+}
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-resume { min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale))); }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-race-context { padding-block: 1px; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-race-context :is(span, small) { display: none; }
+/* The RACE TOOLS tray's compact gap/floors live in css/experience.css, after
+   the tray's own (overlays-layer) base rules: written here they lost to them. */
+/* #pm-now-card is NOT hidden here (#5543): the phone card gives it one line, css/overlays.css. */
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-build { display: none; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 /* Short phone landscape (≤400px tall — 844×390 / 852×344): the sheet was
    nearly full-bleed and the RACE TOOLS tray's 3-col last row left a hole
@@ -289,6 +300,16 @@ body:has(> #howtoplay:not([hidden])) #pmsettings {
     min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
   }
 }
+/* NO THUMB-REACH BAR (#5200). The reach round (2026-10-30) pinned RESUME to
+   the 420 card's bottom edge with position: absolute against the .sheet. The
+   scrolling body's edge-fade mask (css/components.css) clips every descendant
+   it paints, so the moment the list overflowed the bar was masked away: on a
+   landscape iPhone at UI SIZE 51 % the card had NO RESUME at either scroll
+   position, a scrolling list and 50 px of reserved, empty sheet (Bryce,
+   build 25617). RESUME is never out of flow again: it is the first door of
+   the grid in every card, and a short landscape window gets the phone card
+   of css/overlays.css at every UI SIZE (body[data-pause-short],
+   js/ui/pause-opts.js), which fits without a scroller. */
 /* Opaque enough that leftover HUD cannot read through the card. Color is
    the original dim wash, not carnival inks.
    --pause-wash / --pause-scrim are the PAUSE MENU › BACKGROUND setting
@@ -455,12 +476,22 @@ body:has(> #howtoplay:not([hidden])) #pmsettings {
    own cssText). Fixed above the bottom safe edge, never wider than the safe
    viewport, and it WRAPS: four buttons, a scrub bar and the time label are
    ~600px in one row, which clipped EXIT and the label on a 390px portrait
-   phone. Plain tokens so the LIGHT theme and the text size follow. */
+   phone. Plain tokens so the LIGHT theme and the text size follow.
+   CENTRED BY MARGINS, NOT left:50% + translate: a fixed box at left:50% has
+   only half the viewport to shrink-fit into, so at 844x390 (compatibility viewport)
+   it wrapped to 422px wide and 5 rows, 246px = 63% of the height (#5694 I1).
+   UNZOOMED: the dock is a <body> child, outside the `zoom: var(--ui-scale)`
+   sheets, so the inherited `52px / --ui-scale` paint tokens over-sized it
+   (74px buttons at UI SIZE 70). Re-resolve them at scale 1 here. */
 #pm-replay-dock {
+  --tap-paint: max(24px, var(--tap-paint-at));
+  --tap: max(44px, var(--tap-paint-at));
   position: fixed;
-  left: 50%;
+  left: calc(var(--safe-l) + var(--gap));
+  right: calc(var(--safe-r) + var(--gap));
+  width: fit-content;
+  margin-inline: auto;
   bottom: calc(var(--safe-b) + var(--gap));
-  transform: translateX(-50%);
   z-index: 40;
   box-sizing: border-box;
   display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
@@ -478,6 +509,13 @@ body:has(> #howtoplay:not([hidden])) #pmsettings {
 #pm-replay-dock button { min-height: var(--tap-paint); padding-inline: var(--gap); }
 #pm-replay-scrub { flex: 1 1 12rem; width: 12rem; min-width: 0; max-width: 100%; }
 #pm-replay-label { min-width: 4ch; text-align: end; font-variant-numeric: tabular-nums; }
+/* A THUMB SCRUBS THE REPLAY (#5694 I1, after .watch-transport [data-wt="seek"]):
+   on touch or a short window the slider takes its own full-width row at the
+   tap floor, first, and the buttons below drop to a tighter inline pad. */
+@media (pointer: coarse), (max-height: 520px) {
+  #pm-replay-scrub { order: -1; flex: 1 0 100%; width: 100%; height: max(32px, var(--tap)); margin: 0; accent-color: var(--red); }
+  #pm-replay-dock button { padding-inline: calc(var(--gap) * 0.5); }
+}
 } /* @layer components */
 
 /* ---- VS Friend chrome (@layer overlays on purpose) ----
@@ -514,7 +552,7 @@ body:has(> #howtoplay:not([hidden])) #pmsettings {
     letter-spacing: var(--ls-1);
     box-shadow: none;
   }
-  @media (hover: hover) {
+  @media (hover: hover) and (pointer: fine) {
     #vsfriend :is(#vs-code-host, #vs-code-share, #vs-code-copy):hover,
     #vsfriend :is(#vs-share-invite, #vs-copy-invite, #vs-share-answer, #vs-copy-answer):hover,
     #vsfriend :is(#vs-scan-answer, #vs-scan-invite):hover {

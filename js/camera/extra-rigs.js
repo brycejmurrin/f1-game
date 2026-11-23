@@ -34,7 +34,7 @@ const ExtraRigs = (function () {
     return v < 0 ? v + L : v;
   }
 
-  const _rvRows = [], _rvOut = [];
+  const _rvRows = [], _rvOut = [], _fights = [];
 
   /** Closest battle partner for the player, reusing Broadcast.battles when present. The 20 m/s crawl
    *  floor rides _vScale (vTop()/VMAX, latched by tickPitAuto(G) each frame before game.js calls this)
@@ -79,21 +79,34 @@ const ExtraRigs = (function () {
     return best;
   }
 
+  // Same contract as Broadcast.battles: reuse fight bags; the list never escapes pickRival.
   function localBattles(cars, vScale) {
-    const out = [];
+    let n = 0;
+    const floor = 20 * (vScale > 0 ? vScale : 1);
     for (let i = 1; i < cars.length; i++) {
       const a = cars[i - 1], b = cars[i];
-      const v = Math.max(b.speed || 0, 20 * (vScale > 0 ? vScale : 1));
+      const v = Math.max(b.speed || 0, floor);
       const g = (a.prog - b.prog) / v;
-      if (g >= 0 && g < BATTLE_S) out.push({ key: b.key, ahead: a.key, gapS: g, score: g + i * 0.08 });
+      if (g < 0 || g >= BATTLE_S) continue;
+      let f = _fights[n];
+      if (!f) { f = { key: null, ahead: null, gapS: 0, score: 0 }; _fights[n] = f; }
+      f.key = b.key; f.ahead = a.key; f.gapS = g; f.score = g + i * 0.08;
+      n++;
     }
-    return out.sort((x, y) => x.score - y.score);
+    _fights.length = n;
+    _fights.sort((x, y) => x.score - y.score);
+    return _fights;
   }
 
+  // Pooled: rivalLock calls this every rendered RIVAL frame; the fields are
+  // read synchronously into locals, so a shared bag is safe (same contract as
+  // pickRival's running rows).
+  const _carSamp = { s: 0, x: 0, p: null, t: null, r: null, hw: 0 };
   function carSample(track, car, out) {
     const s = wrapS(track, car.s || 0), x = car.x || 0;
     Tracks.sample(track, s, out);
-    return { s, x, p: out.p, t: out.t, r: out.r, hw: out.hw };
+    _carSamp.s = s; _carSamp.x = x; _carSamp.p = out.p; _carSamp.t = out.t; _carSamp.r = out.r; _carSamp.hw = out.hw;
+    return _carSamp;
   }
 
   /** Frame the car ahead or behind in a battle — both cars stay in shot. */
@@ -129,7 +142,18 @@ const ExtraRigs = (function () {
   }
 
   /** Pit-wall / pit-lane camera — sits on the pit side looking across the car. */
+  /** Walk the eye (x, z on _smpA) in from `lat` toward `inner` until it is clear of every solid prop. */
+  function resite(track, lat, inner, eye) {
+    const n = (typeof FlybySeq !== "undefined" && FlybySeq.insideProp) ? Math.ceil(Math.abs(lat - inner) / PIT_SCAN) : 0;
+    for (let i = 0; ; i++) {
+      const l = n ? lat + (inner - lat) * i / n : lat;
+      eye[0] = _smpA.p[0] + _smpA.r[0] * l;
+      eye[2] = _smpA.p[2] + _smpA.r[2] * l;
+      if (i >= n || !FlybySeq.insideProp(track, eye, PIT_CLEAR)) break;
+    }
+  }
   function pitWall(track, s, x, spd, extra, eye, tgt) {
+    if (_pe) return peFrame(track, s, x, extra, eye, tgt);
     const spN = clamp(spd / 72, 0, 1);
     const side = (track.pit && track.pit.side) || (track.def && track.def.pitZone && track.def.pitZone.side) || 1;
     Tracks.sample(track, wrapS(track, s - PIT_BACK), _smpA);
@@ -148,14 +172,7 @@ const ExtraRigs = (function () {
     // kerb until it is clear of every solid prop (FlybySeq's set); a lift, as
     // CamAvoid does for the crane modes, threw it 25–250 m up a street
     // circuit's towers. The clear edge moves with s, so the eye does too.
-    const inner = side * (hw + PIT_EYE_IN);
-    const n = (typeof FlybySeq !== "undefined" && FlybySeq.insideProp) ? Math.ceil(Math.abs(lat - inner) / PIT_SCAN) : 0;
-    for (let i = 0; ; i++) {
-      const l = n ? lat + (inner - lat) * i / n : lat;
-      eye[0] = _smpA.p[0] + _smpA.r[0] * l;
-      eye[2] = _smpA.p[2] + _smpA.r[2] * l;
-      if (i >= n || !FlybySeq.insideProp(track, eye, PIT_CLEAR)) break;
-    }
+    resite(track, lat, side * (hw + PIT_EYE_IN), eye);
     Tracks.sample(track, wrapS(track, s), _smpB);
     const cx = _smpB.p[0] + _smpB.r[0] * x;
     const cz = _smpB.p[2] + _smpB.r[2] * x;
@@ -246,7 +263,7 @@ const ExtraRigs = (function () {
   }
 
   /** A new session: drop the pit auto-cut bookkeeping (quitting mid auto-cut left it armed). */
-  function resetAuto() { _autoOn = false; _autoPrev = -1; _wasInPit = false; }
+  function resetAuto() { _autoOn = false; _autoPrev = -1; _wasInPit = false; peEnd(_peG); _peDone = false; }
 
   function inPit(c) {
     return !!(c && c.pitState && c.pitState !== "none");
@@ -276,6 +293,7 @@ const ExtraRigs = (function () {
     const modes = CamModes.CAM_MODES;
     if (modes !== _pitModes) { _pitModes = modes; _pitIdx = modes.findIndex(_isPitwall); }
     const pitIdx = _pitIdx;
+    if (!enabled) tickPitEntry(G, store);
     if (pitIdx < 0) { _wasInPit = nowIn; return null; }
     if (!enabled) {
       if (_autoOn) { _autoOn = false; _autoPrev = -1; }
@@ -312,6 +330,61 @@ const ExtraRigs = (function () {
     return null;
   }
 
+  /* PIT-ENTRY SHOT (#4745 D): on a called stop's entry road (sA→sIn), up to PE_S from a fixed eye at the entry line
+   * that follows the car. The lane is driven, so it takes nothing; a tap, hard brake, steer or CAM ends it. Reads the
+   * car, never writes it. Off: PIT ENTRY SHOT, reduced motion, automation, the PIT WALL opt-in. */
+  const PE_S = 2.2, PE_BACK = 6, PE_OWNER = "pit-entry";
+  const _peEye = [0, 0, 0];
+  let _pe = null, _peG = null, _peDone = false, _peTap = false, _peHooked = false;
+  function peQuiet(store) {
+    const mv = store && store.get("motion", null);
+    if (mv === "reduce" || (store && store.get("pitEntryShot", true) === false)) return true;
+    if (mv !== "off" && typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) return true;
+    return typeof LoadingScreen !== "undefined" && !!LoadingScreen.isAutomation && !!LoadingScreen.isAutomation();
+  }
+  function peEnd(G) {
+    if (!_pe || !G) return;
+    _pe = null;
+    if (typeof G.setCamMode === "function") G.setCamMode(G.camMode, { persist: false, owner: PE_OWNER, release: true });
+  }
+  function tickPitEntry(G, store) {
+    const c = G.player, track = G.track, p = track && track.pit;
+    const onEntry = !!(p && !p.painted && c.pitArmed && G.state === "race" && !G.paused && typeof PitGeom !== "undefined" &&
+      PitGeom.inSpan(p.sA, p.sIn, c.s, track.total));
+    if (!onEntry) { peEnd(G); _peDone = false; return; }
+    if (_pe) {
+      const now = performance.now();
+      if (now - _pe.at > PE_S * 1000 || _peTap || G.camMode !== _pitIdx || (c.brakeDemand || 0) > 0.85 ||
+        Math.abs((c.steerCommand || 0) - _pe.steer) > 0.5) peEnd(G);
+      return;
+    }
+    if (_peDone || _pitIdx < 0 || typeof G.setCamMode !== "function" || peQuiet(store)) return;
+    _peDone = true;
+    if (CamModes.CAM_MODES[G.camMode]?.id === "helmet") return;
+    if (!_peHooked && typeof addEventListener === "function") {
+      _peHooked = true;
+      addEventListener("pointerdown", (e) => { if (_pe && e.target && e.target.tagName === "CANVAS") _peTap = true; }, true);
+    }
+    Tracks.sample(track, wrapS(track, p.sA - PE_BACK), _smpA);
+    const side = p.side || 1, hw = _smpA.hw || 7;
+    resite(track, side * (hw + PIT_EYE_OUT), side * (hw + PIT_EYE_IN), _peEye);
+    _peEye[1] = _smpA.p[1] + PIT_EYE_UP;
+    _peTap = false;
+    _pe = { at: performance.now(), steer: c.steerCommand || 0 }; _peG = G;
+    G.setCamMode(_pitIdx, { persist: false, owner: PE_OWNER, priority: 5, transient: true });
+  }
+  function peFrame(track, s, x, extra, eye, tgt) {
+    eye[0] = _peEye[0]; eye[1] = _peEye[1]; eye[2] = _peEye[2];
+    const cp = extra && extra.carPos;
+    Tracks.sample(track, wrapS(track, s), _smpB);
+    tgt[0] = cp ? cp[0] : _smpB.p[0] + _smpB.r[0] * x;
+    tgt[1] = _smpB.p[1] + 0.85 + ((extra && extra.bankDy) || 0);
+    tgt[2] = cp ? cp[1] : _smpB.p[2] + _smpB.r[2] * x;
+    const d = Math.hypot(tgt[0] - eye[0], tgt[1] - eye[1], tgt[2] - eye[2]) || 1;
+    return clamp(2 * Math.atan(12 / d) * 180 / Math.PI, 18, 52);
+  }
+  const pitEntryShot = () => !!_pe;
+
   function pitCamAuto(store, v) {
     const st = store || (typeof GameStore !== "undefined" ? GameStore.store : null);
     if (!st) return false;
@@ -321,7 +394,7 @@ const ExtraRigs = (function () {
   }
 
   return {
-    solve, reset, resetAuto, pickRival, tickPitAuto, pitCamAuto, localBattles,
+    solve, reset, resetAuto, pickRival, tickPitAuto, pitCamAuto, pitEntryShot, localBattles,
     BATTLE_S, FALLBACK_S, DRONE_BACK, DRONE_UP,
   };
 })();

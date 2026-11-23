@@ -46,12 +46,17 @@ function carPoseRig() {
   const render = symbolSource("function render(dt)");
   const start = render.indexOf("for (const c of cars)", render.indexOf("const _fxCullR2"));
   const end = render.indexOf("let bankC;", start);
+  const headingStart = render.indexOf("let _camFwdX");
+  const headingEnd = render.indexOf("const paint = carPaintMat", headingStart);
+  assert.ok(headingStart >= 0 && headingEnd > headingStart && headingEnd < start, "camera heading is prepared before the car loop");
+  const heading = render.slice(headingStart, headingEnd);
   assert.ok(start > 0 && end > start, "render car-pose boundary exists");
   const projected = [], prepared = [];
   const ctx = vm.createContext({
     Math, cars: [], player: { s: 100 }, track: { total: 5000 },
     state: "race", dbgCam: null, renderAlpha: 1,
-    camEye: [0, 1, 0], _camFwdX: 0, _camFwdZ: 1,
+    camEye: [0, 1, 0], camTgt: [0, 1, 10],
+    _mProj: { 0: 1, 5: 1.5, 8: 0, 9: 0 },
     _plOk: false, _plCS: 100, _plCX: 0,
     _rp: {}, _pa: {},
     lerpS: (prev, cur, alpha) => prev === undefined ? cur : prev + (cur - prev) * alpha,
@@ -59,8 +64,8 @@ function carPoseRig() {
     loadingScreen: { active: () => false }, photoStudio: null,
     prepared,
   });
-  vm.runInContext(symbolSource("function renderPosOf(c)") + "\n" + symbolSource("function playerAnchor(c)"), ctx, { filename: absSrc("js/game.js") });
-  const run = vm.runInContext(`(function () { ${render.slice(start, end)}
+  vm.runInContext([symbolSource("function renderPosOf(c)"), symbolSource("function outsideFieldRange(c, dx, dz)"), symbolSource("function playerAnchor(c)")].join("\n"), ctx, { filename: absSrc("js/game.js") });
+  const run = vm.runInContext(`(function () { ${heading} ${render.slice(start, end)}
     prepared.push({ car: c, x: rp.x, z: rp.z, world: rp.world, cS, cX }); } })`, ctx, { filename: absSrc("js/game.js") });
   return { ctx, projected, prepared, run };
 }
@@ -90,18 +95,19 @@ test("behind-eye world rivals skip road projection, including interpolated and r
 
 test("the early car gate follows the current camera and preserves player, menu and distance guards", () => {
   const r = carPoseRig();
-  r.ctx.camEye = [10, 2, 20]; r.ctx._camFwdX = -1; r.ctx._camFwdZ = 0;
+  r.ctx.camEye = [10, 2, 20]; r.ctx.camTgt = [0, 2, 20];
   r.ctx.cars = [
     { id: "behind-x", s: 100, px: 17, pz: 20 },
     { id: "boundary-x", s: 100, px: 16, pz: 20 },
     { id: "ahead-x", s: 100, px: 0, pz: 20 },
-    { id: "far-arc", s: 800, px: 0, pz: 20 },
+    { id: "far-arc", s: 800, px: -600, pz: 20 },
+    { id: "upper-deck", s: 2519, px: -51, pz: 24 },
     { id: "player", isPlayer: true, s: 100, px: 50, pz: 20 },
   ];
   r.ctx._plOk = true;
   r.run();
-  assert.deepEqual(r.prepared.map(p => p.car.id), ["boundary-x", "ahead-x", "player"]);
-  assert.equal(r.projected.length, 2, "the player still reuses the frame anchor");
+  assert.deepEqual(r.prepared.map(p => p.car.id), ["boundary-x", "ahead-x", "upper-deck", "player"]);
+  assert.equal(r.projected.length, 3, "the player still reuses the frame anchor");
   r.ctx.dbgCam = {}; r.projected.length = r.prepared.length = 0;
   r.run();
   assert.ok(r.prepared.some(p => p.car.id === "far-arc"), "camera overrides still bypass the player-arc distance gate");
@@ -109,6 +115,19 @@ test("the early car gate follows the current camera and preserves player, menu a
   r.run();
   assert.equal(r.projected.length, 0, "an inactive menu never projects the old grid");
   assert.equal(r.prepared.length, 0);
+});
+
+test("wide overhead view keeps a visible rival behind the eye's horizontal heading", () => {
+  const r = carPoseRig();
+  // Stationary overhead rig, on a flat straight, with the supported +35° FOV.
+  r.ctx.camEye = [0, 34, -9]; r.ctx.camTgt = [0, 0, 8];
+  const halfFov = 81 * Math.PI / 360;
+  r.ctx._mProj = { 0: 1 / Math.tan(halfFov), 5: 1 / Math.tan(halfFov), 8: 0, 9: 0 };
+  r.ctx.cars = [{ id: "rival", s: 84, px: 0, pz: -16 }];
+  const aimPitch = Math.atan2(34, 17), rivalPitch = Math.atan2(34, -7);
+  assert.ok(rivalPitch - aimPitch < halfFov, "the rival is inside the actual vertical FOV");
+  r.run();
+  assert.equal(r.prepared.length, 1);
 });
 
 test("the table: a rival's parts by camera distance; the player is never reduced", () => {
@@ -230,16 +249,16 @@ test("game.js: under FieldLod the caster is pushed AFTER the side-frustum test, 
   const g = read("js/game.js");
   const legacy = g.indexOf("if (!FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c);");
   const cull = g.indexOf("if (_out) continue;", legacy);
-  const lod = g.indexOf("if (FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c, FieldLod.castsShadow(_lodD2));");
+  const lod = g.indexOf("if (FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c, FieldLod.castsShadow(_lodD2, fovY));");
   assert.ok(legacy > 0 && cull > legacy && lod > cull, "legacy push before the frustum test, the LOD push after it");
   assert.match(g, /const body = carDraw\.modelBuf \? null/, "every procedural rival keeps its body mesh (no whole-car swap)");
-  assert.match(g, /if \(_lod < 2\) queueCarDecals\(c\.team, tmpMat/, "and no decal for a rival past 120 m");
+  assert.match(g, /if \(_lod < 2\) queueCarDecals\(pt, tmpMat/, "and no decal for a rival past 120 m");
   // Past FieldLod.flapsM() the flaps go STILL (the static set), they are never skipped.
-  assert.match(g, /drawAeroFlaps\(c\.team, aSt\.val, c\.aeroX \|\| 0, tmpMat, paint, aSt\.aero, null,\s*!c\.isPlayer && fdx \* fdx \+ fdy \* fdy \+ fdz \* fdz >= FieldLod\.flapsM\(\) \*\* 2\);/,
+  assert.match(g, /drawAeroFlaps\(pt, aSt\.val, c\.aeroX \|\| 0, tmpMat, paint, aSt\.aero, null,\s*!c\.isPlayer && fdx \* fdx \+ fdy \* fdy \+ fdz \* fdz >= FieldLod\.flapsM\(\) \*\* 2\);/,
     "flaps gate from the table: past it `still`, the player never");
   assert.doesNotMatch(g, /\bdrawFlaps\b/, "no flag that skips the flap draw");
-  assert.equal(g.split("drawAeroFlaps(c.team, aSt.val").length - 1, 1, "one race call site");
-  assert.match(g, /carDraw\.drawExhaustFx\(c, tmpMat, [^\n]*FieldLod\.flame\(_lodD2\)\)/, "flame gate from the table");
+  assert.equal(g.split("drawAeroFlaps(pt, aSt.val").length - 1, 1, "one race call site");
+  assert.match(g, /carDraw\.drawExhaustFx\(c, tmpMat, [^\n]*FieldLod\.flame\(_lodD2, fovY\)\)/, "flame gate from the table");
   const cd = read("js/car/car-draw.js");
   // BARE (the mirror / PiP, drawMirrorCar) is lite at any distance.
   assert.match(cd, /const lite = bare \|\| \(!c\.isPlayer && \(haveTier \? lodT >= 1 : FieldLod\.wheelsLite\(camD2, G\.lens && G\.lens\.fovY\)\)\)/);
@@ -271,6 +290,19 @@ test("the LOD scales by the lens: a long lens keeps the livery, a wide one cuts 
   assert.ok(!L.wheelsLite(at(130), 18 * DEG) && L.wheelsLite(at(130)), "the wheel extras take the same lens");
 });
 
+// Clean-room fix 51: the shadow and flame cut-offs used raw metres, so a car at
+// full detail under the trackside lens was drawn with no shadow and no flame.
+test("the shadow and flame cut-offs take the same lens as the detail tier", () => {
+  const { FieldLod: L } = loadLod();
+  for (const m of [70, 100, 150]) {
+    assert.equal(L.tier(at(m), 18 * DEG), 0, m + " m at 18°: full detail");
+    assert.equal(L.castsShadow(at(m), 18 * DEG), true, m + " m at 18°: casts a shadow");
+    assert.equal(L.flame(at(m), 18 * DEG), true, m + " m at 18°: keeps the flame");
+    assert.equal(L.castsShadow(at(m)), false, m + " m with no lens: the table (unchanged)");
+    assert.equal(L.flame(at(m)), false, m + " m with no lens: the table (unchanged)");
+  }
+});
+
 test("hysteresis: a car hovering at a threshold does not flicker between tiers", () => {
   const { FieldLod: L } = loadLod();
   const c = {};
@@ -298,12 +330,14 @@ function flapRig() {
     draw: (mesh, mat, opts) => draws.push({ mesh, mat: Array.from(mat), opts }),
   };
   M.CarMesh.init(gfx);
-  const st = { col: [0.8, 0.1, 0.1], finish: null };
-  const draw = new Function("wingColorOf", "clamp", "resolveLivery", "Car3D", "CarMesh", "gfx", "_flapWorld", "CarMaterials",
+  const st = { col: [0.8, 0.1, 0.1], finish: null }, calls = { resolves: 0 };
+  // The helpers as CustomLiveries ships them: wingColorOf resolves the livery itself, wingColorOfLivery takes one.
+  const resolveLivery = () => { calls.resolves++; return { finish: st.finish, wingFinish: st.wingFinish }; };
+  const draw = new Function("wingColorOf", "wingColorOfLivery", "clamp", "resolveLivery", "Car3D", "CarMesh", "gfx", "_flapWorld", "CarMaterials",
     symbolSource("function drawAeroFlaps(") + "\nreturn drawAeroFlaps;")(
-    () => st.col, (v, a, b) => Math.min(b, Math.max(a, v)), () => ({ finish: st.finish, wingFinish: st.wingFinish }),
+    (team) => (resolveLivery(team), st.col), () => st.col, (v, a, b) => Math.min(b, Math.max(a, v)), resolveLivery,
     M.Car3D, M.CarMesh, gfx, new Float32Array(16), M.CarMaterials);
-  return { M, made, draws, freed, draw, st };
+  return { M, made, draws, freed, draw, st, calls };
 }
 const FLAP_TEAM = { id: "t" }, FLAP_PAINT = { paint: 1 }, FLAP_LVL = 2;
 const yaw = 0.7, FLAP_MAT = new Float32Array([Math.cos(yaw), 0, -Math.sin(yaw), 0, 0, 1, 0, 0,
@@ -600,4 +634,98 @@ test("farBody: the decimated silhouette body past FAR_BODY_M, sticky, never when
   // a 18 deg tele lens makes the same camera distance look nearer: 300 m there is ~100 m at the reference lens
   assert.equal(L.farBody(at(300), 18 * Math.PI / 180), false);
   assert.equal(loadLod(0).FieldLod.farBody(at(900), 1.05), false, "apex26.fieldLod = 0 restores the legacy draw");
+});
+
+// ---- perf hunt 9 (#4270 §7 survey): one livery resolve and no key string per drawn car -------------------------
+test("drawAeroFlaps resolves the livery once per car, and a warm flap-set hit builds no `finish|surface` key string", () => {
+  const r = flapRig();
+  r.draw(FLAP_TEAM, FLAP_LVL, 0, FLAP_MAT, FLAP_PAINT, null, null, true);   // warm: the set and its keys are built
+  r.calls.resolves = 0;
+  const RealmMap = new (r.M.Car3D.aeroFlaps.constructor)("return Map.prototype")();
+  const get = RealmMap.get;
+  let finKeys = 0;
+  // Counts lookups by the bare `finish|surface` key form (the memoised base and rear keys carry more fields).
+  RealmMap.get = function (k) { if (typeof k === "string" && /^[^|]*\|(paint|carbon)$/.test(k)) finKeys++; return get.call(this, k); };
+  try { for (let i = 0; i < 100; i++) r.draw(FLAP_TEAM, FLAP_LVL, 0, FLAP_MAT, FLAP_PAINT, null, null, true); }
+  finally { RealmMap.get = get; }
+  assert.equal(r.calls.resolves, 100, "one resolveLivery per draw (was 2: wingColorOf resolved it again)");
+  assert.equal(finKeys, 0, "no per-call `finish|surface` lookup key (was 2 per draw: base and rear-paint keys)");
+});
+
+// DESKTOP ULTRA: every cut sits twice as far out; any other preset, and a phone, keep the table.
+test("GRAPHICS: ULTRA on a desktop doubles the rival LOD reach; HIGH and a phone ULTRA do not", () => {
+  const boot = (preset, mobile) => {
+    const store = { get: (k, d) => (k === "gfxPreset" ? preset : d), raw: () => null };
+    const ctx = vm.createContext({ Math, Object, Infinity, GLX: { isMobile: !!mobile }, GameStore: { store }, Log: { info() {} } });
+    vm.runInContext(read("js/perf/quality-preset.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/perf/quality-preset.js") });
+    vm.runInContext(read("js/car/field-lod.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/car/field-lod.js") });
+    ctx.FieldLod.init(store);
+    return ctx.FieldLod;
+  };
+  const hi = boot("high"), ul = boot("ultra"), ph = boot("ultra", true);
+  assert.equal(boot("extreme").mirrorCap(), 12, "EXTREME keeps the ULTRA reach");
+  assert.equal(ph.mirrorCap(), 6, "a phone never takes the desktop detail set");
+  assert.equal(ph.tier(80 * 80), 1);
+  const at = (m) => m * m;
+  assert.equal(hi.tier(at(80)), 1);
+  assert.equal(ul.tier(at(80)), 0, "50 m lite-wheel cut moved to 100 m");
+  assert.equal(ul.tier(at(110)), 1);
+  assert.equal(hi.tier(at(200)), 2);
+  assert.equal(ul.tier(at(200)), 1, "120 m decal cut moved to 240 m");
+  assert.equal(ul.tier(at(250)), 2);
+  assert.equal(hi.farBody(at(400)), true);
+  assert.equal(ul.farBody(at(400)), false, "250 m far body moved to 500 m");
+  assert.equal(hi.castsShadow(at(80)), false);
+  assert.equal(ul.castsShadow(at(80)), true);
+  assert.equal(ul.flame(at(100)), true);
+  assert.equal(ul.flapsM(), 160);
+  assert.equal(hi.mirrorCap(), 6);
+  assert.equal(ul.mirrorCap(), 12);
+});
+
+test("adaptive models reward sustained headroom and projected size while keeping the existing draw budgets", () => {
+  const { FieldLod, GfxQuality } = adaptiveLod();
+  const gov = { fpsEMA: () => 16.7, floorMs: () => 16.67, gpuMs: () => 8, tier: () => 4, autoTier: () => 0, extrasShed: () => 0 };
+  const feed = (ms, h = 1080) => { for (let t = 0; t < ms; t += 20) FieldLod.updateModelBudget(20, h, gov); };
+  const lens = Math.PI / 3;
+  assert.equal(FieldLod.tier(at(145), lens), 2);
+  feed(3500);
+  assert.equal(FieldLod.tier(at(145), lens), 2);
+  feed(500);
+  assert.equal(FieldLod.tier(at(145), lens), 1);
+  assert.equal(FieldLod.tier(at(145), Math.PI / 2), 2, "a wide lens makes the same car smaller");
+  assert.equal(FieldLod.farBody(at(300), lens), false);
+  assert.equal(FieldLod.wheelsLite(at(60), lens), false);
+  assert.equal(FieldLod.castsShadow(at(60), lens), false);
+  assert.equal(FieldLod.mirrorCap(), FieldLod.T.MIRROR_CARS);
+  gov.gpuMs = () => 13; // the dead band: do not oscillate at the promotion boundary
+  feed(1000); assert.equal(FieldLod.tier(at(145), lens), 1);
+  gov.gpuMs = () => 16; feed(500);
+  assert.equal(FieldLod.tier(at(145), lens), 2);
+  gov.gpuMs = () => -1; feed(4000, 720);
+  assert.equal(FieldLod.tier(at(145), lens), 2);
+  feed(4000); assert.equal(FieldLod.tier(at(145), lens), 1, "frame cadence can trial higher detail without GPU timestamps");
+  gov.extrasShed = () => 1; feed(500);
+  assert.equal(FieldLod.tier(at(145), lens), 2);
+  assert.equal(GfxQuality.detail(), 0);
+  gov.extrasShed = () => 0; gov.autoTier = () => 1;
+  feed(5000); assert.equal(FieldLod.tier(at(145), lens), 2, "the measured governor floor prevents promotion");
+});
+
+function adaptiveLod({ mobile = false, allowed = true, enabled = true } = {}) {
+  const ctx = loadLod();
+  ctx.GLX = { isMobile: mobile };
+  ctx.GfxQuality = { detail: () => 0, feature: name => name === "adaptiveModels" && enabled,
+    option: (_, fallback) => allowed ? fallback : false };
+  ctx.FieldLod.init();
+  return ctx;
+}
+
+test("adaptive models leave mobile, disabled preferences, and the master LOD override alone", () => {
+  for (const opts of [{ mobile: true }, { allowed: false }, { enabled: false }, { masterOff: true }]) {
+    const { FieldLod } = adaptiveLod(opts);
+    if (opts.masterOff) FieldLod.setEnabled(false);
+    for (let i = 0; i < 250; i++) FieldLod.updateModelBudget(20, 2160, null);
+    assert.equal(FieldLod.tier(at(145)), opts.masterOff ? 0 : 2);
+  }
 });

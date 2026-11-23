@@ -1,0 +1,271 @@
+[
+ {
+  "pr": 5190,
+  "merge": "e808230",
+  "files": [
+   "docs/ARCHITECTURE.md",
+   "js/garage/crew-choreo.js",
+   "js/garage/crew-draw.js",
+   "js/garage/crew-motion.js",
+   "js/garage/crew-service.js",
+   "tools/shot/scenery-locations.json"
+  ]
+ },
+ {
+  "pr": 5197,
+  "merge": "a24f80b",
+  "files": [
+   "docs/TESTING-COVERAGE.md",
+   "docs/changelog.d/tiered-bowl-cap-4967.md",
+   "js/circuits/scenery/monza.js",
+   "js/circuits/scenery/silverstone.js",
+   "js/track/scenery/stands.js",
+   "tests/data/impact-map.json",
+   "tests/groups.json",
+   "tests/unit/props-tri-ratchet.test.mjs",
+   "tests/unit/stand-tier-curve-cap.test.mjs",
+   "tests/unit/track-build-vm-release.test.mjs",
+   "tools/shot/scenery-locations.json",
+   "tools/track/props-tris-baseline.json"
+  ]
+ },
+ {
+  "pr": 5194,
+  "merge": "9c95bed",
+  "files": [
+   "css/hud.css",
+   "css/touch-controls.css",
+   "docs/changelog.d/hud-cam-pause-size.md",
+   "js/ui/hud.js",
+   "tests/data/ratchets.d/cursor--hud-cam-pause-size-5179.json",
+   "tests/unit/phone-touch-surface.test.mjs"
+  ]
+ },
+ {
+  "pr": 5192,
+  "merge": "15c922c",
+  "files": [
+   "js/garage/departure-wheels.js",
+   "js/garage/entrance-motion.js",
+   "js/garage/experience.js",
+   "js/garage/exterior-geometry.js",
+   "tools/shot/scenery-locations.json"
+  ]
+ },
+ {
+  "pr": 5178,
+  "merge": "d4720b0",
+  "files": [
+   "docs/ARCHITECTURE.md",
+   "js/garage/scene-equipment.js",
+   "tools/shot/scenery-locations.json"
+  ]
+ },
+ {
+  "pr": 5191,
+  "merge": "4349963",
+  "files": [
+   "docs/changelog.d/offroad-tyre-parity-4936.md",
+   "js/physics/tyre-model.js",
+   "tests/unit/tyre-model.test.mjs"
+  ]
+ },
+ {
+  "pr": 5182,
+  "merge": "5579a05",
+  "files": [
+   "js/garage/scene-crew.js",
+   "tools/shot/scenery-locations.json"
+  ]
+ },
+ {
+  "pr": 5188,
+  "merge": "ca5c145",
+  "files": [
+   "docs/ARCHITECTURE.md",
+   "docs/agent-index.json",
+   "index.html",
+   "js/core/lazy-bundles.js",
+   "js/roster.js",
+   "sw.js",
+   "tests/data/impact-map.json",
+   "tests/unit/boot-load-budget.test.mjs",
+   "tests/unit/gfx-debug-overlay.test.mjs",
+   "tests/unit/load-order.test.mjs",
+   "tools/gen/gen-arch-table.mjs",
+   "tools/gen/gen-shell.mjs",
+   "tools/manifest.cjs"
+  ]
+ },
+ {
+  "pr": 5195,
+  "merge": "d361ab8",
+  "files": [
+   "docs/changelog.d/settings-lazy-gate-4798.md",
+   "js/camera/cockpit-finishes.js",
+   "js/camera/feel.js",
+   "js/track/build-client.js",
+   "js/ui/a11y-opts.js",
+   "js/ui/debris-opts.js",
+   "js/ui/driving-line-opts.js",
+   "js/ui/post-fx-opts.js",
+   "js/ui/settings-tabs.js",
+   "js/xr/xr-opts.js",
+   "tests/data/impact-map.json",
+   "tests/unit/settings-export.test.mjs",
+   "tests/unit/settings-tabs.test.mjs"
+  ]
+ },
+ {
+  "pr": 5193,
+  "merge": "bc89dcd",
+  "files": [
+   "docs/changelog.d/phone-res-default-med.md",
+   "js/agent/apex-lifecycle.js",
+   "js/ui/scale.js",
+   "js/ui/settings-export.js",
+   "tests/data/impact-map.json",
+   "tests/unit/render-effective-res.test.mjs",
+   "tests/unit/scale-defaults.test.mjs"
+  ]
+ },
+ {
+  "pr": 5185,
+  "merge": "7a5dc42",
+  "files": [
+   "js/garage/pit-signs.js",
+   "js/garage/prebuild.js"
+  ]
+ },
+ {
+  "pr": 5187,
+  "merge": "7f46167",
+  "files": [
+   "docs/changelog.d/4924-pwa-slow-link-update.md",
+   "index.html",
+   "js/ui/update-check.js",
+   "sw.js",
+   "tests/data/impact-map.json",
+   "tests/unit/a11y-pwa-pass.test.mjs",
+   "tests/unit/followup-update-check.test.mjs",
+   "tests/unit/global-registry.test.mjs",
+   "tests/unit/service-worker.test.mjs"
+  ]
+ },
+ {
+  "pr": 5186,
+  "merge": "fd0d5f2",
+  "files": [
+   "docs/ARCHITECTURE.md",
+   "docs/changelog.d/batch-race-ui-5101.md",
+   "js/race/announce-banner.js",
+   "js/race/daily-challenge.js",
+   "js/ui/podium-beat.js",
+   "js/ui/title-menu.js",
+   "tests/unit/daily-challenge.test.mjs",
+   "tests/unit/pause-hud-layout.test.mjs",
+   "tests/unit/podium-beat.test.mjs",
+   "tests/unit/title-menu-even.test.mjs"
+  ]
+ },
+ {
+  "pr": 5181,
+  "merge": "0b0474e",
+  "files": [
+   "docs/changelog.d/fx-leftovers-4751.md",
+   "js/fx/skidmarks.js",
+   "js/game.js",
+   "tests/unit/car-presentation-canary.test.mjs",
+   "tests/unit/skidmarks-cadence.test.mjs",
+   "tests/unit/vstd-invariant.test.mjs"
+  ]
+ },
+ {
+  "pr": 5180,
+  "merge": "30d1d65",
+  "files": [
+   "docs/changelog.d/4920-appearance-screen-scope.md",
+   "js/ui/appearance-studio.js",
+   "tests/unit/appearance-studio.test.mjs"
+  ]
+ },
+ {
+  "pr": 5174,
+  "merge": "28df2eb",
+  "files": [
+   "css/menu-destinations.css",
+   "css/responsive.css",
+   "docs/changelog.d/home-title-standalone.md",
+   "tests/helpers/title-fit.mjs",
+   "tests/specs/title-fit.spec.js",
+   "tests/specs/ui-scale.spec.js"
+  ]
+ },
+ {
+  "pr": 5176,
+  "merge": "67ca29f",
+  "files": [
+   "docs/DEBUG-HOOKS.md",
+   "docs/TESTING-COVERAGE.md",
+   "js/agent/apex-lifecycle.js",
+   "js/agent/apex.js",
+   "tests/data/impact-map.json",
+   "tests/groups.json",
+   "tests/unit/render-effective-res.test.mjs"
+  ]
+ },
+ {
+  "pr": 5172,
+  "merge": "bf74d00",
+  "files": [
+   "docs/changelog.d/home-screen-boot-keyboard-band.md",
+   "docs/notes/UI-CONTRACT-2026-11-06.md",
+   "js/editor/designer.js",
+   "js/ui/sheet-shape.js",
+   "tests/helpers/title-fit.mjs",
+   "tests/specs/title-fit.spec.js",
+   "tests/specs/title-menu-rotation.spec.js"
+  ]
+ },
+ {
+  "pr": 5173,
+  "merge": "9cb65e0",
+  "files": [
+   "docs/TESTING-COVERAGE.md",
+   "docs/TESTING.md",
+   "docs/changelog.d/home-rotate-5167.md",
+   "js/ui/sheet-shape.js",
+   "tests/groups.json",
+   "tests/specs/title-menu-rotation.spec.js",
+   "tests/unit/sheetshape-orientation.test.mjs"
+  ]
+ },
+ {
+  "pr": 5169,
+  "merge": "bfaf0fb",
+  "files": [
+   "css/hud.css",
+   "css/touch-controls.css",
+   "docs/DEBUG-HOOKS.md",
+   "docs/changelog.d/hud-revert-5155.md",
+   "docs/changelog.d/ui-rebuild-c-hud.md",
+   "docs/notes/UI-CONTRACT-2026-11-06.md",
+   "js/agent/apex.js",
+   "js/ui/hud-layout.js",
+   "js/ui/hud.js",
+   "js/ui/scale.js",
+   "js/ui/settings-export.js",
+   "tests/data/impact-map.json",
+   "tests/data/ratchets.d/cursor--ui-rebuild-c-hud-7c3e.json",
+   "tests/specs/hud-layout.spec.js",
+   "tests/specs/ui-button-touch.spec.js",
+   "tests/unit/hud-feel.test.mjs",
+   "tests/unit/hud-layout.test.mjs",
+   "tests/unit/hud-survey.test.mjs",
+   "tests/unit/phone-touch-surface.test.mjs",
+   "tests/unit/settings-export.test.mjs",
+   "tools/lib/hud-survey-matrix.mjs",
+   "tools/shot/hud-survey.mjs"
+  ]
+ }
+]

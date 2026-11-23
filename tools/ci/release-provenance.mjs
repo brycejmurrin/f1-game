@@ -10,6 +10,8 @@
  *   node tools/ci/release-provenance.mjs
  *   node tools/ci/release-provenance.mjs --site https://example.test/game --json
  *   node tools/ci/release-provenance.mjs --strict
+ * Strict succeeds only for a clean checkout with source, deploy and live SHAs
+ * all resolved and equal. A shell stamp is not a deployed-byte integrity check.
  */
 import { execFileSync } from "node:child_process";
 
@@ -37,12 +39,13 @@ export function parseLiveShell(html) {
 
 export function ancestryVerdict({ sourceSha, deploySha, liveSha, mergeBase }) {
   if (!liveSha) return "live-unknown";
+  if (!sourceSha || !deploySha) return "local-unknown";
   if (liveSha === sourceSha && liveSha === deploySha) return "live-exact-source-and-deploy";
   if (liveSha === sourceSha) return "live-exact-source";
   if (liveSha === deploySha) return "live-exact-deploy";
   if (liveSha === mergeBase) return "live-at-merge-base";
-  if (mergeBase === liveSha) return "source-and-deploy-diverged-from-live";
-  return "source-or-deploy-newer-than-live";
+  // The source/deploy merge base says nothing about ancestry to a third SHA.
+  return "live-relationship-unproven";
 }
 
 export function renderMarkdown(p) {
@@ -62,7 +65,7 @@ export function renderMarkdown(p) {
     row("Merge base", p.mergeBase),
     row("Live build", p.liveBuild),
     row("Live version", p.liveVersion),
-    row("Working tree", p.dirty ? "dirty" : "clean"),
+    row("Working tree", p.dirty == null ? "unknown" : p.dirty ? "dirty" : "clean"),
     row("Site", p.site),
     "",
     p.verdict === "live-exact-source-and-deploy"
@@ -73,7 +76,7 @@ export function renderMarkdown(p) {
           ? "The current source checkout is live; deploy-ref ancestry should be checked separately."
           : p.verdict === "live-unknown"
             ? "The live shell did not provide a trustworthy SHA; deployed behavior is unproven."
-            : "Live behavior is older or divergent from at least one local source reference.",
+            : "Equality with both local references is unproven; this report does not establish ancestry to the live SHA.",
     "",
   ].join("\n");
 }
@@ -93,11 +96,12 @@ async function fetchLive(site) {
 export async function collect(opts = {}) {
   const site = opts.site || process.env.APEX_SITE || DEFAULT_SITE;
   const deployRef = opts.deployRef || process.env.APEX_DEPLOY_REF || DEFAULT_DEPLOY_REF;
-  const sourceSha = git(["rev-parse", "HEAD"]);
-  const deploySha = git(["rev-parse", deployRef]);
+  const sourceSha = git(["rev-parse", "--verify", "HEAD^{commit}"]);
+  const deploySha = git(["rev-parse", "--verify", "--end-of-options", `${deployRef}^{commit}`]);
   const mergeBase = sourceSha && deploySha ? git(["merge-base", sourceSha, deploySha]) : null;
   const live = await fetchLive(site);
-  const dirty = !!git(["status", "--porcelain"]);
+  const status = git(["status", "--porcelain"]);
+  const dirty = status === null ? null : status !== "";
   const result = {
     repository: git(["remote", "get-url", "origin"]) || null,
     branch: git(["branch", "--show-current"]) || "(detached)",
@@ -129,6 +133,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   const result = await collect(opt);
   console.log(opt.json ? JSON.stringify(result, null, 2) : renderMarkdown(result));
-  if (opt.strict && (result.dirty || !result.liveSha || result.verdict === "source-or-deploy-newer-than-live")) process.exitCode = 1;
+  if (opt.strict && (result.dirty !== false || result.verdict !== "live-exact-source-and-deploy")) process.exitCode = 1;
 }
 

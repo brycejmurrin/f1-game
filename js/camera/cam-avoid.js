@@ -26,6 +26,7 @@ const CamAvoid = (function () {
   }
 
   const _rs = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+  const _pr = { s: 0, lat: 0, k: 0, heading: 0, dist: 0 };
 
   /**
    * THE ROAD IS ALWAYS CLEAR (the rule FlybySeq.onRoadPose states for the
@@ -43,8 +44,8 @@ const CamAvoid = (function () {
   function roadClear(track, eye, margin) {
     if (typeof Tracks === "undefined" || !Tracks.project || !Tracks.sample) return false;
     if (!blocked(track, eye, margin)) return false;
-    const pr = Tracks.project(track, eye[0], eye[2], null, eye[1]);
-    if (!pr) return false;
+    const pr = Tracks.project(track, eye[0], eye[2], null, eye[1], _pr);
+    if (!pr || !isFinite(pr.s)) return false;
     Tracks.sample(track, pr.s, _rs);
     if (Math.abs(pr.lat) > (_rs.hw || 7) + ROAD_PAD) return false;
     // Only the 2 m facade margin reaches the eye: a stand beside the road, not a
@@ -68,7 +69,8 @@ const CamAvoid = (function () {
    */
   function freeEye(track, eye, frame) {
     if (!track || !eye) return eye;
-    if (roadClear(track, eye, MARGIN)) return eye;
+    // Not inside anything (the common frame): one query, not three.
+    if (!blocked(track, eye, MARGIN) || roadClear(track, eye, MARGIN)) return eye;
     const street = !!(track.def && track.def.street);
     if (!street && frame && frame.p && frame.r) {
       const hw = frame.hw > 0 ? frame.hw : 7;
@@ -80,7 +82,9 @@ const CamAvoid = (function () {
         const lat = (eye[0] - frame.p[0]) * frame.r[0] + (eye[2] - frame.p[2]) * frame.r[2];
         const abs = Math.abs(lat);
         if (abs <= hw + IN_MIN) break;   // already at the road edge — lift instead
-        const step = Math.min(STEP, abs - hw);
+        // Stop AT the keep-out. Capping at hw let this last step (STEP === IN_MIN)
+        // land on the white line, inside the band the break above is there to hold.
+        const step = Math.min(STEP, abs - (hw + IN_MIN));
         eye[0] += (dx / len) * step;
         eye[2] += (dz / len) * step;
         // Lost width → a little crane height (street corr does the same trade).

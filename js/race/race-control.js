@@ -1,4 +1,4 @@
-/* Apex 26 — RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … */
+/* Apex 26 — RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car / red flag, and the one rule that reads off it (whether OVERTAKE is … */
 const RaceControl = (function () {
   "use strict";
 
@@ -16,7 +16,11 @@ const RaceControl = (function () {
   // player's finish OR retirement (`since`) — a DNF no longer ends the race for
   // everyone, so season/career points use the real classification — then endRace
   // classifies as before (RaceControl.shortRun when no car ever took the flag).
-  // Net, TT, quali and the AI-only harnesses pass no `post` and keep the rules below.
+  // NET (`post.net`, #5989 A1): the same POST_FINISH_CAP s, counted from the
+  // FIRST human's finish (`post.first`); a friend still on track is then
+  // classified by laps done instead of holding the finished screen to the
+  // 360 s/lap hard cap.
+  // TT, quali and the AI-only harnesses pass no `post` and keep the rules below.
   const POST_FINISH_CAP = 75;
   function finishPending(cars, raceT, lapsTarget, raceT0) {
     if (raceT - (raceT0 > 0 ? raceT0 : 0) > 360 * lapsTarget) return false;
@@ -30,13 +34,14 @@ const RaceControl = (function () {
   }
   function finishDelay(cars, raceT, lapsTarget, raceT0, post) {
     const ran = raceT - (raceT0 > 0 ? raceT0 : 0);
-    let anyHuman = false, allHumansDone = true, anyFinished = false, running = false;
+    let anyHuman = false, allHumansDone = true, anyFinished = false, running = false, humanFinished = false;
     for (const c of cars || []) {
       if (!c) continue;
       if (c.finished) anyFinished = true;
       else if (!c.retired) running = true;
       if (!c.human && !c._nHuman) continue;
       anyHuman = true;
+      if (c.finished && !c.retired) humanFinished = true;
       if (!c.finished && !c.retired) allHumansDone = false;
     }
     // A time penalty is served on the CLOCK (classification sorts finishers by
@@ -49,6 +54,8 @@ const RaceControl = (function () {
     if (finishPending(cars, raceT, lapsTarget, raceT0)) return 0;
     if (post) { if (!(anyHuman && allHumansDone)) post.since = -1; else if (post.since < 0) post.since = raceT; }
     if (anyHuman && allHumansDone && post && post.solo && running) return raceT - post.since < POST_FINISH_CAP ? 0 : 0.1;
+    if (post && post.net) { if (!humanFinished) post.first = -1; else if (!(post.first >= 0)) post.first = raceT; }
+    if (humanFinished && !allHumansDone && post && post.net) return raceT - post.first < POST_FINISH_CAP ? 0 : 0.1;
     if (anyHuman && allHumansDone) return 2.2;
     if (!anyHuman && anyFinished) return 3.5;
     if (ran > 360 * lapsTarget) return 0.1;
@@ -228,12 +235,14 @@ const RaceControl = (function () {
   const RED_STOP = 8;      // s for the field to come to a halt once red is shown
   const RED_HOLD = 6;      // s the flag holds before the restart is called
   const MIN_HOLD = 6;      // s a caution holds once raised (anti-flicker)
+  const SC_HOLD = 45;      // s an SC holds: debris despawns in 4 s, so 6 s never let the field bunch (#5893)
   const YELLOW_MAX = 30;   // s hard cap on a local yellow
   const SC_MAX = 90;       // s hard cap on VSC/SC — bounded, ~a lap or two
   const CAP_REARM_HOLD = 45;  // s of green after a cap-forced drop before the
                               // same stale hazard picture may re-raise a flag
   const QUERY_EVERY = 0.25;   // s — hazards() at ~4 Hz, not per frame
 
+  const NO_HAZARDS = { total: 0, redTotal: 0, sectors: [0, 0, 0], worst: { sector: -1, count: 0, frac: 0 } };
   function blank() {
     return { level: 0, sector: -1, frac: 0, total: 0, sectors: [0, 0, 0], sinceT: 0, cause: "", phase: "" };
   }
@@ -243,13 +252,48 @@ const RaceControl = (function () {
     Log.info("game", "RaceControl flag " + LABEL[prev] + " -> " + LABEL[next]);
   }
 
+  // Compatibility boundary: only this adapter sees G. Scalars stay live across
+  // session/lazy-service replacement; the original store remains captured.
+  /** @param {GameCtx} G */
   function create(G) {
-    Log.info("game", "RaceControl.create");
     const { store } = G;
+    let /** @type {ReturnType<typeof StoppedCars.create> | null} */ stopSrc = null;
+    return createControl(Object.freeze({
+      get state() { return G.state; }, get session() { return G.session; },
+      get timeTrial() { return G.timeTrial; }, get _s8Stamp() { return G._s8Stamp; },
+      get raceT() { return G.raceT; }, get raceWeather() { return G.raceWeather; },
+      get leaderLap() { const leader = G.ranked && G.ranked[0]; return leader ? leader.lap : null; },
+      readCaution: () => store.get("caution", false), writeCaution: (on) => { store.set("caution", on); },
+      networkActive: () => G.netPlay.active(), ownsRaceControl: () => G.netPlay.ownsRaceControl(),
+      reportCaution: (d) => G.netPlay.reportCaution(d),
+      announce: (text, seconds, kind) => typeof G.announce === "function" ? G.announce(text, seconds, kind) : false,
+      wetness: () => typeof G.trackWetness === "function" ? G.trackWetness() : undefined,
+      // W34, lazy: StoppedCars, RetiredCard.
+      stopped: (step) => (typeof StoppedCars !== "undefined" ? stopSrc || (stopSrc = StoppedCars.create()) : null)?.picture(G.cars, G.track, step) ?? null,
+      stoppedReset: () => { if (stopSrc) stopSrc.reset(); },
+      playerWait: () => { if (typeof RetiredCard !== "undefined") RetiredCard.tickG(G); },
+    }));
+  }
+
+
+  /** @param {RaceControlPort} port */
+  function createControl(port) {
+    Log.info("game", "RaceControl.create");
     let caution = blank();
     let queryT = 0;
+    // Stopped cars: own cadence (runs with DEBRIS off), picture, raised-the-flag.
+    let stopQueryT = 0, stopPic = null, stopOwned = false;
     let capHoldT = 0;       // remaining re-arm suppression after a cap-forced drop
     let capHoldLevel = 0;   // the level that capped; escalations ABOVE it still fly
+    // The hard cap's EPISODE clock (#5715): time under any flag since the last
+    // GREEN. `sinceT` resets on every level change, so a picture hovering at a
+    // threshold (SC<->VSC, VSC<->YELLOW) restarted the cap each flip and held
+    // the race neutralised for good. Resets only on green, or on an escalation
+    // above the episode's peak (a real pile-up gets its own full cap).
+    let flagAgeT = 0, flagPeak = 0;
+    function episode(level) {
+      if (level > flagPeak) { flagPeak = level; flagAgeT = 0; }
+    }
     let replayOwned = false;   // recorded flags are pictures, not live race-control procedures
     let restartWanted = false;   // one-shot: the red procedure has run its course
     // OVERTAKE after a neutralisation (Art. B7.2.2c): disabled while the Safety
@@ -279,7 +323,7 @@ const RaceControl = (function () {
     let stormSince = null, stormAtStart = false, stormLastT = 0;
     // Last state broadcast to a guest, so only CHANGES are sent.
     let sent = "";
-    const savedCaution = store.get("caution", false);
+    const savedCaution = port.readCaution();
     let enabled = !(savedCaution === false || savedCaution === 0 || savedCaution === "0");
 
     function reset() {
@@ -287,7 +331,10 @@ const RaceControl = (function () {
       held = 0; heldCause = "";
       scriptHeld = 0; scriptCause = ""; wxHeld = 0; stormSince = null; stormAtStart = false; stormLastT = 0;
       queryT = 0;
+      if (port.stoppedReset) port.stoppedReset();
+      stopQueryT = 0; stopPic = null; stopOwned = false;
       capHoldT = 0; capHoldLevel = 0;
+      flagAgeT = 0; flagPeak = 0;
       restartWanted = false;
       otHoldLap = null;
       lowGripNoted = false;   // update() only runs in a race, so its not-in-race clear never fired: RACE AGAIN in the wet lost the note
@@ -301,8 +348,8 @@ const RaceControl = (function () {
     function flag(prev, next) {
       logFlag(prev, next);
       if (prev >= 3 && next < 3) {
-        const leader = G.ranked && G.ranked[0];
-        otHoldLap = leader ? (leader.lap | 0) : null;
+        const lap = port.leaderLap;
+        otHoldLap = lap === null ? null : (lap | 0);
       }
     }
 
@@ -310,14 +357,13 @@ const RaceControl = (function () {
     // keeps showing a safety car that nothing is maintaining any more.
     function setEnabled(on) {
       enabled = !!on;
-      store.set("caution", enabled);
+      port.writeCaution(enabled);
       if (!enabled) reset();
       return enabled;
     }
 
     function publish() {
-      const netPlay = G.netPlay;
-      if (!netPlay.active() || !netPlay.ownsRaceControl()) return;
+      if (!port.networkActive() || !port.ownsRaceControl()) return;
       // total/sectors ride in the payload, so they must be in the change key —
       // an evolving hazard picture at a constant level went un-republished and
       // froze the guest's counts.
@@ -325,7 +371,7 @@ const RaceControl = (function () {
         "|" + caution.total + "|" + (caution.sectors ? caution.sectors.join(",") : "");
       if (key === sent) return;
       sent = key;
-      netPlay.reportCaution({
+      port.reportCaution({
         level: caution.level, sector: caution.sector, frac: caution.frac,
         cause: caution.cause, total: caution.total, sectors: caution.sectors,
         sinceT: caution.sinceT, phase: caution.phase,
@@ -338,38 +384,41 @@ const RaceControl = (function () {
       const prev = caution.level;
       caution.level = 0; caution.sector = -1; caution.frac = 0;
       caution.cause = ""; caution.sinceT = 0; caution.phase = "";
+      flagAgeT = 0; flagPeak = 0;
+      stopOwned = false;
       flag(prev, 0);
     }
+
 
     // The hard-cap drop, shared by the live-query path and the debris-inactive
     // freeze path. Returns true when the flag just dropped to GREEN.
     function capDropIfExpired() {
       if (caution.level === 0 || caution.level === 4) return false;   // red runs its own procedure
-      const cap = caution.level >= 2 ? SC_MAX : YELLOW_MAX;
-      if (caution.sinceT < cap) return false;
-      capHoldLevel = caution.level;   // what capped — see the re-raise gate below
+      // The episode's PEAK sets the cap: an SC stepping down to a VSC is still
+      // one neutralisation, capped at SC_MAX from when it was raised.
+      const cap = Math.max(flagPeak, caution.level) >= 2 ? SC_MAX : YELLOW_MAX;
+      if (Math.max(flagAgeT, caution.sinceT) < cap) return false;
+      capHoldLevel = Math.max(flagPeak, caution.level);   // the episode's peak capped — see the re-raise gate below
       dropToGreen();
       capHoldT = CAP_REARM_HOLD;
       publish();
       return true;
     }
 
-    // PERF-HUNT-2 S8: game.js flushes once per display frame (G._s8Stamp). A
+    // PERF-HUNT-2 S8: game.js flushes once per display frame (port._s8Stamp). A
     // second update with the same stamp is a no-op; tests that omit the stamp
     // keep the per-call behaviour.
     let _s8Done = null;
     function update(dt) {
-      const stamp = G._s8Stamp;
+      const stamp = port._s8Stamp;
       if (stamp != null && stamp === _s8Done) return;
       if (stamp != null) _s8Done = stamp;   // after the match check; call sites pass finite dt
-      // State reset BEFORE the ownership gate: a guest's caution mirror comes
-      // from host apply(), and returning early here would leave the last flag
-      // flown on its HUD after the race ended (reset() is local-only, safe for all).
-      // A lone lap has no field to protect: in Time Trial and qualifying the
-      // player's OWN cones and shards (hz.total >= 6) raised a VSC whose
-      // cautionV held them to 0.6 of vTop, and the CAUTIONS row is hidden there
-      // so it could not be switched off. Same reset path as "not racing".
-      if ((G.state !== "race" && !(replayOwned && G.state === "count")) || G.timeTrial || G.session === "quali") {
+      // Before any gate, so the card hides once the race is over.
+      if (typeof port.playerWait === "function") port.playerWait();
+      // State reset BEFORE the ownership gate (a guest's mirror would keep the
+      // last flag after the race). A lone lap (TT, quali) has no field to
+      // protect: its own cones raised a VSC there. Same reset as "not racing".
+      if ((port.state !== "race" && !(replayOwned && port.state === "count")) || port.timeTrial || port.session === "quali") {
         if (caution.level !== 0 || capHoldT || replayOwned) reset();
         lowGripNoted = false;
         return;
@@ -378,11 +427,11 @@ const RaceControl = (function () {
       // The LOW GRIP note, once a race, on every peer (it is read off the
       // shared weather, not the flag): the one place the player is told why the
       // Overtake button went dead in the wet. Retried until the banner takes it.
-      if (!lowGripNoted && lowGrip() && typeof G.announce === "function") {
-        lowGripNoted = G.announce("LOW GRIP — OVERTAKE OFF", 3, "warning") !== false;
-        if (lowGripNoted) Log.info("race", "Overtake disabled why=low-grip raceT=" + (+G.raceT || 0).toFixed(1));
+      if (!lowGripNoted && lowGrip()) {
+        lowGripNoted = port.announce("LOW GRIP — OVERTAKE OFF", 3, "warning") !== false;
+        if (lowGripNoted) Log.info("race", "Overtake disabled why=low-grip raceT=" + (+port.raceT || 0).toFixed(1));
       }
-      if (!G.netPlay.ownsRaceControl()) return;
+      if (!port.ownsRaceControl()) return;
       // CAUTIONS off means no flag the local sim raises, the storm's included
       // (Bryce 2026-10-23: a storm SC flew with the row OFF). setEnabled(false)
       // resets wxHeld; this keeps a storm from raising it again.
@@ -393,15 +442,13 @@ const RaceControl = (function () {
         const prev = caution.level;
         caution.level = held; caution.sector = -1; caution.frac = 0;
         caution.cause = heldCause; caution.sinceT = 0; caution.phase = "";
+        episode(held);
         flag(prev, held);
         publish();
       }
-      if (caution.level !== 0) caution.sinceT += dt;
-      // A RED FLAG RUNS ITS PROCEDURE WHATEVER THE SWITCH SAYS. The hazard loop
-      // can only raise one while enabled, but apply() (a scripted red, a host's)
-      // can land one with CAUTIONS off — and a red that never ages never asks
-      // for its restart, which held the whole field at 2 % of top speed until
-      // the player quit. The switch gates the hazard loop below, not this.
+      if (caution.level !== 0) { caution.sinceT += dt; flagAgeT += dt; }
+      // A RED FLAG RUNS ITS PROCEDURE WHATEVER THE SWITCH SAYS: apply() can land
+      // one with CAUTIONS off, and a red that never ages never restarts.
       if (caution.level === 4) {
         // The red procedure: no hazard query, no cap — it ends in exactly ONE
         // restart request. The re-arm hold then keeps the same (not yet
@@ -423,12 +470,12 @@ const RaceControl = (function () {
         if (!(held && caution.level <= held)) capDropIfExpired();
         return;
       }
-      if (!DebrisWorld.active()) {
-        // Debris inactive mid-flag: the LEVEL freezes (test-asserted — see
-        // "debris going inactive mid-race freezes a flying flag") but it keeps
-        // AGEING, so the hard cap still fires. Before this, a trapped Rapier
-        // world (debrisworld sets _active=false permanently) pinned a safety
-        // car — and disabled OVERTAKE — for the rest of the race.
+      stopQueryT += dt;
+      if (stopQueryT >= QUERY_EVERY) { stopQueryT -= QUERY_EVERY; stopPic = port.stopped ? port.stopped(QUERY_EVERY) : null; }
+      const debrisOn = DebrisWorld.active();
+      if (!debrisOn && !stopPic && !stopOwned) {
+        // Debris inactive mid-flag: the LEVEL freezes (test-asserted) but keeps
+        // AGEING, so the hard cap still fires (a trapped Rapier world pinned an SC).
         if (!(held && caution.level <= held)) capDropIfExpired();
         return;
       }
@@ -438,7 +485,7 @@ const RaceControl = (function () {
       // ceil(0.25/dt)·dt and the capHold debit ~6% short at 60/30 fps.
       queryT -= QUERY_EVERY;
 
-      const hz = DebrisWorld.hazards();
+      const hz = debrisOn ? DebrisWorld.hazards() : NO_HAZARDS;
       // DebrisWorld proves a RED-worthy picture has at least two source cars.
       // `total` deliberately remains the lower-caution/HUD count: one scraping
       // car can still need a safety car, but cannot cause a standing restart.
@@ -450,21 +497,19 @@ const RaceControl = (function () {
       else if (hz.worst.count >= YELLOW_MIN) {
         desired = 1; dsector = hz.worst.sector; dfrac = hz.worst.frac; dcause = "YELLOW";
       }
-      caution.total = hz.total;
+      // Stopped cars fly only above what debris asks for.
+      const fromStop = !!stopPic && stopPic.level > desired;
+      if (fromStop) { desired = stopPic.level; dsector = stopPic.sector; dfrac = stopPic.frac; dcause = stopPic.cause; }
+      caution.total = hz.total + (stopPic ? stopPic.n : 0);
       caution.sectors = hz.sectors.slice();
       // v1: a networked race never goes red — the standing restart needs the
       // host to name the moment (netplay hostStart) — it holds a SAFETY CAR.
-      if (desired === 4 && G.netPlay.active()) { desired = 3; dcause = "SAFETY CAR"; }
+      if (desired === 4 && port.networkActive()) { desired = 3; dcause = "SAFETY CAR"; }
 
-      // The HARD CAP the constants always promised ("a stuck hazard cannot
-      // neutralise the race forever"): a flag flown for its full cap drops to
-      // GREEN even while the hazard picture persists — marshals have had their
-      // window; racing resumes. Without this the cap clause below was dead code
-      // (MIN_HOLD < cap made the disjunct unreachable, and lowering only ever
-      // ran when the picture had ALREADY cleared), so one never-despawning
-      // piece of debris held a safety car for the rest of the race.
-      // capHold suppresses an instant re-raise from the SAME stale picture;
-      // genuinely new hazards re-arm after it expires.
+      // HARD CAP: a flag flown for its full cap drops to GREEN even while the
+      // hazard picture persists (one never-despawning shard held an SC all race).
+      // capHold stops an instant re-raise from the SAME stale picture; new
+      // hazards re-arm after it expires.
       if (held && desired < held) { desired = held; dsector = -1; dfrac = 0; dcause = heldCause; }
       if (!(held && caution.level <= held) && capDropIfExpired()) return;
       if (capHoldT > 0) {
@@ -482,9 +527,11 @@ const RaceControl = (function () {
         caution.level = desired; caution.sector = dsector; caution.frac = dfrac;
         caution.cause = dcause; caution.sinceT = 0;
         caution.phase = desired === 4 ? "stopping" : "";
+        episode(desired);
+        stopOwned = fromStop;
         flag(prev, desired);
       } else if (desired < caution.level) {
-        if (caution.sinceT >= MIN_HOLD) {
+        if (caution.sinceT >= (caution.level === 3 ? SC_HOLD : MIN_HOLD)) {
           const prev = caution.level;
           caution.level = desired;
           if (desired !== 1) caution.sector = -1;
@@ -492,6 +539,7 @@ const RaceControl = (function () {
           else if (hz.worst && hz.worst.sector >= 0) caution.sector = hz.worst.sector;
           else caution.sector = 0;
           caution.frac = dfrac; caution.cause = dcause; caution.sinceT = 0;
+          stopOwned = fromStop && desired > 0;
           flag(prev, desired);
         }
       } else if (desired === 1 && dsector >= 0) {
@@ -516,6 +564,11 @@ const RaceControl = (function () {
       if (Array.isArray(d.sectors)) caution.sectors = d.sectors.slice(0, 3).map(num);
       caution.sinceT = Math.max(0, num(d.sinceT));
       caution.phase = typeof d.phase === "string" ? d.phase.slice(0, 16) : "";
+      // The episode clock off the wire: at least the host's time at this level
+      // (a guest that takes race control over keeps capping from there).
+      if (caution.level === 0 || prev === 0) { flagAgeT = 0; flagPeak = 0; }
+      if (caution.level > flagPeak) flagPeak = caution.level;
+      flagAgeT = Math.max(flagAgeT, caution.sinceT);
       flag(prev, caution.level);
       return true;
     }
@@ -564,22 +617,22 @@ const RaceControl = (function () {
     // car. Only with CAUTIONS on (update() gates the call): OFF raises no flag.
     function stormTick() {
       const S = typeof Storm !== "undefined" ? Storm : null;
-      const t = typeof G.raceT === "number" && Number.isFinite(G.raceT) ? G.raceT : 0;
+      const t = typeof port.raceT === "number" && Number.isFinite(port.raceT) ? port.raceT : 0;
       // A practice rewind (driving-coach restoreWorld) sets raceT back: carry the storm's start with it, or the
       // window measures t - stormSince across the jump and the SC stays out for the rewound span again (R2).
       if (stormSince != null && t < stormLastT - 0.5) stormSince -= stormLastT - t;
       stormLastT = t;
-      if (!S || !S.is(G.raceWeather)) {
+      if (!S || !S.is(port.raceWeather)) {
         if (stormSince != null) Log.info("race", "storm eased raceT=" + t.toFixed(1));
         stormSince = null;
-        if (wxHeld) { wxHeld = 0; rehold(); if (typeof G.announce === "function") G.announce("STORM EASING — SAFETY CAR IN THIS LAP", 3, "info"); }
+        if (wxHeld) { wxHeld = 0; rehold(); port.announce("STORM EASING — SAFETY CAR IN THIS LAP", 3, "info"); }
         return;
       }
       if (stormSince == null) {
         stormSince = t; stormAtStart = t < 2;
         wxHeld = 3; rehold();
         Log.info("race", "storm SC deployed start=" + stormAtStart + " raceT=" + t.toFixed(1));
-        if (typeof G.announce === "function") G.announce(stormAtStart ? "STORM — START BEHIND THE SAFETY CAR" : "STORM — SAFETY CAR DEPLOYED", 3, "warning");
+        port.announce(stormAtStart ? "STORM — START BEHIND THE SAFETY CAR" : "STORM — SAFETY CAR DEPLOYED", 3, "warning");
         return;
       }
       if (wxHeld && t - stormSince >= (stormAtStart ? S.SC_START_S : S.SC_ROLL_S)) {
@@ -597,7 +650,7 @@ const RaceControl = (function () {
     // capHoldLevel 4 masked every lower level too, and — the countdown never
     // ticking update() — all 45 s of it landed on the green running after the
     // restart, where a lap-1 pile-up got no yellow, VSC or SC.
-    function clearHold() { capHoldT = 0; capHoldLevel = 0; }
+    function clearHold() { capHoldT = 0; capHoldLevel = 0; if (port.stoppedReset) port.stoppedReset(); stopQueryT = 0; stopPic = null; stopOwned = false; }   // the restart re-grids: stale dwell must not flag it (#5557)
     // game.js redFlagRestart rewound the leader's lap: a pending hold follows it.
     function rewound() { if (otHoldLap != null) otHoldLap -= 1; }
 
@@ -609,8 +662,8 @@ const RaceControl = (function () {
     // Overtake is off and active aero only partial (game.js aeroWetK). Read
     // live, so a weather arc that dries the track hands both back.
     function lowGrip() {
-      if (typeof TyreModel === "undefined" || G.raceWeather == null) return false;
-      return TyreModel.treadFor(G.raceWeather, typeof G.trackWetness === "function" ? G.trackWetness() : undefined) > 0;
+      if (typeof TyreModel === "undefined" || port.raceWeather == null) return false;
+      return TyreModel.treadFor(port.raceWeather, port.wetness()) > 0;
     }
     // May a car EARN Overtake at the Detection Line now? Not under the Safety
     // Car or red flag (a bunched queue would all earn it for the restart lap),
@@ -618,11 +671,11 @@ const RaceControl = (function () {
     function otDetectOpen() { return caution.level < 3 && !lowGrip(); }
     function otEnabled() {
       if (caution.level >= 3 || lowGrip()) return false;
-      const leader = G.ranked[0];
-      if (!leader || !(leader.lap > 1)) return false;
+      const lap = port.leaderLap;
+      if (!(lap > 1)) return false;
       // Never cleared here: a red flag's regrid rewinds the lap AFTER the drop,
       // so a read in between must not spend the hold. Laps only rise otherwise.
-      return otHoldLap == null || leader.lap > otHoldLap;
+      return otHoldLap == null || lap > otHoldLap;
     }
 
     function info() {
@@ -739,6 +792,8 @@ const RaceControl = (function () {
     return Infinity;
   }
 
-  return { create, finishDelay, finishPending, POST_FINISH_CAP, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, classify, shortRun, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
+  // HOLD_M / SC_* / POST_FINISH_CAP stay module-local: holdCap, scQueueFrac and
+  // finishDelay own the thresholds; no external caller reads the constants.
+  return { create, finishDelay, finishPending, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, classify, shortRun, scQueueFrac, holdCap };
 })();
 Object.freeze(RaceControl);

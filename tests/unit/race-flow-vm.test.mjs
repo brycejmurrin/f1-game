@@ -101,3 +101,55 @@ test("a red flag re-grids the field on the stopped clock and leaves no flag flyi
   assert.equal(G.cars.map((c, k) => A.pit({ car: k }).state).filter((s) => s !== "none").length, 0, "no pit state survives the re-grid");
   assert.ok(stepUntil(() => leader().lap > running[0].lap, 60 * 150), "the field races on after the restart");
 });
+
+for (const flow of ["season", "career"]) {
+  test(`${flow}: a duplicate completion cannot advance or pay another round`, async () => {
+    await fresh(3);
+    const { SeasonCal, Career } = g.sandbox;
+    if (flow === "career") {
+      Career.start({ flavour: "driver", teamId: G.player.team.id, seed: 7 });
+      Career.engage(true);
+    }
+    SeasonCal.engage(flow);
+    G.flow = flow;
+    G.season = flow === "career" ? Career.data().season : SeasonCal.blank();
+    // Invoke the real completion boundary twice with the same field. This pins
+    // idempotence; it does not assert that ordinary UI controls deliver twice.
+    G.endRace();
+    assert.equal(G.state, "results");
+    assert.equal(G.season.round, 1);
+    const settled = JSON.stringify(flow === "career" ? Career.data() : G.season);
+    G.endRace();
+    assert.equal(G.season.round, 1, "a duplicate completion cannot spend the next round");
+    assert.equal(JSON.stringify(flow === "career" ? Career.data() : G.season), settled,
+      "the same completion must preserve points, round, economy and results ledger");
+    G.flow = "gp";
+    Career.engage(false);
+    SeasonCal.engage(false);
+  });
+}
+
+test("career simulation forgets the prior driven round's unclassified DNF", async () => {
+  const simGame = await createGame({ track: ID });
+  try {
+    const { G, apex: A } = simGame;
+    const { Career, SeasonCal } = simGame.sandbox;
+    Career.start({ flavour: "driver", teamId: G.player.team.id, seed: 7 });
+    Career.engage(true); SeasonCal.engage("career");
+    G.flow = "career"; G.season = Career.data().season;
+    for (const c of G.cars) {
+      c.lap = 4; c.prog = 3 * G.track.total; c.finished = true;
+      c.finishT = 300 + G.cars.indexOf(c); c.tyreLog = [{ code: "S" }, { code: "M" }]; c.best = 90;
+    }
+    G.player.finished = false; G.player.retired = true; G.player.lap = 1;
+    G.player.prog = 100; G.player.dnf = "mechanical"; G.raceT = 350;
+    G.endRace();
+    assert.equal(G.player.classified, false);
+    G.raceReliability = "off";
+    A.careerSim(1);
+    const row = Career.data().results.at(-1);
+    assert.equal(G.player.retired, false);
+    assert.ok(row.p <= 10, "the seeded next-round finish earns points");
+    assert.ok(row.pts > 0, "a previous unclassified DNF cannot erase the new finish's points");
+  } finally { simGame.close(); }
+});

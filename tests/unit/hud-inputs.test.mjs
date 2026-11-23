@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
@@ -16,7 +17,7 @@ const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-inputs.js"), "utf8");
 
 function load(extra = {}) {
   const ctx = { console, Float32Array, ...extra };
-  vm.createContext(ctx);
+  vm.createContext(ctx); withI18n(ctx);
   vm.runInContext(SRC, ctx, { filename: absSrc("js/ui/hud-inputs.js") });   // a filename, so V8 coverage attributes the run to the file
   vm.runInContext("this.HudInputs = HudInputs;", ctx);
   return ctx.HudInputs;
@@ -43,7 +44,7 @@ test("paused preference changes clear input history before another HUD frame", (
   const store = { get: (k, d) => values.has(k) ? values.get(k) : d,
     set(k, v) { values.set(k, v); for (const fn of listeners) fn({ key: k }); },
     subscribe(fn) { listeners.push(fn); } };
-  const ctx = vm.createContext({ GameStore: { store } });
+  const ctx = withI18n(vm.createContext({ GameStore: { store } }));
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/hud-elements.js"), "utf8"), ctx);
   const elements = vm.runInContext("HudElements", ctx), d = fakeDom();
   const I = load({ document: d.doc, window: d.win, HudElements: elements, GameStore: { store } });
@@ -120,6 +121,20 @@ test("frame: off hides; on samples at a fixed step at any fps, sizes for DPR, re
   assert.ok(I.trace.count <= 2);
 });
 
+test("placing or resetting the touch inputs chart remeasures its CSS box at the same zoom", () => {
+  const d = fakeDom(), I = load({ document: d.doc, window: d.win });
+  const p = { throttleDemand: 1, gear: 3 };
+  let placed = false;
+  d.root.hasAttribute = name => name === "data-hl-user" && placed;
+  for (const state of [false, true, false]) {
+    placed = state;
+    d.cv.clientWidth = placed ? 128 : 84;
+    d.cv.clientHeight = placed ? 48 : 32;
+    I.frame({}, p, 100);
+    assert.deepEqual([d.cv.width, d.cv.height], [d.cv.clientWidth * 2, d.cv.clientHeight * 2]);
+  }
+});
+
 test("reduced motion draws still bars, not a scrolling trace", () => {
   const d = fakeDom();
   d.doc.documentElement.dataset.motion = "reduce";
@@ -145,8 +160,8 @@ test("shell + sheet + toggles: the opt-in readouts are wired without class token
     assert.match(els, new RegExp(`\\["${k}", "[A-Z]+", "off"\\]`), k + " is opt-in");
     assert.match(css, new RegExp(`body\\[data-hud-hide~="${k}"\\]`));
   }
-  assert.match(css, /body\.hud-prof-minimal :is\(#hud-rel, #hud-strat, #hud-inputs\)/);
-  assert.match(css, /body\.hud-bcam :is\(#hud-rel, #hud-strat, #hud-inputs\)/);
+  assert.match(css, /body:is\([^)]*\.hud-prof-minimal[^)]*\) :is\(#hud-rel, #hud-strat, #hud-inputs\)/);
+  assert.match(css, /body:is\([^)]*\.hud-bcam[^)]*\) :is\(#hud-rel, #hud-strat, #hud-inputs\)/);
   for (const g of ["HudRelative.tick", "HudStrategy.tick", "HudInputs.frame"]) assert.ok(hud.includes(g), g + " is called by GameHud");
   assert.doesNotMatch(SRC, /curvature|kCur|Tracks\./);
 });

@@ -80,11 +80,13 @@ const CarBodyGeom = (function () {
 
   // Continuous closed skin; interior stations carry no overlapping caps.
   function closedSkin(out, rings, col) {
+    const v0 = out.pos.length / 3;
     for (let i = 0; i < rings.length - 1; i++) for (let j = 0; j < rings[i].length; j++) {
       const k = (j + 1) % rings[i].length, a = rings[i][j], b = rings[i][k];
       const c = rings[i + 1][j], d = rings[i + 1][k];
       addTri(out, a, c, b, col); addTri(out, b, c, d, col);
     }
+    CarGeometry.loftUv(out, v0, rings);   // heroCar loft UVs (sides only)
     for (const [ring, reverse] of [[rings[0], false], [rings[rings.length - 1], true]])
       for (let j = 1; j < ring.length - 1; j++)
         addTri(out, ring[0], ring[reverse ? j + 1 : j], ring[reverse ? j : j + 1], col);
@@ -462,16 +464,28 @@ const CarBodyGeom = (function () {
       py: le[1] + (te[1] - le[1]) * hinge,
     };
   }
+  // The flap solves ask a neighbour's top at ~40 z's per pose, ~120 poses per end, ~20
+  // pivots: rebuilding its 33-point line per ask was ~33 M elemPoint calls and 0.16-1.2 s a
+  // recipe (perf hunt 7). The line depends only on (e, d), so it is built once; the walk and
+  // its float ops are unchanged, so every answer is bit-identical.
+  const _topLines = new WeakMap();
+  function elemTopLine(e, d) {
+    let byD = _topLines.get(e), line = byD && byD.get(d);
+    if (line) return line;
+    const N = 32, z = new Float64Array(N + 1), top = new Float64Array(N + 1);
+    for (let k = 0; k <= N; k++) { const p = elemPoint(e, d, k / N); z[k] = p.z; top[k] = p.top; }
+    if (!byD) _topLines.set(e, byD = new Map());
+    byD.set(d, line = { z, top });
+    return line;
+  }
   function elemTopAt(e, d, z) {
-    const N = 32;
-    let prev = elemPoint(e, d, 0);
-    for (let k = 1; k <= N; k++) {
-      const cur = elemPoint(e, d, k / N);
-      if ((z <= prev.z && z >= cur.z) || (z >= prev.z && z <= cur.z)) {
-        const f = (z - prev.z) / ((cur.z - prev.z) || 1e-9);
-        return prev.top + (cur.top - prev.top) * f;
+    const L = elemTopLine(e, d), zs = L.z, tops = L.top;
+    for (let k = 1; k < zs.length; k++) {
+      const z0 = zs[k - 1], z1 = zs[k];
+      if ((z <= z0 && z >= z1) || (z >= z0 && z <= z1)) {
+        const f = (z - z0) / ((z1 - z0) || 1e-9);
+        return tops[k - 1] + (tops[k] - tops[k - 1]) * f;
       }
-      prev = cur;
     }
     return null;
   }
@@ -491,6 +505,7 @@ const CarBodyGeom = (function () {
     flankTrim: 0.009, flankDecal: 0.014,             // flank, from coverFlankX
   });
   const SLOT_MIN = 0.003;   // m of daylight to keep in a cascade slot
+  const CLEAR_FT = Array.from({ length: 41 }, (_, k) => foilThick(k / 40));   // solvePoses' CLEAR_N = 40 stations
   function hinged(id, wing, zLead, yLead, zTrail, yTrail, planform, prev) {
     const dz = zLead - zTrail, dy = yTrail - yLead;
     const chord = Math.sqrt(dz * dz + dy * dy);
@@ -536,14 +551,19 @@ const CarBodyGeom = (function () {
       // nose, so the rear simply never trips that half of the test — there is no
       // need for the wing to exempt itself, and exempting it was what left the
       // rear stack unchecked.
+      // elemPoint(self, d, k / CLEAR_N) inlined, its cos/sin hoisted per pose and foilThick tabled:
+      // the same expressions in the same order, so bit-identical (perf hunt 7).
       const clears = (d, prevDelta) => {
+        const ang = self.natural + d, c = Math.cos(ang), s = Math.sin(ang);
         for (let k = 0; k <= CLEAR_N; k++) {
-          const p = elemPoint(self, d, k / CLEAR_N);
-          const ceil = noseUnderAt(p.z);
-          if (isFinite(ceil) && p.top > ceil - NOSE_GAP) return false;
+          const t = k / CLEAR_N, u = (t - self.hinge) * self.chord;
+          const mid = self.py + u * s - FOIL_CAMBER * self.chord * 4 * t * (1 - t);
+          const hh = self.thick * 0.5 * CLEAR_FT[k], pz = self.pz - u * c;
+          const ceil = noseUnderAt(pz);
+          if (isFinite(ceil) && mid + hh > ceil - NOSE_GAP) return false;
           if (prev) {
-            const below = elemTopAt(prev, prevDelta, p.z);
-            if (below != null && p.bot < below + SLOT_MIN) return false;
+            const below = elemTopAt(prev, prevDelta, pz);
+            if (below != null && mid - hh < below + SLOT_MIN) return false;
           }
         }
         return true;
@@ -1273,7 +1293,8 @@ const CarBodyGeom = (function () {
   const CKPT_MONO_REAR = Object.freeze({ z: 0.45, y: 0.32, w: 0.552, h: 0.16, t: 0.752 });
   function buildSharedChassis(out, c1, rideDY, noseStations, ckpt, edgeAt, measure, noseC) {
     const floor = CHASSIS.floor;
-    if (shadeFlags.round) CarShade.floor(out, floor, Math.max(floor.cy + rideDY, 0.052), edgeAt, CARBON, addTri); else addBox(out, floor.cx, Math.max(floor.cy + rideDY, 0.052), floor.cz,
+    // heroCar: the plate's top and bottom rims rounded 5 mm in two segments (CarGeometry.heroBevel; else today's).
+    if (shadeFlags.round) CarGeometry.heroBevel(out, 0.005, 2, (o) => CarShade.floor(o, floor, Math.max(floor.cy + rideDY, 0.052), edgeAt, CARBON, addTri)); else addBox(out, floor.cx, Math.max(floor.cy + rideDY, 0.052), floor.cz,
            floor.sx, floor.sy, floor.sz, CARBON);
     const nose = noseStations || CHASSIS.nose;
     if (nose.curve) {
@@ -1608,7 +1629,7 @@ const CarBodyGeom = (function () {
       noseMount(side) {
         const z = Math.min(2.40, CHASSIS.nose[0].z + style.noseTipZ - 0.065), n = anchors.noseAt(z);
         const w = Math.min(anchors.noseAt(z - 0.060).side, anchors.noseAt(z + 0.060).side);
-        const seat = style.podSculpt ? Math.min(0.035, (n.top - n.bottom) * 0.35) : 0.012;
+        const seat = style.noseSeat != null ? style.noseSeat : style.podSculpt ? -0.012 : 0.012;
         return [side * Math.min(0.09, Math.max(0, w * 0.40 - 0.020)), n.bottom + seat, z];
       },
       coverStripe(out, color) {
@@ -1977,7 +1998,7 @@ const CarBodyGeom = (function () {
 
   function sculptPodLoft(out, data, color) {
     for (const side of [-1, 1]) {
-      const rings = data.podStops.map(p => data.podRing(p.z, side));
+      const rings = data.podStops.map(p => data.podRing(p.z, side)), v0 = out.pos.length / 3;
       for (let r = 0; r < rings.length - 1; r++) for (let k = 0; k < rings[r].length; k++) {
         const j = (k + 1) % rings[r].length;
         const q = [rings[r][k], rings[r + 1][k], rings[r + 1][j], rings[r][j]];
@@ -1986,6 +2007,7 @@ const CarBodyGeom = (function () {
           recessedPodExit(out, q, side, data.podSculpt.exitDepth, color);
         else addQuad(out, ...q, color);
       }
+      CarGeometry.loftUv(out, v0, rings);   // heroCar loft UVs (skin only)
       for (const [boundary, front] of [[rings[0], true], [rings[rings.length - 1], false]]) {
         let ring = boundary;
         const centre = ring.reduce((m, p) => m.map((v, i) => v + p[i] / ring.length), [0, 0, 0]);
@@ -2033,10 +2055,12 @@ const CarBodyGeom = (function () {
       const p = coverProfile(anchors.coverAt(z), shadeFlags.round && shadeFlags.coverHi).pts;
       return p.map(([x, y]) => [x, y, z]).concat(p.slice().reverse().map(([x, y]) => [-x, y, z]));
     });
+    const v0 = out.pos.length / 3;
     for (let r = 0; r < rings.length - 1; r++) for (let k = 0; k < rings[r].length; k++) {
       const j = (k + 1) % rings[r].length;
       addQuad(out, rings[r][k], rings[r + 1][k], rings[r + 1][j], rings[r][j], color);
     }
+    CarGeometry.loftUv(out, v0, rings);   // heroCar loft UVs (skin only)
     for (const [ring, front] of [[rings[0], true], [rings[rings.length - 1], false]]) {
       const c = ring.reduce((a, p) => a.map((v, i) => v + p[i] / ring.length), [0, 0, 0]);
       for (let k = 0; k < ring.length; k++) {

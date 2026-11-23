@@ -85,12 +85,13 @@ const FlybySight = (function () {
   function offRoad(boxes, track) {
     if (!(track.n > 0 && track.px)) return boxes;              // no spline (a test's bare box list): no road to clear
     const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+    const prOut = { s: 0, lat: 0, k: 0, heading: 0, dist: 0 };
     let dropped = 0;
     const kept = boxes.filter((b) => {
       if (b.part || !(b.w > 2 && b.d > 2)) return true;           // trees and thin parts: their own model
       for (let k = 0; k < 25; k++) {             // 5 x 5 over the footprint: a 93 m stand is crossed mid-edge
         const x = b.x + ((k % 5) / 2 - 1) * b.w / 2 * 0.9, z = b.z + (Math.floor(k / 5) / 2 - 1) * b.d / 2 * 0.9;
-        const pr = Tracks.project(track, x, z, null, b.y);
+        const pr = Tracks.project(track, x, z, null, b.y, prOut);
         if (!pr || !isFinite(pr.lat)) continue;
         Tracks.sample(track, pr.s, smp);
         if (Math.abs(pr.lat) < (smp.hw || 7) - 0.5 && b.y - b.h / 2 < smp.p[1] + 1) { dropped++; return false; }
@@ -124,8 +125,6 @@ const FlybySight = (function () {
     });
     return out;
   }
-
-  // ---- the planner's index: the same boxes on a 32 m XZ grid ----------------
 
   const CELL = 32;
   const cellKey = (ix, iz) => ix * 100003 + iz;
@@ -275,8 +274,6 @@ const FlybySight = (function () {
     }
     return { T: Math.max(0, T), near, Tdrawn: Math.max(0, T) * held };
   }
-
-  // ---- one camera ------------------------------------------------------------
 
   /** A look-at pinhole camera, +Y up, no roll, VERTICAL fov in degrees. */
   function camera(eye, tgt, fovDeg, aspect) {
@@ -602,5 +599,5 @@ const FlybySight = (function () {
     return { inF, vis, nearSubj, near, thirds: th, inside, steep, cover, mix: m, mixCost: mc, cost };
   }
 
-  return Object.freeze({ propBoxes, offRoad, spanBoxes, sceneOf, rayBox, transmit, nearThirds, mix, mixCost, frame, camera, project, NEAR_M, GROUND_OK });
+  return Object.freeze({ propBoxes, offRoad, spanBoxes, sceneOf, transmit, nearThirds, mix, mixCost, frame, camera, project, GROUND_OK });
 })();

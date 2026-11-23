@@ -126,3 +126,28 @@ test("15-F9: the bot never force-pushes a branch it did not create", async () =>
     assert.match(mine.stdout, new RegExp(`LEASE=--force-with-lease=bot/model-import:${tip}`), "the bot's own branch is replaced under a lease on its tip");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("a failing assets.mjs verify fails the job before the upload, commit and push", () => {
+  const verify = workflow.indexOf("- name: Verify the pack");
+  const upload = workflow.indexOf("- name: Upload baked models as an artifact");
+  const commit = workflow.indexOf("- name: Commit to the bot branch");
+  assert.ok(verify >= 0 && upload > verify && commit > upload,
+    "verify is its own step, ahead of the upload and the commit/push steps (a failed step skips the ones after it)");
+  const step = workflow.slice(verify, upload);
+  assert.match(step, /if ! node tools\/gen\/assets\.mjs verify; then\n\s+echo "::error::[^\n]*"\n\s+exit 1\n\s+fi/,
+    "a verify failure exits non-zero");
+  assert.doesNotMatch(step, /\bif:/, "the verify step runs on the default success() condition, never always()");
+  assert.doesNotMatch(workflow, /assets\.mjs verify \|\|/, "verify is never downgraded to a warning");
+  assert.doesNotMatch(workflow, /assets\.mjs credits \|\| true/, "a credits failure is not swallowed either");
+  for (const later of [workflow.slice(upload, commit), workflow.slice(commit)]) {
+    assert.doesNotMatch(later, /^\s+if:\s*(\$\{\{\s*)?(always|failure)\(\)/m,
+      "no later step runs after a failed verify");
+  }
+});
+
+test("the bake step fails when the importer imports nothing", () => {
+  const bake = workflow.slice(workflow.indexOf("- name: Bake models"), workflow.indexOf("- name: Verify the pack"));
+  assert.match(bake, /run: \|\n\s+set -euo pipefail\n/, "the importer's exit 2 (every model skipped) stops the job");
+  assert.match(bake, /node tools\/gen\/import-models\.mjs _extract/);
+  assert.doesNotMatch(bake, /import-models\.mjs[^\n]*\|\|/, "the importer's status is never swallowed");
+});

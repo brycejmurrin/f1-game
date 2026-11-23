@@ -68,129 +68,8 @@ const TrackBuildProps = (function () {
     }
   }
 
-  function transformSceneryApi(api, def, n) {
-    const RK = (k) => TrackSpace.sceneryNode(def, k, n);
-    const RS = (s) => TrackSpace.sceneryFrac(def, s);
-    const SIDE = (side) => def.reverse ? -side : side;
-    const w = Object.assign({}, api);
-    // (k, side, ...rest): index + side based
-    for (const name of ["place", "prop", "backdrop", "groundPlane", "anchor", "pine", "tree",
-                        "palm", "conifer", "building", "house", "motorhome", "tower", "billboard",
-                        "marshalPost", "bush", "signBoard", "ferrisWheel", "floodMast", "runoffApron",
-                        "cameraTower", "broadcastCompound", "waterSurface",
-                        "cypress", "stonePine", "broadleafFall", "acacia", "plane"]) {
-      const f = api[name]; if (f) w[name] = (k, side, ...r) => f(RK(k), SIDE(side), ...r);
-    }
-    // (id, k, side, ...rest): the MODEL ID comes first. bakedModel must take the
-    // same origin shift and reverse flip as the procedural call it stands in for
-    // — unwrapped, the baked asset stood 2/3 of a lap away on every shifted
-    // circuit that ships one — but it cannot ride the (k, side) list above,
-    // because that list remaps argument 0, and argument 0 here is a string.
-    // Measured before this line existed: across the 15 call sites on vegas,
-    // monaco, spa, monza and silverstone, all 152 calls reached
-    // Assets.modelSync as NaN (or, on a source-space def, a node number
-    // coerced out of the id), so modelSync never matched a model, bakedModel
-    // always returned false, and the whole baked pack was dead on every
-    // circuit that asks for it — invisible because the `if (!bakedModel(…))`
-    // fallback quietly drew the procedural shape instead.
-    if (api.bakedModel)
-      w.bakedModel = (id, k, side, ...r) => api.bakedModel(id, RK(k), SIDE(side), ...r);
-    // (s, side, ...rest): single fraction + side
-    for (const name of ["grandstand", "grandstandEx"]) {
-      const f = api[name]; if (f) w[name] = (s, side, ...r) => f(RS(s), SIDE(side), ...r);
-    }
-    // (s0, s1, side, ...rest): fraction RANGE + side — swap ends and mirror both
-    for (const name of ["wall", "fence", "guardrail", "tyreWall", "hedge",
-                        "forestEdge", "cityFront", "recordBarrier", "indexSolid",
-                        "concreteCanyon",
-                        "bankedKerbStrip", "bowlSeatWall", "pastelStreetRow",
-                        "spectatorHill", "sponsorHoarding", "waterBand",
-                        "bleacher", "scaffoldStand", "terrace", "tieredBowl"]) {
-      const f = api[name]; if (f) w[name] = (s0, s1, side, ...r) => {
-        const range = TrackSpace.sceneryRange(def, s0, s1);
-        return f(range.s0, range.s1, SIDE(side), ...r);
-      };
-    }
-    // (s0, s1, stepM, fn, tag?): fraction range, no side.
-    // Remap the span into engine frame (same as wall/fence), but hand the
-    // callback AUTHORIZED-frame k. along walks engine nodes; wrapped helpers
-    // then apply sceneryNode once. Passing engine k through made every
-    // anchor/tree/place/bakedModel inside the callback double-shift (Imola
-    // ~1.8 km / Spa ~277 m — docs/BUGS.md S1). Engine-internal ctx.along
-    // (wall/fence closures) is untouched and stays single-shift.
-    if (api.along) w.along = (s0, s1, stepM, fn, tag) => {
-      const range = TrackSpace.sceneryRange(def, s0, s1);
-      if (typeof fn !== "function") return api.along(range.s0, range.s1, stepM, fn, tag);
-      return api.along(range.s0, range.s1, stepM, (kEng, spacing) => {
-        fn(TrackSpace.sceneryNodeToAuthored(def, kEng, n), spacing);
-      }, tag);
-    };
-    // every() walks engine nodes (i + origin shift), the same frame `along`
-    // used to hand its callback. Circuit files then call wrapped pine /
-    // marshalPost, which shift again. Hand authored-frame k, as along does.
-    // Raw every (plantRoadsideTrees, marshal posts) is not this wrapper.
-    if (api.every) w.every = (m, fn) => {
-      if (typeof fn !== "function") return api.every(m, fn);
-      return api.every(m, (kEng) => fn(TrackSpace.sceneryNodeToAuthored(def, kEng, n)));
-    };
-    // (s, …): single fraction, no side (gantry / underpass portal)
-    if (api.gantry) w.gantry = (s, ...r) => api.gantry(RS(s), ...r);
-    if (api.underpassPortal) w.underpassPortal = (s, ...r) => api.underpassPortal(RS(s), ...r);
-
-    // Six more entry points take a node index or a lap fraction and are absent
-    // from the lists above, so they never moved with the rest: `groundPatch`
-    // (34 circuits), `overheadSpan` (18), `circuitKit` (16), `groundedSegments`
-    // (9), `waterField`, and the `frameAt` lookup itself. That gap is why
-    // Miami's Turnpike overpass and Singapore's kit-built pit building were the
-    // last two required models left in the road after the origin move.
-    //
-    // Default: ORIGIN SHIFT ONLY — no side flip, no reverse/mirror remap. That
-    // is deliberate and conservative: the same emitters are unremapped on the
-    // reverse-only circuits (monaco, kyalami, paul_ricard) TODAY, so giving
-    // them the full treatment here would silently move already-shipped geometry.
-    //
-    // Exception: `sceneryLapMirror` circuits (singapore): ONLY frameAt and
-    // overheadSpan take the mirrored remapS — the portal-deck case that landed
-    // ~half a lap from anchor()-placed supports. The k-keyed helpers and
-    // circuitKit stay SHIFT-ONLY on purpose: singapore's authored fracs are
-    // tuned against shift-only (the KOLD legend in js/circuits/singapore.js).
-    //
-    // `frameAt` is wrapped at the API BOUNDARY rather than at its definition on
-    // purpose. models/ and the kits hold the RAW frameAt and resolve fractions
-    // the caller already handed them, so shifting it at source would apply the
-    // shift twice to everything routed through the wrapped calls below.
-    const shiftS = TrackSpace.sceneryOriginDelta(def);
-    const doMirror = !!(def.reverse && def.sceneryLapMirror);
-    if (doMirror || shiftS) {
-      const shiftK = Math.round(shiftS * n);
-      const SK = (k) => (((Math.round(k) + shiftK) % n) + n) % n;
-      const SS = (s) => TrackSpace.wrap01(s + shiftS);
-      const remapS = doMirror ? RS : SS;
-      for (const name of ["groundPatch", "waterField"]) {
-        const f = api[name]; if (f) w[name] = (k, side, ...r) => f(SK(k), side, ...r);
-      }
-      if (api.frameAt) w.frameAt = (frac, ...r) => api.frameAt(remapS(frac), ...r);
-      if (api.overheadSpan) w.overheadSpan = (spec) => api.overheadSpan(
-        spec && Number.isFinite(spec.frac) && !spec.rawFrac
-          ? Object.assign({}, spec, { frac: remapS(spec.frac) }) : spec);
-      if (api.groundedSegments) w.groundedSegments = (spec) => api.groundedSegments(
-        spec && Array.isArray(spec.points)
-          ? Object.assign({}, spec, { points: spec.points.map((pt) => Object.assign({}, pt, { k: SK(pt.k) })) })
-          : spec);
-      if (api.circuitKit) {
-        const kit = api.circuitKit, wk = {};
-        for (const name of Object.keys(kit)) {
-          const f = kit[name];
-          wk[name] = typeof f === "function"
-            ? (spec, ...r) => f(spec && Number.isFinite(spec.frac)
-                ? Object.assign({}, spec, { frac: SS(spec.frac) }) : spec, ...r)
-            : f;
-        }
-        w.circuitKit = wk;
-      }
-    }
-    return w;
-  }
+  // Coordinate wrap lives in api-wrap.js so build-props stays the orchestrator.
+  // along/every still hand authored-frame k (docs/BUGS.md S1) — do not remap twice.
 
   // Painted lens albedo per lamp kind (js/lighting/track-lights.js LAMP_KINDS):
   // over-white at night so the head glows in the props draw, plain by day.
@@ -212,7 +91,7 @@ const TrackBuildProps = (function () {
   // THE PROPS PASS AS STEPS (Tracks.buildSteps delegates to it): it yields only
   // between whole emission phases, so build() — which runs it straight through —
   // produces byte-identical buffers.
-  function* buildSteps(track) {
+  function* buildSteps(track, buildOptions) {
     Log.info("track", "buildProps start " + (track.def && track.def.id));
     const { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS,
             MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, FURN_DEF,
@@ -224,22 +103,34 @@ const TrackBuildProps = (function () {
     // NOT opted into GRAPHICS: HIGH) coarsen that grid, cutting ~20-24% of the props
     // verts on the dense street tracks that OOM-crash iOS — the exact jetsam trigger.
     // CITY_LOD = 1 on desktop and HIGH-tier phones ⇒ geometry is byte-identical there;
-    // `lod()` only ever shrinks a count and never below its floor.
+    // `lod()` never goes below its floor; only the EXTREME `density` flag (never a phone) grows a count.
     // Façade wiring: read mobileTier off the injected backend (stashed on the
     // track by build()), falling back to the GLX global for VM/stub callers.
     const G = track._gfx || (typeof GLX !== "undefined" ? GLX : null);
-    const CITY_LOD = (G && G.mobileTier) ? 0.72 : 1;
+    // Desktop DETAIL (js/track/scenery/detail.js): `density` at EXTREME raises the same knob above 1.
+    const DF = track._detailFeatures || {};
+    const CITY_LOD = (G && G.mobileTier) ? 0.72 : DF.density ? 1.3 : 1;
     const lod = (nn, floor) => Math.max(floor, Math.round(nn * CITY_LOD));
     // Props run ~70-290 verts per metre of lap (median ~130; 52-circuit sweep): start at 100/m so a
     // typical build grows once, not seven times from 8192. Glass and water stay small.
-    const out = TrackModels.scratch(Math.round(track.total * 100));
+    const out = TrackModels.scratch(buildOptions && buildOptions.region ? 8192 : Math.round(track.total * 100));
     const glassBuf = TrackModels.scratch();
     const waterBuf = TrackModels.scratch();
+    const region = buildOptions && buildOptions.region ? TrackSceneryRegion.create(buildOptions.region, [out, glassBuf, waterBuf], RAW) : null;
+    const raw = region ? region.raw : RAW, emit = region ? region.emit : TrackGeom.emit, addMesh = region ? region.addMesh : TrackGeom.addMesh;
     // Cells already emitted this build — overlapping waterBand/waterField calls
     // skip duplicates instead of stacking coplanar quads (docs/BUGS.md S7).
     const waterOccupied = new Set();
     const waterRects = new Map();   // cell width -> emitted world rectangles
     const def = track.def, theme = def.theme, pal = def.palette, ds = track.total / n;
+    // Quantize horizontal layout intervals against the plan-view lap when authored.
+    // A height-only update can otherwise move a half-node tie and re-seed whole streets.
+    const sceneryStepM = def.planarScenerySpacing === true
+      ? px.reduce((sum, x, i) => {
+        const j = (i + 1) % n;
+        return sum + Math.hypot(px[j] - x, pz[j] - pz[i]);
+      }, 0) / n : ds;
+    track.sceneryStepM = sceneryStepM;
     const NIGHT = track._night != null ? track._night : !!def.night;
 
     // Rendered-terrain raycast for exact prop anchoring: anchor-based props
@@ -473,7 +364,9 @@ const TrackBuildProps = (function () {
     };
     const grid = nodeGrid(track);              // shared node grid (built in buildRoad)
     const guards = SceneryGuards.create({ track, n, px, py, pz, hw, ds, grid });
-    const { pitKeep, pitSide, inPitFootprint, onRoadHit, rejBox, rejRad, onTrack } = guards;
+    const { pitKeep, pitSide, inPitFootprint, onRoadHit, onTrack } = guards;
+    const rejBox = region ? (c, size, basis) => guards.rejBox(c, size, basis) || !region.box(c, size, basis) : guards.rejBox;
+    const rejRad = region ? (c, radius, height, basis, base) => guards.rejRad(c, radius, height, basis, base) || !region.radial(c, radius, height, basis) : guards.rejRad;
     const badPrimitive = (kind, c, size) => {
       // COPY c: graph.xform hands out a pooled triple, and this record outlives the op.
       diagnostics.invalid.push({ id: kind, reason: "non-finite primitive dimensions",
@@ -492,7 +385,7 @@ const TrackBuildProps = (function () {
         if (o._dryRun) return true;
       }
       if (o._absorbOnly) { absorbBox(c, sz); return true; }
-      RAW.addBox(o, c, sz, col, basis); absorbBox(c, sz); return true;
+      raw.addBox(o, c, sz, col, basis); absorbBox(c, sz); return true;
     };
     const addCyl = (o, c, rad, h, col, seg, basis) => {
       const tv = o._replayVerdicts;
@@ -504,7 +397,7 @@ const TrackBuildProps = (function () {
         if (o._dryRun) return true;
       }
       if (o._absorbOnly) { absorbUp(c, rad, h); return true; }
-      RAW.addCyl(o, c, rad, h, col, seg, basis); absorbUp(c, rad, h); return true;
+      raw.addCyl(o, c, rad, h, col, seg, basis); absorbUp(c, rad, h); return true;
     };
     const addCone = (o, c, rad, h, col, seg, basis) => {
       const tv = o._replayVerdicts;
@@ -516,7 +409,7 @@ const TrackBuildProps = (function () {
         if (o._dryRun) return true;
       }
       if (o._absorbOnly) { absorbUp(c, rad, h); return true; }
-      RAW.addCone(o, c, rad, h, col, seg, basis); absorbUp(c, rad, h); return true;
+      raw.addCone(o, c, rad, h, col, seg, basis); absorbUp(c, rad, h); return true;
     };
     const addFrustum = (o, c, rB, rT, h, col, seg, basis) => {
       const tv = o._replayVerdicts;
@@ -528,7 +421,7 @@ const TrackBuildProps = (function () {
         if (o._dryRun) return true;
       }
       if (o._absorbOnly) { absorbUp(c, __M.max(rB, rT), h); return true; }
-      RAW.addFrustum(o, c, rB, rT, h, col, seg, basis);
+      raw.addFrustum(o, c, rB, rT, h, col, seg, basis);
       absorbUp(c, __M.max(rB, rT), h); return true;
     };
     const addPrism = (o, c, sz, col, basis) => {
@@ -541,7 +434,7 @@ const TrackBuildProps = (function () {
         if (o._dryRun) return true;
       }
       if (o._absorbOnly) { absorbBox(c, sz); return true; }
-      RAW.addPrism(o, c, sz, col, basis); absorbBox(c, sz); return true;
+      raw.addPrism(o, c, sz, col, basis); absorbBox(c, sz); return true;
     };
     const addPyramid = (o, c, sz, col, basis) => {
       const tv = o._replayVerdicts;
@@ -553,23 +446,24 @@ const TrackBuildProps = (function () {
         if (o._dryRun) return true;
       }
       if (o._absorbOnly) { absorbBox(c, sz); return true; }
-      RAW.addPyramid(o, c, sz, col, basis); absorbBox(c, sz); return true;
+      raw.addPyramid(o, c, sz, col, basis); absorbBox(c, sz); return true;
     };
     const addMountain = (o, c, baseR, h, opts) => {
       if (!finiteVec(c, 3, false) || !__isFinite(baseR) || baseR <= 0 || !__isFinite(h) || h <= 0) return badPrimitive("mountain", c, [baseR, h]);
+      if (region && !region.mountain(c, baseR, h, opts)) return false;
       if (onRoadHit(c[0], c[2], c[1] + h, baseR, 0, 0, 0, 0, 0, 0)) { _culled++; return false; }
-      RAW.addMountain(o, c, baseR, h, opts); absorbUp(c, baseR, h); return true;
+      raw.addMountain(o, c, baseR, h, opts); absorbUp(c, baseR, h); return true;
     };
     const graph = TrackGraph.create({ raw: RAW });
     track.graph = graph;
     const GUARDED = { addBox, addCyl, addCone, addFrustum, addPrism, addPyramid };
     const rawOk = (fn) => (o, ...rest) => {
-      if (o && (o._dryRun || o._absorbOnly)) return true;
-      fn(o, ...rest); return true;
+      if (o && (o._dryRun || o._absorbOnly) && !region) return true;
+      return fn(o, ...rest) !== false;
     };
     const UNGUARDED = {
-      addBox: rawOk(RAW.addBox), addCyl: rawOk(RAW.addCyl), addCone: rawOk(RAW.addCone),
-      addFrustum: rawOk(RAW.addFrustum), addPrism: rawOk(RAW.addPrism), addPyramid: rawOk(RAW.addPyramid),
+      addBox: rawOk(raw.addBox), addCyl: rawOk(raw.addCyl), addCone: rawOk(raw.addCone),
+      addFrustum: rawOk(raw.addFrustum), addPrism: rawOk(raw.addPrism), addPyramid: rawOk(raw.addPyramid),
     };
     // instance(key, place, build, meta, opts?) — returns the number of primitives
     // that survived the guards (0 = wholly suppressed, so the caller skips its
@@ -586,9 +480,9 @@ const TrackBuildProps = (function () {
       // Opt-in crown recipes require the same rounded normals in the fused
       // fallback and canonical instance. Legacy recipes keep their emit path.
       const emit = opts && opts.roundNormals
-        ? { ...baseEmit, roundNormals: RAW.roundNormals } : baseEmit;
-      if (buf === out && G && G.createInstancedBatch) buf._preferInstance = true;
-      const n = graph.instance(key, place, build, meta, emit, buf);
+        ? { ...baseEmit, roundNormals: raw.roundNormals } : baseEmit;
+      if (!region && buf === out && G && G.createInstancedBatch) buf._preferInstance = true;
+      const n = region ? region.instance(graph, key, place, build, () => graph.instance(key, place, build, meta, emit, buf)) : graph.instance(key, place, build, meta, emit, buf);
       if (buf === out) buf._preferInstance = false;
       return n;
     };
@@ -653,7 +547,10 @@ const TrackBuildProps = (function () {
       // true = clear; false = on the road; "pit" = inside the pit complex, which
       // modelGroup records as superseded rather than as a required failure.
       preflight: (bounds) => (!rejBox(bounds.center, bounds.size, bounds.basis) ? true : (guards.pitRejected() ? "pit" : false)),
-      emitBox: (buf, c, size, col, basis) => RAW.addBox(buf, c, size, col, basis),
+      // HEIGHT-BLIND: is (x, z) within `margin` of the road's edge, at any
+      // height? groundPatch asks it per cell of a patch the road hit (#5080).
+      onRoad: (x, z, margin) => onTrack(x, z, margin),
+      emitBox: (buf, c, size, col, basis) => raw.addBox(buf, c, size, col, basis),
       // A grounded point (node, side, metres beyond the edge, half-width)
       // inside the pit complex: the RAW landform emitters ask this chord by
       // chord, since they never pass the footprint guard.
@@ -691,7 +588,31 @@ const TrackBuildProps = (function () {
         return [px[i] + r[0] * o, y, pz[i] + r[2] * o];
       },
     };
+    // Every emitted modelGroup box (world XZ footprint), for the pit-straight
+    // crowd's yield: a circuit's own stand is a modelGroup, which claims no
+    // barrier face or mass, so barrierClear alone never saw it (#5998).
+    const modelFoots = [];
+    modelsOpts.onEmitted = (id, box) => {
+      const b = box.basis, r = [b[0][0], b[0][2]], f = [b[2][0], b[2][2]];
+      const rl = Math.hypot(r[0], r[1]) || 1, fl = Math.hypot(f[0], f[1]) || 1;
+      modelFoots.push({ x: box.center[0], z: box.center[2], r: [r[0] / rl, r[1] / rl], f: [f[0] / fl, f[1] / fl],
+                        hr: box.size[0] / 2, hf: box.size[2] / 2 });
+    };
+    const inModelFoot = (x, z, m) => modelFoots.some((q) => {
+      const dx = x - q.x, dz = z - q.z;
+      return Math.abs(dx * q.r[0] + dz * q.r[1]) <= q.hr + m && Math.abs(dx * q.f[0] + dz * q.f[1]) <= q.hf + m;
+    });
     const models = TrackModels.create(modelsOpts);
+    if (region) {
+      const group = models.modelGroup, span = models.overheadSpan;
+      models.modelGroup = (id, bounds, emit, opts) => region.whole(bounds, () => group(id, bounds, emit, opts));
+      models.overheadSpan = (spec) => {
+        const s = spec || {}, f = frameAt(s.frac || 0);
+        if (!f) return span(spec);
+        const height = 2 * Math.abs(f.c[1] - (surface.floorY || 0)) + 2 * Math.abs(s.clearance || 5) + 20;
+        return region.whole({ center: f.c, size: [Math.abs(s.span || f.hw * 2 + 6) + 2 * Math.abs(s.offset || 0), height, Math.abs(s.depth || 1.4) + 4], basis: [f.r, f.u, f.t] }, () => span(spec));
+      };
+    }
     let sceneryTheme = null, landmarkKit = null, circuitKit = null;
     try {
       if (typeof SceneryThemes !== "undefined" && SceneryThemes &&
@@ -736,9 +657,24 @@ const TrackBuildProps = (function () {
     // These three close that gap by expressing intent instead of arithmetic.
     const UPV = [0, 1, 0];
 
+    // A wrong-SHAPE call (the object form docs/SCENERY-API.md once showed:
+    // seat.prism(out, {on, at, size}) / foundation(out, {footprint, at, top}))
+    // emits nothing and returns false like a guard drop, so it failed silently.
+    // Say so once per helper per build; verify-track lists it under warnings.
+    const _shapeWarned = new Set();
+    const shapeWarn = (name, why) => {
+      if (_shapeWarned.has(name)) return;
+      _shapeWarned.add(name);
+      Log.warn("scenery", `${def && def.id}: ${name}() called with the wrong shape (${why}) — nothing emitted; see docs/SCENERY-API.md`);
+    };
+    const seatArgs = (name, foot, sz) => {
+      if (Array.isArray(foot) && Array.isArray(sz)) return true;
+      shapeWarn("seat." + name, `expects (out, foot[3], size[3], col, basis), got a ${foot && typeof foot === "object" && !Array.isArray(foot) ? "spec object" : typeof foot} foot`);
+      return false;
+    };
     const seat = {
-      box:     (o, foot, sz, col, b) => addBox(o, vadd(foot, (b ? b[1] : UPV), sz[1] / 2), sz, col, b),
-      prism:   (o, foot, sz, col, b) => addPrism(o, foot, sz, col, b),
+      box:     (o, foot, sz, col, b) => seatArgs("box", foot, sz) && addBox(o, vadd(foot, (b ? b[1] : UPV), sz[1] / 2), sz, col, b),
+      prism:   (o, foot, sz, col, b) => seatArgs("prism", foot, sz) && addPrism(o, foot, sz, col, b),
       cyl:     (o, foot, rad, h, col, seg, b) => addCyl(o, foot, rad, h, col, seg, b),
       cone:    (o, foot, rad, h, col, seg, b) => addCone(o, foot, rad, h, col, seg, b),
       frustum: (o, foot, r0, r1, h, col, seg, b) => addFrustum(o, foot, r0, r1, h, col, seg, b),
@@ -752,7 +688,11 @@ const TrackBuildProps = (function () {
     const foundation = (o, spec) => {
       spec = spec || {};
       const c = spec.center, size = spec.size, top = spec.top;
-      if (!c || !size || !Number.isFinite(top)) return false;
+      if (!c || !size || !Number.isFinite(top)) {
+        if (!c && !size && (spec.footprint || spec.at))
+          shapeWarn("foundation", "expects {center[3], size[w,d], top}, got {footprint, at}");
+        return false;
+      }
       const b = spec.basis || [[1, 0, 0], UPV, [0, 0, 1]];
       const r = b[0], f = b[2];
       let lo = Infinity;
@@ -1270,7 +1210,7 @@ const TrackBuildProps = (function () {
     const HK = (k) => (((Math.round(k) - HKSHIFT) % n) + n) % n;
     // Phase every() by the same shift so the walk revisits the same places.
     const every = (m, fn) => {
-      const stp = Math.max(1, Math.round(m / ds));
+      const stp = Math.max(1, Math.round(m / sceneryStepM));
       for (let i = 0; i < n; i += stp) fn((i + HKSHIFT) % n);
     };
     // dressingExclusions are authored in the def's scenery frame, exactly like
@@ -1324,7 +1264,7 @@ const TrackBuildProps = (function () {
     // Box is track-aligned ([t,u,r] basis) so its large face always runs parallel
     // to the road — a forward camera only ever sees the thin sz[2] edge, never
     // the full sz[0]×sz[1] face regardless of the track's world-space heading.
-    const backdrop = (k, side, dist, sz, col) => {
+    const backdrop = (k, side, dist, sz, col, opts) => {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
@@ -1346,10 +1286,19 @@ const TrackBuildProps = (function () {
       }
       // distant scenery settles to the lap's low baseline (groundYAt past the last
       // ribbon vert returns it), so a ridge/skyline never floats on a high section
-      const cy0 = groundYAt(k, dist) + sz[1] / 2 - 2;
+      // …but where the drawn terrain reaches it and stands over the whole
+      // body (shanghai's 30.6 m shed: profile -2.0, terrain >= 6.26 at every
+      // corner, invisible — #5088), it stands on the lowest terrain corner.
+      let base = groundYAt(k, dist), lowT = Infinity;
+      for (const [a, c] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) {
+        const g = terrainYAt(cx + t[0] * a * sz[0] / 2 + r[0] * c * sz[2] / 2, cz + t[2] * a * sz[0] / 2 + r[2] * c * sz[2] / 2);
+        lowT = Number.isFinite(g) ? Math.min(lowT, g) : -Infinity;
+      }
+      if (lowT !== Infinity && lowT > base + sz[1] - 2.5) base = lowT;
+      const cy0 = base + sz[1] / 2 - 2;
       const greenDom = col[1] > col[0] && col[1] > col[2] * 1.05;
       if (greenDom) {
-        const foot = groundYAt(k, dist) - 2;
+        const foot = base - 2;
         const R = Math.max(sz[0], sz[2]) * 0.5 * (0.92 + hash(k * 2.3 + side) * 0.2);
         const H = sz[1] * (0.9 + hash(k * 3.7 + side * 1.3) * 0.35);
         const c1 = [col[0], col[1], col[2]];
@@ -1377,32 +1326,38 @@ const TrackBuildProps = (function () {
         const floors = Math.max(2, Math.min(4, Math.round(sz[1] / 18)));
         const fh = sz[1] / floors;
         const base = cy0 - sz[1] / 2;
+        // On a grade, place the facade along the wall’s local up axis.
+        const facadeCenter = y => opts?.followGrade
+          ? vadd([cx, cy0, cz], u, y - sz[1] / 2)
+          : [cx, base + y, cz];
         out._mat = MAT.GLASS;
         for (let i = 1; i < floors; i++) {
           const wc = (lit && hash(k * 7.7 + i * 3.3 + dist * 0.1) < 0.34) ? darkWin : win;
           // band on the camera-facing (u × sz2) face; thin in up, proud in sz2
-          addBox(out, [cx, base + (i + 0.5) * fh, cz], [sz[0] * 0.98, fh * 0.5, sz[2] * 1.03], wc, [t, u, r]);
+          addBox(out, facadeCenter((i + 0.5) * fh), [sz[0] * 0.98, fh * 0.5, sz[2] * 1.03], wc, [t, u, r]);
         }
         // parapet cap so the roofline isn't a bare slab edge
         out._mat = MAT.METAL;
-        addBox(out, [cx, base + sz[1] + 0.6, cz], [sz[0] * 1.02, 1.2, sz[2] * 1.04], col, [t, u, r]);
+        addBox(out, facadeCenter(sz[1] + 0.6), [sz[0] * 1.02, 1.2, sz[2] * 1.04], col, [t, u, r]);
         out._mat = 0;
       }
     };
 
     const ctx = {
       // output buffers + per-build state
-      out, glassBuf, waterBuf, track, def, theme, pal, n, ds, px, py, pz, hw,
+      out, glassBuf, waterBuf, track, def, theme, pal, n, ds, sceneryStepM, px, py, pz, hw,
       pyMin, NIGHT, MAT, lod,
+      // desktop detail level (0 today) and its feature flags (TrackDetail.NAMES; all false at 0)
+      detail: track._detail || 0, detailFeatures: DF,
       // guarded emitters + the raw escape hatch
       addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, addMountain,
-      emit, RAW, rejBox, rejRad,
+      emit, RAW: raw, rejBox, rejRad,
       graph, instance,
       // guard / grounding / boundary core
       markBarrier, blockAt, post, recordBarrier, indexBarrier, clearTreeDist,
       indexSolid, indexSolidAt, barrierClear, massBlocked, massAdd, reserveEmittedSolid, bankOffsetAt,
       seat, foundation, cantilever, groundYAt, terrainYAt, onTrack,
-      frameAt, overheadSpan, models,
+      frameAt, overheadSpan, models, bakedModel,
       // placement primitives + math helpers
       place, prop, backdrop, groundPlane, every,
       hash, upOf, cross, norm, lerp, vadd,
@@ -1438,6 +1393,7 @@ const TrackBuildProps = (function () {
     if (def.street) {
       const WH = 1.1, WT = 0.4, STEP = 2;
       const barrierOffset = def.barrierGap != null ? def.barrierGap : 0.35;
+      const streetHi = typeof TrackModels !== "undefined" && TrackModels.propsHi(track);
       const panel = (kA, kB, col, side) => {
         const rA = [track.rx[kA], track.ry[kA], track.rz[kA]];
         const rB = [track.rx[kB], track.ry[kB], track.rz[kB]];
@@ -1448,8 +1404,35 @@ const TrackBuildProps = (function () {
         const len = Math.hypot(bx - ax, by - ay, bz - az) + 0.05;
         const f = norm([bx - ax, by - ay, bz - az]);
         const rr = norm(cross(f, upOf(track, kA)));
+        // A SKIRT down to the ground: the base follows the road plane, and
+        // where the road is a raised platform (jeddah, frac 0.233 and
+        // 0.734-0.806) the terrain beyond the verge is 2-3 m lower — 37
+        // panels stood on 1.7-2.3 m of air (#5084). Never sinks a panel.
+        let drop = 0;
+        for (const [x, y, z] of [[ax, ay, az], [cx, cy, cz], [bx, by, bz]]) {
+          const g = terrainYAt(x, z);
+          if (Number.isFinite(g) && y - g > drop) drop = y - g;
+        }
+        drop = drop > 0.3 ? Math.min(drop + 0.1, 6) : 0;
+        // EXTREME props detail (TrackModels.propsHi): a W-beam armco face on a dark backing inside the same
+        // 0.4 x 1.1 m envelope (visual only: markBarrier below is unchanged). A skirted panel keeps the box.
+        if (streetHi && drop === 0) {
+          const d = -side * (rr[0] * rA[0] + rr[1] * rA[1] + rr[2] * rA[2] < 0 ? -1 : 1);   // canonical x toward the road
+          instance(`street-barrier-hi|${col.join(",")}|${d}`,
+            { o: [cx, cy + WH / 2, cz], r: rr, u: [0, 1, 0], t: f, s: [1, 1, len] },
+            (rec) => {
+              const dk = [col[0] * 0.55, col[1] * 0.55, col[2] * 0.58];
+              rec.box([-d * 0.09, 0, 0], [0.22, WH, 1], dk);                     // backing
+              TrackModels.wBeam(rec, d, -0.08, 0.84, col, d * 0.1);              // lower rail
+              TrackModels.wBeam(rec, d, 0.30, 0.84, col, d * 0.1);               // upper rail
+              rec.box([0, WH / 2 - 0.02, 0], [WT, 0.04, 1], dk);                 // cap
+              rec.box([d * 0.05, -WH / 2 + 0.1, 0], [0.1, 0.2, 1], dk);           // kick plate
+            },
+            { kind: "streetBarrier", k: kA, side });
+          return [cx, cz];
+        }
         instance(`street-barrier|${col.join(",")}`,
-          { o: [cx, cy + WH / 2, cz], r: rr, u: [0, 1, 0], t: f, s: [1, 1, len] },
+          { o: [cx, cy + (WH - drop) / 2, cz], r: rr, u: [0, 1, 0], t: f, s: [1, (WH + drop) / WH, len] },
           (rec) => rec.box([0, 0, 0], [WT, WH, 1], col),
           { kind: "streetBarrier", k: kA, side });
         return [cx, cz];
@@ -1478,7 +1461,6 @@ const TrackBuildProps = (function () {
           // over the verge. Where the chord's midpoint gives up more than
           // 0.1 m of the gap, emit two single-node panels that follow the
           // curve instead — the cost lands only on the handful of apex spans.
-          const oM = side * (hw[km] + barrierOffset);
           const qx = (px[k] + track.rx[k] * side * (hw[k] + barrierOffset)
                     + px[kn] + track.rx[kn] * side * (hw[kn] + barrierOffset)) / 2;
           const qz = (pz[k] + track.rz[k] * side * (hw[k] + barrierOffset)
@@ -1508,6 +1490,7 @@ const TrackBuildProps = (function () {
       // Qatar carried 24 such pairs. Claim each (node, side) once.
       const stacked = new Set();
       for (const c of findCorners(track, 0.014)) {
+        if (region) yield;
         // +curv = LEFT turn (mesh.js banking comment; measured in agentview's
         // corner table), so the outside of a c.sign>0 corner is the RIGHT (+x)
         // side. The retired "+k = right" read here put every tyre barrier on
@@ -1730,6 +1713,7 @@ const TrackBuildProps = (function () {
           neonTower(k, side, 13 + s * 12, w, h, d, cn(HK(k), side), pickKind(HK(k), side, na), toneFor(HK(k), side), na);
         }
       });
+      yield;   // perf hunt 7: the street rows were one 200-400 VM ms step; each row is whole before the next reads its masses
       // Back row — taller, set further back, staggered, for skyline depth.
       every(26, (k) => {
         for (const side of [-1, 1]) {
@@ -1739,6 +1723,7 @@ const TrackBuildProps = (function () {
           neonTower(k, side, 40 + s * 30, w, h, d, cn(HK(k) * 1.7, side), pickKind(HK(k) * 1.9, side, na), toneFor(HK(k) * 1.7, side), na);
         }
       });
+      yield;
       // Sign blades + low retail boxes dressing the gaps.
       every(34, (k) => {
         const side = hash(HK(k) * 13) < 0.5 ? -1 : 1;
@@ -1755,8 +1740,13 @@ const TrackBuildProps = (function () {
           const a = anchor(k, side, 9);
           if (massBlocked(a.c, 9, 7, [a.r, a.u, a.t], 0.82)) { blockAt(k, side, 9 - 4.5, 3.5); placeSeq += 2; return; }
           const rc = toneFor(HK(k) * 2.7, side).d || [0.5, 0.5, 0.54];
-          place(k, side, 9, [9, 4 + hash(HK(k)) * 3, 7], NIGHT ? [0.13, 0.13, 0.16] : rc);
-          place(k, side, 9, [9.3, 1.0, 7.3], NIGHT ? lc : [lc[0] * 0.4 + 0.3, lc[1] * 0.4 + 0.3, lc[2] * 0.4 + 0.3], -0.45);
+          const height = 4 + hash(HK(k)) * 3;
+          place(k, side, 9, [9, height, 7], NIGHT ? [0.13, 0.13, 0.16] : rc);
+          // place() seats the centres vertically but tilts both boxes with
+          // the road. Leave clearance around the body's downhill face as
+          // well as across the independent placement jitter (up to 0.13 m).
+          const skirtLength = 7.3 + Math.abs(track.ty[k]) * height;
+          place(k, side, 9, [9.4, 1.0, skirtLength], NIGHT ? lc : [lc[0] * 0.4 + 0.3, lc[1] * 0.4 + 0.3, lc[2] * 0.4 + 0.3], -0.45);
         }
       });
       // Occasional illuminated billboard accent (more on high-neon circuits).
@@ -1784,18 +1774,59 @@ const TrackBuildProps = (function () {
     // wrong side. Only the grandstand remains.
     const crowd = NIGHT ? [0.45, 0.28, 0.3] : [0.78, 0.42, 0.32];
     yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
-    for (let i = 0; i < (def.ownPitStraight ? 0 : 7); i++) {
-      const k = (i * 4) % n;
-      // The bank sits wholly IN FRONT of the shell: from gap 8 its last riser
-      // ran to gap+12.43, 1.4 m into the shell (inner face at 11 + the place()
-      // slot), which buried that row and left its front face millimetres off
-      // the shell's. From 6.55 its back edge is 10.98, clear of the nearest
-      // slot (11.035); of 6.3 / 6.55 this one also keeps the riser faces off
-      // the generic catch fences (15 -> 0 pairs on estoril/jacarepagua/magny).
-      place(k, -1, 14, [6, 11, 16], [0.5, 0.5, 0.56]);     // grandstand shell
-      crowdBank(k, -1, 6.55, 16, 7, 4.2,                     // speckled tiered crowd
-                [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4]);
-    }
+    // DEFERRED to after def.scenery() (the call site), like the foliage: the
+    // stand is placed from the RUN-OFF EDGE, and the circuit's own barriers
+    // only exist once its closure has run. From the kerb at gap 6.55 the bank
+    // stood inside the 9 m default run-off on 17 circuits with no wall in
+    // front, and cars drove through the crowd (#5998). The shells' place()
+    // slots are reserved HERE, so every later prop keeps its SEP_SLOTS phase.
+    const crowdSeq = placeSeq;
+    if (!def.ownPitStraight) placeSeq += 7;
+    const placePitStraightCrowd = () => {
+      if (def.ownPitStraight) return;
+      const seqNow = placeSeq;
+      placeSeq = crowdSeq;
+      const half = Math.max(1, Math.round(8 / ds));   // the bank is 16 m long
+      const gaps = [];
+      for (let i = 0; i < 7; i++) {
+        const k = (i * 4) % n;
+        // Where a car's side stops over the bank's length (barL is the car
+        // CENTRE's limit, WALL_CLEAR its half-width), plus 0.5 m air. The front
+        // riser's face is 0.23 m inside `gap` (a 1.3 m slab 0.42 m back).
+        let edge = 0;
+        for (let d = -half; d <= half; d++) {
+          const kk = ((k + d) % n + n) % n;
+          edge = Math.max(edge, track.barL[kk] - hw[kk] + WALL_CLEAR);
+        }
+        const gap = Math.max(6.55, edge + 0.23 + 0.5);
+        // FIRST MASS WINS. Moved back, the bank lands where nine of those
+        // circuits stand their OWN main grandstand (nurburgring, dijon,
+        // magny_cours …): it stood in the run-off in front of the real one.
+        // There the circuit's stand is the crowd and this bank yields. Asked
+        // of every bank BEFORE any is placed, so a neighbour's shell is not
+        // the occupant; a bank that did not move is never asked.
+        let hits = 0;
+        if (gap > 6.55) for (const dd of [gap + 0.42, gap + 2.1, gap + 3.8, gap + 7.45]) for (const al of [-7, 0, 7]) {
+          const kk = ((k + Math.round(al / ds)) % n + n) % n, o = -(hw[kk] + dd);
+          const x = px[kk] + track.rx[kk] * o, z = pz[kk] + track.rz[kk] * o;
+          if (!barrierClear(x, z, 0.6) || inModelFoot(x, z, 0.6)) hits++;
+        }
+        gaps.push(hits >= 2 ? null : gap);
+      }
+      for (let i = 0; i < 7; i++) {
+        const k = (i * 4) % n, gap = gaps[i];
+        if (gap == null) { placeSeq++; continue; }   // the shell's slot, spent
+        // The bank sits wholly IN FRONT of the shell: from gap 8 its last riser
+        // ran to gap+12.43, 1.4 m into the shell (inner face at 11 + the place()
+        // slot), which buried that row and left its front face millimetres off
+        // the shell's. At 7.45 m ahead of the shell its back edge is 4.43 m
+        // behind `gap`, clear of the nearest slot (+4.485).
+        place(k, -1, gap + 7.45, [6, 11, 16], [0.5, 0.5, 0.56]);     // grandstand shell
+        crowdBank(k, -1, gap, 16, 7, 4.2,                              // speckled tiered crowd
+                  [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4]);
+      }
+      placeSeq = seqNow;
+    };
 
     // Place a BAKED MODEL from the asset pack (assets/pack, built by
     // `node tools/gen/assets.mjs bake-model`) at a trackside anchor. This is the one
@@ -1809,8 +1840,8 @@ const TrackBuildProps = (function () {
     //     if (!bakedModel("grandstand_tifosi", K(0.12), -1, 14))
     //       grandstand(K(0.12), -1, 14, 40);
     //
-    // Never async: Assets prefetches every model at boot precisely so that prop
-    // placement cannot vary with network timing (js/render/shared/assets.js modelSync).
+    // Never async: a circuit's models are fetched BEFORE its build starts (TrackDef.scenerySource names the set,
+    // Assets.modelsReady loads it), so prop placement cannot vary with network timing (assets.js modelSync).
     // A baked mesh's axis-aligned extent in its own space, cached on the mesh:
     // Assets hands back the same object for every stamp of an id, and the pack
     // is 36 models, so this runs a few dozen times per build at most.
@@ -1851,7 +1882,7 @@ const TrackBuildProps = (function () {
       // z*cs + Z), so the guard measures what ships. Callers write
       // `if (!bakedModel(...)) building(...)` and that fallback is itself
       // guarded, so a rejected stamp degrades to nothing, not to a raw box.
-      const bb = meshBox(mesh), sc = o.scale != null ? o.scale : 1;
+      const bb = meshBox(mesh), sc = Number.isFinite(o.height) && o.height > 0 && bb.h > 0 ? o.height / bb.h : o.scale != null ? o.scale : 1;
       const cs = __M.cos(yaw), sn = __M.sin(yaw);
       const cx = bb.cx * sc, cz = bb.cz * sc;
       const wc = [a.c[0] + cx * cs + cz * sn,
@@ -1872,7 +1903,7 @@ const TrackBuildProps = (function () {
       rec.tint.push(tn ? tn[0] : 1, tn ? tn[1] : 1, tn ? tn[2] : 1);
       if (tn) rec.anyTint = true;
       if (INST_MODELS) return true;
-      return TrackGeom.addMesh(out, mesh, { x: a.c[0], y, z: a.c[2], rotY: yaw, scale: sc, tint: tn, mat: o.mat });
+      return addMesh(out, mesh, { x: a.c[0], y, z: a.c[2], rotY: yaw, scale: sc, tint: tn, mat: o.mat });
     }
     // A pack model placed N times is N copies of its triangles in the soup;
     // when the backend draws instanced batches (G.createInstancedBatch — the
@@ -1884,7 +1915,7 @@ const TrackBuildProps = (function () {
     // with its own draw, shadow caster and (TLX) ~64 KB padded instance block.
     const MODEL_INST_MIN_SAVED = 1024;
     const INST_MODELS = (() => {
-      if (!(G && G.createInstancedBatch)) return false;
+      if (region || !(G && G.createInstancedBatch)) return false;
       try { if (localStorage.getItem("apex26.modelInst") === "0") return false; } catch (_) { /* no storage */ }
       return true;
     })();
@@ -1893,12 +1924,12 @@ const TrackBuildProps = (function () {
       const rec = {};
       for (const [key, m] of _pendingModels) {
         const n = m.xf.length / 5;
-        const g = graph.meshModel(key, m.mesh, m.mat);
+        const g = region ? { verts: m.mesh.pos.length / 3, tris: m.mesh.idx.length / 3 } : graph.meshModel(key, m.mesh, m.mat);
         const inst = INST_MODELS && n >= 2 && (n - 1) * g.verts >= MODEL_INST_MIN_SAVED;
         for (let i = 0; INST_MODELS && i < n; i++) {   // off: the copies were emitted at call time
           const b = i * 5, t = m.anyTint ? [m.tint[i * 3], m.tint[i * 3 + 1], m.tint[i * 3 + 2]] : null;
           if (inst) graph.meshPlace(key, m.xf[b], m.xf[b + 1], m.xf[b + 2], m.xf[b + 3], m.xf[b + 4], t);
-          else TrackGeom.addMesh(out, m.mesh, { x: m.xf[b], y: m.xf[b + 1], z: m.xf[b + 2], rotY: m.xf[b + 3], scale: m.xf[b + 4], tint: t, mat: m.mat });
+          else addMesh(out, m.mesh, { x: m.xf[b], y: m.xf[b + 1], z: m.xf[b + 2], rotY: m.xf[b + 3], scale: m.xf[b + 4], tint: t, mat: m.mat });
         }
         rec[key] = { id: m.id, mat: m.mat, verts: g.verts, tris: g.tris, n, inst,
                      xf: Float32Array.from(m.xf), tint: m.anyTint ? Float32Array.from(m.tint) : null };
@@ -2054,7 +2085,7 @@ const TrackBuildProps = (function () {
         ATM, COL,
         place, prop, backdrop, groundPlane, groundYAt,
         // World-XZ ground query, exposed to circuits because its ABSENCE is
-        // what makes Trap B (docs/SCENERY-GROUNDING.md §2) so easy to write:
+        // what makes Trap B (docs/SCENERY-API.md §2) so easy to write:
         // groundYAt is a NODE query, so a circuit walking a tangent away from
         // the centreline had nothing to ask and reused one anchor's height
         // across tens of metres of slope. Returns null off the rendered
@@ -2098,14 +2129,19 @@ const TrackBuildProps = (function () {
         bakedModel,
       };
       if (def.reverse || def.sceneryCoordinates === "source" || TrackSpace.sceneryOriginDelta(def))
-        sceneryApi = transformSceneryApi(sceneryApi, def, n);
+        sceneryApi = SceneryApiWrap.transform(sceneryApi, def, n);
       // drape / drapeRun (terrain-fitted flat decals) are composed from the
       // FINAL api — the wrapped anchor/K/along — so they take authored-frame
       // k and s like circuit code and need no wrapper of their own.
       Object.assign(sceneryApi, TrackModels.drapeKit(sceneryApi));
-      sceneryFn(sceneryApi);
+      // A paced author can yield between complete landmarks. Existing callbacks finish inline.
+      const authoredSteps = sceneryFn(sceneryApi, true);
+      if (authoredSteps && typeof authoredSteps.next === "function") yield* authoredSteps;
     }
+    yield;   // perf hunt 7: the circuit's closure is the build's biggest single step; the venue dressing reads only its finished index
 
+    placePitStraightCrowd();   // from the run-off edge the circuit's barriers left (#5998)
+    if (region) yield;
     SceneryVenue.build(ctx, sceneryTheme, dressingExcluded);
 
     // Foliage runs LAST, once every barrier on the circuit is registered, so the
@@ -2113,7 +2149,8 @@ const TrackBuildProps = (function () {
     // treelines queued by forestEdge() during scenery, then the generic roadside
     // scatter deferred out of the FURN pass above.
     yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
-    for (const a of deferredFoliage) forestEdgeNow.apply(null, a);
+    // One treeline per step (perf hunt 7: 15-28 of them were one ~0.5 s VM step); nothing reads the buffers between them.
+    for (let i = 0; i < deferredFoliage.length; i++) { forestEdgeNow.apply(null, deferredFoliage[i]); yield; }
     yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
     plantRoadsideTrees();
 
@@ -2131,7 +2168,7 @@ const TrackBuildProps = (function () {
       const dens = (typeof LightTune !== "undefined" && LightTune.LT &&
         typeof LightTune.LT.lampDensity === "number" && LightTune.LT.lampDensity > 0)
         ? LightTune.LT.lampDensity : 1;
-      const mstride = Math.max(1, Math.round((22 / dens) / ds));  // matches buildTrackLights + LAMP DENSITY
+      const mstride = Math.max(1, Math.round((22 / dens) / sceneryStepM));  // matches buildTrackLights + LAMP DENSITY
       let mi = 0;
       const globeStreet = fz.lamp === "globe";
       const pickKind = (k, roll) => {
@@ -2233,7 +2270,7 @@ const TrackBuildProps = (function () {
           const base = Number.isFinite(gy) ? gy : 0;
           if (deckY - base < 1) continue;
           const top = deckY - 0.1, bot = base - 0.5;
-          RAW.addBox(out, [x, (top + bot) / 2, z],
+          raw.addBox(out, [x, (top + bot) / 2, z],
                  [1.6, top - bot, 1.6], [0.42, 0.42, 0.47], [r, [0, 1, 0], tg]);
           blockAt(k, side, 2.0, 1);   // solid pillar at the deck edge
         }
@@ -2242,7 +2279,11 @@ const TrackBuildProps = (function () {
     if (out.pos.length === 0) addBox(out, [px[0] + 30, 1, pz[0]], [2, 2, 2], [0.4, 0.4, 0.4]);
     {
       const sk = Object.keys(_suppressed);
-      if (sk.length) Log.warn("scenery", def.id + ": suppressed " + sk.map((k) => k + "=" + _suppressed[k]).join(" "));
+      // A region build (the garage exterior, js/garage/exterior-geometry.js) also
+      // refuses every prop outside its window through rejBox, so its tally is no
+      // guard signal: info, and it says so (#5995, "bahrain: suppressed floodMast=149").
+      if (sk.length && region) Log.info("scenery", def.id + ": region build, outside the window or guarded " + sk.map((k) => k + "=" + _suppressed[k]).join(" "));
+      else if (sk.length) Log.warn("scenery", def.id + ": suppressed " + sk.map((k) => k + "=" + _suppressed[k]).join(" "));
       const pk = Object.keys(_superseded);
       if (pk.length) Log.info("scenery", def.id + ": superseded by the pit complex " + pk.map((k) => k + "=" + _superseded[k]).join(" "));
       if (_culled) Log.info("track", `${def.id}: culled ${_culled} on-track primitive(s)`);
@@ -2266,15 +2307,19 @@ const TrackBuildProps = (function () {
     // dressing have been kept out of it. Platform, wall, boards, lights and
     // the row of garages, every position off track.pit (js/track/scenery/pits.js).
     yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
-    if (typeof SceneryPits !== "undefined" && track.pit) {
-      const pits = SceneryPits.build({ track, out, rawBox: RAW.addBox, rawEmit: emit, upOf, bankOffsetAt, curvature: (s) => curvature(track, s),
-                                       night: NIGHT, lensAlbedo, registerLamp: registerPitLamp });
+    if (!(buildOptions && buildOptions.skipPits) && typeof SceneryPits !== "undefined" && track.pit) {
+      const pitCtx = { track, out, rawBox: raw.addBox, rawEmit: emit, upOf, bankOffsetAt, curvature: (s) => curvature(track, s),
+                       night: NIGHT, lensAlbedo, registerLamp: registerPitLamp };
+      // Stepped (perf hunt 7: the complex was one 100-380 VM ms step); build() is the same generator drained.
+      const pits = SceneryPits.buildSteps ? yield* SceneryPits.buildSteps(pitCtx) : SceneryPits.build(pitCtx);
       // The mast/custom concat above has run; nothing reads lampPosts before
       // buildProps returns (the bake is per frame), so the canopy goes on last.
       for (const lamp of pitLamps) track.lampPosts.push(lamp);
       track.pitBuilt = pits;   // kept, not just logged: `wall` false is invisible from the buffers
       Log.info("track", `pits ${track.def.id}: ${pits.bays} bays, wall ${pits.wall}, ${pitLamps.length} lamps`);
     }
+    // Model groups catch emitter failures; the sticky region cap must still abort publication.
+    if (region) { region.check(); track.sceneryRegion = region.stats(); }
     track.props.count = propList.length;
     track.props.spanCount = spanList.length;
     track.props.dropped = propDropped;

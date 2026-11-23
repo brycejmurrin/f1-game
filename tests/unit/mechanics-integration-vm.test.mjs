@@ -43,7 +43,8 @@ test("weather grip is continuous through the old discrete transition boundaries"
     g.apex.step(0,1);   // A3: settle frame.wetness to the lerp (look=drive)
     const w=g.G.trackWetness();
     samples.push({t,w,fw:g.G.frame.wetness,grip:g.G.gripMult({tread:0})});
-    assert.ok(Math.abs(g.G.frame.wetness-w)<1e-6,
+    // frame.wetness is the field under the view's (s, x): the lap value, shaved by at most the drying line (#1627)
+    assert.ok(g.G.frame.wetness<=w+1e-6&&g.G.frame.wetness>=w*(1-0.6)-1e-6,
       "frame.wetness must track trackWetness at t="+t+" (fw="+g.G.frame.wetness+" w="+w+")");
   }
   assert.equal(samples[0].grip,1);assert.equal(samples.at(-1).grip,.72);
@@ -82,6 +83,29 @@ test("a race can be armed for practice, which unlocks checkpoints and spoils the
   assert.equal(g.G.coach.mark(),true,"checkpoints follow the practice flag, not the session type");
 });
 
+test("quitting releases practice worlds and leaves the trace available for review", async () => {
+  await g.race("monza");
+  g.apex.go();
+  const { G } = g, coach = G.coach;
+  assert.equal(coach.armPractice(), true);
+  assert.equal(coach.mark(), true);
+  g.step(90);
+  assert.equal(coach.rewindReady(), true);
+  const trace = coach.trace();
+  assert.ok(trace.length > 0);
+  G.quitToMenu();
+  assert.equal(G.state, "menu");
+  assert.deepEqual(coach.trace(), trace);
+  // Reopen just the eligibility gate. A race start would reset the coach and
+  // mask any checkpoint or rewind samples the menu still held.
+  try {
+    G.state = "race"; G.practice = true;
+    assert.equal(coach.canPractice(), true);
+    assert.equal(coach.rewindReady(), false);
+    assert.equal(coach.retry(), false);
+  } finally { G.practice = false; G.state = "menu"; }
+});
+
 test("the START drill can be set where it says to: on the grid, before the lights",async()=>{
   // Not g.race(): that presses go(). startRace() leaves the field on the grid.
   g.G.daily.stop();g.G.timeTrial=false;g.G.practice=false;await g.G.startRace();g.apex.headless(true);
@@ -116,6 +140,40 @@ test("rewind steps the player back about ten seconds, and never rewinds a penalt
   const d=g.G.coach.insights.summary().lastDrill;
   assert.ok(!d||d.reason!=="position jumped","the rewind itself must not fail the drill");
 });
+
+for (const action of ["retry", "rewind"]) {
+  test(`${action} restores field sector times from before a real split`, async () => {
+    await tt();
+    const { G, apex } = g;
+    const field = G.fieldSectorBests;
+    const before = action === "retry" ? 60 : Infinity;
+    field[0] = before;
+    const firstSector = G.track.def.sectors[0];
+    const approach = firstSector - 8 / G.track.total;
+    // Start S1 with a forward timing-line crossing. A jump directly from the
+    // grid to a stop in S1 can register an invalid entry on a sloping road.
+    apex.jump(1 - 2 / G.track.total, 60, 0);
+    for (let i = 0; i < 12 && G.player.lap === 0; i++) g.step(1);
+    assert.equal(G.player.lap, 1);
+    assert.equal(G.sectorIdx, 0);
+    apex.jump(approach, 0, 0, { keepLap: true });
+    g.step(180);  // more than the field timing minimum and the rewind sampling interval
+    const personal = G.sectorBests[0];
+    if (action === "retry") assert.equal(G.coach.mark(), true);
+    else assert.equal(G.coach.rewindReady(), true);
+
+    apex.jump(approach, 60, 0, { keepLap: true });
+    for (let i = 0; i < 120 && G.sectorIdx === 0; i++) g.step(1);
+    assert.equal(G.sectorIdx, 1);
+    assert.ok(field[0] >= 2 && field[0] < before, "the crossing earned a new field best");
+    assert.equal(G.sectorBests[0], field[0]);
+    assert.equal(G.coach[action](), true);
+    assert.equal(G.sectorIdx, 0);
+    assert.equal(G.sectorBests[0], personal);
+    assert.equal(G.fieldSectorBests, field);
+    assert.equal(field[0], before);
+  });
+}
 
 test("rewind never hands the player's wheel back to the AI (flying-start hand-over role flags)",async()=>{
   await tt();g.apex.reset(.1,35,0);g.apex.go();g.step(2);

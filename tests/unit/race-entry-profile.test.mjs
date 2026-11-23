@@ -99,6 +99,53 @@ test("tickFrame ends the window two frames after present:ready", () => {
   assert.ok(P.snapshot().marks.some((m) => m.n === "end"));
 });
 
+test("entry totals count only overlapping task time and drain queued records at close", () => {
+  let t = 100, callback;
+  const queue = [];
+  class Observer {
+    constructor(fn) { callback = fn; }
+    observe() {}
+    takeRecords() { return queue.splice(0); }
+    disconnect() { queue.length = 0; }
+  }
+  const profile = load({ PerformanceObserver: Observer, performance: { now: () => t } });
+  profile.begin("race");
+  t = 115;
+  callback({ getEntries: () => [
+    { startTime: 40, duration: 60 },
+    { startTime: 20, duration: 90 },
+  ] });
+  queue.push({ startTime: 120, duration: 60 });
+  t = 200;
+  profile.end();
+  const snapshot = profile.snapshot();
+  assert.deepEqual(Array.from(snapshot.longTasks, task => [task.start, task.ms]), [[100, 10], [120, 60]]);
+  assert.equal(snapshot.blockMs, 70);
+  assert.equal(snapshot.maxBlockMs, 60);
+});
+
+test("entry totals include tasks beyond the retained detail limit and reset for the next race", () => {
+  let t = 0, callback;
+  class Observer {
+    constructor(fn) { callback = fn; }
+    observe() {}
+    disconnect() {}
+  }
+  const profile = load({ PerformanceObserver: Observer, performance: { now: () => t } });
+  profile.begin("race");
+  const tasks = Array.from({ length: 65 }, (_, i) => ({ startTime: i * 60, duration: i === 64 ? 90 : 50 }));
+  t = 3930;
+  callback({ getEntries: () => tasks });
+  profile.end();
+  const snapshot = profile.snapshot();
+  assert.equal(snapshot.longTasks.length, 64);
+  assert.equal(snapshot.blockMs, 3290);
+  assert.equal(snapshot.maxBlockMs, 90);
+  profile.begin("second race");
+  assert.equal(profile.snapshot().blockMs, 0);
+  assert.equal(profile.snapshot().maxBlockMs, 0);
+});
+
 test("PerformanceObserver longtask entries are recorded when supported", () => {
   let cb = null;
   class FakePO {
@@ -173,6 +220,33 @@ test("continueWindow restarts the leg clock: the body's first lap is not the gar
   t = 9010; P.lap("scenery");
   t = 9060; P.lap("resets");
   assert.equal(JSON.stringify(P.snapshot().legs.map((l) => [l.n, l.ms])), JSON.stringify([["scenery", 10], ["resets", 50]]));
+});
+
+test("continueWindow after a finished beginUi window calls begin(): sawReady resets so the next race can end", () => {
+  let t = 0;
+  const P = load({ performance: { now: () => t } });
+  P.beginUi("uiStart");
+  t = 100;
+  P.notePresent(false);
+  P.continueWindow("startRace");
+  P.clearMenuEntrySession();
+  t = 120; P.tickFrame();
+  t = 140; P.tickFrame();
+  assert.equal(P.armed(), false, "first entry window ends after ready + two frames");
+  assert.ok(P.snapshot().windowMs >= 140, "finished window kept its span");
+  const marksBefore = P.snapshot().marks.map((m) => m.n);
+  assert.ok(marksBefore.some((n) => /^entry:/.test(n)));
+  t = 5000;
+  P.continueWindow("startRace");
+  assert.equal(P.armed(), true);
+  assert.equal(P.snapshot().marks.some((m) => /^entry:/.test(m.n)), false,
+    "begin() cleared the previous entry: marks");
+  assert.ok(P.snapshot().marks.some((m) => m.n === "begin:startRace"));
+  P.notePresent(false);
+  assert.ok(P.snapshot().marks.some((m) => m.n === "present:ready"));
+  t = 5010; P.tickFrame();
+  t = 5020; P.tickFrame();
+  assert.equal(P.armed(), false, "second entry can still end");
 });
 
 test("manifest lists the module before quality-preset (load order)", () => {
@@ -253,6 +327,7 @@ test("race-entry ticks pump input and network while holding physics and governor
   const ctx = {
     lastFrame: 100, paused: false, raceRestarting: false, state: "count", _poseAt: null,
     mirrorPass: { preparing: () => preparing }, gfx: { warming: () => warming },
+    FieldLod: { updateModelBudget: dt => calls.push(["modelBudget", dt]) },
     PerfGov: { tick: dt => calls.push(["governor", dt]) }, RenderRate: { drew: () => true },
     performance: { now: () => 260 }, PerfSpans: { begin() {}, end() {} },
     Input: { poll: () => calls.push("input"), clearEdges: () => calls.push("clear") },
@@ -268,6 +343,7 @@ test("race-entry ticks pump input and network while holding physics and governor
   preparing = false;
   assert.throws(() => ctx.tickBody(276), /physics reached/);
   assert.ok(calls.some(call => Array.isArray(call) && call[0] === "governor" && call[1] === 16));
+  assert.ok(calls.some(call => Array.isArray(call) && call[0] === "modelBudget" && call[1] === 16));
   preparing = true;
   calls.length = 0; warming = true;
   ctx.tickBody(300);
@@ -470,13 +546,15 @@ test("software GL reports span starts to the progress sink", () => {
   assert.deepEqual(labels, ["Prepare", "Prepare"]);
 });
 
-test("introBudgetExpired fires after the soft budget elapses", () => {
-  let t = 0;
+test("introBudgetLeft reaches 0 after the soft budget elapses", () => {
+  let t = 1;   // snapshot.budgetLeftMs is null when introBudgetT0 is 0 (falsy stamp)
   const P = load({ performance: { now: () => t }, PerfGov: { softwareRaster: () => true } });
   P.begin("race");
-  assert.equal(P.introBudgetExpired(), false);
-  t = 45001;
-  assert.equal(P.introBudgetExpired(), true);
+  assert.equal(P.introBudgetLeft(), 45000);
+  assert.equal(P.snapshot().budgetLeftMs, 45000);
+  t = 45002;
+  assert.equal(P.introBudgetLeft(), 0);
+  assert.equal(P.snapshot().budgetLeftMs, 0);
 });
 
 test("successful completion waits for presentation even when no handoff exists", async () => {
@@ -554,4 +632,37 @@ test("ended duration stays fixed and a new window resets its terminal clock", ()
   t = 61500; P.end(); assert.equal(P.snapshot().windowMs, 500);
   P.begin("next"); t += 20; assert.equal(P.snapshot().windowMs, 20);
   P.end(); t += 1000; assert.equal(P.snapshot().windowMs, 20);
+});
+
+// game.js's G and loadingScreen live inside its async IIFE: another script can never read them
+// by name, so stallHandoffCover's countdown / loading-phase / software-GL legs were dead in the
+// browser while a VM that injected a global G passed. This sandbox injects NO G or loadingScreen.
+test("stallHandoffCover reads game state and loading phase through bindGame, never a bare global", () => {
+  let state = "menu", phase = "", soft = false;
+  const P = load({ PerfGov: { softwareRaster: () => soft } });
+  assert.equal(P.stallHandoffCover(), false, "nothing bound, nothing armed: no cover");
+  P.bindGame({ state: () => state, loadPhase: () => phase });
+  state = "count";
+  assert.equal(P.stallHandoffCover(), true, "the countdown is a handoff cover");
+  state = "menu";
+  for (const ph of ["handoff", "busy", "build", "garage", "prep"]) {
+    phase = ph;
+    assert.equal(P.stallHandoffCover(), true, `loading phase ${ph} is a cover`);
+  }
+  phase = "idle";
+  assert.equal(P.stallHandoffCover(), false);
+  // Software GL: the race's intro budget is a cover while it lasts.
+  soft = true; state = "race";
+  assert.ok(P.introBudgetLeft() > 0, "the software intro budget is open");
+  assert.equal(P.stallHandoffCover(), true, "software GL race inside the intro budget");
+  // The readback defer must NOT take that leg: a software-GL capture in the race's first 45 s read an
+  // unread #game-soft (camera.spec "chase presented meaningful pixels", hud-mirror GLX glass bands 0; #5296).
+  assert.equal(P.readbackCover(), false, "a live software-GL race is no readback cover");
+  state = "count";
+  assert.equal(P.readbackCover(), true, "the countdown still defers readback");
+  state = "race";
+  soft = false;
+  assert.equal(P.stallHandoffCover(), false, "hardware GL race: no cover");
+  P.bindGame({ state: () => { throw new Error("mid-boot"); } });
+  assert.equal(P.stallHandoffCover(), false, "a probe that throws is no cover");
 });

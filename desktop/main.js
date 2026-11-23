@@ -12,10 +12,10 @@
  * Flags:
  *   --smoke   load index, wait for shell ready, print JSON, exit (CI / xvfb)
  *
- * Soft-GL / no-sandbox are OPT-IN via env (never implied by CI= alone, and
- * never required for a packaged release the user downloads).
+ * Soft-GL / no-sandbox are OPT-IN via env in an unpackaged dev run only (never
+ * implied by CI= alone); a packaged build ignores them (lib/debug-flags.cjs).
  */
-const { app, BrowserWindow, globalShortcut, shell, dialog } = require("electron");
+const { app, BrowserWindow, shell, dialog } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 const {
@@ -25,6 +25,7 @@ const {
   handleScheme,
 } = require("./app-protocol");
 const permissions = require("./lib/permissions.cjs");
+const debugFlags = require("./lib/debug-flags.cjs");
 
 const ORIGIN = `${SCHEME}://${HOST}`;
 const SMOKE = process.argv.includes("--smoke");
@@ -41,11 +42,6 @@ else app.on("second-instance", () => {
   primaryWindow.focus();
 });
 
-function envFlag(name) {
-  const v = process.env[name];
-  return v === "1" || v === "true";
-}
-
 /** Directory that holds the staged site (index.html, js/, …). */
 function siteRoot() {
   if (app.isPackaged) {
@@ -56,20 +52,15 @@ function siteRoot() {
 
 registerScheme();
 
-// Soft-GL for headless / xvfb Playwright — opt-in only (APEX_DESKTOP_SOFT_GL).
-// Do NOT key off CI=true: that would disable the Chromium sandbox whenever a
-// packaged Linux build happened to see CI in the environment.
-const softGl = envFlag("APEX_DESKTOP_SOFT_GL");
-if (softGl) {
-  app.commandLine.appendSwitch("use-gl", "angle");
-  app.commandLine.appendSwitch("use-angle", "swiftshader");
-  app.commandLine.appendSwitch("enable-unsafe-swiftshader");
-  app.commandLine.appendSwitch("enable-unsafe-webgpu");
-  app.commandLine.appendSwitch("disable-dev-shm-usage");
+// Debug env flags (APEX_DESKTOP_SOFT_GL, APEX_DESKTOP_NO_SANDBOX): dev runs only.
+// A packaged build ignores them (lib/debug-flags.cjs); the packaged test suite
+// passes the same switches as argv instead. Never keyed off CI=true.
+for (const [name, value] of debugFlags.debugSwitches(process.env, { isPackaged: app.isPackaged })) {
+  if (value === undefined) app.commandLine.appendSwitch(name);
+  else app.commandLine.appendSwitch(name, value);
 }
-// no-sandbox: explicit test env only (never release / packaged-by-default).
-if (envFlag("APEX_DESKTOP_NO_SANDBOX")) {
-  app.commandLine.appendSwitch("no-sandbox");
+if (app.isPackaged && debugFlags.requestedFlags(process.env).length) {
+  console.warn("[apex-desktop] ignoring debug env in a packaged build:", debugFlags.requestedFlags(process.env).join(", "));
 }
 
 /** Allow-listed session permissions for app://apex/ only (lib/permissions.cjs); open http(s) externally only. */
@@ -216,8 +207,4 @@ app.on("web-contents-created", (_event, contents) => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
-});
-
-app.on("will-quit", () => {
-  globalShortcut.unregisterAll();
 });

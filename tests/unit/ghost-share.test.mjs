@@ -13,6 +13,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";   // title-flow.js is not a game.js carve-out
+import { seedHash32 } from "../helpers/seed-hash32.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const fixture = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/ghost-monza-short.json"), "utf8"));
@@ -63,6 +64,7 @@ function harness(opts = {}) {
     get() { throw new Error("guest sharing must not touch localStorage"); },
   });
   const ctx = vm.createContext(sandbox);
+  seedHash32(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/ghost-share.js"), "utf8"), ctx, {
     filename: absSrc("js/car/ghost-share.js"),
   });
@@ -116,10 +118,10 @@ test("a ghost for an unknown circuit is refused", async () => {
 
 // The last sample lands ON the lap time, as a recorded ghost's does (within
 // one sample, js/car/ghost.js): GhostShare binds the claimed time to it.
-const trace = (n, time) => ({
+const trace = (n, time, distance = (n - 1) * 3.7) => ({
   time,
   t: Array.from({ length: n }, (_, i) => i * time / (n - 1)),
-  s: Array.from({ length: n }, (_, i) => i * 3.7),
+  s: Array.from({ length: n }, (_, i) => i * distance / (n - 1)),
   x: Array.from({ length: n }, (_, i) => (i % 101) / 100),
 });
 
@@ -530,7 +532,7 @@ test("BACK consumes the latest link once after overlapping decodes defer under S
   assert.equal(h.writes.length, 1);
 });
 
-function resultsHarness({ ghost = null, guest = false, recordedContext = null, sessionContext = null } = {}) {
+function resultsHarness({ ghost = null, guest = false, recordedContext = null, sessionContext = null, extra = {} } = {}) {
   const dom = makeDom();
   const Ghost = {
     hasGhost: () => !!ghost,
@@ -538,10 +540,11 @@ function resultsHarness({ ghost = null, guest = false, recordedContext = null, s
     medal: () => null,
     context: () => null,
     snapshot: () => ghost,
-    clear() {},
+    clear() { ghost = null; return true; },
   };
   const GhostShare = {
     hasGuest: () => guest,
+    clearGuest() { guest = false; },
     guest: () => ({ context: recordedContext }),
     contextNotice: harness().GhostShare.contextNotice,
     bestTime: () => guest ? 79 : Infinity,
@@ -560,6 +563,7 @@ function resultsHarness({ ghost = null, guest = false, recordedContext = null, s
     Quali: { MEDALS: [], MEDAL_RANK: {} },
     Career: { objectiveLabel: () => "", OBJ_BONUS: 0 },
     GameAudio: { finish() {} },
+    ...extra,
   };
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
@@ -571,6 +575,7 @@ function resultsHarness({ ghost = null, guest = false, recordedContext = null, s
       resultsTable: dom.byId("results-table"),
       resultsTitle: dom.byId("results-title"),
       resNext: dom.byId("res-next"),
+      results: dom.byId("results"),
     },
     track: { def: { id: "monza", name: "Monza" } },
     player: { best: 80 },
@@ -582,10 +587,12 @@ function resultsHarness({ ghost = null, guest = false, recordedContext = null, s
     cssCol: () => "#fff",
     fmtTime: (value) => value.toFixed(3),
     daily: { isActive: () => false, current: () => null },
+    // game.js armConfirm's contract: the first press arms, the second runs the action (#5672).
+    armConfirm: (btn, text, action) => { if (!btn._armed) { btn._armed = true; btn.textContent = text; return false; } btn._armed = false; action(); return true; },
   };
-  const api = vm.runInContext("GameResults", ctx).create(G);
+  const api = vm.runInContext("GameResultsSheet", ctx).create(G);
   api.buildTTResults();
-  return { dom, G };
+  return { dom, G, api };
 }
 
 test("time-trial results offer link, code, and file only for a shareable local ghost", () => {
@@ -597,6 +604,54 @@ test("time-trial results offer link, code, and file only for a shareable local g
   assert.equal(shared.dom.byId("res-ghost-copy-link").textContent, "COPY LINK");
   assert.equal(shared.dom.byId("res-ghost-copy-code").textContent, "COPY CODE");
   assert.equal(shared.dom.byId("res-ghost-download").textContent, "DOWNLOAD");
+});
+
+test("a refused clipboard reuses ONE select-and-copy box across taps (no duplicate ids)", async () => {
+  const ApexClipboard = { write: async () => false, copySelection() {} };
+  const h = resultsHarness({ ghost: fixture, extra: { ApexClipboard } });
+  const table = h.dom.byId("results-table");
+  const after = (btn) => { btn.insertAdjacentElement = (_, node) => { node.remove(); table.appendChild(node); }; return btn; };
+  const link = after(h.dom.byId("res-ghost-copy-link")), code = after(h.dom.byId("res-ghost-copy-code"));
+  await link.onclick();
+  await link.onclick();
+  await code.onclick();
+  const boxes = table.children.filter((c) => c.id === "res-ghost-copy-fallback");
+  assert.equal(boxes.length, 1, "each refused tap reuses the box");
+  assert.equal(boxes[0].value, "APXG1.p.code", "the box shows the latest tap's value");
+});
+
+test("CLEAR GHOST rebuilds the sheet inside TopModal.keepFocus on the results root", () => {
+  const scopes = [];
+  const TopModal = { keepFocus(scope, fn) { scopes.push(scope); fn(); } };
+  const h = resultsHarness({ ghost: fixture, extra: { TopModal } });
+  h.dom.byId("res-ghost-clear").onclick();
+  assert.equal(scopes.length, 0, "the first tap only arms CLEAR GHOST");
+  h.dom.byId("res-ghost-clear").onclick();
+  assert.equal(scopes.length, 1);
+  assert.equal(scopes[0], h.G.els.results, "focus is kept within #results across the rebuild");
+});
+
+test("Results retains the clear control on refusal and keeps the local PB when clearing a guest", () => {
+  let allowed = false, writes = 0, rebuilt = 0;
+  const TopModal = { keepFocus(scope, fn) { rebuilt++; fn(); } };
+  const Ghost = { hasGhost: () => true, bestTime: () => 80, snapshot: () => null,
+    clear() { writes++; return allowed; } };
+  const h = resultsHarness({ ghost: fixture, guest: true, extra: { Ghost, TopModal } });
+  const confirm = btn => { btn.onclick(); btn.onclick(); };
+  const guest = h.dom.byId("res-ghost-clear");
+  assert.equal(guest.textContent, "✕ CLEAR RIVAL GHOST");
+  confirm(guest);
+  assert.equal(writes, 0, "clearing the in-memory rival never writes to storage");
+  const local = h.dom.byId("res-ghost-clear");
+  assert.equal(local.textContent, "✕ CLEAR GHOST");
+  confirm(local);
+  assert.equal(writes, 1);
+  assert.equal(rebuilt, 1, "a refused deletion preserves the active sheet");
+  assert.equal(local.textContent, "GHOST KEPT — RETRY CLEAR");
+  allowed = true;
+  confirm(local);
+  assert.equal(writes, 2);
+  assert.equal(rebuilt, 2, "the successful retry rebuilds the sheet");
 });
 
 test("time-trial results identify a loaded guest as the rival ghost", () => {
@@ -650,6 +705,7 @@ test("starting TT compares the built car once per rival and session configuratio
     difficulty: "normal", raceTimeOfDay: "day", announce: message => notices.push(message) };
   const ctx = vm.createContext({ G, GhostShare, PhysicsConsts: { REVISION: 7 },
     Ghost: { contextKey: JSON.stringify, setTrack() {}, bestTime: () => Infinity }, GameStore: { ttBoard: () => [] } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-phys.js"), "utf8"), ctx, { filename: absSrc("js/race/session-phys.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-records.js"), "utf8"), ctx, { filename: absSrc("js/race/session-records.js") });
   const records = ctx.SessionRecords.create(G);
   const recorded = records.config(); recorded.car[0] = "mclaren";
@@ -719,7 +775,7 @@ test("a link whose lap time does not match its own trace is refused", async () =
 
 test("a thinned link keeps its time bound to the trace", async () => {
   const { GhostShare } = harness();
-  const long = trace(9000, 135);
+  const long = trace(9000, 135, 7004);
   const r = await GhostShare.encode(long, { track: "spa" });
   assert.equal(r.ok, true);
   assert.ok(r.thinned > 0, "precondition: the link copy was thinned");
@@ -756,15 +812,46 @@ test("a crafted ghost with absurd x, s, t or sample count is refused (CORRUPT)",
   assert.equal(GhostShare.fileExport({ ...ok, x: ok.x.map((v, i) => i === 5 ? 1e308 : v) }, { track: "monza" }).ok, false);
 });
 
-test("s is bounded by the circuit's own length when the circuit declares one", async () => {
+test("a shared ghost must cover one circuit within the declared length tolerance", async () => {
+  const { GhostShare } = harness({ plain: true, lengths: { monza: 5.8, spa: 7 } });
+  const lap = trace(40, 90, 5800);
+  const body = GhostShare.fileExport(lap, { track: "monza" }).envelope;
+  delete body.h; // A legacy link has no track-bound hash.
+  for (const distance of [5568, 5800, 6032])
+    assert.equal((await GhostShare.decode(JSON.stringify({ ...body, ...trace(40, 90, distance) }))).ok, true);
+  for (const distance of [5567, 6033])
+    assert.equal((await GhostShare.decode(JSON.stringify({ ...body, ...trace(40, 90, distance) }))).ok, false);
+  assert.equal((await GhostShare.decode(JSON.stringify({ ...body, track: "spa" }))).ok, false);
+  assert.equal((await GhostShare.decode(JSON.stringify({ ...body, ...trace(40, 100, 7000) }))).ok, false);
+  assert.equal((await GhostShare.decode(JSON.stringify({ ...body, s: lap.s.map(v => 5500 + v / 20) }))).ok, false,
+    "a trace starting near the finish still has to cover the circuit");
+});
+
+test("full laps near the observed built circuit lengths survive the portable link path", async () => {
+  const lengths = { monaco: 3.337, monza: 5.793, spa: 7.004 };
+  const { GhostShare } = harness({ tracks: Object.keys(lengths), lengths });
+  for (const [track, builtRatio] of [["monaco", 0.9717], ["monza", 1], ["spa", 1.0051]]) {
+    const g = trace(200, 100, lengths[track] * 1000 * builtRatio);
+    const result = await GhostShare.encode(g, { track });
+    assert.equal(result.ok, true, track);
+    assert.equal((await GhostShare.decode(result.url)).ok, true, track);
+  }
+});
+
+test("the average lap speed is bounded even for hashless and correctly hashed files", async () => {
   const { GhostShare } = harness({ plain: true, lengths: { monza: 5.8 } });
-  const near = trace(40, 90);                         // s ends at 144 m
-  const raw = JSON.parse(GhostShare.fileExport(near, { track: "monza" }).text);
-  delete raw.h;
-  raw.s = raw.s.map((v, i) => i * 17400 / 39);        // 3 x 5.8 km
-  assert.equal((await GhostShare.decode(JSON.stringify(raw))).ok, true, "3 laps' worth of arc is the ceiling");
-  raw.s = raw.s.map((v) => v * 1.01);
-  assert.equal((await GhostShare.decode(JSON.stringify(raw))).ok, false, "past 3 x lengthKm is not this circuit's ghost");
+  const g = trace(40, 100, 5800);
+  const body = GhostShare.fileExport(g, { track: "monza" }).envelope;
+  body.time /= 10;
+  body.t = body.t.map(t => t / 10);
+  delete body.h;
+  assert.equal((await GhostShare.decode(JSON.stringify(body))).ok, false);
+  const ctx = vm.createContext({});
+  seedHash32(ctx);
+  body.h = vm.runInContext("Hash32", ctx).fnv1a(JSON.stringify([body.track, body.time, body.t, body.s, body.x])).toString(36);
+  assert.equal((await GhostShare.decode(JSON.stringify(body))).ok, false);
+  assert.equal(GhostShare.fileExport(body, { track: body.track }).ok, false);
+  assert.equal(GhostShare.installGuest({ track: body.track, ghost: body }), false);
 });
 
 test("shared ghost meta keeps only the whitelisted keys, strings <= 32 chars", async () => {
@@ -798,9 +885,10 @@ test("TT records find historical wear classes without crossing other settings", 
   const ctx = vm.createContext({ G, Ghost, InputGhost, PhysicsConsts: { REVISION: 7 },
     GhostShare: { hasGuest: () => !!guestContext, guest: () => ({ context: guestContext }),
       contextNotice(a, b) { compared.push([a, b]); return "comparison"; } },
-    Quali: { medalFor: () => null },
+    Quali: { medalFor: () => null, MEDAL_RANK: { bronze: 1, silver: 2, gold: 3 } },
     GameStore: { ttBoard: (id, key) => board.get(key) || [],
       ttBoardAdd(id, entry) { board.set(entry.context, [entry]); } } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-phys.js"), "utf8"), ctx, { filename: absSrc("js/race/session-phys.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-records.js"), "utf8"), ctx, { filename: absSrc("js/race/session-records.js") });
   const records = ctx.SessionRecords.create(G), normalized = records.current();
   for (const wear of ["real", "light", "off"]) {
@@ -827,4 +915,30 @@ test("TT records find historical wear classes without crossing other settings", 
   }
   G.session = "race"; G.raceTyreWear = "real"; const real = records.current();
   G.raceTyreWear = "off"; assert.notEqual(records.current(), real);
+});
+
+// ── #5783 / #5999 I3 track-in-hash (appended only; DAD 2026-11-21) ──────────
+test("I3: export hash covers the track id; a kept-h relabel is refused (#5783/#5999)", async () => {
+  const { GhostShare } = harness({ plain: true, lengths: { monza: 5.8, spa: 5.8 } });
+  const g = trace(40, 90, 5800);
+  const file = GhostShare.fileExport(g, { track: "monza" });
+  assert.equal(file.ok, true);
+  assert.equal((await GhostShare.decode(file.text)).ok, true, "honest monza export imports");
+  const body = JSON.parse(file.text);
+  body.track = "spa";
+  assert.equal((await GhostShare.decode(JSON.stringify(body))).ok, false,
+    "same arc, wrong track, h kept: refused once the hash includes the track");
+});
+
+test("I3: legacy pre-track h still verifies when the track field is honest (#5783/#5999)", async () => {
+  const { GhostShare } = harness({ plain: true });
+  const g = trace(40, 90);
+  const body = JSON.parse(GhostShare.fileExport(g, { track: "monza" }).text);
+  // Simulate a pre-track envelope: recompute h over [time,t,s,x] only.
+  const text = JSON.stringify([body.time, body.t, body.s, body.x]);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  body.h = (h >>> 0).toString(36);
+  assert.equal((await GhostShare.decode(JSON.stringify(body))).ok, true,
+    "old links hashed without the track still load");
 });

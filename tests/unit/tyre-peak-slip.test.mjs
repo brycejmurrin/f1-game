@@ -44,6 +44,22 @@ test("front peak slip angle sits in 6–9° for representative μ at the limit",
     const mu = muRep * scale;
     const alphaDeg = alphaNomDeg * scale;
     assert.ok(alphaDeg >= 6 && alphaDeg <= 9.05, `μ=${mu.toFixed(2)} → α_peak=${alphaDeg.toFixed(2)}°`);
+    // THE BEHAVIOUR, measured on the curve itself: sweep the slip angle through
+    // the front force the car actually gets (PlayerForces.tyreSat's front call,
+    // μ·lateralCurve(CS·α/μ)) and find where it peaks. The arithmetic above only
+    // re-derives the constant; this goes red if the curve stops peaking there.
+    let bestDeg = 0, bestF = -Infinity;
+    for (let i = 1; i <= 2000; i++) {
+      const aDeg = i * 0.01;                                   // 0.01° .. 20°
+      const F = mu * front((CS * (aDeg / DEG)) / mu);
+      if (F > bestF + 1e-12) { bestF = F; bestDeg = aDeg; }
+    }
+    assert.ok(bestDeg >= 6 && bestDeg <= 9.05,
+      `μ=${mu.toFixed(2)}: front force peaks at ${bestDeg.toFixed(2)}° slip, outside 6–9°`);
+    assert.ok(Math.abs(bestDeg - alphaDeg) <= 0.02,
+      `μ=${mu.toFixed(2)}: measured peak ${bestDeg.toFixed(2)}° vs nominal ${alphaDeg.toFixed(2)}°`);
+    // 0.01° grid: the sampled top sits ~1e-4·μ under the true peak.
+    assert.ok(Math.abs(bestF - mu) < 1e-3 * mu, `μ=${mu.toFixed(2)}: the peak force is the full μ, got ${bestF}`);
   }
 });
 

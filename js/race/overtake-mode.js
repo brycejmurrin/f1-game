@@ -12,7 +12,11 @@ const OvertakeMode = (function () {
   // 3–5 s push, then a 9–14 s lockout".
   //
   // ENERGY UNITS. `c.energy` is the battery as 0..1 of the Energy Store's 4 MJ
-  // deployable window (4 MJ ≈ 11.5 s at the MGU-K's 350 kW), so the allowance
+  // deployable window. That unit is a label, not a power model: BOOST drains
+  // it at drainFor(c) = lerp(DRAIN_HI 0.26, DRAIN_LO 0.14, ersDeploy) per real
+  // second (PhysicsConsts; no PACE term), so a full battery lasts 3.8–7.1 s of
+  // deploy (5.0 s at the default ersDeploy 0.5) — not the ≈ 11.5 s that 4 MJ
+  // would last at the MGU-K's real 350 kW. The allowance
   // is OT_MJ / ES_MJ = 0.125 of that same unit, held SEPARATELY in `c.otE`:
   // it is an extra allowance, not a draw on the battery (BOOST's job). It is
   // spent at the rate that empties it over `otTimeFor(c)` seconds of deploy
@@ -70,15 +74,23 @@ const OvertakeMode = (function () {
     c._otHold = false;               // grace: keep a fresh grant across one Activation
   }
 
+  function detectionCrossed(c, track) {
+    return !!track && c._otLap != null && crossed(c._otS, c.s, detectS(track), track.total);
+  }
+
   // Once per car per tick, BEFORE arming: the two lines. `gapAhead` is seconds
   // to the car ahead on the road; `open` is RaceControl.otDetectOpen() — no
   // earning under the Safety Car or in low grip.
-  function lines(c, track, gapAhead, open) {
+  function lines(c, track, gapAhead, open, detected = detectionCrossed(c, track)) {
     if (c._otLap == null || c._otS == null) { c._otLap = c.lap | 0; c._otS = c.s; }
-    if (track && crossed(c._otS, c.s, detectS(track), track.total)) {
-      c.otEarned = !!open && gapAhead < (consts().OT_GAP || 1);
+    if (detected) {
+      // Number.isFinite: `null < 1` is true in JS (null → 0), so a missing gap
+      // would earn Overtake with nobody ahead. game.js passes Infinity; keep the
+      // pure rule honest for every caller.
+      const gapOk = Number.isFinite(gapAhead) && gapAhead < (consts().OT_GAP || 1);
+      c.otEarned = !!open && gapOk;
       if (c.otEarned) note(c, "earned gap=" + (+gapAhead).toFixed(2) + "s");
-      else if (!open && gapAhead < (consts().OT_GAP || 1)) note(c, "denied detection-closed");
+      else if (!open && gapOk) note(c, "denied detection-closed");
     }
     c._otS = c.s;
     // The Activation Line. Highest lap seen, so a car shoved back over the line
@@ -150,6 +162,6 @@ const OvertakeMode = (function () {
     return started;
   }
 
-  return { DETECT_FRAC, energy, mj, detectFrac, detectS, crossed, reset, lines, arm, prepare, consume, spend };
+  return { DETECT_FRAC, energy, mj, detectFrac, detectS, crossed, detectionCrossed, reset, lines, arm, prepare, consume, spend };
 })();
 Object.freeze(OvertakeMode);

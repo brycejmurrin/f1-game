@@ -1,7 +1,10 @@
 // @ts-check
+import { CONTRACT_WINDOWS } from "../helpers/iphone15.mjs";
 import { readFile } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
 import { LANDSCAPE, BOOT_MS, boot, armRace, selectPartCategory, startCareer, goRacing } from "../helpers/career-boot.js";
+import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
+import { readProfile } from "../../tools/lib/bryce-phone.mjs";
 
 test.describe.configure({ mode: "parallel" });
 
@@ -34,16 +37,19 @@ test.describe.parallel("Career — the modes screen", () => {
     await expect(page).toHaveTitle(/Apex 26/);
     const errors = [];
     page.on("pageerror", e => errors.push(e.message));
-    const expected = await page.evaluate(() => {
+    const expected = await page.evaluate(async () => {
       window.__apex.career({ teamId: "haas", seat: 1, seed: 7 });
       const day = "2026-10-16", key = i => JSON.stringify({ bias: i });
       const daily = DailyChallenge.create({ store: GameStore.store });
       daily.select(day, "open");
       for (let i = 0; i < 8; i++) daily.record(90 + i, key(i));
+      // CareerBackup is LAZY_CAREER_UI (#4748): the title kicks the bundle, this waits for it.
+      if (!(await CareerUI.ensureBackup())) throw new Error("career backup bundle did not load");
       const envelope = CareerBackup.build();
       envelope.daily = { days: { [day]: { best: 80, laps: 1,
         classes: { [key(8)]: { best: 80, laps: 1 } } } } };
-      const result = CareerBackup.apply(envelope);
+      // Overwriting the live slot keeps a "before-import" restore point first.
+      const result = await CareerBackup.applyWithUndo(envelope);
       if (!result.ok) throw new Error("Daily merge refused: " + result.reason);
       return GameStore.store.get("daily.v1");
     });
@@ -59,7 +65,7 @@ test.describe.parallel("Career — the modes screen", () => {
     expect(saved.slots).toHaveLength(6);
     expect(saved.daily).toEqual(expected);
     expect(Object.keys(saved.daily.days["2026-10-16"].classes)).toHaveLength(9);
-    const restored = await page.evaluate(saved => CareerBackup.apply(saved), saved);
+    const restored = await page.evaluate(saved => CareerBackup.applyWithUndo(saved), saved);
     expect(restored.ok).toBe(true);
     expect(errors).toEqual([]);
     await info.attach("Daily backup after class merge", { path, contentType: "application/json" });
@@ -267,7 +273,7 @@ test.describe.parallel("Career — the guide", () => {
     await boot(page);
     await startCareer(page);
     await page.locator("#cr-guide").click();
-    const body = await page.locator("#cg-body").innerText();
+    const body = await page.locator("#cg-body").textContent();
     const c = await page.evaluate(() => ({
       win: Career.PRIZE[0], last: Career.prizeFor(22), bonus: Career.OBJ_BONUS,
       mult: Career.RESEARCH_MULT, slots: Career.SLOTS,
@@ -299,7 +305,7 @@ test.describe.parallel("Career — the guide", () => {
     await boot(page);
     await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 4 }));
     await page.locator("#cr-guide").click();
-    const body = await page.locator("#cg-body").innerText();
+    const body = await page.locator("#cg-body").textContent();
     const asks = await page.evaluate(() => Career.freeAgents().map((a) => a.ask));
     expect(body).toContain(Math.min(...asks) + " cr a round");
     expect(body).toContain(Math.max(...asks) + " cr a round");
@@ -579,8 +585,13 @@ test.describe.parallel("Career — sponsors", () => {
     // carrying it across the rollover made every season-two window look already
     // paid — MY TEAM's whole second income stream stopped, silently, from year
     // two on, with the hub still showing the brief and its fee.
+    // Seed 5, not 7 (#5786): the sponsor briefs pay on points finishes, and
+    // qualifying option 1 puts an equal driver mid-grid. Seed 7's MY TEAM career
+    // then finishes P11-P17 and season two meets no brief (VM: 0 paid; 3 on the
+    // older model). Seed 5 still pays (VM: season one 1, season two 2), so this
+    // keeps testing the rollover ledger, not the grid.
     await boot(page);
-    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 7 }));
+    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 5 }));
     await goRacing(page);
     const out = await page.evaluate(() => {
       window.__apex.careerSim(24);
@@ -698,4 +709,81 @@ test.describe.parallel("Career — #cr-left fits phone viewports", () => {
       await expect(page.locator("#cr-left")).toContainText("NEXT RACE");
     });
   }
+});
+
+// ── UI contract cells (#5153 gap 11, the UI contract note of PR #5154, UI-CONTRACT-2026-11-06 §3 rule 8 and §4.7) ──
+// The hub in the owner's three windows — A the iOS Home Screen app (852x393, insets 59/20/59),
+// C the Safari tab (852x283), D the spec phone (844x390) — seeded from Bryce's own export, whose
+// career DENSITY is ROOMY. Measured before the fix (docs/notes/UI-PR-D-MEASURE-2026-11-06.md):
+// ROOMY turned the sheet normal, which paired it at 657 own px (a 73-115 px left pane) and at
+// 552 left no scroller at all. On a phone-sized window ROOMY is a request the box clamps: the
+// sheet stays compact, the panes stack, #cr-body is the one scroller, the foot never moves.
+// #5580: the export stores no UI SIZE, so a phone reads the shipped 70 % (#5358) and the cells measure THAT layout.
+// At 0.7 the sheet has 520 own px in A and 534 in D, over its --compact-at 480, so it went NORMAL there (head 85.2
+// painted px); the short-touch gate in css/overlays.css holds it compact. Limits that were own px for 1.09 are
+// painted px now (probe 2026-11-16, 0.7 | 1.09): foot 56 | 58.2; head 62.5 | 94.8; body 243.5 in A (218.5 normal).
+// the October 2026 LEGACY export (tools/lib/bryce-phone.mjs `legacy`: HUD 155, BUTTON 245), a heavy fixture, not his phone today.
+const LEGACY_PROFILE = readProfile("legacy");
+for (const win of CONTRACT_WINDOWS) test.describe("UI contract career cells — " + win.name, () => {
+  test.use({ ...uiTestOptions({ touch: true, viewport: win.viewport, deviceScaleFactor: 1 }) });
+  test("ROOMY is clamped: compact, stacked, one scroller, the foot on screen", async ({ page }) => {
+    await boot(page);
+    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), LEGACY_PROFILE);
+    expect(imported.ok, "the owner export imports: " + JSON.stringify(imported)).toBe(true);
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.headless(true));
+    await page.addStyleTag({ content: `:root{--sal:${win.insets.l}px;--sar:${win.insets.r}px;--sat:0px;--sab:${win.insets.b}px;}` });
+    await startCareer(page, { teamId: "haas", seat: 1, seed: 4242 });
+    await expect(page.locator("#career")).toBeVisible();
+    await expect(page.locator("#cr-nextrace")).toBeVisible({ timeout: BOOT_MS });
+    await expect(page.locator("#cr-nextrace img")).toBeVisible({ timeout: BOOT_MS });
+    const cell = await page.evaluate(() => {
+      const $ = (id) => document.getElementById(id);
+      const z = (el) => el.currentCSSZoom || 1;
+      const inner = $("cr-inner"), body = $("cr-body"), foot = $("cr-foot"), go = $("cr-go");
+      const ir = inner.getBoundingClientRect(), fr = foot.getBoundingClientRect(), gr = go.getBoundingClientRect();
+      const scrollers = [...inner.querySelectorAll("*")].filter((el) => { const o = getComputedStyle(el).overflowY; return (o === "auto" || o === "scroll") && el.scrollHeight > el.clientHeight + 1; }).map((el) => el.id || el.className);
+      return {
+        look: document.documentElement.dataset.lookCareerDensity, ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
+        density: inner.dataset.density, pair: inner.dataset.pair, compactAt: getComputedStyle(inner).getPropertyValue("--compact-at").trim(),
+        pairAt: getComputedStyle(inner).getPropertyValue("--pair-at").trim(),
+        bodyOverflowY: getComputedStyle(body).overflowY, bodyDisplay: getComputedStyle(body).display, scrollers,
+        footPastSheet: +(fr.bottom - ir.bottom).toFixed(1), footOnScreen: fr.top >= 0 && fr.bottom <= innerHeight + 0.5, footPaintedH: +fr.height.toFixed(1),
+        footBtns: [...foot.querySelectorAll("button")].filter((b) => b.offsetParent).map((b) => { const r = b.getBoundingClientRect(); return { id: b.id, top: Math.round(r.top), h: +r.height.toFixed(1) }; }),
+        sheetOwnH: +(ir.height / z(inner)).toFixed(1), goPaintedH: +gr.height.toFixed(1), sheetInScreen: ir.top >= 0 && ir.bottom <= innerHeight + 0.5,
+        head: (() => { const h = $("cr-header"), tb = $("cr-titlebar"), m = $("cr-meters"); const hr = h.getBoundingClientRect();
+          return { paintedH: +hr.height.toFixed(1), cols: getComputedStyle(h).gridTemplateColumns.split(" ").length,
+            overflow: Math.max(h.scrollWidth - h.clientWidth, tb.scrollWidth - tb.clientWidth, m.scrollWidth - m.clientWidth),
+            metersBesideTitle: m.getBoundingClientRect().left >= tb.getBoundingClientRect().right - 1,
+            clippedChips: [...h.querySelectorAll(".sel-chip")].filter((c) => c.scrollWidth > c.clientWidth + 1).map((c) => c.textContent.trim()) }; })(),
+      };
+    });
+    const tag = win.name + ": ";
+    expect(cell.look, tag + "the export's career density is ROOMY").toBe("roomy");
+    expect(cell.ui, tag + "the export stores no UI SIZE: the shipped phone 70 %").toBe("0.7");
+    expect(cell.density, tag + "a phone-sized window is compact at every UI SIZE (" + cell.sheetOwnH + " own px), ROOMY or not").toBe("compact");
+    expect(cell.compactAt, tag + "the roomy --compact-at: 1px block is gated off the phone; the short-touch gate holds compact").toBe("99999px");
+    expect(cell.pairAt, tag + "the pair threshold is a desk/tablet value").toBe("99999px");
+    expect(cell.pair, tag + "the panes stack").not.toBe("on");
+    expect(cell.bodyDisplay, tag + "#cr-body is the stacked flex column").toBe("flex");
+    expect(cell.bodyOverflowY, tag + "#cr-body is the scroller").toBe("auto");
+    expect(cell.scrollers, tag + "#cr-body is the ONE scroller").toEqual(["cr-body"]);
+    expect(cell.sheetInScreen, tag + "the sheet sits inside the window").toBe(true);
+    expect(cell.footPastSheet, tag + "the foot ends inside the sheet").toBeLessThanOrEqual(0.5);
+    expect(cell.footOnScreen, tag + "the foot is on screen").toBe(true);
+    expect(cell.footBtns.map((b) => b.id), tag + "the foot's three buttons").toEqual(["cr-back", "cr-garage", "cr-go"]);
+    expect(new Set(cell.footBtns.map((b) => b.top)).size, tag + "a one-row foot: " + JSON.stringify(cell.footBtns)).toBe(1);
+    expect(cell.footPaintedH, tag + "a one-row foot, painted (was 60 own px at 1.09 = 65.4 painted)").toBeLessThanOrEqual(60);
+    expect(cell.goPaintedH, tag + "GO RACING paints the WCAG floor").toBeGreaterThanOrEqual(44);
+    // #5580: before the gate the normal-density foot at 0.7 painted GO RACING 44.2 beside 52 px exits (--tap vs --tap-paint).
+    expect(cell.goPaintedH, tag + "the primary is never shorter than its exits").toBeGreaterThanOrEqual(Math.max(...cell.footBtns.map((b) => b.h)) - 0.5);
+    // #5153 gap 16: the BROADCAST LINE (title, team, three meters on one row) fires on every owner window — it keyed on
+    // 660 own px and never fired in A (head 116 own); now from 500, away from the 640-760 phone band (contract rule 6).
+    expect(cell.head.cols, tag + "title | meters on one row").toBe(2);
+    expect(cell.head.metersBesideTitle, tag + "the meters sit beside the title").toBe(true);
+    expect(cell.head.overflow, tag + "the broadcast line fits its row (no horizontal overflow)").toBeLessThanOrEqual(0);
+    expect(cell.head.clippedChips, tag + "every jump chip reads whole").toEqual([]);
+    expect(cell.head.paintedH, tag + "a thin head, painted (was 100 own px at 1.09 = 109 painted; measured 62.5)").toBeLessThanOrEqual(100);
+  });
 });

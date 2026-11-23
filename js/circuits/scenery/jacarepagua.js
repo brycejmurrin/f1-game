@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["jacarepagua"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack,
         bush, ridge, mountain, tree,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         floodMast, cameraTower, sponsorHoarding, palm, terrace, scaffoldStand,
@@ -455,15 +455,20 @@
         palette: [[0.10, 0.44, 0.24], [0.94, 0.86, 0.20], [0.10, 0.22, 0.52], [0.92, 0.90, 0.88]],
       });
 
-      groundPatch(K(0.075), 1, 6, [34, 0.18, 46], SAND,
+      // First-corner sand trap: the long built RIGHT-hander at 0.055-0.113
+      // (tightest at 0.062 / 0.107; absent from def.turns, whose first entry is
+      // the left at 0.1435). Its outside is side -1 (left), where the T1-area
+      // terrace stands at 36 m, so the sand stops at 6 + 26 m. The old kit sat
+      // on side +1, the inside (corner-frames audit 2026-11-10).
+      groundPatch(K(0.075), -1, 6, [26, 0.18, 46], SAND,
         { id: "jacarepagua-t1-sand", samples: 8 });
-      tyreWall(0.058, 0.094, 1, 5, [0.86, 0.20, 0.18]);
+      tyreWall(0.058, 0.094, -1, 5, [0.86, 0.20, 0.18]);
       terrace(0.066, 0.085, -1, 36, {
         rows: 7, rise: 1.4, depth: 2.5, step: 9, density: 0.42,
         conc: [0.80, 0.78, 0.72], concAlt: [0.71, 0.69, 0.64],
         crowd: [[0.94, 0.86, 0.20], [0.10, 0.44, 0.24], [0.92, 0.90, 0.86]],
       });
-      marshalPost(K(0.070), -1, 10);
+      marshalPost(K(0.070), 1, 10);
 
       groundPatch(K(0.205), 1, 5, [26, 0.18, 34], SAND,
         { id: "jacarepagua-t3-sand", samples: 6 });
@@ -479,10 +484,15 @@
       });
       marshalPost(K(0.616), -1, 9);
 
-      groundPatch(K(0.882), 1, 5, [28, 0.18, 36], SAND,
+      // The final corner (right, def.turns T9-T11 = one 150 deg complex
+      // 0.904-0.934): sand + yellow tyre wall on its OUTSIDE (side -1), keyed
+      // off the curated apexes. The old kit ran 0.866-0.900, 50-220 m early
+      // and on the inside (corner-frames audit 2026-11-10).
+      const FIN0 = api.def.turns[8], FIN1 = api.def.turns[10];
+      groundPatch(K((FIN0 + FIN1) / 2), -1, 5, [28, 0.18, 36], SAND,
         { id: "jacarepagua-final-sand", samples: 6 });
-      tyreWall(0.866, 0.900, 1, 4, [0.85, 0.78, 0.20]);
-      marshalPost(K(0.876), -1, 9);
+      tyreWall(FIN0 - 0.006, FIN1 + 0.004, -1, 34, [0.85, 0.78, 0.20]);
+      marshalPost(K(FIN0 - 0.004), 1, 9);
 
       // Wave 6: removed the two spectatorHill banks that shared planes with
       // the city pack and with their own risers (flatCoplanar). Concrete
@@ -493,7 +503,9 @@
         guardrail(s0, s1,  1, 8, [0.80, 0.81, 0.83]);
       }
       guardrail(0.94, 0.06, 1, 4.0, [0.85, 0.85, 0.88]);
-      fence(0.95, 0.06, -1, 9, 4, [0.74, 0.76, 0.80]);
+      // 10.3, not 9: no wall in front, so a car's side reached 10.1 m (the 9 m run-off + its
+      // half-width) and drove 1.1 m into the fence. Run-off unchanged (#5998).
+      fence(0.95, 0.06, -1, 10.3, 4, [0.74, 0.76, 0.80]);
       for (const s of [0.16, 0.28, 0.44, 0.56, 0.72, 0.88]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 9);
       }
@@ -501,7 +513,7 @@
       for (const [s, side, gap] of [
         [0.030, -1, 28], [0.075, -1, 36], [0.470, 1, 42], [0.622, -1, 32], [0.882, -1, 28],
       ]) {
-        floodMast(K(s), side, gap, { h: 30, cool: false, arms: 2, light: false });
+        floodMast(K(s), side, gap, { h: 30, cool: false, arms: 2, light: false, pool: false });
       }
       cameraTower(K(0.205), -1, 24, { h: 15 });
       // Back-half dressing (JAC-M3 keeps it furniture, not planting): the

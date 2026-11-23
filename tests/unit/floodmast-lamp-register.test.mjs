@@ -101,7 +101,11 @@ test("over the cap: always-on lamps survive, the rest thin, one warning", () => 
       api.lampPost({ pos: [a.c[0], a.c[1] + 9, a.c[2]], k: 600 + i * 25, side: -1, kind: "led", always: true });
     }
   });
-  assert.ok(calls.length >= 127 + EXTRA + ALWAYS, `the extras were registered too (${calls.length} calls)`);
+  // The circuit's own count is measured, not hard-coded: it moves with the
+  // scenery (127 before the 2026-11-11 pit-side flip), the extras must not.
+  const own = buildWrapped("hungaroring").calls.length;
+  assert.ok(own + EXTRA + ALWAYS > 160, `the test must overflow the cap (own ${own})`);
+  assert.equal(calls.length, own + EXTRA + ALWAYS, `the extras were registered too (${calls.length} calls, own ${own})`);
   assert.equal(custom.length, 160, "the cap is the cap");
   assert.equal(custom.filter((p) => p.always).length, ALWAYS, "always-on lamps are never the ones thinned");
   assert.equal(track.hasAlwaysLamps, true);

@@ -154,3 +154,16 @@ test('corridor candidate walk is indexed (no for-of over cars)', () => {
   assert.equal(/for\s*\(\s*const\s+\w+\s+of\s+cars\s*\)/.test(body), false);
   assert.equal(/for\s*\(\s*let\s+\w+\s*=\s*0/.test(body), true);
 });
+
+test('W26 row 4: a side-0 plan only gates the pull-aside against the blocker it was made for', () => {
+  const car = { prog: 100, x: 0, speed: 40 }, b1 = { prog: 115, x: 0, speed: 37 }, b2 = { prog: 130, x: 3, speed: 36 };
+  const plan = {};
+  // Both lanes occupied: follow (side 0) against b1.
+  A.choose({ roomL: 6, roomR: 6, roadL: 6, roadR: 6 }, car, b1,
+    [car, b1, { prog: 100, x: -2.8, speed: 40 }, { prog: 100, x: 2.8, speed: 40 }], 1000, 2.8, plan);
+  assert.equal(plan.side, 0); assert.equal(plan.of, b1);
+  assert.equal(A.planAllows(plan, b1), false, 'the stale verdict still holds for the same blocker');
+  assert.equal(A.planAllows(plan, b2), true, 'a NEW blocker is not gated by the old side-0 plan');
+  assert.equal(A.planAllows(null, b2), true, 'no plan yet: the pull is allowed');
+  plan.side = 1; assert.equal(A.planAllows(plan, b1), true);
+});

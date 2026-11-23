@@ -18,7 +18,8 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createHash, webcrypto } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { binaryIntegrity, stampIntegrity, fullPhrases, phrases, recordClips } from "../../tools/gen/voicepack.mjs";
+import { binaryIntegrity, stampIntegrity, fullPhrases, phrases, recordClips, parseCli, publishFiles, checkPrior } from "../../tools/gen/voicepack.mjs";
+import { writeCorpus } from "../../tools/gen/voice-corpus.mjs";
 import { SAMPLES, requestFor } from "../../tools/gen/voice-audition.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
@@ -397,13 +398,13 @@ test("every tyre and pit call the engineer (js/race/engineer.js) makes composes 
 
 test("the positions, gaps and spotter calls a line can carry are all recorded", () => {
   for (let p = 1; p <= 22; p++) assert.ok(hasKey("p " + p), "P" + p);
-  for (const g of [0.1, 0.9, 1.4, 5.5, 9.9]) assert.ok(hasKey(RadioLines.gapText(g)), "gap " + g);
+  for (const g of [0.1, 0.9, 1.4, 5.5, 9.9, 9.96, 9.99, 10]) assert.ok(hasKey(RadioLines.gapText(g)), "gap " + g + " -> " + RadioLines.gapText(g));
   for (const k of Object.keys(Spotter.KEYS)) assert.ok(hasKey(k), "spotter: " + k);
 });
 
 // ── 3. RadioVoice hands a covered line to the pack ──────────────────────────
 
-function radio({ covers = true, packOn, spotterLeft = 0, loading = null, voiceTune = null } = {}) {
+function radio({ covers = true, packOn, spotterLeft = 0, loading = null, voiceTune = null, announcer = undefined } = {}) {
   const spoken = [], packCalls = [], ensures = [], kept = [];
   const synth = { speaking: false, speak(u) { spoken.push(u.text); }, cancel() {}, resume() {}, getVoices: () => [] };
   let onEnd = null;
@@ -422,7 +423,7 @@ function radio({ covers = true, packOn, spotterLeft = 0, loading = null, voiceTu
   });
   const saved = new Map(packOn == null ? [] : [["radioPack", packOn]]);
   if (voiceTune) saved.set("voiceTune", voiceTune);
-  const G = { soundOn: true, state: "race", store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) } };
+  const G = { soundOn: true, state: "race", announcer, store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) } };
   const v = sb.RadioVoice.create(G);
   v.setEnabled(true);
   return { v, spoken, packCalls, ensures, kept, ducks, saved, reload: () => sb.RadioVoice.create(G), end: () => onEnd && onEnd() };
@@ -500,6 +501,11 @@ test("RECORDED never hands a race line to speech synthesis: a line no clip cover
   assert.deepEqual(miss.spoken, [], "and not by speech synthesis either");
   assert.equal(miss.v.debug().last.reason, "not-recorded", "the audio panel can say why");
   assert.equal(miss.v.busy(), false, "a written line does not hold the channel");
+  miss.v.say("BOX BOX BOX", 3, "info");
+  const gap = Object.entries(miss.v.debug().unrecorded);
+  assert.equal(gap.length, 1, "each unrecorded line is tallied, not silently dropped (#5991)");
+  assert.equal(gap[0][0].split("|")[1].toUpperCase(), "BOX BOX BOX");
+  assert.equal(gap[0][1], 2, "repeats count, but log only once");
   const sys = radio({ packOn: false });
   sys.v.say("BOX BOX BOX", 3, "info");
   await new Promise((r) => setTimeout(r, 5));
@@ -651,6 +657,78 @@ test("VoicePack keeps one transmission per channel: the engineer never cuts the 
   assert.equal(handles.every((h) => h.stopped), true, "stop() with no channel cuts everything");
 });
 
+test("VoicePack start notification requires decoded, valid, actually scheduled audio", async (t) => {
+  for (const outcome of ["played", "decode-failed", "no-handle", "preempted", "invalid", "rebuilt", "budget-expired"]) {
+    await t.test(outcome, async () => {
+      const man = { binary: integrity(8), clips: { "car left": [0, 4, 0.5] } };
+      let resolveDecode, rejectDecode, now = 0, gen = 1, valid = true, starts = 0, plays = 0;
+      const sb = sandbox(["js/audio/voice-pack.js"], {
+        GameAudio: { now: () => now, ctxGen: () => gen,
+          decodeClip: () => new Promise((resolve, reject) => { resolveDecode = resolve; rejectDecode = reject; }),
+          radioVoice: (_parts, at) => { plays++; return outcome === "no-handle" ? null : { end: at + 0.5, stop() {} }; } },
+        fetch: () => Promise.resolve({ ok: true, json: () => Promise.resolve(man), arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }),
+      });
+      const p = sb.VoicePack.create({}); await p.load("george");
+      assert.equal(p.speak("george", "car left", { channel: "intro", budgetS: 1,
+        valid: () => valid, onStart: () => { starts++; } }), true);
+      await new Promise((r) => setImmediate(r));
+      assert.equal(starts, 0, "accepted audio still awaits decoding");
+      if (outcome === "preempted") p.stop("intro");
+      if (outcome === "invalid") valid = false;
+      if (outcome === "rebuilt") gen++;
+      if (outcome === "budget-expired") now = 2;
+      if (outcome === "decode-failed") rejectDecode(new Error("decode failed"));
+      else resolveDecode({ duration: 0.5 });
+      await new Promise((r) => setImmediate(r));
+      assert.equal(starts, outcome === "played" ? 1 : 0);
+      assert.equal(plays, ["played", "no-handle"].includes(outcome) ? 1 : 0);
+      p.stop("intro");
+      assert.equal(starts, outcome === "played" ? 1 : 0, "termination never repeats the start notification");
+    });
+  }
+});
+
+test("a throwing or invalid start observer never releases playing audio or advances its completion", async (t) => {
+  for (const observer of ["throws", "number", "object"]) for (const terminal of ["stop", "end"]) {
+    await t.test(`${observer}, then ${terminal}`, async () => {
+      const man = { binary: integrity(8), clips: { "car left": [0, 4, 0.5] } };
+      const timers = new Map(), handles = [], logs = [];
+      let seq = 0, ends = 0, starts = 0;
+      const sb = sandbox(["js/audio/voice-pack.js"], {
+        setTimeout(fn, ms) { const id = ++seq; timers.set(id, { fn, ms }); return id; },
+        clearTimeout(id) { timers.delete(id); },
+        Log: { info: (_channel, msg) => logs.push(msg) },
+        GameAudio: { now: () => 0, ctxGen: () => 1, decodeClip: () => Promise.resolve({ duration: 0.5 }),
+          radioVoice: (_parts, at) => {
+            const h = { end: at + 0.5, stopped: false, stop() { h.stopped = true; } };
+            handles.push(h); return h;
+          } },
+        fetch: () => Promise.resolve({ ok: true, json: () => Promise.resolve(man), arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }),
+      });
+      const p = sb.VoicePack.create({}); await p.load("george");
+      const onStart = observer === "throws" ? () => { starts++; throw new Error("caption paint failed"); }
+        : observer === "number" ? 7 : {};
+      assert.equal(p.speak("george", "car left", { channel: "intro", onStart, onEnd: () => { ends++; } }), true);
+      await new Promise((r) => setImmediate(r));
+      assert.equal(handles.length, 1, "the real pack scheduled an audio handle");
+      assert.equal(p.busy("intro"), true, "observer failures cannot orphan the playing handle");
+      assert.equal(handles[0].stopped, false);
+      assert.equal(ends, 0, "the queue cannot advance while this handle is playing");
+      assert.equal(starts, observer === "throws" ? 1 : 0);
+      assert.ok(logs.some((msg) => msg.includes(observer === "throws" ? "caption paint failed" : "observer is not a function")),
+        "observer errors remain diagnosable");
+      const finish = Array.from(timers.values()).find((timer) => timer.ms < 1000).fn;
+      if (terminal === "stop") {
+        p.stop("intro"); assert.equal(handles[0].stopped, true, "the lane still owns its stop handle");
+      } else finish();
+      assert.equal(p.busy("intro"), false);
+      assert.equal(ends, 1);
+      finish(); p.stop("intro");
+      assert.equal(ends, 1, "late termination stays idempotent");
+    });
+  }
+});
+
 test("a failed fetch is retried later instead of disabling the pack for the session", async () => {
   let calls = 0;
   const sb = sandbox(["js/audio/voice-pack.js"], {
@@ -684,6 +762,43 @@ test("an engineer line waits for a spotter call on the air, and RadioVoice repor
   r.end();
   assert.equal(r.v.busy(), false);
   assert.equal(RadioVoice.inert().busy(), false);
+});
+
+test("a timed-out clip retries in the same audio context and late completion cannot replace the retry", async () => {
+  const man = { binary: integrity(8), clips: { left: [0, 4, 0.5], clear: [4, 4, 0.5] } };
+  const timers = new Map(), decoded = [], played = [];
+  let oldDecode;
+  const sb = sandbox(["js/audio/voice-pack.js"], {
+    setTimeout: (fn, ms) => { timers.set(fn, ms); return fn; },
+    clearTimeout: (fn) => timers.delete(fn),
+    fetch: async () => ({ ok: true, json: async () => man, arrayBuffer: async () => new ArrayBuffer(8) }),
+    GameAudio: { now: () => 0, ctxGen: () => 1,
+      decodeClip: () => {
+        const id = decoded.length + 1;
+        decoded.push(id);
+        return id === 2 ? new Promise((resolve) => { oldDecode = resolve; }) : Promise.resolve(id);
+      },
+      radioVoice: (parts) => { played.push([...parts]); return { end: 0.5, stop() {} }; },
+    },
+  });
+  const pack = sb.VoicePack.create({});
+  await pack.load("george");
+  const speak = async (text) => {
+    assert.equal(pack.speak("george", text, { channel: "spotter" }), true);
+    await new Promise((resolve) => setImmediate(resolve));
+  };
+  await speak("clear");
+  await speak("left");
+  for (const [fn, ms] of timers) if (ms === 4000) { timers.delete(fn); fn(); }
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(pack.busy("spotter"), false);
+  await speak("left");
+  assert.deepEqual(played, [[1], [3]], "retry plays the new decode");
+  oldDecode(2);
+  await speak("left");
+  await speak("clear");
+  assert.deepEqual(played, [[1], [3], [3], [1]], "both healthy cache entries still play");
+  assert.equal(decoded.length, 3);
 });
 
 test("an AudioContext rebuilt while a line decodes drops the line instead of scheduling it on the old clock", async () => {
@@ -1059,6 +1174,48 @@ test("the decoded clip cache is bounded by SECONDS per voice, oldest out first (
   assert.equal(desk.d.cache.george.clips, 22, "desktop: the larger budget, still under the 80-clip count bound");
 });
 
+test("one decoded-PCM budget across voice packs, flushed on quit (#4676)", async () => {
+  const clips = {};
+  for (let i = 0; i < 40; i++) clips["w" + i] = [i * 4, 4, 4];
+  const sb = sandbox(["js/audio/voice-pack.js"], {
+    GLX: { isMobile: true },
+    GameAudio: { now: () => 0, ctxGen: () => 1, decodeClip: () => Promise.resolve({ duration: 4 }),
+      radioVoice: (parts, at) => ({ end: at, stop() {} }) },
+    fetch: () => Promise.resolve({ ok: true, json: () => Promise.resolve({ binary: integrity(160), clips }), arrayBuffer: () => Promise.resolve(new ArrayBuffer(160)) }),
+  });
+  const P = sb.VoicePack.create({});
+  const ids = ["george", "fable", "bella", "emma"];
+  for (const id of ids) assert.equal(await P.load(id), true);
+  for (let i = 0; i < 12; i++) for (const id of ids) { P.speak(id, "w" + i, { channel: "radio" }); await new Promise((r) => setImmediate(r)); }
+  const total = () => Object.values(J(P.debug().cache)).reduce((a, c) => a + c.secs, 0);
+  assert.ok(total() > 0 && total() <= 24, `four voices hold ${total()} s`);
+  P.flushDecoded();
+  assert.equal(total(), 0, "quit-to-menu flush empties every voice");
+  assert.equal(await P.load("george"), true, "the .bin survives the flush");
+});
+
+test("#4274 item 9: a ready pack is held as a Blob outside the JS heap; each clip decodes its exact byte slice", async () => {
+  const body = new Uint8Array(160).map((_, i) => i);
+  const clips = { a: [16, 8, 1], b: [100, 20, 1] };
+  const seen = [];
+  const mk = (extra) => sandbox(["js/audio/voice-pack.js"], Object.assign({
+    GLX: { isMobile: true },
+    GameAudio: { now: () => 0, ctxGen: () => 1, decodeClip: (ab) => { seen.push(Array.from(new Uint8Array(ab))); return Promise.resolve({ duration: 1 }); },
+      radioVoice: (parts, at) => ({ end: at, stop() {} }) },
+    fetch: () => Promise.resolve({ ok: true, json: () => Promise.resolve({ binary: { sha256: createHash("sha256").update(body).digest("hex"), bytes: 160 }, clips }), arrayBuffer: () => Promise.resolve(body.slice().buffer) }),
+  }, extra));
+  for (const [label, extra, heap] of [["Blob", { Blob }, 0], ["no Blob", {}, 160]]) {
+    seen.length = 0;
+    const P = mk(extra).VoicePack.create({});
+    assert.equal(await P.load("george"), true, label);
+    assert.equal(J(P.debug().formats).george.bytes, 160, label + ": the pack's size is still reported");
+    assert.equal(J(P.debug().heapBytes).george, heap, label + ": JS-heap bytes held for the pack");
+    assert.equal(P.speak("george", "a b", { channel: "radio" }), true);
+    for (let i = 0; i < 4; i++) await new Promise((r) => setImmediate(r));
+    assert.deepEqual(seen, [Array.from(body.slice(16, 24)), Array.from(body.slice(100, 120))], label + ": the same bytes reach decodeAudioData");
+  }
+});
+
 // THE PIT GARAGE STOPS THE RADIO. openPitWork freezes the race behind
 // #carsetup WITHOUT the pause card, so the #pausemenu observer that halts the
 // radio never fires, and the frozen card never ages out: an engineer line, a
@@ -1146,6 +1303,15 @@ test("a stalled pack body times out, releases staged tiers, and respects retry d
   assert.equal(P.ready("george"), false, "late body cannot revive a failed attempt");
   P.ensure("george"); await drain(); assert.equal(calls.length, 4);
   now = 120000; P.ensure("george"); await drain(); assert.equal(calls.length, 6);
+});
+
+test("selecting a channel's saved recording preserves the shared race voice source", () => {
+  const r = radio();
+  r.v.setPackOn(false);
+  assert.equal(r.v.setRecordedVoice("radio", "michael"), true);
+  assert.equal(r.v.recordedVoice("radio"), "michael");
+  assert.equal(r.v.packOn(), false);
+  assert.equal(r.saved.get("radioPack"), false);
 });
 
 test("a voice picked over, or the recorded radio switched off, frees the packs no channel speaks from (#3110)", async () => {
@@ -1361,4 +1527,166 @@ test("a twin naming an unknown container or a path is ignored", async () => {
     assert.equal(P.debug().formats.george.fmt, "mp3");
     assert.ok(!urls.some((u) => u.includes("..") || u.endsWith("opus.bin")), urls.join());
   }
+});
+
+// Perf hunt 7: the announcer's pack (fable, ~4-6 MB kept in the JS heap) speaks only commentary, which say()
+// mutes with the ANNOUNCER switch off — TEAM RADIO alone used to fetch and keep it anyway.
+test("the announcer pack is fetched only while the announcer speaks", () => {
+  const staged = (r, id) => r.ensures.some((x) => x === id);
+  const off = radio({ announcer: { enabled: () => false } });
+  off.v.prepare();
+  assert.equal(staged(off, "george"), true, "the race radio still prepares its own pack");
+  assert.equal(staged(off, "fable"), false, "announcer off: no presenter pack");
+  const on = radio({ announcer: { enabled: () => true } });
+  on.v.prepare();
+  assert.equal(staged(on, "fable"), true, "announcer on: the presenter pack is staged");
+});
+
+// ── #2501: author-time hardening (voicepack.mjs / voice-corpus.mjs) ──
+test("voicepack CLI refuses unknown flags, valueless flags and a non-numeric --speed before any work", () => {
+  const ok = parseCli(["--append", "--id", "george", "--speed", "1.08", "--out", "x"]);
+  assert.equal(ok.flag("append"), true); assert.equal(ok.flag("opus"), false);
+  assert.equal(ok.arg("id", "fable"), "george"); assert.equal(ok.arg("voice", "bm_george"), "bm_george");
+  for (const [argv, re] of [[["--apend"], /unknown argument --apend/], [["george"], /unknown argument george/],
+    [["--id"], /--id needs a value/], [["--id", "--append"], /--id needs a value/],
+    [["--speed", "fast"], /--speed must be a positive number/], [["--speed", "0"], /positive/], [["--speed", "-1"], /positive/]]) {
+    assert.throws(() => parseCli(argv), re, argv.join(" "));
+  }
+  // The CLI answers a typo with exit 2 and touches nothing (it used to run a full rebuild).
+  const r = spawnSync(process.execPath, ["tools/gen/voicepack.mjs", "--apend", "--id", "george"], { cwd: ROOT, encoding: "utf8", timeout: 10000 });
+  assert.equal(r.status, 2, r.stderr); assert.match(r.stderr, /unknown argument --apend/);
+});
+
+test("voicepack publishes every file through a temp and a rename, and a failed write leaves the old pack whole", () => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "voice-publish-"));
+  try {
+    const bin = path.join(dir, "p.bin"), json = path.join(dir, "p.json");
+    fs.writeFileSync(bin, "old bin"); fs.writeFileSync(json, "old json");
+    // The index's directory is missing, so its temp write throws after the .bin's temp is written.
+    assert.throws(() => publishFiles([[bin, "new bin"], [path.join(dir, "gone", "p.json"), "new json"]]));
+    assert.equal(fs.readFileSync(bin, "utf8"), "old bin", "no file moves until every temp is written");
+    assert.deepEqual(fs.readdirSync(dir).sort(), ["p.bin", "p.json"], "temps are cleaned up");
+    publishFiles([[bin, "new bin"], [json, "new json"]]);
+    assert.equal(fs.readFileSync(bin, "utf8"), "new bin"); assert.equal(fs.readFileSync(json, "utf8"), "new json");
+    assert.deepEqual(fs.readdirSync(dir).sort(), ["p.bin", "p.json"]);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("voicepack --append refuses a published binary that does not match its index", () => {
+  const bin = Buffer.from("recorded bytes");
+  const man = { clips: { box: [0, 6, 0.4], now: [6, 8, 0.5] }, binary: binaryIntegrity(bin) };
+  checkPrior(man, bin, "george.bin");
+  assert.throws(() => checkPrior(man, Buffer.from("recorded bytez"), "george.bin"), /does not match its index/);
+  assert.throws(() => checkPrior({ clips: man.clips }, bin.subarray(0, 10), "legacy.bin"), /clip "now" .* outside the 10 B/);
+  assert.throws(() => checkPrior({ clips: { box: [0, 6, 0] } }, bin, "z.bin"), /no duration/);
+  // CLI: a tampered .bin stops the append with the published pack untouched.
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "voice-prior-"));
+  try {
+    const clips = Object.fromEntries(fullPhrases("george", "radio").map(({ key }) => [key, [0, bin.length, 1.25]]));
+    const pack = { v: 1, id: "george", voice: "bm_george", speaker: "radio", speed: 1.12, clips, binary: binaryIntegrity(bin) };
+    fs.writeFileSync(path.join(dir, "george.json"), JSON.stringify(pack) + "\n");
+    fs.writeFileSync(path.join(dir, "george.bin"), "tampered bytes");
+    const r = spawnSync(process.execPath, ["tools/gen/voicepack.mjs", "--append", "--id", "george", "--out", dir,
+      "--kokoro", path.join(dir, "missing")], { cwd: ROOT, encoding: "utf8", timeout: 10000 });
+    assert.notEqual(r.status, 0); assert.match(r.stderr, /does not match its index/);
+    assert.equal(fs.readFileSync(path.join(dir, "george.bin"), "utf8"), "tampered bytes");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("recordClips re-renders an empty cached encode and refuses a clip with no readable duration", async () => {
+  const f = recordingFixture();
+  try {
+    const list = [{ key: "box", text: "Box" }];
+    await recordClips({ ...f.opts, list });
+    const mp3 = fs.readdirSync(f.dir).find((n) => n.endsWith(".mp3"));
+    fs.writeFileSync(path.join(f.dir, mp3), "");   // an encode killed mid-write
+    const again = await recordClips({ ...f.opts, list });
+    assert.deepEqual(f.counts(), { loads: 2, generations: 2 }, "the empty cache file is a miss, not a hit");
+    assert.ok(again.binary.length > 0 && again.clips.box[1] === again.binary.length);
+    const silent = path.join(f.dir, "silent-probe.cjs");
+    fs.writeFileSync(silent, `#!${process.execPath}\nconst a = process.argv.slice(2); if (a.length > 2) require("node:fs").writeFileSync(a.at(-1), "x");\n`, { mode: 0o755 });
+    await assert.rejects(recordClips({ ...f.opts, list: [{ key: "now", text: "Now" }], getFFmpeg: () => silent }), /no duration for now_/);
+  } finally { f.close(); }
+});
+
+test("voice-corpus writes nothing when a race failed, and publishes a full run by rename", () => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "voice-corpus-"));
+  try {
+    const out = path.join(dir, "corpus.json");
+    fs.writeFileSync(out, "previous corpus");
+    const corpus = { radio: new Map([["BOX BOX", 2], ["ALPHA", 1]]), coach: new Map() };
+    assert.throws(() => writeCorpus(out, corpus, ["spa: G.setInput is not a function"]), /1 of 6 races failed.*\n  spa: G\.setInput/s);
+    assert.equal(fs.readFileSync(out, "utf8"), "previous corpus", "a partial run leaves the corpus as it was");
+    writeCorpus(out, corpus, []);
+    assert.deepEqual(JSON.parse(fs.readFileSync(out, "utf8")), { radio: ["ALPHA", "BOX BOX"], coach: [] });
+    assert.deepEqual(fs.readdirSync(dir), ["corpus.json"]);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// #5886: THE PACK LIMIT IS A STALL TIMER. One 15 s timer raced manifest + binary + hash, so a 4 MB announcer pack on a
+// ~2 Mbps link failed at 15.0 s every time and was fetched again each RETRY_MS. A fake clock drives the timers; the
+// binary arrives as a stream of chunks (its arrayBuffer() resolves only after the last one, like a real slow body).
+function slowLink(chunks) {
+  let now = 0, seq = 0;
+  const timers = new Map(), waiting = [];
+  const flush = async () => { for (let i = 0; i < 30; i++) await new Promise((r) => setImmediate(r)); };
+  const bytes = new Uint8Array(chunks.reduce((n, c) => n + c, 0)).map((_, i) => i & 255);
+  const man = { binary: { sha256: createHash("sha256").update(bytes).digest("hex"), bytes: bytes.byteLength }, clips: { "car left": [0, 4, 0.5] } };
+  let sent = 0, offset = 0;
+  const reader = { read: () => new Promise((resolve) => waiting.push(resolve)) };
+  const all = new Promise((resolve) => { reader.done = resolve; });
+  const sb = sandbox(["js/audio/voice-pack.js"], {
+    setTimeout(fn, ms) { const id = ++seq; timers.set(id, { fn, at: now + ms }); return id; },
+    clearTimeout(id) { timers.delete(id); },
+    GameAudio: { now: () => 0 },
+    fetch: (url) => Promise.resolve(/\.json$/.test(url) ? { ok: true, json: () => Promise.resolve(man) }
+      : { ok: true, body: { getReader: () => reader }, arrayBuffer: () => all }),
+  });
+  const P = sb.VoicePack.create({});
+  // The next chunk (or the end of the body) reaches the page.
+  const deliver = async () => {
+    const resolve = waiting.shift();
+    if (sent < chunks.length) {
+      const c = bytes.slice(offset, offset + chunks[sent]);
+      offset += chunks[sent++];
+      if (resolve) resolve({ done: false, value: c });
+      if (sent === chunks.length) { reader.done(bytes.buffer.slice(0)); await flush(); const r2 = waiting.shift(); if (r2) r2({ done: true }); }
+    }
+    await flush();
+  };
+  const advance = async (ms) => {
+    const end = now + ms;
+    for (;;) {
+      let next = null;
+      for (const [id, x] of timers) if (x.at <= end && (!next || x.at < next[1].at)) next = [id, x];
+      if (!next) break;
+      now = next[1].at; timers.delete(next[0]); next[1].fn(); await flush();
+    }
+    now = end; await flush();
+  };
+  return { P, deliver, advance, flush };
+}
+
+test("a pack that keeps arriving past 15 s in total still loads (#5886)", async () => {
+  const link = slowLink([1000, 1000, 1000, 1000, 1000]);
+  assert.equal(link.P.ensure("george"), "loading");
+  await link.flush();
+  for (let i = 0; i < 5; i++) { await link.advance(5000); await link.deliver(); }   // one chunk every 5 s: 25 s in all
+  // The SHA-256 check is real webcrypto work off the event loop: wait for it in host time (bounded), not a flush count.
+  for (let i = 0; i < 400 && link.P.ensure("george") === "loading"; i++) await new Promise((r) => setTimeout(r, 5));
+  assert.equal(link.P.ensure("george"), "ready", "a slow link that never goes quiet for 15 s gets its announcer");
+});
+
+test("a binary that goes quiet still fails, 15 s after its last byte (#5886)", async () => {
+  const link = slowLink([1000, 1000, 1000]);
+  link.P.ensure("george");
+  await link.flush();
+  await link.advance(10000); await link.deliver();   // one chunk at 10 s, then silence
+  await link.advance(14000);
+  assert.equal(link.P.ensure("george"), "loading", "14 s of silence is inside the stall window");
+  await link.advance(1500);
+  assert.equal(link.P.ensure("george"), "failed", "15 s with no progress fails the fetch, so the retry window applies");
 });

@@ -98,6 +98,22 @@ function peelOnce() {
   return null;
 }
 
+const PEEL_LAND_MS = 5000;
+
+// In the page: has the peel `did` finished — is the screen it leaves hidden?
+// Synchronous. A peel not listed (a direct hide, the overlay put back) is
+// synchronous in the game too: landed at once. The table is inline because a
+// page function cannot read Node-side module locals.
+function peelLanded(did) {
+  const leaves = { "cz-cancel": "customize", "tp-close": "teampicker", "cs-back": "carsetup",
+    "rs-cancel": "race-settings", "q-back": "quali", "vs-cancel": "vsfriend", "sel-back": "select" };
+  if (did === "pm-quit") return !!window.__apex && window.__apex.info().state === "menu";
+  const id = leaves[did];
+  if (!id) return true;
+  const el = document.getElementById(id);
+  return !el || el.hidden;
+}
+
 /**
  * Walk the shared page back to the TITLE SCREEN (#overlay visible, every other
  * screen hidden, no race running) from wherever the previous test left it.
@@ -110,9 +126,11 @@ export async function toMenu(page) {
     const did = await page.evaluate(peelOnce);
     if (!did) return trail;
     trail.push(did);
-    // A beat for the deferred halves — vt() callbacks, ensureNet().then(open) —
-    // before the next look at the DOM.
-    await page.waitForTimeout(50);
+    // Wait for the deferred half of that peel — a vt() callback (view
+    // transition or its 60 ms fallback) hides the screen and shows the next one
+    // in ONE step — before the next look at the DOM. A peel that never lands
+    // (a refused click) falls through to another look, as the old fixed beat did.
+    await page.waitForFunction(peelLanded, did, { polling: 50, timeout: PEEL_LAND_MS }).catch(() => {});
   }
   throw new Error("toMenu: still not at the title screen after " + trail.join(" > "));
 }

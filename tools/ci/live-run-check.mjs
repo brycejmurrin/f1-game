@@ -39,7 +39,7 @@ export async function liveCiRuns({
   try {
     const branch = git(["rev-parse", "--abbrev-ref", "HEAD"], { cwd });
     const url = git(["remote", "get-url", "origin"], { cwd });
-    const m = String(url).match(/github\.com[:/]([^/]+\/[^/.]+)/);
+    const m = String(url).trim().match(/github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?\/?$/);
     if (!m || !branch || branch === "HEAD") return null;
     const api = `https://api.github.com/repos/${m[1]}/actions/runs?branch=${encodeURIComponent(branch)}&status=in_progress&per_page=5`;
     const res = await fetchImpl(api, {

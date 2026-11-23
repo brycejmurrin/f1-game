@@ -1,10 +1,10 @@
 # CPU, memory, graphics and JS debugging
 
-Read the checkout’s `playwright-probe`, `renderer-debug`, `mcp-probe` and debugger instructions for the chosen operation. Check `tools/list` first. Existing `apex_profile`/`apex_profile_query` remain the profiling implementation; capability-detected `apex_diagnostics` supplies selected bounded local census routes. A package update does not add missing checkout tools. Use that tool’s current capabilities/schema rather than inventing mode names. Keep arbitrary shell/eval and general test execution out of MCP.
+Read the checkout’s `playwright-probe`, `renderer-debug`, `mcp-probe` and debugger instructions for the chosen operation. Check `tools/list` first. Existing `apex_profile` remains the profiling implementation and `node tools/perf/query.mjs <file>` reads its saved artifacts; `node tools/perf/diagnostics.mjs` supplies selected bounded local census routes (their MCP wraps left 2026-11-03; the census kinds also run as `apex_job_start` jobs). A package update does not add missing checkout tools. Use that tool’s current capabilities/schema rather than inventing mode names. Keep arbitrary shell/eval and general test execution out of MCP.
 
 ## Bounded diagnostic operations
 
-When `tools/list` exposes `apex_diagnostics`, call `{"op":"capabilities"}` first. The current bounded routes are:
+Read `node tools/perf/diagnostics.mjs --help` first (the `op`/`kind` vocabulary below is the CLI's). The current bounded routes are:
 
 | Kind | Example run arguments beyond `op:"run"` | Saved report |
 |---|---|---|
@@ -29,7 +29,7 @@ Use one fixed track, camera, car count, weather, viewport, backend and render-sc
 {"track":"monza","mode":"spans","frames":40,"repeat":3,"target":"local"}
 ```
 
-It returns a background job ID and owns the browser lock until completion. Poll `apex_job_status`; cancel with the discovered cancel tool and wait for exit before another browser task. Use `apex_profile_query` with the actual returned file path. CPU mode saves `.cpuprofile`; query bounded top-N self/total samples and optional function/file filters. Use `hitch` or `trace` only when the extra recording answers a specific question. `base` requests an applicable same-scenario git-ref comparison; inspect current mode support first. Fewer than three repeats, or a delta inside the observed spread, remains unproven. A fixed rAF count need not perform identical work in a live variable-rate simulation.
+It returns a background job ID and owns the browser lock until completion. Poll `apex_job_status`; cancel with the discovered cancel tool and wait for exit before another browser task. Use `node tools/perf/query.mjs <file>` with the actual returned file path. CPU mode saves `.cpuprofile`; query bounded top-N self/total samples and optional function/file filters. Use `hitch` or `trace` only when the extra recording answers a specific question. `base` requests an applicable same-scenario git-ref comparison; inspect current mode support first. Fewer than three repeats, or a delta inside the observed spread, remains unproven. A fixed rAF count need not perform identical work in a live variable-rate simulation.
 
 CPU samples and render spans do not measure GPU execution. Traces correlate tasks, GC, style/layout and game timing marks. Instrumentation perturbs work: never call a heap snapshot, paused breakpoint run or graphics capture an uninstrumented FPS baseline. See [Chrome Performance](https://developer.chrome.com/docs/devtools/performance/reference) and [CDP Profiler](https://chromedevtools.github.io/devtools-protocol/tot/Profiler/).
 

@@ -42,7 +42,7 @@ import { ROOT, isMain, firstDiff } from "./gen-lib.mjs";
 const require = createRequire(import.meta.url);
 const MANIFEST = require("../manifest.cjs");
 
-export const TARGETS = Object.freeze(["index.html", "tools/carview.html", "cockpit-view.html", "controller.html", "sw.js", "js/roster.js"]);
+export const TARGETS = Object.freeze(["index.html", "tools/carview.html", "cockpit-view.html", "controller.html", "overlay.html", "bench.html", "sw.js", "js/roster.js"]);
 /** The `?v=` token written into the repo's shell. Real hashes exist only in
  *  the deploy's staged copy. */
 export const DEV_TOKEN = "dev";
@@ -88,6 +88,11 @@ export function replaceMarked(text, open, close, body) {
 //   connect-src stays https:/wss: wide on purpose: the TURN credential URL
 //     (apex26.turnApi), the room-code Worker (apex26.rendezvous) and the Nostr
 //     relays are player-configurable, so an allow-list would break overrides.
+//   img-src/media-src keep https: for the same reason: the music menu streams
+//     a player-pasted URL (soundtrack.js) and Spotify album art arrives as
+//     whatever CDN URL its API returns (spotify.js) (#5993, kept, not tightened).
+//   ONE policy for every root page (index, controller, overlay, bench and the
+//     generated cockpit-view), each with its own inline-script hashes (#5993).
 //   object-src 'none' and base-uri 'self' close plugin and <base> injection.
 // frame-ancestors / report-to are header-only and cannot be set from a meta.
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy
@@ -158,9 +163,19 @@ function cspBlock(html) {
 // they do not hold LCP, then flip to "all". That was an onload= attribute; an
 // attribute handler needs 'unsafe-inline'/'unsafe-hashes', so it is one hashed
 // script instead. A sheet already loaded when this runs has a .sheet; a
-// still-loading one gets a load listener (listeners are not CSP-governed).
-export const DEFER_CSS_SCRIPT = `<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]');` +
-  `for(var i=0;i<L.length;i++)(function(l){function f(){l.media="all"}if(l.sheet)f();else l.addEventListener("load",f)})(L[i])})();</script>`;
+// still-loading one gets load/error listeners (listeners are not CSP-governed).
+// #5394: the sheets flip TOGETHER, in one animation frame once every one has
+// settled (loaded, or failed: a 404 must not hold the rest), so the title intro
+// pays one style recalc instead of one per sheet as each arrived. window "load"
+// is the backstop: it fires only after every sheet has settled, so a sheet that
+// failed before this script ran (no .sheet, and its error event already gone)
+// cannot leave the others on print. flip() runs its loop at most once. A route sheet
+// (MANIFEST.CSS_ROUTE, a data-route tag) is not this script's: LazyBundles flips it.
+export const DEFER_CSS_SCRIPT = `<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]:not([data-route])'),n=L.length,d=0;` +
+  `function flip(){if(d)return;d=1;for(var i=L.length;i--;)L[i].media="all"}` +
+  `function done(){if(--n===0){if(window.requestAnimationFrame)requestAnimationFrame(flip);else setTimeout(flip,0)}}` +
+  `window.addEventListener("load",flip);` +
+  `for(var i=0;i<L.length;i++)(function(l){if(l.sheet)done();else{l.addEventListener("load",done);l.addEventListener("error",done)}})(L[i])})();</script>`;
 
 function preloadBlock() {
   return (MANIFEST.CSS_PRELOAD || []).map((f) =>
@@ -168,10 +183,10 @@ function preloadBlock() {
 }
 
 function cssBlock() {
-  const deferred = new Set(MANIFEST.CSS_DEFERRED || []);
+  const deferred = new Set(MANIFEST.CSS_DEFERRED || []), route = MANIFEST.CSS_ROUTE || {};
   return MANIFEST.CSS.map((f) =>
     `<link rel="stylesheet" href="${f}?v=${DEV_TOKEN}"` +
-    (deferred.has(f) ? ` media="print"` : "") + ">").join("\n") + "\n" + DEFER_CSS_SCRIPT + "\n";
+    (deferred.has(f) ? ` media="print"` : "") + (route[f] ? ` data-route="${route[f].join(" ")}"` : "") + ">").join("\n") + "\n" + DEFER_CSS_SCRIPT + "\n";
 }
 
 function scriptsBlock() {
@@ -196,6 +211,7 @@ function cockpitViewPage() {
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Apex 26 — Cockpit Preview</title>
+<meta http-equiv="Content-Security-Policy" content="${cspFor("")}">
 <style>html,body{margin:0;height:100%;overflow:hidden;background:#171b20;color:#eee;font:14px system-ui}#view{width:100%;height:100%;display:block}#err{position:fixed;inset:0;display:none;place-items:center;text-align:center;padding:20px}</style>
 </head><body><canvas id="view" aria-label="Stationary cockpit model"></canvas>
 <div id="hud" hidden></div><div id="tip" hidden></div><div id="err" role="status"></div>
@@ -213,15 +229,20 @@ function controllerBlock() {
 /** Every tagless file sw.js must seed: loadBackendScripts() injects each one as
  *  `<path>?v=<build>`, and the tag parser cannot see any of them. LAZY_AGENT is
  *  deliberately absent (dev/test surface; an install-time put full-compiles). */
+const controllerPageOnly = MANIFEST.CONTROLLER.filter(file => MANIFEST.OVERLAY_PAGE.includes(file));
+
 export function swOptionalFiles() {
   return [
-    ...Object.values(MANIFEST.DEFERRED).flat(),
+    ...Object.values(MANIFEST.DEFERRED).flat(), ...controllerPageOnly,
     ...MANIFEST.LAZY_RACE, ...(MANIFEST.LAZY_RACE_SESSION || []),
-    ...(MANIFEST.LAZY_TRACK_BUILD || []),
+    ...(MANIFEST.LAZY_TRACK_BUILD || []), ...(MANIFEST.LAZY_GARAGE_EXTERIOR || []),
     ...MANIFEST.LAZY_CIRCUIT, ...MANIFEST.LAZY_SCENERY, ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
     ...(MANIFEST.LAZY_AUDIO || []),
     ...MANIFEST.LAZY_WORKER, ...MANIFEST.LAZY_EDITOR, ...(MANIFEST.LAZY_XR || []),
     ...(MANIFEST.LAZY_CAM_EDITOR || []), ...(MANIFEST.LAZY_CAREER_UI || []),
+    ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []),
+    ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || []), ...(MANIFEST.LAZY_LEARN || []),
+    ...(MANIFEST.LAZY_GFX_HI || []),
   ];
 }
 
@@ -234,19 +255,31 @@ export const SW_ROOT_PAGES = Object.freeze(["controller.html"]);
 function swOptionalBlock() {
   const groups = [
     ["ROOT PAGES — answered offline under their own URL, never by the game shell", SW_ROOT_PAGES],
+    ["Shared companion scripts outside the game shell", controllerPageOnly],
     ["DEFERRED renderer backends (no <script> tag; injected on opt-in)", Object.values(MANIFEST.DEFERRED).flat()],
-    ["LAZY_RACE + LAZY_CIRCUIT + LAZY_SCENERY — race payload; a miss builds a bare/meta circuit offline", [...MANIFEST.LAZY_RACE, ...MANIFEST.LAZY_CIRCUIT, ...MANIFEST.LAZY_SCENERY]],
+    // ORDER IS INSTALL DOWNLOAD PRIORITY (sw.js install walks this Set in order):
+    // every race needs the race-entry bundles, a player needs ~2 of the ~100
+    // circuit + scenery files, so the race-entry groups go first (#4219 A).
+    ["LAZY_RACE — race payload every race needs", MANIFEST.LAZY_RACE],
     ["LAZY_RACE_SESSION — pit/radio/reliability behind startRace (title boots stub)", MANIFEST.LAZY_RACE_SESSION || []],
     ["LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build", MANIFEST.LAZY_TRACK_BUILD || []],
+    ["LAZY_GARAGE_EXTERIOR — optional selected-circuit pit slice", MANIFEST.LAZY_GARAGE_EXTERIOR || []],
     ["LAZY_AUDIO — engine/panel/voice behind first sound gesture or race start", MANIFEST.LAZY_AUDIO || []],
+    ["LAZY_WORKER — worker entry scripts (new Worker, never a page tag)", MANIFEST.LAZY_WORKER],
+    ["LAZY_CIRCUIT + LAZY_SCENERY — per-circuit payload; a miss builds a bare/meta circuit offline", [...MANIFEST.LAZY_CIRCUIT, ...MANIFEST.LAZY_SCENERY]],
     ["LAZY_DATA — the data hub bundle behind the DATA button", MANIFEST.LAZY_DATA],
     ["LAZY_NET — the multiplayer stack behind VS FRIEND", MANIFEST.LAZY_NET],
-    ["LAZY_WORKER — worker entry scripts (new Worker, never a page tag)", MANIFEST.LAZY_WORKER],
     ["LAZY_EDITOR — the track designer behind the TRACK DESIGNER door", MANIFEST.LAZY_EDITOR],
     ["LAZY_XR — WebXR session behind navigator.xr / ENTER VR", MANIFEST.LAZY_XR || []],
     ["LAZY_CAM_EDITOR — camera tuner + flyby shot editor panels", MANIFEST.LAZY_CAM_EDITOR || []],
     ["LAZY_CAREER_UI — CAREER screen behind the title CAREER door", MANIFEST.LAZY_CAREER_UI || []],
-    ["LEARN — lesson iframes and their bare dependencies", MANIFEST.SW_LEARN],
+    ["LAZY_UI_PRESETS — APPEARANCE LAYOUT PRESET row behind the first APPEARANCE enter", MANIFEST.LAZY_UI_PRESETS || []],
+    ["LAZY_SAVES_DATA — SAVES & DATA body (collect / apply / files UI) behind the SettingsExport façade", MANIFEST.LAZY_SAVES_DATA || []],
+    ["LAZY_RESULTS_SHEET — results / TT / standings DOM behind startRace", MANIFEST.LAZY_RESULTS_SHEET || []],
+    ["LAZY_GFX_HI — desktop EXTREME / CINEMA detail, fetched beside the backend when GfxQuality.detail() >= 2", MANIFEST.LAZY_GFX_HI || []],
+    ["LAZY_PERF — BENCHMARK / PHONE TEST rig, idle-loaded after boot", MANIFEST.LAZY_PERF || []],
+    ["LAZY_REAL_RACE — the Data Hub real-race engine (JUMP IN / WATCH / HIGHLIGHTS)", MANIFEST.LAZY_REAL_RACE || []],
+    ["LEARN — the Learn modal and bare lesson assets", [...MANIFEST.LAZY_LEARN, ...MANIFEST.SW_LEARN]],
     ["LOCALES — manifest only until a non-English language ships", MANIFEST.SW_LOCALES || []],
   ];
   const out = [];
@@ -255,6 +288,12 @@ function swOptionalBlock() {
     for (const f of files) out.push(`    "${f}",`);
   }
   return out.join("\n") + "\n";
+}
+
+/** The strict lazy group install must cache whole (CAREER screen files): derived from LAZY_CAREER_UI so a feature PR
+ *  that adds a career file no longer hand-edits a regex line in sw.js (it re-conflicted on every sync). */
+function swRequiredLazyBlock() {
+  return `const REQUIRED_LAZY = ${JSON.stringify(MANIFEST.LAZY_CAREER_UI || [])};\n`;
 }
 
 function swLazyAgentBlock() {
@@ -266,20 +305,28 @@ function rosterSource() {
   const fields = [
     ["DEFERRED", MANIFEST.DEFERRED], ["DEFERRED_EDGES", MANIFEST.DEFERRED_EDGES],
     ["LAZY_AGENT", MANIFEST.LAZY_AGENT], ["LAZY_EDGES", MANIFEST.LAZY_EDGES],
+    ["LAZY_DEV", MANIFEST.LAZY_DEV],
+    ["LAZY_PERF", MANIFEST.LAZY_PERF], ["LAZY_PERF_EDGES", MANIFEST.LAZY_PERF_EDGES],
+    ["LAZY_REAL_RACE", MANIFEST.LAZY_REAL_RACE], ["LAZY_REAL_RACE_EDGES", MANIFEST.LAZY_REAL_RACE_EDGES],
+    ["LAZY_LEARN", MANIFEST.LAZY_LEARN],
     ["LAZY_RACE", MANIFEST.LAZY_RACE],
     ["LAZY_RACE_SESSION", MANIFEST.LAZY_RACE_SESSION],
     ["LAZY_RACE_SESSION_EDGES", MANIFEST.LAZY_RACE_SESSION_EDGES],
-    ["CIRCUITS_DIR", MANIFEST.CIRCUITS_DIR], ["LAZY_CIRCUIT", MANIFEST.LAZY_CIRCUIT],
+    ["CIRCUITS_DIR", MANIFEST.CIRCUITS_DIR],
     ["SCENERY_DIR", MANIFEST.SCENERY_DIR],
     ["LAZY_AUDIO", MANIFEST.LAZY_AUDIO], ["LAZY_AUDIO_EDGES", MANIFEST.LAZY_AUDIO_EDGES],
     ["LAZY_DATA", MANIFEST.LAZY_DATA], ["LAZY_DATA_EDGES", MANIFEST.LAZY_DATA_EDGES],
     ["LAZY_NET", MANIFEST.LAZY_NET], ["LAZY_NET_EDGES", MANIFEST.LAZY_NET_EDGES],
-    ["LAZY_WORKER", MANIFEST.LAZY_WORKER],
     ["LAZY_EDITOR", MANIFEST.LAZY_EDITOR], ["LAZY_EDITOR_EDGES", MANIFEST.LAZY_EDITOR_EDGES],
     ["LAZY_XR", MANIFEST.LAZY_XR], ["LAZY_XR_EDGES", MANIFEST.LAZY_XR_EDGES],
     ["LAZY_CAM_EDITOR", MANIFEST.LAZY_CAM_EDITOR], ["LAZY_CAM_EDITOR_EDGES", MANIFEST.LAZY_CAM_EDITOR_EDGES],
     ["LAZY_CAREER_UI", MANIFEST.LAZY_CAREER_UI], ["LAZY_CAREER_UI_EDGES", MANIFEST.LAZY_CAREER_UI_EDGES],
+    ["LAZY_UI_PRESETS", MANIFEST.LAZY_UI_PRESETS], ["LAZY_UI_PRESETS_EDGES", MANIFEST.LAZY_UI_PRESETS_EDGES],
+    ["LAZY_SAVES_DATA", MANIFEST.LAZY_SAVES_DATA], ["LAZY_SAVES_DATA_EDGES", MANIFEST.LAZY_SAVES_DATA_EDGES],
+    ["LAZY_RESULTS_SHEET", MANIFEST.LAZY_RESULTS_SHEET], ["LAZY_RESULTS_SHEET_EDGES", MANIFEST.LAZY_RESULTS_SHEET_EDGES],
+    ["LAZY_GFX_HI", MANIFEST.LAZY_GFX_HI], ["LAZY_GFX_HI_EDGES", MANIFEST.LAZY_GFX_HI_EDGES],
     ["LAZY_TRACK_BUILD", MANIFEST.LAZY_TRACK_BUILD], ["LAZY_TRACK_BUILD_EDGES", MANIFEST.LAZY_TRACK_BUILD_EDGES],
+    ["LAZY_GARAGE_EXTERIOR", MANIFEST.LAZY_GARAGE_EXTERIOR],
     // The build Worker's importScripts list, "@circuits" expanded in page order
     // so the worker's Tracks.LIST indexes exactly as the page's does.
     ["TRACK_VM", MANIFEST.TRACK_VM.flatMap((e) => (e === "@circuits" ? MANIFEST.CIRCUITS.map(MANIFEST.circuitPath) : [e]))],
@@ -317,10 +364,13 @@ export function generate() {
   let controller = read("controller.html");
   controller = replaceMarked(controller, "<!-- @gen-shell:controller -->", "<!-- /@gen-shell:controller -->", controllerBlock());
   controller = replaceMarked(controller, "<!-- @gen-shell:csp -->", "<!-- /@gen-shell:csp -->", cspBlock(controller));
+  // overlay.html and bench.html are hand-written pages; only their CSP block is generated.
+  const marked = (rel) => replaceMarked(read(rel), "<!-- @gen-shell:csp -->", "<!-- /@gen-shell:csp -->", cspBlock(read(rel)));
   let sw = read("sw.js");
   sw = replaceMarked(sw, "// @gen-shell:sw-optional", "// /@gen-shell:sw-optional", swOptionalBlock());
+  sw = replaceMarked(sw, "// @gen-shell:sw-required-lazy", "// /@gen-shell:sw-required-lazy", swRequiredLazyBlock());
   sw = replaceMarked(sw, "// @gen-shell:sw-lazy-agent", "// /@gen-shell:sw-lazy-agent", swLazyAgentBlock());
-  return { "index.html": html, "tools/carview.html": carview, "cockpit-view.html": cockpitViewPage(), "controller.html": controller, "sw.js": sw, "js/roster.js": rosterSource() };
+  return { "index.html": html, "tools/carview.html": carview, "cockpit-view.html": cockpitViewPage(), "controller.html": controller, "overlay.html": marked("overlay.html"), "bench.html": marked("bench.html"), "sw.js": sw, "js/roster.js": rosterSource() };
 }
 
 /** Targets whose committed bytes differ from a fresh generation. */

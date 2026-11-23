@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "bahrain",
+    revision: 3,
     // The pit complex (TrackPit) sits on the start straight, on its RIGHT (east):
     // OSM pit-lane way 187123422 measures 9.5-11.8 m right of the built
     // centreline, the main grandstand (way 187123419) 39 m left.
@@ -26,7 +27,7 @@
     sceneryTheme: "desert",
     lengthKm: 5.4,
     tyreSeverity: 1.55,  // Sakhir 'most abrasive of the championship' (Pirelli Isola) — between Miami 1.22 and Austria 1.97
-    sunAzimBias: -0.36,   // low desert-latitude sun sits east of overhead at race time (late-day GP)
+    sunAzimBias: -0.36,   // art-directed day-sun yaw offset (rad, atmosphere.js) — not a solar computation
     baseHW: 7,
     sceneryCoordinates: "racing",
     dressingExclusions: [
@@ -38,13 +39,22 @@
     // columns and the terrain beyond them; the far ground plane reads it too.
     terrainMat: "SAND",
     pal: { horizon: [0.20, 0.10, 0.05], zenith: [0.06, 0.05, 0.16], sunColor: [0.80, 0.62, 0.40], ambientSky: [0.30, 0.22, 0.16], ambientGround: [0.28, 0.18, 0.10], fogColor: [0.16, 0.10, 0.06], fogDensity: 0.0028, sunDir: [0.5, 0.14, 0.4], runoff: [0.24, 0.23, 0.22], grass: [0.44, 0.37, 0.26] },
-    elevations: [{ s: 0.645, halfM: 260, rise: -3 }, { s: 0.725, halfM: 180, rise: 2 }],
+    // F1 lists 16.9 m of relief and a ~15 m climb from the main straight to T4.
+    // OpenF1 Bahrain qualifying 9468, Verstappen lap 16, 48 periodic height knots.
+    // The scenery origin shifts source stations forward 0.035949 lap on this trace.
+    elevations: [-0.03, -0.03, -0.06, 0, 0.25, 1.3, 1.73, 0.41, 1.54, 4.14, 5.02, 5.8,
+      7.04, 8.41, 8.09, 6.93, 6.53, 5.95, 3.74, 0.37, -0.44, 1.87, 3.46, 2.02,
+      0.46, 0.86, 1.1, 0.88, 0.97, 0.98, 0.78, 1.23, 2.88, 5.06, 6.95, 7.98,
+      7.81, 6.32, 5.55, 6.17, 5.12, 2.69, 2.15, 2.84, 1.84, 0.24, -0.13, -0.04]
+      .map((rise, i) => ({ s: (i / 48 + 1 - 0.035949) % 1, halfM: 224.46, rise })),
     bankZones: [
       { frac: 0.0475, angleDeg: 3.0, widthM: 120 },   // T1
       { frac: 0.1166, angleDeg: 3.0, widthM: 100 },   // T4
       { frac: 0.3373, angleDeg: 4.0, widthM: 220 },   // T5-T7 sweep
       { frac: 0.4064, angleDeg: 3.5, widthM: 190 },
-      { frac: 0.6077, angleDeg: 3.0, widthM: 130 },   // T10
+      // F1 describes this left-hander as off-camber. Keep the authored
+      // nominal magnitude, anchored to the numbered turn with adverse roll.
+      { turn: 10, angleDeg: -3.0, widthM: 130 },
       { frac: 0.9799, angleDeg: 3.0, widthM: 100 },   // final right
     ],
 
@@ -58,6 +68,9 @@
     // survey. T5/6/7 are the L/R/L esses, T8 the next right hairpin, T9/10
     // the two lefts before the back straight; T14/15 are BOTH final rights.
     // Racing arc fractions: do not apply _sceneryShift to these markings.
+    // Turn fracs stay at the foundation world-anchor pins (tests/specs/foundation/
+    // bahrain.js officialTurns, ≤25 m). Snapping T6/T7 to |k| peaks moved the
+    // apexes 28–32 m off those pins (#6121 CI). Corner-frames still lists them.
     turns: [0.1038, 0.1213, 0.1413, 0.2503, 0.2992, 0.3244, 0.3474, 0.3875, 0.4543, 0.4744, 0.6073, 0.6652, 0.7313, 0.8783, 0.8968],
     // Sakhir: sparse desert — cool-white lamps, thin palm line (not oasis green)
     furniture: { tree: "palm",  fol: [0.30, 0.40, 0.18], lamp: "arm",   lc: [0.88, 0.94, 1.0], sparse: true },

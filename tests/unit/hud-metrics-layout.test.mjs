@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { cssRules as parseCss, decl } from "../helpers/css-rules.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
 
@@ -92,12 +93,16 @@ test("a forced LAYOUT name hides; AUTO and MAP/GAPS are untouched", () => {
 test("MINIMAL drops widgets, and a hidden anchor cannot poison the fit", () => {
   const css = fs.readFileSync(path.join(root, "css/hud.css"), "utf8");
   const hud = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
+  // AERO and BRAKE BIAS hide through the one plain-display rule shared with the other hide reasons (F-13 slice 3).
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   for (const sel of ["#hud-sectors", "#hud-box-best", "#hud-energy", "#hud-ot", "#hud-aero", "#hud-bb"])
-    assert.match(css, new RegExp("body\\.hud-prof-minimal " + sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(css, new RegExp(/#hud-(aero|bb)$/.test(sel)
+      ? "body:is\\([^)]*\\.hud-prof-minimal[^)]*\\) :is\\([^)]*" + esc(sel) + "[^{]*\\{ display: none; \\}"
+      : "body\\.hud-prof-minimal " + esc(sel)));
   // The inset reads are guarded on the rect having a WIDTH, and each falls back
   // to the other side rather than to a viewport-wide number.
   assert.match(hud, /mmR && mmR\.width \? Math\.max\(0, mmR\.left - 10 \* mz\) : null/);
-  assert.match(hud, /scR && scR\.width \? Math\.max\(0, window\.innerWidth - scR\.right - 10 \* sz\) : null/);
+  assert.match(hud, /scR && scR\.width \? Math\.max\(0, vpW\(\) - scR\.right - 10 \* sz\) : null/);
   assert.match(hud, /const sal = salM != null \? salM : \(sarM != null \? sarM : 0\);/);
   assert.match(hud, /const sar = sarM != null \? sarM : \(salM != null \? salM : 0\);/);
 });
@@ -109,7 +114,7 @@ test("MINIMAL drops widgets, and a hidden anchor cannot poison the fit", () => {
 test("dropped gaps and the limits chip ride measured offsets", () => {
   const css = fs.readFileSync(path.join(root, "css/hud.css"), "utf8");
   const hud = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
-  assert.match(css, /:root\[data-gap-drop\] \.hud-gaps \{\s*\n\s*top: calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 4px\);/);
+  assert.match(css, /:root\[data-gap-drop\] \.hud-gaps \{\s*\n\s*top: calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, var\(--hud-top-h-0\)\) \+ 4px\);/);
   assert.match(css, /var\(--hud-sec-h, 4\.8em\)/);
   assert.match(hud, /(?:setProperty\(|hStyle\(root, )"--hud-top-h"/);
   assert.match(hud, /(?:setProperty\(|hStyle\(root, )"--hud-sec-h"/);
@@ -136,7 +141,7 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
   assert.ok(leftPxCall, "--hud-left-px is not published at all");
   assert.ok(!/gm/i.test(leftPxCall),
     "--hud-left-px must not read the metrics panel's own box: " + leftPxCall);
-  assert.match(hud, /\blimLeft = hitsRight && leftRoom;/);   // a let since #2797: the stored restack replays it
+  assert.match(hud, /\blimLeft = hitsRight && leftRoom && /);   // a let since #2797: the stored restack replays it
   // Dock inset is published AFTER zoom caps, from BOOST / leftmost dock
   // control, using the plate's painted zoom + screen-px air, then one
   // painted-overlap grow (CI oversize workers=2: stale dockLeft vs BOOST).
@@ -154,7 +159,8 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
   assert.ok(paintCollapse > 0, "fitHud runs the painted announce collapse");
   assert.equal(fitBody.indexOf("radioTopSlot(", paintCollapse), -1,
     "no radioTopSlot after painted announce collapse (undoes the collapse)");
-  const helper = hud.slice(hud.indexOf("function radioPaintedCollapse"), hud.indexOf("// THE MIRROR AS PAINTED"));
+  const lane = fs.readFileSync(path.join(root, "js/ui/hud-radio-lane.js"), "utf8");   // the helper left hud.js (#3261)
+  const helper = lane.slice(lane.indexOf("function radioPaintedCollapse"), lane.indexOf("// PERF #2151"));
   assert.ok(helper.includes('toggleAttribute("data-lane-collapsed", true)'), "the helper paints data-lane-collapsed on a hit");
   // invalidateFit re-picks the slot, so it must run the same guard right after (it used to leave a relit top slot until the next tick).
   const inv = hud.slice(hud.indexOf("function invalidateFit"), hud.indexOf("_invalidateFit = invalidateFit"));
@@ -206,7 +212,7 @@ test("a hidden HUD does not keep measuring or painting the map", () => {
 // chip — showed no layout selected (review 2026-10-04, verify-core #16).
 test("an unknown HUD layout falls back to the shipped FULL, and the studio jumps to the row that shows AUTO", () => {
   const game = fs.readFileSync(path.join(root, "js/game.js"), "utf8");
-  const studio = fs.readFileSync(path.join(root, "js/ui/appearance-studio.js"), "utf8");
+  const studio = fs.readFileSync(path.join(root, "js/ui/appearance-studio-ui.js"), "utf8");
   const exp = fs.readFileSync(path.join(root, "js/ui/settings-export.js"), "utf8");
   assert.match(game, /store\.get\("hudMetricsLayout", "full"\)/);
   assert.match(game, /if \(HUD_MET_LAYOUTS\.indexOf\(hudMetricsLayout\) < 0\) hudMetricsLayout = "full";/);
@@ -291,4 +297,142 @@ test("tower slots reserve in em, and a late font load refits (#3064)", () => {
     for (const [, sel, body] of rules) assert.doesNotMatch(body, /\d\s*ch\b/, `${sel.trim()}: min-width in ch follows the fallback face`);
   }
   assert.match(hud, /document\.fonts\.addEventListener\("loadingdone"/);
+});
+
+// HUD-CODE-AUDIT F-13 (#4448): a HUD hide carries `!important` only where a plain one could lose. Every rule in
+// css/*.css whose SUBJECT names the id is collected with its layer; a plain hide is safe when no rule sets that id
+// a non-`none` display in a later layer (they win whatever the specificity) or in @layer hud at a specificity the
+// hide does not beat. Rules that reach the element through a class or a tag only are the CI hud-layout shards' job.
+const LAYER_ORDER = ["reset", "base", "components", "hud", "overlays", "responsive", "layout"];
+const splitTop = (s, sep) => { const out = []; let d = 0, cur = ""; for (const ch of s) { if (ch === "(" || ch === "[") d++; else if (ch === ")" || ch === "]") d--; if (d === 0 && sep.test(ch)) { out.push(cur); cur = ""; } else cur += ch; } out.push(cur); return out.map((x) => x.trim()).filter(Boolean); };
+function specificity(sel) {
+  let a = 0, b = 0, c = 0, s = sel;
+  const fn = /:(is|not|has|where)\(((?:[^()]|\((?:[^()]|\([^()]*\))*\))*)\)/;
+  for (let m; (m = s.match(fn)); s = s.replace(m[0], " ")) {
+    if (m[1] === "where") continue;
+    const best = splitTop(m[2], /,/).map(specificity).sort((x, y) => x[0] - y[0] || x[1] - y[1] || x[2] - y[2]).pop() || [0, 0, 0];
+    a += best[0]; b += best[1]; c += best[2];
+  }
+  s = s.replace(/\[[^\]]*\]/g, () => (b++, " ")).replace(/::[\w-]+/g, () => (c++, " "));
+  s = s.replace(/#[\w-]+/g, () => (a++, " ")).replace(/\.[\w-]+|:[\w-]+/g, () => (b++, " "));
+  c += (s.match(/(?:^|[\s>+~])[a-z][\w-]*/gi) || []).length;
+  return [a, b, c];
+}
+const beats = (x, y) => x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
+function cssRules() {
+  const rules = [];
+  for (const f of fs.readdirSync(path.join(root, "css")).filter((f) => f.endsWith(".css"))) {
+    const s = fs.readFileSync(path.join(root, "css", f), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const stack = []; let start = 0;
+    for (let i = 0; i < s.length; i++) {
+      if (s[i] === "{") { stack.push(s.slice(start, i).trim()); start = i + 1; }
+      else if (s[i] === "}") {
+        const pre = stack.pop(), body = s.slice(start, i); start = i + 1;
+        if (pre && !pre.startsWith("@")) {
+          const layer = stack.map((p) => (p.match(/^@layer\s+([\w-]+)/) || [])[1]).filter(Boolean).pop() || "unlayered";
+          for (const one of splitTop(pre.replace(/\s+/g, " "), /,/)) rules.push({ file: f, layer, sel: one, body });
+        }
+      } else if (s[i] === ";" && !stack.length) start = i + 1;
+    }
+  }
+  return rules;
+}
+/** `id` is an id ("hud-delta") or a class token (".hud-gaps"). */
+const subjectHas = (sel, id) => new RegExp((id[0] === "." ? "\\" + id : "#" + id) + "(?![\\w-])").test(splitTop(sel, /[\s>+~]/).pop());
+const displayOf = (body) => (body.match(/(?:^|[;\s])display\s*:\s*([^;}]+)/) || [])[1]?.trim();
+/** Every plain hide of #id (or .class) beats every non-`none` display rule that could reach #id. */
+function assertPlainHidesWin(id) {
+  const rules = cssRules().filter((r) => subjectHas(r.sel, id) && displayOf(r.body));
+  const hides = rules.filter((r) => /^none\b/.test(displayOf(r.body)));
+  const shows = rules.filter((r) => !/^none\b/.test(displayOf(r.body)));
+  for (const s of shows) {
+    assert.doesNotMatch(displayOf(s.body), /!important/, `${s.file} ${s.sel}: an !important display on #${id}`);
+    const li = LAYER_ORDER.indexOf(s.layer);
+    assert.ok(li >= 0 && li <= LAYER_ORDER.indexOf("hud"), `${s.file} ${s.sel}: a display on #${id} in @layer ${s.layer} beats any plain hud hide`);
+    if (s.layer !== "hud") continue;
+    for (const h of hides.filter((h) => h.layer === "hud" && !/!important/.test(displayOf(h.body))))
+      assert.ok(beats(specificity(h.sel), specificity(s.sel)) > 0, `${h.sel} must out-rank ${s.sel} (${s.file})`);
+  }
+  return { hides, shows };
+}
+const hudCssRules = () => cssRules().filter((r) => r.file === "hud.css");
+
+test("F-13 slice 1: a replay hides #hud-sectors and #hud-limits in ONE rule", () => {
+  for (const id of ["hud-sectors", "hud-limits"]) {
+    const bc = hudCssRules().filter((r) => /^body\.bc-on /.test(r.sel) && subjectHas(r.sel, id) && /^none/.test(displayOf(r.body) || ""));
+    assert.equal(bc.length, 1, `#${id} has one bc-on hide: ${bc.map((r) => r.sel).join(" | ")}`);
+  }
+});
+
+test("F-13 slice 2: #hud-delta hides in plain display:none, and nothing could beat it", () => {
+  const { hides } = assertPlainHidesWin("hud-delta");
+  for (const sel of ["#hud-delta[hidden]", "body:not(.desktop) #hud-delta[data-pending]"]) {
+    const h = hides.find((r) => r.sel === sel);
+    assert.ok(h, sel + " still hides");
+    assert.doesNotMatch(h.body, /!important/, sel + " needs no !important");
+  }
+});
+
+test("F-13 slice 3: #hud-aero and #hud-bb hide in ONE plain rule for every reason", () => {
+  for (const id of ["hud-aero", "hud-bb"]) {
+    const { hides } = assertPlainHidesWin(id);
+    for (const h of hides.filter((r) => r.file === "hud.css" || r.file === "watch-transport.css"))
+      assert.doesNotMatch(h.body, /!important/, `${h.sel} (${h.file}) needs no !important`);
+    const one = hides.filter((r) => /^body:is\(/.test(r.sel)).map((r) => r.sel).join(" ");
+    for (const why of ["hud-prof-minimal", "hud-bcam", "hud-met-timing", "hud-met-compact", "bc-on", "watch-controls-on"])
+      assert.match(one, new RegExp("\\." + why + "\\b"), `${why} still hides #${id}`);
+    assert.ok(hides.some((r) => r.sel === `body[data-hud-hide~="${id.slice(4)}"] #${id}`), `the ${id.slice(4)} toggle still hides #${id}`);
+  }
+});
+
+test("F-13 slice 4: RELATIVE, STRATEGY and INPUTS hide in plain rules that out-rank their layout", () => {
+  for (const id of ["hud-rel", "hud-strat", "hud-inputs"]) {
+    const { hides } = assertPlainHidesWin(id);
+    for (const h of hides.filter((r) => !/\[data-(col|fit)-drop\]/.test(r.sel)))
+      assert.doesNotMatch(h.body, /!important/, `${h.sel} (${h.file}) needs no !important`);
+    for (const why of ["hud-prof-minimal", "hud-bcam", "bc-on", "watch-controls-on"])
+      assert.ok(hides.some((r) => new RegExp("^body:is\\([^)]*\\." + why + "\\b").test(r.sel)), `${why} still hides #${id}`);
+  }
+  // The row hides beat the row layout (#hud-rel > div { display: grid }, #hud-strat > div { display: flex }).
+  const rows = cssRules().filter((r) => /^#hud-(rel|strat) > div/.test(r.sel) && displayOf(r.body));
+  for (const id of ["hud-rel", "hud-strat"]) {
+    const hide = rows.find((r) => r.sel === `#${id} > div[hidden]`), show = rows.find((r) => r.sel === `#${id} > div`);
+    assert.ok(hide && show, `#${id} rows have a layout and a [hidden] hide`);
+    assert.ok(beats(specificity(hide.sel), specificity(show.sel)) > 0 && hide.layer === show.layer);
+  }
+});
+
+test("F-13 slice 5: the MAP and GAPS toggles hide in plain display:none", () => {
+  for (const [tok, sel] of [["minimap", "body.hud-hide-map #minimap:not([data-hl-arr])"], [".hud-gaps", "body.hud-hide-gaps .hud-gaps:not([data-hl-arr])"]]) {
+    const { hides } = assertPlainHidesWin(tok);
+    const h = hides.find((r) => r.sel === sel);
+    assert.ok(h, sel + " still hides");
+    assert.doesNotMatch(h.body, /!important/, sel + " needs no !important");
+  }
+});
+
+test("F-17: the LIMITS chip's drop is ONE token, read by the CSS sites and the fit's dock-reach test", () => {
+  const rules = parseCss(readCssSource("css/hud.css"));
+  assert.equal(decl(rules, ":root", "--limits-drop"), "15px", "the token");
+  const tops = rules.map((r) => r.decls.get("top") || "");
+  assert.equal(tops.filter((t) => t.includes("+ var(--limits-drop)")).length, 5, "LIMITS, its broadcast lift, DAMAGE, REL and the v4 chip");
+  assert.equal(tops.filter((t) => t.includes("4.8em) + 15px") || t.includes("4.8em + 15px")).length, 0, "no literal drop is left");
+  // The fit reads it with the other computed root vars (VM: a stylesheet that says 21px is what CHIP_DROP gets).
+  const hud = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8"), at = hud.indexOf("function syncComputedRootVars()");
+  const fn = hud.slice(at, hud.indexOf("\n}\n", at) + 3);
+  const ctx = { _cssRootKey: "", _cssScale: 1, _cssMult: 1, _cssDrop: 15, vpW: () => 844, vpH: () => 390,
+    document: { documentElement: { style: { getPropertyValue: () => "" } }, body: { className: "" } },
+    getComputedStyle: () => ({ getPropertyValue: (p) => (p === "--limits-drop" ? " 21px" : "") }) };
+  vm.createContext(ctx);
+  vm.runInContext(fn + "\nsyncComputedRootVars();", ctx, { filename: absSrc("js/ui/hud.js") });
+  assert.equal(ctx._cssDrop, 21);
+});
+
+test("F-13 slice 7 ratchet: css/hud.css gains no !important line and no :has( site (#4448)", () => {
+  // Lower these as the remaining rules fold into plain cascade wins; never raise them.
+  const lines = fs.readFileSync(path.join(root, "css/hud.css"), "utf8").split("\n");
+  assert.ok(lines.filter((l) => l.includes("!important")).length <= 72, "!important lines (72 at 2026-11-20)");
+  // :has( counted in PARSED selectors (comments excluded; 6 of the file's 31 raw hits are prose).
+  const hasSites = parseCss(readCssSource("css/hud.css")).reduce((n, r) => n + r.selector.split(":has(").length - 1, 0);
+  assert.ok(hasSites <= 25, ":has( selector sites (25 at 2026-11-20)");
 });

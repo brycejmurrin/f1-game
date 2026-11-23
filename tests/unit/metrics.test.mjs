@@ -19,6 +19,8 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/perf/metrics-overlay.js"), "utf8");
+// The painter + snapshot() are LAZY_PERF (#4978 row 3); a harness that wants them loads both.
+const PANEL = readFileSync(join(ROOT, "js/perf/metrics-panel.js"), "utf8");
 
 function load(opts) {
   const disk = new Map(Object.entries(opts.store || {}));
@@ -48,7 +50,8 @@ function load(opts) {
   seedLog(ctx);
   seedStore(ctx);   // metrics.js persists through GameStore.store's raw lane, over the fake localStorage above
   vm.runInContext(SRC, ctx, { filename: absSrc("js/perf/metrics-overlay.js") });
-  return { M: vm.runInContext("GameMetrics", ctx), disk, Log: vm.runInContext("Log", ctx) };
+  if (opts.panel !== false) vm.runInContext(PANEL, ctx, { filename: absSrc("js/perf/metrics-panel.js") });
+  return { M: vm.runInContext("GameMetrics", ctx), disk, Log: vm.runInContext("Log", ctx), ctx };
 }
 
 test("frametime reset counts only long tasks starting in its current window", () => {
@@ -181,7 +184,6 @@ test("overlay sits below the zoomed sector stack, not on the minimap", () => {
   assert.match(hud, /#game-metrics[\s\S]*z-index:\s*11/);
   assert.match(hud, /#game-metrics\[data-pos="left"\]/);
   assert.match(hud, /#game-metrics\[data-pos="right"\]/);
-  assert.match(hud, /#game-metrics-bar/);
   assert.match(hud, /#game-metrics-bar > button[\s\S]*min-height:\s*var\(--tap-sm\)/);
   assert.match(hud, /#game-metrics\[data-size="m"\]/);
   assert.match(hud, /#game-metrics\[data-size="l"\]/);
@@ -335,6 +337,18 @@ test("log page filters the tail by namespace and level", () => {
   assert.match(tr.logs[0], /build done monza/);
 });
 
+test("LOG keeps the newest 12 namespace matches in chronological order after the ring wraps", () => {
+  const { M, Log } = load({});
+  for (let i = 0; i < 600; i++) Log.info(i % 3 === 0 ? "track" : "car", String(i));
+  M.setPage("log");
+  M.setLogNs("track");
+  M.setLogLvl("info");
+  const s = M.snapshot();
+  assert.equal(s.logN, 500);
+  assert.equal(s.logShown, 12);
+  assert.deepEqual(Array.from(s.logs), Array.from({ length: 12 }, (_, i) => "i track " + (564 + 3 * i)));
+});
+
 test("page and log filters persist while metrics are off", () => {
   const { M, disk } = load({});
   assert.equal(M.on(), false);
@@ -485,8 +499,8 @@ test("game.js hands the overlay the memoised loader, not a widened boot gate", (
   assert.match(game, /function loadAgentSurface\(\)/);
   assert.match(game, /if \(!_agentLoad\) _agentLoad = \(async \(\) => \{/);
   assert.match(game, /GameMetrics\.setTelemetryLoader\(loadAgentSurface\)/);
-  // bootAgentSurface still gates, and now defers to the shared loader.
-  assert.match(game, /if \(!wantAgentSurface\(\)\) return;\s*\n\s*await loadAgentSurface\(\);/);
+  // bootAgentSurface still gates, and now defers to the shared loader (fail-soft at boot).
+  assert.match(game, /if \(!wantAgentSurface\(\)\) return;\s*\n\s*try \{ await loadAgentSurface\(\); \}\s*\n\s*catch \(e\) \{ Log\.warn\("game", "bootAgentSurface failed: " \+ \(e && e\.message\)\); \}/);
 });
 
 // THE LAYOUT PICKER MUST NOT MEASURE ITS OWN OUTPUT. Choosing wide/narrow from
@@ -500,7 +514,7 @@ test("game.js hands the overlay the memoised loader, not a widened boot gate", (
 // The granted width comes from the CSS step and does not depend on what was
 // painted into it, which is what makes the decision stable.
 test("the wide/narrow choice reads the granted width, never the painted one", () => {
-  const src = readFileSync(join(ROOT, "js/perf/metrics-overlay.js"), "utf8");
+  const src = PANEL;
   // To fitsWide()'s OWN closing brace: snapshot() is declared earlier in the
   // file, so anchoring the slice on it produced an empty string and every
   // assertion below passed vacuously.
@@ -529,7 +543,7 @@ test("the wide/narrow choice reads the granted width, never the painted one", ()
 //   ot:      3.6 s   cooldown 12.9 s
 // Names match the __apex hook so a player's screenshot maps onto physState().
 test("the PHYS page renders every physState field it fetches", () => {
-  const src = readFileSync(join(ROOT, "js/perf/metrics-overlay.js"), "utf8");
+  const src = PANEL;
   const carried = ["towing", "xVmaxGain", "xDfLoss", "drain", "regen", "brakeBias", "otTime", "otMJ"];
   const snap = src.slice(src.indexOf("function snapshot()"), src.indexOf("function ensurePanel()"));
   for (const f of carried) {
@@ -548,7 +562,7 @@ test("the PHYS page renders every physState field it fetches", () => {
 // (narrow) and 52 (wide) characters and sized the CSS steps to hold exactly
 // that, so a new row wider than its budget silently truncates on a phone.
 test("new PHYS rows stay inside the measured line budgets", () => {
-  const src = readFileSync(join(ROOT, "js/perf/metrics-overlay.js"), "utf8");
+  const src = PANEL;
   // The widest value each new row can render, with every number at full width.
   const wide = [
     "x cost:  vmax +0.000   df -0.000",
@@ -574,5 +588,64 @@ test("GOV reports explicit stopped loop and frame progress without inferring pau
   stopped = true; frames = 13;
   assert.equal(M.snapshot().loopStopped, true);
   assert.equal(M.snapshot().loopFrames, 13);
+  assert.equal(M.snapshot().stallSlow, null, "a stub without stall does not invent a slow run");
   assert.equal(load({}).M.snapshot().loopStopped, null);
+});
+
+test("GOV surfaces a WebGPU stall that never threw", () => {
+  const { M } = load({
+    LoopHealth: { state: () => ({ stopped: false, frames: 9, stall: { slowRun: 4, worstMs: 1800, act: "shed" } }) },
+    PerfGov: { fpsEMA: () => 16.7 },
+  });
+  M.setPage("gov");
+  const s = M.snapshot();
+  assert.equal(s.stallSlow, 4);
+  assert.equal(s.stallWorst, 1800);
+  assert.equal(s.stallAct, "shed");
+  const src = PANEL;
+  const paint = src.slice(src.indexOf("function paintOverlay()"));
+  assert.ok(paint.includes("stallRow(s, true)") && paint.includes("stallRow(s, false)"));
+  const narrow = "stall 10  60000 reload";
+  const wide = "stall:   slow 10  worst 60000  reload";
+  assert.ok(narrow.length <= 25, narrow.length + " ch");
+  assert.ok(wide.length <= 52, wide.length + " ch");
+});
+
+// #4978 row 3: the painter is LAZY_PERF. The eager half must still boot a
+// stored METRICS=ON player: the first paint asks LazyBundles for the perf rig
+// ONCE (no 4 Hz retry loop), and paints the moment it lands.
+test("METRICS ON before the LAZY_PERF panel lands asks the perf rig once, then paints", async () => {
+  let asks = 0, land = null;
+  const rig = new Promise((r) => { land = r; });
+  const appended = [];
+  const el = () => ({ dataset: {}, children: [], style: {}, setAttribute() {}, addEventListener() {}, appendChild(c) { this.children.push(c); } });
+  const ctx = load({ panel: false, store: { "apex26.metrics": "1" },
+    document: { readyState: "complete", createElement: el, body: { appendChild: (n) => appended.push(n) } } });
+  const M = ctx.M;
+  // The test harness has no LazyBundles yet at eval: the boot paint declines
+  // without latching, the way a FULL-order race with lazy-bundles.js would.
+  assert.equal(appended.length, 0, "no panel before its bundle");
+  assert.equal(JSON.stringify(M.snapshot()), JSON.stringify({ on: true, page: "gov" }), "the eager half answers snapshot() before the panel lands");
+  const vmctx = ctx.ctx;
+  // The page's shape (#5555): the global is the factory, the loaders live on the instance behind live().
+  vmctx.LazyBundles = { create() {}, live: () => ({ ensurePerfRig: () => { asks++; return rig; } }) };
+  M.setPage("car"); M.setPage("gov");   // two paints while the bundle is in flight
+  assert.equal(asks, 1, "one ask per ON, not one per paint");
+  vm.runInContext(PANEL, vmctx, { filename: absSrc("js/perf/metrics-panel.js") });
+  land(true);
+  await new Promise((r) => setTimeout(r, 0));   // the cross-realm then() settles on a later tick
+  assert.equal(appended.length, 1, "the panel paints as soon as LAZY_PERF lands");
+  assert.equal(appended[0].id, "game-metrics");
+});
+
+test("the METRICS painter ships in LAZY_PERF, not on the eager boot", async () => {
+  const { createRequire } = await import("node:module");
+  const M = createRequire(import.meta.url)("../../tools/manifest.cjs");
+  // Manifest membership, read as sets (these are load-order facts, not source pins).
+  const lazy = new Set(M.LAZY_PERF), eager = new Set(M.FULL);
+  assert.equal(lazy.has("js/perf/metrics-panel.js"), true);
+  assert.equal(eager.has("js/perf/metrics-panel.js"), false);
+  assert.equal(eager.has("js/perf/metrics-overlay.js"), true, "the rows, keys and picks stay eager");
+  // That snapshot()'s body left the eager half is pinned by behaviour in the test above:
+  // without the panel, snapshot() answers {on, page} and nothing else.
 });

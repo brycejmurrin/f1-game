@@ -21,6 +21,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { gameSource, symbolSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { cssRules, decl } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -51,7 +52,7 @@ function bootInput({ coarse = false, orientation, pads = null, listeners = null 
   sb.window = sb;
   const ctx = vm.createContext(sb);
   vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
-  for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
+  for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   return vm.runInContext("Input", ctx);
 }
@@ -252,7 +253,8 @@ test("manifest.json: id keeps the installed identity, screenshots and shortcuts 
   for (const sh of m.screenshots) {
     assert.ok(fs.existsSync(path.join(ROOT, sh.src)), sh.src + " exists");
     assert.match(sh.sizes, /^\d+x\d+$/);
-    assert.equal(sh.form_factor, "wide");
+    // Absent = every form factor (a phone install prompt needs one): manifest-screenshots.test.mjs.
+    assert.ok(sh.form_factor === undefined || sh.form_factor === "wide" || sh.form_factor === "narrow", sh.src);
     assert.ok(sh.label, "a screenshot is labelled for assistive tech");
   }
   for (const sc of m.shortcuts) {
@@ -330,6 +332,7 @@ test("the CAM button's accessible name starts with the word it shows", () => {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
+  vm.runInContext(read("js/camera/cam-picker.js"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
   vm.runInContext(read("js/camera/mode-switch.js"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
   const G = { $: (id) => (id === "btn-cam" ? btn : null), camMode: 0, store: { set() {} } };
   const cams = vm.runInContext("CamModes", ctx).create(G);
@@ -346,7 +349,8 @@ test("the CAM button's accessible name starts with the word it shows", () => {
 // (≤ 1 per 10 min), shows #update-chip outside races, and its tap persists
 // state, then reloads the way the boot guard does (?b=, query + hash kept).
 // https://developer.chrome.com/docs/workbox/handling-service-worker-updates
-function bootUpdateCheck({ booted = 100, build = 101, controller = 0, racing = false, persist, fetchImpl } = {}) {
+// guardOk: index.html's boot guard read version.json (window.__apexGuardOk, #4925), so the throttle starts at boot.
+function bootUpdateCheck({ booted = 100, build = 101, controller = 0, racing = false, persist, fetchImpl, guardOk = true } = {}) {
   let t = 1_000_000, fetches = 0, replaced = null, persisted = 0;
   const said = [];
   const chip = { hidden: true, textContent: "UPDATE READY · RELOAD", attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } };
@@ -364,7 +368,7 @@ function bootUpdateCheck({ booted = 100, build = 101, controller = 0, racing = f
   vm.runInContext(read("js/ui/update-check.js"), sb, { filename: absSrc("js/ui/update-check.js") });
   const UC = vm.runInContext("UpdateCheck", sb);
   const u = UC.create({
-    now: () => t, inRace: () => racing, chip: () => chip,
+    guardOk: () => guardOk, now: () => t, inRace: () => racing, chip: () => chip,
     fetch: async (url, init) => { fetches++; assert.equal(init.cache, "no-store"); assert.match(url, /^version\.json\?_=\d+$/); if (fetchImpl) return fetchImpl(fetches); return { ok: true, json: async () => ({ build }) }; },
     persist: () => { persisted++; return persist && persist(); },
     location: { pathname: "/f1-game/", search: "?log=net", hash: "#vs=CODE", replace: (u2) => { replaced = u2; } },
@@ -532,9 +536,39 @@ test("UpdateCheck is wired: #update-chip in the shell, the visibility hook, the 
 test("UPDATE READY and the save warning stand down under a modal dialog", () => {
   const css = read("css/overlays.css");
   // Scoped to body's dialogs plus the telemetry popup inside #datahub (css-has-scope.test.mjs).
-  assert.match(css, /body:has\(> dialog:modal\) #update-chip,\s*body:has\(> :where\(#datahub\) > dialog:modal\) #update-chip \{ display: none; \}/);
+  // INSTALL APP shares the chip's z and corner logic, so it shares the pair (C2).
+  assert.match(css, /body:has\(> dialog:modal\) :is\(#update-chip, #install-chip\),\s*body:has\(> :where\(#datahub\) > dialog:modal\) :is\(#update-chip, #install-chip\) \{ display: none; \}/);
   assert.match(css, /body:has\(> dialog\[open\]\) #save-warning,\s*body:has\(> :where\(#datahub\) > dialog\[open\]\) #save-warning \{ display: none; \}/);
   assert.doesNotMatch(css, /Above every\s+menu sheet/, "the comment no longer promises what the top layer forbids");
+});
+
+// C1/C2: #select, #career and #carsetup are div screens (no top layer), so the
+// z 9000 chips sat over their bottom-right primary (#sel-go, #cs-done) and a
+// mis-tap on UPDATE READY reloaded the game. Both chips stand down there; the
+// title keeps them (the rule names only those three screens).
+test("UPDATE READY and INSTALL APP stand down over the select, career and garage screens", () => {
+  const css = read("css/overlays.css");
+  assert.equal(decl(cssRules(css), "body:has(> :is(#select, #career, #carsetup):not([hidden])) :is(#update-chip, #install-chip)", "display"), "none");
+  const html = read("index.html");
+  for (const id of ["select", "career", "carsetup"]) assert.match(html, new RegExp(`\\n<div id="${id}" class="screen"`), `#${id} is a <body> child, so the :has(> …) scope matches`);
+});
+
+// #5328: on the title the chip (fixed bottom-right, z 9000) sat ON the last menu
+// row. Measured at 844x390 with the owner's 2026-11-10 export (UI SIZE 70): chip
+// 610..836 x 338..382 over SAVES & DATA (685..828 x 336..371) and half of HOW TO
+// PLAY; SETTINGS too under the longer refused-load text. While it shows, #overlay
+// ends one chip row plus a gap higher (last row then 298..330).
+test("the title makes room for UPDATE READY instead of sitting under it", () => {
+  const rules = cssRules(read("css/overlays.css"));
+  assert.equal(decl(rules, "body:has(> #update-chip:not([hidden])) #overlay", "padding-bottom"), "calc(var(--sab) + var(--tap) + var(--gap) * 2)");
+  assert.equal(decl(rules, "#update-chip", "bottom"), "calc(var(--sab) + var(--gap))");
+  assert.equal(decl(rules, "#update-chip", "min-height"), "var(--tap)");
+  // The same sums in px at 844x390 (--tap 44, --gap 8, no bottom inset).
+  const sab = 0, tap = 44, gap = 8, H = 390;
+  const chipTop = H - (sab + gap) - tap, contentBottom = H - (sab + tap + gap * 2);
+  assert.equal(chipTop, 338);
+  assert.equal(contentBottom, 330);
+  assert.equal(chipTop - contentBottom, gap, "one gap of air between the last row and the chip");
 });
 
 // Ports are private to the queried controller; replacements and a worker that

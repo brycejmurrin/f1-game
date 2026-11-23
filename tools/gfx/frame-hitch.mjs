@@ -40,6 +40,7 @@ import {
 } from "../lib/harness.mjs";
 
 import { exitIfHelp, parseFlags } from "../lib/cli-args.mjs";
+import { loadAllModels } from "../shot/capture-fallbacks.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -751,6 +752,68 @@ export function analysePassKinds(passSig, passes) {
   };
 }
 
+// THE STORE INVENTORY of a steady frame: each attachment signature with its
+// load>store ops, averaged over the frames that encoded a pass, plus the median
+// queue.submit count. "WxH/format:load>store" names what a tile GPU writes
+// back; ">discard" is an attachment patch 17 (or MSAA) kept on chip.
+export function analysePassOps(opsSig, submits) {
+  const frames = (opsSig || []).filter((f) => Array.isArray(f) && f.length);
+  if (frames.length < 10) return { note: "no per-frame store inventory recorded" };
+  const m = new Map();
+  let stored = 0, discarded = 0;
+  for (const f of frames) {
+    for (const pass of f) {
+      m.set(pass, (m.get(pass) || 0) + 1);
+      for (const a of pass.split("+")) {
+        if (a.endsWith(">store")) stored++;
+        else if (a.endsWith(">discard")) discarded++;
+      }
+    }
+  }
+  const rows = [...m.entries()].map(([pass, c]) => ({ pass, perFrame: +(c / frames.length).toFixed(2) }))
+    .sort((a, b) => b.perFrame - a.perFrame);
+  const subs = (submits || []).filter((v) => v > 0).sort((a, b) => a - b);
+  return {
+    frames: frames.length,
+    medianSubmits: subs.length ? subs[Math.floor(subs.length / 2)] : null,
+    storedPerFrame: +(stored / frames.length).toFixed(2),
+    discardedPerFrame: +(discarded / frames.length).toFixed(2),
+    rows: rows.slice(0, 24),
+  };
+}
+
+// THE UPLOAD SITES (perf hunt 6): gpu-game-check's sampled writeBuffer /
+// createBuffer attribution ({site, n, kb} over the armed window, site =
+// "kind :: label#bytes :: three's functions :: our frames") per window frame.
+// The class reads three's function names — what is uploaded, not who asked.
+// Index before attribute: three's index path is an attribute too. The dump
+// keeps the top 60 sites, so the totals are a floor under gpu.writeBufferKB.
+const UPLOAD_CLASSES = [["uniform", /updateBinding|Bindings|Uniform/i], ["index", /Index/i], ["attribute", /Attribute|Geometr/i]];
+export function analyseUploads(uploads, frames, top = 8) {
+  const ups = (uploads || []).filter((u) => u && u.site && u.n > 0);
+  if (!ups.length || !(frames > 0)) return { note: "no upload sites recorded" };
+  const per = (v) => +(v / frames).toFixed(2);
+  let n = 0, kb = 0;
+  const g = new Map();
+  for (const u of ups) {
+    n += u.n; kb += u.kb || 0;
+    const lib = u.site.split(" :: ")[2] || "";
+    const cls = (UPLOAD_CLASSES.find(([, re]) => re.test(lib)) || ["other"])[0];
+    const r = g.get(cls) || { cls, n: 0, kb: 0 };
+    r.n += u.n; r.kb += u.kb || 0;
+    g.set(cls, r);
+  }
+  const share = (v) => kb > 0 ? +(v / kb).toFixed(3) : 0;
+  const shape = (r) => ({ kbPerFrame: per(r.kb || 0), nPerFrame: per(r.n), share: share(r.kb || 0) });
+  return {
+    frames,
+    kbPerFrame: per(kb),
+    callsPerFrame: per(n),
+    rows: [...ups].sort((a, b) => (b.kb || 0) - (a.kb || 0) || b.n - a.n).slice(0, top).map((u) => ({ site: u.site, ...shape(u) })),
+    groups: [...g.values()].sort((a, b) => b.kb - a.kb || b.n - a.n).map((r) => ({ cls: r.cls, ...shape(r) })),
+  };
+}
+
 // WHAT SURVIVES, by call stack — and NOT where the garbage comes from.
 //
 // This function was built to answer "who allocates the 255 KB a frame", and it
@@ -1145,8 +1208,10 @@ async function main() {
                 // Bounded: only the first 4,000 frames keep their composition,
                 // which is ~35 s of racing and plenty of both kinds of frame.
                 if (n < 4000) passSig.push(sigCur);
+                if (n < 600) opsSig.push(opsCur);
+                subPerFrame[n] = subCur > 32767 ? 32767 : subCur;
               }
-              passCur = 0; sigCur = [];
+              passCur = 0; sigCur = []; opsCur = []; subCur = 0;
               n++;
             }
           }
@@ -1297,14 +1362,44 @@ async function main() {
           return out;
         } catch (_) { return "?"; }
       }
+      // THE STORE INVENTORY (#2649 / #3681 audit): every attachment's load>store op, and the queue.submit
+      // count per frame (three r186 submits once per renderer.render()). A tile GPU pays per stored byte,
+      // so "which attachments does a steady frame store" is the bandwidth question a pass count cannot answer.
+      const SUB_CAP = 60000;
+      const subPerFrame = new Int16Array(SUB_CAP);
+      let subCur = 0;
+      const opsSig = [];             // parallel to passSig, first 600 frames
+      let opsCur = [];
+      function opsOf(desc) {
+        try {
+          const ca = (desc && desc.colorAttachments) || [];
+          const parts = [];
+          for (let i = 0; i < ca.length; i++) {
+            const c = ca[i]; if (!c) continue;
+            const v = c.view || c.resolveTarget;
+            parts.push(((v && v.__sig) || "?") + ":" + c.loadOp + ">" + c.storeOp);
+          }
+          const ds = desc && desc.depthStencilAttachment;
+          if (ds) parts.push("d:" + ds.depthLoadOp + ">" + ds.depthStoreOp);
+          return parts.join("+") || "empty";
+        } catch (_) { return "?"; }
+      }
       try {
         const CE = window.GPUCommandEncoder && window.GPUCommandEncoder.prototype;
         if (CE && typeof CE.beginRenderPass === "function") {
           const origBRP = CE.beginRenderPass;
           CE.beginRenderPass = function (desc) {
-            if (armed) { passCur++; if (sigCur.length < 64) sigCur.push(sigOf(desc)); }
+            if (armed) {
+              passCur++; if (sigCur.length < 64) sigCur.push(sigOf(desc));
+              if (opsCur.length < 64) opsCur.push(opsOf(desc));
+            }
             return origBRP.apply(this, arguments);
           };
+        }
+        const QP = window.GPUQueue && window.GPUQueue.prototype;
+        if (QP && typeof QP.submit === "function") {
+          const origSub = QP.submit;
+          QP.submit = function () { if (armed) subCur++; return origSub.apply(this, arguments); };
         }
       } catch (_) { /* no WebGPU in this context: the pass series stays empty */ }
 
@@ -1427,6 +1522,8 @@ async function main() {
           stacks: [...stacks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25),
           passes: Array.from(passPerFrame.subarray(0, Math.min(n, PASS_CAP))),
           passSig,
+          opsSig,
+          submits: Array.from(subPerFrame.subarray(0, Math.min(n, SUB_CAP))),
           backend: (() => {
             // eslint-disable-next-line no-undef
             try { const t = (typeof GLX !== "undefined") && GLX && GLX.__tlx; return t && t.backendState ? t.backendState() : null; }
@@ -1438,9 +1535,7 @@ async function main() {
 
     await page.goto(srv.url + "index.html", { waitUntil: "domcontentloaded", timeout: 90000 });
     await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 90000 });
-    await page.evaluate(async () => {
-      if (typeof Assets !== "undefined" && Assets.loadModels) { try { await Assets.loadModels(); } catch (_) { /* pack optional */ } }
-    });
+    await loadAllModels(page);
     let cpuCdp = null;
     if (opts.cpuProfile > 0) {
       // Armed BEFORE race(): the stall under test is the race start itself,
@@ -1517,6 +1612,7 @@ async function main() {
     out.backend = d.backend;
     out.passes = analysePasses(d.passes || [], d.t0 || [], d.dur || [], out.spikeThresholdMs);
     out.passKinds = analysePassKinds(d.passSig || [], d.passes || []);
+    out.passOps = analysePassOps(d.opsSig || [], d.submits || []);
     out.layout = analyseLayout(d.layoutMs || [], d.layoutN || [], d.t0 || [], d.dur || [], out.spikeThresholdMs);
     out.heap = analyseHeap(d.heap || [], d.t0 || [], d.dur || [], out.spikeThresholdMs);
     out.alloc = allocProfile
@@ -1561,4 +1657,54 @@ async function main() {
   const json = JSON.stringify(out, null, 2);
   if (opts.json) { mkdirSync(dirname(opts.json), { recursive: true }); writeFileSync(opts.json, json); }
   console.log(json);
+}
+
+// #4710 item 2: WHEN the mirror target was re-allocated. gpu-game-check reads the backend's lifetime `allocs` count and
+// the target's size at every beat (beat.mir); a rise between two beats is a re-allocation, printed with the size and
+// quality on either side of it, which is what tlx.js prepareMirrorTarget re-allocates on (size, or a deeper mip chain).
+export function analyseMirrorAllocs(beats) {
+  const rows = (beats || []).map((b, i) => ({ i, s: b && b.s, m: b && b.mir })).filter((r) => r.m && typeof r.m.allocs === "number");
+  if (rows.length < 2) return { note: "no per-beat mirror allocation count (no mirror pass, or fewer than 2 beats read it)" };
+  const sig = (m) => `${m.w}x${m.h} mips${m.mips}${m.q ? " " + m.q : ""}`;
+  const events = [];
+  for (let k = 1; k < rows.length; k++) {
+    const a = rows[k - 1], b = rows[k], d = b.m.allocs - a.m.allocs;
+    if (d > 0) events.push({ beat: b.i, s: b.s, allocs: d, from: sig(a.m), to: sig(b.m), sizeChanged: sig(a.m) !== sig(b.m) });
+  }
+  return { beats: rows.length, allocs: rows[rows.length - 1].m.allocs - rows[0].m.allocs, events,
+    // A re-allocation between two beats that read the SAME size and mip chain is one the size cannot explain.
+    unexplained: events.filter((e) => !e.sizeChanged).length };
+}
+
+// #4783 row 6: the armed window's passes that carry a depth attachment, as "depth view | colour attachments" counts
+// (gpu-game-check's beginRenderPass wrapper). `shadow` marks a shadow-map pass. The wrapper's view signature is size and format only, so it is
+// told by its shape, a SQUARE depth attachment of side 256 or more (tlx-shadow.js: sun 512 to 2048, car 256 or 1024,
+// lamp 256 or 512; the scene, mirror and post targets are not square and the env probe's faces are 64).
+export function analyseDepthTargets(pairs, frames) {
+  if (!Array.isArray(pairs) || !pairs.length) return { note: "no pass with a depth attachment recorded (no WebGPU encoder on this leg, or the window drew none)" };
+  if (!(frames > 0)) return { note: "no window frames" };
+  const rows = pairs.map(([key, n]) => {
+    const cut = key.indexOf(" | "), depth = key.slice(0, cut), color = key.slice(cut + 3);
+    const m = /^(\d+)x(\d+)\//.exec(depth);
+    return { depth, color, n, perFrame: +(n / frames).toFixed(3), shadow: !!m && m[1] === m[2] && +m[1] >= 256 };
+  }).sort((a, b) => b.n - a.n);
+  return { frames, rows };
+}
+
+// GPU hunt 3: the mirror and TLX churn counters read at both ends of the armed window (gpu-game-check
+// readMirChurn), as per-frame rates. `drawn` is mirror-pass's own pass count (backend-neutral);
+// `renders` restarts at 0 when WGX/GLX re-allocate the target, so its rate is printed only for a window
+// with no re-allocation (`allocs`). A read that failed on either end reports why.
+export function analyseMirrorChurn(a, b, frames) {
+  if (!a || !b || a.error || b.error) return { note: "mirror/churn read failed: " + ((a && a.error) || (b && b.error) || "missing") };
+  if (!(frames > 0)) return { note: "no window frames" };
+  const d = (k) => (typeof a[k] === "number" && typeof b[k] === "number" ? b[k] - a[k] : null);
+  const rate = (v) => (v == null ? null : +(v / frames).toFixed(3));
+  const out = { frames, quality: [a.quality, b.quality], drawnPerFrame: rate(d("drawn")), glassPerFrame: rate(d("glass")),
+    allocs: d("allocs"), rendersPerFrame: d("renders") != null && d("renders") >= 0 && !(d("allocs") > 0) ? rate(d("renders")) : null };
+  if (a.churn && b.churn) {
+    out.churnPerFrame = {};
+    for (const k of Object.keys(b.churn)) if (typeof a.churn[k] === "number") out.churnPerFrame[k] = rate(b.churn[k] - a.churn[k]);
+  }
+  return out;
 }

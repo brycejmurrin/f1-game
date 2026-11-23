@@ -1,5 +1,7 @@
 # AWS Device Farm on a real iPhone (2026-10-23)
 
+Summary: AWS Device Farm as the real-iPhone source after BrowserStack minutes ran out: closes G1 (the same iPhone on three.js WebGPU and WebGL2).
+
 Goal: close G1 in `IPHONE-TLX-WEBGPU-2026-10-23.md` (PR #3592), which asks for the same iPhone measured on three.js
 WebGPU and on WebGL2, with `__tlx.backendState().api` recorded for each leg. BrowserStack Automate minutes are used up,
 so this note tests AWS Device Farm as the device source. Grant: Bryce, in OrchA 26's session, 2026-10-23 about 01:20Z.

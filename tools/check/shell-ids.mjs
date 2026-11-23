@@ -49,7 +49,9 @@ const DYNAMIC_RE = /(?:document\.getElementById|(?<![.\w$])\$)\(\s*(?!["'])([^)]
 // These literal reads run in the isolated preview document, never index.html.
 // Verify against that actual host rather than treating its IDs as exemptions.
 const AUXILIARY_HOSTS = {
-  "js/camera/cockpit-preview.js": { shell: "cockpit-view.html", ids: ["view", "hud", "tip", "err"] },
+  "js/ui/companion-return.js": { shells: ["controller.html", "overlay.html"], ids: ["companion-appearance-return"] },
+  "js/ui/screen-regions.js": { shells: ["controller.html"], ids: ["ctl", "lay-arrange"] },
+  "js/camera/cockpit-preview.js": { shells: ["cockpit-view.html"], ids: ["view", "hud", "tip", "err"] },
 };
 
 /** Ids that exist at runtime but are declared by neither the shell nor a plain
@@ -58,10 +60,42 @@ const AUXILIARY_HOSTS = {
  *  KNOWN_EXTERNAL_READS in tests/unit/global-registry.test.mjs: every entry is a
  *  decision with its reason, and the list may only shrink without a note here. */
 export const RUNTIME_IDS = {
+  "pm-look-popups": "ScreenLooks.build creates each appearance fold from its screen ID when Appearance opens. The shared popup picker focuses this fold.",
+  "as-master": "AudioPanel builds the MASTER SOUND row with SettingRow.build above the MUSIC & SOUND folds (#5584; the shell's node count is a shrink-only ratchet); its one read goes through SettingRow.paint, which is null-guarded",
+  "ga-shots-row": "GarageArrival buildRows() makes the GARAGE ENTER & LEAVE camera / shot-length / after-race rows from its tables (the shell's node count is a shrink-only ratchet); every read in bindSettings is null-guarded",
+  "ga-slowmo": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-sound": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-cue": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-cue-home": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-rear": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-move": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-sway": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-zoom": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-light": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-swell": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-captions": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-bars": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-light-home": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-shot1": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-shot2": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-shot3": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-height": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-door": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-hold": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-carspeed": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-endbeat": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-after": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-start": "GarageArrival buildRows() AFTER_ON (EACH MOMENT, #4745 A2), the same null-guarded reads",
+  "ga-pit-in": "GarageArrival buildRows() AFTER_ON (EACH MOMENT, #4745 A2), the same null-guarded reads",
+  "ga-pit-out": "GarageArrival buildRows() AFTER_ON (EACH MOMENT, #4745 A2), the same null-guarded reads",
+  "ga-crew-home": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-result": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-race": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "pm-btnshape":      "DockLayout.create builds the BUTTON SHAPE row with SettingRow.build under BUTTON OPACITY (shell node count is a shrink-only ratchet); its lookups are null-guarded",
+  "as-slang":         "audio/panel.js builds the SPOKEN LANGUAGE row with SettingRow.build after RADIO SOUND (the shell's node count is a shrink-only ratchet); its paint/wire reads are null-guarded",
   "pm-ckfinish-wheel": "CockpitFinishes.initUI builds pm-ckfinish-<name> through SettingRow.build for wheel/body/halo; this null-guarded lookup prevents duplicate insertion",
   "cs-tab-tune": "SetupUI creates cs-tab-<tab.id> buttons dynamically; SetupExperiments reads the TUNE tab after the garage panel is built",
   "apex-lazy-integrity": "bump-cache.mjs adds the full lazy-script SRI map only to staged deployments; ScriptLoader treats its absence in dev and legacy shells as optional",
-  "dh-tab-schedule":  "Data Hub hub.js builds its tab buttons as dh-tab-<id> when the lazy bundle opens; deep-link.js reads it null-guarded and retries",
   "ps-panel":          "PhotoStudio mk() builds the photo controls panel; setup-camera uses a null-guarded read to exclude it from orbit gestures",
   "pm-three-path":     "renderer-picker addBtn(), and only when the backend files exist — the read at paintPresent() is null-guarded",
   "pm-car-reflect":    "renderer-picker addBtn() CAR REFLECTIONS, injected only when the three files exist — every read is null-guarded",
@@ -118,13 +152,15 @@ export function scan(root = ROOT) {
 
   const read = new Map();      // id -> first site
   const dynamic = [];          // { file, line, expr }
-  const auxiliaryMissing = [], auxiliarySites = new Set();
+  const auxiliaryMissing = [], mainReads = new Map();
   for (const f of files) {
     const rel = path.relative(root, f).replace(/\\/g, "/");
     const auxiliary = AUXILIARY_HOSTS[rel];
-    const auxiliaryPath = auxiliary && path.join(root, auxiliary.shell);
-    const auxiliaryIds = new Set(auxiliaryPath && fs.existsSync(auxiliaryPath)
-      ? [...fs.readFileSync(auxiliaryPath,"utf8").matchAll(/\sid="([^"]+)"/g)].map((m)=>m[1]) : []);
+    const hosts = (auxiliary?.shells || []).map(shell => {
+      const hostPath = path.join(root, shell);
+      const html = fs.existsSync(hostPath) ? fs.readFileSync(hostPath, "utf8") : "";
+      return { shell, ids: new Set([...html.matchAll(/\sid="([^"]+)"/g)].map(match => match[1])) };
+    });
     fs.readFileSync(f, "utf8").split("\n").forEach((line, i) => {
       for (const re of [READ_RE, QS_RE]) {
         re.lastIndex = 0;
@@ -133,9 +169,10 @@ export function scan(root = ROOT) {
           const site = `${rel}:${i + 1}`;
           if (!read.has(m[1])) read.set(m[1], site);
           if (auxiliary && auxiliary.ids.includes(m[1])) {
-            auxiliarySites.add(site + "|" + m[1]);
-            if (!auxiliaryIds.has(m[1]) && !auxiliaryMissing.some((v)=>v.id===m[1])) auxiliaryMissing.push({id:m[1],site});
-          }
+            const absent = hosts.filter(host => !host.ids.has(m[1]));
+            if (absent.length && !auxiliaryMissing.some(v => v.id === m[1] && v.site === site))
+              auxiliaryMissing.push({ id: m[1], site, hosts: absent.map(host => host.shell) });
+          } else if (!mainReads.has(m[1])) mainReads.set(m[1], site);
         }
       }
       DYNAMIC_RE.lastIndex = 0;
@@ -144,8 +181,8 @@ export function scan(root = ROOT) {
     });
   }
 
-  const missing = [...read.keys()].filter((id) => !declared.has(id) && !(id in RUNTIME_IDS) && !auxiliarySites.has(read.get(id) + "|" + id))
-    .map((id) => ({ id, site: read.get(id) })).concat(auxiliaryMissing).sort((a,b)=>a.id.localeCompare(b.id));
+  const missing = [...mainReads.keys()].filter((id) => !declared.has(id) && !(id in RUNTIME_IDS))
+    .map((id) => ({ id, site: mainReads.get(id) })).concat(auxiliaryMissing).sort((a,b)=>a.id.localeCompare(b.id));
   return { declared, read, missing, dynamic, duplicates,
     counts: { declared: declared.size, read: read.size, missing: missing.length, dynamic: dynamic.length, duplicates: duplicates.length } };
 }

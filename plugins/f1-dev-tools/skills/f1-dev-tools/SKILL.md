@@ -34,8 +34,8 @@ grepping, and `lsp_diagnostics` after an edit; the shell fallback is
 | Request | Helper / route |
 |---|---|
 | Inspect UI / compare snapshots | [UI workflow](references/ui-inspection.md); capability-detected `apex_ui_inspect` / `apex_ui_diff` |
-| Profile CPU / frames / heap / leaks / graphics | [Profiling workflow](references/profiling.md); `apex_profile`, `apex_profile_query`, capability-detected `apex_diagnostics` |
-| Inspect garage angles / car parts | [Garage workflow](references/garage-parts.md); `apex_garage`, `apex_car_audit`, catalog discovery and bounded jobs |
+| Profile CPU / frames / heap / leaks / graphics | [Profiling workflow](references/profiling.md); `apex_profile`, `node tools/perf/query.mjs`, `node tools/perf/diagnostics.mjs` |
+| Inspect garage angles / car parts | [Garage workflow](references/garage-parts.md); `apex_garage`, `node tools/car/parts-ladder.mjs --json`, catalog discovery and bounded jobs |
 | Reproduce a scene | `F1Dev.capture()` and `await F1Dev.restore(scene)`; team/halo require the documented boot setup |
 | Identify the page and release | `F1Dev.diagnose()` before `F1Dev.inspect()` and `await F1Dev.trace({frames:12})` |
 | Verify published assets | `await F1Dev.checkAssets(["/version.json", "/js/game.js?v=..."])` and compare returned byte hashes with the claimed manifest |

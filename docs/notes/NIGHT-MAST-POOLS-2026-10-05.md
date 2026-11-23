@@ -1,5 +1,7 @@
 # Night mast pools — Qatar and Bahrain (2026-10-05)
 
+Summary: Why Qatar/Bahrain nights read washed out (flood-mast throw radius × the fleet POOL RADIUS 1.9, cone-less LAMP BOUNCE, the mast foot inside the 37° core, the moon key), the BEAM CORE knob, the shipped preset table, before/after bake ratios and live `lightState`.
+
 PR #923, branch `claude/night-lamp-tuning`, commits `96fb75d83` (round 1) and
 `377ce10de` (round 2). Dated: what was true on the deploy tip `a7d27757f` and on
 those two commits. Cite it for the evidence, not for current values — the

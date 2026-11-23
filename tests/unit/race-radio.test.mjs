@@ -133,6 +133,20 @@ function race(opts = {}) {
 
 // ── 2. FACTS ────────────────────────────────────────────────────────────────
 
+test("reset releases cars from the reusable race facts, fastest lap and events", () => {
+  const facts = RF.create(), { G } = race();
+  facts.observe(G, 0.1);
+  for (const c of G.cars) { c.lastLap = 80; c.finished = true; }
+  const out = facts.observe(G, 0.1), snapshot = out.f, fastest = snapshot.fastest;
+  assert.ok(out.ev.some(e => e.type === "finish"));
+  assert.ok(fastest.car);
+  facts.reset();
+  assert.equal(out.ev.length, 0);
+  assert.equal(out.f, null);
+  for (const key of ["ahead", "behind", "leader", "second", "fastest"]) assert.equal(snapshot[key], null);
+  assert.equal(fastest.car, null);
+});
+
 test("the timing-loop gap is the time between two cars at the same line, not prog/speed", () => {
   const f = RF.create();
   const a = car("AAA", 1000, 80), b = car("BBB", 920, 80);
@@ -918,6 +932,19 @@ function watch(opts = {}) {
 }
 const comm = (r) => r.said.filter((s) => s.kind === "comm");
 
+test("#5557: a paused replay holds the queued line; it is spoken on resume", () => {
+  const r = watch();
+  r.hooks.paused = () => r.hooks.held;
+  r.step(0.05, 20);
+  r.hooks.held = true;
+  assert.equal(r.radio.replayEvent({ kind: "pass", pos: 3 }, r.cars[1], r.cars[0]), true);
+  r.step(0.05, 80);
+  assert.equal(comm(r).length, 0, "nothing is spoken over the frozen cars");
+  r.hooks.held = false;
+  r.step(0.05, 80);
+  assert.equal(comm(r).filter((s) => /REALBBB/.test(s.msg)).length, 1);
+});
+
 test("a WATCH speaks the replay's highlights through the commentator, on any camera, by the REAL names", () => {
   const r = watch();
   r.step(0.05, 20);
@@ -1349,6 +1376,26 @@ test("the real announce queue plays a burst in priority order, penalty-hit over 
   assert.ok(!order.includes("comm line"), "the weakest card was shed once the deeper queue filled");
 });
 
+test("an accepted card is never taken back: announce() true means the card plays (no pop of a queued line)", () => {
+  // The comment promised "a slot once given is NEVER taken back" while the code raised the cap to 5
+  // and popped cards that had already returned true — their callers spent cooldowns for words
+  // nobody heard. A full queue now refuses the newcomer instead; the caller offers it again.
+  const r = raceSaturated();
+  r.G.announce("FIRST", 3, "race");                      // on screen, inside its floor
+  const accepted = [];
+  const offer = (msg, kind) => { if (r.G.announce(msg, 3, kind) === true) accepted.push(msg); };
+  offer("warn A", "warning");                            // warnings always play (never stale-dropped)
+  offer("warn B", "warning");                            // the two base slots
+  offer("box 1", "box");                                 // outranks the tail: queues deeper
+  offer("box 2", "box");
+  offer("box 3", "box");                                 // five waiting: the queue is full
+  offer("hit 1", "penalty-hit");                         // used to pop "warn B" (already told true)
+  r.step(0.1, 400);
+  const said = r.said.map((x) => x.msg);
+  assert.deepEqual(accepted, ["warn A", "warn B", "box 1", "box 2", "box 3"], "the newcomer to a full queue is refused, not swapped in");
+  assert.deepEqual(accepted.filter((m) => !said.includes(m)), [], `every accepted card was played (${JSON.stringify(said)})`);
+});
+
 function loadEngineer() {
   const ectx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite });
   seedLog(ectx);
@@ -1456,4 +1503,96 @@ test("engineer chatter changes preserve accepted WATCH commentary and valid non-
   const engineer = cards.find(c => /SAFETY CAR/.test(c.msg)); assert.ok(engineer);
   r.radio.setChat("chatty"); assert.equal(engineer.still(), true);
   assert.equal(r.radio.setChat("bogus"), "chatty"); assert.equal(engineer.still(), true);
+});
+
+// ── localisation (#1606): pools in locales/, per-locale card fit, language never in the seed ──
+
+import { existsSync } from "node:fs";
+const readJson = (rel) => JSON.parse(readFileSync(join(ROOT, rel), "utf8"));
+// TTS runs slower in some languages: a locale's text may take this many times English's estimate before
+// the card refuses it. A locale not listed gets the default. (Owner may tune; en is the baseline.)
+const LOCALE_BUDGET = { en: 1, es: 1.25, pt: 1.25, it: 1.2, de: 1.3, fr: 1.2, nl: 1.2, ja: 1 };
+const DEFAULT_BUDGET = 1.3;
+
+test("locales/en.json radio.* is the phrasebook, byte for byte", () => {
+  const en = readJson("locales/en.json");
+  for (const [k, pool] of Object.entries(RL.POOLS)) assert.deepEqual(en["radio." + k], [...pool], k);
+  for (const [k, w] of Object.entries(RL.WHY)) assert.equal(en["radio.why." + k], w, k);
+  assert.equal(Object.keys(en).filter((k) => k.startsWith("radio.") && !k.startsWith("radio.why.")).length, Object.keys(RL.POOLS).length);
+});
+
+test("every locale's radio pool fits its card inside that language's budget", () => {
+  const manifest = readJson("locales/manifest.json");
+  const refused = [];
+  let n = 0;
+  for (const lang of Object.keys(manifest)) {
+    const table = readJson(`locales/${lang}.json`);
+    const factor = LOCALE_BUDGET[lang.slice(0, 2)] || DEFAULT_BUDGET;
+    for (const [fullKey, pool] of Object.entries(table)) {
+      if (!fullKey.startsWith("radio.") || fullKey.startsWith("radio.why.") || !Array.isArray(pool)) continue;
+      const key = fullKey.slice(6);
+      const tv = key.startsWith("tv.");
+      for (const tpl of pool) {
+        const msg = RL.fill(tpl, LONG);
+        assert.ok(msg, `${lang} ${key}: "${tpl}" has a slot this test does not fill`);
+        const kind = tv ? "comm" : "info";
+        const life = Math.max(RV.ANN_CARD_MIN_S, RR.durFor(msg, kind) + RV.ANN_CARD_PAD_S);
+        const p = RV.plan({ msg, life: life / factor, kind, lead: tv ? 0 : RV.RADIO_LEAD_S,
+          enabled: true, soundOn: true, api: true, state: "race" });
+        n++;
+        if (!p.speak) refused.push(`${lang} ${key}: "${msg}" (${p.reason})`);
+      }
+    }
+  }
+  assert.ok(n > 100, `expected the English phrasebook at least, spoke ${n}`);
+  assert.deepEqual(refused, []);
+});
+
+test("a locale pool replaces English by key, and the replay stream does not depend on the language", () => {
+  vm.runInContext(readFileSync(join(ROOT, "js/core/i18n.js"), "utf8"), ctx, { filename: absSrc("js/core/i18n.js") });
+  const I18n = vm.runInContext("I18n", ctx);
+  const draw = (seed) => {
+    const d = RL.create(seed);
+    const out = [];
+    for (let i = 0; i < 40; i++) out.push(d.pick("eng.gain", { pos: 3, passed: "X" }));
+    return out;
+  };
+  const EN = RL.POOLS["eng.gain"];
+  const idxOf = (lines, pool) => lines.map((l) => pool.findIndex((t) => RL.fill(t, { pos: 3, passed: "X" }) === l));
+  I18n._installCatalog("en", {});
+  const english = draw(4242);
+  assert.deepEqual(english.slice(0, 3), idxOf(english.slice(0, 3), EN).map((i) => RL.fill(EN[i], { pos: 3, passed: "X" })));
+  // Same number of variants, other words: the SAME variant indices come out for the same seed.
+  const xx = EN.map((t, i) => `XX${i} P{pos} {passed}`);
+  I18n._installCatalog("xx", { "radio.eng.gain": xx });
+  const other = draw(4242);
+  assert.deepEqual(idxOf(other, xx), idxOf(english, EN), "the language must not enter the replay stream");
+  assert.ok(other[0].startsWith("XX"), "the locale pool is used");
+  // A key the locale lacks falls back to English.
+  assert.ok(RL.create(1).pick("eng.lead", {}).length > 0);
+  I18n._installCatalog("xx", { "radio.why.engine": "MOTORSCHADEN" });
+  assert.equal(RL.why("engine"), "MOTORSCHADEN");
+  assert.equal(RL.why("gearbox"), RL.WHY.gearbox);
+  I18n._resetForTest();
+});
+
+test("the radio seed is built from the race seed and round only — no language", () => {
+  for (const f of ["js/race/race-radio.js", "js/race/radio-lines.js"]) {
+    const src = readFileSync(join(ROOT, f), "utf8");
+    for (const m of src.matchAll(/RadioLines\.create\([^\n]*|function create\(seed[^\n]*|const rand = rng\([^\n]*/g)) {
+      assert.ok(!/I18n|lang/i.test(m[0]), `${f}: "${m[0]}" must not read the language`);
+    }
+  }
+});
+
+test("quiet cockpit ticks check the commentary camera only when rules are due or an event arrives", () => {
+  const { G, radio, step, said } = race({ cam: 1 });
+  let cameraReads = 0;
+  Object.defineProperty(G, "camMode", { get() { cameraReads++; return 1; } });
+  step(1 / 64, 63);
+  assert.equal(cameraReads, 2, "the two half-second evaluations");
+  assert.ok(radio.request(), "fresh facts still answer an on-demand check");
+  G._caution = 3;
+  step(1 / 64);
+  assert.ok(said.some(line => line.kind === "warning"));
 });

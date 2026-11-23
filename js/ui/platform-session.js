@@ -4,8 +4,7 @@ const PlatformSession = (function () {
 "use strict";
 function create(G, deps) {
 const { $, els, store } = G;
-const { MAX_RPM, IDLE_RPM } = PhysicsConsts;
-const { canvas, raceWakeLock, disarmProbeOnLeave, cancelMirrorPrep, setPaused, ensureNet, settingsBack, closeSettings, showTouchControls, refreshGearsBtn } = deps;
+const { canvas, raceWakeLock, disarmProbeOnLeave, cancelMirrorPrep, setPaused, ensureNet, settingsBack, closeSettings, showTouchControls, refreshGearsBtn, openSettingsPage } = deps;
 function paintBuild() {
 // BUILD NUMBER in the pause menu. index.html is the one file with no ?v= of its
 // own, so a stale shell (or a service worker serving a cached generation) can run
@@ -77,14 +76,9 @@ if ($("pm-fullscreen")) {
   document.addEventListener("webkitfullscreenchange", syncFullscreen);
   paintFullscreenRow();
 }
-/* ADD TO HOME SCREEN IS THE ONLY FULLSCREEN AN iPHONE HAS. Element fullscreen
-   has never shipped on iPhone Safari (iPad only, and there the browser draws an
-   overlay button you cannot remove), so the row above is hidden on iOS and this
-   takes its place. Standalone also gives what a race actually needs: a viewport
-   that does not move, because there are no toolbars to collapse mid-corner.
-   As of iOS 26 every site added to the Home Screen opens as a web app with no
-   manifest metadata required, so this is a one-tap suggestion rather than a
-   setup guide. Shown once, ever. */
+/* ADD TO HOME SCREEN IS THE ONLY FULLSCREEN AN iPHONE HAS (element fullscreen is
+   iPad-only), so this replaces the row above on iOS: no toolbars to collapse
+   mid-corner. Since iOS 26 any Home Screen site opens as a web app. Shown once. */
 (function iosInstallNudge() {
   const el = $("ios-install");
   if (!el) return;
@@ -93,9 +87,32 @@ if ($("pm-fullscreen")) {
   const ios = /iPad|iPhone|iPod/.test(nav.userAgent) ||
     (nav.platform === "MacIntel" && nav.maxTouchPoints > 1);   // iPadOS reports as a Mac
   const standalone = !!(nav.standalone || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches));
-  if (!ios || standalone || store.get("iosInstallSeen", false)) return;
-  const dismiss = () => { el.hidden = true; store.set("iosInstallSeen", true); };
+  // No wake lock in Home Screen apps on iOS 16.4-18.3 (WebKit 254545).
+  const v = /OS (\d+)_(\d+)|Version\/(\d+)\.(\d+)/.exec(nav.userAgent || "") || [];
+  const ver = (v[1] || v[3]) * 100 + +(v[2] || v[4]);
+  const wakeBroken = ver >= 1604 && ver < 1804;
+  const NOTE = "On iOS 16.4\u201318.3 the screen may dim mid-race in the Home Screen app. Update to iOS 18.4 or later to fix it.";
+  const msg = $("ios-install-msg");
+  if (!ios) return;
+  if (standalone) {
+    if (!wakeBroken || !msg || store.get("iosWakeNoteSeen", false)) return;
+    msg.textContent = NOTE;
+  } else if (store.get("iosInstallSeen", false)) return;
+  else if (wakeBroken && msg) msg.append(" " + NOTE);
+  // The title pads itself by the banner's height (css/touch-controls.css, clean-room fix 50).
+  const root = typeof document !== "undefined" ? document.documentElement : null;
+  const measure = () => { if (root && !el.hidden) root.style.setProperty("--ios-install-h", el.offsetHeight + "px"); };
+  const ro = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
+  const dismiss = () => {
+    if (ro) ro.disconnect();
+    if (root) root.style.removeProperty("--ios-install-h");
+    el.hidden = true;
+    if (!standalone) store.set("iosInstallSeen", true);
+    if (wakeBroken) store.set("iosWakeNoteSeen", true);
+  };
   el.hidden = false;
+  measure();
+  if (ro) ro.observe(el);
   const x = $("ios-install-x");
   if (x) x.onclick = dismiss;
   // It is a suggestion, not a gate: the first title-menu choice dismisses it,
@@ -157,7 +174,7 @@ if ($("pm-fullscreen")) {
   if (!anchor || !anchor.parentNode || !navigator.serviceWorker || typeof MessageChannel === "undefined") return;
   const note = document.createElement("p"), button = document.createElement("button");
   note.className = "adv-help"; note.setAttribute("role", "status");
-  note.textContent = "Offline availability has not been checked.";
+  note.textContent = "Checking offline availability…";
   button.type = "button"; button.textContent = "CHECK OFFLINE AVAILABILITY";
   anchor.parentNode.insertBefore(note, anchor.nextSibling);
   anchor.parentNode.insertBefore(button, note.nextSibling);
@@ -195,125 +212,63 @@ if ($("pm-fullscreen")) {
     }
   }
   button.addEventListener("click", () => { polls = 0; refresh(retry); });
-  navigator.serviceWorker.addEventListener("controllerchange", () => refresh());
-  refresh();
+  // The status costs one cache lookup per precached file: ask when the note is on screen, not at boot.
+  if (typeof IntersectionObserver !== "function") {
+    navigator.serviceWorker.addEventListener("controllerchange", () => refresh());
+    refresh();
+    return;
+  }
+  let shown = false, stale = true;
+  new IntersectionObserver((rows) => {
+    shown = rows[rows.length - 1].isIntersecting;
+    if (shown && stale) { stale = false; refresh(); }
+  }).observe(note);
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (shown) refresh(); else stale = true; });
 })();
 }
 
 function wirePhone() {
-// PHONE AS CONTROLLER (js/input/phone-pad.js, LAZY_NET): the button loads the
-// multiplayer stack the pairing rides on, then the module owns the pairing and
-// feeds Input.remoteSample(). A second press cancels; a lost phone re-arms it.
-// Pairing's generic URL builder follows its page origin. Adapt outgoing links
-// here for native hosts, preserving the private code and relay in the fragment.
-function phoneLink(url) {
-  if (!url || typeof Native === "undefined" || !Native.isNative()) return url;
-  return PhonePad.padUrl("", Native.shareBase()).replace(/#.*$/, "") + new URL(url).hash;
-}
-let phonePad = null;
-let phonePadLoading = false, phonePadGeneration = 0;
-let recoveryOwner = null;
-const recoveryNote = document.createElement("p"), newPhoneCode = document.createElement("button");
-newPhoneCode.type = "button"; newPhoneCode.className = "sel-chip"; newPhoneCode.textContent = "MAKE NEW CODE";
-recoveryNote.setAttribute("role", "status"); newPhoneCode.hidden = true;
-$("pm-phonepad-box").append(recoveryNote, newPhoneCode);
-newPhoneCode.onclick = () => {
-  if (phonePad || phonePadLoading) $("pm-phonepad").onclick();
-  else if (recoveryOwner) recoveryOwner.cancel();
-  recoveryOwner = null;
-  newPhoneCode.hidden = true; recoveryNote.textContent = "";
-  $("pm-phonepad").onclick();
-};
-// The camera the player was in before a phone linked: a phone in the hand is the wheel, so the
-// screen shows VISOR (the cockpit without its steering wheel — js/camera/vantage.js) while
-// it drives, and goes back when the phone is gone, unless the player cycled away meanwhile.
-let phonePadCam = -1;
-const VISOR_CAM = CamModes.CAM_MODES.findIndex((c) => c.id === "visor");
-// The dash the paired phone paints: the fields js/ui/hud.js reads, ~15 Hz.
-function phonePadDash() {
-  const p = G.player;
-  const D = PhonePad.DASH;
-  // NO PLAYER IS A DASH TOO — the menus before a first race. The phone swaps its wheel for the
-  // MENU PAD only on a dash packet (!inRace || paused); a null here sent nothing, so a phone
-  // paired from the title stayed on the wheel's placeholder LCD with no arrows/SELECT/BACK.
-  if (!p) return { gear: 0, kmh: 0, rpm: 0, lap: 0, laps: 0, pos: 0, cars: 0, ers: 0,
-    flags: G.paused ? D.paused : 0, caution: 0, lastLapMs: 0, state: G.state, team: "" };
-  const xOpen = (p.aeroX || 0) > 0.05;
-  const controls = G.recordControls();
-  const flags = (p.boostOn ? D.boost : 0) | (p.otT > 0 ? D.otActive : p.otArmed ? D.otArmed : 0)
-    | (xOpen ? D.xOpen : p.xArmed ? D.xArmed : 0) | (p.retired ? D.retired : 0) | (G.timeTrial ? D.timeTrial : 0)
-    | (G.session === "quali" ? D.quali : G.practice && !G.timeTrial ? D.practice : 0)
-    | (G.paused ? D.paused : 0) | (p.rpm > MAX_RPM * 0.92 ? D.redline : 0)
-    // The control modes, so the wheel offers only what the driver operates.
-    | (controls.gearsManual ? 0 : D.gearsAuto) | (controls.autoThrottle ? D.throttleAuto : 0)
-    | (G.raceAeroMode === "auto" ? D.aeroAuto : 0) | (G.aeroZones.length ? 0 : D.aeroNone);
-  return { gear: p.gear, kmh: G.dashKph(p.speed), rpm: (p.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), lap: p.lap, laps: G.lapsTarget,
-    pos: p.rank, cars: G.cars.length, ers: p.energy, flags, caution: G.cautionLevel(), lastLapMs: (p.lastLap || 0) * 1000,
-    state: G.state, team: PhonePad.teamHex(p.team && p.team.color) };
-}
-$("pm-phonepad").onclick = () => {
-  const box = $("pm-phonepad-box"), status = $("pm-phonepad-status"), btn = $("pm-phonepad");
-  if (phonePad || phonePadLoading) {
-    phonePadGeneration++; phonePadLoading = false;
-    if (phonePad) phonePad.cancel();
-    phonePad = null; box.hidden = true; btn.textContent = "STEER THIS GAME WITH A PHONE";
-    if (phonePadCam >= 0 && G.camMode === VISOR_CAM) G.setCamMode(phonePadCam);   // what lost() does: cancel() closes the link without calling it
-    phonePadCam = -1;
-    return;
-  }
-  box.hidden = false; btn.textContent = "STOP PAIRING"; status.textContent = "Loading…";
-  const generation = ++phonePadGeneration;
-  phonePadLoading = true;
-  ensureNet().then((ok) => {
-    if (generation !== phonePadGeneration) return;
-    phonePadLoading = false;
-    if (!ok) { btn.textContent = "STEER THIS GAME WITH A PHONE"; status.textContent = "Could not load the pairing stack — check the connection."; return; }
-    $("pm-phonepad-url").textContent = phoneLink(PhonePad.padUrl("")).replace(/#.*$/, "");
-    phonePad = PhonePad.host({
-      hud: phonePadDash,
-      say: (t) => { status.textContent = t; },
-      qr: (url, code) => {
-        url = phoneLink(url);
-        LobbyCodes.paintQr($("pm-phonepad-qr-wrap"), $("pm-phonepad-qr"), url);
-        $("pm-phonepad-code").textContent = code || "";
-        $("pm-phonepad-code").setAttribute("data-private", String(!!code && code.length > 6));
-        $("pm-phonepad-pair").hidden = !code;
-        // The code appears below the button: bring it into view on the sheet,
-        // or a short screen shows "scan the code" with nothing to scan.
-        if (code && box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
-      },
-      linked: () => {
-        btn.textContent = "UNPAIR PHONE"; G.announce("PHONE CONNECTED — TILT TO STEER", 3, "info");
-        if (VISOR_CAM >= 0 && G.camMode !== VISOR_CAM) { phonePadCam = G.camMode; G.setCamMode(VISOR_CAM, { persist: false }); }   // the phone's view, not the player's saved one
-      },
-      // The phone's wire died: PhonePad hosts the same code again and the phone re-dials it (lost() follows only if it gives up).
-      relinking: () => { G.announce("PHONE LINK LOST — RECONNECTING", 3, "warn"); },
-      recovery: (r) => {
-        newPhoneCode.hidden = !["waiting", "connecting", "failed", "lost"].includes(r.phase);
-        recoveryNote.textContent = r.reconnecting && r.publicRelay
-          ? r.deadlineAt === null ? "Reconnecting — opening the same-code window…" :
-            "Reconnecting — same code available for up to " + Math.max(0, Math.ceil((r.deadlineAt - Date.now()) / 1000)) + " seconds. Or choose MAKE NEW CODE."
-          : "";
-      },
-      // A first pairing that failed (expired, no relay): the status stays, the button starts over.
-      failed: () => { btn.textContent = "STEER THIS GAME WITH A PHONE"; phonePad = null; },
-      lost: () => {
-        btn.textContent = "STEER THIS GAME WITH A PHONE"; phonePad = null; G.announce("PHONE DISCONNECTED", 3, "warn");
-        if (phonePadCam >= 0 && G.camMode === VISOR_CAM) G.setCamMode(phonePadCam);
-        phonePadCam = -1;
-      },
+  const button = $("pm-phonepad"), box = $("pm-phonepad-box"), status = $("pm-phonepad-status");
+  let panel = null, loading = false, generation = 0;
+  const active = () => loading || !!panel?.active();
+  button.onclick = () => {
+    const request = ++generation;
+    if (active()) {
+      loading = false;
+      panel?.cancel();
+      box.hidden = true; button.textContent = "STEER THIS GAME WITH A PHONE";
+      return;
+    }
+    box.hidden = false; button.textContent = "STOP PAIRING"; status.textContent = "Loading…";
+    loading = true;
+    ensureNet().then((ok) => {
+      if (request !== generation) return;
+      loading = false;
+      if (!ok) {
+        button.textContent = "STEER THIS GAME WITH A PHONE";
+        status.textContent = "Could not load the pairing stack — check the connection.";
+        return;
+      }
+      (panel ||= PhonePairingUI.create(G, setPaused, () => loading)).start();
     });
-    recoveryOwner = phonePad;
-  });
-};
+  };
+  if (typeof location !== "undefined" && new URLSearchParams(location.search).get("settings") === "appearance") {
+    const url = new URL(location.href);
+    url.searchParams.delete("settings");
+    history.replaceState(history.state, "", url.href);
+    queueMicrotask(() => openSettingsPage("appearance"));
+  }
+  $("mb-steerphone").onclick = () => { openSettingsPage("controls"); if (!active()) button.onclick(); };
 }
 
 function wireLifecycle() {
 // UPDATE READY: re-read version.json when the tab comes back (≤ 1 per 10 min)
-// and when a newer worker takes control; the chip shows outside races only and
+// and when a newer worker takes control; the chip shows in the menus only and
 // reloads once the store and ghosts are flushed.
 const updates = UpdateCheck.create({
   inRace: () => UiLayers.inRace(),
+  state: () => G.state,          // "results" (podium, cooldown lap) is not a menu (#5070)
+  cover: () => $("loading"),     // the race-entry cover: hide before the lights, not 2 s into them
   chip: () => $("update-chip"),
   persist: () => { Ghost.flush(); if (typeof InputGhost !== "undefined") InputGhost.flush(); return store.mirrorFlush && store.mirrorFlush(); },
 });
@@ -324,39 +279,42 @@ document.addEventListener("visibilitychange", () => updates.onVisible());
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) disarmProbeOnLeave();
   if (document.hidden && cancelMirrorPrep) cancelMirrorPrep();   // rAF stops; optional warm must not hold entry
-  if (document.hidden && (G.state === "race" || G.state === "count")) setPaused(true, "hidden-tab");
+  // ALREADY PAUSED: a second pause re-showed the card over the lighting tuner and ended a replay scrub (#5017).
+  if (document.hidden && !G.paused && (G.state === "race" || G.state === "count")) setPaused(true, "hidden-tab");
   // Sentinel: a hidden tab that never comes back was killed in the BACKGROUND —
   // normal iOS housekeeping, not our crash. Disarm while hidden, re-arm on
   // return to a live session.
   if (document.hidden) PerfGov.sentinelArm(false);
   else if (G.state === "race" || G.state === "count") PerfGov.sentinelResume();
-  // The platform releases a wake lock on every hide and does not give it
-  // back — re-request it here rather than a fourth listener elsewhere.
+  // The platform drops a wake lock on every hide: re-request it here.
   if (!document.hidden && raceWakeLock.wanted()) raceWakeLock.hold();
-  // VS FRIEND: netPlay.tick runs only from rAF, which a hidden tab stops, so the
-  // rival timed us out after 6 s. Hidden timers still fire ~1 Hz (and WebRTC
-  // pages are exempt from intensive throttling): keep pinging while hidden.
+  // VS FRIEND: rAF stops when hidden (the rival timed out at 6 s); hidden timers still fire ~1 Hz, so ping from one.
   // https://developer.chrome.com/blog/timer-throttling-in-chrome-88
   clearInterval(_netHiddenPump); _netHiddenPump = 0;
   if (document.hidden && G.netPlay.active()) _netHiddenPump = setInterval(() => G.netPlay.tick(performance.now()), 500);
 });
 let _netHiddenPump = 0;
-window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); disarmProbeOnLeave(); if (cancelMirrorPrep) cancelMirrorPrep(); });
-// LOSING FOCUS WHILE STILL VISIBLE pauses too. visibilitychange only fires when
-// the page is HIDDEN (MDN, Page Visibility API): an Alt-Tab to a second monitor,
-// or an overlay taking focus, left the car coasting off-line while the field
-// lapped. Settled for 250 ms (a focus hop inside the page is not a leave), never
-// in a friend race (the rival cannot be paused) and never under automation.
+window.addEventListener("pagehide", () => {
+  // A bfcache hide can leave the VS FRIEND hidden-tab pump armed; clear it with the rest.
+  clearInterval(_netHiddenPump); _netHiddenPump = 0;
+  PerfGov.sentinelArm(false); disarmProbeOnLeave(); if (cancelMirrorPrep) cancelMirrorPrep();
+});
+// LEAVE THE RACE? (#5945): a reload loses the race. Not in TT, menus or automation (a reload would hang).
+window.addEventListener("beforeunload", (e) => {
+  if (navigator.webdriver || G.timeTrial || !(G.state === "race" || G.state === "count")) return;
+  e.preventDefault(); e.returnValue = "";
+});
+// LOSING FOCUS WHILE VISIBLE pauses too (visibilitychange misses an Alt-Tab): settled 250 ms, not in a friend race or automation.
 window.addEventListener("blur", () => {
   setTimeout(() => {
-    if (document.hidden || document.hasFocus() || navigator.webdriver || G.netPlay.active()) return;
+    if (document.hidden || document.hasFocus() || navigator.webdriver || G.netPlay.active() || G.paused) return;
     if (G.state === "race" || G.state === "count") setPaused(true, "blur");
   }, 250);
 });
 // …and the platform taking the AUDIO (an iOS call answered from the compact
 // banner keeps the page visible and focused): the race stops with the sound.
 if (GameAudio.onInterrupted) GameAudio.onInterrupted(() => {
-  if ((G.state === "race" || G.state === "count") && !G.netPlay.active()) setPaused(true, "audio-interrupted");
+  if ((G.state === "race" || G.state === "count") && !G.netPlay.active() && !G.paused) setPaused(true, "audio-interrupted");
 });
 
 }
@@ -373,10 +331,10 @@ Input.init(canvas, { onPause: () => {
   // a UiLayers entry (anyOpen() also keeps Escape from pausing). KeyP / pad
   // Start still land here and must not open pause over the card — that left a
   // stuck #pausemenu after the plate cleared.
-  if (typeof UiLayers !== "undefined") {
-    const loadingTop = UiLayers.top();
-    if (loadingTop && loadingTop.id === "loading") return;
-  }
+  const top = typeof UiLayers !== "undefined" ? UiLayers.top() : null;
+  if (top?.id === "loading") return;
+  // P / gamepad Start cancels an arrangement before touching race state.
+  if (top?.id === "screen-arranger") { document.getElementById("screen-arranger-cancel")?.click(); return; }
   // Innermost sheet first: HOW TO PLAY lays OVER the settings menu, so a pause
   // press there has to close the help sheet, not the menu underneath it (which
   // would leave the help sheet floating over the race with no way back). Reached
@@ -392,12 +350,9 @@ Input.init(canvas, { onPause: () => {
   // Escape does (js/ui/modal.js), so the tool closes back to the pause menu.
   // ONLY those three: the lighting and camera tuners, the flyby and photo mode
   // are closed by setPaused(false) itself, so there the key resumes as before.
-  if (G.paused && typeof UiLayers !== "undefined") {
-    const top = UiLayers.top();
-    if (top && (top.id === "garrival" || top.id === "photo-studio" || top.id === "spotifypanel")) {
-      const door = top.dataset && top.dataset.escClose ? document.getElementById(top.dataset.escClose) : null;
-      if (door) { door.click(); return; }
-    }
+  if (G.paused && top && (top.id === "garrival" || top.id === "photo-studio" || top.id === "spotifypanel")) {
+    const door = top.dataset && top.dataset.escClose ? document.getElementById(top.dataset.escClose) : null;
+    if (door) { door.click(); return; }
   }
   if (G.paused && els.pmsettings && !els.pmsettings.hidden) {
     if (settingsBack()) closeSettings();
@@ -431,6 +386,7 @@ function syncPointerKind() {
   // The phone's own door to the wheel page: a coarse pointer is the device
   // that can BE the controller, so only it gets the buttons (title + CONTROLS).
   $("mb-phonepad").hidden = !touch;
+  $("mb-steerphone").hidden = touch;
   $("pm-phonepad-go").hidden = !touch;
   if (G.state === "race" || G.state === "count") showTouchControls(true);
   refreshGearsBtn();   // GEARS is enabled by thumbs being free, i.e. by this

@@ -48,8 +48,8 @@ test("preset tiles keep names intact and keep a visible selected ring", () => {
   assert.equal(decl(studio, '#appearance-studio [data-as="preset-list"] strong', "word-break"), "normal");
   assert.equal(decl(studio, '#appearance-studio [data-as="preset-list"] strong', "hyphens"), "none");
   assert.equal(decl(studio, '#appearance-studio [data-as="preset-list"] strong', "text-wrap"), "balance");
-  assert.match(decl(studio, '#appearance-studio [data-as="preset-list"] strong', "font-size") || "",
-    /em/, "preset labels scale from the button, not --fs-micro under Sunlight large text");
+  assert.equal(decl(studio, '#appearance-studio [data-as="preset-list"] strong', "font-size"), "var(--fs-micro)",
+    "preset labels sit at the house micro size, which follows TEXT SIZE (UI contract 2026-11-06 gap 4: .72em/.64em painted 9.6–13.6 px)");
   assert.equal(decl(studio, '#appearance-studio [data-as="preset-list"] button', "overflow"), "hidden");
   const pressed = decl(studio, '#appearance-studio [data-as="preset-list"] button[aria-pressed="true"]', "border-color");
   assert.equal(pressed, "var(--red)", "selected preset keeps a red ring at zoom");

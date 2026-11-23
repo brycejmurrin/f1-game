@@ -25,7 +25,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 function createHarness(opts = {}) {
   const store = new Map(Object.entries(opts.disk || {}));
   const microtasks = [];
-  const timers = [];
+  const timers = [], timerMs = [];
   const mockLocalStorage = {
     getItem(k) { return store.has(k) ? store.get(k) : null; },
     setItem(k, v) {
@@ -43,11 +43,11 @@ function createHarness(opts = {}) {
   const sandbox = {
     localStorage: mockLocalStorage,
     module: { exports: {} },
-    TextEncoder,
+    TextEncoder: opts.TextEncoder || TextEncoder,
     queueMicrotask: (fn) => { microtasks.push(fn); },
     console,
   };
-  if (opts.deferWrites) sandbox.setTimeout = (fn) => { timers.push(fn); return timers.length; };
+  if (opts.deferWrites) sandbox.setTimeout = (fn, ms) => { timers.push(fn); timerMs.push(ms); return timers.length; };
   const idles = [], listeners = {};
   if (opts.clock) sandbox.Date = { now: () => opts.clock.t };
   if (opts.idle) {
@@ -67,6 +67,7 @@ function createHarness(opts = {}) {
     store: mockLocalStorage,
     flushMicrotasks: () => { while (microtasks.length) microtasks.shift()(); },
     flushTimers: () => { while (timers.length) timers.shift()(); },
+    timerMs,
     runIdle: (ms) => { const q = idles.splice(0); for (const f of q) f({ timeRemaining: () => ms, didTimeout: false }); },
     idleQueued: () => idles.length,
     fire: (type) => { for (const f of listeners[type] || []) f(); },
@@ -74,6 +75,67 @@ function createHarness(opts = {}) {
     disk: store,
   };
 }
+
+// #5783 I4: lap time is summed from fixed 1/60 steps. Resetting lastSampleT = t
+// makes three steps land just under 1/HZ (float), so the recorder waits a fourth
+// (~15 Hz). Advancing lastSampleT by the sample period keeps the average at 20.
+test("Ghost.record averages 20 Hz on summed 1/60 physics steps (#5783 I4)", () => {
+  const { Ghost } = createHarness();
+  Ghost.setTrack("monza");
+  Ghost.startLap();
+  const dt = 1 / 60;
+  let t = 0;
+  // Issue evidence window: a ~126.7 s flying lap at 60 Hz physics.
+  const lapS = 126.7;
+  while (t < lapS) {
+    Ghost.record(t, t * 40, 0);
+    t += dt;
+  }
+  assert.equal(Ghost.finishLap(lapS), true);
+  const n = Ghost.snapshot().t.length;
+  const rate = n / lapS;
+  assert.ok(rate >= 19.5 && rate <= 20.5,
+    `stated HZ is 20; got ${n} samples over ${lapS}s (${rate.toFixed(2)} Hz)`);
+  // Recipe from the hunt: 60 steps of 1/60 → 20 samples.
+  Ghost.startLap();
+  t = 0;
+  for (let i = 0; i < 60; i++) {
+    Ghost.record(t, i * 2, 0);
+    t += dt;
+  }
+  assert.equal(Ghost.finishLap(1), true);
+  assert.equal(Ghost.snapshot().t.length, 20, "60 steps of 1/60 → 20 samples");
+});
+
+// Pre-fix sparse traces (~15 Hz / 0.1 s nodes) still interpolate; denser
+// 20 Hz traces do too. Playback never assumes a fixed sample spacing.
+test("Ghost.at interpolates both legacy-sparse and 20 Hz traces", () => {
+  const { Ghost, store } = createHarness();
+  const sparse = {
+    time: 1,
+    t: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+    s: [0, 40, 80, 120, 160, 200, 240, 280, 320, 360],
+    x: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+    _used: 1,
+  };
+  store.setItem("apex26.ghost.v1", JSON.stringify({ monza: sparse }));
+  Ghost.setTrack("monza");
+  const mid = Ghost.at(0.15);
+  assert.ok(Math.abs(mid.s - 60) < 1e-6, "legacy 0.1 s nodes still lerp");
+  assert.equal(mid.done, false);
+
+  Ghost.startLap();
+  const dt = 1 / 60;
+  let t = 0;
+  for (let i = 0; i < 60; i++) {
+    Ghost.record(t, t * 40, t);
+    t += dt;
+  }
+  assert.equal(Ghost.finishLap(0.9), true);
+  const dense = Ghost.at(0.5);
+  assert.ok(Math.abs(dense.s - 20) < 0.5, "20 Hz trace interpolates near the recorded s");
+  assert.equal(dense.done, false);
+});
 
 test("Ghost lap recording and playback basics", () => {
   const { Ghost } = createHarness();
@@ -287,6 +349,24 @@ test("ghost quota failures flow through GameStore persistence health", () => {
   assert.equal(GameStore.store.broken, "QuotaExceededError", "persistState can report the failed ghost write");
 });
 
+test("circuit browsing checks the ghost store byte budget once per loaded store", () => {
+  let checks = 0;
+  class CountingEncoder extends TextEncoder {
+    encode(value) { checks++; return super.encode(value); }
+  }
+  const h = createHarness({ TextEncoder: CountingEncoder });
+  for (const circuit of ["spa", "monza", "silverstone"]) {
+    h.Ghost.setTrack(circuit);
+    h.flushMicrotasks();
+  }
+  assert.equal(checks, 1);
+  h.store.setItem("apex26.ghost.v1", "{}");
+  h.GameStore.store.onForeignWrite({ key: "apex26.ghost.v1" });
+  h.Ghost.setTrack("spa");
+  h.flushMicrotasks();
+  assert.equal(checks, 2, "a replacement from another tab gets a new budget check");
+});
+
 test("loading an inherited over-budget store trims it before other saves compete for quota", () => {
   const inherited = {};
   for (let n = 0; n < 100; n++) {
@@ -298,18 +378,22 @@ test("loading an inherited over-budget store trims it before other saves compete
       _used: n,
     };
   }
-  const { Ghost, store, flushMicrotasks } = createHarness({
-    disk: { "apex26.ghost.v1": JSON.stringify(inherited) },
-  });
-
-  Ghost.setTrack("track-0");
-  Ghost.setTrack("track-0", "setup-0");
-  flushMicrotasks();
-
-  const raw = store.getItem("apex26.ghost.v1");
-  assert.ok(Buffer.byteLength(raw, "utf8") <= 512 * 1024, "first load repairs the inherited blob");
-  assert.ok(JSON.parse(raw)["v2:track-0:setup-0"],
-    "repair waits for the final comparable context and promotes it before LRU eviction");
+  for (const foreign of [false, true]) {
+    const key = "apex26.ghost.v1";
+    const json = JSON.stringify(inherited);
+    const { Ghost, GameStore, store, flushMicrotasks } = createHarness({ disk: foreign ? {} : { [key]: json } });
+    Ghost.setTrack("track-0");
+    Ghost.setTrack("track-0", "setup-0");
+    if (foreign) {
+      flushMicrotasks();
+      store.setItem(key, json);
+      GameStore.store.onForeignWrite({ key });
+    }
+    flushMicrotasks();
+    const raw = store.getItem(key);
+    assert.ok(Buffer.byteLength(raw, "utf8") <= 512 * 1024);
+    assert.ok(JSON.parse(raw)["v2:track-0:setup-0"], "the active rival survives local and foreign budget repair");
+  }
 });
 
 test("one oversized valid trace is thinned to fit instead of evicting its own personal best", () => {
@@ -449,6 +533,33 @@ test("clearing an exact context key preserves sibling contexts and clears the se
   assert.equal(saved["v2:monza:wet"].time, 42);
 });
 
+test("refused ghost deletion preserves the disk PB and a faster pending lap until retry", () => {
+  for (const id of ["monza", "v2:monza:dry", null]) {
+    const opts = { deferWrites: true };
+    const h = createHarness(opts);
+    const coldBest = () => {
+      const cold = createHarness({ disk: Object.fromEntries(h.disk) });
+      cold.Ghost.setTrack("monza", "dry");
+      return cold.Ghost.bestTime();
+    };
+    h.Ghost.setTrack("monza", "dry");
+    recordLap(h.Ghost, 42);
+    h.Ghost.flush();
+    recordLap(h.Ghost, 40);
+    opts.failWrites = true;
+    assert.equal(h.Ghost.clear(id), false);
+    assert.equal(h.Ghost.bestTime(), 40, "the pending PB is still playable");
+    assert.equal(coldBest(), 42, "the prior durable PB survives reload");
+    opts.failWrites = false;
+    h.Ghost.flush();
+    assert.equal(coldBest(), 40, "the refused clear preserved the pending save");
+    assert.equal(h.Ghost.clear(id), true);
+    h.flushTimers();
+    assert.equal(h.Ghost.hasGhost(), false);
+    assert.equal(coldBest(), Infinity, "retry commits the clear through reload");
+  }
+});
+
 function recordLap(Ghost, time) {
   Ghost.startLap();
   for (let i = 0; i < 10; i++) Ghost.record(i * 0.1, i * 20, i * 0.2);
@@ -570,7 +681,7 @@ test("the render loop never leaves a long idle slot: flush() and a HIDDEN tab wr
 
 test("game.js flushes the ghost at its off-race moments", () => {
   const game = readFileSync(join(ROOT, "js", "game.js"), "utf8");
-  assert.match(game, /function endRace\(forcedOrder\) \{\s*Ghost\.flush\(\);/);
+  assert.match(symbolSource("function endRace(forcedOrder)"), /Ghost\.flush\(\);/);
   const quit = symbolSource("function quitToMenu()");
   assert.match(quit, /pendingFinishQuit = false;\s*clearRaceEntrySoften\(\);\s*Ghost\.flush\(\);/, "normal quit teardown flushes after finish settlement");
   assert.match(game, /if \(p\) \{ Ghost\.flush\(\);/, "pause writes it too");
@@ -615,4 +726,42 @@ test("Ghost.finishLap refuses a trace that fails validation", () => {
   for (let i = 0; i < 10; i++) Ghost.record(i * 0.1, i * 20, 0);
   assert.equal(Ghost.finishLap(Infinity), false);
   assert.equal(Ghost.hasGhost(), false);
+});
+
+// iOS Safari has no requestIdleCallback. A 0 ms timer ran the store write in the task right behind the
+// lap-line frame of a PB lap; the fallback waits as long as the idle path's cap instead.
+test("without requestIdleCallback a PB write waits seconds, not for the next task", () => {
+  const { Ghost, store, flushTimers, timerMs } = createHarness({ deferWrites: true });
+  Ghost.setTrack("monza");
+  Ghost.startLap();
+  for (let i = 0; i < 12; i++) Ghost.record(i, i * 10, 0);
+  Ghost.finishLap(40);
+  assert.equal(timerMs.length, 1, "one deferred write");
+  assert.ok(timerMs[0] >= 5000, `the write is armed ${timerMs[0]} ms out`);
+  assert.equal(store.getItem("apex26.ghost.v1"), null, "nothing written on the lap-line task");
+  flushTimers();
+  assert.ok(store.getItem("apex26.ghost.v1"), "the timer writes the PB");
+});
+
+test("a layout revision segregates saved laps: a revision-1 ghost is not the revision-2 class's ghost", () => {
+  // #5316 CIRC2-05: Kyalami flipped direction with n and total unchanged, so
+  // only def.revision (the first `layout` entry, js/race/session-records.js)
+  // tells the two laps apart.
+  const { Ghost } = createHarness();
+  const cfg = (rev) => Ghost.contextKey({ circuit: "kyalami", layout: [rev, 1120, 4480.07], physics: 1 });
+  const old = cfg(1), now = cfg(2);
+  assert.notEqual(old, now);
+  assert.equal(Ghost.layoutRevision(old), 1);
+  assert.equal(Ghost.layoutRevision(now), 2);
+  assert.equal(Ghost.layoutRevision(null), 1, "a legacy row with no class was driven on revision 1");
+  assert.equal(Ghost.layoutRevision("not json"), 1);
+  Ghost.setTrack("kyalami", old);
+  Ghost.startLap();
+  for (let i = 0; i <= 40; i++) Ghost.record(i, i * 10, 0);
+  Ghost.finishLap(40);
+  assert.equal(Ghost.hasGhost(), true);
+  Ghost.setTrack("kyalami", now);
+  assert.equal(Ghost.hasGhost(), false, "the clockwise lap is not offered on the anticlockwise layout");
+  Ghost.setTrack("kyalami", old);
+  assert.equal(Ghost.hasGhost(), true, "and it is still stored, untouched");
 });

@@ -28,7 +28,7 @@ export function imageFormatFor(outPath, { jpegFlag = false } = {}) {
   return { type: "png", quality: undefined };
 }
 
-export function defaultOutPath(ROOT, { trackId, frac, cam, type = "png" }) {
+function defaultOutPath(ROOT, { trackId, frac, cam, type = "png" }) {
   const safeTrackId = assertSafePathToken(trackId, "track id");
   const safeCam = assertSafePathToken(cam, "camera");
   const ext = type === "jpeg" ? "jpg" : "png";
@@ -118,10 +118,11 @@ export function parseShotArgv(argv, ROOT) {
   argv = capture.positionals;
   // An unknown bare flag used to be skipped as a "value-taking" flag and the shot ran on defaults.
   makeFlags(argv, ["--batch", "--raster", "--jpeg", "--team", "--wait", "--backend", "--az", "--el", "--dist",
-    "--side", "--tod", "--weather", "--hud", "--clear", "--traffic", "--no-line"]);
+    "--side", "--tod", "--weather", "--hud", "--clear", "--traffic", "--no-line", "--all-models"]);
   const batchPath = flag(argv, "--batch", null);
   const raster = has(argv, "--raster");
   const jpeg = has(argv, "--jpeg");
+  const allModels = has(argv, "--all-models");
   const TEAM = flag(argv, "--team", null);
   const WAIT_MS = Math.max(5, parseFloat(flag(argv, "--wait", "120"))) * 1000;
   const defaults = {
@@ -144,14 +145,14 @@ export function parseShotArgv(argv, ROOT) {
   if (batchPath) {
     const jobs = loadBatchFile(resolve(batchPath)).map((raw) => normalizeJob(raw, defaults));
     if (!jobs.length) throw new Error("batch file has no jobs");
-    return { mode: "batch", jobs, waitMs: WAIT_MS, team: TEAM, raster, capture };
+    return { mode: "batch", jobs, waitMs: WAIT_MS, team: TEAM, raster, capture, allModels };
   }
 
   const positionals = [];
   for (let i = 0; i < argv.length; i++) {
     if (argv[i].startsWith("--")) {
       if (argv[i] !== "--hud" && argv[i] !== "--jpeg" && argv[i] !== "--raster" && argv[i] !== "--clear"
-        && argv[i] !== "--traffic" && argv[i] !== "--no-line"
+        && argv[i] !== "--traffic" && argv[i] !== "--no-line" && argv[i] !== "--all-models"
         && i + 1 < argv.length && !argv[i + 1].startsWith("--")) i++;
       continue;
     }
@@ -161,7 +162,7 @@ export function parseShotArgv(argv, ROOT) {
   const job = normalizeJob({
     trackId, frac: fracArg, cam, out: outArg || undefined,
   }, defaults);
-  return { mode: "single", jobs: [job], waitMs: WAIT_MS, team: TEAM, raster, capture };
+  return { mode: "single", jobs: [job], waitMs: WAIT_MS, team: TEAM, raster, capture, allModels };
 }
 
 /** Team/backend/viewport boundaries require a fresh isolated browser context. */
@@ -196,4 +197,5 @@ export const SHOT_USAGE = `usage: node tools/shot/shot.mjs <trackId> <frac> [cam
   cam: park | eye | orbit | cinematic | trackside.
   --clear: orbit/cinematic/trackside re-site the eye out of scenery (batch field clear).
   --jpeg / .jpg → JPEG q85 (human review). --raster → __apex.render view only (no PNG).
+  --all-models: prefetch the WHOLE pack (default loads only the models a player's page would for the track, #6037).
   Default out: scratch/captures/playwright-probe/<track>-<frac%>-<cam>.png`;

@@ -7,7 +7,7 @@ alwaysApply: true
 
 - **Rules:** read root `AGENTS.md` (canonical). Root `CLAUDE.md` is a stub that
   imports it; do not edit rules into `CLAUDE.md`.
-  Coordination: `docs/WORKERS.md` and AGENTS.md §Coordination. Path-scoped rules: edit `.claude/rules/*.md`,
+  Coordination: AGENTS.md §Coordination; the PR lifecycle is skill `steward`. Path-scoped rules: edit `.claude/rules/*.md`,
   then `npm run gen` (never hand-edit the generated `.mdc` twins).
 - **Skills / subagents:** `.claude/skills/*/SKILL.md` and `.claude/agents/*.md`
   (shared with Claude Code). Codex via `.agents/skills/<name>`
@@ -16,18 +16,20 @@ alwaysApply: true
 - **Route:** deploy/`version.json` → `deploy-research` (host fetch / WebFetch);
   pre-push → `verify-agent` (`--base <ref>` for "was it already red?");
   live canvas → `mcp-probe`; host browser → `playwright-official`;
-  bloat/extract/dead code → `slim-bloat` / `bloat-auditor`. Do not attach
+  bloat/extract/dead code → `slim-bloat` / `code-hunter` (focus dead-code). Do not attach
   `mcp-probe` for a version.json check.
 - **MCP:** six servers in `.mcp.json` / `.cursor/mcp.json` (`apex-tools`,
   `playwright-official`, `chrome-devtools`, `js-debugger`, `apex-lsp`, `browserstack`); plugin
   MCPs (e.g. **browser-use**) → `mcpPluginServerAllowlist`. Catalog does **not** auto-load —
   `tools/mcp/apex-tools-mcp.sh call`,
-  `tools/mcp/chrome-devtools-mcp.sh`, `probe-mcp.py chrome-start`; `tinyfish-mcp.sh`
-  CLI-only. Map: `docs/AGENT-SURFACE.md`.
-- **Cursor Cloud:** model `default` only. Namespaces: `cursor*` plus six repo
+  `tools/mcp/chrome-devtools-mcp.sh`, `probe-mcp.py chrome-start` (CLI-only). Map: `docs/AGENT-SURFACE.md`.
+- **Cursor Cloud:** `composer-2.5` for routine jobs; Grok 7 for hard jobs only
+  (confirm its exact Cursor slug at launch — do not invent one); never `default`
+  or Auto. Dispatcher: `hosts.cursor.model` in `tools/ci/dispatch.json`. Namespaces:
+  `cursor*` plus six repo
   servers after Bootstrap §3; bare `cursor*` only → CLI fallbacks, re-Save when
-  `environment-info` shows nameless `bash` rows. PR push: `subscribe_github_ci` +
-  `subscribe_github_pr`. AGENTS.md and the skills win.
+  `environment-info` shows nameless `bash` rows. For subscriptions and drafter/steward endings, follow
+  `.claude/skills/steward/references/vendors.md`; discover the actual host tools before calling them.
 - **Token hygiene:** one skill per task; prefer `__apex` / `verify-track` /
   `test:tooling-fast` before screenshots or browser groups. Bootstrap / Cloud
   MCP: `docs/AGENT-SURFACE.md` §Bootstrap.

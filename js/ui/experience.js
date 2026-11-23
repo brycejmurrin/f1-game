@@ -16,7 +16,9 @@ const UiExperience = (function () {
 
   function raceBrief(G) {
     const p = G.player, t = G.track && G.track.def;
-    if (!p || !t) return { title: "SESSION PAUSED", detail: "Your session is held here." };
+    // Not "SESSION PAUSED": the sheet's own PAUSED heading sits right above it,
+    // and on a short landscape phone this line IS the card's visible header.
+    if (!p || !t) return { title: "NO RACE", detail: "Your session is held here." };
     const real = typeof RealRace !== "undefined" ? RealRace.status() : null;
     if (real && real.watch) {
       const replay = real.replay;
@@ -110,13 +112,36 @@ const UiExperience = (function () {
   // Keep the boolean photoSubject API; cancellation belongs to its request,
   // so a stale completion cannot be mistaken for an owned preparation failure.
   const cancelledPhotoSwaps = new WeakSet();
+  let photoRequest = 0;
   function openPhoto(G, deps) {
+    const request = ++photoRequest;
+    const ps = deps.photoStudio;
+    if (ps && typeof ps.state === "function" && ps.state().open) return true;
+    if (!ps?.loaded || ps.loaded()) return openReadyPhoto(G, deps);
+    // Leave the caller interactive while the capture UI loads. Back, another
+    // menu, or starting a race must win against a late script response.
+    const state = G.state, paused = G.paused;
+    const currentPage = () => typeof SettingsNav !== "undefined" ? SettingsNav.current() : null;
+    const currentLayer = () => typeof UiLayers !== "undefined" ? UiLayers.top() : null;
+    const page = currentPage(), layer = currentLayer();
+    return ps.ensureLoaded().then(ok => {
+      if (request !== photoRequest || G.state !== state || G.paused !== paused ||
+          currentPage() !== page || currentLayer() !== layer) return false;
+      if (ok) return openReadyPhoto(G, deps);
+      if (typeof LiveRegion !== "undefined") LiveRegion.say("Photo Studio could not load. Try opening it again.", "hud");
+      return false;
+    });
+  }
+
+  function openReadyPhoto(G, deps) {
     let source = deps.source;
     if (source === "home" && deps.trackHome) {
       if (deps.trackReady === false) { if (deps.onWaiting) deps.onWaiting(); return false; }
       source = "home-track";
     }
     const wasPaused = G.paused;
+    const pauseMenu = G.$("pausemenu"), wasPauseHidden = pauseMenu?.hidden;
+    const trigger = typeof document === "undefined" ? null : document.activeElement;
     const callers = [G.$("pmsettings"), G.$("carsetup")].filter((e) => e && !e.hidden);
     const unhide = () => {
       for (const e of callers) e.hidden = false;
@@ -126,6 +151,7 @@ const UiExperience = (function () {
       if (source === "race" || source === "watch") deps.setPaused(wasPaused, "photo-done");
       unhide();
       if (deps.onDone) deps.onDone();
+      if (trigger?.isConnected) trigger.focus({ preventScroll: true });
     };
     for (const e of callers) e.hidden = true;
     if (["race", "watch"].includes(source)) { deps.setPaused(true, "photo-studio"); G.$("pausemenu").hidden = true; }
@@ -137,19 +163,34 @@ const UiExperience = (function () {
     // and trackReady are read again. The callers come back first so the
     // reopened studio hides and restores them itself on DONE.
     const fromHome = source === "home" || source === "home-track";
-    const subject = fromHome && deps.photoSubject && deps.reopen ? (mode) => {
-      deps.photoStudio.close(false); unhide();
-      const request = deps.photoSubject(mode);
-      return Promise.resolve(request).then((ok) => {
+    const subject = fromHome && deps.photoSubject && deps.reopen ? async (mode) => {
+      const resume = typeof window !== "undefined" && window.ScreenArranger?.suspendPreparation?.("photo-studio");
+      let swapped = false;
+      try {
+        deps.photoStudio.close(false); unhide();
+        const request = deps.photoSubject(mode);
+        const ok = await request;
         if (cancelledPhotoSwaps.has(request) || (G.state && G.state !== "menu")) return false;
         if (!ok) deps.photoSubject(null);
-        return deps.reopen();
-      });
+        const opened = await deps.reopen();
+        swapped = ok && opened;
+        return opened;
+      } finally { if (resume) resume(swapped); }
     } : null;
-    const opened = deps.photoStudio.open({ source, metadata: { title, subtitle }, back: restore, subject,
-      view: source === "home-track" && deps.photoView ? deps.photoView() : null });
-    if (!opened) restore();
-    return opened;
+    const failed = () => {
+      restore();
+      if (pauseMenu) pauseMenu.hidden = wasPauseHidden;
+      return false;
+    };
+    try {
+      const opened = deps.photoStudio.open({ source, returnFocus: trigger, metadata: { title, subtitle }, back: restore, subject,
+        view: source === "home-track" && deps.photoView ? deps.photoView() : null });
+      if (opened && typeof opened.then === "function") return opened.then(ok => ok || failed(), failed);
+      return opened || failed();
+    } catch (error) {
+      if (typeof Log !== "undefined") Log.warn("ui", "Photo Studio unavailable: " + error);
+      return failed();
+    }
   }
 
   function create(G, deps) {
@@ -169,7 +210,6 @@ const UiExperience = (function () {
       const s = AppearanceStudio.scene();
       if (!photoScene) return s;
       _sceneScratch.mode = photoScene;
-      _sceneScratch.shot = s.shot;
       _sceneScratch.motion = s.motion;
       return _sceneScratch;
     };
@@ -208,9 +248,42 @@ const UiExperience = (function () {
     });
     wire("mb-photo", () => deps.openPhoto("home"));
     wire("pm-photo", () => deps.openPhoto("race"));
+    // The garage camera bar gains PHOTO here, not in the shell: one more
+    // index.html tag would raise the shell-node ceiling for a single chip.
+    const cam = $("cs-cam");
+    if (cam && !$("cs-photo")) {
+      const photo = document.createElement("button");
+      photo.type = "button";
+      photo.id = "cs-photo";
+      photo.title = "Photo Studio — frame this car and save a background";
+      photo.textContent = "PHOTO";
+      cam.insertAdjacentElement("afterend", photo);
+    }
+    wire("cs-photo", () => deps.openPhoto("garage"));
     wire("pm-strategy", () => deps.openSettingsPage("strategy", "pm-pit-panel"));
     wire("pm-practice", () => deps.openSettingsPage("practice", "pm-practice-panel"));
     wire("pm-review", () => deps.openSettingsPage("review", "pm-session-review"));
+    // DRIVING LINE in-race: the RACE SETTINGS row's three values (js/race/race-settings.js
+    // RS_LINE) as one RACE TOOLS tile that cycles, saved to the same store key as that row.
+    // Built here like RECOVER CAR, so the shell's node count does not grow.
+    const LINE = [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"]];
+    const tray = $("pm-quick-doors");
+    const lineTile = tray && typeof DrivingLine !== "undefined" ? node("button", "", { id: "pm-drivingline", type: "button" }) : null;
+    function paintLine() {
+      if (!lineTile) return;
+      const row = LINE.find((r) => r[0] === DrivingLine.mode()) || LINE[0];
+      lineTile.textContent = "LINE: " + row[1];
+      lineTile.setAttribute("aria-label", "Driving line " + row[1] + ". Activate to change");
+    }
+    if (lineTile) {
+      lineTile.onclick = () => {
+        const i = LINE.findIndex((r) => r[0] === DrivingLine.mode());
+        GameStore.store.set("drivingLine", DrivingLine.setMode(LINE[(i + 1) % LINE.length][0]));
+        paintLine();
+      };
+      tray.insertBefore(lineTile, $("pm-checkpoint"));
+      paintLine();
+    }
     const intro = $("practice-brief");
     let goal = $("practice-goal");
     function paintGoal() {
@@ -265,6 +338,7 @@ const UiExperience = (function () {
     }
     const context = $("pm-race-context");
     function refreshPause() {
+      paintLine();   // RACE SETTINGS may have changed it since the tile last painted
       if (!context) return;
       deps.coach.paint();
       const info = raceBrief(G);
@@ -322,6 +396,13 @@ const UiExperience = (function () {
     });
     window.addEventListener("apex26:photo-background", stamp);
     stamp();
+    // Resize used to sit inside the Home signature (innerWidth/Height + pane),
+    // so every narrow rotate tore down beginHome and blacks the canvas for
+    // seconds while the garage rebuilds. Signature is scene-only; viewport
+    // changes debounce to setSize/aspect (gfx.resize) + one forced present.
+    const HOME_RESIZE_MS = 120;
+    const PREVIEW_MAX_EDGE = 512;
+    let homeViewGen = 0, resizeTimer = 0;
     function stopHome(preservePhoto = false) {
       // Clear FX/post `_last` ONLY when tearing down a live Home present.
       // renderHome() calls stopHome() every race frame once the overlay is
@@ -336,6 +417,10 @@ const UiExperience = (function () {
       world.end();
       home = false; signature = ""; elapsed = 0; painted = false;
       overlay.removeAttribute("data-home-ready");
+      // A resize armed while Home was up must not settle after START RACE: the
+      // debounce would bump homeViewGen, clear painted, and call gfx.resize()
+      // mid-race. Cancel the pending timer on leave.
+      if (resizeTimer) { clearTimeout(resizeTimer); resizeTimer = 0; }
       // Home garage presents drawGlow with no blob shadows / car decals. While
       // TLX is still warming, render() can bail and leave that present's FX
       // counters in __tlx.fxState() — M6 on Metal then waited on glow alone and
@@ -349,25 +434,27 @@ const UiExperience = (function () {
         } catch (_) { /* probe hygiene — never block leaving Home */ }
       }
     }
-    // Resize used to sit inside the Home signature (innerWidth/Height + pane),
-    // so every narrow rotate tore down beginHome and blacks the canvas for
-    // seconds while the garage rebuilds. Signature is scene-only; viewport
-    // changes debounce to setSize/aspect (gfx.resize) + one forced present.
-    const HOME_RESIZE_MS = 120;
-    const PREVIEW_MAX_EDGE = 512;
-    let homeViewGen = 0, resizeTimer = 0;
-    let lastViewportW = window.innerWidth | 0, lastViewportH = window.innerHeight | 0;
+    // The layout viewport (UI contract 2026-11-06 rule 1): innerWidth/Height is the
+    // visual viewport on iOS and can hold the portrait pair at a landscape launch.
+    const icb = () => {
+      const r = document.documentElement;
+      return (r && r.clientWidth > 0 && r.clientHeight > 0) ? [r.clientWidth, r.clientHeight] : [window.innerWidth | 0, window.innerHeight | 0];
+    };
+    let [lastViewportW, lastViewportH] = icb();
     function settleHomeViewport() {
       resizeTimer = 0;
+      // Belt after stopHome's clearTimeout: never resize/paint Home while racing.
+      if (!home && !(world.active && world.active())) return;
       homeViewGen++;
       painted = false;
       elapsed = 0;
       try { if (G.gfx && typeof G.gfx.resize === "function") G.gfx.resize(); } catch (_) { /* harness / pre-boot */ }
     }
     function onHomeViewportChange() {
-      const w = window.innerWidth | 0, h = window.innerHeight | 0;
+      const [w, h] = icb();
       if (w === lastViewportW && h === lastViewportH) return;
       lastViewportW = w; lastViewportH = h;
+      if (!home && !(world.active && world.active())) return;
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(settleHomeViewport, HOME_RESIZE_MS);
     }
@@ -418,8 +505,8 @@ const UiExperience = (function () {
       const selected = selectedScene();
       const varied = variation.enter(selected.mode, AppearanceStudio.homeCamera(), photoOpen);
       s = _sceneScratch;
-      s.mode = (varied && varied.mode) || selected.mode;
-      s.shot = (varied && varied.shot) || selected.shot;
+      s.mode = varied.mode;
+      s.shot = varied.shot; // varied: never null
       // Motion is AppearanceStudio's alone — homeVariation._values is mode/shot
       // only. Never read varied.motion (a stale own-property would freeze ambient).
       s.motion = selected.motion;
@@ -440,8 +527,9 @@ const UiExperience = (function () {
         if (paneKey !== _paneKey) {
           _paneKey = paneKey;
           const rect = !photoOpen && ((window.CssZoom && CssZoom.viewportRect(panel)) || panel.getBoundingClientRect());
-          _hostRect.right = innerWidth; _hostRect.bottom = innerHeight;
-          _hostRect.width = innerWidth; _hostRect.height = innerHeight;
+          const [hw, hh] = icb();
+          _hostRect.right = hw; _hostRect.bottom = hh;
+          _hostRect.width = hw; _hostRect.height = hh;
           _worldView.pane = rect ? GarageExperience.freePane(rect, _hostRect) : null;
         }
         trackView = _worldView;

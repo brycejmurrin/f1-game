@@ -15,8 +15,8 @@
 //
 // Second, the three-second minimum is NOT a global invariant any more. 2026
 // zones are placed for energy harvesting, not overtaking, so several sit on
-// short connectors — albert_park's five include 168 m and 176 m runs and the
-// hungaroring's four a 192 m one. The minimum is asserted where it genuinely
+// short connectors (and the FIA's own zone list, tests/data/aero-zones-fia-2026.json,
+// is the authority on how many). The minimum is asserted where it genuinely
 // holds (a fast circuit like monza), not swept across the calendar.
 //
 // That distinction is the mechanic. A rolling look-ahead has no start and no
@@ -26,8 +26,10 @@
 // apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
 // 50" arrives with the car's state and the retained log ring beside it.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import fs from "node:fs";
 
 const LANDSCAPE = { width: 844, height: 390 };
+const FIA_ZONES = JSON.parse(fs.readFileSync(new URL("../data/aero-zones-fia-2026.json", import.meta.url), "utf8")).circuits;
 const X_ZONE_MIN = 210;   // m — X_STRAIGHT_T * X_ZONE_VREF in js/physics/aero-zones.js
 
 async function loadTrack(page, id) {
@@ -72,7 +74,8 @@ test.describe("active aero — activation zones", () => {
   // (89-95 s against 65 s for the four, both orders, 2026-09-08) — a live
   // scene is torn down and rebuilt while the old one's resources are still
   // around, and on a software rasteriser that costs more than a clean boot.
-  for (const [id, want] of [["monza", 2], ["baku", 2], ["qatar", 1], ["albert_park", 5]]) {
+  // Counts come from the sourced FIA 2026 fixture (document URL per circuit).
+  for (const [id, want] of ["monza", "baku", "qatar", "albert_park"].map((id) => [id, FIA_ZONES[id].count])) {
     test(`${id} gets the real number of zones, not a derived guess`, async ({ page }) => {
       await loadTrack(page, id);
       const zones = await page.evaluate(() => window.__apex.aeroZones());

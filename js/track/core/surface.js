@@ -50,6 +50,9 @@ const TrackSurface = (function () {
     const pitRails = pit ? [pit.off.outer + 0.3, pit.off.outer + 8.3,
                             pit.off.outer + 0.3 + pit.bay.depth + 3, pit.off.outer + 8.3 + pit.bay.depth + 3] : null;
     const rails = monotonicRails(def, outerW, street, flat, pitRails);
+    // The inner 22% of terrain rail indices carries the gravel material. The
+    // road mesh covers the first 2.2 m beside the asphalt with its own verge.
+    const gravelRails = Math.ceil(0.22 * (rails.length - 1));
     const n = track.n;
     // pyMin must be the lowest point of the ROAD SURFACE, not of the centreline.
     // Banking pivots about the centre, so a banked node's low edge sits lift/2
@@ -88,8 +91,29 @@ const TrackSurface = (function () {
       }
     }
 
+    const bermLiftAt = (i, dist, side) => {
+      if (!def.berms || flat || street || !bp) return 0;
+      const lift = bp.lift[i] || 0;
+      if (!(lift > 0.15)) return 0;
+      const outer = bp.bsign[i] || 0;
+      if (!outer || !side || side !== outer) return 0;
+      // Peak just past the verge; hold to ~10 m, ease out by ~22 m.
+      if (dist < 2.0 || dist > 22) return 0;
+      const peak = Math.min(2.4, 0.55 + lift * 0.35);
+      let w = 1;
+      if (dist < 6) w = clamp01((dist - 2.0) / 4);
+      else if (dist > 10) w = 1 - clamp01((dist - 10) / 12);
+      const e = w * w * (3 - 2 * w);
+      return peak * e;
+    };
+
     const p = {
-      outerW, rails, street, flat, pyMin, floorY, ground,
+      outerW, rails, gravelRails, street, flat, pyMin, floorY, ground,
+      gravelAt(k, x) {
+        if (street || def.terrainMat === "CONCRETE" || (pit && Math.sign(x) === pit.side && pit.w[k] > 0.01)) return false;
+        const distance = Math.abs(x) - track.hw[k];
+        return distance > 2.2 && distance <= rails[gravelRails - 1];
+      },
       heightAt(k, lateralDistance, side) {
         const i = ((Math.round(k) % n) + n) % n;
         const dist = Math.max(0, Math.abs(Number(lateralDistance) || 0));
@@ -107,11 +131,11 @@ const TrackSurface = (function () {
         const pit = track && track.pit;
         if (pit && side === pit.side && pit.keep[i] > 0) {
           const edge = pit.keep[i], wk = pit.w[i], ew = wk * wk * (3 - 2 * wk);
-          const flat = (d) => lerp(p.heightAt(k, d, 0), base - 0.03, ew);
-          if (dist <= edge) return flat(dist);
+          const level = lerp(p.heightAt(k, dist, 0), base - 0.03, ew);
+          if (dist <= edge) return level;
           if (dist < edge + 8) {
             const t = (dist - edge) / 8, e = t * t * (3 - 2 * t);
-            return lerp(flat(dist), p.heightAt(k, dist, 0), e);
+            return lerp(level, p.heightAt(k, dist, 0), e);
           }
         }
         if (dist >= outerW) return floorY;
@@ -119,28 +143,13 @@ const TrackSurface = (function () {
         // on the OUTER (high) side only — rise peaks ~6–10 m past the edge and
         // fades by ~22 m. Street / flatTerrain circuits skip berms; shipped
         // defs without berms:true are unchanged.
-        const bermLift = () => {
-          if (!def.berms || flat || street || !bp) return 0;
-          const lift = bp.lift[i] || 0;
-          if (!(lift > 0.15)) return 0;
-          const outer = bp.bsign[i] || 0;
-          if (!outer || !side || side !== outer) return 0;
-          // Peak just past the verge; hold to ~10 m, ease out by ~22 m.
-          if (dist < 2.0 || dist > 22) return 0;
-          const peak = Math.min(2.4, 0.55 + lift * 0.35);
-          let w = 1;
-          if (dist < 6) w = clamp01((dist - 2.0) / 4);
-          else if (dist > 10) w = 1 - clamp01((dist - 10) / 12);
-          const e = w * w * (3 - 2 * w);
-          return peak * e;
-        };
         if (flat || street) {
           const shelf = base - 0.12 - dist * 0.004;
           const edgeStart = outerW * 0.72;
-          if (dist <= edgeStart) return shelf + bermLift();
+          if (dist <= edgeStart) return shelf + bermLiftAt(i, dist, side);
           const t = clamp01((dist - edgeStart) / Math.max(0.01, outerW - edgeStart));
           const ease = t * t * (3 - 2 * t);
-          return lerp(shelf, floorY, ease) + bermLift();
+          return lerp(shelf, floorY, ease) + bermLiftAt(i, dist, side);
         }
         const t = clamp01(dist / outerW);
         const ease = t * t * (3 - 2 * t);
@@ -157,7 +166,7 @@ const TrackSurface = (function () {
           const u = clamp01((dist - SHELF_END) / (SHELF_BLEND - SHELF_END));
           slope = lerp(shelf, slope, u * u * (3 - 2 * u));
         }
-        slope += bermLift();
+        slope += bermLiftAt(i, dist, side);
         // High-relief opt-in: distribute the outer drop over the remaining
         // ribbon, preserving the road shelf, rails and bank attenuation.
         // Both the visible mesh and grounding fallback use this profile.

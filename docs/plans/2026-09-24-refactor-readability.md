@@ -14,7 +14,7 @@ agents to navigate without gambling physics, scenery, or renderer parity.
 
 | Doc | Role vs this plan |
 |---|---|
-| [`CLEANUP-ROADMAP.md`](CLEANUP-ROADMAP.md) | Earlier carve queue (Tier A–C). Several items landed; this plan **supersedes it as the ranked readability backlog** and absorbs unfinished carves. |
+| `CLEANUP-ROADMAP.md` (archived) | Earlier carve queue (Tier A–C). Several items landed; this plan **supersedes it as the ranked readability backlog** and absorbs unfinished carves. |
 | [`2026-09-30-carve-headroom.md`](2026-09-30-carve-headroom.md) | Ratchet-slack workstream: helpers out of saturated `game.js` blocks peers need next (forces / wall / grip / band). |
 | [`notes/ARCHITECTURE-REVIEW.md`](../notes/ARCHITECTURE-REVIEW.md) | Founding bet, `G` façade lessons, why megafunctions stay. |
 | [`ARCHITECTURE-MAP.md`](../ARCHITECTURE-MAP.md) | Correct mental model (domain dirs). Prefer over stale `js/game/` prose. |
@@ -286,7 +286,7 @@ js/input/<tilt>.js             # proposed — gyro path
 ### Phase 0 — safe renames / docs / inventory (S, days of agent time; low risk)
 
 1. **Correct layout fiction** in live docs (`ARCHITECTURE.md` `js/game/` → domain paths; link ARCHITECTURE-MAP). *(This PR.)*
-2. Mark [`CLEANUP-ROADMAP.md`](CLEANUP-ROADMAP.md) status: `SettingRow` already exists (`js/ui/setting-row.js`); point unfinished Tier A/B/C at **this** plan’s ranks.
+2. Mark `CLEANUP-ROADMAP.md` (archived) status: `SettingRow` already exists (`js/ui/setting-row.js`); point unfinished Tier A/B/C at **this** plan’s ranks.
 3. Optional: one-page “where is X?” table in ARCHITECTURE-MAP if agents still miss homes (only if docs-integrity stays green).
 4. **No** circuit scenery waves, elevation bakes, or physics retunes.
 

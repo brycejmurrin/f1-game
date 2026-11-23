@@ -53,15 +53,30 @@ export { TRACK_STALL_MS, awaitTrackBuild };
  * the same onclick handler the game wires up. Use this for any HUD / pause /
  * garage button reached with a race running and no `headless(true)` first;
  * menu clicks on a quiet page keep `locator.click()` and its checks.
+ *
+ * HIT-TEST FIRST (#5242 ask 6). A bare `el.click()` succeeds on a hidden, clipped or covered button, so a spec
+ * could drive a control no thumb can reach and stay green (the #5200 RESUME). Before the click the control is
+ * scrolled into view the way a player would scroll a sheet, must have a painted rect, and must own the point at
+ * its own centre (`elementFromPoint`, which skips `pointer-events: none` layers as a real tap does); otherwise
+ * this throws naming what took the tap. The click itself stays the DOM `.click()` for the reason above.
  */
 export async function clickLive(page, id) {
-  const hit = await page.evaluate((i) => {
+  const r = await page.evaluate((i) => {
     const el = document.getElementById(i);
-    if (!el) return false;
+    if (!el) return { err: "none" };
+    el.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const b = el.getBoundingClientRect();
+    if (!(b.width > 0 && b.height > 0)) return { err: `has no painted rect (${b.width}x${b.height}: hidden or display:none)` };
+    const t = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+    if (!t || (t !== el && !el.contains(t))) {
+      const who = t ? (t.id ? "#" + t.id : t.tagName.toLowerCase() + (typeof t.className === "string" && t.className ? "." + t.className.trim().split(/\s+/).join(".") : "")) : "nothing (centre off-screen)";
+      return { err: `is covered: a tap at its centre lands on ${who}` };
+    }
     el.click();
-    return true;
+    return { err: null };
   }, id);
-  if (!hit) throw new Error(`clickLive: no element with id "${id}"`);
+  if (r.err === "none") throw new Error(`clickLive: no element with id "${id}"`);
+  if (r.err) throw new Error(`clickLive: #${id} ${r.err}`);
 }
 
 /**
@@ -123,10 +138,21 @@ const OPENF1_STUB = JSON.stringify([]);
 // specs navigate to "/" themselves and would drop a query string.
 const LOG_SPEC = process.env.APEX_LOG || "";
 
-async function installMocks(context) {
-  await context.addInitScript((spec) => {
+// SHIPPED DEFAULTS, the one opt-out of the three pins below and of the
+// factory-seat pin in loadTrack. A test tagged with it (`{ tag:
+// SHIPPED_DEFAULTS_TAG }`, tests/specs/shipped-defaults.spec.js) boots exactly
+// what a player gets: the shipped renderer (TLX), TYRE WEAR and WIND as shipped,
+// and the GarageDefaults seat. Everything else here (mocks, console capture,
+// __TEST_MODE) is unchanged. Keyed on the TAG, not a project, so the spec runs
+// once in default discovery and needs no playwright.config.js entry.
+export const SHIPPED_DEFAULTS_TAG = "@shipped-defaults";
+const shippedDefaults = (testInfo) => !!(testInfo && (testInfo.tags || []).includes(SHIPPED_DEFAULTS_TAG));
+
+async function installMocks(context, shipped = false) {
+  await context.addInitScript(({ spec, shipped }) => {
     window.__TEST_MODE = true;
     if (spec) { try { localStorage.setItem("apex26.logLevel", spec); } catch (_) {} }
+    if (shipped) return;
     // Shared CI coverage is native GLX: it is cheaper under SwiftShader and
     // keeps webgl-probes on the implementation they name. TLX product coverage
     // lives in tlx-probes, including an explicit unset shipped-default smoke.
@@ -144,7 +170,7 @@ async function installMocks(context) {
     // WIND (js/race/wind.js) the same way: a seeded per-race wind would move every
     // top speed and lateral trace; "off" is a true no-op (tests/unit/wind.test.mjs).
     try { localStorage.setItem("apex26.wind", JSON.stringify("off")); } catch (_) {}
-  }, LOG_SPEC);
+  }, { spec: LOG_SPEC, shipped });
   await context.route("https://api.jolpi.ca/**", (route) =>
     route.fulfill({
       status: 200,
@@ -180,15 +206,30 @@ function captureConsole(page) {
 }
 
 const pwTest = base.extend({
-  context: async ({ context }, use) => {
-    await installMocks(context);
-    context.on("page", captureConsole);
-    for (const p of context.pages()) captureConsole(p);
-    if (COVERAGE) {
-      context.on("page", (p) => { startCoverage(p); });
-      for (const p of context.pages()) await startCoverage(p);
+  // OWN BROWSER PER TEST (#5599): `test.use({ ownBrowser: true })` gives each test a Chromium of its own, launched
+  // through the worker's `playwright` (which applies the project's context options to every newContext) with the
+  // project's launchOptions, and closed at teardown. Why: a page closed while its GPU work is still in flight (a TLX
+  // race closed at the results screen) leaves the BROWSER's GPU process busy finishing it, and the next page's first
+  // synchronous GPU call (requestAdapter, getContext) blocks its main thread until it does: measured 18-20 s on one
+  // local core (llvmpipe), ~70 s on CI, where boot() then ran out of BOOT_MS with every timer frozen. Closing the
+  // browser kills that GPU process instead (283 ms close + 52 ms launch, next boot 4.9 s). The shared-browser context
+  // below is still created, idle, as the dependency chain needs it.
+  ownBrowser: [false, { option: true }],
+  context: async ({ context: shared, ownBrowser, playwright, browserName, launchOptions }, use, testInfo) => {
+    const own = ownBrowser ? await playwright[browserName].launch(launchOptions) : null;
+    const context = own ? await own.newContext() : shared;
+    try {
+      await installMocks(context, shippedDefaults(testInfo));
+      context.on("page", captureConsole);
+      for (const p of context.pages()) captureConsole(p);
+      if (COVERAGE) {
+        context.on("page", (p) => { startCoverage(p); });
+        for (const p of context.pages()) await startCoverage(p);
+      }
+      await use(context);
+    } finally {
+      if (own) await own.close().catch(() => {});
     }
-    await use(context);
   },
 
   /**
@@ -240,7 +281,8 @@ const pwTest = base.extend({
    *   const { test, expect } = require('./fixtures.js');
    *   test('...', async ({ loadTrack, page }) => { await loadTrack('monza'); ... });
    */
-  loadTrack: async ({ page }, use) => {
+  loadTrack: async ({ page }, use, testInfo) => {
+    const shipped = shippedDefaults(testInfo);
     await use(async (id = "monza", tod = "day", wx = "dry", opts = {}) => {
       await page.goto("/");
       await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
@@ -253,7 +295,7 @@ const pwTest = base.extend({
       // (physics-hotpath, run 2048, twice). Opt-in, because ~54 callers include
       // the ones whose subject IS the frame.
       if (opts.headless) await page.evaluate(() => window.__apex.headless(true));
-      await syncFactoryMcLarenSeat(page);
+      if (!shipped) await syncFactoryMcLarenSeat(page);
       await page.evaluate(({ i, t, w }) => window.__apex.race(i, t, w), { i: id, t: tod, w: wx });
       await awaitTrackBuild(page);
       await page.evaluate(() => window.__apex.go());

@@ -1,0 +1,1 @@
+Fixed: Time trial: a faster lap no longer costs you a medal. A wet gold earned against the old, easier wet target stays gold when you beat that lap and the corrected target rates the new one silver; a better medal still replaces a worse one (#5588).

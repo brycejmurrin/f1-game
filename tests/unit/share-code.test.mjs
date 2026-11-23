@@ -64,6 +64,7 @@ function harness(opts = {}) {
       plan: (day) => ({ day, trackId: "monza", trackName: "Monza" }),
     },
   };
+  if (opts.SetupTune) sandbox.SetupTune = opts.SetupTune;
   const ctx = vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/custom-liveries.js"), "utf8"), ctx, { filename: absSrc("js/car/custom-liveries.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, SRC), "utf8"), ctx, { filename: absSrc(SRC) });
@@ -145,6 +146,20 @@ test("daily encode/decode", () => {
   assert.equal(decoded.streak, 3);
 });
 
+// #5887 (audit A4): a daily link from another day opens the recipient's own daily (title-flow
+// openDaily), so the toast must not name the sender's circuit.
+test("a daily link from another day says it has ended; today's names its circuit", () => {
+  const { ShareCode, store } = harness();
+  for (const [day, msg] of [["2026-10-26", "That daily challenge has ended — here is today's."],
+    ["2026-10-27", "Daily challenge — MONZA."]]) {
+    const decoded = ShareCode.decode(ShareCode.encode("daily", { day, track: "monza", trackName: "Monza", best: 81.2 }).code);
+    let opened = 0;
+    const result = ShareCode.apply(decoded, { store, today: "2026-10-27", openDaily: () => opened++ });
+    assert.equal(opened, 1, day);
+    assert.equal(ShareCode.messageFor(result), msg, day);
+  }
+});
+
 test("corrupt and unknown-team codes are refused", () => {
   const { ShareCode } = harness();
   assert.equal(ShareCode.decode("APXS1.p.not-valid").ok, false);
@@ -171,6 +186,18 @@ test("apply setup writes store and never calls startRace", () => {
   assert.equal(starts, 0);
   assert.equal(garage, 1);
   assert.deepEqual(store.get("setup.mercedes"), decoded.tune);
+});
+
+test("#5036: a setup share code applies to the ACTIVE sheet (SetupTune.keyFor), stamped for a career", () => {
+  const { ShareCode, store } = harness({ SetupTune: {
+    keyFor: (t) => "careerSetup.driver.0." + t,
+    stamp: (_t, v) => Object.assign({}, v, { seed: 7 }),
+  } });
+  const tune = { arbF: 8, arbR: 5, rideF: 20, rideR: 60, brakeBias: 55 };
+  const decoded = ShareCode.decode(ShareCode.encode("setup", { team: "mercedes", tune }).code);
+  assert.equal(ShareCode.apply(decoded, { store, openGarage() {}, selectTeam() {} }).ok, true);
+  assert.deepEqual(store.get("careerSetup.driver.0.mercedes"), Object.assign({}, decoded.tune, { seed: 7 }));
+  assert.equal(store.get("setup.mercedes"), undefined, "the free-play sheet is untouched");
 });
 
 test("hash consumer clears #share= and does not invoke startRace", async () => {
@@ -284,7 +311,7 @@ test("continueHint never offers yesterday's daily", () => {
   assert.equal(none, null, "no streak and no last session: no CONTINUE card");
   const live = h.ShareCode.continueHint({ store: h.store, daily: daily(2) });
   assert.equal(live.kind, "daily");
-  assert.equal(live.day, day, "the daily CONTINUE card is today's, which is what openDailyPicker() opens");
+  assert.equal(live.day, day, "the daily CONTINUE card is today's, which is what the title stages");
   assert.doesNotMatch(live.sub, /YESTERDAY/);
 });
 
@@ -396,6 +423,40 @@ test("a setup code keeps the player's previous sheet and UNDO restores it", asyn
   assert.equal(bag.get("setup.mercedes"), undefined);
 });
 
+// #5896 (decision A): each link overwrote the one undo record, so a second link (or the same
+// link twice) left UNDO restoring the first link's sheet and the player's own was gone.
+test("a second or repeated link keeps the player's own setup as the undo point", () => {
+  const { ShareCode, store } = harness();
+  const own = { arbF: 3, arbR: 4, rideF: 30, rideR: 70, brakeBias: 58 };
+  const a = { arbF: 11, arbR: 11, rideF: 15, rideR: 40, brakeBias: 62 };
+  const b = { arbF: 7, arbR: 2, rideF: 20, rideR: 50, brakeBias: 55 };
+  const link = (tune) => ShareCode.decode(ShareCode.encode("setup", { team: "ferrari", tune }).code);
+  store.set("setup.ferrari", own);
+  assert.equal(ShareCode.apply(link(a), { store }).ok, true);
+  const first = j(store.get("shareUndo"));
+  assert.equal(ShareCode.apply(link(a), { store }).ok, true, "the same link again still loads");
+  assert.deepEqual(j(store.get("shareUndo")), first, "a link that changes nothing leaves the undo record alone");
+  assert.equal(ShareCode.apply(link(b), { store }).ok, true);
+  assert.deepEqual(j(store.get("setup.ferrari")), b);
+  assert.equal(ShareCode.apply(ShareCode.decode("UNDO"), { store }).ok, true);
+  assert.deepEqual(j(store.get("setup.ferrari")), own, "UNDO restores the player's own sheet, not link A");
+});
+
+test("a sheet the player edited after a link is the new undo point; other links' keys stay undoable", () => {
+  const { ShareCode, store, bag } = harness();
+  const own = { arbF: 3, arbR: 4, rideF: 30, rideR: 70, brakeBias: 58 };
+  const edited = { arbF: 9, arbR: 9, rideF: 25, rideR: 45, brakeBias: 60 };
+  const link = (team, tune) => ShareCode.decode(ShareCode.encode("setup", { team, tune }).code);
+  store.set("setup.ferrari", own);
+  ShareCode.apply(link("ferrari", { arbF: 11, arbR: 11, rideF: 15, rideR: 40, brakeBias: 62 }), { store });
+  store.set("setup.ferrari", edited);   // the player's own garage edit confirms the import
+  ShareCode.apply(link("ferrari", { arbF: 1, arbR: 1, rideF: 10, rideR: 30, brakeBias: 50 }), { store });
+  ShareCode.apply(link("mercedes", own), { store });
+  assert.equal(ShareCode.apply(ShareCode.decode("UNDO"), { store }).ok, true);
+  assert.deepEqual(j(store.get("setup.ferrari")), edited, "their edit, not the pre-link sheet");
+  assert.equal(bag.get("setup.mercedes"), undefined, "the later link's team is undone too");
+});
+
 // Round-3 hunt 6-F3: lastSession kept any flow string and CONTINUE restored it into the
 // FREE picker — a season round came back with seasonMode on, a deleted career's "career"
 // with isCareer() true and no save. Only free play's flow is recorded or restored.
@@ -503,7 +564,7 @@ test("Undo retains recovery across failed restore and failed cleanup, then retri
   assert.equal(q.reload().store.get("shareUndo", null), null);
 });
 
-test("partial multi-key Undo blocks replacement after reload; completed imports stay one-deep", () => {
+test("partial multi-key Undo blocks replacement after reload; completed imports keep the undo point", () => {
   const q = quotaHarness();
   let { ShareCode, store } = q.reload();
   const own = [{ id: "own", c1: [1, 0, 0], c2: [0, 0, 1] }];
@@ -525,7 +586,8 @@ test("partial multi-key Undo blocks replacement after reload; completed imports 
   assert.equal(ShareCode.undo(store).ok, true);
   assert.equal(ShareCode.apply(decoded, { store }).ok, true);
   assert.equal(ShareCode.apply(setupImport(ShareCode), { store }).ok, true, "completed recovery can be replaced");
-  assert.deepEqual(j(store.get("shareUndo").keys), ["setup.ferrari"]);
+  // #5896: the livery link's keys stay undoable beside the setup link's.
+  assert.deepEqual(j(store.get("shareUndo").keys), ["livery.custom.ferrari", "livery.ferrari", "setup.ferrari"]);
 });
 
 test("failed completion marker leaves durable pending recovery; failed Undo marker changes no values", () => {
@@ -576,4 +638,78 @@ test("UNDO of a setup code on an empty store leaves the key absent, not pinned t
   assert.equal(store.getStored("setup.mercedes").arbF, 11);
   assert.equal(ShareCode.apply(ShareCode.decode("UNDO"), { store }).ok, true);
   assert.equal(store.getStored("setup.mercedes"), undefined, "absent again, so the shipped default keeps following releases");
+});
+
+function qrCapacity() {
+  const ctx = vm.createContext({ Uint8Array, Array, Math, Object, String, Number, TextEncoder, Int8Array, Int32Array, Uint16Array, Uint32Array });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/net/qr.js"), "utf8"), ctx, { filename: absSrc("js/net/qr.js") });
+  return vm.runInContext("NetQr.capacity()", ctx);
+}
+
+test("card lap codes (APXC1) round-trip in a short link that fits the QR", () => {
+  const { ShareCode, location } = harness({ tracks: ["monza", "mont_tremblant"] });
+  location.origin = "https://brycejmurrin.github.io"; location.pathname = "/f1-game/";
+  const encoded = ShareCode.encode("lap", { track: "mont_tremblant", day: "2026-10-27", time: 81.3456, extra: "drop" });
+  assert.equal(encoded.ok, true);
+  assert.equal(encoded.code, "APXC1.l.mont_tremblant~20261027~81346");
+  assert.ok(encoded.url.length < 120, encoded.url);
+  assert.ok(encoded.url.length <= qrCapacity(), "the link fits NetQr.capacity()");
+  const decoded = ShareCode.decode(encoded.url);
+  assert.deepEqual(j(decoded), { ok: true, v: 1, kind: "lap", track: "mont_tremblant", day: "2026-10-27", time: 81.346 });
+  assert.deepEqual(j(ShareCode.decode(encoded.code)), j(decoded));
+  assert.match(ShareCode.messageFor(decoded), /^Lap challenge — MONT_TREMBLANT · BEAT 1:21\.346\.$/);
+  const bare = ShareCode.encode("lap", { track: "monza" });
+  assert.equal(bare.code, "APXC1.l.monza~-~-");
+  assert.deepEqual(j(ShareCode.decode(bare.code)), { ok: true, v: 1, kind: "lap", track: "monza" });
+  assert.equal(ShareCode.decode("APXC1.l.atlantis~-~-").reason, "unknown-track");
+  for (const bad of ["APXC1.l.monza~2026~1", "APXC1.l.monza", "APXC1.l.MONZA~-~-", "APXD1.l.monza~-~-"]) {
+    assert.equal(ShareCode.decode(bad).ok, false, bad);
+  }
+  assert.equal(ShareCode.encode("lap", { track: "atlantis" }).ok, false);
+});
+
+test("consuming a lap link stages only: never startRace or gridUp, and a past day never selects the Daily", async () => {
+  for (const [day, expectDaily] of [["2026-10-20", false], ["2026-10-27", true]]) {
+    const { ShareCode, store, location } = harness();
+    const encoded = ShareCode.encode("lap", { track: "spa", day, time: 101.5 });
+    location.hash = "#share=" + encoded.code;
+    location.href = "https://example.test/f1-game/" + location.hash;
+    const calls = [];
+    const result = await ShareCode.consumeHash({
+      apply: (decoded) => ShareCode.apply(decoded, {
+        store, today: "2026-10-27",
+        startRace: () => calls.push("startRace"), gridUp: () => calls.push("gridUp"),
+        openDaily: () => calls.push("daily.select"), openTrack: (d) => calls.push("track:" + d.track),
+      }),
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(calls, [expectDaily ? "daily.select" : "track:spa"], day);
+    assert.equal(location.hash, "", "the fragment is consumed");
+  }
+});
+
+// #5879: a career's sheet lives under careerSetup.<flavour>.<slot>.<team>; the restore filter skipped it, so UNDO
+// reported success and left the imported setup in place. Other keys stay outside the filter.
+test("UNDO restores a career setup key and still skips keys outside the share-code set", () => {
+  const { ShareCode, store } = harness();
+  const key = "careerSetup.driver.0.ferrari", prev = { arbF: 3, arbR: 3, rideF: 30, rideR: 45, brakeBias: 58 };
+  store.set(key, { arbF: 9, arbR: 9, rideF: 20, rideR: 60, brakeBias: 54 });
+  store.set("career.slot0", "kept");
+  store.set("shareUndo", { keys: [key, "career.slot0"], prev: { [key]: prev, "career.slot0": null }, at: 1, pending: false });
+  assert.equal(ShareCode.undo(store).ok, true);
+  assert.deepEqual(j(store.get(key)), prev);
+  assert.equal(store.get("career.slot0"), "kept");
+});
+
+test("#5891: a lap-challenge link whose '~' was percent-encoded still opens", () => {
+  const { ShareCode } = harness();
+  const plain = ShareCode.decode("APXC1.l.monza~-~91234");
+  assert.equal(plain.ok, true, "the plain form is accepted");
+  for (const code of ["APXC1.l.monza%7E-%7E91234", "APXC1.l.monza%7e-%7e91234"]) {
+    const enc = ShareCode.decode(code);
+    assert.equal(enc.ok, true, code + " is accepted");
+    assert.deepEqual(j(enc), j(plain), code + " decodes like the plain form");
+  }
+  assert.equal(ShareCode.decode("https://example.test/f1-game/#share=APXC1.l.monza%7E-%7E91234").ok, true);
+  assert.equal(ShareCode.decode("APXC1.l.monza%E0%A4~-~91234").ok, false, "a malformed escape is still refused");
 });
