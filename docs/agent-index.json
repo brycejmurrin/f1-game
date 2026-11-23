@@ -4333,6 +4333,11 @@
       "roster": "LAZY_RACE_SESSION"
     },
     {
+      "path": "js/race/replay-broadcast.js",
+      "global": "ReplayBroadcast",
+      "roster": "LAZY_REAL_RACE"
+    },
+    {
       "path": "js/race/retired-card.js",
       "global": "RetiredCard",
       "roster": "LAZY_RACE_SESSION"

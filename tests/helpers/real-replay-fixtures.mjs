@@ -36,12 +36,21 @@ export function line(p0, v, x, t0, t1) {
   return { t, prog, x: xs };
 }
 
+export function loadReplayBroadcast(ctx) {
+  for (const file of ["js/race/broadcast.js", "js/race/replay-broadcast.js"]) {
+    vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
+  }
+  return vm.runInContext("ReplayBroadcast", ctx);
+}
+
 export function transportReplay(extra = {}, { completeSubject = false } = {}) {
   const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
     Log: { info() {}, warn() {}, debug() {} },
     CamModes: { CAM_MODES: ["cockpit", "side", "heli", "chase", "tcam", "cinematic", "low"].map((id) => ({ id })) },
     Tracks: { sample: (_track, s, out) => { out.p = [s, 0, 0]; out.t = [1, 0, 0]; out.r = [0, 0, 1]; out.hw = 7; } }, ...extra });
-  for (const file of ["js/race/broadcast.js", "js/race/real-replay.js"]) vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx);
+  loadReplayBroadcast(ctx);
+  const file = "js/race/real-replay.js";
+  vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
   const cars = [{ code: "AAA" }, { code: "BBB" }], snaps = [];
   const drivers = [{ code: "AAA", num: 1, pos: 1, name: "Driver A", lapStart: [0, 10] }, { code: "BBB", num: 2, pos: 2, name: "Driver B", lapStart: [0] }];
   const G = { cars, track: { total: 1000 }, state: "race", camMode: 0, raceT: 0,

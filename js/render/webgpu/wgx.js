@@ -2948,14 +2948,13 @@ const WGX = (function () {
     function _createMesh(data) {
       const b = _interleave(data);
       const pulled = b.hasTrk ? _expandPull(b.vert, b.attr, b.idx) : null;
-      const lut = b.hasTrk ? _makeRoadLUT(data.pos, data.trk, data.mat) : null;
-      if (lut) _rememberRoadLut(lut);
-      let vbuf = null, ibuf = null, sbuf = null, attrBG = null;
+      let vbuf = null, ibuf = null, sbuf = null, attrBG = null, lut = null;
       // Hoisted out of the piece branch so the catch can see it: an OOM on
       // piece k must still destroy pieces 0..k-1.
       let pieces = null;
       try {
         if (pulled) {
+          lut = _makeRoadLUT(data.pos, data.trk, data.mat);
           // 4095 = 1365 tris. Large non-indexed draws still saw vertex_index=0
           // on this adapter; car-sized pieces do not.
           const PIECE = 4095;
@@ -2977,6 +2976,7 @@ const WGX = (function () {
               pieces.push(_meshFromPull(vert, attr, n, b.indexFormat));
             }
             const head = pieces[0] || { vbuf: null, sbuf: null, attrBG: null, count: 0 };
+            _rememberRoadLut(lut);
             return {
               _wgx: "mesh", vbuf: head.vbuf, ibuf: null, sbuf: head.sbuf, attrBG: head.attrBG,
               count: head.count, indexFormat: b.indexFormat, chunks: null, pieces,
@@ -2987,17 +2987,16 @@ const WGX = (function () {
             };
           }
           const m = _meshFromPull(pulled.vert, pulled.attr, pulled.count, b.indexFormat);
+          _rememberRoadLut(lut);
           return Object.assign({ _wgx: "mesh", lutSbuf: lut && lut.sbuf, lutAttrBG: lut && lut.attrBG }, m);
         }
         vbuf = _mkBuffer(b.vert, GPUBufferUsage.VERTEX);
         ibuf = _mkBuffer(b.idx, GPUBufferUsage.INDEX);
-        const a = lut || _attrOrZero(b.attr);
+        const a = _attrOrZero(b.attr);
         sbuf = a.sbuf; attrBG = a.attrBG;
       } catch (e) {
-        // Release EVERYTHING this call made — the index buffer and any road
-        // pieces already uploaded were dropped undestroyed here, exactly when
-        // memory is tightest. `lut` was created outside the try; it is owned by
-        // the returned mesh on success and must go with the failure.
+        // Release only allocations from this call. The previous road LUT
+        // stays published until the replacement mesh finishes uploading.
         try { if (vbuf) vbuf.destroy(); } catch (_) { /* already invalid */ }
         try { if (ibuf) ibuf.destroy(); } catch (_) { /* already invalid */ }
         if (pieces) {
@@ -3007,8 +3006,8 @@ const WGX = (function () {
             try { if (pc.sbuf) pc.sbuf.destroy(); } catch (_) { /* already invalid */ }
           }
         }
-        try { if (sbuf && sbuf !== (lut && lut.sbuf)) sbuf.destroy(); } catch (_) { /* already invalid */ }
-        try { if (lut && lut.sbuf) { if (lut.attrBG === _roadLutBG) { _roadLutBG = null; _roadLutReady = false; } lut.sbuf.destroy(); } } catch (_) { /* already invalid */ }
+        try { if (sbuf) sbuf.destroy(); } catch (_) { /* already invalid */ }
+        try { if (lut && lut.sbuf) lut.sbuf.destroy(); } catch (_) { /* already invalid */ }
         _allocFail("createMesh", e);
         return { _wgx: "mesh", vbuf: null, ibuf: null, sbuf: null, attrBG: null, count: 0, indexFormat: b.indexFormat, chunks: null };
       }

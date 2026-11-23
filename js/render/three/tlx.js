@@ -409,7 +409,7 @@ const TLX = (function () {
       // The warm's stage timeline, read by memState().warm: the lights hold for
       // exactly this long on a player's GPU, and the census beats sample it —
       // gpu-census 207 spent its whole window inside the warm and no row said so.
-      const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0,
+      const _warmStages = { at: 0, scene: null, fx: null, post: null, postJobs: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0,
         garageScene: null, mirrorDeferred: false, mirrorLazy: null, rig: null };   // garageScene: noEnv supplemental compile (B·H16 SwiftShader). rig: warmDraws' { ms, pairs, mirror, ok } (hunt 6). B-F3.1: the AUTO warm skipped the mirror; the deferred stage's { ms, drawn, ok }
       // EVERY warm's stages, newest last (cap 6): the menu prep runs a world warm then the garage's, and
       // _warmStages keeps only the last, so the census read the garage's 3.7 s as "the warm" while the
@@ -1806,7 +1806,7 @@ const TLX = (function () {
       let _envOptOut = true;
       try { const ep = GameStore.store.raw("apex26.tlxEnvProbe"); _envOptOut = !_detailOpt("envProbe", ep === "1" || (ep !== "0" && _ultra && !softwareGL)); } catch (_) { /* no store: stay opted out */ }
       const raceProbeOff = _envOptOut;
-      const garageProbeRequested = !isMobile && isWebGPU() && !softContent("env") && _gfxx("garageProbeParallax");
+      const garageProbeRequested = isWebGPU() && !softContent("env") && _gfxx("garageProbeParallax");
       if (garageProbeRequested) _envOptOut = false; // either producer can own the one cube
       if (!_envOptOut) try {
         const envHdr = !!(post && post.hdrOk());
@@ -3916,7 +3916,7 @@ const TLX = (function () {
         _gpuLastOperation = "compile-fx";
         await warmFxPrograms();
         await warmLateLit();
-        _warmStages.fx = Math.round(performance.now() - _tStage); _tStage = performance.now();
+        _warmStages.fx = Math.round(performance.now() - _tStage);
         // MRT STAYS SET THROUGH THE POST WARM. present() sets the ssrTag MRT
         // node for the scene pass and calls post.present() BEFORE restoring
         // it, so every live post quad compiles with that node in its render
@@ -3941,10 +3941,17 @@ const TLX = (function () {
         // Gate lines owned by A·W14 #3618 — do not edit. Menu idle yield (#3279) sits above.
         // typeof: canary sandboxes eval this body without the outer helpers.
         if (typeof warmIdleChunks === "function" && warmIdleChunks()) await _idleYield(48);
-        if (usePost && post.warm && (warmPlusOn() || performance.now() - _warmAt < 3000)) {
-          _gpuLastOperation = "compile-post"; await post.warm(opts, _postF);
+        _tStage = performance.now();
+        try {
+          if (usePost && post.warm && (warmPlusOn() || performance.now() - _warmAt < 3000)) {
+            _gpuLastOperation = "compile-post";
+            // deadlineJob is the one-based ordinal that crossed the post queue's own cutoff.
+            const report = _warmStages.postJobs = { total: 0, completed: 0, deadlineJob: null };
+            await post.warm(opts, _postF, report);
+          }
+        } finally {
+          _warmStages.post = Math.round(performance.now() - _tStage);
         }
-        _warmStages.post = Math.round(performance.now() - _tStage); _tStage = performance.now();
         renderer.setMRT(null);
         // The casters live in their own Scene (tlx-shadow.js castScene), so
         // compileAsync(scene) never sees them and the first sun pass of the
@@ -3956,6 +3963,7 @@ const TLX = (function () {
         // yet (night lamp and car maps), and on WebGPU too: there the lamp-pass pipelines were built synchronously
         // mid-race, and only depth programs move into the covered warm (casterWarmOn, apex26.tlxWarmPlus=0 off).
         if (typeof warmIdleChunks === "function" && warmIdleChunks()) await _idleYield(48);
+        _tStage = performance.now();
         if (casterWarmOn() && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(casterSources()); }
         _warmStages.shadow = Math.round(performance.now() - _tStage); _tStage = performance.now();
         // The sky's E1 cloud-bake program on its own target (MRT null), so no re-bake links it mid-race.
@@ -4023,7 +4031,7 @@ const TLX = (function () {
         if (typeof _swRaceShed !== "undefined" && _swRaceShed && typeof _warmWhere !== "undefined" && _warmWhere !== "menu") pinSoftwareRaceShed(opts);
         _warmAt = performance.now(); _warmAttempts++;
         _warmStages.at = Math.round(_warmAt); _warmStages.attempts = _warmAttempts;
-        _warmStages.garageScene = null;
+        _warmStages.garageScene = _warmStages.post = _warmStages.postJobs = null;
         const target = renderer.getRenderTarget(), mrt = renderer.getMRT();
         const postCapable = !!(post && post.enabled() && _postF.proj && !vizMat);
         // present()'s post rule: a noEnv garage/menu frame keeps proj (SSAO) but paints without post (B·H16).
@@ -4051,7 +4059,8 @@ const TLX = (function () {
           } finally {
             _warmStages.total = Math.round(performance.now() - _warmAt);
             const _warmRec = { where: (typeof _warmWhere !== "undefined" ? _warmWhere : "menu"), at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, post: _warmStages.post, shadow: _warmStages.shadow,
-              sky: _warmStages.sky, mirror: _warmStages.mirror, draw: _warmStages.draw, garageScene: _warmStages.garageScene, total: _warmStages.total, failed: _warmStages.failed };
+              sky: _warmStages.sky, mirror: _warmStages.mirror, draw: _warmStages.draw, garageScene: _warmStages.garageScene, total: _warmStages.total, failed: _warmStages.failed,
+              postJobs: _warmStages.postJobs };
             _warmHistory.push(_warmRec);
             if (_warmHistory.length > 6) _warmHistory.shift();
             try { if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.noteWarm) RaceEntryProfile.noteWarm(_warmRec); } catch (_) { /* optional */ }
@@ -7536,6 +7545,7 @@ const TLX = (function () {
             // The warm timeline: how long the lights held on THIS GPU, by stage;
             // pending/done say whether a census beat is inside it (207 was, all 15).
             o.warm = { where: _warmWhere, at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow, mirror: _warmStages.mirror,
+                       postJobs: _warmStages.postJobs && { ..._warmStages.postJobs },
                        draw: _warmStages.draw, drawn: _warmStages.drawn, garageScene: _warmStages.garageScene,   // A-W1: ms (incl. the GPU settle), and { mirror, scene, post, casts }
                        mirrorDeferred: _warmStages.mirrorDeferred, mirrorLazy: _warmStages.mirrorLazy, rig: _warmStages.rig,   // B-F3.1
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,

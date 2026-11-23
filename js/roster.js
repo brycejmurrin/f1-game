@@ -228,12 +228,21 @@
     LAZY_PERF_EDGES: [],
     LAZY_REAL_RACE: [
     "js/race/tv-graphics.js",
+    "js/race/replay-broadcast.js",
     "js/ui/watch-transport.js",
     "js/race/real-replay.js",
     "js/race/real-race-pace.js",
     "js/race/real-race.js"
   ],
     LAZY_REAL_RACE_EDGES: [
+    [
+      "js/race/tv-graphics.js",
+      "js/race/replay-broadcast.js"
+    ],
+    [
+      "js/race/replay-broadcast.js",
+      "js/race/real-replay.js"
+    ],
     [
       "js/ui/watch-transport.js",
       "js/race/real-replay.js"
