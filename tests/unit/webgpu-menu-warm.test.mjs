@@ -69,6 +69,60 @@ test("RaceEntryProfile.noteWarm records where; requestWarm still calls bare gfx.
   assert.equal(P2.menuEntrySession(), true);
 });
 
+test("warm history preserves each activation's post work and excludes idle waits from stage times", async () => {
+  const start = TLX.indexOf("async function runProgramWarmStages");
+  const end = TLX.indexOf("// B-F3.1: THE DEFERRED MIRROR STAGE", start);
+  const profile = loadProfile();
+  profile.begin("startRace");
+  const rig = new Function("RaceEntryProfile", `
+    let now = 0, _warmWhere = "menu", _gpuLastOperation;
+    let _warmPending, _warmRequested, _warmAt, _warmAttempts, _warmDone;
+    const _warmHistory = [], _warmStages = { failed: 0 };
+    const performance = { now: () => now };
+    const scene = {}, camera = {}, lit = null, fx = null, vizMat = null, _postF = { proj: true };
+    const renderer = {
+      getRenderTarget() {}, getMRT() {}, setRenderTarget() {}, setMRT() {},
+      async compileAsync() { now += _warmWhere === "loading" ? 3000 : 10; },
+    };
+    const shadowSys = { async warm() { now += 20; } }, sky = { async cacheWarm() { now += 5; } };
+    const post = {
+      enabled: () => true, sceneTarget: () => null,
+      async warm(opts, frame, report) {
+        now += 100;
+        report.total = report.completed = _warmWhere === "menu" ? 3 : 2;
+      },
+    };
+    const pinSkyMaterial = () => {}, mintLateLit = () => {}, warmShowSky = () => {};
+    const warmFxPrograms = async () => {}, warmLateLit = async () => {}, _ssrMrtNode = () => null;
+    const warmPlusOn = () => _warmWhere === "menu", warmIdleChunks = warmPlusOn;
+    const _idleYield = async ms => { now += ms; };
+    const casterWarmOn = () => true, casterSources = () => [];
+    const wantMirrorWarm = () => false, drawWarmOn = () => false, Log = { warn() {} };
+    ${TLX.slice(start, end)}
+    return {
+      async run(where) {
+        _warmWhere = where;
+        _warmAttempts = 0;
+        startProgramWarm({});
+        await _warmPending;
+      },
+      history: _warmHistory,
+    };
+  `)(profile);
+
+  await rig.run("menu");
+  await rig.run("race");
+  await rig.run("loading");
+  const [first, next, skipped] = rig.history;
+  assert.deepEqual([first.where, first.at, first.post, first.shadow, first.sky, first.total], ["menu", 0, 100, 20, 5, 231]);
+  assert.deepEqual([next.where, next.at, next.post, next.shadow, next.sky, next.total], ["race", 231, 100, 20, 5, 135]);
+  assert.deepEqual(first.postJobs, { total: 3, completed: 3, deadlineJob: null });
+  assert.deepEqual(next.postJobs, { total: 2, completed: 2, deadlineJob: null });
+  assert.equal(skipped.post, 0);
+  assert.equal(skipped.postJobs, null);
+  assert.deepEqual([...profile.snapshot().warmHistory], rig.history);
+});
+
 test("warmPlusOn is on for WebGPU only when where===menu (source behaviour)", () => {
   // Extract the warmPlusOn body by evaluating the closed-over helpers against stubs.
   const start = TLX.indexOf("function _resolveWarmWhere(opts)");
