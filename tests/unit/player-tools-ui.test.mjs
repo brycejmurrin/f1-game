@@ -54,14 +54,15 @@ test("setting search recognizes player terms and never changes target values", (
   assert.equal(api.reveal(control), true); assert.equal(fold.open, true); assert.equal(h.dom.document.activeElement, control); assert.equal(control.value, "auto");
 });
 test("setting search exposes the lazily-built appearance and screen layout controls", () => {
-  // #4978: SettingsSearch.register + as-* control ids live in the LAZY_UI_PRESETS body.
+  // The eager facade indexes controls before the appearance editor loads.
   const source = read("js/ui/appearance-studio-ui.js");
   assert.match(source, /controls\.id\s*=\s*"as-" \+ key/);
-  assert.match(source, /SettingsSearch\.register\("appearance-studio"/);
+  assert.match(read("js/ui/appearance-studio.js"), /SettingsSearch\.register\("appearance-studio"/);
   const looks = read("js/ui/screen-looks.js");
   assert.match(looks, /SettingsSearch\.register\("screen-looks"/);
   assert.match(looks, /target:\s*"pm-look-" \+ s\.id \+ "-" \+ n\.k/);
   const h = host(), api = h.run("js/ui/settings-search.js", "SettingsSearch");
+  h.sb.SettingsNav = { routes: { appearance: {} } };
   api.register("appearance-studio", [{ id: "appearance-theme", label: "Theme", page: "appearance", target: "as-uiTheme", aliases: "dark light" }]);
   api.register("screen-looks", [{ id: "look-career-width", label: "CAREER width", page: "appearance", target: "pm-look-career-w", aliases: "layout screen" }]);
   assert.equal(api.find("dark theme")[0].target, "as-uiTheme");

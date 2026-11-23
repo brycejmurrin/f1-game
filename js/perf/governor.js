@@ -131,7 +131,7 @@ let _stallsTrimmed = 0;   // this evaluation window
 let _xShed = 0, _xFutile = false;
 function _xq() {
   try {
-    return _gfx && _gfx.__tlx && typeof GfxQuality !== "undefined" && GfxQuality.detail() > 0 && GfxQuality.SHED_ORDER ? GfxQuality : null;
+    return _gfx && _gfx.__tlx && typeof GfxQuality !== "undefined" && GfxQuality.hasShedExtras() ? GfxQuality : null;
   } catch (_) { return null; }
 }
 // The shed count one rung DOWN (d 1: the next count that drops an enabled extra) or UP (d -1: the previous
@@ -143,7 +143,12 @@ function _xStep(q, d) {
   } catch (_) { /* fall through: no rung */ } finally { try { q.setShed(_xShed); } catch (_) { /* restored */ } }
   return -1;
 }
-function _xSet(n) { const q = _xq(); try { _xShed = q ? q.setShed(n) : 0; } catch (_) { _xShed = 0; } }
+function _xSet(n) {
+  const q = _xq(), before = _xShed;
+  try { _xShed = q ? q.setShed(n) : 0; } catch (_) { _xShed = 0; }
+  if (before !== _xShed && typeof document !== "undefined" && document.dispatchEvent)
+    document.dispatchEvent(new Event("apex-graphics-shed"));
+}
 // A fresh (<= 2 s) TLX GPU timer reading in ms, or -1 (no gfx / no timer throws into the catch).
 function _gpuMs() {
   try {

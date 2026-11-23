@@ -94,14 +94,12 @@ const walkToImageTuner = async (page) => {
     document.getElementById("pm-settings").click();
     document.getElementById("pm-open-visual").click();
     document.getElementById("pm-lighting").click();
-    // pm-lighting's handler builds the tab strip synchronously, so the tab
-    // exists by the next statement — the same assumption ui-redesign makes.
-    document.getElementById("lt-tab-image-colour").click();
   });
   // Same reason as the pausebtn wait: `expect(locator).toBeVisible()` polls
   // visibility on the held thread. This is the form ui-redesign uses.
   await page.waitForFunction(() => !document.getElementById("lighting").hidden,
     null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => document.getElementById("lt-tab-image-colour").click());
 };
 
 // HEADLESS before race(): every test in this file reads the tuner's DOM and

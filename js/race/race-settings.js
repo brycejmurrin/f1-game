@@ -292,8 +292,8 @@ const RaceSettings = (function () {
       // quickest driver with his stats lifted. Hidden in a Time Trial (which
       // has no field at all) and in a championship, where the classification
       // feeds points and standings — a 2-car GP would score a season.
-      $("rs-duel").hidden = tt || champ;
-      $("rs-duel-help").hidden = tt || champ;
+      $("rs-duel").hidden = tt || champ || netRoom;
+      $("rs-duel-help").hidden = tt || champ || netRoom;
       paintDuel();
       $("rs-quali").hidden = tt;
       const qForced = champ ? SeasonCal.quali() : null;

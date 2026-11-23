@@ -79,6 +79,22 @@ test("picking a value in the real sheet paints that same value back", async () =
   } finally { g.close(); }
 });
 
+test("room setup hides the solo Duel picker and preserves the selection on return", async () => {
+  const { g, choose } = await realPicker();
+  const row = g.sandbox.document.getElementById("rs-duel");
+  try {
+    choose("senna");
+    g.G.setNetRoom(true);
+    g.G.openRaceSettings("select");
+    assert.equal(row.hidden, true);
+    g.G.setNetRoom(false);
+    g.G.openRaceSettings("select");
+    assert.equal(row.hidden, false);
+    assert.equal(g.G.duel, true);
+    assert.equal(g.G.duelLegend, "senna");
+  } finally { g.close(); }
+});
+
 test("OFF and ON clear the legend; a legend turns the duel on (the real handler)", async () => {
   const { g, choose } = await realPicker();
   try {

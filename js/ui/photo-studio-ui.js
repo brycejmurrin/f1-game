@@ -317,6 +317,7 @@ function create(G, deps) {
         inp.value = String(applied);
         exact.value = String(applied);
         out.textContent = fmtPsTune(d, applied);
+        inp.setAttribute("aria-valuetext", out.textContent);
         paintLtReset();
       };
       const exact = SettingRow.numberInput(inp, read, write);
@@ -324,7 +325,12 @@ function create(G, deps) {
       E[exact.id] = exact;
       inp.addEventListener("input", () => write(parseFloat(inp.value)));
       const item = mk("div", { className: "adv-item" }, [mk("label", { className: "tune-row" }, [lab, inp]), exact]);
-      if (d.help) item.appendChild(mk("p", { className: "adv-help", textContent: d.help }));
+      if (d.help) {
+        const help = mk("p", { id: "ps-lt-help-" + d.id, className: "adv-help", textContent: d.help });
+        item.appendChild(help);
+        inp.setAttribute("aria-describedby", help.id);
+        exact.setAttribute("aria-describedby", help.id);
+      }
       wrap.appendChild(item);
     }
     for (let i = 0; i < groups.length; i++) {
@@ -354,7 +360,10 @@ function create(G, deps) {
       const value = LightTune.LT[d.id];
       if (inp) inp.value = String(value);
       E["ps-lt-num-" + d.id].value = String(value);
-      if (out) out.textContent = fmtPsTune(d, value);
+      if (out) {
+        out.textContent = fmtPsTune(d, value);
+        if (inp) inp.setAttribute("aria-valuetext", out.textContent);
+      }
     }
     paintLtReset();
   }
@@ -445,7 +454,11 @@ function create(G, deps) {
         mk("div", { className: "balanced-row" }, [button("USE AS MENU BACKGROUND", useBackground, "ps-background"), button("CLEAR BACKGROUND", () => say(setBackground("") ? "Menu background cleared." : "Background could not be cleared."))]),
         mk("label", { className: "tune-row" }, [mk("span", { className: "tune-label", textContent: "Import your photo" }), importFile]),
       ]),
-      mk("details", { id: "ps-album" }, [mk("summary", { textContent: "MY PHOTOS · up to 6" }), mk("div", { id: "ps-library" })]),
+      mk("details", { id: "ps-album" }, [mk("summary", { textContent: "MY PHOTOS · up to 6" }),
+        mk("div", { id: "ps-library-error", hidden: true }, [
+          mk("p", { className: "adv-help", textContent: "Could not open photos saved on this device.", attrs: { role: "status" } }),
+          button("RETRY MY PHOTOS", paintLibrary),
+        ]), mk("div", { id: "ps-library" })]),
       mk("p", { id: "ps-message", attrs: { "aria-live": "polite", role: "status" } }),
     ]),
     mk("footer", { className: "sheet-foot" }, [captureButton, done]),
@@ -512,7 +525,7 @@ function create(G, deps) {
     last = null; raw = null; capturedOptions = null; E["ps-preview"].hidden = true;
     st.source = opts.source || "race"; st.metadata = opts.metadata || {}; st.back = typeof opts.back === "function" ? opts.back : null;
     st.subject = typeof opts.subject === "function" ? opts.subject : null;
-    focus = document.activeElement;
+    focus = opts.returnFocus || document.activeElement;
     if (isGarage()) {
       if (!deps.garage) return false;
       st.snapshot = deps.garage.snapshot ? deps.garage.snapshot() : null;
@@ -874,7 +887,7 @@ function create(G, deps) {
   function useBackground() { if (last) chooseBackground(homeImage(last)); }
   async function paintLibrary() {
     const gen = st.generation, paint = ++libraryPaint;
-    let photos; try { photos = await library("list", null, session); } catch (_) { photos = []; }
+    let photos; try { photos = await library("list", null, session); } catch (_) { photos = null; }
     if (!st.open || gen !== st.generation || paint !== libraryPaint) return;
     const box = E["ps-library"];
     // DELETE repaints the list under the focused button; keepFocus lands on the
@@ -883,6 +896,9 @@ function create(G, deps) {
     if (typeof TopModal !== "undefined" && TopModal.keepFocus) TopModal.keepFocus(box, render); else render();
   }
   function paintPhotos(box, photos) {
+    E["ps-library-error"].hidden = !!photos;
+    if (!photos && !session.length) return;
+    photos = photos || [];
     photos = photos.concat(session).sort(newestPhotoFirst).slice(0, LIMIT);
     if (!photos.length) { box.appendChild(mk("p", { className: "adv-help", textContent: "Capture a frame and save it here. Photos stay on this device." })); return; }
     for (const p of photos) {

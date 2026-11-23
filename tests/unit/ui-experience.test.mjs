@@ -65,7 +65,7 @@ test('task doors retain canonical close and settings destinations', () => {
   assert.match(code,/sub && sub\.parentNode/,
     "setDoorLabel must tolerate game-vm's detached querySelector stub");
   assert.doesNotMatch(code,/photoButton\.textContent\s*=/);
-  assert.match(html,/id="photo-studio"[^>]*data-esc-close="ps-close"/);
+  assert.match(html,/id="photo-studio"[^>]*\bhidden>/);
   assert.match(code,/openSettingsPage\("strategy", "pm-pit-panel"\)/);
   assert.match(code,/openSettingsPage\("review", "pm-session-review"\)/);
 });
@@ -668,4 +668,34 @@ test('Home shot comes from the fixed homeCamera on the stored scene and on a Pho
   ui.renderHome(1 / 60);
   assert.deepEqual(begun.at(-1), ['garage', 'rear'], 'the Photo subject override keeps the fixed camera');
   assert.equal(ui.state().scene.shot, 'rear');
+});
+
+test('a cold Photo launch leaves Settings usable and abandons the launch after navigation', async () => {
+  const nodes = { pmsettings: { hidden: false }, carsetup: { hidden: true }, pausemenu: { hidden: true } };
+  const G = { state: 'race', paused: true, $: id => nodes[id] };
+  let page = 'visual', finish, opens = 0;
+  const local = vm.createContext({ SettingsNav: { current: () => page } });
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local, { filename: absSrc('js/ui/experience.js') });
+  const studio = { loaded: () => false, ensureLoaded: () => new Promise(resolve => { finish = resolve; }), open: () => ++opens };
+  const deps = { source: 'race', photoStudio: studio, setPaused() { assert.fail('race pause state changed'); } };
+  const offline = local.api.openPhoto(G, deps);
+  finish(false);
+  assert.equal(await offline, false);
+  assert.equal(nodes.pmsettings.hidden, false);
+  const late = local.api.openPhoto(G, deps);
+  page = 'home'; finish(true);
+  assert.equal(await late, false);
+  assert.equal(opens, 0);
+});
+
+test('Photo launch restores caller visibility on synchronous and asynchronous errors', async () => {
+  for (const open of [() => false, () => Promise.resolve(null), () => Promise.reject(new Error('load failed'))]) {
+    const nodes = { pmsettings: { hidden: false }, carsetup: { hidden: true }, pausemenu: { hidden: true } };
+    const G = { state:'race', paused:true, teamIdx:0, player:{lap:1}, $: id => nodes[id] };
+    const local = vm.createContext({ Teams: { LIST:[{ name:'McLaren' }] } });
+    vm.runInContext(code + ';globalThis.api=UiExperience;', local, { filename: absSrc('js/ui/experience.js') });
+    const result = await local.api.openPhoto(G, { source:'race', photoStudio:{ open }, setPaused(value) { G.paused=value; } });
+    assert.equal(result, false);
+    assert.equal(G.paused, true); assert.equal(nodes.pmsettings.hidden, false); assert.equal(nodes.pausemenu.hidden, true);
+  }
 });

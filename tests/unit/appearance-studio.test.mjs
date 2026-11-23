@@ -29,7 +29,7 @@ function movingDom(document) {
   document.getElementById = id => move(get(id));
   document.createElement = tag => move(create(tag));
 }
-function load(initial = {}, durable = true, reduced = false, document, globals = {}) {
+function load(initial = {}, durable = true, reduced = false, document, globals = {}, open = true) {
   movingDom(document);
   const values = structuredClone(initial), writes = [], owners = [];
   const store = { get: (k, d) => k in values ? values[k] : d, set: (k, v) => { values[k] = v; writes.push(k); return durable; },
@@ -37,7 +37,9 @@ function load(initial = {}, durable = true, reduced = false, document, globals =
   const context = vm.createContext({ GameStore: { store }, Log: { info() {}, warn() {} }, setTimeout, clearTimeout,
     AppearanceOpts: { restore: (v) => owners.push(v) }, ScreenLooks: { normalize: (_id, v) => ({ ...v }), apply() {}, refresh() {} },
     window: { matchMedia: () => ({ matches: reduced }) }, document, ...globals });
-  vm.runInContext(bodySource, context, { filename: absSrc("js/ui/appearance-studio-ui.js") }); vm.runInContext(source, context, { filename: absSrc("js/ui/appearance-studio.js") }); return { studio: context.AppearanceStudio, values, writes, owners };
+  vm.runInContext(bodySource, context, { filename: absSrc("js/ui/appearance-studio-ui.js") }); vm.runInContext(source, context, { filename: absSrc("js/ui/appearance-studio.js") });
+  if (document && open) context.AppearanceStudio.initUI();
+  return { studio: context.AppearanceStudio, values, writes, owners };
 }
 const plain = (v) => JSON.parse(JSON.stringify(v));
 
@@ -229,24 +231,13 @@ test("profile restore, Undo and reset repaint mounted title and pause controls w
   studio.applyPreset("classic"); assertControls(true);   // a cosmetic preset never moves the menu layouts (#5058)
 });
 
-// #4798: deferred scripts evaluate at "interactive", BEFORE DOMContentLoaded, so
-// only a complete document mounts at once; otherwise DCL hands the mount to the
-// settings-lazy gate (SettingsNav.lazy), which runs it on the first Settings
-// enter / tap / idle. With no router (a tool page) DCL mounts directly.
-test("Studio mounts at once only on a complete document; otherwise at DCL through the settings-lazy gate", () => {
-  for (const [readyState, router] of [["complete", true], ["interactive", true], ["loading", true], ["interactive", false]]) {
-    const lookedUp = [], events = [], gated = [];
-    const SettingsNav = router ? { lazy: (fn) => gated.push(fn) } : undefined;
-    load({}, true, false, { readyState, getElementById(id) { lookedUp.push(id); return null; },
-      addEventListener(name, callback) { events.push({ name, callback }); } }, router ? { SettingsNav } : {});
-    if (readyState === "complete") { assert.equal(events.length, 0); assert.deepEqual(lookedUp, ["pm-panel-appearance"]); continue; }
-    assert.equal(lookedUp.length, 0, readyState + ": nothing at eval"); assert.equal(events[0].name, "DOMContentLoaded");
-    events[0].callback();
-    if (router) {
-      assert.equal(lookedUp.length, 0, readyState + ": nothing in the DCL task");
-      assert.equal(gated.length, 1); gated[0]();
-    }
-    assert.deepEqual(lookedUp, ["pm-panel-appearance"], readyState + (router ? ": mounts at the gate" : ": mounts at DCL"));
+test("Appearance waits for entry before mounting even when the body was already loaded", () => {
+  for (const readyState of ["complete", "interactive", "loading"]) {
+    const lookedUp = [];
+    const { studio } = load({}, true, false, { readyState, getElementById(id) { lookedUp.push(id); return null; } }, {}, false);
+    assert.deepEqual(lookedUp, []);
+    studio.initUI();
+    assert.deepEqual(lookedUp, ["pm-panel-appearance"]);
   }
 });
 
@@ -493,6 +484,7 @@ test("Opening Appearance marks the panel busy and defers scene preview off the c
   });
   context.window = context;
   vm.runInContext(bodySource, context, { filename: absSrc("js/ui/appearance-studio-ui.js") }); vm.runInContext(source, context, { filename: absSrc("js/ui/appearance-studio.js") });
+  context.AppearanceStudio.initUI();
   context.AppearanceStudio.attach({ previewScene: (s) => sceneHits.push(plain(s)) });
   sceneHits.length = 0; // attach() refreshes the live Home scene once; this test is about OPEN
   // The other observer is the PORTRAIT & LANDSCAPE watch on body[data-shape] (#4529).
@@ -546,6 +538,7 @@ test("closing Appearance cancels a pending store debounce so sceneChanged cannot
   Object.defineProperty(dom.document, "readyState", { value: "complete" });
   vm.runInContext(bodySource, context, { filename: absSrc("js/ui/appearance-studio-ui.js") });
   vm.runInContext(source, context, { filename: absSrc("js/ui/appearance-studio.js") });
+  context.AppearanceStudio.initUI();
   context.AppearanceStudio.attach({ previewScene: (s) => sceneHits.push(plain(s)) });
   assert.ok(subs.length >= 1 && observers.length >= 1);
   sceneHits.length = 0;
@@ -969,4 +962,22 @@ test("the real picker scopes profile apply and reset to Results, shared popup st
   for (const text of ["APPLY PROFILE", "RESET SCOPE"]) assert.equal(button(text).disabled, true, text);
   button("GLOBAL").click();
   for (const text of ["APPLY PROFILE", "RESET SCOPE"]) assert.equal(button(text).disabled, false, text);
+});
+
+test("Home scene subscribers work before first Appearance visit and can unsubscribe after the transfer", () => {
+  const values = {};
+  const store = { get: (key, fallback) => values[key] ?? fallback, set: (key, value) => { values[key] = value; return true; } };
+  const ctx = vm.createContext({ GameStore:{store}, Log:{warn() {}}, setTimeout, clearTimeout });
+  vm.runInContext(source, ctx, { filename: absSrc("js/ui/appearance-studio.js") });
+  let changes = 0;
+  const unsubscribe = ctx.AppearanceStudio.onSceneChange(() => changes++);
+  ctx.AppearanceStudio.setScene("garage");
+  assert.equal(changes, 1);
+  vm.runInContext(bodySource, ctx, { filename: absSrc("js/ui/appearance-studio-ui.js") });
+  assert.equal(ctx.AppearanceStudio.loaded(), true);
+  ctx.AppearanceStudio.setScene("night");
+  assert.equal(changes, 2);
+  unsubscribe();
+  ctx.AppearanceStudio.setScene("track");
+  assert.equal(changes, 2);
 });

@@ -118,7 +118,7 @@
 .td-pane { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
 .td-group { display: flex; flex-direction: column; gap: calc(var(--gap) / 2); }
 .td-label {
-  font-size: var(--label); font-weight: 700; font-style: italic;
+  font-size: max(var(--label), var(--td-fs-floor)); font-weight: 700; font-style: italic;
   letter-spacing: var(--ls-4); color: var(--steel); text-transform: uppercase;
 }
 /* label · − · value · + : the two keys are --tap-sm squares (paired micro-toggles) */
@@ -750,10 +750,11 @@
 @container designer-shell (max-width: 500px) and (max-height: 600px) {
   #trackdesigner .td-body { min-height: calc(var(--tap) * 12); grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); }
   #trackdesigner [data-role="mode-bar"] { grid-column: 1; grid-row: 1; }
-  #trackdesigner[data-pane="design"] .td-stage { height: calc(var(--tap) * 6); min-height: calc(var(--tap) * 6); grid-column: 1; grid-row: 2; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(72px, 1fr) auto; }
+  /* Let the wrapped toolbar and both canvases contribute to the stage minimum. */
+  #trackdesigner[data-pane="design"] .td-stage { display: flex; min-height: min-content; grid-column: 1; grid-row: 2; }
   #trackdesigner[data-pane="design"] .td-stage > .td-chips[data-role="toolbar"] { position: static; grid-column: 1; grid-row: 1; flex-flow: row wrap; }
-  #trackdesigner[data-pane="design"] .td-stage > canvas:not([data-role="profile"]) { grid-column: 1; grid-row: 2; }
-  #trackdesigner[data-pane="design"] .td-stage > canvas[data-role="profile"] { grid-column: 1; grid-row: 3; }
+  #trackdesigner[data-pane="design"] .td-stage > canvas:not([data-role="profile"]) { flex: 1 0 72px; min-height: 72px; contain: size; }
+  #trackdesigner[data-pane="design"] .td-stage > canvas[data-role="profile"] { flex: none; }
   #trackdesigner .td-rail { grid-column: 1; grid-row: 3; }
   #trackdesigner:is([data-pane="library"], [data-pane="howto"]) .td-body { grid-template-rows: minmax(0, 1fr); }
   #trackdesigner:is([data-pane="library"], [data-pane="howto"]) .td-rail { grid-row: 1; }
@@ -781,6 +782,9 @@
   min-height: calc(var(--tap) * 5.5); padding-top: 0;   /* UI SIZE past ~150 % scrolls the dialog instead of crushing the rail */
 }
 #trackdesigner[data-foot="in"] .td-stage { grid-column: 1; grid-row: 1 / span 3; min-height: 0; }
+@container designer-shell (max-width: 500px) and (max-height: 600px) {
+  #trackdesigner[data-foot="in"][data-pane="design"] .td-stage { min-height: min-content; }
+}
 #trackdesigner[data-foot="in"] [data-role="mode-bar"] { grid-column: 2; grid-row: 1; padding-right: calc(var(--tap) + var(--gap)); gap: 0; }
 #trackdesigner[data-foot="in"] [aria-label="Designer mode"] > button::before { display: none; }
 #trackdesigner[data-foot="in"] [data-role="mode-bar"] > * { min-width: 0; padding-inline: 0; letter-spacing: 0; font-size: var(--fs-micro); }
@@ -808,6 +812,24 @@
   --tap-sm: max(30px, calc(24px / var(--td-zoom)));
   --tap-min: max(24px, calc(24px / var(--td-zoom)));
   --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--td-zoom)));
+}
+/* The designer has its own zoom, including the default phone size when no
+   Appearance override exists. Keep its controls usable in painted pixels. */
+@media (pointer: coarse) {
+  #trackdesigner[open],
+  :root[data-look-designer-size] #trackdesigner {
+    --td-touch-floor: calc(44px / var(--td-zoom));
+    --tap: max(var(--tap-0), var(--td-touch-floor));
+    --tap-sm: max(30px, var(--td-touch-floor));
+    --tap-paint: max(44px, var(--td-touch-floor));
+    --chip-h: max(40px, var(--td-touch-floor));
+  }
+  #trackdesigner[open] :is(button, summary, .td-input),
+  #trackdesigner[data-foot="in"] [data-role="mode-bar"] > [data-role="context-help"] {
+    min-block-size: var(--td-touch-floor);
+    min-inline-size: var(--td-touch-floor);
+  }
+  #trackdesigner[open] .td-stage > canvas[data-role="profile"] { min-height: var(--td-touch-floor); }
 }
 :root[data-look-designer-split] #trackdesigner[data-foot="in"] .td-body { grid-template-columns: minmax(0, 1fr) minmax(250px, calc(100% - var(--look-designer-split))); }
 @media (min-width: 761px) and (orientation: landscape) {

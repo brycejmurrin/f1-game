@@ -373,7 +373,7 @@ const FULL = [
   "js/camera/photo-cam.js",
   "js/camera/replay-buf.js",    // ReplayBuf.create(G): solo 20 s / 30 Hz instant-replay ring + pause scrub
   "js/camera/results-cam.js",   // ResultsCam.create(G): chequered cut, results orbit, highlights reel
-  "js/lighting/tuner-panel.js",
+  "js/lighting/tuner-boot.js", // LightingTunerDoor loads the panel on first use.
   "js/camera/cam-tuner-boot.js", // CamTunerPanel stub; panel body is LAZY_CAM_EDITOR
   "js/physics/brake-cue.js",
   // driving-cues.js is LAZY_AUDIO (SteerTuning and game.js already typeof-guard it).
@@ -1334,6 +1334,7 @@ const LAZY_XR_EDGES = [
 // only; title flyby reads FlybyPanel.loadSaved() which stays FULL with the
 // shot algebra. Opened from #pm-camtune / #pm-flyby.
 const LAZY_CAM_EDITOR = [
+  "js/lighting/tuner-panel.js", // Lighting editor loads independently on its own door.
   "js/camera/tuner-panel.js",   // CamTunerEditor
   "js/camera/flyby-editor.js",  // FlybyEditor
 ];

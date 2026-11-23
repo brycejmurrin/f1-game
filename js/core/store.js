@@ -865,9 +865,9 @@ const GameStore = (function () {
   function ttRead(trackId) {
     return ttParseBoard(store.get("ttlb." + trackId, []));
   }
-  function ttWrite(trackId, laps) {
+  function ttPackBoard(laps) {
     const classes = [], at = new Map();
-    return store.write("ttlb." + trackId, { v: 2, classes, laps: laps.map(e => {
+    return { v: 2, classes, laps: laps.map(e => {
       const o = {};
       for (const k of Object.keys(e)) if (k !== "context") o[k] = e[k];
       if (e.context) {
@@ -875,7 +875,10 @@ const GameStore = (function () {
         o.c = at.get(e.context);
       }
       return o;
-    }) });
+    }) };
+  }
+  function ttWrite(trackId, laps) {
+    return store.write("ttlb." + trackId, ttPackBoard(laps));
   }
   const ttCtx = (e) => e.context || null;
   function ttBoard(trackId, context) {
@@ -922,7 +925,7 @@ const GameStore = (function () {
   }
 
   // ttRead stays module-private (ttBoard / ttBoardAdd* / ttParseBoard cover callers).
-  return { store, ttBoard, ttBoardAdd, ttBoardAddResult, ttBoardSaveResult, ttParseBoard,
+  return { store, ttBoard, ttBoardAdd, ttBoardAddResult, ttBoardSaveResult, ttParseBoard, ttPackBoard,
            hexToRgb, rgbToHex, seasonDriverId,
            migrateSeasonPoints,
            migrateCareer: SaveMigrate.migrateCareer,

@@ -111,17 +111,54 @@ const SettingsNav = (function () {
       .then((ok) => (!ok || typeof LayoutPresets === "undefined" ? fail() : true), fail);
     return presetsLoad;
   }
+  async function graphicsDetails() {
+    const host = panel("graphics");
+    if (!host || typeof GLX === "undefined") return false;
+    let retry = host.querySelector("[data-graphics-retry]");
+    const mount = () => {
+      DesktopGraphics.mount();
+      const focused = retry && document.activeElement === retry;
+      retry?.remove();
+      if (focused && !host.hidden) host.querySelector("[data-desktop-graphics] summary")?.focus({ preventScroll: true });
+      return true;
+    };
+    if (typeof DesktopGraphics !== "undefined") return mount();
+    if (!retry) {
+      retry = document.createElement("button");
+      retry.type = "button"; retry.setAttribute("data-graphics-retry", ""); retry.className = "adv-more-btn";
+      retry.onclick = graphicsDetails;
+      host.appendChild(retry);
+    }
+    if (retry.disabled) return false;
+    retry.disabled = true;
+    retry.textContent = "Loading graphics details…";
+    try {
+      if (typeof ScriptLoader !== "undefined") await ScriptLoader.create().load(["js/ui/desktop-graphics.js"], [], { strict: true, loaded: presetsLoaded });
+      if (typeof DesktopGraphics !== "undefined") return mount();
+    } catch (e) { Log.warn("ui", "Graphics details unavailable: " + e); }
+    retry.disabled = false;
+    retry.textContent = "Graphics details unavailable · Retry";
+    return false;
+  }
   enterFns.push((id) => {
-    if (id === "appearance") presets();
-    if (id === "graphics" && typeof GLX !== "undefined" && typeof ScriptLoader !== "undefined")
-      ScriptLoader.create().load(["js/ui/desktop-graphics.js"], [], { strict: true, loaded: presetsLoaded })
-        .then(ok => { if (ok && typeof DesktopGraphics !== "undefined") DesktopGraphics.mount(); });
+    if (id === "appearance") {
+      presets();
+      if (typeof AppearanceStudio !== "undefined" && AppearanceStudio.loaded()) AppearanceStudio.initUI();
+    }
+    if (id === "graphics") graphicsDetails();
   });
   if (typeof document !== "undefined" && document.addEventListener) {
     const owners = ["js/ui/screen-regions.js", "js/ui/screen-placement.js"];
     const loadPlacement = (files) => ScriptLoader.create().load(files, [[owners[0], owners[1]]], { strict: true, loaded: presetsLoaded });
-    if (typeof GameStore !== "undefined" && GameStore.store.get("screenPlacement", null) && typeof ScriptLoader !== "undefined") {
-      loadPlacement(owners).catch(error => Log.warn("ui", "Saved layout could not load: " + error.message));
+    if (typeof GameStore !== "undefined" && typeof ScriptLoader !== "undefined") {
+      const restoreSavedLayout = () => {
+        if (typeof ScreenPlacement !== "undefined" || !GameStore.store.get("screenPlacement", null)) return;
+        loadPlacement(owners).catch(error => Log.warn("ui", "Saved layout could not load: " + error.message));
+      };
+      restoreSavedLayout();
+      GameStore.store.subscribe?.(change => {
+        if (change.key === "screenPlacement" || change.key === null) restoreSavedLayout();
+      });
     }
     document.addEventListener("apex:spotify-arrange-return", async () => {
       try {
@@ -257,14 +294,11 @@ const SettingsNav = (function () {
         && (typeof GameAudio === "undefined" || GameAudio._stub);
       const loadTouch = id === "controls" && typeof Input !== "undefined" && Input.setPedalSlide
         && typeof TouchButtonSettings === "undefined" && typeof ScriptLoader !== "undefined";
-      // A cold search can arrive before the Studio mounts its picker.
-      const loadStudio = id === "appearance" && typeof after === "function" && typeof AppearanceStudio !== "undefined"
-        && !document.querySelector("#appearance-arrange-screen");
-      const loadFiles = id === "files" && typeof after === "function" && typeof SettingsExport !== "undefined"
-        && SettingsExport.ready && !SettingsExport.loaded();
-      if (!bundleTried && (loadAudio || loadTouch || loadStudio || loadFiles)) {
+      const loadFiles = id === "files" && typeof SettingsExport !== "undefined" && SettingsExport.loaded && !SettingsExport.loaded();
+      const loadAppearance = id === "appearance" && typeof AppearanceStudio !== "undefined" && !AppearanceStudio.loaded();
+      if (!bundleTried && (loadAudio || loadTouch || loadFiles || loadAppearance)) {
         let asked;
-        try { asked = Promise.resolve(loadFiles ? SettingsExport.ready() : loadStudio ? Promise.all([presets(), AppearanceStudio.initUI()]).then(([ok]) => ok) : loadAudio ? AudioPanel._ensure()
+        try { asked = Promise.resolve(loadAppearance ? AppearanceStudio.ensureLoaded() : loadFiles ? SettingsExport.ready() : loadAudio ? AudioPanel._ensure()
           : ScriptLoader.create().load(["js/ui/touch-button-settings.js"], [], { strict: true })); }
         catch (_) { asked = Promise.resolve(false); }
         asked.then((ok) => ok, () => false).then((ok) => {
@@ -312,7 +346,7 @@ const SettingsNav = (function () {
         SettingsExport.ensureMounted();
       }
       Log.info("game", `SettingsNav.show ${id}`);
-      if (id === "audio" || id === "controls") bundleNote(pages[id], id, bundleTried === "failed");
+      if (id === "audio" || id === "controls" || id === "appearance") bundleNote(pages[id], id, bundleTried === "failed");
       if (id === "controls" && typeof TouchButtonSettings !== "undefined") TouchButtonSettings.mountControls(_store, onSelect);
       // Lifecycle hooks also cover programmatic/search navigation, after lazy
       // loading, and before focus resolves newly mounted page controls.
@@ -331,20 +365,19 @@ const SettingsNav = (function () {
     // The audio bundle could not load (offline / UPDATE READY): the page still
     // reveals with the stub engine, so say why the sliders are silent.
     function bundleNote(panel, page, failed) {
-      const audio = page === "audio";
-      let n = audio ? document.getElementById("audioset-offline") : document.getElementById("pm-touch-offline");
+      const noteId = page === "audio" ? "audioset-offline" : page === "appearance" ? "pm-appearance-offline" : "pm-touch-offline";
+      let n = panel?.querySelector("#" + noteId);
       if (!failed && !n) return;
       if (!n) {
         if (!panel || typeof document.createElement !== "function") return;
-        n = document.createElement("p");
-        if (audio) n.id = "audioset-offline";
-        else n.id = "pm-touch-offline";
+        n = document.createElement("p"); n.id = noteId;
         n.className = "adv-help"; n.setAttribute("role", "status");
         panel.insertBefore(n, panel.firstChild);
       }
       // A role=status filled as it is inserted is not announced: say it once (uihunt4 #2).
       const say = failed && (n.hidden || !n.textContent) && typeof LiveRegion !== "undefined";
-      n.textContent = page === "audio" ? "AUDIO ENGINE DID NOT LOAD — CHECK YOUR CONNECTION OR RELOAD" : "Touch button settings could not load. Reopen Controls to retry.";
+      n.textContent = page === "audio" ? "AUDIO ENGINE DID NOT LOAD — CHECK YOUR CONNECTION OR RELOAD" :
+        page === "appearance" ? "Appearance editor could not load. Reopen Appearance to retry." : "Touch button settings could not load. Reopen Controls to retry.";
       n.hidden = !failed;
       if (say) LiveRegion.say(n.textContent, "hud");
     }
@@ -438,7 +471,7 @@ const SettingsNav = (function () {
     invalidate: () => { if (live) live.invalidate(); },
     onLeave: (fn) => { if (typeof fn === "function") leaveFns.push(fn); },
     onEnter: (fn) => { if (typeof fn === "function") enterFns.push(fn); },
-    lazy, flushLazy, presets,
+    lazy, flushLazy, presets, graphicsDetails,
   };
 })();
 Object.freeze(SettingsNav);

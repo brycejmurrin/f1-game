@@ -6301,6 +6301,7 @@ const TLX = (function () {
         // The cube stays unbound — envState() is where the difference shows.
         // The opt-out as a capability: game.js skips its whole probe branch (a track
         // sample, the latch bookkeeping) instead of calling a begin that returns null.
+        hdrOutputActive: _hdrPeak > 1,
         garageProbeEnabled: !!(garageProbeRequested && envRT && lit && lit.uniforms && lit.uniforms.garageBox),
         get envProbeOptOut() { return raceProbeOff || !envRT || _envGaveUp; },
         envProbeReady() { return !garageProbeRoom && (envReady || _envGaveUp); },

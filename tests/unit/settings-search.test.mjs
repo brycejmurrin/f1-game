@@ -59,7 +59,12 @@ test("a cold layout search waits for the picker and respects a later navigation"
   for (const leave of [false, true]) {
     const h = boot();
     let finish;
-    h.ctx.AppearanceStudio = { initUI: () => new Promise(resolve => { finish = resolve; }) };
+    let mounted = false;
+    h.ctx.AppearanceStudio = {
+      loaded: () => mounted,
+      ensureLoaded: () => new Promise(resolve => { finish = () => { mounted = true; resolve(true); }; }),
+      initUI() {},
+    };
     const result = h.result("arrange screen");
     assert.equal(result.dataset.settingResult, "appearance-arrange-screen");
     result.onclick();
@@ -217,6 +222,61 @@ test("an owner-greyed control reports the reason it is described by, not 'unavai
   assert.equal(h.dom.document.querySelector("#pm-panel-controls").children.length, 0, "no generic note is left on the page");
 });
 
+test("backup searches select the correct navigation tab without activating a file action", async () => {
+  const h = boot();
+  let finish, mounted = false, selected;
+  h.ctx.SettingsExport = {
+    loaded: () => mounted, ready: () => new Promise(resolve => { finish = resolve; }),
+    ensureMounted() {
+      if (h.dom.document.querySelector("#pm-files-show-save")) return;
+      for (const tab of ["save", "restore", "share"]) {
+        const target = h.el("button", "pm-files-show-" + tab, h.dom.document.querySelector("#pm-panel-files"));
+        target.setAttribute("role", "tab"); target.setAttribute("aria-selected", "false");
+        target.onclick = () => { selected = tab; };
+      }
+    },
+  };
+  const result = h.result("restore backup"); result.onclick();
+  mounted = true; finish(true); await tick();
+  assert.equal(selected, "restore");
+  assert.equal(h.dom.document.activeElement.id, "pm-files-show-restore");
+  h.nav.back(); assert.equal(h.dom.document.activeElement, result);
+  h.result("share code").onclick(); assert.equal(selected, "share");
+  h.nav.back(); h.result("save backup").onclick(); assert.equal(selected, "save");
+});
+
+test("search indexes available graphics effects on demand without mounting the graphics editor", async () => {
+  const h = boot();
+  h.ctx.GfxQuality = { supportsOption: key => key === "hdrOut" };
+  let loads = 0;
+  h.ctx.ScriptLoader = { create: () => ({ load: async () => {
+    loads++; vm.runInContext(read("js/ui/desktop-graphics.js"), h.ctx, { filename: absSrc("js/ui/desktop-graphics.js") }); return true;
+  } }) };
+  assert.equal(loads, 0);
+  h.result("HDR"); await tick();
+  assert.equal(loads, 1);
+  const result = h.ctx.Search.find("hdr").find(r => r.id === "graphics-hdrOut");
+  assert.equal(result.target, "desktop-detail-hdrOut-sel");
+  assert.equal(h.ctx.Search.find("adaptive rival models").length, 0);
+  assert.equal(h.dom.document.querySelector("[data-desktop-graphics]"), null);
+  h.result("HDR output"); assert.equal(loads, 1);
+  for (const page of ["graphics", "visual", "progress"]) {
+    h.ctx.Search.register("normal-route", [{ id: "new-setting", label: "New option", page, target: "some-setting" }]);
+  }
+  assert.throws(() => h.ctx.Search.register("bad-route", [{ id: "invalid", label: "No page", page: "missing", target: "invalid" }]));
+});
+
+test("player vocabulary resolves the driving line switch and wheel lock", () => {
+  const h = boot();
+  h.ctx.Search.registerRaceSettings(h.nav, { openSettingSearch() { return false; } });
+  for (const query of ["racing line", "driving line"]) {
+    assert.equal(h.ctx.Search.find(query).find(row => row.id === "driving-line-overlay").target, "rs-line-sel");
+  }
+  for (const query of ["wheel-lock", "anti lock", "anti-lock"]) {
+    assert.ok(h.ctx.Search.find(query).some(row => row.id === "wheel-lock"));
+  }
+});
+
 test("session search explains the requirement at Home and opens the destination in a race", () => {
   const h = boot();
   let active = false;
@@ -244,7 +304,8 @@ test("backup search waits for the files owner and selects only the requested tab
       if (files.querySelector("button")) return;
       for (const action of ["save", "restore", "share"]) {
         const tab = h.el("button", "pm-files-show-" + action, files);
-        tab.setAttribute("role", "tab"); tab.onclick = () => { selected = action; };
+        tab.setAttribute("role", "tab"); tab.setAttribute("aria-selected", "false");
+        tab.onclick = () => { selected = action; };
       }
     },
   };
