@@ -416,25 +416,25 @@ function applyGarage(file) {
 // so extras the shipped file does not name (an invented team, a one-off
 // setup.*) cannot linger, then apply GarageDefaults.file() through the same
 // loader a hand-picked export uses. Career / season / settings stay out.
-function resetGarage() {
+async function resetGarage() {
   if (typeof GarageDefaults === "undefined" || !GarageDefaults.file) {
     return { ok: false, reason: "no shipped garage defaults", applied: 0, skipped: 0 };
   }
-  const doomed = [];
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const full = localStorage.key(i);
-      if (!full || full.indexOf("apex26.") !== 0) continue;
-      const k = full.slice(7);
-      if (isGarageKey(k)) doomed.push(k);
-    }
-  } catch (_) { /* storage blocked: apply what we can */ }
+  const store = GameStore.store;
+  try { if (store.mirror) await store.mirror.ready; }
+  catch (_) { return { ok: false, reason: "garage storage is unavailable", applied: 0, skipped: 0 }; }
+  if (store.mirror && !store.mirror.inventoryKnown) return { ok: false, reason: "garage recovery is unavailable — reload and retry", applied: 0, skipped: 0 };
+  const doomed = store.knownKeys().filter(isGarageKey);
   let failed = 0;
   for (const k of doomed) {
     try { if (GameStore.store.set(k, undefined) === false) failed++; } catch (_) { failed++; }
   }
   const result = applyGarage(GarageDefaults.file());
   result.failed = (result.failed || 0) + failed;
+  // A reload must not restore a quota-refused garage row from its old mirror.
+  if (store.mirror && (store.mirror.pending || store.mirror.inFlight)) {
+    try { if (!await store.mirrorFlush()) result.failed++; } catch (_) { result.failed++; }
+  }
   return result;
 }
 
@@ -1001,7 +1001,7 @@ function create(G) {
     resetBtn.type = "button";
     resetBtn.textContent = resetLabel;
     resetBtn.title = "Clear parts, liveries, setups (career setup sheets included) and team/driver back to the shipped garage. Career saves and settings are never touched.";
-    resetBtn.onclick = () => {
+    resetBtn.onclick = async () => {
       if (reloading) return;
       if (!armed || armed.el !== resetBtn) {
         disarm(); unflash(resetBtn);
@@ -1012,7 +1012,11 @@ function create(G) {
         return;
       }
       disarm();
-      const r = resetGarage();
+      reloading = true; resetBtn.disabled = true;
+      let r;
+      try { r = await resetGarage(); }
+      catch (_) { r = { ok: false, reason: "garage storage is unavailable" }; }
+      reloading = false; resetBtn.disabled = false;
       if (!r.ok) { flash(resetBtn, resetLabel, String((r && r.reason) || "REFUSED").toUpperCase(), 2600); return; }
       Log.info("ui", "garage reset to shipped defaults", { applied: r.applied, skipped: r.skipped, failed: r.failed });
       if (r.failed) { flash(resetBtn, resetLabel, `STORAGE FULL — ${r.failed} NOT SAVED`, 3200); return; }

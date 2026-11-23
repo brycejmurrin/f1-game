@@ -3454,6 +3454,7 @@
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
+        "tests/unit/save-durability.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
@@ -3731,6 +3732,7 @@
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/net-roster.test.mjs",
+        "tests/unit/save-durability.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
@@ -6350,6 +6352,7 @@
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/player-dynamics-shipped-vm.test.mjs",
+        "tests/unit/save-durability.test.mjs",
         "tests/unit/setup-tune.test.mjs",
         "tests/unit/share-code.test.mjs"
       ]
@@ -6601,6 +6604,7 @@
         "tests/unit/i18n.test.mjs",
         "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/race-control.test.mjs",
+        "tests/unit/save-durability.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/store-registry.test.mjs",
         "tests/unit/tools-runnable-instruments.test.mjs"
@@ -6695,6 +6699,7 @@
         "tests/unit/real-race-tab-no-race.test.mjs",
         "tests/unit/real-race.test.mjs",
         "tests/unit/reliability.test.mjs",
+        "tests/unit/save-durability.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/setup-tune.test.mjs",
@@ -9156,6 +9161,9 @@
       "recentre": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
+      "reflectionProbe": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
       "release": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
@@ -9189,6 +9197,7 @@
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/source-pin-hygiene.test.mjs"
@@ -9210,7 +9219,8 @@
         "tests/unit/garage-arrival.test.mjs"
       ],
       "endGarageRes": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/photo-studio.test.mjs"
       ],
       "endHome": [
         "tests/unit/garage-arrival.test.mjs",
@@ -9246,6 +9256,9 @@
       ],
       "panelCover": [
         "tests/unit/garage-panel-side.test.mjs"
+      ],
+      "pinGarageRes": [
+        "tests/unit/photo-studio.test.mjs"
       ],
       "prepareExterior": [
         "tests/unit/garage-prebuild.test.mjs"
@@ -9479,6 +9492,7 @@
       "defaults": [
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/player-tools-backup.test.mjs",
+        "tests/unit/save-durability.test.mjs",
         "tests/unit/setup-tune.test.mjs"
       ],
       "experiment": [
@@ -9501,6 +9515,7 @@
         "tests/unit/setup-tune.test.mjs"
       ],
       "reset": [
+        "tests/unit/save-durability.test.mjs",
         "tests/unit/setup-tune.test.mjs"
       ],
       "*": [
@@ -9676,10 +9691,12 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "holdReleaseAll": [
-        "tests/unit/key-binds-hunt.test.mjs"
+        "tests/unit/key-binds-hunt.test.mjs",
+        "tests/unit/pedal-slide.test.mjs"
       ],
       "holdReleasePointer": [
-        "tests/unit/key-binds-hunt.test.mjs"
+        "tests/unit/key-binds-hunt.test.mjs",
+        "tests/unit/pedal-slide.test.mjs"
       ],
       "press": [
         "tests/unit/controller-profiles.test.mjs",
@@ -13099,6 +13116,7 @@
         "tests/unit/rival-attach-init.test.mjs",
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-passby-pool.test.mjs",
+        "tests/unit/save-durability.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/setup-tune.test.mjs",
         "tests/unit/speed-coupling.test.mjs",
@@ -15514,7 +15532,8 @@
         "tests/unit/storm-weather.test.mjs"
       ],
       "step": [
-        "tests/unit/carve-a-modules.test.mjs"
+        "tests/unit/carve-a-modules.test.mjs",
+        "tests/unit/light-presets.test.mjs"
       ]
     },
     "js/race/storm.js": {
@@ -21441,6 +21460,7 @@
         "tests/unit/career-backup.test.mjs",
         "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/save-durability.test.mjs",
         "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs"
       ],
@@ -21458,6 +21478,7 @@
         "tests/unit/settings-export.test.mjs"
       ],
       "mount": [
+        "tests/unit/save-durability.test.mjs",
         "tests/unit/settings-export.test.mjs"
       ],
       "pick": [
@@ -21489,6 +21510,7 @@
         "tests/unit/debris-opts.test.mjs",
         "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/save-durability.test.mjs",
         "tests/unit/scale-defaults.test.mjs",
         "tests/unit/settings-export-lazy.test.mjs",
         "tests/unit/settings-export.test.mjs"
@@ -21510,6 +21532,7 @@
       "ready": [
         "tests/unit/debris-opts.test.mjs",
         "tests/unit/game-ctx-surface.test.mjs",
+        "tests/unit/save-durability.test.mjs",
         "tests/unit/settings-export-lazy.test.mjs"
       ],
       "*": [

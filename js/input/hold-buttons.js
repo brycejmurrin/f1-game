@@ -36,11 +36,11 @@ const InputHoldButtons = (function () {
       // dropping it there switched LATCH off the moment the thumb left GAS.
       beforeReleaseAll(keepLatch);
       for (const h of holdBtns) {
-        if (touchOnly && h.ids.size > h.live.size) {
-          for (const id of h.ids) if (typeof id === "number") h.release(id);
+        if (touchOnly) {
+          for (const id of h.touchIds) h.release(id);
           continue;
         }
-        h.ids.clear();
+        h.ids.clear(); h.touchIds.clear();
         h.anchors && h.anchors.clear();
         h.levels && h.levels.clear();
         h.live && h.live.clear();
@@ -125,6 +125,7 @@ const InputHoldButtons = (function () {
       const axis = (opts && opts.axis) === "x" ? "x" : "y";
       const dir = (opts && opts.dir) || 1;
       const ids = new Set();
+      const touchIds = new Set(); // Includes slid-away contacts until lift; mouse/pen holds survive touch cleanup.
       const anchors = level ? new Map() : null;   // pointerId -> touchdown position and response
       const levels = level ? new Map() : null;    // pointerId -> current travel
       const live = new Map();                     // pointerId -> visible at pointerdown
@@ -170,6 +171,7 @@ const InputHoldButtons = (function () {
         paint(strongest, profile);
       }
       function release(pointerId) {
+        touchIds.delete(pointerId);
         if (gone.delete(pointerId) && gone.size === 0 && slid.size === 0) look(el, null);
         rects.delete(pointerId);
         ramps.delete(pointerId);
@@ -188,6 +190,8 @@ const InputHoldButtons = (function () {
         // the first was still down.
         const firstContact = ids.size === 0;
         ids.add(e.pointerId);
+        if (e.pointerType === "touch") touchIds.add(e.pointerId);
+        else touchIds.delete(e.pointerId);
         // A TRUSTED press hit-tested a rendered button, so it was visible: only a synthetic
         // (dispatched) event pays holdTargetGone's getComputedStyle walk up every ancestor.
         live.set(e.pointerId, e.isTrusted === false ? !holdTargetGone(el) : true);
@@ -227,7 +231,9 @@ const InputHoldButtons = (function () {
         }
         release(e.pointerId);
         try { el.releasePointerCapture(e.pointerId); } catch (_) { /* capture already gone */ }
-        gone.add(e.pointerId); if (!slid.size) look(el, "off");
+        gone.add(e.pointerId);
+        if (e.pointerType === "touch") touchIds.add(e.pointerId);
+        if (!slid.size) look(el, "off");
         to.press(e, true);
         return true;
       }
@@ -259,7 +265,7 @@ const InputHoldButtons = (function () {
         digitalPress(key);
         setTimeout(() => release(key), 100);
       });
-      const rec = { ids, apply, level: paint, anchors, levels, el, live, release, press, slid, gone, rects, ramps, paintLevel, move: null };
+      const rec = { ids, touchIds, apply, level: paint, anchors, levels, el, live, release, press, slid, gone, rects, ramps, paintLevel, move: null };
       holdBtns.push(rec);
       holdByEl.set(el, rec);
       holdById.set(id, rec);

@@ -216,3 +216,65 @@ test("AnnounceBanner holds the floor: a higher card queues instead of replacing 
   banner.tick(3);
   assert.equal(els.announceText.textContent, "FLAG");
 });
+
+
+test("StormFlash transition tails honor pause, explicit OFF, current atmosphere and reduced motion", () => {
+  const StormFlash = load("../../js/race/storm-flash.js", "StormFlash", {
+    Storm: { strikeIn: () => null, flashOk: reduced => !reduced },
+  });
+  const s = StormFlash.create(), heard = [];
+  const frame = { ambientSky: [1, 1, 1], ambientGround: [1, 1, 1], exposure: 2 };
+  const env = { raining: false, state: "race", raceT: 10, reduced: false, frame,
+    LT: { lightning: 1, lightningDecay: 8 }, audio: { thunder: v => heard.push(v) },
+    clamp: (v, a, b) => Math.max(a, Math.min(b, v)) };
+  s._ltBase = { ambientSky: [.1, .2, .3], ambientGround: [.05, .06, .07], exposure: 1 };
+  s._ltFlash = 1; s._thunderT = s._thunderDelay = 2;
+  s.step(0, env);
+  assert.equal(s._thunderT, 2); assert.equal(s._ltFlash, 1);
+  s.step(.25, env);
+  assert.equal(s._thunderT, 1.75);
+  assert.equal(frame.exposure, 1 + .22 * Math.exp(-2), "world flash follows the decaying sky after rain ends");
+  // A weather blend owns the base; following frames use its latest values.
+  s._ltBase.exposure = .6; s._ltBase.ambientSky[0] = .02;
+  s.step(.25, env);
+  assert.equal(frame.exposure, .6 + .22 * s._ltFlash);
+  assert.equal(frame.ambientSky[0], .02 + .55 * s._ltFlash);
+  s.step(2, env);
+  assert.equal(heard.length, 1, "thunder arrives even though the shower ended");
+  assert.equal(heard[0], .8, "loudness retains the original two-second distance");
+  s.step(60, env); env.raining = true; s.step(.1, env);
+  assert.equal(heard.length, 1, "a new shower cannot revive old thunder");
+  s._ltFlash = 1; s._thunderT = 2; env.LT.lightning = 0;
+  s.step(.25, env);
+  assert.equal(s._thunderT, -1, "explicit lightning OFF cancels queued thunder");
+  assert.equal(frame.exposure, .6 + .22 * Math.exp(-2), "OFF still fades world and sky together");
+  env.reduced = true;
+  s.step(0, env);
+  assert.equal(s._ltFlash, 0, "reduced motion clears a running flash even paused");
+  assert.equal(frame.exposure, .6);
+  assert.deepEqual(frame.ambientSky, [.02, .2, .3]);
+  frame.exposure = .9; env.raining = false; s.step(.1, env);
+  assert.equal(frame.exposure, .9, "dry idle does not overwrite atmosphere-owned lighting");
+});
+
+
+test("StormFlash retires queued thunder when quit releases the race atmosphere", () => {
+  const StormFlash = load("../../js/race/storm-flash.js", "StormFlash", {
+    Storm: { strikeIn: () => null },
+  });
+  const s = StormFlash.create(), heard = [];
+  s._thunderT = s._thunderDelay = .2;
+  // quitToMenu clears these two values before the menu's rendered frames.
+  s._ltBase = null; s._ltFlash = 0;
+  const frame = { ambientSky: [.2, .2, .2], ambientGround: [.1, .1, .1], exposure: .7 };
+  const env = { raining: true, state: "menu", skyT: 20, frame, LT: { lightning: 1 },
+    audio: { thunder: v => heard.push(v) }, clamp: (v, a, b) => Math.max(a, Math.min(b, v)) };
+  s.step(0, env);
+  assert.equal(s._thunderT, -1, "session teardown retires the queue even on a paused frame");
+  s.step(1, env);
+  assert.equal(heard.length, 0, "menu frames never play a previous race's thunder");
+  assert.equal(frame.exposure, .7, "menu atmosphere remains owned by the menu");
+  s._ltBase = { ambientSky: [.1, .1, .1], ambientGround: [.05, .05, .05], exposure: 1 };
+  env.state = "race"; env.raceT = 0; s.step(1, env);
+  assert.equal(heard.length, 0, "restoring a race base does not revive retired thunder");
+});

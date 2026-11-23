@@ -161,6 +161,30 @@ test("droplets: blown off at speed — fewer live drops at 80 m/s than parked", 
   assert.ok(b.calls.rotate > 0, "moving drops are drawn as rotated streaks");
 });
 
+test("helmet rain: reducing motion trims collected water and repaints once, even paused", () => {
+  for (const mobile of [false, true]) for (const dt of [0, 1 / 60]) {
+    const { D, calls } = makeDroplets({ mobile, helmet: true, rainAmount: "heavy", runoff: "slow", recordDraws: true });
+    run(D, 3, true, 1, true, 0, false);
+    const full = mobile ? 40 : 90;
+    assert.equal(D.stats().n, full, "start with a populated normal-motion lens");
+    const first = D.stats().first, clears = calls.clear;
+    D.tick(dt, true, 1, true, 0, true);
+    assert.equal(D.stats().n, full / 2, "existing population obeys the reduced cap immediately");
+    assert.equal(D.stats().cap, full / 2, "telemetry reports the active cap");
+    assert.equal(calls.clear, clears + 1, "old full-population pixels are erased");
+    assert.ok(calls.frameDraws.length <= full / 2, "redraw contains only retained beads");
+    if (!dt) {
+      assert.deepEqual(D.stats().first, first, "paused trimming preserves the retained bead state");
+      D.tick(0, true, 1, true, 0, true);
+      assert.equal(calls.clear, clears + 1, "unchanged paused motion mode does not repaint");
+      D.tick(0, true, 1, true, 0, false);
+      assert.equal(D.stats().cap, full, "normal-motion cap is restored");
+      assert.equal(D.stats().n, full / 2, "restoring the cap does not spawn paused water");
+      assert.equal(calls.clear, clears + 2, "restoring motion repaints retained water once");
+    }
+  }
+});
+
 test("droplets: reduced motion — drops never move or streak", () => {
   const { D, calls } = makeDroplets();
   run(D, 3, true, 1, true, 80, true);
