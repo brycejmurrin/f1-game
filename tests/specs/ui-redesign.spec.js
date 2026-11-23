@@ -1212,6 +1212,36 @@ test("Learn opens the wake lesson and returns keyboard focus to its title door",
   await lesson.click();
   const lab = page.frameLocator("#learn-lab");
   await expect(lab.locator("#wake")).toHaveText("86%");
+  await expect(lab.locator("#grip")).toHaveText("88%");
+  await expect(lab.locator("#tow")).toHaveText("86%");
+  await lab.getByRole("slider", { name: "Following gap", exact: false }).press("ArrowRight");
+  await expect(lab.locator("#gap")).toHaveValue("11");
+  const flow = lab.locator("#flow");
+  await flow.scrollIntoViewIfNeeded();
+  const box = await flow.boundingBox();
+  if (!box) throw new Error("missing airflow diagram");
+  const followerX = box.x + box.width * (0.68 - 0.57 * (11 - 5) / 40);
+  const followerY = box.y + box.height * 0.52;
+  await page.mouse.move(followerX, followerY);
+  await page.mouse.down();
+  await page.mouse.move(followerX - box.width * 0.57, followerY);
+  await page.mouse.up();
+  await expect(lab.locator("#gap")).toHaveValue("45");
+  await expect(lab.locator("#wake")).toHaveText("0%");
+  await expect(lab.locator("#grip")).toHaveText("100%");
+
+  await lab.getByLabel("The tow goes away. The wake still reduces grip.").check();
+  await lab.getByRole("button", { name: "Check prediction" }).click();
+  await expect(lab.locator("#feedback")).toHaveText("Correct. The usable tow drops from 86% to 0%. Grip stays at 88% of clean air.");
+  await expect(lab.locator("#gap")).toHaveValue("10");
+  await expect(lab.locator("#tow")).toHaveText("0%");
+  await expect(lab.locator("#grip")).toHaveText("88%");
+  await expect(lab.getByRole("heading", { name: "2026 F1 ACTIVE AERO" })).toBeVisible();
+  await expect(lab.locator("#local-pressure")).toHaveText("64%");
+  await lab.getByRole("slider", { name: "Local flow speed", exact: false }).press("ArrowRight");
+  await expect(lab.locator("#local-pressure")).toHaveText("66%");
+  await expect(lab.locator("#pressure-ratio")).toHaveText("0.81² = 0.66 of the clean-air pressure and force.");
+  await expect(lab.locator("#grip")).toHaveText("88%");
   // Appearance changes must reach the iframe without resetting the lesson.
   await page.evaluate(() => {
     AppearanceOpts.setTheme("light");
@@ -1239,9 +1269,16 @@ test("Learn Grip & Braking lets the player release brake into the force envelope
   await lesson.click();
   const lab = page.frameLocator("#learn-lab");
   await expect(lab.locator("#turnLimit")).toHaveText("60.0%");
+  const firstScreen = await lab.locator(".plot").evaluate(plot => {
+    const bounds = plot.getBoundingClientRect();
+    const controls = document.querySelector("[data-as=controls]").getBoundingClientRect();
+    return { plotLeft: bounds.left, plotBottom: bounds.bottom, controlsRight: controls.right, viewportHeight: innerHeight };
+  });
+  expect(firstScreen.plotLeft).toBeGreaterThan(firstScreen.controlsRight);
+  expect(firstScreen.plotBottom).toBeLessThanOrEqual(firstScreen.viewportHeight);
   const brake = lab.getByRole("slider", { name: "Brake demand" });
   const turn = lab.getByRole("slider", { name: "Lateral demand" });
-  await lab.getByRole("button", { name: "Try 80% turning" }).click();
+  await lab.getByRole("button", { name: "Try 8 kN lateral" }).click();
   await expect(lab.locator("#utilization")).toHaveText("113.1%");
   await expect(lab.locator("#achieved")).toHaveText("70.7% / 70.7%");
   await expect(lab.locator("#brakeLimit")).toHaveText("60.0%");
@@ -1263,6 +1300,21 @@ test("Learn Grip & Braking lets the player release brake into the force envelope
   await expect(brake).toHaveCSS("accent-color", "rgb(0, 163, 224)");
   await lab.getByRole("button", { name: "Reset", exact: true }).click();
   await expect(lab.locator("#achieved")).toHaveText("80.0% / 0.0%");
+  await lab.getByRole("button", { name: "Meet a damp patch" }).click();
+  await expect(lab.locator("#delivered")).toHaveText("4.2 / 5.6 kN");
+  await expect(lab.locator("#utilization")).toHaveText("142.9%");
+  await expect(lab.locator("#brakeLimit")).toHaveText("Lateral demand alone exceeds cap");
+  await lab.getByRole("button", { name: "8 kN", exact: true }).click();
+  await expect(lab.locator("#answer")).toContainText("11.3 kN");
+  await lab.getByRole("button", { name: "6 kN", exact: true }).click();
+  await expect(lab.locator("#answer")).toContainText("10 kN exactly");
+  await lab.getByRole("button", { name: "Plot the 6 kN limit" }).click();
+  await expect(brake).toBeFocused();
+  await expect(lab.locator("#delivered")).toHaveText("6.0 / 8.0 kN");
+  const plot = lab.locator(".plot");
+  const { width, height } = await plot.boundingBox();
+  await plot.click({ position: { x: width * .5, y: height * .5 } });
+  await expect(lab.locator("#delivered")).toHaveText("5.0 / 5.0 kN");
   await brake.press("Escape");
   await expect(lesson).toBeFocused();
 });
