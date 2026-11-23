@@ -10,25 +10,30 @@
 </head>
 <body>
 <main>
-<header><h1>Aero Lab</h1><p>Move the following car through the leader’s wake. Where does a tow help?</p></header>
-<div class="layout">
-<section class="tunnel" aria-label="Wind tunnel">
-<div class="instrument"><strong>Wind tunnel</strong><button id="motion" type="button">Pause flow</button></div>
-<canvas id="flow" width="720" height="276" aria-label="Top-down airflow diagram. Adjust the following gap using the control below."></canvas>
-<div class="legend"><span>← Airflow</span> <span><i id="leaderKey"></i> A · Leader</span><span><i id="followerKey"></i> B · Follower</span></div>
-<p class="wing" id="wing"></p>
-<div class="settings">
+<h1 id="lessonTitle">Aero Lab</h1>
+<div id="learn-studio">
+<div data-as="controls">
+<section class="settings" data-as="box"><h2 data-as="heading">CAR B SETUP</h2>
 <label for="gap">Following gap <output id="gapValue" for="gap"></output></label>
 <input id="gap" type="range" min="5" max="45" step="1" value="10">
 <div class="limits"><span>5 m · Close</span><span>45 m · Clear</span></div>
 <fieldset><legend>Track section</legend><div><label><input type="radio" name="section" value="straight" checked> Straight</label><label><input type="radio" name="section" value="corner"> Fast corner</label></div></fieldset>
 <label class="check"><input id="offset" type="checkbox"> Move follower 4 m off-line</label>
-</div></section>
-<section class="results" aria-label="Follower measurements"><p class="kicker">FOLLOWING CAR</p><h2 id="state" aria-live="polite"></h2>
+
+</section>
+<section data-as="box"><h2 data-as="heading">TRY IT</h2>
+<p>Stay 10 m behind the leader. Switch to the corner, then move off-line. Which change restores grip?</p></section>
+</div>
+<section data-as="preview-side" aria-label="Live wind tunnel">
+<div class="instrument"><strong>Wind tunnel</strong><button id="motion" type="button">Pause flow</button></div>
+<canvas id="flow" width="720" height="276" aria-label="Top-down airflow diagram. Adjust the following gap using the control below."></canvas>
+<div class="legend"><span>← Airflow</span> <span><i id="leaderKey"></i> A · Leader</span><span><i id="followerKey"></i> B · Follower</span></div>
+<p class="wing" id="wing"></p>
+<div class="results" aria-label="Follower measurements">
+<h2 id="state" aria-live="polite"></h2>
 <div class="reading"><div>Wake exposure <strong id="wake"></strong></div><meter aria-label="Wake exposure" id="wakeMeter" min="0" max="1"></meter></div>
 <div class="reading"><div>Grip retained <strong id="grip"></strong></div><meter aria-label="Grip retained" id="gripMeter" min="0" max="1"></meter></div>
-<p id="effect"></p><aside><b>Try it</b><p>Stay 10 m behind the leader. Switch to the corner, then move off-line. Which change restores grip?</p></aside>
-<details><summary>Model and sources</summary><p>Apex’s classic wake model uses forward gap and lateral offset. Grip is the wake multiplier relative to clean air at the same speed. Both presets hold speed at the game reference of 72 m/s (259 km/h). The straight assumes steady steering and no braking; the corner assumes enough steering to lose the tow.</p><p>Car positions are schematic. Tracers illustrate airflow. The 34 m centreline cutoff belongs to this game model.</p><p><a href="https://doi.org/10.4271/2017-01-1546" target="_blank" rel="noopener">Wake-flow research</a> · <a href="https://www.fia.com/regulations/category/110" target="_blank" rel="noopener">FIA regulations</a></p></details></section>
-</div>
+<p id="effect"></p></div></section></div>
+<details><summary>Model and sources</summary><p>Apex’s classic wake model uses forward gap and lateral offset. Grip is the wake multiplier relative to clean air at the same speed. Both presets hold speed at the game reference of 72 m/s (259 km/h). The straight assumes steady steering and no braking; the corner assumes enough steering to lose the tow.</p><p>Car positions are schematic. Tracers illustrate airflow. The 34 m centreline cutoff belongs to this game model.</p><p><a href="https://doi.org/10.4271/2017-01-1546" target="_blank" rel="noopener">Wake-flow research</a> · <a href="https://www.fia.com/regulations/category/110" target="_blank" rel="noopener">FIA regulations</a></p></details>
 </main>
 </body></html>

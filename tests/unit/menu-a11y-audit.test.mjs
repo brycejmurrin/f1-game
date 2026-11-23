@@ -644,8 +644,10 @@ test("Learn opens a named modal from the title and unloads Aero Lab on dismissal
   assert.equal(dialog.hidden, false);
   assert.equal(dom.byId(dialog.getAttribute("aria-labelledby")).textContent, "LEARN");
   const close = dom.byId(dialog.getAttribute("data-esc-close"));
-  assert.equal(close.getAttribute("aria-label"), "Close Learn");
-  assert.equal(close.autofocus, true);
+  const lesson = dom.byId("learn-open-aero");
+  assert.equal(lesson.autofocus, true);
+  assert.equal(frame.getAttribute("src"), null);
+  lesson.click();
   assert.equal(frame.title, "Aero Lab");
   assert.equal(frame.getAttribute("src"), "learn/aero/index.html");
 
@@ -654,8 +656,11 @@ test("Learn opens a named modal from the title and unloads Aero Lab on dismissal
   onMessage({ origin, source: {}, data });
   assert.equal(dialog.hidden, false);
   onMessage({ origin, source: frame.contentWindow, data });
-  assert.equal(dialog.hidden, true);
+  assert.equal(dialog.hidden, false);
+  assert.equal(dom.document.activeElement, lesson);
   assert.equal(frame.getAttribute("src"), null);
+  close.click();
+  assert.equal(dialog.hidden, true);
   queue.shift()();
   assert.equal(dom.document.activeElement, door);
   door.click();

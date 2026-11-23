@@ -1173,6 +1173,8 @@ test("Learn opens the wake lesson and returns keyboard focus to its title door",
   await waitReady(page);
   const door = page.locator("#mb-learn");
   await door.click();
+  const lesson = page.locator("#learn-open-aero");
+  await lesson.click();
   const lab = page.frameLocator("#learn-lab");
   await expect(lab.locator("#wake")).toHaveText("86%");
   // Appearance changes must reach the iframe without resetting the lesson.
@@ -1187,7 +1189,10 @@ test("Learn opens the wake lesson and returns keyboard focus to its title door",
   await lab.getByLabel("Move follower 4 m off-line").check();
   await expect(lab.locator("#grip")).toHaveText("100%");
   await lab.locator("#gap").press("Escape");
+  await expect(lesson).toBeFocused();
+  await page.locator("#learn-close").click();
   await expect(door).toBeFocused();
   await door.click();
+  await lesson.click();
   await expect(lab.locator("#state")).toHaveText("Tow available");
 });

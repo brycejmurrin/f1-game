@@ -13,6 +13,7 @@
   // frameElement is null for standalone and cross-origin embeds.
   const host = window.frameElement;
   const hostRoot = host?.ownerDocument.documentElement;
+  get("lessonTitle").hidden = Boolean(host);
   const root = document.documentElement;
   const scheme = matchMedia("(prefers-color-scheme: light)");
   const tokens = ["--red", "--bg", "--text", "--dim", "--surf-1", "--surf-3",
@@ -54,14 +55,14 @@
   }
 
   // Use the shell's exact stylesheet URLs, including deployed offline cache keys.
-  for (const name of ["tokens", "fonts-hud"]) {
+  for (const name of ["tokens", "fonts-hud", "appearance-studio"]) {
     const sheet = document.createElement("link");
     sheet.rel = "stylesheet";
     const parentSheet = host?.ownerDocument.querySelector(
       'link[rel="stylesheet"][href*="css/' + name + '.css"]');
     sheet.href = parentSheet?.href || "../../css/" + name + ".css";
     sheet.addEventListener("load", syncAppearance);
-    document.head.prepend(sheet);
+    document.head.insertBefore(sheet, document.querySelector('link[href="style.css"]'));
   }
 
   // Coordinates are schematic so both cars stay legible at the smallest gap.

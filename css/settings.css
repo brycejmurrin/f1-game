@@ -88,6 +88,7 @@
    the top of the track (pointer-events: none) so the grab target stays the
    full row. */
 #pmsettings-inner .pm-group button,
+#learn .pm-doors button,
 #pmsettings-inner .pm-doors button {
   height: var(--tap);
   min-height: var(--tap);
@@ -342,6 +343,7 @@
 @media (hover: hover) and (pointer: fine) {
   .tune-revert:hover { color: var(--text); background: var(--plate-hover); }
 }
+#learn .pm-doors button,
 #pmsettings-inner .pm-doors button {
   width: auto;
   height: auto;
@@ -355,6 +357,7 @@
   background: var(--plate-opaque);
   border-color: color-mix(in oklab, var(--steel) 42%, transparent);
 }
+#learn .pm-doors small,
 #pm-settings-index small {
   font-size: var(--fs-micro); font-weight: 400; letter-spacing: normal;
   color: var(--dim);

@@ -12,13 +12,17 @@
   letter-spacing: var(--ls-2);
   color: var(--dim);
 }
+#learn-studio,
 #appearance-studio { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gap); align-items: start; }
 #appearance-studio [data-as="photo-picker"] { margin-top: var(--gap); min-width: 0; }
 #appearance-studio [data-as="photo-picker"] select { flex: 1 1 12ch; width: 100%; min-width: 0; max-width: 100%; }
 #appearance-studio [data-as="photo-preview"] { display: block; max-width: 100%; width: min(100%, 320px); max-height: 180px; object-fit: contain; margin-block: var(--gap); border-radius: var(--r-sm); }
 #appearance-studio [data-as="photo-picker"][hidden], #appearance-studio [data-as="photo-preview"][hidden] { display: none; }
+#learn-studio [data-as="controls"],
 #appearance-studio [data-as="controls"] { display: grid; gap: var(--gap); min-width: 0; }
+#learn-studio [data-as="box"],
 #appearance-studio [data-as="box"] { padding: var(--pad); border: 1px solid var(--plate-line); border-radius: var(--r-md); background: var(--surf-1); min-width: 0; }
+#learn-studio [data-as="heading"],
 #appearance-studio [data-as="heading"] { margin: 0 0 var(--gap); font-size: var(--fs-2); color: var(--dim); letter-spacing: var(--ls-2); }
 #appearance-studio [data-as="row"] { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) * .5); margin-block: calc(var(--gap) * .6); min-width: 0; }
 #appearance-studio [data-as="label"] { flex: 0 0 28%; font-size: var(--fs-2); }
@@ -145,6 +149,7 @@
 }
 #appearance-studio [data-as="note"], #appearance-studio [data-as="status"] { font-size: var(--fs-micro); color: var(--dim); line-height: 1.5; margin: var(--gap) 0 0; }
 #appearance-studio [data-as="status"] { color: var(--text); min-height: 1.5em; }
+#learn-studio [data-as="preview-side"],
 #appearance-studio [data-as="preview-side"] { position: sticky; top: 0; min-width: 0; padding: var(--pad); background: var(--surf-1); border: 1px solid var(--plate-line); border-radius: var(--r-md); }
 #appearance-studio [data-as="preview-toolbar"] { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); margin-bottom: var(--gap); }
 #appearance-studio [data-as="preview-wrap"] { display: flex; justify-content: center; background: var(--carbon); border: 1px solid var(--plate-line); border-radius: var(--r-md); overflow: hidden; }
@@ -164,7 +169,9 @@
 #pm-panel-appearance > [data-as="advanced"] > summary { min-height: var(--tap-paint); font-size: var(--fs-2); font-weight: 700; cursor: pointer; }
 #pmsettings-inner:has(#pm-panel-appearance:not([hidden])[data-appearance-studio]) { --sheet-w: calc(var(--tap) * 25); max-width: min(calc(var(--tap) * 31), calc(100 * var(--vwz) - var(--pad) * 2)); }
 @media (max-width: 900px) {
+  #learn-studio,
   #appearance-studio { grid-template-columns: minmax(0, 1fr); }
+  #learn-studio [data-as="preview-side"],
   #appearance-studio [data-as="preview-side"] { position: static; order: -1; }
   #appearance-studio [data-as="preview-toolbar"] { gap: calc(var(--gap) * .5); }
   #appearance-studio [data-as="preview-toolbar"] > [data-as="segment"] { flex: 1 1 100%; }
@@ -175,7 +182,9 @@
   #appearance-studio [data-as="preview-wrap"][data-shape="phone"] [data-as="preview"] { max-height: calc(var(--tap) * 10); min-height: 0; }
 }
 @media (max-height: 500px) and (min-width: 641px) {
+  #learn-studio,
   #appearance-studio { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+  #learn-studio [data-as="preview-side"],
   #appearance-studio [data-as="preview-side"] { order: 0; position: sticky; top: 0; padding: calc(var(--pad) * .5); }
   #appearance-studio [data-as="preview"] { padding: calc(var(--pad) * .5); min-height: calc(var(--tap) * 3); }
   #appearance-studio [data-as="preview-content"] { max-width: 100%; }
@@ -201,6 +210,7 @@
   --sheet-w: min(calc(var(--tap) * 25), calc(100 * var(--vwz) - var(--pad)));
   max-width: min(calc(var(--tap) * 31), calc(100 * var(--vwz) - var(--pad)));
 }
+#learn-studio,
 #appearance-studio { width: 100%; min-width: 0; }
 #pmsettings-inner[data-shape="tall"] #appearance-studio {
   grid-template-columns: minmax(0, 1fr);

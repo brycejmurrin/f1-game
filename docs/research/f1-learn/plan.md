@@ -95,6 +95,10 @@ Give safety and governance their own reading path. Pair a documented incident wi
 
 [Sporting rules](sport.md) · [Technical and power-unit rules](tech.md) · [History, safety and governance](history.md) · [Vehicle dynamics and model fixtures](physics.md) · [Data Hub architecture](hub.md) · [Gameplay systems and reuse](game.md)
 
+## Implemented Learn menu structure
+
+Learn uses the Settings menu hierarchy: a lesson index, a lesson page and a persistent Back footer. Back from a lesson returns focus to its index entry; Back from the index returns to the title. Each new lesson uses the same Appearance Studio layout: grouped controls and a live preview side by side on wide screens, with controls above the preview on narrow phones. Only playable lessons appear in the index.
+
 ## Session designs after the first Aero Lab
 
 The first lesson opens with two cars 10 m apart. At the same gap, switching to the fast corner preserves wake exposure and removes the usable tow. Moving four metres off-line restores the game's clean-air grip baseline. The next lessons should give players similarly short, reproducible comparisons.
