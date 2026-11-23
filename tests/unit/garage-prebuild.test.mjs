@@ -712,10 +712,10 @@ test("renderer replacement releases garage resources through their original owne
   const h = sceneHarness(true, { crew: true }), garage = h.GarageScene;
   garage.prepare(TEAM, LIV, null, 0, {});
   const prepared = h.live.size;
-  garage.draw(TEAM, LIV, [0, 1.6, 0], null, 0, { ambient: false }, {});
+  garage.draw(TEAM, LIV, [0, 1.6, 0], null, 0, { ambient: false, reflectionHull: [0, 1, 0] }, {});
   assert.equal(h.live.size, prepared + 1, "drawing a car creates its floor-reflection fade mesh");
   const beforeArrival = h.handles.length;
-  garage.draw(TEAM, LIV, [0, 1.6, 0], null, 0, { ambient: false }, {}, { door: 0.5, x: 0, z: 0 });
+  garage.draw(TEAM, LIV, [0, 1.6, 0], null, 0, { ambient: false, reflectionHull: [0, 1, 0] }, {}, { door: 0.5, x: 0, z: 0 });
   const crew = h.handles.slice(beforeArrival);
   assert.equal(crew.length, 4, "the pitstop arrival creates its two figure meshes, posed crew and pole");
   for (const mesh of crew) assert.equal(h.live.has(mesh), true);

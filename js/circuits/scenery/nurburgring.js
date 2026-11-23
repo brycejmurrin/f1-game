@@ -164,9 +164,9 @@
       marshalPost(K(0.140), -1, 10);
       // Haug-Haken (T1): downhill hairpin runoff outside the apex — the classic
       // divebomb zone on the GP-Strecke (MotorSportRadar / Coach Dave Academy).
-      groundPatch(K(0.028), 1, 5, [20, 0.18, 28], GRAVEL,
+      groundPatch(K(0.028), -1, 5, [20, 0.18, 28], GRAVEL,
         { id: "nurburgring-haug-haken-gravel", samples: 6 });
-      tyreWall(0.018, 0.040, 1, 4.5, [0.86, 0.20, 0.18]);
+      tyreWall(0.018, 0.040, -1, 4.5, [0.86, 0.20, 0.18]);
       marshalPost(K(0.030), -1, 9);
 
       {
@@ -324,9 +324,9 @@
       marshalPost(K(0.826), 1, 9);
       // Coca-Cola Kurve (T15): final right-hander onto the pit straight — gravel
       // on the outside exit (InsideF2 / Coach Dave Academy track guides).
-      groundPatch(K(0.855), 1, 5, [18, 0.18, 24], GRAVEL,
+      groundPatch(K(0.855), -1, 5, [18, 0.18, 24], GRAVEL,
         { id: "nurburgring-coca-cola-gravel", samples: 5 });
-      tyreWall(0.848, 0.868, 1, 4.2, [0.86, 0.20, 0.18]);
+      tyreWall(0.848, 0.868, -1, 4.2, [0.86, 0.20, 0.18]);
       {
         const a = anchor(K(0.860), -1, 14);
         const b = [a.r, a.u, a.t];
