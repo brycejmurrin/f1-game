@@ -127,7 +127,9 @@ test("missing stage inputs leave a previous stage intact", () => {
   const root = path.join(fixture, "repo"), dest = path.join(fixture, "site");
   fs.mkdirSync(root); fs.mkdirSync(dest);
   for (const name of STAGE_ROOT_FILES) fs.writeFileSync(path.join(root, name), "{}");
-  for (const name of STAGE_DIRS.slice(0, -1)) fs.mkdirSync(path.join(root, name));
+  for (const name of STAGE_DIRS) {
+    if (name !== "locales") fs.mkdirSync(path.join(root, name));
+  }
   fs.writeFileSync(path.join(dest, "index.html"), "previous complete site");
   fs.writeFileSync(path.join(dest, "version.json"), "{}");
   try {
