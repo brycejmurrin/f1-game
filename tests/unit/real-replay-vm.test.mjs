@@ -56,7 +56,8 @@ test("WATCH: the field becomes puppets on the countdown frame, the camera on the
     const RR = vm.runInContext("RealRace", g.ctx);
     const { script } = scriptIn(g);
     const traces = { frame: "track", cars: { 63: line(-14, 50, 0, -5, 200), 16: line(-22, 48, 1, -5, 200), 18: line(-30, 45, -1, -5, 60) } };
-    const savedCamera = G.camMode;
+    const drivingCamera = G.camMode;
+    const savedCamera = G.store.get("camMode");
     const staged = RR.launch(script, { seat: "LEC", watch: true, camera: "heli", traces, startLap: 1 });
     assert.deepEqual(host(staged), { trackId: "baku", laps: 51, seat: "LEC", startLap: 1, watch: true, reel: false });
     await g.settle(() => G.track && G.track.def && G.track.def.id === "baku" && (G.state === "count" || G.state === "race"), 8000);
@@ -66,9 +67,9 @@ test("WATCH: the field becomes puppets on the countdown frame, the camera on the
     assert.ok(st.replay && st.replay.follow === "LEC" && st.replay.cars === 3, JSON.stringify(st.replay));
     assert.equal(G.player.code, "LEC", "the camera and HUD are on the seat");
     assert.equal(G.camMode, 6, "WATCH uses the requested aerial camera");
-    assert.equal(G.store.get("camMode", savedCamera), savedCamera, "WATCH does not overwrite the driving camera");
+    assert.equal(G.store.get("camMode"), savedCamera, "WATCH does not overwrite the driving camera");
     G.setCamMode(11);
-    assert.equal(G.store.get("camMode", savedCamera), savedCamera, "manual WATCH camera changes also stay session-only");
+    assert.equal(G.store.get("camMode"), savedCamera, "manual WATCH camera changes also stay session-only");
     assert.ok(G.cars.every((c) => !c.human), "nobody drives");
     const by = (code) => G.cars.find((c) => c.code === code);
     assert.ok(RR.replay().owns(by("RUS")) && RR.replay().owns(by("LEC")) && RR.replay().owns(by("HAM")), "every car is the replay's");
@@ -110,7 +111,7 @@ test("WATCH: the field becomes puppets on the countdown frame, the camera on the
     g.step(1);
     assert.equal(RR.replay().isRunning(), false, "the replay stopped with the director at the results");
     assert.equal(RR.status().armed, false);
-    assert.equal(G.camMode, savedCamera, "leaving WATCH restores the driving camera");
+    assert.equal(G.camMode, drivingCamera, "leaving WATCH restores the driving camera");
   } finally { g.close(); }
 });
 

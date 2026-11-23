@@ -94,7 +94,7 @@ export function checkCamMotion() {
   const modes = [
     "chase", "far", "drift", "low", "reverse",
     "heli", "side", "cinematic", "overhead", "drone", "rival", "pitwall", "trackside",
-    "cockpit", "hood", "tcam", "rear",
+    "cockpit", "hood", "tcam", "rear", "helmet",
   ];
   const rows = [];
   for (const mode of modes) {
