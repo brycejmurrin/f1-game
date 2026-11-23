@@ -599,6 +599,33 @@ for (const [resolution, width, height] of [["normal", 1920, 1080], ["4k", 3840, 
   await b.api.exportPhoto(); assert.equal(b.downloads.length,1);
 });
 
+test("Home photo uses the same native framing at full and half render scale", async () => {
+  const b = boot();
+  let scale = 1, captureSize;
+  Object.defineProperties(b.G.gfx, {
+    width: { get: () => Math.round(390 * scale) },
+    height: { get: () => Math.round(845 * scale) },
+  });
+  Object.assign(b.G.gfx, {
+    getRenderScale: () => scale,
+    setRenderScale: value => { scale = value; },
+    setPhotoCaptureSize: size => { captureSize = size; },
+    capturePixels() {
+      const { width, height } = captureSize;
+      return { width, height, data: new Uint8ClampedArray(width * height * 4) };
+    },
+  });
+  b.api.open({ source: "home" });
+  const dimensions = () => [b.api.state().width, b.api.state().height];
+  assert.equal(await b.api.capture(), true);
+  const native = dimensions();
+  scale = 0.5;
+  assert.equal(await b.api.capture(), true);
+  assert.deepEqual(dimensions(), native);
+  assert.equal(scale, 0.5);
+  assert.equal(captureSize, null);
+});
+
 test("multi-sample 4K captures use a fresh draw for each sample and retain the selected resolution", async () => {
   const sizes = [];
   let freshDraws = 0;

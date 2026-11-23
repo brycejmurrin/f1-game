@@ -777,14 +777,6 @@ function create(G, deps) {
   async function fullRes(run, highRes) {
     const gfx = G.gfx, prev = gfx && gfx.getRenderScale && gfx.setRenderScale ? gfx.getRenderScale() : 1;
     let size = null;
-    const canSize = gfx?.setPhotoCaptureSize && gfx.width > 0 && gfx.height > 0;
-    if (highRes || (isGarage() && canSize && Math.max(gfx.width, gfx.height) < 1920)) {
-      if (!canSize) throw new Error("High-resolution capture is unavailable");
-      const edge = highRes ? 3840 : 1920;
-      const factor = Math.min(edge / Math.max(gfx.width, gfx.height), Math.sqrt((edge * edge * 9 / 16) / (gfx.width * gfx.height)));
-      if (highRes || factor > 1) size = { width: Math.max(1, Math.round(gfx.width * factor)), height: Math.max(1, Math.round(gfx.height * factor)) };
-    }
-    if (!size && prev >= 1) return run();
     const release = () => {
       if (releaseCaptureScale !== release) return;
       releaseCaptureScale = null;
@@ -794,7 +786,19 @@ function create(G, deps) {
     releaseCaptureScale = release;
     try {
       if (prev !== 1) gfx.setRenderScale(1);
-      if (size) gfx.setPhotoCaptureSize(size);
+      // Capture backing dimensions are measured at native scale.
+      // Using the live buffer before restoring scale rounds the aspect twice.
+      const width = gfx?.width, height = gfx?.height;
+      const canSize = gfx?.setPhotoCaptureSize && width > 0 && height > 0;
+      if (highRes || (isGarage() && canSize && Math.max(width, height) < 1920)) {
+        if (!canSize) throw new Error("High-resolution capture is unavailable");
+        const edge = highRes ? 3840 : 1920;
+        const factor = Math.min(edge / Math.max(width, height), Math.sqrt((edge * edge * 9 / 16) / (width * height)));
+        if (highRes || factor > 1) {
+          size = { width: Math.max(1, Math.round(width * factor)), height: Math.max(1, Math.round(height * factor)) };
+          gfx.setPhotoCaptureSize(size);
+        }
+      }
       return await run();
     } finally { release(); }
   }
