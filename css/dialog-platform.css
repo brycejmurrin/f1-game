@@ -53,6 +53,9 @@ dialog.screen.dim::backdrop {
 
 /* The header stays reachable while the lesson scrolls inside its own frame. */
 #learn > .sheet {
+  /* Keep the embedded document and its pointer hit targets in one pixel space. */
+  --sheet-scale: 1;
+  zoom: 1;
   --sheet-w: 1120px;
   --fit-at: 340px;
   height: min(100%, 840px);
