@@ -3410,13 +3410,13 @@ test("three still treats NoBlending as non-opaque (why the tag cannot live in op
 
 test("the garage floor reflection depth-resolves after the room on all backends", () => {
   // noDepthTest + alpha drew the mirrored car into empty pixels below the bay
-  // slab (a duplicate under the floor). Room-first + MIRROR_RESOLVE depth bias
-  // clips to floor/props; mirrorSheen + ensureMirrorFade keep contact sheen.
+  // slab (a duplicate under the floor). The projected footprint fits it
+  // to the slab and the floor composites over the opaque reflection.
   const scene = code("js/garage/scene.js");
   assert.match(scene, /const MIRROR_RESOLVE = \{ alpha: 1/,
-    "garage mirror resolves opaque with depth bias");
-  assert.match(scene, /depthBias: MIRROR_BIAS/,
-    "bias pulls the under-floor mesh past the slab for a planar clip");
+    "garage mirror resolves opaque");
+  assert.match(scene, /if \(sheen <= 0\.02\) _gfx\.draw\(floorMesh/,
+    "the opaque floor cannot occlude the reflection before compositing");
   assert.match(scene, /mirrorSheen\(/, "contact sheen scales with camera distance");
   assert.match(scene, /ensureMirrorFade/, "bay fade quad restores floor sheen");
   assert.doesNotMatch(scene, /MIRROR_OPTS.*noDepthTest/,
@@ -6341,7 +6341,7 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   const drawWarmStage = () => ({}), _gpuSettled = async () => {};
   // Source pins for the same order: exactly one setMRT(null) in the full warm path, between the post
   // warm and the caster warm, and the caster warm still guarded on the module.
-  const iPost = stageBody.indexOf("await post.warm(opts, _postF)");
+  const iPost = stageBody.indexOf("await post.warm(opts, _postF, report)");
   const iNull = stageBody.indexOf("renderer.setMRT(null)", iPost);
   const iShadow = stageBody.indexOf("shadowSys.warm(casterSources())", iNull);
   assert.ok(iPost > 0 && iNull > iPost && iShadow > iNull, "setMRT(null) must sit between the post warm and the caster warm");
@@ -6368,6 +6368,8 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
 test("TLX post warm compiles serially and holds each target across awaits", async () => {
   const disposed = false;
   let compileJobs = null, target = "scene", mrt = "tag", active = 0, calls = 0;
+  let now = 0, delay = 1500, failBlur = true;
+  const performance = { now: () => now };
   const _last = { pass: "live" }; let _lastPresentRT = "liveRT", _vizDest = "viz";
   const THREE = { QuadMesh: class { constructor(mat) { this.material = mat; this.camera = {}; } } };
   // Fix C: warm() compiles the module's own `quad` with each job's material rather
@@ -6383,12 +6385,13 @@ test("TLX post warm compiles serially and holds each target across awaits", asyn
       await Promise.resolve();
       assert.equal(target, q.material);
       assert.equal(mrt, "tag", "the post warm compiles under whatever MRT the caller set — never nulls it");
+      now += delay;
       active--;
-      if (q.material === "blur") throw new Error("compile failed");
+      if (failBlur && q.material === "blur") throw new Error("compile failed");
     },
   };
   const present = () => {
-    compileJobs.push({ mat: "AO", target: "AO" }, { mat: "blur", target: "blur" });
+    compileJobs.push({ mat: "AO", target: "AO" }, { mat: "blur", target: "blur" }, { mat: "composite", target: "composite" });
     _last.pass = "warm"; _lastPresentRT = "warmRT"; _vizDest = null;
   };
   const body = fnBody(code("js/render/three/tlx-post.js"), "warm");
@@ -6396,11 +6399,25 @@ test("TLX post warm compiles serially and holds each target across awaits", asyn
   // node's id, and present() runs the post chain under the scene MRT; a warm
   // that nulled it built sixteen programs the race never drew (gpu-census 206).
   assert.doesNotMatch(body, /setMRT\(\s*null\s*\)/, "post.warm must not null the MRT — it compiles the variant present() draws");
-  const warm = eval("(async function(opts, frame){" + body + "})");
-  await assert.rejects(warm({}, {}), /compile failed/);
+  const warm = eval("(async function(opts, frame, report){" + body + "})");
+  const failed = { total: 0, completed: 0, deadlineJob: null };
+  await assert.rejects(warm({}, {}, failed), /compile failed/);
+  assert.deepEqual(failed, { total: 3, completed: 1, deadlineJob: 2 });
   assert.equal(calls, 2); assert.equal(compileJobs, null);
   assert.equal(target, "scene"); assert.equal(mrt, "tag");
   assert.deepEqual(_last, { pass: "live" }); assert.equal(_lastPresentRT, "liveRT"); assert.equal(_vizDest, "viz");
+
+  failBlur = false;
+  const cutoff = { total: 0, completed: 0, deadlineJob: null };
+  await warm({}, {}, cutoff);
+  assert.deepEqual(cutoff, { total: 3, completed: 2, deadlineJob: 2 });
+  assert.equal(calls, 4);
+
+  delay = 100;
+  const complete = { total: 0, completed: 0, deadlineJob: null };
+  await warm({}, {}, complete);
+  assert.deepEqual(complete, { total: 3, completed: 3, deadlineJob: null });
+  assert.equal(calls, 7);
 });
 
 test("GPU verdict rejects captured compilation errors even with zero uncaptured errors", () => {

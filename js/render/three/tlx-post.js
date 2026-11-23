@@ -1697,7 +1697,7 @@
       return true;
     }
 
-    async function warm(opts, frame) {
+    async function warm(opts, frame, report = { total: 0, completed: 0, deadlineJob: null }) {
       if (disposed) return;
       // Collect enabled passes first, then compile serially with stable targets.
       const jobs = [], target = renderer.getRenderTarget(), mrt = renderer.getMRT();
@@ -1705,6 +1705,7 @@
       try {
         compileJobs = jobs;
         try { present(opts, frame); } finally { compileJobs = null; }
+        report.total = jobs.length;
         // The caller's MRT is the LIVE one: present() runs the post chain with
         // the scene pass's ssrTag MRT node still set, so compiling these quads
         // under a null MRT built sixteen programs the race never used
@@ -1722,8 +1723,12 @@
           // exactly what runPass does, so the hit is guaranteed whatever the key
           // contains.
           setQuadMat(job.mat);
-          await renderer.compileAsync(quad, quad.camera);
-          if (performance.now() >= deadline) break;
+          try { await renderer.compileAsync(quad, quad.camera); }
+          finally {
+            if (performance.now() >= deadline) report.deadlineJob = report.completed + 1;
+          }
+          report.completed++;
+          if (report.deadlineJob !== null) break;
         }
       } finally {
         // Disposal clears our binding. A replacement chain can own the renderer

@@ -390,7 +390,7 @@
       //     inside, a stand and hoarding on the exit, marshal post at the
       //     apex. A spectator tunnel passes under the track here — built as
       //     two portal headwalls and a sunken approach apron.
-      tyreWall(0.9100, 0.9270, 1, 12.5, TYRE_R);
+      tyreWall(0.9100, 0.9270, 1, 12.5, TYRE_R); // T10 inside tyre wall
       // Exit stand pushed past the tunnel portals (was clipping 1.65 m @ 0.922).
       grandstandEx(0.9480, 1, 32, 44, null, null);
       sponsorHoarding(0.9300, 0.9650, 1, 18);

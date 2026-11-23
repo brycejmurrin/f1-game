@@ -239,6 +239,28 @@ test("a rival's lap arriving after ours was deleted keeps us at NO TIME, not a m
   assert.equal(q.driven(mine).has("alpha:0"), false);
 });
 
+test("quitting an unfinished friend qualifying with a deleted lap reports NO TIME before canceling", () => {
+  const QualiNet = eval(src("js/race/quali-net.js") + ";QualiNet");
+  const calls = [];
+  const q = QualiNet.create({
+    getPlayer: () => ({ driverId: "alpha:0", lastLap: 0, best: Infinity, qualiCut: true }),
+    getNetPlay: () => ({ active: () => false }),
+    getNetLobby: () => ({
+      reportQuali: (id, time) => calls.push([id, time]),
+      cancel: () => calls.push("cancel"),
+    }),
+  });
+  q.arm(() => {});
+  q.resetOnQuitWithCancel(true);
+  assert.deepEqual(calls, [["alpha:0", Infinity], "cancel"]);
+  assert.equal(q.hasArmed(), false);
+
+  calls.length = 0;
+  q.arm(() => {});
+  q.resetOnQuitWithCancel(false);
+  assert.deepEqual(calls, ["cancel"], "leaving a finished sheet does not send a duplicate result");
+});
+
 // bug-hunt 2 follow-ups: a guest's BACK from the quali sheet, and the host-side relay cap.
 test("a guest that backs out of friend quali releases the host's wait on its lap", async () => {
   const { G, lobby, peerSays } = await hostUp(async () => ({ ok: true }));

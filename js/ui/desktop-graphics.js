@@ -26,7 +26,7 @@ const DesktopGraphics = (() => {
       envProbe: ["Environment reflection probe", "Captures the surroundings for reflections that change as the car moves."],
       envMap: ["High-resolution reflection probe", "Captures more detail in the environment map used by reflective surfaces."],
       envAll: ["World metal reflections", "Lets metal surfaces around the circuit reflect their surroundings."],
-      garageProbeParallax: ["Garage reflections", "Aligns reflections on the car with the walls of its garage bay as you orbit. Requires desktop three.js with hardware WebGPU. Off by default."],
+      garageProbeParallax: ["Garage reflections", "Reflects garage walls on the car as you orbit. Requires three.js with hardware WebGPU, including on phones. Off by default."],
       skyAtmo: ["Atmospheric sky", "Models how sunlight scatters through the air, changing the sky colour near the horizon."],
     },
     "Weather and debris": {
