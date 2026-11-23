@@ -2,13 +2,21 @@
 
 Kind: measurement · Re-measure-by: 2027-02-18
 
-## Current calibration readout, 2026-11-23 (wing coefficient 0.055)
+## Qualifying flying-lap calibration (#5999)
+
+The model now scales the integrated lap by the circuit's measured qualifying factor. The previous race-derived 0.993 multiplier has been removed. Each measured car runs alone in a real qualifying session with its works-car AI setup and the production rolling start. The AI keeps driving at handover. The first crossing starts the clock and the second supplies the timed lap. The generator takes the median of paired timed-to-integrated ratios across easy, normal and hard. Custom tracks use the median of the built-in circuit factors. [Measurement data](../../tests/data/quali-calibration.json) · [Measurement tool](../../tools/check/quali-calibrate.mjs)
+
+The new table contains 1,716 timed laps across 52 circuits. Circuit factors range from 0.9120 at Mosport to 0.9704 at Imola, with a calendar median of 0.9391. Monza, Monaco and Suzuka now use 0.9355, 0.9615 and 0.9280 respectively.
+
+The held-out parity check drives different grid slots on five contrasting circuits at all three difficulties. It checks paired median times, the front of the sheet and stale model times in the calibration data. The fit uses dry, wear-off measurements at the shipped pace. [Parity check](../../tests/unit/quali-absolute-parity-vm.test.mjs)
+
+## Previous race-lap calibration, 2026-11-23 (wing coefficient 0.055)
 
 At deploy revision `ceb304af1a`, `AiDrive.aeroGrip(load)` uses `AI_WING_GRIP = 0.055`. The simulated field's base lap is the integrated lap multiplied by `QUALI_CENTRE` 0.993 and the generated circuit factor. The model applies `AiDrive.paceTrim` to the car's free speed and corner authority and uses the square root of its wing grip in the corner cap. A human row uses the seat's authored wing and pace trim, independent of player setup edits. [Wing change #5854](https://github.com/brycejmurrin/f1-game/pull/5854) · [Pace calibration #5686](https://github.com/brycejmurrin/f1-game/pull/5686)
 
-The current [calibration data](../../tests/data/quali-calibration.json) contains 1,716 paired rows across 52 circuits and three difficulties, 11 sampled grid slots per circuit and difficulty. The recorded laps come from thinned dry races at PACE 0.8396, seed 1, with wear and wind off. Each row stores the best of three timed laps in frames at 60 Hz and the matching uncalibrated model lap in milliseconds. The first 0.055 calendar measurement landed in `0d98e69124`. The checked-in rows come from the subsequent calendar rerun in `0292569af5` after the model adopted pace trim. The latter changed 1,711 driven frame counts and all 1,716 model times relative to the first 0.055 measurement. [First 0.055 measurement](https://github.com/brycejmurrin/f1-game/commit/0d98e69124cd9127e7fa2ab5ddf4d687476b6e03) · [Pace-trim rerun](https://github.com/brycejmurrin/f1-game/commit/0292569af5)
+The [race-lap calibration snapshot](https://github.com/brycejmurrin/f1-game/blob/ceb304af1a413a0fbb910805e8a61b31a3661cf1/tests/data/quali-calibration.json) contains 1,716 paired rows across 52 circuits and three difficulties, 11 sampled grid slots per circuit and difficulty. The recorded laps come from thinned dry races at PACE 0.8396, seed 1, with wear and wind off. Each row stores the best of three timed laps in frames at 60 Hz and the matching uncalibrated model lap in milliseconds. The first 0.055 calendar measurement landed in `0d98e69124`. The checked-in rows come from the subsequent calendar rerun in `0292569af5` after the model adopted pace trim. The latter changed 1,711 driven frame counts and all 1,716 model times relative to the first 0.055 measurement. [First 0.055 measurement](https://github.com/brycejmurrin/f1-game/commit/0d98e69124cd9127e7fa2ab5ddf4d687476b6e03) · [Pace-trim rerun](https://github.com/brycejmurrin/f1-game/commit/0292569af5)
 
-The generator takes the median of the paired driven-to-raw time ratios across all three difficulties for each circuit, then rounds to four decimal places. Factors span 0.9184 at Silverstone to 0.9753 at Imola. The calendar median and fallback for a track without its own factor is 0.9453. [Factor generator](../../tools/gen/gen-quali-calib.mjs) · [Current model](../../js/race/quali-model.js)
+The generator takes the median of the paired driven-to-raw time ratios across all three difficulties for each circuit, then rounds to four decimal places. Factors span 0.9184 at Silverstone to 0.9753 at Imola. The calendar median and fallback for a track without its own factor is 0.9453. [Factor generator](../../tools/gen/gen-quali-calib.mjs) · [Race-lap model snapshot](https://github.com/brycejmurrin/f1-game/blob/ceb304af1a413a0fbb910805e8a61b31a3661cf1/js/race/quali-model.js)
 
 The paired ratios below divide each sampled car's calibrated base lap by its driven best. Each circuit contributes the median of its 11 paired ratios for that difficulty. These are summaries of the same sample used to fit the circuit factors. The later pace-trim commit separately reports all five independent parity tests passing. [Pace-trim rerun](https://github.com/brycejmurrin/f1-game/commit/0292569af5) · [Parity test](../../tests/unit/quali-absolute-parity-vm.test.mjs)
 
@@ -29,7 +37,7 @@ Hard-difficulty examples from the recorded dry data. Base model times use the st
 | Spa | 0.9416 | 140.55 / 143.67 / 145.92 | 139.93 / 143.17 / 145.06 |
 | Bahrain | 0.9480 | 122.50 / 125.23 / 127.03 | 122.18 / 124.54 / 125.90 |
 
-The stored sample leaves out the other grid slots, the seeded execution variation and the driver qualifying bias applied by `simLap`. Recreating the historical full-grid placing table and the owner's wear-real table would require separate measurements. The medal pole now uses 0.9915 times the calibrated synthetic top car's lap. Pit loss and replay scaling use the separate neutral-wing reference with `QUALI_TRIM` 0.92. [Stored measurements](../../tests/data/quali-calibration.json) · [Current model](../../js/race/quali-model.js)
+The stored sample leaves out the other grid slots, the seeded execution variation and the driver qualifying bias applied by `simLap`. Recreating the historical full-grid placing table and the owner's wear-real table would require separate measurements. The medal pole now uses 0.9915 times the calibrated synthetic top car's lap. Pit loss and replay scaling use the separate neutral-wing reference with `QUALI_TRIM` 0.92. [Race-lap measurements](https://github.com/brycejmurrin/f1-game/blob/ceb304af1a413a0fbb910805e8a61b31a3661cf1/tests/data/quali-calibration.json) · [Race-lap model snapshot](https://github.com/brycejmurrin/f1-game/blob/ceb304af1a413a0fbb910805e8a61b31a3661cf1/js/race/quali-model.js)
 
 ## Historical experiment, 2026-11-18 (wing coefficient 0.16)
 
@@ -67,7 +75,7 @@ Re-measure duty: when the AI's driving changes, `tests/unit/quali-absolute-parit
 
 The calibration's reference is the wear-off race lap, so the yardstick is Q / R_off: 0.9875 to 0.9983 with wear off, 0.9905 to 1.0000 with wear real. The earlier "1.3 to 2.0 % with wear real" was Q_real / R_real, against a race lap that wear and fuel had already slowed by 1.1 to 1.5 %. The qualifying lap itself moves 0.1 to 0.35 % with the wear setting. The whole wear-off gain is the flying start (relayed: from 20 % of the lap to the line Q / R is 0.9991 to 1.0007; fuel and tyre-temperature multipliers are exactly 1 with wear off, `js/physics/tyre-model.js`).
 
-Residual left in: the flying-start gain varies by circuit (Monza about 0.3 %, Monaco and Suzuka about 1.0 %), so one centre is off by about ±0.4 % per circuit. Follow-up that would remove it, not built: calibrate on flying laps (the tool stages the qualifying flow per car).
+The race-lap fit left a residual because the flying-start gain varied by circuit. Monza gained about 0.3 %, while Monaco and Suzuka gained about 1.0 %. A single multiplier left roughly ±0.4 % circuit error.
 
 ### Where a lap lands on the sheet (52 circuits; pole / P2-8 / P9-15 / P16-21 / behind the 21 AI rows; median place)
 

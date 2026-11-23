@@ -778,7 +778,7 @@ test("a mid-weekend career save keeps the qualifying it drove when the model cha
   assert.ok(redrawn.every((r) => Math.abs(r.t - today) < today * 0.05), "so a reload draws it from today's model: " + redrawn.map((r) => r.t.toFixed(1)).join(" "));
 });
 
-// The field's lap is QUALI_CENTRE x the circuit's generated factor x the integrated lap (#5786). A circuit the
+// The field's lap is the circuit's generated factor x the integrated lap (#5999). A circuit the
 // calibration never measured (a TRACK DESIGNER layout, any id) takes the calendar median, never 1 and never a
 // property of Object.prototype.
 test("carLap: a calendar circuit reads its own factor, an unmeasured one the calendar median", async () => {
@@ -789,10 +789,10 @@ test("carLap: a calendar circuit reads its own factor, an unmeasured one the cal
   const mk = (id, extra) => ({ n: 80, total: 4000, def: Object.assign({ id }, extra) });
   const near = (a, b, m) => assert.ok(Math.abs(a / b - 1) < 1e-12, `${m}: ${a} vs ${b}`);
   const monza = mk("monza");
-  near(q.carLap(c, monza, 1), 0.993 * +f.by.monza * q.carLap(c, monza, 1, true), "monza takes its row");
+  near(q.carLap(c, monza, 1), +f.by.monza * q.carLap(c, monza, 1, true), "monza takes its row");
   for (const t of [mk("d7f3a1c2", { custom: true }), mk("constructor"), mk("__proto__"), { n: 80, total: 4000 }]) {
     const lap = q.carLap(c, t, 1);
-    near(lap, 0.993 * +f.def * q.carLap(c, t, 1, true), "an unmeasured circuit takes the default");
+    near(lap, +f.def * q.carLap(c, t, 1, true), "an unmeasured circuit takes the default");
     assert.ok(Number.isFinite(lap) && lap > 0);
   }
   G.track = mk("d7f3a1c2", { custom: true });
