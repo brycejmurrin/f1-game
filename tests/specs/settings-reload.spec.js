@@ -86,6 +86,7 @@ const TRANSIENT = {
   "ps-aspect": "Photo Studio framing aid, per shot",
   "ps-grid-select": "Photo Studio framing aid, per shot",
   "ps-postcard": "Photo Studio framing aid, per shot",
+  "ps-samples": "Photo Studio capture quality for this session. A fresh session starts with instant capture.",
 };
 // CLAUDE LINK (#5259) sits in the hub but opens the bridge dialog, not a settings page: it has no rows to visit.
 const DOORS = "#pm-settings-index button[id]:not(#pm-claude-link)";
@@ -147,6 +148,8 @@ test("every live Settings row left off its value comes back after a reload (pers
   const after = await snapRows(page);
   const lost = Object.keys(set).filter((id) => !(id in TRANSIENT) && after[id] !== set[id]).map((id) => `${id}: ${set[id]} -> ${after[id]}`);
   expect(lost, "rows that did not come back after the reload").toEqual([]);
+  expect(set["ps-samples"]).toBe("8");
+  expect(after["ps-samples"]).toBe("1");
   // The allowlist stays honest: a transient row that starts persisting should leave the list.
   const nowPersist = Object.keys(TRANSIENT).filter((id) => id in set && set[id] !== before[id] && after[id] === set[id]);
   expect(nowPersist, "TRANSIENT rows that now persist (drop them from the list)").toEqual([]);

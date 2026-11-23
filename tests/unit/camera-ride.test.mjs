@@ -116,6 +116,30 @@ test("helmet eye position survives reduced motion and leaves the cockpit seat al
   assert.deepEqual(eye("cockpit"), cockpit);
 });
 
+test("helmet head motion scales the lean and braking nod around the selected eye position", () => {
+  let amount = 1;
+  const { cams } = loadRig({ CockpitOpts: {
+    helmetEye: () => "high", helmetMount: () => "left", helmetHeadMotion: () => amount,
+    layout: () => ({ eyeF: -0.2, eyeU: 0.82 }), turnChaseLead: () => 0,
+  } });
+  const track = makeElevationTrack(() => 0);
+  function head(mode, reduceMotion = false) {
+    cams.vantage(track, mode, 200, 0, 60, 0, { carPos: [0, 200], att: { baRoll: 0.055, baPitch: 0.024 }, reduceMotion });
+    return { ...cams.headState() };
+  }
+  const full = head("helmet"), rest = head("helmet", true), cockpit = head("cockpit");
+  assert.ok(rest.lat < 0 && rest.up > 0, "left-eye mount and raised seat survive reduced motion");
+  amount = 0.35;
+  const partial = head("helmet");
+  for (const key of ["lat", "up", "fwd", "nod"]) {
+    assert.notEqual(full[key], rest[key]);
+    assert.ok(Math.abs(partial[key] - rest[key] - (full[key] - rest[key]) * amount) < 1e-12, key);
+  }
+  amount = 0;
+  assert.deepEqual(head("helmet"), rest);
+  assert.deepEqual(head("cockpit"), cockpit);
+});
+
 test("flat road: the chase rig frames exactly as its constants say", () => {
   const track = makeElevationTrack(() => 7.5);
   const cams = loadElevationRig();
