@@ -382,7 +382,7 @@ const RealReplay = (function () {
     function owns(c) { return !!run && run.cars.has(c); }
 
     function onTrack(car) {
-      return !!run.cars.get(car)?.cameraReady;
+      return !!run.cars.get(car)?.cameraReady && !car.retired;
     }
     function runningOrder() { return [...run.cars.keys()].filter(onTrack).sort((a, b) => b.prog - a.prog); }
 
