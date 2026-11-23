@@ -490,7 +490,8 @@ function create(G, deps) {
   function isGarage() { return st.source === "home" || st.source === "garage"; }
   function hasCar() { return st.open && !!releaseCar; }
   function placeCar(reframe = true) {
-    if (!hasCar() || !G.player || !G.track) return;
+    if (st.busy || st.closing || !hasCar() || !G.player || !G.track) return;
+    if (st.source === "race" && (!G.paused || G.netPlay?.active?.())) return;
     const c = G.player, sample = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
     c.s = (+E["ps-car-position"].value % 100) * G.track.total / 100;
     c.x = c.xVis = +E["ps-car-offset"].value;
@@ -555,15 +556,30 @@ function create(G, deps) {
         return false;
       }
     }
-    st.open = true; st.generation++; root.hidden = false;
     const online = !!G.netPlay?.active?.();
+    // Only a frozen offline race can lend its car. Save exactly the fields placement
+    // writes, including absent interpolation fields, and restore before resuming.
+    if (st.source === "race" && G.paused && !online && G.player && G.track?.total > 0) {
+      const car = G.player;
+      const fields = ["s", "x", "xVis", "px", "pz", "yawVis", "head", "rPrevS", "rPrevX", "rPrevPx", "rPrevPz", "rPrevHead", "rPrevYawVis", "speed"];
+      const pose = fields.map(key => [key, Object.getOwnPropertyDescriptor(car, key)]);
+      releaseCar = () => {
+        for (const [key, descriptor] of pose) {
+          if (descriptor) Object.defineProperty(car, key, descriptor); else delete car[key];
+        }
+      };
+    }
+    st.open = true; st.generation++; root.hidden = false;
     SettingRow.paint(sampleRow, online ? "1" : String(st.samples));
     SettingRow.disable(sampleRow, online);
     carGroup.hidden = !hasCar();
     for (const [id, unit] of [["ps-car-position", "%"], ["ps-car-offset", " m"], ["ps-car-rotation", "°"]]) {
-      E[id].value = "0"; E[id + "-value"].textContent = "0" + unit;
+      const c = st.source === "race" && hasCar() ? G.player : null;
+      const value = !c ? 0 : id === "ps-car-position" ? ((c.s % G.track.total + G.track.total) % G.track.total) / G.track.total * 100
+        : id === "ps-car-offset" ? c.x : (c.yawVis || 0) * 180 / Math.PI;
+      E[id].value = String(value); E[id + "-value"].textContent = value.toFixed(1) + unit;
     }
-    placeCar();
+    if (st.source === "home-track") placeCar(); // race photos open exactly where the race was paused
     condGroup.hidden = isGarage(); lineGroup.hidden = isGarage();
     if (!isGarage()) SettingRow.paint(lineRow, DrivingLine.shown() ? "on" : "off");
     looksChanged = false; paintLooks();

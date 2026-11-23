@@ -38,6 +38,15 @@ test("Paused race photo changes time of day and weather live, resets, and leaves
   const before = await phys(page);
   await clickLive(page, "pausebtn");
   await clickLive(page, "pm-photo");
+  await expect(page.locator("#ps-group-car")).toBeVisible();
+  expect(await phys(page), "opening preserves the paused race pose").toEqual(before);
+  for (const [id, value] of [["ps-car-position", "25"], ["ps-car-offset", "3"], ["ps-car-rotation", "90"]]) {
+    await page.locator("#" + id).evaluate((el, v) => {
+      el.value = v; el.dispatchEvent(new Event("input", { bubbles: true }));
+    }, value);
+  }
+  expect((await phys(page)).x).toBe(3);
+  expect((await phys(page)).speed).toBe(0);
   await expect(page.locator("#ps-tod")).toBeVisible();
   await expect(page.locator("#ps-lt-tabs")).toBeVisible();
   expect(await page.evaluate(() => [__apex.setTimeOfDay(), __apex.weather()])).toEqual(["day", "dry"]);

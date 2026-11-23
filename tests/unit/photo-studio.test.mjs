@@ -251,6 +251,43 @@ test("Home circuit photo borrows a subject, places its complete pose, and return
   api.open({ source: "race" });
   assert.equal(api.hasCar(), false); assert.equal(G.player, prior);
 });
+for (const back of [false, true]) test(`race placement restores the exact paused pose on close(${back})`, () => {
+  const player = { s: 432, x: 2, xVis: 1.8, px: 432, pz: 2, head: .3, yawVis: .2,
+    speed: 77, rPrevS: 431, rPrevPx: 431, lap: 3, fuel: 42 };
+  const before = { ...player }, b = boot({ player });
+  b.G.paused = true;
+  for (let visit = 0; visit < 2; visit++) {
+    assert.equal(b.api.open({ source: "race" }), true);
+    assert.equal(b.dom.byId("ps-group-car").hidden, false);
+    assert.equal(b.api.hasCar(), true);
+    assert.deepEqual(player, before, "opening never moves or stops the race car");
+    assert.equal(+b.dom.byId("ps-car-position").value, 43.2);
+    assert.equal(+b.dom.byId("ps-car-offset").value, 2);
+    for (const [id, value] of [["ps-car-position", "25"], ["ps-car-offset", "3"], ["ps-car-rotation", "90"]]) {
+      b.dom.byId(id).value = value; b.dom.byId(id).dispatchEvent({ type: "input" });
+    }
+    assert.equal(player.s, 250); assert.equal(player.pz, 3); assert.equal(player.speed, 0);
+    assert.equal(player.head, 0); assert.equal(player.rPrevS, 250);
+    b.api.close(back);
+    assert.deepEqual(player, before, "including speed, interpolation history and absent properties");
+    assert.equal(b.G.player, player);
+  }
+});
+
+test("live online and unpaused sessions cannot reposition the race car", () => {
+  for (const online of [false, true]) {
+    const player = { s: 123, x: 0, speed: 80 }, b = boot({ player });
+    b.G.paused = online; b.G.netPlay = { active: () => online };
+    b.api.open({ source: "race" });
+    assert.equal(b.api.hasCar(), false);
+    assert.equal(b.dom.byId("ps-group-car").hidden, true);
+    b.dom.byId("ps-car-position").value = "50";
+    b.dom.byId("ps-car-position").dispatchEvent({ type: "input" });
+    assert.deepEqual(player, { s: 123, x: 0, speed: 80 });
+    b.api.close(false);
+  }
+});
+
 // One shared object store, with serialized transactions and staged writes. A
 // request's success is distinct from commit, and abort discards every staged
 // mutation, so these tests exercise isolation and rollback rather than callbacks
