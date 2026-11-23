@@ -37,7 +37,7 @@
       { frac: 0.2825, angleDeg: 3.5, widthM: 180 },   // built ~0.372: T8, the long right (pre-rotation frac, _sceneryShift)
       { frac: 0.4431, angleDeg: 4.0, widthM: 300 },   // built ~0.53: T12-T13 right onto the back straight
       { frac: 0.7326, angleDeg: 3.0, widthM: 100 },   // built ~0.82: T14 hairpin
-      { frac: 0.9985, angleDeg: 4.0, widthM: 280 },   // built ~0.09: T2 (spiral); frac zones are pre-rotation (_sceneryShift)
+      { turn: 2, angleDeg: 4.0, widthM: 280 },       // spiral, before the separate T3 exit bank
     ],
     // The built approximation peaks at racing fraction 0.389, between T8 and
     // T9. F1 places the real high point at T2, 7.4 m above the back straight.
