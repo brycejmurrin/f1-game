@@ -7,7 +7,8 @@ const Broadcast = (function () {
   const SHOT_MAX_S = 14;     // wall seconds: a quiet shot is changed after this
   const BATTLE_S = 1.0;      // two cars this close (seconds) are a battle
   const SHOTS = ["side", "heli", "tcam", "chase", "cinematic", "low"];
-  const EVENT_SHOTS = { pass: ["side", "heli", "chase"], pit: ["heli", "side"], out: ["heli", "side"], fastest: ["tcam", "chase", "side"] };
+  const EVENT_SHOTS = { pass: ["side", "heli", "chase"], pit: ["heli", "side"], out: ["heli", "side"], fastest: ["tcam", "chase", "side"],
+    battle: ["heli", "chase", "side"], recover: ["chase", "heli"], sc: ["heli", "side"], ending: ["heli", "side"], green: ["heli", "chase"] };
 
   // Pooled fight rows: Director + ExtraRigs + WATCH PiP call battles() every
   // cut/tick; a fresh array + objects each time was steady-state GC in a race.

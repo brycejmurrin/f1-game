@@ -84,13 +84,13 @@ const TvGraphics = (function () {
       if (lowerFor <= 0) lower.hidden = true;
       if (!force && wait > 0) return null;
       wait = TICK_S;
-      const ranked = Array.isArray(field) ? field : [];
+      const ranked = typeof field === "function" ? field() : Array.isArray(field) ? field : [];
       const frame = OverlayFeed.frame({
         seq: ++seq, t: Number(G.raceT) || 0, state: G.state, track: G.track && G.track.id,
         lap: G.player && G.player.lap, laps: G.lapsTarget,
         flag: flagOf(G), ranked, sectorLast: G.sectorLast, sectorBests: G.sectorBests,
         fieldSectorBests: G.fieldSectorBests,
-        vScale: G.vTop && typeof PhysicsConsts !== "undefined" ? G.vTop() / PhysicsConsts.VMAX : 1,
+        vScale: !opts?.spectator && G.vTop && typeof PhysicsConsts !== "undefined" ? G.vTop() / PhysicsConsts.VMAX : 1,
       });
       let holder;
       try { if (holderOf) holder = holderOf() || null; } catch (_) { /* replay mid-seek: per-car flags */ }
