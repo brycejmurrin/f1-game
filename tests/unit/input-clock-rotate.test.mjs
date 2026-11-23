@@ -90,7 +90,7 @@ function secondaryRig() {
     addEventListener(type, fn) { const list = events.get(type) || []; list.push(fn); events.set(type, list); },
   };
   const helper = vm.runInContext("InputHoldButtons", sb);
-  helper.secondaryTap(el, { activate: () => actions++, cancel: () => cancelled++, beforeActivate: e => { before = e; return allowed; } });
+  helper.hudTouchTap(el, { activate: () => actions++, cancel: () => cancelled++, beforeActivate: e => { before = e; return allowed; } });
   const event = extra => ({ pointerType: "touch", pointerId: 2, isPrimary: false, isTrusted: true,
     clientX: 20, clientY: 20, timeStamp: 100, target: el, ...extra });
   const emit = (type, extra) => { const e = event(extra); if (type === "pointerdown" || type === "pointerup") fire(type, e); for (const fn of events.get(type) || []) fn(e); return e; };
@@ -99,8 +99,16 @@ function secondaryRig() {
 
 test("secondary touch activates once and deduplicates a native click retargeted into a modal", () => {
   const h = secondaryRig();
-  for (const extra of [{ isPrimary: true }, { pointerType: "mouse" }]) { h.emit("pointerdown", extra); h.emit("pointerup", extra); }
-  assert.equal(h.actions(), 0, "primary touch and mouse remain native");
+  const primary = secondaryRig();
+  let cancelled = false;
+  primary.emit("touchstart", { preventDefault() { cancelled = true; } });
+  assert.equal(cancelled, true);
+  primary.emit("pointerdown", { isPrimary: true });
+  primary.emit("pointerup", { isPrimary: true });
+  assert.equal(primary.actions(), 1);
+  h.emit("pointerdown", { pointerType: "mouse" });
+  h.emit("pointerup", { pointerType: "mouse" });
+  assert.equal(h.actions(), 0, "mouse remains native");
   h.emit("pointerdown"); const up = h.emit("pointerup", { timeStamp: 150 });
   assert.equal(h.actions(), 1); assert.equal(h.before(), up, "the original trusted gesture reaches the owner");
   let stopped = 0;
@@ -216,7 +224,7 @@ test("a remote STEER outside -1..1 is clamped where Input reads it (W26 row 8)",
 });
 
 // Hold-button teardown pins (M10 / M20 / M19): lostpointercapture release, visibility:hidden
-// as gone, and the secondaryTap native-click dedupe window — via the create()/secondaryTap API.
+// as gone, and the hudTouchTap native-click dedupe window — via the create()/hudTouchTap API.
 function holdTeardownRig() {
   const { sb } = boot();
   const listeners = {};
@@ -276,7 +284,7 @@ test("holdTargetGone treats visibility:hidden as gone with no pin (M20)", () => 
   assert.equal(h2.held(), false, "visibility:hidden mid-hold is a lost-capture teardown");
 });
 
-test("secondaryTap dedupes a native click at ~500 ms and lets one after the window through (M19)", () => {
+test("hudTouchTap dedupes a native click at ~500 ms and lets one after the window through (M19)", () => {
   const within = secondaryRig();
   within.emit("pointerdown");
   within.emit("pointerup", { timeStamp: 1000 });
@@ -286,7 +294,7 @@ test("secondaryTap dedupes a native click at ~500 ms and lets one after the wind
     timeStamp: 1500, detail: 1,
     preventDefault() { stopped++; }, stopImmediatePropagation() {},
   }));
-  assert.equal(stopped, 1, "a native click ~500 ms after secondaryTap is still deduped");
+  assert.equal(stopped, 1, "a native click ~500 ms after hudTouchTap is still deduped");
 
   const after = secondaryRig();
   after.emit("pointerdown");

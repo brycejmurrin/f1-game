@@ -64,8 +64,8 @@ test("pedal touches cancel the native gesture while independent pointer holds ke
     const button = els.get(id);
     let prevented = false;
     button.fire("touchstart", { preventDefault() { prevented = true; } });
-    assert.equal(prevented, id !== "left", id);
-    assert.equal(button.listenerOptions.get("touchstart")?.passive, id === "left" ? undefined : false);
+    assert.equal(prevented, true, id);
+    assert.equal(button.listenerOptions.get("touchstart")?.passive, false);
     assert.equal(lv[id], 0, "touchstart does not actuate " + id);
   }
   const gas = els.get("gas"), steer = els.get("left");
