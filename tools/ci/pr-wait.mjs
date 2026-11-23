@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // @doc Explain one PR's current wait from bounded GET evidence, without polling or changing GitHub.
 // @skill steward
-// GitHub concurrency docs (read 2026-10-30): pending is a concurrency wait;
-// FIFO uses time entering the group, not workflow creation. Never infer position.
+// Pending jobs wait on a concurrency group. GitHub does not guarantee start order
+// or expose the time a job entered its group here. Never infer queue position.
 // queued alone does not identify runner availability or another blocking cause.
 import fs from "node:fs";
 import path from "node:path";
