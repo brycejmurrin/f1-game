@@ -197,7 +197,7 @@ test("tick shares synchronous player reads, including computed null, and preserv
 
 test("VSC lesson computes pit loss, rejoin and finish projections for every replay", () => {
   const modelPath = "learn/vsc/model.js";
-  const { fixtures, evaluate } = vm.runInNewContext(
+  const { fixtures, evaluate, progress } = vm.runInNewContext(
     fs.readFileSync(path.join(ROOT, modelPath), "utf8") + "\nVscLesson",
     {},
     { filename: absSrc(modelPath) },
@@ -218,4 +218,21 @@ test("VSC lesson computes pit loss, rejoin and finish projections for every repl
   assert.equal(evaluate(fixtures.default, 2000).rejoin, 0);
   const tie = evaluate({ ...fixtures.default, boxPace: 11000 });
   assert.equal(tie.boxTotal, tie.stayTotal);
+  assert.equal(slower.greenLoss, 23000, "same service time for either stop");
+
+  const earlyGreen = evaluate(fixtures.earlyGreen);
+  assert.equal(earlyGreen.cautionMetres, 200);
+  assert.equal(earlyGreen.restartMetres, 200);
+  assert.equal(earlyGreen.trackTime, 13000);
+  assert.equal(progress(9000, fixtures.earlyGreen, earlyGreen).track, 0.5);
+  assert.equal(progress(13000, fixtures.earlyGreen, earlyGreen).track, 1);
+  assert.equal(progress(22500, fixtures.earlyGreen, earlyGreen).pitPhase, "Service");
+  assert.equal(progress(22500, fixtures.earlyGreen, earlyGreen).pit, progress(24000, fixtures.earlyGreen, earlyGreen).pit);
+
+  const roundedFinish = evaluate({ ...fixtures.default, vscSpeed: 85 });
+  assert.equal(progress(roundedFinish.trackTime, { ...fixtures.default, vscSpeed: 85 }, roundedFinish).track, 1);
+  const noCaution = evaluate({ ...fixtures.default, vscEnds: 0 });
+  assert.equal(noCaution.boxLoss, noCaution.greenLoss);
+  assert.equal(evaluate({ ...fixtures.traffic, gapBehind: 17000 }).traffic, 0);
+  assert.equal(evaluate({ ...fixtures.traffic, gapBehind: 16500 }).traffic, 3000);
 });

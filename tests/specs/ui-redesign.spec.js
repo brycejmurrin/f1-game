@@ -1266,3 +1266,28 @@ test("Learn Grip & Braking lets the player release brake into the force envelope
   await brake.press("Escape");
   await expect(lesson).toBeFocused();
 });
+
+test("Learn VSC lets the player test pit-loss arithmetic and a rejoin prediction", async ({ page }) => {
+  await waitReady(page);
+  await page.locator("#mb-learn").click();
+  const lesson = page.locator("#learn-open-vsc");
+  await lesson.click();
+  const lab = page.frameLocator("#learn-lab");
+  const reveal = lab.getByRole("button", { name: "Reveal strategy" });
+  await expect(lab.locator("#loss")).toHaveText("30 s pit − 18 s track = 12 s lost now. Under green it costs 22 s.");
+  await expect(reveal).toBeDisabled();
+  await lab.getByRole("button", { name: "Box now" }).click();
+  await lab.locator("#prediction").selectOption("ahead");
+  await reveal.click();
+  await expect(lab.locator("#feedback")).toContainText("Correct.");
+  await expect(lab.locator("#verdict")).toContainText("Staying out saves 3 s");
+  await lab.locator("#fixture").selectOption("traffic");
+  await expect(lab.locator("#track-math")).toHaveText("200 m at 80 km/h + 200 m at 180 km/h = 13 s");
+  await lab.getByRole("slider", { name: "Replay time" }).fill("9");
+  await expect(lab.locator("#track-clock")).toHaveText("Green · 200 m · 9 s");
+  await lab.getByText("Change the conditions").click();
+  await lab.getByRole("slider", { name: "Service time for either stop" }).fill("3.5");
+  await expect(lab.locator("#loss")).toHaveText("31 s pit − 13 s track = 18 s lost now. Under green it costs 23 s.");
+  await lab.locator("#prediction").press("Escape");
+  await expect(lesson).toBeFocused();
+});
