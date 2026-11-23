@@ -246,8 +246,8 @@
     /* UNIFORM-ONLY TERMS, hoisted (TLX perf hunt E5). Every value below is a
      * pure function of the U uniforms, so the GPU used to evaluate it once per
      * uncovered sky pixel (~0.5 M a frame at 1080p, again in the mirror). They
-     * are derived ONCE per update() in derive(), in the same arithmetic as the
-     * per-pixel graph did (glsl-sky.js SKY_FS still spells them per pixel and
+     * now update when lighting changes, while drift and dither follow the clock.
+     * The arithmetic matches the per-pixel graph (glsl-sky.js SKY_FS still spells them per pixel and
      * stays the source of truth; only float rounding may differ in the last
      * ulp). The noise, the ray and every per-pixel term are untouched. */
     const v3 = () => uniform(new THREE.Vector3());
@@ -285,10 +285,19 @@
     const lerp = (a, b, t) => a + (b - a) * t;
     const set3 = (u, x, y, z) => u.value.set(x, y, z);
     const lid = (a, b) => (a + b) * 1.25;
-    // update()'s frameSky readers, hoisted: update + derive run every frame, so
+    // update()'s frameSky readers, hoisted: update runs every frame, so
     // no closure or array is minted per call (#3115 F8/F9).
-    const s3 = (u, a) => { if (a) u.value.set(a[0], a[1], a[2]); };
-    const s1 = (u, v, def) => { u.value = v !== undefined ? v : def; };
+    let lightingChanged = false;
+    const s3 = (u, a, derived = true) => {
+      if (a && (u.value.x !== a[0] || u.value.y !== a[1] || u.value.z !== a[2])) {
+        u.value.set(a[0], a[1], a[2]);
+        if (derived) lightingChanged = true;
+      }
+    };
+    const s1 = (u, v, def) => {
+      const next = v !== undefined ? v : def;
+      if (u.value !== next) { u.value = next; lightingChanged = true; }
+    };
     const NO_GLOW = Object.freeze([0, 0, 0]);
     function derive() {
       const sd = U.sunDir.value, sc = U.sunColor.value, ze = U.zenith.value, ho = U.horizon.value;
@@ -324,12 +333,7 @@
       D.lowK.value = (1 - sstep(0.0, 0.60, sunE)) * (1 - overcast * 0.85);
       const lc = clamp01(sunE * 3.0);
       set3(D.lowColor, lerp(0.90, 1.0, lc), lerp(0.26, 0.66, lc), lerp(0.03, 0.12, lc));
-      // Clouds: drift, coverage window, enrichment gates, the lit model's colours.
-      const cT = U.time.value * U.cloudSpeed.value;
-      D.drift1.value.set(cT * 0.0028, cT * 0.0011);
-      D.drift2.value.set(cT * 0.0017, cT * 0.0023);
-      D.bankDrift.value.set(cT * 0.0028 * 1.4, cT * 0.0011 * 1.4);
-      D.thickOff.value.set(cT * 0.00035 + 3.1, 1.7);
+      // Clouds: coverage window, enrichment gates, the lit model's colours.
       D.covLo.value = 0.50 - cloud * 0.42;
       const rich = Math.max(daytime, twilight);
       D.cloudRich.value = rich;
@@ -374,11 +378,8 @@
       D.discOut.value = lerp(0.018, 0.028, golden) * U.sunDiscSize.value;
       D.discIn.value = U.sunDiscSize.value * 0.006;
       set3(D.discCore, lerp(2.3, sw0 * 2.8, golden), lerp(2.2, sw1 * 2.8, golden), lerp(1.9, sw2 * 2.8, golden));
-      // Star spawn window; the dither's time step (float32 like the GPU's floor).
+      // Star spawn window.
       D.starThresh.value = Math.min(0.9994, 1.0 - U.starDensity.value * (1.0 - 0.9968));
-      const step60 = Math.floor(Math.fround(Math.fround(U.time.value) * 60.0));
-      D.dthOff.value = (step60 - 64 * Math.floor(step60 / 64)) * 5.588238;   // GLSL mod(): never negative
-      if (C) cacheSync();
       if (A.on) atmoDerive(night, overcast, rich);
     }
     // SKY ATMO's per-frame uniforms. The exposure march (SkyAtmo.exposure, ~50 exp) re-runs only when
@@ -610,7 +611,20 @@
         fills: C.fills, bands: C.bands, maxOff: +C.maxOff.toFixed(4), dead: C.dead } : null;
     }
     function dispose() { retireCache(); }
+    // A steady sky still animates clouds and dithering as the clock advances.
+    function updateClock() {
+      const cT = U.time.value * U.cloudSpeed.value;
+      D.drift1.value.set(cT * 0.0028, cT * 0.0011);
+      D.drift2.value.set(cT * 0.0017, cT * 0.0023);
+      D.bankDrift.value.set(cT * 0.0028 * 1.4, cT * 0.0011 * 1.4);
+      D.thickOff.value.set(cT * 0.00035 + 3.1, 1.7);
+      // Match the GPU's float32 time step.
+      const step60 = Math.floor(Math.fround(Math.fround(U.time.value) * 60.0));
+      D.dthOff.value = (step60 - 64 * Math.floor(step60 / 64)) * 5.588238;   // GLSL mod(): never negative
+      if (C) cacheSync();
+    }
     derive();
+    updateClock();
 
     /** drawSky(frameSky) -> uniform values. Field names + defaults mirror the
      * js/render/glx/glx.js upload exactly (each frameSky field maps to the same-
@@ -623,30 +637,32 @@
       s3(U.horizon, sky.horizon);
       s3(U.sunDir, sky.sunDir);
       s3(U.sunColor, sky.sunColor);
-      U.stars.value = sky.stars ? 1 : 0;
+      s1(U.stars, sky.stars ? 1 : 0, 0);
       s1(U.cloud, sky.cloud, 0);
-      s1(U.time, sky.time, 0);
-      s1(U.moon, sky.moon, 0);
-      s3(U.cityGlow, sky.cityGlow || NO_GLOW);
-      s1(U.starBright, sky.starBright, 1);
-      s1(U.cloudSpeed, sky.cloudSpeed, 1);
-      s1(U.skyGrad, sky.skyGrad, 0.35);
+      U.time.value = sky.time !== undefined ? sky.time : 0;
+      // Only controls read by derive() invalidate its lighting colors and factors.
+      U.moon.value = sky.moon !== undefined ? sky.moon : 0;
+      s3(U.cityGlow, sky.cityGlow || NO_GLOW, false);
+      U.starBright.value = sky.starBright !== undefined ? sky.starBright : 1;
+      U.cloudSpeed.value = sky.cloudSpeed !== undefined ? sky.cloudSpeed : 1;
+      U.skyGrad.value = sky.skyGrad !== undefined ? sky.skyGrad : 0.35;
       s1(U.starDensity, sky.starDensity, 1);
-      s1(U.daySkyBlue, sky.daySkyBlue, 1);
+      U.daySkyBlue.value = sky.daySkyBlue !== undefined ? sky.daySkyBlue : 1;
       s1(U.mieScatter, sky.mieScatter, 1);
       s1(U.cloudSilver, sky.cloudSilver, 1);
       s1(U.coronaAureole, sky.coronaAureole, 1);
       s1(U.sunDiscSize, sky.sunDiscSize, 1);
-      s1(U.starSize, sky.starSize, 1);
-      s1(U.starTwinkle, sky.starTwinkle, 1);
-      s1(U.moonDiscSize, sky.moonDiscSize, 1);
-      s1(U.moonHalo, sky.moonHalo, 1);
-      s1(U.sunCorona, sky.sunCorona, 1);
+      U.starSize.value = sky.starSize !== undefined ? sky.starSize : 1;
+      U.starTwinkle.value = sky.starTwinkle !== undefined ? sky.starTwinkle : 1;
+      U.moonDiscSize.value = sky.moonDiscSize !== undefined ? sky.moonDiscSize : 1;
+      U.moonHalo.value = sky.moonHalo !== undefined ? sky.moonHalo : 1;
+      U.sunCorona.value = sky.sunCorona !== undefined ? sky.sunCorona : 1;
       s1(U.sunSquash, sky.sunSquash, 1);
-      s1(U.cityGlowReach, sky.cityGlowReach, 1);
+      U.cityGlowReach.value = sky.cityGlowReach !== undefined ? sky.cityGlowReach : 1;
       s1(U.cloudDef, sky.cloudDef, 1);
-      s1(U.lightning, sky.lightning, 0);
-      derive();
+      U.lightning.value = sky.lightning !== undefined ? sky.lightning : 0;
+      updateClock();
+      if (lightingChanged) { derive(); lightingChanged = false; }
     }
 
     /* SKY ATMO: the TSL twin of SkyAtmo.scatter (top of this file), built only when ATMO is on. One
@@ -821,30 +837,24 @@
         const cloudRich = D.cloudRich;
         If(cloudRich.greaterThan(0.001), () => {
           // Billow: higher-frequency octave carves lumpy cumulus definition.
-          // Cached: billow came with f; the bank tap only where its band is
-          // non-zero (the (1 - smoothstep(0.10, 0.26, up)) factor below is
-          // exactly 0 from up 0.26, so bankN = 0 there is the same product).
-          const bankN = C ? float(0.0).toVar() : null;
-          if (C) {
-            If(useC, () => {
-              If(up.lessThan(0.26), () => { bankN.assign(tap(D.cDb).w); });
-            }).Else(() => {
-              billowN.assign(fbm(cp1.mul(2.3).add(vec2(11.7, 4.3))));
-              bankN.assign(fbm(dir.xz.div(max(up, 0.02)).mul(0.16).add(D.bankDrift)));
-            });
-          }
+          if (C) If(useC.not(), () => { billowN.assign(fbm(cp1.mul(2.3).add(vec2(11.7, 4.3)))); });
           const billow = C ? billowN : fbm(cp1.mul(2.3).add(vec2(11.7, 4.3)));
           const defined = smoothstep(0.42, 0.80, f.mul(0.6).add(billow.mul(0.45)))
             .mul(smoothstep(0.013, 0.05, up));
           // CLOUD DEFINITION knob (0.85 = as-shipped blend).
           cov.assign(mix(cov, max(cov, defined), D.defMix));
           // Horizon cloud-bank on the compressed *0.16 plane, banded ~1-9°.
-          const bp = dir.xz.div(max(up, 0.02)).mul(0.16).add(D.bankDrift);
-          const bankThresh = D.bankThresh;
-          const bankCov = smoothstep(bankThresh, 0.80, C ? bankN : fbm(bp))
-            .mul(smoothstep(0.013, 0.030, up))
-            .mul(smoothstep(0.10, 0.26, up).oneMinus());
-          cov.assign(max(cov, bankCov.mul(D.bankK)));
+          // The upper fade reaches zero at 0.26. Skip the four-octave noise or
+          // the explicit-LOD cache tap above it; coverage is already nonnegative.
+          If(up.lessThan(0.26), () => {
+            const bp = dir.xz.div(max(up, 0.02)).mul(0.16).add(D.bankDrift);
+            const bankN = C ? float(0.0).toVar() : fbm(bp);
+            if (C) If(useC, () => { bankN.assign(tap(D.cDb).w); }).Else(() => { bankN.assign(fbm(bp)); });
+            const bankCov = smoothstep(D.bankThresh, 0.80, bankN)
+              .mul(smoothstep(0.013, 0.030, up))
+              .mul(smoothstep(0.10, 0.26, up).oneMinus());
+            cov.assign(max(cov, bankCov.mul(D.bankK)));
+          });
           // Firmer edges so cumulus look solid, not gauzy.
           cov.assign(mix(cov, smoothstep(0.18, 0.82, cov), cloudRich.mul(0.5)));
         });

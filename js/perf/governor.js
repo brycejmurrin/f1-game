@@ -156,12 +156,17 @@ function _gpuMs() {
     return v > 0 && Number.isFinite(v) ? v : -1;
   } catch (_) { return -1; }
 }
+// A 60 FPS target on a 144 Hz display permits 16.7 ms of draw work.
+function _drawBudgetMs() {
+  const target = typeof RenderRate !== "undefined" && RenderRate.targetBudgetMs ? RenderRate.targetBudgetMs() : 0;
+  return Math.max(_floorMs, target);
+}
 // One upper-ladder move: a shed (GPU-bound: timer >= 0.75 x EMA, or no timer) or a restore (GPU room: <= 0.7 x floor).
 function _xMove(ev, up) {
   const q = _xq();
   if (!q || _tierHold || (up ? _xShed <= 0 : _xFutile)) return false;
   const g = _gpuMs();
-  if (g > 0 && (up ? g > _floorMs * 0.7 : g < ev * 0.75)) return false;
+  if (g > 0 && (up ? g > _drawBudgetMs() * 0.7 : g < ev * 0.75)) return false;
   const n = _xStep(q, up ? -1 : 1);
   if (n < 0) return false;
   _pendingVerify = { kind: "xshed", prev: _xShed, ema: ev, up };
@@ -371,7 +376,7 @@ function _ageClocks(stepMs) {
     // §2au: headroom is judged against the SUSTAINED floor (the shadow, which
     // never rewinds) — against the held floor a plateaued EMA would read as
     // "still missing" forever and the ceiling could never age out.
-    if (_frameEMA < Math.max(_floorMs, _floorShadowMs) + RESTORE_WITHIN) {
+    if (_frameEMA < Math.max(_drawBudgetMs(), _floorShadowMs) + RESTORE_WITHIN) {
       if ((_capProbeMs -= stepMs) <= 0) { _scaleCap = Infinity; _armCapProbe(); }
     } else _armCapProbe();
   }
@@ -505,7 +510,8 @@ function tick(dtMs, drawn) {
     // above, not this one evaluation, is what restores the backoff.
   }
 
-  const degradeAt = _floorMs + DEGRADE_OVER, restoreAt = _floorMs + RESTORE_WITHIN;
+  const budgetMs = _drawBudgetMs();
+  const degradeAt = budgetMs + DEGRADE_OVER, restoreAt = budgetMs + RESTORE_WITHIN;
   // §2au guard (see _computeBound): a latched degrade step must clear the held
   // threshold by the margin twice.
   const boundOver = _computeBound ? DEGRADE_OVER : 0;

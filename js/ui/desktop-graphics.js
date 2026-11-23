@@ -75,6 +75,25 @@ const DesktopGraphics = (() => {
       parent.appendChild(el);
       return el;
     }
+    if (!GLX.isMobile) {
+      const options = [["display", "Display refresh rate"], ["60", "60 FPS"], ["120", "Up to 120 FPS"]];
+      const { row, label } = SettingRow.build("pm-desktop-fps", "Race frame rate", options);
+      const detail = document.createElement("details");
+      label.replaceWith(detail);
+      const summary = add(detail, "summary");
+      summary.className = "adv-more-btn";
+      summary.appendChild(label);
+      const note = add(detail, "p", "Display refresh rate draws on each browser frame. Choose 60 FPS for lower GPU use or up to 120 FPS for smoother motion on a high-refresh display. The display and GPU determine the rate you can reach. Changes apply immediately during races.");
+      note.className = "adv-help";
+      note.dataset.help = "keep";
+      panel.insertBefore(row, panel.firstChild);
+      SettingRow.wire(row, {
+        read: () => RenderRate.desktopTarget(),
+        write(value) {
+          if (RenderRate.setDesktopTarget(value)) GameStore.store.rawSet("apex26.desktopFpsTarget", value);
+        },
+      });
+    }
     const fold = add(panel, "details");
     fold.dataset.desktopGraphics = "";
     fold.className = "pm-renderer-sub";

@@ -49,6 +49,19 @@ test("the PiP: AUTO skips a software renderer and ON draws it; no subject, no Pi
   assert.ok(rect[1] && rect[2] === undefined, "the mirror's composite: the default (flipped) path");
 });
 
+test("rear-view road refinement is requested only by the rear camera, including after leaving a broadcast", () => {
+  const h = boot({ mode: "on", bc: true, pipMode: "on" }), rear = [];
+  const begin = h.gfx.mirrorBegin;
+  h.gfx.mirrorBegin = (...args) => { rear.push(args[3]); return begin(...args); };
+  const sub = { s: 400, team: "s", code: "HAM" };
+  h.G.cars.push(sub);
+  h.mp.setSubject(sub, "chase");
+  h.render();
+  h.classes.delete("bc-on");
+  h.render();
+  assert.deepEqual(rear, [false, true]);
+});
+
 test("a phone's governor cannot make the mirror flash: the target ignores render scale, a rung holds ~1.5 s", () => {
   const h = boot({ mode: "on", tier: 2 });
   h.render();
@@ -140,3 +153,57 @@ test("standDown (the GARAGE preview frame) hides the mirror and clears the compo
 // R3-RENDER-4: presentXR drops the post chain that composites the mirror, and the
 // DOM frame is not in the headset — the pass was a whole world render per frame
 // (+25 % of the stereo pair's prop triangles, scratch/hunt3-render/xr-mirror.cjs).
+
+test("mirror and broadcast PiP reuse the lens while updating the moving camera", () => {
+  const h = boot({ mode: "on", pipMode: "on" });
+  const math = h.ctx.M4;
+  let lensBuilds = 0, inversions = 0, passes = 0;
+  h.ctx.M4 = { ...math,
+    perspectiveTo(...args) { lensBuilds++; return math.perspectiveTo(...args); },
+    invertTo(...args) { inversions++; return math.invertTo(...args); },
+  };
+  h.G.frozen = true; // bypass the PiP's frame cadence
+  let lastVP;
+  h.gfx.mirrorBegin = (frame, w, height) => {
+    passes++;
+    const aspect = w / height;
+    const fov = h.classes.has("bc-on") ? h.pooled.fov * Math.PI / 180
+      : 2 * Math.atan(Math.tan(56 * Math.PI / 180 / 2) / aspect);
+    const proj = math.perspectiveTo(new Float32Array(16), fov, aspect, 0.5, 700);
+    const vp = math.mulTo(new Float32Array(16), proj, frame.view);
+    assert.deepEqual(frame.proj, proj);
+    assert.deepEqual(frame.invProj, math.invertTo(new Float32Array(16), proj));
+    assert.deepEqual(frame.viewProj, vp);
+    assert.deepEqual(frame.invViewProj, math.invertTo(new Float32Array(16), vp));
+    if (lastVP) assert.notDeepEqual(vp, lastVP);
+    lastVP = vp;
+    return true;
+  };
+  const check = (expectedPasses, expectedBuilds) => {
+    h.render();
+    assert.equal(passes, expectedPasses);
+    assert.equal(lensBuilds, expectedBuilds);
+    assert.equal(inversions, passes + lensBuilds);
+    assert.equal(h.frame.proj, "P");
+    assert.equal(h.frame.invProj, "IP");
+    assert.equal(h.frame.viewProj, h.mainVP);
+    assert.equal(h.frameSky.invViewProj, h.mainInv);
+  };
+  check(1, 1);
+  h.G.player.s += 10;
+  check(2, 1);
+  h.classes.add("bc-on");
+  const sub = { s: 500, team: "s" };
+  h.G.cars.push(sub); h.mp.setSubject(sub, "chase");
+  check(3, 2);
+  sub.s += 10;
+  check(4, 2);
+  h.pooled.fov += 10;
+  check(5, 3);
+  const box = h.pipEl.getBoundingClientRect();
+  h.pipEl.getBoundingClientRect = () => ({ ...box, width: box.width / 2, right: box.left + box.width / 2 });
+  h.clock.t += 501;
+  check(6, 4);
+  h.classes.delete("bc-on");
+  check(7, 5);
+});

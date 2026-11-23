@@ -187,6 +187,20 @@ const BenchCapture = (function () {
   }
 
   let _leg = null;
+  const watchedDevices = new WeakSet();
+  // GPUDevice.lost can stay pending for the lifetime of the page. Its callback
+  // may retain the device, but must never retain a finished leg's samples.
+  function watchDeviceLoss(dev) {
+    if (watchedDevices.has(dev)) return;
+    dev.lost.then(info => {
+      watchedDevices.delete(dev);
+      const L = _leg;
+      if (!L || L.gpuDevice !== dev) return;
+      push(L.errors, { t: r2((now() - L.t0) / 1000), kind: "device-lost", msg: clean((info && info.reason) + ": " + (info && info.message)) }, CAP.errors * 4);
+      crumb(L);
+    });
+    watchedDevices.add(dev);
+  }
   function wrapCompiles(L) {
     const undo = [];
     const wrap = (proto, name, kind, isAsync) => {
@@ -252,10 +266,10 @@ const BenchCapture = (function () {
     const ev = (name) => () => push(L.events, { t: r2((now() - L.t0) / 1000), ev: name, vis: d ? d.visibilityState : null }, CAP.events);
     on(L, d, "visibilitychange", ev("visibility")); on(L, w, "pageshow", ev("pageshow")); on(L, w, "pagehide", ev("pagehide"));
     on(L, w, "orientationchange", ev("orientation")); on(L, w, "resize", ev("resize"));
-    const dev = safe(() => renderer().backend.device, null);
+    const dev = L.gpuDevice = safe(() => renderer().backend.device, null);
     if (dev) {
       on(L, dev, "uncapturederror", (e) => push(L.errors, { t: r2((now() - L.t0) / 1000), kind: "gpu", msg: clean(e && e.error && e.error.message) }, CAP.errors * 4));
-      safe(() => dev.lost.then((i) => { if (L.on) push(L.errors, { t: r2((now() - L.t0) / 1000), kind: "device-lost", msg: clean((i && i.reason) + ": " + (i && i.message)) }, CAP.errors * 4); crumb(L); }), null);
+      safe(() => watchDeviceLoss(dev), null);
     }
     L.out.gpu.device = dev ? "webgpu" : "none";
     L.out.observers = {

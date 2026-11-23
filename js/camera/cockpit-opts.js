@@ -228,7 +228,35 @@ function helmetMount() { return choice("helmetMount"); }
 function helmetEye() { return choice("helmetEye"); }
 function setHelmetEye(v) { return setChoice("helmetEye", v); }
 function helmetShake() { return choice("helmetShake"); }
-function setHelmetShake(v) { return setChoice("helmetShake", v); }
+function setHelmetShake(v) {
+  motionCache.helmetShake = SHAKE_SCALE[v] ?? 1;
+  return setChoice("helmetShake", v);
+}
+
+// Percentages are cached as factors for the camera. Legacy shake preset names still load from saves and shot URLs.
+const motionCache = Object.create(null);
+function motionAmount(key) {
+  if (motionCache[key] === undefined) {
+    let raw = GameStore.store.raw("apex26." + key);
+    if (key === "helmetShake" && typeof location !== "undefined") {
+      const query = /[?&]helmetshake=([a-z0-9]+)/i.exec(location.search);
+      if (query) raw = query[1].toLowerCase();
+    }
+    const preset = key === "helmetShake" && Object.hasOwn(SHAKE_SCALE, raw) ? SHAKE_SCALE[raw] : null;
+    motionCache[key] = preset ?? (typeof raw === "string" && /^\d{1,3}$/.test(raw) ? Math.min(+raw, key === "helmetShake" ? 150 : 100) / 100 : 1);
+  }
+  return motionCache[key];
+}
+function setMotionAmount(key, value) {
+  const pct = Math.round(Math.max(0, Math.min(key === "helmetShake" ? 150 : 100, value * 100)));
+  if (!Number.isFinite(pct)) return;
+  motionCache[key] = pct / 100;
+  GameStore.store.rawSet("apex26." + key, String(pct));
+}
+function shakeScale(mode, source) {
+  if (mode !== "helmet") return 1;
+  return motionAmount("helmetShake") * (source ? motionAmount(source) : 1);
+}
 function visorColor() { return choice("visorColor"); }
 function setVisorColor(v) { return setChoice("visorColor", v); }
 function visorIntensity() { return choice("visorIntensity"); }
@@ -367,8 +395,16 @@ function initUI() {
     "Tucked moves your eyes down and forward. Upright moves them up and back. Forward keeps your usual eye height. Fine-tune the field of view in Camera Tuner.", helmetEye, setHelmetEye);
   row("pm-helmetmount", "CAMERA MOUNT", C.helmetMount.values, C.helmetMount.labels,
     "Center the helmet camera or mount it over either eye. Works with every eye position.", helmetMount, v => setChoice("helmetMount", v));
-  row("pm-helmetshake", "HELMET SHAKE", C.helmetShake.values, C.helmetShake.labels,
-    "Adjust impact shake, kerb rumble and speed vibration in helmet view.", helmetShake, setHelmetShake);
+  for (const [key, label, helpText] of [
+    ["helmetShake", "Helmet shake", "Overall vibration. 100% is the original strength."],
+    ["helmetImpact", "Impacts and rumble", "Jolts from contact and the sustained rumble on a kerb."],
+    ["helmetKerb", "Kerb rib vibration", "Vertical vibration as each kerb rib passes under the car."],
+    ["helmetBuzz", "Speed vibration", "Continuous vibration as speed builds on dry tarmac."],
+    ["helmetHeadMotion", "Head movement", "How far your head leans in corners and nods under braking."],
+  ]) {
+    slider("pm-" + key.toLowerCase(), label.toUpperCase(), label, helpText,
+      key === "helmetShake" ? 150 : 100, 1, () => motionAmount(key), value => setMotionAmount(key, value));
+  }
   row("pm-visorshape", "VISOR OPENING", C.visorShape.values, C.visorShape.labels,
     "Choose how much of the road is visible through a clear or tinted visor.", visorShape, setVisorShape);
   row("pm-visor-color", "TINT COLOR", C.visorColor.values, C.visorColor.labels,
@@ -447,7 +483,7 @@ return {
   PRESETS, preset, setPreset, halo, haloSize, setHalo, wheel, setWheel, body, setBody, seat, setSeat, interior, setInterior, visor, setVisor, visorColor, setVisorColor, visorIntensity, setVisorIntensity,
   visorRefraction, setVisorRefraction, visorReflections, setVisorReflections, visorBeams, setVisorBeams, visorRain, setVisorRain, visorDropSize, setVisorDropSize, visorRunoff, setVisorRunoff,
   helmetMount, helmetEye, setHelmetEye, helmetShake, setHelmetShake, visorShape, setVisorShape,
-  shakeScale: mode => mode === "helmet" ? SHAKE_SCALE[helmetShake()] : 1,
+  shakeScale, helmetHeadMotion: () => motionAmount("helmetHeadMotion"),
   wheelHasScreen, onWheel, layout, turnChase, setTurnChase, turnChaseLead, setTurnChaseLead, parseLead,
 };
 })();

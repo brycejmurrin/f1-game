@@ -133,6 +133,20 @@ function race(opts = {}) {
 
 // ── 2. FACTS ────────────────────────────────────────────────────────────────
 
+test("reset releases cars from the reusable race facts, fastest lap and events", () => {
+  const facts = RF.create(), { G } = race();
+  facts.observe(G, 0.1);
+  for (const c of G.cars) { c.lastLap = 80; c.finished = true; }
+  const out = facts.observe(G, 0.1), snapshot = out.f, fastest = snapshot.fastest;
+  assert.ok(out.ev.some(e => e.type === "finish"));
+  assert.ok(fastest.car);
+  facts.reset();
+  assert.equal(out.ev.length, 0);
+  assert.equal(out.f, null);
+  for (const key of ["ahead", "behind", "leader", "second", "fastest"]) assert.equal(snapshot[key], null);
+  assert.equal(fastest.car, null);
+});
+
 test("the timing-loop gap is the time between two cars at the same line, not prog/speed", () => {
   const f = RF.create();
   const a = car("AAA", 1000, 80), b = car("BBB", 920, 80);
@@ -1569,4 +1583,16 @@ test("the radio seed is built from the race seed and round only — no language"
       assert.ok(!/I18n|lang/i.test(m[0]), `${f}: "${m[0]}" must not read the language`);
     }
   }
+});
+
+test("quiet cockpit ticks check the commentary camera only when rules are due or an event arrives", () => {
+  const { G, radio, step, said } = race({ cam: 1 });
+  let cameraReads = 0;
+  Object.defineProperty(G, "camMode", { get() { cameraReads++; return 1; } });
+  step(1 / 64, 63);
+  assert.equal(cameraReads, 2, "the two half-second evaluations");
+  assert.ok(radio.request(), "fresh facts still answer an on-demand check");
+  G._caution = 3;
+  step(1 / 64);
+  assert.ok(said.some(line => line.kind === "warning"));
 });

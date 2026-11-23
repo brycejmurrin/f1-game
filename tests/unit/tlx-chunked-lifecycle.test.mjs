@@ -332,6 +332,33 @@ test("splitRanges covers every index exactly once and boxes its own vertices", (
   assert.deepEqual(plain(S.splitRanges(pos, idx, 2)).map(c => [c.start, c.count]), [[0, 6], [6, 3]]);
 });
 
+test("rear-view road bounds retain crossing triangles and shrink submissions with the same index buffer", () => {
+  const S = shaders(), pos = [], idx = [];
+  // One long ribbon. A triangle straddles the edge of the clip volume at x=1.
+  for (let i = 0; i < 11; i++) {
+    const x = i - 4.5;
+    pos.push(x, 0, 0, x + 1, 0, 0, x, 0.5, 0);
+    idx.push(3 * i, 3 * i + 1, 3 * i + 2);
+  }
+  const mesh = { chunks: S.roadRanges(pos, idx, 4, 1) };
+  const coarse = mesh.chunks.map(({ sections, ...chunk }) => chunk);
+  assert.deepEqual(plain(coarse), plain(S.splitRanges(pos, idx, 4)));
+  const source = "js/render/shared/frustum.js";
+  const frustum = vm.runInNewContext(fs.readFileSync(absSrc(source), "utf8") + "; Frustum", {}, { filename: absSrc(source) });
+  const sys = factory([], frustum), vp = Float32Array.of(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+  function ranges(refine, distance = 0) {
+    const n = sys.cull(mesh, vp, [0, 0, 0], distance, null, refine);
+    const runs = [];
+    const count = S.mergeRuns(sys.visList, n, 4, runs);
+    return runs.slice(0, 2 * count);
+  }
+  assert.deepEqual(ranges(false), [0, 24]);
+  assert.deepEqual(ranges(true), [9, 9]); // includes both edge-crossing triangles
+  assert.deepEqual(ranges(true, 0.25), [12, 3]);
+  vp[12] = -100;
+  assert.deepEqual(ranges(true), []);
+});
+
 test("mergeRuns joins contiguous ranges and closes the smallest gaps down to the slot cap", () => {
   const S = shaders(), out = [];
   const c = (start, count) => ({ start, count });
@@ -649,6 +676,8 @@ test("fineCells: a merged record as its cells, each index a view of its block, m
   const fine = sys.fineCells(mesh);
   assert.equal(fine.chunks.length, 36, "3x3 draw blocks -> the 36 cells");
   assert.equal(sys.fineCells(mesh), fine, "built once per record");
+  assert.equal(fine.chunks.filter(c => c.geo instanceof BufferGeometry).length, 0, "CPU-only mirror cells allocate no THREE geometries");
+  assert.equal(fine.chunks.filter(c => c.geo.index instanceof BufferAttribute).length, 0, "cell index views need no THREE attributes");
   const blocks = new Set(mesh.chunks.map((c) => c.geo.index.array.buffer));
   let n = 0;
   const tris = [];
@@ -686,4 +715,29 @@ test("fineCells: a merged record as its cells, each index a view of its block, m
   assert.ok(freed.has(g), "the fine merge slot is freed with the record");
   assert.equal(fine.chunks, null);
   assert.equal(sys.fineCells(mergeFactory("1").build(gridMesh(), 72)), null, "merge 1: the chunks already are the cells");
+});
+
+test("chunk culls share planes across meshes and refresh on an in-place projection change", () => {
+  const source = fs.readFileSync(new URL("../../js/render/shared/frustum.js", import.meta.url), "utf8");
+  const frustum = vm.runInNewContext(source + "\nFrustum", {}, { filename: absSrc("js/render/shared/frustum.js") });
+  let extractions = 0;
+  const sys = factory([], { ...frustum, extractPlanes(vp, out) {
+    extractions++; frustum.extractPlanes(vp, out);
+  } });
+  const vp = Float32Array.of(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1);
+  const centre = { min: [-.1,-.1,-.1], max: [.1,.1,.1] };
+  const far = { min: [9.9,-.1,-.1], max: [10.1,.1,.1] };
+  const road = { chunks: [centre, far] }, props = { chunks: [far] };
+  assert.equal(sys.cull(road, vp), 1);
+  assert.equal(sys.visList[0], centre);
+  assert.equal(sys.cull(props, vp.slice()), 0);
+  assert.equal(extractions, 1);
+  vp[12] = -10;
+  assert.equal(sys.cull(road, vp), 1);
+  assert.equal(sys.visList[0], far);
+  assert.equal(sys.cull(props, vp), 1);
+  assert.equal(extractions, 2);
+  vp[12] = 0;
+  assert.equal(sys.cull(props, vp), 0);
+  assert.equal(extractions, 3);
 });

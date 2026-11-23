@@ -298,3 +298,28 @@ test("PERF: settled backoff skips fitHud layout reads; a dirty observer still pr
   h.nat();
   assert.ok(h.gbrCalls() > 0, "dirty observer: the backoff probe reads layout again");
 });
+
+test("placed radio skips auto-lane inputs and remeasures immediately when restored", () => {
+  const h = boot({ phone: true });
+  const { document } = h.sb, root = document.documentElement;
+  const tower = document.querySelector(".hud-top");
+  let keyReads = 0;
+  const lane = h.sb.HudRadioLane.create({ els: h.els }, {
+    vpW: () => 844, vpH: () => 390, fitKey: () => { keyReads++; return "same"; },
+    top: () => tower, docks: () => [], hStyle() {}, hUnstyle() {}, hToggle() {},
+  });
+  lane.announceLaneTick(root, false);
+  assert.equal(keyReads, 1);
+  document.body.setAttribute("data-radio-placed", "");
+  h.els.announce.setAttribute("data-lane-collapsed", "");
+  h.resetGbr();
+  for (let i = 0; i < 32; i++) lane.announceLaneTick(root, false);
+  lane.radioTopSlot(root, false);
+  assert.equal(h.els.announce.hasAttribute("data-lane-collapsed"), false);
+  assert.equal(keyReads, 1, "automatic placement inputs were not read");
+  assert.equal(tower._gbr, 0, "placed card does not need the tower rectangle");
+  document.body.removeAttribute("data-radio-placed");
+  lane.announceLaneTick(root, false);
+  assert.equal(keyReads, 2);
+  assert.ok(tower._gbr > 0, "the first automatic tick drops the stale geometry");
+});

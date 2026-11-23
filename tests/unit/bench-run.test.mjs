@@ -231,6 +231,93 @@ test("bench-run: with room the plan is saved before the leg pins its renderer, a
   assert.equal(r.ls.get("apex26.tlxForceGL"), "0", "first QUICK PATHS leg is WebGPU");
 });
 
+test("graphics check compares one setting at a time, bracketed by current settings in both scenes", () => {
+  const B = load(), plan = B.newPlan("graphics", {});
+  assert.deepEqual(J(plan.legs.map(l => l.variant)), ["base", "resolution", "mirror", "base", "base", "mirror", "resolution", "base"]);
+  assert.ok(plan.legs.slice(0, 4).every(l => l.weather === "dry" && l.tod === "day"));
+  assert.ok(plan.legs.slice(4).every(l => l.weather === "rain" && l.tod === "night"));
+  const results = plan.legs.map(l => ({ ...l, state: "done", api: "webgpu", steps: [{
+    frames: 900, p95: { base: 30, mirror: 20, resolution: 26 }[l.variant], tier: 2,
+    scale: l.variant === "resolution" ? 0.75 : 1, mirror: l.variant !== "mirror",
+  }] }));
+  assert.match(B.graphicsAdvice(results), /rear-view mirror off.*10 ms.*10 ms/);
+  results[4].steps[0].p95 = 45;
+  assert.equal(B.graphicsAdvice(results), "Keep your current settings. Neither change showed a repeatable frame-time improvement across both scenes.");
+  assert.equal(B.graphicsAdvice(results.filter(l => l.variant !== "base")), "Insufficient comparable samples. Try again with the game in the foreground.");
+});
+
+test("a graphics check survives the reload it initiated, and backgrounding a new leg cancels it", async () => {
+  const data = new Map(), ls = { get length() { return data.size; }, key: i => [...data.keys()][i],
+    getItem: k => data.get(k) ?? null, setItem: (k,v) => data.set(k,v), removeItem: k => data.delete(k) };
+  const page = () => {
+    const visibility = [];
+    const document = { hidden: false, getElementById: () => null, addEventListener: (type, fn) => { if (type === "visibilitychange") visibility.push(fn); } };
+    const hide = () => { document.hidden = true; visibility.forEach(fn => fn()); };
+    const ctx = { localStorage: ls, document, location: { reload: hide }, setTimeout: () => 0 };
+    const B = vm.runInNewContext(SRC + "\n;BenchRun", ctx, { filename: absSrc("js/perf/bench-run.js") });
+    B.create({ state: "menu" });
+    return { B, hide };
+  };
+  assert.equal(page().B.run("graphics"), true);
+  await new Promise(resolve => setImmediate(resolve));
+  const plan = () => JSON.parse(ls.getItem("apex26.benchRun"));
+  assert.equal(plan().state, "running");
+  ls.setItem("apex26.phoneRec", "temporary");
+  page().hide();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(plan().state, "stopped");
+  assert.equal(ls.getItem("apex26.phoneRec"), null);
+});
+
+test("graphics check times 30 FPS draws on a 120 Hz display while the advanced race measures callbacks", async () => {
+  async function measureLeg(id) {
+    const game = { state: "menu" }, timers = new Map(), data = new Map();
+    let raf, now = 0;
+    const ctx = vm.createContext({
+      performance: { now: () => now }, setTimeout: (cb, ms) => timers.set(ms, cb),
+      requestAnimationFrame: cb => { raf = cb; },
+      localStorage: { getItem: k => data.get(k), setItem: (k, v) => data.set(k, v) },
+      SoakRun: { start() { game.state = "race"; return true; }, active: () => true, stop() {} },
+      GLX: { getRenderScale: () => 1, setRenderScale() {} },
+      PerfGov: { autoRes: () => true, tierHold: () => false, setTierHold() {}, setAutoRes() {}, tier: () => 0 },
+      RendererPicker: { liveThreeApi: () => "webgpu" },
+    });
+    for (const module of ["render-rate", "gpu-test-run"]) {
+      const source = "js/perf/" + module + ".js";
+      vm.runInContext(readFileSync(absSrc(source), "utf8"), ctx, { filename: absSrc(source) });
+    }
+    const rate = vm.runInContext("RenderRate", ctx);
+    rate.setMode("30");
+    const B = vm.runInContext(SRC + "\n;BenchRun", ctx, { filename: absSrc("js/perf/bench-run.js") });
+    const plan = B.newPlan(id, {});
+    plan.legs = plan.legs.slice(0, 1);
+    plan.legs[0].state = "booting";
+    data.set(B.KEY, JSON.stringify(plan));
+    B.create(game);
+    timers.get(0)();
+    await new Promise(resolve => setImmediate(resolve));
+    for (let i = 0; i < 600; i++) {
+      now += 1000 / 120;
+      rate.gate(1 / 120, 1000 / 120, false, true);
+    }
+    timers.get(5000)();
+    await new Promise(resolve => setImmediate(resolve));
+    for (let i = 0; i < 2400; i++) {
+      now += 1000 / 120;
+      rate.gate(1 / 120, 1000 / 120, false, true);
+      raf(now);
+    }
+    timers.get(20000)();
+    await new Promise(resolve => setImmediate(resolve));
+    return JSON.parse(data.get(B.KEY)).legs[0].steps[0];
+  }
+  const graphics = await measureLeg("graphics"), advanced = await measureLeg("races");
+  assert.equal(graphics.p95, 33.33);
+  assert.equal(graphics.fps, 30);
+  assert.equal(advanced.p95, 8.33);
+  assert.equal(advanced.fps, 120);
+});
+
 test("Graphics opens the real Benchmark dialog for arrangement without running a test", () => {
   const dom = makeDom(), doc = dom.document, timers = new Map(), edits = [], writes = [];
   const panel = dom.byId("pm-panel-graphics"), dialog = dom.byId("bench");

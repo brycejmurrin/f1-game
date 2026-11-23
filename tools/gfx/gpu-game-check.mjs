@@ -1481,15 +1481,19 @@ try {
   // So the hour is a parameter. 12 keeps every earlier run comparable; 2 is
   // night, where the lamps are up and the branch under test actually runs.
   const abClock = +flag("--clock", "12");
+  const probeFeature = (name, value) => page.evaluate(([feature, setting]) => {
+    const api = feature === "mirrorRoadCull" ? GLX : window.__apex;
+    return typeof api?.[feature] === "function" ? api[feature](setting) : { supported: false };
+  }, [name, value]);
   const abFor = (feature) => async () => {
     const A = { feature, clock: abClock };
-    const has = await page.evaluate((f) => !!(window.__apex && window.__apex[f] && window.__apex.gpuTimer), feature);
+    const has = await page.evaluate(() => !!window.__apex?.gpuTimer);
     if (!has) return { note: "no " + feature + "/gpuTimer hooks" };
     // NOTHING TO A/B (hunt 4 I4). Both features are GLX-only: WGX and the two
     // three.js legs report supported:false, yet each still spent three
     // captures and 40 interleaved samples per feature with the sim frozen —
     // frames that then sat in the governor ring the end snapshot reads.
-    const st0 = await page.evaluate((f) => { try { return window.__apex[f](); } catch (e) { return { error: String(e && e.message) }; } }, feature);
+    const st0 = await probeFeature(feature);
     if (st0 && st0.supported === false) {
       return { feature, skipped: true, stats: st0, note: feature + " reports supported:false on this backend — A/B skipped" };
     }
@@ -1539,7 +1543,7 @@ try {
         const xs = { off: [], on: [] };
         for (let r = 0; r < rounds; r++) {
           for (const k of ["off", "on"]) {
-            await page.evaluate(([f, v]) => window.__apex[f](v), [feature, k === "on"]);
+            await probeFeature(feature, k === "on");
             await settle(k === "on" ? 10 : 4);
             const v = await page.evaluate(() => { try { const q = window.__apex.gpuTimer(); return q && q.ms > 0 ? q.ms : null; } catch (_) { return null; } });
             if (v != null) xs[k].push(v);
@@ -1563,18 +1567,18 @@ try {
       // could not be turned into a per-frame figure, so a grouping defect and a
       // scene with few visible chunks were indistinguishable, and the number
       // ended up labelled unexplained instead of answered.
-      await page.evaluate(([f, v]) => {
-        window.__apex[f](v);
+      await probeFeature(feature, on);
+      await page.evaluate(() => {
         if (!window.__abTick) {
           window.__abTick = true;
           const t = () => { window.__abFrames = (window.__abFrames | 0) + 1; requestAnimationFrame(t); };
           requestAnimationFrame(t);
         }
         window.__abFrames = 0;
-      }, [feature, on]);
+      });
       await settle(on ? 24 : 8);            // ON needs long enough for the queries to answer
       A[key] = await sampleGpu(12);
-      A[key].stats = await page.evaluate((f) => window.__apex[f](), feature);
+      A[key].stats = await probeFeature(feature);
       A[key].frames = await page.evaluate(() => window.__abFrames | 0);
       if (shotBase) {
         A[key].present = await freshFrame("ab-" + key);
@@ -1584,7 +1588,7 @@ try {
       }
     }
     await page.evaluate(() => { try { window.__apex.renderClock(null, false); window.__apex.freeze(false); } catch (_) {} });
-    await page.evaluate((f) => window.__apex[f](false), feature);
+    await probeFeature(feature, false);
     try {
       const sharp = (await import("sharp")).default;
       const raw = async (f) => (f ? sharp(f).raw().toBuffer({ resolveWithObject: true }) : null);
@@ -1627,6 +1631,30 @@ try {
   };
   out.occlusionAB = await bounded(abFor("occlusionCull"), 180000, "occlusion-ab");
   out.multiDrawAB = await bounded(abFor("multiDraw"), 180000, "multidraw-ab");
+  if (backend === "three" && extraLs.includes("apex26.measureMirrorRoad=1")) {
+    const before = await page.evaluate(() => {
+      const A = window.__apex;
+      const quality = A.renderScale({ lite: true });
+      const previous = { mirror: A.mirror().mode, cull: GLX.mirrorRoadCull?.().enabled,
+        scale: quality.scale, auto: quality.auto, hold: quality.tierHold };
+      A.govHold(true);
+      A.renderScale(1);
+      A.mirror("on");
+      return previous;
+    });
+    try {
+      out.mirrorRoadAB = await bounded(abFor("mirrorRoadCull"), 180000, "mirror-road-ab");
+    } finally {
+      await page.evaluate(({ mirror, cull, scale, auto, hold }) => {
+        const A = window.__apex;
+        GLX.mirrorRoadCull?.(cull);
+        A.mirror(mirror);
+        GLX.setRenderScale(scale);
+        PerfGov.setAutoRes(auto);
+        A.govHold(hold);
+      }, before);
+    }
+  }
   checkpoint("feature-ab");
 
   // AND THE SAME THING IN MOTION. park() gives a static camera, and every
