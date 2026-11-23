@@ -76,7 +76,7 @@ const lazyBundles = LazyBundles.create({
   els, loadBackendScripts, getContext: () => G,
   applyLightTuneIfReady: () => { if (ltStore) applyLightTune(); },
   createNetwork: () => { netPlay = NetPlay.create(G); netLobby = NetLobby.create(G); return netLobby; },
-  bindAgent: () => { if (typeof ApexApi !== "undefined") { window.__apex = ApexApi.create(G, restoreFreePlaySelection); if (typeof VisorOptics !== "undefined") window.__apex.visorScene = () => VisorOptics.sceneFromG(G); } },
+  bindAgent: () => { if (typeof ApexApi !== "undefined") { window.__apex = ApexApi.create(G, restoreFreePlaySelection); window.__apex.visorScene = () => typeof VisorOptics !== "undefined" ? VisorOptics.sceneFromG(G) : null; } },
   // Recreate audio instances after LAZY_AUDIO reinjects the real `var` globals; `once` latches each part (a retry re-runs only the one that threw).
   onAudioReady: (once = (k, f) => f()) => {
     once("radio", () => { radioVoice = RadioVoice.create(G); });
@@ -95,7 +95,7 @@ const lazyBundles = LazyBundles.create({
     marshalPanels = MarshalPanels.create(G);
     records = SessionRecords.create(G);
     if (G.daily.isActive() && G.daily.current().class === "standard") records.prepareDaily();   // a STANDARD daily picked before this bundle landed was prepared by the stub (a no-op): every lap would be refused
-    raceRadio = RaceRadio.create(G); RaceCeremony.create(G, { duelOn, isWatch: () => realRace.isWatch(), resultsCam: () => resultsCam, cooldownControls: show => showTouchControls(show, true) });
+    raceRadio = RaceRadio.create(G); RaceCeremony.create(G, { duelOn, isWatch: () => realRace.isWatch(), resultsCam: () => resultsCam, cooldownControls: show => showTouchControls(show, true), snapCooldown: () => { camSnapNext = true; } });
     flyingStart = FlyingStart.create(G, {
       realRace: () => !!(typeof realRace !== "undefined" && realRace && realRace.isActive()) || !!(setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())),
     });
@@ -2631,6 +2631,7 @@ async function startRaceBody() {
   RaceEntryProfile.span("debrisPrime", () => DebrisWorld.prime());
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; feel.startHold = 0; feel.restartPending = false; paused = false; frozen = false; raceRestarting = false; skyViewOverride = null;
   RaceEntryProfile.mark("gridCountdown:end");
+  if (bumpRaceIndex) quali.clearDeletedLap(player, netLobby.qualifying());
   if (typeof Assets !== "undefined" && Assets.retry && PerfGov.softwareRaster()) {
     const run = () => { try { Assets.retry(); } catch (_) { /* optional pack */ } };
     if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 120000 });
@@ -2903,6 +2904,7 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   // the pause dialog on top of the results with a RESUME that resolves to
   // nothing, because resuming is only reachable from state "race".
   paused = false; els.pausemenu.hidden = true;
+  if (typeof RetiredCard !== "undefined") RetiredCard.hide();
   Droplets.clear();   // visor glints never linger over the results/menu (audit4 I1 R1)
   setState("results", isQuali() ? "quali-end" : forcedOrder ? "forced-order" : "flag");
   document.body.classList.remove("in-race");
@@ -2925,9 +2927,12 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
     const myLap = player.lastLap > 0 ? player.lastLap : (player.best < Infinity ? player.best : 0);
     // Tell the other player what we set BEFORE building the sheet: their side
     // needs it to draw the same classification ours will.
-    if (myLap > 0) qualiNet.reportQuali(player.driverId, myLap);
+    if (myLap > 0) {
+      quali.clearDeletedLap(player, qualiNet.hasArmed());
+      qualiNet.reportQuali(player.driverId, myLap);
+    }
     // Infinity = drove, but every lap was deleted: NO TIME, the back of the grid.
-    quali.simulate(qualiNet.driven(myLap > 0 ? myLap : player.qualiCut ? Infinity : 0));
+    quali.simulate(qualiNet.driven(myLap > 0 ? myLap : quali.hasDeletedLap(player, qualiNet.hasArmed()) ? Infinity : 0));
     if (!(myLap > 0)) reportModelQuali();   // no valid lap: the rival still needs OUR time, or their sheet waits forever
     $("quali").classList.add("q-done");   // the session is run: only TO THE GRID now
     qualiNet.markDone(); $("q-back").textContent = "MENU";
@@ -3000,9 +3005,9 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   }
   // A one-off GP's driven quali order stays persisted (quali-persist contract);
   // quali's qualiTrack + qualiMode stamps refuse it on another circuit or mode.
-  dbgCam = null; resultsCam.onFlag();
+  dbgCam = null;
   buildResults(order, { sprint: wasSprint, duel: duelOn() });   // endRace's own read: scored() is stale after a season save conflict
-  RaceCeremony.afterClassify(G, order, { sprint: wasSprint, duel: duelOn(), watch: realRace.isWatch() });   // opt-in ceremony; else #results now
+  if (!RaceCeremony.afterClassify(G, order, { sprint: wasSprint, duel: duelOn(), watch: realRace.isWatch() })) resultsCam.onFlag();
   setupCam.noteResult(order, { sprint: wasSprint, duel: duelOn(), watch: realRace.isWatch() });   // AFTER THE RACE: the next garage visit brings the car home
   announcer.wrapUp(order, Object.assign(loadingInfo(), { sprint: wasSprint }));   // js/audio/announcer.js — the broadcaster's read over the results
 }
@@ -3482,7 +3487,7 @@ var jumpStartPenalty = JumpStartPenalty.create(G, {
 });   // LAZY_RACE_SESSION — recreated in onRaceSessionReady
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G),
-  director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
+  director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing(), lazyBundles.ensureReplayBroadcast),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
   resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf);
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
@@ -4196,7 +4201,7 @@ let netLobby = {
 // C2 visual suspension (js/physics/body-attitude.js) — render-only cosmetic chassis
 // pitch/roll/heave springs; DEFAULT ON, disable via apex26.bodyAttitude/__apex.bodyAttitude.
 const bodyAttitude = BodyAttitude.create(G);
-if (typeof VisorOptics !== "undefined") VisorOptics.bind(G); RaceEntryProfile.bindGame({ state: () => G.state, loadPhase: () => loadingScreen.phase() });   // G is local to this IIFE: a typeof read never sees it (#5964, #5965)
+RaceEntryProfile.bindGame({ state: () => G.state, loadPhase: () => loadingScreen.phase() });   // LazyBundles binds visor optics after the race-session payload loads.
 // MUSIC & SOUND panel (js/audio/panel.js) — the mixer screen, the ♪
 // master button and the audio-settings persistence. create() wires the DOM;
 // init() runs at the boot-restore position near the end of this file.
@@ -4369,7 +4374,7 @@ function quitToMenu() {
   closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
   quali.clear(forgetGp);   // memory only
   qualiNet.clearPeers();
-  qualiNet.hasArmed() ? qualiNet.resetOnQuitWithCancel() : qualiNet.resetSoft();
+  qualiNet.hasArmed() ? qualiNet.resetOnQuitWithCancel(isQuali() && state === "race") : qualiNet.resetSoft();
   stormFx._ltBase = null; stormFx._ltFlash = 0;   // the lightning's saved race base is not the menu's
   // THE PRE-RACE SCREEN OUTLIVES A FAILED START without this: its only other
   // stop is clearMenuScreens(), which startRaceBody() reaches near the END of
@@ -5663,7 +5668,7 @@ function updateCarLongitudinal(c, dt, ranked, S) {
       c.incidentInvalidLap = true;
       // A cut quali lap is DELETED, not replaced: with no valid lap the sheet
       // gave the player the model's time, which could be pole (endRace).
-      if (c.isPlayer && isQuali()) c.qualiCut = true;
+      if (c.isPlayer && isQuali()) quali.markDeletedLap(c, qualiNet.hasArmed());
       // THE RACE LADDER (FIA 2026 Penalty Guidelines): strikes 1-2 are
       // warnings, the 3rd is the black-and-white flag, the 4th AND EACH
       // ADDITIONAL one is +5 s — no reset, no +10 s step (that was a pre-2026
@@ -6357,7 +6362,7 @@ function updateCarAdvance(c, dt, ranked, S) {
         lineCross.lapValid = lapValid;
       }
       if (lapValid) c.lastLap = lapDone;
-      else if (c.isPlayer && isQuali()) c.qualiCut = true;   // ANY deleted quali lap (a takeover, a practice rewind — not only a cut) is NO TIME, never the model's
+      else if (c.isPlayer && isQuali()) quali.markDeletedLap(c, qualiNet.hasArmed());   // a takeover or practice rewind also deletes the lap
       if (lapValid && lapDone < c.best) c.best = lapDone;
       if (c.isPlayer && soundOn) GameAudio.lap();
     } else if (c.isPlayer && isTimeTrial()) {
@@ -6540,7 +6545,7 @@ function updateCarAdvance(c, dt, ranked, S) {
 // Put the player back on the racing line at its CURRENT progress, facing forward at a modest speed — for a spin, a
 // beach or a wall. Progress is kept; lateral position, heading and slip reset. In TT/QUALI the lap is DELETED (no free re-centre).
 function rescuePlayer(c) {
-  if (c.human && (isTimeTrial() || isQuali())) { c.incidentInvalidLap = true; if (c.isPlayer && isQuali() && c.lap >= 1) c.qualiCut = true; }   // as a track-limits cut (lap 0: nothing timed)
+  if (c.human && (isTimeTrial() || isQuali())) { c.incidentInvalidLap = true; if (c.isPlayer && isQuali() && c.lap >= 1) quali.markDeletedLap(c, qualiNet.hasArmed()); }   // lap 0 is untimed
   // A live incident takeover would re-impose the Rapier pose over this rescue
   // (same authority rule as __apex.jump) — hand the car back first.
   incidentSim.release(c);
@@ -7310,7 +7315,8 @@ function render(dt) {
   // #game by design (tokens.css). Re-drawing an identical frozen world every
   // frame (env probe, shadows, rain, debris upload) was unpaid work — keep the
   // last race present and return. Race-settings flyby and live race still draw.
-  if (state === "results" && !resultsCam.live()) return; // ResultsCam owns chequered/orbit/highlights
+  const ceremony = state === "results" ? RaceCeremony.get() : null, ceremonyView = ceremony?.cameraPhase();
+  if (state === "results" && !resultsCam.live() && !ceremony?.needsWorldFrame()) return;
   // HELD GARAGE (studioDone): a world frame that kicks TLX's program warm paints nothing, so the
   // garage's last frame stays up — no hidden canvas, no black card before the flyby.
   const heldWarm = !!(_studio && _studio.held && track && _menuGate.warm > 0); if (heldWarm) _menuGate.warm--;
@@ -7377,8 +7383,8 @@ function render(dt) {
     const bankDy = bankCam ? bankCam.dy : 0;
     // Optional pit-entry/exit auto-cut onto PIT WALL (ExtraRigs) — before we
     // read camMode so this frame's vantage matches the cut.
-    if (typeof ExtraRigs !== "undefined") ExtraRigs.tickPitAuto(G);
-    const mode = CAM_MODES[camMode].id;
+    if (!ceremonyView && typeof ExtraRigs !== "undefined") ExtraRigs.tickPitAuto(G);
+    const mode = ceremonyView === "cooldown" ? "chase" : CAM_MODES[camMode].id;
     roadCamRoll = bankCam ? -bankCam.roll * cameraBankScale(mode) : 0;
     // All per-mode framing lives in camVantage() so the live cam, snapCam() and the
     // previewCam() debug hook stay identical. bankDy keeps the eye riding the bank.
@@ -7446,8 +7452,8 @@ function render(dt) {
   // so we only smooth bumps — no speed lag. Low lambda for the menu flyby.
   // Onboard cams ride ON the car (cockpit/hood/tcam), so they need very high
   // lambda or the eye lags behind/into the bodywork at speed.
-  const racing = state === "race" || state === "count";
-  const camId = CAM_MODES[camMode].id;
+  const racing = state === "race" || state === "count" || ceremonyView === "cooldown";
+  const camId = ceremonyView === "cooldown" ? "chase" : CAM_MODES[camMode].id;
   const onboard = racing && (camId === "cockpit" || camId === "hood" || camId === "visor" || camId === "helmet" || camId === "tcam");
   // Just after a cut, ease the external cams in with a gentler lambda so the angle
   // sweeps to its new vantage instead of snapping. Onboard cams ignore it (must lock).
@@ -7558,7 +7564,7 @@ function render(dt) {
   // fascia out of frame. Only cockpit/hood views have geometry that close, so
   // they keep 0.3 and every other view takes a near plane that buys back a lot
   // of depth resolution for free.
-  const _projMode = CAM_MODES[camMode] ? CAM_MODES[camMode].id : "chase";
+  const _projMode = camId;
   const _nearM = (_projMode === "cockpit" || _projMode === "hood" || _projMode === "visor" || _projMode === "helmet") ? 0.3 : 0.9;
   const _near = cine ? FlybySeq.NEAR : (dbgCam ? 0.3 : _nearM);
   M4.perspectiveTo(_mProj, fovY, gfx.aspect, _near, farPlane);
@@ -7800,7 +7806,8 @@ function render(dt) {
   // The DRIVING LINE ribbon rides the same state as the skids (on the road, no
   // depth write). Drawn against the PLAYER's speed for the dynamic colour.
   // Never in a flyby frame (`cine`: the editor preview, flybyCam, free-cam's flyby lens).
-  if (state !== "menu" && !cine && track && player) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
+  const driverGuide = racing && !ceremonyView && player && !player.finished && !player.retired && !realRace.isWatch();
+  if (state !== "menu" && !cine && track && player && (photoMode || driverGuide)) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
   // (wheel/halo/mirrors) + the car's shadow instead, body mesh skipped. Was two
   // always-equal booleans, so the `hide && !rig` skip they guarded never fired.
@@ -8465,6 +8472,7 @@ function render(dt) {
   if (typeof VisorOptics !== "undefined") VisorOptics.folded(po.visorFolded);
   if (homeTrack && !(gfx.warming && gfx.warming())) uiExperience.didRenderTrack();
   RaceEntryProfile.afterPresent(loadingScreen, gfx, mirrorPass.preparing());
+  if (ceremonyView === "parcFerme" && !(gfx.warming && gfx.warming())) ceremony.worldPresented();
   // Boot canary disarmed once the backend has presented a RUN of world frames,
   // not one. Until then the probe stays armed in storage and a load that dies
   // reverts on the next boot, which is the whole point of it.
@@ -8876,7 +8884,7 @@ photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, ltStore, rende
     finally { _simRngState = rng; }
     return () => { cars = before.cars; player = before.player; };
   }, garage: {
-  snapshot: () => setupCam.captureCamera(), restore: (v) => setupCam.restoreCamera(v), shot: (id) => setupCam.setSetupView(id),
+  prepareCapture: () => setupCam.endGarageRes(), snapshot: () => setupCam.captureCamera(), restore: (v) => setupCam.restoreCamera(v), shot: (id) => setupCam.setSetupView(id),
   looks: lookRowSpecs, looked: () => { if (!$("carsetup").hidden) buildSetup(); } } });
 function openExperiencePhoto(source) { return UiExperience.openPhoto(G, { source, photoStudio, setPaused,
   trackHome: state === "menu" && uiExperience && ["track", "pitlane"].includes(uiExperience.state().scene.mode), trackReady: menuWorld(),
@@ -9004,7 +9012,7 @@ $("q-sim").onclick = () => {
   if (isCareer()) Career.markWeekendStarted();   // the briefs lock: the grid is known now
   // Keep the model's time for us — but a rival who has already driven theirs
   // does not lose it because we could not be bothered to drive ours.
-  quali.simulate(qualiNet.driven(player && player.qualiCut ? Infinity : 0));   // a deleted lap is not traded for the model's
+  quali.simulate(qualiNet.driven(quali.hasDeletedLap(player, qualiNet.hasArmed()) ? Infinity : 0));   // a deleted lap is not traded for the model's
   reportModelQuali();
   $("quali").classList.add("q-done");
   qualiNet.markDone(); $("q-back").textContent = "MENU";

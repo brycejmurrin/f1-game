@@ -10,9 +10,10 @@ const TvGraphics = (function () {
   function codeOf(c) { return String(c && (c.code || c.id || c.num) || "—"); }
   // Live cars carry only c.best (#5941): the lowest holds FASTEST LAP. `holder` (Broadcast's script code) overrides.
   function snapshot(ranked, holder) {
+    const scripted = holder !== undefined;
     const rows = (ranked || []).map((c, i) => ({ code: codeOf(c), pos: Number.isFinite(c.pos) ? c.pos : i + 1,
-      fastest: holder ? codeOf(c) === holder : !!(c.fastest || c.fastestLap), best: c.best > 0 ? c.best : Infinity }));
-    if (holder) return rows;
+      fastest: scripted ? codeOf(c) === holder : !!(c.fastest || c.fastestLap), best: c.best > 0 ? c.best : Infinity }));
+    if (scripted) return rows;
     const top = rows.reduce((a, r) => (r.best < (a ? a.best : Infinity) ? r : a), null);
     if (top) top.fastest = true;
     return rows;
@@ -55,7 +56,7 @@ const TvGraphics = (function () {
 
   /** opts.fastest(): holder code or null. */
   function create(G, parent, opts) {
-    const holderOf = opts && typeof opts.fastest === "function" ? opts.fastest : () => null;
+    const holderOf = typeof opts?.fastest === "function" ? opts.fastest : null;
     const doc = typeof document !== "undefined" ? document : null;
     if (!doc) return { tick() {}, stop() {}, reset() {}, status: () => null, element: () => null };
     addStyle(doc);
@@ -64,7 +65,7 @@ const TvGraphics = (function () {
     host.setAttribute("role", "region");
     host.setAttribute("aria-label", "Broadcast race graphics");
     const lower = doc.createElement("div"); lower.id = "tvg-lower"; lower.hidden = true;
-    const battle = doc.createElement("div"); battle.className = "tvg-battle"; battle.hidden = true;
+    const battle = doc.createElement("div"); battle.className = "tvg-battle"; battle.setAttribute("data-bc-battle", ""); battle.hidden = true;
     const fastest = doc.createElement("div"); fastest.id = "tvg-fastest"; fastest.hidden = true;
     host.append(lower, battle, fastest);
     (parent || doc.body).appendChild(host);
@@ -74,8 +75,8 @@ const TvGraphics = (function () {
       previous = null; wait = 0; lowerFor = 0; fastestCode = "";
       lower.hidden = battle.hidden = fastest.hidden = true;
     }
-    function tick(dt, force) {
-      const on = G && G.hudProfile === "broadcast" && (G.state === "race" || G.state === "count");
+    function tick(dt, force, field = G?.ranked) {
+      const on = G && (opts?.spectator || G.hudProfile === "broadcast") && (G.state === "race" || G.state === "count");
       host.hidden = !on;
       if (!on) { reset(); return null; }
       wait -= Number.isFinite(dt) ? dt : 0;
@@ -83,7 +84,7 @@ const TvGraphics = (function () {
       if (lowerFor <= 0) lower.hidden = true;
       if (!force && wait > 0) return null;
       wait = TICK_S;
-      const ranked = Array.isArray(G.ranked) ? G.ranked : [];
+      const ranked = Array.isArray(field) ? field : [];
       const frame = OverlayFeed.frame({
         seq: ++seq, t: Number(G.raceT) || 0, state: G.state, track: G.track && G.track.id,
         lap: G.player && G.player.lap, laps: G.lapsTarget,
@@ -91,8 +92,8 @@ const TvGraphics = (function () {
         fieldSectorBests: G.fieldSectorBests,
         vScale: G.vTop && typeof PhysicsConsts !== "undefined" ? G.vTop() / PhysicsConsts.VMAX : 1,
       });
-      let holder = null;
-      try { holder = holderOf() || null; } catch (_) { /* replay mid-seek: per-car flags */ }
+      let holder;
+      try { if (holderOf) holder = holderOf() || null; } catch (_) { /* replay mid-seek: per-car flags */ }
       const change = diff(previous, ranked, holder);
       previous = change.snapshot;
       if (change.lower) {
@@ -104,7 +105,8 @@ const TvGraphics = (function () {
       battle.textContent = frame.battle
         ? "BATTLE  " + frame.battle.ahead + "  ·  " + frame.battle.behind + "   " + frame.battle.gapS.toFixed(2) + "s"
         : "";
-      if (change.fastest) fastestCode = change.fastest.code;
+      if (holder !== undefined) fastestCode = holder || "";
+      else if (change.fastest) fastestCode = change.fastest.code;
       fastest.hidden = !fastestCode;
       fastest.textContent = fastestCode ? "FASTEST LAP  ·  " + fastestCode : "";
       return { frame, lower: change.lower, fastest: change.fastest };

@@ -278,7 +278,10 @@
       const res = c.mul(wc).add(hc.mul(wh)).div(max(wc.add(wh), 1e-5));
       return vec4(select(a.greaterThanEqual(1.0), c, res), wCur);
     })(), "tlx-post-traa");
-    const outMat = mk(Fn(() => vec4(max(outT.sample(vec2(screenUV)).rgb, vec3(0.0)), 1.0))(), "tlx-post-traa-out");
+    const outMat = mk(Fn(() => {
+      const uv = vec2(screenUV);
+      return vec4(max(outT.sample(ctx.waterUV ? ctx.waterUV(uv) : uv).rgb, vec3(0.0)), 1.0);
+    })(), "tlx-post-traa-out");
 
     let hist = null, cur = 0, W = 0, H = 0, frames = 0, resets = 0, lastOk = false, reset = true;
     const _jpx = [0, 0], _jndc = [0, 0], _jit = [0, 0];

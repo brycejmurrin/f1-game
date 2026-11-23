@@ -54,6 +54,10 @@ const ON_DEMAND = new Map([
     const generator = createRequire(import.meta.url)(path.join(root, "tools/gen/gen-output-surface.mjs"));
     return ensureFile(path.join(root, generator.TARGET), generator.render());
   }],
+  ["tests/data/impact-map.json", (root) => {
+    const generator = createRequire(import.meta.url)(path.join(root, "tools/docs/gen-agent-index.mjs"));
+    return ensureFile(path.join(root, generator.IMPACT_TARGET), generator.renderImpact());
+  }],
   ["tools/shot/scenery-locations.json", (root) => createRequire(import.meta.url)(path.join(root, "tools/shot/gen-scenery-locations.cjs")).ensureCatalog()],
 ]);
 for (const p of ON_DEMAND_PATHS) {

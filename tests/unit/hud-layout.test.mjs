@@ -1032,20 +1032,14 @@ test("hiddenReason: classes name the reason; the live element has the last word"
     }
   }
   assert.equal(h({ classes: ["desktop"], live: false }).hiddenReason("announce").soft, true, "a race still shows messages");
-  const hides = (src, cls, id) => new RegExp(
-    "body\\." + cls + "[\\s\\S]{0,160}" + id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "[\\s\\S]{0,80}\\{[^}]*display:\\s*none !important"
-  ).test(src);
-  for (const id of ["#hud-dock", "#hud-speed", "#hud-flag", "#hud-mirror", ".touchbtn", "#minimap", ".hud-top", "#announce", "#btn-cam", "#lights"]) {
-    assert.equal(hides(css, "bc-on", id), true, "bc-on hides " + id);
-  }
-  for (const id of ["#bc-tower", "#bc-pip", "#pausebtn"]) {
-    assert.equal(hides(css, "bc-on", id), false, "bc-on keeps " + id);
-  }
-  const wt = fs.readFileSync(path.join(ROOT, "css/watch-transport.css"), "utf8");
-  assert.doesNotMatch(wt, /#hud-dock \{ visibility: hidden/, "the dock is not merely visibility-hidden");
-  for (const id of ["#hud-dock", "#hud-speed", "#hud-flag", ".touchbtn", "#announce", "#btn-cam"]) {
-    assert.equal(hides(wt, "watch-controls-on", id), true, "replay bar hides " + id);
-  }
+  const spectator = "body:is(.bc-on, .watch-controls-on, [data-spectator])";
+  const displayFor = (selector) => rules.find(r => r.selector.includes(selector))?.decls.get("display");
+  assert.equal(displayFor(spectator + " #hud > :not(#bc-tower, #bc-pip)"), "none !important",
+    "spectating hides every driving cluster, including the dock, while leaving the tower and PiP");
+  assert.equal(displayFor(spectator + " :is(.touchbtn, #announce, #lights)"), "none !important",
+    "spectating also hides driving chrome outside the HUD");
+  assert.equal(displayFor('body:is(.watch-controls-on, [data-spectator="watch"]) :is(#campicker, #btn-cam)'), "none !important",
+    "the WATCH transport owns its camera controls");
   // Live: a drawn element is never marked, whatever the classes say.
   const L = load3({ classes: ["hud-prof-minimal"], live: true });
   const ot = L.els["#hud-ot"] || (L.els["#hud-ot"] = fakeEl());

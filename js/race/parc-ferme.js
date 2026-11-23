@@ -246,7 +246,7 @@ var ParcFerme = (function () {
 
     return {
       start, skip, tick, live, status, reset,
-      ensureHost, frozenPath: () => frozenPath(G),
+      ensureHost, frozenPath: () => frozenPath(G), staticView: () => frozen,
     };
   }
 

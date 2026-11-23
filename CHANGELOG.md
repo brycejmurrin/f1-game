@@ -13,6 +13,445 @@ Under each build, use only these categories:
 
 New fragments list only player-visible changes: no internal refactors, agent workflows, CI or tooling (`docs/changelog.d/README.md`). Nothing lints that, and some entries already folded do describe CI or tooling; leave them, add no more. Older history lives in git and merged PRs.
 
+## 28959
+
+### New
+- SETTINGS › APPEARANCE › PORTRAIT & LANDSCAPE. SHARED (the default) keeps one set of sizes and screen looks for both orientations, exactly as before. SEPARATE lets portrait and landscape each keep their own UI and HUD sizes, pause menu and screen looks (garage panel width and height included) on this device; it switches only once the new orientation has settled, never on a launch that briefly reports the wrong one. Backed up with the settings file (#4529).
+- SETTINGS › APPEARANCE › GARAGE: PANEL WIDTH now goes down to 60 % (it used to stop at 100 %, so it could only grow), and a new PANEL HEIGHT (40–100 %) shortens the garage panel. Both work in portrait, so on a phone held upright you can shrink the setup panel and see the car (#4529).
+- Garage animations: RACE START, PIT IN, PIT OUT and RACE END each have their own on/off switch under PLAY ANIMATIONS (VISUAL STUDIO › GARAGE ENTER & LEAVE), so one show can be turned off and the others kept (#4745).
+- RESOLUTION has a new MAX setting (three.js renderer) that draws the 3D view at your screen's full pixel density instead of the phone's 1.5× cap, so a 3× iPhone gets the whole panel instead of half of it per axis. It is opt-in: AUTO, LOW, MED and HIGH draw what they did before, and MAX drops back to HIGH's sharpness by itself the first time the frame rate slips or the phone heats up (#5222).
+- Time Trial: the pit lane works in a Time Trial — the limiter, the lane speed cap and the HUD lane cue, as in a race (a lap run through it is not a flying lap). Stop in your box and END TIME TRIAL is offered for a few seconds (the WORK ON CAR slot, touch-sized): it plays the pit drive-in and ends the session on the Time Trial results; drive on and the run continues (#5789).
+- On ULTRA and EXTREME graphics your car is built from far more triangles (rounder tyres, wings, helmet and bodywork), and on EXTREME it gains modelled detail: bevelled edges, round suspension rods and aerofoil wishbones, a pitot probe, an antenna, rear brake-duct mouths and a denser steering wheel and dash in the cockpit view, about 100,000 triangles in all. Rival liveries are painted at twice the resolution.
+- On a desktop GPU, ULTRA and EXTREME hold their frame rate by switching off their most expensive extras first, before the picture loses resolution, and bring them back when there is room.
+- On EXTREME graphics (desktop, WebGPU), night circuits light the track with up to 128 real lamps instead of 48, each patch of track picks the 48 lamps that light it brightest, and the daytime sky is a physical atmosphere: deep blue overhead, pale at the horizon, orange toward a setting sun, with a limb-darkened sun disc and clouds that shade themselves and glow at the edges around the sun.
+- on GRAPHICS: EXTREME (desktop), track surfaces lose their repeating tile pattern, walls blend smoothly round corners, gravel gets real depth up close, fine surface detail shows within a few metres, texture detail reaches twice as far, and barriers, glass and wet tarmac reflect the real surroundings.
+- On desktop graphics EXTREME, edges are smoothed over several frames, so fences, kerbs and distant barriers shimmer less. On an HDR monitor in Chrome, bright highlights can now go past normal white. ULTRA and above sharpen the rear-view mirror and, on a standard-density monitor, render the race above screen resolution. Photo and replay modes go up to twice the resolution (#5951).
+- On desktop GPUs, GRAPHICS ULTRA now draws sharper ambient occlusion (full resolution, twice the samples) and richer sun shafts and floodlight beams; EXTREME adds horizon-based ambient occlusion, finer wet-road and paint reflections with roughness blur, and a subtle bounce of coloured light between surfaces; in replays, photo mode and the garage on EXTREME, the camera focuses on the car with depth of field and adds camera motion blur. Phones and HIGH and below look exactly as before.
+- GRAPHICS: EXTREME on a desktop now draws sun shadows far down the straights (two extra shadow cascades out to about 500 m) and at night lets the three nearest floodlights throw car and wall shadows instead of one (#5951).
+- On EXTREME graphics (desktop only) the grandstands fill with seated spectators instead of blocks, trees near the track are rounder and fuller, woods and bushes run deeper, city buildings get finer window grids, kerbs get a crowned shape (with saw-tooth rumble strips), and low hills rise on the horizon in place of the flat ground; HIGH, ULTRA and every phone look exactly as before (#5951).
+- an optional AgX colour look for EXTREME (off by default) (#6003).
+- Arrange HUD lets you customize colors for individual instruments and race events, including position changes, flags and pit cues.
+- PEDAL SLIDE in Settings › Controls: INSTANT (the default, unchanged) or EASE, where a thumb slid onto THROTTLE or BRAKE ramps the pedal in over a short distance (#5996).
+- Settings → Graphics → Graphics details automatically shows the effects available for your device. Each effect can follow the preset or use an individual override after a reload.
+- Desktop Graphics details adds independent options for garage reflections, distant showers, distant team colours, Silverstone road surfaces and visible tyre wear.
+- Desktop High and above automatically enable adaptive rival detail, brake heat lighting and loose gravel. Each has its own control in Graphics details.
+- Helmet camera eye-position and vibration settings, including independent left/right camera mounts, higher, lower and rearward viewpoints, five visor openings, seven lens colors and five tint strengths.
+- Tune helmet camera shake by percentage, with separate controls for impacts and rumble, kerb ribs, speed vibration, and head movement under braking and cornering.
+- In Settings → Controls → Touch Button Response, tune Left, Right, Gas and Brake independently. Choose how each press starts, how far to drag and whether to show its input level. Left and Right can each follow the global Adaptive Buttons setting or use their own steering response at speed. Gas and Brake can each ease in when you slide onto them. Reset restores the selected button alone. On-button feedback lights the whole button as input builds. Three rising bars identify progressive steering or Brake before the first tap. Gas shows its input through brightness. The modern and retro cockpit wheels show continuous throttle and brake demand, including light initial presses.
+- Choose Racing or Flat in Settings → Appearance → Menu Customization → Title Button Style to keep the same button treatment when rotating. Auto follows the screen shape.
+- Enter precise values in Lighting Tuner and Photo Studio. The title drawing and menu wash each support a Medium strength.
+- Learn opens from Watch & Explore with an interactive Aero Lab. Change the gap to the lead car, move off-line, and compare slipstream on a straight with grip through a fast corner.
+- Explore Grip & Braking in Learn. Drag the force diagram, compare a dry corner with a damp patch, and predict how much braking you can keep while turning.
+- Arrange a Settings page from its footer. Customize menu regions by orientation, including individual Race Settings controls, text and button sizes, form widths, spacing, alignment and corners. Appearance can open Pause directly and apply or reset a profile for the selected screen. Touch driving buttons and the phone-controller wheel have separate width and height adjustments. Wheel layouts can be exported and imported on the controller. Endurance and Drafting add coordinated colour presets that keep your cockpit layout and accessibility preferences. Lighting, Camera, Flyby and Garage Enter & Leave now have an Arrange this screen button for moving and resizing their windows. Free Camera and circuit Photo Studio let you size the Movement and Look joysticks independently.
+- WHEEL LAYOUT on the phone controller (the sliders button in the pad bar). Pick CLASSIC, RIGHT THUMB (OT, BOOST and AERO beside the pedals), LEFT THUMB (beside the paddles) MIRRORED (pedals left, paddles right) or PHONE STYLE (tall BRAKE and GAS side by side with OT, BOOST and AERO in a column beside them), or flip PEDALS SIDE BY SIDE and MOVED BUTTONS IN A COLUMN yourself, or move any of the eight buttons to LEFT, MID or RIGHT yourself. The phone remembers it.
+- MOVE & SIZE BUTTONS on the phone controller (in WHEEL LAYOUT), like ARRANGE HUD in the game: drag any control (paddles, pedals, every button, the dash) to move it, pinch or tap − / + to size it (never under 44px), and overlapping controls turn red. RESET puts one back, RESET ALL or any preset puts them all back; the phone remembers the rest.
+- Arrange individual screen regions and choose coordinated menu and HUD themes.
+- customize touch-button slide direction, starting pressure, timed hold buildup and feedback color intensity independently for Gas, Brake and each steering arrow.
+- choose idle borders and pressed colors per touch control, plus tap, hold-and-release or double-tap activation for race actions on the HUD and paired phone.
+- shape a timed hold with Gentle Start or Fast Start and assign Quick Tap or Long Hold to a race action.
+- pick a full-pressure edge for Gas, Brake or steering, and show input as a percentage or rising fill.
+- choose paddle, arch, shield and leaf button shapes, reverse the race pedal order, group race actions in a compact grid, or use the Split Actions and Race Views phone layouts. Fine Start, Quick Start and S-Curve tune how pressure changes over a slide.
+- set Gas and Brake by absolute thumb position, show a floating wheel for touch steering, or use a gear flick strip and a Camera, Look and Radio wheel on a paired phone.
+
+### Improved
+- Appearance Studio and Photo Studio paint and capture UI (~54 KB of code) now load with SETTINGS › APPEARANCE instead of on every boot; the title home scene and photo background still work at first paint (#4978).
+- sliding one thumb from GAS onto BRAKE (or from one steering arrow onto the other) now presses the control under the thumb and releases the one it left; a second finger is unaffected, and rotating the phone releases every held control (#5575).
+- The AI field now runs in team order: Mercedes, Ferrari and McLaren lead on pace and the back-row teams are slowest, instead of whichever car had the biggest wing; the field's solo pace spread is about 4 % at NORMAL, with every difficulty level as fast overall as before (#5330).
+- Simulated qualifying now follows the same team order and spread as the race; time-trial medals keep their gap to the AI pole (#5686).
+- Race control: a car that retires and parks in the runoff now shows a local YELLOW in its sector while the marshals recover it (no VSC), so you can see why it vanished; a car stopped on the racing surface still brings out the VSC as before (#5784).
+- the share-card painter now loads with the results sheet instead of at boot, so the title screen parses about 30 KB less script (#5821).
+- On the EXTREME graphics preset (desktop, three.js renderer), cars get finer surface shading: carbon fibre with a streaked anisotropic highlight that fades out at range instead of shimmering, metallic flakes fixed to the paint that sit under the clearcoat and stay steady at distance, softened creases that catch the sun, panel seams and fasteners, and moulded sidewall bands and shoulder graining on the tyres. HIGH and below, and every phone, render as before (#5951).
+- GRAPHICS: ULTRA on a desktop now looks sharper than HIGH: finer sun and car shadows, crisper road and wall textures at shallow angles, live reflections on car paint, and rival cars keep their full detail twice as far away (#5951).
+- On desktop EXTREME the garage is built denser for close-up looks. Equipment, walls and trusses get bevelled edges. Tyres on the trolleys and in the stacks get a real slick profile with shoulders and tread grooves. Hoses run as smooth swept tubes, and the overhead truss gets lattice lacing. Tool chests get round drawer pulls, monitors get bezels, and a drain grate sits at the door. The pit crew figures are rounder too, with twice the ring sides and extra rings on every limb, the torso and the helmet. HIGH, ULTRA and every phone build the same garage as before.
+- EXTREME graphics gives trackside props real detail — W-beam Armco on C-posts, cranked catch-fence tops with cables, tyre-stack and TecPro shapes, truss gantries and lattice camera towers, framed marshal huts and hoardings, building cornices, window jambs, corner piers, balconies and roof plant, and pit garages with door reveals, glazing mullions and pit-wall stands; HIGH and phones are unchanged.
+- GRAPHICS: EXTREME on a desktop: rival cars no longer smear under the new anti-aliasing and blur along their own motion in replays, distant rivals cast sun shadows, grandstand crowds move, street circuits get proper barrier profiles, and your car in the garage uses its most detailed model (#6003).
+- an AI team's wing level is now worth about a second a lap, not four to six. High-wing teams no longer start every weekend far ahead and low-wing teams no longer sit at the back for it; the order comes from car tier and driver skill. Your own car's wing trade is unchanged.
+- Choose a menu in Settings → Appearance → Screen to arrange. Menu headers and footers now leave more room for their own controls.
+- Choose a page state before arranging a Career slot, lobby, photo, Garage panel or Data Hub session. Track selector supports Practice, and Race Settings includes AI Pace.
+- Arrange standings, telemetry detail and individual Saves & Data controls directly on their screens.
+- Default renderer memory: car shadow casters now hold positions and triangles only, so a race keeps about 8 to 9 MB less geometry data in memory (counted, not measured on a phone); shadows are drawn from the same triangles as before.
+- the title screen defers broadcast graphic cards until WATCH or the real-race data tools load their bundle.
+- The garage animation editor previews Race start, Pit entry, Pit exit and Race end. Pit exit plays at the same pace as leaving the pit garage during a session. Race end follows the car back into the garage. Each animation now saves its own camera, crew, timing and appearance settings. Camera changes ease between shots.
+- calendar moves, removals, sprint toggles, presets, SHUFFLE and REVERSE are announced to screen readers, and the "season changed in another tab" note is announced and scrolled into view. LIVE shows the year for a session from another season.
+- UI, HUD, touch-button, title-piece and panel sizes show 100% at their own factory size. Large desktop windows start with larger menus, and saved sizes keep their previous dimensions.
+- Wide desktop title screens now use the landscape phone’s centered button pairs and Racing style by default. The wordmark, menu width, lower-left car drawing and warm background follow the phone composition.
+- Fresh installs use the static title drawing and standard readability settings. Phone title, Pause, Garage panel, Data Hub, Career and racing HUD follow the owner profile.
+- New games start with the owner’s audio mix, solo race setup, cockpit, garage and lighting choices. The garage keeps its Standard lighting by default; Showroom stays selectable. On iPhone, graphics start at Low and 3D resolution at High.
+- the rear-view mirror stops drawing distant scenery at its own draw distance (120 m on a phone) instead of whole blocks beyond it; about three-quarters fewer mirror triangles at Monaco.
+- Camera Feel, VR and performance settings wait until the settings controls are needed, preserving their order in Settings.
+- The Three.js lamp grid scans the current frame’s chunked geometry submissions. Mobile races with many car and effect draws spend less CPU work locating track lighting.
+- Updating a Three.js lamp grid avoids clearing 832 KiB of CPU-side texture data on each rebuild.
+- Browsing circuits reuses the ghost store’s budget check, and selecting the current time of day avoids rebuilding the circuit.
+- Photo Studio can set a captured or saved photo as the Home background in one step and render a higher-resolution PNG with the new Up to 4K capture setting. Standard garage captures target Full HD on smaller displays, and newly saved Home backgrounds retain capture detail up to 4K.
+- With tyre wear on, the AI now prices a pit stop against its real lap time, so a stop costs it a little more of a lap than before. Most races are unchanged; at high-wear circuits such as the Red Bull Ring some AI cars now plan one stop where they planned two, and the order they use their tyres in can change (#5783).
+- The WATCH and HIGHLIGHTS timing tower and AUTO director load when you open the Data Hub, reducing startup code (#5406).
+- In Settings → Controls → Reposition Touch Controls, move the steering arrows nearer the edge, change the gap between them and choose different pedal and action rows. Select a single button to move, resize or reshape it without changing the other buttons. Done keeps your layout for the current steering mode.
+- Keep helmet visor glare local to visible lamps, respect fog and fixture beam settings, preserve reflection-strength differences, and fade sun diffraction smoothly at screen edges. Refresh paused visor controls and disable cached refraction when quality or performance settings turn it off.
+
+### Fixed
+- a retired AI car no longer keeps riding the host's 10 Hz aged AI relay (or getting re-posed from leftover packets) after its DNF; live AI relay and reconnect are unchanged.
+- With BUTTON SIZE above the pedal column's cap at a value that is not exact to three decimals (143 % paints 1.4325), the race HUD re-ran its whole layout fit on every HUD tick for the entire race; it now fits once and settles, which removes about 18 ms of layout work per frame on a phone-class CPU (#4274).
+- In daytime rain the cars no longer look duller than in the dry: wet-day paint now carries the full clearcoat (1.0, as at night) instead of 0.8 against the dry 0.9 (#4751).
+- a car classified after retiring in the top three keeps its podium tile on the race story, and its head now reads "DNF · N points" instead of DNF with no points, matching the results sheet (#4931).
+- Camera tuner: RESET CAM at THIS TRACK / THIS CAR now also clears the COMFORT sliders set for that track or car (they had no way back to the shared value, and the label did not count them); COPY VALUES no longer raises the iPhone keyboard over the preview, and a slider drag saves once on release instead of on every tick (#5042).
+- BUTTON SIZE now sizes the touch controls in a portrait race (RACE IN PORTRAIT); landscape is unchanged
+- Stepping a race through the agent API now moves the cars during a player-controlled cooldown lap, matching the live game.
+- on a landscape phone at UI SIZE 70 the camera tuner shows its "HELMET (default framing)" / "TRACK MONZA (2 overrides)" line again under "Scope, presets and preview tools", so you can see which camera and scope the sliders edit (#5218).
+- Starting a race with the phone upright and then turning it to landscape left the touch controls oversized (BOOST 103 px instead of 90 px at BUTTON SIZE 143 %) behind the rotation pause, and for a moment after RESUME; the HUD now fits itself while the pause is still open (#5237).
+- HUD sizes on a touch phone in landscape: the top band (POS / LAP / TIME tower) no longer changes size when you move BUTTON SIZE, and moving BUTTON SIZE no longer grows the gear / speed row into room it freed. The game quietly remembers the gear row's size until you next move HUD SIZE (#5256).
+- Track designer: changing SPAN WIDTH on a span inside a longer width zone, or on a circuit with a full-lap width zone, no longer resets the rest of that zone to the base width; the zone keeps the road either side of the span (#5314).
+- Donington's pit complex is on the driver's left of the Wheatcroft Straight (it defaulted to the infield right). Dijon T5 sits on its built curvature peak again (#5316).
+- ABOUT & CREDITS and THIRD-PARTY-NOTICES now credit Capacitor and its two plugins (MIT), which the Android app includes, and the Android app now ships the full third-party notices.
+- Opt-in WHEEL LOCK & ABS model (OFF by default): each axle again uses its own tyre curve, so the rear keeps its grip plateau under wheelspin — a fix from the 2026-11-09 audit that a later re-land had overwritten (#5330).
+- Importing a custom car .glb that needs an extension the game cannot read (for example meshopt compression) now fails with that extension's name instead of loading garbage geometry or a misleading bounds error, and a file whose second buffer has no data of its own is refused instead of reading the first buffer's bytes (#5335).
+- on a phone, changing GRAPHICS between LOW and MEDIUM or HIGH now switches the road and grass textures to the matching sharpness without restarting the app; the switch happens in a menu or on the pause screen, never while you are driving
+- on a landscape phone the lighting tuner shows its TIME / WEATHER chips and the "MONZA · DAY · DRY" profile label again (under "Scope, presets and preview tools"); at UI SIZE 50–62 the camera, lighting, flyby and garage-arrival tuners no longer lose their tabs, scope and RESET / COPY; FIND A SETTING now gives the real reason for a greyed row ("Manual gears is off: MANUAL needs TILT or a pad") instead of "unavailable … on this device" (#5562).
+- leaving ROOKIE for RELAX, STANDARD or PRO hands the throttle back (THROTTLE no longer stays on AUTO with the GAS pedal hidden), and a career RESEARCH or RAISE THE CAP purchase that could not be saved is refused instead of shown as bought (#5575).
+- Pressing CAM during the pit-entry shot no longer changes your saved camera: the press ends the shot and you are back on the camera you chose (#5585).
+- The pause REPLAY no longer shows a car that is in its pit box driving the lap up on its jacks with its wheels off; a replayed stop plays as it was recorded (#5585).
+- Time-trial and daily-challenge medal times in wet and rain are now set on the right tyre for the weather, so wet medals are as hard as dry ones (about 2 to 8 % quicker targets, by circuit and weather); the AI's wet pit-stop planning uses the same lap (#5585).
+- TEXT SIZE LARGER (and LARGE) no longer paints smaller menu text than NORMAL at a low UI SIZE: below 67 % every text size is held at 12 painted px or more, so a bigger TEXT SIZE is never smaller (#5586).
+- Time trial: a faster lap no longer costs you a medal. A wet gold earned against the old, easier wet target stays gold when you beat that lap and the corrected target rates the new one silver; a better medal still replaces a worse one (#5588).
+- Results sheet: with Reduce Motion on, the sheet painted its first frame or two on the previous layout, with your row drawn over the winner's at the top of the list; its layout is now instant (#5603).
+- Time Trial on iPhone: setting a personal best no longer stutters just after the start line (the ghost lap was saved in the very next moment; it now saves a few seconds later, or at once when you pause or leave) (#5629).
+- on a slow or stalling connection, track textures and models no longer wait up to 3 seconds longer to load when the game already has them saved (#5629).
+- On a phone at the shipped UI SIZE 70 %, RACE SETTINGS and QUALIFYING now use the compact layout like the career hub and results, instead of the roomier desktop density (#5632).
+- Hungaroring's banked corners (T2, T3, T4, T7, T13, T14) now bank at those corners instead of a corner early on the straight before them; Bahrain's T4 camera tower, tyre wall and catch fence stand at T4 (they were at T10, the tyre wall on the inside), Hungaroring's T1 tyre wall moves to the outside of the hairpin, and corner kits at Albert Park, COTA, Istanbul and Catalunya sit at, or are labelled for, the corner they really face (#5652).
+- Mexico's T9 and Mugello's Bucine (T15) now bank at those corners instead of the one before; Mugello's San Donato tyre wall and gravel move to the outside of T1; Abu Dhabi's hairpin and T16 tyre walls are keyed to their corners, and an unmeasured 3° bank on the straight after T2 is gone; corner scenery at Fuji, Indianapolis, Mexico and Las Vegas is labelled for the corner it really faces (#5652).
+- Nürburgring’s opening hairpin and final corner now show their gravel and tyre walls on the outside of each bend.
+- Shanghai’s outer Yu Garden houses now reach Turn 1, and Hockenheim’s Südtribüne is identified at the final turn.
+- Portimao T12 bank zone is turn-anchored on T12; Norte Turn-1 grandstand stays on its braking approach with a braking kit label (#5652).
+- Sepang T5-T6 bank zone is turn-anchored on T5; K1 Turn-1 grandstand stays on its approach (72 m before the apex) with an approach kit label (#5652).
+- replay previous/next from a retired followed car steps from the place it held when it retired, not to the leader (#4756, #4948).
+- the share card re-enables SHARE and SAVE after a failed draw, keeps a share link intact for its QR code, and stops the STREAK line short of the QR tile (#4638).
+- a stored VR "supported" answer no longer flips off while the headset check runs (#4354).
+- with a private relay set, a connection restart no longer goes through the public Nostr relays (#4770).
+- Circuit picker (Time Trial, Race, Practice — every filter): the track outline on the preview card is centred between the circuit name and the TURNS / CIRCUIT LENGTH row instead of hugging the top edge under the title, and tall layouts such as Monaco no longer run into the name on desktop or portrait (#5656).
+- Career and MY TEAM decisions are kept durably or not at all: signing a contract, re-signing or hiring a driver, a factory or cap upgrade, research, a sponsor or stake pick, a target, extra funds, and a MY TEAM name, livery or logo edit no longer show as done when the save was refused (storage full, or the career changed in another tab) only to vanish on reload; a NEW CAREER over a save another tab changed no longer opens a hub that is gone after reload. The screen stays put, nothing changes, and the game says NOT SAVED (#5657).
+- MY TEAM career: CLEAR LOGO now stays cleared. The logo of your one-off Grand Prix team came back on the career car at the next sync or reload (#5657).
+- Career garage on a phone: locked R&D rows put the RESEARCH price on its own line instead of squeezing the part text into a 47 px column (rows were up to 1,177 px tall and the price sat under RETURN TO CAREER), and the livery editor's area tabs and CANCEL / SAVE & FIT paint the 44 px touch floor at UI SIZE 70 (#5672).
+- Touch floor at UI SIZE 70: chips (SEASON SETUP move / remove, ON / OFF, career hub sections) and every screen's buttons under a BUTTON look below 100 % (CLOSE GARAGE, RETURN TO CAREER, Data Hub, select, popups) paint at least 44 px on a phone (#5672).
+- Time trial results: ✕ CLEAR GHOST asks for a second tap before it deletes the ghost and its medal, and YOUR PB shows how much a new record beat the previous best instead of +0.000s (#5672).
+- the ▲/▼ gap chips read the real time between the cars (how long ago the car ahead was where you are) instead of swinging with your own braking; pieces placed with MOVE & SIZE stay inside the screen's safe area and off the touch buttons and PAUSE during a race, by the smallest shift and without changing the saved layout (ARRANGE HUD's OVERLAP now checks SECTORS with its widest split); and TIME reads 0 on the run from the grid to the line, so it no longer rewinds when lap 1 starts (#5678).
+- on a landscape phone the instant-replay dock no longer covers two-thirds of the screen. It now spans the width with the scrub slider on its own full-width row at thumb height, and its buttons sit on one row below it (at 844x390: 246 px → 122 px tall). Scrubbing also does less work per frame: the dock rewrites only what changed, and a drag on the slider applies once per frame (#5694).
+- Photo mode and Save Screenshot no longer crop the picture on the three.js WebGL2 renderer with upscaling on (#5699).
+- A tall pine refused for overhanging the road no longer stops the trees beside it from growing (#5699).
+- A failed lamp-shadow cache no longer turns lamp shadows off for the rest of the session on desktop (#5699).
+- A graphics context restored while the game is in the background no longer reloads it behind your back (#5699).
+- On the default renderer, an iPhone whose WebGPU adapter answers slowly at a cold start no longer drops to the WebGL2 fallback for the whole session, and a material texture pack that could only be read in part is retried instead of shipping blank layers (#5699).
+- McLaren-style flank sponsor names (the wordmark and duo side designs on every crown but the wrap) stay in front of the rear tyre instead of running a quarter to a third of the name behind it from the side (#5712).
+- A safety car or VSC that flips between levels (debris hovering at a threshold) now still ends at its 90 s hard cap instead of neutralising the race for good, and AI cars no longer waste Overtake under a VSC (#5715).
+- VS FRIEND: NEW FRIEND ROOM on the results opens a new room even after your friend has left, instead of dropping you on the title screen; a friend's invite link that arrives while you are hosting now says so, and CLOSE opens it rather than leaving it to prefill JOIN on the next launch (#5739).
+- Phone as controller: the ALLOW / REJECT card pauses a running solo race instead of covering the pedals while the field drives away; leaving or reloading the controller page re-links on the same code instead of unpairing; a connect that never opens gives up after 15 s with CONNECT usable again; a new pairing link opened into an open controller tab is used instead of the old code (#5739).
+- Track designer: tapping the road to add a point no longer deletes the bridges, hills, banking and props on that stretch; a pinch that starts on the road keeps your selection; TEST HERE from another point no longer brings back an old range (#5743).
+- Settings files: the engine-sound tables are no longer listed as changed before the sound loads; a file with no device info, or with a wrong-shaped value, can no longer pin another device's graphics or store junk; a file over 1 MB says FILE TOO LARGE (#5743).
+- Photo Studio: a capture that never comes back gives up after 8 seconds instead of sticking on CAPTURING…; a failed open no longer leaves the free camera on; opening it twice keeps the race's pause restorable (#5743).
+- DRIVER CAREER / MY TEAM: from season 2, AI teams that bought Hyper Soft tyres in winter development were 7–16 % faster on the straights and back-markers won the championship. AI teams no longer buy tyres as an upgrade, a developed AI car can be no faster than the fastest tier's works car, and AI development runs slower for the constructors' leader and faster for back-markers (like F1's aero testing sliding scale). Careers in progress play under the new cap from the next race; points already scored are unchanged (#5760).
+- In a dry race of 8 laps or more, a player who still owes the second dry compound now gets the PIT cue, minimap "P" and pit-entry teach line in the last five laps even on a fresh set (they were silent before and the race still DSQ'd). DUEL and armed practice no longer apply the two-compound rule to the AI planner or the compound warning — matching the end-race exemption that already skipped the DSQ (#5775 R1, R2).
+- A car scraping a barrier into its end or clipping the lane side of a pit-wall nose stops at the face without snapping sideways.
+- WebGPU (WGX) trees sway and marshal flags wave in the wind like WebGL2 — the per-vertex weight was already packed in the normal’s fourth component, but the vertex shader never applied it.
+- Garage and race: your car's full-resolution livery now always arrives on a busy desktop or tablet; before, a device that never had a spare moment could keep the softer preview paint for the whole session (#5796).
+- With MOTION: REDUCED (or the OS reduce-motion switch), menus and sheets no longer flash their previous layout for a frame when they re-fit; sizes and positions now change at once, while fades and colour changes stay reduced (#5812).
+- Starting today's DAILY from RACE SETTINGS no longer sometimes hands START back with no garage drive-out: the start now waits for the race session to finish loading before it begins (#5813).
+- a denied screen wake-lock request no longer drops a second hold that arrived while the first was still pending (#5818).
+- joining a real race mid-session (a rolling green with no start lights) no longer stalls mid-lap when a rival from the back of the grid first comes into shadow range: its car pieces now finish building in the first frames after green (#5830).
+- BACK TO MENU on the error screen now restarts the game after a persistent frame error; before, the game stayed frozen until a reload (#5875).
+- Reloading (or a crash) during a setup comparison no longer leaves the works baseline as your setup: the next load or garage visit restores your tuned setup, unless you changed it by hand since (#5879).
+- UNDO after importing a setup share code inside a career now restores your career setup instead of reporting success and changing nothing (#5879).
+- The broadcast overlay timing tower now shows the whole 22-car field; P21 and P22, the player's own row included, were never shown (#5885).
+- on a slow mobile connection the race announcer stayed silent and its 4 MB voice pack downloaded again every 30 seconds, because the whole download had to finish in 15 seconds; now it only gives up after 15 seconds with no data arriving (#5886).
+- Time trial laps with WIND OFF get their own leaderboard and ghost instead of sharing them with windy laps; records set with the default REAL wind are unchanged (#5895).
+- A practice drill's saved best now belongs to its circuit and team in every session, so a drill in a race at one circuit no longer overwrites another circuit's best; older saved bests move to their circuit and team (#5888).
+- The braking drill scores your stop scaled to one entry speed, so braking from a lower speed no longer always reads NEW BEST (#5888).
+- A lap-challenge link whose '~' was rewritten to %7E by a mail app or link shortener now opens instead of being refused as corrupt (#5891).
+- Opening a setup or livery share link twice, or two links in a row, no longer loses your own setup: UNDO (SETTINGS › FILES) now goes back to what you had before the first link, and a link that changes nothing leaves the undo point alone (#5896).
+- With tyre wear OFF and DAMAGE on HANDLING, the pit lane now opens for a repair-only stop, so a damaged wing or floor can be fixed instead of costing grip for the rest of the race (#5878).
+- Changing team between Season rounds no longer hands your points to the AI driver now in your old seat: your points move with you, and the driver you replaced keeps their own (#5877).
+- The AI pace option CATCH-UP now helps cars more than half a lap behind you too, instead of giving them nothing and spreading the field (#5900).
+- Turning SOUND OFF as your first tap no longer downloads the whole audio bundle (#5900).
+- Two dim labels in CAR SETUP (a tab's current part and the FREE price) now meet text contrast (#5900).
+- The pit-lane limit board on the wall follows SPEED UNITS: MPH (#5897).
+- The friend-room note on the results screen names the RACE A FRIEND button; the Daily history shows laps as m:ss.mmm; two tooltips no longer show a source path or claim RESET GARAGE leaves career setup sheets alone (#5897).
+- A screen reader no longer hears earlier races' winners on a results screen after races quit during the ceremony (#5898).
+- The broadcast overlay no longer shows a false OVERTAKE when the car ahead retires (#5885 item 2).
+- Overcast weather is called CLOUDY everywhere: the Daily button and chip and the friend lobby said OVERCAST while race setup said CLOUDY (#5897).
+- after the game had to restart itself because a race ran too slowly, it used to keep car reflections and per-section track lights off on that device forever; that safety setting now wears off after three days (longer if it keeps happening), while a real graphics crash still keeps it until you reset the renderer (#5899).
+- Two slow first loads on a bad connection (the three.js download taking longer than 15 s) no longer move the game to the WebGL2 renderer for good; only a real hang or crash counts, and a renderer retired by crashes gets one more try on the next release (#5942).
+- Playing the Daily Challenge with the phone's clock set back or far ahead no longer deletes real days from the Daily history (#5943).
+- A controller that dropped out without a disconnect event no longer comes back with GAS (TOGGLE) or LOOK BACK latched on (#5944).
+- On a desktop the helmet-camera HUD now uses its desktop layout from the start, and switching between touch and mouse mid-session re-lays it out and re-shows the KEYBOARD and CONTROLLER tables (#5944).
+- One long trip off the track now counts as one track-limits strike, not one every 3 s; the next strike needs the car back on the track first (#5945).
+- Refreshing or closing the page during a race now asks before leaving (desktop browsers; iOS Safari usually skips the prompt) (#5945).
+- SPOKEN LANGUAGE offers only AUTO and ENGLISH until the radio lines are translated; a stored other language switches to AUTO (#5946).
+- Captions SPOKEN ONLY now shows only lines you actually hear, not lines played with the sound or voice volume off (#5946).
+- Saving a shared copy of a circuit you already have now asks KEEP MINE / USE THEIRS before it changes your circuit's name and country (#5947).
+- The helmet camera's visor glint, sun flare and lamp reflections never painted on the released game: the visor looked for the game state under a name it cannot see from its own script and gave up. It now gets the game state at boot (#5964).
+- The stall watchdog now treats the start countdown and the loading screen's handoff, build, garage and prep phases as race entry, as intended, instead of only the profiled window, so slow frames there no longer shed graphics quality (#5965).
+- The first tap on SOUND ON no longer mutes the game and saves the mute; it starts the sound (#5973).
+- Closing race setup with Esc twice puts keyboard focus back on the RACE button instead of the page (#5973).
+- On a portrait phone at a small UI SIZE, race setup's › buttons no longer run past the sheet edge (#5973).
+- In phone landscape the ERS readout stays inside its bar (#5973).
+- The iOS Add to Home Screen banner no longer covers title-menu buttons (#5973).
+- Under the zoomed trackside camera, cars that look close keep their shadow and exhaust flame (#5973).
+- The ERS Deploy part says +11% acceleration, matching what it does (#5973).
+- Baku's barriers stand off the road like the other street circuits, so the racing line no longer brushes the walls (#5973).
+- A career on the 2026 calendar names its rounds like season mode (Bahrain GP, Barcelona-Catalunya GP) (#5973).
+- Curated corners in a chicane no longer snap to the same apex on the track map and flyby (#5973).
+- On a phone, a race that had to lower graphics detail no longer keeps it lowered for every later race in the session (#5973).
+- HOW TO PLAY > PIT STOPS now explains the two-dry-compound rule: finishing a dry race of eight laps or more on one compound disqualifies you (#6016).
+- AI cars treat a coasting or stopped finisher still on track as a hazard, so they no longer make low-speed contact with it after the flag (#5979).
+- The stream overlay's flag state was always blank because the TV graphics feed read a flag the game never published; it now carries the race-control flag (green, yellow, VSC, safety car, red) and the player's lap count (#5981).
+- The endurance steering wheel's two lower braces now have the carbon finish the rest of the wheel uses, instead of the plain panel surface (#5986).
+- In a VS FRIEND race, a finished player no longer waits up to 6 minutes a lap for a friend who stopped racing; the race ends 75 s after the first player finishes and anyone still on track is classified by laps completed, as in solo races (#5989).
+- Room-code joins no longer try two dead Nostr relays (nostr-pub.wellorder.net, nostr.oxtr.dev); five remain (#5989).
+- The broadcast overlay, cockpit preview and frame bench pages now ship the same Content-Security-Policy as the game (#5993).
+- the WebGL2 fallback no longer shows "graphics unavailable" on phones whose GPU allows fewer shader uniforms (many Android devices); it draws fewer point lights there instead (#5990).
+- the camera tuner's MOTION BLUR slider now works: it turns on the radial speed blur at high speed. It starts OFF for everyone, including anyone who moved the old slider (which never did anything), so nothing changes until you move it. SPEED LINES is hidden until it is built (#5990).
+- RESET in the lighting tuner clears only the circuit and conditions you are tuning; your global lighting adjustments from an older save stay on every other circuit (#5990).
+- after a mid-race weather change, the lamp shape (density, pool size, beam) now moves to the new weather's look once the weather fade finishes (#5990).
+- With RADIO VOICE: RECORDED, a radio line no recorded voice can say was dropped without a trace; it still stays written on its card, and it is now logged once and counted in the radio's debug readout, so the missing recordings can be found (#5991).
+- AI cars that were not pitting aimed their racing line across the pit wall and the pit-exit wall and scraped along it (Mosport Turn 1, Mont-Tremblant, Baku and others); they now aim on the road side of it, and their wall contacts beside the pit fall by about 80 % over nine circuits (#5997).
+- On 17 circuits the main-straight crowd stood inside the run-off, so a car running wide drove through the spectators. The crowd now stands behind the run-off edge. Where the circuit has its own main grandstand there, that stand is the crowd (#5998).
+- Marshal huts on 32 circuits stopped a car at the hut's middle, so cars drove 1–1.5 m into the hut; a car now stops at its face (#5998).
+- The main-straight catch fence on seven circuits (Estoril, Watkins Glen, Buenos Aires, Jacarepaguá, Magny-Cours, Nürburgring, Hockenheim) sits just behind the run-off edge instead of 1.1 m inside it (#5998).
+- Indianapolis oval retaining wall now collides — the car can no longer drive ~8 m through the concrete face.
+- Catch fences on Spa, Shanghai, Hockenheim and the Nürburgring sat inside the run-off, so a car running wide drove through them; they now sit at 10.3 m behind the edge, with Spa's stands moved just behind those fences (#6007).
+- Track designer: START FROM no longer replaces your loop under an in-progress map drag when the circuit finishes loading mid-gesture (or after a Loading / service-worker reflow that used to re-fit the map under a stale aim).
+- Pack pine and broadleaf trees now have a real crown (tiered cones / leaf discs) instead of a trunk with a few leaf slivers, so baked pines no longer read as brown posts. Spa turns `bakedPines` back on so those crowns render in game (#6037).
+- When two thumbs are on the driving canvas, dragging either thumb can take steering back. A resting thumb or a vertical slide leaves steering with the active thumb (#6062).
+- Browser Back closes the telemetry trace and returns focus to its selected driver. A second Back closes the Data Hub.
+- Photo Studio captures the final antialiased frame and mirror inset on native three.js WebGPU (#6065).
+- custom team accent text on the radio plate now always meets 4.5:1 contrast.
+- Resetting Race HUD keeps touch-button layouts. Settings search finds backup, restore and more audio controls. Cancelling a restore preview returns to the selected restore point.
+- Screen layout editors open from Settings → Appearance, clearing the Arrange button from game screens.
+- rival pass-by whoosh re-aims far less often (was opt-in `?lab=rivalEps`; now on by default, off with `?lab=noRivalEps`), and cutting a team-radio sting no longer leaves its filter chain rendering into the SFX bus when the context never fires `onended`.
+- MUSIC & SOUND has a MASTER SOUND switch at the top, so sound can be turned on from settings and from the pause menu; with it off the closed folds read MUTED instead of ON. Music that iOS pauses mid-game (Siri, a call, AirPods) comes back on the next tap or RESUME, and offline the readout says "Music needs a connection" instead of naming a track.
+- with a controller or the arrow keys, Down inside a scrolling settings page now reaches controls further down the page (TEST RACE MIX) before jumping to BACK.
+- the THREE PATH help text in Settings › Graphics said Safari and iPhone always use WebGL2; it now says what the game does — it tries WebGPU there too and falls back to WebGL2 only after a WebGPU failure.
+- the HELMET camera's visor glint now paints on the published game; it read a value that only existed in test builds
+- a slow phone is no longer reloaded by the stall watchdog while the garage set-up or race settings are open, or during the countdown and pre-race loading
+- the HUD no longer shows or speaks a blue flag for a car in the pit lane, matching race control
+- a race radio card that was accepted is always played; a burst of higher-priority calls no longer silently drops one already queued
+- the TV-style FASTEST LAP banner now appears in WATCH and HIGHLIGHTS with the BROADCAST HUD
+- REPEAT CONTROL REMINDERS re-enables only the brake, overtake and aero reminders, and they show again even after your first two races
+- menu positions inside a scaled UI are measured correctly on Safari before 26.4
+- RESOLUTION MAX now sharpens the picture on the WebGL2 renderer too; before it was silently the same as HIGH there.
+- The garage's PANEL HEIGHT setting can no longer shrink the panel until no part row or the CLOSE button fits.
+- Qualifying rows stay compact in phone landscape, so the whole 22-car sheet fits again instead of 14 rows.
+- The Home Screen install tip on a landscape phone sits at the bottom left from the first second and shows its whole message.
+- The circuit strip and the How To Play contents fade only on the side that still has more to scroll.
+- How To Play no longer says a time trial has no pit lane with tyre wear off: END TIME TRIAL in your box ends the session.
+- A time-trial or daily-challenge lap as quick as the fastest AI qualifier now earns a medal on every circuit: gold sits just under the simulated pole instead of 3-7 % under it.
+- RACE STORY and the pit-duel card no longer file a rain lap one lap late when a real race has an untimed lap (#4535).
+- Road height, banking, vehicle roll and driving cameras now follow the same surface. Corrected the timing of Spa’s Eau Rouge climb, Monaco’s climb and tunnel, Zandvoort’s dune crests and progressive banking, and surveyed profiles and corner camber across the roster.
+- Overtake shows when the pit limiter holds it, and the race guide explains steering assists, race-control penalties and Time Trial medals.
+- The WebGL fallback retries post-processing and multisampling when the render size changes after a framebuffer allocation failure.
+- Brands Hatch starts on its real line on the Brabham straight, so Paddock Hill Bend is the first corner of the lap; the grid, pit lane, sector lines and corner numbers moved with it.
+- a career backup with a standalone season round over 200 is refused instead of resetting the round to 0 and keeping its points.
+- A full-distance race at Buenos Aires, Donington and Dijon is now the real 72, 76 and 80 laps (it was a lap or two off).
+- The results screen no longer reads out the winners of earlier races you quit before their results showed; only the race on screen is announced.
+- A one-point finish reads "1 point", not "1 points".
+- The race engineer no longer says one lap too many ("6 LAPS TO THE FLAG" in a 5-lap race) before you first cross the line.
+- The recorded announcer now says the circuit length in its introduction instead of skipping that line.
+- First-race tips no longer appear after you have taken the flag or retired.
+- For screen readers, each driver's TYRE STINTS disclosure on the results screen is now named for that driver.
+- Touch control groups you have moved stay on screen when LEFT-HANDED is switched on, and sit where you placed them at race start instead of about 25 % further out.
+- A resting second finger or palm on the screen no longer takes over touch steering; a finger takes the steering once it drags.
+- After the backup copy of your saves was lost once, every save is backed up again on the next launch, not only the ones rewritten at boot.
+- When Tab wraps round inside a screen, the focused control is scrolled into view.
+- COCKPIT and HELMET cameras: the road no longer shows through the car's sides at the lower left and right of a wide phone screen. The shoulder beside the driver was an open shell the wide lens cut through; it is now lined with carbon.
+- on a short landscape phone the WATCH replay bar no longer wraps the one-row phone layout — a later `max-width: 740` wrap rule was undoing the phone-band `nowrap` for every 600–740×≤520 window the ⋯ dock assumes.
+- WATCH transport focus rings use the house inset ring and UI-SIZE floor again (they had been a flat outset 2px that out-specified `css/tokens.css`).
+- Cockpit preview iframe on a landscape phone no longer shrinks to 150px when Settings still has room (sheet density, not viewport height).
+- a daily-challenge link from another day now says that daily has ended instead of naming the sender's circuit while opening today's.
+- a daily streak no longer freezes after the device clock was once set ahead and then corrected.
+- the time-trial help no longer says the daily is the same for every player; it follows your local date.
+- tapping DATA on a slow connection now says "STILL LOADING…" after 10 seconds, and a stalled load gives up in about 25 seconds instead of two minutes of silence.
+- Career slot deletion reports a storage failure and keeps the save available for retry.
+- A slow online launch can recover when the service worker has no cached game shell.
+- Photo Studio releases temporary capture resolution when closed, and the pause menu matches destructive pointer confirmations to the original press.
+- Racing avoids rebuilding field diagnostics for the retirement prompt, and paused replay scrubbing avoids redundant field updates.
+- Finishing the last circuit recognized by an older client preserves championship rounds that require a newer version.
+- Race share cards retain a classified retiree's podium place and points.
+- Muted audio stays suspended after foregrounding. Graphics recovery controls can be reached from the title menu with a keyboard.
+- Phone controllers preserve an established reconnect through a page hide, and multiplayer grids retain connected drivers whose profiles arrive late.
+- VS FRIEND guests receive the final host settings after rapid changes and start only under the approved rules.
+- a car-to-car hit now feels and scores the same at every OVERALL SPEED setting (shake, damage and the career contact penalty used to grow with the slider); the default setting is unchanged.
+- NEW CAREER refuses a driver code that is already on the grid, with the reason shown in the form.
+- an imported or edited career save with out-of-range contract terms, a round behind its own results, or an offer from an unknown team now loads into a playable state.
+- the career guide now says a late retirement (past 90% of the winner's laps) is classified and paid.
+- DRIVING HELP no longer reads OFF at the two lowest FINE notches above 1, where it was still steering the car a little; only notch 1 is OFF, and 2–3 now read CUSTOM.
+- CLOSE GARAGE takes a click while the garage is opening. The title-to-garage crossfade stays on a machine that can present it quickly, and the fade no longer sits under the cursor. A software renderer, which held that fade for several seconds, opens the bay directly so the button takes the press.
+- Garage launch comparisons keep a recoverable copy of the original tune before applying a trial setup. Refused writes can be retried after storage is available again.
+- editing an already fitted custom livery preserves the original paint if the new selection cannot be saved.
+- a reconnected controller waits for a fresh button press, and unplugging a spare controller preserves the active controller's menu repeat timing.
+- checkpoint retries and rewinds restore the field sector best alongside the driver's personal best.
+- Daily Challenge share links honor the sender's class for the current day and explain expired challenges where the recipient can see the message. Lap codes pasted in Settings can stage their circuit.
+- a late Auto Soak start cannot change a replacement run's camera or stop its recording. Stopping a soak preserves a separate manual recording.
+- the phone recorder rejects malformed saved reports and applies its 80-field limit across nested renderer statistics.
+- the garage drive-out and drive-in now always show the session's own circuit, weather and time of day through the open garage door — the race-start cover lifts, and an arrival starts moving, only once that view is ready (#5660).
+- The garage blends the car reflection into the floor and fades it out before it can protrude beneath the slab.
+- Garage no longer mid-splits names like "Schumacher", the portrait sheet fills the space above the camera bar instead of leaving an empty ghosted band, and the tall category strip hides part subtitles so SUSP stays reachable without a long horizontal scroll.
+- Garage photos on WebGPU capture the displayed garage instead of an empty or stale race frame. Opening Photo Studio from the spinning garage frames the parked car for capture, and Home displays the photo selected in Appearance. The Home title sits directly on the selected photo.
+- shared ghost envelopes hash the circuit id, so a kept-`h` relabel no longer imports as a rival on the wrong track.
+- Time-trial ghosts now record at the stated 20 samples/sec (was ~15 Hz on 60 Hz physics steps).
+- GLX fallback SSR marches at half resolution (F3) and blob shadows batch into one draw (F5).
+- The rear-view mirror on the Three.js renderer culls smaller road sections while keeping the same road markings.
+- Settings → Graphics lets desktop drivers choose a race frame-rate target. The graphics check on desktop and phone compares settings during dry and wet-night driving.
+- Photo Studio can combine 8 or 32 samples for smoother edges in exported stills.
+- Helmet view stays on the driver through a called pit entry instead of cutting briefly to the pit wall.
+- Leaving a race frees its replay and HUD timing buffers. Full-grid races also do less repeated work in helmet view, race audio and the HUD.
+- Leaving a multiplayer room now closes every driver and spectator connection when the host exits.
+- Helmet settings show the controls relevant to the chosen visor and keep detailed vibration tuning together. Restoring standard vibration clears it from changes-only settings backups.
+- Zero-pressure pedals, drag steering after pause, and interrupted touch gestures now follow the active input.
+- Hidden race readouts keep pit actions, overtake availability and timing gaps up to date.
+- Helmet readouts and grouped touch controls stay legible and better separated on small screens, including saved layouts. Touch controls can also be repositioned from the title screen.
+- camera and track sampling no longer write NaN into pooled samples on a bad arc, and broadcast / trackside / flyby / rival-lock projection paths reuse their result bags (including the no-Broadcast `localBattles` fallback) instead of allocating every frame.
+- WATCH & DRIVE no longer leaves OpenF1 script fetches in the queue when you leave the tab mid-load (other Data Hub tabs stopped spinning behind dead work).
+- a career season rollover that hits a full storage quota rolls the winter back instead of advancing the year only in memory.
+- MY TEAM sponsor “both cars in the points” no longer counts a disqualified team-mate.
+- career save migration keeps digit-string round and finish tallies (e.g. `"18"`) instead of zeroing them.
+- Track Designer EXPORT now refuses RED designs like SHARE/CARD; phone DESIGNER SIZE no longer paints toolbar text under 12 px; Photo Studio portrait no longer overlaps the preview by the home-indicator inset, clips the Garage select, or flashes a white strip above the scene.
+- A second finger on a phone D-pad arrow no longer cancels the first thumb's held repeat.
+- Unplugging a rumbling gamepad stops the buzz instead of letting the last effect run out.
+- ending dock REPOSITION cancels a pending fit frame; a results-sheet host swap disconnects the prior spoken-card observer; a pagehide clears the VS FRIEND hidden-tab net pump; soft-resetting friend quali drops peer times with the rest of the gate.
+- leaving Home, closing Appearance, stopping a WATCH scrub, or clearing a stale overlay feed no longer leaves a timer or animation frame that can fire after teardown; friend-quali's gate wake-up timer clears once every rival has posted.
+- mid-race local quit no longer shows “Connection closed.” while still inRace.
+- NetPlay session/remote list helpers reuse scratch buffers on broadcast/status paths.
+- a second NetSession.create on one transport replaces the prior session message handler.
+- ending a friend race no longer claims your friend left the room when you quit.
+- pack-strip decode worker retires after use and stops inflating unused PNG rows.
+- a nonfinite yaw no longer NaNs car positions in contact, and a large yaw step at low fps no longer tunnels through a rival.
+- bank grip and corner-speed helpers ignore nonfinite bank/lat instead of poisoning the AI brake plan.
+- Private Browsing no longer spams the diag log sixty times a second from settings reads.
+- a camera frame whose eye lands on its target no longer collapses the view matrix to zeroes.
+- a long pause before the lights go out no longer hands the field a huge rolling-start head-start — count-credit catch-up is capped at the same wall as the drop itself (#hunt2-race).
+- a CHEAPER STOP call no longer invents free time when the car behind is crawling; the gap is timed at our pace, not theirs (#hunt2-race).
+- Overtake Mode no longer treats a missing gap-ahead as "within 1 s" and earns aggression while alone (#hunt2-race).
+- Qualifying no longer keeps a BADGE UNLOCKED card after SIMULATE or a peer update leaves you off a driven pole.
+- in CUSTOMISE SEASON, turning a round's sprint off and back on (or reordering the sprint rounds) no longer counts as a changed setup, so APPLY no longer asks to RESTART and lose the season over nothing. A round you remove with ✕ also loses its sprint mark, so adding it back makes it a Grand Prix.
+- when a Data Hub LIVE refresh could only serve a saved copy, it no longer says "updated <now>". It keeps the time of the last real update and says it is showing an offline copy.
+- WATCH and HIGHLIGHTS now pick up post-race penalties and disqualifications. A race loaded within a day of the start is rebuilt after 30 minutes instead of being kept forever.
+- on the Friday of a race weekend the Data Hub opens on the latest session that has started, not the future Race with "no classification yet".
+- after the season finale, SCHEDULE no longer offers to add a calendar of races that have already run. The last-season stand-ins in SCHEDULE and STANDINGS check for the new season every 30 minutes.
+- a WATCH launch that is refused no longer moves JUMP IN to the wrong lap, and REFRESH THIS SESSION stops a positions download that is still running.
+- the instant replay ends cleanly if the field is replaced mid-scrub, and it refuses a non-numeric time instead of moving every car to nowhere.
+- on WATCH with the camera on AUTO, seeking past the followed driver's retirement moves the picture to a car that is still running at once.
+- Jeddah's grid is on the pit straight after the final hairpin (it sat before Turn 27), 250 m from Turn 1; turns carry their FIA numbers and the pit building, main stand and start gantry stand at the line.
+- Kyalami now runs anticlockwise, as the real circuit does: Turn 1 is The Kink, Crowthorne is the left-hander at Turn 2, Ingwe leads onto the main straight, the start line sits on the straight between them and the pit lane is on the infield. Kyalami ghosts and time-trial times saved on the old clockwise lap are kept but no longer replayed, compared or shown as the track's best (#5316).
+- On short landscape phones, Career Modes spans the title menu, with Continue and Daily Time Trial on the row below.
+- Title width can step directly between Auto and its first explicit width setting. Engine sliders can reproduce every named preset, camera adjustments display 0.025 m steps precisely, and audio and steering controls first appear at their actual defaults.
+- Older Turn Chasing and Line-Speed Cue choices survive settings backups. Changing the Predictive Cue slider also preserves the separate Line-Speed Cue choice after restart.
+- Lighting Tuner’s My Edits now leaves other circuits’ lighting alone after Reset, including when older saves contain a global lighting override (#6068).
+- Garage photo captures preserve their requested resolution, and resetting the garage also clears setups retained after storage failures.
+- Reduced motion immediately limits existing visor rain, thunder no longer waits for a later shower, and disabling lightning no longer leaves scene lighting frozen.
+- Releasing a touch preserves mouse-held driving controls, and rotating the screen cancels pending custom touch actions.
+- Optional garage reflections refresh when inspection lighting changes.
+- The Garage paint editor uses the full panel width on landscape phones, giving the tabs and paint controls the space previously reserved for the category list.
+- The garage preview shows the selected rim shape, catalog rim colour and tyre sidewall details while editing a livery.
+- Madrid's 24 % banked La Monumental is on the real corner now — the long right straight after the Turn 10/11 chicane — with its stands, arcade and flood masts; the ordinary left late in the lap that carried the bank and the bowl is flat again.
+- Scenery in the rear-view mirror no longer jumps as the last piece of it leaves the mirror's draw distance (default renderer).
+- Rotating the phone while arranging the race HUD keeps the editor open when portrait racing is enabled.
+- Photo Studio now aligns portrait framing with the exported crop, keeps a successful capture when the display readback stalls, and saves a new photo even after the device clock moves backward.
+- Restoring a full settings backup on the same device class can return graphics and resolution to their adaptive defaults.
+- Offline pack updates preserve access to cached assets and check that downloaded pack contents match the requested version.
+- Rear-view mirrors respect their baked-light budget on lighter circuits, and the Three.js memory census retains the dimensions of uploaded decal textures.
+- Quitting a race while Three.js warms its shaders now releases the rear-view mirror target when warm-up finishes.
+- Track lighting updates when replacement lamp groups have the same count or a track reuses its light buffer with new positions.
+- Shader warm-up preserves live effect targets, and a resized mirror only starts displaying its new image after a successful render.
+- Switching gamepads preserves controller-specific mappings and avoids phantom presses on reconnect. Spare controllers take fewer button reads.
+- Switching songs cancels superseded loads and releases idle streamed media. Music resumes at the position where the page was hidden, and single-song playlists repeat from the beginning.
+- Telemetry braking comparisons accept complete zones before a later outage. GPS dots disappear across measured coverage gaps.
+- Saving or clearing an input ghost keeps other circuits’ tapes when another tab has written them and its storage notification is still queued.
+- phone Settings postcard width, landscape door fold, Race Settings DEFAULT/STABLE boxes, Data Hub calendar bar gap, How to Play chip clip, and Qualifying two-column order.
+- Reduced helmet visor repainting as the touch HUD updates and cut repeated work when drawing rain beads, sun rays and floodlights. Refraction maps now build faster, and only compatible presentation paths read the visor layers. Visor highlights now follow the live bloom and glare settings during normal races.
+- Retrying a Settings or Track Designer import after storage fills now saves session-only progress and custom circuits once storage recovers.
+- A photo that finishes saving after Photo Studio reopens now appears in the album. Visit-only photos keep their place after a clock change, and an earlier deletion failure leaves the new visit’s status intact.
+- Phone steering returns to neutral after a disconnect until the controller receives a fresh tilt reading.
+- WATCH follows the same neighboring driver after a retirement whether the replay was played or scrubbed.
+- Offline assets survive an upgrade when the newest cache entry is damaged or unreadable and an older cache still has the correct file.
+- Settings backups keep practice scores for places gained, metres closed and time defended. Older time-trial setups retain their lap records and completion counts when imported.
+- Photos with identical timestamps appear in retention order, so saving another photo evicts the last one shown.
+- Switching from touch steering back to tilt stays neutral until the phone supplies a new reading.
+- the pause menu on a landscape phone shows the song again, as one line with previous / play-pause / next under the doors. With MUSIC on but master sound off it reads "Sound off" and ▶ turns sound on.
+- QUIT TO MENU and RESTART RACE confirm on a second tap when a long frame delivers both taps together and the second click never arrives.
+- On-screen driving buttons suppress Safari’s native touch gesture that can show a magnifier during driving.
+- the METRICS log ring no longer shifts 500 entries on every overflow emit; the gfx-debug soft-frame luma samples a 64×64 downscale instead of the full blit canvas; TitleWarm drops its 1 Hz poll once the build is done.
+- on a landscape phone the career hub and the race results stay in their compact layout at every UI SIZE — at the shipped 70 % the results list showed two-line 74 px rows with no pinned podium (now one-line 44 px rows, P1–P3 and your row pinned) and the hub head was 85 px tall (now 62).
+- the phone-as-controller wheel shows the whole gear digit and speed again — at 844x390 the dash was 91px tall and cut the gear in half. CENTRE TILT, the steering pick and the link health now share one slim 44px bar under the buttons (health is a dot that only spells itself out when the link is not good), and the height that freed goes to the dash, taller buttons (55 → 62px) and taller pedals and shift paddles (144 → 185px). GAS AUTO now sits centred on its pedal.
+- Phone as controller: a desktop now has a PHONE CONTROLLER button on the title screen that opens Settings › CONTROLS and starts the pairing; a phone that connects to a code the game made in the last five minutes now steers straight away, with no ALLOW pop-up; when the game does need to ask (a different phone reconnecting, or an older code), the ALLOW / REJECT card now shows on top of Settings and the pause menu instead of hidden behind them; until the game admits the phone it shows a waiting message instead of a wheel that does nothing, and it then opens on the surface the game's screen needs (the menu pad on a menu, the wheel in a race) (#5955).
+- neighboring garages have open doorways, solid walls and furnished interiors during garage drive-outs and arrivals.
+- Results keeps the personal ghost and offers a retry if deleting it fails to save.
+- instant replay hides events whose footage has expired and applies a slider seek before frame stepping.
+- a stalled voice-pack decode can be retried during the same session.
+- the Time Trial pit release banner includes the four-second decision window in the displayed hold duration.
+- starting a second race clears sector flashes, and the hidden relative HUD waits until enabled to build its rows.
+- Track Designer keeps an older share request from overwriting a newer copy or updating a reopened editor; a late card export can no longer open its share sheet there.
+- private rendezvous Worker rate-limits junk/legacy paths before they burn Free-plan request quota; F1 Dev Tools caps asset response bodies, bounds hung scene race() starts, and keeps diagnose page identity when inspect fails mid-boot.
+- Simulated qualifying now matches how the AI really drives. A lap at the AI's pace no longer takes pole by seconds (Monza and Spa were the worst): drive exactly as well as the AI and you qualify around the middle of the grid, at every circuit; the front takes a lap clearly quicker than theirs. The simulated grid is also spread out the way the cars really are (about four seconds from first to last, not one), because each team's wing level now counts in the simulated lap. Known effect in VS FRIEND qualifying: a player who taps SIMULATE gets the simulated time, which is now quicker than before; that is being fixed separately (#5783).
+- Time trial and daily challenge medal targets are quicker at every circuit and now sit just ahead of the AI's own best lap. Time trial medals you have already won are kept; an old daily challenge best that you share again is graded against the new target and can show a lower medal (#5783).
+- A qualifying lap you already drove in a saved weekend keeps its grid; a qualifying you only simulated is drawn again with the new times when you come back to it (#5783).
+- Returning to the same qualifying session after a deleted lap keeps the NO TIME result if you choose SIMULATE. You can still drive a valid replacement lap.
+- Reduced repeated work when driving with the HUD editor closed, displaying helmet speed, tracking rival pit stops, and rendering cockpit effects on phones. Browsing circuits now keeps fewer full track previews in memory.
+- Reduced repeated work during races in AI pacing, rival audio, tyre HUD updates, multiplayer strategy messages and rendering instanced scenery.
+- Reduced repeated collision checks and chunk culling during races, redundant WebGL decal and reflection work, and unnecessary multisample depth resolves on WebGPU.
+- Reduced repeated work in wet-road physics, overtake detection, controller polling, WATCH playback, crowd audio and radio layout.
+- Reduced allocations for skid marks and reflection mipmaps, and skipped unnecessary work in career saves and the diagnostics log.
+- Reused adjacent scenery vertices during track builds and skipped a duplicate asset scan after the model manifest loads.
+- a debris safety car now stays out at least 45 s instead of pulling in ~6 s after the debris settles (#5893).
+- a car stopped on the racing line is retired 60 s after it stops, counting the caution it raised, not 60 s after that caution ends (#5892).
+- RECOVER CAR puts the car back at the recovery speed instead of keeping its speed, so spamming it is no longer faster than driving (#5876).
+- an AI car rear-ending the player can no longer push it past the designed punt cap by stacking the collision passes (#5894).
+- a spun or sliding player hit by an AI car no longer gets an uncapped shove (up to +17.8 m/s in one frame); the same punt cap applies whatever the car's angle (clean-room fix 34).
+- a shove against the pit wall can no longer teleport a car into the pit lane (clean-room fix 35).
+- AI cars now see a car stopped mid-corner in time, pick one side to pass it and hold it, and no longer get pinned onto it while side by side — a parked player at Monaco was hit 82 times in 90 s, now 0 (clean-room fixes 39-41).
+- mobile spatial upscaling now uses the full screen. Photo Studio and replay preserve cinematic effects with temporal antialiasing, and WebGPU captures include the final composition.
+- nearby rivals stay visible at track crossovers and in wide overhead views. Wheel blur respects front lockups, wheels freeze in paused photos, and pit jacks lift the entire car in mirrors and broadcast views.
+- Monaco’s tunnel shelters the car from fresh rain. Switching onboard cameras no longer stretches rain streaks or transfers helmet water to another lens.
+- driving with shadow darkness and god rays both off skips unused sun-shadow draws. Garage preparation spreads geometry work across frames, twilight pit lamps stay consistent during drive-out, and garage signs recover from interrupted uploads.
+- rear-view mirrors reuse scenery on held frames, distant rivals use simpler wheels, and tyre compound stripes no longer draw duplicate faces.
+- wet-weather driving avoids building hidden particle geometry, and mobile skips unused exhaust haze calculations. Title prewarming waits for the menu before reading menu state.
+- HDR highlights survive spatial upscaling, depth of field gets depth on its first frame, and mobile debug views fill the viewport. Stable viewport settings avoid redundant updates, and ambient occlusion releases unused texture bindings.
+- reflection probes recover after a refused cube face and respect renderer settings. Closing Track Designer stops pending generation and thumbnails, and interrupted pit-crew uploads release partial meshes.
+- a bad (non-finite) car pose sample in the instant replay no longer snaps that car to the origin.
+- Switching circuits now releases the previous lamp atlas from renderer memory.
+- SAVE ALL SETTINGS now also backs up your season setup, circuit mastery, ghosts, onboarding tips and your own circuits, and loading merges them with what the device already has (#5992).
+- SAVE CAREER FILE now also carries the standalone season, licence badges and daily history, so it is no longer empty when you have no career (clean-room fix 70).
+- a title-screen button tapped before the game finished loading is now remembered and opens once loading ends, and the loading stripe no longer jumps backwards (#5995).
+- city building facades (floor rails, mullions, window panes, night neon trim) draw with their brick, stone, concrete, glass or metal texture on GPU-instanced renderers instead of plain untextured boxes — most visible on Baku, Mexico, Abu Dhabi and Brands Hatch
+- a grandstand that could not seat any rows no longer leaves an invisible solid behind it, so trees grow where it would have stood (Mexico, COTA, Sepang, Miami)
+- Miami's Hard Rock LED bands sit on the tower instead of riding half a band high and poking 1.4 m out of the top; Bahrain's Sakhir tower bands follow the same taper
+- start/finish gantry legs stand on the pit-straight surface instead of 5–10 cm under it
+- curved grandstands, terraces, bleachers and scaffold stands no longer open metre-wide gaps between their sections on the outside of a bend (Jerez's back terraces stood up to 12 m apart; Fuji, Mexico, Abu Dhabi, Jeddah, Silverstone and Catalunya too)
+- in Time Trial, pressing TODAY'S CHALLENGE while a circuit search is typed arms the daily again instead of leaving the searched circuit selected.
+- Settings backups preserve individual preferences and time-trial records, camera controls show inherited offsets, and race lobbies explain rule changes.
+- Graphics details, studio navigation and precision controls recover more reliably, and Track Designer and Data Export controls are easier to use on small touchscreens.
+- Phone menus keep their scale when editing fields, Settings opens on Controls, and tapping an action no longer leaves a mouse hover highlight.
+- on a phone at small UI SIZE the Settings ‹ › arrows (Graphics, Accessibility, Controls, Driving, HUD & camera) and the title SOUND button were smaller than a fingertip; they now paint at the full touch size.
+- Time Trial rejects shared rival laps with impossible average speeds or distances that do not match the circuit.
+- Starting a Grand Prix with the race automation hook after a career restores the saved free-play seat.
+- the SHARPEN slider's help text said its crispness is recovered after anti-aliasing; the sharpening runs before it, and the text now says so.
+- on a connection that is up but not answering, the installed app no longer opens to three seconds of nothing — once a copy of the game is on the phone it starts from that copy after one second. On a slow connection right after an update, the game may start on the previous version and restart itself once onto the new one.
+- Small race HUD readouts can be pinched by holding the piece and placing the second finger on open track space. Arrange shows the full size reading.
+- Solo finishers can go straight to results when their placing is settled. Touch driving controls stay available on the cooldown lap, and the post-race ceremony keeps time at low frame rates.
+- Spa's forest now uses the single baked pine model the circuit asks for, which the game never actually downloaded — the trees look the same from the road, cost fewer draw calls, and lose the small per-tree differences (thinner and leaning trees, slight size variation) the stand-in trees had.
+- Spa's forest is back to full pine trees; since the last update the roadside trees had been showing as tall brown posts with a few green slivers on top.
+- Position gains and losses change the text colour directly on the white timing tile without adding a dark box behind the number.
+- with Reduce Motion on, a landscape phone could open the title on a short five-row button grid with PRACTICE clipped; it now always settles on the seven-row layout.
+- held pedals keep their pressed highlight when steering with another finger. Sliding across overlapping touch controls follows the visible button.
+- Track designer: inserting a SHAPE stamp no longer ties a knot in the loop. The fill used to rejoin behind the stamp and cross the road; 53 of 53 inserts per shape did this before, and now 0 to 1 do for straight, corner, chicane and s-bend.
+- Track designer: FIX ALL now repairs every START FROM template. Silverstone's start and Korea's hairpin fold were left red before.
+- Track designer: Ctrl+Z (or UNDO) during a point drag no longer loses the undo when you let go.
+- Track designer: resizing or rotating the screen re-fits the circuit to the map unless you have panned or zoomed.
+- Track designer: the checks chip reads "1 WARNING", not "1 WARNINGS".
+- Updated circuit crests, descents and corner heights against survey and qualifying data, including Paddock Hill at Brands Hatch, Turn 4 at Bahrain and Remus at the Red Bull Ring. Adjusted affected trackside scenery to fit the rebuilt road.
+- Time Trial shows two actions in the pit box. WORK ON CAR opens the parts garage and lets you return to the same run. END SESSION finishes the run in the garage, where VIEW RESULTS opens the lap sheet.
+- on a landscape phone the UPDATE READY chip no longer sits on top of the title's last menu row — at 844x390 it covered SAVES & DATA and half of HOW TO PLAY for as long as an update was pending, and a tap meant for them reloaded the game. The title now ends one row higher while the chip shows.
+- Reduced the pixel cost of helmet reflections and combined two cockpit wheel draws. On the direct Three FXAA path, the visor shares the final scene pass for refraction and dry-glass reflections.
+- reversing into a pit-wall end no longer snaps the car sideways.
+- Watkins Glen's Esses climb from Turn 1 up to the back straight instead of dropping, and its eleven turn numbers now sit on the real corners — the Esses and the Outer Loop are counted, the Boot is no longer double-counted.
+- The WebGPU renderer recovers from a failed road mesh allocation without interrupting the frame or dropping an already loaded road.
+
 ## 26824
 
 ### New

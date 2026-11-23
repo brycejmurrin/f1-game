@@ -1,1 +1,0 @@
-Fixed: Touch floor at UI SIZE 70: chips (SEASON SETUP move / remove, ON / OFF, career hub sections) and every screen's buttons under a BUTTON look below 100 % (CLOSE GARAGE, RETURN TO CAREER, Data Hub, select, popups) paint at least 44 px on a phone (#5672).

@@ -3530,7 +3530,7 @@
     {
       "path": "js/fx/visor-optics.js",
       "global": "VisorOptics",
-      "roster": "tag"
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/game.js",
@@ -4331,6 +4331,11 @@
       "path": "js/race/reliability.js",
       "global": "Reliability",
       "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/replay-broadcast.js",
+      "global": "ReplayBroadcast",
+      "roster": "LAZY_REAL_RACE"
     },
     {
       "path": "js/race/retired-card.js",

@@ -51,19 +51,248 @@ const VisorOptics = (function () {
   let _cv = null, _ctx = null, _looked = false;
   let _blend = "", _blendParam, _blendT = -Infinity;
   let _w = 0, _h = 0, _shown = false, _shed = false, _acc = 1, _bendLevelBuilt = "";
+  let _settingsDirty = false;
   let _budget = 0, _paintHz = HZ, _lastHaze = null;
   let _portKey = "", _paths = null, _svg = null;
   // The TINTED lens colour, resolved once per port build. tintRGB() reads getComputedStyle(body): with the HUD
   // restyling every frame that is a forced style recalc of the page, and the 15 Hz paint asked for it on every
   // repaint (39 forced reads per 15 s in a rain race here, up to 2.4 ms each on a desktop CPU).
   let _lens = null, _portW = 0, _portH = 0, _portV = "", _portC = "", _portS = "";
-  const _stats = { ticks: 0, paints: 0, msLast: 0, msMax: 0, msSum: 0, glints: 0, sun: 0, rim: 0, lamp: 0, msBend: 0, msLookup: 0, errors: 0 };
+  const _stats = { ticks: 0, paints: 0, msLast: 0, msMax: 0, msSum: 0, glints: 0, sun: 0, rim: 0, lamp: 0, msBend: 0, msLookup: 0, msVisibility: 0, visibilityRays: 0, visibilityCandidates: 0, errors: 0 };
   const _tmpSun = [0, 0, 0], _glintBuf = [];
   const _basis = { fwd: [0, 0, -1], right: [1, 0, 0], up: [0, 1, 0] };
+  // CPU halo geometry is retained once when the cockpit mesh is built. Its actual draw matrix is published
+  // before Droplets.tick; no depth readback, screen-space pillar guess or duplicate cockpit rig is needed.
+  const _cockpitBlocker = { triangles: null, positions: null, indices: null, nodes: null, bounds: null, inverse: new Float32Array(12) };
+  let _rayStack = new Int32Array(64);
+  const _occluderMatrix = new Float32Array(16);
+  let _occluderGeometry = null;
+  const _rayOrigin = [0, 0, 0], _rayDirection = [0, 0, 0];
+  let _cockpitBlocked = false;
 
   const clampTo = (v, a, b) => (v < a ? a : v > b ? b : v);
   const lum = (c) => (c ? 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] : 0);
   const r2 = (v) => Math.round(v * 100) / 100;
+
+  function setCockpitOccluder(geometry, matrix) {
+    const was = _cockpitBlocked;
+    _cockpitBlocked = false;
+    if (!geometry || !(geometry.triangles?.length >= 9 || (geometry.positions?.length >= 9 && geometry.indices?.length >= 3)) || !geometry.bounds || !matrix) {
+      if (was) { _settingsDirty = true; _acc = 1; }
+      _occluderGeometry = null;
+      return;
+    }
+    // Invert the affine model transform once per draw. Preserve ray parameters even for scaled geometry.
+    const a = matrix[0], b = matrix[4], c = matrix[8], d = matrix[1], e = matrix[5], f = matrix[9],
+      g = matrix[2], h = matrix[6], i = matrix[10];
+    const det = a * (e * i - f * h) + b * (f * g - d * i) + c * (d * h - e * g);
+    if (!Number.isFinite(det) || Math.abs(det) < 1e-10) {
+      if (was) { _settingsDirty = true; _acc = 1; }
+      _occluderGeometry = null;
+      return;
+    }
+    const geometryChanged = !was || geometry !== _occluderGeometry;
+    let matrixChanged = false;
+    for (let j = 0; j < 16; j++) {
+      if (_occluderMatrix[j] !== matrix[j]) matrixChanged = true;
+      _occluderMatrix[j] = matrix[j];
+    }
+    _occluderGeometry = geometry;
+    if (geometryChanged) _acc = 1;
+    if (geometryChanged || matrixChanged) _settingsDirty = true;
+    if (!geometryChanged && !matrixChanged) { _cockpitBlocked = true; return; }
+    const inv = _cockpitBlocker.inverse, k = 1 / det;
+    inv[0] = (e * i - f * h) * k; inv[1] = (c * h - b * i) * k; inv[2] = (b * f - c * e) * k;
+    inv[4] = (f * g - d * i) * k; inv[5] = (a * i - c * g) * k; inv[6] = (c * d - a * f) * k;
+    inv[8] = (d * h - e * g) * k; inv[9] = (b * g - a * h) * k; inv[10] = (a * e - b * d) * k;
+    for (let row = 0; row < 12; row += 4)
+      inv[row + 3] = -(inv[row] * matrix[12] + inv[row + 1] * matrix[13] + inv[row + 2] * matrix[14]);
+    _cockpitBlocker.triangles = geometry.triangles; _cockpitBlocker.bounds = geometry.bounds;
+    _cockpitBlocker.positions = geometry.positions; _cockpitBlocker.indices = geometry.indices; _cockpitBlocker.nodes = geometry.nodes;
+    if (geometry.nodes && geometry.nodes.length / 10 > _rayStack.length) _rayStack = new Int32Array(geometry.nodes.length / 10);
+    _cockpitBlocked = true;
+  }
+
+  function rayBox(bounds, offset, maxT) {
+    let near = 0, far = maxT;
+    for (let axis = 0; axis < 3; axis++) {
+      const o = _rayOrigin[axis], d = _rayDirection[axis];
+      if (Math.abs(d) < 1e-10) {
+        if (o < bounds[offset + axis] || o > bounds[offset + axis + 3]) return false;
+      } else {
+        const t0 = (bounds[offset + axis] - o) / d, t1 = (bounds[offset + axis + 3] - o) / d;
+        near = Math.max(near, Math.min(t0, t1)); far = Math.min(far, Math.max(t0, t1));
+        if (near > far) return false;
+      }
+    }
+    return true;
+  }
+  function rayTriangle(p, a, b, c, maxT) {
+    const o = _rayOrigin, ray = _rayDirection;
+    const ex = p[b] - p[a], ey = p[b + 1] - p[a + 1], ez = p[b + 2] - p[a + 2];
+    const fx = p[c] - p[a], fy = p[c + 1] - p[a + 1], fz = p[c + 2] - p[a + 2];
+    const px = ray[1] * fz - ray[2] * fy, py = ray[2] * fx - ray[0] * fz, pz = ray[0] * fy - ray[1] * fx;
+    const det = ex * px + ey * py + ez * pz;
+    if (Math.abs(det) < 1e-10) return false;
+    const tx = o[0] - p[a], ty = o[1] - p[a + 1], tz = o[2] - p[a + 2];
+    const u = (tx * px + ty * py + tz * pz) / det;
+    if (u < 0 || u > 1) return false;
+    const qx = ty * ez - tz * ey, qy = tz * ex - tx * ez, qz = tx * ey - ty * ex;
+    const v = (ray[0] * qx + ray[1] * qy + ray[2] * qz) / det;
+    if (v < 0 || u + v > 1) return false;
+    const t = (fx * qx + fy * qy + fz * qz) / det;
+    return t > 1e-6 && t < maxT - 1e-6;
+  }
+  function cockpitBlocks(scene, dx, dy, dz, maxT) {
+    const blocker = scene.occluder;
+    if (!blocker) return false;
+    const inv = blocker.inverse, eye = scene.eye;
+    for (let axis = 0; axis < 3; axis++) {
+      const r = axis * 4;
+      _rayOrigin[axis] = inv[r] * eye[0] + inv[r + 1] * eye[1] + inv[r + 2] * eye[2] + inv[r + 3];
+      _rayDirection[axis] = inv[r] * dx + inv[r + 1] * dy + inv[r + 2] * dz;
+    }
+    if (!rayBox(blocker.bounds, 0, maxT)) return false;
+    if (blocker.nodes && blocker.positions && blocker.indices) {
+      const nodes = blocker.nodes, indices = blocker.indices, positions = blocker.positions;
+      let top = 1; _rayStack[0] = 0;
+      while (top) {
+        const n = _rayStack[--top] * 10;
+        if (!rayBox(nodes, n, maxT)) continue;
+        const count = nodes[n + 9] | 0;
+        if (count) {
+          const start = nodes[n + 8] | 0;
+          for (let t = start; t < start + count; t++) {
+            const j = t * 3;
+            if (rayTriangle(positions, indices[j] * 3, indices[j + 1] * 3, indices[j + 2] * 3, maxT)) return true;
+          }
+        } else { _rayStack[top++] = nodes[n + 6]; _rayStack[top++] = nodes[n + 7]; }
+      }
+      return false;
+    }
+    const triangles = blocker.triangles;
+    if (triangles) for (let n = 0; n + 8 < triangles.length; n += 9)
+      if (rayTriangle(triangles, n, n + 3, n + 6, maxT)) return true;
+    return false;
+  }
+  function sourceBlocked(scene, dx, dy, dz, maxT) {
+    _stats.visibilityRays++;
+    if (cockpitBlocks(scene, dx, dy, dz, maxT)) return true;
+    return !!(scene.track && typeof TrackGeom !== "undefined" && typeof TrackGeom.lightBlocked === "function"
+      && TrackGeom.lightBlocked(scene.track, scene.eye, dx, dy, dz, maxT));
+  }
+  const _expandedBounds = new Float64Array(6);
+  function coneBox(bounds, radius, maxT) {
+    const distance = Math.hypot((bounds[0] + bounds[3]) * 0.5 - _rayOrigin[0],
+      (bounds[1] + bounds[4]) * 0.5 - _rayOrigin[1], (bounds[2] + bounds[5]) * 0.5 - _rayOrigin[2]);
+    const extent = Math.hypot(bounds[3] - bounds[0], bounds[4] - bounds[1], bounds[5] - bounds[2]) * 0.5;
+    const length = Math.hypot(_rayDirection[0], _rayDirection[1], _rayDirection[2]);
+    if (radius >= length) return true;
+    const margin = radius * Math.min(maxT, (distance + extent) / Math.max(1e-6, length - radius));
+    for (let i = 0; i < 3; i++) { _expandedBounds[i] = bounds[i] - margin; _expandedBounds[i + 3] = bounds[i + 3] + margin; }
+    return rayBox(_expandedBounds, 0, maxT);
+  }
+  function possibleOcclusion(scene, dx, dy, dz, maxT, radius) {
+    const b = scene.occluder, eye = scene.eye;
+    if (b) {
+      const inv = b.inverse;
+      let stretch = 0;
+      for (let axis = 0; axis < 3; axis++) {
+        const r = axis * 4;
+        _rayOrigin[axis] = inv[r] * eye[0] + inv[r + 1] * eye[1] + inv[r + 2] * eye[2] + inv[r + 3];
+        _rayDirection[axis] = inv[r] * dx + inv[r + 1] * dy + inv[r + 2] * dz;
+        stretch += inv[r] * inv[r] + inv[r + 1] * inv[r + 1] + inv[r + 2] * inv[r + 2];
+      }
+      // Frobenius norm bounds any affine stretch, so this early-out cannot clip a real disk intersection.
+      if (coneBox(b.bounds, radius * Math.sqrt(stretch), maxT)) return true;
+    }
+    const world = scene.track?._lightOccluders;
+    if (!world || !world.boxes?.length || !world.bounds) return false;
+    _rayOrigin[0] = eye[0]; _rayOrigin[1] = eye[1]; _rayOrigin[2] = eye[2];
+    _rayDirection[0] = dx; _rayDirection[1] = dy; _rayDirection[2] = dz;
+    return coneBox(world.bounds, radius, maxT);
+  }
+  // Fixed disk samples: a solar half-angle of 0.266 degrees, and a nominal 0.15m lamp aperture.
+  // This is bounded source-coverage sampling, not a full optical simulation. Low keeps one centre ray.
+  const DISK = [[0, 0], [-0.85, 0], [0.85, 0], [0, -0.85], [0, 0.85], [-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6], [0.6, 0.6]];
+  function sourceVisibility(scene, dx, dy, dz, maxT, radius, samples) {
+    if ((!scene.occluder && !scene.track?._lightOccluders) || !possibleOcclusion(scene, dx, dy, dz, maxT, radius)) return 1;
+    const started = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
+    const count = samples >= 9 ? 9 : samples >= 5 ? 5 : 1;
+    const d = Math.hypot(dx, dy, dz) || 1;
+    // A perpendicular disk around the source direction, independent of camera roll.
+    let rx = -dz, rz = dx;
+    const rl = Math.hypot(rx, rz);
+    if (rl < 1e-6) { rx = 1; rz = 0; } else { rx /= rl; rz /= rl; }
+    const ux = -dy * rz / d, uy = (dz * rx - dx * rz) / d, uz = dy * rx / d;
+    let visible = 0;
+    for (let i = 0; i < count; i++) {
+      const x = DISK[i][0] * radius, y = DISK[i][1] * radius;
+      if (!sourceBlocked(scene, dx + rx * x + ux * y, dy + uy * y, dz + rz * x + uz * y, maxT)) visible++;
+    }
+    if (started) _stats.msVisibility += performance.now() - started;
+    return visible / count;
+  }
+  // Bounded records keyed by source coordinates, never culled-list rank. Fully hidden sources snap to zero
+  // immediately; smoothing only softens partially covered samples and cannot trail glare through a blocker.
+  const _coverage = Array.from({ length: 9 }, () => ({ x: NaN, y: 0, z: 0, value: 1, age: -1 }));
+  let _coverageEpoch = 0;
+  function smoothCoverage(raw, x, y, z, dt, smooth) {
+    if (!smooth) return raw;
+    let slot = null, oldest = _coverage[0];
+    for (const rec of _coverage) {
+      if (rec.age >= 0 && rec.x === x && rec.y === y && rec.z === z) { slot = rec; break; }
+      if (rec.age < oldest.age) oldest = rec;
+    }
+    if (!slot) { slot = oldest; slot.x = x; slot.y = y; slot.z = z; slot.value = raw; }
+    const v = raw <= 0 || raw >= 1 || !(dt > 0) ? raw : slot.value + (raw - slot.value) * (1 - Math.exp(-Math.min(dt, 0.1) * 30));
+    slot.value = v; slot.age = _coverageEpoch;
+    return v;
+  }
+
+  // Shared analytical lighting for water highlights: normalized screen positions and radius/minDim.
+  // Slots and RGB arrays are reused; consumers read once per water paint and never read scene pixels.
+  const _lightField = { active: false, width: 0, height: 0, count: 0, revision: 0,
+    ambient: [0, 0, 0], ambientStrength: 0,
+    sources: Array.from({ length: 9 }, () => ({ x: 0, y: 0, r: 0, k: 0, rgb: [0, 0, 0] })) };
+  function lightField() { return _lightField; }
+  function clearLightField() {
+    if (_lightField.active || _lightField.count) _lightField.revision++;
+    _lightField.active = false; _lightField.count = 0; _lightField.ambientStrength = 0;
+    _lightField.ambient[0] = _lightField.ambient[1] = _lightField.ambient[2] = 0;
+  }
+  function publishLightField(m, scene) {
+    const f = _lightField, base = Math.max(1, Math.min(_w, _h));
+    f.active = true; f.width = _w; f.height = _h; f.count = 0; f.revision++;
+    const exp = scene.exposure > 0 ? scene.exposure : 1, amb = scene.ambientSky;
+    f.ambientStrength = clampTo(lum(amb) * exp, 0, 1);
+    for (let i = 0; i < 3; i++) f.ambient[i] = clampTo((amb ? amb[i] : 0) * exp, 0, 1);
+    for (let i = -1; i < m.glints.length && f.count < f.sources.length; i++) {
+      const source = i < 0 ? m.sun : m.glints[i];
+      if (!source || !(source.k > 0)) continue;
+      const dst = f.sources[f.count++];
+      dst.x = source.x / _w; dst.y = source.y / _h; dst.r = source.r / base; dst.k = source.k;
+      for (let c = 0; c < 3; c++) dst.rgb[c] = source.rgb[c] / 255;
+    }
+  }
+  const _cameraSample = new Float64Array(6);
+  let _cameraSampled = false, _motionHold = 0;
+  function motionCadence(dt) {
+    if (!_G || !_G.camEye || !_G.camTgt || !(dt > 0)) return false;
+    const eye = _G.camEye, tgt = _G.camTgt;
+    const dx = tgt[0] - eye[0], dy = tgt[1] - eye[1], dz = tgt[2] - eye[2], length = Math.hypot(dx, dy, dz) || 1;
+    const fx = dx / length, fy = dy / length, fz = dz / length;
+    if (_cameraSampled) {
+      const shift = Math.hypot(eye[0] - _cameraSample[0], eye[1] - _cameraSample[1], eye[2] - _cameraSample[2]);
+      const turn = Math.hypot(fx - _cameraSample[3], fy - _cameraSample[4], fz - _cameraSample[5]);
+      // Ignore tiny helmet jitter; a short hold avoids switching the upload cadence at every threshold crossing.
+      if (shift > Math.max(0.02, dt * 25) || turn > Math.max(0.003, dt * 0.3)) _motionHold = 0.2;
+      else _motionHold = Math.max(0, _motionHold - dt);
+    }
+    _cameraSample[0] = eye[0]; _cameraSample[1] = eye[1]; _cameraSample[2] = eye[2];
+    _cameraSample[3] = fx; _cameraSample[4] = fy; _cameraSample[5] = fz; _cameraSampled = true;
+    return _motionHold > 0;
+  }
 
   // ---------- PORT geometry (pure) ----------
 
@@ -183,11 +412,12 @@ const VisorOptics = (function () {
    *  (VISOR REFLECTIONS); `fringe` is the chromatic rim amount (VISOR REFRACTION); `smoke` marks the tinted lens
    *  (its inner reflections read stronger against the darker transmitted scene). Every intensity is 0..~1.5 and
    *  proportional to light actually reaching the shield: a dark scene returns zeros. */
-  function lightMap(scene, w, h, { level = 1, fringe = 0, smoke = false, tint = null, bloom = 1, glare = 0.12, beams = 1, glintLimit = MAX_GLINTS } = {}) {
+  function lightMap(scene, w, h, { level = 1, fringe = 0, smoke = false, tint = null, bloom = 1, glare = 0.12, beams = 1, glintLimit = MAX_GLINTS, style = "classic", visibilitySamples = 1, smoothVisibility = false, visibilityDt = 0 } = {}) {
     const out = { sun: null, ghost: null, rays: null, rim: null, glints: [], fringe: 0, haze: 0, bloom: clampTo(bloom, 0, 2.5) };
     if (!scene || !scene.eye || !scene.tgt || !(level > 0)) return out;
     // VISOR BEAMS: one scale for every streak — the lamps' beams, the sun's rays, the star flares; 0 keeps the glints alone.
     const bm = Number.isFinite(beams) ? clampTo(beams, 0, 2) : 1;
+    if (smoothVisibility) _coverageEpoch++;
     const basis = camBasis(scene.eye, scene.tgt, _basis, scene.roll);
     const exp = scene.exposure > 0 ? scene.exposure : 1;
     const gain = level * (smoke ? 1.25 : 1);
@@ -200,7 +430,9 @@ const VisorOptics = (function () {
     // from ~3° up; only the set sun (below −1°) adds nothing.
     const sunUp = sd ? clampTo((sd[1] + 0.02) / 0.08, 0, 1) : 0;
     let sceneLight = 0;
-    if (sd && key > 0.02 && sunUp > 0.01) {
+    const sunVisible = sd && key > 0.02 && sunUp > 0.01
+      ? smoothCoverage(sourceVisibility(scene, sd[0], sd[1], sd[2], Infinity, 0.00465, visibilitySamples), Infinity, 0, 0, visibilityDt, smoothVisibility) : 0;
+    if (sunVisible > 0) {
       const p = projectDir(sd, basis, scene.fov, w, h, _tmpSun);
       const warm = scene.sunColor;
       const rgb = [clampTo(warm[0] / Math.max(1e-3, Math.max(warm[0], warm[1], warm[2])), 0, 1) * 255,
@@ -214,14 +446,16 @@ const VisorOptics = (function () {
         const over = Math.max(Math.abs(Math.atan2(p.sx, p.z)) - halfX, Math.abs(Math.atan2(p.sy, p.z)) - halfY, 0);
         const fade = 1 - clampTo(over / (45 * Math.PI / 180), 0, 1);
         if (fade > 0.01) {
-          const k = clampTo(2.0 * key * sunUp * gain * fade, 0, 1.4);
+          const k = clampTo(2.0 * key * sunUp * gain * fade, 0, 1.4) * sunVisible;
           const x = clampTo(p.x, -0.08 * w, 1.08 * w), y = clampTo(p.y, -0.08 * h, 1.08 * h);
-          out.sun = { x, y, k, r: base * 0.22 * (1 + 0.9 * (1 - fade)), rgb };
-          // The double-reflection ghost: mirrored through the centre, larger and fainter (lens-flare geometry).
-          if (over === 0) out.ghost = { x: w - x, y: h - y, k: k * 0.4, r: base * 0.3, rgb };
-          // God rays: a sun in the frame streaks across the shield's micro-scratches and the tear-off film —
-          // radial, longest when the sun sits low in the frame (a low sun ahead is what blinds a driver).
-          if (over === 0 && bm > 0) out.rays = { x, y, k: k * bm, len: Math.hypot(w, h) * 0.75 * (0.7 + 0.3 * bm), rgb };
+          out.sun = { x, y, k, r: base * 0.12 * (1 + 0.5 * (1 - fade)), rgb };
+          // Fade the scratch rays and ghost over six degrees beyond the view instead of popping at its edge.
+          // Keep their true projected source: the clamped rim glow must never drag a ray origin onto the frame.
+          const edge = clampTo(over / (6 * Math.PI / 180), 0, 1);
+          const rayFade = 1 - edge * edge * (3 - 2 * edge);
+          if (rayFade > 0) out.ghost = { x: w - p.x, y: h - p.y, k: k * 0.15 * rayFade, r: base * 0.18, rgb };
+          // These are visor diffraction spokes, independent of the world's volumetric god-ray pass.
+          if (rayFade > 0 && bm > 0) out.rays = { x: p.x, y: p.y, k: k * bm * 0.35 * rayFade, len: Math.hypot(w, h) * 0.35 * (0.7 + 0.3 * bm), rgb };
         }
       }
       // Fresnel rim sheen: the inner rim is seen at grazing angles, where reflectance climbs, and it is lit on
@@ -230,14 +464,14 @@ const VisorOptics = (function () {
       // fades to nothing once it is ~120° behind (sunFacing). It used to peak with the sun behind (A·W46).
       const side = Math.hypot(p.sx, p.sy);
       const rake = sunFacing(p.z) * (0.35 + 0.3 * side);
-      const rk = clampTo(1.0 * key * sunUp * rake * gain, 0, 1);
+      const rk = clampTo(1.0 * key * sunUp * rake * gain, 0, 1) * sunVisible;
       if (rk > 0.004) out.rim = { k: rk, dx: side > 1e-3 ? p.sx / side : 0, dy: side > 1e-3 ? -p.sy / side : -1, rgb };
-      sceneLight += key * sunUp;
+      sceneLight += key * sunUp * sunVisible;
     }
 
     // Sky haze on the brow: the sky reflected in the top of the shield; only a daylight sky is bright enough.
     const amb = clampTo(lum(scene.ambientSky) * exp, 0, 2);
-    out.haze = clampTo(0.3 * amb * gain, 0, 0.32);
+    out.haze = clampTo(0.12 * amb * gain, 0, 0.16);
     const lampVis = lampAdapt(key * sunUp + amb);
     sceneLight += amb * 0.5;
 
@@ -247,6 +481,9 @@ const VisorOptics = (function () {
       const eye = scene.eye, f = (h / 2) / Math.tan((scene.fov || 62) * Math.PI / 360);
       _glintBuf.length = 0;
       for (let i = 0; i + LIGHT_STRIDE <= L.length; i += LIGHT_STRIDE) {
+        // Match the world's fixture halo contract: synthetic road fills have no visible lens to reflect.
+        const glareW = L[i + 14];
+        if (!(glareW > 0) || !Number.isFinite(glareW)) continue;
         const dx = L[i] - eye[0], dy = L[i + 1] - eye[1], dz = L[i + 2] - eye[2];
         const z = dx * basis.fwd[0] + dy * basis.fwd[1] + dz * basis.fwd[2];
         if (z < 1) continue;                                  // behind, or at the eye
@@ -265,35 +502,67 @@ const VisorOptics = (function () {
         // the law the road obeys; the square root compresses a 100× energy range into glints of one family.
         const dl = Math.sqrt(d2), cosT = -(dx * L[i + 7] + dy * L[i + 8] + dz * L[i + 9]) / dl;
         const beam = clampTo((cosT - L[i + 11]) / Math.max(1e-3, L[i + 10] - L[i + 11]), 0, 1);
-        const kl = LAMP_GAIN * Math.sqrt(Math.max(0, lum([L[i + 3], L[i + 4], L[i + 5]]) * exp) / d2) * (0.5 + 0.5 * beam) * edgeFade * lampVis;
-        if (kl < 0.15) continue;                                // below this a glint would not read; the road gets little from it either
+        const energy = LAMP_GAIN * Math.sqrt(Math.max(0, lum([L[i + 3], L[i + 4], L[i + 5]]) * exp) / d2) * (0.5 + 0.5 * beam) * glareW;
+        // Compress fixture energy BEFORE the user's gain, so bright floods retain distinct strength settings.
+        // Adaptation and edge fading follow the compression so they can still extinguish a very bright source.
+        const fogDistance = dl * Math.max(0, scene.fogDensity || 0) * Math.exp(-Math.max(0, dy) * Math.max(0, scene.fogHeight || 0));
+        const transmission = Math.exp(-fogDistance * fogDistance);
+        const kl = energy / (1 + energy) * edgeFade * lampVis * transmission;
+        if (kl < 0.15) continue;                                // distant fixtures disappear into the same fog as the world
         const m = Math.max(1e-3, L[i + 3], L[i + 4], L[i + 5]);
         // The fixture's aim on screen (its cone): a faint beam leaves each glint that way — the floods' light
         // seen in the haze and on the shield, pointing where the lamp points.
         const bx = L[i + 7] * basis.right[0] + L[i + 8] * basis.right[1] + L[i + 9] * basis.right[2];
         const by = -(L[i + 7] * basis.up[0] + L[i + 8] * basis.up[1] + L[i + 9] * basis.up[2]);
         const bl = Math.hypot(bx, by);
-        _glintBuf.push({ x, y, k: kl, d: dl, rgb: [L[i + 3] / m * 255, L[i + 4] / m * 255, L[i + 5] / m * 255], bx: bl > 1e-3 ? bx / bl : 0, by: bl > 1e-3 ? by / bl : 1, beam });
+        const vol = Number.isFinite(L[i + 13]) ? clampTo(L[i + 13], 0, 2) : 0;
+        _glintBuf.push({ x, y, k: kl, d: dl, source: i, rgb: [L[i + 3] / m * 255, L[i + 4] / m * 255, L[i + 5] / m * 255], bx: bl > 1e-3 ? bx / bl : 0, by: bl > 1e-3 ? by / bl : 1, beam, vol });
       }
       _glintBuf.sort((a, b) => b.k - a.k);
       const n = Math.min(MAX_GLINTS, Math.max(0, glintLimit | 0), _glintBuf.length);
-      for (let i = 0; i < n; i++) {
+      // Look beyond blocked bright lamps, but cap visibility work even when the whole city is occluded.
+      // Full detail examines at most 32 candidates; reduced/minimal examine 16. A dimmer source past the
+      // ceiling is omitted rather than inventing visibility or spending unbounded ray queries to find it.
+      const candidateLimit = Math.min(_glintBuf.length, Math.max(16, n * 4));
+      for (let i = 0; i < candidateLimit && out.glints.length < n; i++) {
         const g = _glintBuf[i];
-        const k = clampTo(g.k * gain * (0.7 + 0.3 * clampTo(glare / 0.12, 0, 2.5)), 0, 1.2);   // LENS GLARE lifts the cores
+        _stats.visibilityCandidates++;
+        const sx = L[g.source], sy = L[g.source + 1], sz = L[g.source + 2];
+        const visible = smoothCoverage(sourceVisibility(scene, sx - eye[0], sy - eye[1], sz - eye[2], 1, 0.15, visibilitySamples), sx, sy, sz, visibilityDt, smoothVisibility);
+        if (!(visible > 0)) continue;
+        const k = clampTo(g.k * gain * (0.7 + 0.3 * clampTo(glare / 0.12, 0, 2.5)), 0, 1.2) * visible;   // LENS GLARE lifts the cores
         // Nearer fixtures smear wider across the curved shield; far ones stay small.
-        const r = base * clampTo(0.14 + 8 / Math.max(8, g.d), 0.14, 0.36) * (0.8 + 0.2 * out.bloom);
+        const r = base * clampTo(0.035 + 1.5 / Math.max(8, g.d), 0.035, 0.10) * (0.8 + 0.2 * out.bloom);
         out.glints.push({ x: g.x, y: g.y, k, r, rgb: g.rgb,
           // The fixture's beam, seen in the air and on the shield: longer and brighter the harder the lamp hits the eye.
-          beam: bm > 0 && k > 0.25 ? { dx: g.bx, dy: g.by, len: base * (0.45 + 0.55 * g.beam) * clampTo(k, 0, 1) * (0.6 + 0.4 * bm), k: k * 0.5 * bm } : null,
+          beam: bm > 0 && k > 0.25 && g.vol > 0 ? { dx: g.bx, dy: g.by, len: base * (0.16 + 0.24 * g.beam) * clampTo(k, 0, 1) * (0.6 + 0.4 * bm), k: k * 0.24 * bm * g.vol } : null,
           // A star flare on the brightest three: the shield's micro-scratches split a hard point source into spokes.
-          star: bm > 0 && i < 3 && k > 0.45 ? { len: r * 2.8 * (0.7 + 0.3 * bm), k: k * 0.4 * bm } : null });
-        sceneLight += g.k * 0.6;
+          star: bm > 0 && out.glints.length < 3 && k > 0.45 ? { len: r * 2.8 * (0.7 + 0.3 * bm), k: k * 0.2 * bm } : null });
+        sceneLight += g.k * visible * 0.6;
       }
     }
 
     // Chromatic fringe: a lens property, but ADDED colour, so it needs light in the scene to show.
-    out.fringe = clampTo(fringe * clampTo(sceneLight, 0, 1) * 0.55 * level, 0, 0.6);
+    out.fringe = clampTo(fringe * clampTo(sceneLight, 0, 1) * 0.22 * level, 0, 0.28);
     if (tint && out.sun) { const t = tint; out.sun.rgb = [(out.sun.rgb[0] * 2 + t[0]) / 3, (out.sun.rgb[1] * 2 + t[1]) / 3, (out.sun.rgb[2] * 2 + t[2]) / 3]; }
+    if (style === "compact" || style === "scratches") {
+      // Fixed per-source attenuation: a new lamp cannot dim another one. Eight bounded 1.2 cores sum to
+      // at most 2.4 after this scale; this is an amplitude limit, not a physical energy-conservation model.
+      out.bloom *= 0.5;
+      out.ghost = null;
+      if (out.sun) { out.sun.k *= 0.8; out.sun.r *= 0.7; }
+      if (style === "scratches" && out.rays) {
+        out.rays.k *= 0.18;
+        out.rays.len = base * 0.22 * (0.7 + 0.3 * bm);
+        out.rays.short = true;
+      } else out.rays = null;
+      for (const g of out.glints) {
+        g.k *= 0.25; g.r *= 0.7; g.beam = null;
+        // Every selected fixture gets the same response; no top-three rank bonus that jumps between lamps.
+        g.star = style === "scratches" && bm > 0
+          ? { len: g.r * 1.7 * (0.7 + 0.3 * bm), k: g.k * 0.25 * bm, short: true } : null;
+      }
+    }
     return out;
   }
 
@@ -411,7 +680,7 @@ const VisorOptics = (function () {
     // tick measured the layout before lookup; size a newly acquired canvas for its first paint.
     _sizeLightCanvas(_w, _h);
     // A visor setting change repaints at once; the port image is rebuilt only for the settings it shows (not a beams slider drag).
-    if (typeof CockpitOpts !== "undefined" && CockpitOpts.onWheel) CockpitOpts.onWheel((name) => { if (name && name.startsWith("visor")) { if (name === "visorColor") _portKey = ""; _acc = 1; } });
+    if (typeof CockpitOpts !== "undefined" && CockpitOpts.onWheel) CockpitOpts.onWheel((name) => { if (name && name.startsWith("visor")) { if (name === "visorColor") _portKey = ""; _settingsDirty = true; _acc = 1; } });
     Log.info("game", "VisorOptics: helmet visor overlay ready");
     return _cv;
   }
@@ -571,6 +840,7 @@ const VisorOptics = (function () {
   }
 
   function _show(on) {
+    if (!on) clearLightField();
     if (on === _shown) return;
     _shown = on;
     _lastHaze = null;
@@ -602,7 +872,7 @@ const VisorOptics = (function () {
     g.save(); g.translate(x, y); g.scale(sx, 1); g.fillStyle = grad;
     g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
     // The smear: the shield's horizontal curvature drags every bright source into a faint streak across it.
-    g.scale(3.2, 0.32); g.globalAlpha = 0.35;
+    g.scale(2.0, 0.22); g.globalAlpha = 0.16;
     g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
     g.globalAlpha = 1; g.restore();
   }
@@ -614,9 +884,15 @@ const VisorOptics = (function () {
     leftX: Math.cos(angle - 0.035), leftY: Math.sin(angle - 0.035),
     rightX: Math.cos(angle + 0.035), rightY: Math.sin(angle + 0.035),
   }));
+  // Two opposed pairs, fixed to the shield; no random rotations or per-paint table construction.
+  const SHORT_RAYS = [0.52, 0.52 + Math.PI, 2.62, 2.62 + Math.PI].map((angle) => ({
+    length: 1, strength: 1, dx: Math.cos(angle), dy: Math.sin(angle),
+    leftX: Math.cos(angle - 0.012), leftY: Math.sin(angle - 0.012),
+    rightX: Math.cos(angle + 0.012), rightY: Math.sin(angle + 0.012),
+  }));
   function _rays(g, r) {
     const c = Math.round(r.rgb[0]) + "," + Math.round(r.rgb[1]) + "," + Math.round(r.rgb[2]);
-    for (const ray of RAYS) {
+    for (const ray of r.short ? SHORT_RAYS : RAYS) {
       const a = Math.min(1, r.k * ray.strength * 0.7);
       if (a < 0.004) continue;
       const len = r.len * ray.length, ex = r.x + ray.dx * len, ey = r.y + ray.dy * len;
@@ -660,7 +936,7 @@ const VisorOptics = (function () {
   function _star(g, s) {
     const c = Math.round(s.rgb[0]) + "," + Math.round(s.rgb[1]) + "," + Math.round(s.rgb[2]);
     const a = Math.min(1, s.star.k);
-    for (const spoke of STAR) {
+    for (const spoke of s.star.short ? SHORT_RAYS : STAR) {
       const len = s.star.len * spoke.length, ex = s.x + spoke.dx * len, ey = s.y + spoke.dy * len;
       const grad = g.createLinearGradient(s.x, s.y, ex, ey);
       grad.addColorStop(0, "rgba(" + c + "," + a.toFixed(3) + ")");
@@ -706,25 +982,35 @@ const VisorOptics = (function () {
     g.globalCompositeOperation = "source-over";
   }
 
+  // One authority for both the folded shader and CSS fallback. A cached SVG map
+  // must not leave world refraction running after LOW, budget shedding or exit.
+  function _syncBend(on) {
+    if (on === _bendActive) return;
+    _bendActive = on;
+    if (!document.body) return;
+    if (on) document.body.setAttribute("data-visor-bend-active", "1");
+    else document.body.removeAttribute("data-visor-bend-active");
+  }
+
   /** Once per rendered frame (from Droplets.tick). on: an onboard camera, racing, not photo mode. dt 0 = paused
    *  (the last paint stays). vs is unused today (kept for the airflow/heat ideas); reduced: prefers-reduced-motion. */
   function tick(dt, on, vs, reduced) {
-    _bendActive = false;
     const helmet = _helmet();
-    if (!helmet) { _syncBudget(0); _show(false); return; }
+    if (!helmet) { _cockpitBlocked = false; _syncBend(false); _syncBudget(0); _show(false); return; }
     const visor = _opt("visor", "off");
+    const quality = _opt("visorQuality", "auto");
     const resized = visor !== "off" && _size();
     _port(visor);                                              // OFF clears the aperture without measuring the viewport
-    const changed = _syncBudget(visor !== "off" && on ? _pressureBudget() : 0);
-    if (visor === "off" || !on || _low() || _shed) { _show(false); return; }
+    const changed = _syncBudget(visor !== "off" && on ? Math.max(_pressureBudget(), quality === "low" ? 1 : 0) : 0);
+    if (visor === "off" || !on || _low() || _shed) { if (visor === "off" || !on) _cockpitBlocked = false; _syncBend(false); _show(false); return; }
     const budget = BUDGETS[_budget];
     // The world filter is independent of the reflection canvas, including on resize.
     const t2 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
     const refraction = _budget < 2 ? _opt("visorRefraction", "off") : "off";
     if (BEND[refraction]) {
       _bend(refraction);
-      _bendActive = !!bendField.data && _bendW === _w && _bendH === _h;
     }
+    _syncBend(!!BEND[refraction] && !!bendField.data && _bendW === _w && _bendH === _h);
     if (t2 && _bendActive && !_stats.msBend) _stats.msBend = r2(performance.now() - t2);
     const level = LEVEL[_opt("visorReflections", "light")] || 0;
     if (!(level > 0)) { _show(false); return; }
@@ -733,10 +1019,14 @@ const VisorOptics = (function () {
     if (!_lookup()) return;
     if (t1 && !_stats.msLookup) _stats.msLookup = r2(performance.now() - t1);
     _syncBlend(t1 || Date.now());
-    const hz = _paintHz = Math.min(reduced ? HZ_REDUCED : HZ, budget.hz);
+    const moving = motionCadence(dt);
+    const requestedHz = quality === "high" || (quality !== "low" && moving) ? 30 : HZ;
+    const hz = _paintHz = Math.min(reduced ? HZ_REDUCED : requestedHz, _budget ? budget.hz : 30);
     _acc += dt > 0 ? dt : 0;
-    if (!newSizeOrCanvas && _acc < 1 / hz) return;
-    if (!(dt > 0) && !newSizeOrCanvas && !changed) return;              // a paused profile change still refreshes once
+    if (!newSizeOrCanvas && _acc < 1 / hz && !(!(dt > 0) && _settingsDirty)) return;
+    if (!(dt > 0) && !newSizeOrCanvas && !changed && !_settingsDirty) return;              // a paused profile change still refreshes once
+    _settingsDirty = false;
+    const visibilityDt = dt > 0 ? Math.min(0.1, _acc) : 0;
     _acc = newSizeOrCanvas || changed || !_budget ? 0 : _acc % (1 / hz); // preserve reduced cadence without catch-up paints
     const t0 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
     const scene = readScene();
@@ -747,7 +1037,9 @@ const VisorOptics = (function () {
     let m;
     try {
       m = lightMap(scene, _w, _h, { level, fringe, smoke: visor === "smoke", tint: visor === "smoke" ? _lens : null,
-        bloom: Number.isFinite(tune?.bloomMul) ? tune.bloomMul : 1, glare: Number.isFinite(tune?.glareStr) ? tune.glareStr : 0.12, beams, glintLimit: budget.glints });
+        bloom: Number.isFinite(tune?.bloomMul) ? tune.bloomMul : 1, glare: Number.isFinite(tune?.glareStr) ? tune.glareStr : 0.12, beams, glintLimit: budget.glints, style: _opt("visorLightStyle", "classic"),
+        visibilitySamples: _budget ? 1 : quality === "high" ? 9 : 5, smoothVisibility: true, visibilityDt });
+      publishLightField(m, scene);
       // With the sun behind the driver and no visible lamps, only the sky gradient remains.
       // Its pixels depend on sky brightness and viewport size, even as the helmet moves.
       const hazeOnly = !m.sun && !m.rim && !m.glints.length && m.fringe <= 0.004;
@@ -761,7 +1053,7 @@ const VisorOptics = (function () {
     } catch (e) {
       // Cosmetic layer: a bad frame (a non-finite gradient, a hook mid-rebuild) must never take the render loop
       // down with it. Clear the glass, say so once, and try again next tick.
-      _lightValid = false;
+      _lightValid = false; clearLightField();
       if (!_stats.errors++) Log.warn("game", "VisorOptics: paint skipped — " + (e && e.message ? e.message : e));
       if (_ctx) _ctx.clearRect(0, 0, _w, _h);
       return;
@@ -776,21 +1068,23 @@ const VisorOptics = (function () {
   function stats() {
     return { shown: _shown, shed: _shed, budget: BUDGETS[_budget].name, paintHz: _shown ? _paintHz : 0, w: _w, h: _h, ticks: _stats.ticks, paints: _stats.paints, msLast: r2(_stats.msLast), msMax: r2(_stats.msMax),
              msAvg: _stats.paints ? r2(_stats.msSum / _stats.paints) : 0, glints: _stats.glints, sun: _stats.sun, rim: _stats.rim, lamp: _stats.lamp,
-             port: !!_portKey, bend: _bendLevelBuilt, blend: _blend, msBend: _stats.msBend, msLookup: _stats.msLookup, errors: _stats.errors };
+             port: !!_portKey, bend: _bendLevelBuilt, blend: _blend, msBend: _stats.msBend, msLookup: _stats.msLookup, msVisibility: r2(_stats.msVisibility), visibilityRays: _stats.visibilityRays, visibilityCandidates: _stats.visibilityCandidates, errors: _stats.errors };
   }
   // Only a visible race HUD owns the lens. These are also the CSS fallback gates.
-  const lensFrame = { bend: null, light: null, revision: 0, additive: false };
+  const lensFrame = { bend: null, water: null, light: null, revision: 0, additive: false };
   function frameLens() {
-    if ((!_bendActive && !_shown) || !document.body.matches("body[data-helmet-cam]:not(.bc-on,.watch-controls-on,.hud-hidden,.pc-uihidden)")) return null;
+    const water = typeof Droplets !== "undefined" && typeof Droplets.waterLens === "function" ? Droplets.waterLens() : null;
+    if ((!_bendActive && !_shown && !water) || !document.body.matches("body[data-helmet-cam]:not(.bc-on,.watch-controls-on,.hud-hidden,.pc-uihidden)")) return null;
     const hud = document.getElementById("hud");
     if (!hud || hud.hidden) return null;
     const drops = document.getElementById("fx-droplets");
     lensFrame.bend = _bendActive ? bendField : null;
+    lensFrame.water = water;
     // Draining drops remain between the world and the reflected light.
     lensFrame.light = _shown && _lightValid && (!drops || drops.hidden) ? _cv : null;
     lensFrame.revision = _stats.paints;
     lensFrame.additive = _blend === "add";
-    return lensFrame.bend || lensFrame.light ? lensFrame : null;
+    return lensFrame.bend || lensFrame.water || lensFrame.light ? lensFrame : null;
   }
   function folded(on) {
     if (_folded === on) return;
@@ -798,20 +1092,29 @@ const VisorOptics = (function () {
     document.body.toggleAttribute("data-visor-folded", !!on);
     document.body.toggleAttribute("data-visor-light-folded", on === 2);
   }
-  function clear() { _bendActive = false; folded(false); _syncBudget(0); _show(false); }
+  function clear() { _cameraSampled = false; _motionHold = 0; for (const rec of _coverage) rec.age = -1; _cockpitBlocked = false; _syncBend(false); folded(false); _syncBudget(0); _show(false); }
 
   /** Live scene snapshot for __apex.visorScene — keeps apex.js a one-line delegate. */
+  const _sceneInternals = { occluder: { value: null }, track: { value: null } };
   function sceneFromG(G) {
-    return {
+    const tune = typeof LightTune !== "undefined" ? LightTune.LT : null;
+    _sceneInternals.occluder.value = _cockpitBlocked ? _cockpitBlocker : null;
+    _sceneInternals.track.value = G.track;
+    // Production needs the live spatial structures; diagnostic JSON needs only the bounded scene fields.
+    // Descriptors are reused, but each call still returns a fresh snapshot object.
+    return Object.defineProperties({
       // The lens the world was drawn with: G.lens.fovY is the fitted FOV, not the raw camFov (#5018).
       eye: G.camEye, tgt: G.camTgt, fov: G.lens && G.lens.fovY > 0 ? G.lens.fovY * 180 / Math.PI : G.camFov, roll: G.camRoll || 0,
       sunDir: G.frame.sunDir, sunColor: G.frame.sunColor, exposure: G.frame.exposure != null ? G.frame.exposure : 1,
       ambientSky: G.frame.ambientSky, lights: G.frame.lights, tailStart: G.frame.tailStart, floodEmit: G._lastFloodEmit,
-    };
+      // Match the rendered scene's height fog, including a user tuning override of zero.
+      fogDensity: (G.frame.fogDensity || 0) * (tune?.fogDensityMul ?? 1),
+      fogHeight: tune?.fogHeight ?? G.frame.fogHeight ?? 0,
+    }, _sceneInternals);
   }
 
   // camBasis / projectDir / LEVEL / FRINGE stay module-private: lightMap + tick
   // close over them; no js/ or test reader used the public VisorOptics.* forms.
-  return { bind, tick, clear, frameLens, folded, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG };
+  return { bind, setCockpitOccluder, tick, clear, lightField, frameLens, folded, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG };
 })();
 Object.freeze(VisorOptics);

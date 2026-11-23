@@ -94,6 +94,35 @@ test("start → cooldown; seek chain → results shows sheet + data-ceremony-pha
   assert.equal(api.status().live, false);
 });
 
+test("cooldown renders live and parc fermé presents one static frame before giving ResultsCam the view", () => {
+  const { R, results, sb } = boot();
+  sb.ParcFerme = { create: () => ({ start() {}, reset() {}, staticView: () => true }) };
+  const G = Gbase({ els: { results } });
+  const calls = [];
+  let resultShot = true;
+  const camera = {
+    reset() { resultShot = false; calls.push("reset"); },
+    live: () => resultShot,
+    onFlag() { resultShot = true; calls.push("results"); },
+  };
+  const api = R.create(G, { resultsCam: () => camera, snapCooldown: () => calls.push("chase") });
+  api.start(G.cars, {});
+  assert.equal(api.cameraPhase(), "cooldown");
+  assert.equal(api.needsWorldFrame(), true);
+  assert.equal(camera.live(), false);
+  api.seek("parcFerme");
+  assert.equal(api.cameraPhase(), "parcFerme");
+  assert.equal(api.needsWorldFrame(), true);
+  api.worldPresented();
+  assert.equal(api.needsWorldFrame(), false);
+  assert.equal(camera.live(), false);
+  api.seek("results");
+  assert.equal(api.cameraPhase(), null);
+  assert.equal(api.needsWorldFrame(), false);
+  assert.equal(camera.live(), true);
+  assert.deepEqual(calls, ["reset", "chase", "reset", "results"]);
+});
+
 test("skip advances one phase; podium skipped when fewer than 3", () => {
   const { R, results } = boot();
   const G = Gbase({ els: { results }, cars: cars(2) });

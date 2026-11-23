@@ -1,1 +1,0 @@
-Fixed: on a landscape phone the career hub and the race results stay in their compact layout at every UI SIZE — at the shipped 70 % the results list showed two-line 74 px rows with no pinned podium (now one-line 44 px rows, P1–P3 and your row pinned) and the hub head was 85 px tall (now 62).

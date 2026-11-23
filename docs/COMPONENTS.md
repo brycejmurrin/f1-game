@@ -256,20 +256,19 @@ missing class, a file that left, or a file that joined.
 - `.build-tag` — `dialogs` + `menus`. The footer version tag: styled in `menus`, overridden by the pause card's compact-density selector in `dialogs`.
 - `.hud-box` / `.hud-value` — `hud` + `overlays` + `tokens` + `touch-controls`
 - `.hud-label` — `hud` + `overlays` + `touch-controls`
-- `.hud-gaps` — `hud` + `overlays` + `watch-transport`
-- `.hud-top` — `hud` + `watch-transport`
-- `.hud-bottom` — `hud` + `touch-controls` + `watch-transport`
+- `.hud-gaps` — `hud` + `overlays`
+- `.hud-bottom` — `hud` + `touch-controls`
 - `.hud-unit` — `hud` + `touch-controls`
 - `.hud-energy-label` — `hud` + `touch-controls`. The ERS bar's label: styled in `hud`; the ≤740 px touch layout keeps it on one line so the value stays inside the bar (clean-room fix 49).
-- `.touchbtn` — `hud` + `overlays` + `tokens` + `touch-controls` + `watch-transport`
-- `.hud-hidden` — `helmet-visor` + `hud` + `responsive` + `touch-controls`. Hides the driving HUD, including manually positioned instruments detached from the bottom cluster; the visor refraction filter also steps aside so a clean frame stays unbent.
+- `.touchbtn` — `hud` + `overlays` + `tokens` + `touch-controls`
+- `.hud-hidden` — `helmet-visor` + `hud` + `responsive` + `touch-controls` + `watch-transport`. Hides the driving HUD, spectator cards and visor refraction.
 - `.hud-hide-map` — `hud` + `overlays`. Body class for MAP OFF: `hud` parks the gap strip in the map's corner; the ≥1200px tier in `overlays` (which wins the layer order whatever the specificity) steps aside with `body:not(.hud-hide-map)` so its 178px beside-the-map anchor cannot leave the strip floating.
 - `.dock-grp` — `overlays` + `touch-controls`. Custom row layouts arrange the same button groups as the shipped dock.
 - `.dock` — `hud` + `overlays` + `touch-controls`. The touch-controls dock: laid out in `touch-controls`; `hud` hides it with the rest of the chrome and stills it under reduced motion.
 - `.mirror-controls` — `hud` + `overlays` + `touch-controls`. Custom pedal rows follow the mirrored dock. LEFT-HANDED body class (`js/game.js`): `touch-controls` reverses `#hud-dock`, so `#dock-right` paints on the left; `hud` re-points TYRES's `--apex-dock-left` anchor to it, and `js/ui/hud.js` `pickDocks()` hands the fit the docks by painted side.
 - `.bc-on` — `helmet-visor` + `hud`. Body class for the broadcast HUD (a REAL RACE WATCH / HIGHLIGHTS run): `hud` hides the driving chrome, the touch buttons and CAM; `helmet-visor` skips refraction while broadcast is up.
 - `.bc-head` — `hud` + `watch-transport`. Timing header button semantics.
-- `.watch-controls-on` — `helmet-visor` + `hud` + `watch-transport`. Body class for the WATCH transport strip: `watch-transport` hides the driving HUD chrome and the helmet `::before` shield; `hud` folds it into the AERO / BRAKE BIAS and RELATIVE / STRATEGY / INPUTS hide rules; `helmet-visor` also drops the world refraction filter so the replay view is not bent.
+- `.watch-controls-on` — `helmet-visor` + `hud`. Body class for the WATCH transport strip. The HUD stylesheet hides driving instruments and the helmet frame, and the visor stylesheet disables refraction.
 - `.pc-stickwrap` / `.pc-move-wrap` / `.pc-look-wrap` / `.pc-altcol` / `.pc-btn` — `hud` + `photo-studio`. Photo Studio borrows the camera controls, then fits their zoom and anchors around its side or bottom dock while it is open.
 - `.pc-uihidden` — `helmet-visor` + `hud`. Photo-mode HIDE HUD: `hud` clears the driving chrome for an unobstructed frame; `helmet-visor` drops the refraction filter with it.
 - `.pc-nopanel` — `hud` + `tuner`

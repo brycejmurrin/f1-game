@@ -117,7 +117,10 @@ const TrackBuildProps = (function () {
     const glassBuf = TrackModels.scratch();
     const waterBuf = TrackModels.scratch();
     const region = buildOptions && buildOptions.region ? TrackSceneryRegion.create(buildOptions.region, [out, glassBuf, waterBuf], RAW) : null;
-    const raw = region ? region.raw : RAW, emit = region ? region.emit : TrackGeom.emit, addMesh = region ? region.addMesh : TrackGeom.addMesh;
+    const lightBoxes = out._lightBoxRecords = [], rawBase = region ? region.raw : RAW;
+    const recordLightBox = (o,c,size,col,basis) => { if(o!==glassBuf && o!==waterBuf)TrackGeom.lightBox(o._lightBoxRecords || (o._lightBoxRecords=[]),o,c,size,basis); };
+    const raw = Object.assign({},rawBase,{addBox(o,c,size,col,basis){const result=rawBase.addBox(o,c,size,col,basis);if(result!==false)recordLightBox(o,c,size,col,basis);return result;}});
+    const emit = region ? region.emit : TrackGeom.emit, addMesh = region ? region.addMesh : TrackGeom.addMesh;
     // Cells already emitted this build — overlapping waterBand/waterField calls
     // skip duplicates instead of stacking coplanar quads (docs/BUGS.md S7).
     const waterOccupied = new Set();
@@ -384,7 +387,7 @@ const TrackBuildProps = (function () {
         if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
         if (o._dryRun) return true;
       }
-      if (o._absorbOnly) { absorbBox(c, sz); return true; }
+      if (o._absorbOnly) { recordLightBox(o,c,sz,col,basis); absorbBox(c, sz); return true; }
       raw.addBox(o, c, sz, col, basis); absorbBox(c, sz); return true;
     };
     const addCyl = (o, c, rad, h, col, seg, basis) => {
@@ -461,8 +464,9 @@ const TrackBuildProps = (function () {
       if (o && (o._dryRun || o._absorbOnly) && !region) return true;
       return fn(o, ...rest) !== false;
     };
+    const rawBox = rawOk(raw.addBox);
     const UNGUARDED = {
-      addBox: rawOk(raw.addBox), addCyl: rawOk(raw.addCyl), addCone: rawOk(raw.addCone),
+      addBox: (o,...args) => { if(o._absorbOnly && !region){recordLightBox(o,...args);return true;}return rawBox(o,...args); }, addCyl: rawOk(raw.addCyl), addCone: rawOk(raw.addCone),
       addFrustum: rawOk(raw.addFrustum), addPrism: rawOk(raw.addPrism), addPyramid: rawOk(raw.addPyramid),
     };
     // instance(key, place, build, meta, opts?) — returns the number of primitives
@@ -2320,6 +2324,7 @@ const TrackBuildProps = (function () {
     }
     // Model groups catch emitter failures; the sticky region cap must still abort publication.
     if (region) { region.check(); track.sceneryRegion = region.stats(); }
+    track._lightOccluders = TrackGeom.lightIndex(lightBoxes); delete out._lightBoxRecords;
     track.props.count = propList.length;
     track.props.spanCount = spanList.length;
     track.props.dropped = propDropped;

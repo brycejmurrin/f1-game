@@ -219,8 +219,35 @@ for (const [name, steering, driving, expected] of [
   assert.equal(restarted.GameStore.store.get("brakeCue", 1), 7);
 });
 
+test("visor light styles roundtrip without changing saved beam strength", () => {
+  for (const style of ["classic", "compact", "scratches"]) {
+    const disk = { "apex26.helmetVisorLightStyle": style, "apex26.helmetVisorBeams": "160" };
+    for (const mode of ["all", "changes"]) {
+      const saved = boot({ disk }).collect(mode), target = boot();
+      target.loadSettings(saved);
+      assert.equal(target.collect("all").settings.camera.helmetVisorLightStyle, style);
+      assert.equal(target.disk.get("apex26.helmetVisorBeams"), "160");
+      assert.equal(saved.settings.camera.helmetVisorLightStyle, mode === "changes" && style === "classic" ? undefined : style);
+    }
+  }
+});
+
+test("visor effects quality roundtrips in both backup modes without rewriting optical preferences", () => {
+  for (const quality of ["auto", "low", "high"]) for (const mode of ["all", "changes"]) {
+    const source = boot({ disk: { "apex26.helmetVisorQuality": quality,
+      "apex26.helmetVisorLightStyle": "scratches", "apex26.helmetVisorBeams": "160" } });
+    const saved = source.collect(mode), target = boot();
+    target.loadSettings(saved);
+    const camera = target.collect("all").settings.camera;
+    assert.equal(camera.helmetVisorQuality, quality);
+    assert.equal(camera.helmetVisorLightStyle, "scratches");
+    assert.equal(camera.helmetVisorBeams, "160");
+    assert.equal(saved.settings.camera.helmetVisorQuality, mode === "changes" && quality === "auto" ? undefined : quality);
+  }
+});
+
 test("visor optics and water settings survive both backup modes and reject invalid choices", () => {
-  const values = { helmetVisorRefraction: "medium", helmetVisorReflections: "strong", helmetVisorRain: "heavy", helmetVisorRunoff: "fast", helmetVisorDropSize: "175" };
+  const values = { helmetVisorRefraction: "medium", helmetVisorReflections: "strong", helmetVisorLightStyle: "scratches", helmetVisorQuality: "high", helmetVisorRain: "heavy", helmetVisorRunoff: "fast", helmetVisorDropSize: "175" };
   const disk = Object.fromEntries(Object.entries(values).map(([key, value]) => ["apex26." + key, value]));
   for (const mode of ["all", "changes"]) {
     const saved = boot({ disk }).collect(mode);
@@ -233,7 +260,7 @@ test("visor optics and water settings survive both backup modes and reject inval
   }
   const defaults = boot().collect("all").settings.camera;
   assert.deepEqual(Object.fromEntries(Object.keys(values).map(key => [key, defaults[key]])), {
-    helmetVisorRefraction: "off", helmetVisorReflections: "light", helmetVisorRain: "normal", helmetVisorRunoff: "normal", helmetVisorDropSize: "100",
+    helmetVisorRefraction: "off", helmetVisorReflections: "light", helmetVisorLightStyle: "classic", helmetVisorQuality: "auto", helmetVisorRain: "normal", helmetVisorRunoff: "normal", helmetVisorDropSize: "100",
   });
   assert.equal(defaults.helmetVisorBeams, "100", "the VISOR BEAMS slider exports as a percent, 100 by default");
   const beams = boot({ disk: { "apex26.helmetVisorBeams": "160" } }).collect("changes");
@@ -1966,16 +1993,22 @@ for (const fileReader of [false, true]) test(`switching backup tabs invalidates 
   assert.equal(b.reloads(), 0);
 });
 
-test("garage reset stays on screen when deleting an extra key is not durable", () => {
-  const b = bootImportUI({ disk: { "apex26.customTeam": JSON.stringify({ name: "Old team" }) },
-    store: { set(_key, value) { return value !== undefined; } },
-    globals: { GarageDefaults: { file: () => ({ format: "apex26-garage-v1", garage: { team: 0 } }) } },
+test("garage reset stays on screen when deleting an extra key is not durable", async () => {
+  const b = bootImportUI({ realStore: true, disk: { "apex26.customTeam": JSON.stringify({ name: "Old team" }) },
+    globals: { GarageDefaults: { has: () => false, file: () => ({ format: "apex26-garage-v1", garage: { team: 0 } }) } },
   });
+  const remove = b.sb.localStorage.removeItem;
+  b.sb.localStorage.removeItem = (key) => {
+    if (key === "apex26.customTeam") throw new Error("Removal denied");
+    remove(key);
+  };
   const row = b.SettingsExport.garageRow(); b.dom.body.appendChild(row);
   const reset = b.dom.byId("cs-garage-reset");
-  reset.click(); reset.click();
+  // miniDOM.click dispatches events but intentionally does not return handler promises.
+  await reset.onclick(); await reset.onclick();
   assert.equal(reset.textContent, "RESET GARAGE TO DEFAULTS — STORAGE FULL — 1 NOT SAVED");
   assert.doesNotMatch(reset.textContent, /RELOADING/);
+  assert.equal(reset.disabled, false, "a failed reset leaves the retry control usable");
   b.flushReloads(); assert.equal(b.reloads(), 0);
 });
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * gen-agent-index.mjs — docs/agent-index.json, the hook page, and the impact map.
- * @doc Regenerates `docs/agent-index.json`, `docs/AGENT-HOOKS.md` and `tests/data/impact-map.json`; `--check`.
+ * @doc Regenerates the agent index and hook page (`--check`), plus a local impact report.
  * @skill agent-view
  *
  * One static pass, no browser. Hook rows are the object `agentHelp()` returns
@@ -27,13 +27,15 @@
  *
  *   node tools/docs/gen-agent-index.mjs
  *   node tools/docs/gen-agent-index.mjs --check
+ *   node tools/gen/ensure-built.mjs --with tests/data/impact-map.json
  */
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
-import { argGate, emit, isMain, readRepo, ROOT } from "../gen/gen-lib.mjs";
+import { argGate, emit, ensureFile, isMain, readRepo, ROOT } from "../gen/gen-lib.mjs";
 import { fileGlobal, rosterOf } from "../gen/gen-arch-table.mjs";
 import { isTwinned } from "../ci/twinned-specs.mjs";
+import { readImpactPins } from "../lib/impact-map.mjs";
 
 const require = createRequire(import.meta.url);
 const espree = require("espree");
@@ -43,7 +45,7 @@ export const INDEX_TARGET = "docs/agent-index.json";
 export const HOOKS_TARGET = "docs/AGENT-HOOKS.md";
 export const IMPACT_TARGET = "tests/data/impact-map.json";
 export const TARGET = INDEX_TARGET;
-export const TARGETS = [INDEX_TARGET, HOOKS_TARGET, IMPACT_TARGET];
+export const TARGETS = [INDEX_TARGET, HOOKS_TARGET];
 
 const HOOK_GROUPS = ["perceive", "detail", "know", "act", "fields", "read", "control", "model"];
 const CALL_GROUPS = new Set(["read", "control"]);
@@ -341,7 +343,7 @@ export function buildImpactMap(specList = testFiles()) {
     for (const file of [...paths].sort(cmpStr)) {
       const hits = [];
       for (const name of funcs(file)) {
-        if (text.includes(name + "(")) hits.push(name);
+        if (name !== "narrow" && text.includes(name + "(")) hits.push(name);
       }
       hits.sort(cmpStr);
       if (!hits.length) add(file, "*", spec);
@@ -366,13 +368,7 @@ export function buildImpactMap(specList = testFiles()) {
 
 /** Merge hand-pinned `narrow` rows from tests/data/impact-map.d/*.json into the generated map. */
 export function mergeImpactPinFiles(map) {
-  const dir = path.join(ROOT, "tests/data/impact-map.d");
-  if (!fs.existsSync(dir)) return sortImpactMap(map);
-  for (const name of fs.readdirSync(dir).filter((n) => n.endsWith(".json")).sort(cmpStr)) {
-    let frag;
-    try { frag = JSON.parse(fs.readFileSync(path.join(dir, name), "utf8")); }
-    catch { continue; }
-    const pins = frag.pins || frag;
+  for (const pins of readImpactPins()) {
     for (const [file, fnMap] of Object.entries(pins)) {
       if (!map[file]) map[file] = {};
       for (const [fn, specs] of Object.entries(fnMap)) {
@@ -393,7 +389,6 @@ function outputs() {
   return [
     [INDEX_TARGET, renderIndex(index)],
     [HOOKS_TARGET, renderHookPage(index)],
-    [IMPACT_TARGET, renderImpact()],
   ];
 }
 
@@ -407,6 +402,8 @@ function main() {
     const c = emit(rel, body, check);
     if (c) code = c;
   }
+  if (check.length) readImpactPins();
+  else ensureFile(path.join(ROOT, IMPACT_TARGET), renderImpact());
   return code;
 }
 

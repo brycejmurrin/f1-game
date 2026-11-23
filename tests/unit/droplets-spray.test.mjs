@@ -27,19 +27,19 @@ function ctx2d(calls) {
       calls.draw++;
       if (calls.frameDraws) calls.frameDraws.push({ dest: args.slice(-4), alpha: this.globalAlpha });
     },
-    save() {}, restore() {}, resetTransform() {}, translate() {}, rotate: () => { calls.rotate++; },
-    beginPath() {}, arc() {}, fill() {}, moveTo() {}, bezierCurveTo() {}, closePath() {}, stroke() {},
+    save() {}, restore() {}, resetTransform() {}, translate() {}, scale() {}, rotate: () => { calls.rotate++; },
+    beginPath() {}, arc() {}, fill() {}, moveTo() {}, bezierCurveTo() {}, closePath() {}, stroke() { if (calls.highlightStrokes) calls.highlightStrokes.push({ color: this.strokeStyle, alpha: this.globalAlpha }); },
     createRadialGradient: () => grad, createLinearGradient: () => grad,
   };
 }
 
-function makeDroplets({ mobile = false, preset = "high", staticEl = true, helmet = false, rainAmount = "normal", runoff = "normal", dropSize = 1, recordDraws = false, recordAtlas = false, viewport = null, seed = 0xd809 } = {}) {
-  const calls = { clear: 0, draw: 0, rotate: 0, ...(recordDraws ? { frameDraws: [] } : {}), ...(recordAtlas ? { atlasStops: [], atlasBuilds: 0 } : {}) };
+function makeDroplets({ mobile = false, preset = "high", staticEl = true, helmet = false, rainAmount = "normal", runoff = "normal", dropSize = 1, recordDraws = false, recordAtlas = false, viewport = null, seed = 0xd809, refraction = "off", quality = "auto", light = null, budget = 0, backend = "three" } = {}) {
+  const calls = { clear: 0, draw: 0, rotate: 0, highlightStrokes: [], ...(recordDraws ? { frameDraws: [] } : {}), ...(recordAtlas ? { atlasStops: [], atlasBuilds: 0 } : {}) };
   const el = { id: "fx-droplets", hidden: true, width: 0, height: 0, getContext: () => ctx2d(calls), setAttribute() {} };
   const game = { parentNode: { insertBefore: (n) => { calls.inserted = n; } } };
   const document = {
     documentElement: viewport?.root,
-    body: { hasAttribute: () => helmet },
+    body: { hasAttribute: name => name === "data-helmet-cam" ? helmet : name === "data-visor-shed" ? budget >= 3 : false, getAttribute: name => name === "data-visor-budget" ? String(budget) : null },
     getElementById: (id) => (id === "fx-droplets" ? (staticEl ? el : null) : id === "game" ? game : null),
     createElement: () => {
       if (recordAtlas) { calls.atlasBuilds++; calls.atlasStops.length = 0; }
@@ -50,13 +50,14 @@ function makeDroplets({ mobile = false, preset = "high", staticEl = true, helmet
   const ctx = vm.createContext({
     Math: Object.assign(Object.create(Math), { random: () => rng.unit() }), Float32Array, Object,
     document, window: viewport?.win || { innerWidth: 844, innerHeight: 390, devicePixelRatio: 3 },
-    CockpitOpts: { visor: () => "clear", visorRain: () => rainAmount, visorRunoff: () => runoff, visorDropSize: () => dropSize, visorRefraction: () => "off", visorReflections: () => "light" },
+    CockpitOpts: { visor: () => "clear", visorRain: () => rainAmount, visorRunoff: () => runoff, visorDropSize: () => dropSize, visorRefraction: () => refraction, visorQuality: () => quality, visorReflections: () => "light" },
+    VisorOptics: { tick() {}, clear() {}, lightField: () => light }, RendererPicker: { liveBackend: () => backend },
     GLX: { isMobile: mobile }, GfxQuality: { current: () => preset },
   });
   seedLog(ctx);
   vm.runInContext(read("js/render/shared/canvas-css-size.js"), ctx, { filename: absSrc("js/render/shared/canvas-css-size.js") });
   const D = vm.runInContext(read("js/fx/droplets.js") + ";Droplets", ctx, { filename: absSrc("js/fx/droplets.js") });
-  return { D, el, calls, setHelmet: v => { helmet = v; }, setDropSize: v => { dropSize = v; } };
+  return { D, el, calls, setHelmet: v => { helmet = v; }, setDropSize: v => { dropSize = v; }, setRefraction: v => { refraction = v; }, setQuality: v => { quality = v; }, setLight: v => { light = v; }, setBudget: v => { budget = v; } };
 }
 
 // 5 s of 60 Hz frames.
@@ -159,6 +160,30 @@ test("droplets: blown off at speed — fewer live drops at 80 m/s than parked", 
   run(b.D, 6, true, 1, false, 80, false);
   assert.ok(b.D.stats().n < a.D.stats().n, `fast ${b.D.stats().n} < parked ${a.D.stats().n}`);
   assert.ok(b.calls.rotate > 0, "moving drops are drawn as rotated streaks");
+});
+
+test("helmet rain: reducing motion trims collected water and repaints once, even paused", () => {
+  for (const mobile of [false, true]) for (const dt of [0, 1 / 60]) {
+    const { D, calls } = makeDroplets({ mobile, helmet: true, rainAmount: "heavy", runoff: "slow", recordDraws: true });
+    run(D, 3, true, 1, true, 0, false);
+    const full = mobile ? 40 : 90;
+    assert.equal(D.stats().n, full, "start with a populated normal-motion lens");
+    const first = D.stats().first, clears = calls.clear;
+    D.tick(dt, true, 1, true, 0, true);
+    assert.equal(D.stats().n, full / 2, "existing population obeys the reduced cap immediately");
+    assert.equal(D.stats().cap, full / 2, "telemetry reports the active cap");
+    assert.equal(calls.clear, clears + 1, "old full-population pixels are erased");
+    assert.ok(calls.frameDraws.length <= full / 2, "redraw contains only retained beads");
+    if (!dt) {
+      assert.deepEqual(D.stats().first, first, "paused trimming preserves the retained bead state");
+      D.tick(0, true, 1, true, 0, true);
+      assert.equal(calls.clear, clears + 1, "unchanged paused motion mode does not repaint");
+      D.tick(0, true, 1, true, 0, false);
+      assert.equal(D.stats().cap, full, "normal-motion cap is restored");
+      assert.equal(D.stats().n, full / 2, "restoring the cap does not spawn paused water");
+      assert.equal(calls.clear, clears + 2, "restoring motion repaints retained water once");
+    }
+  }
 });
 
 test("droplets: reduced motion — drops never move or streak", () => {
@@ -443,4 +468,71 @@ test("game.js wires the nearest-N gate, sprayStr/sprayRate and the Droplets tick
   assert.match(g, /Particles\.sprayAdmit\(_sdx \* _sdx \+ _sdz \* _sdz\)/);
   assert.match(g, /Particles\.sprayStr\(vStd\(c\.speed\), Storm\.sprayK\(raceWeather\), frame\.wetness\)/);
   assert.match(g, /Droplets\.tick\(paused \? 0 : dt, onboard && !photoMode, underCover \? 0 : frame\.rain \|\| 0, Storm\.is\(raceWeather\)/);
+});
+
+
+test("wet refraction follows the same production bead field, leaves clean glass neutral and reuses storage", () => {
+  const arm = makeDroplets({ helmet: true, mobile: true, refraction: "strong" });
+  arm.D.tick(0.06, true, 1, false, 0, false);
+  const drop = arm.D.stats().first, field = arm.D.waterLens();
+  assert.ok(field && field.data.length === 128 * 128 * 4);
+  const marked = [];
+  for (let p = 0; p < field.data.length; p += 4) {
+    if (field.data[p + 3]) marked.push([p / 4 % field.size, Math.floor(p / 4 / field.size)]);
+    else assert.deepEqual([field.data[p], field.data[p + 1]], [128, 128], "uncovered pixels have exact neutral channels");
+  }
+  assert.ok(marked.length > 0 && marked.length < field.size * field.size / 20, "displacement is localized to the actual drop");
+  const center = marked.reduce((a, p) => [a[0] + p[0] / marked.length, a[1] + p[1] / marked.length], [0, 0]);
+  assert.ok(Math.abs(center[0] / field.size - drop.x) < 0.03 && Math.abs(center[1] / field.size - drop.y) < 0.03);
+  const data = field.data, revision = field.revision, state = arm.D.stats();
+  arm.D.tick(0, true, 0, false, 0, false);
+  assert.equal(arm.D.waterLens().revision, revision, "pause never uploads another unchanged field");
+  arm.setRefraction("light"); arm.D.tick(0, true, 0, false, 0, false);
+  assert.equal(arm.D.waterLens().data, data);
+  assert.deepEqual(arm.D.stats(), state, "editing refraction does not reset or move collected water");
+  arm.setQuality("low"); arm.D.tick(0, true, 0, false, 0, false);
+  assert.equal(arm.D.waterLens(), null); assert.ok(arm.D.stats().n > 0, "visor low quality keeps the existing surface water");
+  arm.setQuality("auto"); arm.D.tick(0, true, 0, false, 0, false);
+  assert.ok(arm.D.waterLens());
+  arm.setBudget(2); arm.D.tick(0, true, 0, false, 0, false); assert.equal(arm.D.waterLens(), null);
+  arm.setBudget(0); arm.D.tick(0, true, 0, false, 0, false); assert.ok(arm.D.waterLens());
+  arm.D.tick(0, false, 0, false, 0, false); assert.equal(arm.D.waterLens(), null);
+});
+
+test("wet displacement updates at a bounded cadence while droplets continue their existing simulation", () => {
+  const arm = makeDroplets({ helmet: true, refraction: "medium", mobile: true });
+  arm.D.tick(0.06, true, 1, false, 0, false);
+  const first = arm.D.stats().first, before = arm.D.waterLens().revision;
+  run(arm.D, 1, true, 1, false, 0, false);
+  assert.equal(arm.D.waterLens().revision - before, 30);
+  assert.ok(arm.D.stats().first.hitAge > first.hitAge);
+  arm.setRefraction("off"); arm.D.tick(0, true, 0, false, 0, false);
+  assert.equal(arm.D.waterLens(), null);
+});
+
+test("helmet bead highlights respond to visible scene light and go dark without it", () => {
+  const dark = { active: true, count: 0, ambient: [0, 0, 0], ambientStrength: 0, sources: [], revision: 1 };
+  const arm = makeDroplets({ helmet: true, light: dark });
+  arm.D.tick(0.06, true, 1, false, 0, false);
+  arm.calls.highlightStrokes.length = 0;
+  arm.D.tick(0.05, true, 0, false, 0, false);
+  assert.equal(arm.calls.highlightStrokes.length, 0, "no fixed self-lit crescent is drawn in a dark light field");
+  const state = arm.D.stats();
+  arm.setLight({ ...dark, revision: 2, count: 1, sources: [{ x: 0.5, y: 0, k: 1, rgb: [1, 0.1, 0] }] });
+  arm.D.tick(0, true, 0, false, 0, false);
+  assert.ok(arm.calls.highlightStrokes.some(s => s.color === "rgb(255,26,0)" && s.alpha > 0));
+  assert.deepEqual(arm.D.stats(), state, "a paused lighting change repaints the same beads");
+  arm.calls.highlightStrokes.length = 0;
+  arm.setLight({ ...dark, revision: 3 }); arm.D.tick(0, true, 0, false, 0, false);
+  assert.equal(arm.calls.highlightStrokes.length, 0, "a newly blocked light leaves no stale highlight");
+});
+
+
+test("non-Three renderers keep surface water without generating an unused displacement texture", () => {
+  for (const backend of ["webgl2", "webgpu"]) {
+    const arm = makeDroplets({ helmet: true, refraction: "strong", backend });
+    run(arm.D, 1, true, 1, false, 0, false);
+    assert.equal(arm.D.waterLens(), null);
+    assert.ok(arm.D.stats().n > 0 && arm.calls.draw > 0);
+  }
 });

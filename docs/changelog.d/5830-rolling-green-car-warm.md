@@ -1,1 +1,0 @@
-Fixed: joining a real race mid-session (a rolling green with no start lights) no longer stalls mid-lap when a rival from the back of the grid first comes into shadow range: its car pieces now finish building in the first frames after green (#5830).
