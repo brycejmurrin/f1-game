@@ -73,6 +73,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { api as githubApi } from "./github-api.mjs";
+import { measure, optionalWorkAdmission } from "./queue-depth.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { OWNER, byOwner, describeActor, isDecisionComment, newestLabelEvent, ownerSet } from "./lib/provenance.mjs";
 import { PLATFORM_STEP, platformStepFailed } from "./lib/deploy-tip.mjs";
@@ -640,11 +641,22 @@ export async function applyPlan(plan, { api = githubApi, config, log = console.l
     if (mine) post(`issues/comments/${mine.id}`, { body: plan.board }, "PATCH"); else post(`issues/${plan.boardIssue}/comments`, { body: plan.board });
     writes++;
   } else log(`= board: no open Board issue (#${config.boardIssue || "?"}) — the Board comment was not written`);
+  // Measure once, just before the first eligible optional fire. Bookkeeping
+  // and deploy-red recovery still run while Linux is busy.
+  const canFire = fire && env.WORKER_FIRE_URL && env.WORKER_FIRE_TOKEN;
+  let admission;
   // The claim comment is posted ONLY after the fire returned 200: a refused fire leaves no claim; a 200 without a session
   // id started a worker all the same, so it is claimed (no session named) and counted, but not adopted.
   for (const l of plan.launches) {
     const why = launchRecheck(l, { api, now });
     if (why) { log(`= launch skipped for ${l.kind} #${l.number}: ${why}`); continue; }
+    if (canFire && l.kind !== "deploy-red") {
+      if (!admission) {
+        admission = optionalWorkAdmission(measure({ request: api }));
+        log(`= optional workers ${admission.proceed ? "admitted" : "deferred"} — ${admission.message}`);
+      }
+      if (!admission.proceed) continue;
+    }
     log(`LAUNCH ${l.address}  (${l.title})`);
     if (!fire) { log("= fire skipped: --fire not given"); continue; }
     const r = await fireWorker(l.address, { env, fetchImpl });

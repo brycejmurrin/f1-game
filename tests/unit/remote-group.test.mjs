@@ -245,6 +245,21 @@ test("groupVerdict: a red shard is a red even when the run is still going; cance
   assert.equal(groupVerdict({ status: "completed", conclusion: "success" }, [plan, job("ui (1/4)", "completed", "success")]).code, 0);
 });
 
+test("optional queue admission runs before shared shards and a refused run cannot pass", () => {
+  const workflow = YAML.parse(YML);
+  const admission = workflow.jobs.queue;
+  assert.equal(workflow.jobs.group.needs, "queue");
+  assert.match(workflow.jobs.group.if, /needs.queue.result == 'success'/);
+  assert.equal(admission.permissions.actions, "read");
+  assert.equal(admission.steps[0].with["persist-credentials"], false);
+  assert.equal(admission.steps[1].run, "node tools/ci/queue-depth.mjs --admit-optional");
+  const jobs = [{ name: admission.name, status: "completed", conclusion: "failure" },
+    { name: "ui (1/4)", status: "completed", conclusion: "skipped" }];
+  const verdict = groupVerdict({ status: "completed", conclusion: "failure" }, jobs);
+  assert.equal(verdict.code, 1);
+  assert.equal(verdict.line, "queue admission failed before any shard ran");
+});
+
 test("--ref still refreshes origin/<branch>: the sha, the green lookup and the workflow check read it", () => {
   // A stale local origin/<branch> names a tip that has newer, untested commits; with --ref the fetch used to be skipped.
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "rg-fetch-"));
