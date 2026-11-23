@@ -666,6 +666,7 @@ test("Learn opens a named modal from the title and unloads Aero Lab on dismissal
   const frame = dom.byId("learn-lab");
   frame.contentWindow = {};
   assert.equal(wired, dialog);
+  assert.equal(dialog.parentNode, dom.document.body);
   assert.equal(dialog.tagName, "DIALOG");
   assert.equal(dialog.hidden, false);
   assert.equal(dom.byId(dialog.getAttribute("aria-labelledby")).textContent, "LEARN");
