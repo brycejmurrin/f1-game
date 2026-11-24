@@ -166,7 +166,7 @@ test('alternate init records a context already claimed before timeout', () => {
 
 test('GLX particle buffers retain independent stream payloads and refresh cross-stream epochs', () => {
   let uploads = 0; const c = ctx({
-    ctxGone:()=>false, particleProg:{}, particleU:{}, frameEye:[0,0,0], frameViewProj:[], frameSunColor:null, frameAmbSky:[], frameAmbGround:[],
+    ctxGone:()=>false, particleProg:{}, particleU:{}, frameEye:[0,0,0], frameViewProj:[], frameSunColor:null, frameDecalSun:null, frameAmbSky:[], frameAmbGround:[],
     _particleFog:{color:[],density:0}, _partEpochs:new WeakMap(), _partEpoch:0, _partResident:[], particleVAO:[{},{}],particleVBO:[{},{}],particleCap:[0,0],
     useProg(){},bindVAO(){},setBlend(){},setDepthMask(){},setCull(){},setAlphaWrite(){},
     gl:{uniformMatrix4fv(){},uniform3fv(){},uniform1f(){},bindBuffer(){},bufferData(){},bufferSubData(){uploads++;},blendFunc(){},drawArrays(){}},
