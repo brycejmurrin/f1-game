@@ -3,6 +3,7 @@ const SettingsSearch = (function () {
   "use strict";
   const CATALOG = Object.freeze([
     ["steering", "Steering input", "controls", "pm-steer-sel", "tilt touch buttons keyboard wheel"],
+    ["steering-return", "Steering return rate", "advanced", "pm-steerreturn", "digital steering keyboard d-pad arrow recenter centre center release speed unwind"],
     ["gears", "Manual gears", "driving", "pm-gears-sel", "shift automatic transmission"],
     ["aero", "Active aero", "driving", "pm-aero-sel", "wing manual automatic drs"],
     ["keys", "Keyboard bindings", "controls", "pm-keys", "rebind keys controls"],

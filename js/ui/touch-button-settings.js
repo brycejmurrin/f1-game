@@ -30,10 +30,21 @@ const TouchButtonSettings = (() => {
     const idle = choice("idleColor", "IDLE BORDER COLOR", palette);
     const pressed = choice("pressedColor", "PRESSED COLOR", palette);
     const activation = choice("activation", "ACTIVATION", [["default", "DEFAULT"], ["tap", "TAP ON RELEASE"], ["quick", "QUICK TAP"], ["hold", "HOLD AND RELEASE"], ["long", "LONG HOLD AND RELEASE"], ["double", "DOUBLE TAP"]]);
-    const gestureHint = "Quick Tap requires a lift within 0.18 seconds. Hold requires 0.45 seconds, Long Hold requires 0.9 seconds, and Double Tap requires two taps within 0.35 seconds. Default keeps the original gesture for this action.";
-    const gestureHelp = node("p", gestureHint);
+    const gestureHints = {
+      tap: "Lift to activate.",
+      quick: "Lift within the selected time to activate.",
+      hold: "Hold for at least the selected time, then lift to activate.",
+      long: "Hold for at least the selected time, then lift to activate.",
+      double: "Lift twice within the selected time. Each tap must also be shorter than this window.",
+    };
+    const gestureRow = node("label"), gestureLabel = node("span"), gestureAmount = node("b"), gestureTime = node("input");
+    gestureRow.className = "tune-row"; gestureLabel.className = "tune-label";
+    gestureTime.type = "range"; gestureTime.step = "10"; gestureTime.id = host.id + "-gesture-time";
+    gestureRow.append(gestureLabel, gestureTime); host.appendChild(gestureRow);
+    const gestureHelp = node("p");
     gestureHelp.className = "adv-help"; gestureHelp.id = host.id + "-activation-help";
-    activation.setAttribute("aria-describedby", gestureHelp.id); host.appendChild(gestureHelp);
+    activation.setAttribute("aria-describedby", gestureHelp.id);
+    gestureTime.setAttribute("aria-describedby", gestureHelp.id); host.appendChild(gestureHelp);
     const response = node("div"); host.appendChild(response); section = response;
     const slider = choice("sliderEdge", "PEDAL MAPPING", [["relative", "RELATIVE SLIDE"],
       ...["top", "bottom", "left", "right"].map(k => [k, "ABSOLUTE · FULL AT " + k.toUpperCase()])]);
@@ -93,6 +104,11 @@ const TouchButtonSettings = (() => {
     host.append(reset, note);
     button.value = ids[0];
 
+    function paintGestureTime() {
+      const label = Number(gestureTime.value) / 1000 + " s";
+      gestureAmount.textContent = label;
+      gestureTime.setAttribute("aria-valuetext", label);
+    }
     function distance(px) {
       amount.textContent = px + " px";
       travel.setAttribute("aria-valuetext", px + " pixels");
@@ -122,9 +138,18 @@ const TouchButtonSettings = (() => {
         "Relative Slide uses your first touch and slide distance. Absolute reads your position across the whole pedal.";
       idle.value = profile.idleColor || "default"; pressed.value = profile.pressedColor || "default";
       activation.value = profile.activation || "default";
-      gestureHelp.textContent = gestureHint + (id === "camera" && !standalone
-        ? " Keep holding for the view grid: 0.9 seconds with Hold, 1.35 seconds with Long Hold, or 0.34 seconds otherwise." : "");
+      const timing = profile.gestureTiming;
       activation.parentElement.parentElement.hidden = gestureHelp.hidden = analog || id === "look";
+      gestureRow.hidden = gestureTime.disabled = gestureHelp.hidden || !timing;
+      if (timing) {
+        gestureLabel.textContent = timing.label; gestureLabel.appendChild(gestureAmount);
+        gestureTime.setAttribute("aria-label", timing.label);
+        gestureTime.min = String(timing.min); gestureTime.max = String(timing.max);
+        gestureTime.value = String(profile[timing.key] ?? timing.defaultMs);
+        paintGestureTime();
+      }
+      gestureHelp.textContent = (gestureHints[profile.activation] || "Default keeps the original gesture for this action.") +
+        (id === "camera" && !standalone ? " A longer hold opens the view grid." : "");
       press.value = profile.press; travel.value = String(profile.travel); distance(profile.travel);
       slide.parentElement.parentElement.hidden = slideHelp.hidden = !pedal || !!profile.sliderEdge;
       feedbackHelp.textContent = id === "gas" ? "Gas brightens with throttle input. A tread mark warns of wheelspin." : id === "brake" ? "Brake brightens with braking input. Double bars warn of lock-up." : "The arrow brightens as its steering input increases.";
@@ -166,6 +191,11 @@ const TouchButtonSettings = (() => {
       note.textContent = ""; refresh();
     }
     button.onchange = () => { note.textContent = ""; refresh(); };
+    gestureTime.oninput = paintGestureTime;
+    gestureTime.onchange = () => {
+      const timing = PedalTravel.buttonProfile(button.value).gestureTiming;
+      if (timing) change({ [timing.key]: Number(gestureTime.value) });
+    };
     for (const control of [idle, pressed, activation]) control.onchange = () => change({ [control.dataset.field]: control.value });
     slider.onchange = () => change({ sliderEdge: slider.value });
     sliderEntry.onchange = () => change({ sliderEntry: sliderEntry.value });
