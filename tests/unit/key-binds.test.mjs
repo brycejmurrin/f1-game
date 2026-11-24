@@ -70,6 +70,32 @@ test("inputState gate distinguishes title navigation, menus, typing and HUD focu
   assert.equal(s.key.throttle, true);
 });
 
+test("camera sticks and triggers move the camera without leaking held controls into driving", () => {
+  const { Input, sb, fire, anyOpen } = boot();
+  const { pad, press, release } = fakePad(sb, fire);
+  sb.UiLayers.top = () => anyOpen.on ? { id: "photo-studio" } : null;
+  const motion = [];
+  const camera = {
+    isActive: () => anyOpen.on,
+    setPadInput(...axes) { motion.push(axes); },
+    setRemoteCameraInput() {},
+  };
+  Input.bindPhotoCamera(camera);
+  anyOpen.on = true;
+  pad.axes = [1, -1, 1, -1];
+  press(7);
+  Input.poll();
+  assert.deepEqual(motion.at(-1), [1, -1, 1, -1, 1]);
+  assert.equal(Input.throttle(), false);
+  anyOpen.on = false;
+  Input.poll();
+  assert.equal(Input.throttle(), false, "the held camera trigger cannot immediately become gas");
+  assert.equal(Input.steer(), 0);
+  pad.axes.fill(0); release(7); Input.poll();
+  press(7); Input.poll();
+  assert.equal(Input.throttle(), true, "a fresh trigger press can drive after returning to rest");
+});
+
 test("the defaults are the keys the game always had", () => {
   const { Input } = boot();
   const map = Object.fromEntries(Input.keyBindings().map((a) => [a.id, a.codes]));

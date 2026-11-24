@@ -55,10 +55,24 @@ function releasePhotoPointers() {
   for (const release of pointerReleases) release();
 }
 const altitudeHeld = { up: false, down: false };
+const padInput = { moveX: 0, moveY: 0, lookX: 0, lookY: 0, vertical: 0 };
+const remoteInput = { ...padInput };
 let lightingOpener = null;
 // Physical aliases own their holds independently: releasing Space cannot
 // cancel a still-held R, nor can one Shift release cancel the other.
 const aliasHeld = { KeyR: false, Space: false, ShiftLeft: false, ShiftRight: false };
+function signedAxis(value) { return Math.max(-1, Math.min(1, Number.isFinite(value) ? value : 0)); }
+function writeCameraInput(input, moveX, moveY, lookX, lookY, vertical) {
+  input.moveX = signedAxis(moveX); input.moveY = signedAxis(moveY);
+  input.lookX = signedAxis(lookX); input.lookY = signedAxis(lookY);
+  input.vertical = signedAxis(vertical);
+}
+function setPadInput(moveX, moveY, lookX, lookY, vertical) {
+  if (G.photoMode) writeCameraInput(padInput, moveX, moveY, lookX, lookY, vertical);
+}
+function setRemoteCameraInput(moveX, moveY, lookX, lookY, vertical) {
+  if (G.photoMode) writeCameraInput(remoteInput, moveX, moveY, lookX, lookY, vertical);
+}
 function releasePhotoKeys() {
   for (const code in aliasHeld) aliasHeld[code] = false;
   for (const k in photoKeys) photoKeys[k] = false;
@@ -68,6 +82,8 @@ function releasePhotoInput() {
   releasePhotoPointers();
   altitudeHeld.up = altitudeHeld.down = false;
   releasePhotoKeys();
+  writeCameraInput(padInput);
+  writeCameraInput(remoteInput);
   photoMove.x = photoMove.y = photoLook.x = photoLook.y = 0;
   photoMouse.dx = photoMouse.dy = 0; photoMouse.drag = false; photoMouse.pid = null;
   G.photoAlt = 0; G.photoVertT = 0;
@@ -79,8 +95,8 @@ function updatePhotoCam(dt) {
     : (photoKeys.boost ? 95 : 34);                // m/s (Shift = boost)
   const lookRate = 1.7;                           // rad/s for key/stick look
   // Look: arrow keys + touch look stick + mouse drag delta.
-  const yawIn = (photoKeys.yr ? 1 : 0) - (photoKeys.yl ? 1 : 0) + photoLook.x;
-  const pitchIn = (photoKeys.pu ? 1 : 0) - (photoKeys.pd ? 1 : 0) - photoLook.y;
+  const yawIn = signedAxis((photoKeys.yr ? 1 : 0) - (photoKeys.yl ? 1 : 0) + photoLook.x + padInput.lookX + remoteInput.lookX);
+  const pitchIn = signedAxis((photoKeys.pu ? 1 : 0) - (photoKeys.pd ? 1 : 0) - photoLook.y - padInput.lookY - remoteInput.lookY);
   photoCam.yaw   += yawIn * lookRate * dt + photoMouse.dx * 0.0032;
   photoCam.pitch += pitchIn * lookRate * dt - photoMouse.dy * 0.0032;
   photoMouse.dx = 0; photoMouse.dy = 0;
@@ -88,9 +104,9 @@ function updatePhotoCam(dt) {
   const cp = Math.cos(photoCam.pitch), sp = Math.sin(photoCam.pitch);
   const fwd = [Math.sin(photoCam.yaw) * cp, sp, -Math.cos(photoCam.yaw) * cp];
   const rgt = [Math.cos(photoCam.yaw), 0, Math.sin(photoCam.yaw)];
-  const mf = (photoKeys.w ? 1 : 0) - (photoKeys.s ? 1 : 0) - photoMove.y;
-  const ms = (photoKeys.d ? 1 : 0) - (photoKeys.a ? 1 : 0) + photoMove.x;
-  const mvIn = (photoKeys.up ? 1 : 0) - (photoKeys.dn ? 1 : 0) + G.photoAlt;
+  const mf = signedAxis((photoKeys.w ? 1 : 0) - (photoKeys.s ? 1 : 0) - photoMove.y - padInput.moveY - remoteInput.moveY);
+  const ms = signedAxis((photoKeys.d ? 1 : 0) - (photoKeys.a ? 1 : 0) + photoMove.x + padInput.moveX + remoteInput.moveX);
+  const mvIn = signedAxis((photoKeys.up ? 1 : 0) - (photoKeys.dn ? 1 : 0) + G.photoAlt + padInput.vertical + remoteInput.vertical);
   G.photoVertT = mvIn ? G.photoVertT + dt : 0;
   const vRamp = Math.min(1, 0.12 + 0.88 * Math.pow(Math.min(G.photoVertT / 2.2, 1), 1.6));
   const mv = mvIn * vRamp;
@@ -380,7 +396,10 @@ $("pc-fov").oninput = (e) => {
   photoCam.fov = (typeof v === "number" && isFinite(v)) ? Math.max(20, Math.min(110, v)) : 60;
 };
 
-return { updatePhotoCam, enterPhotoMode, exitPhotoMode, freeCam };
+const camera = { updatePhotoCam, enterPhotoMode, exitPhotoMode, setPadInput, setRemoteCameraInput, freeCam,
+  isActive: () => G.photoMode };
+if (typeof Input !== "undefined") Input.bindPhotoCamera?.(camera);
+return camera;
 }
 
 return { create, focusScene, sceneOwnsFocus };

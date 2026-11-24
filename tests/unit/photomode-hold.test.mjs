@@ -365,3 +365,23 @@ test("Modified shortcuts keep their browser defaults and reset held camera keys"
   assert.ok(!G.photoKeys.s);
   assert.ok(!G.photoKeys.a);
 });
+
+test("Physical and paired camera samples are bounded, independent and cleared on exit", () => {
+  const { G, api } = boot();
+  api.setPadInput(1, -1, 1, -1, 1);
+  api.enterPhotoMode();
+  api.updatePhotoCam(.1);
+  assert.deepEqual(G.photoCam.pos, [0, 0, 0]);
+  api.setPadInput(2, -2, 0, 0, NaN);
+  api.updatePhotoCam(.1);
+  assert.ok(Math.abs(G.photoCam.pos[0] - 3.4) < 1e-8);
+  assert.ok(Math.abs(G.photoCam.pos[2] + 3.4) < 1e-8);
+  api.setRemoteCameraInput(0, 0, 1, -1, 1);
+  api.setPadInput(0, 0, 0, 0, 0);
+  api.updatePhotoCam(.1);
+  assert.ok(G.photoCam.yaw > 0 && G.photoCam.pitch > 0 && G.photoCam.pos[1] > 0);
+  api.exitPhotoMode(); api.enterPhotoMode();
+  api.updatePhotoCam(.1);
+  assert.deepEqual(G.photoCam.pos, [0, 0, 0]);
+  assert.equal(G.photoCam.yaw, 0);
+});

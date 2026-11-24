@@ -77,6 +77,8 @@ export const KNOWN = {
   "aero-none": "controller.html <style> (body.aero-none #b-aero) — the phone page, not css/",
   // …and the MENU PAD screen it swaps in out of a race (body.linked.menu #menupad).
   "menu": "controller.html <style> (body.linked.menu #menupad) — the phone page, not css/",
+  "camera-pad": "controller.html <style> (body.camera-pad shows the phone's free-camera controls)",
+  "camera-panel": "controller.html <style> (body.camera-panel shows menu navigation alongside the return control)",
   // Audio sheet. Both wrap rows that style themselves; every sibling group on
   // the sheet stacks with the same zero margins, so nothing is missing.
   "as-sub": "wrapper for #as-voices / #as-ann-voice; .set-row / .tune-row / .as-note style themselves",

@@ -152,6 +152,26 @@ test("D-pad Left/Right on a focused <select> wraps past disabled options and fir
   assert.deepEqual(events, ["input", "change"]);
 });
 
+test("camera mode reserves sticks and triggers, leaving D-pad, shoulders and confirm for the panel", () => {
+  const h = menuRig();
+  const moves = [];
+  h.sb.document.activeElement.dispatchEvent = (event) => { moves.push(event.key); };
+  const buttons = new Set([6, 7]);
+  const menu = vm.runInContext("InputPadMenu", h.sb).create({
+    btnDown: (_pad, index) => buttons.has(index),
+    btnEdge: (_pad, index) => buttons.has(index),
+    nowMs: () => 0,
+    getPadAxisMap: () => ({ steer: 0, steerInvert: 1 }),
+  });
+  const pad = { mapping: "standard", axes: [1, 0, -1, 0] };
+  menu.poll(pad, { dpadOnly: true });
+  assert.deepEqual(moves, []);
+  buttons.add(13); buttons.add(5); buttons.add(0);
+  menu.poll(pad, { dpadOnly: true });
+  assert.deepEqual(moves, ["ArrowDown", "ArrowRight"]);
+  assert.equal(h.clicks, 1);
+});
+
 test("D-pad and bumper arrows reach the focused SettingRow", () => {
   const { Input, sb, fire, navOpen } = boot();
   const { press, release } = fakePad(sb, fire);

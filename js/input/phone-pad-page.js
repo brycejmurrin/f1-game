@@ -28,6 +28,10 @@ const PhonePadPage = (function () {
   // Pure DOM writes on a mini-DOM-friendly surface (textContent, style,
   // classList), so tests/unit/phone-pad.test.mjs can drive it too.
   const CAUTION = ["", "YELLOW", "VSC", "SAFETY CAR", "RED FLAG"];
+  function controllerSurface(h) {
+    if (h.surface) return h.surface;
+    return (h.state === "race" || h.state === "count") && !(h.flags & DASH.paused) ? "drive" : "menu";
+  }
   function paintHud(el, h) {
     if (!el || !h) return;
     const text = (n, v) => { if (el[n] && el[n].textContent !== v) el[n].textContent = v; };
@@ -64,9 +68,9 @@ const PhonePadPage = (function () {
       el.body.classList.toggle("throttle-auto", !!(h.flags & DASH.throttleAuto));
       el.body.classList.toggle("aero-auto", !!(h.flags & DASH.aeroAuto));
       el.body.classList.toggle("aero-none", !!(h.flags & DASH.aeroNone));
-      // THE MENU PAD: out of a race, or paused inside one, the page swaps the
-      // wheel for a D-pad, SELECT and BACK (controller.html #menupad).
-      el.body.classList.toggle("menu", !inRace || !!(h.flags & DASH.paused));
+      const surface = controllerSurface(h);
+      el.body.classList.toggle("menu", surface !== "drive");
+      el.body.classList.toggle("camera-pad", surface === "camera");
     }
   }
 
@@ -104,13 +108,16 @@ const PhonePadPage = (function () {
     };
     // Sensor state — what padSession reads on every send.
     let roll = null, thr = 0, brk = 0, held = 0, steer = 0, steeringMode = "tilt";
+    let reconnectSteering = null, surface = null;
+    const camera = { moveX: 0, moveY: 0, lookX: 0, lookY: 0, lift: 0 };
     let session = null, glanceTimer = null;
     // This page's peer id, sent in every hello: the game lets a re-dial from the
     // phone it ALLOWed straight back in, and asks again for any other.
     const peerId = opts.peerId || PhonePadCodec.makePeerId();
     let sensorOn = false;
     let lastHud = null;
-    const src = { roll: () => roll, thr: () => thr, brk: () => brk, held: () => held | (glanceTimer !== null ? HELD.lookBack : 0), steer: () => steeringMode === "touch" ? steer : null };
+    const src = { roll: () => roll, thr: () => thr, brk: () => brk, held: () => held | (glanceTimer !== null ? HELD.lookBack : 0),
+      steer: () => steeringMode === "touch" ? steer : null, camera: () => surface === "camera" ? camera : null };
 
     // The rim turns with the phone: the wheel the player sees is the wheel
     // they are holding. Geared down and clamped — the controls on top stay
@@ -122,7 +129,7 @@ const PhonePadPage = (function () {
       dom.rim.style.transform = "rotate(" + r.toFixed(1) + "deg)";
     }
     function onOrient(e) {
-      if (steeringMode !== "tilt" || (typeof document !== "undefined" && document.hidden)) return;
+      if (steeringMode !== "tilt" || surface === "camera" || (typeof document !== "undefined" && document.hidden)) return;
       const r = TiltRoll.rollDeg(e.beta, e.gamma, TiltRoll.screenAngle());
       if (r === null) return;
       roll = r;
@@ -322,10 +329,14 @@ const PhonePadPage = (function () {
       if (mode !== "tilt" && mode !== "touch") return false;
       if (mode === "touch" && (!session || !session.health().touchSupported)) { say("Touch steering needs an updated game. Reload the game and reconnect.", true); return false; }
       if (mode !== steeringMode) { roll = null; paintRoll(); }
-      steeringMode = mode; steer = 0; push();
+      applySteeringMode(mode);
+      push();
+      return true;
+    }
+    function applySteeringMode(mode) {
+      steeringMode = mode; steer = 0;
       if (dom.steeringMode) dom.steeringMode.value = mode;
       if (dom.steer) dom.steer.hidden = mode !== "touch";
-      return true;
     }
     if (dom.steeringMode) dom.steeringMode.addEventListener("change", () => { if (!setSteeringMode(dom.steeringMode.value)) dom.steeringMode.value = steeringMode; });
     if (dom.steer) {
@@ -624,6 +635,86 @@ const PhonePadPage = (function () {
     }
     menuStick(dom.stick, dom.nub, dom.arrows);
 
+    function cameraStick(base, nub, x, y) {
+      if (!base) return;
+      let pointer = null, bounds = null;
+      const keys = new Set();
+      function set(dx, dy, immediate) {
+        const scale = Math.max(1, Math.hypot(dx, dy));
+        camera[x] = dx / scale; camera[y] = dy / scale;
+        if (nub?.style) nub.style.translate = (camera[x] * 60) + "% " + (camera[y] * 60) + "%";
+        push(immediate);
+      }
+      function aim(e, immediate) {
+        set((e.clientX - bounds.left) * 2 / bounds.width - 1, (e.clientY - bounds.top) * 2 / bounds.height - 1, immediate);
+      }
+      function release(e) {
+        if (e && e.pointerId !== pointer) return;
+        pointer = bounds = null;
+        keys.clear();
+        if (camera[x] || camera[y]) set(0, 0, true);
+      }
+      base.addEventListener("pointerdown", e => {
+        if (pointer !== null || (e.pointerType === "mouse" && e.button !== 0)) return;
+        bounds = base.getBoundingClientRect();
+        if (!bounds.width || !bounds.height) return;
+        pointer = e.pointerId; rememberPointer(e);
+        try { base.setPointerCapture(pointer); } catch (_) { /* document release also handles the lift */ }
+        aim(e, true);
+        e.preventDefault();
+      });
+      base.addEventListener("pointermove", e => { if (e.pointerId === pointer) aim(e, false); });
+      base.addEventListener("lostpointercapture", e => { if (!base.getClientRects().length) release(e); });
+      releases.push(release);
+      pointerReleases.push(release);
+      for (const type of ["keydown", "keyup"]) base.addEventListener(type, e => {
+        if (pointer !== null || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+        e.preventDefault();
+        if (keys.has(e.key) === (type === "keydown")) return;
+        if (type === "keydown") keys.add(e.key); else keys.delete(e.key);
+        set(Number(keys.has("ArrowRight")) - Number(keys.has("ArrowLeft")),
+          Number(keys.has("ArrowDown")) - Number(keys.has("ArrowUp")), true);
+      });
+      base.addEventListener("blur", () => release());
+      if (typeof window !== "undefined") window.addEventListener("resize", () => release());
+    }
+    const cameraPad = dom.cameraPad;
+    if (cameraPad) {
+      cameraStick(cameraPad.move, cameraPad.moveNub, "moveX", "moveY");
+      cameraStick(cameraPad.look, cameraPad.lookNub, "lookX", "lookY");
+      let up = 0, down = 0;
+      function lift() { camera.lift = up - down; push(); }
+      hold(cameraPad.up, () => { up = 1; lift(); }, () => { up = 0; lift(); });
+      hold(cameraPad.down, () => { down = 1; lift(); }, () => { down = 0; lift(); });
+      edge(cameraPad.back, "navBack", false);
+      function showPanel(show, e) {
+        releaseAll();
+        dom.body?.classList.toggle("camera-panel", show);
+        if (!e.detail) (show ? cameraPad.return : cameraPad.panel).focus?.();
+      }
+      cameraPad.panel.addEventListener("click", e => showPanel(true, e));
+      cameraPad.return.addEventListener("click", e => showPanel(false, e));
+    }
+    function paintController(h) {
+      const next = controllerSurface(h);
+      if (next !== surface) {
+        const active = typeof document !== "undefined" ? document.activeElement : null;
+        const wasInPad = active && (dom.surfaces?.[surface]?.contains(active) ||
+          (surface === "camera" && dom.surfaces?.menu?.contains(active)));
+        const changedFrom = surface;
+        surface = next;
+        closeUtilities();
+        if (changedFrom) releaseAll();
+        dom.body?.classList.remove("camera-panel");
+        push();
+        paintHud(dom.hud, h);
+        if (wasInPad) dom.surfaceFocus?.[next]?.focus?.();
+      } else {
+        paintHud(dom.hud, h);
+      }
+      lastHud = h;
+    }
+
     let wake = null, wakeRequest = null, wakeGeneration = 0;
     function releaseWake(lock) {
       if (!lock) return;
@@ -685,7 +776,9 @@ const PhonePadPage = (function () {
       if (old) old.cancelled = true;
       connecting = false;
       const active = session;
-      steeringMode = "tilt"; if (dom.steeringMode) dom.steeringMode.value = "tilt"; if (dom.steer) dom.steer.hidden = true;
+      reconnectSteering = null;
+      applySteeringMode("tilt");
+      surface = null;
       session = null;
       releaseAll();
       if (active) { steer = 0; thr = brk = held = 0; active.sample(true); active.close(); }
@@ -702,9 +795,10 @@ const PhonePadPage = (function () {
       // A suspended linked phone can already be waiting, backing off, or negotiating
       // its automatic reconnect when pagehide follows the wire close.
       const code = redial || (attempt?.opened || redialTimer || attempt?.isRedial ? liveCode : null);
+      const mode = reconnectSteering || steeringMode;
       if (session && session.sendSuspend) session.sendSuspend();
       cancel();
-      if (code && !deps.privateRelay()) { redial = code; say("Link paused — reconnecting when this page is back…", true); }
+      if (code && !deps.privateRelay()) { reconnectSteering = mode; redial = code; say("Link paused — reconnecting when this page is back…", true); }
     }
     if (typeof window !== "undefined" && window.addEventListener) {
       window.addEventListener("pagehide", pageHide);
@@ -830,8 +924,8 @@ const PhonePadPage = (function () {
           // its screen wants (paintHud: body.menu). So the wheel / menu pad appear on the
           // FIRST dash, already in the right mode; until then the page stays "awaiting".
           onHud: (h) => {
-            lastHud = h; paintHud(dom.hud, h);
-            if (utility && (!utility.panel.hidden || glanceTimer !== null) && (h.flags & DASH.paused || (h.state !== "race" && h.state !== "count"))) closeUtilities();
+            if (gen !== bindGen) return;
+            paintController(h);
             if (gen !== bindGen || surfaced) return;
             surfaced = true;
             if (dom.body) { dom.body.classList.remove("awaiting"); dom.body.classList.add("linked"); }
@@ -845,6 +939,12 @@ const PhonePadPage = (function () {
             if (dom.body && !surfaced) dom.body.classList.add("awaiting");
             if (opts.onOpen) opts.onOpen();
           },
+          onCapabilities: ({ touchSupported }) => {
+            if (gen !== bindGen || !reconnectSteering) return;
+            const mode = reconnectSteering;
+            reconnectSteering = null;
+            if (mode === "touch" && touchSupported) setSteeringMode("touch");
+          },
           onHealth: (h) => {
             const text = h.state === "unavailable" ? "INPUT AGE UNAVAILABLE · UPDATE GAME" : h.state === "waiting" ? "WAITING FOR INPUT ACK" : h.state === "reconnecting" ? "INPUT NOT ACKNOWLEDGED" : "INPUT " + h.state.toUpperCase();
             if (dom.health && dom.health.textContent !== text) dom.health.textContent = text;
@@ -854,7 +954,11 @@ const PhonePadPage = (function () {
           onClose: (why) => {
             if (attempt !== owner || gen !== bindGen) return;   // a cancel, or a session rebind() replaced
             bound = null; listen.stopped = true; clearConnectDeadline();
-            steer = 0; steeringMode = "tilt"; if (dom.steeringMode) dom.steeringMode.value = "tilt"; if (dom.health) { dom.health.textContent = "INPUT DISCONNECTED"; if (dom.health.dataset) dom.health.dataset.state = "disconnected"; } if (dom.steer) dom.steer.hidden = true;
+            const wire = !!why && why !== "peer", again = wire && !deps.privateRelay();
+            reconnectSteering = again ? reconnectSteering || steeringMode : null;
+            surface = null;
+            applySteeringMode("tilt");
+            if (dom.health) { dom.health.textContent = "INPUT DISCONNECTED"; if (dom.health.dataset) dom.health.dataset.state = "disconnected"; }
             attempt = null; owner.cancelled = true; connecting = false;
             session = null;
             dropWake(); releaseAll();
@@ -863,7 +967,6 @@ const PhonePadPage = (function () {
             // WHICH END DIED: "peer" is the game's own goodbye (UNPAIR, its tab
             // closed); any other reason is this end's wire (rtc failed/disconnected).
             // A private relay's one mailbox is not hosted again, so no re-dial there.
-            const wire = !!why && why !== "peer", again = wire && !deps.privateRelay();
             say(!wire ? "Disconnected — the game closed the link. Pair again from its Settings."
               : "Link lost — this phone slept, took a call or lost signal. " + (again ? "Reconnecting…" : "Pair again from the game's Settings."), true);
             if (opts.onClose) opts.onClose();
@@ -960,7 +1063,7 @@ const PhonePadPage = (function () {
       setSteeringMode, closeUtilities,
       // The test/console handle: what the page holds, and a way to paint a
       // dash without a link (controller.html?demo drives the LCD from it).
-      paintHud: (h) => { lastHud = h; paintHud(dom.hud, h); },
+      paintHud: paintController,
       armSensor: requestSensor,   // the demo turns the rim with a real phone's tilt, unlinked
       setRoll: (r) => { roll = r; paintRoll(); if (session) session.sample(); },   // stands in for the sensor
       pump: () => (session ? session.pump() : 0),   // the frame tick, for a harness with no rAF

@@ -88,7 +88,8 @@ const PhonePad = (function () {
     // A clock on every pump: the rtc transport ignores it, loopback (the test
     // wire) schedules by it, and an undefined `now` there delivers nothing.
     const now = opts.now || (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
-    let lastSeq = -1, ackAt = -1e9, peerAck = false, peerGrip = false, helloPending = false;
+    let lastSeq = -1, ackAt = -1e9, peerAck = false, peerGrip = false, peerCamera = false, helloPending = false;
+    const hostHello = encodeHello("host", false, true, undefined, true);
     let samples = 0, events = 0, stale = 0, junk = 0, huds = 0;
     let closed = false;
     let raf = 0;
@@ -131,7 +132,7 @@ const PhonePad = (function () {
       if (closed) return;
       if (channel === T.STATE) {
         const s = decodeSample(data);
-        if (!s) { junk++; return; }
+        if (!s || (s.camera && !peerCamera)) { junk++; return; }
         if (!admitted) { gated++; return; }
         // Unordered channel: an older sample after a newer one is thrown away,
         // never applied — it would steer the car back where the phone was.
@@ -145,8 +146,8 @@ const PhonePad = (function () {
       const ev = decodeEvent(data);
       if (!ev) { junk++; return; }
       if (ev.t === "hi" && ev.side === "pad" && ev.p === PROTO) {
-        peerAck = !!ev.ack; peerGrip = !!ev.grip;
-        helloPending = !transport.send(T.EVENT, encodeHello("host", false, true));
+        peerAck = !!ev.ack; peerGrip = !!ev.grip; peerCamera = !!ev.camera;
+        helloPending = !transport.send(T.EVENT, hostHello);
         hapticsOn = !!ev.haptics;
         if (admitted) applyHaptics();
         // The FIRST hello names the peer; a later one cannot rename it mid-link.
@@ -178,7 +179,7 @@ const PhonePad = (function () {
 
     const armed = () => {
       if (closed) return;
-      helloPending = !transport.send(T.EVENT, encodeHello("host", false, true));
+      helloPending = !transport.send(T.EVENT, hostHello);
       if (!peer.fp) peer.fp = remoteFingerprint(transport);
       if (opts.onOpen) { try { opts.onOpen(); } catch (e) { /* caller's problem */ } }
       decide();
@@ -192,14 +193,14 @@ const PhonePad = (function () {
       hudAt = t;
       let h = null;
       try { h = opts.hud(); } catch (e) { h = null; }
-      const text = encodeHud(h, peerGrip);
+      const text = encodeHud(h, peerGrip, peerCamera);
       if (text && transport.send(T.STATE, text)) huds++;
     }
     // Samples land in the transport's inbox and reach Input only on pump(): once
     // a frame, ahead of the game loop's own Input.poll(). The frame loop is not
     // this module's to edit (js/game.js is ratcheted), so an rAF of its own
     // does the pumping; a test pumps by hand with pump: false.
-    const pump = () => { const t = now(); const n = transport.pump(t); if (helloPending) helloPending = !transport.send(T.EVENT, encodeHello("host", false, true)); sendHud(t); return n; };
+    const pump = () => { const t = now(); const n = transport.pump(t); if (helloPending) helloPending = !transport.send(T.EVENT, hostHello); sendHud(t); return n; };
     if (opts.pump !== false && typeof requestAnimationFrame === "function") {
       const tick = () => { if (closed) return; pump(); raf = requestAnimationFrame(tick); };
       raf = requestAnimationFrame(tick);
@@ -535,7 +536,7 @@ const PhonePad = (function () {
     const T = NetTransport;
     const now = opts.now || (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
     let seq = 0, lastSent = -1e9, sent = 0, haptics = 0, huds = 0, closed = false;
-    let beat = 0, helloPending = false, peerSteer = false, peerAck = false, ackAt = -1, openedAt = now();
+    let beat = 0, helloPending = false, peerSteer = false, peerAck = false, peerCamera = false, ackAt = -1, openedAt = now();
     let dirty = false;   // a coalesced move awaiting the 15 ms gap
     const pending = [], sentTimes = new Map();
     const EDGE_MAX_AGE_MS = 1200, NAV_MAX_AGE_MS = 250, EDGE_CAP = 24;
@@ -543,7 +544,7 @@ const PhonePad = (function () {
     const canVibrate = () => typeof opts.vibrate === "function" || (typeof navigator !== "undefined" && typeof navigator.vibrate === "function" && navigator.maxTouchPoints > 0);
     function flush() {
       if (closed || transport.status !== "open") return;
-      if (helloPending) helloPending = !transport.send(T.EVENT, encodeHello("pad", canVibrate(), true, opts.peerId));
+      if (helloPending) helloPending = !transport.send(T.EVENT, encodeHello("pad", canVibrate(), true, opts.peerId, true));
       while (pending.length) {
         const edge = pending[0];
         if (now() - edge.at > (NAV_REPEAT[edge.k] ? NAV_MAX_AGE_MS : EDGE_MAX_AGE_MS)) { pending.shift(); expired++; continue; }
@@ -572,6 +573,7 @@ const PhonePad = (function () {
       const ok = transport.send(T.STATE, encodeSample({
         seq: seq++, roll: src.roll(), thr: src.thr(), brk: src.brk(), held: src.held(),
         ...(peerSteer && src.steer && src.steer() != null ? { steer: src.steer() } : {}),
+        camera: peerCamera ? src.camera?.() : null,
       }));
       if (ok) { sent++; sentTimes.set(seq - 1, t); while (sentTimes.size > 128) sentTimes.delete(sentTimes.keys().next().value); }
       return ok;
@@ -594,7 +596,10 @@ const PhonePad = (function () {
         return;
       }
       const ev = decodeEvent(data);
-      if (ev && ev.t === "hi" && ev.side === "host" && ev.p === PROTO) { peerSteer = !!ev.steer; peerAck = !!ev.ack; if (opts.onCapabilities) opts.onCapabilities({ touchSupported: peerSteer }); }
+      if (ev && ev.t === "hi" && ev.side === "host" && ev.p === PROTO) {
+        peerSteer = !!ev.steer; peerAck = !!ev.ack; peerCamera = !!ev.camera;
+        if (opts.onCapabilities) opts.onCapabilities({ touchSupported: peerSteer });
+      }
       if (ev && ev.t === "hap" && ev.ms > 0) { haptics++; vibrate(ev.ms); }
     });
     const close = (why) => {
