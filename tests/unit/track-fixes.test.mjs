@@ -288,14 +288,16 @@ test("heights and props ride through a remedy: SPACING and START keep every (x, 
   ds.props.forEach((p, i) => assert.ok(dist(at(ds.pts, p.s), at(rs.design.pts, rs.design.props[i].s)) <= 0.5, `start: prop ${i} stays put`));
 });
 
-test("FIX ALL clears the two START FROM templates it used to leave red: Silverstone (start) and Korea (fold) (clean-room 64-65)", () => {
-  const I = B.ctx.TrackInsight;
-  for (const id of ["silverstone", "korea"]) {
-    const def = B.Tracks.LIST.find((t) => t.id === id);
-    assert.ok(def, id + " is in the roster");
+test("FIX ALL leaves every START FROM template with no RED: Silverstone (start), Korea (fold) (clean-room 64-65), Buddh (spacing + fold, #6342)", () => {
+  const I = B.ctx.TrackInsight, needed = [];
+  for (const def of B.Tracks.LIST.filter((t) => !t.custom)) {
     const f = I.fromCircuit(def);
-    const r = F.fixAll({ name: def.name + " REMIX", seed: 7, theme: "parkland", baseHW: f.baseHW, pts: f.pts });
-    assert.ok(r.verdict, id + ": judged");
-    assert.equal(r.verdict.red, 0, id + " is green after FIX ALL: " + codes(r.verdict) + " via " + r.msgs.join(" | "));
+    const d = { name: def.name + " REMIX", seed: 7, theme: "parkland", baseHW: f.baseHW, pts: f.pts };
+    if (!(V.check(d).red > 0)) continue;
+    needed.push(def.id);
+    const r = F.fixAll(d, V.check);
+    assert.ok(r.verdict, def.id + ": judged");
+    assert.equal(r.verdict.red, 0, def.id + " is green after FIX ALL: " + codes(r.verdict) + " via " + r.msgs.join(" | "));
   }
+  for (const id of ["silverstone", "korea", "buddh"]) assert.ok(needed.includes(id), id + " still starts red (the regression it guards)");
 });
