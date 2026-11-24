@@ -13,6 +13,25 @@ const InputPadMenu = (function () {
     const PAD_NAV_DELAY_MS = 450;   // delay before the first repeat
     const PAD_NAV_REPEAT_MS = 130;  // interval between repeats while held
     const PAD_NAV_KEYS = { up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight" };
+    let focusRoot = null;
+
+    // Synthetic arrows move DOM focus, but Safari can keep touch modality
+    // and suppress :focus-visible. Arm the existing pad ring on actual input.
+    function showGamepadFocus() {
+      if (focusRoot || !document.documentElement || !window.MenuNav?.activeLayer()) return;
+      focusRoot = document.documentElement;
+      focusRoot.dataset.gamepadNav = "on";
+      document.addEventListener("pointerdown", clearGamepadFocus, true);
+      window.addEventListener("keydown", clearGamepadFocus, true);
+    }
+
+    function clearGamepadFocus(event) {
+      if (!focusRoot || event?.isTrusted === false) return;
+      delete focusRoot.dataset.gamepadNav;
+      focusRoot = null;
+      document.removeEventListener("pointerdown", clearGamepadFocus, true);
+      window.removeEventListener("keydown", clearGamepadFocus, true);
+    }
 
     // Dispatch a synthetic keydown at `document` (not `window`) — measured: an
     // event dispatched at `window` only reaches WINDOW's own listeners, never
@@ -21,7 +40,7 @@ const InputPadMenu = (function () {
     // listens on `document` (capture). Dispatching at `document` reaches both,
     // in the same order a real keypress would (window-capture, document-capture,
     // …, document-bubble, window-bubble).
-    function padDispatchKey(key) {
+    function padDispatchKey(key, physical = false) {
       // TARGET THE FOCUSED ELEMENT, the way a real key press does. An element's
       // OWN onkeydown is not in the path of an event dispatched at `document` —
       // the event's target IS document, so it never descends to the control —
@@ -33,6 +52,7 @@ const InputPadMenu = (function () {
       // garage's TEAM tab while a real ArrowDown walked all fifteen). Bubbling from the control still reaches document
       // (TopModal's Escape) and window (MenuNav's capture listener), which is
       // what the dispatch-at-document note below the fallback was protecting.
+      if (physical) showGamepadFocus();
       const el = document.activeElement;
       const target = el && el !== document.body && el.dispatchEvent ? el : document;
       target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
@@ -249,13 +269,12 @@ const InputPadMenu = (function () {
       }
       if (dir) {
         const now = nowMs();
-        if (dir !== padNavDir) {
+        const fresh = dir !== padNavDir;
+        if (fresh || now >= padNavNextT) {
           padNavDir = dir;
+          showGamepadFocus();
           padNavKey(dir);
-          padNavNextT = now + PAD_NAV_DELAY_MS;
-        } else if (now >= padNavNextT) {
-          padNavKey(dir);
-          padNavNextT = now + PAD_NAV_REPEAT_MS;
+          padNavNextT = now + (fresh ? PAD_NAV_DELAY_MS : PAD_NAV_REPEAT_MS);
         }
       } else {
         padNavDir = null;   // released the instant input returns to neutral
@@ -263,13 +282,13 @@ const InputPadMenu = (function () {
       if (pad.mapping == null || pad.mapping === "standard") {
         // Triggers page long panes; LB/RB step left/right. A wheel's mapping ""
         // puts paddles/pedals on vendor indices — those already navigate above.
-        if (btnEdge(pad, 6)) padDispatchKey("PageUp");
-        if (btnEdge(pad, 7)) padDispatchKey("PageDown");
-        if (btnEdge(pad, 4)) padDispatchKey("ArrowLeft");
-        if (btnEdge(pad, 5)) padDispatchKey("ArrowRight");
+        if (btnEdge(pad, 6)) padDispatchKey("PageUp", true);
+        if (btnEdge(pad, 7)) padDispatchKey("PageDown", true);
+        if (btnEdge(pad, 4)) padDispatchKey("ArrowLeft", true);
+        if (btnEdge(pad, 5)) padDispatchKey("ArrowRight", true);
       }
-      if (btnEdge(pad, okBtn)) padActivate();
-      if (btnEdge(pad, backBtn)) padEscape();
+      if (btnEdge(pad, okBtn)) { showGamepadFocus(); padActivate(); }
+      if (btnEdge(pad, backBtn)) { showGamepadFocus(); padEscape(); }
     }
 
     function remoteNav(dir) {
@@ -277,7 +296,10 @@ const InputPadMenu = (function () {
       if (!padFocusableInLayer()) { padSeedFocus(); return; }
       padNavKey(dir);
     }
-    function reset() { padNavDir = null; padNavSeeded = false; padNavSeedLayer = null; }
+    function reset() {
+      padNavDir = null; padNavSeeded = false; padNavSeedLayer = null;
+      clearGamepadFocus();
+    }
     return { poll: padNavPoll, activate: padActivate, escape: padEscape, remoteNav,
       releaseDirection() { padNavDir = null; }, reset };
   }
