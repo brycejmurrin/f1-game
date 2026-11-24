@@ -17,12 +17,16 @@ const setups = {
   "pit-duel": {traffic: 0},
   stint: {finish: "hard", stopLap: 25, savingLaps: 4},
 };
+function cursor(x, y) {
+  assert.ok(Number.isFinite(x) && Number.isFinite(y));
+  return `<circle cx="${x}" cy="${y}"/>`;
+}
 
 for (const [id, setup] of Object.entries(setups)) {
   test(`Learn challenge starts open and accepts a reachable ${id} setup`, () => {
     const path = new URL("../../learn/" + id + "/lab.js", import.meta.url);
     let lesson;
-    vm.runInNewContext(readFileSync(path, "utf8"), {LearnSandbox: {mount(value) { lesson = value; }}}, {filename: fileURLToPath(path)});
+    vm.runInNewContext(readFileSync(path, "utf8"), {LearnSandbox: {cursor, mount(value) { lesson = value; }}}, {filename: fileURLToPath(path)});
     const initial = Object.fromEntries(lesson.controls.map(control => [control.id, control.value]));
     for (const [key, value] of Object.entries(setup)) {
       const control = lesson.controls.find(item => item.id === key);
@@ -40,5 +44,18 @@ for (const [id, setup] of Object.entries(setups)) {
     assert.equal(solved.success, true, solved.feedback);
     assert.notDeepEqual(solved.metrics, baseline.metrics);
     assert.ok(solved.explanation && solved.feedback && solved.svg);
+
+    const replayState = id === "chassis" ? {...initial, view: "wake"} : initial;
+    const input = lesson.replay.input?.(replayState);
+    if (input) {
+      const {min, max} = lesson.controls.find(control => control.id === input);
+      assert.notEqual(lesson.evaluate({...replayState, [input]: min}).svg,
+        lesson.evaluate({...replayState, [input]: max}).svg, "the replay drives the lesson's existing slider");
+    } else {
+      const {replay} = lesson.evaluate(replayState);
+      const first = replay(0).svg;
+      const last = replay(1).svg;
+      assert.ok(first && last && first !== last, "playback changes the diagram across the run");
+    }
   });
 }

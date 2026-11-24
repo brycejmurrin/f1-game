@@ -5,10 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Telemetry Detective · Apex 26 Learn</title>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../replay.css">
 <script src="../../js/core/mat4.js" defer></script>
 <script src="../../js/data/telemetry-model.js" defer></script>
 <script src="model.js" defer></script>
 <script src="../appearance.js" defer></script>
+<script src="../replay.js" defer></script>
 <script src="lab.js" defer></script>
 </head>
 <body>
@@ -40,6 +42,7 @@
       </fieldset>
       <label class="scrub-label" for="scrub"><span id="scrub-label">Time</span><span id="cursor" aria-hidden="true"></span></label>
       <input type="range" id="scrub" min="0" max="2" step=".001" value="0">
+      <div id="trace-replay"></div>
       <div class="buttons">
         <button type="button" data-checkpoint="start">Start</button>
         <button type="button" data-checkpoint="brake">Brake on</button>

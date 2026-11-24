@@ -261,6 +261,16 @@ details {
   font-size: var(--fs-micro);
 }
 .flow-key { display: flex; flex-wrap: wrap; gap: var(--gap); margin-top: calc(var(--gap) / 2); }
+#direction-row:not([hidden]) { display: flex; align-items: center; gap: .5em; margin-bottom: .6em; }
+#direction {
+  padding: .25em .5em;
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-sm);
+  background: var(--plate);
+  color: inherit;
+  font: inherit;
+}
+#direction:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 #flow { cursor: grab; }
 #flow[data-dragging] { cursor: grabbing; }
 #prediction fieldset { display: grid; gap: calc(var(--gap) / 2); }

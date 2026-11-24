@@ -40,6 +40,8 @@ label .readout { font-variant-numeric: tabular-nums; white-space: nowrap; }
 select { display: block; width: 100%; margin: .25em 0 .65em; }
 input[type="range"] { display: block; width: 100%; min-height: 28px; margin: 0; accent-color: var(--red); }
 .actions { display: flex; flex-wrap: wrap; gap: .45em; }
+#replay-speed-row { align-items: center; margin: 0; }
+#replay-speed { inline-size: auto; margin: 0; }
 #feedback { margin-top: .65em; }
 #feedback:empty { display: none; }
 

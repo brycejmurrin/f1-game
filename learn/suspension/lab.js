@@ -90,6 +90,7 @@
 
   LearnSandbox.mount({
     title: "Pushrod, Pullrod & Anti-dive",
+    replay: {label: "suspension travel", input: state => state.view === "braking" ? "decel" : "bump"},
     intro: "Trace a wheel bump into the spring, then change how the front suspension reacts to braking.",
     controls: [
       {id: "view", label: "Experiment", options: [["linkage", "Wheel bump · front view"], ["braking", "Braking loads · side view"]], value: "linkage"},

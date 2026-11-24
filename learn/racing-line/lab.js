@@ -77,6 +77,7 @@
 
   LearnSandbox.mount({
     title: 'Racing lines and apex geometry',
+    replay: {label: 'ghost race', input: () => 'elapsed'},
     intro: 'Move the clipping point around a hairpin. Compare the time from the approach to the end of the next straight against an early apex.',
     controls: [
       {id:'apex', label:'Apex position through the turn', min:30, max:70, step:1, value:30, unit:'%'},
