@@ -1191,8 +1191,18 @@ test("UI inspector verifies real scale bindings, persistence and CSS provenance"
   expect(after.accessibility).toContain("Interface size");
   expect(diffInspections(before, after).changed.some(c => c.selector === "#pm-uiscale")).toBe(true);
   // A DOM-only mutation is deliberately NOT a working setting: the inspector must reject it.
-  await input.evaluate(e => { e.value = Number(e.value) + (Number(e.value) < 200 ? 1 : -1); });
-  expect((await snapshot()).issues.some(i => i.kind === "binding-mismatch" && i.selector === "#pm-uiscale")).toBe(true);
+  // Inspect in the same browser task: pending layout refreshes legitimately
+  // restore the slider from storage between separate Playwright evaluations.
+  const mutated = await input.evaluate(e => {
+    const previous = Number(e.value);
+    e.value = previous + (previous < 200 ? 1 : -1);
+    return { previous, value: Number(e.value), report: __apex.ui.inspect({ root: "#ap-menu-customization" }) };
+  });
+  expect(mutated.value).not.toBe(mutated.previous);
+  const binding = mutated.report.controls.find(c => c.selector === "#pm-uiscale").binding;
+  expect(binding.runtime).toBeCloseTo(value, 5);
+  expect(binding.saved.value).toBe(value);
+  expect(mutated.report.issues.some(i => i.kind === "binding-mismatch" && i.selector === "#pm-uiscale")).toBe(true);
   await page.reload(); await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => __apex.headless(true)); await open();
   expect((await snapshot()).controls.find(c => c.selector === "#pm-uiscale").binding.saved.value).toBe(value);
