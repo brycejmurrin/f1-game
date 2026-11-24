@@ -9336,6 +9336,7 @@ function setPaused(p, why) {
   if (p && garageReturn === "pit" && !$("carsetup").hidden) { paused = true; return; }
   if (paused && !p) Input.invalidateRemoteDrive();
   if (paused !== !!p) Log.info("game", "Race " + (p ? "paused" : "resumed") + " why=" + (why || "button") + " state=" + state + " raceT=" + raceT.toFixed(1));
+  if (paused !== !!p && typeof TouchButtonActions !== "undefined") TouchButtonActions.cancelAll();
   paused = p; GameAudio.resetReplayScrub(); replayBuf.onPause(!!p); // REPLAY overlay while paused
   if (p) learnAeroDrill?.guide.hide();
   if (!netPlay.active()) { if (p) dropRaceWake(); else holdRaceWake(); UiExperience.resumeArm(G, !p && why !== "restart" && state === "race" && !realRace.isWatch()); }   // a paused screen may sleep; a networked race runs on under the card, and never holds for a resume countdown
