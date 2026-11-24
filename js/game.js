@@ -300,7 +300,7 @@ function syncMetricsOverlayCompact() {
 // both thumbs (arrows + pedals); TOUCH auto-throttles — neither has a free
 // hand for a shifter.
 function gearsManual(forceTouch = false) {
-  return manualMode && (steerMode === "tilt" || !Input.touchControlsNeeded() && !forceTouch);
+  return manualMode && (steerMode === "tilt" || !Input.touchDrivingControls() && !forceTouch);
 }
 /* AUTO-THROTTLE IS AN OPTION NOW, not only a consequence of TOUCH mode.
    XAG 107's worked example of an input barrier is literally a racing game's
@@ -311,7 +311,7 @@ function gearsManual(forceTouch = false) {
    thumb, so it is not a preference but a fact about the control scheme. */
 let autoThrottleOpt = store.get("autoThrottle", false);
 let throttleLatchOpt = store.get("throttleLatch", false);
-function autoThrottle(forceTouch = false) { return autoThrottleOpt || ((forceTouch || Input.touchControlsNeeded()) && steerMode === "touch"); }
+function autoThrottle(forceTouch = false) { return autoThrottleOpt || ((forceTouch || Input.touchDrivingControls()) && steerMode === "touch"); }
 // Left/right-handed docks. F1 Mobile enumerates both as first-class control
 // schemes rather than hiding a toggle; the whole feature here is which dock
 // each thumb group lands in, so CSS does it (body.mirror-controls).
@@ -2753,7 +2753,7 @@ function startRace() {
 }
 
 function showTouchControls(show, cooldown = false, preview = false) {
-  const t = show && (preview || Input.touchControlsNeeded());
+  const t = show && (preview || Input.touchDrivingControls());
   const manual = !cooldown && gearsManual(preview);
   // GAS pedal whenever throttle is manual (tilt/button); touch auto-throttle hides it
   els.btnThrottle.hidden = !(t && (cooldown || !autoThrottle(preview)));
@@ -8673,8 +8673,10 @@ function paintSteer() {
   const note = $("pm-steer-note");
   if (!note) return;
   // Warn only for genuine deny/unavailable — not the brief pre-first-reading window.
-  note.textContent = Input.gyroDenied
-    ? "Motion access is denied on this device, so TILT cannot steer here — pick BUTTONS or TOUCH."
+  const device = Input.controlDevice();
+  note.textContent = device === "controller" ? "Controller active. Your touch steering preference is saved."
+    : device === "keyboard" ? "Keyboard active. Your touch steering preference is saved."
+    : Input.gyroDenied ? "Motion access is denied on this device, so TILT cannot steer here — pick BUTTONS or TOUCH."
     : "TILT leans the phone. BUTTONS adds on-screen arrows. TOUCH drags a finger on the track.";
 }
 
@@ -8717,7 +8719,7 @@ function tiltSay(msg) { els.audiostate.textContent = msg; if (msg) announce(msg.
 const platformSession = PlatformSession.create(G, {
   canvas, raceWakeLock, disarmProbeOnLeave: () => _disarmProbeOnLeave(),
   cancelMirrorPrep: () => mirrorPass.cancelPreparation(),
-  setPaused, ensureNet, settingsBack: () => settingsNav.back(), closeSettings, showTouchControls, refreshGearsBtn, openSettingsPage: (id) => { openSettings(); settingsNav.showDirect(id, true); },
+  setPaused, ensureNet, settingsBack: () => settingsNav.back(), closeSettings, showTouchControls, refreshGearsBtn, paintSteer, openSettingsPage: (id) => { openSettings(); settingsNav.showDirect(id, true); },
 });
 platformSession.wireFirstGesture();
 
@@ -9431,7 +9433,7 @@ SettingsExport.create(G);   // SETTINGS FILE: download preferences as JSON (js/u
 // GEARS toggle: usable when thumbs are free (tilt or desktop keyboard).
 // Disabled — not hidden — on BUTTONS/TOUCH (see the pm-calib note in setSteerMode).
 function refreshGearsBtn() {
-  SettingRow.disable($("pm-gears"), Input.touchControlsNeeded() && steerMode !== "tilt");
+  SettingRow.disable($("pm-gears"), Input.touchDrivingControls() && steerMode !== "tilt");
   SettingRow.paint($("pm-gears"), manualMode ? "manual" : "auto");
 }
 SettingRow.wire("pm-gears", { values: SettingRow.labels(["auto", "manual"]), read: () => (manualMode ? "manual" : "auto"), write: (v) => {

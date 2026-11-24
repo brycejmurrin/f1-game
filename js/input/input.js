@@ -663,6 +663,37 @@ const Input = (function () {
   function noteInputSource(source) {
     if (source === "keyboard" || source === "controller" || source === "touch" || source === "phone") inputSource = source;
   }
+  // Device selection is separate from Help's activity hints. Touching a menu
+  // still counts for Help, but must not restore the driving dock over a pad.
+  /** @type {"keyboard" | "controller" | "touch" | null} */
+  let localControlDevice = null;
+  let physicalPadAvailable = false;
+  /** @type {(() => void) | null} */
+  let onControlDeviceChange = null;
+  function controlDevice() {
+    return localControlDevice || (touchControlsNeeded() ? "touch" : "keyboard");
+  }
+  function touchDrivingControls() { return controlDevice() === "touch"; }
+  function setLocalControlDevice(device, availabilityChanged = false) {
+    const before = controlDevice();
+    localControlDevice = device;
+    const after = controlDevice();
+    if (before === after && !availabilityChanged) return;
+    if (before === "touch" && after !== "touch") {
+      holdReleaseAll();
+      btnSteerVal = 0; btnSteerT = 0;
+      clearCanvasSteering();
+    }
+    onControlDeviceChange?.();
+  }
+  function setPhysicalPadAvailable(available) {
+    if (physicalPadAvailable === available) return;
+    physicalPadAvailable = available;
+    const device = available && touchControlsNeeded() ? "controller"
+      : !available && localControlDevice === "controller" ? null : localControlDevice;
+    setLocalControlDevice(device, true);
+  }
+
   function activeInputSource() {
     if (inputSource) return inputSource;
     if (!defaultInputSource) defaultInputSource = touchControlsNeeded() ? "touch" : "keyboard";
@@ -1134,6 +1165,8 @@ const Input = (function () {
       heldKeys.delete(e.code); syncHeldKeys();
       return;
     }
+    if (down && !e.repeat && e.isTrusted !== false && !e.altKey && !window.UiLayers?.navOpen() && act &&
+        (act !== "shiftDown" || !/^Shift/.test(e.code))) setLocalControlDevice("keyboard");
     if (["left", "right", "throttle", "brake", "lookBack"].includes(act)) {
       const toggle = (act === "throttle" && throttleIsToggle()) || (act === "lookBack" && lookBackIsToggle());
       if (toggle) {
@@ -1361,6 +1394,8 @@ const Input = (function () {
   function onTouchStart(e) {
     if (!canvasTouchIsDriving()) return;
     noteInputSource("touch");
+    if (e.isTrusted !== false) setLocalControlDevice("touch");
+    if (touchControlsNeeded() && !touchDrivingControls()) return;
     e.preventDefault();
     for (const t of e.changedTouches) {
       touches.set(t.identifier, {
@@ -1649,6 +1684,7 @@ const Input = (function () {
       return;
     }
     padConnected = true;
+    setPhysicalPadAvailable(true);
     // EDGES ARE PER DEVICE. padPrevButtons holds the LAST pad's buttons, so
     // when another pad takes over, a button already held on it would read as
     // a fresh press (a boost, a shift, a camera cut). Reseed from the new
@@ -1729,7 +1765,10 @@ const Input = (function () {
         if (btnDown(pad, i) && !padPrevButtons[i]) { padActive = true; break; }
       }
     }
-    if (padActive) noteInputSource("controller");
+    if (padActive) {
+      noteInputSource("controller");
+      if (padOwnsDrive) setLocalControlDevice("controller");
+    }
     if (axisCaptureCb) {
       // The wheel wizard owns the frame: turning the wheel to answer "which
       // axis steers?" must not also steer the car sitting behind the sheet.
@@ -1879,6 +1918,7 @@ const Input = (function () {
     // latch + touch-pedals specs). Do not clear the finger — the hold should
     // still be there when the menu closes. Keyboard, tilt and the pad are
     // unchanged.
+    if (touchControlsNeeded() && !touchDrivingControls()) return 0;
     if (steerMode === "buttons") return navBlocksTouch() ? 0 : buttonSteering();
     if (tiltActive()) return analogShape(tiltSteering(), "tilt");
     return navBlocksTouch() ? 0 : analogShape(touchSteering(), "touch");
@@ -1912,6 +1952,9 @@ const Input = (function () {
     if (_wasInRace && !inRace) clearDriveToggles();
     _wasInRace = inRace;
     pollGamepad();
+    // An empty snapshot can be transient. Use the existing fast re-probe
+    // window before relaying polling-only loss to the UI.
+    if (physicalPadAvailable && !padConnected && nowMs() - _padLostAt >= PAD_PROBE_FAST_MS) setPhysicalPadAvailable(false);
     _navLatch = navBlocksTouchLive() ? 1 : 0;
   }
 
@@ -2071,6 +2114,13 @@ const Input = (function () {
     landscapeUnlockNow();
   }
 
+  function clearCanvasSteering() {
+    if (activeTouch) hideDragAnchor();
+    touches.clear();
+    touchSteer = 0; activeTouch = null; touchSteerVal = 0; touchSteerT = 0;
+    dragFilterClear();
+  }
+
   function setSteerMode(m) {
     // Unknown / foreign values → BUTTONS (not tilt): matches game.js STEER_MODES
     // and WCAG 2.2 SC 2.5.4. M40: Input used to default unknown to "tilt" with no
@@ -2083,12 +2133,7 @@ const Input = (function () {
       btnSteerVal = 0; btnSteerT = 0;
       btnSteerSeq = btnSteerLeftSeq = btnSteerRightSeq = 0;
     }
-    if (steerMode !== "touch") {
-      if (activeTouch) hideDragAnchor();
-      touches.clear();
-      touchSteer = 0; activeTouch = null; touchSteerVal = 0; touchSteerT = 0;
-      dragFilterClear();
-    }
+    if (steerMode !== "touch") clearCanvasSteering();
     if (steerMode !== "tilt") { ++gyroRequestGeneration; detachGyro(); }
   }
 
@@ -2190,7 +2235,9 @@ const Input = (function () {
       try { _coarseMql = window.matchMedia("(pointer: coarse)"); } catch (_) { _coarseMql = false; }
       if (_coarseMql && _coarseMql.addEventListener) {
         _coarseMql.addEventListener("change", () => {
-          for (const cb of _coarseCbs) { try { cb(touchControlsNeeded()); } catch (_) { /* one bad subscriber must not stop the rest */ } }
+          const touch = touchControlsNeeded();
+          if (touch) localControlDevice = physicalPadAvailable ? "controller" : null;
+          for (const cb of _coarseCbs) { try { cb(touch); } catch (_) { /* one bad subscriber must not stop the rest */ } }
         });
       }
     }
@@ -2248,6 +2295,7 @@ const Input = (function () {
     onPauseCb = (opts && opts.onPause) || null;
     onPadLostCb = (opts && opts.onPadLost) || null;
     onPhoneTiltChange = opts?.onPhoneTiltChange || null;
+    onControlDeviceChange = opts?.onControlDeviceChange || null;
     // One page load, one wire-up. A second init (hot reload, a harness that
     // boots twice, a future re-entry) must not stack keydown/blur/gamepad
     // listeners: a toggle GAS key would flip twice per press, and blur would
@@ -2411,6 +2459,7 @@ const Input = (function () {
       _padNextProbeMs = 0;
       if (e.gamepad) padPedalSeenByDevice.delete(padKey(e.gamepad, e.gamepad.index));
       // A new connection re-reads its own pedals from rest.
+      setPhysicalPadAvailable(true);
       try { Log.info("input", `gamepad connected ${padLogId(e)}`); }
       catch (_) { /* Log absent */ }
     });
@@ -2435,6 +2484,7 @@ const Input = (function () {
         padPrevButtons.length = 0;
       }
       if (e.gamepad) padPrevByIndex.delete(e.gamepad.index);
+      setPhysicalPadAvailable(still);
       try { Log.info("input", `gamepad disconnected ${padLogId(e)}`); }
       catch (_) { /* Log absent */ }
       /* A PAD LEAVING MID-RACE IS AN EVENT, not just a state change. Zeroing
@@ -2670,7 +2720,8 @@ const Input = (function () {
     setControllerProfiles: (raw) => ensureDeviceProfiles() ? deviceProfiles.replace(raw) : null,
     resetControllerProfile,
     setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padCalibrationOwner, parkedPadPreview, padRest, setPadRest, padRestStore,
-    touchControlsNeeded,
+    touchControlsNeeded, controlDevice, touchDrivingControls,
+    physicalPadAvailable: () => physicalPadAvailable,
     pickPad,
     onPointerKindChange,
     clearEdges, clearDriveEdges,
