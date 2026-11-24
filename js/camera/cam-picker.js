@@ -1,4 +1,4 @@
-/* Apex 26 — CAM button picker: hold or right-click opens the view grid (a pad or paired phone: hold CAM, Input.consumeCameraMenu), arrow keys move it, AUTO appears only while a WATCH runs. CamModes.create owns the saved mode index. */
+/* Apex 26 — CAM button picker: hold or right-click opens the view grid, arrow keys move it, AUTO appears only while a WATCH runs. CamModes.create owns the saved mode index. */
 const CamPicker = (function () {
   "use strict";
 
