@@ -200,12 +200,19 @@ const PhonePadPage = (function () {
         for (const id of anchors.keys()) pedalOwners.delete(id);
         ids.clear(); anchors.clear(); levels.clear(); el.classList.remove("on"); if (travel) paintLevel(); else off();
       });
+      function buildFromAnchor(pointer, contact) {
+        if (contact.profile.sliderEdge || !contact.profile.buildMs) return;
+        PedalTravel.buildOnHold(contact, () => anchors.get(pointer) === contact, value => {
+          levels.set(pointer, value);
+          paintLevel(false);
+        });
+      }
       const start = (e, transfer) => {
         rememberPointer(e);
         ids.add(e.pointerId);
         el.classList.add("on");
         if (!travel) { on(1); return; }
-        const profile = PedalTravel.contactProfile(travel, undefined, transfer ? null : e, el);
+        const profile = PedalTravel.contactProfile(travel, undefined, e, el, transfer);
         const cross = transfer && !profile.sliderEdge && profile.slide === "ease";
         const peerId = travel === "gas" ? "brake" : "gas";
         // Standalone phones keep the first pedal held unless the destination opts in.
@@ -216,16 +223,10 @@ const PhonePadPage = (function () {
         anchors.set(e.pointerId, contact);
         pedalOwners.set(e.pointerId, target);
         const initial = profile.sliderEdge ? PedalTravel.sliderLevel(profile, e) :
-          cross ? PedalTravel.arrive(0) : transfer ? 1 : PedalTravel.level(profile, 0);
+          cross ? PedalTravel.arrive(0) : PedalTravel.level(profile, 0);
         levels.set(e.pointerId, initial);
         paintLevel();
-        if (!transfer && !profile.sliderEdge && profile.buildMs) {
-          const pointer = e.pointerId;
-          PedalTravel.buildOnHold(contact, () => anchors.get(pointer) === contact, value => {
-            levels.set(pointer, value);
-            paintLevel(false);
-          });
-        }
+        if (!cross) buildFromAnchor(e.pointerId, contact);
       };
       const down = (e) => {
         if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -244,15 +245,20 @@ const PhonePadPage = (function () {
             up(e); pedalTargets.get(peer).start(e, true); return;
           }
         }
-        const dy = c.y - e.clientY, dist = Math.hypot(e.clientX - c.x || 0, dy || 0);
+        const dx = e.clientX - c.x || 0, dy = e.clientY - c.y || 0;
         let value;
         if (c.profile.sliderEdge) value = PedalTravel.sliderLevel(c.profile, e);
         else if (c.cross) {
-          value = Math.max(levels.get(e.pointerId), PedalTravel.arrive(dist));
-          if (value >= 1) { c.cross = false; c.y = e.clientY; }
-        } else if (c.transfer) value = PedalTravel.ease(c.y, e.clientY, c.profile.travel);
-        else {
-          c.advance = PedalTravel.advance(c.profile, e.clientX - c.x || 0, -dy || 0, dy);
+          value = Math.max(levels.get(e.pointerId), PedalTravel.arrive(Math.hypot(dx, dy)));
+          if (value === 1) {
+            c.cross = false;
+            c.x = e.clientX; c.y = e.clientY;
+            buildFromAnchor(e.pointerId, c);
+          }
+        } else if (c.transfer && !c.profile.trackCrossover && c.profile.slide !== "response") {
+          value = PedalTravel.ease(c.y, e.clientY, c.profile.travel);
+        } else {
+          c.advance = PedalTravel.advance(c.profile, dx, dy, -dy);
           value = PedalTravel.level(c.profile, c.advance, c.holdFraction);
         }
         levels.set(e.pointerId, value); paintLevel(false);
