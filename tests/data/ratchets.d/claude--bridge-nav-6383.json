@@ -1,0 +1,12 @@
+{
+  "files": {
+    "js/game.js": {
+      "codeLines": 4,
+      "lines": 6
+    }
+  },
+  "tree": {
+    "dynamicIdReads": 1,
+    "eagerCodeBytes": 277
+  }
+}

@@ -1,5 +1,11 @@
 # Phone bridge commands and results
 
+## Contents
+- Commands
+- Recipes
+- Menu route: nav and tap
+- Cannot measure
+
 Every command is one comment holding one fence. The reply is one comment:
 
 ````
@@ -29,7 +35,10 @@ in `js/agent/apex-bridge.js`), not this table.
 | `wait` | `ms` | `{waited}`; for spacing steps inside a `batch` |
 | `gpuTest` | `op` start / stop / status / active | GPU TEST (`GpuTestRun`) |
 | `recorder` | `op` start / stop / isOn / json | PHONE TEST recorder |
-| `batch` | `steps[]` of `{cmd, args}` | one result per step; stops at the first failure; `reload` / `path` only last |
+| `screen` | — | `{screen, state}`: the topmost visible screen (`title`, `select`, `setup`, `garage`, `loading`, `quali`, `results`, `pause`), else `drive-out` (the garage-out, state still `menu`) or `race` |
+| `tap` | `id` (one of `TAP_OK`) or `tile` (a track id); `until` a screen, `ms` | `{tapped, screen, state, ok}`: pointerdown, pointerup and click on the real control; a hidden, disabled or unlisted control is refused |
+| `nav` | `flow` tt / race, `track`, `weather`, `tod`, `entry` setup / garage / daily, `go` (default true) | `{ok, screen, state, ms, steps:[{step, ok, screen, ms}], door}`; starts on the title; `door` = `menuPrep().door` |
+| `batch` | `steps[]` of `{cmd, args}` | one result per step; stops at the first failure (or a `tap` / `nav` whose `value.ok` is false); `reload` / `path` only last |
 | `reload` | — | `{reloading}` (may be lost), then a new hello |
 
 ## Recipes
@@ -67,6 +76,29 @@ Hands-free BENCHMARK (the game reloads per leg; one hello per reload; duration: 
 Snapshot: `{"cmd":"snap","args":{"w":320}}`. Decode `value.jpeg` (strip `data:image/jpeg;base64,`) into
 `scratch/phone-snap-<n>.jpg` and Read it. A black frame from `from: "game"` is a readback limit, not proof the
 phone shows black: ask Bryce before calling it a render bug.
+
+## Menu route: nav and tap
+
+#6383. `call race` / `tt` jump to the grid and skip the menus and the garage drive-out; `nav` walks
+the player's route instead, tapping the same buttons a thumb does and waiting (20 s a step, 60 s for RACE!) for each
+screen; RACE! answers as soon as the garage drive-out is on screen (`screen: "drive-out"`), so a `snap` right after it
+shows the world outside the door. It never sets state: weather and hour are stepped on the SESSION SETUP chevrons. Read `value.ok` and the last
+step's `error`: the outer `ok` only says the command ran. A synthetic tap has no user activation, so audio unlock,
+haptics, tilt permission and fullscreen behave as before the first real touch. `door` is the world behind the garage
+door: `built` (the circuit id built), `dark`, `readyFor` (the circuit, tod and weather the menu prep readied) and
+`want` (the session asked for) and `driveOut`; `readyFor` ≠ the asked tod / weather is the wrong world.
+
+#5835 drive-out world, all three entries (one comment each; Bryce on the title screen first, a `reload` between):
+
+```apex-cmd
+{"cmd":"batch","args":{"steps":[{"cmd":"nav","args":{"flow":"tt","track":"monza","weather":"rain","tod":"night","entry":"setup"}},{"cmd":"wait","args":{"ms":1000}},{"cmd":"snap","args":{"w":320}}]}}
+```
+
+Then the same with `"entry":"garage"` (picker → YOUR CAR → garage DONE → SESSION SETUP → RACE!) and
+`{"cmd":"nav","args":{"entry":"daily"}}` (DAILY pins its own circuit, weather and hour). For the case that used to
+fail, run one entry right after a session with a different weather or hour: finish or quit it (`tap` `pausebtn`, then
+`pm-quit`) and `nav` again without a reload. END TIME TRIAL: drive into the box, then
+`{"cmd":"tap","args":{"id":"hud-end-session"}}`, `cs-arrival-skip` for SKIP, `cs-done` for VIEW RESULTS.
 
 ## Cannot measure
 
