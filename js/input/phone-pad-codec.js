@@ -29,13 +29,19 @@ const PhonePadCodec = (function () {
   // handshake, touch steering uses [2, seq, null, thr, brk, held, steer].
   // Version 3 carries already-shaped pedals with either kind of steering.
   // Version 4 carries camera input: [4, seq, moveX, moveY, lookX, lookY, lift].
+  // RESUME FENCE (#6330): to a host that advertised driveFence, a drive sample
+  // also echoes the last dash hudSeq the phone painted, as an 8th field (a v1
+  // sample pads its steer slot with null). The host neutralises a sample whose
+  // echo predates the first drive dash it sent after Resume.
   function encodeSample(s) {
     if (s.camera) return JSON.stringify([CAMERA_SAMPLE, s.seq | 0, ...CAMERA_AXES.map(key => round2(num(s.camera[key], -1, 1)))]);
     const roll = (typeof s.roll === "number" && isFinite(s.roll)) ? round2(s.roll) : null;
     const touch = typeof s.steer === "number" && isFinite(s.steer);
     const version = s.calibratedPedals === true ? 3 : touch ? 2 : PROTO;
     const fields = [version, s.seq | 0, touch ? null : roll, round2(s.thr), round2(s.brk), s.held | 0];
-    if (version !== PROTO) fields.push(touch ? num(s.steer, -1, 1) : null);
+    const echo = Number.isSafeInteger(s.driveEcho);
+    if (version !== PROTO || echo) fields.push(touch ? num(s.steer, -1, 1) : null);
+    if (echo) fields.push(Math.max(-1, s.driveEcho));
     return JSON.stringify(fields);
   }
   function decodeSample(text) {
@@ -47,6 +53,9 @@ const PhonePadCodec = (function () {
       const camera = Object.fromEntries(CAMERA_AXES.map((key, i) => [key, num(a[i + 2], -1, 1)]));
       return { seq: a[1] | 0, roll: null, thr: 0, brk: 0, held: 0, camera };
     }
+    const a8 = a.length === 8 && [a.pop()];
+    if (a8 && !(Number.isSafeInteger(a8[0]) && a8[0] >= -1)) return null;
+    if (a8 && a[0] === PROTO && a[6] === null) a.pop();
     const touch = Number.isFinite(a[6]), calibrated = a[0] === 3;
     const validSteering = touch ? a[2] === null : a[6] === null;
     if (!((a.length === 6 && a[0] === PROTO) || (a.length === 7 &&
@@ -57,6 +66,7 @@ const PhonePadCodec = (function () {
       seq: a[1] | 0,
       roll: (typeof a[2] === "number" && isFinite(a[2])) ? num(a[2], -180, 180) : null,
       thr: num(a[3], 0, 1), brk: num(a[4], 0, 1), held: a[5] | 0,
+      ...(a8 && { driveEcho: a8[0] }),
     };
   }
   // STATE channel, desktop → phone: the dash, ["H", gear, kmh, rpmFrac, lap,
@@ -106,10 +116,11 @@ const PhonePadCodec = (function () {
   // unloading it), not unpairing. The next close is a wire loss the game re-hosts for.
   function encodeSuspend() { return JSON.stringify({ t: "sus" }); }
   function encodeHaptic(ms) { return JSON.stringify({ t: "hap", ms: Math.max(0, Math.min(1000, ms | 0)) }); }
-  function encodeHello(side, haptics, extended, id, camera, hudOrder) {
+  function encodeHello(side, haptics, extended, id, camera, hudOrder, driveFence) {
     return JSON.stringify({ t: "hi", side, p: PROTO, haptics: haptics === true, ...(extended ? { steer: true, ack: true } : {}),
       ...(camera ? { camera: CAMERA_SAMPLE } : {}),
       ...(hudOrder ? { hudOrder: true } : {}),
+      ...(driveFence && { driveFence }),
       ...(extended && side === "pad" ? { grip: true } : {}),
       ...(extended && side === "host" ? { calibratedPedals: true } : {}),
       ...(typeof id === "string" && PEER_ID_RE.test(id) ? { id } : {}) });
@@ -132,6 +143,7 @@ const PhonePadCodec = (function () {
     if (o.t === "hi") return { t: "hi", side: String(o.side || ""), p: o.p | 0, haptics: o.haptics === true, ...(o.steer === true ? { steer: true } : {}), ...(o.ack === true ? { ack: true } : {}),
       ...(o.camera === CAMERA_SAMPLE ? { camera: true } : {}),
       ...(o.hudOrder === true ? { hudOrder: true } : {}),
+      ...(o.driveFence === true && { driveFence: true }),
       ...(o.grip === true ? { grip: true } : {}),
       ...(o.calibratedPedals === true ? { calibratedPedals: true } : {}),
       ...(typeof o.id === "string" && PEER_ID_RE.test(o.id) ? { id: o.id } : {}) };

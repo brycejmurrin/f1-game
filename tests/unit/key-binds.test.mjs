@@ -60,7 +60,7 @@ test("inputState gate distinguishes title navigation, menus, typing and HUD focu
   assert.equal(s.gate.anyOpen, true);
   assert.equal(s.gate.focus.id, "query");
   assert.equal(s.gate.focus.tag, "INPUT");
-  assert.equal(Input.throttle(), true, "reading the gate preserves the key held before the menu opened");
+  assert.equal(Input.throttle(), false, "the open menu owns the key held before it opened (#6268)");
   sb.document.activeElement = { id: "pausebtn", tagName: "BUTTON", matches: () => true };
   s = Input.debugState();
   assert.equal(s.gate.anyOpen, true);

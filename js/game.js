@@ -2210,7 +2210,13 @@ function menuPrep() {
   const key = trackIdx >= 0 ? menuKey(trackIdx) : "", p = _menuGate.prep, def = Tracks.LIST[trackIdx];
   return { state, trackId: def ? def.id : null, key, world: menuWorld(), building: !!(p && p.building), done: !!key && _menuGate.done === key,
     warmable: !!gfx.warm, warmKey: _warmKey, warmed: !!key && _warmKey === key, warmFrames: _menuGate.warm, warming: !!(gfx.warming && gfx.warming()),
-    garageReady: !!_menuGate.garageReady, cars: carDraw.menuCarAssets || null };
+    garageReady: !!_menuGate.garageReady, cars: carDraw.menuCarAssets || null, door: doorWorld() };
+}
+// THE WORLD BEHIND THE GARAGE DOOR (#6383, the bridge's #5835 check): the circuit actually built, its dark flag, the
+// session (tod|weather) its menu readiness was for, against the session now asked for (a mismatch = the wrong world); driveOut = the garage-out is on screen.
+function doorWorld() {
+  const [i, tod, weather] = (_menuGate.ready || "").split("|"), d = i ? Tracks.LIST[+i] : null;
+  return { built: builtTrackId, dark: builtTrackNight, readyFor: d ? { trackId: d.id, tod, weather } : null, want: { tod: raceTimeOfDay, weather: raceWeather }, driveOut: !!_studio };
 }
 // THE GARAGE, PRE-BUILT ON RACE SETTINGS AND THE IDLE TITLE. RACE! opens on the
 // garage drive-out and GARAGE on the garage, and an undrawn garage's first frame
@@ -4966,7 +4972,7 @@ function updateCar(c, dt, ranked) {
   // vTop() inside PitLane, so it rides OVERALL SPEED and a player's measured pit
   // loss does not move when they change the pace slider.
   let pitV = -1;
-  if (pits.inLane(c)) {
+  if (pits.inLane(c) || pits.onClosedLane(c)) {   // a SHUT lane's tarmac too (#5775 R12)
     pitV = pits.limit();
     // The AI brakes for its own box; a human does that themselves, and a game
     // that did it for them would be driving the one part of a stop the driver

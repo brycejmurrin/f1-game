@@ -511,6 +511,16 @@ var PitLane = (function () {
       return c.pitState === "out" && inWindowOf(c);
     }
 
+    /** #5775 R12 (decision A): with the lane SHUT (wear off, damage off, no Time Trial) its tarmac and its
+     *  wall pin still exist, so a car driven onto it was railed through at full speed. It is held to the
+     *  limiter like any other car on the lane; no stop is offered. */
+    function onClosedLane(c) {
+      const zz = z();
+      if (!zz || !c || !c.human || laneOpen() || !inWindowOf(c)) return false;   // the AI never drives a shut lane
+      Tracks.sample(G.track, c.s, _smp);
+      return inLaneLat(c, _smp.hw || 0, zz.side);
+    }
+
     /** Is the pit limiter holding this car? `inLane` plus the EXIT ROAD, which
      *  a served car is still on after the window ends — one predicate, because
      *  everything the lane forbids it forbids for exactly this long: the speed
@@ -1858,7 +1868,7 @@ var PitLane = (function () {
     // toBox / roadOf / committing / boxBusy / setNext / inWindow stay module-
     // local (create internals + tests via PitLane.inWindow); nothing outside
     // reads them on the instance. session-stub may still stub extras.
-    return { zoneOf: () => z(), releaseTrack, limit, approachV, entryV, exitV, stopAnim, inLane, held,
+    return { zoneOf: () => z(), releaseTrack, limit, approachV, entryV, exitV, stopAnim, inLane, onClosedLane, held,
              arm, update, reset, clearArm, info, serviceCar, planFor, think, stepBegin, stepEnd,
              pickFor, recommendedTread, ownedTyres, choices, selectNext, estimate, commitFrac, toEntry, cue,
              worthStopping, canWork, addWork, workS: WORK_S,

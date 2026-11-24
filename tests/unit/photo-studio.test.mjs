@@ -513,6 +513,20 @@ for (const back of [false, true]) test(`race placement restores the exact paused
   }
 });
 
+test("#6272: changing only Rotation keeps the exact paused position and offset", () => {
+  const player = { s: 126.48, x: 1.234, xVis: 1.234, px: 126.5, pz: 1.2, head: .3, yawVis: 0, speed: 0 };
+  const b = boot({ player }); b.G.paused = true;
+  b.api.open({ source: "race" });
+  // A native range snaps its value to the step (.1): model that rounding.
+  b.dom.byId("ps-car-position").value = "12.6"; b.dom.byId("ps-car-offset").value = "1.2";
+  b.dom.byId("ps-car-rotation").value = "45"; b.dom.byId("ps-car-rotation").dispatchEvent({ type: "input" });
+  assert.equal(player.s, 126.48); assert.equal(player.x, 1.234);
+  assert.equal(player.px, 126.5); assert.equal(player.pz, 1.2);
+  assert.equal(player.yawVis, Math.PI / 4);
+  b.dom.byId("ps-car-offset").dispatchEvent({ type: "input" });
+  assert.equal(player.s, 126.48, "moving Sideways leaves the circuit position alone"); assert.equal(player.x, 1.2);
+  b.api.close(false);
+});
 test("live online and unpaused sessions cannot reposition the race car", () => {
   for (const online of [false, true]) {
     const player = { s: 123, x: 0, speed: 80 }, b = boot({ player });
@@ -877,6 +891,20 @@ test("queued opener focus cannot steal focus from a reopened Studio or a detache
   b.api.close(false); opener.focus(); b.api.open({ source: "home" }); b.api.close(true); frames.shift()(); opener.remove();
   while (frames.length) frames.shift()();
   assert.equal(b.dom.document.activeElement === b.dom.byId("ps-close"), true, "a detached opener is no longer a focus target");
+});
+test("#6259: a control focused while the restore is queued keeps focus over the opener", () => {
+  const frames = [], b = boot({ requestAnimationFrame: (fn) => frames.push(fn) });
+  const overlay = b.dom.byId("overlay"), opener = b.dom.document.createElement("button"), sibling = b.dom.document.createElement("button");
+  overlay.appendChild(opener); overlay.appendChild(sibling); opener.focus();
+  b.api.open({ source: "home", back: () => {} }); b.api.close(true);
+  frames.shift()(); frames.shift()(); // DONE's frame, then the restore's first frame
+  assert.equal(frames.length, 1, "the opener restore is still queued");
+  sibling.focus();
+  while (frames.length) frames.shift()();
+  assert.equal(b.dom.document.activeElement === sibling, true, "the newer focus wins over the deferred opener restore");
+  opener.focus(); b.api.open({ source: "home", back: () => {} }); b.api.close(true);
+  while (frames.length) frames.shift()();
+  assert.equal(b.dom.document.activeElement === opener, true, "with no newer focus the opener is still restored");
 });
 test("an import finishing after close is discarded and its bitmap is released", async () => {
   let resolve, disposed = 0;

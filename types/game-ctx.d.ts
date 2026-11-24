@@ -316,6 +316,7 @@ interface PitSession {
   /** The lane's speed cap in m/s at the CURRENT pace scale. */
   limit(): number;
   inLane(c: CarState): boolean;
+  onClosedLane(c: CarState): boolean;
   inWindow(c: CarState): boolean;
   /** Arm (or cancel) the stop; omit `on` to toggle. */
   arm(c: CarState, on?: boolean): boolean;
