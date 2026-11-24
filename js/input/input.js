@@ -205,6 +205,7 @@ const Input = (function () {
   let remThr = 0, remBrk = 0;    // 0..1 pedal travel from the phone
   let remPedalDz = REMOTE_PEDAL_ON;  // Legacy phone/XR samples are raw travel.
   let remHeld = 0;               // REMOTE_HELD bits
+  let remoteDriveReady = false;
   let remRoll = false;           // the last sample carried a roll: a phone with no sensor sends null
   let remStick = false, remSteer = 0;   // the last sample carried a STICK command (XR): -1..1, no tilt pipeline
   let remSeq = null;             // the last roll sample's seq (burst dt, below)
@@ -353,7 +354,7 @@ const Input = (function () {
   }
 
   function tiltActive() {
-    return steerMode === "tilt" && localTiltFresh() && (!tiltRemote || remoteSteers());
+    return steerMode === "tilt" && localTiltFresh() && (!tiltRemote || (remoteDriveReady && remoteSteers()));
   }
   function localTiltFresh() {
     if (tiltSeen && !tiltRemote && nowMs() - lastOrientMs >= LOCAL_TILT_STALE_MS) {
@@ -428,8 +429,9 @@ const Input = (function () {
     remBrk = clamp(+s.brk || 0, 0, 1);
     remHeld = s.held | 0;
     remoteMs = n;
+    remoteDriveReady = !remoteDrivingBlocked();
     if (hadPhoneTilt !== phoneTiltAvailable()) onPhoneTiltChange?.();
-    if (!remoteDrivingBlocked() && (remThr > remPedalDz || remBrk > remPedalDz || remHeld ||
+    if (remoteDriveReady && (remThr > remPedalDz || remBrk > remPedalDz || remHeld ||
       (remStick ? Math.abs(remSteer) > 0.05 : remRoll && Math.abs(s.roll - tiltZero) > 2))) {
       noteInputSource(owner === "phone" || !remStick ? "phone" : "controller");
     }
@@ -478,6 +480,7 @@ const Input = (function () {
   // reset() uses this on blur/visibility loss; the next fresh sample can take
   // control again, while a real link loss additionally clears remoteOwner below.
   function clearRemoteControls(clearSequence) {
+    remoteDriveReady = false;
     const hadPhoneTilt = phoneTiltAvailable();
     remoteMs = 0; remThr = remBrk = 0; remHeld = 0; remRoll = false; remStick = false; remSteer = 0;
     remCamera = null;
@@ -485,6 +488,12 @@ const Input = (function () {
     if (tiltRemote || !gyroAttached) tiltSeen = false;
     if (tiltRemote) tiltFilterClear();
     if (hadPhoneTilt) onPhoneTiltChange?.();
+  }
+  // Resume requires a new driving sample. Keep the live link and its sensor
+  // capability available to the menu, but start the steering filter fresh.
+  function invalidateRemoteDrive() {
+    remoteDriveReady = false;
+    if (tiltRemote) tiltFilterClear();
   }
   // The link dropped: pedals off at once, and a phone-fed tilt reading must not
   // keep steering a device whose own sensor is not attached.
@@ -2065,7 +2074,7 @@ const Input = (function () {
     if (Math.abs(k) > 0.001) return k;
     // A paired phone WITH a sensor: the tilt pipeline fed by remoteSample,
     // whatever the local mode. Pedals-only phones fall through to it.
-    if (remoteSteers()) return remoteDrivingBlocked() ? 0 : remStick ? analogShape(remSteer, "pad") : analogShape(tiltSteering(), "tilt");
+    if (remoteDriveReady && remoteSteers()) return remoteDrivingBlocked() ? 0 : remStick ? analogShape(remSteer, "pad") : analogShape(tiltSteering(), "tilt");
     // On-screen buttons and the drag wheel. A friend race keeps simulating
     // under the pause menu; the pad already zeroes itself while a menu is open.
     // Gate on anyOpen(), NOT navOpen(): navOpen() is also true on the title
@@ -2080,10 +2089,10 @@ const Input = (function () {
     return navBlocksTouch() ? 0 : analogShape(touchSteering(), "touch");
   }
 
-  // remoteActive() FIRST: it is a clock compare, and with no phone paired (the common case) it ends the
-  // test before remoteDrivingBlocked() walks the UI layers — that walk ran every physics step (B·H11).
-  function remoteThrottle() { return remoteActive() && !remoteDrivingBlocked() && remThr > remPedalDz; }
-  function remoteBrake() { return remoteActive() && !remoteDrivingBlocked() && remBrk > remPedalDz; }
+  // Most sessions have no active remote, so check the sample before walking UI layers.
+  function remoteDriveActive() { return remoteDriveReady && remoteActive() && !remoteDrivingBlocked(); }
+  function remoteThrottle() { return remoteDriveActive() && remThr > remPedalDz; }
+  function remoteBrake() { return remoteDriveActive() && remBrk > remPedalDz; }
   // anyOpen() = pause/settings/sheets. navOpen() also covers title #overlay.
   // LATCHED ONCE PER FRAME, at the end of poll() (PERF-HUNT-2 S5): updateCar asks
   // throttle/braking/steer/…Level 3-6 times per physics step and each anyOpen() walks
@@ -2201,7 +2210,7 @@ const Input = (function () {
      it was removed on request — the dock had grown to five buttons in one thumb
      column once PIT landed beside it, and a glance over the shoulder is the
      control that least deserves a permanent seat there. */
-  function lookingBack() { return keyLookBack || padLookBack || (remoteActive() && !remoteDrivingBlocked() && !!(remHeld & REMOTE_HELD.lookBack)); }
+  function lookingBack() { return keyLookBack || padLookBack || (remoteDriveActive() && !!(remHeld & REMOTE_HELD.lookBack)); }
 
   /* FREE-LOOK inputs for CamFeel. lookStick() is the latest right-stick sample
      (−1..1); consumeLookMouse() returns and clears RMB-drag pixel deltas.
@@ -2820,6 +2829,7 @@ const Input = (function () {
   return {
     init,
     reset,
+    invalidateRemoteDrive,
     keyBindings, setKeyBinding, clearKeyBinding, setKeyMap, getKeyMap, resetKeys, keysAreDefault, keyLabel, keyboardSeen, activeInputSource,
     padBindings, setPadBinding, clearPadBinding, setPadMap, getPadMap, resetPad, padsAreDefault, padLabel, padCapture, padPresent,
     debugState,

@@ -1,0 +1,1 @@
+Improved: Graphics details (SETTINGS › GRAPHICS) now shows what your Graphics preset does for each effect: "Use preset · On / Off" (on phones "Preset"), a "Preset: on from HIGH / ULTRA / EXTREME only…" line in each effect's help, and a short note on what LOW, MEDIUM and HIGH change.
