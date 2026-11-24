@@ -727,7 +727,7 @@ for (const entry of ["watch-first", "vr-first"]) {
       }
       assert.equal(h.current(), "far", "no ended owner's temporary camera is restored");
       assert.equal(h.stored.get("camMode"), h.index("far"));
-      assert.deepEqual(h.writes, [["camMode", h.index("far")]], "temporary owners never persist their shots");
+      assert.deepEqual(h.writes, [["camMode", h.index("far")], ["camChasePreset", "far"]], "only the initial explicit Far selection persists; temporary owners never write");
       h.G.setCamMode(h.index("chase"));
       assert.equal(h.current(), "chase", "ordinary manual controls still work after release");
       assert.equal(h.stored.get("camMode"), h.index("chase"));
