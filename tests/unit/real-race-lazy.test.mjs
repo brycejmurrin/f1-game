@@ -1,7 +1,8 @@
 /* real-race-lazy.test.mjs — #4978 row 6: the real-race family is off the eager boot.
  *
  * js/race/real-race-boot.js (FULL) is the RealRace game.js creates at eval; the body
- * (RealRaceBody) with RealRacePace / RealReplay / WatchTransport is LAZY_REAL_RACE.
+ * (RealRaceBody) with RealRacePace / RealReplay / ReplayBroadcast / WatchTransport
+ * is LAZY_REAL_RACE.
  * Pinned here: the group is not on the boot wall; the stub answers "no real race"
  * until the body lands and then creates it ONCE; the Data Hub (the only player door
  * to a real race) and the agent surface await the bundle before anything launches.
@@ -18,7 +19,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = new URL("../../", import.meta.url);
 const read = (rel) => readFileSync(new URL(rel, ROOT), "utf8");
 const manifest = createRequire(import.meta.url)("../../tools/manifest.cjs");
-const BODY = ["js/race/tv-graphics.js", "js/ui/watch-transport.js", "js/race/real-replay.js", "js/race/real-race-pace.js", "js/race/real-race.js"];
+const BODY = ["js/race/tv-graphics.js", "js/race/replay-broadcast.js", "js/ui/watch-transport.js", "js/race/real-replay.js", "js/race/real-race-pace.js", "js/race/real-race.js"];
 
 test("the real-race body is LAZY_REAL_RACE, not on the boot wall; the stub is", () => {
   assert.deepEqual(manifest.LAZY_REAL_RACE, BODY);
@@ -33,6 +34,8 @@ test("the real-race body is LAZY_REAL_RACE, not on the boot wall; the stub is", 
   }
   assert.ok(full.has("js/race/real-race-boot.js") && tags.has("js/race/real-race-boot.js"), "the RealRace stub boots eagerly");
   assert.ok(at.get("js/race/real-race-boot.js") < at.get(manifest.PATHS.GAME), "the stub evaluates before game.js creates it");
+  assert.ok(tags.has("js/race/broadcast.js"), "the shared camera policy boots eagerly");
+  assert.ok(at.get("js/race/broadcast.js") < at.get("js/camera/director.js"), "the live director reads the policy at eval");
 });
 
 function stubWorld() {
@@ -106,16 +109,25 @@ function hubWorld() {
     addEventListener() {}, removeEventListener() {},
   });
   ctx.window = ctx;
-  for (const file of ["js/core/mat4.js", "js/race/real-race-boot.js"]) vm.runInContext(read(file), ctx, { filename: absSrc(file) });
+  for (const file of ["js/core/mat4.js", "js/race/broadcast.js", "js/race/real-race-boot.js"]) vm.runInContext(read(file), ctx, { filename: absSrc(file) });
   vm.runInContext(read("js/core/script-loader.js") + "\n" + read("js/core/lazy-bundles.js") + "\nthis.LazyBundles = LazyBundles;", ctx, { filename: absSrc("js/core/lazy-bundles.js") });
   const lb = ctx.LazyBundles.create({ els: {}, applyLightTuneIfReady() {}, onAudioReady() {}, getContext: () => null, bindAgent() {},
-    loadBackendScripts: (files) => {
+    loadBackendScripts: (files, _edges, { loaded } = {}) => {
+      files = files.filter(file => !loaded?.has(file));
       loads.push(files.slice());
       if (files.includes("js/race/real-race.js")) {
         return new Promise((r) => { releaseRace = () => {
-          for (const file of files) vm.runInContext(read(file), ctx, { filename: absSrc(file) });
+          for (const file of files) {
+            vm.runInContext(read(file), ctx, { filename: absSrc(file) });
+            loaded?.add(file);
+          }
           r(true);
         }; });
+      }
+      if (files.length === 1 && files[0] === "js/race/replay-broadcast.js") {
+        const [file] = files;
+        vm.runInContext(read(file), ctx, { filename: absSrc(file) });
+        loaded?.add(file);
       }
       if (files.includes("js/data/hub.js")) ctx.DataHub = { init() {} };
       return Promise.resolve(true);
@@ -123,12 +135,26 @@ function hubWorld() {
   return { lb, loads, ctx, release: () => releaseRace() };
 }
 
+test("post-finish TV loads only its presentation and the Data Hub reuses it", async () => {
+  const w = hubWorld();
+  assert.equal(await w.lb.ensureReplayBroadcast(), true);
+  assert.deepEqual(Array.from(w.loads[0]), ["js/race/replay-broadcast.js"]);
+  assert.equal(vm.runInContext("typeof RealRaceBody", w.ctx), "undefined");
+  const presentation = vm.runInContext("ReplayBroadcast", w.ctx);
+  const p = w.lb.ensureRealRace();
+  w.release();
+  assert.equal(await p, true);
+  assert.equal(vm.runInContext("ReplayBroadcast", w.ctx), presentation);
+});
+
 test("the Data Hub opens only once the real-race engine has landed (WATCH & DRIVE never launches into a stub)", async () => {
   const w = hubWorld();
   let opened = null;
   const p = w.lb.ensureDataHub().then((ok) => { opened = ok; });
   for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
   assert.equal(vm.runInContext("typeof TvGraphics", w.ctx), "undefined");
+  assert.equal(vm.runInContext("typeof ReplayBroadcast", w.ctx), "undefined");
+  assert.equal(vm.runInContext("Broadcast.shotFor('pass', 'side', 0)", w.ctx), "heli");
   assert.equal(opened, null, "the hub waits for the real-race bundle");
   assert.ok(w.loads.some((l) => l.includes("js/race/real-race.js")), "the hub asks for LAZY_REAL_RACE");
   w.release();
@@ -136,6 +162,7 @@ test("the Data Hub opens only once the real-race engine has landed (WATCH & DRIV
   assert.equal(opened, true);
   assert.equal(vm.runInContext('TvGraphics.diff([{ code: "VER", pos: 1 }, { code: "NOR", pos: 2 }], [{ code: "NOR", pos: 1 }, { code: "VER", pos: 2 }]).lower.code', w.ctx), "NOR");
   assert.equal(vm.runInContext("typeof RealRaceBody.create", w.ctx), "function");
+  assert.equal(vm.runInContext("typeof ReplayBroadcast.create", w.ctx), "function");
   await w.lb.ensureRealRace();
   assert.equal(w.loads.filter((l) => l.includes("js/race/real-race.js")).length, 1, "one inject, memoised");
 });

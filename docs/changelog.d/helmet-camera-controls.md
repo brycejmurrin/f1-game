@@ -1,1 +1,0 @@
-New: Helmet camera eye-position and vibration settings, including independent left/right camera mounts, higher, lower and rearward viewpoints, five visor openings, seven lens colors and five tint strengths.

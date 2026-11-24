@@ -266,12 +266,14 @@ test("only GENERATED files cure themselves, and only when their source merged cl
   assert.equal(cure(["docs/agent-output/catalog.json", "docs/agent-output/policies.json"]), false, "policies.json is hand-written");
 
   // System audit 2026-10-26: the merge-conflict hot spots that are generated —
-  // gen-agent-index's three outputs and the scenery survey cache (75 conflicts
+  // gen-agent-index's two committed outputs and the scenery survey cache (75 conflicts
   // in 7 days) — cure; their sources still do not. (The coverage table left git
   // on 2026-11-10: RETIRED_PATHS, cured as a deletion below.)
-  const derived = ["docs/agent-index.json", "tests/data/impact-map.json", "docs/AGENT-HOOKS.md"];
+  const derived = ["docs/agent-index.json", "docs/AGENT-HOOKS.md"];
   assert.equal(cure(derived), true);
   assert.deepEqual(cureableConflicts(derived).derivedF, derived);
+  const impact = "tests/data/impact-map.json";
+  assert.deepEqual(cureableConflicts([impact]).builtF, [impact], "old branches keep the deletion");
   // The scenery catalog is built on demand since 2026-11-11 (ON_DEMAND_PATHS): its conflict is modify/delete, cured as a deletion.
   assert.equal(cure(["tools/shot/scenery-locations.json"]), true, "the scenery catalog cures as a built path");
   assert.deepEqual(cureableConflicts(["tools/shot/scenery-locations.json", "package.json"]).builtF, ["tools/shot/scenery-locations.json"]);

@@ -53,7 +53,7 @@ function boot(mode) {
   }
   hb.wireHold("left", () => {}, (l) => { lv.left = l; }, { button: "left", axis: "x", dir: -1, sibling: "right" });
   hb.wireHold("right", () => {}, (l) => { lv.right = l; }, { button: "right", axis: "x", dir: 1, sibling: "left" });
-  return { els, lv, PT: sb.PedalTravel };
+  return { els, lv, hb, PT: sb.PedalTravel };
 }
 // pointermove goes to whichever button holds the pointer; the landing button forwards it.
 const move = (els, x, y) => els.get("gas").fire("pointermove", { clientX: x, clientY: y });
@@ -131,4 +131,38 @@ test("the mode is read per slide: switching back to INSTANT restores the full pr
   els.get("gas").fire("pointerdown", { clientX: 50, clientY: 250 });
   move(els, 50, 195);
   assert.equal(lv.brake, 1);
+});
+
+
+test("last-touch cleanup preserves mouse, pen and keyboard holds and clears slid-away touch state", () => {
+  const { els, lv, hb } = boot({ v: "instant" });
+  const gas = els.get("gas"), brake = els.get("brake"), left = els.get("left");
+  gas.fire("pointerdown", { pointerId: 1, pointerType: "mouse", button: 0, clientX: 50, clientY: 250 });
+  brake.fire("pointerdown", { pointerId: 2, pointerType: "pen", clientX: 50, clientY: 150 });
+  left.fire("keydown", { code: "Space", stopPropagation() {} });
+  left.fire("pointerdown", { pointerId: 3, clientX: 50, clientY: 50 });
+  hb.holdReleaseAll(true, true);
+  assert.deepEqual(lv, { gas: 1, brake: 1, left: 1, right: 0 });
+  assert.deepEqual(Array.from(hb.pointerCounts()), [1, 1, 1, 0]);
+  hb.holdReleaseAll();
+  assert.deepEqual(lv, { gas: 0, brake: 0, left: 0, right: 0 });
+  // A handed-off touch has decoration on its original control as well as a receiving contact.
+  const appearance = {};
+  for (const [id, el] of els) {
+    el.setAttribute = (key, value) => { if (key === "data-slid") appearance[id] = value; };
+    el.removeAttribute = key => { if (key === "data-slid") delete appearance[id]; };
+  }
+  gas.fire("pointerdown", { pointerId: 4, clientX: 50, clientY: 250 });
+  gas.fire("pointermove", { pointerId: 4, clientX: 50, clientY: 150 });
+  assert.deepEqual(appearance, { gas: "off", brake: "on" });
+  hb.holdReleaseAll(true, true);
+  assert.deepEqual(appearance, {});
+  assert.deepEqual(lv, { gas: 0, brake: 0, left: 0, right: 0 });
+  // Reused ids carry the new pointer type even when the preceding touch missed its lift.
+  gas.fire("pointerdown", { pointerId: 4, clientX: 50, clientY: 250 });
+  gas.fire("pointerdown", { pointerId: 4, pointerType: "mouse", button: 0, clientX: 50, clientY: 250 });
+  hb.holdReleaseAll(true, true);
+  assert.equal(lv.gas, 1);
+  hb.holdReleasePointer(4);
+  assert.equal(lv.gas, 0);
 });

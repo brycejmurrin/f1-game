@@ -1,1 +1,0 @@
-Fixed: With RADIO VOICE: RECORDED, a radio line no recorded voice can say was dropped without a trace; it still stays written on its card, and it is now logged once and counted in the radio's debug readout, so the missing recordings can be found (#5991).

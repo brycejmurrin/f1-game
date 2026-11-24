@@ -298,7 +298,7 @@ function tlxBlock(head, tail) {
 }
 const LIT_DETAIL = new Function("isMobile", "GfxQuality", "renderer", "TLXShaders", "THREE", "TSL", "litCtx", "ENV_SIZE", "Log",
   "let lit;\n" + tlxBlock("let litDetail = null;", "lit = TLXShaders.lit(THREE, TSL, litCtx);") + "\nreturn lit;");
-test("garage capture reuses the cube until a room or mood change, and discards it at exit", () => {
+test("garage capture refreshes discrete room lighting once, and discards it at exit", () => {
   const start = TLX.indexOf("let garageProbeRoom =");
   const end = TLX.indexOf("function _restoreEnvFrame()", start);
   const run = new Function("record", `
@@ -317,6 +317,13 @@ test("garage capture reuses the cube until a room or mood change, and discards i
   for (let i = 0; i < 10; i++) capture.frame(probe);
   assert.deepEqual(record, ["reset", 0, 1, 2, 3, 4, 5]);
   assert.equal(capture.ready(), true);
+  for (const update of [{ inspection: "side" }, { inspection: "front" }, { inspection: "" }, { night: true }]) {
+    Object.assign(probe, update);
+    const at = record.length;
+    for (let i = 0; i < 12; i++) capture.frame(probe);
+    assert.deepEqual(record.slice(at), ["reset", 0, 1, 2, 3, 4, 5], "one completed cycle per discrete light change");
+  }
+  const at = record.length;
   probe.mood = "night";
   capture.frame(probe);
   capture.frame(probe);
@@ -324,7 +331,7 @@ test("garage capture reuses the cube until a room or mood change, and discards i
   capture.frame(probe);
   capture.leave();
   capture.leave();
-  assert.deepEqual(record.slice(7), ["reset", 0, 1, "reset", 0, "reset"]);
+  assert.deepEqual(record.slice(at), ["reset", 0, 1, "reset", 0, "reset"]);
   assert.equal(capture.ready(), false);
 });
 const ENV_STR = new Function("lit", "frame", "envRT", "envReady", "_envBlank", "_envActive", tlxBlock("if (lit.setEnvStr) {", "lit.setEnvStr("));

@@ -139,7 +139,7 @@ a { color: inherit; }
   main { padding: .45rem; }
   .lesson-intro { margin-block-end: .4rem; }
   .instrument { grid-template-columns: minmax(0, 1fr) minmax(7.75rem, .8fr); gap: .5rem; }
-  .chart { max-width: 175px; }
+  .chart { max-width: 164px; align-self: start; }
   #learn-studio [data-as="box"], #learn-studio [data-as="preview-side"] { padding: .55rem; }
 }
 

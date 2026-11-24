@@ -375,6 +375,148 @@ const TrackGeom = (function () {
   // madrid's retail boxes vs the guardrail). Index by a per-emitter sequence.
   const SEP_SLOTS = Object.freeze([0.035, 0.065, 0.135, 0.165]);
 
-  return { MAT, SWAY_FRAC, swayMatAt, ROUND_K, roundNormals, MIN_SEP, SEP_SLOTS, cross, norm, vadd, emit, addMesh,
+  // Exact architectural box primitives, not enclosing prop bounds: gaps and rotated corners stay open.
+  // Records are built once, survive worker transfer, and avoid retaining the city triangle soup.
+  const LIGHT_CELL = 16, LIGHT_STRIDE = 18;
+  const lightCellKey = (x, z) => x * 65536 + z;
+  // Opaque tree surfaces, not enclosing boxes. Tessellate once at build time;
+  // runtime queries reuse the cell index and the visor's bounded disk samples.
+  const lightScratch = { pos: [], nrm: [], col: [], idx: [], mat: [] };
+  function lightPrimitive(records, out, kind, args) {
+    const mat = Math.floor((out._mat || 0) + 0.5);
+    if (out._dryRun || (mat !== MAT.FOLIAGE && mat !== MAT.WOOD)) return;
+    for (const key of ["pos", "nrm", "col", "idx", "mat"]) lightScratch[key].length = 0;
+    const fn = kind === "cone" ? addCone : kind === "cyl" ? addCyl : addFrustum;
+    fn(lightScratch, ...args);
+    lightMesh(records, lightScratch);
+  }
+  function lightMesh(records, mesh, transform) {
+    const p = mesh.pos, idx = mesh.idx, cs = Math.cos(transform?.rotY || 0), sn = Math.sin(transform?.rotY || 0);
+    const scale = transform?.scale ?? 1;
+    for (let i = 0; i < idx.length; i += 3) {
+      const v = [];
+      for (let j = 0; j < 3; j++) {
+        const n = idx[i + j] * 3, x = p[n] * scale, y = p[n + 1] * scale, z = p[n + 2] * scale;
+        v.push(x * cs + z * sn + (transform?.x || 0), y + (transform?.y || 0), -x * sn + z * cs + (transform?.z || 0));
+      }
+      // A zero last row distinguishes triangles from invertible box transforms. Shared
+      // stride/bounds keep worker transfer and accepted-stage publication intact.
+      records.push(...v, 0, 0, 0,
+        Math.min(v[0], v[3], v[6]), Math.min(v[1], v[4], v[7]), Math.min(v[2], v[5], v[8]),
+        Math.max(v[0], v[3], v[6]), Math.max(v[1], v[4], v[7]), Math.max(v[2], v[5], v[8]));
+    }
+  }
+  function lightTriangle(data, n, eye, dx, dy, dz, maxT) {
+    const ax = data[n], ay = data[n + 1], az = data[n + 2];
+    const ex = data[n + 3] - ax, ey = data[n + 4] - ay, ez = data[n + 5] - az;
+    const fx = data[n + 6] - ax, fy = data[n + 7] - ay, fz = data[n + 8] - az;
+    const px = dy * fz - dz * fy, py = dz * fx - dx * fz, pz = dx * fy - dy * fx;
+    const det = ex * px + ey * py + ez * pz;
+    if (Math.abs(det) < 1e-10) return false;
+    const tx = eye[0] - ax, ty = eye[1] - ay, tz = eye[2] - az;
+    const u = (tx * px + ty * py + tz * pz) / det;
+    if (u < 0 || u > 1) return false;
+    const qx = ty * ez - tz * ey, qy = tz * ex - tx * ez, qz = tx * ey - ty * ex;
+    const v = (dx * qx + dy * qy + dz * qz) / det;
+    if (v < 0 || u + v > 1) return false;
+    const t = (fx * qx + fy * qy + fz * qz) / det;
+    return t > 1e-6 && t < maxT - 1e-6;
+  }
+  function lightBox(records, out, c, size, basis) {
+    const mat = Math.floor((out._mat || 0) + 0.5);
+    if (out._dryRun || out._matAt || mat === MAT.GLASS || mat === MAT.FOLIAGE || mat === MAT.FLAG || mat === MAT.FABRIC) return;
+    // Keep structural slabs/walls, not tiny fittings; omission cannot invent an opaque silhouette.
+    if (Math.min(...size) < 0.08 || Math.max(size[0]*size[1], size[0]*size[2], size[1]*size[2]) < 4) return;
+    const r = basis ? basis[0] : [1,0,0], u = basis ? basis[1] : [0,1,0], f = basis ? basis[2] : [0,0,1];
+    const a=r[0]*size[0]/2,b=u[0]*size[1]/2,d=f[0]*size[2]/2,
+      e=r[1]*size[0]/2,g=u[1]*size[1]/2,h=f[1]*size[2]/2,
+      i=r[2]*size[0]/2,j=u[2]*size[1]/2,k=f[2]*size[2]/2;
+    const det=a*(g*k-h*j)+b*(h*i-e*k)+d*(e*j-g*i);
+    if (!Number.isFinite(det) || Math.abs(det)<1e-10) return;
+    const s=1/det, x=Math.abs(a)+Math.abs(b)+Math.abs(d), y=Math.abs(e)+Math.abs(g)+Math.abs(h), z=Math.abs(i)+Math.abs(j)+Math.abs(k);
+    records.push(c[0],c[1],c[2], (g*k-h*j)*s,(d*j-b*k)*s,(b*h-d*g)*s,
+      (h*i-e*k)*s,(a*k-d*i)*s,(d*e-a*h)*s,(e*j-g*i)*s,(b*i-a*j)*s,(a*g-b*e)*s,
+      c[0]-x,c[1]-y,c[2]-z,c[0]+x,c[1]+y,c[2]+z);
+  }
+  function* lightIndexSteps(records) {
+    const boxes = new Float32Array(records.length);
+    const count = boxes.length / LIGHT_STRIDE, cells = new Map();
+    const bounds = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+    // Dense forests contribute many small triangles. Copy and bin them in
+    // batches so the paced builder can return to the loading screen.
+    const batch = 2048;
+    for (let id = 0; id < count; id++) {
+      const n = id * LIGHT_STRIDE;
+      for (let i = 0; i < LIGHT_STRIDE; i++) boxes[n + i] = records[n + i];
+      for (let a = 0; a < 3; a++) {
+        bounds[a] = Math.min(bounds[a], boxes[n + 12 + a]);
+        bounds[a + 3] = Math.max(bounds[a + 3], boxes[n + 15 + a]);
+      }
+      const endX = Math.floor(boxes[n + 15] / LIGHT_CELL), endZ = Math.floor(boxes[n + 17] / LIGHT_CELL);
+      for (let x = Math.floor(boxes[n + 12] / LIGHT_CELL); x <= endX; x++)
+        for (let z = Math.floor(boxes[n + 14] / LIGHT_CELL); z <= endZ; z++) {
+          const key = lightCellKey(x, z);
+          let list = cells.get(key);
+          if (!list) cells.set(key, list = []);
+          list.push(id);
+        }
+      if ((id + 1) % batch === 0) yield;
+    }
+    let packed = 0;
+    for (const [key, list] of cells) {
+      cells.set(key, new Uint32Array(list));
+      if (++packed % 256 === 0) yield;
+    }
+    return { boxes, cells, bounds, stamp: new Uint32Array(count), generation: 0, queries: 0, tests: 0 };
+  }
+  function lightIndex(records) {
+    const steps = lightIndexSteps(records);
+    for (;;) {
+      const step = steps.next();
+      if (step.done) return step.value;
+    }
+  }
+  function lightBlocked(track, eye, dx, dy, dz, maxT) {
+    const index=track && track._lightOccluders;
+    if(!index || !index.boxes.length || !(maxT>0))return false;
+    index.queries++;
+    const bounds=index.bounds;let near=0,far=maxT;
+    for(let axis=0;axis<3;axis++){
+      const dir=axis===0?dx:axis===1?dy:dz;
+      if(Math.abs(dir)<1e-12){if(eye[axis]<bounds[axis]||eye[axis]>bounds[axis+3])return false;}
+      else {const a=(bounds[axis]-eye[axis])/dir,b=(bounds[axis+3]-eye[axis])/dir;near=Math.max(near,Math.min(a,b));far=Math.min(far,Math.max(a,b));if(near>far)return false;}
+    }
+    if(!Number.isFinite(far))return false;
+    const start=near+Math.min(1e-6,(far-near)*0.5), sx=dx>=0?1:-1, sz=dz>=0?1:-1;
+    let x=Math.floor((eye[0]+dx*start)/LIGHT_CELL), z=Math.floor((eye[2]+dz*start)/LIGHT_CELL);
+    let tx=Math.abs(dx)>1e-12?((x+(sx>0?1:0))*LIGHT_CELL-eye[0])/dx:Infinity;
+    let tz=Math.abs(dz)>1e-12?((z+(sz>0?1:0))*LIGHT_CELL-eye[2])/dz:Infinity;
+    const stepX=Math.abs(LIGHT_CELL/dx),stepZ=Math.abs(LIGHT_CELL/dz),data=index.boxes;
+    let gen=(index.generation+1)>>>0;if(!gen){index.stamp.fill(0);gen=1;}index.generation=gen;
+    // Broad phase follows only crossed cells; a shared stamp visits a spanning box once per ray.
+    for(let cells=0;cells<2048;cells++){
+      const ids=index.cells.get(lightCellKey(x,z));
+      if(ids)for(let q=0;q<ids.length;q++){
+        const id=ids[q];if(index.stamp[id]===gen)continue;index.stamp[id]=gen;index.tests++;
+        const n=id*LIGHT_STRIDE,ox=eye[0]-data[n],oy=eye[1]-data[n+1],oz=eye[2]-data[n+2];
+          if (data[n + 9] === 0 && data[n + 10] === 0 && data[n + 11] === 0) {
+            if (lightTriangle(data, n, eye, dx, dy, dz, maxT)) return true;
+            continue;
+          }
+          let lo=0,hi=maxT;
+        for(let a=0;a<3;a++){
+          const o=n+3+a*3,origin=data[o]*ox+data[o+1]*oy+data[o+2]*oz,dir=data[o]*dx+data[o+1]*dy+data[o+2]*dz;
+          if(Math.abs(dir)<1e-12){if(origin< -1||origin>1){hi=-1;break;}}
+          else{const t0=(-1-origin)/dir,t1=(1-origin)/dir;lo=Math.max(lo,Math.min(t0,t1));hi=Math.min(hi,Math.max(t0,t1));if(lo>hi)break;}
+        }
+        if(lo<=hi && hi>1e-6 && lo<maxT-1e-6)return true;
+      }
+      if(tx>far && tz>far)break;
+      if(tx<tz){x+=sx;tx+=stepX;}else{z+=sz;tz+=stepZ;}
+    }
+    return false;
+  }
+
+  return { lightPrimitive, lightMesh, lightBox, lightIndex, lightIndexSteps, lightBlocked, MAT, SWAY_FRAC, swayMatAt, ROUND_K, roundNormals, MIN_SEP, SEP_SLOTS, cross, norm, vadd, emit, addMesh,
            addBox, addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain };
 })();

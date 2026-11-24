@@ -101,7 +101,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/harness.mjs** | Shared harness for the headless `__apex` tools: in-process static server + Chromium launch with teardown-safe shutdown. | playwright-probe |
 | **lib/hud-geometry.mjs** | In-page HUD box probe (rect, visibility, font px) + the pure overlap/safe-area rules of hud-layout.spec. | — |
 | **lib/hud-survey-matrix.mjs** | HUD survey core: cells, quick/full/exhaustive matrices, shards, expected-visible rules, findings, merge, report HTML. | — |
-| **lib/impact-map.mjs** | Narrow `tests/data/impact-map.json` pins for change-aware spec selection. | — |
+| **lib/impact-map.mjs** | Authored impact-map pins for change-aware spec selection and the generated test index. | — |
 | **lib/js-strip.mjs** | Dependency-free JS comment/whitespace stripper; the boot wall's eagerCodeBytes ratchet measures its output. | — |
 | **lib/lint-bins.mjs** | Locates the pinned lint binaries (actionlint, zizmor, glslang, naga, shellcheck) and defines what an absent one means. | — |
 | **lib/mem-census.mjs** | Page-side memory census (track WeakRefs, decoded audio, render objects, forced GC) for the CLI and its spec. | — |
@@ -218,7 +218,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/physics-oracle.mjs** | Golden physics traces (VM): raw-double per-step player state + track queries for the apex-26 TypeScript port gate. | tune-physics |
 | **check/physics-tune-sweep.mjs** | How DRIVEABLE is each notch of each handling slider? Drives the real DOM slider, then a curvature-fed closed-loop lap. | tune-physics |
 | **check/player-dyn.mjs** | Player vehicle-dynamics bench (VM): braking, accel, skidpad, step steer, trail-brake, lift-off, power-on, flick. | tune-physics |
-| **check/quali-calibrate.mjs** | Qualifying calibration (VM): drives the clear-air AI field per circuit, writes `tests/data/quali-calibration.json`. | race-weekend |
+| **check/quali-calibrate.mjs** | Qualifying calibration (VM): measures solo flying laps and writes `tests/data/quali-calibration.json`. | race-weekend |
 | **check/quick-validate.mjs** | Fast refactor gate: boots the game once and probes the critical paths (globals, race, physics, lighting) in ~30-60 s. | check-changes |
 | **check/ratchets.mjs** | Size ratchets: ratchets.json + per-branch ratchets.d/ deltas. `--check`, `--update`, `--fold`, `--json`, `--base <ref>`. | — |
 | **check/scan-globals.mjs** | Derives the REAL global-reference graph of the IIFE build (espree/eslint-scope): assigns, eval-time reads, edges. | check-changes |
@@ -290,7 +290,7 @@ Agent-facing generated pages: the coverage table, the hook index and the static 
 
 | Tool | Does | Suggested skill |
 |---|---|---|
-| **docs/gen-agent-index.mjs** | Regenerates `docs/agent-index.json`, `docs/AGENT-HOOKS.md` and `tests/data/impact-map.json`; `--check`. | agent-view |
+| **docs/gen-agent-index.mjs** | Regenerates the agent index and hook page (`--check`), plus a local impact report. | agent-view |
 | **docs/gen-coverage-table.mjs** | Builds the per-file coverage page (artifacts/, never committed) from each suite's header or groups.json note. | check-changes |
 | **docs/knowledge-gc.mjs** | docs/notes retention: lists uncited notes; `--apply` archives them and repoints links; `--index`; `--move`. | slim-bloat |
 

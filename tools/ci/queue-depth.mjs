@@ -249,6 +249,21 @@ export function measure(opts = {}) {
   return { at: new Date((opts.now || Date.now)()).toISOString(), ...v, line: reportLine(v) };
 }
 
+// Optional browser groups and new workers leave room for land and Pages jobs.
+export const OPTIONAL_LINUX_LIMIT = 35;
+
+export function optionalWorkAdmission(snapshot) {
+  const inFlight = snapshot.linux?.inFlight;
+  if (!Number.isFinite(inFlight)) {
+    return { proceed: true, message: `queue depth unavailable (${snapshot.error || "no Linux job count"}); proceeding` };
+  }
+  const count = snapshot.truncated ? `at least ${inFlight}` : String(inFlight);
+  if (inFlight >= OPTIONAL_LINUX_LIMIT) {
+    return { proceed: false, message: `${count} Linux jobs in flight (limit ${OPTIONAL_LINUX_LIMIT})` };
+  }
+  return { proceed: true, message: `${count} Linux jobs in flight (limit ${OPTIONAL_LINUX_LIMIT})` };
+}
+
 // ── #2182: does this push start CI at all? ──────────────────────────────────
 const DEPLOY = "claude/f1-game-project-26h3ng";
 const OWNER = "brycejmurrin";
@@ -378,13 +393,20 @@ function parseArgs(argv) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
   exitIfHelp(argv, `usage: node tools/ci/queue-depth.mjs [--json] [--write [path]] [--push "<git push command>"] [--wait <min> [--interval <s>]]
+       node tools/ci/queue-depth.mjs --admit-optional
 
 Counts queued + running Actions JOBS by OS against ${LINUX_SLOTS} Linux / ${MACOS_SLOTS} macOS slots.
 Hold at ≥${LINUX_HOLD} Linux in flight, ≥${QUEUED_HOLD} queued, or ≥${MACOS_SLOTS} macOS. --write defaults to ${DEFAULT_OUT}.
 --push: exit 0 with "= queue skip" when every pushed branch has no open PR.
 --wait <min>: block (run it as ONE background task) until ok has held 2 min; prints the in-flight/queued trend each poll; exit 0 ok, 124 timeout.
-Informational since 2026-10-16: nothing holds a push on this line (AGENTS.md rule 4).
+--admit-optional: exit 1 at ${OPTIONAL_LINUX_LIMIT} Linux jobs in flight to defer an optional browser group.
+The normal gauge is informational and never holds a push (AGENTS.md rule 4).
 Exit 0 = ok or hold (never blocks), 2 = bad args, 3 = API/token.`);
+  if (argv.length === 1 && argv[0] === "--admit-optional") {
+    const result = optionalWorkAdmission(measure());
+    console.log(`= optional work ${result.proceed ? "admitted" : "deferred"} — ${result.message}`);
+    process.exit(result.proceed ? 0 : 1);
+  }
   const args = parseArgs(argv);
   if (args.error) { console.error(`queue-depth: ${args.error}`); process.exit(2); }
   if (args.push !== null) {

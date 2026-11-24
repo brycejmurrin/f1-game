@@ -1478,6 +1478,7 @@ const CarDraw = (function () {
     // The cockpit body: the REAL car (livery, nose, mirrors, number board) minus
     // the driver helmet the camera sits inside. Cached per team like playerBodies.
     const cockpitBodies = {};
+    const cockpitOccluders = new WeakMap();
     const cockpitBodyOrder = [];
     // The last key's inputs, so the per-frame call (default camera) builds no
     // string and no closure on a hit — the hoisted factory reads _cb*.
@@ -1486,9 +1487,12 @@ const CarDraw = (function () {
     function buildPendingCockpitBody() {
       const team = _cbTeam, source = deps.resolveLivery(team);
       const view = typeof CockpitFinishes !== "undefined" ? CockpitFinishes.view(source) : null, liv = view ? view.livery : source;
-      return G.gfx.createMesh(Car3D.build(liv.c1, liv.c2,
-        { livery: liv, cockpitHalo: view && view.halo, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, cockpitBody: CockpitOpts.body(), halo: _cbHalo, num: _cbNum,
-          parts: _cbParts, detail: carDetail().player, hero: carDetail().hero }));
+      const data = Car3D.build(liv.c1, liv.c2,
+        { livery: liv, cockpitHalo: view && view.halo, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, sourceOcclusion: true, cockpitBody: CockpitOpts.body(), halo: _cbHalo, num: _cbNum,
+          parts: _cbParts, detail: carDetail().player, hero: carDetail().hero });
+      const mesh = G.gfx.createMesh(data);
+      if (mesh && data._cockpitOccluder) cockpitOccluders.set(mesh, data._cockpitOccluder);
+      return mesh;
     }
     // The first-person SHADOW caster: the WHOLE exterior car (wheels, engine
     // cover/airbox, fin, rear wing) as a depth silhouette minus only what made
@@ -1709,7 +1713,9 @@ const CarDraw = (function () {
       // The cockpit CHOICES (js/camera/cockpit-opts.js): VISOR keeps the STANDARD
       // seat (its eye is vantage.js VISOR_EYE_*) and no wheel.
       const wheelStyle = noWheel ? "none" : CockpitOpts.wheel(), lay = CockpitOpts.layout(wheelStyle, noWheel ? "std" : null);
-      G.gfx.draw(cockpitBodyMesh(c.team, c), base, paint);
+      const body = cockpitBodyMesh(c.team, c);
+      if (typeof VisorOptics !== "undefined" && VisorOptics.setCockpitOccluder) VisorOptics.setCockpitOccluder(cockpitOccluders.get(body) || null, base);
+      G.gfx.draw(body, base, paint);
       // The housings' glass: the live rear view, else the sky-tint fallback.
       if (!carModelBuf) drawMirrorLens(c, base, nite);
       // INTERIOR: carbon or team trim; CLASSIC adds gauges and an aeroscreen.

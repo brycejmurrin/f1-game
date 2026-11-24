@@ -575,6 +575,7 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
     transparent calc(var(--sheen) + 14%));
 }
 @media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion="reduce"]) #menu-buttons .bigbtn:focus-visible::after { animation: sheen 0.62s cubic-bezier(0.3, 0, 0.2, 1); }
   @media (hover: hover) and (pointer: fine) {
     .bigbtn:is(:hover, :focus-visible)::after { animation: sheen 0.62s cubic-bezier(0.3, 0, 0.2, 1); }
   }

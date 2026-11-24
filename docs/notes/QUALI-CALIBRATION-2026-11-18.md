@@ -2,25 +2,62 @@
 
 Kind: measurement · Re-measure-by: 2027-02-18
 
-Summary: The simulated field's lap (`Quali.carLap`) is `QUALI_CENTRE` 0.993 x a generated per-circuit factor x the integrated lap, and the corner cap takes the car's wing level as the driven AI is charged it. On 52 circuits x 3 levels a driver exactly as good as the AI qualifies P12 by median (P9 to P15 at 33 / 45 / 45 circuits on easy / normal / hard), where today's model gives pole everywhere and the first refit (`docs/notes/QUALI-REFIT-2026-11-18.md`) the back of the grid everywhere. Time-trial gold (`referencePole`) and AI pit strategy are unchanged from the first refit.
+## Qualifying flying-lap calibration (#5999)
 
-Evidence classes: every number here is REPRODUCED-VM by the lane that wrote this note unless marked relayed.
+The model now scales the integrated lap by the circuit's measured qualifying factor. The previous race-derived 0.993 multiplier has been removed. Each measured car runs alone in a real qualifying session with its works-car AI setup and the production rolling start. The AI keeps driving at handover. The first crossing starts the clock and the second supplies the timed lap. The generator takes the median of paired timed-to-integrated ratios across easy, normal and hard. Custom tracks use the median of the built-in circuit factors. [Measurement data](../../tests/data/quali-calibration.json) · [Measurement tool](../../tools/check/quali-calibrate.mjs)
 
-## The three parts
+The new table contains 1,716 timed laps across 52 circuits. Circuit factors range from 0.9120 at Mosport to 0.9704 at Imola, with a calendar median of 0.9391. Monza, Monaco and Suzuka now use 0.9355, 0.9615 and 0.9280 respectively.
+
+The held-out parity check drives different grid slots on five contrasting circuits at all three difficulties. It checks paired median times, the front of the sheet and stale model times in the calibration data. The fit uses dry, wear-off measurements at the shipped pace. [Parity check](../../tests/unit/quali-absolute-parity-vm.test.mjs)
+
+## Previous race-lap calibration, 2026-11-23 (wing coefficient 0.055)
+
+At deploy revision `ceb304af1a`, `AiDrive.aeroGrip(load)` uses `AI_WING_GRIP = 0.055`. The simulated field's base lap is the integrated lap multiplied by `QUALI_CENTRE` 0.993 and the generated circuit factor. The model applies `AiDrive.paceTrim` to the car's free speed and corner authority and uses the square root of its wing grip in the corner cap. A human row uses the seat's authored wing and pace trim, independent of player setup edits. [Wing change #5854](https://github.com/brycejmurrin/f1-game/pull/5854) · [Pace calibration #5686](https://github.com/brycejmurrin/f1-game/pull/5686)
+
+The [race-lap calibration snapshot](https://github.com/brycejmurrin/f1-game/blob/ceb304af1a413a0fbb910805e8a61b31a3661cf1/tests/data/quali-calibration.json) contains 1,716 paired rows across 52 circuits and three difficulties, 11 sampled grid slots per circuit and difficulty. The recorded laps come from thinned dry races at PACE 0.8396, seed 1, with wear and wind off. Each row stores the best of three timed laps in frames at 60 Hz and the matching uncalibrated model lap in milliseconds. The first 0.055 calendar measurement landed in `0d98e69124`. The checked-in rows come from the subsequent calendar rerun in `0292569af5` after the model adopted pace trim. The latter changed 1,711 driven frame counts and all 1,716 model times relative to the first 0.055 measurement. [First 0.055 measurement](https://github.com/brycejmurrin/f1-game/commit/0d98e69124cd9127e7fa2ab5ddf4d687476b6e03) · [Pace-trim rerun](https://github.com/brycejmurrin/f1-game/commit/0292569af5)
+
+The generator takes the median of the paired driven-to-raw time ratios across all three difficulties for each circuit, then rounds to four decimal places. Factors span 0.9184 at Silverstone to 0.9753 at Imola. The calendar median and fallback for a track without its own factor is 0.9453. [Factor generator](../../tools/gen/gen-quali-calib.mjs) · [Race-lap model snapshot](https://github.com/brycejmurrin/f1-game/blob/ceb304af1a413a0fbb910805e8a61b31a3661cf1/js/race/quali-model.js)
+
+The paired ratios below divide each sampled car's calibrated base lap by its driven best. Each circuit contributes the median of its 11 paired ratios for that difficulty. These are summaries of the same sample used to fit the circuit factors. The later pace-trim commit separately reports all five independent parity tests passing. [Pace-trim rerun](https://github.com/brycejmurrin/f1-game/commit/0292569af5) · [Parity test](../../tests/unit/quali-absolute-parity-vm.test.mjs)
+
+| Difficulty | Circuit median ratio, min / median / max |
+|---|---|
+| Easy | 0.988 / 0.993 / 0.996 |
+| Normal | 0.989 / 0.993 / 0.995 |
+| Hard | 0.989 / 0.993 / 0.997 |
+
+Hard-difficulty examples from the recorded dry data. Base model times use the stored raw time multiplied by the circuit factor and 0.993. Each set of times is sorted independently.
+
+| Circuit | Factor | Driven best, fastest / median / slowest (s) | Base model, fastest / median / slowest (s) |
+|---|---:|---|---|
+| Monza | 0.9387 | 116.45 / 119.40 / 123.10 | 115.62 / 118.11 / 119.59 |
+| Monaco | 0.9648 | 90.15 / 92.08 / 92.70 | 89.58 / 91.60 / 92.71 |
+| Suzuka | 0.9336 | 120.32 / 123.22 / 124.85 | 120.02 / 122.87 / 124.47 |
+| Silverstone | 0.9184 | 118.92 / 122.40 / 125.40 | 118.41 / 121.45 / 123.13 |
+| Spa | 0.9416 | 140.55 / 143.67 / 145.92 | 139.93 / 143.17 / 145.06 |
+| Bahrain | 0.9480 | 122.50 / 125.23 / 127.03 | 122.18 / 124.54 / 125.90 |
+
+The stored sample leaves out the other grid slots, the seeded execution variation and the driver qualifying bias applied by `simLap`. Recreating the historical full-grid placing table and the owner's wear-real table would require separate measurements. The medal pole now uses 0.9915 times the calibrated synthetic top car's lap. Pit loss and replay scaling use the separate neutral-wing reference with `QUALI_TRIM` 0.92. [Race-lap measurements](https://github.com/brycejmurrin/f1-game/blob/ceb304af1a413a0fbb910805e8a61b31a3661cf1/tests/data/quali-calibration.json) · [Race-lap model snapshot](https://github.com/brycejmurrin/f1-game/blob/ceb304af1a413a0fbb910805e8a61b31a3661cf1/js/race/quali-model.js)
+
+## Historical experiment, 2026-11-18 (wing coefficient 0.16)
+
+The original option 1b experiment found a median P12 for a driver matching the AI's pace. P9 to P15 covered 33, 45 and 45 of the 52 circuits on easy, normal and hard respectively. The same comparison gave pole everywhere before the refit and a median P22 in the first refit. The experiment's medal reference and AI pit strategy stayed at the first refit's values. Unless marked relayed, the figures below are from that experiment's VM measurements. In its tables, “today” means the pre-refit revision `9261395b`, and “this tree” means the original option 1b test tree. [First refit measurements](QUALI-REFIT-2026-11-18.md)
+
+### The three parts
 
 1. Wing term. `AiDrive.aeroGrip(load) = 1 + (load - 0.5) x AERO_GRIP_K` (0.16) is the factor the driven AI's lateral grip carries (`js/physics/ai-drive.js` `lateralScale`, `lateralScales`, `brakeTarget`); `carLap` multiplies its corner cap by the square root. One constant, one helper: the model cannot drift from the driver.
    A HUMAN's car (the player, a VS FRIEND rival) reads the neutral wing, factor 1, on purpose: on track a human pays for wing in top speed and the AI does not (#5791), so a simulated human time must not move with a setup slider (maximum wing, SIMULATE, then race on any wing would buy grid places). `tests/unit/quali-persist.test.mjs` pins it: identical at minimum, neutral and maximum wing, and the AI rows do not move with the human's setup.
 2. Centre. `QUALI_CENTRE` 0.993, one constant; the model does not read the tyre-wear setting (see Yardstick).
 3. Per-circuit factor. `CALIB[id]` in the `@gen-quali-calib` block of `js/race/quali-model.js`, 0.9339 (silverstone) to 0.9792 (imola); a circuit with no row (a TRACK DESIGNER layout) takes the calendar median 0.9590.
 
-## How the factor is made (two stages)
+### How the factor is made (two stages)
 
 - Measurement, a tool run: `node tools/check/quali-calibrate.mjs --update --jobs 3` writes `tests/data/quali-calibration.json`. Per circuit and level it drives two thinned clear-air AI fields (grid slots `i % 4 == 1` and `3`, 11 cars, best of 3 timed laps, tyre wear and wind off, VM seed 1) and records each car's best lap as an integer frame count (1/60 s) beside the model's uncalibrated lap in integer ms. Each circuit runs in its own process; nothing from the clock, host or order reaches the file. `--verify <id>` re-measures one circuit and compares byte for byte; `--model-only` refreshes the model column without driving. Measured on this 4-core box: 12 min wall, 35 min of CPU at `--jobs 3` for the calendar (`--model-only` 4 min at `--jobs 4`), and the file it wrote was byte-identical to one assembled from an earlier drive that ran the circuits in three long-lived processes in a different order. It is never part of `npm run gen` or CI, and the file is not in `GENERATED_PATHS` (a merge regenerates those).
 - Generator, arithmetic: `tools/gen/gen-quali-calib.mjs` (in `npm run gen` and `gen:check`; `tests/unit/generated-docs.test.mjs` runs its `--check`) writes the block: per circuit the median over all measured cars and levels of driven / uncalibrated model, to 4 decimals. It refuses a factor outside [0.9, 1.1] and a file that is not exactly the calendar. The edit hook refuses a hand edit of the block (tried: "the edit touches a generated block").
 
 Re-measure duty: when the AI's driving changes, `tests/unit/quali-absolute-parity-vm.test.mjs` fails; run the tool with `--update`, then `npm run gen`, and commit both files. When only the model's integrated lap changes, the test's third assertion fails and `--model-only` is enough.
 
-## Yardstick: how much quicker is a qualifying lap than a race lap for the same driver
+### Yardstick: how much quicker is a qualifying lap than a race lap for the same driver
 
 `scratch/yardstick/quali-vs-race.mjs` (a subagent's script, re-run by this lane with identical output): the real qualifying flow in the VM, the AI driver model given the car at the flying-start hand-over; hard; R = the same car's clear-air race best lap; "off" / "real" = tyre wear.
 
@@ -38,9 +75,9 @@ Re-measure duty: when the AI's driving changes, `tests/unit/quali-absolute-parit
 
 The calibration's reference is the wear-off race lap, so the yardstick is Q / R_off: 0.9875 to 0.9983 with wear off, 0.9905 to 1.0000 with wear real. The earlier "1.3 to 2.0 % with wear real" was Q_real / R_real, against a race lap that wear and fuel had already slowed by 1.1 to 1.5 %. The qualifying lap itself moves 0.1 to 0.35 % with the wear setting. The whole wear-off gain is the flying start (relayed: from 20 % of the lap to the line Q / R is 0.9991 to 1.0007; fuel and tyre-temperature multipliers are exactly 1 with wear off, `js/physics/tyre-model.js`).
 
-Residual left in: the flying-start gain varies by circuit (Monza about 0.3 %, Monaco and Suzuka about 1.0 %), so one centre is off by about ±0.4 % per circuit. Follow-up that would remove it, not built: calibrate on flying laps (the tool stages the qualifying flow per car).
+The race-lap fit left a residual because the flying-start gain varied by circuit. Monza gained about 0.3 %, while Monaco and Suzuka gained about 1.0 %. A single multiplier left roughly ±0.4 % circuit error.
 
-## Where a lap lands on the sheet (52 circuits; pole / P2-8 / P9-15 / P16-21 / behind the 21 AI rows; median place)
+### Where a lap lands on the sheet (52 circuits; pole / P2-8 / P9-15 / P16-21 / behind the 21 AI rows; median place)
 
 Driven laps: this lane's calendar drive (the measurement file's sample). Sheets: `G.qualiSim(0)` on worktrees of `9261395b` (today), `fed34d71` (first refit) and this tree.
 
@@ -63,7 +100,7 @@ Per-circuit median of model / driven over the measured cars (min / median / max 
 
 The sheet stays 1 to 1.5 s narrower than the driven field: for the AI a high wing is also worth straight-line time (#5791), which a corner term cannot reproduce. That is why the AI's fastest race lap is still pole at 15 to 30 circuits.
 
-## The test (out of sample: grid slots `i % 4 == 0`, 5 circuits x 3 levels, easy / normal / hard)
+### The test (out of sample: grid slots `i % 4 == 0`, 5 circuits x 3 levels, easy / normal / hard)
 
 | circuit | median model / driven, band [0.978, 1.008]: today | first refit | 1b | fastest model / fastest driven, band [0.968, 1.018]: today | first refit | 1b |
 |---|---|---|---|---|---|---|
@@ -75,7 +112,7 @@ The sheet stays 1 to 1.5 s narrower than the driven field: for the AI a high win
 
 Today's model fails the median at four circuits (Monaco's median passes; Monaco fails the third assertion, the model column of the measurement file); the first refit fails the median in every cell; 1b passes all three assertions in every cell. The fastest-car band is wider than the median's (one car, and the narrower sheet). It catches today's model and does not catch the first refit (0.940 to 0.989); the median does. Monaco's 0.975 is a known residual: the corner-only wing term overstates wing where there are no straights; revisit when #5791 is decided.
 
-## The owner's settings (export 2026-11-10: hard, OVERALL SPEED 11, tyre wear real; wind off in the VM)
+### The owner's settings (export 2026-11-10: hard, OVERALL SPEED 11, tyre wear real; wind off in the VM)
 
 | circuit | AI clear-air race best laps, wear real, fastest / median / slowest | same, wear off | sheet P1 / P11 / P22 today | first refit | 1b | equal driver's qualifying lap lands: today / first refit / 1b |
 |---|---|---|---|---|---|---|
@@ -86,6 +123,6 @@ Today's model fails the median at four circuits (Monaco's median passes; Monaco 
 
 Gold (`referencePole`) is unchanged from the first refit: 112.8, 85.2, 117.8, 118.1.
 
-## What does not move from the first refit
+### What stayed the same in the experiment
 
 A state hash of AI-only races (every car's position, speed, lap, stops and wear every 30 frames for 150 s, plus the pit plans and `pitLossLaps`) is identical between `fed34d71` and this tree in 7 cases: monza hard, suzuka normal and monaco easy with wear off; monza hard (10 laps), redbull hard (20), redbull normal (10) and bahrain hard (20) with wear real. `referencePole` has the same five readers and is untouched, so the stop-count table of the first note stands as measured there. `carLap` has one reader in the game, `simLap`, so what moves is the sheet and what reads it: the grid, `__apex.qualiSim`, and VS FRIEND's SIMULATE time, which for a human's own car does not read the wing level (above).

@@ -668,3 +668,98 @@ test("write failure announces recovery immediately, then augments the still-open
     assert.equal(mounts, recover ? 0 : 1);
   }
 });
+
+function garageReset(h) {
+  h.c.document = { querySelector: () => null };
+  for (const file of ["js/data/settings-defaults.js", "js/data/garage-defaults.js", "js/data/teams.js", "js/car/liveries.js",
+    "js/car/custom-liveries.js", "js/physics/consts.js", "js/garage/setup-tune.js", "js/ui/settings-export.js", "js/ui/settings-export-body.js"]) {
+    vm.runInContext(src(file), h.c, { filename: absSrc(file) });
+    if (file === "js/physics/consts.js") h.c.PhysicsConsts = h.c.window.PhysicsConsts;
+  }
+  return vm.runInContext("({ reset: SettingsExport.resetGarage, tune: SetupTune })", h.c);
+}
+
+test("garage reset clears quota-refused setups from retries and mirror before reload", async () => {
+  const h = boot(), garage = garageReset(h);
+  await h.store.mirror.ready;
+  h.disk.set("other-app.setup.ferrari", "keep-external");
+  h.store.set("difficulty", "hard");
+  h.store.set("career.driver.0", { keep: "career" });
+  h.block(true);
+  garage.tune.set("ferrari", { arbF: 11 });
+  h.store.set("sfx", false);
+  await h.store.mirrorFlush();
+  h.block(false);
+  const result = await garage.reset();
+  assert.equal(result.failed, 0);
+  assert.equal(h.disk.get("other-app.setup.ferrari"), "keep-external");
+  assert.equal(garage.tune.get("ferrari").arbF, garage.tune.defaults("ferrari").arbF);
+  assert.equal(h.store.retryFailed().retried, 1, "only the unrelated sound preference remains queued");
+  await h.store.mirrorFlush();
+  const reloaded = boot({ idb: h.idb, disk: h.disk });
+  await reloaded.store.mirror.ready;
+  assert.deepEqual([reloaded.store.getStored("setup.ferrari"), reloaded.store.get("difficulty"), reloaded.store.get("sfx"),
+    reloaded.store.get("career.driver.0").keep], [undefined, "hard", false, "career"]);
+});
+
+test("garage reset waits for mirror inventory and clears a row that cannot restore to disk", async () => {
+  const h = boot(), garage = garageReset(h);
+  await h.store.mirror.ready;
+  garage.tune.set("haas", { arbF: 11 });
+  await h.store.mirrorFlush();
+  const reloaded = boot({ idb: h.idb }), reset = garageReset(reloaded);
+  reloaded.block(true);
+  // Reset starts before the asynchronous restore finishes; haas cannot reach primary storage.
+  const restoring = reloaded.store.mirror.ready.then(() => reloaded.block(false));
+  const result = await reset.reset();
+  await restoring;
+  assert.equal(result.failed, 0);
+  const again = boot({ idb: h.idb });
+  await again.store.mirror.ready;
+  assert.equal(again.store.getStored("setup.haas"), undefined, "reset tombstoned the mirror-only setup");
+});
+
+test("garage reset reports a refused mirror deletion instead of permitting its success reload", async () => {
+  const h = boot(), garage = garageReset(h);
+  await h.store.mirror.ready;
+  garage.tune.set("ferrari", { arbF: 11 });
+  await h.store.mirrorFlush();
+  h.idb.failNext();
+  const result = await garage.reset();
+  assert.equal(result.failed, 1, "primary deletion alone cannot make the reset durable");
+  await h.store.mirrorFlush();
+  const reloaded = boot({ idb: h.idb });
+  await reloaded.store.mirror.ready;
+  assert.equal(reloaded.store.getStored("setup.ferrari"), undefined, "the retained mirror deletion is retryable");
+});
+
+test("garage reset reopens a closed mirror before reporting durable success", async () => {
+  const h = boot(), garage = garageReset(h);
+  await h.store.mirror.ready;
+  garage.tune.set("ferrari", { arbF: 11 });
+  await h.store.mirrorFlush();
+  h.idb.handles.at(-1).forceClose(true);
+  assert.equal(h.store.mirror.supported, false);
+  const result = await garage.reset();
+  assert.equal(result.failed, 0);
+  assert.equal(h.store.mirror.pending, 0);
+  const reloaded = boot({ idb: h.idb });
+  await reloaded.store.mirror.ready;
+  assert.equal(reloaded.store.getStored("setup.ferrari"), undefined);
+});
+
+test("garage reset refuses an unread mirror inventory instead of hiding recoverable garage rows", async () => {
+  const h = boot(), garage = garageReset(h);
+  await h.store.mirror.ready;
+  garage.tune.set("ferrari", { arbF: 11 });
+  await h.store.mirrorFlush();
+  h.idb.down(true);
+  const next = boot({ idb: h.idb }), reset = garageReset(next);
+  const result = await reset.reset();
+  assert.equal(result.ok, false);
+  assert.equal(next.disk.size, 0, "refused before applying any defaults");
+  h.idb.down(false);
+  const recovered = boot({ idb: h.idb });
+  await recovered.store.mirror.ready;
+  assert.equal(recovered.store.getStored("setup.ferrari").arbF, 11, "unread recovery data is preserved");
+});

@@ -97,3 +97,53 @@ test("replaying a close leaves reopened CI alone and a current close cleans up o
   assert.deepEqual(cancelled("closed", after), []);
   assert.deepEqual(cancelled("closed", close), [1, 7]);
 });
+
+test("scheduled cleanup cancels only old empty queued attempts and rechecks after a 409", () => {
+  const workflow = parse(fs.readFileSync(new URL("../../.github/workflows/ci-cancel-on-close.yml", import.meta.url), "utf8"));
+  const job = workflow.jobs["cancel-empty"];
+  assert.equal(job.if, "github.event_name == 'schedule'");
+  assert.deepEqual(job.permissions, { actions: "write" });
+  const mock = `
+    date() { echo "2026-11-21T10:00:00Z"; }
+    gh() {
+      case "$*" in
+        *"status=queued -f created=<2026-11-21T10:00:00Z "*)
+          echo '{"workflow_runs":[{"id":1,"run_attempt":1},{"id":2,"run_attempt":1},{"id":3,"run_attempt":1},{"id":4,"run_attempt":1},{"id":5,"run_attempt":1},{"id":6,"run_attempt":1},{"id":7,"run_attempt":1}]}' ;;
+        "api repos/owner/repo/actions/runs/3")
+          echo '{"status":"queued","run_attempt":2,"run_started_at":"2026-11-21T09:00:00Z"}' ;;
+        "api repos/owner/repo/actions/runs/5")
+          echo '{"status":"queued","run_attempt":1,"run_started_at":"2026-11-21T11:00:00Z"}' ;;
+        "api repos/owner/repo/actions/runs/6")
+          echo '{"status":"completed","run_attempt":1,"run_started_at":"2026-11-21T09:00:00Z"}' ;;
+        "api repos/owner/repo/actions/runs/"[1247])
+          echo '{"status":"queued","run_attempt":1,"run_started_at":"2026-11-21T09:00:00Z"}' ;;
+        "api repos/owner/repo/actions/runs/2/attempts/1/jobs?per_page=1")
+          echo '{"total_count":1}' ;;
+        "api repos/owner/repo/actions/runs/4/attempts/1/jobs?per_page=1")
+          if read -r -t 1 -u 4 appeared; then echo '{"total_count":0}'; else echo '{"total_count":1}'; fi ;;
+        "api repos/owner/repo/actions/runs/"[17]"/attempts/1/jobs?per_page=1")
+          echo '{"total_count":0}' ;;
+        "api --include -X POST repos/owner/repo/actions/runs/"[14]"/cancel")
+          echo "$*" >&3
+          echo "HTTP/2.0 409 Conflict"
+          return 1 ;;
+        "api --include -X POST repos/owner/repo/actions/runs/7/cancel")
+          echo "$*" >&3 ;;
+        "api -X POST repos/owner/repo/actions/runs/"*"/force-cancel")
+          echo "$*" >&3 ;;
+        *) return 1 ;;
+      esac
+    }
+    exec 3>&1
+    exec 4<<<"first recheck"
+  `;
+  const post = execFileSync("bash", ["-c", mock + job.steps[0].run], {
+    encoding: "utf8", env: { ...process.env, REPO: "owner/repo" },
+  }).split("\n").filter((line) => line.startsWith("api "));
+  assert.deepEqual(post, [
+    "api --include -X POST repos/owner/repo/actions/runs/1/cancel",
+    "api -X POST repos/owner/repo/actions/runs/1/force-cancel",
+    "api --include -X POST repos/owner/repo/actions/runs/4/cancel",
+    "api --include -X POST repos/owner/repo/actions/runs/7/cancel",
+  ]);
+});

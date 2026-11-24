@@ -219,8 +219,35 @@ for (const [name, steering, driving, expected] of [
   assert.equal(restarted.GameStore.store.get("brakeCue", 1), 7);
 });
 
+test("visor light styles roundtrip without changing saved beam strength", () => {
+  for (const style of ["classic", "compact", "scratches"]) {
+    const disk = { "apex26.helmetVisorLightStyle": style, "apex26.helmetVisorBeams": "160" };
+    for (const mode of ["all", "changes"]) {
+      const saved = boot({ disk }).collect(mode), target = boot();
+      target.loadSettings(saved);
+      assert.equal(target.collect("all").settings.camera.helmetVisorLightStyle, style);
+      assert.equal(target.disk.get("apex26.helmetVisorBeams"), "160");
+      assert.equal(saved.settings.camera.helmetVisorLightStyle, mode === "changes" && style === "classic" ? undefined : style);
+    }
+  }
+});
+
+test("visor effects quality roundtrips in both backup modes without rewriting optical preferences", () => {
+  for (const quality of ["auto", "low", "high"]) for (const mode of ["all", "changes"]) {
+    const source = boot({ disk: { "apex26.helmetVisorQuality": quality,
+      "apex26.helmetVisorLightStyle": "scratches", "apex26.helmetVisorBeams": "160" } });
+    const saved = source.collect(mode), target = boot();
+    target.loadSettings(saved);
+    const camera = target.collect("all").settings.camera;
+    assert.equal(camera.helmetVisorQuality, quality);
+    assert.equal(camera.helmetVisorLightStyle, "scratches");
+    assert.equal(camera.helmetVisorBeams, "160");
+    assert.equal(saved.settings.camera.helmetVisorQuality, mode === "changes" && quality === "auto" ? undefined : quality);
+  }
+});
+
 test("visor optics and water settings survive both backup modes and reject invalid choices", () => {
-  const values = { helmetVisorRefraction: "medium", helmetVisorReflections: "strong", helmetVisorRain: "heavy", helmetVisorRunoff: "fast", helmetVisorDropSize: "175" };
+  const values = { helmetVisorRefraction: "medium", helmetVisorReflections: "strong", helmetVisorLightStyle: "scratches", helmetVisorQuality: "high", helmetVisorRain: "heavy", helmetVisorRunoff: "fast", helmetVisorDropSize: "175" };
   const disk = Object.fromEntries(Object.entries(values).map(([key, value]) => ["apex26." + key, value]));
   for (const mode of ["all", "changes"]) {
     const saved = boot({ disk }).collect(mode);
@@ -233,7 +260,7 @@ test("visor optics and water settings survive both backup modes and reject inval
   }
   const defaults = boot().collect("all").settings.camera;
   assert.deepEqual(Object.fromEntries(Object.keys(values).map(key => [key, defaults[key]])), {
-    helmetVisorRefraction: "off", helmetVisorReflections: "light", helmetVisorRain: "normal", helmetVisorRunoff: "normal", helmetVisorDropSize: "100",
+    helmetVisorRefraction: "off", helmetVisorReflections: "light", helmetVisorLightStyle: "classic", helmetVisorQuality: "auto", helmetVisorRain: "normal", helmetVisorRunoff: "normal", helmetVisorDropSize: "100",
   });
   assert.equal(defaults.helmetVisorBeams, "100", "the VISOR BEAMS slider exports as a percent, 100 by default");
   const beams = boot({ disk: { "apex26.helmetVisorBeams": "160" } }).collect("changes");
@@ -1966,16 +1993,22 @@ for (const fileReader of [false, true]) test(`switching backup tabs invalidates 
   assert.equal(b.reloads(), 0);
 });
 
-test("garage reset stays on screen when deleting an extra key is not durable", () => {
-  const b = bootImportUI({ disk: { "apex26.customTeam": JSON.stringify({ name: "Old team" }) },
-    store: { set(_key, value) { return value !== undefined; } },
-    globals: { GarageDefaults: { file: () => ({ format: "apex26-garage-v1", garage: { team: 0 } }) } },
+test("garage reset stays on screen when deleting an extra key is not durable", async () => {
+  const b = bootImportUI({ realStore: true, disk: { "apex26.customTeam": JSON.stringify({ name: "Old team" }) },
+    globals: { GarageDefaults: { has: () => false, file: () => ({ format: "apex26-garage-v1", garage: { team: 0 } }) } },
   });
+  const remove = b.sb.localStorage.removeItem;
+  b.sb.localStorage.removeItem = (key) => {
+    if (key === "apex26.customTeam") throw new Error("Removal denied");
+    remove(key);
+  };
   const row = b.SettingsExport.garageRow(); b.dom.body.appendChild(row);
   const reset = b.dom.byId("cs-garage-reset");
-  reset.click(); reset.click();
+  // miniDOM.click dispatches events but intentionally does not return handler promises.
+  await reset.onclick(); await reset.onclick();
   assert.equal(reset.textContent, "RESET GARAGE TO DEFAULTS — STORAGE FULL — 1 NOT SAVED");
   assert.doesNotMatch(reset.textContent, /RELOADING/);
+  assert.equal(reset.disabled, false, "a failed reset leaves the retry control usable");
   b.flushReloads(); assert.equal(b.reloads(), 0);
 });
 
@@ -2534,4 +2567,82 @@ test("preferences-only camera and lighting edits merge down to individual overri
   assert.deepEqual(JSON.parse(receiver.disk.get("apex26.lightTune")), {
     "monza|day|dry": { exposure: 1, sun: 2 }, "spa|night|wet": { rain: 3 },
   });
+});
+
+test("Controls reset removes all input overrides without resetting assistance or progress", () => {
+  const keys = ["steerMode", "autoThrottle", "tiltDeg", "steerRate", "pace", "carWeight", "touchCurve", "touchRange", "dragSmooth", "digitalRate", "analogSpeedSteer", "padDeadzone", "padAxes", "padProfiles", "padRest", "keys", "pad", "dockLayout", "touchButtonProfiles", "pedalSlide", "throttleLatch", "holdMode", "hudBtnScale"];
+  const keep = { "apex26.career": "saved", "apex26.photoLibrary": "photos", "apex26.drivingHelp": "7", "apex26.motion": '"reduce"', "apex26.volMusic": "0.2", "apex26.steerSchema": "6" };
+  const b = boot({ disk: { ...Object.fromEntries(keys.map(k => ["apex26." + k, "3"])), ...keep } });
+  assert.equal(b.SettingsExport.resetSettings("controls").ok, true);
+  assert.deepEqual(keys.filter(k => b.disk.has("apex26." + k)), []);
+  assert.deepEqual(Object.fromEntries(b.disk), keep);
+});
+
+test("section resets respect page ownership rather than legacy backup groups", () => {
+  const cases = [
+    ["audio", ["volMusic", "sndTune", "radioVoice"], ["steerMode", "musicAccount"]],
+    ["graphics", ["gfxPreset", "gfxBackend", "resMode", "gfxPhoneFeatureOverrides"], ["uiScale", "hudBtnScale", "hudProfile"]],
+    ["a11y", ["motion", "captions", "textSize", "uiContrast", "holdMode"], ["uiTheme", "gfxPreset"]],
+    ["display", ["hudLayout", "helmetVisor", "camTuneTrack", "camComfort"], ["dockLayout", "hudBtnScale", "uiScale", "gfxPreset"]],
+    ["appearance", ["uiTheme", "screenPlacement", "uiScale"], ["appearanceProfiles", "captions", "textSize", "homePhoto"]],
+    ["driving", ["manual", "autoThrottle", "aeroMode", "conditionCues", "drivingHelp"], ["raceDraft", "steerMode", "tiltDeg"]],
+    ["advanced", ["pace", "tiltDeg", "steerRate", "padCurve"], ["keys", "padProfiles", "dockLayout"]],
+  ];
+  for (const [scope, removed, kept] of cases) {
+    const b = boot({ disk: Object.fromEntries([...removed, ...kept].map(k => ["apex26." + k, "3"])) });
+    assert.equal(b.SettingsExport.resetSettings(scope).ok, true, scope);
+    assert.deepEqual([...b.disk.keys()].sort(), kept.map(k => "apex26." + k).sort(), scope);
+  }
+});
+
+test("all preferences reset preserves saves and reusable profiles and rejects unknown scopes", () => {
+  const b = boot();
+  for (const row of b.SettingsExport.SPEC) b.disk.set("apex26." + row.k, "3");
+  const keep = ["career", "ttlb", "ghost.v1", "spotifyToken", "parts.ferrari", "photoLibrary", "homePhoto", "favTracks", "appearanceProfiles"];
+  for (const k of keep) b.disk.set("apex26." + k, "saved");
+  const before = [...b.disk];
+  assert.equal(b.SettingsExport.resetSettings("unknown").ok, false);
+  assert.deepEqual([...b.disk], before);
+  assert.equal(b.SettingsExport.resetSettings("files").ok, true);
+  const retained = [...b.SettingsExport.SPEC.filter(r => r.info).map(r => "apex26." + r.k), ...keep.map(k => "apex26." + k)];
+  assert.deepEqual([...b.disk.keys()].sort(), retained.sort());
+});
+
+test("refused reset restores previous preferences and reports failure", () => {
+  const b = boot({ disk: { "apex26.sound": "true", "apex26.volMusic": "0.2", "apex26.steerMode": '"touch"' } });
+  const before = [...b.disk].sort(), original = b.GameStore.store.set;
+  b.GameStore.store.set = (k, value) => k === "volMusic" && value === undefined ? false : original(k, value);
+  const result = b.SettingsExport.resetSettings("audio");
+  assert.equal(result.ok, false); assert.equal(result.applied, 0);
+  assert.deepEqual([...b.disk].sort(), before);
+});
+
+test("reset confirmation can cancel or leave without writes and reloads only after confirmation", () => {
+  let leave;
+  const b = bootImportUI({ disk: { "apex26.steerMode": '"touch"' }, globals: { SettingsNav: { onLeave: fn => { leave = fn; } } } });
+  const launcher = b.dom.document.createElement("button");
+  b.dom.byId("pm-panel-files").appendChild(launcher);
+  const open = () => b.SettingsExport.resetRow("controls", launcher);
+  const named = label => [...b.dom.document.querySelectorAll("button")].find(x => x.textContent === label);
+  open();
+  assert.equal(b.disk.get("apex26.steerMode"), '"touch"');
+  named("CANCEL").click(); assert.equal(b.reloads(), 0);
+  open(); leave("controls"); assert.equal(named("CONFIRM RESET & RELOAD"), undefined);
+  open(); named("CONFIRM RESET & RELOAD").click();
+  assert.equal(b.disk.has("apex26.steerMode"), false); assert.equal(b.reloads(), 1);
+});
+
+test("real-store reset unpins defaults and does not reload on storage failure", () => {
+  const b = boot({ realStore: true, disk: { "apex26.steerMode": '"touch"', "apex26.carWeight": "3", "apex26.career": '"saved"' } });
+  assert.equal(b.SettingsExport.resetSettings("controls").ok, true);
+  assert.equal(b.GameStore.store.getStored("steerMode"), undefined);
+  assert.equal(b.GameStore.store.getStored("carWeight"), undefined, "boot can choose its own device default");
+  assert.equal(b.disk.get("apex26.career"), '"saved"');
+  const ui = bootImportUI({ disk: { "apex26.steerMode": '"touch"' } });
+  const write = ui.GameStore.store.set;
+  ui.GameStore.store.set = (k, v) => k === "steerMode" && v === undefined ? false : write(k, v);
+  const launcher = ui.dom.document.createElement("button"); ui.dom.byId("pm-panel-files").appendChild(launcher);
+  ui.SettingsExport.resetRow("controls", launcher);
+  [...ui.dom.document.querySelectorAll("button")].find(n => n.textContent === "CONFIRM RESET & RELOAD").click();
+  assert.equal(ui.reloads(), 0); assert.equal(ui.disk.get("apex26.steerMode"), '"touch"');
 });

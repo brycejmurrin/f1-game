@@ -1,1 +1,0 @@
-Fixed: Garage and race: your car's full-resolution livery now always arrives on a busy desktop or tablet; before, a device that never had a spare moment could keep the softer preview paint for the whole session (#5796).

@@ -17,9 +17,10 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { firstDiff } from "../../tools/gen/gen-lib.mjs";
+import { ensureOnDemand } from "../../tools/gen/ensure-built.mjs";
 import { renderCoverage } from "../../tools/docs/gen-coverage-table.mjs";
 import {
-  agentHelpFromSource, flattenHooks, renderIndex, renderHookPage, renderImpact, buildIndex, buildImpactMap,
+  agentHelpFromSource, flattenHooks, renderIndex, renderHookPage, renderImpact, buildIndex, buildImpactMap, IMPACT_TARGET,
 } from "../../tools/docs/gen-agent-index.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -31,7 +32,6 @@ test("coverage page renders the same twice, and the agent index matches a fresh 
   const index = buildIndex();
   assert.equal(firstDiff(read("docs/agent-index.json"), renderIndex(index)), "identical");
   assert.equal(firstDiff(read("docs/AGENT-HOOKS.md"), renderHookPage(index)), "identical");
-  assert.equal(firstDiff(read("tests/data/impact-map.json"), renderImpact()), "identical");
 });
 
 test("a drifted generated page fails the staleness comparison", () => {
@@ -103,8 +103,12 @@ test("impact map carries garage livery narrow pins for GLX readback witnesses (#
   }
 });
 
-test("impact map is a narrow file to function to specs table", () => {
-  const impact = JSON.parse(read("tests/data/impact-map.json"));
+test("the on-demand impact report matches its current sources and stays out of git", () => {
+  ensureOnDemand(IMPACT_TARGET);
+  const rendered = read(IMPACT_TARGET);
+  assert.equal(firstDiff(rendered, renderImpact()), "identical");
+  assert.equal(spawnSync("git", ["ls-files", "--", IMPACT_TARGET], { cwd: ROOT, encoding: "utf8" }).stdout.trim(), "");
+  const impact = JSON.parse(rendered);
   assert.equal(impact.kind, "static-reference");
   assert.equal(impact.narrowOnly, true);
   const files = Object.keys(impact.map);

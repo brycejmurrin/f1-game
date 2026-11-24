@@ -90,26 +90,20 @@ test("D-pad Left/Right on a focused <select> wraps past disabled options and fir
   assert.equal(keys.pop().key, "ArrowDown", "the cross-axis arrow is the plain synthetic keydown MenuNav walks on");
 });
 
-test("D-pad Left/Right on a wrap:false <select> (LAPS) stops at its ends like the row chevrons", () => {
+test("D-pad and bumper arrows reach the focused SettingRow", () => {
   const { Input, sb, fire, navOpen } = boot();
   const { press, release } = fakePad(sb, fire);
   navOpen.on = true;
   const events = [];
-  const sel = { tagName: "SELECT", disabled: false, _srLive: { wrap: false },
-    options: [{ disabled: false }, { disabled: false }, { disabled: false }], selectedIndex: 0,
-    dispatchEvent: (e) => { events.push(e.type); return true; } };
-  sb.document.activeElement = sel;
-  press(14); Input.poll(); release(14); Input.poll();         // D-pad left at the first option
-  assert.equal(sel.selectedIndex, 0, "no wrap from 3 LAPS to FULL");
-  assert.deepEqual(events, [], "…and no change fires for the no-op");
-  sel.selectedIndex = 2;
-  press(15); Input.poll(); release(15); Input.poll();         // right at the last
-  assert.equal(sel.selectedIndex, 2, "no wrap from FULL back to 3 LAPS");
-  press(14); Input.poll(); release(14); Input.poll();
-  assert.equal(sel.selectedIndex, 1, "inside the list it still steps");
-  sel._srLive = { wrap: true }; sel.selectedIndex = 0;
-  press(14); Input.poll(); release(14); Input.poll();
-  assert.equal(sel.selectedIndex, 2, "an ordinary row still wraps");
+  sb.document.activeElement = { tagName: "SELECT", disabled: false,
+    _srLive: { wrap: false }, dispatchEvent: (e) => { events.push([e.type, e.key]); return true; } };
+  for (const button of [14, 15, 4, 5]) {
+    press(button); Input.poll(); release(button); Input.poll();
+  }
+  assert.deepEqual(events, [
+    ["keydown", "ArrowLeft"], ["keydown", "ArrowRight"],
+    ["keydown", "ArrowLeft"], ["keydown", "ArrowRight"],
+  ]);
 });
 
 test("D-pad on UI SIZE (40–200, step 0.25) moves a visible amount per press, on the step grid", () => {

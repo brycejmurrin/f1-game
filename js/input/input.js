@@ -211,6 +211,7 @@ const Input = (function () {
 
   let onPauseCb = null;
   let onPadLostCb = null;      // fired when the LAST pad disconnects (game.js pauses)
+  let onPhoneTiltChange = null;
 
   // SIM TIME vs WALL TIME. The steering RAMPS (keyboard, and the tilt slew) are
   // control-loop stages: they belong to the same clock the car is integrated on,
@@ -364,6 +365,8 @@ const Input = (function () {
   // none, a permission refused) is pedals and buttons only, and must not sit
   // in steer() ahead of the on-screen arrows or a drag on the glass.
   function remoteSteers() { return remoteActive() && (remRoll || remStick); }
+  // Settings follow the paired phone's steering mode across brief sample gaps.
+  function phoneTiltAvailable() { return remoteOwner === "phone" && remRoll; }
   // One sample from the phone: {roll (deg, may be null), thr, brk, held}.
   // Remote driving follows the physical pad's ownership: title/navigation,
   // settings and capture tools own the controls. Menu edges remain available.
@@ -372,6 +375,7 @@ const Input = (function () {
   }
   function remoteSample(s) {
     if (!s) return false;
+    const hadPhoneTilt = phoneTiltAvailable();
     const owner = typeof s.source === "string" ? s.source.slice(0, 32) : "remote";
     if (owner !== remoteOwner) remSeq = null;
     remoteOwner = owner;
@@ -405,6 +409,7 @@ const Input = (function () {
     remBrk = clamp(+s.brk || 0, 0, 1);
     remHeld = s.held | 0;
     remoteMs = n;
+    if (hadPhoneTilt !== phoneTiltAvailable()) onPhoneTiltChange?.();
     if (!remoteDrivingBlocked() && (remThr > REMOTE_PEDAL_ON || remBrk > REMOTE_PEDAL_ON || remHeld ||
       (remStick ? Math.abs(remSteer) > 0.05 : remRoll && Math.abs(s.roll - tiltZero) > 2))) {
       noteInputSource(remStick ? "controller" : "phone");
@@ -454,17 +459,19 @@ const Input = (function () {
   // reset() uses this on blur/visibility loss; the next fresh sample can take
   // control again, while a real link loss additionally clears remoteOwner below.
   function clearRemoteControls(clearSequence) {
+    const hadPhoneTilt = phoneTiltAvailable();
     remoteMs = 0; remThr = remBrk = 0; remHeld = 0; remRoll = false; remStick = false; remSteer = 0;
     if (clearSequence) remSeq = null;
     if (tiltRemote || !gyroAttached) tiltSeen = false;
     if (tiltRemote) tiltFilterClear();
+    if (hadPhoneTilt) onPhoneTiltChange?.();
   }
   // The link dropped: pedals off at once, and a phone-fed tilt reading must not
   // keep steering a device whose own sensor is not attached.
   function remoteLost(source) {
     if (source != null && source !== remoteOwner) return false;
-    remoteOwner = null;
     clearRemoteControls(true);
+    remoteOwner = null;
   }
   function setRemoteHaptics(fn) {
     const had = !!remoteHaptics;
@@ -2240,6 +2247,7 @@ const Input = (function () {
     Log.info("input", "Input.init");
     onPauseCb = (opts && opts.onPause) || null;
     onPadLostCb = (opts && opts.onPadLost) || null;
+    onPhoneTiltChange = opts?.onPhoneTiltChange || null;
     // One page load, one wire-up. A second init (hot reload, a harness that
     // boots twice, a future re-entry) must not stack keydown/blur/gamepad
     // listeners: a toggle GAS key would flip twice per press, and blur would
@@ -2617,7 +2625,7 @@ const Input = (function () {
     consumeLookMouse,
     lockEscape, unlockEscape, lockLandscape, unlockLandscape,
     tiltActive,
-    remoteSample, remoteEvent, remoteLost, remoteActive, remoteSteers, setRemoteHaptics,
+    remoteSample, remoteEvent, remoteLost, remoteActive, remoteSteers, phoneTiltAvailable, setRemoteHaptics,
     simTilt,
     simTiltReset,
     steerToTilt,

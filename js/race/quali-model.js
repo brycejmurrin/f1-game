@@ -60,37 +60,31 @@ const Quali = (function () {
   const PACE_CORNER = 1.15;
 
   // THE FIELD'S LAP (carLap; referencePole keeps QUALI_TRIM and a neutral wing) is
-  // QUALI_CENTRE x the circuit's measured factor x the integrated lap, and the corner
+  // the circuit's measured factor x the integrated lap, and the corner
   // cap also takes the car's wing as the driven AI is charged it (AiDrive.aeroGrip).
-  // CALIB[id] is driven / integrated: the median, over a thinned clear-air AI field
-  // at easy, normal and hard, of each car's best driven lap over this model's
+  // CALIB[id] is driven / integrated: the median, over AI works cars driving solo
+  // qualifying flying laps at easy, normal and hard, of each timed lap over this model's
   // uncalibrated lap for the same car. GENERATED from tests/data/quali-calibration.json
   // by tools/gen/gen-quali-calib.mjs (`npm run gen`); the measurement itself is a tool
-  // run, `node tools/check/quali-calibrate.mjs --update` (about half an hour of CPU; never in CI,
+  // run, `node tools/check/quali-calibrate.mjs --update` (never in CI,
   // and not in tools/lib/generated-paths.mjs GENERATED_PATHS, which a merge regenerates).
   // RE-MEASURE when the AI's driving changes: tests/unit/quali-absolute-parity-vm.test.mjs
   // fails, the tool is re-run and the block regenerated. A circuit with no row (a
   // TRACK DESIGNER layout) takes CALIB_DEFAULT, the calendar median.
   // @gen-quali-calib start
   const CALIB = {
-    abudhabi: 0.9439, albert_park: 0.9307, anderstorp: 0.9503, bahrain: 0.9480, baku: 0.9564, brands_hatch: 0.9486,
-    buddh: 0.9433, buenos_aires: 0.9456, catalunya: 0.9390, cota: 0.9305, dijon: 0.9428, donington: 0.9570,
-    estoril: 0.9477, fuji: 0.9450, hockenheim: 0.9521, hungaroring: 0.9337, imola: 0.9753, indianapolis: 0.9439,
-    interlagos: 0.9412, istanbul: 0.9488, jacarepagua: 0.9387, jeddah: 0.9539, jerez: 0.9453, korea: 0.9348,
-    kyalami: 0.9463, madrid: 0.9400, magny_cours: 0.9494, mexico: 0.9418, miami: 0.9376, monaco: 0.9648,
-    mont_tremblant: 0.9631, montreal: 0.9508, monza: 0.9387, mosport: 0.9322, mugello: 0.9294, nurburgring: 0.9441,
-    okayama: 0.9527, paul_ricard: 0.9281, portimao: 0.9622, qatar: 0.9498, redbull: 0.9452, sepang: 0.9529,
-    shanghai: 0.9339, silverstone: 0.9184, singapore: 0.9540, sochi: 0.9532, spa: 0.9416, suzuka: 0.9336,
-    vegas: 0.9411, watkins_glen: 0.9565, zandvoort: 0.9510, zolder: 0.9513,
+    abudhabi: 0.9377, albert_park: 0.9268, anderstorp: 0.9427, bahrain: 0.9411, baku: 0.9586, brands_hatch: 0.9355,
+    buddh: 0.9308, buenos_aires: 0.9369, catalunya: 0.9326, cota: 0.9249, dijon: 0.9276, donington: 0.9537,
+    estoril: 0.9424, fuji: 0.9228, hockenheim: 0.9501, hungaroring: 0.9275, imola: 0.9704, indianapolis: 0.9397,
+    interlagos: 0.9387, istanbul: 0.9458, jacarepagua: 0.9302, jeddah: 0.9504, jerez: 0.9299, korea: 0.9303,
+    kyalami: 0.9424, madrid: 0.9370, magny_cours: 0.9474, mexico: 0.9292, miami: 0.9353, monaco: 0.9615,
+    mont_tremblant: 0.9628, montreal: 0.9461, monza: 0.9355, mosport: 0.9120, mugello: 0.9223, nurburgring: 0.9444,
+    okayama: 0.9396, paul_ricard: 0.9229, portimao: 0.9641, qatar: 0.9439, redbull: 0.9267, sepang: 0.9438,
+    shanghai: 0.9326, silverstone: 0.9212, singapore: 0.9457, sochi: 0.9400, spa: 0.9367, suzuka: 0.9280,
+    vegas: 0.9427, watkins_glen: 0.9571, zandvoort: 0.9498, zolder: 0.9486,
   };
-  const CALIB_DEFAULT = 0.9453;
+  const CALIB_DEFAULT = 0.9391;
   // @gen-quali-calib end
-  // Where the field sits against its own clear-air race laps (tyre wear off, the lap
-  // CALIB is measured on): the same driver's qualifying lap is 0.2-1.2 % quicker, all
-  // of it the flying start, and within 0.35 % of that whether tyre wear is on or off.
-  // Measured: docs/notes/QUALI-CALIBRATION-2026-11-18.md §Yardstick.
-  const QUALI_CENTRE = 0.993;
-
   const EXEC_SPREAD = 0.012;
   const QUALI_BIAS = 0.003;
 
@@ -133,6 +127,49 @@ const Quali = (function () {
         return "career:" + (sl ? sl.flavour + ":" + sl.i : "?");
       }
       return G.seasonMode ? "season" : "gp";
+    }
+
+    // A pending deletion belongs to this tab's weekend, not to a disposable
+    // car or a completed grid. Keep one per mode/slot across reloads.
+    const deletedLaps = new Map();
+    function deletedLapScope(c) {
+      const mode = modeId(), s = G.season;
+      const day = mode !== "gp" && s ? SeasonCal.drawRound(s) : 0;
+      const seed = mode === "season" ? s && s.seed : mode === "gp" ? 0 : Career.seasonSeed();
+      return ["apex26.qualiDeleted." + mode, JSON.stringify([hereId(), day, seed, seatKey(c.driverId, c.team)])];
+    }
+
+    function pendingDeletion(key) {
+      if (deletedLaps.has(key)) return deletedLaps.get(key);
+      let value = null;
+      try { value = sessionStorage.getItem(key); } catch (_) { /* tab storage unavailable */ }
+      deletedLaps.set(key, value);
+      return value;
+    }
+
+    function markDeletedLap(c, friend) {
+      c.qualiCut = true;
+      if (friend || c.lap < 1) return;
+      const [key, stamp] = deletedLapScope(c);
+      if (pendingDeletion(key) === stamp) return;
+      deletedLaps.set(key, stamp);
+      try { sessionStorage.setItem(key, stamp); } catch (_) { /* memory still covers a quit */ }
+    }
+
+    function hasDeletedLap(c, friend) {
+      if (!c) return false;
+      if (c.qualiCut) return true;
+      if (friend) return false;
+      const [key, stamp] = deletedLapScope(c);
+      return pendingDeletion(key) === stamp;
+    }
+
+    function clearDeletedLap(c, friend) {
+      if (!c || friend) return;
+      const [key, stamp] = deletedLapScope(c);
+      if (pendingDeletion(key) !== stamp) return;
+      deletedLaps.set(key, null);
+      try { sessionStorage.removeItem(key); } catch (_) { /* memory still covers a quit */ }
     }
 
     // `shape` (carLap): { pace, free, corner } — integrate at that PACE
@@ -228,7 +265,7 @@ const Quali = (function () {
       const k = c.tier != null && typeof AiDrive != "undefined" && AiDrive.paceTrim ? AiDrive.paceTrim(Teams.TIER_V[c.tier] * c.skill) : 1;
       const free = G.vTop() * Math.min(PhysicsConsts.BAND_CEIL || 1, c.tierV * c.skill * diffRow().ai * k);
       const t = lapTime(track, free, grip, { pace: paceNow(), free, corner: PACE_CORNER * Math.min(1, cornerFor(c.skill) * k) * wingFor(c) });
-      return raw ? t : QUALI_CENTRE * calibFor(track) * t;
+      return raw ? t : calibFor(track) * t;
     }
 
     // The reference POLE a time-trial medal is measured against: a top-rated
@@ -501,7 +538,8 @@ const Quali = (function () {
 
     // forgetOrder / lapTime stay create()-local — begin() and the
     // pace helpers call them; no quali.forgetOrder / .lapTime / .capFor reader.
-    return { simulate, preview, order, results, rows, clear, begin, carLap, referencePole };
+    return { simulate, preview, order, results, rows, clear, begin, carLap, referencePole,
+      markDeletedLap, hasDeletedLap, clearDeletedLap };
   }
 
   // STEP / QUALI_TRIM / EXEC_SPREAD stay module-local — only create() and the

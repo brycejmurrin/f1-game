@@ -180,7 +180,7 @@ const RealReplay = (function () {
   function sampleAt(tr, tt, out, cursor) {
     out = out || {};
     const n = tr.n;
-    out.before = false; out.ended = false; out.speed = 0;
+    out.before = false; out.ended = false; out.speed = 0; out.speedKnown = false; out.gap = false;
     if (!n) { out.ended = true; out.prog = 0; out.x = 0; return out; }
     if (tt <= tr.t[0]) { out.before = tt < tr.t[0]; out.prog = tr.prog[0]; out.x = tr.x[0]; return out; }
     if (tt >= tr.end) { out.ended = tt > tr.end + ENDED_S; out.prog = tr.prog[n - 1]; out.x = tr.x[n - 1]; return out; }
@@ -196,7 +196,8 @@ const RealReplay = (function () {
     out.x = tr.x[lo] + (tr.x[hi] - tr.x[lo]) * a;
     out.speed = Math.max(0, (tr.prog[hi] - tr.prog[lo]) / dt);
     // A gap in the data (a garage stop, a red flag) is a parked car, not a teleport.
-    if (dt > ENDED_S * 3) { out.speed = 0; out.prog = tr.prog[lo]; out.x = tr.x[lo]; }
+    if (dt > ENDED_S * 3) { out.speed = 0; out.prog = tr.prog[lo]; out.x = tr.x[lo]; out.gap = true; }
+    else out.speedKnown = true;
     return out;
   }
 
@@ -282,19 +283,24 @@ const RealReplay = (function () {
     let /** @type {ReturnType<typeof WatchTransport.create> | null} */ transport = null;
     const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
     const at = {};
-    // THE BROADCAST (js/race/broadcast.js): the timing tower, and with camera "auto" the director.
-    const bc = typeof Broadcast !== "undefined" ? Broadcast.create(G, { follow: (w) => follow(w), setFollow: (c) => setFollow(c), cameraOwner: () => run && run.cameraOwner }) : null;
+    // The replay broadcast: the timing tower and, with camera "auto", the director.
+    const bc = typeof ReplayBroadcast !== "undefined" ? ReplayBroadcast.create(G, { follow: (w) => follow(w), setFollow: (c) => setFollow(c), cameraOwner: () => run && run.cameraOwner }) : null;
     // What it reads each frame — one object for the run, the lists computed only when asked.
     const bcState = {
       get script() { return run.script; }, get T() { return run.T; }, get speed() { return run.speed; },
       get list() { return run.list; }, get reel() { return !!run.reel; }, get follow() { return run.follow; },
       get followNum() { const f = run.follow && run.cars.get(run.follow); return f ? f.num : null; },
+      nameOf: (car) => run.cars.get(car)?.d?.name,
+      kphOf: (car) => run.cars.get(car)?.traceKph,
+      get cameraLabel() { return typeof CamModes !== "undefined" ? CamModes.CAM_MODES[G.camMode]?.label : ""; },
       isOut: (num) => { for (const [c, f] of run.cars) if (f.num === num) return !f.tr || !!(f.parked && c.retired); return true; },
       carOf: (num) => { for (const [c, f] of run.cars) if (f.num === num) return c; return null; },
+      canFeature: (num) => onTrack(carOfNum(num)),
+      field: runningOrder,
       codeOf: (c) => { const f = run.cars.get(c); return f && f.d ? f.d.code : null; },   // the REAL driver's code (a seat car can wear another)
       colourOf: (num) => { for (const [c, f] of run.cars) if (f.num === num) return c.team && G.cssCol ? G.cssCol(c.team.color) : ""; return ""; },
       // c.speed is the trace's real m/s at every rate (pose() carries the rate apart, in c.replayRate), so battles()/PiP/director read it as is.
-      running: () => [...run.cars.keys()].filter((c) => run.cars.get(c).tr && !c.retired).sort((a, b) => b.prog - a.prog).map((c) => ({ key: c, prog: c.prog, speed: c.speed })),
+      running: () => runningOrder().map((c) => ({ key: c, prog: c.prog, speed: c.speed })),
     };
 
     /** start({script, traces, seats: Map car->driver, startLap, follow, rate, reel, camera}) — false when no trace fits. */
@@ -340,11 +346,11 @@ const RealReplay = (function () {
       pose(true);
       if (run.onTimeline) run.onTimeline(run.T);
       // Every car is a puppet — the seat too: the camera and HUD follow it, nobody drives it.
-      let follow = null;
-      for (const [c, f] of cars) if (f.tr && f.d && f.d.code === o.follow) follow = c;
-      if (!follow) for (const [c, f] of cars) if (f.tr && !follow) follow = c;
+      const running = runningOrder();
+      const follow = running.find(c => cars.get(c).d.code === o.follow) || running[0]
+        || [...cars].find(([, f]) => f.tr)?.[0];
       setFollow(follow);
-      if (bc) bc.start({ auto, tower: o.tower !== false });
+      if (bc) { bc.start({ auto, tower: o.tower !== false }); bc.refresh(bcState); }
       if (reel && reel.length) cutTo(reel[0]);
       // THE COMMENTARY (js/race/race-radio.js): the replay's highlights are the
       // news, told with the REAL drivers' names. Real team radio is caption-only
@@ -375,7 +381,23 @@ const RealReplay = (function () {
 
     function owns(c) { return !!run && run.cars.has(c); }
 
-    function runningOrder() { return [...run.cars.keys()].filter((c) => run.cars.get(c).tr && !c.retired).sort((a, b) => b.prog - a.prog); }
+    function onTrack(car) {
+      return !!run.cars.get(car)?.cameraReady && !car.retired;
+    }
+    function runningOrder() { return [...run.cars.keys()].filter(onTrack).sort((a, b) => b.prog - a.prog); }
+
+    function recoverSubject(paint = false) {
+      if (!bc?.autoOn() || onTrack(run.follow)) return false;
+      const next = runningOrder()[0];
+      if (!next) return false;
+      setFollow(next, false);
+      bc.onCut("recover");
+      if (paint) {
+        bc.refresh(bcState);
+        if (G.snapGameCam) G.snapGameCam();
+      }
+      return true;
+    }
 
     // A seek can skip every frame before a retirement. Rank the traces at the
     // last instant the subject was running, using the same stable progress order.
@@ -449,26 +471,14 @@ const RealReplay = (function () {
         if (run.onTimeline) run.onTimeline(run.T);
         if (bc) bc.resetTiming();
       }
-      // Keep a live subject, but never replace the viewer's manual, locked or fixed-camera choice.
-      const liveSubject = () => {
-        let next = null;
-        for (const [car, f] of run.cars) if (f.tr && !car.retired && (!next || car.prog > next.prog)) next = car;
-        if (next) setFollow(next, false);
-      };
       if (highlight) {
         const c = carOfNum(highlight.num);
         const picture = bc && bc.status();
-        if (c && !c.retired && !(picture && (picture.locked || picture.manual))) setFollow(c, false);
-        else if (bc && bc.autoOn() && (!run.follow || run.follow.retired)) liveSubject();   // a caution/green highlight has no driver
-        if (bc) bc.onCut(highlight.kind);
-      } else if (!continuous && bc && bc.autoOn() && run.follow && run.follow.retired) {
-        // A seek past the followed car's DNF: off the parked car now, not at the
-        // next event or SHOT_MAX_S later (hunt #5694 B9).
-        const picture = bc.status();
-        if (!(picture && (picture.locked || picture.manual))) liveSubject();
-      }
+        if (onTrack(c) && !(picture && (picture.locked || picture.manual))) setFollow(c, false);
+        if (!recoverSubject() && bc) bc.onCut(highlight.kind);
+      } else if (!continuous) recoverSubject();
       if (!continuous && G.raceRadio && G.raceRadio.resetTimeline) G.raceRadio.resetTimeline();
-      if (bc) bc.refresh(bcState);
+      if (bc) bc.refresh(bcState, !continuous);
       if (G.refreshHud) G.refreshHud(true);
       if (G.snapGameCam) G.snapGameCam(paint);
       if (transport) transport.paint();
@@ -481,18 +491,28 @@ const RealReplay = (function () {
     }
     function setAuto(v) {
       if (!bc || !run) return false;
-      if (v && bc.autoOn()) return true;
+      if (v && bc.autoOn()) { recoverSubject(true); return true; }
       const enabled = bc.setAuto(v);
       if (enabled) {
         // Reels and paused playback do not tick the director. Take its shot
         // now through setCamMode so the camera, HUD and audio agree on ownership.
-        bc.onCut(null);
+        if (!recoverSubject()) bc.onCut(null);
         bc.refresh(bcState);
         // Playback pause still renders each frame. Only the outer pause menu
         // needs an explicit paint; otherwise let the normal frame draw the cut.
         if (G.snapGameCam) G.snapGameCam(!!G.paused);
       }
       return enabled;
+    }
+    function setCamera(id) {
+      if (id === "tv") return setAuto(true);
+      if (!run || !G.setCamMode || typeof CamModes === "undefined") return false;
+      const index = CamModes.CAM_MODES.findIndex(camera => camera.id === id);
+      if (index < 0) return false;
+      G.setCamMode(index, { owner: run.cameraOwner, priority: 10, persist: false });
+      if (bc) { bc.setLocked(true); bc.refresh(bcState); }
+      if (G.snapGameCam) G.snapGameCam(!!G.paused);
+      return true;
     }
     function seekEvent(index) {
       const h = run && Number.isInteger(index) && run.events[index];
@@ -574,6 +594,8 @@ const RealReplay = (function () {
       for (const [c, f] of run.cars) {
         if (!f.tr) { if (!f.parked) { f.parked = true; c.retired = true; c.dnf = f.d && f.d.dns ? "dns" : f.d && f.d.dnf ? "dnf" : null; idle(c); } continue; }
         sampleAt(f.tr, run.T, at, f);
+        f.traceKph = at.speedKnown ? at.speed * 3.6 : undefined;
+        f.cameraReady = !at.before && !at.ended && !at.gap;
         if (at.before && !discontinuous) { if (f.posed) { idle(c); } continue; }   // a seek before the trace reposes its first sample
         if (at.ended && !discontinuous) { if (!f.parked) { f.parked = true; c.retired = true; c.dnf = f.d && f.d.dnf ? "dnf" : null; idle(c); c.dnfAt = null; } continue; }
         f.posed = true; f.parked = false; c.dnf = null;
@@ -672,6 +694,7 @@ const RealReplay = (function () {
       if (run.onTimeline) run.onTimeline(run.T);
       if (G.state !== "race") return;
       fire();
+      recoverSubject(true);
       if (bc) bc.tick(dt, bcState);
       if (G.raceT != null) G.raceT = Math.max(0, run.T);
       if (run.reel) {
@@ -696,11 +719,11 @@ const RealReplay = (function () {
 
     const api = { start, stop, owns, tick, follow, setSpeed, stepSpeed, seek, skip, status, setPaused, eventStep, seekEvent, isRunning: () => !!run,
              isPausedAt: (t) => !!run && run.paused && run.T === t,
-             describe: () => run ? { name: run.script.name || run.script.circuit || "REAL RACE", startT: run.startT, drivers: [...run.cars.entries()].filter(([, f]) => f.tr && f.d).map(([c, f]) => ({ code: f.d.code, name: f.d.name, get available() { return !c.retired; } })), events: run.events, speeds: SPEEDS } : null,
+             describe: () => run ? { name: run.script.name || run.script.circuit || "REAL RACE", startT: run.startT, drivers: [...run.cars.entries()].filter(([, f]) => f.tr && f.d).map(([c, f]) => ({ code: f.d.code, name: f.d.name, get available() { return !!run && onTrack(c); } })), events: run.events, speeds: SPEEDS } : null,
              setLocked: (v) => (bc && run ? bc.setLocked(v) : false),
              // The in-game AUTO camera (js/camera/mode-switch.js): hand the picture to the
              // TV director, ask who has it, or take it (a shot picked by the viewer).
-             setAuto, autoOn: () => !!(bc && run && bc.autoOn()),
+             setAuto, setCamera, autoOn: () => !!(bc && run && bc.autoOn()),
              takePicture: () => { if (bc && run) bc.manual(); } };
     if (typeof WatchTransport !== "undefined") transport = WatchTransport.create(G, api);
     return api;

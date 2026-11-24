@@ -1141,4 +1141,12 @@ body[data-retired-wait] .dock-grp, body[data-retired-wait] .touchbtn { display: 
 #retired-card span { font-size: .85rem; opacity: .8; }
 #retired-card button { min-height: 44px; min-width: 44px; padding: 0 calc(var(--gap) * 1.5); font: inherit; font-weight: 700;
   border-radius: 8px; border: 0; background: var(--red); color: var(--text); touch-action: manipulation; }
+body[data-spectator="live"] #retired-card {
+  top: auto; bottom: calc(var(--sab) + var(--gap)); transform: translateX(-50%);
+  translate: none; scale: none;
+  flex-direction: row; padding: calc(var(--gap) / 3) var(--gap); text-align: left;
+}
+body[data-spectator="live"] #retired-card b { font-size: var(--fs-micro); }
+body[data-spectator="live"] #retired-card span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+body[data-spectator="live"] #retired-card button { white-space: nowrap; }
 } /* @layer overlays */

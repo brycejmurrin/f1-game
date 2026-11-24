@@ -680,7 +680,7 @@ function fakeEl() {
     textContent: "", disabled: false, value: "", style: { setProperty(k, v) { this[k] = v; } },
     classes: new Set(),
     addEventListener(t, f) { (listeners[t] ||= []).push(f); },
-    dispatch(t, ev) { for (const f of listeners[t] || []) f(Object.assign({ preventDefault() {}, pointerId: 1 }, ev)); },
+    dispatch(t, ev) { for (const f of listeners[t] || []) f(Object.assign({ preventDefault() {}, pointerId: 1, pointerType: "touch" }, ev)); },
     setPointerCapture() {},
     getBoundingClientRect: () => ({ top: 100, height: 200, left: 0, width: 100 }),
   };
@@ -3031,5 +3031,52 @@ test("companion previews return to the opening game or use the Appearance link w
     link.dispatchEvent(new Event("click", { cancelable:true }));
     assert.equal(window.closed, preview && canClose);
     assert.deepEqual(assigned, preview && !canClose ? [link.href] : []);
+  }
+});
+
+test("last-finger cleanup preserves mouse, pen and keyboard controls on the paired phone", () => {
+  const previous = globalThis.document, listeners = new Map();
+  globalThis.document = { hidden: false, addEventListener(type, fn) {
+    if (!listeners.has(type)) listeners.set(type, []);
+    listeners.get(type).push(fn);
+  } };
+  const fire = (type, event) => { for (const fn of listeners.get(type) || []) fn(event); };
+  const timers = fakeTimers();
+  const dom = { gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(), stick: fakeEl(), buttons: { navDown: fakeEl() } };
+  const ctl = PhonePad.pad(dom, { timers });
+  try {
+    dom.gas.dispatch("pointerdown", { pointerId: 1, pointerType: "mouse", button: 0, clientY: 200 });
+    dom.gas.dispatch("keydown", { key: " " });
+    dom.brake.dispatch("pointerdown", { pointerId: 2, pointerType: "pen", clientY: 200 });
+    dom.lookBack.dispatch("pointerdown", { pointerId: 3 });
+    dom.buttons.navDown.dispatch("pointerdown", { pointerId: 4, pointerType: "mouse", button: 0 });
+    dom.stick.dispatch("pointerdown", { pointerId: 5, clientX: 95, clientY: 200 });
+    assert.equal(timers.pending(), 2);
+    assert.notEqual(ctl.state().held, 0);
+    fire("touchend", { touches: [] });
+    assert.equal(ctl.state().thr, 1);
+    assert.equal(ctl.state().brk, 1);
+    assert.equal(ctl.state().held, 0, "the lost touch LOOK BACK contact releases");
+    assert.equal(timers.pending(), 1, "only the mouse-held arrow keeps repeating");
+    assert.equal(dom.stick.classes.has("on"), false);
+    assert.equal(dom.buttons.navDown.classes.has("on"), true);
+    fire("pointerup", { pointerId: 1 });
+    assert.equal(ctl.state().thr, 1, "keyboard hold survives mouse release");
+    dom.gas.dispatch("keyup", { key: " " });
+    assert.equal(ctl.state().thr, 0);
+    // A mouse can reuse an id whose previous touch never sent pointerup.
+    dom.gas.dispatch("pointerdown", { pointerId: 6, clientY: 200 });
+    dom.gas.dispatch("pointerdown", { pointerId: 6, pointerType: "mouse", button: 0, clientY: 200 });
+    fire("touchcancel", { touches: [] });
+    assert.equal(ctl.state().thr, 1);
+    globalThis.document.hidden = true;
+    fire("visibilitychange", {});
+    assert.equal(ctl.state().thr, 0);
+    assert.equal(ctl.state().brk, 0);
+    assert.equal(timers.pending(), 0, "backgrounding still clears every input source");
+  } finally {
+    ctl.cancel();
+    if (previous === undefined) delete globalThis.document;
+    else globalThis.document = previous;
   }
 });

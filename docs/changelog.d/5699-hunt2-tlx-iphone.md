@@ -1,1 +1,0 @@
-Fixed: On the default renderer, an iPhone whose WebGPU adapter answers slowly at a cold start no longer drops to the WebGL2 fallback for the whole session, and a material texture pack that could only be read in part is retried instead of shipping blank layers (#5699).

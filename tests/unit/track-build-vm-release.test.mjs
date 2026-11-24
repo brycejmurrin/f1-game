@@ -9,8 +9,8 @@
 //                    one pins the whole mesh buffer its emitter wrote into).
 //   release(track)   drops a finished build's own VERTEX BUFFERS — `propsGeo`
 //                    and friends, plus this harness's per-mesh `__cap` capture
-//                    — which trim() cannot reach, because they hang off the
-//                    returned track rather than off the context.
+//                    — and the light occluder index. trim() cannot reach these
+//                    because they hang off the returned track.
 //
 // Both were being skipped. `pit-complex.test.mjs` and `pit-signs.test.mjs`
 // build all 52 circuits and cache them to avoid rebuilding, and measured on
@@ -73,11 +73,13 @@ test("an unreleased build really does pin millions of slots — the problem is r
     `longer holds the geometry, release() is obsolete — delete it and this file.`);
 });
 
-test("release() empties the geometry buffers and the mesh capture", () => {
+test("release() drops the geometry buffers, mesh capture and light occluder index", () => {
   const t = build(ID);
   ctxOnce().trim(0);
+  assert.ok(t._lightOccluders?.boxes.length > 0, "Monza builds a light occluder index");
   const before = slots(t);
   assert.equal(ctxOnce().release(t), t, "release returns the track it was given");
+  assert.equal(t._lightOccluders, undefined, "release drops the complete light occluder index");
   const after = slots(t);
   assert.ok(after < before / 10,
     `release() freed ${(before / 1e6).toFixed(2)} M -> ${(after / 1e6).toFixed(2)} M slots; ` +

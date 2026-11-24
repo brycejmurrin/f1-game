@@ -227,8 +227,28 @@ if ($("pm-fullscreen")) {
 })();
 }
 
+function paintTiltCalibration() {
+  const phoneTilt = Input.phoneTiltAvailable();
+  const calib = $("pm-calib");
+  document.body.toggleAttribute("data-phone-tilt", phoneTilt);
+  calib.disabled = G.getSteerMode() !== "tilt" && !phoneTilt;
+  if (calib.disabled) clearTimeout(calib._t);
+}
+
 function wirePhone() {
   const button = $("pm-phonepad"), box = $("pm-phonepad-box"), status = $("pm-phonepad-status");
+  const calib = $("pm-calib");
+  calib.onclick = () => {
+    // Give the player time to take their thumb off the glass and settle.
+    clearTimeout(calib._t);
+    calib._t = setTimeout(() => {
+      const phoneTilt = Input.phoneTiltAvailable();
+      if (document.hidden || (!G.paused && !(G.state === "menu" && phoneTilt))) return;
+      if (phoneTilt && !Input.remoteActive()) return;
+      Input.calibrate();
+      if (G.paused) setPaused(false, "recalibrate");
+    }, 300);
+  };
   let panel = null, loading = false, generation = 0;
   const active = () => loading || !!panel?.active();
   button.onclick = () => {
@@ -372,6 +392,9 @@ onPadLost: () => {
   setPaused(true, "pad-lost");
   G.announce("CONTROLLER DISCONNECTED — RECONNECT OR PRESS RESUME", 4, "coach");
   Log.info("input", "paused: last gamepad disconnected");
+}, onPhoneTiltChange: () => {
+  paintTiltCalibration();
+  if (typeof SettingDeps !== "undefined") SettingDeps.refresh();
 } });
 /* body.desktop IS A LIVE ANSWER, NOT A BOOT-TIME ONE: `(pointer: coarse)` flips
    whenever an iPad is docked to or undocked from a keyboard, and
@@ -437,7 +460,7 @@ for (const t of GESTURE_EVTS) document.addEventListener(t, onFirstGesture, true)
 
 }
 
-return { wireFirstGesture, paintBuild, wireInstall, wirePhone, wireLifecycle, initInput };
+return { wireFirstGesture, paintBuild, wireInstall, wirePhone, paintTiltCalibration, wireLifecycle, initInput };
 }
   return { create };
 })();

@@ -670,6 +670,7 @@ test("Learn opens a named modal and returns focus to the selected lesson after u
   frame.contentWindow = { postMessage: (msg, target) => replies.push([msg.type, target]) };
   top = "learn";
   assert.equal(wired, dialog);
+  assert.equal(dialog.parentNode, dom.document.body);
   assert.equal(dialog.tagName, "DIALOG");
   assert.equal(dialog.hidden, false);
   assert.equal(dom.byId(dialog.getAttribute("aria-labelledby")).textContent, "LEARN");

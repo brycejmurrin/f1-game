@@ -325,3 +325,27 @@ test("custom camera gestures share the picker hold and cancel with the camera sc
   send("pointerdown", 3200); camera.hide(); send("pointerup", 4100);
   assert.equal(cycles, 1, "a hold retired by pause cannot switch camera on resume");
 });
+
+test("custom touch actions cancel on viewport changes and still accept the next gesture", () => {
+  const listeners = new Map(), orientation = new Map();
+  const window = { addEventListener: (type, fn) => listeners.set(type, fn),
+    screen: { orientation: { addEventListener: (type, fn) => orientation.set(type, fn) } } };
+  const { model, actions } = boot({ window });
+  const handlers = new Map(); let clicks = 0;
+  const el = { style: { setProperty() {}, removeProperty() {} }, setAttribute() {}, removeAttribute() {},
+    getAttribute: () => null, getBoundingClientRect: () => ({ left: 0, right: 20, top: 0, bottom: 20 }),
+    addEventListener: (type, fn) => handlers.set(type, fn), setPointerCapture() {}, click: () => clicks++ };
+  actions.bindControl(el, "pause");
+  const send = (type, timeStamp, pointerId) => handlers.get(type)({ pointerType: "touch", pointerId, timeStamp,
+    clientX: 10, clientY: 10, preventDefault() {}, stopImmediatePropagation() {} });
+  for (const mode of ["tap", "hold"]) {
+    model.setButtonProfile("pause", { activation: mode });
+    for (const interrupt of [listeners.get("resize"), listeners.get("orientationchange"), orientation.get("change"), listeners.get("blur")]) {
+      const before = clicks;
+      send("pointerdown", 0, 1); interrupt(); send("pointerup", 500, 1);
+      assert.equal(clicks, before, mode + " must not activate across a viewport interruption");
+      send("pointerdown", 1000, 2); send("pointerup", 1500, 2);
+      assert.equal(clicks, before + 1, "a fresh gesture remains usable");
+    }
+  }
+});

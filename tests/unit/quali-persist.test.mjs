@@ -105,6 +105,32 @@ test("clear() keeps a driven persist; clear(true) forgets it", () => {
   assert.equal(G.season.qualiOrder, undefined);
 });
 
+test("a pending deletion is limited to its circuit, stage, season, seat and solo mode", () => {
+  const { q, G, ctx } = loadQuali({ season: { round: 0, stage: "sprint", seed: 17 } });
+  ctx.SeasonCal = { drawRound: (s) => s.round + (s.stage === "sprint" ? 1000 : 0) };
+  const original = { ...G.cars[0], lap: 1 };
+  q.markDeletedLap(original, false);
+  const replacement = { ...original, qualiCut: false };
+
+  assert.equal(q.hasDeletedLap(replacement, false), true, "a replacement car inherits the pending deletion");
+  assert.equal(q.hasDeletedLap(replacement, true), false, "a friend room does not inherit a solo result");
+  assert.equal(q.hasDeletedLap({ ...replacement, driverId: "p2" }, false), false);
+  G.season.stage = "race";
+  assert.equal(q.hasDeletedLap(replacement, false), false, "GP qualifying is a separate session from sprint qualifying");
+  G.season.stage = "sprint";
+  G.season.seed = 18;
+  assert.equal(q.hasDeletedLap(replacement, false), false, "a new championship gets a fresh attempt");
+  G.season.seed = 17;
+  G.track = { def: { id: "spa" } };
+  assert.equal(q.hasDeletedLap(replacement, false), false);
+  G.track = { def: { id: "monza" } };
+  G.seasonMode = false;
+  assert.equal(q.hasDeletedLap(replacement, false), false);
+  G.seasonMode = true;
+  q.clearDeletedLap(replacement, false);
+  assert.equal(q.hasDeletedLap(replacement, false), false);
+});
+
 test("restore fills names, gaps, and isPlayer from live cars", () => {
   const { q } = loadQuali({
     season: {
@@ -300,8 +326,8 @@ test("friend-race title quit cancels the lobby instead of aborting back into it"
   // 2026-09-02: quitToMenu grew and netLobby.cancel() moved to +2605, so this
   // assertion failed for a call that was still there. See tests/helpers/fn-source.mjs.
   const quit = symbolSource("function quitToMenu()");
-  assert.match(quit, /qualiNet\.resetOnQuitWithCancel\(\)/);
-  assert.match(fnSource(QUALI_NET, "function resetOnQuitWithCancel()"), /netLobby\.cancel\(\)/);
+  assert.match(quit, /qualiNet\.resetOnQuitWithCancel\(isQuali\(\) && state === "race"\)/);
+  assert.match(fnSource(QUALI_NET, "function resetOnQuitWithCancel(unfinished)"), /netLobby\.cancel\(\)/);
   assert.doesNotMatch(quit, /netLobby\.abortQuali\(\)/);
 });
 
@@ -752,7 +778,7 @@ test("a mid-weekend career save keeps the qualifying it drove when the model cha
   assert.ok(redrawn.every((r) => Math.abs(r.t - today) < today * 0.05), "so a reload draws it from today's model: " + redrawn.map((r) => r.t.toFixed(1)).join(" "));
 });
 
-// The field's lap is QUALI_CENTRE x the circuit's generated factor x the integrated lap (#5786). A circuit the
+// The field's lap is the circuit's generated factor x the integrated lap (#5999). A circuit the
 // calibration never measured (a TRACK DESIGNER layout, any id) takes the calendar median, never 1 and never a
 // property of Object.prototype.
 test("carLap: a calendar circuit reads its own factor, an unmeasured one the calendar median", async () => {
@@ -763,10 +789,10 @@ test("carLap: a calendar circuit reads its own factor, an unmeasured one the cal
   const mk = (id, extra) => ({ n: 80, total: 4000, def: Object.assign({ id }, extra) });
   const near = (a, b, m) => assert.ok(Math.abs(a / b - 1) < 1e-12, `${m}: ${a} vs ${b}`);
   const monza = mk("monza");
-  near(q.carLap(c, monza, 1), 0.993 * +f.by.monza * q.carLap(c, monza, 1, true), "monza takes its row");
+  near(q.carLap(c, monza, 1), +f.by.monza * q.carLap(c, monza, 1, true), "monza takes its row");
   for (const t of [mk("d7f3a1c2", { custom: true }), mk("constructor"), mk("__proto__"), { n: 80, total: 4000 }]) {
     const lap = q.carLap(c, t, 1);
-    near(lap, 0.993 * +f.def * q.carLap(c, t, 1, true), "an unmeasured circuit takes the default");
+    near(lap, +f.def * q.carLap(c, t, 1, true), "an unmeasured circuit takes the default");
     assert.ok(Number.isFinite(lap) && lap > 0);
   }
   G.track = mk("d7f3a1c2", { custom: true });

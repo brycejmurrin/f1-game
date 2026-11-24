@@ -10,7 +10,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   LINUX_SLOTS, LINUX_HOLD, MACOS_SLOTS, QUEUED_HOLD, MAX_RUNS, DEFAULT_OUT,
-  isMac, countJobs, evaluate, RUN_STATUSES, reportLine, measure, pushTargets, pushStartsCi, pushVerdict, waitForOk, HYSTERESIS_MS,
+  isMac, countJobs, evaluate, RUN_STATUSES, reportLine, measure, pushTargets, pushStartsCi, pushVerdict, waitForOk, HYSTERESIS_MS, optionalWorkAdmission,
 } from "../../tools/ci/queue-depth.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -24,6 +24,15 @@ test("thresholds are the measured account slots", () => {
   assert.equal(QUEUED_HOLD, 10);
   assert.equal(MAX_RUNS, 30);
   assert.equal(DEFAULT_OUT, "apex-status/queue-depth.json");
+});
+
+test("optional work defers at the Linux capacity knee without changing the push gauge", () => {
+  const snapshot = (n) => evaluate(countJobs([...many(n, "in_progress"), ...many(7, "pending"), ...many(5, "in_progress", "macos-latest")]));
+  assert.equal(optionalWorkAdmission(snapshot(34)).proceed, true);
+  assert.equal(optionalWorkAdmission(snapshot(35)).proceed, false);
+  assert.match(optionalWorkAdmission({ ...snapshot(35), truncated: true }).message, /at least 35/);
+  assert.equal(optionalWorkAdmission({ error: "HTTP 429" }).proceed, true);
+  assert.match(optionalWorkAdmission({ error: "HTTP 429" }).message, /unavailable/);
 });
 
 test("jobs split by runner label; completed and environment-waiting jobs hold no slot", () => {

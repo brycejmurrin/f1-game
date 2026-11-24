@@ -1,1 +1,0 @@
-Fixed: HUD sizes on a touch phone in landscape: the top band (POS / LAP / TIME tower) no longer changes size when you move BUTTON SIZE, and moving BUTTON SIZE no longer grows the gear / speed row into room it freed. The game quietly remembers the gear row's size until you next move HUD SIZE (#5256).

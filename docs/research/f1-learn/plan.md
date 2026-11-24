@@ -112,3 +112,40 @@ The first lesson opens with two cars 10 m apart. At the same gap, switching to t
 | Further sessions | Reconstruct a steward decision and rescore the result. Compare floor designs, hybrid architectures, safety layers or development budgets across eras. | [Race decisions](race-sessions.md) · [Era sessions](era-sessions.md) |
 
 Use the worked values and transfer questions in each brief as acceptance fixtures. Preserve the year and event on every source-backed example; label teaching values in the same view as their outputs.
+
+## After Grip & Braking and VSC Pit Strategy
+
+| Proposed lesson | First playable decision | Why this order |
+|---|---|---|
+| [Where did the time go?](telemetry-ideas.md) | Choose which driver reaches a corner exit first, then align the traces by distance and check the prediction. | Builds directly on Grip & Braking. An offline pair of traces and the existing Data Hub marker calculations give the lesson a reproducible outcome. |
+| [Energy & Overtake](engineering-ideas.md) | Spend charge now or save it for the faster section. Cross the detection line at a different gap and compare what is available. | Introduces a genuinely different resource constraint. Power, energy and eligibility each get a distinct readout and a dated rule reference. |
+| [Read the evidence before the decision](steward-ideas.md) | Select what the evidence establishes about a driver leaving the track, then reveal the official finding and sanction. | Adds a rule-interpretation session with evidence review and an accessible text sequence. Each future case needs its own source and reasoning review. |
+
+All three start with a local worked example. The telemetry lesson can link to the Data Hub after the example; real timing data is optional. The engineering and stewarding briefs also include alternate concepts for later releases.
+
+## Candidate curriculum from the 14-module brainstorm
+
+The following ideas came from a separate brainstorming pass. The numbers preserve that brief’s order and help reviewers find related ideas. The three playable lessons are in draft game PRs. Their remaining experiments and the other eleven candidates are proposals.
+
+| Pillar | Candidates | Current coverage and next decision |
+|---|---|---|
+| Car anatomy and aerodynamics | 1. Active aero and the slipstream paradox · 2. Nimble car X-ray · 3. Pushrod, pullrod and anti-dive | Aero Lab already supports moving the follower through a wake, comparing straight and corner, and varying local flow speed. A 2025/26 silhouette and an animated suspension cutaway would require separate geometry and provenance. [Chassis briefs](curriculum-chassis.md) · [Aero Lab PR](https://github.com/brycejmurrin/f1-game/pull/6195) |
+| Power unit and energy | 4. Deployment clipping and Overtake · 5. Hybrid lap budget · 6. Rear brake blending and torque fill | Start with the existing two-window Energy & Overtake fixture. A charge ledger could then drive the sector budget. A brake-blending visual needs its own rear-axle torque and energy limits. [Power briefs](curriculum-power.md) · [Worked energy fixtures](engineering-ideas.md) |
+| Tyres, driving dynamics and telemetry | 7. Thermal windows, graining and blistering · 8. Braking, load transfer and the friction circle · 9. Racing lines and apex geometry · 10. Telemetry Detective · 11. Rain lines and aquaplaning | Grip & Braking already covers combined tyre force on dry and damp surfaces at a fixed load. Speed-dependent downforce and axle load transfer would extend it. Prototype Telemetry Detective next because the paired traces and expected delta already exist. [Driving briefs](curriculum-driving.md) · [Telemetry fixtures](telemetry-ideas.md) · [Grip PR](https://github.com/brycejmurrin/f1-game/pull/6197) |
+| Race strategy and weekend operations | 12. Pit windows under VSC and Safety Car · 13. Undercut versus overcut · 14. Fuel burn, tyre allocation and the cliff | VSC Pit Strategy already replays one sector and estimates tyre and traffic outcomes. A full Safety Car requires modelling the queue. An undercut duel is a smaller next experiment: change the out-lap or rejoin gap and observe the crossover. [Strategy briefs](curriculum-strategy.md) · [VSC PR](https://github.com/brycejmurrin/f1-game/pull/6198) |
+
+### Shared lesson format
+
+Open with one question that calls for a decision. Let the player manipulate the visual and keep its most important measurement visible beside the control. Show units, a baseline and what stayed fixed. End with a short **Engineer Challenge** that changes one condition and asks for a prediction before revealing the explanation. The range controls, replay controls and feedback should also work with a keyboard and with motion paused.
+
+### Further ideas from the same brainstorm
+
+| Candidate | First playable question |
+|---|---|
+| Setup trade-offs | How does changing a single setup parameter affect braking and cornering over the same run? |
+| Survival cell, crash structures and Halo | Which component absorbs impact energy, and which preserves space around the driver? |
+| Wind tunnel, CFD and track correlation | Does a development gain survive when the circuit measurements disagree with the tunnel? |
+| Pit-stop choreography | Which delayed crew action actually changes the time at which the car can be released safely? |
+| Qualifying out-lap and tow timing | Can the driver gain a tow while preserving clear air through the preceding corner? |
+
+For review, take one proposal at a time: choose the physical relationship to demonstrate, identify which quantities a primary source or the game can support, and write down an input that reverses the expected outcome where one exists. Treat examples such as a particular qualifying gap, a fuel-weight penalty, or a tyre-temperature threshold as scenario inputs unless a dated source establishes the value for that case.

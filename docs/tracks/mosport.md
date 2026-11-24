@@ -40,7 +40,7 @@ Esses and Whites are projected onto this centreline rather than guessed
 | 0.1483 | -1 | 10 | Approach to Clayton, the steepest pitch on the lap. `guardrail` and a continuous `forestEdge`; nothing built. A pedestrian `bridge` crosses here (real: footbridge at Turn 2). |
 | 0.1817 | -1 | 14 | **Clayton Corner (T2)** — a dramatic plunging left. `tyreWall` on the outside, `spectatorHill` set back behind it in the trees, `marshalPost` at the apex. |
 | 0.2800 | +1 | 18 | Between Clayton and Quebec: woodland both sides, a small `spectatorHill` on the inside, `guardrail` continuous. Dark and enclosed. |
-| 0.3117 | -1 | 12 | **Quebec Corner (T3).** `guardrail` then `tyreWall`, `marshalPost`, `forestEdge` hard behind. A single `billboard` on the exit fence. |
+| 0.2787 apex; 0.3117 exit | -1 | 11–16 | **Quebec Corner (T3).** Armco covers the apex and exit, with a tyre wall at the apex. The marshal post, woodland and one billboard remain at the exit. |
 | 0.4200 | -1 | 22 | The run down to Moss, still falling. Continuous `forestEdge`, sandy shoulder `groundPatch`, one `marshalPost`. The lowest, most enclosed part of the lap. |
 | 0.4817 | +1 | 15 | **Moss Corner (T5a/5b)** — `modelGroup("mosport-moss-corner-bank")` positive-rake seat tiers on the inside; `tyreWall` on both apexes. Signature corner (Stirling Moss redesign of the original hairpin). |
 | 0.5400 | -1 | 20 | Moss exit onto the back straight: `guardrail`, a low `ridge` carrying the ground up, `forestEdge` set back as the trees open out. The climb starts here. |
