@@ -581,6 +581,7 @@ const TLX = (function () {
       let _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
       let _captureDraw = false, _captureSource = null;
+      let _lastPhotoFocus = false;
       let _blitRT = null, _softImg = null, _softBlitGen = 0;
       // Soft-present / capturePixels LDR unstride pool (audit #3): one grow-only
       // Uint8ClampedArray reused across presents so a 1280×720 soft blit does not
@@ -5497,6 +5498,7 @@ const TLX = (function () {
         get height() { return H; },
         get aspect() { return H ? W / H : 1; },
         hdrMode() { return !!(post && post.hdrOk()); },   // M8: float scene target when the chain is up
+        photoFocusAvailable() { return !_softBlit && !softwareGL && !_xrActive && !!post?.photoFocusAvailable?.(); },
         maxLights: _maxLights,   // lit-shader light slots (16 on _liteGpu; LightBudget.slots() mirrors it)
         msaa() { return post && _sceneSamples > 1 ? _sceneSamples : 1; },
         pcss() { return !!(shadowSys && shadowSys.S.pcssEnabled); },   // WebGPU blocker map live (tlx-shadow.js)
@@ -7043,14 +7045,15 @@ const TLX = (function () {
           // The reload spends the shared ctxLostReloads budget (n <= 2, like the heal path below); past it the latch is
           // still written for the player's own next reload, but nothing reloads on its own.
           // (persistFail / paintCanvas / dropTo / refuseTab are hoisted above present(): one closure set per renderer, none a frame — R13.)
+          const photoFocus = opts?.photoFocus !== undefined && this.photoFocusAvailable();
+          if (_lastPhotoFocus && !photoFocus) post?.endPhotoFocus?.();
+          _lastPhotoFocus = photoFocus;
           let painted = false;
           try {
-            // Garage / menu frames set noEnv (setup-camera may still pass
-            // proj/invProj for SSAO-capable hardware). Routing noEnv through
-            // the HDR scene target left the turntable black — software GL's
-            // half-float FBO never got the car, and ?viz=scene confirmed the
-            // RT itself is empty. View-space post already self-disables;
-            // paint the default framebuffer like GLX.
+            // Garage / menu frames normally draw directly. The hardware-only
+            // Photo Studio route needs the sampleable scene depth target.
+            // Software GL's half-float FBO left the turntable black, so it
+            // stays on its direct path with the studio's depth controls off.
             //
             // SOFT-PRESENT BACK-PRESSURE. On a software adapter the visible
             // frame is a readback, and a readback completes only after every
@@ -7065,9 +7068,9 @@ const TLX = (function () {
             if (_softBlit && _softReadPending
                 && ((typeof performance !== "undefined" ? performance.now() : Date.now()) - _softReadSince) <= _softReadStaleMs()) {
               painted = true;   // nothing drawn this frame by design; the last blit stays up
-            } else if (post && _postF.proj && !_postF.noEnv) {
+            } else if (post && _postF.proj && (!_postF.noEnv || photoFocus)) {
               pinSkyMaterial();
-              skyCacheStep();   // E1: before the MRT goes on (its own target, MRT null)
+              if (!_postF.noEnv) skyCacheStep();   // E1: before the MRT goes on (its own target, MRT null)
               const _tag = !post.tagOn || post.tagOn();   // R3: a one-attachment scene target takes no MRT
               if (_tag && lit && lit.setSsrMrt) lit.setSsrMrt(true);
               if (_tag && fx && fx.setSsrMrt) fx.setSsrMrt(true);
@@ -7076,7 +7079,7 @@ const TLX = (function () {
               if (_hadMrt) renderer.setMRT(_ssrMrtNode());
               if (post.setMirror) {
                 // Pixels of the present target (the SGSR output size when upscaling).
-                const up = wantSpatialUpscale(), ok = !!(_mirRect && mirRT && _mirReady && !_mirDead);
+                const up = wantSpatialUpscale(), ok = !_postF.noEnv && !!(_mirRect && mirRT && _mirReady && !_mirDead);
                 post.setMirror(ok ? mirRT.texture : null, ok ? _mirPx(up ? presentW : W, up ? presentH : H) : null, ok && mirRT.texture.type !== THREE.UnsignedByteType, _mirFlip);
               }
               try {
