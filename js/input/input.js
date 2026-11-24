@@ -1934,10 +1934,11 @@ const Input = (function () {
   function steerNow() {
     if (padConnected) advanceDpad();
     const k = keyboardSteer();
-    if (keyLeft || keyRight || Math.abs(k) > 0.001) return k;
+    if (keyLeft || keyRight) return k;
     // The d-pad half of padSteer is digital and already ramped — it must not
     // also be curved and speed-scaled as if it were a deflection.
     if (padSteerActive()) return padSteerAnalog ? analogShape(padSteer, padIsWheel ? "wheel" : "pad") : padSteer;
+    if (Math.abs(k) > 0.001) return k;
     // A paired phone WITH a sensor: the tilt pipeline fed by remoteSample,
     // whatever the local mode. Pedals-only phones fall through to it.
     if (remoteSteers()) return remoteDrivingBlocked() ? 0 : remStick ? analogShape(remSteer, "pad") : analogShape(tiltSteering(), "tilt");

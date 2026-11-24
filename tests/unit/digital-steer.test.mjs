@@ -186,6 +186,37 @@ function padRig(mapping = "standard") {
   return Object.assign(r, { pad, trig: (i, v) => { pad.buttons[i] = { pressed: v >= 0.5, value: v }; } });
 }
 
+test("an active stick takes over from released keyboard steering on the first poll", () => {
+  for (const stickAfterRelease of [0, 1]) {
+    const { Input, key, clock, pad } = padRig();
+    const step = () => {
+      clock.t += STEP;
+      Input.poll();
+      return Input.steer(STEP / 1000);
+    };
+    key("ArrowLeft", true);
+    for (let i = 0; i < 60; i++) step();
+    pad.axes[0] = 1;
+    assert.equal(step(), -1, "the held key still has priority over an opposite stick");
+    pad.axes[0] = 0;
+    step();
+    key("ArrowLeft", false);
+    pad.axes[0] = stickAfterRelease;
+    let steer = step();
+    if (stickAfterRelease) {
+      assert.equal(steer, 1, "the first controller poll must not keep steering left");
+    } else {
+      assert.ok(steer > -1 && steer < 0, "an idle stick preserves the keyboard's normal return");
+      for (let i = 0; i < 60; i++) {
+        const next = step();
+        assert.ok(next >= steer && next <= 0, "the return unwinds without overshoot");
+        steer = next;
+      }
+      assert.equal(steer, 0);
+    }
+  }
+});
+
 test("a calibrated drift offset still reaches full lock on BOTH sides", () => {
   const { Input, pad } = padRig();
   Input.setPadDeadzone(0.05); Input.setPadSaturation(0);
