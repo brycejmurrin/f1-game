@@ -96,7 +96,7 @@ const InputHoldButtons = (function () {
     // moment it is inside that sibling's box: THE CONTROL UNDER THE FINGER WINS.
     //   - only THAT pointer moves; a second finger on either control is untouched;
     //   - arrival normally stays full. A pedal with eased crossover ramps up;
-    //     a progressive steering arrow treats the entry point as a fresh press;
+    //     a tuned steering arrow treats the entry point as a fresh press;
     //   - it hands back the same way, and every release net above still applies
     //     to whichever control holds the pointer now.
     // The HUD can move without rotating. Hit-test the current layout even when
@@ -202,9 +202,8 @@ const InputHoldButtons = (function () {
         if (level) {
           const crossingPedal = arrived && axis === "y";
           const profile = PedalTravel.contactProfile(opts?.button || id, slideEase?.() ? "ease" : "instant",
-            arrived && !crossingPedal ? null : e, el, crossingPedal);
-          const trackTravel = !!profile.sliderEdge || !arrived ||
-            (crossingPedal ? profile.trackCrossover || profile.slide === "response" : profile.press === "progressive");
+            arrived && !crossingPedal ? null : e, el, arrived);
+          const trackTravel = !!profile.sliderEdge || !arrived || profile.trackCrossover || profile.slide === "response";
           const ramp = crossingPedal && !profile.sliderEdge && profile.slide === "ease";
           const contact = { x: e.clientX, y: e.clientY, profile, trackTravel, ramp };
           anchors.set(e.pointerId, contact);
@@ -212,7 +211,7 @@ const InputHoldButtons = (function () {
             ramp ? PedalTravel.MIN : trackTravel ? PedalTravel.level(profile, 0) : 1;
           levels.set(e.pointerId, initial);
           paintLevel();
-          if (!ramp && (!arrived || crossingPedal)) buildFromAnchor(e.pointerId, contact);
+          if (!ramp && trackTravel) buildFromAnchor(e.pointerId, contact);
         }
         gone.clear();
         if (arrived) slid.add(e.pointerId);

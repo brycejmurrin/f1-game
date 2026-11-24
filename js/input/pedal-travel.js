@@ -232,11 +232,13 @@ const PedalTravel = (function () {
     if (profile.sliderEdge) profile.sliderBounds = el.getBoundingClientRect();
     else if (crossover && profile.slide !== "response") {
       // The inherited, untuned profile keeps its original crossover. An
-      // explicit profile resumes from full input without jumping to its start.
+      // explicit pedal resumes from full input without jumping to its start;
+      // an explicit arrow starts its response afresh (#6305). A
+      // hold target alone shapes no build, so it is not a tuning.
       profile.trackCrossover = !!buttonOverrides(id).slide || profile.press === "progressive" || profile.travel !== TRAVEL_PX ||
         !!(profile.direction || profile.slideCurve || profile.fullEdge || profile.buildMs) ||
-        profile.start != null || profile.end != null || profile.holdEnd != null;
-      profile.start = 100;
+        profile.start != null || profile.end != null;
+      if (id === "gas" || id === "brake") profile.start = 100;
     } else if (profile.fullEdge && event) {
       const amount = positionLevel(profile.fullEdge, el.getBoundingClientRect(), event);
       if (amount !== undefined) profile.start = 100 * amount;
