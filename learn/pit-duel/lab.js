@@ -12,11 +12,11 @@
     intro: "You start behind a rival. Compare the gap after both cars stop, when the temporary track-position swap has cleared.",
     controls: [
       { id: "mode", label: "Exercise", options: [["strategy", "Strategy · equal stops"], ["execution", "Execution · variable pit loss"]], value: "strategy" },
-      { id: "call", label: "Your pit call", options: [["first", "Stop first · undercut"], ["second", "Stay out a lap · overcut"]], value: "first" },
+      { id: "call", primary: true, label: "Your pit call", options: [["first", "Stop first · undercut"], ["second", "Stay out a lap · overcut"]], value: "first" },
       { id: "gap", label: "Starting deficit", min: 0.2, max: 3, step: 0.1, value: 0.8, unit: "s" },
       { id: "old", label: "Old-tyre comparison lap", min: 88.5, max: 93, step: 0.1, value: 90, unit: "s" },
       { id: "warm", label: "Early stopper’s warm-up cost", min: 0, max: 3, step: 0.1, value: 0.3, unit: "s" },
-      { id: "traffic", label: "Early stopper’s traffic cost", min: 0, max: 3, step: 0.1, value: 1, unit: "s" },
+      { id: "traffic", primary: true, label: "Early stopper’s traffic cost", min: 0, max: 3, step: 0.1, value: 1, unit: "s" },
       { id: "stop", label: "Your pit loss", min: 19, max: 23, step: 0.1, value: 20, unit: "s", when: state => state.mode === "execution" },
     ],
     challenge: "In Strategy, gain a place by at least 0.5 s with equal 20 s stops. In Execution, turn a deficit after the pace comparison into a lead of at least 0.5 s.",

@@ -28,10 +28,6 @@
     </header>
     <canvas id="chart" aria-hidden="true"></canvas>
     <p class="caption" id="axis-note"></p>
-    <div class="ghosts" aria-hidden="true">
-      <div class="road"><span>0 m</span><div class="course"><i data-ghost="0">A</i><i data-ghost="1">B</i></div><span id="strip-end"></span></div>
-      <p class="caption" id="ghost-note">Schematic distance along the same section.</p>
-    </div>
   </section>
   <div class="sidebar">
     <section class="panel controls" aria-labelledby="cursor-title">
@@ -54,6 +50,12 @@
         <select id="reference"><option value="0">Driver A</option><option value="1">Driver B</option></select>
       </label>
     </section>
+    <div class="panel">
+    <div class="ghosts" aria-hidden="true">
+      <div class="road"><span>0 m</span><div class="course"><i data-ghost="0">A</i><i data-ghost="1">B</i></div><span id="strip-end"></span></div>
+      <p class="caption" id="ghost-note">Schematic distance along the same section.</p>
+    </div>
+    </div>
     <section class="panel" aria-labelledby="values-title">
       <h3 id="values-title">At the cursor</h3>
       <table>

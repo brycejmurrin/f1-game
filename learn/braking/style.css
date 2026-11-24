@@ -129,9 +129,10 @@ a { color: inherit; }
   #learn-studio [data-as="preview-side"] { order: 0; }
 }
 
-@media (max-width: 560px) {
+@media (width < 580px) {
   .instrument { grid-template-columns: minmax(0, 1fr); }
-  .chart { max-width: 220px; }
+  .chart { max-width: 175px; }
+  .instrument [data-as="box"] { padding: .55rem; }
   dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 

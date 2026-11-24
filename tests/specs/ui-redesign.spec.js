@@ -1236,6 +1236,7 @@ test("Learn opens the wake lesson and returns keyboard focus to its title door",
   await expect(lab.locator("#gap")).toHaveValue("10");
   await expect(lab.locator("#tow")).toHaveText("0%");
   await expect(lab.locator("#grip")).toHaveText("88%");
+  await lab.getByText("2026 Active Aero rules and experiment", { exact: true }).click();
   await expect(lab.getByRole("heading", { name: "2026 F1 ACTIVE AERO" })).toBeVisible();
   await expect(lab.locator("#local-pressure")).toHaveText("64%");
   await lab.getByRole("slider", { name: "Local flow speed", exact: false }).press("ArrowRight");
@@ -1251,7 +1252,9 @@ test("Learn opens the wake lesson and returns keyboard focus to its title door",
   await expect(lab.locator("#gap")).toHaveCSS("accent-color", "rgb(0, 163, 224)");
   await lab.getByLabel("Fast corner").check();
   await expect(lab.locator("#state")).toHaveText("Cornering in wake");
-  await lab.getByLabel("Move follower 4 m off-line").check();
+  await lab.getByRole("slider", { name: "Lateral offset" }).fill("-2");
+  await expect(lab.locator("#grip")).toHaveText("94%");
+  await lab.getByRole("button", { name: "Move to 4 m boundary" }).click();
   await expect(lab.locator("#grip")).toHaveText("100%");
   await lab.locator("#gap").press("Escape");
   await expect(lesson).toBeFocused();
@@ -1392,4 +1395,17 @@ test("Learn curriculum groups fourteen lessons and lets a player solve the chass
   await expect(lab.getByRole("status")).toBeEmpty();
   await check.press("Escape");
   await expect(lesson).toBeFocused();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator("#learn-open-deployment").click();
+  const charge = lab.getByRole("slider", { name: "Usable charge at entry" });
+  await expect(charge).toBeVisible();
+  await expect(lab.locator(".lesson-primary")).toContainText("Usable charge at entry");
+  const chart = lab.locator("#lesson-diagram");
+  await chart.hover();
+  await page.mouse.wheel(0, 350);
+  await expect.poll(() => chart.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  const more = lab.getByText("More setup controls", { exact: true });
+  await more.click();
+  await expect(lab.getByLabel("Power curve")).toBeVisible();
 });

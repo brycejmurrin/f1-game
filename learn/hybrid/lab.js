@@ -114,7 +114,7 @@
     controls: [
       { id: "budget", label: "Lap recharge allowance", options: [["6", "6.0 MJ · Las Vegas qualifying"], ["7", "7.0 MJ · Melbourne qualifying"], ["8", "8.0 MJ · Las Vegas race, Overtake inactive"], ["8.5", "8.5 MJ · Las Vegas race, Overtake active"]], value: "8" },
       { id: "start", label: "Usable charge at start", min: 0.5, max: 4, step: 0.25, value: 2, unit: "MJ" },
-      { id: "deploy", label: "Deployment in acceleration phases", min: 100, max: 350, step: 25, value: 250, unit: "kW" },
+      { id: "deploy", primary: true, label: "Deployment in acceleration phases", min: 100, max: 350, step: 25, value: 250, unit: "kW" },
       { id: "brake", label: "Harvest under braking", min: 100, max: 350, step: 25, value: 275, unit: "kW" },
       { id: "clip", label: "Full-throttle harvesting", min: 0, max: 350, step: 25, value: 0, unit: "kW" },
       { id: "repeat", label: "Repeat-lap trace", value: "off", options: [["off", "First lap only"], ["on", "Overlay next lap · dashed"]] },

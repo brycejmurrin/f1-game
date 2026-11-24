@@ -26,27 +26,56 @@ main {
 
 #learn-studio {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--gap);
   align-items: start;
-}
-#learn-studio [data-as="preview-side"] {
-  position: sticky;
-  top: 0;
   min-width: 0;
   padding: var(--pad);
   background: var(--surf-1);
   border: 1px solid var(--plate-line);
   border-radius: var(--r-md);
 }
-@media (max-width: 900px) {
-  #learn-studio { grid-template-columns: minmax(0, 1fr); }
-  #learn-studio [data-as="preview-side"] { position: static; order: -1; }
+.airflow { grid-area: airflow; min-width: 0; }
+.settings { grid-area: setup; }
+.results { grid-area: results; }
+#corner-replay { grid-area: replay; }
+.gap-help { grid-area: help; }
+
+@media (min-width: 641px) {
+  #learn-studio {
+    grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr);
+    grid-template-areas: "setup airflow" "setup results" "setup replay" "help help";
+  }
+}
+@media (max-width: 640px) {
+  main { padding: min(var(--pad, 14px), 14px); }
+  #learn-studio {
+    grid-template-areas: "airflow" "metrics" "setup" "replay" "explanation" "help";
+    padding: min(var(--pad, 14px), 12px);
+    gap: .55rem;
+  }
+  #learn-studio .settings[data-as="box"] { padding: .55rem; }
+  .settings fieldset { margin-block: .4rem; }
+  .settings h2 { display: none; }
+  .wake-metrics { grid-area: metrics; }
+  .wake-explanation { grid-area: explanation; }
+  .wake-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .3rem; }
+  .wake-metrics .reading { background: var(--plate); border-radius: var(--r-sm); padding: .3rem; }
+  .wake-metrics .reading div { display: block; text-align: center; font-size: .8em; }
+  .wake-metrics strong { display: block; font-size: 1.2rem; }
+  .wake-metrics meter { display: none; }
+  #learn-studio .results { display: contents; }
+  #learn-studio .legend { gap: .45rem; }
+  #learn-studio .legend span:first-child { margin-right: 0; }
+}
+@media (pointer: coarse) {
+  .settings input[type="range"], #corner-replay input[type="range"], .active-aero summary { min-height: 44px; }
+  .active-aero summary { align-content: center; }
 }
 
 h1, h2, p { margin: 0; }
 
-.settings label[for="gap"], .reading div, .limits, .instrument, .legend {
+.settings label[for], .reading div, .limits, .instrument, .legend {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -241,17 +270,9 @@ details {
   border-radius: var(--r-md);
   background: var(--surf-1);
 }
-@media (max-width: 640px) {
-  #learn-studio [data-as="controls"] { order: -2; }
-}
 @media (max-height: 500px) and (min-width: 641px) {
-  #learn-studio { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
-  #learn-studio [data-as="preview-side"] {
-    order: 0;
-    position: sticky;
-    padding: calc(var(--pad) * .5);
-  }
-  canvas { height: 86px; }
+  #learn-studio { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: calc(var(--pad) * .5); }
+  #flow { height: 100px; }
   main { padding: .45rem; }
   .instrument button { padding: .15rem .5rem; }
 }

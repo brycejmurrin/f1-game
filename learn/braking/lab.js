@@ -5,6 +5,18 @@
   const brake = get("brake");
   const turn = get("turn");
   const plot = document.querySelector(".plot");
+  const setup = get("setup-title").closest("section");
+  const controls = setup.parentElement;
+  const readings = document.querySelector(".readings");
+  const compactLayout = matchMedia("(width < 580px)");
+  function placeForceControls() {
+    const focused = document.activeElement;
+    if (compactLayout.matches) readings.before(setup);
+    else controls.prepend(setup);
+    if (setup.contains(focused)) focused.focus({preventScroll: true});
+  }
+  compactLayout.addEventListener("change", placeForceControls);
+  placeForceControls();
   const requested = [plot.querySelector(".ray.requested"), plot.querySelector(".point.requested")];
   const delivered = [plot.querySelector(".ray.achieved"), plot.querySelector(".point.achieved")];
   const limitPoint = plot.querySelector(".point.limit");

@@ -48,15 +48,21 @@ const LearnSandbox = (() => {
       expand.setAttribute("aria-expanded", String(expanded));
       expand.textContent = expanded ? "Fit diagram" : "Expand diagram";
     });
+    const replayHost = element("div", instrument);
+    const primary = element("div", instrument);
+    primary.className = "lesson-primary";
     const diagramKey = element("p", instrument);
     diagramKey.className = "diagram-key";
-    const replayHost = element("div", instrument);
     const readouts = element("dl", instrument);
     const explanation = element("p", instrument);
     const settings = panel(studio);
+    const setup = element("details", settings);
+    setup.className = "lesson-setup";
+    element("summary", setup, "More setup controls");
+    const fields = element("div", setup);
     for (const control of lesson.controls) {
       state[control.id] = control.value;
-      const row = element("div", settings);
+      const row = element("div", fields);
       row.className = "control";
       if (control.when) conditionalRows.push({row, when: control.when});
       const label = element("label", row);
@@ -82,7 +88,7 @@ const LearnSandbox = (() => {
         }
       }
       setValue(control.value);
-      controls.set(control.id, {control, input, setValue, labelText});
+      controls.set(control.id, {control, row, input, setValue, labelText});
       input.addEventListener("input", () => {
         if (presets) presets.value = "";
         replay?.stop();
@@ -91,13 +97,14 @@ const LearnSandbox = (() => {
         syncReplay(true);
       });
     }
-    const presets = lesson.presets && element("select", settings);
+    const presets = lesson.presets && element("select", fields);
+    let presetLabel;
     if (presets) {
       presets.id = "lesson-preset";
-      const label = document.createElement("label");
-      label.htmlFor = presets.id;
-      label.textContent = "Compare setups";
-      settings.insertBefore(label, presets);
+      presetLabel = document.createElement("label");
+      presetLabel.htmlFor = presets.id;
+      presetLabel.textContent = "Compare setups";
+      fields.insertBefore(presetLabel, presets);
       element("option", presets, "Choose an example").value = "";
       lesson.presets.forEach(([name], i) => { element("option", presets, name).value = String(i); });
       presets.addEventListener("change", () => {
@@ -108,8 +115,22 @@ const LearnSandbox = (() => {
         syncReplay();
       });
     }
-    const reset = element("button", settings, "Reset controls");
+    const reset = element("button", fields, "Reset controls");
     reset.type = "button";
+    const compact = matchMedia("(width < 46rem)");
+    function placeControls() {
+      const focused = document.activeElement;
+      for (const {control, row} of controls.values()) {
+        (compact.matches && control.primary ? primary : fields).append(row);
+      }
+      if (presets) fields.append(presetLabel, presets);
+      fields.append(reset);
+      setup.open = !compact.matches || fields.contains(focused);
+      if (settings.contains(focused) || primary.contains(focused)) focused.focus({preventScroll: true});
+    }
+    compact.addEventListener("change", placeControls);
+    placeControls();
+
     const task = panel(studio);
     task.className = "challenge";
     element("h2", task, "Engineer challenge");

@@ -114,8 +114,8 @@
     replay: {label: state => state.view === "floor" ? "floor airflow" : "tyre wake"},
     intro: "Compare FIA package dimensions, play airflow in the Floor and Inwash layers, or make a blind legality call.",
     controls: [
-      {id: "view", label: "Drawing layer", options: [["compare", "Axle and body overlay"], ["floor", "Floor cutaway · playable airflow"], ["wake", "Inwash / outwash · playable airflow"], ["inspect", "Free inspection"], ["challenge", "Challenge · fixed 3,450 / 945 mm"], ["edge", "Challenge · exact limits"]], value: "compare"},
-      {id: "wakeStyle", when: state => state.view === "wake", label: "Tyre wake direction (wake layer)", options: [["out", "Outwash"], ["in", "Inwash"]], value: "out"},
+      {id: "view", primary: true, label: "Drawing layer", options: [["compare", "Axle and body overlay"], ["floor", "Floor cutaway · playable airflow"], ["wake", "Inwash / outwash · playable airflow"], ["inspect", "Free inspection"], ["challenge", "Challenge · fixed 3,450 / 945 mm"], ["edge", "Challenge · exact limits"]], value: "compare"},
+      {id: "wakeStyle", primary: true, when: state => state.view === "wake", label: "Tyre wake direction (wake layer)", options: [["out", "Outwash"], ["in", "Inwash"]], value: "out"},
       {id: "offset", when: state => state.view === "wake", label: "Following car offset (wake layer)", min: -75, max: 75, step: 5, value: 0, unit: "%"},
       {id: "wheelbase", when: state => state.view === "inspect", label: "Candidate wheelbase", min: 3200, max: 3600, step: 10, value: 3450, unit: "mm"},
       {id: "body", when: state => state.view === "inspect", label: "Candidate body half-width", min: 850, max: 1000, step: 5, value: 945, unit: "mm"},

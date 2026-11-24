@@ -25,7 +25,7 @@
       { id: "start", label: "Starting tyre set", options: [["soft", "S1 · Soft"], ["medium", "M1 · Medium"], ["hard", "H1 · Hard"]], value: "medium" },
       { id: "finish", label: "Replacement tyre set", options: [["soft", "S2 · Soft"], ["medium", "M2 · Medium"], ["hard", "H2 · Hard"]], value: "medium" },
       { id: "stopLap", label: "Pit at the end of lap", min: 12, max: 39, step: 1, value: 34, unit: "" },
-      { id: "fuel", label: "Starting fuel", min: 64.5, max: 67, step: 0.05, value: 65.2, unit: "kg" },
+      { id: "fuel", primary: true, label: "Starting fuel", min: 64.5, max: 67, step: 0.05, value: 65.2, unit: "kg" },
       { id: "savingLaps", label: "Lift-and-coast laps", min: 0, max: 12, step: 1, value: 0, unit: "" },
     ],
     challenge: "Finish with a recoverable sample, use an eligible dry tyre plan, and avoid laps beyond the tyre cliff. Then find a quicker legal plan.",

@@ -68,9 +68,9 @@
     replay: {label: 'torque response', initial: 1},
     intro: 'Compare two moments at one corner. On entry, the rear discs replace fading electrical braking. At the exit, the electric motor fills a gap in engine torque as the turbo spools.',
     controls: [
-      { id: 'scenario', label: 'Corner phase', value: 'entry', options: [['entry', 'Entry · brake blending'], ['exit', 'Exit · torque fill']] },
+      { id: 'scenario', primary: true, label: 'Corner phase', value: 'entry', options: [['entry', 'Entry · brake blending'], ['exit', 'Exit · torque fill']] },
       { id: 'demand', label: 'Requested axle torque', min: 800, max: 2400, step: 100, value: 1800, unit: 'N·m' },
-      { id: 'retained', label: state => state.scenario === 'entry' ? 'Initial regenerative torque retained' : 'Initial torque shortfall the motor can cover', min: 0, max: 100, step: 5, value: 50, unit: '%' },
+      { id: 'retained', primary: true, label: state => state.scenario === 'entry' ? 'Initial regenerative torque retained' : 'Initial torque shortfall the motor can cover', min: 0, max: 100, step: 5, value: 50, unit: '%' },
       { id: 'engineBrake', when: state => state.scenario === 'entry', label: 'Engine-braking share', min: 0, max: 30, step: 5, value: 0, unit: '%' },
       { id: 'response', label: 'Torque compensation', value: 'hold', options: [['hold', 'Off · hold baseline torque'], ['fill', 'On · fill shortfall']] }
     ],

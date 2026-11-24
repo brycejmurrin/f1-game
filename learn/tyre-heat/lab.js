@@ -40,10 +40,10 @@
     key: 'Time is in seconds and temperature is in °C. The shaded target is illustrative. Thin comparison traces share the selected workload on the other asphalt.',
     intro: 'A tyre can feel hot at the tread while the rubber beneath it is still cool. Compare how sliding and repeated loading heat the surface and core over a 90-second run.',
     controls: [
-      { id: 'track', label: 'Track surface', value: 'cold', options: [['cold', 'Cold night · 15 °C'], ['hot', 'Hot track · 50 °C']] },
+      { id: 'track', primary: true, label: 'Track surface', value: 'cold', options: [['cold', 'Cold night · 15 °C'], ['hot', 'Hot track · 50 °C']] },
       { id: 'sliding', label: 'Sliding intensity', min: 0, max: 100, step: 5, value: 80, unit: '%' },
       { id: 'load', label: 'Cornering workload', min: 0, max: 100, step: 5, value: 35, unit: '%' },
-      { id: 'elapsed', label: 'Time into run', min: 0, max: 90, step: 1, value: 0, unit: 's' }
+      { id: 'elapsed', primary: true, label: 'Time into run', min: 0, max: 90, step: 1, value: 0, unit: 's' }
     ],
     challenge: 'At the end of the run, put both temperatures inside the illustrative 90–105 °C target band. Change one heat source at a time.',
     sources: [

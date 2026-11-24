@@ -112,7 +112,7 @@
       { id: "gap", when: state => state.curve === "overtake", label: "Gap at detection line", min: 0.5, max: 1.5, step: 0.05, value: 0.9, unit: "s" },
       { id: "endSpeed", label: "Speed at end of straight", min: 300, max: 360, step: 5, value: 350, unit: "km/h" },
       { id: "request", label: "Requested electrical power", min: 50, max: 350, step: 25, value: 350, unit: "kW" },
-      { id: "charge", label: "Usable charge at entry", min: 0.25, max: 4, step: 0.25, value: 1, unit: "MJ" },
+      { id: "charge", primary: true, label: "Usable charge at entry", min: 0.25, max: 4, step: 0.25, value: 1, unit: "MJ" },
     ],
     challenge: "Keep the 350 km/h finish speed and the standard curve. Deliver at least 1.50 MJ while keeping 0.30 MJ in reserve.",
     sources: [

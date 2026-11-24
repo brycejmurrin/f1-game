@@ -26,8 +26,8 @@
       ['Las Vegas · Drying (illustrative)', {line:'rubber', tyre:'inter', water:3, film:.2, speed:125}],
     ],
     controls:[
-      {id:'line', label:'Line through the bend', options:Object.entries(laneNames), value:'rubber'},
-      {id:'tyre', label:'Tyre', options:[['slick','Slick'],['inter','Intermediate'],['wet','Full wet']], value:'inter'},
+      {id:'line', primary: true, label:'Line through the bend', options:Object.entries(laneNames), value:'rubber'},
+      {id:'tyre', primary: true, label:'Tyre', options:[['slick','Slick'],['inter','Intermediate'],['wet','Full wet']], value:'inter'},
       {id:'water', label:'Water in outer puddle', min:0, max:7, step:0.5, value:4, unit:'mm'},
       {id:'film', label:'Surface water film', min:0, max:2, step:0.1, value:.8, unit:'mm'},
       {id:'speed', label:'Corner speed', min:70, max:170, step:5, value:125, unit:'km/h'}

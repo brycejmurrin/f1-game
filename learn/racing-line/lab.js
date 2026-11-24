@@ -102,9 +102,9 @@
     key: 'Solid is your line. Dashed is the early-apex reference. The dot marks your apex. The bars mark the shared corner exit and finish.',
     intro: 'Move the clipping point around a hairpin. Compare the time from the approach to the end of the next straight against an early apex.',
     controls: [
-      {id:'apex', label:'Apex position through the turn', min:30, max:70, step:1, value:30, unit:'%'},
+      {id:'apex', primary: true, label:'Apex position through the turn', min:30, max:70, step:1, value:30, unit:'%'},
       {id:'straight', label:'Following straight', min:50, max:500, step:25, value:200, unit:'m'},
-      {id:'elapsed', label:'Replay clock', min:0, max:24, step:0.1, value:0, unit:'s'}
+      {id:'elapsed', primary: true, label:'Replay clock', min:0, max:24, step:0.1, value:0, unit:'s'}
     ],
     challenge:'On a straight of at least 300 m, gain 0.70 s over the early-apex reference.',
     sources:[['Driver61 · The racing line', 'https://driver61.com/uni/racing-line/'],
