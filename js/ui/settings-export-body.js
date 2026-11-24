@@ -430,7 +430,13 @@ function applySettings(file, G) {
     // Merge at the same depth as objDiff, retaining the receiver's unrelated edits.
     const depth = row.mergeDepth || (!row.whole && isObj(def) && Object.keys(def).length ? 1 : 0);
     const sparse = file.mode === "changes" && depth && isObj(v);
-    writes.push([row, sparse ? mergeChangedFields(readStored(row), v, depth) : v]);
+    const stored = sparse ? readStored(row) : null;
+    // The profile cleaner fills in an empty list even for a marker-only file.
+    // Keep the receiver's list unless the changes file explicitly supplies one.
+    if (sparse && row.k === "padProfiles" && !Object.hasOwn(g[row.k], "devices") && Array.isArray(stored?.devices)) {
+      v.devices = stored.devices;
+    }
+    writes.push([row, sparse ? mergeChangedFields(stored, v, depth) : v]);
   }
   // Earlier files shared one response across both surfaces. Only copy a
   // validated Touch write, so the same device and unset rules apply to Phone.
