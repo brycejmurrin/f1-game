@@ -64,11 +64,13 @@ const TouchButtonSettings = (() => {
     buildHelp.className = "adv-help"; buildHelp.id = host.id + "-build-help";
     build.setAttribute("aria-describedby", buildHelp.id); section.appendChild(buildHelp);
     section = response;
-    const slide = choice("slide", "SLIDE ONTO PEDAL", [["inherit", standalone ? "STAY ON ORIGINAL PEDAL" : "DEFAULT"], ["instant", "INSTANT"], ["ease", "EASE"]]);
+    const slide = choice("slide", "SLIDE ONTO PEDAL", [["inherit", standalone ? "STAY ON ORIGINAL PEDAL" : "DEFAULT"],
+      ["instant", "INSTANT"], ["ease", "EASE"], ["response", "USE BUTTON RESPONSE"]]);
     const slideHelp = node("p", (standalone
       ? "Stay on Original Pedal keeps the first pedal held when you cross onto this one. "
       : "Default uses the Pedal Slide setting above. ") +
-      "Crossing onto this pedal with Instant gives full input immediately. Ease starts at 12% and reaches full input after another 40 pixels.");
+      "Instant gives full input immediately. Ease starts at 12% and reaches full input after another 40 pixels. " +
+      "Both then use your slide settings from full input. Use Button Response starts with this pedal’s configured input as you enter.");
     slideHelp.className = "adv-help"; slideHelp.id = host.id + "-slide-help"; slide.setAttribute("aria-describedby", slideHelp.id); section.appendChild(slideHelp);
     const strengths = Array.from({ length: 10 }, (_, i) => [String(i + 1), i ? String(i + 1) : "1 · OFF"]);
     const adaptive = choice("adaptive", "ADAPTIVE BUTTONS", [["inherit", "FOLLOW GLOBAL"], ...strengths]);

@@ -67,6 +67,8 @@ const SettingsSearch = (function () {
     ["units", "Speed units", "appearance", "pm-units-sel", "mph kmh kilometres miles"],
     ["help-text", "Help text", "appearance", "pm-helptext-sel", "explanations descriptions hints"],
     ["tilt-sensitivity", "Tilt sensitivity", "controls", "pm-tiltsimple", "phone steering"],
+    ["pad-gas-deadzone", "Controller gas dead zone", "advanced", "pm-padgasdz", "gamepad trigger throttle pedal calibration wheel"],
+    ["pad-brake-deadzone", "Controller brake dead zone", "advanced", "pm-padbrakedz", "gamepad trigger brake pedal calibration wheel"],
     ["stick-deadzone", "Stick dead zone", "advanced", "pm-paddz", "controller gamepad drift deadzone stick pad wheel centre center"],
     ["haptics", "Haptics strength", "driving", "pm-haptics", "vibration rumble feedback"],
     ["trigger-haptics", "Trigger haptics", "driving", "pm-triggerhap-sel", "controller vibration feedback"],

@@ -302,6 +302,8 @@ test("each driving slider applies on input and re-applies from storage after a r
     ["pm-haptics", "haptics", 1, "setHaptics"],
     ["pm-paddz", "padDeadzone", 20, "setPadDeadzone"],
     ["pm-padsat", "padSaturation", 12, "setPadSaturation"],
+    ["pm-padgasdz", "padGasDeadzone", 2, "setPadPedalDeadzone", "throttle"],
+    ["pm-padbrakedz", "padBrakeDeadzone", 21, "setPadPedalDeadzone", "brake"],
   ];
   const recorder = (calls) => new Proxy({}, { get: (_, name) => (...args) => { calls.push([name, args]); } });
   const last = (calls, setter, first) => {

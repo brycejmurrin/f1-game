@@ -98,6 +98,8 @@ const SettingDeps = (function () {
     // HIGH CONTRAST keeps every plate solid (tokens.css --hud-panel-a-eff).
     { key: "panel-contrast", ids: ["pm-panelopacity"], reason: "Solid under HIGH CONTRAST",
       when: () => (doc() ? doc().documentElement.getAttribute("data-ui-contrast") !== "high" : null) },
+    { key: "pad-pedal-deadzone", ids: ["pm-padgasdz", "pm-padbrakedz"], runtime: true, reason: "Connect a controller",
+      when: () => typeof Input === "undefined" ? null : Input.physicalPadAvailable?.() ?? Input.padPresent?.() ?? null },
     { key: "metrics-off", ids: ["pm-metrics-page", "pm-metrics-pos", "pm-metrics-size"], runtime: true,
       parent: "pm-metrics", reason: "OVERLAY is OFF" },
     { key: "xr-off", ids: ["pm-xr-backend", "pm-xr-input"], runtime: true, parent: "pm-xr-mode", reason: "VR MODE is OFF" },
@@ -420,6 +422,9 @@ const SettingDeps = (function () {
     const d = doc();
     if (!d) return;
     for (const t of ["change", "input", "click"]) d.addEventListener(t, soon, true);
+    if (typeof window !== "undefined") {
+      for (const t of ["gamepadconnected", "gamepaddisconnected"]) window.addEventListener?.(t, soon);
+    }
     if (typeof SettingsNav !== "undefined" && SettingsNav.onEnter) SettingsNav.onEnter(soon);
     // Owners grey their controls on their own clocks (Spotify connecting, a
     // DAILY race opening): follow every disabled / aria-disabled change.

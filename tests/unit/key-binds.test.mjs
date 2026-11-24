@@ -87,6 +87,10 @@ test("camera sticks and triggers move the camera without leaking held controls i
   assert.equal(Input.calibratePad(), true);
   Input.poll();
   assert.deepEqual(motion.at(-1), [0, 0, 0, 0, 0], "calibrated rest cannot move the camera");
+  Input.setPadPedalDeadzone("throttle", 0.3);
+  press(7, 0.2);
+  Input.poll();
+  assert.ok(motion.at(-1)[4] > 0, "the driving pedal setting does not change camera trigger response");
   pad.axes = [1, -1, 1, -1];
   press(7);
   Input.poll();
