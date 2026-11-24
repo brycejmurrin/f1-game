@@ -225,6 +225,7 @@ apex-tools HTTP `3713` (`127.0.0.1` only). Design / refuses:
 | Agent bloat / extract / dead code | skill **slim-bloat** → `code-hunter` (focus dead-code) + `bloat-scan.mjs` | a browser group; raising a ratchet to hide growth |
 | Review one skill / agent / hook / AGENTS.md section after an edit | `surface-reviewer` (report in `scratch/`; `retest <old report>` = before/after) | the main session hand-reading every unit |
 | Bug / perf hunt over a slice | `prior-art-scout` (known list) → one `code-hunter` per slice → `finding-verifier` before any fix | a browser run in a hunter; acting on an unverified finding |
+| Runtime hunt: leaks, hitches, scripted play, `needs-browser` rows | skill **runtime-hunt** in a full session (js-debugger, chrome-devtools, `apex_profile`, `apex_track`, `apex-lsp`; one browser) → `finding-verifier` → a `docs/notes/RUNTIME-HUNT-*` note | a subagent with a browser (rule 10); fixing in the hunt PR |
 
 Call `apex_status` before any `apex_*` browser tool. Occupancy treats a
 `playwright test` suite and the host Playwright MCP's LAUNCHED Chromium

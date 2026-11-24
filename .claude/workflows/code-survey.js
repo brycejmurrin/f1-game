@@ -454,7 +454,7 @@ You are the SYNTHESIZER. ${confirmed.length} findings survived adversarial verif
 
 Rules: every one of the ${confirmed.length} confirmed findings lands in exactly one of sections 2, 3, 4 or 5 — none may be dropped. Invent nothing that is not in the list. Where a finding needs verification before anyone acts on it, say which command proves it (per AGENTS.md: \`npm run test:tooling-fast\`, \`node tools/track/verify-track.cjs <id>\`, a single spec, or \`node tools/ci/pick-tests.mjs\`).
 
-NEEDS A BROWSER (a verifier said only a rendered or driven run can settle these; list each in section 6 with the probe that would settle it — neither confirmed nor refuted):
+NEEDS A BROWSER (a verifier said only a rendered or driven run can settle these; list each in section 6 with the probe that would settle it — neither confirmed nor refuted; end section 6 with a \`### Runtime confirm\` hand-off: these rows, grouped by runtime-hunt mode (perf/leak or scripted play), for the orchestrator to give one session that follows skill runtime-hunt):
 ${JSON.stringify(needsBrowser, null, 1)}
 
 NOT COVERED THIS RUN (say so in section 6): ${JSON.stringify(notCovered)}
