@@ -131,7 +131,13 @@ const TouchButtonSettings = (() => {
     const palette = [["default", "DEFAULT"], ...Object.keys(PedalTravel.colors).map(k => [k, k.toUpperCase()])];
     const idle = choice("idleColor", "IDLE BORDER COLOR", palette);
     const pressed = choice("pressedColor", "PRESSED COLOR", palette);
+    // PRESS MODE (#6365): the paired phone's BOOST / OVERTAKE / AERO. TOGGLE is the race HUD's tap.
+    const latch = choice("latch", "PRESS MODE", [["toggle", "TOGGLE"], ["hold", "HOLD"]]);
+    const latchHelp = node("p"); latchHelp.className = "adv-help"; latchHelp.id = host.id + "-latch-help";
+    latch.setAttribute("aria-describedby", latchHelp.id); host.appendChild(latchHelp);
     const activation = choice("activation", "ACTIVATION", [["default", "DEFAULT"], ["tap", "TAP ON RELEASE"], ["quick", "QUICK TAP"], ["hold", "HOLD AND RELEASE"], ["long", "LONG HOLD AND RELEASE"], ["double", "DOUBLE TAP"]]);
+    // The timing slider's caption per gesture (moved out of the eager PedalTravel table, #6365).
+    const gestureLabels = { quick: "QUICK TAP LIMIT", hold: "HOLD TIME", long: "LONG HOLD TIME", double: "DOUBLE TAP WINDOW" };
     const gestureHints = {
       tap: "Lift to activate.",
       quick: "Lift within the selected time to activate.",
@@ -242,11 +248,16 @@ const TouchButtonSettings = (() => {
       idle.value = profile.idleColor || "default"; pressed.value = profile.pressedColor || "default";
       activation.value = profile.activation || "default";
       const timing = profile.gestureTiming;
-      activation.parentElement.parentElement.hidden = gestureHelp.hidden = analog || id === "look";
+      const latching = standalone && typeof PhonePadPage !== "undefined" && PhonePadPage.latchButtons.includes(id);   // the phone page loads it
+      latch.parentElement.parentElement.hidden = latchHelp.hidden = !latching;
+      latch.value = profile.latch || "toggle";
+      latchHelp.textContent = profile.latch === "hold" ? "Press to switch it on and lift to switch it off. It lights only while pressed."
+        : "Each press switches it on or off. The button stays lit while the game reports it on.";
+      activation.parentElement.parentElement.hidden = gestureHelp.hidden = analog || id === "look" || (latching && profile.latch === "hold");
       gestureRow.hidden = gestureTime.disabled = gestureHelp.hidden || !timing;
       if (timing) {
-        gestureLabel.textContent = timing.label; gestureLabel.appendChild(gestureAmount);
-        gestureTime.setAttribute("aria-label", timing.label);
+        gestureLabel.textContent = gestureLabels[profile.activation]; gestureLabel.appendChild(gestureAmount);
+        gestureTime.setAttribute("aria-label", gestureLabels[profile.activation]);
         gestureTime.min = String(timing.min); gestureTime.max = String(timing.max);
         gestureTime.value = String(profile[timing.key] ?? timing.defaultMs);
         paintGestureTime();
@@ -302,7 +313,7 @@ const TouchButtonSettings = (() => {
       const timing = PedalTravel.buttonProfile(button.value).gestureTiming;
       if (timing) change({ [timing.key]: Number(gestureTime.value) });
     };
-    for (const control of [idle, pressed, activation]) control.onchange = () => change({ [control.dataset.field]: control.value });
+    for (const control of [idle, pressed, activation, latch]) control.onchange = () => change({ [control.dataset.field]: control.value });
     slider.onchange = () => change({ sliderEdge: slider.value });
     sliderEntry.onchange = () => change({ sliderEntry: sliderEntry.value });
     press.onchange = () => change({ press: press.value });

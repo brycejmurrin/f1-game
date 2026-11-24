@@ -1675,6 +1675,7 @@
         "tests/unit/pedal-slide.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs",
+        "tests/unit/phone-press-mode.test.mjs",
         "tests/unit/player-tools-backup.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/setting-deps.test.mjs",

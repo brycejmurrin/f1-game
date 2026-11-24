@@ -16,7 +16,7 @@ const PhonePairingUI = (function () {
       flags: G.paused ? D.paused : 0, caution: 0, lastLapMs: 0, state: G.state, surface, team: "" };
     const xOpen = (p.aeroX || 0) > 0.05;
     const controls = G.recordControls();
-    const flags = (p.boostOn ? D.boost : 0) | (p.otT > 0 ? D.otActive : p.otArmed ? D.otArmed : 0)
+    const flags = (p.boostOn ? D.boost : 0) | (p.otT > 0 ? D.otActive : p.otArmed ? D.otArmed : 0) | (p.otOn ? D.otOn : 0)
       | (xOpen ? D.xOpen : p.xArmed ? D.xArmed : 0) | (p.retired ? D.retired : 0) | (G.timeTrial ? D.timeTrial : 0)
       | (G.session === "quali" ? D.quali : G.practice && !G.timeTrial ? D.practice : 0)
       | (G.paused ? D.paused : 0) | (p.rpm > MAX_RPM * 0.92 ? D.redline : 0)

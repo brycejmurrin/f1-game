@@ -1076,6 +1076,15 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   dom.buttons.overtake[1].dispatch("pointerdown", {});
   for (let i = 0; i < 3; i++) frame();
   assert.equal(desk.Input.consumeOvertake(), true, "the second OT button (the grip's) fires the same edge");
+  // PRESS MODE TOGGLE (#6365): both OT buttons stay lit after the lift while the HOST reports OT on.
+  dom.buttons.overtake[1].dispatch("pointerup", {});
+  dash.value = { ...dash.value, flags: dash.value.flags | PhonePad.DASH.otOn };
+  timers.advance(700); clock.t += 700;
+  for (let i = 0; i < 6; i++) frame();
+  assert.ok(dom.buttons.overtake.every(b => b.classes.has("on") && b.attrs["aria-pressed"] === "true"), "latched OT keeps its colour off the finger");
+  dash.value = { ...dash.value, flags: dash.value.flags & ~PhonePad.DASH.otOn };
+  for (let i = 0; i < 6; i++) frame();
+  assert.ok(dom.buttons.overtake.every(b => !b.classes.has("on") && b.attrs["aria-pressed"] === "false"), "the host ending OT returns both to idle");
   // MENU PAD: a held direction repeats at a keyboard's cadence (380 ms, then every 110 ms); the release stops it.
   const e0 = link.stats().events;
   dom.buttons.navDown.dispatch("pointerdown", {});

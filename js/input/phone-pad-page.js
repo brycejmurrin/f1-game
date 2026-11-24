@@ -18,7 +18,36 @@ const PhonePadPage = (function () {
     gearsAuto: 512, throttleAuto: 1024, aeroAuto: 2048, aeroNone: 4096,
     // The SESSION, so the LCD does not paint a race position where there is none: qualifying's
     // field is the player alone ("P1/1") and practice's rank is road order (hud.js: Q / PRAC).
-    quali: 8192, practice: 16384 });
+    quali: 8192, practice: 16384,
+    // OT switched on (#6365). otActive is only "deploying now" and drops under braking; a host
+    // without this bit leaves the phone on otActive.
+    otOn: 32768 });
+
+  // PRESS MODE (#6365): one latch per toggle action (BOOST / OT / AERO), shared by its buttons. Its state is the
+  // HOST's dash bit; after an edge the asked-for state stands until the host shows it or CONFIRM_MS passes
+  // (refused: flat battery, OT not armed). Before any dash, the local latch. `send(k)` → false when unlinked.
+  const LATCH_BITS = Object.freeze({ boost: DASH.boost, overtake: DASH.otOn | DASH.otActive, aero: DASH.xOpen });
+  const CONFIRM_MS = 600, latchButtons = Object.freeze(Object.keys(LATCH_BITS));
+  function pressLatch(k, send, clock = () => Date.now()) {
+    let host = null, local = false, expect = null, sentAt = -Infinity;
+    const on = () => host === null ? local : expect !== null && clock() - sentAt < CONFIRM_MS ? expect : host;
+    const fire = () => {
+      const want = !on();
+      if (send(k) === false) return;
+      local = want; expect = host === null ? null : want; sentAt = clock();
+    };
+    return {
+      // TOGGLE: every press flips the effect. HOLD: the press switches it on, the lift switches it off.
+      down(hold) { if (!hold || !on()) fire(); },
+      up(hold) { if (hold && on()) fire(); },
+      tap: fire,
+      hud(flags) {
+        host = !!(flags & LATCH_BITS[k]);
+        if (expect !== null && (host === expect || clock() - sentAt >= CONFIRM_MS)) expect = null;
+      },
+      active: on,
+    };
+  }
 
   // ── phone: the wheel's LCD ────────────────────────────────────────────────
   // Paints one dash packet into the elements controller.html hands over:
@@ -400,12 +429,24 @@ const PhonePadPage = (function () {
       };
       return { start, stop };
     }
+    // TOGGLE paints `on` while the latch is on (aria-pressed says so); HOLD only under the finger.
+    const latches = new Map();
+    function paintLatch(k) {
+      const l = latches.get(k);
+      for (const el of l.els) {
+        const on = l.fingers.get(el).size > 0 || (!l.hold && l.latch.active());
+        el.classList.toggle("on", on);
+        if (l.hold) el.removeAttribute?.("aria-pressed"); else el.setAttribute?.("aria-pressed", String(l.latch.active()));
+      }
+    }
     function edge(el, k, repeat) {
       if (!el) return;
       const r = repeater(k), stop = r.stop;
       const held = new Set();
+      const l = latches.get(k);
+      if (l) { l.els.push(el); l.fingers.set(el, held); }
       const fire = () => { buzz(); if (session) session.event(k); };
-      el.addEventListener("click", (e) => { if (!e.detail) { e.preventDefault(); fire(); } });
+      el.addEventListener("click", (e) => { if (!e.detail) { e.preventDefault(); if (l) { buzz(); l.latch.tap(); paintLatch(k); } else fire(); } });
       el.addEventListener("pointerdown", (e) => {
         if (e.pointerType === "mouse" && e.button !== 0) return;
         e.preventDefault();
@@ -417,10 +458,12 @@ const PhonePadPage = (function () {
         try { el.setPointerCapture(e.pointerId); } catch (err) { /* document release fanout still stops the repeat */ }
         el.classList.add("on");
         if (!first) return;
+        if (l) { buzz(); if (![...l.fingers.values()].some(f => f !== held && f.size)) l.latch.down(l.hold); paintLatch(k); return; }
         fire();
         if (repeat) r.start();
       });
       const up = (e) => {
+        const lifted = held.size > 0;
         if (e && typeof e === "object" && "pointerId" in e) {
           if (!held.delete(e.pointerId)) return;
           if (held.size) return;
@@ -429,6 +472,7 @@ const PhonePadPage = (function () {
         }
         el.classList.remove("on");
         stop();
+        if (l && lifted) { if (![...l.fingers.values()].some(f => f.size)) l.latch.up(l.hold); paintLatch(k); }
       };
       // Lost lift / blur / last-finger-up: same nets as hold() and the menu stick.
       releases.push(() => up());
@@ -439,6 +483,10 @@ const PhonePadPage = (function () {
       // and killed a held D-pad repeat; document/window pointerup catches the lift.
       el.addEventListener("lostpointercapture", (e) => { if (!el.isConnected || !el.getClientRects().length) up(e); });
       el.addEventListener("contextmenu", (e) => e.preventDefault());
+    }
+    for (const k of latchButtons) {
+      latches.set(k, { latch: pressLatch(k, key => !!session && (session.event(key), true), opts.now), els: [], fingers: new Map(), hold: false });
+      PedalTravel.watchButtonProfile(k, p => { const l = latches.get(k); l.hold = p.latch === "hold"; if (l.els.length) paintLatch(k); });
     }
     // An action may have more than one button (OT on the grip AND on the face).
     for (const k of PhonePadCodec.EVENTS) {
@@ -706,6 +754,7 @@ const PhonePadPage = (function () {
       cameraPad.return.addEventListener("click", e => showPanel(false, e));
     }
     function paintController(h) {
+      for (const [k, l] of latches) { l.latch.hud(h.flags); if (l.els.length) paintLatch(k); }
       const next = controllerSurface(h);
       if (next !== surface) {
         const active = typeof document !== "undefined" ? document.activeElement : null;
@@ -1466,6 +1515,6 @@ const PhonePadPage = (function () {
     return { get: () => normaliseLayout(cur), set, show, arrange, sizeBy: (id, f) => sizeBy(id, f, true) };
   }
 
-  return { HELD, DASH, paintHud, pad, LAYOUT_KEYS, LAYOUT_PRESETS, ARRANGE_MIN_PX, minScale, normaliseLayout, readWheelBackup, layoutPreset, applyLayout, layout };
+  return { HELD, DASH, paintHud, pad, pressLatch, latchButtons, LAYOUT_KEYS, LAYOUT_PRESETS, ARRANGE_MIN_PX, minScale, normaliseLayout, readWheelBackup, layoutPreset, applyLayout, layout };
 })();
 Object.freeze(PhonePadPage);

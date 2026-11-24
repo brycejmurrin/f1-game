@@ -55,10 +55,11 @@ const TouchButtonActions = (() => {
       else el.removeAttribute?.("data-touch-indicator");
       if (profile.indicator === "bar" && profile.feedback && profile.fillDirection) el.setAttribute("data-touch-fill-direction", profile.fillDirection);
       else el.removeAttribute?.("data-touch-fill-direction");
-      const timing = profile.gestureTiming;
+      // PRESS MODE HOLD (#6365, the phone's BOOST / OT / AERO) answers the finger, not a gesture.
+      const hold = profile.latch === "hold", timing = !hold && profile.gestureTiming;
       const duration = timing && profile[timing.key];
-      if (mode !== profile.activation || customMs !== duration) {
-        mode = profile.activation;
+      if (mode !== (hold ? undefined : profile.activation) || customMs !== duration) {
+        mode = hold ? undefined : profile.activation;
         customMs = duration;
         timingMs = duration ?? timing?.defaultMs;
         cancelPress();
