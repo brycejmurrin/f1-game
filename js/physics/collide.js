@@ -915,5 +915,25 @@ const Collide = (() => {
     return best;
   }
 
-  return { create, LCAR, WCAR, fillArcBuckets, releaseArcBuckets, forArcNear, arcBackSpan, scanTraffic, scanOtAhead, scanTow, parkedAhead };
+  // WHERE A RESCUE PUTS THE CAR ACROSS THE ROAD (#5775 R5). The rescue keeps `s` and used to set
+  // x = 0 blind: onto a car stopped on the line (Monza: shoved 1.76 m in the same step) or, at
+  // Monaco, nose to tail with it four times in 21 s. Centre, else a car's width and a metre to
+  // the side the car came off, else the other: the first clear of every car within a length and
+  // a half of arc. All three taken: centre, as before. `hw` is the half-width at s. No allocation.
+  function rescueX(c, cars, L, hw) {
+    const off = Math.min(WCAR + 1, hw - WCAR / 2 - 0.3), sd = c.x < 0 ? -1 : 1;
+    for (let k = 0; k < 3; k++) {
+      const x = k ? (k === 1 ? sd : -sd) * off : 0;
+      let i = 0;
+      for (; i < cars.length; i++) {
+        const o = cars[i], d = ((o.s - c.s + L / 2) % L + L) % L - L / 2;
+        if (o !== c && !o.finished && d * d < 2.25 * LCAR * LCAR && Math.abs((o.x || 0) - x) < WCAR + 0.4) break;
+      }
+      if (i === cars.length) return x;
+      if (!(off > 0)) break;
+    }
+    return 0;
+  }
+
+  return { create, LCAR, WCAR, rescueX, fillArcBuckets, releaseArcBuckets, forArcNear, arcBackSpan, scanTraffic, scanOtAhead, scanTow, parkedAhead };
 })();

@@ -483,7 +483,7 @@ const AiDrive = (function () {
     const kAhead = Math.abs(ctx.kAhead60 || 0);
     const straight = kAhead < 0.006;
     if (!straight) return false;
-    // The 1 / 2 m/s closing tolerances are pace-5 m/s: they ride vScale = vTop()/VMAX (as letPassCase).
+    // The 1 / 2 m/s closing tolerances are pace-5 m/s: they ride vScale = vTop()/VMAX (as queueBrake).
     // Catch also arms on a clear pace edge (#1401 / pass-completion): the queue
     // cap levels live speeds, so a faster car stuck in the tow still wants ERS.
     const vs = ctx.vTop > 0 ? ctx.vTop / 72 : 1;
@@ -1650,14 +1650,18 @@ const AiDrive = (function () {
   // laps and is where the "AI welded to my bumper" pile-ups start. After a
   // patience window (awareness commits earlier) the AI moves toward its free
   // side and stops accelerating away — TORCS' OPP_LETPASS, minus the blue flag.
-  // LET PASS IS A BLUE FLAG: a quicker car inside 9 m on our gearbox, closing, with
-  // nothing ahead of US holding it up — and LAPPING us. Never a same-lap rival (the
-  // player included), or it reads as "the AI doesn't defend": a racer makes the
-  // faster car pass; a backmarker moves over.
-  // The closing rate rides the pace scale (vScale = vTop()/VMAX), like queueBrake's bands.
-  function letPassCase(racing, blocker, chaser, chaserGap, chaserSpeed, speed, vScale, lapping) {
-    if (!racing || blocker || !chaser || !lapping || !(chaserGap < 9)) return false;
-    return (chaserSpeed || 0) > (speed || 0) + 2.5 * (vScale > 0 ? vScale : 1);
+  // LET PASS IS A BLUE FLAG: a car LAPPING us within LET_PASS_GAP_S on our gearbox,
+  // with nothing ahead of US holding it up. Never a same-lap rival (the player
+  // included), or it reads as "the AI doesn't defend": a racer makes the faster car
+  // pass; a backmarker moves over.
+  // A TIME GAP, not metres AND a closing rate (#5775 R6): a lapper sitting in the tow
+  // at 10-20 m never met "< 9 m and > 2.5 m/s quicker" at one instant, so a lapped
+  // car held it up for 50-90 s — the player is held to the same window by blueWatch.
+  // Seconds of the chaser's own speed are pace-invariant: no vScale needed.
+  const LET_PASS_GAP_S = 1.2;
+  function letPassCase(racing, blocker, chaser, chaserGap, chaserSpeed, lapping) {
+    if (!racing || blocker || !chaser || !lapping || !(chaserGap >= 0)) return false;
+    return chaserGap < LET_PASS_GAP_S * Math.max(chaserSpeed || 0, 1);
   }
   function letPassDelay(t) {
     return lerp(4.2, 1.8, t.awareness);
