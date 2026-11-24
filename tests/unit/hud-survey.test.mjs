@@ -32,7 +32,9 @@ const rec = (key, x, y, w, h, extra = {}) => ({ key, sel: key, role: "hud", exis
 
 // ── lockstep with the game source ─────────────────────────────────────────
 test("the survey's tables lockstep the game's: CamModes, HudLayout, HudElements, hud.js camera sets", () => {
-  const cams = [...read("js/camera/mode-switch.js").matchAll(/\{ id: "([a-z]+)",\s+label:/g)].map((m) => m[1]);
+  const registry = read("js/camera/mode-switch.js").match(/const CAM_MODES = \[([\s\S]*?)\n  \];/);
+  assert.ok(registry, "camera registry exists independently of picker groups");
+  const cams = [...registry[1].matchAll(/\{ id: "([a-z]+)",\s+label:/g)].map((m) => m[1]);
   assert.deepEqual([...M.CAMS].sort(), [...new Set(cams)].sort(), "CAMS = CamModes.CAM_MODES ids");
   const hl = read("js/ui/hud-layout.js");
   const els = [...hl.slice(hl.indexOf("const ELEMENTS"), hl.indexOf("const IDS")).matchAll(/\["([a-z]+)", "/g)].map((m) => m[1]);

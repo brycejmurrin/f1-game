@@ -144,7 +144,7 @@ test.describe("Apex 26 — player camera modes", () => {
       return { before, after };
     });
     expect(r.before).toBe("chase");
-    expect(r.after).toBe("far");
+    expect(r.after).toBe("cockpit");
   });
 });
 
