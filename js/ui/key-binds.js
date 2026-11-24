@@ -86,7 +86,9 @@ function create(G) {
     if (dev.key !== "pad" || !Input.controllerProfile || !Input.controllerProfile()) dev.load(store.get(dev.key, null));
     let armed = null;   // { id, slot, btn } while a slot waits for input
     const setNote = (t) => { if (note) note.textContent = t; };
-    const save = () => store.set(dev.key, dev.get());
+    // Input already persists the active device profile. Keep the shared pad
+    // map intact so a wheel that has yet to migrate can still claim it.
+    const save = () => { if (dev.keys || !Input.controllerProfile?.()) store.set(dev.key, dev.get()); };
     // Stop capture without rebuilding. Successful capture needs one render,
     // followed by focus on the replacement for the slot the player changed.
     function clearArmed() {
@@ -279,7 +281,15 @@ function create(G) {
         if (tail) help.append(` ${tail}`);
       });
     }
-    if (resetBtn) resetBtn.onclick = () => { disarm(true); dev.resetAll(); save(); tick(); render(); setNote(dev.resetNote); };
+    if (resetBtn) resetBtn.onclick = () => {
+      disarm(true);
+      if (dev.resetAll() === false) {
+        render();
+        setNote("Controller changed or disconnected. Try again with the controller connected.");
+        return;
+      }
+      save(); tick(); render(); setNote(dev.resetNote);
+    };
     const api = { render, arm, disarm, hidden: () => !!(wrap && wrap.hidden) };
     sections.push(api);
     render();
@@ -317,10 +327,7 @@ function create(G) {
       ["Look back", ["lookBack"], "hold"], ["Recover", ["recover"]], ["Radio check", ["radio"], "gaps from the engineer"], ["Mirror", ["mirror"], "on / off"], ["Pause", ["pause"]],
     ],
   });
-  // CONTROLLER RESET must clear the whole controller story: button map, wheel
-  // axes (SET UP A WHEEL → apex26.padAxes), and CALIBRATE STICK rest (padRest).
-  // padsAreDefault() alone left pedals/steer wrong after RESET, and disabled
-  // the button entirely when only axes/rest differed from shipped.
+  // RESET clears the selected device's buttons, axes and saved stick centre.
   const controllerIsDefault = () => Input.padsAreDefault()
     && (!Input.padAxesAreDefault || Input.padAxesAreDefault())
     && (!Input.padRest || Input.padRest() === 0);
@@ -328,6 +335,8 @@ function create(G) {
     cancelCalibration();
     stopPreview();
     if (abortWheel) abortWheel();
+    const reset = Input.resetControllerProfile?.(true);
+    if (reset != null) return reset;
     Input.resetPad();
     if (Input.setPadAxisMap) {
       Input.setPadAxisMap(null);

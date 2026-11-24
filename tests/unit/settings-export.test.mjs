@@ -687,6 +687,25 @@ test("a fresh store exports no changes, and ALL lists every key at its default",
   assert.deepEqual(all.changed, []);
 });
 
+test("a marker-only changed controller profile import retains saved wheel devices", () => {
+  const wheel = { id: "Wheel", axes: { steer: 3, throttle: 2 }, buttons: { camera: [19] } };
+  const profiles = { v: 1, devices: [wheel], legacyClaimed: false };
+  const disk = { "apex26.padProfiles": JSON.stringify(profiles) };
+  for (const [mode, patch, devices] of [
+    ["changes", { legacyClaimed: true }, [wheel]],
+    ["changes", { legacyClaimed: true, devices: [] }, []],
+    ["all", { legacyClaimed: true }, []],
+  ]) {
+    const game = boot({ disk, realStore: true });
+    const result = game.loadSettings({
+      format: game.collect(mode).format, mode, settings: { driving: { padProfiles: patch } },
+    });
+    assert.deepEqual(result.sections.preferences, { applied: 1, skipped: 0, failed: 0 });
+    const reloaded = boot({ disk: Object.fromEntries(game.disk), realStore: true });
+    assert.deepEqual(JSON.parse(reloaded.disk.get("apex26.padProfiles")), { v: 1, devices, legacyClaimed: true });
+  }
+});
+
 test("changes-only backups restore complete solo race drafts and explicit HUD maps", () => {
   const mobile = true;
   const globals = { HudElements: { defaults: () => ({ speed: "off" }) } };
@@ -2720,6 +2739,24 @@ test("all preferences reset preserves saves and reusable profiles and rejects un
   assert.equal(b.SettingsExport.resetSettings("files").ok, true);
   const retained = [...b.SettingsExport.SPEC.filter(r => r.info).map(r => "apex26." + r.k), ...keep.map(k => "apex26." + k)];
   assert.deepEqual([...b.disk.keys()].sort(), retained.sort());
+});
+
+test("Reset Appearance preserves Garage looks across reload", () => {
+  const looks = { garageLook: "workshop", crewLook: "sculpted", garageMood: "night" };
+  const disk = Object.fromEntries(Object.entries(looks).map(([key, value]) => ["apex26." + key, value]));
+  const b = bootImportUI({ realStore: true, disk: { ...disk, "apex26.uiTheme": '"light"' } });
+  const launcher = b.dom.document.createElement("button");
+  b.dom.byId("pm-panel-files").appendChild(launcher);
+  b.SettingsExport.resetRow("appearance", launcher);
+  [...b.dom.document.querySelectorAll("button")].find(n => n.textContent === "CONFIRM RESET & RELOAD").click();
+  assert.equal(b.reloads(), 1);
+
+  const reloaded = boot({ realStore: true, disk: Object.fromEntries(b.disk) });
+  assert.equal(reloaded.GameStore.store.getStored("uiTheme"), undefined);
+  for (const [key, value] of Object.entries(looks)) assert.equal(reloaded.GameStore.store.raw(key), value, key);
+
+  assert.equal(reloaded.SettingsExport.resetSettings("files").ok, true);
+  for (const key of Object.keys(looks)) assert.equal(reloaded.GameStore.store.raw(key), null, key);
 });
 
 test("refused reset restores previous preferences and reports failure", () => {

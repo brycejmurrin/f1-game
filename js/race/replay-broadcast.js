@@ -302,7 +302,7 @@ const ReplayBroadcast = (function () {
       cameraSuspended = false;
       shown = new Set(); towerT = 0; mode = "gap"; prevPos = new Map(); deltaAt = new Map();
       syncCamera();
-      if (auto) { camTo(Broadcast.chooseShot(G, G.player, null, null, 0)); lastCut = 0; }
+      if (auto) { camTo(Broadcast.chooseWatchShot(G, G.player, null, null, 0)); lastCut = 0; }
       buildTower(o && o.tower !== false);
       if (typeof document !== "undefined" && document.body && document.createElement) viewer = makeViewer(document, live);
       if (!live) ensureGraphics();
@@ -333,8 +333,9 @@ const ReplayBroadcast = (function () {
       shown.clear(); prevPos.clear(); deltaAt.clear(); towerT = 0; lastCut = -1e9; eventUntil = -Infinity;
       setPip(null); graphics?.reset();
     }
+    function viewerOwnsPicture() { return locked || wall < manualUntil; }
     /** The director has the picture: AUTO and not waiting out a viewer's choice. */
-    function autoOn() { return on && auto && !locked && wall >= manualUntil; }
+    function autoOn() { return on && auto && !viewerOwnsPicture(); }
 
     function buildTower(want) {
       const el = typeof document !== "undefined" ? document.getElementById("bc-tower") : null;
@@ -439,7 +440,7 @@ const ReplayBroadcast = (function () {
     }
 
     function direct(st) {
-      if (!auto || locked || wall < manualUntil) return;
+      if (!autoOn()) return;
       if (suspendCamera()) return;
       // The viewer cycled the camera (C / the CAM button): theirs for a while.
       if (setCam != null && G.camMode !== setCam) { manual(); return; }
@@ -458,7 +459,7 @@ const ReplayBroadcast = (function () {
     }
     function cut(c, kind, T) {
       lastCut = wall; cuts++;
-      camTo(Broadcast.chooseShot(G, c || G.player, kind, onAirShot, cuts));
+      camTo(Broadcast.chooseWatchShot(G, c || G.player, kind, onAirShot, cuts));
       if (c && replay.setFollow) replay.setFollow(c);
       else if (G.snapGameCam) G.snapGameCam();
       Log.debug("game", "Broadcast.cut T=" + (+T).toFixed(1) + " kind=" + (kind || "-") + " shot=" + onAirShot + " car=" + (c ? c.code : "-"));
@@ -466,11 +467,11 @@ const ReplayBroadcast = (function () {
 
     /** The reel cut to a new highlight (RealReplay.cutTo): a new shot for it, unless the viewer has the picture. */
     function onCut(kind) {
-      if (!on || !auto || locked || wall < manualUntil) return;
+      if (!autoOn()) return;
       if (suspendCamera()) return;
       if (setCam != null && G.camMode !== setCam) { manual(); return; }
       lastCut = wall; cuts++;
-      camTo(Broadcast.chooseShot(G, G.player, kind, onAirShot, cuts));
+      camTo(Broadcast.chooseWatchShot(G, G.player, kind, onAirShot, cuts));
     }
 
     /** Every frame from RealReplay.tick: dt wall seconds; st = {script, T, speed, list, reel, followNum,
@@ -528,7 +529,7 @@ const ReplayBroadcast = (function () {
     function status() { return on ? { auto, locked, manual: wall < manualUntil, manualRemaining: Math.max(0, manualUntil - wall), shot: onAirShot, cuts, tower: !!tower, rows: rowsEl.length, mode,
                                       pip: pip ? { code: pip.key.code || null, label: pip.label } : null } : null; }
 
-    return { start, stop, tick, tickLive, refresh, onCut, manual, setAuto, setLocked, resetTiming, autoOn, status, isOn: () => on };
+    return { start, stop, tick, tickLive, refresh, onCut, manual, setAuto, setLocked, resetTiming, autoOn, viewerOwnsPicture, status, isOn: () => on };
   }
 
   return { create, towerAt, towerSample, liveRows, nextEvent, pipPick, fmtGap };
