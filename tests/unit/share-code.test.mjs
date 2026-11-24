@@ -54,6 +54,7 @@ function harness(opts = {}) {
       data: () => opts.career || null,
       load: () => opts.career || null,
       ...(opts.calendar ? { calendar: () => opts.calendar.map((id) => ({ id, name: id.toUpperCase() })) } : {}),
+      ...(opts.careerApi || {}),
     },
     DailyChallenge: {
       prevDay: (day) => {
@@ -712,4 +713,68 @@ test("#5891: a lap-challenge link whose '~' was percent-encoded still opens", ()
   }
   assert.equal(ShareCode.decode("https://example.test/f1-game/#share=APXC1.l.monza%7E-%7E91234").ok, true);
   assert.equal(ShareCode.decode("APXC1.l.monza%E0%A4~-~91234").ok, false, "a malformed escape is still refused");
+});
+
+// #5879 row 3 (decision a): a My Team car reads its paint from the career save, so a livery
+// code pasted in a live MY TEAM career must land there, and the quick-race keys stay untouched.
+function myTeamCareer(opts = {}) {
+  const identity = { "livery.custom.custom": [{ id: "old", name: "OLD", c1: [0, 0, 0], c2: [1, 1, 1] }], "livery.custom": "old" };
+  const calls = [];
+  const careerApi = {
+    inCareer: () => true,
+    identityValue: (k, d) => (Object.hasOwn(identity, k) && identity[k] != null ? identity[k] : d),
+    setIdentityValues: (values) => {
+      calls.push(j(values));
+      if (opts.refuse) return false;
+      Object.assign(identity, j(values));
+      return true;
+    },
+  };
+  return { identity, calls, careerApi, career: { flavour: "myteam" } };
+}
+
+test("a My Team career imports a livery code into the career save, not the quick-race keys", () => {
+  const mt = myTeamCareer();
+  const { ShareCode, store, bag } = harness({ teams: ["mercedes", "custom"], career: mt.career, careerApi: mt.careerApi });
+  store.set("livery.custom", "gp-paint");
+  const liv = { id: "shared", name: "SHARED", c1: [1, 0, 0], c2: [0, 0, 1] };
+  const decoded = ShareCode.decode(ShareCode.encode("livery", { team: "custom", id: liv.id, livery: liv }).code);
+  const result = ShareCode.apply(decoded, { store });
+  assert.equal(result.ok, true);
+  assert.equal(result.career, true);
+  assert.equal(mt.identity["livery.custom"], "shared", "the My Team car now wears the shared livery");
+  assert.deepEqual(mt.identity["livery.custom.custom"].map((l) => l.id), ["old", "shared"], "earlier career liveries kept");
+  assert.equal(store.get("livery.custom"), "gp-paint", "quick-race selection untouched");
+  assert.equal(bag.has("livery.custom.custom"), false, "quick-race list untouched");
+  assert.equal(bag.has("shareUndo"), false, "no quick-race undo record claims this import");
+  const msg = ShareCode.messageFor(result);
+  assert.match(msg, /MY TEAM career/);
+  assert.doesNotMatch(msg, /UNDO/, "the toast must not promise an UNDO that cannot restore career paint");
+});
+
+test("a refused career save reports failure instead of 'Livery loaded'", () => {
+  const mt = myTeamCareer({ refuse: true });
+  const { ShareCode, store } = harness({ teams: ["custom"], career: mt.career, careerApi: mt.careerApi });
+  const liv = { id: "shared", name: "SHARED", c1: [1, 0, 0], c2: [0, 0, 1] };
+  const decoded = ShareCode.decode(ShareCode.encode("livery", { team: "custom", id: liv.id, livery: liv }).code);
+  const result = ShareCode.apply(decoded, { store });
+  assert.equal(mt.calls.length, 1, "the career save path was asked");
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "career-save-failed");
+  assert.equal(mt.identity["livery.custom"], "old");
+  assert.equal(store.get("livery.custom", null), null, "no fallthrough into the quick-race keys");
+  assert.match(ShareCode.messageFor(result), /^Livery not loaded/);
+});
+
+test("outside a My Team career a custom livery code still writes the quick-race keys", () => {
+  const mt = myTeamCareer();
+  mt.careerApi.inCareer = () => false;
+  const { ShareCode, store } = harness({ teams: ["custom"], career: mt.career, careerApi: mt.careerApi });
+  const liv = { id: "shared", name: "SHARED", c1: [1, 0, 0], c2: [0, 0, 1] };
+  const decoded = ShareCode.decode(ShareCode.encode("livery", { team: "custom", id: liv.id, livery: liv }).code);
+  const result = ShareCode.apply(decoded, { store });
+  assert.equal(result.ok, true);
+  assert.equal(result.career, undefined);
+  assert.equal(store.get("livery.custom"), "shared");
+  assert.equal(mt.calls.length, 0);
 });

@@ -229,6 +229,7 @@ const ShareCode = (function () {
     if (result && result.ok) {
       const undo = " Your previous one is kept: paste UNDO in SETTINGS › FILES to restore it.";
       if (result.kind === "setup") return "Setup loaded — " + result.team.toUpperCase() + "." + undo;
+      if (result.kind === "livery" && result.career) return "Livery loaded into your MY TEAM career. Your quick-race livery is unchanged.";
       if (result.kind === "livery") return "Livery loaded — " + result.team.toUpperCase() + "." + undo;
       if (result.kind === "undo") return "Share code undone — your previous setup / livery is back.";
       if (result.kind === "daily" && result.expired) return "That daily challenge has ended — here is today's.";
@@ -239,6 +240,7 @@ const ShareCode = (function () {
     if (result && result.reason === "unknown-track") return "That share code names a circuit this version does not know.";
     if (result && result.reason === "livery-full") return "Livery not added — " + String(result.team || "").toUpperCase()
       + " is at the " + LIVERY_CAP + "-livery limit for share codes. Delete one in GARAGE › TEAM first.";
+    if (result && result.reason === "career-save-failed") return "Livery not loaded — your MY TEAM career save could not be written. Nothing changed.";
     if (result && result.reason === "nothing-to-undo") return "There is no share code import to undo.";
     if (result && result.reason === "recovery-pending") return "Finish restoring your previous import first: paste UNDO in SETTINGS › FILES, then try the new code again.";
     if (result && result.reason === "undo-save-failed") return "Import stopped — your recovery copy could not be saved. Free browser storage, then try the code again.";
@@ -266,10 +268,13 @@ const ShareCode = (function () {
     }
     if (decoded.kind === "livery") {
       const customKey = "livery.custom." + decoded.team;
+      // #5879 (decision a): a live MY TEAM career owns the custom car's paint; the quick-race keys stay untouched.
+      const career = careerLiveryOwner(decoded.team);
+      const read = (k, d) => (career ? career.identityValue(k, d) : store.get(k, d));
       let next = null;
       let selectedId = decoded.livery ? decoded.livery.id : decoded.id;
       if (decoded.livery) {
-        const stored = store.get(customKey, []);
+        const stored = read(customKey, []);
         const arr = Array.isArray(stored) ? stored : [];
         // A catalog id collision replaces an earlier import only for identical paint; else a fresh id.
         const incoming = CustomLiveries.normalizeImported(decoded.team, [decoded.livery], decoded.livery.id);
@@ -297,9 +302,15 @@ const ShareCode = (function () {
         values[customKey] = next;
       }
       selectedId = CustomLiveries.coherentImportedSelection(
-        decoded.team, next || store.get(customKey, []), selectedId);
+        decoded.team, next || read(customKey, []), selectedId);
       // Select the stored livery (a crafted code could name another id).
       values["livery." + decoded.team] = selectedId;
+      if (career) {
+        // The career save path reports a real write outcome; a refused or non-durable save is not "loaded".
+        if (!career.setIdentityValues(values)) return { ok: false, kind: "livery", team: decoded.team, reason: "career-save-failed" };
+        if (typeof h.openGarage === "function") h.openGarage("share");
+        return { ok: true, kind: "livery", team: decoded.team, career: true };
+      }
       const failed = importValues(store, decoded, values);
       if (failed) return failed;
       if (typeof h.selectTeam === "function") h.selectTeam(decoded.team);
@@ -321,6 +332,11 @@ const ShareCode = (function () {
     return CORRUPT;
   }
 
+  function careerLiveryOwner(team) {
+    if (team !== "custom" || typeof Career === "undefined" || !Career.inCareer || !Career.inCareer()) return null;
+    const c = Career.data && Career.data();
+    return c && c.flavour === "myteam" && Career.setIdentityValues && Career.identityValue ? Career : null;
+  }
   // Undo of setup/livery codes: keys, the values before the first link (null = absent), next = what links wrote (#5896).
   function durableSet(store, key, value) {
     try { return store.set(key, value) === true; }
