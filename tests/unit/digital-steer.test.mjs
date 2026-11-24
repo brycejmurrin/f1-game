@@ -669,3 +669,30 @@ test("an on-screen arrow uses its slide endpoint even with global Adaptive Butto
   for (let i = 0; i < 20; i++) Input.steer(1 / 60);
   assert.equal(Input.steer(1 / 60), 0);
 });
+
+test("an absolute arrow sends its curve and endpoints to steering and the HUD meter", () => {
+  const { Input, left, right, model } = bootButtons();
+  right().getBoundingClientRect = () => ({ left: 200, top: 0, width: 100, height: 100 });
+  Input.setAdaptiveButtons(0);
+  Input.setSteerExpo(1);
+  const arrow = left();
+  arrow.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 });
+  arrow.style.setProperty = (key, value) => { arrow.style[key] = value; };
+  arrow.style.removeProperty = key => { delete arrow.style[key]; };
+  model.setButtonProfile("left", { sliderEdge: "right", sliderStart: 17, sliderEnd: 83, sliderCurve: "fine" });
+  for (const [type, clientX, expected] of [["pointerdown", 0, 0.17], ["pointermove", 50, 0.335], ["pointermove", 100, 0.83]]) {
+    arrow.fire(type, { clientX });
+    for (let i = 0; i < 30; i++) Input.steer(1 / 60);
+    assert.ok(Math.abs(Input.steer(1 / 60) + expected) < 1e-10);
+    assert.ok(Math.abs(Number(arrow.style["--touch-level"]) - expected) < 1e-10);
+  }
+  arrow.fire("pointerup", { clientX: 100 });
+  for (let i = 0; i < 30; i++) Input.steer(1 / 60);
+  assert.equal(Input.steer(1 / 60), 0);
+  assert.equal(arrow.style["--touch-level"], undefined);
+  model.setButtonProfile("left", { sliderEdge: null, holdEnd: 30, buildMs: 0 });
+  arrow.fire("pointerdown", { clientX: 0 });
+  arrow.fire("pointermove", { clientX: 45 });
+  for (let i = 0; i < 30; i++) Input.steer(1 / 60);
+  assert.equal(Input.steer(1 / 60), -1, "an inactive hold target leaves global Adaptive Buttons in charge");
+});

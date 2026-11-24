@@ -2971,6 +2971,44 @@ test("paired absolute brake uses its full physical length and releases immediate
   } finally { ctl?.cancel(); PedalTravel.resetButtonProfile("brake"); }
 });
 
+test("phone pedal output and fill meter follow the configured absolute curve", () => {
+  const dom = { gas: fakeEl(), brake: fakeEl() };
+  dom.brake.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 });
+  let ctl;
+  try {
+    PedalTravel.setButtonProfile("brake", { sliderEdge: "left", sliderStart: 83, sliderEnd: 19, sliderCurve: "fine",
+      indicator: "bar", fillDirection: "right", idleColor: "blue", pressedColor: "purple", brightness: 70 });
+    ctl = PhonePad.pad(dom);
+    const sample = (type, clientX) => dom.brake.dispatch(type, { pointerId: 8, clientX, clientY: 50 });
+    assert.equal(dom.brake.attrs["data-touch-fill-direction"], "right");
+    assert.equal(dom.brake.style["--touch-custom-idle"], "var(--zone)");
+    assert.equal(dom.brake.style["--touch-custom-pressed"], "var(--sec-best)");
+    assert.equal(dom.brake.style["--touch-brightness"], "70%");
+    for (const [type, x, value] of [["pointerdown", 100, 0.83], ["pointermove", 50, 0.67], ["pointermove", 0, 0.19], ["pointerup", 0, 0]]) {
+      sample(type, x);
+      assert.equal(ctl.state().brk, value);
+      assert.equal(Number(dom.brake.style["--travel"]), value);
+    }
+  } finally { ctl?.cancel(); PedalTravel.resetButtonProfile("brake"); }
+});
+
+test("phone pressure feedback matches the encoded sample at a half-percent midpoint", () => {
+  const dom = { brake: fakeEl() };
+  dom.brake.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 });
+  let ctl;
+  try {
+    PedalTravel.setButtonProfile("brake", { sliderEdge: "right", sliderStart: 1, sliderEnd: 34, indicator: "percent" });
+    ctl = PhonePad.pad(dom);
+    dom.brake.dispatch("pointerdown", { pointerId: 8, clientX: 0, clientY: 50 });
+    dom.brake.dispatch("pointermove", { pointerId: 8, clientX: 50, clientY: 50 });
+    const brk = ctl.state().brk;
+    assert.equal(brk, 0.175, "display rounding does not alter the local response");
+    const sent = PhonePad.decodeSample(PhonePad.encodeSample({ seq: 1, brk, thr: 0, held: 0 }));
+    assert.equal(sent.brk, 0.18);
+    assert.equal(Number(dom.brake.style["--travel"]), sent.brk);
+  } finally { ctl?.cancel(); PedalTravel.resetButtonProfile("brake"); }
+});
+
 test("the phone uses the configured slide endpoint and independent absolute crossover", () => {
   const oldDoc = globalThis.document, events = {}, dom = { gas: fakeEl(), brake: fakeEl() };
   dom.gas.getBoundingClientRect = () => ({ left: 100, right: 200, top: 0, bottom: 200, width: 100, height: 200 });

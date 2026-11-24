@@ -153,7 +153,7 @@ const PhonePadCodec = (function () {
   }
 
   return {
-    PROTO, EVENTS, NAV_REPEAT, num, hudOf,
+    PROTO, EVENTS, NAV_REPEAT, num, round2, hudOf,
     encodeSample, decodeSample, encodeHud, decodeHud, encodeEvent, encodeHaptic, encodeHello, encodeSuspend, decodeEvent, makePeerId,
     teamHex, fmtLap, padUrl, codeFromUrl, pairingFromUrl,
   };

@@ -193,7 +193,7 @@ const PhonePadPage = (function () {
         else el.removeAttribute?.("data-touch-response");
       });
       // `edge` false = a slide (rate-capped, coalesced); a press or lift is sent at once.
-      const level = (v, edge) => { if (el.style && el.style.setProperty) el.style.setProperty("--travel", v.toFixed(2)); on(v, edge); };
+      const level = (v, edge) => { if (el.style && el.style.setProperty) el.style.setProperty("--travel", PhonePadCodec.round2(v).toFixed(2)); on(v, edge); };
       const paintLevel = (edge = true) => { let strongest = 0; for (const v of levels.values()) strongest = Math.max(strongest, v); level(strongest, edge); };
       releases.push(() => {
         if (!ids.size) return;
