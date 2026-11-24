@@ -62,7 +62,7 @@ function boot(options = {}) {
       out.p = [s, 2, 0]; out.t = [1, 0, 0]; out.r = [0, .6, .8]; // the right vector after banking
     } }, setTimeout: options.setTimeout || (() => 0), clearTimeout: () => {}, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
     AppearanceStudio: { setScene(mode) { scene.value = mode; return { durable: true }; } },
-    NativeDownload: options.nativeDownload, GLX: { isMobile: !!options.mobile },
+    VisorOptics: options.visorOptics, NativeDownload: options.nativeDownload, GLX: { isMobile: !!options.mobile },
     LightTune: options.noLightTune ? undefined : {
       LT,
       TUNE_DEFS: options.tuneDefs || [
@@ -102,6 +102,47 @@ function boot(options = {}) {
   return { api, PS, dom, order, downloads, canvasOps, G, storage, scene, LT, ltProfiles, ltWrites, latchWrites,
     closed: () => closed, restored: () => restored, overlays: () => overlays };
 }
+
+test("visor capture snapshots the rendered pose before asynchronous readback", async () => {
+  let resolve, painted;
+  const b = boot({ visorOptics: {
+    captureSnapshot: G => ({ eye: G.camEye.slice() }),
+    captureLight: (_image, _G, options) => { painted = options.snapshot; }
+  } });
+  b.G.camEye = [1, 2, 3];
+  b.G.gfx.capturePixels = () => new Promise(r => { resolve = r; });
+  b.api.open({ source: "race" });
+  const row = b.dom.byId("ps-visor-level"); row.value = "medium"; b.dom.dispatch(row, { type: "change" });
+  const capture = b.api.capture();
+  b.G.camEye[0] = 99;
+  resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) });
+  assert.equal(await capture, true);
+  assert.deepEqual(painted.eye, [1, 2, 3]);
+});
+
+test("photo visor lighting is opt-in and baked once before cropping, saving or downloading", async () => {
+  const calls = [], b = boot({ visorOptics: { captureSnapshot: () => undefined, captureLight(image, G, options) {
+    calls.push({ width: image.width, height: image.height, options: { ...options }, G });
+  } } });
+  b.api.open({ source: "race" });
+  assert.equal(b.dom.byId("ps-group-visor").hidden, false);
+  assert.equal(await b.api.capture(), true); assert.equal(calls.length, 0);
+  for (const [key, value] of [["level", "strong"], ["beams", "off"], ["style", "compact"]]) {
+    const el = b.dom.byId("ps-visor-" + key); el.value = value; b.dom.dispatch(el, { type: "change" });
+  }
+  assert.equal(b.dom.byId("ps-message").textContent, "Press Capture to preview the new visor lighting.");
+  assert.equal(await b.api.capture(), true);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].options, { level: "strong", beams: "off", style: "compact", snapshot: undefined });
+  assert.deepEqual([calls[0].width, calls[0].height], [160, 90]);
+  assert.equal(calls[0].G, b.G);
+  const frame = b.dom.byId("ps-aspect"); frame.value = "square"; b.dom.dispatch(frame, { type: "change" });
+  await b.api.exportPhoto(); await b.api.savePhoto(); b.dom.byId("ps-background").click();
+  assert.equal(calls.length, 1, "recomposition and outputs reuse the same lit pixels");
+  b.api.close(false); b.api.open({ source: "garage" });
+  assert.equal(b.dom.byId("ps-group-visor").hidden, true, "garage has its own lighting pipeline");
+  await b.api.capture(); assert.equal(calls.length, 1);
+});
 
 test("a garage still waits for a fresh capture draw even when a previous photo exists", async () => {
   const b = boot();
@@ -251,6 +292,43 @@ test("Home circuit photo borrows a subject, places its complete pose, and return
   api.open({ source: "race" });
   assert.equal(api.hasCar(), false); assert.equal(G.player, prior);
 });
+for (const back of [false, true]) test(`race placement restores the exact paused pose on close(${back})`, () => {
+  const player = { s: 432, x: 2, xVis: 1.8, px: 432, pz: 2, head: .3, yawVis: .2,
+    speed: 77, rPrevS: 431, rPrevPx: 431, lap: 3, fuel: 42 };
+  const before = { ...player }, b = boot({ player });
+  b.G.paused = true;
+  for (let visit = 0; visit < 2; visit++) {
+    assert.equal(b.api.open({ source: "race" }), true);
+    assert.equal(b.dom.byId("ps-group-car").hidden, false);
+    assert.equal(b.api.hasCar(), true);
+    assert.deepEqual(player, before, "opening never moves or stops the race car");
+    assert.equal(+b.dom.byId("ps-car-position").value, 43.2);
+    assert.equal(+b.dom.byId("ps-car-offset").value, 2);
+    for (const [id, value] of [["ps-car-position", "25"], ["ps-car-offset", "3"], ["ps-car-rotation", "90"]]) {
+      b.dom.byId(id).value = value; b.dom.byId(id).dispatchEvent({ type: "input" });
+    }
+    assert.equal(player.s, 250); assert.equal(player.pz, 3); assert.equal(player.speed, 0);
+    assert.equal(player.head, 0); assert.equal(player.rPrevS, 250);
+    b.api.close(back);
+    assert.deepEqual(player, before, "including speed, interpolation history and absent properties");
+    assert.equal(b.G.player, player);
+  }
+});
+
+test("live online and unpaused sessions cannot reposition the race car", () => {
+  for (const online of [false, true]) {
+    const player = { s: 123, x: 0, speed: 80 }, b = boot({ player });
+    b.G.paused = online; b.G.netPlay = { active: () => online };
+    b.api.open({ source: "race" });
+    assert.equal(b.api.hasCar(), false);
+    assert.equal(b.dom.byId("ps-group-car").hidden, true);
+    b.dom.byId("ps-car-position").value = "50";
+    b.dom.byId("ps-car-position").dispatchEvent({ type: "input" });
+    assert.deepEqual(player, { s: 123, x: 0, speed: 80 });
+    b.api.close(false);
+  }
+});
+
 // One shared object store, with serialized transactions and staged writes. A
 // request's success is distinct from commit, and abort discards every staged
 // mutation, so these tests exercise isolation and rollback rather than callbacks
@@ -1059,6 +1137,86 @@ test("Photo Lighting clones the profile store, writes via the light store, and r
   b.api.close(false);
   assert.equal(b.G._ltStore, original, "close restores the exact original profiles reference");
   assert.equal(original["monza|day|dry"].exposureMul, 1.1, "original map was never mutated");
+});
+
+test("every lighting-tuner control stays available across race, garage and circuit Studio visits", () => {
+  const knobs = vm.runInNewContext(fs.readFileSync(new URL("../../js/lighting/knobs.js", import.meta.url), "utf8") + "\nLightKnobs;", {}, { filename: absSrc("js/lighting/knobs.js") });
+  const original = { "test|day|dry": { ...knobs.LT } };
+  const b = boot({ profiles: original, LT: { ...knobs.LT }, tuneDefs: knobs.TUNE_DEFS });
+  let firstSlider, firstClone;
+  for (const source of ["race", "race", "garage", "home-track", "race"]) {
+    assert.equal(b.api.open({ source }), true);
+    const group = b.dom.byId("ps-group-lighting");
+    assert.equal(group.hidden, source === "garage", source + " lighting visibility");
+    if (source !== "garage") {
+      assert.notEqual(b.G._ltStore, original);
+      assert.notEqual(b.G._ltStore, firstClone, "each visit gets a fresh isolated profile");
+      firstClone = b.G._ltStore;
+      for (const d of knobs.TUNE_DEFS) {
+        const slider = b.dom.byId("ps-lt-in-" + d.id), exact = b.dom.byId("ps-lt-num-" + d.id);
+        assert.ok(slider && exact, d.id + " has range and exact-value controls");
+        assert.deepEqual([slider.min, slider.max, slider.step], [String(d.min), String(d.max), String(d.step)]);
+        assert.equal(+slider.value, d.def, d.id + " returns to race baseline");
+        const value = d.def === d.max ? d.min : d.max;
+        slider.value = String(value); slider.dispatchEvent({ type: "input" });
+        assert.equal(b.LT[d.id], value, d.id + " is editable");
+        assert.equal(original["test|day|dry"][d.id], d.def, d.id + " leaves saved lighting alone");
+      }
+      const slider = b.dom.byId("ps-lt-in-keyMul");
+      if (firstSlider) assert.equal(slider, firstSlider, "reuse the panel without duplicate controls");
+      firstSlider = slider;
+    }
+    b.api.close(false);
+    assert.equal(b.G._ltStore, original);
+    assert.deepEqual(b.LT, original["test|day|dry"], "every knob restores on close");
+    assert.deepEqual(b.latchWrites, [], "photo edits never change renderer recovery settings");
+  }
+});
+
+test("Home circuit photos resolve the selected tuner profile before showing lighting controls", () => {
+  const saved = { "test|day|dry": { exposureMul: 1.7, contrast: 1.3, sunElev: 23 } };
+  const b = boot({ profiles: saved });
+  let applied = 0;
+  b.G.applyRaceSettings = () => { applied++; Object.assign(b.LT, b.G._ltStore["test|day|dry"]); };
+  b.api.open({ source: "home-track" });
+  assert.equal(applied, 1, "prepare the selected atmosphere, not the authored track palette");
+  for (const [id, value] of Object.entries(saved["test|day|dry"])) {
+    assert.equal(+b.dom.byId("ps-lt-in-" + id).value, value);
+    assert.equal(+b.dom.byId("ps-lt-num-" + id).value, value);
+  }
+  const exposure = b.dom.byId("ps-lt-in-exposureMul"); exposure.value = "2"; exposure.dispatchEvent({ type: "input" });
+  b.api.close(false);
+  assert.equal(b.G._ltStore, saved); assert.equal(b.LT.exposureMul, 1.7);
+  b.api.open({ source: "race" });
+  assert.equal(applied, 1, "race entry preserves the current live atmosphere, including blends");
+  b.api.close(false);
+});
+
+test("lighting rows follow the selected time/weather profile and condition reset", () => {
+  const b = boot();
+  b.G.setTimeOfDay = v => { if (v !== undefined) { b.G.raceTimeOfDay = v; b.LT.exposureMul = v === "night" ? 1.8 : 1; } return b.G.raceTimeOfDay; };
+  b.api.open({ source: "race" });
+  const tod = b.dom.byId("ps-tod"); tod.value = "night"; b.dom.dispatch(tod, { type: "change" });
+  assert.equal(+b.dom.byId("ps-lt-in-exposureMul").value, 1.8);
+  assert.equal(+b.dom.byId("ps-lt-num-exposureMul").value, 1.8);
+  b.dom.byId("ps-cond-reset").click();
+  assert.equal(+b.dom.byId("ps-lt-in-exposureMul").value, 1);
+});
+
+test("online photos cannot alter or rewind the live weather when closed", () => {
+  const b = boot(), arc = { from: "dry", to: "rain", progress: .4 };
+  b.G.netPlay = { active: () => true }; b.G.weatherArc = arc;
+  b.api.open({ source: "race" });
+  assert.equal(b.dom.byId("ps-tod").disabled, true);
+  assert.equal(b.dom.byId("ps-weather").disabled, true);
+  for (const [id, value] of [["ps-tod", "night"], ["ps-weather", "storm"]]) {
+    const el = b.dom.byId(id); el.value = value; b.dom.dispatch(el, { type: "change" });
+  }
+  assert.equal(b.G.raceTimeOfDay, "day"); assert.equal(b.G.raceWeather, "dry");
+  b.G.raceWeather = "rain"; arc.progress = .7;
+  b.api.close(false);
+  assert.equal(b.G.raceWeather, "rain", "network weather progresses independently of the photo");
+  assert.equal(b.G.weatherArc, arc); assert.equal(arc.progress, .7);
 });
 
 test("Photo Lighting exact entry edits the session and follows range movement and reset", () => {

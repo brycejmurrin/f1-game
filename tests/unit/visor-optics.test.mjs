@@ -1181,3 +1181,33 @@ test("real foliage index removes all hidden solar effects while preserving adjac
     assert.ok(clear.sun && clear.rays, "sun beside the crown still lights the visor");
   }
 });
+
+test("photo visor lighting paints the captured angle without changing the driving lens or clearing the scene", () => {
+  const { V, calls, live } = load({ helmet: false });
+  const g = ctx2d(calls), canvas = { width: 3840, height: 2160, getContext: () => g };
+  let saves = 0, restores = 0;
+  g.save = () => saves++; g.restore = () => restores++;
+  const G = { camEye: DAY.eye, camTgt: DAY.tgt, camFov: DAY.fov, camRoll: 0, frame: { ...DAY, sunDir: [.15, .15, -1] } };
+  const stats = JSON.stringify(V.stats());
+  assert.equal(V.captureLight(canvas, G, { level: "off" }), null);
+  assert.equal(calls.gradients, 0);
+  const sun = V.captureLight(canvas, G, { level: "medium", beams: "medium", style: "classic" });
+  assert.ok(sun.sun && sun.rays); assert.ok(calls.gradients > 0);
+  assert.equal(calls.clear, 0, "the rendered photograph must survive compositing");
+  assert.equal(saves, restores);
+  assert.equal(live.helmet, false); assert.equal(calls.portWrites, 0);
+  assert.equal(JSON.stringify(V.stats()), stats, "photo exports do not mutate driving optic state");
+  const coated = V.captureLight(canvas, G, { level: "medium", beams: "off", style: "compact" });
+  assert.equal(coated.rays, null); assert.equal(coated.ghost, null);
+  const snapshot = V.captureSnapshot(G);
+  const originalX = G.frame.sunDir[0];
+  G.frame.sunDir[0] = 99;
+  assert.equal(snapshot.scene.sunDir[0], originalX, "snapshot does not retain mutable lighting vectors");
+  const frozen = V.captureLight(canvas, { ...G, camTgt: [0, 1, 10] }, { level: "medium", snapshot });
+  assert.ok(frozen.sun, "readback delay cannot change the rendered camera pose");
+  G.frame.sunDir[0] = originalX;
+  const behind = V.captureLight(canvas, { ...G, camTgt: [0, 1, 10] }, { level: "medium" });
+  assert.equal(behind.sun, null, "changing the shot changes projected sun glare");
+  const night = V.captureLight(canvas, { ...G, frame: { ...NIGHT, lights: lamp(0, -25) } }, { level: "strong", style: "scratches" });
+  assert.ok(night.glints.length > 0, "night lamps also feed photo lighting");
+});
