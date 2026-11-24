@@ -154,6 +154,22 @@ test("draw() honours the mode and reports a backend without the pass", () => {
   assert.equal(load().mode(), "full", "the shipped default is the whole lap, Forza's default");
 });
 
+test("the drill can read the hidden plan and restore the normal driving-line buffer", () => {
+  const DL = load(), api = stadium();
+  const uploads = [];
+  const gfx = { drawDrivingLine: (_verts, _count, dirty) => { uploads.push(dirty); return true; } };
+  DL.setMode("off");
+  DL.prepare(api);
+  assert.ok(DL.speedAt(api.straight) < DL.speedAt(100));
+  assert.equal(DL.draw(gfx, api, 70), false);
+  DL.setMode("full");
+  DL.draw(gfx, api, 70);
+  DL.draw(gfx, api, 70);
+  DL.invalidateUpload();
+  DL.draw(gfx, api, 70);
+  assert.deepEqual(uploads, [true, false, true]);
+});
+
 // The shipped triples before the palette became data (2026-10-30): a saved
 // "f1" or "safe" must draw exactly what it drew then.
 const F1_COLS = [0.10, 0.95, 0.35, 1.00, 0.72, 0.10, 1.00, 0.12, 0.10];

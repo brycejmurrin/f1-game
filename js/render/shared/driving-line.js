@@ -297,6 +297,8 @@ window.DrivingLine = (function () {
   function ensure(api) {
     if (cache.id !== api.id || !cache.verts) build(api);
   }
+  function prepare(api) { _api = api; ensure(api); }
+  function invalidateUpload() { cache.dirty = true; }
   function draw(gfx, api, playerSpeed) {
     if (api) _api = api;
     const dm = drawMode();
@@ -351,6 +353,6 @@ window.DrivingLine = (function () {
   // tests pin the palette and opacity tables, the bank lerp and the sweep budgets.
   return { PALETTES, OPACITIES, STRIDE, DEFAULTS, setMode, mode: getMode, setPhoto, shown,
            setPalette, palette: getPalette, setOpacity, opacity: getOpacity, opacityMul,
-           build, draw, speedAt, zoneAt, cue, reset, bankOffset,
+           build, draw, prepare, invalidateUpload, speedAt, zoneAt, cue, reset, bankOffset,
            _cache: () => cache };
 })();
