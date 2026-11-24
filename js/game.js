@@ -9370,7 +9370,7 @@ function endTimeTrialFromBox() {
   if (state !== "race" || !isTimeTrial() || !pits.canWork(player) || paused || netPlay.active()) return;
   paused = true;
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain(); radioVoice.halt();
-  openGarage("pit");
+  openGarage("pit"); $("cs-done").textContent = "SKIP TO GARAGE";   // DONE/BACK/Escape skip the drive-in here, not return to the run (#6390)
   setupCam.startPitIn((to) => {
     setupCam.cancelArrival();
     G.endRace();

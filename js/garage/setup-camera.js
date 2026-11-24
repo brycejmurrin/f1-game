@@ -527,7 +527,7 @@ function fireHandoff(to) { const p = handoff; handoff = null; if (p) p.done(to);
 function startPitOut(done) {
   handoff = { done };
   if (!GarageArrival.plays(GarageArrival.settings(G.store.get("garageArrival", null)), "pitOut") || reducedMotion() || auto()) { fireHandoff(); return false; }
-  endHome(); homeScene = null; arrival.start({ out: true, rate: GarageArrival.PIT_EXIT_RATE });
+  endHome(); homeScene = null; arrival.start({ out: true, rate: GarageArrival.PIT_EXIT_RATE, skip: G.timeTrial ? "SKIP TO TIME TRIAL" : undefined });
   return true;
 }
 function skipPitOut() { if (!handoff) return false; arrival.finish(); fireHandoff(); return true; }

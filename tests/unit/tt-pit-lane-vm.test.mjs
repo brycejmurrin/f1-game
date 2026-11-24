@@ -118,6 +118,7 @@ test("TT: END SESSION is visible in the box and returns to the garage before res
   const held = p.pitT, team = p.team.id;
   G.saveTeamParts(team, { ...G.getTeamParts(team), engine: "sprint" });
   box.getElementById("cs-done").onclick();
+  assert.equal(box.getElementById("cs-arrival-skip").textContent, "SKIP TO TIME TRIAL", "a TT drive-out names the TT, not a race (#6390 F3)");
   box.getElementById("cs-done").onclick();
   assert.equal(G.paused, false);
   assert.equal(G.state, "race");
@@ -166,6 +167,7 @@ test("#6390: the garage over the finished TT session keeps drawing (state result
   try {
     assert.equal(doc.getElementById("cs-arrival-skip").textContent, "SKIP TO GARAGE");
     assert.equal(doc.getElementById("cs-arrival-alt").hidden, false, "the drive-in offers SKIP TO RESULTS too");
+    assert.equal(doc.getElementById("cs-done").textContent, "SKIP TO GARAGE", "DONE skips the drive-in: it must not read RETURN TO TIME TRIAL (F2)");
     doc.getElementById("cs-arrival-skip").onclick();
     for (let i = 0; i < 4 && G.state !== "results"; i++) { pump(1); g.flushTimers(); }
     assert.equal(G.state, "results");
@@ -184,6 +186,22 @@ test("#6390: the garage over the finished TT session keeps drawing (state result
     assert.equal(doc.getElementById("cs-done").textContent, "VIEW RESULTS");
     spy.n = 0; pump(3);
     assert.ok(spy.n >= 2, "the reopened garage draws: " + spy.n);
+  } finally { spy.restore(); }
+});
+
+test("#6390 F4: PHOTO from the finished-session garage draws too (same results return)", async () => {
+  const doc = await endInBox(), G = g.G, spy = garageDraws();
+  try {
+    doc.getElementById("cs-arrival-skip").onclick();
+    for (let i = 0; i < 4 && G.state !== "results"; i++) { pump(1); g.flushTimers(); }
+    assert.equal(G.state, "results");
+    const photo = doc.getElementById("cs-photo");
+    await photo.onclick({ currentTarget: photo });
+    g.flushTimers();
+    assert.equal(doc.getElementById("carsetup").hidden, true, "the studio took over the garage");
+    assert.equal(G.setupPreviewOn, true, "on the garage camera");
+    spy.n = 0; pump(4);
+    assert.ok(spy.n >= 3, "Photo Studio over the results state draws the bay: " + spy.n);
   } finally { spy.restore(); }
 });
 
