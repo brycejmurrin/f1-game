@@ -67,6 +67,7 @@
     key: 'Torque is in N·m. The entry bars show pedal request versus the motor, discs and engine. On exit, the blue band shows electrical assist.',
     replay: {label: 'torque response', initial: 1},
     intro: 'Compare two moments at one corner. On entry, the rear discs replace fading electrical braking. At the exit, the electric motor fills a gap in engine torque as the turbo spools.',
+    inGame: "Apex eases the rear axle’s share of braking as the rear tyres approach their grip limit. BOOST adds electric acceleration on throttle. The lab’s separate disc, engine and motor torque traces illustrate how real brake-by-wire and torque fill work.",
     controls: [
       { id: 'scenario', primary: true, label: 'Corner phase', value: 'entry', options: [['entry', 'Entry · brake blending'], ['exit', 'Exit · torque fill']] },
       { id: 'demand', label: 'Requested axle torque', min: 800, max: 2400, step: 100, value: 1800, unit: 'N·m' },

@@ -96,6 +96,7 @@
     replay: {label: state => state.view === "braking" ? "braking load sweep" : "bump and return", rewind: true,
       input: state => state.view === "braking" ? "decel" : null},
     intro: "Trace a wheel bump into the spring, then change how the front suspension reacts to braking.",
+    inGame: "Use anti-roll bars and ride height in Garage Setup to change mechanical balance and aero load. Apex applies those changes through handling and downforce modifiers. On an F1 car, the rods, rockers and dampers respond to their physical geometry, as the cutaway shows.",
     presets: [
       ["Same bump · light damping", {view:"linkage", rod:"push", bump:20, damping:"low"}],
       ["Same bump · firm damping", {view:"linkage", rod:"push", bump:20, damping:"high"}],
