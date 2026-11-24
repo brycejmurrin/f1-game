@@ -3,6 +3,7 @@ const VscLesson = (() => {
   "use strict";
 
   const distance = 400;
+  const safetyCarSpeed = 60;
   const pitPath = Object.freeze([4000, 18000, 2500, 5500]);
   const baseline = {
     gapBehind: 14000,
@@ -18,6 +19,8 @@ const VscLesson = (() => {
     hardLife: Object.freeze({ ...baseline, boxPace: 5000 }),
     earlyGreen: Object.freeze({ ...baseline, vscEnds: 9000, boxPace: 5000 }),
     traffic: Object.freeze({ ...baseline, vscEnds: 9000, boxPace: 5000, traffic: 3000 }),
+    green: Object.freeze({ ...baseline, regime: "green", vscEnds: 0, boxPace: 5000 }),
+    safetyCar: Object.freeze({ ...baseline, regime: "safetyCar", vscSpeed: safetyCarSpeed, vscEnds: 30000, gapBehind: 3500, boxPace: 5000 }),
   });
 
   const travelTime = (metres, speed) => Math.round(metres * 3600 / speed);
@@ -64,5 +67,14 @@ const VscLesson = (() => {
       green: Math.min(1, elapsed / result.greenTrack) };
   }
 
-  return Object.freeze({ distance, fixtures, pitPath, evaluate, progress });
+  function compareRegimes(input, pitTime) {
+    // Hold each illustrative pace for the full sector so only track pace changes.
+    const speeds = { green: input.greenSpeed, vsc: input.vscSpeed, safetyCar: input.safetyCarSpeed ?? safetyCarSpeed };
+    return Object.fromEntries(Object.entries(speeds).map(([mode, speed]) => {
+      const trackTime = travelTime(distance, speed);
+      return [mode, { speed, trackTime, loss: pitTime - trackTime }];
+    }));
+  }
+
+  return Object.freeze({ distance, fixtures, pitPath, evaluate, progress, compareRegimes });
 })();

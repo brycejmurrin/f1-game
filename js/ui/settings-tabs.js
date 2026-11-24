@@ -351,6 +351,7 @@ const SettingsNav = (function () {
       // Lifecycle hooks also cover programmatic/search navigation, after lazy
       // loading, and before focus resolves newly mounted page controls.
       if (id === "progress" && typeof Badges !== "undefined") Badges.render();
+      mountReset(id, pages[id]);
       fireEnter(id);
       const body = document.getElementById("pm-settings-body");
       if (body) body.scrollTop = 0;
@@ -360,6 +361,25 @@ const SettingsNav = (function () {
       if (focus && !placed) focusPage(id);
       scheduleScrollFade();
       mark("apex:settings:shown");
+    }
+
+    function mountReset(id, panel) {
+      if (!panel || typeof SettingsExport === "undefined" || !["controls", "advanced", "driving", "display", "appearance", "a11y", "audio", "graphics", "files"].includes(id)) return;
+      if (panel.querySelector("[data-reset-settings]")) return;
+      const button = document.createElement("button"); button.type = "button";
+      button.setAttribute("data-reset-settings", id);
+      button.textContent = id === "files" ? "RESET ALL PREFERENCES…" : "RESET " + routes[id].title + "…";
+      button.onclick = async () => {
+        const request = generation;
+        button.disabled = true;
+        try {
+          if (await SettingsExport.ready()) {
+            if (request === generation && !panel.hidden && !document.getElementById("pmsettings")?.hidden) SettingsExport.resetRow(id, button);
+          } else button.textContent = "RESET UNAVAILABLE — TAP TO RETRY";
+        } catch (_) { button.textContent = "RESET UNAVAILABLE — TAP TO RETRY"; }
+        finally { button.disabled = false; }
+      };
+      panel.appendChild(button);
     }
 
     // The audio bundle could not load (offline / UPDATE READY): the page still

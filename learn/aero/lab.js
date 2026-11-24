@@ -176,6 +176,7 @@
     const headway = (distance / constants.VMAX).toFixed(2);
     get("gapValue").textContent = distance + " m · " + headway + " s";
     gap.setAttribute("aria-valuetext", distance + " metres, " + headway + " seconds");
+    get("gap-formula").textContent = distance + " m ÷ " + constants.VMAX + " m/s = " + headway + " s at the Apex reference speed.";
     for (const [key, value] of Object.entries(result)) {
       get(key).textContent = Math.round(value * 100) + "%";
       get(key + "Meter").value = value;
@@ -232,6 +233,28 @@
     document.querySelector("input[name=section][value=corner]").checked = true;
     update();
   });
+  const aeroZone = get("aero-zone");
+  const aeroEnabled = get("aero-enabled");
+  const aeroRequest = get("aero-request");
+  function updateWings(request) {
+    const canUse = aeroEnabled.checked && aeroZone.value !== "outside";
+    const front = request && canUse;
+    const rear = front && aeroZone.value === "normal";
+    for (const [axle, straight] of [["front", front], ["rear", rear]]) {
+      get(axle + "-mode").textContent = straight ? "Straight Mode" : "Corner Mode";
+      get(axle + "-flap").dataset.straight = String(straight);
+    }
+    get("aero-verdict").textContent = !request
+      ? "Both wings start in Corner Mode. Predict which flaps can move, then request activation."
+      : !aeroEnabled.checked ? "Activation refused. The control electronics have not enabled it."
+      : !canUse ? "Activation refused. The car is outside an activation zone."
+      : rear ? "Full activation. Front and rear switch to the lower-drag configuration."
+      : "Partial activation. The front switches to Straight Mode and the rear stays in Corner Mode.";
+  }
+  aeroZone.addEventListener("change", () => updateWings(false));
+  aeroEnabled.addEventListener("change", () => updateWings(false));
+  aeroRequest.addEventListener("click", () => updateWings(true));
+  updateWings(false);
   const flowSpeed = get("flow-speed");
   function updatePressure() {
     const speed = Number(flowSpeed.value);

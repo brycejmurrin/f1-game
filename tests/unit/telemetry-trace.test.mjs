@@ -22,7 +22,8 @@ seedDom(ctx);   // telemetry.js formats lap times through Dom.fmtLap
 vm.runInContext(readFileSync("js/core/mat4.js", "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
 for (const file of [
   "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
-  "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js"
+  "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js",
+  "learn/telemetry/model.js"
 ]) {
   vm.runInContext(readFileSync(file, "utf8"), ctx, { filename: absSrc(file) });
 }
@@ -98,6 +99,77 @@ test("braking duel aligns distance and refuses clamped or missing feed intervals
   assert.equal(absent.available, true); assert.equal(absent.lanes[0].brake, null); assert.equal(absent.lanes[0].throttle, null);
   flat.car[12].brake = 50;
   assert.equal(model.brakingDuel(flat, b, 0, 90).lanes[0].brake, null, "one noisy feed sample must not become two grid hits");
+});
+
+const lesson = vm.runInContext("TelemetryLesson", ctx);
+
+test("Telemetry Detective compares the same distance and flips the delta with the reference", () => {
+  const { lanes, from, to } = lesson.fixture;
+  const result = lesson.analyze(lanes, from, to);
+  assert.equal(result.available, true);
+  assert.equal(result.deltaBefore, 0);
+  assert.ok(Math.abs(result.change - 2 / 15) < 1e-9);
+  assert.equal(lesson.analyze(lanes, from, to, 1).change, -result.change);
+  assert.equal(result.lanes[0].brake.distance, 21.875);
+  assert.equal(result.lanes[1].brake.distance, 36.25);
+  assert.equal(result.lanes[0].minSpeed.value, 144);
+  assert.equal(result.lanes[1].minSpeed.value, 126);
+  assert.equal(result.lanes[0].throttle.distance, 55.625);
+  assert.equal(result.lanes[1].throttle.distance, 65);
+
+  const atTime = lesson.readAt(lanes, 0.5, "time");
+  assert.equal(atTime.lanes[0].distance, 28.75);
+  assert.equal(atTime.lanes[1].distance, 30);
+  assert.equal(atTime.delta, null);
+  assert.ok(lesson.readAt(lanes, 30).delta < 0);
+  const alignedLesson = lesson.readAt(lanes, 0.75, "time");
+  assert.deepEqual([alignedLesson.lanes[0].distance, alignedLesson.lanes[1].distance], [40, 42.5]);
+  const samePlace = lesson.readAt(lanes, alignedLesson.lanes[0].distance, "distance");
+  assert.ok(Math.abs(samePlace.delta + 0.05) < 1e-9);
+  const atExit = lesson.readAt(lanes, to);
+  assert.equal(atExit.lanes[0].distance, to);
+  assert.equal(atExit.lanes[1].distance, to);
+  assert.ok(Math.abs(atExit.lanes[0].t - 1.7916666667) < 1e-9);
+  assert.equal(atExit.lanes[1].t, 1.925);
+  assert.equal(atExit.delta, result.deltaAfter);
+  const series = lesson.series(lanes, from, to, 1);
+  assert.equal(series.length, 129);
+  assert.equal(series.at(-1).delta, -atExit.delta);
+});
+
+test("Telemetry Detective leaves gaps unknown and keeps valid earlier comparisons", () => {
+  const { lanes: [a, b], from, to } = lesson.fixture;
+  assert.deepEqual({ ...lesson.analyze([a, b], from, 95) }, {
+    available: false, reason: "Both lanes must cover the whole interval."
+  });
+  assert.equal(lesson.readAt([a, b], 95).delta, null);
+  assert.equal(lesson.readAt([a, b], 95).lanes[1].speed, null);
+  assert.equal(lesson.series([a, b], 90, 95, 0, 1).at(-1).delta, null);
+  assert.deepEqual({ ...lesson.analyze([a, { car: b.car.slice(1) }], from, to) }, {
+    available: false, reason: "Both lanes need a sample at the alignment origin."
+  });
+
+  const car = b.car.map((row, i) => ({ ...row, t: row.t + (i >= 3 ? 2 : 0) }));
+  assert.deepEqual({ ...lesson.analyze([a, { car }], 10, to) }, {
+    available: false, reason: "Unavailable: telemetry gap after the alignment origin."
+  });
+  assert.deepEqual({ ...lesson.analyze([a, { car }], 60, to) }, {
+    available: false, reason: "Unavailable: telemetry gap after the alignment origin."
+  });
+  assert.equal(lesson.readAt([a, { car }], 60).delta, null);
+  assert.equal(lesson.analyze([a, { car }], 10, 25).available, true);
+
+  const missing = b.car.map((row, i) => ({ ...row, brake: i === 4 ? null : row.brake }));
+  assert.deepEqual({ ...lesson.analyze([a, { car: missing }], from, to) }, {
+    available: false, reason: "Unavailable: missing telemetry channels."
+  });
+  assert.equal(lesson.readAt([a, { car: missing }], 1, "time").lanes[1].brake, null);
+  const noBrake = b.car.map(row => ({ ...row, brake: 0 }));
+  const result = lesson.analyze([a, { car: noBrake }], from, to);
+  assert.equal(result.available, true);
+  assert.equal(result.lanes[1].brake, null);
+  assert.equal(result.lanes[1].throttle, null);
+  assert.ok(Math.abs(result.change - 2 / 15) < 1e-9);
 });
 
 // A closed, oval-ish lap in track-local units at ~3.7 Hz, like the real feed.

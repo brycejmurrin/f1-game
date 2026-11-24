@@ -282,3 +282,10 @@ details {
   justify-content: space-between;
   margin-top: var(--gap);
 }
+
+.active-aero .check { display: block; margin-block: calc(var(--gap) / 2); }
+.active-aero select { max-width: 100%; }
+.wing-modes { display: grid; gap: calc(var(--gap) / 2); margin-top: var(--gap); }
+.wing-modes div { display: grid; grid-template-columns: minmax(0, 1fr) 2em minmax(0, 1fr); align-items: center; gap: calc(var(--gap) / 3); }
+.wing-modes i { display: block; width: 100%; height: .28em; transform: rotate(-25deg); }
+.wing-modes i[data-straight="true"] { transform: none; }

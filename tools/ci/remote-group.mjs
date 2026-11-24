@@ -290,13 +290,16 @@ export function failLines(log, max = 8) {
   return out;
 }
 
-/** Terminal verdict over a run's shard jobs (the plan job included). */
+const QUEUE_JOB = "Check browser queue capacity";
+
+/** Terminal verdict with the admission job reported separately from the shards. */
 export function groupVerdict(run, jobs) {
-  const shards = (jobs || []).filter((j) => j.name !== "Plan shards");
+  const shards = (jobs || []).filter((j) => j.name !== "Plan shards" && j.name !== QUEUE_JOB);
   const bad = (jobs || []).filter((j) => j.conclusion === "failure" || j.conclusion === "timed_out");
   const done = shards.filter((j) => j.status === "completed").length;
   const tail = `(${done}/${shards.length} shards done, ${bad.length} failed)`;
   if (run.status !== "completed") return { done: false, line: `running ${tail}`, code: 124 };
+  if (bad.some((j) => j.name === QUEUE_JOB)) return { done: true, line: "queue admission failed before any shard ran", code: 1 };
   if (bad.length || run.conclusion === "failure") return { done: true, line: `failed ${tail}`, code: 1 };
   if (run.conclusion === "cancelled") return { done: true, line: `cancelled ${tail} — superseded by a newer dispatch of this group, or stopped`, code: 2 };
   return { done: true, line: run.conclusion === "success" ? `passed ${tail}` : `${run.conclusion} ${tail}`, code: run.conclusion === "success" ? 0 : 1 };
@@ -342,7 +345,9 @@ async function watch(runId, { interval, deadline }) {
       say(`${job.name} → ${job.conclusion}${mins}`);
       if (job.conclusion === "failure" || job.conclusion === "timed_out") {
         const log = api("GET", `actions/jobs/${job.id}/logs`, null, { raw: true });
-        const lines = failLines(log.text);
+        const lines = job.name === QUEUE_JOB
+          ? (log.text || "").split("\n").filter((line) => line.includes("= optional work deferred"))
+          : failLines(log.text);
         for (const l of lines.length ? lines : [`(no test lines in the log — read ${job.html_url})`]) console.log("    " + l);
       }
     }

@@ -1167,6 +1167,20 @@ test("fully occluded lamp lists have bounded candidate and sample work without i
   assert.equal(omitted.glints.length, 0, "a visible but lower-ranked source past the ceiling is intentionally omitted");
 });
 
+test("real foliage index removes all hidden solar effects while preserving adjacent sky", () => {
+  const { V, ctx } = load();
+  const geom = vm.runInContext(read("js/track/core/geom.js") + ";TrackGeom", ctx, { filename: absSrc("js/track/core/geom.js") });
+  ctx.TrackGeom = geom;
+  const records = [];
+  geom.lightPrimitive(records, { _mat: geom.MAT.FOLIAGE }, "cone", [[0, 0, -20], 4, 12, [.2, .4, .1], 7]);
+  const track = { _lightOccluders: geom.lightIndex(records) };
+  for (const samples of [1, 5, 9]) {
+    const hidden = V.lightMap({ ...DAY, track, sunDir: [0, 0.1, -0.995] }, 852, 393, { visibilitySamples: samples });
+    assert.equal(hidden.sun, null); assert.equal(hidden.rays, null); assert.equal(hidden.ghost, null); assert.equal(hidden.rim, null);
+    const clear = V.lightMap({ ...DAY, track, sunDir: [.4, .1, -.91] }, 852, 393, { visibilitySamples: samples });
+    assert.ok(clear.sun && clear.rays, "sun beside the crown still lights the visor");
+  }
+});
 
 test("photo visor lighting paints the captured angle without changing the driving lens or clearing the scene", () => {
   const { V, calls, live } = load({ helmet: false });

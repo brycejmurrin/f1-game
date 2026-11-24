@@ -2,7 +2,7 @@
   "use strict";
 
   const get = id => document.getElementById(id);
-  const { distance, fixtures, pitPath, evaluate, progress } = VscLesson;
+  const { distance, fixtures, pitPath, evaluate, progress, compareRegimes } = VscLesson;
   const fixture = get("fixture");
   const prediction = get("prediction");
   const timeline = get("timeline");
@@ -17,6 +17,7 @@
   const format = new Intl.NumberFormat("en", { maximumFractionDigits: 3 });
   const seconds = ms => format.format(ms / 1000) + " s";
   const metres = n => format.format(Math.round(n * 10) / 10) + " m";
+  const regimeNames = { green: "Green", vsc: "VSC", safetyCar: "Safety Car" };
   let input;
   let result;
   let choice = "";
@@ -33,7 +34,7 @@
     get("track-car").style.left = replay.track * 100 + "%";
     get("green-car").style.left = replay.green * 100 + "%";
     get("pit-clock").textContent = replay.pitPhase + " · " + seconds(Math.min(elapsed, result.pitTime));
-    const trackState = elapsed >= result.trackTime ? "Passed marker" : elapsed >= result.cautionMs ? "Green" : "VSC";
+    const trackState = elapsed >= result.trackTime ? "Passed marker" : elapsed >= result.cautionMs ? "Green" : regimeNames[input.regime || "vsc"];
     get("track-clock").textContent = trackState + " · " + metres(replay.track * distance) + " · " +
       seconds(Math.min(elapsed, result.trackTime));
     get("green-clock").textContent = metres(replay.green * distance) + " · " +
@@ -45,6 +46,18 @@
 
   function drawArithmetic() {
     const service = input.service;
+    const selectedRegime = input.regime || "vsc";
+    const cautionName = selectedRegime === "safetyCar" ? "Safety Car" : "VSC";
+    get("track-label").textContent = "Track · " + regimeNames[selectedRegime] + " scenario";
+    get("pace-label").textContent = cautionName + " track speed";
+    const vscPace = selectedRegime === "vsc" ? input.vscSpeed : fixtures.default.vscSpeed;
+    const safetyCarPace = selectedRegime === "safetyCar" ? input.vscSpeed : fixtures.safetyCar.vscSpeed;
+    const comparisonInput = { ...input, vscSpeed: vscPace, safetyCarSpeed: safetyCarPace };
+    for (const [mode, comparison] of Object.entries(compareRegimes(comparisonInput, result.pitTime))) {
+      get("compare-" + mode + "-speed").textContent = comparison.speed + " km/h";
+      get("compare-" + mode + "-track").textContent = seconds(comparison.trackTime);
+      get("compare-" + mode + "-loss").textContent = seconds(comparison.loss);
+    }
     get("conditions").textContent = "The reference car starts " + seconds(input.gapBehind) +
       " behind. Boxing fits Hards now, with " + seconds(input.boxPace) +
       " projected tyre pace loss. Staying out keeps Mediums until lap 25, with " +
@@ -112,6 +125,8 @@
       get(id + "-value").textContent = format.format(Number(control.value)) + unit;
       control.setAttribute("aria-valuetext", get(id + "-value").textContent);
     }
+    if (input.regime === "green") input.vscEnds = 0;
+    for (const id of ["vsc-speed", "vsc-duration"]) get(id).disabled = input.regime === "green";
     result = evaluate(input, input.service - pitPath[2]);
     duration = Math.max(result.pitTime, result.trackTime, result.greenTrack);
     timeline.max = duration / 1000;

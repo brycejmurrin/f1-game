@@ -1,0 +1,29 @@
+:root { font: var(--fs-3, 16px)/1.45 var(--font-ui, system-ui); color: var(--text); background: var(--bg); }
+* { box-sizing: border-box; }
+body { margin: 0; }
+#lab { max-width: 1100px; margin: auto; padding: var(--pad, 14px); }
+h1, h2, p, dl, dd { margin: 0; }
+h2 { font-size: var(--fs-5, 20px); }
+.intro { color: var(--dim); margin-bottom: var(--gap, .75rem); max-width: 88ch; }
+#learn-studio { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gap, .75rem); align-items: start; }
+#lab svg { width: 100%; height: auto; display: block; color: var(--text); background: var(--bg); border-radius: var(--r-sm); }
+dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr)); margin: .65rem 0; gap: .55rem; }
+dt { font-size: var(--fs-2); color: var(--dim); }
+dd { font-weight: 700; font-variant-numeric: tabular-nums; }
+.control { margin-bottom: .55rem; }
+label { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; font-weight: 600; }
+label span { font-variant-numeric: tabular-nums; font-weight: 400; white-space: nowrap; }
+input, select, button { font: inherit; color: inherit; min-height: var(--tap, 44px); }
+input, select { display: block; width: 100%; accent-color: var(--red); }
+button, select { background: var(--plate); border: 1px solid var(--plate-line); border-radius: var(--r-sm); padding: .3em .65em; cursor: pointer; }
+button:hover, select:hover { background: var(--plate-hover); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.challenge { grid-column: 1 / -1; }
+.challenge button { margin-top: .55rem; }
+[role=status]:not(:empty) { margin-top: .55rem; font-weight: 600; }
+details { padding: .65rem 0; }
+summary { cursor: pointer; }
+a { color: var(--text); }
+@media (min-width: 46rem) {
+  #learn-studio { grid-template-columns: minmax(0, 1.7fr) minmax(15rem, 1fr); }
+}

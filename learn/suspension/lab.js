@@ -1,0 +1,139 @@
+(() => {
+  "use strict";
+
+  const accent = "var(--red, currentColor)";
+  const mass = 800;
+  const gravity = 9.81;
+  const cgHeight = .30;
+  const wheelbase = 3.40;
+  const fia21 = "https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_21_-_2026-10-19.pdf";
+
+  const arrows = `<defs><marker id="susp-arrow" viewBox="0 0 8 8" refX="7" refY="4"
+    markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L8 4L0 8z" fill="currentColor"/></marker></defs>`;
+
+  function linkage(rod, bump) {
+    const push = rod === "push";
+    const travel = bump * 1.2;
+    const outerRest = push ? 166 : 95;
+    const outer = outerRest - travel;
+    const pivot = push ? 81 : 163;
+    const radius = 21;
+    // Locate the rod/rocker joint where the two fixed-length circles meet.
+    // Choose the branch that gives a vertically downward rocker arm at rest.
+    const rodLength = Math.hypot(325 - 142, pivot + radius - outerRest);
+    const distance = Math.hypot(142 - 325, outer - pivot);
+    const offset = Math.acos((radius * radius + distance * distance - rodLength * rodLength) / (2 * radius * distance));
+    const theta = Math.atan2(outer - pivot, 142 - 325) - offset;
+    const rotation = theta - Math.PI / 2;
+    const angle = rotation * 180 / Math.PI;
+    const jointX = 325 + radius * Math.cos(theta);
+    const jointY = pivot + radius * Math.sin(theta);
+    const springX = 325 + 27 * Math.cos(rotation) - 10 * Math.sin(rotation);
+    const springY = pivot + 27 * Math.sin(rotation) + 10 * Math.cos(rotation);
+    const load = push ? "Compression" : "Tension";
+    return `${arrows}<g font-size="13" fill="currentColor">
+      <text x="31" y="27">FRONT VIEW · one wheel</text>
+      <text x="414" y="27">${push ? "Pushrod" : "Pullrod"} · ${load.toLowerCase()} in bump</text>
+      <path d="M32 213H562" stroke="currentColor" opacity=".28"/>
+      <rect x="72" y="122" width="41" height="86" rx="11" fill="none" stroke="currentColor" opacity=".32" stroke-dasharray="5 4"/>
+      <rect x="72" y="${122 - travel}" width="41" height="86" rx="11" fill="var(--surf-1, #222)" stroke="currentColor" stroke-width="2.5"/>
+      <path d="M112 ${131 - travel}L142 ${122 - travel} V${186 - travel} L112 ${190 - travel}
+        M142 ${122 - travel}L278 119H335 M142 ${186 - travel}L278 181H335" stroke="currentColor" stroke-width="2" fill="none" opacity=".65"/>
+      <path d="M142 ${outer}L${jointX} ${jointY}" stroke="${accent}" stroke-width="4" fill="none"/>
+      <circle cx="142" cy="${outer}" r="5" fill="${accent}"/>
+      <path d="M325 ${pivot} l0 21 27 -11 z" fill="var(--surf-1, #222)" stroke="currentColor" stroke-width="2" transform="rotate(${angle} 325 ${pivot})"/>
+      <circle cx="325" cy="${pivot}" r="4" fill="currentColor"/>
+      <path d="M${springX} ${springY}L377 ${pivot + 10}l5 -7 7 14 7 -14 7 14 7 -14 7 14 7 -14 6 7h23
+        M377 ${pivot + 29}h30v-6h24v12h-24v-6h46" fill="none" stroke="currentColor" stroke-width="2"/>
+      <path d="M453 ${pivot - 4}v48" stroke="currentColor" stroke-width="3"/>
+      <text x="32" y="70">Wheel bump</text>
+      <path d="M53 164V${Math.min(118 - travel, 136)}" stroke="currentColor" marker-end="url(#susp-arrow)"/>
+      <text x="150" y="${112 - travel}">Upright</text>
+      <text x="293" y="${pivot - 12}">Rocker</text>
+      <text x="467" y="${pivot + 15}">Spring</text>
+      <text x="467" y="${pivot + 35}">Damper</text>
+      <text x="30" y="234">Dashed outline: wheel at rest · linkage motion exaggerated</text>
+    </g>`;
+  }
+
+  function braking(decel, high, transfer, pitch) {
+    const front = mass * gravity * .47 + transfer;
+    const rear = mass * gravity * .53 - transfer;
+    const fTop = 188 - front / 116;
+    const rTop = 188 - rear / 116;
+    const angle = -pitch * 5;
+    return `${arrows}<g font-size="13" fill="currentColor">
+      <text x="30" y="27">SIDE VIEW · front at left</text>
+      <text x="349" y="27">${high ? "Higher" : "Lower"} anti-dive geometry</text>
+      <path d="M91 49H36" stroke="currentColor" marker-end="url(#susp-arrow)"/>
+      <text x="98" y="53">Travel</text>
+      <path d="M31 188H569" stroke="currentColor" opacity=".5"/>
+      <circle cx="126" cy="166" r="22" fill="var(--surf-1, #222)" stroke="currentColor" stroke-width="2.5"/>
+      <circle cx="472" cy="166" r="22" fill="var(--surf-1, #222)" stroke="currentColor" stroke-width="2.5"/>
+      <path d="M86 137L183 115H257l25 -23h37l28 23h139l36 20v11H85z"
+        stroke="currentColor" opacity=".45" stroke-dasharray="4 4" fill="none"/>
+      <g transform="rotate(${angle} 300 129)">
+        <path d="M86 137L183 115H257l25 -23h37l28 23h139l36 20v11H85z"
+          stroke="${accent}" stroke-width="2.5" fill="var(--surf-1, #222)"/>
+        <circle cx="300" cy="126" r="5" fill="currentColor"/>
+        <text x="310" y="130">CG</text>
+      </g>
+      <path d="M126 168L192 ${high ? 125 : 161}l44 ${high ? -16 : -10}" stroke="${accent}" stroke-width="3.5" fill="none"/>
+      <path d="M219 ${high ? 103 : 159}H279" stroke="currentColor" opacity=".65"/>
+      <text x="286" y="${high ? 107 : 164}">Front linkage force path</text>
+      <path d="M126 186V${fTop} M472 186V${rTop}" stroke="currentColor" stroke-width="2" marker-end="url(#susp-arrow)"/>
+      <path d="M126 199h${decel * 27}" stroke="${accent}" stroke-width="2" ${decel ? 'marker-end="url(#susp-arrow)"' : ""}/>
+      ${decel ? '<text x="126" y="216">Braking force</text>' : ""}
+      <text x="30" y="234">Up arrows: axle load · dashed body: no-braking position · pitch exaggerated</text>
+    </g>`;
+  }
+
+  LearnSandbox.mount({
+    title: "Pushrod, Pullrod & Anti-dive",
+    intro: "Trace a wheel bump into the spring, then change how the front suspension reacts to braking.",
+    controls: [
+      {id: "view", label: "Experiment", options: [["linkage", "Wheel bump · front view"], ["braking", "Braking loads · side view"]], value: "linkage"},
+      {id: "rod", label: "Rocker actuation", options: [["push", "Pushrod · rocker above"], ["pull", "Pullrod · rocker below"]], value: "push"},
+      {id: "bump", when: state => state.view === "linkage", label: "Wheel bump (front view)", min: 0, max: 30, step: 1, value: 15, unit: "mm"},
+      {id: "decel", when: state => state.view === "braking", label: "Braking deceleration", min: 0, max: 3, step: .1, value: 1, unit: "g"},
+      {id: "geometry", when: state => state.view === "braking", label: "Fixed braking geometry", options: [["low", "Lower anti-dive"], ["high", "Higher anti-dive"]], value: "low"},
+      {id: "answer", when: state => state.view === "braking", label: "Your prediction", options: [["unset", "Choose a prediction"], ["less", "Less front load transfer"], ["same", "Same front load transfer"], ["more", "More front load transfer"]], value: "unset"},
+    ],
+    challenge: "In Braking loads, keep 1 g and the same rod. Switch to higher anti-dive. The body dives less. Predict what happens to quasi-static front load transfer.",
+    sources: [
+      ["Formula 1 explainer · rods and rockers", "https://www.formula1.com/en/latest/article/explainer-whats-the-difference-between-pull-rod-and-push-rod-suspension.1I3wL4LEL0nQZbKZbx1Dhz"],
+      ["FIA Section C Issue 21 · C10.2 and C10.3", fia21],
+      ["MIT vehicle dynamics study · tyre loads", "https://dspace.mit.edu/bitstream/handle/1721.1/139209/gaither-gaither-sb-2-2021-thesis.pdf"],
+    ],
+    evaluate({view, rod, bump, decel, geometry, answer}) {
+      const high = geometry === "high";
+      const push = rod === "push";
+      const brakeView = view === "braking";
+      const transfer = mass * gravity * decel * cgHeight / wheelbase;
+      const pitch = decel * (high ? .45 : 1);
+      const challengeSetup = brakeView && high && Math.abs(decel - 1) < 1e-9;
+      const success = challengeSetup && answer === "same";
+      return {
+        svg: brakeView ? braking(decel, high, transfer, pitch) : linkage(rod, bump),
+        metrics: brakeView ? [
+          ["Forward load shift", `${Math.round(transfer)} N · both geometries at this deceleration`],
+          ["Illustrative pitch index", `${pitch.toFixed(2)} · lower anti-dive at 1 g = 1.00`],
+          ["Fixed inputs", "800 kg · 0.30 m CG height · 3.40 m wheelbase"],
+          ["Rocker actuation retained", push ? "Pushrod" : "Pullrod"],
+        ] : [
+          ["Wheel bump", `${bump} mm upwards`],
+          ["Rod load during upward bump", push ? "Compression" : "Tension"],
+          ["Inboard package", push ? "Higher rocker location in this diagram" : "Lower rocker location in this diagram"],
+        ],
+        explanation: brakeView
+          ? "At fixed deceleration, axle load shift follows mass × deceleration × CG height ÷ wheelbase on flat ground with no aero. The pivot geometry changes the route of braking loads through the chassis, so the body pitch in this illustration changes independently."
+          : "Both layouts move an inboard rocker as the upright rises. The pushrod drives a higher rocker in compression and the pullrod draws on a lower rocker in tension in these examples.",
+        success,
+        feedback: !challengeSetup ? "Set Braking loads, 1 g and Higher anti-dive to compare against the lower geometry."
+          : answer === "unset" ? "The diagram shows less pitch. Make a prediction about the vertical axle loads."
+          : success ? "Correct. The nose dives less in the example, but about 692 N still shifts to the front. The external moment balance stayed the same."
+          : "Look at the fixed inputs. The body pitch changed, while the mass, CG height, wheelbase and deceleration stayed the same.",
+      };
+    },
+  });
+})();
