@@ -166,12 +166,12 @@ on all eleven:
 | donington | 0.00040 | R | R, Redgate — **stale (line now 0.2551, on the real Wheatcroft straight): see "donington, brands_hatch — MOVED"** |
 | anderstorp | 0.00011 | R | R |
 | brands_hatch | **0.00619** | R | R, Paddock Hill Bend — **stale (line now 0.2736, on the real Brabham straight): see "donington, brands_hatch — MOVED"** |
-| zolder | 0.00015 | R | R — **stale (line now 0.1226, kept on purpose): see "Zolder: NOT moved"** |
+| zolder | 0.00015 | R | R — **line surveyed at control index 24/107: see "Zolder: surveyed start line"** |
 | dijon | 0.00001 | R | R |
 | buddh | 0.00002 | R | R |
 | mont_tremblant | 0.00087 | R | R |
 
-### Measured 2026-11-10: donington and brands_hatch owed; zolder NOT moved
+### Donington, Brands Hatch and Zolder
 
 The table above describes v0. A later "MEASURED" pass moved these three lines
 off v0 (onto the nearest straight holding R >= 1500 m across the grid). The
@@ -179,21 +179,19 @@ off v0 (onto the nearest straight holding R >= 1500 m across the grid). The
 0.9072 on the Starkey straight before the Esses, brands_hatch 0.1226 on the
 Stirlings-Clearways link, zolder 0.1226 "before the final chicane".
 
-**Zolder: NOT moved — 0.1226 stays (verdict 2026-11-11, #5287).** W12 moved it
-to 0.2170, after the built left-right chicane it took for the final one; the
-move was reverted before landing because that chicane is the FIRST corner.
-Evidence: (1) en.wikipedia "Circuit Zolder" (noise limits: "just after turn 4
-(Bianchi)"); the Lucien Bianchi kit, authored on the fixed scenery frame `K()`,
-sits on the built apex that 0.2170 numbered T1, and every corner-named kit
-landed on a built apex in the same three-off order (`corner-frames.cjs`);
-(2) shape: the built lap runs tight right (R16 m) → 580 m straight → left-right
-chicane (52 m) → 616 m straight. The real T1 is the Earste chicane ("first
-left"), and Jochen Rindt bocht is the right onto the pit straight, so the line
-belongs on the 580 m straight BEFORE the chicane, where 0.1226 already sits
-(~55 m before it). The kit labels read one corner earlier (Earste on the R16
-right, S/F before it); the two readings differ by one corner and both put the
-line before the chicane. Do not move it after the chicane again; a re-survey
-needs a surveyed S/F coordinate, not either reading alone.
+**Zolder: surveyed start line (#6223).** The painted stripe at 50.989037 N,
+5.255728 E projects to world (128.36, −151.64) in the committed trace frame.
+The orthophoto and current circuit diagram put it on the straight from Jacky
+Ickx to Eerste Linkse. The earlier 0.1226 origin was before Jacky Ickx, about
+464 m upstream. The new built origin is (128.36, −150.83), 0.81 m from the
+stripe. One control point on the source chord allows for centreline smoothing.
+A small entry correction at Jacky Ickx removes a kink exposed by the new
+sampling origin.
+
+The grid fits the preceding straight, with pole 14 m and slot 24 at 198 m
+before the line. OSM’s pit-lane way 179267542 runs on the driver’s right at
+the stripe. The game’s standard pit lane rejoins on the straight before
+Eerste Linkse. The real pit exit continues beyond that bend. [Flemish orthophoto](https://geo.api.vlaanderen.be/OMWRGBMRVL/wms) · [Circuit diagram](https://www.racingcircuits.info/europe/belgium/zolder.html) · [Pit-lane way](https://www.openstreetmap.org/way/179267542)
 
 **donington, brands_hatch — MOVED onto the located real lines (#5316 leftovers): donington 2026-11-11; brands_hatch 2026-11-18, on Bryce's `decision: Brands Hatch A` (#5316, after the first build was reverted in #5506).**
 Both coordinates are from the driver61 circuit guides' "Start / Finish Line" GPS

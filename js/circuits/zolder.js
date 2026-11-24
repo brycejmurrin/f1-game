@@ -16,27 +16,19 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "zolder",
-    revision: 2,
+    revision: 3,
     classic: true,
     // Projected trace winding is CCW for a clockwise circuit — the x axis is
     // negated by the projection, so it mirrors handedness. Calibrated against
     // monza/suzuka/zandvoort (all real-CW, all projected CCW, all reverse:false).
     reverse: false,
-    // MEASURED: v0 sits in a 176 m-radius corner with the 182 m grid behind
-    // it, so the line moves to the nearest node holding R >= 1500 m across the
-    // whole grid zone (radius there: 4653 m).
-    //
-    // startFrac is an INDEX fraction into the control points, NOT an arc
-    // fraction. The points are not arc-uniform, so this value comes from
-    // projecting each control point onto the spline the grid is measured on;
-    // scaling a polyline length instead lands on a 35 m radius.
-    //
-    // sceneryStartFrac keeps the dressing on the v0 origin it was authored
-    // against, so props, landmarks and corner boards stay on their real corners
-    // while only the line and grid move.
-    // Do NOT move it past the left-right chicane after the 580 m straight: that
-    // chicane is T1, not the final one (verdict 2026-11-11, docs/tracks/zolder.md).
-    startFrac: 0.1226,
+    // Flemish orthophoto stripe 50.989037 N, 5.255728 E. The source chord
+    // between [72.7,-114.4] and [330.8,-282.9] crosses the stripe. Its added
+    // collinear point is placed upstream to compensate for the two smoothing
+    // passes, so built node 0 lands at (128.36, -150.83), within 1 m of the stripe.
+    // The index is 24 of 107. A small Jacky Ickx entry correction keeps its
+    // inside kerb open after the change in resampling phase. Scenery keeps v0.
+    startFrac: 24 / 107,
     sceneryStartFrac: 0.0000,
     name: "ZOLDER",
     gp: "Belgian GP",
@@ -48,6 +40,7 @@
     // self-clips (6.00 m / 1326 m³ place×place @ frac ~0.02) and swallows
     // the stand envelope. Monza / Sepang / Portimão precedent.
     ownPitStraight: true,
+    pit: { side: 1 },  // OSM way 179267542, driver’s right at the surveyed stripe
     lengthKm: 4.004,
     tyreSeverity: 1.02,  // Belgian permanent classic; near-neutral
     baseHW: 7.5,
@@ -66,21 +59,19 @@
       sunDir:        [0.50, 0.52, 0.42],
     },
 
-    // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
-    // re-seats turns when the start line moves.
-    // turns: the 10 strongest curvature peaks of THIS centreline in lap order,
-    // 10 being the researched real turn count. No researched sectors — consumers
-    // fall back to thirds.
-    sectors: [0.36, 0.613],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.0240, 0.0376, 0.1911, 0.2771, 0.4105, 0.5591, 0.7066, 0.7230, 0.7675, 0.8790],
-    // Flemish DHMV II lidar transects across 8 m of the modern asphalt.
-    bankZones: [{ turn: 4, angleDeg: 2.5, widthM: 160 }, { turn: 9, angleDeg: 3.8, widthM: 145 }],
+    // Built racing-arc fractions. The RacingCircuits.info layout and named
+    // OSM ways place Eerste, Sterrenwacht, Kanaal, Bianchi, Kleine, Villeneuve,
+    // Terlamen, Bolderberg, Rindt and Jacky Ickx in that order after the stripe.
+    // Use idealized timing thirds on straighter sections; no historic split map.
+    sectors: [0.36, 0.67],
+    turns: [0.0752, 0.1609, 0.1996, 0.2890, 0.4423, 0.5898, 0.6511, 0.7623, 0.7854, 0.9077],
+    // Keep the Flemish DHMV II transverse stations at the previous world
+    // anchors, now numbered T2 (Sterrenwacht) and T7 (Terlamen).
+    bankZones: [{ turn: 2, angleDeg: 2.5, widthM: 160 }, { turn: 7, angleDeg: 3.8, widthM: 145 }],
     furniture: { tree: "fir", fol: [0.15, 0.31, 0.19], lamp: "none" },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
     standSet: ["concrete", "steel", "darkSteel"],
-    path: { len: 4004, pts: [[-433.1,493.4],[-554,446.2],[-561.5,440],[-565.8,432.8],[-567.1,428],[-567,422.1],[-565.5,418.2],[-559.6,410.2],[-515.3,380.8],[-502.6,370.1],[-494.9,361],[-473.8,330.9],[-463.8,321.1],[-121.4,89],[-117,82.2],[-115,74.8],[-113.3,65.3],[-127.7,44.1],[-132.2,35.6],[-131.7,29.9],[-129.2,23.9],[-125.6,16.7],[-118,7.4],[72.7,-114.4],[330.8,-282.9],[344.8,-295],[358,-308.9],[366.7,-320.2],[370,-334],[367.9,-352.8],[360,-374.8],[355.6,-383.6],[341.1,-405],[313.7,-441.8],[244,-539.8],[237.8,-553.2],[230,-578.2],[228.7,-590.7],[230,-604.8],[233.5,-615.6],[243.2,-628.2],[248.5,-632.7],[271.1,-644.5],[289.1,-649.7],[341.5,-658.8],[367.4,-660.6],[385.5,-658.9],[395.3,-656.6],[414.6,-649.1],[432.1,-639.3],[446.2,-628.2],[460.6,-613.5],[474.8,-593.9],[558.6,-439.5],[563.9,-424.5],[566.8,-408.1],[567.1,-399.2],[566.5,-391.3],[563.1,-376.9],[557.9,-364.2],[549.3,-350.7],[540.2,-340.8],[526.9,-330.4],[181.2,-93.1],[75.3,-24.3],[68,-18.2],[63.7,-10.9],[64.4,-7.2],[71.8,9.3],[71.1,16.5],[5.5,121],[-54,234.5],[-61.3,251.1],[-66.3,263.6],[-73.8,293.7],[-76.2,337.7],[-74.2,353.7],[-70.9,369.2],[-62.3,398.8],[-43.9,454.2],[-29.9,488.5],[-29.3,492.9],[-30.2,501.3],[-34.1,505.1],[-48.3,513.9],[-52.7,519],[-54.2,524.9],[-52.8,533.3],[-42.3,553.4],[-38,566.4],[-38,578.2],[-39.4,584.1],[-44,594.3],[-48.2,598.9],[-119.8,651.8],[-128.5,655.7],[-149.7,660.2],[-159.9,660.6],[-178.1,658],[-191,653.7],[-200.5,648.9],[-215.1,637.5],[-303.4,560.1],[-325.3,543.2],[-345,530.9],[-363.2,521.9]] },
+    path: { len: 4004, pts: [[-433.1,493.4],[-554,446.2],[-561.5,440],[-565.8,432.8],[-567.1,428],[-567,422.1],[-565.5,418.2],[-559.6,410.2],[-515.3,380.8],[-502.6,370.1],[-494.9,361],[-473.8,330.9],[-463.8,321.1],[-148.8,107.6],[-117,82.2],[-115,74.8],[-113.3,65.3],[-127.7,44.1],[-132.2,35.6],[-131.7,29.9],[-129.2,23.9],[-125.6,16.7],[-118,7.4],[72.7,-114.4],[82.8,-121.0],[330.8,-282.9],[344.8,-295],[358,-308.9],[366.7,-320.2],[370,-334],[367.9,-352.8],[360,-374.8],[355.6,-383.6],[341.1,-405],[313.7,-441.8],[244,-539.8],[237.8,-553.2],[230,-578.2],[228.7,-590.7],[230,-604.8],[233.5,-615.6],[243.2,-628.2],[248.5,-632.7],[271.1,-644.5],[289.1,-649.7],[341.5,-658.8],[367.4,-660.6],[385.5,-658.9],[395.3,-656.6],[414.6,-649.1],[432.1,-639.3],[446.2,-628.2],[460.6,-613.5],[474.8,-593.9],[558.6,-439.5],[563.9,-424.5],[566.8,-408.1],[567.1,-399.2],[566.5,-391.3],[563.1,-376.9],[557.9,-364.2],[549.3,-350.7],[540.2,-340.8],[526.9,-330.4],[181.2,-93.1],[75.3,-24.3],[68,-18.2],[63.7,-10.9],[64.4,-7.2],[71.8,9.3],[71.1,16.5],[5.5,121],[-54,234.5],[-61.3,251.1],[-66.3,263.6],[-73.8,293.7],[-76.2,337.7],[-74.2,353.7],[-70.9,369.2],[-62.3,398.8],[-43.9,454.2],[-29.9,488.5],[-29.3,492.9],[-30.2,501.3],[-34.1,505.1],[-48.3,513.9],[-52.7,519],[-54.2,524.9],[-52.8,533.3],[-42.3,553.4],[-38,566.4],[-38,578.2],[-39.4,584.1],[-44,594.3],[-48.2,598.9],[-119.8,651.8],[-128.5,655.7],[-149.7,660.2],[-159.9,660.6],[-178.1,658],[-191,653.7],[-200.5,648.9],[-215.1,637.5],[-303.4,560.1],[-325.3,543.2],[-345,530.9],[-363.2,521.9]] },
   }
   );
 })();

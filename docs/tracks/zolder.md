@@ -4,21 +4,10 @@
 
 > **GEOMETRY CAVEAT: this trace is the 2002-present 4.010 km layout. Formula One raced the 4.262 km, 15-turn version used from 1975 to 1985; that configuration no longer exists on the ground.**
 
-> **FRAME DEBT:** `startFrac` 0.1226 / `sceneryStartFrac` 0 → `_sceneryShift` ≈ 0.844.
-> Pit / S/F landmarks use `sl()`; corner props stay on authored `K()`. Do not
-> retune frame keys without a per-circuit probe (`docs/tracks/START-LINES.md`).
-
-> **START LINE — DO NOT MOVE IT AFTER THE CHICANE (verdict 2026-11-11, #5287).** A
-> 2026-11-10 pass (W12) moved `startFrac` 0.1226 → 0.2170, onto the straight after
-> the built left-right chicane, reading that chicane as the final one. It is the
-> FIRST corner (Earste chicane, "first left"), so the move was reverted before
-> landing. Evidence: en.wikipedia "Circuit Zolder" puts Bianchi at turn 4, and the
-> `K()`-framed Bianchi kit sits on the apex 0.2170 numbered T1, with every
-> corner-named kit three numbers off (`node tools/track/corner-frames.cjs zolder`);
-> the built lap runs R16 m right → 580 m → left-right chicane → 616 m. Whether the
-> S/F sits before the chicane (0.1226, chicane reading) or one corner earlier
-> before the R16 right (kit reading) needs a surveyed coordinate:
-> `docs/tracks/START-LINES.md` "Zolder: NOT moved".
+> **Surveyed start line.** The built origin is 0.81 m from the stripe seen in
+> the Flemish orthophoto. Pit and start/finish landmarks follow the new line.
+> The wider landscape stays in its authored frame, and the named corner kits
+> follow their surveyed bends. See [Start lines](START-LINES.md#donington-brands-hatch-and-zolder).
 
 ## 1. Setting
 
@@ -34,30 +23,29 @@ Gently undulating, no severe changes. Keep real hills; no knife-edge terrain spi
 
 ## 4. Landmarks & surroundings by lap position
 
-Clockwise, so `+1` (right of travel) is the **infield** — pits, paddock, media — and
-`-1` is the outer ring of pine woodland. Turn fractions from the def are quoted in
-the rows they anchor.
+The pit lane is on the driver’s right (+1). The table uses racing-lap fractions
+for the surveyed corners and start/finish buildings. The legacy landscaping
+calls retain their authored fractions in the scenery file.
 
-| s | Side | Distance | Box description |
-|---|---|---|---|
-| 0.005 | +1 | 14 | Pit lane and garages: a long low `building` run of flat-roofed boxes, plain white/grey, with a continuous `sponsorHoarding` band along the pit wall and a `marshalPost` at the pit exit. Functional, not glamorous — this is a club circuit that happens to have F1 history. |
-| 0.015 | -1 | 20 | **REQUIRED `zolder-main-grandstand`:** permanent S/F tribune (positive-rake `modelGroup`; `grandstandEx` at gap 12 was SUPPRESSED on this fold). Camera tower + billboards behind. Source: [circuit-zolder.be museum page](https://www.circuit-zolder.be/en/about-us/museum/) ("behind the permanent grandstand at start/finish"). |
-| 0.018 | -1 | 58 | **REQUIRED `zolder-sf-museum`:** low archive hall behind the permanent tribune — wall of fame, Villeneuve carbon fragment, posters. Source: same museum page. |
-| 0.028 | +1 | 54 | **REQUIRED `zolder-villeneuve-poles`:** Stefan Bongaerts paddock sculpture — five white poles (helmet / 126C2 / Ferrari / signature / maple leaves). Source: [Motorsport Guides pilgrimage](https://motorsportguides.com/a-pilgrimage-to-zolder-where-gilles-villeneuve-lost-his-life/). **Not** the chicane plaque. |
-| 0.035 | -1 | 22 | Outside of the **Earste Chicane** (T1, s≈0.0352): wide pale sand run-off, then `tyreWall` on `guardrail`, `spectatorHill`, scatter of `tree`. |
-| 0.042 | +1 | 16 | Infield of the chicane exit: `groundPatch` of bare sand, a `marshalPost`, a short `guardrail` run and the first rank of `pine` screening the paddock beyond. |
-| 0.110 | -1 | 30 | Long `forestEdge` of dark Scots pine down the run away from the chicane — the dominant wall of the outer loop. |
-| 0.180 | +1 | 72 | **REQUIRED `zolder-sterrenwacht`:** Sterrenwachtbocht (T2) — small square club building with a low observation drum. Named for the nearby Sterrenwacht / Bolderberg site ([nl.wikipedia Circuit Zolder](https://nl.wikipedia.org/wiki/Circuit_Zolder)). Exact drum diameter **UNCERTAIN**. Seated behind pit offices on the frame-debt fold (was gap 30 through the offices). |
-| 0.194 | -1 | 20 | **Kanaalbocht** (T3, s≈0.1938) outside: low `ridge` of sandy spoil carrying the boundary, `guardrail` then `tyreWall` at the apex, `forestEdge` above the ridge line. |
-| 0.265 | -1 | 34 | Forested motorhome park in the outer loop: scattered `motorhome` between `pine` (terrain-seated), a `groundPatch` of sand track access, `forestEdge` closing it off from the circuit. |
-| 0.347 | +1 | 18 | **Lucien Bianchi bocht** (T4, s≈0.3473): fast infield-side corner — `guardrail` backed by `tyreWall`, a `marshalPost` on the exit and a pair of `billboard` panels facing the approach. |
-| 0.433 | -1 | 24 | **Villeneuve chicane** (T5, s≈0.4333). Popular viewing: a modest `grandstandEx` on the outside, `tyreWall` on `guardrail`, sand run-off. The **chicane memorial** stays a single small low `building` on a `groundPatch` set back from the barrier — black granite plaque era; restraint is the point; do not dress it. Bust at Terlamen (2023+) is **UNCERTAIN** for this pass and not modelled. |
-| 0.505 | +1 | 40 | Infield service area: `broadcastCompound` with trucks and dishes, one or two `motorhome`, a low `building` shed, all on a pale `groundPatch` with `pine` ranked behind. |
-| 0.567 | -1 | 20 | **Kleine chicane** (T6, s≈0.5667): the small chicane — `tyreWall`, short `guardrail`, `marshalPost`, sand `groundPatch` run-off, `pine` immediately beyond. Tight and enclosed. |
-| 0.715 | +1 | 22 | **Bolderberghaarspeldbocht** (T7, s≈0.7153): the hairpin after a rise and drop. Small `grandstandEx`, deep `tyreWall` on `guardrail`, `marshalPost`, `billboard` on the braking approach. |
-| 0.863 | +1 | 18 | **Terlamenbocht** entry (T8, s≈0.8628): infield `grandstandEx`, `guardrail`, `sponsorHoarding` along the barrier, `marshalPost` at the apex. |
-| 0.879 | -1 | 22 | Terlamenbocht exit (T9, s≈0.8792) outside: `tyreWall`, `cameraTower`, a `billboard` bank, `forestEdge` behind — the last of the pine before the paddock reopens. |
-| 0.924 | +1 | 16 | **Jochen Rindt bocht** (T10, s≈0.9237) onto the pit straight: paddock `building` blocks and parked `motorhome` behind `guardrail`, `sponsorHoarding` on the pit-wall approach, `marshalPost` on the exit. |
+| Racing fraction | Side | Feature |
+|---|---|---|
+| 0.005 | +1 | Pit frontage and club offices, with a sponsor band along the pit wall. |
+| 0.012 | −1 | Permanent start/finish tribune opposite the pit lane. [Circuit Zolder](https://www.circuit-zolder.be/en/about-us/museum/) |
+| 0.018 | −1 | Museum behind the tribune. [Circuit Zolder](https://www.circuit-zolder.be/en/about-us/museum/) |
+| 0.028 | +1 | Stefan Bongaerts’ five poles in the paddock. [Motorsport Guides](https://motorsportguides.com/a-pilgrimage-to-zolder-where-gilles-villeneuve-lost-his-life/) |
+| 0.0752 | +1 | Eerste Linkse, T1. Sand runoff, tyre wall, Armco and spectator bank on the outside. |
+| 0.1609 | +1 | Sterrenwacht, T2. Club building with observation drum beside the bend. |
+| 0.1996 | −1 | Kanaalbocht, T3. Sandy spoil ridge, tyre wall and scrub. |
+| 0.2890 | −1 | Lucien Bianchi, T4. Tyres, marshal post and approach billboards on the outside. |
+| 0.4423 | ±1 | Kleine Chicane, T5. Armco both sides, with graded sand and pines beyond. |
+| 0.5898 | +1 | Villeneuve Chicane, T6. Viewing stand and sand runoff. The memorial is a small building set back from the barrier. |
+| 0.6511 | ±1 | Terlamen, T7. Inside stand and outside tyre wall with camera tower and forest edge. |
+| 0.7623 | ±1 | Bolderberg, T8. Inside stand, outside sand and tyre wall. |
+| 0.7854 | +1 | Jochen Rindt, T9. Armco, tyre wall and paddock furniture. |
+| 0.9077 | — | Jacky Ickx, T10. The final chicane leads onto the start straight. |
+
+Corner order follows the current circuit diagram and named OSM ways. The
+surveyed banking stays at Sterrenwacht and Terlamen. [Circuit layout](https://www.racingcircuits.info/europe/belgium/zolder.html)
 
 ## 5. Track features
 
