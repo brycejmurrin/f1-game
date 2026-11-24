@@ -117,8 +117,20 @@ test("garage and race lens controls keep POV independent and pass the same focus
   });
   const reticle = b.dom.byId("ps-focus-reticle"), slider = b.dom.byId("ps-focal-length");
   const auto = b.dom.byId("ps-focus-auto"), status = b.dom.byId("ps-focus-status");
+  const depth = b.dom.byId("ps-depth-focus");
+  // Depth focus ships opt-in: a tap does nothing until the toggle is on.
+  assert.equal(b.api.open({ source: "home" }), true);
+  assert.equal(depth.value, "off");
+  assert.match(status.textContent, /Depth focus is off/);
+  send("pointerdown", 245, 130); send("pointerup", 245, 130);
+  assert.equal(b.PS.lens().focus, null);
+  assert.equal(reticle.hidden, true);
+  depth.value = "on"; b.dom.dispatch(depth, { type: "change" });
+  assert.equal(b.storage.get("apex26.photoDepthFocus"), "1");
+  b.api.close(false);
   for (const [source, initial] of [["home", "28"], ["race", "16"]]) {
     assert.equal(b.api.open({ source }), true);
+    assert.equal(depth.value, "on");
     assert.equal(slider.value, initial);
     const commands = b.order.slice(), pose = b.restored();
     slider.value = "80"; b.dom.dispatch(slider, { type: "input" });

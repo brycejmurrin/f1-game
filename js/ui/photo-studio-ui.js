@@ -157,6 +157,9 @@ function create(G, deps) {
   const st = { open: false, source: "race", aspect: "wide", highRes: false, samples: 1, grid: "thirds", postcard: false, busy: false, closing: false, metadata: {}, back: null, snapshot: null, borrowed: null, generation: 0, subject: null };
   const lens = { mm: null, focus: null };
   let sceneTap = null, reticleTimer = null, lastFocusAvailable = false;
+  // Depth focus is opt-in (default off) until it is verified on real GPUs.
+  const DEPTH_KEY = "apex26.photoDepthFocus";
+  let depthFocus = (() => { try { return localStorage.getItem(DEPTH_KEY) === "1"; } catch (_) { return false; } })();
   const E = {}, session = [];
   let last = null, raw = null, capturedOptions = null, focus = null, libraryPaint = 0, releaseCar = null, downloading = false;
   const mk = (tag, props, kids) => {
@@ -188,6 +191,12 @@ function create(G, deps) {
   const resetLens = button("RESET LENS", () => { lens.mm = null; paintFocal(); });
   const autoFocus = button("AUTO FOCUS", () => { lens.focus = null; hideReticle(); paintFocus(); }, "ps-focus-auto");
   const focusHint = mk("p", { id: "ps-focus-status", className: "adv-help", attrs: { role: "status" } });
+  const depthRow = select("Depth focus", [["off", "Off"], ["on", "On"]], () => depthFocus ? "on" : "off", (v) => {
+    depthFocus = v === "on";
+    try { localStorage.setItem(DEPTH_KEY, depthFocus ? "1" : "0"); } catch (_) { /* private mode: session only */ }
+    if (!depthFocus) { lens.focus = null; sceneTap = null; hideReticle(); }
+    paintFocus();
+  }, "ps-depth-focus");
   focalInput.addEventListener("input", () => { lens.mm = +focalInput.value; paintFocal(); });
   function paintFocal() {
     const fov = isGarage() ? deps.garage?.currentFov?.() || 36 : G.dbgCam?.fov || G.photoCam?.fov || 60;
@@ -198,11 +207,12 @@ function create(G, deps) {
     focalInput.value = String(mm);
     focalValue.textContent = mm + " mm";
   }
-  function focusAvailable() { return !!G.gfx?.photoFocusAvailable?.(); }
+  function focusAvailable() { return depthFocus && !!G.gfx?.photoFocusAvailable?.(); }
   function paintFocus(available = focusAvailable()) {
     lastFocusAvailable = available;
     autoFocus.disabled = !available || st.busy || st.closing || !lens.focus;
-    focusHint.textContent = !available ? "Depth of field is unavailable on this renderer."
+    focusHint.textContent = !depthFocus ? "Depth focus is off. Turn it on to tap or click the scene to set focus."
+      : !available ? "Depth of field is unavailable on this renderer."
       : lens.focus ? "Focus distance locked." : "Auto focus. Tap or click the scene to set focus.";
   }
   function hideReticle() {
@@ -216,7 +226,7 @@ function create(G, deps) {
   }
   function beginTap(e) {
     if (sceneTap) { sceneTap = null; return; }
-    if (!e.isPrimary || e.button !== 0 || st.busy || st.closing || !sceneBounds(e.target)) return;
+    if (!depthFocus || !e.isPrimary || e.button !== 0 || st.busy || st.closing || !sceneBounds(e.target)) return;
     sceneTap = { id: e.pointerId, x: e.clientX, y: e.clientY };
   }
   function moveTap(e) {
@@ -246,7 +256,7 @@ function create(G, deps) {
   const cameraGroup = group("camera", "CAMERA", [
     shots, mk("p", { id: "ps-help", className: "adv-help" }),
     mk("label", { className: "tune-row" }, [mk("span", { className: "tune-label", textContent: "Focal length (35 mm eq.)" }), focalInput, focalValue]),
-    mk("div", { className: "balanced-row" }, [resetLens, autoFocus]), focusHint,
+    depthRow, mk("div", { className: "balanced-row" }, [resetLens, autoFocus]), focusHint,
   ]);
   const captureButton = button("CAPTURE", capture, "ps-capture"), done = button("DONE", () => close(true), "ps-close");
   captureButton.className = "bigbtn"; done.className = "bigbtn alt";
@@ -657,6 +667,7 @@ function create(G, deps) {
     st.open = true; st.generation++; root.hidden = false;
     lens.mm = lens.focus = null;
     for (const [type, handler] of Object.entries(tapHandlers)) window.addEventListener(type, handler, true);
+    SettingRow.paint(depthRow, depthFocus ? "on" : "off");
     SettingRow.paint(sampleRow, online ? "1" : String(st.samples));
     SettingRow.disable(sampleRow, online);
     carGroup.hidden = !hasCar(); visorGroup.hidden = isGarage();
