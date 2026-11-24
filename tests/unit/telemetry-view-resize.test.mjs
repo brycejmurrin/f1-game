@@ -24,7 +24,7 @@ function driver(dur = 80, r = 1600, speedKmh = 200) {
   return { loc, car };
 }
 
-async function openPopup(drs = 12, s1 = 25) {
+async function openPopup(drs = 12, s1 = 25, gear = 7, circuitOverlay = false, gapped = false) {
   const dom = makeDom();
   const timers = new Map(), frames = new Map(), observers = [];
   let nextId = 0;
@@ -61,10 +61,12 @@ async function openPopup(drs = 12, s1 = 25) {
     { num: 3, name: "Comparison Driver", code: "CMP", color: "0000ff" }
   ];
   const trace = driver(80);
-  trace.car.forEach((sample) => Object.assign(sample, { gear: 7, throttle: 80, brake: 0, rpm: 10000, drs }));
-  const meta = { sessionKey: 7, meetingKey: 1, name: "Race", type: "Race" };
+  trace.car.forEach((sample) => Object.assign(sample, { gear, throttle: 80, brake: 0, rpm: 10000, drs }));
+  if (gapped) trace.loc = trace.loc.filter((point) => point.date < 1e12 + 24000 || point.date > 1e12 + 32000);
+  const meta = { sessionKey: 7, meetingKey: 1, name: "Race", type: "Race", circuit: circuitOverlay ? "Montreal" : "" };
   const context = vm.createContext({
     document: dom.document,
+    Tracks: { LIST: [{ id: "montreal", _metaOnly: circuitOverlay }] },
     window: { innerHeight: 800, innerWidth: 600, devicePixelRatio: 1 },
     setTimeout(fn) { const id = ++nextId; timers.set(id, fn); return id; },
     clearTimeout(id) { timers.delete(id); },
@@ -87,14 +89,24 @@ async function openPopup(drs = 12, s1 = 25) {
   for (const file of [
     "js/core/mat4.js", "js/ui/cvd-palette.js", "js/ui/track-maps.js", "js/data/tab-utils.js",
     "js/data/telemetry-model.js", "js/data/telemetry-render.js",
-    "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js"
+    "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js", "js/data/real-race-script.js"
   ]) {
-    vm.runInContext(readFileSync(file, "utf8"), context, { filename: absSrc(file) });
+    let src = readFileSync(file, "utf8");
+    if (circuitOverlay && file === "js/ui/track-maps.js") src = src.replace("const TrackMaps", "let TrackMaps");
+    vm.runInContext(src, context, { filename: absSrc(file) });
   }
+  if (circuitOverlay) vm.runInContext(`
+    TrackMaps = { ...TrackMaps,
+      drsZones: (track) => track._metaOnly ? [] : [{ a: 0.2, b: 0.3 }],
+      corners: (track) => track._metaOnly ? [] : [{ entry: 0.95, exit: 1.1 }],
+      cornerSpeed: () => 122,
+    };
+  `, context);
   const api = vm.runInContext("DataTelemetry", context).create({
     el, clear: (node) => node.replaceChildren(), emptyMsg: (text) => el("div", "dh-empty", text),
     spinner: () => el("div", "dh-spinner"), sel: { sessionKey: 7, meta },
     ensureSession: async () => {}, buildPicker: () => el("div"), invalidateOther() {},
+    loadCircuit: async (index) => { context.Tracks.LIST[index]._metaOnly = false; },
     findTeam: () => null, cssColor: (color) => JSON.stringify(color), textColorOn: () => "white", COMPOUND: {}, NO_TELEM_MSG: "No data"
   });
   const body = await api.loadTelemetry();
@@ -104,6 +116,7 @@ async function openPopup(drs = 12, s1 = 25) {
   body.querySelector(".dh-livebtn").click();
   for (let i = 0; i < 12; i++) await Promise.resolve();
   for (const [id, fn] of timers) { timers.delete(id); fn(); }
+  await Promise.resolve();
 
   return { popup: dom.document.querySelector(".dh-tpopup"), observers, frames, context };
 }
@@ -159,51 +172,90 @@ test("column-only resizing refits the telemetry map", async () => {
   assert.equal(popup.open, true, "arranging playback leaves its native dialog open");
 });
 
-test("track focus enlarges the same map and preserves the shared playback cursor", async () => {
-  const { popup, observers, frames } = await openPopup();
-  const toggle = popup.querySelector('[data-track-toggle]');
-  const map = popup.querySelector('.dh-map');
-  const body = popup.querySelector('.dh-tpopup-body');
-  toggle.click();
-  assert.equal(toggle.getAttribute('aria-pressed'), 'true');
-  assert.ok(body.hasAttribute('data-track-focus'));
-  const main = popup.querySelector('.dh-telem-main'), side = popup.querySelector('.dh-telem-side');
-  main._rect = { width: 560, height: 100, left: 0, top: 0 };
-  side._rect = { width: 560, height: 400, left: 0, top: 100 };
-  observers[0].cb();
-  for (const [id, fn] of frames) { frames.delete(id); fn(); }
-  assert.equal(map.width, 536 * 2);
-  assert.ok(map.height <= map.width);
-  const seek = popup.querySelector('[data-track-seek]').querySelector('input');
-  seek.value = '24';
-  seek.dispatchEvent({ type: 'input' });
-  assert.match(popup.querySelector('[data-track-time]').textContent, /24/);
-  toggle.click();
-  assert.equal(toggle.getAttribute('aria-pressed'), 'false');
-  assert.equal(popup.querySelector('.dh-map'), map, 'switching does not create another player');
-  assert.equal(seek.value, '24');
-  assert.equal(popup.open, true);
-});
-
-test("the telemetry map switches between the speed scale and shared sector palette", async () => {
+test("one map button cycles speed, sector colors and recorded gear", async () => {
   const { popup, context } = await openPopup();
-  const modes = popup.querySelector("[data-map-modes]");
-  const [speed, sectors] = modes.children;
+  const [button, ...extra] = popup.querySelectorAll("[data-map-mode]");
   const key = popup.querySelector("[data-map-scale]");
   const map = popup.querySelector(".dh-map");
-  assert.equal(speed.getAttribute("aria-pressed"), "true");
+  assert.equal(extra.length, 0);
+  assert.equal(button.textContent, "Map · Speed ↻");
+  assert.equal(button.title, "Switch to Sectors");
   assert.equal(key.children[0].children.at(-1).textContent, "200 km/h");
   assert.ok(popup.querySelector(".dh-mapdot[data-reference]"), "the reference dot has a distinct ring");
   vm.runInContext('CvdPalette.set("deutan")', context);
-  sectors.click();
-  assert.equal(speed.getAttribute("aria-pressed"), "false");
-  assert.equal(sectors.getAttribute("aria-pressed"), "true");
+
+  button.click();
+  assert.equal(button.textContent, "Map · Sectors ↻");
   assert.match(map.getAttribute("aria-label"), /sectors/);
   assert.deepEqual([...key.children].map((item) => item.children[0].style.background),
     ["#4aa3ff", "#ddcc77", "#ff9ec8"]);
-  speed.click();
+
+  button.click();
+  assert.equal(button.textContent, "Map · Gears ↻");
+  assert.equal(map.getAttribute("aria-label"), "Telemetry track map with driver positions and reference lap recorded gears.");
+  assert.deepEqual([...key.children].map((item) => item.children.at(-1).textContent), ["G7"]);
+
+  button.click();
+  assert.equal(button.textContent, "Map · Speed ↻");
   assert.match(map.getAttribute("aria-label"), /speed/);
   assert.equal(key.children[0].children[0].textContent, "0 km/h");
-  const partial = await openPopup(12, null);
-  assert.equal(partial.popup.querySelector("[data-map-modes]").hidden, true);
+  const partial = await openPopup(12, null, null);
+  assert.equal(partial.popup.querySelector("[data-map-mode]").hidden, true);
+});
+
+test("the map button skips circuit overlays when the GPS lap has a gap", async () => {
+  const { popup } = await openPopup(12, 25, 7, true);
+  const button = popup.querySelector("[data-map-mode]");
+  const map = popup.querySelector(".dh-map");
+  const cycle = (control, steps) => Array.from({ length: steps }, () => {
+    control.click();
+    return control.textContent;
+  });
+
+  assert.deepEqual(cycle(button, 3), ["Map · Sectors ↻", "Map · Gears ↻", "Map · Active Aero ↻"]);
+  assert.equal(map.getAttribute("aria-label"), "Telemetry track map with driver positions and reference lap game circuit aero zones.");
+  button.click();
+  assert.equal(button.textContent, "Map · Corner Speed ↻");
+  assert.equal(map.getAttribute("aria-label"), "Telemetry track map with driver positions and reference lap estimated corner speed.");
+  button.click();
+  assert.equal(button.textContent, "Map · Speed ↻");
+
+  const partial = await openPopup(12, 25, 7, true, true);
+  assert.deepEqual(cycle(partial.popup.querySelector("[data-map-mode]"), 3), ["Map · Sectors ↻", "Map · Gears ↻", "Map · Speed ↻"]);
+});
+
+test("Track View uses the map viewport and keeps playback position through map zoom", async () => {
+  const { popup, observers, frames } = await openPopup();
+  const toggle = popup.querySelector("[data-track-toggle]");
+  const seek = popup.querySelector('input[aria-label="Track playback time"]');
+  const map = popup.querySelector(".dh-map");
+  const mapFrame = popup.querySelector("[data-track-map-frame]");
+  const zoom = popup.querySelector("[data-map-zoom-controls]");
+  const reset = zoom.children[1];
+  seek.value = "24";
+  seek.dispatchEvent({ type: "input" });
+
+  toggle.click();
+  assert.equal(toggle.getAttribute("aria-pressed"), "true");
+  mapFrame._rect = { width: 760, height: 220, left: 0, top: 0 };
+  popup.querySelector(".dh-telem-main")._rect = { width: 760, height: 90, left: 0, top: 0 };
+  const observer = observers.find(item => item.targets.has(mapFrame));
+  assert.ok(observer);
+  observer.cb();
+  for (const [id, fn] of frames) { frames.delete(id); fn(); }
+  assert.deepEqual([map.width, map.height], [1520, 440]);
+
+  zoom.children[2].onclick();
+  assert.equal(reset.textContent, "125%");
+  assert.equal(mapFrame.hasAttribute("data-map-panned"), true);
+  popup.querySelector("[data-map-mode]").click();
+  assert.equal(reset.textContent, "125%");
+  assert.equal(Number(seek.value), 24);
+
+  toggle.click();
+  assert.equal(map.style.transform, "");
+  assert.equal(popup.querySelector(".dh-map"), map);
+  assert.equal(toggle.getAttribute("aria-pressed"), "false");
+  assert.equal(Number(seek.value), 24);
+  assert.equal(popup.open, true);
 });

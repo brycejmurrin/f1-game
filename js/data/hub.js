@@ -48,6 +48,7 @@ const DataHub = (function () {
   ];
 
   let root = null;
+  let loadCircuit;
   let contentEl = null;
   let tabButtons = {};            // id -> button element
   let openFlag = false;
@@ -150,9 +151,10 @@ const DataHub = (function () {
     return chip;
   }
 
-  function init(rootEl) {
+  function init(rootEl, hydrateCircuit = () => Promise.resolve()) {
     if (root || !rootEl) return;
     root = rootEl;
+    loadCircuit = hydrateCircuit;
     root.classList.add("dh-overlay");
     // A real <dialog> (index.html): the platform asserts role and modality,
     // so only the label is written here.
@@ -898,7 +900,8 @@ const DataHub = (function () {
   // Implementation: js/data/telemetry.js.
   const { loadTelemetry, closeTelemPopup } = DataTelemetry.create({
     el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker,
-    invalidateOther, COMPOUND, findTeam, cssColor, textColorOn, NO_TELEM_MSG
+    invalidateOther, COMPOUND, findTeam, cssColor, textColorOn, NO_TELEM_MSG,
+    loadCircuit: (index) => loadCircuit(index)
   });
   // Implementation: js/data/real-race-tab.js — the RACE IT tab: one real Grand
   // Prix's timing as a script, and every real driver's seat as a JUMP IN.

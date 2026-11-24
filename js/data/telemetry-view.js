@@ -4,7 +4,7 @@ const DataTelemetryView = (function () {
 
   function create(ctx, lifecycle) {
     const { el, cssColor, textColorOn, COMPOUND } = ctx;
-    const { laneRole, dcode, CHANNELS, cumDist, mapSpeedMax, mapSpeedColor, speedText } = DataTelemetryModel;
+    const { laneRole, dcode, CHANNELS, cumDist, mapSpeedMax, mapSpeedColor, mapGearColor, speedText } = DataTelemetryModel;
     const { laneColors } = DataTelemetryModel.create(ctx);
     const renderer = DataTelemetryRender.create(ctx);
     const { buildBases } = renderer;
@@ -65,7 +65,7 @@ const DataTelemetryView = (function () {
       return ht;
     }
 
-    function buildTelemetryView(detail, tels) {
+    function buildTelemetryView(detail, tels, track) {
       host = detail;
       lifecycle.stop();
       const laps = tels.filter(function (t) { return t.car && t.car.length; });
@@ -161,6 +161,7 @@ const DataTelemetryView = (function () {
       view.toggleTrack = function () {
         view.trackOnly = !view.trackOnly;
         detail.toggleAttribute("data-track-focus", view.trackOnly);
+        if (!view.trackOnly) view.mapZoom?.reset();
         detail.scrollTop = 0;
       };
 
@@ -295,18 +296,25 @@ const DataTelemetryView = (function () {
         const c2 = el("canvas", "dh-canvas dh-map");
         c2.setAttribute("role", "img");
         c2.setAttribute("aria-describedby", "dh-telem-summary");
-        const modes = el("div");
-        modes.setAttribute("data-map-modes", "");
-        modes.setAttribute("role", "group");
-        modes.setAttribute("aria-label", "Track map coloring");
-        sideArea.appendChild(modes);
-        sideArea.appendChild(c2);
+        const mapButton = el("button", "dh-tbtn");
+        mapButton.type = "button";
+        mapButton.setAttribute("data-map-mode", "");
+        const toolbar = el("div");
+        toolbar.setAttribute("data-track-toolbar", "");
+        toolbar.appendChild(mapButton);
+        const zoomControls = el("div");
+        toolbar.appendChild(zoomControls);
+        const mapFrame = el("div");
+        mapFrame.setAttribute("data-track-map-frame", "");
+        mapFrame.appendChild(c2);
+        sideArea.append(toolbar, mapFrame);
+        view.mapFrame = mapFrame;
+        view.mapZoom = TrackMaps.attachZoom?.(c2, mapFrame, zoomControls, "dh-tbtn");
         view.map = c2;
-        view.mw = 320; view.mh = 320;
-        sizeCanvas(c2, 320, 320, view.ratio);
-        view.mapBase = makeOffscreen(320, 320, view.ratio);
+        sizeMap(view, 320, 320, view.ratio);
         // colour key for the car dots on the map
         const mkey = el("div", "dh-maplegend");
+        mkey.setAttribute("data-map-driver-key", "");
         function mchip(color, code, reference = false) {
           const item = el("span", "dh-legend-item dh-legend-static");
           const dot = el("span", "dh-legend-dot dh-mapdot");
@@ -326,19 +334,54 @@ const DataTelemetryView = (function () {
         sideArea.appendChild(key);
         const vMax = mapSpeedMax(primary.car);
         const canSectors = !!view.sectors && Number.isFinite(Date.parse(primary.lap?.dateStart));
-        const speed = el("button", "dh-tbtn", "Speed"), sectors = el("button", "dh-tbtn", "Sectors");
-        for (const button of [speed, sectors]) button.type = "button";
-        if (canSectors && vMax > 0) modes.append(speed, sectors);
-        else modes.hidden = true;
+        const validGears = [...new Set(primary.car.map((row) => row.gear).filter((gear) => mapGearColor(gear)))].sort((a, b) => a - b);
+        view.mapFractions = track && DataTelemetryModel.mapLapFractions(primary);
+        const overlay = {};
+        if (view.mapFractions) {
+          overlay.aero = TrackMaps.drsZones(track).map((zone) => ({ from: zone.a, to: zone.b < zone.a ? zone.b + 1 : zone.b, color: TrackMaps.aeroColor() }));
+          const palette = TrackMaps.cornerSpeedColors();
+          overlay.corners = TrackMaps.corners(track).flatMap((corner) => {
+            const speed = TrackMaps.cornerSpeed(corner);
+            return Number.isFinite(speed) ? [{ from: corner.entry, to: corner.exit, color: TrackMaps.cornerSpeedColor(speed, palette) }] : [];
+          });
+        }
+        view.mapOverlays = overlay;
+        const modes = [
+          ["speed", "Speed", vMax > 0], ["sectors", "Sectors", canSectors], ["gears", "Gears", validGears.length > 0],
+          ["aero", "Active Aero", overlay.aero?.length], ["corners", "Corner Speed", overlay.corners?.length],
+        ].filter(([, , available]) => available);
+        let modeIndex = 0;
+        mapButton.hidden = modes.length < 2;
+        view.mapMode = modes[0]?.[0] || "speed";
         function updateMapKey() {
-          const sectorMode = view.mapMode === "sectors";
-          speed.setAttribute("aria-pressed", String(!sectorMode));
-          sectors.setAttribute("aria-pressed", String(sectorMode));
-          c2.setAttribute("aria-label", "Telemetry track map with driver positions and reference lap " +
-            (sectorMode ? "sectors." : vMax > 0 ? "speed." : "trace."));
+          const mode = view.mapMode;
+          const sectorMode = mode === "sectors", gearMode = mode === "gears";
+          const circuitMode = mode === "aero" || mode === "corners";
+          if (!mapButton.hidden) {
+            const label = "Map · " + modes[modeIndex][1];
+            const next = modes[(modeIndex + 1) % modes.length][1];
+            mapButton.textContent = label + " ↻";
+            mapButton.title = "Switch to " + next;
+            mapButton.setAttribute("aria-label", label + ". " + mapButton.title);
+          }
+          const description = {
+            sectors: "sectors", gears: "recorded gears", aero: "game circuit aero zones",
+            corners: "estimated corner speed", speed: vMax > 0 ? "speed" : "trace",
+          };
+          c2.setAttribute("aria-label", "Telemetry track map with driver positions and reference lap " + description[mode] + ".");
           key.replaceChildren();
           if (sectorMode) {
             TrackMaps.sectorColors().forEach((color, i) => key.appendChild(mchip(color, "S" + (i + 1))));
+          } else if (circuitMode) {
+            if (mode === "aero") key.appendChild(mchip(TrackMaps.aeroColor(), "Active Aero"));
+            else TrackMaps.cornerSpeedColors().forEach((color, i) => {
+              key.appendChild(mchip(color, ["Slow", "Medium", "Fast"][i]));
+            });
+            const note = el("span", "", "Approx. lap alignment to game circuit");
+            note.setAttribute("data-map-alignment", "");
+            key.appendChild(note);
+          } else if (gearMode) {
+            validGears.forEach((gear) => key.appendChild(mchip(mapGearColor(gear), gear ? "G" + gear : "N")));
           } else if (vMax > 0) {
             const item = el("span", "dh-legend-item dh-legend-static");
             const ramp = el("span", "dh-gradbar");
@@ -350,16 +393,13 @@ const DataTelemetryView = (function () {
             key.appendChild(el("span", "", "Speed unavailable"));
           }
         }
-        function setMapMode(mode) {
-          if (view.mapMode === mode) return;
-          view.mapMode = mode;
+        if (!mapButton.hidden) mapButton.addEventListener("click", () => {
+          modeIndex = (modeIndex + 1) % modes.length;
+          view.mapMode = modes[modeIndex][0];
           updateMapKey();
           renderer.buildMapBase(view);
           paintFrame(view);
-        }
-        if (canSectors && !vMax) view.mapMode = "sectors";
-        speed.addEventListener("click", () => setMapMode("speed"));
-        sectors.addEventListener("click", () => setMapMode("sectors"));
+        });
         updateMapKey();
       }
 
@@ -378,7 +418,7 @@ const DataTelemetryView = (function () {
         sizeCanvas(c1, view.cw, view.ch, liveRatio);
         view.chartBase = makeOffscreen(view.cw, view.ch, liveRatio);
         if (view.delta) { sizeCanvas(view.delta, view.dw, view.dh, liveRatio); view.deltaBase = makeOffscreen(view.dw, view.dh, liveRatio); }
-        if (view.map) { sizeCanvas(view.map, view.mw, view.mh, liveRatio); view.mapBase = makeOffscreen(view.mw, view.mh, liveRatio); }
+        if (view.map) sizeMap(view, view.mw, view.mh, liveRatio);
       }
 
       attachScrub(c1, view);
@@ -429,12 +469,10 @@ const DataTelemetryView = (function () {
             }
 
             if (view.map && sideArea.isConnected) {
-              const sideW = Math.min(view.trackOnly ? 600 : Infinity, sideArea.clientWidth - 24);
-              const mapH = view.trackOnly ? Math.min(sideW, Math.max(120, detail.clientHeight - mainArea.offsetHeight - 60)) : sideW;
-              if (sideW > 0 && (view.mw !== sideW || view.mh !== mapH || ratioChanged)) {
-                view.mw = sideW; view.mh = mapH;
-                sizeCanvas(view.map, sideW, mapH, newR);
-                view.mapBase = makeOffscreen(sideW, mapH, newR);
+              const sideW = view.trackOnly ? view.mapFrame.clientWidth : sideArea.clientWidth - 24;
+              const mapH = view.trackOnly ? view.mapFrame.clientHeight : sideW;
+              if (sideW > 0 && mapH > 0 && (view.mw !== sideW || view.mh !== mapH || ratioChanged)) {
+                sizeMap(view, sideW, mapH, newR);
                 resized = true;
               }
             }
@@ -449,6 +487,7 @@ const DataTelemetryView = (function () {
         ro.observe(detail);
         ro.observe(mainArea);
         ro.observe(sideArea);
+        if (view.mapFrame) ro.observe(view.mapFrame);
         view._ro = ro;
       }
     }
@@ -469,6 +508,15 @@ const DataTelemetryView = (function () {
     function sizeCanvas(cv, w, h, r) {
       cv.width = Math.max(1, Math.round(w * r));
       cv.height = Math.max(1, Math.round(h * r));
+    }
+
+    function sizeMap(view, w, h, ratio) {
+      view.mw = w; view.mh = h;
+      // Keep both map buffers bounded when filling a high-DPI desktop.
+      view.mapRatio = Math.min(ratio, Math.sqrt(3_000_000 / (w * h)));
+      sizeCanvas(view.map, w, h, view.mapRatio);
+      view.mapBase = makeOffscreen(w, h, view.mapRatio);
+      view.mapZoom?.refit();
     }
 
     function appendStintsPits(detail, b) {

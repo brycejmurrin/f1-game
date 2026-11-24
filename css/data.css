@@ -793,9 +793,8 @@ body[data-width="narrow"] .dh-dchip > span { display: none; }
   border: 1px solid rgba(0, 0, 0, 0.6);
 }
 .dh-mapdot[data-reference] { border-color: var(--hud-ink-light); box-shadow: 0 0 0 1px var(--plate-line); }
-[data-map-modes] { display: flex; justify-content: center; gap: calc(var(--gap) / 2); }
-[data-map-modes][hidden] { display: none; }
-[data-map-modes] button[aria-pressed="true"] { background: var(--plate-on); border-color: var(--red); color: var(--text); }
+[data-map-mode] { align-self: center; }
+[data-map-mode][hidden] { display: none; }
 .dh-maplegend[data-map-scale] { margin-top: 0; }
 /* slow->fast swatch matching the map's speed colouring */
 .dh-gradbar {
@@ -1497,12 +1496,104 @@ body[data-width] .dh-tpopup-body[data-track-focus] { flex-direction: column; ove
 body[data-width] [data-track-focus] .dh-telem-main { flex: none; overflow: visible; width: 100%; }
 body[data-width] [data-track-focus] .dh-telem-main > :not(.dh-transport) { display: none; }
 body[data-width] [data-track-focus] .dh-transport { margin: 0; }
+[data-track-focus] .dh-transport > :is(button, .dh-trates) { flex: none; white-space: nowrap; }
 body[data-width] [data-track-focus] .dh-thint { display: none; }
 body[data-width] [data-track-focus] [data-track-seek] { display: flex; align-items: center; gap: var(--gap); width: 100%; min-width: 0; }
 [data-track-seek] input { flex: 1; min-width: 0; min-height: var(--tap-paint); }
 [data-track-time] { font-variant-numeric: tabular-nums; }
-body[data-width] [data-track-focus] .dh-telem-side { width: 100%; flex: none; overflow: visible; border: 0; }
-body[data-width] [data-track-focus] .dh-telem-side .dh-canvas.dh-map { max-width: 600px; aspect-ratio: auto; order: -2; }
-body[data-width] [data-track-focus] .dh-maplegend { order: -1; }
+[data-track-toolbar], [data-track-map-frame] { display: contents; }
+[data-track-toolbar] > [data-map-zoom-controls] { display: none; }
+body[data-width] .dh-tpopup-card:has(.dh-tpopup-body[data-track-focus]) { width: 100%; height: 100%; }
+body[data-width] [data-track-focus] .dh-telem-side {
+  width: 100%; flex: 1 1 0; min-height: 0; overflow: visible; border: 0;
+  gap: calc(var(--gap) / 2); padding-block: 0 calc(var(--gap) / 2);
+}
+[data-track-focus] .dh-telem-side > .dh-dash { display: none; }
+[data-track-focus] [data-track-toolbar] {
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: var(--gap);
+}
+[data-track-focus] [data-track-toolbar] .dh-tbtn { border-radius: var(--r-sm); }
+[data-track-focus] [data-track-toolbar] > [data-map-mode] { background: var(--plate-on); }
+[data-track-focus] [data-track-toolbar] [data-map-zoom-controls] > button {
+  border-block: 0; border-inline: 0;
+}
+[data-track-focus] [data-track-toolbar] [data-map-zoom-controls] > button + button {
+  border-inline-start: 1px solid var(--plate-line);
+}
+[data-track-focus] [data-track-toolbar] > [data-map-zoom-controls] { display: flex; }
+[data-track-focus] [data-track-map-frame] {
+  display: grid; place-items: center; flex: 1 1 0; min-height: 0; overflow: hidden;
+  border-radius: var(--r-md);
+}
+body[data-width] [data-track-focus] .dh-telem-side .dh-canvas.dh-map {
+  width: 100%; height: 100%; min-height: 0; min-width: 0; max-width: none; aspect-ratio: auto; object-fit: fill;
+}
+[data-track-focus] [data-map-alignment] { flex-basis: 100%; }
+
+/* Keep the toolbar on one row and reserve space for the circuit note so the
+   portrait map stays framed when the legend switches. */
+body[data-width="narrow"] [data-track-focus] [data-track-toolbar] {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) auto;
+  width: 100%;
+}
+body[data-width="narrow"] [data-track-focus] [data-map-mode] {
+  max-width: 100%;
+  white-space: normal;
+}
+body[data-width="narrow"] [data-track-focus] [data-map-mode][hidden] + [data-map-zoom-controls] {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+body[data-width="narrow"] [data-track-focus] [data-map-scale] {
+  align-content: start;
+  min-block-size: calc(2lh + var(--gap) / 3);
+  column-gap: calc(var(--gap) / 2);
+  font-size: var(--fs-micro);
+  line-height: 1.35;
+}
+body[data-width="narrow"] [data-track-focus] [data-map-scale] .dh-legend-item { padding: 0; }
+
+/* Wide maps get a rail for secondary controls. Each region remains addressable
+   by Arrangement, and the track shares no rows with wrapping legends. */
+body[data-width="wide"] [data-track-focus] .dh-telem-side {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, clamp(10rem, 23%, 14rem));
+  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas: "map tools" "map drivers" "map scale";
+  column-gap: var(--gap); align-items: start;
+}
+body[data-width="wide"] [data-track-focus] [data-track-map-frame] {
+  grid-area: map; align-self: stretch;
+}
+body[data-width="wide"] [data-track-focus] [data-track-toolbar] {
+  grid-area: tools; justify-content: flex-start;
+  gap: calc(var(--gap) / 2); padding-bottom: calc(var(--gap) / 2);
+  border-bottom: 1px solid var(--plate-line);
+}
+body[data-width="wide"] [data-track-focus] [data-map-driver-key] {
+  grid-area: drivers; flex-direction: column; align-items: flex-start;
+}
+body[data-width="wide"] [data-track-focus] [data-map-scale] {
+  grid-area: scale; overflow: auto; max-height: 100%;
+  padding-top: calc(var(--gap) / 2); border-top: 1px solid var(--plate-line);
+}
+body[data-width="wide"] [data-track-focus] .dh-maplegend {
+  justify-content: flex-start; font-size: var(--fs-micro);
+  gap: calc(var(--gap) / 3); margin-top: 0;
+}
+
+/* On a short screen give the key compact text rows. If large type needs more
+   height, let the popup scroll the whole rail with the map. */
+body[data-width="wide"][data-density="compact"] [data-track-focus] .dh-telem-side {
+  grid-template-rows: auto auto minmax(auto, 1fr);
+}
+body[data-width="wide"][data-density="compact"] [data-track-focus] .dh-maplegend { line-height: 1.25; }
+body[data-width="wide"][data-density="compact"] [data-track-focus] .dh-maplegend .dh-legend-item { padding: 0; }
+body[data-width="wide"][data-density="compact"] [data-track-focus] [data-map-scale] {
+  overflow: visible;
+  max-height: none;
+}
+[data-track-focus] .dh-telem-side > [data-hub-part] { display: none; }
 
 } /* @layer overlays */

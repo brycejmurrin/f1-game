@@ -534,11 +534,6 @@ function buildTeamPicker() {
 
 // Panes only measure themselves when something tells them to; opening a sheet
 // is exactly such a moment (see js/ui/scroll-fade.js).
-// The track-detail map's size observer (openTrackDetail). Module-scoped so a
-// re-open disconnects the previous one instead of stacking a fresh observer —
-// and a stale closure over the PREVIOUS circuit — on every visit.
-let detailRO = null;
-
 const ScrollFadeRefresh = () => { if (window.ScrollFade) window.ScrollFade.refresh(); };
 
 // Circuit list filter: all / championship calendar / retired classics.
@@ -1488,218 +1483,24 @@ function drsZoneRangeHtml(z, trackLenM) {
   return a + " m &ndash; " + b + " m";
 }
 
+let trackDetail, trackDetailLoad, requestedDetailIndex;
 function openTrackDetail() {
-  const t = Tracks.LIST[G.trackIdx];
-  if (!t) return;
-  const modal = document.getElementById("track-detail");
-  if (!modal) return;
-  // A meta stub reads "0 turns", blank map: repaint when it lands (#5890).
-  whenCircuit(t, () => { if (!modal.hidden) openTrackDetail(); });
-  const crns = TrackMaps.corners(t);
-  document.getElementById("track-detail-name").textContent = t.name + (t.gp ? "  ·  " + t.gp : "");
-  // Canvas labels name this circuit, so each map reads distinctly to a screen reader.
-  const mapCanvas = document.getElementById("track-detail-canvas");
-  if (mapCanvas) mapCanvas.setAttribute("aria-label", t.name + " circuit layout diagram");
-  const elevCanvas = document.getElementById("track-detail-elev");
-  if (elevCanvas) elevCanvas.setAttribute("aria-label", t.name + " elevation profile");
-  const dz = TrackMaps.drsZones(t);
-  const dir = TrackMaps.direction(t);
-  const elev = TrackMaps.elevRange(t);
-  const meta = [
-    t.country,
-    t.lengthKm ? t.lengthKm.toFixed(1) + " km" : "",
-    crns.length + " turns",
-    dir ? (dir === "CW" ? "Clockwise" : "Anti-clockwise") : "",
-    elev > 2 ? "+" + elev + " m elev" : "",
-    dz && dz.length ? dz.length + (dz.length === 1 ? " aero zone" : " aero zones") : ""
-  ].filter(Boolean).join("  ·  ");
-  document.getElementById("track-detail-meta").textContent = meta;
-
-  // Circuit type flags
-  const nightEl = document.getElementById("tdf-night");
-  const streetEl = document.getElementById("tdf-street");
-  const bankedEl = document.getElementById("tdf-banked");
-  if (nightEl) nightEl.hidden = !t.night;
-  if (streetEl) streetEl.hidden = !t.street;
-  if (bankedEl) bankedEl.hidden = !t.banked;
-
-  // ☆ FAVOURITE — built here, not in index.html, so the shell carries no node
-  // for it; created once and repainted per circuit.
-  const panel = document.getElementById("track-detail-panel");
-  let fav = panel && panel.querySelector("#track-detail-fav");
-  if (!fav && panel) {
-    fav = document.createElement("button");
-    fav.type = "button";
-    fav.id = "track-detail-fav";
-    fav.className = "sel-chip";
-    panel.insertBefore(fav, document.getElementById("track-detail-flags"));
+  if (typeof CircuitDetailsPanel !== "undefined") {
+    trackDetail ??= CircuitDetailsPanel.create({ G, whenCircuit, favList, toggleFav, drawElevProfile, drsZoneLapMetre, drsZoneWraps, vt });
+    return trackDetail.openTrackDetail();
   }
-  if (fav) {
-    const paintFav = () => {
-      const on = favList().includes(t.id);
-      fav.textContent = on ? "★ FAVOURITE" : "☆ FAVOURITE";
-      fav.classList.toggle("active", on);
-      fav.setAttribute("aria-pressed", on ? "true" : "false");
-    };
-    fav.onclick = () => { toggleFav(t.id); paintFav(); };
-    paintFav();
+  requestedDetailIndex = G.trackIdx;
+  if (!trackDetailLoad) {
+    trackDetailLoad = ScriptLoader.create().load(["js/ui/track-detail.js"], [], {
+      strict: true, ready: () => typeof CircuitDetailsPanel !== "undefined",
+    }).then(ok => {
+      if (ok && G.trackIdx === requestedDetailIndex && !$("select")?.hidden) openTrackDetail();
+    }).finally(() => { trackDetailLoad = null; });
   }
-
-  // Legend built once (like FAVOURITE), not in the shell. Fast/medium/slow/hairpin
-  // reuse tdc-* colour; Sector is the grey S2 stroke the canvas key never named.
-  const wrap = document.getElementById("track-detail-canvas-wrap");
-  let legend = document.getElementById("track-detail-legend");
-  if (!legend && wrap) {
-    legend = document.createElement("ul");
-    legend.id = "track-detail-legend";
-    legend.setAttribute("aria-label", "Circuit map colours");
-    wrap.appendChild(legend);
-  }
-  if (legend) {
-    legend.replaceChildren();
-    const sectors = TrackMaps.sectorColors();
-    const items = [
-      ["S1", sectors[0]], ["S2", sectors[1]], ["S3", sectors[2]],
-      ["Hairpin", TrackMaps.classColor("HAIRPIN")], ["Slow", TrackMaps.classColor("SLOW")],
-      ["Medium", TrackMaps.classColor("MEDIUM")], ["Fast", TrackMaps.classColor("FAST")]
-    ];
-    if (dz.length) items.push(["Aero", TrackMaps.aeroColor()]);
-    for (const [label, color] of items) {
-      const li = document.createElement("li");
-      const sw = document.createElement("i");
-      const caption = document.createElement("span");
-      caption.textContent = label;
-      sw.style.color = color;
-      li.append(sw, caption);
-      legend.appendChild(li);
-    }
-  }
-
-  // Elevation sparkline — same painter as the preview chart above; here the
-  // canvas has a WRAPPER that carries the hidden state (the preview canvas
-  // hides itself), which was the only real difference between the two blocks.
-  drawElevProfile(document.getElementById("track-detail-elev"), t,
-                  document.getElementById("track-detail-elev-wrap"));
-
-  // Active-aero (straight-mode) zones with metre positions — the 2026 rules have no DRS
-  const drsWrap = document.getElementById("track-detail-drs-wrap");
-  const drsList = document.getElementById("track-detail-drs-list");
-  if (drsWrap && drsList) {
-    if (dz && dz.length) {
-      const trackLen = (t.lengthKm || 5) * 1000;
-      // A zone across the line: AeroZones leaves end > total (z.b > 1, z.wrap),
-      // or a drawer already folded b into the next lap (z.b < z.a). Either way
-      // "4870 m – 514 m" looked broken — name the S/F wrap. Place-keys stay on
-      // Tracks / AeroZones; this is only the label.
-      drsList.innerHTML = dz.map(function (z, i) {
-        return '<div class="tdd-zone">Zone ' + (i + 1) + ": " + drsZoneRangeHtml(z, trackLen) + "</div>";
-      }).join("");
-      drsWrap.hidden = false;
-    } else {
-      drsWrap.hidden = true;
-    }
-  }
-
-  // Turns list — class from TrackMaps (radius + heading sweep), not raw |k|.
-  // Literal tdc-* class names kept here so docs/COMPONENTS.md inventory still
-  // sees them (dynamic "tdc-" + x would look unused to the audit).
-  const TDC_CLS = {
-    HAIRPIN: "tdc-hairpin",
-    SLOW: "tdc-slow",
-    MEDIUM: "tdc-medium",
-    FAST: "tdc-fast"
-  };
-  const list = document.getElementById("track-detail-list");
-  list.innerHTML = crns.map(function (c) {
-    const lbl = c.cls || "MEDIUM";
-    const cls = TDC_CLS[lbl] || "tdc-medium";
-    return '<div class="tdc-corner"><span class="tdc-num">T' + c.n + '</span><span class="' + cls + '">' + lbl + '</span></div>';
-  }).join("");
-  for (const [cls, name] of Object.entries(TDC_CLS)) {
-    for (const chip of list.querySelectorAll("." + name)) chip.style.color = TrackMaps.classColor(cls);
-  }
-
-  // Crossfade into the full-screen circuit-detail modal (progressive
-  // enhancement; the content above is already populated while hidden).
-  Log.info("ui", "Menus.open track-detail");
-  vt(() => { modal.hidden = false; });
-  const cv = document.getElementById("track-detail-canvas");
-  // A TALL CIRCUIT CANNOT SPEND THE MODAL'S WIDTH, so give it to the panel.
-  // The map fits by height here, and the layout audit measured what that
-  // leaves: at 1280x800 the wrap is 982px wide and Jeddah's outline is 363 of
-  // it — 37% fill, against Baku's 99% — with ~600px of empty wrap sitting
-  // beside a turns list squeezed into a fixed 260px rail. Keyed on the
-  // CIRCUIT'S ASPECT alone, deliberately: deciding from the measured fit would
-  // feed the panel's own width back into the fit that chose it, through the
-  // ResizeObserver below. A circuit's shape cannot oscillate.
-  modal.setAttribute("data-map-tall", TrackMaps.aspect(t) < 1 ? "1" : "0");
-  let lastFit = "";
-  const drawDetail = function () {
-    // A queued rAF/ResizeObserver delivery may arrive after CLOSE. Never
-    // measure and redraw a hidden modal, and never retain its circuit closure.
-    if (modal.hidden) return;
-    // The strip was drawn while the modal was display:none (a zero box, so deferred).
-    drawElevProfile(document.getElementById("track-detail-elev"), t, document.getElementById("track-detail-elev-wrap"));
-    // Fit the canvas to the wrap in local (pre-zoom) CSS pixels. clientWidth
-    // is correct inside `zoom: var(--ui-scale)` sheets; gBCR would mix visual
-    // pixels and re-introduce stretch at UI SIZE ≠ 100%.
-    const wrapW = wrap ? wrap.clientWidth : (window.innerWidth - 24);
-    const legendH = legend ? legend.offsetHeight : 0;
-    const wrapH = wrap ? Math.max(0, wrap.clientHeight - legendH) : (window.innerHeight - 80);
-    // Floors apply ONLY to the unmeasured fallbacks. Flooring a MEASURED wrap
-    // at 200/150 pinned a canvas bigger than its box whenever the local wrap
-    // was smaller than the floor — fitCanvas writes an inline max-width, which
-    // beats the stylesheet's max-width:100% belt — so at UI SIZE 200% on a
-    // landscape phone the map overflowed its wrap by 98px a side (2026-08-21
-    // sweep). A measured wrap is the honest budget however small; fitCanvas's
-    // own 40px transient floor still guards the degenerate frame.
-    const maxW = wrapW > 0 ? wrapW : Math.max(200, Math.min(window.innerWidth - 24, 600));
-    const maxH = wrapH > 0 ? wrapH : Math.max(150, Math.round(maxW / 1.2));
-    // Zoom×dpr joins the KEY as well as the buffer: with a CSS-px-only key a
-    // DPR change under an unchanged box (drag to another monitor, browser
-    // zoom) produced an identical key and the early return skipped the refit.
-    const ratio = Math.min(3, Math.max(1,
-      (cv.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
-    const key = maxW + "x" + maxH + "@" + ratio.toFixed(2);
-    if (key === lastFit) return;   // the observer below also fires on our own pin
-    lastFit = key;
-    const fit = TrackMaps.fitCanvas(cv, maxW, maxH, t, true);
-    // The biggest circuit diagram in the game had NO dpr/zoom term: inside
-    // zoom: var(--ui-scale) at dpr 2 + 200% it painted at 4x its backing
-    // store. Same buffer expansion + buffer-ratio param scaling as the
-    // picker preview above; CSS size stays the local fit.
-    if (ratio > 1.01) {
-      cv.width = Math.round(fit.w * ratio);
-      cv.height = Math.round(fit.h * ratio);
-    }
-    const mk = Math.min(1, fit.w / 520, fit.h / 300);
-    const br = fit.w ? (cv.width / fit.w) : 1;
-    TrackMaps.draw(cv, t, {
-      checkeredStart: true,
-      width: Math.max(2 * br, Math.round(5 * mk * br)), pad: Math.max(12 * br, Math.round(42 * mk * br)),
-      corners: true, cornerR: Math.max(4 * br, Math.round(6 * mk * br)), cornerFont: Math.max(8 * br, Math.round(12 * mk * br)),
-      sectors: true, drs: true, legend: false
-    });
-  };
-  requestAnimationFrame(drawDetail);
-  // ONE rAF LANDS TOO EARLY. The modal opens through a view transition, so the
-  // first frame measures the dialog mid-animation: 500px of an eventual 645px
-  // wrap, a fifth of the map's height thrown away on every open, and the map
-  // stayed that size because nothing re-measured afterwards. Re-fit whenever
-  // the wrap's box actually changes — which also covers a UI SIZE change or a
-  // rotation while the modal is open. Guarded by lastFit so pinning the canvas
-  // cannot feed itself a second pass.
-  if (wrap && typeof ResizeObserver === "function") {
-    if (detailRO) detailRO.disconnect();
-    detailRO = new ResizeObserver(drawDetail);
-    detailRO.observe(wrap);
-  }
+  return trackDetailLoad;
 }
 function closeTrackDetail() {
-  const modal = document.getElementById("track-detail");
-  if (modal) modal.hidden = true;
-  if (detailRO) detailRO.disconnect();
-  detailRO = null;
+  trackDetail?.closeTrackDetail();
 }
 return {
   buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt,

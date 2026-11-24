@@ -700,7 +700,12 @@ function gridHarness({ grid = field(22, 11), speaking = () => false, radioOn = t
   const screen = sb.LoadingScreen.create({
     $: (id) => (els[id] = els[id] || elem()),
     Tracks: {}, Flags: { svg: () => "" },
-    TrackMaps: { corners: () => [], fitCanvas: () => ({ w: 210, h: 150 }), draw: (cv, t, o) => { ops.push("map"); draws.push(o); } },
+    TrackMaps: {
+      corners: (track) => track.corners || [], drsZones: (track) => track.aero || [],
+      cornerSpeed: (corner) => corner.speed, cornerSpeedColors: () => ["red", "amber", "cyan"],
+      sectorColors: () => ["gold", "silver", "bronze"], aeroColor: () => "blue",
+      fitCanvas: () => ({ w: 280, h: 188 }), draw: (cv, t, o) => { ops.push("map"); draws.push(o); },
+    },
     store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) },
     announcer: () => ({ play: (inf, life) => { plays.push(life); return true; }, stop() { annStops.push(now); }, speaking }),
     radio: () => ({ sayPreRace: (text, life, lead) => { said.push({ text, life, lead }); return radioOn; }, stop: () => stops.push(now),
@@ -751,8 +756,12 @@ test("the turn on camera is tagged on the map, and only redrawn when it changes"
   const h = gridHarness();
   let onAir = 0;
   h.sb.FlybySeq = Object.assign({}, h.sb.FlybySeq, { airCorner: () => onAir });
-  h.run();
+  h.run({ track: { id: "monza", name: "MONZA", country: "Italy", sectors: [0.3, 0.6], aero: [{}] } });
   assert.equal(h.draws.at(-1).mark, 0, "the card goes up with the plain outline");
+  const { sectors, drs, checkeredStart } = h.draws.at(-1);
+  assert.deepEqual([sectors, drs, checkeredStart], [false, true, true]);
+  assert.match(h.els["ld-text"].dataset.mapLabel, /^Active Aero/);
+  assert.match(h.els["ld-text"].style.props["--ld-map-key"], /blue/);
   h.tickTo(0.2);
   const before = h.draws.length;
   onAir = 4;
@@ -763,12 +772,53 @@ test("the turn on camera is tagged on the map, and only redrawn when it changes"
   assert.match(h.els["ld-map"].attrs["aria-label"], /turn 4/i);
   h.tickTo(0.3);
   assert.equal(h.draws.length, before + 1, "the same corner is not redrawn ten times a second");
+  h.tickTo(0.4);
+  assert.equal(h.draws.length, before + 2, "the mode change redraws once even when the corner stays the same");
+  assert.deepEqual([h.draws.at(-1).sectors, h.draws.at(-1).drs, h.draws.at(-1).mark], [true, false, 4]);
+  assert.match(h.els["ld-text"].dataset.mapLabel, /^Sectors/);
+  assert.match(h.els["ld-text"].style.props["--ld-map-key"], /gold.*silver.*bronze/);
   onAir = 0;
-  h.tickTo(0.35);
+  h.tickTo(0.45);
   assert.equal(h.draws.at(-1).mark, 0, "a shot of no corner clears the tag");
   assert.equal(h.els["ld-map"].dataset.turn, "");
   // The grid shots own the slot whatever the last corner was.
   onAir = 9;
+  h.tickTo(0.72);
+  assert.equal(h.view(), "grid");
+});
+
+test("flyby uses its available overlays when there are no aero zones, splits, or grid", () => {
+  const h = gridHarness({ grid: null });
+  const track = { id: "monza", name: "MONZA", country: "Italy" };
+  h.run({ track: { ...track, sectors: [0.3, 0.6] } });
+  assert.equal(h.els["ld-map"].dataset.mode, "sectors");
+  h.run({ track: { ...track, aero: [{}] } });
+  h.tickTo(0.75);
+  assert.equal(h.els["ld-map"].dataset.mode, "aero");
+  h.run({ track: { ...track, aero: [{}], sectors: [0.3, 0.6] } });
+  h.tickTo(0.45);
+  assert.equal(h.els["ld-map"].dataset.mode, "aero");
+  h.tickTo(0.55);
+  assert.equal(h.els["ld-map"].dataset.mode, "sectors");
+});
+
+test("corner speed gets a separate map interval before the grid", () => {
+  const h = gridHarness();
+  h.sb.FlybySeq = Object.assign({}, h.sb.FlybySeq, { airCorner: () => 1 });
+  h.run({ track: {
+    id: "monza", name: "MONZA", country: "Italy",
+    aero: [{}], sectors: [0.3, 0.6], corners: [{ speed: 126 }, { speed: 206 }, { speed: 248 }],
+  } });
+  const mode = () => h.els["ld-map"].dataset.mode;
+  h.tickTo(0.12);
+  assert.equal(mode(), "aero");
+  h.tickTo(0.35);
+  assert.equal(mode(), "sectors");
+  h.tickTo(0.58);
+  assert.equal(mode(), "corners");
+  assert.deepEqual([...h.draws.at(-1).cornerSpeeds], [126, 206, 248]);
+  assert.equal(h.draws.at(-1).drs || h.draws.at(-1).sectors, false);
+  assert.equal(h.els["ld-text"].dataset.mapLabel, "Corner Speed · T1 ≈ 126 km/h");
   h.tickTo(0.72);
   assert.equal(h.view(), "grid");
 });
@@ -1066,7 +1116,7 @@ test("the card over the scene: black bars and a light hint in every theme, an un
   assert.equal(ruleDecls(css, "#ld-map").get("object-fit"), "contain", "fitCanvas pins px width AND height; the 45% cap squashed the outline");
   assert.match(css, /@starting-style\s*\{\s*#loading\[data-phase\] #ld-card\s*\{[^}]*opacity:\s*0/, "a transition cannot start from display: none");
   for (const part of ["before", "after"]) assert.equal(ruleDecls(css, `:root[data-motion="reduce"] #loading::${part}`).get("content"), "none", `MENU ANIMATION: REDUCE drops the ${part} bar`);
-  assert.match(ruleDecls(css, "#ld-wordmark").get("font-size"), /^clamp\(.*\b3\.4vw\b/, "#loading is not zoomed: --vwz shrank the wordmark as UI SIZE grew");
+  assert.match(ruleDecls(css, "#ld-wordmark").get("font-size"), /^clamp\(.*\b2\.8vw\b/, "#loading is not zoomed: --vwz shrank the wordmark as UI SIZE grew");
 });
 
 test("the garage phase (the drive-out before the flyby): no card, no timer, and a tap skips to the card + flyby, not counted as a flyby skip", () => {

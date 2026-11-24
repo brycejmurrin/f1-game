@@ -14,7 +14,7 @@ window.AppearanceArrangementPicker = (function () {
     lighting: () => document.getElementById("pm-lighting"),
     camtune: () => document.getElementById("pm-camtune"),
     garrival: () => document.getElementById("pm-garrival"),
-    flyby: flybyDoor, freecam: flybyDoor,
+    flyby: flybyDoor, "flyby-card": flybyDoor, freecam: flybyDoor,
   };
   const separatePages = { pair: "controller.html", menupad: "controller.html", wheel: "controller.html", broadcast: "overlay.html" };
   const preparation = {
@@ -128,11 +128,12 @@ window.AppearanceArrangementPicker = (function () {
         note.textContent = "Pause during a session to arrange " + label + ".";
         return;
       }
-      note.textContent = id === "telemetry-detail" ? "In Data Hub’s Telemetry tab, choose a session and a driver, then open their fastest-lap trace." : go.disabled ? "Open Appearance from Home to arrange Home." :
+      note.textContent = id === "telemetry-detail" ? "Open a lap in Data Hub. Choose Charts & Track or Track View, then Start arranging." : go.disabled ? "Open Appearance from Home to arrange Home." :
         atHome() && id === "duel-picker" ? "Continue from the circuit list to Race Settings, open Field, and choose your duel rival." :
         atHome() && id === "teampicker" ? "Select the team card in the Garage to arrange the team picker." :
         atHome() && id === "quali" ? "In Race Settings, choose a qualifying grid, then start to arrange the qualifying sheet." :
         id === "photo-controls" ? "Open Photo Studio on the paused race to edit the movement and look sticks." :
+        id === "flyby-card" ? "Arrange the track card over the Flyby editor preview. Use Track Card in Flyby for the whole card’s size and position." :
         id === "freecam" ? "Choose Free Camera in the Flyby editor to arrange its window." :
         id === "customize" ? "Open Team in Garage, then edit your team." :
         id === "career-offers" ? "Open a saved career with a pending contract or a completed season, then choose Sign a contract or End of season." :
@@ -176,7 +177,7 @@ window.AppearanceArrangementPicker = (function () {
     go.addEventListener("click", async () => {
       navigation.pending = null;
       const id = target.value;
-      navigation.prepare = !!preparation[id] && prepareChoice.checked;
+      navigation.prepare = id === "telemetry-detail" || (!!preparation[id] && prepareChoice.checked);
       if (id === "popups") {
         const fold = document.getElementById("pm-look-popups");
         if (fold) {

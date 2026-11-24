@@ -905,6 +905,10 @@ test("the real picker scopes profile apply and reset to Results, shared popup st
   const button = text => panel.querySelectorAll("button").find(el => el.textContent === text);
   const pick = id => { picker.value = id; dom.dispatch(picker, { type: "change" }); };
   const hint = panel.querySelector("#appearance-arrange-help");
+  pick("telemetry-detail");
+  assert.equal(hint.textContent, "Open a lap in Data Hub. Choose Charts & Track or Track View, then Start arranging.");
+  pick("flyby-card");
+  assert.ok(button("Arrange Flyby track card"));
   pick("hud");
   assert.equal(hint.textContent, "Preview the race HUD with sample readouts. Apply or Cancel returns to Appearance.");
   pick("touch-controls");

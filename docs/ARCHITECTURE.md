@@ -296,6 +296,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `screen-regions.js` | `ScreenRegions` | LAZY_UI_PRESETS | IDs are part of exported profiles. |
 | `screen-placement.js` | `ScreenPlacement` | LAZY_UI_PRESETS | Region geometry is sparse. |
 | `screen-arranger.js` | `ScreenArranger` | LAZY_UI_PRESETS | A transparent native modal owns input while the actual screen renders each draft. |
+| `track-detail.js` | `CircuitDetailsPanel` | LAZY_UI_PRESETS | Circuit Details dialog, loaded from the circuit picker or Appearance. |
 | `hud-layout-editor.js` | `HudLayoutEditor` | LAZY_UI_PRESETS | HUD customization controls and color stylesheet, loaded on demand. |
 | `dock-toolbar.js` | `DockToolbar` | LAZY_UI_PRESETS | Live touch layout toolbar, loaded on the first edit. |
 | `hud-arrange.js` | `HudArrange` | LAZY_UI_PRESETS | Live race HUD arrangement. |

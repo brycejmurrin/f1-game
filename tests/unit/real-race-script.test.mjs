@@ -186,7 +186,9 @@ test("the circuit resolves by name before country, and the weather and hour read
   const { D } = load();
   assert.equal(D.trackIdFor({ country_name: "Italy", circuit_short_name: "Monza" }, TRACKS), "monza");
   assert.equal(D.trackIdFor({ country_name: "Italy", circuit_short_name: "Imola" }, TRACKS), "imola");
-  assert.equal(D.trackIdFor({ country_name: "Italy", circuit_short_name: "Nowhere" }, TRACKS), "monza", "the country's current circuit, not the classic");
+  const unknown = { country_name: "Italy", circuit_short_name: "Nowhere" };
+  assert.equal(D.trackIdFor(unknown, TRACKS), "monza", "the country's current circuit, not the classic");
+  assert.equal(D.trackIdFor(unknown, TRACKS, { exact: true }), null, "a circuit overlay needs a matched venue");
   assert.equal(D.trackIdFor({ country_name: "United States", circuit_short_name: "Austin" }, TRACKS), "cota");
   assert.equal(D.trackIdFor({ country_name: "Azerbaijan", circuit_short_name: "Baku" }, TRACKS), "baku");
   assert.equal(D.trackIdFor({ country_name: "Nowhere", circuit_short_name: "X" }, TRACKS), null);
