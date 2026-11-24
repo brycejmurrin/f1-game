@@ -2722,6 +2722,24 @@ test("all preferences reset preserves saves and reusable profiles and rejects un
   assert.deepEqual([...b.disk.keys()].sort(), retained.sort());
 });
 
+test("Reset Appearance preserves Garage looks across reload", () => {
+  const looks = { garageLook: "workshop", crewLook: "sculpted", garageMood: "night" };
+  const disk = Object.fromEntries(Object.entries(looks).map(([key, value]) => ["apex26." + key, value]));
+  const b = bootImportUI({ realStore: true, disk: { ...disk, "apex26.uiTheme": '"light"' } });
+  const launcher = b.dom.document.createElement("button");
+  b.dom.byId("pm-panel-files").appendChild(launcher);
+  b.SettingsExport.resetRow("appearance", launcher);
+  [...b.dom.document.querySelectorAll("button")].find(n => n.textContent === "CONFIRM RESET & RELOAD").click();
+  assert.equal(b.reloads(), 1);
+
+  const reloaded = boot({ realStore: true, disk: Object.fromEntries(b.disk) });
+  assert.equal(reloaded.GameStore.store.getStored("uiTheme"), undefined);
+  for (const [key, value] of Object.entries(looks)) assert.equal(reloaded.GameStore.store.raw(key), value, key);
+
+  assert.equal(reloaded.SettingsExport.resetSettings("files").ok, true);
+  for (const key of Object.keys(looks)) assert.equal(reloaded.GameStore.store.raw(key), null, key);
+});
+
 test("refused reset restores previous preferences and reports failure", () => {
   const b = boot({ disk: { "apex26.sound": "true", "apex26.volMusic": "0.2", "apex26.steerMode": '"touch"' } });
   const before = [...b.disk].sort(), original = b.GameStore.store.set;

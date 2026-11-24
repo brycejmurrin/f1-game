@@ -266,7 +266,7 @@ const RESET_INFO = {
   advanced: "Steering response, curves, smoothing, dead zones, sensitivity, handling, overall speed and feedback.",
   driving: "Driving assistance, gears, throttle and active aero. Race rules and circuit setup stay saved.",
   display: "HUD layout and visibility, camera framing, helmet and visor settings.",
-  appearance: "Menu appearance, sizing and layouts. Saved appearance profiles and personal photos stay saved.",
+  appearance: "Menu appearance, sizing and layouts. Garage room, crew and lighting choices, saved appearance profiles and personal photos stay saved.",
   a11y: "Accessibility, captions, text size, contrast and hold/toggle controls. Reduced motion returns to the device setting.",
   audio: "Music, sound, radio, volumes and audio tuning. Connected music accounts stay connected.",
   graphics: "Graphics quality, renderer, resolution and feature overrides. Defaults adapt to this device.",
@@ -287,7 +287,10 @@ function resetOwns(row, section) {
   if (section === "controls") return steering || row.group === "controls" || RESET_INPUT.has(row.k);
   if (section === "driving") return row.k === "preset" || RESET_AIDS.has(row.k);
   if (section === "a11y") return row.group === "a11y" || RESET_ACCESS.has(row.k);
-  if (section === "appearance") return (row.group === "appearance" && !RESET_ACCESS.has(row.k)) || row.k === "uiScale";
+  if (section === "appearance") {
+    if (row.k === "garageLook" || row.k === "crewLook" || row.k === "garageMood") return false;
+    return (row.group === "appearance" && !RESET_ACCESS.has(row.k)) || row.k === "uiScale";
+  }
   if (section === "display") return (row.group === "hud" || row.group === "camera" || RESET_UI.has(row.k)) && row.k !== "uiScale" && !RESET_INPUT.has(row.k);
   if (section === "graphics") return row.group === "display" && !RESET_UI.has(row.k) && !RESET_INPUT.has(row.k);
   return section === "audio" && row.group === "audio";
