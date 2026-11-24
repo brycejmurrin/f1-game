@@ -3,13 +3,14 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { makeDom } from "../helpers/mini-dom.mjs";
 
 // Each fixture is a setup a player can actually select in the sandbox.
 const setups = {
-  chassis: {view: "inspect", answer: "axle"},
+  chassis: {view: "challenge", answer: "axle"},
   suspension: {view: "braking", geometry: "high", answer: "same"},
   deployment: {charge: 4},
-  hybrid: {start: 4, brake: 350, clip: 250},
+  hybrid: {start: 4, brake: 350, clip: 250, deploy: 275},
   "brake-blend": {retained: 25, response: "fill"},
   "tyre-heat": {elapsed: 90, sliding: 70, load: 90},
   "racing-line": {apex: 55, straight: 500},
@@ -54,8 +55,171 @@ for (const [id, setup] of Object.entries(setups)) {
     } else {
       const {replay} = lesson.evaluate(replayState);
       const first = replay(0).svg;
-      const last = replay(1).svg;
-      assert.ok(first && last && first !== last, "playback changes the diagram across the run");
+      const sample = replay(.35).svg;
+      assert.ok(first && sample && first !== sample, "playback changes the diagram across the run");
+    }
+    if (id === "chassis") {
+      assert.equal(lesson.evaluate({...initial, view: "inspect", wheelbase: 3200, body: 850, answer: "pass"}).success, false);
+      const edge = lesson.evaluate({...initial, view: "edge", answer: "pass"});
+      assert.equal(edge.success, true);
+      assert.deepEqual(Array.from(edge.metrics.slice(0, 2), row => row[1]), ["3,400 mm", "950 mm"]);
+    }
+    if (id === "suspension") {
+      for (const rod of ["push", "pull"]) {
+        for (const damping of ["low", "high"]) {
+          for (let bump = 0; bump <= 30; bump++) {
+            const {replay} = lesson.evaluate({...initial, rod, damping, bump});
+            for (let i = 0; i <= 100; i++) {
+              const {svg} = replay(i / 100);
+              assert.equal(svg.indexOf("NaN"), -1);
+              const piston = Number(svg.match(/<rect x="([0-9.]+)" y="[0-9.]+" width="6" height="8"/)?.[1]);
+              assert.ok(piston >= 391 && piston + 6 <= 439, "the piston stays inside its cylinder");
+            }
+          }
+        }
+      }
+    }
+    if (id === "hybrid") {
+      const {replay} = lesson.evaluate({...initial, start: 2, deploy: 350});
+      assert.equal(replay(7 / 60).readout, "7.0 s · Deploy · 0.00 MJ · Store empty");
+      const recovery = lesson.evaluate({...initial, budget: "6", deploy: 100, brake: 350, clip: 350});
+      const values = Object.fromEntries(recovery.metrics);
+      assert.ok(Number.parseFloat(values["Harvested this lap"]) < 6);
+      assert.equal(values["Recharge blocked by allowance"], "0.00 MJ");
+      assert.ok(Number.parseFloat(values["Recharge blocked by full store"]) > 0);
+      assert.equal(recovery.replay(1).readout.split(" · ")[0], "60.0 s");
+      assert.equal(values["Deployment time traded for super clipping"], "7 s · 0.70 MJ requested deployment");
+    }
+    if (id === "deployment") {
+      const {replay, svg} = lesson.evaluate({...initial, curve: "overtake", gap: .95, charge: 4});
+      assert.equal(replay(1).readout.split(" · ")[2], "100 kW delivered");
+      const [chartX, chartY] = svg.match(/points="([^"]+)" fill="none" stroke="#65b7ff"/)[1].split(" ").at(-1).split(",").map(Number);
+      const [, cursorX, cursorY] = replay(1).svg.match(/cx="([^"]+)" cy="([^"]+)"/).map(Number);
+      assert.equal(chartX, cursorX);
+      assert.ok(Math.abs(chartY - cursorY) < .0051);
+    }
+    if (id === "rain") {
+      const slick = lesson.evaluate({...initial, line: "puddle", tyre: "slick"}).replay(.5);
+      const wet = lesson.evaluate({...initial, line: "puddle", tyre: "wet"}).replay(.5);
+      assert.notEqual(slick.readout, wet.readout);
+      const entryShortfall = lesson.evaluate({...initial, line: "textured", tyre: "wet", water: 7, film: .1});
+      assert.equal(entryShortfall.success, false);
+      assert.ok(Number.parseFloat(entryShortfall.replay(0).readout.split(" · ")[2]) < 10);
+      assert.notEqual(entryShortfall.replay(0).svg, entryShortfall.replay(.5).svg);
+    }
+    if (id === "pit-duel") {
+      assert.equal(lesson.replay.steps, 2);
+      assert.equal(lesson.evaluate({...initial, stop: 19}).success, false);
+      assert.equal(lesson.evaluate({...initial, mode: "execution", stop: 19}).success, true);
+      assert.equal(lesson.evaluate({...initial, ...setup, mode: "execution", stop: 19}).success, false);
+    }
+    if (id === "stint") {
+      assert.equal(lesson.replay.first + lesson.replay.steps, 50);
+      const {replay} = lesson.evaluate({...initial, fuel: 64.5});
+      assert.equal(replay(1).readout, "Lap 50 · Incomplete · 0.00 kg fuel · 0.50 kg shortfall · no completed pace");
     }
   });
 }
+
+function replayFixture() {
+  const dom = makeDom();
+  const frames = new Map();
+  let token = 0;
+  const context = vm.createContext({
+    document: dom.document,
+    LearnAppearance: {mount(fn) { fn(false); }},
+    ResizeObserver: class { observe() {} },
+    addEventListener() {},
+    requestAnimationFrame(fn) { frames.set(++token, fn); return token; },
+    cancelAnimationFrame(id) { frames.delete(id); },
+  });
+  context.window = context;
+  return {
+    ...dom, frames,
+    load(...paths) {
+      for (const path of paths) {
+        const url = new URL("../../" + path, import.meta.url);
+        vm.runInContext(readFileSync(url, "utf8"), context, {filename: fileURLToPath(url)});
+      }
+    },
+    step(now) {
+      const [id, draw] = frames.entries().next().value;
+      frames.delete(id);
+      draw(now);
+    },
+  };
+}
+
+function telemetryReplay() {
+  const fixture = replayFixture();
+  fixture.byId("chart").getContext = () => null;
+  const time = fixture.document.createElement("input");
+  time.setAttribute("name", "axis");
+  time.value = "time";
+  const distance = fixture.document.createElement("input");
+  distance.setAttribute("name", "axis");
+  distance.value = "distance";
+  fixture.body.append(time, distance);
+  for (const lane of ["a", "b"]) {
+    const ghost = fixture.document.createElement("div");
+    ghost.setAttribute("data-ghost", lane);
+    fixture.body.appendChild(ghost);
+  }
+  fixture.load("js/core/mat4.js", "js/data/telemetry-model.js",
+    "learn/telemetry/model.js", "learn/replay.js", "learn/telemetry/lab.js");
+  return {...fixture, time};
+}
+
+test("VSC Next marker visits the reference restart after the lead has passed", () => {
+  const {byId, dispatch, load} = replayFixture();
+  byId("fixture").value = "default";
+  load("learn/vsc/model.js", "learn/vsc/lab.js");
+  const duration = byId("vsc-duration");
+  const timeline = byId("timeline");
+  duration.value = "23";
+  dispatch(duration, {type: "input"});
+  timeline.value = "22";
+  dispatch(timeline, {type: "input"});
+  assert.equal(byId("track-clock").textContent.split(" · ")[0], "Passed marker");
+  assert.equal(byId("reference-clock").textContent.split(" · ")[0], "VSC");
+  byId("next").click();
+  assert.equal(Number(timeline.value), 23);
+  assert.equal(byId("reference-clock").textContent.split(" · ")[0], "Green");
+
+  duration.value = "33";
+  dispatch(duration, {type: "input"});
+  timeline.value = "32";
+  dispatch(timeline, {type: "input"});
+  assert.equal(byId("reference-clock").textContent.split(" · ")[0], "Passed marker");
+  byId("next").click();
+  assert.equal(Number(timeline.value), 32, "no restart marker after both cars have passed");
+});
+
+test("Telemetry time replay keeps 1× speed through slow frames and stops when hidden", () => {
+  const {byId, document, frames, step} = telemetryReplay();
+  const play = byId("trace-replay").querySelector("button");
+  play.click();
+  for (const now of [0, 200, 400, 600, 800, 1000]) step(now);
+  assert.equal(byId("cursor").textContent, "1.000 s");
+  assert.equal(play.textContent, "Pause time replay");
+  document.hidden = true;
+  document.dispatchEvent({type: "visibilitychange"});
+  assert.equal(frames.size, 0);
+  assert.equal(play.textContent, "Play time replay");
+  assert.equal(byId("cursor").textContent, "1.000 s");
+});
+
+test("Telemetry axis switching uses the other trace past the reference's last sample", () => {
+  const {byId, dispatch, time} = telemetryReplay();
+  byId("extend").click();
+  const reference = byId("reference");
+  reference.value = "1";
+  dispatch(reference, {type: "change"});
+  assert.equal(byId("cursor").textContent, "95.0 m");
+  assert.equal(byId("time-a").textContent, "1.875");
+  assert.equal(byId("time-b").textContent, "—");
+  dispatch(time, {type: "change"});
+  assert.equal(byId("cursor").textContent, "1.875 s");
+  assert.equal(time.checked, true);
+  assert.equal(reference.value, "1", "the selected comparison reference stays in place");
+});

@@ -123,7 +123,17 @@ async function checkFit(page, v) {
 
 test.describe("landscape 852x393 notch", () => {
   test.use({ viewport: { width: VIEWS[0].w, height: VIEWS[0].h }, hasTouch: true });
-  test("telemetry compare view is not clipped, overlapped or narrower than its column", async ({ page }) => { await checkFit(page, VIEWS[0]); });
+  test("telemetry compare view is not clipped, overlapped or narrower than its column", async ({ page }) => {
+    await checkFit(page, VIEWS[0]);
+    const replay = page.locator("[data-telemetry-replay]");
+    await expect(replay.getByRole("slider")).toBeHidden();
+    await page.getByRole("button", { name: "Track Replay", exact: true }).click();
+    await expect(replay.getByRole("slider")).toBeVisible();
+    await replay.getByRole("button", { name: "EXPAND", exact: true }).click();
+    await expect(page.locator("[data-replay-expanded]").getByRole("slider")).toBeVisible();
+    await page.locator("[data-replay-expanded]").getByRole("button", { name: "Close replay", exact: true }).click();
+    await expect(replay.getByRole("button", { name: "EXPAND", exact: true })).toBeFocused();
+  });
 });
 test.describe("portrait 390x844", () => {
   test.use({ viewport: { width: VIEWS[1].w, height: VIEWS[1].h }, hasTouch: true });

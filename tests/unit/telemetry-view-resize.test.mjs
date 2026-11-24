@@ -87,7 +87,7 @@ async function openPopup(drs = 12, s1 = 25) {
   for (const file of [
     "js/core/mat4.js", "js/ui/cvd-palette.js", "js/ui/track-maps.js", "js/data/tab-utils.js",
     "js/data/telemetry-model.js", "js/data/telemetry-render.js",
-    "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js"
+    "js/data/telemetry-player.js", "js/data/telemetry-context.js", "js/data/telemetry-replay.js", "js/data/telemetry-view.js", "js/data/telemetry.js"
   ]) {
     vm.runInContext(readFileSync(file, "utf8"), context, { filename: absSrc(file) });
   }
@@ -157,6 +157,32 @@ test("column-only resizing refits the telemetry map", async () => {
   assert.equal(map.width, (180 - 24) * 2);
   assert.equal(map.height, map.width);
   assert.equal(popup.open, true, "arranging playback leaves its native dialog open");
+});
+
+test("track focus enlarges the same map and preserves the shared playback cursor", async () => {
+  const { popup, observers, frames } = await openPopup();
+  const toggle = popup.querySelector('[data-track-toggle]');
+  const map = popup.querySelector('.dh-map');
+  const body = popup.querySelector('.dh-tpopup-body');
+  toggle.click();
+  assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+  assert.ok(body.hasAttribute('data-track-focus'));
+  const main = popup.querySelector('.dh-telem-main'), side = popup.querySelector('.dh-telem-side');
+  main._rect = { width: 560, height: 100, left: 0, top: 0 };
+  side._rect = { width: 560, height: 400, left: 0, top: 100 };
+  observers[0].cb();
+  for (const [id, fn] of frames) { frames.delete(id); fn(); }
+  assert.equal(map.width, 536 * 2);
+  assert.ok(map.height <= map.width);
+  const seek = popup.querySelector('[data-track-seek]').querySelector('input');
+  seek.value = '24';
+  seek.dispatchEvent({ type: 'input' });
+  assert.match(popup.querySelector('[data-track-time]').textContent, /24/);
+  toggle.click();
+  assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+  assert.equal(popup.querySelector('.dh-map'), map, 'switching does not create another player');
+  assert.equal(seek.value, '24');
+  assert.equal(popup.open, true);
 });
 
 test("the telemetry map switches between the speed scale and shared sector palette", async () => {

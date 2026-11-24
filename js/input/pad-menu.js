@@ -2,7 +2,7 @@
 "use strict";
 
 const InputPadMenu = (function () {
-  function create({ btnDown, btnEdge, nowMs, getPadAxisMap, padRest = () => 0, padButtons = () => [], padBrand = () => "xbox" }) {
+  function create({ btnDown, btnEdge, nowMs, getPadAxisMap, padRest = () => 0, padButtons = () => [], padBrand = () => "xbox", consumeButton = (_button) => {} }) {
     const PAD_NAV_DEADZONE = 0.22; // menu sticks only — larger so a resting stick does not creep
 
     let padNavDir = null;           // held direction while a menu is open, or null
@@ -287,8 +287,8 @@ const InputPadMenu = (function () {
         if (btnEdge(pad, 4)) padNavKey("left", true);
         if (btnEdge(pad, 5)) padNavKey("right", true);
       }
-      if (btnEdge(pad, okBtn)) { showGamepadFocus(); padActivate(); }
-      if (btnEdge(pad, backBtn)) { showGamepadFocus(); padEscape(); }
+      if (btnEdge(pad, okBtn)) { consumeButton(okBtn); showGamepadFocus(); padActivate(); }
+      if (btnEdge(pad, backBtn)) { consumeButton(backBtn); showGamepadFocus(); padEscape(); }
     }
 
     function remoteNav(dir) {

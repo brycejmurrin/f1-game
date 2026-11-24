@@ -403,3 +403,97 @@ test("Input.activeInputSource follows real activity, not connected-device presen
   key("KeyD", true); key("KeyD", false);
   assert.equal(Input.activeInputSource(), "keyboard", "the next keyboard press takes priority again");
 });
+
+test("phone driving controls follow a detected DualSense and a real keyboard, then restore the saved touch scheme", () => {
+  const changes = [];
+  const { Input, sb, key, fire, navOpen, anyOpen } = boot({
+    onControlDeviceChange: () => changes.push(Input.controlDevice()),
+  });
+  let pointerChanged;
+  const coarse = { matches: true, addEventListener: (_, cb) => { pointerChanged = cb; } };
+  sb.matchMedia = () => coarse;
+  const state = () => [Input.controlDevice(), Input.touchDrivingControls(), Input.debugState().steerMode];
+  Input.setSteerMode("buttons");
+  assert.deepEqual(state(), ["touch", true, "buttons"]);
+  const { pad, press, release } = fakePad(sb, fire, "DualSense Wireless Controller");
+  assert.deepEqual(state(), ["controller", false, "buttons"]);
+  fire("pointerdown", { pointerType: "touch", isTrusted: true });
+  fire("keydown", { isTrusted: false, code: "ArrowDown", preventDefault() {} });
+  navOpen.on = anyOpen.on = true;
+  key("Tab", true); key("ArrowDown", true); key("ArrowDown", false);
+  navOpen.on = anyOpen.on = false;
+  assert.deepEqual(state(), ["controller", false, "buttons"]);
+  key("KeyW", true);
+  key("KeyW", false);
+  assert.deepEqual(state(), ["keyboard", false, "buttons"]);
+  Input.poll();
+  assert.equal(Input.controlDevice(), "keyboard", "an idle pad cannot take back control");
+  press(15);
+  Input.poll();
+  assert.equal(Input.controlDevice(), "controller");
+  release(15);
+  sb.navigator.getGamepads = () => [];
+  fire("gamepaddisconnected", { gamepad: pad });
+  assert.deepEqual(state(), ["touch", true, "buttons"]);
+  key("KeyW", true);
+  key("KeyW", false);
+  coarse.matches = false; pointerChanged();
+  coarse.matches = true; pointerChanged();
+  assert.deepEqual(state(), ["touch", true, "buttons"], "undocking a tablet restores touch after keyboard input");
+  assert.deepEqual(changes, ["controller", "keyboard", "controller", "touch", "keyboard"]);
+});
+
+test("polling discovers a physical pad and waits out a short Gamepad API gap", () => {
+  const { Input, sb } = boot();
+  sb.matchMedia = () => ({ matches: true, addEventListener() {} });
+  let now = 1000;
+  sb.performance.now = () => now;
+  const pad = { connected: true, id: "DualSense", mapping: "standard", index: 0,
+    axes: [0, 0, 0, 0], buttons: [] };
+  let snapshot = [pad];
+  sb.navigator.getGamepads = () => snapshot;
+  Input.poll();
+  assert.equal(Input.physicalPadAvailable(), true);
+  assert.equal(Input.touchDrivingControls(), false);
+  snapshot = [];
+  now += 16;
+  Input.poll();
+  assert.equal(Input.touchDrivingControls(), false);
+  snapshot = [pad];
+  now += 16;
+  Input.poll();
+  assert.equal(Input.touchDrivingControls(), false);
+  snapshot = [];
+  now += 16;
+  Input.poll();
+  now += 300;
+  Input.poll();
+  assert.equal(Input.physicalPadAvailable(), false);
+  assert.equal(Input.touchDrivingControls(), true);
+});
+
+test("toggle throttle releases on handoff between controller and keyboard", () => {
+  const { Input, sb, key, fire } = boot();
+  Input.setHoldMode({ throttle: "toggle" });
+  const pad = fakePad(sb, fire, "DualSense Wireless Controller");
+  pad.press(7); Input.poll(); pad.release(7); Input.poll();
+  assert.equal(Input.controlDevice(), "controller");
+  assert.equal(Input.throttleLevel(), 1);
+  key("KeyA", true); Input.poll();
+  assert.equal(Input.controlDevice(), "keyboard");
+  assert.equal(Input.throttleLevel(), 0);
+  key("KeyA", false);
+  key("KeyW", true); key("KeyW", false);
+  assert.equal(Input.throttleLevel(), 1);
+  pad.pad.axes[0] = 1; Input.poll();
+  assert.equal(Input.controlDevice(), "controller");
+  assert.equal(Input.throttleLevel(), 0);
+});
+
+test("Alt+Left keeps browser Back available while driving", () => {
+  const { Input, fire } = boot();
+  let prevented = false;
+  fire("keydown", { code: "ArrowLeft", key: "ArrowLeft", altKey: true, preventDefault() { prevented = true; } });
+  assert.equal(prevented, false);
+  assert.equal(Input.debugState().key.left, false);
+});

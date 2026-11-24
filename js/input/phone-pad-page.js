@@ -222,9 +222,10 @@ const PhonePadPage = (function () {
         const profile = PedalTravel.contactProfile(travel, undefined, e, el, transfer);
         const cross = transfer && !profile.sliderEdge && profile.slide === "ease";
         const peerId = travel === "gas" ? "brake" : "gas";
-        // Standalone phones historically capture a pedal until lift, including a
-        // slide through the other pedal. Only an explicit destination crossover opts in.
-        const bounds = PedalTravel.buttonOverrides(peerId).slide && dom[peerId]?.getBoundingClientRect?.();
+        // Standalone phones keep the first pedal held unless the destination opts in.
+        const peerResponse = PedalTravel.buttonOverrides(peerId);
+        const entersPeer = peerResponse.sliderEdge ? PedalTravel.sliderEntry(peerResponse) === "enter" : !!peerResponse.slide;
+        const bounds = entersPeer && dom[peerId]?.getBoundingClientRect?.();
         const contact = { x: e.clientX, y: e.clientY, profile, cross, transfer, bounds };
         anchors.set(e.pointerId, contact);
         pedalOwners.set(e.pointerId, target);

@@ -5,6 +5,20 @@
   const brake = get("brake");
   const turn = get("turn");
   const plot = document.querySelector(".plot");
+  const setup = get("setup-title").closest("section");
+  const controls = setup.parentElement;
+  const readings = document.querySelector(".readings");
+  const compactLayout = matchMedia("(width < 580px)");
+  const landscapeLayout = matchMedia("(min-width: 34rem) and (max-height: 430px)");
+  function placeForceControls() {
+    const focused = document.activeElement;
+    if (compactLayout.matches && !landscapeLayout.matches) readings.before(setup);
+    else controls.prepend(setup);
+    if (setup.contains(focused)) focused.focus({preventScroll: true});
+  }
+  compactLayout.addEventListener("change", placeForceControls);
+  landscapeLayout.addEventListener("change", placeForceControls);
+  placeForceControls();
   const requested = [plot.querySelector(".ray.requested"), plot.querySelector(".point.requested")];
   const delivered = [plot.querySelector(".ray.achieved"), plot.querySelector(".point.achieved")];
   const limitPoint = plot.querySelector(".point.limit");
@@ -145,6 +159,7 @@
   function selectSurface(next) {
     surface = next;
     surfaces.forEach(control => { control.checked = control.value === surface; });
+    updateSpeedGrip();
   }
 
   function applyCase(key) {
@@ -211,6 +226,39 @@
 
   const deceleration = get("deceleration");
   const cgHeight = get("cg-height");
+  const speedControls = [get("braking-speed"), get("speed-brake"), get("front-bias")];
+  function updateSpeedGrip() {
+    const [speed, braking, bias] = speedControls.map(input => Number(input.value));
+    const labels = [speed + " km/h", force(braking), bias + "%"];
+    speedControls.forEach((input, i) => {
+      get(input.id + "-value").textContent = labels[i];
+      input.setAttribute("aria-valuetext", labels[i]);
+    });
+    const weight = 800 * 9.81 / 1000;
+    const aero = 16 * (speed / 300) ** 2;
+    const transfer = braking * .30 / 3.40;
+    const friction = surface === "dry" ? 1.25 : .875;
+    const front = friction * (weight * .47 + aero * .44 + transfer);
+    const rear = friction * (weight * .53 + aero * .56 - transfer);
+    const frontRequest = braking * bias / 100;
+    const rearRequest = braking - frontRequest;
+    get("speed-aero").textContent = force(aero);
+    const axleReading = (request, limit) => {
+      const excess = request - limit;
+      const overage = excess < .01 ? "<0.01 kN" : excess.toFixed(2) + " kN";
+      return force(request) + " / " + force(limit) + (excess > 0 ? " · " + overage + " over" : "");
+    };
+    get("speed-front").textContent = axleReading(frontRequest, front);
+    get("speed-rear").textContent = axleReading(rearRequest, rear);
+    const frontOver = frontRequest > front;
+    const rearOver = rearRequest > rear;
+    const message = (frontOver && rearOver ? "Both axles exceed their grip limits." :
+      frontOver ? "Front lockup risk. Move bias rearward or reduce the brake request." :
+      rearOver ? "Rear lockup risk. Move bias forward or reduce the brake request." :
+      "Both axles are within the straight-line grip limit.") + " Surface: " + surface + ".";
+    if (get("speed-lock").textContent !== message) get("speed-lock").textContent = message;
+  }
+  speedControls.forEach(input => input.addEventListener("input", updateSpeedGrip));
   function updateAxleLoads() {
     const g = Number(deceleration.value);
     const height = Number(cgHeight.value);
@@ -244,4 +292,5 @@
   LearnAppearance.mount(reduced => cornerReplay.reduced(reduced));
   cornerReplay.seek(0);
   updateAxleLoads();
+  updateSpeedGrip();
 })();

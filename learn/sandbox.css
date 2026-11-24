@@ -1,4 +1,5 @@
 :root { font: var(--fs-3, 16px)/1.45 var(--font-ui, system-ui); color: var(--text); background: var(--bg); }
+html, body { min-height: 100%; height: auto; overflow: visible; }
 * { box-sizing: border-box; }
 body { margin: 0; }
 #lab { max-width: 1100px; margin: auto; padding: var(--pad, 14px); }
@@ -7,6 +8,17 @@ h2 { font-size: var(--fs-5, 20px); }
 .intro { color: var(--dim); margin-bottom: var(--gap, .75rem); max-width: 88ch; }
 #learn-studio { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gap, .75rem); align-items: start; }
 #lab svg { width: 100%; height: auto; display: block; color: var(--text); background: var(--bg); border-radius: var(--r-sm); }
+.diagram-view { min-width: 0; }
+.diagram-view.expanded { overflow-x: auto; }
+#lab .diagram-view.expanded svg { min-width: 600px; }
+.expand-diagram { margin-block: .4rem; }
+.lesson-instrument { container-type: inline-size; }
+.lesson-primary:empty { display: none; }
+.lesson-primary:not(:empty) { margin-block: .65rem; }
+.lesson-setup summary { font-weight: 650; }
+.lesson-setup[open] summary { margin-block-end: .45rem; }
+.diagram-key { color: var(--dim); margin-block: .4rem; }
+@container (min-width: 600px) { .expand-diagram[aria-expanded="false"] { display: none; } }
 dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr)); margin: .65rem 0; gap: .55rem; }
 dt { font-size: var(--fs-2); color: var(--dim); }
 dd { font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -26,4 +38,31 @@ summary { cursor: pointer; }
 a { color: var(--text); }
 @media (min-width: 46rem) {
   #learn-studio { grid-template-columns: minmax(0, 1.7fr) minmax(15rem, 1fr); }
+  .lesson-setup, .lesson-setup[open] { padding: 0; }
+  .lesson-setup summary { display: none; }
+}
+@media (width < 46rem) {
+  #lab { padding: min(var(--pad, 14px), 14px); }
+  #learn-studio [data-as="box"] { min-width: 0; padding: min(var(--pad, 14px), 14px); }
+  .intro { margin-bottom: .65rem; }
+  .lesson-setup { padding: 0; }
+  .lesson-replay span { flex-basis: 100%; order: 1; }
+}
+@media (pointer: coarse) { .lesson-setup summary { min-block-size: 44px; align-content: center; } }
+
+@media (min-width: 34rem) and (max-height: 430px) {
+  #lab { display: flex; flex-direction: column; padding: .5rem; }
+  #lab > .intro { order: 1; margin: .55rem 0 0; }
+  #lab > details { order: 2; }
+  #learn-studio {
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    gap: .55rem;
+  }
+  #learn-studio [data-as="box"] { padding: .55rem; }
+  #lab .diagram-view:not(.expanded) svg { max-block-size: min(42vh, 155px); }
+  .lesson-primary:not(:empty) { margin: 0; }
+  .lesson-setup, .lesson-setup[open] { padding: 0; }
+  .lesson-setup summary { display: list-item; }
+  .lesson-replay { gap: .35em; }
+  .lesson-replay span { order: 1; flex-basis: 100%; }
 }

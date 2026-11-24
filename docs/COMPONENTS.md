@@ -248,7 +248,7 @@ missing class, a file that left, or a file that joined.
 - `.pane` — `components` + `race-setup` + `select`
 - `.pair-side` / `.pair-main` — `overlays` + `race-setup`
 - `.balanced-row` — `components` + `menus` + `photo-studio` + `race-setup` + `settings-controls` + `tuner`. Flex wrap that derives its column count from `--balance-basis` / `--balance-min` instead of `repeat(N, ...)`.
-- `.bigbtn` — `career` + `carsetup` + `components` + `dialogs` + `experience` + `menu-destinations` + `menus` + `overlays` + `photo-studio` + `responsive` + `select` + `title` + `tokens`
+- `.bigbtn` — `career` + `carsetup` + `components` + `data` + `dialogs` + `experience` + `menu-destinations` + `menus` + `overlays` + `photo-studio` + `responsive` + `select` + `title` + `tokens`
 - `.alt` — `career` + `components` + `dialogs` + `experience` + `menus`. Alternate `.bigbtn` look; defined on `.bigbtn.alt` in `components`, re-tinted per screen elsewhere.
 - `.minibtn` — `menus` + `responsive`
 - `.btn-ico` — `menu-destinations` + `menus` + `title`

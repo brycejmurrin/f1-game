@@ -13,19 +13,44 @@
 <body>
 <main>
 <h1 id="lessonTitle">Aero Lab</h1>
-<div id="learn-studio">
-<div data-as="controls">
+<section id="learn-studio" aria-label="Live wind tunnel">
+<div class="airflow">
+<div class="instrument"><strong>Airflow schematic</strong><button id="motion" type="button">Pause flow</button></div>
+<canvas id="flow" width="720" height="276" role="img" aria-label="Top-down airflow schematic" aria-describedby="gap-instructions state effect">Use the gap slider to change the follower position. The model readouts describe the airflow at that position.</canvas>
+<div class="legend"><span>← Airflow</span><span><i id="leaderKey"></i> A · Leader</span><span><i id="followerKey"></i> B · Follower</span></div>
+</div>
+<div class="results" aria-label="Apex classic model estimates">
+<div class="wake-metrics">
+<div class="reading"><div>Wake exposure <strong id="wake"></strong></div><meter aria-label="Wake exposure" id="wakeMeter" min="0" max="1"></meter></div>
+<div class="reading"><div>Grip vs. clean air <strong id="grip"></strong></div><meter aria-label="Grip relative to clean air" id="gripMeter" min="0" max="1"></meter></div>
+<div class="reading"><div>Usable tow <strong id="tow"></strong></div><meter aria-label="Usable tow strength" id="towMeter" min="0" max="1"></meter></div>
+</div>
+<div class="wake-explanation">
+<h2 id="state" aria-live="polite"></h2>
+<p class="hint">Apex classic model · clean-air grip baseline 100%</p>
+<p id="effect"></p>
+</div>
+</div>
 <section class="settings" data-as="box"><h2 data-as="heading">CAR B SETUP</h2>
 <label for="gap">Following gap <output id="gapValue" for="gap"></output></label>
 <input id="gap" type="range" min="5" max="45" step="1" value="10" aria-describedby="gap-instructions">
+<fieldset><legend>Track section</legend><div><label><input type="radio" name="section" value="straight" checked> Straight</label><label><input type="radio" name="section" value="corner"> Fast corner</label></div></fieldset>
+<label id="direction-row" hidden>Turn direction <select id="direction"><option value="left">Left</option><option value="right">Right</option></select></label>
+<label for="offset">Lateral offset <output id="offset-value" for="offset"></output></label>
+<input id="offset" type="range" min="-4" max="4" step=".5" value="0">
+<button id="wake-boundary" type="button">Move to 4 m boundary</button>
+</section>
+<div id="corner-replay" hidden></div>
+<details class="gap-help">
+<summary>Reading the airflow and gap</summary>
+<div class="flow-key"><span>— Clean air</span><span>~ Disturbed wake</span><span>Highlighted lines follow Car B</span></div>
 <p id="gap-instructions" class="hint">Drag car B along the diagram, or use this slider with your arrow keys.</p>
 <div class="limits"><span>5 m</span><span>45 m</span></div>
 <p id="gap-formula" class="hint"></p>
-<fieldset><legend>Track section</legend><div><label><input type="radio" name="section" value="straight" checked> Straight</label><label><input type="radio" name="section" value="corner"> Fast corner</label></div></fieldset>
-<label id="direction-row" hidden>Turn direction <select id="direction"><option value="left">Left</option><option value="right">Right</option></select></label>
-<label class="check"><input id="offset" type="checkbox"> Move follower 4 m off-line</label>
+</details>
 </section>
-<section class="active-aero" data-as="box" aria-labelledby="active-aero-title">
+<details class="active-aero">
+<summary>2026 Active Aero rules and experiment</summary>
 <h2 id="active-aero-title" data-as="heading">2026 F1 ACTIVE AERO</h2>
 <p><strong>Straight Mode · low drag.</strong> In dry conditions, the front and rear flaps can open in FIA-designated activation zones when enabled.</p>
 <p><strong>Corner Mode · high downforce.</strong> Flaps return to their higher-downforce positions for corners.</p>
@@ -45,25 +70,11 @@
 <p id="aero-verdict" role="status"></p>
 <p class="hint">This wing exercise uses the FIA’s activation rules. The Apex wake readouts use the independent gap and track section controls.</p>
 <p><a href="https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_b_sporting_-_iss_09_-_2026-10-01.pdf" target="_blank" rel="noopener">FIA 2026 Sporting Regulations, B7.1</a></p>
-</section>
-</div>
-<section data-as="preview-side" aria-label="Live wind tunnel">
-<div class="instrument"><strong>Airflow schematic</strong><button id="motion" type="button">Pause flow</button></div>
-<canvas id="flow" width="720" height="276" role="img" aria-label="Top-down airflow schematic" aria-describedby="gap-instructions state effect">Use the gap slider to change the follower position. The model readouts describe the airflow at that position.</canvas>
-<div class="legend"><span>← Airflow</span><span><i id="leaderKey"></i> A · Leader</span><span><i id="followerKey"></i> B · Follower</span></div>
-<div class="flow-key"><span>— Clean air</span><span>~ Disturbed wake</span><span>Highlighted lines follow Car B</span></div>
-<div id="corner-replay" hidden></div>
-<div class="results" aria-label="Apex classic model estimates">
-<h2 id="state" aria-live="polite"></h2>
-<p class="hint">Apex classic model · clean-air grip baseline 100%</p>
-<div class="reading"><div>Wake exposure <strong id="wake"></strong></div><meter aria-label="Wake exposure" id="wakeMeter" min="0" max="1"></meter></div>
-<div class="reading"><div>Grip vs. clean air <strong id="grip"></strong></div><meter aria-label="Grip relative to clean air" id="gripMeter" min="0" max="1"></meter></div>
-<div class="reading"><div>Usable tow <strong id="tow"></strong></div><meter aria-label="Usable tow strength" id="towMeter" min="0" max="1"></meter></div>
-<p id="effect"></p></div></section></div>
+</details>
 <section class="physics-note" aria-labelledby="prediction-title">
 <h2 id="prediction-title">MAKE A PREDICTION</h2>
 <form id="prediction">
-<fieldset><legend>At 10 m directly behind car A, what changes when B enters the fast corner?</legend>
+<fieldset><legend>In the Apex model, what changes when B enters the fast corner 10 m behind A?</legend>
 <label><input type="radio" name="answer" value="clear"> The wake clears and grip returns.</label>
 <label><input type="radio" name="answer" value="tow"> The tow goes away. The wake still reduces grip.</label>
 <label><input type="radio" name="answer" value="gain"> The tow gets stronger.</label>
@@ -72,6 +83,7 @@
 <p id="feedback" role="status"></p>
 </form>
 </section>
+<p class="physics-note">In real airflow, drag and downforce can recover at different rates as a following car moves sideways. Cornering can still involve a drag reduction even when the driver gains more from moving into cleaner air. <a href="https://doi.org/10.4271/2017-01-1546" target="_blank" rel="noopener">Wake-flow study</a></p>
 <section class="physics-note" aria-labelledby="force-title">
 <h2 id="force-title">Why the force changes</h2>
 <p>A wing or floor gets its aerodynamic load from the air moving past it. Dynamic pressure is <strong>q = ½ρv²</strong>, where ρ is air density and v is the local air speed relative to the car. Aero force is dynamic pressure × reference area × a force coefficient.</p>
@@ -83,6 +95,16 @@
 <p id="pressure-ratio">0.80² = 0.64 of the clean-air pressure and force.</p>
 <p>Disturbed flow can also change the effective lift coefficient. Changes in flow angle and turbulence alter the way air follows the wing and floor, including where it separates. A loss of downforce leaves the tyres with less vertical load for cornering.</p>
 </section>
+<details>
+  <summary>In Apex 26</summary>
+  <p><strong>Slipstream and dirty air.</strong> Apex estimates the wake from the gap and sideways offset to the car ahead. In Classic, its centerline reach is 34 m. Lining up behind a rival gives you a tow when the steering is nearly straight and the brake is released. The same wake reduces aerodynamic grip when you turn.</p>
+  <p><strong>Wind.</strong> The game generates ambient wind and gusts from the circuit, weather, race seed and session clock. A headwind lowers your top speed, a tailwind raises it, and a crosswind nudges the car sideways.</p>
+  <p><strong>Active Aero.</strong> Opening the wings in a marked zone lowers drag and costs downforce. In Manual, use the Active Aero control when the HUD shows it is available. Auto opens the wings for you. Braking or leaving the zone closes them. Apex halves the usual performance change in Low Grip. The FIA exercise above shows front-wing-only activation.</p>
+  <h3>Monza Aero Drill</h3>
+  <p>Start at speed on the pit straight, closing on one rival, with ambient wind and Classic Dirty Air enabled. Close the gap without contact. Watch the tow indicator and the Active Aero readout, then brake for the first chicane and watch the wings close.</p>
+  <p>Use <strong>Pause → Practice → Try Again</strong> to restore both cars. Keep the same throttle and Aero inputs on a second run, and move out of the wake to compare how quickly you close.</p>
+  <button type="button" id="launch-aero-drill" hidden>Launch Aero Drill</button>
+</details>
 <details><summary>Model and sources</summary><p>Apex’s classic wake model uses forward gap and lateral offset. Grip is the wake multiplier relative to clean air at the same speed. Both presets hold speed at the game reference of 72 m/s (259 km/h). The lab holds speed, gap and offset constant when you switch track sections. On the straight the tow is eligible. In the corner, the game’s tow condition is treated as unmet. The wake and grip formulas stay the same in both cases.</p><p>Car positions and flow lines are schematic. The lines illustrate the game’s estimated wake. Clean air here means outside car A’s wake. The 34 m centreline cutoff is an Apex setting. Usable tow shows a percentage of the game’s maximum tow strength.</p><p><a href="https://doi.org/10.4271/2017-01-1546" target="_blank" rel="noopener">Wake-flow research</a> · <a href="https://www.fia.com/regulations/category/110" target="_blank" rel="noopener">FIA regulations</a></p></details>
 </main>
 </body></html>
