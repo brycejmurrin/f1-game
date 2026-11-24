@@ -11,7 +11,7 @@ const PhonePadCodec = (function () {
 
   // The edges the phone may send; each is a name Input.remoteEvent knows.
   const EVENTS = Object.freeze(["shiftUp", "shiftDown", "overtake", "boost", "aero",
-    "camera", "recover", "radio", "calib", "pause",
+    "camera", "cameraMenu", "recover", "radio", "calib", "pause",
     // The menu pad (desktop: input.js REMOTE_EDGES → the gamepad's nav seam).
     "navUp", "navDown", "navLeft", "navRight", "navSelect", "navBack"]);
   // A held direction repeats like a keyboard's (OS-style delay, then rate) so a

@@ -1,8 +1,9 @@
-/* Apex 26 — CAM button picker: hold or right-click opens the view grid, arrow keys move it, AUTO appears only while a WATCH runs. CamModes.create owns the saved mode index. */
+/* Apex 26 — CAM button picker: hold or right-click opens the view grid (a pad or paired phone: hold CAM, Input.consumeCameraMenu), arrow keys move it, AUTO appears only while a WATCH runs. CamModes.create owns the saved mode index. */
 const CamPicker = (function () {
   "use strict";
 
   const touchHolds = new WeakMap();
+  let live = null;   // the attached picker: a pad or paired phone opens and drives it (#6271)
 
   function attach(host) {
     const G = host.G, $ = host.$, CAM_MODES = host.CAM_MODES, HOLD_MS = host.HOLD_MS;
@@ -221,9 +222,10 @@ const CamPicker = (function () {
         new MutationObserver(() => { if (b.hidden) camPicker.hide(); }).observe(b, { attributes: true, attributeFilter: ["hidden"] });
       }
     })();
-    return { hide: camPicker.hide };
+    live = camPicker;
+    return { hide: camPicker.hide, show: camPicker.show };
   }
 
-  return { attach, touchHold: button => touchHolds.get(button) };
+  return { attach, touchHold: button => touchHolds.get(button), visible: () => !!live && live.visible() };
 })();
 Object.freeze(CamPicker);

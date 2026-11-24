@@ -1076,6 +1076,23 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   dom.buttons.overtake[1].dispatch("pointerdown", {});
   for (let i = 0; i < 3; i++) frame();
   assert.equal(desk.Input.consumeOvertake(), true, "the second OT button (the grip's) fires the same edge");
+  // CAM (#6271): a tap cycles on the lift; held 340 ms it opens the game's full camera picker.
+  dom.buttons.camera.dispatch("pointerdown", {});
+  for (let i = 0; i < 3; i++) frame();
+  assert.equal(desk.Input.consumeCameraCycle(), false, "CAM waits for the lift to know tap from hold");
+  dom.buttons.camera.dispatch("pointerup", { type: "pointerup" });
+  for (let i = 0; i < 3; i++) frame();
+  assert.equal(desk.Input.consumeCameraCycle(), true, "a tap cycles");
+  dom.buttons.camera.dispatch("pointerdown", {});
+  timers.advance(340); for (let i = 0; i < 3; i++) frame();
+  assert.equal(desk.Input.consumeCameraMenu(), true, "a held CAM opens the picker while the thumb is still down");
+  dom.buttons.camera.dispatch("pointerup", { type: "pointerup" });
+  for (let i = 0; i < 3; i++) frame();
+  assert.equal(desk.Input.consumeCameraCycle(), false, "and its lift cycles nothing");
+  dom.buttons.camera.dispatch("pointerdown", {}); dom.buttons.camera.dispatch("pointercancel", { type: "pointercancel" });
+  timers.advance(1000); for (let i = 0; i < 3; i++) frame();
+  assert.equal(desk.Input.consumeCameraCycle() || desk.Input.consumeCameraMenu(), false, "a cancelled touch is neither");
+  assert.equal(timers.pending(), 0, "and leaves no timer");
   // MENU PAD: a held direction repeats at a keyboard's cadence (380 ms, then every 110 ms); the release stops it.
   const e0 = link.stats().events;
   dom.buttons.navDown.dispatch("pointerdown", {});

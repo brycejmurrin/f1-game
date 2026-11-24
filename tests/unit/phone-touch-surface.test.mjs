@@ -735,14 +735,15 @@ test("an empty pad poll clears free look without requiring a disconnect event", 
 });
 
 test("a spare pad disconnect preserves held action edge baselines", () => {
+  // RECOVER (button 10), not CAM: CAM's press waits for its release since #6271.
   const pad = { index: 0, connected: true, mapping: "standard", id: "active", axes: [0, 0, 0, 0],
-    buttons: Array.from({ length: 16 }, (_, i) => ({ pressed: i === 8, value: i === 8 ? 1 : 0 })) };
+    buttons: Array.from({ length: 16 }, (_, i) => ({ pressed: i === 10, value: i === 10 ? 1 : 0 })) };
   const spare = { index: 1, connected: true, mapping: "standard", id: "spare", axes: [0, 0, 0, 0], buttons: [] };
   let live = [pad, spare]; const h = bootInput({ pads: () => live });
   h.fire("gamepadconnected", { gamepad: pad }); h.Input.poll();
-  assert.equal(h.Input.consumeCameraCycle(), true);
+  assert.equal(h.Input.consumeRecover(), true);
   live = [pad]; h.fire("gamepaddisconnected", { gamepad: spare }); h.Input.poll();
-  assert.equal(h.Input.consumeCameraCycle(), false);
+  assert.equal(h.Input.consumeRecover(), false);
 });
 
 /* ── touch-control LABEL floor (GAS/BRAKE/BOOST/OT/PAUSE/CAM) ───────────────
