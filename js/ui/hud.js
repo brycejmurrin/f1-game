@@ -1768,6 +1768,7 @@ function syncDriveControls(player, canService, timeTrial, showReadouts, spokenFl
     hData(els.btnBrake, "gripCue", brakeFeedback && cue === "lock" ? cue : null);
   }
   hToggle(els.btnBoost, "on", player.boostOn);
+  hData(els.btnBoost, "held", G.state === "race" && player.boostOn && (player.pitState === "box" || pit?.held?.(player) || G.cautionLevel?.() >= 2) ? "1" : null);   // ON but game.js ersHeld blocks deploy (#5783 K3)
   hStyle(els.btnBoost, "--e", (Math.round((player.energy || 0) * 20) / 20).toFixed(2));
   // OVERTAKE (FIA 2026 B7.2.3(c), js/race/overtake-mode.js): EARNED under 1 s at
   // the detection line, granted at the timing line as a 0.5 MJ allowance for

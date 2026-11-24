@@ -747,7 +747,8 @@ function blueFlagCall(ev) {
 const PIT_LAMP_GREEN = ["near", "enter", "armed", "lane", "keep", "near-box", "square", "stop", "box"];
 let /** @type {ReturnType<typeof RaceEngineer.create> | null} */ engineer = null;  // RaceEngineer.create(G), same deferral
 function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
-function updateCaution(dt) { raceCtl.update(dt); }
+const redOrder = new Map();   // the field's order when a red flag first shows: redFlagRestart grids from it (#5783 H1)
+function updateCaution(dt) { raceCtl.update(dt); if (raceCtl.level < 4) redOrder.clear(); else if (!redOrder.size) cars.filter((c) => !c.retired).sort((a, b) => b.prog - a.prog).forEach((c, i) => redOrder.set(c, i)); }
 function applyCaution(d) { return raceCtl.apply(d); }
 function cautionInfo() { const i = raceCtl.info(), w = scWatch.info(); i.owed = w.owed; i.owedT = w.t; i.owedCode = w.code; return i; }   // + the give-back window (hud.js flag chip)
 function cautionLevel() { return raceCtl.level; }   // allocation-free, for per-tick readers
@@ -1637,7 +1638,7 @@ function redFlagRestart() {
   if (state !== "race" || !track || cars.some((c) => c.finished)) return false;
   IncidentSim.reset(); DebrisWorld.reset(); DebrisWorld.prime();
   const L = track.total;
-  const order = cars.filter((c) => !c.retired).sort((a, b) => b.prog - a.prog);
+  const rk = (c) => (redOrder.has(c) ? redOrder.get(c) : Infinity), order = cars.filter((c) => !c.retired).sort((a, b) => (rk(a) - rk(b)) || (b.prog - a.prog)); redOrder.clear();   // passes made braking for the red do not stand
   // THE REWIND IS THE LEADER'S. Stepping each car back its OWN lap would put a
   // car 150 m behind a leader that had just crossed (one lap number lower, not
   // lapped) a full lap down after the restart. The leader re-runs its lap; every

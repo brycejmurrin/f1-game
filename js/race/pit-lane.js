@@ -1573,6 +1573,13 @@ var PitLane = (function () {
         onSet *= fuelAt(Math.max(0, x - n - done) / 2 + x / 2) / fuelAt((x + Math.max(x, N)) / 2);
       }
       if (onSet == null || onSet * 1.1 >= left) return 99;
+      // SHORT OF THE FLAG IS NOT YET A STOP THAT PAYS (#5783 F2): Bahrain rain, 6 laps, 6 of 21 AI
+      // boxed wet-for-wet with two laps left and lost 12-20 s on sets that would have ended near
+      // wear 1. Price it as the worn rule does (AiDrive.wornPays), at the wear the set would reach
+      // the flag on: under the payback it runs on, and the worn rule still calls it in past 1.
+      const spent = Math.min(1, G.tyres.spent(c));
+      const endWear = spent + (1 - spent) * left / Math.max(0.05, onSet);
+      if (!AiDrive.wornPays({ lapsLeft: left, wear: endWear, pitLossLaps: c.pitPlan.pitLossLaps })) return 99;
       return Math.max(0, Math.round(((G.lapsTarget - fresh) + (lap + onSet)) / 2) - lap);
     }
     const _pitCtx = { stopsLeft: 0, lapsToStop: 0, rivalBehindBoxed: false, stuckBehind: false, rivalUsed: false, fits: true,

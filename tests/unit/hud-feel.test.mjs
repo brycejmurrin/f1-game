@@ -124,7 +124,7 @@ function boot(opts = {}) {
   const els = {
     pos: $("hud-pos"), lap: $("hud-lap"), time: $("hud-time"), best: $("hud-best"),
     speed: $("hud-speed-n"), energy: $("hud-energy-fill"), ot: $("hud-ot"), aero: $("hud-aero"),
-    btnOT: $("btn-ot"), btnAero: $("btn-aero"),
+    btnOT: $("btn-ot"), btnAero: $("btn-aero"), btnBoost: $("btn-boost"),
     gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"), hudSectors: $("hud-sectors"),
     flag: $("hud-flag"), minimap, gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
     announceLive: $("announce-live"),
@@ -268,6 +268,27 @@ test("the pit limiter holds an Overtake grant until the driver leaves the exit r
   tick();
   assert.equal(els.ot.textContent, "OT READY 0.50 MJ");
   assert.equal(els.btnOT.getAttribute("aria-disabled"), "false");
+});
+
+test("a latched BOOST that cannot deploy (box, limiter, caution) is marked held, not lit (#5783 K3)", () => {
+  // game.js ersHeld blocks deploy in the box, at the lane limiter and under a caution cap (level >= 2) while
+  // the touch toggle stays ON; the button painted the plain lit .on and deploy resumed later with no cue.
+  const { els, player, G, tick } = boot();
+  let limiterHeld = false, level = 0;
+  G.pits = { held: (car) => car === player && limiterHeld };
+  G.cautionLevel = () => level;
+  player.boostOn = true; tick();
+  assert.ok(els.btnBoost.classList.contains("on"));
+  assert.equal(els.btnBoost.dataset.held, undefined, "green, on the road: BOOST deploys");
+  for (const [why, set] of [["box", () => { player.pitState = "box"; }], ["limiter", () => { limiterHeld = true; }],
+    ["VSC", () => { level = 2; }], ["safety car", () => { level = 3; }]]) {
+    player.pitState = "none"; limiterHeld = false; level = 0; set(); tick();
+    assert.equal(els.btnBoost.dataset.held, "1", `${why}: latched BOOST reads held`);
+  }
+  player.pitState = "none"; limiterHeld = false; level = 1; tick();
+  assert.equal(els.btnBoost.dataset.held, undefined, "a local yellow sets no caution cap: BOOST deploys");
+  level = 3; player.boostOn = false; tick();
+  assert.equal(els.btnBoost.dataset.held, undefined, "off is off, not held");
 });
 
 test("automatic active aero identifies its mode while the manual control stays unavailable", () => {
