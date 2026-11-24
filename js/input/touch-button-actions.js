@@ -130,5 +130,5 @@ const TouchButtonActions = (() => {
       if (profile) bindControl(button, profile);
     }
   }
-  return Object.freeze({ bindControl });
+  return Object.freeze({ bindControl, cancelAll });
 })();
