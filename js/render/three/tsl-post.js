@@ -38,7 +38,7 @@
     const VP = ctx.vp || { enabled: false, view: () => null, uv: () => screenUV, tex: (n) => n };
     // DESKTOP TIERS (tsl-gi.js buildPlan): which extra variants to build. Absent = today's pass set, nothing else built.
     const HI = ctx.hi || null;
-    const GIM = HI && typeof window !== "undefined" && window.TLXShaders && window.TLXShaders.gi || null;
+    const GIM = typeof window !== "undefined" && window.TLXShaders && window.TLXShaders.gi || null;
 
     // GL bottom-left uv -> the node system's top-left texture space.
     const TL = (u) => vec2(u.x, u.y.oneMinus());
@@ -1416,18 +1416,20 @@
     }
 
     // The desktop-tier passes that do not live in this closure (tsl-gi.js): GTAO, SSGI, focus, DoF, motion blur.
-    const gi = HI && GIM ? GIM.build(THREE, TSL, {
+    const buildGi = (plan) => GIM.build(THREE, TSL, {
       // GL bottom-left uv of the pass's own fragment (phys targets never build these, so VP is the identity here).
       passUV: () => { const suv = vec2(VP.uv(VP.view())).toVar(); return vec2(suv.x, suv.y.oneMinus()).toVar(); },
       passMaterial, depthAt, TL, sceneT, tagT, viewPosNdc, clipXYW, perspU, ssaoU, contactShadowT, ignoise,
       ownTexture: ctx.ownTexture,
       // tlx-post.js: the scene's velocity attachment (null without it) and the SSGI temporal set (native WebGPU).
       velTex: ctx.velTex || null, giTemporal: !!ctx.giTemporal,
-    }, HI) : null;
+    }, plan);
+    const gi = HI && GIM ? buildGi(HI) : null;
+    const makePhotoFocus = GIM ? () => buildGi({ dof: true }) : null;
 
     return { bright, blurAO, blurGR, blurAOH, blurAOV, blurGRH, blurGRV,
              down, downFixed, upAdd, upFinal, upAddFixed, upFinalFixed, spread,
-             ssao, godray, composite, fxaa, sgsr, blit, mirror, ssaoHi, godrayHi, gi };
+             ssao, godray, composite, fxaa, sgsr, blit, mirror, ssaoHi, godrayHi, gi, makePhotoFocus };
   }
 
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { post, labFxaaSubpix });

@@ -420,26 +420,35 @@
       const fU = Object.assign(perspU(), {
         focusUV: uniform(new THREE.Vector2(0.5, 0.45)),
         fixed: uniform(0),      // > 0: a caller-given focus distance (m)
+        tapMode: uniform(0),    // 0: auto, 1: picked scene pixel, 2: keep its depth
         blend: uniform(1),
       });
       const prevTex = texture(own());
-      const dist = (uv) => viewPosNdc(fU, uv, depthAt(uv).mul(2.0).sub(1.0)).z.negate();
+      const dist = (uv, depth) => viewPosNdc(fU, uv, depth.mul(2.0).sub(1.0)).z.negate();
       const focusMat = passMaterial(Fn(() => {
-        const sum = float(0.0).toVar(), cnt = float(0.0).toVar();
-        for (let gy = -1; gy <= 1; gy++) {
-          for (let gx = -2; gx <= 2; gx++) {
-            const uv = clamp(fU.focusUV.add(vec2(gx * 0.06, gy * 0.07)), vec2(0.001), vec2(0.999)).toVar();
-            const car = smoothstep(0.42, 0.55, tagT.sample(TL(uv)).r).oneMinus();
-            const dd = depthAt(uv);
-            If(car.greaterThan(0.5).and(dd.lessThan(0.99999)), () => { sum.addAssign(dist(uv)); cnt.addAssign(1.0); });
-          }
-        }
-        const cd = depthAt(fU.focusUV);
-        const centre = select(cd.lessThan(0.99999), dist(fU.focusUV), float(FOCUS_MAX));
-        const target = clamp(select(cnt.greaterThan(0.5), sum.div(max(cnt, 1.0)), centre), FOCUS_MIN, FOCUS_MAX).toVar();
-        If(fU.fixed.greaterThan(0.0), () => { target.assign(fU.fixed); });
         const prev = float(prevTex.sample(vec2(0.5)).r);
-        return vec4(mix(prev, target, fU.blend), 0.0, 0.0, 1.0);
+        const target = float(prev).toVar();
+        If(fU.tapMode.lessThan(1.5), () => {
+          const cd = depthAt(fU.focusUV).toVar();
+          const centre = float(dist(fU.focusUV, cd)).toVar();
+          target.assign(select(cd.lessThan(1.0), centre, float(FOCUS_MAX)));
+          If(fU.tapMode.lessThan(0.5), () => {
+            const sum = float(0.0).toVar(), cnt = float(0.0).toVar();
+            for (let gy = -1; gy <= 1; gy++) {
+              for (let gx = -2; gx <= 2; gx++) {
+                const uv = clamp(fU.focusUV.add(vec2(gx * 0.06, gy * 0.07)), vec2(0.001), vec2(0.999)).toVar();
+                const car = smoothstep(0.42, 0.55, tagT.sample(TL(uv)).r).oneMinus();
+                const dd = depthAt(uv).toVar();
+                If(car.greaterThan(0.5).and(dd.lessThan(0.99999)), () => { sum.addAssign(dist(uv, dd)); cnt.addAssign(1.0); });
+              }
+            }
+            const autoCentre = select(cd.lessThan(0.99999), centre, float(FOCUS_MAX));
+            target.assign(clamp(select(cnt.greaterThan(0.5), sum.div(max(cnt, 1.0)), autoCentre), FOCUS_MIN, FOCUS_MAX));
+            If(fU.fixed.greaterThan(0.0), () => { target.assign(fU.fixed); });
+            target.assign(mix(prev, target, fU.blend));
+          });
+        });
+        return vec4(target, 0.0, 0.0, 1.0);
       })(), "tlx-gi-focus");
       out.focus = { mat: focusMat, U: fU, prevTex };
 
@@ -449,12 +458,13 @@
         texel: uniform(new THREE.Vector2(1, 1)),
         aperture: uniform(DOF.aperture),
         maxPx: uniform(DOF.maxPx1080),
+        minFocus: uniform(FOCUS_MIN),
       });
       const zDist = (uv) => viewPosNdc(dU, uv, depthAt(uv).mul(2.0).sub(1.0)).z.negate();
       const K = dofKernel(BUDGET.dofTaps);
       const dofMat = passMaterial(Fn(() => {
         const vUV = glUV();
-        const f = max(float(focusTex.sample(vec2(0.5)).r), FOCUS_MIN).toVar();
+        const f = max(float(focusTex.sample(vec2(0.5)).r), dU.minFocus).toVar();
         const coc = (z) => clamp(dU.aperture.mul(abs(float(1.0).sub(f.div(max(z, 0.05))))), 0.0, 1.0).mul(dU.maxPx);
         const z0 = float(zDist(vUV)).toVar();
         const c0 = float(coc(z0)).toVar();

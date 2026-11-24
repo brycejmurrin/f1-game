@@ -1036,6 +1036,7 @@ function beginHome(mode, opts) {
 }
 function endHome() { return home.end(); }
 const _spProj = new Float32Array(16), _spView = new Float32Array(16), _spVP = new Float32Array(16);
+let _spStockFov = 36;
 const _spInvProj = new Float32Array(16);
 const _spEye = [0, 0, 0], _spUp = [0, 1, 0], _spSun = [0, 0.86, 0.51];
 const _spLiv = () => resolveLivery(Teams.LIST[G.teamIdx]);   // memoised on store.rev
@@ -1274,7 +1275,10 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   eye[1] = setupPreviewOrbit[1] + setupPreviewPan[1] + spDist * spSe;
   eye[2] = setupPreviewOrbit[2] + setupPreviewPan[2] + Math.cos(setupPreviewAz) * spDist * spCe;
   const lens = setupPreviewLens;
-  M4.perspectiveTo(_spProj, (lens && lens.fov || homeFov) * Math.PI / 180, gfx.aspect, 0.1, 800);
+  _spStockFov = lens && lens.fov || homeFov;
+  const photoLens = typeof PhotoStudio !== "undefined" ? PhotoStudio.lens?.() : null;
+  const photoFov = photoLens?.mm ? PhotoStudio.focalFov(photoLens.mm, gfx.aspect) : null;
+  M4.perspectiveTo(_spProj, photoFov ?? _spStockFov * Math.PI / 180, gfx.aspect, 0.1, 800);
   // An on-axis camera centers the car behind the panel, half-cropped. Shift the
   // frustum (off-axis / "lens shift") so the car renders centered in the VISIBLE
   // region instead — sideways when the panel is docked to an edge, downwards
@@ -1291,7 +1295,8 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   if (arriving && arriving.active) {
     eye[0] = arriving.eye[0]; eye[1] = arriving.eye[1]; eye[2] = arriving.eye[2];
     _spAim[0] = arriving.aim[0]; _spAim[1] = arriving.aim[1]; _spAim[2] = arriving.aim[2];
-    M4.perspectiveTo(_spProj, (gfx.aspect < 1 ? Math.min(85, arriving.fov + 14) : arriving.fov) * Math.PI / 180, gfx.aspect, 0.1, 800);
+    _spStockFov = gfx.aspect < 1 ? Math.min(85, arriving.fov + 14) : arriving.fov;
+    M4.perspectiveTo(_spProj, photoFov ?? _spStockFov * Math.PI / 180, gfx.aspect, 0.1, 800);
   }
   M4.lookAtTo(_spView, eye, _spAim, _spUp);
   M4.mulTo(_spVP, _spProj, _spView);
@@ -1388,7 +1393,8 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     M4.invertTo(exteriorSkyInv, _spVP); outside.sky.invViewProj = exteriorSkyInv; outside.sky.time = sceneTime / 1000; gfx.drawSky(outside.sky);
     if (exterior.drawWeather) exterior.drawWeather(sceneTime, reducedMotion());
   }
-  gfx.present(presentOpts());
+  const options = presentOpts();
+  gfx.present(photoLens && gfx.photoFocusAvailable?.() ? { ...options, photoFocus: photoLens.focus } : options);
   return !(gfx.warming && gfx.warming());
 }
 
@@ -1621,7 +1627,7 @@ if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.bind
 // spellings __apex.garageCam() and types/game-ctx.d.ts already name).
 return {
   beginHome, endHome, renderHome(dt) { return home.active && renderSetupPreview(dt); }, homeState: () => home.state(),
-  captureCamera, restoreCamera,
+  captureCamera, restoreCamera, currentFov: () => _spStockFov,
   // A sequence's bars and mood go with it even when no garage frame follows (the race, a quit).
   startArrival(...args) { endHome(); homeScene = null; return arrival.start(...args); }, cancelArrival() { handoff = null; arrival.cancel(); sequenceLook(null); }, startPitOut, startPitIn, skipPitOut, noteResult, startHome,
   startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; driveOutEngine(false); clearSetupGestures(); if (departureWheels) departureWheels.release(); _spMeshKey = ""; sequenceLook(null); },

@@ -7550,6 +7550,8 @@ function render(dt) {
     // portrait (js/camera/fov-fit.js). cine stays authored / uncapped.
     fovY = CamFovFit.fitFovY(camFov * Math.PI / 180, gfx.aspect, { cine, boost: camFovBoost * Math.PI / 180 });
   }
+  const photoLens = typeof PhotoStudio !== "undefined" ? PhotoStudio.lens?.() : null;
+  if (photoLens?.mm) fovY = PhotoStudio.focalFov(photoLens.mm, gfx.aspect);
   // Near plane 0.3 (was 0.2): pushing the near distance out sharpens depth-buffer
   // precision across the scene — the biggest single lever against z-fighting /
   // shadow flicker. Capped at 0.3 (not higher): the cockpit rig keeps the wheel /
@@ -8411,6 +8413,7 @@ function render(dt) {
   // SPEED BLUR (the tuner knob, or the camera tuner's MOTION BLUR if larger) ramps in above ~40% of vTop().
   const _spd = Math.max(LT.speedBlur, typeof CamComfort !== "undefined" ? CamComfort.blurAmount() : 0) * clamp((((player && player.speed) || 0) / vTop() - 0.4) / 0.5, 0, 1);
   const po = _presentOpts;
+  po.photoFocus = photoLens && gfx.photoFocusAvailable?.() ? photoLens.focus : undefined;
   // Bloom joins the last MEASURED shed (lookPostShed / autoTier fallback): bloomAmt
   // 0 skips the ~9-pass bright+mip chain — the biggest post-chain saving left
   // after env/SSR/shadows. GRAPHICS: LOW sheds look post via lookPostShed (not autoTier alone).
@@ -8884,6 +8887,7 @@ photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, ltStore, rende
     return () => { cars = before.cars; player = before.player; };
   }, garage: {
   prepareCapture: () => setupCam.endGarageRes(), snapshot: () => setupCam.captureCamera(), restore: (v) => setupCam.restoreCamera(v), shot: (id) => setupCam.setSetupView(id),
+  currentFov: () => setupCam.currentFov(),
   looks: lookRowSpecs, looked: () => { if (!$("carsetup").hidden) buildSetup(); } } });
 function openExperiencePhoto(source) { return UiExperience.openPhoto(G, { source, photoStudio, setPaused,
   trackHome: state === "menu" && uiExperience && ["track", "pitlane"].includes(uiExperience.state().scene.mode), trackReady: menuWorld(),
