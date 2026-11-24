@@ -16,7 +16,7 @@ const DesktopGraphics = (() => {
       carMap: ["High-resolution car shadows", "Adds detail to the shadow cast by the car, especially around the wheels and wings."],
       csm: ["Cascaded sun shadows", "Divides the sun shadow map by distance so nearby shadows can stay detailed over a longer view."],
       lampShadows: ["Floodlight shadows", "Lets floodlights cast shadows during night sessions."],
-      brakeLightSpill: ["Brake heat lighting", "After dark, hot front brakes light the area around the wheels. With per-chunk lighting, ground illumination requires three.js. Automatic on desktop High and above."],
+      brakeLightSpill: ["Brake heat lighting", "After dark, hot front brakes light the area around the wheels. With per-chunk lighting, ground illumination requires three.js."],
       lightsHi: ["Extended light count", "Allows more lights to illuminate the scene at once, especially around floodlit sections."],
       raysHi: ["High-quality light shafts", "Uses more samples to smooth the shafts of light visible through the air."],
       ssaoHi: ["High-quality ambient occlusion", "Adds finer shading where surfaces meet, such as beneath the car."],
@@ -26,18 +26,18 @@ const DesktopGraphics = (() => {
       envProbe: ["Environment reflection probe", "Captures the surroundings for reflections that change as the car moves."],
       envMap: ["High-resolution reflection probe", "Captures more detail in the environment map used by reflective surfaces."],
       envAll: ["World metal reflections", "Lets metal surfaces around the circuit reflect their surroundings."],
-      garageProbeParallax: ["Garage reflections", "Reflects garage walls on the car as you orbit. Requires three.js with hardware WebGPU, including on phones. Off by default."],
+      garageProbeParallax: ["Garage reflections", "Reflects garage walls on the car as you orbit. Requires three.js with hardware WebGPU, including on phones."],
       skyAtmo: ["Atmospheric sky", "Models how sunlight scatters through the air, changing the sky colour near the horizon."],
     },
     "Weather and debris": {
-      gravelDebris: ["Loose gravel", "Rear tyres throw small bouncing stones when a car enters gravel runoff at speed. Automatic on desktop High and above."],
-      rainCurtains: ["Distant showers", "Shows the rain falling over a wet section of the circuit during a moving local shower. Off by default."],
+      gravelDebris: ["Loose gravel", "Rear tyres throw small bouncing stones when a car enters gravel runoff at speed."],
+      rainCurtains: ["Distant showers", "Shows the rain falling over a wet section of the circuit during a moving local shower."],
     },
     "Cars and scenery": {
-      adaptiveModels: ["Adaptive rival models", "Keeps rivals in their detailed models farther away when rendering above 720p with spare frame time. Automatic on desktop High and above."],
-      rivalLiveryLod: ["Distant team colours", "Keeps two livery colours visible when rivals switch to simplified models farther down the track. Off by default."],
-      circuitSurfaces: ["Silverstone surface detail", "Shows worn asphalt, resurfaced patches and scuffed kerb paint at Silverstone with the three.js renderer. Off by default."],
-      tyreWearVisual: ["Visible tyre wear", "Shows scuffing as tyres wear. Preview fresh and worn tyres in the garage. Off by default."],
+      adaptiveModels: ["Adaptive rival models", "Keeps rivals in their detailed models farther away when rendering above 720p with spare frame time."],
+      rivalLiveryLod: ["Distant team colours", "Keeps two livery colours visible when rivals switch to simplified models farther down the track."],
+      circuitSurfaces: ["Silverstone surface detail", "Shows worn asphalt, resurfaced patches and scuffed kerb paint at Silverstone with the three.js renderer."],
+      tyreWearVisual: ["Visible tyre wear", "Shows scuffing as tyres wear. Preview fresh and worn tyres in the garage."],
       meshHi: ["Car mesh detail", "Uses finer geometry to smooth the outlines of curved bodywork and wheels."],
       heroCar: ["Modelled player car parts", "Adds individually modelled parts to the player car. Look closely at the bodywork in the garage."],
       liveryHi: ["High-resolution liveries", "Uses sharper livery textures so stripes and decals hold their detail up close."],
@@ -68,7 +68,10 @@ const DesktopGraphics = (() => {
   function mount() {
     const panel = document.getElementById("pm-panel-graphics");
     if (!panel || typeof GLX === "undefined" || panel.querySelector("[data-desktop-graphics]")) return;
-    const values = [["", "Use preset"], ["on", "On"], ["off", "Off"]];
+    // "Use preset" names what the CURRENT preset gives (GfxQuality.presetDefault), so the rules live in one place.
+    const values = effect => [["", "Use preset · " + (GfxQuality.presetDefault(effect, GfxQuality.current()) ? "On" : "Off")], ["on", "On"], ["off", "Off"]];
+    const RULES = { high: "on from HIGH", ultra: "on from ULTRA", extreme: "EXTREME only", cinema: "EXTREME only, in garage, photo and replay" };
+    const ruleText = effect => "Preset: " + (GLX.isMobile ? "off unless you turn it on." : (RULES[GfxQuality.presetRule(effect)] || "off at every preset") + ".");
     function add(parent, tag, text) {
       const el = document.createElement(tag);
       if (text) el.textContent = text;
@@ -105,8 +108,9 @@ const DesktopGraphics = (() => {
       const store = GameStore.store;
       const key = GfxQuality.choicesKey();
       function readChoices() { return store.get(key, {}) || {}; }
-      const help = GLX.isMobile ? "Use preset follows Graphics. Higher detail can reduce frame rate. Texture filtering and atmospheric sky use the three.js renderer."
-        : "Use preset follows Graphics. Some effects require three.js WebGPU or a compatible display.";
+      const presets = "LOW, MEDIUM and HIGH set how far the frame-rate governor may cut back: LOW also keeps car shadows, bloom, ambient occlusion and light shafts off; MEDIUM keeps the reflection probe, floodlight shadows and dry-road reflections off. ";
+      const help = presets + (GLX.isMobile ? "On phones the effects below stay off unless you turn them on. Higher detail can reduce frame rate. Texture filtering and atmospheric sky use the three.js renderer."
+        : "ULTRA and EXTREME add the effects below. Some require three.js WebGPU or a compatible display.") + " On can still be reduced for a while when frame rate drops.";
       const body = add(fold, "div");
       body.id = "pm-graphics-details-body";
       add(body, "p", help + " Changes take effect after reloading.").className = "adv-help";
@@ -123,14 +127,14 @@ const DesktopGraphics = (() => {
         if (!available.length) continue;
         add(body, "h3", title).className = "pm-group-h";
         for (const [effect, [name, explanation]] of available) {
-          const { row, label, sel } = SettingRow.build("desktop-detail-" + effect, name, values);
+          const { row, label, sel } = SettingRow.build("desktop-detail-" + effect, name, values(effect));
           sel.dataset.effect = effect;
           const detail = document.createElement("details");
           label.replaceWith(detail);
           const summary = add(detail, "summary");
           summary.className = "adv-more-btn";
           summary.appendChild(label);
-          const note = add(detail, "p", explanation);
+          const note = add(detail, "p", explanation + " " + ruleText(effect));
           note.className = "adv-help";
           note.dataset.help = "keep";
           body.appendChild(row);
@@ -163,7 +167,7 @@ const DesktopGraphics = (() => {
           });
           const repaint = choices => {
             const value = valueOf(choices);
-            SettingRow.paint(row, value);
+            SettingRow.paint(row, value, values(effect));
             paintRuntime(value);
           };
           detail.addEventListener("toggle", () => paintRuntime(valueOf(readChoices())));
