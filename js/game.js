@@ -9383,7 +9383,7 @@ function endTimeTrialFromBox() {
 }
 // The TT sheet reached from the garage offers the way back (GARAGE, and Escape); a new TT sheet starts without it (endRace).
 function ttGarageDoor(on) { $("res-garage").hidden = !on; if (on) els.results.setAttribute("data-esc-close", "res-garage"); else els.results.removeAttribute("data-esc-close"); }
-els.resMenu.parentNode?.insertBefore(Object.assign(document.createElement("button"), { id: "res-garage", type: "button", className: "bigbtn alt", hidden: true, textContent: "GARAGE" }), els.resMenu);   // built here: shellNodes (as pm-recover)
+{ const b = document.createElement("button"); b.id = "res-garage"; Object.assign(b, { type: "button", className: "bigbtn alt", hidden: true, textContent: "GARAGE" }); els.resMenu.parentNode?.insertBefore(b, els.resMenu); }   // built here: shellNodes
 $("res-garage").onclick = () => { ttGarageDoor(false); els.results.hidden = true; openGarage("tt-results"); $("cs-done").textContent = "VIEW RESULTS"; };
 els.workBtn.onclick = openPitWork;
 els.endSessionBtn.onclick = endTimeTrialFromBox;

@@ -815,7 +815,7 @@ const GarageArrival = (function () {
     // Built here, not in index.html (the shell's node count is ratcheted); after SKIP in DOM and focus order.
     let alt = $("cs-arrival-alt");
     if (!alt && skip && skip.parentNode && typeof document !== "undefined") {
-      alt = Object.assign(document.createElement("button"), { id: "cs-arrival-alt", type: "button", hidden: true }); skip.parentNode.insertBefore(alt, skip.nextSibling);
+      alt = document.createElement("button"); alt.id = "cs-arrival-alt"; alt.type = "button"; alt.hidden = true; skip.parentNode.insertBefore(alt, skip.nextSibling);
     }
     let /** @type {null | (() => void)} */ altGo = null;   // a second way out (END TIME TRIAL: SKIP TO RESULTS, #6390); null hides it
     function chrome(on) {
