@@ -1376,14 +1376,14 @@ const TLX = (function () {
       function getPresentSize(out) { const o = out || {}; o.width = presentW || W; o.height = presentH || H; return o; }
       // B8 lab (liteTier above): three's WebGL2 leg on a phone, only with ?lab=tlxLite.
       const _lite = liteTier(!!(renderer.backend && !renderer.backend.isWebGPUBackend), mobileTier || _phoneHw);
-      // A phone is ALWAYS mobileTier (glx-facade.js), so its cap is 1.5 unless RESOLUTION MAX asks for more
-      // (setDprBoost, below; PIXEL-TRUTH-HUNT-2026-11-09.md F1, #5222). LAB ?lab=dpr2 / ?lab=dpr3 (labOn above: URL
+      // A phone is ALWAYS mobileTier (glx-facade.js), so its cap is 1.5 unless GRAPHICS HIGH (setDprPreset: 2, passed as
+      // a boost) or RESOLUTION MAX (setDprBoost: 3) asks for more (PIXEL-TRUTH-HUNT-2026-11-09.md F1, #5222). LAB ?lab=dpr2 / ?lab=dpr3 (labOn above: URL
       // only, one boot, no storage key) replaces the cap, so what a sharper phone picture costs per frame can be
       // measured on the phone itself and by tools/gfx/live-frame-census.mjs --sweep (docs/notes/PHONE-PERF-MEASURE-2026-11-10.md).
-      let _dprBoost = 0, _dprCeil = 0;   // RESOLUTION MAX's request; capDpr's ceiling (0 = none)
-      let DPR_CAP = dprCapFor(_lite, mobileTier, _dprBoost, _dprCeil);
+      let _dprBoost = 0, _dprCeil = 0, _dprPreset = 0;   // RESOLUTION MAX's request; capDpr's ceiling (0 = none); GRAPHICS HIGH's floor
+      let DPR_CAP = dprCapFor(_lite, mobileTier, Math.max(_dprBoost, _dprPreset), _dprCeil);
       function reCapDpr() {
-        const c = dprCapFor(_lite, mobileTier, _dprBoost, _dprCeil);
+        const c = dprCapFor(_lite, mobileTier, Math.max(_dprBoost, _dprPreset), _dprCeil);
         if (c === DPR_CAP) return false;
         DPR_CAP = c; resizeNow(); return true;
       }
@@ -5492,6 +5492,12 @@ const TLX = (function () {
           _dprBoost = v; return reCapDpr();
         },
         getDprBoost() { return _dprBoost; },
+        // GRAPHICS HIGH's floor (PerfGov.setUserTier: 2 or 0, #5222): raise-only like the boost, never budget-shed.
+        setDprPreset(n) {
+          const v = n > 0 ? Math.min(+n, 3) : 0;
+          if (v === _dprPreset) return false;
+          _dprPreset = v; return reCapDpr();
+        },
         setSpatialUpscale, getSpatialUpscale,
         getPresentSize,
         get width() { return W; },
