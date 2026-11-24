@@ -39,18 +39,49 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const { buildContext } = require(path.join(ROOT, "tools/track/verify-track.cjs"));
 
-test("Zolder follows the measured Turn 4 drop and signed transverse falls", () => {
+test("Zolder preserves the measured Sterrenwacht drop and transverse falls across the start-line change", () => {
   const tracks = buildContext();
   const def = tracks.LIST.find(circuit => circuit.id === "zolder");
   const road = tracks.buildCenterline(def, { line: false });
-  const drop = road.py[0] - road.py[Math.round(def.turns[3] * road.n)];
-  assert.ok(Math.abs(drop - 4.64) < 0.35, `Turn 4 drop: ${drop} m`);
-  // DHMV II 1 m lidar, transverse sections of 8 m at the two apexes.
-  for (const [turn, measured] of [[4, -0.36], [9, -0.55]]) {
-    const distance = def.turns[turn - 1] * road.total;
-    const rise = tracks.banking(road, distance, 4, {}).dy - tracks.banking(road, distance, -4, {}).dy;
-    assert.ok(Math.abs(rise - measured) < 0.08, `Turn ${turn} crossfall: ${rise} m`);
+  // These are world stations from the DHMV II survey. They keep their
+  // identity when the old lap zero or a numbered turn changes.
+  const station = (x, z) => tracks.project(road, x, z).s;
+  const yAt = (s) => {
+    const sampled = { p: [0, 0, 0], r: [0, 0, 0], t: [0, 0, 0] };
+    tracks.sample(road, s, sampled);
+    return sampled.p[1];
+  };
+  const reference = station(-190.18, 134.80);
+  const sterrenwacht = station(240.01, -623.58);
+  const terlamen = station(-189.62, 653.73);
+  const drop = yAt(reference) - yAt(sterrenwacht);
+  assert.ok(Math.abs(drop - 4.64) < 0.35, `Sterrenwacht drop: ${drop} m`);
+  for (const [s, measured] of [[sterrenwacht, -0.36], [terlamen, -0.55]]) {
+    const rise = tracks.banking(road, s, 4, {}).dy - tracks.banking(road, s, -4, {}).dy;
+    assert.ok(Math.abs(rise - measured) < 0.08, `Crossfall at ${s} m: ${rise} m`);
   }
+});
+
+test("Zolder starts at the surveyed stripe with a straight grid and pit rejoin", () => {
+  const tracks = buildContext(), { TrackMesh, TrackPit } = tracks._vmContext;
+  const def = tracks.LIST.find(circuit => circuit.id === "zolder");
+  const road = tracks.buildCenterline(def, { line: false });
+  // Flemish orthophoto at 50.989037 N, 5.255728 E, projected into the OSM frame.
+  const stripe = [128.36, -151.64];
+  assert.ok(Math.hypot(road.px[0] - stripe[0], road.pz[0] - stripe[1]) < 2);
+  assert.ok(road.tx[0] > 0.8 && road.tz[0] < -0.5, "runs southwest towards Eerste Linkse");
+  const grid = Array.from({ length: 24 }, (_, i) => TrackMesh.gridSlot(road, i));
+  assert.equal(road.total - grid[0].s, 14);
+  assert.equal(road.total - grid.at(-1).s, 198);
+  assert.ok(grid.every(slot => Math.abs(tracks.curvature(road, slot.s)) < 0.002));
+  const pit = TrackPit.build(road, def, tracks.curvature);
+  assert.equal(pit.side, 1);
+  assert.equal(pit.row.boxes.length, 12);
+  const firstTurn = def.turns[0] * road.total;
+  assert.ok(pit.sA < pit.sIn && pit.sOut < pit.sB && pit.sB < firstTurn);
+  assert.ok(Math.abs(tracks.curvature(road, pit.sB)) < 0.002, "pit exit joins the straight before T1");
+  assert.ok(def.sectors[0] > 0 && def.sectors[0] < def.sectors[1] && def.sectors[1] < 1);
+  assert.ok(def.sectors.every(f => Math.abs(tracks.curvature(road, f * road.total)) < 0.002));
 });
 
 // Fields the ENGINE consumes off the AUTHORED def and deliberately does not
