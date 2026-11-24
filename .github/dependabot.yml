@@ -47,9 +47,16 @@ updates:
       interval: weekly
     labels: ["area:tooling"]
 
+  # GRADLE WRAPPER: MINOR AND PATCH ONLY (2026-11-24, Bryce `decision: b` on #6349). No workflow
+  # builds mobile/android (no gradlew, no setup-java), so a wrapper major (8.x -> 9.x, #6349) would
+  # land untested against AGP 8.13.0 (mobile/android/build.gradle:10). A major moves with AGP, by hand.
+  # https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference#ignore--
   - package-ecosystem: gradle
     directory: /mobile/android
     target-branch: claude/f1-game-project-26h3ng
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: gradle-wrapper
+        update-types: ["version-update:semver-major"]
     labels: ["area:tooling"]
