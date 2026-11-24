@@ -59,6 +59,25 @@ test("Attwood banking peaks at the surveyed exit station", () => {
   assert.equal(measuredRow().bad, true, "a measured peak moving several road nodes fails");
 });
 
+test("Istanbul Turn 8 banking covers both built apexes and the road between them", () => {
+  const stable = "istanbul|bank:frac0.457";
+  const row = rows.find(r => r.stable === stable);
+  assert.ok(row && !row.bad && row.offsetM === 0, row?.detail);
+  const tracks = CF.context();
+  const def = tracks.LIST.find(d => d.id === "istanbul");
+  const zone = def.bankZones.find(z => z.frac === 0.457);
+  const measuredRow = () => CF.measure(tracks, "istanbul").find(r => CF.stableKey(r) === stable);
+
+  zone.widthM = 80;
+  assert.equal(measuredRow().bad, true, "a narrower zone under the same peak leaves the apexes flat");
+  def.bankZones.push({ ...zone, widthM: 300 });
+  assert.equal(measuredRow().bad, true, "another zone cannot supply the missing camber");
+  def.bankZones.pop();
+  zone.widthM = 300;
+  zone.angleDeg = -7;
+  assert.equal(measuredRow().bad, true, "continuous adverse camber fails");
+});
+
 test("corner-frames: label parsing names the corners a comment means", () => {
   const def = { turns: new Array(20).fill(0) };
   assert.deepEqual(CF.cornersIn("// T2/3 apron", def, {}), [2, 3]);
