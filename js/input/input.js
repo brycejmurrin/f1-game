@@ -1509,8 +1509,8 @@ const Input = (function () {
   // Explicit touch response must reach the wheel even with ADAPTIVE BUTTONS off.
   const arrowSpeedMix = profile => profile?.adaptive == null ? undefined : (profile.adaptive - 1) / 9;
   function steerButtonCommand(travel, profile) {
-    if (profile.press === "progressive" || profile.travel !== PedalTravel.TRAVEL_PX || profile.direction || profile.slideCurve ||
-        profile.start != null || profile.end != null || profile.holdEnd != null) return travel;
+    if (profile.sliderEdge || profile.press === "progressive" || profile.travel !== PedalTravel.TRAVEL_PX || profile.direction ||
+        profile.slideCurve || profile.start != null || profile.end != null || (profile.buildMs && profile.holdEnd != null)) return travel;
     return 1 + (travel - 1) * adaptiveMix;
   }
   const holdButtons = InputHoldButtons.create({

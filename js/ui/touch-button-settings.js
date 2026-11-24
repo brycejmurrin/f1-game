@@ -148,11 +148,17 @@ const TouchButtonSettings = (() => {
     activation.setAttribute("aria-describedby", gestureHelp.id);
     gestureTime.setAttribute("aria-describedby", gestureHelp.id); host.appendChild(gestureHelp);
     const response = node("div"); host.appendChild(response); section = response;
-    const slider = choice("sliderEdge", "PEDAL MAPPING", [["relative", "RELATIVE SLIDE"],
-      ...["top", "bottom", "left", "right"].map(k => [k, "ABSOLUTE · FULL AT " + k.toUpperCase()])]);
+    const slider = choice("sliderEdge", "INPUT MAPPING", [["relative", "RELATIVE SLIDE"],
+      ["top", "BOTTOM TO TOP"], ["bottom", "TOP TO BOTTOM"], ["left", "RIGHT TO LEFT"], ["right", "LEFT TO RIGHT"]]);
     const sliderHelp = node("p"); sliderHelp.className = "adv-help"; sliderHelp.id = host.id + "-slider-help";
     slider.setAttribute("aria-describedby", sliderHelp.id); section.appendChild(sliderHelp);
     const sliderEntry = choice("sliderEntry", "SLIDE ONTO PEDAL", [["stay", "STAY ON ORIGINAL PEDAL"], ["enter", "USE SLIDER POSITION"]]);
+    const percentages = Array.from({ length: 101 }, (_, i) => [String(i), i + "%"]);
+    const curves = [["linear", "LINEAR"], ["fine", "FINE START"], ["quick", "QUICK START"], ["smooth", "S-CURVE"]];
+    const absolute = node("div"); response.appendChild(absolute); section = absolute;
+    const sliderStart = choice("sliderStart", "START EDGE INPUT", percentages);
+    const sliderEnd = choice("sliderEnd", "END EDGE INPUT", percentages);
+    const sliderCurve = choice("sliderCurve", "EDGE-TO-EDGE RESPONSE", curves);
     const relative = node("div"); response.appendChild(relative); section = relative;
     const press = choice("press", "FIRST TOUCH", [["instant", "INSTANT"], ["progressive", "PROGRESSIVE"]]);
     const help = node("p"); help.className = "adv-help"; help.id = host.id + "-help";
@@ -164,15 +170,14 @@ const TouchButtonSettings = (() => {
     const travelHelp = node("p", "Choose 40–160 screen pixels of thumb movement. A shorter slide changes input faster. A longer slide gives finer control.");
     travelHelp.className = "adv-help"; travelHelp.id = host.id + "-travel-help";
     travel.setAttribute("aria-describedby", travelHelp.id); section.appendChild(travelHelp);
-    const slideCurve = choice("slideCurve", "SLIDE RESPONSE", [["linear", "LINEAR"], ["fine", "FINE START"], ["quick", "QUICK START"], ["smooth", "S-CURVE"]]);
+    const slideCurve = choice("slideCurve", "SLIDE RESPONSE", curves);
     const slideCurveHelp = node("p", "Linear changes pressure evenly as you slide. Fine Start makes small slides gentler. Quick Start makes them stronger. S-Curve gives fine control near each end and changes pressure fastest in the middle.");
     slideCurveHelp.className = "adv-help"; slideCurveHelp.id = host.id + "-slide-curve-help";
     slideCurve.setAttribute("aria-describedby", slideCurveHelp.id); section.appendChild(slideCurveHelp);
     const edge = choice("fullEdge", "START FROM TOUCH POSITION", [["fixed", "OFF · FIXED START"], ...["top", "bottom", "left", "right"].map(k => [k, "FULL AT " + k.toUpperCase()])]);
-    const percentages = Array.from({ length: 21 }, (_, i) => [String(i * 5), i * 5 + "%"]);
     const withDefault = [["default", "MODE DEFAULT"], ...percentages];
     const start = choice("start", "STARTING INPUT", withDefault);
-    const direction = choice("direction", "SLIDE DIRECTION", [["default", "MODE DEFAULT"], ...["up", "down", "left", "right"].map(d => [d, d.toUpperCase()])]);
+    const direction = choice("direction", "SLIDE DIRECTION", [["default", "MODE DEFAULT"], ...PedalTravel.directions.map(d => [d, d === "any" ? "ANY DIRECTION" : d.toUpperCase()])]);
     const end = choice("end", "SLIDE END INPUT", withDefault);
     const endHelp = node("p", "The input reached after moving the Slide Distance in the selected direction. Set a value above the starting input to increase it, or below to decrease it.");
     endHelp.className = "adv-help"; endHelp.id = host.id + "-end-help";
@@ -200,7 +205,8 @@ const TouchButtonSettings = (() => {
     const feedback = choice("feedback", "ON-BUTTON FEEDBACK", [["on", "ON"], ["off", "OFF"]]);
     const feedbackHelp = node("p"); feedbackHelp.className = "adv-help"; feedbackHelp.id = host.id + "-feedback-help";
     feedback.setAttribute("aria-describedby", feedbackHelp.id); section.appendChild(feedbackHelp);
-    const indicator = choice("indicator", "PRESSURE INDICATOR", [["color", "COLOR"], ["percent", "COLOR + PERCENTAGE"], ["bar", "RISING FILL"]]);
+    const indicator = choice("indicator", "PRESSURE INDICATOR", [["color", "COLOR"], ["percent", "COLOR + PERCENTAGE"], ["bar", "FILL BAR"]]);
+    const fillDirection = choice("fillDirection", "FILL DIRECTION", [["top", "BOTTOM TO TOP"], ["bottom", "TOP TO BOTTOM"], ["left", "RIGHT TO LEFT"], ["right", "LEFT TO RIGHT"]]);
     const brightness = choice("brightness", "FULL-INPUT COLOR INTENSITY", [["25", "SUBTLE · 25%"], ["46", "STANDARD · 46%"], ["70", "STRONG · 70%"], ["100", "VIVID · 100%"]]);
     const reset = node("button"), note = node("p");
     reset.type = "button"; reset.dataset.field = "reset";
@@ -217,29 +223,22 @@ const TouchButtonSettings = (() => {
       amount.textContent = px + " px";
       travel.setAttribute("aria-valuetext", px + " pixels");
     }
-    function paintPercent(control, value) {
-      control.querySelector("[data-imported-percent]")?.remove();
-      // Settings files can contain whole percentages between the menu's five-point steps.
-      if (typeof value === "number" && value % 5 !== 0) {
-        const option = node("option", value + "%");
-        option.value = String(value); option.setAttribute("data-imported-percent", "");
-        control.appendChild(option);
-      }
-      control.value = String(value);
-    }
     function refresh() {
       const id = button.value, profile = PedalTravel.buttonProfile(id);
       const pedal = id === "gas" || id === "brake";
       const analog = pedal || id === "left" || id === "right";
       response.hidden = !analog;
       slider.value = profile.sliderEdge || "relative";
-      slider.parentElement.parentElement.hidden = sliderHelp.hidden = !pedal;
+      absolute.hidden = !profile.sliderEdge;
       relative.hidden = !!profile.sliderEdge;
-      sliderEntry.parentElement.parentElement.hidden = !standalone || !profile.sliderEdge;
-      sliderHelp.textContent = profile.sliderEdge ? "Your thumb position sets the pedal continuously. The " + profile.sliderEdge +
-        " edge gives 100%, and the opposite edge gives 0%. Lift to release. With feedback on, three ticks mark 25%, 50% and 75%." +
+      sliderEntry.parentElement.parentElement.hidden = !standalone || !pedal || !profile.sliderEdge;
+      sliderStart.value = String(profile.sliderStart ?? 0);
+      sliderEnd.value = String(profile.sliderEnd ?? 100);
+      sliderCurve.value = profile.sliderCurve || "linear";
+      sliderHelp.textContent = profile.sliderEdge ? "Thumb position sets the input from " + sliderStart.value + "% at the starting edge to " +
+        sliderEnd.value + "% at the " + profile.sliderEdge + " edge. Lift to release. The ticks mark 25%, 50% and 75% of the travel." +
         (id === "gas" && !standalone ? " Use Hold throttle for manual Gas." : "") :
-        "Relative Slide uses your first touch and slide distance. Absolute reads your position across the whole pedal.";
+        "Relative Slide uses your first touch and slide distance. Edge-to-edge reads your position across the whole button.";
       idle.value = profile.idleColor || "default"; pressed.value = profile.pressedColor || "default";
       activation.value = profile.activation || "default";
       const timing = profile.gestureTiming;
@@ -267,20 +266,23 @@ const TouchButtonSettings = (() => {
       feedback.value = profile.feedback ? "on" : "off";
       slideCurve.value = profile.slideCurve || "linear";
       direction.value = profile.direction || "default";
-      paintPercent(start, profile.start ?? "default");
-      paintPercent(end, profile.end ?? "default");
-      paintPercent(holdEnd, profile.holdEnd ?? 100);
+      start.value = String(profile.start ?? "default");
+      end.value = String(profile.end ?? "default");
+      holdEnd.value = String(profile.holdEnd ?? 100);
       curve.value = String(profile.buildPower || 1); curve.disabled = holdEnd.disabled = !profile.buildMs;
       build.value = String(profile.buildMs || 0);
       brightness.value = String(profile.brightness || 46);
       brightness.disabled = indicator.disabled = !profile.feedback;
       edge.value = profile.fullEdge || "fixed"; start.disabled = !!profile.fullEdge;
       indicator.value = profile.indicator || "color";
+      fillDirection.value = profile.fillDirection || "top";
+      fillDirection.parentElement.parentElement.hidden = !profile.feedback || profile.indicator !== "bar";
       help.textContent = profile.press === "progressive"
         ? "Touch for 12% input. Slide away from that spot in any direction to reach 100% over your Slide Distance. Slide back to ease off."
         : pedal ? "Touch for full input. Slide upward to ease off, or move back down toward your starting point to press harder." : "Touch for a full turn. Slide toward the other arrow to ease off. At the default distance, the global Adaptive Buttons level controls how much this slide eases steering.";
       if (profile.direction || profile.start != null || profile.fullEdge || profile.end != null) {
-        const gesture = profile.direction || (profile.press === "progressive" ? "in any direction" : pedal ? "up" : "toward the other arrow");
+        const gesture = profile.direction === "any" ? "in any direction" : profile.direction ||
+          (profile.press === "progressive" ? "in any direction" : pedal ? "up" : "toward the other arrow");
         const touchdown = profile.fullEdge ? "Touch the " + profile.fullEdge + " edge for 100%, the opposite edge for 0%, or the middle for 50%." +
           (profile.feedback ? " A double line marks the full edge." : "") : "Touch for " + PedalTravel.startPercent(profile) + "% input.";
         const slideTarget = profile.end != null ? " to reach " + profile.end + "% input."
@@ -307,10 +309,12 @@ const TouchButtonSettings = (() => {
     travel.oninput = () => distance(travel.value);
     travel.onchange = () => change({ travel: Number(travel.value) });
     slideCurve.onchange = () => change({ slideCurve: slideCurve.value });
+    sliderCurve.onchange = () => change({ sliderCurve: sliderCurve.value });
     direction.onchange = () => change({ direction: direction.value });
     edge.onchange = () => change({ fullEdge: edge.value });
     indicator.onchange = () => change({ indicator: indicator.value });
-    for (const control of [start, end, holdEnd]) {
+    fillDirection.onchange = () => change({ fillDirection: fillDirection.value });
+    for (const control of [start, end, holdEnd, sliderStart, sliderEnd]) {
       control.onchange = () => change({ [control.dataset.field]: control.value === "default" ? null : Number(control.value) });
     }
     curve.onchange = () => change({ buildPower: Number(curve.value) });
