@@ -715,7 +715,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   const cameraMenu = await page.evaluate(() => ({
     role: document.getElementById("campicker").getAttribute("role"),
     radios: document.querySelectorAll('#campicker [role="menuitemradio"]').length,
-    selected: document.querySelectorAll('#campicker [aria-checked="true"]').length,
+    selected: document.querySelectorAll('#campicker > [aria-checked="true"]').length,
     expanded: document.getElementById("btn-cam").getAttribute("aria-expanded"),
   }));
   expect(cameraMenu.role).toBe("menu");
@@ -723,7 +723,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(cameraMenu.selected).toBe(1);
   expect(cameraMenu.expanded).toBe("true");
   await page.keyboard.press("End");
-  expect(await page.evaluate(() => document.activeElement === document.querySelector("#campicker button:last-child"))).toBe(true);
+  expect(await page.evaluate(() => document.activeElement === [...document.querySelectorAll("#campicker button")].filter(b => b.checkVisibility()).at(-1))).toBe(true);
   await page.keyboard.press("Escape");
   expect(await page.evaluate(() => ({
     hidden: document.getElementById("campicker").hidden,

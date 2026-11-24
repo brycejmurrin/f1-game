@@ -65,6 +65,7 @@ function boot(disk = {}, o = {}) {
     TrackMaps: Object.assign({
       corners: () => [], direction: () => "CW", elevRange: () => 0,
       drsZones: o.trackMapsDrs || (() => []),
+      sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"], classColor: () => "", aeroColor: () => "#26a5f5",
       aspect: () => 1.5, elevProfile: () => null,
       fitCanvas: () => ({ w: 100, h: 60 }), draw() {},
     }, o.trackMaps),

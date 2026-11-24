@@ -1,0 +1,15 @@
+.lesson-replay:not([hidden]) { display: flex; flex-wrap: wrap; align-items: center; gap: .5em; margin-block: .6em; }
+.lesson-replay input[type=range] { flex: 1 1 7rem; inline-size: auto; min-inline-size: 0; accent-color: var(--red); }
+.lesson-replay select {
+  inline-size: auto;
+  min-height: 2em;
+  padding-inline: .45em;
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-sm);
+  background: var(--plate);
+  color: inherit;
+  font: inherit;
+}
+.lesson-replay select:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lesson-replay [hidden] { display: none; }
+.lesson-replay span { font-variant-numeric: tabular-nums; }

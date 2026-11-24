@@ -1104,6 +1104,12 @@ body.hud-hidden #hud-restore::after {
   min-width: max-content;
   white-space: nowrap;
 }
+#campicker button[data-category] { flex: 1 1 18%; font-size: 0.8em; }
+#campicker button[data-category][aria-expanded="true"] { border-color: var(--red); }
+#campicker button[data-group] { flex: 1 1 28%; }
+#campicker [data-wheel] { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); }
+#campicker [data-wheel] span { flex-basis: 100%; }
+#campicker [data-wheel] button { flex: 1 1 22%; }
 #campicker button.active {
   background: var(--plate-on);
   border-color: var(--red);
@@ -1111,7 +1117,7 @@ body.hud-hidden #hud-restore::after {
 /* Compact: keep the grid in the CAM/pause corner. Density, not a viewport
    max-height gate — 852×393 is already body compact (body --compact-at 600).
    A short landscape has width to spare, not height: spread the grid left of
-   CAM (5–6 columns, 4 rows of 20 views) instead of the old 280 px / 7 rows. */
+   CAM (categories plus the selected group) instead of the old 280 px / 7 rows. */
 body[data-density="compact"] #campicker {
   gap: calc(var(--gap) * 0.5);
   padding: calc(var(--gap) * 0.75);

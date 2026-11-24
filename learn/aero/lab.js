@@ -21,6 +21,7 @@
   const gap = get("gap");
   const offset = get("offset");
   const motion = get("motion");
+  const direction = get("direction");
   const constants = host ? host.ownerDocument.defaultView.PhysicsConsts : window.PhysicsConsts;
   const model = constants.DirtyAir;
   const tow = {range: constants.TOW_RANGE, fade: constants.TOW_FADE, halfW: constants.TOW_HALF_W};
@@ -32,6 +33,14 @@
   let phase = 0;
   let drag = null;
   let followerWake = 0;
+  let corner = false;
+  let cornerProgress = 0;
+  const replayHost = get("corner-replay");
+  const cornerReplay = LearnReplay.mount(replayHost, {
+    label: "corner",
+    describe: value => (value < .27 ? "Entry" : value < .70 ? "Through turn" : "Exit") + " · " + Math.round(value * 100) + "%",
+    draw(value) { cornerProgress = value; draw(); },
+  });
 
   function syncAppearance(reduced) {
     // Resolve swatches once per appearance change; Canvas cannot inherit CSS colours.
@@ -45,23 +54,30 @@
     if (reduced !== reduceMotion) {
       reduceMotion = reduced;
       animate = !reduced;
+      cornerReplay.reduced(reduced);
       updateMotion();
     } else {
       draw();
     }
   }
 
-  // Coordinates are schematic so both cars stay legible at the smallest gap.
+  // Leave room behind Car B at the widest gap so its trail stays visible.
   function scene() {
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
     const leader = width * 0.84;
     const gapMin = Number(gap.min);
-    const step = width * 0.57 / (Number(gap.max) - gapMin);
+    const step = width * 0.50 / (Number(gap.max) - gapMin);
     const anchor = leader - width * 0.16;
     const xAt = metres => anchor - (metres - gapMin) * step;
+    const mid = height * 0.52;
+    const handedness = direction.value === "left" ? -1 : 1;
+    const turnX = width * (0.99 - 0.96 * cornerProgress);
+    const trackY = x => corner && width > 0
+      ? mid + handedness * height * .18 * Math.tanh(4 * (x - turnX) / width)
+      : mid;
     return {width, height, leader, xAt, step, follower: xAt(Number(gap.value)),
-      mid: height * 0.52, lateral: offset.checked ? -height * 0.26 : 0};
+      trackY, lateral: offset.checked ? -height * (corner ? .21 : .26) : 0};
   }
 
   function measure(distance, lateral, straight) {
@@ -74,10 +90,17 @@
     };
   }
 
-  function car(x, y, scale, colour, letter) {
+  function car(x, y, scale, colour, letter, angle = 0, selected = false) {
     ctx.save();
     ctx.translate(x, y);
+    ctx.rotate(angle);
     ctx.scale(scale, scale);
+    if (selected) {
+      ctx.strokeStyle = palette.label;
+      ctx.setLineDash(followerWake > 0 ? [3, 3] : []);
+      ctx.strokeRect(-24, -17, 48, 34);
+      ctx.setLineDash([]);
+    }
     ctx.fillStyle = palette.label;
     for (const axle of [-14, 11]) {
       for (const side of [-1, 1]) ctx.fillRect(axle, side * 10 - 3, 8, 6);
@@ -101,11 +124,29 @@
     ctx.fillStyle = palette.label;
     ctx.font = "bold 13px monospace";
     ctx.textAlign = "center";
-    ctx.fillText(letter, x, y - scale * 15 - 4);
+    const labelY = y - scale * 15 - 4;
+    ctx.fillText(letter, x, labelY < 13 ? y + scale * 15 + 12 : labelY);
+  }
+
+  function band(from, to, halfWidth, trackY) {
+    ctx.beginPath();
+    ctx.moveTo(from, trackY(from) - halfWidth);
+    const slices = Math.ceil((to - from) / 4);
+    for (let i = 1; i <= slices; i++) {
+      const x = from + (to - from) * i / slices;
+      ctx.lineTo(x, trackY(x) - halfWidth);
+    }
+    for (let i = slices; i >= 0; i--) {
+      const x = from + (to - from) * i / slices;
+      ctx.lineTo(x, trackY(x) + halfWidth);
+    }
+    ctx.closePath();
+    ctx.fill();
   }
 
   function draw() {
-    const {width, height, leader, follower, mid, lateral, xAt} = scene();
+    if (!palette) return;
+    const {width, height, leader, follower, lateral, xAt, trackY} = scene();
     if (!width || !height) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = Math.round(width * dpr), h = Math.round(height * dpr);
@@ -119,38 +160,66 @@
     const gapMin = Number(gap.min);
     const near = xAt(gapMin);
     const wakeHalf = height * 0.25;
-    const scale = Math.min(1.7, width / 340);
+    const scale = Math.min(1.7, width / 340, height / 105);
+    // Car A sets the measured wake. The overlay follows Car B and illustrates local flow.
+    const followerY = trackY(follower) + lateral;
+    const heading = x => Math.atan2(trackY(x + 1) - trackY(x - 1), 2);
+    const followerRear = follower - 20 * scale;
+    const followerSpan = 40 * scale;
+    const followerTrail = Math.max(followerSpan, width * 0.14);
+    const followerInk = ctx.createLinearGradient(followerRear - followerTrail, 0, follower + followerSpan, 0);
+    followerInk.addColorStop(0, "transparent");
+    followerInk.addColorStop(0.42, palette.follower);
+    followerInk.addColorStop(0.7, palette.follower);
+    followerInk.addColorStop(1, "transparent");
+    if (corner) {
+      ctx.fillStyle = palette.label;
+      ctx.globalAlpha = .10;
+      band(0, width, height * .30, trackY);
+    }
     ctx.fillStyle = palette.follower;
     ctx.globalAlpha = 0.13;
-    ctx.fillRect(edge, mid - wakeHalf, leader - edge, wakeHalf * 2);
+    band(edge, leader, wakeHalf, trackY);
     for (let row = -8; row <= 8; row++) {
       const cross = row * height / 19;
-      const base = mid + cross;
-      ctx.strokeStyle = palette.flow;
-      ctx.globalAlpha = Math.abs(cross) < wakeHalf ? 0.82 : 0.45;
+      const fromFollower = cross - lateral;
+      const nearFollower = Math.exp(-((fromFollower / (22 * scale)) ** 2));
+      const side = fromFollower < 0 ? -1 : 1;
       ctx.lineWidth = 1;
       ctx.setLineDash([8, 7]);
       ctx.lineDashOffset = phase * 32;
       const offsetAtRow = cross / wakeHalf * tow.halfW;
-      ctx.beginPath();
+      const path = new Path2D();
       for (let x = 0; x <= width + 4; x += 4) {
         const fraction = Math.max(0, Math.min(1, (near - x) / Math.max(1, near - edge)));
         const gapAtX = gapMin + fraction * (tow.range - gapMin);
         const wake = x >= edge && x < leader
           ? model.wakeOf(gapAtX, offsetAtRow, "classic", tow) : 0;
-        const y = base + wake * height * 0.17 * Math.sin(x / width * 31 + phase * 4 + row);
-        if (x === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        const fromRear = (followerRear - x) / followerTrail;
+        const aroundCar = Math.exp(-(((x - follower) / (followerSpan * 0.65)) ** 2));
+        const trail = fromRear > 0 ? Math.min(1, fromRear * 7) * Math.max(0, 1 - fromRear) : 0;
+        const leaderWave = wake * height * 0.12 * Math.sin(x / width * 31 + phase * 4 + row);
+        const split = side * 14 * scale * aroundCar;
+        const ripple = trail * scale * (2 + 9 * followerWake)
+          * Math.sin((x - followerRear) / followerTrail * 18 + phase * 6 + row);
+        const y = trackY(x) + cross + leaderWave + nearFollower * (split + ripple);
+        if (x === 0) path.moveTo(x, y);
+        else path.lineTo(x, y);
       }
-      ctx.stroke();
+      ctx.strokeStyle = palette.flow;
+      ctx.globalAlpha = Math.abs(cross) < wakeHalf ? 0.82 : 0.45;
+      ctx.stroke(path);
+      if (nearFollower > 0.12) {
+        ctx.strokeStyle = followerInk;
+        ctx.globalAlpha = nearFollower * (0.7 + 0.3 * followerWake);
+        ctx.lineWidth = 1.6;
+        ctx.stroke(path);
+      }
     }
     ctx.globalAlpha = 1;
-    ctx.strokeStyle = palette.label;
-    ctx.setLineDash(followerWake > 0 ? [3, 3] : []);
-    ctx.strokeRect(follower - 24 * scale, mid + lateral - 17 * scale, 48 * scale, 34 * scale);
     ctx.setLineDash([]);
-    car(leader, mid, scale, palette.leader, "A");
-    car(follower, mid + lateral, scale, palette.follower, "B");
+    car(leader, trackY(leader), scale, palette.leader, "A", heading(leader));
+    car(follower, followerY, scale, palette.follower, "B", heading(follower), true);
   }
 
   function tick(time) {
@@ -171,6 +240,12 @@
   function update() {
     const distance = Number(gap.value);
     const onStraight = document.querySelector("input[name=section]:checked").value === "straight";
+    if (corner === onStraight) {
+      corner = !onStraight;
+      replayHost.hidden = get("direction-row").hidden = !corner;
+      cornerReplay.stop();
+      cornerReplay.seek(0);
+    }
     const result = measure(distance, offset.checked ? tow.halfW : 0, onStraight);
     followerWake = result.wake;
     const headway = (distance / constants.VMAX).toFixed(2);
@@ -194,10 +269,10 @@
   canvas.addEventListener("pointerdown", event => {
     if (drag || event.button !== 0) return;
     const box = canvas.getBoundingClientRect();
-    const {follower, mid, lateral} = scene();
+    const {follower, lateral, trackY} = scene();
     const y = (event.clientY - box.top) * canvas.clientHeight / box.height;
     const x = pointerX(event, box);
-    if (Math.abs(x - follower) > 34 || Math.abs(y - mid - lateral) > 30) return;
+    if (Math.abs(x - follower) > 34 || Math.abs(y - trackY(follower) - lateral) > 30) return;
     canvas.setPointerCapture(event.pointerId);
     drag = {id: event.pointerId, x, gap: Number(gap.value)};
     canvas.dataset.dragging = "";
@@ -273,6 +348,7 @@
   document.addEventListener("visibilitychange", updateMotion);
   LearnAppearance.mount(syncAppearance);
   new ResizeObserver(draw).observe(canvas);
+  cornerReplay.seek(0);
   update();
   updateMotion();
 })();

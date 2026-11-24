@@ -198,8 +198,8 @@ test("WATCH paused event navigation paints the final subject and event shot in o
     camera: G.camMode, T: G.raceT });
   replay.setPaused(true);
   replay.eventStep(1);
-  assert.deepEqual(frames, [{ paint: true, car: "BBB", prog: 180, camera: 3, T: 4 }]);
-  assert.equal(replay.status().broadcast.shot, "chase");
+  assert.deepEqual(frames, [{ paint: true, car: "BBB", prog: 180, camera: 2, T: 4 }]);
+  assert.equal(replay.status().broadcast.shot, "heli");
   assert.equal(replay.status().paused, true);
   for (const car of cars) assert.equal(car.rPrevPx, car.px, "event navigation clears interpolation");
   replay.stop();
@@ -234,8 +234,8 @@ test("HIGHLIGHTS opens with the event's shot and preserves manual subject and ca
     G.snapGameCam = (paint) => frames.push({ paint, car: G.player.code, camera: G.camMode });
     replay.start(options);
     assert.equal(replay.status().follow, "BBB", "opening follows the first event's driver");
-    assert.equal(replay.status().broadcast.shot, "chase", "opening gets the pass shot");
-    assert.equal(frames.at(-1).camera, 3, "entry snap includes the event camera");
+    assert.equal(replay.status().broadcast.shot, "heli", "opening advances from Side to the next pass shot");
+    assert.equal(frames.at(-1).camera, 2, "entry snap includes the event camera");
     G.camMode = 2; // A viewer-picked HELI camera, with the current driver retained.
     replay.takePicture();
     if (automatic) replay.tick(14); else { replay.setPaused(true); replay.skip(); }
@@ -727,7 +727,7 @@ for (const entry of ["watch-first", "vr-first"]) {
       }
       assert.equal(h.current(), "far", "no ended owner's temporary camera is restored");
       assert.equal(h.stored.get("camMode"), h.index("far"));
-      assert.deepEqual(h.writes, [["camMode", h.index("far")]], "temporary owners never persist their shots");
+      assert.deepEqual(h.writes, [["camMode", h.index("far")], ["camChasePreset", "far"]], "only the initial explicit Far selection persists; temporary owners never write");
       h.G.setCamMode(h.index("chase"));
       assert.equal(h.current(), "chase", "ordinary manual controls still work after release");
       assert.equal(h.stored.get("camMode"), h.index("chase"));

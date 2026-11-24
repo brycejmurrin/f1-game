@@ -2,7 +2,55 @@
 // Split from key-binds.test.mjs (T3-16); the VM rig is tests/helpers/key-binds-rig.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import vm from "node:vm";
 import { read, boot, fakePad, plain, bootUi, menuRig, rawPad, setBtn } from "../helpers/key-binds-rig.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
+
+test("a paired DualSense moves menu focus and shows the controller ring after touch", () => {
+  const h = menuRig();
+  const doc = h.sb.document;
+  const root = doc.documentElement = { dataset: {} };
+  let clicks = 0;
+  const options = [0, 1].map((i) => ({
+    tagName: "BUTTON", getAttribute: () => null, closest: () => null, matches: () => true,
+    getBoundingClientRect: () => ({ left: 0, top: i * 40, width: 40, height: 30 }),
+    focus() { doc.activeElement = this; }, scrollIntoView() {},
+    dispatchEvent(event) {
+      h.sb.MenuNav.onKeyDown(Object.assign(event, { preventDefault() {}, isTrusted: false }));
+    },
+    click() { clicks++; },
+  }));
+  const layer = { id: "overlay", contains: (el) => options.includes(el),
+    querySelectorAll: () => options, querySelector: () => options[0] };
+  h.sb.UiLayers.top = () => layer;
+  h.sb.UiLayers.shown = () => true;
+  vm.runInContext(read("js/ui/menu-nav.js"), h.sb, { filename: absSrc("js/ui/menu-nav.js") });
+  const pad = fakePad(h.sb, h.fire, "DualSense Wireless Controller (Vendor: 054c Product: 0ce6)");
+  doc.activeElement = options[0];
+  h.tick();
+  assert.equal(root.dataset.gamepadNav, undefined, "an idle controller leaves touch mode alone");
+  pad.press(13); h.tick();
+  assert.equal(doc.activeElement, options[1], "the real menu navigator moves focus down");
+  assert.equal(root.dataset.gamepadNav, "on", "a synthetic event enables explicit focus styling");
+  pad.release(13); h.tick();
+  assert.equal(root.dataset.gamepadNav, "on", "the focused control stays marked after release");
+  h.fire("keydown", { isTrusted: false, target: doc.body, preventDefault() {} });
+  assert.equal(root.dataset.gamepadNav, "on", "synthetic keys cannot clear the ring");
+  h.fire("pointerdown", { isTrusted: true, target: doc.body });
+  h.tick();
+  assert.equal(root.dataset.gamepadNav, undefined, "a touch clears the ring and the idle pad leaves it off");
+  pad.press(0); h.tick();
+  assert.equal(clicks, 1, "Cross activates the focused item");
+  assert.equal(root.dataset.gamepadNav, "on");
+  pad.release(0); h.tick();
+  h.fire("keydown", { isTrusted: true, target: doc.body, key: "Tab", code: "Tab", preventDefault() {} });
+  assert.equal(root.dataset.gamepadNav, undefined, "the keyboard takes over from the controller");
+  pad.press(12); h.tick();
+  assert.equal(root.dataset.gamepadNav, "on");
+  h.navOpen.on = false; h.tick();
+  assert.equal(root.dataset.gamepadNav, undefined, "leaving menus clears the ring");
+  assert.match(read("css/responsive.css"), /:root\[data-gamepad-nav="on"\] :focus:not\(body\)/);
+});
 
 test("reconnecting the same pad requires a release before it can activate a menu again", () => {
   const h = menuRig(), pad = rawPad();

@@ -138,6 +138,7 @@ test("CAM touch long-press keeps the picker open after normal capture release", 
   await page.waitForFunction(() => document.getElementById("campicker")?.hidden === false, null, { polling: 100, timeout: 5000 });
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   await expect(page.locator("#campicker")).toBeVisible();
+  await page.locator('#campicker [data-category="chase"]').click();
   await page.locator('#campicker [data-idx="1"]').click();
   await expect(cam).toHaveText("FAR");
   await expect(page.locator("#campicker")).toBeHidden();

@@ -42,6 +42,13 @@
         ${plot(35, 'Engine alone', engine)}
         ${plot(325, enabled ? 'Engine + MGU-K' : 'Selected · assist off', delivered)}
         <text x="300" y="231" text-anchor="middle">Dashed line = requested axle torque · full scale 2,400 N·m</text></g>`,
+      replay(progress) {
+        const time = progress * 2;
+        const y = torque => 184 - torque / 2400 * 125;
+        return {svg: LearnSandbox.cursor(35 + 235 * progress, y(engine(time)), 45, 184)
+          + LearnSandbox.cursor(325 + 235 * progress, y(delivered(time)), 45, 184),
+        readout: time.toFixed(1) + ' s · ' + Math.round(delivered(time)) + ' N·m delivered'};
+      },
       metrics: [['Engine at throttle pickup', pickupEngine + ' N·m'], ['Motor at pickup', pickupMotor + ' N·m'], ['Initial shortfall', missing + ' N·m']],
       explanation: 'The 2026 power unit has no MGU-H to spin the turbo. After the throttle opens, exhaust flow rebuilds boost. The MGU-K can add drive torque while boost rises. These traces assume a fixed gear, good traction and a replenished battery. The motor tapers as the engine catches up. Available energy, deployment limits and tyre grip constrain usable torque on track.',
       success: enabled && missing === 0,
@@ -51,6 +58,7 @@
 
   LearnSandbox.mount({
     title: 'Rear brake blending and torque fill',
+    replay: {label: 'torque response', initial: 1},
     intro: 'Compare two moments at one corner. On entry, the rear discs replace fading electrical braking. At the exit, the electric motor fills a gap in engine torque as the turbo spools.',
     controls: [
       { id: 'scenario', label: 'Corner phase', value: 'entry', options: [['entry', 'Entry · brake blending'], ['exit', 'Exit · torque fill']] },
@@ -79,13 +87,18 @@
         <text x="220" y="30" fill="${discColour}" font-size="15">■ Disc braking</text>
         <text x="393" y="30" fill="currentColor" font-size="15">┃ Pedal request</text>
         ${torqueBar(76, 'Before harvest fades', initialMotor, initialDisc, demand)}
-        ${torqueBar(148, 'After harvest fades', motor, disc, demand)}
         <path d="M48 191h500" stroke="currentColor" opacity=".4"/>
         <g fill="currentColor" font-size="14"><text x="48" y="215">0</text>
         <text x="548" y="215" text-anchor="end">2,400 N·m rear-axle torque</text></g>
       </g>`;
       return {
         svg,
+        replay(progress) {
+          const motorNow = initialMotor + (motor - initialMotor) * progress;
+          const discNow = initialDisc + (disc - initialDisc) * progress;
+          return {svg: torqueBar(148, 'As harvest fades', motorNow, discNow, demand),
+            readout: Math.round(motorNow + discNow) + ' N·m delivered'};
+        },
         metrics: [['Motor after fade', `${motor} N·m`], ['Discs after fade', `${disc} N·m`], ['Torque shortfall', `${missing} N·m`]],
         explanation: `The motor initially supplies 60% of this illustrative rear-axle request. After harvesting changes, the rear discs ${response === 'fill' ? 'add ' + (disc - initialDisc) + ' N·m to cover the lost motor torque' : 'stay at their initial torque of ' + initialDisc + ' N·m'}. This snapshot assumes adequate disc capacity and omits engine braking and control delays.`,
         success,

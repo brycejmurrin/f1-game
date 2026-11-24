@@ -250,7 +250,7 @@ test("select-screen vt skips startViewTransition on coarse pointer (phone)", () 
     Flags: { svg: () => "" },
     AppearanceOpts: { applyAll() {} },
     SeasonCal: { canRace: () => true, rounds: () => 0 },
-    TrackMaps: { corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], aspect: () => 1.5, elevProfile: () => null, fitCanvas: () => ({ w: 100, h: 60 }), draw() {} },
+    TrackMaps: { corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"], classColor: () => "", aspect: () => 1.5, elevProfile: () => null, fitCanvas: () => ({ w: 100, h: 60 }), draw() {} },
   };
   sb.window = sb;
   vm.runInNewContext(read("js/ui/select-screen.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/select-screen.js") });

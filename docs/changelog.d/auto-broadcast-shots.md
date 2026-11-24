@@ -1,0 +1,1 @@
+Improved: AUTO broadcast visits every eligible camera angle instead of getting stuck alternating two views, and checks subject framing and scenery visibility before selecting shots in live TV and Watch Race.

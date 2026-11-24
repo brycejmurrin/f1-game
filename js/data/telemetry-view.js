@@ -4,7 +4,7 @@ const DataTelemetryView = (function () {
 
   function create(ctx, lifecycle) {
     const { el, cssColor, textColorOn, COMPOUND } = ctx;
-    const { laneRole, dcode, CHANNELS, cumDist } = DataTelemetryModel;
+    const { laneRole, dcode, CHANNELS, cumDist, mapSpeedMax, mapSpeedColor, speedText } = DataTelemetryModel;
     const { laneColors } = DataTelemetryModel.create(ctx);
     const renderer = DataTelemetryRender.create(ctx);
     const { buildBases } = renderer;
@@ -131,7 +131,7 @@ const DataTelemetryView = (function () {
         playing: false, rate: 1, _raf: 0, _last: 0, onboard: false,
         chart: null, map: null, delta: null,
         chartBase: null, mapBase: null, deltaBase: null, mapT: null,
-        sectors: null, g: null, playBtn: null, a11ySummary: null, updateSummary: null
+        sectors: null, mapMode: "speed", g: null, playBtn: null, a11ySummary: null, updateSummary: null
       };
       view.updateSummary = function () { updateTextSummary(view); };
       // per-driver visibility: visible = primary (solid), visibleC = compare (dashed)
@@ -154,7 +154,7 @@ const DataTelemetryView = (function () {
       laps.forEach(function (t) { scan(t.car); });
       view.tMax = view.tMax || 1;
       laps.forEach(function (t) { t.cum = cumDist(t.car, t.lap && t.lap.lapDuration); });
-      if (primary.lap && primary.lap.s1 !== null && primary.lap.s2 !== null) {
+      if (primary.lap && [primary.lap.s1, primary.lap.s2].every((t) => Number.isFinite(t) && t > 0)) {
         view.sectors = [primary.lap.s1, primary.lap.s1 + primary.lap.s2];
       }
 
@@ -294,8 +294,12 @@ const DataTelemetryView = (function () {
       if (primary.loc && primary.loc.length > 8) {
         const c2 = el("canvas", "dh-canvas dh-map");
         c2.setAttribute("role", "img");
-        c2.setAttribute("aria-label", "Track map for the selected telemetry lanes; dots mark each driver and colour shows speed.");
         c2.setAttribute("aria-describedby", "dh-telem-summary");
+        const modes = el("div");
+        modes.setAttribute("data-map-modes", "");
+        modes.setAttribute("role", "group");
+        modes.setAttribute("aria-label", "Track map coloring");
+        sideArea.appendChild(modes);
         sideArea.appendChild(c2);
         view.map = c2;
         view.mw = 320; view.mh = 320;
@@ -303,24 +307,60 @@ const DataTelemetryView = (function () {
         view.mapBase = makeOffscreen(320, 320, view.ratio);
         // colour key for the car dots on the map
         const mkey = el("div", "dh-maplegend");
-        function mchip(col, code) {
+        function mchip(color, code, reference = false) {
           const item = el("span", "dh-legend-item dh-legend-static");
-          const dot = el("span", "dh-legend-dot dh-mapdot"); dot.style.background = cssColor(col);
+          const dot = el("span", "dh-legend-dot dh-mapdot");
+          dot.style.background = color;
+          if (reference) dot.setAttribute("data-reference", "");
           item.appendChild(dot); item.appendChild(document.createTextNode(code));
           return item;
         }
         // one map-legend chip per lane, in that lane's colour
         view.laps.forEach(function (t, i) {
           const badge = DataTabUtils.sessionSuffix(dupNum, t.d.num, t.sessionLabel);
-          mkey.appendChild(mchip(view.laneCols[i], dcode(t.d) + badge + " · " + laneRole(i)));
+          mkey.appendChild(mchip(cssColor(view.laneCols[i]), dcode(t.d) + badge + " · " + laneRole(i), i === 0));
         });
-        // track colouring key: slow (blue) -> fast (red), sectors marked S2/S3
-        const gi = el("span", "dh-legend-item dh-legend-static");
-        gi.appendChild(document.createTextNode("SLOW"));
-        gi.appendChild(el("span", "dh-gradbar"));
-        gi.appendChild(document.createTextNode("FAST"));
-        mkey.appendChild(gi);
         sideArea.appendChild(mkey);
+        const key = el("div", "dh-maplegend");
+        key.setAttribute("data-map-scale", "");
+        sideArea.appendChild(key);
+        const vMax = mapSpeedMax(primary.car);
+        const canSectors = !!view.sectors && Number.isFinite(Date.parse(primary.lap?.dateStart));
+        const speed = el("button", "dh-tbtn", "Speed"), sectors = el("button", "dh-tbtn", "Sectors");
+        for (const button of [speed, sectors]) button.type = "button";
+        if (canSectors && vMax > 0) modes.append(speed, sectors);
+        else modes.hidden = true;
+        function updateMapKey() {
+          const sectorMode = view.mapMode === "sectors";
+          speed.setAttribute("aria-pressed", String(!sectorMode));
+          sectors.setAttribute("aria-pressed", String(sectorMode));
+          c2.setAttribute("aria-label", "Telemetry track map with driver positions and reference lap " +
+            (sectorMode ? "sectors." : vMax > 0 ? "speed." : "trace."));
+          key.replaceChildren();
+          if (sectorMode) {
+            TrackMaps.sectorColors().forEach((color, i) => key.appendChild(mchip(color, "S" + (i + 1))));
+          } else if (vMax > 0) {
+            const item = el("span", "dh-legend-item dh-legend-static");
+            const ramp = el("span", "dh-gradbar");
+            const stops = [0, 0.375, 0.5, 0.625, 1].map((f) => mapSpeedColor(f) + " " + f * 100 + "%");
+            ramp.style.background = "linear-gradient(90deg in srgb, " + stops.join(", ") + ")";
+            item.append(el("span", "", speedText(0)), ramp, el("span", "", speedText(vMax)));
+            key.appendChild(item);
+          } else {
+            key.appendChild(el("span", "", "Speed unavailable"));
+          }
+        }
+        function setMapMode(mode) {
+          if (view.mapMode === mode) return;
+          view.mapMode = mode;
+          updateMapKey();
+          renderer.buildMapBase(view);
+          paintFrame(view);
+        }
+        if (canSectors && !vMax) view.mapMode = "sectors";
+        speed.addEventListener("click", () => setMapMode("speed"));
+        sectors.addEventListener("click", () => setMapMode("sectors"));
+        updateMapKey();
       }
 
       appendStintsPits(sideArea, primary);

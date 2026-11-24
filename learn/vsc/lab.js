@@ -7,6 +7,7 @@
   const prediction = get("prediction");
   const timeline = get("timeline");
   const play = get("play");
+  const speed = get("replay-speed");
   const settings = [
     { id: "green-speed", key: "greenSpeed", scale: 1, unit: " km/h" },
     { id: "vsc-speed", key: "vscSpeed", scale: 1, unit: " km/h" },
@@ -156,7 +157,7 @@
   }
 
   function tick(now) {
-    if (lastFrame) elapsed = Math.min(duration, elapsed + (now - lastFrame) * 3);
+    if (lastFrame) elapsed = Math.min(duration, elapsed + Math.min(now - lastFrame, 100) * Number(speed.value));
     lastFrame = now;
     drawReplay();
     if (elapsed < duration) raf = requestAnimationFrame(tick);
@@ -219,7 +220,7 @@
       reduced = prefersReduced;
       if (reduced) stopReplay();
     }
-    play.hidden = reduced;
+    play.hidden = get("replay-speed-row").hidden = reduced;
   });
   selectFixture();
 })();

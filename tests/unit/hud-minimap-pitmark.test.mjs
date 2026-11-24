@@ -115,10 +115,13 @@ function minimap(cues = false, zones = [], sameInk = false, palette = null) {
       },
     },
     ...(palette && { CvdPalette: palette }),
-    TrackMaps: { sectorColors: () => palette ? ["sec1", "sec2", "sec3"].map(k => palette.hex(k)) : ["#fff", "#fff", "#fff"], drsZones: () => zones },
     GhostShare: { hasGuest: () => false }, Ghost: { hasGhost: () => true },
   };
   vm.createContext(sb);
+  const maps = "js/ui/track-maps.js";
+  vm.runInContext(fs.readFileSync(path.join(ROOT, maps), "utf8").replace(/^const TrackMaps/m, "var TrackMaps"), sb, { filename: absSrc(maps) });
+  sb.TrackMaps = { ...sb.TrackMaps, drsZones: () => zones,
+    ...(sameInk && { sectorColors: () => ["#fff", "#fff", "#fff"] }) };
   vm.runInContext(hud + "\nthis.HudMinimap = HudMinimap;", sb, { filename: absSrc("js/ui/hud-minimap.js") });
   const map = sb.HudMinimap.create(G, {
     vpW: () => 844, vpH: () => 390, teamCss: () => "#fff", replayGhost: () => ({ at: () => ghost }),
@@ -133,10 +136,12 @@ test("colourblind cues OFF keeps the solid sector strokes and filled ghost dot",
   assert.deepEqual(h.canvases[0].log.filter((e) => e[0] === "stroke").map((e) => e.at(-1).dash), [[], [], []]);
   assert.equal(h.canvases[0].log.some((e) => e[0] === "fillText"), false);
   assert.deepEqual(h.targetLog.filter((e) => e[0] === "arc").map((e) => e[3]), [3.4, 4]);
+  assert.equal(h.canvases[0].log.filter((e) => e[0] === "fillRect").length, 5,
+    "the cached map has a checkered start tick");
 });
 
 test("colourblind sectors have distinct dash patterns and cached S1/S2/S3 labels with equal inks", () => {
-  const h = minimap(true); h.map.draw();
+  const h = minimap(true, [], true); h.map.draw();
   const background = h.canvases[0].log;
   const strokes = background.filter((e) => e[0] === "stroke").map((e) => e.at(-1));
   assert.deepEqual(strokes.map((e) => e.dash), [[6, 3], [2, 3], [6, 2, 2, 2]]);

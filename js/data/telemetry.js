@@ -210,7 +210,7 @@ const DataTelemetry = (function () {
           // These two ARE the telemetry view. A rejected request is a failed
           // load, while a fulfilled [] is a valid "not published" answer.
           F1API.carData(sessionKey, d.num, paddedStart, end, start),
-          F1API.locationData(sessionKey, d.num, start, end)
+          F1API.locationData(sessionKey, d.num, paddedStart, end)
         ];
         if (withExtras) {
           jobs.push(F1API.stints(sessionKey, d.num).catch(function () { return []; }));
@@ -225,17 +225,8 @@ const DataTelemetry = (function () {
           // reach the pit entry, which spurs off the circuit, stretches the map's
           // x/y bounds and rescales everything — the same track, drawn as a
           // different shape in one session than the other.
-          const endMs = isFinite(ms) ? ms + dur * 1000 : null;
-          function clipToLap(list) {
-            if (!endMs || !list || !list.length) return list || [];
-            const kept = list.filter(function (s) {
-              const at = +s.date;
-              return !isFinite(at) || at <= endMs;
-            });
-            // Coverage and sparsity do not authorize samples from the next lap.
-            return kept;
-          }
-          return { d: d, lap: lap, car: DataTelemetryModel.clipCar(res[0], dur), loc: dropStrays(clipToLap(res[1])),
+          const loc = DataTelemetryModel.clipLocations(dropStrays(res[1] || []), ms, ms + dur * 1000);
+          return { d: d, lap: lap, car: DataTelemetryModel.clipCar(res[0], dur), loc: loc,
                    stints: res[2] || [], pits: res[3] || [] };
         });
       });

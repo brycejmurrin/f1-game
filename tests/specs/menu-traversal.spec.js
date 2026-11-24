@@ -216,7 +216,18 @@ test.describe("Menu traversal — keyboard and controller", () => {
   test("the title menu, and its lack of a door", async ({ page }) => {
     await boot(page);
     await walk(page, "overlay");
+    const ring = await page.evaluate(() => {
+      const focused = document.activeElement;
+      if (!focused) return { active: false, outline: "", width: 0 };
+      const style = getComputedStyle(focused);
+      return { active: focused.matches(':root[data-gamepad-nav="on"] #overlay :focus'),
+        outline: style.outlineStyle, width: parseFloat(style.outlineWidth) };
+    });
+    expect(ring.active, "the D-pad leaves a visibly focused control").toBe(true);
+    expect(ring.outline).toBe("solid");
+    expect(ring.width).toBeGreaterThanOrEqual(3);
     await page.keyboard.press("Escape");
+    await expect(page.locator("html")).not.toHaveAttribute("data-gamepad-nav", "on");
     await page.evaluate(() => window.__aud.padPress(1));
     expect(await page.evaluate(() => window.__aud.top()), "the title has no Escape door").toBe("overlay");
   });

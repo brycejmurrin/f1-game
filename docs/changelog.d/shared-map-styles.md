@@ -1,0 +1,1 @@
+Improved: The race minimap, Circuit Detail and Data Hub share map symbols, with matching aero colors and a Colour Vision-aware circuit legend. Data Hub can switch between speed and sector colors and labels the speed scale in your chosen units.

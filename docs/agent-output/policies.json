@@ -741,6 +741,11 @@
       "presentation": "native",
       "preserve": "Tree equality and smoke success; no prose in GITHUB_OUTPUT"
     },
+    "tools/ci/pages-verified-base.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "Only the verified first-parent commit SHA on stdout; empty selects the whole tip"
+    },
     "tools/ci/path-overlap.mjs": {
       "action": "keep-native",
       "presentation": "native",
