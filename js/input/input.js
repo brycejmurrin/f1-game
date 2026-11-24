@@ -679,16 +679,17 @@ const Input = (function () {
     return localControlDevice || (touchControlsNeeded() ? "touch" : "keyboard");
   }
   function touchDrivingControls() { return controlDevice() === "touch"; }
+  function releaseTouchDrivingControls(touchOnly = false) {
+    holdReleaseAll(false, touchOnly);
+    btnSteerVal = 0; btnSteerT = 0;
+    clearCanvasSteering();
+  }
   function setLocalControlDevice(device, availabilityChanged = false) {
     const before = controlDevice();
     localControlDevice = device;
     const after = controlDevice();
     if (before === after && !availabilityChanged) return;
-    if (before === "touch" && after !== "touch") {
-      holdReleaseAll();
-      btnSteerVal = 0; btnSteerT = 0;
-      clearCanvasSteering();
-    }
+    if (before === "touch" && after !== "touch") releaseTouchDrivingControls();
     if (before === "controller" && after !== "controller") {
       if (padThrottleToggle) { padThrottle = false; padThrottleVal = 0; }
       if (padLookBackToggle) padLookBack = false;
@@ -2269,7 +2270,12 @@ const Input = (function () {
       if (_coarseMql && _coarseMql.addEventListener) {
         _coarseMql.addEventListener("change", () => {
           const touch = touchControlsNeeded();
-          if (touch) localControlDevice = physicalPadAvailable ? "controller" : null;
+          if (touch) {
+            // The pointer-kind subscribers may hide the dock while a thumb is
+            // still down. Retire its input before they update visibility.
+            if (physicalPadAvailable && touchDrivingControls()) releaseTouchDrivingControls(true);
+            localControlDevice = physicalPadAvailable ? "controller" : null;
+          }
           for (const cb of _coarseCbs) { try { cb(touch); } catch (_) { /* one bad subscriber must not stop the rest */ } }
         });
       }

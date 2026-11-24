@@ -77,11 +77,12 @@ function boot(initOpts) {
   for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
-  Input.init(el(), initOpts);
+  const canvas = el();
+  Input.init(canvas, initOpts);
   const pedal = el("btn-throttle");
   const tap = () => { pedal.fire("pointerdown"); pedal.fire("pointerup"); };
   const blur = () => (listeners.blur || []).forEach((f) => f({}));
-  return { Input, pedal, tap, blur, listeners, sb, clock, model: vm.runInContext("PedalTravel", ctx) };
+  return { Input, canvas, pedal, tap, blur, listeners, sb, clock, model: vm.runInContext("PedalTravel", ctx) };
 }
 
 // Real Input + InputPadMenu; only the browser's pad snapshots and pause layer
@@ -311,6 +312,46 @@ test("LATCH: a second finger landing on GAS does not cancel the latch while the 
   pedal.fire("pointerdown", { pointerId: 3 });
   pedal.fire("pointerup", { pointerId: 3 });
   assert.equal(Input.throttleLatched(), false, "a fresh tap still lifts it");
+});
+
+test("a pointer change releases touch GAS before an idle pad hides the dock", () => {
+  for (const [withPad, latch] of [[false, false], [true, false], [true, true]]) {
+    const { Input, canvas, pedal, sb, listeners } = boot();
+    const brake = sb.document.getElementById("btn-brake");
+    let pointerChanged, throttleAtNotification;
+    const primaryPointer = {
+      matches: false,
+      addEventListener(type, fn) { if (type === "change") pointerChanged = fn; },
+    };
+    sb.matchMedia = () => primaryPointer;
+    Input.onPointerKindChange(() => { throttleAtNotification = Input.throttleLevel(); });
+    if (withPad) {
+      const pad = { index: 0, id: "Idle pad", connected: true, mapping: "standard", axes: [0, 0, 0, 0], buttons: [] };
+      sb.navigator.getGamepads = () => [pad];
+      for (const fn of listeners.gamepadconnected) fn({ gamepad: pad });
+    }
+    const touch = { pointerId: 1, pointerType: "touch" };
+    const mouse = { pointerId: 2, pointerType: "mouse", button: 0 };
+    canvas.fire("touchstart", { changedTouches: [{ identifier: 1, clientX: 0, clientY: 0 }] });
+    Input.setThrottleLatch(latch);
+    pedal.fire("pointerdown", touch);
+    if (latch) pedal.fire("pointerup", touch);
+    brake.fire("pointerdown", mouse);
+    assert.equal(Input.controlDevice(), "touch");
+    assert.equal(Input.throttleLevel(), 1);
+    assert.equal(Input.brakeLevel(), 1);
+
+    primaryPointer.matches = true;
+    pointerChanged();
+    assert.equal(Input.controlDevice(), withPad ? "controller" : "touch");
+    assert.equal(throttleAtNotification, withPad ? 0 : 1);
+    assert.equal(Input.brakeLevel(), 1, "the mouse contact was not released");
+    if (withPad) {
+      assert.equal(Input.throttleLatched(), false);
+      pedal.fire("pointermove", { ...touch, clientY: 40 });
+      assert.equal(Input.throttleLevel(), 0, "a late move cannot restore the retired contact");
+    }
+  }
 });
 
 test("input hunt fixes: pad steer gated under a menu, rotation keeps the tilt zero, Ctrl/Alt reserved, lobby asks for tilt", () => {
