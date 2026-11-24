@@ -314,6 +314,8 @@ const dataScriptsLoaded = new Set();
 const DATA_READY = {
   "js/data/api-transport.js": () => typeof F1Transport !== "undefined",
   "js/data/tab-utils.js": () => typeof DataTabUtils !== "undefined",
+  "js/data/telemetry-context.js": () => typeof DataTelemetryContext !== "undefined",
+  "js/data/telemetry-replay.js": () => typeof DataTelemetryReplay !== "undefined",
   "js/data/telemetry-model.js": () => typeof DataTelemetryModel !== "undefined",
   "js/data/telemetry-render.js": () => typeof DataTelemetryRender !== "undefined",
   "js/data/telemetry-player.js": () => typeof DataTelemetryPlayer !== "undefined",

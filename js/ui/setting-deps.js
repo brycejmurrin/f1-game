@@ -67,6 +67,8 @@ const SettingDeps = (function () {
      null (parent unknown: leave the control alone). `reason` stays short: it
      sits inside a one-line label. */
   const layer = (slider, toggle, name) => ({ key: "layer-" + toggle, ids: [slider], parent: toggle, reason: name + " layer is off" });
+  const touchDriving = () => typeof Input === "undefined" ? null : Input.touchDrivingControls?.() ?? null;
+  const padAvailable = () => typeof Input === "undefined" ? null : Input.physicalPadAvailable?.() ?? null;
   const RULES = Object.freeze([
     // A container rule first: its re-enable runs before a narrower rule re-greys a control inside it.
     // SOUND EFFECTS row AND the master speaker button (engine.js sfxOk).
@@ -74,21 +76,27 @@ const SettingDeps = (function () {
     // Radio voices play through the master bus (radio-voice.js).
     { key: "sound-radio", ids: ["as-spot", "as-focus", "as-rpack", "as-rpreset"], parent: "soundbtn", reason: "SOUND is muted" },
     { key: "steer-tilt", ids: ["pm-tiltsimple", "pm-smooth", "pm-tiltcurve"],
-      when: (s) => (typeof Input !== "undefined" && Input.phoneTiltAvailable?.()) || s.is("pm-steer", "tilt"),
+      when: (s) => (typeof Input !== "undefined" && Input.phoneTiltAvailable?.()) || (touchDriving() !== false && s.is("pm-steer", "tilt")),
       reason: "Requires TILT steering" },
     { key: "steer-touch", ids: ["pm-touchrange", "pm-dragsmooth", "pm-touchcurve"],
-      parent: "pm-steer", values: ["touch"], reason: "TOUCH steering only" },
-    { key: "steer-touch-speed", ids: ["pm-touchdragspeed"], runtime: true,
-      parent: "pm-steer", values: ["touch"], reason: "TOUCH steering only" },
-    // TOUCH always drives the throttle for you (game.js throttleMode()).
-    { key: "throttle-touch", ids: ["pm-throttlemode"], parent: "pm-steer", except: ["touch"], reason: "TOUCH uses AUTO gas" },
+      when: (s) => touchDriving() !== false && s.is("pm-steer", "touch"), reason: "TOUCH steering only" },
+    { key: "steer-touch-speed", ids: ["pm-touchdragspeed", "pm-touch-steering-guide"], runtime: true,
+      when: (s) => touchDriving() !== false && s.is("pm-steer", "touch"), reason: "TOUCH steering only" },
+    { key: "steer-pad", ids: ["pm-paddz", "pm-padsat"], when: padAvailable, reason: "Connect a controller" },
+    { key: "steer-pad-curve", ids: ["pm-padcurve"],
+      when: (s) => (s.is("pm-xr-mode", "on") && s.is("pm-xr-input", "controllers")) || padAvailable(),
+      reason: "Connect a controller" },
+    // Drag steering uses AUTO gas only while driving by touch.
+    { key: "throttle-touch", ids: ["pm-throttlemode"],
+      when: (s) => touchDriving() === false || s.is("pm-steer", "tilt", "buttons"), reason: "TOUCH uses AUTO gas" },
     // PREDICTIVE CUE (1 = OFF) outranks the line-speed cue and is what condition-aware timing adjusts.
     { key: "cue-line", ids: ["pm-linebrakecue"], parent: "pm-brakecue", values: ["1"], reason: "PREDICTIVE CUE is on" },
     { key: "cue-condition", ids: ["pm-condition-cues"], runtime: true,
       parent: "pm-brakecue", except: ["1"], reason: "PREDICTIVE CUE is OFF" },
     // Button size, opacity and handedness style the on-screen touch dock only.
-    { key: "touch-dock", ids: ["pm-btnscale", "pm-btnopacity", "pm-mirror"], reason: "Touch controls only",
-      when: () => (typeof Input !== "undefined" && Input.touchControlsNeeded ? !!Input.touchControlsNeeded() : null) },
+    { key: "touch-dock", ids: ["pm-steer", "pm-btnscale", "pm-btnopacity", "pm-mirror"], when: touchDriving, reason: "Touch controls only" },
+    { key: "touch-pedals", ids: ["pm-pedalslide", "pm-touch-response-fields"], runtime: true,
+      when: touchDriving, reason: "Touch controls only" },
     { key: "hud-off", ids: ["pm-hudprofile", "pm-hudmetrics", "pm-hudmap", "pm-hudgaps", "pm-hudmirror", "pm-panelopacity"],
       parent: "pm-hidehud", values: ["on"], reason: "HUD is OFF" },
     // SGSR reconstructs a below-full buffer; at HIGH there is nothing to upscale.
@@ -98,6 +106,8 @@ const SettingDeps = (function () {
     // HIGH CONTRAST keeps every plate solid (tokens.css --hud-panel-a-eff).
     { key: "panel-contrast", ids: ["pm-panelopacity"], reason: "Solid under HIGH CONTRAST",
       when: () => (doc() ? doc().documentElement.getAttribute("data-ui-contrast") !== "high" : null) },
+    { key: "pad-pedal-deadzone", ids: ["pm-padgasdz", "pm-padbrakedz"], runtime: true, reason: "Connect a controller",
+      when: () => typeof Input === "undefined" ? null : Input.physicalPadAvailable?.() ?? Input.padPresent?.() ?? null },
     { key: "metrics-off", ids: ["pm-metrics-page", "pm-metrics-pos", "pm-metrics-size"], runtime: true,
       parent: "pm-metrics", reason: "OVERLAY is OFF" },
     { key: "xr-off", ids: ["pm-xr-backend", "pm-xr-input"], runtime: true, parent: "pm-xr-mode", reason: "VR MODE is OFF" },
@@ -420,6 +430,9 @@ const SettingDeps = (function () {
     const d = doc();
     if (!d) return;
     for (const t of ["change", "input", "click"]) d.addEventListener(t, soon, true);
+    if (typeof window !== "undefined") {
+      for (const t of ["gamepadconnected", "gamepaddisconnected"]) window.addEventListener?.(t, soon);
+    }
     if (typeof SettingsNav !== "undefined" && SettingsNav.onEnter) SettingsNav.onEnter(soon);
     // Owners grey their controls on their own clocks (Spotify connecting, a
     // DAILY race opening): follow every disabled / aria-disabled change.

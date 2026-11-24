@@ -3373,6 +3373,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/data/telemetry-context.js",
+      "global": "DataTelemetryContext",
+      "roster": "LAZY_DATA"
+    },
+    {
       "path": "js/data/telemetry-model.js",
       "global": "DataTelemetryModel",
       "roster": "LAZY_DATA"
@@ -3385,6 +3390,11 @@
     {
       "path": "js/data/telemetry-render.js",
       "global": "DataTelemetryRender",
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/telemetry-replay.js",
+      "global": "DataTelemetryReplay",
       "roster": "LAZY_DATA"
     },
     {

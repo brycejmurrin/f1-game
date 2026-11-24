@@ -177,9 +177,15 @@ window.SettingRow = (function () {
         step(p, dir, cur.read, cur.write);
       });
     }
-    const stop = (e) => { if (e && e.stopPropagation) e.stopPropagation(); };
-    if (p.prev) p.prev.onclick = (e) => { stop(e); step(p, -1, read, write); };
-    if (p.next) p.next.onclick = (e) => { stop(e); step(p, 1, read, write); };
+    function stepFromPointer(event, button, dir) {
+      event?.stopPropagation?.();
+      // Some browsers focus the chevron on click. Hand that focus to the
+      // select so the next keyboard or controller input stays on this row.
+      if (doc()?.activeElement === button && !p.sel.disabled) p.sel.focus({ preventScroll: true });
+      step(p, dir, read, write);
+    }
+    if (p.prev) p.prev.onclick = (e) => stepFromPointer(e, p.prev, -1);
+    if (p.next) p.next.onclick = (e) => stepFromPointer(e, p.next, 1);
     pointerOnly(p);
     paint(p.el, read());
     return p.el;

@@ -65,7 +65,7 @@ const DataTelemetryView = (function () {
       return ht;
     }
 
-    function buildTelemetryView(detail, tels, track) {
+    function buildTelemetryView(detail, tels, header, track) {
       host = detail;
       lifecycle.stop();
       const laps = tels.filter(function (t) { return t.car && t.car.length; });
@@ -113,6 +113,8 @@ const DataTelemetryView = (function () {
           ht.appendChild(lapEl);
         }, li < 0 ? "NO CAR DATA" : laneRole(li)));
       });
+
+      tels.filter((t) => t.lap && t.sessionKey != null).forEach((t) => mainArea.appendChild(DataTelemetryContext.panel(t, el)));
 
       const view = {
         laps: laps,
@@ -177,6 +179,7 @@ const DataTelemetryView = (function () {
       textSummary.appendChild(textSummaryBody);
       view.a11ySummary = textSummaryBody;
       mainArea.appendChild(textSummary);
+      view.replay = DataTelemetryReplay.create(view, ctx, player);
       mainArea.appendChild(buildTransport(view));
 
       const isLS = shortLS();
@@ -407,6 +410,31 @@ const DataTelemetryView = (function () {
 
       detail.appendChild(mainArea);
       detail.appendChild(sideArea);
+      if (view.replay) {
+        const replay = view.replay.element;
+        const switcher = el("div");
+        switcher.setAttribute("data-telemetry-views", "");
+        switcher.setAttribute("role", "group");
+        switcher.setAttribute("aria-label", "Telemetry view");
+        const charts = el("button", "dh-tbtn", "Charts"), track = el("button", "dh-tbtn", "Track Replay");
+        charts.type = track.type = "button";
+        function showReplay(show) {
+          detail.toggleAttribute("data-telemetry-replay-view", show);
+          mainArea.hidden = sideArea.hidden = show;
+          replay.hidden = !show;
+          charts.setAttribute("aria-pressed", String(!show));
+          track.setAttribute("aria-pressed", String(show));
+          detail.scrollTop = 0;
+          if (show) view.replay.resize();
+        }
+        charts.addEventListener("click", () => { showReplay(false); charts.focus(); });
+        track.addEventListener("click", () => { showReplay(true); track.focus(); });
+        switcher.append(charts, track);
+        header.setAttribute("data-telemetry-view-header", "");
+        header.insertBefore(switcher, header.lastElementChild);
+        showReplay(false);
+        detail.appendChild(replay);
+      }
 
       // currentCSSZoom reads 1 on a detached tree, so the ratio derived above
       // missed any ancestor zoom. Re-derive it now that the canvases are live —

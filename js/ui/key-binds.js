@@ -683,6 +683,7 @@ function create(G) {
   if (typeof SettingsNav !== "undefined" && SettingsNav && SettingsNav.onLeave) {
     SettingsNav.onLeave((id) => { if (id === "controls") disarmAll(); });
   }
+  window.addEventListener("apexbuttonprofileapply", () => { disarmAll(); rerender(); });
   window.addEventListener("blur", cancelCalibration);
   if (keys || pad) Log.info("ui", "KeyBinds.create");
   return {

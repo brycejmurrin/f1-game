@@ -26,20 +26,50 @@ const LearnSandbox = (() => {
     const studio = element("div", root);
     studio.id = "learn-studio";
     const instrument = panel(studio);
+    instrument.className = "lesson-instrument";
+    const diagramView = element("div", instrument);
+    diagramView.className = "diagram-view";
+    diagramView.id = "lesson-diagram";
+    diagramView.setAttribute("role", "region");
+    diagramView.setAttribute("aria-label", lesson.title + " diagram");
     const diagram = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     diagram.setAttribute("viewBox", "0 0 600 240");
     diagram.setAttribute("role", "img");
-    instrument.appendChild(diagram);
+    diagramView.appendChild(diagram);
+    const expand = element("button", instrument, "Expand diagram");
+    expand.type = "button";
+    expand.className = "expand-diagram";
+    expand.setAttribute("aria-expanded", "false");
+    expand.setAttribute("aria-controls", diagramView.id);
+    expand.addEventListener("click", () => {
+      const expanded = diagramView.classList.toggle("expanded");
+      diagramView.tabIndex = expanded ? 0 : -1;
+      if (!expanded) diagramView.scrollLeft = 0;
+      expand.setAttribute("aria-expanded", String(expanded));
+      expand.textContent = expanded ? "Fit diagram" : "Expand diagram";
+    });
     const replayHost = element("div", instrument);
+    const primary = element("div", instrument);
+    primary.className = "lesson-primary";
+    const diagramKey = element("p", instrument);
+    diagramKey.className = "diagram-key";
     const readouts = element("dl", instrument);
     const explanation = element("p", instrument);
     const settings = panel(studio);
+    const sideControls = element("div", settings);
+    sideControls.className = "lesson-side-primary";
+    const setup = element("details", settings);
+    setup.className = "lesson-setup";
+    element("summary", setup, "More setup controls");
+    const fields = element("div", setup);
     for (const control of lesson.controls) {
       state[control.id] = control.value;
-      const row = element("div", settings);
+      const row = element("div", fields);
       row.className = "control";
       if (control.when) conditionalRows.push({row, when: control.when});
-      const label = element("label", row, control.label);
+      const label = element("label", row);
+      const labelText = document.createTextNode("");
+      label.appendChild(labelText);
       const input = element(control.options ? "select" : "input", row);
       input.id = "input-" + control.id;
       label.htmlFor = input.id;
@@ -60,16 +90,52 @@ const LearnSandbox = (() => {
         }
       }
       setValue(control.value);
-      controls.set(control.id, {control, setValue});
+      controls.set(control.id, {control, row, input, setValue, labelText});
       input.addEventListener("input", () => {
+        if (presets) presets.value = "";
         replay?.stop();
         setValue(control.options ? input.value : input.valueAsNumber);
         render();
         syncReplay(true);
       });
     }
-    const reset = element("button", settings, "Reset controls");
+    const presets = lesson.presets && element("select", fields);
+    let presetLabel;
+    if (presets) {
+      presets.id = "lesson-preset";
+      presetLabel = document.createElement("label");
+      presetLabel.htmlFor = presets.id;
+      presetLabel.textContent = "Compare setups";
+      fields.insertBefore(presetLabel, presets);
+      element("option", presets, "Choose an example").value = "";
+      lesson.presets.forEach(([name], i) => { element("option", presets, name).value = String(i); });
+      presets.addEventListener("change", () => {
+        if (presets.value === "") return;
+        const [, values] = lesson.presets[Number(presets.value)];
+        for (const [id, value] of Object.entries(values)) controls.get(id).setValue(value);
+        render();
+        syncReplay();
+      });
+    }
+    const reset = element("button", fields, "Reset controls");
     reset.type = "button";
+    const compact = matchMedia("(width < 46rem)");
+    const landscape = matchMedia("(min-width: 34rem) and (max-height: 430px)");
+    function placeControls() {
+      const focused = document.activeElement;
+      const inline = landscape.matches ? sideControls : compact.matches ? primary : fields;
+      for (const {control, row} of controls.values()) {
+        (control.primary ? inline : fields).append(row);
+      }
+      if (presets) fields.append(presetLabel, presets);
+      fields.append(reset);
+      setup.open = !(compact.matches || landscape.matches) || fields.contains(focused);
+      if (settings.contains(focused) || primary.contains(focused)) focused.focus({preventScroll: true});
+    }
+    compact.addEventListener("change", placeControls);
+    landscape.addEventListener("change", placeControls);
+    placeControls();
+
     const task = panel(studio);
     task.className = "challenge";
     element("h2", task, "Engineer challenge");
@@ -78,6 +144,11 @@ const LearnSandbox = (() => {
     check.type = "button";
     const feedback = element("p", task);
     feedback.setAttribute("role", "status");
+    if (lesson.inGame) {
+      const gameNote = element("details", root);
+      element("summary", gameNote, "In Apex 26");
+      element("p", gameNote, lesson.inGame);
+    }
     const details = element("details", root);
     element("summary", details, "Sources");
     const list = element("ul", details);
@@ -93,7 +164,18 @@ const LearnSandbox = (() => {
     let replayProgress = 0;
     function render(clearFeedback = true) {
       for (const {row, when} of conditionalRows) row.hidden = !when(state);
+      for (const {control, labelText} of controls.values()) {
+        labelText.nodeValue = typeof control.label === "function" ? control.label(state) : control.label;
+      }
       result = lesson.evaluate(state);
+      const entry = replayInput();
+      if (entry && result.replayEnd !== undefined) {
+        entry.input.max = result.replayEnd;
+        if (state[entry.control.id] > result.replayEnd) {
+          entry.setValue(result.replayEnd);
+          result = lesson.evaluate(state);
+        }
+      }
       // Markup is authored by the lesson using its own enumerated or bounded controls.
       diagram.innerHTML = result.svg;
       if (result.replay) {
@@ -102,6 +184,8 @@ const LearnSandbox = (() => {
         diagram.appendChild(overlay);
       } else overlay = null;
       diagram.setAttribute("aria-label", lesson.title + ". " + result.explanation);
+      diagramKey.textContent = result.key ?? lesson.key ?? "";
+      diagramKey.hidden = !diagramKey.textContent;
       readouts.replaceChildren();
       for (const [name, value] of result.metrics) {
         const group = element("div", readouts);
@@ -113,12 +197,18 @@ const LearnSandbox = (() => {
     }
     const replayInput = () => controls.get(lesson.replay?.input?.(state));
     const replay = lesson.replay && LearnReplay.mount(replayHost, {
-      label: lesson.replay.label,
+      label: () => typeof lesson.replay.label === "function" ? lesson.replay.label(state) : lesson.replay.label,
+      duration: lesson.replay.duration,
+      rewind: lesson.replay.rewind,
+      steps: lesson.replay.steps,
+      first: lesson.replay.first,
+      realTime: lesson.replay.realTime,
       draw(progress) {
         replayProgress = progress;
         const entry = replayInput();
         if (entry) {
-          const {id, min, max, step = 1} = entry.control;
+          const {id, min, step = 1} = entry.control;
+          const max = Number(entry.input.max);
           const value = Number((min + Math.round(progress * (max - min) / step) * step).toFixed(6));
           if (value !== state[id]) {
             entry.setValue(value);
@@ -133,11 +223,13 @@ const LearnSandbox = (() => {
     });
     function syncReplay(fromInput = false) {
       if (!replay) return;
+      replay.stop();
       const entry = replayInput();
       replay.controls.hidden = !(entry || result.replay);
       replay.manual(!entry);
       if (entry) {
-        const {id, min, max} = entry.control;
+        const {id, min} = entry.control;
+        const max = Number(entry.input.max);
         replay.seek((state[id] - min) / (max - min));
       } else if (result.replay) replay.seek(fromInput ? replayProgress : lesson.replay.initial ?? 0);
     }
@@ -147,6 +239,7 @@ const LearnSandbox = (() => {
     reset.addEventListener("click", () => {
       replay?.stop();
       for (const {control, setValue} of controls.values()) setValue(control.value);
+      if (presets) presets.value = "";
       render();
       syncReplay();
     });

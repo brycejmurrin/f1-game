@@ -30,12 +30,19 @@ const parentOf = (rule) => {
 // A when() rule reads module state; each one names how the test turns it off and on.
 const WHEN = {
   "steer-tilt": (h, on) => setParent(h, { id: "pm-steer", want: "tilt", off: "buttons" }, on),
+  "steer-touch": (h, on) => setParent(h, { id: "pm-steer", want: "touch", off: "buttons" }, on),
+  "steer-touch-speed": (h, on) => setParent(h, { id: "pm-steer", want: "touch", off: "buttons" }, on),
+  "steer-pad": (h, on) => { h.mode.pad = on; },
+  "steer-pad-curve": (h, on) => { h.mode.pad = on; },
+  "throttle-touch": (h, on) => setParent(h, { id: "pm-steer", want: "buttons", off: "touch" }, on),
+  "touch-pedals": (h, on) => { h.mode.touch = on; },
   "line-off": (h, on) => { h.mode.line = on ? "full" : "off"; },
   "intro-motion": (h, on) => { h.mode.motion = on ? "on" : "reduce"; },
   "vignette-motion": (h, on) => { h.mode.motion = on ? "on" : "reduce"; },
   "touch-dock": (h, on) => { h.mode.touch = on; },
   "panel-contrast": (h, on) => { h.d.documentElement.setAttribute("data-ui-contrast", on ? "normal" : "high"); },
   "turnchase-cam": (h, on) => { h.mode.cam = on ? "cockpit" : "chase"; },
+  "pad-pedal-deadzone": (h, on) => { h.ctx.Input.physicalPadAvailable = () => on; },
 };
 
 function boot(extra = {}) {
@@ -43,11 +50,11 @@ function boot(extra = {}) {
   const d = dom.document;
   d.getElementById = (id) => d.querySelector("#" + id);
   const el = (tag, id, parent = dom.body) => { const n = dom.makeElement(tag, id); parent.appendChild(n); return n; };
-  const mode = { line: "full", motion: "on", touch: true, phoneTilt: false, cam: "cockpit", scene: "photo" };
+  const mode = { line: "full", motion: "on", touch: true, pad: false, phoneTilt: false, cam: "cockpit", scene: "photo" };
   const ctx = vm.createContext({
     document: d, setTimeout, Log: { info() {}, warn() {} },
     DrivingLine: { mode: () => mode.line }, TitleFx: { mode: () => mode.motion },
-    Input: { touchControlsNeeded: () => mode.touch, phoneTiltAvailable: () => mode.phoneTilt },
+    Input: { touchDrivingControls: () => mode.touch, physicalPadAvailable: () => mode.pad, phoneTiltAvailable: () => mode.phoneTilt },
     GameStore: { store: { get: (k, fallback) => (k === "homeScene" ? mode.scene : k === "camMode" ? 0 : fallback) } },
     CamModes: { CAM_MODES: [{ id: "cockpit" }], fromSaved: value => value },
     ...extra,
@@ -147,6 +154,25 @@ test("each parent OFF greys every dependent with a described reason; ON restores
       assert.equal(c.value, before[i], `${rule.key}: #${c.id} lost its value`);
       assert.ok(!(c.getAttribute("aria-describedby") || "").includes("-dep"), `${rule.key}: stale reason reference`);
     });
+  }
+});
+
+test("runtime pedal sliders refresh with the physical gamepad connection", () => {
+  let present = false;
+  const handlers = new Map(), refreshes = [];
+  const h = boot({
+    window: { addEventListener: (type, fn) => handlers.set(type, fn) },
+    Input: { padPresent: () => present },
+    setTimeout: fn => refreshes.push(fn),
+  });
+  const [gas] = buildTarget(h, "pm-padgasdz"), [brake] = buildTarget(h, "pm-padbrakedz");
+  h.Deps.refresh();
+  assert.deepEqual([gas.disabled, brake.disabled], [true, true]);
+  for (const [event, plugged] of [["gamepadconnected", true], ["gamepaddisconnected", false]]) {
+    present = plugged;
+    handlers.get(event)();
+    refreshes.shift()();
+    assert.deepEqual([gas.disabled, brake.disabled], [!plugged, !plugged]);
   }
 });
 
@@ -347,4 +373,22 @@ test("a refresh that changes nothing writes nothing to the DOM", () => {
     assert.deepEqual(writes, [], `${rule.key}: an idempotent refresh wrote ${writes.length} times: ${writes.slice(0, 4).join("; ")}`);
     assert.ok(live.length > 0);
   }
+});
+
+test("hardware controls enable stick tuning and manual throttle with a saved touch steering preference", () => {
+  const h = boot();
+  const [steer] = buildTarget(h, "pm-steer");
+  const [drag] = buildTarget(h, "pm-touchrange");
+  const [deadzone] = buildTarget(h, "pm-paddz");
+  const [throttle] = buildTarget(h, "pm-throttlemode");
+  steer.value = "touch";
+  h.Deps.refresh();
+  assert.deepEqual([steer, drag, deadzone, throttle].map(c => c.disabled), [false, false, true, true]);
+  h.mode.touch = false; h.mode.pad = true;
+  h.Deps.refresh();
+  assert.deepEqual([steer, drag, deadzone, throttle].map(c => c.disabled), [true, true, false, false]);
+  h.mode.touch = true; h.mode.pad = false;
+  h.Deps.refresh();
+  assert.deepEqual([steer, drag, deadzone, throttle].map(c => c.disabled), [false, false, true, true]);
+  assert.equal(steer.value, "touch");
 });

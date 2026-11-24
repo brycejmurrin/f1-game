@@ -89,7 +89,8 @@ async function openPopup(drs = 12, s1 = 25, gear = 7, circuitOverlay = false, ga
   for (const file of [
     "js/core/mat4.js", "js/ui/cvd-palette.js", "js/ui/track-maps.js", "js/data/tab-utils.js",
     "js/data/telemetry-model.js", "js/data/telemetry-render.js",
-    "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js", "js/data/real-race-script.js"
+    "js/data/telemetry-player.js", "js/data/telemetry-context.js", "js/data/telemetry-replay.js",
+    "js/data/telemetry-view.js", "js/data/telemetry.js", "js/data/real-race-script.js"
   ]) {
     let src = readFileSync(file, "utf8");
     if (circuitOverlay && file === "js/ui/track-maps.js") src = src.replace("const TrackMaps", "let TrackMaps");

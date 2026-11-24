@@ -28,10 +28,6 @@
     </header>
     <canvas id="chart" aria-hidden="true"></canvas>
     <p class="caption" id="axis-note"></p>
-    <div class="ghosts" aria-hidden="true">
-      <div class="road"><span>0 m</span><div class="course"><i data-ghost="0">A</i><i data-ghost="1">B</i></div><span>100 m</span></div>
-      <p class="caption" id="ghost-note">Schematic distance along the same section.</p>
-    </div>
   </section>
   <div class="sidebar">
     <section class="panel controls" aria-labelledby="cursor-title">
@@ -54,6 +50,12 @@
         <select id="reference"><option value="0">Driver A</option><option value="1">Driver B</option></select>
       </label>
     </section>
+    <div class="panel">
+    <div class="ghosts" aria-hidden="true">
+      <div class="road"><span>0 m</span><div class="course"><i data-ghost="0">A</i><i data-ghost="1">B</i></div><span id="strip-end"></span></div>
+      <p class="caption" id="ghost-note">Schematic distance along the same section.</p>
+    </div>
+    </div>
     <section class="panel" aria-labelledby="values-title">
       <h3 id="values-title">At the cursor</h3>
       <table>
@@ -67,6 +69,7 @@
         </tbody>
       </table>
       <p id="delta" class="delta"></p>
+      <p id="checkpoint-delta" class="caption"></p>
       <p id="announcement" class="sr-only" role="status"></p>
     </section>
   </div>
@@ -109,10 +112,14 @@
   <p id="hub-status" role="status"></p>
 </section>
 <details class="panel">
+  <summary>In Apex 26</summary>
+  <p>This lesson uses synthetic braking runs to practise reading sampled traces. Open Data Hub Telemetry to compare real session data from OpenF1 with the same time and distance tools. The brake channel tells you when braking was reported, so use speed and position to work out what happened around that point.</p>
+</details>
+<details class="panel">
   <summary>Model and sources</summary>
-  <p>The lesson uses authored samples spaced 0.25 s apart, with no real driver identities. Estimated distance is integrated from sample speeds. Equal-distance arrival times are interpolated. Speed, brake and throttle in the table are nearby samples. The brake and throttle step traces switch halfway between sample times so the cursor and table use the same nearest-sample rule. The speed line connects observed samples.</p>
+  <p>Dots show the fictional samples at 0.25 s intervals. To estimate distance the model uses each interval’s ending speed across that interval. The speed line joins the sample points. Equal-distance arrival times use interpolation, so hundredths of a second are estimates. The binary brake state and sampled throttle each use a step trace that switches halfway between samples.</p>
   <p>Brake onset and throttle return are estimated threshold markers from the game’s Braking Duel model. Minimum observed speed is a sampled quantity. The distance strip is schematic and carries no GPS or steering data.</p>
-  <p><a href="https://openf1.org/docs/#car-data" target="_blank" rel="noopener">OpenF1 channel definitions</a> · <a href="https://www.motec.com.au/products/I2" target="_blank" rel="noopener">MoTeC time comparison tools</a></p>
+  <p><a href="https://openf1.org/docs/#car-data" target="_blank" rel="noopener">OpenF1 channel definitions</a> · <a href="https://www.motec.com.au/products/I2" target="_blank" rel="noopener">MoTeC time comparison tools</a> · <a href="https://www.formula1.com/en/latest/article/rob-smedley-explains-how-the-new-aws-braking-performance-graphic-works-and.3A8cnQLZGXFbMjCR2fFBnB" target="_blank" rel="noopener">Formula 1 on timing and telemetry</a></p>
 </details>
 </main>
 </body>

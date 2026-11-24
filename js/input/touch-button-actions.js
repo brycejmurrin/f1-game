@@ -5,9 +5,11 @@ const TouchButtonActions = (() => {
   const cancelAll = () => { for (const cancel of activePresses) cancel(); };
   if (typeof document !== "undefined" && document.addEventListener) {
     // WebKit can finish every contact without delivering pointerup or cancel.
-    const noFingers = e => { if (e.touches?.length === 0) cancelAll(); };
+    const noFingers = e => {
+      if (e.touches?.length === 0) for (const cancel of activePresses) cancel(true);
+    };
     document.addEventListener("touchend", noFingers, { capture: true, passive: true });
-    document.addEventListener("touchcancel", noFingers, { capture: true, passive: true });
+    document.addEventListener("touchcancel", e => { if (e.touches?.length === 0) cancelAll(); }, { capture: true, passive: true });
     document.addEventListener("visibilitychange", () => { if (document.hidden) cancelAll(); });
   }
   if (typeof window !== "undefined") {
@@ -19,9 +21,10 @@ const TouchButtonActions = (() => {
   }
   function bindControl(el, id) {
     if (!el) return;
-    let mode, pointer = null, began = 0, previous = -Infinity, touchClick = false;
-    let ticks = null, picker = null;
-    function cancelPress() {
+    let mode, timingMs, customMs, pointer = null, began = 0, previous = -Infinity, touchClick = false;
+    let ticks = null, picker = null, pickerGeneration;
+    function cancelPress(onlyDown = false) {
+      if (onlyDown && pointer === null) return;
       activePresses.delete(cancelPress);
       picker?.cancel(); picker = null;
       pointer = null; previous = -Infinity;
@@ -50,7 +53,14 @@ const TouchButtonActions = (() => {
       else el.removeAttribute?.("data-touch-edge");
       if (profile.indicator && profile.feedback) el.setAttribute("data-touch-indicator", profile.indicator);
       else el.removeAttribute?.("data-touch-indicator");
-      if (mode !== profile.activation) { mode = profile.activation; cancelPress(); }
+      const timing = profile.gestureTiming;
+      const duration = timing && profile[timing.key];
+      if (mode !== profile.activation || customMs !== duration) {
+        mode = profile.activation;
+        customMs = duration;
+        timingMs = duration ?? timing?.defaultMs;
+        cancelPress();
+      }
     });
     if (["left", "right", "gas", "brake"].includes(id) || id === "look") return;
     const consume = e => { e.preventDefault(); e.stopImmediatePropagation(); };
@@ -63,7 +73,12 @@ const TouchButtonActions = (() => {
       activePresses.add(cancelPress);
       if (id === "camera" && typeof CamPicker !== "undefined") {
         picker = CamPicker.touchHold(el);
-        picker?.start(e, mode);
+        if (picker && picker.screenGeneration !== pickerGeneration) {
+          // Pause and view changes retire a first tap even when it has already lifted.
+          pickerGeneration = picker.screenGeneration;
+          previous = -Infinity;
+        }
+        picker?.start(e, mode, timingMs, customMs != null);
       }
       try { el.setPointerCapture(pointer); } catch (_) { /* implicit touch capture still delivers a lift */ }
     }, true);
@@ -81,10 +96,12 @@ const TouchButtonActions = (() => {
         if (opened) { previous = -Infinity; return; }
       }
       const elapsed = e.timeStamp - began;
-      const fire = mode === "tap" || (mode === "quick" && elapsed <= 180) ||
-        (mode === "hold" && elapsed >= 450) || (mode === "long" && elapsed >= 900) ||
-        (mode === "double" && elapsed < 350 && e.timeStamp - previous <= 350);
-      previous = !fire && elapsed < 350 ? e.timeStamp : -Infinity;
+      const shortTap = mode === "double" && elapsed < timingMs;
+      const fire = mode === "tap" || (mode === "quick" && elapsed <= timingMs) ||
+        ((mode === "hold" || mode === "long") && elapsed >= timingMs) ||
+        (shortTap && e.timeStamp - previous <= timingMs);
+      previous = shortTap && !fire ? e.timeStamp : -Infinity;
+      if (previous !== -Infinity) activePresses.add(cancelPress);
       if (fire) el.click();
     }, true);
     const cancel = e => { if (e.pointerId === pointer) cancelPress(); };

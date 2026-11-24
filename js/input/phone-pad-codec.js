@@ -22,19 +22,27 @@ const PhonePadCodec = (function () {
 
   // ── wire ──────────────────────────────────────────────────────────────────
   // STATE channel, phone → desktop: one JSON array per sample,
-  // [1, seq, roll|null, thr, brk, held]. After an explicit steer capability
+  // [1, seq, roll|null, thr, brk, held]. After the respective capability
   // handshake, touch steering uses [2, seq, null, thr, brk, held, steer].
+  // Version 3 carries already-shaped pedals with either kind of steering.
   function encodeSample(s) {
     const roll = (typeof s.roll === "number" && isFinite(s.roll)) ? round2(s.roll) : null;
     const touch = typeof s.steer === "number" && isFinite(s.steer);
-    return JSON.stringify(touch ? [2, s.seq | 0, null, round2(s.thr), round2(s.brk), s.held | 0, num(s.steer, -1, 1)] : [PROTO, s.seq | 0, roll, round2(s.thr), round2(s.brk), s.held | 0]);
+    const fields = [touch ? 2 : PROTO, s.seq | 0, touch ? null : roll, round2(s.thr), round2(s.brk), s.held | 0];
+    if (s.calibratedPedals === true) fields[0] = 3;
+    if (touch || fields[0] === 3) fields.push(touch ? num(s.steer, -1, 1) : null);
+    return JSON.stringify(fields);
   }
   function decodeSample(text) {
     let a;
     try { a = JSON.parse(typeof text === "string" ? text : ""); } catch (e) { return null; }
-    if (!Array.isArray(a) || !((a.length === 6 && a[0] === PROTO) || (a.length === 7 && a[0] === 2 && typeof a[6] === "number" && isFinite(a[6])))) return null;
+    if (!Array.isArray(a)) return null;
+    const touch = Number.isFinite(a[6]), calibrated = a[0] === 3;
+    if (!((a.length === 6 && a[0] === PROTO) || (a.length === 7 &&
+        ((a[0] === 2 && touch) || (calibrated && (touch || a[6] === null)))))) return null;
     return {
-      ...(a[0] === 2 ? { steer: num(a[6], -1, 1) } : {}),
+      ...(calibrated ? { calibratedPedals: true } : {}),
+      ...(touch ? { steer: num(a[6], -1, 1) } : {}),
       seq: a[1] | 0,
       roll: (typeof a[2] === "number" && isFinite(a[2])) ? num(a[2], -180, 180) : null,
       thr: num(a[3], 0, 1), brk: num(a[4], 0, 1), held: a[5] | 0,
@@ -82,7 +90,7 @@ const PhonePadCodec = (function () {
   function encodeHaptic(ms) { return JSON.stringify({ t: "hap", ms: Math.max(0, Math.min(1000, ms | 0)) }); }
   function encodeHello(side, haptics, extended, id) {
     return JSON.stringify({ t: "hi", side, p: PROTO, haptics: haptics === true, ...(extended ? { steer: true, ack: true } : {}),
-      ...(extended && side === "pad" ? { grip: true } : {}), ...(typeof id === "string" && PEER_ID_RE.test(id) ? { id } : {}) });
+      ...(extended && side === "pad" ? { grip: true } : {}), ...(extended && side === "host" ? { calibratedPedals: true } : {}), ...(typeof id === "string" && PEER_ID_RE.test(id) ? { id } : {}) });
   }
   // A fresh peer id: 128 random bits as hex (crypto where the page has it).
   function makePeerId() {
@@ -100,7 +108,7 @@ const PhonePadCodec = (function () {
     if (o.t === "sus") return { t: "sus" };
     if (o.t === "hap") return { t: "hap", ms: Math.max(0, Math.min(1000, o.ms | 0)) };
     if (o.t === "hi") return { t: "hi", side: String(o.side || ""), p: o.p | 0, haptics: o.haptics === true, ...(o.steer === true ? { steer: true } : {}), ...(o.ack === true ? { ack: true } : {}),
-      ...(o.grip === true ? { grip: true } : {}), ...(typeof o.id === "string" && PEER_ID_RE.test(o.id) ? { id: o.id } : {}) };
+      ...(o.grip === true ? { grip: true } : {}), ...(o.calibratedPedals === true ? { calibratedPedals: true } : {}), ...(typeof o.id === "string" && PEER_ID_RE.test(o.id) ? { id: o.id } : {}) };
     return null;
   }
   // A TeamDef colour (three 0..1 floats) as the CSS hex the phone's LCD tints with.

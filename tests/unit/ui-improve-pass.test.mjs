@@ -1182,8 +1182,8 @@ test("How to Play names every input and drops the retired screen-half lie", () =
   const game = gameCode();
   assert.match(game, /autoThrottle\(\s*\)\s*\?\s*1\s*:\s*Math\.max\(\s*0\s*,\s*Input\.throttleLevel\(\s*\)\s*\)/,
     "TOUCH auto-throttle must apply full pedal travel, not a 0 analog reading");
-  assert.match(game, /steerMode\s*===\s*"tilt"\s*\|\|\s*!Input\.touchControlsNeeded\(\s*\)/,
-    "phone MANUAL gears stay tilt-only — BUTTONS already owns both thumbs");
+  assert.match(game, /steerMode\s*===\s*"tilt"\s*\|\|\s*!Input\.touchDrivingControls\(\s*\)/,
+    "MANUAL gears are available with tilt or hardware controls");
   assert.match(game, /L\.push\(\s*shifts\s*,\s*taps\s*\)\s*;\s*R\.push\(\s*pedals\s*\)/,
     "tilt+manual puts the shifter left and the pedals right");
   // MenuNav BEHAVIOUR: arrows wrap in every direction so a pad press is never

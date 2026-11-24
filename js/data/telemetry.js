@@ -38,7 +38,7 @@ const DataTelemetry = (function () {
       const i = tray.findIndex(function (e) { return e.d.num === d.num && e.sessionKey === sk; });
       if (i !== -1) { tray.splice(i, 1); return; }
       tray.push({ d: d, sessionKey: sk, meetingKey: meta.meetingKey, sessionLabel: sessionShort(meta),
-                  sessionName: meta.name || meta.type || "Session" });
+                  sessionName: meta.name || meta.type || "Session", circuit: meta.circuit });
       if (tray.length > MAX_LANES) tray.shift();   // oldest lane drops off
     }
     // The lanes overlay on ONE track map, so they must be the same circuit. A
@@ -227,7 +227,7 @@ const DataTelemetry = (function () {
           // different shape in one session than the other.
           const loc = DataTelemetryModel.clipLocations(dropStrays(res[1] || []), ms, ms + dur * 1000);
           return { d: d, lap: lap, car: DataTelemetryModel.clipCar(res[0], dur), loc: loc,
-                   stints: res[2] || [], pits: res[3] || [] };
+                   nativeCar: res[0], nativeLoc: res[1], stints: res[2] || [], pits: res[3] || [] };
         });
       });
     }
@@ -252,6 +252,7 @@ const DataTelemetry = (function () {
     function stopTelAnim() {
       if (telView) {
         pauseAnim(telView);
+        if (telView.replay) telView.replay.dispose();
         if (telView._ro) { telView._ro.disconnect(); telView._ro = null; }
         // Drop the reference too: the view holds canvases, offscreen bases and
         // every lane's sample arrays, and a stopped view is never resumed — a
@@ -373,7 +374,7 @@ const DataTelemetry = (function () {
         const build = () => {
           if (telemPopup !== overlay) return;
           clear(body);
-          buildTelemetryView(body, tels, track);
+          buildTelemetryView(body, tels, hdr, track);
         };
         if (track?._metaOnly && loadCircuit) loadCircuit(index).then(build, build);
         else build();
@@ -396,7 +397,7 @@ const DataTelemetry = (function () {
         // popup then opens one tick later than the harness drains for.
         return fetchDriverTel(e.sessionKey, e.d, i === 0).then(function (tel) {
           telLanes--;
-          tel.sessionLabel = e.sessionLabel; tel.sessionName = e.sessionName;
+          tel.sessionKey = e.sessionKey; tel.sessionLabel = e.sessionLabel; tel.sessionName = e.sessionName; tel.circuit = e.circuit;
           return tel;
         }, function (err) { telLanes--; throw err; });
       }))

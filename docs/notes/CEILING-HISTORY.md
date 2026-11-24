@@ -1,5 +1,12 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-23 — PR #6246 (cursor/photo-panel-focus-b27e) — camera focus and pedal calibration boot code
+
+`(tree) eagerCodeBytes` 3987306 → **3994771** (+7465) on merge train #6306.
+Photo Studio and Lighting focus handling adds 4090 bytes in #6246. Pedal handoff and calibration adds 3375 bytes in #6245.
+The focus code releases held controls and restores focus when a camera panel closes. The pedal code applies the selected pedal response and dead zone before driving resumes.
+Each PR stays within its own absorb. The train reports the sum of their existing fragments.
+
 ## 2026-11-22 — Helmet camera controls (codex/helmet-camera-controls)
 
 `(tree) eagerCodeBytes` 3965656 → **3969867** (+4211). The camera needs the saved eye position and vibration scale while driving.

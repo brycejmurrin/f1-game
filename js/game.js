@@ -300,7 +300,7 @@ function syncMetricsOverlayCompact() {
 // both thumbs (arrows + pedals); TOUCH auto-throttles — neither has a free
 // hand for a shifter.
 function gearsManual(forceTouch = false) {
-  return manualMode && (steerMode === "tilt" || !Input.touchControlsNeeded() && !forceTouch);
+  return manualMode && (steerMode === "tilt" || !Input.touchDrivingControls() && !forceTouch);
 }
 /* AUTO-THROTTLE IS AN OPTION NOW, not only a consequence of TOUCH mode.
    XAG 107's worked example of an input barrier is literally a racing game's
@@ -311,7 +311,7 @@ function gearsManual(forceTouch = false) {
    thumb, so it is not a preference but a fact about the control scheme. */
 let autoThrottleOpt = store.get("autoThrottle", false);
 let throttleLatchOpt = store.get("throttleLatch", false);
-function autoThrottle(forceTouch = false) { return autoThrottleOpt || ((forceTouch || Input.touchControlsNeeded()) && steerMode === "touch"); }
+function autoThrottle(forceTouch = false) { return autoThrottleOpt || ((forceTouch || Input.touchDrivingControls()) && steerMode === "touch"); }
 // Left/right-handed docks. F1 Mobile enumerates both as first-class control
 // schemes rather than hiding a toggle; the whole feature here is which dock
 // each thumb group lands in, so CSS does it (body.mirror-controls).
@@ -840,7 +840,7 @@ const isQuali = () => session === "quali";
 // and `penalty`/`cuts` are ordinary fields on that car.
 // A Time Trial is always practisable, which is what the feature shipped as.
 // Cleared by startRace() so it can never leak from one session into the next.
-let practiceMode = false;
+let practiceMode = false, learnAeroDrill = null;
 const isPractice = () => practiceMode || isTimeTrial();
 // A DUEL is a practice race against ONE bumped rival. Same trim that Time Trial
 // and Quali already do to `cars` after makeCars(); the rival's stats come from
@@ -2525,15 +2525,20 @@ async function startRaceBody() {
   if (gfxContextLost()) { quitToMenuAfterCtxLost(); return false; } if (isCareer()) Career.markWeekendStarted();   // session loaded, no save conflict, track built: the round's brief locks
   // PRACTICE IS PER-SESSION. Armed from the pause menu inside one session, it
   // must never survive into the next — a race that silently did not count
-  // because the last one was practice is the worst possible failure here. A
-  // Time Trial needs no flag: isPractice() derives it.
+  // because the last one was practice is the worst possible failure here. The
+  // Learn drill starts unscored, and isPractice() handles Time Trial itself.
   // duelMode is NOT cleared: it is a race SETTING like difficulty or tyre wear,
   // chosen on the settings sheet and meant to stick until the player changes it.
-  practiceMode = false;
+  const aeroDrill = learnAeroDrill;
+  practiceMode = !!aeroDrill;
   releaseFieldScratch(); makeCars(); rlap("makeCars");
   coach.reset(); PerfGov.resetFrameStats();
-  // Qualifying keeps the full field for simulation, then drives one flying lap.
-  if (isQuali()) {
+  if (aeroDrill) {
+    const rival = cars.find(c => c !== player && c.team === player?.team) || cars.find(c => c !== player);
+    cars = [rival, player].filter(Boolean);
+    lapsTarget = 1;
+  } else if (isQuali()) {
+    // Keep the full field for the qualifying simulation. The player drives one lap.
     qualiField = cars;
     cars = [player];
     lapsTarget = 1;
@@ -2573,7 +2578,7 @@ async function startRaceBody() {
   // Awaited so startRace's latch spans the sheet's build; openQuali lands its own failure on the menu.
   if (!isQuali() && gridFromQuali() && !quali.order(cars)) { loadingScreen.stop(); await openQuali(); return false; }
   RaceEntryProfile.mark("gridCountdown:start");
-  gridUp(gridOrderFor(gridFromQuali() ? quali.order(cars) : null));
+  gridUp(aeroDrill ? cars : gridOrderFor(gridFromQuali() ? quali.order(cars) : null));
   rlap("gridUp");
   wxArc.startChangeable(0);
   recomputePlayerMods();
@@ -2592,7 +2597,7 @@ async function startRaceBody() {
   // M35/B6: arm on the SAME raceIndex gridUp just hashed (launch/tyre/phase), THEN
   // bump. Bumping first changed AI draws and broke quali-pace-parity at PACE 1.34.
   // armReliability freezes raceDrawRound for the in-race mistake hash after the bump.
-  const bumpRaceIndex = session === "race"; if (bumpRaceIndex) armReliability(cars);   // the bump waits for the start to COMMIT (below the last stale() await, #4484)
+  const bumpRaceIndex = session === "race" && !aeroDrill; if (bumpRaceIndex) armReliability(cars);   // the bump waits for the start to COMMIT (below the last stale() await, #4484)
   resultT = 0; postFinish.since = -1;
   feel.camRoll = 0; camSlipSm = 0;
   feel.shake = 0; feel.hitStop = 0; stormFx._thunderT = -1; announce._waitAt = NaN;   // a crash's shake, a queued thunder or the WAITING card's quiet window from the last session must not reach this grid
@@ -2629,6 +2634,7 @@ async function startRaceBody() {
   try { await RaceEntryProfile.spanAsync("warmCarAssets", () => warmCarAssetsAsync(() => !stale(), vmNoFramePump ? Infinity : 8, { deferRear: !headlessMode })); } finally { _carWarm.busy = false; }
   if (stale()) return false;
   RaceEntryProfile.span("debrisPrime", () => DebrisWorld.prime());
+  if (aeroDrill) aeroDrill.staging = true;
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; feel.startHold = 0; feel.restartPending = false; paused = false; frozen = false; raceRestarting = false; skyViewOverride = null;
   RaceEntryProfile.mark("gridCountdown:end");
   if (bumpRaceIndex) quali.clearDeletedLap(player, netLobby.qualifying());
@@ -2691,6 +2697,10 @@ async function startRaceBody() {
   if (player !== entryPlayer || (state !== "count" && state !== "race")) return false;
   clearRaceEntrySoften(); if (bumpRaceIndex) raceIndex++;   // committed: raceDrawRound froze this race's mistake-hash round in armReliability
 
+  if (aeroDrill && !aeroDrill.begin()) {
+    quitToMenu(); announce("COULD NOT START THE AERO DRILL", 3, "info"); return false;
+  }
+
   // A flyby timer can land this in a BACKGROUND tab, after the hide handler ran in "menu" state.
   if (document.hidden) setPaused(true, "hidden-tab");
 }
@@ -2722,7 +2732,7 @@ function startRace() {
     rs.hidden = true;
     try { if (rs.open && typeof rs.close === "function") rs.close(); } catch (_) { /* already closed */ }
   }
-  practiceMode = false;   // before loadingInfo() reads it: the body clears it only after several awaits
+  practiceMode = !!learnAeroDrill;   // before loadingInfo() reads it
   if (!loadingScreen.phase()) { loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race"); }
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   // Software GL defers pack retry until after grid (#3584); hardware keeps idle prefetch here.
@@ -2753,7 +2763,7 @@ function startRace() {
 }
 
 function showTouchControls(show, cooldown = false, preview = false) {
-  const t = show && (preview || Input.touchControlsNeeded());
+  const t = show && (preview || Input.touchDrivingControls());
   const manual = !cooldown && gearsManual(preview);
   // GAS pedal whenever throttle is manual (tilt/button); touch auto-throttle hides it
   els.btnThrottle.hidden = !(t && (cooldown || !autoThrottle(preview)));
@@ -3315,7 +3325,7 @@ const G = {
   ltKey: (...a) => ltKey(...a),
   // (setLightTune is a hoisted function, exposed as a plain shorthand below.)
   exitPhotoMode: (...a) => exitPhotoMode(...a),
-  openWatchPhoto: () => openExperiencePhoto("watch"),   // const initialised below — defer
+  openWatchPhoto: (trigger) => openExperiencePhoto("watch", trigger),   // const initialised below — defer
   // Stable helpers consumed by js/lighting/atmosphere.js.
   clamp: (v, a, b) => clamp(v, a, b),
   satAdjust: (rgb, amt) => satAdjust(rgb, amt),
@@ -3485,7 +3495,9 @@ let flyingStart = FlyingStart.create(G, { realRace: () => realRace.isActive() ||
 var jumpStartPenalty = JumpStartPenalty.create(G, {
   autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,
 });   // LAZY_RACE_SESSION — recreated in onRaceSessionReady
-titleMenu = TitleMenu.create(G, openDataHub); // returning-player, Daily and Learn (js/ui/title-menu.js)
+titleMenu = TitleMenu.create(G, openDataHub, () => { // returning-player, Daily and Learn (js/ui/title-menu.js)
+  if (!learnAeroDrill) LearnDoor.launchAeroDrill(G, drill => { learnAeroDrill = drill; }, level => { raceDirtyAir = level; });
+});
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing(), lazyBundles.ensureReplayBroadcast),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
@@ -4095,7 +4107,7 @@ function raceIntro(go) {
 function loadingInfo() {
   const real = realRace.intro();
   const out = {
-    track: Tracks.LIST[trackIdx], laps: raceLaps,
+    track: Tracks.LIST[trackIdx], laps: learnAeroDrill ? 1 : raceLaps,
     gp: real ? real.title : SeasonCal.gpName ? SeasonCal.gpName(Tracks.LIST[trackIdx]) : undefined,   // the 2026 REAL calendar renames two rounds (season-cal.js); a real race is its own event
     real,   // the Data Hub's real race (RealRace.intro): the event, whose car, from which lap — the announcer reads it
     weather: raceWeather, tod: raceTimeOfDay,
@@ -4158,7 +4170,7 @@ DebrisWorld.create(G);
 // flagged, fallback-guarded window (extends the sacred xPinned + (prog,x)
 // exceptions). Inert (owns() is a Set read) unless a flag is on AND the debris
 // side-world is live. DEFAULT ON per feature (apex26.r2Airborne/r3Contact/c1Pileup).
-const incidentSim = IncidentSim.create(G);
+const incidentSim = IncidentSim.create(G, c => { if (c.human && c.isPlayer && isQuali() && c.lap >= 1) quali.markDeletedLap(c, qualiNet.hasArmed()); });
 // Car-to-car contact (js/physics/collide.js). collideFx stays here (shake /
 // hit-stop are camera state) and rides in as the second argument, not a G member.
 const collide = Collide.create(G, collideFx, (c) => realRace.owns(c));
@@ -4384,6 +4396,7 @@ function quitToMenu() {
   loadingScreen.stop();
   if (skipToResults()) { resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.release(); announcer.stop && announcer.stop(); }   // a finished player's result is settled before the session is dropped
   setState("menu", "quit"); paused = false; releaseFieldScratch(true); raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  if (learnAeroDrill) { learnAeroDrill.restore(); learnAeroDrill = null; }
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -4485,6 +4498,7 @@ function update(dt) {
     Log.info("game", "manual recover");
   }
   if (state === "count") {
+    if (learnAeroDrill?.staging) return; // hold until the rolling start is ready
     // In a session the countdown is driven by the SHARED clock rather than by
     // accumulated dt, and the random hold is dictated by the host. Both matter
     // for fairness: accumulating dt independently lets the two grids drift
@@ -8673,8 +8687,10 @@ function paintSteer() {
   const note = $("pm-steer-note");
   if (!note) return;
   // Warn only for genuine deny/unavailable — not the brief pre-first-reading window.
-  note.textContent = Input.gyroDenied
-    ? "Motion access is denied on this device, so TILT cannot steer here — pick BUTTONS or TOUCH."
+  const device = Input.controlDevice();
+  note.textContent = device === "controller" ? "Controller active. Your touch steering preference is saved."
+    : device === "keyboard" ? "Keyboard active. Your touch steering preference is saved."
+    : Input.gyroDenied ? "Motion access is denied on this device, so TILT cannot steer here — pick BUTTONS or TOUCH."
     : "TILT leans the phone. BUTTONS adds on-screen arrows. TOUCH drags a finger on the track.";
 }
 
@@ -8717,7 +8733,7 @@ function tiltSay(msg) { els.audiostate.textContent = msg; if (msg) announce(msg.
 const platformSession = PlatformSession.create(G, {
   canvas, raceWakeLock, disarmProbeOnLeave: () => _disarmProbeOnLeave(),
   cancelMirrorPrep: () => mirrorPass.cancelPreparation(),
-  setPaused, ensureNet, settingsBack: () => settingsNav.back(), closeSettings, showTouchControls, refreshGearsBtn, openSettingsPage: (id) => { openSettings(); settingsNav.showDirect(id, true); },
+  setPaused, ensureNet, settingsBack: () => settingsNav.back(), closeSettings, showTouchControls, refreshGearsBtn, paintSteer, openSettingsPage: (id) => { openSettings(); settingsNav.showDirect(id, true); },
 });
 platformSession.wireFirstGesture();
 
@@ -8883,10 +8899,10 @@ photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, ltStore, rende
   }, garage: {
   prepareCapture: () => setupCam.endGarageRes(), snapshot: () => setupCam.captureCamera(), restore: (v) => setupCam.restoreCamera(v), shot: (id) => setupCam.setSetupView(id),
   looks: lookRowSpecs, looked: () => { if (!$("carsetup").hidden) buildSetup(); } } });
-function openExperiencePhoto(source) { return UiExperience.openPhoto(G, { source, photoStudio, setPaused,
+function openExperiencePhoto(source, trigger) { return UiExperience.openPhoto(G, { source, trigger, photoStudio, setPaused,
   trackHome: state === "menu" && uiExperience && ["track", "pitlane"].includes(uiExperience.state().scene.mode), trackReady: menuWorld(),
   photoView: () => uiExperience.photoView(), onWaiting: () => AppearanceStudio.notify("Return Home to finish loading this scene, then open Photo Studio."),
-  photoSubject: (m) => uiExperience.photoSubject(m), reopen: () => openExperiencePhoto("home"), onDone: () => uiExperience.photoSubject(null) }); }
+  photoSubject: (m) => uiExperience.photoSubject(m), reopen: (opener) => openExperiencePhoto("home", opener), onDone: () => uiExperience.photoSubject(null) }); }
 uiExperience = UiExperience.create(G, { setupCam, coach, openPhoto: openExperiencePhoto, openPractice: () => openTimeTrial(false),
   prepareTrack: scheduleFlybyTrack, trackReady: menuWorld, trackKey: () => menuKey(trackIdx), updateTrackPhoto: updatePhotoCam,
   captureTrackCamera: () => ({ eye: camEye.slice(), tgt: camTgt.slice(), fov: camFov }),
@@ -8894,7 +8910,7 @@ uiExperience = UiExperience.create(G, { setupCam, coach, openPhoto: openExperien
   openWatch: () => openDataHub("race"),
   openSettingsPage: (page, fold) => { openSettings(); settingsNav.showDirect(page, true); const f = fold && $(fold); if (f) { if (f.tagName === "DETAILS") f.open = true; else if (f.parentElement.tagName === "DETAILS") f.parentElement.open = true; f.scrollIntoView({ block: "start" }); f.focus(); } },
 });
-AppearanceStudio.attach({ previewScene: (s) => uiExperience.previewScene(s), openPhoto: () => openExperiencePhoto(state === "menu" ? "home" : "race"), openDisplay: () => settingsNav.show("display", true),
+AppearanceStudio.attach({ previewScene: (s) => uiExperience.previewScene(s), openPhoto: (trigger) => openExperiencePhoto(state === "menu" ? "home" : "race", trigger), openDisplay: () => settingsNav.show("display", true),
   applyVisuals: (v) => { uiScale.applyUiScale(); uiScale.applyHudScale(); uiScale.applyBtnScale(); uiScale.applyBtnOpacity(); uiScale.applyPanelOpacity(); G.hudProfile = v.hudProfile; G.hudMetricsLayout = v.hudMetricsLayout; G.hudMapVis = v.hudMapVis; G.hudGapsVis = v.hudGapsVis; if (v.hudMirror) mirrorPass.setMode(v.hudMirror); paintHudDetailsSummary(); syncMetricsOverlayCompact(); },
 });
 function syncSettingsAvailability() {
@@ -9431,7 +9447,7 @@ SettingsExport.create(G);   // SETTINGS FILE: download preferences as JSON (js/u
 // GEARS toggle: usable when thumbs are free (tilt or desktop keyboard).
 // Disabled — not hidden — on BUTTONS/TOUCH (see the pm-calib note in setSteerMode).
 function refreshGearsBtn() {
-  SettingRow.disable($("pm-gears"), Input.touchControlsNeeded() && steerMode !== "tilt");
+  SettingRow.disable($("pm-gears"), Input.touchDrivingControls() && steerMode !== "tilt");
   SettingRow.paint($("pm-gears"), manualMode ? "manual" : "auto");
 }
 SettingRow.wire("pm-gears", { values: SettingRow.labels(["auto", "manual"]), read: () => (manualMode ? "manual" : "auto"), write: (v) => {

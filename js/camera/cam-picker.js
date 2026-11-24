@@ -8,7 +8,7 @@ const CamPicker = (function () {
     const G = host.G, $ = host.$, CAM_MODES = host.CAM_MODES, HOLD_MS = host.HOLD_MS;
     const watchReplay = host.watchReplay, pickCam = host.pickCam, toAuto = host.toAuto, cycleCam = host.cycleCam;
     const camTrigger = $("btn-cam");
-    let cancelCamHold = () => {};
+    let cancelCamHold = () => {}, screenGeneration = 0;
     const camPicker = (() => {
       let el = null, group = "drive", wheelRow = null, wheelTab = null;
       const groups = host.PICKER_GROUPS;
@@ -127,6 +127,7 @@ const CamPicker = (function () {
         return true;
       };
       const hide = () => {
+        screenGeneration++;
         cancelCamHold();
         if (el) el.hidden = true;
         camTrigger?.setAttribute("aria-expanded", "false");
@@ -169,7 +170,13 @@ const CamPicker = (function () {
       // A custom touch gesture owns pointer dispatch. It borrows this same picker
       // timer so pausing or changing screens cancels it just like a default press.
       touchHolds.set(b, {
-        start(e, mode) { start(e, mode === "hold" ? 900 : mode === "long" ? 1350 : HOLD_MS); },
+        get screenGeneration() { return screenGeneration; },
+        start(e, mode, timingMs, customized) {
+          let delay = HOLD_MS;
+          if (mode === "hold" || mode === "long") delay = timingMs + 450;
+          else if (customized) delay = Math.max(HOLD_MS, timingMs + (mode === "quick" ? 1 : 0));
+          start(e, delay);
+        },
         finish(e) {
           if (!Number.isFinite(downTs)) return true; // the screen retired this press
           const elapsed = e.timeStamp - downTs;

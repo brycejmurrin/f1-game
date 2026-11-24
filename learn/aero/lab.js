@@ -34,6 +34,7 @@
   let drag = null;
   let followerWake = 0;
   let corner = false;
+  const wakeHalfRatio = .25;
   let cornerProgress = 0;
   const replayHost = get("corner-replay");
   const cornerReplay = LearnReplay.mount(replayHost, {
@@ -77,7 +78,7 @@
       ? mid + handedness * height * .18 * Math.tanh(4 * (x - turnX) / width)
       : mid;
     return {width, height, leader, xAt, step, follower: xAt(Number(gap.value)),
-      trackY, lateral: offset.checked ? -height * (corner ? .21 : .26) : 0};
+      trackY, lateral: height * wakeHalfRatio * Number(offset.value) / tow.halfW};
   }
 
   function measure(distance, lateral, straight) {
@@ -159,7 +160,7 @@
     const edge = xAt(tow.range);
     const gapMin = Number(gap.min);
     const near = xAt(gapMin);
-    const wakeHalf = height * 0.25;
+    const wakeHalf = height * wakeHalfRatio;
     const scale = Math.min(1.7, width / 340, height / 105);
     // Car A sets the measured wake. The overlay follows Car B and illustrates local flow.
     const followerY = trackY(follower) + lateral;
@@ -220,6 +221,12 @@
     ctx.setLineDash([]);
     car(leader, trackY(leader), scale, palette.leader, "A", heading(leader));
     car(follower, followerY, scale, palette.follower, "B", heading(follower), true);
+    if (lateral) {
+      ctx.fillStyle = palette.label;
+      ctx.beginPath();
+      ctx.arc(follower, followerY, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   function tick(time) {
@@ -246,7 +253,11 @@
       cornerReplay.stop();
       cornerReplay.seek(0);
     }
-    const result = measure(distance, offset.checked ? tow.halfW : 0, onStraight);
+    const sideways = Number(offset.value);
+    const result = measure(distance, sideways, onStraight);
+    const offsetText = sideways === 0 ? "Centred" : Math.abs(sideways) + " m " + (sideways < 0 ? "above" : "below") + " centre";
+    get("offset-value").textContent = offsetText;
+    offset.setAttribute("aria-valuetext", offsetText);
     followerWake = result.wake;
     const headway = (distance / constants.VMAX).toFixed(2);
     get("gapValue").textContent = distance + " m · " + headway + " s";
@@ -259,9 +270,9 @@
     const state = result.wake === 0 ? "Clear air" : onStraight ? "Tow available" : "Cornering in wake";
     if (get("state").textContent !== state) get("state").textContent = state;
     get("effect").textContent = result.wake === 0
-      ? "Car B is outside the shaded wake. It has clean-air grip and no tow."
+      ? "Car B’s centre is at or beyond the shaded wake boundary. The Apex model gives it clean-air grip and no tow."
       : onStraight ? "The straight-line tow is available. Wake exposure still reduces grip."
-      : "The corner removes the usable tow. At this gap and offset the grip loss is unchanged.";
+      : "The Apex corner preset removes usable tow. At this gap and offset the modelled grip loss stays the same.";
     draw();
   }
 
@@ -289,6 +300,10 @@
     delete canvas.dataset.dragging;
   });
   document.querySelector(".settings").addEventListener("input", update);
+  get("wake-boundary").addEventListener("click", () => {
+    offset.value = String(Number(offset.value) > 0 ? tow.halfW : -tow.halfW);
+    update();
+  });
   get("prediction").addEventListener("submit", event => {
     event.preventDefault();
     const answer = get("prediction").querySelector("input:checked");
@@ -304,7 +319,7 @@
     feedback.textContent = lead + "The usable tow drops from " + percent(straight.tow) + " to "
       + percent(corner.tow) + ". Grip stays at " + percent(corner.grip) + " of clean air.";
     gap.value = 10;
-    offset.checked = false;
+    offset.value = 0;
     document.querySelector("input[name=section][value=corner]").checked = true;
     update();
   });
@@ -346,6 +361,13 @@
   updatePressure();
   motion.addEventListener("click", () => { animate = !animate; updateMotion(); });
   document.addEventListener("visibilitychange", updateMotion);
+  const launch = get("launch-aero-drill");
+  if (window.frameElement?.id === "learn-lab") {
+    launch.hidden = false;
+    launch.addEventListener("click", () => {
+      window.parent.postMessage({type: "apex-learn-scenario", id: "aero"}, window.location.origin);
+    });
+  }
   LearnAppearance.mount(syncAppearance);
   new ResizeObserver(draw).observe(canvas);
   cornerReplay.seek(0);
