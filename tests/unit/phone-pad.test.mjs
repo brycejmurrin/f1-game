@@ -296,6 +296,58 @@ test("RECALIBRATE zeroes the phone's current roll, and the roll is what debugSta
   assert.equal(Input.debugState().remote.active, true);
 });
 
+test("RECALIBRATE falls back to fresh host tilt only on the paused touch host", async (t) => {
+  const cases = [
+    { name: "paused host with fresh local tilt", paused: true, local: true, calibrates: true },
+    { name: "paused host without fresh local tilt", paused: true, local: false, calibrates: false },
+    { name: "paused keyboard host with fresh local tilt", paused: true, touchHost: false, local: true, calibrates: false },
+    { name: "title menu with only stale phone tilt", paused: false, local: true, calibrates: false },
+    { name: "title menu with fresh phone tilt", paused: false, phoneFresh: true, calibrates: true },
+    { name: "paused host with fresh phone tilt", paused: true, phoneFresh: true, calibrates: true },
+  ];
+  for (const { name, paused, touchHost = true, local, phoneFresh, calibrates } of cases) await t.test(name, async () => {
+    const { Input, clock, sb } = bootInput();
+    const dom = makeDom(), timers = fakeTimers();
+    const G = { $: dom.byId, els: {}, store: {}, state: paused ? "race" : "menu", paused, getSteerMode: () => "tilt" };
+    const resumes = [];
+    Object.assign(sb, {
+      G, document: dom.document, DeviceOrientationEvent: {},
+      matchMedia: () => ({ matches: touchHost, addEventListener() {} }),
+      setTimeout: timers.setTimeout, clearTimeout: timers.clearTimeout,
+      deps: { setPaused(value, reason) { G.paused = value; resumes.push(reason); } },
+    });
+    vm.runInContext(read("js/ui/platform-session.js"), sb, { filename: absSrc("js/ui/platform-session.js") });
+    const platform = vm.runInContext("PlatformSession.create(G, deps)", sb);
+    platform.wirePhone();
+    Input.setSteerMode("tilt");
+    await Input.requestGyro();
+    const originalCalibrate = Input.calibrate;
+    let calibrations = 0;
+    Input.calibrate = () => { calibrations++; originalCalibrate(); };
+    clock.t = 10;
+    Input.remoteSample({ source: "phone", roll: 15, thr: 0, brk: 0, held: 0, seq: 0 });
+    if (!phoneFresh) clock.t += 710;
+    if (local) {
+      for (let frame = 0; frame < 60; frame++) {
+        clock.t += 16;
+        sb.dispatchEvent({ type: "deviceorientation", beta: 0, gamma: -30 });
+        Input.steer(0.016);
+      }
+      assert.ok(Input.steer(0.016) < -0.8, "the local sensor owns steering after phone samples expire");
+    }
+    platform.paintTiltCalibration();
+    const button = dom.byId("pm-calib");
+    assert.equal(button.disabled, false);
+    button.onclick();
+    clock.t += 300;
+    timers.advance(300);
+    assert.equal(Input.remoteActive(), !!phoneFresh);
+    assert.equal(calibrations, calibrates ? 1 : 0);
+    if (calibrates) assert.equal(Input.steer(0.016), 0);
+    assert.deepEqual(resumes, paused && calibrates ? ["recalibrate"] : []);
+  });
+});
+
 test("current phone pedals keep the configured pressure at the host", () => {
   const { Input, phone, frame } = pair();
   frame();
