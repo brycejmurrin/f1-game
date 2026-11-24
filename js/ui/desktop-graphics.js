@@ -68,8 +68,11 @@ const DesktopGraphics = (() => {
   function mount() {
     const panel = document.getElementById("pm-panel-graphics");
     if (!panel || typeof GLX === "undefined" || panel.querySelector("[data-desktop-graphics]")) return;
-    // "Use preset" names what the CURRENT preset gives (GfxQuality.presetDefault), so the rules live in one place.
-    const values = effect => [["", "Use preset · " + (GfxQuality.presetDefault(effect, GfxQuality.current()) ? "On" : "Off")], ["on", "On"], ["off", "Off"]];
+    // "Use preset" names what the CURRENT preset gives (GfxQuality.presetDefault), so the rules live in one place. A phone's
+    // 90 px stepper cell fits "Preset" (every phone row is off by preset); the option's aria-label keeps the full value.
+    const presetOn = effect => GfxQuality.presetDefault(effect, GfxQuality.current()) ? "On" : "Off";
+    const values = effect => [["", GLX.isMobile ? "Preset" : "Use preset · " + presetOn(effect)], ["on", "On"], ["off", "Off"]];
+    const nameOption = (sel, effect) => sel.options[0]?.setAttribute("aria-label", `Use preset (${presetOn(effect)})`);
     const RULES = { high: "on from HIGH", ultra: "on from ULTRA", extreme: "EXTREME only", cinema: "EXTREME only, in garage, photo and replay" };
     const ruleText = effect => "Preset: " + (GLX.isMobile ? "off unless you turn it on." : (RULES[GfxQuality.presetRule(effect)] || "off at every preset") + ".");
     function add(parent, tag, text) {
@@ -129,6 +132,7 @@ const DesktopGraphics = (() => {
         for (const [effect, [name, explanation]] of available) {
           const { row, label, sel } = SettingRow.build("desktop-detail-" + effect, name, values(effect));
           sel.dataset.effect = effect;
+          nameOption(sel, effect);
           const detail = document.createElement("details");
           label.replaceWith(detail);
           const summary = add(detail, "summary");
@@ -168,6 +172,7 @@ const DesktopGraphics = (() => {
           const repaint = choices => {
             const value = valueOf(choices);
             SettingRow.paint(row, value, values(effect));
+            nameOption(sel, effect);
             paintRuntime(value);
           };
           detail.addEventListener("toggle", () => paintRuntime(valueOf(readChoices())));
