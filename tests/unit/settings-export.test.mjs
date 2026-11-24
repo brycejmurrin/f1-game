@@ -1039,6 +1039,75 @@ test("gesture deadlines and the digital return rate survive backup and reset", (
   assert.equal(b.pedals.buttonProfile("boost").holdMs, undefined);
 });
 
+const dockedTabletUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15";
+function bootDockableResponses(docked, tablet = true) {
+  const b = boot({ touch: true, mobile: tablet, globals: {
+    navigator: { userAgent: dockedTabletUA, maxTouchPoints: tablet ? 5 : 0 },
+    document: { body: { classList: { contains: name => name === "desktop" && docked } } },
+  } });
+  return { ...b, dock: () => { docked = true; } };
+}
+
+test("button profile backups follow the tablet across docking, including a docked boot", () => {
+  const tablet = bootDockableResponses(false);
+  const touch = { v: 1, buttons: { boost: { activation: "quick", quickMs: 520 } } };
+  const phone = responseMap(50);
+  tablet.GameStore.store.set("touchButtonProfiles", touch);
+  tablet.GameStore.store.set("phoneButtonProfiles", phone);
+  tablet.GameStore.store.set("digitalRecenterRate", 6);
+  tablet.GameStore.store.rawSet("gfxBackend", "wgx");
+  const undocked = tablet.collect("changes");
+
+  for (const target of [tablet, bootDockableResponses(true)]) {
+    target.dock();
+    target.pedals.setButtonProfile("boost", { activation: "quick", quickMs: 140 });
+    assert.equal(target.pedals.buttonProfile("boost").quickMs, 140);
+    target.GameStore.store.rawSet("gfxBackend", "glx");
+    assert.equal(target.loadSettings(undocked).deviceSkipped, 1, "only the renderer is skipped");
+    assert.equal(target.pedals.buttonProfile("boost").quickMs, 520);
+    assert.deepEqual(target.GameStore.store.get("phoneButtonProfiles"), phone);
+    assert.equal(target.GameStore.store.get("digitalRecenterRate"), 6);
+    assert.equal(target.GameStore.store.raw("gfxBackend"), "glx");
+  }
+
+  const docked = tablet.collect("changes");
+  const undockedTarget = bootDockableResponses(false);
+  assert.equal(undockedTarget.loadSettings(docked).deviceSkipped, 1);
+  assert.equal(undockedTarget.pedals.buttonProfile("boost").quickMs, 520);
+  const sameUaMac = bootDockableResponses(true, false);
+  assert.equal(sameUaMac.loadSettings(docked).deviceSkipped, 2);
+  assert.equal(sameUaMac.GameStore.store.get("touchButtonProfiles"), undefined);
+  assert.equal(sameUaMac.GameStore.store.get("phoneButtonProfiles"), undefined);
+  const unknown = boot({ touch: true });
+  assert.equal(unknown.loadSettings(docked).deviceSkipped, 2);
+  assert.equal(unknown.GameStore.store.get("touchButtonProfiles"), undefined);
+});
+
+test("docked tablet button profile restores keep legacy safety and ALL unpin behavior", () => {
+  const tablet = bootDockableResponses(true);
+  const legacy = legacyResponseFile(responseMap(45));
+  assert.equal(tablet.loadSettings(legacy).applied, 2);
+  assert.deepEqual(tablet.GameStore.store.get("phoneButtonProfiles"), { ...responseMap(45), inherited: true });
+
+  const oldDesktop = legacyResponseFile(responseMap(60), "changes", true);
+  oldDesktop.device.userAgent = dockedTabletUA;
+  assert.equal(tablet.loadSettings(oldDesktop).deviceSkipped, 1);
+  assert.equal(tablet.loadSettings({ ...legacy, device: undefined }).deviceSkipped, 1);
+  assert.equal(tablet.loadSettings({ ...legacy, device: { desktop: false, buttonProfileDesktop: "false" } }).deviceSkipped, 1);
+  assert.deepEqual(tablet.GameStore.store.get("touchButtonProfiles"), responseMap(45));
+
+  assert.equal(tablet.loadSettings(legacyResponseFile(null, "all")).applied, 2);
+  assert.equal(tablet.GameStore.store.get("touchButtonProfiles"), undefined);
+  assert.deepEqual(tablet.GameStore.store.get("phoneButtonProfiles"), { v: 1, buttons: {}, inherited: true });
+  tablet.loadSettings(legacy);
+  const donor = bootDockableResponses(false);
+  const unset = donor.collect("all");
+  assert.equal(unset.settings.driving.touchButtonProfiles, null);
+  tablet.loadSettings(unset);
+  assert.equal(tablet.GameStore.store.get("touchButtonProfiles"), undefined);
+  assert.equal(tablet.GameStore.store.get("phoneButtonProfiles"), undefined);
+});
+
 test("touch response profiles keep each button independent across backups, imports and resets", () => {
   const phone = () => boot({ touch: true, mobile: true });
   const a = phone(), b = phone();
