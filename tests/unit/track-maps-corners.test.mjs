@@ -66,8 +66,8 @@ test("Monza curated turns include Curva Grande and varied classes", () => {
   const { Tracks, TrackMaps } = loadTrackMaps();
   const monza = Tracks.LIST.find((t) => t.id === "monza");
   assert.equal(monza.turns.length, 11);
-  assert.ok(monza.turns.some((f) => Math.abs(f - 0.1288) < 1e-4),
-    "Curva Grande apex (~0.1288) missing from js/circuits/monza.js turns");
+  assert.ok(Math.abs(monza.turns[2] - 0.1918) < 1e-4,
+    "T3 must sit on the Curva Grande sweep shown on the FIA map");
   const crns = TrackMaps.corners(monza);
   assert.equal(crns.length, 11);
   assert.ok(crns.every((c) => c.cls && c.r > 0 && Number.isFinite(c.v)));
