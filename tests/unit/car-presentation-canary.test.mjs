@@ -44,7 +44,7 @@ test("the player's skid stamp precedes the cockpit-rig continue", () => {
   const game = read("js/game.js");
   const stamp = game.indexOf("skids.stamp(_groundMat,");
   // The branch also carries the VISOR eye (no rig, no body) since 2026-09-28.
-  const cockpit = game.indexOf("if (c.isPlayer && (cockpitRigOnly || visorEye)) {");
+  const cockpit = game.indexOf("if (c.isPlayer && cockpitRigOnly) {");
   assert.ok(stamp > 0 && cockpit > 0, "both sites present");
   assert.ok(stamp < cockpit, `skids.stamp at ${stamp} must come before the cockpit branch at ${cockpit}`);
   assert.equal(game.split("skids.stamp(").length - 1, 1, "one stamp site");
@@ -209,6 +209,5 @@ test("the first-person caster is pinned to the car loop's cockpit branch", () =>
   assert.match(game, /const yv = yawVisInterp\(c\);/);
   // The mode test and the axes call the twin in car-draw.js mirrors.
   assert.match(game, /const cockpitRigOnly = !dbgCam && \(state === "race" \|\| state === "count"\) && \(CAM_MODES\[camMode\]\.id === "cockpit" \|\| CAM_MODES\[camMode\]\.id === "helmet"\);/);
-  assert.match(game, /const visorEye = !dbgCam && \(state === "race" \|\| state === "count"\) && CAM_MODES\[camMode\]\.id === "visor";/);
-  assert.match(game, /GameCams\.cockpitViewmodelAxes\(smp2\.r, smp2\.t, yv, camEye, tmpR, _cockU, tmpF, _cockP,\s*GameCams\.seatFwd\(visorEye \? "visor" : "cockpit"\), GameCams\.seatUp\(visorEye \? "visor" : "cockpit"\), bankC \? bankC\.roll : 0\);\s*basisMat\(tmpR, _cockU, tmpF, _cockP, _cockMat\);\s*drawCockpitRig\(c, _cockMat,/);
+  assert.match(game, /GameCams\.cockpitViewmodelAxes\(smp2\.r, smp2\.t, yv, camEye, tmpR, _cockU, tmpF, _cockP,\s*GameCams\.seatFwd\(\), GameCams\.seatUp\(\), bankC \? bankC\.roll : 0\);\s*basisMat\(tmpR, _cockU, tmpF, _cockP, _cockMat\);\s*drawCockpitRig\(c, _cockMat,/);
 });

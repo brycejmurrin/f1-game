@@ -164,7 +164,7 @@ const _hudVis = { map: null, gaps: null, mode: null, prof: null, hideMap: null, 
 function syncHudVisClasses(modeId) {
   const onboard = !!ONBOARD_IDS[modeId];
   const prof = G.hudProfile || "standard";
-  // MAP AUTO: hide onboard (cockpit/hood/tcam/visor/helmet) or MINIMAL so the view stays clear.
+  // MAP AUTO: hide onboard (cockpit/hood/tcam/helmet) or MINIMAL so the view stays clear.
   const hideMap = resolveHudVis(G.hudMapVis, onboard || prof === "minimal");
   // GAPS do not AUTO-hide onboard — from a cockpit you cannot see the car
   // behind you. GAPS: OFF still hides it. MINIMAL still auto-hides chrome.

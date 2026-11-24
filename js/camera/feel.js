@@ -57,7 +57,6 @@ const CamFeel = (function () {
     function brakeOf(ctx) { return (ctx && ctx.brake) || 0; }
     function onboard(mode, eye, tgt, ctx) {
       if (mode === "cockpit" || mode === "helmet") return 1.5 * spOf(ctx) + 1 * brakeOf(ctx);   // HELMET is the cockpit from inside the lid
-      if (mode === "visor") return 1 * spOf(ctx);
       if (mode === "hood") return 2 * spOf(ctx) + 1.5 * brakeOf(ctx);
       if (mode === "tcam") return 2.5 * spOf(ctx);
       if (mode === "rear") return 1 * spOf(ctx) + 4 * brakeOf(ctx);
@@ -85,8 +84,8 @@ const CamFeel = (function () {
   // Off under camComfort() and on a wet road (SSR flicker).
   //
   // KERB RIB SHIVER: spatial, driven off arc `s` in vantage.js onboardAttitude
-  // for the same bolted set (cockpit/hood/visor/tcam/helmet).
-  const BUZZ_MODES = Object.freeze(["cockpit", "hood", "visor", "tcam", "helmet"]);
+  // for the same bolted set (cockpit/hood/tcam/helmet).
+  const BUZZ_MODES = Object.freeze(["cockpit", "hood", "tcam", "helmet"]);
   const FREELOOK_MODES = BUZZ_MODES;
   // LOOK BACK already faces aft in these — flipping again is a double reverse.
   const LOOKBACK_SKIP = Object.freeze(["reverse", "rear"]);
@@ -238,7 +237,6 @@ const CamFeel = (function () {
     // onboard camera (mode-switch jitter).
     helmet:    { sp: 3.5, yaw: 3, brake: 8, slip: 3 },
     hood:      { sp: 4.5, yaw: 4, brake: 9, slip: 4 },
-    visor:     { sp: 3.0, yaw: 3, brake: 3, slip: 3 },
     tcam:      { sp: 5.0, yaw: 4, brake: 8, slip: 4 },
     rear:      { sp: 5.5, yaw: 7, brake: 8, slip: 4 },
   });

@@ -1,5 +1,5 @@
-// The shipped CAM_MODES ids, in index order (apex26.camMode is an index into
-// this list), read from js/camera/mode-switch.js so a test stub cannot drift
+// The shipped CAM_MODES ids in runtime index order, read from
+// js/camera/mode-switch.js so a test stub cannot drift
 // from the indices the game really produces.
 import fs from "node:fs";
 import path from "node:path";

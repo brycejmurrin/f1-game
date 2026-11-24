@@ -118,14 +118,13 @@ test("trackside snap selects the seek destination without inheriting hysteresis"
   assert.equal(TS.pose(track, 1105, 0, { snap: true }).index, 0, "seek also wraps the lap");
 });
 
-test("CAM_MODES keeps trackside at its saved index 14 (apex26.camMode is the index)", () => {
-  // Run the real mode table, not a regex over its source: the index IS the persisted camMode.
+test("CAM_MODES still loads and saves trackside as camera 14", () => {
   const win = {};
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), vm.createContext({ window: win }),
     { filename: absSrc("js/camera/mode-switch.js") });
-  const ids = win.CamModes.CAM_MODES.map((m) => m.id);
-  assert.equal(ids.indexOf("trackside"), 14, "saved camMode 14 must stay trackside; append, never reorder");
-  assert.equal(ids[13], "visor", "visor stays directly before it");
+  const { CAM_MODES, fromSaved, toSaved } = win.CamModes;
+  assert.equal(CAM_MODES[fromSaved(14)].id, "trackside");
+  assert.equal(toSaved(CAM_MODES.findIndex(mode => mode.id === "trackside")), 14);
 });
 
 test("reset forgets the held cam so a restart does not keep the old one", () => {

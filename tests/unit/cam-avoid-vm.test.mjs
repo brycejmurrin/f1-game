@@ -32,6 +32,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { CAM_MODE_IDS } from "../helpers/camera-modes.mjs";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -79,8 +80,8 @@ test("the start gantry (Monza s=5) no longer lifts the LOW eye", () => {
 
 test("every mode steps <= 0.52 m (2 dp) per 0.5 m of arc across the s=0 seam and L/2", () => {
   const g = games.monza, L = g.G.track.total;
-  const modes = g.sandbox.CamModes.CAM_MODES.map((m) => m.id);
-  assert.equal(modes.length, 20, "the seam claim covers the 20 shipped modes");
+  const modes = Array.from(g.sandbox.CamModes.CAM_MODES, mode => mode.id);
+  assert.deepEqual(modes, CAM_MODE_IDS, "the VM covers every shipped camera mode");
   for (const mode of modes) {
     for (const base of [0, L / 2]) {
       let prev = null;

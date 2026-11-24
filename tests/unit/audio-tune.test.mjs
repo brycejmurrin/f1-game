@@ -26,6 +26,7 @@ import vm from "node:vm";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { CAM_MODE_IDS } from "../helpers/camera-modes.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/audio/engine.js"].map((file) =>
@@ -2038,14 +2039,11 @@ test("the saved camera's mix is applied at boot, not only on the first camera ch
 // missed when rival/pitwall/drone/helmet were added: it played the full chase
 // engine and wind behind spectator shots.
 test("every CAM_MODES id has an explicit camera mix kind", () => {
-  const modes = fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8");
-  const list = modes.slice(modes.indexOf("const CAM_MODES = ["));
-  const ids = [...list.slice(0, list.indexOf("];")).matchAll(/\bid:\s*"([a-z]+)"/g)].map((m) => m[1]);
-  assert.ok(ids.length >= 20 && ids.includes("tv"), "precondition: parsed the camera list, got " + ids.join(","));
+  assert.ok(CAM_MODE_IDS.includes("tv"), "the shipped camera list includes the TV director");
   const eng = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8");
   const kindSrc = eng.slice(eng.indexOf("const CAM_KIND"), eng.indexOf("});", eng.indexOf("const CAM_KIND")));
   const listed = new Set([...kindSrc.matchAll(/\b([a-z]+):\s*"(?:onboard|chase|tv)"/g)].map((m) => m[1]));
-  assert.deepEqual(ids.filter((id) => !listed.has(id)), [], "camera ids with no CAM_KIND entry fall back to the chase mix");
+  assert.deepEqual(CAM_MODE_IDS.filter((id) => !listed.has(id)), [], "camera ids with no CAM_KIND entry fall back to the chase mix");
   const { GameAudio: A } = boot();
   A.init();
   assert.equal(A.setCameraMix("tv"), "tv", "the TV director camera gets the TV (spectator) mix");

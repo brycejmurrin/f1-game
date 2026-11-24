@@ -1,9 +1,6 @@
 /* CamModes — the PLAYER camera-mode switch UI: the CAM button (tap to cycle, hold/right-click for the picker grid) and the C-key cycle. BROADCAST-ONLY: it changes which CAM_MODES rig you look through and never touches car state; game.js owns `camMode` / `camCutT` and this module writes them through G. */
 "use strict";
-// CAM_MODES index IS `camMode` (persisted as apex26.camMode), so the order is a
-// save-format contract: append, never reorder. js/camera/vantage.js resolves
-// each id to a rig; cam-tuner, apex.js, agentview.js and game.js read the list
-// through CamModes.CAM_MODES.
+// Keep the saved camera numbers stable for settings exports and existing profiles.
 window.CamModes = (function () {
   const CAM_MODES = [
     { id: "chase",     label: "CHASE",     cut: 0.35 },
@@ -19,15 +16,21 @@ window.CamModes = (function () {
     { id: "low",       label: "LOW",       cut: 0.4 },
     { id: "tcam",      label: "T-CAM",     cut: 0 },
     { id: "rear",      label: "REAR CAM",  cut: 0.15 },
-    { id: "visor",     label: "VISOR",     cut: 0 },        // the cockpit without its steering wheel (a linked phone is the wheel)
-    { id: "trackside", label: "TRACKSIDE", cut: 0.5 },      // fixed corner cams that auto-switch as the car passes (append-only)
-    // Append-only: apex26.camMode is an index. New player cams land HERE (after TRACKSIDE).
+    { id: "trackside", label: "TRACKSIDE", cut: 0.5 },      // fixed corner cams that auto-switch as the car passes
     { id: "rival",     label: "RIVAL LOCK", cut: 0.4 },     // frames the nearest battle rival (Broadcast.battles)
     { id: "pitwall",   label: "PIT WALL",   cut: 0.45 },    // pit-lane / pit-exit wall cam (optional auto-cut)
     { id: "drone",     label: "DRONE",      cut: 0.5 },     // smoothed tether with corner look-ahead (heli alternative)
-    { id: "tv",        label: "TV",        cut: 0.5 },      // live TV director (js/camera/director.js) — append only; index is apex26.camMode
+    { id: "tv",        label: "TV",        cut: 0.5 },      // live TV director (js/camera/director.js)
     { id: "helmet",    label: "HELMET",     cut: 0 },       // the cockpit from inside the lid: eye forward, visor frame (css/hud.css)
   ];
+  // Slot 13 was Visor. Retain the numbering of the later cameras on disk.
+  const VISOR_SLOT = 13;
+  function fromSaved(value) {
+    const slot = Math.min(Math.max(value | 0, 0), CAM_MODES.length);
+    return slot === VISOR_SLOT ? CAM_MODES.findIndex(mode => mode.id === "helmet")
+      : slot > VISOR_SLOT ? slot - 1 : slot;
+  }
+  const toSaved = index => index >= VISOR_SLOT ? index + 1 : index;
   const HOLD_MS = 340;   // CAM button hold before the picker opens
 
   function create(G) {
@@ -52,7 +55,7 @@ window.CamModes = (function () {
 
     // A REAL RACE WATCH (js/race/real-replay.js): its TV director is one more
     // "camera" — AUTO — in the picker and the C / CAM cycle. Never a CAM_MODES
-    // entry: that list is the saved apex26.camMode index and GameCams.vantage's
+    // entry: that list is the driving camera registry and GameCams.vantage's
     // mode ids, and AUTO is neither.
     function watchReplay() {
       const r = typeof RealRace !== "undefined" && RealRace.replay ? RealRace.replay() : null;
@@ -136,7 +139,7 @@ window.CamModes = (function () {
       const replay = typeof RealRace !== "undefined" && RealRace.replay ? RealRace.replay() : null;
       if (!owner && !(opts && opts.persist === false) && !(replay && replay.isRunning())) {
         baseCamera = G.camMode;
-        G.store.set("camMode", G.camMode);
+        G.store.set("camMode", toSaved(G.camMode));
       }
       if (G.camMode !== prev) {
         G.camCutT = (CAM_MODES[G.camMode] || CAM_MODES[0]).cut ?? 0.35;   // cut: 0 is an instant cut, not missing
@@ -188,5 +191,5 @@ window.CamModes = (function () {
     return { refreshCamBtn, setCamMode, cycleCam, hideCamPicker: camUi.hide };
   }
 
-  return { CAM_MODES, create };
+  return { CAM_MODES, fromSaved, toSaved, create };
 })();

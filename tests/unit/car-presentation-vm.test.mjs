@@ -559,8 +559,8 @@ test("putBoundedMesh's stamp LRU evicts exactly what the old reorder-on-hit LRU 
 test("first-person views cast the first-person caster at the cockpit matrix; exterior views the silhouette at the ground matrix", () => {
   const v = carDrawVm({ casters: true });
   const { ctx, G, carDraw } = v;
-  ctx.CamModes.CAM_MODES.push({ id: "helmet" }, { id: "visor" });   // [chase, cockpit, helmet, visor]
-  ctx.CockpitOpts.layout = () => ({ eyeF: -0.10, eyeU: 0.75 });      // a seat that is not the visor's
+  ctx.CamModes.CAM_MODES.push({ id: "helmet" });
+  ctx.CockpitOpts.layout = () => ({ eyeF: -0.10, eyeU: 0.75 });      // a custom seat
   for (const f of ["js/camera/vantage-ride.js", "js/camera/vantage.js", "js/render/shared/shadow-pass.js"])
     vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   v.field((c, i) => 1000 + 9 * i);
@@ -597,23 +597,23 @@ test("first-person views cast the first-person caster at the cockpit matrix; ext
   };
   const close = (a, b, msg, eps = 2e-3) => a.forEach((x, i) => assert.ok(Math.abs(x - b[i]) < eps, `${msg}: [${i}] ${x} vs ${b[i]}`));
   // What the cockpit branch in game.js draws the body at: the same call over the same inputs.
-  const drawnMat = (seat) => {
+  const drawnMat = () => {
     const R = [0, 0, 0], U = [0, 1, 0], F = [0, 0, 0], P = [0, 0, 0];
-    ctx.GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, R, U, F, P, ctx.GameCams.seatFwd(seat), ctx.GameCams.seatUp(seat), 0.1);
+    ctx.GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, R, U, F, P, ctx.GameCams.seatFwd(), ctx.GameCams.seatUp(), 0.1);
     // Stored as game.js stores _cockMat (a Float32Array): the cast must match it bit for bit.
     return Array.from(Float32Array.from([R[0], R[1], R[2], 0, U[0], U[1], U[2], 0, F[0], F[1], F[2], 0, P[0], P[1], P[2], 1]));
   };
   const eyeAt = (m, eyeU, eyeF) => [0, 1, 2].map((i) => m[4 + i] * eyeU + m[8 + i] * eyeF + m[12 + i]);
   for (const which of ["car", "lamp"]) {
     const f = which === "car" ? frame : night;
-    for (const [mode, seat, eyeU, eyeF] of [[1, "cockpit", 0.75, -0.10], [2, "cockpit", 0.75, -0.10], [3, "visor", 0.82, -0.20]]) {
+    for (const mode of [1, 2]) {
       const k = cast(mode, f, which);
       const id = ctx.CamModes.CAM_MODES[mode].id;
       assert.equal(k.mesh, carDraw.cockpitShadowMesh(player.team, player), `${id}/${which}: the first-person caster casts`);
       assert.notEqual(k.mesh, carDraw.cockpitBodyMesh(player.team, player), `${id}/${which}: not the cockpit build (no wheels, no rear assembly)`);
       assert.notEqual(k.mesh, carDraw.teamMesh(player.team, player, true), `${id}/${which}: not the exterior silhouette (helmet, factory halo)`);
-      assert.deepEqual(k.m, drawnMat(seat), `${id}/${which}: cast at the matrix the cockpit body is drawn with`);
-      close(eyeAt(k.m, eyeU, eyeF), G.camEye, `${id}/${which}: the ${seat} seat's eye sits at the camera`);
+      assert.deepEqual(k.m, drawnMat(), `${id}/${which}: cast at the matrix the cockpit body is drawn with`);
+      close(eyeAt(k.m, 0.75, -0.10), G.camEye, `${id}/${which}: the cockpit seat's eye sits at the camera`);
     }
     // The countdown is first person too (the car loop's race|count test).
     assert.equal(cast(1, f, which, "count").mesh, carDraw.cockpitShadowMesh(player.team, player), `count/${which}: the first-person caster`);

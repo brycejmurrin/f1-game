@@ -121,14 +121,14 @@ const SettingDeps = (function () {
     // The DRIVING LINE mode is a RACE SETTINGS row (another screen), so read the module.
     { key: "line-off", ids: ["pm-linecolor", "pm-lineopacity"], reason: "OFF in Race settings",
       when: () => (typeof DrivingLine !== "undefined" && DrivingLine.mode ? DrivingLine.mode() !== "off" : null) },
-    // TURN CHASING only aims the cockpit / visor / helmet look (vantage.js).
+    // TURN CHASING only aims the cockpit and helmet look (vantage.js).
     { key: "turnchase-cam", ids: ["pm-turnchase"], runtime: true, reason: "Cockpit views only",
       when: () => {
         if (typeof GameStore === "undefined" || !GameStore.store || typeof CamModes === "undefined") return null;
         // Default 19 matches game.js's shipped camMode read (store-registry).
-        const idx = GameStore.store.get("camMode", 19);
-        const id = CamModes.CAM_MODES && CamModes.CAM_MODES[idx | 0] && CamModes.CAM_MODES[idx | 0].id;
-        return id ? (id === "cockpit" || id === "visor" || id === "helmet") : null;
+        const index = CamModes.fromSaved(GameStore.store.get("camMode", 19));
+        const id = CamModes.CAM_MODES[index].id;
+        return id === "cockpit" || id === "helmet";
       } },
   ]);
 

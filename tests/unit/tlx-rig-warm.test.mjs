@@ -271,12 +271,12 @@ test("menu path: opts.mirror runs the mirror stage over the race scene once per 
   assert.equal(s.R.mirror().stages, 0, "a software GPU never warms the mirror (as wantMirrorWarm)");
 });
 
-test("wiring: present() dispatches the rig warm after the entry and mirror warms; car-draw warms both seats; race entry awaits it", () => {
+test("wiring: present() dispatches the rig warm after the entry and mirror warms; car-draw warms the shared rig; race entry awaits it", () => {
   assert.ok(TLX.includes("_coAppend(mesh.geo, model, opts)) return;   // R1\n          if (_capture) { _captureRec(mesh, model, opts); return; }"), "draw() captures right after the coalesce line");
   assert.ok(TLX.includes("_capture = recs; _coOn = false;"), "coalescing is off while capturing, so _coAppend never takes a rig draw");
   assert.ok(TLX.includes("\n        warmDraws,   //"), "the backend publishes warmDraws");
-  assert.ok(CAR_DRAW.includes("G.gfx.warmDraws(() => { drawCockpitRig(c, _rigWarmBase, 0, paint, false); drawCockpitRig(c, _rigWarmBase, 0, paint, true); },"),
-    "cockpit/helmet (wheel) and visor (no wheel)");
+  assert.ok(CAR_DRAW.includes("G.gfx.warmDraws(() => drawCockpitRig(c, _rigWarmBase, 0, paint),"),
+    "cockpit and helmet share this rig");
   assert.ok(TLX.includes("          if (_rigWarm && !_rigWarm.started) _rigWarm.seen++;   // a present reached the queue (warmDraws' re-arm)\n          if (!_warmPending && !_deviceLost) { if (_warmRequested)"),
     "present() marks a queued job seen before its dispatch (the harness mirrors that line)");
   // A·W56: the wheel telemetry (car-independent _rigFx) is warmed with the menu's program warm, from the same draws.

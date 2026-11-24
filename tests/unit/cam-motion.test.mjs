@@ -10,6 +10,7 @@ test("on a straight, each camera moves differently through speed, a brake, and a
   const r = checkCamMotion();
   assert.equal(r.ok, true, r.failures.join("\n"));
   assert.equal(r.rows.length, 18);
+  assert.ok(r.rows.some(row => row.mode === "helmet"));
 });
 
 // The corner half: the same chase rig on a curved road (shared fixture) with

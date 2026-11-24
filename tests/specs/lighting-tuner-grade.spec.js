@@ -3,6 +3,7 @@
 // — shared CI coverage is native GLX; TLX product coverage lives in tlx-probes.
 import { test, expect, BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
 import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
+import { CAM_MODE_IDS } from "../helpers/camera-modes.mjs";
 // BUDGETS, FROM A MEASUREMENT. Every wait below was under the worst case this
 // class of box actually posts: measured idle (loadavg 0.00, three cold boots,
 // scratch/perf/boot-budget.mjs) the page needs up to 24.6 s to publish __apex
@@ -381,7 +382,7 @@ for (const tier of PHONE_TUNER_TIERS) test.describe("tuners on a landscape phone
     expect(got.density, "the tier this cell is about").toBe(tier.density);
     expect(got.open || got.summary, "the tools are open, or their summary is there to open them").toBe(true);
     expect(got.door, "the tools open").toBe(true);
-    expect(got.shown, "every camera-mode tab").toBe(20);
+    expect(got.shown, "every camera-mode tab").toBe(CAM_MODE_IDS.length);
     expect(got.one, "RESET").toBe(true);
   });
 });

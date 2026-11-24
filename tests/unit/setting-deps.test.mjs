@@ -49,7 +49,7 @@ function boot(extra = {}) {
     DrivingLine: { mode: () => mode.line }, TitleFx: { mode: () => mode.motion },
     Input: { touchControlsNeeded: () => mode.touch, phoneTiltAvailable: () => mode.phoneTilt },
     GameStore: { store: { get: (k, fallback) => (k === "homeScene" ? mode.scene : k === "camMode" ? 0 : fallback) } },
-    CamModes: { CAM_MODES: [{ id: "cockpit" }] },
+    CamModes: { CAM_MODES: [{ id: "cockpit" }], fromSaved: value => value },
     ...extra,
   });
   // turnchase-cam OFF flips the mode id at the stored camMode index.

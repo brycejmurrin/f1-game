@@ -247,7 +247,7 @@ test("source guards: game.js emits carFx beside the other emitters, before the c
   // game.js: carFx.emit beside the other emitters, before the cockpit branch.
   const game = read("js/game.js");
   const emit = game.indexOf("carFx.emit(c, _groundMat, dt, state);");
-  const cockpit = game.indexOf("if (c.isPlayer && (cockpitRigOnly || visorEye)) {");
+  const cockpit = game.indexOf("if (c.isPlayer && cockpitRigOnly) {");
   assert.ok(emit > 0 && cockpit > 0 && emit < cockpit, "carFx.emit must run before the cockpit view's continue");
   assert.equal(game.split("carFx.emit(").length - 1, 1, "one emit site");
   const marks = game.indexOf("carFx.marks(c, _groundMat, dt, state);");
@@ -386,7 +386,7 @@ test("haze source guards: visual only, wired once, the post shaders' opts.haze u
   const pick = game.indexOf("const hazeAnchor = haze && haze.pick(cars, player, onboard, ");
   const loop = game.indexOf("for (const c of cars) {", pick);
   const mark = game.indexOf("if (c === hazeAnchor) haze.mark(c, tmpMat);");
-  const cockpit = game.indexOf("if (c.isPlayer && (cockpitRigOnly || visorEye)) {");
+  const cockpit = game.indexOf("if (c.isPlayer && cockpitRigOnly) {");
   assert.ok(pick > 0 && loop > pick && mark > loop && mark < cockpit, "pick before the car loop, mark in it before the cockpit continue");
   assert.match(game, /const haze = gfx\.mobileTier \? null : carFx\.haze;/);
   assert.match(game, /po\.haze = haze \? haze\.at\(_mVP\) : null;/, "one {u, v, str} (or null) for the post; off on phones");
