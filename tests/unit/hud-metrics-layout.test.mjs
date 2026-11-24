@@ -428,10 +428,23 @@ test("F-17: the LIMITS chip's drop is ONE token, read by the CSS sites and the f
   assert.equal(ctx._cssDrop, 21);
 });
 
+test("saved TYRES and ERS keep their base width across responsive layers", () => {
+  const readout = ":is(#hud-tyre, #hud-energy)";
+  const widths = cssRules()
+    .filter((rule) => subjectHas(rule.sel, "hud-tyre") || subjectHas(rule.sel, "hud-energy"))
+    .map(({ file, sel, body }) => ({ file, sel, width: body.match(/(?:^|;)\s*width:\s*([^;]+)/)?.[1].trim() }))
+    .filter((rule) => rule.width);
+  assert.equal(widths.find(({ sel }) => sel === readout)?.width, "130px");
+  for (const { file, sel, width } of widths.filter(({ sel }) => sel !== readout)) {
+    assert.ok(sel.endsWith(":where(:not([data-hl-v4]))"), `${file} ${sel} must leave saved readouts at their base width`);
+    assert.doesNotMatch(width, /!important/);
+  }
+});
+
 test("F-13 slice 7 ratchet: css/hud.css gains no !important line and no :has( site (#4448)", () => {
   // Lower these as the remaining rules fold into plain cascade wins; never raise them.
   const lines = fs.readFileSync(path.join(root, "css/hud.css"), "utf8").split("\n");
-  assert.ok(lines.filter((l) => l.includes("!important")).length <= 72, "!important lines (72 at 2026-11-20)");
+  assert.ok(lines.filter((l) => l.includes("!important")).length <= 71, "!important lines (71 after the readout width fold)");
   // :has( counted in PARSED selectors (comments excluded; 6 of the file's 31 raw hits are prose).
   const hasSites = parseCss(readCssSource("css/hud.css")).reduce((n, r) => n + r.selector.split(":has(").length - 1, 0);
   assert.ok(hasSites <= 25, ":has( selector sites (25 at 2026-11-20)");

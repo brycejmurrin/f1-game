@@ -475,7 +475,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      labels (--fs-micro) and never the digits — an 18px label over a 22px
      value (F-10, docs/notes/HUD-CODE-AUDIT-2026-10-10.md). */
   #hud-speed { font-size: calc(28px * var(--hud-text-boost, 1)); }
-  #hud-energy { width: 132px; height: 15px; }
+  #hud-energy { height: 15px; }
+  #hud-energy:where(:not([data-hl-v4])) { width: 132px; }
   .hud-unit { font-size: var(--fs-micro); margin-left: calc(var(--gap) / 6); }
   /* ONE INSTRUMENT (design pass 2a; the plate itself is in css/hud.css, which may read --accent):
      SPEED is the hero figure (read every corner), GEAR a compact block, the inner plates go.
@@ -789,7 +790,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     }
     body.desktop #hud-gear { font-size: 58px; min-width: 44px; }
     body.desktop #hud-tach { width: 172px; height: 18px; }
-    body.desktop #hud-energy { width: auto; justify-self: stretch; height: 18px; min-width: 0; }
+    body.desktop #hud-energy { justify-self: stretch; height: 18px; min-width: 0; }
+    body.desktop #hud-energy:where(:not([data-hl-v4])) { width: auto; }
     body.desktop #hud-speed { font-size: calc(42px * var(--hud-text-boost, 1)); }
     body.desktop .hud-unit { font-size: var(--fs-micro); margin-left: calc(var(--gap) / 3); }
     body.desktop #hud-ot, body.desktop #hud-aero { font-size: calc(15px * var(--hud-text-boost, 1)); padding: calc(var(--gap) * 2 / 3) calc(var(--gap) * 7 / 6); }
@@ -866,7 +868,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
        screen the only one still reading at the shrunken size. */
     #hud-gear { font-size: 40px; }
     #hud-tach { width: 84px; }
-    body:not(.desktop) #hud-energy { width: 108px; }
+    body:not(.desktop) #hud-energy:where(:not([data-hl-v4])) { width: 108px; }
     body:not(.desktop) .hud-energy-label { white-space: nowrap; letter-spacing: 0; }
     body:not(.desktop) #hud-energy-n { margin-left: 0.25em; }
     body:not(.desktop) #hud-speed { font-size: calc(30px * var(--hud-text-boost, 1)); }

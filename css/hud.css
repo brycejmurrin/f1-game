@@ -543,8 +543,11 @@ body.hud-met-driver #hud-box-best,
 body.hud-met-compact #hud-sectors,
 body.hud-met-compact #hud-box-best { display: none !important; }
 
+/* Saved placements use this width at every breakpoint. Responsive widths
+   in this sheet and the overlays layer apply only to automatic readouts. */
+:is(#hud-tyre, #hud-energy) { width: 130px; }
 #hud-energy {
-  width: 130px; height: 14px;
+  height: 14px;
   /* A plate under the fill, like the tach: with none, the bar's empty half was
      the live scene, and the 55%-black ENERGY label vanished into it below
      ~half charge — the reading that matters most was the one you could not
@@ -584,7 +587,7 @@ body.hud-met-compact #hud-box-best { display: none !important; }
 #hud-tyre[hidden] { display: none; }
 /* A PLATE, like every other cluster readout: unframed, the dim PLAN line under the
    bar did not read as part of the chip over sky or tarmac (visual review 2026-10-14). */
-#hud-tyre { width: 130px; box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) / 2); margin-bottom: calc(var(--gap) * 2 / 3);
+#hud-tyre { box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) / 2); margin-bottom: calc(var(--gap) * 2 / 3);
   background: var(--hud-strip-bg); padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.5); border-radius: var(--r-sm); }
 /* TYRE TEMPERATURE (js/ui/hud-tyres.js): one state painted on the compound
    letter — cold / working / hot vs the compound window. Semantic tokens, so
@@ -884,10 +887,10 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
     transform: translateX(-50%);
     bottom: calc(100% + 4px);
     margin: 0;
-    width: min(130px, 42vw);
     max-width: 100%;
     box-sizing: border-box;
   }
+  body:not(.desktop) #hud-tyre:where(:not([data-hl-v4])) { width: min(130px, 42vw); }
   body:not(.desktop) #hud-gearbox,
   body:not(.desktop) #hud-energy {
     max-width: 100%;
@@ -2657,7 +2660,6 @@ body.hud-prof-broadcast .hud-top[data-hl-v4] { left: calc(10px + var(--sal) / va
 #hud-flag[data-hl-v4] { top: calc(100px + var(--sat) / var(--hud-z)) !important; left: 50% !important; transform: translateX(-50%) !important; }
 #hud-mirror[data-hl-v4] { top: calc(70px + var(--sat) / var(--hud-z)) !important; width: 180px; height: calc(180px * 2 / 7); }
 #announce[data-hl-v4] { top: calc(25svh / var(--hud-z)) !important; left: calc(50vw / var(--hud-z)) !important; right: auto !important; transform: none !important; width: max-content !important; min-height: 0 !important; }
-:is(#hud-tyre, #hud-energy)[data-hl-v4] { width: 130px !important; }
 
 /* Optional panel dimensions keep the content minimum. Scale still transforms the whole widget. */
 [data-hl-width] { box-sizing: border-box; min-width: min-content; }
