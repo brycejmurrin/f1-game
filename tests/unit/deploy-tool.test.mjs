@@ -962,24 +962,37 @@ test("deploy timeout fails even when a SIGTERM handler exits successfully", asyn
   await assert.rejects(run(process.execPath, ["-e", "process.exit(9)"], "ordinary failure", { timeoutMs: 1000, json: false }), /exit 9/);
 });
 
+// Flake #6358 (2026-11-24): this case passed only on retry in a local --jobs=3 floor. It raced the wall clock twice:
+// a real 500 ms deadline against two node start-ups (a SIGTERM before the leader's handler killed it, no pid file),
+// and a 1800 ms return bound against a loaded box. The deadline is now an injected clock fired once both fixtures
+// report ready, and "before they naturally finish" is read from their own finish markers, not from Date.now().
 test("deploy escalates resistant children and reaps finite descendants before returning", async () => {
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "deploy-tree-"));
-  const pidFile = path.join(dir, "pids.json"), marker = path.join(dir, "late.txt");
-  const descendant = `const fs=require('node:fs');process.on('SIGTERM',()=>{});setTimeout(()=>fs.writeFileSync(${JSON.stringify(marker)},'leaked'),2200);`;
-  const parent = `const {spawn}=require('node:child_process');const fs=require('node:fs');process.on('SIGTERM',()=>{});const c=spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{detached:true,stdio:'ignore'});fs.writeFileSync(${JSON.stringify(pidFile)},JSON.stringify([process.pid,c.pid]));setTimeout(()=>process.exit(0),2500);`;
-  let pids = [];
+  const pidFile = path.join(dir, "pids.json"), ready = path.join(dir, "ready.txt");
+  const marker = path.join(dir, "late.txt"), leaderDone = path.join(dir, "leader-done.txt");
+  const descendant = `const fs=require('node:fs');process.on('SIGTERM',()=>{});fs.writeFileSync(${JSON.stringify(ready)},'ready');setTimeout(()=>fs.writeFileSync(${JSON.stringify(marker)},'leaked'),20000);`;
+  const parent = `const {spawn}=require('node:child_process');const fs=require('node:fs');process.on('SIGTERM',()=>{});const c=spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{detached:true,stdio:'ignore'});fs.writeFileSync(${JSON.stringify(pidFile + ".tmp")},JSON.stringify([process.pid,c.pid]));fs.renameSync(${JSON.stringify(pidFile + ".tmp")},${JSON.stringify(pidFile)});setTimeout(()=>{fs.writeFileSync(${JSON.stringify(leaderDone)},'done');process.exit(0);},20000);`;
+  let pids = [], fire = null, supervised = null;
   try {
-    const started = Date.now();
-    const result = await superviseDeployChild(process.execPath, ["-e", parent], { cwd: ROOT, env: process.env,
-      stdio: "ignore", timeoutMs: 500, graceMs: 100, cleanupMs: 1000 });
+    supervised = superviseDeployChild(process.execPath, ["-e", parent], { cwd: ROOT, env: process.env,
+      stdio: "ignore", timeoutMs: 500, graceMs: 100, cleanupMs: 1000, startTimer: fn => { fire = fn; return null; } });
+    // Wait on the fixtures' own ready events (both SIGTERM handlers installed), then expire the deadline.
+    for (const waitStart = Date.now(); !(fs.existsSync(pidFile) && fs.existsSync(ready)); ) {
+      assert.ok(Date.now() - waitStart < 30000, "fixtures never reported ready");
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
     pids = JSON.parse(fs.readFileSync(pidFile, "utf8"));
+    assert.equal(typeof fire, "function", "the supervisor armed its deadline");
+    const expire = fire; fire = null; expire();
+    const result = await supervised;
     assert.equal(result.error?.code, "ETIMEDOUT");
-    assert.ok(Date.now() - started < 1800, "escalation returns before the resistant fixtures naturally finish");
     assert.deepEqual(result.survivors, []);
     assert.ok(pids.every(pid => !alive(pid)), "both the resistant leader and detached descendant are stopped at return");
+    assert.equal(fs.existsSync(leaderDone), false, "escalation, not the leader's natural exit, ended the run");
     assert.equal(fs.existsSync(marker), false, "the descendant never reaches its finite late work");
   } finally {
     // Fixtures also self-end; a failing assertion must not leave active work.
+    if (fire) { fire(); await supervised; }
     for (const pid of pids) { if (alive(pid)) { try { process.kill(pid, "SIGKILL"); } catch { /* exited */ } } }
     fs.rmSync(dir, { recursive: true, force: true });
   }
