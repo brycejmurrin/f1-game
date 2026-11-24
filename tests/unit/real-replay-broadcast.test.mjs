@@ -572,3 +572,62 @@ test("WATCH AUTO: a seek past the followed car's DNF moves the picture to a runn
     assert.ok(running.some((code) => code === follow), "onto a running car: " + follow);
   } finally { g.close(); }
 });
+
+function shotPolicy(extra = {}) {
+  const ctx = vm.createContext({ ...extra });
+  loadReplayBroadcast(ctx);
+  return vm.runInContext('Broadcast', ctx);
+}
+
+test('AUTO visits every eligible event shot instead of becoming a two-shot loop', () => {
+  const B = shotPolicy();
+  for (const [kind, pool] of Object.entries({pass:['side','heli','chase'],battle:['heli','chase','side'],fastest:['tcam','chase','side']})) {
+    let shot = pool[0]; const seen = [];
+    for (let n = 1; n <= 9; n++) { shot = B.shotFor(kind, shot, n); seen.push(shot); }
+    for (let i = 0; i < seen.length; i += 3) assert.equal(new Set(seen.slice(i, i + 3)).size, 3, kind);
+  }
+});
+
+test('AUTO rejects blocked candidates once each and uses bounded nearby fallback', () => {
+  const B = shotPolicy(), seen=[];
+  assert.equal(B.shotFor('pass','chase',12,s => {seen.push(s);return s==='heli';}), 'heli');
+  assert.deepEqual(seen,['side','heli']);
+  seen.length=0;
+  assert.equal(B.shotFor('pass','chase',12,s=>{seen.push(s);return false;}),'chase');
+  assert.deepEqual(seen,['side','heli','chase']);
+});
+
+test('AUTO evaluates the requested subject, isolates probes, and rejects HUD-edge framing', () => {
+  const subject={s:200,x:1,px:200,pz:0,speed:40,head:0}, probes=[], scopes=[], rays=[];
+  const B=shotPolicy({performance:{now:()=>12345},Tracks:{sample:(_t,_s,out)=>{out.p[1]=10;},banking:()=>({dy:2})},window:{innerWidth:393,innerHeight:852},CamFeel:{scoped:(key,fn)=>{scopes.push(key);return fn();}},FlybySight:{
+    camera:(eye,tgt,fov,aspect)=>{assert.equal(aspect,393/852);return {eye};},
+    project:cam=>({x:cam.eye[0]===1?.9:0,y:0}),
+    transmit:(_track,eye,point)=>{rays.push(point.slice());return {Tdrawn:eye[0]===2?0:1};},
+  }});
+  const G={track:{},player:{px:-999,pz:0},camVantage:(shot,s,x,speed,now,extra)=>{
+    probes.push(shot);assert.equal(now,12345);assert.equal(extra.att,subject);assert.equal(s,200);assert.equal(extra.frameSubject,true);assert.equal(extra.snap,true);
+    return {eye:[{side:1,heli:2,chase:3,tcam:4}[shot],4,0],tgt:[200,30,0],fov:55};
+  }};
+  assert.equal(B.chooseShot(G,subject,'pass','chase',0),'chase');
+  assert.deepEqual(probes,['side','heli','chase']);assert.equal(rays.length,2,'edge shot rejected before raycast');
+  assert.ok(rays.every(p=>p[0]===200 && p[1]===12.8),'actual body height, not tuned aim');assert.ok(scopes.every(s=>s==='broadcast-probe:'));
+  probes.length=0;
+  assert.equal(B.chooseShot(G,subject,'fastest','side',0),'tcam','onboard does not need subject-body projection');
+});
+
+test('WATCH probes only at eligible cuts and uses the incoming driver', () => {
+  let xr=false;const probed=[];
+  const ctx=vm.createContext({Log:{info(){},debug(){}},XrBoot:{comfort:()=>xr},
+    CamModes:{CAM_MODES:['side','heli','chase','tcam','cinematic','low'].map(id=>({id}))},
+    FlybySight:{camera:()=>({}),project:()=>({x:0,y:0}),transmit:()=>({Tdrawn:1})}});
+  const B=loadReplayBroadcast(ctx),a={code:'AAA',px:0,pz:0,s:0},b={code:'BBB',px:100,pz:0,s:100};
+  const G={track:{},player:a,camMode:0,setCamMode:m=>{G.camMode=m;},camVantage:(shot,s,x,spd,now,e)=>{probed.push(e.att);return {eye:[s,5,-10],tgt:[s,1,0],fov:55};}};
+  const bc=B.create(G,{setFollow:c=>{G.player=c;}});
+  const st={script:{drivers:[]},T:0,speed:1,reel:false,follow:a,list:[{t:10,kind:'pass',num:2}],isOut:()=>false,carOf:()=>b,running:()=>[]};
+  bc.start({auto:true,tower:false});probed.length=0;
+  st.T=1;bc.tick(1,st);assert.equal(probed.length,0);
+  st.T=5;bc.tick(4,st);assert.deepEqual(probed,[b]);
+  probed.length=0;bc.setLocked(true);st.T=25;bc.tick(20,st);assert.equal(probed.length,0);
+  bc.setAuto(true);xr=true;bc.tick(20,st);assert.equal(probed.length,0);
+  xr=false;bc.manual();bc.tick(1,st);assert.equal(probed.length,0);bc.stop();
+});
