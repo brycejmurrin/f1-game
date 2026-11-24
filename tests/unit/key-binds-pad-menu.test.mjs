@@ -52,6 +52,16 @@ test("a paired DualSense moves menu focus and shows the controller ring after to
   assert.match(read("css/responsive.css"), /:root\[data-gamepad-nav="on"\] :focus:not\(body\)/);
 });
 
+test("Cross skips a pointer-only chevron that still has focus", () => {
+  const h = menuRig();
+  const pad = fakePad(h.sb, h.fire);
+  const chevron = h.sb.document.activeElement;
+  chevron.getAttribute = (name) => name === "aria-hidden" ? "true" : null;
+  pad.press(0); h.tick();
+  assert.equal(h.clicks, 0);
+  assert.equal(h.dispatched.at(-1)?.key, "ArrowDown", "seed a usable control instead");
+});
+
 test("reconnecting the same pad requires a release before it can activate a menu again", () => {
   const h = menuRig(), pad = rawPad();
   h.sb.navigator.getGamepads = () => pad.connected ? [pad] : [];
@@ -136,6 +146,10 @@ test("D-pad Left/Right on a focused <select> wraps past disabled options and fir
   assert.equal(events.filter((t) => t === "keydown").length, 1, "the cross axis is a key, dispatched at the focused select");
   assert.equal(dispatched.length, 0, "…at the CONTROL, not at the document (an element's own handler must see it)");
   assert.equal(keys.pop().key, "ArrowDown", "the cross-axis arrow is the plain synthetic keydown MenuNav walks on");
+  events.length = 0;
+  press(5); Input.poll(); release(5); Input.poll();
+  assert.equal(sel.selectedIndex, 0, "RB steps a native select just like D-pad Right");
+  assert.deepEqual(events, ["input", "change"]);
 });
 
 test("D-pad and bumper arrows reach the focused SettingRow", () => {
