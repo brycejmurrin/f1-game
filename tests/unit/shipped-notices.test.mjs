@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { COMPONENTS, NOTICE_SOURCES, androidLine, buildCreditsHtml, buildNoticesText, noticeModel } from "../../desktop/scripts/notices.mjs";
+import { COMPONENTS, NOTICE_SOURCES, androidLine, buildCreditsHtml, buildNoticesText, noticeModel, syncCommitted } from "../../desktop/scripts/notices.mjs";
 import { writeAppNotices } from "../../mobile/scripts/sync-web.mjs";
 import { STAGE_DIRS, STAGE_ROOT_FILES, stageExcluded } from "../../tools/desktop/stage-files.mjs";
 
@@ -98,8 +98,53 @@ test("every local link in ABOUT & CREDITS is a file the site stages", () => {
   assert.deepEqual(local.filter((h) => !staged(h) || stageExcluded(h)), [], "a credits link would 404 on the live site");
   // A licence outside the staged dirs is an Android-only component, named in the panel's closing line.
   assert.deepEqual(COMPONENTS.filter((c) => !staged(c.licence)).map((c) => c.group), COMPONENTS.filter((c) => c.group === "android").map(() => "android"));
-  assert.equal(androidLine(noticeModel(ROOT)), "The Android app also includes Capacitor 8.6.2 (MIT), Capacitor Filesystem 8.1.5 (MIT) and Capacitor Share 8.0.3 (MIT).");
+  // The versions come from mobile/package.json, not a literal: a Dependabot bump of a mobile package
+  // must not edit this test. Names, licences and completeness stay pinned; the regenerated outputs are
+  // notices.test.mjs's drift check (and the fake-bump test below proves a stale panel fails there).
+  assert.equal(androidLine(noticeModel(ROOT)), expectedAndroidLine(JSON.parse(read("mobile/package.json"))));
   assert.ok(buildCreditsHtml(ROOT).includes(androidLine(noticeModel(ROOT))), "the panel names the Android-only components");
+});
+
+// Each Android-only component, its licence and the npm package its version is read from.
+const ANDROID = [["Capacitor", "MIT", "@capacitor/core"], ["Capacitor Filesystem", "MIT", "@capacitor/filesystem"], ["Capacitor Share", "MIT", "@capacitor/share"]];
+function expectedAndroidLine(pkg) {
+  const ver = (dep) => {
+    const v = String(pkg.dependencies?.[dep] || "").replace(/^[\^~]/, "");
+    assert.match(v, /^\d+\.\d+\.\d+/, `mobile/package.json pins ${dep} to an exact x.y.z version`);
+    return v;
+  };
+  const names = ANDROID.map(([name, spdx, dep]) => `${name} ${ver(dep)} (${spdx})`);
+  return `The Android app also includes ${names.slice(0, -1).join(", ")} and ${names.at(-1)}.`;
+}
+
+test("the Android component list is exactly the android COMPONENTS rows, in panel order", () => {
+  assert.deepEqual(COMPONENTS.filter((c) => c.group === "android").map((c) => [c.name, c.npm[0]]), ANDROID.map(([n, , d]) => [n, d]));
+});
+
+test("a version-only mobile bump flows into the panel and fails the drift check with the regen command", () => {
+  // A throwaway root: every top-level entry symlinked to the repo except mobile/, whose package.json is a
+  // bumped copy. Only read paths run here (check mode never writes).
+  const tmp = fs.mkdtempSync(path.join(ROOT, "artifacts", "notices-bump-"));
+  try {
+    for (const e of ls(".")) if (e !== "mobile") fs.symlinkSync(path.join(ROOT, e), path.join(tmp, e));
+    fs.mkdirSync(path.join(tmp, "mobile"));
+    for (const e of ls("mobile")) if (e !== "package.json") fs.symlinkSync(path.join(ROOT, "mobile", e), path.join(tmp, "mobile", e));
+    const pkg = JSON.parse(read("mobile/package.json"));
+    pkg.dependencies["@capacitor/share"] = "^99.1.2";
+    fs.writeFileSync(path.join(tmp, "mobile/package.json"), JSON.stringify(pkg, null, 2));
+    const line = androidLine(noticeModel(tmp));
+    assert.equal(line, expectedAndroidLine(pkg));
+    assert.ok(line.includes("Capacitor Share 99.1.2 (MIT)"), line);
+    assert.ok(!buildCreditsHtml(ROOT).includes(line), "the committed panel still names the old version");
+    let out = "";
+    const write = process.stdout.write;
+    process.stdout.write = (s) => { out += s; return true; };
+    let code;
+    try { code = syncCommitted(tmp, { check: true }); } finally { process.stdout.write = write; }
+    assert.equal(code, 1, "a stale panel fails the check");
+    assert.match(out, /index\.html: STALE — regenerate with `node desktop\/scripts\/notices\.mjs`/);
+    assert.match(out, /THIRD-PARTY-NOTICES: STALE — regenerate with `node desktop\/scripts\/notices\.mjs`/);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
 
 test("the Android web dir gets the full third-party notices", () => {
