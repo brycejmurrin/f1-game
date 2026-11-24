@@ -236,7 +236,7 @@ const DataTelemetry = (function () {
             return kept;
           }
           return { d: d, lap: lap, car: DataTelemetryModel.clipCar(res[0], dur), loc: dropStrays(clipToLap(res[1])),
-                   stints: res[2] || [], pits: res[3] || [] };
+                   nativeCar: res[0], nativeLoc: res[1], stints: res[2] || [], pits: res[3] || [] };
         });
       });
     }
@@ -395,7 +395,7 @@ const DataTelemetry = (function () {
         // popup then opens one tick later than the harness drains for.
         return fetchDriverTel(e.sessionKey, e.d, i === 0).then(function (tel) {
           telLanes--;
-          tel.sessionLabel = e.sessionLabel; tel.sessionName = e.sessionName;
+          tel.sessionKey = e.sessionKey; tel.sessionLabel = e.sessionLabel; tel.sessionName = e.sessionName;
           return tel;
         }, function (err) { telLanes--; throw err; });
       }))

@@ -22,7 +22,7 @@ seedDom(ctx);   // telemetry.js formats lap times through Dom.fmtLap
 vm.runInContext(readFileSync("js/core/mat4.js", "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
 for (const file of [
   "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
-  "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js",
+  "js/data/telemetry-player.js", "js/data/telemetry-context.js", "js/data/telemetry-view.js", "js/data/telemetry.js",
   "learn/telemetry/model.js"
 ]) {
   vm.runInContext(readFileSync(file, "utf8"), ctx, { filename: absSrc(file) });
@@ -610,7 +610,7 @@ for (const sampleCount of [8, 9, 801]) test(`telemetry clipping, lane colors and
   seedDom(context);
   for (const file of [
     "js/core/mat4.js", "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
-    "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js"
+    "js/data/telemetry-player.js", "js/data/telemetry-context.js", "js/data/telemetry-view.js", "js/data/telemetry.js"
   ]) {
     vm.runInContext(readFileSync(file, "utf8"), context, { filename: absSrc(file) });
   }
@@ -792,4 +792,46 @@ test("TELEMETRY shows no DRS channel, pill or summary when no sample has a value
   view.hasDrs = true; laps[0] = lane(12); view.primary = laps[0];
   player.updateTextSummary(view);
   assert.equal(lastBit().split(", ").pop(), "DRS open.");
+});
+
+test("lap context preserves tyre joins, prior weather, late deletion and unknown fields", () => {
+  const C = vm.runInContext("DataTelemetryContext", ctx);
+  const start = Date.parse("2023-07-08T15:14:00Z");
+  const tel = { d: { num: 1 }, lap: { dateStart: new Date(start).toISOString(), lapDuration: 90, lapNumber: 25, s1: 30, s2: 30, s3: 30 },
+    nativeCar: [{ date: start - 100 }, { date: start + 90100 }], nativeLoc: [] };
+  const source = (rows) => ({ status: "available", rows });
+  const sources = { stints: source([{ driver_number: 1, lap_start: 24, lap_end: 26, compound: "SOFT", tyre_age_at_start: 0 }]),
+    weather: source([{ date: new Date(start + 5000).toISOString(), track_temperature: 99 },
+      { date: new Date(start - 20000).toISOString(), track_temperature: 27 }]),
+    raceControl: source([{ date: new Date(start + 100000).toISOString(), driver_number: 1, lap_number: 25, message: "LAP TIME DELETED" }]), traffic: source([]) };
+  const s = C.summarize(tel, sources);
+  assert.equal(s.tyre.ageAtStintStart, 0); assert.equal(s.tyre.lapsSinceStintStart, 1);
+  assert.equal(s.weatherAtStart.track_temperature, 27); assert.equal(s.weatherAgeSeconds, 20);
+  assert.equal(s.weatherDuringLap.length, 1); assert.equal(s.deletionReported, true);
+  assert.equal(s.eventsDuringLap.length, 0); assert.equal(s.sectorSumErrorSeconds, 0);
+  assert.equal(s.carQuality.bracketsLap, true); assert.equal(s.locationQuality.maxGapSeconds, null);
+  sources.weather = source([]); sources.stints = source([]); sources.raceControl = source([]);
+  const missing = C.summarize(tel, sources);
+  assert.equal(missing.weatherAtStart, null); assert.equal(missing.tyre, null); assert.equal(missing.deletionReported, null);
+});
+
+test("traffic matches native UTC with bounded sample skew and preserves source units", () => {
+  const C = vm.runInContext("DataTelemetryContext", ctx), start = Date.parse("2023-07-08T15:14:00Z");
+  const r = (driver, dt, x) => ({ driver_number: driver, date: new Date(start + dt).toISOString(), x, y: 10 });
+  const got = C.traffic({ d: { num: 1 } }, [r(1, 0, 100), r(4, 200, 130), r(5, 600, 101), r(1, 2000, 150)], start, start + 3000);
+  assert.equal(got.observations.length, 1); assert.equal(got.observations[0].driverNumber, 4);
+  assert.equal(got.observations[0].distanceSourceUnits, 30); assert.equal(got.observations[0].timestampSkewSeconds, 0.2);
+});
+
+test("context endpoint failures remain explicit and do not reject usable sources", async () => {
+  const c = vm.createContext({ Date, Promise, Number, F1API: { request: async (url) => {
+    if (url.includes("/weather?")) throw new Error("offline");
+    return [];
+  } } });
+  vm.runInContext(readFileSync("js/data/telemetry-context.js", "utf8"), c, { filename: absSrc("js/data/telemetry-context.js") });
+  const C = vm.runInContext("DataTelemetryContext", c);
+  const result = await C.load({ sessionKey: 9122, d: { num: 1 }, lap: { dateStart: "2023-07-08T15:14:00Z", lapDuration: 90, lapNumber: 25 } });
+  assert.equal(result.sources.weather.status, "unavailable"); assert.equal(result.sources.laps.status, "available");
+  assert.match(result.sources.traffic.url, /date%3E=/); assert.doesNotMatch(result.sources.traffic.url, /driver_number/);
+  assert.equal(result.summary.weatherAtStart, null); assert.equal(result.summary.sectorSumErrorSeconds, null);
 });

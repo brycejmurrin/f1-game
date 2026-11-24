@@ -114,6 +114,8 @@ const DataTelemetryView = (function () {
         }, li < 0 ? "NO CAR DATA" : laneRole(li)));
       });
 
+      tels.filter((t) => t.lap && t.sessionKey != null).forEach((t) => mainArea.appendChild(DataTelemetryContext.panel(t, el)));
+
       const view = {
         laps: laps,
         // laneCols must be indexed the SAME way its consumers read it. The lane

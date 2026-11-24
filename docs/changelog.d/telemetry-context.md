@@ -1,0 +1,1 @@
+New: Telemetry comparisons now load per-lap tyre, weather, race-control, speed-trap and approximate traffic context separately from the charts, with source availability and a combined telemetry/context JSON download.

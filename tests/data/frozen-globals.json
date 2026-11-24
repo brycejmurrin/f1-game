@@ -52,6 +52,7 @@
     "DataStandings",
     "DataTabUtils",
     "DataTelemetry",
+    "DataTelemetryContext",
     "DataTelemetryModel",
     "DataTelemetryPlayer",
     "DataTelemetryRender",
