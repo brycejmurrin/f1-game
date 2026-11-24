@@ -943,6 +943,23 @@ test("an ALL file carries an object key's whole effective value; CHANGES only it
   assert.deepEqual(boot({ disk }).collect("changes").settings.a11y.holdMode, { throttle: "toggle" }, "CHANGES keeps the diff");
 });
 
+test("gesture deadlines and the digital return rate survive backup and reset", () => {
+  const phone = () => boot({ touch: true, mobile: true });
+  const a = phone(), b = phone();
+  a.pedals.setButtonProfile("boost", { activation: "quick", quickMs: 250, holdMs: 560, longHoldMs: 1600, doubleTapMs: 620 });
+  a.GameStore.store.set("digitalRecenterRate", 6);
+  const backup = a.collect("changes");
+  assert.equal(backup.settings.steering.digitalRecenterRate, 6);
+  assert.deepEqual(backup.settings.driving.touchButtonProfiles.buttons.boost,
+    { activation: "quick", quickMs: 250, holdMs: 560, longHoldMs: 1600, doubleTapMs: 620 });
+  b.loadSettings(backup);
+  assert.equal(b.GameStore.store.get("digitalRecenterRate", 0), 6);
+  assert.equal(b.pedals.buttonProfile("boost").holdMs, 560);
+  assert.equal(b.SettingsExport.resetSettings("controls").ok, true);
+  assert.equal(b.GameStore.store.get("digitalRecenterRate", 0), 0);
+  assert.equal(b.pedals.buttonProfile("boost").holdMs, undefined);
+});
+
 test("touch response profiles keep each button independent across backups, imports and resets", () => {
   const phone = () => boot({ touch: true, mobile: true });
   const a = phone(), b = phone();

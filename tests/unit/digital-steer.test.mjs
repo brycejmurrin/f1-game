@@ -375,6 +375,29 @@ test("last d-pad wins: RIGHT pressed while LEFT is still held steers right", () 
   assert.equal(Input.steer(1 / 60), -1, "releasing RIGHT hands back to still-held LEFT");
 });
 
+test("digital return rate applies to keyboard, D-pad and touch buttons without changing build rate", () => {
+  const keyboard = boot(), gamepad = padRig(), buttons = bootButtons();
+  for (const [rig, setRight] of [
+    [keyboard, on => keyboard.key("ArrowRight", on)],
+    [gamepad, on => { gamepad.trig(15, Number(on)); gamepad.Input.poll(); }],
+    [buttons, on => buttons.right().fire(on ? "pointerdown" : "pointerup", { pointerId: 1 })],
+  ]) {
+    const { Input } = rig;
+    Input.setSteerExpo(1);
+    Input.setKeyRampIn(4);
+    Input.setKeyRampOut(2.5);
+    setRight(true);
+    assert.equal(Input.steer(0.05), 0.2);
+    for (let i = 0; i < 5; i++) Input.steer(0.05);
+    setRight(false);
+    assert.equal(Input.steer(0.1), 0.75);
+    Input.setKeyRampIn(6);
+    assert.equal(Input.steer(0.1), 0.5);
+    Input.setKeyRampOut(null);
+    assert.equal(Input.steer(0.05), 0);
+  }
+});
+
 test("coalesced pointer samples move the finger only when they ARE the finger", () => {
   const { Input, onCanvas } = boot();
   Input.setSteerMode("touch");

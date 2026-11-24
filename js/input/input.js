@@ -17,7 +17,8 @@ const Input = (function () {
   // rather than 167 — a thumb cannot feather a hold, so the weight has to come
   // from the rate.
   let KEY_RAMP_IN = 4;        // steer units/s toward full lock (ROAD-WHEEL units)
-  let KEY_RAMP_OUT = 8;       // steer units/s back to centre (quicker: releasing
+  let KEY_RAMP_OUT = 8;       // legacy return for digital steering and canvas drag
+  let digitalRampOut = null;  // null follows Steer Rate at the original 2:1 ratio
   let adaptiveMix = 0;
   let steerSpeedRef = 41.7;   // default SPEED STEER v5; pushed from steer-tuning
   let speedStdOverride = null;
@@ -578,12 +579,13 @@ const Input = (function () {
   function digitalStep(val, target, dt, speedMix) {
     // Work in shaped (road-wheel) space, return raw so game.js's expo undoes it.
     const v = toShaped(val), t = target;   // target is -1 / 0 / +1; shaping is identity there
-    if (t === 0) return fromShaped(moveToward(v, 0, KEY_RAMP_OUT * dt));
+    const returnRate = digitalRampOut ?? KEY_RAMP_OUT;
+    if (t === 0) return fromShaped(moveToward(v, 0, returnRate * dt));
     if (v * t < 0) {
       const toCentre = Math.abs(v);
-      const unwind = KEY_RAMP_OUT * dt;
+      const unwind = returnRate * dt;
       if (unwind < toCentre) return fromShaped(moveToward(v, 0, unwind));
-      const spare = (unwind - toCentre) / KEY_RAMP_OUT;   // seconds still unspent
+      const spare = (unwind - toCentre) / returnRate;   // seconds still unspent
       return fromShaped(moveToward(0, t, digitalRateIn(speedMix) * spare));
     }
     // Easing a held arrow back to partial lock keeps the existing global return rate.
@@ -2164,13 +2166,16 @@ const Input = (function () {
   // The digital ramp rate — the knob every comparable racer exposes and we did
   // not. Unity's legacy default is 333 ms to full lock; ours is 250 ms, and the
   // AC Advanced Gamepad Assist author's note is that a KEYBOARD wants a lower
-  // rate than a controller for stability. The release rate rides with it at the
-  // same 2:1 ratio the file has always used, because unwinding must stay
-  // quicker than building (see digitalStep).
+  // rate than a controller for stability. The default return rate follows its
+  // original 2:1 ratio, including for an existing stored build rate.
   function setKeyRampIn(rate) {
     if (typeof rate !== "number" || !isFinite(rate)) return;
     KEY_RAMP_IN = clamp(rate, 1.5, 10);
     KEY_RAMP_OUT = KEY_RAMP_IN * 2;
+  }
+  function setKeyRampOut(rate) {
+    if (rate === null) digitalRampOut = null;
+    else if (typeof rate === "number" && isFinite(rate)) digitalRampOut = clamp(rate, 2.5, 14);
   }
   function setAdaptiveButtons(v) {
     if (typeof v === "boolean") v = Number(v);
@@ -2614,6 +2619,7 @@ const Input = (function () {
       speedStd: currentSpeedStd(),
       steerSpeedRef,
       rateIn: digitalRateIn(),
+      rateOut: digitalRampOut ?? KEY_RAMP_OUT,
       pad: { connected: padConnected, steer: padSteer, throttle: padThrottle, brake: padBrake },
       touchSteer,
       touchActive: !!activeTouch,
@@ -2698,6 +2704,7 @@ const Input = (function () {
     setPadDeadzone,
     setPadSaturation,
     setKeyRampIn,
+    setKeyRampOut,
     setHaptics,
     setTriggerHaptics,
     triggerRumbleSupported,
