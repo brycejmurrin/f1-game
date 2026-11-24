@@ -3041,6 +3041,85 @@ test("the phone uses the configured slide endpoint and independent absolute cros
   }
 });
 
+test("opening Wheel Layout or Move & Size retires a captured Gas touch without dropping the link", async () => {
+  const dom = makeDom(), previousDocument = globalThis.document, previousWindow = globalThis.window;
+  const [transport, host] = NetTransport.loopback({ latencyMs: 0 });
+  transport.pump(0); host.pump(0);
+  const samples = [];
+  host.onMessage((channel, data) => { if (channel === NetTransport.STATE) samples.push(PhonePad.decodeSample(data)); });
+  const window = { addEventListener(type, fn) { if (type === "DOMContentLoaded") fn(); } };
+  const document = dom.document, gas = dom.byId("gas"), sheet = dom.byId("layout-sheet");
+  const byId = document.getElementById;
+  document.getElementById = id => {
+    const el = byId(id);
+    el.getClientRects = () => el.hidden ? [] : [{}];
+    return el;
+  };
+  sheet.hidden = true;
+  sheet.showModal = () => { sheet.open = true; };
+  sheet.close = () => { sheet.open = false; };
+  sheet.append(dom.byId("lay-arrange"), dom.byId("lay-done"));
+  let captured;
+  gas.setPointerCapture = pointerId => { captured = pointerId; };
+  const send = (el, type, pointerId, clientY = 0) => dom.dispatch(el, {
+    type, pointerId, pointerType: "touch", button: 0, clientX: 0, clientY, bubbles: true,
+  });
+  const tap = id => {
+    const el = dom.byId(id);
+    el.focus();
+    send(el, "pointerdown", 2);
+    send(el, "pointerup", 2);
+    send(el, "click", 2);
+  };
+  try {
+    globalThis.document = document; globalThis.window = window;
+    const scripts = [...read("controller.html").matchAll(/<script>([\s\S]*?)<\/script>/g)];
+    const pad = (elements, opts) => PhonePad.pad(elements, { ...opts, now: () => 0, deps: {
+      rtc: () => transport, prefetchIce: async () => null, normalise: c => c,
+      valid: () => true, privateRelay: () => false, swap: async () => ({ ok: true }),
+    } });
+    vm.runInNewContext(scripts.at(-1)[1], { window, document, location: { search: "" }, NetTransport,
+      PhonePad: { ...PhonePad, pad }, PhonePadPage }, { filename: absSrc("controller.html") });
+    const ctl = window.__apexPad, layout = window.__apexPadLayout;
+    assert.equal((await ctl.connect("ABC234")).ok, true);
+    host.send(NetTransport.EVENT, PhonePad.encodeHello("host", false, true));
+    ctl.pump();
+    assert.equal(ctl.setSteeringMode("touch"), true);
+
+    for (const arranging of [false, true]) {
+      send(gas, "pointerdown", 1);
+      assert.equal(captured, 1);
+      host.pump(0);
+      assert.equal(samples.at(-1).thr, 1);
+      if (arranging) layout.arrange(true);
+      else tap("b-layout");
+      assert.equal(dom.body.classList.contains("arranging"), arranging);
+      assert.equal(sheet.open === true, !arranging);
+      host.pump(0);
+      assert.equal(ctl.state().thr, 0);
+      assert.equal(samples.at(-1).thr, 0, "release reaches the host immediately");
+      send(gas, "pointermove", 1, 40);
+      assert.equal(ctl.state().thr, 0);
+      if (arranging) tap("arr-done");
+      else tap("lay-done");
+      assert.equal(dom.body.classList.contains("arranging"), false);
+      assert.equal(sheet.open === true, false);
+      send(gas, "pointermove", 1, 20);
+      assert.equal(ctl.state().thr, 0, "closing the editor cannot revive the retired contact");
+      send(gas, "pointerup", 1);
+      assert.equal(ctl.state().linked, true);
+      assert.equal(ctl.state().steeringMode, "touch");
+    }
+    send(gas, "pointerdown", 3);
+    host.pump(0);
+    assert.equal(samples.at(-1).thr, 1, "a fresh touch works after closing the editor");
+  } finally {
+    window.__apexPad?.cancel();
+    if (previousDocument === undefined) delete globalThis.document; else globalThis.document = previousDocument;
+    if (previousWindow === undefined) delete globalThis.window; else globalThis.window = previousWindow;
+  }
+});
+
 test("Appearance controller demos keep editor gestures free of motion permission requests", () => {
   const scripts = [...read("controller.html").matchAll(/<script>([\s\S]*?)<\/script>/g)];
   for (const [search, expected] of [["?arrange=wheel&demo=wheel", 0], ["?arrange=menupad&demo=menu", 0],
