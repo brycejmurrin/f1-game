@@ -546,10 +546,10 @@
       // gptoday / RaceFans same weekend. Outside of Tour → right of racing
       // (paddock side = side −1 in this file's convention). Channel length /
       // wall height approximate — no FIA drawing scaled here.
-      // Placed at 0.940, just past the FIA 2022 T15 apex (0.925; T14 is 0.908), at gap 22 with a short bay — mid-
-      // corner spans at gap 14–28 were footprint-rejected on the ribbon fold.
+      // The bay starts at the Tour exit between the FIA T14 and T15 apexes.
+      // Keep the short footprint on the paddock side of the ribbon fold.
       {
-        const a = anchor(K(0.940), -1, 22);
+        const a = anchor(K(0.916), -1, 22);
         const b = [a.r, a.u, a.t];
         modelGroup("paul-ricard-pit-entry-2019", {
           center: vadd(a.c, a.u, 1.8), size: [7, 4.5, 22], basis: b,

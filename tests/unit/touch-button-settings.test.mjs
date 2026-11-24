@@ -7,7 +7,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 function boot(globals = {}) {
   const dom = makeDom(), context = vm.createContext({ document: dom.document, ...globals });
-  for (const path of ["js/input/pedal-travel.js", "js/input/touch-button-actions.js", "js/ui/touch-button-settings.js"]) {
+  for (const path of ["js/input/pedal-travel.js", "js/input/controller-profiles.js", "js/input/touch-button-actions.js", "js/ui/touch-button-settings.js"]) {
     vm.runInContext(fs.readFileSync(absSrc(path), "utf8"), context, { filename: absSrc(path) });
   }
   const host = dom.document.createElement("div"); host.id = "touch-test"; dom.body.appendChild(host);
@@ -69,6 +69,33 @@ test("changing, reopening and resetting a touch response edits only the selected
   choose("press", "progressive");
   assert.equal(describedBy(field("feedback")).includes("Three rising bars"), false);
   assert.equal(describedBy(field("press")).includes("Latch toggles"), true);
+});
+
+test("phone and race profiles fork the original button responses and restore independently", () => {
+  const storage = new Map([["touchButtonProfiles", { v: 1, buttons: { gas: { start: 35 } } }]]);
+  const store = { get: (k, fallback) => storage.has(k) ? storage.get(k) : fallback, getStored: k => storage.get(k), subscribe: () => () => {},
+    set(k, v) { if (v === undefined) storage.delete(k); else storage.set(k, v); return true; } };
+  const phone = boot({ GameStore: { store } });
+  phone.dom.document.documentElement.setAttribute("data-phone-controller", "");
+  const race = boot({ GameStore: { store } });
+  race.model.setButtonProfile("gas", { start: 50 });
+  assert.equal(phone.model.buttonProfile("gas").start, 35);
+  phone.editor.mount(phone.host, ["gas", "brake"], { standalone: true });
+  const picker = phone.host.querySelector("#pm-button-profiles");
+  const name = picker.querySelector("input");
+  const action = text => picker.querySelectorAll("button").find(btn => btn.textContent === text);
+  name.value = "Gentle start";
+  action("Save as new").onclick();
+  phone.model.setButtonProfile("gas", { start: 10 });
+  action("Apply").onclick();
+  assert.equal(phone.model.buttonProfile("gas").start, 35);
+  assert.equal(race.model.buttonProfile("gas").start, 50);
+  phone.model.resetButtonProfile("gas");
+  assert.equal(phone.model.buttonProfile("gas").start, undefined);
+  race.model.setButtonProfile("gas", { start: 75 });
+  assert.equal(phone.model.buttonProfile("gas").start, undefined, "an explicit phone reset does not fall back to race settings");
+  action("Delete").onclick();
+  assert.equal(picker.querySelector("select").children.length, 1);
 });
 
 test("controller editor offers only the controls its caller supports", () => {
@@ -249,12 +276,14 @@ test("slide responses shape direct touch travel independently of timed buildup a
   host.querySelector("button").onclick(); assert.equal(control("slideCurve").value, "linear");
 });
 
-test("absolute mapping preserves relative settings, only appears on pedals and resets per button", () => {
+test("absolute mapping preserves relative settings and resets per button", () => {
   const { host, dom, editor, model } = boot();
   editor.mount(host);
   const field = key => dom.byId("touch-test-" + key);
   const choose = (key, value) => { field(key).value = value; field(key).onchange(); };
-  assert.ok(field("sliderEdge").parentElement.parentElement.hidden);
+  assert.equal(field("sliderEdge").value, "relative");
+  choose("sliderEdge", "top");
+  assert.equal(model.buttonProfile("left").sliderEdge, "top");
   choose("button", "gas"); choose("press", "progressive"); choose("fullEdge", "bottom");
   choose("sliderEdge", "right");
   assert.equal(model.buttonProfile("gas").sliderEdge, "right");
@@ -265,6 +294,55 @@ test("absolute mapping preserves relative settings, only appears on pedals and r
   assert.equal(field("fullEdge").value, "bottom");
   choose("sliderEdge", "left"); host.querySelector("button").onclick();
   assert.equal(model.buttonProfile("gas").sliderEdge, undefined);
+});
+
+test("whole percentages, curves and independent fill direction survive reloading both response editors", () => {
+  const values = new Map();
+  const listeners = new Set();
+  const GameStore = { store: {
+    get: (key, fallback) => values.get(key) ?? fallback,
+    set(key, value) { values.set(key, value); for (const listener of listeners) listener({ key }); },
+    subscribe(listener) { listeners.add(listener); },
+  } };
+  for (const standalone of [false, true]) {
+    const before = boot({ GameStore });
+    const ids = standalone ? ["gas", "brake"] : ["left", "right", "gas", "brake"];
+    before.editor.mount(before.host, ids, { standalone });
+    const choose = (key, value) => {
+      const field = before.dom.byId("touch-test-" + key);
+      assert.ok(field.children.some(option => option.value === value));
+      field.value = value; field.onchange();
+    };
+    choose("button", ids[0]);
+    choose("direction", "down-right"); choose("start", "73"); choose("end", "17");
+    let profile = before.model.buttonProfile(ids[0]);
+    assert.deepEqual([0, 45, 90].map(d => before.model.level(profile, before.model.advance(profile, d * Math.SQRT1_2, d * Math.SQRT1_2, 0)).toFixed(2)),
+      ["0.73", "0.45", "0.17"]);
+    choose("direction", "any");
+    profile = before.model.buttonProfile(ids[0]);
+    assert.equal(before.model.advance(profile, -54, -72, 0), 90);
+    choose("sliderEdge", "right"); choose("sliderStart", "17"); choose("sliderEnd", "83");
+    choose("sliderCurve", "fine"); choose("indicator", "bar"); choose("fillDirection", "left");
+
+    const after = boot({ GameStore });
+    after.editor.mount(after.host, ids, { standalone });
+    for (const [field, expected] of Object.entries({ sliderStart: "17", sliderEnd: "83", sliderCurve: "fine", fillDirection: "left" })) {
+      assert.equal(after.dom.byId("touch-test-" + field).value, expected);
+    }
+    const el = after.dom.document.createElement("button");
+    after.actions.bindControl(el, ids[0]);
+    assert.equal(el.getAttribute("data-touch-fill-direction"), "left", "fill moves independently of the rightward input");
+    const contact = after.model.contactProfile(ids[0], undefined, null, {
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }),
+    });
+    assert.deepEqual([0, 50, 100].map(clientX => after.model.sliderLevel(contact, { clientX })).map(v => v.toFixed(3)), ["0.170", "0.335", "0.830"]);
+    for (const [start, end] of [[83, 17], [37, 37]]) {
+      after.model.setButtonProfile(ids[0], { sliderStart: start, sliderEnd: end, sliderCurve: "smooth" });
+      const next = after.model.contactProfile(ids[0], undefined, null, { getBoundingClientRect: () => contact.sliderBounds });
+      assert.deepEqual([0, 50, 100].map(clientX => Math.round(after.model.sliderLevel(next, { clientX }) * 100)), [start, (start + end) / 2, end]);
+    }
+    assert.equal(after.model.buttonProfile("brake").sliderEdge, undefined);
+  }
 });
 
 test("absolute slider paints a single decorative quarter scale and restores its relative edge guide", () => {

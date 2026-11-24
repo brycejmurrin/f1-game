@@ -98,7 +98,7 @@ test('online Photo camera input integrates while shared physics continues; solo 
       // The paused branch's return line hands the frame to GameAudio.feedReplayScrub.
       GameAudio: { feedReplayScrub() {} }, soundOn: false, player: null, rivalAudio: null,
       naturalGear() { return 1; }, rpmFor() { return 0; }, isWetRoad() { return false; }, vTop() { return 1; },
-      _poseAt: null, photoMode: photo, setupPreviewOn: false,
+      _poseAt: null, photoMode: photo, photomode: {}, setupPreviewOn: false,
       els: { lighting: { hidden: true }, camtune: { hidden: true }, flyby: { hidden: true } },
       announceT: 0, hitStop: 0, frozen: false, track: {}, physAcc: 0, PHYS_DT: 1 / 60, cars: [], renderAlpha: 0,   // track: the K1 null-track gate wants a built world
       banner: { tick() {}, clear() {}, announce() {}, get t() { return 0; } }, feel: { shake: 0, camRoll: 0, hitStop: 0 },
@@ -140,24 +140,29 @@ function boot() {
     const nub = dom.document.createElement("div"); nub.className = "pc-nub";
     dom.byId(id).appendChild(nub);
   }
-  const api = vm.runInContext("Photomode", ctx).create(G);
-  return { dom, G, api, key: (e) => { const list = listeners.get(e.type); if (list && list.length) list.at(-1)(e); } };
+  const photomode = vm.runInContext("Photomode", ctx);
+  const api = photomode.create(G);
+  return { dom, G, api, photomode, key: (e) => {
+    for (const listener of [...(listeners.get(e.type) || [])]) listener(e);
+  } };
 }
 
-test("Photo Studio buttons keep activation and arrows while WASD still flies and keyups release", () => {
+test("Photo Studio panel keeps native keys while an unfocused scene flies and keyups release", () => {
   const { dom, G, api, key } = boot();
   Object.assign(G.photoKeys, { up: false, pu: false, yl: false, w: false }); api.enterPhotoMode();
   const panel = dom.byId("ps-panel"), button = dom.document.createElement("button"); panel.appendChild(button); button.focus();
   const event = (code, type = "keydown") => ({ code, type, prevented: false, preventDefault() { this.prevented = true; }, stopPropagation() {} });
-  for (const code of ["Space", "Enter", "NumpadEnter", "ArrowUp", "ArrowLeft"]) {
+  for (const code of ["Space", "Enter", "NumpadEnter", "ArrowUp", "ArrowLeft", "KeyW"]) {
     const e = event(code); key(e); assert.equal(e.prevented, false, code + " belongs to the focused control");
   }
   assert.equal(G.photoKeys.up, false); assert.equal(G.photoKeys.pu, false); assert.equal(G.photoKeys.yl, false); assert.equal(G.photoKeys.w, false);
+  button.blur();
   const move = event("KeyW"); key(move); api.updatePhotoCam(0.05);
-  assert.equal(move.prevented, true, "W is a camera control even when DONE has keyboard focus");
-  assert.ok(G.photoCam.pos[2] < -1, "the camera moves forward from the focused Studio button");
+  assert.equal(move.prevented, true, "W is a camera control when no panel control has focus");
+  assert.ok(G.photoCam.pos[2] < -1, "the camera moves forward when the scene owns input");
   const field = dom.document.createElement("input"); panel.appendChild(field); field.focus();
-  G.photoKeys.w = false;
+  key({ type: "focusin", target: field });
+  assert.equal(G.photoKeys.w, false, "moving focus to a field releases a held camera key");
   const editing = event("KeyW"); key(editing);
   assert.equal(editing.prevented, false, "form fields retain their typing keys");
   assert.equal(G.photoKeys.w, false, "typing in an input cannot fly the camera");
@@ -224,12 +229,13 @@ test("ignored Studio Space and stale alias keyups do not cancel a different held
   const panel = dom.byId("ps-panel"), button = dom.document.createElement("button"); panel.appendChild(button); button.focus();
   send("Space", "keydown"); send("Space", "keyup"); api.updatePhotoCam(.1);
   assert.ok(G.photoCam.pos[1] > 0, "activating a Studio button with Space leaves held R alone");
+  button.blur();
   send("ShiftLeft", "keydown"); send("ShiftRight", "keydown");
   key({ type: "blur" });
   assert.equal(G.photoKeys.up, false); assert.equal(G.photoKeys.boost, false);
   send("ShiftLeft", "keydown"); send("ShiftLeft", "keyup");
   assert.equal(G.photoKeys.boost, false, "blur clears the other physical Shift too");
-  button.blur(); send("Space", "keydown"); send("KeyR", "keyup");
+  send("Space", "keydown"); send("KeyR", "keyup");
   const before = G.photoCam.pos[1]; api.updatePhotoCam(.1);
   assert.ok(G.photoCam.pos[1] > before, "an old keyup after blur cannot cancel newly held Space");
   api.exitPhotoMode(); api.enterPhotoMode();
@@ -239,7 +245,8 @@ test("ignored Studio Space and stale alias keyups do not cancel a different held
 });
 
 test("fly-cam UP hold survives the boundary pointerleave and a capture steal; a hidden button releases", () => {
-  const { dom, G } = boot();
+  const { dom, G, api, key } = boot();
+  api.enterPhotoMode();
   const el = dom.byId("pc-up");
   el.isConnected = true;   // mini-dom has no isConnected — this is a live, visible button
   dom.dispatch(el, { type: "pointerdown", pointerId: 7 });
@@ -256,11 +263,16 @@ test("fly-cam UP hold survives the boundary pointerleave and a capture steal; a 
   assert.equal(G.photoAlt, 1);
   dom.dispatch(el, { type: "pointerup", pointerId: 8 });
   assert.equal(G.photoAlt, 0, "a plain lift still releases");
+  dom.dispatch(el, { type: "pointerdown", pointerId: 9 });
+  dom.dispatch(el, { type: "lostpointercapture", pointerId: 9 });
+  key({ type: "pointerup", pointerId: 9, target: dom.document.body });
+  assert.equal(G.photoAlt, 0, "a retargeted lift still releases");
 });
 
 test("opposite altitude holds cancel together and releasing either preserves the other pointer", () => {
   for (const first of ["up", "down"]) {
-    const { dom, G } = boot(), second = first === "up" ? "down" : "up";
+    const { dom, G, api } = boot(), second = first === "up" ? "down" : "up";
+    api.enterPhotoMode();
     dom.dispatch(dom.byId("pc-" + first), { type: "pointerdown", pointerId: 1 });
     dom.dispatch(dom.byId("pc-" + second), { type: "pointerdown", pointerId: 2 });
     assert.equal(G.photoAlt, 0, "opposing holds cancel");
@@ -293,6 +305,10 @@ test("sized movement and look sticks use visual ring geometry and keep the nub i
     event("pointermove", 1, x, y + localHeight * factor / 2);
     assert.deepEqual([vec.x, vec.y], [0, 1]);
     assert.equal(nub.style.transform, "translate(0px," + (localHeight - 18) / 2 + "px)");
+    event("lostpointercapture", 1, x, y);
+    assert.deepEqual([vec.x, vec.y], [0, 1], "a second control taking capture does not release this stick");
+    key({ type: "pointermove", pointerId: 1, target: dom.document.body, clientX: x, clientY: y - localHeight * factor / 2, preventDefault() {} });
+    assert.deepEqual([vec.x, vec.y], [0, -1], "the original contact still updates when WebKit retargets it");
     assert.equal(reads, 1);
     key({type:"resize"});
     event("pointermove", 1, x + 30, y);
@@ -307,4 +323,45 @@ test("sized movement and look sticks use visual ring geometry and keep the nub i
     event("pointermove", 4, x + 30, y);
     assert.deepEqual([vec.x, vec.y], [0, 0], "a stale pointer cannot drive a reopened camera");
   }
+});
+
+test("Camera focus keeps arrows in the scene and Tab returns to the initiating control", () => {
+  const { dom, G, api, photomode, key } = boot();
+  api.enterPhotoMode();
+  const panel = dom.byId("ps-panel"), button = dom.document.createElement("button");
+  panel.appendChild(button);
+  assert.equal(photomode.focusScene(button), true);
+  const send = (code) => key({ type: "keydown", code, preventDefault() {}, stopPropagation() {} });
+  send("ArrowRight");
+  send("KeyW");
+  api.updatePhotoCam(.1);
+  assert.ok(G.photoCam.yaw > 0);
+  assert.ok(G.photoCam.pos[2] < 0);
+  send("Tab");
+  key({ type: "focusin", target: button });
+  assert.equal(dom.document.activeElement, button);
+  assert.equal(G.photoKeys.yr, false, "re-entering the panel clears held scene arrows");
+  assert.equal(G.photoKeys.w, false, "re-entering the panel clears held scene movement");
+  send("ArrowRight");
+  send("KeyW");
+  assert.equal(G.photoKeys.yr, false, "arrows belong to the panel again");
+  assert.equal(G.photoKeys.w, false, "auto-repeat cannot move the camera while editing the panel");
+});
+
+test("Modified shortcuts keep their browser defaults and reset held camera keys", () => {
+  const { G, api, key } = boot();
+  api.enterPhotoMode();
+  const event = (code, modifiers = {}) => {
+    const e = { type: "keydown", code, preventDefault() { this.defaultPrevented = true; }, stopPropagation() {}, ...modifiers };
+    key(e);
+    return e;
+  };
+  event("KeyW");
+  assert.equal(G.photoKeys.w, true);
+  event("MetaLeft", { metaKey: true });
+  assert.equal(G.photoKeys.w, false, "Cmd releases the movement key even if macOS suppresses its keyup");
+  assert.equal(event("KeyS", { metaKey: true }).defaultPrevented, undefined);
+  assert.equal(event("KeyA", { ctrlKey: true }).defaultPrevented, undefined);
+  assert.ok(!G.photoKeys.s);
+  assert.ok(!G.photoKeys.a);
 });

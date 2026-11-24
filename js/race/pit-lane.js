@@ -335,7 +335,7 @@ var PitLane = (function () {
     function worthStopping(c) {
       if (!enabled() || !c || c.retired || c.finished) return false;
       const wear = G.tyres.spent(c);
-      const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
+      const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== recommendedTread(c);
       const caution = G.cautionInfo ? G.cautionInfo() : null;
       const free = !!caution && caution.level >= 2 && caution.level < 4 && wear >= 0.35;
       return wear >= CUE_WEAR || wrongTread || free || compoundDue(c);
@@ -1068,7 +1068,7 @@ var PitLane = (function () {
     function pickFor(c) {
       const tyres = G.tyres;
       if (!tyres || !c) return null;
-      const want = TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
+      const want = recommendedTread(c);
       const list = ownedRecords(tyres), log = c.tyreLog;
       const rule = want === 0 && twoCompoundApplies() && typeof SportingRegs !== "undefined";
       // pitStops already counts this box; until fitting, it is THIS stint.
@@ -1179,7 +1179,7 @@ var PitLane = (function () {
      *  re-chosen from the AI class ladder, so serviceCar never falls back to
      *  pickFor — the PLAYER's catalogue / owned rows, with no pace offset. */
     function refreshAiNext(c) {
-      const wantTread = TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
+      const wantTread = recommendedTread(c);
       if ((c.pitNext.tread || 0) === wantTread) return;
       setNext(c, G.tyres.classRecord(aiClassFor(c, wantTread, !!c.tyre && (c.tyre.tread || 0) !== wantTread)));
     }
@@ -1397,11 +1397,11 @@ var PitLane = (function () {
       const plan = c.pitPlan, zz = z();
       if (!plan || !zz || !G.tyres || !c.tyre || typeof AiDrive === "undefined") return false;
       const ai = !c.human;
-      const wantTread = TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
+      const wantTread = recommendedTread(c);
       // The weather call owns a tread change; do not price a stint on the wrong set.
       if (!ai && (c.tyre.tread || 0) !== wantTread) return false;
       if (ai && (c.pitArmed || (c.pitState && c.pitState !== "none") || (c.tyre.tread || 0) > 0
-          || TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness()) > 0
+          || wantTread > 0
           || (G.tyres.lapsOn ? G.tyres.lapsOn(c) : 0) < 2
           || (c.lap || 0) - (c._recutLap || -99) < AiDrive.STRAT.REPLAN_GAP)) return false;
       const done = c.pitStops || 0, lap = Math.max(1, c.lap || 1);
@@ -1607,6 +1607,20 @@ var PitLane = (function () {
       if (_flagStep) { _treadMemo = out; _pitReads |= 2; }
       return out;
     }
+    /** The same weather recommendation for the pit wall, auto fit and HUD. */
+    function recommendedTread(c) {
+      const want = treadNow();
+      if (want === 0 || !c || !c.tyre || c.tyre.tread > 0) return want;
+      const arc = G.weatherArc;
+      if (!arc || !arc.cell || arc.w0 >= 0.25 || typeof WeatherArc === "undefined" || !WeatherArc.showerStopPays || !z()) return want;
+      const lapS = c.lastLap > 0 ? c.lastLap : referenceLapS();
+      const trackM = G.track.total;
+      const progress = c.lap >= 1 ? clamp(c.s / trackM, 0, 1) : 0;
+      const finish = arc.t + Math.max(0, lapsToFlag(c) - progress) * lapS;
+      const entry = arc.t + toEntry(c) / trackM * lapS;
+      const entryPaid = c.pitState === "lane" || c.pitState === "box";
+      return WeatherArc.showerStopPays(arc, want, entry, finish, lossS(), entryPaid) ? want : 0;
+    }
     function think(c) {
       const plan = c && c.pitPlan;
       if (c && c.pitNext && !c.human && !c.local) refreshAiNext(c);   // armed, before the early return below
@@ -1625,7 +1639,7 @@ var PitLane = (function () {
       // WRONG TYRE FOR THE CONDITIONS, in either direction: slicks in the rain
       // AND wets on a drying track. This is the recourse docs/PHYSICS.md said a
       // dry->rain arc did not have.
-      const wantTread = treadNow();
+      const wantTread = recommendedTread(c);
       const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== wantTread;
       // ON THE RIGHT WET TYRE THE DRY PLAN'S LAPS MEAN NOTHING: plan.lapsAt was
       // cut for slicks, and every stop in a wet race refits the wet class
@@ -1839,7 +1853,7 @@ var PitLane = (function () {
     // reads them on the instance. session-stub may still stub extras.
     return { zoneOf: () => z(), releaseTrack, limit, approachV, entryV, exitV, stopAnim, inLane, held,
              arm, update, reset, clearArm, info, serviceCar, planFor, think, stepBegin, stepEnd,
-             pickFor, ownedTyres, choices, selectNext, estimate, commitFrac, toEntry, cue,
+             pickFor, recommendedTread, ownedTyres, choices, selectNext, estimate, commitFrac, toEntry, cue,
              worthStopping, canWork, addWork, workS: WORK_S,
              cueM: CUE_M, boxCueM: BOX_CUE_M, moveM: MOVE_M,
              boxTol: BOX_TOL, squareByM: SQUARE_BY_M, squareLat: BOX_SQUARE_LAT,

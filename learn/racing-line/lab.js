@@ -101,6 +101,7 @@
     replay: {label: 'compressed ghost race', rewind: true, input: () => 'elapsed'},
     key: 'Solid is your line. Dashed is the early-apex reference. The dot marks your apex. The bars mark the shared corner exit and finish.',
     intro: 'Move the clipping point around a hairpin. Compare the time from the approach to the end of the next straight against an early apex.',
+    inGame: "Drive your own line around the circuit. The optional Driving Line ribbon gives you a reference for turning and braking. The lab compares two lines through one hairpin. In an Apex race or a real F1 race, grip, traffic and the next corner can all change which line pays off.",
     controls: [
       {id:'apex', primary: true, label:'Apex position through the turn', min:30, max:70, step:1, value:30, unit:'%'},
       {id:'straight', label:'Following straight', min:50, max:500, step:25, value:200, unit:'m'},

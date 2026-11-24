@@ -654,8 +654,9 @@ test("Learn opens a named modal and returns focus to the selected lesson after u
   vm.runInNewContext(src("js/ui/dom.js"), sb, { filename: absSrc("js/ui/dom.js") });
   dom.byId("menu-buttons").dataset.destinations = "true";
   vm.runInNewContext(src("js/ui/title-menu.js"), sb, { filename: absSrc("js/ui/title-menu.js") });
+  let aeroLaunches = 0;
   sb.TitleMenu.create({ $: dom.byId, state: "menu", soundOn: false, store: {} }, (tab, options) =>
-    new Promise(resolve => launches.push({ tab, options, resolve })));
+    new Promise(resolve => launches.push({ tab, options, resolve })), () => { aeroLaunches++; });
   const door = dom.byId("mb-learn");
   assert.equal(door.parentNode.id, "menu-explore");
   door.click();
@@ -702,6 +703,10 @@ test("Learn opens a named modal and returns focus to the selected lesson after u
   dom.byId("learn-open-telemetry").click();
   assert.equal(frame.title, "Telemetry Detective");
   assert.equal(frame.getAttribute("src"), "learn/telemetry/index.html");
+  const drill = { type: "apex-learn-scenario", id: "aero" };
+  await onMessage({ origin, source: frame.contentWindow, data: drill });
+  assert.equal(aeroLaunches, 0, "another lesson cannot launch the Aero Drill");
+  assert.equal(dialog.hidden, false);
   const transfer = { type: "apex-learn-telemetry" };
   const send = () => onMessage({ origin, source: frame.contentWindow, data: transfer });
   await onMessage({ origin, source: {}, data: transfer });
@@ -741,6 +746,18 @@ test("Learn opens a named modal and returns focus to the selected lesson after u
   top = "overlay";
   queue.shift()();
   assert.equal(dom.document.activeElement, door);
+  door.click();
+  top = "learn";
+  lesson.click();
+  await onMessage({ origin, source: {}, data: drill });
+  await onMessage({ origin, source: frame.contentWindow, data: { ...drill, id: "unknown" } });
+  assert.equal(dialog.hidden, false);
+  assert.equal(aeroLaunches, 0);
+  await onMessage({ origin, source: frame.contentWindow, data: drill });
+  assert.equal(dialog.hidden, true);
+  top = "overlay";
+  queue.shift()();
+  assert.equal(aeroLaunches, 1);
   door.click();
   dialog.dispatchEvent({ type: "cancel" });
   assert.equal(dialog.hidden, true);

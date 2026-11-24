@@ -116,8 +116,9 @@ const UiExperience = (function () {
   function openPhoto(G, deps) {
     const request = ++photoRequest;
     const ps = deps.photoStudio;
+    const trigger = deps.trigger || (typeof document === "undefined" ? null : document.activeElement);
     if (ps && typeof ps.state === "function" && ps.state().open) return true;
-    if (!ps?.loaded || ps.loaded()) return openReadyPhoto(G, deps);
+    if (!ps?.loaded || ps.loaded()) return openReadyPhoto(G, deps, trigger);
     // Leave the caller interactive while the capture UI loads. Back, another
     // menu, or starting a race must win against a late script response.
     const state = G.state, paused = G.paused;
@@ -127,13 +128,13 @@ const UiExperience = (function () {
     return ps.ensureLoaded().then(ok => {
       if (request !== photoRequest || G.state !== state || G.paused !== paused ||
           currentPage() !== page || currentLayer() !== layer) return false;
-      if (ok) return openReadyPhoto(G, deps);
+      if (ok) return openReadyPhoto(G, deps, trigger);
       if (typeof LiveRegion !== "undefined") LiveRegion.say("Photo Studio could not load. Try opening it again.", "hud");
       return false;
     });
   }
 
-  function openReadyPhoto(G, deps) {
+  function openReadyPhoto(G, deps, trigger) {
     let source = deps.source;
     if (source === "home" && deps.trackHome) {
       if (deps.trackReady === false) { if (deps.onWaiting) deps.onWaiting(); return false; }
@@ -141,7 +142,6 @@ const UiExperience = (function () {
     }
     const wasPaused = G.paused;
     const pauseMenu = G.$("pausemenu"), wasPauseHidden = pauseMenu?.hidden;
-    const trigger = typeof document === "undefined" ? null : document.activeElement;
     const callers = [G.$("pmsettings"), G.$("carsetup")].filter((e) => e && !e.hidden);
     const unhide = () => {
       for (const e of callers) e.hidden = false;
@@ -151,7 +151,6 @@ const UiExperience = (function () {
       if (source === "race" || source === "watch") deps.setPaused(wasPaused, "photo-done");
       unhide();
       if (deps.onDone) deps.onDone();
-      if (trigger?.isConnected) trigger.focus({ preventScroll: true });
     };
     for (const e of callers) e.hidden = true;
     if (["race", "watch"].includes(source)) { deps.setPaused(true, "photo-studio"); G.$("pausemenu").hidden = true; }
@@ -172,7 +171,7 @@ const UiExperience = (function () {
         const ok = await request;
         if (cancelledPhotoSwaps.has(request) || (G.state && G.state !== "menu")) return false;
         if (!ok) deps.photoSubject(null);
-        const opened = await deps.reopen();
+        const opened = await deps.reopen(trigger);
         swapped = ok && opened;
         return opened;
       } finally { if (resume) resume(swapped); }
@@ -180,6 +179,7 @@ const UiExperience = (function () {
     const failed = () => {
       restore();
       if (pauseMenu) pauseMenu.hidden = wasPauseHidden;
+      if (trigger?.isConnected) trigger.focus({ preventScroll: true });
       return false;
     };
     try {
@@ -246,8 +246,8 @@ const UiExperience = (function () {
       deps.openPractice();
       showPractice();
     });
-    wire("mb-photo", () => deps.openPhoto("home"));
-    wire("pm-photo", () => deps.openPhoto("race"));
+    wire("mb-photo", (e) => deps.openPhoto("home", e.currentTarget));
+    wire("pm-photo", (e) => deps.openPhoto("race", e.currentTarget));
     // The garage camera bar gains PHOTO here, not in the shell: one more
     // index.html tag would raise the shell-node ceiling for a single chip.
     const cam = $("cs-cam");
@@ -259,7 +259,7 @@ const UiExperience = (function () {
       photo.textContent = "PHOTO";
       cam.insertAdjacentElement("afterend", photo);
     }
-    wire("cs-photo", () => deps.openPhoto("garage"));
+    wire("cs-photo", (e) => deps.openPhoto("garage", e.currentTarget));
     wire("pm-strategy", () => deps.openSettingsPage("strategy", "pm-pit-panel"));
     wire("pm-practice", () => deps.openSettingsPage("practice", "pm-practice-panel"));
     wire("pm-review", () => deps.openSettingsPage("review", "pm-session-review"));

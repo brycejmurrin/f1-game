@@ -229,11 +229,11 @@ function paintActions() {
   box.hidden = !list.length;
 }
 
-function place(eye, target, fov) {
+function place(eye, target, fov, preserveInput = false) {
   photoCam.pos[0] = eye[0]; photoCam.pos[1] = eye[1]; photoCam.pos[2] = eye[2];
   const a = aim(eye, target); photoCam.yaw = a.yaw; photoCam.pitch = a.pitch;
   if (fov != null) setFov(fov);
-  if (photo && photo.releaseKeys) photo.releaseKeys();
+  if (!preserveInput && photo && photo.releaseKeys) photo.releaseKeys();
   publish();
 }
 function publish() {
@@ -424,7 +424,7 @@ function cmd(opts) {
   if (opts.lens != null) setLens(opts.lens);
   if (opts.snap === "car" && !snapCar()) return false;
   if (opts.snap === "corner" && !(opts.n != null ? snapCorner(opts.n) : stepCorner(1))) return false;
-  if (opts.eye && opts.target) place(opts.eye, opts.target, opts.fov);
+  if (opts.eye && opts.target) place(opts.eye, opts.target, opts.fov, opts.preserveInput === true);
   else if (opts.fov != null) setFov(opts.fov);
   publish();
   return state();

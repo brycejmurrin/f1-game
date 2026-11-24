@@ -85,7 +85,7 @@ test("free-cam pads match the steering-arrow diameter", () => {
 test("photo-mode restore eye is #pc-restore when controls are hidden", () => {
   const hud = read("css/hud.css");
   assert.match(hud, /#pc-restore\s*\{/);
-  assert.match(hud, /body\.pc-uihidden #photo-controls > :not\(#pc-restore\)/);
+  assert.match(hud, /body\.pc-uihidden #photo-controls > :not\(#pc-restore, #pc-scene\)/);
   assert.match(hud, /body\.pc-uihidden #pc-restore \{\s*display:\s*block/);
 });
 

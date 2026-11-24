@@ -307,13 +307,16 @@ test('previewScene skips software GL and downscales capture edges', async () => 
 
 test('a Home Photo SUBJECT pick restores and reopens after an owned preparation failure; DONE restores', async () => {
   const settings={hidden:false}, garage={hidden:true}, pause={hidden:false};
+  const trigger = { id: 'mb-photo' };
   const G={paused:false,teamIdx:0,track:{def:{name:'Monza'}},$:id=>({pmsettings:settings,carsetup:garage,pausemenu:pause})[id]};
   ctx.Teams={LIST:[{name:'McLaren'}]};
   const log=[]; let opened=null, back=null;
   const studio={open:(o)=>{opened=o;back=o.back;log.push('open:'+o.source);return true;},close:(b)=>log.push('close:'+b)};
-  const deps={source:'home',trackHome:false,trackReady:true,photoStudio:studio,setPaused:()=>{},
-    photoSubject:(m)=>{log.push('subject:'+m);return Promise.resolve(m!=='garage');},reopen:()=>{log.push('reopen');return true;},onDone:()=>log.push('done')};
+  const deps={source:'home',trigger,trackHome:false,trackReady:true,photoStudio:studio,setPaused:()=>{},
+    photoSubject:(m)=>{log.push('subject:'+m);return Promise.resolve(m!=='garage');},
+    reopen:(opener)=>{assert.equal(opener,trigger);log.push('reopen');return true;},onDone:()=>log.push('done')};
   assert.equal(ctx.api.openPhoto(G,deps),true);
+  assert.equal(opened.returnFocus,trigger,'the clicked opener survives without DOM focus');
   assert.equal(typeof opened.subject,'function','the Home door offers a subject switch');
   assert.equal(settings.hidden,true,'the caller is hidden under the studio');
   assert.equal(await opened.subject('circuit'),true);

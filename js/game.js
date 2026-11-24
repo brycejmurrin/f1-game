@@ -840,7 +840,7 @@ const isQuali = () => session === "quali";
 // and `penalty`/`cuts` are ordinary fields on that car.
 // A Time Trial is always practisable, which is what the feature shipped as.
 // Cleared by startRace() so it can never leak from one session into the next.
-let practiceMode = false;
+let practiceMode = false, learnAeroDrill = null;
 const isPractice = () => practiceMode || isTimeTrial();
 // A DUEL is a practice race against ONE bumped rival. Same trim that Time Trial
 // and Quali already do to `cars` after makeCars(); the rival's stats come from
@@ -2525,15 +2525,20 @@ async function startRaceBody() {
   if (gfxContextLost()) { quitToMenuAfterCtxLost(); return false; } if (isCareer()) Career.markWeekendStarted();   // session loaded, no save conflict, track built: the round's brief locks
   // PRACTICE IS PER-SESSION. Armed from the pause menu inside one session, it
   // must never survive into the next — a race that silently did not count
-  // because the last one was practice is the worst possible failure here. A
-  // Time Trial needs no flag: isPractice() derives it.
+  // because the last one was practice is the worst possible failure here. The
+  // Learn drill starts unscored, and isPractice() handles Time Trial itself.
   // duelMode is NOT cleared: it is a race SETTING like difficulty or tyre wear,
   // chosen on the settings sheet and meant to stick until the player changes it.
-  practiceMode = false;
+  const aeroDrill = learnAeroDrill;
+  practiceMode = !!aeroDrill;
   releaseFieldScratch(); makeCars(); rlap("makeCars");
   coach.reset(); PerfGov.resetFrameStats();
-  // Qualifying keeps the full field for simulation, then drives one flying lap.
-  if (isQuali()) {
+  if (aeroDrill) {
+    const rival = cars.find(c => c !== player && c.team === player?.team) || cars.find(c => c !== player);
+    cars = [rival, player].filter(Boolean);
+    lapsTarget = 1;
+  } else if (isQuali()) {
+    // Keep the full field for the qualifying simulation. The player drives one lap.
     qualiField = cars;
     cars = [player];
     lapsTarget = 1;
@@ -2573,7 +2578,7 @@ async function startRaceBody() {
   // Awaited so startRace's latch spans the sheet's build; openQuali lands its own failure on the menu.
   if (!isQuali() && gridFromQuali() && !quali.order(cars)) { loadingScreen.stop(); await openQuali(); return false; }
   RaceEntryProfile.mark("gridCountdown:start");
-  gridUp(gridOrderFor(gridFromQuali() ? quali.order(cars) : null));
+  gridUp(aeroDrill ? cars : gridOrderFor(gridFromQuali() ? quali.order(cars) : null));
   rlap("gridUp");
   wxArc.startChangeable(0);
   recomputePlayerMods();
@@ -2592,7 +2597,7 @@ async function startRaceBody() {
   // M35/B6: arm on the SAME raceIndex gridUp just hashed (launch/tyre/phase), THEN
   // bump. Bumping first changed AI draws and broke quali-pace-parity at PACE 1.34.
   // armReliability freezes raceDrawRound for the in-race mistake hash after the bump.
-  const bumpRaceIndex = session === "race"; if (bumpRaceIndex) armReliability(cars);   // the bump waits for the start to COMMIT (below the last stale() await, #4484)
+  const bumpRaceIndex = session === "race" && !aeroDrill; if (bumpRaceIndex) armReliability(cars);   // the bump waits for the start to COMMIT (below the last stale() await, #4484)
   resultT = 0; postFinish.since = -1;
   feel.camRoll = 0; camSlipSm = 0;
   feel.shake = 0; feel.hitStop = 0; stormFx._thunderT = -1; announce._waitAt = NaN;   // a crash's shake, a queued thunder or the WAITING card's quiet window from the last session must not reach this grid
@@ -2629,6 +2634,7 @@ async function startRaceBody() {
   try { await RaceEntryProfile.spanAsync("warmCarAssets", () => warmCarAssetsAsync(() => !stale(), vmNoFramePump ? Infinity : 8, { deferRear: !headlessMode })); } finally { _carWarm.busy = false; }
   if (stale()) return false;
   RaceEntryProfile.span("debrisPrime", () => DebrisWorld.prime());
+  if (aeroDrill) aeroDrill.staging = true;
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; feel.startHold = 0; feel.restartPending = false; paused = false; frozen = false; raceRestarting = false; skyViewOverride = null;
   RaceEntryProfile.mark("gridCountdown:end");
   if (bumpRaceIndex) quali.clearDeletedLap(player, netLobby.qualifying());
@@ -2691,6 +2697,10 @@ async function startRaceBody() {
   if (player !== entryPlayer || (state !== "count" && state !== "race")) return false;
   clearRaceEntrySoften(); if (bumpRaceIndex) raceIndex++;   // committed: raceDrawRound froze this race's mistake-hash round in armReliability
 
+  if (aeroDrill && !aeroDrill.begin()) {
+    quitToMenu(); announce("COULD NOT START THE AERO DRILL", 3, "info"); return false;
+  }
+
   // A flyby timer can land this in a BACKGROUND tab, after the hide handler ran in "menu" state.
   if (document.hidden) setPaused(true, "hidden-tab");
 }
@@ -2722,7 +2732,7 @@ function startRace() {
     rs.hidden = true;
     try { if (rs.open && typeof rs.close === "function") rs.close(); } catch (_) { /* already closed */ }
   }
-  practiceMode = false;   // before loadingInfo() reads it: the body clears it only after several awaits
+  practiceMode = !!learnAeroDrill;   // before loadingInfo() reads it
   if (!loadingScreen.phase()) { loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race"); }
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   // Software GL defers pack retry until after grid (#3584); hardware keeps idle prefetch here.
@@ -3315,7 +3325,7 @@ const G = {
   ltKey: (...a) => ltKey(...a),
   // (setLightTune is a hoisted function, exposed as a plain shorthand below.)
   exitPhotoMode: (...a) => exitPhotoMode(...a),
-  openWatchPhoto: () => openExperiencePhoto("watch"),   // const initialised below — defer
+  openWatchPhoto: (trigger) => openExperiencePhoto("watch", trigger),   // const initialised below — defer
   // Stable helpers consumed by js/lighting/atmosphere.js.
   clamp: (v, a, b) => clamp(v, a, b),
   satAdjust: (rgb, amt) => satAdjust(rgb, amt),
@@ -3485,7 +3495,9 @@ let flyingStart = FlyingStart.create(G, { realRace: () => realRace.isActive() ||
 var jumpStartPenalty = JumpStartPenalty.create(G, {
   autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,
 });   // LAZY_RACE_SESSION — recreated in onRaceSessionReady
-titleMenu = TitleMenu.create(G, openDataHub); // returning-player, Daily and Learn (js/ui/title-menu.js)
+titleMenu = TitleMenu.create(G, openDataHub, () => { // returning-player, Daily and Learn (js/ui/title-menu.js)
+  if (!learnAeroDrill) LearnDoor.launchAeroDrill(G, drill => { learnAeroDrill = drill; }, level => { raceDirtyAir = level; });
+});
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing(), lazyBundles.ensureReplayBroadcast),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
@@ -4095,7 +4107,7 @@ function raceIntro(go) {
 function loadingInfo() {
   const real = realRace.intro();
   const out = {
-    track: Tracks.LIST[trackIdx], laps: raceLaps,
+    track: Tracks.LIST[trackIdx], laps: learnAeroDrill ? 1 : raceLaps,
     gp: real ? real.title : SeasonCal.gpName ? SeasonCal.gpName(Tracks.LIST[trackIdx]) : undefined,   // the 2026 REAL calendar renames two rounds (season-cal.js); a real race is its own event
     real,   // the Data Hub's real race (RealRace.intro): the event, whose car, from which lap — the announcer reads it
     weather: raceWeather, tod: raceTimeOfDay,
@@ -4158,7 +4170,7 @@ DebrisWorld.create(G);
 // flagged, fallback-guarded window (extends the sacred xPinned + (prog,x)
 // exceptions). Inert (owns() is a Set read) unless a flag is on AND the debris
 // side-world is live. DEFAULT ON per feature (apex26.r2Airborne/r3Contact/c1Pileup).
-const incidentSim = IncidentSim.create(G);
+const incidentSim = IncidentSim.create(G, c => { if (c.human && c.isPlayer && isQuali() && c.lap >= 1) quali.markDeletedLap(c, qualiNet.hasArmed()); });
 // Car-to-car contact (js/physics/collide.js). collideFx stays here (shake /
 // hit-stop are camera state) and rides in as the second argument, not a G member.
 const collide = Collide.create(G, collideFx, (c) => realRace.owns(c));
@@ -4384,6 +4396,7 @@ function quitToMenu() {
   loadingScreen.stop();
   if (skipToResults()) { resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.release(); announcer.stop && announcer.stop(); }   // a finished player's result is settled before the session is dropped
   setState("menu", "quit"); paused = false; releaseFieldScratch(true); raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  if (learnAeroDrill) { learnAeroDrill.restore(); learnAeroDrill = null; }
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -4485,6 +4498,7 @@ function update(dt) {
     Log.info("game", "manual recover");
   }
   if (state === "count") {
+    if (learnAeroDrill?.staging) return; // hold until the rolling start is ready
     // In a session the countdown is driven by the SHARED clock rather than by
     // accumulated dt, and the random hold is dictated by the host. Both matter
     // for fairness: accumulating dt independently lets the two grids drift
@@ -4641,7 +4655,7 @@ function update(dt) {
   if (aiLod) aiLod.step(cars, state === "race" && session === "race" && !isPractice() && !netPlay.active(), raceCtl.level, raceT, player, track ? track.total : 0);
   PerfSpans.begin("ai"); for (let i = 0; i < cars.length; i++) updateCar(cars[i], dt, ranked); PerfSpans.end("ai");   // per-car step: AI + player
   pits.stepEnd();
-  if (jumpStartPenalty.reactWindowOpen()) {
+  if (!learnAeroDrill && jumpStartPenalty.reactWindowOpen()) { // this drill starts with both cars at speed
     for (const c of cars) jumpStartPenalty.tickReaction(c);
   }
   RaceControl.settleLineStep();   // finishers cannot be promoted to a new incident
@@ -4830,7 +4844,7 @@ function collideFx(a, b, impact) {
 }
 
 // updateCar's per-step scratch: the locals its parts (below it) read and hand back; rewritten before every read.
-const _ucS = CarFields.warmDoubles({ recordInput: null, tyreGrip: 0.5, vT: 0, inp: 0, roomL: 0, roomR: 0, unstuckActive: 0, queued: 0, aiT: 0, braking: 0, hw: 0, slopeSin: 0, k: 0, mods: 0, gmC: 0, perfMul: 0, vmax: 0, alongO: 0, alongDx: 0, deploy: 0, throttleLvl: 0, gearMult: 0, surfaceMu: 0, brakeDecel: 0, onThrottle: 0, steer: 0, gripScale: 0, latFac: 0, kerbGrip: 0, bankMu: 0, dd: 0, blocker: 0, blockerGap: 0, letPass: 0, aiFreeSpeed: 0, squeezed: 0, roadL: 0, roadR: 0, alongDprog: 0, chaser: 0, chaserGap: 0, nearbyN: 0, sep: 0, slopeNose: 0, lateralGrade: 0, trMul: 0, gm0: 0, pitV: 0, cautionV: 0, otFree: 0, brakeLvl: 0, accelCeil: 0, towCar: 0, towGap: 0, pvA: 0, pvB: 0 }, ["alongDx", "alongDprog", "sep", "surfaceMu", "pitV", "aiFreeSpeed", "brakeLvl", "pvA", "pvB"]);
+const _ucS = CarFields.warmDoubles({ recordInput: null, tyreGrip: 0.5, vT: 0, inp: 0, roomL: 0, roomR: 0, unstuckActive: 0, queued: 0, aiT: 0, braking: 0, hw: 0, slopeSin: 0, k: 0, mods: 0, gmC: 0, perfMul: 0, vmax: 0, alongO: 0, alongDx: 0, deploy: 0, throttleLvl: 0, gearMult: 0, surfaceMu: 0, brakeDecel: 0, onThrottle: 0, steer: 0, gripScale: 0, latFac: 0, kerbGrip: 0, bankMu: 0, dd: 0, blocker: 0, blockerGap: 0, letPass: 0, aiFreeSpeed: 0, squeezed: 0, roadL: 0, roadR: 0, alongDprog: 0, chaser: 0, chaserGap: 0, nearbyN: 0, sep: 0, slopeNose: 0, lateralGrade: 0, trMul: 0, gm0: 0, pitV: 0, cautionV: 0, otFree: 0, brakeLvl: 0, accelCeil: 0, towCar: 0, towGap: 0, pvA: 0, pvB: 0, bicycleStartS: 0 }, ["bicycleStartS", "alongDx", "alongDprog", "sep", "surfaceMu", "pitV", "aiFreeSpeed", "brakeLvl", "pvA", "pvB"]);
 // The step's Wind.sync() answer: every car of a step synced with the same (seed, weather, track, raceT), so the
 // first car to reach it pays and the rest share its object — the same one sync's own cache returned (#3109 row 9).
 const _windStep = { st: null };
@@ -6196,6 +6210,7 @@ function updateCarBicycle(c, dt, ranked, S) {
     // — see frenetH), then let trackFrom() pin it to the true perpendicular foot.
     // The predictor only has to be close; it exists so the refinement stays local.
     let tX = smp.t[0], tZ = smp.t[2]; const tL = Math.hypot(tX, tZ) || 1; tX /= tL; tZ /= tL;
+    S.bicycleStartS = c.s;
     const tf = trackFrom(c.px, c.pz, c.s + (vWx * tX + vWz * tZ) * dt / hFrenet);
     c.s = tf.s;
     c.x = tf.x;
@@ -6263,10 +6278,16 @@ function updateCarAdvance(c, dt, ranked, S) {
   let ds = c.s - oldS;
   if (ds > L / 2) ds -= L; else if (ds < -L / 2) ds += L;   // signed wrap == M4.wrapDelta(ds, L), kept INLINE: physics inner loop, and the characterization golden is a browser spec
 
-  // If ds is huge, the car was teleported (jump/park). Reset to prevent glitches.
-  if (Math.abs(ds) > 20) {
-    ds = c.speed * dt;
-    oldS = wrapS(c.s - ds);
+  // A driven projection can jump between two perpendicular feet inside a
+  // tight corner. Keep that signed arc change when the input pose still
+  // matches the last step plus any contact shove already credited to progress.
+  const teleportM = 20;
+  if (Math.abs(ds) > teleportM) {
+    const trackedMove = c.human && Math.abs(M4.wrapDelta(S.bicycleStartS - oldS - (c._pushD || 0), L)) < 1e-6;
+    if (!trackedMove) {
+      ds = c.speed * dt;
+      oldS = wrapS(c.s - ds);
+    }
   }
 
   const dLine = ds;   // signed change in s, contact shove INCLUDED — the lap-line test needs it
@@ -7807,7 +7828,9 @@ function render(dt) {
   // depth write). Drawn against the PLAYER's speed for the dynamic colour.
   // Never in a flyby frame (`cine`: the editor preview, flybyCam, free-cam's flyby lens).
   const driverGuide = racing && !ceremonyView && player && !player.finished && !player.retired && !realRace.isWatch();
-  if (state !== "menu" && !cine && track && player && (photoMode || driverGuide)) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
+  const drillMarkings = learnAeroDrill?.guide.draw(gfx, track && drivingLineApi(track), renderAlpha,
+    driverGuide && state === "race" && !photoMode && !cine && !paused && !replayBuf.isScrubbing());
+  if (!drillMarkings && state !== "menu" && !cine && track && player && (photoMode || driverGuide)) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
   // (wheel/halo/mirrors) + the car's shadow instead, body mesh skipped. Was two
   // always-equal booleans, so the `hide && !rig` skip they guarded never fired.
@@ -8212,10 +8235,10 @@ function render(dt) {
   // depthMask are set once for the whole field instead of ping-ponging with the
   // lit body program every car.
   shadowPass.flushBlobs();
-  // Ghost car (time trial): replay best-lap position as a bright emissive silhouette
-  if (isTimeTrial() && player && (state === "race" || state === "count")) {
+  // The lesson guide uses the existing transparent ghost draw and never joins the field.
+  if ((isTimeTrial() || drillMarkings) && player && (state === "race" || state === "count")) {
     const replayGhost = GhostShare.hasGuest() ? GhostShare : Ghost;
-    const g = (player.lap | 0) >= 1 ? replayGhost.at(player.lapTime) : null;   // S4: lap 0 is the run-up, off the lap clock (the HUD delta and dot gate the same way)
+    const g = drillMarkings ? learnAeroDrill.guide.car() : (player.lap | 0) >= 1 ? replayGhost.at(player.lapTime) : null;
     // Skip the ghost while it overlaps the player — at the lap start it sits on
     // your exact grid position, and in the cockpit/onboard cams its bodywork
     // fills the camera as a black box until you pull away ("starts dark, clears
@@ -8250,6 +8273,11 @@ function render(dt) {
       // alpha the track stays readable straight through it at any distance,
       // and the raised emissive keeps it reading as a bright spectre.
       gfx.draw(teamMesh(player.team, player), tmpMat, _ghostOpts);
+      if (drillMarkings) {
+        const guideTeam = carDraw.paintTeam(player), setup = teamDecalState(guideTeam, true);
+        if (!carDraw.modelBuf) drawAeroFlaps(guideTeam, setup.val, g.aeroX, tmpMat, _ghostOpts, setup.aero);
+        Particles.flare(tmpP[0], tmpP[1] + 1.5, tmpP[2], 0.30, 1, g.braking ? 0.20 : 0.76, 0.12, 0.85);
+      }
       }
     }
   }
@@ -8885,10 +8913,10 @@ photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, ltStore, rende
   }, garage: {
   prepareCapture: () => setupCam.endGarageRes(), snapshot: () => setupCam.captureCamera(), restore: (v) => setupCam.restoreCamera(v), shot: (id) => setupCam.setSetupView(id),
   looks: lookRowSpecs, looked: () => { if (!$("carsetup").hidden) buildSetup(); } } });
-function openExperiencePhoto(source) { return UiExperience.openPhoto(G, { source, photoStudio, setPaused,
+function openExperiencePhoto(source, trigger) { return UiExperience.openPhoto(G, { source, trigger, photoStudio, setPaused,
   trackHome: state === "menu" && uiExperience && ["track", "pitlane"].includes(uiExperience.state().scene.mode), trackReady: menuWorld(),
   photoView: () => uiExperience.photoView(), onWaiting: () => AppearanceStudio.notify("Return Home to finish loading this scene, then open Photo Studio."),
-  photoSubject: (m) => uiExperience.photoSubject(m), reopen: () => openExperiencePhoto("home"), onDone: () => uiExperience.photoSubject(null) }); }
+  photoSubject: (m) => uiExperience.photoSubject(m), reopen: (opener) => openExperiencePhoto("home", opener), onDone: () => uiExperience.photoSubject(null) }); }
 uiExperience = UiExperience.create(G, { setupCam, coach, openPhoto: openExperiencePhoto, openPractice: () => openTimeTrial(false),
   prepareTrack: scheduleFlybyTrack, trackReady: menuWorld, trackKey: () => menuKey(trackIdx), updateTrackPhoto: updatePhotoCam,
   captureTrackCamera: () => ({ eye: camEye.slice(), tgt: camTgt.slice(), fov: camFov }),
@@ -8896,7 +8924,7 @@ uiExperience = UiExperience.create(G, { setupCam, coach, openPhoto: openExperien
   openWatch: () => openDataHub("race"),
   openSettingsPage: (page, fold) => { openSettings(); settingsNav.showDirect(page, true); const f = fold && $(fold); if (f) { if (f.tagName === "DETAILS") f.open = true; else if (f.parentElement.tagName === "DETAILS") f.parentElement.open = true; f.scrollIntoView({ block: "start" }); f.focus(); } },
 });
-AppearanceStudio.attach({ previewScene: (s) => uiExperience.previewScene(s), openPhoto: () => openExperiencePhoto(state === "menu" ? "home" : "race"), openDisplay: () => settingsNav.show("display", true),
+AppearanceStudio.attach({ previewScene: (s) => uiExperience.previewScene(s), openPhoto: (trigger) => openExperiencePhoto(state === "menu" ? "home" : "race", trigger), openDisplay: () => settingsNav.show("display", true),
   applyVisuals: (v) => { uiScale.applyUiScale(); uiScale.applyHudScale(); uiScale.applyBtnScale(); uiScale.applyBtnOpacity(); uiScale.applyPanelOpacity(); G.hudProfile = v.hudProfile; G.hudMetricsLayout = v.hudMetricsLayout; G.hudMapVis = v.hudMapVis; G.hudGapsVis = v.hudGapsVis; if (v.hudMirror) mirrorPass.setMode(v.hudMirror); paintHudDetailsSummary(); syncMetricsOverlayCompact(); },
 });
 function syncSettingsAvailability() {
@@ -9302,6 +9330,7 @@ function setPaused(p, why) {
   if (paused && !p) Input.invalidateRemoteDrive();
   if (paused !== !!p) Log.info("game", "Race " + (p ? "paused" : "resumed") + " why=" + (why || "button") + " state=" + state + " raceT=" + raceT.toFixed(1));
   paused = p; GameAudio.resetReplayScrub(); replayBuf.onPause(!!p); // REPLAY overlay while paused
+  if (p) learnAeroDrill?.guide.hide();
   if (!netPlay.active()) { if (p) dropRaceWake(); else holdRaceWake(); UiExperience.resumeArm(G, !p && why !== "restart" && state === "race" && !realRace.isWatch()); }   // a paused screen may sleep; a networked race runs on under the card, and never holds for a resume countdown
   if (!p) {
     closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();

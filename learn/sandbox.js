@@ -144,6 +144,11 @@ const LearnSandbox = (() => {
     check.type = "button";
     const feedback = element("p", task);
     feedback.setAttribute("role", "status");
+    if (lesson.inGame) {
+      const gameNote = element("details", root);
+      element("summary", gameNote, "In Apex 26");
+      element("p", gameNote, lesson.inGame);
+    }
     const details = element("details", root);
     element("summary", details, "Sources");
     const list = element("ul", details);

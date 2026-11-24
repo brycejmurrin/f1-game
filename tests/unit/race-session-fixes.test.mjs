@@ -148,6 +148,46 @@ test("a deleted qualifying lap survives quit and reload without blocking a valid
   }
 });
 
+test("a qualifying wall-hit takeover survives quit on a flying lap only", async () => {
+  const g = await createGame({ track: "monza", carMeshes: false, rapier: true });
+  try {
+    const { G, apex } = g;
+    apex.headless(true);
+    G.daily.stop();
+    G.flow = "season";
+    const seasonCal = runInContext("SeasonCal", g.ctx);
+    G.season = seasonCal.applyConfig({ ...seasonCal.fresh(), trackIds: ["monza", "spa"] }).season;
+    G.trackIdx = seasonCal.trackIndex(0);
+    G.raceGrid = "quali";
+    apex.debris(true);
+
+    for (const lap of [0, 1]) {
+      const el = await openSeasonQualifying(g);
+      const previousField = G.cars;
+      el("q-drive").onclick();
+      assert.ok(await g.settle(() => G.cars !== previousField && G.state === "count", 4000));
+      apex.go();
+      assert.ok(await g.settle(() => apex.incident().active, 4000), "real Rapier takeover path is available");
+
+      const p = G.player, track = G.track, tracks = runInContext("Tracks", g.ctx);
+      const frac = 0.25, wall = tracks.wallAt(track, track.total * frac, 1);
+      apex.jump(frac, 55, wall - 0.05, { keepLap: true });
+      p.lap = lap;
+      p.head -= Math.PI / 2;
+      for (let i = 0; i < 4 && !p._incidentOwned; i++) apex.step(1 / 60);
+      assert.ok(p.wallHits > 0 && p._incidentOwned, "driving into the wall really hands the player to Rapier");
+      assert.equal(p.lap, lap, "the player has not crossed the line");
+      assert.equal(p.incidentInvalidLap, true);
+      if (lap === 0) assert.equal(p.qualiCut, false, "an out-lap incident does not delete a qualifying lap");
+      G.quitToMenu();
+    }
+
+    const el = await openSeasonQualifying(g);
+    el("q-sim").onclick();
+    assert.ok(qualiSheetRow(g)?.endsWith("NO TIME"), "quit during the takeover cannot replace the deleted lap");
+  } finally { g.close(); }
+});
+
 test("5: S1+S2+S3 equals the lap time — S3 closes at the line, not a whole step past it", async () => {
   const g = await createGame({ track: "monza" });
   try {

@@ -55,15 +55,16 @@ const ZONE_COUNT = {
   catalunya: 4, redbull: 4, silverstone: 4, spa: 5, hungaroring: 4,
   bahrain: 3, jeddah: 3, imola: 1, zandvoort: 2, monza: 4, baku: 2,
   singapore: 5, cota: 2, mexico: 3, interlagos: 2,
-  vegas: 2, qatar: 1, abudhabi: 2,          // PROVISIONAL: last FIA DRS count (2025), no 2026 map yet
+  vegas: 3,
+  qatar: 1, abudhabi: 2,                    // PROVISIONAL: last FIA DRS count (2025), no 2026 map yet
   madrid: 2, sepang: 4, istanbul: 2, portimao: 2,
 };
 
 // WHICH straights: each zone as [fromTurn, toTurn] — the FIA corner it starts
 // after and the corner it runs to (1-based into def.turns, T1 = turns[0]; a
-// pair naming the last turn and T1 wraps across the line). Valid because, for
-// every circuit marked FIA below, def.turns is the FIA 2026 event-map
-// numbering, one apex per numbered corner (W12, 2026-11-10).
+// pair naming the last turn and T1 wraps across the line). Most circuits
+// marked FIA below use event-map numbering (W12, 2026-11-10).
+// Vegas maps FIA corners to the built turn indices instead.
 //
 // A pair resolves to EVERY straight run between the two apexes, merged into
 // one span: a real zone runs from the exit of Tn to the braking point of the
@@ -74,7 +75,7 @@ const ZONE_COUNT = {
 //
 // miami, montreal and mexico were FIA-numbered on 2026-11-11 (#5316 leftovers,
 // tools/track/official-corners.cjs: the F1 timing corner markers). Not curated
-// (no 2026 source): imola, vegas, abudhabi — their rows are the old
+// (no 2026 source): imola, abudhabi — their rows are the old
 // geometry-derived pairs.
 const AERO_ZONE_TURNS = {
   suzuka: [[14, 15], [18, 1]],                                    // FIA 2026 JPN: after T14, T18
@@ -95,7 +96,7 @@ const AERO_ZONE_TURNS = {
   cota: [[11, 12], [20, 1]],                                      // FIA 2026 USA: after T20, T11
   mexico: [[3, 4], [11, 12], [17, 1]],                            // FIA 2026 MEX: after T17, T3, T11
   interlagos: [[3, 4], [14, 1]],                                  // FIA 2026 BRA: after T14 (through the T15 kink), T3
-  vegas: [[5, 6], [13, 14]],                                      // PROVISIONAL
+  vegas: [[5, 6], [13, 14], [16, 17]],                            // FIA 2026 LAS: after FIA T4, T12, T16, mapped to built turns
   qatar: [[16, 1]],                                               // PROVISIONAL: FIA 2025 QAT DRS, after T16
   abudhabi: [[4, 5], [16, 1]],                                    // PROVISIONAL
 };

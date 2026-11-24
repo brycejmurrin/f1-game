@@ -113,6 +113,7 @@
     title: "Nimble Chassis X-ray",
     replay: {label: state => state.view === "floor" ? "floor airflow" : "tyre wake"},
     intro: "Compare FIA package dimensions, play airflow in the Floor and Inwash layers, or make a blind legality call.",
+    inGame: "In the garage, aero parts and ride-height rake change your car’s downforce. Apex represents their combined effect with an aero-load value. The X-ray shows how real F1 rules constrain individual dimensions and how teams shape the floor and tyre wake.",
     controls: [
       {id: "view", primary: true, label: "Drawing layer", options: [["compare", "Axle and body overlay"], ["floor", "Floor cutaway · playable airflow"], ["wake", "Inwash / outwash · playable airflow"], ["inspect", "Free inspection"], ["challenge", "Challenge · fixed 3,450 / 945 mm"], ["edge", "Challenge · exact limits"]], value: "compare"},
       {id: "wakeStyle", primary: true, when: state => state.view === "wake", label: "Tyre wake direction (wake layer)", options: [["out", "Outwash"], ["in", "Inwash"]], value: "out"},

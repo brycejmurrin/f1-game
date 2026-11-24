@@ -14,6 +14,7 @@ const {
 } = SettingsExport._core;
 
 const EXCLUDED = "photo library and personal background images, garage (parts, liveries, setup sheets, MY TEAM), saves (career, the season save, replays, daily challenge), accounts and network (Spotify, TURN, relays), renderer self-heal latches, developer flags. Time-trial leaderboards are optional in the ttlb section, and season setup, circuit mastery, ghosts, onboarding marks and your own circuits in the progress section (best laps and progress merge, season setup is replaced)";
+const BUTTON_RESPONSE_SCHEMA = 2;   // Phone and touchscreen now have independent responses.
 
 function same(a, b) {
   if (a === b) return true;
@@ -96,6 +97,7 @@ function collect(mode, G) {
   const desktop = thisDesktop(G);   // the same reading applySettings compares against
   const out = {
     format: FORMAT, mode: all ? "all" : "changes", exportedAt: new Date().toISOString(), build,
+    buttonResponseSchema: BUTTON_RESPONSE_SCHEMA,
     device: { desktop, userAgent: (typeof navigator !== "undefined" && navigator.userAgent) || null },
     keys: { json: "went through store.set (JSON)", raw: "bare strings from store.rawSet; null = unset" },
     excluded: EXCLUDED,
@@ -264,7 +266,7 @@ const RESET_INFO = {
   advanced: "Steering response, curves, smoothing, dead zones, sensitivity, handling, overall speed and feedback.",
   driving: "Driving assistance, gears, throttle and active aero. Race rules and circuit setup stay saved.",
   display: "HUD layout and visibility, camera framing, helmet and visor settings.",
-  appearance: "Menu appearance, sizing and layouts. Saved appearance profiles and personal photos stay saved.",
+  appearance: "Menu appearance, sizing and layouts. Garage room, crew and lighting choices, saved appearance profiles and personal photos stay saved.",
   a11y: "Accessibility, captions, text size, contrast and hold/toggle controls. Reduced motion returns to the device setting.",
   audio: "Music, sound, radio, volumes and audio tuning. Connected music accounts stay connected.",
   graphics: "Graphics quality, renderer, resolution and feature overrides. Defaults adapt to this device.",
@@ -279,12 +281,16 @@ function resetInfo(section) { return Object.hasOwn(RESET_INFO, section) ? RESET_
 function resetOwns(row, section) {
   if (row.info || row.k === "favTracks" || row.k === "appearanceProfiles") return false;
   if (section === "files") return true;
+  if (row.k === "controlButtonPresets") return false;
   const steering = row.group === "steering" && !RESET_AIDS.has(row.k);
   if (section === "advanced") return steering || RESET_ADVANCED.has(row.k);
   if (section === "controls") return steering || row.group === "controls" || RESET_INPUT.has(row.k);
   if (section === "driving") return row.k === "preset" || RESET_AIDS.has(row.k);
   if (section === "a11y") return row.group === "a11y" || RESET_ACCESS.has(row.k);
-  if (section === "appearance") return (row.group === "appearance" && !RESET_ACCESS.has(row.k)) || row.k === "uiScale";
+  if (section === "appearance") {
+    if (row.k === "garageLook" || row.k === "crewLook" || row.k === "garageMood") return false;
+    return (row.group === "appearance" && !RESET_ACCESS.has(row.k)) || row.k === "uiScale";
+  }
   if (section === "display") return (row.group === "hud" || row.group === "camera" || RESET_UI.has(row.k)) && row.k !== "uiScale" && !RESET_INPUT.has(row.k);
   if (section === "graphics") return row.group === "display" && !RESET_UI.has(row.k) && !RESET_INPUT.has(row.k);
   return section === "audio" && row.group === "audio";
@@ -427,7 +433,27 @@ function applySettings(file, G) {
     // Merge at the same depth as objDiff, retaining the receiver's unrelated edits.
     const depth = row.mergeDepth || (!row.whole && isObj(def) && Object.keys(def).length ? 1 : 0);
     const sparse = file.mode === "changes" && depth && isObj(v);
-    writes.push([row, sparse ? mergeChangedFields(readStored(row), v, depth) : v]);
+    const stored = sparse ? readStored(row) : null;
+    // The profile cleaner fills in an empty list even for a marker-only file.
+    // Keep the receiver's list unless the changes file explicitly supplies one.
+    if (sparse && row.k === "padProfiles" && !Object.hasOwn(g[row.k], "devices") && Array.isArray(stored?.devices)) {
+      v.devices = stored.devices;
+    }
+    writes.push([row, sparse ? mergeChangedFields(stored, v, depth) : v]);
+  }
+  // Earlier files shared one response across both surfaces. Only copy a
+  // validated Touch write, so the same device and unset rules apply to Phone.
+  if ((file.buttonResponseSchema === undefined || file.buttonResponseSchema === 1) &&
+      isPlain(groups.driving) && !Object.hasOwn(groups.driving, "phoneButtonProfiles")) {
+    const touch = writes.find(([row]) => row.k === "touchButtonProfiles");
+    if (touch) {
+      const phone = SPEC.find(row => row.k === "phoneButtonProfiles");
+      const store = GameStore.store;
+      const existing = store.getStored ? store.getStored(phone.k) : store.get(phone.k, undefined);
+      if (existing === undefined || existing?.inherited === true) {
+        writes.push([phone, { ...(touch[1] ?? defaultOf(phone, G)), inherited: true }]);
+      }
+    }
   }
   const result = writePreferences(writes);
   let { applied, failed } = result;

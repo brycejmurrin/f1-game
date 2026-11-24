@@ -1,5 +1,5 @@
 {
- "_doc": "FIA 2026 straight-mode (SM) zones per circuit, from the FIA Race Director's event document 'Circuit Map, Pit Lane Drawing, ...' (STRAIGHT MODE table: 'Xm after Tn - ZONE An'). count = zones listed; pairs = [fromTurn, toTurn] in def.turns numbering, present only where def.turns is the FIA 2026 event-map numbering. status provisional = no 2026 document yet. Re-checked 2026-11-10 (W12). js/physics/aero-zones.js must agree; tests/unit/aero-zone-tables.test.mjs enforces it.",
+ "_doc": "FIA 2026 straight-mode (SM) zones per circuit, from the FIA Race Director's event document 'Circuit Map, Pit Lane Drawing, ...' (STRAIGHT MODE table: 'Xm after Tn - ZONE An'). count = zones listed; pairs = [fromTurn, toTurn] in def.turns numbering, present where the built mapping is verified. status provisional = no 2026 document yet. js/physics/aero-zones.js must agree; tests/unit/aero-zone-tables.test.mjs enforces it.",
  "circuits": {
   "monaco": {
    "count": 0,
@@ -438,11 +438,29 @@
    "note": "no 2026 FIA map yet (event not run); 2025 FIA DRS list"
   },
   "vegas": {
-   "count": 2,
-   "fia": [],
-   "doc": null,
-   "status": "provisional",
-   "note": "no 2026 FIA map yet (event not run); count is the last DRS list, unverified this pass"
+   "count": 3,
+   "fia": [
+    "after T4 (40 m normal grip, 90 m low grip)",
+    "after T12 (110 m normal grip, 150 m low grip)",
+    "after T16 (45 m normal grip, 95 m low grip)"
+   ],
+   "doc": "https://www.fia.com/system/files/decision-document/2026_las_vegas_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+   "status": "fia-2026",
+   "pairs": [
+    [
+     5,
+     6
+    ],
+    [
+     13,
+     14
+    ],
+    [
+     16,
+     17
+    ]
+   ],
+   "note": "Doc 6, PDF page 2. FIA T4, T12 and T16 map to built T5, T13 and T16, respectively. The Strip span passes the FIA T13 kink, which has no separate built turn. Game spans follow built geometry and use one activation window per zone."
   },
   "abudhabi": {
    "count": 2,

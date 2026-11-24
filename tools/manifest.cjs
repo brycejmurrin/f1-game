@@ -1555,6 +1555,7 @@ const CONTROLLER = [
   "js/net/scan.js",         // the pairing screen's SCAN QR CODE (jsQR is injected on demand)
   "js/input/tilt-roll.js",
   "js/input/pedal-travel.js", // the phone wheel's pedals share hold-buttons' travel numbers
+  "js/input/controller-profiles.js", // named button profiles shared with Controls
   "js/input/touch-button-actions.js",
   "js/ui/touch-button-settings.js",
   "js/input/phone-pad-codec.js",

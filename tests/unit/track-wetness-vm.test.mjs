@@ -10,6 +10,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { runInContext } from "node:vm";
 const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
 
 let g;
@@ -117,4 +118,54 @@ test("wear OFF: a player on the garage slick drives on the weather's tyre as the
     assert.equal(G.gripMult(P), 1);
     assert.equal(JSON.stringify([P.tread, P.mods]), key, "the session-record key never moved");
   } finally { w.close(); }
+});
+
+test("local Monza rain keeps slicks while blanket Silverstone rain calls for wets", async () => {
+  for (const [track, local, expectedTread] of [["monza", true, 0], ["silverstone", false, 2]]) {
+    const race = await createGame({ storage: { tyreWear: "real", reliability: "off" } });
+    try {
+      const { G, ctx } = race;
+      G.seed = 1;
+      G.raceChangeable = true;
+      G.wxArcPlan = { to: "rain", dur: 150 };
+      await race.race(track, "day", "dry", { laps: 6 });
+      G.weatherArc.t = 160;
+      race.step(1, 0);
+      assert.equal(!!G.weatherArc.cell, local);
+      assert.equal(G.trackWetness() > 0.25, true, "the old lap-mean threshold would book a stop");
+
+      const pits = G.pits;
+      const { sIn } = pits.zoneOf();
+      const s = (sIn - 120 + G.track.total) % G.track.total;
+      const player = { ...G.player, lap: 3, s };
+      const engineer = ctx.RaceEngineer.create(G);
+      const sense = engineer.senseOf(player);
+      const call = engineer.callFor(sense)[0] || "";
+      assert.equal(sense.wantTread, expectedTread);
+      assert.match(call, local ? /STAY OUT/ : /BOX FOR WETS/);
+      assert.equal(pits.cue(player)?.text ?? null, local ? null : "PIT 120m");
+      assert.equal(pits.pickFor(player).tread, expectedTread);
+
+      const ai = G.cars.find(car => !car.human);
+      ai.lap = 3;
+      ai.s = s;
+      pits.think(ai);
+      assert.equal(ai.pitArmed, !local, "AI pit booking must use that same recommendation");
+      if (!local) assert.equal(ai.pitNext.tread, expectedTread);
+    } finally { race.close(); }
+  }
+});
+
+
+test("local shower strategy charges only the stops the car still has to make", () => {
+  const strategy = runInContext("WeatherArc", g.ctx);
+  const rain = runInContext("RainCells", g.ctx);
+  const tyres = g.ctx.TyreModel;
+  const cell = rain.forPlan("dry", "rain", 150, 3500, w => tyres.wetness(w, null));
+  assert.ok(cell, "a naturally drawn local shower");
+  const arc = { from: "dry", to: "rain", w0: 0, dur: 150, cell };
+
+  assert.equal(strategy.showerStopPays(arc, 1, 150, 280, 22.5, false), false);
+  assert.equal(strategy.showerStopPays(arc, 1, 150, 280, 22.5, true), true);
+  assert.equal(strategy.showerStopPays(arc, 1, 150, 600, 22.5, true), false, "the return to slicks still costs a stop");
 });

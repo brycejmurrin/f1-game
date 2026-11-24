@@ -149,10 +149,14 @@
   <p>This straight-line estimate models static load, downforce and requested load transfer separately. A request above an axle’s grip limit indicates lockup risk. FIA rules prohibit anti-lock braking systems. <a href="https://www.fia.com/regulations/category/110" target="_blank" rel="noopener">FIA Technical Regulations C11</a></p>
 </section>
 <details>
+  <summary>In Apex 26</summary>
+  <p>This lab uses a fixed force budget for each surface. Apex estimates grip and combined braking, acceleration and cornering separately at the front and rear axles. Try changing Brake Bias in Garage Setup to move the braking demand between them, then ease off the pedal as you steer in.</p>
+</details>
+<details>
   <summary>Model and sources</summary>
   <p>The horizontal axis shows the magnitude of rearward tyre force. The vertical axis shows the magnitude of sideways tyre force. The plot holds both axes at 0–10 kN so a surface change visibly shrinks the force budget. The 10 kN dry and 7 kN damp caps are illustrative values with equal pure-brake and pure-turn limits.</p>
   <p>Required resultant = √(brake² + lateral²). If the resultant exceeds the surface cap, the model shortens the force arrow without changing its direction. To hold 8 kN lateral on dry asphalt, brake force can reach √(10² − 8²) = 6 kN. On the damp preset an 8 kN lateral request exceeds the 7 kN cap even with the brake released.</p>
-  <p>The load-transfer experiment shows axle normal loads independently. The main plot uses an illustrative force envelope at a fixed load. Apex’s driving model estimates combined slip and force separately at the front and rear axles. Brake position, steering angle and measured tyre slip are separate quantities. Real combined-slip response depends on slip angle, slip ratio, load and surface. <a href="https://doi.org/10.4271/2011-01-0094" target="_blank" rel="noopener">SAE research on tyre force ellipses</a></p>
+  <p>The load-transfer experiment shows axle normal loads independently. The main plot uses an illustrative force envelope at a fixed load. Brake position, steering angle and measured tyre slip are separate quantities. Real combined-slip response depends on slip angle, slip ratio, load and surface. <a href="https://doi.org/10.4271/2011-01-0094" target="_blank" rel="noopener">SAE research on tyre force ellipses</a></p>
   <p><a href="https://dspace.mit.edu/bitstream/handle/1721.1/139209/gaither-gaither-sb-2-2021-thesis.pdf" target="_blank" rel="noopener">MIT study on race-car load transfer</a></p>
 </details>
 </main>

@@ -190,7 +190,9 @@
     stopReplay();
     const [entry, transit, , exit] = pitPath;
     const markers = [entry, entry + transit, result.pitTime - exit,
-      result.pitTime, result.cautionMs, result.trackTime, result.greenTrack, input.gapBehind, result.referenceArrival].sort((a, b) => a - b);
+      result.pitTime, result.cautionMs, result.trackTime, result.greenTrack, input.gapBehind, result.referenceArrival];
+    if (input.gapBehind < input.vscEnds && input.vscEnds < result.referenceArrival) markers.push(input.vscEnds);
+    markers.sort((a, b) => a - b);
     elapsed = markers.find(mark => mark > elapsed + 0.5) ?? duration;
     drawReplay();
   });
