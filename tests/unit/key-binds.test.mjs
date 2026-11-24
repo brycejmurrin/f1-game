@@ -414,3 +414,29 @@ test("polling discovers a physical pad and waits out a short Gamepad API gap", (
   assert.equal(Input.physicalPadAvailable(), false);
   assert.equal(Input.touchDrivingControls(), true);
 });
+
+test("toggle throttle releases on handoff between controller and keyboard", () => {
+  const { Input, sb, key, fire } = boot();
+  Input.setHoldMode({ throttle: "toggle" });
+  const pad = fakePad(sb, fire, "DualSense Wireless Controller");
+  pad.press(7); Input.poll(); pad.release(7); Input.poll();
+  assert.equal(Input.controlDevice(), "controller");
+  assert.equal(Input.throttleLevel(), 1);
+  key("KeyA", true); Input.poll();
+  assert.equal(Input.controlDevice(), "keyboard");
+  assert.equal(Input.throttleLevel(), 0);
+  key("KeyA", false);
+  key("KeyW", true); key("KeyW", false);
+  assert.equal(Input.throttleLevel(), 1);
+  pad.pad.axes[0] = 1; Input.poll();
+  assert.equal(Input.controlDevice(), "controller");
+  assert.equal(Input.throttleLevel(), 0);
+});
+
+test("Alt+Left keeps browser Back available while driving", () => {
+  const { Input, fire } = boot();
+  let prevented = false;
+  fire("keydown", { code: "ArrowLeft", key: "ArrowLeft", altKey: true, preventDefault() { prevented = true; } });
+  assert.equal(prevented, false);
+  assert.equal(Input.debugState().key.left, false);
+});
