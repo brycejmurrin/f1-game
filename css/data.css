@@ -1492,17 +1492,17 @@ body[data-density="compact"] [data-xscroll] :is(th:first-child, .dh-td-pos) {
 }
 
 /* Track-focused telemetry reuses the native popup, cursor and playback loop. */
-.dh-track-seek { display: none; }
-body[data-width] .dh-tpopup-body.dh-track-focus { flex-direction: column; overflow-y: auto; overscroll-behavior: contain; align-items: stretch; }
-body[data-width] .dh-track-focus .dh-telem-main { flex: none; overflow: visible; width: 100%; }
-body[data-width] .dh-track-focus .dh-telem-main > :not(.dh-transport) { display: none; }
-body[data-width] .dh-track-focus .dh-transport { margin: 0; }
-body[data-width] .dh-track-focus .dh-thint { display: none; }
-body[data-width] .dh-track-focus .dh-track-seek { display: flex; align-items: center; gap: var(--gap); width: 100%; min-width: 0; }
-.dh-track-seek input { flex: 1; min-width: 0; min-height: var(--tap-paint); }
-.dh-track-time { font-variant-numeric: tabular-nums; }
-body[data-width] .dh-track-focus .dh-telem-side { width: 100%; flex: none; overflow: visible; border: 0; }
-body[data-width] .dh-track-focus .dh-telem-side .dh-canvas.dh-map { max-width: 600px; aspect-ratio: auto; order: -2; }
-body[data-width] .dh-track-focus .dh-maplegend { order: -1; }
+[data-track-seek] { display: none; }
+body[data-width] .dh-tpopup-body[data-track-focus] { flex-direction: column; overflow-y: auto; overscroll-behavior: contain; align-items: stretch; }
+body[data-width] [data-track-focus] .dh-telem-main { flex: none; overflow: visible; width: 100%; }
+body[data-width] [data-track-focus] .dh-telem-main > :not(.dh-transport) { display: none; }
+body[data-width] [data-track-focus] .dh-transport { margin: 0; }
+body[data-width] [data-track-focus] .dh-thint { display: none; }
+body[data-width] [data-track-focus] [data-track-seek] { display: flex; align-items: center; gap: var(--gap); width: 100%; min-width: 0; }
+[data-track-seek] input { flex: 1; min-width: 0; min-height: var(--tap-paint); }
+[data-track-time] { font-variant-numeric: tabular-nums; }
+body[data-width] [data-track-focus] .dh-telem-side { width: 100%; flex: none; overflow: visible; border: 0; }
+body[data-width] [data-track-focus] .dh-telem-side .dh-canvas.dh-map { max-width: 600px; aspect-ratio: auto; order: -2; }
+body[data-width] [data-track-focus] .dh-maplegend { order: -1; }
 
 } /* @layer overlays */

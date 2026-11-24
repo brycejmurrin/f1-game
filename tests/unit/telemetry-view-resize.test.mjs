@@ -161,12 +161,12 @@ test("column-only resizing refits the telemetry map", async () => {
 
 test("track focus enlarges the same map and preserves the shared playback cursor", async () => {
   const { popup, observers, frames } = await openPopup();
-  const toggle = popup.querySelector('.dh-track-toggle');
+  const toggle = popup.querySelector('[data-track-toggle]');
   const map = popup.querySelector('.dh-map');
   const body = popup.querySelector('.dh-tpopup-body');
   toggle.click();
   assert.equal(toggle.getAttribute('aria-pressed'), 'true');
-  assert.ok(body.classList.contains('dh-track-focus'));
+  assert.ok(body.hasAttribute('data-track-focus'));
   const main = popup.querySelector('.dh-telem-main'), side = popup.querySelector('.dh-telem-side');
   main._rect = { width: 560, height: 100, left: 0, top: 0 };
   side._rect = { width: 560, height: 400, left: 0, top: 100 };
@@ -174,10 +174,10 @@ test("track focus enlarges the same map and preserves the shared playback cursor
   for (const [id, fn] of frames) { frames.delete(id); fn(); }
   assert.equal(map.width, 536 * 2);
   assert.ok(map.height <= map.width);
-  const seek = popup.querySelector('.dh-track-seek').querySelector('input');
+  const seek = popup.querySelector('[data-track-seek]').querySelector('input');
   seek.value = '24';
   seek.dispatchEvent({ type: 'input' });
-  assert.match(popup.querySelector('.dh-track-time').textContent, /24/);
+  assert.match(popup.querySelector('[data-track-time]').textContent, /24/);
   toggle.click();
   assert.equal(toggle.getAttribute('aria-pressed'), 'false');
   assert.equal(popup.querySelector('.dh-map'), map, 'switching does not create another player');

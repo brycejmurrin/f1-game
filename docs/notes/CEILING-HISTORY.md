@@ -4052,5 +4052,4 @@ Fragment: `ratchets.d/codex--mobile-visor-paint-cost.json`.
 
 `(tree) assertPins` 8162 → **8163** (+1) and `assertPinsAll` 10409 → **10410** (+1):
 regression coverage verifies track focus preserves its existing map and cursor.
-`(tree) cssClasses` 670 → **673** (+3): scoped track-focus layout, scrubber and time label.
 Fragment: `ratchets.d/cursor--telemetry-mobile-1124.json`.

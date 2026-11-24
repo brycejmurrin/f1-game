@@ -160,7 +160,7 @@ const DataTelemetryView = (function () {
 
       view.toggleTrack = function () {
         view.trackOnly = !view.trackOnly;
-        detail.classList.toggle("dh-track-focus", view.trackOnly);
+        detail.toggleAttribute("data-track-focus", view.trackOnly);
         detail.scrollTop = 0;
       };
 
