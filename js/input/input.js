@@ -665,7 +665,7 @@ const Input = (function () {
   }
   // Device selection is separate from Help's activity hints. Touching a menu
   // still counts for Help, but must not restore the driving dock over a pad.
-  /** @type {"keyboard" | "controller" | null} */
+  /** @type {"keyboard" | "controller" | "touch" | null} */
   let localControlDevice = null;
   let physicalPadAvailable = false;
   /** @type {(() => void) | null} */
@@ -1081,7 +1081,6 @@ const Input = (function () {
     if (down && e.isTrusted !== false && !(tag === "INPUT" || tag === "TEXTAREA" || (active && active.isContentEditable))) {
       kbSeen = true;
       noteInputSource("keyboard");
-      setLocalControlDevice("keyboard");
     }
     // Native HUD buttons own their activation keys. Let the browser deliver
     // their click once; releases still clear keys held before focus moved here.
@@ -1166,6 +1165,8 @@ const Input = (function () {
       heldKeys.delete(e.code); syncHeldKeys();
       return;
     }
+    if (down && !e.repeat && e.isTrusted !== false && !e.altKey && !window.UiLayers?.navOpen() && act &&
+        (act !== "shiftDown" || !/^Shift/.test(e.code))) setLocalControlDevice("keyboard");
     if (["left", "right", "throttle", "brake", "lookBack"].includes(act)) {
       const toggle = (act === "throttle" && throttleIsToggle()) || (act === "lookBack" && lookBackIsToggle());
       if (toggle) {
@@ -1393,7 +1394,7 @@ const Input = (function () {
   function onTouchStart(e) {
     if (!canvasTouchIsDriving()) return;
     noteInputSource("touch");
-    if (!physicalPadAvailable && e.isTrusted !== false) setLocalControlDevice(null);
+    if (e.isTrusted !== false) setLocalControlDevice("touch");
     if (touchControlsNeeded() && !touchDrivingControls()) return;
     e.preventDefault();
     for (const t of e.changedTouches) {
@@ -1766,7 +1767,7 @@ const Input = (function () {
     }
     if (padActive) {
       noteInputSource("controller");
-      setLocalControlDevice("controller");
+      if (padOwnsDrive) setLocalControlDevice("controller");
     }
     if (axisCaptureCb) {
       // The wheel wizard owns the frame: turning the wheel to answer "which

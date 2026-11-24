@@ -397,12 +397,23 @@ onPadLost: () => {
   if (typeof SettingDeps !== "undefined") SettingDeps.refresh();
 }, onControlDeviceChange: syncControlDevice });
 function syncControlDevice() {
+  const focused = document.activeElement;
+  const nav = window.MenuNav;
+  const layer = nav?.activeLayer();
+  const previous = focused && layer?.contains(focused) ? nav.items(layer) : [];
+  const position = previous.indexOf(focused);
   const cooldown = G.state === "results" && RaceCeremony.get()?.playerDrives();
   if (G.state === "race" || G.state === "count" || cooldown) showTouchControls(true, !!cooldown);
   paintSteer();
   paintTiltCalibration();
   refreshGearsBtn();
   if (typeof SettingDeps !== "undefined") SettingDeps.refresh();
+  if (position >= 0 && focused.disabled && nav.activeLayer() === layer) {
+    const available = new Set(nav.items(layer));
+    const next = previous.slice(position + 1).find((el) => available.has(el)) ||
+      previous.slice(0, position).reverse().find((el) => available.has(el));
+    next?.focus();
+  }
 }
 /* body.desktop IS A LIVE ANSWER, NOT A BOOT-TIME ONE: `(pointer: coarse)` flips
    whenever an iPad is docked to or undocked from a keyboard, and

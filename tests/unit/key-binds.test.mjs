@@ -349,7 +349,7 @@ test("Input.activeInputSource follows real activity, not connected-device presen
 
 test("phone driving controls follow a detected DualSense and a real keyboard, then restore the saved touch scheme", () => {
   const changes = [];
-  const { Input, sb, key, fire } = boot({
+  const { Input, sb, key, fire, navOpen, anyOpen } = boot({
     onControlDeviceChange: () => changes.push(Input.controlDevice()),
   });
   let pointerChanged;
@@ -362,6 +362,9 @@ test("phone driving controls follow a detected DualSense and a real keyboard, th
   assert.deepEqual(state(), ["controller", false, "buttons"]);
   fire("pointerdown", { pointerType: "touch", isTrusted: true });
   fire("keydown", { isTrusted: false, code: "ArrowDown", preventDefault() {} });
+  navOpen.on = anyOpen.on = true;
+  key("Tab", true); key("ArrowDown", true); key("ArrowDown", false);
+  navOpen.on = anyOpen.on = false;
   assert.deepEqual(state(), ["controller", false, "buttons"]);
   key("KeyW", true);
   key("KeyW", false);
