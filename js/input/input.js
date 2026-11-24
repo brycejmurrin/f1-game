@@ -632,6 +632,7 @@ const Input = (function () {
   }
 
   let /** @type {ReturnType<typeof ControllerProfiles.create> | null} */ deviceProfiles = null;
+  let legacyWheel = false;
   function profileChanged() { if (deviceProfiles) deviceProfiles.save(); }
   const bindings = InputBindings.create({
     onKeysChanged() { heldKeys.clear(); keyThrottleToggle = keyLookBackToggle = false; syncHeldKeys(); },
@@ -814,7 +815,7 @@ const Input = (function () {
       if (legacyAxes) setPadAxisMap(legacyAxes);
       if (legacyButtons) setPadMap(legacyButtons);
     }
-    const legacyWheel = !padAxesAreDefault();
+    legacyWheel = !padAxesAreDefault();
     deviceProfiles = ControllerProfiles.create({
       legacyMatches: (pad) => !legacyWheel || pad.mapping !== "standard",
       store: GameStore.store,
@@ -829,15 +830,29 @@ const Input = (function () {
   // Rest belongs to the device AND its steering axis/sign. Profile resets and
   // completed captures must not reuse an offset measured on a different axis.
   function invalidateAxisRest(id, previous) {
-    if (previous.steer === padAxisMap.steer && previous.steerInvert === padAxisMap.steerInvert) return;
+    if (previous && previous.steer === padAxisMap.steer && previous.steerInvert === padAxisMap.steerInvert) return;
     padRestMap.delete(id);
-    padRestLegacy = null; padRestOffset = 0;
+    if (!legacyWheelPending()) padRestLegacy = null;
+    padRestOffset = 0;
     if (typeof GameStore !== "undefined" && GameStore.store) GameStore.store.set("padRest", padRestStore());
   }
-  function resetControllerProfile() {
+  function legacyWheelPending() {
+    return legacyWheel && !deviceProfiles?.legacyClaimed();
+  }
+  function resetControllerProfile(clearRest = false) {
+    if (clearRest) {
+      const profiles = ensureDeviceProfiles();
+      if (!profiles) return null; // Legacy Input has no per-device reset.
+      const pad = activePad();
+      if (!pad) return false;
+      const selected = profiles.current();
+      // During a swap, wait for polling to update the displayed bindings.
+      if (selected && selected.id !== padIdOf(pad)) return false;
+      if (!selected) profiles.activate(pad);
+    }
     const current = deviceProfiles && deviceProfiles.current();
     if (!current) return false;
-    const previous = getPadAxisMap();
+    const previous = clearRest ? null : getPadAxisMap();
     if (!deviceProfiles.reset()) return false;
     invalidateAxisRest(current.id, previous);
     return true;
@@ -850,10 +865,14 @@ const Input = (function () {
      — makes every good pad worse to spare one bad one. */
   const padIdOf = (p) => String((p && p.id) || "").slice(0, 120);
   const restOk = (v) => typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= 0.5;
-  function restFor(p) {
+  function restFor(p, claim = true) {
     if (!p) return 0;
     const id = padIdOf(p);
-    if (padRestLegacy !== null) { if (!padRestMap.has(id)) padRestMap.set(id, padRestLegacy); padRestLegacy = null; }
+    if (padRestLegacy !== null && !legacyWheelPending()) {
+      if (!claim) return padRestMap.get(id) ?? padRestLegacy;
+      if (!padRestMap.has(id)) padRestMap.set(id, padRestLegacy);
+      padRestLegacy = null;
+    }
     return padRestMap.get(id) || 0;
   }
   function padCalibrationOwner() {
@@ -878,7 +897,7 @@ const Input = (function () {
   // The driving pad's offset (before any pad is seen, a pending legacy scalar).
   function padRest() {
     const p = activePad();
-    return p ? restFor(p) : (padRestLegacy !== null ? padRestLegacy : padRestOffset);
+    return p ? restFor(p, false) : (padRestLegacy !== null ? padRestLegacy : padRestOffset);
   }
   // What KeyBinds persists as apex26.padRest: {[padId]: offset}, 0 when none.
   // Axis-map / profile resets clear rest via invalidateAxisRest (no clearPadRest export).
@@ -1040,7 +1059,7 @@ const Input = (function () {
     const pad = activePad();
     if (!pad) return null;
     const axes = pad.axes || [];
-    const rest = padRestMap.get(padIdOf(pad)) || (padRestLegacy !== null ? padRestLegacy : 0);
+    const rest = restFor(pad, false);
     const wheel = !padStd(pad) && !padAxesAreDefault();
     const stick = padStick(axes, rest, wheel);
     const seen = Object.assign({}, padPedalSeen);

@@ -57,7 +57,7 @@ const ControllerProfiles = (function () {
       try { apply(defaults()); } finally { applying = false; }
       save(); return true;
     }
-    return { activate, save, reset, reload, replace, data: read,
+    return { activate, save, reset, reload, replace, data: read, legacyClaimed: () => legacyClaimed,
       current: () => current ? { id: current, label: current, saved, count: read().devices.length } : null };
   }
   const BUTTON_PRESETS = "controlButtonPresets";
