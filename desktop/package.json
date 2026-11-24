@@ -29,7 +29,7 @@
     "pack:test": "npm run stage && npm run sync-version && npm run prebuild && electron-builder --config electron-builder.config.cjs --dir -c.electronFuses.enableNodeCliInspectArguments=true"
   },
   "devDependencies": {
-    "electron": "45.3.2",
+    "electron": "45.4.1",
     "electron-builder": "26.18.0",
     "@playwright/test": "1.65.1",
     "playwright": "1.65.1",

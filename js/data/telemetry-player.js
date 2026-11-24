@@ -330,20 +330,28 @@ const DataTelemetryPlayer = (function () {
       if (view.playing) return;
       if (view.cursorT === null || view.cursorT >= view.tMax) view.cursorT = 0;
       view.playing = true; view._last = 0; setPlayLabel(view);
+      // A hidden tab may stop running callbacks entirely. Reset the clock on
+      // visibility changes so the first visible frame cannot count that gap.
+      view._resetPlaybackClock = () => { view._last = 0; };
+      document.addEventListener("visibilitychange", view._resetPlaybackClock);
       view._raf = requestAnimationFrame(function step(ts) {
         if (!view.playing) return;
-        if (!view._last) view._last = ts;
-        const dt = Math.min((ts - view._last) / 1000, 0.1); view._last = ts; // hidden-tab resume must not jump
-        let nt = (view.cursorT || 0) + dt * view.rate;
-        if (nt >= view.tMax) nt = 0;        // loop the lap
-        view.cursorT = nt;
-        paintFrame(view);
+        if (!document.hidden) {
+          const dt = view._last ? Math.max(0, (ts - view._last) / 1000) : 0;
+          view._last = ts;
+          let nt = (view.cursorT || 0) + dt * view.rate;
+          if (nt >= view.tMax) nt = 0;        // loop the lap
+          view.cursorT = nt;
+          paintFrame(view);
+        }
         view._raf = requestAnimationFrame(step);
       });
     }
     function pauseAnim(view) {
       if (!view.playing) return;
       view.playing = false;
+      document.removeEventListener("visibilitychange", view._resetPlaybackClock);
+      view._resetPlaybackClock = null;
       if (view._raf) { cancelAnimationFrame(view._raf); view._raf = 0; }
       setPlayLabel(view);
       if (view.updateSummary) view.updateSummary();

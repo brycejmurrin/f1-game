@@ -556,6 +556,39 @@ test("closing while readback is pending prevents an obsolete capture entering a 
   resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) });
   assert.equal(await pending, false); assert.equal(b.api.state().captured, false); assert.equal(b.api.state().busy, false);
 });
+test("Done frees an instant read before the next capture, even without another present", async () => {
+  const b = boot(), reads = [], cancelled = [];
+  let queued = null;
+  b.G.gfx.capturePixels = owner => {
+    if (queued) return Promise.reject(new Error("capture already pending"));
+    return new Promise(resolve => { queued = { owner, resolve }; reads.push(queued); });
+  };
+  b.G.gfx.cancelCapture = (_msg, owner) => {
+    cancelled.push(owner);
+    if (queued?.owner === owner) queued = null;
+  };
+  b.api.open();
+  const first = b.api.capture();
+  assert.equal(!!b.dom.byId("ps-body").inert, false, "instant capture does not use the sampled pass");
+  b.dom.byId("ps-close").click();
+  b.api.open({ source: "garage" });
+  const second = b.api.capture();
+  assert.equal(reads.length, 2, "the reopened visit has a queue slot before either read completes");
+  assert.deepEqual(cancelled, [reads[0].owner]);
+  assert.notEqual(reads[0].owner, reads[1].owner);
+  const pixels = { width: 4, height: 2, data: new Uint8ClampedArray(32) };
+  reads[0].resolve(pixels);
+  assert.equal(await first, false);
+  assert.equal(b.api.state().busy, true);
+  assert.equal(b.api.state().captured, false);
+  b.dom.byId("ps-close").click();
+  assert.deepEqual(cancelled, reads.map(read => read.owner), "the old completion did not clear the second read's cancellation");
+  assert.equal(await second, false);
+  b.api.open({ source: "garage" });
+  const third = b.api.capture();
+  queued.resolve(pixels);
+  assert.equal(await third, true);
+});
 test("a delayed save retains its original photo and cannot clear a reopened capture's busy state", async () => {
   let encode, read;
   const b = boot({ encode: (cb) => { encode = cb; } });
