@@ -52,10 +52,13 @@ function boot(options = {}) {
     cmd: (v) => { current = v; restored = v; },
   };
   const garage = { prepareCapture: options.prepareCapture, snapshot: () => ({ az: 1, spin: options.garageSpin ?? true }), shot: (v) => order.push("shot:" + v), restore: (v) => { restored = v; order.push("restore"); },
-    looks: options.looks, looked: options.looked };
+    looks: options.looks, looked: options.looked, currentFov: () => 36 };
   const scene = { value: options.homeScene || "photo" };
   const ltWrites = [], latchWrites = [];
-  const ctx = vm.createContext({ document: dom.document, window: { dispatchEvent: () => {}, addEventListener: () => {}, removeEventListener: () => {} },
+  const windowEvents = new Map();
+  const ctx = vm.createContext({ document: dom.document, window: { dispatchEvent: () => {},
+    addEventListener: (type, fn) => windowEvents.set(type, fn),
+    removeEventListener: (type, fn) => { if (windowEvents.get(type) === fn) windowEvents.delete(type); } },
     localStorage: { getItem: (k) => storage.get(k), setItem: (k, v) => { if (options.storageFull) throw new Error("Quota"); storage.set(k, v); }, removeItem: (k) => storage.delete(k) },
     CustomEvent: class {}, URL: { createObjectURL: () => "blob:photo", revokeObjectURL: () => {} },
     Log: { info: () => {}, warn: () => {} }, Tracks: { sample: (_t, s, out) => {
@@ -99,9 +102,77 @@ function boot(options = {}) {
   const PS = ctx.PhotoStudio, api = PS.create(G, { freeCam, garage, renderFrame: () => { order.push("draw"); options.renderSample?.(ctx.PhotoStudioBody.sampling); },
     ltStore: GAME_DEPS.has("ltStore") ? ltStore : undefined, ltSet: GAME_DEPS.has("ltSet") ? ltStore.set : undefined,
     borrowCar: options.borrowCar ? () => options.borrowCar(G) : undefined });
-  return { api, PS, dom, order, downloads, canvasOps, G, storage, scene, LT, ltProfiles, ltWrites, latchWrites,
+  return { api, PS, dom, order, downloads, canvasOps, G, storage, scene, LT, ltProfiles, ltWrites, latchWrites, windowEvents,
     closed: () => closed, restored: () => restored, overlays: () => overlays };
 }
+
+test("garage and race lens controls keep POV independent and pass the same focus to capture", async () => {
+  let capturedLens, b;
+  b = boot({ renderSample: () => { capturedLens = b.PS.lens(); } });
+  b.G.gfx.photoFocusAvailable = () => true;
+  b.G.gfx.aspect = 2;
+  b.G.canvas.getBoundingClientRect = () => ({ left: 20, top: 40, width: 900, height: 450 });
+  const send = (type, x, y, extras) => b.windowEvents.get(type)({
+    isPrimary: true, pointerId: 3, button: 0, target: b.G.canvas, clientX: x, clientY: y, ...extras,
+  });
+  const reticle = b.dom.byId("ps-focus-reticle"), slider = b.dom.byId("ps-focal-length");
+  const auto = b.dom.byId("ps-focus-auto"), status = b.dom.byId("ps-focus-status");
+  const depth = b.dom.byId("ps-depth-focus");
+  // Depth focus ships opt-in: a tap does nothing until the toggle is on.
+  assert.equal(b.api.open({ source: "home" }), true);
+  assert.equal(depth.value, "off");
+  assert.match(status.textContent, /Depth focus is off/);
+  send("pointerdown", 245, 130); send("pointerup", 245, 130);
+  assert.equal(b.PS.lens().focus, null);
+  assert.equal(reticle.hidden, true);
+  depth.value = "on"; b.dom.dispatch(depth, { type: "change" });
+  assert.equal(b.storage.get("apex26.photoDepthFocus"), "1");
+  b.api.close(false);
+  for (const [source, initial] of [["home", "28"], ["race", "16"]]) {
+    assert.equal(b.api.open({ source }), true);
+    assert.equal(depth.value, "on");
+    assert.equal(slider.value, initial);
+    const commands = b.order.slice(), pose = b.restored();
+    slider.value = "80"; b.dom.dispatch(slider, { type: "input" });
+    assert.equal(b.PS.lens().mm, 80);
+    assert.deepEqual(b.order, commands);
+    assert.equal(b.restored(), pose);
+    assert.equal(b.PS.focalMm(b.PS.focalFov(80, 2), 2), 80);
+    assert.ok(b.PS.focalFov(80, 2) < b.PS.focalFov(24, 2));
+
+    send("pointerdown", 245, 130, { target: slider }); send("pointerup", 245, 130);
+    send("pointerdown", 245, 130); send("pointermove", 275, 130); send("pointerup", 245, 130);
+    send("pointerdown", 245, 130); send("pointercancel", 245, 130); send("pointerup", 245, 130);
+    send("pointerdown", 245, 130); send("pointerdown", 251, 131, { isPrimary: false, pointerId: 4 }); send("pointerup", 245, 130);
+    assert.equal(b.PS.lens().focus, null);
+    assert.equal(reticle.hidden, true);
+    for (const pointerType of ["mouse", "touch"]) {
+      send("pointerdown", 245, 130, { pointerType }); send("pointerup", 245, 130, { pointerType });
+      assert.deepEqual({ ...b.PS.lens().focus }, { x: 0.25, y: 0.8 });
+    }
+    assert.equal(reticle.hidden, false);
+    assert.equal(status.textContent, "Focus distance locked.");
+    const lock = b.PS.lens().focus;
+    assert.equal(await b.api.capture(), true);
+    assert.equal(capturedLens.focus, lock);
+    assert.equal(capturedLens.mm, 80);
+    b.dom.dispatch(auto, { type: "click" });
+    assert.equal(b.PS.lens().focus, null);
+    assert.equal(reticle.hidden, true);
+    b.api.close(false);
+    assert.equal(b.PS.lens(), null);
+    assert.equal(b.windowEvents.has("pointerdown"), false);
+  }
+  b.G.gfx.photoFocusAvailable = () => false;
+  b.api.open({ source: "home" });
+  assert.match(status.textContent, /unavailable/);
+  send("pointerdown", 245, 130); send("pointerup", 245, 130);
+  assert.equal(b.PS.lens().focus, null);
+  assert.equal(auto.disabled, true);
+  b.G.gfx.photoFocusAvailable = () => true;
+  assert.equal(b.PS.lens().focus, null, "a garage renderer that becomes ready starts in auto focus");
+  assert.match(status.textContent, /Tap or click/);
+});
 
 test("visor capture snapshots the rendered pose before asynchronous readback", async () => {
   let resolve, painted;
@@ -555,6 +626,39 @@ test("closing while readback is pending prevents an obsolete capture entering a 
   b.api.open(); const pending = b.api.capture(); b.api.close(false); b.api.open({ source: "garage" });
   resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) });
   assert.equal(await pending, false); assert.equal(b.api.state().captured, false); assert.equal(b.api.state().busy, false);
+});
+test("Done frees an instant read before the next capture, even without another present", async () => {
+  const b = boot(), reads = [], cancelled = [];
+  let queued = null;
+  b.G.gfx.capturePixels = owner => {
+    if (queued) return Promise.reject(new Error("capture already pending"));
+    return new Promise(resolve => { queued = { owner, resolve }; reads.push(queued); });
+  };
+  b.G.gfx.cancelCapture = (_msg, owner) => {
+    cancelled.push(owner);
+    if (queued?.owner === owner) queued = null;
+  };
+  b.api.open();
+  const first = b.api.capture();
+  assert.equal(!!b.dom.byId("ps-body").inert, false, "instant capture does not use the sampled pass");
+  b.dom.byId("ps-close").click();
+  b.api.open({ source: "garage" });
+  const second = b.api.capture();
+  assert.equal(reads.length, 2, "the reopened visit has a queue slot before either read completes");
+  assert.deepEqual(cancelled, [reads[0].owner]);
+  assert.notEqual(reads[0].owner, reads[1].owner);
+  const pixels = { width: 4, height: 2, data: new Uint8ClampedArray(32) };
+  reads[0].resolve(pixels);
+  assert.equal(await first, false);
+  assert.equal(b.api.state().busy, true);
+  assert.equal(b.api.state().captured, false);
+  b.dom.byId("ps-close").click();
+  assert.deepEqual(cancelled, reads.map(read => read.owner), "the old completion did not clear the second read's cancellation");
+  assert.equal(await second, false);
+  b.api.open({ source: "garage" });
+  const third = b.api.capture();
+  queued.resolve(pixels);
+  assert.equal(await third, true);
 });
 test("a delayed save retains its original photo and cannot clear a reopened capture's busy state", async () => {
   let encode, read;

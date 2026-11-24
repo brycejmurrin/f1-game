@@ -36,7 +36,7 @@
 }
 #drag-anchor[data-steering-guide="wheel"] > span { display: none; }
 /* Quarter-travel ticks sit inside the captured control, clear of its label.
-   The longer center tick marks half pressure in either direction. */
+   The longer center tick marks the midpoint of the physical control. */
 [data-touch-edge] { contain: layout; }
 [data-pedal-ticks] {
   position: absolute; inset: 0; pointer-events: none;
@@ -51,4 +51,18 @@
               var(--tick) 75% 84% / 2px 10% no-repeat;
 }
 [aria-pressed] > [data-pedal-ticks] { display: none; }
+
+/* Explicit directions override the default upward fill, including the
+   unlayered default in the phone page. Only active bars opt into this. */
+:is([data-touch-feedback="on"], #gas.on, #brake.on)[data-touch-indicator="bar"][data-touch-fill-direction]::after {
+  --touch-pressure: var(--touch-level, var(--travel, 0));
+  transform-origin: var(--touch-fill-origin, top) !important;
+  transform: scale(var(--touch-fill-x, 1), var(--touch-fill-y, var(--touch-pressure))) !important;
+}
+[data-touch-fill-direction="left"] { --touch-fill-origin: right; }
+[data-touch-fill-direction="right"] { --touch-fill-origin: left; }
+:is([data-touch-fill-direction="left"], [data-touch-fill-direction="right"])::after {
+  --touch-fill-x: var(--touch-pressure);
+  --touch-fill-y: 1;
+}
 }

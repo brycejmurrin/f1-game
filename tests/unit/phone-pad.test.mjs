@@ -91,12 +91,12 @@ function bootInput() {
   for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"])
     vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
-  let paused = 0;
-  Input.init(el(), { onPause: () => { paused++; } });
+  let paused = 0, lost = 0;
+  Input.init(el(), { onPause: () => { paused++; }, onPadLost: () => { lost++; } });
   Input.reset();
   const key = (k, down) => (listeners[down ? "keydown" : "keyup"] || [])
     .forEach((f) => f({ key: k, code: k, repeat: false, preventDefault() {}, target: { tagName: "BODY" } }));
-  return { Input, key, clock, vibrated, pausedCount: () => paused, sb, keys };
+  return { Input, key, clock, vibrated, pausedCount: () => paused, lostCount: () => lost, sb, keys };
 }
 
 // Timers pad() can be handed instead of the wall clock (its `timers` seam).
@@ -296,6 +296,58 @@ test("RECALIBRATE zeroes the phone's current roll, and the roll is what debugSta
   assert.equal(Input.debugState().remote.active, true);
 });
 
+test("RECALIBRATE falls back to fresh host tilt only on the paused touch host", async (t) => {
+  const cases = [
+    { name: "paused host with fresh local tilt", paused: true, local: true, calibrates: true },
+    { name: "paused host without fresh local tilt", paused: true, local: false, calibrates: false },
+    { name: "paused keyboard host with fresh local tilt", paused: true, touchHost: false, local: true, calibrates: false },
+    { name: "title menu with only stale phone tilt", paused: false, local: true, calibrates: false },
+    { name: "title menu with fresh phone tilt", paused: false, phoneFresh: true, calibrates: true },
+    { name: "paused host with fresh phone tilt", paused: true, phoneFresh: true, calibrates: true },
+  ];
+  for (const { name, paused, touchHost = true, local, phoneFresh, calibrates } of cases) await t.test(name, async () => {
+    const { Input, clock, sb } = bootInput();
+    const dom = makeDom(), timers = fakeTimers();
+    const G = { $: dom.byId, els: {}, store: {}, state: paused ? "race" : "menu", paused, getSteerMode: () => "tilt" };
+    const resumes = [];
+    Object.assign(sb, {
+      G, document: dom.document, DeviceOrientationEvent: {},
+      matchMedia: () => ({ matches: touchHost, addEventListener() {} }),
+      setTimeout: timers.setTimeout, clearTimeout: timers.clearTimeout,
+      deps: { setPaused(value, reason) { G.paused = value; resumes.push(reason); } },
+    });
+    vm.runInContext(read("js/ui/platform-session.js"), sb, { filename: absSrc("js/ui/platform-session.js") });
+    const platform = vm.runInContext("PlatformSession.create(G, deps)", sb);
+    platform.wirePhone();
+    Input.setSteerMode("tilt");
+    await Input.requestGyro();
+    const originalCalibrate = Input.calibrate;
+    let calibrations = 0;
+    Input.calibrate = () => { calibrations++; originalCalibrate(); };
+    clock.t = 10;
+    Input.remoteSample({ source: "phone", roll: 15, thr: 0, brk: 0, held: 0, seq: 0 });
+    if (!phoneFresh) clock.t += 710;
+    if (local) {
+      for (let frame = 0; frame < 60; frame++) {
+        clock.t += 16;
+        sb.dispatchEvent({ type: "deviceorientation", beta: 0, gamma: -30 });
+        Input.steer(0.016);
+      }
+      assert.ok(Input.steer(0.016) < -0.8, "the local sensor owns steering after phone samples expire");
+    }
+    platform.paintTiltCalibration();
+    const button = dom.byId("pm-calib");
+    assert.equal(button.disabled, false);
+    button.onclick();
+    clock.t += 300;
+    timers.advance(300);
+    assert.equal(Input.remoteActive(), !!phoneFresh);
+    assert.equal(calibrations, calibrates ? 1 : 0);
+    if (calibrates) assert.equal(Input.steer(0.016), 0);
+    assert.deepEqual(resumes, paused && calibrates ? ["recalibrate"] : []);
+  });
+});
+
 test("current phone pedals keep the configured pressure at the host", () => {
   const { Input, phone, frame } = pair();
   frame();
@@ -328,20 +380,37 @@ test("legacy phone samples and XR keep their raw pedal dead zone", () => {
   assert.equal(Input.brakeLevel(), 0);
 });
 
-test("a phone sends calibrated pedals only to a host that advertises support", () => {
+test("a phone negotiates calibrated pedals and versioned camera input independently", () => {
   let receive;
+  let camera = { moveX: 0.2, moveY: -0.1, lookX: 0.3, lookY: -0.4, lift: 1 };
   const wire = [];
   const transport = {
     status: "open", onMessage(fn) { receive = fn; }, onClose() {},
     send(channel, text) { if (channel === NetTransport.STATE) wire.push(JSON.parse(text)); return true; },
   };
-  const session = PhonePad.padSession(transport, { roll: () => 30, steer: () => -0.4, thr: () => 0.2, brk: () => 0.05, held: () => 0 }, { heartbeat: false });
+  const session = PhonePad.padSession(transport, { roll: () => 30, steer: () => -0.4, thr: () => 0.2, brk: () => 0.05, held: () => 0, camera: () => camera }, { heartbeat: false });
   receive(NetTransport.EVENT, '{"t":"hi","side":"host","p":1,"steer":true,"ack":true}');
   session.sample(true);
   receive(NetTransport.EVENT, PhonePad.encodeHello("host", false, true));
   session.sample(true);
-  assert.deepEqual(wire, [[2, 0, null, 0.2, 0.05, 0, -0.4], [3, 1, null, 0.2, 0.05, 0, -0.4]]);
+  receive(NetTransport.EVENT, '{"t":"hi","side":"host","p":1,"steer":true,"camera":true,"calibratedPedals":true}');
+  session.sample(true);
+  const hello = PhonePad.encodeHello("host", false, true, undefined, true);
+  assert.equal(JSON.parse(hello).camera, 4);
+  receive(NetTransport.EVENT, hello);
+  session.sample(true);
+  assert.deepEqual(PhonePad.decodeSample(JSON.stringify(wire[3])).camera, camera);
+  camera = null;
+  session.sample(true);
+  assert.deepEqual(wire, [
+    [2, 0, null, 0.2, 0.05, 0, -0.4],
+    [3, 1, null, 0.2, 0.05, 0, -0.4],
+    [3, 2, null, 0.2, 0.05, 0, -0.4],
+    [4, 3, 0.2, -0.1, 0.3, -0.4, 1],
+    [3, 4, null, 0.2, 0.05, 0, -0.4],
+  ]);
   assert.equal(PhonePad.decodeSample(JSON.stringify(wire[1])).calibratedPedals, true);
+  assert.equal(PhonePad.decodeSample("[3,0,0.2,-0.1,0.3,-0.4,1]"), null, "old camera samples cannot become pedals");
   assert.equal(PhonePad.decodeSample('[3,0,null,0,0,0,"invalid"]'), null);
 });
 
@@ -558,6 +627,23 @@ test("the dash reaches the phone ~15 Hz on the unreliable channel and paints the
   assert.equal(el.pos.textContent, "DNF");
 });
 
+test("a phone without HUD ordering keeps the previous packet shape", () => {
+  const [padEnd, hostEnd] = NetTransport.loopback({ latencyMs: 0 });
+  padEnd.pump(0); hostEnd.pump(0);
+  const received = [];
+  padEnd.onMessage((channel, data) => { if (channel === NetTransport.STATE) received.push(JSON.parse(data)); });
+  const { Input } = bootInput();
+  const link = PhonePad.link(hostEnd, { input: Input, pump: false, now: () => 0,
+    hud: () => ({ state: "race", surface: "camera" }) });
+  try {
+    padEnd.send(NetTransport.EVENT, PhonePad.encodeHello("pad", false, true, undefined, true));
+    link.pump();
+    padEnd.pump(0);
+    assert.equal(received[0].length, 16, "a camera-compatible legacy peer still gets the original surface frame");
+    assert.equal(PhonePad.decodeHud(JSON.stringify(received[0])).surface, "camera");
+  } finally { link.close(); }
+});
+
 test("the LCD says Q / PRAC where the race HUD does, not a race position (R2-08)", () => {
   const D = PhonePad.DASH, el = lcd();
   const base = { gear: 3, kmh: 100, rpm: 0.5, lap: 1, laps: 1, pos: 1, cars: 1, ers: 0.5, flags: 0, caution: 0, lastLapMs: 0, state: "race", team: "" };
@@ -692,6 +778,41 @@ test("menu pad: the phone's nav events land on the gamepad's menu seam (arrows, 
   Input.remoteEvent("navBack"); assert.equal(keys.at(-1), "btn:Escape", "BACK is Escape on a plain layer");
   layer.tagName = "DIALOG"; Input.remoteEvent("navBack"); assert.equal(keys.at(-1), "layer:cancel", "and the cancel seam on a <dialog>");
   assert.equal(Input.remoteEvent("navSideways"), false, "an unknown nav name is refused");
+});
+
+test("losing a standby phone or gamepad leaves the active driver in control", () => {
+  const { Input, sb, clock, key, lostCount } = bootInput();
+  const pad = { id: "DualSense", index: 0, connected: true, mapping: "standard", axes: [0.75, 0, 0, 0],
+    buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
+  let pads = [pad];
+  sb.navigator.getGamepads = () => pads;
+  sb.UiLayers = { inRace: () => true, anyOpen: () => false, navOpen: () => false };
+  clock.t = 1000;
+  Input.remoteSample({ source: "phone", thr: 0, brk: 0, held: 0 });
+  Input.poll();
+  assert.ok(Input.steer() > 0.5, "the physical pad is driving");
+  clock.t += 710;
+  Input.poll();
+  assert.equal(lostCount(), 0, "standby phone timeouts do not pause");
+
+  pad.axes[0] = 0;
+  Input.poll();
+  Input.remoteSample({ source: "phone", steer: 0.75, thr: 1, brk: 0, held: 0 });
+  pads = [];
+  sb.dispatchEvent({ type: "gamepaddisconnected", gamepad: pad });
+  assert.ok(Input.throttle(), "phone control survives the physical disconnect");
+  assert.equal(lostCount(), 0, "standby gamepad removal does not pause");
+  Input.poll();
+  clock.t += 710;
+  Input.poll();
+  assert.equal(lostCount(), 1, "losing the active phone still pauses");
+
+  key("ArrowLeft", true);
+  Input.remoteSample({ source: "phone", thr: 0, brk: 0, held: 0 });
+  Input.poll();
+  clock.t += 710;
+  Input.poll();
+  assert.equal(lostCount(), 1, "a local keyboard driver can also survive standby phone loss");
 });
 
 // ---------------------------------------------------------------------------
@@ -1414,7 +1535,8 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   // every wheel element owns its touches; the canceller mirrors index.html's;
   // portrait shows the TURN card instead of a squeezed grid; the lock rides
   // the CONNECT tap behind fullscreen (Android), best effort.
-  assert.match(page, /#ctl, #ctl \*, #menupad, #menupad \* \{ touch-action: none; \}/, "every wheel and pad element refuses browser gestures");
+  assert.match(page, /#ctl, #ctl \*, #menupad, #menupad \*, #camera-pad, #camera-pad \* \{ touch-action: none; \}/,
+    "every driving, menu and camera control refuses browser gestures");
   for (const ev of ["gesturestart", "gesturechange", "gestureend", "dblclick", "touchend"]) {
     assert.match(page, new RegExp(`document\\.addEventListener\\("${ev}"`), `the ${ev} canceller`);
   }
@@ -2276,6 +2398,35 @@ test("menu stick survives WebKit capture transfer but releases when hidden", () 
   }
 });
 
+test("phone camera sticks track retargeted pointers without applying an event twice", () => {
+  const previous = globalThis.document, listeners = {}, writes = [];
+  globalThis.document = { addEventListener(type, fn) { (listeners[type] ||= []).push(fn); } };
+  const move = fakeEl(), look = fakeEl(), moveNub = { style: { set translate(value) { writes.push(value); } } };
+  move.getClientRects = () => [{}];
+  const cameraPad = { move, look, moveNub, up: fakeEl(), down: fakeEl(), back: fakeEl(), panel: fakeEl(), return: fakeEl() };
+  const ctl = PhonePad.pad({ cameraPad });
+  try {
+    move.dispatch("pointerdown", { pointerId: 21, clientX: 100, clientY: 200 });
+    const moveEvent = { pointerId: 21, clientX: 0, clientY: 200, target: move };
+    for (const fn of listeners.pointermove || []) fn(moveEvent);
+    move.dispatch("pointermove", moveEvent);
+    assert.deepEqual(writes, ["60% 0%", "-60% 0%"], "one update per move");
+
+    look.dispatch("pointerdown", { pointerId: 22, clientX: 50, clientY: 200 });
+    move.dispatch("lostpointercapture", { pointerId: 21 });
+    const retargeted = { pointerId: 21, clientX: 50, clientY: 100, target: look };
+    for (const fn of listeners.pointermove || []) fn(retargeted);
+    assert.equal(writes.at(-1), "0% -60%", "retargeting the first finger to the other stick still updates its axis");
+    for (const fn of listeners.pointerup || []) fn({ pointerId: 22 });
+    assert.equal(writes.at(-1), "0% -60%", "the second finger's release leaves the first alone");
+    for (const fn of listeners.pointerup || []) fn({ pointerId: 21 });
+    assert.equal(writes.at(-1), "0% 0%", "an outside release centers the first stick");
+  } finally {
+    ctl.cancel();
+    if (previous === undefined) delete globalThis.document; else globalThis.document = previous;
+  }
+});
+
 test("phone controls ignore secondary mouse presses while keeping primary and touch input", () => {
   const dom = { gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(), stick: fakeEl(), buttons: { navDown: fakeEl() } };
   const timers = fakeTimers();
@@ -2656,7 +2807,7 @@ test("#5739 row 4: pagehide on a LINKED controller sends suspend, and pageshow r
   const h = wakePad({
     rtc: () => {
       let onClose;
-      const t = { status: "open", sent: [], send(ch, d) { t.sent.push(d); return true; }, pump() {}, onMessage() {}, onOpen() {}, onClose(f) { onClose = f; },
+      const t = { status: "open", sent: [], send(ch, d) { t.sent.push(d); return true; }, pump() {}, onMessage(f) { t.receive = f; }, onOpen() {}, onClose(f) { onClose = f; },
         close() { if (t.status === "closed") return; t.status = "closed"; if (onClose) onClose("local"); } };
       wires.push(t); return t;
     },
@@ -2664,6 +2815,9 @@ test("#5739 row 4: pagehide on a LINKED controller sends suspend, and pageshow r
   });
   await h.ctl.connect("ABC234");
   assert.equal(h.ctl.state().linked, true);
+  const hello = PhonePad.encodeHello("host", false, true);
+  wires[0].receive(NetTransport.EVENT, hello);
+  assert.equal(h.ctl.setSteeringMode("touch"), true);
   h.fire("pagehide");
   assert.ok(wires[0].sent.includes('{"t":"sus"}'), "the game is told this is a suspend, not an unpair");
   assert.equal(wires[0].status, "closed");
@@ -2673,6 +2827,9 @@ test("#5739 row 4: pagehide on a LINKED controller sends suspend, and pageshow r
   h.fire("pageshow"); await settle();
   assert.deepEqual(swaps, ["ABC234", "ABC234"], "the same code, no CONNECT tap");
   assert.equal(h.ctl.state().linked, true);
+  wires[1].receive(NetTransport.EVENT, hello);
+  assert.equal(h.ctl.state().steeringMode, "touch", "the same link keeps its selected steering");
+  assert.equal(h.ctl.state().steer, 0, "the steering contact from before suspend is gone");
   h.ctl.cancel();
 });
 
@@ -2902,13 +3059,16 @@ test("the phone's surface follows the game's screen from the first frame it is a
   const [padEnd, hostEnd] = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(21) });
   padEnd.pump(0); hostEnd.pump(0);
   const clock = desk.clock;
-  const screen = { state: "menu", paused: false };
+  const screen = { state: "menu", paused: false, layer: undefined };
+  desk.sb.document.body.classList.contains = (name) => name === "photo-mode" && screen.layer === "photo-studio";
+  desk.sb.UiLayers = { inRace: () => screen.state === "race", navOpen: () => !!screen.layer, top: () => ({ id: screen.layer }) };
   const dashOf = () => ({ gear: 0, kmh: 0, rpm: 0, lap: 0, laps: 0, pos: 0, cars: 0, ers: 0, flags: screen.paused ? PhonePad.DASH.paused : 0,
-    caution: 0, lastLapMs: 0, state: screen.state, team: "" });
+    caution: 0, lastLapMs: 0, state: screen.state, team: "", surface: screen.paused && !screen.layer ? "menu" : desk.Input.remoteControlContext() });
   let allow;
   const link = PhonePad.link(hostEnd, { input: desk.Input, pump: false, now: () => clock.t, hud: dashOf, doc: null,
     admit: () => new Promise((r) => { allow = r; }) });
-  const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), buttons: {}, hud: lcd() };
+  const cameraPad = { move: fakeEl(), look: fakeEl(), up: fakeEl(), down: fakeEl(), back: fakeEl(), panel: fakeEl(), return: fakeEl() };
+  const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), buttons: {}, hud: lcd(), cameraPad };
   const ctl = PhonePad.pad(dom, { now: () => clock.t, timers: fakeTimers(), deps: {
     rtc: () => padEnd, prefetchIce: async () => null, normalise: (c) => String(c).toUpperCase(), valid: (c) => c.length === 6,
     swap: async (o) => { const ans = await o.reply("OFFER"); return ans ? { ok: true } : { ok: false, error: "reply_failed" }; },
@@ -2928,6 +3088,34 @@ test("the phone's surface follows the game's screen from the first frame it is a
     screen.state = "race";
     for (let i = 0; i < 8; i++) frame();
     assert.ok(!dom.hud.body.classes.has("menu"), "a race starts: the wheel");
+    const drivingHud = ctl.state().hud;
+    screen.layer = "rotate-device";
+    for (let i = 0; i < 8; i++) frame();
+    assert.ok(dom.hud.body.classes.has("menu"), "host overlays can own input without pausing the race");
+    screen.layer = "photo-studio";
+    for (let i = 0; i < 8; i++) frame();
+    assert.ok(dom.hud.body.classes.has("camera-pad"), "the host's free camera selects the camera controls");
+    cameraPad.move.dispatch("pointerdown", { clientX: 100, clientY: 200 });
+    cameraPad.look.dispatch("keydown", { key: "ArrowUp" });
+    cameraPad.up.dispatch("keydown", { key: " " });
+    for (let i = 0; i < 3; i++) frame();
+    assert.deepEqual(desk.Input.remoteCamera(), { moveX: 1, moveY: 0, lookX: 0, lookY: -1, lift: 1 });
+    assert.ok(ctl.state().hud.hudSeq > drivingHud.hudSeq, "the negotiated host numbers its HUD packets");
+    for (const sequence of [drivingHud.hudSeq, undefined]) {
+      const lateDash = PhonePad.encodeHud(drivingHud, true, true, sequence);
+      padEnd._emit("message", NetTransport.STATE, lateDash);
+      assert.ok(dom.hud.body.classes.has("camera-pad"), "an older or pre-negotiation dash cannot switch away from the camera");
+    }
+    for (let i = 0; i < 3; i++) frame();
+    assert.equal(desk.Input.remoteCamera().moveX, 1, "stale dash delivery cannot release held camera controls");
+    assert.equal(desk.Input.throttle(), false, "camera motion cannot drive");
+    screen.layer = "rotate-device";
+    assert.equal(desk.Input.remoteCamera(), null, "a host layer change invalidates held camera movement immediately");
+    for (let i = 0; i < 8; i++) frame();
+    screen.layer = "photo-studio";
+    for (let i = 0; i < 8; i++) frame();
+    assert.deepEqual(desk.Input.remoteCamera(), { moveX: 0, moveY: 0, lookX: 0, lookY: 0, lift: 0 }, "camera contacts do not survive a mode round trip");
+    screen.layer = undefined;
     screen.paused = true;
     for (let i = 0; i < 8; i++) frame();
     assert.ok(dom.hud.body.classes.has("menu"), "paused: the menu pad drives the pause menu");
@@ -3007,6 +3195,44 @@ test("paired absolute brake uses its full physical length and releases immediate
     assert.equal(boundsReads, 1);
     sample("pointerup", 120);
     assert.equal(ctl.state().brk, 0);
+  } finally { ctl?.cancel(); PedalTravel.resetButtonProfile("brake"); }
+});
+
+test("phone pedal output and fill meter follow the configured absolute curve", () => {
+  const dom = { gas: fakeEl(), brake: fakeEl() };
+  dom.brake.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 });
+  let ctl;
+  try {
+    PedalTravel.setButtonProfile("brake", { sliderEdge: "left", sliderStart: 83, sliderEnd: 19, sliderCurve: "fine",
+      indicator: "bar", fillDirection: "right", idleColor: "blue", pressedColor: "purple", brightness: 70 });
+    ctl = PhonePad.pad(dom);
+    const sample = (type, clientX) => dom.brake.dispatch(type, { pointerId: 8, clientX, clientY: 50 });
+    assert.equal(dom.brake.attrs["data-touch-fill-direction"], "right");
+    assert.equal(dom.brake.style["--touch-custom-idle"], "var(--zone)");
+    assert.equal(dom.brake.style["--touch-custom-pressed"], "var(--sec-best)");
+    assert.equal(dom.brake.style["--touch-brightness"], "70%");
+    for (const [type, x, value] of [["pointerdown", 100, 0.83], ["pointermove", 50, 0.67], ["pointermove", 0, 0.19], ["pointerup", 0, 0]]) {
+      sample(type, x);
+      assert.equal(ctl.state().brk, value);
+      assert.equal(Number(dom.brake.style["--travel"]), value);
+    }
+  } finally { ctl?.cancel(); PedalTravel.resetButtonProfile("brake"); }
+});
+
+test("phone pressure feedback matches the encoded sample at a half-percent midpoint", () => {
+  const dom = { brake: fakeEl() };
+  dom.brake.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 });
+  let ctl;
+  try {
+    PedalTravel.setButtonProfile("brake", { sliderEdge: "right", sliderStart: 1, sliderEnd: 34, indicator: "percent" });
+    ctl = PhonePad.pad(dom);
+    dom.brake.dispatch("pointerdown", { pointerId: 8, clientX: 0, clientY: 50 });
+    dom.brake.dispatch("pointermove", { pointerId: 8, clientX: 50, clientY: 50 });
+    const brk = ctl.state().brk;
+    assert.equal(brk, 0.175, "display rounding does not alter the local response");
+    const sent = PhonePad.decodeSample(PhonePad.encodeSample({ seq: 1, brk, thr: 0, held: 0 }));
+    assert.equal(sent.brk, 0.18);
+    assert.equal(Number(dom.brake.style["--travel"]), sent.brk);
   } finally { ctl?.cancel(); PedalTravel.resetButtonProfile("brake"); }
 });
 

@@ -14,7 +14,7 @@ let live = null, samplePass = null;
 function capturePass(count) {
   let projection, view, width, height;
   return {
-    index: 0, draws: 0, pump: false, cancelRead: null, garageTime: null,
+    index: 0, draws: 0, pump: false, garageTime: null,
     project(p, v, w, h) {
       if (!projection) {
         projection = p.slice(); view = v.slice(); width = w; height = h;
@@ -155,6 +155,11 @@ function create(G, deps) {
     }
   }
   const st = { open: false, source: "race", aspect: "wide", highRes: false, samples: 1, grid: "thirds", postcard: false, busy: false, closing: false, metadata: {}, back: null, snapshot: null, borrowed: null, generation: 0, subject: null };
+  const lens = { mm: null, focus: null };
+  let sceneTap = null, reticleTimer = null, lastFocusAvailable = false;
+  // Depth focus is opt-in (default off) until it is verified on real GPUs.
+  const DEPTH_KEY = "apex26.photoDepthFocus";
+  let depthFocus = (() => { try { return localStorage.getItem(DEPTH_KEY) === "1"; } catch (_) { return false; } })();
   const E = {}, session = [];
   let last = null, raw = null, capturedOptions = null, focus = null, libraryPaint = 0, releaseCar = null, downloading = false;
   const mk = (tag, props, kids) => {
@@ -180,6 +185,79 @@ function create(G, deps) {
   const importFile = mk("input", { id: "ps-import", type: "file", accept: "image/png,image/jpeg,image/webp", attrs: { "aria-label": "Import a personal photo" } });
   importFile.addEventListener("change", () => importPhoto(importFile.files && importFile.files[0]));
   const group = (id, title, kids) => mk("section", { id: "ps-group-" + id, attrs: { "aria-label": title } }, [mk("h3", { className: "adv-sec", textContent: title }), ...kids]);
+  const reticle = mk("div", { id: "ps-focus-reticle", hidden: true, attrs: { "aria-hidden": "true" } });
+  const focalInput = mk("input", { id: "ps-focal-length", type: "range", min: "8", max: "135", step: "1" });
+  const focalValue = mk("output", { attrs: { for: "ps-focal-length" } });
+  const resetLens = button("RESET LENS", () => { lens.mm = null; paintFocal(); });
+  const autoFocus = button("AUTO FOCUS", () => { lens.focus = null; hideReticle(); paintFocus(); }, "ps-focus-auto");
+  const focusHint = mk("p", { id: "ps-focus-status", className: "adv-help", attrs: { role: "status" } });
+  const depthRow = select("Depth focus", [["off", "Off"], ["on", "On"]], () => depthFocus ? "on" : "off", (v) => {
+    depthFocus = v === "on";
+    try { localStorage.setItem(DEPTH_KEY, depthFocus ? "1" : "0"); } catch (_) { /* private mode: session only */ }
+    if (!depthFocus) { lens.focus = null; sceneTap = null; hideReticle(); }
+    paintFocus();
+  }, "ps-depth-focus");
+  focalInput.addEventListener("input", () => { lens.mm = +focalInput.value; paintFocal(); });
+  function paintFocal() {
+    const fov = isGarage() ? deps.garage?.currentFov?.() || 36 : G.dbgCam?.fov || G.photoCam?.fov || 60;
+    const stockMm = Math.max(1, Math.round(PhotoStudio.focalMm(fov * Math.PI / 180, G.gfx?.aspect || 16 / 9)));
+    const mm = lens.mm ?? stockMm;
+    focalInput.min = String(Math.min(8, stockMm, mm));
+    focalInput.max = String(Math.max(135, stockMm, mm));
+    focalInput.value = String(mm);
+    focalValue.textContent = mm + " mm";
+  }
+  function focusAvailable() { return depthFocus && !!G.gfx?.photoFocusAvailable?.(); }
+  function paintFocus(available = focusAvailable()) {
+    lastFocusAvailable = available;
+    autoFocus.disabled = !available || st.busy || st.closing || !lens.focus;
+    focusHint.textContent = !depthFocus ? "Depth focus is off. Turn it on to tap or click the scene to set focus."
+      : !available ? "Depth of field is unavailable on this renderer."
+      : lens.focus ? "Focus distance locked." : "Auto focus. Tap or click the scene to set focus.";
+  }
+  function hideReticle() {
+    clearTimeout(reticleTimer);
+    reticle.hidden = true;
+  }
+  function sceneBounds(target) {
+    if (target !== G.canvas || !G.canvas) return null;
+    const rect = G.canvas.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 ? rect : null;
+  }
+  function beginTap(e) {
+    if (sceneTap) { sceneTap = null; return; }
+    if (!depthFocus || !e.isPrimary || e.button !== 0 || st.busy || st.closing || !sceneBounds(e.target)) return;
+    sceneTap = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  }
+  function moveTap(e) {
+    if (sceneTap && e.pointerId === sceneTap.id && Math.hypot(e.clientX - sceneTap.x, e.clientY - sceneTap.y) > 6) sceneTap = null;
+  }
+  function cancelTap(e) { if (sceneTap?.id === e.pointerId) sceneTap = null; }
+  function finishTap(e) {
+    moveTap(e);
+    if (!sceneTap || sceneTap.id !== e.pointerId) return;
+    sceneTap = null;
+    const rect = sceneBounds(e.target);
+    if (st.busy || st.closing || !rect || !focusAvailable()) { paintFocus(); return; }
+    // Touch implicitly captures the canvas, even if release is over the sheet.
+    const hit = document.elementFromPoint?.(e.clientX, e.clientY);
+    if (hit && hit !== G.canvas) return;
+    const x = (e.clientX - rect.left) / rect.width, y = (e.clientY - rect.top) / rect.height;
+    if (x < 0 || x >= 1 || y < 0 || y >= 1) return;
+    lens.focus = { x, y: 1 - y }; // TLX reconstructs depth in bottom-left scene coordinates.
+    hideReticle();
+    reticle.style.left = e.clientX + "px";
+    reticle.style.top = e.clientY + "px";
+    reticle.hidden = false;
+    reticleTimer = setTimeout(hideReticle, 900);
+    paintFocus();
+  }
+  const tapHandlers = { pointerdown: beginTap, pointermove: moveTap, pointerup: finishTap, pointercancel: cancelTap, lostpointercapture: cancelTap };
+  const cameraGroup = group("camera", "CAMERA", [
+    shots, mk("p", { id: "ps-help", className: "adv-help" }),
+    mk("label", { className: "tune-row" }, [mk("span", { className: "tune-label", textContent: "Focal length (35 mm eq.)" }), focalInput, focalValue]),
+    depthRow, mk("div", { className: "balanced-row" }, [resetLens, autoFocus]), focusHint,
+  ]);
   const captureButton = button("CAPTURE", capture, "ps-capture"), done = button("DONE", () => close(true), "ps-close");
   const focusCamera = button("MOVE CAMERA", (e) => {
     if (typeof Photomode !== "undefined") Photomode.focusScene(e.currentTarget);
@@ -447,6 +525,7 @@ function create(G, deps) {
     mk("div", { id: "ps-body", className: "sheet-body pane" }, [
       mk("p", { id: "ps-context", className: "adv-help" }),
       subjectGroup,
+      cameraGroup,
       carGroup,
       condGroup,
       lineGroup,
@@ -456,7 +535,6 @@ function create(G, deps) {
       group("composition", "COMPOSITION", [
         select("Frame", [["scene", "Full scene"], ["wide", "16:9"], ["square", "1:1"], ["portrait", "4:5"]], () => st.aspect, (v) => { st.aspect = v; guides(); if (!st.busy) recompose(); }, "ps-aspect"),
         select("Guide", [["off", "Off"], ["thirds", "Thirds"], ["centre", "Centre"]], () => st.grid, (v) => { st.grid = v; guides(); }, "ps-grid-select"),
-        shots, mk("p", { id: "ps-help", className: "adv-help" }),
         coaching(),
         select("Caption", [["off", "Off"], ["on", "Postcard"]], () => st.postcard ? "on" : "off", (v) => { st.postcard = v === "on"; if (!st.busy) recompose(); }, "ps-postcard"),
       ]),
@@ -482,7 +560,7 @@ function create(G, deps) {
     ]),
     mk("footer", { className: "sheet-foot" }, [captureButton, done]),
   ]);
-  root.appendChild(guide); root.appendChild(panel);
+  root.appendChild(guide); root.appendChild(reticle); root.appendChild(panel);
   root.setAttribute("aria-label", "Photo Studio");
   root.setAttribute("data-esc-close", "ps-close");
   const say = (s) => { E["ps-message"].textContent = s; };
@@ -502,6 +580,8 @@ function create(G, deps) {
     focusCamera.disabled = value || closing;
     E["ps-capture"].textContent = value && !closing ? "CAPTURING…" : "CAPTURE";
     E["ps-close"].textContent = closing ? "CLOSING…" : "DONE";
+    focalInput.disabled = resetLens.disabled = value || closing;
+    paintFocus();
   }
   function guides() { root.dataset.aspect = st.aspect; root.dataset.grid = st.grid; }
   function camera() { return deps.freeCam || (typeof FreeCam !== "undefined" ? FreeCam : null); }
@@ -539,6 +619,7 @@ function create(G, deps) {
           target: [c.px - fz * 3, y + .5, c.pz + fx * 3], fov, preserveInput });
       } else fc.cmd(id === "corner" ? { snap: "corner" } : { snap: "car", fov });
     }
+    paintFocal();
   }
   function open(opts) {
     opts = opts || {};
@@ -588,6 +669,9 @@ function create(G, deps) {
       };
     }
     st.open = true; st.generation++; root.hidden = false;
+    lens.mm = lens.focus = null;
+    for (const [type, handler] of Object.entries(tapHandlers)) window.addEventListener(type, handler, true);
+    SettingRow.paint(depthRow, depthFocus ? "on" : "off");
     SettingRow.paint(sampleRow, online ? "1" : String(st.samples));
     SettingRow.disable(sampleRow, online);
     carGroup.hidden = !hasCar(); visorGroup.hidden = isGarage(); focusCamera.hidden = isGarage();
@@ -615,7 +699,7 @@ function create(G, deps) {
     shots.replaceChildren();
     const list = isGarage() ? [["hero", "HERO"], ["front", "FRONT"], ["side", "SIDE"], ["rear", "REAR"], ["top", "TOP"]] : [["car", "CHASE"], ["wide", "WIDE"], ["detail", "DETAIL"], ["corner", "CORNER"]];
     for (const [id, label] of list) shots.appendChild(button(label, () => setShot(id)));
-    st.closing = false; guides(); busy(false); say("Capture the frame, then save or download it. Frame and Caption recrop your photo; moving the camera leaves it unchanged until CAPTURE."); paintLibrary(); E["ps-close"].focus();
+    st.closing = false; paintFocal(); guides(); busy(false); say("Capture the frame, then save or download it. Frame and Caption recrop your photo; moving the camera leaves it unchanged until CAPTURE."); paintLibrary(); E["ps-close"].focus();
     return true;
   }
   function close(back) {
@@ -637,14 +721,19 @@ function create(G, deps) {
   }
   /** @type {(() => void) | null} */
   let releaseCaptureScale = null;
+  /** @type {(() => void) | null} */
+  let cancelStudioRead = null;
   function finishClose(back) {
     if (!st.open && !st.closing) return;
+    cancelStudioRead?.();
     if (activePass) releasePass(activePass);
     if (releaseCaptureScale) releaseCaptureScale();
     if (!isGarage() && cond.tod != null) { resetCond(); cond.tod = null; }
     if (!isGarage()) DrivingLine.setPhoto(null);
     endLight();
     const returnTo = st.back; st.generation++; st.open = false; st.back = null; st.closing = false;
+    for (const [type, handler] of Object.entries(tapHandlers)) window.removeEventListener(type, handler, true);
+    sceneTap = null; hideReticle();
     if (releaseCar) { releaseCar(); releaseCar = null; }
     if (isGarage()) { if (deps.garage && deps.garage.restore && st.snapshot) deps.garage.restore(st.snapshot); st.snapshot = null; }
     else {
@@ -688,11 +777,14 @@ function create(G, deps) {
     if (activePass !== pass) return;
     activePass = null;
     if (samplePass === pass) samplePass = null;
-    pass.cancelRead?.();
     E["ps-body"].inert = false;
   }
-  /** @param {*} pass @param {(() => void) | null} rendered */
-  async function frame(pass = null, rendered = null) {
+  /**
+   * @param {*} pass
+   * @param {(() => void) | null} rendered
+   * @param {boolean} studioRead Whether an instant read belongs to this Studio visit.
+   */
+  async function frame(pass = null, rendered = null, studioRead = false) {
     const gfx = G.gfx;
     if (gfx && gfx.invalidateSoftPresent && gfx.softPresent && gfx.softPresent()) gfx.invalidateSoftPresent();
     // Observe the display blit immediately. Its result matters only if the
@@ -717,23 +809,24 @@ function create(G, deps) {
         if (gfx.cancelCapture) gfx.cancelCapture("capture timed out", owner);
         reject(Object.assign(new Error("the scene did not draw a frame in time"), { timedOut: true }));
       }, CAPTURE_MS); });
-      let stopRead;
-      const cancelled = pass && new Promise((_, reject) => {
-        stopRead = () => {
+      let stopRead = null;
+      const cancelled = (pass || studioRead) && new Promise((_, reject) => {
+        cancelStudioRead = stopRead = () => {
+          cancelStudioRead = null;
+          reject(Object.assign(new Error("Capture cancelled"), { cancelled: true }));
           gfx.cancelCapture?.("capture cancelled", owner);
-          reject(new Error("Capture cancelled"));
         };
-        pass.cancelRead = stopRead;
         // WGX submits a queued readback on a subsequent present.
-        pass.pump = !!gfx.cancelCapture;
+        if (pass) pass.pump = !!gfx.cancelCapture;
       });
       read = Promise.race(cancelled ? [read, late, cancelled] : [read, late]).finally(() => {
         clearTimeout(capTimer);
-        if (pass) { pass.pump = false; pass.cancelRead = null; }
+        if (cancelStudioRead === stopRead) cancelStudioRead = null;
+        if (pass) pass.pump = false;
       });
       try { pixels = await read; }
       catch (reason) {
-        if ((pass && activePass !== pass) || (reason && reason.timedOut)) throw reason;
+        if ((pass && activePass !== pass) || reason?.cancelled || reason?.timedOut) throw reason;
         // Native WebGPU canvases can compose directly even when a backend has
         // no readback render target. Draw and copy in this same task instead.
         Log.warn("ui", "backend readback unavailable; copying the scene canvas", reason);
@@ -853,7 +946,7 @@ function create(G, deps) {
     } finally { release(); }
   }
   async function sampledFrame(count, maxEdge, rendered) {
-    if (count === 1) return frame(null, rendered);
+    if (count === 1) return frame(null, rendered, true);
     const pass = capturePass(count);
     activePass = samplePass = pass;
     E["ps-body"].inert = true;
@@ -1023,7 +1116,13 @@ function create(G, deps) {
     const blob = await blobOf(out); if (cancelled()) throw new Error("Contact sheet cancelled");
     await download(blob, "apex26-replay-moment.png"); return true;
   }
-  const api = { open, close, capture, state, contactSheet, album, background, setBackground, exportPhoto, savePhoto, hasCar };
+  function activeLens() {
+    if (!st.open) return null;
+    const available = focusAvailable();
+    if (available !== lastFocusAvailable) paintFocus(available);
+    return lens;
+  }
+  const api = { open, close, capture, state, contactSheet, album, background, setBackground, exportPhoto, savePhoto, hasCar, lens: activeLens };
   live = api; busy(false); return api;
 }
 // ASPECTS / LIMIT stay module-private (crop + library only); no external callers.

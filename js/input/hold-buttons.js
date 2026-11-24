@@ -44,7 +44,7 @@ const InputHoldButtons = (function () {
         h.anchors && h.anchors.clear();
         h.levels && h.levels.clear();
         h.live && h.live.clear();
-        h.slid.clear(); h.gone.clear(); h.rects.clear();
+        h.slid.clear(); h.gone.clear();
         look(h.el, null);
         h.apply(false);
         h.level && h.level(0);
@@ -99,8 +99,8 @@ const InputHoldButtons = (function () {
     //     a progressive steering arrow treats the entry point as a fresh press;
     //   - it hands back the same way, and every release net above still applies
     //     to whichever control holds the pointer now.
-    // The sibling's box is read once per contact, never per pointermove: a
-    // rotation releases every hold (Input.onScreenRotate), so it cannot go stale.
+    // The HUD can move without rotating. Hit-test the current layout even when
+    // pointer capture still routes movement events to the original button.
     // data-slid = "on" | "off": the pressed look, which `:active` cannot carry across a hand-off.
     const look = (el, v) => { if (!el || !el.setAttribute) return; if (v) el.setAttribute("data-slid", v); else el.removeAttribute("data-slid"); };
     function boxOf(el) {
@@ -132,7 +132,6 @@ const InputHoldButtons = (function () {
       const sibId = opts && opts.sibling;
       const slid = new Set();                     // contacts that arrived by a slide (pressed look)
       const gone = new Set();                     // pointerIds that slid AWAY and are still down (pressed-look only)
-      const rects = new Map();                    // pointerId -> the sibling's box for this contact
       // Every contact holds independently: easing or releasing one finger must
       // not override another finger's stronger press. Both release routes use
       // the same aggregation, including window capture before the local event.
@@ -172,7 +171,6 @@ const InputHoldButtons = (function () {
       function release(pointerId) {
         touchIds.delete(pointerId);
         if (gone.delete(pointerId) && gone.size === 0 && slid.size === 0) look(el, null);
-        rects.delete(pointerId);
         if (slid.delete(pointerId) && slid.size === 0) look(el, gone.size ? "off" : null);
         anchors && anchors.delete(pointerId);
         levels && levels.delete(pointerId);
@@ -219,19 +217,17 @@ const InputHoldButtons = (function () {
         gone.clear();
         if (arrived) slid.add(e.pointerId);
         look(el, slid.size ? "on" : null);
-        const sib = sibId && holdById.get(sibId);
-        if (sib) rects.set(e.pointerId, boxOf(sib.el));
       }
       // The contact left for the sibling: release it here, press it there.
       function handOff(e) {
         const to = holdById.get(sibId);
-        if (!to) return false;
+        if (!to || to.el.hidden || to.el.disabled) return false;
         // Capture keeps e.target on the current pedal. The visible sibling must
         // actually be under the finger, especially where custom dock boxes overlap.
         if (document.elementFromPoint) {
           const hit = document.elementFromPoint(e.clientX, e.clientY);
           if (hit !== to.el && !to.el.contains?.(hit)) return false;
-        }
+        } else if (!inBox(boxOf(to.el), e.clientX, e.clientY)) return false;
         release(e.pointerId);
         try { el.releasePointerCapture(e.pointerId); } catch (_) { /* capture already gone */ }
         gone.add(e.pointerId);
@@ -268,7 +264,7 @@ const InputHoldButtons = (function () {
         digitalPress(key);
         setTimeout(() => release(key), 100);
       });
-      const rec = { ids, touchIds, apply, level: paint, anchors, levels, el, live, release, press, slid, gone, rects, paintLevel, move: null };
+      const rec = { ids, touchIds, apply, level: paint, anchors, levels, el, live, release, press, slid, gone, paintLevel, move: null };
       holdBtns.push(rec);
       holdByEl.set(el, rec);
       holdById.set(id, rec);
@@ -286,7 +282,7 @@ const InputHoldButtons = (function () {
         if (to && to.move && to.ids.has(e.pointerId)) to.move(e);
       });
       if (level || sibId) rec.move = (e) => {
-        if (inBox(rects.get(e.pointerId), e.clientX, e.clientY) && handOff(e)) return;
+        if (sibId && handOff(e)) return;
         const a = anchors ? anchors.get(e.pointerId) : null;
         if (!a || (!a.ramp && !a.trackTravel)) return;
         const dx = e.clientX - a.x, dy = e.clientY - a.y;
@@ -298,8 +294,10 @@ const InputHoldButtons = (function () {
             a.x = e.clientX; a.y = e.clientY;
             if (a.trackTravel) buildFromAnchor(e.pointerId, a);
           }
-        } else if (a.profile.sliderEdge) levels.set(e.pointerId, PedalTravel.sliderLevel(a.profile, e));
-        else {
+        } else if (a.profile.sliderEdge) {
+          a.profile.sliderBounds = el.getBoundingClientRect();
+          levels.set(e.pointerId, PedalTravel.sliderLevel(a.profile, e));
+        } else {
           a.advance = PedalTravel.advance(a.profile, dx, dy, axis === "x" ? -dir * dx : -dy);
           levels.set(e.pointerId, PedalTravel.level(a.profile, a.advance, a.holdFraction));
         }

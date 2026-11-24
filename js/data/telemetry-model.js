@@ -148,6 +148,24 @@ const DataTelemetryModel = (function () {
     return kept;
   }
 
+  // Circuit overlays use normalized distance along the GPS trace. A partial
+  // or gapped lap would shift every range after the missing section.
+  function mapLapFractions({ loc, lap }) {
+    const start = Date.parse(lap?.dateStart), end = start + lap?.lapDuration * 1000;
+    if (!loc?.length || loc[0].date !== start || !Number.isFinite(end)) return null;
+    const limit = Math.min(gapLimitMs(loc), 1500);
+    if (end - loc.at(-1).date > limit) return null;
+    const d = [0];
+    for (let i = 1; i < loc.length; i++) {
+      if (isGap(loc, i, limit)) return null;
+      d.push(d[i - 1] + Math.hypot(loc[i].x - loc[i - 1].x, loc[i].y - loc[i - 1].y));
+    }
+    const last = loc.at(-1), seam = Math.hypot(last.x - loc[0].x, last.y - loc[0].y);
+    const total = d.at(-1) + seam;
+    if (!(total > 0) || seam > total * 0.025) return null;
+    return d.map((distance) => distance / total);
+  }
+
   function mapSpeedMax(car) {
     return (car || []).reduce((max, row) => Number.isFinite(row.speed) && row.speed > max ? row.speed : max, 0);
   }
@@ -158,6 +176,11 @@ const DataTelemetryModel = (function () {
     const g = Math.round(180 * (1 - Math.abs(f - 0.5) * 2));
     return "rgb(" + r + "," + g + "," + b + ")";
   }
+  const GEAR_COLORS = ["#c0c0c0", "#fb7185", "#fb923c", "#facc15", "#a3e635", "#2dd4bf", "#38bdf8", "#818cf8", "#e879f9"];
+  function mapGearColor(gear) {
+    return Number.isInteger(gear) ? GEAR_COLORS[gear] : undefined;
+  }
+
   function dateAtT(car, t) {
     if (!car || !car.length) return null;
     const n = car.length;
@@ -401,7 +424,7 @@ const DataTelemetryModel = (function () {
 
   return { create, speedUnit, speedValue, speedText, clamp, laneRole, summaryTime, signed, summaryValue, dcode, sessionShort, drsOpen, hasDrs,
            CHANNELS, PADL, PADR, PADY, chartX, chanNorm, sampleAt, clipCar, cumDist,
-           distAtT, timeAtDist, brakingDuel, locAt, locationAtDate, clipLocations, mapSpeedMax, mapSpeedColor,
+           distAtT, timeAtDist, brakingDuel, locAt, locationAtDate, clipLocations, mapSpeedMax, mapSpeedColor, mapGearColor, mapLapFractions,
            dropStrays, locBounds, gapLimitMs, isGap };
 })();
 Object.freeze(DataTelemetryModel);

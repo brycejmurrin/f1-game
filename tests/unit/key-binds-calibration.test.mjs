@@ -2,7 +2,7 @@
 // Split from key-binds.test.mjs (T3-16); the VM rig is tests/helpers/key-binds-rig.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fakePad, plain, bootUi, slotOf, rawPad, setBtn, delayedCalibration, withProfileStore } from "../helpers/key-binds-rig.mjs";
+import { fakePad, plain, bootUi, slotOf, rawPad, setBtn, delayedCalibration, withProfileStore, releaseWheelPedal } from "../helpers/key-binds-rig.mjs";
 
 for (const reason of ["reset", "back", "close", "blur", "disconnect", "connect", "binding", "wheel"]) {
   test(`pending stick calibration is cancelled by ${reason}, and a fresh attempt works`, () => {
@@ -181,9 +181,11 @@ test('wheel wizard pins the first device, ignores other axes and cancels only ow
   a.axes[1] = .9; I.poll();
   assert.equal(h.$('pm-pad-wheel').textContent, 'CANCEL', 'other device cannot finish');
   b.axes[2] = .9; I.poll();
+  releaseWheelPedal(I, h.sb, b, 2, 0);
   a.connected = false; h.fire('gamepaddisconnected', { gamepad: a });
   assert.equal(h.$('pm-pad-wheel').textContent, 'CANCEL', 'spare disconnect keeps wizard');
   b.axes[1] = .9; I.poll();
+  releaseWheelPedal(I, h.sb, b, 1, 0);
   assert.equal(h.$('pm-pad-wheel').textContent, 'SET UP A WHEEL');
   assert.equal(I.controllerProfile().id, 'Wheel B', 'commit belongs to first captured device');
   assert.equal(I.getPadAxisMap().steer, 3);

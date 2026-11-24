@@ -216,6 +216,9 @@ window.TopModal = (function () {
   // opener because the toolbar and its dock are separate sibling layers.
   const LAYER_SKIP = {
     "rotate-device": 1, "photo-controls": 1,
+    // The dock editor restores its own opener. Its editable buttons sit outside
+    // the toolbar and must stay reachable by Tab for keyboard nudging.
+    "dock-edit-bar": 1,
   };
   function firstFocusable(layer, skipTexty) {
     for (const el of layer.querySelectorAll(focusableSel())) {

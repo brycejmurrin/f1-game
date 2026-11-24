@@ -171,7 +171,7 @@ not tabled: they move with every edit and nothing reads them.
 | `save-` | `save-health.css` | — |  |
 | `season-` | `race-setup.css` | `components.css`, `select.css` |  |
 | `sec-` | `hud.css` | — |  |
-| `sel-` | `editor.css` | `career-experience.css`, `career.css`, `carsetup.css`, `components.css`, `overlays.css`, `race-setup.css`, `select.css`, `tokens.css` |  |
+| `sel-` | `editor.css` | `career-experience.css`, `career.css`, `carsetup.css`, `components.css`, `overlays.css`, `race-setup.css`, `select.css`, `tokens.css`, `track-detail.css` |  |
 | `session-` | `race-setup.css` | — | `.session-summary` (below) |
 | `set-` | `settings-controls.css` | `appearance-studio.css`, `experience.css`, `race-setup.css`, `select.css`, `settings.css`, `tuner.css` |  |
 | `settings-` | `player-tools.css` | — |  |
@@ -296,7 +296,7 @@ missing class, a file that left, or a file that joined.
 - `.res-pos` / `.res-name` / `.res-pts` — `career` + `overlays`. The championship table deliberately reuses the results-screen row so standings do not look like a different game depending on where you are; compact Career history / qualifying / standings / results wrap the shared points cell instead of ellipsizing it. **This is the one that bit us**: it is invisible from either file alone.
 - `.q-time` — `career` + `overlays`. Shared timing text; race result gaps sit on a second line inside the driver name so they remain readable on phones.
 - `.sel-label` — `career` + `carsetup` + `overlays` + `select`. The skewed red section heading.
-- `.sel-chip` — `career` + `career-experience` + `carsetup` + `components` + `editor` + `race-setup` + `select` + `tokens`
+- `.sel-chip` — `career` + `career-experience` + `carsetup` + `components` + `editor` + `race-setup` + `select` + `tokens` + `track-detail`
 - `.sel-edit` — `carsetup` + `components` + `editor` + `select`
 - `.team-tile` — `components` + `select`
 - `.track-row` / `.season-upcoming-row` — `components` + `race-setup` + `select`

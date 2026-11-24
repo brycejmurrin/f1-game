@@ -19,7 +19,7 @@ webgl-lint 1.11.4 — MIT — opt-in WebGL checker (developer tool) — https://
 Snapdragon Game Super Resolution 1 — BSD-3-Clause — upscaling shader, adapted — https://github.com/SnapdragonStudios/snapdragon-gsr (vendor/sgsr/LICENSE)
 Capacitor 8.6.2 — MIT — Android app wrapper (Android build only) — https://capacitorjs.com (mobile/licenses/capacitor-LICENSE)
 Capacitor Filesystem 8.1.5 — MIT — saving files in the Android app — https://capacitorjs.com/docs/apis/filesystem (mobile/licenses/capacitor-filesystem-LICENSE)
-Capacitor Share 8.0.2 — MIT — the share sheet in the Android app — https://capacitorjs.com/docs/apis/share (mobile/licenses/capacitor-share-LICENSE)
+Capacitor Share 8.0.3 — MIT — the share sheet in the Android app — https://capacitorjs.com/docs/apis/share (mobile/licenses/capacitor-share-LICENSE)
 Titillium Web — OFL-1.1 — typeface — https://fonts.google.com/specimen/Titillium+Web (assets/fonts/titillium-web-OFL.txt)
 Barlow Condensed — OFL-1.1 — typeface — https://github.com/jpt/barlow (assets/fonts/barlow-condensed-OFL.txt)
 Saira — OFL-1.1 — typeface (subset) — https://github.com/Omnibus-Type/Saira (assets/fonts/saira-OFL.txt)

@@ -75,6 +75,35 @@ test("HIGHLIGHTS no-driver cuts replace retired subjects only while AUTO owns th
   }
 });
 
+test("HIGHLIGHTS cuts to a late-arriving event driver without restarting the lead-in", () => {
+  for (const owner of ["auto", "manual", "locked"]) {
+    const { replay, G, options, cars } = transportReplay();
+    options.traces.cars = { 1: line(0, 45, 0, 0, 40), 2: line(-24, 48, 0, 8, 40) };
+    const captions = [], snappedAt = [];
+    G.announce = (text) => captions.push(text);
+    G.snapGameCam = () => snappedAt.push(G.raceT);
+    replay.start({ ...options, reel: true });
+    assert.equal(replay.status().T, 4);
+    assert.equal(G.player, cars[0]);
+    if (owner === "manual") replay.takePicture();
+    if (owner === "locked") replay.setLocked(true);
+
+    replay.tick(3.75);
+    assert.equal(G.player, cars[0], owner);
+    const snapCount = snappedAt.length;
+    replay.tick(0.25);
+    const expected = owner === "auto" ? cars[1] : cars[0];
+    assert.equal(G.player, expected, owner);
+    assert.deepEqual(snappedAt.slice(snapCount), owner === "auto" ? [8] : [], owner);
+    assert.equal(G.raceT, 8);
+    replay.tick(4);
+    assert.equal(G.player, expected);
+    assert.equal(replay.status().T, 12);
+    assert.deepEqual(captions, ["L1 · BBB PASSES AAA FOR P1"]);
+    replay.stop();
+  }
+});
+
 test("WATCH AUTO handoff updates the actual camera and cockpit HUD immediately, including paused reels", () => {
   for (const reel of [false, true]) for (const paused of [false, true]) for (const outerPaused of [false, true]) {
     const { replay, G, options, ctx } = transportReplay();
@@ -150,6 +179,29 @@ test("WATCH transport pause holds the replay clock, and seek reposes ended and r
   assert.equal(cars[1].retired, true, "the rewound car can retire again");
   replay.seek(NaN); assert.equal(replay.status().T, 15, "invalid timeline values cannot corrupt the clock");
   replay.seek(999); assert.equal(replay.status().T, 30, "scrubbing is bounded by loaded positions");
+  replay.stop();
+});
+
+test("Space leaves a focused WATCH disclosure to the browser and still toggles playback on the canvas or background", () => {
+  let onKey;
+  const { replay } = transportReplay({ window: {
+    addEventListener(type, listener) { if (type === "keydown") onKey = listener; },
+    removeEventListener() {},
+  } });
+  function space(target) {
+    const effects = [];
+    onKey({ code: "Space", target, preventDefault() { effects.push("prevented"); }, stopPropagation() { effects.push("stopped"); } });
+    return effects;
+  }
+
+  const summary = { tagName: "SUMMARY", closest: selector => selector === ".watch-transport" ? {} : null };
+  assert.deepEqual(space(summary), [], "the browser can activate the disclosure");
+  assert.equal(replay.status().paused, false);
+  for (const target of [{ tagName: "CANVAS" }, { tagName: "BODY" }]) {
+    const paused = replay.status().paused;
+    assert.deepEqual(space(target), ["prevented", "stopped"]);
+    assert.equal(replay.status().paused, !paused);
+  }
   replay.stop();
 });
 

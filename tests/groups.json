@@ -562,6 +562,8 @@
     "tests/unit/gfx-hi-absent.test.mjs",
     "// LAZY_GFX_HI (#6003, Bryce's B): the desktop tiers above ULTRA load beside the backend only at detail 2; a phone and ULTRA never fetch it. Real GfxQuality + RendererBoot in a VM, ~0.1 s.",
     "tests/unit/gfx-hi-lazy.test.mjs",
+    "// GfxQuality.presetRule/presetDefault (Graphics details \"Use preset · On\" + Preset: line) match each consumer, 5 presets + phones. < 1 s.",
+    "tests/unit/gfx-preset-rule.test.mjs",
     "tests/unit/ghost-share.test.mjs",
     "tests/unit/ghost.test.mjs",
     "// #1807: a git hook's GIT_DIR / GIT_INDEX_FILE must not reach fixture git (a decoy",

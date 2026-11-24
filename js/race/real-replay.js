@@ -334,7 +334,7 @@ const RealReplay = (function () {
       if (o.startLap > 1 && lead && Array.isArray(lead.lapStart) && lead.lapStart[o.startLap - 1] != null) T = lead.lapStart[o.startLap - 1];
       if (reel && reel.length) T = reel[0].t - LEAD_S;
       T = clamp(T, startT, duration);
-      run = { script, cars, T, speed: o.rate > 0 ? o.rate : 1, paused: false, follow: null, reel, reelIdx: 0, list, eventCursor: eventCursor(list, T), fit: built.fit, finished: false, onKey: null };
+      run = { script, cars, T, speed: o.rate > 0 ? o.rate : 1, paused: false, follow: null, reel, reelIdx: 0, deferredHighlight: null, list, eventCursor: eventCursor(list, T), fit: built.fit, finished: false, onKey: null };
       run.startT = startT; run.duration = duration; run.events = events; run.onTimeline = o.onTimeline;
       run.savedCamera = G.camMode;
       run.cameraOwner = {};
@@ -463,6 +463,7 @@ const RealReplay = (function () {
     // Discontinuities release timeline history. An automatic overlapping clip
     // only changes the picture: its clock and event cursor keep running.
     function reposition(t, highlight, paint = false, continuous = false) {
+      run.deferredHighlight = null;
       if (!continuous) {
         captionGeneration++;
         run.T = t; run.eventCursor = eventCursor(run.list, t); run.radio = null;
@@ -473,8 +474,12 @@ const RealReplay = (function () {
       }
       if (highlight) {
         const c = carOfNum(highlight.num);
-        const picture = bc && bc.status();
-        if (onTrack(c) && !(picture && (picture.locked || picture.manual))) setFollow(c, false);
+        if (c && !bc?.viewerOwnsPicture()) {
+          if (onTrack(c)) setFollow(c, false);
+          // A lead-in may start before the event car has any usable frames.
+          // Keep the running fallback until the event car can be filmed.
+          else if (run.T < highlight.t) run.deferredHighlight = { car: c, highlight };
+        }
         if (!recoverSubject() && bc) bc.onCut(highlight.kind);
       } else if (!continuous) recoverSubject();
       if (!continuous && G.raceRadio && G.raceRadio.resetTimeline) G.raceRadio.resetTimeline();
@@ -482,6 +487,15 @@ const RealReplay = (function () {
       if (G.refreshHud) G.refreshHud(true);
       if (G.snapGameCam) G.snapGameCam(paint);
       if (transport) transport.paint();
+    }
+    function followDeferredHighlight() {
+      const pending = run.deferredHighlight;
+      if (!pending) return;
+      if (bc?.viewerOwnsPicture() || run.T > Math.min(run.duration, pending.highlight.t + HOLD_S)) {
+        run.deferredHighlight = null;
+      } else if (onTrack(pending.car)) {
+        reposition(run.T, pending.highlight, false, true);
+      }
     }
     function setPaused(v) {
       if (!run) return false;
@@ -555,12 +569,12 @@ const RealReplay = (function () {
       // the replay keys are the bare keys, and Shift stays theirs (Shift+= is "+").
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const t = e.target, tag = t && t.tagName;
-      // THE TRANSPORT'S OWN BUTTONS AND TIMELINE keep the replay keys: a click
+      // THE TRANSPORT'S BUTTONS, TIMELINE AND DISCLOSURES keep the replay keys: a click
       // leaves focus there, and the keys went dead until something else took
       // focus. Space / Enter stay the focused control's (press it, not pause).
       // Text fields and selects keep every key (typing, type-ahead).
       const ctl = t && typeof t.closest === "function" && t.closest(".watch-transport") &&
-        (tag === "BUTTON" || (tag === "INPUT" && t.type === "range"));
+        (tag === "BUTTON" || tag === "SUMMARY" || (tag === "INPUT" && t.type === "range"));
       if (ctl ? (e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter")
           : (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON")) return;
       let used = true;
@@ -693,10 +707,11 @@ const RealReplay = (function () {
       pose();
       if (run.onTimeline) run.onTimeline(run.T);
       if (G.state !== "race") return;
+      if (G.raceT != null) G.raceT = Math.max(0, run.T);
+      followDeferredHighlight();
       fire();
       recoverSubject(true);
       if (bc) bc.tick(dt, bcState);
-      if (G.raceT != null) G.raceT = Math.max(0, run.T);
       if (run.reel) {
         const h = run.reel[run.reelIdx];
         if (!h || run.T > Math.min(run.duration, h.t + HOLD_S)) advanceReel();

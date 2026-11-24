@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
-import { fnSource } from "../helpers/fn-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const source = (p) => fs.readFileSync(new URL("../../" + p, import.meta.url), "utf8");
@@ -18,17 +17,49 @@ test("custom liveries: a null/non-object stored element is dropped, resolveLiver
   assert.doesNotThrow(() => CL.resolveLivery(team));
 });
 
-test("telemetry playback: dt after a hidden tab is clamped", () => {
-  const src = fnSource(source("js/data/telemetry-player.js"), "function playAnim(view)");
-  let raf = null;
+test("telemetry playback follows foreground elapsed time and skips hidden-tab gaps", () => {
+  let frame = null;
+  const document = new EventTarget();
+  function visibility(hidden) {
+    document.hidden = hidden;
+    document.dispatchEvent(new Event("visibilitychange"));
+  }
+  visibility(false);
   const ctx = vm.createContext({
-    requestAnimationFrame: (f) => { raf = f; return 1; },
-    setPlayLabel() {}, paintFrame() {},
+    document,
+    DataTelemetryModel: {},
+    requestAnimationFrame: (fn) => { frame = fn; return 1; },
+    cancelAnimationFrame: () => { frame = null; },
   });
-  vm.runInContext(src, ctx);
-  const view = { playing: false, cursorT: 0, tMax: 1000, rate: 1, _last: 0 };
-  ctx.view = view;
-  vm.runInContext("playAnim(view)", ctx);
-  raf(1000); raf(1000 + 60000); // 60 s hidden-tab gap
-  assert.ok(view.cursorT <= 0.11, "cursor advanced " + view.cursorT + "s in one frame");
+  const file = "js/data/telemetry-player.js";
+  vm.runInContext(source(file), ctx, { filename: absSrc(file) });
+  const player = vm.runInContext("DataTelemetryPlayer.create({}, { paintFrame() {} })", ctx);
+  const view = { playing: false, cursorT: 0, tMax: 2, rate: 1 };
+  player.playAnim(view);
+  function expectCursor(t) {
+    assert.ok(Math.abs(view.cursorT - t) < 1e-9, `expected ${t}s, got ${view.cursorT}s`);
+  }
+  frame(1000);
+  frame(1200);
+  expectCursor(0.2);
+  view.rate = 2;
+  frame(1400);
+  expectCursor(0.6);
+
+  visibility(true);
+  visibility(false);
+  frame(61400);
+  expectCursor(0.6);
+  view.rate = 4;
+  frame(61600);
+  expectCursor(1.4);
+  frame(61800);
+  expectCursor(0);
+
+  player.pauseAnim(view);
+  assert.equal(frame, null);
+  assert.equal(view.playing, false);
+  const last = view._last;
+  visibility(true);
+  assert.equal(view._last, last, "pause removes the visibility listener");
 });

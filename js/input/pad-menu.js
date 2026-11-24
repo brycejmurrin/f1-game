@@ -122,7 +122,7 @@ const InputPadMenu = (function () {
       padDispatchKey(key);
     }
 
-    function padNavDirOf(pad) {
+    function padNavDirOf(pad, dpadOnly) {
       const axisMap = getPadAxisMap();
       const std = pad.mapping == null || pad.mapping === "standard";
       // Buttons 12-15 and axes 2/3 are the d-pad and the right stick ONLY on the
@@ -131,6 +131,7 @@ const InputPadMenu = (function () {
       // held "up" forever. Such a device navigates by the steering axis the
       // player set up (left/right) and the paddles they bound (shift down/up).
       if (!std) {
+        if (dpadOnly) return null;
         const sx = axisMap.steer;
         const ax = pad.axes || [];
         if (Number.isInteger(sx) && sx >= 0 && sx < ax.length) {
@@ -146,6 +147,7 @@ const InputPadMenu = (function () {
       if (btnDown(pad, 13)) return "down";
       if (btnDown(pad, 14)) return "left";
       if (btnDown(pad, 15)) return "right";
+      if (dpadOnly) return null;
       // A wheel's pedals rest at -1: read as a stick they held a direction and
       // scrolled the menu on their own. The mapped pedal axes are not sticks.
       const ped = (i) => i === axisMap.throttle || i === axisMap.brake;
@@ -247,7 +249,7 @@ const InputPadMenu = (function () {
       }
     }
 
-    function padNavPoll(pad) {
+    function padNavPoll(pad, { dpadOnly = false } = {}) {
       const top = window.UiLayers && window.UiLayers.top();
       if (top !== padNavSeedLayer) {
         padNavSeedLayer = top || null;
@@ -258,13 +260,13 @@ const InputPadMenu = (function () {
         padNavDir = null;
         padNavNextT = 0;
       }
-      const dir = padNavDirOf(pad);
+      const dir = padNavDirOf(pad, dpadOnly);
       // Nintendo's confirm is the physical A, which the standard mapping numbers 1.
       const nin = padBrand(pad) === "nintendo";
       const okBtn = nin ? 1 : 0, backBtn = nin ? 0 : 1;
       if (!padNavSeeded) {
         padNavSeeded = true;
-        if (!dir && !btnEdge(pad, okBtn)) padSeedFocus();
+        if (!dpadOnly && !dir && !btnEdge(pad, okBtn)) padSeedFocus();
       }
       if (dir) {
         const now = nowMs();
@@ -280,8 +282,8 @@ const InputPadMenu = (function () {
       if (pad.mapping == null || pad.mapping === "standard") {
         // Triggers page long panes; LB/RB step left/right. A wheel's mapping ""
         // puts paddles/pedals on vendor indices — those already navigate above.
-        if (btnEdge(pad, 6)) padDispatchKey("PageUp", true);
-        if (btnEdge(pad, 7)) padDispatchKey("PageDown", true);
+        if (!dpadOnly && btnEdge(pad, 6)) padDispatchKey("PageUp", true);
+        if (!dpadOnly && btnEdge(pad, 7)) padDispatchKey("PageDown", true);
         if (btnEdge(pad, 4)) padNavKey("left", true);
         if (btnEdge(pad, 5)) padNavKey("right", true);
       }

@@ -15,6 +15,13 @@ const PhotoStudio = (function () {
     const cw = Math.min(w, h * r), ch = Math.min(h, w / r);
     return { x: (w - cw) / 2, y: (h - ch) / 2, width: cw, height: ch };
   }
+  function focalFov(mm, aspect) {
+    // The 36 mm frame width gives a stable horizontal angle across aspect ratios.
+    return 2 * Math.atan(18 / (mm * aspect));
+  }
+  function focalMm(fov, aspect) {
+    return 18 / (Math.tan(fov / 2) * aspect);
+  }
   function background() {
     try { const v = localStorage.getItem(KEY); return v && /^data:image\/(jpeg|png);base64,/.test(v) && v.length < 1.5e6 ? v : ""; } catch (_) { return ""; }
   }
@@ -97,7 +104,8 @@ const PhotoStudio = (function () {
 
   // No eager ensureBody(): bare specs load this stub without Log/ScriptLoader (#4978).
   return Object.freeze({
-    create, shareCancelled, background, setBackground, crop, filename,
+    create, shareCancelled, background, setBackground, crop, filename, focalFov, focalMm,
+    lens: () => live?.lens(),
     album: () => { const r = live; return r && r.album ? r.album() : ensureBody().then(() => { const impl = newest && newest(); return impl && impl.album ? impl.album() : Promise.reject(new Error("Photo library unavailable")); }); },
     contactSheet: (times, seek, cancelled) => { const r = live; return r && r.contactSheet ? r.contactSheet(times, seek, cancelled) : ensureBody().then(() => { const impl = newest && newest(); return impl && impl.contactSheet ? impl.contactSheet(times, seek, cancelled) : Promise.reject(new Error("Photo capture unavailable")); }); },
     state: () => { const r = live; return r && r.state ? r.state() : { open: false }; },

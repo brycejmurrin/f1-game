@@ -65,12 +65,17 @@ function boot(disk = {}, o = {}) {
     TrackMaps: Object.assign({
       corners: () => [], direction: () => "CW", elevRange: () => 0,
       drsZones: o.trackMapsDrs || (() => []),
+      cornerSpeed: () => null,
       sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"], classColor: () => "", aeroColor: () => "#26a5f5",
       aspect: () => 1.5, elevProfile: () => null,
       fitCanvas: () => ({ w: 100, h: 60 }), draw() {},
     }, o.trackMaps),
   };
   sb.window = sb;
+  const installTrackDetail = () => vm.runInNewContext(src("js/ui/circuit-details-panel.js"), sb, { filename: absSrc("js/ui/circuit-details-panel.js") });
+  if (o.loadTrackDetail) {
+    sb.ScriptLoader = { create: () => ({ load: o.loadTrackDetail.bind(null, installTrackDetail) }) };
+  } else installTrackDetail();
   vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: absSrc("js/ui/select-screen.js") });
   const $ = (id) => dom.byId(id);
   const selTracks = $("sel-tracks");
@@ -266,16 +271,38 @@ test("DRS zone labels name an S/F wrap with arrow markers", () => {
   assert.match(html, /5367 m.*S\/F.*519 m/);
   assert.match(html, /crossing start\/finish/);
   h.menus.openTrackDetail();
-  const list = h.dom.byId("track-detail-drs-list").innerHTML;
-  assert.match(list, /Zone 1:.*S\/F/);
-  assert.doesNotMatch(list, /5370 m &ndash; 519 m/);
+  const [zone] = h.dom.byId("track-detail-drs-list").children;
+  const [marker, distance] = zone.children;
+  assert.equal(zone.textContent, "Zone 1: 5367 m");
+  assert.equal(marker.textContent, " → S/F → ");
+  assert.equal(marker.getAttribute("aria-label"), "crossing start/finish");
+  assert.equal(distance.textContent, "577 m");
 });
 
 test("track detail names its map and elevation canvases for the selected circuit", () => {
   const h = boot({}, { trackIdx: 1 });
   h.menus.openTrackDetail();
-  assert.equal(h.dom.byId("track-detail-canvas").getAttribute("aria-label"), "Spa circuit layout diagram");
+  assert.equal(h.dom.byId("track-detail-canvas").getAttribute("aria-label"), "Spa circuit map · Overview");
   assert.equal(h.dom.byId("track-detail-elev").getAttribute("aria-label"), "Spa elevation profile");
+});
+
+test("opening Circuit Details loads the panel once and displays the requested circuit", async () => {
+  let loads = 0;
+  let finish;
+  const { dom, menus } = boot({}, { loadTrackDetail(install, files, _edges, options) {
+    loads++;
+    assert.deepEqual(Array.from(files), ["js/ui/circuit-details-panel.js"]);
+    return new Promise(resolve => { finish = () => { install(); resolve(options.ready()); }; });
+  } });
+  dom.byId("track-detail").hidden = true;
+  const first = menus.openTrackDetail();
+  assert.equal(menus.openTrackDetail(), first);
+  assert.equal(loads, 1);
+  assert.equal(dom.byId("track-detail").hidden, true);
+  finish();
+  await first;
+  assert.equal(dom.byId("track-detail").hidden, false);
+  assert.equal(dom.byId("track-detail-canvas").getAttribute("aria-label"), "Spa circuit map · Overview");
 });
 
 // #4671 (re-landed after the Nov 6 rollback): re-opening the picker re-attaches
