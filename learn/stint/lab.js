@@ -20,6 +20,7 @@
     intro: "Plan a fictional 50-lap dry race. Balance the tyres’ pace drop, starting fuel mass and the recoverable sample.",
     controls: [
       { id: "plot", label: "Plot", options: [["net", "Net pace and tyre-only reference"], ["tyres", "Tyre wear by stint"]], value: "net" },
+      { id: "fixture", label: "Mandatory dry nomination", options: [["hard", "Teaching fixture · Hard"], ["vegas", "2026 Las Vegas · Medium or Hard"]], value: "hard" },
       { id: "start", label: "Starting tyre set", options: [["soft", "S1 · Soft"], ["medium", "M1 · Medium"], ["hard", "H1 · Hard"]], value: "medium" },
       { id: "finish", label: "Replacement tyre set", options: [["soft", "S2 · Soft"], ["medium", "M2 · Medium"], ["hard", "H2 · Hard"]], value: "medium" },
       { id: "stopLap", label: "Pit at the end of lap", min: 12, max: 39, step: 1, value: 34, unit: "" },
@@ -31,12 +32,17 @@
       ["2026 FIA Sporting Regulations · B5.1.4 and B6.3.6", "https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_b_sporting_-_iss_09_-_2026-10-01.pdf"],
       ["2026 FIA Technical Regulations · C6.5.2 fuel sample", "https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_21_-_2026-10-19.pdf"],
       ["2026 Las Vegas compound nominations", "https://www.formula1.com/en/latest/article/what-tyres-will-the-teams-and-drivers-have-for-the-2026-las-vegas-grand-prix.1HEaoIW48MVZs9cAT7rP2w"],
+      ["FIA · Las Vegas event tyre prescriptions", "https://www.fia.com/system/files/decision-document/2026_las_vegas_grand_prix_-_competition_notes_-_pirelli_preview_v3.pdf"],
+      ["Pirelli · Las Vegas podium stops", "https://press.pirelli.com/verstappen-wins-overtaking-spectacle-on-the-strip/"],
     ],
     evaluate(state) {
       const first = compounds[state.start];
       const second = compounds[state.finish];
       const remaining = state.fuel - laps * 1.30 + state.savingLaps * 0.10;
-      const tyreOk = state.start !== state.finish && [state.start, state.finish].includes("hard");
+      const used = [state.start, state.finish];
+      const vegas = state.fixture === "vegas";
+      const mandatory = vegas ? "Medium or Hard" : "Hard";
+      const tyreOk = state.start !== state.finish && (used.includes("hard") || vegas && used.includes("medium"));
       const fuelOk = remaining >= sample;
       const lengths = [state.stopLap, laps - state.stopLap];
       const worn = Math.max(0, lengths[0] - first.cliff) + Math.max(0, lengths[1] - second.cliff);
@@ -45,10 +51,12 @@
       const tyres = rows.flat();
       const showNet = state.plot !== "tyres";
       let fuel = state.fuel;
+      const fuelAfter = [];
       const net = tyres.map((loss, lap) => {
         const saving = lap < state.savingLaps;
         const combined = loss + Math.max(0, fuel) * 0.03 + (saving ? 0.15 : 0);
         fuel -= saving ? 1.20 : 1.30;
+        fuelAfter.push(fuel);
         return combined;
       });
       const maxLoss = Math.max(2, Math.ceil(Math.max(...tyres, ...(showNet ? net : []))));
@@ -70,7 +78,7 @@
       const signedSeconds = value => (value > 0 ? "+" : "") + value.toFixed(2) + " s";
       const result = remaining < 0 ? "Fuel runs out" : fuelOk ? "Sample covered" : "Sample short";
       const success = tyreOk && fuelOk && !worn;
-      const next = !tyreOk ? "Use two specifications, one of them the mandatory Hard." :
+      const next = !tyreOk ? "Use two specifications and include " + mandatory + "." :
         !fuelOk ? "Add starting fuel or use more saving laps." :
           worn ? "Shift the stop to keep both stints inside their tyre limits." :
             "The plan meets the fuel and tyre targets. Compare its projected cost with another plan.";
@@ -100,18 +108,23 @@
         replay(progress) {
           const lap = Math.round(progress * (laps - 1));
           const pace = showNet ? net[lap] : tyres[lap];
+          const late = lap >= state.stopLap;
+          const age = lap + 1 - (late ? state.stopLap : 0);
           return {svg: LearnSandbox.cursor(x(lap + 1), y(pace), 51, 167),
-            readout: "Lap " + (lap + 1) + " · " + signedSeconds(pace)};
+            readout: "Lap " + (lap + 1) + " · " + (late ? second : first).label + " age " + age +
+              " · " + fuelAfter[lap].toFixed(2) + " kg fuel · " + signedSeconds(tyres[lap]) +
+              " tyre-only · " + signedSeconds(net[lap]) + " net"};
         },
         metrics: [
-          ["Dry tyre rule", tyreOk ? "Two specifications, including Hard" : "Plan fails"],
+          ["Dry tyre rule", tyreOk ? "Two specifications, including " + mandatory : "Plan fails"],
           ["Laps beyond the tyre cliff", String(worn)],
           ["Fuel at finish", remaining.toFixed(3) + " kg · " + result],
           ["Projected loss against reference", remaining < 0 ? "Cannot complete distance" : projected.toFixed(1) + " s"],
           ["Pre-cliff · laps " + (firstCompare + 1) + "–" + (lastCompare + 1),
             signedSeconds(tyreChange) + " tyre-only · " + signedSeconds(netChange) + " net"],
         ],
-        explanation: "The fixture nominates Hard as mandatory. Two Medium sets still count as one specification. In a 2026 Grand Prix without intermediate or wet tyre use, the rules require two dry specifications, including a nominated mandatory one. The sample is 0.70 L, or 0.525 kg at the illustrative density of 0.75 kg/L with ideal recovery. Burn, tyre wear and pace costs are teaching inputs. The solid line adds fuel mass and lift-and-coast costs to the dashed tyre-only reference. Falling fuel mass can hide tyre wear before the cliff. The projected total also includes a 20 s stop, which is left out of the lap-pace plot. If the fuel runs out, the graph still illustrates the planned distance.",
+        explanation: (vegas ? "Las Vegas nominated Medium and Hard. The 2026 podium used Soft then Medium under the Safety Car. This 50-lap pace model remains illustrative. " : "The teaching fixture nominates Hard. ") +
+          "An all-slick race requires two distinct dry specifications including a nominated one. The FIA requires a 0.70 L recoverable sample during competition. This model checks estimated finish mass using 0.75 kg/L and ideal recovery. The solid net pace line includes fuel mass and lift-and-coast. The projected total includes a 20 s stop. The graph shows the planned distance even if the fuel runs out.",
         success,
         feedback: next,
       };

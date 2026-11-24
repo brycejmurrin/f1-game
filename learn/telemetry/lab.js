@@ -10,6 +10,8 @@
   const checkpoints = document.querySelectorAll("[data-checkpoint]");
   const ghosts = document.querySelectorAll("[data-ghost]");
   const maxTime = Math.max(...lanes.map(lane => lane.cum.t.at(-1)));
+  const stripEnd = Math.ceil(Math.max(...lanes.map(lane => lane.cum.d.at(-1))) / 5) * 5;
+  get("strip-end").textContent = stripEnd + " m";
   const rowNames = ["time", "distance", "speed", "brake", "throttle"];
   const answerKeys = ["a", "b"];
   const signed = value => (value >= 0 ? "+" : "−") + Math.abs(value).toFixed(2) + " s";
@@ -21,7 +23,8 @@
   let deltaSeries;
   let plot = null;
   const replay = LearnReplay.mount(get("trace-replay"), {
-    label: "telemetry trace",
+    label: () => axis === "time" ? "time replay" : "distance scan",
+    duration: () => axis === "time" ? maxTime * 1000 : 7000,
     draw(progress) { selectCursor(progress * axisLimit()); },
   });
   replay.manual(false);
@@ -31,6 +34,9 @@
     deltaSeries = series(lanes, from, gate, reference).map(point => ({
       ...point, time: DataTelemetryModel.timeAtDist(lanes[reference].cum, point.distance),
     }));
+    const middle = readAt(lanes, 40, "distance", reference).delta;
+    const atGate = Number.isFinite(analysis.deltaAfter) ? signed(analysis.deltaAfter) : "unavailable";
+    get("checkpoint-delta").textContent = "Equal-distance checkpoints · 40 m: " + signed(middle) + " · " + gate + " m: " + atGate;
     for (const button of checkpoints) {
       const key = button.dataset.checkpoint;
       button.disabled = key !== "start" && key !== "exit" && !analysis.lanes?.[reference]?.[key];
@@ -138,6 +144,12 @@
           return [[boundary, previous[channel]], [boundary, sample[channel]], [columns[index], sample[channel]]];
         });
         trace(points, row, i ? accent : ink, i ? [5, 3] : []);
+        ctx.fillStyle = i ? accent : ink;
+        for (const [index, sample] of lane.car.entries()) {
+          ctx.beginPath();
+          ctx.arc(x(columns[index]), y(row, sample[channel], ...bands[row].limits), 2.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
       });
     });
     trace(deltaSeries.map(point => [point[axis], point.delta]), 3, accent, []);
@@ -176,7 +188,7 @@
       ];
       values.forEach((value, j) => { get(rowNames[j] + "-" + answerKeys[i]).textContent = value; });
       ghosts[i].hidden = distance === null;
-      if (distance !== null) ghosts[i].style.left = Math.min(100, distance) + "%";
+      if (distance !== null) ghosts[i].style.left = distance / stripEnd * 100 + "%";
     });
     const time = axis === "time";
     get("cursor").textContent = time ? cursor.toFixed(3) + " s" : cursor.toFixed(1) + " m";
@@ -196,20 +208,20 @@
   }
 
   function selectAxis(next, value) {
-    replay.stop();
     if (value === undefined) {
       const current = readAt(lanes, cursor, axis, reference).lanes[reference];
       value = (next === "time" ? current.t : current.distance) ?? 0;
     }
     axis = next;
+    replay.stop();
     document.querySelectorAll("[name=axis]").forEach(control => { control.checked = control.value === axis; });
     const time = axis === "time";
     scrub.max = String(axisLimit());
     scrub.step = time ? ".001" : ".1";
     get("scrub-label").textContent = time ? "Elapsed time" : "Estimated distance";
     get("axis-note").textContent = time
-      ? "Equal time · The gap trace uses the reference driver’s distance. Positive means the other driver is later."
-      : "Equal distance · Compare arrival times. Positive means the other driver is later.";
+      ? "Time replay · 1× follows the recorded fixture clock. The gap trace uses the reference driver’s distance. Positive means the other driver is later."
+      : "Distance scan · The cursor moves uniformly along the section. Scan speed is relative to the lesson. Positive means the other driver arrives later.";
     selectCursor(value, true);
     replay.seek(cursor / axisLimit(), false);
   }

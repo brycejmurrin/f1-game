@@ -203,10 +203,10 @@ test("VSC lesson computes pit loss, rejoin and finish projections for every repl
     { filename: absSrc(modelPath) },
   );
   const expected = {
-    default: [30000, 22000, 12000, 2000, 26000, 23000],
-    hardLife: [30000, 22000, 12000, 2000, 17000, 23000],
-    earlyGreen: [30000, 22000, 17000, -3000, 22000, 23000],
-    traffic: [30000, 22000, 17000, -3000, 25000, 23000],
+    default: [30000, 22000, 12000, -3556, 26000, 23000],
+    hardLife: [30000, 22000, 12000, -3556, 17000, 23000],
+    earlyGreen: [30000, 22000, 17000, -8000, 22000, 23000],
+    traffic: [30000, 22000, 17000, -8000, 25000, 23000],
     green: [30000, 22000, 22000, -8000, 27000, 23000],
     safetyCar: [30000, 22000, 6000, -2500, 11000, 23000],
   };
@@ -218,8 +218,8 @@ test("VSC lesson computes pit loss, rejoin and finish projections for every repl
   assert.deepEqual([regimes.green.loss, regimes.vsc.loss, regimes.safetyCar.loss], [22000, 12000, 6000]);
   const slower = evaluate(fixtures.default, 1000);
   assert.equal(slower.boxLoss, 13000);
-  assert.equal(slower.rejoin, 1000);
-  assert.equal(evaluate(fixtures.default, 2000).rejoin, 0);
+  assert.equal(slower.rejoin, -4556);
+  assert.equal(evaluate(fixtures.default, -3556).rejoin, 0);
   const tie = evaluate({ ...fixtures.default, boxPace: 11000 });
   assert.equal(tie.boxTotal, tie.stayTotal);
   assert.equal(slower.greenLoss, 23000, "same service time for either stop");
@@ -228,6 +228,9 @@ test("VSC lesson computes pit loss, rejoin and finish projections for every repl
   assert.equal(earlyGreen.cautionMetres, 200);
   assert.equal(earlyGreen.restartMetres, 200);
   assert.equal(earlyGreen.trackTime, 13000);
+  assert.equal(earlyGreen.referenceTrackTime, 8000);
+  assert.equal(progress(13999, fixtures.earlyGreen, earlyGreen).reference, 0);
+  assert.equal(progress(22000, fixtures.earlyGreen, earlyGreen).reference, 1);
   assert.equal(progress(9000, fixtures.earlyGreen, earlyGreen).track, 0.5);
   assert.equal(progress(13000, fixtures.earlyGreen, earlyGreen).track, 1);
   assert.equal(progress(22500, fixtures.earlyGreen, earlyGreen).pitPhase, "Service");
@@ -237,6 +240,6 @@ test("VSC lesson computes pit loss, rejoin and finish projections for every repl
   assert.equal(progress(roundedFinish.trackTime, { ...fixtures.default, vscSpeed: 85 }, roundedFinish).track, 1);
   const noCaution = evaluate({ ...fixtures.default, vscEnds: 0 });
   assert.equal(noCaution.boxLoss, noCaution.greenLoss);
-  assert.equal(evaluate({ ...fixtures.traffic, gapBehind: 17000 }).traffic, 0);
-  assert.equal(evaluate({ ...fixtures.traffic, gapBehind: 16500 }).traffic, 3000);
+  assert.equal(evaluate({ ...fixtures.traffic, gapBehind: 22000 }).traffic, 0);
+  assert.equal(evaluate({ ...fixtures.traffic, gapBehind: 21500 }).traffic, 3000);
 });

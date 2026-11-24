@@ -22,6 +22,8 @@
       ["Pirelli on Austria 2026’s undercuts", "https://www.formula1.com/en/latest/article/what-the-teams-said-race-day-in-austria-2026.2c6WyTl6yjshJrSwqRsYAK"],
       ["2026 Las Vegas tyre warm-up", "https://www.formula1.com/en/latest/article/what-tyres-will-the-teams-and-drivers-have-for-the-2026-las-vegas-grand-prix.1HEaoIW48MVZs9cAT7rP2w"],
       ["Formula 1 on undercuts and overcuts", "https://www.formula1.com/en/latest/article/jolyon-palmers-analysis-singapore-and-the-art-of-undercutting.1NgVyVsZnHTDEA9wi0s5lW"],
+      ["Pirelli · Hot Austria and undercut outcomes", "https://press.pirelli.com/george-russell-wins-in-austria-as-verstappen-celebrates-second-place-at-the-red-bull-ring/"],
+      ["Pirelli · Tyre warm-up in cool Las Vegas", "https://press.pirelli.com/the-night-time-challenge-of-las-vegas"],
     ],
     evaluate(state) {
       const earlyLap = fresh + state.warm + state.traffic;
@@ -37,7 +39,7 @@
       const success = finish >= 0.5;
       return {
         svg: `<g fill="currentColor" font-size="18">
-          <text x="106" y="26">Gap to rival · positive means ahead</text>
+          <text x="106" y="26">Gap contributions · positive means ahead</text>
           <path d="M75 110H530" stroke="currentColor" opacity=".45" stroke-dasharray="7 5"/>
           <text x="28" y="116">Level</text>
           <polyline points="${points.map(([x, delta]) => x + "," + y(delta)).join(" ")}" fill="none" stroke="var(--red, #e64b43)" stroke-width="4"/>
@@ -46,14 +48,9 @@
             <text x="${x}" y="211" text-anchor="middle">${labels[i]}</text>`).join("")}
         </g>`,
         replay(progress) {
-          const stage = progress < .5 ? 0 : 1;
-          const [x, delta] = points[stage];
-          const [nextX, nextDelta] = points[stage + 1];
-          const step = progress * 2 - stage;
-          const gap = delta + (nextDelta - delta) * step;
-          return {svg: LearnSandbox.cursor(x + (nextX - x) * step, y(gap), 45, 191),
-            readout: (progress === 0 ? labels[0] : progress < .5 ? "Pace adjustment" :
-              progress === 1 ? labels[2] : "Pit-loss adjustment") + " · " + signed(gap)};
+          const stage = Math.round(progress * (points.length - 1));
+          const [x, gap] = points[stage];
+          return {svg: LearnSandbox.cursor(x, y(gap), 45, 191), readout: labels[stage] + " · " + signed(gap)};
         },
         metrics: [
           ["Early stopper’s out-lap", earlyLap.toFixed(1) + " s"],
@@ -61,7 +58,7 @@
           ["Pit loss gained on rival", signed(pitGain)],
           ["Gap after both stops", signed(finish)],
         ],
-        explanation: "The early stopper runs 88.2 s on fresh tyres before warm-up and traffic costs. The late stopper runs the old-tyre lap. Pit losses are counted once each. These are illustrative timings on a common comparison interval.",
+        explanation: "The early stopper runs 88.2 s on fresh tyres before warm-up and traffic costs. The late stopper runs the old-tyre lap. The replay steps through contributions to the final gap on a common comparison interval. Hot Austria and cool Las Vegas illustrate why fresh-tyre warm-up matters.",
         success,
         feedback: success ? "You gained the place and cleared the 0.5 s target." :
           finish > 0 ? "You gained the place with less than 0.5 s to spare." :

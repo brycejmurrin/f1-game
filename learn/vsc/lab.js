@@ -34,6 +34,9 @@
     get("pit-car").style.left = replay.pit * 100 + "%";
     get("track-car").style.left = replay.track * 100 + "%";
     get("green-car").style.left = replay.green * 100 + "%";
+    get("reference-car").style.left = replay.reference * 100 + "%";
+    get("reference-clock").textContent = elapsed < input.gapBehind ? "Approaching entry" :
+      metres(replay.reference * distance) + " · " + seconds(Math.min(elapsed, result.referenceArrival));
     get("pit-clock").textContent = replay.pitPhase + " · " + seconds(Math.min(elapsed, result.pitTime));
     const trackState = elapsed >= result.trackTime ? "Passed marker" : elapsed >= result.cautionMs ? "Green" : regimeNames[input.regime || "vsc"];
     get("track-clock").textContent = trackState + " · " + metres(replay.track * distance) + " · " +
@@ -71,8 +74,9 @@
     if (result.restartMetres) segments.push(metres(result.restartMetres) + " at " + input.greenSpeed + " km/h");
     get("track-math").textContent = segments.join(" + ") + " = " + seconds(result.trackTime);
     get("green-math").textContent = metres(distance) + " at " + input.greenSpeed + " km/h = " + seconds(result.greenTrack);
-    get("loss").textContent = seconds(result.pitTime) + " pit − " + seconds(result.trackTime) +
-      " track = " + seconds(result.boxLoss) + " lost now. Under green it costs " + seconds(result.greenLoss) + ".";
+    const effect = loss => seconds(Math.abs(loss)) + (loss < 0 ? " gained" : " lost");
+    get("loss").textContent = seconds(result.pitTime) + " pit vs. " + seconds(result.trackTime) +
+      " track · " + effect(result.boxLoss) + " now, " + effect(result.greenLoss) + " under green.";
     get("vsc-zone").style.width = result.cautionMetres / distance * 100 + "%";
   }
 
@@ -92,10 +96,11 @@
     const side = margin > 0 ? "ahead" : margin < 0 ? "behind" : "level";
     const rejoin = side === "level" ? "level with the reference car" :
       seconds(Math.abs(margin)) + (side === "ahead" ? " ahead of" : " behind") + " the reference car";
-    get("rejoin").textContent = "Box now: " + seconds(input.gapBehind) + " gap − " +
-      seconds(result.boxLoss) + " pit loss. You rejoin " + rejoin + ".";
+    get("rejoin").textContent = "The reference car arrives at " + seconds(result.referenceArrival) +
+      " (" + seconds(input.gapBehind) + " to enter plus " + seconds(result.referenceTrackTime) +
+      " on track). Your pit route takes " + seconds(result.pitTime) + ". You rejoin " + rejoin + ".";
     get("feedback").textContent = prediction.value === side ? "Correct. Your pit loss puts you " + rejoin + "." :
-      "The worked rejoin is " + rejoin + ". Compare the starting gap with the pit loss.";
+      "The worked rejoin is " + rejoin + ". Compare when both cars reach the same exit marker.";
     const traffic = result.traffic ? " + " + seconds(result.traffic) + " traffic" : "";
     get("box-total").textContent = seconds(result.boxLoss) + " pit + " + seconds(input.boxPace) +
       " tyre pace" + traffic + " = " + seconds(result.boxTotal);
@@ -129,7 +134,7 @@
     if (input.regime === "green") input.vscEnds = 0;
     for (const id of ["vsc-speed", "vsc-duration"]) get(id).disabled = input.regime === "green";
     result = evaluate(input, input.service - pitPath[2]);
-    duration = Math.max(result.pitTime, result.trackTime, result.greenTrack);
+    duration = Math.max(result.pitTime, result.trackTime, result.greenTrack, result.referenceArrival);
     timeline.max = duration / 1000;
     timeline.step = ".001";
     elapsed = 0;
@@ -177,7 +182,7 @@
     stopReplay();
     const [entry, transit, , exit] = pitPath;
     const markers = [entry, entry + transit, result.pitTime - exit,
-      result.pitTime, result.cautionMs, result.trackTime, result.greenTrack].sort((a, b) => a - b);
+      result.pitTime, result.cautionMs, result.trackTime, result.greenTrack, input.gapBehind, result.referenceArrival].sort((a, b) => a - b);
     elapsed = markers.find(mark => mark > elapsed + 0.5) ?? duration;
     drawReplay();
   });

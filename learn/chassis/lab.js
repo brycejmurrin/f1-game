@@ -62,7 +62,7 @@
   function floor() {
     return `<g font-size="13" fill="currentColor">
       <text x="44" y="30">Prior concept · shaped floor tunnels</text>
-      <text x="320" y="30">2026 concept · smaller diffuser</text>
+      <text x="320" y="30">2026 · partially flat floor</text>
       <path d="M44 157H550" stroke="currentColor" opacity=".35"/>
       <path d="M54 128 Q91 129 125 133 H171 Q204 126 268 82
         M330 128 Q370 129 400 133 H453 Q481 128 548 107" stroke="${accent}" stroke-width="4" fill="none"/>
@@ -70,7 +70,7 @@
       <path d="M254 116l9 1-6 7 M533 124l9 3-7 6" stroke="currentColor" opacity=".65" fill="none"/>
       <path d="M54 128L84 102H212L268 82 M330 128l34-26h123l61 5" stroke="currentColor" opacity=".26" fill="none"/>
       <text x="44" y="179">Track surface</text>
-      <text x="44" y="211">Air still moves under the 2026 floor. Geometry is illustrative.</text>
+      <text x="44" y="211">2026 concept uses a lower-powered diffuser · geometry is illustrative</text>
     </g>`;
   }
 
@@ -125,7 +125,6 @@
     sources: [
       ["FIA Section C Issue 21 · C2.3 and C3.5", fia21],
       ["FIA comparative 2026 package concept", "https://www.fia.com/news/new-era-competition-fia-showcases-future-focused-formula-1-regulations-2026-and-beyond"],
-      ["FIA on the 2026 floor and diffuser", "https://www.fia.com/news/f1s-new-era-everything-you-need-know-about-how-fia-making-formula-1-more-competitive-more"],
     ],
     evaluate({view, wheelbase, body, answer, wakeStyle, offset}) {
       const axleFail = wheelbase > limits.wheelbase;
@@ -143,7 +142,7 @@
       ] : inspection ? [
         ["Axle separation", check(wheelbase, limits.wheelbase)],
         ["Applicable body half-width", check(body, limits.halfWidth)],
-        ["Tyre and wheel rim", "Excluded from the C2.3 lateral limit"],
+        ["Tyre, rim and specified rim attachments", "Excluded from the C2.3 lateral limit"],
       ] : [
         ["Maximum wheelbase", "3,600 → 3,400 mm"],
         ["Comparative body width", "2,000 → 1,900 mm"],
@@ -153,9 +152,9 @@
       const explanation = wakeView
         ? "Switch direction and offset the follower to compare where the tyre-wake paths sit. The FIA describes the 2026 in-washing control boards behind the front tyres as a way to manage their wake and help cars follow. This top view shows the intended direction. It gives no measured wake shape or follower load."
         : inspection
-        ? "C2.3 measures the axle planes and the applicable envelope at Legality Setup. It gives 3,400 mm axle separation and 950 mm from the centre plane. The tyre can extend beyond the body limit under its exception."
+        ? "C2.3 measures the axle planes and the applicable envelope at Legality Setup. It gives 3,400 mm axle separation and 950 mm from the centre plane. The tyre, rim and specified rim attachments have a lateral exception."
         : view === "floor"
-          ? "The FIA's design comparison describes a narrower floor and smaller diffuser. The cutaway illustrates underfloor geometry, so it provides no force or response measurement."
+          ? "The FIA concept describes a partially flat floor and a lower-powered diffuser. The cutaway illustrates the airflow path. Its dimensions and forces are schematic."
           : "Both silhouettes use the same scale and front-axle origin. The FIA uses these dimensions to describe the package change. Agility also depends on mass distribution, tyres and aero.";
       return {
         svg: wakeView ? wake(wakeStyle, offset) : view === "floor" ? floor() : top(inspection ? wheelbase : limits.wheelbase, inspection ? body : limits.halfWidth, view === "compare"),

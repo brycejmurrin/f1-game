@@ -34,6 +34,7 @@
   let drag = null;
   let followerWake = 0;
   let corner = false;
+  const wakeHalfRatio = .25;
   let cornerProgress = 0;
   const replayHost = get("corner-replay");
   const cornerReplay = LearnReplay.mount(replayHost, {
@@ -77,7 +78,7 @@
       ? mid + handedness * height * .18 * Math.tanh(4 * (x - turnX) / width)
       : mid;
     return {width, height, leader, xAt, step, follower: xAt(Number(gap.value)),
-      trackY, lateral: offset.checked ? -height * (corner ? .21 : .26) : 0};
+      trackY, lateral: offset.checked ? -height * wakeHalfRatio : 0};
   }
 
   function measure(distance, lateral, straight) {
@@ -159,7 +160,7 @@
     const edge = xAt(tow.range);
     const gapMin = Number(gap.min);
     const near = xAt(gapMin);
-    const wakeHalf = height * 0.25;
+    const wakeHalf = height * wakeHalfRatio;
     const scale = Math.min(1.7, width / 340, height / 105);
     // Car A sets the measured wake. The overlay follows Car B and illustrates local flow.
     const followerY = trackY(follower) + lateral;
@@ -220,6 +221,12 @@
     ctx.setLineDash([]);
     car(leader, trackY(leader), scale, palette.leader, "A", heading(leader));
     car(follower, followerY, scale, palette.follower, "B", heading(follower), true);
+    if (lateral) {
+      ctx.fillStyle = palette.label;
+      ctx.beginPath();
+      ctx.arc(follower, followerY, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   function tick(time) {
@@ -259,9 +266,9 @@
     const state = result.wake === 0 ? "Clear air" : onStraight ? "Tow available" : "Cornering in wake";
     if (get("state").textContent !== state) get("state").textContent = state;
     get("effect").textContent = result.wake === 0
-      ? "Car B is outside the shaded wake. It has clean-air grip and no tow."
+      ? "Car B’s centre is at or beyond the shaded wake boundary. The Apex model gives it clean-air grip and no tow."
       : onStraight ? "The straight-line tow is available. Wake exposure still reduces grip."
-      : "The corner removes the usable tow. At this gap and offset the grip loss is unchanged.";
+      : "The Apex corner preset removes usable tow. At this gap and offset the modelled grip loss stays the same.";
     draw();
   }
 

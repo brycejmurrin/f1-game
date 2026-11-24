@@ -23,7 +23,7 @@
 <p id="gap-formula" class="hint"></p>
 <fieldset><legend>Track section</legend><div><label><input type="radio" name="section" value="straight" checked> Straight</label><label><input type="radio" name="section" value="corner"> Fast corner</label></div></fieldset>
 <label id="direction-row" hidden>Turn direction <select id="direction"><option value="left">Left</option><option value="right">Right</option></select></label>
-<label class="check"><input id="offset" type="checkbox"> Move follower 4 m off-line</label>
+<label class="check"><input id="offset" type="checkbox"> Move follower 4 m off-line to the wake boundary</label>
 </section>
 <section class="active-aero" data-as="box" aria-labelledby="active-aero-title">
 <h2 id="active-aero-title" data-as="heading">2026 F1 ACTIVE AERO</h2>
@@ -63,7 +63,7 @@
 <section class="physics-note" aria-labelledby="prediction-title">
 <h2 id="prediction-title">MAKE A PREDICTION</h2>
 <form id="prediction">
-<fieldset><legend>At 10 m directly behind car A, what changes when B enters the fast corner?</legend>
+<fieldset><legend>In the Apex model, what changes when B enters the fast corner 10 m behind A?</legend>
 <label><input type="radio" name="answer" value="clear"> The wake clears and grip returns.</label>
 <label><input type="radio" name="answer" value="tow"> The tow goes away. The wake still reduces grip.</label>
 <label><input type="radio" name="answer" value="gain"> The tow gets stronger.</label>
@@ -72,6 +72,7 @@
 <p id="feedback" role="status"></p>
 </form>
 </section>
+<p class="physics-note">In real airflow, drag and downforce can recover at different rates as a following car moves sideways. Cornering can still involve a drag reduction even when the driver gains more from moving into cleaner air. <a href="https://doi.org/10.4271/2017-01-1546" target="_blank" rel="noopener">Wake-flow study</a></p>
 <section class="physics-note" aria-labelledby="force-title">
 <h2 id="force-title">Why the force changes</h2>
 <p>A wing or floor gets its aerodynamic load from the air moving past it. Dynamic pressure is <strong>q = ½ρv²</strong>, where ρ is air density and v is the local air speed relative to the car. Aero force is dynamic pressure × reference area × a force coefficient.</p>

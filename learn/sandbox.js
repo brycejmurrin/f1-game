@@ -26,10 +26,27 @@ const LearnSandbox = (() => {
     const studio = element("div", root);
     studio.id = "learn-studio";
     const instrument = panel(studio);
+    const diagramView = element("div", instrument);
+    diagramView.className = "diagram-view";
+    diagramView.id = "lesson-diagram";
+    diagramView.setAttribute("role", "region");
+    diagramView.setAttribute("aria-label", lesson.title + " diagram");
     const diagram = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     diagram.setAttribute("viewBox", "0 0 600 240");
     diagram.setAttribute("role", "img");
-    instrument.appendChild(diagram);
+    diagramView.appendChild(diagram);
+    const expand = element("button", instrument, "Expand diagram");
+    expand.type = "button";
+    expand.className = "expand-diagram";
+    expand.setAttribute("aria-expanded", "false");
+    expand.setAttribute("aria-controls", diagramView.id);
+    expand.addEventListener("click", () => {
+      const expanded = diagramView.classList.toggle("expanded");
+      diagramView.tabIndex = expanded ? 0 : -1;
+      if (!expanded) diagramView.scrollLeft = 0;
+      expand.setAttribute("aria-expanded", String(expanded));
+      expand.textContent = expanded ? "Fit diagram" : "Expand diagram";
+    });
     const replayHost = element("div", instrument);
     const readouts = element("dl", instrument);
     const explanation = element("p", instrument);
@@ -60,7 +77,7 @@ const LearnSandbox = (() => {
         }
       }
       setValue(control.value);
-      controls.set(control.id, {control, setValue});
+      controls.set(control.id, {control, input, setValue});
       input.addEventListener("input", () => {
         replay?.stop();
         setValue(control.options ? input.value : input.valueAsNumber);
@@ -94,6 +111,14 @@ const LearnSandbox = (() => {
     function render(clearFeedback = true) {
       for (const {row, when} of conditionalRows) row.hidden = !when(state);
       result = lesson.evaluate(state);
+      const entry = replayInput();
+      if (entry && result.replayEnd !== undefined) {
+        entry.input.max = result.replayEnd;
+        if (state[entry.control.id] > result.replayEnd) {
+          entry.setValue(result.replayEnd);
+          result = lesson.evaluate(state);
+        }
+      }
       // Markup is authored by the lesson using its own enumerated or bounded controls.
       diagram.innerHTML = result.svg;
       if (result.replay) {
@@ -114,11 +139,14 @@ const LearnSandbox = (() => {
     const replayInput = () => controls.get(lesson.replay?.input?.(state));
     const replay = lesson.replay && LearnReplay.mount(replayHost, {
       label: lesson.replay.label,
+      duration: lesson.replay.duration,
+      rewind: lesson.replay.rewind,
       draw(progress) {
         replayProgress = progress;
         const entry = replayInput();
         if (entry) {
-          const {id, min, max, step = 1} = entry.control;
+          const {id, min, step = 1} = entry.control;
+          const max = Number(entry.input.max);
           const value = Number((min + Math.round(progress * (max - min) / step) * step).toFixed(6));
           if (value !== state[id]) {
             entry.setValue(value);
@@ -137,7 +165,8 @@ const LearnSandbox = (() => {
       replay.controls.hidden = !(entry || result.replay);
       replay.manual(!entry);
       if (entry) {
-        const {id, min, max} = entry.control;
+        const {id, min} = entry.control;
+        const max = Number(entry.input.max);
         replay.seek((state[id] - min) / (max - min));
       } else if (result.replay) replay.seek(fromInput ? replayProgress : lesson.replay.initial ?? 0);
     }

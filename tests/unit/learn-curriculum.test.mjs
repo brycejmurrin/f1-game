@@ -54,8 +54,21 @@ for (const [id, setup] of Object.entries(setups)) {
     } else {
       const {replay} = lesson.evaluate(replayState);
       const first = replay(0).svg;
-      const last = replay(1).svg;
-      assert.ok(first && last && first !== last, "playback changes the diagram across the run");
+      const sample = replay(.35).svg;
+      assert.ok(first && sample && first !== sample, "playback changes the diagram across the run");
+    }
+    if (id === "hybrid") {
+      const {replay} = lesson.evaluate({...initial, start: 2, deploy: 350});
+      assert.equal(replay(7 / 60).readout, "7.0 s · Deploy · 0.00 MJ");
+    }
+    if (id === "deployment") {
+      const {replay} = lesson.evaluate({...initial, curve: "overtake", gap: .95, charge: 4});
+      assert.equal(replay(1).readout.split(" · ")[2], "100 kW delivered");
+    }
+    if (id === "rain") {
+      const slick = lesson.evaluate({...initial, line: "puddle", tyre: "slick"}).replay(.5);
+      const wet = lesson.evaluate({...initial, line: "puddle", tyre: "wet"}).replay(.5);
+      assert.notEqual(slick.readout, wet.readout);
     }
   });
 }

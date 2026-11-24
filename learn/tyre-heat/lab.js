@@ -44,12 +44,13 @@
       { id: 'load', label: 'Cornering workload', min: 0, max: 100, step: 5, value: 35, unit: '%' },
       { id: 'elapsed', label: 'Time into run', min: 0, max: 90, step: 1, value: 45, unit: 's' }
     ],
-    challenge: 'At the end of the run, put both temperatures inside the shaded 90–105 °C band. Change one heat source at a time.',
+    challenge: 'At the end of the run, put both temperatures inside the illustrative 90–105 °C target band. Change one heat source at a time.',
     sources: [
       ['Pirelli · Understanding the tyre working window', 'https://www.pirelli.com/global/en-ww/race/racingspot/seeing-through-the-window-50931/'],
       ['Pirelli · Cold sliding and graining', 'https://press.pirelli.com/review---2013-official-formula-one-test-in-barcelona/'],
       ['Pirelli · Heat and blister formation', 'https://press.pirelli.com/a-hot-summer-of-formula-1-gets-underway-in-austria/'],
-      ['Pirelli · How sliding heats the tread', 'https://press.pirelli.com/in-bahrain-with-prior-knowledge/']
+      ['Pirelli · How sliding heats the tread', 'https://press.pirelli.com/in-bahrain-with-prior-knowledge/'],
+      ['Pirelli · Cool asphalt and graining in Las Vegas', 'https://press.pirelli.com/the-night-time-challenge-of-las-vegas']
     ],
     evaluate({ track, sliding, load, elapsed }) {
       const coldTrack = track === 'cold';
@@ -73,6 +74,8 @@
         <rect x="58" y="${y(upper)}" width="325" height="${y(lower) - y(upper)}" fill="#699969" opacity=".27"/>
         ${labels}
         <path d="M58 43v146h325" stroke="currentColor" fill="none" opacity=".4"/>
+        <polyline points="${other.surfacePoints.join(' ')}" stroke="${surfaceColour}" stroke-width="2" stroke-dasharray="2 4" opacity=".75" fill="none"/>
+        <polyline points="${other.corePoints.join(' ')}" stroke="${coreColour}" stroke-width="2" stroke-dasharray="2 4" opacity=".75" fill="none"/>
         <polyline points="${surfacePoints.join(' ')}" stroke="${surfaceColour}" stroke-width="4" fill="none"/>
         <polyline points="${corePoints.join(' ')}" stroke="${coreColour}" stroke-width="4" stroke-dasharray="8 4" fill="none"/>
         <circle cx="${x(elapsed)}" cy="${y(surface)}" r="5" fill="${surfaceColour}"/>
@@ -80,6 +83,8 @@
         <text x="58" y="216">0 s</text><text x="${x(45)}" y="216" text-anchor="middle">45 s</text>
         <text x="383" y="216" text-anchor="end">90 s</text>
         <text x="424" y="72">Tread section</text>
+        <text x="420" y="216" font-size="12">Dotted · ${otherTemp} °C asphalt</text>
+        <text x="62" y="${y(upper) - 6}" font-size="11">Illustrative target</text>
         <rect x="423" y="103" width="151" height="31" fill="currentColor" opacity=".16"/>
         <path d="M423 103h151" stroke="currentColor" stroke-width="2"/>
         ${grainMarks}${blisterMarks}

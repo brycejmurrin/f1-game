@@ -145,6 +145,7 @@
   function selectSurface(next) {
     surface = next;
     surfaces.forEach(control => { control.checked = control.value === surface; });
+    updateSpeedGrip();
   }
 
   function applyCase(key) {
@@ -211,6 +212,34 @@
 
   const deceleration = get("deceleration");
   const cgHeight = get("cg-height");
+  const speedControls = [get("braking-speed"), get("speed-brake"), get("front-bias")];
+  function updateSpeedGrip() {
+    const [speed, braking, bias] = speedControls.map(input => Number(input.value));
+    const labels = [speed + " km/h", force(braking), bias + "%"];
+    speedControls.forEach((input, i) => {
+      get(input.id + "-value").textContent = labels[i];
+      input.setAttribute("aria-valuetext", labels[i]);
+    });
+    const weight = 800 * 9.81 / 1000;
+    const aero = 16 * (speed / 300) ** 2;
+    const transfer = braking * .30 / 3.40;
+    const friction = surface === "dry" ? 1.25 : .875;
+    const front = friction * (weight * .47 + aero * .44 + transfer);
+    const rear = friction * (weight * .53 + aero * .56 - transfer);
+    const frontRequest = braking * bias / 100;
+    const rearRequest = braking - frontRequest;
+    get("speed-aero").textContent = force(aero);
+    get("speed-front").textContent = force(frontRequest) + " / " + force(front);
+    get("speed-rear").textContent = force(rearRequest) + " / " + force(rear);
+    const frontOver = frontRequest > front;
+    const rearOver = rearRequest > rear;
+    const message = (frontOver && rearOver ? "Both axles exceed their grip limits." :
+      frontOver ? "Front lockup risk. Move bias rearward or reduce the brake request." :
+      rearOver ? "Rear lockup risk. Move bias forward or reduce the brake request." :
+      "Both axles are within the straight-line grip limit.") + " Surface: " + surface + ".";
+    if (get("speed-lock").textContent !== message) get("speed-lock").textContent = message;
+  }
+  speedControls.forEach(input => input.addEventListener("input", updateSpeedGrip));
   function updateAxleLoads() {
     const g = Number(deceleration.value);
     const height = Number(cgHeight.value);
@@ -244,4 +273,5 @@
   LearnAppearance.mount(reduced => cornerReplay.reduced(reduced));
   cornerReplay.seek(0);
   updateAxleLoads();
+  updateSpeedGrip();
 })();
