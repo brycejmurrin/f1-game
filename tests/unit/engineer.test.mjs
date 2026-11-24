@@ -145,7 +145,9 @@ test("the wrong tread outranks everything — it is the one that costs whole sec
 });
 
 test("a LOCAL SHOWER names its sector, and says whether the lap as a whole wants rubber for it (js/race/rain-cells.js)", () => {
-  assert.equal(line({ rainWhere: "2", wantTread: 0 }), "RAIN IN SECTOR 2 — REST OF THE LAP IS DRY, STAY OUT");
+  assert.equal(line({ rainWhere: "2", wantTread: 0 }), "RAIN IN SECTOR 2 — STAY OUT");
+  assert.equal(line({ rainWhere: "2", noStop: true, wantTread: 0 }), "RAIN IN SECTOR 2");
+  assert.match(line({ rainWhere: "2", lapsToStop: 0, nextCode: "M" }), /^BOX BOX BOX/);
   assert.equal(line({ rainWhere: "2 & 3", wantTread: 1 }), "RAIN IN SECTOR 2 & 3 — INTERS FOR THE LAP");
   assert.equal(E.create({}).callFor(sense({ rainWhere: "1", rainInLaps: 2 }))[1], "where", "before the lap-count forecast");
   assert.match(line({ rainWhere: "1", wrongTread: true, wet: true, wantTread: 1 }), /BOX FOR INTERS/, "the box call still comes first");
