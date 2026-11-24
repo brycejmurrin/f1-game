@@ -883,3 +883,25 @@ test("production geometry carries finite metre coordinates and rejects malformed
   assert.equal(R.validGeometry({...geometry,anchors:[0,.7,.3,1]}),false);
   assert.equal(R.validGeometry({...geometry,width:[null]}),false);
 });
+
+test("replay gauges reject future and stale telemetry while retaining recorded zero inputs", () => {
+  const R = vm.runInContext("DataTelemetryReplay", ctx), start = Date.parse("2023-07-08T15:14:00Z");
+  const lane = {lap:{dateStart:new Date(start).toISOString(),lapDuration:10},nativeCar:[{date:start+1000,gear:4,throttle:0,brake:0},{date:start+5000,gear:5,throttle:100,brake:1}]};
+  assert.equal(R.sampleAt(lane,.5),null);
+  assert.equal(R.sampleAt(lane,2).throttle,0);
+  assert.equal(R.sampleAt(lane,3),null);
+  assert.equal(R.sampleAt(lane,5).gear,5);
+});
+
+test("replay trails are bounded past history, preserve gaps and reset on rewind", () => {
+  const R = vm.runInContext("DataTelemetryReplay", ctx), lane = {lap:{lapDuration:10}};
+  const path = R.trailAt(lane,8,3,t=>t>6&&t<7?null:[t,t]);
+  assert.equal(path[0][0],5);
+  assert.equal(path.at(-1)[0],8);
+  assert.ok(path.includes(null));
+  assert.ok(path.length<=65);
+  assert.equal(R.trailAt(lane,2,8,t=>[t,t])[0][0],0);
+  assert.equal(R.trailAt(lane,20,3,t=>[t,t]).at(-1)[0],10);
+  assert.equal(R.trailAt(lane,0,3,t=>[t,t]).length,0);
+  assert.equal(R.trailAt(lane,8,0,t=>[t,t]).length,0);
+});

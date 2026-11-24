@@ -67,6 +67,19 @@ const DataTelemetryReplay = (function () {
     return { tyre: context.summary.tyre, weather: before(context.sources.weather.rows),
       event: before(context.sources.raceControl.rows, (r, date) => date >= start && (r.driver_number == null || +r.driver_number === lane.d.num)) };
   }
+  function sampleAt(lane, elapsed) {
+    const date = Date.parse(lane.lap?.dateStart) + Math.min(elapsed, lane.lap?.lapDuration || elapsed) * 1000;
+    const samples = lane.nativeCar || lane.car || [], sample = samples[lower(samples, date, "date")];
+    return sample && finite(sample.date) && date - sample.date <= 1500 ? sample : null;
+  }
+  // Bounded history, recomputed from the cursor so seeking never leaves future trails.
+  function trailAt(lane, elapsed, seconds, locate) {
+    const end = Math.min(elapsed, lane.lap?.lapDuration || elapsed), start = Math.max(0, end - seconds), points = [];
+    if (!(seconds > 0) || !(end > start)) return points;
+    const count = Math.min(64, Math.ceil((end - start) / .15));
+    for (let n = 0; n <= count; n++) points.push(locate(start + (end - start) * n / count));
+    return points;
+  }
   function create(view, { el, cssColor }, player) {
     if (typeof Path2D === "undefined") return { element: el("p", "dh-live-sub", "Replay drawing unavailable in this browser."), draw() {}, dispose() {} };
     const box = el("section", "dh-livecard"), heading = el("h3", "dh-section", "TRACK REPLAY");
@@ -75,19 +88,30 @@ const DataTelemetryReplay = (function () {
     const restart = el("button", "bigbtn alt", "RESTART"), expand = el("button", "bigbtn alt", "EXPAND");
     controls.setAttribute("data-replay-actions", "");
     fields.setAttribute("data-replay-fields", "");
-    const rate = el("select"), mode = el("select"), zoom = el("select"), focus = el("select");
-    for (const select of [rate, mode, zoom, focus]) select.className = "dh-pick-select";
+    const rate = el("select"), mode = el("select"), zoom = el("select"), focus = el("select"), trail = el("select"), overlay = el("select");
+    for (const select of [rate, mode, zoom, focus, trail, overlay]) select.className = "dh-pick-select";
     const label = (title, input) => { const l = el("label", "dh-pick-field"); l.appendChild(el("span", "dh-pick-label", title.toUpperCase())); input.setAttribute("aria-label", title); l.appendChild(input); fields.appendChild(l); };
     [[rate, [[1, "1×"], [2, "2×"], [4, "4×"]]], [mode, [["follow", "Follow car"], ["overview", "Whole circuit"]]],
-      [zoom, [[80, "Close"], [140, "Medium"], [300, "Wide"]]], [focus, view.laps.map((l, i) => [i, l.d.name || "#" + l.d.num])]].forEach(([select, values]) => {
+      [zoom, [[80, "Close"], [140, "Medium"], [300, "Wide"], ["custom", "Custom"]]], [focus, view.laps.map((l, i) => [i, l.d.name || "#" + l.d.num])],
+      [trail, [[0, "Off"], [3, "3 seconds"], [8, "8 seconds"]]], [overlay, [["both", "Gear + inputs"], ["gear", "Gear"], ["inputs", "Throttle + brake"], ["off", "Off"]]]].forEach(([select, values]) => {
       values.forEach(([value, title]) => { const o = el("option", "", title); o.value = String(value); select.appendChild(o); });
     });
     zoom.value = "140";
+    zoom.options[3].disabled = true; // Dynamic readout, not a stale preset to select after reset.
+    trail.value = "3";
     for (const button of [play, restart, expand]) { button.type = "button"; controls.appendChild(button); }
     label("Speed", rate); label("View", mode); label("Zoom", zoom); label("Follow", focus);
+    label("Trail", trail); label("Telemetry", overlay);
     const canvas = el("canvas", "dh-canvas"), seek = el("input"), seekLabel = el("label", "dh-pick-field");
     seekLabel.appendChild(el("span", "dh-pick-label", "LAP TIME"));
     canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", "Telemetry replay with circuit overview and following car detail");
+    canvas.tabIndex = 0;
+    const mapTools = el("div", "dh-transport"), zoomIn = el("button", "bigbtn alt", "+"), zoomOut = el("button", "bigbtn alt", "−");
+    const resetMap = el("button", "bigbtn alt", "RESET VIEW"), gestures = el("button", "bigbtn alt", "MOVE MAP");
+    mapTools.setAttribute("data-replay-actions", "");
+    for (const button of [zoomIn, zoomOut, resetMap, gestures]) { button.type = "button"; mapTools.appendChild(button); }
+    zoomIn.setAttribute("aria-label", "Zoom in on map"); zoomOut.setAttribute("aria-label", "Zoom out on map"); gestures.setAttribute("aria-pressed", "false");
+    const mapHint = el("p", "dh-live-sub", "Use + / − to zoom. Enable Move map to drag or pinch; turn it off to scroll the panel. Keyboard: + / −, arrows, 0 to reset. Short maps show the followed driver's gauges.");
     seek.type = "range"; seek.min = "0"; seek.max = String(view.tMax); seek.step = "0.01"; seek.value = "0";
     seek.setAttribute("aria-label", "Replay lap time in seconds"); seekLabel.appendChild(seek);
     const clock = el("output", "dh-live-title", "0.00 s"), note = el("p", "dh-live-sub"), rows = el("div", "dh-livecontrols");
@@ -100,9 +124,11 @@ const DataTelemetryReplay = (function () {
       return { telemetry, context, event };
     });
     const source = el("a", "dh-live-sub", "Geometry source and method"); source.href = "assets/telemetry/README.md"; source.target = "_blank"; source.rel = "noopener";
-    box.append(heading, controls, fields, canvas, clock, seekLabel, note, rows, source);
+    box.append(heading, controls, fields, mapTools, canvas, mapHint, clock, seekLabel, note, rows, source);
     let geometry = null, models = [], disposed = false, dialog = null, placeholder = null, lastFrame = -Infinity, lastContext = "";
     let w = 320, h = 320, ratio = 1, timeout = 0;
+    let magnification = 1, panX = 0, panY = 0, lastScale = 1, moving = false;
+    const pointers = new Map();
     const abort = new AbortController();
     const setText = (node, text) => { if (node.textContent !== text) node.textContent = text; };
     const raw = view.primary.loc || [], fallbackLine = raw.map((p) => [p.x, p.y]);
@@ -139,17 +165,25 @@ const DataTelemetryReplay = (function () {
       const ink = colors.getPropertyValue("--text").trim() || colors.color;
       c.setTransform(ratio, 0, 0, ratio, 0, 0); c.clearRect(0, 0, w, h);
       const positions = view.laps.map((lane, i) => position(lane, i, t));
+      const trails = view.laps.map((lane, i) => trailAt(lane, t, +trail.value, (at) => position(lane, i, at)));
       if (bounds && linePath) {
         const [x0, y0, x1, y1] = bounds, extent = Math.max(x1 - x0, y1 - y0, 1), selected = positions[+focus.value];
         const overview = mode.value === "overview" || !selected;
-        const center = overview ? [(x0 + x1) / 2, (y0 + y1) / 2] : selected;
-        const scale = overview ? Math.min((w - 24) / Math.max(1, x1 - x0), (h - 36) / Math.max(1, y1 - y0)) : Math.min(w, h) / (geometry ? +zoom.value : extent * +zoom.value / 1400);
+        const target = overview ? [(x0 + x1) / 2, (y0 + y1) / 2] : selected;
+        const center = [target[0] + panX, target[1] + panY];
+        const scale = magnification * (overview ? Math.min((w - 24) / Math.max(1, x1 - x0), (h - 36) / Math.max(1, y1 - y0)) : Math.min(w, h) / (geometry ? 140 : extent / 10));
+        lastScale = scale;
         function scene(cx, cy, s, ox, oy, mini) {
           c.save(); c.translate(ox, oy); c.scale(s, -s); c.translate(-cx, -cy);
           if (road) { c.globalAlpha = .14; c.fillStyle = ink; c.fill(road, "evenodd"); c.globalAlpha = 1;
             c.strokeStyle = ink; c.lineWidth = (mini ? .5 : 1) / s; edges.forEach((p) => c.stroke(p)); }
           c.strokeStyle = ink; c.lineWidth = (mini ? 1 : 1.5) / s;
           if (geometry) c.setLineDash([5 / s, 4 / s]); c.stroke(linePath); c.setLineDash([]);
+          trails.forEach((points, i) => {
+            c.beginPath(); let connected = false;
+            for (const p of points) { if (!p) { connected = false; continue; } connected ? c.lineTo(...p) : c.moveTo(...p); connected = true; }
+            c.strokeStyle = cssColor(view.laneCols[i]); c.lineWidth = (mini ? 1 : 2 + (view.laps.length - i) * 2) / s; c.stroke();
+          });
           positions.forEach((p, i) => {
             if (!p) return; c.save(); c.translate(...p); c.fillStyle = cssColor(view.laneCols[i]); c.strokeStyle = c.fillStyle;
             if (geometry && !mini && !overview) {
@@ -165,8 +199,28 @@ const DataTelemetryReplay = (function () {
           c.clearRect(0, 0, size, size); scene((x0 + x1) / 2, (y0 + y1) / 2, s, size / 2, size / 2, true);
         }
         if (geometry && !overview) {
-          c.fillStyle = ink; c.fillRect(12, h - 18, 20 * scale, 2); c.font = "12px system-ui"; c.fillText("20 m · approximate geometry", 12, h - 26);
+          const metres = [20, 10, 5, 2, 1].find((n) => n * scale <= w / 3) || 1;
+          c.fillStyle = ink; c.fillRect(12, h - 18, metres * scale, 2); c.font = "12px system-ui"; c.fillText(metres + " m · approximate geometry", 12, h - 26);
         }
+      }
+      if (overlay.value !== "off") {
+        const shown = h < 220 ? [+focus.value] : view.laps.map((_, i) => i);
+        const badgeW = Math.min(160, w * .55), badgeH = overlay.value === "gear" ? 32 : 48;
+        shown.slice(0, Math.max(1, Math.floor((h - 48) / badgeH))).forEach((i, row) => {
+          const lane = view.laps[i], state = sampleAt(lane, t), x = w - badgeW - 8, y = 8 + row * badgeH;
+          c.fillStyle = colors.getPropertyValue("--surf-1").trim() || "#111"; c.globalAlpha = .94; c.fillRect(x, y, badgeW, badgeH - 3); c.globalAlpha = 1;
+          c.fillStyle = cssColor(view.laneCols[i]); c.fillRect(x, y, 3, badgeH - 3); c.font = "bold 12px system-ui";
+          const name = lane.d.code || "#" + lane.d.num, gear = overlay.value === "inputs" ? "" : "  G" + (state?.gear ?? "—");
+          c.fillText(name + gear, x + 8, y + 15);
+          if (overlay.value !== "gear") {
+            const throttle = finite(state?.throttle) ? clamp(state.throttle, 0, 100) : null;
+            c.fillStyle = ink; c.font = "10px system-ui"; c.fillText("THR " + (throttle == null ? "—" : Math.round(throttle) + "%"), x + 8, y + 29);
+            c.fillStyle = state?.brake ? colors.getPropertyValue("--red").trim() || ink : ink;
+            c.fillText(state?.brake == null ? "BRK —" : state.brake ? "BRAKE" : "BRK OFF", x + badgeW - 54, y + 29);
+            c.globalAlpha = .2; c.fillRect(x + 8, y + 34, badgeW - 16, 5); c.globalAlpha = 1;
+            c.fillStyle = cssColor(view.laneCols[i]); if (throttle != null) c.fillRect(x + 8, y + 34, (badgeW - 16) * throttle / 100, 5);
+          }
+        });
       }
       view.laps.forEach((lane, i) => {
         const at = Math.min(t, lane.lap?.lapDuration || t), samples = lane.nativeCar || lane.car;
@@ -195,9 +249,33 @@ const DataTelemetryReplay = (function () {
     seek.addEventListener("input", () => seekTo(+seek.value)); restart.addEventListener("click", () => seekTo(0));
     play.addEventListener("click", () => { view.playing ? player.pauseAnim(view) : player.playAnim(view); draw(true); });
     rate.addEventListener("change", () => { view.rate = +rate.value; player.paintFrame(view); });
-    [mode, zoom, focus].forEach((s) => s.addEventListener("change", () => draw(true)));
+    function zoomBy(factor) { magnification = clamp(magnification * factor, .25, 8); zoom.options[3].textContent = "Custom · " + magnification.toFixed(1) + "×"; zoom.value = "custom"; draw(true); }
+    function clearPointers() { for (const id of pointers.keys()) if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id); pointers.clear(); }
+    function resetView() { clearPointers(); magnification = 1; panX = panY = 0; zoom.value = "140"; draw(true); }
+    zoomIn.addEventListener("click", () => zoomBy(1.3)); zoomOut.addEventListener("click", () => zoomBy(1 / 1.3)); resetMap.addEventListener("click", resetView);
+    zoom.addEventListener("change", () => { if (zoom.value !== "custom") magnification = 140 / +zoom.value; draw(true); });
+    [mode, focus].forEach((s) => s.addEventListener("change", resetView));
+    [trail, overlay].forEach((s) => s.addEventListener("change", () => draw(true)));
+    gestures.addEventListener("click", () => { moving = !moving; clearPointers(); gestures.setAttribute("aria-pressed", String(moving)); gestures.classList.toggle("alt", !moving); canvas.setAttribute("data-map-gestures", String(moving)); });
+    canvas.addEventListener("wheel", (e) => { if (!moving && document.activeElement !== canvas) return; e.preventDefault(); zoomBy(Math.exp(-clamp(e.deltaY, -100, 100) * .005)); }, { passive: false });
+    canvas.addEventListener("keydown", (e) => {
+      if (["+", "=", "-", "0", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+        e.preventDefault();
+        if (e.key === "0") resetView(); else if (["+", "=", "-"].includes(e.key)) zoomBy(e.key === "-" ? 1 / 1.3 : 1.3);
+        else { panX += (e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0) * 30 / lastScale; panY += (e.key === "ArrowUp" ? 1 : e.key === "ArrowDown" ? -1 : 0) * 30 / lastScale; draw(true); }
+      }
+    });
+    canvas.addEventListener("pointerdown", (e) => { if (!moving || pointers.size >= 2 || (e.pointerType === "mouse" && e.button !== 0)) return; pointers.set(e.pointerId, [e.clientX, e.clientY]); canvas.setPointerCapture(e.pointerId); });
+    canvas.addEventListener("pointermove", (e) => {
+      if (!pointers.has(e.pointerId)) return;
+      const before = [...pointers.values()], previous = pointers.get(e.pointerId); pointers.set(e.pointerId, [e.clientX, e.clientY]);
+      if (pointers.size === 2) { const after = [...pointers.values()], distance = (a) => Math.hypot(a[0][0] - a[1][0], a[0][1] - a[1][1]); const old = distance(before); if (old > 1) zoomBy(distance(after) / old); }
+      else if (pointers.size === 1) { const rect = canvas.getBoundingClientRect(); panX -= (e.clientX - previous[0]) * w / rect.width / lastScale; panY += (e.clientY - previous[1]) * h / rect.height / lastScale; draw(true); }
+    });
+    for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) canvas.addEventListener(event, (e) => pointers.delete(e.pointerId));
     function restore() {
       if (!dialog) return;
+      clearPointers();
       const previous = dialog; dialog = null;
       if (!disposed && placeholder?.parentNode) { placeholder.replaceWith(box); expand.hidden = false; expand.focus(); }
       previous.remove(); if (!disposed) resize();
@@ -236,8 +314,8 @@ const DataTelemetryReplay = (function () {
         resize();
       }).catch(() => { if (!disposed) { note.textContent = "Width-aware replay unavailable; showing feed positions. " + fallback; draw(true); } }).finally(() => clearTimeout(timeout));
     }
-    return { element: box, draw, dispose() { disposed = true; abort.abort(); clearTimeout(timeout); observer?.disconnect(); if (dialog) { dialog.close(); restore(); } } };
+    return { element: box, draw, dispose() { disposed = true; clearPointers(); abort.abort(); clearTimeout(timeout); observer?.disconnect(); if (dialog) { dialog.close(); restore(); } } };
   }
-  return { supports, validGeometry, motion, interpolate, contextAt, create };
+  return { supports, validGeometry, motion, interpolate, contextAt, sampleAt, trailAt, create };
 })();
 Object.freeze(DataTelemetryReplay);

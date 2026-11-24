@@ -181,6 +181,15 @@ test("mobile replay expansion preserves scrubbing, focus and parent telemetry", 
   await panel.getByRole('button',{name:'EXPAND',exact:true}).click();
   await expect(page.locator('[data-replay-expanded]')).toBeVisible();
   await expect(panel.getByRole('combobox',{name:'Follow',exact:true})).toBeVisible();
+  await panel.getByRole('button',{name:'Zoom in on map',exact:true}).click();
+  await expect(panel.getByRole('combobox',{name:'Zoom',exact:true})).toHaveValue('custom');
+  await panel.getByRole('button',{name:'MOVE MAP',exact:true}).click();
+  await expect(panel.getByRole('button',{name:'MOVE MAP',exact:true})).toHaveAttribute('aria-pressed','true');
+  await panel.getByRole('button',{name:'MOVE MAP',exact:true}).click();
+  await panel.getByRole('combobox',{name:'Telemetry',exact:true}).selectOption('gear');
+  await panel.getByRole('button',{name:'RESET VIEW',exact:true}).click();
+  await expect(panel.getByRole('combobox',{name:'Zoom',exact:true})).toHaveValue('140');
+  await expect(panel.getByRole('combobox',{name:'Zoom',exact:true}).locator('option[value="custom"]')).toHaveAttribute('disabled','');
   await panel.getByRole('slider').fill('20');
   await expect(panel.locator('output')).toHaveText('20.00 s');
   await page.keyboard.press('Escape');
