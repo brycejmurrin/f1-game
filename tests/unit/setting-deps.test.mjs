@@ -42,6 +42,7 @@ const WHEN = {
   "touch-dock": (h, on) => { h.mode.touch = on; },
   "panel-contrast": (h, on) => { h.d.documentElement.setAttribute("data-ui-contrast", on ? "normal" : "high"); },
   "turnchase-cam": (h, on) => { h.mode.cam = on ? "cockpit" : "chase"; },
+  "pad-pedal-deadzone": (h, on) => { h.ctx.Input.physicalPadAvailable = () => on; },
 };
 
 function boot(extra = {}) {
@@ -153,6 +154,25 @@ test("each parent OFF greys every dependent with a described reason; ON restores
       assert.equal(c.value, before[i], `${rule.key}: #${c.id} lost its value`);
       assert.ok(!(c.getAttribute("aria-describedby") || "").includes("-dep"), `${rule.key}: stale reason reference`);
     });
+  }
+});
+
+test("runtime pedal sliders refresh with the physical gamepad connection", () => {
+  let present = false;
+  const handlers = new Map(), refreshes = [];
+  const h = boot({
+    window: { addEventListener: (type, fn) => handlers.set(type, fn) },
+    Input: { padPresent: () => present },
+    setTimeout: fn => refreshes.push(fn),
+  });
+  const [gas] = buildTarget(h, "pm-padgasdz"), [brake] = buildTarget(h, "pm-padbrakedz");
+  h.Deps.refresh();
+  assert.deepEqual([gas.disabled, brake.disabled], [true, true]);
+  for (const [event, plugged] of [["gamepadconnected", true], ["gamepaddisconnected", false]]) {
+    present = plugged;
+    handlers.get(event)();
+    refreshes.shift()();
+    assert.deepEqual([gas.disabled, brake.disabled], [!plugged, !plugged]);
   }
 });
 

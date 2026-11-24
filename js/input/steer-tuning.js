@@ -661,6 +661,8 @@ function applySteerTuning() {
   const haptics     = clamp(store.get("haptics", 6), SLIDER_MIN, SLIDER_MAX);
   const padDz       = clamp(store.get("padDeadzone", 5), 0, 30);
   const padSat      = clamp(store.get("padSaturation", 0), 0, 30);
+  const gasDz       = clamp(store.get("padGasDeadzone", 12), 0, 30);
+  const brakeDz     = clamp(store.get("padBrakeDeadzone", 12), 0, 30);
   Input.setAnalogTrim("tilt", curveTrimFromSlider(tiltCurve));
   Input.setAnalogTrim("touch", curveTrimFromSlider(touchCurve));
   Input.setAnalogTrim("pad", curveTrimFromSlider(padCurve));
@@ -677,6 +679,8 @@ function applySteerTuning() {
   if (Input.setTriggerHaptics) Input.setTriggerHaptics(trigHap);
   Input.setPadDeadzone(padDz / 100);
   Input.setPadSaturation(padSat / 100);
+  Input.setPadPedalDeadzone?.("throttle", gasDz / 100);
+  Input.setPadPedalDeadzone?.("brake", brakeDz / 100);
   G.raceLineAssist = line / 5;
   // The stored value is only trusted when it is a NUMBER. clamp compares, and
   // both `v < lo` and `v > hi` are false for a string, so a non-number walks
@@ -740,6 +744,8 @@ function applySteerTuning() {
   paintTriggerHapRow();
   paintRow("pm-paddz", padDz, pctLabel(padDz));
   paintRow("pm-padsat", padSat, pctLabel(padSat));
+  paintRow("pm-padgasdz", gasDz, pctLabel(gasDz));
+  paintRow("pm-padbrakedz", brakeDz, pctLabel(brakeDz));
   refreshPresetButtons();
   refreshMacros();
 }
@@ -865,6 +871,36 @@ wireTune("pm-analogspeed", "analogSpeedSteer", 1, SLIDER_MIN, SLIDER_MAX, (v) =>
 wireTune("pm-haptics", "haptics", 6, SLIDER_MIN, SLIDER_MAX, (v) => Input.setHaptics(v <= 1 ? 0 : (v - 1) / 9), adaptLabel);
 wireTune("pm-paddz", "padDeadzone", 5, 0, 30, (v) => Input.setPadDeadzone(v / 100), pctLabel);
 wireTune("pm-padsat", "padSaturation", 0, 0, 30, (v) => Input.setPadSaturation(v / 100), pctLabel);
+(function ensurePedalDeadzoneRows() {
+  if ($("pm-padgasdz") || typeof document === "undefined") return;
+  const host = $("pm-padsat")?.closest?.(".adv-item");
+  if (!host?.parentNode) return;
+  const next = host.nextSibling;
+  for (const [id, name] of [["pm-padgasdz", "Gas"], ["pm-padbrakedz", "Brake"]]) {
+    const row = document.createElement("div");
+    const label = document.createElement("label");
+    const title = document.createElement("span");
+    const reading = document.createElement("b");
+    const input = document.createElement("input");
+    const help = document.createElement("p");
+    row.className = "adv-item";
+    label.className = "tune-row";
+    title.className = "tune-label";
+    title.textContent = name.toUpperCase() + " DEAD ZONE ";
+    reading.id = id + "-v";
+    reading.textContent = "12%";
+    Object.assign(input, { id, type: "range", min: "0", max: "30", step: "1", value: "12" });
+    input.setAttribute("aria-label", "Controller " + name.toLowerCase() + " dead zone");
+    help.className = "adv-help";
+    help.textContent = "Ignore light trigger or pedal movement below this percentage. Lower it for finer control.";
+    title.append(reading);
+    label.append(title, input);
+    row.append(label, help);
+    host.parentNode.insertBefore(row, next);
+  }
+})();
+wireTune("pm-padgasdz", "padGasDeadzone", 12, 0, 30, (v) => Input.setPadPedalDeadzone("throttle", v / 100), pctLabel);
+wireTune("pm-padbrakedz", "padBrakeDeadzone", 12, 0, 30, (v) => Input.setPadPedalDeadzone("brake", v / 100), pctLabel);
 
 function paintTriggerHapRow() {
   const item = $("pm-triggerhap-item");

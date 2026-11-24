@@ -355,7 +355,12 @@ const AppearanceStudioBody = (function () {
     adopt(menu, "pm-appearance-menu");
     jump(menu, "REDUCE MOTION is in ACCESSIBILITY", "a11y", "pm-motion-sel");
     const hud = group(controls, "RACE HUD"); adopt(hud, "pm-appearance-hud"); jump(hud, "HUD STYLE is in HUD & CAMERA", "display", "pm-hudprofile-sel"); jump(hud, "HUD SIZE is in HUD & CAMERA", "display", "pm-hudscale"); jump(hud, "HUD LAYOUT is in HUD & CAMERA", "display", "pm-hudmetrics-sel");
-    const sceneBox = group(controls, "SCENE · HOME"); choice(sceneBox, "Scene", "homeScene", [["auto", "Mix environments"], ["garage", "Garage"], ["night", "Night garage"], ["studio", "Studio"], ["track", "Circuit"], ["pitlane", "Pit lane"], ["static", "Static"], ["photo", "My photo"]]); choice(sceneBox, "Home camera", "homeCamera", [["auto", "Auto"], ["hero", "Hero"], ["front", "Front"], ["side", "Side"], ["rear", "Rear"]]); choice(sceneBox, "Background motion", "backgroundMotion", [["still", "Off"], ["ambient", "On"]]); ui.sceneNote = node("p", "as-note"); sceneBox.append(ui.sceneNote, button("PHOTO STUDIO & MY BACKGROUND", () => { if (hooks.openPhoto) hooks.openPhoto(); else say("Photo Studio becomes available after the game finishes loading."); }));
+    const sceneBox = group(controls, "SCENE · HOME"); choice(sceneBox, "Scene", "homeScene", [["auto", "Mix environments"], ["garage", "Garage"], ["night", "Night garage"], ["studio", "Studio"], ["track", "Circuit"], ["pitlane", "Pit lane"], ["static", "Static"], ["photo", "My photo"]]); choice(sceneBox, "Home camera", "homeCamera", [["auto", "Auto"], ["hero", "Hero"], ["front", "Front"], ["side", "Side"], ["rear", "Rear"]]); choice(sceneBox, "Background motion", "backgroundMotion", [["still", "Off"], ["ambient", "On"]]); ui.sceneNote = node("p", "as-note");
+    const photoDoor = button("PHOTO STUDIO & MY BACKGROUND", () => {
+      if (hooks.openPhoto) hooks.openPhoto(photoDoor);
+      else say("Photo Studio becomes available after the game finishes loading.");
+    });
+    sceneBox.append(ui.sceneNote, photoDoor);
     ui.photoBox = node("section", "as-photo-picker"); ui.photoBox.setAttribute("aria-label", "Saved menu background photos");
     ui.photoSelect = node("select"); ui.photoSelect.id = "ap-photo-select"; ui.photoSelect.setAttribute("aria-label", "Saved photo"); ui.photoSelect.addEventListener("change", photoSelection);
     ui.photoPreview = node("img", "as-photo-preview"); ui.photoPreview.alt = "Saved photo preview"; ui.photoPreview.hidden = true;

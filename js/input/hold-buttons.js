@@ -44,7 +44,7 @@ const InputHoldButtons = (function () {
         h.anchors && h.anchors.clear();
         h.levels && h.levels.clear();
         h.live && h.live.clear();
-        h.slid.clear(); h.gone.clear(); h.rects.clear(); h.ramps.clear();
+        h.slid.clear(); h.gone.clear();
         look(h.el, null);
         h.apply(false);
         h.level && h.level(0);
@@ -99,8 +99,8 @@ const InputHoldButtons = (function () {
     //     a progressive steering arrow treats the entry point as a fresh press;
     //   - it hands back the same way, and every release net above still applies
     //     to whichever control holds the pointer now.
-    // The sibling's box is read once per contact, never per pointermove: a
-    // rotation releases every hold (Input.onScreenRotate), so it cannot go stale.
+    // The HUD can move without rotating. Hit-test the current layout even when
+    // pointer capture still routes movement events to the original button.
     // data-slid = "on" | "off": the pressed look, which `:active` cannot carry across a hand-off.
     const look = (el, v) => { if (!el || !el.setAttribute) return; if (v) el.setAttribute("data-slid", v); else el.removeAttribute("data-slid"); };
     function boxOf(el) {
@@ -132,8 +132,6 @@ const InputHoldButtons = (function () {
       const sibId = opts && opts.sibling;
       const slid = new Set();                     // contacts that arrived by a slide (pressed look)
       const gone = new Set();                     // pointerIds that slid AWAY and are still down (pressed-look only)
-      const rects = new Map();                    // pointerId -> the sibling's box for this contact
-      const ramps = new Map();                    // pointerId -> EASE arrival point, until full
       // Every contact holds independently: easing or releasing one finger must
       // not override another finger's stronger press. Both release routes use
       // the same aggregation, including window capture before the local event.
@@ -173,8 +171,6 @@ const InputHoldButtons = (function () {
       function release(pointerId) {
         touchIds.delete(pointerId);
         if (gone.delete(pointerId) && gone.size === 0 && slid.size === 0) look(el, null);
-        rects.delete(pointerId);
-        ramps.delete(pointerId);
         if (slid.delete(pointerId) && slid.size === 0) look(el, gone.size ? "off" : null);
         anchors && anchors.delete(pointerId);
         levels && levels.delete(pointerId);
@@ -182,6 +178,13 @@ const InputHoldButtons = (function () {
         if (!ids.delete(pointerId)) return;
         if (ids.size === 0) apply(false);
         paintLevel();
+      }
+      function buildFromAnchor(pointer, contact) {
+        if (contact.profile.sliderEdge || !contact.profile.buildMs) return;
+        PedalTravel.buildOnHold(contact, () => anchors.get(pointer) === contact, value => {
+          levels.set(pointer, value);
+          paintLevel();
+        });
       }
       function press(e, arrived) {
         try { el.setPointerCapture(e.pointerId); } catch (_) { /* pointer already gone (cancelled between down and here); the button still works uncaptured */ }
@@ -197,38 +200,34 @@ const InputHoldButtons = (function () {
         live.set(e.pointerId, e.isTrusted === false ? !holdTargetGone(el) : true);
         if (firstContact) apply(true);
         if (level) {
-          const profile = PedalTravel.contactProfile(opts?.button || id, slideEase?.() ? "ease" : "instant", arrived ? null : e, el);
-          const trackTravel = !!profile.sliderEdge || !arrived || (axis === "x" && profile.press === "progressive");
-          anchors.set(e.pointerId, { x: e.clientX, y: e.clientY, profile, trackTravel });
-          const ramp = arrived && !profile.sliderEdge && profile.slide === "ease";
-          if (ramp) ramps.set(e.pointerId, { x: e.clientX, y: e.clientY });
-          const initial = profile.sliderEdge ? PedalTravel.sliderLevel(profile, e) : trackTravel ? PedalTravel.level(profile, 0) : ramp ? PedalTravel.MIN : 1;
+          const crossingPedal = arrived && axis === "y";
+          const profile = PedalTravel.contactProfile(opts?.button || id, slideEase?.() ? "ease" : "instant",
+            arrived && !crossingPedal ? null : e, el, crossingPedal);
+          const trackTravel = !!profile.sliderEdge || !arrived ||
+            (crossingPedal ? profile.trackCrossover || profile.slide === "response" : profile.press === "progressive");
+          const ramp = crossingPedal && !profile.sliderEdge && profile.slide === "ease";
+          const contact = { x: e.clientX, y: e.clientY, profile, trackTravel, ramp };
+          anchors.set(e.pointerId, contact);
+          const initial = profile.sliderEdge ? PedalTravel.sliderLevel(profile, e) :
+            ramp ? PedalTravel.MIN : trackTravel ? PedalTravel.level(profile, 0) : 1;
           levels.set(e.pointerId, initial);
           paintLevel();
-          if (!arrived && !profile.sliderEdge && profile.buildMs) {
-            const pointer = e.pointerId, contact = anchors.get(pointer);
-            PedalTravel.buildOnHold(contact, () => anchors.get(pointer) === contact, value => {
-              levels.set(pointer, value);
-              paintLevel();
-            });
-          }
+          if (!ramp && (!arrived || crossingPedal)) buildFromAnchor(e.pointerId, contact);
         }
         gone.clear();
         if (arrived) slid.add(e.pointerId);
         look(el, slid.size ? "on" : null);
-        const sib = sibId && holdById.get(sibId);
-        if (sib) rects.set(e.pointerId, boxOf(sib.el));
       }
       // The contact left for the sibling: release it here, press it there.
       function handOff(e) {
         const to = holdById.get(sibId);
-        if (!to) return false;
+        if (!to || to.el.hidden || to.el.disabled) return false;
         // Capture keeps e.target on the current pedal. The visible sibling must
         // actually be under the finger, especially where custom dock boxes overlap.
         if (document.elementFromPoint) {
           const hit = document.elementFromPoint(e.clientX, e.clientY);
           if (hit !== to.el && !to.el.contains?.(hit)) return false;
-        }
+        } else if (!inBox(boxOf(to.el), e.clientX, e.clientY)) return false;
         release(e.pointerId);
         try { el.releasePointerCapture(e.pointerId); } catch (_) { /* capture already gone */ }
         gone.add(e.pointerId);
@@ -265,7 +264,7 @@ const InputHoldButtons = (function () {
         digitalPress(key);
         setTimeout(() => release(key), 100);
       });
-      const rec = { ids, touchIds, apply, level: paint, anchors, levels, el, live, release, press, slid, gone, rects, ramps, paintLevel, move: null };
+      const rec = { ids, touchIds, apply, level: paint, anchors, levels, el, live, release, press, slid, gone, paintLevel, move: null };
       holdBtns.push(rec);
       holdByEl.set(el, rec);
       holdById.set(id, rec);
@@ -283,20 +282,22 @@ const InputHoldButtons = (function () {
         if (to && to.move && to.ids.has(e.pointerId)) to.move(e);
       });
       if (level || sibId) rec.move = (e) => {
-        if (inBox(rects.get(e.pointerId), e.clientX, e.clientY) && handOff(e)) return;
-        const r = ramps.get(e.pointerId);
-        if (r) {
-          const lv = Math.max(levels.get(e.pointerId) || 0, PedalTravel.arrive(Math.hypot(e.clientX - r.x, e.clientY - r.y)));
-          levels.set(e.pointerId, lv);
-          if (lv >= 1) ramps.delete(e.pointerId);
-          paintLevel();
-          return;
-        }
+        if (sibId && handOff(e)) return;
         const a = anchors ? anchors.get(e.pointerId) : null;
-        if (!a?.trackTravel) return;
-        if (a.profile.sliderEdge) levels.set(e.pointerId, PedalTravel.sliderLevel(a.profile, e));
-        else {
-          const dx = e.clientX - a.x, dy = e.clientY - a.y;
+        if (!a || (!a.ramp && !a.trackTravel)) return;
+        const dx = e.clientX - a.x, dy = e.clientY - a.y;
+        if (a.ramp) {
+          const lv = Math.max(levels.get(e.pointerId), PedalTravel.arrive(Math.hypot(dx, dy)));
+          levels.set(e.pointerId, lv);
+          if (lv === 1) {
+            a.ramp = false;
+            a.x = e.clientX; a.y = e.clientY;
+            if (a.trackTravel) buildFromAnchor(e.pointerId, a);
+          }
+        } else if (a.profile.sliderEdge) {
+          a.profile.sliderBounds = el.getBoundingClientRect();
+          levels.set(e.pointerId, PedalTravel.sliderLevel(a.profile, e));
+        } else {
           a.advance = PedalTravel.advance(a.profile, dx, dy, axis === "x" ? -dir * dx : -dy);
           levels.set(e.pointerId, PedalTravel.level(a.profile, a.advance, a.holdFraction));
         }

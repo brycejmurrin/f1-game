@@ -35,7 +35,7 @@ function extractFn(src, name) {
   throw new Error(`unbalanced braces reading ${name}()`);
 }
 
-function loadMenuNav({ document, layer, zoom } = {}) {
+function loadMenuNav({ document, layer, zoom, photoFocus } = {}) {
   const ctx = {
     window: null,
     document: document || { readyState: "loading", addEventListener() {} },
@@ -45,6 +45,7 @@ function loadMenuNav({ document, layer, zoom } = {}) {
   ctx.window = ctx;
   ctx.window.UiLayers = { shown: () => true, top: () => layer || null };
   ctx.window.Log = ctx.Log;
+  if (photoFocus) ctx.Photomode = { sceneOwnsFocus: photoFocus };
   if (zoom) ctx.window.CssZoom = { of: () => zoom, toLocalDelta: (_el, px) => px / zoom };
   ctx.window.addEventListener = () => {};
   vm.runInNewContext(SRC, ctx, { filename: path.resolve(SRC_PATH) });
@@ -360,14 +361,24 @@ test("step(): Up from a tab rail reaches the sheet head's close, not the wrap to
   assert.equal(step(plain, 0, -1, [close, plain, row, foot]).id, "foot", "a non-tab keeps the in-band wrap (Zandvoort trap)");
 });
 
-test("MenuNav.activeLayer refuses freecam with the other fly-cam layers", () => {
-  const overlay = { id: "overlay" };
-  assert.equal(loadMenuNav({ layer: overlay }).activeLayer(), overlay);
-  const toolbar = { id: "tl-editor" };
-  assert.equal(loadMenuNav({ layer: toolbar }).activeLayer(), toolbar);
-  for (const id of ["photo-controls", "freecam"]) {
-    assert.equal(loadMenuNav({ layer: { id } }).activeLayer(), null, id);
-  }
+test("Lighting and the fly-camera toolbar share navigation without taking the scene's keyboard arrows", () => {
+  const dom = makeDom(), layer = dom.byId("photo-controls"), lighting = dom.byId("lighting"), freecam = dom.byId("freecam");
+  const control = dom.document.createElement("button"), exit = dom.document.createElement("button");
+  const scene = dom.document.createElement("div"), obscured = dom.document.createElement("button");
+  lighting.appendChild(control); layer.appendChild(exit); layer.appendChild(scene); freecam.appendChild(obscured); freecam.hidden = true;
+  scene.tabIndex = -1;
+  const nav = loadMenuNav({ document: dom.document, layer, photoFocus: () => dom.document.activeElement === scene });
+  assert.equal(nav.activeLayer(), layer);
+  assert.equal(nav.ownsFocus(layer, control), true);
+  assert.equal(nav.ownsFocus(layer, scene), true);
+  assert.equal(nav.ownsFocus(layer, obscured), false);
+  assert.deepEqual(Array.from(nav.items(layer)), [control, exit]);
+  scene.focus();
+  const key = (isTrusted) => ({ key: "ArrowDown", isTrusted, preventDefault() { this.defaultPrevented = true; } });
+  nav.onKeyDown(key(true));
+  assert.equal(dom.document.activeElement, scene);
+  nav.onKeyDown(key(false));
+  assert.equal(dom.document.activeElement, control);
 });
 
 // uihunt4-flows-1030 #1: at 1280x800 the STANDINGS and LIVE panels can hold no

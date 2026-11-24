@@ -296,25 +296,53 @@ test("RECALIBRATE zeroes the phone's current roll, and the roll is what debugSta
   assert.equal(Input.debugState().remote.active, true);
 });
 
-test("the phone's pedals reach throttle()/braking() and their travel reaches the levels", () => {
+test("current phone pedals keep the configured pressure at the host", () => {
   const { Input, phone, frame } = pair();
   frame();
   assert.equal(Input.throttle(), false); assert.equal(Input.braking(), false);
   phone.thr = 0.8; frame();
   assert.equal(Input.throttle(), true);
-  // The 0.1 resting-thumb dead zone is RESCALED like the pad's (padPedalLevel), not a gate.
-  const lvl = (v) => (v - 0.1) / 0.9;
-  assert.ok(Math.abs(Input.throttleLevel() - lvl(0.8)) < 1e-12, "an on-screen pedal reports how far it is pressed, past the dead zone");
+  assert.equal(Input.throttleLevel(), 0.8);
   phone.thr = 0; phone.brk = 0.35; frame();
   assert.equal(Input.throttle(), false);
   assert.equal(Input.braking(), true);
-  assert.ok(Math.abs(Input.brakeLevel() - lvl(0.35)) < 1e-12);
+  assert.equal(Input.brakeLevel(), 0.35);
   phone.brk = 0.05; frame();
-  assert.equal(Input.braking(), false, "a resting thumb (< 0.1) is not a brake");
+  assert.equal(Input.braking(), true);
+  assert.equal(Input.brakeLevel(), 0.05);
   phone.brk = 0; phone.held = PhonePad.HELD.lookBack; frame();
   assert.equal(Input.lookingBack(), true, "LOOK BACK is held, not edged");
   phone.held = 0; frame();
   assert.equal(Input.lookingBack(), false);
+});
+
+test("legacy phone samples and XR keep their raw pedal dead zone", () => {
+  const { Input, frame, padEnd } = pair();
+  frame(false);
+  padEnd.send(NetTransport.STATE, "[1,1,null,0.2,0.08,0]");
+  frame(false);
+  assert.ok(Math.abs(Input.throttleLevel() - 1 / 9) < 1e-10);
+  assert.equal(Input.brakeLevel(), 0);
+  Input.remoteSample({ source: "xr", steer: 0, thr: 0.55, brk: 0.08, calibratedPedals: true });
+  assert.ok(Math.abs(Input.throttleLevel() - 0.5) < 1e-10);
+  assert.equal(Input.brakeLevel(), 0);
+});
+
+test("a phone sends calibrated pedals only to a host that advertises support", () => {
+  let receive;
+  const wire = [];
+  const transport = {
+    status: "open", onMessage(fn) { receive = fn; }, onClose() {},
+    send(channel, text) { if (channel === NetTransport.STATE) wire.push(JSON.parse(text)); return true; },
+  };
+  const session = PhonePad.padSession(transport, { roll: () => 30, steer: () => -0.4, thr: () => 0.2, brk: () => 0.05, held: () => 0 }, { heartbeat: false });
+  receive(NetTransport.EVENT, '{"t":"hi","side":"host","p":1,"steer":true,"ack":true}');
+  session.sample(true);
+  receive(NetTransport.EVENT, PhonePad.encodeHello("host", false, true));
+  session.sample(true);
+  assert.deepEqual(wire, [[2, 0, null, 0.2, 0.05, 0, -0.4], [3, 1, null, 0.2, 0.05, 0, -0.4]]);
+  assert.equal(PhonePad.decodeSample(JSON.stringify(wire[1])).calibratedPedals, true);
+  assert.equal(PhonePad.decodeSample('[3,0,null,0,0,0,"invalid"]'), null);
 });
 
 test("a button edge crosses on the reliable channel exactly once, and PAUSE reaches the game's callback", () => {
@@ -722,11 +750,22 @@ test("phone pedals use the selected response independently, and carry it across 
     assert.equal(ctl.state().brk, PedalTravel.MIN, "brake crossover has its own response");
     gas("pointermove", 20, 100);
     assert.equal(ctl.state().brk, 1);
+    gas("pointermove", 20, 99);
+    assert.equal(ctl.state().brk, 1, "after Ease, a small move keeps full input");
+    gas("pointermove", 20, 43);
+    assert.equal(ctl.state().brk, 0.5, "then the destination has its regular pedal travel");
     for (const fn of events.pointercancel) fn({ pointerId: 7 });
     assert.equal(ctl.state().brk, 0);
     dom.brake.dispatch("pointerdown", { clientX: 20, clientY: 100 });
     assert.equal(ctl.state().brk, 1, "fresh brake press keeps its independent instant style");
     assert.ok(!dom.brake.classes.has("feedback-off"));
+    dom.brake.dispatch("pointerup", { clientX: 20, clientY: 100 });
+    PedalTravel.setButtonProfile("brake", { slide: "response", start: 40, direction: "up", slideCurve: "fine", travel: 40 });
+    gas("pointerdown", 120, 100);
+    gas("pointermove", 60, 100);
+    assert.equal(ctl.state().brk, 0.4, "Use Button Response starts at the destination pressure");
+    gas("pointermove", 60, 68);
+    assert.ok(Math.abs(ctl.state().brk - 0.15) < 1e-10, "uses the destination direction and curve after crossing");
   } finally {
     ctl?.cancel(); PedalTravel.resetButtonProfile("gas"); PedalTravel.resetButtonProfile("brake");
     if (oldDoc === undefined) delete globalThis.document; else globalThis.document = oldDoc;
@@ -894,15 +933,15 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   assert.equal(dom.gas.style["--travel"], "1.00", "the fill shows the travel it sends");
   dom.gas.dispatch("pointermove", { clientY: 100 + 200 * 0.1 - 45 });   // slid 45 px up
   for (let i = 0; i < 3; i++) frame();
-  const eased = 1 - (45 - 12) / 90, easedLvl = (eased - 0.1) / 0.9;   // the host rescales past its 0.1 dead zone
-  assert.ok(Math.abs(desk.Input.throttleLevel() - easedLvl) < 0.02, `eased to ~${eased.toFixed(2)}, got ${desk.Input.throttleLevel()}`);
+  const eased = 1 - (45 - 12) / 90;
+  assert.equal(desk.Input.throttleLevel(), Number(eased.toFixed(2)), "the host matches the painted pedal");
   assert.equal(dom.gas.style["--travel"], eased.toFixed(2));
   dom.gas.dispatch("pointermove", { clientY: 100 + 200 * 0.1 + 60 });   // back down past the landing point: full again
   for (let i = 0; i < 3; i++) frame();
   assert.equal(desk.Input.throttleLevel(), 1);
   dom.gas.dispatch("pointermove", { clientY: -500 });   // dragged far off the top: the floor, not a release
   for (let i = 0; i < 3; i++) frame();
-  assert.ok(desk.Input.throttle() && Math.abs(desk.Input.throttleLevel() - (0.12 - 0.1) / 0.9) < 0.02, `floor ${desk.Input.throttleLevel()}`);
+  assert.equal(desk.Input.throttleLevel(), 0.12, "the host keeps the profile floor");
   assert.ok(dom.gas.classes.has("on"));
   dom.gas.dispatch("pointerup", {});
   for (let i = 0; i < 3; i++) frame();
@@ -2414,7 +2453,7 @@ test("the codec carries the page's peer id in its hello, hex only (W26 row 11b)"
   assert.equal(PhonePad.decodeEvent(PhonePad.encodeHello("pad", false, true, id)).id, id);
   assert.equal(PhonePad.decodeEvent(PhonePad.encodeHello("pad", false, true, "<script>")).id, undefined, "a junk id is dropped at encode");
   assert.equal(PhonePad.decodeEvent(JSON.stringify({ t: "hi", side: "pad", p: 1, id: "zz" })).id, undefined, "and at decode");
-  assert.deepEqual(PhonePad.decodeEvent(PhonePad.encodeHello("host", false, true)), { t: "hi", side: "host", p: 1, haptics: false, steer: true, ack: true }, "no id: the hello is unchanged");
+  assert.deepEqual(PhonePad.decodeEvent(PhonePad.encodeHello("host", false, true)), { t: "hi", side: "host", p: 1, haptics: false, steer: true, ack: true, calibratedPedals: true }, "the host advertises calibrated pedals without a peer id");
 });
 
 test("link(): with admit() the channel is open but deaf, its haptics and dash wait, and a refusal closes it as 'rejected' (W26 row 11a)", async () => {

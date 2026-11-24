@@ -46,6 +46,7 @@ const SettingsExport = (function () {
   "use strict";
 
 const FORMAT = "apex26-settings-v1";
+const pedalDeadzonePercent = (v) => Number.isFinite(v) ? Math.max(0, Math.min(30, Math.round(v))) : undefined;
 
 // One row per preference: k = key after the prefix, lane, group, def = the
 // shipped default (a function when it depends on the device or another
@@ -250,6 +251,8 @@ const SPEC = [
   { k: "haptics", lane: "json", group: "driving", def: 6, src: "js/input/steer-tuning.js (scales Input.vibrate and Input.rumble)" },
   { k: "triggerHaptics", lane: "json", group: "driving", def: true, src: "js/input/steer-tuning.js (L2/R2 trigger-rumble; falls back to dual-rumble when off or unsupported)" },
   { k: "padDeadzone", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js (percent of stick travel)" },
+  { k: "padGasDeadzone", lane: "json", group: "driving", def: 12, normalize: pedalDeadzonePercent, src: "js/input/steer-tuning.js (percent of gas trigger or pedal travel)" },
+  { k: "padBrakeDeadzone", lane: "json", group: "driving", def: 12, normalize: pedalDeadzonePercent, src: "js/input/steer-tuning.js (percent of brake trigger or pedal travel)" },
   { k: "padSaturation", lane: "json", group: "driving", def: 0, src: "js/input/steer-tuning.js (percent short of the rim that is full lock)" },
   { k: "padLabels", lane: "json", group: "driving", def: "auto", src: "js/ui/key-binds.js (Xbox/PlayStation/Nintendo button names)" },
   { k: "padAxes", lane: "json", group: "driving", def: null, src: "js/ui/key-binds.js wheel wizard (axis indices + signs)" },
@@ -331,6 +334,10 @@ const SPEC = [
   { k: "pedalSlide", lane: "json", group: "driving", def: "instant", oneOf: ["instant", "ease"], src: "js/input/steer-tuning.js PEDAL SLIDE row → Input.setPedalSlide (#5996)" },
   { k: "touchButtonProfiles", lane: "json", group: "driving", def: null, perDevice: true, whole: true, src: "js/input/pedal-travel.js",
     normalize: v => v === null ? null : typeof PedalTravel !== "undefined" ? PedalTravel.normalizeProfiles(v) : undefined },
+  { k: "phoneButtonProfiles", lane: "json", group: "driving", def: { v: 1, buttons: {} }, perDevice: true, whole: true, src: "js/input/pedal-travel.js",
+    normalize: v => v === null ? null : typeof PedalTravel !== "undefined" ? PedalTravel.normalizeProfiles(v, true) : undefined },
+  { k: "controlButtonPresets", lane: "json", group: "controls", def: null, freeShape: true, whole: true, src: "js/input/controller-profiles.js",
+    normalize: v => v === null ? null : typeof ControllerProfiles !== "undefined" ? ControllerProfiles.normalizeButtonPresets(v) : undefined },
   { k: "tyreWear", lane: "json", group: "driving", def: "real", src: "js/game.js" },
   { k: "dirtyAir", lane: "json", group: "driving", def: "classic", oneOf: ["off", "classic", "cfd"], src: "js/game.js PhysicsConsts.DirtyAir" },
   { k: "wind", lane: "json", group: "driving", def: "real", oneOf: ["off", "real"], src: "js/race/race-settings.js WIND row → Wind.setLevel" },

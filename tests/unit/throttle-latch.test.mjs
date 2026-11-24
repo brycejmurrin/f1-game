@@ -77,11 +77,12 @@ function boot(initOpts) {
   for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
-  Input.init(el(), initOpts);
+  const canvas = el();
+  Input.init(canvas, initOpts);
   const pedal = el("btn-throttle");
   const tap = () => { pedal.fire("pointerdown"); pedal.fire("pointerup"); };
   const blur = () => (listeners.blur || []).forEach((f) => f({}));
-  return { Input, pedal, tap, blur, listeners, sb, clock };
+  return { Input, canvas, pedal, tap, blur, listeners, sb, clock, model: vm.runInContext("PedalTravel", ctx) };
 }
 
 // Real Input + InputPadMenu; only the browser's pad snapshots and pause layer
@@ -196,6 +197,49 @@ test("LATCH: a tap sticks, a second tap lifts", () => {
   assert.equal(Input.throttleLatched(), false);
 });
 
+test("relative race pedals keep a continuous crossover and use the destination's chosen response", () => {
+  for (const style of ["instant", "ease", "response"]) {
+    const { Input, pedal, sb, listeners, model } = boot();
+    const brake = sb.document.getElementById("btn-brake");
+    brake.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 200 });
+    pedal.getBoundingClientRect = () => ({ left: 100, top: 0, width: 100, height: 200 });
+    model.setButtonProfile("brake", { slide: style, start: 40, direction: "up", slideCurve: "fine", travel: 40 });
+    pedal.fire("pointerdown", { clientX: 120, clientY: 80 });
+    const move = y => pedal.fire("pointermove", { clientX: 80, clientY: y });
+    move(70);
+    const start = style === "response" ? 0.4 : 1;
+    assert.equal(Input.throttleLevel(), 0);
+    assert.equal(Input.brakeLevel(), style === "ease" ? 0.12 : start);
+    const anchor = style === "ease" ? 110 : 70;
+    if (style === "ease") move(anchor);
+    move(anchor - 1);
+    assert.equal(Input.brakeLevel(), start, "a tiny move never jumps to the configured touchdown pressure");
+    move(anchor - 32);
+    assert.ok(Math.abs(Input.brakeLevel() - (start - 0.25)) < 1e-10);
+    for (const release of listeners.pointerup) release({ pointerId: 1 });
+    assert.equal(Input.brakeLevel(), 0);
+  }
+});
+
+test("explicit Instant and Ease resume pedaling after entry even with default slide tuning", () => {
+  for (const slide of ["instant", "ease"]) {
+    const { Input, pedal, sb, model } = boot();
+    const brake = sb.document.getElementById("btn-brake");
+    brake.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 200 });
+    pedal.getBoundingClientRect = () => ({ left: 100, top: 0, width: 100, height: 200 });
+    model.setButtonProfile("brake", { slide });
+    pedal.fire("pointerdown", { clientX: 120, clientY: 80 });
+    const move = y => pedal.fire("pointermove", { clientX: 80, clientY: y });
+    move(70);
+    assert.equal(Input.brakeLevel(), slide === "ease" ? 0.12 : 1);
+    const anchor = slide === "ease" ? 110 : 70;
+    move(anchor);
+    assert.equal(Input.brakeLevel(), 1);
+    move(anchor - 57);
+    assert.equal(Input.brakeLevel(), 0.5, "after entry, the destination responds to the default amount of travel");
+  }
+});
+
 test("LATCH is FULL travel, not the pedal's last modulation", () => {
   const { Input, pedal } = boot();
   Input.setThrottleLatch(true);
@@ -268,6 +312,46 @@ test("LATCH: a second finger landing on GAS does not cancel the latch while the 
   pedal.fire("pointerdown", { pointerId: 3 });
   pedal.fire("pointerup", { pointerId: 3 });
   assert.equal(Input.throttleLatched(), false, "a fresh tap still lifts it");
+});
+
+test("a pointer change releases touch GAS before an idle pad hides the dock", () => {
+  for (const [withPad, latch] of [[false, false], [true, false], [true, true]]) {
+    const { Input, canvas, pedal, sb, listeners } = boot();
+    const brake = sb.document.getElementById("btn-brake");
+    let pointerChanged, throttleAtNotification;
+    const primaryPointer = {
+      matches: false,
+      addEventListener(type, fn) { if (type === "change") pointerChanged = fn; },
+    };
+    sb.matchMedia = () => primaryPointer;
+    Input.onPointerKindChange(() => { throttleAtNotification = Input.throttleLevel(); });
+    if (withPad) {
+      const pad = { index: 0, id: "Idle pad", connected: true, mapping: "standard", axes: [0, 0, 0, 0], buttons: [] };
+      sb.navigator.getGamepads = () => [pad];
+      for (const fn of listeners.gamepadconnected) fn({ gamepad: pad });
+    }
+    const touch = { pointerId: 1, pointerType: "touch" };
+    const mouse = { pointerId: 2, pointerType: "mouse", button: 0 };
+    canvas.fire("touchstart", { changedTouches: [{ identifier: 1, clientX: 0, clientY: 0 }] });
+    Input.setThrottleLatch(latch);
+    pedal.fire("pointerdown", touch);
+    if (latch) pedal.fire("pointerup", touch);
+    brake.fire("pointerdown", mouse);
+    assert.equal(Input.controlDevice(), "touch");
+    assert.equal(Input.throttleLevel(), 1);
+    assert.equal(Input.brakeLevel(), 1);
+
+    primaryPointer.matches = true;
+    pointerChanged();
+    assert.equal(Input.controlDevice(), withPad ? "controller" : "touch");
+    assert.equal(throttleAtNotification, withPad ? 0 : 1);
+    assert.equal(Input.brakeLevel(), 1, "the mouse contact was not released");
+    if (withPad) {
+      assert.equal(Input.throttleLatched(), false);
+      pedal.fire("pointermove", { ...touch, clientY: 40 });
+      assert.equal(Input.throttleLevel(), 0, "a late move cannot restore the retired contact");
+    }
+  }
 });
 
 test("input hunt fixes: pad steer gated under a menu, rotation keeps the tilt zero, Ctrl/Alt reserved, lobby asks for tilt", () => {

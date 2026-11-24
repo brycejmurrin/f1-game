@@ -7,7 +7,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 function boot(globals = {}) {
   const dom = makeDom(), context = vm.createContext({ document: dom.document, ...globals });
-  for (const path of ["js/input/pedal-travel.js", "js/input/touch-button-actions.js", "js/ui/touch-button-settings.js"]) {
+  for (const path of ["js/input/pedal-travel.js", "js/input/controller-profiles.js", "js/input/touch-button-actions.js", "js/ui/touch-button-settings.js"]) {
     vm.runInContext(fs.readFileSync(absSrc(path), "utf8"), context, { filename: absSrc(path) });
   }
   const host = dom.document.createElement("div"); host.id = "touch-test"; dom.body.appendChild(host);
@@ -69,6 +69,33 @@ test("changing, reopening and resetting a touch response edits only the selected
   choose("press", "progressive");
   assert.equal(describedBy(field("feedback")).includes("Three rising bars"), false);
   assert.equal(describedBy(field("press")).includes("Latch toggles"), true);
+});
+
+test("phone and race profiles fork the original button responses and restore independently", () => {
+  const storage = new Map([["touchButtonProfiles", { v: 1, buttons: { gas: { start: 35 } } }]]);
+  const store = { get: (k, fallback) => storage.has(k) ? storage.get(k) : fallback, getStored: k => storage.get(k), subscribe: () => () => {},
+    set(k, v) { if (v === undefined) storage.delete(k); else storage.set(k, v); return true; } };
+  const phone = boot({ GameStore: { store } });
+  phone.dom.document.documentElement.setAttribute("data-phone-controller", "");
+  const race = boot({ GameStore: { store } });
+  race.model.setButtonProfile("gas", { start: 50 });
+  assert.equal(phone.model.buttonProfile("gas").start, 35);
+  phone.editor.mount(phone.host, ["gas", "brake"], { standalone: true });
+  const picker = phone.host.querySelector("#pm-button-profiles");
+  const name = picker.querySelector("input");
+  const action = text => picker.querySelectorAll("button").find(btn => btn.textContent === text);
+  name.value = "Gentle start";
+  action("Save as new").onclick();
+  phone.model.setButtonProfile("gas", { start: 10 });
+  action("Apply").onclick();
+  assert.equal(phone.model.buttonProfile("gas").start, 35);
+  assert.equal(race.model.buttonProfile("gas").start, 50);
+  phone.model.resetButtonProfile("gas");
+  assert.equal(phone.model.buttonProfile("gas").start, undefined);
+  race.model.setButtonProfile("gas", { start: 75 });
+  assert.equal(phone.model.buttonProfile("gas").start, undefined, "an explicit phone reset does not fall back to race settings");
+  action("Delete").onclick();
+  assert.equal(picker.querySelector("select").children.length, 1);
 });
 
 test("controller editor offers only the controls its caller supports", () => {
