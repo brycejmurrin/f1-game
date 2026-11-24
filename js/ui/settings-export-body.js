@@ -263,7 +263,7 @@ const RESET_INFO = {
   controls: "Steering input and feel, touch pedals and button layout, keyboard bindings, and all controller mappings and calibration.",
   advanced: "Steering response, curves, smoothing, dead zones, sensitivity, handling, overall speed and feedback.",
   driving: "Driving assistance, gears, throttle and active aero. Race rules and circuit setup stay saved.",
-  display: "HUD layout and visibility, camera framing, helmet and visor settings.",
+  display: "HUD layout and visibility, driving line colour and opacity, camera framing, helmet and visor settings.",
   appearance: "Menu appearance, sizing and layouts. Saved appearance profiles and personal photos stay saved.",
   a11y: "Accessibility, captions, text size, contrast and hold/toggle controls. Reduced motion returns to the device setting.",
   audio: "Music, sound, radio, volumes and audio tuning. Connected music accounts stay connected.",
@@ -271,8 +271,9 @@ const RESET_INFO = {
   files: "All game preferences, control bindings and controller profiles. Saves, best laps, garage builds, photos, favourite circuits and saved appearance profiles stay saved.",
 };
 const RESET_INPUT = new Set("autoThrottle steerMode mirrorControls dockLayout tiltCurve touchSteeringGuide touchCurve padCurve touchRange touchDragSpeed dragSmooth digitalRate analogSpeedSteer haptics triggerHaptics padDeadzone padSaturation padLabels padAxes padProfiles padRest throttleLatch pedalSlide touchButtonProfiles holdMode lookBackLatch hudBtnScale hudBotKeep hudBtnOpacity hudBtnShape".split(" "));
-const RESET_AIDS = new Set("manual autoThrottle aeroMode drivingCoach conditionCues brakeCue gripSteer audioCues drivingHelp raceLine".split(" "));
+const RESET_AIDS = new Set("manual autoThrottle aeroMode drivingCoach conditionCues brakeCue lineBrakeCue adaptiveButtons gripSteer audioCues drivingHelp raceLine".split(" "));
 const RESET_ACCESS = new Set("textSize uiContrast cvdMode captions captionSize captionPos captionBg captionSpeakerInk".split(" "));
+const RESET_LINE_DISPLAY = new Set(["drivingLinePalette", "drivingLineOpacity"]);
 const RESET_UI = new Set("uiScale hudScale hudPanelOpacity portraitOk".split(" "));
 const RESET_ADVANCED = new Set("tiltCurve touchCurve padCurve touchRange touchDragSpeed dragSmooth digitalRate analogSpeedSteer haptics triggerHaptics padDeadzone padSaturation".split(" "));
 function resetInfo(section) { return Object.hasOwn(RESET_INFO, section) ? RESET_INFO[section] : null; }
@@ -285,7 +286,7 @@ function resetOwns(row, section) {
   if (section === "driving") return row.k === "preset" || RESET_AIDS.has(row.k);
   if (section === "a11y") return row.group === "a11y" || RESET_ACCESS.has(row.k);
   if (section === "appearance") return (row.group === "appearance" && !RESET_ACCESS.has(row.k)) || row.k === "uiScale";
-  if (section === "display") return (row.group === "hud" || row.group === "camera" || RESET_UI.has(row.k)) && row.k !== "uiScale" && !RESET_INPUT.has(row.k);
+  if (section === "display") return (row.group === "hud" || row.group === "camera" || RESET_LINE_DISPLAY.has(row.k) || RESET_UI.has(row.k)) && row.k !== "uiScale" && !RESET_INPUT.has(row.k);
   if (section === "graphics") return row.group === "display" && !RESET_UI.has(row.k) && !RESET_INPUT.has(row.k);
   return section === "audio" && row.group === "audio";
 }
