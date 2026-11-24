@@ -45,6 +45,19 @@
   let phase = 0;
   let surface = "dry";
   let drag = null;
+  const cornerReplay = LearnReplay.mount(get("corner-replay"), {
+    label: "corner entry",
+    describe: value => (value < .25 ? "Approach" : value < .75 ? "Turn-in" : "Apex") + " · " + Math.round(value * 100) + "%",
+    draw(progress) {
+      const step = progress * (samples.length - 1);
+      const start = Math.min(samples.length - 2, Math.floor(step));
+      const mix = (a, b) => String(Math.round(a + (b - a) * (step - start)));
+      brake.value = mix(samples[start][0], samples[start + 1][0]);
+      turn.value = mix(samples[start][1], samples[start + 1][1]);
+      showPhase(Math.round(step));
+      update(false);
+    },
+  });
 
   const decimal = value => value.toFixed(1);
   const force = value => decimal(value) + " kN";
@@ -62,7 +75,7 @@
     plotPoint(point, x, y);
   }
 
-  function update() {
+  function update(record = true) {
     const x = Number(brake.value) / 10;
     const y = Number(turn.value) / 10;
     const cap = caps[surface];
@@ -106,20 +119,26 @@
       : onLimit ? "Both requested forces are delivered. Increasing either one uses more than the available " + force(cap) + "."
         : "There is " + force(cap - resultant) + " of resultant headroom before the tyre reaches the limit.";
 
-    samples[phase] = [Number(brake.value), Number(turn.value)];
+    if (record) samples[phase] = [Number(brake.value), Number(turn.value)];
     trace.forEach(({row, values}, i) => {
       row.classList.toggle("current", phase === i);
       values.textContent = decimal(samples[i][0] / 10) + " brake / " + force(samples[i][1] / 10) + " lateral";
     });
   }
 
-  function selectPhase(index) {
+  function showPhase(index) {
     phase = index;
+    stages.forEach((button, i) => button.setAttribute("aria-pressed", String(i === phase)));
+    get("phase-tip").textContent = notes[phase];
+  }
+
+  function selectPhase(index) {
+    cornerReplay.stop();
+    cornerReplay.seek(index / (samples.length - 1), false);
+    showPhase(index);
     const [brakeDemand, lateralDemand] = samples[phase];
     brake.value = String(brakeDemand);
     turn.value = String(lateralDemand);
-    stages.forEach((button, i) => button.setAttribute("aria-pressed", String(i === phase)));
-    get("phase-tip").textContent = notes[phase];
     update();
   }
 
@@ -147,6 +166,7 @@
 
   plot.addEventListener("pointerdown", event => {
     if (event.button !== 0 || drag !== null) return;
+    cornerReplay.stop();
     drag = event.pointerId;
     plot.setPointerCapture(drag);
     positionRequest(event);
@@ -156,11 +176,13 @@
   });
   plot.addEventListener("lostpointercapture", () => { drag = null; });
 
-  brake.addEventListener("input", update);
-  turn.addEventListener("input", update);
+  for (const control of [brake, turn]) control.addEventListener("input", () => {
+    cornerReplay.stop();
+    update();
+  });
   surfaces.forEach(control => control.addEventListener("change", () => {
     selectSurface(control.value);
-    update();
+    update(false);
   }));
   stages.forEach((button, i) => button.addEventListener("click", () => selectPhase(i)));
   document.querySelectorAll("[data-case]").forEach(button => button.addEventListener("click", () => applyCase(button.dataset.case)));
@@ -219,7 +241,7 @@
     });
   });
 
-  LearnAppearance.mount();
-  update();
+  LearnAppearance.mount(reduced => cornerReplay.reduced(reduced));
+  cornerReplay.seek(0);
   updateAxleLoads();
 })();

@@ -1907,7 +1907,7 @@ const MOVED = {
 // its standalone page and lesson assets without a ScriptLoader version query.
 const LAZY_LEARN = ["js/ui/learn-door.js"];
 const SW_LEARN = [
-  "learn/appearance.js", "learn/sandbox.js", "learn/sandbox.css",
+  "learn/appearance.js", "learn/replay.js", "learn/replay.css", "learn/sandbox.js", "learn/sandbox.css",
   ...["chassis", "suspension", "deployment", "hybrid", "brake-blend", "tyre-heat",
     "racing-line", "rain", "pit-duel", "stint"].flatMap(id => ["learn/" + id + "/index.html", "learn/" + id + "/lab.js"]),
   "learn/braking/index.html", "learn/braking/style.css", "learn/braking/lab.js",

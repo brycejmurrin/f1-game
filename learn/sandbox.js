@@ -5,7 +5,7 @@ const LearnSandbox = (() => {
   function mount(lesson) {
     const root = document.getElementById("lab");
     const state = {};
-    const controls = [];
+    const controls = new Map();
     const conditionalRows = [];
 
     function element(tag, parent, text) {
@@ -30,6 +30,7 @@ const LearnSandbox = (() => {
     diagram.setAttribute("viewBox", "0 0 600 240");
     diagram.setAttribute("role", "img");
     instrument.appendChild(diagram);
+    const replayHost = element("div", instrument);
     const readouts = element("dl", instrument);
     const explanation = element("p", instrument);
     const settings = panel(studio);
@@ -59,10 +60,12 @@ const LearnSandbox = (() => {
         }
       }
       setValue(control.value);
-      controls.push(() => setValue(control.value));
+      controls.set(control.id, {control, setValue});
       input.addEventListener("input", () => {
+        replay?.stop();
         setValue(control.options ? input.value : input.valueAsNumber);
         render();
+        syncReplay(true);
       });
     }
     const reset = element("button", settings, "Reset controls");
@@ -86,11 +89,18 @@ const LearnSandbox = (() => {
     }
 
     let result;
-    function render() {
+    let overlay;
+    let replayProgress = 0;
+    function render(clearFeedback = true) {
       for (const {row, when} of conditionalRows) row.hidden = !when(state);
       result = lesson.evaluate(state);
       // Markup is authored by the lesson using its own enumerated or bounded controls.
       diagram.innerHTML = result.svg;
+      if (result.replay) {
+        overlay = document.createElementNS(diagram.namespaceURI, "g");
+        overlay.setAttribute("aria-hidden", "true");
+        diagram.appendChild(overlay);
+      } else overlay = null;
       diagram.setAttribute("aria-label", lesson.title + ". " + result.explanation);
       readouts.replaceChildren();
       for (const [name, value] of result.metrics) {
@@ -99,18 +109,56 @@ const LearnSandbox = (() => {
         element("dd", group, value);
       }
       explanation.textContent = result.explanation;
-      feedback.textContent = "";
+      if (clearFeedback) feedback.textContent = "";
+    }
+    const replayInput = () => controls.get(lesson.replay?.input?.(state));
+    const replay = lesson.replay && LearnReplay.mount(replayHost, {
+      label: lesson.replay.label,
+      draw(progress) {
+        replayProgress = progress;
+        const entry = replayInput();
+        if (entry) {
+          const {id, min, max, step = 1} = entry.control;
+          const value = Number((min + Math.round(progress * (max - min) / step) * step).toFixed(6));
+          if (value !== state[id]) {
+            entry.setValue(value);
+            render();
+          }
+        } else if (overlay) {
+          const frame = result.replay(progress);
+          overlay.innerHTML = frame.svg;
+          return frame.readout;
+        }
+      },
+    });
+    function syncReplay(fromInput = false) {
+      if (!replay) return;
+      const entry = replayInput();
+      replay.controls.hidden = !(entry || result.replay);
+      replay.manual(!entry);
+      if (entry) {
+        const {id, min, max} = entry.control;
+        replay.seek((state[id] - min) / (max - min));
+      } else if (result.replay) replay.seek(fromInput ? replayProgress : lesson.replay.initial ?? 0);
     }
     check.addEventListener("click", () => {
       feedback.textContent = (result.success ? "Challenge complete. " : "Try again. ") + result.feedback;
     });
     reset.addEventListener("click", () => {
-      for (const restore of controls) restore();
+      replay?.stop();
+      for (const {control, setValue} of controls.values()) setValue(control.value);
       render();
+      syncReplay();
     });
-    LearnAppearance.mount();
+    LearnAppearance.mount(reduced => replay?.reduced(reduced));
     render();
+    syncReplay();
   }
 
-  return Object.freeze({mount});
+  function cursor(x, y, top, bottom) {
+    return `<path d="M${x} ${top}V${bottom}" stroke="currentColor" stroke-dasharray="3 4" opacity=".62"/>
+      <circle cx="${x}" cy="${y}" r="5" fill="var(--red, #e64b43)" stroke="currentColor" stroke-width="1.5"/>`;
+  }
+
+  return Object.freeze({mount, cursor});
 })();

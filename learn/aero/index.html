@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Aero Lab · Apex 26 Learn</title>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../replay.css">
 <script src="../appearance.js" defer></script>
+<script src="../replay.js" defer></script>
 <script src="lab.js" defer></script>
 </head>
 <body>
@@ -20,6 +22,7 @@
 <div class="limits"><span>5 m</span><span>45 m</span></div>
 <p id="gap-formula" class="hint"></p>
 <fieldset><legend>Track section</legend><div><label><input type="radio" name="section" value="straight" checked> Straight</label><label><input type="radio" name="section" value="corner"> Fast corner</label></div></fieldset>
+<label id="direction-row" hidden>Turn direction <select id="direction"><option value="left">Left</option><option value="right">Right</option></select></label>
 <label class="check"><input id="offset" type="checkbox"> Move follower 4 m off-line</label>
 </section>
 <section class="active-aero" data-as="box" aria-labelledby="active-aero-title">
@@ -49,6 +52,7 @@
 <canvas id="flow" width="720" height="276" role="img" aria-label="Top-down airflow schematic" aria-describedby="gap-instructions state effect">Use the gap slider to change the follower position. The model readouts describe the airflow at that position.</canvas>
 <div class="legend"><span>← Airflow</span><span><i id="leaderKey"></i> A · Leader</span><span><i id="followerKey"></i> B · Follower</span></div>
 <div class="flow-key"><span>— Clean air</span><span>~ Disturbed wake</span><span>Highlighted lines follow Car B</span></div>
+<div id="corner-replay" hidden></div>
 <div class="results" aria-label="Apex classic model estimates">
 <h2 id="state" aria-live="polite"></h2>
 <p class="hint">Apex classic model · clean-air grip baseline 100%</p>

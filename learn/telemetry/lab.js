@@ -20,6 +20,11 @@
   let analysis;
   let deltaSeries;
   let plot = null;
+  const replay = LearnReplay.mount(get("trace-replay"), {
+    label: "telemetry trace",
+    draw(progress) { selectCursor(progress * axisLimit()); },
+  });
+  replay.manual(false);
 
   function buildComparison() {
     analysis = analyze(lanes, from, gate, reference);
@@ -191,6 +196,7 @@
   }
 
   function selectAxis(next, value) {
+    replay.stop();
     if (value === undefined) {
       const current = readAt(lanes, cursor, axis, reference).lanes[reference];
       value = (next === "time" ? current.t : current.distance) ?? 0;
@@ -205,6 +211,7 @@
       ? "Equal time · The gap trace uses the reference driver’s distance. Positive means the other driver is later."
       : "Equal distance · Compare arrival times. Positive means the other driver is later.";
     selectCursor(value, true);
+    replay.seek(cursor / axisLimit(), false);
   }
 
   function jump(key) {
@@ -269,7 +276,11 @@
     control.addEventListener("change", () => selectAxis(control.value));
   });
   checkpoints.forEach(button => button.addEventListener("click", () => jump(button.dataset.checkpoint)));
-  scrub.addEventListener("input", () => selectCursor(Number(scrub.value)));
+  scrub.addEventListener("input", () => {
+    replay.stop();
+    selectCursor(Number(scrub.value));
+    replay.seek(cursor / axisLimit(), false);
+  });
   scrub.addEventListener("change", () => update(true));
   get("reference").addEventListener("change", event => {
     reference = Number(event.target.value);
@@ -278,8 +289,10 @@
   });
   chart.addEventListener("click", event => {
     if (!plot) return;
+    replay.stop();
     const offset = event.clientX - chart.getBoundingClientRect().left - plot.left;
     selectCursor(offset / (plot.right - plot.left) * axisLimit(), true);
+    replay.seek(cursor / axisLimit(), false);
   });
 
   if (window.frameElement) {
@@ -301,6 +314,6 @@
 
   buildComparison();
   selectAxis("time", 0);
-  LearnAppearance.mount(draw);
+  LearnAppearance.mount(reduced => { replay.reduced(reduced); draw(); });
   new ResizeObserver(draw).observe(chart);
 })();

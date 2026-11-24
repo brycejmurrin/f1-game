@@ -16,6 +16,7 @@
 
   LearnSandbox.mount({
     title: "Stint Planner",
+    replay: {label: "race stint"},
     intro: "Plan a fictional 50-lap dry race. Balance the tyres’ pace drop, starting fuel mass and the recoverable sample.",
     controls: [
       { id: "plot", label: "Plot", options: [["net", "Net pace and tyre-only reference"], ["tyres", "Tyre wear by stint"]], value: "net" },
@@ -96,6 +97,12 @@
           <text x="283" y="223">Tyre-only</text>
           <text x="556" y="223" text-anchor="end">▲ Cliff begins</text>
         </g>`,
+        replay(progress) {
+          const lap = Math.round(progress * (laps - 1));
+          const pace = showNet ? net[lap] : tyres[lap];
+          return {svg: LearnSandbox.cursor(x(lap + 1), y(pace), 51, 167),
+            readout: "Lap " + (lap + 1) + " · " + signedSeconds(pace)};
+        },
         metrics: [
           ["Dry tyre rule", tyreOk ? "Two specifications, including Hard" : "Plan fails"],
           ["Laps beyond the tyre cliff", String(worn)],

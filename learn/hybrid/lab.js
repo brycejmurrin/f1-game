@@ -87,6 +87,7 @@
 
   LearnSandbox.mount({
     title: "Hybrid Lap Energy",
+    replay: {label: "energy lap"},
     intro: "Charge is a stock. Recharge and deployment are flows. Build an energy plan for a fictional lap and see how the same energy store can accept more than 4 MJ across multiple cycles.",
     controls: [
       { id: "budget", label: "Lap recharge allowance", options: [["6", "6.0 MJ · Las Vegas qualifying"], ["7", "7.0 MJ"], ["8", "8.0 MJ · Las Vegas race, Overtake inactive"], ["8.5", "8.5 MJ"]], value: "8" },
@@ -103,6 +104,7 @@
     ],
     evaluate(state) {
       const result = simulate(state);
+      const chargeTrace = [state.start, ...result.stages.map(stage => stage.end)];
       const { charge, deployed, harvested, storeLimited, budgetLimited, unserved } = result;
       const balance = charge - state.start;
       const nextLap = simulate({ ...state, start: charge });
@@ -112,6 +114,14 @@
       const success = state.budget === "8" && harvested + 1e-9 >= 7.5 && deployed + 1e-9 >= 8 && charge + 1e-9 >= 1;
       return {
         svg: diagram(state, result),
+        replay(progress) {
+          const position = progress * result.stages.length;
+          const phase = Math.min(result.stages.length - 1, Math.floor(position));
+          const charge = chargeTrace[phase] + (chargeTrace[phase + 1] - chargeTrace[phase]) * (position - phase);
+          const name = progress === 1 ? "Finish" : result.stages[phase].name;
+          return {svg: LearnSandbox.cursor(47 + progress * 534, 172 - charge / capacity * 118, 53, 172),
+            readout: name + " · " + mj(charge)};
+        },
         metrics: [
           ["Harvested this lap", mj(harvested) + " / " + mj(Number(state.budget))],
           ["Deployed this lap", mj(deployed)], ["Charge at finish", mj(charge)],

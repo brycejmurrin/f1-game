@@ -57,6 +57,8 @@
     </g>`;
   }
 
+  const floorFlow = ["M56 143 H135 Q184 144 263 117", "M332 143 H415 Q479 144 542 127"];
+
   function floor() {
     return `<g font-size="13" fill="currentColor">
       <text x="44" y="30">Prior concept · shaped floor tunnels</text>
@@ -64,7 +66,7 @@
       <path d="M44 157H550" stroke="currentColor" opacity=".35"/>
       <path d="M54 128 Q91 129 125 133 H171 Q204 126 268 82
         M330 128 Q370 129 400 133 H453 Q481 128 548 107" stroke="${accent}" stroke-width="4" fill="none"/>
-      <path d="M56 143 H135 Q184 144 263 117 M332 143 H415 Q479 144 542 127" stroke="currentColor" opacity=".65" stroke-dasharray="5 4" fill="none"/>
+      <path d="${floorFlow.join(" ")}" stroke="currentColor" opacity=".65" stroke-dasharray="5 4" fill="none"/>
       <path d="M254 116l9 1-6 7 M533 124l9 3-7 6" stroke="currentColor" opacity=".65" fill="none"/>
       <path d="M54 128L84 102H212L268 82 M330 128l34-26h123l61 5" stroke="currentColor" opacity=".26" fill="none"/>
       <text x="44" y="179">Track surface</text>
@@ -72,10 +74,18 @@
     </g>`;
   }
 
+  function wakePaths(inwash) {
+    return [-1, 1].map(side => {
+      const start = 123 + side * 21;
+      const bend = 123 + side * (inwash ? 14 : 48);
+      const end = 123 + side * (inwash ? 12 : 71);
+      return `M86 ${start} C161 ${start} 207 ${bend} 282 ${end} S436 ${end} 559 ${end}`;
+    });
+  }
+
   function wake(style, offset) {
     const inwash = style === "in";
     const yFollower = 123 + offset * .65;
-    const wakeEnd = inwash ? 12 : 71;
     const car = (x, y) => `<g fill="var(--surf-1, #24242b)" stroke="currentColor" stroke-width="1.7">
       <path d="M${x} ${y - 19}h11v13h27l15 -13h49v38h-49l-15 -13h-27v13h-11z"/>
       <rect x="${x + 18}" y="${y - 26}" width="14" height="12" rx="3"/>
@@ -90,13 +100,8 @@
         <text x="333" y="27">${inwash ? "Inwash · toward the centreline" : "Outwash · toward the outside"}</text>
         <path d="M32 123H571" stroke="currentColor" opacity=".36" stroke-dasharray="4 5"/>
         ${car(58, 123)}${car(433, yFollower)}
-        ${[-1, 1].map(side => {
-          const start = 123 + side * 21;
-          const bend = 123 + side * (inwash ? 14 : 48);
-          const end = 123 + side * wakeEnd;
-          return `<path d="M86 ${start} C161 ${start} 207 ${bend} 282 ${end} S436 ${end} 559 ${end}"
-            fill="none" stroke="${accent}" stroke-width="3" stroke-dasharray="8 5" marker-end="url(#wheel-wake-arrow)"/>`;
-        }).join("")}
+        ${wakePaths(inwash).map(path => `<path d="${path}" fill="none" stroke="${accent}" stroke-width="3"
+          stroke-dasharray="8 5" marker-end="url(#wheel-wake-arrow)"/>`).join("")}
         <text x="57" y="184">Lead car</text>
         <text x="432" y="${yFollower < 123 ? yFollower + 43 : yFollower - 32}">Following car</text>
         <path d="M210 215h77" stroke="currentColor" marker-end="url(#wheel-wake-arrow)"/>
@@ -106,6 +111,7 @@
 
   LearnSandbox.mount({
     title: "Nimble Chassis X-ray",
+    replay: {label: "airflow"},
     intro: "Compare FIA package dimensions and inspect an example against two 2026 chassis checks.",
     controls: [
       {id: "view", label: "Drawing layer", options: [["compare", "Axle and body overlay"], ["floor", "Floor side cutaway"], ["wake", "Inwash / outwash"], ["inspect", "Inspect a candidate"]], value: "compare"},
@@ -127,6 +133,7 @@
       const result = axleFail ? (bodyFail ? "both" : "axle") : (bodyFail ? "body" : "pass");
       const inspection = view === "inspect";
       const wakeView = view === "wake";
+      const traces = wakeView ? wakePaths(wakeStyle === "in") : view === "floor" ? floorFlow : null;
       const success = inspection && answer === result;
       const check = (n, max) => format(n) + " mm · " + (n <= max ? "within limit" : format(n - max) + " mm over");
       const metrics = wakeView ? [
@@ -152,6 +159,9 @@
           : "Both silhouettes use the same scale and front-axle origin. The FIA uses these dimensions to describe the package change. Agility also depends on mass distribution, tyres and aero.";
       return {
         svg: wakeView ? wake(wakeStyle, offset) : view === "floor" ? floor() : top(inspection ? wheelbase : limits.wheelbase, inspection ? body : limits.halfWidth, view === "compare"),
+        replay: traces && (progress => ({svg: traces.map(path => `<path d="${path}" pathLength="100" fill="none"
+          stroke="currentColor" stroke-linecap="round" stroke-width="4" stroke-dasharray="5 95"
+          stroke-dashoffset="${-95 * progress}"/>`).join("")})),
         metrics,
         explanation,
         success,

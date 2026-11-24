@@ -7,6 +7,7 @@
 
   LearnSandbox.mount({
     title: "Pit Stop Duel",
+    replay: {label: "pit comparison"},
     intro: "You start behind a rival. Compare the gap after both cars stop, when the temporary track-position swap has cleared.",
     controls: [
       { id: "call", label: "Your pit call", options: [["first", "Stop first · undercut"], ["second", "Stay out a lap · overcut"]], value: "first" },
@@ -44,6 +45,16 @@
             <text x="${x}" y="${y(delta) - 12}" text-anchor="middle">${signed(delta)}</text>
             <text x="${x}" y="211" text-anchor="middle">${labels[i]}</text>`).join("")}
         </g>`,
+        replay(progress) {
+          const stage = progress < .5 ? 0 : 1;
+          const [x, delta] = points[stage];
+          const [nextX, nextDelta] = points[stage + 1];
+          const step = progress * 2 - stage;
+          const gap = delta + (nextDelta - delta) * step;
+          return {svg: LearnSandbox.cursor(x + (nextX - x) * step, y(gap), 45, 191),
+            readout: (progress === 0 ? labels[0] : progress < .5 ? "Pace adjustment" :
+              progress === 1 ? labels[2] : "Pit-loss adjustment") + " · " + signed(gap)};
+        },
         metrics: [
           ["Early stopper’s out-lap", earlyLap.toFixed(1) + " s"],
           ["Pace gained on rival", signed(paceGain)],

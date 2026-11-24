@@ -36,6 +36,7 @@
 
   LearnSandbox.mount({
     title: 'Tyre thermal science',
+    replay: {label: 'thermal run', input: () => 'elapsed'},
     intro: 'A tyre can feel hot at the tread while the rubber beneath it is still cool. Compare how sliding and repeated loading heat the surface and core over a 90-second run.',
     controls: [
       { id: 'track', label: 'Track surface', value: 'cold', options: [['cold', 'Cold night · 15 °C'], ['hot', 'Hot track · 50 °C']] },

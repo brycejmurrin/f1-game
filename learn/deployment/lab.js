@@ -78,6 +78,7 @@
 
   LearnSandbox.mount({
     title: "Deployment & Clipping",
+    replay: {label: "straight"},
     intro: "An electric motor can have charge left and still deliver less power as speed rises. Compare the requested power, the FIA ceiling and what actually gets delivered over a fixed eight-second speed trace.",
     controls: [
       { id: "curve", label: "Power curve", options: [["standard", "Standard"], ["limited", "Power-limited sector"], ["overtake", "Request Overtake"]], value: "standard" },
@@ -99,11 +100,19 @@
       const curve = requestedOvertake && !eligible ? "standard" : state.curve;
       const activeState = { ...state, curve };
       const result = trace(activeState);
+      const samples = result.delivered.map(point => point.split(",").map(Number));
       const used = state.charge - result.charge;
       const conditions = state.curve === "standard" && state.endSpeed === 350;
       const success = conditions && used + 1e-9 >= 1.5 && result.charge + 1e-9 >= 0.3;
       return {
         svg: diagram(activeState, result),
+        replay(progress) {
+          const x = xAt(progress * duration);
+          const next = samples.findIndex(sample => sample[0] > x);
+          const y = (next < 0 ? samples.at(-1) : samples[Math.max(0, next - 1)])[1];
+          return {svg: LearnSandbox.cursor(x, y, 47, 181),
+            readout: (progress * duration).toFixed(1) + " s · " + Math.round((181 - y) * 350 / 133) + " kW delivered"};
+        },
         metrics: [
           ["Energy deployed", mj(used)], ["Charge left", mj(result.charge)],
           ["Request above ceiling", mj(result.speedLoss)], ["Undelivered for lack of charge", mj(result.emptyLoss)],
