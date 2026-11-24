@@ -69,13 +69,15 @@ const DataTelemetryReplay = (function () {
   }
   function create(view, { el, cssColor }, player) {
     if (typeof Path2D === "undefined") return { element: el("p", "dh-live-sub", "Replay drawing unavailable in this browser."), draw() {}, dispose() {} };
-    const box = el("section", "dh-livecard"), heading = el("h3", "", "TRACK REPLAY");
+    const box = el("section", "dh-livecard"), heading = el("h3", "dh-section", "TRACK REPLAY");
     box.setAttribute("data-telemetry-replay", "");
-    const controls = el("div", "dh-transport"), play = el("button", "dh-tbtn", "PLAY");
-    const restart = el("button", "dh-tbtn", "RESTART"), expand = el("button", "dh-tbtn", "EXPAND");
+    const controls = el("div", "dh-transport"), fields = el("div", "dh-pick-fields"), play = el("button", "bigbtn", "PLAY");
+    const restart = el("button", "bigbtn alt", "RESTART"), expand = el("button", "bigbtn alt", "EXPAND");
+    controls.setAttribute("data-replay-actions", "");
+    fields.setAttribute("data-replay-fields", "");
     const rate = el("select"), mode = el("select"), zoom = el("select"), focus = el("select");
     for (const select of [rate, mode, zoom, focus]) select.className = "dh-pick-select";
-    const label = (title, input) => { const l = el("label", "dh-live-sub", title); input.setAttribute("aria-label", title); l.appendChild(input); controls.appendChild(l); };
+    const label = (title, input) => { const l = el("label", "dh-pick-field"); l.appendChild(el("span", "dh-pick-label", title.toUpperCase())); input.setAttribute("aria-label", title); l.appendChild(input); fields.appendChild(l); };
     [[rate, [[1, "1×"], [2, "2×"], [4, "4×"]]], [mode, [["follow", "Follow car"], ["overview", "Whole circuit"]]],
       [zoom, [[80, "Close"], [140, "Medium"], [300, "Wide"]]], [focus, view.laps.map((l, i) => [i, l.d.name || "#" + l.d.num])]].forEach(([select, values]) => {
       values.forEach(([value, title]) => { const o = el("option", "", title); o.value = String(value); select.appendChild(o); });
@@ -83,21 +85,22 @@ const DataTelemetryReplay = (function () {
     zoom.value = "140";
     for (const button of [play, restart, expand]) { button.type = "button"; controls.appendChild(button); }
     label("Speed", rate); label("View", mode); label("Zoom", zoom); label("Follow", focus);
-    const canvas = el("canvas", "dh-canvas"), seek = el("input"), seekLabel = el("label", "dh-live-sub", "Lap time");
+    const canvas = el("canvas", "dh-canvas"), seek = el("input"), seekLabel = el("label", "dh-pick-field");
+    seekLabel.appendChild(el("span", "dh-pick-label", "LAP TIME"));
     canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", "Telemetry replay with circuit overview and following car detail");
     seek.type = "range"; seek.min = "0"; seek.max = String(view.tMax); seek.step = "0.01"; seek.value = "0";
     seek.setAttribute("aria-label", "Replay lap time in seconds"); seekLabel.appendChild(seek);
     const clock = el("output", "dh-live-title", "0.00 s"), note = el("p", "dh-live-sub"), rows = el("div", "dh-livecontrols");
     rows.setAttribute("data-replay-lanes", "");
     const cells = view.laps.map((lane, i) => {
-      const cell = el("div", "dh-livecard"), title = el("strong", "", lane.d.name || "#" + lane.d.num);
+      const cell = el("div", "dh-livecard"), title = el("strong", "dh-live-title", lane.d.name || "#" + lane.d.num);
       title.style.color = cssColor(view.laneCols[i]); cell.appendChild(title);
       const telemetry = el("p", "dh-live-sub"), context = el("p", "dh-live-sub"), event = el("p", "dh-live-sub");
       cell.append(telemetry, context, event); rows.appendChild(cell);
       return { telemetry, context, event };
     });
     const source = el("a", "dh-live-sub", "Geometry source and method"); source.href = "assets/telemetry/README.md"; source.target = "_blank"; source.rel = "noopener";
-    box.append(heading, controls, canvas, clock, seekLabel, note, rows, source);
+    box.append(heading, controls, fields, canvas, clock, seekLabel, note, rows, source);
     let geometry = null, models = [], disposed = false, dialog = null, placeholder = null, lastFrame = -Infinity, lastContext = "";
     let w = 320, h = 320, ratio = 1, timeout = 0;
     const abort = new AbortController();
@@ -196,16 +199,23 @@ const DataTelemetryReplay = (function () {
     function restore() {
       if (!dialog) return;
       const previous = dialog; dialog = null;
-      if (!disposed && placeholder?.parentNode) { placeholder.replaceWith(box); expand.textContent = "EXPAND"; expand.focus(); }
+      if (!disposed && placeholder?.parentNode) { placeholder.replaceWith(box); expand.hidden = false; expand.focus(); }
       previous.remove(); if (!disposed) resize();
     }
     expand.addEventListener("click", () => {
       if (dialog) { dialog.close(); return; }
       placeholder = el("div"); placeholder.hidden = true; box.replaceWith(placeholder);
       dialog = el("dialog", "dh-tpopup"); dialog.setAttribute("data-replay-expanded", ""); dialog.setAttribute("aria-label", "Expanded telemetry replay");
-      dialog.appendChild(box); document.body.appendChild(dialog);
-      const opened = dialog; dialog.addEventListener("close", () => { if (dialog === opened) restore(); });
-      expand.textContent = "CLOSE REPLAY"; dialog.showModal(); resize(); expand.focus();
+      const card = el("div", "dh-tpopup-card fit-managed"), header = el("div", "dh-tpopup-hdr"), title = el("div", "dh-tpopup-title");
+      title.appendChild(el("span", "", "TRACK REPLAY")); title.appendChild(el("span", "dh-tpopup-sub", view.primary.circuit || "Telemetry"));
+      const close = el("button", "dh-close", "✕"); close.type = "button"; close.autofocus = true; close.setAttribute("aria-label", "Close replay");
+      const opened = dialog; close.addEventListener("click", () => opened.close());
+      header.append(title, close);
+      const body = el("div", "dh-tpopup-body"); body.appendChild(box); card.append(header, body);
+      dialog.appendChild(card); document.body.appendChild(dialog);
+      dialog.addEventListener("pointerdown", (e) => { if (e.target === opened) opened.close(); });
+      dialog.addEventListener("close", () => { if (dialog === opened) restore(); });
+      expand.hidden = true; dialog.showModal(); resize(); close.focus();
     });
     const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(resize) : null;
     observer?.observe(canvas);

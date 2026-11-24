@@ -187,7 +187,7 @@ test("mobile replay expansion preserves scrubbing, focus and parent telemetry", 
   await expect(page.locator('[data-replay-expanded]')).toHaveCount(0);
   await expect(panel.getByRole('button',{name:'EXPAND',exact:true})).toBeFocused();
   await panel.getByRole('button',{name:'EXPAND',exact:true}).click();
-  await panel.getByRole('button',{name:'CLOSE REPLAY',exact:true}).click();
+  await page.locator('[data-replay-expanded]').getByRole('button',{name:'Close replay',exact:true}).click();
   await panel.getByRole('button',{name:'RESTART',exact:true}).click();
   await expect(panel.locator('output')).toHaveText('0.00 s');
   await page.getByRole('button',{name:'Close telemetry',exact:true}).click();

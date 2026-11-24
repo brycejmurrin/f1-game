@@ -1496,13 +1496,16 @@ body[data-density="compact"] [data-xscroll] :is(th:first-child, .dh-td-pos) {
 @layer overlays {
   [data-telemetry-replay] { min-width: 0; width: 100%; padding-block: var(--gap); }
   [data-telemetry-replay] .dh-transport { flex-wrap: wrap; }
-  [data-telemetry-replay] label { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) / 2); min-width: 0; }
-  [data-telemetry-replay] > label { width: 100%; }
-  [data-telemetry-replay] select { max-width: 100%; min-height: max(44px, var(--tap-min)); }
-  [data-telemetry-replay] input[type="range"] { flex: 1; min-width: 120px; min-height: 44px; touch-action: pan-y; }
-  [data-telemetry-replay] .dh-canvas { width: 100%; max-width: none; height: clamp(240px, 42vh, 420px); touch-action: pan-y; }
+  [data-replay-actions] { padding-inline: calc(var(--gap) / 3); }
+  [data-replay-actions] > .bigbtn { flex: 1 1 0; width: auto; min-width: 0; margin: 0; font-size: var(--fs-2); padding: calc(var(--gap) / 2) var(--gap); }
+  [data-replay-fields] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(var(--gap) * 2 / 3); margin-bottom: var(--gap); }
+  body[data-width="wide"] [data-replay-fields] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  [data-telemetry-replay] > label { min-width: 0; width: 100%; }
+  [data-telemetry-replay] input[type="range"] { width: 100%; min-width: 0; min-height: var(--tap-paint); accent-color: var(--red); touch-action: pan-y; }
+  [data-telemetry-replay] .dh-canvas { width: 100%; max-width: none; height: clamp(160px, calc(36 * var(--svhz)), 360px); touch-action: pan-y; }
+  [data-telemetry-replay] p { margin-block: calc(var(--gap) / 3); }
   [data-replay-lanes] { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--gap); }
-  [data-replay-expanded]:not([open]) { display: none; }
-  [data-replay-expanded][open] { display: block; width: min(1100px, 100%); max-width: 100%; height: auto; max-height: 100dvh; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; margin: auto; padding: var(--pad); background: var(--surf-1); color: var(--text); border: 1px solid var(--card-line); }
-  [data-replay-expanded]::backdrop { background: var(--scrim-heavy); }
+  [data-replay-expanded] .dh-tpopup-body { flex-direction: column; align-items: stretch; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding: var(--gap) calc(var(--gap) * 4 / 3); }
+  [data-replay-expanded] [data-telemetry-replay] { padding-block: 0; }
+  [data-replay-expanded] [data-telemetry-replay] > .dh-section { display: none; }
 }
