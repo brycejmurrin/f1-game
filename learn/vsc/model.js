@@ -17,6 +17,7 @@ const VscLesson = (() => {
   const fixtures = Object.freeze({
     default: Object.freeze({ ...baseline }),
     hardLife: Object.freeze({ ...baseline, boxPace: 5000 }),
+    fullField: Object.freeze({ ...baseline, vscEnds: 32000 }),
     earlyGreen: Object.freeze({ ...baseline, vscEnds: 9000, boxPace: 5000 }),
     traffic: Object.freeze({ ...baseline, vscEnds: 9000, boxPace: 5000, traffic: 3000 }),
     green: Object.freeze({ ...baseline, regime: "green", vscEnds: 0, boxPace: 5000 }),
@@ -37,11 +38,16 @@ const VscLesson = (() => {
     const trackTime = cautionMs + travelTime(restartMetres, input.greenSpeed);
     const greenLoss = pitTime - greenTrack;
     const boxLoss = pitTime - trackTime;
-    const rejoin = input.gapBehind - boxLoss;
+    const referenceCautionMs = Math.min(fullCautionTime, Math.max(0, input.vscEnds - input.gapBehind));
+    const remainingMetres = referenceCautionMs === fullCautionTime ? 0 : distance - travelled(referenceCautionMs, input.vscSpeed);
+    const referenceTrackTime = referenceCautionMs + travelTime(remainingMetres, input.greenSpeed);
+    const referenceArrival = input.gapBehind + referenceTrackTime;
+    const rejoin = referenceArrival - pitTime;
     const traffic = rejoin < 0 ? input.traffic : 0;
     const boxTotal = boxLoss + input.boxPace + traffic;
     const stayTotal = greenLoss + input.stayPace;
     return { pitTime, greenTrack, cautionMs, cautionMetres, restartMetres, trackTime,
+      referenceCautionMs, referenceTrackTime, referenceArrival,
       greenLoss, boxLoss, rejoin, traffic, boxTotal, stayTotal };
   }
 
@@ -63,7 +69,12 @@ const VscLesson = (() => {
     const underCaution = Math.min(onTrack, result.cautionMs);
     const track = travelled(underCaution, input.vscSpeed) +
       travelled(onTrack - underCaution, input.greenSpeed);
+    const referenceElapsed = Math.max(0, elapsed - input.gapBehind);
+    const referenceCaution = Math.min(referenceElapsed, result.referenceCautionMs);
+    const reference = travelled(referenceCaution, input.vscSpeed) +
+      travelled(referenceElapsed - referenceCaution, input.greenSpeed);
     return { pit, pitPhase, track: elapsed >= result.trackTime ? 1 : track / distance,
+      reference: elapsed >= result.referenceArrival ? 1 : Math.min(1, reference / distance),
       green: Math.min(1, elapsed / result.greenTrack) };
   }
 
