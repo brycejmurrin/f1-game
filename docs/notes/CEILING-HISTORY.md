@@ -4047,3 +4047,9 @@ Fragment: `ratchets.d/codex--tt-pit-end-session.json`.
 
 `(tree) eagerCodeBytes` 3994421 → **3995081** (+660). Cached visor lighting and bead directions replace repeated paint-time calculations. The visor also skips neutral displacement texels and defers layer lookup until the renderer can use it. Reading the live lighting registry removes the cached developer snapshot.
 Fragment: `ratchets.d/codex--mobile-visor-paint-cost.json`.
+
+## 2026-11-23 — cursor/telemetry-mobile-1124: mobile telemetry track view
+
+`(tree) assertPins` 8162 → **8163** (+1) and `assertPinsAll` 10409 → **10410** (+1):
+regression coverage verifies track focus preserves its existing map and cursor.
+Fragment: `ratchets.d/cursor--telemetry-mobile-1124.json`.

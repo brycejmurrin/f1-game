@@ -62,13 +62,9 @@
     // Turn 8 is the famous one: a long, banked, quadruple-apex left taken flat.
     bankZones: [
       { frac: 0.050, angleDeg: -4.0, widthM: 130 },  // T1 tilts outward (METU §1.3); magnitude estimated
-      // Turn 8: the long left sweeper, curvature peaks 0.438-0.476 (turns[6..7], both LEFT).
-      // `turn: 6` resolved to turns[5] = 0.3659, a RIGHT-hander (survey 2026-10-15).
-      // Real Turn 8 (def T7 0.4384 .. T8 0.4764, one four-apex left): ONE zone over
-      // the whole corner. corner-frames.cjs lists it (98 m from either apex: it
-      // peaks between them, by design); splitting it per apex left ~80 m flat
-      // mid-corner (#5652), so the row stays in the baseline.
-      { frac: 0.457, angleDeg: 7.0, widthM: 300 },
+      // The real Turn 8 is one four-apex left. The built def marks its two
+      // main peaks at T7 and T8. One bank covers both and the road between them.
+      { frac: 0.457, angleDeg: 7.0, widthM: 300 },  // T7-T8 continuous bank
       { turn: 11, angleDeg: 3.5, widthM: 130 },   // Turn 12 (turns[10] = 0.8819, left)
     ],
 

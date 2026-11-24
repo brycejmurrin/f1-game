@@ -318,6 +318,8 @@ function measure(Tracks, id) {
       // station only while the actual painted bank still spans that apex.
       const exitStation = !turnAnchor && claim.length === 1 &&
         /^T\d+ exit, measured peak (\d+(?:\.\d+)?) m after apex$/i.exec(comment);
+      const continuousBank = !turnAnchor && claim.length === 2 && claim[1] === claim[0] + 1 &&
+        /^T\d+-T\d+ continuous bank$/.test(comment);
       if (exitStation) {
         const stationM = Number(exitStation[1]);
         const apex = turns[claim[0] - 1];
@@ -325,6 +327,23 @@ function measure(Tracks, id) {
         const halfWidth = (z.widthM || 40) / 2;
         bad = stationM > halfWidth || lapGap(apex, at) * L > halfWidth || m > L / n;
         detail = `claims T${claim[0]} exit +${stationM} m, builds at ${at.toFixed(4)}`;
+      } else if (continuousBank) {
+        const first = Math.round(turns[claim[0] - 1] * n) % n;
+        const last = Math.round(turns[claim[1] - 1] * n) % n;
+        const span = (last - first + n) % n;
+        const peak = lapDelta(at, first / n) * n;
+        m = Math.max(0, -peak, peak - span) * L / n;
+        // The annotated zone must supply continuous inward camber through
+        // both apexes. Adjacent zones cannot supply missing parts of the span.
+        const other = Tracks.buildCenterline({ ...def, bankZones: zones.filter((_, j) => j !== i) }, { line: false }).bankP;
+        const side = Math.sign(ksm[first]);
+        let covered = !!lift && side !== 0 && side === Math.sign(ksm[last]) && span > 0 && span < n / 2;
+        for (let j = 0; covered && j <= span; j++) {
+          const k = (first + j) % n;
+          covered = lift[k] > (other?.lift[k] ?? 0) && bankTrack.bankP.bsign[k] === side;
+        }
+        bad = m > L / n / 2 || !covered;
+        detail = `claims continuous T${claim[0]}–T${claim[1]} span, peaks at ${at.toFixed(4)} (${covered ? "continuous camber" : "span not covered"})`;
       } else if (claim.length) {
         m = Math.min(...claim.map((t) => lapGap(turns[t - 1], at) * L));
         bad = m > BANK_M;
