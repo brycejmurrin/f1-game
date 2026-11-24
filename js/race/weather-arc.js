@@ -22,6 +22,50 @@ const WeatherArc = (function () {
   const intOf = (w) => INTENSITY[w] || 0;
   const STORM_AT = 1.25;
 
+  const TAU_WET = 8, TAU_DRY = 36;   // seconds to wet and dry the road
+  const hasTM = () => typeof TyreModel !== "undefined" && !!TyreModel && !!TyreModel.treadFor;
+  const wetOf = (w) => hasTM() ? TyreModel.wetness(asRain(w), null)
+    : asRain(w) === "rain" ? 1 : w === "wet" ? 0.5 : 0;
+
+  function segAt(a, i, n, t) {
+    return RainCells.segWet({
+      rs: a.w0s ? a.w0s[i] : a.w0, w1: wetOf(a.to), dur: a.dur, wOut: a.w0, cell: a.cell || null,
+      tauW: TAU_WET, tauD: TAU_DRY,
+    }, RainCells.segFrac(i, n), t);
+  }
+
+  // Price a move off slicks using the wetness of each segment. Grip-limited
+  // speed scales with sqrt(grip), so the time difference is proportional to
+  // the inverse square roots. Integrate once per shower and tyre so every car
+  // can read its own pit-entry-to-finish window in constant time.
+  const TYRE_FORECAST_STEP = 5;
+  const showerTyreForecast = new WeakMap();
+  function showerStopPays(arc, tread, entry, finish, loss, entryPaid) {
+    const dryAgain = arc.cell.life + 3 * TAU_DRY;
+    const end = Math.min(finish, dryAgain);
+    if (entry >= end) return false;
+    let forecast = showerTyreForecast.get(arc);
+    if (!forecast) { forecast = []; showerTyreForecast.set(arc, forecast); }
+    let gain = forecast[tread];
+    if (!gain) {
+      const n = arc.w0s ? arc.w0s.length : RainCells.SEGS;
+      gain = new Float64Array(Math.ceil(dryAgain / TYRE_FORECAST_STEP) + 1);
+      for (let bin = 1; bin < gain.length; bin++) {
+        const t = (bin - 0.5) * TYRE_FORECAST_STEP;
+        let delta = 0;
+        for (let i = 0; i < n; i++) {
+          const wet = segAt(arc, i, n, t);
+          delta += 1 / Math.sqrt(TyreModel.weatherGrip(0, wet)) - 1 / Math.sqrt(TyreModel.weatherGrip(tread, wet));
+        }
+        gain[bin] = gain[bin - 1] + delta * TYRE_FORECAST_STEP / n;
+      }
+      forecast[tread] = gain;
+    }
+    // Once the road recovers, getting back onto slicks costs another stop.
+    const cost = (entryPaid ? 0 : loss) + (finish > dryAgain ? loss : 0);
+    return gain[Math.floor(end / TYRE_FORECAST_STEP)] - gain[Math.floor(entry / TYRE_FORECAST_STEP)] > cost;
+  }
+
   function arcSeq(from, to) {
     const a = LADDER.indexOf(from), b = LADDER.indexOf(to);
     if (a >= 0 && b >= 0 && a !== b) {
@@ -240,7 +284,6 @@ const WeatherArc = (function () {
     // loop) is read OFF that wetness with the tyre model's own thresholds, so
     // the road can no longer be inter-wet under a sky that still reads dry. An
     // arc stays armed past `dur` until the road has settled on its target.
-    const TAU_WET = 8, TAU_DRY = 36;   // s: the lag wetting / drying (4.5x slower)
     const SETTLE = 0.005;              // |wetness - target| that ends an arc
     const RAINING = 0.72;   // the full-rain particle tier
     const reseedRain = (vw) => { if (typeof Particles !== "undefined" && Particles.rainSeed) Particles.rainSeed(!arc && vw < RAINING); else G.initRainDrops(); };
@@ -292,8 +335,6 @@ const WeatherArc = (function () {
     // What a weather means as wetness, and the tread ladder that splits it:
     // TyreModel's own (wetValue via wetness(w, null); treadFor — 0.25 inter,
     // 0.72 full wet), with the same numbers inline for a VM with no tyre model.
-    const hasTM = () => typeof TyreModel !== "undefined" && !!TyreModel && !!TyreModel.treadFor;
-    const wetOf = (w) => { w = asRain(w); return hasTM() ? TyreModel.wetness(w, null) : (w === "rain" ? 1 : w === "wet" ? 0.5 : 0); };
     const treadOf = (w) => hasTM() ? TyreModel.treadFor(null, w) : (w >= 0.72 ? 2 : w >= 0.25 ? 1 : 0);
     // THE SHARED RACE CLOCK. game.js snaps raceT to the host's wall clock in a
     // friend race; summed sim dt drops time to the 5-step cap and background
@@ -352,12 +393,6 @@ const WeatherArc = (function () {
     // position reads the one scalar above, exactly as before.
     const local = (a) => !!a && (!!a.cell || !!a.w0s);
     const hasRC = () => typeof RainCells !== "undefined" && !!RainCells;
-    function segAt(a, i, n, t) {
-      return RainCells.segWet({
-        rs: a.w0s ? a.w0s[i] : a.w0, w1: wetOf(a.to), dur: a.dur, wOut: a.w0, cell: a.cell || null,
-        tauW: TAU_WET, tauD: TAU_DRY,
-      }, RainCells.segFrac(i, n), t);
-    }
     /** The segment grid at the arc's own clock, cached per arc.t.
      *  Without the memo, wetnessAt rebuilt SEGS per car; netplay shares raceT +
      *  plan only, never `_sg` (#4270). */
@@ -578,6 +613,6 @@ const WeatherArc = (function () {
       get plan() { return plan; }, set plan(v) { plan = v; },
     };
   }
-  return { create, arcSeq, LADDER, VALID, TARGETS };
+  return { create, arcSeq, showerStopPays, LADDER, VALID, TARGETS };
 })();
 Object.freeze(WeatherArc);
