@@ -687,6 +687,25 @@ test("a fresh store exports no changes, and ALL lists every key at its default",
   assert.deepEqual(all.changed, []);
 });
 
+test("a marker-only changed controller profile import retains saved wheel devices", () => {
+  const wheel = { id: "Wheel", axes: { steer: 3, throttle: 2 }, buttons: { camera: [19] } };
+  const profiles = { v: 1, devices: [wheel], legacyClaimed: false };
+  const disk = { "apex26.padProfiles": JSON.stringify(profiles) };
+  for (const [mode, patch, devices] of [
+    ["changes", { legacyClaimed: true }, [wheel]],
+    ["changes", { legacyClaimed: true, devices: [] }, []],
+    ["all", { legacyClaimed: true }, []],
+  ]) {
+    const game = boot({ disk, realStore: true });
+    const result = game.loadSettings({
+      format: game.collect(mode).format, mode, settings: { driving: { padProfiles: patch } },
+    });
+    assert.deepEqual(result.sections.preferences, { applied: 1, skipped: 0, failed: 0 });
+    const reloaded = boot({ disk: Object.fromEntries(game.disk), realStore: true });
+    assert.deepEqual(JSON.parse(reloaded.disk.get("apex26.padProfiles")), { v: 1, devices, legacyClaimed: true });
+  }
+});
+
 test("changes-only backups restore complete solo race drafts and explicit HUD maps", () => {
   const mobile = true;
   const globals = { HudElements: { defaults: () => ({ speed: "off" }) } };
