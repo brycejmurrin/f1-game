@@ -69,7 +69,7 @@ function _tuneNum(T, id, fallback) {
 // Reused every garage frame — gfx.present / begin consume opts synchronously.
 const _presentOpts = {
   exposure: 0, bloom: 0, threshold: 0, contact: 0, reflect: 0, carReflect: 0,
-  ssao: 0, godray: 0, bloomLevels: 0, flareMul: 0, tune: null,
+  ssao: 0, godray: 0, bloomLevels: 0, flareMul: 0, tune: null, photoFocus: undefined,
 };
 const _presentTune = { sunShaftMul: 0 };
 // A phone boots GRAPHICS MEDIUM, and the governor never ticks in the bay, so
@@ -82,7 +82,7 @@ function garagePhone() {
 const NO_MOOD = Object.freeze({ exposure: 1, bloom: 1, glare: 1, sun: null });
 const moodDef = () => (typeof GarageScene !== "undefined" && GarageScene.moodDef && GarageScene.moodDef()) || NO_MOOD;
 
-function presentOpts(tune) {
+function presentOpts(tune, photoFocus = undefined) {
   const T = tune === undefined ? liveTune() : tune;
   const exposureMul = _tuneNum(T, "exposureMul", 1);
   const bloomMul = _tuneNum(T, "bloomMul", 1);
@@ -118,6 +118,7 @@ function presentOpts(tune) {
   }
   _presentOpts.bloomLevels = levels;
   _presentOpts.tune = _presentTune;
+  _presentOpts.photoFocus = photoFocus;
   return _presentOpts;
 }
 function glareScale(tune) {
@@ -1393,8 +1394,8 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     M4.invertTo(exteriorSkyInv, _spVP); outside.sky.invViewProj = exteriorSkyInv; outside.sky.time = sceneTime / 1000; gfx.drawSky(outside.sky);
     if (exterior.drawWeather) exterior.drawWeather(sceneTime, reducedMotion());
   }
-  const options = presentOpts();
-  gfx.present(photoLens && gfx.photoFocusAvailable?.() ? { ...options, photoFocus: photoLens.focus } : options);
+  const photoFocus = photoLens && gfx.photoFocusAvailable?.() ? photoLens.focus : undefined;
+  gfx.present(presentOpts(undefined, photoFocus));
   return !(gfx.warming && gfx.warming());
 }
 

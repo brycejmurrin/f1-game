@@ -265,6 +265,15 @@ test("garage present routes through Lighting Tuner multipliers", () => {
   assert.ok(Math.abs(glareScale({ glareStr: 0.24 }) - 2) < 1e-9);
 });
 
+test("garage present options clear photo focus when returning to the ordinary preview", () => {
+  const pick = { x: 0.25, y: 0.6 };
+  const options = presentOpts(null, pick);
+  assert.equal(options.photoFocus, pick);
+  assert.equal(presentOpts(null, null).photoFocus, null, "null requests automatic photo focus");
+  assert.equal(presentOpts(null), options, "preview reuses the per-frame options");
+  assert.equal(options.photoFocus, undefined);
+});
+
 test("INTER and WET tyre chips take their ink from the compound visual.band", () => {
   const sheet = read("js/garage/setup-sheet.js");
   assert.match(sheet, /opt\.wetTread && opt\.visual && opt\.visual\.band/,
