@@ -1228,6 +1228,8 @@
     "// GRAPHICS: EXTREME shadow extras on TLX: cascade splits / snapping / cadence, the extra-lamp pick, the real shadow-pass + shadowSys + lit shader gates.",
     "tests/unit/tlx-csm-lampx.test.mjs",
     "tests/unit/tlx-cull-shadow-pack.test.mjs",
+    "// #6362 first-build DPR hold: a phone keeps a raised DPR cap at 1.5 until a world presents after a race-entry warm.",
+    "tests/unit/tlx-dpr-first-build.test.mjs",
     "// A throw in one TLX subsystem costs that subsystem only: the car/lamp shadow",
     "// pass no longer clears the SUN flag; a retired post chain is rebuilt at the",
     "// next realloc and a post-only death keeps the bound label.",

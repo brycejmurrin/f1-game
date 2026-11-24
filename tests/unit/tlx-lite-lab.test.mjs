@@ -117,12 +117,15 @@ test("sunMapSize keeps the pre-B8 rule exactly: only isMobile picks 1024 (a forc
 
 // ?lab=dpr2 / ?lab=dpr3 (phone perf hunt 2026-11-10): the lab that lets a phone and live-frame-census --sweep draw
 // above the 1.5 mobile cap. create()'s own cap lines are run against the shipped dprCapFor (which applies labDprCap).
-function labCap(search, { mobileTier = true, webgpu = true } = {}) {
+// The cap AFTER the first-build hold has released (tlx-dpr-first-build.test.mjs pins the hold itself): the lab's
+// measurement is the race's buffer; at boot a phone keeps 1.5 until a race-entry warm is over.
+function labCap(search, { mobileTier = true, webgpu = true, held = false } = {}) {
   const ctx = boot(search);
   ctx.renderer = { backend: webgpu ? { isWebGPUBackend: true } : { isWebGLBackend: true } };
   ctx.mobileTier = mobileTier; ctx._phoneHw = true;
   ctx.liteTier = ctx.TLX.liteTier; ctx.dprCapFor = ctx.TLX.dprCapFor;
-  vm.runInContext(LITE_LINE + "\n" + DPR_LINE + "\nglobalThis.__cap = DPR_CAP;", ctx, { filename: absSrc("tests/unit/tlx-lite-lab.test.mjs") });
+  vm.runInContext(LITE_LINE + "\n" + DPR_LINE + (held ? "" : "\n_dprHold = false; DPR_CAP = dprCapFor(_lite, mobileTier, _dprBoost, _dprCeil, _dprHold);") +
+    "\nglobalThis.__cap = DPR_CAP;", ctx, { filename: absSrc("tests/unit/tlx-lite-lab.test.mjs") });
   return ctx.__cap;
 }
 
@@ -137,6 +140,8 @@ test("?lab=dpr2 and ?lab=dpr3 replace the cap on either tier; dpr3 wins when bot
   assert.equal(labCap("?lab=dpr3"), 3);
   assert.equal(labCap("?lab=dpr3", { mobileTier: false }), 3);
   assert.equal(labCap("?lab=dpr2,dpr3"), 3);
+  // #6362: at boot a phone holds the tier's 1.5 under either lab; a desktop has no hold.
+  assert.deepEqual([labCap("?lab=dpr2", { held: true }), labCap("?lab=dpr3", { held: true }), labCap("?lab=dpr3", { mobileTier: false, held: true })], [1.5, 1.5, 3]);
 });
 
 test("?lab=tlxLite keeps its own lower cap on the WebGL2 phone leg even with a dpr lab beside it", () => {

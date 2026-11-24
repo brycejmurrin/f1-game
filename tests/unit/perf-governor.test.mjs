@@ -651,6 +651,7 @@ test("TLX capDpr only ever lowers the cap and re-sizes; RESOLUTION MAX's boost c
   vm.runInContext(tlx.replace(/^const TLX = /m, "var TLX = "), ctx, { filename: absSrc("js/render/three/tlx.js") });
   ctx.dprCapFor = ctx.TLX.dprCapFor;
   vm.runInContext("function resizeNow() { resized++; }\n" + slice("let _dprBoost = 0, _dprCeil = 0;", "\n") +
+    "_dprHold = false;\n" +   // after the first-build hold (#6362; tlx-dpr-first-build.test.mjs pins the held boot)
     slice("let DPR_CAP = ", "\n") + slice("function reCapDpr() {", "\n      }") +
     "\nvar f = {" + slice("capDpr(n) {", "getDprBoost() { return _dprBoost; },") + "};", ctx, { filename: absSrc("js/render/three/tlx.js") });
   const cap = () => vm.runInContext("DPR_CAP", ctx);

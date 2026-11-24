@@ -195,11 +195,12 @@ const TLX = (function () {
   // The device-pixel-ratio cap create() sizes the present buffer with (#5222). The tier's own cap (lite 1.25,
   // mobileTier 1.5, else 2); RESOLUTION MAX's boost may only RAISE it, to at most 3 (resize() still takes the lower of
   // this and window.devicePixelRatio, so MAX means the device's own DPR); the URL lab above replaces both; a `ceil`
-  // (the crash sentinel's capDpr) only lowers. Pure, so tests evaluate it with exact values.
-  function dprCapFor(lite, mobileTier, boost, ceil) {
+  // (the crash sentinel's capDpr) only lowers. `hold` (FIRST-BUILD HOLD, below) keeps a raised cap at the tier's
+  // until the first world frame. Pure, so tests evaluate it with exact values.
+  function dprCapFor(lite, mobileTier, boost, ceil, hold) {
     if (lite) return ceil >= 1 && ceil < lite.dprCap ? ceil : lite.dprCap;
     const base = mobileTier ? 1.5 : 2, b = Math.min(+boost || 0, 3);
-    const cap = labDprCap(b > base ? b : base);
+    const raised = labDprCap(b > base ? b : base), cap = hold && raised > base ? base : raised;
     return ceil >= 1 && ceil < cap ? ceil : cap;
   }
   // Per present, on the caller's opts (pinSoftwareRaceShed's precedent): idempotent, so a reused opts is safe.
@@ -1380,12 +1381,24 @@ const TLX = (function () {
       // (setDprBoost, below; PIXEL-TRUTH-HUNT-2026-11-09.md F1, #5222). LAB ?lab=dpr2 / ?lab=dpr3 (labOn above: URL
       // only, one boot, no storage key) replaces the cap, so what a sharper phone picture costs per frame can be
       // measured on the phone itself and by tools/gfx/live-frame-census.mjs --sweep (docs/notes/PHONE-PERF-MEASURE-2026-11-10.md).
-      let _dprBoost = 0, _dprCeil = 0;   // RESOLUTION MAX's request; capDpr's ceiling (0 = none)
-      let DPR_CAP = dprCapFor(_lite, mobileTier, _dprBoost, _dprCeil);
+      // FIRST-BUILD HOLD (#6362): iPhone WebGPU, the first race after loading ?lab=dpr2 / ?lab=dpr3 reloaded the tab
+      // and the second completed at 60 fps (#5222). The post chain's targets get their GPU memory on their first draw,
+      // the entry warm's drawWarm, in the same window as every pipeline compile and the circuit upload, at the present
+      // size (~15 B/px of post targets plus the swap chain: tests/unit/tlx-dpr-first-build.test.mjs). A phone
+      // (mobileTier) holds a raised cap at its tier's 1.5 until a world presents after a race-entry warm, then grows
+      // to the raised cap on the next animation frame (_releaseDprHold), with no compile in flight.
+      let _dprBoost = 0, _dprCeil = 0; let _dprHold = !!mobileTier;   // RESOLUTION MAX's request; capDpr's ceiling (0 = none); the hold (one line: tests lift it)
+      let DPR_CAP = dprCapFor(_lite, mobileTier, _dprBoost, _dprCeil, _dprHold);
       function reCapDpr() {
-        const c = dprCapFor(_lite, mobileTier, _dprBoost, _dprCeil);
+        const c = dprCapFor(_lite, mobileTier, _dprBoost, _dprCeil, _dprHold);
         if (c === DPR_CAP) return false;
         DPR_CAP = c; resizeNow(); return true;
+      }
+      let _dprHoldWarmed = false, _dprHoldFrames = 0;   // a race-entry warm finished; world frames presented under the hold
+      function _releaseDprHold() {
+        _dprHold = false;
+        const go = () => { try { reCapDpr(); } catch (e) { try { Log.warn("gfx", "TLX: DPR hold release failed", e); } catch (_) { /* harness */ } } };
+        if (typeof requestAnimationFrame === "function") requestAnimationFrame(go); else setTimeout(go, 0);
       }
       // ?lab=postSubmit (URL only, one boot, no storage key: D-027): the post chain submits its passes' command buffers
       // in one call (tlx-post.js SUBMIT HOLD, vendor PATCHES.md §21). OFF until a phone A/B; __tlx.postSubmit(on) flips it for the session.
@@ -4069,7 +4082,11 @@ const TLX = (function () {
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
           }
-        })().finally(() => { _warmPending = null; _warmDone = true; if (typeof pinPipelines === "function") pinPipelines(); });
+        })().finally(() => {
+          _warmPending = null; _warmDone = true;
+          if (typeof _warmWhere !== "undefined" && _warmWhere !== "menu" && typeof _dprHold !== "undefined") _dprHoldWarmed = true;   // FIRST-BUILD HOLD (typeof: warm rigs)
+          if (typeof pinPipelines === "function") pinPipelines();
+        });
       }
       // B-F3.1: THE DEFERRED MIRROR STAGE ALONE, requested by the first mirrorBegin after an AUTO entry warm skipped
       // it (wantMirrorWarm / mirrorWarmGate). The same compiles and W1's 4x4 mirror draw, owned the way the entry
@@ -5481,7 +5498,7 @@ const TLX = (function () {
         mirrorMax: _mirHi ? [_mirCapW, _mirCapH] : null,   // mirrorHi: mirror-pass.js targetSize's cap (GLX/WGX: none, 1024x512)   // superSample / ss2x ceiling (1 everywhere else): the governor's climb
         // PerfGov.init (after create) caps the backing store at DPR 1 once the crash sentinel holds two strikes: the scene/ldr/canvas targets shrink with dpr^2 (#1641). Only ever lowers.
         capDpr(n) {
-          if (!(n >= 1) || n >= DPR_CAP) return false;
+          if (!(n >= 1) || n >= dprCapFor(_lite, mobileTier, _dprBoost, _dprCeil, false)) return false;   // the unheld cap: only lowers
           _dprCeil = n; return reCapDpr();
         },
         // RESOLUTION MAX (js/ui/scale.js) asks for the device's own DPR (3); every other RESOLUTION and PerfGov's
@@ -7106,6 +7123,9 @@ const TLX = (function () {
               paintCanvas(this);
             }
             painted = true;
+            // FIRST-BUILD HOLD: a world presented after a race-entry warm (a menu flyby's frames keep the hold;
+            // 1800 world frames, ~30 s, release it should no race warm ever run).
+            if (_dprHold && _postF.proj && !_postF.noEnv && (_dprHoldWarmed || ++_dprHoldFrames > 1800)) _releaseDprHold();
           } catch (e) {
             // LP-01 (#4900): a freed CPU mirror read by three's vertex-layout key is ONE geometry's defect, not the
             // device's. Repair every nulled mirror (zero-length view of its own class; the GPU buffer is intact)
