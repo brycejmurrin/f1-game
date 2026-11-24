@@ -81,7 +81,7 @@ const DataTelemetryReplay = (function () {
     return points;
   }
   function create(view, { el, cssColor }, player) {
-    if (typeof Path2D === "undefined") return { element: el("p", "dh-live-sub", "Replay drawing unavailable in this browser."), draw() {}, dispose() {} };
+    if (typeof Path2D === "undefined") return null;
     const box = el("section", "dh-livecard"), heading = el("h3", "dh-section", "TRACK REPLAY");
     box.setAttribute("data-telemetry-replay", "");
     const controls = el("div", "dh-transport"), fields = el("div", "dh-pick-fields"), play = el("button", "bigbtn", "PLAY");
@@ -100,7 +100,6 @@ const DataTelemetryReplay = (function () {
     zoom.options[3].disabled = true; // Dynamic readout, not a stale preset to select after reset.
     trail.value = "3";
     for (const button of [play, restart, expand]) { button.type = "button"; controls.appendChild(button); }
-    expand.setAttribute("data-replay-expand", "");
     label("Speed", rate); label("View", mode); label("Zoom", zoom); label("Follow", focus);
     label("Trail", trail); label("Telemetry", overlay);
     const canvas = el("canvas", "dh-canvas"), seek = el("input"), seekLabel = el("label", "dh-pick-field");
@@ -160,7 +159,7 @@ const DataTelemetryReplay = (function () {
       canvas.width = Math.round(w * ratio); canvas.height = Math.round(h * ratio); draw(true);
     }
     function draw(force = false) {
-      if (disposed || !box.isConnected || !drawable) return;
+      if (disposed || box.hidden || !box.isConnected || !drawable) return;
       const t = view.cursorT || 0, now = performance.now();
       if (!force && view.playing && now - lastFrame < 33) return;
       lastFrame = now;
@@ -320,7 +319,7 @@ const DataTelemetryReplay = (function () {
         resize();
       }).catch(() => { if (!disposed) { note.textContent = "Width-aware replay unavailable; showing feed positions. " + fallback; draw(true); } }).finally(() => clearTimeout(timeout));
     }
-    return { element: box, draw, dispose() { disposed = true; clearPointers(); abort.abort(); clearTimeout(timeout); observer?.disconnect(); if (dialog) { dialog.close(); restore(); } } };
+    return { element: box, draw, resize, dispose() { disposed = true; clearPointers(); abort.abort(); clearTimeout(timeout); observer?.disconnect(); if (dialog) { dialog.close(); restore(); } } };
   }
   return { supports, validGeometry, motion, interpolate, contextAt, sampleAt, trailAt, create };
 })();

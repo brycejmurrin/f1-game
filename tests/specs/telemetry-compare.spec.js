@@ -182,7 +182,18 @@ test("mobile replay expansion preserves scrubbing, focus and parent telemetry", 
   await openTelemetry(page);
   await page.locator('.dh-dchip',{hasText:'NOR'}).click();
   await page.getByRole('button', { name: 'LOAD FASTEST LAP', exact: true }).click();
+  const views = page.getByRole("group", { name: "Telemetry view" });
+  const charts = views.getByRole("button", { name: "Charts", exact: true });
+  const track = views.getByRole("button", { name: "Track Replay", exact: true });
+  const chart = page.locator("canvas[aria-label^='Telemetry trace chart']");
   const panel=page.locator('[data-telemetry-replay]');
+  await expect(charts).toHaveAttribute("aria-pressed", "true");
+  await expect(chart).toBeVisible();
+  await expect(panel).toBeHidden();
+  await track.click();
+  await expect(track).toHaveAttribute("aria-pressed", "true");
+  await expect(chart).toBeHidden();
+  await expect(page.locator(".dh-tpopup[open]")).toHaveCount(1);
   await expect(panel.getByText(/track width unavailable/)).toBeVisible();
   await panel.getByRole('button',{name:'EXPAND',exact:true}).click();
   await expect(page.locator('[data-replay-expanded]')).toBeVisible();
@@ -204,15 +215,31 @@ test("mobile replay expansion preserves scrubbing, focus and parent telemetry", 
   await panel.getByRole('button',{name:'EXPAND',exact:true}).click();
   await page.locator('[data-replay-expanded]').getByRole('button',{name:'Close replay',exact:true}).click();
   await expect(page.locator('[data-replay-expanded]')).toHaveCount(0);
-  // A view change can hide replay while the parent transport still owns the clock.
-  await panel.evaluate(async el => {
-    el.style.display = "none";
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  });
+  await charts.click();
+  await expect(panel).toBeHidden();
+  await expect(chart).toBeVisible();
+  await track.click();
+  await expect(panel.locator("output")).toHaveText("20.00 s");
+  await charts.click();
   await page.getByTitle("Restart lap", { exact: true }).click();
-  await panel.evaluate(el => el.style.removeProperty("display"));
+  await track.click();
   await expect(panel.locator('output')).toHaveText('0.00 s');
   await page.getByRole('button',{name:'Close telemetry',exact:true}).click();
   await expect(panel).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+test("Track Replay remains available with car timing and no location data", async ({ page }) => {
+  await dataReady(page);
+  await openTelemetry(page);
+  await page.evaluate(() => { F1API.locationData = () => Promise.resolve([]); });
+  await page.locator(".dh-dchip", { hasText: "NOR" }).click();
+  await page.getByRole("button", { name: "LOAD FASTEST LAP", exact: true }).click();
+  await page.getByRole("button", { name: "Track Replay", exact: true }).click();
+  const replay = page.locator("[data-telemetry-replay]");
+  await expect(replay.getByText(/Location data unavailable for this lap/)).toBeVisible();
+  await replay.getByRole("slider").fill("10");
+  await expect(replay.locator("output")).toHaveText("10.00 s");
+  await page.getByRole("button", { name: "Charts", exact: true }).click();
+  await expect(page.locator("canvas[aria-label^='Telemetry trace chart']")).toBeVisible();
 });

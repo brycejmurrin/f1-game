@@ -943,18 +943,35 @@ test("an ALL file carries an object key's whole effective value; CHANGES only it
   assert.deepEqual(boot({ disk }).collect("changes").settings.a11y.holdMode, { throttle: "toggle" }, "CHANGES keeps the diff");
 });
 
+test("gesture deadlines and the digital return rate survive backup and reset", () => {
+  const phone = () => boot({ touch: true, mobile: true });
+  const a = phone(), b = phone();
+  a.pedals.setButtonProfile("boost", { activation: "quick", quickMs: 250, holdMs: 560, longHoldMs: 1600, doubleTapMs: 620 });
+  a.GameStore.store.set("digitalRecenterRate", 6);
+  const backup = a.collect("changes");
+  assert.equal(backup.settings.steering.digitalRecenterRate, 6);
+  assert.deepEqual(backup.settings.driving.touchButtonProfiles.buttons.boost,
+    { activation: "quick", quickMs: 250, holdMs: 560, longHoldMs: 1600, doubleTapMs: 620 });
+  b.loadSettings(backup);
+  assert.equal(b.GameStore.store.get("digitalRecenterRate", 0), 6);
+  assert.equal(b.pedals.buttonProfile("boost").holdMs, 560);
+  assert.equal(b.SettingsExport.resetSettings("controls").ok, true);
+  assert.equal(b.GameStore.store.get("digitalRecenterRate", 0), 0);
+  assert.equal(b.pedals.buttonProfile("boost").holdMs, undefined);
+});
+
 test("touch response profiles keep each button independent across backups, imports and resets", () => {
   const phone = () => boot({ touch: true, mobile: true });
   const a = phone(), b = phone();
   const unset = a.collect("all");
   assert.equal(unset.settings.driving.touchButtonProfiles, null);
   a.pedals.setButtonProfile("gas", { press: "progressive", travel: 160, slide: "ease" });
-  a.pedals.setButtonProfile("brake", { feedback: false });
+  a.pedals.setButtonProfile("brake", { feedback: false, end: 73, holdEnd: 27, sliderEntry: "stay" });
   a.pedals.setButtonProfile("left", { travel: 50, adaptive: 15 });
   for (const mode of ["all", "changes"]) {
     const saved = a.collect(mode);
     assert.deepEqual(saved.settings.driving.touchButtonProfiles, {
-      v: 1, buttons: { left: { travel: 50, adaptive: 10 }, gas: { press: "progressive", travel: 160, slide: "ease" }, brake: { feedback: false } },
+      v: 1, buttons: { left: { travel: 50, adaptive: 10 }, gas: { press: "progressive", travel: 160, slide: "ease" }, brake: { feedback: false, end: 73, holdEnd: 27, sliderEntry: "stay" } },
     });
     b.loadSettings(saved);
     assert.equal(b.pedals.buttonProfile("right").travel, 90);
@@ -964,6 +981,9 @@ test("touch response profiles keep each button independent across backups, impor
     assert.equal(b.pedals.buttonProfile("left").adaptive, undefined);
     assert.equal(b.pedals.buttonProfile("left").travel, 50);
     assert.equal(b.pedals.buttonProfile("brake").feedback, false);
+    assert.equal(b.pedals.buttonProfile("brake").end, 73);
+    assert.equal(b.pedals.buttonProfile("brake").holdEnd, 27);
+    assert.equal(b.pedals.buttonProfile("brake").sliderEntry, "stay");
     assert.equal(b.pedals.level(b.pedals.buttonProfile("gas"), 80), 0.56);
     b.pedals.resetButtonProfile("left");
     assert.equal(b.pedals.buttonProfile("left").travel, 90);

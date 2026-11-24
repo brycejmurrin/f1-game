@@ -14,33 +14,51 @@
       (1 - t) ** 2 * n + 2 * t * (1 - t) * b[i] + t ** 2 * c[i]);
     for (let i = 0; i <= 60; i++) points.push(quadratic(entry, inControl, touch, i / 60));
     for (let i = 1; i <= 60; i++) points.push(quadratic(touch, outControl, exit, i / 60));
-    points.push([-80, -43]);
     return points;
+  }
+
+  const lateralLimit = 16;
+  const commonEntry = 42;
+
+  function allowableSpeed(base, cap, ds, curvature, longitudinalLimit) {
+    if (cap <= base) return cap;
+    let lo = base, hi = cap;
+    for (let i = 0; i < 26; i++) {
+      const candidate = (lo + hi) / 2;
+      const longitudinal = (candidate ** 2 - base ** 2) / (2 * ds);
+      const lateral = curvature * candidate ** 2;
+      if (Math.hypot(longitudinal / longitudinalLimit, lateral / lateralLimit) <= 1) lo = candidate;
+      else hi = candidate;
+    }
+    return lo;
   }
 
   function simulate(apex, straight) {
     const points = trajectory(apex);
     const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
-    const limits = points.map((b, i) => {
-      if (!i || i === points.length - 1) return 80;
+    const curvature = points.map((b, i) => {
+      if (!i || i === points.length - 1) return 0;
       const a = points[i - 1], c = points[i + 1];
       const cross = Math.abs((b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]));
-      const curvature = 2 * cross / (dist(a, b) * dist(b, c) * dist(a, c));
-      return Math.min(80, Math.sqrt(16 / Math.max(curvature, 0.0001)));
+      return 2 * cross / (dist(a, b) * dist(b, c) * dist(a, c));
     });
-    // Limit entry speed by available braking distance, then propagate acceleration to exit.
+    const segment = i => Math.max(curvature[i], curvature[i + 1]);
+    const limits = curvature.map((_, i) => Math.min(80, Math.sqrt(lateralLimit /
+      Math.max(.0001, segment(Math.max(0, i - 1)), i < points.length - 1 ? segment(i) : 0))));
+    // Run backward for braking room and forward for acceleration room under one force budget.
     for (let i = points.length - 2; i >= 0; i--) {
-      limits[i] = Math.min(limits[i], Math.sqrt(limits[i + 1] ** 2 + 2 * 12 * dist(points[i], points[i + 1])));
+      limits[i] = allowableSpeed(limits[i + 1], limits[i], dist(points[i], points[i + 1]), segment(i), 12);
     }
+    limits[0] = Math.min(limits[0], commonEntry);
     const clock = [0];
     let time = 0;
-    for (let i = 1; i < points.length - 1; i++) {
+    for (let i = 1; i < points.length; i++) {
       const ds = dist(points[i - 1], points[i]);
-      limits[i] = Math.min(limits[i], Math.sqrt(limits[i - 1] ** 2 + 2 * 5 * ds));
+      limits[i] = allowableSpeed(limits[i - 1], limits[i], ds, segment(i - 1), 5);
       time += 2 * ds / (limits[i - 1] + limits[i]);
       clock.push(time);
     }
-    const exit = limits.at(-2);
+    const exit = limits.at(-1);
     const accelerationTime = Math.min((80 - exit) / 5, (Math.sqrt(exit ** 2 + 10 * straight) - exit) / 5);
     const remaining = Math.max(0, straight - exit * accelerationTime - 2.5 * accelerationTime ** 2);
     return {points, limits, clock, exit, accelerationTime, straight, time: time + accelerationTime + remaining / 80};
@@ -49,6 +67,7 @@
   const project = ([x, y]) => [348 + 2.1 * x, 120 + 2.1 * y];
   const path = points => 'M' + points.map(p => project(p).map(v => v.toFixed(1)).join(' ')).join(' L');
   const signed = n => (n > 0 ? '+' : '') + n.toFixed(2);
+  const straightFinish = 28;
 
   function ghost(run, elapsed, reference) {
     const i = run.clock.findIndex(t => t > elapsed);
@@ -66,8 +85,10 @@
       const dt = Math.max(0, Math.min(elapsed, run.time) - run.clock.at(-1));
       const acc = Math.min(dt, run.accelerationTime);
       const distance = run.exit * acc + 2.5 * acc ** 2 + 80 * (dt - acc);
-      position = [reference ? 552 : 489, 178 - 110 * Math.min(1, distance / run.straight)];
-      angle = -90;
+      const [exitX, exitY] = project(run.points.at(-1));
+      const progress = Math.min(1, distance / run.straight);
+      position = [exitX + (straightFinish - exitX) * progress, exitY];
+      angle = 180;
     }
     const colour = reference ? '#f5f5f5' : '#70efc9';
     return `<g transform="translate(${position.map(n => n.toFixed(2)).join(' ')}) rotate(${angle}) scale(${reference ? 1.25 : 0.8})">
@@ -77,42 +98,47 @@
 
   LearnSandbox.mount({
     title: 'Racing lines and apex geometry',
-    replay: {label: 'ghost race', input: () => 'elapsed'},
+    replay: {label: 'compressed ghost race', rewind: true, input: () => 'elapsed'},
+    key: 'Solid is your line. Dashed is the early-apex reference. The dot marks your apex. The bars mark the shared corner exit and finish.',
     intro: 'Move the clipping point around a hairpin. Compare the time from the approach to the end of the next straight against an early apex.',
     controls: [
-      {id:'apex', label:'Apex position through the turn', min:30, max:70, step:1, value:30, unit:'%'},
+      {id:'apex', primary: true, label:'Apex position through the turn', min:30, max:70, step:1, value:30, unit:'%'},
       {id:'straight', label:'Following straight', min:50, max:500, step:25, value:200, unit:'m'},
-      {id:'elapsed', label:'Replay clock', min:0, max:20, step:0.1, value:3, unit:'s'}
+      {id:'elapsed', primary: true, label:'Replay clock', min:0, max:24, step:0.1, value:0, unit:'s'}
     ],
     challenge:'On a straight of at least 300 m, gain 0.70 s over the early-apex reference.',
-    sources:[['Driver61 · The racing line', 'https://driver61.com/uni/racing-line/']],
+    sources:[['Driver61 · The racing line', 'https://driver61.com/uni/racing-line/'],
+      ['SAE · Combined cornering and braking', 'https://doi.org/10.4271/2011-01-0094']],
     evaluate({apex, straight, elapsed = 3}) {
       const run = simulate(apex / 100, straight), reference = simulate(0.3, straight);
       const gain = reference.time - run.time;
+      const cornerGain = reference.clock.at(-1) - run.clock.at(-1);
+      const straightGain = gain - cornerGain;
       const [x,y] = project(run.points[61]);
+      const [exitX, exitY] = project(run.points.at(-1));
       const success = straight >= 300 && gain >= 0.70;
       const svg = `<rect width="600" height="240" fill="#18382f"/>
         <path d="M0 200 H348 A80 80 0 0 0 348 40 H0" fill="none" stroke="#dad9cc" stroke-width="38"/>
         <path d="M0 200 H348 A80 80 0 0 0 348 40 H0" fill="none" stroke="#38424b" stroke-width="34"/>
-        <path d="${path(reference.points.slice(0, -1))}" fill="none" stroke="#eee" stroke-width="2" stroke-dasharray="5 4"/>
-        <path d="${path(run.points.slice(0, -1))}" fill="none" stroke="#70efc9" stroke-width="3"/>
+        <path d="${path(run.points)}" fill="none" stroke="#70efc9" stroke-width="3"/>
+        <path d="${path(reference.points)}" fill="none" stroke="#eee" stroke-width="2" stroke-dasharray="5 4"/>
         <circle cx="${x}" cy="${y}" r="5" fill="#ffcc76" stroke="#151e22"/>
-        <rect x="449" width="151" height="240" fill="#142a26"/>
-        <path d="M489 178 V68 M552 178 V68" stroke="#92a69d" stroke-width="2" stroke-dasharray="4 5"/>
-        <path d="M472 68 H570" stroke="#d9e8df" stroke-width="3"/>
+        <path d="M${straightFinish} 19V40" stroke="#d9e8df" stroke-width="3"/>
+        <path d="M${exitX} ${exitY - 13}v26" stroke="#d9e8df" stroke-width="2" stroke-dasharray="4 3"/>
+        <text x="${exitX}" y="${exitY + 29}" text-anchor="middle" fill="#edf5f4" font-size="12">Corner exit</text>
         ${ghost(reference, elapsed, true)}${ghost(run, elapsed, false)}
         <g fill="#edf5f4" font-family="system-ui" font-size="14">
-        <text x="20" y="205">Entry →</text><text x="20" y="45">← Exit</text>
+        <text x="20" y="205">Entry →</text><text x="35" y="51">← Exit straight · ${straight} m</text>
         <text x="30" y="102" fill="#70efc9">Solid · your line</text>
         <text x="30" y="125">Dashed · early reference</text>
         <text x="30" y="148" fill="#ffcc76">Dot · apex</text>
-        <text x="524" y="25" text-anchor="middle">Exit straight</text>
-        <text x="524" y="56" text-anchor="middle">Finish · ${straight} m</text>
-        <text x="489" y="202" text-anchor="middle" fill="#70efc9">You</text>
-        <text x="552" y="202" text-anchor="middle">Early</text></g>`;
-      return {svg, metrics:[['Exit speed', Math.round(run.exit * 3.6) + ' km/h'], ['Sector time', run.time.toFixed(2) + ' s'], ['Time vs early apex', signed(-gain) + ' s']],
-        explanation:'The model derives curvature from the drawn line. Tighter bends lower the speed limit. Scrub the clock to compare both cars at the same instant. Each car enters its own straight progress lane at corner exit and stops at the finish.',
-        success, feedback:success ? 'You traded some entry speed for a faster sector.' : straight < 300 ? 'Lengthen the following straight to run the challenge.' : 'Move the apex and watch the sector delta. The largest exit speed may carry an entry-time cost.'};
+        </g>`;
+      return {svg, replayEnd: Math.ceil(Math.max(run.time, reference.time) * 10) / 10,
+        metrics:[['Common entry', Math.round(run.limits[0] * 3.6) + ' km/h'], ['Exit speed', Math.round(run.exit * 3.6) + ' km/h'],
+          ['Gain through the corner', signed(cornerGain) + ' s'], ['Gain on the exit straight', signed(straightGain) + ' s'],
+          ['Sector time', run.time.toFixed(2) + ' s'], ['Time vs early apex', signed(-gain) + ' s']],
+        explanation:'Both ghosts start at a common speed. Curvature uses part of a simplified combined tyre-force budget. The exit straight is rescaled on screen. Positive gains mean time saved at common comparison markers. Diagram playback is compressed and ends at the slower car’s finish.',
+        success, feedback:success ? 'Compared with the early line, your gains are ' + signed(cornerGain) + ' s through the corner and ' + signed(straightGain) + ' s on the straight.' : straight < 300 ? 'Lengthen the following straight to run the challenge.' : 'Move the apex and compare the two gains. A higher exit speed can come with a slower corner.'};
     }
   });
 })();

@@ -1491,9 +1491,34 @@ body[data-density="compact"] [data-xscroll] :is(th:first-child, .dh-td-pos) {
   }
 }
 
+/* Track-focused telemetry reuses the native popup, cursor and playback loop. */
+[data-track-seek] { display: none; }
+body[data-width] .dh-tpopup-body[data-track-focus] { flex-direction: column; overflow-y: auto; overscroll-behavior: contain; align-items: stretch; }
+body[data-width] [data-track-focus] .dh-telem-main { flex: none; overflow: visible; width: 100%; }
+body[data-width] [data-track-focus] .dh-telem-main > :not(.dh-transport) { display: none; }
+body[data-width] [data-track-focus] .dh-transport { margin: 0; }
+body[data-width] [data-track-focus] .dh-thint { display: none; }
+body[data-width] [data-track-focus] [data-track-seek] { display: flex; align-items: center; gap: var(--gap); width: 100%; min-width: 0; }
+[data-track-seek] input { flex: 1; min-width: 0; min-height: var(--tap-paint); }
+[data-track-time] { font-variant-numeric: tabular-nums; }
+body[data-width] [data-track-focus] .dh-telem-side { width: 100%; flex: none; overflow: visible; border: 0; }
+body[data-width] [data-track-focus] .dh-telem-side .dh-canvas.dh-map { max-width: 600px; aspect-ratio: auto; order: -2; }
+body[data-width] [data-track-focus] .dh-maplegend { order: -1; }
+
 } /* @layer overlays */
 
 @layer overlays {
+  [data-telemetry-views] { display: flex; flex: none; gap: calc(var(--gap) / 3); }
+  [data-telemetry-views] > button { min-height: var(--tap-paint); white-space: nowrap; }
+  [data-telemetry-views] > [aria-pressed="true"] { background: var(--plate-on); border-color: var(--red); }
+  body[data-width="narrow"] [data-telemetry-view-header] { flex-wrap: wrap; }
+  body[data-width="narrow"] [data-telemetry-views] { order: 1; width: 100%; }
+  .dh-tpopup[open] .dh-tpopup-body[data-telemetry-replay-view] {
+    flex-direction: column; align-items: stretch; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
+    padding: 0 calc(var(--gap) * 4 / 3);
+  }
+  .dh-tpopup-body > [data-telemetry-replay] { flex: none; }
+  .dh-tpopup-body > :is(.dh-telem-main, .dh-telem-side, [data-telemetry-replay])[hidden] { display: none; }
   [data-telemetry-replay] { min-width: 0; width: 100%; padding-block: var(--gap); }
   [data-telemetry-replay] .dh-transport { flex-wrap: wrap; }
   [data-replay-actions] { padding-inline: calc(var(--gap) / 3); }
@@ -1506,12 +1531,6 @@ body[data-density="compact"] [data-xscroll] :is(th:first-child, .dh-td-pos) {
   [data-telemetry-replay] .dh-canvas[data-map-gestures="true"] { touch-action: none; cursor: grab; }
   [data-telemetry-replay] p { margin-block: calc(var(--gap) / 3); }
   [data-replay-lanes] { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--gap); }
-  /* Keep the original trace and map in reach on short screens. EXPAND
-     moves the full replay out of the compact chart column. */
-  body[data-density="compact"] .dh-telem-main > [data-telemetry-replay] {
-    flex-flow: row wrap; align-items: center; justify-content: space-between; padding-block: 0;
-    > :not(h3, .dh-transport), > .dh-transport > :not([data-replay-expand]) { display: none; }
-  }
   [data-replay-expanded] .dh-tpopup-body { flex-direction: column; align-items: stretch; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding: var(--gap) calc(var(--gap) * 4 / 3); }
   [data-replay-expanded] [data-telemetry-replay] { padding-block: 0; }
   [data-replay-expanded] [data-telemetry-replay] > .dh-section { display: none; }

@@ -127,8 +127,10 @@ test.describe("landscape 852x393 notch", () => {
     await checkFit(page, VIEWS[0]);
     const replay = page.locator("[data-telemetry-replay]");
     await expect(replay.getByRole("slider")).toBeHidden();
-    await replay.getByRole("button", { name: "EXPAND", exact: true }).click();
+    await page.getByRole("button", { name: "Track Replay", exact: true }).click();
     await expect(replay.getByRole("slider")).toBeVisible();
+    await replay.getByRole("button", { name: "EXPAND", exact: true }).click();
+    await expect(page.locator("[data-replay-expanded]").getByRole("slider")).toBeVisible();
     await page.locator("[data-replay-expanded]").getByRole("button", { name: "Close replay", exact: true }).click();
     await expect(replay.getByRole("button", { name: "EXPAND", exact: true })).toBeFocused();
   });

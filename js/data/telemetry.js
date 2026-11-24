@@ -367,7 +367,7 @@ const DataTelemetry = (function () {
       setTimeout(function () {
         if (telemPopup !== overlay) return;
         clear(body);
-        buildTelemetryView(body, tels);
+        buildTelemetryView(body, tels, hdr);
       }, 0);
     }
 

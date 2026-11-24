@@ -30,6 +30,7 @@
     const jointY = pivot + radius * Math.sin(theta);
     const springX = 325 + 27 * Math.cos(rotation) - 10 * Math.sin(rotation);
     const springY = pivot + 27 * Math.sin(rotation) + 10 * Math.cos(rotation);
+    const pistonX = 412 + 13 * Math.sin(rotation);
     const load = push ? "Compression" : "Tension";
     return `${arrows}<g font-size="13" fill="currentColor">
       <text x="31" y="27">FRONT VIEW · one wheel</text>
@@ -44,7 +45,9 @@
       <path d="M325 ${pivot} l0 21 27 -11 z" fill="var(--surf-1, #222)" stroke="currentColor" stroke-width="2" transform="rotate(${angle} 325 ${pivot})"/>
       <circle cx="325" cy="${pivot}" r="4" fill="currentColor"/>
       <path d="M${springX} ${springY}L377 ${pivot + 10}l5 -7 7 14 7 -14 7 14 7 -14 7 14 7 -14 6 7h23
-        M377 ${pivot + 29}h30v-6h24v12h-24v-6h46" fill="none" stroke="currentColor" stroke-width="2"/>
+        M${springX} ${springY}L${pistonX} ${pivot + 29}H439" fill="none" stroke="currentColor" stroke-width="2"/>
+      <rect x="${pistonX}" y="${pivot + 25}" width="6" height="8" fill="${accent}"/>
+      <path d="M391 ${pivot + 22}H439V${pivot + 36}H391" fill="none" stroke="currentColor" stroke-width="2"/>
       <path d="M453 ${pivot - 4}v48" stroke="currentColor" stroke-width="3"/>
       <text x="32" y="70">Wheel bump</text>
       <path d="M53 164V${Math.min(118 - travel, 136)}" stroke="currentColor" marker-end="url(#susp-arrow)"/>
@@ -56,13 +59,13 @@
     </g>`;
   }
 
-  function braking(decel, high, transfer, pitch) {
+  function braking(decel, high, transfer, pitch, includeArrows = true) {
     const front = mass * gravity * .47 + transfer;
     const rear = mass * gravity * .53 - transfer;
     const fTop = 188 - front / 116;
     const rTop = 188 - rear / 116;
     const angle = -pitch * 5;
-    return `${arrows}<g font-size="13" fill="currentColor">
+    return `${includeArrows ? arrows : ""}<g font-size="13" fill="currentColor">
       <text x="30" y="27">SIDE VIEW · front at left</text>
       <text x="349" y="27">${high ? "Higher" : "Lower"} anti-dive geometry</text>
       <path d="M91 49H36" stroke="currentColor" marker-end="url(#susp-arrow)"/>
@@ -90,23 +93,30 @@
 
   LearnSandbox.mount({
     title: "Pushrod, Pullrod & Anti-dive",
-    replay: {label: "suspension travel", input: state => state.view === "braking" ? "decel" : "bump"},
+    replay: {label: state => state.view === "braking" ? "braking load sweep" : "bump and return", rewind: true,
+      input: state => state.view === "braking" ? "decel" : null},
     intro: "Trace a wheel bump into the spring, then change how the front suspension reacts to braking.",
+    presets: [
+      ["Same bump · light damping", {view:"linkage", rod:"push", bump:20, damping:"low"}],
+      ["Same bump · firm damping", {view:"linkage", rod:"push", bump:20, damping:"high"}],
+    ],
+    key: "The dashed wheel outline marks rest. Positive travel rises from rest and negative travel shows rebound below it.",
     controls: [
-      {id: "view", label: "Experiment", options: [["linkage", "Wheel bump · front view"], ["braking", "Braking loads · side view"]], value: "linkage"},
-      {id: "rod", label: "Rocker actuation", options: [["push", "Pushrod · rocker above"], ["pull", "Pullrod · rocker below"]], value: "push"},
-      {id: "bump", when: state => state.view === "linkage", label: "Wheel bump (front view)", min: 0, max: 30, step: 1, value: 15, unit: "mm"},
-      {id: "decel", when: state => state.view === "braking", label: "Braking deceleration", min: 0, max: 3, step: .1, value: 1, unit: "g"},
+      {id: "view", primary: true, label: "Experiment", options: [["linkage", "Wheel bump · front view"], ["braking", "Braking loads · side view"], ["compare", "Compare anti-dive at 1 g"]], value: "linkage"},
+      {id: "rod", when: state => state.view === "linkage", label: "Rocker actuation", options: [["push", "Pushrod · rocker above"], ["pull", "Pullrod · rocker below"]], value: "push"},
+      {id: "bump", primary: true, when: state => state.view === "linkage", label: "Wheel bump (front view)", min: 0, max: 30, step: 1, value: 15, unit: "mm"},
+      {id: "damping", when: state => state.view === "linkage", label: "Damping on return", options: [["low", "Light"], ["high", "Firm"]], value: "high"},
+      {id: "decel", primary: true, when: state => state.view === "braking", label: "Braking deceleration", min: 0, max: 3, step: .1, value: 1, unit: "g"},
       {id: "geometry", when: state => state.view === "braking", label: "Fixed braking geometry", options: [["low", "Lower anti-dive"], ["high", "Higher anti-dive"]], value: "low"},
       {id: "answer", when: state => state.view === "braking", label: "Your prediction", options: [["unset", "Choose a prediction"], ["less", "Less front load transfer"], ["same", "Same front load transfer"], ["more", "More front load transfer"]], value: "unset"},
     ],
-    challenge: "In Braking loads, keep 1 g and the same rod. Switch to higher anti-dive. The body dives less. Predict what happens to quasi-static front load transfer.",
+    challenge: "Compare both geometries at 1 g. The body dives less with higher anti-dive. In Braking loads, choose higher anti-dive at 1 g and predict what happens to front load transfer.",
     sources: [
       ["Formula 1 explainer · rods and rockers", "https://www.formula1.com/en/latest/article/explainer-whats-the-difference-between-pull-rod-and-push-rod-suspension.1I3wL4LEL0nQZbKZbx1Dhz"],
       ["FIA Section C Issue 21 · C10.2 and C10.3", fia21],
       ["MIT vehicle dynamics study · tyre loads", "https://dspace.mit.edu/bitstream/handle/1721.1/139209/gaither-gaither-sb-2-2021-thesis.pdf"],
     ],
-    evaluate({view, rod, bump, decel, geometry, answer}) {
+    evaluate({view, rod, bump, damping, decel, geometry, answer}) {
       const high = geometry === "high";
       const push = rod === "push";
       const brakeView = view === "braking";
@@ -114,13 +124,32 @@
       const pitch = decel * (high ? .45 : 1);
       const challengeSetup = brakeView && high && Math.abs(decel - 1) < 1e-9;
       const success = challengeSetup && answer === "same";
+      if (view === "compare") {
+        const shift = mass * gravity * cgHeight / wheelbase;
+        return {svg: `<g transform="translate(0 40) scale(.5)">${braking(1, false, shift, 1)}</g>
+          <g transform="translate(300 40) scale(.5)">${braking(1, true, shift, .45, false)}</g>`,
+          key: "Both panels use the same deceleration. Compare the body pitch and the axle load arrows.",
+          metrics: [["Forward shift, both cars", Math.round(shift) + " N"], ["Lower anti-dive pitch index", "1.00"], ["Higher anti-dive pitch index", "0.45"]],
+          explanation: "Both cars brake at 1 g with the same mass, CG height and wheelbase. Geometry shifts the load path through the suspension and changes pitch. Axle load transfer is the same.",
+          success: false, feedback: "Use the Braking loads view to submit your prediction."};
+      }
       return {
-        svg: brakeView ? braking(decel, high, transfer, pitch) : linkage(rod, bump),
+        svg: brakeView ? braking(decel, high, transfer, pitch) : "",
+        key: brakeView ? "Arrows at the wheels show axle loads. The dashed body outline marks the unpitched position." : undefined,
+        replay: !brakeView && (progress => {
+          const returnPhase = Math.max(0, (progress - .35) / .65);
+          const decay = damping === "high" ? 7 : 3;
+          const frequency = damping === "high" ? 12 : 15;
+          const angle = frequency * returnPhase;
+          const recovery = Math.exp(-decay * returnPhase) * (Math.cos(angle) + decay / frequency * Math.sin(angle));
+          const travel = progress === 1 ? 0 : bump * (progress < .35 ? progress / .35 : recovery);
+          const phase = progress === 0 || progress === 1 ? "rest" : progress < .35 ? "rising" : "settling";
+          return {svg: linkage(rod, travel), readout: travel.toFixed(1) + " mm · " + phase};
+        }),
         metrics: brakeView ? [
           ["Forward load shift", `${Math.round(transfer)} N · both geometries at this deceleration`],
           ["Illustrative pitch index", `${pitch.toFixed(2)} · lower anti-dive at 1 g = 1.00`],
           ["Fixed inputs", "800 kg · 0.30 m CG height · 3.40 m wheelbase"],
-          ["Rocker actuation retained", push ? "Pushrod" : "Pullrod"],
         ] : [
           ["Wheel bump", `${bump} mm upwards`],
           ["Rod load during upward bump", push ? "Compression" : "Tension"],
@@ -128,7 +157,7 @@
         ],
         explanation: brakeView
           ? "At fixed deceleration, axle load shift follows mass × deceleration × CG height ÷ wheelbase on flat ground with no aero. The pivot geometry changes the route of braking loads through the chassis, so the body pitch in this illustration changes independently."
-          : "Both layouts move an inboard rocker as the upright rises. The pushrod drives a higher rocker in compression and the pullrod draws on a lower rocker in tension in these examples.",
+          : "The rocker drives an inboard spring and a damper piston. The spring symbol is generic and an F1 example is a torsion bar. Light and firm damping return the wheel through rest with different amounts of signed rebound. The pushrod works in compression and the pullrod in tension during the illustrated upward bump.",
         success,
         feedback: !challengeSetup ? "Set Braking loads, 1 g and Higher anti-dive to compare against the lower geometry."
           : answer === "unset" ? "The diagram shows less pitch. Make a prediction about the vertical axle loads."

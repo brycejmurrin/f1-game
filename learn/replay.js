@@ -2,21 +2,21 @@
 const LearnReplay = (() => {
   "use strict";
 
-  function mount(parent, {label, draw, duration = 7000, describe = value => Math.round(value * 100) + "%"}) {
+  function mount(parent, {label, draw, duration = 7000, rewind = false, steps = 1000, first = 0, realTime = false,
+    describe = value => Math.round(value * 100) + "%"}) {
     const controls = document.createElement("div");
     controls.className = "lesson-replay";
     const button = document.createElement("button");
     button.type = "button";
     const slider = document.createElement("input");
     slider.type = "range";
-    slider.min = "0";
-    slider.max = "1000";
+    slider.min = String(first);
+    slider.max = String(first + steps);
     slider.step = "1";
-    slider.setAttribute("aria-label", label + " progress");
+    const name = () => typeof label === "function" ? label() : label;
     const position = document.createElement("span");
     position.setAttribute("aria-hidden", "true");
     const rate = document.createElement("select");
-    rate.setAttribute("aria-label", "Playback speed");
     for (const value of [.5, 1, 2]) {
       const option = document.createElement("option");
       option.value = String(value);
@@ -25,6 +25,13 @@ const LearnReplay = (() => {
     }
     rate.value = "1";
     controls.append(button, slider, position, rate);
+    if (rewind) {
+      const reset = document.createElement("button");
+      reset.type = "button";
+      reset.textContent = "Rewind";
+      reset.addEventListener("click", () => { stop(); seek(0); });
+      controls.appendChild(reset);
+    }
     parent.appendChild(controls);
 
     let value = 0;
@@ -34,7 +41,7 @@ const LearnReplay = (() => {
 
     function seek(next, paint = true) {
       value = Math.max(0, Math.min(1, next));
-      slider.value = String(Math.round(value * 1000));
+      slider.value = String(first + Math.round(value * steps));
       position.textContent = (paint ? draw(value) : undefined) ?? describe(value);
       slider.setAttribute("aria-valuetext", position.textContent);
     }
@@ -43,13 +50,17 @@ const LearnReplay = (() => {
       cancelAnimationFrame(frame);
       frame = 0;
       last = 0;
-      button.textContent = "Play " + label;
+      button.textContent = "Play " + name();
+      slider.setAttribute("aria-label", name() + " progress");
+      const modelClock = typeof realTime === "function" ? realTime() : realTime;
+      rate.setAttribute("aria-label", modelClock ? "Playback speed" : "Diagram playback rate");
     }
 
     function tick(now) {
       const delta = last ? now - last : 0;
       last = now;
-      seek(value + Math.min(delta, 100) * Number(rate.value) / duration);
+      const span = typeof duration === "function" ? duration() : duration;
+      seek(value + Math.min(delta, 100) * Number(rate.value) / span);
       if (value < 1) frame = requestAnimationFrame(tick);
       else stop();
     }
@@ -58,12 +69,12 @@ const LearnReplay = (() => {
       if (frame) return stop();
       if (reduced || document.hidden) return;
       if (value === 1) seek(0);
-      button.textContent = "Pause " + label;
+      button.textContent = "Pause " + name();
       frame = requestAnimationFrame(tick);
     });
     slider.addEventListener("input", () => {
       stop();
-      seek(Number(slider.value) / 1000);
+      seek((Number(slider.value) - first) / steps);
     });
     document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
     window.addEventListener("pagehide", stop);

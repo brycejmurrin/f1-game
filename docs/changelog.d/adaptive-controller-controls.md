@@ -1,0 +1,1 @@
+Fixed: On phones, a detected gamepad or keyboard clears the touch driving dock, and Controls enables the tuning that applies to the available input. Your saved touch steering returns when you switch back to touch.

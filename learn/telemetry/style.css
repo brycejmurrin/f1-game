@@ -62,11 +62,13 @@ a { color: inherit; }
 [hidden] { display: none; }
 .sr-only { width: 1px; height: 1px; overflow: hidden; position: absolute; clip-path: inset(50%); white-space: nowrap; }
 @media (min-width: 620px) { .workspace { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); } }
-@media (min-width: 620px) and (max-height: 430px) {
-  main { padding: .4rem; }
-  .intro { margin-bottom: .3rem; }
+@media (min-width: 34rem) and (max-height: 430px) {
+  .workspace { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
+  main { display: flex; flex-direction: column; padding: .4rem; }
+  .intro { order: 1; margin: .55rem 0 0; }
+  main > .exercise, main > details { order: 2; }
   .panel { padding: .42rem; }
-  canvas { height: 188px; }
+  canvas { height: clamp(146px, 56vh, 188px); }
   .ghosts { margin-top: .2rem; }
 }
 @media (pointer: coarse) { button, select, fieldset label, input[type=range] { min-height: 44px; } }
