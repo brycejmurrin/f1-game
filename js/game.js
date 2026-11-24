@@ -3227,18 +3227,10 @@ const G = {
   get _ltNextT() { return stormFx._ltNextT; }, set _ltNextT(v) { stormFx._ltNextT = v; },
   // Mutable state consumed by js/garage/setup-sheet.js.
   get livDraftOverride() { return customLiv.livDraftOverride; }, set livDraftOverride(v) { customLiv.livDraftOverride = v; },
-  get _spMeshKey() { return setupCam.meshKey; }, set _spMeshKey(v) { setupCam.meshKey = v; },
+  // The setup-garage camera (js/garage/setup-camera.js) as ONE member: its orbit state
+  // (az/el/dist/spin/pan/aeroX/xOn/effDist/effFit/effPanel), meshKey and controls.
+  get setupCam() { return setupCam; },
   get setupPreviewOn() { return setupPreviewOn; }, set setupPreviewOn(v) { setupPreviewOn = v; },
-  // Read-only garage-camera state for __apex.garageCam().
-  get setupPreviewSpin() { return setupCam.spin; },
-  get setupPreviewAz() { return setupCam.az; },
-  get setupPreviewEl() { return setupCam.el; },
-  get setupPreviewDist() { return setupCam.dist; },
-  get spEffDist() { return setupCam.effDist; },
-  get spEffFit() { return setupCam.effFit; },
-  get spEffPanel() { return setupCam.effPanel; },
-  get setupPreviewPan() { return setupCam.pan; },
-  get setupPreviewAeroX() { return setupCam.aeroX; },
   get raceAeroMode() { return raceAeroMode; },
   // Repaint the pause-menu button too: __apex.aeroMode() and the button are two
   // doors onto one value, and a stale label is a lie about the car's behaviour.
@@ -3246,15 +3238,6 @@ const G = {
   get aeroZones() { return aeroZ ? aeroZ.zones : []; },
   aeroZoneAt: (s) => aeroZ.at(s),
   aeroZoneAhead: (s) => aeroZ.ahead(s),
-  stepSetupAero: (dt) => setupCam.stepSetupAero(dt),
-  setSetupView: (...a) => setupCam.setSetupView(...a),
-  setSetupAim: (p) => setupCam.setSetupAim(p),   // garageFrame target: orbit about and look at a car-space point
-  setSetupFree: (on) => setupCam.setSetupFree(on),   // garageFrame clamp:false — lift the player's el/dist floors for a dev shot; a {fov, centre} lens too (until the next preset)
-  setupPan: (...a) => setupCam.setupPan(...a),
-  nudgeSetupCam: (...a) => setupCam.nudgeSetupCam(...a),
-  nudgeSetupZoom: (mul) => setupCam.nudgeSetupCam(0, 0, mul),
-  setSetupAero: (on, opts) => setupCam.setSetupAero(on, opts),
-  get setupPreviewXOn() { return setupCam.xOn; },
   get soundOn() { return soundOn; }, set soundOn(v) { soundOn = v; },
   // A preset that bundles assists (ROOKIE) may set keys game.js owns —
   // autoThrottle among them — so it calls this to re-read them and repaint.

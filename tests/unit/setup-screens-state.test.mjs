@@ -696,7 +696,7 @@ function loadSetupUi(opts = {}) {
     invalidateDecalTextures: null,
     teamIdx: 1, driverIdx: 0, soundOn: false, careerOwned: () => false, unlimitedBudget: false,
     peerSeats: () => [], teamSwatch: () => dom.document.createElement("span"),
-    setTeamPicker() {}, openCustomize() {}, livDraftOverride: null, _spMeshKey: "", setupPreviewOn: false,
+    setTeamPicker() {}, openCustomize() {}, livDraftOverride: null, setupCam: { meshKey: "" }, setupPreviewOn: false,
   };
   const extra = {
     MutationObserver: class { constructor(cb) { this.cb = cb; observers.push(this); } observe(t, o) { this.target = t; this.opts = o; } },
@@ -752,7 +752,7 @@ test("garage: Change Car shows the sheet with aria-busy before heavy buildSetup 
     getCustomLiveries: () => [], setCustomLiveries() {}, getLiveries: () => [], invalidateDecalTextures: null,
     teamIdx: 1, driverIdx: 0, soundOn: false, careerOwned: () => false, unlimitedBudget: false,
     peerSeats: () => [], teamSwatch: () => dom.document.createElement("span"),
-    setTeamPicker() {}, openCustomize() {}, livDraftOverride: null, _spMeshKey: "", setupPreviewOn: false,
+    setTeamPicker() {}, openCustomize() {}, livDraftOverride: null, setupCam: { meshKey: "" }, setupPreviewOn: false,
   };
   const sb = sandbox(dom, {
     requestAnimationFrame: (fn) => { rafQueue.push(fn); return rafQueue.length; },
