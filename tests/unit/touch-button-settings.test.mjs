@@ -350,3 +350,64 @@ test("custom touch actions cancel on viewport changes and still accept the next 
     }
   }
 });
+
+test("a selected slide direction reaches either a higher or lower endpoint independently of hold", () => {
+  const { host, dom, editor, model } = boot();
+  editor.mount(host);
+  const field = key => dom.byId("touch-test-" + key);
+  const choose = (key, value) => { field(key).value = value; field(key).onchange(); };
+  choose("button", "gas");
+  choose("start", "40"); choose("direction", "down"); choose("end", "80");
+  let gas = model.buttonProfile("gas");
+  const sample = (x, y, held = 0) => model.level(gas, model.advance(gas, x, y, -y), held);
+  assert.deepEqual([sample(90, 0), sample(0, -90), sample(0, 90)], [0.4, 0.4, 0.8]);
+  assert.ok(Math.abs(sample(0, 45) - 0.6) < 1e-10);
+  choose("press", "progressive"); choose("end", "0"); choose("buildMs", "500"); choose("holdEnd", "60");
+  gas = model.buttonProfile("gas");
+  assert.equal(sample(0, 45), 0.2);
+  assert.equal(sample(0, 0, 1), 0.6);
+  assert.equal(sample(0, 90, 1), 0);
+  assert.equal(sample(0, 180, 1), 0);
+  choose("button", "brake");
+  assert.equal(field("end").value, "default");
+  assert.equal(field("holdEnd").disabled, true);
+  choose("button", "gas");
+  assert.equal(field("end").value, "0");
+  assert.equal(field("holdEnd").value, "60");
+  assert.match(dom.byId("touch-test-help").textContent, /Slide down to reach 0% input/);
+});
+
+test("an imported whole percentage stays selectable and a timed hold can descend below 12%", () => {
+  const frames = [];
+  const { host, dom, editor, model } = boot({ performance: { now: () => 100 }, requestAnimationFrame: fn => frames.push(fn) });
+  model.setButtonProfile("gas", { start: 37, end: 53, holdEnd: 0, buildMs: 500 });
+  editor.mount(host, ["gas", "brake"], { standalone: true });
+  const field = key => dom.byId("touch-test-" + key);
+  for (const [key, amount] of [["start", "37"], ["end", "53"], ["holdEnd", "0"]]) {
+    assert.equal(field(key).value, amount);
+    assert.ok(field(key).children.some(option => option.value === amount));
+  }
+  model.setButtonProfile("gas", { start: null, end: null });
+  editor.mount(host);
+  const contact = { profile: model.buttonProfile("gas") }, values = [];
+  model.buildOnHold(contact, () => true, v => values.push(v));
+  assert.equal(frames.length, 1);
+  frames.shift()(350); frames.shift()(600);
+  assert.deepEqual(values, [0.5, 0]);
+});
+
+test("changing absolute crossover on the phone leaves relative crossover intact", () => {
+  const { host, dom, model, editor } = boot();
+  model.setButtonProfile("gas", { slide: "ease" });
+  editor.mount(host, ["gas"], { standalone: true });
+  const field = key => dom.byId("touch-test-" + key);
+  const choose = (key, value) => { field(key).value = value; field(key).onchange(); };
+  choose("sliderEdge", "right");
+  assert.equal(field("sliderEntry").value, "enter", "old crossover follows the explicit relative setting");
+  choose("sliderEntry", "stay");
+  assert.equal(model.buttonOverrides("gas").slide, "ease");
+  choose("sliderEdge", "relative");
+  assert.equal(field("slide").value, "ease");
+  choose("sliderEdge", "right");
+  assert.equal(field("sliderEntry").value, "stay");
+});
