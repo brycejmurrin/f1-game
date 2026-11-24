@@ -224,6 +224,7 @@ apex-tools HTTP `3713` (`127.0.0.1` only). Design / refuses:
 | Run a Playwright **group** | CI: the PR's tiers; a whole group (`remote-group.mjs`) is Bryce's opt-in (agents run no browser test locally, AGENTS.md rule 5) | `test-bg.mjs` (one spec, Bryce-granted sessions only); any `apex_*` wrap; host `browser_*` |
 | Agent bloat / extract / dead code | skill **slim-bloat** → `code-hunter` (focus dead-code) + `bloat-scan.mjs` | a browser group; raising a ratchet to hide growth |
 | Review one skill / agent / hook / AGENTS.md section after an edit | `surface-reviewer` (report in `scratch/`; `retest <old report>` = before/after) | the main session hand-reading every unit |
+| Review a code PR before the ready flip (advisory) | `pr-reviewer` (skill **steward** §Land; ≤ 10 `FINDING` rows; the owner records a ticked `review:` Plan line) | a GitHub approval or a gate row; a browser run in the reviewer |
 | Bug / perf hunt over a slice | `prior-art-scout` (known list) → one `code-hunter` per slice → `finding-verifier` before any fix | a browser run in a hunter; acting on an unverified finding |
 
 Call `apex_status` before any `apex_*` browser tool. Occupancy treats a

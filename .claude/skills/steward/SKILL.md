@@ -111,6 +111,9 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    gate's plan row): tick it with its evidence, or move what is left of it into the `land:` item. An item that needs Bryce's device is his: never strike it; ask (§Lane 6). A CONFLICTING/DIRTY PR syncs first (§Red 5): a ready flip
    on a dirty PR starts no CI. Flip only after the draft CI run on this head has FINISHED (D-046): the ready run
    shares the `ci-pr-<n>` group and cancels a draft run still in flight.
+   **Review** (a diff touching `js/`, `css/`, `index.html` or `sw.js`): once that draft run has finished, run agent
+   `pr-reviewer` on the PR and tick `- [x] review: <n> findings, <k> accepted (<reviewed sha>)`; accepted findings go in
+   ONE push, whose draft run then gates the flip as above. Advisory: no gate row, no label (Bryce's `decision: A1`, PR #6377; blocking is re-decided after 2 weeks).
 2. `node tools/ci/ship-pr.mjs --pr <n>` (wraps `ready-gate.mjs`; an already-ready PR is refused as `not-draft` and
    only needs the label). On a pass it prints the two calls and flips nothing itself:
 3. GitHub MCP `update_pull_request` with `draft: false`, then add `land` (the one-label recipe in

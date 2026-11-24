@@ -15,6 +15,9 @@ restated rules drifted into three wordings and one contradicted the skill [14].
   while the one-PR worker landed in 11 min (#5847). One issue or one
   batch issue, one PR; a fix that touches a generated or digest source gets its own PR [5]. A combined unit only for
   PRs that conflict with each other, three at most, the queue fixed at launch [13].
+- Group at launch: at most 3 small `ready` issues of one area or the same files become one `batch` issue
+  (`## Members`, `## Merge order`; `dispatch.mjs` `batchMembers`), one worker, one PR, about 400 changed lines at most
+  (Bryce's `decision: B1`, PR #6377); unrelated issues stay one PR each.
 - Adopt only a lapsed or handed-back lease, never a parked one (skill `steward` §Lane 3). `pr-board.mjs --brief`
   prints `lease …` and `churn: adopted Nx`; a churn PR (3+ adopters) gets one worker that stays until `land`.
 - Re-verify on the deploy tip first; a worker closes an already-fixed issue with evidence and opens no PR.
