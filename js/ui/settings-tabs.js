@@ -374,7 +374,9 @@ const SettingsNav = (function () {
         button.disabled = true;
         try {
           if (await SettingsExport.ready()) {
-            if (request === generation && !panel.hidden && !document.getElementById("pmsettings")?.hidden) SettingsExport.resetRow(id, button);
+            // #6263: a late bundle must not pull focus off a newer control.
+            const ae = document.activeElement, moved = !!ae && ae !== button && ae !== document.body;
+            if (request === generation && !panel.hidden && !document.getElementById("pmsettings")?.hidden) SettingsExport.resetRow(id, button, { focus: !moved });
           } else button.textContent = "RESET UNAVAILABLE — TAP TO RETRY";
         } catch (_) { button.textContent = "RESET UNAVAILABLE — TAP TO RETRY"; }
         finally { button.disabled = false; }
