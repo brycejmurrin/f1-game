@@ -51,18 +51,18 @@
               var(--tick) 75% 84% / 2px 10% no-repeat;
 }
 [aria-pressed] > [data-pedal-ticks] { display: none; }
-}
 
-/* Explicit fill directions override the race and phone defaults. Keep this
-   outside the cascade layer because the phone's base fill is unlayered. */
-:is(.touchbtn[data-touch-feedback], #gas.on, #brake.on)[data-touch-indicator="bar"][data-touch-fill-direction]::after {
+/* Explicit directions override the default upward fill, including the
+   unlayered default in the phone page. Only active bars opt into this. */
+:is([data-touch-feedback="on"], #gas.on, #brake.on)[data-touch-indicator="bar"][data-touch-fill-direction]::after {
   --touch-pressure: var(--touch-level, var(--travel, 0));
-  transform-origin: var(--touch-fill-origin, top);
-  transform: scale(var(--touch-fill-x, 1), var(--touch-fill-y, var(--touch-pressure)));
+  transform-origin: var(--touch-fill-origin, top) !important;
+  transform: scale(var(--touch-fill-x, 1), var(--touch-fill-y, var(--touch-pressure))) !important;
 }
 [data-touch-fill-direction="left"] { --touch-fill-origin: right; }
 [data-touch-fill-direction="right"] { --touch-fill-origin: left; }
 :is([data-touch-fill-direction="left"], [data-touch-fill-direction="right"])::after {
   --touch-fill-x: var(--touch-pressure);
   --touch-fill-y: 1;
+}
 }
