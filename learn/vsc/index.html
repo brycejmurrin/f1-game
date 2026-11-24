@@ -25,6 +25,8 @@
 <option value="hardLife">Durable Hards · Full VSC</option>
 <option value="earlyGreen">Durable Hards · Early green</option>
 <option value="traffic">Durable Hards · Early green and traffic</option>
+<option value="green">Durable Hards · Green throughout</option>
+<option value="safetyCar">Durable Hards · Safety Car queue</option>
 </select>
 <div class="actions" id="choices"><button id="box" type="button" aria-pressed="false">Box now</button><button id="stay" type="button" aria-pressed="false">Stay out</button></div>
 <label for="prediction">If you box now, where will you rejoin?</label>
@@ -41,10 +43,10 @@
 <summary>Change the conditions</summary>
 <label for="green-speed">Green track speed <span class="readout" id="green-speed-value" aria-hidden="true"></span></label>
 <input id="green-speed" type="range" min="130" max="250" step="5">
-<label for="vsc-speed">VSC track speed <span class="readout" id="vsc-speed-value" aria-hidden="true"></span></label>
+<label for="vsc-speed"><span id="pace-label">VSC track speed</span> <span class="readout" id="vsc-speed-value" aria-hidden="true"></span></label>
 <input id="vsc-speed" type="range" min="50" max="120" step="5">
 <label for="vsc-duration">Green resumes after <span class="readout" id="vsc-duration-value" aria-hidden="true"></span></label>
-<input id="vsc-duration" type="range" min="0" max="22" step=".5">
+<input id="vsc-duration" type="range" min="0" max="30" step=".5">
 <label for="service">Service time for either stop <span class="readout" id="service-value" aria-hidden="true"></span></label>
 <input id="service" type="range" min="1" max="6" step=".1">
 <label for="gap">Gap to reference car <span class="readout" id="gap-value" aria-hidden="true"></span></label>
@@ -79,7 +81,7 @@
 </div>
 <dl class="math">
 <dt>Pit path</dt><dd id="pit-math"></dd>
-<dt>Track · VSC scenario</dt><dd id="track-math"></dd>
+<dt>Track · Selected scenario</dt><dd id="track-math"></dd>
 <dt>Track · Green comparison</dt><dd id="green-math"></dd>
 </dl>
 <p id="loss" class="callout"></p>
@@ -91,6 +93,19 @@
 </div>
 </section>
 </div>
+<section class="regime-compare" data-as="box" aria-labelledby="regime-title">
+<h2 id="regime-title">Green, VSC and Safety Car</h2>
+<p>Same pit stop and same 400 m sector. The three illustrated track paces stay constant here so you can isolate the effect of the time spent on track.</p>
+<table>
+<thead><tr><th scope="col">Regime</th><th scope="col">Track pace</th><th scope="col">Track time</th><th scope="col">Relative pit loss</th></tr></thead>
+<tbody>
+<tr><th scope="row">Green · normal racing</th><td id="compare-green-speed"></td><td id="compare-green-track"></td><td id="compare-green-loss"></td></tr>
+<tr><th scope="row">VSC · controlled by deltas</th><td id="compare-vsc-speed"></td><td id="compare-vsc-track"></td><td id="compare-vsc-loss"></td></tr>
+<tr><th scope="row">Safety Car · queue pace</th><td id="compare-safetyCar-speed"></td><td id="compare-safetyCar-track"></td><td id="compare-safetyCar-loss"></td></tr>
+</tbody>
+</table>
+<p>Under VSC, drivers follow minimum sector-time references. A Safety Car can bunch the pack. Try its scenario to see why a smaller stop loss can still cost track position when the starting gap has closed.</p>
+</section>
 <details id="history">
 <summary>What happened in Australia?</summary>
 <p>At the 2026 Australian Grand Prix, Mercedes switched Russell and Antonelli from Mediums to Hards on lap 12 under VSC. Ferrari kept Leclerc and Hamilton out until laps 25 and 28. Mercedes finished first and second, ahead of both Ferraris.</p>

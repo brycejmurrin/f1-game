@@ -27,7 +27,8 @@ import spa from "./foundation/spa.js";
 import suzuka from "./foundation/suzuka.js";
 import vegas from "./foundation/vegas.js";
 import zandvoort from "./foundation/zandvoort.js";
+import zolder from "./foundation/zolder.js";
 
-const REGISTER = { abudhabi, bahrain, hungaroring, interlagos, monaco, montreal, monza, qatar, redbull, spa, suzuka, vegas, zandvoort };
+const REGISTER = { abudhabi, bahrain, hungaroring, interlagos, monaco, montreal, monza, qatar, redbull, spa, suzuka, vegas, zandvoort, zolder };
 
 for (const id of foundationScope(Object.keys(REGISTER), process.env.APEX_CIRCUITS)) REGISTER[id]();

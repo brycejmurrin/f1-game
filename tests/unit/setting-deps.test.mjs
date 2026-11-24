@@ -29,6 +29,7 @@ const parentOf = (rule) => {
 };
 // A when() rule reads module state; each one names how the test turns it off and on.
 const WHEN = {
+  "steer-tilt": (h, on) => setParent(h, { id: "pm-steer", want: "tilt", off: "buttons" }, on),
   "line-off": (h, on) => { h.mode.line = on ? "full" : "off"; },
   "intro-motion": (h, on) => { h.mode.motion = on ? "on" : "reduce"; },
   "vignette-motion": (h, on) => { h.mode.motion = on ? "on" : "reduce"; },
@@ -42,11 +43,11 @@ function boot(extra = {}) {
   const d = dom.document;
   d.getElementById = (id) => d.querySelector("#" + id);
   const el = (tag, id, parent = dom.body) => { const n = dom.makeElement(tag, id); parent.appendChild(n); return n; };
-  const mode = { line: "full", motion: "on", touch: true, cam: "cockpit", scene: "photo" };
+  const mode = { line: "full", motion: "on", touch: true, phoneTilt: false, cam: "cockpit", scene: "photo" };
   const ctx = vm.createContext({
     document: d, setTimeout, Log: { info() {}, warn() {} },
     DrivingLine: { mode: () => mode.line }, TitleFx: { mode: () => mode.motion },
-    Input: { touchControlsNeeded: () => mode.touch },
+    Input: { touchControlsNeeded: () => mode.touch, phoneTiltAvailable: () => mode.phoneTilt },
     GameStore: { store: { get: (k, fallback) => (k === "homeScene" ? mode.scene : k === "camMode" ? 0 : fallback) } },
     CamModes: { CAM_MODES: [{ id: "cockpit" }], fromSaved: value => value },
     ...extra,
@@ -247,6 +248,18 @@ test("EXPLAIN never speaks for a control SettingDeps greyed itself", () => {
   h.Deps.refresh();
   const reasons = (input.getAttribute("aria-describedby") || "").split(" ").filter(Boolean);
   assert.deepEqual(reasons, ["pm-smooth-dep"]);
+});
+
+test("a paired phone's tilt enables the game's tilt sliders without changing its local steering mode", () => {
+  const h = boot();
+  const sliders = ["pm-tiltsimple", "pm-smooth", "pm-tiltcurve"].flatMap(id => buildTarget(h, id));
+  WHEN["steer-tilt"](h, false);
+  for (const phoneTilt of [false, true, false]) {
+    h.mode.phoneTilt = phoneTilt;
+    h.Deps.refresh();
+    assert.ok(sliders.every(slider => slider.disabled === !phoneTilt && slider.value === "7"));
+    assert.equal(h.d.getElementById("pm-steer-sel").value, "buttons");
+  }
 });
 
 test("stable dependencies and owner explanations make no metadata or reason writes", () => {

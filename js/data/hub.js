@@ -56,6 +56,7 @@ const DataHub = (function () {
   // A door that asks for a tab (WATCH → "race") does not overwrite it.
   let doorTab = "schedule";
   let returnFocus = null;
+  let returnToSource = null;
   let developerTools = null;
   // Title sheets that own the top layer. Late ensureDataHub().then(open)
   // must not unhide the hub over them (How to Play was the measured case:
@@ -70,11 +71,11 @@ const DataHub = (function () {
     "#lighting,#camtune,#flyby,#freecam,#garrival,#duel-picker"
   );
 
-  function blockingLayer() {
+  function blockingLayer(exempt) {
     if (typeof document.querySelectorAll !== "function") return null;
     const nodes = document.querySelectorAll(BLOCKING_SEL);
     for (let i = 0; i < nodes.length; i++) {
-      if (nodes[i] && !nodes[i].hidden) return nodes[i];
+      if (nodes[i] && nodes[i] !== exempt && !nodes[i].hidden) return nodes[i];
     }
     return null;
   }
@@ -261,20 +262,23 @@ const DataHub = (function () {
     });
   }
 
-  function open(want) {
-    if (!root) return;
-    const block = blockingLayer();
+  function open(want, options) {
+    if (!root) return false;
+    // Learn deliberately remains mounted beneath the hub so the lesson can resume.
+    const from = options?.from;
+    const block = blockingLayer(from && from.id === "learn" ? from : null);
     if (block) {
       Log.info("data", "hub open skipped — #" + (block.id || "?") + " is up");
-      return;
+      return false;
     }
     const asked = !!want && TABS.some(function (t) { return t.id === want; });
     if (asked) active = want;
     // Already open: switch tab only. A second open would overwrite returnFocus with an element INSIDE the
     // dialog, and close() would then focus something hidden instead of where the player came from.
-    if (openFlag) { showTab(active); return; }
+    if (openFlag) { showTab(active); return true; }
     if (!asked) active = doorTab;
     returnFocus = document.activeElement;
+    returnToSource = options?.onClose || null;
     Log.info("data", "hub open");
     root.hidden = false;
     openFlag = true;
@@ -287,6 +291,7 @@ const DataHub = (function () {
     queueMicrotask(function () {
       if (openFlag && tabButtons[active]) tabButtons[active].focus();
     });
+    return true;
   }
 
   function close() {
@@ -322,7 +327,9 @@ const DataHub = (function () {
     }
     root.hidden = true;
     openFlag = false;
-    if (returnFocus && returnFocus.isConnected && returnFocus.focus) returnFocus.focus();
+    if (returnToSource) queueMicrotask(returnToSource);
+    else if (returnFocus && returnFocus.isConnected && returnFocus.focus) returnFocus.focus();
+    returnToSource = null;
     returnFocus = null;
   }
 

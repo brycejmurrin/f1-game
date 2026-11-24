@@ -138,6 +138,38 @@ function currentCacheName() {
   return _cacheNamePromise;
 }
 
+function parseLazyVersions(html) {
+  const lazyV = new Map();
+  try {
+    const block = html.match(/<script type="application\/json" id="apex-lazy-v">([\s\S]*?)<\/script>/);
+    const parsed = block ? JSON.parse(block[1]) : null;
+    if (parsed && typeof parsed === "object") {
+      for (const [k, v] of Object.entries(parsed)) if (typeof v === "string" && /^[0-9a-f]{12}$/.test(v)) lazyV.set(k, v);
+    }
+  } catch (_) { /* malformed: build-keyed */ }
+  return lazyV;
+}
+
+// The standalone Telemetry Detective lesson loads these scripts through stable URLs.
+// Reuse the active shell's pinned bytes instead of precaching another copy.
+async function matchLearnScript(url) {
+  if (url.search || !/\/(?:core\/mat4|data\/telemetry-model)\.js$/.test(url.pathname)) return undefined;
+  const mat4 = new URL("js/core/mat4.js", self.location.href);
+  const telemetry = new URL("js/data/telemetry-model.js", self.location.href);
+  if (url.href !== mat4.href && url.href !== telemetry.href) return undefined;
+  const shell = await matchPreferCurrent("index.html");
+  if (!shell) return undefined;
+  const html = await shell.text();
+  const version = url.href === mat4.href
+    ? /<script\b[^>]*\bsrc="js\/core\/mat4\.js\?v=([^"]+)"/.exec(html)?.[1]
+    : parseLazyVersions(html).get("js/data/telemetry-model.js") ||
+      /<meta name="apex-build" content="(\d+)"/.exec(html)?.[1];
+  if (!version) return undefined;
+  const pinned = new URL(url.href);
+  pinned.searchParams.set("v", version);
+  return matchPreferCurrent(pinned.href);
+}
+
 // WORKER → PAGE LOG CHANNEL. `Log` (js/core/log.js) does not exist in the
 // worker, so the rare failures worth a trace are posted to every same-origin
 // window as { type: "apex-sw-log", level, msg } and index.html's SW listener
@@ -733,6 +765,28 @@ async function precacheAssetLists() {
     // LEARN — the Learn modal and bare lesson assets
     "js/ui/learn-door.js",
     "learn/appearance.js",
+    "learn/sandbox.js",
+    "learn/sandbox.css",
+    "learn/chassis/index.html",
+    "learn/chassis/lab.js",
+    "learn/suspension/index.html",
+    "learn/suspension/lab.js",
+    "learn/deployment/index.html",
+    "learn/deployment/lab.js",
+    "learn/hybrid/index.html",
+    "learn/hybrid/lab.js",
+    "learn/brake-blend/index.html",
+    "learn/brake-blend/lab.js",
+    "learn/tyre-heat/index.html",
+    "learn/tyre-heat/lab.js",
+    "learn/racing-line/index.html",
+    "learn/racing-line/lab.js",
+    "learn/rain/index.html",
+    "learn/rain/lab.js",
+    "learn/pit-duel/index.html",
+    "learn/pit-duel/lab.js",
+    "learn/stint/index.html",
+    "learn/stint/lab.js",
     "learn/braking/index.html",
     "learn/braking/style.css",
     "learn/braking/lab.js",
@@ -743,6 +797,10 @@ async function precacheAssetLists() {
     "learn/vsc/style.css",
     "learn/vsc/model.js",
     "learn/vsc/lab.js",
+    "learn/telemetry/index.html",
+    "learn/telemetry/style.css",
+    "learn/telemetry/model.js",
+    "learn/telemetry/lab.js",
     // LOCALES — manifest only until a non-English language ships
     "locales/manifest.json",
     // /@gen-shell:sw-optional
@@ -762,14 +820,7 @@ async function precacheAssetLists() {
   // into the staged shell; R3-PHONE-8): each lazy file is seeded under the key
   // ScriptLoader.url() asks for. No block (a dev server, the committed shell) →
   // every lazy key stays `?v=<build>`, as before.
-  const lazyV = new Map();
-  try {
-    const block = html.match(/<script type="application\/json" id="apex-lazy-v">([\s\S]*?)<\/script>/);
-    const parsed = block ? JSON.parse(block[1]) : null;
-    if (parsed && typeof parsed === "object") {
-      for (const [k, v] of Object.entries(parsed)) if (typeof v === "string" && /^[0-9a-f]{12}$/.test(v)) lazyV.set(k, v);
-    }
-  } catch (_) { /* malformed: build-keyed */ }
+  const lazyV = parseLazyVersions(html);
   const re = /<(script|link)\b[^>]*>/gi;
   let m;
   while ((m = re.exec(html))) {
@@ -1586,7 +1637,7 @@ self.addEventListener("fetch", (event) => {
         }
       } catch (_) { /* offline: fall through to the cache */ }
     }
-    const cached = await matchPreferCurrent(req);
+    const cached = await matchLearnScript(url) || await matchPreferCurrent(req);
     if (cached) return cached;
     // On a miss there is nothing to fall back to, so a timeout race could only
     // FAIL a slow-but-alive request (and drop its late response uncached) — a

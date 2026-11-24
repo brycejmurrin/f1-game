@@ -196,9 +196,9 @@ function create(G, deps) {
   // G.weather → Atmosphere.applyRaceSettings). A preview only: open() records what the session had, RESET and
   // every close put it back, so a photo never leaks into a race, a career or a result.
   const cond = { tod: null, wx: null, arc: null, touched: false };
-  const pick = (label, list, read, run, id) => select(label, list, read, (v) => { run(v); paintCond(); }, id);
-  const setTod = (v) => { if (st.busy || st.closing || isGarage()) return; cond.touched = true; G.setTimeOfDay(v); };
-  const setWx = (v) => { if (st.busy || st.closing || isGarage()) return; cond.touched = true; G.weather(v); };
+  const pick = (label, list, read, run, id) => select(label, list, read, (v) => { run(v); paintCond(); paintLight(); }, id);
+  const setTod = (v) => { if (st.busy || st.closing || isGarage() || G.netPlay?.active?.()) return; cond.touched = true; G.setTimeOfDay(v); };
+  const setWx = (v) => { if (st.busy || st.closing || isGarage() || G.netPlay?.active?.()) return; cond.touched = true; G.weather(v); };
   const todRow = pick("Time of day", TODS, () => G.setTimeOfDay(), setTod, "ps-tod");
   const wxRow = pick("Weather", WXS, () => G.weather(), setWx, "ps-weather");
   const condReset = button("RESET CONDITIONS", () => resetCond(), "ps-cond-reset");
@@ -212,16 +212,17 @@ function create(G, deps) {
   function paintCond() {
     for (const [id, row, v] of [["ps-tod", todRow, G.setTimeOfDay()], ["ps-weather", wxRow, G.weather()]]) {
       SettingRow.paint(row, v);
+      SettingRow.disable(row, !!G.netPlay?.active?.());
     }
-    E["ps-cond-reset"].disabled = st.busy || !(G.setTimeOfDay() !== cond.tod || G.weather() !== cond.wx);
+    E["ps-cond-reset"].disabled = st.busy || !!G.netPlay?.active?.() || !(G.setTimeOfDay() !== cond.tod || G.weather() !== cond.wx);
   }
   function resetCond() {
-    if (cond.tod == null) return;
+    if (cond.tod == null || G.netPlay?.active?.()) return;
     if (G.setTimeOfDay() !== cond.tod) G.setTimeOfDay(cond.tod);
     if (G.weather() !== cond.wx || cond.touched) { G.weather(cond.wx); }
     if (cond.touched) G.weatherArc = cond.arc;   // a MIXED race's arc, dropped by weather()
     cond.touched = false;
-    if (st.open) paintCond();
+    if (st.open) { paintCond(); paintLight(); }
   }
   // GARAGE LOOKS: in the garage the bay's own room, crew and lighting stand in for TIME & WEATHER. The rows are the
   // TEAM tab's GARAGE / CREW / LIGHTING pickers (deps.garage.looks = SetupUI's lookRowSpecs, one table) and call the
@@ -283,7 +284,9 @@ function create(G, deps) {
     }
   }
   function buildLight() {
-    if (lightSess.built || typeof LightTune === "undefined" || !LightTune.TUNE_DEFS || !LightTune.LT) return false;
+    // Reuse the controls on every visit; an existing panel is ready, not a failed build.
+    if (lightSess.built) return true;
+    if (typeof LightTune === "undefined" || !LightTune.TUNE_DEFS || !LightTune.LT) return false;
     lightSess.built = true;
     const defs = LightTune.TUNE_DEFS, LT = LightTune.LT, groups = [];
     let cur = null, section = null, wrap = null;
@@ -391,6 +394,7 @@ function create(G, deps) {
       setLtTab(lightSess.tab || (LightTune.TUNE_DEFS[0] && LightTune.TUNE_DEFS[0].group));
       paintLight();
     } catch (_) {
+      G._ltStore = saved;
       lightSess.saved = lightSess.clone = lightSess.snap = null;
       lightSess.active = false; lightGroup.hidden = true;
     }
@@ -424,6 +428,17 @@ function create(G, deps) {
   ]);
   const sampleRow = select("Capture quality", [["1", "Instant"], ["8", "8 samples"], ["32", "32 samples"]],
     () => String(st.samples), (v) => { if (!st.busy && !G.netPlay?.active?.()) st.samples = +v; }, "ps-samples");
+  const photoVisor = { level: "off", beams: "medium", style: "classic" };
+  const visorRow = (key, label, choices) => select(label, choices, () => photoVisor[key], v => {
+    if (st.busy || st.closing) return;
+    photoVisor[key] = v; say("Press Capture to preview the new visor lighting.");
+  }, "ps-visor-" + key);
+  const strengths = [["off", "Off"], ["light", "Light"], ["medium", "Medium"], ["strong", "Strong"]];
+  const visorGroup = group("visor", "VISOR LIGHTING", [
+    visorRow("level", "Reflections", strengths), visorRow("beams", "Beams", strengths),
+    visorRow("style", "Style", [["classic", "Classic"], ["compact", "Compact"], ["scratches", "Short rays"]]),
+    mk("p", { className: "adv-help", textContent: "Light effects over any angle, without the helmet frame. Capture previews them and includes them in downloads, saved photos and backgrounds. Driving settings stay unchanged." }),
+  ]);
   const panel = mk("section", { id: "ps-panel", className: "sheet", attrs: { "aria-label": "Photo Studio" } }, [
     mk("header", { className: "sheet-head" }, [mk("h2", { textContent: "PHOTO STUDIO" })]),
     mk("div", { id: "ps-body", className: "sheet-body pane" }, [
@@ -433,6 +448,7 @@ function create(G, deps) {
       condGroup,
       lineGroup,
       lightGroup,
+      visorGroup,
       looksGroup,
       group("composition", "COMPOSITION", [
         select("Frame", [["scene", "Full scene"], ["wide", "16:9"], ["square", "1:1"], ["portrait", "4:5"]], () => st.aspect, (v) => { st.aspect = v; guides(); if (!st.busy) recompose(); }, "ps-aspect"),
@@ -488,7 +504,8 @@ function create(G, deps) {
   function isGarage() { return st.source === "home" || st.source === "garage"; }
   function hasCar() { return st.open && !!releaseCar; }
   function placeCar(reframe = true) {
-    if (!hasCar() || !G.player || !G.track) return;
+    if (st.busy || st.closing || !hasCar() || !G.player || !G.track) return;
+    if (st.source === "race" && (!G.paused || G.netPlay?.active?.())) return;
     const c = G.player, sample = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
     c.s = (+E["ps-car-position"].value % 100) * G.track.total / 100;
     c.x = c.xVis = +E["ps-car-offset"].value;
@@ -553,20 +570,37 @@ function create(G, deps) {
         return false;
       }
     }
-    st.open = true; st.generation++; root.hidden = false;
     const online = !!G.netPlay?.active?.();
+    // Only a frozen offline race can lend its car. Save exactly the fields placement
+    // writes, including absent interpolation fields, and restore before resuming.
+    if (st.source === "race" && G.paused && !online && G.player && G.track?.total > 0) {
+      const car = G.player;
+      const fields = ["s", "x", "xVis", "px", "pz", "yawVis", "head", "rPrevS", "rPrevX", "rPrevPx", "rPrevPz", "rPrevHead", "rPrevYawVis", "speed"];
+      const pose = fields.map(key => [key, Object.getOwnPropertyDescriptor(car, key)]);
+      releaseCar = () => {
+        for (const [key, descriptor] of pose) {
+          if (descriptor) Object.defineProperty(car, key, descriptor); else delete car[key];
+        }
+      };
+    }
+    st.open = true; st.generation++; root.hidden = false;
     SettingRow.paint(sampleRow, online ? "1" : String(st.samples));
     SettingRow.disable(sampleRow, online);
-    carGroup.hidden = !hasCar();
+    carGroup.hidden = !hasCar(); visorGroup.hidden = isGarage();
     for (const [id, unit] of [["ps-car-position", "%"], ["ps-car-offset", " m"], ["ps-car-rotation", "°"]]) {
-      E[id].value = "0"; E[id + "-value"].textContent = "0" + unit;
+      const c = st.source === "race" && hasCar() ? G.player : null;
+      const value = !c ? 0 : id === "ps-car-position" ? ((c.s % G.track.total + G.track.total) % G.track.total) / G.track.total * 100
+        : id === "ps-car-offset" ? c.x : (c.yawVis || 0) * 180 / Math.PI;
+      E[id].value = String(value); E[id + "-value"].textContent = value.toFixed(1) + unit;
     }
-    placeCar();
+    if (st.source === "home-track") placeCar(); // race photos open exactly where the race was paused
     condGroup.hidden = isGarage(); lineGroup.hidden = isGarage();
     if (!isGarage()) SettingRow.paint(lineRow, DrivingLine.shown() ? "on" : "off");
     looksChanged = false; paintLooks();
     if (!isGarage()) {
-      cond.tod = G.setTimeOfDay(); cond.wx = G.weather(); cond.arc = G.weatherArc; cond.touched = false; paintCond();
+      cond.tod = online ? null : G.setTimeOfDay(); cond.wx = G.weather(); cond.arc = G.weatherArc; cond.touched = false; paintCond();
+      // Home flybys start with the track palette, not the selected tuner profile.
+      if (st.source === "home-track") G.applyRaceSettings?.();
       beginLight();
     } else { endLight(); }
     subjectGroup.hidden = !st.subject;
@@ -649,7 +683,8 @@ function create(G, deps) {
     pass.cancelRead?.();
     E["ps-body"].inert = false;
   }
-  async function frame(pass = null) {
+  /** @param {*} pass @param {(() => void) | null} rendered */
+  async function frame(pass = null, rendered = null) {
     const gfx = G.gfx;
     if (gfx && gfx.invalidateSoftPresent && gfx.softPresent && gfx.softPresent()) gfx.invalidateSoftPresent();
     // Observe the display blit immediately. Its result matters only if the
@@ -660,6 +695,7 @@ function create(G, deps) {
       if (!gfx.renderCaptureFrame(deps.renderFrame)) throw new Error("The scene is still getting ready");
     } else if (deps.renderFrame) deps.renderFrame();
     if (pass && pass.draws === draws) throw new Error("The scene is not ready to sample");
+    rendered?.();
     // Read WebGL before yielding: its unpreserved backbuffer is cleared after compositing.
     let pixels = null;
     if (gfx && gfx.capturePixels) {
@@ -705,6 +741,7 @@ function create(G, deps) {
       // Repaint immediately before a native canvas copy; no await may come
       // between this draw and drawImage below.
       deps.renderFrame();
+      rendered?.();
     }
     const canvas = mk("canvas");
     if (pixels) {
@@ -720,7 +757,7 @@ function create(G, deps) {
     }
     return canvas;
   }
-  function options() { return { maxEdge: st.highRes ? 3840 : 2048, aspect: st.aspect, postcard: st.postcard, metadata: { title: st.metadata.title || G.track && G.track.name || "GARAGE", subtitle: st.metadata.subtitle || (isGarage() ? "PERSONAL PHOTO" : "RACE MOMENT") } }; }
+  function options() { return { visor: isGarage() ? { level: "off" } : { ...photoVisor }, maxEdge: st.highRes ? 3840 : 2048, aspect: st.aspect, postcard: st.postcard, metadata: { title: st.metadata.title || G.track && G.track.name || "GARAGE", subtitle: st.metadata.subtitle || (isGarage() ? "PERSONAL PHOTO" : "RACE MOMENT") } }; }
   function recompose() {
     if (!raw || !capturedOptions) return;
     last = compose(raw, { ...capturedOptions, aspect: st.aspect, postcard: st.postcard });
@@ -807,8 +844,8 @@ function create(G, deps) {
       return await run();
     } finally { release(); }
   }
-  async function sampledFrame(count, maxEdge) {
-    if (count === 1) return frame();
+  async function sampledFrame(count, maxEdge, rendered) {
+    if (count === 1) return frame(null, rendered);
     const pass = capturePass(count);
     activePass = samplePass = pass;
     E["ps-body"].inert = true;
@@ -818,7 +855,7 @@ function create(G, deps) {
         if (activePass !== pass || st.closing || G.netPlay?.active?.()) throw new Error("Capture cancelled");
         pass.index = i;
         say("Capturing sample " + (i + 1) + " of " + count + "…");
-        const src = await frame(pass);
+        const src = await frame(pass, rendered);
         if (activePass !== pass) throw new Error("Capture cancelled");
         if (!out) {
           sourceWidth = src.width; sourceHeight = src.height;
@@ -848,7 +885,13 @@ function create(G, deps) {
     if (!st.open || st.busy) return false;
     const gen = st.generation, opts = options(); busy(true); say("Capturing the rendered scene…");
     try {
-      const source = await fullRes(() => sampledFrame(G.netPlay?.active?.() ? 1 : st.samples, opts.maxEdge), st.highRes); if (gen !== st.generation) return false;
+      const source = await fullRes(async () => {
+        let snapshot;
+        const rendered = opts.visor.level !== "off" ? () => { snapshot = VisorOptics.captureSnapshot(G); } : null;
+        const image = await sampledFrame(G.netPlay?.active?.() ? 1 : st.samples, opts.maxEdge, rendered);
+        if (gen === st.generation && opts.visor.level !== "off") VisorOptics.captureLight(image, G, { ...opts.visor, snapshot });
+        return image;
+      }, st.highRes); if (gen !== st.generation) return false;
       keepSource(source, opts); last = compose(raw, opts); E["ps-preview"].src = thumbnail(last); E["ps-preview"].hidden = false;
       say("Captured " + last.width + " × " + last.height + ". Ready to download or save."); return true;
     } catch (e) { Log.warn("ui", "capture failed", e); if (gen === st.generation) say("Capture failed: " + text(e.message, 120) + ". Try again once the scene is ready."); return false; }

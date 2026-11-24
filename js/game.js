@@ -3485,7 +3485,7 @@ let flyingStart = FlyingStart.create(G, { realRace: () => realRace.isActive() ||
 var jumpStartPenalty = JumpStartPenalty.create(G, {
   autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,
 });   // LAZY_RACE_SESSION — recreated in onRaceSessionReady
-titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
+titleMenu = TitleMenu.create(G, openDataHub); // returning-player, Daily and Learn (js/ui/title-menu.js)
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing(), lazyBundles.ensureReplayBroadcast),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
@@ -8755,13 +8755,15 @@ if (typeof MenuQuitTail !== "undefined" && MenuQuitTail.wire) {
 $("mb-standings").onclick = () => { buildStandings(); $("standings").hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("standings-close").onclick = () => { $("standings").hidden = true; };
 // A refused or offline bundle says so: the tap sound already played, a silent door reads as broken.
-const openDataHub = (tab) => {
+function openDataHub(tab, options) {
   const visit = titleVisit;
   return ensureDataHub({ onSlow: () => { if (state === "menu" && visit === titleVisit) announce("STILL LOADING…", 4, "info"); } }).then((ok) => {
-    if (state !== "menu" || visit !== titleVisit) return;
-    if (ok) DataHub.open(tab); else announce("COULD NOT LOAD — CHECK YOUR CONNECTION OR RELOAD", 4, "warning");
+    if (state !== "menu" || visit !== titleVisit || (options?.isCurrent && !options.isCurrent())) return false;
+    if (ok) return DataHub.open(tab, options);
+    if (!options) announce("COULD NOT LOAD — CHECK YOUR CONNECTION OR RELOAD", 4, "warning");
+    return false;
   });
-};
+}
 $("mb-data").onclick = () => {
   // The click sound fires immediately — the bundle is one network round trip
   // on a cold tap and the button must not feel dead while it lands.
@@ -9391,7 +9393,7 @@ function setSteerMode(mode) {
   // DISABLE (don't hide): hiding reflowed the settings grid mid-tap, so the
   // next tap landed on whatever button slid under the finger (worst case
   // HIDE HUD, which closes the whole menu). Same for the GEARS toggle below.
-  $("pm-calib").disabled = mode !== "tilt";
+  platformSession.paintTiltCalibration();
   refreshGearsBtn();   // manual is tilt-only, so the GEARS toggle disables off-tilt
   // Only refresh touch buttons when in an active race — don't bleed controls onto
   // the title/select screen (e.g. when gyro denial auto-switches to buttons mode).
@@ -9418,9 +9420,6 @@ SettingRow.wire("pm-mirror", { values: SettingRow.labels(["off", "on"]),
   write: (v) => { mirrorControls = v === "on"; store.set("mirrorControls", mirrorControls); applyMirrorControls(); } });
 platformSession.wireInstall();
 applyMirrorControls();
-// The zero is taken a beat after the tap (thumb off the glass, phone settled), still behind the pause card.
-// ONE handle (#5027): a double tap re-arms it, a newer pause clears it, and it never resumes a hidden tab.
-$("pm-calib").onclick = () => { const b = $("pm-calib"); clearTimeout(b._t); b._t = setTimeout(() => { if (!paused || document.hidden) return; Input.calibrate(); setPaused(false, "recalibrate"); }, 300); };
 platformSession.wirePhone();
 keyBinds = KeyBinds.create(G);   // the KEYBOARD rows: rebindable driving keys (js/ui/key-binds.js)
 window.addEventListener("apexcontrollerprofilechange", () => { if (keyBinds) keyBinds.render(); if (controllerProfileUi) controllerProfileUi.refresh(); });
@@ -9534,7 +9533,7 @@ platformSession.initInput({ steerMode, throttleLatchOpt });
 paintSteer();
 paintHudDetailsSummary();
 syncMetricsOverlayCompact();
-$("pm-calib").disabled = steerMode !== "tilt";
+platformSession.paintTiltCalibration();
 refreshGearsBtn();
 audioPanel.init();
 // THE BOOT BUILDS NO WORLD. This was a synchronous Tracks.build() inside

@@ -659,7 +659,7 @@ const fwd = (name) => (...args) => {
 };
 const api = {};
 for (const n of ["collect", "collectGarage", "collectCareer", "collectTtlb", "ttlbParseBoard", "applySettings",
-                 "applyGarage", "applyCareer", "applyTtlb", "resetGarage"]) api[n] = fwd(n);
+                 "applyGarage", "applyCareer", "applyTtlb", "resetGarage", "resetSettings", "resetInfo", "resetRow"]) api[n] = fwd(n);
 function create(G) {
   _G = G;
   // The bound body under its own module name, so tools/check/check-gctx.mjs sees SettingsExportBody handed G.

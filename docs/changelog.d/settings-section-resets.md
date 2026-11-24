@@ -1,0 +1,1 @@
+Improved: Settings sections now offer confirmed resets to device-appropriate defaults. Controls resets steering, touch controls, layouts, bindings and controller profiles together; Saves & Data can reset all preferences while keeping saves, garage builds, photos and saved appearance profiles.

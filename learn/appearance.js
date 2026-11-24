@@ -13,7 +13,7 @@ const LearnAppearance = (function () {
     const root = document.documentElement;
     const motion = matchMedia("(prefers-reduced-motion: reduce)");
     const scheme = matchMedia("(prefers-color-scheme: light)");
-    const lessonStyle = document.querySelector('link[href="style.css"]');
+    const lessonStyle = document.querySelector('link[rel="stylesheet"]');
 
     function sync() {
       if (hostRoot) {

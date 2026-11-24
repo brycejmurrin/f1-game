@@ -32,9 +32,9 @@ function phoneWire() {
   const now = () => S.performance.now();
   const [padEnd, hostEnd] = S.NetTransport.loopback({ latencyMs: 0, rnd: S.NetTransport.seededRnd(5) });
   padEnd.pump(now()); hostEnd.pump(now());
-  const phone = { roll: 0, thr: 0, brk: 0, held: 0 };
+  const phone = { roll: 0, stick: null, thr: 0, brk: 0, held: 0 };
   const session = S.PhonePad.padSession(padEnd, {
-    roll: () => phone.roll, thr: () => phone.thr, brk: () => phone.brk, held: () => phone.held,
+    roll: () => phone.roll, steer: () => phone.stick, thr: () => phone.thr, brk: () => phone.brk, held: () => phone.held,
   }, { now, heartbeat: false });
   const link = S.PhonePad.link(hostEnd, { input: S.Input, pump: false, now, hud: () => null });
   const deliver = () => { session.sample(true); session.pump(); link.pump(); };
@@ -128,6 +128,19 @@ test("two wires, no crosstalk: phone edges reach Input once, the session's traff
   assert.equal(st1.stale, 0);
 });
 
+test("only phone tilt makes the desktop tilt calibration available", () => {
+  const doc = S.document, calibration = doc.getElementById("pm-calib");
+  const localMode = g.G.getSteerMode();
+  for (const [roll, stick, tilt] of [[null, null, false], [0, null, true], [null, 0.5, false], [0, null, true]]) {
+    w.phone.roll = roll; w.phone.stick = stick;
+    w.deliver();
+    assert.equal(S.Input.phoneTiltAvailable(), tilt);
+    assert.equal(doc.body.hasAttribute("data-phone-tilt"), tilt);
+    assert.equal(calibration.disabled, !tilt && localMode !== "tilt");
+    assert.equal(g.G.getSteerMode(), localMode);
+  }
+});
+
 test("stopping the session leaves the phone driving; dropping the phone leaves the session up", () => {
   A.netStop();
   assert.equal(A.net().active, false);
@@ -143,6 +156,7 @@ test("stopping the session leaves the phone driving; dropping the phone leaves t
   w.hostEnd.close();
   w.link.pump();
   assert.equal(S.Input.remoteActive(), false, "pedals off the moment the phone link closes");
+  assert.equal(S.document.body.hasAttribute("data-phone-tilt"), false, "tilt controls return to the local mode");
   assert.equal(A.net().active, true, "and the multiplayer session is untouched");
   A.netStop();
 });

@@ -12,24 +12,19 @@
                     0i DEPTH — the plantation running back behind the edge
                     0j sandy forest rides (firebreaks) cut through the wood
                     0k understory scrub + open sand heath seen through trunks
-     1  s 0.005 +1  pit lane / garages / hoarding / pit-exit marshal
-     2  s 0.015 -1  main-straight grandstand, camera tower, billboards, pine
-     3  s 0.035 -1  Earste Chicane (T1) outside: sand run-off, tyres, hill
-     4  s 0.042 +1  chicane exit infield: sand patch, marshal, rail, pine screen
-     5  s 0.110 -1  long forestEdge — the wall of the outer loop
-     6  s 0.180 +1  Sterrenwacht (T2): rail, marshal, small building in trees
-     7  s 0.194 -1  Kanaalbocht (T3): sandy spoil ridge, rail + tyres, forest
-     8  s 0.265 -1  forested motorhome park
-     9  s 0.347 +1  Lucien Bianchi bocht (T4): rail+tyres, marshal, billboards
-    10  s 0.433 -1  Villeneuve chicane (T5) + the memorial (restraint: one
-                    small low building on a ground patch, nothing else)
-    11  s 0.505 +1  infield service area: broadcast compound, motorhomes, shed
-    12  s 0.567 -1  Kleine chicane (T6): tight, enclosed, pine right behind
-    13  s 0.715 +1  Bolderberghaarspeldbocht (T7): hill, small stand, tyres
-    14  s 0.863 +1  Terlamenbocht entry (T8): stand, rail, hoarding, marshal
-    15  s 0.879 -1  Terlamenbocht exit (T9): tyres, camera tower, billboards
-    16  s 0.924 +1  Jochen Rindt bocht (T10): paddock blocks, motorhomes
-    17  s 0.60-0.70 / 0.74-0.85  §5 the fast sweepers through the pine
+     1–2 start/finish and pit frontage, relative to the surveyed stripe
+     3–4 Eerste Linkse outside and exit
+     5   long forest edge
+     6–7 Sterrenwacht and Kanaalbocht
+     8   forested motorhome park
+     9   Lucien Bianchi
+     10  Villeneuve Chicane and the memorial
+     11  infield service area
+     12  Kleine Chicane
+     13  Bolderberg
+     14–15 Terlamen entry and exit
+     16  Jochen Rindt
+     17  fast sweepers through the pines
 */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["zolder"] =
@@ -173,15 +168,15 @@
       // crowns through the pit offices, S/F stand, Sterrenwacht and Rindt
       // paddock (clip-audit severe addCone×building / place×pine).
       const OWNED = [
-        [0.900, 0.075],   // Rindt paddock + pit straight + Earste chicane
-        [0.160, 0.225],   // Sterrenwacht + Kanaalbocht
-        [0.250, 0.285],   // motorhome park apron
-        [0.325, 0.372],   // Lucien Bianchi
-        [0.395, 0.458],   // Villeneuve chicane and the memorial patch
+        [0.005, 0.083],   // Bolderberg and Rindt
+        [0.225, 0.339],   // pit straight and paddock
+        [0.333, 0.386],   // Eerste Linkse and exit
+        [0.415, 0.497],   // Sterrenwacht and Kanaalbocht
         [0.472, 0.540],   // infield service area
-        [0.542, 0.598],   // Kleine chicane
-        [0.686, 0.748],   // Bolderberg hairpin
-        [0.838, 0.910],   // Terlamenbocht (+ exit scrub keep-out)
+        [0.541, 0.591],   // Lucien Bianchi
+        [0.686, 0.749],   // Kleine chicane
+        [0.830, 0.889],   // Villeneuve chicane and memorial
+        [0.890, 0.958],   // Terlamen
       ];
       const owned = (f) => OWNED.some(([a, b]) =>
         a <= b ? (f >= a && f <= b) : (f >= a || f <= b));
@@ -199,14 +194,13 @@
         // Permanent S/F tribune + museum corridor (outside).
         indexSolid(sl(0.985), sl(0.040), -1, 14, 24);
         indexSolid(sl(0.008), sl(0.030), -1, 48, 22);
-        // Sterrenwacht clubhouse (frame debt → racing pit fold; behind offices),
-        // service sheds, Rindt paddock.
-        indexSolid(0.172, 0.190, 1, 60, 22);
+        // Sterrenwacht clubhouse, service sheds and Rindt paddock.
+        indexSolid(0.4256, 0.4436, 1, 60, 22);
         indexSolid(0.482, 0.520, 1, 48, 22);
-        indexSolid(0.900, 0.948, 1, 16, 20);
+        indexSolid(0.0346, 0.0826, 1, 16, 20);
         // Hairpin outside marshal corridor — pines were swallowing the post.
-        indexSolid(0.696, 0.734, -1, 12, 10);
-        indexSolid(0.696, 0.734, 1, 18, 12);
+        indexSolid(0.0159, 0.0539, -1, 12, 10);
+        indexSolid(0.0159, 0.0539, 1, 18, 12);
       }
 
       // === 0. GLOBAL: the heath ==========================================
@@ -245,6 +239,9 @@
         // pine() does not consult indexSolid/barrierClear.
         if (owned(f)) return;
         for (const side of [-1, 1]) {
+          // On the neighbouring ribbons, leave space for the Eerste Linkse
+          // spectator bank and the venue shelter beside the uphill sweep.
+          if (side === 1 && ((f >= 0.59 && f < 0.62) || (f >= 0.79 && f < 0.80))) continue;
           const ranks = side < 0 ? 4 : 3;
           for (let r = 0; r < ranks; r++) {
             const jitter = hash(k * 7 + r * 131 + (side < 0 ? 0 : 401));
@@ -561,7 +558,7 @@
       //     the chicane memorial as one small low building).
       //     https://motorsportguides.com/a-pilgrimage-to-zolder-where-gilles-villeneuve-lost-his-life/
       {
-        const a = anchor(K(sl(0.028)), 1, 54);
+        const a = anchor(K(sl(0.028)), 1, 46);
         if (a && !onTrack(a.c[0], a.c[2], 8)) {
           const b = [a.r, a.u, a.t];
           const gy = terrainYAt(a.c[0], a.c[2]);
@@ -600,61 +597,61 @@
       // === 2. (main stand emitted as zolder-main-grandstand above) =========
       // Legacy grandstandEx(sl(0.012),…) removed — was SUPPRESSED.
 
-      // === 3. s 0.035 -1 22 — EARSTE CHICANE (T1) OUTSIDE ================
+      // === 3. EERSTE LINKSE (T1) OUTSIDE [authored 0.3481] ===
       // Wide bleached sand run-off, then tyres on armco, then the hill.
       // The trap is GRADED, not one slab: bleached where the cars leave the
       // tarmac, plain sand across the middle, weathered at the barrier — that
       // grading is what makes a sand trap read as sand and not as carpet.
-      groundPatch(K(0.0352), -1, 6.0, [24, 0.16, 46], SAND_PALE);
-      groundPatch(K(0.0300), -1, 4.0, [18, 0.15, 38], SAND_PALE);
-      groundPatch(K(0.0410), -1, 4.0, [18, 0.15, 38], SAND);
-      groundPatch(K(0.0352), -1, 17.0, [12, 0.15, 44], SAND_DUSK);
-      guardrail(0.026, 0.050, -1, 22, RAIL);
+      groundPatch(K(0.3481), 1, 6.0, [24, 0.16, 46], SAND_PALE);
+      groundPatch(K(0.3429), 1, 4.0, [18, 0.15, 38], SAND_PALE);
+      groundPatch(K(0.3539), 1, 4.0, [18, 0.15, 38], SAND);
+      groundPatch(K(0.3481), 1, 17.0, [12, 0.15, 44], SAND_DUSK);
+      guardrail(0.3389, 0.3629, 1, 22, RAIL);
       // One tyre bank along the trap — overlapping triple stacks made 8 m²
       // flatCoplanar spots (structures.js tyre×cap).
-      tyreWall(0.028, 0.048, -1, 21.4, TYRE_CAP);
+      tyreWall(0.3409, 0.3609, 1, 21.4, TYRE_CAP);
       // Second line of armco behind the bank, then the hill, then the fence.
-      guardrail(0.024, 0.052, -1, 26, RAIL);
-      spectatorHill(0.026, 0.052, -1, 27);
-      fence(0.022, 0.056, -1, 24, 3.6, [0.58, 0.60, 0.60]);
-      marshalPost(K(0.0276), -1, 24);
-      marshalPost(K(0.0470), -1, 24);
+      guardrail(0.3369, 0.3649, 1, 26, RAIL);
+      spectatorHill(0.3389, 0.3649, 1, 27);
+      fence(0.3349, 0.3689, 1, 24, 3.6, [0.58, 0.60, 0.60]);
+      marshalPost(K(0.3405), 1, 34);
+      marshalPost(K(0.3599), 1, 24);
       for (let i = 0; i < 9; i++) {
-        const s = 0.024 + i * 0.0034;
+        const s = 0.3369 + i * 0.0034;
         const j = hash(i * 23 + 31);
         // Past the spectatorHill (gap ~27, rows out to ~35) so trunks do not
         // pierce the bank (clip-audit 1.61 m pine×hill @ racing frac ~0.88).
-        tree(K(s), -1, 46 + j * 9, 8 + j * 5, j > 0.6 ? BIRCH : PINE_C);
+        tree(K(s), 1, 46 + j * 9, 8 + j * 5, j > 0.6 ? BIRCH : PINE_C);
       }
       // The wood picks straight back up behind the bank — set past tyre/building
       // reach so addCone does not swallow the T1 boxes (clip-audit frac ~0.03).
       for (let i = 0; i < 14; i++) {
         const j = hash(i * 127 + 91);
-        pine(K(0.020 + i * 0.0024), -1, 64 + j * 18, 16 + j * 9, pineCol(j));
+        pine(K(0.3329 + i * 0.0024), 1, 64 + j * 18, 16 + j * 9, pineCol(j));
       }
 
-      // === 4. s 0.042 +1 16 — CHICANE EXIT, INFIELD ======================
-      groundPatch(K(0.042), 1, 4.0, [14, 0.15, 28], SAND);
-      if (clear(K(0.036), 1, 9.0, 12, 24, 7)) {
-        groundPatch(K(0.036), 1, 9.0, [12, 0.15, 24], SAND_PALE);
+      // === 4. EERSTE LINKSE EXIT [authored 0.3481] ===
+      groundPatch(K(0.3549), -1, 4.0, [14, 0.15, 28], SAND);
+      if (clear(K(0.3489), -1, 9.0, 12, 24, 7)) {
+        groundPatch(K(0.3489), -1, 9.0, [12, 0.15, 24], SAND_PALE);
       }
-      groundPatch(K(0.044), 1, 15.0, [10, 0.14, 30], SAND_DUSK);
-      marshalPost(K(0.044), 1, 15);
-      guardrail(0.036, 0.052, 1, 16, RAIL);
-      fence(0.034, 0.056, 1, 19, 3.2, [0.58, 0.60, 0.60]);
+      groundPatch(K(0.3569), -1, 15.0, [10, 0.14, 30], SAND_DUSK);
+      marshalPost(K(0.3569), -1, 15);
+      guardrail(0.3489, 0.3649, -1, 16, RAIL);
+      fence(0.3469, 0.3689, -1, 19, 3.2, [0.58, 0.60, 0.60]);
       // First rank of pine screening the paddock beyond — past the pit-office
       // envelope (gap 32–34) and the yard shed (gap 66). Early ranks at gap 24
       // were the 2.55 m addCone×office clip @ frac ~0.028.
       for (let i = 0; i < 10; i++) {
         const j = hash(i * 71 + 17);
-        pine(K(0.048 + i * 0.0028), 1, 72 + j * 8, 14 + j * 6, pineCol(j));
+        pine(K(0.3609 + i * 0.0028), -1, 72 + j * 8, 14 + j * 6, pineCol(j));
       }
       for (let i = 0; i < 12; i++) {
         const j = hash(i * 137 + 59);
-        const kk = K(0.045 + i * 0.0030), d = 88 + j * 18;
-        const a = anchor(kk, 1, d);
+        const kk = K(0.3579 + i * 0.0030), d = 88 + j * 18;
+        const a = anchor(kk, -1, d);
         if (!a || onTrack(a.c[0], a.c[2], 9)) continue;   // the pit road is in here
-        pine(kk, 1, d, 15 + j * 9, pineCol(j));
+        pine(kk, -1, d, 15 + j * 9, pineCol(j));
       }
 
       // === 5. s 0.110 -1 30 — THE LONG FOREST EDGE =======================
@@ -677,15 +674,15 @@
         building(K(0.121), -1, 72, 7, 3.4, 6, { wall: [0.55, 0.50, 0.42] });
       }
 
-      // === 6. s 0.180 +1 16 — STERRENWACHT (T2) ==========================
+      // === 6. STERRENWACHT (T2) [authored 0.4338] ===
       // Named for the nearby Sterrenwacht / Bolderberg observatory site
       // (nl.wikipedia Circuit Zolder; climbfinder Sterrenwacht–Bolderberg).
-      // Authored-frame K() — frame debt; do NOT sl() this corner.
-      guardrail(0.170, 0.192, 1, 12, RAIL);
-      marshalPost(K(0.1802), 1, 16);
-      groundPatch(K(0.1802), 1, 19.0, [12, 0.15, 30], SAND_PALE);
+      // Keep the clubhouse behind the barrier beside the named bend.
+      guardrail(0.4236, 0.4456, 1, 12, RAIL);
+      marshalPost(K(0.4338), 1, 16);
+      groundPatch(K(0.4338), 1, 19.0, [12, 0.15, 30], SAND_PALE);
       {
-        const a = anchor(K(0.1802), 1, 72);
+        const a = anchor(K(0.4338), 1, 72);
         if (a && !onTrack(a.c[0], a.c[2], 8)) {
           const b = [a.r, a.u, a.t];
           const gy = terrainYAt(a.c[0], a.c[2]);
@@ -709,36 +706,35 @@
             addCyl(stage, vadd(a.c, a.u, dy + 7.95), 0.14, 1.6, [0.55, 0.56, 0.58], 5, b);
             stage._mat = 0;
           }, { required: true });
-          // Frame debt puts authored 0.18 on the racing pit fold — sit behind
-          // the team offices (gap 32–34), not through them.
+          // Reserve space behind the guardrail for the clubhouse.
           if (typeof indexSolid === "function")
-            indexSolid(0.172, 0.190, 1, 60, 22);
+            indexSolid(0.4256, 0.4436, 1, 60, 22);
         }
       }
       // Pine screen behind the clubhouse — past the 9 m box (+ crown).
       for (let i = 0; i < 12; i++) {
         const j = hash(i * 83 + 29);
-        pine(K(0.166 + i * 0.0036), 1, 92 + j * 12, 15 + j * 8, pineCol(j));
+        pine(K(0.4196 + i * 0.0036), 1, 92 + j * 12, 15 + j * 8, pineCol(j));
       }
 
-      // === 7. s 0.194 -1 20 — KANAALBOCHT (T3) ===========================
+      // === 7. KANAALBOCHT (T3) [authored 0.4725] ===
       // A low ridge of sandy spoil carries the boundary here.
       {
-        const a = anchor(K(0.1938), -1, 62);
+        const a = anchor(K(0.4725), -1, 62);
         if (a) {
           const y = terrainYAt ? terrainYAt(a.c[0], a.c[2]) : a.c[1];
           ridge(a.c[0], a.c[2], y, Math.atan2(a.t[2], a.t[0]), 74, 18, 5.0, SAND_DUSK);
         }
       }
-      guardrail(0.184, 0.206, -1, 20, RAIL);
-      tyreWall(0.188, 0.202, -1, 19.4, TYRE_CAP2);
-      groundPatch(K(0.1938), -1, 4.0, [16, 0.15, 32], SAND_PALE);
-      groundPatch(K(0.1938), -1, 15.0, [12, 0.14, 34], SAND);
-      forestEdge(0.180, 0.214, -1, 40, { spacing: 13 });
+      guardrail(0.4627, 0.4847, -1, 20, RAIL);
+      tyreWall(0.4667, 0.4807, -1, 19.4, TYRE_CAP2);
+      groundPatch(K(0.4725), -1, 4.0, [16, 0.15, 32], SAND_PALE);
+      groundPatch(K(0.4725), -1, 15.0, [12, 0.14, 34], SAND);
+      forestEdge(0.4587, 0.4927, -1, 40, { spacing: 13 });
       // The spoil is old coal ground: scrub takes it before the pine does.
       for (let i = 0; i < 8; i++) {
         const j = hash(i * 167 + 23);
-        bush(K(0.182 + i * 0.0042), -1, 44 + j * 14, j > 0.6 ? PINE_C : SCRUB);
+        bush(K(0.4607 + i * 0.0042), -1, 44 + j * 14, j > 0.6 ? PINE_C : SCRUB);
       }
 
       // === 8. s 0.265 -1 34 — FORESTED MOTORHOME PARK ====================
@@ -752,7 +748,7 @@
         const j = hash(i * 101 + 19);
         pine(K(0.236 + i * 0.0032), -1, 48 + j * 22, 15 + j * 9, pineCol(j));
       }
-      forestEdge(0.222, 0.300, -1, 22, { spacing: 14 });
+      forestEdge(0.360, 0.400, -1, 22, { spacing: 14 });
       // The sand track in to the park, and a second row of vans under the pine.
       if (clear(K(0.258), -1, 62, 46, 10, 11)) {
         groundPatch(K(0.258), -1, 62, [46, 0.13, 10], SAND_DUSK);
@@ -763,46 +759,46 @@
           { wall: j < 0.5 ? [0.80, 0.81, 0.82] : [0.86, 0.86, 0.84] });
       }
 
-      // === 9. s 0.347 +1 18 — LUCIEN BIANCHI BOCHT (T4) ==================
-      guardrail(0.334, 0.362, 1, 18, RAIL);
-      tyreWall(0.338, 0.358, 1, 17.4, TYRE_CAP);
-      marshalPost(K(0.356), 1, 20);
-      billboard(K(0.330), 1, 24, 12, 4.5, [0.84, 0.78, 0.18]);
-      billboard(K(0.338), 1, 24, 12, 4.5, [0.14, 0.30, 0.58]);
-      groundPatch(K(0.347), 1, 4.0, [15, 0.15, 30], SAND);
-      groundPatch(K(0.352), 1, 18.0, [11, 0.14, 28], SAND_DUSK);
-      fence(0.330, 0.366, 1, 22, 3.2, [0.58, 0.60, 0.60]);
+      // === 9. LUCIEN BIANCHI (T4) [authored 0.5619] ===
+      guardrail(0.5489, 0.5769, -1, 18, RAIL);
+      tyreWall(0.5529, 0.5729, -1, 17.4, TYRE_CAP);
+      marshalPost(K(0.5709), -1, 20);
+      billboard(K(0.5449), -1, 24, 12, 4.5, [0.84, 0.78, 0.18]);
+      billboard(K(0.5529), -1, 24, 12, 4.5, [0.14, 0.30, 0.58]);
+      groundPatch(K(0.5619), -1, 4.0, [15, 0.15, 30], SAND);
+      groundPatch(K(0.5669), -1, 18.0, [11, 0.14, 28], SAND_DUSK);
+      fence(0.5449, 0.5809, -1, 22, 3.2, [0.58, 0.60, 0.60]);
 
-      // === 10. s 0.433 -1 24 — VILLENEUVE CHICANE (T5) ===================
+      // === 10. VILLENEUVE CHICANE (T6) [authored 0.8627] ===
       // Popular viewing on the outside; sand run-off; tyres on armco.
       // Sand graded the same way as T1, and the tyre bank doubled where the
       // cars arrive square at it.
-      groundPatch(K(0.4333), -1, 4.0, [22, 0.16, 46], SAND_PALE);
-      groundPatch(K(0.4270), -1, 4.0, [16, 0.15, 30], SAND_PALE);
-      groundPatch(K(0.4400), -1, 4.0, [16, 0.15, 30], SAND);
-      groundPatch(K(0.4333), -1, 15.0, [10, 0.14, 44], SAND_DUSK);
-      guardrail(0.424, 0.446, -1, 18, RAIL);
-      guardrail(0.420, 0.450, -1, 22, RAIL);
-      tyreWall(0.426, 0.444, -1, 17.4, TYRE_CAP);
-      grandstandEx(0.4333, -1, 26, 62, null, null);
+      groundPatch(K(0.8627), 1, 4.0, [22, 0.16, 46], SAND_PALE);
+      groundPatch(K(0.8564), 1, 4.0, [16, 0.15, 30], SAND_PALE);
+      groundPatch(K(0.8694), 1, 4.0, [16, 0.15, 30], SAND);
+      groundPatch(K(0.8627), 1, 15.0, [10, 0.14, 44], SAND_DUSK);
+      guardrail(0.8534, 0.8754, 1, 18, RAIL);
+      guardrail(0.8494, 0.8794, 1, 22, RAIL);
+      tyreWall(0.8554, 0.8734, 1, 17.4, TYRE_CAP);
+      grandstandEx(0.8627, 1, 26, 62, null, null);
       // No spectatorHill beside this stand — it shared horizontal faces with
       // the crowdBank (flatCoplanar spots). Fence marks the viewing bank alone.
-      fence(0.404, 0.424, -1, 22, 3.4, [0.58, 0.60, 0.60]);
-      marshalPost(K(0.4270), -1, 21);
+      fence(0.8334, 0.8534, 1, 22, 3.4, [0.58, 0.60, 0.60]);
+      marshalPost(K(0.8564), 1, 21);
       for (let i = 0; i < 10; i++) {
         const j = hash(i * 67 + 5);
-        pine(K(0.404 + i * 0.0052), -1, 44 + j * 12, 16 + j * 7, pineCol(j));
+        pine(K(0.8334 + i * 0.0052), 1, 44 + j * 12, 16 + j * 7, pineCol(j));
       }
       // Pine standing over the viewing bank and closing behind the stand.
       for (let i = 0; i < 16; i++) {
         const j = hash(i * 139 + 83);
-        pine(K(0.400 + i * 0.0036), -1, 58 + j * 26, 17 + j * 9, pineCol(j));
+        pine(K(0.8294 + i * 0.0036), 1, 58 + j * 26, 17 + j * 9, pineCol(j));
       }
       // --- the memorial. One small low building on a ground patch, set back
       //     from the barrier. Unlit, unsignposted, nothing else. Restraint is
       //     the point: do NOT add lights, flags, billboards or a crowd here.
-      groundPatch(K(0.4368), -1, 30, [8, 0.16, 10], CONCRETE);
-      building(K(0.4368), -1, 31, 3.0, 2.2, 3.0, { wall: [0.80, 0.79, 0.76] });
+      groundPatch(K(0.8662), 1, 30, [8, 0.16, 10], CONCRETE);
+      building(K(0.8662), 1, 31, 3.0, 2.2, 3.0, { wall: [0.80, 0.79, 0.76] });
 
       // === 11. s 0.505 +1 40 — INFIELD SERVICE AREA ======================
       groundPatch(K(0.505), 1, 34, [24, 0.15, 46], SAND_PALE);
@@ -821,115 +817,111 @@
         groundPatch(K(0.505), 1, 74, [30, 0.13, 12], SAND_DUSK);
       }
 
-      // === 12. s 0.567 -1 20 — KLEINE CHICANE (T6) =======================
+      // === 12. KLEINE CHICANE (T5) [authored 0.7152] ===
       // Tight and enclosed: the pine starts immediately beyond the barrier.
       // There is no room for a hill or a stand here, so the specificity has to
       // come from the barrier itself — armco, tyres, a marshal each side, and
       // a wood that is two ranks deep (third rank was forestEdge-self clips).
-      guardrail(0.556, 0.580, -1, 14, RAIL);
+      guardrail(0.7045, 0.7285, 1, 14, RAIL);
       // No tyreWall on this tight chord — along() stacks self-clipped at
       // 1.16 m (structures tyre cyl×cyl @ racing frac ~0.56). Armco + fence
       // still read the barrier; tyres return on the hairpin / Terlamen.
       // tyreWall removed (was 0.558–0.578).
-      guardrail(0.554, 0.582, 1, 13, RAIL);
-      marshalPost(K(0.5667), -1, 16);
-      marshalPost(K(0.5600), 1, 15);
-      groundPatch(K(0.5667), -1, 4.0, [13, 0.15, 26], SAND_PALE);
-      groundPatch(K(0.5580), -1, 4.0, [11, 0.15, 22], SAND);
-      groundPatch(K(0.5760), -1, 4.0, [11, 0.15, 22], SAND);
-      groundPatch(K(0.5700), -1, 14.0, [9, 0.14, 22], SAND_DUSK);
-      fence(0.552, 0.584, -1, 17, 3.2, [0.58, 0.60, 0.60]);
+      guardrail(0.7025, 0.7305, -1, 13, RAIL);
+      marshalPost(K(0.7152), 1, 16);
+      marshalPost(K(0.7085), -1, 15);
+      groundPatch(K(0.7152), 1, 4.0, [13, 0.15, 26], SAND_PALE);
+      groundPatch(K(0.7065), 1, 4.0, [11, 0.15, 22], SAND);
+      groundPatch(K(0.7245), 1, 4.0, [11, 0.15, 22], SAND);
+      groundPatch(K(0.7185), 1, 14.0, [9, 0.14, 22], SAND_DUSK);
+      fence(0.7005, 0.7325, 1, 17, 3.2, [0.58, 0.60, 0.60]);
       for (let i = 0; i < 12; i++) {
         const j = hash(i * 89 + 37);
-        pine(K(0.548 + i * 0.0032), -1, 22 + j * 7, 16 + j * 8, pineCol(j));
-        if (j > 0.55) pine(K(0.548 + i * 0.0032), -1, 36 + j * 8, 17 + j * 6, pineCol(1 - j));
+        pine(K(0.6965 + i * 0.0032), 1, 22 + j * 7, 16 + j * 8, pineCol(j));
+        if (j > 0.55) pine(K(0.6965 + i * 0.0032), 1, 36 + j * 8, 17 + j * 6, pineCol(1 - j));
       }
-      forestEdge(0.540, 0.600, -1, 22, { spacing: 14 });
+      forestEdge(0.6885, 0.7485, 1, 22, { spacing: 14 });
       // Infield side is pine to the kerb as well — this corner is a slot.
       for (let i = 0; i < 10; i++) {
         const j = hash(i * 149 + 67);
-        pine(K(0.550 + i * 0.0032), 1, 20 + j * 10, 15 + j * 8, pineCol(j));
+        pine(K(0.6985 + i * 0.0032), -1, 20 + j * 10, 15 + j * 8, pineCol(j));
       }
 
-      // === 13. s 0.715 +1 22 — BOLDERBERGHAARSPELDBOCHT (T7) =============
+      // === 13. BOLDERBERG (T8) [authored 0.0352] ===
       // No spectatorHill under the stand — flatCoplanar with its own risers
       // (6 spots at line 586). The grandstandEx already reads as the bank.
-      grandstandEx(0.7153, 1, 30, 48, null, null);
-      guardrail(0.700, 0.734, 1, 22, RAIL);
-      // Short tyre bank on the inside only — full-span + facing outside bank
-      // self-clipped on the hairpin chord (1.16 m cyl×cyl @ racing ~0.56,
-      // where authored 0.70 + shift lands).
-      tyreWall(0.708, 0.722, 1, 21.2, TYRE_CAP);
-      marshalPost(K(0.730), 1, 24);
-      marshalPost(K(0.700), -1, 16);
-      billboard(K(0.694), 1, 24, 12, 4.5, [0.80, 0.26, 0.18]);
+      grandstandEx(0.0352, 1, 30, 48, null, null);
+      guardrail(0.0199, 0.0539, 1, 22, RAIL);
+      // Short tyre bank on the outside, behind the closer Armco.
+      tyreWall(0.0279, 0.0419, -1, 21.2, TYRE_CAP);
+      marshalPost(K(0.0499), 1, 24);
+      marshalPost(K(0.0199), -1, 16);
+      billboard(K(0.0139), 1, 24, 12, 4.5, [0.80, 0.26, 0.18]);
       // The outside of the hairpin runs within a patch width of the approach,
       // so the sand sits out past the barrier line — at gap 4 the engine
       // refused it and the run-off was simply missing.
-      groundPatch(K(0.7153), -1, 12.0, [17, 0.15, 34], SAND_PALE);
-      groundPatch(K(0.7080), -1, 12.0, [13, 0.14, 26], SAND);
-      guardrail(0.698, 0.736, -1, 16, RAIL);
-      // Outside: armco only (tyreWall removed — was the other half of the
-      // 1.16 m hairpin stack pair).
+      groundPatch(K(0.0352), -1, 12.0, [17, 0.15, 34], SAND_PALE);
+      groundPatch(K(0.0279), -1, 12.0, [13, 0.14, 26], SAND);
+      guardrail(0.0179, 0.0559, -1, 16, RAIL);
       for (let i = 0; i < 12; i++) {
         const j = hash(i * 43 + 47);
         // Past the outside marshal (gap 16) — was 1.22 m pine×post @ ~0.781.
-        pine(K(0.690 + i * 0.0042), -1, 34 + j * 14, 16 + j * 8, pineCol(j));
+        pine(K(0.0099 + i * 0.0042), -1, 34 + j * 14, 16 + j * 8, pineCol(j));
       }
       for (let i = 0; i < 14; i++) {
         const j = hash(i * 181 + 29);
-        pine(K(0.686 + i * 0.0040), -1, 46 + j * 24, 17 + j * 9, farCol(j));
+        pine(K(0.0059 + i * 0.0040), -1, 46 + j * 24, 17 + j * 9, farCol(j));
       }
 
-      // === 14. s 0.863 +1 18 — TERLAMENBOCHT ENTRY (T8) ==================
-      grandstandEx(0.8628, 1, 20, 70, null, null);
-      guardrail(0.852, 0.874, 1, 16, RAIL);
-      sponsorHoarding(0.850, 0.876, 1, 13.5);
-      marshalPost(K(0.8628), 1, 18);
-      fence(0.848, 0.878, 1, 30, 3.4, [0.58, 0.60, 0.60]);
-      if (clear(K(0.8628), 1, 44, 24, 40, 10)) {
-        groundPatch(K(0.8628), 1, 44, [24, 0.14, 40], SAND_DUSK);
+      // === 14. TERLAMENBOCHT ENTRY (T7) [authored 0.9099] ===
+      grandstandEx(0.9099, 1, 20, 70, null, null);
+      guardrail(0.8991, 0.9211, 1, 16, RAIL);
+      sponsorHoarding(0.8971, 0.9231, 1, 13.5);
+      marshalPost(K(0.9099), 1, 18);
+      fence(0.8951, 0.9251, 1, 30, 3.4, [0.58, 0.60, 0.60]);
+      if (clear(K(0.9099), 1, 44, 24, 40, 10)) {
+        groundPatch(K(0.9099), 1, 44, [24, 0.14, 40], SAND_DUSK);
       }
 
-      // === 15. s 0.879 -1 22 — TERLAMENBOCHT EXIT (T9) ===================
+      // === 15. TERLAMENBOCHT EXIT (T7) [authored 0.9240] ===
       // The last of the pine before the paddock reopens.
-      guardrail(0.870, 0.892, -1, 20, RAIL);
-      tyreWall(0.872, 0.890, -1, 19.4, TYRE_CAP2);
-      cameraTower(K(0.8792), -1, 24);
+      guardrail(0.9148, 0.9368, -1, 20, RAIL);
+      tyreWall(0.9168, 0.9348, -1, 19.4, TYRE_CAP2);
+      cameraTower(K(0.9240), -1, 24);
       for (let i = 0; i < 4; i++) {
-        billboard(K(0.868 + i * 0.0075), -1, 30, 11, 4.2,
+        billboard(K(0.9128 + i * 0.0075), -1, 30, 11, 4.2,
           i % 2 ? [0.15, 0.32, 0.56] : [0.86, 0.84, 0.22]);
       }
-      groundPatch(K(0.8792), -1, 14.0, [10, 0.14, 34], SAND_PALE);
-      forestEdge(0.850, 0.910, -1, 38, { spacing: 13 });
+      groundPatch(K(0.9240), -1, 14.0, [10, 0.14, 34], SAND_PALE);
+      forestEdge(0.8948, 0.9548, -1, 38, { spacing: 13 });
       // Past marshal (gap 18–24) and tyre stacks so pine trunks miss posts.
       for (let i = 0; i < 14; i++) {
         const j = hash(i * 73 + 53);
-        pine(K(0.848 + i * 0.0044), -1, 48 + j * 14, 16 + j * 8, pineCol(j));
+        pine(K(0.8928 + i * 0.0044), -1, 48 + j * 14, 16 + j * 8, pineCol(j));
       }
       for (let i = 0; i < 16; i++) {
         const j = hash(i * 191 + 11);
-        pine(K(0.846 + i * 0.0042), -1, 66 + j * 26, 17 + j * 9, farCol(j));
+        pine(K(0.8908 + i * 0.0042), -1, 66 + j * 26, 17 + j * 9, farCol(j));
       }
 
-      // === 16. s 0.924 +1 16 — JOCHEN RINDT BOCHT (T10) ==================
-      guardrail(0.912, 0.940, 1, 14, RAIL);
-      marshalPost(K(0.938), 1, 16);
-      sponsorHoarding(0.930, 0.958, 1, 12);
+      // === 16. JOCHEN RINDT (T9) [authored 0.0583] ===
+      guardrail(0.0466, 0.0746, 1, 14, RAIL);
+      marshalPost(K(0.0726), 1, 16);
+      sponsorHoarding(0.0646, 0.0926, 1, 12);
       for (let i = 0; i < 5; i++) {
         const j = hash(i * 107 + 61);
-        building(K(0.906 + i * 0.0086), 1, 22 + j * 6, 12, 5.2, 11,
+        building(K(0.0406 + i * 0.0086), 1, 22 + j * 6, 12, 5.2, 11,
           { wall: j < 0.5 ? GREY : WHITE });
       }
       if (typeof indexSolid === "function")
-        indexSolid(0.900, 0.948, 1, 16, 20);
+        indexSolid(0.0346, 0.0826, 1, 16, 20);
       for (let i = 0; i < 6; i++) {
         const j = hash(i * 113 + 7);
-        seatMotorhome(K(0.908 + i * 0.0072), 1, 48, 10, 6.4 + j * 1.4, 14,
+        seatMotorhome(K(0.0426 + i * 0.0072), 1, 48, 10, 6.4 + j * 1.4, 14,
           { wall: j < 0.5 ? [0.89, 0.89, 0.88] : [0.80, 0.81, 0.83] });
       }
-      groundPatch(K(0.9237), 1, 30, [30, 0.14, 70], CONCRETE);
-      tyreWall(0.914, 0.922, 1, 13.4, TYRE_CAP);
+      groundPatch(K(0.0583), 1, 30, [30, 0.14, 70], CONCRETE);
+      tyreWall(0.0486, 0.0566, 1, 13.4, TYRE_CAP);
 
       // === 17. §5 THE FAST SWEEPERS THROUGH THE PINE =====================
       // Between the Kleine chicane and the hairpin, and again out of Terlamen,

@@ -2030,8 +2030,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "MUSIC & SOUND folds stretch to the sheet, not shrink to the summary text");
   assert.match(read("index.html"), /id="pm-calib"[^>]*>[\s\S]*?id="pm-calib-help"/,
     "TILT recalibrate help sits on the button, not under RESET DOCK LAYOUT");
-  assert.match(read("css/settings-controls.css"), /body\.desktop #pm-calib-help/,
-    "desktop hides the TILT help with RECALIBRATE TILT");
+  assert.equal(doorDecl(css("css/settings-controls.css"), "body.desktop:not([data-phone-tilt]) #pm-calib-help", "display"), "none !important",
+    "desktop hides the tilt help if no phone is steering by tilt");
   // UI audit 2026-10-18: the help IS the reason RECALIBRATE is grey, so it stays
   // readable (dimmed) instead of hidden; the slot never collapses either way.
   assert.ok(!decl(css("css/settings-controls.css"), "#pm-calib:disabled + #pm-calib-help", "visibility"),

@@ -197,7 +197,7 @@ test("tick shares synchronous player reads, including computed null, and preserv
 
 test("VSC lesson computes pit loss, rejoin and finish projections for every replay", () => {
   const modelPath = "learn/vsc/model.js";
-  const { fixtures, evaluate, progress } = vm.runInNewContext(
+  const { fixtures, evaluate, progress, compareRegimes } = vm.runInNewContext(
     fs.readFileSync(path.join(ROOT, modelPath), "utf8") + "\nVscLesson",
     {},
     { filename: absSrc(modelPath) },
@@ -207,11 +207,15 @@ test("VSC lesson computes pit loss, rejoin and finish projections for every repl
     hardLife: [30000, 22000, 12000, 2000, 17000, 23000],
     earlyGreen: [30000, 22000, 17000, -3000, 22000, 23000],
     traffic: [30000, 22000, 17000, -3000, 25000, 23000],
+    green: [30000, 22000, 22000, -8000, 27000, 23000],
+    safetyCar: [30000, 22000, 6000, -2500, 11000, 23000],
   };
   for (const [id, times] of Object.entries(expected)) {
     const { pitTime, greenLoss, boxLoss, rejoin, boxTotal, stayTotal } = evaluate(fixtures[id]);
     assert.deepEqual([pitTime, greenLoss, boxLoss, rejoin, boxTotal, stayTotal], times, id);
   }
+  const regimes = compareRegimes(fixtures.default, 30000);
+  assert.deepEqual([regimes.green.loss, regimes.vsc.loss, regimes.safetyCar.loss], [22000, 12000, 6000]);
   const slower = evaluate(fixtures.default, 1000);
   assert.equal(slower.boxLoss, 13000);
   assert.equal(slower.rejoin, 1000);

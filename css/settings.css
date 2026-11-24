@@ -359,6 +359,10 @@ body:not(.desktop) #pmsettings-inner:not([data-shape="tall"]) { --compact-at: 62
 @media (hover: hover) and (pointer: fine) {
   .tune-revert:hover { color: var(--text); background: var(--plate-hover); }
 }
+#learn nav { display: grid; gap: var(--pad); }
+#learn nav h3 { margin: 0 0 var(--gap); font-size: var(--fs-3); }
+#learn nav .pm-doors { display: grid; gap: var(--gap); grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr)); }
+
 /* Navigation doors are quiet, solid panels. Opaque semantic surfaces keep
    the same hierarchy over a live background and in the light theme. */
 #learn .pm-doors button,
