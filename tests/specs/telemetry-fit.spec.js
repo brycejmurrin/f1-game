@@ -305,9 +305,12 @@ test("arranging the wide telemetry trace resizes the rendered column and Apply k
   const detail = page.locator("dialog.dh-tpopup");
   const column = detail.locator(".dh-telem-main");
   await expect(page.locator("body")).toHaveAttribute("data-width", "wide");
+  // The telemetry-detail route always prepares first (#6307): pick the view, then Start arranging.
+  await page.locator("#arrange-prepare").getByRole("button", { name: "Start arranging", exact: true }).click();
   const width = () => column.evaluate(node => node.getBoundingClientRect().width);
-  const initial = await width();
   const editor = page.locator("#screen-arranger[open]");
+  await expect(editor).toBeVisible();
+  const initial = await width();
   await editor.getByLabel("Region", { exact: true }).selectOption("charts");
   await editor.getByRole("button", { name: "Controls", exact: true }).click();
   await editor.getByRole("button", { name: "Width −", exact: true }).click();
