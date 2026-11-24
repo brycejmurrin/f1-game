@@ -111,6 +111,7 @@
     replay: {label: "compressed energy lap", duration: 12000, rewind: true},
     key: "Vertical axis: usable charge in MJ. Deploy, brake and super clip are separate phases. The optional dashed trace is lap two.",
     intro: "Charge is a stock. Recharge and deployment are flows. Build an energy plan for a fictional lap and see how the same energy store can accept more than 4 MJ across multiple cycles.",
+    inGame: "Set a sector to SAVE in the race’s Energy Plan to switch BOOST off. The car can then harvest under braking or at part throttle when the store has room. Apex tracks the charge in its 4 MJ store. The Melbourne and Las Vegas lap allowances here illustrate FIA accounting and how it can vary by event.",
     controls: [
       { id: "budget", label: "Lap recharge allowance", options: [["6", "6.0 MJ · Las Vegas qualifying"], ["7", "7.0 MJ · Melbourne qualifying"], ["8", "8.0 MJ · Las Vegas race, Overtake inactive"], ["8.5", "8.5 MJ · Las Vegas race, Overtake active"]], value: "8" },
       { id: "start", label: "Usable charge at start", min: 0.5, max: 4, step: 0.25, value: 2, unit: "MJ" },

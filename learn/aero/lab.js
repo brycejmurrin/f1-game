@@ -361,6 +361,13 @@
   updatePressure();
   motion.addEventListener("click", () => { animate = !animate; updateMotion(); });
   document.addEventListener("visibilitychange", updateMotion);
+  const launch = get("launch-aero-drill");
+  if (window.frameElement?.id === "learn-lab") {
+    launch.hidden = false;
+    launch.addEventListener("click", () => {
+      window.parent.postMessage({type: "apex-learn-scenario", id: "aero"}, window.location.origin);
+    });
+  }
   LearnAppearance.mount(syncAppearance);
   new ResizeObserver(draw).observe(canvas);
   cornerReplay.seek(0);

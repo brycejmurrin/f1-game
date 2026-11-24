@@ -19,6 +19,7 @@
     replay: {label: "race stint", steps: laps - 1, first: 1},
     key: "The vertical scale shows seconds lost per lap. Solid is net pace, dashes are tyre-only, triangles mark the cliff and shading marks a plan without enough fuel.",
     intro: "Plan a fictional 50-lap dry race. Balance the tyres’ pace drop, starting fuel mass and the recoverable sample.",
+    inGame: "With Tyre Wear enabled, Apex scales tyre life to race distance and steps the fuel load down after each completed lap. Eligible dry races use two compounds. The lesson’s kilogram budget and fuel sample illustrate an additional FIA requirement. In the game, fuel load affects pace automatically as laps are completed.",
     controls: [
       { id: "plot", label: "Plot", options: [["net", "Net pace and tyre-only reference"], ["tyres", "Tyre wear by stint"]], value: "net" },
       { id: "fixture", label: "Mandatory dry nomination", options: [["hard", "Teaching fixture · Hard"], ["vegas", "2026 Las Vegas · Medium or Hard"]], value: "hard" },
