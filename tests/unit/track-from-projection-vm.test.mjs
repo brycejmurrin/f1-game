@@ -21,6 +21,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { runInContext } from "node:vm";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -136,4 +137,87 @@ test("past the inside edge of a tight corner the read follows the car (Sochi tra
   }
   assert.ok(cases >= 6, `only ${cases} past-the-edge paths — the corner pick found too few`);
   assert.ok(worstOld > 1.5, `the two-step read never trailed > 1.5 m (worst ${worstOld.toFixed(2)}) — this case no longer reproduces the bug`);
+});
+
+
+test("a driven Spa hairpin cut keeps progress and contact aligned with the projected position", async () => {
+  const { G, apex } = g;
+  G.raceReliability = "off";
+  await g.race("spa", "day", "dry");
+  apex.headless(true);
+  const track = G.track;
+  apex.reset(208 / track.total, 12, 0, 42);
+  for (const [index, car] of G.cars.entries()) {
+    if (car !== G.player) apex.retire(index, "bench");
+  }
+  const player = G.player;
+  const target = G.worldFromTrack(256, 10);
+  player.head = Math.atan2(target.x - player.px, target.z - player.pz);
+  apex.setInput({ steer: 0, throttle: true });
+
+  let jumped = false;
+  for (let frame = 0; frame < 200; frame++) {
+    const previousS = player.s;
+    g.step(1);
+    if (player.s - previousS > 20) jumped = true;
+  }
+  assert.ok(jumped, "the driven path must cross the hairpin's centre of curvature");
+  assert.ok(Math.abs(player.prog - player.s) < 1, "progress follows the new perpendicular foot");
+  const projected = G.worldFromTrack(player.s, player.x);
+  assert.ok(Math.hypot(projected.x - player.px, projected.z - player.pz) < 1, "the projection still describes the world pose");
+
+  const collider = runInContext("Collide", g.ctx).create(G, () => {});
+  collider.resolveCollisions([], 1 / 60);
+  const parked = { ...G.cars.find(car => car !== player), s: player.s, prog: player.s, x: player.x, speed: 0, retired: true };
+  assert.ok(collider.pairContact(player, parked), "an overlapping parked car is reachable by the progress-based contact check");
+  parked.s -= 28;
+  parked.prog -= 28;
+  assert.equal(collider.pairContact(player, parked), null, "the old arc bucket cannot create a contact");
+});
+
+test("signed progress crosses the line and skips an untracked position jump", async () => {
+  const { G, apex } = g;
+  await g.race("spa", "day", "dry");
+  apex.headless(true);
+  const { total } = G.track;
+
+  apex.reset((total - 0.1) / total, 15, 0, 42);
+  g.step(1);
+  assert.equal(G.player.lap, 1, "the normal forward wrap crosses the line");
+  assert.ok(Math.abs(G.player.prog - total - G.player.s) < 1e-6);
+
+  apex.reset(0.1 / total, -12, 0, 42);
+  g.step(1);
+  assert.equal(G.player.lap, 0, "reversing across the line does not score a lap");
+  assert.ok(G.player.s > total - 1);
+  assert.ok(G.player.prog < 0, "the reverse wrap decreases progress");
+
+  apex.reset(0.5, 10, 0, 42);
+  const player = G.player;
+  const beforeJump = player.prog;
+  player._prevS = player.s - 35;
+  g.step(1);
+  assert.ok(Math.abs(player.prog - beforeJump) < 1, "an untracked jump is not added to race progress");
+});
+
+
+test("a credited contact displacement is counted once when motion crosses the fallback threshold", async () => {
+  const { G, apex } = g;
+  await g.race("spa", "day", "dry");
+  apex.headless(true);
+  apex.reset(0.5, 10, 0, 42);
+  const player = G.player;
+
+  // Collision resolution keeps s and prog in sync but deliberately leaves
+  // _prevS pinned until Advance has checked for a lap-line crossing.
+  player._prevS = player.s - 20;
+  player._pushD = 20;
+  const previousS = player._prevS;
+  const beforeStep = player.prog;
+  g.step(1);
+
+  assert.ok(player.s - previousS > 20, "the position change must reach the fallback branch");
+  assert.ok(Math.abs(player.prog - beforeStep) < 1, "the contact displacement was already credited");
+  assert.ok(Math.abs(player.prog - player.s) < 1e-6, "progress remains aligned after the combined move");
+  assert.equal(player._pushD, 0);
 });
