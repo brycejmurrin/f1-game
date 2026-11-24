@@ -98,7 +98,7 @@ test("every local link in ABOUT & CREDITS is a file the site stages", () => {
   assert.deepEqual(local.filter((h) => !staged(h) || stageExcluded(h)), [], "a credits link would 404 on the live site");
   // A licence outside the staged dirs is an Android-only component, named in the panel's closing line.
   assert.deepEqual(COMPONENTS.filter((c) => !staged(c.licence)).map((c) => c.group), COMPONENTS.filter((c) => c.group === "android").map(() => "android"));
-  assert.equal(androidLine(noticeModel(ROOT)), "The Android app also includes Capacitor 8.6.2 (MIT), Capacitor Filesystem 8.1.5 (MIT) and Capacitor Share 8.0.2 (MIT).");
+  assert.equal(androidLine(noticeModel(ROOT)), "The Android app also includes Capacitor 8.6.2 (MIT), Capacitor Filesystem 8.1.5 (MIT) and Capacitor Share 8.0.3 (MIT).");
   assert.ok(buildCreditsHtml(ROOT).includes(androidLine(noticeModel(ROOT))), "the panel names the Android-only components");
 });
 

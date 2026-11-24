@@ -14,7 +14,7 @@ let live = null, samplePass = null;
 function capturePass(count) {
   let projection, view, width, height;
   return {
-    index: 0, draws: 0, pump: false, cancelRead: null, garageTime: null,
+    index: 0, draws: 0, pump: false, garageTime: null,
     project(p, v, w, h) {
       if (!projection) {
         projection = p.slice(); view = v.slice(); width = w; height = h;
@@ -637,8 +637,11 @@ function create(G, deps) {
   }
   /** @type {(() => void) | null} */
   let releaseCaptureScale = null;
+  /** @type {(() => void) | null} */
+  let cancelStudioRead = null;
   function finishClose(back) {
     if (!st.open && !st.closing) return;
+    cancelStudioRead?.();
     if (activePass) releasePass(activePass);
     if (releaseCaptureScale) releaseCaptureScale();
     if (!isGarage() && cond.tod != null) { resetCond(); cond.tod = null; }
@@ -688,11 +691,14 @@ function create(G, deps) {
     if (activePass !== pass) return;
     activePass = null;
     if (samplePass === pass) samplePass = null;
-    pass.cancelRead?.();
     E["ps-body"].inert = false;
   }
-  /** @param {*} pass @param {(() => void) | null} rendered */
-  async function frame(pass = null, rendered = null) {
+  /**
+   * @param {*} pass
+   * @param {(() => void) | null} rendered
+   * @param {boolean} studioRead Whether an instant read belongs to this Studio visit.
+   */
+  async function frame(pass = null, rendered = null, studioRead = false) {
     const gfx = G.gfx;
     if (gfx && gfx.invalidateSoftPresent && gfx.softPresent && gfx.softPresent()) gfx.invalidateSoftPresent();
     // Observe the display blit immediately. Its result matters only if the
@@ -717,23 +723,24 @@ function create(G, deps) {
         if (gfx.cancelCapture) gfx.cancelCapture("capture timed out", owner);
         reject(Object.assign(new Error("the scene did not draw a frame in time"), { timedOut: true }));
       }, CAPTURE_MS); });
-      let stopRead;
-      const cancelled = pass && new Promise((_, reject) => {
-        stopRead = () => {
+      let stopRead = null;
+      const cancelled = (pass || studioRead) && new Promise((_, reject) => {
+        cancelStudioRead = stopRead = () => {
+          cancelStudioRead = null;
+          reject(Object.assign(new Error("Capture cancelled"), { cancelled: true }));
           gfx.cancelCapture?.("capture cancelled", owner);
-          reject(new Error("Capture cancelled"));
         };
-        pass.cancelRead = stopRead;
         // WGX submits a queued readback on a subsequent present.
-        pass.pump = !!gfx.cancelCapture;
+        if (pass) pass.pump = !!gfx.cancelCapture;
       });
       read = Promise.race(cancelled ? [read, late, cancelled] : [read, late]).finally(() => {
         clearTimeout(capTimer);
-        if (pass) { pass.pump = false; pass.cancelRead = null; }
+        if (cancelStudioRead === stopRead) cancelStudioRead = null;
+        if (pass) pass.pump = false;
       });
       try { pixels = await read; }
       catch (reason) {
-        if ((pass && activePass !== pass) || (reason && reason.timedOut)) throw reason;
+        if ((pass && activePass !== pass) || reason?.cancelled || reason?.timedOut) throw reason;
         // Native WebGPU canvases can compose directly even when a backend has
         // no readback render target. Draw and copy in this same task instead.
         Log.warn("ui", "backend readback unavailable; copying the scene canvas", reason);
@@ -853,7 +860,7 @@ function create(G, deps) {
     } finally { release(); }
   }
   async function sampledFrame(count, maxEdge, rendered) {
-    if (count === 1) return frame(null, rendered);
+    if (count === 1) return frame(null, rendered, true);
     const pass = capturePass(count);
     activePass = samplePass = pass;
     E["ps-body"].inert = true;

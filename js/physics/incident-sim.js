@@ -9,6 +9,7 @@ const IncidentSim = (function () {
   const _boundary = {}, _boundaryPost = {};
 
   let G = null;             // game.js ctx façade (live getters + trackFrom/worldFromTrack helpers)
+  let /** @type {((car: CarState) => void) | null} */ onLapInvalidated = null;
 
   // R2/R3/C1 sub-flags default ON; takeover needs debris on (apex26.debris) + Rapier — active().
   let _r2 = true;           // apex26.r2Airborne — R2 airborne / rollover
@@ -74,9 +75,10 @@ const IncidentSim = (function () {
   function fin(v) { return typeof v === "number" && Number.isFinite(v); }
   const clamp = M4.clamp;                     // shared scalar helper (js/core/mat4.js)
 
-  function create(ctx) {
+  function create(ctx, lapInvalidated = null) {
     Log.info("game", "IncidentSim.create");
     G = ctx;
+    onLapInvalidated = lapInvalidated;
     try { _r2 = (localStorage.getItem("apex26.r2Airborne") || "1") !== "0"; } catch (e) { /* storage blocked — default ON */ }
     try { _r3 = (localStorage.getItem("apex26.r3Contact") || "1") !== "0"; } catch (e) { /* storage blocked — default ON */ }
     try { _c1 = (localStorage.getItem("apex26.c1Pileup") || "1") !== "0"; } catch (e) { /* storage blocked — default ON */ }
@@ -273,6 +275,8 @@ const IncidentSim = (function () {
       _owned.add(i);
       c._incidentOwned = true;
       c.incidentInvalidLap = true;
+      // Qualifying keeps the deletion even when the driver quits before crossing the line.
+      if (onLapInvalidated) onLapInvalidated(c);
       promoted.push(i);
     }
     if (!promoted.length) return;

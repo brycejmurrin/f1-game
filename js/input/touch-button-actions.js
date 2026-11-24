@@ -53,6 +53,8 @@ const TouchButtonActions = (() => {
       else el.removeAttribute?.("data-touch-edge");
       if (profile.indicator && profile.feedback) el.setAttribute("data-touch-indicator", profile.indicator);
       else el.removeAttribute?.("data-touch-indicator");
+      if (profile.indicator === "bar" && profile.feedback && profile.fillDirection) el.setAttribute("data-touch-fill-direction", profile.fillDirection);
+      else el.removeAttribute?.("data-touch-fill-direction");
       const timing = profile.gestureTiming;
       const duration = timing && profile[timing.key];
       if (mode !== profile.activation || customMs !== duration) {

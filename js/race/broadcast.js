@@ -51,7 +51,7 @@ const Broadcast = (function () {
 
   /** Cut-time geometry only; no DOM reads, per-frame rays or simulation writes.
    * The subject is explicit: WATCH has not transferred follow ownership yet. */
-  function chooseShot(G, car, kind, onAir, n, shots, now = typeof performance !== "undefined" ? performance.now() : 0) {
+  function chooseShot(G, car, kind, onAir, n, shots, now = typeof performance !== "undefined" ? performance.now() : 0, watch = false) {
     if (!car || !G.track || !G.camVantage || typeof FlybySight === "undefined") return shotFor(kind, onAir, n, null, shots);
     const pose = G.camPoseOf ? G.camPoseOf(car) : null;
     const s = pose ? pose.s : car.s || 0, x = pose ? pose.x : car.x || 0;
@@ -62,7 +62,10 @@ const Broadcast = (function () {
     const sample = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
     if (typeof Tracks !== "undefined" && Tracks.sample) Tracks.sample(G.track, s, sample);
     const bodyY = sample.p[1] + (extra.bankDy || 0) + 0.8;
-    const aspect = typeof window !== "undefined" && window.innerWidth > 0 && window.innerHeight > 0 ? window.innerWidth / window.innerHeight : 16 / 9;
+    const viewportAspect = typeof window !== "undefined" && window.innerWidth > 0 && window.innerHeight > 0
+      ? window.innerWidth / window.innerHeight : 16 / 9;
+    const rendererAspect = watch ? G.gfx?.aspect : null;
+    const aspect = rendererAspect > 0 && Number.isFinite(rendererAspect) ? rendererAspect : viewportAspect;
     const accept = shot => {
       const solve = () => G.camVantage(shot, s, x, car.speed || 0, now, extra);
       // Probe springs must never overwrite the player's or the on-air rig's history.
@@ -73,7 +76,12 @@ const Broadcast = (function () {
       const distance = Math.hypot(point[0] - v.eye[0], point[1] - v.eye[1], point[2] - v.eye[2]);
       if (!(distance > 0.9 && distance < 250)) return false;
       if (shot !== "tcam") {
-        const p = FlybySight.project(FlybySight.camera(v.eye, v.tgt, v.fov, aspect), point);
+        // WATCH uses the fitted race lens, while the live broadcast supplies
+        // its authored lens through a debug camera.
+        const fov = watch && typeof CamFovFit !== "undefined"
+          ? CamFovFit.fitFovY(v.fov * Math.PI / 180, aspect, { boost: (v.fovBoost || 0) * Math.PI / 180 }) * 180 / Math.PI
+          : v.fov;
+        const p = FlybySight.project(FlybySight.camera(v.eye, v.tgt, fov, aspect), point);
         // Keep the subject in the central window, away from tower and transport.
         if (!p || Math.abs(p.x) > 0.55 || Math.abs(p.y) > 0.55) return false;
       }
@@ -81,7 +89,10 @@ const Broadcast = (function () {
     };
     return shotFor(kind, onAir, n, accept, shots);
   }
+  function chooseWatchShot(G, car, kind, onAir, n) {
+    return chooseShot(G, car, kind, onAir, n, undefined, undefined, true);
+  }
 
-  return { battles, shotFor, chooseShot, SHOTS, SHOT_MIN_S, SHOT_MAX_S };
+  return { battles, shotFor, chooseShot, chooseWatchShot, SHOTS, SHOT_MIN_S, SHOT_MAX_S };
 })();
 Object.freeze(Broadcast);
