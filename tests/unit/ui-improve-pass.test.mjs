@@ -1037,16 +1037,16 @@ test("camera picker is a keyboard radio menu and cannot outlive the race layer",
   assert.equal(picker.className, "balanced-row", "the picker balances from local space like every other cluster");
   assert.equal(picker.hidden, false);
   assert.equal(h.trigger.getAttribute("aria-expanded"), "true");
-  assert.ok(picker.children.length >= 10 && picker.children.every((b) => b.getAttribute("role") === "menuitemradio"));
-  assert.deepEqual(picker.children.map((b) => b.getAttribute("aria-checked") === "true"), picker.children.map((_, i) => i === 2), "only the live mode is aria-checked");
-  assert.equal(h.active(), picker.children[2], "opening focuses the checked item");
-  h.key(picker, "ArrowRight"); assert.equal(h.active(), picker.children[3]);
-  h.key(picker, "ArrowDown");  assert.equal(h.active(), picker.children[4]);
-  h.key(picker, "ArrowLeft");  assert.equal(h.active(), picker.children[3]);
-  h.key(picker, "ArrowUp");    assert.equal(h.active(), picker.children[2]);
-  h.key(picker, "End");        assert.equal(h.active(), picker.children[picker.children.length - 1]);
-  h.key(picker, "ArrowRight"); assert.equal(h.active(), picker.children[0], "wraps");
-  h.key(picker, "Home");       assert.equal(h.active(), picker.children[0]);
+  const items = picker.children.filter(b => !b.hidden);
+  const selected = items.find(b => b.getAttribute("aria-checked") === "true");
+  assert.equal(selected.dataset.mode, "drift");
+  assert.equal(h.active(), selected, "opening focuses the checked item");
+  const at = items.indexOf(selected);
+  h.key(picker, "ArrowRight"); assert.equal(h.active(), items[(at + 1) % items.length]);
+  h.key(picker, "ArrowLeft"); assert.equal(h.active(), selected);
+  h.key(picker, "End"); assert.equal(h.active(), items.at(-1));
+  h.key(picker, "ArrowRight"); assert.equal(h.active(), items[0], "wraps");
+  h.key(picker, "Home"); assert.equal(h.active(), items[0]);
   h.key(picker, "Escape");
   assert.equal(picker.hidden, true, "Escape closes the picker");
   assert.equal(h.trigger.getAttribute("aria-expanded"), "false");
@@ -1114,20 +1114,20 @@ test("in a REAL RACE WATCH the picker and the C cycle carry AUTO (the TV directo
   assert.equal(picker.children[0].dataset.idx, "auto", "AUTO heads the list");
   assert.equal(picker.children[0].getAttribute("aria-checked"), "true", "the director has the picture: AUTO is the checked item");
   assert.equal(picker.children.filter((b) => b.getAttribute("aria-checked") === "true").length, 1);
-  picker.children[4].onclick({ stopPropagation() {} });   // a shot: the viewer takes the picture
+  picker.children.find(b => b.dataset.mode === "cockpit").onclick({ stopPropagation() {} });   // a shot: the viewer takes the picture
   assert.deepEqual(calls, ["take"]);
   assert.equal(h.G.camMode, 3);
   assert.equal(h.trigger.textContent.startsWith("AUTO"), false);
   picker = h.open();
   assert.equal(picker.children[0].getAttribute("aria-checked"), "false");
-  assert.equal(picker.children[4].getAttribute("aria-checked"), "true");
+  assert.equal(picker.children.find(b => b.dataset.mode === "cockpit").getAttribute("aria-checked"), "true");
   picker.children[0].onclick({ stopPropagation() {} });
   assert.deepEqual(calls, ["take", "auto"]);
   assert.match(h.trigger.textContent, /^AUTO · /, "the CAM button says who has the picture");
   // The C cycle: from AUTO the next shot is the viewer's; past the last shot, AUTO again.
   h.api.cycleCam();
   assert.equal(r.auto, false);
-  h.G.camMode = h.open().children.length - 2;   // the last CAM_MODES entry
+  h.G.camMode = 18;   // Helmet, the last runtime CAM_MODES entry
   h.api.hideCamPicker();
   assert.equal(h.api.cycleCam(), "auto");
   assert.equal(r.auto, true);

@@ -10,7 +10,13 @@ const CamPicker = (function () {
     const camTrigger = $("btn-cam");
     let cancelCamHold = () => {};
     const camPicker = (() => {
-      let el = null;
+      let el = null, group = "drive", wheelRow = null, wheelTab = null;
+      const groups = host.PICKER_GROUPS;
+      const focusItems = () => [...el.querySelectorAll('button')].filter(b => !b.hidden && !(b.dataset.wheelValue && wheelRow.hidden));
+      const modeGroup = () => {
+        const id = CAM_MODES[G.camMode].id;
+        return groups.find(g => g.modes.includes(id))?.id || "drive";
+      };
       const build = () => {
         el = document.createElement("div");
         el.id = "campicker";
@@ -18,19 +24,45 @@ const CamPicker = (function () {
         el.setAttribute("aria-label", "Camera view");
         el.className = "balanced-row";
         el.hidden = true;
-        for (let i = 0; i < CAM_MODES.length; i++) {
-          const b = document.createElement("button");
-          b.textContent = CAM_MODES[i].label;
-          b.dataset.idx = i;
-          b.setAttribute("role", "menuitemradio");
-          b.tabIndex = -1;
-          b.onclick = (e) => {
-            e.stopPropagation(); pickCam(+b.dataset.idx); hide(); camTrigger?.focus();
+        for (const g of groups) {
+          const tab = document.createElement("button");
+          tab.textContent = g.label; tab.dataset.category = g.id;
+          tab.setAttribute("role", "menuitem"); tab.tabIndex = -1;
+          tab.onclick = e => { e.stopPropagation(); group = g.id; sync(); tab.focus(); };
+          el.appendChild(tab);
+        }
+        for (const g of groups) for (const id of g.modes) {
+          const i = CAM_MODES.findIndex(m => m.id === id), b = document.createElement("button");
+          b.textContent = g.id === "chase" ? ({ chase: "NEAR", far: "FAR", drift: "ACTION", low: "LOW · ADVANCED" })[id] : CAM_MODES[i].label;
+          b.dataset.idx = String(i); b.dataset.group = g.id; b.dataset.mode = id;
+          b.setAttribute("role", "menuitemradio"); b.tabIndex = -1;
+          b.onclick = e => {
+            e.stopPropagation(); pickCam(g.id === "drive" && id === "chase" ? host.chaseMode() : i);
+            hide(); camTrigger?.focus();
           };
           el.appendChild(b);
         }
+        if (typeof CockpitOpts !== "undefined") {
+          wheelTab = document.createElement("button"); wheelTab.textContent = "WHEEL";
+          wheelTab.dataset.category = "wheel"; wheelTab.setAttribute("role", "menuitem"); wheelTab.tabIndex = -1;
+          wheelTab.onclick = e => { e.stopPropagation(); group = "wheel"; sync(); wheelTab.focus(); };
+          el.insertBefore(wheelTab, el.children[groups.length]);
+          wheelRow = document.createElement("div"); wheelRow.dataset.wheel = "";
+          wheelRow.setAttribute("role", "group"); wheelRow.setAttribute("aria-label", "Steering wheel");
+          const title = document.createElement("span"); title.textContent = "STEERING WHEEL";
+          wheelRow.appendChild(title);
+          for (const id of CockpitOpts.WHEELS) {
+            const button = document.createElement("button"); button.dataset.wheelValue = id;
+            button.textContent = id === "none" ? "HIDDEN" : CockpitOpts.CHOICES.wheel.labels[id];
+            button.setAttribute("role", "menuitemradio"); button.tabIndex = -1;
+            button.onclick = e => { e.stopPropagation(); CockpitOpts.setWheel(id); sync(); };
+            wheelRow.appendChild(button);
+          }
+          el.appendChild(wheelRow);
+        }
+
         el.addEventListener("keydown", (e) => {
-          const items = [...el.querySelectorAll('[role="menuitemradio"]')];
+          const items = focusItems();
           const at = items.indexOf(document.activeElement);
           let next = -1;
           if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (at + 1) % items.length;
@@ -64,20 +96,34 @@ const CamPicker = (function () {
         syncAuto(r);
         const auto = !!(r && r.autoOn());
         for (const b of el.children) {
+          if (b.dataset.category) {
+            b.setAttribute("aria-expanded", String(b.dataset.category === group));
+            continue;
+          }
           if (b.getAttribute("role") !== "menuitemradio") continue;
-          const on = b === autoBtn ? auto : !auto && +b.dataset.idx === G.camMode;
-          b.classList.toggle("active", on);
-          b.setAttribute("aria-checked", on ? "true" : "false");
+          b.hidden = b !== autoBtn && b.dataset.group !== group;
+          const family = b.dataset.group === "drive" && b.dataset.mode === "chase";
+          const on = b === autoBtn ? auto : !auto && (family ? groups[1].modes.includes(CAM_MODES[G.camMode].id) : +b.dataset.idx === G.camMode);
+          b.classList.toggle("active", on && !b.hidden);
+          b.setAttribute("aria-checked", on && !b.hidden ? "true" : "false");
+        }
+        if (wheelRow) {
+          wheelTab.hidden = !["cockpit", "helmet"].includes(CAM_MODES[G.camMode].id);
+          wheelRow.hidden = wheelTab.hidden || group !== "wheel";
+          for (const b of wheelRow.querySelectorAll("button")) {
+            const on = b.dataset.wheelValue === CockpitOpts.wheel();
+            b.setAttribute("aria-checked", String(on)); b.classList.toggle("active", on);
+          }
         }
       };
       const show = () => {
         if (document.hidden || G.paused || (G.state !== "race" && G.state !== "count") ||
             document.body.classList.contains("hud-hidden") || document.body.classList.contains("lt-open")) return false;
         if (!el) build();
-        sync();
+        group = modeGroup(); sync();
         el.hidden = false;
         camTrigger?.setAttribute("aria-expanded", "true");
-        el.querySelector('[aria-checked="true"]')?.focus();
+        (focusItems().find(b => b.getAttribute("aria-checked") === "true") || focusItems()[0])?.focus();
         return true;
       };
       const hide = () => {

@@ -198,6 +198,7 @@ const SPEC = [
   { k: "helmetVisorDropSize", lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js visorDropSize (percent,50–200)" },
   { k: "helmetVisorRunoff", lane: "raw", group: "camera", def: "normal", src: "js/camera/cockpit-opts.js CHOICES.visorRunoff", oneOf: ["normal", "slow", "fast"] },
   { k: "camMode", lane: "json", group: "camera", def: 19, src: "js/camera/mode-switch.js (saved camera number)" },
+  { k: "camChasePreset", lane: "json", group: "camera", def: "chase", oneOf: ["chase", "far", "drift", "low"], src: "js/camera/mode-switch.js Chase preset" },
   { k: "pitCamAuto", lane: "json", group: "camera", def: false, src: "js/camera/extra-rigs.js (opt-in auto-cut to PIT WALL in pits)" },
   { k: "pitEntryShot", lane: "json", group: "camera", def: true, src: "js/camera/extra-rigs.js PIT ENTRY SHOT (feel.js row; #4745)" },
   { k: "camTune", mergeDepth: 2, lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js CAM_TUNE_DEFS (geometric knobs def 0; cornerLead def 0.54; the file holds {mode:{knob:value}} edits)" },

@@ -183,9 +183,9 @@ test("heli and TV side: straight-road pose (eye height, back/out offsets, aim)",
   near(side.eye[2], s - 6, "side eye 6 m behind the car");
   near(side.eye[0], 14, "side eye 14 m out");
   near(side.eye[1], Y + 3.2, "side eye 3.2 m up");
-  near(side.tgt[2], s + 14, "side aims 14 m up the road: the car leads the frame");
-  near(side.tgt[0], x * 0.3, "side aim keeps 0.3 of the car's lateral");
-  near(side.tgt[1], Y + 0.7, "side aim 0.7 m up");
+  near(side.tgt[2], s, "side keeps the subject in frame");
+  near(side.tgt[0], x, "side aim follows the car lateral");
+  near(side.tgt[1], Y + 0.8, "side aims at the body");
   near(side.fov, 44, "side lens (no CamFeel)");
   // Street circuit (hw 6 → corridor 5 m): the lost width is traded for height.
   const heliSt = pose(true, "heli"), sideSt = pose(true, "side");

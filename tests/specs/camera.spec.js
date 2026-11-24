@@ -25,20 +25,20 @@ test.describe("Apex 26 — player camera modes", () => {
     expect(r.bad).toBe(false);            // unknown mode is rejected, not crashed
   });
 
-  test("the CAM button cycles through every mode and wraps", async ({ page, loadTrack }) => {
+  test("the CAM button cycles through driving views and wraps", async ({ page, loadTrack }) => {
     await loadTrack("monza", "day", "dry", { headless: true });
     const seq = await page.evaluate(() => {
       window.__apex.camera(0);            // start at chase
       const out = [];
       const btn = document.getElementById("btn-cam");
-      const count = window.__apex.camera().modes.length;
+      const count = 6;
       for (let i = 0; i < count + 1; i++) {   // all modes + wrap back to the first
         out.push(window.__apex.camera().mode);
         btn.click();
       }
       return out;
     });
-    expect(seq).toEqual(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear", "trackside", "rival", "pitwall", "drone", "tv", "helmet", "chase"]);
+    expect(seq).toEqual(["chase", "cockpit", "helmet", "tcam", "hood", "overhead", "chase"]);
   });
 
   test("camera choice persists across a reload", async ({ page, loadTrack }) => {

@@ -31,6 +31,14 @@ window.CamModes = (function () {
       : slot > VISOR_SLOT ? slot - 1 : slot;
   }
   const toSaved = index => index >= VISOR_SLOT ? index + 1 : index;
+  const DRIVE = Object.freeze(["chase", "cockpit", "helmet", "tcam", "hood", "overhead"]);
+  const CHASE = Object.freeze(["chase", "far", "drift", "low"]);
+  const PICKER_GROUPS = Object.freeze([
+    { id: "drive", label: "DRIVING", modes: DRIVE },
+    { id: "chase", label: "CHASE PRESETS", modes: CHASE },
+    { id: "aerial", label: "AERIAL", modes: ["overhead", "heli", "drone"] },
+    { id: "broadcast", label: "BROADCAST", modes: ["reverse", "rear", "side", "cinematic", "trackside", "rival", "pitwall", "tv"] },
+  ]);
   const HOLD_MS = 340;   // CAM button hold before the picker opens
 
   function create(G) {
@@ -138,8 +146,10 @@ window.CamModes = (function () {
       // write apex26.camMode so EXIT VR restores the player's saved choice.
       const replay = typeof RealRace !== "undefined" && RealRace.replay ? RealRace.replay() : null;
       if (!owner && !(opts && opts.persist === false) && !(replay && replay.isRunning())) {
+        const preset = [CAM_MODES[G.camMode]?.id, CAM_MODES[baseCamera]?.id].find(id => CHASE.includes(id));
         baseCamera = G.camMode;
         G.store.set("camMode", toSaved(G.camMode));
+        if (preset) G.store.set("camChasePreset", preset);
       }
       if (G.camMode !== prev) {
         G.camCutT = (CAM_MODES[G.camMode] || CAM_MODES[0]).cut ?? 0.35;   // cut: 0 is an instant cut, not missing
@@ -168,15 +178,24 @@ window.CamModes = (function () {
     function toAuto() { const r = watchReplay(); if (r) { r.setAuto(true); refreshCamBtn(); } return "auto"; }
     // In a WATCH the cycle runs the shots and then AUTO (where it would wrap);
     // from AUTO the next press is the next shot, the viewer's.
+    function chaseMode() {
+      const current = CAM_MODES[G.camMode].id;
+      const saved = CHASE.includes(current) ? current : G.store.get?.("camChasePreset", "chase");
+      return CAM_MODES.findIndex(m => m.id === (CHASE.includes(saved) ? saved : "chase"));
+    }
     function cycleCam() {
       // CAM / C during a shot dismisses it and is spent: back on the camera the player chose, nothing saved (#5585).
       if (endShots()) { const top = pictureOwner(); return setCamMode(top ? top.idx : baseCamera, { persist: false }); }
       const r = watchReplay();
       if (r && !r.autoOn() && G.camMode === CAM_MODES.length - 1) return toAuto();
-      return r ? pickCam(G.camMode + 1) : setCamMode(G.camMode + 1);
+      if (r) return pickCam(G.camMode + 1);
+      const current = CAM_MODES[G.camMode].id;
+      const at = DRIVE.indexOf(CHASE.includes(current) ? "chase" : current);
+      const next = DRIVE[(at + 1) % DRIVE.length];
+      return setCamMode(next === "chase" ? chaseMode() : CAM_MODES.findIndex(m => m.id === next));
     }
 
-    const camUi = CamPicker.attach({ G, $, CAM_MODES, HOLD_MS, watchReplay, pickCam, toAuto, cycleCam });
+    const camUi = CamPicker.attach({ G, $, CAM_MODES, HOLD_MS, watchReplay, pickCam, toAuto, cycleCam, chaseMode, PICKER_GROUPS });
     refreshCamBtn();
     // A WHEEL change mid-race flips whether the HUD shows gear and speed.
     if (typeof CockpitOpts !== "undefined") CockpitOpts.onWheel(refreshCamBtn);
@@ -191,5 +210,5 @@ window.CamModes = (function () {
     return { refreshCamBtn, setCamMode, cycleCam, hideCamPicker: camUi.hide };
   }
 
-  return { CAM_MODES, fromSaved, toSaved, create };
+  return { CAM_MODES, fromSaved, toSaved, DRIVE, CHASE, PICKER_GROUPS, create };
 })();

@@ -669,3 +669,13 @@ test("the render loop keeps a remote TV/results subject even beyond the player's
     assert.deepEqual(Array.from(ctx.seen), ["ME", "NEAR", "FAR"], "a camera override is independent of player location");
   }
 });
+
+
+test("manual side and cinematic cameras frame the body without a director override", () => {
+  const { G } = realCamScene();
+  for (const mode of ["side", "cinematic"]) for (const x of [-10, 0, 10]) {
+    const v = G.camVantage(mode, 1000, x, 60, 0, { carPos: [x, 1000], frameSubject: false, snap: true });
+    assert.ok(Math.abs(v.tgt[0] - x) < 1e-8);
+    assert.ok(Math.abs(v.tgt[2] - 1000) < 1e-8);
+  }
+});
