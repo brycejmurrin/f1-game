@@ -107,7 +107,7 @@ const TracksideCams = (function () {
     const idx = pick(cams, s, track.total, prev, extra && extra.snap);
     track._tsIdx = idx;
     const c = cams[idx];
-    const cut = idx !== prev;
+    let cut = idx !== prev;
     _eye[0] = c.eye[0]; _eye[1] = c.eye[1]; _eye[2] = c.eye[2];
     if (extra && extra.carPos) {
       // vantage free-world path passes [px, pz]; keep a 3-vector path for tests.
@@ -126,7 +126,25 @@ const TracksideCams = (function () {
     // a fisheye when it passes the camera. Hold ~FOV_SPAN metres of circuit
     // in frame and clamp so neither end blows out. `cut` is the auto-switch:
     // the live rig snaps instead of damping across the circuit.
-    const dist = Math.hypot(_tgt[0] - _eye[0], _tgt[1] - _eye[1], _tgt[2] - _eye[2]) || 1;
+    let dist = Math.hypot(_tgt[0] - _eye[0], _tgt[1] - _eye[1], _tgt[2] - _eye[2]) || 1;
+    // A previous-lap corner can be kilometres away on a long straight. Keep
+    // the car readable without widening every gameplay camera's far plane.
+    const sight = track._tsSight || (track._tsSight = { index: -1, x: 0, z: 0, clear: true });
+    if (sight.index !== idx || extra?.snap || Math.hypot(_tgt[0] - sight.x, _tgt[2] - sight.z) >= 5) {
+      sight.index = idx; sight.x = _tgt[0]; sight.z = _tgt[2];
+      sight.clear = dist <= 250 && (typeof FlybySight === "undefined" || FlybySight.transmit(track, _eye, _tgt).Tdrawn >= 0.35);
+    }
+    const fallback = dist > 250 || !sight.clear;
+    if (fallback) {
+      // Nearby coverage stays over the road instead of looking through trees
+      // from a distant fixed corner. The original fixed shot resumes when clear.
+      Tracks.sample(track, wrapS(track, s - 10), _smp);
+      _eye[0] = _smp.p[0]; _eye[1] = _smp.p[1] + 6; _eye[2] = _smp.p[2];
+      if (typeof CamAvoid !== "undefined") CamAvoid.freeEye(track, _eye, _smp);
+      dist = Math.hypot(_tgt[0] - _eye[0], _tgt[1] - _eye[1], _tgt[2] - _eye[2]) || 1;
+    }
+    cut = cut || (track._tsFallback != null && track._tsFallback !== fallback);
+    track._tsFallback = fallback;
     let fov = 2 * Math.atan((FOV_SPAN * 0.5) / dist) * (180 / Math.PI);
     if (fov < FOV_FAR) fov = FOV_FAR;
     if (fov > FOV_NEAR) fov = FOV_NEAR;
@@ -135,7 +153,7 @@ const TracksideCams = (function () {
   }
 
   /** A restart / seek is a CUT: forget the held cam so hysteresis cannot keep the old one. */
-  function reset(track) { if (track) track._tsIdx = 0; }
+  function reset(track) { if (track) { track._tsIdx = 0; track._tsSight = null; track._tsFallback = null; } }
 
   function status(track) {
     if (!track) return { count: 0, index: 0 };

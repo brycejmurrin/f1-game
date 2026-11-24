@@ -682,7 +682,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
       : lerp(57, 63, spFov) + (far ? 4 : 0) + dep * 3;
   }
   // Start coverage on the body; explicit tuner aim and local look remain additive.
-  if (extra.frameSubject && (mode === "chase" || mode === "side" || mode === "heli" || mode === "cinematic")) {
+  if (mode === "side" || mode === "cinematic" || (extra.frameSubject && (mode === "chase" || mode === "heli"))) {
     tgt[0] = extra.carPos ? extra.carPos[0] : p[0];
     tgt[1] = p[1] + 0.8;
     tgt[2] = extra.carPos ? extra.carPos[1] : p[2];

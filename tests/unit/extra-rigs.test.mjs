@@ -318,7 +318,7 @@ test("pit-entry shot: a CAM press dismisses it and is spent — the saved camera
   r.tick(2400);                            // past PE_S: a late release changes nothing
   assert.equal(r.G.camMode, 0); assert.equal(r.saved.get("camMode"), 0);
   r.cams.cycleCam();                       // the next press is an ordinary cycle from the player's camera
-  assert.equal(r.G.camMode, 1); assert.equal(r.saved.get("camMode"), 1, "CHASE -> FAR, saved");
+  assert.equal(r.G.camMode, 3); assert.equal(r.saved.get("camMode"), 3, "CHASE -> COCKPIT, saved");
 });
 
 test("pit-entry shot: left alone it hands back the player's camera, and the saved choice never moved (#5585)", () => {

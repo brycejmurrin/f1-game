@@ -306,7 +306,8 @@ test("custom camera gestures share the picker hold and cancel with the camera sc
   // The action recognizer captures each pointer before the CAM button's ordinary listener.
   const register = el.addEventListener.bind(el);
   el.addEventListener = (type, fn, capture) => capture ? handlers.set(type, fn) : register(type, fn);
-  const camera = picker.attach({ $: () => el, G: { state: "race" }, CAM_MODES: [{ label: "Helmet" }],
+  const camera = picker.attach({ $: () => el, G: { state: "race", camMode: 0 }, CAM_MODES: [{ id: "helmet", label: "Helmet" }],
+    PICKER_GROUPS: [{ id: "drive", label: "Driving", modes: ["helmet"] }],
     watchReplay: () => null, HOLD_MS: 340, cycleCam: () => cycles++ });
   actions.bindControl(el, "camera");
   el.click = () => el.onclick();

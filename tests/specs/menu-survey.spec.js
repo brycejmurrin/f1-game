@@ -275,9 +275,9 @@ test.describe("Menu survey — in-race HUD + controls (landscape)", () => {
     await awaitRenderFrames(page, 2);   // the jumped pose is on screen
     await page.locator("#btn-cam").dispatchEvent("contextmenu");   // long-press equivalent
     await page.locator("#campicker").waitFor({ state: "visible" });
-    // The grid built a button per camera mode and highlights exactly the current one.
+    // Camera groups highlight one active camera; the wheel group has its own selection.
     expect(await page.locator("#campicker button").count()).toBeGreaterThanOrEqual(10);
-    expect(await page.locator("#campicker button.active").count()).toBe(1);
+    expect(await page.locator("#campicker > button.active").count()).toBe(1);
     await shot(page, "landscape-43-camera-picker");
   });
 });

@@ -422,7 +422,7 @@ test("CamModes.setCamMode({persist:false}) skips store.write", () => {
   assert.equal(writes.length, 0);
   api.setCamMode(1);
   assert.equal(G.camMode, 1);
-  assert.deepEqual(writes, [["camMode", 1]]);
+  assert.deepEqual(writes, [["camMode", 1], ["camChasePreset", "far"]]);
 });
 
 test("XrUi.mount creates hidden #xr-enter until capability probe says yes", () => {

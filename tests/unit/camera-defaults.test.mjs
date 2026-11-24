@@ -51,18 +51,19 @@ test("CAM touch release preserves the long-press picker; cancelled holds never c
       assert.equal(timers.size, 0, "abandoned holds cannot open later");
     }
     fire("pointerdown"); fire("pointerup"); fire("lostpointercapture"); button.onclick();
-    assert.equal(G.camMode, 1, "the next short tap still cycles");
+    assert.equal(G.camMode, 3, "the next short tap still cycles");
   }
 });
 
 // UI hunt 2026-10-29 rows 2-3: a tap whose pointerup queued behind a long frame
 // (timer first) opened the picker; an open picker outlived its hidden button.
-function camHarness() {
+function camHarness(extra = {}) {
   const dom = makeDom(), timers = new Map(), observers = [];
   let serial = 0;
   const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} },
     setTimeout(fn) { timers.set(++serial, fn); return serial; }, clearTimeout(id) { timers.delete(id); },
     MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe(el, opts) { this.el = el; this.opts = opts; } } };
+  Object.assign(ctx, extra);
   ctx.window = ctx; ctx.addEventListener = () => {};
   vm.runInNewContext(fs.readFileSync(path.join(root, "js/input/pedal-travel.js"), "utf8"), ctx, { filename: absSrc("js/input/pedal-travel.js") });
   vm.runInNewContext(fs.readFileSync(path.join(root, "js/input/hold-buttons.js"), "utf8"), ctx, { filename: absSrc("js/input/hold-buttons.js") });
@@ -83,7 +84,7 @@ test("End focuses the last camera without changing the current view", () => {
   h.fire("pointerdown", 0); h.runTimers(); h.fire("pointerup", 500);
   const menu = h.dom.byId("campicker"), before = h.G.camMode;
   h.dom.dispatch(menu, {type:"keydown", key:"End"});
-  assert.equal(h.dom.document.activeElement, menu.querySelectorAll('[role="menuitemradio"]').at(-1));
+  assert.equal(h.dom.document.activeElement, menu.querySelectorAll('[role="menuitemradio"]').filter(b => !b.hidden).at(-1));
   assert.equal(h.G.camMode, before);
 });
 
@@ -93,11 +94,11 @@ test("CAM hold is judged by event times: a late-delivered short tap cycles, a re
   assert.equal(h.dom.byId("campicker").hidden, false);
   h.fire("pointerup", 1080); h.fire("lostpointercapture");
   assert.equal(h.dom.byId("campicker").hidden, true, "an 80 ms press is a tap, not a hold");
-  assert.equal(h.G.camMode, 1, "…and the tap cycles the camera");
+  assert.equal(h.G.camMode, 3, "…and the tap cycles the camera");
   h.fire("pointerdown", 5000); h.runTimers();
   h.fire("pointerup", 5700); h.fire("lostpointercapture");
   assert.equal(h.dom.byId("campicker").hidden, false, "a 700 ms press keeps the picker");
-  assert.equal(h.G.camMode, 1);
+  assert.equal(h.G.camMode, 3);
 });
 
 test("an open CAM picker hides when #btn-cam hides (race end), not only on pause", () => {
@@ -119,7 +120,7 @@ test("setCamMode refuses NaN / Infinity so a poisoned index cannot stick", () =>
   ctx.window = ctx;
   vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/cam-picker.js"), "utf8"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
     vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
-  const G = { $: dom.byId, camMode: 3, store: { set(_k, v) { stored.push(v); } }, state: "race", camCutT: 0 };
+  const G = { $: dom.byId, camMode: 3, store: { set(k, v) { if (k === "camMode") stored.push(v); } }, state: "race", camCutT: 0 };
   const cams = ctx.CamModes.create(G);
   const n = ctx.CamModes.CAM_MODES.length;
   assert.equal(cams.setCamMode(NaN), ctx.CamModes.CAM_MODES[3].id, "NaN keeps the current mode");
@@ -970,7 +971,7 @@ test("pending CAM hold is retired on pause/hide/quit, hidden page and blur witho
     dom.document.hidden = false; G.state = "race"; G.paused = false;
     fire("pointerup"); fire("lostpointercapture");
     fire("pointerdown"); fire("pointerup"); fire("lostpointercapture"); button.onclick();
-    assert.equal(G.camMode, 1, ending + " does not consume the next genuine short tap");
+    assert.equal(G.camMode, 3, ending + " does not consume the next genuine short tap");
   }
 });
 
@@ -1001,15 +1002,15 @@ test("CAM context-menu and late hold cannot open on a paused, hidden or non-race
 test("CAM secondary contact cycles without a native click and preserves long press", () => {
   const h = camHarness(), extra = { isPrimary: false };
   h.fire("pointerdown", 1000, extra); h.fire("pointerup", 1080, extra);
-  assert.equal(h.G.camMode, 1, "a second finger changes camera while the first stays held");
+  assert.equal(h.G.camMode, 3, "a second finger changes camera while the first stays held");
   h.fire("pointerdown", 2000, extra); h.runTimers(); h.fire("pointerup", 2700, extra);
-  assert.equal(h.G.camMode, 1, "long press opens the picker without cycling");
+  assert.equal(h.G.camMode, 3, "long press opens the picker without cycling");
   assert.equal(h.dom.byId("campicker").hidden, false);
   h.cams.hideCamPicker();
   h.fire("pointerdown", 3000, extra); h.runTimers(); h.fire("pointerup", 3080, extra);
-  assert.equal(h.G.camMode, 2, "an event-time short tap still cycles if a delayed timer fired first");
+  assert.equal(h.G.camMode, h.ctx.CamModes.CAM_MODES.findIndex(m => m.id === "helmet"), "an event-time short tap still cycles if a delayed timer fired first");
   h.fire("pointerdown", 4000, extra); h.fire("pointercancel", 4040, extra); h.fire("pointerup", 4080, extra);
-  assert.equal(h.G.camMode, 2, "cancelled secondary gestures cannot cycle");
+  assert.equal(h.G.camMode, h.ctx.CamModes.CAM_MODES.findIndex(m => m.id === "helmet"), "cancelled secondary gestures cannot cycle");
 });
 
 test("M4.lookAtTo keeps an orthonormal basis when eye coincides with target", () => {
@@ -1024,4 +1025,84 @@ test("M4.lookAtTo keeps an orthonormal basis when eye coincides with target", ()
   const z = Math.hypot(out[2], out[6], out[10]);
   assert.ok(Math.abs(x - 1) < 1e-5 && Math.abs(y - 1) < 1e-5 && Math.abs(z - 1) < 1e-5,
     "eye==target must not collapse the view basis to zeroes");
+});
+
+
+test("driving cycle has six views, remembers Chase presets, and keeps legacy saves", () => {
+  const h = camHarness(), M = h.ctx.CamModes, saved = {};
+  h.G.store = { get: (k, d) => saved[k] ?? d, set: (k, v) => { saved[k] = v; } };
+  const idx = id => M.CAM_MODES.findIndex(m => m.id === id);
+  h.cams.setCamMode(idx("far"));
+  const cycle = Array.from({ length: 6 }, () => h.cams.cycleCam());
+  assert.deepEqual(cycle, ["cockpit", "helmet", "tcam", "hood", "overhead", "far"]);
+  assert.equal(saved.camChasePreset, "far");
+  assert.equal(saved.camMode, M.toSaved(idx("far")));
+  h.cams.setCamMode(idx("drift"), { owner: {}, transient: true });
+  assert.equal(saved.camChasePreset, "far", "temporary views cannot overwrite a driving preset");
+  assert.equal(h.cams.cycleCam(), "far", "first tap dismisses a temporary shot");
+  assert.equal(M.CAM_MODES[M.fromSaved(13)].id, "helmet");
+  for (const id of ["trackside", "tv", "helmet", "far"]) assert.equal(M.fromSaved(M.toSaved(idx(id))), idx(id));
+});
+
+test("camera picker groups expose all rigs without putting broadcast into the driving cycle", () => {
+  const h = camHarness(); h.fire("contextmenu", 0);
+  const menu = h.dom.byId("campicker");
+  const visible = () => menu.children.filter(b => b.getAttribute("role") === "menuitemradio" && !b.hidden);
+  assert.equal(visible().length, 6);
+  const category = id => menu.children.find(b => b.dataset.category === id);
+  category("chase").onclick({ stopPropagation() {} });
+  assert.deepEqual(visible().map(b => b.textContent), ["NEAR", "FAR", "ACTION", "LOW · ADVANCED"]);
+  visible().find(b => b.dataset.mode === "far").onclick({ stopPropagation() {} });
+  assert.equal(h.G.camMode, 1);
+  h.fire("contextmenu", 1000); category("broadcast").onclick({ stopPropagation() {} });
+  assert.equal(visible().length, 8);
+  assert.ok(visible().some(b => b.dataset.mode === "trackside"));
+  h.dom.dispatch(menu, { type: "keydown", key: "End" });
+  assert.equal(h.dom.document.activeElement.dataset.mode, "tv");
+});
+
+
+test("cycling a legacy Far boot remembers the preset without an explicit reselect", () => {
+  const h = camHarness(), saved = new Map();
+  h.G.store = { get: (k, d) => saved.get(k) ?? d, set: (k, v) => saved.set(k, v) };
+  // Recreate on the loaded legacy camera, as game boot does.
+  h.G.camMode = h.ctx.CamModes.fromSaved(1);
+  const cams = h.ctx.CamModes.create(h.G);
+  for (let i = 0; i < 6; i++) cams.cycleCam();
+  assert.equal(h.ctx.CamModes.CAM_MODES[h.G.camMode].id, "far");
+});
+
+test("onboard picker reuses wheel styles and hides the control for external views", () => {
+  let wheel = "classic";
+  const h = camHarness({ CockpitOpts: {
+    WHEELS: ["classic", "none"], CHOICES: { wheel: { labels: { classic: "CLASSIC" } } },
+    wheel: () => wheel, setWheel: value => { wheel = value; }, wheelHasScreen: () => false, onWheel() {},
+  } });
+  h.cams.setCamMode(3);
+  h.dom.dispatch(h.button, {type:"contextmenu"});
+  const menu = h.dom.byId("campicker"), row = menu.children.find(b => b.dataset.wheel === "");
+  const wheelTab = menu.children.find(b => b.dataset.category === "wheel");
+  assert.equal(wheelTab.hidden, false);
+  wheelTab.onclick({ stopPropagation() {} });
+  assert.equal(row.hidden, false);
+  const buttons = row.querySelectorAll("button");
+  assert.equal(buttons[0].getAttribute("aria-checked"), "true");
+  buttons[1].onclick({ stopPropagation() {} }); assert.equal(wheel, "none");
+  h.dom.dispatch(menu, {type:"keydown", key:"End"});
+  assert.equal(h.dom.document.activeElement, buttons[1], "wheel controls participate in keyboard navigation");
+  buttons[0].onclick({ stopPropagation() {} }); assert.equal(wheel, "classic");
+  h.cams.hideCamPicker(); h.cams.setCamMode(0);
+  h.dom.dispatch(h.button, {type:"contextmenu"});
+  assert.equal(row.hidden, true);
+});
+
+
+test("phone ownership does not replace the remembered Chase preset", () => {
+  const h = camHarness(), saved = new Map();
+  h.G.store = { get: (k, d) => saved.get(k) ?? d, set: (k, v) => saved.set(k, v) };
+  h.cams.setCamMode(1);
+  h.cams.setCamMode(18, {owner:"phone", priority:10});
+  h.cams.setCamMode(3);
+  h.cams.setCamMode(0, {owner:"phone", release:true});
+  assert.equal(saved.get("camChasePreset"), "far");
 });
