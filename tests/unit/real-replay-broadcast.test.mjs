@@ -10,6 +10,7 @@ const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 import { ROOT, host, scriptIn, line, loadReplayBroadcast, transportReplay } from "../helpers/real-replay-fixtures.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadRig, makeTrack, runFiles } from "../helpers/camera-rig.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
 test("WATCH opens a late lap on a running car when the selected driver's trace has ended", () => {
@@ -630,4 +631,43 @@ test('WATCH probes only at eligible cuts and uses the incoming driver', () => {
   probed.length=0;bc.setLocked(true);st.T=25;bc.tick(20,st);assert.equal(probed.length,0);
   bc.setAuto(true);xr=true;bc.tick(20,st);assert.equal(probed.length,0);
   xr=false;bc.manual();bc.tick(1,st);assert.equal(probed.length,0);bc.stop();
+});
+
+test("WATCH AUTO rejects an authored angle that the fitted race lens crops", () => {
+  const aspect = 852 / 393;
+  const viewport = { innerWidth: 852, innerHeight: 393 };
+  const { ctx, cams } = loadRig({ window: viewport,
+    GameStore: { store: { get(_key, value) { return value; }, set() { return true; } } } });
+  runFiles(ctx, ["js/camera/offsets.js", "js/camera/flyby-sight.js", "js/camera/fov-fit.js"]);
+  const replayBroadcast = loadReplayBroadcast(ctx);
+  const tune = vm.runInContext("CamTune", ctx);
+  const broadcast = vm.runInContext("Broadcast", ctx);
+  const sight = vm.runInContext("FlybySight", ctx);
+  const fit = vm.runInContext("CamFovFit", ctx);
+  tune.set("side", "pitch", 26.75);
+  tune.set("side", "fov", 35);
+  ctx.CamModes = { CAM_MODES: [{ id: "side" }, { id: "chase" }] };
+  const track = makeTrack([[1000, 0]]);
+  const car = { s: 500, x: 0, px: 0, pz: 500, head: 0, speed: 60 };
+  const G = { track, player: car, gfx: { aspect }, camMode: 0,
+    setCamMode(mode) { G.camMode = mode; },
+    camVantage(shot, ...args) { return ["side", "chase"].includes(shot) ? cams.vantage(track, shot, ...args) : null; } };
+  const extra = { att: car, carPos: [car.px, car.pz], carHead: 0, noLook: true, frameSubject: true, dt: 0, snap: true };
+  const projectedY = (shot, fitted) => {
+    const v = G.camVantage(shot, car.s, car.x, car.speed, 0, extra);
+    const fov = fitted ? fit.fitFovY(v.fov * Math.PI / 180, aspect, { boost: (v.fovBoost || 0) * Math.PI / 180 }) * 180 / Math.PI : v.fov;
+    return sight.project(sight.camera(v.eye, v.tgt, fov, aspect), [0, 0.8, 500]).y;
+  };
+  assert.equal(broadcast.chooseShot(G, car, null, null, 0, undefined, 0), "side");
+  assert.ok(Math.abs(projectedY("side", false)) < 0.55);
+  assert.ok(Math.abs(projectedY("side", true)) > 1);
+
+  // The canvas and window can disagree during resize; WATCH follows the canvas projection.
+  [viewport.innerWidth, viewport.innerHeight] = [393, 852];
+  const bc = replayBroadcast.create(G, {});
+  bc.start({ auto: true, tower: false });
+  assert.equal(bc.status().shot, "chase");
+  assert.equal(G.camMode, 1);
+  assert.ok(Math.abs(projectedY("chase", true)) <= 0.55);
+  bc.stop();
 });

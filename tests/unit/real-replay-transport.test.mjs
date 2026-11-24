@@ -75,6 +75,35 @@ test("HIGHLIGHTS no-driver cuts replace retired subjects only while AUTO owns th
   }
 });
 
+test("HIGHLIGHTS cuts to a late-arriving event driver without restarting the lead-in", () => {
+  for (const owner of ["auto", "manual", "locked"]) {
+    const { replay, G, options, cars } = transportReplay();
+    options.traces.cars = { 1: line(0, 45, 0, 0, 40), 2: line(-24, 48, 0, 8, 40) };
+    const captions = [], snappedAt = [];
+    G.announce = (text) => captions.push(text);
+    G.snapGameCam = () => snappedAt.push(G.raceT);
+    replay.start({ ...options, reel: true });
+    assert.equal(replay.status().T, 4);
+    assert.equal(G.player, cars[0]);
+    if (owner === "manual") replay.takePicture();
+    if (owner === "locked") replay.setLocked(true);
+
+    replay.tick(3.75);
+    assert.equal(G.player, cars[0], owner);
+    const snapCount = snappedAt.length;
+    replay.tick(0.25);
+    const expected = owner === "auto" ? cars[1] : cars[0];
+    assert.equal(G.player, expected, owner);
+    assert.deepEqual(snappedAt.slice(snapCount), owner === "auto" ? [8] : [], owner);
+    assert.equal(G.raceT, 8);
+    replay.tick(4);
+    assert.equal(G.player, expected);
+    assert.equal(replay.status().T, 12);
+    assert.deepEqual(captions, ["L1 · BBB PASSES AAA FOR P1"]);
+    replay.stop();
+  }
+});
+
 test("WATCH AUTO handoff updates the actual camera and cockpit HUD immediately, including paused reels", () => {
   for (const reel of [false, true]) for (const paused of [false, true]) for (const outerPaused of [false, true]) {
     const { replay, G, options, ctx } = transportReplay();
