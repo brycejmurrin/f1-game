@@ -326,6 +326,45 @@ test("each driving slider applies on input and re-applies from storage after a r
   }
 });
 
+test("steering dead zone distinguishes an explicit saved 5% from the device default (#6280)", () => {
+  let applied;
+  const input = { setPadDeadzone: value => { applied = value; } };
+  const { storage } = makeStorageFaults();
+  const realStore = ctx => {
+    ctx.localStorage = storage;
+    seedStore(ctx);
+    return vm.runInContext("GameStore.store", ctx);
+  };
+  const { move, apply, G } = bootTuning(input, {}, {}, realStore);
+  assert.equal(applied, null, "an unset key uses the device default");
+  move("pm-paddz", 5);
+  assert.equal(applied, 0.05);
+  bootTuning(input, {}, {}, realStore);
+  assert.equal(applied, 0.05, "explicit 5% survives a fresh boot");
+  G.store.set("padDeadzone", undefined);
+  apply();
+  assert.equal(applied, null, "removing the stored choice restores the device default");
+});
+
+test("the dead-zone row follows the active controller default without persisting it", () => {
+  let wheel = true, selected;
+  const { $, disk, fire, move } = bootTuning({
+    setPadDeadzone(v) { selected = v; },
+    getPadDeadzone() { return selected ?? (wheel ? 0 : 0.05); },
+  });
+  assert.equal($("pm-paddz-v").textContent, "0%");
+  assert.equal(disk.padDeadzone, undefined);
+  wheel = false;
+  fire("apexcontrollerprofilechange");
+  assert.equal($("pm-paddz-v").textContent, "5%");
+  assert.equal(disk.padDeadzone, undefined);
+  move("pm-paddz", 5);
+  wheel = true;
+  fire("gamepadconnected");
+  assert.equal($("pm-paddz-v").textContent, "5%", "an explicit 5% survives a wheel switch");
+  assert.equal(disk.padDeadzone, 5);
+});
+
 test("FEEL › SIM on a fresh install does not light a preset its unset keys do not match (B·H11 hunt)", () => {
   // matchPreset read an unset key as the CANDIDATE's own value, so a store holding only the four
   // FEEL keys "matched" PRO (adaptiveButtons/brakeCue/tiltDeg still at their STANDARD fallbacks).

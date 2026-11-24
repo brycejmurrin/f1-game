@@ -379,6 +379,15 @@ function steerReturnRateFromSlider(v) {
 function steerReturnLabel(v) { return v === 0 ? "FOLLOW" : String(v); }
 function analogSpeedFromSlider(v) { return (v - 1) / 9; }   // 0..1, v1 = OFF
 function pctLabel(v) { return v + "%"; }
+function storedPadDeadzone() {
+  const raw = store.getStored ? store.getStored("padDeadzone") : store.get("padDeadzone");
+  return Number.isFinite(raw) ? clamp(raw, 0, 30) : null;
+}
+function paintPadDeadzone() {
+  const effective = Input.getPadDeadzone?.();
+  const pct = Number.isFinite(effective) ? Math.round(effective * 100) : storedPadDeadzone() ?? 5;
+  paintRow("pm-paddz", pct, pctLabel(pct));
+}
 
 // Three named bundles drive all the handling sliders at once so a player never
 // has to understand the underlying knobs. STANDARD reproduces the original
@@ -659,7 +668,7 @@ function applySteerTuning() {
   const returnRate = Number.isInteger(returnRaw) ? clamp(returnRaw, 0, SLIDER_MAX) : 0;
   const analogSpd   = clamp(store.get("analogSpeedSteer", 1), SLIDER_MIN, SLIDER_MAX);
   const haptics     = clamp(store.get("haptics", 6), SLIDER_MIN, SLIDER_MAX);
-  const padDz       = clamp(store.get("padDeadzone", 5), 0, 30);
+  const padDz       = storedPadDeadzone();
   const padSat      = clamp(store.get("padSaturation", 0), 0, 30);
   Input.setAnalogTrim("tilt", curveTrimFromSlider(tiltCurve));
   Input.setAnalogTrim("touch", curveTrimFromSlider(touchCurve));
@@ -675,7 +684,7 @@ function applySteerTuning() {
   // step owed (changing a default reaches fresh installs only).
   const trigHap = store.get("triggerHaptics", true) !== false;
   if (Input.setTriggerHaptics) Input.setTriggerHaptics(trigHap);
-  Input.setPadDeadzone(padDz / 100);
+  Input.setPadDeadzone(padDz === null ? null : padDz / 100);
   Input.setPadSaturation(padSat / 100);
   G.raceLineAssist = line / 5;
   // The stored value is only trusted when it is a NUMBER. clamp compares, and
@@ -738,7 +747,7 @@ function applySteerTuning() {
     }
   }
   paintTriggerHapRow();
-  paintRow("pm-paddz", padDz, pctLabel(padDz));
+  paintPadDeadzone();
   paintRow("pm-padsat", padSat, pctLabel(padSat));
   refreshPresetButtons();
   refreshMacros();
@@ -939,6 +948,9 @@ advDetails.addEventListener("toggle", () => {
 });
 // Any granular Advanced edit refreshes the simplified controls (events bubble up).
 $("advanced-inner").addEventListener("input", refreshMacros);
+for (const event of ["gamepadconnected", "gamepaddisconnected", "apexcontrollerprofilechange"]) {
+  window.addEventListener(event, paintPadDeadzone);
+}
 applySteerTuning();
 return { applySteerTuning };
 }

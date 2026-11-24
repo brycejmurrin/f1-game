@@ -485,8 +485,8 @@ function create(G) {
   if (wheelBtn && Input.beginAxisCapture) {
     const STEPS = [
       { key: "steer", ask: "Turn the wheel LEFT and hold it…", done: "Steering found." },
-      { key: "throttle", ask: "Now press the THROTTLE pedal all the way…", done: "Throttle found." },
-      { key: "brake", ask: "Now press the BRAKE pedal all the way…", done: "Brake found." },
+      { key: "throttle", ask: "Now press the THROTTLE pedal all the way, then release it completely…", done: "Throttle found." },
+      { key: "brake", ask: "Now press the BRAKE pedal all the way, then release it completely…", done: "Brake found." },
     ];
     let running = false;
     let stepTimer = 0;   // the 600 ms gap; a cancel+restart inside it ran two wizards
@@ -538,30 +538,25 @@ function create(G) {
       wheelBtn.textContent = "CANCEL";
       const map = Object.assign(Input.getPadAxisMap(), { throttle: null, brake: null,
         throttleRest: null, throttleFar: null, brakeRest: null, brakeFar: null });
-      const ext = {};   // pedal -> the live {rest, far} Input keeps tracking after the capture
       let i = 0;
       const step = (note) => {
         if (!running) return;
         if (i >= STEPS.length) {
-          for (const k of ["throttle", "brake"]) {
-            const e = ext[k];
-            if (e && Math.abs(e.far - e.rest) >= 0.3) { map[k + "Rest"] = Math.round(e.rest * 1000) / 1000; map[k + "Far"] = Math.round(e.far * 1000) / 1000; }
-          }
           finish(map, "Wheel set up. Steering, throttle and brake are mapped to the axes you moved.");
           return;
         }
-        say(typeof note === "string" ? note : STEPS[i].ask);
+        const st = STEPS[i];
+        say(typeof note === "string" ? note : st.ask);
         // Axes already chosen are off the table: the wheel is still springing back
         // from the steering step when the pedal steps snapshot their rest.
         // The brake step leaves the throttle's axis listening on purpose: a combined
         // pedal axis is rejected with a message below instead of going silent.
-        const taken = STEPS.slice(0, i).filter((s) => s.key !== "throttle" || STEPS[i].key !== "brake")
+        const taken = STEPS.slice(0, i).filter((s) => s.key !== "throttle" || st.key !== "brake")
           .map((s) => map[s.key]).filter((a) => a != null);
         Input.beginAxisCapture((axis, dir, info) => {
           if (!running) return;
           if (!wheelOwner && info) wheelOwner = info.key;
           if (wheelOwner && (!info || info.key !== wheelOwner)) return;
-          const st = STEPS[i];
           // A combined pedal axis moves with BOTH pedals: it cannot be two controls.
           if (st.key === "brake" && axis === map.throttle) {
             clearTimeout(stepTimer);
@@ -569,7 +564,10 @@ function create(G) {
             return;
           }
           map[st.key] = axis;
-          if (info && st.key !== "steer") ext[st.key] = info;
+          if (info && st.key !== "steer") {
+            map[st.key + "Rest"] = Math.round(info.rest * 1000) / 1000;
+            map[st.key + "Far"] = Math.round(info.far * 1000) / 1000;
+          }
           // The steering sign is whatever the wheel reports for LEFT; we asked
           // for left, so a POSITIVE reading means this wheel is inverted.
           if (st.key === "steer") map.steerInvert = dir > 0 ? -1 : 1;
@@ -579,7 +577,13 @@ function create(G) {
           tick();
           clearTimeout(stepTimer);
           stepTimer = setTimeout(step, 600);   // let the pedal come back up before listening again
-        }, { exclude: taken, ownerKey: wheelOwner });
+        }, { exclude: taken, ownerKey: wheelOwner, pedalStatus: st.key === "steer" ? null : status => {
+          if (status === "release") say("Press all the way, then release the pedal completely.");
+          else {
+            abortWheel();
+            say("Could not confirm the pedal's resting position. Release both pedals, then run wheel setup again.");
+          }
+        } });
       };
       step();
     };

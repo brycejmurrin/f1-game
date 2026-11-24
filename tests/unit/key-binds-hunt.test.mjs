@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { read, boot, plain, bootUi, rawPad, setBtn, menuRig } from "../helpers/key-binds-rig.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { releaseWheelPedal } from "../helpers/key-binds-rig.mjs";
 
 // ---- round 2 input hunt: I-01 / I-02 / I-05 / I-06 / I-08 / I-09 + nintendo A/B ---------------
 
@@ -181,6 +182,7 @@ test("I-05: a set-up wheel is linear with no dead zone by default; the DEAD ZONE
   sb.navigator.getGamepads = () => [pad];
   fire("gamepadconnected", { gamepad: pad });
   Input.setPadAxisMap({ steer: 0, throttle: 2, brake: 3 });
+  assert.equal(Input.getPadDeadzone(), 0, "the row can display the wheel's default");
   const road = () => { Input.poll(); return Math.pow(Math.abs(Input.steer()), 2.4); };   // game.js raises the command to STEER_EXPO
   pad.axes[0] = 0.03;
   assert.ok(Math.abs(road() - 0.03) < 1e-6, "3 % of rotation is 3 % of lock, not swallowed by a 5 % dead zone");
@@ -189,6 +191,14 @@ test("I-05: a set-up wheel is linear with no dead zone by default; the DEAD ZONE
   Input.setPadDeadzone(0.1);
   pad.axes[0] = 0.08;
   assert.equal(road(), 0, "a DEAD ZONE the player chose still applies");
+  pad.axes[0] = 0.04;
+  for (const deadzone of [0.04, 0.05, 0.06]) {
+    Input.setPadDeadzone(deadzone);
+    assert.equal(road(), 0, `an explicit ${deadzone} dead zone applies to the wheel`);
+    assert.equal(Input.parkedPadPreview().steer, 0, "CHECK CONTROLS uses the same dead zone");
+  }
+  Input.setPadDeadzone(null);
+  assert.ok(Math.abs(road() - 0.04) < 1e-6, "removing the choice restores the wheel's zero default");
   // Control: a standard pad keeps the thumbstick shaping.
   const std = rawPad({ id: "Pad Std", axes: [0.03, 0, 0, 0] });
   sb.navigator.getGamepads = () => [std];
@@ -228,12 +238,16 @@ test("I-06: the wheel wizard persists each pedal's rest and far; a brake press o
   $("pm-pad-wheel").onclick();
   pad.axes[0] = -1; Input.poll();        // steer
   pad.axes[0] = 0; Input.poll();
-  pad.axes[1] = 0.5; Input.poll();       // throttle captured at 50 % travel on an axis resting at 0
-  pad.axes[1] = 1; Input.poll();         // …and pressed on to its far end (tracked after the capture)
-  pad.axes[1] = 0; Input.poll();         // released: this is NOT a brake
+  pad.axes[1] = 0.5; Input.poll();       // throttle identified at 50 % travel on an axis resting at 0
+  pad.axes[1] = 1; Input.poll();
+  assert.match($("pm-pad-calib-note").textContent, /release the pedal/);
+  releaseWheelPedal(Input, sb, pad, 1, 0);
+  pad.axes[1] = 0.95; Input.poll();      // the driver presses the same axis in the brake step
+  releaseWheelPedal(Input, sb, pad, 1, 0);
   assert.match($("pm-pad-calib-note").textContent || "", /THROTTLE's axis/, "the same-axis press is refused with a message");
   assert.equal($("pm-pad-wheel").textContent, "CANCEL", "the wizard is still waiting for the brake");
   pad.axes[3] = 1; Input.poll();         // brake on its own axis
+  releaseWheelPedal(Input, sb, pad, 3, -1);
   assert.equal($("pm-pad-wheel").textContent, "SET UP A WHEEL", "finished");
   assert.equal(disk.padAxes.throttle, 1);
   assert.equal(disk.padAxes.brake, 3);
@@ -241,6 +255,48 @@ test("I-06: the wheel wizard persists each pedal's rest and far; a brake press o
   assert.equal(disk.padAxes.throttleFar, 1);
   assert.equal(disk.padAxes.brakeRest, -1);
   assert.equal(disk.padAxes.brakeFar, 1);
+});
+
+test("wheel setup distinguishes a startup zero from a measured zero-rest pedal (#6290)", () => {
+  const disk = {};
+  const { Input, $, fire, sb } = bootUi(true, {}, disk);
+  const pad = rawPad({ mapping: "", id: "Wheel", axes: [0, 0, 0, 0] });
+  let now = 0;
+  sb.performance.now = () => now;
+  sb.navigator.getGamepads = () => [pad];
+  fire("gamepadconnected", { gamepad: pad });
+  $("pm-pad-wheel").onclick();
+  pad.axes[0] = -1; Input.poll();
+  for (const value of [-0.9, -0.4, -0.1, -0.06, 0, 0.04, 0.1, 0.4, 0.99]) {
+    pad.axes[1] = value; now += 35; Input.poll();
+  }
+  assert.match($("pm-pad-calib-note").textContent, /release the pedal/);
+  assert.equal(disk.padAxes, undefined);
+  releaseWheelPedal(Input, sb, pad, 1, -1);
+  pad.axes[2] = -0.5; Input.poll();
+  pad.axes[2] = -0.98; Input.poll();
+  releaseWheelPedal(Input, sb, pad, 2, 0);
+  assert.deepEqual([disk.padAxes.throttleRest, disk.padAxes.throttleFar, disk.padAxes.brakeRest, disk.padAxes.brakeFar], [-1, 0.99, 0, -0.98]);
+  assert.equal(Input.throttleLevel(), 0, "released throttle stays released");
+  pad.axes[1] = 0.99; Input.poll();
+  assert.equal(Input.throttleLevel(), 1, "the pressed endpoint reaches full throttle");
+});
+
+test("wheel setup preserves the current mapping if the pedal's release cannot be confirmed", () => {
+  const disk = {};
+  const { Input, $, fire, sb } = bootUi(true, {}, disk);
+  const pad = rawPad({ mapping: "", id: "Wheel", axes: [0, -1, -1, 0] });
+  sb.navigator.getGamepads = () => [pad];
+  fire("gamepadconnected", { gamepad: pad });
+  $("pm-pad-wheel").onclick();
+  pad.axes[0] = -1; Input.poll();
+  pad.axes[1] = 1; Input.poll();
+  sb.performance.now = () => 10000;
+  Input.poll();
+  assert.match($("pm-pad-calib-note").textContent, /Release both pedals, then run wheel setup again/);
+  assert.equal($("pm-pad-wheel").textContent, "SET UP A WHEEL");
+  assert.equal(disk.padAxes, undefined);
+  assert.ok(Input.padAxesAreDefault());
 });
 
 test("I-08: a spare pad unplugging does not turn the driving pad's held buttons into fresh presses", () => {
