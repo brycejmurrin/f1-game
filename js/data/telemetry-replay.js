@@ -100,6 +100,7 @@ const DataTelemetryReplay = (function () {
     zoom.options[3].disabled = true; // Dynamic readout, not a stale preset to select after reset.
     trail.value = "3";
     for (const button of [play, restart, expand]) { button.type = "button"; controls.appendChild(button); }
+    expand.setAttribute("data-replay-expand", "");
     label("Speed", rate); label("View", mode); label("Zoom", zoom); label("Follow", focus);
     label("Trail", trail); label("Telemetry", overlay);
     const canvas = el("canvas", "dh-canvas"), seek = el("input"), seekLabel = el("label", "dh-pick-field");
@@ -126,7 +127,7 @@ const DataTelemetryReplay = (function () {
     const source = el("a", "dh-live-sub", "Geometry source and method"); source.href = "assets/telemetry/README.md"; source.target = "_blank"; source.rel = "noopener";
     box.append(heading, controls, fields, mapTools, canvas, mapHint, clock, seekLabel, note, rows, source);
     let geometry = null, models = [], disposed = false, dialog = null, placeholder = null, lastFrame = -Infinity, lastContext = "";
-    let w = 320, h = 320, ratio = 1, timeout = 0;
+    let w = 320, h = 320, ratio = 1, timeout = 0, drawable = true;
     let magnification = 1, panX = 0, panY = 0, lastScale = 1, moving = false;
     const pointers = new Map();
     const abort = new AbortController();
@@ -150,12 +151,16 @@ const DataTelemetryReplay = (function () {
     bounds = measureBounds(fallbackLine);
     function resize() {
       if (disposed || !box.isConnected) return;
-      w = Math.max(1, canvas.clientWidth); h = Math.max(1, canvas.clientHeight);
+      const width = canvas.clientWidth, height = canvas.clientHeight;
+      // Track-only view can hide the replay while the shared clock keeps running.
+      drawable = width > 0 && height > 0;
+      if (!drawable) return;
+      w = width; h = height;
       ratio = Math.min(2, (window.devicePixelRatio || 1) * (typeof CssZoom !== "undefined" ? CssZoom.of(canvas) : 1));
       canvas.width = Math.round(w * ratio); canvas.height = Math.round(h * ratio); draw(true);
     }
     function draw(force = false) {
-      if (disposed || !box.isConnected) return;
+      if (disposed || !box.isConnected || !drawable) return;
       const t = view.cursorT || 0, now = performance.now();
       if (!force && view.playing && now - lastFrame < 33) return;
       lastFrame = now;
@@ -174,6 +179,7 @@ const DataTelemetryReplay = (function () {
         const scale = magnification * (overview ? Math.min((w - 24) / Math.max(1, x1 - x0), (h - 36) / Math.max(1, y1 - y0)) : Math.min(w, h) / (geometry ? 140 : extent / 10));
         lastScale = scale;
         function scene(cx, cy, s, ox, oy, mini) {
+          if (s <= 0) return;
           c.save(); c.translate(ox, oy); c.scale(s, -s); c.translate(-cx, -cy);
           if (road) { c.globalAlpha = .14; c.fillStyle = ink; c.fill(road, "evenodd"); c.globalAlpha = 1;
             c.strokeStyle = ink; c.lineWidth = (mini ? .5 : 1) / s; edges.forEach((p) => c.stroke(p)); }

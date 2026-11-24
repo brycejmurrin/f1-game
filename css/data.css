@@ -1506,6 +1506,12 @@ body[data-density="compact"] [data-xscroll] :is(th:first-child, .dh-td-pos) {
   [data-telemetry-replay] .dh-canvas[data-map-gestures="true"] { touch-action: none; cursor: grab; }
   [data-telemetry-replay] p { margin-block: calc(var(--gap) / 3); }
   [data-replay-lanes] { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--gap); }
+  /* Keep the original trace and map in reach on short screens. EXPAND
+     moves the full replay out of the compact chart column. */
+  body[data-density="compact"] .dh-telem-main > [data-telemetry-replay] {
+    flex-flow: row wrap; align-items: center; justify-content: space-between; padding-block: 0;
+    > :not(h3, .dh-transport), > .dh-transport > :not([data-replay-expand]) { display: none; }
+  }
   [data-replay-expanded] .dh-tpopup-body { flex-direction: column; align-items: stretch; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding: var(--gap) calc(var(--gap) * 4 / 3); }
   [data-replay-expanded] [data-telemetry-replay] { padding-block: 0; }
   [data-replay-expanded] [data-telemetry-replay] > .dh-section { display: none; }

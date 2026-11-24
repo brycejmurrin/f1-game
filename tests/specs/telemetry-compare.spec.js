@@ -12,7 +12,7 @@ async function dataReady(page) {
   const onPageError = error => scriptErrors.push(error.message);
   page.on("pageerror", onPageError);
   await page.goto("/version.json");
-  await page.setContent('<div id="datahub" hidden></div>');
+  await page.setContent('<dialog id="datahub" class="screen" hidden></dialog>');
   await page.evaluate(() => { window.Teams = { LIST: [] }; });
   // Standalone fixtures supply the app's core dependencies first: Log for
   // requests/open, M4 for telemetry-model's eval-time clamp binding, and Dom
@@ -21,6 +21,8 @@ async function dataReady(page) {
   await page.addScriptTag({ url: "/js/core/mat4.js" });
   // hub.js binds Dom.el at evaluation time, just as the app does.
   await page.addScriptTag({ url: "/js/ui/dom.js" });
+  await page.addScriptTag({ url: "/js/ui/modal.js" });
+  await page.evaluate(() => { TopModal.wire(document.getElementById("datahub")); });
   // hub.js and schedule.js call I18n.t / I18n.date at render and init time.
   await page.addScriptTag({ url: "/js/core/i18n.js" });
   // The app loads TrackMaps eagerly for the telemetry map's shared markers.
@@ -169,13 +171,17 @@ test("a lane can be removed from the tray before loading", async ({ page }) => {
 });
 
 test("mobile replay expansion preserves scrubbing, focus and parent telemetry", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
   await page.setViewportSize({width:390,height:844});
   await dataReady(page);
-  await page.addStyleTag({url:"/css/data.css"});
-  await page.evaluate(()=>{document.body.dataset.width="narrow";});
+  for (const file of ["tokens", "components", "dialogs", "data"]) {
+    await page.addStyleTag({ url: `/css/${file}.css` });
+  }
+  await page.evaluate(() => { document.body.dataset.width = "narrow"; document.body.dataset.shape = "tall"; });
   await openTelemetry(page);
   await page.locator('.dh-dchip',{hasText:'NOR'}).click();
-  await page.locator('.dh-livebtn',{hasText:'LOAD LAP'}).click();
+  await page.getByRole('button', { name: 'LOAD FASTEST LAP', exact: true }).click();
   const panel=page.locator('[data-telemetry-replay]');
   await expect(panel.getByText(/track width unavailable/)).toBeVisible();
   await panel.getByRole('button',{name:'EXPAND',exact:true}).click();
@@ -197,8 +203,16 @@ test("mobile replay expansion preserves scrubbing, focus and parent telemetry", 
   await expect(panel.getByRole('button',{name:'EXPAND',exact:true})).toBeFocused();
   await panel.getByRole('button',{name:'EXPAND',exact:true}).click();
   await page.locator('[data-replay-expanded]').getByRole('button',{name:'Close replay',exact:true}).click();
-  await panel.getByRole('button',{name:'RESTART',exact:true}).click();
+  await expect(page.locator('[data-replay-expanded]')).toHaveCount(0);
+  // A view change can hide replay while the parent transport still owns the clock.
+  await panel.evaluate(async el => {
+    el.style.display = "none";
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+  await page.getByTitle("Restart lap", { exact: true }).click();
+  await panel.evaluate(el => el.style.removeProperty("display"));
   await expect(panel.locator('output')).toHaveText('0.00 s');
   await page.getByRole('button',{name:'Close telemetry',exact:true}).click();
   await expect(panel).toHaveCount(0);
+  expect(errors).toEqual([]);
 });
