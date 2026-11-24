@@ -30,6 +30,12 @@ const PedalTravel = (function () {
     camera: "btn-cam", pause: "pausebtn", showHud: "hud-restore" });
   const phoneButtons = Object.freeze(["gas", "brake", "shiftUp", "shiftDown", "boost", "overtake", "aero",
     "camera", "pause", "radio", "recover", "look", "calib", "navSelect", "navBack"]);
+  const gestureTiming = Object.freeze({
+    quick: { key: "quickMs", label: "QUICK TAP LIMIT", defaultMs: 180, min: 80, max: 600 },
+    hold: { key: "holdMs", label: "HOLD TIME", defaultMs: 450, min: 150, max: 2000 },
+    long: { key: "longHoldMs", label: "LONG HOLD TIME", defaultMs: 900, min: 350, max: 3000 },
+    double: { key: "doubleTapMs", label: "DOUBLE TAP WINDOW", defaultMs: 350, min: 150, max: 1000 },
+  });
   const allButtons = new Set([...Object.keys(raceButtons), ...phoneButtons]);
   const colors = Object.freeze({ red: "--red", green: "--faster", blue: "--zone", purple: "--sec-best", orange: "--spark", yellow: "--gold", white: "--hud-ink-light" });
   const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -103,7 +109,15 @@ const PedalTravel = (function () {
       if (Object.hasOwn(colors, value[field])) out[field] = value[field];
     }
     if (!BUTTONS.includes(id)) {
-      if (id !== "look" && ["tap", "quick", "hold", "long", "double"].includes(value.activation)) out.activation = value.activation;
+      if (id === "look") return out;
+      if (typeof value.activation === "string" && (value.activation === "tap" || Object.hasOwn(gestureTiming, value.activation))) {
+        out.activation = value.activation;
+      }
+      for (const { key, defaultMs, min, max } of Object.values(gestureTiming)) {
+        if (!Number.isFinite(value[key])) continue;
+        const ms = Math.max(min, Math.min(max, Math.round(value[key] / 10) * 10));
+        if (ms !== defaultMs) out[key] = ms;
+      }
       return out;
     }
     if (value.press === "progressive") out.press = value.press;
@@ -130,7 +144,7 @@ const PedalTravel = (function () {
     if ([250, 500, 1000, 2000].includes(value.buildMs)) out.buildMs = value.buildMs;
     if ([25, 70, 100].includes(value.brightness)) out.brightness = value.brightness;
     if (value.feedback === false) out.feedback = false;
-    if ((id === "gas" || id === "brake") && (value.slide === "instant" || value.slide === "ease")) out.slide = value.slide;
+    if ((id === "gas" || id === "brake") && ["instant", "ease", "response"].includes(value.slide)) out.slide = value.slide;
     return out;
   }
 
@@ -165,7 +179,9 @@ const PedalTravel = (function () {
   function buttonProfile(id, globalSlide) {
     const pedal = id === "gas" || id === "brake";
     const slide = pedal && (globalSlide ?? store()?.get("pedalSlide", "instant"));
-    return { press: "instant", travel: TRAVEL_PX, slide: slide === "ease" ? "ease" : "instant", feedback: true, ...buttonOverrides(id) };
+    const profile = { press: "instant", travel: TRAVEL_PX, slide: slide === "ease" ? "ease" : "instant", feedback: true, ...buttonOverrides(id) };
+    if (profile.activation) profile.gestureTiming = gestureTiming[profile.activation];
+    return profile;
   }
   function positionLevel(edge, rect, event) {
     const horizontal = edge === "left" || edge === "right";
@@ -178,10 +194,17 @@ const PedalTravel = (function () {
 
   // One layout read per position-based contact. Absolute sliders sample every
   // movement against this rectangle; relative buttons use only the landing.
-  function contactProfile(id, slide, event, el) {
+  function contactProfile(id, slide, event, el, crossover = false) {
     const profile = buttonProfile(id, slide);
     if (profile.sliderEdge) profile.sliderBounds = el.getBoundingClientRect();
-    else if (profile.fullEdge && event) {
+    else if (crossover && profile.slide !== "response") {
+      // The inherited, untuned profile keeps its original crossover. An
+      // explicit profile resumes from full input without jumping to its start.
+      profile.trackCrossover = !!buttonOverrides(id).slide || profile.press === "progressive" || profile.travel !== TRAVEL_PX ||
+        !!(profile.direction || profile.slideCurve || profile.fullEdge || profile.buildMs) ||
+        profile.start != null || profile.end != null || profile.holdEnd != null;
+      profile.start = 100;
+    } else if (profile.fullEdge && event) {
       const amount = positionLevel(profile.fullEdge, el.getBoundingClientRect(), event);
       if (amount !== undefined) profile.start = 100 * amount;
     }

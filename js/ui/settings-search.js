@@ -3,6 +3,7 @@ const SettingsSearch = (function () {
   "use strict";
   const CATALOG = Object.freeze([
     ["steering", "Steering input", "controls", "pm-steer-sel", "tilt touch buttons keyboard wheel"],
+    ["steering-return", "Steering return rate", "advanced", "pm-steerreturn", "digital steering keyboard d-pad arrow recenter centre center release speed unwind"],
     ["gears", "Manual gears", "driving", "pm-gears-sel", "shift automatic transmission"],
     ["aero", "Active aero", "driving", "pm-aero-sel", "wing manual automatic drs"],
     ["keys", "Keyboard bindings", "controls", "pm-keys", "rebind keys controls"],
@@ -67,6 +68,8 @@ const SettingsSearch = (function () {
     ["units", "Speed units", "appearance", "pm-units-sel", "mph kmh kilometres miles"],
     ["help-text", "Help text", "appearance", "pm-helptext-sel", "explanations descriptions hints"],
     ["tilt-sensitivity", "Tilt sensitivity", "controls", "pm-tiltsimple", "phone steering"],
+    ["pad-gas-deadzone", "Controller gas dead zone", "advanced", "pm-padgasdz", "gamepad trigger throttle pedal calibration wheel"],
+    ["pad-brake-deadzone", "Controller brake dead zone", "advanced", "pm-padbrakedz", "gamepad trigger brake pedal calibration wheel"],
     ["stick-deadzone", "Stick dead zone", "advanced", "pm-paddz", "controller gamepad drift deadzone stick pad wheel centre center"],
     ["haptics", "Haptics strength", "driving", "pm-haptics", "vibration rumble feedback"],
     ["trigger-haptics", "Trigger haptics", "driving", "pm-triggerhap-sel", "controller vibration feedback"],

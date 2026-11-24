@@ -536,6 +536,7 @@ const PhonePad = (function () {
     const now = opts.now || (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
     let seq = 0, lastSent = -1e9, sent = 0, haptics = 0, huds = 0, closed = false;
     let beat = 0, helloPending = false, peerSteer = false, peerAck = false, ackAt = -1, openedAt = now();
+    let peerCalibratedPedals = false;
     let dirty = false;   // a coalesced move awaiting the 15 ms gap
     const pending = [], sentTimes = new Map();
     const EDGE_MAX_AGE_MS = 1200, NAV_MAX_AGE_MS = 250, EDGE_CAP = 24;
@@ -570,7 +571,7 @@ const PhonePad = (function () {
       if (!force && t - lastSent < MIN_SAMPLE_GAP_MS) { dirty = true; return false; }
       lastSent = t; dirty = false;
       const ok = transport.send(T.STATE, encodeSample({
-        seq: seq++, roll: src.roll(), thr: src.thr(), brk: src.brk(), held: src.held(),
+        seq: seq++, roll: src.roll(), thr: src.thr(), brk: src.brk(), held: src.held(), calibratedPedals: peerCalibratedPedals,
         ...(peerSteer && src.steer && src.steer() != null ? { steer: src.steer() } : {}),
       }));
       if (ok) { sent++; sentTimes.set(seq - 1, t); while (sentTimes.size > 128) sentTimes.delete(sentTimes.keys().next().value); }
@@ -594,7 +595,10 @@ const PhonePad = (function () {
         return;
       }
       const ev = decodeEvent(data);
-      if (ev && ev.t === "hi" && ev.side === "host" && ev.p === PROTO) { peerSteer = !!ev.steer; peerAck = !!ev.ack; if (opts.onCapabilities) opts.onCapabilities({ touchSupported: peerSteer }); }
+      if (ev && ev.t === "hi" && ev.side === "host" && ev.p === PROTO) {
+        peerSteer = !!ev.steer; peerAck = !!ev.ack; peerCalibratedPedals = !!ev.calibratedPedals;
+        if (opts.onCapabilities) opts.onCapabilities({ touchSupported: peerSteer });
+      }
       if (ev && ev.t === "hap" && ev.ms > 0) { haptics++; vibrate(ev.ms); }
     });
     const close = (why) => {

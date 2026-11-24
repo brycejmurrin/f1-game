@@ -18,8 +18,9 @@ test("confirming Resume cannot become gas until that button is released", () => 
   h.sb.navigator.getGamepads = () => [pad.pad];
   h.tick();
   assert.equal(h.Input.throttleLevel(), 0, "a missing snapshot is not a witnessed release");
-  pad.press(7); h.tick();
-  assert.equal(h.Input.throttleLevel(), 1, "the other gas binding stays available");
+  h.Input.setPadPedalDeadzone("throttle", 0.25);
+  pad.pad.buttons[7] = { pressed: true, value: 0.625 }; h.tick();
+  assert.equal(h.Input.throttleLevel(), 0.5, "the other gas binding retains its calibrated response");
   pad.release(7); pad.release(0); h.tick();
   pad.press(0); h.tick();
   assert.equal(h.Input.throttleLevel(), 1, "a fresh Cross press can drive");

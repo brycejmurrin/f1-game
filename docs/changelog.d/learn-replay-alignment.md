@@ -1,0 +1,1 @@
+Fixed: Learn replays now stop at the reference car’s VSC restart, keep recorded-speed Telemetry Detective playback on time through slow frames, and preserve the cursor when switching axes using the other driver’s trace if needed.

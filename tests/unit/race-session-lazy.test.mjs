@@ -215,7 +215,7 @@ function runStartRaceBody({ sessionOk = true, conflict = false, ctxLost = false,
     radioVoice: obj, flow: "race", season, SeasonCal: { conflicted: () => false, canRace: () => true },
     resultsCam: obj, RaceCeremony: { resetLive: fn }, _roadReflectionTransition: {}, IncidentSim: obj, raceCtl: obj, wxArc: obj, DebrisWorld: obj,
     banner: obj, raceMessageHistory: null, announcer: {}, hud: {}, _menuGate: {},
-    loadTrack: fn, trackIdx: 0, gfxContextLost: () => ctxLost, releaseFieldScratch: () => { throw STOP; },
+    loadTrack: fn, trackIdx: 0, learnAeroDrill: null, gfxContextLost: () => ctxLost, releaseFieldScratch: () => { throw STOP; },
   });
   vm.runInContext(symbolSource("async function startRaceBody()") + "\nglobalThis.__run = startRaceBody;", ctx, { filename: "vm-slice:startRaceBody" });
   return ctx.__run().then((v) => ({ v, season, log, ...n }), (e) => { if (e !== STOP) throw e; return { v: "built", season, log, ...n }; });

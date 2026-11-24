@@ -19,7 +19,7 @@ const DataTelemetryView = (function () {
     // stale-on-launch inner*) divided by the host's zoom is the right box; the
     // mini-dom tests (telemetry-view-resize, telemetry-trace) have only inner*.
     let host = null;   // the detail pane being filled; CssZoom.of(host) is the card's zoom
-    function view() {
+    function viewportSize() {
       const d = typeof document !== "undefined" ? document.documentElement : null;
       const win = typeof window !== "undefined" ? window : null;
       const w = (d && d.clientWidth) || (win && win.innerWidth) || 0;
@@ -28,7 +28,7 @@ const DataTelemetryView = (function () {
       return { w: w / z, h: h / z };
     }
     function shortLS() {
-      const v = view();
+      const v = viewportSize();
       return v.h > 0 && v.h < 520 && v.w > v.h;
     }
     // A PORTRAIT PHONE has height to spare and no width. At the landscape
@@ -36,17 +36,17 @@ const DataTelemetryView = (function () {
     // two left axes printed over each other and the gap chart's title under
     // its own line. It scrolls anyway, so it gets a taller trace instead.
     function tallNarrow(w) {
-      const v = view();
+      const v = viewportSize();
       return w < 480 && v.h > v.w * 1.2;
     }
     function chartH(w, compact) {
       const base = Math.round(w * (tallNarrow(w) ? 0.56 : w < 480 ? 190 / 600 : 220 / 600));
-      if (compact && shortLS()) return Math.min(base, Math.round(view().h * 0.38));
+      if (compact && shortLS()) return Math.min(base, Math.round(viewportSize().h * 0.38));
       return base;
     }
     function deltaH(w) {
       const base = Math.round(tallNarrow(w) ? Math.max(64, w * 0.2) : w * (72 / 600));
-      if (shortLS()) return Math.min(base, Math.round(view().h * 0.12));
+      if (shortLS()) return Math.min(base, Math.round(viewportSize().h * 0.12));
       return base;
     }
 
@@ -65,7 +65,7 @@ const DataTelemetryView = (function () {
       return ht;
     }
 
-    function buildTelemetryView(detail, tels) {
+    function buildTelemetryView(detail, tels, header) {
       host = detail;
       lifecycle.stop();
       const laps = tels.filter(function (t) { return t.car && t.car.length; });
@@ -114,6 +114,8 @@ const DataTelemetryView = (function () {
         }, li < 0 ? "NO CAR DATA" : laneRole(li)));
       });
 
+      tels.filter((t) => t.lap && t.sessionKey != null).forEach((t) => mainArea.appendChild(DataTelemetryContext.panel(t, el)));
+
       const view = {
         laps: laps,
         // laneCols must be indexed the SAME way its consumers read it. The lane
@@ -158,6 +160,12 @@ const DataTelemetryView = (function () {
         view.sectors = [primary.lap.s1, primary.lap.s1 + primary.lap.s2];
       }
 
+      view.toggleTrack = function () {
+        view.trackOnly = !view.trackOnly;
+        detail.toggleAttribute("data-track-focus", view.trackOnly);
+        detail.scrollTop = 0;
+      };
+
       // Transport bar → main
       const textSummary = el("details");
       textSummary.dataset.hubPart = "summary";
@@ -170,6 +178,7 @@ const DataTelemetryView = (function () {
       textSummary.appendChild(textSummaryBody);
       view.a11ySummary = textSummaryBody;
       mainArea.appendChild(textSummary);
+      view.replay = DataTelemetryReplay.create(view, ctx, player);
       mainArea.appendChild(buildTransport(view));
 
       const isLS = shortLS();
@@ -361,6 +370,31 @@ const DataTelemetryView = (function () {
 
       detail.appendChild(mainArea);
       detail.appendChild(sideArea);
+      if (view.replay) {
+        const replay = view.replay.element;
+        const switcher = el("div");
+        switcher.setAttribute("data-telemetry-views", "");
+        switcher.setAttribute("role", "group");
+        switcher.setAttribute("aria-label", "Telemetry view");
+        const charts = el("button", "dh-tbtn", "Charts"), track = el("button", "dh-tbtn", "Track Replay");
+        charts.type = track.type = "button";
+        function showReplay(show) {
+          detail.toggleAttribute("data-telemetry-replay-view", show);
+          mainArea.hidden = sideArea.hidden = show;
+          replay.hidden = !show;
+          charts.setAttribute("aria-pressed", String(!show));
+          track.setAttribute("aria-pressed", String(show));
+          detail.scrollTop = 0;
+          if (show) view.replay.resize();
+        }
+        charts.addEventListener("click", () => { showReplay(false); charts.focus(); });
+        track.addEventListener("click", () => { showReplay(true); track.focus(); });
+        switcher.append(charts, track);
+        header.setAttribute("data-telemetry-view-header", "");
+        header.insertBefore(switcher, header.lastElementChild);
+        showReplay(false);
+        detail.appendChild(replay);
+      }
 
       // currentCSSZoom reads 1 on a detached tree, so the ratio derived above
       // missed any ancestor zoom. Re-derive it now that the canvases are live —
@@ -423,11 +457,12 @@ const DataTelemetryView = (function () {
             }
 
             if (view.map && sideArea.isConnected) {
-              const sideW = sideArea.clientWidth - 24;
-              if (sideW > 0 && (view.mw !== sideW || ratioChanged)) {
-                view.mw = sideW; view.mh = sideW;
-                sizeCanvas(view.map, sideW, sideW, newR);
-                view.mapBase = makeOffscreen(sideW, sideW, newR);
+              const sideW = Math.min(view.trackOnly ? 600 : Infinity, sideArea.clientWidth - 24);
+              const mapH = view.trackOnly ? Math.min(sideW, Math.max(120, detail.clientHeight - mainArea.offsetHeight - 60)) : sideW;
+              if (sideW > 0 && (view.mw !== sideW || view.mh !== mapH || ratioChanged)) {
+                view.mw = sideW; view.mh = mapH;
+                sizeCanvas(view.map, sideW, mapH, newR);
+                view.mapBase = makeOffscreen(sideW, mapH, newR);
                 resized = true;
               }
             }

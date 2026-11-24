@@ -184,7 +184,8 @@ test("scoped :has(> dialog…) holds: every shell <dialog> is a <body> child; ru
     if (f.isDirectory()) { if (f.name !== "vendor") walk(rel); } else if (f.name.endsWith(".js") && /(?:createElement|\bel)\(\s*["']dialog["']/.test(read(rel))) built.push(rel);
   } };
   walk("js");
-  assert.deepEqual(built, ["js/agent/apex-bridge.js", "js/agent/bridge-link.js", "js/data/telemetry.js", "js/editor/designer.js", "js/share/share-card-chips.js", "js/ui/learn-door.js", "js/ui/screen-arranger.js"], "a new runtime <dialog>: append it to <body> or #datahub, or widen the scoped rules");
+  assert.deepEqual(built, ["js/agent/apex-bridge.js", "js/agent/bridge-link.js", "js/data/telemetry-replay.js", "js/data/telemetry.js", "js/editor/designer.js", "js/share/share-card-chips.js", "js/ui/learn-door.js", "js/ui/screen-arranger.js"], "a new runtime <dialog>: append it to <body> or #datahub, or widen the scoped rules");
+  assert.match(read("js/data/telemetry-replay.js"), /document\.body\.appendChild\(dialog\)/);
   for (const f of ["js/share/share-card-chips.js", "js/editor/designer.js"]) assert.equal(/document\.body\.appendChild\(dlg\)/.test(read(f)), true, f + ": the preview / KEEP MINE ask is a <body> child");
   // js/ui/screen-arranger.js appends its <dialog> to <body>: tests/specs/appearance-orientation.spec.js asserts it live.
   assert.match(read("js/data/telemetry.js"), /const host = document\.getElementById\("datahub"\) \|\| document\.body;\s*host\.appendChild\(overlay\);/);

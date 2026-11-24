@@ -131,11 +131,32 @@
   </div>
   <p id="load-feedback" role="status">Predict which axle gains load, then check your answer in a 1 g stop.</p>
 </section>
+<section data-as="box" class="scenario" aria-labelledby="speed-grip-title">
+  <h2 id="speed-grip-title">Brake bias as aero grip falls</h2>
+  <p>Keep the brake request fixed and reduce speed. Aero load falls with speed squared, while brake bias divides the request between the axles.</p>
+  <label for="braking-speed">Speed <output id="braking-speed-value" for="braking-speed"></output></label>
+  <input id="braking-speed" type="range" min="60" max="340" value="300" step="5">
+  <label for="speed-brake">Total braking request <output id="speed-brake-value" for="speed-brake"></output></label>
+  <input id="speed-brake" type="range" min="2" max="36" value="18" step=".5">
+  <label for="front-bias">Front brake bias <output id="front-bias-value" for="front-bias"></output></label>
+  <input id="front-bias" type="range" min="45" max="75" value="56" step="1">
+  <dl class="load-values">
+    <div><dt>Illustrative aero load</dt><dd id="speed-aero"></dd></div>
+    <div><dt>Front request and limit</dt><dd id="speed-front"></dd></div>
+    <div><dt>Rear request and limit</dt><dd id="speed-rear"></dd></div>
+  </dl>
+  <p id="speed-lock" role="status"></p>
+  <p>This straight-line estimate models static load, downforce and requested load transfer separately. A request above an axle’s grip limit indicates lockup risk. FIA rules prohibit anti-lock braking systems. <a href="https://www.fia.com/regulations/category/110" target="_blank" rel="noopener">FIA Technical Regulations C11</a></p>
+</section>
+<details>
+  <summary>In Apex 26</summary>
+  <p>This lab uses a fixed force budget for each surface. Apex estimates grip and combined braking, acceleration and cornering separately at the front and rear axles. Try changing Brake Bias in Garage Setup to move the braking demand between them, then ease off the pedal as you steer in.</p>
+</details>
 <details>
   <summary>Model and sources</summary>
   <p>The horizontal axis shows the magnitude of rearward tyre force. The vertical axis shows the magnitude of sideways tyre force. The plot holds both axes at 0–10 kN so a surface change visibly shrinks the force budget. The 10 kN dry and 7 kN damp caps are illustrative values with equal pure-brake and pure-turn limits.</p>
   <p>Required resultant = √(brake² + lateral²). If the resultant exceeds the surface cap, the model shortens the force arrow without changing its direction. To hold 8 kN lateral on dry asphalt, brake force can reach √(10² − 8²) = 6 kN. On the damp preset an 8 kN lateral request exceeds the 7 kN cap even with the brake released.</p>
-  <p>The load-transfer experiment shows axle normal loads independently. The main plot uses an illustrative force envelope at a fixed load. Apex’s driving model estimates combined slip and force separately at the front and rear axles. Brake position, steering angle and measured tyre slip are separate quantities. Real combined-slip response depends on slip angle, slip ratio, load and surface. <a href="https://doi.org/10.4271/2011-01-0094" target="_blank" rel="noopener">SAE research on tyre force ellipses</a></p>
+  <p>The load-transfer experiment shows axle normal loads independently. The main plot uses an illustrative force envelope at a fixed load. Brake position, steering angle and measured tyre slip are separate quantities. Real combined-slip response depends on slip angle, slip ratio, load and surface. <a href="https://doi.org/10.4271/2011-01-0094" target="_blank" rel="noopener">SAE research on tyre force ellipses</a></p>
   <p><a href="https://dspace.mit.edu/bitstream/handle/1721.1/139209/gaither-gaither-sb-2-2021-thesis.pdf" target="_blank" rel="noopener">MIT study on race-car load transfer</a></p>
 </details>
 </main>
