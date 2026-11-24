@@ -212,3 +212,39 @@ test("last-touch cleanup preserves mouse, pen and keyboard holds and clears slid
   hb.holdReleasePointer(4);
   assert.equal(lv.gas, 0);
 });
+
+// #6305: a crossover applies the destination's configured response.
+test("a tuned Instant arrow applies its own response on crossover; an untuned one stays full", () => {
+  const { els, lv, PT } = boot({ v: "instant" });
+  const left = els.get("left"), right = els.get("right");
+  left.fire("pointerdown", { clientX: 50, clientY: 20 });
+  left.fire("pointermove", { clientX: 150, clientY: 20 });
+  assert.equal(lv.right, 1, "unconfigured Instant arrow keeps the full arrival");
+  left.fire("pointermove", { clientX: 150, clientY: 60 });
+  assert.equal(lv.right, 1);
+  right.fire("pointerup", {});
+  PT.setButtonProfile("right", { start: 25, end: 65, direction: "down", travel: 40 });
+  right.fire("pointerdown", { pointerId: 2, clientX: 150, clientY: 20 });
+  right.fire("pointermove", { pointerId: 2, clientX: 150, clientY: 60 });
+  assert.equal(Math.round(lv.right * 100), 65, "direct touch: 25 % to 65 %");
+  right.fire("pointerup", { pointerId: 2 });
+  left.fire("pointerdown", { clientX: 50, clientY: 20 });
+  left.fire("pointermove", { clientX: 150, clientY: 20 });
+  assert.equal(Math.round(lv.right * 100), 25, "crossover starts at the configured start");
+  left.fire("pointermove", { clientX: 150, clientY: 60 });
+  assert.equal(Math.round(lv.right * 100), 65, "and slides to the configured end");
+});
+
+test("a saved hold target without a build time leaves the pedal crossover unchanged", () => {
+  const results = [];
+  for (const holdEnd of [undefined, 30]) {
+    const { els, lv, PT } = boot({ v: "instant" });
+    if (holdEnd != null) PT.setButtonProfile("brake", { holdEnd });
+    els.get("gas").fire("pointerdown", { clientX: 50, clientY: 250 });
+    move(els, 50, 195);
+    const arrival = lv.brake;
+    move(els, 50, 138);                     // 57 px up without lifting
+    results.push([arrival, lv.brake]);
+  }
+  assert.deepEqual(results, [[1, 1], [1, 1]]);
+});
