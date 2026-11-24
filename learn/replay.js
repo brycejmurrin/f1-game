@@ -14,6 +14,7 @@ const LearnReplay = (() => {
     slider.max = String(first + steps);
     slider.step = "1";
     const name = () => typeof label === "function" ? label() : label;
+    const modelClock = () => typeof realTime === "function" ? realTime() : realTime;
     const position = document.createElement("span");
     position.setAttribute("aria-hidden", "true");
     const rate = document.createElement("select");
@@ -36,7 +37,7 @@ const LearnReplay = (() => {
 
     let value = 0;
     let frame = 0;
-    let last = 0;
+    let last = null;
     let reduced = false;
 
     function seek(next, paint = true) {
@@ -49,18 +50,19 @@ const LearnReplay = (() => {
     function stop() {
       cancelAnimationFrame(frame);
       frame = 0;
-      last = 0;
+      last = null;
       button.textContent = "Play " + name();
       slider.setAttribute("aria-label", name() + " progress");
-      const modelClock = typeof realTime === "function" ? realTime() : realTime;
-      rate.setAttribute("aria-label", modelClock ? "Playback speed" : "Diagram playback rate");
+      rate.setAttribute("aria-label", modelClock() ? "Playback speed" : "Diagram playback rate");
     }
 
     function tick(now) {
-      const delta = last ? now - last : 0;
+      if (document.hidden) return stop();
+      const delta = last === null ? 0 : now - last;
       last = now;
       const span = typeof duration === "function" ? duration() : duration;
-      seek(value + Math.min(delta, 100) * Number(rate.value) / span);
+      const elapsed = modelClock() ? delta : Math.min(delta, 100);
+      seek(value + elapsed * Number(rate.value) / span);
       if (value < 1) frame = requestAnimationFrame(tick);
       else stop();
     }
