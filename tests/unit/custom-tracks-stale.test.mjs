@@ -215,7 +215,7 @@ function picker(verdict) {
     getComputedStyle: () => ({ getPropertyValue: () => "", display: "flex", flexDirection: "row", gridTemplateColumns: "none", paddingTop: "0px", paddingBottom: "0px" }),
     innerWidth: 844, innerHeight: 390, requestAnimationFrame: () => 0, cancelAnimationFrame() {}, devicePixelRatio: 1,
     Tracks: { LIST }, Teams: { LIST: [] }, Flags: { svg: () => "" }, SeasonCal: { canRace: () => true, rounds: () => 0 },
-    TrackMaps: { cachedIds: () => [], corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], elevProfile: () => null, aspect: () => 1.5, fitCanvas: () => ({ w: 100, h: 60 }), draw() {} },
+    TrackMaps: { cachedIds: () => [], corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"], classColor: () => "", elevProfile: () => null, aspect: () => 1.5, fitCanvas: () => ({ w: 100, h: 60 }), draw() {} },
     TrackBuildClient: { enabled: () => false },
     CustomTracks: { badge: (id, again) => { asks.push({ id, again }); return verdict.why; }, ensureEditor: async () => false, get: () => null } };
   sb.window = sb;

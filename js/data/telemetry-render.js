@@ -4,7 +4,8 @@ const DataTelemetryRender = (function () {
 
   function create({ cssColor }) {
     const { clamp, CHANNELS, PADL, PADR, PADY, chartX, chanNorm, sampleAt,
-            distAtT, timeAtDist, locAt, locBounds, gapLimitMs, isGap, dcode, speedUnit, speedValue } = DataTelemetryModel;
+            distAtT, timeAtDist, locAt, locationAtDate, locBounds, gapLimitMs, isGap,
+            dcode, speedUnit, speedValue, mapSpeedMax, mapSpeedColor } = DataTelemetryModel;
 
     // composite one frame: cached bases + moving cursor, car dots, delta, gauges
     function paintFrame(view) {
@@ -73,24 +74,25 @@ const DataTelemetryRender = (function () {
           mg.drawImage(view.mapBase, 0, 0, MW, MH);
           // extra lanes first, reference last so it stays on top
           for (let i = view.laps.length - 1; i >= 0; i--)
-            drawCarDot(mg, view, view.laps[i], T, cssColor(view.laneCols[i]), 1 / ZOOM);
+            drawCarDot(mg, view, i, T, 1 / ZOOM);
           mg.restore();
         } else {
           mg.drawImage(view.mapBase, 0, 0, MW, MH);
           for (let i = view.laps.length - 1; i >= 0; i--)
-            drawCarDot(mg, view, view.laps[i], T, cssColor(view.laneCols[i]), 1);
+            drawCarDot(mg, view, i, T, 1);
         }
       }
     }
-    function drawCarDot(g, view, tel, t, fill, rscale) {
-      const best = locAt(view, tel, t);
+    function drawCarDot(g, view, lane, t, scale) {
+      const best = locAt(view, view.laps[lane], t);
       if (!best) return;
       const p = mapPoint(view, best);
-      const rs = rscale || 1, r = 5.5 * rs;
-      g.strokeStyle = "rgba(0,0,0,0.65)"; g.lineWidth = 3.5 * rs;
-      g.beginPath(); g.arc(p[0], p[1], r, 0, Math.PI * 2); g.stroke();
-      g.fillStyle = fill; g.strokeStyle = "rgba(255,255,255,0.9)"; g.lineWidth = 1.5 * rs;
-      g.beginPath(); g.arc(p[0], p[1], r, 0, Math.PI * 2); g.fill(); g.stroke();
+      TrackMaps.drawCarMarker(g, p[0], p[1], 5.5 * scale, cssColor(view.laneCols[lane]), lane === 0);
+    }
+
+    function buildMapBase(view) {
+      computeMapTransform(view);
+      renderMap(view.mapBase.getContext("2d"), view.mw, view.mh, view);
     }
 
     // rebuild the cached static layers (chart traces + coloured track map + delta)
@@ -99,10 +101,7 @@ const DataTelemetryRender = (function () {
       // ratio with a pre-transformed context, so the renderers keep speaking
       // layout px on a denser bitmap.
       renderTraces(view.chartBase.getContext("2d"), view.cw, view.ch, view);
-      if (view.map) {
-        computeMapTransform(view);
-        renderMap(view.mapBase.getContext("2d"), view.mw, view.mh, view);
-      }
+      if (view.map) buildMapBase(view);
       if (view.delta) renderDelta(view.deltaBase.getContext("2d"), view.dw, view.dh, view);
     }
 
@@ -322,8 +321,10 @@ const DataTelemetryRender = (function () {
     function renderMap(g, W, H, view) {
       const loc = view.primary.loc, car = view.primary.car;
       g.clearRect(0, 0, W, H);
-      let vMax = 1;
-      for (let i = 0; i < (car ? car.length : 0); i++) if ((car[i].speed || 0) > vMax) vMax = car[i].speed;
+      const vMax = mapSpeedMax(car);
+      const start = Date.parse(view.primary.lap?.dateStart);
+      const splits = Number.isFinite(start) && view.sectors ? view.sectors.map((t) => start + t * 1000) : [];
+      const sectorInk = view.mapMode === "sectors" && splits.length === 2 ? TrackMaps.sectorColors() : null;
       function speedAtDate(date) {
         if (!car || !car.length) return null;
         let ci = 0;
@@ -336,28 +337,44 @@ const DataTelemetryRender = (function () {
         strokeLap(g, view, view.compare.loc);
       }
       g.lineWidth = 3; g.lineCap = "round"; g.lineJoin = "round";
+      function segment(a, b, color) {
+        g.strokeStyle = color;
+        g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
+      }
       const N = loc.length;
       const limit = gapLimitMs(loc);
       for (let i = 1; i <= N; i++) {
         const a = loc[i - 1], b2 = loc[i % N];
         if (i === N && !closesLoop(view, loc)) break;   // partial lap: leave it open
         if (i < N && isGap(loc, i, limit)) continue;    // coverage gap: no invented straight
-        const v = speedAtDate(b2.date);
-        const f = v === null ? 0.5 : clamp(v / vMax, 0, 1);
-        const r = Math.round(255 * Math.min(1, f * 1.6));
-        const b = Math.round(255 * Math.min(1, (1 - f) * 1.6));
-        const gr = Math.round(180 * (1 - Math.abs(f - 0.5) * 2));
-        g.strokeStyle = "rgb(" + r + "," + gr + "," + b + ")";
         const p0 = mapPoint(view, a), p1 = mapPoint(view, b2);
-        g.beginPath(); g.moveTo(p0[0], p0[1]); g.lineTo(p1[0], p1[1]); g.stroke();
+        if (sectorInk) {
+          let from = p0, sector = a.date < splits[0] ? 0 : a.date < splits[1] ? 1 : 2;
+          while (sector < 2 && splits[sector] < b2.date) {
+            const f = (splits[sector] - a.date) / (b2.date - a.date);
+            const split = [p0[0] + (p1[0] - p0[0]) * f, p0[1] + (p1[1] - p0[1]) * f];
+            segment(from, split, sectorInk[sector]);
+            from = split;
+            sector++;
+          }
+          segment(from, p1, sectorInk[sector]);
+        } else {
+          const speed = speedAtDate(b2.date);
+          const ink = Number.isFinite(speed) && vMax > 0 ? mapSpeedColor(clamp(speed / vMax, 0, 1)) : "#999";
+          segment(p0, p1, ink);
+        }
+      }
+      if (loc[0]?.date === start && loc.length > 1 && !isGap(loc, 1, limit)) {
+        const p0 = mapPoint(view, loc[0]), p1 = mapPoint(view, loc[1]);
+        TrackMaps.drawStartFinish(g, p0[0], p0[1], p1[0], p1[1], 2);
       }
       // sector-boundary ticks
-      if (view.sectors) {
+      if (splits.length) {
         g.fillStyle = "rgba(255,255,255,0.9)";
         g.strokeStyle = "rgba(0,0,0,0.6)"; g.lineWidth = 1;
         g.font = "9px system-ui, sans-serif"; g.textBaseline = "middle"; g.textAlign = "center";
-        view.sectors.forEach(function (sb, idx) {
-          const lp = locAt(view, view.primary, sb);
+        splits.forEach(function (date, idx) {
+          const lp = locationAtDate(loc, date);
           if (!lp) return;
           const p = mapPoint(view, lp);
           g.beginPath(); g.arc(p[0], p[1], 3.5, 0, Math.PI * 2); g.fill(); g.stroke();
@@ -369,7 +386,7 @@ const DataTelemetryRender = (function () {
       }
     }
 
-    return { buildBases, paintFrame };
+    return { buildBases, buildMapBase, paintFrame };
   }
 
   return { create };

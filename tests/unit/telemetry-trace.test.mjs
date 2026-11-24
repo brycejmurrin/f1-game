@@ -21,13 +21,24 @@ seedDom(ctx);   // telemetry.js formats lap times through Dom.fmtLap
 // js/core/mat4.js first — the shared scalar helpers (M4.clamp) telemetry.js binds at eval.
 vm.runInContext(readFileSync("js/core/mat4.js", "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
 for (const file of [
-  "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
+  "js/ui/track-maps.js", "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
   "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js",
   "learn/telemetry/model.js"
 ]) {
   vm.runInContext(readFileSync(file, "utf8"), ctx, { filename: absSrc(file) });
 }
 const T = vm.runInContext("DataTelemetry", ctx);
+
+test("the map can locate a sampled start line without extending a partial trace", () => {
+  const { clipLocations, locationAtDate } = vm.runInContext("DataTelemetryModel", ctx);
+  const loc = [-250, 250, 500, 750, 1000, 6000, 6250].map((date) => ({ date, x: date, y: date / 2 }));
+  const clipped = clipLocations(loc, 0, 1000);
+  assert.equal(clipped[0].date, 0);
+  assert.equal(clipped[0].x, 0);
+  assert.equal(clipped.at(-1).date, 1000);
+  assert.equal(locationAtDate(loc, 2000), null, "a timing mark cannot bridge a GPS outage");
+  assert.equal(clipLocations(loc.slice(1), 0, 1000)[0].date, 250, "no observed sample brackets the start");
+});
 
 test("comparison map closes only the lap boundary while preserving GPS gaps", () => {
   const renderer = vm.runInContext("DataTelemetryRender", ctx).create({ cssColor: () => "comparison" });
@@ -609,7 +620,7 @@ for (const sampleCount of [8, 9, 801]) test(`telemetry clipping, lane colors and
   });
   seedDom(context);
   for (const file of [
-    "js/core/mat4.js", "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
+    "js/core/mat4.js", "js/ui/track-maps.js", "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
     "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js"
   ]) {
     vm.runInContext(readFileSync(file, "utf8"), context, { filename: absSrc(file) });

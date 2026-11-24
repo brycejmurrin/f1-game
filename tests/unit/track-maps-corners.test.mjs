@@ -196,7 +196,7 @@ test("TrackMaps.draw strokes a crossing zone past the line, wrapping to pts[0]",
   TrackMaps.draw({ width: 400, height: 300, getContext: () => g }, def, { drs: true, start: false });
   const m = TrackMaps.outline(def).length;
   const zones = TrackMaps.drsZones(def);
-  const drawn = strokes.filter((s) => s.style === "rgba(0,220,180,0.85)").map((s) => s.n);
+  const drawn = strokes.filter((s) => s.style === TrackMaps.aeroColor()).map((s) => s.n);
   const want = Array.from(zones, (z) => Math.floor(z.b * m) - Math.floor(z.a * m) + 1);
   assert.deepEqual(drawn, want, "every zone is stroked over its whole index span, wrapping % m");
 });

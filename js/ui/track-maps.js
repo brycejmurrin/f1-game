@@ -35,6 +35,40 @@ const TrackMaps = (function () {
     return SECTOR_TOKENS.map((k, i) => (cs && String(cs.getPropertyValue(k) || "").trim()) || SECTOR_COLORS[i]);
   }
 
+  function aeroColor() {
+    return typeof CvdPalette !== "undefined" ? CvdPalette.hex("zone") : "#26a5f5";
+  }
+
+  function drawStartFinish(g, x, y, nextX, nextY, cell) {
+    const dx = nextX - x, dy = nextY - y;
+    if (!dx && !dy) return;
+    g.save();
+    g.translate(x, y);
+    g.rotate(Math.atan2(dy, dx));
+    g.fillStyle = "#14161c";
+    g.fillRect(-cell - 0.5, -2 * cell - 0.5, 2 * cell + 1, 4 * cell + 1);
+    g.fillStyle = "#fff";
+    for (let i = 0; i < 4; i++) {
+      g.fillRect(i % 2 ? 0 : -cell, (i - 2) * cell, cell, cell);
+    }
+    g.restore();
+  }
+
+  function drawCarMarker(g, x, y, radius, color, featured) {
+    g.beginPath();
+    g.arc(x, y, radius, 0, Math.PI * 2);
+    g.fillStyle = color || "#999";
+    g.fill();
+    g.strokeStyle = "rgba(0,0,0,0.8)";
+    g.lineWidth = featured ? radius * 0.7 : radius * 0.45;
+    g.stroke();
+    if (featured) {
+      g.strokeStyle = "#fff";
+      g.lineWidth = radius * 0.25;
+      g.stroke();
+    }
+  }
+
   // Corner class → CvdPalette row (its off shades are the old red → green
   // ramp; a COLOUR VISION mode turns it into a lightness ramp, #1595).
   const CLASS_KEY = { HAIRPIN: "cnrHairpin", SLOW: "cnrSlow", MEDIUM: "cnrMedium", FAST: "cnrFast" };
@@ -520,7 +554,7 @@ const TrackMaps = (function () {
       g.strokeStyle = opts.color || themeColor(def); g.lineWidth = width; g.stroke();
     }
 
-    // DRS zones: bright cyan overlay on straight segments
+    // Aero activation zones use the same solid overlay as the HUD.
     if (opts.drs && data.drsZones && data.drsZones.length) {
       const m = pts.length;
       g.lineWidth = width + 2;
@@ -529,7 +563,7 @@ const TrackMaps = (function () {
         const zone = data.drsZones[z];
         const from = Math.floor(zone.a * m);
         const to = Math.floor(zone.b * m);   // past m when the zone crosses the line
-        g.strokeStyle = "rgba(0,220,180,0.85)";
+        g.strokeStyle = aeroColor();
         g.beginPath();
         for (let i = from; i <= to; i++) {
           const p = pts[i % m];
@@ -541,9 +575,14 @@ const TrackMaps = (function () {
 
     if (opts.start !== false) {
       const s = pts[0];
-      g.fillStyle = opts.startColor || "#e10600";
-      g.strokeStyle = "rgba(0,0,0,0.6)"; g.lineWidth = 1.5;
-      g.beginPath(); g.arc(PX(s[0]), PY(s[1]), width + 1.5, 0, Math.PI * 2); g.fill(); g.stroke();
+      if (opts.checkeredStart) {
+        const next = pts[1];
+        drawStartFinish(g, PX(s[0]), PY(s[1]), PX(next[0]), PY(next[1]), width * 0.7);
+      } else {
+        g.fillStyle = opts.startColor || "#e10600";
+        g.strokeStyle = "rgba(0,0,0,0.6)"; g.lineWidth = 1.5;
+        g.beginPath(); g.arc(PX(s[0]), PY(s[1]), width + 1.5, 0, Math.PI * 2); g.fill(); g.stroke();
+      }
     }
 
     // ONE CORNER, CALLED OUT: `mark` is a turn number (the loading card's
@@ -686,7 +725,8 @@ const TrackMaps = (function () {
 
   return {
     outline, aspect, fitCanvas, planPreview, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw, detectCorners,
-    SECTOR_COLORS, SECTOR_TOKENS, sectorColors, classColor, classifyCorner, measureApex, assignCornerClasses,
+    SECTOR_COLORS, SECTOR_TOKENS, sectorColors, aeroColor, drawStartFinish, drawCarMarker,
+    classColor, classifyCorner, measureApex, assignCornerClasses,
     invalidate, cachedIds: () => Object.keys(cache),
   };
 })();
