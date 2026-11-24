@@ -326,7 +326,7 @@ function bootButtons({ count = null, inputFile = "js/input/input.js" } = {}) {
   const Input = vm.runInContext("Input", ctx);
   Input.init(el());
   return {
-    Input, clock, els,
+    Input, clock, els, model: vm.runInContext("PedalTravel", ctx),
     left: () => els.get("btn-steer-left"),
     right: () => els.get("btn-steer-right"),
   };
@@ -627,4 +627,22 @@ test("dropping a pad still forgets its use record when the live set is reused", 
   list = [a, b];
   h.clock.t += 16; h.Input.poll();
   assert.ok(Math.abs(h.Input.steer(1 / 60)) < 0.05, "the unplugged pad's use record must not survive");
+});
+
+test("an on-screen arrow uses its slide endpoint even with global Adaptive Buttons off", () => {
+  const { Input, left, right, model } = bootButtons();
+  right().getBoundingClientRect = () => ({ left: 180, top: 0, width: 100, height: 100 });
+  Input.setAdaptiveButtons(0);
+  Input.setSteerExpo(1);
+  model.setButtonProfile("left", { end: 30 });
+  const arrow = left();
+  arrow.fire("pointerdown", { clientX: 0 });
+  for (let i = 0; i < 20; i++) Input.steer(1 / 60);
+  assert.equal(Input.steer(1 / 60), -1);
+  arrow.fire("pointermove", { clientX: 90 });
+  for (let i = 0; i < 20; i++) Input.steer(1 / 60);
+  assert.ok(Math.abs(Input.steer(1 / 60) + 0.3) < 1e-10);
+  arrow.fire("pointerup", { clientX: 90 });
+  for (let i = 0; i < 20; i++) Input.steer(1 / 60);
+  assert.equal(Input.steer(1 / 60), 0);
 });

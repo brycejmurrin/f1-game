@@ -46,7 +46,7 @@ const SettingsSearch = (function () {
     ["mirror", "Rear-view mirror", "display", "pm-hudmirror-sel", "rear view camera"],
     ["line-colour", "Driving line colour", "display", "pm-linecolor-sel", "visual guide color"],
     ["line-opacity", "Driving line opacity", "display", "pm-lineopacity-sel", "visual guide transparent"],
-    ["touch-response", "Touch button response", "controls", "pm-touch-response", "left right arrows steer gas throttle brake pedal slide progressive travel distance input pressure button brightness opacity feedback wheelspin lockup"],
+    ["touch-response", "Touch button response", "controls", "pm-touch-response", "left right arrows steer gas throttle brake pedal slide progressive travel distance input pressure button brightness opacity feedback wheelspin lockup direction start endpoint hold target"],
     ["touch-size", "Touch button size", "display", "pm-btnscale", "bigger smaller pedals arrows"],
     ["touch-opacity", "Touch button opacity", "display", "pm-btnopacity", "transparent pedals arrows"],
     ["touch-shape", "Touch button shape", "display", "pm-btnshape-sel", "round square corners pedals arrows"],
