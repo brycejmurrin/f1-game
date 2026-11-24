@@ -1575,7 +1575,8 @@ body[data-width="wide"] [data-track-focus] [data-map-driver-key] {
   grid-area: drivers; flex-direction: column; align-items: flex-start;
 }
 body[data-width="wide"] [data-track-focus] [data-map-scale] {
-  grid-area: scale; overflow: auto; max-height: 100%;
+  grid-area: scale; overflow-x: hidden; overflow-y: auto; max-height: 100%;
+  overscroll-behavior-y: contain;
   padding-top: calc(var(--gap) / 2); border-top: 1px solid var(--plate-line);
 }
 body[data-width="wide"] [data-track-focus] .dh-maplegend {

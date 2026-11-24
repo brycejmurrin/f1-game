@@ -322,37 +322,41 @@
 .ld-caption-text { display: block; font-weight: 600; max-width: calc(var(--caption-ch, 38) * 1ch); }
 /* Reflow facts at the short edge instead of giving each one a full row.
    Keep the map and facts side by side even when the circuit is wide. */
-@media (orientation: landscape) and (max-height: 500px), (orientation: portrait) and (max-width: 500px) {
-  #ld-body { gap: calc(var(--pad) * 0.75); }
-  #ld-map { max-width: 38%; }
-  #ld-title, #ld-meta > div { min-width: 0; overflow-wrap: anywhere; }
-  #ld-meta {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 4.5em), 1fr));
-    font-size: var(--fs-micro);
-    line-height: 1.2;
-    gap: calc(var(--gap) * 0.5) var(--gap);
-    margin-top: calc(var(--gap) * 0.65);
-  }
-  #ld-text[data-map-label]::after { line-height: 1.25; }
+body:is([data-width="narrow"], [data-density="compact"]) #ld-body {
+  gap: calc(var(--pad) * 0.75);
 }
-@media (orientation: landscape) and (max-height: 500px) {
-  #ld-card { padding-block: calc(var(--gap) * 0.6); }
-  #ld-wordmark { margin-bottom: calc(var(--gap) * 0.5); }
-  #ld-wordmark::after { margin-top: calc(var(--gap) * 0.3); }
-  #ld-meta { display: flex; flex-wrap: wrap; }
-  #ld-meta > div { flex: 1 1 auto; }
-  #ld-text[data-map-label]::after {
-    margin-top: calc(var(--gap) * 0.5);
-    padding-top: calc(var(--gap) * 0.5);
-  }
+body:is([data-width="narrow"], [data-density="compact"]) #ld-map { max-width: 38%; }
+body:is([data-width="narrow"], [data-density="compact"]) :is(#ld-title, #ld-meta > div) {
+  min-width: 0; overflow-wrap: anywhere;
 }
-@media (orientation: portrait) and (max-width: 500px) {
-  /* Allow two lines for the corner label so switching to the grid label
-     does not move the card or its skip affordance. */
-  #ld-text[data-map-label]::after {
-    min-block-size: calc(2lh + 0.75 * var(--gap) + 1px);
-    box-sizing: border-box;
-  }
+body:is([data-width="narrow"], [data-density="compact"]) #ld-meta {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 4.5em), 1fr));
+  font-size: var(--fs-micro);
+  line-height: 1.2;
+  gap: calc(var(--gap) * 0.5) var(--gap);
+  margin-top: calc(var(--gap) * 0.65);
+}
+body:is([data-width="narrow"], [data-density="compact"]) #ld-text[data-map-label]::after { line-height: 1.25; }
+body[data-width="wide"][data-density="compact"] #ld-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  column-gap: calc(var(--gap) * 0.5);
+}
+body[data-width="wide"][data-density="compact"] #ld-card { padding-block: calc(var(--gap) * 0.6); }
+body[data-width="wide"][data-density="compact"] #ld-wordmark {
+  font-size: var(--fs-6);
+  margin-bottom: calc(var(--gap) * 0.5);
+}
+body[data-width="wide"][data-density="compact"] #ld-wordmark::after { margin-top: calc(var(--gap) * 0.3); }
+body[data-width="wide"][data-density="compact"] #ld-text[data-map-label]::after {
+  margin-top: calc(var(--gap) * 0.5);
+  padding-top: calc(var(--gap) * 0.5);
+}
+/* Reserve two lines so a different stage caption does not move the card. */
+body[data-width="narrow"] #ld-text[data-map-label]::after {
+  min-block-size: calc(2lh + 0.75 * var(--gap) + 1px);
+  box-sizing: border-box;
 }
 @media (prefers-reduced-motion: reduce) {
   #ld-card { transition: none; transform: none; }

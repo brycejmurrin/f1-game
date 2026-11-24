@@ -4903,6 +4903,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/circuit-details-panel.js",
+      "global": "CircuitDetailsPanel",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
       "path": "js/ui/companion-return.js",
       "global": null,
       "roster": "OVERLAY_PAGE"
@@ -5276,11 +5281,6 @@
       "path": "js/ui/touch-button-settings.js",
       "global": "TouchButtonSettings",
       "roster": "LAZY_NET"
-    },
-    {
-      "path": "js/ui/track-detail.js",
-      "global": "CircuitDetailsPanel",
-      "roster": "LAZY_UI_PRESETS"
     },
     {
       "path": "js/ui/track-maps.js",

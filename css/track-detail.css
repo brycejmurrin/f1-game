@@ -171,12 +171,10 @@
   background: var(--look-hud-bg); border: 1px solid var(--hairline); border-radius: var(--r-sm);
   font-size: var(--fs-micro);
 }
-@media (orientation: landscape) and (max-height: 500px) {
-  /* The wider circuit projection can reach the corners of the map on phones. */
-  #td-inner[data-shape="wide"] #track-detail-legend {
-    position: static; flex-direction: row; gap: calc(var(--gap) * 0.4) var(--gap);
-    padding: 0; background: none; border: 0;
-  }
+/* The wider circuit projection can reach the map corners on short screens. */
+body[data-density="compact"] #td-inner[data-shape="wide"] #track-detail-legend {
+  position: static; flex-direction: row; gap: calc(var(--gap) * 0.4) var(--gap);
+  padding: 0; background: none; border: 0;
 }
 /* ☆ FAVOURITE (js/ui/select-screen.js openTrackDetail builds it): a chip, not a
    full-width bar, in the panel's column. */

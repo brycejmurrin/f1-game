@@ -1,7 +1,6 @@
 {
   "tree": {
-    "assertPins": 2,
-    "assertPinsAll": 1,
-    "eagerCodeBytes": 2260
+    "assertPins": 1,
+    "assertPinsAll": 1
   }
 }

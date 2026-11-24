@@ -170,7 +170,7 @@ function bootMenus(disk = {}, o = {}) {
       aeroColor: () => "blue", cornerSpeed: () => 122, cornerSpeedColors: () => ["red", "amber", "cyan"],
     },
   });
-  vm.runInNewContext(src("js/ui/track-detail.js"), sb, { filename: absSrc("js/ui/track-detail.js") });
+  vm.runInNewContext(src("js/ui/circuit-details-panel.js"), sb, { filename: absSrc("js/ui/circuit-details-panel.js") });
   vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: absSrc("js/ui/select-screen.js") });
   if (o.practicePick || o.practicePickApi) {
     const api = o.practicePickApi || {};
@@ -898,7 +898,7 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
     "filter snap refreshes the hero before the deferred chip rebuild");
   assert.ok(!/className = "track-group-head"/.test(menus),
     "filter chips name the view; no vertical CLASSICS/SEASON divider");
-  assert.match(code("js/ui/track-detail.js"), /legend:\s*false/, "the modal uses the DOM legend, not the 9px canvas key");
+  assert.match(code("js/ui/circuit-details-panel.js"), /legend:\s*false/, "the modal uses the DOM legend, not the 9px canvas key");
   const maps = code("js/ui/track-maps.js");
   assert.match(maps, /wrap:\s*z\.end > total/, "activationZones marks a run past S/F");
   const nav = code("js/ui/menu-nav.js");
@@ -952,11 +952,11 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
 
 test("closing track detail disconnects its observer and blocks queued hidden redraws", () => {
   const menus = code("js/ui/select-screen.js");
-  const panel = code("js/ui/track-detail.js");
+  const panel = code("js/ui/circuit-details-panel.js");
   const drawAt = panel.search(/drawDetail\s*=\s*function\s*\(\s*\)\s*\{/);
   assert.ok(drawAt >= 0, "drawDetail is the redraw closure");
   assert.match(panel.slice(drawAt, drawAt + 400), /if\s*\(\s*modal\.hidden\s*\)\s*return\s*;/, "a queued redraw of a hidden modal is dropped");
-  const close = fnBody(panel, "closeTrackDetail", "js/ui/track-detail.js");
+  const close = fnBody(panel, "closeTrackDetail", "js/ui/circuit-details-panel.js");
   assert.match(close, /detailRO\.disconnect\(\s*\)/, "closing disconnects the ResizeObserver");
   assert.match(close, /detailRO\s*=\s*null/, "…and forgets it");
   const ret = menus.match(/return\s*\{([^}]*\bopenTrackDetail\b[^}]*)\}/);

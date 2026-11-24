@@ -110,8 +110,8 @@ const LoadingScreen = (function () {
     const MAP_W = 280, MAP_H = 188;
     // Match the compact landscape card in loading.css. Giving the grid a wide,
     // shallow slot keeps two grid blocks legible even with the whole field.
-    const shortLandscape = typeof matchMedia === "function"
-      ? matchMedia("(orientation: landscape) and (max-height: 500px)") : null;
+    const body = typeof document !== "undefined" ? document.body : null;
+    const compactWide = () => body?.dataset.width === "wide" && body.dataset.density === "compact";
     const wideMapBox = { w: 156, h: 116 };
 
     // The live geometry, read from the store on first use and kept after.
@@ -146,15 +146,17 @@ const LoadingScreen = (function () {
     function root() { return el || (el = $("loading")); }
     // The window changed under a card that is up (Safari's toolbar, a rotation): re-fit.
     if (typeof addEventListener === "function") addEventListener("resize", () => { if (phase) fitCard($); });
-    // Redraw the current graphic when crossing the compact landscape breakpoint.
-    shortLandscape?.addEventListener?.("change", () => {
-      const cv = $("ld-map");
-      if (!phase || !mapTrack || !cv) return;
-      if (paintedGrid) fitMap(cv, mapTrack);
-      else drawMap(mapTrack, markN, mapMode);
-      fitCard($);
-      if (paintedGrid) drawGrid(paintedGrid);
-    });
+    // Redraw the graphic if the shared layout changes its map slot.
+    if (body && typeof MutationObserver === "function") {
+      new MutationObserver(() => {
+        const cv = $("ld-map");
+        if (!phase || !mapTrack || !cv || (mapBox === wideMapBox) === compactWide()) return;
+        if (paintedGrid) fitMap(cv, mapTrack);
+        else drawMap(mapTrack, markN, mapMode);
+        fitCard($);
+        if (paintedGrid) drawGrid(paintedGrid);
+      }).observe(body, { attributes: true, attributeFilter: ["data-width", "data-density"] });
+    }
 
     function paint(info) {
       const t = info.track;
@@ -186,7 +188,7 @@ const LoadingScreen = (function () {
     }
 
     function fitMap(cv, track) {
-      if (shortLandscape?.matches) {
+      if (compactWide()) {
         mapBox = wideMapBox;
         cv.width = mapBox.w;
         cv.height = mapBox.h;

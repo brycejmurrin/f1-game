@@ -72,7 +72,7 @@ function boot(disk = {}, o = {}) {
     }, o.trackMaps),
   };
   sb.window = sb;
-  const installTrackDetail = () => vm.runInNewContext(src("js/ui/track-detail.js"), sb, { filename: absSrc("js/ui/track-detail.js") });
+  const installTrackDetail = () => vm.runInNewContext(src("js/ui/circuit-details-panel.js"), sb, { filename: absSrc("js/ui/circuit-details-panel.js") });
   if (o.loadTrackDetail) {
     sb.ScriptLoader = { create: () => ({ load: o.loadTrackDetail.bind(null, installTrackDetail) }) };
   } else installTrackDetail();
@@ -291,7 +291,7 @@ test("opening Circuit Details loads the panel once and displays the requested ci
   let finish;
   const { dom, menus } = boot({}, { loadTrackDetail(install, files, _edges, options) {
     loads++;
-    assert.deepEqual(Array.from(files), ["js/ui/track-detail.js"]);
+    assert.deepEqual(Array.from(files), ["js/ui/circuit-details-panel.js"]);
     return new Promise(resolve => { finish = () => { install(); resolve(options.ready()); }; });
   } });
   dom.byId("track-detail").hidden = true;

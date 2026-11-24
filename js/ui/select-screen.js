@@ -1491,7 +1491,7 @@ function openTrackDetail() {
   }
   requestedDetailIndex = G.trackIdx;
   if (!trackDetailLoad) {
-    trackDetailLoad = ScriptLoader.create().load(["js/ui/track-detail.js"], [], {
+    trackDetailLoad = ScriptLoader.create().load(["js/ui/circuit-details-panel.js"], [], {
       strict: true, ready: () => typeof CircuitDetailsPanel !== "undefined",
     }).then(ok => {
       if (ok && G.trackIdx === requestedDetailIndex && !$("select")?.hidden) openTrackDetail();
