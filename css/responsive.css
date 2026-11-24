@@ -216,14 +216,14 @@ body:not(.hud-hidden) #hud-restore { display: none; }
   #disclaimer { color: var(--text); border-color: var(--text); }
 }
 
-/* THE PHONE'S FOCUS. The phone's D-pad moves focus with synthetic keys, and a
+/* CONTROLLER FOCUS. A D-pad moves focus with synthetic keys, and a
    browser may not draw :focus-visible for that (Safari after a touch or a
    click) or any focus at all while its window is not the focused one — the
-   player is holding the phone, not using this screen. PhonePad.link() marks
-   the phone's focus .pad-ring; overlays layer, so no component's own
-   `outline: none` hides it. Same inset geometry as the base ring, one step
-   heavier, plus a halo, because it is read from the sofa. */
-.pad-ring {
+   phone-as-controller case. PhonePad.link() marks the focused control with
+   .pad-ring. A physical gamepad marks its input mode and follows DOM focus.
+   The overlays layer keeps the inset ring visible over component styling. */
+.pad-ring,
+:root[data-gamepad-nav="on"] :focus:not(body) {
   outline: max(3px, calc(3px / var(--ui-scale, 1))) solid var(--focus);
   outline-offset: calc(-1 * max(3px, calc(3px / var(--ui-scale, 1))));
   box-shadow: 0 0 0 max(2px, calc(2px / var(--ui-scale, 1))) color-mix(in srgb, var(--focus) 35%, transparent);
