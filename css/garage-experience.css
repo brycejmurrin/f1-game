@@ -46,7 +46,7 @@
      phone the pane leaves ~200 px for the controls themselves. */
   .cs-liv-editor [role="tablist"] {
     display: flex; gap: calc(var(--gap) * 0.5); overflow-x: auto; scrollbar-width: none;
-    overscroll-behavior-x: contain; touch-action: pan-x;
+    overscroll-behavior-x: contain; touch-action: manipulation;
     position: sticky; top: 0; z-index: 2; background: var(--carbon); padding-block: calc(var(--gap) * 0.5);
   }
   /* var(--tap), not 44px: a literal inside the sheet zoom painted 30.8 px at UI SIZE 70 (#5672). */

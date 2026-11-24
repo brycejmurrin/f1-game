@@ -3,9 +3,11 @@
 // sheet:  LABEL                     ‹ VALUE ›
 //
 // One line at every UI SIZE and orientation. The value is a native <select>
-// (tap it: the platform picker lists every option; a screen reader hears a
-// combo box with its label; arrow keys step it), and the chevrons step for the
-// quick flips — ON/OFF, AUTO/MANUAL — a thumb makes mid-race. Console racing
+// that NEVER OPENS its picker (Bryce, iPhone 15, 2026-11-24: "I don't want the
+// drop down at all"): ‹ and › step, a tap or click on the value cycles to the
+// next option (wrapping), Left/Right step it from a keyboard or pad, Space and
+// Enter cycle it. The <select> stays the model — its options, value, change
+// event and accessible name — so every caller and test reads it unchanged. Console racing
 // games settle on this shape for the same reasons: a setting costs one row
 // however many options it has, Left/Right on a pad changes it, and the label
 // and the value truncate independently instead of fighting for the line.
@@ -176,19 +178,92 @@ window.SettingRow = (function () {
         const cur = p.sel._srLive;
         step(p, dir, cur.read, cur.write);
       });
+      if (p.prev && p.next) noPicker(p.sel, () => { const cur = p.sel._srLive; step(p, 1, cur.read, cur.write); });   // a chevron-less row keeps its native list
     }
     function stepFromPointer(event, button, dir) {
       event?.stopPropagation?.();
-      // Some browsers focus the chevron on click. Hand that focus to the
-      // select so the next keyboard or controller input stays on this row.
-      if (doc()?.activeElement === button && !p.sel.disabled) p.sel.focus({ preventScroll: true });
+      // Some browsers focus the chevron on click (Safari does for any
+      // tabindex, -1 included). Hand that focus to the select so the next
+      // keyboard or controller input stays on this row — but NEVER after a
+      // finger: on iOS a scripted select.focus() inside a tap OPENS ITS
+      // PICKER, which was why a ‹ › tap stepped AND dropped the list down
+      // (Bryce, iPhone 15 Photo Studio, 2026-11-24).
+      if (button._srTouch !== true && doc()?.activeElement === button && !p.sel.disabled) p.sel.focus({ preventScroll: true });
       step(p, dir, read, write);
     }
-    if (p.prev) p.prev.onclick = (e) => stepFromPointer(e, p.prev, -1);
-    if (p.next) p.next.onclick = (e) => stepFromPointer(e, p.next, 1);
+    for (const [b, dir] of [[p.prev, -1], [p.next, 1]]) {
+      if (!b) continue;
+      if (!b._srPointer && b.addEventListener) {
+        b._srPointer = true;
+        b.addEventListener("pointerdown", (e) => { b._srTouch = !!e && e.pointerType !== "mouse"; });
+        b.addEventListener("touchstart", () => { b._srTouch = true; }, { passive: true });
+      }
+      b.onclick = (e) => stepFromPointer(e, b, dir);
+    }
     pointerOnly(p);
     paint(p.el, read());
     return p.el;
+  }
+
+  /* THE VALUE IS A CYCLE BUTTON, NOT A DROPDOWN. css/settings-controls.css
+     gives the select pointer-events:none, so a finger or mouse lands on the
+     cluster <div> behind it: a click inside the select's box steps forward.
+     The listeners on the select itself cover a host without that rule (and
+     the unit tests' mini DOM): a mouse press is cancelled before the UA opens
+     the list, a finger's touchend is cancelled before iOS focuses it (focus
+     IS what opens the iOS picker), and the click that follows cycles. The
+     keys that OPEN a native list (Space, Enter, F4, Alt+Up/Down) never reach
+     the UA: Space/Enter cycle like a tap, the rest do nothing.
+     `next()` steps the value forward; RendererPicker's own row uses it too. */
+  function noPicker(sel, next) {
+    if (!sel || !sel.addEventListener || sel._srNoPicker) return;
+    sel._srNoPicker = true;
+    const cycle = () => { if (!sel.disabled) next(); };
+    sel.addEventListener("keydown", (e) => {
+      if (sel.disabled || e.defaultPrevented || e.isComposing) return;
+      if (e.key === "F4" || (e.altKey && (e.key === "ArrowDown" || e.key === "ArrowUp"))) { e.preventDefault(); return; }
+      if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      if (e.key !== " " && e.key !== "Enter") return;
+      e.preventDefault();
+      cycle();
+    });
+    const quiet = (e) => !!(e && (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || (e.button != null && e.button !== 0)));
+    let touchAt = -1e9, sx = 0, sy = 0, moved = false;
+    sel.addEventListener("mousedown", (e) => {
+      if (quiet(e)) return;
+      e.preventDefault();
+      if (!sel.disabled && typeof sel.focus === "function") sel.focus({ preventScroll: true });
+    });
+    sel.addEventListener("touchstart", (e) => {
+      const t = e && e.touches && e.touches[0];
+      moved = false; sx = t ? t.clientX : 0; sy = t ? t.clientY : 0;
+    }, { passive: true });
+    sel.addEventListener("touchmove", (e) => {
+      const t = e && e.touches && e.touches[0];
+      if (t && (t.clientX - sx) ** 2 + (t.clientY - sy) ** 2 > 100) moved = true;
+    }, { passive: true });
+    sel.addEventListener("touchend", (e) => {
+      if (e && e.cancelable) e.preventDefault();
+      if (moved || (e && e.touches && e.touches.length)) return;
+      touchAt = Date.now();
+      cycle();
+    }, { passive: false });
+    sel.addEventListener("click", (e) => {
+      e?.stopPropagation?.();
+      if (Date.now() - touchAt < 700) return;   // the tap already cycled
+      if (quiet(e)) return;
+      cycle();
+    });
+    const box = sel.parentNode;
+    if (box && box.addEventListener && !box._srCycle) {
+      box._srCycle = true;
+      box.addEventListener("click", (e) => {
+        if (!e || e.target !== box) return;   // a chevron (or the select) already handled it
+        const r = typeof sel.getBoundingClientRect === "function" ? sel.getBoundingClientRect() : null;
+        if (r && r.width && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) return;
+        cycle();
+      });
+    }
   }
 
   /* The chevrons are pointer affordances for the native <select>, not a second
@@ -278,5 +353,5 @@ window.SettingRow = (function () {
   /* [["auto", "AUTO"], …] from a plain value list. */
   const labels = (list) => list.map((v) => [v, S(v).toUpperCase()]);
 
-  return { parts, paint, disable, optionDisabled, value, wire, build, labels, numberInput };
+  return { parts, paint, disable, optionDisabled, value, wire, build, labels, numberInput, noPicker };
 })();

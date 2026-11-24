@@ -67,7 +67,7 @@ body[data-spectator] #bc-tower {
   width: clamp(136px, 19vw, 194px);
   max-height: calc(100dvh - var(--spectator-foot) - var(--sat) - var(--sab) - 3 * var(--gap));
   overflow-y: auto; overflow-x: hidden;
-  overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y;
+  overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: manipulation;
 }
 body[data-spectator="watch"] #bc-pip {
   --hud-z: 1;

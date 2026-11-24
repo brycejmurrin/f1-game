@@ -134,6 +134,13 @@
    "SYSTEM DEFAL…". Wider, and it shrinks back toward 8rem on a narrow phone.
    Matched by id, so the pane gains no class. */
 .set-row > div > select[id^="as-v-"] { flex: 0 1 14rem; width: 14rem; min-width: 8rem; }
+/* A ‹ VALUE › stepper never opens a dropdown (Bryce, 2026-11-24: "I don't
+   want the drop down at all"). The value lets the pointer through to its
+   cluster, which cycles to the next option (js/ui/setting-row.js noPicker);
+   keyboard and pad focus still land on the select itself. */
+.set-row > div:has(> button[data-step]) > select { pointer-events: none; }
+.set-row > div:has(> button[data-step]):not(:has(> select:disabled)) { cursor: pointer; }
+.set-row > div:has(> button[data-step]) > button { cursor: pointer; }
 .set-row > div > select:disabled,
 .set-row > div > button:disabled { opacity: 0.45; cursor: default; }
 .set-row + .adv-help { margin-top: 0; }
