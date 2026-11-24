@@ -56,6 +56,8 @@ const LearnSandbox = (() => {
     const readouts = element("dl", instrument);
     const explanation = element("p", instrument);
     const settings = panel(studio);
+    const sideControls = element("div", settings);
+    sideControls.className = "lesson-side-primary";
     const setup = element("details", settings);
     setup.className = "lesson-setup";
     element("summary", setup, "More setup controls");
@@ -118,17 +120,20 @@ const LearnSandbox = (() => {
     const reset = element("button", fields, "Reset controls");
     reset.type = "button";
     const compact = matchMedia("(width < 46rem)");
+    const landscape = matchMedia("(min-width: 34rem) and (max-height: 430px)");
     function placeControls() {
       const focused = document.activeElement;
+      const inline = landscape.matches ? sideControls : compact.matches ? primary : fields;
       for (const {control, row} of controls.values()) {
-        (compact.matches && control.primary ? primary : fields).append(row);
+        (control.primary ? inline : fields).append(row);
       }
       if (presets) fields.append(presetLabel, presets);
       fields.append(reset);
-      setup.open = !compact.matches || fields.contains(focused);
+      setup.open = !(compact.matches || landscape.matches) || fields.contains(focused);
       if (settings.contains(focused) || primary.contains(focused)) focused.focus({preventScroll: true});
     }
     compact.addEventListener("change", placeControls);
+    landscape.addEventListener("change", placeControls);
     placeControls();
 
     const task = panel(studio);

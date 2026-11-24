@@ -49,3 +49,20 @@ a { color: var(--text); }
   .lesson-replay span { flex-basis: 100%; order: 1; }
 }
 @media (pointer: coarse) { .lesson-setup summary { min-block-size: 44px; align-content: center; } }
+
+@media (min-width: 34rem) and (max-height: 430px) {
+  #lab { display: flex; flex-direction: column; padding: .5rem; }
+  #lab > .intro { order: 1; margin: .55rem 0 0; }
+  #lab > details { order: 2; }
+  #learn-studio {
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    gap: .55rem;
+  }
+  #learn-studio [data-as="box"] { padding: .55rem; }
+  #lab .diagram-view:not(.expanded) svg { max-block-size: min(42vh, 155px); }
+  .lesson-primary:not(:empty) { margin: 0; }
+  .lesson-setup, .lesson-setup[open] { padding: 0; }
+  .lesson-setup summary { display: list-item; }
+  .lesson-replay { gap: .35em; }
+  .lesson-replay span { order: 1; flex-basis: 100%; }
+}

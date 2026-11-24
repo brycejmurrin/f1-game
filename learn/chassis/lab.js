@@ -119,7 +119,7 @@
       {id: "offset", when: state => state.view === "wake", label: "Following car offset (wake layer)", min: -75, max: 75, step: 5, value: 0, unit: "%"},
       {id: "wheelbase", when: state => state.view === "inspect", label: "Candidate wheelbase", min: 3200, max: 3600, step: 10, value: 3450, unit: "mm"},
       {id: "body", when: state => state.view === "inspect", label: "Candidate body half-width", min: 850, max: 1000, step: 5, value: 945, unit: "mm"},
-      {id: "answer", when: state => state.view === "challenge" || state.view === "edge", label: "Your inspection call", options: [["unset", "Choose a result"], ["pass", "Both dimensions pass"], ["axle", "Wheelbase only fails"], ["body", "Body half-width only fails"], ["both", "Both dimensions fail"]], value: "unset"},
+      {id: "answer", primary: true, when: state => state.view === "challenge" || state.view === "edge", label: "Your inspection call", options: [["unset", "Choose a result"], ["pass", "Both dimensions pass"], ["axle", "Wheelbase only fails"], ["body", "Body half-width only fails"], ["both", "Both dimensions fail"]], value: "unset"},
     ],
     challenge: "Choose the fixed 3,450 / 945 mm challenge and decide which measurements pass. Then try the exact-limit fixture to see how the rule treats equality.",
     sources: [

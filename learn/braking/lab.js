@@ -9,13 +9,15 @@
   const controls = setup.parentElement;
   const readings = document.querySelector(".readings");
   const compactLayout = matchMedia("(width < 580px)");
+  const landscapeLayout = matchMedia("(min-width: 34rem) and (max-height: 430px)");
   function placeForceControls() {
     const focused = document.activeElement;
-    if (compactLayout.matches) readings.before(setup);
+    if (compactLayout.matches && !landscapeLayout.matches) readings.before(setup);
     else controls.prepend(setup);
     if (setup.contains(focused)) focused.focus({preventScroll: true});
   }
   compactLayout.addEventListener("change", placeForceControls);
+  landscapeLayout.addEventListener("change", placeForceControls);
   placeForceControls();
   const requested = [plot.querySelector(".ray.requested"), plot.querySelector(".point.requested")];
   const delivered = [plot.querySelector(".ray.achieved"), plot.querySelector(".point.achieved")];

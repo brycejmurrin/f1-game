@@ -1390,6 +1390,7 @@ test("Learn curriculum groups fourteen lessons and lets a player solve the chass
   await lab.getByLabel("Your inspection call").selectOption("pass");
   await check.click();
   await expect(lab.getByRole("status")).toContainText("Challenge complete.");
+  await lab.getByText("More setup controls", { exact: true }).click();
   await lab.getByRole("button", { name: "Reset controls" }).click();
   await expect(lab.getByLabel("Drawing layer")).toHaveValue("compare");
   await expect(lab.getByRole("status")).toBeEmpty();
@@ -1408,4 +1409,11 @@ test("Learn curriculum groups fourteen lessons and lets a player solve the chass
   const more = lab.getByText("More setup controls", { exact: true });
   await more.click();
   await expect(lab.getByLabel("Power curve")).toBeVisible();
+
+  await charge.fill("2");
+  await page.setViewportSize({ width: 667, height: 375 });
+  await expect(lab.locator(".lesson-side-primary #input-charge")).toHaveValue("2");
+  await chart.evaluate(() => window.scrollTo(0, 0));
+  await expect(chart).toBeInViewport();
+  await expect(charge).toBeInViewport();
 });

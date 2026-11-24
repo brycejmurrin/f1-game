@@ -270,8 +270,13 @@ details {
   border-radius: var(--r-md);
   background: var(--surf-1);
 }
-@media (max-height: 500px) and (min-width: 641px) {
-  #learn-studio { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: calc(var(--pad) * .5); }
+@media (min-width: 34rem) and (max-height: 430px) {
+  #learn-studio {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: "setup airflow" "setup results" "setup replay" "help help";
+    padding: calc(var(--pad) * .5);
+  }
+  #learn-studio .results { display: block; }
   #flow { height: 100px; }
   main { padding: .45rem; }
   .instrument button { padding: .15rem .5rem; }

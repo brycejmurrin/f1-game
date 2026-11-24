@@ -17,6 +17,7 @@
 <section class="timing" data-as="preview-side" aria-labelledby="timing-heading">
 <h3 id="timing-heading" data-as="heading">Compare the same timing markers</h3>
 <p class="muted">Illustrative circuit sector · 400 m on track</p>
+<div class="timing-setup">
 <label for="fixture">Scenario</label>
 <select id="fixture">
 <option value="default">Long stint · Your sector under VSC</option>
@@ -27,6 +28,8 @@
 <option value="green">Durable Hards · Green throughout</option>
 <option value="safetyCar">Durable Hards · Safety Car queue</option>
 </select>
+</div>
+<div class="timing-lanes">
 <div class="markers" aria-hidden="true"><span>Start marker</span><span>End marker</span></div>
 <div class="lane">
 <span>Pit lane</span><strong id="pit-clock"></strong>
@@ -43,6 +46,7 @@
 <div class="lane">
 <span>Reference car · same restart</span><strong id="reference-clock"></strong>
 <div class="track" aria-hidden="true"><i id="reference-car"></i></div>
+</div>
 </div>
 <div class="transport">
 <label for="timeline">Replay time <span class="readout" id="elapsed" aria-hidden="true"></span></label>
