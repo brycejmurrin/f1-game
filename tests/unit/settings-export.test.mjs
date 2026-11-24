@@ -2902,3 +2902,16 @@ test("real-store reset unpins defaults and does not reload on storage failure", 
   [...ui.dom.document.querySelectorAll("button")].find(n => n.textContent === "CONFIRM RESET & RELOAD").click();
   assert.equal(ui.reloads(), 0); assert.equal(ui.disk.get("apex26.steerMode"), '"touch"');
 });
+
+test("#6263: resetRow with focus:false shows the confirmation without moving focus", () => {
+  const b = bootImportUI({ globals: { SettingsNav: { onLeave: () => {} } } });
+  const launcher = b.dom.document.createElement("button"), other = b.dom.document.createElement("button");
+  b.dom.byId("pm-panel-files").append(launcher, other);
+  other.focus();
+  b.SettingsExport.resetRow("controls", launcher, { focus: false });
+  const confirm = [...b.dom.document.querySelectorAll("button")].find(x => x.textContent === "CONFIRM RESET & RELOAD");
+  assert.ok(confirm, "the prompt is shown");
+  assert.equal(b.dom.document.activeElement === other, true, "focus stays where the player put it");
+  b.SettingsExport.resetRow("controls", launcher);
+  assert.equal(b.dom.document.activeElement?.textContent, "CONFIRM RESET & RELOAD", "the default still focuses the confirmation");
+});

@@ -504,3 +504,43 @@ test("TopModal.onFocusIn does not trap Tab into a LAYER_SKIP layer", () => {
   assert.equal(doc.activeElement, stray,
     "focus stays on the stray control — photo-controls is LAYER_SKIP, not a menu trap");
 });
+
+// #6261: the portrait rotation blocker is CSS-shown (never a native modal) and
+// LAYER_SKIP keeps it out of focus memory — but it must still contain Tab and
+// pull a stray focus back, or the covered HUD's Pause takes the keyboard.
+test("#6261: the rotation blocker contains Tab and pulls stray focus off the covered HUD", () => {
+  const doc = { activeElement: null }, keydown = [];
+  const btn = (id) => { const b = { id, hidden: false, disabled: false, tagName: "BUTTON", tabIndex: 0, getAttribute: () => null,
+    focus() { doc.activeElement = b; }, scrollIntoView() {} }; return b; };
+  const race = btn("rotate-race"), controls = btn("rotate-controls"), exit = btn("rotate-exit"), pause = btn("pausebtn");
+  const rotate = {
+    id: "rotate-device", hidden: false, tagName: "DIV",
+    contains: (el) => el === rotate || el === race || el === controls || el === exit,
+    querySelectorAll: () => [race, controls, exit], querySelector: () => null,
+    addEventListener: (type, fn) => { if (type === "keydown") keydown.push(fn); },
+    getBoundingClientRect: () => ({ width: 390, height: 844 }),
+  };
+  const document = {
+    readyState: "complete", addEventListener() {},
+    get activeElement() { return doc.activeElement; },
+    body: { contains: () => true }, documentElement: {},
+    getElementById: (id) => ({ "rotate-device": rotate }[id] || null),
+    querySelectorAll: () => [], querySelector: () => null,
+  };
+  const context = {
+    window: { addEventListener() {}, UiLayers: { LAYER_IDS: ["rotate-device"], top: () => rotate, shown: (el) => !!el && !el.hidden } },
+    WeakSet, WeakMap, queueMicrotask: () => {}, MutationObserver: class { observe() {} },
+    document, Log: { info() {}, warn() {} },
+  };
+  context.globalThis = context;
+  vm.createContext(context);
+  vm.runInContext(read("js/ui/modal.js"), context, { filename: absSrc("js/ui/modal.js") });
+  pause.focus();
+  context.window.TopModal.onFocusIn({ target: pause });
+  assert.equal(doc.activeElement, race, "focus on the covered Pause is pulled back onto the blocker");
+  exit.focus();
+  assert.ok(keydown.length > 0, "the blocker wraps Tab at its edges");
+  let prevented = 0;
+  for (const fn of keydown) fn({ key: "Tab", shiftKey: false, preventDefault() { prevented++; } });
+  assert.equal(prevented, 1); assert.equal(doc.activeElement, race, "Tab past EXIT RACE wraps to the first blocker button");
+});
