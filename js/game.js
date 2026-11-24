@@ -9334,6 +9334,7 @@ function setPaused(p, why) {
   // (RETURN TO RACE charged a dead race and droned the engine), RESUME + RETURN TO RACE ran the race
   // with the wake lock released (bug-hunt 3, 2026-10-10). The garage is the screen; it stays paused.
   if (p && garageReturn === "pit" && !$("carsetup").hidden) { paused = true; return; }
+  if (paused && !p) Input.invalidateRemoteDrive();
   if (paused !== !!p) Log.info("game", "Race " + (p ? "paused" : "resumed") + " why=" + (why || "button") + " state=" + state + " raceT=" + raceT.toFixed(1));
   paused = p; GameAudio.resetReplayScrub(); replayBuf.onPause(!!p); // REPLAY overlay while paused
   if (p) learnAeroDrill?.guide.hide();
