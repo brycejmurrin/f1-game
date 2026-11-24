@@ -1,8 +1,6 @@
 {
   "why": "Shrink-only baseline of corner-frame offenders (tests/unit/corner-frames.test.mjs): stable key -> measured offset m. Delete a row when it is fixed; never add one. Regenerate: node tools/track/corner-frames.cjs --baseline",
   "rows": {
-    "bahrain|T6": 28,
-    "bahrain|T7": 32,
     "fuji|T13": 54,
     "imola|T7": 19,
     "magny_cours|T9": 46,
