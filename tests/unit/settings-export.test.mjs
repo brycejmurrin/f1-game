@@ -158,14 +158,15 @@ function bootImportUI(opts = {}) {
 // Restore into an empty profile and reload the actual option owner, including its
 // first-read cache. The source can have a URL override that the backup must ignore.
 function bootPreference(disk, owner, search = "") {
+  const lineAppearance = {};
   const b = boot({ realStore: true, disk, globals: {
-    location: { search }, DrivingLine: { setPalette() {}, setOpacity() {} },
+    location: { search }, DrivingLine: { setPalette(v) { lineAppearance.palette = v; }, setOpacity(v) { lineAppearance.opacity = v; } },
   } });
   const cockpit = owner === "cockpit";
   const src = cockpit ? "js/camera/cockpit-opts.js" : "js/ui/driving-line-opts.js";
   const binding = cockpit ? "CockpitOpts" : "DrivingLineOpts";
   const opts = vm.runInContext(read(src) + "\n" + binding, b.sb, { filename: absSrc(src) });
-  return { ...b, preference: cockpit ? opts.turnChaseLead : opts.brakeCue };
+  return { ...b, lineAppearance, preference: cockpit ? opts.turnChaseLead : opts.brakeCue };
 }
 
 for (const mode of ["all", "changes"]) {
@@ -2704,7 +2705,7 @@ test("pedal dead zones round-trip and clamp imported trigger values", () => {
 
 test("Controls reset removes all input overrides without resetting assistance or progress", () => {
   const keys = ["steerMode", "autoThrottle", "tiltDeg", "steerRate", "pace", "carWeight", "touchCurve", "touchRange", "dragSmooth", "digitalRate", "analogSpeedSteer", "padDeadzone", "padGasDeadzone", "padBrakeDeadzone", "padAxes", "padProfiles", "padRest", "keys", "pad", "dockLayout", "touchButtonProfiles", "pedalSlide", "throttleLatch", "holdMode", "hudBtnScale"];
-  const keep = { "apex26.career": "saved", "apex26.photoLibrary": "photos", "apex26.drivingHelp": "7", "apex26.motion": '"reduce"', "apex26.volMusic": "0.2", "apex26.steerSchema": "6" };
+  const keep = { "apex26.career": "saved", "apex26.photoLibrary": "photos", "apex26.drivingHelp": "7", "apex26.adaptiveButtons": "10", "apex26.motion": '"reduce"', "apex26.volMusic": "0.2", "apex26.steerSchema": "6" };
   const b = boot({ disk: { ...Object.fromEntries(keys.map(k => ["apex26." + k, "3"])), ...keep } });
   assert.equal(b.SettingsExport.resetSettings("controls").ok, true);
   assert.deepEqual(keys.filter(k => b.disk.has("apex26." + k)), []);
@@ -2719,12 +2720,47 @@ test("section resets respect page ownership rather than legacy backup groups", (
     ["display", ["hudLayout", "helmetVisor", "camTuneTrack", "camComfort"], ["dockLayout", "hudBtnScale", "uiScale", "gfxPreset"]],
     ["appearance", ["uiTheme", "screenPlacement", "uiScale"], ["appearanceProfiles", "captions", "textSize", "homePhoto"]],
     ["driving", ["manual", "autoThrottle", "aeroMode", "conditionCues", "drivingHelp"], ["raceDraft", "steerMode", "tiltDeg"]],
-    ["advanced", ["pace", "tiltDeg", "steerRate", "padCurve"], ["keys", "padProfiles", "dockLayout"]],
+    ["advanced", ["pace", "tiltDeg", "steerRate", "padCurve"], ["keys", "padProfiles", "dockLayout", "adaptiveButtons"]],
   ];
   for (const [scope, removed, kept] of cases) {
     const b = boot({ disk: Object.fromEntries([...removed, ...kept].map(k => ["apex26." + k, "3"])) });
     assert.equal(b.SettingsExport.resetSettings(scope).ok, true, scope);
     assert.deepEqual([...b.disk.keys()].sort(), kept.map(k => "apex26." + k).sort(), scope);
+  }
+});
+
+test("#6294 Driving Aids reset clears both braking cues and Adaptive Buttons across reload", () => {
+  const b = bootPreference({ "apex26.brakeCue": "7", "apex26.lineBrakeCue": '"on"',
+    "apex26.adaptiveButtons": "10", "apex26.steerRate": "8", "apex26.drivingLinePalette": '"pink"',
+    "apex26.raceDraft": '{"laps":"10"}', "apex26.career": '"saved"' }, "line");
+  assert.equal(b.preference(), true);
+  assert.equal(b.SettingsExport.resetSettings("driving").ok, true);
+  const restarted = bootPreference(Object.fromEntries(b.disk), "line");
+  assert.equal(restarted.preference(), false, "the fallback beep remains disabled after Predictive resets");
+  for (const key of ["brakeCue", "lineBrakeCue", "adaptiveButtons"])
+    assert.equal(restarted.GameStore.store.getStored(key), undefined, key + " returns to its boot default");
+  assert.equal(restarted.collect("all").settings.steering.brakeCue, 1);
+  assert.equal(restarted.collect("all").settings.steering.adaptiveButtons, 6);
+  for (const [key, value] of [["steerRate", "8"], ["drivingLinePalette", '"pink"'],
+    ["raceDraft", '{"laps":"10"}'], ["career", '"saved"']])
+    assert.equal(restarted.disk.get("apex26." + key), value, key + " stays saved");
+});
+
+test("#6295 HUD & Camera reset restores driving line appearance across reload without changing aids", () => {
+  const b = bootPreference({ "apex26.drivingLinePalette": '"pink"', "apex26.drivingLineOpacity": '"solid"',
+    "apex26.lineBrakeCue": '"on"', "apex26.raceLine": "2", "apex26.adaptiveButtons": "10",
+    "apex26.gfxPreset": '"medium"' }, "line");
+  assert.deepEqual(b.lineAppearance, { palette: "pink", opacity: "solid" });
+  assert.equal(b.SettingsExport.resetSettings("display").ok, true);
+  const restarted = bootPreference(Object.fromEntries(b.disk), "line");
+  assert.deepEqual(restarted.lineAppearance, { palette: "f1", opacity: "normal" });
+  assert.equal(restarted.preference(), true, "Line-Speed Cue belongs to Driving Aids");
+  for (const [key, value] of [["raceLine", "2"], ["adaptiveButtons", "10"], ["gfxPreset", '"medium"']])
+    assert.equal(restarted.disk.get("apex26." + key), value, key + " stays saved");
+  for (const scope of ["controls", "advanced", "driving", "graphics"]) {
+    const other = boot({ disk: { "apex26.drivingLinePalette": '"pink"', "apex26.drivingLineOpacity": '"solid"' } });
+    assert.equal(other.SettingsExport.resetSettings(scope).ok, true);
+    assert.equal(other.disk.size, 2, scope + " preserves line appearance");
   }
 });
 
