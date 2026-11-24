@@ -35,8 +35,9 @@
  * then queued, cut at MAX_RUNS: under load ≥ 30 runs are in progress, so no
  * queued run — where the queued jobs live — was ever read (the tool said 155
  * queued while a full scan found 545). Now runs with status queued are listed
- * (paged) before in_progress (pending/requested/waiting runs dropped 2026-10-26); the first MAX_RUNS are
- * read job by job, and up to MAX_COUNTED more QUEUED runs are counted by
+ * (paged) alongside in_progress and pending; a round-robin sample of MAX_RUNS is
+ * read job by job so empty queued attempts cannot hide running work (#6279).
+ * Up to MAX_COUNTED more QUEUED runs are counted by
  * their jobs `total_count` (one per_page=1 call each; the sampled job gives
  * the OS). A count that skipped live runs is a lower bound: the line and the
  * hold reasons say `≥`.
@@ -148,7 +149,7 @@ export function countJobs(jobs) {
 /**
  * The verdict over counted jobs. Pure.
  * @param {ReturnType<typeof countJobs>} c
- * @param {{ runsExamined?: number, runsCounted?: number, runsLive?: number, now?: number }} [meta]
+ * @param {{ runsExamined?: number, runsCounted?: number, runsLive?: number, incomplete?: boolean, estimated?: boolean, now?: number }} [meta]
  */
 export function evaluate(c, meta = {}) {
   const now = meta.now ?? Date.now();
@@ -159,7 +160,7 @@ export function evaluate(c, meta = {}) {
   const queued = c.linux.queued + c.macos.queued;
   const runsExamined = meta.runsExamined ?? 0, runsCounted = meta.runsCounted ?? 0;
   const runsLive = meta.runsLive ?? runsExamined + runsCounted;
-  const truncated = runsLive > runsExamined + runsCounted;
+  const truncated = !!meta.incomplete || runsLive > runsExamined + runsCounted;
   // A truncated count is a lower bound: say so in the reason itself (#2181).
   const n = (x) => truncated ? `≥${x} (a lower bound)` : `${x}`;
   const reasons = [];
@@ -187,6 +188,7 @@ export function evaluate(c, meta = {}) {
     runsCounted,
     runsLive,
     truncated,
+    estimated: !!meta.estimated,
   };
 }
 
@@ -203,8 +205,8 @@ export function reportLine(v) {
 }
 
 /**
- * Live runs (queued/pending/requested first, then in_progress; paged, deduped)
- * → the first `maxRuns` read job by job, up to `maxCounted` further QUEUED runs
+ * Live runs (queued/in_progress/pending; paged, deduped)
+ * → `maxRuns` sampled round-robin by status, up to `maxCounted` further QUEUED runs
  * counted by jobs total_count → verdict. Injectable `request` for tests.
  * @param {{ request?: typeof api, maxRuns?: number, maxCounted?: number, now?: () => number }} [opts]
  */
@@ -213,25 +215,41 @@ export function measure(opts = {}) {
   const maxRuns = opts.maxRuns ?? MAX_RUNS;
   const maxCounted = opts.maxCounted ?? MAX_COUNTED;
   const runs = new Map();
+  let incomplete = false, estimated = false;
   for (const status of RUN_STATUSES) {
     for (let page = 1; page <= MAX_PAGES; page++) {
       const r = request(`actions/runs?status=${status}&per_page=100&page=${page}`);
       if (r.error) return { error: `runs (${status}): ${r.error}` };
       const list = r.json?.workflow_runs;
       if (!Array.isArray(list)) return { error: `runs (${status}) returned no run array` };
-      for (const run of list) if (run && Number.isInteger(run.id) && !runs.has(run.id)) runs.set(run.id, { status, ...run });
-      const total = Number.isInteger(r.json.total_count) ? r.json.total_count : list.length;
+      const total = r.json.total_count;
+      if (!Number.isInteger(total) || total < list.length) return { error: `runs (${status}) returned invalid total_count` };
+      for (const run of list) {
+        if (!run || !Number.isInteger(run.id)) { incomplete = true; continue; }
+        if (!runs.has(run.id)) runs.set(run.id, { ...run, status });
+      }
+      if ((list.length < 100 || page === MAX_PAGES) && (page - 1) * 100 + list.length < total) incomplete = true;
       if (list.length < 100 || page * 100 >= total) break;
     }
   }
-  const ordered = [...runs.values()];
+  const buckets = RUN_STATUSES.map((status) => [...runs.values()].filter((run) => run.status === status));
+  const ordered = [];
+  for (let i = 0; buckets.some((bucket) => i < bucket.length); i++) {
+    for (const bucket of buckets) if (bucket[i]) ordered.push(bucket[i]);
+  }
   const examined = ordered.slice(0, maxRuns);
   const jobs = [];
   for (const run of examined) {
-    const j = request(`actions/runs/${run.id}/jobs?per_page=100`);
-    if (j.error) return { error: `run #${run.id} jobs: ${j.error}` };
-    if (!Array.isArray(j.json?.jobs)) return { error: `run #${run.id} jobs returned no job array` };
-    jobs.push(...j.json.jobs);
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const j = request(`actions/runs/${run.id}/jobs?per_page=100${page === 1 ? "" : `&page=${page}`}`);
+      if (j.error) return { error: `run #${run.id} jobs: ${j.error}` };
+      if (!Array.isArray(j.json?.jobs)) return { error: `run #${run.id} jobs returned no job array` };
+      const total = j.json.total_count;
+      if (!Number.isInteger(total) || total < j.json.jobs.length) return { error: `run #${run.id} jobs returned invalid total_count` };
+      jobs.push(...j.json.jobs);
+      if ((j.json.jobs.length < 100 || page === MAX_PAGES) && (page - 1) * 100 + j.json.jobs.length < total) incomplete = true;
+      if (j.json.jobs.length < 100 || page * 100 >= total) break;
+    }
   }
   // Past the cap: a QUEUED run's jobs are all waiting, so its jobs total is the
   // count (an upper bound if one started since); the sampled job names the OS.
@@ -239,13 +257,17 @@ export function measure(opts = {}) {
   for (const run of ordered.slice(maxRuns).filter((r) => QUEUED_RUN.has(r.status)).slice(0, maxCounted)) {
     const j = request(`actions/runs/${run.id}/jobs?per_page=1`);
     if (j.error) return { error: `run #${run.id} jobs: ${j.error}` };
-    const n = Number.isInteger(j.json?.total_count) ? j.json.total_count : 0;
+    const n = j.json?.total_count;
+    if (!Array.isArray(j.json?.jobs) || !Number.isInteger(n) || n < j.json.jobs.length || (n > 0 && !j.json.jobs.length))
+      return { error: `run #${run.id} jobs returned invalid sample` };
+    // One sampled OS cannot prove a mixed run has spare Linux capacity.
+    if (n > 0) estimated = true;
     const labels = j.json?.jobs?.[0]?.labels || [];
     const created_at = j.json?.jobs?.[0]?.created_at || run.created_at;
     for (let i = 0; i < n; i++) jobs.push({ status: "queued", labels, created_at });
     counted++;
   }
-  const v = evaluate(countJobs(jobs), { runsExamined: examined.length, runsCounted: counted, runsLive: runs.size, now: (opts.now || Date.now)() });
+  const v = evaluate(countJobs(jobs), { runsExamined: examined.length, runsCounted: counted, runsLive: runs.size, incomplete, estimated, now: (opts.now || Date.now)() });
   return { at: new Date((opts.now || Date.now)()).toISOString(), ...v, line: reportLine(v) };
 }
 
@@ -254,12 +276,15 @@ export const OPTIONAL_LINUX_LIMIT = 35;
 
 export function optionalWorkAdmission(snapshot) {
   const inFlight = snapshot.linux?.inFlight;
-  if (!Number.isFinite(inFlight)) {
-    return { proceed: true, message: `queue depth unavailable (${snapshot.error || "no Linux job count"}); proceeding` };
+  if (snapshot.error || !Number.isFinite(inFlight) || inFlight < 0) {
+    return { proceed: false, message: `queue depth unavailable (${snapshot.error || "no Linux job count"}); deferring` };
   }
   const count = snapshot.truncated ? `at least ${inFlight}` : String(inFlight);
   if (inFlight >= OPTIONAL_LINUX_LIMIT) {
     return { proceed: false, message: `${count} Linux jobs in flight (limit ${OPTIONAL_LINUX_LIMIT})` };
+  }
+  if (snapshot.truncated || snapshot.estimated) {
+    return { proceed: false, message: `${count} Linux jobs in flight; incomplete or estimated queue depth cannot establish spare capacity` };
   }
   return { proceed: true, message: `${count} Linux jobs in flight (limit ${OPTIONAL_LINUX_LIMIT})` };
 }
@@ -399,7 +424,7 @@ Counts queued + running Actions JOBS by OS against ${LINUX_SLOTS} Linux / ${MACO
 Hold at ≥${LINUX_HOLD} Linux in flight, ≥${QUEUED_HOLD} queued, or ≥${MACOS_SLOTS} macOS. --write defaults to ${DEFAULT_OUT}.
 --push: exit 0 with "= queue skip" when every pushed branch has no open PR.
 --wait <min>: block (run it as ONE background task) until ok has held 2 min; prints the in-flight/queued trend each poll; exit 0 ok, 124 timeout.
---admit-optional: exit 1 at ${OPTIONAL_LINUX_LIMIT} Linux jobs in flight to defer an optional browser group.
+--admit-optional: exit 1 at ${OPTIONAL_LINUX_LIMIT} Linux jobs in flight or unknown capacity to defer an optional browser group.
 The normal gauge is informational and never holds a push (AGENTS.md rule 4).
 Exit 0 = ok or hold (never blocks), 2 = bad args, 3 = API/token.`);
   if (argv.length === 1 && argv[0] === "--admit-optional") {
