@@ -506,7 +506,7 @@ function bootInput({ DeviceOrientationEvent, pads, console: con = console, debug
   const ctx = vm.createContext(sb);
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/tilt-roll.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
-  Input.init({ addEventListener() {} }, {});
+  Input.init({ addEventListener: on }, {});
   const count = (type) => (listeners.get(type) || []).length;
   const fire = (type, e) => { for (const fn of [...(listeners.get(type) || [])]) fn(e); };
   return { Input, count, fire, clock, intervals, nodes, document: sb.document };
@@ -636,6 +636,93 @@ test("gamepaddisconnected re-reads the live list: a second pad keeps the pad pat
   live = [];
   h.fire("gamepaddisconnected", { gamepad: padB });
   assert.equal(h.Input.padConnected, false, "the last pad leaving disconnects");
+});
+
+test("physical pad loss pauses only when the last driving pad disconnects", () => {
+  for (const [scenario, expected] of [
+    ["driver with idle spare", 1], ["driver without spare", 1], ["idle spare", 0],
+    ["keyboard coast", 0], ["keyboard takes over", 0], ["phone coast", 0], ["touch coast", 0], ["spare driving", 0],
+    ["driver with idle phone", 1],
+    ["driver masks phone steering", 1],
+    ["driver after snapshot gap", 1],
+  ]) {
+    const pad = index => ({
+      index, connected: true, mapping: "standard", id: String(index), axes: [0, 0, 0, 0],
+      buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })),
+    });
+    const press = (p, index, down = true) => { p.buttons[index] = { pressed: down, value: +down }; };
+    const driver = pad(0), spare = pad(1);
+    let live = [driver, spare], losses = 0;
+    if (["driver without spare", "keyboard coast", "keyboard takes over", "phone coast", "touch coast", "driver with idle phone", "driver masks phone steering"].includes(scenario)) live = [driver];
+    const h = bootInput({ pads: () => live });
+    h.Input.init(null, { onPadLost() { losses++; } });
+    h.clock.t = 10;
+    h.fire("gamepadconnected", { gamepad: driver });
+    h.Input.poll();
+    if (scenario !== "keyboard coast") {
+      h.clock.t = 20;
+      press(driver, 7);
+      h.Input.poll();
+      assert.equal(h.Input.throttleLevel(), 1, scenario);
+    }
+    let lost = driver;
+    if (scenario === "keyboard coast" || scenario === "keyboard takes over") {
+      press(driver, 7, false);
+      h.Input.poll();
+      const key = { code: "ArrowUp", key: "ArrowUp", isTrusted: true, preventDefault() {} };
+      h.fire("keydown", key);
+      assert.equal(h.Input.throttleLevel(), 1);
+      h.fire("keyup", key);
+    } else if (scenario === "phone coast") {
+      press(driver, 7, false);
+      h.Input.poll();
+      h.Input.remoteSample({ source: "phone", steer: 0.6, thr: 1 });
+      assert.equal(h.Input.throttleLevel(), 1);
+      h.Input.remoteSample({ source: "phone", steer: 0, thr: 0 });
+    } else if (scenario === "driver with idle phone") {
+      h.Input.remoteSample({ source: "phone", steer: 0, thr: 0 });
+    } else if (scenario === "driver masks phone steering") {
+      driver.axes[0] = -1;
+      h.Input.poll();
+      assert.equal(h.Input.steer(1 / 60), -1);
+      h.Input.remoteSample({ source: "phone", steer: 1 });
+      assert.equal(h.Input.steer(1 / 60), -1, "the physical pad still supplies steering");
+      h.Input.remoteSample({ source: "phone", steer: 0 });
+    } else if (scenario === "touch coast") {
+      press(driver, 7, false);
+      h.Input.setSteerMode("touch");
+      const event = { changedTouches: [{ identifier: 1, clientX: 50, clientY: 50 }], preventDefault() {}, isTrusted: true };
+      h.fire("touchstart", event);
+      h.fire("touchend", { ...event, touches: [] });
+      assert.equal(h.Input.activeInputSource(), "touch");
+    } else if (scenario === "spare driving") {
+      h.clock.t = 30;
+      press(driver, 7, false);
+      press(spare, 7);
+      h.Input.poll();
+      assert.equal(h.Input.throttleLevel(), 1);
+    } else if (scenario === "idle spare") {
+      lost = spare;
+    } else if (scenario === "driver after snapshot gap") {
+      live = [];
+      h.Input.poll();
+      assert.equal(losses, 0, "a missing snapshot alone does not pause");
+      live = [null, spare];
+    }
+    live[lost.index] = null;
+    h.fire("gamepaddisconnected", { gamepad: lost });
+    assert.equal(losses, expected, scenario);
+    assert.equal(h.Input.throttleLevel(), ["spare driving", "idle spare"].includes(scenario) ? 1 : 0, scenario);
+    if (["driver with idle spare", "driver after snapshot gap"].includes(scenario)) {
+      press(spare, 8);
+      h.Input.poll();
+      assert.equal(h.Input.consumeCameraCycle(), false, "the replacement's held action is not a new press");
+      press(spare, 8, false); h.Input.poll();
+      press(spare, 8); h.Input.poll();
+      assert.equal(h.Input.consumeCameraCycle(), true, "a fresh replacement press still works");
+      assert.equal(losses, 1);
+    }
+  }
 });
 
 test("requestGyro: only a RESOLVED refusal (or no sensor API) is hard-denied; a rejected call is transient", async () => {
