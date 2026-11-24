@@ -4965,7 +4965,7 @@ function updateCar(c, dt, ranked) {
   // vTop() inside PitLane, so it rides OVERALL SPEED and a player's measured pit
   // loss does not move when they change the pace slider.
   let pitV = -1;
-  if (pits.inLane(c)) {
+  if (pits.inLane(c) || pits.onClosedLane(c)) {   // a SHUT lane's tarmac too (#5775 R12)
     pitV = pits.limit();
     // The AI brakes for its own box; a human does that themselves, and a game
     // that did it for them would be driving the one part of a stop the driver
