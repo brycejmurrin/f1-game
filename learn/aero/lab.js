@@ -51,13 +51,13 @@
     }
   }
 
-  // Coordinates are schematic so both cars stay legible at the smallest gap.
+  // Leave room behind Car B at the widest gap so its trail stays visible.
   function scene() {
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
     const leader = width * 0.84;
     const gapMin = Number(gap.min);
-    const step = width * 0.57 / (Number(gap.max) - gapMin);
+    const step = width * 0.50 / (Number(gap.max) - gapMin);
     const anchor = leader - width * 0.16;
     const xAt = metres => anchor - (metres - gapMin) * step;
     return {width, height, leader, xAt, step, follower: xAt(Number(gap.value)),
@@ -120,37 +120,63 @@
     const near = xAt(gapMin);
     const wakeHalf = height * 0.25;
     const scale = Math.min(1.7, width / 340);
+    // Car A sets the measured wake. The overlay follows Car B and illustrates local flow.
+    const followerY = mid + lateral;
+    const followerRear = follower - 20 * scale;
+    const followerSpan = 40 * scale;
+    const followerTrail = Math.max(followerSpan, width * 0.14);
+    const followerInk = ctx.createLinearGradient(followerRear - followerTrail, 0, follower + followerSpan, 0);
+    followerInk.addColorStop(0, "transparent");
+    followerInk.addColorStop(0.42, palette.follower);
+    followerInk.addColorStop(0.7, palette.follower);
+    followerInk.addColorStop(1, "transparent");
     ctx.fillStyle = palette.follower;
     ctx.globalAlpha = 0.13;
     ctx.fillRect(edge, mid - wakeHalf, leader - edge, wakeHalf * 2);
     for (let row = -8; row <= 8; row++) {
       const cross = row * height / 19;
       const base = mid + cross;
-      ctx.strokeStyle = palette.flow;
-      ctx.globalAlpha = Math.abs(cross) < wakeHalf ? 0.82 : 0.45;
+      const fromFollower = base - followerY;
+      const nearFollower = Math.exp(-((fromFollower / (22 * scale)) ** 2));
+      const side = fromFollower < 0 ? -1 : 1;
       ctx.lineWidth = 1;
       ctx.setLineDash([8, 7]);
       ctx.lineDashOffset = phase * 32;
       const offsetAtRow = cross / wakeHalf * tow.halfW;
-      ctx.beginPath();
+      const path = new Path2D();
       for (let x = 0; x <= width + 4; x += 4) {
         const fraction = Math.max(0, Math.min(1, (near - x) / Math.max(1, near - edge)));
         const gapAtX = gapMin + fraction * (tow.range - gapMin);
         const wake = x >= edge && x < leader
           ? model.wakeOf(gapAtX, offsetAtRow, "classic", tow) : 0;
-        const y = base + wake * height * 0.17 * Math.sin(x / width * 31 + phase * 4 + row);
-        if (x === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        const fromRear = (followerRear - x) / followerTrail;
+        const aroundCar = Math.exp(-(((x - follower) / (followerSpan * 0.65)) ** 2));
+        const trail = fromRear > 0 ? Math.min(1, fromRear * 7) * Math.max(0, 1 - fromRear) : 0;
+        const leaderWave = wake * height * 0.12 * Math.sin(x / width * 31 + phase * 4 + row);
+        const split = side * 14 * scale * aroundCar;
+        const ripple = trail * scale * (2 + 9 * followerWake)
+          * Math.sin((x - followerRear) / followerTrail * 18 + phase * 6 + row);
+        const y = base + leaderWave + nearFollower * (split + ripple);
+        if (x === 0) path.moveTo(x, y);
+        else path.lineTo(x, y);
       }
-      ctx.stroke();
+      ctx.strokeStyle = palette.flow;
+      ctx.globalAlpha = Math.abs(cross) < wakeHalf ? 0.82 : 0.45;
+      ctx.stroke(path);
+      if (nearFollower > 0.12) {
+        ctx.strokeStyle = followerInk;
+        ctx.globalAlpha = nearFollower * (0.7 + 0.3 * followerWake);
+        ctx.lineWidth = 1.6;
+        ctx.stroke(path);
+      }
     }
     ctx.globalAlpha = 1;
     ctx.strokeStyle = palette.label;
     ctx.setLineDash(followerWake > 0 ? [3, 3] : []);
-    ctx.strokeRect(follower - 24 * scale, mid + lateral - 17 * scale, 48 * scale, 34 * scale);
+    ctx.strokeRect(follower - 24 * scale, followerY - 17 * scale, 48 * scale, 34 * scale);
     ctx.setLineDash([]);
     car(leader, mid, scale, palette.leader, "A");
-    car(follower, mid + lateral, scale, palette.follower, "B");
+    car(follower, followerY, scale, palette.follower, "B");
   }
 
   function tick(time) {
