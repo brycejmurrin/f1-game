@@ -92,6 +92,12 @@ export const SCREENS = [
   { id: "photostudio", name: "Photo Studio", root: "#photo-studio", open: async (p) => {
       await p.evaluate(() => document.getElementById("mb-photo").click());
       await p.waitForSelector("#photo-studio:not([hidden])", { timeout: 15000 }); } },
+  // The circuit subject: PLACE YOUR CAR (◀ circuit position ▶, #6397) shows only with a car on the track.
+  { id: "photostudiocircuit", view: "#ps-group-car", name: "Photo Studio — circuit", root: "#photo-studio", open: async (p) => {
+      await p.evaluate(() => document.getElementById("mb-photo").click());
+      await p.waitForSelector("#photo-studio:not([hidden])", { timeout: 15000 });
+      await p.evaluate(() => { const s = document.getElementById("ps-subject"); s.value = "circuit"; s.dispatchEvent(new Event("change", { bubbles: true })); });
+      await p.waitForFunction(() => PhotoStudio.state().open && PhotoStudio.state().source === "home-track", null, { polling: 250, timeout: 180000 }); } },
   { id: "title", name: "Title / main menu", root: "#overlay", open: async () => {} },
   { id: "select", name: "Circuit select", root: "#select", mapAxis: true, open: async (p, circuit) => {
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });

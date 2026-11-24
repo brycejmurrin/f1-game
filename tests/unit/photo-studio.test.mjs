@@ -102,7 +102,7 @@ function boot(options = {}) {
   const PS = ctx.PhotoStudio, api = PS.create(G, { freeCam, garage, renderFrame: () => { order.push("draw"); options.renderSample?.(ctx.PhotoStudioBody.sampling); },
     ltStore: GAME_DEPS.has("ltStore") ? ltStore : undefined, ltSet: GAME_DEPS.has("ltSet") ? ltStore.set : undefined,
     borrowCar: options.borrowCar ? () => options.borrowCar(G) : undefined });
-  return { api, PS, dom, order, downloads, canvasOps, G, storage, scene, LT, ltProfiles, ltWrites, latchWrites, windowEvents,
+  return { api, PS, Body: ctx.PhotoStudioBody, dom, order, downloads, canvasOps, G, storage, scene, LT, ltProfiles, ltWrites, latchWrites, windowEvents,
     closed: () => closed, restored: () => restored, overlays: () => overlays };
 }
 
@@ -174,6 +174,8 @@ test("garage and race lens controls keep POV independent and pass the same focus
   assert.match(status.textContent, /Tap or click/);
 });
 
+const shot = (b, label) => b.dom.byId("ps-shots").children.find((el) => el.textContent === label);
+
 test("visor capture snapshots the rendered pose before asynchronous readback", async () => {
   let resolve, painted;
   const b = boot({ visorOptics: {
@@ -183,6 +185,7 @@ test("visor capture snapshots the rendered pose before asynchronous readback", a
   b.G.camEye = [1, 2, 3];
   b.G.gfx.capturePixels = () => new Promise(r => { resolve = r; });
   b.api.open({ source: "race" });
+  shot(b, "HELMET").click();
   const row = b.dom.byId("ps-visor-level"); row.value = "medium"; b.dom.dispatch(row, { type: "change" });
   const capture = b.api.capture();
   b.G.camEye[0] = 99;
@@ -191,28 +194,129 @@ test("visor capture snapshots the rendered pose before asynchronous readback", a
   assert.deepEqual(painted.eye, [1, 2, 3]);
 });
 
-test("photo visor lighting is opt-in and baked once before cropping, saving or downloading", async () => {
-  const calls = [], b = boot({ visorOptics: { captureSnapshot: () => undefined, captureLight(image, G, options) {
+// #6397: Bryce saw the helmet's port surround painted into a photo taken from outside the car.
+// The visor frame and its light belong to the HELMET seat only; every other angle captures plain.
+test("visor frame and lighting are the HELMET seat's only, baked once before cropping, saving or downloading", async () => {
+  const calls = [], ports = [], b = boot({ visorOptics: { captureSnapshot: () => undefined, captureLight(image, G, options) {
     calls.push({ width: image.width, height: image.height, options: { ...options }, G });
-  } } });
+  }, capturePort(image) { ports.push(image.width); return true; } } });
   b.api.open({ source: "race" });
-  assert.equal(b.dom.byId("ps-group-visor").hidden, false);
-  assert.equal(await b.api.capture(), true); assert.equal(calls.length, 0);
+  assert.equal(b.dom.byId("ps-group-visor").hidden, true, "a free-camera angle shows no visor rows");
   for (const [key, value] of [["level", "strong"], ["beams", "off"], ["style", "compact"]]) {
     const el = b.dom.byId("ps-visor-" + key); el.value = value; b.dom.dispatch(el, { type: "change" });
   }
-  assert.equal(b.dom.byId("ps-message").textContent, "Press Capture to preview the new visor lighting.");
+  assert.equal(b.dom.byId("ps-message").textContent, "Press Capture to preview the new visor look.");
   assert.equal(await b.api.capture(), true);
-  assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0].options, { level: "strong", beams: "off", style: "compact", snapshot: undefined });
+  assert.deepEqual([calls.length, ports.length], [0, 0], "no visor light or frame outside the helmet");
+  shot(b, "COCKPIT").click();
+  assert.equal(b.dom.byId("ps-group-visor").hidden, true, "the cockpit seat has no visor");
+  assert.equal(await b.api.capture(), true);
+  assert.deepEqual([calls.length, ports.length], [0, 0]);
+  shot(b, "HELMET").click();
+  assert.equal(b.dom.byId("ps-group-visor").hidden, false);
+  assert.equal(await b.api.capture(), true);
+  assert.equal(calls.length, 1); assert.deepEqual(ports, [160]);
+  assert.deepEqual(calls[0].options, { frame: "on", level: "strong", beams: "off", style: "compact", helmet: true, snapshot: undefined });
   assert.deepEqual([calls[0].width, calls[0].height], [160, 90]);
   assert.equal(calls[0].G, b.G);
   const frame = b.dom.byId("ps-aspect"); frame.value = "square"; b.dom.dispatch(frame, { type: "change" });
   await b.api.exportPhoto(); await b.api.savePhoto(); b.dom.byId("ps-background").click();
   assert.equal(calls.length, 1, "recomposition and outputs reuse the same lit pixels");
+  const hide = b.dom.byId("ps-visor-frame"); hide.value = "off"; b.dom.dispatch(hide, { type: "change" });
+  assert.equal(await b.api.capture(), true);
+  assert.deepEqual([calls.length, ports.length], [2, 1], "VISOR FRAME › HIDDEN keeps the light, drops the frame");
+  shot(b, "CHASE").click();
+  assert.equal(b.dom.byId("ps-group-visor").hidden, true, "leaving the seat hides the visor rows");
+  assert.equal(await b.api.capture(), true); assert.equal(calls.length, 2);
   b.api.close(false); b.api.open({ source: "garage" });
   assert.equal(b.dom.byId("ps-group-visor").hidden, true, "garage has its own lighting pipeline");
-  await b.api.capture(); assert.equal(calls.length, 1);
+  await b.api.capture(); assert.equal(calls.length, 2);
+});
+
+test("HELMET and COCKPIT presets seat the free camera in the race camera's driver's eye", () => {
+  const { POV_SHOTS, visorOptions } = boot().Body;
+  assert.deepEqual(Object.keys(POV_SHOTS), ["helmet", "cockpit"]);
+  assert.deepEqual([POV_SHOTS.helmet.visor, POV_SHOTS.cockpit.visor], [true, false]);
+  const v = { frame: "on", level: "light", beams: "medium", style: "classic" };
+  const plain = (o) => JSON.parse(JSON.stringify(o));   // VM-realm objects
+  assert.deepEqual(plain(visorOptions(false, "helmet", v)), { ...v, helmet: true });
+  for (const [garage, pov] of [[false, "cockpit"], [false, null], [false, "chase"], [true, "helmet"]]) {
+    assert.deepEqual(plain(visorOptions(garage, pov, v)), { level: "off", frame: "off", helmet: false }, garage + " " + pov);
+  }
+  const b = boot();
+  b.api.open({ source: "race" });
+  const labels = b.dom.byId("ps-shots").children.map((el) => el.textContent);
+  assert.deepEqual(labels, ["CHASE", "WIDE", "DETAIL", "CORNER", "HELMET", "COCKPIT"]);
+  for (const id of ["helmet", "cockpit"]) {
+    shot(b, id.toUpperCase()).click();
+    assert.equal(b.restored().pov, id, "FreeCam is asked for the race rig's seat");
+    assert.equal(b.restored().fov, 64, "the race camera's standstill lens (CamFeel fallback)");
+    assert.equal(b.restored().eye, undefined, "the seat's eye is solved by render, not placed here");
+  }
+  shot(b, "WIDE").click();
+  assert.equal(b.restored().pov, undefined, "any other shot leaves the seat");
+  b.api.close(false); b.api.open({ source: "garage" });
+  assert.equal(shot(b, "HELMET"), undefined, "the garage keeps its own shot list");
+});
+
+test("a driver's-eye seat rides the placed car instead of reframing to CHASE", () => {
+  const player = { s: 100, x: 0, px: 100, pz: 0, head: 0, yawVis: 0, speed: 0 };
+  const b = boot({ player });
+  b.G.paused = true;
+  b.api.open({ source: "race" });
+  shot(b, "COCKPIT").click();
+  const seat = b.restored();
+  b.dom.byId("ps-car-position-fwd").dispatchEvent({ type: "click", detail: 0 });
+  assert.ok(Math.abs(player.s - 101) < 1e-9, "one metre along the lap");
+  assert.equal(b.restored(), seat, "no CHASE reframe while seated");
+  shot(b, "CHASE").click();
+  b.dom.byId("ps-car-position-fwd").dispatchEvent({ type: "click", detail: 0 });
+  assert.notEqual(b.restored().eye, undefined, "off the seat, placement reframes as before");
+  b.api.close(false);
+});
+
+test("circuit position steps in metres along the lap and wraps at the line", () => {
+  const { stepPosition, holdMetres, positionLabel } = boot().Body;
+  assert.equal(stepPosition(50, 1000, 1), 50.1);
+  assert.equal(stepPosition(50, 1000, -1), 49.9);
+  assert.ok(Math.abs(stepPosition(99.95, 1000, 1) - 0.05) < 1e-9, "forward past the line wraps to the start");
+  assert.ok(Math.abs(stepPosition(0, 1000, -1) - 99.9) < 1e-9, "back past the line wraps to the end");
+  assert.equal(stepPosition(25, 0, 1), 25, "no lap length: unchanged");
+  assert.deepEqual([0, 11, 12, 29, 30, 200].map(holdMetres), [1, 1, 5, 5, 25, 25], "a held press speeds up");
+  assert.equal(positionLabel(25, 5793), "1448 m");
+  assert.equal(positionLabel(25, 0), "25.0%");
+});
+
+test("◀ ▶, a held press and keyboard arrows drive the same metre step", () => {
+  const timers = [];
+  const player = { s: 500, x: 0, px: 500, pz: 0, head: 0, yawVis: 0, speed: 0 };
+  const b = boot({ player, setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; } });
+  b.G.paused = true;
+  b.api.open({ source: "race" });
+  const slider = b.dom.byId("ps-car-position"), fwd = b.dom.byId("ps-car-position-fwd"), back = b.dom.byId("ps-car-position-back");
+  assert.equal(slider.step, "0.001", "the thumb itself is fine-grained");
+  assert.equal(b.dom.byId("ps-car-position-value").textContent, "500 m");
+  back.dispatchEvent({ type: "click", detail: 0 });
+  assert.equal(player.s, 499); assert.equal(b.dom.byId("ps-car-position-value").textContent, "499 m");
+  fwd.dispatchEvent({ type: "pointerdown", button: 0 });
+  assert.equal(player.s, 500, "a press steps at once");
+  fwd.dispatchEvent({ type: "click", detail: 1 });
+  assert.equal(player.s, 500, "the pointer's click does not step twice");
+  assert.equal(timers.at(-1).ms, 380);
+  timers.at(-1).fn();
+  for (let i = 0; i < 12; i++) timers.at(-1).fn();
+  assert.equal(timers.at(-1).ms, 70);
+  assert.equal(player.s, 500 + 11 + 2 * 5, "1 m ticks, then 5 m");
+  fwd.dispatchEvent({ type: "pointerup" });
+  const before = player.s;
+  let prevented = false;
+  slider.dispatchEvent({ type: "keydown", key: "ArrowLeft", isTrusted: true, preventDefault: () => { prevented = true; } });
+  assert.equal(player.s, before - 1); assert.equal(prevented, true);
+  slider.dispatchEvent({ type: "keydown", key: "ArrowRight", shiftKey: true, isTrusted: true, preventDefault() {} });
+  assert.equal(player.s, before + 9, "Shift steps 10 m");
+  slider.dispatchEvent({ type: "keydown", key: "ArrowRight", isTrusted: false, preventDefault() { throw new Error("pad arrows walk focus"); } });
+  assert.equal(player.s, before + 9);
+  b.api.close(false);
 });
 
 test("a garage still waits for a fresh capture draw even when a previous photo exists", async () => {

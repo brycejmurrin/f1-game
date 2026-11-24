@@ -54,6 +54,12 @@ body[data-density="compact"] #ps-panel button[data-step] {
   min-height: max(var(--tap), var(--tap-paint));
 }
 #ps-panel .tune-row { display: flex; flex-direction: column; gap: calc(var(--gap) * .5); }
+/* Circuit position: ◀ slider ▶ on one line; the nudges are square tap targets at the house floor. */
+#ps-pos-row { display: flex; align-items: center; gap: calc(var(--gap) * .5); }
+#ps-pos-row > input { flex: 1 1 auto; min-width: 0; }
+#ps-panel #ps-pos-row > [data-nudge] { flex: none; min-width: var(--tap); padding-inline: 0; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+@media (pointer: coarse) { #ps-panel #ps-pos-row > [data-nudge] { min-width: var(--tap-paint); } }
+body[data-density="compact"] #ps-panel #ps-pos-row > [data-nudge] { min-width: var(--tap-paint); }
 /* PHOTO LIGHTING: match the lighting-tuner tab / slider touch floors (tuner.css). */
 #ps-lt-tabs {
   display: flex; flex-wrap: wrap; gap: calc(var(--gap) / 3);

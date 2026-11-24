@@ -182,6 +182,8 @@ interface DebugCam {
   roll?: number;
   /** Render through the flyby's lens (FlybySeq.FAR / FOG / NEAR). */
   cine?: boolean;
+  /** Photo Studio POV seat (FreeCam cmd {pov}): render() solves the race rig's eye for it and draws the cockpit rig. */
+  onboard?: "helmet" | "cockpit";
 }
 
 /** The horizon-facing sky override __apex.sky() installs, or null. */
