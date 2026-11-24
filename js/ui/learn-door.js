@@ -242,7 +242,7 @@ const LearnDoor = (function () {
     const verts = new Float32Array(200 * stride);
     // The existing shader chooses a palette colour from its speed ratio.
     // Encode cyan wake, pale clean air and orange braking with fixed attributes.
-    const style = { speed: 2, cornersOnly: false, opacity: 1.2,
+    const style = { speed: 2, cornersOnly: false, opacity: 1.35,
       cols: new Float32Array([0.08, 0.78, 0.96, 0.65, 0.90, 1, 1, 0.18, 0.05]) };
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const windArrows = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"];
@@ -296,6 +296,14 @@ const LearnDoor = (function () {
             rise += Math.cos(wave) * strength * 0.40;
           }
         }
+        // Each stream has a few facing-camera tracers so it still reads
+        // when its ribbon is edge-on to the driver's camera.
+        if (height && i < steps && i % Math.max(1, Math.ceil(steps / 5)) === 0) {
+          const tracerLift = DrivingLine.bankOffset(G.track, s, center) + rise;
+          const size = 0.29 + 0.09 * Math.cos(i * 0.9 - phase);
+          Particles.flare(p[0] + r[0] * center, p[1] + r[1] * center + tracerLift,
+            p[2] + r[2] * center, size, air.wake ? 0.05 : 0.45, air.wake ? 1.45 : 0.65, 1.85, air.wake ? 0.94 : 0.42);
+        }
         for (let side = -1; side <= 1; side += 2) {
           const edge = center + halfWidth * side;
           const x = height ? edge : Math.max(-hw + 0.2, Math.min(edge, hw - 0.2));
@@ -307,7 +315,9 @@ const LearnDoor = (function () {
           verts[v++] = side;
           verts[v++] = colour;
           verts[v++] = 1;
-          verts[v] = (along - near) * (height ? 0.48 : 1) - phase;
+          // Keep an illuminated core along the whole airborne ribbon. A
+          // shallow travelling ripple makes the airflow readable in motion.
+          verts[v] = height ? 2.84 + 0.14 * Math.sin((along - near) * 0.6 - phase) : along - near;
         }
       }
       if (join) {
@@ -366,15 +376,17 @@ const LearnDoor = (function () {
         air.time = reduced ? 0 : G.raceT;
         air.rear = ahead - 2;
         air.lane = lane;
-        const phase = -air.time * air.speed * 0.48 % 5;
+        const phase = -air.time * air.speed * 0.6 % (2 * Math.PI);
         const near = ahead - Math.min(34, gap - 3);
         air.wake = true;
-        strip(near, air.rear, lane - 1.1, 0.42, 3, phase, 0.65);
-        strip(near, air.rear, lane + 1.1, 0.42, 3, phase, 0.65);
-        strip(near, air.rear, lane, 0.45, 3, phase + 2, 1.95);
+        strip(near, air.rear, lane - 2.3, 0.83, 3, phase, 1.15);
+        strip(near, air.rear, lane + 2.3, 0.83, 3, phase, 1.15);
+        // Lift the middle stream above the outer pair so both driving views
+        // read three separate ribbons even when the eye is low to the road.
+        strip(near, air.rear, lane, 0.88, 3, phase + 2, 3.05);
         air.wake = false;
         // A clean reference outside the wake makes sideways wind drift visible.
-        strip(near, ahead + 4, lane + wayIn * 4.5, 0.32, 2 / 1.06, phase, 1.30);
+        strip(near, ahead + 4, lane + wayIn * 5.1, 0.45, 2 / 1.06, phase, 1.45);
       }
       if (toBrake < 150 && toBrake > -22) strip(brakeAt, brakeAt + 15, TrackLine.at(G.track, brakeAt).x, 3, 1, 0);
       if (count && gfx.drawDrivingLine?.(verts, count, true, style)) DrivingLine.invalidateUpload();
