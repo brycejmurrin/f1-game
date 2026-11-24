@@ -1973,7 +1973,7 @@ body:not(.desktop) #carsetup #cs-customize {
 }
 #cs-arrival[hidden] { display: none; }
 #cs-arrival-label { font-weight: 700; letter-spacing: .12em; font-size: var(--label); }
-#cs-arrival-skip { min-height: var(--tap); }
+#cs-arrival-skip, #cs-arrival-alt { min-height: var(--tap); }
 
 #ga-enabled, #ga-after, #ga-captions, #ga-bars { width: var(--tap); height: var(--tap); accent-color: var(--red); }
 /* CINEMA BARS (GARAGE ENTER & LEAVE): letterbox the bay while a sequence plays
