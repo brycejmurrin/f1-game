@@ -235,14 +235,21 @@ const LearnDoor = (function () {
     task.setAttribute("role", "status");
     const readout = document.createElement("span");
     const demoLabel = document.createElement("span");
-    root.append(task, readout, demoLabel);
+    const scope = document.createElement("canvas");
+    scope.width = 280;
+    scope.height = 148;
+    scope.setAttribute("aria-hidden", "true");
+    const ctx = scope.getContext("2d");
+    const copy = document.createElement("div");
+    copy.append(task, readout, demoLabel);
+    root.append(scope, copy);
     document.body.append(root);
     const sample = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0] };
     const stride = DrivingLine.STRIDE;
-    const verts = new Float32Array(200 * stride);
+    const verts = new Float32Array(640 * stride);
     // The existing shader chooses a palette colour from its speed ratio.
     // Encode cyan wake, pale clean air and orange braking with fixed attributes.
-    const style = { speed: 2, cornersOnly: false, opacity: 1.35,
+    const style = { speed: 2, cornersOnly: false, opacity: 0.86,
       cols: new Float32Array([0.08, 0.78, 0.96, 0.65, 0.90, 1, 1, 0.18, 0.05]) };
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const windArrows = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"];
@@ -253,6 +260,56 @@ const LearnDoor = (function () {
     function smooth(v) {
       const t = M4.clamp(v, 0, 1);
       return t * t * (3 - 2 * t);
+    }
+
+    // A local top view stays readable behind the helmet halo. The wake
+    // footprint uses the drill's Classic falloff, as does the car physics.
+    let footprint, lastX, lastY;
+    function drawScope(gap, offset) {
+      if (!ctx) return;
+      const x = 140, y = 24, scaleX = 13, scaleY = 2.9;
+      const px = Math.round(M4.clamp(x + offset * scaleX, 14, 266));
+      const py = Math.round(M4.clamp(y + gap * scaleY, 12, 126));
+      if (px === lastX && py === lastY) return;
+      lastX = px;
+      lastY = py;
+      if (!footprint) {
+        footprint = document.createElement("canvas");
+        footprint.width = scope.width;
+        footprint.height = scope.height;
+        const field = footprint.getContext("2d");
+        for (let d = 1; d < 34; d++) {
+          const strength = PhysicsConsts.DirtyAir.wakeOf(d, 0, "classic");
+          const w = 4 * scaleX;
+          const band = field.createLinearGradient(x - w, 0, x + w, 0);
+          band.addColorStop(0, "transparent");
+          band.addColorStop(0.5, "rgba(30,231,255," + strength + ")");
+          band.addColorStop(1, "transparent");
+          field.fillStyle = band;
+          field.fillRect(x - w, y + d * scaleY, 2 * w, scaleY + 0.5);
+        }
+        field.fillStyle = "#90f1ff";
+        field.fillRect(x - 7, y - 9, 14, 16);
+        field.font = "bold 28px system-ui";
+        field.fillText("Rival", x + 17, y + 7);
+      }
+      ctx.clearRect(0, 0, scope.width, scope.height);
+      ctx.drawImage(footprint, 0, 0);
+      ctx.font = "bold 28px system-ui";
+      ctx.fillStyle = "#fff";
+      ctx.strokeStyle = "#111827";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(px, py - 9);
+      ctx.lineTo(px + 8, py + 7);
+      ctx.lineTo(px - 8, py + 7);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.textAlign = px > 195 ? "right" : "left";
+      ctx.fillText("You", px + (px > 195 ? -15 : 15), py + 8);
+      ctx.textAlign = "left";
     }
 
     function demonstrate(ahead, lane, wayIn) {
@@ -277,7 +334,7 @@ const LearnDoor = (function () {
       // Repeat each end vertex at the join so the strips share one draw
       // without a triangle that connects the wake to the braking marker.
       if (join) count += 2;
-      const steps = Math.ceil((far - near) / 2);
+      const steps = Math.ceil((far - near) / (height ? 0.6 : 2));
       for (let i = 0; i <= steps; i++) {
         const along = near + (far - near) * i / steps;
         const s = G.wrapS(along);
@@ -291,28 +348,25 @@ const LearnDoor = (function () {
           center += air.cross * distance / air.speed;
           if (air.wake) {
             const strength = PhysicsConsts.DirtyAir.wakeOf(distance, lane - air.lane, "classic");
-            const wave = distance * 0.32 + height * 2 + air.time * 5;
-            center += Math.sin(wave) * strength * 0.70;
-            rise += Math.cos(wave) * strength * 0.40;
+            // Paired counter-rotating vortices open from the rear wheels.
+            // The elevated central plume leaves the rival visible between them.
+            const direction = Math.sign(lane - air.lane);
+            const wave = distance * 0.58 - air.time * 4.5;
+            const spread = Math.min(1, distance / 7);
+            const radius = spread * (0.65 + 0.8 * strength);
+            center += direction * (spread + Math.cos(wave) * radius);
+            rise += direction ? Math.sin(wave) * radius : spread + Math.sin(wave) * 0.3;
           }
-        }
-        // Each stream has a few facing-camera tracers so it still reads
-        // when its ribbon is edge-on to the driver's camera.
-        if (height && i < steps && i % Math.max(1, Math.ceil(steps / 5)) === 0) {
-          const tracerLift = DrivingLine.bankOffset(G.track, s, center) + rise;
-          const size = 0.29 + 0.09 * Math.cos(i * 0.9 - phase);
-          Particles.flare(p[0] + r[0] * center, p[1] + r[1] * center + tracerLift,
-            p[2] + r[2] * center, size, air.wake ? 0.05 : 0.45, air.wake ? 1.45 : 0.65, 1.85, air.wake ? 0.94 : 0.42);
         }
         for (let side = -1; side <= 1; side += 2) {
           const edge = center + halfWidth * side;
           const x = height ? edge : Math.max(-hw + 0.2, Math.min(edge, hw - 0.2));
-          const lift = DrivingLine.bankOffset(G.track, s, x) + 0.04 + rise;
+          const lift = DrivingLine.bankOffset(G.track, s, x) + 0.04 + rise + (height ? side * halfWidth * 0.65 : 0);
           let v = count++ * stride;
           verts[v++] = p[0] + r[0] * x + (r[1] * t[2] - r[2] * t[1]) * lift;
           verts[v++] = p[1] + r[1] * x + (r[2] * t[0] - r[0] * t[2]) * lift;
           verts[v++] = p[2] + r[2] * x + (r[0] * t[1] - r[1] * t[0]) * lift;
-          verts[v++] = side;
+          verts[v++] = height ? side * 0.30 : side;
           verts[v++] = colour;
           verts[v++] = 1;
           // Keep an illuminated core along the whole airborne ribbon. A
@@ -368,6 +422,7 @@ const LearnDoor = (function () {
       const lane = rival.rPrevX + (rival.x - rival.rPrevX) * alpha;
       const wayIn = lane > 0 ? -1 : 1;
       demonstrate(ahead, lane, wayIn);
+      drawScope(gap, player.x - lane);
       if (gap > 0 && gap < 125) {
         const reduced = motion.matches || document.documentElement.dataset.motion === "reduce";
         Tracks.sample(G.track, G.wrapS(ahead), sample);
@@ -379,14 +434,14 @@ const LearnDoor = (function () {
         const phase = -air.time * air.speed * 0.6 % (2 * Math.PI);
         const near = ahead - Math.min(34, gap - 3);
         air.wake = true;
-        strip(near, air.rear, lane - 2.3, 0.83, 3, phase, 1.15);
-        strip(near, air.rear, lane + 2.3, 0.83, 3, phase, 1.15);
+        strip(near, air.rear, lane - 1.25, 0.36, 3, phase, 1.75);
+        strip(near, air.rear, lane + 1.25, 0.36, 3, phase, 1.75);
         // Lift the middle stream above the outer pair so both driving views
         // read three separate ribbons even when the eye is low to the road.
-        strip(near, air.rear, lane, 0.88, 3, phase + 2, 3.05);
+        strip(near, air.rear, lane, 0.24, 3, phase + 2, 2.15);
         air.wake = false;
         // A clean reference outside the wake makes sideways wind drift visible.
-        strip(near, ahead + 4, lane + wayIn * 5.1, 0.45, 2 / 1.06, phase, 1.45);
+        strip(near, ahead + 4, lane + wayIn * 5.8, 0.14, 2 / 1.06, phase, 1.45);
       }
       if (toBrake < 150 && toBrake > -22) strip(brakeAt, brakeAt + 15, TrackLine.at(G.track, brakeAt).x, 3, 1, 0);
       if (count && gfx.drawDrivingLine?.(verts, count, true, style)) DrivingLine.invalidateUpload();

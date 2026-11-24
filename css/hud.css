@@ -2665,24 +2665,4 @@ body.hud-prof-broadcast .hud-top[data-hl-v4] { left: calc(10px + var(--sal) / va
 #hud-rel[data-hl-width] > div { justify-content: space-between; }
 #pm-hudlayout input[type="number"] { box-sizing: border-box; width: 100%; min-height: 44px; padding: .4em .65em; border: 1px solid var(--dim); border-radius: .4em; background: var(--panel); color: var(--text); font: inherit; }
 
-/* The lesson's instruction card leaves all driving input with the HUD. */
-#learn-aero-guide {
-  position: fixed;
-  z-index: 8;
-  pointer-events: none;
-  top: max(calc(var(--sat) + 3.25rem), 17%);
-  left: 50%;
-  transform: translateX(-50%);
-  width: max-content; max-width: 52vw;
-  padding: var(--pad) calc(var(--pad) * 1.5);
-  border: 1px solid var(--plate-line);
-  border-radius: var(--r-md);
-  color: var(--text); background: var(--plate);
-  font-family: var(--font-hud);
-  text-align: center;
-}
-#learn-aero-guide strong, #learn-aero-guide span { display: block; }
-#learn-aero-guide strong { font-size: var(--fs-3); }
-#learn-aero-guide span { font-size: var(--fs-2); color: var(--dim); }
-
 } /* @layer hud */
