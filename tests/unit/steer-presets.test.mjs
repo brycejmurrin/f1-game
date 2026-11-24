@@ -298,6 +298,7 @@ test("each driving slider applies on input and re-applies from storage after a r
     ["pm-touchdragspeed", "touchDragSpeed", 7, "setTouchSpeedMix"],
     ["pm-dragsmooth", "dragSmooth", 6, "setDragSmoothing"],
     ["pm-steerrate", "digitalRate", 9, "setKeyRampIn"],
+    ["pm-steerreturn", "digitalRecenterRate", 2, "setKeyRampOut"],
     ["pm-analogspeed", "analogSpeedSteer", 7, "setAnalogSpeedMix"],
     ["pm-haptics", "haptics", 1, "setHaptics"],
     ["pm-paddz", "padDeadzone", 20, "setPadDeadzone"],

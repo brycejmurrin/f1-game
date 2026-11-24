@@ -3010,6 +3010,37 @@ test("paired absolute brake uses its full physical length and releases immediate
   } finally { ctl?.cancel(); PedalTravel.resetButtonProfile("brake"); }
 });
 
+test("the phone uses the configured slide endpoint and independent absolute crossover", () => {
+  const oldDoc = globalThis.document, events = {}, dom = { gas: fakeEl(), brake: fakeEl() };
+  dom.gas.getBoundingClientRect = () => ({ left: 100, right: 200, top: 0, bottom: 200, width: 100, height: 200 });
+  dom.brake.getBoundingClientRect = () => ({ left: 0, right: 100, top: 0, bottom: 200, width: 100, height: 200 });
+  globalThis.document = { addEventListener(type, fn) { (events[type] ||= []).push(fn); }, elementFromPoint: x => x < 100 ? dom.brake : dom.gas };
+  let ctl;
+  try {
+    PedalTravel.setButtonProfile("gas", { start: 40, end: 20, direction: "down" });
+    PedalTravel.setButtonProfile("brake", { sliderEdge: "bottom", slide: "ease", sliderEntry: "stay" });
+    ctl = PhonePad.pad(dom);
+    const gas = (type, x, y) => dom.gas.dispatch(type, { clientX: x, clientY: y });
+    gas("pointerdown", 120, 50);
+    assert.equal(ctl.state().thr, 0.4);
+    gas("pointermove", 120, 140);
+    assert.equal(ctl.state().thr, 0.2);
+    gas("pointermove", 80, 100);
+    assert.equal(ctl.state().brk, 0);
+    gas("pointerup", 80, 100);
+    PedalTravel.setButtonProfile("brake", { sliderEntry: "enter" });
+    gas("pointerdown", 120, 50);
+    gas("pointermove", 80, 100);
+    assert.equal(ctl.state().thr, 0);
+    assert.equal(ctl.state().brk, 0.5);
+    for (const fn of events.pointerup) fn({ pointerId: 1 });
+    assert.equal(ctl.state().brk, 0);
+  } finally {
+    ctl?.cancel(); PedalTravel.resetButtonProfile("gas"); PedalTravel.resetButtonProfile("brake");
+    if (oldDoc === undefined) delete globalThis.document; else globalThis.document = oldDoc;
+  }
+});
+
 test("Appearance controller demos keep editor gestures free of motion permission requests", () => {
   const scripts = [...read("controller.html").matchAll(/<script>([\s\S]*?)<\/script>/g)];
   for (const [search, expected] of [["?arrange=wheel&demo=wheel", 0], ["?arrange=menupad&demo=menu", 0],

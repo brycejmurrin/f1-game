@@ -30,6 +30,12 @@ const PedalTravel = (function () {
     camera: "btn-cam", pause: "pausebtn", showHud: "hud-restore" });
   const phoneButtons = Object.freeze(["gas", "brake", "shiftUp", "shiftDown", "boost", "overtake", "aero",
     "camera", "pause", "radio", "recover", "look", "calib", "navSelect", "navBack"]);
+  const gestureTiming = Object.freeze({
+    quick: { key: "quickMs", label: "QUICK TAP LIMIT", defaultMs: 180, min: 80, max: 600 },
+    hold: { key: "holdMs", label: "HOLD TIME", defaultMs: 450, min: 150, max: 2000 },
+    long: { key: "longHoldMs", label: "LONG HOLD TIME", defaultMs: 900, min: 350, max: 3000 },
+    double: { key: "doubleTapMs", label: "DOUBLE TAP WINDOW", defaultMs: 350, min: 150, max: 1000 },
+  });
   const allButtons = new Set([...Object.keys(raceButtons), ...phoneButtons]);
   const colors = Object.freeze({ red: "--red", green: "--faster", blue: "--zone", purple: "--sec-best", orange: "--spark", yellow: "--gold", white: "--hud-ink-light" });
   const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -65,20 +71,25 @@ const PedalTravel = (function () {
 
   function level(profile, advancePx, holdFraction = 0) {
     const start = startPercent(profile) / 100;
-    const resting = start + (1 - start) * (holdFraction ** (profile.buildPower || 1));
+    const holdEnd = (profile.holdEnd ?? 100) / 100;
+    const resting = start + (holdEnd - start) * (holdFraction ** (profile.buildPower || 1));
+    if (profile.end != null) {
+      const fraction = Math.min(1, slideFraction(Math.max(0, advancePx), profile));
+      return resting * (1 - fraction) + profile.end / 100 * fraction;
+    }
     if (profile.press === "progressive") {
       if (!profile.direction) advancePx = Math.max(0, advancePx);
       const span = advancePx < 0 ? start : 1 - start;
       return Math.max(0, Math.min(1, resting + span * slideFraction(advancePx, profile)));
     }
-    return Math.max(Math.min(start, MIN), resting - slideFraction(Math.max(0, advancePx - DEAD_PX), profile));
+    return Math.max(Math.min(start, resting, MIN), resting - slideFraction(Math.max(0, advancePx - DEAD_PX), profile));
   }
 
   // Only a configured direct hold needs frames. Identity checks also handle
   // capture transfers, focus loss and pointer IDs reused before the next frame.
   function buildOnHold(contact, active, update) {
     const duration = contact.profile.buildMs;
-    if (!duration || startPercent(contact.profile) === 100) return;
+    if (!duration || startPercent(contact.profile) === (contact.profile.holdEnd ?? 100)) return;
     const began = performance.now();
     function tick(now) {
       if (!active()) return;
@@ -98,7 +109,15 @@ const PedalTravel = (function () {
       if (Object.hasOwn(colors, value[field])) out[field] = value[field];
     }
     if (!BUTTONS.includes(id)) {
-      if (id !== "look" && ["tap", "quick", "hold", "long", "double"].includes(value.activation)) out.activation = value.activation;
+      if (id === "look") return out;
+      if (typeof value.activation === "string" && (value.activation === "tap" || Object.hasOwn(gestureTiming, value.activation))) {
+        out.activation = value.activation;
+      }
+      for (const { key, defaultMs, min, max } of Object.values(gestureTiming)) {
+        if (!Number.isFinite(value[key])) continue;
+        const ms = Math.max(min, Math.min(max, Math.round(value[key] / 10) * 10));
+        if (ms !== defaultMs) out[key] = ms;
+      }
       return out;
     }
     if (value.press === "progressive") out.press = value.press;
@@ -110,10 +129,16 @@ const PedalTravel = (function () {
     if ((id === "left" || id === "right") && Number.isFinite(value.adaptive))
       out.adaptive = Math.max(1, Math.min(10, Math.round(value.adaptive)));
     if (["up", "down", "left", "right"].includes(value.direction)) out.direction = value.direction;
-    if (Number.isFinite(value.start)) out.start = Math.max(0, Math.min(100, Math.round(value.start)));
+    for (const field of ["start", "end", "holdEnd"]) {
+      if (Number.isFinite(value[field])) out[field] = Math.max(0, Math.min(100, Math.round(value[field])));
+    }
+    if (out.holdEnd === 100) delete out.holdEnd;
     const edges = ["top", "bottom", "left", "right"];
     if (edges.includes(value.fullEdge)) out.fullEdge = value.fullEdge;
-    if ((id === "gas" || id === "brake") && edges.includes(value.sliderEdge)) out.sliderEdge = value.sliderEdge;
+    if (id === "gas" || id === "brake") {
+      if (edges.includes(value.sliderEdge)) out.sliderEdge = value.sliderEdge;
+      if (value.sliderEntry === "enter" || value.sliderEntry === "stay") out.sliderEntry = value.sliderEntry;
+    }
     if (["percent", "bar"].includes(value.indicator)) out.indicator = value.indicator;
     if ([0.5, 2].includes(value.buildPower)) out.buildPower = value.buildPower;
     if ([250, 500, 1000, 2000].includes(value.buildMs)) out.buildMs = value.buildMs;
@@ -147,10 +172,16 @@ const PedalTravel = (function () {
     const raw = saved();
     return overrides(id, allButtons.has(id) && raw && raw.v === 1 && raw.buttons && raw.buttons[id]);
   }
+  // Old phone profiles used the presence of a relative slide override to opt in.
+  function sliderEntry(profile) {
+    return profile.sliderEntry ?? (profile.slide ? "enter" : "stay");
+  }
   function buttonProfile(id, globalSlide) {
     const pedal = id === "gas" || id === "brake";
     const slide = pedal && (globalSlide ?? store()?.get("pedalSlide", "instant"));
-    return { press: "instant", travel: TRAVEL_PX, slide: slide === "ease" ? "ease" : "instant", feedback: true, ...buttonOverrides(id) };
+    const profile = { press: "instant", travel: TRAVEL_PX, slide: slide === "ease" ? "ease" : "instant", feedback: true, ...buttonOverrides(id) };
+    if (profile.activation) profile.gestureTiming = gestureTiming[profile.activation];
+    return profile;
   }
   function positionLevel(edge, rect, event) {
     const horizontal = edge === "left" || edge === "right";
@@ -205,7 +236,7 @@ const PedalTravel = (function () {
     return buttonProfile(id);
   }
 
-  return { raceButtons, phoneButtons, colors, DEAD_PX, TRAVEL_PX, MIN, RAMP_PX, ease, arrive, level, advance, startPercent, buildOnHold, normalizeProfiles, buttonOverrides, buttonProfile, contactProfile, sliderLevel,
+  return { raceButtons, phoneButtons, colors, DEAD_PX, TRAVEL_PX, MIN, RAMP_PX, ease, arrive, level, advance, startPercent, buildOnHold, normalizeProfiles, buttonOverrides, buttonProfile, contactProfile, sliderLevel, sliderEntry,
     watchButtonProfile, setButtonProfile, resetButtonProfile: id => setButtonProfile(id, null) };
 })();
 Object.freeze(PedalTravel);

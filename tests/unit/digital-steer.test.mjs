@@ -326,7 +326,7 @@ function bootButtons({ count = null, inputFile = "js/input/input.js" } = {}) {
   const Input = vm.runInContext("Input", ctx);
   Input.init(el());
   return {
-    Input, clock, els,
+    Input, clock, els, model: vm.runInContext("PedalTravel", ctx),
     left: () => els.get("btn-steer-left"),
     right: () => els.get("btn-steer-right"),
   };
@@ -373,6 +373,29 @@ test("last d-pad wins: RIGHT pressed while LEFT is still held steers right", () 
   pad.buttons[15] = { pressed: false, value: 0 };
   for (let i = 0; i < 40; i++) { clock.t += STEP; Input.poll(); Input.steer(1 / 60); }
   assert.equal(Input.steer(1 / 60), -1, "releasing RIGHT hands back to still-held LEFT");
+});
+
+test("digital return rate applies to keyboard, D-pad and touch buttons without changing build rate", () => {
+  const keyboard = boot(), gamepad = padRig(), buttons = bootButtons();
+  for (const [rig, setRight] of [
+    [keyboard, on => keyboard.key("ArrowRight", on)],
+    [gamepad, on => { gamepad.trig(15, Number(on)); gamepad.Input.poll(); }],
+    [buttons, on => buttons.right().fire(on ? "pointerdown" : "pointerup", { pointerId: 1 })],
+  ]) {
+    const { Input } = rig;
+    Input.setSteerExpo(1);
+    Input.setKeyRampIn(4);
+    Input.setKeyRampOut(2.5);
+    setRight(true);
+    assert.equal(Input.steer(0.05), 0.2);
+    for (let i = 0; i < 5; i++) Input.steer(0.05);
+    setRight(false);
+    assert.equal(Input.steer(0.1), 0.75);
+    Input.setKeyRampIn(6);
+    assert.equal(Input.steer(0.1), 0.5);
+    Input.setKeyRampOut(null);
+    assert.equal(Input.steer(0.05), 0);
+  }
 });
 
 test("coalesced pointer samples move the finger only when they ARE the finger", () => {
@@ -627,4 +650,22 @@ test("dropping a pad still forgets its use record when the live set is reused", 
   list = [a, b];
   h.clock.t += 16; h.Input.poll();
   assert.ok(Math.abs(h.Input.steer(1 / 60)) < 0.05, "the unplugged pad's use record must not survive");
+});
+
+test("an on-screen arrow uses its slide endpoint even with global Adaptive Buttons off", () => {
+  const { Input, left, right, model } = bootButtons();
+  right().getBoundingClientRect = () => ({ left: 180, top: 0, width: 100, height: 100 });
+  Input.setAdaptiveButtons(0);
+  Input.setSteerExpo(1);
+  model.setButtonProfile("left", { end: 30 });
+  const arrow = left();
+  arrow.fire("pointerdown", { clientX: 0 });
+  for (let i = 0; i < 20; i++) Input.steer(1 / 60);
+  assert.equal(Input.steer(1 / 60), -1);
+  arrow.fire("pointermove", { clientX: 90 });
+  for (let i = 0; i < 20; i++) Input.steer(1 / 60);
+  assert.ok(Math.abs(Input.steer(1 / 60) + 0.3) < 1e-10);
+  arrow.fire("pointerup", { clientX: 90 });
+  for (let i = 0; i < 20; i++) Input.steer(1 / 60);
+  assert.equal(Input.steer(1 / 60), 0);
 });

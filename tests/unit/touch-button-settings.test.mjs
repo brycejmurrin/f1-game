@@ -19,7 +19,8 @@ test("changing, reopening and resetting a touch response edits only the selected
   editor.mount(host);
   const field = key => dom.byId("touch-test-" + key);
   const choose = (key, value) => { field(key).value = value; field(key).onchange(); };
-  const slider = host.querySelector("input"), reset = host.querySelector("button");
+  const slider = [...host.querySelectorAll("input")].find(input => input.dataset.field === "travel");
+  const reset = host.querySelector("button");
   const describedBy = el => dom.byId(el.getAttribute("aria-describedby")).textContent;
   assert.equal(describedBy(slider).includes("40–160"), true);
   assert.equal(field("button").value, "left");
@@ -49,7 +50,7 @@ test("changing, reopening and resetting a touch response edits only the selected
   slider.onchange(); choose("slide", "ease"); choose("feedback", "off");
   assert.equal(model.buttonProfile("brake").feedback, false);
   editor.mount(host);
-  assert.equal(host.querySelectorAll("input").length, 1);
+  assert.equal(host.querySelectorAll("input").length, 2);
   assert.equal(slider.value, "120");
   choose("slide", "inherit");
   assert.equal(model.buttonOverrides("brake").slide, undefined);
@@ -293,6 +294,67 @@ test("absolute slider paints a single decorative quarter scale and restores its 
   assert.equal(children.length, 0);
 });
 
+test("gesture timing follows the active mode and is saved independently per button", () => {
+  const windowEvents = new Map();
+  const { dom, host, editor, actions, model } = boot({ window: { addEventListener: (type, fn) => windowEvents.set(type, fn) } });
+  editor.mount(host);
+  const control = key => dom.byId("touch-test-" + key);
+  const choose = (key, value) => { control(key).value = value; control(key).onchange(); };
+  const button = dom.document.createElement("button");
+  button.getBoundingClientRect = () => ({ left: 0, top: 0, right: 20, bottom: 20 });
+  let activations = 0;
+  const events = new Map();
+  button.addEventListener = (type, fn) => events.set(type, fn);
+  button.click = () => activations++;
+  actions.bindControl(button, "boost");
+  const send = (type, timeStamp) => events.get(type)({ type, timeStamp, pointerId: 1, pointerType: "touch",
+    clientX: 5, clientY: 5, preventDefault() {}, stopImmediatePropagation() {} });
+  const tap = (start, end) => { send("pointerdown", start); send("pointerup", end); };
+  const slider = control("gesture-time");
+  choose("button", "boost");
+  assert.equal(slider.parentElement.hidden, true);
+  for (const [mode, saved, defaultMs, duration] of [
+    ["quick", "quickMs", 180, 250], ["hold", "holdMs", 450, 600], ["long", "longHoldMs", 900, 1050],
+  ]) {
+    choose("activation", mode);
+    assert.equal(slider.parentElement.hidden, false);
+    assert.equal(slider.value, String(defaultMs));
+    choose("gesture-time", String(duration));
+    assert.equal(model.buttonOverrides("boost")[saved], duration);
+    const before = activations;
+    tap(0, mode === "quick" ? duration + 1 : duration - 1);
+    assert.equal(activations, before);
+    tap(2000, 2000 + duration);
+    assert.equal(activations, before + 1);
+  }
+  choose("activation", "double");
+  assert.equal(slider.value, "350");
+  choose("gesture-time", "600");
+  // An ordinary lift between the taps keeps the first tap armed.
+  tap(4000, 4050);
+  dom.document.dispatchEvent({ type: "touchend", touches: [] });
+  tap(4600, 4650);
+  assert.equal(activations, 4);
+  tap(5000, 5050);
+  windowEvents.get("blur")();
+  tap(5300, 5350);
+  assert.equal(activations, 4, "a tap made before blur cannot complete the gesture");
+  dom.document.dispatchEvent({ type: "touchcancel", touches: [] });
+  tap(5600, 5650);
+  assert.equal(activations, 4, "a cancellation with no fingers clears the pending tap");
+  choose("activation", "hold");
+  send("pointerdown", 6000);
+  dom.document.dispatchEvent({ type: "touchcancel", touches: [{ identifier: 1 }] });
+  send("pointerup", 6600);
+  assert.equal(activations, 5, "cancelling another finger keeps the active hold");
+  choose("activation", "quick");
+  assert.equal(slider.value, "250");
+  assert.equal(slider.getAttribute("aria-valuetext"), "0.25 s");
+  choose("button", "pause");
+  choose("activation", "quick");
+  assert.equal(slider.value, "180");
+});
+
 test("custom camera gestures share the picker hold and cancel with the camera screen", () => {
   const dom = makeDom(), el = dom.byId("btn-cam"), handlers = new Map();
   let timer, cycles = 0;
@@ -325,6 +387,28 @@ test("custom camera gestures share the picker hold and cancel with the camera sc
   assert.equal(cycles, 1, "the selected long-hold action still cycles on release");
   send("pointerdown", 3200); camera.hide(); send("pointerup", 4100);
   assert.equal(cycles, 1, "a hold retired by pause cannot switch camera on resume");
+
+  model.setButtonProfile("camera", { activation: "long", longHoldMs: 1200 });
+  send("pointerdown", 5000); assert.equal(timer.delay, 1650);
+  send("pointerup", 6200);
+  assert.equal(cycles, 2, "the custom hold still activates before the picker threshold");
+  send("pointerdown", 7000); timer.fn(); send("pointerup", 8650);
+  assert.equal(el.getAttribute("aria-expanded"), "true");
+  assert.equal(cycles, 2);
+  camera.hide();
+
+  model.setButtonProfile("camera", { activation: "quick", quickMs: 450 });
+  send("pointerdown", 9000); assert.equal(timer.delay, 451);
+  send("pointerup", 9450);
+  assert.equal(cycles, 3, "a longer Quick Tap still fits before the camera picker opens");
+
+  model.setButtonProfile("camera", { activation: "double", doubleTapMs: 1000 });
+  send("pointerdown", 10000); send("pointerup", 10050);
+  camera.hide();
+  send("pointerdown", 10500); send("pointerup", 10550);
+  assert.equal(cycles, 3, "a first tap from the previous screen cannot pair after resume");
+  send("pointerdown", 10900); send("pointerup", 10950);
+  assert.equal(cycles, 4, "two taps on the current screen still switch camera");
 });
 
 test("custom touch actions cancel on viewport changes and still accept the next gesture", () => {
@@ -349,4 +433,65 @@ test("custom touch actions cancel on viewport changes and still accept the next 
       assert.equal(clicks, before + 1, "a fresh gesture remains usable");
     }
   }
+});
+
+test("a selected slide direction reaches either a higher or lower endpoint independently of hold", () => {
+  const { host, dom, editor, model } = boot();
+  editor.mount(host);
+  const field = key => dom.byId("touch-test-" + key);
+  const choose = (key, value) => { field(key).value = value; field(key).onchange(); };
+  choose("button", "gas");
+  choose("start", "40"); choose("direction", "down"); choose("end", "80");
+  let gas = model.buttonProfile("gas");
+  const sample = (x, y, held = 0) => model.level(gas, model.advance(gas, x, y, -y), held);
+  assert.deepEqual([sample(90, 0), sample(0, -90), sample(0, 90)], [0.4, 0.4, 0.8]);
+  assert.ok(Math.abs(sample(0, 45) - 0.6) < 1e-10);
+  choose("press", "progressive"); choose("end", "0"); choose("buildMs", "500"); choose("holdEnd", "60");
+  gas = model.buttonProfile("gas");
+  assert.equal(sample(0, 45), 0.2);
+  assert.equal(sample(0, 0, 1), 0.6);
+  assert.equal(sample(0, 90, 1), 0);
+  assert.equal(sample(0, 180, 1), 0);
+  choose("button", "brake");
+  assert.equal(field("end").value, "default");
+  assert.equal(field("holdEnd").disabled, true);
+  choose("button", "gas");
+  assert.equal(field("end").value, "0");
+  assert.equal(field("holdEnd").value, "60");
+  assert.match(dom.byId("touch-test-help").textContent, /Slide down to reach 0% input/);
+});
+
+test("an imported whole percentage stays selectable and a timed hold can descend below 12%", () => {
+  const frames = [];
+  const { host, dom, editor, model } = boot({ performance: { now: () => 100 }, requestAnimationFrame: fn => frames.push(fn) });
+  model.setButtonProfile("gas", { start: 37, end: 53, holdEnd: 0, buildMs: 500 });
+  editor.mount(host, ["gas", "brake"], { standalone: true });
+  const field = key => dom.byId("touch-test-" + key);
+  for (const [key, amount] of [["start", "37"], ["end", "53"], ["holdEnd", "0"]]) {
+    assert.equal(field(key).value, amount);
+    assert.ok(field(key).children.some(option => option.value === amount));
+  }
+  model.setButtonProfile("gas", { start: null, end: null });
+  editor.mount(host);
+  const contact = { profile: model.buttonProfile("gas") }, values = [];
+  model.buildOnHold(contact, () => true, v => values.push(v));
+  assert.equal(frames.length, 1);
+  frames.shift()(350); frames.shift()(600);
+  assert.deepEqual(values, [0.5, 0]);
+});
+
+test("changing absolute crossover on the phone leaves relative crossover intact", () => {
+  const { host, dom, model, editor } = boot();
+  model.setButtonProfile("gas", { slide: "ease" });
+  editor.mount(host, ["gas"], { standalone: true });
+  const field = key => dom.byId("touch-test-" + key);
+  const choose = (key, value) => { field(key).value = value; field(key).onchange(); };
+  choose("sliderEdge", "right");
+  assert.equal(field("sliderEntry").value, "enter", "old crossover follows the explicit relative setting");
+  choose("sliderEntry", "stay");
+  assert.equal(model.buttonOverrides("gas").slide, "ease");
+  choose("sliderEdge", "relative");
+  assert.equal(field("slide").value, "ease");
+  choose("sliderEdge", "right");
+  assert.equal(field("sliderEntry").value, "stay");
 });
