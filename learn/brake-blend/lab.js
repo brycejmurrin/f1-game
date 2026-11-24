@@ -64,14 +64,21 @@
 
   LearnSandbox.mount({
     title: 'Rear brake blending and torque fill',
+    key: 'Torque is in N·m. The entry bars show pedal request versus the motor, discs and engine. On exit, the blue band shows electrical assist.',
     replay: {label: 'torque response', initial: 1},
     intro: 'Compare two moments at one corner. On entry, the rear discs replace fading electrical braking. At the exit, the electric motor fills a gap in engine torque as the turbo spools.',
     controls: [
       { id: 'scenario', label: 'Corner phase', value: 'entry', options: [['entry', 'Entry · brake blending'], ['exit', 'Exit · torque fill']] },
       { id: 'demand', label: 'Requested axle torque', min: 800, max: 2400, step: 100, value: 1800, unit: 'N·m' },
-      { id: 'retained', label: 'Available motor share', min: 0, max: 100, step: 5, value: 50, unit: '%' },
+      { id: 'retained', label: state => state.scenario === 'entry' ? 'Initial regenerative torque retained' : 'Initial torque shortfall the motor can cover', min: 0, max: 100, step: 5, value: 50, unit: '%' },
       { id: 'engineBrake', when: state => state.scenario === 'entry', label: 'Engine-braking share', min: 0, max: 30, step: 5, value: 0, unit: '%' },
       { id: 'response', label: 'Torque compensation', value: 'hold', options: [['hold', 'Off · hold baseline torque'], ['fill', 'On · fill shortfall']] }
+    ],
+    presets: [
+      ['Entry · regen depleted', {scenario:'entry', retained:0, response:'fill'}],
+      ['Entry · regen available', {scenario:'entry', retained:100, response:'fill'}],
+      ['Exit · motor unavailable', {scenario:'exit', retained:0, response:'fill'}],
+      ['Exit · motor available', {scenario:'exit', retained:100, response:'fill'}],
     ],
     challenge: 'On entry, keep the requested torque with 25% or less of the original motor braking available. On exit, meet the request from throttle pickup. Check each phase separately.',
     sources: [

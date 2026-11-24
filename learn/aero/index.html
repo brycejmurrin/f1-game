@@ -23,7 +23,9 @@
 <p id="gap-formula" class="hint"></p>
 <fieldset><legend>Track section</legend><div><label><input type="radio" name="section" value="straight" checked> Straight</label><label><input type="radio" name="section" value="corner"> Fast corner</label></div></fieldset>
 <label id="direction-row" hidden>Turn direction <select id="direction"><option value="left">Left</option><option value="right">Right</option></select></label>
-<label class="check"><input id="offset" type="checkbox"> Move follower 4 m off-line to the wake boundary</label>
+<label for="offset">Lateral offset <output id="offset-value" for="offset"></output></label>
+<input id="offset" type="range" min="-4" max="4" step=".5" value="0">
+<button id="wake-boundary" type="button">Move to 4 m boundary</button>
 </section>
 <section class="active-aero" data-as="box" aria-labelledby="active-aero-title">
 <h2 id="active-aero-title" data-as="heading">2026 F1 ACTIVE AERO</h2>

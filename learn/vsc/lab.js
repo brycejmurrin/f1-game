@@ -34,9 +34,14 @@
     get("pit-car").style.left = replay.pit * 100 + "%";
     get("track-car").style.left = replay.track * 100 + "%";
     get("green-car").style.left = replay.green * 100 + "%";
+    const beforeEntry = elapsed < input.gapBehind;
+    const referenceArrived = elapsed >= result.referenceArrival;
+    const referenceState = beforeEntry ? "Approaching entry" : referenceArrived ? "Passed marker" :
+      elapsed >= input.vscEnds ? "Green" : regimeNames[input.regime || "vsc"];
+    get("reference-car").hidden = beforeEntry;
     get("reference-car").style.left = replay.reference * 100 + "%";
-    get("reference-clock").textContent = elapsed < input.gapBehind ? "Approaching entry" :
-      metres(replay.reference * distance) + " · " + seconds(Math.min(elapsed, result.referenceArrival));
+    get("reference-clock").textContent = referenceState + (beforeEntry ? "" :
+      " · " + metres(replay.reference * distance) + " · " + seconds(Math.min(elapsed, result.referenceArrival)));
     get("pit-clock").textContent = replay.pitPhase + " · " + seconds(Math.min(elapsed, result.pitTime));
     const trackState = elapsed >= result.trackTime ? "Passed marker" : elapsed >= result.cautionMs ? "Green" : regimeNames[input.regime || "vsc"];
     get("track-clock").textContent = trackState + " · " + metres(replay.track * distance) + " · " +
@@ -45,7 +50,10 @@
       seconds(Math.min(elapsed, result.greenTrack));
     get("elapsed").textContent = seconds(elapsed) + " / " + seconds(duration);
     timeline.value = elapsed / 1000;
-    timeline.setAttribute("aria-valuetext", seconds(elapsed) + ", " + replay.pitPhase + ", track " + trackState);
+    const gap = result.rejoin === 0 ? "level" : seconds(Math.abs(result.rejoin)) + (result.rejoin > 0 ? " ahead" : " behind");
+    const finalGap = elapsed >= Math.max(result.pitTime, result.referenceArrival) ? ", pit car " + gap : "";
+    timeline.setAttribute("aria-valuetext", seconds(elapsed) + ", " + replay.pitPhase + ", track " + trackState +
+      ", reference " + referenceState + finalGap);
   }
 
   function drawArithmetic() {

@@ -2,7 +2,7 @@
 const LearnReplay = (() => {
   "use strict";
 
-  function mount(parent, {label, draw, duration = 7000, rewind = false,
+  function mount(parent, {label, draw, duration = 7000, rewind = false, steps = 1000, first = 0, realTime = false,
     describe = value => Math.round(value * 100) + "%"}) {
     const controls = document.createElement("div");
     controls.className = "lesson-replay";
@@ -10,14 +10,13 @@ const LearnReplay = (() => {
     button.type = "button";
     const slider = document.createElement("input");
     slider.type = "range";
-    slider.min = "0";
-    slider.max = "1000";
+    slider.min = String(first);
+    slider.max = String(first + steps);
     slider.step = "1";
     const name = () => typeof label === "function" ? label() : label;
     const position = document.createElement("span");
     position.setAttribute("aria-hidden", "true");
     const rate = document.createElement("select");
-    rate.setAttribute("aria-label", "Playback speed");
     for (const value of [.5, 1, 2]) {
       const option = document.createElement("option");
       option.value = String(value);
@@ -42,7 +41,7 @@ const LearnReplay = (() => {
 
     function seek(next, paint = true) {
       value = Math.max(0, Math.min(1, next));
-      slider.value = String(Math.round(value * 1000));
+      slider.value = String(first + Math.round(value * steps));
       position.textContent = (paint ? draw(value) : undefined) ?? describe(value);
       slider.setAttribute("aria-valuetext", position.textContent);
     }
@@ -53,6 +52,8 @@ const LearnReplay = (() => {
       last = 0;
       button.textContent = "Play " + name();
       slider.setAttribute("aria-label", name() + " progress");
+      const modelClock = typeof realTime === "function" ? realTime() : realTime;
+      rate.setAttribute("aria-label", modelClock ? "Playback speed" : "Diagram playback rate");
     }
 
     function tick(now) {
@@ -73,7 +74,7 @@ const LearnReplay = (() => {
     });
     slider.addEventListener("input", () => {
       stop();
-      seek(Number(slider.value) / 1000);
+      seek((Number(slider.value) - first) / steps);
     });
     document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
     window.addEventListener("pagehide", stop);

@@ -22,34 +22,38 @@
     let time = 0;
     const stages = [];
 
-    function stage(name, duration, power, start) {
-      stages.push({name, time, duration, start, end: charge,
+    function stage(name, duration, power, start, limiter) {
+      stages.push({name, time, duration, start, end: charge, limiter,
         active: Math.min(duration, Math.abs(charge - start) * 1000 / power)});
       time += duration;
     }
 
     function recover(name, duration, power) {
       const potential = duration * power / 1000;
-      const withinBudget = Math.min(potential, Math.max(0, rechargeLimit - harvested));
-      const actual = Math.min(withinBudget, capacity - charge);
-      budgetLimited += potential - withinBudget;
-      storeLimited += withinBudget - actual;
+      const allowance = Math.max(0, rechargeLimit - harvested);
+      const headroom = Math.max(0, capacity - charge);
+      const actual = Math.min(potential, allowance, headroom);
+      const limited = potential - actual;
+      const storeFirst = headroom <= allowance;
+      if (storeFirst) storeLimited += limited;
+      else budgetLimited += limited;
       harvested += actual;
       const start = charge;
       charge += actual;
-      stage(name, duration, power, start);
+      stage(name, duration, power, start, limited > 1e-9 ? (storeFirst ? "Store full" : "Allowance reached") : "");
     }
 
     for (let i = 0; i < driveTimes.length; i++) {
-      const demand = driveTimes[i] * state.deploy / 1000;
+      const deployTime = driveTimes[i] - (state.clip ? clipTimes[i] : 0);
+      const demand = deployTime * state.deploy / 1000;
       const actual = Math.min(demand, charge);
       const start = charge;
       charge -= actual;
-      stage("Deploy", driveTimes[i], state.deploy, start);
+      stage("Deploy", deployTime, state.deploy, start, demand > actual + 1e-9 ? "Store empty" : "");
       deployed += actual;
       unserved += demand - actual;
-      recover("Brake", brakeTimes[i], state.brake);
       if (state.clip) recover("Super clip", clipTimes[i], state.clip);
+      recover("Brake", brakeTimes[i], state.brake);
     }
     return { stages, time, harvested, deployed, charge, storeLimited, budgetLimited, unserved };
   }
@@ -104,10 +108,11 @@
 
   LearnSandbox.mount({
     title: "Hybrid Lap Energy",
-    replay: {label: "energy lap", duration: 12000},
+    replay: {label: "compressed energy lap", duration: 12000, rewind: true},
+    key: "Vertical axis: usable charge in MJ. Deploy, brake and super clip are separate phases. The optional dashed trace is lap two.",
     intro: "Charge is a stock. Recharge and deployment are flows. Build an energy plan for a fictional lap and see how the same energy store can accept more than 4 MJ across multiple cycles.",
     controls: [
-      { id: "budget", label: "Lap recharge allowance", options: [["6", "6.0 MJ · Las Vegas qualifying"], ["7", "7.0 MJ"], ["8", "8.0 MJ · Las Vegas race, Overtake inactive"], ["8.5", "8.5 MJ"]], value: "8" },
+      { id: "budget", label: "Lap recharge allowance", options: [["6", "6.0 MJ · Las Vegas qualifying"], ["7", "7.0 MJ · Melbourne qualifying"], ["8", "8.0 MJ · Las Vegas race, Overtake inactive"], ["8.5", "8.5 MJ · Las Vegas race, Overtake active"]], value: "8" },
       { id: "start", label: "Usable charge at start", min: 0.5, max: 4, step: 0.25, value: 2, unit: "MJ" },
       { id: "deploy", label: "Deployment in acceleration phases", min: 100, max: 350, step: 25, value: 250, unit: "kW" },
       { id: "brake", label: "Harvest under braking", min: 100, max: 350, step: 25, value: 275, unit: "kW" },
@@ -118,6 +123,7 @@
     sources: [
       ["FIA 2026 Technical Regulations, Issue 21 · C5.2.7 and C5.2.9–10", "https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_21_-_2026-10-19.pdf"],
       ["FIA · 2026 Las Vegas power unit information", "https://www.fia.com/system/files/decision-document/2026_las_vegas_grand_prix_-_power_unit_information.pdf"],
+      ["FIA · 2026 Melbourne power unit information", "https://www.fia.com/system/files/decision-document/2026_australian_grand_prix_-_power_unit_information.pdf"],
       ["FIA · 2026 in-season energy refinements", "https://www.fia.com/news/refinements-2026-fia-formula-1-regulations-agreed-all-stakeholders"],
     ],
     evaluate(state) {
@@ -125,8 +131,8 @@
       const { charge, deployed, harvested, storeLimited, budgetLimited, unserved } = result;
       const balance = charge - state.start;
       const nextLap = simulate({ ...state, start: charge });
-      const lapMode = state.budget === "6"
-        ? "For one qualifying push, finishing with less charge can be acceptable. The 6.0 MJ allowance is from Las Vegas qualifying."
+      const lapMode = Number(state.budget) <= 7
+        ? "For one qualifying push, finishing with less charge can be acceptable. The limit varies by event."
         : "For a repeatable race plan, aim to finish with at least as much charge as you started with. A negative balance draws on the opening reserve.";
       const success = state.budget === "8" && harvested + 1e-9 >= 7.5 && deployed + 1e-9 >= 8 && charge + 1e-9 >= 1;
       return {
@@ -136,7 +142,8 @@
           const stage = result.stages.find(stage => time < stage.time + stage.duration) ?? result.stages.at(-1);
           const name = progress === 1 ? "Finish" : stage.name;
           return {svg: LearnSandbox.cursor(xAt(time, result), yAt(chargeAt(stage, time)), 53, 172),
-            readout: time.toFixed(1) + " s · " + name + " · " + mj(chargeAt(stage, time))};
+            readout: time.toFixed(1) + " s · " + name + " · " + mj(chargeAt(stage, time)) +
+              (stage.limiter && time >= stage.time + stage.active ? " · " + stage.limiter : "")};
         },
         metrics: [
           ["Harvested this lap", mj(harvested) + " / " + mj(Number(state.budget))],
@@ -145,8 +152,9 @@
           ["Recharge blocked by allowance", mj(budgetLimited)],
           ["Recharge blocked by full store", mj(storeLimited)],
           ["Deployment request left unmet", mj(unserved)],
+          ["Deployment time traded for super clipping", state.clip ? "7 s · " + mj(7 * state.deploy / 1000) + " requested deployment" : "0 s"],
         ],
-        explanation: "The FIA limits the usable state-of-charge swing to 4 MJ and measures lap recharge separately at the ERS-K DC bus. " + lapMode + " The dashed repeat lap starts from the first lap’s finishing charge and resets the recharge allowance. Flat sections show the store or allowance reaching a limit. Full-throttle harvesting, called super clipping, diverts some engine output to recharge. Timing and eligible phases are illustrative.",
+        explanation: "The FIA limits the usable state-of-charge swing to 4 MJ and measures lap recharge separately at the ERS-K DC bus. " + lapMode + " The repeat starts from the first lap’s finish. Each blocked recovery phase is assigned to its first binding limit. Super clipping replaces deployment time at full throttle inside the same 60 s teaching lap. Playback compresses that lap into 12 s at the default diagram rate.",
         success,
         feedback: success ? "Target met. Repeated cycles moved more than 4 MJ through the store while the stored charge always stayed in its 0–4 MJ window."
           : state.budget !== "8" ? "Choose the 8.0 MJ allowance for this challenge."

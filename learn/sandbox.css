@@ -11,6 +11,9 @@ h2 { font-size: var(--fs-5, 20px); }
 .diagram-view.expanded { overflow-x: auto; }
 #lab .diagram-view.expanded svg { min-width: 600px; }
 .expand-diagram { margin-block: .4rem; }
+.lesson-instrument { container-type: inline-size; }
+.diagram-key { color: var(--dim); margin-block: .4rem; }
+@container (min-width: 600px) { .expand-diagram[aria-expanded="false"] { display: none; } }
 dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr)); margin: .65rem 0; gap: .55rem; }
 dt { font-size: var(--fs-2); color: var(--dim); }
 dd { font-weight: 700; font-variant-numeric: tabular-nums; }

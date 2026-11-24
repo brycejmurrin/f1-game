@@ -1,1 +1,1 @@
-Fixed: Learn replays now show the correct wake boundary, battery cutoffs, grip limits and Safety Car timing. Lessons also add new comparison controls and an expandable diagram view.
+Fixed: Learn replays show how lateral position changes a wake, where battery limits bind, and how grip and pit gaps change through an experiment. Chassis, wet-weather and pit challenges now grade their stated targets. Keyboard controls advance one pit stage or lap at a time.

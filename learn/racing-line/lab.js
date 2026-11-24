@@ -98,7 +98,8 @@
 
   LearnSandbox.mount({
     title: 'Racing lines and apex geometry',
-    replay: {label: 'ghost race', rewind: true, input: () => 'elapsed'},
+    replay: {label: 'compressed ghost race', rewind: true, input: () => 'elapsed'},
+    key: 'Solid is your line. Dashed is the early-apex reference. The dot marks your apex. The bars mark the shared corner exit and finish.',
     intro: 'Move the clipping point around a hairpin. Compare the time from the approach to the end of the next straight against an early apex.',
     controls: [
       {id:'apex', label:'Apex position through the turn', min:30, max:70, step:1, value:30, unit:'%'},
@@ -111,7 +112,10 @@
     evaluate({apex, straight, elapsed = 3}) {
       const run = simulate(apex / 100, straight), reference = simulate(0.3, straight);
       const gain = reference.time - run.time;
+      const cornerGain = reference.clock.at(-1) - run.clock.at(-1);
+      const straightGain = gain - cornerGain;
       const [x,y] = project(run.points[61]);
+      const [exitX, exitY] = project(run.points.at(-1));
       const success = straight >= 300 && gain >= 0.70;
       const svg = `<rect width="600" height="240" fill="#18382f"/>
         <path d="M0 200 H348 A80 80 0 0 0 348 40 H0" fill="none" stroke="#dad9cc" stroke-width="38"/>
@@ -120,6 +124,8 @@
         <path d="${path(reference.points)}" fill="none" stroke="#eee" stroke-width="2" stroke-dasharray="5 4"/>
         <circle cx="${x}" cy="${y}" r="5" fill="#ffcc76" stroke="#151e22"/>
         <path d="M${straightFinish} 19V40" stroke="#d9e8df" stroke-width="3"/>
+        <path d="M${exitX} ${exitY - 13}v26" stroke="#d9e8df" stroke-width="2" stroke-dasharray="4 3"/>
+        <text x="${exitX}" y="${exitY + 29}" text-anchor="middle" fill="#edf5f4" font-size="12">Corner exit</text>
         ${ghost(reference, elapsed, true)}${ghost(run, elapsed, false)}
         <g fill="#edf5f4" font-family="system-ui" font-size="14">
         <text x="20" y="205">Entry →</text><text x="35" y="51">← Exit straight · ${straight} m</text>
@@ -129,10 +135,10 @@
         </g>`;
       return {svg, replayEnd: Math.ceil(Math.max(run.time, reference.time) * 10) / 10,
         metrics:[['Common entry', Math.round(run.limits[0] * 3.6) + ' km/h'], ['Exit speed', Math.round(run.exit * 3.6) + ' km/h'],
-          ['Approach to apex', run.clock[61].toFixed(2) + ' s'], ['Approach to turn exit', run.clock.at(-1).toFixed(2) + ' s'],
+          ['Gain through the corner', signed(cornerGain) + ' s'], ['Gain on the exit straight', signed(straightGain) + ' s'],
           ['Sector time', run.time.toFixed(2) + ' s'], ['Time vs early apex', signed(-gain) + ' s']],
-        explanation:'Both ghosts start at a common speed. Curvature uses part of a simplified combined tyre-force budget and leaves a smaller share for accelerating or braking. The exit straight is compressed on screen. The replay ends at the slower car’s finish.',
-        success, feedback:success ? 'You traded some entry speed for a faster sector.' : straight < 300 ? 'Lengthen the following straight to run the challenge.' : 'Move the apex and watch the sector delta. The largest exit speed may carry an entry-time cost.'};
+        explanation:'Both ghosts start at a common speed. Curvature uses part of a simplified combined tyre-force budget. The exit straight is rescaled on screen. Positive gains mean time saved at common comparison markers. Diagram playback is compressed and ends at the slower car’s finish.',
+        success, feedback:success ? 'Compared with the early line, your gains are ' + signed(cornerGain) + ' s through the corner and ' + signed(straightGain) + ' s on the straight.' : straight < 300 ? 'Lengthen the following straight to run the challenge.' : 'Move the apex and compare the two gains. A higher exit speed can come with a slower corner.'};
     }
   });
 })();

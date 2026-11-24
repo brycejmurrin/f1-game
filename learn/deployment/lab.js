@@ -2,8 +2,6 @@
   "use strict";
 
   const duration = 8;
-  const steps = 400;
-  const dt = duration / steps;
   const startSpeed = 260;
   const blue = "#65b7ff";
   const amber = "#f9bb64";
@@ -20,31 +18,53 @@
   const mj = n => n.toFixed(2) + " MJ";
 
   function trace(state) {
+    const speedAt = time => startSpeed + (state.endSpeed - startSpeed) * time / duration;
+    const capAt = time => ceiling(speedAt(time), state.curve);
+    const demandAt = time => Math.min(state.request, capAt(time));
+    const speeds = [290, 310, 337.5, 340, 345, 355, (1800 - state.request) / 5,
+      (6900 - state.request) / 20, (7100 - state.request) / 20];
+    const times = [0, ...new Set(speeds.filter(speed => speed > startSpeed && speed < state.endSpeed)
+      .map(speed => duration * (speed - startSpeed) / (state.endSpeed - startSpeed)))].sort((a, b) => a - b);
+    times.push(duration);
     let charge = state.charge;
     let speedLoss = 0;
     let emptyLoss = 0;
-    const limit = [];
-    const delivered = [];
-    const store = [];
-    for (let i = 0; i <= steps; i++) {
-      const speed = startSpeed + (state.endSpeed - startSpeed) * i / steps;
-      limit.push(point(i * dt, ceiling(speed, state.curve)));
+    let depletion = Infinity;
+    const segments = [];
+    const energyTo = (from, to) => (to - from) * (demandAt(from) + demandAt(to)) / 2000;
+    for (let i = 1; i < times.length; i++) {
+      const from = times[i - 1], to = times[i];
+      segments.push({from, to, charge});
+      const energy = energyTo(from, to);
+      if (energy > 0 && charge <= energy && depletion === Infinity) {
+        let low = from, high = to;
+        for (let j = 0; j < 40; j++) {
+          const middle = (low + high) / 2;
+          if (energyTo(from, middle) < charge) low = middle;
+          else high = middle;
+        }
+        depletion = high;
+      }
+      speedLoss += (to - from) * state.request / 1000 - energy;
+      emptyLoss += Math.max(0, energy - charge);
+      charge = Math.max(0, charge - energy);
     }
-    for (let i = 0; i < steps; i++) {
-      const t = i * dt;
-      const speed = startSpeed + (state.endSpeed - startSpeed) * (i + 0.5) / steps;
-      const capped = Math.min(state.request, ceiling(speed, state.curve));
-      store.push({charge, capped});
-      const spent = Math.min(charge, capped * dt / 1000);
-      speedLoss += (state.request - capped) * dt / 1000;
-      emptyLoss += capped * dt / 1000 - spent;
-      const active = capped > 0 ? spent / capped * 1000 : dt;
-      delivered.push(point(t, active > 0 ? capped : 0));
-      if (active < dt - 1e-9) delivered.push(point(t + active, capped), point(t + active, 0));
-      delivered.push(point(t + dt, active < dt - 1e-9 ? 0 : capped));
-      charge -= spent;
+    function sample(time) {
+      const segment = segments.find(segment => time <= segment.to) ?? segments.at(-1);
+      const capped = capAt(time);
+      const requested = demandAt(time);
+      const available = Math.max(0, segment.charge - energyTo(segment.from, time));
+      const limiter = time >= depletion && requested > 0 ? "Charge limit" :
+        capped < state.request ? "Speed ceiling" : "Driver request";
+      return {speed: speedAt(time), capped, available, delivered: time >= depletion ? 0 : requested, limiter};
     }
-    return { charge, speedLoss, emptyLoss, limit, delivered, store };
+    const limit = times.map(time => point(time, sample(time).capped));
+    const delivered = times.flatMap((time, i) => {
+      const cutoff = i > 0 && depletion > times[i - 1] && depletion <= time
+        ? [point(depletion, demandAt(depletion)), point(depletion, sample(depletion).delivered)] : [];
+      return [...cutoff, point(time, sample(time).delivered)];
+    });
+    return { charge, speedLoss, emptyLoss, limit, delivered, sample };
   }
 
   function diagram(state, traceData) {
@@ -80,11 +100,16 @@
 
   LearnSandbox.mount({
     title: "Deployment & Clipping",
-    replay: {label: "straight"},
+    replay: {label: "straight", duration: duration * 1000, realTime: true, rewind: true},
+    key: "Time on straight in seconds. Power is in kW. Amber dashes show the ceiling, dots show the request, and blue shows delivery.",
     intro: "An electric motor can have charge left and still deliver less power as speed rises. Compare the requested power, the FIA ceiling and what actually gets delivered over a fixed eight-second speed trace.",
+    presets: [
+      ["Same straight · 4.00 MJ", {curve:"standard", endSpeed:350, request:350, charge:4}],
+      ["Same straight · 0.25 MJ", {curve:"standard", endSpeed:350, request:350, charge:.25}],
+    ],
     controls: [
       { id: "curve", label: "Power curve", options: [["standard", "Standard"], ["limited", "Power-limited sector"], ["overtake", "Request Overtake"]], value: "standard" },
-      { id: "gap", label: "Gap at detection line", min: 0.5, max: 1.5, step: 0.05, value: 0.9, unit: "s" },
+      { id: "gap", when: state => state.curve === "overtake", label: "Gap at detection line", min: 0.5, max: 1.5, step: 0.05, value: 0.9, unit: "s" },
       { id: "endSpeed", label: "Speed at end of straight", min: 300, max: 360, step: 5, value: 350, unit: "km/h" },
       { id: "request", label: "Requested electrical power", min: 50, max: 350, step: 25, value: 350, unit: "kW" },
       { id: "charge", label: "Usable charge at entry", min: 0.25, max: 4, step: 0.25, value: 1, unit: "MJ" },
@@ -109,14 +134,10 @@
         svg: diagram(activeState, result),
         replay(progress) {
           const time = progress * duration;
-          const i = Math.min(steps - 1, Math.floor(time / dt));
-          const sample = result.store[i];
-          const charge = Math.max(0, sample.charge - sample.capped * (time - i * dt) / 1000);
-          const speed = startSpeed + (state.endSpeed - startSpeed) * progress;
-          const power = charge > 1e-9 ? Math.min(state.request, ceiling(speed, curve)) : 0;
-          return {svg: LearnSandbox.cursor(xAt(time), yAt(power), 47, 181),
-            readout: time.toFixed(1) + " s · " + speed.toFixed(0) + " km/h · " + Math.round(power) +
-              " kW delivered · " + mj(charge) + " left"};
+          const {speed, delivered, available, limiter} = result.sample(time);
+          return {svg: LearnSandbox.cursor(xAt(time), yAt(delivered), 47, 181),
+            readout: time.toFixed(1) + " s · " + speed.toFixed(0) + " km/h · " + Math.round(delivered) +
+              " kW delivered · " + mj(available) + " left · " + limiter};
         },
         metrics: [
           ["Energy deployed", mj(used)], ["Charge left", mj(result.charge)],

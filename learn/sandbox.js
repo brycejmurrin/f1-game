@@ -26,6 +26,7 @@ const LearnSandbox = (() => {
     const studio = element("div", root);
     studio.id = "learn-studio";
     const instrument = panel(studio);
+    instrument.className = "lesson-instrument";
     const diagramView = element("div", instrument);
     diagramView.className = "diagram-view";
     diagramView.id = "lesson-diagram";
@@ -47,6 +48,8 @@ const LearnSandbox = (() => {
       expand.setAttribute("aria-expanded", String(expanded));
       expand.textContent = expanded ? "Fit diagram" : "Expand diagram";
     });
+    const diagramKey = element("p", instrument);
+    diagramKey.className = "diagram-key";
     const replayHost = element("div", instrument);
     const readouts = element("dl", instrument);
     const explanation = element("p", instrument);
@@ -56,7 +59,9 @@ const LearnSandbox = (() => {
       const row = element("div", settings);
       row.className = "control";
       if (control.when) conditionalRows.push({row, when: control.when});
-      const label = element("label", row, control.label);
+      const label = element("label", row);
+      const labelText = document.createTextNode("");
+      label.appendChild(labelText);
       const input = element(control.options ? "select" : "input", row);
       input.id = "input-" + control.id;
       label.htmlFor = input.id;
@@ -77,12 +82,30 @@ const LearnSandbox = (() => {
         }
       }
       setValue(control.value);
-      controls.set(control.id, {control, input, setValue});
+      controls.set(control.id, {control, input, setValue, labelText});
       input.addEventListener("input", () => {
+        if (presets) presets.value = "";
         replay?.stop();
         setValue(control.options ? input.value : input.valueAsNumber);
         render();
         syncReplay(true);
+      });
+    }
+    const presets = lesson.presets && element("select", settings);
+    if (presets) {
+      presets.id = "lesson-preset";
+      const label = document.createElement("label");
+      label.htmlFor = presets.id;
+      label.textContent = "Compare setups";
+      settings.insertBefore(label, presets);
+      element("option", presets, "Choose an example").value = "";
+      lesson.presets.forEach(([name], i) => { element("option", presets, name).value = String(i); });
+      presets.addEventListener("change", () => {
+        if (presets.value === "") return;
+        const [, values] = lesson.presets[Number(presets.value)];
+        for (const [id, value] of Object.entries(values)) controls.get(id).setValue(value);
+        render();
+        syncReplay();
       });
     }
     const reset = element("button", settings, "Reset controls");
@@ -110,6 +133,9 @@ const LearnSandbox = (() => {
     let replayProgress = 0;
     function render(clearFeedback = true) {
       for (const {row, when} of conditionalRows) row.hidden = !when(state);
+      for (const {control, labelText} of controls.values()) {
+        labelText.nodeValue = typeof control.label === "function" ? control.label(state) : control.label;
+      }
       result = lesson.evaluate(state);
       const entry = replayInput();
       if (entry && result.replayEnd !== undefined) {
@@ -127,6 +153,8 @@ const LearnSandbox = (() => {
         diagram.appendChild(overlay);
       } else overlay = null;
       diagram.setAttribute("aria-label", lesson.title + ". " + result.explanation);
+      diagramKey.textContent = result.key ?? lesson.key ?? "";
+      diagramKey.hidden = !diagramKey.textContent;
       readouts.replaceChildren();
       for (const [name, value] of result.metrics) {
         const group = element("div", readouts);
@@ -138,9 +166,12 @@ const LearnSandbox = (() => {
     }
     const replayInput = () => controls.get(lesson.replay?.input?.(state));
     const replay = lesson.replay && LearnReplay.mount(replayHost, {
-      label: lesson.replay.label,
+      label: () => typeof lesson.replay.label === "function" ? lesson.replay.label(state) : lesson.replay.label,
       duration: lesson.replay.duration,
       rewind: lesson.replay.rewind,
+      steps: lesson.replay.steps,
+      first: lesson.replay.first,
+      realTime: lesson.replay.realTime,
       draw(progress) {
         replayProgress = progress;
         const entry = replayInput();
@@ -161,6 +192,7 @@ const LearnSandbox = (() => {
     });
     function syncReplay(fromInput = false) {
       if (!replay) return;
+      replay.stop();
       const entry = replayInput();
       replay.controls.hidden = !(entry || result.replay);
       replay.manual(!entry);
@@ -176,6 +208,7 @@ const LearnSandbox = (() => {
     reset.addEventListener("click", () => {
       replay?.stop();
       for (const {control, setValue} of controls.values()) setValue(control.value);
+      if (presets) presets.value = "";
       render();
       syncReplay();
     });

@@ -78,7 +78,7 @@
       ? mid + handedness * height * .18 * Math.tanh(4 * (x - turnX) / width)
       : mid;
     return {width, height, leader, xAt, step, follower: xAt(Number(gap.value)),
-      trackY, lateral: offset.checked ? -height * wakeHalfRatio : 0};
+      trackY, lateral: height * wakeHalfRatio * Number(offset.value) / tow.halfW};
   }
 
   function measure(distance, lateral, straight) {
@@ -253,7 +253,11 @@
       cornerReplay.stop();
       cornerReplay.seek(0);
     }
-    const result = measure(distance, offset.checked ? tow.halfW : 0, onStraight);
+    const sideways = Number(offset.value);
+    const result = measure(distance, sideways, onStraight);
+    const offsetText = sideways === 0 ? "Centred" : Math.abs(sideways) + " m " + (sideways < 0 ? "above" : "below") + " centre";
+    get("offset-value").textContent = offsetText;
+    offset.setAttribute("aria-valuetext", offsetText);
     followerWake = result.wake;
     const headway = (distance / constants.VMAX).toFixed(2);
     get("gapValue").textContent = distance + " m · " + headway + " s";
@@ -296,6 +300,10 @@
     delete canvas.dataset.dragging;
   });
   document.querySelector(".settings").addEventListener("input", update);
+  get("wake-boundary").addEventListener("click", () => {
+    offset.value = String(Number(offset.value) > 0 ? tow.halfW : -tow.halfW);
+    update();
+  });
   get("prediction").addEventListener("submit", event => {
     event.preventDefault();
     const answer = get("prediction").querySelector("input:checked");
@@ -311,7 +319,7 @@
     feedback.textContent = lead + "The usable tow drops from " + percent(straight.tow) + " to "
       + percent(corner.tow) + ". Grip stays at " + percent(corner.grip) + " of clean air.";
     gap.value = 10;
-    offset.checked = false;
+    offset.value = 0;
     document.querySelector("input[name=section][value=corner]").checked = true;
     update();
   });

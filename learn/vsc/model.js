@@ -17,6 +17,7 @@ const VscLesson = (() => {
   const fixtures = Object.freeze({
     default: Object.freeze({ ...baseline }),
     hardLife: Object.freeze({ ...baseline, boxPace: 5000 }),
+    fullField: Object.freeze({ ...baseline, vscEnds: 32000 }),
     earlyGreen: Object.freeze({ ...baseline, vscEnds: 9000, boxPace: 5000 }),
     traffic: Object.freeze({ ...baseline, vscEnds: 9000, boxPace: 5000, traffic: 3000 }),
     green: Object.freeze({ ...baseline, regime: "green", vscEnds: 0, boxPace: 5000 }),

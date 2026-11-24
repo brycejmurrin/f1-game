@@ -20,26 +20,28 @@
   let reference = 0;
   let gate = to;
   let analysis;
+  let landmarks;
   let deltaSeries;
   let plot = null;
   const replay = LearnReplay.mount(get("trace-replay"), {
     label: () => axis === "time" ? "time replay" : "distance scan",
     duration: () => axis === "time" ? maxTime * 1000 : 7000,
+    realTime: () => axis === "time",
     draw(progress) { selectCursor(progress * axisLimit()); },
   });
   replay.manual(false);
 
   function buildComparison() {
-    analysis = analyze(lanes, from, gate, reference);
+    landmarks = analyze(lanes, from, to, reference);
+    analysis = gate === to ? landmarks : analyze(lanes, from, gate, reference);
     deltaSeries = series(lanes, from, gate, reference).map(point => ({
       ...point, time: DataTelemetryModel.timeAtDist(lanes[reference].cum, point.distance),
     }));
     const middle = readAt(lanes, 40, "distance", reference).delta;
-    const atGate = Number.isFinite(analysis.deltaAfter) ? signed(analysis.deltaAfter) : "unavailable";
-    get("checkpoint-delta").textContent = "Equal-distance checkpoints · 40 m: " + signed(middle) + " · " + gate + " m: " + atGate;
+    get("checkpoint-delta").textContent = "Equal-distance checkpoints · 40 m: " + signed(middle) + " · " + to + " m: " + signed(landmarks.deltaAfter);
     for (const button of checkpoints) {
       const key = button.dataset.checkpoint;
-      button.disabled = key !== "start" && key !== "exit" && !analysis.lanes?.[reference]?.[key];
+      button.disabled = key !== "start" && key !== "exit" && !landmarks.lanes?.[reference]?.[key];
     }
   }
 
@@ -161,11 +163,11 @@
     ctx.stroke();
     ctx.restore();
 
-    if (analysis.available) {
+    if (landmarks.available) {
       ctx.fillStyle = paper;
       ctx.strokeStyle = accent;
-      const px = x(axis === "time" ? analysis.lanes[reference].end : gate);
-      const py = y(3, analysis.deltaAfter, ...bands[3].limits);
+      const px = x(axis === "time" ? landmarks.lanes[reference].end : to);
+      const py = y(3, landmarks.deltaAfter, ...bands[3].limits);
       ctx.beginPath();
       ctx.arc(px, py, 3.5, 0, Math.PI * 2);
       ctx.fill();
@@ -227,7 +229,7 @@
   }
 
   function jump(key) {
-    const value = key === "start" ? from : key === "exit" ? gate : analysis.lanes?.[reference]?.[key]?.distance;
+    const value = key === "start" ? from : key === "exit" ? to : landmarks.lanes?.[reference]?.[key]?.distance;
     if (Number.isFinite(value)) selectAxis("distance", value);
   }
 

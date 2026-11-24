@@ -205,6 +205,7 @@ test("VSC lesson computes pit loss, rejoin and finish projections for every repl
   const expected = {
     default: [30000, 22000, 12000, -3556, 26000, 23000],
     hardLife: [30000, 22000, 12000, -3556, 17000, 23000],
+    fullField: [30000, 22000, 12000, 2000, 26000, 23000],
     earlyGreen: [30000, 22000, 17000, -8000, 22000, 23000],
     traffic: [30000, 22000, 17000, -8000, 25000, 23000],
     green: [30000, 22000, 22000, -8000, 27000, 23000],

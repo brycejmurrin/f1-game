@@ -111,37 +111,39 @@
 
   LearnSandbox.mount({
     title: "Nimble Chassis X-ray",
-    replay: {label: "airflow"},
-    intro: "Compare FIA package dimensions and inspect an example against two 2026 chassis checks.",
+    replay: {label: state => state.view === "floor" ? "floor airflow" : "tyre wake"},
+    intro: "Compare FIA package dimensions, play airflow in the Floor and Inwash layers, or make a blind legality call.",
     controls: [
-      {id: "view", label: "Drawing layer", options: [["compare", "Axle and body overlay"], ["floor", "Floor side cutaway"], ["wake", "Inwash / outwash"], ["inspect", "Inspect a candidate"]], value: "compare"},
+      {id: "view", label: "Drawing layer", options: [["compare", "Axle and body overlay"], ["floor", "Floor cutaway · playable airflow"], ["wake", "Inwash / outwash · playable airflow"], ["inspect", "Free inspection"], ["challenge", "Challenge · fixed 3,450 / 945 mm"], ["edge", "Challenge · exact limits"]], value: "compare"},
       {id: "wakeStyle", when: state => state.view === "wake", label: "Tyre wake direction (wake layer)", options: [["out", "Outwash"], ["in", "Inwash"]], value: "out"},
       {id: "offset", when: state => state.view === "wake", label: "Following car offset (wake layer)", min: -75, max: 75, step: 5, value: 0, unit: "%"},
       {id: "wheelbase", when: state => state.view === "inspect", label: "Candidate wheelbase", min: 3200, max: 3600, step: 10, value: 3450, unit: "mm"},
       {id: "body", when: state => state.view === "inspect", label: "Candidate body half-width", min: 850, max: 1000, step: 5, value: 945, unit: "mm"},
-      {id: "answer", when: state => state.view === "inspect", label: "Your inspection call", options: [["unset", "Choose a result"], ["pass", "Both dimensions pass"], ["axle", "Wheelbase only fails"], ["body", "Body half-width only fails"], ["both", "Both dimensions fail"]], value: "unset"},
+      {id: "answer", when: state => state.view === "challenge" || state.view === "edge", label: "Your inspection call", options: [["unset", "Choose a result"], ["pass", "Both dimensions pass"], ["axle", "Wheelbase only fails"], ["body", "Body half-width only fails"], ["both", "Both dimensions fail"]], value: "unset"},
     ],
-    challenge: "Inspect the 3,450 mm candidate with a 945 mm body half-width. Under C2.3, which of these two dimensions fails? Judge the body separately from the tyre drawn beyond it.",
+    challenge: "Choose the fixed 3,450 / 945 mm challenge and decide which measurements pass. Then try the exact-limit fixture to see how the rule treats equality.",
     sources: [
       ["FIA Section C Issue 21 · C2.3 and C3.5", fia21],
       ["FIA comparative 2026 package concept", "https://www.fia.com/news/new-era-competition-fia-showcases-future-focused-formula-1-regulations-2026-and-beyond"],
     ],
     evaluate({view, wheelbase, body, answer, wakeStyle, offset}) {
+      const blind = view === "challenge" || view === "edge";
+      if (blind) [wheelbase, body] = view === "edge" ? [limits.wheelbase, limits.halfWidth] : [3450, 945];
       const axleFail = wheelbase > limits.wheelbase;
       const bodyFail = body > limits.halfWidth;
       const result = axleFail ? (bodyFail ? "both" : "axle") : (bodyFail ? "body" : "pass");
-      const inspection = view === "inspect";
+      const inspection = view === "inspect" || blind;
       const wakeView = view === "wake";
       const traces = wakeView ? wakePaths(wakeStyle === "in") : view === "floor" ? floorFlow : null;
-      const success = inspection && answer === result;
+      const success = blind && answer === result;
       const check = (n, max) => format(n) + " mm · " + (n <= max ? "within limit" : format(n - max) + " mm over");
       const metrics = wakeView ? [
         ["Front-tyre wake direction", wakeStyle === "in" ? "In toward the centreline" : "Out away from the centreline"],
         ["Follower offset", offset === 0 ? "Centred" : `${Math.abs(offset)}% of schematic half-lane · ${offset < 0 ? "above" : "below"} centre`],
         ["Evidence", "FIA design intent · no calculated grip or drag"],
       ] : inspection ? [
-        ["Axle separation", check(wheelbase, limits.wheelbase)],
-        ["Applicable body half-width", check(body, limits.halfWidth)],
+        ["Axle separation", blind ? `${format(wheelbase)} mm` : check(wheelbase, limits.wheelbase)],
+        ["Applicable body half-width", blind ? `${format(body)} mm` : check(body, limits.halfWidth)],
         ["Tyre, rim and specified rim attachments", "Excluded from the C2.3 lateral limit"],
       ] : [
         ["Maximum wheelbase", "3,600 → 3,400 mm"],
@@ -157,6 +159,9 @@
           ? "The FIA concept describes a partially flat floor and a lower-powered diffuser. The cutaway illustrates the airflow path. Its dimensions and forces are schematic."
           : "Both silhouettes use the same scale and front-axle origin. The FIA uses these dimensions to describe the package change. Agility also depends on mass distribution, tyres and aero.";
       return {
+        key: wakeView ? "Arrows show the direction of tyre wake with the noses facing left." :
+          inspection ? "Limits at legality setup: 3,400 mm wheelbase and 950 mm body half-width." :
+          "The illustration compares FIA package dimensions on a common scale.",
         svg: wakeView ? wake(wakeStyle, offset) : view === "floor" ? floor() : top(inspection ? wheelbase : limits.wheelbase, inspection ? body : limits.halfWidth, view === "compare"),
         replay: traces && (progress => ({svg: traces.map(path => `<path d="${path}" pathLength="100" fill="none"
           stroke="currentColor" stroke-linecap="round" stroke-width="4" stroke-dasharray="5 95"
@@ -164,7 +169,7 @@
         metrics,
         explanation,
         success,
-        feedback: wakeView ? "Compare both paths at the same offset. Then move the follower to see why position matters." : !inspection ? "Switch to Inspect a candidate to check the two dimensions."
+        feedback: wakeView ? "Compare both paths at the same offset. Then move the follower to see why position matters." : !blind ? "Choose one of the two fixed challenge fixtures to submit an inspection call."
           : answer === "unset" ? "Compare each candidate number with its own C2.3 limit, then make your call."
           : success ? "Correct. You classified both measurements independently and used the body half-width exception for the tyre."
           : "Check the axle separation against 3,400 mm and the applicable half-width against 950 mm. A measurement exactly on its limit passes.",

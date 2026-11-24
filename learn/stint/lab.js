@@ -16,7 +16,8 @@
 
   LearnSandbox.mount({
     title: "Stint Planner",
-    replay: {label: "race stint"},
+    replay: {label: "race stint", steps: laps - 1, first: 1},
+    key: "The vertical scale shows seconds lost per lap. Solid is net pace, dashes are tyre-only, triangles mark the cliff and shading marks a plan without enough fuel.",
     intro: "Plan a fictional 50-lap dry race. Balance the tyres’ pace drop, starting fuel mass and the recoverable sample.",
     controls: [
       { id: "plot", label: "Plot", options: [["net", "Net pace and tyre-only reference"], ["tyres", "Tyre wear by stint"]], value: "net" },
@@ -59,6 +60,7 @@
         fuelAfter.push(fuel);
         return combined;
       });
+      const incomplete = fuelAfter.findIndex(mass => mass < -1e-9);
       const maxLoss = Math.max(2, Math.ceil(Math.max(...tyres, ...(showNet ? net : []))));
       const x = lap => 68 + lap * 9.75;
       const y = pace => 167 - pace / maxLoss * 116;
@@ -92,6 +94,8 @@
           <path d="M${x(state.stopLap)} 51V167" stroke="currentColor" opacity=".55" stroke-dasharray="4 5"/>
           <text x="${x(state.stopLap)}" y="192" text-anchor="middle">Pit · lap ${state.stopLap}</text>
           <text x="68" y="192">Lap 1</text><text x="556" y="192" text-anchor="end">Lap 50</text>
+          ${incomplete >= 0 ? `<rect x="${x(incomplete + .5)}" y="51" width="${556 - x(incomplete + .5)}"
+            height="116" fill="currentColor" opacity=".18"/>` : ""}
           ${chartLine(tyres, "currentColor", "7 5")}
           ${showNet ? chartLine(net, "var(--red, #e64b43)", "") : ""}
           ${[first, second].map(({ cliff }, stint) => {
@@ -107,12 +111,17 @@
         </g>`,
         replay(progress) {
           const lap = Math.round(progress * (laps - 1));
+          if (incomplete >= 0 && lap >= incomplete) {
+            return {svg: `<path d="M${x(lap + 1)} 51V167" stroke="currentColor" stroke-dasharray="3 4"/>`,
+              readout: "Lap " + (lap + 1) + " · Incomplete · 0.00 kg fuel · " +
+                (-fuelAfter[lap]).toFixed(2) + " kg shortfall · no completed pace"};
+          }
           const pace = showNet ? net[lap] : tyres[lap];
           const late = lap >= state.stopLap;
           const age = lap + 1 - (late ? state.stopLap : 0);
           return {svg: LearnSandbox.cursor(x(lap + 1), y(pace), 51, 167),
             readout: "Lap " + (lap + 1) + " · " + (late ? second : first).label + " age " + age +
-              " · " + fuelAfter[lap].toFixed(2) + " kg fuel · " + signedSeconds(tyres[lap]) +
+              " · " + Math.max(0, fuelAfter[lap]).toFixed(2) + " kg fuel · " + signedSeconds(tyres[lap]) +
               " tyre-only · " + signedSeconds(net[lap]) + " net"};
         },
         metrics: [
@@ -124,7 +133,7 @@
             signedSeconds(tyreChange) + " tyre-only · " + signedSeconds(netChange) + " net"],
         ],
         explanation: (vegas ? "Las Vegas nominated Medium and Hard. The 2026 podium used Soft then Medium under the Safety Car. This 50-lap pace model remains illustrative. " : "The teaching fixture nominates Hard. ") +
-          "An all-slick race requires two distinct dry specifications including a nominated one. The FIA requires a 0.70 L recoverable sample during competition. This model checks estimated finish mass using 0.75 kg/L and ideal recovery. The solid net pace line includes fuel mass and lift-and-coast. The projected total includes a 20 s stop. The graph shows the planned distance even if the fuel runs out.",
+          "An all-slick race requires two distinct dry specifications including a nominated one. The FIA requires a 0.70 L recoverable sample during competition. This model checks estimated finish mass using 0.75 kg/L and ideal recovery. The solid net pace line includes fuel mass and lift-and-coast. The projected total includes a 20 s stop. A shaded lap shows the planned projection after the fuel becomes insufficient.",
         success,
         feedback: next,
       };

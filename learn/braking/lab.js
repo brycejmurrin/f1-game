@@ -229,8 +229,13 @@
     const frontRequest = braking * bias / 100;
     const rearRequest = braking - frontRequest;
     get("speed-aero").textContent = force(aero);
-    get("speed-front").textContent = force(frontRequest) + " / " + force(front);
-    get("speed-rear").textContent = force(rearRequest) + " / " + force(rear);
+    const axleReading = (request, limit) => {
+      const excess = request - limit;
+      const overage = excess < .01 ? "<0.01 kN" : excess.toFixed(2) + " kN";
+      return force(request) + " / " + force(limit) + (excess > 0 ? " · " + overage + " over" : "");
+    };
+    get("speed-front").textContent = axleReading(frontRequest, front);
+    get("speed-rear").textContent = axleReading(rearRequest, rear);
     const frontOver = frontRequest > front;
     const rearOver = rearRequest > rear;
     const message = (frontOver && rearOver ? "Both axles exceed their grip limits." :

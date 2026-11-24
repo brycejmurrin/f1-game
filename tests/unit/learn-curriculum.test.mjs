@@ -6,10 +6,10 @@ import { fileURLToPath } from "node:url";
 
 // Each fixture is a setup a player can actually select in the sandbox.
 const setups = {
-  chassis: {view: "inspect", answer: "axle"},
+  chassis: {view: "challenge", answer: "axle"},
   suspension: {view: "braking", geometry: "high", answer: "same"},
   deployment: {charge: 4},
-  hybrid: {start: 4, brake: 350, clip: 250},
+  hybrid: {start: 4, brake: 350, clip: 250, deploy: 275},
   "brake-blend": {retained: 25, response: "fill"},
   "tyre-heat": {elapsed: 90, sliding: 70, load: 90},
   "racing-line": {apex: 55, straight: 500},
@@ -57,18 +57,65 @@ for (const [id, setup] of Object.entries(setups)) {
       const sample = replay(.35).svg;
       assert.ok(first && sample && first !== sample, "playback changes the diagram across the run");
     }
+    if (id === "chassis") {
+      assert.equal(lesson.evaluate({...initial, view: "inspect", wheelbase: 3200, body: 850, answer: "pass"}).success, false);
+      const edge = lesson.evaluate({...initial, view: "edge", answer: "pass"});
+      assert.equal(edge.success, true);
+      assert.deepEqual(Array.from(edge.metrics.slice(0, 2), row => row[1]), ["3,400 mm", "950 mm"]);
+    }
+    if (id === "suspension") {
+      for (const rod of ["push", "pull"]) {
+        for (const damping of ["low", "high"]) {
+          for (let bump = 0; bump <= 30; bump++) {
+            const {replay} = lesson.evaluate({...initial, rod, damping, bump});
+            for (let i = 0; i <= 100; i++) {
+              const {svg} = replay(i / 100);
+              assert.equal(svg.indexOf("NaN"), -1);
+              const piston = Number(svg.match(/<rect x="([0-9.]+)" y="[0-9.]+" width="6" height="8"/)?.[1]);
+              assert.ok(piston >= 391 && piston + 6 <= 439, "the piston stays inside its cylinder");
+            }
+          }
+        }
+      }
+    }
     if (id === "hybrid") {
       const {replay} = lesson.evaluate({...initial, start: 2, deploy: 350});
-      assert.equal(replay(7 / 60).readout, "7.0 s · Deploy · 0.00 MJ");
+      assert.equal(replay(7 / 60).readout, "7.0 s · Deploy · 0.00 MJ · Store empty");
+      const recovery = lesson.evaluate({...initial, budget: "6", deploy: 100, brake: 350, clip: 350});
+      const values = Object.fromEntries(recovery.metrics);
+      assert.ok(Number.parseFloat(values["Harvested this lap"]) < 6);
+      assert.equal(values["Recharge blocked by allowance"], "0.00 MJ");
+      assert.ok(Number.parseFloat(values["Recharge blocked by full store"]) > 0);
+      assert.equal(recovery.replay(1).readout.split(" · ")[0], "60.0 s");
+      assert.equal(values["Deployment time traded for super clipping"], "7 s · 0.70 MJ requested deployment");
     }
     if (id === "deployment") {
-      const {replay} = lesson.evaluate({...initial, curve: "overtake", gap: .95, charge: 4});
+      const {replay, svg} = lesson.evaluate({...initial, curve: "overtake", gap: .95, charge: 4});
       assert.equal(replay(1).readout.split(" · ")[2], "100 kW delivered");
+      const [chartX, chartY] = svg.match(/points="([^"]+)" fill="none" stroke="#65b7ff"/)[1].split(" ").at(-1).split(",").map(Number);
+      const [, cursorX, cursorY] = replay(1).svg.match(/cx="([^"]+)" cy="([^"]+)"/).map(Number);
+      assert.equal(chartX, cursorX);
+      assert.ok(Math.abs(chartY - cursorY) < .0051);
     }
     if (id === "rain") {
       const slick = lesson.evaluate({...initial, line: "puddle", tyre: "slick"}).replay(.5);
       const wet = lesson.evaluate({...initial, line: "puddle", tyre: "wet"}).replay(.5);
       assert.notEqual(slick.readout, wet.readout);
+      const entryShortfall = lesson.evaluate({...initial, line: "textured", tyre: "wet", water: 7, film: .1});
+      assert.equal(entryShortfall.success, false);
+      assert.ok(Number.parseFloat(entryShortfall.replay(0).readout.split(" · ")[2]) < 10);
+      assert.notEqual(entryShortfall.replay(0).svg, entryShortfall.replay(.5).svg);
+    }
+    if (id === "pit-duel") {
+      assert.equal(lesson.replay.steps, 2);
+      assert.equal(lesson.evaluate({...initial, stop: 19}).success, false);
+      assert.equal(lesson.evaluate({...initial, mode: "execution", stop: 19}).success, true);
+      assert.equal(lesson.evaluate({...initial, ...setup, mode: "execution", stop: 19}).success, false);
+    }
+    if (id === "stint") {
+      assert.equal(lesson.replay.first + lesson.replay.steps, 50);
+      const {replay} = lesson.evaluate({...initial, fuel: 64.5});
+      assert.equal(replay(1).readout, "Lap 50 · Incomplete · 0.00 kg fuel · 0.50 kg shortfall · no completed pace");
     }
   });
 }
