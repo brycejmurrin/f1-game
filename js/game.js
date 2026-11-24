@@ -4655,7 +4655,7 @@ function update(dt) {
   if (aiLod) aiLod.step(cars, state === "race" && session === "race" && !isPractice() && !netPlay.active(), raceCtl.level, raceT, player, track ? track.total : 0);
   PerfSpans.begin("ai"); for (let i = 0; i < cars.length; i++) updateCar(cars[i], dt, ranked); PerfSpans.end("ai");   // per-car step: AI + player
   pits.stepEnd();
-  if (jumpStartPenalty.reactWindowOpen()) {
+  if (!learnAeroDrill && jumpStartPenalty.reactWindowOpen()) { // this drill starts with both cars at speed
     for (const c of cars) jumpStartPenalty.tickReaction(c);
   }
   RaceControl.settleLineStep();   // finishers cannot be promoted to a new incident
@@ -7821,7 +7821,9 @@ function render(dt) {
   // depth write). Drawn against the PLAYER's speed for the dynamic colour.
   // Never in a flyby frame (`cine`: the editor preview, flybyCam, free-cam's flyby lens).
   const driverGuide = racing && !ceremonyView && player && !player.finished && !player.retired && !realRace.isWatch();
-  if (state !== "menu" && !cine && track && player && (photoMode || driverGuide)) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
+  const drillMarkings = learnAeroDrill?.guide.draw(gfx, track && drivingLineApi(track), renderAlpha,
+    driverGuide && state === "race" && !photoMode && !cine && !paused && !replayBuf.isScrubbing());
+  if (!drillMarkings && state !== "menu" && !cine && track && player && (photoMode || driverGuide)) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
   // (wheel/halo/mirrors) + the car's shadow instead, body mesh skipped. Was two
   // always-equal booleans, so the `hide && !rig` skip they guarded never fired.
@@ -8231,10 +8233,10 @@ function render(dt) {
   // depthMask are set once for the whole field instead of ping-ponging with the
   // lit body program every car.
   shadowPass.flushBlobs();
-  // Ghost car (time trial): replay best-lap position as a bright emissive silhouette
-  if (isTimeTrial() && player && (state === "race" || state === "count")) {
+  // The lesson guide uses the existing transparent ghost draw and never joins the field.
+  if ((isTimeTrial() || drillMarkings) && player && (state === "race" || state === "count")) {
     const replayGhost = GhostShare.hasGuest() ? GhostShare : Ghost;
-    const g = (player.lap | 0) >= 1 ? replayGhost.at(player.lapTime) : null;   // S4: lap 0 is the run-up, off the lap clock (the HUD delta and dot gate the same way)
+    const g = drillMarkings ? learnAeroDrill.guide.car() : (player.lap | 0) >= 1 ? replayGhost.at(player.lapTime) : null;
     // Skip the ghost while it overlaps the player — at the lap start it sits on
     // your exact grid position, and in the cockpit/onboard cams its bodywork
     // fills the camera as a black box until you pull away ("starts dark, clears
@@ -8269,6 +8271,11 @@ function render(dt) {
       // alpha the track stays readable straight through it at any distance,
       // and the raised emissive keeps it reading as a bright spectre.
       gfx.draw(teamMesh(player.team, player), tmpMat, _ghostOpts);
+      if (drillMarkings) {
+        const guideTeam = carDraw.paintTeam(player), setup = teamDecalState(guideTeam, true);
+        if (!carDraw.modelBuf) drawAeroFlaps(guideTeam, setup.val, g.aeroX, tmpMat, _ghostOpts, setup.aero);
+        Particles.flare(tmpP[0], tmpP[1] + 1.5, tmpP[2], 0.30, 1, g.braking ? 0.20 : 0.76, 0.12, 0.85);
+      }
       }
     }
   }
@@ -9318,6 +9325,7 @@ function setPaused(p, why) {
   if (p && garageReturn === "pit" && !$("carsetup").hidden) { paused = true; return; }
   if (paused !== !!p) Log.info("game", "Race " + (p ? "paused" : "resumed") + " why=" + (why || "button") + " state=" + state + " raceT=" + raceT.toFixed(1));
   paused = p; GameAudio.resetReplayScrub(); replayBuf.onPause(!!p); // REPLAY overlay while paused
+  if (p) learnAeroDrill?.guide.hide();
   if (!netPlay.active()) { if (p) dropRaceWake(); else holdRaceWake(); UiExperience.resumeArm(G, !p && why !== "restart" && state === "race" && !realRace.isWatch()); }   // a paused screen may sleep; a networked race runs on under the card, and never holds for a resume countdown
   if (!p) {
     closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();

@@ -167,13 +167,17 @@ const LearnDoor = (function () {
       track: G.trackIdx, weather: G.raceWeather, changeable: G.raceChangeable, grid: G.raceGrid,
       duel: G.duel, dirtyAir: G.raceDirtyAir, wind: Wind.level(), goal: G.coach.practiceGoal(),
     };
+    const guide = createAeroGuide(G);
     activate({
+      guide,
       staging: false,
       begin() {
         this.staging = false;
+        guide.hide();
         return beginAeroDrill(G);
       },
       restore() {
+        guide.remove();
         G.trackIdx = previous.track;
         G.raceWeather = previous.weather;
         G.raceChangeable = previous.changeable;
@@ -219,6 +223,166 @@ const LearnDoor = (function () {
     G.snapGameCam();
     G.coach.setPracticeGoal("slipstream");
     return G.coach.mark();
+  }
+
+  // Rendering-only lesson cues. Use the driving-line shader so the cars and
+  // cockpit occlude the lesson markings as they do any other road marking.
+  function createAeroGuide(G) {
+    const root = document.createElement("div");
+    root.id = "learn-aero-guide";
+    root.hidden = true;
+    const task = document.createElement("strong");
+    task.setAttribute("role", "status");
+    const readout = document.createElement("span");
+    const demoLabel = document.createElement("span");
+    root.append(task, readout, demoLabel);
+    document.body.append(root);
+    const sample = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0] };
+    const stride = DrivingLine.STRIDE;
+    const verts = new Float32Array(200 * stride);
+    // The existing shader chooses a palette colour from its speed ratio.
+    // Encode cyan wake, pale clean air and orange braking with fixed attributes.
+    const style = { speed: 2, cornersOnly: false, opacity: 1.2,
+      cols: new Float32Array([0.08, 0.78, 0.96, 0.65, 0.90, 1, 1, 0.18, 0.05]) };
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const windArrows = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"];
+    const demo = { s: 0, x: 0, aeroX: 0, braking: false };
+    const air = { cross: 0, speed: 1, time: 0, rear: 0, lane: 0, wake: true };
+    let count = 0, brakeAt, profile;
+
+    function smooth(v) {
+      const t = M4.clamp(v, 0, 1);
+      return t * t * (3 - 2 * t);
+    }
+
+    function demonstrate(ahead, lane, wayIn) {
+      const time = G.raceT;
+      const merge = smooth((time - 0.25) / 1.5);
+      const close = smooth((time - 1.75) / 1.75);
+      const slowdown = brakeAt == null ? 0 : smooth((ahead - brakeAt + 8) / 70);
+      demo.s = ahead - (17 - 7 * close + 13 * slowdown);
+      demo.x = lane + wayIn * 4.4 * (1 - merge);
+      demo.braking = brakeAt != null && demo.s >= brakeAt - 8;
+      const shut = demo.braking ? smooth((demo.s - brakeAt + 8) / 7) : 0;
+      demo.aeroX = G.aeroZoneAt(demo.s) ? smooth((time - 1.57) / 0.33) * (1 - shut) : 0;
+      const phase = demo.braking ? "brakes for Turn 1" : merge < 0.98 ? "tucks into the wake"
+        : close > 0.90 ? "eases off for space" : demo.aeroX > 0.15 ? "uses Straight Mode" : "holds the gap";
+      const label = "Guide car · " + phase;
+      if (demoLabel.textContent !== label) demoLabel.textContent = label;
+    }
+
+    function strip(near, far, lane, halfWidth, colour, phase, height = 0) {
+      if (near >= far) return;
+      const join = count * stride;
+      // Repeat each end vertex at the join so the strips share one draw
+      // without a triangle that connects the wake to the braking marker.
+      if (join) count += 2;
+      const steps = Math.ceil((far - near) / 2);
+      for (let i = 0; i <= steps; i++) {
+        const along = near + (far - near) * i / steps;
+        const s = G.wrapS(along);
+        Tracks.sample(G.track, s, sample);
+        const { p, r, t, hw } = sample;
+        let center = lane, rise = height;
+        if (height) {
+          // Approximate tracer advection from the local air speed. The Classic
+          // falloff is the same gap and offset model that drives slipstream.
+          const distance = Math.max(0, air.rear - along);
+          center += air.cross * distance / air.speed;
+          if (air.wake) {
+            const strength = PhysicsConsts.DirtyAir.wakeOf(distance, lane - air.lane, "classic");
+            const wave = distance * 0.32 + height * 2 + air.time * 5;
+            center += Math.sin(wave) * strength * 0.70;
+            rise += Math.cos(wave) * strength * 0.40;
+          }
+        }
+        for (let side = -1; side <= 1; side += 2) {
+          const edge = center + halfWidth * side;
+          const x = height ? edge : Math.max(-hw + 0.2, Math.min(edge, hw - 0.2));
+          const lift = DrivingLine.bankOffset(G.track, s, x) + 0.04 + rise;
+          let v = count++ * stride;
+          verts[v++] = p[0] + r[0] * x + (r[1] * t[2] - r[2] * t[1]) * lift;
+          verts[v++] = p[1] + r[1] * x + (r[2] * t[0] - r[0] * t[2]) * lift;
+          verts[v++] = p[2] + r[2] * x + (r[0] * t[1] - r[1] * t[0]) * lift;
+          verts[v++] = side;
+          verts[v++] = colour;
+          verts[v++] = 1;
+          verts[v] = (along - near) * (height ? 0.48 : 1) - phase;
+        }
+      }
+      if (join) {
+        verts.copyWithin(join, join - stride, join);
+        verts.copyWithin(join + stride, join + 2 * stride, join + 3 * stride);
+      }
+    }
+
+    function draw(gfx, api, alpha, visible) {
+      const player = G.player;
+      if (!visible || !player || player.lap !== 1 || player.s < 80) { hide(); return; }
+      const rival = G.cars.find(c => c !== player && !c.retired);
+      const turnAt = G.track.def.turns[0] * G.track.total;
+      if (!rival || player.s > turnAt + 45) { hide(); return; }
+      // Build the profile even when the normal driving line is off.
+      DrivingLine.prepare(api);
+      if (profile !== api.vTop) {
+        profile = api.vTop;
+        brakeAt = null;
+        for (let s = 144; s < turnAt; s += 4) {
+          const speed = DrivingLine.speedAt(s);
+          if (speed != null && speed < G.vTop() * 0.94) { brakeAt = s; break; }
+        }
+      }
+      const toBrake = brakeAt == null ? Infinity : brakeAt - player.s;
+      root.hidden = false;
+      const gap = rival.prog - player.prog;
+      const inWake = player.wake > 0.08;
+      const wing = player.aeroX > 0.15 ? "Aero open" : player.xArmed ? "Aero ready" : "Corner Mode";
+      let instruction = "Follow the airflow behind the rival";
+      if (player.s >= turnAt - 24) instruction = "Turn in for the chicane";
+      else if (toBrake <= 14) instruction = player.brakeDemand > 0.05 ? "Keep braking for Turn 1" : "Brake for Turn 1";
+      else if (gap < 0) instruction = "Let the rival back ahead";
+      else if (gap <= 10) instruction = "Ease off to leave space";
+      else if (gap > 34) instruction = "Close on the rival ahead";
+      else if (!inWake) instruction = "Tuck into the cyan wake";
+      else if (player.xArmed && player.aeroX <= 0.15 && G.raceAeroMode !== "auto") instruction = Onboard.prompt("aero");
+      if (task.textContent !== instruction) task.textContent = instruction;
+      const wind = Wind.state();
+      const angle = Math.atan2(wind.wx, wind.wz) - player.head;
+      // The road's right vector is the negative angular direction from heading.
+      const arrow = windArrows[(Math.round(-angle * 4 / Math.PI) % 8 + 8) % 8];
+      const status = [player.towing > 0.08 ? "Tow active" : "Clear of tow", wing,
+        wind.on ? "Wind " + arrow + " " + AppearanceOpts.speed(wind.kmh) + " " + AppearanceOpts.unitLabel() : ""].filter(Boolean).join(" · ");
+      if (readout.textContent !== status) readout.textContent = status;
+      count = 0;
+      const ahead = rival.rPrevS + (rival.s - rival.rPrevS) * alpha;
+      const lane = rival.rPrevX + (rival.x - rival.rPrevX) * alpha;
+      const wayIn = lane > 0 ? -1 : 1;
+      demonstrate(ahead, lane, wayIn);
+      if (gap > 0 && gap < 125) {
+        const reduced = motion.matches || document.documentElement.dataset.motion === "reduce";
+        Tracks.sample(G.track, G.wrapS(ahead), sample);
+        air.cross = wind.wx * sample.r[0] + wind.wz * sample.r[2];
+        air.speed = Math.max(api.vTop * 0.25, rival.speed - wind.wx * sample.t[0] - wind.wz * sample.t[2]);
+        air.time = reduced ? 0 : G.raceT;
+        air.rear = ahead - 2;
+        air.lane = lane;
+        const phase = -air.time * air.speed * 0.48 % 5;
+        const near = ahead - Math.min(34, gap - 3);
+        air.wake = true;
+        strip(near, air.rear, lane - 1.1, 0.42, 3, phase, 0.65);
+        strip(near, air.rear, lane + 1.1, 0.42, 3, phase, 0.65);
+        strip(near, air.rear, lane, 0.45, 3, phase + 2, 1.95);
+        air.wake = false;
+        // A clean reference outside the wake makes sideways wind drift visible.
+        strip(near, ahead + 4, lane + wayIn * 4.5, 0.32, 2 / 1.06, phase, 1.30);
+      }
+      if (toBrake < 150 && toBrake > -22) strip(brakeAt, brakeAt + 15, TrackLine.at(G.track, brakeAt).x, 3, 1, 0);
+      if (count && gfx.drawDrivingLine?.(verts, count, true, style)) DrivingLine.invalidateUpload();
+      return true; // the drill owns the road markings on this approach
+    }
+
+    function hide() { root.hidden = true; }
+    return { draw, hide, car: () => demo, remove: () => root.remove() };
   }
 
   return { open, launchAeroDrill };
