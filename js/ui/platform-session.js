@@ -4,7 +4,7 @@ const PlatformSession = (function () {
 "use strict";
 function create(G, deps) {
 const { $, els, store } = G;
-const { canvas, raceWakeLock, disarmProbeOnLeave, cancelMirrorPrep, setPaused, ensureNet, settingsBack, closeSettings, showTouchControls, refreshGearsBtn, openSettingsPage } = deps;
+const { canvas, raceWakeLock, disarmProbeOnLeave, cancelMirrorPrep, setPaused, ensureNet, settingsBack, closeSettings, showTouchControls, refreshGearsBtn, paintSteer, openSettingsPage } = deps;
 function paintBuild() {
 // BUILD NUMBER in the pause menu. index.html is the one file with no ?v= of its
 // own, so a stale shell (or a service worker serving a cached generation) can run
@@ -231,7 +231,7 @@ function paintTiltCalibration() {
   const phoneTilt = Input.phoneTiltAvailable();
   const calib = $("pm-calib");
   document.body.toggleAttribute("data-phone-tilt", phoneTilt);
-  calib.disabled = G.getSteerMode() !== "tilt" && !phoneTilt;
+  calib.disabled = !phoneTilt && (!Input.touchDrivingControls() || G.getSteerMode() !== "tilt");
   if (calib.disabled) clearTimeout(calib._t);
 }
 
@@ -395,7 +395,15 @@ onPadLost: () => {
 }, onPhoneTiltChange: () => {
   paintTiltCalibration();
   if (typeof SettingDeps !== "undefined") SettingDeps.refresh();
-} });
+}, onControlDeviceChange: syncControlDevice });
+function syncControlDevice() {
+  const cooldown = G.state === "results" && RaceCeremony.get()?.playerDrives();
+  if (G.state === "race" || G.state === "count" || cooldown) showTouchControls(true, !!cooldown);
+  paintSteer();
+  paintTiltCalibration();
+  refreshGearsBtn();
+  if (typeof SettingDeps !== "undefined") SettingDeps.refresh();
+}
 /* body.desktop IS A LIVE ANSWER, NOT A BOOT-TIME ONE: `(pointer: coarse)` flips
    whenever an iPad is docked to or undocked from a keyboard, and
    showTouchControls() reads the LIVE query. A stale body.desktop leaves GAS/BRAKE/
@@ -411,8 +419,7 @@ function syncPointerKind() {
   $("mb-phonepad").hidden = !touch;
   $("mb-steerphone").hidden = touch;
   $("pm-phonepad-go").hidden = !touch;
-  if (G.state === "race" || G.state === "count") showTouchControls(true);
-  refreshGearsBtn();   // GEARS is enabled by thumbs being free, i.e. by this
+  syncControlDevice();
 }
 syncPointerKind();
 Input.onPointerKindChange(syncPointerKind);
