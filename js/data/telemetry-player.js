@@ -13,6 +13,10 @@ const DataTelemetryPlayer = (function () {
     function paintFrame(view) {
       renderer.paintFrame(view);
       updateGauges(view);
+      if (view.seek) {
+        view.seek.value = String(view.cursorT || 0);
+        setText(view.seekTime, summaryTime(view.cursorT || 0));
+      }
     }
 
     function updateTextSummary(view) {
@@ -76,6 +80,25 @@ const DataTelemetryPlayer = (function () {
           paintFrame(view);
         });
         bar.appendChild(ob);
+        const focus = el("button", "dh-tbtn dh-track-toggle", "TRACK VIEW");
+        focus.type = "button"; focus.setAttribute("aria-pressed", "false");
+        focus.addEventListener("click", function () {
+          view.toggleTrack();
+          focus.setAttribute("aria-pressed", String(view.trackOnly));
+          focus.textContent = view.trackOnly ? "CHARTS & TRACK" : "TRACK VIEW";
+        });
+        bar.appendChild(focus);
+        const scrub = el("label", "dh-track-seek");
+        scrub.appendChild(el("span", null, "Lap position"));
+        const seek = el("input"); seek.type = "range"; seek.min = "0";
+        seek.max = String(view.tMax); seek.step = "0.1"; seek.value = "0";
+        seek.setAttribute("aria-label", "Track playback time");
+        seek.addEventListener("input", function () {
+          pauseAnim(view); view.cursorT = clamp(Number(seek.value), 0, view.tMax);
+          view._last = 0; paintFrame(view); updateTextSummary(view);
+        });
+        view.seek = seek; view.seekTime = el("span", "dh-track-time", summaryTime(0));
+        scrub.appendChild(seek); scrub.appendChild(view.seekTime); bar.appendChild(scrub);
       }
 
       bar.appendChild(el("span", "dh-thint", "drag chart to scrub"));

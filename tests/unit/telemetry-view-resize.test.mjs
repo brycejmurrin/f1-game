@@ -157,3 +157,29 @@ test("column-only resizing refits the telemetry map", async () => {
   assert.equal(map.height, map.width);
   assert.equal(popup.open, true, "arranging playback leaves its native dialog open");
 });
+
+test("track focus enlarges the same map and preserves the shared playback cursor", async () => {
+  const { popup, observers, frames } = await openPopup();
+  const toggle = popup.querySelector('.dh-track-toggle');
+  const map = popup.querySelector('.dh-map');
+  const body = popup.querySelector('.dh-tpopup-body');
+  toggle.click();
+  assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+  assert.ok(body.classList.contains('dh-track-focus'));
+  const main = popup.querySelector('.dh-telem-main'), side = popup.querySelector('.dh-telem-side');
+  main._rect = { width: 560, height: 100, left: 0, top: 0 };
+  side._rect = { width: 560, height: 400, left: 0, top: 100 };
+  observers[0].cb();
+  for (const [id, fn] of frames) { frames.delete(id); fn(); }
+  assert.equal(map.width, 536 * 2);
+  assert.ok(map.height <= map.width);
+  const seek = popup.querySelector('.dh-track-seek').querySelector('input');
+  seek.value = '24';
+  seek.dispatchEvent({ type: 'input' });
+  assert.match(popup.querySelector('.dh-track-time').textContent, /24/);
+  toggle.click();
+  assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+  assert.equal(popup.querySelector('.dh-map'), map, 'switching does not create another player');
+  assert.equal(seek.value, '24');
+  assert.equal(popup.open, true);
+});
