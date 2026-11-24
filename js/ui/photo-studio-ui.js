@@ -268,7 +268,8 @@ function create(G, deps) {
     reticleTimer = setTimeout(hideReticle, 900);
     paintFocus();
   }
-  const tapHandlers = { pointerdown: beginTap, pointermove: moveTap, pointerup: finishTap, pointercancel: cancelTap, lostpointercapture: cancelTap };
+  // A drag or a fly key can leave the HELMET seat (FreeCam): repaint the seat-only rows when one ends.
+  const tapHandlers = { pointerdown: beginTap, pointermove: moveTap, pointerup: (e) => { finishTap(e); paintPov(); }, pointercancel: cancelTap, lostpointercapture: cancelTap, keyup: () => paintPov() };
   const cameraGroup = group("camera", "CAMERA", [
     shots, mk("p", { id: "ps-help", className: "adv-help" }),
     mk("label", { className: "tune-row" }, [mk("span", { className: "tune-label", textContent: "Focal length (35 mm eq.)" }), focalInput, focalValue]),
@@ -520,7 +521,8 @@ function create(G, deps) {
   // Circuit position: a fine slider plus ◀ ▶ that step 1 m (hold to repeat and speed up);
   // the readout is metres along the lap, so a spot can be found again.
   const lapTotal = () => (G.track && G.track.total > 0 ? G.track.total : 0);
-  const posInput = mk("input", { id: "ps-car-position", type: "range", min: "0", max: "100", step: "0.001", value: "0",
+  // step "any": a stepped thumb would snap each metre to a multiple of the step (cm off on a long lap).
+  const posInput = mk("input", { id: "ps-car-position", type: "range", min: "0", max: "100", step: "any", value: "0",
     attrs: { "aria-labelledby": "ps-car-position-label" } });
   const posOut = mk("output", { id: "ps-car-position-value", textContent: "0 m", attrs: { for: "ps-car-position" } });
   function paintPosition() {
@@ -528,7 +530,7 @@ function create(G, deps) {
     posInput.setAttribute("aria-valuetext", posOut.textContent + " along the lap");
   }
   function nudgePosition(metres) {
-    if (posInput.disabled || !lapTotal()) return;
+    if (posInput.disabled || st.busy || st.closing || !lapTotal()) return;   // the car would not move: keep the readout honest
     posInput.value = String(stepPosition(posInput.value, lapTotal(), metres));
     paintPosition(); placeCar();
   }

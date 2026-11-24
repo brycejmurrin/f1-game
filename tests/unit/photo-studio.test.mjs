@@ -294,7 +294,7 @@ test("◀ ▶, a held press and keyboard arrows drive the same metre step", () =
   b.G.paused = true;
   b.api.open({ source: "race" });
   const slider = b.dom.byId("ps-car-position"), fwd = b.dom.byId("ps-car-position-fwd"), back = b.dom.byId("ps-car-position-back");
-  assert.equal(slider.step, "0.001", "the thumb itself is fine-grained");
+  assert.equal(slider.step, "any", "the thumb itself is continuous (no snapping off the metre)");
   assert.equal(b.dom.byId("ps-car-position-value").textContent, "500 m");
   back.dispatchEvent({ type: "click", detail: 0 });
   assert.equal(player.s, 499); assert.equal(b.dom.byId("ps-car-position-value").textContent, "499 m");
@@ -316,6 +316,29 @@ test("◀ ▶, a held press and keyboard arrows drive the same metre step", () =
   assert.equal(player.s, before + 9, "Shift steps 10 m");
   slider.dispatchEvent({ type: "keydown", key: "ArrowRight", isTrusted: false, preventDefault() { throw new Error("pad arrows walk focus"); } });
   assert.equal(player.s, before + 9);
+  b.api.close(false);
+});
+
+test("the seat-only visor rows follow the seat, and nudges wait while a capture is busy", async () => {
+  let resolve;
+  const player = { s: 500, x: 0, px: 500, pz: 0, head: 0, yawVis: 0, speed: 0 };
+  const b = boot({ player });
+  b.G.paused = true;
+  b.api.open({ source: "race" });
+  shot(b, "HELMET").click();
+  assert.equal(b.dom.byId("ps-group-visor").hidden, false);
+  b.restored().pov = null;                                   // FreeCam left the seat on fly input
+  b.windowEvents.get("keyup")({ code: "KeyW" });
+  assert.equal(b.dom.byId("ps-group-visor").hidden, true, "a fly key's release repaints the rows");
+  b.G.gfx.capturePixels = () => new Promise(r => { resolve = r; });
+  const capture = b.api.capture();
+  const fwd = b.dom.byId("ps-car-position-fwd"), value = b.dom.byId("ps-car-position").value;
+  fwd.dispatchEvent({ type: "click", detail: 0 });
+  fwd.dispatchEvent({ type: "pointerdown", button: 0 });
+  assert.equal(b.dom.byId("ps-car-position").value, value, "no readout drift while the car cannot move");
+  assert.equal(player.s, 500);
+  resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) });
+  assert.equal(await capture, true);
   b.api.close(false);
 });
 
