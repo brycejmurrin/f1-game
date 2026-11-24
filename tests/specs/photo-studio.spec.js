@@ -86,6 +86,9 @@ test("Title circuit photo provides a car to place without starting a race", asyn
   await present(page);
   await evidence(page, info, "title-circuit-desktop");
   expect((await page.evaluate(() => __apex.physState())).s).toBeCloseTo(placed.s);
+  await page.locator("#ps-visor-level").selectOption("medium");
+  await page.locator("#ps-visor-beams").selectOption("strong");
+  await page.locator("#ps-visor-style").selectOption("scratches");
   await clickLive(page, "ps-capture");
   await page.waitForFunction(() => PhotoStudio.state().captured && !PhotoStudio.state().busy,
     null, { polling: 100, timeout: BOOT_MS });
@@ -229,7 +232,8 @@ test("Paused race photo keeps controls reachable at 200% and isolates panel scro
   });
   await clickLive(page, "pausebtn");
   await clickLive(page, "pm-photo");
-  await expect(page.getByRole("region", { name: "PLACE YOUR CAR" })).toBeHidden();
+  await expect(page.getByRole("region", { name: "PLACE YOUR CAR" })).toBeVisible();
+  for (const id of ["ps-car-position", "ps-car-offset", "ps-car-rotation"]) await expect(page.locator("#" + id)).toBeEnabled();
   await page.evaluate(() => { __apex.uiScale(200); __apex.headless(false); });
   for (const [name, viewport] of [["race-landscape-200", LANDSCAPE], ["race-portrait-200", PORTRAIT]]) {
     await page.setViewportSize(viewport);
