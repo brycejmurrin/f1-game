@@ -167,6 +167,26 @@ test("the pause card's RECOVER CAR raises the same edge R raises (hunt3 7-F3)", 
     "RECOVER CAR resumes, then raises the edge game.js's consumeRecover gate reads");
 });
 
+test("Space on a WATCH disclosure keeps native activation through the driving key handler", () => {
+  let pauses = 0, prevented = 0;
+  const { Input, sb, fire } = boot({ onPause: () => { pauses++; } });
+  const target = { tagName: "SUMMARY", closest: selector => selector === ".watch-transport" ? {} : null };
+  sb.document.activeElement = target;
+  const press = () => {
+    for (const type of ["keydown", "keyup"]) {
+      fire(type, { key: " ", code: "Space", target, preventDefault() { prevented++; } });
+    }
+  };
+  press();
+  assert.equal(prevented, 0, "the native activation must receive both edges");
+  assert.equal(Input.consumeBoostToggle(), false);
+
+  assert.equal(Input.setKeyBinding("pause", 0, "Space").ok, true);
+  press();
+  assert.equal(pauses, 0, "a remapped Pause must leave native activation alone too");
+  assert.equal(prevented, 0);
+});
+
 test("a rebind moves the action to the new key and the old key stops answering", () => {
   const { Input, key } = boot();
   key("Space", true); assert.equal(Input.consumeBoostToggle(), true, "Space boosts by default");

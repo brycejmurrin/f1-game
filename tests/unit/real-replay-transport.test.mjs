@@ -182,6 +182,29 @@ test("WATCH transport pause holds the replay clock, and seek reposes ended and r
   replay.stop();
 });
 
+test("Space leaves a focused WATCH disclosure to the browser and still toggles playback on the canvas or background", () => {
+  let onKey;
+  const { replay } = transportReplay({ window: {
+    addEventListener(type, listener) { if (type === "keydown") onKey = listener; },
+    removeEventListener() {},
+  } });
+  function space(target) {
+    const effects = [];
+    onKey({ code: "Space", target, preventDefault() { effects.push("prevented"); }, stopPropagation() { effects.push("stopped"); } });
+    return effects;
+  }
+
+  const summary = { tagName: "SUMMARY", closest: selector => selector === ".watch-transport" ? {} : null };
+  assert.deepEqual(space(summary), [], "the browser can activate the disclosure");
+  assert.equal(replay.status().paused, false);
+  for (const target of [{ tagName: "CANVAS" }, { tagName: "BODY" }]) {
+    const paused = replay.status().paused;
+    assert.deepEqual(space(target), ["prevented", "stopped"]);
+    assert.equal(replay.status().paused, !paused);
+  }
+  replay.stop();
+});
+
 test("WATCH paused follow refreshes the inset before snapping without advancing playback", () => {
   const { replay, G, cars } = transportReplay();
   replay.tick(0.1);

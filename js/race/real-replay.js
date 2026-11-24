@@ -569,12 +569,12 @@ const RealReplay = (function () {
       // the replay keys are the bare keys, and Shift stays theirs (Shift+= is "+").
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const t = e.target, tag = t && t.tagName;
-      // THE TRANSPORT'S OWN BUTTONS AND TIMELINE keep the replay keys: a click
+      // THE TRANSPORT'S BUTTONS, TIMELINE AND DISCLOSURES keep the replay keys: a click
       // leaves focus there, and the keys went dead until something else took
       // focus. Space / Enter stay the focused control's (press it, not pause).
       // Text fields and selects keep every key (typing, type-ahead).
       const ctl = t && typeof t.closest === "function" && t.closest(".watch-transport") &&
-        (tag === "BUTTON" || (tag === "INPUT" && t.type === "range"));
+        (tag === "BUTTON" || tag === "SUMMARY" || (tag === "INPUT" && t.type === "range"));
       if (ctl ? (e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter")
           : (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON")) return;
       let used = true;
