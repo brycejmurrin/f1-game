@@ -2570,6 +2570,7 @@
         "tests/unit/low-speed-lock.test.mjs",
         "tests/unit/onboard.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
+        "tests/unit/pause-resume-fence.test.mjs",
         "tests/unit/pedal-slide.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs",

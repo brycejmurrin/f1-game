@@ -90,7 +90,14 @@ const PhonePad = (function () {
     const now = opts.now || (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
     let lastSeq = -1, ackAt = -1e9, peerAck = false, peerGrip = false, peerCamera = false, helloPending = false;
     let peerHudOrder = false, hudSeq = 0;
-    const hostHello = encodeHello("host", false, true, undefined, true);
+    // RESUME FENCE (#6330). A drive sample still in flight across Resume must
+    // not drive: driveFromSeq is the first drive dash sent for the current
+    // Input drive generation (null = none yet), and a sample echoing an older
+    // dash is handed to Input as driveFenced. Peers without the echo keep the
+    // old behaviour (an in-flight legacy sample can still land after Resume).
+    // Armed by the first dash that names a surface: no dash, no Resume to fence.
+    let fenceSeq, fenceGen, fenced = 0;   // fenceSeq: undefined = unarmed, null = no drive dash yet
+    const hostHello = encodeHello("host", false, true, undefined, true, false, true);
     let samples = 0, events = 0, stale = 0, junk = 0, huds = 0;
     let closed = false;
     let raf = 0;
@@ -140,6 +147,8 @@ const PhonePad = (function () {
         if (s.seq <= lastSeq && lastSeq - s.seq < 30000) { stale++; return; }
         lastSeq = s.seq;
         samples++;
+        if (fenceSeq !== undefined && !s.camera && s.driveEcho !== undefined &&
+            (fenceSeq === null || fenceGen !== input.remoteDriveGeneration?.() || s.driveEcho < fenceSeq)) { s.driveFenced = true; fenced++; }
         const accepted = input.remoteSample(Object.assign({ source: "phone" }, s));
         if (accepted !== false && peerAck && now() - ackAt >= HEARTBEAT_MS) { ackAt = now(); transport.send(T.STATE, JSON.stringify(["A", s.seq])); }
         return;
@@ -195,6 +204,13 @@ const PhonePad = (function () {
       hudAt = t;
       let h = null;
       try { h = opts.hud(); } catch (e) { h = null; }
+      // A non-drive dash (Pause, a menu, camera) closes the fence; the first
+      // drive dash of a new Input drive generation opens it at its own sequence.
+      const gen = input.remoteDriveGeneration?.();
+      if (peerHudOrder && h?.surface) {
+        if (h.surface !== "drive") fenceSeq = null;
+        else if (fenceSeq == null || fenceGen !== gen) { fenceSeq = hudSeq; fenceGen = gen; }
+      }
       const text = encodeHud(h, peerGrip, peerCamera, peerHudOrder ? hudSeq++ : undefined);
       if (text && transport.send(T.STATE, text)) huds++;
     }
@@ -216,7 +232,7 @@ const PhonePad = (function () {
     return {
       pump,
       close() { try { transport.close(); } catch (e) { /* already closed */ } onClose(); },
-      stats: () => ({ samples, events, stale, junk, huds, lastSeq, gated, admitted, open: !closed && transport.status === "open" }),
+      stats: () => ({ samples, events, stale, junk, huds, lastSeq, gated, admitted, fenced, open: !closed && transport.status === "open" }),
     };
   }
 
@@ -539,7 +555,7 @@ const PhonePad = (function () {
     const now = opts.now || (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
     let seq = 0, lastSent = -1e9, sent = 0, haptics = 0, huds = 0, closed = false;
     let beat = 0, helloPending = false, peerSteer = false, peerAck = false, peerCamera = false, ackAt = -1, openedAt = now();
-    let peerCalibratedPedals = false;
+    let peerCalibratedPedals = false, peerDriveFence = false;
     let lastHudSeq = -1;
     let dirty = false;   // a coalesced move awaiting the 15 ms gap
     const pending = [], sentTimes = new Map();
@@ -576,6 +592,7 @@ const PhonePad = (function () {
       lastSent = t; dirty = false;
       const ok = transport.send(T.STATE, encodeSample({
         seq: seq++, roll: src.roll(), thr: src.thr(), brk: src.brk(), held: src.held(), calibratedPedals: peerCalibratedPedals,
+        ...(peerDriveFence ? { driveEcho: lastHudSeq } : {}),
         ...(peerSteer && src.steer && src.steer() != null ? { steer: src.steer() } : {}),
         camera: peerCamera ? src.camera?.() : null,
       }));
@@ -608,7 +625,7 @@ const PhonePad = (function () {
       const ev = decodeEvent(data);
       if (ev && ev.t === "hi" && ev.side === "host" && ev.p === PROTO) {
         peerSteer = !!ev.steer; peerAck = !!ev.ack; peerCamera = !!ev.camera;
-        peerCalibratedPedals = !!ev.calibratedPedals;
+        peerCalibratedPedals = !!ev.calibratedPedals; peerDriveFence = !!ev.driveFence;
         if (opts.onCapabilities) opts.onCapabilities({ touchSupported: peerSteer });
       }
       if (ev && ev.t === "hap" && ev.ms > 0) { haptics++; vibrate(ev.ms); }
