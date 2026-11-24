@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { boot as bootInput, fakePad } from "../helpers/key-binds-rig.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
@@ -83,8 +84,7 @@ test("rotating a paused time trial leaves its HUD arrangement toolbar in the for
 });
 
 test('online Photo camera input integrates while shared physics continues; solo Photo holds physics', () => {
-  const source = src('js/game.js');
-  const tick = source.slice(source.indexOf('function tickBody(now) {'), source.indexOf('// ---------- car setup panel ----------'));
+  const tick = symbolSource("function tickBody(");
   for (const [online, photo] of [[false, true], [true, true], [true, false]]) {
     const calls = { photo: 0, render: 0, physics: 0 };
     const sandbox = { ...renderRateStubs(), Math, PerfSpans: { begin() {}, end() {} }, lastFrame: 0, paused: true, state: 'race', gfx: { warming: () => false },
@@ -109,6 +109,32 @@ test('online Photo camera input integrates while shared physics continues; solo 
     assert.equal(calls.render, 1);
     assert.equal(calls.physics, online ? 1 : 0, 'one player taking a photo cannot freeze a shared world');
   }
+});
+
+test("gamepad Back can end a frozen photo sampling pass without pumping it again", () => {
+  const { Input, sb, fire, anyOpen } = bootInput();
+  const { press } = fakePad(sb, fire);
+  anyOpen.on = true;
+  const layer = { id: "photo-studio" };
+  sb.UiLayers.top = () => layer;
+  const capture = { sampling: { pump: true } };
+  let back = 0, renders = 0;
+  sb.document.dispatchEvent = (event) => {
+    if (event.key === "Escape") { back++; capture.sampling = null; }
+    return true;
+  };
+  const context = vm.createContext({
+    Input, lastFrame: 0, PhotoStudioBody: capture, netPlay: { active: () => false },
+    render: (dt) => { assert.equal(dt, 0); renders++; },
+  });
+  vm.runInContext(symbolSource("function tickBody("), context, { filename: absSrc("js/game.js") });
+  context.tickBody(16);
+  assert.equal(renders, 1, "the frozen capture can pump a render while waiting");
+  press(1); // Back on the standard Bluetooth layout
+  context.tickBody(32);
+  assert.equal(back, 1);
+  assert.equal(capture.sampling, null);
+  assert.equal(renders, 1, "the cancelled pass is not drawn again");
 });
 
 function boot() {
@@ -364,4 +390,24 @@ test("Modified shortcuts keep their browser defaults and reset held camera keys"
   assert.equal(event("KeyA", { ctrlKey: true }).defaultPrevented, undefined);
   assert.ok(!G.photoKeys.s);
   assert.ok(!G.photoKeys.a);
+});
+
+test("Physical and paired camera samples are bounded, independent and cleared on exit", () => {
+  const { G, api } = boot();
+  api.setPadInput(1, -1, 1, -1, 1);
+  api.enterPhotoMode();
+  api.updatePhotoCam(.1);
+  assert.deepEqual(G.photoCam.pos, [0, 0, 0]);
+  api.setPadInput(2, -2, 0, 0, NaN);
+  api.updatePhotoCam(.1);
+  assert.ok(Math.abs(G.photoCam.pos[0] - 3.4) < 1e-8);
+  assert.ok(Math.abs(G.photoCam.pos[2] + 3.4) < 1e-8);
+  api.setRemoteCameraInput(0, 0, 1, -1, 1);
+  api.setPadInput(0, 0, 0, 0, 0);
+  api.updatePhotoCam(.1);
+  assert.ok(G.photoCam.yaw > 0 && G.photoCam.pitch > 0 && G.photoCam.pos[1] > 0);
+  api.exitPhotoMode(); api.enterPhotoMode();
+  api.updatePhotoCam(.1);
+  assert.deepEqual(G.photoCam.pos, [0, 0, 0]);
+  assert.equal(G.photoCam.yaw, 0);
 });

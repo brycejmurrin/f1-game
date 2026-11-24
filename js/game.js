@@ -8553,8 +8553,11 @@ function tickBody(now) {
   let dt = Math.max(0, Math.min((now - lastFrame) / 1000, 1 / 4));   // clamp big gaps (tab resume) and a non-monotonic rAF stamp
   const _dtMs = now - lastFrame;
   lastFrame = now;
-  if (typeof PhotoStudioBody !== "undefined" && PhotoStudioBody.sampling && !netPlay.active()) {
-    if (PhotoStudioBody.sampling.pump) render(0);
+  const photoSample = typeof PhotoStudioBody !== "undefined" && PhotoStudioBody.sampling;
+  if (photoSample && !netPlay.active()) {
+    // Keep gamepad Back available while the sampled scene is frozen.
+    Input.poll();
+    if (PhotoStudioBody.sampling === photoSample && photoSample.pump) render(0);
     return;
   }
   // Adaptive resolution: only govern while actively rendering a race. RenderRate.drew(): an interval after a skipped rAF carries no draw, so it is not evidence.

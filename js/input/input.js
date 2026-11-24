@@ -201,6 +201,7 @@ const Input = (function () {
   const REMOTE_HELD = Object.freeze({ lookBack: 1 });
   let remoteOwner = null;
   let remoteMs = 0;              // nowMs() of the last sample; 0 = never
+  let remCamera = null;
   let remThr = 0, remBrk = 0;    // 0..1 pedal travel from the phone
   let remPedalDz = REMOTE_PEDAL_ON;  // Legacy phone/XR samples are raw travel.
   let remHeld = 0;               // REMOTE_HELD bits
@@ -213,7 +214,8 @@ const Input = (function () {
   let remoteHaptics = null;      // (ms) => void, forwards vibrate() to the phone
 
   let onPauseCb = null;
-  let onPadLostCb = null;      // fired when the LAST pad disconnects (game.js pauses)
+  /** @type {(() => void) | null} */
+  let onPadLostCb = null;      // fired when a controller disconnects and no other driver owns the car
   let onPhoneTiltChange = null;
 
   // SIM TIME vs WALL TIME. The steering RAMPS (keyboard, and the tilt slew) are
@@ -376,6 +378,18 @@ const Input = (function () {
   function remoteDrivingBlocked() {
     return !!axisCaptureCb || !!padCaptureCb || !!(window.UiLayers && window.UiLayers.navOpen());
   }
+  function photoLayerOpen() {
+    const id = window.UiLayers?.top()?.id;
+    return id === "photo-studio" || id === "photo-controls" || id === "freecam";
+  }
+  function remoteControlContext() {
+    if (document.body?.classList?.contains?.("photo-mode") && photoLayerOpen()) return "camera";
+    return !window.UiLayers?.inRace?.() || remoteDrivingBlocked() ? "menu" : "drive";
+  }
+  function remoteCamera() {
+    if (remCamera && (!remoteActive() || remoteControlContext() !== "camera")) remCamera = null;
+    return remCamera;
+  }
   function remoteSample(s) {
     if (!s) return false;
     const hadPhoneTilt = phoneTiltAvailable();
@@ -383,6 +397,7 @@ const Input = (function () {
     if (owner !== remoteOwner) remSeq = null;
     remoteOwner = owner;
     const n = nowMs();
+    remCamera = owner === "phone" && s.camera && remoteControlContext() === "camera" ? s.camera : null;
     // A STICK (an XR thumbstick, js/xr/xr-input.js) is an analog steer
     // command, not a lean: it used to be dressed up as a roll (steerToTilt) and
     // ride the phone's One-Euro filter, tilt dead zone and 8/s slew, and lamp 1's
@@ -416,7 +431,7 @@ const Input = (function () {
     if (hadPhoneTilt !== phoneTiltAvailable()) onPhoneTiltChange?.();
     if (!remoteDrivingBlocked() && (remThr > remPedalDz || remBrk > remPedalDz || remHeld ||
       (remStick ? Math.abs(remSteer) > 0.05 : remRoll && Math.abs(s.roll - tiltZero) > 2))) {
-      noteInputSource(remStick ? "controller" : "phone");
+      noteInputSource(owner === "phone" || !remStick ? "phone" : "controller");
     }
     return true;
   }
@@ -456,7 +471,7 @@ const Input = (function () {
     if (!fn) return false;
     const menuEdge = kind === "pause" || kind.startsWith("nav");
     if (!menuEdge && remoteDrivingBlocked()) return false;
-    if (!menuEdge) noteInputSource(remStick ? "controller" : "phone");
+    if (!menuEdge) noteInputSource(remoteOwner === "phone" || !remStick ? "phone" : "controller");
     return fn() !== false;
   }
   // Forget the current remote command without tearing down the paired transport.
@@ -465,6 +480,7 @@ const Input = (function () {
   function clearRemoteControls(clearSequence) {
     const hadPhoneTilt = phoneTiltAvailable();
     remoteMs = 0; remThr = remBrk = 0; remHeld = 0; remRoll = false; remStick = false; remSteer = 0;
+    remCamera = null;
     if (clearSequence) remSeq = null;
     if (tiltRemote || !gyroAttached) tiltSeen = false;
     if (tiltRemote) tiltFilterClear();
@@ -1011,8 +1027,9 @@ const Input = (function () {
      a throttle pick-up live in. The 0.12 still swallows a trigger's resting
      slop; above it travel ramps continuously from 0 to 1. A face button (1)
      and a full pedal stay exactly 1. */
-  const padPedalDeadzone = { throttle: 0.12, brake: 0.12 };
-  function pedalLevel(v, dz) { return v > dz ? clamp((v - dz) / (1 - dz), 0, 1) : 0; }
+  const TRIGGER_DEADZONE = 0.12;
+  const padPedalDeadzone = { throttle: TRIGGER_DEADZONE, brake: TRIGGER_DEADZONE };
+  function pedalLevel(v, dz = TRIGGER_DEADZONE) { return v > dz ? clamp((v - dz) / (1 - dz), 0, 1) : 0; }
   function resetPadDriveState() {
     padThrottleToggle = padLookBackToggle = false;
     padDpadTarget = padDpadVal = padDpadT = 0;
@@ -1670,13 +1687,34 @@ const Input = (function () {
   // never a second focus-mover. See padDispatchKey/padActivate/padEscape below
   // and their header comment for why B needs its own branch.
   let remoteWas = false;        // the phone was live on the previous poll
+  function reportControllerLoss(source) {
+    const localDriving = keyLeft || keyRight || keyThrottle || keyBrake ||
+      btnSteerLeft || btnSteerRight || btnThrottle || btnBrake || activeTouch;
+    const anotherDriver = source === "remote"
+      ? padConnected && (inputSource === "controller" || padSteerActive() || padThrottle || padBrake)
+      : remoteActive() && remoteOwner === "phone" && inputSource === "phone";
+    if (localDriving || anotherDriver) return;
+    try { onPadLostCb?.(); } catch (_) { /* the game's handler must not break input teardown */ }
+  }
+  let photoCamera = null;
+  const cameraHeldPads = new Set(); // holds stay with the pad that used the camera
+  function photoAxis(axes, index) {
+    const axis = axes[index];
+    if (!Number.isFinite(axis) || index === padAxisMap.throttle || index === padAxisMap.brake) return 0;
+    const rest = index === padAxisMap.steer ? padRestOffset * padAxisMap.steerInvert : 0;
+    const delta = axis - rest;
+    const value = delta / (delta >= 0 ? 1 - rest : 1 + rest);
+    const mag = Math.abs(value);
+    return mag <= LOOK_STICK_DEAD ? 0 : Math.sign(value) * (Math.min(1, mag) - LOOK_STICK_DEAD) / (1 - LOOK_STICK_DEAD);
+  }
   function pollGamepad() {
+    const camera = photoCamera?.isActive() ? photoCamera : null;
     haptics.flush();   // opens the frame for the rumble mixer: one effect per frame (js/input/haptics.js)
     // A PHONE CONTROLLER GOING QUIET is the same interruption as an unplugged
     // pad (a call, an app switch, a flat battery): its pedals already zero at
     // REMOTE_STALE_MS, but the race ran on with the car coasting into a wall.
     const rAct = remoteActive();
-    if (remoteWas && !rAct && onPadLostCb) { try { onPadLostCb(); } catch (_) { /* the game's handler must not break polling */ } }
+    if (remoteWas && !rAct) reportControllerLoss("remote");
     remoteWas = rAct;
     if (!padConnected) {
       // Recovery re-probe on a monotonic deadline. gamepadconnected fires only
@@ -1687,11 +1725,12 @@ const Input = (function () {
       // re-probe every frame; long absences keep the ~1 s throttle so
       // getGamepads()'s per-call array allocation stays off the frame budget.
       const t = nowMs();
-      if (t < _padNextProbeMs) return;
+      if (t < _padNextProbeMs) { camera?.setPadInput(); return; }
       if (!_padLostAt) _padLostAt = t;
       if (!activePad()) {
         const age = t - _padLostAt;
         _padNextProbeMs = t + (age < PAD_PROBE_FAST_MS ? 0 : PAD_PROBE_SLOW_MS);
+        camera?.setPadInput();
         return;
       }
       padConnected = true;
@@ -1717,6 +1756,7 @@ const Input = (function () {
       lookStickX = 0; lookStickY = 0;
       resetPadDriveState();
       padIsWheel = false;
+      camera?.setPadInput();
       // A missing browser snapshot is not a release. Reseed on recovery:
       // even a button pressed during the gap needs
       // a witnessed release before it can trigger an action.
@@ -1761,6 +1801,20 @@ const Input = (function () {
       Log.warn("input", `gamepad mapping "${pad.mapping}" is not "standard": button/axis indices may not match`);
     }
     const axes = pad.axes || [];
+    const cameraPad = !!camera && padStd(pad) && photoLayerOpen() &&
+      !axisCaptureCb && !padCaptureCb && !document.hidden;
+    let padCameraHeld = cameraHeldPads.has(key);
+    if (cameraPad || padCameraHeld) {
+      const moveX = photoAxis(axes, 0), moveY = photoAxis(axes, 1);
+      const lookX = photoAxis(axes, 2), lookY = photoAxis(axes, 3);
+      const up = pedalLevel(btnVal(pad, 7));
+      const down = pedalLevel(btnVal(pad, 6));
+      padCameraHeld = !!(moveX || moveY || lookX || lookY || up || down);
+      if (padCameraHeld) cameraHeldPads.add(key);
+      else cameraHeldPads.delete(key);
+      if (cameraPad) camera.setPadInput(moveX, moveY, lookX, lookY, up - down);
+    }
+    if (!cameraPad) camera?.setPadInput();
     const stick = padStick(axes);
     // Right stick (standard mapping axes 2/3) → free-look. Menu nav still uses
     // both sticks via padNavDir; free-look is only consumed in-race by CamFeel.
@@ -1789,7 +1843,7 @@ const Input = (function () {
     padSteer = padSteerAnalog ? stick : dpad;
     // Capture/menu presses still enter padPrevButtons below, but cannot arm a
     // driving toggle — even if their callback closes that owner this poll.
-    const padOwnsDrive = !axisCaptureCb && !padCaptureCb && !(window.UiLayers && window.UiLayers.navOpen());
+    const padOwnsDrive = !cameraPad && !padCameraHeld && !axisCaptureCb && !padCaptureCb && !window.UiLayers?.navOpen();
     // pedals: analog triggers, a wheel's pedal AXES, or the A/B face buttons.
     const throttleInput = pedalLevel(Math.max(padActVal(pad, "throttle", consumed), padPedalAxis(axes, "throttle")), padPedalDeadzone.throttle);
     if (throttleIsToggle()) {
@@ -1839,7 +1893,9 @@ const Input = (function () {
       // held LB/RB/trigger can never also queue a gear shift or camera cycle
       // that fires the instant the menu closes (see docs/research note above
       // clearEdges() for the bug class this avoids).
-      if (window.UiLayers && window.UiLayers.navOpen()) {
+      const menuOpen = window.UiLayers?.navOpen();
+      if (cameraPad || menuOpen || padCameraHeld) {
+        lookStickX = lookStickY = 0;
         // ...and the PEDALS go with it. They were latched above this branch, so a
         // pad kept throttling/braking the car through the pause menu (the
         // keyboard's driving keys are gated by menuOverlayOpen(); the pad's were
@@ -1853,7 +1909,8 @@ const Input = (function () {
         // …and the STEERING: a friend race keeps simulating under the pause menu, and the stick or d-pad
         // that moves through it was also steering the car at up to full lock.
         padSteer = 0; padSteerAnalog = false; padDpadTarget = 0; padDpadVal = 0;
-        padMenu.poll(pad);
+        if (cameraPad || menuOpen) padMenu.poll(pad, { dpadOnly: cameraPad || padCameraHeld });
+        else padMenu.reset();
       } else {
         padMenu.reset();   // fresh hold-timer the next time a menu opens
         // edge-triggered actions reuse the same latches the keyboard sets.
@@ -2003,6 +2060,11 @@ const Input = (function () {
     // window before relaying polling-only loss to the UI.
     if (physicalPadAvailable && !padConnected && nowMs() - _padLostAt >= PAD_PROBE_FAST_MS) setPhysicalPadAvailable(false);
     _navLatch = navBlocksTouchLive() ? 1 : 0;
+    if (photoCamera?.isActive()) {
+      const remote = remoteCamera();
+      if (remote) photoCamera.setRemoteCameraInput(remote.moveX, remote.moveY, remote.lookX, remote.lookY, remote.lift);
+      else photoCamera.setRemoteCameraInput();
+    } else remCamera = null;
   }
 
   function throttle() {
@@ -2555,7 +2617,8 @@ const Input = (function () {
          no way to intervene. Console certification treats disconnect recovery
          as a tested failure mode for exactly this reason. Only when NO pad is
          left: swapping one of two pads is not an interruption. */
-      if (!still && onPadLostCb) { try { onPadLostCb(); } catch (_) { /* the game's own handler must not break input teardown */ } }
+      if (e.gamepad) cameraHeldPads.delete(padKey(e.gamepad, e.gamepad.index));
+      if (!still) reportControllerLoss("physical");
     });
     ready = true;
   }
@@ -2737,7 +2800,8 @@ const Input = (function () {
     consumeLookMouse,
     lockEscape, unlockEscape, lockLandscape, unlockLandscape,
     tiltActive,
-    remoteSample, remoteEvent, remoteLost, remoteActive, remoteSteers, phoneTiltAvailable, setRemoteHaptics,
+    remoteSample, remoteEvent, remoteLost, remoteActive, remoteSteers, remoteCamera, remoteControlContext, phoneTiltAvailable, setRemoteHaptics,
+    bindPhotoCamera: (camera) => { photoCamera = camera; },
     simTilt,
     simTiltReset,
     steerToTilt,

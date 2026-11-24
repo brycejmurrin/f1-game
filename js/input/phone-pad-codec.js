@@ -7,6 +7,7 @@
 
 const PhonePadCodec = (function () {
   const PROTO = 1;
+  const CAMERA_SAMPLE = 4;
 
   // The edges the phone may send; each is a name Input.remoteEvent knows.
   const EVENTS = Object.freeze(["shiftUp", "shiftDown", "overtake", "boost", "aero",
@@ -19,27 +20,37 @@ const PhonePadCodec = (function () {
 
   const round2 = (v) => Math.round((+v || 0) * 100) / 100;
   const num = (v, lo, hi) => (typeof v === "number" && isFinite(v)) ? Math.min(hi, Math.max(lo, v)) : 0;
+  const CAMERA_AXES = ["moveX", "moveY", "lookX", "lookY", "lift"];
+  const SURFACES = ["drive", "menu", "camera"];
 
   // ── wire ──────────────────────────────────────────────────────────────────
   // STATE channel, phone → desktop: one JSON array per sample,
   // [1, seq, roll|null, thr, brk, held]. After the respective capability
   // handshake, touch steering uses [2, seq, null, thr, brk, held, steer].
   // Version 3 carries already-shaped pedals with either kind of steering.
+  // Version 4 carries camera input: [4, seq, moveX, moveY, lookX, lookY, lift].
   function encodeSample(s) {
+    if (s.camera) return JSON.stringify([CAMERA_SAMPLE, s.seq | 0, ...CAMERA_AXES.map(key => round2(num(s.camera[key], -1, 1)))]);
     const roll = (typeof s.roll === "number" && isFinite(s.roll)) ? round2(s.roll) : null;
     const touch = typeof s.steer === "number" && isFinite(s.steer);
-    const fields = [touch ? 2 : PROTO, s.seq | 0, touch ? null : roll, round2(s.thr), round2(s.brk), s.held | 0];
-    if (s.calibratedPedals === true) fields[0] = 3;
-    if (touch || fields[0] === 3) fields.push(touch ? num(s.steer, -1, 1) : null);
+    const version = s.calibratedPedals === true ? 3 : touch ? 2 : PROTO;
+    const fields = [version, s.seq | 0, touch ? null : roll, round2(s.thr), round2(s.brk), s.held | 0];
+    if (version !== PROTO) fields.push(touch ? num(s.steer, -1, 1) : null);
     return JSON.stringify(fields);
   }
   function decodeSample(text) {
     let a;
     try { a = JSON.parse(typeof text === "string" ? text : ""); } catch (e) { return null; }
     if (!Array.isArray(a)) return null;
+    if (a[0] === CAMERA_SAMPLE) {
+      if (a.length !== 7 || !a.slice(2).every(Number.isFinite)) return null;
+      const camera = Object.fromEntries(CAMERA_AXES.map((key, i) => [key, num(a[i + 2], -1, 1)]));
+      return { seq: a[1] | 0, roll: null, thr: 0, brk: 0, held: 0, camera };
+    }
     const touch = Number.isFinite(a[6]), calibrated = a[0] === 3;
+    const validSteering = touch ? a[2] === null : a[6] === null;
     if (!((a.length === 6 && a[0] === PROTO) || (a.length === 7 &&
-        ((a[0] === 2 && touch) || (calibrated && (touch || a[6] === null)))))) return null;
+        ((a[0] === 2 && touch) || (calibrated && validSteering))))) return null;
     return {
       ...(calibrated ? { calibratedPedals: true } : {}),
       ...(touch ? { steer: num(a[6], -1, 1) } : {}),
@@ -49,14 +60,18 @@ const PhonePadCodec = (function () {
     };
   }
   // STATE channel, desktop → phone: the dash, ["H", gear, kmh, rpmFrac, lap,
-  // laps, pos, cars, ers, flags, caution, lastLapMs, state, teamHex]. Tagged
-  // "H" so decodeSample's `a[0] !== PROTO` refuses it and vice versa.
-  function encodeHud(h, gripFeedback) {
+  // laps, pos, cars, ers, flags, caution, lastLapMs, state, teamHex].
+  // Negotiated extensions append grip, surface and the host's HUD sequence.
+  function encodeHud(h, gripFeedback, surfaces, hudSeq) {
     if (!h) return null;
     const fields = ["H", h.gear | 0, Math.round(+h.kmh || 0), round2(h.rpm), h.lap | 0, h.laps | 0,
       h.pos | 0, h.cars | 0, round2(h.ers), h.flags | 0, h.caution | 0, Math.round(+h.lastLapMs || 0),
       String(h.state || "").slice(0, 8), /^#[0-9a-f]{6}$/i.test(h.team || "") ? h.team : ""];
-    if (gripFeedback && h.grip) fields.push(h.grip);
+    const grip = gripFeedback ? h.grip : "";
+    const surface = surfaces && SURFACES.includes(h.surface) ? h.surface : "";
+    if (hudSeq !== undefined) fields.push(grip || "", surface, hudSeq);
+    else if (surface) fields.push(grip || "", surface);
+    else if (grip) fields.push(grip);
     return JSON.stringify(fields);
   }
   function decodeHud(text) {
@@ -66,7 +81,8 @@ const PhonePadCodec = (function () {
   }
   // The parsed half, so the session's STATE handler parses each packet once (audit4 UB5).
   function hudOf(a) {
-    if (!Array.isArray(a) || (a.length !== 14 && a.length !== 15) || a[0] !== "H") return null;
+    if (!Array.isArray(a) || a.length < 14 || a.length > 17 || a[0] !== "H") return null;
+    if (a.length === 17 && (!Number.isSafeInteger(a[16]) || a[16] < 0)) return null;
     return {
       gear: num(a[1], -1, 9) | 0, kmh: num(a[2], 0, 999) | 0, rpm: num(a[3], 0, 1),
       lap: num(a[4], 0, 999) | 0, laps: num(a[5], 0, 999) | 0, pos: num(a[6], 0, 99) | 0, cars: num(a[7], 0, 99) | 0,
@@ -74,6 +90,8 @@ const PhonePadCodec = (function () {
       lastLapMs: num(a[11], 0, 3.6e6) | 0, state: String(a[12] || "").slice(0, 8),
       team: /^#[0-9a-f]{6}$/i.test(a[13] || "") ? a[13] : "",
       ...(["spin", "slip", "lock"].includes(a[14]) ? { grip: a[14] } : {}),
+      ...(SURFACES.includes(a[15]) ? { surface: a[15] } : {}),
+      ...(a.length === 17 ? { hudSeq: a[16] } : {}),
     };
   }
   // EVENT channel: {t:"ev", k} phone→desktop; {t:"hap", ms} desktop→phone;
@@ -88,9 +106,13 @@ const PhonePadCodec = (function () {
   // unloading it), not unpairing. The next close is a wire loss the game re-hosts for.
   function encodeSuspend() { return JSON.stringify({ t: "sus" }); }
   function encodeHaptic(ms) { return JSON.stringify({ t: "hap", ms: Math.max(0, Math.min(1000, ms | 0)) }); }
-  function encodeHello(side, haptics, extended, id) {
+  function encodeHello(side, haptics, extended, id, camera, hudOrder) {
     return JSON.stringify({ t: "hi", side, p: PROTO, haptics: haptics === true, ...(extended ? { steer: true, ack: true } : {}),
-      ...(extended && side === "pad" ? { grip: true } : {}), ...(extended && side === "host" ? { calibratedPedals: true } : {}), ...(typeof id === "string" && PEER_ID_RE.test(id) ? { id } : {}) });
+      ...(camera ? { camera: CAMERA_SAMPLE } : {}),
+      ...(hudOrder ? { hudOrder: true } : {}),
+      ...(extended && side === "pad" ? { grip: true } : {}),
+      ...(extended && side === "host" ? { calibratedPedals: true } : {}),
+      ...(typeof id === "string" && PEER_ID_RE.test(id) ? { id } : {}) });
   }
   // A fresh peer id: 128 random bits as hex (crypto where the page has it).
   function makePeerId() {
@@ -108,7 +130,11 @@ const PhonePadCodec = (function () {
     if (o.t === "sus") return { t: "sus" };
     if (o.t === "hap") return { t: "hap", ms: Math.max(0, Math.min(1000, o.ms | 0)) };
     if (o.t === "hi") return { t: "hi", side: String(o.side || ""), p: o.p | 0, haptics: o.haptics === true, ...(o.steer === true ? { steer: true } : {}), ...(o.ack === true ? { ack: true } : {}),
-      ...(o.grip === true ? { grip: true } : {}), ...(o.calibratedPedals === true ? { calibratedPedals: true } : {}), ...(typeof o.id === "string" && PEER_ID_RE.test(o.id) ? { id: o.id } : {}) };
+      ...(o.camera === CAMERA_SAMPLE ? { camera: true } : {}),
+      ...(o.hudOrder === true ? { hudOrder: true } : {}),
+      ...(o.grip === true ? { grip: true } : {}),
+      ...(o.calibratedPedals === true ? { calibratedPedals: true } : {}),
+      ...(typeof o.id === "string" && PEER_ID_RE.test(o.id) ? { id: o.id } : {}) };
     return null;
   }
   // A TeamDef colour (three 0..1 floats) as the CSS hex the phone's LCD tints with.
