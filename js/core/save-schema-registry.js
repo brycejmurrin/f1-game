@@ -215,6 +215,7 @@ const SaveSchemaRegistry = (function () {
     lastSession: entry("js/ui/share-code.js", "json", 1, "json"),
     logLevel: entry("js/core/log.js", "raw", 1, "rawScalar"),
     photoBackground: entry("js/ui/photo-studio.js", "raw", 1, "string"),
+    photoDepthFocus: entry("js/ui/photo-studio-ui.js", "raw", 1, "rawScalar"),   // Photo Studio opt-in depth focus ("1" on)
     rendezvous: entry("js/net/rendezvous.js", "raw", 1, "rawScalar"),
     seasonCfg: entry("js/career/season-cal.js", "json", 1, "season"),
     setupTrialRecover: entry("js/garage/setup-trials.js", "json", 1, "json"),

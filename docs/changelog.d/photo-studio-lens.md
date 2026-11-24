@@ -1,0 +1,1 @@
+New: Change focal length independently of camera position in garage and race Photo Studio. Turn on the new Depth focus option (off by default) and supported TLX renderers let you tap or click a subject to lock focus at its scene depth, or return to auto focus. Captures keep the selected lens and focus without the preview reticle.

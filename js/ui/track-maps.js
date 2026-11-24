@@ -39,6 +39,113 @@ const TrackMaps = (function () {
     return typeof CvdPalette !== "undefined" ? CvdPalette.hex("zone") : "#26a5f5";
   }
 
+  // Reference car in dry conditions at base pace. Use the game's cornering
+  // envelope for the measured apex curvature, capped at its reference top speed.
+  function cornerSpeed(corner) {
+    if (!(corner.v > 0)) return null;
+    const { LAT_MAX, VMAX } = PhysicsConsts;
+    return 3.6 * Math.min(VMAX, AiDrive.cornerSpeed(corner.v, LAT_MAX, 1, VMAX));
+  }
+
+  function cornerSpeedColors() {
+    return [CvdPalette.hex("bad"), CvdPalette.hex("warn"), CvdPalette.hex("info")];
+  }
+
+  /** A clipped, pannable canvas. Pan is measured in the viewport's local CSS pixels. */
+  function attachZoom(canvas, viewport, controls, buttonClass) {
+    let zoom = 1, x = 0, y = 0;
+    const points = new Map();
+    viewport.setAttribute("data-map-zoom", "");
+    viewport.tabIndex = 0;
+    viewport.setAttribute("role", "group");
+    viewport.setAttribute("aria-label", "Zoomable track map");
+    controls.setAttribute("data-map-zoom-controls", "");
+    const buttons = ["−", "100%", "+"].map((label) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = buttonClass;
+      button.textContent = label;
+      controls.appendChild(button);
+      return button;
+    });
+    const [minus, reset, plus] = buttons;
+    minus.setAttribute("aria-label", "Zoom map out");
+    plus.setAttribute("aria-label", "Zoom map in");
+
+    function paint() {
+      const limitX = Math.max(0, (canvas.clientWidth * zoom - viewport.clientWidth) / 2);
+      const limitY = Math.max(0, (canvas.clientHeight * zoom - viewport.clientHeight) / 2);
+      x = Math.max(-limitX, Math.min(limitX, x));
+      y = Math.max(-limitY, Math.min(limitY, y));
+      canvas.style.transform = zoom === 1 ? "" : `translate(${x}px, ${y}px) scale(${zoom})`;
+      viewport.toggleAttribute("data-map-panned", zoom > 1);
+      reset.textContent = Math.round(zoom * 100) + "%";
+      reset.setAttribute("aria-label", "Reset map zoom · " + reset.textContent);
+      minus.disabled = zoom <= 1;
+      plus.disabled = zoom >= 4;
+    }
+    function scale(value, cx = 0, cy = 0) {
+      const next = Math.max(1, Math.min(4, value)), ratio = next / zoom;
+      x = cx - (cx - x) * ratio;
+      y = cy - (cy - y) * ratio;
+      zoom = next;
+      if (zoom === 1) x = y = 0;
+      paint();
+    }
+    minus.onclick = () => scale(zoom / 1.25);
+    plus.onclick = () => scale(zoom * 1.25);
+    reset.onclick = () => scale(1);
+    function point(e) {
+      const r = viewport.getBoundingClientRect();
+      return [(e.clientX - r.left) * viewport.clientWidth / r.width - viewport.clientWidth / 2,
+              (e.clientY - r.top) * viewport.clientHeight / r.height - viewport.clientHeight / 2];
+    }
+    viewport.addEventListener("wheel", (e) => {
+      if (e.ctrlKey || !e.deltaY || !viewport.clientWidth || !viewport.clientHeight) return;
+      e.preventDefault();
+      scale(zoom * (e.deltaY < 0 ? 1.125 : 1 / 1.125), ...point(e));
+    }, { passive: false });
+    viewport.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 || points.size >= 2 || !viewport.clientWidth || !viewport.clientHeight) return;
+      points.set(e.pointerId, point(e));
+      viewport.setPointerCapture(e.pointerId);
+    });
+    viewport.addEventListener("pointermove", (e) => {
+      const before = points.get(e.pointerId);
+      if (!before) return;
+      const next = point(e);
+      if (points.size === 2) {
+        const other = [...points].find(([id]) => id !== e.pointerId)[1];
+        const previous = Math.hypot(before[0] - other[0], before[1] - other[1]);
+        const distance = Math.hypot(next[0] - other[0], next[1] - other[1]);
+        if (previous > 0) scale(zoom * distance / previous, (before[0] + other[0]) / 2, (before[1] + other[1]) / 2);
+      }
+      points.set(e.pointerId, next);
+      if (zoom > 1) {
+        const part = points.size === 2 ? 0.5 : 1;
+        x += (next[0] - before[0]) * part;
+        y += (next[1] - before[1]) * part;
+        paint();
+      }
+    });
+    viewport.addEventListener("lostpointercapture", (e) => points.delete(e.pointerId));
+    viewport.addEventListener("keydown", (e) => {
+      if (e.target !== viewport || zoom === 1) return;
+      const movement = { ArrowLeft: [32, 0], ArrowRight: [-32, 0], ArrowUp: [0, 32], ArrowDown: [0, -32] }[e.key];
+      if (!movement) return;
+      e.preventDefault();
+      x += movement[0];
+      y += movement[1];
+      paint();
+    });
+    paint();
+    return { reset() { points.clear(); scale(1); }, refit: paint };
+  }
+
+  function cornerSpeedColor(speed, colors) {
+    return colors[speed < 140 ? 0 : speed < 210 ? 1 : 2];
+  }
+
   function drawStartFinish(g, x, y, nextX, nextY, cell) {
     const dx = nextX - x, dy = nextY - y;
     if (!dx && !dy) return;
@@ -162,7 +269,10 @@ const TrackMaps = (function () {
     }
     const ang = Math.abs(dHead) * 180 / Math.PI;
     const r = kPeak > 1e-6 ? 1 / kPeak : 999;
-    return { v: kPeak, r: r, ang: ang, cls: classifyCorner(r, ang), fPeak: ((sPeak / total) % 1 + 1) % 1 };
+    return {
+      v: kPeak, r: r, ang: ang, cls: classifyCorner(r, ang), fPeak: ((sPeak / total) % 1 + 1) % 1,
+      entry: a / total, exit: (a + len) / total,
+    };
   }
 
   function cornerAt(tr, frac, n, win) {
@@ -171,11 +281,12 @@ const TrackMaps = (function () {
     const idx = Math.floor(f * m) % m;
     const mp = tr.map[idx];
     const mes = measureApex(tr, f, win);
-    // `f` is the apex's LAP FRACTION, and it is the only field here expressed in
-    // track space rather than minimap space — measureApex already computes it.
-    // The flyby sequencer anchors shots
-    // on corners (`s = f * track.total`), which it cannot do from x/y minimap px.
-    return { n: n, x: mp[0], y: mp[1], f: mes.fPeak, v: mes.v, r: mes.r, ang: mes.ang, cls: mes.cls };
+    // The flyby camera anchors on the apex lap fraction. Entry and exit give
+    // the corner stroke its range, with exit past 1 across the start line.
+    return {
+      n, x: mp[0], y: mp[1], f: mes.fPeak, v: mes.v, r: mes.r, ang: mes.ang, cls: mes.cls,
+      entry: mes.entry, exit: mes.exit,
+    };
   }
 
   // Drop a cached outline after LAZY_CIRCUIT hydrate (meta stubs have no path).
@@ -323,8 +434,9 @@ const TrackMaps = (function () {
     return { shape: beside ? "beside" : "stacked", slotW: slotW, slotH: slotH };
   }
 
-  function fitCanvas(canvas, maxW, maxH, def, pinCss) {
-    const a = aspect(def);
+  function fitCanvas(canvas, maxW, maxH, def, pinCss, rotate = false) {
+    const baseAspect = aspect(def);
+    const a = rotate ? 1 / baseAspect : baseAspect;
     // A ResizeObserver can briefly report a zero slot while zoom/layout classes
     // converge. Never turn that transient into a visible 1x1 canvas; 40 local
     // px is the compact preview's own height floor and the next settled refit
@@ -491,7 +603,8 @@ const TrackMaps = (function () {
     g.clearRect(0, 0, W, H);
     const data = compute(def);
     if (!data || data.pts.length < 3) return false;
-    const pts = data.pts;
+    // Rotate source coordinates so markers and their text are painted upright.
+    const pts = opts.rotate ? data.pts.map(([x, y]) => [-y, x]) : data.pts;
 
     let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
     for (let i = 0; i < pts.length; i++) {
@@ -504,6 +617,8 @@ const TrackMaps = (function () {
     const ox = (W - spanx * sc) / 2, oy = (H - spany * sc) / 2;
     function PX(x) { return ox + (x - minx) * sc; }
     function PY(y) { return oy + (y - miny) * sc; }
+    const cornerX = (c) => PX(opts.rotate ? -c.y : c.x);
+    const cornerY = (c) => PY(opts.rotate ? c.x : c.y);
     const cx = PX((minx + maxx) / 2), cy = PY((miny + maxy) / 2);
 
     const width = opts.width || 3;
@@ -573,6 +688,27 @@ const TrackMaps = (function () {
       }
     }
 
+    if (opts.cornerSpeeds) {
+      const colors = cornerSpeedColors(), m = pts.length;
+      g.lineWidth = width + 1;
+      for (const [i, speed] of opts.cornerSpeeds.entries()) {
+        if (!Number.isFinite(speed)) continue;
+        const corner = data.corners[i];
+        // Keep very short apexes legible at the outline's sample resolution.
+        const padSamples = Math.max(0, (3 - (corner.exit - corner.entry) * m) / 2);
+        const from = Math.floor(corner.entry * m - padSamples);
+        const to = Math.ceil(corner.exit * m + padSamples);
+        g.strokeStyle = cornerSpeedColor(speed, colors);
+        g.beginPath();
+        for (let j = from; j <= to; j++) {
+          const p = pts[(j + m) % m];
+          if (j === from) g.moveTo(PX(p[0]), PY(p[1]));
+          else g.lineTo(PX(p[0]), PY(p[1]));
+        }
+        g.stroke();
+      }
+    }
+
     if (opts.start !== false) {
       const s = pts[0];
       if (opts.checkeredStart) {
@@ -592,16 +728,22 @@ const TrackMaps = (function () {
     // An unknown number draws nothing.
     const mk = opts.mark > 0 ? data.corners[(opts.mark | 0) - 1] : null;
     if (mk) {
-      const x = PX(mk.x), y = PY(mk.y), col = opts.markColor || "#e10600";
+      const x = cornerX(mk), y = cornerY(mk), col = opts.markColor || "#e10600";
       const fpx = opts.markFont > 0 ? opts.markFont : Math.max(10, Math.round(width * 2.6)), txt = "T" + (opts.mark | 0);
       g.lineWidth = Math.max(1.5, width * 0.6);
-      g.strokeStyle = col; g.fillStyle = "rgba(10,10,16,0.85)";
-      g.beginPath(); g.arc(x, y, width * 1.8, 0, Math.PI * 2); g.fill(); g.stroke();
+      g.strokeStyle = col;
+      if (!opts.cornerSpeeds) {
+        g.fillStyle = "rgba(10,10,16,0.85)";
+        g.beginPath(); g.arc(x, y, width * 1.8, 0, Math.PI * 2); g.fill(); g.stroke();
+      }
       const dx = x - cx, dy = y - cy, len = Math.hypot(dx, dy) || 1, off = width * 1.8 + fpx * 1.1;
       g.font = "800 " + fpx + "px system-ui, sans-serif";
       const hw = g.measureText(txt).width / 2 + fpx * 0.4, hh = fpx * 0.7;
       const lx = Math.min(W - hw, Math.max(hw, x + dx / len * off));
       const ly = Math.min(H - hh, Math.max(hh, y + dy / len * off));
+      if (opts.cornerSpeeds) {
+        g.beginPath(); g.moveTo(x, y); g.lineTo(lx, ly); g.stroke();
+      }
       g.fillStyle = col;
       g.beginPath(); g.rect(lx - hw, ly - hh, hw * 2, hh * 2); g.fill();
       g.fillStyle = "#ffffff"; g.textAlign = "center"; g.textBaseline = "middle";
@@ -621,7 +763,7 @@ const TrackMaps = (function () {
       // reads as "corners are here" without the clutter.
       if (W < 200 || H < 140) {
         for (let i = 0; i < cs.length; i++) {
-          const x = PX(cs[i].x), y = PY(cs[i].y);
+          const x = cornerX(cs[i]), y = cornerY(cs[i]);
           const cls = cs[i].cls || classifyCorner(cs[i].r || (cs[i].v > 1e-6 ? 1 / cs[i].v : 999), 0);
           const col = classColor(cls) || (opts.cornerColor || "#fff");
           g.fillStyle = col;
@@ -632,7 +774,7 @@ const TrackMaps = (function () {
       const labelR0 = Math.max(20, rDot + 14);
       const labels = [];
       for (let i = 0; i < cs.length; i++) {
-        const x = PX(cs[i].x), y = PY(cs[i].y);
+        const x = cornerX(cs[i]), y = cornerY(cs[i]);
         const cls = cs[i].cls || classifyCorner(cs[i].r || (cs[i].v > 1e-6 ? 1 / cs[i].v : 999), 0);
         const col = classColor(cls) || (opts.cornerColor || "#fff");
         let dx = x - cx, dy = y - cy;
@@ -725,7 +867,7 @@ const TrackMaps = (function () {
 
   return {
     outline, aspect, fitCanvas, planPreview, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw, detectCorners,
-    SECTOR_COLORS, SECTOR_TOKENS, sectorColors, aeroColor, drawStartFinish, drawCarMarker,
+    SECTOR_COLORS, SECTOR_TOKENS, sectorColors, aeroColor, cornerSpeed, cornerSpeedColors, cornerSpeedColor, attachZoom, drawStartFinish, drawCarMarker,
     classColor, classifyCorner, measureApex, assignCornerClasses,
     invalidate, cachedIds: () => Object.keys(cache),
   };

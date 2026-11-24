@@ -79,10 +79,9 @@ test("every circuit's authored turn table resolves — an unread table is a sile
 });
 
 // THE SOURCED FIXTURE. tests/data/aero-zones-fia-2026.json carries, per
-// circuit, the zone count and (where def.turns is the FIA 2026 numbering) the
-// [fromTurn, toTurn] pairs read off the FIA Race Director's 2026 event map, with
-// the document URL. The module must agree with it — the old checks compared the
-// table with a selection derived from the table itself.
+// circuit, the zone count and the verified [fromTurn, toTurn] pairs in built
+// numbering, with the FIA Race Director's document URL. This also checks the
+// game's table against an external source rather than against its own output.
 const FIA = JSON.parse(fs.readFileSync(new URL("../data/aero-zones-fia-2026.json", import.meta.url), "utf8")).circuits;
 
 test("every fixture row names its source document, and only a provisional row may lack a 2026 one", () => {
@@ -139,6 +138,17 @@ test("the discard warning is observable here (mutation: one pair that bounds not
   AeroZones.AERO_ZONE_TURNS.monza = [[1, 1]];
   try { AeroZones.zonesFor(tr); } finally { AeroZones.AERO_ZONE_TURNS.monza = saved; }
   assert.ok(warns.some((w) => /monza turn table unusable/.test(w)), `no discard warning: ${JSON.stringify(warns)}`);
+});
+
+test("Vegas opens Straight Mode on the final approach after FIA Turn 16", () => {
+  const def = Tracks.LIST.find((t) => t.id === "vegas");
+  const track = centreline(def);
+  const aero = AeroZones.create({ track });
+  aero.build();
+
+  assert.equal(aero.at(5300), null);
+  assert.ok(aero.at(5600), "the straight after FIA Turn 16 is inside an activation zone");
+  assert.equal(aero.at(6100), null);
 });
 
 test("Imola corner renumbering retains its authored Alta approach aero window", () => {

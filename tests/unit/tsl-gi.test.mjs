@@ -242,8 +242,13 @@ async function rig(t, features, tsl = TSL) {
   const identity = new THREE.Matrix4().elements;
   const shadow = { sunTex: new THREE.DepthTexture(1, 1), S: { enabled: true, lightVP: identity, lampLightVP: identity, lampArmed: false, lampIdx: -1 } };
   const T = globalThis.TLXShaders, orig = T.post;
-  let P = null;
-  T.post = (...a) => (P = orig(...a));
+  let P = null, photo = null;
+  T.post = (...a) => {
+    P = orig(...a);
+    const make = P.makePhotoFocus;
+    P.makePhotoFocus = () => (photo = make());
+    return P;
+  };
   const Q = gfxQuality("high");
   const on = new Set(features);
   // detail 0 + per-name forcing: the plan builds exactly `features` (the apex26.gfxx.<name>=1 path, WebGL2 here).
@@ -262,8 +267,54 @@ async function rig(t, features, tsl = TSL) {
   const frame = { invProj: identity, proj: identity, invVP: identity, viewProj: identity, upVS: [0, 1, 0],
     eye: [0, 0, 0], sunDir: [0, 1, 0], sunColor: [1, 1, 1], sunVS: [0, 0, -1], time: 0, cloud: 0, lights };
   const opts = { ssao: 0.8, contact: 0.5, godray: 0.8, bloom: 0.5, reflect: 0.5, carReflect: 0.3, mist: 0.5, lampVol: 0.5 };
-  return { P, post, fg, mats, present: (o) => post.present(o || opts, frame), on, shadow };
+  return { P, post, fg, mats, present: (o, F = frame) => post.present(o || opts, F), on, shadow, photo: () => photo, frame, renderer };
 }
+
+test("ordinary TLX photo frames probe scene depth once, keep it on zoom, and use DoF for capture", async (t) => {
+  const h = await rig(t, []);
+  const quiet = { flareMul: 0, carReflect: 0, bloom: 0 };
+  assert.equal(h.P.gi, null, "this graphics preset has no cinema passes");
+  assert.equal(h.post.photoFocusAvailable(), true);
+  assert.equal(h.post.needsDepth(quiet, h.frame), false);
+  h.present(quiet);
+  assert.equal(h.photo(), null);
+  assert.equal(h.post.needsDepth({ ...quiet, photoFocus: null }, h.frame), true);
+  assert.equal(h.post.needsTag({ ...quiet, photoFocus: null }, h.frame), true);
+  h.present({ ...quiet, photoFocus: null });
+  const { focus, dof } = h.photo();
+  h.renderer.backend.utils.getTextureSampleData = () => ({ primarySamples: 1 });
+  for (const pass of [focus, dof]) {
+    const builder = new THREE.WGSLNodeBuilder(new THREE.QuadMesh(pass.mat), h.renderer);
+    builder.camera = new THREE.PerspectiveCamera();
+    builder.scene = new THREE.Scene();
+    builder.build();
+    assert.ok(builder.fragmentShader.length > 500, `${pass.mat.name} generates WGSL`);
+  }
+  assert.equal(focus.U.tapMode.value, 0);
+  const pick = { x: 0.15, y: 0.82 }, picked = { ...quiet, photoFocus: pick };
+  assert.equal(h.post.needsDepth(picked, h.frame), true);
+  h.present(picked);
+  assert.deepEqual(focus.U.focusUV.value.toArray(), [0.15, 0.82]);
+  assert.equal(focus.U.tapMode.value, 1);
+  assert.notEqual(focus.prevTex.value, dof.focusTex.value, "never read the texture being written");
+  const depth = dof.focusTex.value;
+  assert.notEqual(h.P.fxaa.tex.value, dof.src.value, "AA reads DoF output");
+  assert.ok(h.post.captureTarget());
+  h.post.resize(640, 360);
+  h.present(picked);
+  assert.equal(focus.U.tapMode.value, 2);
+  assert.equal(focus.prevTex.value, depth, "resize retains the picked depth");
+  h.present({ ...quiet, photoFocus: { ...pick } });
+  assert.equal(focus.U.tapMode.value, 1, "retapping even the same UV samples a new surface depth");
+  h.present({ ...quiet, photoFocus: null });
+  assert.equal(focus.U.tapMode.value, 0);
+  assert.equal(focus.U.blend.value, 1, "auto discards the manual lock immediately");
+  h.present(picked, { ...h.frame, noEnv: true });
+  assert.equal(dof.src.value, h.post.sceneTarget().texture, "garage keeps its direct scene colour before applying DoF");
+  assert.ok(h.post.captureTarget(), "capture replays the garage resolve as well");
+  h.post.endPhotoFocus();
+  assert.equal(dof.src.value, dof.focusTex.value, "leaving the studio releases unneeded colour and focus targets");
+});
 
 // A numeric reading of a built TSL node (three r187 node types) for the few node kinds the budget graphs use;
 // `leaf(node)` answers the graph's inputs. The budget test asserts what the built post graph computes.

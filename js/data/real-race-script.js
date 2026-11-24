@@ -28,7 +28,7 @@ const DataRealRaceScript = (function () {
    *  the circuit the calendar gives it), then the venue aliases below (the Tracks
    *  handoff), then the country's current-season circuit, else any of that
    *  country, else null. F1API.placeLabel owns the display country. */
-  function trackIdFor(session, tracks) {
+  function trackIdFor(session, tracks, { exact = false } = {}) {
     const list = arr(tracks);
     const country = String(session.country_name || session.country || "").toLowerCase();
     const circuit = String(session.circuit_short_name || session.circuit || "").toLowerCase();
@@ -48,6 +48,7 @@ const DataRealRaceScript = (function () {
     const alias = { "kuala lumpur": "sepang", "monte carlo": "monaco", "sakhir": "bahrain", "melbourne": "albert_park", "spielberg": "redbull", "austin": "cota",
                     "yas marina circuit": "abudhabi", "lusail": "qatar", "spa-francorchamps": "spa", "madring": "madrid" };
     if (alias[circuit] && list.some((t) => t.id === alias[circuit])) return alias[circuit];
+    if (exact) return null;
     const same = list.filter((t) => String(t.country || "").toLowerCase() === country || (country === "united states" && t.country === "USA") || (country === "united kingdom" && t.country === "UK") || (country === "united arab emirates" && t.country === "UAE"));
     const current = same.find((t) => !t.classic);
     return (current || same[0] || {}).id || null;

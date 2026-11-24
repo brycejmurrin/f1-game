@@ -74,6 +74,13 @@ export function fakePad(sb, fire, id = "Xbox Wireless Controller") {
   fire("gamepadconnected", { gamepad: pad });
   return { pad, press: (i, v = 1) => { pad.buttons[i] = { pressed: v >= 0.5, value: v }; }, release: (i) => { pad.buttons[i] = { pressed: false, value: 0 }; } };
 }
+export function releaseWheelPedal(Input, sb, pad, axis, rest) {
+  const now = sb.performance.now();
+  pad.axes[axis] = rest;
+  Input.poll();
+  sb.performance.now = () => now + 150;
+  Input.poll();
+}
 // Values come back from the vm realm with that realm's Array/Object
 // prototypes; strict deepEqual compares prototypes, so round-trip to plain.
 export const plain = (v) => JSON.parse(JSON.stringify(v));

@@ -311,7 +311,11 @@ test("fire: the POST carries the bearer token, anthropic-version and {text: addr
   assert.deepEqual(await fireWorker("ISSUE 10", { env, fetchImpl: async () => { throw new Error("ECONNRESET"); } }), { status: 0, error: "ECONNRESET" });
   // applyPlan: the claim comment only after a 200; a CONTINUE also drops needs-owner and posts the adoption.
   const writes = [], out = [];
-  const api = (p, o) => { if (o?.method) writes.push(`${o.method} ${p}${o.body?.body ? " " + o.body.body : ""}`); return { json: {} }; };
+  const api = (p, o) => {
+    if (p.startsWith("actions/runs?status=")) return { json: { total_count: 0, workflow_runs: [] } };
+    if (o?.method) writes.push(`${o.method} ${p}${o.body?.body ? " " + o.body.body : ""}`);
+    return { json: {} };
+  };
   const p = planDispatch(state({ issues: [board(), issue(10, ["ready"])], prs: [pr(20, { labels: ["needs-owner"], updated_at: ago(0.1) })] }), cfg(), NOW);
   let n = 0;
   const flaky = async (url, init) => (n++ === 0 ? ok(url, init) : respond(503, { type: "error", error: { type: "overloaded_error", message: "overloaded" } })(url, init));
@@ -334,8 +338,8 @@ test("busy Linux pool defers optional worker fires and keeps deploy-red recovery
   const fired = [], logs = [], writes = [];
   const api = (p, o) => {
     if (o?.method) { writes.push(p); return { json: {} }; }
-    if (p.startsWith("actions/runs?")) return { json: { workflow_runs: p.includes("status=queued") ? [{ id: 123 }] : [] } };
-    if (p === "actions/runs/123/jobs?per_page=100") return { json: { jobs: Array.from({ length: 35 }, () => ({ status: "in_progress" })) } };
+    if (p.startsWith("actions/runs?")) return { json: { total_count: p.includes("status=queued") ? 1 : 0, workflow_runs: p.includes("status=queued") ? [{ id: 123 }] : [] } };
+    if (p === "actions/runs/123/jobs?per_page=100") return { json: { total_count: 35, jobs: Array.from({ length: 35 }, () => ({ status: "in_progress" })) } };
     return { json: p.startsWith("issues/1/comments") ? [] : {} };
   };
   const result = await applyPlan({ launches, labels: [], digests: [], nudges: [], boardIssue: 1 }, {
@@ -356,7 +360,11 @@ test("fire: a 200 without a claude_code_session_id still started a worker, so it
   const env = { WORKER_FIRE_URL: "https://api.anthropic.com/v1/claude_code/routines/trig_abc/fire", WORKER_FIRE_TOKEN: "sk-ant-oat01-test" };
   const bare = async () => ({ status: 200, json: async () => ({ type: "routine_fire" }), headers: { get: () => null } });
   const writes = [], out = [];
-  const api = (p, o) => { if (o?.method) writes.push(`${o.method} ${p}${o.body?.body ? " " + o.body.body : ""}`); return { json: {} }; };
+  const api = (p, o) => {
+    if (p.startsWith("actions/runs?status=")) return { json: { total_count: 0, workflow_runs: [] } };
+    if (o?.method) writes.push(`${o.method} ${p}${o.body?.body ? " " + o.body.body : ""}`);
+    return { json: {} };
+  };
   const p = planDispatch(state({ issues: [board(), issue(10, ["ready"])], prs: [pr(20, { labels: ["needs-owner"], updated_at: ago(0.1) })] }), cfg(), NOW);
   assert.deepEqual(p.launches.map((l) => l.address), ["CONTINUE PR 20", "ISSUE 10"]);
   const r = await applyPlan(p, { api, config: cfg(), log: (s) => out.push(s), now: NOW, fire: true, env, fetchImpl: bare });
@@ -435,7 +443,7 @@ test("main: --plan prints the plan lines, the Board and a summary; --apply --fir
   const api = (p, o) => {
     if (o?.method) return { json: { id: 1 } };
     if (p.startsWith("issues?state=open")) return { json: p.endsWith("page=1") ? [{ number: 1780, title: "Board", labels: [], body: "" }, { number: 10, title: "T", labels: [{ name: "ready" }], body: "x", updated_at: ago(1), user: { login: "brycejmurrin" } }] : [] };
-    if (p.startsWith("actions/")) return { json: { workflow_runs: [] } };
+    if (p.startsWith("actions/")) return { json: { total_count: 0, workflow_runs: [] } };
     return { json: [] };
   };
   const log = [];
@@ -618,4 +626,23 @@ test("rule 1: a claimed issue with no open PR, no live launch and no comment for
   assert.deepEqual(quiet([issue(10, ["ready", "claimed"], { comments: [claim(1)] })]), [], "a claim younger than staleHours is alive");
   assert.deepEqual(quiet([issue(10, ["ready", "claimed"], { comments: [claim(9)] })], [pr(20, { body: "Closes #10" })]), [], "an open PR that closes it owns it");
   assert.deepEqual(quiet([issue(10, ["ready", "claimed"], { comments: [claim(9), launched(10, 1)] })]), [], "a live launch claim");
+});
+
+
+test("#6279: unknown queue capacity defers optional workers but retains deploy-red recovery", async () => {
+  const launches = [{ kind: "deploy-red", address: "DEPLOY-RED 123", on: 1 },
+    { kind: "issue", address: "ISSUE 10", on: 10, number: 10 }];
+  const fired = [], logs = [];
+  const result = await applyPlan({ launches, labels: [], digests: [], nudges: [], boardIssue: 1 }, {
+    api: (p) => p.startsWith("actions/runs?") ? { error: "HTTP 502" } : { json: {} },
+    config: cfg(), log: (line) => logs.push(line), now: NOW, fire: true,
+    env: { WORKER_FIRE_URL: "test-url", WORKER_FIRE_TOKEN: "test-token" },
+    fetchImpl: async (_, request) => {
+      fired.push(JSON.parse(request.body).text);
+      return { status: 200, json: async () => ({ claude_code_session_id: SID }), headers: { get: () => null } };
+    },
+  });
+  assert.deepEqual(fired, ["DEPLOY-RED 123"]);
+  assert.equal(result.fired, 1);
+  assert.ok(logs.some((line) => line.includes("workers deferred") && line.includes("HTTP 502")));
 });

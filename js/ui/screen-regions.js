@@ -77,7 +77,12 @@ window.ScreenRegions = (function () {
       "map-btn": "Map button", "detail-chip": "Circuit detail button", "preview-facts": "Circuit facts", "preview-elev": "Elevation profile",
       back: "Back", car: "Choose car", go: "Continue" }), tiles: part("#sel-tracks", "Circuit tiles"), brief: part("#practice-brief", "Practice briefing"),
   });
-  screen("track-detail", "Circuit detail", { heading, map: part("#track-detail-canvas-wrap", "Track map"), details: part("#track-detail-panel", "Track details"), ...parts("track-detail-", { close: "Close", meta: "Circuit facts", "elev-wrap": "Elevation profile", "drs-wrap": "Overtake zones", list: "Corners" }) });
+  screen("track-detail", "Circuit detail", {
+    heading, map: part("#track-detail-canvas-wrap", "Track map"), details: part("#track-detail-panel", "Track details"),
+    ...parts("track-detail-", { close: "Close", meta: "Circuit facts", "elev-wrap": "Elevation profile", "drs-wrap": "Overtake zones", list: "Corners",
+      "map-tools": "Map controls", modes: "Map overlays", legend: "Map legend" }),
+    mapViewport: part("#track-detail-map", "Circuit map viewport"), mapZoom: part("[data-map-zoom-controls]", "Map zoom"),
+  });
   screen("pausemenu", "Pause", { heading, ...parts("pm-", { resume: "Resume", restart: "Restart race", settings: "Settings", quit: "Quit to menu" }), summary: part("#pm-race-context", "Race summary"), tools: part("#pm-quick-doors", "Race tools"), music: part("#pm-now-card", "Now playing") });
   Object.assign(screens.pausemenu.regions, parts("pm-", { strategy: "Strategy", review: "Review", practice: "Practice", photo: "Photo", howto: "How to play",
     checkpoint: "Rewind and retry", standings: "Standings", "skip-results": "Skip to results", prev: "Previous track", play: "Play or pause music", skip: "Next track" }));
@@ -155,7 +160,11 @@ window.ScreenRegions = (function () {
     window: part(".dh-tpopup-card", "Detail window"), summary: part('[data-hub-part="summary"]', "Text summary"),
     play: part(".dh-tplay", "Play or pause"), restart: part(".dh-trestart", "Restart"), rates: part(".dh-trates", "Playback speed"),
     onboard: part(".dh-onboard", "Onboard camera"), braking: part("details.dh-thint", "Braking zone duel"),
-    mapKey: part(".dh-maplegend", "Track map legend"), stints: part('[data-hub-part="stints"]', "Tyre stints"),
+    mapKey: part("[data-map-driver-key]", "Track map driver key"), trackToggle: part("[data-track-toggle]", "Track View"),
+    mapViewport: part(".dh-map", "Track map"), mapToolbar: part("[data-track-toolbar]", "Map controls"),
+    mapMode: part("[data-map-mode]", "Map mode"), mapZoom: part("[data-map-zoom-controls]", "Map zoom"),
+    mapSeek: part("[data-track-seek]", "Lap position"), mapScale: part("[data-map-scale]", "Map colour key"),
+    stints: part('[data-hub-part="stints"]', "Tyre stints"),
     pits: part('[data-hub-part="pits"]', "Pit stops"),
   }, "dialog.dh-tpopup");
   screen("share-card-preview", "Share card", {
@@ -231,6 +240,11 @@ window.ScreenRegions = (function () {
   }));
   Object.assign(tunerRegions.flyby, parts("fb-row-", { dur: "Shot duration", ease: "Shot easing", fov0: "Starting field of view", fov1: "Ending field of view" }),
     parts("fb-", { "ann-script": "Announcer script", "ann-play": "Play announcement" }));
+  screen("flyby-card", "Flyby track card", {
+    brand: part("#ld-wordmark", "Wordmark"), circuit: part("#ld-head", "Circuit name and flag"),
+    map: part("#ld-map", "Track map and starting grid"), facts: part("#ld-meta", "Race facts"),
+    text: part("#ld-text", "Track details and map status"),
+  }, "#loading");
   const workspaceTools = { tools: part("details.ew-tools", "Scope and tools"),
     editorActions: part('[role="group"][aria-label="Editor actions"]', "Editor actions") };
   for (const [id, label, prefix] of [
@@ -287,6 +301,7 @@ window.ScreenRegions = (function () {
     if (navigation.pending !== id || (id === "menupad" && controllerOrientation?.matches)) return;
     const root = document.querySelector(screens[id].root);
     if (!root || root.hidden || root.tagName === "DIALOG" && !root.open || !root.getClientRects().length) return;
+    if (id === "flyby-card" && root.dataset.phase !== "hold") return;
     const focus = Array.from(root.querySelectorAll("button:enabled")).find(el => el.getClientRects().length);
     if (startEditor(id, focus || root)) {
       navigation.pending = null;

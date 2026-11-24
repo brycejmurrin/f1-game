@@ -1,0 +1,1 @@
+Fixed: Sliding a finger onto a customized steering arrow now applies that arrow's own response, and a saved hold target with Hold Build Time off no longer changes how a pedal responds when a finger slides onto it.

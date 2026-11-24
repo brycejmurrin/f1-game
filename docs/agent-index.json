@@ -4913,6 +4913,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/circuit-details-panel.js",
+      "global": "CircuitDetailsPanel",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
       "path": "js/ui/companion-return.js",
       "global": null,
       "roster": "OVERLAY_PAGE"

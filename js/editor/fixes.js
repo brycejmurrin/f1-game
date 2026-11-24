@@ -275,7 +275,9 @@ const TrackFixes = (function () {
   }
   /** FOLD: split a segment over 3× its neighbour's length next to the fold, so a
    *  long straight no longer runs straight into a hairpin of short segments
-   *  (Korea: 688 m into 11–15 m) — smoothing alone moves that fold around. */
+   *  (Korea: 688 m into 11–15 m) — smoothing alone moves that fold around. The
+   *  window reaches two segments past the nearest control point: Buddh's 742 m
+   *  exit straight starts there (#6342). */
   function evened(d, pts, issue, built) {
     const tr = trOf(d, built), N = pts.length;
     if (!tr || N + 4 > (LIM().ptsMax || PTS_CAP)) return null;
@@ -284,7 +286,7 @@ const TrackFixes = (function () {
     const w = (i) => ((i % N) + N) % N, len = (i) => { const a = pts[w(i)], b = pts[w(i + 1)]; return Math.hypot(b[0] - a[0], b[1] - a[1]); };
     const point = (i, fromEnd, m) => { const a = pts[w(i)], b = pts[w(i + 1)], t = (fromEnd ? len(i) - m : m) / len(i); return [q(a[0] + (b[0] - a[0]) * t), q(a[1] + (b[1] - a[1]) * t)]; };
     const ins = new Map();
-    for (let i = c - 2; i <= c + 1; i++) {
+    for (let i = c - 3; i <= c + 2; i++) {
       const L = len(i), prev = len(i - 1), next = len(i + 1), add = [];
       if (L > 3 * prev && L > 48) add.push(point(i, false, Math.min(Math.max(2 * prev, 16), L / 3)));
       if (L > 3 * next && L > 48) add.push(point(i, true, Math.min(Math.max(2 * next, 16), L / 3)));

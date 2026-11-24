@@ -204,6 +204,6 @@ const Onboard = (function () {
     return { tick, reset, resetControls, state, MARKS };
   }
 
-  return { create, resetControlsRefresher, harvestClipCue, MARKS, BIT, ALL };
+  return { create, resetControlsRefresher, harvestClipCue, prompt: verb, MARKS, BIT, ALL };
 })();
 Object.freeze(Onboard);

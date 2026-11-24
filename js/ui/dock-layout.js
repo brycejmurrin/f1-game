@@ -283,6 +283,15 @@ const DockLayout = (function () {
       G.refreshHud?.(true);
       toolbar?.paint();
     }
+    function cancelPending() {
+      if (!pending) return;
+      pending = null;
+      $("pm-dock-reposition")?.removeAttribute("aria-busy");
+    }
+    if (typeof SettingsNav !== "undefined") SettingsNav.onLeave(page => {
+      if (page === "controls") cancelPending();
+    });
+
     // restore=false when something else opened a dialog while we were editing:
     // stacking SETTINGS back on top of it would show two.
     function setEditing(on, restore, accept = restore !== false) {
@@ -296,22 +305,23 @@ const DockLayout = (function () {
         } else {
           if (pending || typeof ScriptLoader === "undefined") return;
           const door = $("pm-dock-reposition"), origin = [$("pmsettings"), $("pausemenu")].find(el => el && !el.hidden);
+          const controlPage = origin === $("pmsettings") ? $("pm-panel-controls") : null;
           const request = ScriptLoader.create().load(["js/ui/dock-toolbar.js"], [], { strict: true });
           pending = request;
           door?.setAttribute("aria-busy", "true");
           request.catch(() => false).then(ok => {
             if (pending !== request) return;
-            pending = null;
-            door?.removeAttribute("aria-busy");
+            cancelPending();
+            if (origin?.hidden || controlPage?.hidden) return;
             if (!ok || typeof DockToolbar === "undefined") {
               Log.warn("ui", "The touch layout editor could not load.");
               G.announce?.("Could not open the touch editor. Tap Reposition Touch Controls to retry.", 3, "coach");
-            } else if (!origin || !origin.hidden) setEditing(true);
+            } else setEditing(true);
           });
           return;
         }
       }
-      if (!on && pending) { pending = null; $("pm-dock-reposition")?.removeAttribute("aria-busy"); }
+      if (!on) cancelPending();
       const was = editing;
       if (was && !on) {
         if (accept) {

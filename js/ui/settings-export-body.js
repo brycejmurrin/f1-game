@@ -95,10 +95,12 @@ function collect(mode, G) {
   let build = null;
   try { const m = document.querySelector('meta[name="apex-build"]'); build = (m && m.content) || null; } catch (_) { /* no DOM */ }
   const desktop = thisDesktop(G);   // the same reading applySettings compares against
+  const profileDesktop = buttonProfileDesktop();
   const out = {
     format: FORMAT, mode: all ? "all" : "changes", exportedAt: new Date().toISOString(), build,
     buttonResponseSchema: BUTTON_RESPONSE_SCHEMA,
-    device: { desktop, userAgent: (typeof navigator !== "undefined" && navigator.userAgent) || null },
+    device: { desktop, userAgent: (typeof navigator !== "undefined" && navigator.userAgent) || null,
+      ...(desktop === null || profileDesktop === null ? {} : { buttonProfileDesktop: profileDesktop }) },
     keys: { json: "went through store.set (JSON)", raw: "bare strings from store.rawSet; null = unset" },
     excluded: EXCLUDED,
     changed, settings, defaults, where,
@@ -259,22 +261,32 @@ function thisDesktop(G) {
   try { if (document.body.classList) return document.body.classList.contains("desktop"); } catch (_) { /* no DOM */ }
   return G && G.gfx && typeof G.gfx.isMobile === "boolean" ? !G.gfx.isMobile : null;
 }
+// The primary pointer can change when a tablet docks. Use the same hardware
+// signals as the renderer facade, without its forceMobileTier test override.
+function buttonProfileDesktop() {
+  if (typeof navigator === "undefined" || !navigator.userAgent) return null;
+  const { userAgent, maxTouchPoints } = navigator;
+  if (/iPhone|iPad|iPod|Android/i.test(userAgent)) return false;
+  if (!Number.isFinite(maxTouchPoints)) return null;
+  return !(maxTouchPoints > 1 && /Mac/.test(userAgent));
+}
 // Backup groups predate the settings navigation. Reset scopes follow the visible
 // pages instead: Controls must include the input keys historically filed as driving.
 const RESET_INFO = {
   controls: "Steering input and feel, touch pedals and button layout, keyboard bindings, and all controller mappings and calibration.",
   advanced: "Steering response, curves, smoothing, dead zones, sensitivity, handling, overall speed and feedback.",
   driving: "Driving assistance, gears, throttle and active aero. Race rules and circuit setup stay saved.",
-  display: "HUD layout and visibility, camera framing, helmet and visor settings.",
-  appearance: "Menu appearance, sizing and layouts. Saved appearance profiles and personal photos stay saved.",
+  display: "HUD layout and visibility, driving line colour and opacity, camera framing, helmet and visor settings.",
+  appearance: "Menu appearance, sizing and layouts. Garage room, crew and lighting choices, saved appearance profiles and personal photos stay saved.",
   a11y: "Accessibility, captions, text size, contrast and hold/toggle controls. Reduced motion returns to the device setting.",
   audio: "Music, sound, radio, volumes and audio tuning. Connected music accounts stay connected.",
   graphics: "Graphics quality, renderer, resolution and feature overrides. Defaults adapt to this device.",
   files: "All game preferences, control bindings and controller profiles. Saves, best laps, garage builds, photos, favourite circuits and saved appearance profiles stay saved.",
 };
 const RESET_INPUT = new Set("autoThrottle steerMode mirrorControls dockLayout tiltCurve touchSteeringGuide touchCurve padCurve touchRange touchDragSpeed dragSmooth digitalRate analogSpeedSteer haptics triggerHaptics padDeadzone padGasDeadzone padBrakeDeadzone padSaturation padLabels padAxes padProfiles padRest throttleLatch pedalSlide touchButtonProfiles holdMode lookBackLatch hudBtnScale hudBotKeep hudBtnOpacity hudBtnShape".split(" "));
-const RESET_AIDS = new Set("manual autoThrottle aeroMode drivingCoach conditionCues brakeCue gripSteer audioCues drivingHelp raceLine".split(" "));
+const RESET_AIDS = new Set("manual autoThrottle aeroMode drivingCoach conditionCues brakeCue lineBrakeCue adaptiveButtons gripSteer audioCues drivingHelp raceLine".split(" "));
 const RESET_ACCESS = new Set("textSize uiContrast cvdMode captions captionSize captionPos captionBg captionSpeakerInk".split(" "));
+const RESET_LINE_DISPLAY = new Set(["drivingLinePalette", "drivingLineOpacity"]);
 const RESET_UI = new Set("uiScale hudScale hudPanelOpacity portraitOk".split(" "));
 const RESET_ADVANCED = new Set("tiltCurve touchCurve padCurve touchRange touchDragSpeed dragSmooth digitalRate analogSpeedSteer haptics triggerHaptics padDeadzone padGasDeadzone padBrakeDeadzone padSaturation".split(" "));
 function resetInfo(section) { return Object.hasOwn(RESET_INFO, section) ? RESET_INFO[section] : null; }
@@ -287,8 +299,11 @@ function resetOwns(row, section) {
   if (section === "controls") return steering || row.group === "controls" || RESET_INPUT.has(row.k);
   if (section === "driving") return row.k === "preset" || RESET_AIDS.has(row.k);
   if (section === "a11y") return row.group === "a11y" || RESET_ACCESS.has(row.k);
-  if (section === "appearance") return (row.group === "appearance" && !RESET_ACCESS.has(row.k)) || row.k === "uiScale";
-  if (section === "display") return (row.group === "hud" || row.group === "camera" || RESET_UI.has(row.k)) && row.k !== "uiScale" && !RESET_INPUT.has(row.k);
+  if (section === "appearance") {
+    if (row.k === "garageLook" || row.k === "crewLook" || row.k === "garageMood") return false;
+    return (row.group === "appearance" && !RESET_ACCESS.has(row.k)) || row.k === "uiScale";
+  }
+  if (section === "display") return (row.group === "hud" || row.group === "camera" || RESET_LINE_DISPLAY.has(row.k) || RESET_UI.has(row.k)) && row.k !== "uiScale" && !RESET_INPUT.has(row.k);
   if (section === "graphics") return row.group === "display" && !RESET_UI.has(row.k) && !RESET_INPUT.has(row.k);
   return section === "audio" && row.group === "audio";
 }
@@ -397,12 +412,22 @@ function applySettings(file, G) {
   }
   // A FILE FROM THE OTHER KIND OF DEVICE (#5005): a desktop's renderer, quality and resolution pinned on the
   // phone boot desktop graphics. Every perDevice row stays this device's own; the receipt counts them skipped.
-  const here = thisDesktop(G), there = isPlain(file.device) ? file.device.desktop : null;
+  const device = isPlain(file.device) ? file.device : null;
+  const here = thisDesktop(G), there = device?.desktop;
   // A file that does not say which kind of device saved it (no or a broken `device` block: hand-built, older)
   // is treated as the other kind on a page that knows its own: pinning its resolution and renderer here is
   // the #5005 failure (#5743 S4).
   const crossDevice = typeof here === "boolean" && (typeof there !== "boolean" || here !== there);
   const restoreAdaptiveDefaults = file.mode === "all" && typeof here === "boolean" && here === there;
+  const profileHere = buttonProfileDesktop();
+  const hasProfileClass = device && Object.hasOwn(device, "buttonProfileDesktop");
+  // Older undocked tablet files already say desktop:false. A desktop:true
+  // legacy file cannot distinguish a docked iPad with a Mac UA from a Mac.
+  const profileMatches = hasProfileClass
+    ? typeof there === "boolean" && typeof profileHere === "boolean" && profileHere === device.buttonProfileDesktop
+    : (profileHere === false ? there === false : !crossDevice);
+  const restoreProfileDefaults = file.mode === "all" && profileMatches &&
+    (hasProfileClass || profileHere === false || restoreAdaptiveDefaults);
   const writes = [];
   let skipped = 0, deviceSkipped = 0;
   for (const row of SPEC) {
@@ -412,7 +437,8 @@ function applySettings(file, G) {
     const g = groups[row.group];
     if (!isPlain(g) || !Object.prototype.hasOwnProperty.call(g, row.k)) continue;
     // An unset (null) value is nothing to keep out, so it is not a skip either.
-    if (row.noImport || (crossDevice && (row.perDevice || row.deviceBound))) {
+    const profile = row.k === "touchButtonProfiles" || row.k === "phoneButtonProfiles";
+    if (row.noImport || (profile ? !profileMatches : crossDevice && (row.perDevice || row.deviceBound))) {
       if (g[row.k] !== null) { skipped++; if (!row.noImport) deviceSkipped++; }
       continue;
     }
@@ -420,7 +446,7 @@ function applySettings(file, G) {
     if (v === undefined) { skipped++; continue; }
     if (v === null && row.perDevice) {
       // An ALL backup from the same device class records that this preference was unpinned.
-      if (restoreAdaptiveDefaults) writes.push([row, null]);
+      if (profile ? restoreProfileDefaults : restoreAdaptiveDefaults) writes.push([row, null]);
       continue;
     }
     const def = defaultOf(row, G);
@@ -430,7 +456,13 @@ function applySettings(file, G) {
     // Merge at the same depth as objDiff, retaining the receiver's unrelated edits.
     const depth = row.mergeDepth || (!row.whole && isObj(def) && Object.keys(def).length ? 1 : 0);
     const sparse = file.mode === "changes" && depth && isObj(v);
-    writes.push([row, sparse ? mergeChangedFields(readStored(row), v, depth) : v]);
+    const stored = sparse ? readStored(row) : null;
+    // The profile cleaner fills in an empty list even for a marker-only file.
+    // Keep the receiver's list unless the changes file explicitly supplies one.
+    if (sparse && row.k === "padProfiles" && !Object.hasOwn(g[row.k], "devices") && Array.isArray(stored?.devices)) {
+      v.devices = stored.devices;
+    }
+    writes.push([row, sparse ? mergeChangedFields(stored, v, depth) : v]);
   }
   // Earlier files shared one response across both surfaces. Only copy a
   // validated Touch write, so the same device and unset rules apply to Phone.

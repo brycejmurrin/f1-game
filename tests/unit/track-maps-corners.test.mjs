@@ -45,6 +45,7 @@ function loadTrackMaps() {
       runFile(entry);
     }
   }
+  runFile("js/ui/cvd-palette.js");
   runFile("js/ui/track-maps.js");
   return ctx;
 }
@@ -77,6 +78,27 @@ test("Monza curated turns include Curva Grande and varied classes", () => {
   assert.equal(crns[2].cls, "FAST", "T3 Curva Grande must be FAST");
   assert.equal(crns[5].cls, "MEDIUM", "T6 Lesmo should be MEDIUM");
   assert.ok(new Set(labels).size >= 3, "Monza must show ≥3 classes, got " + labels.join(","));
+});
+
+test("corner speed colors trace the corner segments over a neutral lap outline", () => {
+  const { Tracks, TrackMaps } = loadTrackMaps();
+  const track = Tracks.LIST.find((t) => t.id === "montreal");
+  const colors = TrackMaps.cornerSpeedColors();
+  const paths = [];
+  let vertices = 0;
+  const brush = {
+    clearRect() {}, beginPath() { vertices = 0; }, moveTo() { vertices++; },
+    lineTo() { vertices++; }, closePath() {},
+    stroke() { paths.push({ color: this.strokeStyle, vertices }); },
+  };
+  const canvas = { width: 220, height: 188, getContext: () => brush };
+  const speeds = TrackMaps.corners(track).map((_, i) => [120, 180, 230][i % 3]);
+  TrackMaps.draw(canvas, track, { start: false, color: "neutral", cornerSpeeds: speeds });
+  const outline = paths.find((path) => path.color === "neutral");
+  const segments = paths.filter((path) => colors.includes(path.color));
+  assert.equal(segments.length, speeds.length);
+  assert.ok(segments.every((path) => path.vertices > 2 && path.vertices < outline.vertices));
+  assert.deepEqual(segments.slice(0, 3).map((path) => path.color), Array.from(colors));
 });
 
 test("Spa La Source is HAIRPIN; Eau Rouge complex includes FAST", () => {

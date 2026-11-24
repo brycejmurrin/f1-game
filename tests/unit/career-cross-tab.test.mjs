@@ -215,6 +215,40 @@ test("legacy migration preserves a save when its destination set is full", () =>
     "no free slot means defer migration, not delete the overflow save");
 });
 
+// #6327: an explicit marker the ladder rejects was moved to career.driver.0,
+// its legacy key cleared, and the moved slot then read as damaged: the only
+// copy sat where nothing opens it. Both legacy keys keep such a save in place.
+for (const source of ["apex26.career", "apex26.career.2"]) {
+  test(`legacy ${source} with an invalid version marker stays at its source key`, () => {
+    const bad = { ...save(4, 400), v: "oops" };
+    const disk = new Map([[source, JSON.stringify(bad)]]);
+    const { Career } = load({ disk });
+    Career.load();
+    assert.deepEqual(JSON.parse(disk.get(source)), bad, "the unreadable save is kept verbatim");
+    assert.equal(disk.has("apex26.career.driver.0"), false, "no damaged slot is created from it");
+  });
+  test(`legacy ${source} with a future version stays at its source key`, () => {
+    const newer = { ...save(4, 400), v: 99 };
+    const disk = new Map([[source, JSON.stringify(newer)]]);
+    const { Career } = load({ disk });
+    Career.load();
+    assert.deepEqual(JSON.parse(disk.get(source)), newer);
+    assert.equal(disk.has("apex26.career.driver.0"), false);
+  });
+  test(`legacy ${source} with no or a supported marker still migrates`, () => {
+    for (const v of [undefined, 1, "2"]) {
+      const old = save(5, 500);
+      if (v === undefined) delete old.v; else old.v = v;
+      const disk = new Map([[source, JSON.stringify(old)]]);
+      const { Career } = load({ disk });
+      const c = Career.load();
+      assert.equal(disk.get(source) ?? null, "null", `v=${v}: the legacy key is cleared after the move`);
+      assert.equal(JSON.parse(disk.get("apex26.career.driver.0")).money, 500, `v=${v}: moved to the slot`);
+      assert.equal(c && c.money, 500, `v=${v}: and it opens`);
+    }
+  });
+}
+
 test("an active career refuses to overwrite a newer foreign save", () => {
   const { Career, disk, foreign } = load();
   Career.load();

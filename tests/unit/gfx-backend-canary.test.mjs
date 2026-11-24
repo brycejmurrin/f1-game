@@ -5476,13 +5476,14 @@ test("Gfx seam lists instancing on all three backends", () => {
     "the Gfx contract must not still say TLX exports instancing as undefined");
 });
 
-test("TLX garage (noEnv) paints the canvas, not the HDR scene target", () => {
+test("TLX garage (noEnv) keeps the direct path except on hardware Photo Studio frames", () => {
   // Setup preview sets noEnv (and may still pass proj for SSAO). The HDR RT
   // stayed black on software GL (viz=scene was empty) so the turntable
-  // vanished while GLX was fine — gate the post chain on !noEnv.
+  // vanished while GLX was fine. Only supported Photo Studio frames need to sample it.
   const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(src, /if \(post && _postF\.proj && !_postF\.noEnv\)/,
-    "post chain must skip noEnv garage frames — they must not render into sceneRT");
+  assert.match(src, /if \(post && _postF\.proj && \(!_postF\.noEnv \|\| photoFocus\)\)/);
+  assert.match(src, /const photoFocus = opts\?\.photoFocus !== undefined && this\.photoFocusAvailable\(\)/);
+  assert.match(src, /photoFocusAvailable\(\) \{ return !_softBlit && !softwareGL && !_xrActive && !!post\?\./);
   assert.match(src, /_postF\.noEnv\s*=/,
     "begin() must latch frame.noEnv onto _postF for present()");
 });

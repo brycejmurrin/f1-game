@@ -2,7 +2,7 @@
 // Split from key-binds.test.mjs (T3-16); the VM rig is tests/helpers/key-binds-rig.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { read, boot, fakePad, plain, bootUi, slotOf } from "../helpers/key-binds-rig.mjs";
+import { read, boot, fakePad, plain, bootUi, slotOf, releaseWheelPedal } from "../helpers/key-binds-rig.mjs";
 
 test("a phone hides both tables behind one hint until a key or a pad is seen", () => {
   const { $, press, fire, sb } = bootUi(false);
@@ -168,7 +168,9 @@ test("the wheel wizard drops a stored rest offset when the steering axis moves",
   $("pm-pad-wheel").onclick();
   pad.axes[1] = -0.9; Input.poll();     // steer -> axis 1
   pad.axes[2] = 0.9; Input.poll();      // throttle -> axis 2
-  pad.axes[3] = 0.9; Input.poll();      // brake -> axis 3, finish
+  releaseWheelPedal(Input, sb, pad, 2, 0);
+  pad.axes[3] = 0.9; Input.poll();      // brake -> axis 3
+  releaseWheelPedal(Input, sb, pad, 3, 0);
   assert.equal(disk.padAxes.steer, 1, "the wizard finished");
   assert.equal(Input.padRest(), 0, "the old axis's offset is not carried over");
   assert.equal(disk.padRest, 0, "…and not stored");
@@ -208,7 +210,9 @@ test("CONTROLLER RESET clears wheel axes and stick rest, not only the button map
   $("pm-pad-wheel").onclick();
   pad.axes[1] = -0.9; Input.poll();
   pad.axes[2] = 0.9; Input.poll();
+  releaseWheelPedal(Input, sb, pad, 2, 0);
   pad.axes[3] = 0.9; Input.poll();
+  releaseWheelPedal(Input, sb, pad, 3, 0);
   assert.equal(Input.padAxesAreDefault(), false, "wizard left a custom axis map");
   assert.equal(Input.padsAreDefault(), true, "buttons stayed at shipped defaults");
   assert.equal($("pm-pad-reset").disabled, false, "RESET is live when only axes differ");
@@ -229,6 +233,98 @@ test("CONTROLLER RESET clears wheel axes and stick rest, not only the button map
   assert.equal(Object.prototype.hasOwnProperty.call(disk, "padRest"), false, "padRest removed from store");
   assert.equal($("pm-pad-reset").disabled, true, "RESET disables once everything is shipped");
   assert.match($("pm-pad-note").textContent, /Controller reset/);
+});
+
+function bootSavedController(disk) {
+  return bootUi(true, {}, disk, (sb) => {
+    sb.GameStore = { store: { get: (key, fallback) => disk[key] ?? fallback, set(key, value) { disk[key] = plain(value); } } };
+  });
+}
+
+test("CONTROLLER RESET keeps the disconnected wheel's profile and stick centre after reload", () => {
+  const wheel = { id: "Wheel", axes: { steer: 3, throttle: 2 }, buttons: { camera: [19, null] } };
+  const disk = {
+    padProfiles: { v: 1, legacyClaimed: true, devices: [wheel] },
+    padRest: { Wheel: 0.2, Pad: 0.1 },
+  };
+  const r = bootSavedController(disk);
+  fakePad(r.sb, r.fire, "Pad");
+  r.Input.poll();
+  r.Input.setPadBinding("camera", 0, 18);
+  r.$("pm-pad-reset").onclick();
+  assert.equal(r.Input.getPadMap().camera[0], 8);
+  assert.equal(r.Input.padRest(), 0);
+  assert.deepEqual(disk.padRest, { Wheel: 0.2 });
+
+  const fresh = bootSavedController(disk);
+  const { pad } = fakePad(fresh.sb, fresh.fire, "Wheel");
+  pad.mapping = "";
+  pad.axes[3] = 0.2;
+  fresh.Input.poll();
+  assert.equal(fresh.Input.getPadAxisMap().steer, 3);
+  assert.equal(fresh.Input.getPadAxisMap().throttle, 2);
+  assert.equal(fresh.Input.getPadMap().camera[0], 19);
+  assert.equal(fresh.Input.padRest(), 0.2);
+});
+
+test("CONTROLLER RESET leaves an unclaimed legacy wheel map and centre available after reload", () => {
+  const disk = { padAxes: { steer: 3, throttle: 2 }, pad: { camera: [19, null] }, padRest: 0.2 };
+  const r = bootSavedController(disk);
+  fakePad(r.sb, r.fire, "Pad");
+  r.Input.poll();
+  assert.equal(r.Input.padRest(), 0);
+  slotOf(r.$("pm-pad"), "camera", 0).onclick();
+  r.press("Backspace");
+  assert.equal(r.Input.getPadMap().camera[0], null);
+  assert.equal(r.$("pm-pad-reset").disabled, false);
+  r.$("pm-pad-reset").onclick();
+  assert.equal(r.Input.getPadMap().camera[0], 8);
+  assert.equal(disk.padProfiles.legacyClaimed, false);
+  assert.deepEqual(disk.padAxes, { steer: 3, throttle: 2 });
+  assert.deepEqual(disk.pad, { camera: [19, null] });
+  assert.equal(disk.padRest, 0.2);
+
+  const fresh = bootSavedController(disk);
+  const { pad } = fakePad(fresh.sb, fresh.fire, "Wheel");
+  pad.mapping = "";
+  pad.axes[3] = 0.2;
+  fresh.Input.poll();
+  assert.equal(fresh.Input.getPadAxisMap().steer, 3);
+  assert.equal(fresh.Input.getPadAxisMap().throttle, 2);
+  assert.equal(fresh.Input.getPadMap().camera[0], 19);
+  assert.equal(fresh.Input.padRest(), 0.2);
+});
+
+test("CONTROLLER RESET keeps saved profiles when the controller disconnects or swaps before polling", () => {
+  const wheel = { id: "Wheel", axes: { steer: 3 }, buttons: { camera: [19, null] } };
+  const disk = {
+    padAxes: { steer: 3 },
+    padProfiles: { v: 1, legacyClaimed: true, devices: [wheel] },
+    padRest: { Wheel: 0.2, Pad: 0.1 },
+  };
+  const r = bootSavedController(disk);
+  const reset = r.$("pm-pad-reset");
+  const beforeConnection = plain(disk);
+  reset.onclick();
+  assert.deepEqual(disk, beforeConnection, "no active profile means no writes");
+
+  const { pad } = fakePad(r.sb, r.fire, "Wheel");
+  pad.mapping = "";
+  r.Input.poll();
+  const beforeSwap = plain(disk);
+  r.sb.navigator.getGamepads = () => [];
+  r.fire("gamepaddisconnected", { gamepad: pad });
+  reset.onclick();
+  assert.deepEqual(disk, beforeSwap, "the disconnected profile stays intact");
+  assert.equal(r.$("pm-pad-note").textContent, "Controller changed or disconnected. Try again with the controller connected.");
+
+  fakePad(r.sb, r.fire, "Pad");
+  reset.onclick();
+  assert.deepEqual(disk, beforeSwap, "neither controller is reset during the swap");
+  r.Input.poll();
+  reset.onclick();
+  assert.deepEqual(disk.padRest, { Wheel: 0.2 });
+  assert.equal(disk.padProfiles.devices.find((profile) => profile.id === "Wheel").buttons.camera[0], 19);
 });
 
 test("How to Play input disclosures stay on the article the player opened", () => {

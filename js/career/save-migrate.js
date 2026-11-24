@@ -56,6 +56,10 @@ const SaveMigrate = (function () {
   // PAID_SPONSORS_MAX = CAL_MAX / min SPONSOR_KINDS.window.
   const BONUS_MAX = 24, YEARS_MAX = 3, BUDGET_LVL_MAX = 3, PAID_SPONSORS_MAX = 16.;
   const salaryIn = (v) => clampTo(finiteNumber(v), 0, SALARY_MAX);
+  // Season years: 4 digits, the width sponsorPicks keys and the calendar carry.
+  // 0 / junk answers 0 so the caller picks its default.
+  const YEAR_MIN = 1950, YEAR_MAX = 9999;
+  const yearIn = (v) => { const n = Math.trunc(finiteNumber(v)); return n ? clampTo(n, YEAR_MIN, YEAR_MAX) : 0; };
   // A sparse {key: number} map -> only the finite entries, clamped. Career
   // multiplies tdev into every AI car's pace and adds dev into every rating:
   // one "abc" or 1e308 there became NaN or an infinite lap time for the grid.
@@ -319,7 +323,10 @@ const SaveMigrate = (function () {
     while (v < CAREER_V && CAREER_MIGRATIONS[v]) { CAREER_MIGRATIONS[v](career); log("info", "Career save migrated v" + v + "->v" + (v + 1)); v++; }
     career.v = CAREER_V;
     career.flavour = career.flavour === "myteam" ? "myteam" : "driver";
-    career.year = finiteNumber(career.year) | 0 || 2026;
+    // Clamp before truncating: `| 0` wrapped 3e9 to -1294967296 (#6327).
+    career.year = yearIn(career.year) || 2026;
+    // year0 absent reads as 2026 (Career.seasonsElapsed); a present one is clamped.
+    if ("year0" in career) { const y0 = yearIn(career.year0); if (y0) career.year0 = y0; else delete career.year0; }
     career.money = clampTo(finiteNumber(career.money), 0, MONEY_MAX);
     career.rep = Math.max(0, Math.min(100, finiteNumber(career.rep)));
     // Driver identity is read by title/cards and by rating lookups. Keep a
@@ -438,6 +445,6 @@ const SaveMigrate = (function () {
   return { migrateCareer, migrateSeasonPoints, remapPoints, roundMap, finishMap, CAREER_V,
            careerVersion,
            validateCareerSave,
-           LIMITS: Object.freeze({ TDEV_MAX: TDEV_LIMIT, DEV_MAX: DEV_LIMIT, EXP_MAX: EXP_LIMIT, MONEY_MAX, SALARY_MAX, FACILITY_MAX: FACILITY_LIMIT, BONUS_MAX, YEARS_MAX, BUDGET_LVL_MAX, PAID_SPONSORS_MAX }) };
+           LIMITS: Object.freeze({ TDEV_MAX: TDEV_LIMIT, DEV_MAX: DEV_LIMIT, EXP_MAX: EXP_LIMIT, MONEY_MAX, SALARY_MAX, FACILITY_MAX: FACILITY_LIMIT, BONUS_MAX, YEARS_MAX, BUDGET_LVL_MAX, PAID_SPONSORS_MAX, YEAR_MIN, YEAR_MAX }) };
 })();
 Object.freeze(SaveMigrate);

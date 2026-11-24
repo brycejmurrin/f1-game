@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { boot as bootInput, fakePad } from "../helpers/key-binds-rig.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
@@ -83,8 +84,7 @@ test("rotating a paused time trial leaves its HUD arrangement toolbar in the for
 });
 
 test('online Photo camera input integrates while shared physics continues; solo Photo holds physics', () => {
-  const source = src('js/game.js');
-  const tick = source.slice(source.indexOf('function tickBody(now) {'), source.indexOf('// ---------- car setup panel ----------'));
+  const tick = symbolSource("function tickBody(");
   for (const [online, photo] of [[false, true], [true, true], [true, false]]) {
     const calls = { photo: 0, render: 0, physics: 0 };
     const sandbox = { ...renderRateStubs(), Math, PerfSpans: { begin() {}, end() {} }, lastFrame: 0, paused: true, state: 'race', gfx: { warming: () => false },
@@ -109,6 +109,32 @@ test('online Photo camera input integrates while shared physics continues; solo 
     assert.equal(calls.render, 1);
     assert.equal(calls.physics, online ? 1 : 0, 'one player taking a photo cannot freeze a shared world');
   }
+});
+
+test("gamepad Back can end a frozen photo sampling pass without pumping it again", () => {
+  const { Input, sb, fire, anyOpen } = bootInput();
+  const { press } = fakePad(sb, fire);
+  anyOpen.on = true;
+  const layer = { id: "photo-studio" };
+  sb.UiLayers.top = () => layer;
+  const capture = { sampling: { pump: true } };
+  let back = 0, renders = 0;
+  sb.document.dispatchEvent = (event) => {
+    if (event.key === "Escape") { back++; capture.sampling = null; }
+    return true;
+  };
+  const context = vm.createContext({
+    Input, lastFrame: 0, PhotoStudioBody: capture, netPlay: { active: () => false },
+    render: (dt) => { assert.equal(dt, 0); renders++; },
+  });
+  vm.runInContext(symbolSource("function tickBody("), context, { filename: absSrc("js/game.js") });
+  context.tickBody(16);
+  assert.equal(renders, 1, "the frozen capture can pump a render while waiting");
+  press(1); // Back on the standard Bluetooth layout
+  context.tickBody(32);
+  assert.equal(back, 1);
+  assert.equal(capture.sampling, null);
+  assert.equal(renders, 1, "the cancelled pass is not drawn again");
 });
 
 function boot() {
@@ -142,7 +168,7 @@ function boot() {
   }
   const photomode = vm.runInContext("Photomode", ctx);
   const api = photomode.create(G);
-  return { dom, G, api, photomode, key: (e) => {
+  return { dom, G, api, ctx, photomode, key: (e) => {
     for (const listener of [...(listeners.get(e.type) || [])]) listener(e);
   } };
 }
@@ -171,6 +197,55 @@ test("Photo Studio panel keeps native keys while an unfocused scene flies and ke
   assert.equal(G.photoKeys.w, false); assert.equal(G.photoKeys.up, false);
   const escape = event("Escape"); key(escape); assert.equal(escape.prevented, false, "Escape reaches the canonical layer close door");
 });
+
+for (const heldBeforeRotation of [false, true]) {
+  test(`visible portrait blocker keeps ${heldBeforeRotation ? "previously held" : "fresh"} camera keys out`, () => {
+    const { dom, G, api, ctx, key } = boot();
+    const blocker = dom.byId("rotate-device"), openControls = dom.document.createElement("button");
+    openControls.id = "rotate-controls";
+    blocker.appendChild(openControls);
+    dom.document.body.classList.add("in-race");
+    dom.document.getElementById = id => dom.document.querySelector("#" + id);
+    ctx.getComputedStyle = el => ({ visibility: "visible", zIndex: el === blocker ? "9000" : "0" });
+    vm.runInContext(src("js/ui/layers.js"), ctx, { filename: absSrc("js/ui/layers.js") });
+    const event = (code, type = "keydown") => {
+      const e = { code, type, preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } };
+      key(e);
+      return e;
+    };
+
+    api.enterPhotoMode();
+    if (heldBeforeRotation) {
+      event("KeyW");
+      api.updatePhotoCam(.1);
+      assert.ok(G.photoCam.pos[2] < 0);
+    }
+    const position = G.photoCam.pos[2];
+    blocker._rect = { width: 390, height: 844 };
+    openControls.focus();
+    key({ type: "focusin", target: openControls });
+    assert.equal(vm.runInContext("UiLayers.top().id", ctx), "rotate-device");
+    const fresh = heldBeforeRotation ? null : event("KeyW");
+    api.updatePhotoCam(.1);
+    assert.equal(G.photoCam.pos[2], position, "W cannot move the camera under the blocker");
+    assert.ok(!G.photoKeys.w);
+    assert.ok(!fresh?.prevented, "the camera must leave blocker keys alone");
+    for (const type of ["keydown", "keyup"]) {
+      for (const code of ["Space", "Enter", "Tab", "ArrowUp"]) {
+        const e = event(code, type);
+        assert.ok(!e.prevented && !e.stopped, `${code} ${type} belongs to the blocker`);
+      }
+    }
+
+    blocker._rect = { width: 0, height: 0 };
+    openControls.blur();
+    api.updatePhotoCam(.1);
+    assert.equal(G.photoCam.pos[2], position, "a stale hold cannot move the camera when the blocker leaves");
+    assert.equal(event("KeyW").prevented, true);
+    api.updatePhotoCam(.1);
+    assert.ok(G.photoCam.pos[2] < position, "a fresh press drives the camera again");
+  });
+}
 
 test("#pc-restore and Studio buttons keep Space activation on keydown AND keyup (#3562)", () => {
   for (const host of ["pc-restore", "ps-panel", "screen-arranger"]) {
@@ -364,4 +439,24 @@ test("Modified shortcuts keep their browser defaults and reset held camera keys"
   assert.equal(event("KeyA", { ctrlKey: true }).defaultPrevented, undefined);
   assert.ok(!G.photoKeys.s);
   assert.ok(!G.photoKeys.a);
+});
+
+test("Physical and paired camera samples are bounded, independent and cleared on exit", () => {
+  const { G, api } = boot();
+  api.setPadInput(1, -1, 1, -1, 1);
+  api.enterPhotoMode();
+  api.updatePhotoCam(.1);
+  assert.deepEqual(G.photoCam.pos, [0, 0, 0]);
+  api.setPadInput(2, -2, 0, 0, NaN);
+  api.updatePhotoCam(.1);
+  assert.ok(Math.abs(G.photoCam.pos[0] - 3.4) < 1e-8);
+  assert.ok(Math.abs(G.photoCam.pos[2] + 3.4) < 1e-8);
+  api.setRemoteCameraInput(0, 0, 1, -1, 1);
+  api.setPadInput(0, 0, 0, 0, 0);
+  api.updatePhotoCam(.1);
+  assert.ok(G.photoCam.yaw > 0 && G.photoCam.pitch > 0 && G.photoCam.pos[1] > 0);
+  api.exitPhotoMode(); api.enterPhotoMode();
+  api.updatePhotoCam(.1);
+  assert.deepEqual(G.photoCam.pos, [0, 0, 0]);
+  assert.equal(G.photoCam.yaw, 0);
 });

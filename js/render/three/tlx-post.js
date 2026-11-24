@@ -610,15 +610,20 @@
       giPrevOk = false;
     }
     let focusRT = null, _fi = 0, _focusOk = false, _focusT = 0, _prevOk = false;
+    let photoGi = null, photoFocusFailed = false, lastTap = null;
+    const photoFocusAvailable = () => !viz && hdr && !phys && !!P?.makePhotoFocus && !photoFocusFailed;
     const _prevVP = new Float32Array(16);
     function releaseCine() {
       const G = P.gi;
       if (G && G.motionBlur) unbind(G.motionBlur.src, blackTex);
-      if (G && G.dof) { unbind(G.dof.src, blackTex); unbind(G.dof.focusTex, blackTex); }
-      if (G && G.focus) unbind(G.focus.prevTex, blackTex);
+      const optics = G?.dof ? G : photoGi;
+      if (optics) {
+        unbind(optics.dof.src, blackTex); unbind(optics.dof.focusTex, blackTex);
+        unbind(optics.focus.prevTex, blackTex);
+      }
       if (cineA) { dropRT(cineA); dropRT(cineB); cineA = null; cineB = null; }
       if (focusRT) { dropRT(focusRT[0]); dropRT(focusRT[1]); focusRT = null; }
-      _focusOk = false;
+      _focusOk = false; lastTap = null;
     }
     function ensureGI() {
       if (!giRT || (P.gi && P.gi.giAcc && !giHist)) {
@@ -642,14 +647,20 @@
       layoutHalf();
     }
     // CINEMA (dof / motionBlur live): composite output -> motion blur -> depth of field, ping-ponging cineA / cineB.
-    // Returns the target the AA resolve reads (src itself when neither runs, which is every frame below EXTREME).
+    // Returns the target the AA resolve reads. Photo Studio can use the depth probe at any supported graphics level.
     function cinemaPost(src, F, o) {
       const HV = _hiLive, G = P.gi;
       _last.dof = false; _last.mblur = false;
-      if (!HV || !G || viz || !F || !(HV.dof || HV.motionBlur)) { _focusOk = false; return src; }
+      const photo = o?.photoFocus !== undefined && photoFocusAvailable();
+      if (photo && !G?.dof && !photoGi) {
+        try { photoGi = P.makePhotoFocus(); }
+        catch (e) { photoFocusFailed = true; Log.warn("gfx", "photo focus could not be prepared", e); }
+      }
+      const optics = G?.dof ? G : photoGi;
+      if (viz || !F || !(photo && optics || HV?.dof || HV?.motionBlur)) { _focusOk = false; lastTap = null; return src; }
       let cur = src;
       const next = () => (cur === cineA ? cineB : cineA);
-      if (HV.motionBlur && G.motionBlur && F.invVP && F.viewProj) {
+      if (!F.noEnv && HV?.motionBlur && G?.motionBlur && F.invVP && F.viewProj) {
         ensureCine();
         const M = G.motionBlur;
         M.U.invVP.value.fromArray(F.invVP);
@@ -658,17 +669,22 @@
         const out = next();
         runPass(M.mat, out); cur = out; _last.mblur = true;
       }
-      if (HV.dof && G.dof && G.focus && F.invProj && F.proj) {
+      if ((photo || HV?.dof) && optics?.dof && F.invProj && F.proj) {
         ensureCine(); ensureFocus();
-        const FU = G.focus.U, D = G.dof;
+        const FU = optics.focus.U, D = optics.dof;
         setPersp(FU, F.invProj, F.proj);
         const now = typeof performance !== "undefined" ? performance.now() : 0;
-        FU.blend.value = GIM.focusBlend((now - _focusT) / 1000, !_focusOk);
+        const tap = photo ? o.photoFocus : null;
+        FU.focusUV.value.set(tap?.x ?? 0.5, tap?.y ?? 0.45);
+        FU.tapMode.value = !tap ? 0 : _focusOk && tap === lastTap ? 2 : 1;
+        FU.blend.value = GIM.focusBlend((now - _focusT) / 1000, !_focusOk || !!lastTap);
+        lastTap = tap;
         _focusT = now; _focusOk = true;
-        FU.fixed.value = o && o.focusDist > 0 ? o.focusDist : 0;
-        G.focus.prevTex.value = focusRT[_fi ^ 1].texture;
-        runPass(G.focus.mat, focusRT[_fi]);
+        FU.fixed.value = !photo && o && o.focusDist > 0 ? o.focusDist : 0;
+        optics.focus.prevTex.value = focusRT[_fi ^ 1].texture;
+        runPass(optics.focus.mat, focusRT[_fi]);
         setPersp(D.U, F.invProj, F.proj);
+        D.U.minFocus.value = tap ? 0.05 : GIM.FOCUS_MIN;
         D.U.texel.value.set(1 / pW, 1 / pH);
         D.U.maxPx.value = GIM.DOF.maxPx1080 * pH / 1080;
         D.focusTex.value = focusRT[_fi].texture;
@@ -676,7 +692,7 @@
         D.src.value = cur.texture;
         const out = next();
         runPass(D.mat, out); cur = out; _last.dof = true;
-      } else _focusOk = false;
+      } else { _focusOk = false; lastTap = null; }
       return cur;
     }
     // have* is this frame's gate. A shut block counts; an open one resets.
@@ -1065,6 +1081,12 @@
       _ps[0] = ps && ps.width ? ps.width : PW; _ps[1] = ps && ps.height ? ps.height : PH;
       return _ps;
     }
+    // Home garage and the program warmer clear flags before the next race frame.
+    function clearLast() {
+      _last.ssao = false; _last.bloom = false; _last.shafts = false;
+      _last.ssr = false; _last.fxaa = false; _last.sgsr = false; _last.taa = false;
+      _last.aoHi = 0; _last.rays = 0; _last.gi = false; _last.ssrHi = false; _last.dof = false; _last.mblur = false;
+    }
 
     /** Resolve the HDR scene to the canvas — the glx/post.js present() port.
      * F = tlx.js's latched frame state (proj/invProj/invVP/sunVS/upVS/skyHi/
@@ -1086,6 +1108,21 @@
       try {
       holdBegin();
       if (phys) VP.sync();   // the readers' logical/physical ratio for the targets as bound NOW
+      if (F.noEnv && o.photoFocus !== undefined && photoFocusAvailable() && !compileJobs && !_scissorWarm) {
+        // The garage normally draws directly. Keep its existing scene colour
+        // when routing it through the lens, with no race exposure or grade.
+        clearLast(); _hiLatched = false; _prevOk = false;
+        if (AA) AA.skipped();
+        P.fxaa.tex.value = cinemaPost(sceneRT, F, o).texture;
+        P.fxaa.U.texel.value.set(1 / pW, 1 / pH);
+        if (P.fxaa.mirTex) fxaaMirror(false);
+        bindLens(null); bindWater(null);
+        runPass(P.fxaa.mat, null);
+        _last.fxaa = true;
+        _lastPresentRT = ldrRT; // replay the same resolve in captureTarget()
+        holdFlush(false);
+        return;
+      }
 
       const threshold = o.threshold !== undefined ? o.threshold : 0.75;
       const bloomAmt = o.bloom !== undefined ? o.bloom : 0.55;
@@ -1555,10 +1592,8 @@
         aoIdle = shedIdle(!!haveAO, aoIdle, releaseAO);
         grIdle = shedIdle(!!haveGR, grIdle, releaseGR);
         bloomIdle = shedIdle(!!(haveBloom && useLv > 0), bloomIdle, releaseBloom);
-        if (HI) {
-          giIdle = shedIdle(!!haveGI, giIdle, releaseGI);
-          cineIdle = shedIdle(!!(_last.dof || _last.mblur), cineIdle, releaseCine);
-        }
+        if (HI) giIdle = shedIdle(!!haveGI, giIdle, releaseGI);
+        if (HI || photoGi) cineIdle = shedIdle(!!(_last.dof || _last.mblur), cineIdle, releaseCine);
       }
       } finally {
         try { holdFlush(false); } catch (_) { /* a throw mid-chain: tlx.js's catch owns the fallback */ }
@@ -1608,6 +1643,7 @@
     function needsTag(opts, F) {
       const o = opts || {};
       if (viz) return true;
+      if (o.photoFocus === null && photoFocusAvailable()) return true;   // Photo Studio auto focus scans the car tag.
       if (_hiLive && (_hiLive.dof || _hiLive.motionBlur)) return true;   // CINEMA: the car mask / autofocus read the tag
       const hz = o.haze;
       if (hz && hz.str > 0.002) return true;   // the plume's car-mask fetch
@@ -1627,6 +1663,7 @@
     function needsDepth(opts, F) {
       const o = opts || {};
       if (viz) return true;
+      if (o.photoFocus !== undefined && photoFocusAvailable()) return true;
       if (_hiLive && (_hiLive.ssgi || _hiLive.dof || _hiLive.motionBlur)) return true;   // desktop tiers read scene depth
       if (taaLive() && F.invVP && F.viewProj) return true;   // TRAA reprojects from the scene depth
       if (((o.ssao !== undefined ? o.ssao : 0) > 0 || (o.contact !== undefined ? o.contact : 0) > 0) && F.invProj) return true;   // SSAO, contact, AO upsample
@@ -1783,6 +1820,11 @@
     return {
       enabled: () => true,
       hdrOk: () => hdr,
+      photoFocusAvailable,
+      endPhotoFocus() {
+        if (!_hiLive?.dof && !_hiLive?.motionBlur) releaseCine();
+        else { _focusOk = false; lastTap = null; }
+      },
       sceneTarget: () => sceneRT,
       tagOn: () => tagOn,   // R3: false = one colour attachment, present() must not set the ssrTag MRT
       targetFormats: () => ({ mir11, tag8 }),   // tlx.js _mirTarget: the mirror's attachments follow the scene's
@@ -1864,14 +1906,7 @@
         // #3311 phone orientation cover (square physical; logical follows the flip).
         orientCover: orientCover ? { physical: [PW, PH], logical: [W, H], post: [pW, pH] } : null,
       }),
-      // Drop last-presented block flags (Home garage / mid-warm frames must
-      // not satisfy a race probe that waits on shafts/bloom before Singapore
-      // has presented). Next present() rewrites _last from that frame.
-      clearLast() {
-        _last.ssao = false; _last.bloom = false; _last.shafts = false;
-        _last.ssr = false; _last.fxaa = false; _last.sgsr = false; _last.taa = false;
-        _last.aoHi = 0; _last.rays = 0; _last.gi = false; _last.ssrHi = false; _last.dof = false; _last.mblur = false;
-      },
+      clearLast,
     };
     } catch (e) {
       dispose();

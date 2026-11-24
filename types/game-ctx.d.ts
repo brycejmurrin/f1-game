@@ -324,6 +324,7 @@ interface PitSession {
   estimate(c: CarState): { lossS: number; gapS: number | null } | null;
   /** The lane's net cost in seconds at racing speed (the STRATEGY row's figure). */
   lossS(): number;
+  recommendedTread(c: CarState): number;
   choices(c: CarState): Array<{ id: string; code: string }>;
   selectNext(c: CarState, id: string): boolean;
   serviceCar(c: CarState): void;

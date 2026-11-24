@@ -416,7 +416,7 @@ function ensureDataHub(opts) {
         dataHubLoad = null;
         return false;
       }
-      try { DataHub.init(els.datahub); }
+      try { DataHub.init(els.datahub, ensureCircuit); }
       catch (e) {
         Log.error("data", "the data hub failed to start: " + (e && e.message));
         dataHubLoad = null;

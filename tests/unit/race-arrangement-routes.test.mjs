@@ -62,3 +62,29 @@ test("Race Settings registers the AI pace row and both step controls plus its va
     assert.equal(regions["race-settings"].regions[key].selector, "#rs-" + key);
   }
 });
+
+test("the flyby card opens its arranger only during the Flyby editor preview", () => {
+  const dom = makeDom(), doc = dom.document, opened = [], observers = new Map();
+  const loading = dom.byId("loading");
+  loading.hidden = true;
+  loading.getClientRects = () => [{}];
+  doc.getElementById = id => doc.querySelector("#" + id);
+  const window = { ScreenArranger: { open(id) { opened.push(id); return true; } } };
+  vm.runInNewContext(fs.readFileSync(absSrc(registry), "utf8"), {
+    window, document: doc, URLSearchParams, location: { search: "?arrange=flyby-card" },
+    queueMicrotask: fn => fn(), requestAnimationFrame: fn => fn(),
+    MutationObserver: class {
+      constructor(run) { this.run = run; }
+      observe(target) { observers.set(target, this.run); }
+    },
+  }, { filename: absSrc(registry) });
+  loading.hidden = false;
+  for (const phase of ["build", "run", "hold"]) {
+    loading.dataset.phase = phase;
+    observers.get(loading)([{ target: loading }]);
+    assert.deepEqual(opened, phase === "hold" ? ["flyby-card"] : []);
+  }
+  const { "track-detail": detail, "telemetry-detail": telemetry } = window.ScreenRegions;
+  assert.equal(detail.regions.mapZoom.selector, "[data-map-zoom-controls]");
+  assert.equal(telemetry.regions.mapZoom.selector, "[data-map-zoom-controls]");
+});
