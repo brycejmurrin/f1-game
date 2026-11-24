@@ -168,7 +168,7 @@ function boot() {
   }
   const photomode = vm.runInContext("Photomode", ctx);
   const api = photomode.create(G);
-  return { dom, G, api, photomode, key: (e) => {
+  return { dom, G, api, ctx, photomode, key: (e) => {
     for (const listener of [...(listeners.get(e.type) || [])]) listener(e);
   } };
 }
@@ -197,6 +197,55 @@ test("Photo Studio panel keeps native keys while an unfocused scene flies and ke
   assert.equal(G.photoKeys.w, false); assert.equal(G.photoKeys.up, false);
   const escape = event("Escape"); key(escape); assert.equal(escape.prevented, false, "Escape reaches the canonical layer close door");
 });
+
+for (const heldBeforeRotation of [false, true]) {
+  test(`visible portrait blocker keeps ${heldBeforeRotation ? "previously held" : "fresh"} camera keys out`, () => {
+    const { dom, G, api, ctx, key } = boot();
+    const blocker = dom.byId("rotate-device"), openControls = dom.document.createElement("button");
+    openControls.id = "rotate-controls";
+    blocker.appendChild(openControls);
+    dom.document.body.classList.add("in-race");
+    dom.document.getElementById = id => dom.document.querySelector("#" + id);
+    ctx.getComputedStyle = el => ({ visibility: "visible", zIndex: el === blocker ? "9000" : "0" });
+    vm.runInContext(src("js/ui/layers.js"), ctx, { filename: absSrc("js/ui/layers.js") });
+    const event = (code, type = "keydown") => {
+      const e = { code, type, preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } };
+      key(e);
+      return e;
+    };
+
+    api.enterPhotoMode();
+    if (heldBeforeRotation) {
+      event("KeyW");
+      api.updatePhotoCam(.1);
+      assert.ok(G.photoCam.pos[2] < 0);
+    }
+    const position = G.photoCam.pos[2];
+    blocker._rect = { width: 390, height: 844 };
+    openControls.focus();
+    key({ type: "focusin", target: openControls });
+    assert.equal(vm.runInContext("UiLayers.top().id", ctx), "rotate-device");
+    const fresh = heldBeforeRotation ? null : event("KeyW");
+    api.updatePhotoCam(.1);
+    assert.equal(G.photoCam.pos[2], position, "W cannot move the camera under the blocker");
+    assert.ok(!G.photoKeys.w);
+    assert.ok(!fresh?.prevented, "the camera must leave blocker keys alone");
+    for (const type of ["keydown", "keyup"]) {
+      for (const code of ["Space", "Enter", "Tab", "ArrowUp"]) {
+        const e = event(code, type);
+        assert.ok(!e.prevented && !e.stopped, `${code} ${type} belongs to the blocker`);
+      }
+    }
+
+    blocker._rect = { width: 0, height: 0 };
+    openControls.blur();
+    api.updatePhotoCam(.1);
+    assert.equal(G.photoCam.pos[2], position, "a stale hold cannot move the camera when the blocker leaves");
+    assert.equal(event("KeyW").prevented, true);
+    api.updatePhotoCam(.1);
+    assert.ok(G.photoCam.pos[2] < position, "a fresh press drives the camera again");
+  });
+}
 
 test("#pc-restore and Studio buttons keep Space activation on keydown AND keyup (#3562)", () => {
   for (const host of ["pc-restore", "ps-panel", "screen-arranger"]) {

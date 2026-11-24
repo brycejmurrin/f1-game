@@ -204,12 +204,15 @@ function setPhotoUiHidden(hide) {
   if (G.soundOn) GameAudio.uiTick();
 }
 // Dedicated key handler (not Input.onKey) so photo controls never touch driving.
+function rotateBlockerOwnsKeys() { return window.UiLayers?.top?.()?.id === "rotate-device"; }
 function photoEditorFocus(e) {
   if (e.target?.closest?.("#screen-arranger")) { releasePhotoInput(); return; }
-  if (e.target?.closest?.(PHOTO_PANEL)) releasePhotoKeys();
+  if (e.target?.closest?.(PHOTO_PANEL) ||
+      (e.target?.closest?.("#rotate-device") && rotateBlockerOwnsKeys())) releasePhotoKeys();
 }
 function photoKeyHandler(e) {
   const focused = document.activeElement, tag = (focused && focused.tagName) || "";
+  if (rotateBlockerOwnsKeys()) { releasePhotoKeys(); return; }
   if (focused?.closest?.("#screen-arranger")) return;
   const down = e.type === "keydown";
   if (down && /^(Meta|Alt|Control)(Left|Right)$/.test(e.code)) releasePhotoKeys();
