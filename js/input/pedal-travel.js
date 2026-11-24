@@ -150,7 +150,8 @@ const PedalTravel = (function () {
     if (!s) return memory;
     // Fork the old shared responses before the first edit on either surface.
     if (s.getStored && s.getStored(PHONE_KEY) === undefined) {
-      s.set(PHONE_KEY, normalizeProfiles(s.get(KEY, null)) ?? EMPTY_PHONE, { migration: true });
+      const shared = normalizeProfiles(s.get(KEY, null)) ?? EMPTY_PHONE;
+      s.set(PHONE_KEY, { ...shared, inherited: true }, { migration: true });
     }
     return s.get(profileKey(), null);
   }
