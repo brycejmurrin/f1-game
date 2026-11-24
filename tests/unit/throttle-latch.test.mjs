@@ -81,7 +81,7 @@ function boot(initOpts) {
   const pedal = el("btn-throttle");
   const tap = () => { pedal.fire("pointerdown"); pedal.fire("pointerup"); };
   const blur = () => (listeners.blur || []).forEach((f) => f({}));
-  return { Input, pedal, tap, blur, listeners, sb, clock };
+  return { Input, pedal, tap, blur, listeners, sb, clock, model: vm.runInContext("PedalTravel", ctx) };
 }
 
 // Real Input + InputPadMenu; only the browser's pad snapshots and pause layer
@@ -194,6 +194,49 @@ test("LATCH: a tap sticks, a second tap lifts", () => {
   tap();
   assert.equal(Input.throttle(), false, "a second tap lifts it");
   assert.equal(Input.throttleLatched(), false);
+});
+
+test("relative race pedals keep a continuous crossover and use the destination's chosen response", () => {
+  for (const style of ["instant", "ease", "response"]) {
+    const { Input, pedal, sb, listeners, model } = boot();
+    const brake = sb.document.getElementById("btn-brake");
+    brake.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 200 });
+    pedal.getBoundingClientRect = () => ({ left: 100, top: 0, width: 100, height: 200 });
+    model.setButtonProfile("brake", { slide: style, start: 40, direction: "up", slideCurve: "fine", travel: 40 });
+    pedal.fire("pointerdown", { clientX: 120, clientY: 80 });
+    const move = y => pedal.fire("pointermove", { clientX: 80, clientY: y });
+    move(70);
+    const start = style === "response" ? 0.4 : 1;
+    assert.equal(Input.throttleLevel(), 0);
+    assert.equal(Input.brakeLevel(), style === "ease" ? 0.12 : start);
+    const anchor = style === "ease" ? 110 : 70;
+    if (style === "ease") move(anchor);
+    move(anchor - 1);
+    assert.equal(Input.brakeLevel(), start, "a tiny move never jumps to the configured touchdown pressure");
+    move(anchor - 32);
+    assert.ok(Math.abs(Input.brakeLevel() - (start - 0.25)) < 1e-10);
+    for (const release of listeners.pointerup) release({ pointerId: 1 });
+    assert.equal(Input.brakeLevel(), 0);
+  }
+});
+
+test("explicit Instant and Ease resume pedaling after entry even with default slide tuning", () => {
+  for (const slide of ["instant", "ease"]) {
+    const { Input, pedal, sb, model } = boot();
+    const brake = sb.document.getElementById("btn-brake");
+    brake.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 200 });
+    pedal.getBoundingClientRect = () => ({ left: 100, top: 0, width: 100, height: 200 });
+    model.setButtonProfile("brake", { slide });
+    pedal.fire("pointerdown", { clientX: 120, clientY: 80 });
+    const move = y => pedal.fire("pointermove", { clientX: 80, clientY: y });
+    move(70);
+    assert.equal(Input.brakeLevel(), slide === "ease" ? 0.12 : 1);
+    const anchor = slide === "ease" ? 110 : 70;
+    move(anchor);
+    assert.equal(Input.brakeLevel(), 1);
+    move(anchor - 57);
+    assert.equal(Input.brakeLevel(), 0.5, "after entry, the destination responds to the default amount of travel");
+  }
 });
 
 test("LATCH is FULL travel, not the pedal's last modulation", () => {
