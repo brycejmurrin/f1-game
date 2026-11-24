@@ -346,6 +346,53 @@ test("setEditing(true) hides SETTINGS and PAUSED so the docks are reachable, and
   assert.equal(made[0].hidden, true);
 });
 
+test("Done and Cancel restore the opener after the Controls dialog reopens", () => {
+  for (const action of ["done", "cancel"]) {
+    const { api, ctx, els, settings, made } = bootCreate();
+    const next = [], nativeFocus = {};
+    ctx.queueMicrotask = fn => next.push(fn);
+    const opener = els["pm-dock-reposition"] = {
+      isConnected: true, setAttribute() {},
+      focus() { if (settings.open) ctx.document.activeElement = opener; },
+    };
+    settings.contains = target => target === opener || target === nativeFocus;
+    let top = settings;
+    ctx.window.UiLayers = { top: () => top };
+    ctx.document.activeElement = opener;
+    api.setEditing(true);
+    const bar = made[0];
+    settings.open = false;
+    ctx.document.activeElement = bar;
+    bar.querySelector("[data-k=" + action + "]").click();
+    assert.equal(api.editing(), false);
+    assert.equal(settings.hidden, false);
+    assert.equal(ctx.document.activeElement, bar, "the native dialog is still closed");
+    settings.open = true;
+    ctx.document.activeElement = nativeFocus;
+    assert.equal(next.length, 1);
+    next.shift()();
+    assert.equal(ctx.document.activeElement, opener, "restore after native focus selection");
+
+    api.setEditing(true);
+    bar.querySelector("[data-k=" + action + "]").click();
+    top = { contains: () => false };
+    ctx.document.activeElement = nativeFocus;
+    next.shift()();
+    assert.equal(ctx.document.activeElement, nativeFocus, "leave focus alone when another layer opens");
+
+    top = settings;
+    api.setEditing(true);
+    bar.querySelector("[data-k=" + action + "]").click();
+    api.setEditing(true);
+    ctx.document.activeElement = bar;
+    next.shift()();
+    assert.equal(ctx.document.activeElement, bar, "a previous close cannot focus through a reopened editor");
+    api.setEditing(false, false);
+    assert.equal(settings.hidden, true);
+    assert.equal(next.length, 0, "no restore is queued when the editor yields the screen");
+  }
+});
+
 test("dock tools open compact and keep Done available in both states", () => {
   const { api, made } = bootCreate();
   api.setEditing(true);

@@ -16,6 +16,7 @@ const DockToolbar = (() => {
       $("btn-boost"), $("btn-ot"), $("btn-aero"), $("shift-up"), $("shift-down")];
     const byId = new Map(controls.filter(Boolean).map(node => [node.id, node]));
     let target = "all", shown = null, opener = null, preview = null;
+    let focusGeneration = 0;
     let editBar = null, doneBtn = null, toolsButton = null, expanded = false, visible = false;
     let initial, current;
     const history = [];
@@ -308,6 +309,7 @@ const DockToolbar = (() => {
       repaintDock();
     }
     function show(on, restore) {
+      const generation = ++focusGeneration;
       if (!on) {
         drag = null;
         if (preview) {
@@ -327,7 +329,17 @@ const DockToolbar = (() => {
       if (btn) {
         btn.setAttribute("aria-pressed", on ? "true" : "false");
         btn.textContent = on ? "DONE REPOSITIONING" : "REPOSITION TOUCH CONTROLS";
-        if (!on && restore !== false) (opener?.isConnected && opener !== document.body ? opener : btn).focus?.();
+        if (!on && restore !== false) {
+          const target = opener?.isConnected && opener !== document.body ? opener : btn;
+          const restoreFocus = () => {
+            if (generation !== focusGeneration || !target.isConnected || target.closest?.("[hidden], [inert]")) return;
+            const layer = window.UiLayers?.top?.();
+            if (!layer || layer.contains(target)) target.focus?.({ preventScroll: true });
+          };
+          // The hidden change queues showModal(), which picks its own focus first.
+          if (typeof queueMicrotask === "function") queueMicrotask(restoreFocus);
+          else restoreFocus();
+        }
       }
       if (!on) clearFitFrame();
     }

@@ -32,6 +32,7 @@ function rig({ paused = true, top = null } = {}) {
   const els = { howtoplay: el("howtoplay"), pmsettings: el("pmsettings"), pausemenu: el("pausemenu", { hidden: false }) };
   const doors = { "ga-close": { click: () => clicks.push("ga-close") }, "ps-close": { click: () => clicks.push("ps-close") }, "sp-close": { click: () => clicks.push("sp-close") } };
   doors["screen-arranger-cancel"] = { click: () => clicks.push("screen-arranger-cancel") };
+  doors["dock-edit-cancel"] = { click: () => clicks.push("dock-edit-cancel") };
   const ctx = {
     G: { paused }, els,
     UiLayers: { top: () => (top === "pausemenu" ? els.pausemenu : top === "pmsettings" ? els.pmsettings : top) },
@@ -53,12 +54,14 @@ for (const [layer, door] of [["garrival", "ga-close"], ["photo-studio", "ps-clos
   });
 }
 
-test("P and gamepad Start leave the layout editor through Cancel at Home or in a paused race", () => {
-  for (const paused of [false, true]) {
-    const r = rig({ paused, top: { id: "screen-arranger", dataset: { escClose: "screen-arranger-cancel" } } });
-    r.fn();
-    assert.deepEqual(r.clicks, ["screen-arranger-cancel"]);
-    assert.deepEqual(r.toggles, []);
+test("P and gamepad Start cancel either layout editor at Home or in a paused race", () => {
+  for (const [id, door] of [["screen-arranger", "screen-arranger-cancel"], ["dock-edit-bar", "dock-edit-cancel"]]) {
+    for (const paused of [false, true]) {
+      const r = rig({ paused, top: { id, dataset: { escClose: door } } });
+      r.fn();
+      assert.deepEqual(r.clicks, [door]);
+      assert.deepEqual(r.toggles, [], id + " keeps race state");
+    }
   }
 });
 
