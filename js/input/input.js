@@ -1084,11 +1084,12 @@ const Input = (function () {
       kbSeen = true;
       noteInputSource("keyboard");
     }
-    // Native HUD buttons own their activation keys. Let the browser deliver
-    // their click once; releases still clear keys held before focus moved here.
-    const nativeHudActivation = tag === "BUTTON" && hudControl &&
+    // HUD buttons and WATCH disclosures own their native activation keys.
+    // Releases still clear keys held before focus moved here.
+    const watchSummary = tag === "SUMMARY" && (active || e.target)?.closest?.(".watch-transport");
+    const nativeActivation = ((tag === "BUTTON" && hudControl) || watchSummary) &&
       (e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter");
-    if (nativeHudActivation) {
+    if (nativeActivation) {
       if (!down) { heldKeys.delete(e.code); syncHeldKeys(); }
       return;
     }
