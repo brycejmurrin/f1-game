@@ -244,7 +244,10 @@ function wirePhone() {
     calib._t = setTimeout(() => {
       const phoneTilt = Input.phoneTiltAvailable();
       if (document.hidden || (!G.paused && !(G.state === "menu" && phoneTilt))) return;
-      if (phoneTilt && !Input.remoteActive()) return;
+      if (phoneTilt && !Input.remoteActive()) {
+        // The phone can stay paired while the touch host's live gyro takes over.
+        if (!G.paused || !Input.touchDrivingControls() || G.getSteerMode() !== "tilt" || !Input.tiltActive()) return;
+      }
       Input.calibrate();
       if (G.paused) setPaused(false, "recalibrate");
     }, 300);
