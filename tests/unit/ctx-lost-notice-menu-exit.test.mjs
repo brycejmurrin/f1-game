@@ -27,7 +27,7 @@ function bootNoticeHarness({ storageDenied = false } = {}) {
     Tracks: { LIST: [{ id: "monza", name: "Monza", country: "Italy" }] },
     Teams: { LIST: [{ id: "ferrari", name: "Ferrari", color: [1, 0, 0], color2: [1, 1, 1], drivers: [{ name: "A", code: "AA", num: 1 }] }] },
     Flags: { svg: () => "" }, SeasonCal: { canRace: () => true, rounds: () => 0 },
-    TrackMaps: { corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], aspect: () => 1.5, elevProfile: () => null, fitCanvas: () => ({ w: 100, h: 60 }), draw() {} },
+    TrackMaps: { corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"], classColor: () => "", aspect: () => 1.5, elevProfile: () => null, fitCanvas: () => ({ w: 100, h: 60 }), draw() {} },
   };
   sb.window = sb;
   vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: absSrc("js/ui/select-screen.js") });

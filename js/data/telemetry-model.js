@@ -125,6 +125,39 @@ const DataTelemetryModel = (function () {
     if (!b) return a;
     return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
   }
+  function locationAtDate(loc, date) {
+    if (!Number.isFinite(date) || !loc.length || date < loc[0].date || date > loc.at(-1).date) return null;
+    let lo = 0, hi = loc.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (loc[mid].date < date) lo = mid + 1;
+      else hi = mid;
+    }
+    const b = loc[lo], a = loc[lo - 1];
+    if (b.date === date) return b;
+    // A timing marker requires local coverage even when the rest of the lap is sparse.
+    if (!a || isGap(loc, lo, 1500)) return null;
+    return { ...lerpLoc(a, b, (date - a.date) / (b.date - a.date)), date };
+  }
+
+  function clipLocations(loc, start, end) {
+    if (!Number.isFinite(start)) return loc;
+    const kept = loc.filter((row) => row.date >= start && row.date <= end);
+    const first = locationAtDate(loc, start);
+    if (first && first !== kept[0]) kept.unshift(first);
+    return kept;
+  }
+
+  function mapSpeedMax(car) {
+    return (car || []).reduce((max, row) => Number.isFinite(row.speed) && row.speed > max ? row.speed : max, 0);
+  }
+
+  function mapSpeedColor(f) {
+    const r = Math.round(255 * Math.min(1, f * 1.6));
+    const b = Math.round(255 * Math.min(1, (1 - f) * 1.6));
+    const g = Math.round(180 * (1 - Math.abs(f - 0.5) * 2));
+    return "rgb(" + r + "," + g + "," + b + ")";
+  }
   function dateAtT(car, t) {
     if (!car || !car.length) return null;
     const n = car.length;
@@ -368,6 +401,7 @@ const DataTelemetryModel = (function () {
 
   return { create, speedUnit, speedValue, speedText, clamp, laneRole, summaryTime, signed, summaryValue, dcode, sessionShort, drsOpen, hasDrs,
            CHANNELS, PADL, PADR, PADY, chartX, chanNorm, sampleAt, clipCar, cumDist,
-           distAtT, timeAtDist, brakingDuel, locAt, dropStrays, locBounds, gapLimitMs, isGap };
+           distAtT, timeAtDist, brakingDuel, locAt, locationAtDate, clipLocations, mapSpeedMax, mapSpeedColor,
+           dropStrays, locBounds, gapLimitMs, isGap };
 })();
 Object.freeze(DataTelemetryModel);

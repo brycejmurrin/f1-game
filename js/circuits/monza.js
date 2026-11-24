@@ -54,16 +54,12 @@
       { s0: 0.2821, s1: 0.3460, hw: 7.0, ease: 0.012 },  // racing arc 0.295-0.315 Roggia
       { s0: 0.5960, s1: 0.7315, hw: 7.2, ease: 0.012 },  // racing arc 0.608-0.652 Ascari
     ],
-    // Frac zones kept (not { turn }): converting to turn-anchors moved the
-    // banking under the car and drifted physics-characterization + props-index
-    // pins on CI (#6121). Corner-frames still lists the three far fracs; fix
-    // with a physics-aware pass, not a silent rebaseline.
     bankZones: [
-      { frac: 0.1636, angleDeg: 3.0, widthM: 240 },   // Curva Grande
-      { frac: 0.3831, angleDeg: 6.0, widthM: 140 },   // Lesmo 1
+      { turn: 3, angleDeg: 3.0, widthM: 240 },        // Curva Grande
+      { frac: 0.3760, angleDeg: 6.0, widthM: 170 },   // T6 Lesmo 1, between both curvature peaks
       { frac: 0.4323, angleDeg: 6.0, widthM: 80 },    // Lesmo 2
       { frac: 0.6310, angleDeg: 3.5, widthM: 110 },   // Ascari
-      { frac: 0.8222, angleDeg: 4.0, widthM: 300 },   // Parabolica
+      { turn: 11, angleDeg: 4.0, widthM: 300 },       // Parabolica
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
@@ -74,9 +70,10 @@
     // Racing-arc fractions: turns[3/7] - offset / built total 5777.158737 m;
     // use the built lap, not path.len or control-index width-zone fractions.
     sectors: [0.26536876, 0.58048447],
+    // T3 is on the Curva Grande sweep, past the Rettifilo exit kink at 0.1288.
     // T7 is Lesmo 2 (the R27 apex at 0.4321); it read 0.3827, the second
     // apex of Lesmo 1, until 2026-10-04 — board 7 stood on Lesmo 1's exit.
-    turns: [0.0962, 0.1022, 0.1288, 0.3057, 0.3122, 0.3692, 0.4321, 0.6177, 0.6309, 0.6497, 0.8387],
+    turns: [0.0962, 0.1022, 0.1918, 0.3057, 0.3122, 0.3692, 0.4321, 0.6177, 0.6309, 0.6497, 0.8387],
     furniture: { tree: "stonePine", fol: [0.16, 0.34, 0.17], lamp: "none" },  // deep royal-park canopy
     kit: { marshal: "hut",       rail: "armco",       fence: "leaning",   tyre: "stack",   board: "arched",    gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     standSet: ["crimson", "concrete", "steel"],  // tifosi red + old park concrete

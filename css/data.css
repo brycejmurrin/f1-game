@@ -791,12 +791,15 @@ body[data-width="narrow"] .dh-dchip > span { display: none; }
 .dh-legend-dot.dh-mapdot {
   width: 10px; height: 10px; border-radius: 50%;
   border: 1px solid rgba(0, 0, 0, 0.6);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
 }
+.dh-mapdot[data-reference] { border-color: var(--hud-ink-light); box-shadow: 0 0 0 1px var(--plate-line); }
+[data-map-modes] { display: flex; justify-content: center; gap: calc(var(--gap) / 2); }
+[data-map-modes][hidden] { display: none; }
+[data-map-modes] button[aria-pressed="true"] { background: var(--plate-on); border-color: var(--red); color: var(--text); }
+.dh-maplegend[data-map-scale] { margin-top: 0; }
 /* slow->fast swatch matching the map's speed colouring */
 .dh-gradbar {
   display: inline-block; width: 44px; height: 6px; border-radius: var(--r-xs);
-  background: linear-gradient(90deg in oklab, #2222ff, #ccb4cc, #ff2222);
 }
 /* Short local viewport: cap the track map so content doesn't overflow.
    Narrow (zoom-aware) portrait-ish cards use a slightly larger cap. Compact

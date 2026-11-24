@@ -1553,23 +1553,26 @@ function openTrackDetail() {
     legend = document.createElement("ul");
     legend.id = "track-detail-legend";
     legend.setAttribute("aria-label", "Circuit map colours");
+    wrap.appendChild(legend);
+  }
+  if (legend) {
+    legend.replaceChildren();
+    const sectors = TrackMaps.sectorColors();
     const items = [
-      ["tdc-fast", "Fastest"],
-      ["tdc-medium", "Medium"],
-      ["tdc-slow", "Slow"],
-      ["tdc-hairpin", "Hairpin"],
-      ["", "Sector"]
+      ["S1", sectors[0]], ["S2", sectors[1]], ["S3", sectors[2]],
+      ["Hairpin", TrackMaps.classColor("HAIRPIN")], ["Slow", TrackMaps.classColor("SLOW")],
+      ["Medium", TrackMaps.classColor("MEDIUM")], ["Fast", TrackMaps.classColor("FAST")]
     ];
-    for (let i = 0; i < items.length; i++) {
+    if (dz.length) items.push(["Aero", TrackMaps.aeroColor()]);
+    for (const [label, color] of items) {
       const li = document.createElement("li");
       const sw = document.createElement("i");
-      if (items[i][0]) sw.className = items[i][0];
-      else li.setAttribute("data-leg", "sector");
-      li.appendChild(sw);
-      li.appendChild(document.createTextNode(" " + items[i][1]));
+      const caption = document.createElement("span");
+      caption.textContent = label;
+      sw.style.color = color;
+      li.append(sw, caption);
       legend.appendChild(li);
     }
-    wrap.appendChild(legend);
   }
 
   // Elevation sparkline — same painter as the preview chart above; here the
@@ -1612,6 +1615,9 @@ function openTrackDetail() {
     const cls = TDC_CLS[lbl] || "tdc-medium";
     return '<div class="tdc-corner"><span class="tdc-num">T' + c.n + '</span><span class="' + cls + '">' + lbl + '</span></div>';
   }).join("");
+  for (const [cls, name] of Object.entries(TDC_CLS)) {
+    for (const chip of list.querySelectorAll("." + name)) chip.style.color = TrackMaps.classColor(cls);
+  }
 
   // Crossfade into the full-screen circuit-detail modal (progressive
   // enhancement; the content above is already populated while hidden).
@@ -1669,7 +1675,7 @@ function openTrackDetail() {
     const mk = Math.min(1, fit.w / 520, fit.h / 300);
     const br = fit.w ? (cv.width / fit.w) : 1;
     TrackMaps.draw(cv, t, {
-      color: TrackMaps.themeColor(t), startColor: "#e10600",
+      checkeredStart: true,
       width: Math.max(2 * br, Math.round(5 * mk * br)), pad: Math.max(12 * br, Math.round(42 * mk * br)),
       corners: true, cornerR: Math.max(4 * br, Math.round(6 * mk * br)), cornerFont: Math.max(8 * br, Math.round(12 * mk * br)),
       sectors: true, drs: true, legend: false
