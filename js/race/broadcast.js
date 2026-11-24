@@ -36,12 +36,52 @@ const Broadcast = (function () {
     return _fights;
   }
 
-  /** The shot for a cut: from the kind's list when it has one, never the shot on air. */
-  function shotFor(kind, onAir, n) {
-    const pool = (EVENT_SHOTS[kind] || SHOTS).filter((s) => s !== onAir);
-    return pool.length ? pool[(n | 0) % pool.length] : onAir;
+  /** Walk a stable pool: indexing a filtered pool with cuts can alternate two
+   * shots forever. Inspect each candidate at most once, only when a cut is due. */
+  function shotFor(kind, onAir, n, accept, shots) {
+    const pool = shots || EVENT_SHOTS[kind] || SHOTS;
+    const at = pool.indexOf(onAir);
+    const start = at >= 0 ? at + 1 : Math.abs(n | 0);
+    for (let i = 0; i < pool.length; i++) {
+      const shot = pool[(start + i) % pool.length];
+      if (!accept || accept(shot)) return shot;
+    }
+    return "chase";   // nearby road-following coverage when all authored angles are blocked
   }
 
-  return { battles, shotFor, SHOTS, SHOT_MIN_S, SHOT_MAX_S };
+  /** Cut-time geometry only; no DOM reads, per-frame rays or simulation writes.
+   * The subject is explicit: WATCH has not transferred follow ownership yet. */
+  function chooseShot(G, car, kind, onAir, n, shots, now = typeof performance !== "undefined" ? performance.now() : 0) {
+    if (!car || !G.track || !G.camVantage || typeof FlybySight === "undefined") return shotFor(kind, onAir, n, null, shots);
+    const pose = G.camPoseOf ? G.camPoseOf(car) : null;
+    const s = pose ? pose.s : car.s || 0, x = pose ? pose.x : car.x || 0;
+    const cp = pose?.carPos || (car.px != null && car.pz != null ? [car.px, car.pz] : null);
+    const extra = { att: car, carPos: cp, carHead: pose?.carHead ?? car.head,
+      noLook: true, frameSubject: true, dt: 0, snap: true };
+    if (typeof Tracks !== "undefined" && Tracks.banking) extra.bankDy = Tracks.banking(G.track, s, x, { dy: 0, roll: 0 }, true)?.dy || 0;
+    const sample = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
+    if (typeof Tracks !== "undefined" && Tracks.sample) Tracks.sample(G.track, s, sample);
+    const bodyY = sample.p[1] + (extra.bankDy || 0) + 0.8;
+    const aspect = typeof window !== "undefined" && window.innerWidth > 0 && window.innerHeight > 0 ? window.innerWidth / window.innerHeight : 16 / 9;
+    const accept = shot => {
+      const solve = () => G.camVantage(shot, s, x, car.speed || 0, now, extra);
+      // Probe springs must never overwrite the player's or the on-air rig's history.
+      const v = typeof CamFeel !== "undefined" && CamFeel.scoped ? CamFeel.scoped("broadcast-probe:", solve) : solve();
+      if (!v?.eye || !v.tgt || !v.eye.every(Number.isFinite) || !v.tgt.every(Number.isFinite) || !Number.isFinite(v.fov)) return false;
+      // Onboard intentionally looks ahead, not back at the subject's body.
+      const point = shot === "tcam" || !cp ? v.tgt : [cp[0], bodyY, cp[1]];
+      const distance = Math.hypot(point[0] - v.eye[0], point[1] - v.eye[1], point[2] - v.eye[2]);
+      if (!(distance > 0.9 && distance < 250)) return false;
+      if (shot !== "tcam") {
+        const p = FlybySight.project(FlybySight.camera(v.eye, v.tgt, v.fov, aspect), point);
+        // Keep the subject in the central window, away from tower and transport.
+        if (!p || Math.abs(p.x) > 0.55 || Math.abs(p.y) > 0.55) return false;
+      }
+      return FlybySight.transmit(G.track, v.eye, point).Tdrawn >= 0.65;
+    };
+    return shotFor(kind, onAir, n, accept, shots);
+  }
+
+  return { battles, shotFor, chooseShot, SHOTS, SHOT_MIN_S, SHOT_MAX_S };
 })();
 Object.freeze(Broadcast);

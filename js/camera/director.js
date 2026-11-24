@@ -230,7 +230,9 @@ const Director = (function () {
         running: running.length ? running : (player ? [{ key: player, prog: player.prog || 0, speed: player.speed || 0 }] : []),
       });
       if (decision) {
-        if (spectating) decision.shot = FINISH_SHOTS[cuts % FINISH_SHOTS.length];
+        if (typeof Broadcast !== "undefined" && Broadcast.chooseShot) {
+          decision.shot = Broadcast.chooseShot(G, decision.subject, decision.kind, onAirShot, cuts, spectating ? FINISH_SHOTS : undefined, 0);
+        } else if (spectating) decision.shot = FINISH_SHOTS[cuts % FINISH_SHOTS.length];
         lastCut = wall; cuts++;
         applyShot(decision.subject, decision.shot, dt, true);
         Log.debug("game", "Director.cut kind=" + (decision.kind || "-") + " shot=" + decision.shot

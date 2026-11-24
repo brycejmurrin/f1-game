@@ -2,7 +2,7 @@
 const ReplayBroadcast = (function () {
   "use strict";
 
-  const { battles, shotFor, SHOTS, SHOT_MIN_S, SHOT_MAX_S } = Broadcast;
+  const { battles, SHOT_MIN_S, SHOT_MAX_S } = Broadcast;
 
   // ── The director's rules ──────────────────────────────────────────────────
   const EVENT_LEAD_S = 6;    // race seconds: cut to an event this long before it happens
@@ -302,7 +302,7 @@ const ReplayBroadcast = (function () {
       cameraSuspended = false;
       shown = new Set(); towerT = 0; mode = "gap"; prevPos = new Map(); deltaAt = new Map();
       syncCamera();
-      if (auto) { camTo(SHOTS[0]); lastCut = 0; }
+      if (auto) { camTo(Broadcast.chooseShot(G, G.player, null, null, 0)); lastCut = 0; }
       buildTower(o && o.tower !== false);
       if (typeof document !== "undefined" && document.body && document.createElement) viewer = makeViewer(document, live);
       if (!live) ensureGraphics();
@@ -458,7 +458,7 @@ const ReplayBroadcast = (function () {
     }
     function cut(c, kind, T) {
       lastCut = wall; cuts++;
-      camTo(shotFor(kind, onAirShot, cuts));
+      camTo(Broadcast.chooseShot(G, c || G.player, kind, onAirShot, cuts));
       if (c && replay.setFollow) replay.setFollow(c);
       else if (G.snapGameCam) G.snapGameCam();
       Log.debug("game", "Broadcast.cut T=" + (+T).toFixed(1) + " kind=" + (kind || "-") + " shot=" + onAirShot + " car=" + (c ? c.code : "-"));
@@ -470,7 +470,7 @@ const ReplayBroadcast = (function () {
       if (suspendCamera()) return;
       if (setCam != null && G.camMode !== setCam) { manual(); return; }
       lastCut = wall; cuts++;
-      camTo(shotFor(kind, onAirShot, cuts));
+      camTo(Broadcast.chooseShot(G, G.player, kind, onAirShot, cuts));
     }
 
     /** Every frame from RealReplay.tick: dt wall seconds; st = {script, T, speed, list, reel, followNum,
