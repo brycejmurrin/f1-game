@@ -245,6 +245,7 @@ test("lazy: LAZY_UI_PRESETS, no <script> tag, loaded by SettingsNav on APPEARANC
   assert.deepEqual(MANIFEST.LAZY_UI_PRESETS, [
     "js/ui/desktop-graphics.js",
     "js/ui/screen-regions.js", "js/ui/screen-placement.js", "js/ui/screen-arranger.js",
+    "js/ui/circuit-details-panel.js",
     "js/ui/hud-layout-editor.js", "js/ui/dock-toolbar.js", "js/ui/hud-arrange.js",
     "js/ui/look-avail.js", "js/ui/layout-presets.js",
     "js/ui/appearance-arrangement-picker.js", "js/ui/appearance-studio-ui.js", "js/ui/photo-studio-ui.js",

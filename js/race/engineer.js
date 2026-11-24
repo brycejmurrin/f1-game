@@ -171,9 +171,11 @@ var RaceEngineer = (function () {
       // (its plan's window, PitLane.windowOf) and ours is near. Boxing first
       // is the cover; a driver who knows can choose.
       if (s.threat && take(s.threat + " CAN UNDERCUT — BOX NEXT LAP TO COVER", "threat")) return;
-      // A LOCAL SHOWER: where it is, and whether the lap as a whole wants rubber for it (treadFor on the lap mean)
-      // — the dilemma a blanket rain never posed.
-      if (s.rainWhere && take("RAIN IN SECTOR " + s.rainWhere + (s.wantTread > 0 ? " — " + TREAD_WORD[s.wantTread] + " FOR THE LAP" : " — REST OF THE LAP IS DRY, STAY OUT"), "where")) return;
+      // A LOCAL SHOWER: where it is and whether changing tread pays over the wet spell.
+      if (s.rainWhere && (s.lapsToStop == null || s.lapsToStop > 1)) {
+        const advice = s.noStop ? "" : s.wantTread > 0 ? " — " + TREAD_WORD[s.wantTread] + " FOR THE LAP" : " — STAY OUT";
+        if (take("RAIN IN SECTOR " + s.rainWhere + advice, "where")) return;
+      }
       if (s.rainInLaps != null) {
         if (s.lapsToStop != null && s.rainInLaps <= s.lapsToStop) {
           // The box lap is the forecast's own (the lap the stated onset falls on — a grid start is lap 0), and
@@ -288,7 +290,8 @@ var RaceEngineer = (function () {
       // The wrong tread in EITHER direction — slicks in the rain and wets on a
       // drying track — read exactly as PitLane.think reads it for an AI car, so
       // the advice the player gets and the call the field makes cannot diverge.
-      const wantTread = TyreModel.treadFor(G.raceWeather, G.trackWetness ? G.trackWetness() : undefined);
+      const wantTread = pits && pits.recommendedTread ? pits.recommendedTread(c)
+        : TyreModel.treadFor(G.raceWeather, G.trackWetness ? G.trackWetness() : undefined);
       const cautionLvl = G.cautionLevel ? G.cautionLevel() : 0;   // per step: the allocation-free read
       // The estimate is a fresh object plus a scan of the field: re-read it on a
       // 0.25 s clock, not every physics step (it is advice with a tilde, and a
@@ -419,7 +422,7 @@ var RaceEngineer = (function () {
       out.wantTread = wantTread;
       if (b.fcArc !== arc) { b.fcArc = arc; b.fcMin = {}; }
       const tread = c.tyre.tread || 0;
-      out.rainInLaps = !noStop && arc && WET.indexOf(arc.to) >= 0 && left > 0
+      out.rainInLaps = !noStop && arc && !arc.cell && WET.indexOf(arc.to) >= 0 && left > 0
         ? (byKind.rain ? latchLaps(b, "rain", byKind.rain, lapF) : lapS > 0 ? Math.max(1, Math.round(left / lapS)) : null) : null;
       out.heavyInLaps = !noStop && tread === 1 && !byKind.rain && byKind.heavy ? latchLaps(b, "heavy", byKind.heavy, lapF) : null;
       out.easeInLaps = !noStop && tread >= 2 && byKind.easing ? latchLaps(b, "easing", byKind.easing, lapF) : null;

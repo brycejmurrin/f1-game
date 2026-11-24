@@ -103,6 +103,7 @@
     replay: {label: "straight", duration: duration * 1000, realTime: true, rewind: true},
     key: "Time on straight in seconds. Power is in kW. Amber dashes show the ceiling, dots show the request, and blue shows delivery.",
     intro: "An electric motor can have charge left and still deliver less power as speed rises. Compare the requested power, the FIA ceiling and what actually gets delivered over a fixed eight-second speed trace.",
+    inGame: "BOOST draws from the 4 MJ energy store and gives less extra acceleration at high speed. Closing to under one second at the detection line can earn a separate OVERTAKE allowance for the following lap. This lesson plots FIA electrical-power ceilings in kW. Apex applies a speed-dependent acceleration boost.",
     presets: [
       ["Same straight · 4.00 MJ", {curve:"standard", endSpeed:350, request:350, charge:4}],
       ["Same straight · 0.25 MJ", {curve:"standard", endSpeed:350, request:350, charge:.25}],

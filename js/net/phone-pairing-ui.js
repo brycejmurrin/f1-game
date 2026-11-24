@@ -7,10 +7,13 @@ const PhonePairingUI = (function () {
     const { MAX_RPM, IDLE_RPM } = PhysicsConsts;
     const p = G.player;
     const D = PhonePad.DASH;
+    const context = typeof Input !== "undefined" && Input.remoteControlContext?.();
+    const surface = context === "camera" ? "camera" : context === "menu" || G.paused ||
+      (G.state !== "race" && G.state !== "count") ? "menu" : "drive";
     // NO PLAYER IS A DASH TOO (menus before a first race): the phone shows its MENU PAD only on a
     // dash packet (!inRace || paused), and a null sends nothing, so it stayed on the wheel.
     if (!p) return { gear: 0, kmh: 0, rpm: 0, lap: 0, laps: 0, pos: 0, cars: 0, ers: 0,
-      flags: G.paused ? D.paused : 0, caution: 0, lastLapMs: 0, state: G.state, team: "" };
+      flags: G.paused ? D.paused : 0, caution: 0, lastLapMs: 0, state: G.state, surface, team: "" };
     const xOpen = (p.aeroX || 0) > 0.05;
     const controls = G.recordControls();
     const flags = (p.boostOn ? D.boost : 0) | (p.otT > 0 ? D.otActive : p.otArmed ? D.otArmed : 0)
@@ -22,7 +25,7 @@ const PhonePairingUI = (function () {
       | (G.raceAeroMode === "auto" ? D.aeroAuto : 0) | (G.aeroZones.length ? 0 : D.aeroNone);
     return { gear: p.gear, kmh: G.dashKph(p.speed), rpm: (p.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), lap: p.lap, laps: G.lapsTarget,
       pos: p.rank, cars: G.cars.length, ers: p.energy, flags, caution: G.cautionLevel(), lastLapMs: (p.lastLap || 0) * 1000,
-      state: G.state, team: PhonePad.teamHex(p.team && p.team.color),
+      state: G.state, surface, team: PhonePad.teamHex(p.team && p.team.color),
       grip: typeof HudReadouts === "undefined" ? "" : HudReadouts.pedalGrip(p, typeof WheelState !== "undefined" && WheelState.enabled()) };
   }
 

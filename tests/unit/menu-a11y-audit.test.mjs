@@ -549,6 +549,7 @@ test("every layer in the shell is a named region or dialog, and #announce is a l
     "photo-controls": "a toolbar of labelled buttons over the free camera, not a screen",
     "ceremony-podium": "the built podium is checked by podium-beat.test.mjs",
     "hud-arrange-bar": "a named toolbar built by HudArrange, covered by its editor tests",
+    "dock-edit-bar": "a named toolbar built by DockToolbar, covered by its editor tests",
     learn: "dialog created on demand, covered by the Learn door test below",
     // Pre-race plate: role=status (not region/dialog); named via aria-label.
     loading: "status plate — announces once, not a navigable region",
@@ -597,6 +598,7 @@ test("Escape/back is one behaviour: every layer names its own door, and every do
     if (id === "ceremony-podium") continue;   // podium-beat.test.mjs checks the rendered Continue door
     if (id === "screen-arranger") continue;   // the live dialog's door: appearance-orientation.spec.js
     if (id === "learn") continue; // the on-demand dialog is covered below
+    if (id === "dock-edit-bar") continue; // dock-layout.test.mjs drives Back through the live Cancel control.
     if (id === "hud-arrange-bar") {
       assert.match(read("js/ui/hud-arrange.js"), /setAttribute\("data-esc-close", "hud-arrange-cancel"\)/);
       assert.match(read("js/ui/hud-arrange.js"), /mk\("Cancel", "Discard HUD edits", \(\) => setEditing\(false, true, false\), "hud-arrange-cancel"\)/);
@@ -654,8 +656,9 @@ test("Learn opens a named modal and returns focus to the selected lesson after u
   vm.runInNewContext(src("js/ui/dom.js"), sb, { filename: absSrc("js/ui/dom.js") });
   dom.byId("menu-buttons").dataset.destinations = "true";
   vm.runInNewContext(src("js/ui/title-menu.js"), sb, { filename: absSrc("js/ui/title-menu.js") });
+  let aeroLaunches = 0;
   sb.TitleMenu.create({ $: dom.byId, state: "menu", soundOn: false, store: {} }, (tab, options) =>
-    new Promise(resolve => launches.push({ tab, options, resolve })));
+    new Promise(resolve => launches.push({ tab, options, resolve })), () => { aeroLaunches++; });
   const door = dom.byId("mb-learn");
   assert.equal(door.parentNode.id, "menu-explore");
   door.click();
@@ -702,6 +705,10 @@ test("Learn opens a named modal and returns focus to the selected lesson after u
   dom.byId("learn-open-telemetry").click();
   assert.equal(frame.title, "Telemetry Detective");
   assert.equal(frame.getAttribute("src"), "learn/telemetry/index.html");
+  const drill = { type: "apex-learn-scenario", id: "aero" };
+  await onMessage({ origin, source: frame.contentWindow, data: drill });
+  assert.equal(aeroLaunches, 0, "another lesson cannot launch the Aero Drill");
+  assert.equal(dialog.hidden, false);
   const transfer = { type: "apex-learn-telemetry" };
   const send = () => onMessage({ origin, source: frame.contentWindow, data: transfer });
   await onMessage({ origin, source: {}, data: transfer });
@@ -741,6 +748,18 @@ test("Learn opens a named modal and returns focus to the selected lesson after u
   top = "overlay";
   queue.shift()();
   assert.equal(dom.document.activeElement, door);
+  door.click();
+  top = "learn";
+  lesson.click();
+  await onMessage({ origin, source: {}, data: drill });
+  await onMessage({ origin, source: frame.contentWindow, data: { ...drill, id: "unknown" } });
+  assert.equal(dialog.hidden, false);
+  assert.equal(aeroLaunches, 0);
+  await onMessage({ origin, source: frame.contentWindow, data: drill });
+  assert.equal(dialog.hidden, true);
+  top = "overlay";
+  queue.shift()();
+  assert.equal(aeroLaunches, 1);
   door.click();
   dialog.dispatchEvent({ type: "cancel" });
   assert.equal(dialog.hidden, true);
@@ -812,6 +831,7 @@ test("ScrollFade.SCREENS and AriaState.ROOTS cover every UiLayers layer that scr
     "screen-arranger": "mounted on demand, native overflow and native region and step selects",
     "ceremony-podium": "dynamic story and Continue action; no scroll pane or selectable chips",
     "hud-arrange-bar": "dynamic toolbar uses native overflow and select state, no selected-class chips",
+    "dock-edit-bar": "dynamic toolbar uses native overflow and select state, no selected-class chips",
     loading: "status plate — no scroll region, no selected chips",
     learn: "the Aero Lab iframe owns its own scroll and control states",
   };

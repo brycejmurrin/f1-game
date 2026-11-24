@@ -235,8 +235,8 @@
 /* The wordmark is #title's recipe at card scale — same italic, same skewed red
    underline — because this IS the title screen's brand arriving on the grid. */
 #ld-wordmark {
-  margin: 0 0 var(--gap);
-  font-size: clamp(var(--fs-6), 3.4vw, calc(2 * var(--fs-6)));   /* plain vw: #loading is not zoomed, so --vwz (1vw / UI SIZE) shrank it as UI SIZE grew */
+  margin: 0 0 calc(var(--gap) * 0.75);
+  font-size: clamp(var(--fs-6), 2.8vw, calc(1.6 * var(--fs-6)));   /* plain vw: #loading is not zoomed, so --vwz (1vw / UI SIZE) shrank it as UI SIZE grew */
   font-weight: 700; font-style: italic;
   letter-spacing: var(--ls-2);
   color: var(--text);
@@ -260,18 +260,34 @@
 #ld-map {
   flex: 0 0 auto;
   display: block;
-  max-width: 45%;
+  max-width: 52%;
   /* The map shrinks first: its inline height (fitCanvas) is a maximum, the
      body's height a cap; object-fit keeps the outline's aspect either way. */
   max-height: 100%;
   height: auto;
-  /* fitCanvas pins an inline px width AND height, so when the 45% cap binds (a
+  /* fitCanvas pins an inline px width AND height, so when the width cap binds (a
      portrait phone, a big CARD SIZE) the height does not follow and the outline
      and the grid graphic were squashed sideways; contain keeps the raster's own
      aspect, as the picker's maps do. */
   object-fit: contain;
 }
-#ld-text { flex: 1 1 14rem; min-width: 0; }
+#ld-map[data-view="map"] {
+  background: var(--look-hud-bg, var(--scrim-heavy));
+  border-radius: var(--r-sm);
+  box-shadow: inset 0 0 0 1px var(--plate-line);
+}
+#ld-text { flex: 1 1 min(14rem, 41%); min-width: 0; }
+#ld-text[data-map-label]::after {
+  content: attr(data-map-label);
+  display: block;
+  margin-top: calc(var(--gap) * 0.75);
+  padding-top: calc(var(--gap) * 0.75);
+  border-top: 1px solid var(--plate-line);
+  background: var(--ld-map-key, none) left top / min(100%, 6rem) var(--r-xs) no-repeat;
+  color: var(--text);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+}
 #ld-head { display: flex; align-items: center; gap: var(--gap); }
 #ld-flag { display: block; width: calc(2 * var(--fs-6)); flex: 0 0 auto; line-height: 0; }
 #ld-flag svg, #ld-flag img { display: block; width: 100%; height: auto; border-radius: 2px; }
@@ -304,6 +320,44 @@
   margin-bottom: calc(var(--gap) * 0.15);
 }
 .ld-caption-text { display: block; font-weight: 600; max-width: calc(var(--caption-ch, 38) * 1ch); }
+/* Reflow facts at the short edge instead of giving each one a full row.
+   Keep the map and facts side by side even when the circuit is wide. */
+body:is([data-width="narrow"], [data-density="compact"]) #ld-body {
+  gap: calc(var(--pad) * 0.75);
+}
+body:is([data-width="narrow"], [data-density="compact"]) #ld-map { max-width: 38%; }
+body:is([data-width="narrow"], [data-density="compact"]) :is(#ld-title, #ld-meta > div) {
+  min-width: 0; overflow-wrap: anywhere;
+}
+body:is([data-width="narrow"], [data-density="compact"]) #ld-meta {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 4.5em), 1fr));
+  font-size: var(--fs-micro);
+  line-height: 1.2;
+  gap: calc(var(--gap) * 0.5) var(--gap);
+  margin-top: calc(var(--gap) * 0.65);
+}
+body:is([data-width="narrow"], [data-density="compact"]) #ld-text[data-map-label]::after { line-height: 1.25; }
+body[data-width="wide"][data-density="compact"] #ld-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  column-gap: calc(var(--gap) * 0.5);
+}
+body[data-width="wide"][data-density="compact"] #ld-card { padding-block: calc(var(--gap) * 0.6); }
+body[data-width="wide"][data-density="compact"] #ld-wordmark {
+  font-size: var(--fs-6);
+  margin-bottom: calc(var(--gap) * 0.5);
+}
+body[data-width="wide"][data-density="compact"] #ld-wordmark::after { margin-top: calc(var(--gap) * 0.3); }
+body[data-width="wide"][data-density="compact"] #ld-text[data-map-label]::after {
+  margin-top: calc(var(--gap) * 0.5);
+  padding-top: calc(var(--gap) * 0.5);
+}
+/* Reserve two lines so a different stage caption does not move the card. */
+body[data-width="narrow"] #ld-text[data-map-label]::after {
+  min-block-size: calc(2lh + 0.75 * var(--gap) + 1px);
+  box-sizing: border-box;
+}
 @media (prefers-reduced-motion: reduce) {
   #ld-card { transition: none; transform: none; }
 }

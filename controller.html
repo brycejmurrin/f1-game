@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-phone-controller>
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-o+Yf98lzGmWXYL+YEyaFHijcUl6dy+lziQU9e3qzZiI=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-H3jM1cXo65kaB5BeVHiiu1pAYxxRxlhV8jz5xQsqoX8=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-o+Yf98lzGmWXYL+YEyaFHijcUl6dy+lziQU9e3qzZiI=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-awA1cj9JkSM4OGATtX2mdYj9sdieLeWe59vJp0Dma6I=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <!-- Same generation marker as index.html: sw.js reads it before caching a navigation (a page with
      no marker is cached unconditionally, one with a stale marker is skipped). Stamped by the deploy. -->
@@ -374,6 +374,28 @@
              background: radial-gradient(110% 80% at 50% -15%, color-mix(in oklab, var(--red) 18%, transparent), transparent 60%), var(--bg); }
   body.linked.menu #menupad { display: grid; }
   body.menu #ctl { display: none; }
+  #camera-pad, #phone-camera-return { display: none; }
+  body.linked.camera-pad:not(.camera-panel) #menupad { display: none; }
+  body.linked.camera-pad:not(.camera-panel) #camera-pad {
+    position: absolute; inset: 0; z-index: 1; display: grid;
+    padding: calc(10px + var(--sat)) calc(14px + var(--sar)) calc(10px + var(--sab)) calc(14px + var(--sal));
+    grid-template-columns: 1fr minmax(110px, .65fr) 1fr; gap: 12px;
+    align-items: center; justify-items: center; background: var(--bg);
+  }
+  body.linked.camera-pad.camera-panel #phone-camera-return { display: block; }
+  body.camera-pad #b-pause-menu { display: none; }
+  .phone-camera-stick {
+    position: relative; display: grid; place-items: center;
+    width: min(100%, 55vh); aspect-ratio: 1; border-radius: 50%;
+    background: var(--surf-2); border: 1px solid var(--plate-line); box-shadow: var(--edge);
+  }
+  .phone-camera-stick i {
+    width: 36%; aspect-ratio: 1; border-radius: 50%; pointer-events: none;
+    background: var(--plate-hover); border: 1px solid var(--plate-line);
+  }
+  .phone-camera-stick span { position: absolute; bottom: 9%; pointer-events: none; font-weight: 700; }
+  #phone-camera-actions { width: 100%; display: grid; gap: 6px; }
+  #phone-camera-actions button, #phone-camera-return { min-height: 44px; }
   /* The disc: a carbon bowl in the game's plate colours with a painted
      chevron at each edge. Sized on the phone's height (a landscape phone is
      ~360-430px tall) so a thumb reaches every edge without a stretch. The
@@ -477,7 +499,7 @@
   /* touch-action is NOT inherited: body's `none` does not reach the pedal
      divs, and Safari decides double-tap zoom on the touched element. Every
      part of the wheel owns its touches. */
-  #ctl, #ctl *, #menupad, #menupad * { touch-action: none; }
+  #ctl, #ctl *, #menupad, #menupad *, #camera-pad, #camera-pad * { touch-action: none; }
   /* LANDSCAPE ONLY. The wheel is a landscape object — two thumbs on the
      grips, the phone held like a rim — so portrait gets no squeezed layout,
      it gets a card that says which way to turn. The tilt maths follows the
@@ -553,10 +575,25 @@
     <div id="mp-title" role="status">MENU</div>
     <div id="mp-sub">DRAG OR TAP TO MOVE</div>
     <button id="b-pause-menu" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>PAUSE / RESUME</button>
+    <button id="phone-camera-return" class="bigbtn alt" type="button">CAMERA CONTROLS</button>
   </div>
   <div id="ab">
     <button id="b-navBack" type="button" aria-label="Back"><b aria-hidden="true">B</b><small>BACK</small></button>
     <button id="b-navSelect" type="button" aria-label="Select"><b aria-hidden="true">A</b><small>SELECT</small></button>
+  </div>
+</section>
+<section id="camera-pad" class="grain" aria-label="Free camera controls">
+  <div id="phone-camera-move" class="phone-camera-stick" role="group" tabindex="0" aria-label="Move camera with the arrow keys or drag">
+    <i aria-hidden="true"></i><span aria-hidden="true">MOVE</span>
+  </div>
+  <div id="phone-camera-actions">
+    <button id="phone-camera-up" class="bigbtn alt" type="button" aria-label="Raise camera">UP</button>
+    <button id="phone-camera-down" class="bigbtn alt" type="button" aria-label="Lower camera">DOWN</button>
+    <button id="phone-camera-panel" class="bigbtn alt" type="button">PANEL CONTROLS</button>
+    <button id="phone-camera-back" class="bigbtn alt" type="button">BACK</button>
+  </div>
+  <div id="phone-camera-look" class="phone-camera-stick" role="group" tabindex="0" aria-label="Aim camera with the arrow keys or drag">
+    <i aria-hidden="true"></i><span aria-hidden="true">LOOK</span>
   </div>
 </section>
 <section id="ctl" aria-label="Steering wheel controller">
@@ -697,6 +734,7 @@
 <script defer crossorigin="anonymous" src="js/net/scan.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/tilt-roll.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/pedal-travel.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/controller-profiles.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/touch-button-actions.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/touch-button-settings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/phone-pad-codec.js?v=dev"></script>
@@ -728,6 +766,12 @@ window.addEventListener("DOMContentLoaded", function () {
                boost: [$("b-boost"), $("b-boost-big")], aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"),
                recover: $("b-recover"), pause: [$("b-pause"), $("b-pause-menu")],
                navSelect: $("b-navSelect"), navBack: $("b-navBack") },
+    surfaces: { drive: $("ctl"), menu: $("menupad"), camera: $("camera-pad") },
+    surfaceFocus: { drive: $("b-pause"), menu: $("b-navSelect"), camera: $("phone-camera-panel") },
+    cameraPad: { move: $("phone-camera-move"), moveNub: $("phone-camera-move").firstElementChild,
+      look: $("phone-camera-look"), lookNub: $("phone-camera-look").firstElementChild,
+      up: $("phone-camera-up"), down: $("phone-camera-down"), back: $("phone-camera-back"),
+      panel: $("phone-camera-panel"), return: $("phone-camera-return") },
     stick: $("dpad"), nub: $("dpad-nub"),
     arrows: { navUp: $("b-navUp"), navDown: $("b-navDown"), navLeft: $("b-navLeft"), navRight: $("b-navRight") },
     scan: $("scan"), scanBox: $("scan-box"), video: $("scan-video"),

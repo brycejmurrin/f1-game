@@ -14,7 +14,7 @@ let live = null, samplePass = null;
 function capturePass(count) {
   let projection, view, width, height;
   return {
-    index: 0, draws: 0, pump: false, cancelRead: null, garageTime: null,
+    index: 0, draws: 0, pump: false, garageTime: null,
     project(p, v, w, h) {
       if (!projection) {
         projection = p.slice(); view = v.slice(); width = w; height = h;
@@ -181,6 +181,9 @@ function create(G, deps) {
   importFile.addEventListener("change", () => importPhoto(importFile.files && importFile.files[0]));
   const group = (id, title, kids) => mk("section", { id: "ps-group-" + id, attrs: { "aria-label": title } }, [mk("h3", { className: "adv-sec", textContent: title }), ...kids]);
   const captureButton = button("CAPTURE", capture, "ps-capture"), done = button("DONE", () => close(true), "ps-close");
+  const focusCamera = button("MOVE CAMERA", (e) => {
+    if (typeof Photomode !== "undefined") Photomode.focusScene(e.currentTarget);
+  }, "ps-focus-camera");
   captureButton.className = "bigbtn"; done.className = "bigbtn alt";
   // SUBJECT: the Home door opens on whatever the Home scene shows, and the
   // default scene is the garage, so the circuit shoot (free camera over the
@@ -440,7 +443,7 @@ function create(G, deps) {
     mk("p", { className: "adv-help", textContent: "Light effects over any angle, without the helmet frame. Capture previews them and includes them in downloads, saved photos and backgrounds. Driving settings stay unchanged." }),
   ]);
   const panel = mk("section", { id: "ps-panel", className: "sheet", attrs: { "aria-label": "Photo Studio" } }, [
-    mk("header", { className: "sheet-head" }, [mk("h2", { textContent: "PHOTO STUDIO" })]),
+    mk("header", { className: "sheet-head" }, [mk("h2", { textContent: "PHOTO STUDIO" }), focusCamera]),
     mk("div", { id: "ps-body", className: "sheet-body pane" }, [
       mk("p", { id: "ps-context", className: "adv-help" }),
       subjectGroup,
@@ -496,6 +499,7 @@ function create(G, deps) {
       E[id].disabled = value || closing || (id !== "ps-capture" && !last);
     }
     E["ps-close"].disabled = false;
+    focusCamera.disabled = value || closing;
     E["ps-capture"].textContent = value && !closing ? "CAPTURING…" : "CAPTURE";
     E["ps-close"].textContent = closing ? "CLOSING…" : "DONE";
   }
@@ -517,9 +521,9 @@ function create(G, deps) {
     c.head = Math.atan2(sample.t[0], sample.t[2]) - c.yawVis;
     c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevPx = c.px; c.rPrevPz = c.pz;
     c.rPrevHead = c.head; c.rPrevYawVis = c.yawVis; c.speed = 0;
-    if (reframe) setShot("car");
+    if (reframe) setShot("car", true);
   }
-  function setShot(id) {
+  function setShot(id, preserveInput = false) {
     if (st.busy || st.closing) return;
     if (isGarage()) { if (deps.garage && deps.garage.shot) deps.garage.shot(id); }
     else {
@@ -532,7 +536,7 @@ function create(G, deps) {
         const bank = Tracks.banking ? Tracks.banking(G.track, c.s, c.x) : null;
         const y = sample.p[1] + (bank ? bank.dy : 0), fx = Math.sin(c.head), fz = Math.cos(c.head);
         fc.cmd({ eye: [c.px - fx * 9, y + 3.2, c.pz - fz * 9],
-          target: [c.px - fz * 3, y + .5, c.pz + fx * 3], fov });
+          target: [c.px - fz * 3, y + .5, c.pz + fx * 3], fov, preserveInput });
       } else fc.cmd(id === "corner" ? { snap: "corner" } : { snap: "car", fov });
     }
   }
@@ -586,7 +590,7 @@ function create(G, deps) {
     st.open = true; st.generation++; root.hidden = false;
     SettingRow.paint(sampleRow, online ? "1" : String(st.samples));
     SettingRow.disable(sampleRow, online);
-    carGroup.hidden = !hasCar(); visorGroup.hidden = isGarage();
+    carGroup.hidden = !hasCar(); visorGroup.hidden = isGarage(); focusCamera.hidden = isGarage();
     for (const [id, unit] of [["ps-car-position", "%"], ["ps-car-offset", " m"], ["ps-car-rotation", "°"]]) {
       const c = st.source === "race" && hasCar() ? G.player : null;
       const value = !c ? 0 : id === "ps-car-position" ? ((c.s % G.track.total + G.track.total) % G.track.total) / G.track.total * 100
@@ -633,8 +637,11 @@ function create(G, deps) {
   }
   /** @type {(() => void) | null} */
   let releaseCaptureScale = null;
+  /** @type {(() => void) | null} */
+  let cancelStudioRead = null;
   function finishClose(back) {
     if (!st.open && !st.closing) return;
+    cancelStudioRead?.();
     if (activePass) releasePass(activePass);
     if (releaseCaptureScale) releaseCaptureScale();
     if (!isGarage() && cond.tod != null) { resetCond(); cond.tod = null; }
@@ -672,7 +679,11 @@ function create(G, deps) {
     looksChanged = false;
     // Let the caller paint its restored visibility after modal isolation settles.
     if (back && target && target.focus) requestAnimationFrame(() => requestAnimationFrame(() => {
-      if (!st.open && st.generation === generation && target.isConnected) target.focus();
+      const top = typeof UiLayers === "undefined" ? null : UiLayers.top();
+      if (!st.open && st.generation === generation && target.isConnected &&
+          (!top || (typeof MenuNav === "undefined" ? top.contains(target) : MenuNav.ownsFocus(top, target)))) {
+        target.focus({ preventScroll: true });
+      }
     }));
   }
   let activePass = null;
@@ -680,11 +691,14 @@ function create(G, deps) {
     if (activePass !== pass) return;
     activePass = null;
     if (samplePass === pass) samplePass = null;
-    pass.cancelRead?.();
     E["ps-body"].inert = false;
   }
-  /** @param {*} pass @param {(() => void) | null} rendered */
-  async function frame(pass = null, rendered = null) {
+  /**
+   * @param {*} pass
+   * @param {(() => void) | null} rendered
+   * @param {boolean} studioRead Whether an instant read belongs to this Studio visit.
+   */
+  async function frame(pass = null, rendered = null, studioRead = false) {
     const gfx = G.gfx;
     if (gfx && gfx.invalidateSoftPresent && gfx.softPresent && gfx.softPresent()) gfx.invalidateSoftPresent();
     // Observe the display blit immediately. Its result matters only if the
@@ -709,23 +723,24 @@ function create(G, deps) {
         if (gfx.cancelCapture) gfx.cancelCapture("capture timed out", owner);
         reject(Object.assign(new Error("the scene did not draw a frame in time"), { timedOut: true }));
       }, CAPTURE_MS); });
-      let stopRead;
-      const cancelled = pass && new Promise((_, reject) => {
-        stopRead = () => {
+      let stopRead = null;
+      const cancelled = (pass || studioRead) && new Promise((_, reject) => {
+        cancelStudioRead = stopRead = () => {
+          cancelStudioRead = null;
+          reject(Object.assign(new Error("Capture cancelled"), { cancelled: true }));
           gfx.cancelCapture?.("capture cancelled", owner);
-          reject(new Error("Capture cancelled"));
         };
-        pass.cancelRead = stopRead;
         // WGX submits a queued readback on a subsequent present.
-        pass.pump = !!gfx.cancelCapture;
+        if (pass) pass.pump = !!gfx.cancelCapture;
       });
       read = Promise.race(cancelled ? [read, late, cancelled] : [read, late]).finally(() => {
         clearTimeout(capTimer);
-        if (pass) { pass.pump = false; pass.cancelRead = null; }
+        if (cancelStudioRead === stopRead) cancelStudioRead = null;
+        if (pass) pass.pump = false;
       });
       try { pixels = await read; }
       catch (reason) {
-        if ((pass && activePass !== pass) || (reason && reason.timedOut)) throw reason;
+        if ((pass && activePass !== pass) || reason?.cancelled || reason?.timedOut) throw reason;
         // Native WebGPU canvases can compose directly even when a backend has
         // no readback render target. Draw and copy in this same task instead.
         Log.warn("ui", "backend readback unavailable; copying the scene canvas", reason);
@@ -845,7 +860,7 @@ function create(G, deps) {
     } finally { release(); }
   }
   async function sampledFrame(count, maxEdge, rendered) {
-    if (count === 1) return frame(null, rendered);
+    if (count === 1) return frame(null, rendered, true);
     const pass = capturePass(count);
     activePass = samplePass = pass;
     E["ps-body"].inert = true;

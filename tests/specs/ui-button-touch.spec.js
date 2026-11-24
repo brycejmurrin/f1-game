@@ -362,6 +362,27 @@ test.describe("Lighting tuner — pause lifecycle", () => {
     await page.goto("/");
     await waitReady(page);
     await openLightingPhotoMode(page);
+    const scene = page.locator("#pc-scene"), launcher = page.locator("#pc-toggle");
+    await expect(scene).toBeFocused();
+    const target = await page.evaluate(() => window.__apex.camState().tgt);
+    await page.keyboard.down("ArrowLeft");
+    try {
+      await page.waitForFunction((before) => window.__apex.camState().tgt.some((v, i) => Math.abs(v - before[i]) > 0.1),
+        target, { polling: 100, timeout: BOOT_MS });
+    } finally {
+      await page.keyboard.up("ArrowLeft");
+    }
+    await page.keyboard.press("Tab");
+    await expect(launcher).toBeFocused();
+    const panel = page.locator("#pc-panel"), camera = page.locator("#pc-focus-camera");
+    await panel.focus();
+    await page.keyboard.press("Space");
+    await expect(panel).toHaveText("SHOW PANEL");
+    await page.keyboard.press("Space");
+    await expect(panel).toHaveText("HIDE PANEL");
+    await camera.focus();
+    await page.keyboard.press("Enter");
+    await expect(scene).toBeFocused();
     const where = async () => page.evaluate(() => {
       const $ = (id) => document.getElementById(id);
       return {
@@ -377,6 +398,7 @@ test.describe("Lighting tuner — pause lifecycle", () => {
     const expectAt = async (want) => { const got = await where(); expect(got, "got " + JSON.stringify(got)).toEqual(want); };
     await page.keyboard.press("Escape");
     await expectAt({ photo: false, lighting: true, visual: false, settingsHome: false, settings: false, pause: false });
+    await expect(launcher).toBeFocused();
     await page.keyboard.press("Escape");
     await expectAt({ photo: false, lighting: false, visual: true, settingsHome: false, settings: true, pause: false });
     await page.keyboard.press("Escape");

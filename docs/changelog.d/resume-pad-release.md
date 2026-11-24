@@ -1,0 +1,1 @@
+Fixed: Holding a controller button to resume or leave a menu no longer carries that press into acceleration, braking, or rear view. Switching driving devices releases the previous device’s toggle throttle, and Alt+Left keeps its browser behavior.

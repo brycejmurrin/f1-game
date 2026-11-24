@@ -2,7 +2,7 @@
 "use strict";
 
 const InputPadMenu = (function () {
-  function create({ btnDown, btnEdge, nowMs, getPadAxisMap, padRest = () => 0, padButtons = () => [], padBrand = () => "xbox" }) {
+  function create({ btnDown, btnEdge, nowMs, getPadAxisMap, padRest = () => 0, padButtons = () => [], padBrand = () => "xbox", consumeButton = (_button) => {} }) {
     const PAD_NAV_DEADZONE = 0.22; // menu sticks only — larger so a resting stick does not creep
 
     let padNavDir = null;           // held direction while a menu is open, or null
@@ -66,8 +66,9 @@ const InputPadMenu = (function () {
     // 2026-09-08). Along the control's axis the pad steps the VALUE itself and
     // fires input/change the way a real key would; Up/Down go to MenuNav as
     // the ordinary row move they are for the keyboard too.
-    function padNavKey(dir) {
-      const el = document.activeElement;
+    function padNavKey(dir, physical = false) {
+      if (physical) showGamepadFocus();
+      const el = window.MenuNav ? padFocusableInLayer() : document.activeElement;
       const key = PAD_NAV_KEYS[dir];
       const horizontal = dir === "left" || dir === "right";
       if (el && !el.disabled) {
@@ -121,7 +122,7 @@ const InputPadMenu = (function () {
       padDispatchKey(key);
     }
 
-    function padNavDirOf(pad) {
+    function padNavDirOf(pad, dpadOnly) {
       const axisMap = getPadAxisMap();
       const std = pad.mapping == null || pad.mapping === "standard";
       // Buttons 12-15 and axes 2/3 are the d-pad and the right stick ONLY on the
@@ -130,6 +131,7 @@ const InputPadMenu = (function () {
       // held "up" forever. Such a device navigates by the steering axis the
       // player set up (left/right) and the paddles they bound (shift down/up).
       if (!std) {
+        if (dpadOnly) return null;
         const sx = axisMap.steer;
         const ax = pad.axes || [];
         if (Number.isInteger(sx) && sx >= 0 && sx < ax.length) {
@@ -145,6 +147,7 @@ const InputPadMenu = (function () {
       if (btnDown(pad, 13)) return "down";
       if (btnDown(pad, 14)) return "left";
       if (btnDown(pad, 15)) return "right";
+      if (dpadOnly) return null;
       // A wheel's pedals rest at -1: read as a stick they held a direction and
       // scrolled the menu on their own. The mapped pedal axes are not sticks.
       const ped = (i) => i === axisMap.throttle || i === axisMap.brake;
@@ -170,14 +173,12 @@ const InputPadMenu = (function () {
     }
 
     function padFocusableInLayer() {
-      const layer = window.MenuNav && window.MenuNav.activeLayer();
+      const nav = window.MenuNav;
+      const layer = nav && nav.activeLayer();
       if (!layer) return null;
       const active = document.activeElement;
-      const sel = window.MenuNav.FOCUSABLE;
-      if (active && sel && layer.contains(active) && active.matches && active.matches(sel)) {
-        return active;
-      }
-      return null;
+      if (!nav.FOCUSABLE || !active?.matches?.(nav.FOCUSABLE) || active.getAttribute?.("aria-hidden") === "true") return null;
+      return (nav.ownsFocus?.(layer, active) ?? layer.contains(active)) ? active : null;
     }
 
     // One ArrowDown into MenuNav — the empty path padActivate takes.
@@ -248,7 +249,7 @@ const InputPadMenu = (function () {
       }
     }
 
-    function padNavPoll(pad) {
+    function padNavPoll(pad, { dpadOnly = false } = {}) {
       const top = window.UiLayers && window.UiLayers.top();
       if (top !== padNavSeedLayer) {
         padNavSeedLayer = top || null;
@@ -259,21 +260,20 @@ const InputPadMenu = (function () {
         padNavDir = null;
         padNavNextT = 0;
       }
-      const dir = padNavDirOf(pad);
+      const dir = padNavDirOf(pad, dpadOnly);
       // Nintendo's confirm is the physical A, which the standard mapping numbers 1.
       const nin = padBrand(pad) === "nintendo";
       const okBtn = nin ? 1 : 0, backBtn = nin ? 0 : 1;
       if (!padNavSeeded) {
         padNavSeeded = true;
-        if (!dir && !btnEdge(pad, okBtn)) padSeedFocus();
+        if (!dpadOnly && !dir && !btnEdge(pad, okBtn)) padSeedFocus();
       }
       if (dir) {
         const now = nowMs();
         const fresh = dir !== padNavDir;
         if (fresh || now >= padNavNextT) {
           padNavDir = dir;
-          showGamepadFocus();
-          padNavKey(dir);
+          padNavKey(dir, true);
           padNavNextT = now + (fresh ? PAD_NAV_DELAY_MS : PAD_NAV_REPEAT_MS);
         }
       } else {
@@ -282,13 +282,13 @@ const InputPadMenu = (function () {
       if (pad.mapping == null || pad.mapping === "standard") {
         // Triggers page long panes; LB/RB step left/right. A wheel's mapping ""
         // puts paddles/pedals on vendor indices — those already navigate above.
-        if (btnEdge(pad, 6)) padDispatchKey("PageUp", true);
-        if (btnEdge(pad, 7)) padDispatchKey("PageDown", true);
-        if (btnEdge(pad, 4)) padDispatchKey("ArrowLeft", true);
-        if (btnEdge(pad, 5)) padDispatchKey("ArrowRight", true);
+        if (!dpadOnly && btnEdge(pad, 6)) padDispatchKey("PageUp", true);
+        if (!dpadOnly && btnEdge(pad, 7)) padDispatchKey("PageDown", true);
+        if (btnEdge(pad, 4)) padNavKey("left", true);
+        if (btnEdge(pad, 5)) padNavKey("right", true);
       }
-      if (btnEdge(pad, okBtn)) { showGamepadFocus(); padActivate(); }
-      if (btnEdge(pad, backBtn)) { showGamepadFocus(); padEscape(); }
+      if (btnEdge(pad, okBtn)) { consumeButton(okBtn); showGamepadFocus(); padActivate(); }
+      if (btnEdge(pad, backBtn)) { consumeButton(backBtn); showGamepadFocus(); padEscape(); }
     }
 
     function remoteNav(dir) {

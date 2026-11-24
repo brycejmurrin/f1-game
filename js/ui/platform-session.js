@@ -355,6 +355,7 @@ Input.init(canvas, { onPause: () => {
   if (top?.id === "loading") return;
   // P / gamepad Start cancels an arrangement before touching race state.
   if (top?.id === "screen-arranger") { document.getElementById("screen-arranger-cancel")?.click(); return; }
+  if (top?.id === "dock-edit-bar") { document.getElementById("dock-edit-cancel")?.click(); return; }
   // Innermost sheet first: HOW TO PLAY lays OVER the settings menu, so a pause
   // press there has to close the help sheet, not the menu underneath it (which
   // would leave the help sheet floating over the race with no way back). Reached

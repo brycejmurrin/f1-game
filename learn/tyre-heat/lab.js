@@ -39,6 +39,7 @@
     replay: {label: 'compressed thermal run', rewind: true, input: () => 'elapsed'},
     key: 'Time is in seconds and temperature is in °C. The shaded target is illustrative. Thin comparison traces share the selected workload on the other asphalt.',
     intro: 'A tyre can feel hot at the tread while the rubber beneath it is still cool. Compare how sliding and repeated loading heat the surface and core over a 90-second run.',
+    inGame: "With Tyre Wear enabled, Apex tracks surface and carcass heat and gives compounds different grip windows. If you slide on a cold set, easing off can let the modeled graining clear. Blistering persists until you change tyres. The lab uses one illustrative window. Real tyre operating temperatures depend on the compound and running conditions.",
     controls: [
       { id: 'track', primary: true, label: 'Track surface', value: 'cold', options: [['cold', 'Cold night · 15 °C'], ['hot', 'Hot track · 50 °C']] },
       { id: 'sliding', label: 'Sliding intensity', min: 0, max: 100, step: 5, value: 80, unit: '%' },

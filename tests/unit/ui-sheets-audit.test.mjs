@@ -1014,8 +1014,10 @@ test("SettingRow wrap:false clamps the LAPS chevrons at the ends", () => {
   assert.equal(built.prev.disabled, true, "down from 3 does not wrap to FULL");
   built.prev.click();
   assert.equal(laps, 3);
+  built.next.focus();
   built.next.click();
   assert.equal(laps, 5);
+  assert.equal(dom.document.activeElement, built.sel, "the pointer chevron hands focus to the row's select");
   built.next.click();
   assert.equal(laps, 57);
   assert.equal(built.next.disabled, true, "up from FULL does not wrap to 3");

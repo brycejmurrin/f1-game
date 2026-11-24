@@ -6,6 +6,26 @@ import vm from "node:vm";
 import { read, boot, fakePad, plain, bootUi, menuRig, rawPad, setBtn, releaseWheelPedal } from "../helpers/key-binds-rig.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
+test("confirming Resume cannot become gas until that button is released", () => {
+  const h = menuRig();
+  const pad = fakePad(h.sb, h.fire, "DualSense Wireless Controller");
+  h.sb.document.activeElement.click = () => { h.navOpen.on = false; };
+  h.tick();
+  pad.press(0); h.tick(); h.tick();
+  assert.equal(h.Input.throttleLevel(), 0, "Cross still belongs to Resume");
+  h.sb.navigator.getGamepads = () => [];
+  h.tick();
+  h.sb.navigator.getGamepads = () => [pad.pad];
+  h.tick();
+  assert.equal(h.Input.throttleLevel(), 0, "a missing snapshot is not a witnessed release");
+  h.Input.setPadPedalDeadzone("throttle", 0.25);
+  pad.pad.buttons[7] = { pressed: true, value: 0.625 }; h.tick();
+  assert.equal(h.Input.throttleLevel(), 0.5, "the other gas binding retains its calibrated response");
+  pad.release(7); pad.release(0); h.tick();
+  pad.press(0); h.tick();
+  assert.equal(h.Input.throttleLevel(), 1, "a fresh Cross press can drive");
+});
+
 test("a paired DualSense moves menu focus and shows the controller ring after touch", () => {
   const h = menuRig();
   const doc = h.sb.document;
@@ -50,6 +70,16 @@ test("a paired DualSense moves menu focus and shows the controller ring after to
   h.navOpen.on = false; h.tick();
   assert.equal(root.dataset.gamepadNav, undefined, "leaving menus clears the ring");
   assert.match(read("css/responsive.css"), /:root\[data-gamepad-nav="on"\] :focus:not\(body\)/);
+});
+
+test("Cross skips a pointer-only chevron that still has focus", () => {
+  const h = menuRig();
+  const pad = fakePad(h.sb, h.fire);
+  const chevron = h.sb.document.activeElement;
+  chevron.getAttribute = (name) => name === "aria-hidden" ? "true" : null;
+  pad.press(0); h.tick();
+  assert.equal(h.clicks, 0);
+  assert.equal(h.dispatched.at(-1)?.key, "ArrowDown", "seed a usable control instead");
 });
 
 test("reconnecting the same pad requires a release before it can activate a menu again", () => {
@@ -136,6 +166,34 @@ test("D-pad Left/Right on a focused <select> wraps past disabled options and fir
   assert.equal(events.filter((t) => t === "keydown").length, 1, "the cross axis is a key, dispatched at the focused select");
   assert.equal(dispatched.length, 0, "…at the CONTROL, not at the document (an element's own handler must see it)");
   assert.equal(keys.pop().key, "ArrowDown", "the cross-axis arrow is the plain synthetic keydown MenuNav walks on");
+  events.length = 0;
+  press(5); Input.poll(); release(5); Input.poll();
+  assert.equal(sel.selectedIndex, 0, "RB steps a native select just like D-pad Right");
+  assert.deepEqual(events, ["input", "change"]);
+});
+
+test("camera mode reserves sticks and triggers, leaving D-pad, shoulders and confirm for the panel", () => {
+  const h = menuRig();
+  const moves = [];
+  const focused = h.sb.document.activeElement;
+  focused.dispatchEvent = (event) => { moves.push(event.key); };
+  h.sb.document.activeElement = { id: "pc-scene", matches: () => false };
+  const buttons = new Set([6, 7]);
+  const menu = vm.runInContext("InputPadMenu", h.sb).create({
+    btnDown: (_pad, index) => buttons.has(index),
+    btnEdge: (_pad, index) => buttons.has(index),
+    nowMs: () => 0,
+    getPadAxisMap: () => ({ steer: 0, steerInvert: 1 }),
+  });
+  const pad = { mapping: "standard", axes: [1, 0, -1, 0] };
+  menu.poll(pad, { dpadOnly: true });
+  assert.deepEqual(h.dispatched, [], "an idle controller must leave keyboard camera focus alone");
+  assert.deepEqual(moves, []);
+  h.sb.document.activeElement = focused;
+  buttons.add(13); buttons.add(5); buttons.add(0);
+  menu.poll(pad, { dpadOnly: true });
+  assert.deepEqual(moves, ["ArrowDown", "ArrowRight"]);
+  assert.equal(h.clicks, 1);
 });
 
 test("D-pad and bumper arrows reach the focused SettingRow", () => {

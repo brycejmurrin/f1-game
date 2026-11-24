@@ -20,6 +20,7 @@
     title:'Wet lines and aquaplaning',
     replay: {label: 'wet corner', initial: .5},
     intro:'Three lines cross the same bend. The usual groove is rubbered in, a strip beside it has exposed texture, and water collects along the outer edge.',
+    inGame: "With mixed weather, Apex can wet one part of the circuit before another. Local wetness, tread and speed determine how much grip you lose, with slicks aquaplaning earlier than wets. The lab isolates thin film and pooled water to show how those conditions affect a real tyre.",
     key:'Yellow dashes show the intended line and white dashes mark paint. Blue shows standing water. The cutaway follows the car and reports film and pool depth separately.',
     presets:[
       ['Las Vegas · Wet (illustrative)', {line:'textured', tyre:'wet', water:5.5, film:1.2, speed:125}],

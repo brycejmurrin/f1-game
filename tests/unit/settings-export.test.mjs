@@ -158,14 +158,15 @@ function bootImportUI(opts = {}) {
 // Restore into an empty profile and reload the actual option owner, including its
 // first-read cache. The source can have a URL override that the backup must ignore.
 function bootPreference(disk, owner, search = "") {
+  const lineAppearance = {};
   const b = boot({ realStore: true, disk, globals: {
-    location: { search }, DrivingLine: { setPalette() {}, setOpacity() {} },
+    location: { search }, DrivingLine: { setPalette(v) { lineAppearance.palette = v; }, setOpacity(v) { lineAppearance.opacity = v; } },
   } });
   const cockpit = owner === "cockpit";
   const src = cockpit ? "js/camera/cockpit-opts.js" : "js/ui/driving-line-opts.js";
   const binding = cockpit ? "CockpitOpts" : "DrivingLineOpts";
   const opts = vm.runInContext(read(src) + "\n" + binding, b.sb, { filename: absSrc(src) });
-  return { ...b, preference: cockpit ? opts.turnChaseLead : opts.brakeCue };
+  return { ...b, lineAppearance, preference: cockpit ? opts.turnChaseLead : opts.brakeCue };
 }
 
 for (const mode of ["all", "changes"]) {
@@ -281,6 +282,85 @@ test("visor optics and water settings survive both backup modes and reject inval
   assert.equal(target.disk.get("apex26.helmetVisorDropSize"), "100", "restoring the exported default resets the size");
   assert.equal(target.collect("all").settings.camera.helmetVisorDropSize, "100", "reset restores the shipped percent");
   assert.equal(target.collect("changes").settings.camera?.helmetVisorDropSize, undefined, "reset no longer appears changed");
+});
+
+test("button preset backups carry all four modes and keep explicit empty phone responses separate", () => {
+  const source = boot({ touch: true, mobile: true }), target = boot({ touch: true, mobile: true });
+  const modes = {
+    keyboard: [{ id: "profile-1", name: "Keys", values: { throttle: ["KeyW", null] } }],
+    pad: [{ id: "profile-1", name: "Pad", values: { throttle: [7, null] } }],
+    touch: [{ id: "profile-1", name: "Touch", values: { v: 1, buttons: { gas: { start: 45 } } } }],
+    phone: [{ id: "profile-1", name: "Phone", values: null }],
+  };
+  source.GameStore.store.set("controlButtonPresets", { v: 1, modes });
+  source.GameStore.store.set("touchButtonProfiles", { v: 1, buttons: { gas: { start: 50 } } });
+  source.GameStore.store.set("phoneButtonProfiles", { v: 1, buttons: {} });
+  const saved = source.collect("all");
+  assert.equal(target.loadSettings(saved).failed, 0);
+  assert.deepEqual(JSON.parse(target.disk.get("apex26.controlButtonPresets")), { v: 1, modes });
+  assert.deepEqual(JSON.parse(target.disk.get("apex26.phoneButtonProfiles")), { v: 1, buttons: {} });
+  assert.equal(target.SettingsExport.resetSettings("controls").ok, true);
+  assert.ok(target.disk.has("apex26.controlButtonPresets"));
+  assert.ok(target.disk.has("apex26.phoneButtonProfiles"));
+});
+
+const responseMap = (start) => ({ v: 1, buttons: { gas: { start } } });
+const legacyResponseFile = (value, mode = "changes", desktop = false) => ({
+  format: "apex26-settings-v1", mode, device: { desktop },
+  settings: { driving: { touchButtonProfiles: value } },
+});
+function bootButtonResponses(opts = {}) {
+  let phone = false;
+  const document = { documentElement: { hasAttribute: key => phone && key === "data-phone-controller" } };
+  const b = boot({ realStore: true, touch: true, mobile: true, globals: { document }, ...opts });
+  // In the game, building the driving buttons seeds the Phone profile before Settings opens.
+  b.pedals.watchButtonProfile("gas", () => {});
+  return { ...b, usePhone: () => { phone = true; } };
+}
+
+test("legacy shared responses restore both surfaces after boot and clear inherited settings from ALL", () => {
+  const target = bootButtonResponses();
+  for (const mode of ["changes", "all"]) {
+    const legacy = legacyResponseFile(responseMap(45), mode);
+    assert.equal(target.loadSettings(legacy).applied, 2);
+    assert.deepEqual(target.collect("all").settings.driving.phoneButtonProfiles, responseMap(45));
+  }
+  target.usePhone();
+  assert.equal(target.pedals.buttonProfile("gas").start, 45);
+  assert.equal(target.loadSettings(legacyResponseFile(null, "all")).applied, 2);
+  assert.equal(target.pedals.buttonProfile("gas").start, undefined);
+});
+
+test("legacy shared responses preserve explicit Phone edits and stay device-local", () => {
+  const target = bootButtonResponses();
+  target.usePhone();
+  target.pedals.setButtonProfile("gas", { start: 70 });
+  assert.equal(target.loadSettings(legacyResponseFile(responseMap(45))).applied, 1);
+  assert.equal(target.pedals.buttonProfile("gas").start, 70);
+  target.pedals.resetButtonProfile("gas");
+  assert.equal(target.loadSettings(legacyResponseFile(responseMap(40), "all")).applied, 1);
+  assert.equal(target.pedals.buttonProfile("gas").start, undefined);
+
+  const fresh = bootButtonResponses();
+  const crossDevice = fresh.loadSettings(legacyResponseFile(responseMap(45), "all", true));
+  assert.deepEqual([crossDevice.applied, crossDevice.deviceSkipped], [0, 1]);
+  const malformed = fresh.loadSettings(legacyResponseFile({ v: 1, buttons: { retired: {} } }));
+  assert.deepEqual([malformed.applied, malformed.skipped], [0, 1]);
+  fresh.usePhone();
+  assert.equal(fresh.pedals.buttonProfile("gas").start, undefined);
+});
+
+test("modern CHANGES files keep independent Phone responses when only touchscreen changed", () => {
+  const source = bootButtonResponses();
+  source.pedals.setButtonProfile("gas", { start: 45 });
+  const backup = source.collect("changes");
+  assert.equal(backup.buttonResponseSchema, 2);
+  assert.equal(backup.settings.driving.phoneButtonProfiles, undefined);
+  const target = bootButtonResponses();
+  assert.equal(target.loadSettings(backup).applied, 1);
+  assert.equal(target.pedals.buttonProfile("gas").start, 45);
+  target.usePhone();
+  assert.equal(target.pedals.buttonProfile("gas").start, undefined);
 });
 
 test("backup controls mount once in their own settings page, outside renderer options", () => {
@@ -606,6 +686,25 @@ test("a fresh store exports no changes, and ALL lists every key at its default",
   assert.equal(all.settings.display.gfxPreset, null, "unset per-device default: the loading device keeps its own");
   assert.equal(all.settings.audio.sndTune.gain, 1, "an object default is spelled out");
   assert.deepEqual(all.changed, []);
+});
+
+test("a marker-only changed controller profile import retains saved wheel devices", () => {
+  const wheel = { id: "Wheel", axes: { steer: 3, throttle: 2 }, buttons: { camera: [19] } };
+  const profiles = { v: 1, devices: [wheel], legacyClaimed: false };
+  const disk = { "apex26.padProfiles": JSON.stringify(profiles) };
+  for (const [mode, patch, devices] of [
+    ["changes", { legacyClaimed: true }, [wheel]],
+    ["changes", { legacyClaimed: true, devices: [] }, []],
+    ["all", { legacyClaimed: true }, []],
+  ]) {
+    const game = boot({ disk, realStore: true });
+    const result = game.loadSettings({
+      format: game.collect(mode).format, mode, settings: { driving: { padProfiles: patch } },
+    });
+    assert.deepEqual(result.sections.preferences, { applied: 1, skipped: 0, failed: 0 });
+    const reloaded = boot({ disk: Object.fromEntries(game.disk), realStore: true });
+    assert.deepEqual(JSON.parse(reloaded.disk.get("apex26.padProfiles")), { v: 1, devices, legacyClaimed: true });
+  }
 });
 
 test("changes-only backups restore complete solo race drafts and explicit HUD maps", () => {
@@ -2606,7 +2705,7 @@ test("pedal dead zones round-trip and clamp imported trigger values", () => {
 
 test("Controls reset removes all input overrides without resetting assistance or progress", () => {
   const keys = ["steerMode", "autoThrottle", "tiltDeg", "steerRate", "pace", "carWeight", "touchCurve", "touchRange", "dragSmooth", "digitalRate", "analogSpeedSteer", "padDeadzone", "padGasDeadzone", "padBrakeDeadzone", "padAxes", "padProfiles", "padRest", "keys", "pad", "dockLayout", "touchButtonProfiles", "pedalSlide", "throttleLatch", "holdMode", "hudBtnScale"];
-  const keep = { "apex26.career": "saved", "apex26.photoLibrary": "photos", "apex26.drivingHelp": "7", "apex26.motion": '"reduce"', "apex26.volMusic": "0.2", "apex26.steerSchema": "6" };
+  const keep = { "apex26.career": "saved", "apex26.photoLibrary": "photos", "apex26.drivingHelp": "7", "apex26.adaptiveButtons": "10", "apex26.motion": '"reduce"', "apex26.volMusic": "0.2", "apex26.steerSchema": "6" };
   const b = boot({ disk: { ...Object.fromEntries(keys.map(k => ["apex26." + k, "3"])), ...keep } });
   assert.equal(b.SettingsExport.resetSettings("controls").ok, true);
   assert.deepEqual(keys.filter(k => b.disk.has("apex26." + k)), []);
@@ -2621,12 +2720,47 @@ test("section resets respect page ownership rather than legacy backup groups", (
     ["display", ["hudLayout", "helmetVisor", "camTuneTrack", "camComfort"], ["dockLayout", "hudBtnScale", "uiScale", "gfxPreset"]],
     ["appearance", ["uiTheme", "screenPlacement", "uiScale"], ["appearanceProfiles", "captions", "textSize", "homePhoto"]],
     ["driving", ["manual", "autoThrottle", "aeroMode", "conditionCues", "drivingHelp"], ["raceDraft", "steerMode", "tiltDeg"]],
-    ["advanced", ["pace", "tiltDeg", "steerRate", "padCurve"], ["keys", "padProfiles", "dockLayout"]],
+    ["advanced", ["pace", "tiltDeg", "steerRate", "padCurve"], ["keys", "padProfiles", "dockLayout", "adaptiveButtons"]],
   ];
   for (const [scope, removed, kept] of cases) {
     const b = boot({ disk: Object.fromEntries([...removed, ...kept].map(k => ["apex26." + k, "3"])) });
     assert.equal(b.SettingsExport.resetSettings(scope).ok, true, scope);
     assert.deepEqual([...b.disk.keys()].sort(), kept.map(k => "apex26." + k).sort(), scope);
+  }
+});
+
+test("#6294 Driving Aids reset clears both braking cues and Adaptive Buttons across reload", () => {
+  const b = bootPreference({ "apex26.brakeCue": "7", "apex26.lineBrakeCue": '"on"',
+    "apex26.adaptiveButtons": "10", "apex26.steerRate": "8", "apex26.drivingLinePalette": '"pink"',
+    "apex26.raceDraft": '{"laps":"10"}', "apex26.career": '"saved"' }, "line");
+  assert.equal(b.preference(), true);
+  assert.equal(b.SettingsExport.resetSettings("driving").ok, true);
+  const restarted = bootPreference(Object.fromEntries(b.disk), "line");
+  assert.equal(restarted.preference(), false, "the fallback beep remains disabled after Predictive resets");
+  for (const key of ["brakeCue", "lineBrakeCue", "adaptiveButtons"])
+    assert.equal(restarted.GameStore.store.getStored(key), undefined, key + " returns to its boot default");
+  assert.equal(restarted.collect("all").settings.steering.brakeCue, 1);
+  assert.equal(restarted.collect("all").settings.steering.adaptiveButtons, 6);
+  for (const [key, value] of [["steerRate", "8"], ["drivingLinePalette", '"pink"'],
+    ["raceDraft", '{"laps":"10"}'], ["career", '"saved"']])
+    assert.equal(restarted.disk.get("apex26." + key), value, key + " stays saved");
+});
+
+test("#6295 HUD & Camera reset restores driving line appearance across reload without changing aids", () => {
+  const b = bootPreference({ "apex26.drivingLinePalette": '"pink"', "apex26.drivingLineOpacity": '"solid"',
+    "apex26.lineBrakeCue": '"on"', "apex26.raceLine": "2", "apex26.adaptiveButtons": "10",
+    "apex26.gfxPreset": '"medium"' }, "line");
+  assert.deepEqual(b.lineAppearance, { palette: "pink", opacity: "solid" });
+  assert.equal(b.SettingsExport.resetSettings("display").ok, true);
+  const restarted = bootPreference(Object.fromEntries(b.disk), "line");
+  assert.deepEqual(restarted.lineAppearance, { palette: "f1", opacity: "normal" });
+  assert.equal(restarted.preference(), true, "Line-Speed Cue belongs to Driving Aids");
+  for (const [key, value] of [["raceLine", "2"], ["adaptiveButtons", "10"], ["gfxPreset", '"medium"']])
+    assert.equal(restarted.disk.get("apex26." + key), value, key + " stays saved");
+  for (const scope of ["controls", "advanced", "driving", "graphics"]) {
+    const other = boot({ disk: { "apex26.drivingLinePalette": '"pink"', "apex26.drivingLineOpacity": '"solid"' } });
+    assert.equal(other.SettingsExport.resetSettings(scope).ok, true);
+    assert.equal(other.disk.size, 2, scope + " preserves line appearance");
   }
 });
 
@@ -2641,6 +2775,24 @@ test("all preferences reset preserves saves and reusable profiles and rejects un
   assert.equal(b.SettingsExport.resetSettings("files").ok, true);
   const retained = [...b.SettingsExport.SPEC.filter(r => r.info).map(r => "apex26." + r.k), ...keep.map(k => "apex26." + k)];
   assert.deepEqual([...b.disk.keys()].sort(), retained.sort());
+});
+
+test("Reset Appearance preserves Garage looks across reload", () => {
+  const looks = { garageLook: "workshop", crewLook: "sculpted", garageMood: "night" };
+  const disk = Object.fromEntries(Object.entries(looks).map(([key, value]) => ["apex26." + key, value]));
+  const b = bootImportUI({ realStore: true, disk: { ...disk, "apex26.uiTheme": '"light"' } });
+  const launcher = b.dom.document.createElement("button");
+  b.dom.byId("pm-panel-files").appendChild(launcher);
+  b.SettingsExport.resetRow("appearance", launcher);
+  [...b.dom.document.querySelectorAll("button")].find(n => n.textContent === "CONFIRM RESET & RELOAD").click();
+  assert.equal(b.reloads(), 1);
+
+  const reloaded = boot({ realStore: true, disk: Object.fromEntries(b.disk) });
+  assert.equal(reloaded.GameStore.store.getStored("uiTheme"), undefined);
+  for (const [key, value] of Object.entries(looks)) assert.equal(reloaded.GameStore.store.raw(key), value, key);
+
+  assert.equal(reloaded.SettingsExport.resetSettings("files").ok, true);
+  for (const key of Object.keys(looks)) assert.equal(reloaded.GameStore.store.raw(key), null, key);
 });
 
 test("refused reset restores previous preferences and reports failure", () => {

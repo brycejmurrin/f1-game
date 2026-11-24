@@ -10,6 +10,7 @@
     replay: {label: "pit comparison", steps: 2},
     key: "The dotted line marks level. Each replay step shows the change to your gap from comparison pace or pit loss.",
     intro: "You start behind a rival. Compare the gap after both cars stop, when the temporary track-position swap has cleared.",
+    inGame: "With Tyre Wear enabled, fresh tyres take time to warm and rivals can pit early for an undercut or stop to cover one. Watch the HUD’s PIT LOSS estimate and the gap behind before taking pit entry. The lab fixes both stop times in Strategy mode so you can isolate pace, warm-up and traffic. Real pit walls weigh those factors against live gaps and the time lost in the lane.",
     controls: [
       { id: "mode", label: "Exercise", options: [["strategy", "Strategy · equal stops"], ["execution", "Execution · variable pit loss"]], value: "strategy" },
       { id: "call", primary: true, label: "Your pit call", options: [["first", "Stop first · undercut"], ["second", "Stay out a lap · overcut"]], value: "first" },

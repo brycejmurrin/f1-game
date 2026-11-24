@@ -1368,6 +1368,7 @@ const LAZY_CAREER_UI_EDGES = [["js/career/career-planning-ui.js", "js/career/car
 const LAZY_UI_PRESETS = [
   "js/ui/desktop-graphics.js",   // Graphics loads individual effect controls on entry.
   "js/ui/screen-regions.js", "js/ui/screen-placement.js", "js/ui/screen-arranger.js",
+  "js/ui/circuit-details-panel.js", // Circuit Details also loads independently from either picker door.
   "js/ui/hud-layout-editor.js",  // HUD settings controls and saved color policy
   "js/ui/dock-toolbar.js",         // Reposition Touch Controls loads its toolbar on first use.
   "js/ui/hud-arrange.js",          // ARRANGE HUD editor: DockLayout.arrangeDoor (eager) loads it on the first pause-card tap
@@ -1555,6 +1556,7 @@ const CONTROLLER = [
   "js/net/scan.js",         // the pairing screen's SCAN QR CODE (jsQR is injected on demand)
   "js/input/tilt-roll.js",
   "js/input/pedal-travel.js", // the phone wheel's pedals share hold-buttons' travel numbers
+  "js/input/controller-profiles.js", // named button profiles shared with Controls
   "js/input/touch-button-actions.js",
   "js/ui/touch-button-settings.js",
   "js/input/phone-pad-codec.js",

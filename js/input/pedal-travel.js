@@ -24,7 +24,12 @@ const PedalTravel = (function () {
   }
 
   const KEY = "touchButtonProfiles";
+  const PHONE_KEY = "phoneButtonProfiles";
+  const EMPTY_PHONE = Object.freeze({ v: 1, buttons: Object.freeze({}) });
   const BUTTONS = ["left", "right", "gas", "brake"];
+  const edges = ["top", "bottom", "left", "right"];
+  const directions = Object.freeze(["up", "down", "left", "right", "up-left", "up-right", "down-left", "down-right", "any"]);
+  const curves = ["fine", "quick", "smooth"];
   const raceButtons = Object.freeze({ left: "btn-steer-left", right: "btn-steer-right", gas: "btn-throttle", brake: "btn-brake",
     boost: "btn-boost", overtake: "btn-ot", aero: "btn-aero", shiftUp: "shift-up", shiftDown: "shift-down",
     camera: "btn-cam", pause: "pausebtn", showHud: "hud-restore" });
@@ -50,23 +55,31 @@ const PedalTravel = (function () {
       case "down": return dy;
       case "left": return -dx;
       case "right": return dx;
+      case "up-left": return (-dx - dy) * Math.SQRT1_2;
+      case "up-right": return (dx - dy) * Math.SQRT1_2;
+      case "down-left": return (dy - dx) * Math.SQRT1_2;
+      case "down-right": return (dx + dy) * Math.SQRT1_2;
+      case "any": return Math.hypot(dx, dy);
       default: return profile.press === "progressive" ? Math.hypot(dx, dy) : instantAxis;
     }
   }
 
   // Shape only the first slide distance. Preserve the sign and any overtravel
   // so a directional slide can still unwind a timed hold at its normal limit.
-  function slideFraction(distance, profile) {
-    const fraction = distance / profile.travel;
+  function responseFraction(fraction, curve) {
     const t = Math.abs(fraction);
-    if (!profile.slideCurve || t >= 1) return fraction;
+    if (!curve || t >= 1) return fraction;
     const sign = Math.sign(fraction);
-    switch (profile.slideCurve) {
+    switch (curve) {
       case "fine": return sign * t * t;
       case "quick": return sign * t * (2 - t);
       case "smooth": return sign * t * t * (3 - 2 * t);
       default: return fraction;
     }
+  }
+
+  function slideFraction(distance, profile) {
+    return responseFraction(distance / profile.travel, profile.slideCurve);
   }
 
   function level(profile, advancePx, holdFraction = 0) {
@@ -121,25 +134,28 @@ const PedalTravel = (function () {
       return out;
     }
     if (value.press === "progressive") out.press = value.press;
-    if (["fine", "quick", "smooth"].includes(value.slideCurve)) out.slideCurve = value.slideCurve;
+    if (curves.includes(value.slideCurve)) out.slideCurve = value.slideCurve;
     if (Number.isFinite(value.travel)) {
       const travel = Math.max(40, Math.min(160, Math.round(value.travel)));
       if (travel !== TRAVEL_PX) out.travel = travel;
     }
     if ((id === "left" || id === "right") && Number.isFinite(value.adaptive))
       out.adaptive = Math.max(1, Math.min(10, Math.round(value.adaptive)));
-    if (["up", "down", "left", "right"].includes(value.direction)) out.direction = value.direction;
+    if (directions.includes(value.direction)) out.direction = value.direction;
     for (const field of ["start", "end", "holdEnd"]) {
       if (Number.isFinite(value[field])) out[field] = Math.max(0, Math.min(100, Math.round(value[field])));
     }
     if (out.holdEnd === 100) delete out.holdEnd;
-    const edges = ["top", "bottom", "left", "right"];
     if (edges.includes(value.fullEdge)) out.fullEdge = value.fullEdge;
+    if (edges.includes(value.sliderEdge)) out.sliderEdge = value.sliderEdge;
+    if (Number.isFinite(value.sliderStart)) out.sliderStart = Math.max(0, Math.min(100, Math.round(value.sliderStart)));
+    if (Number.isFinite(value.sliderEnd)) out.sliderEnd = Math.max(0, Math.min(100, Math.round(value.sliderEnd)));
+    if (curves.includes(value.sliderCurve)) out.sliderCurve = value.sliderCurve;
     if (id === "gas" || id === "brake") {
-      if (edges.includes(value.sliderEdge)) out.sliderEdge = value.sliderEdge;
       if (value.sliderEntry === "enter" || value.sliderEntry === "stay") out.sliderEntry = value.sliderEntry;
     }
     if (["percent", "bar"].includes(value.indicator)) out.indicator = value.indicator;
+    if (edges.includes(value.fillDirection) && value.fillDirection !== "top") out.fillDirection = value.fillDirection;
     if ([0.5, 2].includes(value.buildPower)) out.buildPower = value.buildPower;
     if ([250, 500, 1000, 2000].includes(value.buildMs)) out.buildMs = value.buildMs;
     if ([25, 70, 100].includes(value.brightness)) out.brightness = value.brightness;
@@ -148,8 +164,8 @@ const PedalTravel = (function () {
     return out;
   }
 
-  function normalizeProfiles(value) {
-    if (value === null) return null;
+  function normalizeProfiles(value, keepEmpty = false) {
+    if (value === null) return keepEmpty ? EMPTY_PHONE : null;
     if (!object(value) || value.v !== 1 || !object(value.buttons)) return undefined;
     const buttons = {};
     for (const id of allButtons) {
@@ -159,7 +175,7 @@ const PedalTravel = (function () {
     if (Object.keys(buttons).length) return { v: 1, buttons };
     // Empty is the valid unpinned shape. A malformed or future-only map
     // should be skipped on import, even when restoring a full backup.
-    return Object.keys(value.buttons).length ? undefined : null;
+    return Object.keys(value.buttons).length ? undefined : keepEmpty ? EMPTY_PHONE : null;
   }
 
   // Both entry points load GameStore; keep a session value for isolated input
@@ -167,7 +183,24 @@ const PedalTravel = (function () {
   let memory = null;
   const memoryListeners = new Set();
   const store = () => typeof GameStore !== "undefined" ? GameStore.store : null;
-  const saved = () => store() ? store().get(KEY, null) : memory;
+  const profileKey = () => typeof document !== "undefined" && document.documentElement?.hasAttribute?.("data-phone-controller") ? PHONE_KEY : KEY;
+  function saved() {
+    const s = store();
+    if (!s) return memory;
+    // Fork the old shared responses before the first edit on either surface.
+    if (s.getStored && s.getStored(PHONE_KEY) === undefined) {
+      const shared = normalizeProfiles(s.get(KEY, null)) ?? EMPTY_PHONE;
+      s.set(PHONE_KEY, { ...shared, inherited: true }, { migration: true });
+    }
+    return s.get(profileKey(), null);
+  }
+  function writeProfiles(value) {
+    const key = profileKey(), s = store();
+    const durable = s ? s.set(key, key === KEY ? value ?? undefined : value ?? EMPTY_PHONE) : false;
+    if (!s) memory = value;
+    if (!s?.subscribe) for (const refresh of memoryListeners) refresh();
+    return durable;
+  }
   function buttonOverrides(id) {
     const raw = saved();
     return overrides(id, allButtons.has(id) && raw && raw.v === 1 && raw.buttons && raw.buttons[id]);
@@ -212,13 +245,17 @@ const PedalTravel = (function () {
   }
 
   function sliderLevel(profile, event) {
-    return positionLevel(profile.sliderEdge, profile.sliderBounds, event) ?? 0;
+    const position = positionLevel(profile.sliderEdge, profile.sliderBounds, event);
+    if (position === undefined) return 0;
+    const fraction = responseFraction(position, profile.sliderCurve);
+    const start = profile.sliderStart ?? 0, end = profile.sliderEnd ?? 100;
+    return (start * (1 - fraction) + end * fraction) / 100;
   }
   function watchButtonProfile(id, callback) {
     const refresh = () => callback(buttonProfile(id));
     refresh();
     if (store()?.subscribe) return store().subscribe(change => {
-      if (change.key === KEY || change.key === null) refresh();
+      if (change.key === profileKey() || change.key === null) refresh();
     });
     memoryListeners.add(refresh);
     return () => memoryListeners.delete(refresh);
@@ -229,14 +266,11 @@ const PedalTravel = (function () {
     const clean = overrides(id, patch === null ? null : { ...buttons[id], ...patch });
     if (Object.keys(clean).length) buttons[id] = clean;
     else delete buttons[id];
-    const value = Object.keys(buttons).length ? { v: 1, buttons } : undefined;
-    if (store()) store().set(KEY, value);
-    else memory = value;
-    if (!store()?.subscribe) for (const refresh of memoryListeners) refresh();
+    writeProfiles(Object.keys(buttons).length ? { v: 1, buttons } : null);
     return buttonProfile(id);
   }
 
-  return { raceButtons, phoneButtons, colors, DEAD_PX, TRAVEL_PX, MIN, RAMP_PX, ease, arrive, level, advance, startPercent, buildOnHold, normalizeProfiles, buttonOverrides, buttonProfile, contactProfile, sliderLevel, sliderEntry,
+  return { raceButtons, phoneButtons, colors, directions, DEAD_PX, TRAVEL_PX, MIN, RAMP_PX, ease, arrive, level, advance, startPercent, buildOnHold, normalizeProfiles, buttonOverrides, buttonProfile, contactProfile, sliderLevel, sliderEntry,
     watchButtonProfile, setButtonProfile, resetButtonProfile: id => setButtonProfile(id, null) };
 })();
 Object.freeze(PedalTravel);

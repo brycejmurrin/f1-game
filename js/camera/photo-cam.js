@@ -2,6 +2,21 @@
 const Photomode = (function () {
   "use strict";
 
+let lastPanelFocus = null, lastPanelLayer = null;
+const PHOTO_PANEL = "#ps-panel, #freecam-inner, #lighting-inner, #pc-bar, #pc-restore";
+function sceneOwnsFocus() { return document.activeElement?.id === "pc-scene"; }
+function focusScene(fromControl) {
+  const scene = document.getElementById("pc-scene");
+  if (!scene) return false;
+  const previous = fromControl || document.activeElement;
+  if (previous && previous !== scene && previous !== document.body) {
+    lastPanelFocus = previous;
+    lastPanelLayer = window.UiLayers?.top?.();
+  }
+  scene.focus({ preventScroll: true });
+  return sceneOwnsFocus();
+}
+
 function create(G) {
 Log.info("game", "Photomode.create");
 // Stable bindings from the game.js closure.
@@ -35,31 +50,53 @@ function initPhotoCam() {
 // flew off in that direction until the player pressed the same control again.
 // Split out of initPhotoCam so blur can release the input WITHOUT also
 // re-deriving the pose from the game camera, which would teleport the shot.
-const stickReleases = [];
-function releasePhotoSticks() {
-  for (const release of stickReleases) release();
+const pointerReleases = [];
+function releasePhotoPointers() {
+  for (const release of pointerReleases) release();
 }
 const altitudeHeld = { up: false, down: false };
+const padInput = { moveX: 0, moveY: 0, lookX: 0, lookY: 0, vertical: 0 };
+const remoteInput = { ...padInput };
+let lightingOpener = null;
 // Physical aliases own their holds independently: releasing Space cannot
 // cancel a still-held R, nor can one Shift release cancel the other.
 const aliasHeld = { KeyR: false, Space: false, ShiftLeft: false, ShiftRight: false };
-function releasePhotoInput() {
-  releasePhotoSticks();
-  altitudeHeld.up = altitudeHeld.down = false;
+function signedAxis(value) { return Math.max(-1, Math.min(1, Number.isFinite(value) ? value : 0)); }
+function writeCameraInput(input, moveX, moveY, lookX, lookY, vertical) {
+  input.moveX = signedAxis(moveX); input.moveY = signedAxis(moveY);
+  input.lookX = signedAxis(lookX); input.lookY = signedAxis(lookY);
+  input.vertical = signedAxis(vertical);
+}
+function setPadInput(moveX, moveY, lookX, lookY, vertical) {
+  if (G.photoMode) writeCameraInput(padInput, moveX, moveY, lookX, lookY, vertical);
+}
+function setRemoteCameraInput(moveX, moveY, lookX, lookY, vertical) {
+  if (G.photoMode) writeCameraInput(remoteInput, moveX, moveY, lookX, lookY, vertical);
+}
+function releasePhotoKeys() {
   for (const code in aliasHeld) aliasHeld[code] = false;
+  for (const k in photoKeys) photoKeys[k] = false;
+  freeCam?.releaseKeys();
+}
+function releasePhotoInput() {
+  releasePhotoPointers();
+  altitudeHeld.up = altitudeHeld.down = false;
+  releasePhotoKeys();
+  writeCameraInput(padInput);
+  writeCameraInput(remoteInput);
   photoMove.x = photoMove.y = photoLook.x = photoLook.y = 0;
   photoMouse.dx = photoMouse.dy = 0; photoMouse.drag = false; photoMouse.pid = null;
   G.photoAlt = 0; G.photoVertT = 0;
-  for (const k in photoKeys) photoKeys[k] = false;
 }
+function photoVisibilityChanged() { if (document.hidden) releasePhotoInput(); }
 // Integrate held input into the fly-cam each paused frame and publish dbgCam.
 function updatePhotoCam(dt) {
   const spd = freeCam && freeCam.isOpen() ? freeCam.speed(photoKeys.boost)   // the panel's SPEED dial
     : (photoKeys.boost ? 95 : 34);                // m/s (Shift = boost)
   const lookRate = 1.7;                           // rad/s for key/stick look
   // Look: arrow keys + touch look stick + mouse drag delta.
-  const yawIn   = (photoKeys.yr ? 1 : 0) - (photoKeys.yl ? 1 : 0) + photoLook.x;
-  const pitchIn = (photoKeys.pu ? 1 : 0) - (photoKeys.pd ? 1 : 0) - photoLook.y;
+  const yawIn = signedAxis((photoKeys.yr ? 1 : 0) - (photoKeys.yl ? 1 : 0) + photoLook.x + padInput.lookX + remoteInput.lookX);
+  const pitchIn = signedAxis((photoKeys.pu ? 1 : 0) - (photoKeys.pd ? 1 : 0) - photoLook.y - padInput.lookY - remoteInput.lookY);
   photoCam.yaw   += yawIn * lookRate * dt + photoMouse.dx * 0.0032;
   photoCam.pitch += pitchIn * lookRate * dt - photoMouse.dy * 0.0032;
   photoMouse.dx = 0; photoMouse.dy = 0;
@@ -67,9 +104,9 @@ function updatePhotoCam(dt) {
   const cp = Math.cos(photoCam.pitch), sp = Math.sin(photoCam.pitch);
   const fwd = [Math.sin(photoCam.yaw) * cp, sp, -Math.cos(photoCam.yaw) * cp];
   const rgt = [Math.cos(photoCam.yaw), 0, Math.sin(photoCam.yaw)];
-  const mf = (photoKeys.w ? 1 : 0) - (photoKeys.s ? 1 : 0) - photoMove.y;   // stick UP (dy<0) = forward
-  const ms = (photoKeys.d ? 1 : 0) - (photoKeys.a ? 1 : 0) + photoMove.x;
-  const mvIn = (photoKeys.up ? 1 : 0) - (photoKeys.dn ? 1 : 0) + G.photoAlt;
+  const mf = signedAxis((photoKeys.w ? 1 : 0) - (photoKeys.s ? 1 : 0) - photoMove.y - padInput.moveY - remoteInput.moveY);
+  const ms = signedAxis((photoKeys.d ? 1 : 0) - (photoKeys.a ? 1 : 0) + photoMove.x + padInput.moveX + remoteInput.moveX);
+  const mvIn = signedAxis((photoKeys.up ? 1 : 0) - (photoKeys.dn ? 1 : 0) + G.photoAlt + padInput.vertical + remoteInput.vertical);
   G.photoVertT = mvIn ? G.photoVertT + dt : 0;
   const vRamp = Math.min(1, 0.12 + 0.88 * Math.pow(Math.min(G.photoVertT / 2.2, 1), 1.6));
   const mv = mvIn * vRamp;
@@ -89,9 +126,11 @@ function updatePhotoCam(dt) {
              fov: photoCam.fov, far: gfx.isMobile ? 1100 : 2500, fog: 1.0 };   // not 8000 — a huge far plane wrecks depth precision → z-fighting/flicker
   if (freeCam) freeCam.decorate(G.dbgCam, dt);   // roll, lens, status line — inert unless its panel is open
 }
-function enterPhotoMode() {
+function enterPhotoMode(opener = null) {
   if (G.photoMode) return;
   Log.info("game", "Photomode.enter");
+  lightingOpener = opener;
+  lastPanelFocus = lastPanelLayer = null;
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   G.photoMode = true;
   PerfGov.setAutoRes(false);
@@ -107,8 +146,10 @@ function enterPhotoMode() {
   window.addEventListener("keyup", photoKeyHandler, true);
   window.addEventListener("blur", releasePhotoInput);
   window.addEventListener("focusin", photoEditorFocus);
-  window.addEventListener("resize", releasePhotoSticks);
-  window.visualViewport?.addEventListener("resize", releasePhotoSticks);
+  document.addEventListener?.("visibilitychange", photoVisibilityChanged);
+  window.addEventListener("resize", releasePhotoPointers);
+  window.visualViewport?.addEventListener("resize", releasePhotoPointers);
+  if (opener) focusScene(opener);
 }
 function exitPhotoMode() {
   if (!G.photoMode) return;
@@ -129,14 +170,17 @@ function exitPhotoMode() {
   window.removeEventListener("keyup", photoKeyHandler, true);
   window.removeEventListener("blur", releasePhotoInput);
   window.removeEventListener("focusin", photoEditorFocus);
-  window.removeEventListener("resize", releasePhotoSticks);
-  window.visualViewport?.removeEventListener("resize", releasePhotoSticks);
+  document.removeEventListener?.("visibilitychange", photoVisibilityChanged);
+  window.removeEventListener("resize", releasePhotoPointers);
+  window.visualViewport?.removeEventListener("resize", releasePhotoPointers);
   if (gfx.setRenderScale) gfx.setRenderScale(G._photoPrevScale || 1);
   applyResMode();
+  lightingOpener?.focus({ preventScroll: true });
+  lightingOpener = lastPanelFocus = lastPanelLayer = null;
 }
 function togglePhotoPanel() {
   const p = freeCam && freeCam.isOpen() ? freeCam.panel() : $("lighting-inner"); if (!p) return;
-  releasePhotoSticks();
+  releasePhotoPointers();
   const hide = !p.hidden;
   p.hidden = hide;
   document.body.classList.toggle("pc-nopanel", hide);
@@ -160,24 +204,39 @@ function setPhotoUiHidden(hide) {
   if (G.soundOn) GameAudio.uiTick();
 }
 // Dedicated key handler (not Input.onKey) so photo controls never touch driving.
+function rotateBlockerOwnsKeys() { return window.UiLayers?.top?.()?.id === "rotate-device"; }
 function photoEditorFocus(e) {
-  if (e.target?.closest?.("#screen-arranger")) releasePhotoInput();
+  if (e.target?.closest?.("#screen-arranger")) { releasePhotoInput(); return; }
+  if (e.target?.closest?.(PHOTO_PANEL) ||
+      (e.target?.closest?.("#rotate-device") && rotateBlockerOwnsKeys())) releasePhotoKeys();
 }
 function photoKeyHandler(e) {
   const focused = document.activeElement, tag = (focused && focused.tagName) || "";
+  if (rotateBlockerOwnsKeys()) { releasePhotoKeys(); return; }
   if (focused?.closest?.("#screen-arranger")) return;
   const down = e.type === "keydown";
-  // Typing in a slider — but a key-UP always releases: W held while a click
-  // moved focus into a slider (or COPY VIEW's textarea) stayed down forever.
-  // The Studio's buttons, and the #pc-restore eye that is the only control left
-  // while the photo UI is hidden, own Space/Enter and menu arrows. Key-up must
-  // still release camera input held before focus moved into the dock.
-  const studioControl = focused && focused.closest && focused.closest("#ps-panel, #pc-restore");
-  const studioKey = e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter" || /^Arrow/.test(e.code);
-  if (down && e.code !== "Escape" && ((studioControl && studioKey) || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT")) return;
+  if (down && /^(Meta|Alt|Control)(Left|Right)$/.test(e.code)) releasePhotoKeys();
+  const shortcut = e.metaKey || e.altKey || e.ctrlKey || e.isComposing;
+  if (down && (shortcut || e.defaultPrevented)) return;
+  if (down && e.code === "Tab" && sceneOwnsFocus()) {
+    const layer = window.UiLayers?.top?.();
+    if (lastPanelFocus?.isConnected && lastPanelLayer === layer) lastPanelFocus.focus({ preventScroll: true });
+    if (sceneOwnsFocus()) {
+      const nav = window.MenuNav;
+      const fallback = layer && nav?.currentItem(layer, nav.items(layer));
+      (fallback || $("pc-toggle"))?.focus({ preventScroll: true });
+    }
+    if (!sceneOwnsFocus()) { e.preventDefault(); e.stopPropagation(); }
+    return;
+  }
+  // Panel controls own activation and navigation. Key-up still releases
+  // camera input held before focus moved, including out of a text field.
+  const editing = focused?.closest?.(PHOTO_PANEL) || focused?.isContentEditable ||
+    tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+  if (down && editing) return;
   const fc = freeCam ? freeCam.key(e.code, down, document.activeElement) : 0;
   if (fc < 0 && down) return;                // an arrow key over the free-cam panel belongs to its focused control
-  if (fc > 0) { e.preventDefault(); if (down) e.stopPropagation(); return; }
+  if (fc > 0) { if (!shortcut && !editing) e.preventDefault(); if (down) e.stopPropagation(); return; }
   let hit = true;
   switch (e.code) {
     case "KeyW": photoKeys.w = down; break;
@@ -198,83 +257,76 @@ function photoKeyHandler(e) {
   // A key-UP still reaches Input: W held from driving, released in here, stayed held after RESUME.
   // A focused control's own key-up keeps its default: buttons activate on Space
   // keyup, so preventDefault there swallowed the press (#3562).
-  if (hit && !(studioControl && studioKey)) { e.preventDefault(); if (down) e.stopPropagation(); }
+  if (hit && !shortcut && !editing) { e.preventDefault(); if (down) e.stopPropagation(); }
+}
+// WebKit can retarget a held pointer when another control takes capture.
+// Listen on window so the original contact can still move and release.
+function wirePhotoPointer(el, press, finish, update) {
+  let pid = null;
+  function release() {
+    if (pid === null) return;
+    const previous = pid;
+    pid = null;
+    window.removeEventListener("pointerup", endIf, true);
+    window.removeEventListener("pointercancel", endIf, true);
+    if (update) window.removeEventListener("pointermove", moveOutside, true);
+    if (el.hasPointerCapture?.(previous)) el.releasePointerCapture(previous);
+    finish();
+  }
+  const endIf = (e) => { if (e.pointerId === pid) release(); };
+  const move = (e) => {
+    if (e.pointerId !== pid) return;
+    update(e);
+    e.preventDefault();
+  };
+  const moveOutside = (e) => { if (e.pointerId === pid && !el.contains(e.target)) move(e); };
+  pointerReleases.push(release);
+  el.addEventListener("pointerdown", e => {
+    if (pid !== null || !G.photoMode || e.button > 0 || press(e) === false) return;
+    pid = e.pointerId;
+    try { el.setPointerCapture(pid); } catch (_) { /* a retargeted lift is still seen on window */ }
+    window.addEventListener("pointerup", endIf, true);
+    window.addEventListener("pointercancel", endIf, true);
+    if (update) window.addEventListener("pointermove", moveOutside, true);
+    e.preventDefault();
+  });
+  if (update) el.addEventListener("pointermove", move);
+  el.addEventListener("pointerup", endIf);
+  el.addEventListener("pointercancel", endIf);
+  el.addEventListener("lostpointercapture", e => { if (Input.holdTargetGone(el)) endIf(e); });
 }
 // Virtual thumbstick: pointer offset from centre → normalised (−1..1) vector.
 function wirePhotoStick(id, vec) {
   const el = $(id); if (!el) return;
   const nub = el.querySelector(".pc-nub");
-  let pid = null, box = null, travelX = 0, travelY = 0;
-  const set = (cx, cy) => {
-    let dx = (cx - box.left) / box.width * 2 - 1;
-    let dy = (cy - box.top) / box.height * 2 - 1;
+  let box, travelX = 0, travelY = 0;
+  function set(e) {
+    let dx = (e.clientX - box.left) / box.width * 2 - 1;
+    let dy = (e.clientY - box.top) / box.height * 2 - 1;
     const magnitude = Math.hypot(dx, dy);
     if (magnitude > 1) { dx /= magnitude; dy /= magnitude; }
     vec.x = dx; vec.y = dy;
     if (nub) nub.style.transform = "translate(" + dx * travelX + "px," + dy * travelY + "px)";
-  };
-  const end = () => {
-    if (pid === null) return;
-    const previous = pid;
-    pid = null; box = null;
-    vec.x = vec.y = 0;
-    if (nub) nub.style.transform = "translate(0,0)";
-    window.removeEventListener("pointerup", endIf, true);
-    window.removeEventListener("pointercancel", endIf, true);
-    if (el.hasPointerCapture?.(previous)) el.releasePointerCapture(previous);
-  };
-  stickReleases.push(end);
-  const endIf = e => { if (e.pointerId === pid) end(); };
-  el.addEventListener("pointerdown", e => {
-    if (pid !== null || !G.photoMode) return;
+  }
+  wirePhotoPointer(el, e => {
     // Pointer coordinates and the ring must be in the same viewport space,
     // including CSS scale and old Safari's zoom. Nub travel is local CSS px.
     box = window.CssZoom ? window.CssZoom.viewportRect(el) : el.getBoundingClientRect();
-    if (!(box.width > 0 && box.height > 0)) return;
+    if (!(box.width > 0 && box.height > 0)) return false;
     if (nub) {
       travelX = Math.max(0, el.clientWidth - nub.offsetWidth) / 2;
       travelY = Math.max(0, el.clientHeight - nub.offsetHeight) / 2;
     }
-    pid = e.pointerId;
-    try { el.setPointerCapture(pid); } catch (_) { /* the window release net still catches an outside lift */ }
-    window.addEventListener("pointerup", endIf, true);
-    window.addEventListener("pointercancel", endIf, true);
-    set(e.clientX, e.clientY);
-    e.preventDefault();
-  });
-  el.addEventListener("pointermove", (e) => { if (e.pointerId === pid) { set(e.clientX, e.clientY); e.preventDefault(); } });
-  el.addEventListener("pointerup", endIf);
-  el.addEventListener("pointercancel", endIf);
-  /* THE STICK CAN BE TAKEN AWAY MID-HOLD, AND THEN NO pointerup EVER ARRIVES.
-     css/hud.css display:none's the whole fly-cam overlay whenever a .screen.dim
-     opens, and HIDE HUD does the same to everything but the restore eye — both
-     can fire with a thumb down. A touch pointer holds IMPLICIT capture, so
-     removing the element loses the capture instead of delivering an up, the
-     vector stays at its last value, and updatePhotoCam flies the camera away
-     for good. js/input/input.js added this same listener to the pedals for
-     the same reason. */
-  el.addEventListener("lostpointercapture", endIf);
+    set(e);
+  }, () => {
+    vec.x = vec.y = 0;
+    if (nub) nub.style.transform = "translate(0,0)";
+  }, set);
 }
 function wirePhotoHold(id, on, off) {
   const el = $(id); if (!el) return;
-  let pid = null;
-  const release = (e) => { if (pid === null || !e || e.pointerId === pid) { pid = null; off(); } };
-  el.addEventListener("pointerdown", (e) => {
-    pid = e.pointerId;
-    try { el.setPointerCapture(pid); } catch (_) { /* see wirePhotoStick: a pointer already gone can throw here too */ }
-    on();
-    e.preventDefault();
-  });
-  el.addEventListener("pointerup", release);
-  el.addEventListener("pointercancel", release);
-  /* No pointerleave: with the pointer captured it is a BOUNDARY event, fired
-     the moment setPointerCapture retargets (the trap holdSetupCtl in
-     js/garage/setup-camera.js documents), so the button let go on the same press that took it. And a
-     lostpointercapture is a teardown only when the button was taken away —
-     WebKit keeps one capture slot, so a second finger on the other hold
-     button steals it with this thumb still down (js/input/input.js
-     holdTargetGone / lostCaptureShouldRelease). */
-  el.addEventListener("lostpointercapture", (e) => { if (Input.holdTargetGone(el)) release(e); });   // see wirePhotoStick
+  el.tabIndex = -1;
+  wirePhotoPointer(el, on, off);
 }
 wirePhotoStick("pc-move", photoMove);
 wirePhotoStick("pc-look", photoLook);
@@ -299,20 +351,25 @@ wirePhotoHold("pc-down", () => altitude("down", true), () => altitude("down", fa
       photoMouse.drag = false; photoMouse.pid = null;
     };
     canvas.addEventListener("pointerdown", (e) => {
-      if (!G.photoMode || photoMouse.drag) return;
+      if (!G.photoMode || photoMouse.drag || e.button > 0) return;
       photoMouse.drag = true; photoMouse.pid = e.pointerId;
       photoMouse.px = e.clientX; photoMouse.py = e.clientY;
+      if (focusScene()) e.preventDefault();
     });
     window.addEventListener("pointermove", (e) => {
       if (!G.photoMode || !photoMouse.drag || e.pointerId !== photoMouse.pid) return;
       photoMouse.dx += e.clientX - photoMouse.px; photoMouse.dy += e.clientY - photoMouse.py;
       photoMouse.px = e.clientX; photoMouse.py = e.clientY;
     });
-    window.addEventListener("pointerup", stop);
-    window.addEventListener("pointercancel", stop);
+    window.addEventListener("pointerup", stop, true);
+    window.addEventListener("pointercancel", stop, true);
   }
 }
-$("pc-toggle").onclick = () => { if (G.soundOn) GameAudio.uiSelect(); G.photoMode ? exitPhotoMode() : enterPhotoMode(); };
+$("pc-toggle").onclick = (event) => {
+  if (G.soundOn) GameAudio.uiSelect();
+  if (G.photoMode) exitPhotoMode();
+  else enterPhotoMode(event?.currentTarget || $("pc-toggle"));
+};
 $("pc-exit").onclick = () => {
   if (G.soundOn) GameAudio.uiTick();
   if (freeCam && freeCam.isOpen()) freeCam.close(true); else exitPhotoMode();   // EXIT from the free-cam panel goes back to the menu
@@ -324,6 +381,16 @@ $("pc-hud").onclick = () => setPhotoUiHidden(true);
   lb.id = "pc-line"; lb.type = "button"; lb.setAttribute("aria-pressed", "true"); lb.textContent = "HIDE LINE";
   lb.onclick = togglePhotoLine;
   $("pc-bar").insertBefore(lb, $("pc-hud"));
+  const scene = document.createElement("div");
+  scene.id = "pc-scene"; scene.tabIndex = -1;
+  scene.setAttribute("role", "region"); scene.setAttribute("aria-label", "Camera controls");
+  scene.textContent = "WASD move · arrows look · R/F height · Tab returns to the panel";
+  $("photo-controls").appendChild(scene);
+  const focusButton = document.createElement("button");
+  focusButton.id = "pc-focus-camera"; focusButton.type = "button";
+  focusButton.textContent = "CAMERA CONTROLS";
+  focusButton.onclick = (event) => focusScene(event.currentTarget);
+  $("pc-bar").insertBefore(focusButton, lb);
 }
 $("pc-restore").onclick = () => setPhotoUiHidden(false);
 $("pc-fov").oninput = (e) => {
@@ -332,8 +399,11 @@ $("pc-fov").oninput = (e) => {
   photoCam.fov = (typeof v === "number" && isFinite(v)) ? Math.max(20, Math.min(110, v)) : 60;
 };
 
-return { updatePhotoCam, enterPhotoMode, exitPhotoMode, freeCam };
+const camera = { updatePhotoCam, enterPhotoMode, exitPhotoMode, setPadInput, setRemoteCameraInput, freeCam,
+  isActive: () => G.photoMode };
+if (typeof Input !== "undefined") Input.bindPhotoCamera?.(camera);
+return camera;
 }
 
-return { create };
+return { create, focusScene, sceneOwnsFocus };
 })();

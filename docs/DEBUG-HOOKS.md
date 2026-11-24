@@ -384,8 +384,8 @@ Snapshot of state: `state` is the state-machine value
 sample count, `total` the lap length (m). `timeTrial` and `seasonMode` reflect the
 active game mode. `sectors` is `[s1End, s2End]` racing-lap fractions from the
 def's curated markings (or `null`); `turns` is the curated FIA turn count (or `null`).
-Returns `track: null` if no circuit is loaded — poll this to know when a track
-has finished building.
+`track` reports the circuit id when a circuit is loaded and the state is `count`
+or `race`. It returns `null` in other states, including `results`.
 `warming` is true while a rendered page holds `tickBody` (a program or rig warm
 pending or queued, or the mirror prep): real frames then charge neither
 the countdown nor physics. `liveTicks` counts live race frames (`PerfGov.ticks()`: past those holds, not paused, in count or race).
@@ -846,8 +846,8 @@ eye is outside every solid prop (`FlybySeq`) and the sightline to the target kee
 `FlybySight.transmit` T ≥ 0.5. The result carries
 `clear: {T, tries, blocked?}`; when `blocked` is set, nothing cleared and the
 least-blocked try is used, so skip or flag that frame. For a "signature corner",
-take a curated turn from `info().turns`, not `corners()[n/3]`: `corners()` returns
-every curvature peak, kinks included.
+take a curated turn from the circuit definition's `turns` array. `info().turns`
+reports the count, and `corners()` returns curvature peaks, kinks included.
 
 ### `dolly(f, fwd?, right?, up?, opts?) → {eye, target} | false`
 Track-relative free-cam placed by an **offset from the centreline** at
@@ -1248,7 +1248,7 @@ far and the seconds under load arming the next. `debug` is
 **The pitch curve is four independent knobs**, and `tune` carries all four:
 
 ```
-rate(rev) = (0.25·idle + 0.45·revRange·rev^curve) · pitch   (× gear, boost, voice)
+rate(rev) = (0.17·idle + 0.5115·revRange·rev^curve) · pitch   (× boost, voice trim, rev flare)
 ```
 
 `idle` moves the idle end alone, `revRange` the span alone, `pitch` transposes
@@ -1386,7 +1386,7 @@ init, which has not run yet.
   sampled a frame apart and one bad frame must not chirp.
 - **SPACE** — `GameAudio.setVenue(def)` picks the circuit's acoustics from data
   the definitions already carry (`street: true`, `theme`). The impulse
-  responses are generated, not shipped. `audio().venue` reports the live send.
+  responses are generated, not shipped. `GameAudio.venue()` reports the live send.
 - **OVERRUN** — crackle on a trailing throttle. `loadLift` is `clamp01(ax/12)`
   and so is zero the instant the throttle closes, which is why lifting used to
   sound exactly like coasting. `GameAudio.overrunState()` reports `{fired,
@@ -1839,8 +1839,8 @@ MOVE/zoom/SPIN controls leave it open.
 
 ### `corners() → [number, …]`
 Lap-fractions of **curvature-peak** apexes (local maxima of `|curvature|`). Handy
-for parking at sharp bends. This is **not** the curated FIA turn list — that lives
-on `info().turns` / `track.def.turns`, authored in `js/circuits/<id>.js`.
+for parking at sharp bends. The curated FIA turn list is `track.def.turns`,
+authored in `js/circuits/<id>.js`. `info().turns` reports its count.
 
 ### `nodeAt(frac, opts?) → {k, frac, x, y, z, tx, tz, rx, rz, hw} | null`
 A `frac` that is not a finite number (NaN, undefined, null, Infinity, a non-numeric
@@ -1983,8 +1983,8 @@ car at a known attitude with no residual rotation, rather than mid-slide. Both
 are readable back through `physState()` as `vLat` and `yawRate`. Returns the new
 heading formatted in degrees, or `false` if the player isn't initialised.
 
-Pair it with `aim(deg)` — `aim` points the car at an absolute bearing, `spin` is
-relative to wherever it already points.
+Use `aim(deg)` to set a heading relative to the local track tangent. `spin(deg)`
+rotates the car from its current heading.
 
 ### `nudge(dLat, dSpeed) → {speed, vLat} | false`
 Add an instantaneous lateral impulse (m/s, **+right of travel**) and/or a forward
@@ -2897,21 +2897,23 @@ speed (the STRATEGY row's figure).
 **THERE IS NO PIT CONTROL.** A driver calls a stop the way a real one does — by
 putting the car on the pit side at the entry and holding it there — so there is
 no button, no key and no gamepad bind to press. `{arm: true}` calls the stop
-directly and `{arm: false}` cancels it, which is how a spec skips the gesture;
-to exercise the gesture itself, put the car past `COMMIT_FRAC` of the
-half-width toward `side` within `COMMIT_M` of the entry and hold it for
-`COMMIT_S`.
+directly and `{arm: false}` cancels it, which is how a spec skips the gesture.
+To exercise the gesture, drive forward on the pit side before your box, above
+`COMMIT_V` (10% of the speed envelope), and hold the line for `COMMIT_S`
+(0.55 s). On a separate entry road, put the car's centre at
+least `COMMIT_IN` (0.5 m) past its inner edge. On a painted lane, cross the
+painted lane edge.
 
 | Field | Meaning |
 |---|---|
 | `enabled` | The lane only exists while TYRE WEAR is on; with it off there is nothing to stop for |
 | `lenM` | How long the pit window is along the lap |
-| `boxM` / `atM` | Where THIS CAR's box is, and how far it has come — both measured from the entry, so `boxM - atM` is the distance to its stop. A pit lane is a ROW of garages: each team's box is offset from the row anchor by its `Teams.LIST` position at a 14 m pitch, so `boxM` differs per team and teammates share one (which is why stacking two cars in one window is expensive). A car with no team gets the anchor |
+| `boxM` / `atM` | Where THIS CAR's box is, and how far it has come — both measured from the entry, so `boxM - atM` is the distance to its stop. A pit lane is a ROW of garages: each team's box is offset from the row anchor by its `Teams.LIST` position at an 11 m pitch, so `boxM` differs per team and teammates share one (which is why stacking two cars in one window is expensive). A car with no team gets the anchor |
 | `limitKph` | The limiter, at the CURRENT pace scale — it is stored as a fraction of the speed envelope, so it rides OVERALL SPEED |
 | `boxS` | How long the car is held in the box (deterministic — a random stop time would make a strategy call a coin flip) |
 | `armed` | The stop is called and the next entry will take it |
 | `inLane` | This car is SERVING a stop — a state, not a position |
-| `state` | `none` / `approach` / `lane` / `box` / `out` |
+| `state` | `none` / `lane` / `box` / `out` |
 | `inWindow` | Inside the arc window at all (true for every car passing the pits) |
 | `stops` | Stops this car has made |
 | `commit` | How far through the commitment dwell this car is, 0-1 — 0 unless it is holding the line into the pits right now. With no button, this is the whole input, and the HUD's compound chip fills with it |
@@ -5635,11 +5637,11 @@ localStorage.removeItem('apex26.gfxBackend'); location.reload()         // TLX (
 ```
 
 **Boot step timeout (localStorage only):** `apex26.gfxBootStepMs` is read once at
-load in `js/render/renderer-boot.js`. It can only **raise** the default 8 s
+load in `js/render/renderer-boot.js`. It can only **raise** the default 15 s
 per-step cap for XR probe / backend script / `Gfx.create` (never lower it); values
 above 60 s are clamped. Software-GL CI and specs that measure TLX boot (e.g.
 `track-switch-memory.spec.js`) set `45000` by hand when SwiftShader needs longer
-than 8 s. There is no in-game writer — set before reload.
+than 15 s. There is no in-game writer. Set it before reloading.
 
 On TLX, `window.scene`, `camera`, `renderer` and `THREE` are published on boot
 (look for the `[TLX] … exposed` console line), so the extension finds the scene

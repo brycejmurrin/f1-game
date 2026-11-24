@@ -36,6 +36,10 @@
   --scroll-thumb: color-mix(in oklab, var(--text) 34%, transparent);
   --scroll-track: color-mix(in oklab, var(--surf-1) 82%, transparent);
 }
+/* Use the dialog's safe content box in portrait, independent of UI size. */
+@media (orientation: portrait) {
+  #td-inner { height: 100%; }
+}
 #td-inner[data-density="compact"] #track-detail-header {
   padding-top: 0; padding-bottom: calc(var(--pad) * 0.2);
 }
@@ -100,6 +104,44 @@
 .tdc-medium { color: #facc15; }
 .tdc-slow   { color: #fb923c; }
 .tdc-hairpin{ color: #f87171; }
+#track-detail-map-tools {
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
+  gap: calc(var(--gap) / 2); max-width: 100%; flex: none;
+}
+#track-detail-modes { display: flex; flex-wrap: wrap; justify-content: center; gap: calc(var(--gap) / 3); }
+#track-detail-modes .sel-chip { font-size: var(--fs-micro); padding-inline: calc(var(--gap) / 2); }
+#track-detail-map {
+  display: grid; place-items: center; align-self: stretch; flex: 1 1 0;
+  min-height: 0; min-width: 0; overflow: hidden;
+  background: var(--plate); border-radius: var(--r-md);
+  box-shadow: inset 0 0 0 1px var(--plate-line);
+}
+[data-map-zoom] { touch-action: none; overflow: hidden; }
+[data-map-zoom][data-map-panned] canvas { cursor: grab; }
+[data-map-zoom][data-map-panned] canvas:active { cursor: grabbing; }
+[data-map-zoom-controls] {
+  display: flex; align-items: stretch; flex: none;
+  border: 1px solid var(--plate-line); border-radius: var(--r-sm); background: var(--plate);
+  font-variant-numeric: tabular-nums;
+}
+[data-map-zoom-controls] > button {
+  min-inline-size: max(var(--tap-paint), calc(var(--fs-micro) * 2.5));
+  border: 0; border-radius: var(--r-sm); padding-inline: calc(var(--gap) / 2);
+}
+[data-map-zoom-controls] > button + button { border-inline-start: 1px solid var(--plate-line); }
+[data-map-zoom-controls] > button:disabled { color: var(--dim); }
+/* Keep the controls thumb-sized even if the pointer changes while the sheet is open. */
+@media (pointer: coarse) {
+  #td-inner { --td-touch-target: calc(44.2px / var(--sheet-scale, var(--ui-scale))); }
+  #td-inner #track-detail-close {
+    min-inline-size: max(var(--tap-paint), var(--td-touch-target));
+    min-block-size: max(var(--tap-paint), var(--td-touch-target));
+  }
+  #td-inner .sel-chip {
+    min-inline-size: max(var(--tap-paint), var(--td-touch-target));
+    min-block-size: max(var(--chip-h), var(--td-touch-target));
+  }
+}
 #track-detail-legend {
   flex: none; align-self: stretch;
   display: flex; flex-wrap: wrap;
@@ -129,6 +171,11 @@
   background: var(--look-hud-bg); border: 1px solid var(--hairline); border-radius: var(--r-sm);
   font-size: var(--fs-micro);
 }
+/* The wider circuit projection can reach the map corners on short screens. */
+body[data-density="compact"] #td-inner[data-shape="wide"] #track-detail-legend {
+  position: static; flex-direction: row; gap: calc(var(--gap) * 0.4) var(--gap);
+  padding: 0; background: none; border: 0;
+}
 /* ☆ FAVOURITE (js/ui/select-screen.js openTrackDetail builds it): a chip, not a
    full-width bar, in the panel's column. */
 #track-detail-fav { align-self: flex-start; margin-top: calc(var(--gap) * 0.5); }
@@ -149,11 +196,10 @@
 /* Tall sheet: map on top, facts scroll under it. The sheet owns height now, so
    the dialog itself does not scroll (that was the full-bleed leftover). */
 #td-inner[data-shape="tall"] #track-detail-canvas-wrap {
-  flex: none;
-  height: min(calc(40 * var(--svhz)), 420px);
+  flex: 0 1 max(54%, min(calc(40 * var(--svhz)), 420px));
 }
 #td-inner[data-shape="tall"] #track-detail-panel {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   padding-top: calc(var(--gap) * 0.5);
   border-top: 1px solid var(--card-line);
 }

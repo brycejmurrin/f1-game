@@ -40,6 +40,19 @@ test("the map can locate a sampled start line without extending a partial trace"
   assert.equal(clipLocations(loc.slice(1), 0, 1000)[0].date, 250, "no observed sample brackets the start");
 });
 
+test("wide Track View rotates a tall circuit to increase its fitted scale", () => {
+  const renderer = vm.runInContext("DataTelemetryRender", ctx).create({ cssColor: () => "" });
+  const loc = [{ x: 0, y: 0, date: 0 }, { x: 100, y: 400, date: 100 }, { x: 0, y: 150, date: 200 }];
+  const brush = new Proxy({}, { get: () => () => {} });
+  const view = { primary: { loc, car: [] }, mw: 800, mh: 200, map: true, mapBase: { getContext: () => brush } };
+  renderer.buildMapBase(view);
+  const overview = view.mapT.sc;
+  view.trackOnly = true;
+  renderer.buildMapBase(view);
+  assert.equal(view.mapT.rotate, true);
+  assert.ok(view.mapT.sc > overview * 2);
+});
+
 test("comparison map closes only the lap boundary while preserving GPS gaps", () => {
   const renderer = vm.runInContext("DataTelemetryRender", ctx).create({ cssColor: () => "comparison" });
   for (const gapped of [false, true]) for (const complete of [false, true]) {
@@ -49,18 +62,20 @@ test("comparison map closes only the lap boundary while preserving GPS gaps", ()
       date: i * 250 + (gapped && i >= 6 ? 10000 : 0)
     }));
     let start, last, segments = [], comparison;
+    const labels = [];
     const drawing = new Proxy({
       beginPath() { start = last = null; segments = []; },
       moveTo(x, y) { start = last = [x, y]; },
       lineTo(x, y) { const next = [x, y]; segments.push([last, next]); last = next; },
       closePath() { segments.push([last, start]); last = start; },
-      stroke() { if (!comparison) comparison = segments.slice(); }
+      fillText(label) { labels.push(label); },
+      stroke() { if (this.strokeStyle === "comparison") comparison = segments.slice(); }
     }, { get: (target, key) => key in target ? target[key] : () => {} });
     const inert = new Proxy({}, { get: () => () => {} });
-    const primary = { loc, car: [] }, compare = { loc, car: [] };
+    const primary = { loc, car: [], lap: { dateStart: new Date(0).toISOString() } }, compare = { loc, car: [] };
     const view = {
       primary, compare, laps: [primary, compare], colC: [1, 0, 0],
-      visible: {}, visibleC: {}, tMax: 13, speedMax: 1, rpmMax: 1,
+      visible: {}, visibleC: {}, sectors: [0.5, 2], tMax: 13, speedMax: 1, rpmMax: 1,
       cw: 320, ch: 200, mw: 320, mh: 320, map: true,
       chartBase: { getContext: () => inert }, mapBase: { getContext: () => drawing }
     };
@@ -75,7 +90,27 @@ test("comparison map closes only the lap boundary while preserving GPS gaps", ()
     }
     if (complete) expected.push([point(loc.at(-1)), point(loc[0])]);
     assert.deepEqual(comparison, expected, `gapped=${gapped}, complete=${complete}`);
+    assert.deepEqual(labels, gapped ? ["S/F", "S2"] : ["S/F", "S2", "S3"],
+      "an observed timing boundary gets a label, and a boundary inside a GPS gap stays unmarked");
   }
+});
+
+test("the gear map leaves gaps neutral and uses observed gear colours", () => {
+  const { mapGearColor } = vm.runInContext("DataTelemetryModel", ctx);
+  const renderer = vm.runInContext("DataTelemetryRender", ctx).create({ cssColor: () => "comparison" });
+  const speeds = new Map([[500, 2], [1000, 3], [1500, 4], [3500, 6], [4000, 7]]);
+  const car = [...speeds].map(([date, gear]) => ({ date, gear }));
+  const loc = Array.from({ length: 10 }, (_, i) => ({ date: i * 500, x: i * 15, y: i }));
+  const inks = [];
+  const brush = new Proxy({ stroke() { if (this.lineWidth === 3.5) inks.push(this.strokeStyle); } },
+    { get: (target, key) => key in target ? target[key] : () => {} });
+  renderer.buildMapBase({
+    primary: { car, loc }, mapMode: "gears", mw: 320, mh: 320,
+    map: true, mapBase: { getContext: () => brush },
+  });
+  assert.deepEqual(inks, [
+    "#999", mapGearColor(2), mapGearColor(3), "#999", "#999", "#999", "#999", mapGearColor(6), "#999",
+  ]);
 });
 
 test("braking duel aligns distance and refuses clamped or missing feed intervals", () => {
