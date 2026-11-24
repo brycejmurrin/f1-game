@@ -211,8 +211,15 @@
 
   function selectAxis(next, value) {
     if (value === undefined) {
-      const current = readAt(lanes, cursor, axis, reference).lanes[reference];
-      value = (next === "time" ? current.t : current.distance) ?? 0;
+      const readings = readAt(lanes, cursor, axis, reference).lanes;
+      const field = next === "time" ? "t" : "distance";
+      value = readings[reference][field] ?? readings[1 - reference][field];
+      if (value === null) {
+        replay.stop();
+        document.querySelectorAll("[name=axis]").forEach(control => { control.checked = control.value === axis; });
+        get("announcement").textContent = "Neither driver has a sample at this point. Move the cursor to switch axes.";
+        return;
+      }
     }
     axis = next;
     replay.stop();

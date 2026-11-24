@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { makeDom } from "../helpers/mini-dom.mjs";
 
 // Each fixture is a setup a player can actually select in the sandbox.
 const setups = {
@@ -119,3 +120,106 @@ for (const [id, setup] of Object.entries(setups)) {
     }
   });
 }
+
+function replayFixture() {
+  const dom = makeDom();
+  const frames = new Map();
+  let token = 0;
+  const context = vm.createContext({
+    document: dom.document,
+    LearnAppearance: {mount(fn) { fn(false); }},
+    ResizeObserver: class { observe() {} },
+    addEventListener() {},
+    requestAnimationFrame(fn) { frames.set(++token, fn); return token; },
+    cancelAnimationFrame(id) { frames.delete(id); },
+  });
+  context.window = context;
+  return {
+    ...dom, frames,
+    load(...paths) {
+      for (const path of paths) {
+        const url = new URL("../../" + path, import.meta.url);
+        vm.runInContext(readFileSync(url, "utf8"), context, {filename: fileURLToPath(url)});
+      }
+    },
+    step(now) {
+      const [id, draw] = frames.entries().next().value;
+      frames.delete(id);
+      draw(now);
+    },
+  };
+}
+
+function telemetryReplay() {
+  const fixture = replayFixture();
+  fixture.byId("chart").getContext = () => null;
+  const time = fixture.document.createElement("input");
+  time.setAttribute("name", "axis");
+  time.value = "time";
+  const distance = fixture.document.createElement("input");
+  distance.setAttribute("name", "axis");
+  distance.value = "distance";
+  fixture.body.append(time, distance);
+  for (const lane of ["a", "b"]) {
+    const ghost = fixture.document.createElement("div");
+    ghost.setAttribute("data-ghost", lane);
+    fixture.body.appendChild(ghost);
+  }
+  fixture.load("js/core/mat4.js", "js/data/telemetry-model.js",
+    "learn/telemetry/model.js", "learn/replay.js", "learn/telemetry/lab.js");
+  return {...fixture, time};
+}
+
+test("VSC Next marker visits the reference restart after the lead has passed", () => {
+  const {byId, dispatch, load} = replayFixture();
+  byId("fixture").value = "default";
+  load("learn/vsc/model.js", "learn/vsc/lab.js");
+  const duration = byId("vsc-duration");
+  const timeline = byId("timeline");
+  duration.value = "23";
+  dispatch(duration, {type: "input"});
+  timeline.value = "22";
+  dispatch(timeline, {type: "input"});
+  assert.equal(byId("track-clock").textContent.split(" · ")[0], "Passed marker");
+  assert.equal(byId("reference-clock").textContent.split(" · ")[0], "VSC");
+  byId("next").click();
+  assert.equal(Number(timeline.value), 23);
+  assert.equal(byId("reference-clock").textContent.split(" · ")[0], "Green");
+
+  duration.value = "33";
+  dispatch(duration, {type: "input"});
+  timeline.value = "32";
+  dispatch(timeline, {type: "input"});
+  assert.equal(byId("reference-clock").textContent.split(" · ")[0], "Passed marker");
+  byId("next").click();
+  assert.equal(Number(timeline.value), 32, "no restart marker after both cars have passed");
+});
+
+test("Telemetry time replay keeps 1× speed through slow frames and stops when hidden", () => {
+  const {byId, document, frames, step} = telemetryReplay();
+  const play = byId("trace-replay").querySelector("button");
+  play.click();
+  for (const now of [0, 200, 400, 600, 800, 1000]) step(now);
+  assert.equal(byId("cursor").textContent, "1.000 s");
+  assert.equal(play.textContent, "Pause time replay");
+  document.hidden = true;
+  document.dispatchEvent({type: "visibilitychange"});
+  assert.equal(frames.size, 0);
+  assert.equal(play.textContent, "Play time replay");
+  assert.equal(byId("cursor").textContent, "1.000 s");
+});
+
+test("Telemetry axis switching uses the other trace past the reference's last sample", () => {
+  const {byId, dispatch, time} = telemetryReplay();
+  byId("extend").click();
+  const reference = byId("reference");
+  reference.value = "1";
+  dispatch(reference, {type: "change"});
+  assert.equal(byId("cursor").textContent, "95.0 m");
+  assert.equal(byId("time-a").textContent, "1.875");
+  assert.equal(byId("time-b").textContent, "—");
+  dispatch(time, {type: "change"});
+  assert.equal(byId("cursor").textContent, "1.875 s");
+  assert.equal(time.checked, true);
+  assert.equal(reference.value, "1", "the selected comparison reference stays in place");
+});
