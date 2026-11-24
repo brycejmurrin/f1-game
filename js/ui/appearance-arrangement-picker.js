@@ -5,7 +5,7 @@ window.AppearanceArrangementPicker = (function () {
   // Appearance keeps its illustrative preview. This button uses the same
   // launchers a player would press, so their Career slot or race stays theirs.
   const previewTargets = { garage: "carsetup", race: "race-settings", pause: "pausemenu" };
-  const launchers = { career: "mb-career", carsetup: "mb-garage", select: "mb-race", datahub: "mb-data", "telemetry-detail": "mb-data",
+  const launchers = { career: "mb-career", carsetup: "mb-garage", select: "mb-race", datahub: "mb-data", learn: "mb-learn", "telemetry-detail": "mb-data",
     results: "mb-race", "share-card-preview": "mb-race", "race-settings": "mb-race", "track-detail": "mb-race", "duel-picker": "mb-race", customize: "mb-garage", "career-offers": "mb-career", "career-history": "mb-career", "career-guide": "mb-career", standings: "mb-standings", quali: "mb-race", teampicker: "mb-garage", "season-setup": "mb-season",
     trackdesigner: "mb-designer", "td-label-ask": "mb-designer", "photo-studio": "mb-photo", watch: "mb-watch", vsfriend: "mb-vs", howtoplay: "mb-help" };
   const pauseDoors = { "photo-controls": "pm-photo", "photo-studio": "pm-photo", standings: "pm-standings", howtoplay: "pm-howto" };

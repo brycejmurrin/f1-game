@@ -133,6 +133,20 @@ window.ScreenRegions = (function () {
     replayControls: part('[data-hub-part="replay"]', "Race replay controls"), lapList: part('[data-hub-part="lap-list"]', "Lap by lap"),
     lapBoard: part('[data-hub-part="selected-lap"] .dh-table', "Selected lap classification"),
   });
+  screen("learn", "Learn", {
+    heading, navigation: part("#learn-index", "Lesson list"), actions, back: part("#learn-close", "Back"),
+    ...parts("learn-group-", {
+      aerodynamics: "Car anatomy and aerodynamics", energy: "Power unit and energy",
+      driving: "Tyres and driving dynamics", strategy: "Race strategy",
+    }),
+    ...parts("learn-open-", {
+      aero: "Aero Lab", chassis: "Chassis X-Ray", suspension: "Suspension and anti-dive",
+      deployment: "Straight-line deployment", hybrid: "Hybrid lap budget", "brake-blend": "Rear brake blending",
+      "tyre-heat": "Tyre Thermal Lab", braking: "Grip & Braking", "racing-line": "Racing lines",
+      telemetry: "Telemetry Detective", rain: "Wet weather lines", vsc: "VSC pit strategy",
+      "pit-duel": "Undercut or overcut", stint: "Fuel and tyre degradation",
+    }),
+  });
   screen("telemetry-detail", "Telemetry detail", {
     heading: part(".dh-tpopup-hdr", "Drivers and session"), traces: part(".dh-tpopup-body", "Telemetry detail panel"),
     charts: part(".dh-telem-main", "Trace area"), sidebar: part(".dh-telem-side", "Map and gauges"),
@@ -254,7 +268,7 @@ window.ScreenRegions = (function () {
 
   for (const [id, label] of Object.entries({
     continue: "Continue", daily: "Daily time trial", race: "Race", tt: "Time trial", vs: "Race a friend", season: "Season",
-    practice: "Practice", garage: "Garage", watch: "Watch", data: "Data Hub", photo: "Photo Studio", designer: "Track Designer",
+    practice: "Practice", garage: "Garage", watch: "Watch", data: "Data Hub", learn: "Learn", photo: "Photo Studio", designer: "Track Designer",
     visual: "Visual Studio", standings: "Standings", settings: "Settings", phonepad: "Use as controller",
     steerphone: "Phone controller", help: "How to play", saves: "Saves and data",
   })) screens["home-style"].regions[id] = homePart("#mb-" + id, label);

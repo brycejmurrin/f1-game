@@ -435,3 +435,34 @@ test("Garage animation tuner edits its window on first visit at the measured pho
     await context.close();
   }
 });
+
+test("Appearance saves a Learn lesson button layout and restores it on a fresh open", async ({ page }) => {
+  await page.setViewportSize({ width: 852, height: 393 });
+  await page.goto("/");
+  const boot = () => expect(page.locator("html")).toHaveAttribute("data-booted", /.*/, { timeout: BOOT });
+  await boot();
+  await page.locator("#mb-settings").click();
+  await page.locator("#pm-open-appearance").click();
+  await page.getByLabel("Screen to arrange").selectOption("learn");
+  await page.getByRole("button", { name: "Arrange Learn", exact: true }).click();
+
+  const editor = page.locator('#screen-arranger[data-editing-screen="learn"]');
+  const button = page.locator("#learn-open-braking");
+  const font = () => button.evaluate(el => parseFloat(getComputedStyle(el).fontSize));
+  const action = name => editor.getByRole("button", { name, exact: true }).click();
+  await editor.getByLabel("Region", { exact: true }).selectOption("braking");
+  const originalFont = await font();
+  await action("Controls");
+  await action("Text size +");
+  const savedFont = await font();
+  expect(savedFont).toBeGreaterThan(originalFont);
+  await action("Apply");
+  await expect(editor).toHaveCount(0);
+
+  await page.reload();
+  await boot();
+  await page.locator("#mb-learn").click();
+  await expect.poll(font).toBe(savedFont);
+  await button.click();
+  await expect(page.frameLocator("#learn-lab").locator("#turnLimit")).toHaveText("60.0%");
+});
