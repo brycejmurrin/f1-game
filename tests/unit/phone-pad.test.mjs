@@ -530,6 +530,23 @@ test("the dash reaches the phone ~15 Hz on the unreliable channel and paints the
   assert.equal(el.pos.textContent, "DNF");
 });
 
+test("a phone without HUD ordering keeps the previous packet shape", () => {
+  const [padEnd, hostEnd] = NetTransport.loopback({ latencyMs: 0 });
+  padEnd.pump(0); hostEnd.pump(0);
+  const received = [];
+  padEnd.onMessage((channel, data) => { if (channel === NetTransport.STATE) received.push(JSON.parse(data)); });
+  const { Input } = bootInput();
+  const link = PhonePad.link(hostEnd, { input: Input, pump: false, now: () => 0,
+    hud: () => ({ state: "race", surface: "camera" }) });
+  try {
+    padEnd.send(NetTransport.EVENT, PhonePad.encodeHello("pad", false, true, undefined, true));
+    link.pump();
+    padEnd.pump(0);
+    assert.equal(received[0].length, 16, "a camera-compatible legacy peer still gets the original surface frame");
+    assert.equal(PhonePad.decodeHud(JSON.stringify(received[0])).surface, "camera");
+  } finally { link.close(); }
+});
+
 test("the LCD says Q / PRAC where the race HUD does, not a race position (R2-08)", () => {
   const D = PhonePad.DASH, el = lcd();
   const base = { gear: 3, kmh: 100, rpm: 0.5, lap: 1, laps: 1, pos: 1, cars: 1, ers: 0.5, flags: 0, caution: 0, lastLapMs: 0, state: "race", team: "" };
@@ -2273,6 +2290,35 @@ test("menu stick survives WebKit capture transfer but releases when hidden", () 
   }
 });
 
+test("phone camera sticks track retargeted pointers without applying an event twice", () => {
+  const previous = globalThis.document, listeners = {}, writes = [];
+  globalThis.document = { addEventListener(type, fn) { (listeners[type] ||= []).push(fn); } };
+  const move = fakeEl(), look = fakeEl(), moveNub = { style: { set translate(value) { writes.push(value); } } };
+  move.getClientRects = () => [{}];
+  const cameraPad = { move, look, moveNub, up: fakeEl(), down: fakeEl(), back: fakeEl(), panel: fakeEl(), return: fakeEl() };
+  const ctl = PhonePad.pad({ cameraPad });
+  try {
+    move.dispatch("pointerdown", { pointerId: 21, clientX: 100, clientY: 200 });
+    const moveEvent = { pointerId: 21, clientX: 0, clientY: 200, target: move };
+    for (const fn of listeners.pointermove || []) fn(moveEvent);
+    move.dispatch("pointermove", moveEvent);
+    assert.deepEqual(writes, ["60% 0%", "-60% 0%"], "one update per move");
+
+    look.dispatch("pointerdown", { pointerId: 22, clientX: 50, clientY: 200 });
+    move.dispatch("lostpointercapture", { pointerId: 21 });
+    const retargeted = { pointerId: 21, clientX: 50, clientY: 100, target: look };
+    for (const fn of listeners.pointermove || []) fn(retargeted);
+    assert.equal(writes.at(-1), "0% -60%", "retargeting the first finger to the other stick still updates its axis");
+    for (const fn of listeners.pointerup || []) fn({ pointerId: 22 });
+    assert.equal(writes.at(-1), "0% -60%", "the second finger's release leaves the first alone");
+    for (const fn of listeners.pointerup || []) fn({ pointerId: 21 });
+    assert.equal(writes.at(-1), "0% 0%", "an outside release centers the first stick");
+  } finally {
+    ctl.cancel();
+    if (previous === undefined) delete globalThis.document; else globalThis.document = previous;
+  }
+});
+
 test("phone controls ignore secondary mouse presses while keeping primary and touch input", () => {
   const dom = { gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(), stick: fakeEl(), buttons: { navDown: fakeEl() } };
   const timers = fakeTimers();
@@ -2934,6 +2980,7 @@ test("the phone's surface follows the game's screen from the first frame it is a
     screen.state = "race";
     for (let i = 0; i < 8; i++) frame();
     assert.ok(!dom.hud.body.classes.has("menu"), "a race starts: the wheel");
+    const drivingHud = ctl.state().hud;
     screen.layer = "rotate-device";
     for (let i = 0; i < 8; i++) frame();
     assert.ok(dom.hud.body.classes.has("menu"), "host overlays can own input without pausing the race");
@@ -2945,6 +2992,14 @@ test("the phone's surface follows the game's screen from the first frame it is a
     cameraPad.up.dispatch("keydown", { key: " " });
     for (let i = 0; i < 3; i++) frame();
     assert.deepEqual(desk.Input.remoteCamera(), { moveX: 1, moveY: 0, lookX: 0, lookY: -1, lift: 1 });
+    assert.ok(ctl.state().hud.hudSeq > drivingHud.hudSeq, "the negotiated host numbers its HUD packets");
+    for (const sequence of [drivingHud.hudSeq, undefined]) {
+      const lateDash = PhonePad.encodeHud(drivingHud, true, true, sequence);
+      padEnd._emit("message", NetTransport.STATE, lateDash);
+      assert.ok(dom.hud.body.classes.has("camera-pad"), "an older or pre-negotiation dash cannot switch away from the camera");
+    }
+    for (let i = 0; i < 3; i++) frame();
+    assert.equal(desk.Input.remoteCamera().moveX, 1, "stale dash delivery cannot release held camera controls");
     assert.equal(desk.Input.throttle(), false, "camera motion cannot drive");
     screen.layer = "rotate-device";
     assert.equal(desk.Input.remoteCamera(), null, "a host layer change invalidates held camera movement immediately");

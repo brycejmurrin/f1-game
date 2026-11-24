@@ -266,7 +266,7 @@ const InputPadMenu = (function () {
       const okBtn = nin ? 1 : 0, backBtn = nin ? 0 : 1;
       if (!padNavSeeded) {
         padNavSeeded = true;
-        if (!dir && !btnEdge(pad, okBtn)) padSeedFocus();
+        if (!dpadOnly && !dir && !btnEdge(pad, okBtn)) padSeedFocus();
       }
       if (dir) {
         const now = nowMs();

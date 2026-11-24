@@ -663,7 +663,10 @@ const PhonePadPage = (function () {
         aim(e, true);
         e.preventDefault();
       });
-      base.addEventListener("pointermove", e => { if (e.pointerId === pointer) aim(e, false); });
+      // WebKit may retarget the first touch after a second control takes capture.
+      // Track the pointer in one place, including moves still targeted at the stick.
+      const moveTarget = typeof document !== "undefined" ? document : base;
+      moveTarget.addEventListener("pointermove", e => { if (e.pointerId === pointer) aim(e, false); }, true);
       base.addEventListener("lostpointercapture", e => { if (!base.getClientRects().length) release(e); });
       releases.push(release);
       pointerReleases.push(release);

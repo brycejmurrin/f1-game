@@ -7,7 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
-import { read, boot, bootUi, fakePad, plain } from "../helpers/key-binds-rig.mjs";
+import { read, boot, bootUi, fakePad, plain, rawPad, setBtn } from "../helpers/key-binds-rig.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 test("malformed imported binding slots cannot stop Controls initialization", () => {
@@ -82,6 +82,11 @@ test("camera sticks and triggers move the camera without leaking held controls i
   };
   Input.bindPhotoCamera(camera);
   anyOpen.on = true;
+  Input.setPadAxisMap({ steer: 0, steerInvert: -1 });
+  pad.axes[0] = 0.3;
+  assert.equal(Input.calibratePad(), true);
+  Input.poll();
+  assert.deepEqual(motion.at(-1), [0, 0, 0, 0, 0], "calibrated rest cannot move the camera");
   pad.axes = [1, -1, 1, -1];
   press(7);
   Input.poll();
@@ -91,9 +96,31 @@ test("camera sticks and triggers move the camera without leaking held controls i
   Input.poll();
   assert.equal(Input.throttle(), false, "the held camera trigger cannot immediately become gas");
   assert.equal(Input.steer(), 0);
+  assert.equal(Input.lookStick().x, 0, "the held camera stick cannot immediately become driving free-look");
   pad.axes.fill(0); release(7); Input.poll();
+  pad.axes[0] = 0.3; Input.poll();
   press(7); Input.poll();
   assert.equal(Input.throttle(), true, "a fresh trigger press can drive after returning to rest");
+});
+
+test("changing active pads does not release another pad's camera hold", () => {
+  const { Input, sb, fire, anyOpen } = boot();
+  const first = fakePad(sb, fire);
+  const second = rawPad({ index: 1, id: "Spare pad" });
+  sb.navigator.getGamepads = () => [first.pad, second];
+  let now = 0;
+  sb.performance.now = () => now += 16;
+  sb.UiLayers.top = () => anyOpen.on ? { id: "photo-studio" } : null;
+  Input.bindPhotoCamera({ isActive: () => anyOpen.on, setPadInput() {}, setRemoteCameraInput() {} });
+  Input.poll();
+  anyOpen.on = true;
+  first.pad.axes[2] = 1; first.press(7); Input.poll();
+  anyOpen.on = false;
+  setBtn(second, 7, true); Input.poll();
+  assert.equal(Input.throttleLevel(), 1, "the spare never used the camera");
+  first.press(2); Input.poll();
+  assert.equal(Input.lookStick().x, 0);
+  assert.equal(Input.throttleLevel(), 0, "reselecting the first pad preserves its hold guard");
 });
 
 test("the defaults are the keys the game always had", () => {

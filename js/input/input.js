@@ -1616,10 +1616,13 @@ const Input = (function () {
     try { onPadLostCb(); } catch (_) { /* the game's handler must not break input teardown */ }
   }
   let photoCamera = null;
-  let padCameraHeld = false;
+  const cameraHeldPads = new Set(); // holds stay with the pad that used the camera
   function photoAxis(axes, index) {
     if (index === padAxisMap.throttle || index === padAxisMap.brake) return 0;
-    const value = readPadAxis(axes, index);
+    if (!Number.isFinite(axes[index])) return 0;
+    const rest = index === padAxisMap.steer ? padRestOffset * padAxisMap.steerInvert : 0;
+    const delta = axes[index] - rest;
+    const value = delta / (delta >= 0 ? 1 - rest : 1 + rest);
     const mag = Math.abs(value);
     return mag <= LOOK_STICK_DEAD ? 0 : Math.sign(value) * (Math.min(1, mag) - LOOK_STICK_DEAD) / (1 - LOOK_STICK_DEAD);
   }
@@ -1718,11 +1721,14 @@ const Input = (function () {
     const menuTop = camera && window.UiLayers?.top()?.id;
     const cameraPad = padStd(pad) && (menuTop === "photo-studio" || menuTop === "photo-controls" || menuTop === "freecam") &&
       !axisCaptureCb && !padCaptureCb && !document.hidden;
+    let padCameraHeld = cameraHeldPads.has(key);
     if (cameraPad || padCameraHeld) {
       const moveX = photoAxis(axes, 0), moveY = photoAxis(axes, 1);
       const lookX = photoAxis(axes, 2), lookY = photoAxis(axes, 3);
       const up = padPedalLevel(btnVal(pad, 7)), down = padPedalLevel(btnVal(pad, 6));
       padCameraHeld = !!(moveX || moveY || lookX || lookY || up || down);
+      if (padCameraHeld) cameraHeldPads.add(key);
+      else cameraHeldPads.delete(key);
       if (cameraPad) camera.setPadInput(moveX, moveY, lookX, lookY, up - down);
     }
     if (!cameraPad) camera?.setPadInput();
@@ -1802,6 +1808,7 @@ const Input = (function () {
       // clearEdges() for the bug class this avoids).
       const menuOpen = window.UiLayers?.navOpen();
       if (cameraPad || menuOpen || padCameraHeld) {
+        lookStickX = lookStickY = 0;
         // ...and the PEDALS go with it. They were latched above this branch, so a
         // pad kept throttling/braking the car through the pause menu (the
         // keyboard's driving keys are gated by menuOverlayOpen(); the pad's were
@@ -2498,6 +2505,7 @@ const Input = (function () {
          no way to intervene. Console certification treats disconnect recovery
          as a tested failure mode for exactly this reason. Only when NO pad is
          left: swapping one of two pads is not an interruption. */
+      if (e.gamepad) cameraHeldPads.delete(padKey(e.gamepad, e.gamepad.index));
       if (!still) reportControllerLoss("physical");
     });
     ready = true;

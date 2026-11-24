@@ -89,6 +89,7 @@ const PhonePad = (function () {
     // wire) schedules by it, and an undefined `now` there delivers nothing.
     const now = opts.now || (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
     let lastSeq = -1, ackAt = -1e9, peerAck = false, peerGrip = false, peerCamera = false, helloPending = false;
+    let peerHudOrder = false, hudSeq = 0;
     const hostHello = encodeHello("host", false, true, undefined, true);
     let samples = 0, events = 0, stale = 0, junk = 0, huds = 0;
     let closed = false;
@@ -147,6 +148,7 @@ const PhonePad = (function () {
       if (!ev) { junk++; return; }
       if (ev.t === "hi" && ev.side === "pad" && ev.p === PROTO) {
         peerAck = !!ev.ack; peerGrip = !!ev.grip; peerCamera = !!ev.camera;
+        peerHudOrder = !!ev.hudOrder;
         helloPending = !transport.send(T.EVENT, hostHello);
         hapticsOn = !!ev.haptics;
         if (admitted) applyHaptics();
@@ -193,7 +195,7 @@ const PhonePad = (function () {
       hudAt = t;
       let h = null;
       try { h = opts.hud(); } catch (e) { h = null; }
-      const text = encodeHud(h, peerGrip, peerCamera);
+      const text = encodeHud(h, peerGrip, peerCamera, peerHudOrder ? hudSeq++ : undefined);
       if (text && transport.send(T.STATE, text)) huds++;
     }
     // Samples land in the transport's inbox and reach Input only on pump(): once
@@ -529,7 +531,7 @@ const PhonePad = (function () {
   // button state the page keeps: { roll(), thr(), brk(), held() }. Returns
   // { sample(), event(k), pump(), close(), stats() }; the page calls sample()
   // from deviceorientation and on every pedal change, and pump() each frame.
-  // `opts.onHud(h)` receives every dash packet; `opts.peerId` (hex) rides the
+  // `opts.onHud(h)` receives fresh dash packets; `opts.peerId` (hex) rides the
   // hello so the game can recognise this page when it re-dials (host() admit).
   function padSession(transport, src, opts) {
     opts = opts || {};
@@ -537,6 +539,7 @@ const PhonePad = (function () {
     const now = opts.now || (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
     let seq = 0, lastSent = -1e9, sent = 0, haptics = 0, huds = 0, closed = false;
     let beat = 0, helloPending = false, peerSteer = false, peerAck = false, peerCamera = false, ackAt = -1, openedAt = now();
+    let lastHudSeq = -1;
     let dirty = false;   // a coalesced move awaiting the 15 ms gap
     const pending = [], sentTimes = new Map();
     const EDGE_MAX_AGE_MS = 1200, NAV_MAX_AGE_MS = 250, EDGE_CAP = 24;
@@ -544,7 +547,7 @@ const PhonePad = (function () {
     const canVibrate = () => typeof opts.vibrate === "function" || (typeof navigator !== "undefined" && typeof navigator.vibrate === "function" && navigator.maxTouchPoints > 0);
     function flush() {
       if (closed || transport.status !== "open") return;
-      if (helloPending) helloPending = !transport.send(T.EVENT, encodeHello("pad", canVibrate(), true, opts.peerId, true));
+      if (helloPending) helloPending = !transport.send(T.EVENT, encodeHello("pad", canVibrate(), true, opts.peerId, true, true));
       while (pending.length) {
         const edge = pending[0];
         if (now() - edge.at > (NAV_REPEAT[edge.k] ? NAV_MAX_AGE_MS : EDGE_MAX_AGE_MS)) { pending.shift(); expired++; continue; }
@@ -592,7 +595,13 @@ const PhonePad = (function () {
         let ack; try { ack = JSON.parse(data); } catch (_) { ack = null; }
         if (peerAck && Array.isArray(ack) && ack[0] === "A" && Number.isInteger(ack[1]) && sentTimes.has(ack[1])) { ackAt = sentTimes.get(ack[1]); for (const key of sentTimes.keys()) if (key <= ack[1]) sentTimes.delete(key); }
         const h = hudOf(ack);
-        if (h && opts.onHud) { huds++; try { opts.onHud(h); } catch (e) { /* page's problem */ } }
+        if (!h) return;
+        // The dash shares the unordered state channel. After the first ordered
+        // frame, also discard any legacy frame still in flight from negotiation.
+        const sequence = h.hudSeq ?? -1;
+        if (lastHudSeq !== -1 && sequence <= lastHudSeq) return;
+        lastHudSeq = sequence;
+        if (opts.onHud) { huds++; try { opts.onHud(h); } catch (e) { /* page's problem */ } }
         return;
       }
       const ev = decodeEvent(data);
