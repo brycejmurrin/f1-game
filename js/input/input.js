@@ -689,6 +689,16 @@ const Input = (function () {
       btnSteerVal = 0; btnSteerT = 0;
       clearCanvasSteering();
     }
+    if (before === "controller" && after !== "controller") {
+      if (padThrottleToggle) { padThrottle = false; padThrottleVal = 0; }
+      if (padLookBackToggle) padLookBack = false;
+      padThrottleToggle = padLookBackToggle = false;
+    }
+    if (before === "keyboard" && after !== "keyboard") {
+      if (keyThrottleToggle) keyThrottle = false;
+      if (keyLookBackToggle) keyLookBack = false;
+      keyThrottleToggle = keyLookBackToggle = false;
+    }
     onControlDeviceChange?.();
   }
   function setPhysicalPadAvailable(available) {
@@ -1017,9 +1027,11 @@ const Input = (function () {
   }
   // The largest value across an action's bound buttons (a trigger is analog,
   // a face button reads 0/1) and any rising edge across them.
-  function padActVal(pad, id) {
+  function padActVal(pad, id, consumed = null) {
     let v = 0;
-    for (const b of bindings.padButtons(id)) if (b != null) v = Math.max(v, clamp(btnVal(pad, b), 0, 1));
+    for (const b of bindings.padButtons(id)) {
+      if (b != null && !consumed?.has(b)) v = Math.max(v, clamp(btnVal(pad, b), 0, 1));
+    }
     return v;
   }
   // Read-only Controls diagnostic: share shaping/travel math with the driving
@@ -1164,13 +1176,13 @@ const Input = (function () {
        is held, so latching it would leave the car steering or braking until the
        key is pressed again. Placed BELOW the pause/Escape block (Escape and P are
        never chords) and above the gate, so releases still clear their latches. */
-    if (down && (e.metaKey || e.ctrlKey)) return;
+    if (down && (e.metaKey || e.ctrlKey || e.altKey)) return;
     if (menuOverlayOpen() || typing) {
       if (down) return;
       heldKeys.delete(e.code); syncHeldKeys();
       return;
     }
-    if (down && !e.repeat && e.isTrusted !== false && !e.altKey && !window.UiLayers?.navOpen() && act &&
+    if (down && !e.repeat && e.isTrusted !== false && !window.UiLayers?.navOpen() && act &&
         (act !== "shiftDown" || !/^Shift/.test(e.code))) setLocalControlDevice("keyboard");
     if (["left", "right", "throttle", "brake", "lookBack"].includes(act)) {
       const toggle = (act === "throttle" && throttleIsToggle()) || (act === "lookBack" && lookBackIsToggle());
@@ -1525,6 +1537,8 @@ const Input = (function () {
      https://developer.mozilla.org/en-US/docs/Web/API/Gamepad/timestamp */
   const PAD_WAKE = 0.3;
   const padUse = new Map();    // padKey -> { axes, btn, usedAt }
+  const PAD_MENU_RELEASE = 0.12; // independent of the driving pedal calibration
+  const padMenuButtons = new Map(); // consumed presses survive missing Gamepad snapshots
   const padUseLive = new Set(); // reused each poll; a fresh Set here was one alloc per frame
   // The W3C standard layout (d-pad on 12-15, right stick on 2/3). Gamepad.mapping is
   // always a string in a browser; a missing one is a bare harness pad, read as standard.
@@ -1550,6 +1564,11 @@ const Input = (function () {
         const down = btnDown(p, b);
         if (!first && down && !rec.btn[b]) used = true;
         rec.btn[b] = down;
+      }
+      const consumed = padMenuButtons.get(k);
+      if (consumed) {
+        for (const b of consumed) if (btnVal(p, b) <= PAD_MENU_RELEASE) consumed.delete(b);
+        if (!consumed.size) padMenuButtons.delete(k);
       }
       // The rest reference moves only on use (or first sight), so a slow drift
       // cannot creep past PAD_WAKE a frame at a time without ever counting.
@@ -1704,6 +1723,7 @@ const Input = (function () {
     }
     padSnapshotLost = false;
     padPrevKey = key;
+    const consumed = padMenuButtons.get(key);
     const profiles = ensureDeviceProfiles();
     if (profiles) profiles.activate(pad);
     selectPedalState(key);
@@ -1751,21 +1771,22 @@ const Input = (function () {
     // driving toggle — even if their callback closes that owner this poll.
     const padOwnsDrive = !axisCaptureCb && !padCaptureCb && !(window.UiLayers && window.UiLayers.navOpen());
     // pedals: analog triggers, a wheel's pedal AXES, or the A/B face buttons.
+    const throttleInput = pedalLevel(Math.max(padActVal(pad, "throttle", consumed), padPedalAxis(axes, "throttle")), padPedalDeadzone.throttle);
     if (throttleIsToggle()) {
       if (padOwnsDrive && padActEdge(pad, "throttle")) padThrottleToggle = !padThrottleToggle;
       padThrottle = padThrottleToggle;
       padThrottleVal = padThrottleToggle ? 1 : 0;
     } else {
-      padThrottleVal = pedalLevel(Math.max(padActVal(pad, "throttle"), padPedalAxis(axes, "throttle")), padPedalDeadzone.throttle);
+      padThrottleVal = throttleInput;
       padThrottle = padThrottleVal > 0;
     }
-    padBrakeVal = pedalLevel(Math.max(padActVal(pad, "brake"), padPedalAxis(axes, "brake")), padPedalDeadzone.brake);
+    padBrakeVal = pedalLevel(Math.max(padActVal(pad, "brake", consumed), padPedalAxis(axes, "brake")), padPedalDeadzone.brake);
     padBrake = padBrakeVal > 0;
     // A connected pad is not active input. Record only a real deflection or a
     // newly pressed button, so an idle Bluetooth pad cannot steal Help/coach
     // wording from the keyboard or touch player.
     let padActive = Math.abs(stick) > 0.05 || Math.abs(dpad) > 0.05 ||
-      padThrottleVal > 0 || padBrakeVal > 0;
+      throttleInput > 0 || padBrakeVal > 0;
     if (!padActive && pad.buttons) {
       for (let i = 0; i < pad.buttons.length; i++) {
         if (btnDown(pad, i) && !padPrevButtons[i]) { padActive = true; break; }
@@ -1828,7 +1849,7 @@ const Input = (function () {
         if (lookBackIsToggle()) {
           if (padOwnsDrive && padActEdge(pad, "lookBack")) padLookBackToggle = !padLookBackToggle;
           padLookBack = padLookBackToggle;
-        } else padLookBack = padActVal(pad, "lookBack") > 0.5;
+        } else padLookBack = padActVal(pad, "lookBack", consumed) > 0.5;
       }
     }
     const n = pad.buttons ? pad.buttons.length : 0;
@@ -1837,7 +1858,11 @@ const Input = (function () {
   }
 
   const padMenu = InputPadMenu.create({ btnDown, btnEdge, nowMs, getPadAxisMap: () => padAxisMap, padRest: () => padRestOffset,
-    padButtons: (id) => bindings.padButtons(id), padBrand: (p) => bindings.padBrand(p) });
+    padButtons: (id) => bindings.padButtons(id), padBrand: (p) => bindings.padBrand(p),
+    consumeButton: (button) => {
+      if (!padMenuButtons.has(padPrevKey)) padMenuButtons.set(padPrevKey, new Set());
+      padMenuButtons.get(padPrevKey).add(button);
+    } });
 
   // A connected pad only "wins" steering when its stick is actually deflected,
   // so an idle controller never overrides tilt / touch / on-screen buttons.
@@ -2491,7 +2516,10 @@ const Input = (function () {
         if (padPrevKey !== null) padSnapshotLost = true;
         padPrevButtons.length = 0;
       }
-      if (e.gamepad) padPrevByIndex.delete(e.gamepad.index);
+      if (e.gamepad) {
+        padPrevByIndex.delete(e.gamepad.index);
+        padMenuButtons.delete(padKey(e.gamepad, e.gamepad.index));
+      }
       setPhysicalPadAvailable(still);
       try { Log.info("input", `gamepad disconnected ${padLogId(e)}`); }
       catch (_) { /* Log absent */ }
