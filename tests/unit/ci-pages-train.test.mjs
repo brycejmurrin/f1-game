@@ -11,11 +11,91 @@ import path from "node:path";
 import { parse as parseYAML } from "yaml";
 import { report } from "../../tools/ci/ci-coverage.mjs";
 import { decide as rearmDecide } from "../../tools/ci/pages-rearm.mjs";
+import { verifiedBase } from "../../tools/ci/pages-verified-base.mjs";
+import { select } from "../../tools/ci/select-specs.mjs";
+import { changedPaths, firstParentChanges, PAGES_HISTORY_LIMIT } from "../../tools/lib/changed-files.mjs";
 import { ciWorkflow, pagesWorkflow, selectedJob, shipFilter } from "../helpers/ci-workflow.mjs";
 
 test("no workflow demotes the change-aware gate to advisory", () => {
   assert.doesNotMatch(pagesWorkflow, /^\s+advisory:/m);
   assert.doesNotMatch(ciWorkflow, /^\s+advisory:/m);
+});
+
+test("the Pages selector keeps reverted CSS and individually oversized specs from separate merges", (t) => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "pages-history-"));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  const git = (...args) => cp.execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
+  const css = "css/hud.css";
+  const spec = "tests/specs/perf-race-entry.spec.js";
+  const write = (file, value) => {
+    fs.mkdirSync(path.dirname(path.join(cwd, file)), { recursive: true });
+    fs.writeFileSync(path.join(cwd, file), value);
+  };
+  const commit = (message) => { git("add", "-A"); git("commit", "-qm", message); return git("rev-parse", "HEAD"); };
+  git("init", "-qb", "deploy");
+  git("config", "user.email", "t@t");
+  git("config", "user.name", "t");
+  write(css, "original CSS"); write(spec, "original spec");
+  const base = commit("verified publication");
+  git("checkout", "-qb", "layout");
+  write("css/menus.css", "private intermediate change");
+  commit("edit menus before review");
+  fs.rmSync(path.join(cwd, "css/menus.css"));
+  write(css, "changed layout");
+  const side = commit("CSS-only PR");
+  git("checkout", "-q", "deploy");
+  git("merge", "-q", "--no-ff", "-m", "land layout", "layout");
+  git("checkout", "-qb", "follow-up");
+  write(css, "original CSS"); write(spec, "changed oversized spec");
+  commit("revert CSS and edit spec");
+  git("checkout", "-q", "deploy");
+  git("merge", "-q", "--no-ff", "-m", "land follow-up", "follow-up");
+  const tip = git("rev-parse", "HEAD");
+  const net = changedPaths([base, tip], { cwd });
+  assert.deepEqual(net, [spec], "the net diff has lost the stylesheet");
+  const history = firstParentChanges(base, tip, { cwd });
+  assert.deepEqual(history.map((change) => change.files), [[css], [css, spec]]);
+  const specs = (plan) => new Set(plan.shards.flatMap((shard) => shard.specs.split(" ")));
+  assert.equal(specs(select(base, undefined, { files: net })).has("tests/specs/hud-layout.spec.js"), false);
+  const plan = select(base, undefined, { history });
+  const selected = specs(plan);
+  assert.ok(selected.has("tests/specs/hud-layout.spec.js"));
+  assert.ok(selected.has("tests/specs/ui-scale.spec.js"));
+  assert.ok(selected.has(spec));
+  assert.ok(plan.oversize.some((row) => row.file === spec), "the edited over-budget spec keeps its own leg");
+  assert.throws(() => firstParentChanges(side, tip, { cwd }), /outside the first-parent window/);
+  for (let i = 0; i < PAGES_HISTORY_LIMIT - 1; i++) git("commit", "-q", "--allow-empty", "-m", `later ${i}`);
+  assert.throws(() => firstParentChanges(base, git("rev-parse", "HEAD"), { cwd }), /outside the first-parent window/);
+});
+
+test("Pages verifies the published base from completed byte checks, even below a newer unverified live SHA", () => {
+  const [tip, live, verified] = ["a", "b", "c"].map((c) => c.repeat(40));
+  const chain = [tip, live, verified];
+  const branch = "example/deploy";
+  const runs = [tip, live, live, verified].map((head_sha, i) => ({
+    head_sha, head_branch: branch, id: i + 10, run_attempt: 2, conclusion: "success", status: "completed",
+  }));
+  const bytes = (conclusion) => ({ name: "Live shell matches the published commit and build", conclusion: "success",
+    steps: [{ name: "Verify published runtime bytes and lazy assets", conclusion }] });
+  const runList = "actions/workflows/pages.yml/runs?branch=example%2Fdeploy&status=success&per_page=10";
+  const jobs = (id) => `actions/runs/${id}/attempts/2/jobs?per_page=100&page=1`;
+  const responses = new Map([
+    [runList, { workflow_runs: runs }],
+    [jobs(11), { jobs: [] }], // successful no-op
+    [jobs(12), { jobs: [bytes("skipped")] }], // superseded poll
+    [jobs(13), { jobs: [bytes("success")] }],
+  ]);
+  const reads = [];
+  const request = (endpoint) => {
+    reads.push(endpoint);
+    return { json: responses.get(endpoint) };
+  };
+  assert.equal(verifiedBase(chain, live, branch, request), verified);
+  assert.deepEqual(reads, [runList, jobs(11), jobs(12), jobs(13)],
+    "inspect exact attempts at or before the live SHA");
+  assert.equal(verifiedBase(chain.slice(0, 2), live, branch, request), "", "missing earlier history selects everything");
+  assert.equal(verifiedBase(chain, live, branch, () => ({ error: "unavailable" })), "");
+  assert.equal(verifiedBase(chain, "d".repeat(40), branch, () => assert.fail("first-parent check must happen before the API read")), "");
 });
 
 test("one CI run per branch head: push and pull_request share a group, manual runs keep their own", () => {
@@ -212,6 +292,10 @@ test("a Pages run reuses a gate that already passed on the SAME tree, and only t
   assert.doesNotMatch(verdict, /^\s+environment:/m, "the verdict must not create a deployment record");
   assert.doesNotMatch(verdict, /^\s+concurrency:/m, "the verdict must never be cancelled by newest-wins");
   assert.match(verdict, /fetch-depth: 0/, "the parents' trees are the question; a shallow clone has no parents");
+  assert.match(verdict, /elif \[ "\$LIVE" = "\$GITHUB_SHA" \]; then[\s\S]*?echo "nothing_new=true"/,
+    "a tick for the already-live tip is still a no-op");
+  assert.match(verdict, /\[ -n "\$SINCE" \] && \[ "\$\(git rev-parse --verify -q "\$GITHUB_SHA\^1"\)" = "\$SINCE" \]/,
+    "only a gate for the single change after the verified base can be reused");
   assert.match(verdict, /tools\/ci\/pages-reuse-verdict\.sh "\$GITHUB_SHA" >> "\$GITHUB_OUTPUT"/);
   assert.match(ciJob, /needs: verdict/);
   assert.match(ciJob, /if: needs\.verdict\.outputs\.nothing_new != 'true' && needs\.verdict\.outputs\.reuse != 'true'$/m, "the gate runs unless nothing is new or an earlier gate on this tree is reused");

@@ -41,6 +41,32 @@ export function changedPaths(args = [], { cwd = ROOT, run = execFileSync } = {})
   return parseNameStatusZ(out);
 }
 
+// Bound the release train's historical routing work. Older windows use the
+// full gate, as do windows whose first-parent chain cannot be proved.
+export const PAGES_HISTORY_LIMIT = 64;
+
+/** Most recent first-parent commits, newest first, including the head. */
+export function firstParents(head, { cwd = ROOT, run = execFileSync } = {}) {
+  return run("git", ["rev-list", "--first-parent", `--max-count=${PAGES_HISTORY_LIMIT + 1}`, head, "--"], {
+    cwd, encoding: "utf8",
+  }).trim().split("\n");
+}
+
+/** Keep each first-parent diff distinct so the selector can retain narrow
+ * routes (e.g. a CSS-only merge) alongside the other changes in the train.
+ * An off-chain, missing or too-old base cannot certify a partial window. */
+export function firstParentChanges(base, head, opts = {}) {
+  const chain = firstParents(head, opts);
+  const boundary = chain.indexOf(base);
+  if (boundary < 0) throw new Error(`${base} is outside the first-parent window of ${head}`);
+  return chain.slice(0, boundary).map((after, i) => ({
+    before: chain[i + 1], after,
+    // Disabling rename detection reports both endpoints without fetching the
+    // old blobs in CI's blobless checkout.
+    files: changedPaths([chain[i + 1], after, "--no-renames", "--"], opts),
+  })).reverse();
+}
+
 /** Untracked, not-ignored paths (`git ls-files --others --exclude-standard`).
  *  A new file is invisible to `git diff <base>` until `git add`, and AGENTS.md's
  *  loop runs the selectors BEFORE staging (audit W6, 2026-11-10). */

@@ -1128,12 +1128,20 @@ Two always-judged checks give the PR verdict fixed names:
 
 Heavy jobs use one shared skip expression on deploy pushes and draft PRs (`github.event.pull_request.draft` inside `ci.yml`; `desktop.yml` uses `draft == false`). `ready_for_review` is listed on every `pull_request` trigger so marking ready starts the full tier on the same `head_sha` (draft fast runs may cancel — AGENTS.md rule 8 dedupe).
 | **Ship push** | push to deploy branch | Starts `pages.yml` directly (2026-10-16): no ci.yml run of its own. |
-| **Pages train** | push / dispatch / cron | Full gate against live `before_sha` (ci.yml called with `concurrency_key`); one running + one pending, the newest push replaces the pending one; never cancelled mid-run. |
+| **Pages train** | push / dispatch / cron | Full gate since the last byte-verified publication at or before the live SHA (ci.yml called with `concurrency_key`). Selected specs combine the routes from each first-parent change, including changes later reverted. One running + one pending, and the newest push replaces the pending one. |
 | **Nightly** | `ci.yml` schedule `17 4 * * *` (04:17 UTC) | Rotating browser group (`nightly-group.mjs`) instead of smoke-only; renderer / gfx on real GPU; coverage for the specs `select-specs` never picks. `gpu-census.yml` runs on its own staggered cron (`47 5 * * *`, 05:47 UTC) for adapter identity. |
 
 Every `pull_request` workflow uses a per-PR concurrency group with
 `cancel-in-progress: true`. Deploy / Pages / import-models / spec-timings do
 **not** cancel in-progress runs.
+
+The train plans the union against specs runnable at the tip and packs it using
+the usual budget. If the live SHA, byte verification, or first-parent window
+is unavailable, the gate selects against the whole tip. A tree-equal earlier
+gate can be reused when the verified publication is the tip's first parent.
+[Git first-parent history](https://git-scm.com/docs/git-rev-list#Documentation/git-rev-list.txt---first-parent) ·
+[GitHub Actions workflow runs](https://docs.github.com/en/rest/actions/workflow-runs) ·
+[GitHub Actions workflow jobs](https://docs.github.com/en/rest/actions/workflow-jobs)
 
 ### Flaky tests
 
