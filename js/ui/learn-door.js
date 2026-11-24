@@ -30,7 +30,7 @@ const LearnDoor = (function () {
   let dialog;
   let frame;
 
-  function open(door, openDataHub) {
+  function open(door, openDataHub, launchAeroDrill) {
     if (!dialog) build();
     dialog.hidden = false;
 
@@ -120,6 +120,15 @@ const LearnDoor = (function () {
         if (dialog.hidden || frame.hidden || event.origin !== location.origin || event.source !== frame.contentWindow ||
             UiLayers.top() !== dialog) return;
         if (event.data?.type === "apex-learn-close") close.click();
+        if (event.data?.type === "apex-learn-scenario") {
+          if (!launchAeroDrill || event.data.id !== "aero" || sheet.dataset.lesson !== "aero") return;
+          leaveLesson();
+          dialog.hidden = true;
+          queueMicrotask(() => {
+            if (dialog.hidden && UiLayers.top()?.id === "overlay") launchAeroDrill();
+          });
+          return;
+        }
         if (event.data?.type !== "apex-learn-telemetry" || sheet.dataset.lesson !== "telemetry" ||
             pendingTelemetry === visit || !openDataHub) return;
 
@@ -148,6 +157,70 @@ const LearnDoor = (function () {
     }
   }
 
-  return { open };
+  // Use the production race, wind, aero and checkpoint code. These settings
+  // belong to the drill and are restored when its race ends or cannot start.
+  function launchAeroDrill(G, activate, setDirtyAir) {
+    if (G.state !== "menu" || G.netPlay.active()) return;
+    const monza = Tracks.LIST.findIndex(def => def.id === "monza");
+    if (monza < 0) return;
+    const previous = {
+      track: G.trackIdx, weather: G.raceWeather, changeable: G.raceChangeable, grid: G.raceGrid,
+      duel: G.duel, dirtyAir: G.raceDirtyAir, wind: Wind.level(), goal: G.coach.practiceGoal(),
+    };
+    activate({
+      staging: false,
+      begin() {
+        this.staging = false;
+        return beginAeroDrill(G);
+      },
+      restore() {
+        G.trackIdx = previous.track;
+        G.raceWeather = previous.weather;
+        G.raceChangeable = previous.changeable;
+        G.raceGrid = previous.grid;
+        G.duel = previous.duel;
+        setDirtyAir(previous.dirtyAir);
+        Wind.setLevel(previous.wind);
+        G.coach.setPracticeGoal(previous.goal);
+      },
+    });
+    UiExperience.leavePracticePick();
+    G.flow = "gp";
+    G.session = "race";
+    G.trackIdx = monza;
+    G.raceWeather = "dry";
+    G.raceChangeable = false;
+    G.raceGrid = "tier";
+    G.duel = false;
+    setDirtyAir("classic");
+    Wind.setLevel("real");
+    G.startRace();
+  }
+
+  function beginAeroDrill(G) {
+    // Start just past the line with a closing speed and a 24 m gap inside
+    // the 34 m Classic tow window. Both cars need room left in the aero zone.
+    const start = 100, gap = 24;
+    const zone = G.aeroZoneAt(start), player = G.player;
+    const rival = G.cars.find(c => c !== player);
+    if (!zone || G.aeroZoneAt(start + gap) !== zone || !player || !rival || G.state !== "count") return false;
+    const speed = G.vTop();
+    const place = (c, s, entrySpeed) => {
+      c.s = c._prevS = c.prog = c.rPrevS = s;
+      c.lap = 1;
+      c.x = c.xVis = c.rPrevX = TrackLine.at(G.track, s).x;
+      c.speed = entrySpeed;
+      c.gear = 6;
+      RealRace.seatOnRoad(G.track, c);
+    };
+    place(player, start, speed * 0.94);
+    place(rival, start + gap, speed * 0.80);
+    if (!G.goRolling()) return false;
+    G.snapGameCam();
+    G.coach.setPracticeGoal("slipstream");
+    return G.coach.mark();
+  }
+
+  return { open, launchAeroDrill };
 })();
 Object.freeze(LearnDoor);
