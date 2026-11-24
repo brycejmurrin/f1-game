@@ -283,6 +283,85 @@ test("visor optics and water settings survive both backup modes and reject inval
   assert.equal(target.collect("changes").settings.camera?.helmetVisorDropSize, undefined, "reset no longer appears changed");
 });
 
+test("button preset backups carry all four modes and keep explicit empty phone responses separate", () => {
+  const source = boot({ touch: true, mobile: true }), target = boot({ touch: true, mobile: true });
+  const modes = {
+    keyboard: [{ id: "profile-1", name: "Keys", values: { throttle: ["KeyW", null] } }],
+    pad: [{ id: "profile-1", name: "Pad", values: { throttle: [7, null] } }],
+    touch: [{ id: "profile-1", name: "Touch", values: { v: 1, buttons: { gas: { start: 45 } } } }],
+    phone: [{ id: "profile-1", name: "Phone", values: null }],
+  };
+  source.GameStore.store.set("controlButtonPresets", { v: 1, modes });
+  source.GameStore.store.set("touchButtonProfiles", { v: 1, buttons: { gas: { start: 50 } } });
+  source.GameStore.store.set("phoneButtonProfiles", { v: 1, buttons: {} });
+  const saved = source.collect("all");
+  assert.equal(target.loadSettings(saved).failed, 0);
+  assert.deepEqual(JSON.parse(target.disk.get("apex26.controlButtonPresets")), { v: 1, modes });
+  assert.deepEqual(JSON.parse(target.disk.get("apex26.phoneButtonProfiles")), { v: 1, buttons: {} });
+  assert.equal(target.SettingsExport.resetSettings("controls").ok, true);
+  assert.ok(target.disk.has("apex26.controlButtonPresets"));
+  assert.ok(target.disk.has("apex26.phoneButtonProfiles"));
+});
+
+const responseMap = (start) => ({ v: 1, buttons: { gas: { start } } });
+const legacyResponseFile = (value, mode = "changes", desktop = false) => ({
+  format: "apex26-settings-v1", mode, device: { desktop },
+  settings: { driving: { touchButtonProfiles: value } },
+});
+function bootButtonResponses(opts = {}) {
+  let phone = false;
+  const document = { documentElement: { hasAttribute: key => phone && key === "data-phone-controller" } };
+  const b = boot({ realStore: true, touch: true, mobile: true, globals: { document }, ...opts });
+  // In the game, building the driving buttons seeds the Phone profile before Settings opens.
+  b.pedals.watchButtonProfile("gas", () => {});
+  return { ...b, usePhone: () => { phone = true; } };
+}
+
+test("legacy shared responses restore both surfaces after boot and clear inherited settings from ALL", () => {
+  const target = bootButtonResponses();
+  for (const mode of ["changes", "all"]) {
+    const legacy = legacyResponseFile(responseMap(45), mode);
+    assert.equal(target.loadSettings(legacy).applied, 2);
+    assert.deepEqual(target.collect("all").settings.driving.phoneButtonProfiles, responseMap(45));
+  }
+  target.usePhone();
+  assert.equal(target.pedals.buttonProfile("gas").start, 45);
+  assert.equal(target.loadSettings(legacyResponseFile(null, "all")).applied, 2);
+  assert.equal(target.pedals.buttonProfile("gas").start, undefined);
+});
+
+test("legacy shared responses preserve explicit Phone edits and stay device-local", () => {
+  const target = bootButtonResponses();
+  target.usePhone();
+  target.pedals.setButtonProfile("gas", { start: 70 });
+  assert.equal(target.loadSettings(legacyResponseFile(responseMap(45))).applied, 1);
+  assert.equal(target.pedals.buttonProfile("gas").start, 70);
+  target.pedals.resetButtonProfile("gas");
+  assert.equal(target.loadSettings(legacyResponseFile(responseMap(40), "all")).applied, 1);
+  assert.equal(target.pedals.buttonProfile("gas").start, undefined);
+
+  const fresh = bootButtonResponses();
+  const crossDevice = fresh.loadSettings(legacyResponseFile(responseMap(45), "all", true));
+  assert.deepEqual([crossDevice.applied, crossDevice.deviceSkipped], [0, 1]);
+  const malformed = fresh.loadSettings(legacyResponseFile({ v: 1, buttons: { retired: {} } }));
+  assert.deepEqual([malformed.applied, malformed.skipped], [0, 1]);
+  fresh.usePhone();
+  assert.equal(fresh.pedals.buttonProfile("gas").start, undefined);
+});
+
+test("modern CHANGES files keep independent Phone responses when only touchscreen changed", () => {
+  const source = bootButtonResponses();
+  source.pedals.setButtonProfile("gas", { start: 45 });
+  const backup = source.collect("changes");
+  assert.equal(backup.buttonResponseSchema, 2);
+  assert.equal(backup.settings.driving.phoneButtonProfiles, undefined);
+  const target = bootButtonResponses();
+  assert.equal(target.loadSettings(backup).applied, 1);
+  assert.equal(target.pedals.buttonProfile("gas").start, 45);
+  target.usePhone();
+  assert.equal(target.pedals.buttonProfile("gas").start, undefined);
+});
+
 test("backup controls mount once in their own settings page, outside renderer options", () => {
   const b = bootImportUI();
   for (const id of ["pm-settings-changed", "pm-settings-all", "pm-settings-load"]) {

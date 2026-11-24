@@ -393,7 +393,7 @@ body[data-density="compact"] #pmsettings-inner .pm-groups .set-row > div > butto
 #pmsettings-inner:not([data-density="compact"]) #pm-panel-display > details { grid-column: 1 / -1; }
 #pmsettings-inner:not([data-density="compact"]) #pm-panel-appearance > details { grid-column: 1 / -1; }
 #pmsettings-inner:not([data-density="compact"]) #pm-panel-appearance :is(.pm-look-h, .pm-accent-swatches, .pm-replay-intro) { grid-column: 1 / -1; }
-#pmsettings-inner:not([data-density="compact"]) .pm-group :is(#pm-keys-section, #pm-pad-section) { grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) .pm-group :is(#pm-keys-section, #pm-pad-section, #pm-button-profiles) { grid-column: 1 / -1; }
 /* DISPLAY: HUD / METRICS / RENDERER each on their own row (UI SIZE moved to
    APPEARANCE › READABILITY). Named areas so an open fold cannot steal the hole. */
 #pmsettings-inner:not([data-density="compact"]) #pm-panel-display {

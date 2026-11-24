@@ -14,6 +14,7 @@ const {
 } = SettingsExport._core;
 
 const EXCLUDED = "photo library and personal background images, garage (parts, liveries, setup sheets, MY TEAM), saves (career, the season save, replays, daily challenge), accounts and network (Spotify, TURN, relays), renderer self-heal latches, developer flags. Time-trial leaderboards are optional in the ttlb section, and season setup, circuit mastery, ghosts, onboarding marks and your own circuits in the progress section (best laps and progress merge, season setup is replaced)";
+const BUTTON_RESPONSE_SCHEMA = 2;   // Phone and touchscreen now have independent responses.
 
 function same(a, b) {
   if (a === b) return true;
@@ -96,6 +97,7 @@ function collect(mode, G) {
   const desktop = thisDesktop(G);   // the same reading applySettings compares against
   const out = {
     format: FORMAT, mode: all ? "all" : "changes", exportedAt: new Date().toISOString(), build,
+    buttonResponseSchema: BUTTON_RESPONSE_SCHEMA,
     device: { desktop, userAgent: (typeof navigator !== "undefined" && navigator.userAgent) || null },
     keys: { json: "went through store.set (JSON)", raw: "bare strings from store.rawSet; null = unset" },
     excluded: EXCLUDED,
@@ -279,6 +281,7 @@ function resetInfo(section) { return Object.hasOwn(RESET_INFO, section) ? RESET_
 function resetOwns(row, section) {
   if (row.info || row.k === "favTracks" || row.k === "appearanceProfiles") return false;
   if (section === "files") return true;
+  if (row.k === "controlButtonPresets") return false;
   const steering = row.group === "steering" && !RESET_AIDS.has(row.k);
   if (section === "advanced") return steering || RESET_ADVANCED.has(row.k);
   if (section === "controls") return steering || row.group === "controls" || RESET_INPUT.has(row.k);
@@ -428,6 +431,20 @@ function applySettings(file, G) {
     const depth = row.mergeDepth || (!row.whole && isObj(def) && Object.keys(def).length ? 1 : 0);
     const sparse = file.mode === "changes" && depth && isObj(v);
     writes.push([row, sparse ? mergeChangedFields(readStored(row), v, depth) : v]);
+  }
+  // Earlier files shared one response across both surfaces. Only copy a
+  // validated Touch write, so the same device and unset rules apply to Phone.
+  if ((file.buttonResponseSchema === undefined || file.buttonResponseSchema === 1) &&
+      isPlain(groups.driving) && !Object.hasOwn(groups.driving, "phoneButtonProfiles")) {
+    const touch = writes.find(([row]) => row.k === "touchButtonProfiles");
+    if (touch) {
+      const phone = SPEC.find(row => row.k === "phoneButtonProfiles");
+      const store = GameStore.store;
+      const existing = store.getStored ? store.getStored(phone.k) : store.get(phone.k, undefined);
+      if (existing === undefined || existing?.inherited === true) {
+        writes.push([phone, { ...(touch[1] ?? defaultOf(phone, G)), inherited: true }]);
+      }
+    }
   }
   const result = writePreferences(writes);
   let { applied, failed } = result;
