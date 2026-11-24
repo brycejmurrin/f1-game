@@ -227,6 +227,7 @@ const RaceSettings = (function () {
     if (typeof DamageHandling !== "undefined") DamageHandling.fromStore(store);   // #1578: the stored DAMAGE choice, default DISPLAY
     const isTimeTrial = () => G.session === "tt";
     const isChampionship = () => G.flow === "season" || G.flow === "career";
+    const sessionLaps = (n) => SeasonCal.lapsFor(n, G.season);   // what the green runs: a sprint divides (#6341)
     const gridFromQuali = () => (isChampionship() ? SeasonCal.quali() : (G.raceQuali && !isTimeTrial()));
     // The one flow whose setup is remembered: a solo one-off GP. Time trial
     // (and the Daily inside it), championship rounds and a VS FRIEND room all
@@ -410,7 +411,7 @@ const RaceSettings = (function () {
       const id = planTrackId(), pin = pits.pinnedStops(id);
       SettingRow.paint("rs-plan", pin == null ? "auto" : String(pin), RS_PLAN);
       const built = !!(G.track && G.track.def && G.track.def.id === id);
-      const plan = built && pits.zoneOf() ? pits.planFor(0.5, true, laps) : null;
+      const plan = built && pits.zoneOf() ? pits.planFor(0.5, true, sessionLaps(laps)) : null;
       bar.hidden = !plan;
       if (!plan) return;
       const stints = $("rs-plan-stints");
@@ -447,7 +448,7 @@ const RaceSettings = (function () {
       let text = "";
       const def = Tracks.LIST[G.trackIdx];
       if (!tt && G.raceChangeable && typeof Forecast !== "undefined" && previewWxPlan && G.track && def && G.track.def && G.track.def.id === def.id) {
-        const plan = previewWxPlan({ laps: G.raceLaps, from: G.raceWeather });
+        const plan = previewWxPlan({ laps: sessionLaps(G.raceLaps), from: G.raceWeather });
         const f = plan && Forecast.compute({ arc: plan, from: G.raceWeather, lapS: G.track.total / 45, seed: netRoom || !G.simSeed ? 0 : G.simSeed() });
         if (f) text = "FORECAST: " + f.text;
       }
