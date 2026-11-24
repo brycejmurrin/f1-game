@@ -10,6 +10,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { cssRules } from "../helpers/css-rules.mjs";
+import { boot as bootInput, fakePad } from "../helpers/key-binds-rig.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/dock-layout.js"), "utf8");
@@ -283,6 +284,7 @@ function bootCreate(opts = {}) {
   const els = { "dock-left": dockEl(), "dock-right": dockEl(), pmsettings: settings, pausemenu: pause };
   const made = [];
   const bodyAttrs = {};
+  let leaveSettings;
   const ctx = {
     Log: { info() {}, warn() {}, debug() {}, enabled() { return false; } },
     window: { innerWidth: 400, innerHeight: 800, addEventListener(t, fn) { winL[t] = fn; } },
@@ -290,15 +292,21 @@ function bootCreate(opts = {}) {
       documentElement: {},
       body: { setAttribute(k, v) { bodyAttrs[k] = v; }, removeAttribute(k) { delete bodyAttrs[k]; }, appendChild(n) { made.push(n); } },
       // The REPOSITION toolbar is a div of buttons found by [data-k=…].
-      createElement() {
-        const kids = [];
-        return { style: {}, dataset: {}, setAttribute() {}, appendChild(c) { kids.push(c); },
+      createElement(tag) {
+        const kids = [], attrs = new Map();
+        return { tagName: tag.toUpperCase(), style: {}, dataset: {}, children: kids,
+          setAttribute(k, v) { attrs.set(k, String(v)); },
+          getAttribute(k) { return attrs.get(k) ?? null; },
+          removeAttribute(k) { attrs.delete(k); },
+          click() { this.onclick?.(); },
+          appendChild(c) { kids.push(c); },
           querySelector(sel) { const k = /data-k=(\w+)/.exec(sel); return k ? kids.find((c) => c.dataset.k === k[1]) || null : null; } };
       },
       addEventListener(t, fn) { docL[t] = fn; },
     },
     MutationObserver: function (cb) { this.observe = target => observers.set(target, cb); },
     getComputedStyle() { ctx.gcsCalls = (ctx.gcsCalls || 0) + 1; return { getPropertyValue() { return "0"; } }; },
+    SettingsNav: { onLeave(fn) { leaveSettings = fn; } },
   };
   if (!opts.lazyToolbar) installToolbar(ctx);
   vm.runInNewContext(SRC.replace(/^const\b/gm, "var"), ctx);
@@ -311,7 +319,7 @@ function bootCreate(opts = {}) {
   const store = { get(k, d) { return k in persisted ? persisted[k] : d; }, set(k, v) { persisted[k] = v; sets.push([k, v]); } };
   if (opts.subscribe) store.subscribe = (fn) => { listeners.push(fn); return () => {}; };
   const api = ctx.DockLayout.create({ $: (id) => els[id] || null, store, getSteerMode: () => mode }, opts.scaleUi, opts.previewControls);
-  return { ctx, api, winL, docL, observers, settings, pause, els, bodyAttrs, made, sets, listeners, store, setMode: (m) => { mode = m; } };
+  return { ctx, api, winL, docL, observers, settings, pause, els, bodyAttrs, made, sets, listeners, store, leaveSettings, setMode: (m) => { mode = m; } };
 }
 
 test("a rotation repaints the dock offsets in the new viewport's pixels", () => {
@@ -775,6 +783,85 @@ test("leaving Settings while its toolbar loads does not open an editor over the 
   assert.equal(pause.hidden, false);
 });
 
+test("switching Settings sections retires a pending editor even after returning to Controls", async () => {
+  const { ctx, api, settings, els, leaveSettings } = bootCreate({ lazyToolbar: true });
+  const door = els["pm-dock-reposition"] = ctx.document.createElement("button");
+  const controls = els["pm-panel-controls"] = { hidden: false };
+  let finish;
+  ctx.ScriptLoader = { create: () => ({ load: () => new Promise(resolve => { finish = resolve; }) }) };
+  api.setEditing(true);
+  assert.equal(door.getAttribute("aria-busy"), "true");
+  leaveSettings("controls");
+  controls.hidden = true;
+  assert.equal(door.getAttribute("aria-busy"), null);
+  controls.hidden = false;
+  installToolbar(ctx);
+  finish(true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(api.editing(), false);
+  assert.equal(settings.hidden, false);
+  api.setEditing(true);
+  assert.equal(api.editing(), true, "a fresh request can open the loaded toolbar");
+});
+
+test("controller directions and Back belong to the editor while its throttle and steering stay neutral", () => {
+  const { api, settings, pause, made } = bootCreate();
+  api.setEditing(true);
+  const bar = made[0], tools = bar.querySelector("[data-k=tools]"), done = bar.querySelector("[data-k=done]");
+  const cancel = bar.querySelector("[data-k=cancel]");
+  const { Input, sb, fire } = bootInput();
+  const lookup = { "dock-edit-bar": bar, [cancel.id]: cancel, pmsettings: settings, pausemenu: pause };
+  sb.document.getElementById = id => lookup[id] ?? null;
+  sb.document.documentElement = { clientWidth: 400, clientHeight: 800, dataset: {} };
+  sb.getComputedStyle = () => ({ visibility: "visible", zIndex: "0" });
+  bar.contains = el => bar.children.includes(el);
+  bar.querySelectorAll = () => [tools, done];
+  bar.getBoundingClientRect = () => ({ left: 0, right: 180, top: 0, bottom: 44, width: 180, height: 44 });
+  settings.getBoundingClientRect = () => ({ width: 400, height: 800 });
+  const dispatch = event => {
+    event.target = sb.document.activeElement;
+    event.isTrusted = false;
+    event.preventDefault = () => { event.defaultPrevented = true; };
+    event.stopPropagation = () => {};
+    sb.MenuNav.onKeyDown(event);
+    sb.TopModal.onEscape(event);
+    return !event.defaultPrevented;
+  };
+  for (const [index, button] of [tools, done].entries()) {
+    button.getBoundingClientRect = () => ({ left: index * 100, right: index * 100 + 80, top: 0, bottom: 44, width: 80, height: 44 });
+    button.closest = () => null;
+    button.focus = () => { sb.document.activeElement = button; };
+    button.scrollIntoView = () => {};
+    button.dispatchEvent = dispatch;
+  }
+  for (const file of ["js/ui/layers.js", "js/ui/menu-nav.js", "js/ui/modal.js"]) {
+    vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), sb, { filename: absSrc(file) });
+  }
+  tools.focus();
+  assert.equal(sb.UiLayers.top(), bar);
+  assert.equal(sb.UiLayers.anyOpen(), true);
+  const editable = { tagName: "BUTTON", matches: selector => selector === "#hud-dock .touchbtn", closest: () => null };
+  sb.document.activeElement = editable;
+  sb.MenuNav.onKeyDown({ key: "ArrowUp", isTrusted: true, preventDefault: () => assert.fail("the dock button owns its keyboard nudge") });
+  assert.equal(sb.document.activeElement, editable);
+  tools.focus();
+
+  const pad = fakePad(sb, fire);
+  pad.press(15);   // D-pad Right
+  Input.poll();
+  assert.equal(sb.document.activeElement, done);
+  assert.equal(Input.steer(1 / 60), 0);
+  pad.press(7);    // the normal driving accelerator
+  Input.poll();
+  assert.equal(Input.throttleLevel(), 0);
+
+  pad.release(7);
+  pad.release(15);
+  pad.press(1);    // Back, while the compact toolbar hides its Cancel button
+  Input.poll();
+  assert.equal(api.editing(), false);
+  assert.equal(settings.hidden, false);
+});
 
 test("the home touch editor previews the race dock and restores the title when it closes", () => {
   for (const restore of [true, false]) {

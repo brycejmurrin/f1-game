@@ -575,6 +575,8 @@ window.MenuNav = (function () {
     // Trusted arrows nudge the selected title region. The pad synthesizes arrows to navigate the toolbar.
     if (!layer || (dir && layer.id === "tl-editor" && e.isTrusted)) return;
     const active = document.activeElement;
+    // The touch editor's keyboard nudges originate on the dock outside its toolbar.
+    if (dir && layer.id === "dock-edit-bar" && e.isTrusted && active?.matches?.("#hud-dock .touchbtn")) return;
     // key-binds is waiting for this key: let it bind PageDown/Home/arrows without paging the pane.
     if (active && active.dataset && active.dataset.armed === "1") return;
     if (ownsArrows(active, key, e)) return;

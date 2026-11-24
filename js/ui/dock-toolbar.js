@@ -127,6 +127,7 @@ const DockToolbar = (() => {
       editBar.id = "dock-edit-bar";
       editBar.setAttribute("role", "toolbar");
       editBar.setAttribute("aria-label", "Touch controls");
+      editBar.setAttribute("data-esc-close", "dock-edit-cancel");
       const mk = (k, label, aria, onclick) => {
         const b = document.createElement("button");
         b.type = "button";
@@ -172,7 +173,7 @@ const DockToolbar = (() => {
         });
       }
       mk("undo", "Undo", "Undo last touch layout edit", () => { if (history.length) restore(history.pop()); });
-      mk("cancel", "Cancel", "Discard touch layout edits", () => close(false));
+      mk("cancel", "Cancel", "Discard touch layout edits", () => close(false)).id = "dock-edit-cancel";
       mk("smaller", "−", "Smaller buttons", () => stepSize(-1));
       // The readout is text, not a control: a disabled button paints see-through
       // over the timing tower (measured 844x390), so it is an opaque span.
@@ -396,7 +397,7 @@ const DockToolbar = (() => {
       }
 
       document.addEventListener("keydown", (e) => {
-        if (!visible) return;
+        if (!visible || e.defaultPrevented) return;
         if (e.key === "Escape") {
           e.preventDefault(); e.stopPropagation(); close(false);
           return;

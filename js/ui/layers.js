@@ -17,6 +17,7 @@ window.UiLayers = (function () {
     // TRANSIENT: absent until their lazy editor first opens; each builder sets its own
     // data-esc-close (tests/unit/menu-a11y-audit.test.mjs; the live door: appearance-orientation.spec.js).
     { id: "hud-arrange-bar", transient: true },
+    { id: "dock-edit-bar", transient: true },
     { id: "ceremony-podium", transient: true },
     { id: "screen-arranger", transient: true },
     /* The rotate blocker: an opaque z-9000 fixed div shown MID-RACE (unique
