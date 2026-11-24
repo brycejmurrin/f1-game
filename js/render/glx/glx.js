@@ -2687,7 +2687,7 @@ const GLXBackend = (function () {
     gl.uniform3fv(particleU.uEye, frameEye);
     gl.uniform1f(particleU.uAdditive, additive ? 1 : 0);
     // Lit + fogged (PARTICLE_FS): the decals' frame light and the lit pass's fog.
-    gl.uniform3fv(particleU.uSunColor, frameSunColor || [1, 0.98, 0.9]);
+    gl.uniform3fv(particleU.uSunColor, frameDecalSun || frameSunColor || [1, 0.98, 0.9]);   // keyMul-scaled, as decals + TLX
     gl.uniform3fv(particleU.uAmbSky, frameAmbSky);
     gl.uniform3fv(particleU.uAmbGround, frameAmbGround);
     gl.uniform3fv(particleU.uFogColor, _particleFog.color);

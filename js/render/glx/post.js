@@ -1393,7 +1393,14 @@ const GLXPost = (function () {
     }
     const mirror = {
       begin(w, h) { if (!mirrorTarget(w, h)) return false; mirActive = true; return true; },
-      end() { if (!mirActive) return; mirActive = false; mirRenders++; mirrorMips(); },
+      // The mirror's depth is dead once its pass ends (begin() clears it next frame): DontCare it so a tiler
+      // never stores it, as TLX and WGX discard theirs (#5777 R12). Before mirrorMips rebinds the output.
+      end() {
+        if (!mirActive) return;
+        mirActive = false; mirRenders++;
+        if (_invFbo && mirFBO) { gl.bindFramebuffer(gl.FRAMEBUFFER, mirFBO); gl.invalidateFramebuffer(gl.FRAMEBUFFER, _INV_DEPTH); }
+        mirrorMips();
+      },
       abort() { mirActive = false; },   // a pass whose begin() threw: nothing rendered, so no mip chain and no render count
       // Quit-to-menu (#4219): free the target; the next begin() re-allocates it through mirrorTarget. Never mid-pass.
       release() { if (mirActive) return false; mirrorFree(); return true; },

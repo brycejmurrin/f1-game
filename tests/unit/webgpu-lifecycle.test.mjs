@@ -4119,6 +4119,26 @@ test("drawParticles(…, dirty=false) skips the VBO upload when its slot holds t
   assert.equal(frame([[B, 200, true, false]]), 0, "…then it is clean again on that slot");
 });
 
+// #5777 R10: the particles' sun term is KEY LIGHT-scaled, as the decals and TLX (tsl-fx updateFrame).
+test("drawParticles uploads sunColor * keyMul, not the raw sun (#5777 R10)", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  const A = new Float32Array(400).fill(1);
+  const sunOf = (tune) => {
+    assert.equal(gfx.begin({ sunColor: [1, 0.8, 0.6], tune }), true);
+    const w0 = h.writes.length;
+    gfx.drawParticles(A, 400, false, true);
+    const ubo = h.writes.slice(w0).filter((w) => w.buffer && w.buffer.desc && w.buffer.desc.size === 144);
+    gfx.present({});
+    assert.ok(ubo.length >= 1, "a particle uniform write");
+    return ubo[ubo.length - 1].values.slice(20, 23);
+  };
+  const near = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 1e-6);
+  assert.ok(near(sunOf(null), [1, 0.8, 0.6]), "no tune: the frame sun");
+  assert.ok(near(sunOf({ keyMul: 0.29 }), [0.29, 0.232, 0.174]), "night keyMul 0.29 scales the particle sun");
+  assert.ok(near(sunOf({ keyMul: 1 }), [1, 0.8, 0.6]), "…and a later keyMul 1 frame is not left scaled");
+});
+
 // #2156: freeTexture retired unconditionally, and _retireFlush ran only after a submit — so a texture freed
 // outside a frame (title screen, a track switch) stayed resident until the next fully presented frame.
 test("freeTexture destroys at once outside a frame, after the submit inside one; a present that bails flushes (#2156)", async () => {

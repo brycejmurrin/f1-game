@@ -3213,7 +3213,10 @@ const WGX = (function () {
       const _pAS = _particleFrame.ambSky, _pAG = _particleFrame.ambGround;
       _pAS[0] = as[0]*ambM; _pAS[1] = as[1]*ambM; _pAS[2] = as[2]*ambM;
       _pAG[0] = ag[0]*ambM; _pAG[1] = ag[1]*ambM; _pAG[2] = ag[2]*ambM;
-      _particleFrame.sun = sc; _particleFrame.fogColor = fc; _particleFrame.fogDensity = fogDensity;
+      // KEY LIGHT scales the particles' sun term, as the decals (_fxWrite) and TLX (tsl-fx updateFrame).
+      const _pS = _particleFrame.sun, _pKM = T && T.keyMul != null ? T.keyMul : 1;
+      _pS[0] = sc[0]*_pKM; _pS[1] = sc[1]*_pKM; _pS[2] = sc[2]*_pKM;
+      _particleFrame.fogColor = fc; _particleFrame.fogDensity = fogDensity;
       d[52]=T && T.keyMul != null ? T.keyMul : 1;
       d[53]=T && T.glowAmp != null ? T.glowAmp : 2.3;
       d[54]=f.wetness != null ? f.wetness : 0;
