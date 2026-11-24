@@ -248,7 +248,12 @@ leaves D-046's push rules unchanged.
 | C3 | #6368's stale `docs/ARCHITECTURE.md` reached CI. According to the measuring agent the local floor missed it | an issue to check whether `tooling-fast --changed` runs the `gen-arch-table` guard for a `js/` header-comment edit | yes, as an issue |
 | C4 | `ready`, `needs-owner` and `fleet-board` are idle while `dispatch.yml` is disabled | keep them until Bryce decides whether dispatch returns, rather than relabelling twice | no change |
 
-## 5. The decision line
+## 5. Decision
 
-One line answers all three, for example `decision: A1 B1 C1+C3`. The options and picks are in §4, and the PR's
-`needs-decision` comment repeats them.
+Bryce, PR #6377, 2026-11-24 21:44Z: `decision: A1 B1 C1+C3` (D-047). The follow-ups:
+- A1: an agent card `pr-reviewer`, a steward §Land line and a calibration note.
+- B1: a line in the orchestrator brief.
+- C1: issue #6379.
+- C3: issue #6380.
+
+Each is its own PR or issue. This note stays the measurement.
