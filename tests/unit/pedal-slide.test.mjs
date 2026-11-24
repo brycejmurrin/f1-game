@@ -21,7 +21,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var");
 
 // GAS is the lower box (y 200..300), BRAKE the upper one (y 100..200) at x 0..100.
-function boot(mode) {
+function boot(mode, hitTest) {
   const els = new Map();
   function el(id, box) {
     const on = {};
@@ -34,6 +34,7 @@ function boot(mode) {
       },
       fire(t, ev) { (on[t] || []).forEach((f) => f({ pointerId: 1, pointerType: "touch", isTrusted: true, preventDefault() {}, ...ev })); },
       setAttribute() {}, removeAttribute() {}, getBoundingClientRect: () => box,
+      setBox(next) { box = next; },
       setPointerCapture() {}, releasePointerCapture() {},
     };
     els.set(id, e);
@@ -43,7 +44,15 @@ function boot(mode) {
   el("brake", { left: 0, top: 100, width: 100, height: 100 });
   el("left", { left: 0, top: 0, width: 100, height: 100 });
   el("right", { left: 100, top: 0, width: 100, height: 100 });
-  const sb = { document: { getElementById: (id) => els.get(id) || null }, getComputedStyle: () => ({}), Math };
+  const document = { getElementById: (id) => els.get(id) || null };
+  if (hitTest) document.elementFromPoint = (x, y) => {
+    for (const el of els.values()) {
+      const { left, top, width, height } = el.getBoundingClientRect();
+      if (x >= left && x < left + width && y >= top && y < top + height) return el;
+    }
+    return null;
+  };
+  const sb = { document, getComputedStyle: () => ({}), Math };
   vm.createContext(sb);
   for (const rel of ["js/input/pedal-travel.js", "js/input/hold-buttons.js"]) vm.runInContext(read(rel), sb, { filename: absSrc(rel) });
   const hb = sb.InputHoldButtons.create({ beforeReleaseAll() {}, slideEase: () => mode.v === "ease" });
@@ -85,6 +94,43 @@ test("INSTANT: sliding GAS onto BRAKE arrives at full brake (shipped behaviour)"
   move(els, 50, 195);
   assert.equal(lv.brake, 1, "full press on arrival");
   assert.equal(lv.gas, 0, "GAS let go");
+});
+
+test("held absolute Brake measures pressure against its relocated bounds", () => {
+  const { els, lv, PT } = boot({ v: "instant" }, true);
+  const brake = els.get("brake");
+  PT.setButtonProfile("brake", { sliderEdge: "bottom" });
+  brake.fire("pointerdown", { clientX: 50, clientY: 150 });
+  assert.equal(lv.brake, 0.5);
+  brake.setBox({ left: 240, top: 200, width: 100, height: 80 });
+  brake.fire("pointermove", { clientX: 290, clientY: 240 });
+  assert.equal(lv.brake, 0.5, "the same fraction of the relocated Brake");
+  brake.fire("pointermove", { clientX: 290, clientY: 260 });
+  assert.equal(lv.brake, 0.75);
+  brake.fire("pointerup", {});
+  assert.equal(lv.brake, 0);
+});
+
+test("crossover follows the visible sibling after relocation and releases only the moved contact", () => {
+  for (const hitTest of [true, false]) {
+    const { els, lv, hb } = boot({ v: "instant" }, hitTest);
+    const gas = els.get("gas"), brake = els.get("brake");
+    gas.fire("pointerdown", { pointerId: 1, clientX: 50, clientY: 250 });
+    gas.fire("pointerdown", { pointerId: 2, clientX: 50, clientY: 250 });
+    brake.setBox({ left: 240, top: 100, width: 100, height: 100 });
+    gas.fire("pointermove", { pointerId: 1, clientX: 50, clientY: 150 });
+    assert.equal(lv.brake, 0, "the old Brake bounds no longer receive the contact");
+    gas.fire("pointermove", { pointerId: 1, clientX: 290, clientY: 150 });
+    assert.deepEqual([lv.gas, lv.brake], [1, 1], "second finger still holds Gas");
+    assert.deepEqual(Array.from(hb.pointerCounts()), [1, 1, 0, 0]);
+    // The window's capture-phase release can arrive before either button sees cancellation.
+    hb.holdReleasePointer(1);
+    brake.fire("pointercancel", { pointerId: 1 });
+    assert.deepEqual([lv.gas, lv.brake], [1, 0]);
+    gas.fire("pointerup", { pointerId: 2 });
+    assert.deepEqual([lv.gas, lv.brake], [0, 0]);
+    assert.deepEqual(Array.from(hb.pointerCounts()), [0, 0, 0, 0]);
+  }
 });
 
 test("EASE: BRAKE arrives at the floor and ramps to full over RAMP_PX", () => {
