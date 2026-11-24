@@ -4,7 +4,7 @@ const DataTelemetry = (function () {
 
   function create(ctx) {
     const { el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker,
-            invalidateOther, cssColor, textColorOn, NO_TELEM_MSG } = ctx;
+            invalidateOther, cssColor, textColorOn, NO_TELEM_MSG, loadCircuit } = ctx;
 
     const { driverColor, laneColors } = DataTelemetryModel.create(ctx);
     const { dcode, sessionShort, laneRole } = DataTelemetryModel;
@@ -366,8 +366,18 @@ const DataTelemetry = (function () {
       // Build after layout so clientWidth measurements are real
       setTimeout(function () {
         if (telemPopup !== overlay) return;
-        clear(body);
-        buildTelemetryView(body, tels, hdr);
+        const tracks = typeof Tracks !== "undefined" ? Tracks.LIST : [];
+        const id = sel.meta && typeof DataRealRaceScript !== "undefined"
+          ? DataRealRaceScript.trackIdFor(sel.meta, tracks, { exact: true }) : null;
+        const index = id ? tracks.findIndex((track) => track.id === id) : -1;
+        const track = tracks[index];
+        const build = () => {
+          if (telemPopup !== overlay) return;
+          clear(body);
+          buildTelemetryView(body, tels, hdr, track);
+        };
+        if (track?._metaOnly && loadCircuit) loadCircuit(index).then(build, build);
+        else build();
       }, 0);
     }
 

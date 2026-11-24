@@ -164,8 +164,13 @@ function bootMenus(disk = {}, o = {}) {
     addEventListener: (type, fn, opts) => winListeners.push({ type, fn, opts }),
     Tracks: { LIST }, Teams: { LIST: o.teams || [{ id: "t", name: "Team", drivers: [] }] }, Flags: { svg: () => "" },
     SeasonCal: { canRace: () => true, rounds: () => 0 },
-    TrackMaps: { corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"], classColor: () => "", aspect: () => 1.5, elevProfile: () => null },
+    TrackMaps: {
+      corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [],
+      sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"], classColor: () => "", aspect: () => 1.5, elevProfile: () => null,
+      aeroColor: () => "blue", cornerSpeed: () => 122, cornerSpeedColors: () => ["red", "amber", "cyan"],
+    },
   });
+  vm.runInNewContext(src("js/ui/circuit-details-panel.js"), sb, { filename: absSrc("js/ui/circuit-details-panel.js") });
   vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: absSrc("js/ui/select-screen.js") });
   if (o.practicePick || o.practicePickApi) {
     const api = o.practicePickApi || {};
@@ -307,6 +312,28 @@ test("CIRCUIT DETAIL repaints when its circuit file arrives, if still open on th
   land();
   await new Promise((r) => setImmediate(r));
   assert.match(meta(), /\b19 turns/, "the open panel repainted with the hydrated circuit");
+});
+
+test("Circuit Detail changes the canvas and key together when selecting a map overlay", () => {
+  const h = bootMenus();
+  const maps = h.sb.TrackMaps;
+  h.sb.Tracks.LIST[1].sectors = [0.2, 0.6];
+  maps.corners = () => [{ n: 1 }];
+  maps.drsZones = () => [{ a: 0.1, b: 0.2 }];
+  maps.fitCanvas = () => ({ w: 400, h: 200 });
+  const paints = [];
+  maps.draw = (_canvas, _track, opts) => paints.push(opts);
+  h.menus.openTrackDetail();
+  const buttons = h.dom.byId("track-detail-modes").children;
+  assert.deepEqual(buttons.map((b) => b.textContent), ["Overview", "Active Aero", "Sectors", "Corner Speed"]);
+  buttons[2].onclick();
+  assert.equal(buttons[2].getAttribute("aria-pressed"), "true");
+  assert.equal(paints.at(-1).sectors, true);
+  assert.equal(paints.at(-1).drs, false);
+  assert.deepEqual(h.dom.byId("track-detail-legend").children.map((li) => li.children[0].style.color), maps.sectorColors());
+  buttons[3].onclick();
+  assert.deepEqual(Array.from(paints.at(-1).cornerSpeeds), [122]);
+  assert.equal(paints.at(-1).sectors, false);
 });
 
 test("FAVOURITE CIRCUITS: hidden until used — no chip, no badge, nothing written", () => {
@@ -871,8 +898,7 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
     "filter snap refreshes the hero before the deferred chip rebuild");
   assert.ok(!/className = "track-group-head"/.test(menus),
     "filter chips name the view; no vertical CLASSICS/SEASON divider");
-  assert.match(menus, /\["S1", sectors\[0\]\], \["S2", sectors\[1\]\], \["S3", sectors\[2\]\]/, "all sectors use the shared color palette");
-  assert.match(menus, /legend:\s*false/, "the modal uses the DOM legend, not the 9px canvas key");
+  assert.match(code("js/ui/circuit-details-panel.js"), /legend:\s*false/, "the modal uses the DOM legend, not the 9px canvas key");
   const maps = code("js/ui/track-maps.js");
   assert.match(maps, /wrap:\s*z\.end > total/, "activationZones marks a run past S/F");
   const nav = code("js/ui/menu-nav.js");
@@ -926,10 +952,11 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
 
 test("closing track detail disconnects its observer and blocks queued hidden redraws", () => {
   const menus = code("js/ui/select-screen.js");
-  const drawAt = menus.search(/drawDetail\s*=\s*function\s*\(\s*\)\s*\{/);
+  const panel = code("js/ui/circuit-details-panel.js");
+  const drawAt = panel.search(/drawDetail\s*=\s*function\s*\(\s*\)\s*\{/);
   assert.ok(drawAt >= 0, "drawDetail is the redraw closure");
-  assert.match(menus.slice(drawAt, drawAt + 400), /if\s*\(\s*modal\.hidden\s*\)\s*return\s*;/, "a queued redraw of a hidden modal is dropped");
-  const close = fnBody(menus, "closeTrackDetail", "js/ui/select-screen.js");
+  assert.match(panel.slice(drawAt, drawAt + 400), /if\s*\(\s*modal\.hidden\s*\)\s*return\s*;/, "a queued redraw of a hidden modal is dropped");
+  const close = fnBody(panel, "closeTrackDetail", "js/ui/circuit-details-panel.js");
   assert.match(close, /detailRO\.disconnect\(\s*\)/, "closing disconnects the ResizeObserver");
   assert.match(close, /detailRO\s*=\s*null/, "…and forgets it");
   const ret = menus.match(/return\s*\{([^}]*\bopenTrackDetail\b[^}]*)\}/);

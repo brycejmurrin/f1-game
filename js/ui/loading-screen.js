@@ -90,6 +90,8 @@ const LoadingScreen = (function () {
     // the turn marked on the map (0 none), and `radioState` the radio check
     // ("" not yet, "done" tried, "live" on air; stop() cuts a live one).
     let cur = null, view = "map", radioState = "", mapBox = null, markN = 0;
+    let mapTrack = null, paintedGrid = null;
+    let mapMode = "", mapEnd = 1, mapModes = [], cornerSpeeds = [];
 
     function readSkips() {
       try { return store && store.get ? store.get("flySkips", 0) : 0; } catch (_) { return 0; }
@@ -105,7 +107,12 @@ const LoadingScreen = (function () {
 
     // The map's slot in the card, in CSS px. fitCanvas keeps the circuit's own
     // aspect inside it, so a wide circuit gets the width and a tall one the height.
-    const MAP_W = 210, MAP_H = 150;
+    const MAP_W = 280, MAP_H = 188;
+    // Match the compact landscape card in loading.css. Giving the grid a wide,
+    // shallow slot keeps two grid blocks legible even with the whole field.
+    const body = typeof document !== "undefined" ? document.body : null;
+    const compactWide = () => body?.dataset.width === "wide" && body.dataset.density === "compact";
+    const wideMapBox = { w: 156, h: 116 };
 
     // The live geometry, read from the store on first use and kept after.
     let geom = null;
@@ -139,6 +146,17 @@ const LoadingScreen = (function () {
     function root() { return el || (el = $("loading")); }
     // The window changed under a card that is up (Safari's toolbar, a rotation): re-fit.
     if (typeof addEventListener === "function") addEventListener("resize", () => { if (phase) fitCard($); });
+    // Redraw the graphic if the shared layout changes its map slot.
+    if (body && typeof MutationObserver === "function") {
+      new MutationObserver(() => {
+        const cv = $("ld-map");
+        if (!phase || !mapTrack || !cv || (mapBox === wideMapBox) === compactWide()) return;
+        if (paintedGrid) fitMap(cv, mapTrack);
+        else drawMap(mapTrack, markN, mapMode);
+        fitCard($);
+        if (paintedGrid) drawGrid(paintedGrid);
+      }).observe(body, { attributes: true, attributeFilter: ["data-width", "data-density"] });
+    }
 
     function paint(info) {
       const t = info.track;
@@ -150,8 +168,14 @@ const LoadingScreen = (function () {
       // The same numbers the select card shows, minus the ones that need the
       // built world — this paints before any build has necessarily happened.
       // A real race shows where it stands instead (metaRows).
-      const rows = metaRows(info, TrackMaps.corners(t).length);
-      drawMap(t);
+      const corners = TrackMaps.corners(t);
+      const rows = metaRows(info, corners.length);
+      cornerSpeeds = corners.map((corner) => TrackMaps.cornerSpeed?.(corner));
+      mapModes = [];
+      if (TrackMaps.drsZones?.(t).length) mapModes.push("aero");
+      if (t.sectors?.length === 2) mapModes.push("sectors");
+      if (cornerSpeeds.some(Number.isFinite)) mapModes.push("corners");
+      drawMap(t, 0, mapModes[0] || "layout");
       const meta = $("ld-meta");
       if (typeof meta.replaceChildren === "function") meta.replaceChildren(); else meta.textContent = "";
       for (const [k, v] of rows) {
@@ -163,41 +187,66 @@ const LoadingScreen = (function () {
       }
     }
 
-    /** The lap outline, on the circuit picker's recipe: white line, dark casing,
-     *  red start marker, no corner/sector/DRS furniture. Sized from the
-     *  circuit's own aspect, and oversampled for HiDPI the way the picker's
-     *  preview is, with the line weight scaled by the same ratio so it keeps
-     *  its visual thickness. Wrapped: a map that will not draw must never stop
-     *  a race from starting. `mark`: the turn the flyby is filming, tagged on
-     *  the outline so the shot on screen has a place on the lap (0: none). */
-    function drawMap(t, mark) {
+    function fitMap(cv, track) {
+      if (compactWide()) {
+        mapBox = wideMapBox;
+        cv.width = mapBox.w;
+        cv.height = mapBox.h;
+        cv.style.width = mapBox.w + "px";
+        cv.style.height = mapBox.h + "px";
+        cv.style.aspectRatio = mapBox.w + " / " + mapBox.h;
+      } else {
+        mapBox = TrackMaps.fitCanvas(cv, MAP_W, MAP_H, track, true);
+      }
+      // Draw at the CSS slot's density after the player's CARD SIZE is applied.
+      const ratio = Math.min(3, Math.max(1, (window.devicePixelRatio || 1) * cardGeom().scale));
+      if (ratio > 1.01) {
+        cv.width = Math.round(mapBox.w * ratio);
+        cv.height = Math.round(mapBox.h * ratio);
+      }
+    }
+
+    /** Draw one overlay at a time, with the corner currently on camera. */
+    function drawMap(t, mark, mode) {
       const cv = $("ld-map");
       // TrackMaps comes from `hooks`, not window: every module here is a bare
       // lexical `const` at script scope, so window.TrackMaps is undefined and a
       // window-based guard would silently skip the map on every boot.
       if (!cv || !TrackMaps || typeof TrackMaps.draw !== "function") return;
       try {
-        const fit = TrackMaps.fitCanvas(cv, MAP_W, MAP_H, t, true);
-        mapBox = { w: fit.w, h: fit.h };
+        fitMap(cv, t);
+        mapTrack = t;
+        paintedGrid = null;
         markN = mark > 0 ? mark | 0 : 0;
         if (cv.dataset) cv.dataset.turn = markN ? String(markN) : "";
-        setView(cv, "map", markN ? "Circuit layout, turn " + markN + " on camera" : "Circuit layout");
-        // THE CARD'S SCALE IS PART OF THE OVERSAMPLE. A canvas laid out at 210
-        // CSS px and then scaled to 1.6 by the card is a 210 px raster stretched
-        // across 336 — the one element on the card that cannot reflow, and the
-        // one that shows it. Folding the scale in here draws the pixels the
-        // player actually sees. Still capped at 3: the cap is about memory.
-        const ratio = Math.min(3, Math.max(1, (window.devicePixelRatio || 1) * cardGeom().scale));
-        if (ratio > 1.01) {
-          cv.width = Math.round(fit.w * ratio);
-          cv.height = Math.round(fit.h * ratio);
+        mapMode = mode;
+        if (cv.dataset) cv.dataset.mode = mode;
+        let title = "Circuit layout", key = "";
+        if (mode === "aero") {
+          const zones = TrackMaps.drsZones(t).length;
+          title = "Active Aero · " + zones + (zones === 1 ? " zone" : " zones");
+          key = `linear-gradient(0deg, ${TrackMaps.aeroColor()} 0 100%)`;
+        } else if (mode === "sectors" || mode === "corners") {
+          const [c1, c2, c3] = mode === "sectors" ? TrackMaps.sectorColors() : TrackMaps.cornerSpeedColors();
+          key = `linear-gradient(90deg, ${c1} 0 33%, ${c2} 33% 67%, ${c3} 67%)`;
+          title = "Sectors · S1 / S2 / S3";
+          if (mode === "corners") {
+            const speed = cornerSpeeds[markN - 1];
+            const mph = typeof AppearanceOpts !== "undefined" && AppearanceOpts.units() === "mph";
+            title = Number.isFinite(speed)
+              ? "Corner Speed · T" + markN + " ≈ " + Math.round(mph ? speed * 0.621371 : speed) + (mph ? " mph" : " km/h")
+              : "Corner Speed · Slow / Medium / Fast";
+          }
         }
-        const br = fit.w ? (cv.width / fit.w) : 1;
-        const lw = Math.max(2, Math.round(Math.min(fit.w, fit.h) / 42));
+        setView(cv, "map", title, key, mode === "corners" ? 0 : markN);
+        const br = cv.width / mapBox.w;
+        const lw = Math.max(3, Math.round(Math.min(mapBox.w, mapBox.h) / 35));
         TrackMaps.draw(cv, t, {
-          color: "#ffffff", casing: "rgba(0,0,0,0.55)", startColor: "#e10600",
-          width: lw * br, pad: Math.round(lw * 1.5) * br,
-          corners: false, sectors: false, drs: false, mark: markN, markFont: Math.round(11 * br),
+          color: mode === "corners" ? "#b8c2d1" : "#fff", checkeredStart: true,
+          width: lw * br, pad: Math.max(8, lw * 2) * br,
+          sectors: mode === "sectors", drs: mode === "aero",
+          cornerSpeeds: mode === "corners" ? cornerSpeeds : null,
+          mark: markN, markFont: Math.round(11 * br),
         });
       } catch (_) { /* no outline is a smaller loss than no race */ }
     }
@@ -208,10 +257,27 @@ const LoadingScreen = (function () {
       return Math.max(0, Math.min(1, (Date.now() - flyT0) / flyMs));
     }
 
-    function setView(cv, v, label) {
+    function setView(cv, v, label, key = "", turn = 0) {
       view = v;
       if (cv.dataset) cv.dataset.view = v;
-      if (typeof cv.setAttribute === "function") cv.setAttribute("aria-label", label);
+      const text = $("ld-text");
+      text.dataset.mapLabel = label;
+      text.style.setProperty("--ld-map-key", key);
+      if (typeof cv.setAttribute === "function") {
+        cv.setAttribute("aria-label", label + (turn ? ", turn " + turn + " on camera" : ""));
+      }
+    }
+
+    /** Reserve the final grid shots, if there is a grid to draw. */
+    function mapEndFor(info) {
+      if (!gridField(info.grid) || typeof FlybySeq === "undefined") return 1;
+      const shots = info.shots?.length ? info.shots : FlybySeq.DEFAULT;
+      let total = 0, beforeGrid;
+      for (const shot of shots) {
+        if (beforeGrid === undefined && isGridShot(shot.id)) beforeGrid = total;
+        total += shot.dur || 0;
+      }
+      return total > 0 ? (beforeGrid ?? total) / total : 1;
     }
 
     /** The grid graphic, drawn in the box the map left (see gridLayout). False
@@ -222,10 +288,12 @@ const LoadingScreen = (function () {
       try {
         const ctx = cv.getContext("2d");
         if (!ctx) return false;
-        // Laid out in DISPLAYED px: on a phone the stylesheet caps the canvas
-        // at 45% of the card, and rows sized for 210 px are unreadable at 150.
-        // clientWidth is the displayed width; 0 (not laid out) means as authored.
-        const shown = cv.clientWidth > 0 ? cv.clientWidth / mapBox.w : 1;
+        // CSS may cap either dimension. Keep the grid aligned to the
+        // contained canvas image when laying out chips in displayed pixels.
+        const shown = Math.min(
+          cv.clientWidth > 0 ? cv.clientWidth / mapBox.w : 1,
+          cv.clientHeight > 0 ? cv.clientHeight / mapBox.h : 1,
+        );
         const w = mapBox.w * shown, h = mapBox.h * shown;
         const me = field.findIndex((c) => c.isPlayer);
         const L = gridLayout(field, w, h, me);
@@ -261,6 +329,7 @@ const LoadingScreen = (function () {
           }
         }
         ctx.setTransform(1, 0, 0, 1, 0, 0);
+        paintedGrid = field;
         setView(cv, "grid", "Starting grid, you start P" + (me + 1));
         return true;
       } catch (_) { return false; }
@@ -271,16 +340,18 @@ const LoadingScreen = (function () {
      *  (`build` gone) nothing changes: the race is already on its way. */
     function watchShot() {
       if (phase !== "run" || !build || !cur || typeof FlybySeq === "undefined" || !FlybySeq.shotAt) return;
+      const u = flyU();
       let id = "";
-      try { id = FlybySeq.shotAt(flyU(), cur.shots).id; } catch (_) { return; }
+      try { id = FlybySeq.shotAt(u, cur.shots).id; } catch (_) { return; }
       const field = gridField(cur.grid);
       const want = field && isGridShot(id) ? "grid" : "map";
-      // The corner on air (FlybySeq.airCorner: what the last rendered frame
-      // filmed). The map is redrawn only when it changes, a few times a flyby.
+      const modeIdx = Math.floor(u * mapModes.length / (mapEnd || 1));
+      const mode = mapModes[Math.min(mapModes.length - 1, modeIdx)] || "layout";
+      // The corner on air (FlybySeq.airCorner: what the last rendered frame filmed).
       let turn = 0;
       if (want === "map" && typeof FlybySeq.airCorner === "function") { try { turn = FlybySeq.airCorner() | 0; } catch (_) { turn = 0; } }
-      if (want !== view || (want === "map" && turn !== markN)) {
-        if (want === "map") drawMap(cur.track, turn);
+      if (want !== view || (want === "map" && (mode !== mapMode || turn !== markN))) {
+        if (want === "map") drawMap(cur.track, turn, mode);
         else if (!drawGrid(field)) cur.grid = null;   // could not draw: the map, for the rest of the run
       }
       if (id === "grid-mine" && !radioState) radioCheck(field);
@@ -459,6 +530,7 @@ const LoadingScreen = (function () {
       stop();
       build = typeof go === "function" ? go : null;
       cur = info; view = "map"; radioState = "";
+      mapEnd = mapEndFor(info);
       const r = root();
       if (!r) { fire(); return; }          // no markup: degrade to "just race"
       paint(info);
