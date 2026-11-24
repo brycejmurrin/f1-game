@@ -949,9 +949,10 @@ function exteriorLighting() {
   for (let i = 0; i < 3; i++) { light.sunColor[i] *= .55; light.ambientSky[i] *= .55; light.ambientGround[i] *= .55; }
   return exteriorLight = light;
 }
-function releaseExterior() {
+// `hard`: free the built set too (race start). A garage close parks it for the next open (exterior.js park, #6401).
+function releaseExterior(hard) {
   exteriorEpoch++; exteriorBoot = null; exteriorBootKey = ""; exteriorDrawn = false;
-  if (exterior) exterior.release();
+  if (exterior) exterior.release(hard);
   exteriorRequested = null; exteriorHeld = null; exteriorSequence = false; exteriorVisible = false; exteriorLight = null; exteriorAnchor = null;
 }
 // The ROOM's view of the game beyond the car (GarageScene.draw's ctx): the
@@ -1605,7 +1606,7 @@ document.addEventListener("visibilitychange", () => { if (document.hidden) clear
 // Drop its gesture now, so a later visit never inherits that finger's baseline.
 if (typeof MutationObserver === "function") {
   for (const surface of [$("carsetup"), $("photo-studio")]) {
-    if (surface) new MutationObserver(() => { if (surface.hidden) { clearSetupGestures(); if (!home.active && !driveOut && typeof releaseExterior === "function") releaseExterior(); } })
+    if (surface) new MutationObserver(() => { if (surface.hidden) { clearSetupGestures(); if (!home.active && !driveOut) releaseExterior(); } })
       .observe(surface, { attributes: true, attributeFilter: ["hidden"] });
   }
 }
@@ -1664,7 +1665,7 @@ return {
   release() {
     if (G.setupPreviewOn) return false;
     if (departureWheels) departureWheels.release();
-    if (typeof releaseExterior === "function") releaseExterior(); GarageScene.release(); _spMesh = null; _spMeshKey = ""; _spBase = null;   // the hull is CPU-only and frames the next visit
+    releaseExterior(true); GarageScene.release(); _spMesh = null; _spMeshKey = ""; _spBase = null;   // the hull is CPU-only and frames the next visit
     return true;
   },
   get meshKey() { return _spMeshKey.endsWith("|wheels") ? _spMeshKey.slice(0, -7) : _spMeshKey; },   // the split-wheels suffix is internal: callers compare this to previewKey()
