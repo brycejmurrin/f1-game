@@ -453,7 +453,7 @@ test("custom camera gestures share the picker hold and cancel with the camera sc
   el.click = () => el.onclick();
   const send = (type, timeStamp) => handlers.get(type)({ type, timeStamp, pointerId: 3, pointerType: "touch",
     clientX: 25, clientY: 25, preventDefault() {}, stopImmediatePropagation() {} });
-  for (const [mode, threshold] of [["quick", 340], ["double", 340], ["hold", 900], ["long", 1350]]) {
+  for (const [mode, threshold] of [["quick", 340], ["double", 350], ["hold", 900], ["long", 1350]]) {
     model.setButtonProfile("camera", { activation: mode });
     send("pointerdown", 100); assert.equal(timer.delay, threshold);
     timer.fn(); send("pointerup", 100 + threshold);
@@ -487,6 +487,25 @@ test("custom camera gestures share the picker hold and cancel with the camera sc
   assert.equal(cycles, 3, "a first tap from the previous screen cannot pair after resume");
   send("pointerdown", 10900); send("pointerup", 10950);
   assert.equal(cycles, 4, "two taps on the current screen still switch camera");
+
+  model.resetButtonProfile("camera");
+  model.setButtonProfile("camera", { activation: "double" });
+  for (const [start, timerRan, expectedCycles] of [[12000, false, 5], [13000, true, 6]]) {
+    send("pointerdown", start);
+    assert.equal(timer.delay, 350);
+    if (timerRan) {
+      timer.fn();
+      assert.equal(el.getAttribute("aria-expanded"), "true", "the picker callback ran before the queued release");
+    }
+    send("pointerup", start + 345);
+    assert.equal(el.getAttribute("aria-expanded"), "false", "a 345 ms first tap leaves the picker closed");
+    send("pointerdown", start + 450); send("pointerup", start + 500);
+    assert.equal(cycles, expectedCycles, "the second release 155 ms later completes the double tap");
+    assert.equal(el.getAttribute("aria-expanded"), "false");
+  }
+  send("pointerdown", 14000); send("pointerup", 14350);
+  assert.equal(el.getAttribute("aria-expanded"), "true", "a 350 ms press opens the picker even if the timer has not run");
+  assert.equal(cycles, 6);
 });
 
 test("custom touch actions cancel on viewport changes and still accept the next gesture", () => {

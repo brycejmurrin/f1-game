@@ -126,14 +126,14 @@ const CamPicker = (function () {
         (focusItems().find(b => b.getAttribute("aria-checked") === "true") || focusItems()[0])?.focus();
         return true;
       };
-      const hide = () => {
-        screenGeneration++;
+      const close = () => {
         cancelCamHold();
         if (el) el.hidden = true;
         camTrigger?.setAttribute("aria-expanded", "false");
       };
+      const hide = () => { screenGeneration++; close(); };
       const visible = () => !!el && !el.hidden;
-      return { show, hide, visible };
+      return { show, hide, close, visible };
     })();
     (() => {
       const b = camTrigger;
@@ -157,7 +157,8 @@ const CamPicker = (function () {
       // HOLD_MS that the timer already "held" is undone and clicks as a tap.
       function finish(e) {
         clearTimeout(holdT);
-        if (held && e && e.timeStamp - downTs < holdMs) camPicker.hide();
+        // Undo a speculative open without retiring a valid first tap.
+        if (held && e && e.timeStamp - downTs < holdMs) camPicker.close();
         released = true;
       }
       b.addEventListener("pointerup", finish);
@@ -174,7 +175,7 @@ const CamPicker = (function () {
         start(e, mode, timingMs, customized) {
           let delay = HOLD_MS;
           if (mode === "hold" || mode === "long") delay = timingMs + 450;
-          else if (customized) delay = Math.max(HOLD_MS, timingMs + (mode === "quick" ? 1 : 0));
+          else if (mode === "double" || customized) delay = Math.max(HOLD_MS, timingMs + (mode === "quick" ? 1 : 0));
           start(e, delay);
         },
         finish(e) {
