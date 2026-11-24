@@ -60,6 +60,8 @@ const AUXILIARY_HOSTS = {
  *  KNOWN_EXTERNAL_READS in tests/unit/global-registry.test.mjs: every entry is a
  *  decision with its reason, and the list may only shrink without a note here. */
 export const RUNTIME_IDS = {
+  "res-garage": "game.js builds the TT results sheet's GARAGE door before #res-menu at boot (#6390; shellNodes is a shrink-only ratchet), before any lookup",
+  "cs-arrival-alt": "GarageArrival create() builds END TIME TRIAL's SKIP TO RESULTS after #cs-arrival-skip when the shell lacks it (#6390; the shell's node count is a shrink-only ratchet); every read is null-guarded",
   "pm-padgasdz": "SteerTuning mounts the controller pedal dead-zone rows beside Stick Saturation. This lookup prevents mounting the rows twice.",
   "pm-look-popups": "ScreenLooks.build creates each appearance fold from its screen ID when Appearance opens. The shared popup picker focuses this fold.",
   "as-master": "AudioPanel builds the MASTER SOUND row with SettingRow.build above the MUSIC & SOUND folds (#5584; the shell's node count is a shrink-only ratchet); its one read goes through SettingRow.paint, which is null-guarded",

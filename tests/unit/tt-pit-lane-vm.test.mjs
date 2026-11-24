@@ -142,6 +142,66 @@ test("TT: END SESSION is visible in the box and returns to the garage before res
   assert.equal(G.timeTrial, true, "still a Time Trial's sheet");
 });
 
+// #6390: the finished-session garage sat over a BLACK canvas on Bryce's iPhone. render()'s RESULTS early return
+// (keep the frozen race's last frame) ran before the garage branch, so once G.endRace() set state "results" the
+// open garage never drew again. Count GarageScene.draw per pumped frame, and drive Bryce's "b": SKIP TO RESULTS.
+function garageDraws() {
+  const GS = g.sandbox.GarageScene, d0 = GS.draw, out = { n: 0 };
+  GS.draw = function () { out.n++; return d0.apply(this, arguments); };
+  out.restore = () => { GS.draw = d0; };
+  return out;
+}
+const pump = (n) => { const t0 = performance.now(); for (let i = 0; i < n; i++) g.pumpFrame(t0 + (i + 1) * 100); };
+async function endInBox() {
+  const a = await freshTT();
+  const seen = creepToBox(a, 60 * 12);
+  assert.equal(seen[seen.length - 1], "box", "reached the box");
+  g.G.refreshHud(true);
+  g.sandbox.document.getElementById("hud-end-session").onclick();
+  return g.sandbox.document;
+}
+
+test("#6390: the garage over the finished TT session keeps drawing (state results), and its sheet has a way back", async () => {
+  const doc = await endInBox(), G = g.G, spy = garageDraws();
+  try {
+    assert.equal(doc.getElementById("cs-arrival-skip").textContent, "SKIP TO GARAGE");
+    assert.equal(doc.getElementById("cs-arrival-alt").hidden, false, "the drive-in offers SKIP TO RESULTS too");
+    doc.getElementById("cs-arrival-skip").onclick();
+    for (let i = 0; i < 4 && G.state !== "results"; i++) { pump(1); g.flushTimers(); }
+    assert.equal(G.state, "results");
+    assert.equal(doc.getElementById("carsetup").hidden, false, "SKIP TO GARAGE lands in the garage");
+    assert.equal(doc.getElementById("res-garage").hidden, true, "a new TT sheet starts without the door (the last run's MENU left it up)");
+    spy.n = 0; pump(4);
+    assert.ok(spy.n >= 3, "the garage draws in the results state (was 0: a black canvas): " + spy.n);
+    doc.getElementById("cs-done").onclick();   // VIEW RESULTS
+    assert.equal(doc.getElementById("results").hidden, false);
+    assert.equal(doc.getElementById("res-garage").hidden, false, "the sheet's GARAGE door");
+    assert.equal(doc.getElementById("results").getAttribute("data-esc-close"), "res-garage", "Escape takes the same door");
+    doc.getElementById("res-garage").onclick();
+    for (let i = 0; i < 4; i++) { g.flushTimers(); pump(1); }
+    assert.equal(doc.getElementById("results").hidden, true);
+    assert.equal(doc.getElementById("carsetup").hidden, false, "back in the garage");
+    assert.equal(doc.getElementById("cs-done").textContent, "VIEW RESULTS");
+    spy.n = 0; pump(3);
+    assert.ok(spy.n >= 2, "the reopened garage draws: " + spy.n);
+  } finally { spy.restore(); }
+});
+
+test("#6390 b: SKIP TO RESULTS ends the run straight onto the TT sheet; GARAGE then lands in the garage", async () => {
+  const doc = await endInBox(), G = g.G;
+  assert.equal(G.state, "race", "the drive-in plays before the session ends");
+  doc.getElementById("cs-arrival-alt").onclick();
+  assert.equal(G.state, "results", "the session ended at once");
+  assert.equal(doc.getElementById("carsetup").hidden, true, "no garage stop on the way");
+  assert.equal(doc.getElementById("results").hidden, false, "the TT results sheet is up");
+  assert.equal(G.timeTrial, true);
+  doc.getElementById("res-garage").onclick();
+  for (let i = 0; i < 4; i++) { g.flushTimers(); pump(1); }
+  assert.equal(doc.getElementById("carsetup").hidden, false, "closing the sheet lands in the garage");
+  doc.getElementById("cs-done").onclick();
+  assert.equal(doc.getElementById("results").hidden, false, "VIEW RESULTS reopens the sheet");
+});
+
 // ── Part 1 (#5789, on #5720): the TT drive-out's exterior is keyed on the TT SESSION ──
 // The exterior outside the garage door is keyed on circuit + weather + hour. Every TT entry used to key it on the
 // previous session's chips ("it sometimes works"). #5720 keys the drive-out on G at its moment and re-keys on every

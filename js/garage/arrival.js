@@ -812,6 +812,12 @@ const GarageArrival = (function () {
     const own = { in: {}, home: {}, out: {} }, into = () => own[dir] || own.in;
     const root = $("carsetup"), panel = $("cs-inner"), controls = $("cs-stack");
     const overlay = $("cs-arrival"), skip = $("cs-arrival-skip"), label = $("cs-arrival-label");
+    // Built here, not in index.html (the shell's node count is ratcheted); after SKIP in DOM and focus order.
+    let alt = $("cs-arrival-alt");
+    if (!alt && skip && skip.parentNode && typeof document !== "undefined") {
+      alt = Object.assign(document.createElement("button"), { id: "cs-arrival-alt", type: "button", hidden: true }); skip.parentNode.insertBefore(alt, skip.nextSibling);
+    }
+    let /** @type {null | (() => void)} */ altGo = null;   // a second way out (END TIME TRIAL: SKIP TO RESULTS, #6390); null hides it
     function chrome(on) {
       root.classList.toggle("cs-arriving", on);
       panel.inert = controls.inert = on;
@@ -840,6 +846,8 @@ const GarageArrival = (function () {
       if (!plays(config, MOMENT[dir]) || reducedMotion()) { finish(); return; }
       label.textContent = state.label;
       skip.textContent = (opts && opts.skip) || (dir === "out" ? "SKIP TO RACE" : "SKIP TO WORK");
+      altGo = (opts && typeof opts.onAlt === "function" && opts.onAlt) || null;
+      if (alt) { alt.hidden = !altGo; if (altGo) alt.textContent = opts.alt || "SKIP"; }
       label.hidden = !config.captions;   // CAPTIONS off: SKIP stays, the words go
       chrome(true); skip.focus({ preventScroll: true });
     }
@@ -865,8 +873,9 @@ const GarageArrival = (function () {
       }
       return state;
     }
-    function cancel() { state = null; time = 0; chrome(false); }
+    function cancel() { state = null; time = 0; altGo = null; chrome(false); }
     skip.onclick = finish;
+    if (alt) alt.onclick = () => { const go = altGo; altGo = null; if (go) go(); };
     return { start, step, cancel, finish, get state() { return state; } };
   }
   /* SLOW-MO AT THE DOOR: SLOW_S seconds of show time around the car crossing the

@@ -508,7 +508,7 @@ function noteResult(order, meta) {
 }
 function startHome(from) {
   const p = pendingHome;
-  if (!p || from === "pit" || from === "vsfriend") return false;
+  if (!p || from === "pit" || from === "vsfriend" || from === "tt-results") return false;
   pendingHome = null;
   const cfg = GarageArrival.settings(G.store.get("garageArrival", null));
   if (!GarageArrival.plays(cfg, "afterRace") || performance.now() - p.at > 30 * 60e3) return false;
@@ -523,7 +523,7 @@ function startHome(from) {
 // paused: no control to move (docs/PHYSICS.md).
 let handoff = null;
 const auto = () => typeof LoadingScreen !== "undefined" && LoadingScreen.isAutomation && LoadingScreen.isAutomation();
-function fireHandoff() { const p = handoff; handoff = null; if (p) p.done(); }
+function fireHandoff(to) { const p = handoff; handoff = null; if (p) p.done(to); }
 function startPitOut(done) {
   handoff = { done };
   if (!GarageArrival.plays(GarageArrival.settings(G.store.get("garageArrival", null)), "pitOut") || reducedMotion() || auto()) { fireHandoff(); return false; }
@@ -532,10 +532,11 @@ function startPitOut(done) {
 }
 function skipPitOut() { if (!handoff) return false; arrival.finish(); fireHandoff(); return true; }
 // END TIME TRIAL (#5789): the drive-in, then done() once (end, SKIP, DONE); gated as startPitOut, on PIT IN.
+// SKIP TO RESULTS (#6390, Bryce's "b"): the same hand-back, done({ results: true }), straight to the lap sheet.
 function startPitIn(done) {
   handoff = { done };
   if (!GarageArrival.plays(GarageArrival.settings(G.store.get("garageArrival", null)), "pitIn") || reducedMotion() || auto()) { fireHandoff(); return false; }
-  endHome(); homeScene = null; arrival.start({ skip: "SKIP TO GARAGE" });
+  endHome(); homeScene = null; arrival.start({ skip: "SKIP TO GARAGE", alt: "SKIP TO RESULTS", onAlt: () => { if (handoff) { arrival.finish(); fireHandoff({ results: true }); } } });
   return true;
 }
 const arrivalCar = new Float32Array(MAT_REFLECT_X);

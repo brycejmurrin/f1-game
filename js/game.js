@@ -2950,7 +2950,7 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
     qualiNet.refreshQualiGate();
     return;
   }
-  if (isTimeTrial()) { buildTTResults(); els.results.hidden = false; return; }
+  if (isTimeTrial()) { buildTTResults(); ttGarageDoor(false); els.results.hidden = false; return; }
   careerSettlement = null;   // whatever the last career round paid is not this race's news
   // The only human RETIRED and the race ended early (RaceControl.finishDelay
   // counts a retired human as done). An AI whose drawn failure it had already
@@ -7337,7 +7337,7 @@ function render(dt) {
   // frame (env probe, shadows, rain, debris upload) was unpaid work — keep the
   // last race present and return. Race-settings flyby and live race still draw.
   const ceremony = state === "results" ? RaceCeremony.get() : null, ceremonyView = ceremony?.cameraPhase();
-  if (state === "results" && !resultsCam.live() && !ceremony?.needsWorldFrame()) return;
+  if (state === "results" && !resultsCam.live() && !ceremony?.needsWorldFrame() && !setupPreviewOn) return;   // the TT garage over results draws (#6390)
   // HELD GARAGE (studioDone): a world frame that kicks TLX's program warm paints nothing, so the
   // garage's last frame stays up — no hidden canvas, no black card before the flyby.
   const heldWarm = !!(_studio && _studio.held && track && _menuGate.warm > 0); if (heldWarm) _menuGate.warm--;
@@ -9222,7 +9222,7 @@ function garageBack() {
   if (garageReturn === "pit") { if (!setupCam.skipPitOut()) setupCam.startPitOut(closePitWork); return; }
   leaveGarage();
   if (garageReturn === "tt-results") {
-    els.results.hidden = false;
+    els.results.hidden = false; ttGarageDoor(true);
     setTimeout(() => { if (!setupPreviewOn) garagePre.release(); }, 0);
   }
   else if (garageReturn === "vsfriend") { $("vsfriend").hidden = false; netLobby.roomChanged("car"); }
@@ -9371,15 +9371,20 @@ function endTimeTrialFromBox() {
   paused = true;
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain(); radioVoice.halt();
   openGarage("pit");
-  setupCam.startPitIn(() => {
+  setupCam.startPitIn((to) => {
     setupCam.cancelArrival();
     G.endRace();
     els.results.hidden = true;
     garageReturn = "tt-results";
     $("cs-done").textContent = "VIEW RESULTS";
     buildSetup();
+    if (to && to.results) garageBack();   // SKIP TO RESULTS (#6390): the sheet now; its GARAGE door comes back here
   });
 }
+// The TT sheet reached from the garage offers the way back (GARAGE, and Escape); a new TT sheet starts without it (endRace).
+function ttGarageDoor(on) { $("res-garage").hidden = !on; if (on) els.results.setAttribute("data-esc-close", "res-garage"); else els.results.removeAttribute("data-esc-close"); }
+els.resMenu.parentNode?.insertBefore(Object.assign(document.createElement("button"), { id: "res-garage", type: "button", className: "bigbtn alt", hidden: true, textContent: "GARAGE" }), els.resMenu);   // built here: shellNodes (as pm-recover)
+$("res-garage").onclick = () => { ttGarageDoor(false); els.results.hidden = true; openGarage("tt-results"); $("cs-done").textContent = "VIEW RESULTS"; };
 els.workBtn.onclick = openPitWork;
 els.endSessionBtn.onclick = endTimeTrialFromBox;
 
