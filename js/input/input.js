@@ -121,7 +121,7 @@ const Input = (function () {
      captured per pad (calibratePad), and a SATURATION so a stick that can no
      longer reach 1.0 can still reach full lock. */
   const PAD_DZ_DEFAULT = 0.05;
-  let padDeadzone = PAD_DZ_DEFAULT;  // inner: centre slop, ignored then re-scaled
+  let padDeadzone = null;   // unset uses the current device's default
   let padSaturation = 0;       // outer: deflection treated as full lock
   let padRestOffset = 0;       // the DRIVING pad's captured resting position (drift compensation)
   // Rest offsets are PER DEVICE (pad id): one pad's drift must not pull another.
@@ -745,8 +745,12 @@ const Input = (function () {
      snapshotted on first sight. The answer comes from whichever device moved,
      and that movement is also USE (notePadUse), so the wheel drives after. */
   const AXIS_CAPTURE_MOVE = 0.45;
-  const AXIS_EXT_MS = 1500;
-  let axisExt = null;            // {key, axis, rest, far, until} of the last captured axis
+  const PEDAL_RELEASE_BAND = 0.12;
+  const PEDAL_RELEASE_DRIFT = 0.025;
+  const PEDAL_RELEASE_MS = 120;
+  const PEDAL_CAPTURE_MS = 8000;
+  let pedalCapture = null;
+  let pedalCaptureStatus = null;
   function snapshotRests(pads, into) {
     for (let i = 0; pads && i < pads.length; i++) {
       const p = pads[i];
@@ -763,11 +767,51 @@ const Input = (function () {
     axisCaptureRest = null;
     axisCaptureSkip = new Set((opts && opts.exclude) || []);
     axisCaptureOwner = opts && opts.ownerKey || null;
+    pedalCapture = null;
+    pedalCaptureStatus = opts?.pedalStatus || null;
     if (!axisCaptureCb) return;
     axisCaptureRest = snapshotRests(readPads(), new Map());
   }
+  function completeAxisCapture(info) {
+    const cb = axisCaptureCb;
+    beginAxisCapture(null);
+    cb(info.axis, Math.sign(info.far - info.rest) || 1, info);
+  }
+  function pollPedalCapture(pads) {
+    const capture = pedalCapture;
+    const pad = Array.prototype.find.call(pads, (p, i) => p?.connected && padKey(p, i) === capture.key);
+    const value = pad?.axes?.[capture.axis], now = nowMs();
+    if (!Number.isFinite(value) || now >= capture.deadline) {
+      const notify = pedalCaptureStatus;
+      beginAxisCapture(null);
+      notify("retry");
+      return;
+    }
+    const { initial, direction } = capture;
+    const offset = direction * (value - initial);
+    capture.outward = Math.max(capture.outward, offset);
+    capture.inward = Math.max(capture.inward, -offset);
+    // Until a zero-rest axis visits both sides, its first movement can be a
+    // genuine press. Visiting the opposite side makes the first endpoint a
+    // candidate for rest, as when a browser reports startup zero.
+    const startupZero = initial === 0 && capture.inward >= AXIS_CAPTURE_MOVE / 2;
+    const rest = startupZero ? initial + direction * capture.outward : initial;
+    const far = startupZero ? initial - direction * capture.inward : initial + direction * capture.outward;
+    if (Math.abs(value - rest) > PEDAL_RELEASE_BAND) {
+      capture.releasedAt = null;
+      return;
+    }
+    if (capture.releasedAt === null || Math.abs(value - capture.releaseValue) > PEDAL_RELEASE_DRIFT) {
+      capture.releasedAt = now;
+      capture.releaseValue = value;
+    }
+    if (now - capture.releasedAt >= PEDAL_RELEASE_MS && Math.abs(far - value) >= AXIS_CAPTURE_MOVE) {
+      completeAxisCapture({ key: capture.key, axis: capture.axis, rest: value, far });
+    }
+  }
   function pollAxisCapture(pads) {
     if (!axisCaptureCb || !pads) return;
+    if (pedalCapture) { pollPedalCapture(pads); return; }
     if (!axisCaptureRest) { axisCaptureRest = snapshotRests(pads, new Map()); return; }
     let best = -1, bestI = -1, bestRest = 0, bestV = 0, bestKey = "";
     for (let j = 0; j < pads.length; j++) {
@@ -785,12 +829,11 @@ const Input = (function () {
       }
     }
     if (bestI < 0 || best < AXIS_CAPTURE_MOVE) return;
-    const cb = axisCaptureCb;
-    axisCaptureCb = null; axisCaptureRest = null;
-    // The capture fires at 45 % travel; the third argument keeps tracking the axis's
-    // far end for AXIS_EXT_MS so the wizard can read the full pedal travel.
-    axisExt = { key: bestKey, axis: bestI, rest: bestRest, far: bestV, until: nowMs() + AXIS_EXT_MS };
-    cb(bestI, Math.sign(bestV - bestRest) || 1, axisExt);
+    if (pedalCaptureStatus) {
+      pedalCapture = { key: bestKey, axis: bestI, initial: bestRest, direction: Math.sign(bestV - bestRest),
+        outward: best, inward: 0, releaseValue: 0, releasedAt: null, deadline: nowMs() + PEDAL_CAPTURE_MS };
+      pedalCaptureStatus("release");
+    } else completeAxisCapture({ key: bestKey, axis: bestI, rest: bestRest, far: bestV });
   }
   function setPadAxisMap(saved, ownerKey) {
     let owner = null;
@@ -979,13 +1022,20 @@ const Input = (function () {
      other side still reached 1. Dividing each half by the travel it actually
      has puts both full deflections at exactly ±1. |rest| <= 0.5
      (calibratePad / setPadRest refuse more), so neither divisor is below 0.5. */
+  function effectivePadDeadzone(wheel) {
+    return padDeadzone ?? (wheel ? 0 : PAD_DZ_DEFAULT);
+  }
+  function getPadDeadzone() {
+    const pad = activePad();
+    return effectivePadDeadzone(!!pad && !padStd(pad) && !padAxesAreDefault());
+  }
   function padAxisShape(raw, rest = padRestOffset, wheel = padIsWheel) {
     const d = raw - rest;
     const v = clamp(d >= 0 ? d / (1 - rest) : d / (1 + rest), -1, 1);
     const a = Math.abs(v);
     // A set-up wheel is a full-range axis, not a thumbstick: 5 % of 900 degrees
     // is ~22 of dead rotation. It defaults to none; a DEAD ZONE row change wins.
-    const dz = wheel && padDeadzone === PAD_DZ_DEFAULT ? 0 : padDeadzone;
+    const dz = effectivePadDeadzone(wheel);
     if (a <= dz) return 0;
     const span = Math.max(0.05, 1 - dz - padSaturation);
     return clamp(Math.sign(v) * (a - dz) / span, -1, 1);
@@ -1790,10 +1840,6 @@ const Input = (function () {
     selectPedalState(key);
     padRestOffset = restFor(pad);
     padIsWheel = !padStd(pad) && !padAxesAreDefault();
-    if (axisExt && key === axisExt.key && nowMs() <= axisExt.until) {
-      const ev = readPadAxis(pad.axes || [], axisExt.axis);
-      if (Math.abs(ev - axisExt.rest) > Math.abs(axisExt.far - axisExt.rest)) axisExt.far = ev;
-    }
     // The indices below are the W3C "standard" layout and nothing here remaps.
     // A pad the browser could not map reports mapping "" and shuffles them —
     // log it once so a "throttle is on LB" report has its cause on record.
@@ -2266,7 +2312,8 @@ const Input = (function () {
     if (typeof v === "number" && isFinite(v)) analogSpeedMix = clamp(v, 0, 1);
   }
   function setPadDeadzone(v) {
-    if (typeof v === "number" && isFinite(v)) padDeadzone = clamp(v, 0, 0.30);
+    if (v === null) padDeadzone = null;
+    else if (typeof v === "number" && isFinite(v)) padDeadzone = clamp(v, 0, 0.30);
   }
   function setPadPedalDeadzone(pedal, v) {
     if ((pedal === "throttle" || pedal === "brake") && Number.isFinite(v)) padPedalDeadzone[pedal] = clamp(v, 0, 0.30);
@@ -2751,7 +2798,7 @@ const Input = (function () {
       analogTrim: Object.assign({}, analogTrim),
       analogSpeedMix,
       analogSpeedGain: analogSpeedGain(),
-      padDeadzone,
+      padDeadzone: effectivePadDeadzone(padIsWheel),
       padSaturation,
       padRestOffset,
       padSteerAnalog,
@@ -2850,6 +2897,7 @@ const Input = (function () {
     setControllerProfiles: (raw) => ensureDeviceProfiles() ? deviceProfiles.replace(raw) : null,
     resetControllerProfile,
     setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padCalibrationOwner, parkedPadPreview, padRest, setPadRest, padRestStore,
+    getPadDeadzone,
     touchControlsNeeded, controlDevice, touchDrivingControls,
     physicalPadAvailable: () => physicalPadAvailable,
     pickPad,

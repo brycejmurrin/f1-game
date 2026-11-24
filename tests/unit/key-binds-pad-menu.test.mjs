@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
-import { read, boot, fakePad, plain, bootUi, menuRig, rawPad, setBtn } from "../helpers/key-binds-rig.mjs";
+import { read, boot, fakePad, plain, bootUi, menuRig, rawPad, setBtn, releaseWheelPedal } from "../helpers/key-binds-rig.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 test("confirming Resume cannot become gas until that button is released", () => {
@@ -350,10 +350,11 @@ test("the wheel wizard passes the axes it already mapped, so steering and thrott
   pad.axes[0] = -1; Input.poll();            // STEP 1: steer left and hold; step 2 arms at once (test timers are synchronous)
   pad.axes[0] = 0; Input.poll();             // the wheel is let go before the pedal is touched
   pad.axes[1] = 1; Input.poll();             // STEP 2: throttle
-  pad.axes[1] = -1; Input.poll();            // the pedal comes back up while step 3 listens
+  releaseWheelPedal(Input, sb, pad, 1, -1);   // only the release advances to step 3
   pad.axes[0] = -1; Input.poll();            // …and the wheel is turned again
   assert.equal($("pm-pad-wheel").textContent, "CANCEL", "neither released axis finished a step");
   pad.axes[2] = 1; Input.poll();             // STEP 3: brake
+  releaseWheelPedal(Input, sb, pad, 2, -1);
   const map = Input.getPadAxisMap();
   assert.equal(map.steer, 0);
   assert.equal(map.throttle, 1, "throttle is the pedal, not the wheel springing back");
