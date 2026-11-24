@@ -32,7 +32,7 @@ import { MEASURED, capacity, declaredTests, declaredTestsIn, caseModules, caseMo
 import { loadDb, TIMINGS_FILE } from "./spec-timings.mjs";
 import { ADAPTED, ADAPTED_RUNNER, isTwinned, twinOf } from "./twinned-specs.mjs";
 import { FAT_UI_SPEC } from "./fat-shard.mjs";
-import { changedPaths } from "../lib/changed-files.mjs";
+import { changedPaths, firstParentChanges } from "../lib/changed-files.mjs";
 import { readImpactPins, specsAffectedByImpact } from "../lib/impact-map.mjs";
 import { changeKind, readyBrowserExempt } from "./change-kind.mjs";
 import { expandScript } from "../gen/gen-test-groups.mjs";
@@ -1246,18 +1246,23 @@ export function specsRacing(ids, root = ROOT) {
 /** Circuit ids a per-circuit data file's rows changed for, or null when the
  *  diff cannot be read (then the file stays infra unless the rest of the diff
  *  already named a circuit — see circuitsTouched). */
-export function dataCircuits(file, ref, root = ROOT) {
+export function dataCircuits(file, ref, root = ROOT, afterRef) {
   const read = (txt) => { try { return JSON.parse(txt); } catch { return null; } };
   let before, after;
+  const readRef = (sha) => read(execFileSync("git", ["show", `${sha}:${file}`], {
+    cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+    ...(afterRef ? { env: { ...process.env, GIT_NO_LAZY_FETCH: "1" } } : {}),
+  }));
   // A blob:none CI checkout (ci.yml select job) has HEAD blobs from checkout
   // but not the base version of a *changed* file. `git show ref:file` then
   // exits non-zero (persist-credentials: false cannot lazy-fetch). Returning
   // {} here used to mark every circuit as moved. Returning null lets
   // circuitsTouched pin the file to circuits the rest of the diff already
   // named (PR #1015 run 37425354715: scoped=false, DROPPED 8).
-  try { before = read(execFileSync("git", ["show", `${ref}:${file}`], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })); }
-  catch { return null; }
-  try { after = read(fs.readFileSync(path.join(root, file), "utf8")); } catch { return null; }
+  try {
+    before = readRef(ref);
+    after = afterRef ? readRef(afterRef) : read(fs.readFileSync(path.join(root, file), "utf8"));
+  } catch { return null; }
   if (!before || !after) return null;
   const ids = new Set();
   const flat = [before, after].every((o) => Object.entries(o)
@@ -1280,7 +1285,7 @@ export function dataCircuits(file, ref, root = ROOT) {
 /** `{ ids, scoped, dataResolved }`: the circuits a diff touches, whether EVERY
  *  changed path is one of them, and the per-circuit data files resolved to ids
  *  (the caller stops calling those infra). */
-export function circuitsTouched(changed, ref, root = ROOT) {
+export function circuitsTouched(changed, ref, root = ROOT, afterRef) {
   const ids = new Set(), dataResolved = [];
   let scoped = changed.length > 0;
   const unresolvedData = [];
@@ -1292,7 +1297,7 @@ export function circuitsTouched(changed, ref, root = ROOT) {
     const fd = CIRCUIT_FOUNDATION.exec(f);
     if (fd) { ids.add((fd[1] || fd[2]).replace(/-/g, "_")); continue; }
     if (PER_CIRCUIT_DATA.has(f)) {
-      const d = ref ? dataCircuits(f, ref, root) : null;
+      const d = ref ? dataCircuits(f, ref, root, afterRef) : null;
       if (d) { d.forEach((id) => ids.add(id)); dataResolved.push(f); continue; }
       unresolvedData.push(f);
       continue;
@@ -1673,9 +1678,7 @@ export const CSS_LAYOUT_SPECS = [
 /** Sheets whose surface no phone-shape layout spec measures yet: the smoke (and menu-baseline where listed) only. */
 export const CSS_SMOKE_ONLY = /^css\/(a11y-loading|appearance-studio|career-experience|career|cockpit-preview|data|editor|experience|loading|photo-studio|player-tools|race-setup|save-health|select|track-detail|tuner|watch-transport)\.css$/;
 
-export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
-  // opts.files: a hypothetical change ("which specs would an edit to js/ui/hud.js need?") on any tree.
-  const changed = opts.files ?? changedPaths(opts.readyPr ? [changedRef, "HEAD"] : [changedRef]);   // rename SOURCES too (ledger M36)
+function routesFor({ files: changed, before, after }, { scripts, impactPins, readyPr }) {
   // `routing` is what the group map, the source pins and the extras see. A css
   // file does NOT route as its js owner: CSS_LAYOUT_SPECS keeps a css diff
   // narrow (Bryce, decision on #5304, 2026-11-10: "option 1, tip wins").
@@ -1685,19 +1688,16 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // group-mates are not this diff's business (pick-tests SPEC_OWNER_REASON).
   stripSpecOwner(g);
   // The boot group stays (BOOT_FALLBACK_REASONS): Smoke is not a required check.
-  const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
   const browserGroups = [...g.keys()].map((n) => `test:${n}`)
     .filter((s) => scripts[s] && scripts[s].includes("run-playwright")).sort();
   const specs = specsOf(browserGroups, scripts);
   // Same three-way contract as pick-tests --json: "unmatched" means files
   // changed but no rule claimed them — the selection is NOT trustworthy and
   // the caller must fall back to a full run, not to running nothing.
-  const circ = circuitsTouched(changed, changedRef);
+  const circ = circuitsTouched(changed, before, ROOT, after);
   const tracked = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f));
-  const docsOnly = isDocsOnly(changed);
   const kind = changeKind(changed);
-  const browserExempt = opts.readyPr && readyBrowserExempt(changed);
-  const lightDiff = opts.readyPr ? browserExempt : docsOnly || kind === "docs";
+  const lightDiff = readyPr ? readyBrowserExempt(changed) : kind === "docs";
   // The three always-run inputs, unioned into the candidate set BEFORE the cut
   // so they compete for the budget on merit rather than being bolted on after.
   // An edited case module (tests/specs/foundation/<id>.js) is an edit to the spec
@@ -1705,14 +1705,12 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   const changedSpecs = [...new Set(changed.flatMap((f) => (/^tests\/specs\/.+\.spec\.js$/.test(f) ? [f] : specsRegistering(f))))]
     .filter((f) => fs.existsSync(path.join(ROOT, f)));
   const imported = specsImporting(changed);
-  const failed = (opts.failed || []).filter((f) => fs.existsSync(path.join(ROOT, f)));
   // The touched circuits' own foundation specs are AFFECTED, like an import;
   // on a circuit-scoped diff another circuit's foundation is not a candidate.
   const ownFoundations = [...new Set(circ.ids.map(foundationSpec))].filter((f) => fs.existsSync(path.join(ROOT, f)));
   // Source modules whose browser gate is over-budget when merely routed (see
   // SOURCE_AFFECTED) — same rank-2 elevation as an import / own foundation.
   const sourceAffected = specsAffectedBySource(routing);
-  const impactPins = readImpactPins();
   const impactAffected = specsAffectedByImpact(changed, ROOT, impactPins);
   // The specs pick-tests names that its group RULES cannot (a spec loading a
   // module standalone, the shared UI layer): ONE function, pick-tests'
@@ -1735,11 +1733,38 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...sourceAffected, ...impactAffected,
     ...standalone, ...extras, ...runnerPlan.specs, ...specs, ...racing])]
     .filter((f) => !otherCircuit(f));
-  const { inScope: failedInScope, dropped: failedDropped } = scopeCarryForward(failed, lightDiff ? [] : routed);
-  // Docs-only PRs skip the selected matrix at the plan (required check
-  // names still report). Never a pull_request paths filter: those leave
-  // required checks pending.
-  let candidates = lightDiff ? [] : kind === "css" ? cssSpecs(changed) : routed;
+  const candidates = lightDiff ? [] : kind === "css" ? cssSpecs(changed) : routed;
+  return { circ, tracked, unmatched, browserGroups, changedSpecs, imported, racing, runner, runnerPlan, candidates,
+    standalone, ownFoundations, sourceAffected, impactAffected,
+    kind, floorOnly: !lightDiff && changed.length > 0 && unmatched.length < changed.length && !candidates.length,
+    routed: lightDiff ? [] : routed };
+}
+
+export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
+  // Paths from ordinary diffs include rename sources (ledger M36). Pages
+  // routes each first-parent diff against the runnable specs at the tip,
+  // then packs their union once under the existing budget and gate policy.
+  const changes = opts.history ?? [{ before: changedRef,
+    files: opts.files ?? changedPaths(opts.readyPr ? [changedRef, "HEAD"] : [changedRef]) }];
+  const changed = [...new Set(changes.flatMap((change) => change.files))];
+  const scripts = pkgScripts();
+  const impactPins = readImpactPins();
+  const routes = changes.map((change) => routesFor(change, { scripts, impactPins, readyPr: opts.readyPr }));
+  const union = (read) => [...new Set(routes.flatMap(read))];
+  const tracked = union((r) => r.tracked), unmatched = union((r) => r.unmatched);
+  const changedSpecs = union((r) => r.changedSpecs), imported = union((r) => r.imported), racing = union((r) => r.racing);
+  const standalone = union((r) => r.standalone), ownFoundations = union((r) => r.ownFoundations);
+  const sourceAffected = union((r) => r.sourceAffected), impactAffected = union((r) => r.impactAffected);
+  const browserGroups = union((r) => r.browserGroups).sort();
+  const runner = routes.some((r) => r.runner);
+  const runnerUnrepresented = union((r) => r.runnerPlan.unrepresented).sort();
+  const ids = union((r) => r.circ.ids).sort();
+  const scoped = ids.length > 0 && routes.every((r) => r.circ.scoped || r.kind === "docs" || r.kind === "empty");
+  const failed = (opts.failed || []).filter((f) => fs.existsSync(path.join(ROOT, f)));
+  const { inScope: failedInScope, dropped: failedDropped } = scopeCarryForward(failed, union((r) => r.routed));
+  let candidates = union((r) => r.candidates);
+  const browserExempt = opts.readyPr && readyBrowserExempt(changed);
+  const lightDiff = opts.readyPr ? browserExempt : changeKind(changed) === "docs";
   const reason = !changed.length ? "none"
     : browserExempt ? "browser-exempt"
     : lightDiff ? "docs"
@@ -1752,7 +1777,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // The plan's APEX_CIRCUITS (circuits, below): a registry spec is billed for the cases it will register.
   const fitOpts = { rank, overflowShards: opts.overflowShards ?? MAX_OVERFLOW_SHARDS,
     overBudgetShards: opts.overBudgetShards ?? MAX_OVER_BUDGET_SHARDS, staleFirst: !!opts.staleFirst,
-    scope: circ.scoped ? circ.ids : null,
+    scope: scoped ? ids : null,
     // No routed spec is dropped (fit()'s NO-DROP TAIL) unless the caller asked for no overflow at all: the
     // draft plan (`--overflow-shards 0`) keeps the bounded cut and its drop warns. opts.noDrop overrides.
     noDrop: opts.noDrop ?? (opts.overflowShards ?? MAX_OVERFLOW_SHARDS) > 0 };
@@ -1761,9 +1786,10 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // whose plan came out with nothing to run gets it too. Never an empty plan
   // for a code diff ("unmatched" already fails closed in the CI step).
   const runs = (c) => [c.selected, c.oversize, c.overflow, c.spill, c.overBudgetRun].some((b) => (b || []).length);
+  const historyFloor = opts.history && routes.some((r) => r.floorOnly);
   let floored = false;
   if (!lightDiff && changed.length && reason !== "unmatched"
-      && (reason === "infra" || reason === "partial" || !runs(cut))) {
+      && (reason === "infra" || reason === "partial" || historyFloor || !runs(cut))) {
     const add = floorSpecs().filter((f) => !candidates.includes(f));
     if (add.length) { candidates = [...candidates, ...add]; cut = fit(candidates, budgetMin, fitOpts); }
     floored = true;
@@ -1777,8 +1803,8 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // `circuits` is set only when EVERY changed path is circuit-scoped: it is
   // what lets a per-circuit loop skip the other 51 circuits, so a diff that
   // also touches the engine must leave it empty (the whole fleet runs).
-  const r = { reason, changed: changed.length, tracked, unmatched, floored, runner, runnerUnrepresented: runnerPlan.unrepresented, groups: browserGroups,
-              circuits: circ.scoped ? circ.ids : [], circuitsTouched: circ.ids,
+  const r = { reason, changed: changed.length, tracked, unmatched, floored, runner, runnerUnrepresented, groups: browserGroups,
+              circuits: scoped ? ids : [], circuitsTouched: ids,
               changedSpecs, imported, racing, failed: failedInScope, failedDropped, ...cut,
               selected: prioritise(cut.selected, { changedSpecs, failed: failedInScope, imported }) };
   r.shards = shards(r);
@@ -1795,7 +1821,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
   const si = argv.indexOf("--since");
-  const usage = "usage: node tools/ci/select-specs.mjs (--since <ref> | --files <path,path>) [--budget-min N] [--overflow-shards N] [--over-budget-shards N] [--failed-from file] [--stale-first] [--ready-pr] [--json]";
+  const usage = "usage: node tools/ci/select-specs.mjs (--since <ref> | --files <path,path>) [--pages-history] [--budget-min N] [--overflow-shards N] [--over-budget-shards N] [--failed-from file] [--stale-first] [--ready-pr] [--json]";
   if (argv.includes("--help") || argv.includes("-h")) { console.log(usage); process.exit(0); }
   const fl = argv.indexOf("--files");
   const files = fl >= 0 && argv[fl + 1] ? argv[fl + 1].split(",").map((f) => f.trim()).filter(Boolean) : undefined;
@@ -1816,7 +1842,26 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const overflowShards = oi >= 0 && Number.isInteger(Number(argv[oi + 1])) ? Number(argv[oi + 1]) : undefined;
   const ui = argv.indexOf("--over-budget-shards");
   const overBudgetShards = ui >= 0 && Number.isInteger(Number(argv[ui + 1])) ? Number(argv[ui + 1]) : undefined;
-  const r = select(si >= 0 ? argv[si + 1] : undefined, bi >= 0 ? Number(argv[bi + 1]) : DEFAULT_BUDGET_MIN, { failed, overflowShards, overBudgetShards, staleFirst: argv.includes("--stale-first"), readyPr: argv.includes("--ready-pr"), files });
+  let before = si >= 0 ? argv[si + 1] : undefined;
+  let history;
+  if (argv.includes("--pages-history")) {
+    if (!before || files || argv.includes("--ready-pr")) {
+      console.error("--pages-history requires --since and a committed Pages checkout");
+      process.exit(2);
+    }
+    const emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"; // ci-resolve-before.sh's full-selection sentinel
+    if (before !== emptyTree) {
+      try {
+        history = firstParentChanges(before, "HEAD");
+        console.error(`Routing ${history.length} first-parent change(s) since verified Pages commit ${before}`);
+      } catch (error) {
+        console.error(`::warning::SELECTING EVERYTHING on a Pages call: ${error.message}`);
+        before = emptyTree;
+      }
+    }
+  }
+  const r = select(before, bi >= 0 ? Number(argv[bi + 1]) : DEFAULT_BUDGET_MIN,
+    { failed, overflowShards, overBudgetShards, staleFirst: argv.includes("--stale-first"), readyPr: argv.includes("--ready-pr"), files, history });
   if (argv.includes("--json")) { console.log(JSON.stringify(r, null, 2)); process.exit(0); }
   console.error(r.floor ? `FLOOR SPEC (rule 3): ${r.floor}` : `NO FLOOR SPEC: ${r.floorReason}`);
   console.error(`${r.changed} changed file(s) [${r.reason}] -> groups: ${r.groups.join(", ") || "(none)"}`);

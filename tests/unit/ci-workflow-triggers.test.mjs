@@ -89,13 +89,14 @@ test("pages.yml is a release train: schedule + dispatch, one deploy branch, noth
   assert.match(verdict, /tools\/ci\/pages-live-sha\.sh "\$SITE_URL"/);
   assert.match(verdict, /nothing_new: \$\{\{ steps\.live\.outputs\.nothing_new \}\}/);
   assert.match(verdict, /since: \$\{\{ steps\.live\.outputs\.since \}\}/);
-  assert.match(verdict, /git merge-base --is-ancestor "\$LIVE" "\$GITHUB_SHA"/, "the live commit is the diff base only when it is an ancestor");
+  assert.match(verdict, /node tools\/ci\/pages-verified-base\.mjs "\$GITHUB_SHA" "\$LIVE" "\$DEPLOY_BRANCH"/,
+    "the test base must come from verified first-parent publication history");
   // The refusal to run off-branch must come BEFORE the network and the reuse lookup.
   assert.ok(verdict.indexOf("Refuse to run off the deploy branch") < verdict.indexOf("What is live"));
 
   const ciJob = pagesWorkflow.split("\n  ci:")[1].split("\n  publishable:")[0];
   assert.match(ciJob, /if: needs\.verdict\.outputs\.nothing_new != 'true' && needs\.verdict\.outputs\.reuse != 'true'$/m);
-  assert.match(ciJob, /before_sha: \$\{\{ needs\.verdict\.outputs\.since \}\}/, "the gate diffs against what is live, never against a push's before");
+  assert.match(ciJob, /before_sha: \$\{\{ needs\.verdict\.outputs\.since \}\}/, "the test gate gets the verified base from the verdict job");
   assert.doesNotMatch(pagesWorkflow, /github\.event\.before/, "there is no push event to read a before from");
   const preflight = pagesWorkflow.split("\n  publishable:")[1].split("\n  deploy:")[0];
   assert.match(preflight, /needs\.verdict\.outputs\.nothing_new != 'true'/, "nothing new must never reach the environment");
