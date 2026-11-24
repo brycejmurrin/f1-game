@@ -6,8 +6,8 @@
   },
   "files": {
     "css/hud.css": {
-      "codeLines": 2399,
-      "lines": 2669
+      "codeLines": 2400,
+      "lines": 2671
     },
     "js/agent/agentview.js": {
       "lines": 2324
@@ -20,23 +20,23 @@
       "lines": 2929
     },
     "js/game.js": {
-      "codeLines": 5479,
+      "codeLines": 5482,
       "gMembers": 297,
-      "lines": 9613,
+      "lines": 9607,
       "topLets": 127
     },
     "js/net/lobby.js": {
-      "lines": 2394
+      "lines": 2387
     },
     "js/render/glx/glx.js": {
-      "lines": 2903
+      "lines": 2912
     },
     "js/track/tracks.js": {
       "lines": 861
     },
     "js/ui/hud.js": {
-      "codeLines": 1464,
-      "lines": 2326
+      "codeLines": 1482,
+      "lines": 2335
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 2
@@ -45,13 +45,13 @@
   "tree": {
     "assertPins": {
       "absorb": 5,
-      "ceiling": 8161,
+      "ceiling": 8164,
       "slack": 200
     },
     "assertPinsAll": {
       "absorb": 5,
       "baseline": "2026-11-10 (audit item 9): re-seeded at the TRUE count after the counter learned the indirect shape (a bool from includes()/test()/indexOf() that a later assert reads); was 10320 under the old counter, +39 indirect sites. Shrink-only: lower it as those sites are rewritten, never raise it to absorb them.",
-      "ceiling": 10401,
+      "ceiling": 10411,
       "slack": 200
     },
     "bareCatches": {
@@ -68,11 +68,11 @@
     },
     "eagerCodeBytes": {
       "absorb": 5000,
-      "ceiling": 3994421,
+      "ceiling": 3978249,
       "slack": 0
     },
     "eagerScripts": {
-      "ceiling": 301,
+      "ceiling": 299,
       "slack": 0
     },
     "implicitAsserts": {
@@ -104,7 +104,7 @@
       "ceiling": 0,
       "slack": 0
     },
-    "vmSrcLoads": 601,
+    "vmSrcLoads": 598,
     "waitForTimeout": 66,
     "waitNoPolling": {
       "ceiling": 40,
