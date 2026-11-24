@@ -203,16 +203,19 @@ const PhonePadPage = (function () {
       touchPointers.delete(e.pointerId);
       for (const up of pointerReleases) up(e);
     };
+    const releaseControls = () => {
+      touchPointers.clear();
+      for (const r of releases) r();
+    };
     const releaseAll = (touchOnly) => {
       // No fingers on the glass says nothing about mouse, pen, keyboard or motion input.
       if (touchOnly === true) {
         for (const pointerId of touchPointers) releasePointer({ pointerId });
         return;
       }
-      touchPointers.clear();
       const clearRoll = roll !== null;
       if (clearRoll) { roll = null; paintRoll(); }
-      for (const r of releases) r();
+      releaseControls();
       if (clearRoll && session) session.sample(true);
     };
     const pedalTargets = new Map(), pedalOwners = new Map();
@@ -1119,7 +1122,7 @@ const PhonePadPage = (function () {
       connect,
       cancel,
       scan,
-      setSteeringMode, closeUtilities,
+      setSteeringMode, closeUtilities, releaseControls,
       // The test/console handle: what the page holds, and a way to paint a
       // dash without a link (controller.html?demo drives the LCD from it).
       paintHud: paintController,
@@ -1303,7 +1306,7 @@ const PhonePadPage = (function () {
     if (dom.stripBtn) dom.stripBtn.addEventListener("click", () => set(Object.assign({}, cur, { strip: cur.strip === "column" ? "row" : "column" })));
     dom.sheet?.addEventListener("cancel", e => { e.preventDefault(); show(false); });
     function show(on) {
-      if (on) dom.closeUtilities?.();
+      if (on) dom.releaseControls?.();
       if (dom.sheet) {
         if (!on && dom.sheet.open) dom.sheet.close();
         dom.sheet.hidden = !on;
@@ -1361,7 +1364,10 @@ const PhonePadPage = (function () {
     function restore(snapshot) { cur = applyLayout(dom, snapshot); paint(); pick(picked); }
     function arrange(on, accept = true) {
       if (on === arranging()) return;
-      if (on) { baseline = cur; opener = dom.doc?.activeElement; }
+      if (on) {
+        dom.releaseControls?.();
+        baseline = cur; opener = dom.doc?.activeElement;
+      }
       else { stopDrag(true); if (accept && cur !== baseline) set(cur); else restore(baseline); }
       dom.body.classList.toggle("arranging", on);
       if (dom.bar) dom.bar.hidden = !on;
