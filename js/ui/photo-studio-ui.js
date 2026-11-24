@@ -181,6 +181,9 @@ function create(G, deps) {
   importFile.addEventListener("change", () => importPhoto(importFile.files && importFile.files[0]));
   const group = (id, title, kids) => mk("section", { id: "ps-group-" + id, attrs: { "aria-label": title } }, [mk("h3", { className: "adv-sec", textContent: title }), ...kids]);
   const captureButton = button("CAPTURE", capture, "ps-capture"), done = button("DONE", () => close(true), "ps-close");
+  const focusCamera = button("MOVE CAMERA", (e) => {
+    if (typeof Photomode !== "undefined") Photomode.focusScene(e.currentTarget);
+  }, "ps-focus-camera");
   captureButton.className = "bigbtn"; done.className = "bigbtn alt";
   // SUBJECT: the Home door opens on whatever the Home scene shows, and the
   // default scene is the garage, so the circuit shoot (free camera over the
@@ -440,7 +443,7 @@ function create(G, deps) {
     mk("p", { className: "adv-help", textContent: "Light effects over any angle, without the helmet frame. Capture previews them and includes them in downloads, saved photos and backgrounds. Driving settings stay unchanged." }),
   ]);
   const panel = mk("section", { id: "ps-panel", className: "sheet", attrs: { "aria-label": "Photo Studio" } }, [
-    mk("header", { className: "sheet-head" }, [mk("h2", { textContent: "PHOTO STUDIO" })]),
+    mk("header", { className: "sheet-head" }, [mk("h2", { textContent: "PHOTO STUDIO" }), focusCamera]),
     mk("div", { id: "ps-body", className: "sheet-body pane" }, [
       mk("p", { id: "ps-context", className: "adv-help" }),
       subjectGroup,
@@ -496,6 +499,7 @@ function create(G, deps) {
       E[id].disabled = value || closing || (id !== "ps-capture" && !last);
     }
     E["ps-close"].disabled = false;
+    focusCamera.disabled = value || closing;
     E["ps-capture"].textContent = value && !closing ? "CAPTURING…" : "CAPTURE";
     E["ps-close"].textContent = closing ? "CLOSING…" : "DONE";
   }
@@ -517,9 +521,9 @@ function create(G, deps) {
     c.head = Math.atan2(sample.t[0], sample.t[2]) - c.yawVis;
     c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevPx = c.px; c.rPrevPz = c.pz;
     c.rPrevHead = c.head; c.rPrevYawVis = c.yawVis; c.speed = 0;
-    if (reframe) setShot("car");
+    if (reframe) setShot("car", true);
   }
-  function setShot(id) {
+  function setShot(id, preserveInput = false) {
     if (st.busy || st.closing) return;
     if (isGarage()) { if (deps.garage && deps.garage.shot) deps.garage.shot(id); }
     else {
@@ -532,7 +536,7 @@ function create(G, deps) {
         const bank = Tracks.banking ? Tracks.banking(G.track, c.s, c.x) : null;
         const y = sample.p[1] + (bank ? bank.dy : 0), fx = Math.sin(c.head), fz = Math.cos(c.head);
         fc.cmd({ eye: [c.px - fx * 9, y + 3.2, c.pz - fz * 9],
-          target: [c.px - fz * 3, y + .5, c.pz + fx * 3], fov });
+          target: [c.px - fz * 3, y + .5, c.pz + fx * 3], fov, preserveInput });
       } else fc.cmd(id === "corner" ? { snap: "corner" } : { snap: "car", fov });
     }
   }
@@ -586,7 +590,7 @@ function create(G, deps) {
     st.open = true; st.generation++; root.hidden = false;
     SettingRow.paint(sampleRow, online ? "1" : String(st.samples));
     SettingRow.disable(sampleRow, online);
-    carGroup.hidden = !hasCar(); visorGroup.hidden = isGarage();
+    carGroup.hidden = !hasCar(); visorGroup.hidden = isGarage(); focusCamera.hidden = isGarage();
     for (const [id, unit] of [["ps-car-position", "%"], ["ps-car-offset", " m"], ["ps-car-rotation", "°"]]) {
       const c = st.source === "race" && hasCar() ? G.player : null;
       const value = !c ? 0 : id === "ps-car-position" ? ((c.s % G.track.total + G.track.total) % G.track.total) / G.track.total * 100
@@ -672,7 +676,11 @@ function create(G, deps) {
     looksChanged = false;
     // Let the caller paint its restored visibility after modal isolation settles.
     if (back && target && target.focus) requestAnimationFrame(() => requestAnimationFrame(() => {
-      if (!st.open && st.generation === generation && target.isConnected) target.focus();
+      const top = typeof UiLayers === "undefined" ? null : UiLayers.top();
+      if (!st.open && st.generation === generation && target.isConnected &&
+          (!top || (typeof MenuNav === "undefined" ? top.contains(target) : MenuNav.ownsFocus(top, target)))) {
+        target.focus({ preventScroll: true });
+      }
     }));
   }
   let activePass = null;

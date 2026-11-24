@@ -3325,7 +3325,7 @@ const G = {
   ltKey: (...a) => ltKey(...a),
   // (setLightTune is a hoisted function, exposed as a plain shorthand below.)
   exitPhotoMode: (...a) => exitPhotoMode(...a),
-  openWatchPhoto: () => openExperiencePhoto("watch"),   // const initialised below — defer
+  openWatchPhoto: (trigger) => openExperiencePhoto("watch", trigger),   // const initialised below — defer
   // Stable helpers consumed by js/lighting/atmosphere.js.
   clamp: (v, a, b) => clamp(v, a, b),
   satAdjust: (rgb, amt) => satAdjust(rgb, amt),
@@ -8899,10 +8899,10 @@ photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, ltStore, rende
   }, garage: {
   prepareCapture: () => setupCam.endGarageRes(), snapshot: () => setupCam.captureCamera(), restore: (v) => setupCam.restoreCamera(v), shot: (id) => setupCam.setSetupView(id),
   looks: lookRowSpecs, looked: () => { if (!$("carsetup").hidden) buildSetup(); } } });
-function openExperiencePhoto(source) { return UiExperience.openPhoto(G, { source, photoStudio, setPaused,
+function openExperiencePhoto(source, trigger) { return UiExperience.openPhoto(G, { source, trigger, photoStudio, setPaused,
   trackHome: state === "menu" && uiExperience && ["track", "pitlane"].includes(uiExperience.state().scene.mode), trackReady: menuWorld(),
   photoView: () => uiExperience.photoView(), onWaiting: () => AppearanceStudio.notify("Return Home to finish loading this scene, then open Photo Studio."),
-  photoSubject: (m) => uiExperience.photoSubject(m), reopen: () => openExperiencePhoto("home"), onDone: () => uiExperience.photoSubject(null) }); }
+  photoSubject: (m) => uiExperience.photoSubject(m), reopen: (opener) => openExperiencePhoto("home", opener), onDone: () => uiExperience.photoSubject(null) }); }
 uiExperience = UiExperience.create(G, { setupCam, coach, openPhoto: openExperiencePhoto, openPractice: () => openTimeTrial(false),
   prepareTrack: scheduleFlybyTrack, trackReady: menuWorld, trackKey: () => menuKey(trackIdx), updateTrackPhoto: updatePhotoCam,
   captureTrackCamera: () => ({ eye: camEye.slice(), tgt: camTgt.slice(), fov: camFov }),
@@ -8910,7 +8910,7 @@ uiExperience = UiExperience.create(G, { setupCam, coach, openPhoto: openExperien
   openWatch: () => openDataHub("race"),
   openSettingsPage: (page, fold) => { openSettings(); settingsNav.showDirect(page, true); const f = fold && $(fold); if (f) { if (f.tagName === "DETAILS") f.open = true; else if (f.parentElement.tagName === "DETAILS") f.parentElement.open = true; f.scrollIntoView({ block: "start" }); f.focus(); } },
 });
-AppearanceStudio.attach({ previewScene: (s) => uiExperience.previewScene(s), openPhoto: () => openExperiencePhoto(state === "menu" ? "home" : "race"), openDisplay: () => settingsNav.show("display", true),
+AppearanceStudio.attach({ previewScene: (s) => uiExperience.previewScene(s), openPhoto: (trigger) => openExperiencePhoto(state === "menu" ? "home" : "race", trigger), openDisplay: () => settingsNav.show("display", true),
   applyVisuals: (v) => { uiScale.applyUiScale(); uiScale.applyHudScale(); uiScale.applyBtnScale(); uiScale.applyBtnOpacity(); uiScale.applyPanelOpacity(); G.hudProfile = v.hudProfile; G.hudMetricsLayout = v.hudMetricsLayout; G.hudMapVis = v.hudMapVis; G.hudGapsVis = v.hudGapsVis; if (v.hudMirror) mirrorPass.setMode(v.hudMirror); paintHudDetailsSummary(); syncMetricsOverlayCompact(); },
 });
 function syncSettingsAvailability() {

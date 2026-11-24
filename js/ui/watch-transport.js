@@ -31,7 +31,7 @@ const WatchTransport = (function () {
     function action(parent, key, label, text, fn) {
       const b = node("button", key, text); b.type = "button";
       b.setAttribute("aria-label", label);
-      b.addEventListener("click", () => { fn(); paint(); });
+      b.addEventListener("click", () => { fn(b); paint(); });
       parent.appendChild(b); return b;
     }
     function select(parent, key, label, choices, change) {
@@ -69,7 +69,7 @@ const WatchTransport = (function () {
       select(top, "camera", "CAMERA", cameras.map((c) => [c.id, c.id === "tv" ? "TV AUTO" : c.label || c.id.toUpperCase()]), id => replay.setCamera(id));
       action(top, "auto", "AUTO: let the TV director choose the driver and camera", "AUTO", () => replay.setAuto(true));
       action(top, "lock", "FOLLOW LOCK: keep following the selected driver and camera", "FOLLOW LOCK", () => replay.setLocked(true));
-      const photo = action(top, "photo", "Open photo mode", "PHOTO", () => { if (G.openWatchPhoto) G.openWatchPhoto(); });
+      const photo = action(top, "photo", "Open photo mode", "PHOTO", (trigger) => G.openWatchPhoto?.(trigger));
       photo.hidden = typeof G.openWatchPhoto !== "function";
       root.appendChild(top);
       const timeline = node("div", "timeline");
