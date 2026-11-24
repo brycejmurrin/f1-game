@@ -47,19 +47,27 @@ window.MenuNav = (function () {
 
   const shown = UL.shown;          // a zero box, not the hidden attribute
 
-  /* THE FREE CAMERA IS NOT A MENU, and these are the layers MenuNav has to
-     refuse. In the tuner's fly-cam (#photo-controls) and the pause FREE CAMERA
-     sheet (#freecam) the arrow keys PITCH AND YAW the camera
-     (js/camera/photo-cam.js) — but that handler is added when free-cam opens,
-     which puts it AFTER this one among window-capture listeners, so whatever
-     MenuNav does with an arrow happens first. Left to itself it would walk
-     focus around the fly-cam's own EXIT/FOV buttons and preventDefault the key
-     before the camera ever saw it. The tuner panel behind it is equally
-     off-limits: it is open by design the whole time you are flying.
-     Title layout keeps pad navigation for its toolbar. */
   function activeLayer() {
-    const t = UL.top();
-    return (t && (t.id === "photo-controls" || t.id === "freecam")) ? null : t;
+    return UL.top();
+  }
+
+  // The fly-camera toolbar and its dock sit in sibling layers for pointer
+  // hit testing. They form one focus scope for keyboard and controller use.
+  function photoCompanion(layer) {
+    if (layer.id === "photo-controls") {
+      const free = document.getElementById("freecam");
+      const dock = free && !free.hidden ? free : document.getElementById("lighting");
+      return dock && !dock.hidden ? dock : null;
+    }
+    if (layer.id === "photo-studio") {
+      const controls = document.getElementById("photo-controls");
+      return controls && !controls.hidden ? controls : null;
+    }
+    return null;
+  }
+
+  function ownsFocus(layer, el) {
+    return !!el && (layer.contains(el) || !!photoCompanion(layer)?.contains(el));
   }
 
   // `oyIn` lets onWheel's ancestor walk share ONE getComputedStyle between
@@ -135,8 +143,12 @@ window.MenuNav = (function () {
     // A ctrl-wheel is the browser's zoom gesture (and a trackpad pinch); never
     // take that over.
     if (e.ctrlKey || e.defaultPrevented) return;
-    const layer = activeLayer();
-    if (!layer) return;
+    const top = activeLayer();
+    if (!top) return;
+    const companion = photoCompanion(top);
+    const isCamera = top.id === "photo-controls" || top.id === "photo-studio";
+    if (isCamera && !ownsFocus(top, e.target)) return; // the scene wheel adjusts camera speed
+    const layer = companion?.contains(e.target) ? companion : top;
     const dy = wheelPx(e);
     if (!dy) return;
     // A SIDEWAYS STRIP TAKES THE WHEEL FIRST. The circuit picker's flag strip
@@ -206,8 +218,14 @@ window.MenuNav = (function () {
   // same answer where the API is missing.
   function items(layer) {
     const out = [];
-    for (const el of layer.querySelectorAll(FOCUSABLE)) {
+    const companion = photoCompanion(layer);
+    const own = layer.querySelectorAll(FOCUSABLE);
+    const paired = companion?.querySelectorAll(FOCUSABLE);
+    const candidates = !paired ? own : layer.id === "photo-controls" ? [...paired, ...own] : [...own, ...paired];
+    for (const el of candidates) {
       if (el.disabled || el.getAttribute("aria-hidden") === "true") continue;
+      if (el.id === "pc-up" || el.id === "pc-down") continue; // pointer holds; keyboard and pads have altitude controls
+      if (el.closest?.("[inert]")) continue;
       // A roving listbox is one spatial stop, at its selected option.
       if (ownedListboxOption(el) && el.tabIndex < 0) continue;
       if (!shown(el)) continue;
@@ -419,7 +437,9 @@ window.MenuNav = (function () {
   const isStrip = (n) => n.getAttribute && n.getAttribute("data-orientation") === "horizontal"
     && n.scrollWidth - n.clientWidth > 1;
   function scrollerOf(el, layer) {
-    for (let n = el; n && n !== layer.parentNode; n = n.parentElement) {
+    const companion = photoCompanion(layer);
+    const scope = companion?.contains(el) ? companion : layer;
+    for (let n = el; n && n !== scope.parentNode; n = n.parentElement) {
       if (n.nodeType !== 1 || !n.matches) continue;
       if (n.matches(SCROLLERS) && n.scrollHeight - n.clientHeight > 1) return n;
       if (isStrip(n)) return n;
@@ -574,6 +594,7 @@ window.MenuNav = (function () {
     const layer = activeLayer();
     // Trusted arrows nudge the selected title region. The pad synthesizes arrows to navigate the toolbar.
     if (!layer || (dir && layer.id === "tl-editor" && e.isTrusted)) return;
+    if (dir && e.isTrusted && typeof Photomode !== "undefined" && Photomode.sceneOwnsFocus()) return;
     const active = document.activeElement;
     // key-binds is waiting for this key: let it bind PageDown/Home/arrows without paging the pane.
     if (active && active.dataset && active.dataset.armed === "1") return;
@@ -582,7 +603,7 @@ window.MenuNav = (function () {
     const list = items(layer);
     if (!list.length) return;
     _boxes = new Map();   // fresh per press — see centre()
-    const inLayer = active && layer.contains(active) && list.indexOf(active) >= 0;
+    const inLayer = active && list.indexOf(active) >= 0;
     if (seed) { e.preventDefault(); focusItem(currentItem(layer, list), layer); return; }
 
     if (paging) {
@@ -641,7 +662,7 @@ window.MenuNav = (function () {
         // The region is the nearest pane focus is in whether or not it scrolls
         // (the title cluster is one), else the layer.
         const home = region || (active.closest && active.closest(SCROLLERS));
-        const scope = home && layer.contains(home) ? list.filter((el) => home.contains(el)) : list;
+        const scope = home && ownsFocus(layer, home) ? list.filter((el) => home.contains(el)) : list;
         if (!scope.length) return;
         focusItem(sign > 0 ? scope[scope.length - 1] : scope[0], layer);
         e.preventDefault();
@@ -692,5 +713,5 @@ window.MenuNav = (function () {
   // second copy of the selector to drift out of step with this one.
   // items / currentItem: js/ui/modal.js lands focus on a freshly shown
   // non-dialog screen with the same rule the first arrow press uses.
-  return { activeLayer, nearestPane, onWheel, onKeyDown, FOCUSABLE, step, pickSideways, items, currentItem, ownsArrows };
+  return { activeLayer, ownsFocus, nearestPane, onWheel, onKeyDown, FOCUSABLE, step, pickSideways, items, currentItem, ownsArrows };
 })();

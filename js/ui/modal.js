@@ -212,10 +212,8 @@ window.TopModal = (function () {
   const TEXTY = /^(text|search|url|email|password|tel|number)$/;
   const isTexty = (el) => el.tagName === "TEXTAREA" ||
     (el.tagName === "INPUT" && TEXTY.test((el.type || "text").toLowerCase()));
-  // The rotate blocker manages its own focus (js/game.js) and is CSS-gated;
-  // the fly-cam is not a menu — its arrows are the camera's (MenuNav refuses
-  // it too) and a focused button there would turn Space into a click. Used by
-  // scanLayers (no focus memory) and onFocusIn (no Tab trap into them).
+  // The rotate blocker manages its own focus. Photo mode remembers its own
+  // opener because the toolbar and its dock are separate sibling layers.
   const LAYER_SKIP = {
     "rotate-device": 1, "photo-controls": 1,
   };
@@ -237,10 +235,15 @@ window.TopModal = (function () {
     // its chrome.
     const layer = window.UiLayers && window.UiLayers.top();
     if (!layer) return;
-    // LAYER_SKIP layers never get wireLayer focus memory. Trapping Tab into
-    // them here would undo that: a focused #pc-* button turns Space into a click.
-    if (LAYER_SKIP[layer.id]) return;
     const t = e.target;
+    if (layer.id === "photo-controls" || layer.id === "photo-studio") {
+      const nav = window.MenuNav;
+      if (nav?.ownsFocus) {
+        if (!nav.ownsFocus(layer, t)) focusShown(nav.currentItem(layer, nav.items(layer)));
+        return;
+      }
+    }
+    if (LAYER_SKIP[layer.id]) return;
     if (layer.tagName === "DIALOG") {
       if (t && t !== document.body && layer.contains(t)) return;
       const focusable = firstFocusable(layer, false) || layer;
