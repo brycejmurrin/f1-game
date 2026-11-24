@@ -32,7 +32,9 @@ const rec = (key, x, y, w, h, extra = {}) => ({ key, sel: key, role: "hud", exis
 
 // ── lockstep with the game source ─────────────────────────────────────────
 test("the survey's tables lockstep the game's: CamModes, HudLayout, HudElements, hud.js camera sets", () => {
-  const cams = [...read("js/camera/mode-switch.js").matchAll(/\{ id: "([a-z]+)",\s+label:/g)].map((m) => m[1]);
+  const registry = read("js/camera/mode-switch.js").match(/const CAM_MODES = \[([\s\S]*?)\n  \];/);
+  assert.ok(registry, "camera registry exists independently of picker groups");
+  const cams = [...registry[1].matchAll(/\{ id: "([a-z]+)",\s+label:/g)].map((m) => m[1]);
   assert.deepEqual([...M.CAMS].sort(), [...new Set(cams)].sort(), "CAMS = CamModes.CAM_MODES ids");
   const hl = read("js/ui/hud-layout.js");
   const els = [...hl.slice(hl.indexOf("const ELEMENTS"), hl.indexOf("const IDS")).matchAll(/\["([a-z]+)", "/g)].map((m) => m[1]);
@@ -222,9 +224,9 @@ test("pairwise covers every pair (or only the named ones), deterministically, un
 
 test("quick / full / leads / exhaustive: sizes, boots, coverage", () => {
   const q = M.expandMatrix("quick");
-  assert.equal(q.cells.length, 14);
+  assert.equal(q.cells.length, 13);
   assert.equal(M.bootGroups(q.cells).length, 3);
-  for (const n of ["chase-default", "cockpit-default", "visor-default", "chase-preset-clean", "phoneP-chase", "chase-hud70", "chase-hud150", "phoneL-helmet"])
+  for (const n of ["chase-default", "cockpit-default", "chase-preset-clean", "phoneP-chase", "chase-hud70", "chase-hud150", "phoneL-helmet"])
     assert.ok(q.cells.some((c) => c.id === n), n);
   const f = M.expandMatrix("full");
   assert.ok(f.cells.length <= M.FULL_CAP);
@@ -305,7 +307,7 @@ test("expected-visible rules", () => {
     assert.equal(d[k].want, true, k);
   assert.equal(d["btn-ot"].want, false, "desktop hides the touch stack");
   assert.equal(E({ map: "auto", cam: "cockpit" }).map.want, false);
-  assert.equal(E({ map: "auto", cam: "visor" }).map.want, false, "visor is ONBOARD for MAP AUTO (hud.js / CamGroups)");
+  assert.equal(E({ map: "auto", cam: "hood" }).map.want, false, "hood is ONBOARD for MAP AUTO (hud.js / CamGroups)");
   assert.equal(E({ map: "on", profile: "minimal" }).map.want, true, "MAP ON beats MINIMAL");
   assert.equal(E({ profile: "minimal" }).sectors.want, false);
   assert.equal(E({ profile: "broadcast", cam: "heli" }).sectors.want, true);
@@ -479,10 +481,10 @@ test("lead checks decide from the numbers, and merge re-decides across shards", 
   const ov = ev(mk([{ type: "noOverlap", a: "mirror", b: ["announce", "flag"] }]));
   assert.deepEqual(ov.map((x) => x.severity), ["high", "info"]);
   assert.equal(ev(mk([{ type: "camConsistency" }]))[0].severity, "medium", "chase given the cockpit layout set");
-  // CamGroups: VISOR / HOOD are onboard (MAP AUTO hides) with no wheel (other set, no cockpit-cam).
+  // CamGroups: HOOD is onboard (MAP AUTO hides) with no wheel (other set, no cockpit-cam).
   const camCell = (cam, layoutSet, bodyHud) => ({ id: "c", cell: M.normalizeCell({ name: "c", cam, map: "auto", checks: [{ type: "camConsistency" }], lead: "L" }),
     records: [], state: { layoutSet, bodyHud } });
-  for (const cam of ["visor", "hood"]) {
+  for (const cam of ["hood"]) {
     const [f] = ev(camCell(cam, "other", "desktop hud-hide-map"));
     assert.equal(f.severity, "info", f.detail);
     assert.equal(ev(camCell(cam, "cockpit", "desktop hud-hide-map"))[0].severity, "medium", `${cam} on the cockpit set is a defect`);

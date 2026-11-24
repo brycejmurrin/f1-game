@@ -11,8 +11,20 @@ const DataTelemetryPlayer = (function () {
     const setText = (node, value) => { const text = String(value); if (node.textContent !== text) node.textContent = text; };
 
     function paintFrame(view) {
+      (view.rateButtons || []).forEach(({ button, rate }) => {
+        const selected = String(rate === view.rate);
+        if (button.getAttribute("aria-pressed") !== selected) {
+          button.classList.toggle("active", rate === view.rate);
+          button.setAttribute("aria-pressed", selected);
+        }
+      });
+      if (view.replay) view.replay.draw();
       renderer.paintFrame(view);
       updateGauges(view);
+      if (view.seek) {
+        view.seek.value = String(view.cursorT || 0);
+        setText(view.seekTime, summaryTime(view.cursorT || 0));
+      }
     }
 
     function updateTextSummary(view) {
@@ -54,19 +66,23 @@ const DataTelemetryPlayer = (function () {
       bar.appendChild(play); bar.appendChild(restart);
 
       const rates = el("div", "dh-trates");
+      view.rateButtons = [];
       [1, 2, 4].forEach(function (r) {
         const b = el("button", "dh-ratebtn" + (r === view.rate ? " active" : ""), r + "×");
         b.type = "button";
+        view.rateButtons.push({ button: b, rate: r });
         b.addEventListener("click", function () {
           view.rate = r;
           const bs = rates.querySelectorAll(".dh-ratebtn");
           for (let i = 0; i < bs.length; i++) bs[i].classList.toggle("active", bs[i] === b);
+          paintFrame(view);
         });
         rates.appendChild(b);
       });
       bar.appendChild(rates);
 
-      if (view.primary.loc && view.primary.loc.length > 8) {
+      const hasLocations = view.primary.loc && view.primary.loc.length > 8;
+      if (hasLocations) {
         const ob = el("button", "dh-tbtn dh-onboard", "ONBOARD");
         ob.type = "button";
         ob.title = "Rotate the map so the car always points up";
@@ -76,6 +92,30 @@ const DataTelemetryPlayer = (function () {
           paintFrame(view);
         });
         bar.appendChild(ob);
+      }
+      if (hasLocations && !view.replay) {
+        const focus = el("button", "dh-tbtn", "TRACK VIEW");
+        focus.setAttribute("data-track-toggle", "");
+        focus.type = "button"; focus.setAttribute("aria-pressed", "false");
+        focus.addEventListener("click", function () {
+          view.toggleTrack();
+          focus.setAttribute("aria-pressed", String(view.trackOnly));
+          focus.textContent = view.trackOnly ? "CHARTS & TRACK" : "TRACK VIEW";
+        });
+        bar.appendChild(focus);
+        const scrub = el("label");
+        scrub.setAttribute("data-track-seek", "");
+        scrub.appendChild(el("span", null, "Lap position"));
+        const seek = el("input"); seek.type = "range"; seek.min = "0";
+        seek.max = String(view.tMax); seek.step = "0.1"; seek.value = "0";
+        seek.setAttribute("aria-label", "Track playback time");
+        seek.addEventListener("input", function () {
+          pauseAnim(view); view.cursorT = clamp(Number(seek.value), 0, view.tMax);
+          view._last = 0; paintFrame(view); updateTextSummary(view);
+        });
+        view.seek = seek; view.seekTime = el("span", null, summaryTime(0));
+        view.seekTime.setAttribute("data-track-time", "");
+        scrub.appendChild(seek); scrub.appendChild(view.seekTime); bar.appendChild(scrub);
       }
 
       bar.appendChild(el("span", "dh-thint", "drag chart to scrub"));
@@ -309,7 +349,7 @@ const DataTelemetryPlayer = (function () {
       if (view.updateSummary) view.updateSummary();
     }
 
-    return { buildTransport, buildGauges, attachScrub, pauseAnim, paintFrame, updateTextSummary };
+    return { buildTransport, buildGauges, attachScrub, playAnim, pauseAnim, paintFrame, updateTextSummary };
   }
 
   return { create };

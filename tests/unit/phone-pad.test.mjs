@@ -1501,7 +1501,7 @@ test("PlatformSession: out of a race (no player) the dash still goes out, so the
   let sample;
   const context = vm.createContext({ G, document: { createElement: () => fakeEl() },
     PhysicsConsts: { MAX_RPM: 15000, IDLE_RPM: 3000 },
-    CamModes: { CAM_MODES: [{ id: "visor" }] },
+    CamModes: { CAM_MODES: [{ id: "helmet" }] },
     PhonePad: { ...PhonePad, padUrl: () => "https://apex.test/controller.html",
       host(options) { sample = options.hud; return { cancel() {} }; } },
   });
@@ -1631,9 +1631,14 @@ test("wheel pedal axes never feed onboard free-look; an ordinary right stick sti
 
 test("PlatformSession: STOP cancels a pending phone load and a fresh attempt owns its host", async () => {
   const elements = new Map(), loads = [], hosts = [], cameras = [];
-  const G = { els: {}, store: {}, camMode: 1, announce() {}, setCamMode(i, options) { this.camMode = i; cameras.push({ i, persist: options?.persist }); },
+  let savedCamera = 1;
+  const G = { els: {}, store: {}, camMode: 1, announce() {}, setCamMode(i, options) {
+    cameras.push({ i, owner: options?.owner, release: options?.release, persist: options?.persist });
+    this.camMode = options?.release ? savedCamera : i;
+    if (!options?.owner && options?.persist !== false) savedCamera = i;
+  },
     $(id) { if (!elements.has(id)) elements.set(id, fakeEl()); return elements.get(id); } };
-  const context = vm.createContext({ G, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "chase" }, { id: "visor" }] },
+  const context = vm.createContext({ G, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "chase" }, { id: "helmet" }] },
     ensureNet: () => new Promise((resolve) => loads.push(resolve)),
     PhonePad: { padUrl: () => "https://apex.test/controller.html", host(options) {
       const h = { cancelled: 0, options, cancel() { h.cancelled++; } }; hosts.push(h); return h;
@@ -1653,16 +1658,26 @@ test("PlatformSession: STOP cancels a pending phone load and a fresh attempt own
   assert.equal(hosts.length, 0);
   loads[2](true); await settle();
   assert.equal(hosts.length, 1, "only the newest start creates a host");
-  hosts[0].options.linked(); assert.deepEqual(cameras.at(-1), { i: 2, persist: false }, "visor is found by id and the temporary change is not saved");
+  hosts[0].options.linked();
+  const temporary = cameras.at(-1);
+  assert.equal(temporary.i, 2, "the linked phone selects Helmet by id");
+  assert.equal(temporary.persist, false);
+  assert.ok(temporary.owner);
   btn.onclick();
   assert.equal(G.camMode, 1, "UNPAIR restores the prior camera");
+  assert.equal(cameras.at(-1).owner, temporary.owner);
+  assert.equal(cameras.at(-1).release, true);
+  assert.equal(savedCamera, 1);
   assert.equal(hosts[0].cancelled, 1, "STOP owns and cancels the sole host");
   assert.equal(box.hidden, true);
   btn.onclick(); loads[3](true); await settle();
   hosts[1].options.linked(); hosts[1].options.lost();
   assert.equal(G.camMode, 1, "losing the phone restores the previous camera");
   btn.onclick(); loads[4](true); await settle();
-  hosts[2].options.linked(); G.setCamMode(0); hosts[2].options.lost();
+  hosts[2].options.linked(); G.setCamMode(0);
+  hosts[2].options.linked();  // A transport reconnect keeps the player's current view.
+  assert.equal(G.camMode, 0);
+  hosts[2].options.lost();
   assert.equal(G.camMode, 0, "a camera chosen by the player after linking is preserved");
   btn.onclick(); loads[5](false); await settle();
   assert.equal(btn.textContent, "STEER THIS GAME WITH A PHONE", "a load failure offers retry, not a misleading STOP");
@@ -1898,7 +1913,7 @@ test('PlatformSession MAKE NEW CODE cancels the current owner before replacement
   const nodes = new Map(), hosts = [], order = [];
   const G = { els: {}, store: {}, camMode: 1, announce() {}, setCamMode(i) { this.camMode = i; },
     $(id) { if (!nodes.has(id)) nodes.set(id, fakeEl()); return nodes.get(id); } };
-  const context = vm.createContext({ G, Date, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: 'visor' }] },
+  const context = vm.createContext({ G, Date, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: 'helmet' }] },
     PhonePad: { padUrl: () => 'https://apex.test/controller.html', host(options) { const id = hosts.length; order.push('host' + id); const h = { options, cancel() { order.push('cancel' + id); options.recovery({ phase: 'cancelled', publicRelay: true }); } }; hosts.push(h); return h; } } });
   loadPairingUI(context);
   vm.runInContext(read('js/ui/platform-session.js'), context, { filename: absSrc("js/ui/platform-session.js") });
@@ -2553,7 +2568,7 @@ test("#5739 row 3: PlatformSession pauses a running SOLO race under the ALLOW ca
   const G = { els: {}, store: {}, camMode: 1, state: "race", paused: false, announce() {}, setCamMode(i) { this.camMode = i; },
     netPlay: { active: () => false },
     $(id) { if (!elements.has(id)) elements.set(id, fakeEl()); return elements.get(id); } };
-  const context = vm.createContext({ G, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: "visor" }] },
+  const context = vm.createContext({ G, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: "helmet" }] },
     ensureNet: () => Promise.resolve(true), setPaused: (p, why) => { pauses.push([p, why]); G.paused = p; },
     PhonePad: { padUrl: () => "https://apex.test/controller.html", host(options) { const h = { options, cancel() {} }; hosts.push(h); return h; } },
   });
@@ -2887,7 +2902,7 @@ test("PlatformSession: the desktop's title door PHONE CONTROLLER opens Settings 
   const elements = new Map(), hosts = [], pages = [];
   const G = { els: {}, store: {}, camMode: 1, announce() {}, setCamMode(i) { this.camMode = i; },
     $(id) { if (!elements.has(id)) elements.set(id, fakeEl()); return elements.get(id); } };
-  const context = vm.createContext({ G, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: "visor" }] },
+  const context = vm.createContext({ G, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: "helmet" }] },
     openSettingsPage: (p) => pages.push(p),
     PhonePad: { padUrl: () => "https://apex.test/controller.html", host(options) { const h = { cancelled: 0, options, cancel() { h.cancelled++; } }; hosts.push(h); return h; } },
   });
@@ -2954,6 +2969,37 @@ test("paired absolute brake uses its full physical length and releases immediate
     sample("pointerup", 120);
     assert.equal(ctl.state().brk, 0);
   } finally { ctl?.cancel(); PedalTravel.resetButtonProfile("brake"); }
+});
+
+test("the phone uses the configured slide endpoint and independent absolute crossover", () => {
+  const oldDoc = globalThis.document, events = {}, dom = { gas: fakeEl(), brake: fakeEl() };
+  dom.gas.getBoundingClientRect = () => ({ left: 100, right: 200, top: 0, bottom: 200, width: 100, height: 200 });
+  dom.brake.getBoundingClientRect = () => ({ left: 0, right: 100, top: 0, bottom: 200, width: 100, height: 200 });
+  globalThis.document = { addEventListener(type, fn) { (events[type] ||= []).push(fn); }, elementFromPoint: x => x < 100 ? dom.brake : dom.gas };
+  let ctl;
+  try {
+    PedalTravel.setButtonProfile("gas", { start: 40, end: 20, direction: "down" });
+    PedalTravel.setButtonProfile("brake", { sliderEdge: "bottom", slide: "ease", sliderEntry: "stay" });
+    ctl = PhonePad.pad(dom);
+    const gas = (type, x, y) => dom.gas.dispatch(type, { clientX: x, clientY: y });
+    gas("pointerdown", 120, 50);
+    assert.equal(ctl.state().thr, 0.4);
+    gas("pointermove", 120, 140);
+    assert.equal(ctl.state().thr, 0.2);
+    gas("pointermove", 80, 100);
+    assert.equal(ctl.state().brk, 0);
+    gas("pointerup", 80, 100);
+    PedalTravel.setButtonProfile("brake", { sliderEntry: "enter" });
+    gas("pointerdown", 120, 50);
+    gas("pointermove", 80, 100);
+    assert.equal(ctl.state().thr, 0);
+    assert.equal(ctl.state().brk, 0.5);
+    for (const fn of events.pointerup) fn({ pointerId: 1 });
+    assert.equal(ctl.state().brk, 0);
+  } finally {
+    ctl?.cancel(); PedalTravel.resetButtonProfile("gas"); PedalTravel.resetButtonProfile("brake");
+    if (oldDoc === undefined) delete globalThis.document; else globalThis.document = oldDoc;
+  }
 });
 
 test("Appearance controller demos keep editor gestures free of motion permission requests", () => {

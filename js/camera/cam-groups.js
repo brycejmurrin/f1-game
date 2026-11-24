@@ -8,8 +8,6 @@
    (js/ui/hud.js) to keep the road clear:
      cockpit  the driver's eye: tub, halo, steering wheel
      helmet   the same cockpit from inside the lid (vantage.js HELMET_EYE_FWD)
-     visor    the cockpit WITHOUT its wheel (a linked phone is the wheel) —
-              still tub, halo, mirrors, front wheels and nose
      hood     bolted to the nose: the car's front is the bottom of the frame
      tcam     on the airbox: the engine cover / halo ahead of the lens
    REAR is not onboard: it looks backwards over the gearbox at the field.
@@ -25,13 +23,10 @@
    clear the wheel and the touch columns (hud-layout.js HELMET strips). Reported
    2026-10-05 from a phone: in HELMET "the HUD isn't really showing" — it had
    taken the cockpit's hides (chips, gear, speed) and showed the top row alone.
-     helmet
-   VISOR is out of both: it draws no wheel and no dash (vantage.js "the wheel
-   and its dash left out"), so its bottom centre is the nose, exactly as HOOD's
-   is — and HOOD always used the other layout. */
+     helmet */
 const CamGroups = (function () {
   "use strict";
-  const ONBOARD = Object.freeze({ cockpit: 1, helmet: 1, visor: 1, hood: 1, tcam: 1 });
+  const ONBOARD = Object.freeze({ cockpit: 1, helmet: 1, hood: 1, tcam: 1 });
   const COCKPIT_LAYOUT = Object.freeze({ cockpit: 1 });
   const HELMET_LAYOUT = Object.freeze({ helmet: 1 });
   return Object.freeze({

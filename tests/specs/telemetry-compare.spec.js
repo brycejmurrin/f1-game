@@ -12,7 +12,7 @@ async function dataReady(page) {
   const onPageError = error => scriptErrors.push(error.message);
   page.on("pageerror", onPageError);
   await page.goto("/version.json");
-  await page.setContent('<div id="datahub" hidden></div>');
+  await page.setContent('<dialog id="datahub" class="screen" hidden></dialog>');
   await page.evaluate(() => { window.Teams = { LIST: [] }; });
   // Standalone fixtures supply the app's core dependencies first: Log for
   // requests/open, M4 for telemetry-model's eval-time clamp binding, and Dom
@@ -21,8 +21,12 @@ async function dataReady(page) {
   await page.addScriptTag({ url: "/js/core/mat4.js" });
   // hub.js binds Dom.el at evaluation time, just as the app does.
   await page.addScriptTag({ url: "/js/ui/dom.js" });
+  await page.addScriptTag({ url: "/js/ui/modal.js" });
+  await page.evaluate(() => { TopModal.wire(document.getElementById("datahub")); });
   // hub.js and schedule.js call I18n.t / I18n.date at render and init time.
   await page.addScriptTag({ url: "/js/core/i18n.js" });
+  // The app loads TrackMaps eagerly for the telemetry map's shared markers.
+  await page.addScriptTag({ url: "/js/ui/track-maps.js" });
   // The manifest's LAZY_DATA in order — every tab module, then the hub, which
   // calls each Data*.create() at evaluation time (tools/manifest.cjs LAZY_DATA_EDGES).
   for (const file of LAZY_DATA) await page.addScriptTag({ url: "/" + file });
@@ -76,6 +80,7 @@ async function stubApi(page) {
     F1API.locationData = (sk, num) => Promise.resolve(lap(({ 1: 75.1, 63: 75.6, 16: 76.0, 44: 76.4 }[num] || 76) + (sk === 9999 ? 0.8 : 0)).loc);
     F1API.stints = () => Promise.resolve([]);
     F1API.pits = () => Promise.resolve([]);
+    F1API.request = () => Promise.resolve([]); // Optional context stays offline in this fixture.
   });
 }
 
@@ -163,4 +168,78 @@ test("a lane can be removed from the tray before loading", async ({ page }) => {
   await page.locator(".dh-row", { hasText: "NOR" }).locator(".dh-lane-x").click();
   await expect(page.locator(".dh-livecard .dh-row")).toHaveCount(1);
   await expect(page.locator(".dh-livecard .dh-row")).toContainText("RUS");
+});
+
+test("mobile replay expansion preserves scrubbing, focus and parent telemetry", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.setViewportSize({width:390,height:844});
+  await dataReady(page);
+  for (const file of ["tokens", "components", "dialogs", "data"]) {
+    await page.addStyleTag({ url: `/css/${file}.css` });
+  }
+  await page.evaluate(() => { document.body.dataset.width = "narrow"; document.body.dataset.shape = "tall"; });
+  await openTelemetry(page);
+  await page.locator('.dh-dchip',{hasText:'NOR'}).click();
+  await page.getByRole('button', { name: 'LOAD FASTEST LAP', exact: true }).click();
+  const views = page.getByRole("group", { name: "Telemetry view" });
+  const charts = views.getByRole("button", { name: "Charts", exact: true });
+  const track = views.getByRole("button", { name: "Track Replay", exact: true });
+  const chart = page.locator("canvas[aria-label^='Telemetry trace chart']");
+  const panel=page.locator('[data-telemetry-replay]');
+  await expect(charts).toHaveAttribute("aria-pressed", "true");
+  await expect(chart).toBeVisible();
+  await expect(panel).toBeHidden();
+  await track.click();
+  await expect(track).toHaveAttribute("aria-pressed", "true");
+  await expect(chart).toBeHidden();
+  await expect(page.locator(".dh-tpopup[open]")).toHaveCount(1);
+  await expect(panel.getByText(/track width unavailable/)).toBeVisible();
+  await panel.getByRole('button',{name:'EXPAND',exact:true}).click();
+  await expect(page.locator('[data-replay-expanded]')).toBeVisible();
+  await expect(panel.getByRole('combobox',{name:'Follow',exact:true})).toBeVisible();
+  await panel.getByRole('button',{name:'Zoom in on map',exact:true}).click();
+  await expect(panel.getByRole('combobox',{name:'Zoom',exact:true})).toHaveValue('custom');
+  await panel.getByRole('button',{name:'MOVE MAP',exact:true}).click();
+  await expect(panel.getByRole('button',{name:'MOVE MAP',exact:true})).toHaveAttribute('aria-pressed','true');
+  await panel.getByRole('button',{name:'MOVE MAP',exact:true}).click();
+  await panel.getByRole('combobox',{name:'Telemetry',exact:true}).selectOption('gear');
+  await panel.getByRole('button',{name:'RESET VIEW',exact:true}).click();
+  await expect(panel.getByRole('combobox',{name:'Zoom',exact:true})).toHaveValue('140');
+  await expect(panel.getByRole('combobox',{name:'Zoom',exact:true}).locator('option[value="custom"]')).toHaveAttribute('disabled','');
+  await panel.getByRole('slider').fill('20');
+  await expect(panel.locator('output')).toHaveText('20.00 s');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-replay-expanded]')).toHaveCount(0);
+  await expect(panel.getByRole('button',{name:'EXPAND',exact:true})).toBeFocused();
+  await panel.getByRole('button',{name:'EXPAND',exact:true}).click();
+  await page.locator('[data-replay-expanded]').getByRole('button',{name:'Close replay',exact:true}).click();
+  await expect(page.locator('[data-replay-expanded]')).toHaveCount(0);
+  await charts.click();
+  await expect(panel).toBeHidden();
+  await expect(chart).toBeVisible();
+  await track.click();
+  await expect(panel.locator("output")).toHaveText("20.00 s");
+  await charts.click();
+  await page.getByTitle("Restart lap", { exact: true }).click();
+  await track.click();
+  await expect(panel.locator('output')).toHaveText('0.00 s');
+  await page.getByRole('button',{name:'Close telemetry',exact:true}).click();
+  await expect(panel).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("Track Replay remains available with car timing and no location data", async ({ page }) => {
+  await dataReady(page);
+  await openTelemetry(page);
+  await page.evaluate(() => { F1API.locationData = () => Promise.resolve([]); });
+  await page.locator(".dh-dchip", { hasText: "NOR" }).click();
+  await page.getByRole("button", { name: "LOAD FASTEST LAP", exact: true }).click();
+  await page.getByRole("button", { name: "Track Replay", exact: true }).click();
+  const replay = page.locator("[data-telemetry-replay]");
+  await expect(replay.getByText(/Location data unavailable for this lap/)).toBeVisible();
+  await replay.getByRole("slider").fill("10");
+  await expect(replay.locator("output")).toHaveText("10.00 s");
+  await page.getByRole("button", { name: "Charts", exact: true }).click();
+  await expect(page.locator("canvas[aria-label^='Telemetry trace chart']")).toBeVisible();
 });

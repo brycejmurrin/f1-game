@@ -159,7 +159,7 @@ function drawMinimap() {
     // zone in one colour.
     const zones = TrackMaps.drsZones(track.def);
     if (zones && zones.length) {
-      const zoneInk = palette === "off" ? "rgba(38,165,245,0.9)" : CvdPalette.hex("zone");
+      const zoneInk = TrackMaps.aeroColor();
       mc.strokeStyle = zoneInk; mc.lineWidth = 3;
       for (const z of zones) {
         // z.b > 1 for a zone across the line: walk on past n and wrap.
@@ -200,6 +200,8 @@ function drawMinimap() {
         }
       }
     }
+    TrackMaps.drawStartFinish(mc, 8 + map[0][0] * (cssW - 16), 8 + map[0][1] * (cssH - 16),
+      8 + map[1][0] * (cssW - 16), 8 + map[1][1] * (cssH - 16), 1.5);
     // THE PIT LANE: a light dashed run from where the entry road peels off
     // to where the exit road rejoins, a "P" where it PEELS OFF and a tick
     // across the run at the entry line. The "P" marks the peel-off, not the
@@ -259,18 +261,9 @@ function drawMinimap() {
     if (c === player) continue;
     const p = at(c.s);
     if (!p) continue;
-    const x = 6 + p[0] * (cssW - 16), y = 6 + p[1] * (cssH - 16);
-    mm.fillStyle = teamCss(c);   // keyed on store.rev: a livery edit repaints the dot
-    if (c.human && !c.local) {
-      mm.fillRect(x - 1, y - 1, 6, 6);
-      // A white ring, because the team colour is the one thing it cannot use to
-      // stand out — the car it must be told apart from may share it.
-      mm.strokeStyle = "#fff";
-      mm.lineWidth = 1;
-      mm.strokeRect(x - 1.5, y - 1.5, 7, 7);
-    } else {
-      mm.fillRect(x, y, 4, 4);
-    }
+    const x = 8 + p[0] * (cssW - 16), y = 8 + p[1] * (cssH - 16);
+    const remote = c.human && !c.local;
+    TrackMaps.drawCarMarker(mm, x, y, remote ? 3 : 2, teamCss(c), remote);
   }
   // ghost replay marker (time trial): shared rival first, otherwise your PB
   const ghost = replayGhost();
@@ -314,10 +307,8 @@ function drawMinimap() {
     mmPitMark(mm, _mmPitP[0], _mmPitP[1], 7, pitColor);
     mm.globalAlpha = 1;
   }
-  mm.fillStyle = inPit ? markerColor("map-lane", mmYou()) : "#fff";
-  mm.beginPath();
-  mm.arc(8 + p[0] * (cssW - 16), 8 + p[1] * (cssH - 16), 4, 0, 7);
-  mm.fill();
+  const playerInk = inPit ? markerColor("map-lane", mmYou()) : "#fff";
+  TrackMaps.drawCarMarker(mm, 8 + p[0] * (cssW - 16), 8 + p[1] * (cssH - 16), 4, playerInk, true);
 }
 
 /** A polyline along `steps` map nodes forward from node `i0`, in the map's

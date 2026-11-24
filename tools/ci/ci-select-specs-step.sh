@@ -54,7 +54,11 @@ if [ "${READY_PR:-false}" = true ] && [ "${EVENT:-}" = pull_request ] && [ "${CA
     || fail "ready PR checkout does not match the event head and resolved merge base"
   ready_args=(--ready-pr)
 fi
-node tools/ci/select-specs.mjs --since "$BEFORE" "${ready_args[@]}" --failed-from .selected-failed.txt \
+# Only the release train needs the routes of each first-parent change. All
+# other events keep their existing one-diff comparison.
+history_args=()
+if [ "${CALLED:-false}" = true ]; then history_args=(--pages-history); fi
+node tools/ci/select-specs.mjs --since "$BEFORE" "${ready_args[@]}" "${history_args[@]}" --failed-from .selected-failed.txt \
   ${BUDGET_MIN:+--budget-min "$BUDGET_MIN"} ${OVERFLOW_SHARDS:+--overflow-shards "$OVERFLOW_SHARDS" --stale-first} \
   ${OVER_BUDGET_SHARDS:+--over-budget-shards "$OVER_BUDGET_SHARDS"} --json > sel.json \
   || fail "selector failed"

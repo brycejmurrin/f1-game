@@ -3,7 +3,7 @@
 // persistence, finite distinct rig poses, and representative rendered views.
 // Hook/control checks use headless builds; the representative pixel check explicitly renders.
 // Modes: chase, far, drift, cockpit, hood, overhead, heli, reverse, side,
-//        cinematic, low, tcam, rear, visor, trackside, rival, pitwall, drone, helmet.
+//        cinematic, low, tcam, rear, trackside, rival, pitwall, drone, helmet.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { frameContent, frameDelta, screenshotPixels } from "../helpers/visual-oracle.js";
 import { awaitCaptureReady, screenshotPresentedCanvas } from "../helpers/presented-canvas.js";
@@ -19,26 +19,26 @@ test.describe("Apex 26 — player camera modes", () => {
       const bad = window.__apex.camera("banana");
       return { init, byId, byIdx, bad };
     });
-    expect(r.init.modes).toEqual(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear", "visor", "trackside", "rival", "pitwall", "drone", "tv", "helmet"]);
+    expect(r.init.modes).toEqual(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear", "trackside", "rival", "pitwall", "drone", "tv", "helmet"]);
     expect(r.byId.mode).toBe("cockpit");
     expect(r.byIdx.mode).toBe("chase");
     expect(r.bad).toBe(false);            // unknown mode is rejected, not crashed
   });
 
-  test("the CAM button cycles through every mode and wraps", async ({ page, loadTrack }) => {
+  test("the CAM button cycles through driving views and wraps", async ({ page, loadTrack }) => {
     await loadTrack("monza", "day", "dry", { headless: true });
     const seq = await page.evaluate(() => {
       window.__apex.camera(0);            // start at chase
       const out = [];
       const btn = document.getElementById("btn-cam");
-      const count = window.__apex.camera().modes.length;
+      const count = 6;
       for (let i = 0; i < count + 1; i++) {   // all modes + wrap back to the first
         out.push(window.__apex.camera().mode);
         btn.click();
       }
       return out;
     });
-    expect(seq).toEqual(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear", "visor", "trackside", "rival", "pitwall", "drone", "tv", "helmet", "chase"]);
+    expect(seq).toEqual(["chase", "cockpit", "helmet", "tcam", "hood", "overhead", "chase"]);
   });
 
   test("camera choice persists across a reload", async ({ page, loadTrack }) => {
@@ -58,7 +58,7 @@ test.describe("Apex 26 — player camera modes", () => {
     await loadTrack("monza", "day", "dry", { headless: true });
     await page.evaluate(() => { window.__apex.jump(0.0, 50, 0); window.__apex.snapCam(); });
     const MODES = ["chase", "far", "drift", "cockpit", "hood", "overhead", "heli",
-                   "reverse", "side", "cinematic", "low", "tcam", "rear", "visor", "trackside",
+                   "reverse", "side", "cinematic", "low", "tcam", "rear", "trackside",
                    "rival", "pitwall", "drone", "helmet"];
     // `tv` is a director meta-mode (dbgCam cuts); excluded from distinct-vantage
     // sampling — it has no fixed framing of its own.
@@ -144,7 +144,7 @@ test.describe("Apex 26 — player camera modes", () => {
       return { before, after };
     });
     expect(r.before).toBe("chase");
-    expect(r.after).toBe("far");
+    expect(r.after).toBe("cockpit");
   });
 });
 

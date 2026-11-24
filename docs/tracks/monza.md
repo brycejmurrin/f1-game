@@ -29,6 +29,25 @@ not a surveyed anchor. Do not relocate it until an aerial/map crossing is
 registered against the actual trace. The current road width and spline scale
 also need independent measured registration before adjustment.
 
+### Road banking at Curva Grande, Lesmo 1 and Parabolica
+
+Registering the centreline to the [2025 FIA circuit map](https://www.fia.com/system/files/decision-document/2025_monza_event_-_circuit_map_-_monza_2025_0.pdf)
+puts the T3 label near lap fraction 0.191. The game now marks T3 at the
+nearby curvature feature at 0.1918. The old 0.1288 marker sat on the shorter
+right kink after Rettifilo. The [circuit operator](https://www.monzanet.it/en/circuit/)
+describes Biassono as a wide, approximately 300 m radius right-hander and
+Parabolica as a long turn whose radius opens on exit.
+
+The table measures the built road at stations where the absolute crossfall
+exceeds 0.1°. The crossfall angles are existing game tuning values. The FIA
+map and operator's guide establish the corner locations and shapes.
+
+| Curve | Previous banked span | Current banked span | Built placement |
+|---|---:|---:|---|
+| Curva Grande (T3) | 839–1,050 m | 1,003–1,214 m | Peak of 3° on the sweep |
+| Lesmo 1 (T6) | 2,150–2,275 m | 2,096–2,249 m | Crossfall of 3.3° and 3.5° at the two curvature peaks |
+| Parabolica (T11) | 4,617–4,882 m | 4,713–4,978 m | Peak of 4° at T11, with 2.1° still present at 4,917 m |
+
 ## 1. Setting
 The "Temple of Speed," opened 1922, set inside the **Royal Villa park of Monza** — Europe's largest walled park (~688 ha) just north of Milan. Track threads through dense woodland of **umbrella pines** and tall deciduous trees, past the neoclassical **Villa Reale**, ornamental lakes, and the crumbling old banked oval (Sopraelevata).
 

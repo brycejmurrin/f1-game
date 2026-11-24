@@ -3,6 +3,7 @@ const SettingsSearch = (function () {
   "use strict";
   const CATALOG = Object.freeze([
     ["steering", "Steering input", "controls", "pm-steer-sel", "tilt touch buttons keyboard wheel"],
+    ["steering-return", "Steering return rate", "advanced", "pm-steerreturn", "digital steering keyboard d-pad arrow recenter centre center release speed unwind"],
     ["gears", "Manual gears", "driving", "pm-gears-sel", "shift automatic transmission"],
     ["aero", "Active aero", "driving", "pm-aero-sel", "wing manual automatic drs"],
     ["keys", "Keyboard bindings", "controls", "pm-keys", "rebind keys controls"],
@@ -46,7 +47,7 @@ const SettingsSearch = (function () {
     ["mirror", "Rear-view mirror", "display", "pm-hudmirror-sel", "rear view camera"],
     ["line-colour", "Driving line colour", "display", "pm-linecolor-sel", "visual guide color"],
     ["line-opacity", "Driving line opacity", "display", "pm-lineopacity-sel", "visual guide transparent"],
-    ["touch-response", "Touch button response", "controls", "pm-touch-response", "left right arrows steer gas throttle brake pedal slide progressive travel distance input pressure button brightness opacity feedback wheelspin lockup"],
+    ["touch-response", "Touch button response", "controls", "pm-touch-response", "left right arrows steer gas throttle brake pedal slide progressive travel distance input pressure button brightness opacity feedback wheelspin lockup direction start endpoint hold target"],
     ["touch-size", "Touch button size", "display", "pm-btnscale", "bigger smaller pedals arrows"],
     ["touch-opacity", "Touch button opacity", "display", "pm-btnopacity", "transparent pedals arrows"],
     ["touch-shape", "Touch button shape", "display", "pm-btnshape-sel", "round square corners pedals arrows"],

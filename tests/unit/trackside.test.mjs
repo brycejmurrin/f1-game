@@ -9,7 +9,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-function load() {
+function load(extra = {}) {
   const Tracks = {
     sample(track, s, out) {
       out.p[0] = 0; out.p[1] = 2; out.p[2] = s;
@@ -28,7 +28,7 @@ function load() {
     clearEye: (t, e) => e,
   };
   const CamAvoid = { freeEye: (t, e) => e };
-  const ctx = { Tracks, FlybySeq, CamAvoid, Log: { info() {} } };
+  const ctx = { Tracks, FlybySeq, CamAvoid, Log: { info() {} }, ...extra };
   vm.runInNewContext(
     fs.readFileSync(path.join(ROOT, "js/camera/trackside.js"), "utf8") + "\nthis.exported = TracksideCams;",
     ctx, { filename: absSrc("js/camera/trackside.js") });
@@ -118,14 +118,13 @@ test("trackside snap selects the seek destination without inheriting hysteresis"
   assert.equal(TS.pose(track, 1105, 0, { snap: true }).index, 0, "seek also wraps the lap");
 });
 
-test("CAM_MODES keeps trackside at its saved index 14 (apex26.camMode is the index)", () => {
-  // Run the real mode table, not a regex over its source: the index IS the persisted camMode.
+test("CAM_MODES still loads and saves trackside as camera 14", () => {
   const win = {};
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), vm.createContext({ window: win }),
     { filename: absSrc("js/camera/mode-switch.js") });
-  const ids = win.CamModes.CAM_MODES.map((m) => m.id);
-  assert.equal(ids.indexOf("trackside"), 14, "saved camMode 14 must stay trackside; append, never reorder");
-  assert.equal(ids[13], "visor", "visor stays directly before it");
+  const { CAM_MODES, fromSaved, toSaved } = win.CamModes;
+  assert.equal(CAM_MODES[fromSaved(14)].id, "trackside");
+  assert.equal(toSaved(CAM_MODES.findIndex(mode => mode.id === "trackside")), 14);
 });
 
 test("reset forgets the held cam so a restart does not keep the old one", () => {
@@ -138,4 +137,27 @@ test("reset forgets the held cam so a restart does not keep the old one", () => 
   assert.equal(track._tsIdx, 0);
   assert.equal(TS.status(track).index, 0);
   assert.doesNotThrow(() => TS.reset(null));
+});
+
+
+test("Trackside replaces a distant previous-lap camera with nearby subject coverage", () => {
+  const TS = load(), track = { total: 5000 };
+  const shot = TS.pose(track, 150, 0, { carPos: [0, 150], snap: true });
+  assert.equal(shot.tgt[2], 150);
+  assert.ok(Math.hypot(...shot.eye.map((v, i) => v - shot.tgt[i])) < 30);
+  assert.equal(track._tsFallback, true);
+});
+
+test("Trackside rejects blocked sight lines and caches visibility while the subject stays put", () => {
+  let casts = 0, clear = false;
+  const TS = load({ FlybySight: { transmit: () => { casts++; return { Tdrawn: clear ? 1 : 0 }; } } });
+  const track = { total: 1000 };
+  TS.pose(track, 160, 0, { carPos: [0, 160] });
+  assert.equal(track._tsFallback, true);
+  for (let i = 0; i < 60; i++) TS.pose(track, 160, 0, { carPos: [0, 160] });
+  assert.equal(casts, 1, "paused frames do not raycast repeatedly");
+  clear = true;
+  const shot = TS.pose(track, 170, 0, { carPos: [0, 170] });
+  assert.equal(casts, 2); assert.equal(track._tsFallback, false); assert.equal(shot.cut, true);
+  assert.equal(shot.eye[2], 100, "clear fixed camera is restored");
 });

@@ -112,9 +112,9 @@ export const DEFAULT_OUT = "apex-status/queue-depth.json";
 /** Job statuses that wait for a runner; `waiting` (an environment gate) holds no slot. */
 const QUEUED = new Set(["queued", "requested"]);
 /**
- * `pending` is a job waiting its turn in a concurrency group: ci.yml's
- * `queue: max` smoke and selected lanes hold ready PRs' legs FIFO. It holds no
- * runner and no push frees it, so it is counted apart (`laneWaiting`) and
+ * `pending` is a job waiting in a concurrency group. GitHub does not
+ * guarantee start order for the `queue: max` smoke and selected lanes (#5536).
+ * It holds no runner, so it is counted apart (`laneWaiting`) and
  * drives no hold. Counting it as queued froze the gauge at hold for hours on
  * 2026-10-15 (30 "queued", oldest 101 min, while 7 of 40 runners worked).
  * docs.github.com/en/rest/actions/concurrency-groups lists a group's members as

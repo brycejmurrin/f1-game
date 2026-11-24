@@ -30,10 +30,21 @@ const TouchButtonSettings = (() => {
     const idle = choice("idleColor", "IDLE BORDER COLOR", palette);
     const pressed = choice("pressedColor", "PRESSED COLOR", palette);
     const activation = choice("activation", "ACTIVATION", [["default", "DEFAULT"], ["tap", "TAP ON RELEASE"], ["quick", "QUICK TAP"], ["hold", "HOLD AND RELEASE"], ["long", "LONG HOLD AND RELEASE"], ["double", "DOUBLE TAP"]]);
-    const gestureHint = "Quick Tap requires a lift within 0.18 seconds. Hold requires 0.45 seconds, Long Hold requires 0.9 seconds, and Double Tap requires two taps within 0.35 seconds. Default keeps the original gesture for this action.";
-    const gestureHelp = node("p", gestureHint);
+    const gestureHints = {
+      tap: "Lift to activate.",
+      quick: "Lift within the selected time to activate.",
+      hold: "Hold for at least the selected time, then lift to activate.",
+      long: "Hold for at least the selected time, then lift to activate.",
+      double: "Lift twice within the selected time. Each tap must also be shorter than this window.",
+    };
+    const gestureRow = node("label"), gestureLabel = node("span"), gestureAmount = node("b"), gestureTime = node("input");
+    gestureRow.className = "tune-row"; gestureLabel.className = "tune-label";
+    gestureTime.type = "range"; gestureTime.step = "10"; gestureTime.id = host.id + "-gesture-time";
+    gestureRow.append(gestureLabel, gestureTime); host.appendChild(gestureRow);
+    const gestureHelp = node("p");
     gestureHelp.className = "adv-help"; gestureHelp.id = host.id + "-activation-help";
-    activation.setAttribute("aria-describedby", gestureHelp.id); host.appendChild(gestureHelp);
+    activation.setAttribute("aria-describedby", gestureHelp.id);
+    gestureTime.setAttribute("aria-describedby", gestureHelp.id); host.appendChild(gestureHelp);
     const response = node("div"); host.appendChild(response); section = response;
     const slider = choice("sliderEdge", "PEDAL MAPPING", [["relative", "RELATIVE SLIDE"],
       ...["top", "bottom", "left", "right"].map(k => [k, "ABSOLUTE · FULL AT " + k.toUpperCase()])]);
@@ -55,14 +66,22 @@ const TouchButtonSettings = (() => {
     const slideCurveHelp = node("p", "Linear changes pressure evenly as you slide. Fine Start makes small slides gentler. Quick Start makes them stronger. S-Curve gives fine control near each end and changes pressure fastest in the middle.");
     slideCurveHelp.className = "adv-help"; slideCurveHelp.id = host.id + "-slide-curve-help";
     slideCurve.setAttribute("aria-describedby", slideCurveHelp.id); section.appendChild(slideCurveHelp);
-    const direction = choice("direction", "SLIDE DIRECTION", [["default", "MODE DEFAULT"], ...["up", "down", "left", "right"].map(d => [d, d.toUpperCase()])]);
     const edge = choice("fullEdge", "START FROM TOUCH POSITION", [["fixed", "OFF · FIXED START"], ...["top", "bottom", "left", "right"].map(k => [k, "FULL AT " + k.toUpperCase()])]);
-    const start = choice("start", "STARTING INPUT", [["default", "MODE DEFAULT"], ...Array.from({ length: 21 }, (_, i) => [String(i * 5), i * 5 + "%"])]);
+    const percentages = Array.from({ length: 21 }, (_, i) => [String(i * 5), i * 5 + "%"]);
+    const withDefault = [["default", "MODE DEFAULT"], ...percentages];
+    const start = choice("start", "STARTING INPUT", withDefault);
+    const direction = choice("direction", "SLIDE DIRECTION", [["default", "MODE DEFAULT"], ...["up", "down", "left", "right"].map(d => [d, d.toUpperCase()])]);
+    const end = choice("end", "SLIDE END INPUT", withDefault);
+    const endHelp = node("p", "The input reached after moving the Slide Distance in the selected direction. Set a value above the starting input to increase it, or below to decrease it.");
+    endHelp.className = "adv-help"; endHelp.id = host.id + "-end-help";
+    end.setAttribute("aria-describedby", endHelp.id); section.appendChild(endHelp);
     const build = choice("buildMs", "HOLD BUILD TIME", [["0", "OFF"], ["250", "0.25 S"], ["500", "0.5 S"], ["1000", "1 S"], ["2000", "2 S"]]);
+    const holdEnd = choice("holdEnd", "HOLD TARGET INPUT", percentages);
     const curve = choice("buildPower", "HOLD BUILD CURVE", [["1", "LINEAR"], ["2", "GENTLE START"], ["0.5", "FAST START"]]);
-    const buildHelp = node("p", "From the starting input, a steady hold builds to full over this time. Choose a starting input below 100% to feel it. Linear builds evenly. Gentle Start builds slowly at first. Fast Start builds quickly and eases into full input. You can still slide during the hold.");
+    const buildHelp = node("p", "A steady hold moves from the starting input to the hold target over this time. Gentle Start changes input slowly at first. Fast Start changes it quickly at first. You can still slide during the hold.");
     buildHelp.className = "adv-help"; buildHelp.id = host.id + "-build-help";
-    build.setAttribute("aria-describedby", buildHelp.id); section.appendChild(buildHelp);
+    for (const control of [build, holdEnd, curve]) control.setAttribute("aria-describedby", buildHelp.id);
+    section.appendChild(buildHelp);
     section = response;
     const slide = choice("slide", "SLIDE ONTO PEDAL", [["inherit", standalone ? "STAY ON ORIGINAL PEDAL" : "DEFAULT"], ["instant", "INSTANT"], ["ease", "EASE"]]);
     const slideHelp = node("p", (standalone
@@ -85,9 +104,24 @@ const TouchButtonSettings = (() => {
     host.append(reset, note);
     button.value = ids[0];
 
+    function paintGestureTime() {
+      const label = Number(gestureTime.value) / 1000 + " s";
+      gestureAmount.textContent = label;
+      gestureTime.setAttribute("aria-valuetext", label);
+    }
     function distance(px) {
       amount.textContent = px + " px";
       travel.setAttribute("aria-valuetext", px + " pixels");
+    }
+    function paintPercent(control, value) {
+      control.querySelector("[data-imported-percent]")?.remove();
+      // Settings files can contain whole percentages between the menu's five-point steps.
+      if (typeof value === "number" && value % 5 !== 0) {
+        const option = node("option", value + "%");
+        option.value = String(value); option.setAttribute("data-imported-percent", "");
+        control.appendChild(option);
+      }
+      control.value = String(value);
     }
     function refresh() {
       const id = button.value, profile = PedalTravel.buttonProfile(id);
@@ -104,9 +138,18 @@ const TouchButtonSettings = (() => {
         "Relative Slide uses your first touch and slide distance. Absolute reads your position across the whole pedal.";
       idle.value = profile.idleColor || "default"; pressed.value = profile.pressedColor || "default";
       activation.value = profile.activation || "default";
-      gestureHelp.textContent = gestureHint + (id === "camera" && !standalone
-        ? " Keep holding for the view grid: 0.9 seconds with Hold, 1.35 seconds with Long Hold, or 0.34 seconds otherwise." : "");
+      const timing = profile.gestureTiming;
       activation.parentElement.parentElement.hidden = gestureHelp.hidden = analog || id === "look";
+      gestureRow.hidden = gestureTime.disabled = gestureHelp.hidden || !timing;
+      if (timing) {
+        gestureLabel.textContent = timing.label; gestureLabel.appendChild(gestureAmount);
+        gestureTime.setAttribute("aria-label", timing.label);
+        gestureTime.min = String(timing.min); gestureTime.max = String(timing.max);
+        gestureTime.value = String(profile[timing.key] ?? timing.defaultMs);
+        paintGestureTime();
+      }
+      gestureHelp.textContent = (gestureHints[profile.activation] || "Default keeps the original gesture for this action.") +
+        (id === "camera" && !standalone ? " A longer hold opens the view grid." : "");
       press.value = profile.press; travel.value = String(profile.travel); distance(profile.travel);
       slide.parentElement.parentElement.hidden = slideHelp.hidden = !pedal || !!profile.sliderEdge;
       feedbackHelp.textContent = id === "gas" ? "Gas brightens with throttle input. A tread mark warns of wheelspin." : id === "brake" ? "Brake brightens with braking input. Double bars warn of lock-up." : "The arrow brightens as its steering input increases.";
@@ -114,14 +157,16 @@ const TouchButtonSettings = (() => {
       else if (profile.feedback && !profile.sliderEdge && id !== "gas" && profile.press === "progressive") feedbackHelp.textContent += " Three rising bars mark a progressive button.";
       const overrides = PedalTravel.buttonOverrides(id);
       slide.value = overrides.slide || "inherit";
-      sliderEntry.value = overrides.slide ? "enter" : "stay";
+      sliderEntry.value = PedalTravel.sliderEntry(overrides);
       adaptive.parentElement.parentElement.hidden = pedal; adaptiveHelp.hidden = pedal;
       adaptive.value = String(overrides.adaptive || "inherit");
       feedback.value = profile.feedback ? "on" : "off";
       slideCurve.value = profile.slideCurve || "linear";
       direction.value = profile.direction || "default";
-      start.value = profile.start == null ? "default" : String(profile.start);
-      curve.value = String(profile.buildPower || 1); curve.disabled = !profile.buildMs;
+      paintPercent(start, profile.start ?? "default");
+      paintPercent(end, profile.end ?? "default");
+      paintPercent(holdEnd, profile.holdEnd ?? 100);
+      curve.value = String(profile.buildPower || 1); curve.disabled = holdEnd.disabled = !profile.buildMs;
       build.value = String(profile.buildMs || 0);
       brightness.value = String(profile.brightness || 46);
       brightness.disabled = indicator.disabled = !profile.feedback;
@@ -130,11 +175,13 @@ const TouchButtonSettings = (() => {
       help.textContent = profile.press === "progressive"
         ? "Touch for 12% input. Slide away from that spot in any direction to reach 100% over your Slide Distance. Slide back to ease off."
         : pedal ? "Touch for full input. Slide upward to ease off, or move back down toward your starting point to press harder." : "Touch for a full turn. Slide toward the other arrow to ease off. At the default distance, the global Adaptive Buttons level controls how much this slide eases steering.";
-      if (profile.direction || profile.start != null || profile.fullEdge) {
+      if (profile.direction || profile.start != null || profile.fullEdge || profile.end != null) {
         const gesture = profile.direction || (profile.press === "progressive" ? "in any direction" : pedal ? "up" : "toward the other arrow");
         const touchdown = profile.fullEdge ? "Touch the " + profile.fullEdge + " edge for 100%, the opposite edge for 0%, or the middle for 50%." +
           (profile.feedback ? " A double line marks the full edge." : "") : "Touch for " + PedalTravel.startPercent(profile) + "% input.";
-        help.textContent = touchdown + " Slide " + gesture + (profile.press === "progressive" ? " to build input." : " to ease off.");
+        const slideTarget = profile.end != null ? " to reach " + profile.end + "% input."
+          : profile.press === "progressive" ? " to build input." : " to ease off.";
+        help.textContent = touchdown + " Slide " + gesture + slideTarget;
       }
       if (id === "gas" && !standalone) help.textContent += " Hold throttle gives manual control until you lift. Latch toggles full throttle with each tap. Auto handles throttle while you steer and brake.";
       reset.textContent = "RESET " + id.toUpperCase();
@@ -144,9 +191,14 @@ const TouchButtonSettings = (() => {
       note.textContent = ""; refresh();
     }
     button.onchange = () => { note.textContent = ""; refresh(); };
+    gestureTime.oninput = paintGestureTime;
+    gestureTime.onchange = () => {
+      const timing = PedalTravel.buttonProfile(button.value).gestureTiming;
+      if (timing) change({ [timing.key]: Number(gestureTime.value) });
+    };
     for (const control of [idle, pressed, activation]) control.onchange = () => change({ [control.dataset.field]: control.value });
     slider.onchange = () => change({ sliderEdge: slider.value });
-    sliderEntry.onchange = () => change({ slide: sliderEntry.value === "enter" ? "instant" : "inherit" });
+    sliderEntry.onchange = () => change({ sliderEntry: sliderEntry.value });
     press.onchange = () => change({ press: press.value });
     travel.oninput = () => distance(travel.value);
     travel.onchange = () => change({ travel: Number(travel.value) });
@@ -154,7 +206,9 @@ const TouchButtonSettings = (() => {
     direction.onchange = () => change({ direction: direction.value });
     edge.onchange = () => change({ fullEdge: edge.value });
     indicator.onchange = () => change({ indicator: indicator.value });
-    start.onchange = () => change({ start: start.value === "default" ? null : Number(start.value) });
+    for (const control of [start, end, holdEnd]) {
+      control.onchange = () => change({ [control.dataset.field]: control.value === "default" ? null : Number(control.value) });
+    }
     curve.onchange = () => change({ buildPower: Number(curve.value) });
     build.onchange = () => change({ buildMs: Number(build.value) });
     brightness.onchange = () => change({ brightness: Number(brightness.value) });

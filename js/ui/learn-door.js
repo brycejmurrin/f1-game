@@ -3,24 +3,24 @@ const LearnDoor = (function () {
   "use strict";
 
   const curriculum = [
-    ["Car anatomy & aerodynamics", [
+    ["aerodynamics", "Car anatomy & aerodynamics", [
       ["aero", "Aero Lab", "Following distance, slipstream & cornering grip"],
       ["chassis", "Chassis X-Ray", "Compare the car footprint, floor and wake"],
       ["suspension", "Suspension & Anti-Dive", "Follow wheel motion through a pushrod or pullrod"],
     ]],
-    ["Power unit & energy", [
+    ["energy", "Power unit & energy", [
       ["deployment", "Straight-Line Deployment", "Trace where electric power tapers on a straight"],
       ["hybrid", "Hybrid Lap Budget", "Balance deployment and harvesting across a lap"],
       ["brake-blend", "Rear Brake Blending", "Trade regeneration for friction and explore torque fill"],
     ]],
-    ["Tyres & driving dynamics", [
+    ["driving", "Tyres & driving dynamics", [
       ["tyre-heat", "Tyre Thermal Lab", "Follow surface and core temperatures through a run"],
       ["braking", "Grip & Braking", "Share tyre grip between braking and turning"],
       ["racing-line", "Racing Lines", "Move the apex and measure the exit-speed trade-off"],
       ["telemetry", "Telemetry Detective", "Compare braking, speed & throttle at the same distance"],
       ["rain", "Wet Weather Lines", "Explore rubber, standing water and tyre choice"],
     ]],
-    ["Race strategy", [
+    ["strategy", "Race strategy", [
       ["vsc", "VSC Pit Strategy", "Pit timing, tyre life & track position"],
       ["pit-duel", "Undercut or Overcut", "Make the pit call against a rival"],
       ["stint", "Fuel & Tyre Degradation", "Separate fuel burn from compound wear over a stint"],
@@ -49,12 +49,14 @@ const LearnDoor = (function () {
       header.appendChild(heading);
       const body = Dom.el("div", "sheet-body pane");
       const index = Dom.el("nav", "");
+      index.id = "learn-index";
       index.setAttribute("aria-label", "Lessons");
       let activeLesson;
       let visit = 0;
       let pendingTelemetry;
-      for (const [name, lessons] of curriculum) {
+      for (const [category, name, lessons] of curriculum) {
         const group = Dom.el("section", "");
+        group.id = "learn-group-" + category;
         group.appendChild(Dom.el("h3", "", name));
         const doors = Dom.el("div", "pm-doors");
         group.appendChild(doors);

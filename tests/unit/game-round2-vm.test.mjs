@@ -111,12 +111,22 @@ test("CAM-1: a world-fixed TRACKSIDE eye is not dragged down-track by the car-fr
     g.step(240);
     assert.ok(G.player.speed > 10, "the car is moving");
     const modes = ev(g, "CamModes.CAM_MODES.map((m) => m.id)");
+    // Pin a real nearby fixed post. An arbitrary authored corner can now
+    // select the moving elevated fallback, which has a different invariant.
+    const s = G.player.s - 10;
+    const sample = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
+    ev(g, "Tracks").sample(G.track, s, sample);
+    G.track._tsCams = [{ s, lookS: s, n: 1, fov: 42,
+      eye: [sample.p[0], sample.p[1] + 6, sample.p[2]] }];
+    ev(g, "TracksideCams").reset(G.track);
     G.setCamMode(modes.indexOf("trackside"), true);
     a.snapCam(true);
+    assert.equal(G.track._tsFallback, false, "fixture selects a visible fixed post");
     const E0 = [...G.camEye];
     let drift = 0;
     for (let i = 0; i < 6; i++) {
       try { g.pumpFrame(1000 + i * 16.7); } catch (_) { /* the VM's draw stubs run dry after a few frames */ }
+      assert.equal(G.track._tsFallback, false, "fixed-post coverage remains active");
       drift = Math.max(drift, Math.hypot(G.camEye[0] - E0[0], G.camEye[2] - E0[2]));
     }
     assert.ok(drift < 0.1, "the eye stays on its post while the car passes (drift " + drift.toFixed(2) + " m; ~2.2 m when damped in the car's frame)");

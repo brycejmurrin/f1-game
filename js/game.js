@@ -300,7 +300,7 @@ function syncMetricsOverlayCompact() {
 // both thumbs (arrows + pedals); TOUCH auto-throttles — neither has a free
 // hand for a shifter.
 function gearsManual(forceTouch = false) {
-  return manualMode && (steerMode === "tilt" || !Input.touchControlsNeeded() && !forceTouch);
+  return manualMode && (steerMode === "tilt" || !Input.touchDrivingControls() && !forceTouch);
 }
 /* AUTO-THROTTLE IS AN OPTION NOW, not only a consequence of TOUCH mode.
    XAG 107's worked example of an input barrier is literally a racing game's
@@ -311,7 +311,7 @@ function gearsManual(forceTouch = false) {
    thumb, so it is not a preference but a fact about the control scheme. */
 let autoThrottleOpt = store.get("autoThrottle", false);
 let throttleLatchOpt = store.get("throttleLatch", false);
-function autoThrottle(forceTouch = false) { return autoThrottleOpt || ((forceTouch || Input.touchControlsNeeded()) && steerMode === "touch"); }
+function autoThrottle(forceTouch = false) { return autoThrottleOpt || ((forceTouch || Input.touchDrivingControls()) && steerMode === "touch"); }
 // Left/right-handed docks. F1 Mobile enumerates both as first-class control
 // schemes rather than hiding a toggle; the whole feature here is which dock
 // each thumb group lands in, so CSS does it (body.mirror-controls).
@@ -804,7 +804,7 @@ function buildStudioRig() {
 }
 let headlessMode = false;  // skip render() when true (headless control loop)
 const { CAM_MODES } = CamModes;  // player camera modes (js/camera/mode-switch.js; eval-time — a HARD_EDGES pair)
-let camMode = Math.min(Math.max(store.get("camMode", 19) | 0, 0), CAM_MODES.length - 1);
+let camMode = CamModes.fromSaved(store.get("camMode", 19));
 // The game mode, on TWO axes. `flow` is what the run is FOR and survives a
 // whole championship; `session` is what this one visit to the track IS. They
 // are genuinely independent — a career weekend qualifies then races, so a
@@ -2763,7 +2763,7 @@ function startRace() {
 }
 
 function showTouchControls(show, cooldown = false, preview = false) {
-  const t = show && (preview || Input.touchControlsNeeded());
+  const t = show && (preview || Input.touchDrivingControls());
   const manual = !cooldown && gearsManual(preview);
   // GAS pedal whenever throttle is manual (tilt/button); touch auto-throttle hides it
   els.btnThrottle.hidden = !(t && (cooldown || !autoThrottle(preview)));
@@ -7438,12 +7438,12 @@ function render(dt) {
       // race camera (docs/notes/CAMERA-FEEL.md). Real-time noise, fps-independent; onboard it stays in the tub.
       if (typeof CamFeel !== "undefined") CamFeel.shake(eyeT, tgtT, CamTune.shakeOffset(feel.shake, comfort) * CockpitOpts.shakeScale(mode, "helmetImpact"), performance.now() * 0.001, CamFeel.isBuzzMode(mode));
     }
-    // Onboard speed buzz — CamFeel.BUZZ_MODES (cockpit/hood/visor/tcam). Amp via
+    // Onboard speed buzz — CamFeel.BUZZ_MODES (cockpit/hood/tcam/helmet). Amp via
     // CamTune.buzzAmp (REDUCE MOTION / COMFORT › HEAD BOB). Off when wet (SSR flicker).
     const _buzzWet = 1.0 - clamp((frame.wetness || 0) * 2.0, 0.0, 1.0);
     if (state === "race" && _buzzWet > 0.01
         && (typeof CamFeel !== "undefined" ? CamFeel.isBuzzMode(mode)
-          : (mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "tcam"))) {
+          : (mode === "cockpit" || mode === "hood" || mode === "tcam"))) {
       const spV = clamp(player.speed / vTop(), 0, 1);
       const vAmp = CamTune.buzzAmp(spV, player.deploying, comfort, _buzzWet) * CockpitOpts.shakeScale(mode, "helmetBuzz");
       if (vAmp > 0.001) {
@@ -7468,7 +7468,7 @@ function render(dt) {
   // lambda or the eye lags behind/into the bodywork at speed.
   const racing = state === "race" || state === "count" || ceremonyView === "cooldown";
   const camId = ceremonyView === "cooldown" ? "chase" : CAM_MODES[camMode].id;
-  const onboard = racing && (camId === "cockpit" || camId === "hood" || camId === "visor" || camId === "helmet" || camId === "tcam");
+  const onboard = racing && (camId === "cockpit" || camId === "hood" || camId === "helmet" || camId === "tcam");
   // Just after a cut, ease the external cams in with a gentler lambda so the angle
   // sweeps to its new vantage instead of snapping. Onboard cams ignore it (must lock).
   const cutEase = camCutT > 0 ? (camCutT = Math.max(0, camCutT - dt), 0.4) : 1;
@@ -7485,7 +7485,7 @@ function render(dt) {
   const softCam = camId === "drone" || camId === "rival" || camId === "pitwall";
   const raceLam = softCam ? (comfort ? 6 : (camId === "drone" ? 12 : 14)) : ((camId === "heli" || camId === "side" || camId === "cinematic" || camId === "overhead" || camId === "low" || camId === "trackside") ? 9 : 18);
   const lE = onboard ? 400 : (racing ? raceLam : 1.6) * cutEase;
-  const gentleHead = !comfort && onboard && (camId === "cockpit" || camId === "hood" || camId === "visor" || camId === "helmet") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag; XR: HMD owns look
+  const gentleHead = !comfort && onboard && (camId === "cockpit" || camId === "hood" || camId === "helmet") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag; XR: HMD owns look
   const lT = gentleHead ? 7 : onboard ? 400 : (racing ? raceLam + (softCam ? 1 : 2) : 10) * cutEase;
   // Damp HORIZONTALLY in the CAR's frame, not the world's. Damping toward a
   // MOVING target lags ~v/lambda - v*dt/2, so the car-to-camera distance
@@ -7579,7 +7579,7 @@ function render(dt) {
   // they keep 0.3 and every other view takes a near plane that buys back a lot
   // of depth resolution for free.
   const _projMode = camId;
-  const _nearM = (_projMode === "cockpit" || _projMode === "hood" || _projMode === "visor" || _projMode === "helmet") ? 0.3 : 0.9;
+  const _nearM = (_projMode === "cockpit" || _projMode === "hood" || _projMode === "helmet") ? 0.3 : 0.9;
   const _near = cine ? FlybySeq.NEAR : (dbgCam ? 0.3 : _nearM);
   M4.perspectiveTo(_mProj, fovY, gfx.aspect, _near, farPlane);
   if (homeTrack && !dbgCam) { const view = uiExperience.trackCamera(); _mProj[8] = view.shiftX; _mProj[9] = view.shiftY; }
@@ -7826,11 +7826,6 @@ function render(dt) {
   // (wheel/halo/mirrors) + the car's shadow instead, body mesh skipped. Was two
   // always-equal booleans, so the `hide && !rig` skip they guarded never fired.
   const cockpitRigOnly = !dbgCam && (state === "race" || state === "count") && (CAM_MODES[camMode].id === "cockpit" || CAM_MODES[camMode].id === "helmet");
-  // VISOR is the cockpit WITHOUT ITS STEERING WHEEL (a phone in the hand is the
-  // wheel): the same rig — tub, halo, mirrors, front wheels — around an eye
-  // closer to the front and lower (js/camera/vantage.js VISOR_EYE_*); the player
-  // body is skipped exactly as in cockpit.
-  const visorEye = !dbgCam && (state === "race" || state === "count") && CAM_MODES[camMode].id === "visor";
   // A steep or wide lens can see behind its horizontal heading. Bound the
   // entire frustum (including roll and lens shift) by its widest corner ray.
   let _camFwdX = camTgt[0] - camEye[0], _camFwdZ = camTgt[2] - camEye[2];
@@ -8104,13 +8099,13 @@ function render(dt) {
         carFx.emit(c, _groundMat, dt, state);   // plank sparks (js/fx/car-fx.js); the AI lock-up marks are laid above the frustum cull
       }
     }
-    if (c.isPlayer && (cockpitRigOnly || visorEye)) {
+    if (c.isPlayer && cockpitRigOnly) {
       // The rig stays on the car: its origin is the eye minus THIS mode's eye offsets.
       GameCams.cockpitViewmodelAxes(smp2.r, smp2.t, yv, camEye, tmpR, _cockU, tmpF, _cockP,
-        GameCams.seatFwd(visorEye ? "visor" : "cockpit"), GameCams.seatUp(visorEye ? "visor" : "cockpit"), bankC ? bankC.roll : 0);
+        GameCams.seatFwd(), GameCams.seatUp(), bankC ? bankC.roll : 0);
       basisMat(tmpR, _cockU, tmpF, _cockP, _cockMat);
-      drawCockpitRig(c, _cockMat, wheelDt, paint, visorEye);   // VISOR: no steering wheel
-      // THE STOP'S CREW still: cockpit/visor continue before the exterior path,
+      drawCockpitRig(c, _cockMat, wheelDt, paint);
+      // THE STOP'S CREW still: cockpit and helmet continue before the exterior path,
       // so without this the player's own stop drew no crew at all. Kit stands
       // on the grounded basis (not the camera-anchored viewmodel). The
       // viewmodel fronts already take stopAnim's axle slide inside drawCockpitRig.
@@ -8692,8 +8687,10 @@ function paintSteer() {
   const note = $("pm-steer-note");
   if (!note) return;
   // Warn only for genuine deny/unavailable — not the brief pre-first-reading window.
-  note.textContent = Input.gyroDenied
-    ? "Motion access is denied on this device, so TILT cannot steer here — pick BUTTONS or TOUCH."
+  const device = Input.controlDevice();
+  note.textContent = device === "controller" ? "Controller active. Your touch steering preference is saved."
+    : device === "keyboard" ? "Keyboard active. Your touch steering preference is saved."
+    : Input.gyroDenied ? "Motion access is denied on this device, so TILT cannot steer here — pick BUTTONS or TOUCH."
     : "TILT leans the phone. BUTTONS adds on-screen arrows. TOUCH drags a finger on the track.";
 }
 
@@ -8736,7 +8733,7 @@ function tiltSay(msg) { els.audiostate.textContent = msg; if (msg) announce(msg.
 const platformSession = PlatformSession.create(G, {
   canvas, raceWakeLock, disarmProbeOnLeave: () => _disarmProbeOnLeave(),
   cancelMirrorPrep: () => mirrorPass.cancelPreparation(),
-  setPaused, ensureNet, settingsBack: () => settingsNav.back(), closeSettings, showTouchControls, refreshGearsBtn, openSettingsPage: (id) => { openSettings(); settingsNav.showDirect(id, true); },
+  setPaused, ensureNet, settingsBack: () => settingsNav.back(), closeSettings, showTouchControls, refreshGearsBtn, paintSteer, openSettingsPage: (id) => { openSettings(); settingsNav.showDirect(id, true); },
 });
 platformSession.wireFirstGesture();
 
@@ -9450,7 +9447,7 @@ SettingsExport.create(G);   // SETTINGS FILE: download preferences as JSON (js/u
 // GEARS toggle: usable when thumbs are free (tilt or desktop keyboard).
 // Disabled — not hidden — on BUTTONS/TOUCH (see the pm-calib note in setSteerMode).
 function refreshGearsBtn() {
-  SettingRow.disable($("pm-gears"), Input.touchControlsNeeded() && steerMode !== "tilt");
+  SettingRow.disable($("pm-gears"), Input.touchDrivingControls() && steerMode !== "tilt");
   SettingRow.paint($("pm-gears"), manualMode ? "manual" : "auto");
 }
 SettingRow.wire("pm-gears", { values: SettingRow.labels(["auto", "manual"]), read: () => (manualMode ? "manual" : "auto"), write: (v) => {

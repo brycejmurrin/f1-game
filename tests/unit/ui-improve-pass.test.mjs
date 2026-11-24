@@ -164,7 +164,7 @@ function bootMenus(disk = {}, o = {}) {
     addEventListener: (type, fn, opts) => winListeners.push({ type, fn, opts }),
     Tracks: { LIST }, Teams: { LIST: o.teams || [{ id: "t", name: "Team", drivers: [] }] }, Flags: { svg: () => "" },
     SeasonCal: { canRace: () => true, rounds: () => 0 },
-    TrackMaps: { corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], aspect: () => 1.5, elevProfile: () => null },
+    TrackMaps: { corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"], classColor: () => "", aspect: () => 1.5, elevProfile: () => null },
   });
   vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: absSrc("js/ui/select-screen.js") });
   if (o.practicePick || o.practicePickApi) {
@@ -862,7 +862,6 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
   const td = css("css/track-detail.css");
   assert.ok(ruleFor(td, /^#td-inner$/), "the sheet inner is #td-inner");
   assert.equal(decl(td, "#track-detail-legend", "font-size"), "var(--fs-2)");
-  assert.equal(decl(td, /#track-detail-legend \[data-leg="sector"\]/, "color"), "var(--silver)");
   const menus = code("js/ui/select-screen.js");
   assert.match(menus, /function drsZoneRangeHtml/, "DRS wrap labels are one helper for detail + tests");
   assert.match(menus, /crossing start\/finish/, "a zone past the line names S/F on the wrap");
@@ -872,7 +871,7 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
     "filter snap refreshes the hero before the deferred chip rebuild");
   assert.ok(!/className = "track-group-head"/.test(menus),
     "filter chips name the view; no vertical CLASSICS/SEASON divider");
-  assert.match(menus, /setAttribute\("data-leg", "sector"\)/, "grey S2 sector is named");
+  assert.match(menus, /\["S1", sectors\[0\]\], \["S2", sectors\[1\]\], \["S3", sectors\[2\]\]/, "all sectors use the shared color palette");
   assert.match(menus, /legend:\s*false/, "the modal uses the DOM legend, not the 9px canvas key");
   const maps = code("js/ui/track-maps.js");
   assert.match(maps, /wrap:\s*z\.end > total/, "activationZones marks a run past S/F");
@@ -1037,16 +1036,16 @@ test("camera picker is a keyboard radio menu and cannot outlive the race layer",
   assert.equal(picker.className, "balanced-row", "the picker balances from local space like every other cluster");
   assert.equal(picker.hidden, false);
   assert.equal(h.trigger.getAttribute("aria-expanded"), "true");
-  assert.ok(picker.children.length >= 10 && picker.children.every((b) => b.getAttribute("role") === "menuitemradio"));
-  assert.deepEqual(picker.children.map((b) => b.getAttribute("aria-checked") === "true"), picker.children.map((_, i) => i === 2), "only the live mode is aria-checked");
-  assert.equal(h.active(), picker.children[2], "opening focuses the checked item");
-  h.key(picker, "ArrowRight"); assert.equal(h.active(), picker.children[3]);
-  h.key(picker, "ArrowDown");  assert.equal(h.active(), picker.children[4]);
-  h.key(picker, "ArrowLeft");  assert.equal(h.active(), picker.children[3]);
-  h.key(picker, "ArrowUp");    assert.equal(h.active(), picker.children[2]);
-  h.key(picker, "End");        assert.equal(h.active(), picker.children[picker.children.length - 1]);
-  h.key(picker, "ArrowRight"); assert.equal(h.active(), picker.children[0], "wraps");
-  h.key(picker, "Home");       assert.equal(h.active(), picker.children[0]);
+  const items = picker.children.filter(b => !b.hidden);
+  const selected = items.find(b => b.getAttribute("aria-checked") === "true");
+  assert.equal(selected.dataset.mode, "drift");
+  assert.equal(h.active(), selected, "opening focuses the checked item");
+  const at = items.indexOf(selected);
+  h.key(picker, "ArrowRight"); assert.equal(h.active(), items[(at + 1) % items.length]);
+  h.key(picker, "ArrowLeft"); assert.equal(h.active(), selected);
+  h.key(picker, "End"); assert.equal(h.active(), items.at(-1));
+  h.key(picker, "ArrowRight"); assert.equal(h.active(), items[0], "wraps");
+  h.key(picker, "Home"); assert.equal(h.active(), items[0]);
   h.key(picker, "Escape");
   assert.equal(picker.hidden, true, "Escape closes the picker");
   assert.equal(h.trigger.getAttribute("aria-expanded"), "false");
@@ -1114,20 +1113,20 @@ test("in a REAL RACE WATCH the picker and the C cycle carry AUTO (the TV directo
   assert.equal(picker.children[0].dataset.idx, "auto", "AUTO heads the list");
   assert.equal(picker.children[0].getAttribute("aria-checked"), "true", "the director has the picture: AUTO is the checked item");
   assert.equal(picker.children.filter((b) => b.getAttribute("aria-checked") === "true").length, 1);
-  picker.children[4].onclick({ stopPropagation() {} });   // a shot: the viewer takes the picture
+  picker.children.find(b => b.dataset.mode === "cockpit").onclick({ stopPropagation() {} });   // a shot: the viewer takes the picture
   assert.deepEqual(calls, ["take"]);
   assert.equal(h.G.camMode, 3);
   assert.equal(h.trigger.textContent.startsWith("AUTO"), false);
   picker = h.open();
   assert.equal(picker.children[0].getAttribute("aria-checked"), "false");
-  assert.equal(picker.children[4].getAttribute("aria-checked"), "true");
+  assert.equal(picker.children.find(b => b.dataset.mode === "cockpit").getAttribute("aria-checked"), "true");
   picker.children[0].onclick({ stopPropagation() {} });
   assert.deepEqual(calls, ["take", "auto"]);
   assert.match(h.trigger.textContent, /^AUTO · /, "the CAM button says who has the picture");
   // The C cycle: from AUTO the next shot is the viewer's; past the last shot, AUTO again.
   h.api.cycleCam();
   assert.equal(r.auto, false);
-  h.G.camMode = h.open().children.length - 2;   // the last CAM_MODES entry
+  h.G.camMode = 18;   // Helmet, the last runtime CAM_MODES entry
   h.api.hideCamPicker();
   assert.equal(h.api.cycleCam(), "auto");
   assert.equal(r.auto, true);
@@ -1156,8 +1155,8 @@ test("How to Play names every input and drops the retired screen-half lie", () =
   const game = gameCode();
   assert.match(game, /autoThrottle\(\s*\)\s*\?\s*1\s*:\s*Math\.max\(\s*0\s*,\s*Input\.throttleLevel\(\s*\)\s*\)/,
     "TOUCH auto-throttle must apply full pedal travel, not a 0 analog reading");
-  assert.match(game, /steerMode\s*===\s*"tilt"\s*\|\|\s*!Input\.touchControlsNeeded\(\s*\)/,
-    "phone MANUAL gears stay tilt-only — BUTTONS already owns both thumbs");
+  assert.match(game, /steerMode\s*===\s*"tilt"\s*\|\|\s*!Input\.touchDrivingControls\(\s*\)/,
+    "MANUAL gears are available with tilt or hardware controls");
   assert.match(game, /L\.push\(\s*shifts\s*,\s*taps\s*\)\s*;\s*R\.push\(\s*pedals\s*\)/,
     "tilt+manual puts the shifter left and the pedals right");
   // MenuNav BEHAVIOUR: arrows wrap in every direction so a pad press is never

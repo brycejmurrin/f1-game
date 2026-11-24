@@ -185,6 +185,8 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `tab-utils.js` | `DataTabUtils` | LAZY_DATA | shared Data Hub driver colors, lane identity counts and the OpenF1 live-window test. |
 | `api-transport.js` | `F1Transport` | LAZY_DATA | paced API transport: bounded bodies, cache, timeouts, retries and cancellation. |
 | `api.js` | `F1API` | LAZY_DATA | F1API: Jolpica + OpenF1 endpoint mapping and session cache policy. |
+| `telemetry-context.js` | `DataTelemetryContext` | LAZY_DATA | optional lap context, retained separately from interpolated display samples. |
+| `telemetry-replay.js` | `DataTelemetryReplay` | LAZY_DATA | width-aware telemetry replay sharing the chart's clock and lifecycle. |
 | `telemetry-model.js` | `DataTelemetryModel` | LAZY_DATA | telemetry channels, lane identities and GPS/distance interpolation. |
 | `telemetry-render.js` | `DataTelemetryRender` | LAZY_DATA | telemetry canvas layers, frame compositing, delta chart and track map. |
 | `telemetry-player.js` | `DataTelemetryPlayer` | LAZY_DATA | telemetry transport, scrub interaction, playback, gauges and accessible summary. |
@@ -608,7 +610,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `particles.js` | `Particles` | tag | shared transient-particle pool (tyre smoke, collision and plank sparks, gravel/grass kickup, rain spray) for js/game.js. |
-| `droplets.js` | `Droplets` | tag | Droplets: rain on the lens / visor for the ONBOARD cameras (cockpit, hood, visor, helmet, T-cam). |
+| `droplets.js` | `Droplets` | tag | Droplets: rain on the lens / visor for the ONBOARD cameras (cockpit, hood, helmet, T-cam). |
 | `grade-tint.js` | `GradeTint` | tag | GradeTint: car-paint bases, the tuner scratch, and sky grade hue/sat. |
 | `skidmarks.js` | `SkidMarks` | tag | SkidMarks: the tyre-mark ring buffer and its batched draw. |
 | `car-fx.js` | `CarFx` | tag | CarFx: per-car motion effects js/game.js's render loop asks for once a car's grounded basis is built — the PLANK SPARKS a car throws when its floor bottoms… |
@@ -1681,7 +1683,7 @@ behind+above), FAR (pulled back/up), DRIFT (swings outside on a slide),
 COCKPIT (onboard eye, player car hidden), HOOD (nose cam), OVERHEAD (top-down
 drone), HELI (broadcast heli), REVERSE (mounted ahead looking back), TV SIDE
 (trackside panning), CINEMATIC (slow orbit), LOW (surface skimmer), T-CAM
-(roll-hoop broadcast), REAR CAM (tail-mounted looking back), VISOR (the cockpit eye further forward, no wheel),
+(roll-hoop broadcast), REAR CAM (tail-mounted looking back),
 TRACKSIDE (fixed corner cams that auto-switch), RIVAL LOCK (frames the nearest battle rival),
 PIT WALL (pit-lane wall cam with optional auto-cut), DRONE (smoothed tether with corner look-ahead),
 TV (the live director, `js/camera/director.js`) and HELMET (the cockpit from inside the lid). Chase modes

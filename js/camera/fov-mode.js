@@ -17,7 +17,6 @@ const CamFov = (function () {
   const FOV_BY_MODE = Object.freeze({
     cockpit:    { base: 64, widen: 14, scale: 1,   dep: 3 },
     hood:       { base: 64, widen: 14, scale: 1,   dep: 3 },
-    visor:      { base: 64, widen: 14, scale: 1,   dep: 3 },
     helmet:     { base: 64, widen: 14, scale: 1,   dep: 3 },   // the cockpit's lens; the visor frame is CSS
     overhead:   { base: 46, widen: 0,  scale: 1,   dep: 0 },
     heli:       { base: 36, widen: 8,  scale: 0.5, dep: 2 },

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "circuit": "Silverstone",
+  "units": "metres",
+  "source": "TUMFTM/racetrack-database",
+  "revision": "e59595d1f3573b30d1ded6a08984935b957688e0",
+  "license": "LGPL-3.0",
+  "calibrationSession": 9122,
+  "calibrationDriver": 1,
+  "calibrationLap": 25,
+  "registrationRmsMetres": 3.156,
+  "clearanceMetres": 1.25,
+  "sourceHashes": {
+    "track": "27c51454e81780a75c353d3e6c9f73dbbcd1e82139782e95bd722ade19736e39",
+    "line": "cd91302271801f26d61c047180f60ed080ddcedd53981e69872d475f26ef9408"
+  },
+  "anchors": [
+    0.0,
+    0.3108717178484683,
+    0.7270053500696835,
+    1.0
+  ],
+  "startPoint": [
+    5.01689990257236,
+    10.705483087425051
+  ]
+}

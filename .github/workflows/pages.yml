@@ -23,7 +23,7 @@ on:
   # one gate per gate length and the train always takes the newest tip.
   # The same prose paths ci.yml ignored start no train; the cron ships them.
   # `verdict` still refuses any ref but the deploy branch and diffs the gate
-  # against the LIVE commit, never the push's previous tip (unpublished and
+  # from a verified publication, never the push's previous tip (unpublished and
   # possibly ungated, it is not a base).
   push:
     branches:
@@ -85,7 +85,7 @@ concurrency:
 #      lock, `tools/ci/pages-publishable.sh` reads the live shell's apex-sha
 #      and publishes only if it is an ancestor of this run's commit. An older
 #      run that reaches the lock after a newer one has published stops there.
-#   3. REUSE, NEVER RE-RUN THE SAME TREE. A merge made through GitHub is a
+#   3. REUSE FOR A SINGLE MERGE. A merge made through GitHub is a
 #      new commit, so every PR merge paid the full gate a second time even
 #      when the PR run had tested the very same files. `verdict` compares
 #      tree hashes: when this commit's tree equals a parent's, and that
@@ -93,6 +93,8 @@ concurrency:
 #      skipped and the run goes straight to `publishable`. The tree is the
 #      proof — same files means same workflow, same tests, same result. A
 #      merge whose base moved has a different tree and gets its own gate.
+#      Across several unpublished commits, a PR gate on the final tree
+#      does not prove the cumulative selection. Run that gate afresh.
 #
 # What this replaces, and why (kept short; the runs are in the history):
 #   - 2026-08-12: workflow-level concurrency. cancel-in-progress: true starved
@@ -136,12 +138,14 @@ jobs:
             exit 1
           fi
       # A train tick with nothing new stops here: one slot for thirty seconds
-      # instead of a 14-job gate that would end in "already live". `since` is
-      # the live commit when it is an ancestor of this one — the exact base
-      # for the sweeps and selection filters ("what changed since what is
-      # live?") — and empty otherwise, which those filters read as "run all".
+      # instead of a 14-job gate that would end in "already live". For a
+      # publishable tip, `since` is the last byte-verified publication on the
+      # first-parent chain at or before the live commit. Empty runs all. A
+      # no-op tick at the already-live tip cannot certify a publication.
       - name: What is live, and is this tip newer?
         id: live
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -u
           # Built from the default env, not github.event.repository — the
@@ -154,19 +158,27 @@ jobs:
           elif [ "$LIVE" = "$GITHUB_SHA" ]; then
             echo "live is already $GITHUB_SHA — nothing to publish"
             echo "nothing_new=true" >> "$GITHUB_OUTPUT"; echo "since=$LIVE" >> "$GITHUB_OUTPUT"
-          elif git cat-file -e "${LIVE}^{commit}" 2>/dev/null && git merge-base --is-ancestor "$LIVE" "$GITHUB_SHA"; then
-            echo "live $LIVE is an ancestor; gating the diff since it"
-            echo "nothing_new=false" >> "$GITHUB_OUTPUT"; echo "since=$LIVE" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::live $LIVE is not an ancestor of $GITHUB_SHA; gating the whole tip (publishable decides later)"
-            echo "nothing_new=false" >> "$GITHUB_OUTPUT"; echo "since=" >> "$GITHUB_OUTPUT"
+            SINCE="$(node tools/ci/pages-verified-base.mjs "$GITHUB_SHA" "$LIVE" "$DEPLOY_BRANCH")"
+            if [ -n "$SINCE" ]; then
+              echo "Gating changes since verified publication $SINCE (live $LIVE)"
+            else
+              echo "::warning::no verified first-parent publication in range; gating the whole tip"
+            fi
+            echo "nothing_new=false" >> "$GITHUB_OUTPUT"; echo "since=$SINCE" >> "$GITHUB_OUTPUT"
           fi
       - name: Look for a completed successful gate on this tree
         id: v
         if: steps.live.outputs.nothing_new != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash tools/ci/pages-reuse-verdict.sh "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          SINCE: ${{ steps.live.outputs.since }}
+        run: |
+          if [ -n "$SINCE" ] && [ "$(git rev-parse --verify -q "$GITHUB_SHA^1")" = "$SINCE" ]; then
+            bash tools/ci/pages-reuse-verdict.sh "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "reuse=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Say so in the run summary
         env:
           NOTHING_NEW: ${{ steps.live.outputs.nothing_new }}
@@ -205,9 +217,9 @@ jobs:
       checks: read     # ci.yml's reuse steps read a draft run's guards record
     uses: ./.github/workflows/ci.yml
     with:
-      # The live commit, when it is an ancestor of this tip: the sweeps and
-      # selection filters diff against exactly what is live. Empty means
-      # unknown, and every filter in ci.yml reads empty as "run everything".
+      # The verified publication on this tip's first-parent chain. Selected
+      # specs union the routes of the intervening merges. Other filters use
+      # the before/tip diff. An empty base selects the whole tip.
       before_sha: ${{ needs.verdict.outputs.since }}
       # A unique key keeps ci.yml's OWN concurrency group out of the way; the
       # group that matters is the one on this job. It also tells ci.yml this

@@ -199,6 +199,20 @@ if ((typeof DrivingCues !== "undefined") && DrivingCues.create) DrivingCues.crea
   host.parentNode.insertBefore(item, host.nextSibling);
 })();
 
+(function ensureSteerReturnRow() {
+  if ($("pm-steerreturn")) return;
+  const host = $("pm-steerrate")?.closest?.(".adv-item");
+  if (!host?.parentNode || typeof document === "undefined") return;
+  const buildHelp = host.querySelector(".adv-help");
+  if (buildHelp) buildHelp.textContent = "How fast a held key, D-pad direction or on-screen arrow winds on lock. Higher reaches full lock faster.";
+  const item = document.createElement("div");
+  item.className = "adv-item";
+  item.innerHTML = '<label class="tune-row"><span class="tune-label">STEERING RETURN RATE <b id="pm-steerreturn-v">FOLLOW</b></span>'
+    + '<input id="pm-steerreturn" type="range" min="0" max="10" step="1" value="0" aria-label="Steering return rate" aria-describedby="pm-steerreturn-help"></label>'
+    + '<p class="adv-help" id="pm-steerreturn-help">How fast digital steering moves back to center when you let go or turn the other way. At 0, Follow uses twice the Steer Rate.</p>';
+  host.parentNode.insertBefore(item, host.nextSibling);
+})();
+
 let hapRepaintWired = false;   // device capability repaint is wired once
 let trigHapWired = false;      // TRIGGER HAPTICS row paint + gamepadconnected
 const SLIDER_MIN = 1, SLIDER_MAX = 10;
@@ -358,6 +372,11 @@ function steerRateFromSlider(v) {
   return v <= 5 ? 2.5 + (4.0 - 2.5) * (v - 1) / 4
                 : 4.0 + (7.0 - 4.0) * (v - 5) / 5;
 }
+function steerReturnRateFromSlider(v) {
+  if (v === 0) return null;
+  return v <= 5 ? 2.5 + (8 - 2.5) * (v - 1) / 4 : 8 + (14 - 8) * (v - 5) / 5;
+}
+function steerReturnLabel(v) { return v === 0 ? "FOLLOW" : String(v); }
 function analogSpeedFromSlider(v) { return (v - 1) / 9; }   // 0..1, v1 = OFF
 function pctLabel(v) { return v + "%"; }
 
@@ -636,6 +655,8 @@ function applySteerTuning() {
   const touchDrag   = clamp(store.get("touchDragSpeed", 1), SLIDER_MIN, SLIDER_MAX);
   const dragSmooth  = clamp(store.get("dragSmooth", 1), SLIDER_MIN, SLIDER_MAX);
   const steerRate2  = clamp(store.get("digitalRate", 5), SLIDER_MIN, SLIDER_MAX);
+  const returnRaw = store.get("digitalRecenterRate", 0);
+  const returnRate = Number.isInteger(returnRaw) ? clamp(returnRaw, 0, SLIDER_MAX) : 0;
   const analogSpd   = clamp(store.get("analogSpeedSteer", 1), SLIDER_MIN, SLIDER_MAX);
   const haptics     = clamp(store.get("haptics", 6), SLIDER_MIN, SLIDER_MAX);
   const padDz       = clamp(store.get("padDeadzone", 5), 0, 30);
@@ -647,6 +668,7 @@ function applySteerTuning() {
   if (Input.setTouchSpeedMix) Input.setTouchSpeedMix(touchSpeedFromSlider(touchDrag));
   Input.setDragSmoothing(dragCutoffFromSlider(dragSmooth));
   Input.setKeyRampIn(steerRateFromSlider(steerRate2));
+  Input.setKeyRampOut?.(steerReturnRateFromSlider(returnRate));
   Input.setAnalogSpeedMix(analogSpeedFromSlider(analogSpd));
   Input.setHaptics(haptics <= 1 ? 0 : (haptics - 1) / 9);
   // TRIGGER HAPTICS defaults ON. Absent key = fresh install; no STEER_SCHEMA
@@ -695,6 +717,7 @@ function applySteerTuning() {
   paintRow("pm-touchdragspeed", touchDrag, adaptLabel(touchDrag));
   paintRow("pm-dragsmooth", dragSmooth, dragSmoothLabel(dragSmooth));
   paintRow("pm-steerrate", steerRate2);
+  paintRow("pm-steerreturn", returnRate, steerReturnLabel(returnRate));
   paintRow("pm-analogspeed", analogSpd, adaptLabel(analogSpd));
   paintRow("pm-haptics", haptics, adaptLabel(haptics));
   // HIDE the row outright where no haptic is possible. The help text already
@@ -837,6 +860,7 @@ wireTune("pm-touchdragspeed", "touchDragSpeed", 1, SLIDER_MIN, SLIDER_MAX, (v) =
 }, adaptLabel);
 wireTune("pm-dragsmooth", "dragSmooth", 1, SLIDER_MIN, SLIDER_MAX, (v) => Input.setDragSmoothing(dragCutoffFromSlider(v)), dragSmoothLabel);
 wireTune("pm-steerrate", "digitalRate", 5, SLIDER_MIN, SLIDER_MAX, (v) => Input.setKeyRampIn(steerRateFromSlider(v)));
+wireTune("pm-steerreturn", "digitalRecenterRate", 0, 0, SLIDER_MAX, (v) => Input.setKeyRampOut?.(steerReturnRateFromSlider(v)), steerReturnLabel);
 wireTune("pm-analogspeed", "analogSpeedSteer", 1, SLIDER_MIN, SLIDER_MAX, (v) => Input.setAnalogSpeedMix(analogSpeedFromSlider(v)), adaptLabel);
 wireTune("pm-haptics", "haptics", 6, SLIDER_MIN, SLIDER_MAX, (v) => Input.setHaptics(v <= 1 ? 0 : (v - 1) / 9), adaptLabel);
 wireTune("pm-paddz", "padDeadzone", 5, 0, 30, (v) => Input.setPadDeadzone(v / 100), pctLabel);

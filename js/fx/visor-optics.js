@@ -946,9 +946,8 @@ const VisorOptics = (function () {
     }
   }
 
-  function _paint(m) {
-    const g = _ctx, w = _w, h = _h;
-    g.clearRect(0, 0, w, h);
+  function _paint(m, g = _ctx, w = _w, h = _h, paths = _paths, clear = true) {
+    if (clear) g.clearRect(0, 0, w, h);
     g.globalCompositeOperation = "lighter";
     const base = Math.min(w, h);
     // Sky haze along the brow (daylight only): the top of the shield mirrors the sky.
@@ -959,14 +958,14 @@ const VisorOptics = (function () {
       g.fillStyle = grad; g.fillRect(0, 0, w, h * 0.45);
     }
     // Fresnel rim sheen: a band along the port edge, brightest on the sun's side, fading across to the far side.
-    if (m.rim && _paths) {
+    if (m.rim && paths) {
       const R = Math.hypot(w, h) * 0.5, cx = w / 2, cy = h / 2;
       const grad = g.createLinearGradient(cx + m.rim.dx * R, cy + m.rim.dy * R, cx - m.rim.dx * R, cy - m.rim.dy * R);
       const c = Math.round(m.rim.rgb[0]) + "," + Math.round(m.rim.rgb[1]) + "," + Math.round(m.rim.rgb[2]);
       grad.addColorStop(0, "rgba(" + c + "," + Math.min(1, m.rim.k).toFixed(3) + ")");
       grad.addColorStop(0.55, "rgba(" + c + "," + (m.rim.k * 0.25).toFixed(3) + ")");
       grad.addColorStop(1, "rgba(" + c + "," + (m.rim.k * 0.06).toFixed(3) + ")");
-      g.strokeStyle = grad; g.lineWidth = base * 0.07; g.stroke(_paths.rim);
+      g.strokeStyle = grad; g.lineWidth = base * 0.07; g.stroke(paths.rim);
     }
     // The sun and its ghost, then the lamps (drawn wider than tall: the shield curves most horizontally).
     if (m.rays) _rays(g, m.rays);
@@ -974,10 +973,10 @@ const VisorOptics = (function () {
     if (m.ghost) _glow(g, m.ghost.x, m.ghost.y, m.ghost.r, m.ghost.k, m.ghost.rgb, 1.8, 0);
     for (const s of m.glints) { if (s.beam) _beam(g, s); if (s.star) _star(g, s); _glow(g, s.x, s.y, s.r, s.k, s.rgb, 2.0, m.bloom); }
     // Chromatic fringe at the rim: the lens splits the rim's light, magenta outside and cyan inside the edge.
-    if (m.fringe > 0.004 && _paths) {
+    if (m.fringe > 0.004 && paths) {
       g.lineWidth = Math.max(1.5, base * 0.006);
-      g.strokeStyle = "rgba(255,70,150," + (m.fringe * 0.7).toFixed(3) + ")"; g.stroke(_paths.out);
-      g.strokeStyle = "rgba(70,200,255," + m.fringe.toFixed(3) + ")"; g.stroke(_paths.inn);
+      g.strokeStyle = "rgba(255,70,150," + (m.fringe * 0.7).toFixed(3) + ")"; g.stroke(paths.out);
+      g.strokeStyle = "rgba(70,200,255," + m.fringe.toFixed(3) + ")"; g.stroke(paths.inn);
     }
     g.globalCompositeOperation = "source-over";
   }
@@ -1113,8 +1112,33 @@ const VisorOptics = (function () {
     }, _sceneInternals);
   }
 
+  // Freeze the rendered camera/light values before asynchronous GPU readback.
+  function captureSnapshot(G) {
+    const source = sceneFromG(G), tune = typeof LightTune !== "undefined" ? LightTune.LT : null;
+    const scene = Object.defineProperty(JSON.parse(JSON.stringify(source)), "track", { value: source.track });
+    return { scene, bloom: tune?.bloomMul ?? 1, glare: tune?.glareStr ?? .12 };
+  }
+
+  // Photo-only additive light, after scene readback and before cropping. No helmet
+  // DOM, saved preferences, animation cadence or cached driving lens is changed.
+  function captureLight(canvas, G, opts = {}) {
+    const level = LEVEL[opts.level] || 0;
+    if (!level) return null;
+    const g = canvas.getContext("2d"), w = canvas.width, h = canvas.height;
+    if (!g || !w || !h) throw new Error("Visor photo lighting is unavailable");
+    const snapshot = opts.snapshot || captureSnapshot(G);
+    // Free-camera shots retain world occlusion, not a cached cockpit-only blocker.
+    const scene = snapshot.scene;
+    const m = lightMap(scene, w, h, { level, beams: BEAMS[opts.beams] ?? 1, style: opts.style || "classic",
+      bloom: snapshot.bloom, glare: snapshot.glare, visibilitySamples: 9 });
+    const paths = typeof Path2D === "function" ? { rim: new Path2D(portPath(w, h, Math.min(w, h) * .03)) } : null;
+    g.save();
+    try { _paint(m, g, w, h, paths, false); } finally { g.restore(); }
+    return m;
+  }
+
   // camBasis / projectDir / LEVEL / FRINGE stay module-private: lightMap + tick
   // close over them; no js/ or test reader used the public VisorOptics.* forms.
-  return { bind, setCockpitOccluder, tick, clear, lightField, frameLens, folded, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG };
+  return { bind, setCockpitOccluder, tick, clear, captureLight, captureSnapshot, lightField, frameLens, folded, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG };
 })();
 Object.freeze(VisorOptics);

@@ -104,10 +104,10 @@ test("a lap counted under a takeover resets the player's sector clock and keeps 
 test("touch auto-throttle never counts as a driver asking for a rescue; a pressed pedal still does", async () => {
   await startRace();
   const a = g.apex, I = g.sandbox.Input, p = g.G.player;
-  const keep = { touchControlsNeeded: I.touchControlsNeeded, throttle: I.throttle, braking: I.braking };
+  const keep = { touchDrivingControls: I.touchDrivingControls, throttle: I.throttle, braking: I.braking };
   try {
     // A phone: coarse pointer + steerMode "touch" (seeded) → autoThrottle() true.
-    I.touchControlsNeeded = () => true; I.throttle = () => false; I.braking = () => false;
+    I.touchDrivingControls = () => true; I.throttle = () => false; I.braking = () => false;
     a.clearInput();                       // live Input path, not a scripted input
     // The pace floor keeps the auto-throttled car under the 3 m/s gate for
     // longer than the 3 s rescue window (vmax = 72 * 0.05 = 3.6 m/s), which is
@@ -141,9 +141,9 @@ test("touch auto-throttle never counts as a driver asking for a rescue; a presse
 test("touch steering has no pedal to release, so auto gas rescues a wedged car — but never a car rubbing in a pack", async () => {
   await startRace();
   const a = g.apex, I = g.sandbox.Input, p = g.G.player;
-  const keep = { touchControlsNeeded: I.touchControlsNeeded, throttle: I.throttle, braking: I.braking };
+  const keep = { touchDrivingControls: I.touchDrivingControls, throttle: I.throttle, braking: I.braking };
   try {
-    I.touchControlsNeeded = () => true; I.throttle = () => false; I.braking = () => false;
+    I.touchDrivingControls = () => true; I.throttle = () => false; I.braking = () => false;
     a.clearInput();
     a.setPhysics(PHYS0);                  // full pace: vStd(speed) is speed
     // WEDGED: pinned by geometry the longitudinal model cannot represent, so the

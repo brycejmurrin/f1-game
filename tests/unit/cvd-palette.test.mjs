@@ -288,6 +288,8 @@ const LITERAL_OK = {
     [/^\s*(green|modern|desert|street_night|street_day): "#/, "#5ec269 #39b7f0 #f0b429 #a78bfa #fb923c", "circuit theme accent: identity, not a state; the name is printed beside it"],
     [/return \(def && THEME\[def\.theme\]\) \|\| "#/, "#cfd2d8", "the theme table's neutral fallback"],
     [/^\s*const SECTOR_COLORS = /, "#ffd700 #c0c0c0 #cd9b5a", "fallback = --gold/--silver/--bronze (pinned by hud-feel); CVD modes take sec1-3"],
+    [/return typeof CvdPalette !== "undefined" \? CvdPalette\.hex\("zone"\)/, "#26a5f5", "default aero ink when the palette is unavailable"],
+    [/g\.fillStyle = "#14161c"/, "#14161c", "dark backing for the checkered start line"],
     [/opts\.(startColor|markColor) \|\| "#e10600"/, "#e10600", "brand-red start/mark pin, labelled on the map"],
     [/g\.fillStyle = "#ffffff"; g\.textAlign/, "#ffffff", "label ink"],
   ],

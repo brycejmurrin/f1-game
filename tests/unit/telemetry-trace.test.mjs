@@ -21,13 +21,24 @@ seedDom(ctx);   // telemetry.js formats lap times through Dom.fmtLap
 // js/core/mat4.js first — the shared scalar helpers (M4.clamp) telemetry.js binds at eval.
 vm.runInContext(readFileSync("js/core/mat4.js", "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
 for (const file of [
-  "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
-  "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js",
+  "js/ui/track-maps.js", "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
+  "js/data/telemetry-player.js", "js/data/telemetry-context.js", "js/data/telemetry-replay.js", "js/data/telemetry-view.js", "js/data/telemetry.js",
   "learn/telemetry/model.js"
 ]) {
   vm.runInContext(readFileSync(file, "utf8"), ctx, { filename: absSrc(file) });
 }
 const T = vm.runInContext("DataTelemetry", ctx);
+
+test("the map can locate a sampled start line without extending a partial trace", () => {
+  const { clipLocations, locationAtDate } = vm.runInContext("DataTelemetryModel", ctx);
+  const loc = [-250, 250, 500, 750, 1000, 6000, 6250].map((date) => ({ date, x: date, y: date / 2 }));
+  const clipped = clipLocations(loc, 0, 1000);
+  assert.equal(clipped[0].date, 0);
+  assert.equal(clipped[0].x, 0);
+  assert.equal(clipped.at(-1).date, 1000);
+  assert.equal(locationAtDate(loc, 2000), null, "a timing mark cannot bridge a GPS outage");
+  assert.equal(clipLocations(loc.slice(1), 0, 1000)[0].date, 250, "no observed sample brackets the start");
+});
 
 test("comparison map closes only the lap boundary while preserving GPS gaps", () => {
   const renderer = vm.runInContext("DataTelemetryRender", ctx).create({ cssColor: () => "comparison" });
@@ -609,8 +620,8 @@ for (const sampleCount of [8, 9, 801]) test(`telemetry clipping, lane colors and
   });
   seedDom(context);
   for (const file of [
-    "js/core/mat4.js", "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
-    "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js"
+    "js/core/mat4.js", "js/ui/track-maps.js", "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
+    "js/data/telemetry-player.js", "js/data/telemetry-context.js", "js/data/telemetry-replay.js", "js/data/telemetry-view.js", "js/data/telemetry.js"
   ]) {
     vm.runInContext(readFileSync(file, "utf8"), context, { filename: absSrc(file) });
   }
@@ -792,4 +803,105 @@ test("TELEMETRY shows no DRS channel, pill or summary when no sample has a value
   view.hasDrs = true; laps[0] = lane(12); view.primary = laps[0];
   player.updateTextSummary(view);
   assert.equal(lastBit().split(", ").pop(), "DRS open.");
+});
+
+test("lap context preserves tyre joins, prior weather, late deletion and unknown fields", () => {
+  const C = vm.runInContext("DataTelemetryContext", ctx);
+  const start = Date.parse("2023-07-08T15:14:00Z");
+  const tel = { d: { num: 1 }, lap: { dateStart: new Date(start).toISOString(), lapDuration: 90, lapNumber: 25, s1: 30, s2: 30, s3: 30 },
+    nativeCar: [{ date: start - 100 }, { date: start + 90100 }], nativeLoc: [] };
+  const source = (rows) => ({ status: "available", rows });
+  const sources = { stints: source([{ driver_number: 1, lap_start: 24, lap_end: 26, compound: "SOFT", tyre_age_at_start: 0 }]),
+    weather: source([{ date: new Date(start + 5000).toISOString(), track_temperature: 99 },
+      { date: new Date(start - 20000).toISOString(), track_temperature: 27 }]),
+    raceControl: source([{ date: new Date(start + 100000).toISOString(), driver_number: 1, lap_number: 25, message: "LAP TIME DELETED" }]), traffic: source([]) };
+  const s = C.summarize(tel, sources);
+  assert.equal(s.tyre.ageAtStintStart, 0); assert.equal(s.tyre.lapsSinceStintStart, 1);
+  assert.equal(s.weatherAtStart.track_temperature, 27); assert.equal(s.weatherAgeSeconds, 20);
+  assert.equal(s.weatherDuringLap.length, 1); assert.equal(s.deletionReported, true);
+  assert.equal(s.eventsDuringLap.length, 0); assert.equal(s.sectorSumErrorSeconds, 0);
+  assert.equal(s.carQuality.bracketsLap, true); assert.equal(s.locationQuality.maxGapSeconds, null);
+  sources.weather = source([]); sources.stints = source([]); sources.raceControl = source([]);
+  const missing = C.summarize(tel, sources);
+  assert.equal(missing.weatherAtStart, null); assert.equal(missing.tyre, null); assert.equal(missing.deletionReported, null);
+});
+
+test("traffic matches native UTC with bounded sample skew and preserves source units", () => {
+  const C = vm.runInContext("DataTelemetryContext", ctx), start = Date.parse("2023-07-08T15:14:00Z");
+  const r = (driver, dt, x) => ({ driver_number: driver, date: new Date(start + dt).toISOString(), x, y: 10 });
+  const got = C.traffic({ d: { num: 1 } }, [r(1, 0, 100), r(4, 200, 130), r(5, 600, 101), r(1, 2000, 150)], start, start + 3000);
+  assert.equal(got.observations.length, 1); assert.equal(got.observations[0].driverNumber, 4);
+  assert.equal(got.observations[0].distanceSourceUnits, 30); assert.equal(got.observations[0].timestampSkewSeconds, 0.2);
+});
+
+test("context endpoint failures remain explicit and do not reject usable sources", async () => {
+  const c = vm.createContext({ Date, Promise, Number, F1API: { request: async (url) => {
+    if (url.includes("/weather?")) throw new Error("offline");
+    return [];
+  } } });
+  vm.runInContext(readFileSync("js/data/telemetry-context.js", "utf8"), c, { filename: absSrc("js/data/telemetry-context.js") });
+  const C = vm.runInContext("DataTelemetryContext", c);
+  const result = await C.load({ sessionKey: 9122, d: { num: 1 }, lap: { dateStart: "2023-07-08T15:14:00Z", lapDuration: 90, lapNumber: 25 } });
+  assert.equal(result.sources.weather.status, "unavailable"); assert.equal(result.sources.laps.status, "available");
+  assert.match(result.sources.traffic.url, /date%3E=/); assert.doesNotMatch(result.sources.traffic.url, /driver_number/);
+  assert.equal(result.summary.weatherAtStart, null); assert.equal(result.summary.sectorSumErrorSeconds, null);
+});
+
+test("production replay preserves recorded sector anchors and rejects missing coverage", () => {
+  const R = vm.runInContext("DataTelemetryReplay", ctx);
+  const lap = { dateStart: "2023-07-08T15:14:00Z", lapDuration: 9, s1: 3, s2: 3, s3: 3 };
+  const start = Date.parse(lap.dateStart);
+  const lane = { circuit: "Silverstone", lap, nativeCar: Array.from({length: 21}, (_, i) => ({date: start + (i - 1) * 500, speed: 100 + i})) };
+  const geometry = { anchors: [0, .3, .7, 1] };
+  const path = R.motion(lane, geometry);
+  assert.ok(path.every((p, i) => !i || p[1] >= path[i - 1][1]));
+  [0,3,6,9].forEach((t, i) => assert.ok(Math.abs(R.interpolate(path,t)-geometry.anchors[i]) < 1e-9));
+  assert.equal(R.motion({...lane, circuit: "Monaco"}, geometry), null);
+  assert.equal(R.motion({...lane, nativeCar: lane.nativeCar.slice(3)}, geometry), null);
+  assert.equal(R.motion({...lane, nativeCar: lane.nativeCar.filter((s,i)=>i<6 || i>10)}, geometry), null);
+  assert.equal(R.motion({...lane, lap: {...lap,s3:4}}, geometry), null);
+  assert.equal(R.motion({...lane, nativeCar: lane.nativeCar.slice(0,10)}, geometry), null);
+});
+
+test("production replay context follows each lap's UTC clock without future weather", () => {
+  const R = vm.runInContext("DataTelemetryReplay", ctx), start = Date.parse("2023-07-08T15:14:00Z");
+  const date = (seconds) => new Date(start + seconds * 1000).toISOString();
+  const lane = {d:{num:1},lap:{dateStart:date(0)},context:{summary:{tyre:{compound:"SOFT"}},sources:{weather:{rows:[{date:date(10),track_temperature:30},{date:date(-2),track_temperature:27}]},raceControl:{rows:[{date:date(5),driver_number:4,message:"OTHER DRIVER"},{date:date(6),message:"YELLOW"},{date:date(20),message:"CHEQUERED"}]}}}};
+  assert.equal(R.contextAt(lane,4).weather.track_temperature,27);
+  assert.equal(R.contextAt(lane,5).event,null);
+  assert.equal(R.contextAt(lane,11).weather.track_temperature,30);
+  assert.equal(R.contextAt(lane,11).event.message,"YELLOW");
+  assert.equal(R.contextAt({...lane,lap:{dateStart:date(30)}},0).event,null);
+});
+
+test("production geometry carries finite metre coordinates and rejects malformed payloads", () => {
+  const R = vm.runInContext("DataTelemetryReplay", ctx);
+  const geometry = JSON.parse(readFileSync("assets/telemetry/silverstone.json","utf8"));
+  assert.equal(R.validGeometry(geometry),true);
+  assert.equal(R.validGeometry({...geometry,units:"source units"}),false);
+  assert.equal(R.validGeometry({...geometry,bounds:null}),false);
+  assert.equal(R.validGeometry({...geometry,anchors:[0,.7,.3,1]}),false);
+  assert.equal(R.validGeometry({...geometry,width:[null]}),false);
+});
+
+test("replay gauges reject future and stale telemetry while retaining recorded zero inputs", () => {
+  const R = vm.runInContext("DataTelemetryReplay", ctx), start = Date.parse("2023-07-08T15:14:00Z");
+  const lane = {lap:{dateStart:new Date(start).toISOString(),lapDuration:10},nativeCar:[{date:start+1000,gear:4,throttle:0,brake:0},{date:start+5000,gear:5,throttle:100,brake:1}]};
+  assert.equal(R.sampleAt(lane,.5),null);
+  assert.equal(R.sampleAt(lane,2).throttle,0);
+  assert.equal(R.sampleAt(lane,3),null);
+  assert.equal(R.sampleAt(lane,5).gear,5);
+});
+
+test("replay trails are bounded past history, preserve gaps and reset on rewind", () => {
+  const R = vm.runInContext("DataTelemetryReplay", ctx), lane = {lap:{lapDuration:10}};
+  const path = R.trailAt(lane,8,3,t=>t>6&&t<7?null:[t,t]);
+  assert.equal(path[0][0],5);
+  assert.equal(path.at(-1)[0],8);
+  assert.ok(path.includes(null));
+  assert.ok(path.length<=65);
+  assert.equal(R.trailAt(lane,2,8,t=>[t,t])[0][0],0);
+  assert.equal(R.trailAt(lane,20,3,t=>[t,t]).at(-1)[0],10);
+  assert.equal(R.trailAt(lane,0,3,t=>[t,t]).length,0);
+  assert.equal(R.trailAt(lane,8,0,t=>[t,t]).length,0);
 });

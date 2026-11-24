@@ -1092,7 +1092,7 @@ const CarDraw = (function () {
         if (sliced && tex && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(tex);
       } else if (ph === 2) {
         if (casters) { if (defer) _deferredCarWarm.push({ c, caster: true }); else teamMesh(c.team, c, true); }
-        if (casters && c.isPlayer && ["cockpit", "helmet", "visor"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitShadowMesh(c.team, c);
+        if (casters && c.isPlayer && ["cockpit", "helmet"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitShadowMesh(c.team, c);
       } else if (lodWarm) {
         // What the LAUNCH first draws (FieldLod): the planted field wheels and
         // the exhaust flame quad — each was built on its first draw, after the
@@ -1343,7 +1343,7 @@ const CarDraw = (function () {
         try {
           if (step.lod) { getFieldWheelMeshes(c.team, c); warmFlaps(c); }
           else {
-            if (step.caster && c.isPlayer && ["cockpit", "helmet", "visor"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitShadowMesh(c.team, c, visualKey);
+            if (step.caster && c.isPlayer && ["cockpit", "helmet"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitShadowMesh(c.team, c, visualKey);
             if (step.caster) teamMesh(c.team, c, true);
             else {
               if (c.isPlayer) {
@@ -1538,7 +1538,7 @@ const CarDraw = (function () {
       return putBoundedMesh(cockpitBodies, cockpitBodyOrder, _cbShKey, buildPendingCockpitShadow, COCKPIT_BODY_CACHE_MAX);
     }
     // THE PLAYER'S SHADOW CASTER IN A FIRST-PERSON VIEW (ShadowPass.resolvePlayer,
-    // deps.cockpitCaster): in cockpit, helmet and visor, cockpitShadowMesh at the
+    // deps.cockpitCaster): in cockpit and helmet, cockpitShadowMesh at the
     // matrix the car loop's cockpit branch draws the body with — the same mode
     // test, and GameCams.cockpitViewmodelAxes over the same inputs (the player's
     // road sample and interpolated yawVis, the final eye, the mode's seat),
@@ -1548,9 +1548,8 @@ const CarDraw = (function () {
     const _ckR = [0, 0, 0], _ckU = [0, 1, 0], _ckF = [0, 0, 0], _ckP = [0, 0, 0];
     function cockpitCaster(c, smp, yv, out, bankRoll) {
       const id = !G.dbgCam && (G.state === "race" || G.state === "count") ? CamModes.CAM_MODES[G.camMode].id : "";
-      if (id !== "cockpit" && id !== "helmet" && id !== "visor") return null;
-      const seat = id === "visor" ? "visor" : "cockpit";
-      GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, _ckR, _ckU, _ckF, _ckP, GameCams.seatFwd(seat), GameCams.seatUp(seat), bankRoll);
+      if (id !== "cockpit" && id !== "helmet") return null;
+      GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, _ckR, _ckU, _ckF, _ckP, GameCams.seatFwd(), GameCams.seatUp(), bankRoll);
       out[0] = _ckR[0]; out[1] = _ckR[1]; out[2] = _ckR[2]; out[3] = 0;
       out[4] = _ckU[0]; out[5] = _ckU[1]; out[6] = _ckU[2]; out[7] = 0;
       out[8] = _ckF[0]; out[9] = _ckF[1]; out[10] = _ckF[2]; out[11] = 0;
@@ -1674,14 +1673,14 @@ const CarDraw = (function () {
       return n;
     }
     // The rig's programs before the first onboard frame needs them (TLX gfx.warmDraws captures the draws
-    // and compiles them; GLX/WGX have no warmDraws). Both seats: cockpit/helmet with the wheel, visor without.
+    // and compiles them; GLX/WGX have no warmDraws). Cockpit and helmet share the rig.
     // Outside a frame: the decal it queues is dropped by the next beginDecals(), and dt 0 moves nothing.
     // mirrorKey: the world, when the menu already warmed it (the race-entry warm was skipped) — TLX then
     // compiles the race scene into the mirror target as well, once per world.
     const _rigWarmBase = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
     function warmCockpitRig(c, paint, mirrorKey) {
       if (!c || carModelBuf || typeof G.gfx.warmDraws !== "function") return Promise.resolve(false);
-      return G.gfx.warmDraws(() => { drawCockpitRig(c, _rigWarmBase, 0, paint, false); drawCockpitRig(c, _rigWarmBase, 0, paint, true); },
+      return G.gfx.warmDraws(() => drawCockpitRig(c, _rigWarmBase, 0, paint),
         { mirror: mirrorKey || null });
     }
     // THE WHEEL TELEMETRY, BEFORE ANY CAR (A·W56, #3673). Its material (_rigFx: double-sided, no alpha write) is the
@@ -1697,7 +1696,7 @@ const CarDraw = (function () {
         if (CockpitOpts.wheelHasScreen(ws)) G.gfx.draw(getLedStrip(0, ws), _rigWarmBase, _rigFx);
       });
     }
-    function drawCockpitRig(c, base, dt, paint, noWheel) {
+    function drawCockpitRig(c, base, dt, paint) {
       // Match game.js sessionDarkFor / skyNight: an explicit night, or a night
       // circuit on the default TOD. (Was the same check; kept next to the glass
       // so a wrong flag cannot leave the day sky-tint mesh on at night.)
@@ -1710,9 +1709,7 @@ const CarDraw = (function () {
       // forward of their real physics position so they read further out ahead of
       // the driver instead of hugging the cockpit edge (cosmetic-only offset —
       // the actual wheel/contact-patch physics is untouched).
-      // The cockpit CHOICES (js/camera/cockpit-opts.js): VISOR keeps the STANDARD
-      // seat (its eye is vantage.js VISOR_EYE_*) and no wheel.
-      const wheelStyle = noWheel ? "none" : CockpitOpts.wheel(), lay = CockpitOpts.layout(wheelStyle, noWheel ? "std" : null);
+      const wheelStyle = CockpitOpts.wheel(), lay = CockpitOpts.layout(wheelStyle);
       const body = cockpitBodyMesh(c.team, c);
       if (typeof VisorOptics !== "undefined" && VisorOptics.setCockpitOccluder) VisorOptics.setCockpitOccluder(cockpitOccluders.get(body) || null, base);
       G.gfx.draw(body, base, paint);
