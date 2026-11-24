@@ -1723,7 +1723,7 @@ test("TK2-17: a circuit's foundation cases route through the registry, scoped to
   const spa = one(["js/circuits/scenery/spa.js"]);
   assert.deepEqual(spa.circuits, ["spa"]);
   assert.equal(row(spa)?.rank, 2);
-  assert.equal(row(spa)?.tests, 5, "billed for the cases APEX_CIRCUITS=spa registers, not all 24");
+  assert.equal(row(spa)?.tests, 5, "billed for the cases APEX_CIRCUITS=spa registers, not the entire registry");
   assert.ok(spa.shards.filter((s) => s.specs.split(" ").includes(R)).every((s) => s.circuits === "spa"));
   // An edited case module is an edited spec (rank 0), still scoped to its circuit.
   const mod = one(["tests/specs/foundation/monza.js"]);
@@ -1731,6 +1731,10 @@ test("TK2-17: a circuit's foundation cases route through the registry, scoped to
   assert.deepEqual(mod.circuits, ["monza"]);
   assert.equal(row(mod)?.rank, 0);
   assert.equal(row(mod)?.tests, 1);
+  const zolder = one(["tests/specs/foundation/zolder.js"]);
+  assert.deepEqual(zolder.changedSpecs, [R]);
+  assert.deepEqual(zolder.circuits, ["zolder"]);
+  assert.equal(row(zolder)?.tests, 1);
   // An ADAPTED circuit's diff does not pull the registry in: its own file is VM-covered, as before.
   const cota = one(["js/circuits/scenery/cota.js"]);
   assert.equal(row(cota), undefined, "a scoped diff to a circuit the registry lacks drops it (otherCircuit)");
@@ -1738,11 +1742,11 @@ test("TK2-17: a circuit's foundation cases route through the registry, scoped to
   // FAIL CLOSED: the registry edited, or a circuit + engine diff, runs EVERY circuit (no APEX_CIRCUITS).
   const whole = one([R]);
   assert.deepEqual(whole.circuits, []);
-  assert.equal(row(whole)?.tests, 24, "the loop itself changed: all of it runs");
+  assert.equal(row(whole)?.tests, 25, "the loop itself changed: all of it runs");
   const engine = one(["js/circuits/monza.js", "js/track/tracks.js"]);
   assert.deepEqual(engine.circuits, [], "not circuit-only: the whole fleet");
   assert.equal(row(engine)?.rank, 2, "monza's own foundation is still affected");
-  assert.equal(row(engine)?.tests, 24, "…and runs every circuit's cases, more than before, never fewer");
+  assert.equal(row(engine)?.tests, 25, "…and runs every circuit's cases, more than before, never fewer");
 });
 
 test("a circuit edit routes the specs that RACE that circuit, read from the files (T2)", () => {
