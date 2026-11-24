@@ -96,8 +96,11 @@ export const SCREENS = [
   { id: "photostudiocircuit", view: "#ps-group-car", name: "Photo Studio — circuit", root: "#photo-studio", open: async (p) => {
       await p.evaluate(() => document.getElementById("mb-photo").click());
       await p.waitForSelector("#photo-studio:not([hidden])", { timeout: 15000 });
+      // The Home world builds on rendered frames: lift the audit's headless mode while it does.
+      const was = await p.evaluate(() => { const h = window.__apex.headless(); window.__apex.headless(false); return h; });
       await p.evaluate(() => { const s = document.getElementById("ps-subject"); s.value = "circuit"; s.dispatchEvent(new Event("change", { bubbles: true })); });
-      await p.waitForFunction(() => PhotoStudio.state().open && PhotoStudio.state().source === "home-track", null, { polling: 250, timeout: 180000 }); } },
+      await p.waitForFunction(() => PhotoStudio.state().open && PhotoStudio.state().source === "home-track", null, { polling: 250, timeout: 90000 });
+      await p.evaluate((h) => window.__apex.headless(h), was); } },
   { id: "title", name: "Title / main menu", root: "#overlay", open: async () => {} },
   { id: "select", name: "Circuit select", root: "#select", mapAxis: true, open: async (p, circuit) => {
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
