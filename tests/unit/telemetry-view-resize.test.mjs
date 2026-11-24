@@ -24,7 +24,7 @@ function driver(dur = 80, r = 1600, speedKmh = 200) {
   return { loc, car };
 }
 
-async function openPopup(drs = 12) {
+async function openPopup(drs = 12, s1 = 25) {
   const dom = makeDom();
   const timers = new Map(), frames = new Map(), observers = [];
   let nextId = 0;
@@ -77,7 +77,7 @@ async function openPopup(drs = 12) {
     },
     F1API: {
       sessionDrivers: async () => drivers,
-      fastestLap: async () => ({ dateStart: new Date(1e12).toISOString(), lapDuration: 80, lapNumber: 3, s1: 25, s2: 25, s3: 30 }),
+      fastestLap: async () => ({ dateStart: new Date(1e12).toISOString(), lapDuration: 80, lapNumber: 3, s1, s2: 25, s3: 30 }),
       carData: async (_session, num) => num === 2 ? [] : trace.car,
       locationData: async (_session, num) => num === 2 ? [] : trace.loc,
       stints: async () => [], pits: async () => []
@@ -85,7 +85,8 @@ async function openPopup(drs = 12) {
   });
   seedDom(context);
   for (const file of [
-    "js/core/mat4.js", "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
+    "js/core/mat4.js", "js/ui/cvd-palette.js", "js/ui/track-maps.js", "js/data/tab-utils.js",
+    "js/data/telemetry-model.js", "js/data/telemetry-render.js",
     "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js"
   ]) {
     vm.runInContext(readFileSync(file, "utf8"), context, { filename: absSrc(file) });
@@ -156,4 +157,27 @@ test("column-only resizing refits the telemetry map", async () => {
   assert.equal(map.width, (180 - 24) * 2);
   assert.equal(map.height, map.width);
   assert.equal(popup.open, true, "arranging playback leaves its native dialog open");
+});
+
+test("the telemetry map switches between the speed scale and shared sector palette", async () => {
+  const { popup, context } = await openPopup();
+  const modes = popup.querySelector("[data-map-modes]");
+  const [speed, sectors] = modes.children;
+  const key = popup.querySelector("[data-map-scale]");
+  const map = popup.querySelector(".dh-map");
+  assert.equal(speed.getAttribute("aria-pressed"), "true");
+  assert.equal(key.children[0].children.at(-1).textContent, "200 km/h");
+  assert.ok(popup.querySelector(".dh-mapdot[data-reference]"), "the reference dot has a distinct ring");
+  vm.runInContext('CvdPalette.set("deutan")', context);
+  sectors.click();
+  assert.equal(speed.getAttribute("aria-pressed"), "false");
+  assert.equal(sectors.getAttribute("aria-pressed"), "true");
+  assert.match(map.getAttribute("aria-label"), /sectors/);
+  assert.deepEqual([...key.children].map((item) => item.children[0].style.background),
+    ["#4aa3ff", "#ddcc77", "#ff9ec8"]);
+  speed.click();
+  assert.match(map.getAttribute("aria-label"), /speed/);
+  assert.equal(key.children[0].children[0].textContent, "0 km/h");
+  const partial = await openPopup(12, null);
+  assert.equal(partial.popup.querySelector("[data-map-modes]").hidden, true);
 });

@@ -164,7 +164,7 @@ function bootMenus(disk = {}, o = {}) {
     addEventListener: (type, fn, opts) => winListeners.push({ type, fn, opts }),
     Tracks: { LIST }, Teams: { LIST: o.teams || [{ id: "t", name: "Team", drivers: [] }] }, Flags: { svg: () => "" },
     SeasonCal: { canRace: () => true, rounds: () => 0 },
-    TrackMaps: { corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], aspect: () => 1.5, elevProfile: () => null },
+    TrackMaps: { corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"], classColor: () => "", aspect: () => 1.5, elevProfile: () => null },
   });
   vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: absSrc("js/ui/select-screen.js") });
   if (o.practicePick || o.practicePickApi) {
@@ -862,7 +862,6 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
   const td = css("css/track-detail.css");
   assert.ok(ruleFor(td, /^#td-inner$/), "the sheet inner is #td-inner");
   assert.equal(decl(td, "#track-detail-legend", "font-size"), "var(--fs-2)");
-  assert.equal(decl(td, /#track-detail-legend \[data-leg="sector"\]/, "color"), "var(--silver)");
   const menus = code("js/ui/select-screen.js");
   assert.match(menus, /function drsZoneRangeHtml/, "DRS wrap labels are one helper for detail + tests");
   assert.match(menus, /crossing start\/finish/, "a zone past the line names S/F on the wrap");
@@ -872,7 +871,7 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
     "filter snap refreshes the hero before the deferred chip rebuild");
   assert.ok(!/className = "track-group-head"/.test(menus),
     "filter chips name the view; no vertical CLASSICS/SEASON divider");
-  assert.match(menus, /setAttribute\("data-leg", "sector"\)/, "grey S2 sector is named");
+  assert.match(menus, /\["S1", sectors\[0\]\], \["S2", sectors\[1\]\], \["S3", sectors\[2\]\]/, "all sectors use the shared color palette");
   assert.match(menus, /legend:\s*false/, "the modal uses the DOM legend, not the 9px canvas key");
   const maps = code("js/ui/track-maps.js");
   assert.match(maps, /wrap:\s*z\.end > total/, "activationZones marks a run past S/F");

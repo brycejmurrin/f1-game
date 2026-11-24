@@ -70,7 +70,7 @@ function bootFlipHarness(o = {}) {
     PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000 },
     Ghost: { hasGhost: () => false, timeAt: () => null, at: () => null },
     GhostShare: { hasGuest: () => false, timeAt: () => null, at: () => null },
-    TrackMaps: { drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"] },
+    TrackMaps: { drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"], drawStartFinish() {}, drawCarMarker() {} },
     setTimeout: () => 1, clearTimeout: () => {},
     performance: { now: () => 1000 },
     matchMedia: (q) => {
@@ -560,7 +560,7 @@ function bootOrderHarness({ events = true } = {}) {
     PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000 },
     Ghost: { hasGhost: () => false, timeAt: () => null, at: () => null },
     GhostShare: { hasGuest: () => false, timeAt: () => null, at: () => null },
-    TrackMaps: { drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"] },
+    TrackMaps: { drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"], drawStartFinish() {}, drawCarMarker() {} },
     setTimeout: () => 1, clearTimeout: () => {},
     performance: { now: () => state.now },
     matchMedia: () => ({ matches: false, addListener() {}, removeListener() {} }),

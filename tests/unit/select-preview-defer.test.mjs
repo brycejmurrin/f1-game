@@ -55,6 +55,7 @@ function boot(o = {}) {
     Flags: { svg: () => "" },
     SeasonCal: { canRace: () => true, rounds: () => 0 },
     TrackMaps: {
+      sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"], classColor: () => "", aeroColor: () => "#26a5f5",
       cachedIds: () => cached.slice(),
       corners: () => { cornersCalls++; return [{ n: 1, v: 0.1, r: 50, ang: 90 }]; },
       direction: () => "CW",

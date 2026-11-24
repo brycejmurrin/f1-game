@@ -94,7 +94,8 @@ function boot(opts = {}) {
     PhysicsConsts: { IDLE_RPM, MAX_RPM },
     Ghost: { hasGhost: () => false, timeAt: () => null, at: () => null },
     GhostShare: { hasGuest: () => false, timeAt: () => null, at: () => null },
-    TrackMaps: opts.trackMaps || { drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"] },
+    TrackMaps: { drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"],
+      drawStartFinish() {}, drawCarMarker() {}, ...opts.trackMaps },
     // #announce-live's delayed write (sayFlag) queues here; a test runs them.
     setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout: () => {},
     performance: { now: () => 1000 },
