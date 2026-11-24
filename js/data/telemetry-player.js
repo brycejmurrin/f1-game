@@ -11,8 +11,6 @@ const DataTelemetryPlayer = (function () {
     const setText = (node, value) => { const text = String(value); if (node.textContent !== text) node.textContent = text; };
 
     function paintFrame(view) {
-      renderer.paintFrame(view);
-      updateGauges(view);
       (view.rateButtons || []).forEach(({ button, rate }) => {
         const selected = String(rate === view.rate);
         if (button.getAttribute("aria-pressed") !== selected) {
@@ -21,6 +19,8 @@ const DataTelemetryPlayer = (function () {
         }
       });
       if (view.replay) view.replay.draw();
+      renderer.paintFrame(view);
+      updateGauges(view);
     }
 
     function updateTextSummary(view) {
