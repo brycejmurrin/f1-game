@@ -31,7 +31,7 @@ test("optional work defers at the Linux capacity knee without changing the push 
   assert.equal(optionalWorkAdmission(snapshot(34)).proceed, true);
   assert.equal(optionalWorkAdmission(snapshot(35)).proceed, false);
   assert.match(optionalWorkAdmission({ ...snapshot(35), truncated: true }).message, /at least 35/);
-  assert.equal(optionalWorkAdmission({ error: "HTTP 429" }).proceed, true);
+  assert.equal(optionalWorkAdmission({ error: "HTTP 429" }).proceed, false);
   assert.match(optionalWorkAdmission({ error: "HTTP 429" }).message, /unavailable/);
 });
 
@@ -72,7 +72,7 @@ test("a run count never drives the verdict: 20 live runs with few jobs is ok", (
   const v = measure({ request: (q) => q.startsWith("actions/runs?status=queued")
     ? { json: { total_count: 20, workflow_runs: runs } }
     : q.startsWith("actions/runs?") ? { json: { total_count: 0, workflow_runs: [] } }
-      : { json: { jobs: [] } }, now: () => 0 });
+      : { json: { total_count: 0, jobs: [] } }, now: () => 0 });
   assert.equal(v.verdict, "ok");
   assert.equal(v.runsExamined, 20);
   assert.equal(v.at, "1970-01-01T00:00:00.000Z");
@@ -88,10 +88,10 @@ function fakeApi(byStatus, jobsOf) {
       const all = byStatus[m[1]] || [], page = Number(m[2]);
       return { json: { total_count: all.length, workflow_runs: all.slice((page - 1) * 100, page * 100) } };
     }
-    m = q.match(/^actions\/runs\/(\d+)\/jobs\?per_page=(\d+)$/);
+    m = q.match(/^actions\/runs\/(\d+)\/jobs\?per_page=(\d+)(?:&page=(\d+))?$/);
     assert.ok(m, `unexpected request ${q}`);
     const jobs = jobsOf(Number(m[1]));
-    return { json: { total_count: jobs.length, jobs: jobs.slice(0, Number(m[2])) } };
+    return { json: { total_count: jobs.length, jobs: jobs.slice(((Number(m[3]) || 1) - 1) * Number(m[2]), (Number(m[3]) || 1) * Number(m[2])) } };
   };
   return { calls, request };
 }
@@ -306,4 +306,69 @@ test("2026-11-20: a CI run reads `pending` while its lane legs run: their in_pro
   assert.equal(v.linux.running, 6, "a pending run's running legs hold runners");
   assert.equal(v.laneWaiting, 20, "its lane-waiting legs are counted apart");
   assert.equal(v.verdict, "ok");
+});
+
+
+test("#6279: empty queued attempts cannot hide running or pending-run Linux legs", () => {
+  for (const status of ["in_progress", "pending"]) {
+    const queued = Array.from({ length: 40 }, (_, i) => ({ id: i + 1, status: "queued" }));
+    const active = Array.from({ length: 8 }, (_, i) => ({ id: i + 101, status }));
+    const f = fakeApi({ queued, [status]: active }, (id) => id < 100 ? [] : many(5, "in_progress"));
+    const v = measure({ request: f.request });
+    assert.equal(v.linux.running, 40, status);
+    assert.equal(v.truncated, false, "remaining empty queued attempts are fully counted");
+    assert.equal(optionalWorkAdmission(v).proceed, false);
+  }
+});
+
+test("#6279: incomplete or estimated low counts cannot admit optional work", () => {
+  const active = Array.from({ length: 31 }, (_, i) => ({ id: i + 1, status: "in_progress" }));
+  const bounded = measure({ request: fakeApi({ in_progress: active }, () => [job("in_progress")]).request });
+  assert.equal(bounded.linux.running, 30);
+  assert.equal(optionalWorkAdmission(bounded).proceed, false);
+  const queued = [{ id: 1, status: "queued" }, { id: 2, status: "queued" }];
+  const estimate = measure({ maxRuns: 1, request: fakeApi({ queued }, () => [job("queued", "macos-latest"), job("queued")]).request });
+  assert.equal(estimate.truncated, false);
+  assert.equal(estimate.estimated, true, "one macOS sample cannot classify the whole run");
+  assert.equal(optionalWorkAdmission(estimate).proceed, false);
+  const empty = measure({ request: fakeApi({}, () => []).request });
+  assert.equal(optionalWorkAdmission(empty).proceed, true, "complete idle snapshot admits work");
+});
+
+test("#6279: detailed jobs paginate and bounded or short responses defer admission", () => {
+  const runs = [{ id: 1, status: "in_progress" }];
+  const f = fakeApi({ in_progress: runs }, () => [...many(100, "completed"), ...many(40, "in_progress")]);
+  const full = measure({ request: f.request });
+  assert.equal(full.linux.running, 40);
+  assert.equal(full.truncated, false);
+  assert.equal(optionalWorkAdmission(full).proceed, false);
+  const capped = measure({ request: fakeApi({ in_progress: runs }, () => [...many(300, "completed"), ...many(40, "in_progress")]).request });
+  assert.equal(capped.linux.running, 0);
+  assert.equal(capped.truncated, true);
+  assert.equal(optionalWorkAdmission(capped).proceed, false);
+  for (const endpoint of ["runs", "jobs"]) {
+    const api = fakeApi({ in_progress: runs }, () => []);
+    const partial = measure({ request: (q) => {
+      const r = api.request(q);
+      if (endpoint === "runs" ? q.includes("status=in_progress") : q.includes("/jobs?")) r.json.total_count = 40;
+      return r;
+    } });
+    assert.equal(partial.truncated, true, endpoint);
+    assert.equal(optionalWorkAdmission(partial).proceed, false, endpoint);
+  }
+});
+
+test("#6279: run-list caps and malformed/API responses never prove spare capacity", () => {
+  const runs = Array.from({ length: 301 }, (_, i) => ({ id: i + 1, status: "queued" }));
+  const capped = measure({ maxCounted: 400, request: fakeApi({ queued: runs }, () => []).request });
+  assert.equal(capped.truncated, true, "unlisted runs survive the examination accounting");
+  assert.equal(optionalWorkAdmission(capped).proceed, false);
+  for (const response of [{ error: "HTTP 502" }, { json: { jobs: [] } }, { json: { total_count: 2 } }]) {
+    const api = fakeApi({ queued: [{ id: 1, status: "queued" }] }, () => []);
+    for (const maxRuns of [0, 1]) {
+      const failed = measure({ maxRuns, request: (q) => q.includes("/jobs?") ? response : api.request(q) });
+      assert.ok(failed.error);
+      assert.equal(optionalWorkAdmission(failed).proceed, false);
+    }
+  }
 });
