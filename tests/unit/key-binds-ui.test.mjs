@@ -2,7 +2,7 @@
 // Split from key-binds.test.mjs (T3-16); the VM rig is tests/helpers/key-binds-rig.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { read, boot, fakePad, plain, bootUi, slotOf } from "../helpers/key-binds-rig.mjs";
+import { read, boot, fakePad, plain, bootUi, slotOf, releaseWheelPedal } from "../helpers/key-binds-rig.mjs";
 
 test("a phone hides both tables behind one hint until a key or a pad is seen", () => {
   const { $, press, fire, sb } = bootUi(false);
@@ -168,7 +168,9 @@ test("the wheel wizard drops a stored rest offset when the steering axis moves",
   $("pm-pad-wheel").onclick();
   pad.axes[1] = -0.9; Input.poll();     // steer -> axis 1
   pad.axes[2] = 0.9; Input.poll();      // throttle -> axis 2
-  pad.axes[3] = 0.9; Input.poll();      // brake -> axis 3, finish
+  releaseWheelPedal(Input, sb, pad, 2, 0);
+  pad.axes[3] = 0.9; Input.poll();      // brake -> axis 3
+  releaseWheelPedal(Input, sb, pad, 3, 0);
   assert.equal(disk.padAxes.steer, 1, "the wizard finished");
   assert.equal(Input.padRest(), 0, "the old axis's offset is not carried over");
   assert.equal(disk.padRest, 0, "…and not stored");
@@ -208,7 +210,9 @@ test("CONTROLLER RESET clears wheel axes and stick rest, not only the button map
   $("pm-pad-wheel").onclick();
   pad.axes[1] = -0.9; Input.poll();
   pad.axes[2] = 0.9; Input.poll();
+  releaseWheelPedal(Input, sb, pad, 2, 0);
   pad.axes[3] = 0.9; Input.poll();
+  releaseWheelPedal(Input, sb, pad, 3, 0);
   assert.equal(Input.padAxesAreDefault(), false, "wizard left a custom axis map");
   assert.equal(Input.padsAreDefault(), true, "buttons stayed at shipped defaults");
   assert.equal($("pm-pad-reset").disabled, false, "RESET is live when only axes differ");

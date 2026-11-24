@@ -120,18 +120,76 @@ test("a paused friend race brakes the car (the real game, stepped under the paus
       return 60 - G.player.speed;
     };
     const coast = shed({ throttle: false, brake: false }, 30);
+    const input = vm.runInContext("Input", g.ctx);
+    const key = (type, code) => vm.runInContext("dispatchEvent", g.ctx)({ type, key: code, code, preventDefault() {} });
     const active = G.netPlay.active;
     G.netPlay.active = () => true;
     try {
+      key("keydown", "ArrowUp");
+      key("keydown", "ArrowLeft");
+      assert.equal(input.throttleLevel(), 1, "the keyboard is driving before Pause");
+      assert.ok(input.steer(1 / 60) < 0, "the keyboard is steering before Pause");
       G.els.pausebtn.onclick();
       assert.equal(G.paused, true, "the pause card is up");
       const t0 = G.raceT;
-      const paused = shed({ throttle: true, brake: false }, 30);
+      const paused = shed(null, 30);
       assert.ok(G.raceT > t0, "a networked race keeps running under the card");
       assert.ok(coast >= 0, `coasting does not gain speed (${coast})`);
       assert.ok(paused > 2 * coast + 2, `paused + networked, throttle held: the car brakes (shed ${paused.toFixed(2)} m/s vs coast ${coast.toFixed(2)})`);
-    } finally { G.netPlay.active = active; }
+      assert.equal(G.player.steerCommand, 0, "held steering stays out of the paused car");
+    } finally {
+      key("keyup", "ArrowUp");
+      key("keyup", "ArrowLeft");
+      G.netPlay.active = active;
+    }
   } finally { g.close(); }
+});
+
+test("friend-race Resume waits for a fresh paired-phone driving sample", async () => {
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  const game = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const { G, apex, ctx } = game;
+    apex.headless(true);
+    assert.ok((await game.stepUntil(() => G.state === "race" && G.raceT > 1, { maxSteps: 60 * 30 })).ok);
+    const input = vm.runInContext("Input", ctx);
+    const resume = vm.runInContext('document.getElementById("pm-resume").onclick', ctx);
+    // The VM supplies neither layout nor mutation records. Give the pause card
+    // a box, hide the portrait blocker on desktop, and refresh UiLayers.
+    G.els.pausemenu.getBoundingClientRect = () => ({ width: 360, height: 280 });
+    G.els.pmsettings.hidden = true;
+    vm.runInContext(`{
+      const style = getComputedStyle;
+      getComputedStyle = (el) => el.id === "rotate-device" ? { display: "none" } : style(el);
+    }`, ctx);
+    const refreshLayers = () => vm.runInContext('dispatchEvent({ type: "resize" })', ctx);
+    const active = G.netPlay.active;
+    G.netPlay.active = () => true;
+    const driving = { source: "phone", steer: 0.7, thr: 1, brk: 0.8, held: 1 };
+    const controls = () => [input.throttleLevel(), input.brakeLevel(), input.steer(), input.lookingBack()];
+    try {
+      input.remoteSample(driving);
+      assert.ok(controls().every(Boolean), "the phone is driving before Pause");
+      G.els.pausebtn.onclick();
+      refreshLayers();
+      assert.equal(G.paused, true);
+      assert.equal(G.els.pausemenu.hidden, false);
+      input.remoteSample(driving);
+      assert.deepEqual(controls(), [0, 0, 0, false], "a sample received while paused is gated");
+      resume();
+      refreshLayers();
+      assert.equal(G.paused, false);
+      assert.equal(input.remoteActive(), true, "the link stays live");
+      assert.deepEqual(controls(), [0, 0, 0, false], "the paused sample cannot drive after Resume");
+      input.remoteSample(driving);
+      assert.ok(controls().every(Boolean), "the first fresh sample can drive");
+
+      G.els.pausebtn.onclick();
+      resume();
+      refreshLayers();
+      assert.deepEqual(controls(), [0, 0, 0, false], "a pre-menu sample cannot drive after a quick Pause and Resume");
+    } finally { G.netPlay.active = active; }
+  } finally { game.close(); }
 });
 
 test("the HUD hides eligible garage work during a friend race and restores it when solo", () => {

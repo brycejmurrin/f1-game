@@ -169,7 +169,11 @@ function migrateSlots() {
   for (const item of found) {
     const c = item.value;
     if (typeof CareerPlanning !== "undefined" && CareerPlanning.protect(c, Tracks.LIST || [])) continue;
-    if (c && Number(c.v) > GameStore.CAREER_V) continue;
+    // A save this build cannot open stays at its source key (#6327): moving a
+    // "damaged" marker cleared the legacy key and left a slot nothing reads.
+    if (!c || typeof c !== "object" || Array.isArray(c)) continue;
+    const v = typeof SaveMigrate !== "undefined" && SaveMigrate.careerVersion ? SaveMigrate.careerVersion(c.v) : Number(c.v);
+    if (v == null || Number.isNaN(v) || v > GameStore.CAREER_V) continue;
     const f = flavourIn(c && c.flavour);
     // Never overwrite: a set that already holds saves is the current layout, and
     // a stale key left behind by a half-finished migration must not clobber it.
