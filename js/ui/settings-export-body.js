@@ -270,11 +270,11 @@ const RESET_INFO = {
   graphics: "Graphics quality, renderer, resolution and feature overrides. Defaults adapt to this device.",
   files: "All game preferences, control bindings and controller profiles. Saves, best laps, garage builds, photos, favourite circuits and saved appearance profiles stay saved.",
 };
-const RESET_INPUT = new Set("autoThrottle steerMode mirrorControls dockLayout tiltCurve touchSteeringGuide touchCurve padCurve touchRange touchDragSpeed dragSmooth digitalRate analogSpeedSteer haptics triggerHaptics padDeadzone padSaturation padLabels padAxes padProfiles padRest throttleLatch pedalSlide touchButtonProfiles holdMode lookBackLatch hudBtnScale hudBotKeep hudBtnOpacity hudBtnShape".split(" "));
+const RESET_INPUT = new Set("autoThrottle steerMode mirrorControls dockLayout tiltCurve touchSteeringGuide touchCurve padCurve touchRange touchDragSpeed dragSmooth digitalRate analogSpeedSteer haptics triggerHaptics padDeadzone padGasDeadzone padBrakeDeadzone padSaturation padLabels padAxes padProfiles padRest throttleLatch pedalSlide touchButtonProfiles holdMode lookBackLatch hudBtnScale hudBotKeep hudBtnOpacity hudBtnShape".split(" "));
 const RESET_AIDS = new Set("manual autoThrottle aeroMode drivingCoach conditionCues brakeCue gripSteer audioCues drivingHelp raceLine".split(" "));
 const RESET_ACCESS = new Set("textSize uiContrast cvdMode captions captionSize captionPos captionBg captionSpeakerInk".split(" "));
 const RESET_UI = new Set("uiScale hudScale hudPanelOpacity portraitOk".split(" "));
-const RESET_ADVANCED = new Set("tiltCurve touchCurve padCurve touchRange touchDragSpeed dragSmooth digitalRate analogSpeedSteer haptics triggerHaptics padDeadzone padSaturation".split(" "));
+const RESET_ADVANCED = new Set("tiltCurve touchCurve padCurve touchRange touchDragSpeed dragSmooth digitalRate analogSpeedSteer haptics triggerHaptics padDeadzone padGasDeadzone padBrakeDeadzone padSaturation".split(" "));
 function resetInfo(section) { return Object.hasOwn(RESET_INFO, section) ? RESET_INFO[section] : null; }
 function resetOwns(row, section) {
   if (row.info || row.k === "favTracks" || row.k === "appearanceProfiles") return false;

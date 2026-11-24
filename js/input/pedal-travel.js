@@ -144,7 +144,7 @@ const PedalTravel = (function () {
     if ([250, 500, 1000, 2000].includes(value.buildMs)) out.buildMs = value.buildMs;
     if ([25, 70, 100].includes(value.brightness)) out.brightness = value.brightness;
     if (value.feedback === false) out.feedback = false;
-    if ((id === "gas" || id === "brake") && (value.slide === "instant" || value.slide === "ease")) out.slide = value.slide;
+    if ((id === "gas" || id === "brake") && ["instant", "ease", "response"].includes(value.slide)) out.slide = value.slide;
     return out;
   }
 
@@ -194,10 +194,17 @@ const PedalTravel = (function () {
 
   // One layout read per position-based contact. Absolute sliders sample every
   // movement against this rectangle; relative buttons use only the landing.
-  function contactProfile(id, slide, event, el) {
+  function contactProfile(id, slide, event, el, crossover = false) {
     const profile = buttonProfile(id, slide);
     if (profile.sliderEdge) profile.sliderBounds = el.getBoundingClientRect();
-    else if (profile.fullEdge && event) {
+    else if (crossover && profile.slide !== "response") {
+      // The inherited, untuned profile keeps its original crossover. An
+      // explicit profile resumes from full input without jumping to its start.
+      profile.trackCrossover = !!buttonOverrides(id).slide || profile.press === "progressive" || profile.travel !== TRAVEL_PX ||
+        !!(profile.direction || profile.slideCurve || profile.fullEdge || profile.buildMs) ||
+        profile.start != null || profile.end != null || profile.holdEnd != null;
+      profile.start = 100;
+    } else if (profile.fullEdge && event) {
       const amount = positionLevel(profile.fullEdge, el.getBoundingClientRect(), event);
       if (amount !== undefined) profile.start = 100 * amount;
     }
