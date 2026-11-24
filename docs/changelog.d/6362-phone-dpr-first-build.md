@@ -1,0 +1,1 @@
+Fixed: On iPhone with a raised resolution (RESOLUTION MAX), the menus now stay at the standard resolution until the first race has built, then switch up, to stop that first race from reloading the page.
