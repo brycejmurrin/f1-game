@@ -179,6 +179,10 @@ first; 1e9 is far above any season's income (or a run of GRANT top-ups) and far 
 which a later `+=` turned into Infinity, saved as null and read back as 0. A salary (deal, offer
 or hire) is tens to a few hundred credits a round; `hireAsk`'s yearly raise compounds, so 1e5
 leaves decades of headroom. Finite-only checks let -5 and 1e308 import cleanly before this.
+`year` and a present `year0` clamp to `[LIMITS.YEAR_MIN, LIMITS.YEAR_MAX]` (1950–9999, the
+four digits a `sponsorPicks` key carries) before truncation; `| 0` alone wrapped 3e9 to a negative
+year (#6327). A legacy `apex26.career` / `apex26.career.<i>` save whose `v` this build cannot open
+(an invalid marker or a newer version) stays at its source key instead of moving into a slot.
 
 Versioned (`CAREER_V`), migrated through a ladder of one function per version step,
 mirroring `migrateSeasonPoints`. Key fields:
