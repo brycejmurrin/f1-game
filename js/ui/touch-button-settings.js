@@ -2,6 +2,108 @@
 const TouchButtonSettings = (() => {
   "use strict";
   const displays = new WeakMap();
+  const profilePickers = new WeakMap();
+
+  function mountProfilePicker(host, store, modes, onApply) {
+    if (!host || typeof ControllerProfiles === "undefined") return;
+    if (profilePickers.has(host)) { profilePickers.get(host)(); return; }
+    const presets = ControllerProfiles.buttonPresets(store);
+    const element = (tag, text, className) => {
+      const node = document.createElement(tag);
+      if (text) node.textContent = text;
+      if (className) node.className = className;
+      return node;
+    };
+    const option = (value, name) => Object.assign(element("option", name), { value });
+    const fold = element("details", "", "pm-renderer-sub");
+    fold.id = "pm-button-profiles";
+    const modeSelect = element("select"), profileSelect = element("select"), name = element("input");
+    const note = element("p", "", "adv-help");
+    note.setAttribute("role", "status");
+    name.type = "text"; name.maxLength = 40; name.placeholder = "Name your profile";
+    const row = (caption, control) => {
+      const label = element("label", "", "set-row");
+      label.append(element("span", caption, "tune-label"), control);
+      return label;
+    };
+    const button = (caption, click) => Object.assign(element("button", caption), { type: "button", onclick: click });
+    let mode = modes[0], selected = "";
+    const apply = button("Apply", () => {
+      const profile = presets.list(mode.id).find(p => p.id === selected);
+      if (!profile || mode.available?.() === false) return;
+      const durable = mode.apply(profile.values);
+      onApply?.();
+      say(durable ? profile.name + " applied." : profile.name + " applied for this session.");
+    });
+    const save = button("Save as new", () => write());
+    const update = button("Update selected", () => write(selected));
+    const remove = button("Delete", () => {
+      const result = presets.remove(mode.id, selected);
+      if (!result) return;
+      selected = ""; name.value = ""; refresh();
+      say(result.durable ? "Profile deleted." : "Profile deleted for this session.");
+    });
+    const actions = element("div", "", "balanced-row");
+    actions.append(apply, save, update, remove);
+    fold.append(element("summary", "Button profiles"));
+    if (modes.length > 1) {
+      for (const item of modes) modeSelect.appendChild(option(item.id, item.name));
+      modeSelect.value = mode.id;
+      fold.append(row("Input mode", modeSelect));
+    }
+    fold.append(row("Saved profile", profileSelect), row("Profile name", name), actions, note);
+    host.insertBefore(fold, host.firstChild);
+
+    function say(text) { note.textContent = text; }
+    function refresh() {
+      const rows = presets.list(mode.id);
+      profileSelect.replaceChildren(option("", "Select a profile"), ...rows.map(p => option(p.id, p.name)));
+      if (!rows.some(p => p.id === selected)) selected = "";
+      profileSelect.value = selected;
+      const available = mode.available?.() !== false;
+      apply.disabled = update.disabled = !selected || !available;
+      remove.disabled = !selected;
+      save.disabled = !available || rows.length >= ControllerProfiles.PRESET_LIMIT;
+      if (!available) say("Connect a controller to save or apply its bindings.");
+    }
+    function write(id) {
+      if (mode.available?.() === false) return;
+      if (!name.value.trim()) { say("Enter a profile name."); name.focus(); return; }
+      const result = presets.save(mode.id, name.value, mode.read(), id);
+      if (!result) { say("Use a unique profile name. Each input mode holds up to 12 profiles."); return; }
+      selected = result.id;
+      refresh();
+      say(result.durable ? "Profile saved." : "Profile saved for this session.");
+    }
+    modeSelect.onchange = () => {
+      mode = modes.find(item => item.id === modeSelect.value) || modes[0];
+      selected = ""; name.value = ""; say(""); refresh();
+    };
+    profileSelect.onchange = () => {
+      selected = profileSelect.value;
+      name.value = presets.list(mode.id).find(p => p.id === selected)?.name || "";
+      say(""); refresh();
+    };
+    if (modes.some(item => item.id === "pad")) {
+      for (const event of ["gamepadconnected", "gamepaddisconnected"]) {
+        window.addEventListener(event, () => { say(""); setTimeout(refresh, 0); });
+      }
+    }
+    profilePickers.set(host, refresh);
+    refresh();
+  }
+
+  function responseMode(store, id, name) {
+    const phone = id === "phone", key = phone ? "phoneButtonProfiles" : "touchButtonProfiles";
+    return {
+      id, name,
+      read: () => PedalTravel.normalizeProfiles(store.get(key, null)) ?? null,
+      apply(value) {
+        const clean = PedalTravel.normalizeProfiles(value, phone);
+        return (phone ? store.set("phoneButtonProfiles", clean) : store.set("touchButtonProfiles", clean ?? undefined)) !== false;
+      },
+    };
+  }
   function mount(host, ids = Object.keys(PedalTravel.raceButtons), { standalone = false } = {}) {
     if (displays.has(host)) { displays.get(host)(); return; }
     const node = (tag, text) => {
@@ -166,8 +268,29 @@ const TouchButtonSettings = (() => {
       note.textContent = button.value.toUpperCase() + " returned to its defaults.";
     };
     displays.set(host, refresh); refresh();
+    if (standalone && typeof GameStore !== "undefined") {
+      mountProfilePicker(host, GameStore.store, [responseMode(GameStore.store, "phone", "Phone as controller")], refresh);
+    }
   }
   function mountControls(store, onSelect) {
+    const panel = document.getElementById("pm-panel-controls");
+    const bindings = (id, name, read, set, available) => ({
+      id, name, read, available,
+      apply(value) {
+        set(value);
+        const durable = id === "pad" ? store.set("pad", read()) : store.set("keys", read());
+        window.dispatchEvent(new Event("apexbuttonprofileapply"));
+        return durable !== false && (id !== "pad" || Input.controllerProfile?.()?.saved !== false);
+      },
+    });
+    if (panel && typeof Input !== "undefined") mountProfilePicker(panel, store, [
+      responseMode(store, "touch", "Screen touch buttons"),
+      bindings("pad", "Gamepad", Input.getPadMap, Input.setPadMap, Input.padPresent),
+      bindings("keyboard", "Keyboard", Input.getKeyMap, Input.setKeyMap),
+    ], () => {
+      displays.get(document.getElementById("pm-touch-response-fields"))?.();
+      onSelect?.();
+    });
     const existing = document.getElementById("pm-touch-response-fields");
     const readGuide = () => store.get("touchSteeringGuide", "ring") === "wheel" ? "wheel" : "ring";
     if (existing) {

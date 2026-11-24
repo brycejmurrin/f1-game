@@ -279,6 +279,7 @@ function resetInfo(section) { return Object.hasOwn(RESET_INFO, section) ? RESET_
 function resetOwns(row, section) {
   if (row.info || row.k === "favTracks" || row.k === "appearanceProfiles") return false;
   if (section === "files") return true;
+  if (row.k === "controlButtonPresets") return false;
   const steering = row.group === "steering" && !RESET_AIDS.has(row.k);
   if (section === "advanced") return steering || RESET_ADVANCED.has(row.k);
   if (section === "controls") return steering || row.group === "controls" || RESET_INPUT.has(row.k);

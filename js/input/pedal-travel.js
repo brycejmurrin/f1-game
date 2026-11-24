@@ -24,6 +24,8 @@ const PedalTravel = (function () {
   }
 
   const KEY = "touchButtonProfiles";
+  const PHONE_KEY = "phoneButtonProfiles";
+  const EMPTY_PHONE = Object.freeze({ v: 1, buttons: Object.freeze({}) });
   const BUTTONS = ["left", "right", "gas", "brake"];
   const raceButtons = Object.freeze({ left: "btn-steer-left", right: "btn-steer-right", gas: "btn-throttle", brake: "btn-brake",
     boost: "btn-boost", overtake: "btn-ot", aero: "btn-aero", shiftUp: "shift-up", shiftDown: "shift-down",
@@ -123,8 +125,8 @@ const PedalTravel = (function () {
     return out;
   }
 
-  function normalizeProfiles(value) {
-    if (value === null) return null;
+  function normalizeProfiles(value, keepEmpty = false) {
+    if (value === null) return keepEmpty ? EMPTY_PHONE : null;
     if (!object(value) || value.v !== 1 || !object(value.buttons)) return undefined;
     const buttons = {};
     for (const id of allButtons) {
@@ -134,7 +136,7 @@ const PedalTravel = (function () {
     if (Object.keys(buttons).length) return { v: 1, buttons };
     // Empty is the valid unpinned shape. A malformed or future-only map
     // should be skipped on import, even when restoring a full backup.
-    return Object.keys(value.buttons).length ? undefined : null;
+    return Object.keys(value.buttons).length ? undefined : keepEmpty ? EMPTY_PHONE : null;
   }
 
   // Both entry points load GameStore; keep a session value for isolated input
@@ -142,7 +144,23 @@ const PedalTravel = (function () {
   let memory = null;
   const memoryListeners = new Set();
   const store = () => typeof GameStore !== "undefined" ? GameStore.store : null;
-  const saved = () => store() ? store().get(KEY, null) : memory;
+  const profileKey = () => typeof document !== "undefined" && document.documentElement?.hasAttribute?.("data-phone-controller") ? PHONE_KEY : KEY;
+  function saved() {
+    const s = store();
+    if (!s) return memory;
+    // Fork the old shared responses before the first edit on either surface.
+    if (s.getStored && s.getStored(PHONE_KEY) === undefined) {
+      s.set(PHONE_KEY, normalizeProfiles(s.get(KEY, null)) ?? EMPTY_PHONE, { migration: true });
+    }
+    return s.get(profileKey(), null);
+  }
+  function writeProfiles(value) {
+    const key = profileKey(), s = store();
+    const durable = s ? s.set(key, key === KEY ? value ?? undefined : value ?? EMPTY_PHONE) : false;
+    if (!s) memory = value;
+    if (!s?.subscribe) for (const refresh of memoryListeners) refresh();
+    return durable;
+  }
   function buttonOverrides(id) {
     const raw = saved();
     return overrides(id, allButtons.has(id) && raw && raw.v === 1 && raw.buttons && raw.buttons[id]);
@@ -180,7 +198,7 @@ const PedalTravel = (function () {
     const refresh = () => callback(buttonProfile(id));
     refresh();
     if (store()?.subscribe) return store().subscribe(change => {
-      if (change.key === KEY || change.key === null) refresh();
+      if (change.key === profileKey() || change.key === null) refresh();
     });
     memoryListeners.add(refresh);
     return () => memoryListeners.delete(refresh);
@@ -191,10 +209,7 @@ const PedalTravel = (function () {
     const clean = overrides(id, patch === null ? null : { ...buttons[id], ...patch });
     if (Object.keys(clean).length) buttons[id] = clean;
     else delete buttons[id];
-    const value = Object.keys(buttons).length ? { v: 1, buttons } : undefined;
-    if (store()) store().set(KEY, value);
-    else memory = value;
-    if (!store()?.subscribe) for (const refresh of memoryListeners) refresh();
+    writeProfiles(Object.keys(buttons).length ? { v: 1, buttons } : null);
     return buttonProfile(id);
   }
 

@@ -283,6 +283,26 @@ test("visor optics and water settings survive both backup modes and reject inval
   assert.equal(target.collect("changes").settings.camera?.helmetVisorDropSize, undefined, "reset no longer appears changed");
 });
 
+test("button preset backups carry all four modes and keep explicit empty phone responses separate", () => {
+  const source = boot({ touch: true, mobile: true }), target = boot({ touch: true, mobile: true });
+  const modes = {
+    keyboard: [{ id: "profile-1", name: "Keys", values: { throttle: ["KeyW", null] } }],
+    pad: [{ id: "profile-1", name: "Pad", values: { throttle: [7, null] } }],
+    touch: [{ id: "profile-1", name: "Touch", values: { v: 1, buttons: { gas: { start: 45 } } } }],
+    phone: [{ id: "profile-1", name: "Phone", values: null }],
+  };
+  source.GameStore.store.set("controlButtonPresets", { v: 1, modes });
+  source.GameStore.store.set("touchButtonProfiles", { v: 1, buttons: { gas: { start: 50 } } });
+  source.GameStore.store.set("phoneButtonProfiles", { v: 1, buttons: {} });
+  const saved = source.collect("all");
+  assert.equal(target.loadSettings(saved).failed, 0);
+  assert.deepEqual(JSON.parse(target.disk.get("apex26.controlButtonPresets")), { v: 1, modes });
+  assert.deepEqual(JSON.parse(target.disk.get("apex26.phoneButtonProfiles")), { v: 1, buttons: {} });
+  assert.equal(target.SettingsExport.resetSettings("controls").ok, true);
+  assert.ok(target.disk.has("apex26.controlButtonPresets"));
+  assert.ok(target.disk.has("apex26.phoneButtonProfiles"));
+});
+
 test("backup controls mount once in their own settings page, outside renderer options", () => {
   const b = bootImportUI();
   for (const id of ["pm-settings-changed", "pm-settings-all", "pm-settings-load"]) {

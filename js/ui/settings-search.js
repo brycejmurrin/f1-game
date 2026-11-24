@@ -65,6 +65,7 @@ const SettingsSearch = (function () {
     ["flyby-editor", "Flyby shot editor", "visual", "pm-flyby", "cinematic cameras visual studio"],
     ["arrival-tuner", "Garage arrival tuner", "visual", "pm-garrival", "pit animation visual studio"],
     ["units", "Speed units", "appearance", "pm-units-sel", "mph kmh kilometres miles"],
+    ["button-profiles", "Button profiles", "controls", "pm-button-profiles", "save apply profiles presets keyboard gamepad touch phone controller bindings"],
     ["help-text", "Help text", "appearance", "pm-helptext-sel", "explanations descriptions hints"],
     ["tilt-sensitivity", "Tilt sensitivity", "controls", "pm-tiltsimple", "phone steering"],
     ["stick-deadzone", "Stick dead zone", "advanced", "pm-paddz", "controller gamepad drift deadzone stick pad wheel centre center"],

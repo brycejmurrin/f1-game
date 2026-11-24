@@ -27,6 +27,25 @@ function boot() {
   } };
 }
 const pad = (id, mapping = 'standard') => ({ id, index: 0, connected: true, mapping, axes: [0, 0, 0, 0], buttons: Array.from({ length: 20 }, () => ({ pressed: false, value: 0 })) });
+test("named keyboard, gamepad, touch and phone profiles use separate slots and preserve the other modes", () => {
+  const { Profiles, Input } = boot(), disk = new Map();
+  const store = { get: (key, fallback) => disk.get(key) ?? fallback, set(key, value) { disk.set(key, value); return true; } };
+  const state = Profiles.buttonPresets(store);
+  for (const [mode, values] of [["keyboard", { throttle: ["KeyW", null] }], ["pad", { throttle: [7, null] }],
+    ["touch", { v: 1, buttons: { gas: { start: 45 } } }], ["phone", { v: 1, buttons: { gas: { start: 30 } } }]]) {
+    assert.equal(state.save(mode, "Race", values).id, "profile-1");
+  }
+  assert.equal(state.save("keyboard", "race", {}), null, "names are unique within each mode");
+  assert.equal(state.save("pad", "Wet", { throttle: [5, null] }, "profile-1").id, "profile-1");
+  Input.setKeyMap(state.list("keyboard")[0].values);
+  Input.setPadMap(state.list("pad")[0].values);
+  assert.equal(Input.getKeyMap().throttle[0], "KeyW");
+  assert.equal(Input.getPadMap().throttle[0], 5);
+  state.remove("touch", "profile-1");
+  assert.equal(state.list("touch").length, 0);
+  assert.equal(Profiles.buttonPresets(store).list("phone")[0].values.buttons.gas.start, 30, "phone profile survives when touch's saved profile is deleted");
+});
+
 test('empty snapshots neutralize axes without replaying held actions on recovery', () => {
   const { Input: I, drive, state } = boot(), p = pad('recovering pad');
   for (const [action, index] of [['camera', 8], ['shiftUp', 5], ['boost', 0]]) I.setPadBinding(action, 0, index);
