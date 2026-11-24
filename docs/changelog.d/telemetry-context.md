@@ -1,1 +1,2 @@
 New: Telemetry comparisons now load per-lap tyre, weather, race-control, speed-trap and approximate traffic context separately from the charts, with source availability and a combined telemetry/context JSON download.
+New: Telemetry now includes an expandable synchronized replay panel, keyboard/touch scrubbing, driver follow, live lap context and sourced approximate Silverstone road widths. Other circuits retain feed-position playback; incomplete telemetry never receives a fabricated estimated line.

@@ -22,7 +22,7 @@ seedDom(ctx);   // telemetry.js formats lap times through Dom.fmtLap
 vm.runInContext(readFileSync("js/core/mat4.js", "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
 for (const file of [
   "js/ui/track-maps.js", "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
-  "js/data/telemetry-player.js", "js/data/telemetry-context.js", "js/data/telemetry-view.js", "js/data/telemetry.js",
+  "js/data/telemetry-player.js", "js/data/telemetry-context.js", "js/data/telemetry-replay.js", "js/data/telemetry-view.js", "js/data/telemetry.js",
   "learn/telemetry/model.js"
 ]) {
   vm.runInContext(readFileSync(file, "utf8"), ctx, { filename: absSrc(file) });
@@ -621,7 +621,7 @@ for (const sampleCount of [8, 9, 801]) test(`telemetry clipping, lane colors and
   seedDom(context);
   for (const file of [
     "js/core/mat4.js", "js/ui/track-maps.js", "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
-    "js/data/telemetry-player.js", "js/data/telemetry-context.js", "js/data/telemetry-view.js", "js/data/telemetry.js"
+    "js/data/telemetry-player.js", "js/data/telemetry-context.js", "js/data/telemetry-replay.js", "js/data/telemetry-view.js", "js/data/telemetry.js"
   ]) {
     vm.runInContext(readFileSync(file, "utf8"), context, { filename: absSrc(file) });
   }
@@ -845,4 +845,41 @@ test("context endpoint failures remain explicit and do not reject usable sources
   assert.equal(result.sources.weather.status, "unavailable"); assert.equal(result.sources.laps.status, "available");
   assert.match(result.sources.traffic.url, /date%3E=/); assert.doesNotMatch(result.sources.traffic.url, /driver_number/);
   assert.equal(result.summary.weatherAtStart, null); assert.equal(result.summary.sectorSumErrorSeconds, null);
+});
+
+test("production replay preserves recorded sector anchors and rejects missing coverage", () => {
+  const R = vm.runInContext("DataTelemetryReplay", ctx);
+  const lap = { dateStart: "2023-07-08T15:14:00Z", lapDuration: 9, s1: 3, s2: 3, s3: 3 };
+  const start = Date.parse(lap.dateStart);
+  const lane = { circuit: "Silverstone", lap, nativeCar: Array.from({length: 21}, (_, i) => ({date: start + (i - 1) * 500, speed: 100 + i})) };
+  const geometry = { anchors: [0, .3, .7, 1] };
+  const path = R.motion(lane, geometry);
+  assert.ok(path.every((p, i) => !i || p[1] >= path[i - 1][1]));
+  [0,3,6,9].forEach((t, i) => assert.ok(Math.abs(R.interpolate(path,t)-geometry.anchors[i]) < 1e-9));
+  assert.equal(R.motion({...lane, circuit: "Monaco"}, geometry), null);
+  assert.equal(R.motion({...lane, nativeCar: lane.nativeCar.slice(3)}, geometry), null);
+  assert.equal(R.motion({...lane, nativeCar: lane.nativeCar.filter((s,i)=>i<6 || i>10)}, geometry), null);
+  assert.equal(R.motion({...lane, lap: {...lap,s3:4}}, geometry), null);
+  assert.equal(R.motion({...lane, nativeCar: lane.nativeCar.slice(0,10)}, geometry), null);
+});
+
+test("production replay context follows each lap's UTC clock without future weather", () => {
+  const R = vm.runInContext("DataTelemetryReplay", ctx), start = Date.parse("2023-07-08T15:14:00Z");
+  const date = (seconds) => new Date(start + seconds * 1000).toISOString();
+  const lane = {d:{num:1},lap:{dateStart:date(0)},context:{summary:{tyre:{compound:"SOFT"}},sources:{weather:{rows:[{date:date(10),track_temperature:30},{date:date(-2),track_temperature:27}]},raceControl:{rows:[{date:date(5),driver_number:4,message:"OTHER DRIVER"},{date:date(6),message:"YELLOW"},{date:date(20),message:"CHEQUERED"}]}}}};
+  assert.equal(R.contextAt(lane,4).weather.track_temperature,27);
+  assert.equal(R.contextAt(lane,5).event,null);
+  assert.equal(R.contextAt(lane,11).weather.track_temperature,30);
+  assert.equal(R.contextAt(lane,11).event.message,"YELLOW");
+  assert.equal(R.contextAt({...lane,lap:{dateStart:date(30)}},0).event,null);
+});
+
+test("production geometry carries finite metre coordinates and rejects malformed payloads", () => {
+  const R = vm.runInContext("DataTelemetryReplay", ctx);
+  const geometry = JSON.parse(readFileSync("assets/telemetry/silverstone.json","utf8"));
+  assert.equal(R.validGeometry(geometry),true);
+  assert.equal(R.validGeometry({...geometry,units:"source units"}),false);
+  assert.equal(R.validGeometry({...geometry,bounds:null}),false);
+  assert.equal(R.validGeometry({...geometry,anchors:[0,.7,.3,1]}),false);
+  assert.equal(R.validGeometry({...geometry,width:[null]}),false);
 });

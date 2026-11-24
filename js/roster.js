@@ -415,6 +415,7 @@
     "js/data/api-transport.js",
     "js/data/api.js",
     "js/data/telemetry-context.js",
+    "js/data/telemetry-replay.js",
     "js/data/telemetry-model.js",
     "js/data/telemetry-render.js",
     "js/data/telemetry-player.js",
@@ -446,6 +447,10 @@
     ],
     [
       "js/data/telemetry-context.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/telemetry-replay.js",
       "js/data/hub.js"
     ],
     [

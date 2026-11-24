@@ -78,6 +78,7 @@ async function stubApi(page) {
     F1API.locationData = (sk, num) => Promise.resolve(lap(({ 1: 75.1, 63: 75.6, 16: 76.0, 44: 76.4 }[num] || 76) + (sk === 9999 ? 0.8 : 0)).loc);
     F1API.stints = () => Promise.resolve([]);
     F1API.pits = () => Promise.resolve([]);
+    F1API.request = () => Promise.resolve([]); // Optional context stays offline in this fixture.
   });
 }
 
@@ -165,4 +166,30 @@ test("a lane can be removed from the tray before loading", async ({ page }) => {
   await page.locator(".dh-row", { hasText: "NOR" }).locator(".dh-lane-x").click();
   await expect(page.locator(".dh-livecard .dh-row")).toHaveCount(1);
   await expect(page.locator(".dh-livecard .dh-row")).toContainText("RUS");
+});
+
+test("mobile replay expansion preserves scrubbing, focus and parent telemetry", async ({ page }) => {
+  await page.setViewportSize({width:390,height:844});
+  await dataReady(page);
+  await page.addStyleTag({url:"/css/data.css"});
+  await page.evaluate(()=>{document.body.dataset.width="narrow";});
+  await openTelemetry(page);
+  await page.locator('.dh-dchip',{hasText:'NOR'}).click();
+  await page.locator('.dh-livebtn',{hasText:'LOAD LAP'}).click();
+  const panel=page.locator('[data-telemetry-replay]');
+  await expect(panel.getByText(/track width unavailable/)).toBeVisible();
+  await panel.getByRole('button',{name:'EXPAND',exact:true}).click();
+  await expect(page.locator('[data-replay-expanded]')).toBeVisible();
+  await expect(panel.getByRole('combobox',{name:'Follow',exact:true})).toBeVisible();
+  await panel.getByRole('slider').fill('20');
+  await expect(panel.locator('output')).toHaveText('20.00 s');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-replay-expanded]')).toHaveCount(0);
+  await expect(panel.getByRole('button',{name:'EXPAND',exact:true})).toBeFocused();
+  await panel.getByRole('button',{name:'EXPAND',exact:true}).click();
+  await panel.getByRole('button',{name:'CLOSE REPLAY',exact:true}).click();
+  await panel.getByRole('button',{name:'RESTART',exact:true}).click();
+  await expect(panel.locator('output')).toHaveText('0.00 s');
+  await page.getByRole('button',{name:'Close telemetry',exact:true}).click();
+  await expect(panel).toHaveCount(0);
 });

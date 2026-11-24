@@ -173,6 +173,8 @@ const DataTelemetryView = (function () {
       view.a11ySummary = textSummaryBody;
       mainArea.appendChild(textSummary);
       mainArea.appendChild(buildTransport(view));
+      view.replay = DataTelemetryReplay.create(view, ctx, player);
+      mainArea.appendChild(view.replay.element);
 
       const isLS = shortLS();
       const sideW = isLS ? 225 : 0;

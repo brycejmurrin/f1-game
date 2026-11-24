@@ -13,6 +13,14 @@ const DataTelemetryPlayer = (function () {
     function paintFrame(view) {
       renderer.paintFrame(view);
       updateGauges(view);
+      (view.rateButtons || []).forEach(({ button, rate }) => {
+        const selected = String(rate === view.rate);
+        if (button.getAttribute("aria-pressed") !== selected) {
+          button.classList.toggle("active", rate === view.rate);
+          button.setAttribute("aria-pressed", selected);
+        }
+      });
+      if (view.replay) view.replay.draw();
     }
 
     function updateTextSummary(view) {
@@ -54,13 +62,16 @@ const DataTelemetryPlayer = (function () {
       bar.appendChild(play); bar.appendChild(restart);
 
       const rates = el("div", "dh-trates");
+      view.rateButtons = [];
       [1, 2, 4].forEach(function (r) {
         const b = el("button", "dh-ratebtn" + (r === view.rate ? " active" : ""), r + "×");
         b.type = "button";
+        view.rateButtons.push({ button: b, rate: r });
         b.addEventListener("click", function () {
           view.rate = r;
           const bs = rates.querySelectorAll(".dh-ratebtn");
           for (let i = 0; i < bs.length; i++) bs[i].classList.toggle("active", bs[i] === b);
+          paintFrame(view);
         });
         rates.appendChild(b);
       });
@@ -309,7 +320,7 @@ const DataTelemetryPlayer = (function () {
       if (view.updateSummary) view.updateSummary();
     }
 
-    return { buildTransport, buildGauges, attachScrub, pauseAnim, paintFrame, updateTextSummary };
+    return { buildTransport, buildGauges, attachScrub, playAnim, pauseAnim, paintFrame, updateTextSummary };
   }
 
   return { create };

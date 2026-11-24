@@ -3393,6 +3393,11 @@
       "roster": "LAZY_DATA"
     },
     {
+      "path": "js/data/telemetry-replay.js",
+      "global": "DataTelemetryReplay",
+      "roster": "LAZY_DATA"
+    },
+    {
       "path": "js/data/telemetry-view.js",
       "global": "DataTelemetryView",
       "roster": "LAZY_DATA"

@@ -186,6 +186,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `api-transport.js` | `F1Transport` | LAZY_DATA | paced API transport: bounded bodies, cache, timeouts, retries and cancellation. |
 | `api.js` | `F1API` | LAZY_DATA | F1API: Jolpica + OpenF1 endpoint mapping and session cache policy. |
 | `telemetry-context.js` | `DataTelemetryContext` | LAZY_DATA | optional lap context, retained separately from interpolated display samples. |
+| `telemetry-replay.js` | `DataTelemetryReplay` | LAZY_DATA | width-aware telemetry replay sharing the chart's clock and lifecycle. |
 | `telemetry-model.js` | `DataTelemetryModel` | LAZY_DATA | telemetry channels, lane identities and GPS/distance interpolation. |
 | `telemetry-render.js` | `DataTelemetryRender` | LAZY_DATA | telemetry canvas layers, frame compositing, delta chart and track map. |
 | `telemetry-player.js` | `DataTelemetryPlayer` | LAZY_DATA | telemetry transport, scrub interaction, playback, gauges and accessible summary. |
