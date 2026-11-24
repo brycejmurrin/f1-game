@@ -2569,8 +2569,23 @@ test("preferences-only camera and lighting edits merge down to individual overri
   });
 });
 
+test("pedal dead zones round-trip and clamp imported trigger values", () => {
+  const donor = boot(), receiver = boot();
+  donor.GameStore.store.set("padGasDeadzone", 0);
+  donor.GameStore.store.set("padBrakeDeadzone", 28);
+  const backup = donor.collect("changes");
+  assert.equal(backup.settings.driving.padGasDeadzone, 0);
+  assert.equal(backup.settings.driving.padBrakeDeadzone, 28);
+  receiver.loadSettings(backup);
+  assert.equal(receiver.GameStore.store.get("padGasDeadzone", 12), 0);
+  assert.equal(receiver.GameStore.store.get("padBrakeDeadzone", 12), 28);
+  backup.settings.driving.padBrakeDeadzone = 80;
+  receiver.loadSettings(backup);
+  assert.equal(receiver.GameStore.store.get("padBrakeDeadzone", 12), 30);
+});
+
 test("Controls reset removes all input overrides without resetting assistance or progress", () => {
-  const keys = ["steerMode", "autoThrottle", "tiltDeg", "steerRate", "pace", "carWeight", "touchCurve", "touchRange", "dragSmooth", "digitalRate", "analogSpeedSteer", "padDeadzone", "padAxes", "padProfiles", "padRest", "keys", "pad", "dockLayout", "touchButtonProfiles", "pedalSlide", "throttleLatch", "holdMode", "hudBtnScale"];
+  const keys = ["steerMode", "autoThrottle", "tiltDeg", "steerRate", "pace", "carWeight", "touchCurve", "touchRange", "dragSmooth", "digitalRate", "analogSpeedSteer", "padDeadzone", "padGasDeadzone", "padBrakeDeadzone", "padAxes", "padProfiles", "padRest", "keys", "pad", "dockLayout", "touchButtonProfiles", "pedalSlide", "throttleLatch", "holdMode", "hudBtnScale"];
   const keep = { "apex26.career": "saved", "apex26.photoLibrary": "photos", "apex26.drivingHelp": "7", "apex26.motion": '"reduce"', "apex26.volMusic": "0.2", "apex26.steerSchema": "6" };
   const b = boot({ disk: { ...Object.fromEntries(keys.map(k => ["apex26." + k, "3"])), ...keep } });
   assert.equal(b.SettingsExport.resetSettings("controls").ok, true);

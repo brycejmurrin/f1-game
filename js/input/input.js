@@ -196,10 +196,12 @@ const Input = (function () {
      (shift, overtake, …) come on the RELIABLE channel via remoteEvent; the
      held look-back bit rides the sample. */
   const REMOTE_STALE_MS = 700;   // the phone heartbeats every 100 ms; six misses = gone
+  const REMOTE_PEDAL_ON = 0.1;   // raw remote travel below this is a resting thumb
   const REMOTE_HELD = Object.freeze({ lookBack: 1 });
   let remoteOwner = null;
   let remoteMs = 0;              // nowMs() of the last sample; 0 = never
   let remThr = 0, remBrk = 0;    // 0..1 pedal travel from the phone
+  let remPedalDz = REMOTE_PEDAL_ON;  // Legacy phone/XR samples are raw travel.
   let remHeld = 0;               // REMOTE_HELD bits
   let remRoll = false;           // the last sample carried a roll: a phone with no sensor sends null
   let remStick = false, remSteer = 0;   // the last sample carried a STICK command (XR): -1..1, no tilt pipeline
@@ -405,12 +407,13 @@ const Input = (function () {
       tiltSmoothed = oneEuro(tiltRaw, odt);
       tiltSeen = tiltRemote = true;
     }
+    remPedalDz = owner === "phone" && s.calibratedPedals === true ? 0 : REMOTE_PEDAL_ON;
     remThr = clamp(+s.thr || 0, 0, 1);
     remBrk = clamp(+s.brk || 0, 0, 1);
     remHeld = s.held | 0;
     remoteMs = n;
     if (hadPhoneTilt !== phoneTiltAvailable()) onPhoneTiltChange?.();
-    if (!remoteDrivingBlocked() && (remThr > REMOTE_PEDAL_ON || remBrk > REMOTE_PEDAL_ON || remHeld ||
+    if (!remoteDrivingBlocked() && (remThr > remPedalDz || remBrk > remPedalDz || remHeld ||
       (remStick ? Math.abs(remSteer) > 0.05 : remRoll && Math.abs(s.roll - tiltZero) > 2))) {
       noteInputSource(remStick ? "controller" : "phone");
     }
@@ -945,8 +948,8 @@ const Input = (function () {
      a throttle pick-up live in. The 0.12 still swallows a trigger's resting
      slop; above it travel ramps continuously from 0 to 1. A face button (1)
      and a full pedal stay exactly 1. */
-  const PAD_PEDAL_DZ = 0.12;
-  function padPedalLevel(v) { return v > PAD_PEDAL_DZ ? clamp((v - PAD_PEDAL_DZ) / (1 - PAD_PEDAL_DZ), 0, 1) : 0; }
+  const padPedalDeadzone = { throttle: 0.12, brake: 0.12 };
+  function pedalLevel(v, dz) { return v > dz ? clamp((v - dz) / (1 - dz), 0, 1) : 0; }
   function resetPadDriveState() {
     padThrottleToggle = padLookBackToggle = false;
     padDpadTarget = padDpadVal = padDpadT = 0;
@@ -998,8 +1001,8 @@ const Input = (function () {
     const seen = Object.assign({}, padPedalSeen);
     return {
       steer: analogShape(stick, wheel ? "wheel" : "pad"),
-      throttle: padPedalLevel(Math.max(padActVal(pad, "throttle"), padPedalAxis(axes, "throttle", seen))),
-      brake: padPedalLevel(Math.max(padActVal(pad, "brake"), padPedalAxis(axes, "brake", seen))),
+      throttle: pedalLevel(Math.max(padActVal(pad, "throttle"), padPedalAxis(axes, "throttle", seen)), padPedalDeadzone.throttle),
+      brake: pedalLevel(Math.max(padActVal(pad, "brake"), padPedalAxis(axes, "brake", seen)), padPedalDeadzone.brake),
     };
   }
   function padActEdge(pad, id) {
@@ -1714,10 +1717,10 @@ const Input = (function () {
       padThrottle = padThrottleToggle;
       padThrottleVal = padThrottleToggle ? 1 : 0;
     } else {
-      padThrottleVal = padPedalLevel(Math.max(padActVal(pad, "throttle"), padPedalAxis(axes, "throttle")));
+      padThrottleVal = pedalLevel(Math.max(padActVal(pad, "throttle"), padPedalAxis(axes, "throttle")), padPedalDeadzone.throttle);
       padThrottle = padThrottleVal > 0;
     }
-    padBrakeVal = padPedalLevel(Math.max(padActVal(pad, "brake"), padPedalAxis(axes, "brake")));
+    padBrakeVal = pedalLevel(Math.max(padActVal(pad, "brake"), padPedalAxis(axes, "brake")), padPedalDeadzone.brake);
     padBrake = padBrakeVal > 0;
     // A connected pad is not active input. Record only a real deflection or a
     // newly pressed button, so an idle Bluetooth pad cannot steal Help/coach
@@ -1884,14 +1887,10 @@ const Input = (function () {
     return navBlocksTouch() ? 0 : analogShape(touchSteering(), "touch");
   }
 
-  const REMOTE_PEDAL_ON = 0.1;   // travel below this is a resting thumb, not a press
-  // The pad's rule (padPedalLevel): the dead zone is RESCALED, not a gate, so travel
-  // ramps from 0 at the threshold to 1 at full press instead of jumping 0 -> 11 %.
-  function remotePedalLevel(v) { return v > REMOTE_PEDAL_ON ? clamp((v - REMOTE_PEDAL_ON) / (1 - REMOTE_PEDAL_ON), 0, 1) : 0; }
   // remoteActive() FIRST: it is a clock compare, and with no phone paired (the common case) it ends the
   // test before remoteDrivingBlocked() walks the UI layers — that walk ran every physics step (B·H11).
-  function remoteThrottle() { return remoteActive() && !remoteDrivingBlocked() && remThr > REMOTE_PEDAL_ON; }
-  function remoteBrake() { return remoteActive() && !remoteDrivingBlocked() && remBrk > REMOTE_PEDAL_ON; }
+  function remoteThrottle() { return remoteActive() && !remoteDrivingBlocked() && remThr > remPedalDz; }
+  function remoteBrake() { return remoteActive() && !remoteDrivingBlocked() && remBrk > remPedalDz; }
   // anyOpen() = pause/settings/sheets. navOpen() also covers title #overlay.
   // LATCHED ONCE PER FRAME, at the end of poll() (PERF-HUNT-2 S5): updateCar asks
   // throttle/braking/steer/…Level 3-6 times per physics step and each anyOpen() walks
@@ -1933,13 +1932,13 @@ const Input = (function () {
     if (keyThrottle) return 1;
     const touch = touchThrottleLevel();
     if (touch > 0 && !navBlocksTouch()) return touch;
-    if (remoteThrottle()) return remotePedalLevel(remThr);
+    if (remoteThrottle()) return pedalLevel(remThr, remPedalDz);
     return padThrottleVal;
   }
   function brakeLevel() {
     if (keyBrake) return 1;
     if (btnBrake && btnBrakeVal > 0 && !navBlocksTouch()) return btnBrakeVal;
-    if (remoteBrake()) return remotePedalLevel(remBrk);
+    if (remoteBrake()) return pedalLevel(remBrk, remPedalDz);
     return padBrakeVal;
   }
 
@@ -2111,6 +2110,9 @@ const Input = (function () {
   }
   function setPadDeadzone(v) {
     if (typeof v === "number" && isFinite(v)) padDeadzone = clamp(v, 0, 0.30);
+  }
+  function setPadPedalDeadzone(pedal, v) {
+    if ((pedal === "throttle" || pedal === "brake") && Number.isFinite(v)) padPedalDeadzone[pedal] = clamp(v, 0, 0.30);
   }
   function setPadSaturation(v) {
     if (typeof v === "number" && isFinite(v)) padSaturation = clamp(v, 0, 0.30);
@@ -2645,6 +2647,7 @@ const Input = (function () {
     setAnalogTrim,
     setAnalogSpeedMix,
     setPadDeadzone,
+    setPadPedalDeadzone,
     setPadSaturation,
     setKeyRampIn,
     setHaptics,

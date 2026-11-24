@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
-import { read, boot, plain, bootUi, rawPad, setBtn, menuRig } from "../helpers/key-binds-rig.mjs";
+import { read, boot, plain, bootUi, fakePad, rawPad, setBtn, menuRig } from "../helpers/key-binds-rig.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 // ---- round 2 input hunt: I-01 / I-02 / I-05 / I-06 / I-08 / I-09 + nintendo A/B ---------------
@@ -195,6 +195,27 @@ test("I-05: a set-up wheel is linear with no dead zone by default; the DEAD ZONE
   fire("gamepadconnected", { gamepad: std });
   Input.setPadDeadzone(0.05);
   assert.equal(road(), 0, "a stick's 5 % dead zone is unchanged");
+});
+
+test("physical gas and brake have independent dead zones shared with the parked preview", () => {
+  const { Input, sb, fire } = boot();
+  const { press } = fakePad(sb, fire);
+  press(7, 0.1); press(6, 0.1);
+  Input.poll();
+  assert.equal(Input.throttleLevel(), 0);
+  assert.equal(Input.brakeLevel(), 0);
+  Input.setPadPedalDeadzone("throttle", 0);
+  Input.setPadPedalDeadzone("brake", 0.25);
+  press(6, 0.55);
+  Input.poll();
+  const { throttle, brake } = Input.parkedPadPreview();
+  assert.equal(throttle, 0.1);
+  assert.ok(Math.abs(brake - 0.4) < 1e-10);
+  assert.equal(Input.throttleLevel(), throttle);
+  assert.equal(Input.brakeLevel(), brake);
+  press(7, 1); press(6, 1); Input.poll();
+  assert.equal(Input.throttleLevel(), 1);
+  assert.equal(Input.brakeLevel(), 1);
 });
 
 test("I-06: a pedal with a measured rest/far reads (raw - rest)/(far - rest); a brake on the throttle's axis is refused", () => {
