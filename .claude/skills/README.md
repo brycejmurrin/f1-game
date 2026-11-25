@@ -36,6 +36,7 @@ auto-selects on, so a fold that leaves the vocabulary behind makes the workflow 
 | **f1-animation-cameras** | camera and animation motion, replay cameras |
 | **game-feel** | shake, hit-stop, sparks, haptics — without changing physics |
 | **garage-parts-livery** | the GARAGE parts catalog, liveries, car meshes |
+| **gardener** | structure cleanup: duplication, coupling, a file to split; survey then one-carve PRs |
 | **handoff** | `/handoff`: a paste-ready cold-start prompt; the cap |
 | **input-controls** | steering, touch, gamepad, tilt, assists |
 | **js-debugger** | breakpoints, stepping, profiles through the debugger MCP |

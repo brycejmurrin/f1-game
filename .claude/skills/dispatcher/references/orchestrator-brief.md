@@ -31,6 +31,15 @@ restated rules drifted into three wordings and one contradicted the skill [14].
 - A TAKEOVER brief states evidence, not a verdict: the lease line, the newest commit trailer and comment time on the
   PR, never "the owner cannot be reached" [11]. Post the adoption comment yourself before launching.
 
+## Roles
+
+Most launches are an issue or a PR (`ISSUE n`, `CONTINUE PR n`, `DEPLOY-RED`). One standing role is launched by
+judgement, not by an issue:
+
+| Role | Launch when | Never when | Brief |
+|---|---|---|---|
+| **Gardener** (skill `gardener`) | the skill's §CARVE quiet-queue check passes (its one home); the skill picks SURVEY or CARVE | that check fails: never on a red tip or a busy queue, one Gardener at a time | no issue address: `TASK: gardener <survey \| carve item N of <note>>`, and the worker opens its own PR (skill `steward` §Open); STATE lists the open PRs' files |
+
 ## The brief
 
 ```text
