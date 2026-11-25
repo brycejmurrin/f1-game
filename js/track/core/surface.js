@@ -79,15 +79,8 @@ const TrackSurface = (function () {
     // Same omission class as the bankZones fix (ed5a310f).
     if (def.bridges) {
       const ds = track.total / n;
-      for (const bridge of def.bridges) {
-        const cs = TrackSpace.wrap01(bridge.s + TrackSpace.sceneryOriginDelta(def)) * track.total;
-        for (let k = 0; k < n; k++) {
-          let d = Math.abs(k * ds - cs);
-          d = Math.min(d, track.total - d);
-          if (d < bridge.halfM)
-            ground[k] -= bridge.rise * 0.5 * (1 + Math.cos(Math.PI * d / bridge.halfM));
-        }
-      }
+      for (const b of def.bridges)
+        TrackSpace.bumpWindow(ground, b.s + TrackSpace.sceneryOriginDelta(def), b.halfM, b.rise, ds, track.total, -1);
     }
 
     const bermLiftAt = (i, dist, side) => {
