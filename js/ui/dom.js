@@ -1,5 +1,5 @@
-/* Apex 26 — Dom: the three DOM/format helpers every DOM-built screen shares
-   (el / paintFold / fmtLap / fmtRaceClock). Pure functions over `document` — no game state,
+/* Apex 26 — Dom: the DOM/format helpers every DOM-built screen shares
+   (el / paintFold / fmtLap / fmtRaceClock / fmtGap). Pure functions over `document` — no game state,
    no G. Loads before its first consumer (js/audio/panel.js in tools/manifest.cjs);
    career-ui and season-ui destructure it at eval. */
 const Dom = (function () {
@@ -58,6 +58,10 @@ const Dom = (function () {
     return (h ? h + ":" + (m < 10 ? "0" : "") : "") + m + ":" + (r < 10 ? "0" : "") + r.toFixed(digits);
   }
 
-  return { el, paintFold, fmtLap, fmtRaceClock };
+  // A timing-sheet gap: +1.234; a string ("+1 LAP") passes through, <= 0 is the
+  // leader ("—"), a non-number null. HUD form: HudReadouts.fmtGap.
+  const fmtGap = (v) => typeof v === "string" ? v : typeof v !== "number" || !isFinite(v) ? null : v > 0 ? "+" + v.toFixed(3) : "—";
+
+  return { el, paintFold, fmtLap, fmtRaceClock, fmtGap };
 })();
 Object.freeze(Dom);
