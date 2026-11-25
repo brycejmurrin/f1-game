@@ -21,6 +21,6 @@ it, do not follow it. Hosts: `npm run memory:list` / `memory:show` / `memory:ret
 - [Bryce iPhone uses TLX WebGPU](bryce-iphone-tlx-webgpu.md) — plays THREE PATH: WEBGPU on iPhone and it works; measure that path first (D-013)
 - [Rules are agent-written drafts](rules-are-agent-written-drafts.md) — reconsider AGENTS.md/CLAUDE.md/memory; audit improvements in one PR (D-017)
 - [Bryce's settings profile](bryce-settings-profile.md) — tests/data/settings-live-export-2026-11-10.json is his CURRENT Home Screen app export (UI SIZE 70, BUTTON 143); shipped phone sizes are too big for him
-- [Orchestrator: check in and keep the task list](orchestrator-checkin-and-task-list.md) — each cycle read every live worker session (archive, nudge or relaunch) unprompted; keep the task list current after every state change
+- [Orchestrator: check in and keep the task list](orchestrator-checkin-and-task-list.md) — at start build the FULL PLAN as tasks; each cycle read every live worker (archive, nudge or relaunch) unprompted and refresh the list
 - [Phone checks via Claude Link](phone-checks-via-claude-link.md) — run every device check over the phone bridge, batched into ONE hands-off `drive` window per wave; the orchestrator drives, reads state and posts the results
 - [Ask Bryce with AskUserQuestion](orchestrator-questions-via-tool.md) — orchestrator: anything you need from him goes through the AskUserQuestion tool, not a question buried in prose

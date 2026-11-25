@@ -25,9 +25,10 @@ Endings by audience (steps 1–2 are shared):
   block and the Plan; the dispatch Action launches it once no live owner names the PR.
 - **Orchestrator at ~400k context** (retro 2026-11-25: one orchestrator held 594M of 1,901M cache-read tokens):
   write the handoff as a comment on the orchestration tracking issue or PR (open PRs, live sessions, decisions
-  pending, Bryce's grants quoted with their times, held items), launch a fresh orchestrator with `create_session`
-  (environment_id `env_019j6UuJTdHnhCNbThaF5CRy`, "f1-game orchestrator"; permission_mode `auto`) whose prompt
-  links that comment, then stop. No chat prompt; the successor reads the comment.
+  pending, Bryce's grants quoted with their times, held items, the full task list), launch a fresh orchestrator with
+  `create_session` (environment_id `env_019j6UuJTdHnhCNbThaF5CRy`, "f1-game orchestrator"; permission_mode `auto`)
+  whose prompt links that comment, then stop. No chat prompt; the successor reads the comment and rebuilds the task
+  list before acting.
 - **Quota wall** (a usage-limit warning or a 429 `usage_limit_reached`; six workers died on one at 2026-11-18
   22:32–23:37Z and two lost uncommitted work, #5844): do step 1 and refresh the Hand-off block NOW, before the
   next call, then end without arming a check-in; every wake re-hits the wall. Long waits: AGENTS.md rule 12.
