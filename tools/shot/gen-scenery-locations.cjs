@@ -189,7 +189,14 @@ function ensureCatalog() {
 module.exports = { ensureCatalog, receiptHolds, generate, TARGET: "tools/shot/scenery-locations.json" };
 
 if (require.main === module) {
-  const check = process.argv.includes("--check");
+  const { exitIfHelp } = require("../lib/cli-args.mjs");
+  const argv = process.argv.slice(2);
+  const USAGE = "usage: node tools/shot/gen-scenery-locations.cjs [--check [--cached]]   (no flag: WRITES tools/shot/scenery-locations.json)";
+  exitIfHelp(argv, USAGE);
+  // #6556: any argument other than --check (--help included) fell to the write branch.
+  const bad = argv.filter((a) => a !== "--check" && a !== "--cached");
+  if (bad.length) { console.error(`gen-scenery-locations: unknown argument ${bad.join(" ")}; nothing written\n\n${USAGE}`); process.exit(2); }
+  const check = argv.includes("--check");
   if (check && process.argv.includes("--cached") && receiptHolds()) {
     console.log("OK scenery catalog: unchanged inputs and bytes since the last passed check (artifacts/cache/scenery-catalog.json)");
     process.exit(0);

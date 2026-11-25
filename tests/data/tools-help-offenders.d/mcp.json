@@ -1,0 +1,8 @@
+{
+  "//": "tools/mcp CLIs with no --help path yet (#6556 U0 baseline 2026-11-25). Fix one: add exitIfHelp from tools/lib/cli-args.mjs, then delete its line.",
+  "offenders": [
+    "tools/mcp/apex-extras.mjs",
+    "tools/mcp/ios-console.mjs",
+    "tools/mcp/js-debugger-boot.cjs"
+  ]
+}
