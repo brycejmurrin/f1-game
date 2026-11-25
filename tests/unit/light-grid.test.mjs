@@ -683,7 +683,7 @@ test("the sun-glint knee and the world env-probe reflection reach every backend"
   // the knob reaches each backend
   const knob = defs().find((d) => d.id === "specKnee");
   assert.ok(knob && knob.def === 4.0 && knob.min === 1 && knob.u === "uSpecKnee", "specKnee knob: def 4, min 1 (= the old cap), u uSpecKnee");
-  assert.match(read("js/render/glx/glx.js"), /uf1\(litU\.uSpecKnee,\s*_litUf,\s*"specKnee",\s*T && T\.specKnee != null \? T\.specKnee : 4\.0\)/, "GLX uploads uSpecKnee");
+  assert.match(read("js/render/glx/glx.js"), /uf1\(litU\.uSpecKnee,\s*_litUf,\s*"specKnee",\s*PostCommon\.knob\(T, "specKnee"\)\)/, "GLX uploads uSpecKnee (TUNE_DEFS def 4, #6499)");
   assert.match(tlx, /uf1\(U\.specKnee, k\("specKnee", 4\.0\)\)/, "TLX updates U.specKnee");
   assert.match(read("js/render/webgpu/wgx.js"), /d\[83\] = \(T && T\.specKnee != null\) \? T\.specKnee : 4\.0;/, "WGX packs params4.w");
   // the probe in the world env block, faded over the same 60..150 m on all three
