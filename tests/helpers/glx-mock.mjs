@@ -35,6 +35,8 @@ const GLX_FILE = "js/render/glx/glx.js";
 const FILES = [...MANIFEST.FULL.slice(0, MANIFEST.FULL.indexOf("js/render/gfx.js")),
   ...MANIFEST.DEFERRED.webgl2];
 // GLSL `const int …` lines inside shader strings stay const (glx-light-fit reads the rewritten loop bound).
+const KNOBS_FILE = "js/lighting/knobs.js";
+const KNOBS_SRC = fs.readFileSync(path.join(ROOT, KNOBS_FILE), "utf8").replace(/^const\b/gm, "var");
 const SOURCES = FILES.map((f) => [f, fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b(?!\s+(?:int|uint|float|bool|[biu]?vec[234]|mat[234]|highp|mediump|lowp)\b)/gm, "var")]);
 
 
@@ -171,6 +173,9 @@ export function bootGlx(opts = {}) {
   const GLX = vm.runInContext("GLX", ctx);
   const inited = GLX.init(canvas);
   if (!inited) throw new Error("glx-mock: GLX.init() refused the mock context");
+  // The knob registry, after GLX as in production (knobs.js reads GLX.isMobile at
+  // eval): GLX's lit pass reads omitted knobs through PostCommon.knob -> TUNE_DEFS.
+  vm.runInContext(KNOBS_SRC, ctx, { filename: absSrc(KNOBS_FILE) });
 
   const count = (name, pred) => calls.reduce((n, c) => n + (c[0] === name && (!pred || pred(c[1])) ? 1 : 0), 0);
   return {

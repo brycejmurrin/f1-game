@@ -10,7 +10,8 @@
  * holds identically before and after the carve that moved GLX onto knob().
  *
  * Exempt (render drift decision D4 on #6495, not settled here):
- *   fogHeight  — falls back to frame.fogHeight, not def 0.018 (both backends);
+ *   fogHeight  — falls back to frame.fogHeight, not def 0.018 (both backends;
+ *                not numeric, so the scans skip it);
  *   carEnvCube — literal 0 (probe off), the safe side of the tier-gated def.
  *
  * Run: node --test tests/unit/glx-tlx-knob-defaults.test.mjs
@@ -92,8 +93,7 @@ test("GLX and TLX fall back to the same value for every shared knob", () => {
   }
 });
 
-test("fogHeight stays a frame.fogHeight fallback on both backends (D4, #6495)", () => {
-  const re = /T && T\.fogHeight != null \? T\.fogHeight\s*:\s*\(frame\.fogHeight != null \? frame\.fogHeight : 0\.0\)/;
-  assert.match(GLX, re);
-  assert.match(TSL, re);
+test("glx.js reads knobs through PostCommon.knob, literals only for the exempt ids", () => {
+  const lit = [...GLX.matchAll(LIT_RE)].map((m) => m[1]);
+  assert.deepEqual(lit, ["carEnvCube"], "a GLX knob fallback restates a literal: use PostCommon.knob(T, id)");
 });
