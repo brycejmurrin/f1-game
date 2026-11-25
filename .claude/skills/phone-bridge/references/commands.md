@@ -119,8 +119,9 @@ no function.
 - Find by what Bryce sees: `{"cmd":"tap","args":{"text":"MUSIC & SOUND"}}`. A label shared by two controls answers
   `2 controls match … (ids)`; add `nth` or `within`.
 - `set` by control goes through the control's own handlers, so it stores and applies exactly as a thumb would:
-  `{"cmd":"set","args":{"id":"rs-weather-sel","value":"rain"}}`. `set` by key writes a SETTINGS FILE key (the
-  `settingsFile` list; tables are refused) the way an import does. Most screens read a stored key at load, so the reply
+  `{"cmd":"set","args":{"id":"rs-weather-sel","value":"rain"}}`. `set` by key writes a SETTINGS FILE key (a SPEC row in
+  `js/ui/settings-export.js`) under the import's own rules: no migration-version or `noImport` row, `normalize`
+  first, then its type and `oneOf`, and no tables. Most screens read a stored key at load, so the reply
   says `reload: true`: put a `reload` last.
 - `key` events are synthetic. A handler that checks `isTrusted` ignores them, the browser does not move focus on a
   synthetic Tab, and they never end a `drive` (only Bryce's real touch does).

@@ -386,7 +386,7 @@ const ApexBridge = (function () {
     "career", "cr-career", "mb-career", "mb-continue",                                  // career
     "save", "mb-saves", "pm-open-files", "pm-panel-files", "pm-files", "pm-settings-file", "pm-other-save-files",
     "pm-share-code", "pm-restore", "pm-checkpoint-save", "cs-garage-file", "cs-garage-reset", "ct-import",   // saves & files
-    "vs", "vsfriend", "mb-vs", "mb-phonepad", "mb-steerphone",                          // net: VS FRIEND, phone pairing
+    "vs", "vsfriend", "mb-vs", "mb-phonepad", "pm-phonepad", "mb-steerphone",           // net: VS FRIEND, phone pairing
     "bridge-link", "apex-bridge",                                                         // the token form and the badge
   ];
   const CONTROL_TAGS = new Set(["BUTTON", "A", "SUMMARY", "INPUT", "SELECT", "LABEL", "OPTION"]);
@@ -467,7 +467,8 @@ const ApexBridge = (function () {
     if (want != null && !hits.length) hits = pool.filter((el) => labelOf(el).startsWith(want));
     const what = want != null ? "text:" + want : "data:" + data.map(([k, v]) => k + "=" + v).join(",");
     if (!hits.length) throw new Error("no visible control matches " + what);
-    const nth = a.nth != null ? Number(a.nth) : null;
+    if (a.nth != null && !(Number.isInteger(a.nth) && a.nth >= 0)) throw new Error("nth must be a whole number from 0");
+    const nth = a.nth != null ? a.nth : null;
     if (hits.length > 1 && nth == null) throw new Error(hits.length + " controls match " + what + " (" + hits.slice(0, 6).map((h) => h.id || h.tagName).join(", ") + "): add nth or within");
     const el = hits[nth || 0];
     if (!el) throw new Error("nth " + nth + " is past the " + hits.length + " matches");
@@ -478,7 +479,8 @@ const ApexBridge = (function () {
     const area = deniedArea(el);
     if (area) throw new Error(what + " is refused: inside #" + area + " (saves, career, net or the link)");
     if (!isControl(el)) throw new Error(what + " is not a control");
-    if (el.tagName === "INPUT" && el.type === "file") throw new Error(what + " opens a file picker");
+    const forEl = el.tagName === "LABEL" ? (el.control || (attr(el, "for") ? byId(attr(el, "for")) : null)) : el;
+    if (forEl && forEl.tagName === "INPUT" && forEl.type === "file") throw new Error(what + " opens a file picker");
     if (el.tagName === "A" && attr(el, "href") && !String(attr(el, "href")).startsWith("#")) throw new Error(what + " leaves the game");
     if (!shown(el)) throw new Error(what + " is not visible (screen " + screenNow() + ")");
     if (el.disabled || attr(el, "aria-disabled") === "true") throw new Error(what + " is disabled");
@@ -552,20 +554,27 @@ const ApexBridge = (function () {
     }
     throw new Error(what + " is not a select, checkbox, radio or range");
   }
+  // The SETTINGS FILE import's own rules (settings-export-body.js applySettings): never an `info` row (a migration
+  // version) or a `noImport` one, a row's `normalize` first, then its type and `oneOf`. Tables (an object or computed
+  // default) are set on their own screen, and a row with no default to type-check needs a `oneOf`.
   function setKey(key, value) {
     const SE = typeof SettingsExport !== "undefined" ? SettingsExport : null, S = gs();
     if (!SE || !Array.isArray(SE.SPEC) || !S) throw new Error("the settings store is not up");
     if (typeof key !== "string" || SET_KEY_DENY.test(key)) throw new Error("key not allowed: " + key);
     const row = SE.SPEC.find((r) => r && r.k === key);
-    if (!row) throw new Error("not a settings key: " + key + " (call settingsFile lists them)");
-    if (value !== null && typeof value === "object") throw new Error(key + " is a table: set it on its own screen");
-    if (row.oneOf && value !== null && !row.oneOf.some((o) => o === value)) throw new Error(key + " must be one of " + row.oneOf.join(", "));
-    const def = typeof row.def === "function" ? undefined : row.def;
-    if (value !== null && row.lane !== "raw" && def != null && typeof def !== "object" && typeof value !== typeof def) throw new Error(key + " takes a " + typeof def);
-    if (typeof value === "string" && value.length > 200) throw new Error(key + ": value too long");
+    if (!row || row.info || row.noImport) throw new Error("not a settings key: " + key + " (the SPEC rows in js/ui/settings-export.js)");
+    const def = row.def;
+    if (typeof def === "function" || (def !== null && typeof def === "object")) throw new Error(key + " is a table: set it on its own screen");
+    if (value !== null && typeof value === "object") throw new Error(key + " takes a single value");
+    let v = value;
+    if (v !== null && row.normalize) { v = row.normalize(v); if (v === undefined) throw new Error(key + ": " + JSON.stringify(value) + " is not a value it takes"); }
+    if (v !== null && def == null && !row.oneOf) throw new Error(key + " has no type to check: set it on its own screen");
+    if (v !== null && def != null && typeof v !== typeof def) throw new Error(key + " takes a " + typeof def);
+    if (v !== null && row.oneOf && !row.oneOf.some((o) => o === v)) throw new Error(key + " must be one of " + row.oneOf.join(", "));
+    if (typeof v === "string" && v.length > 200) throw new Error(key + ": value too long");
     const rk = "apex26." + key, read = () => (row.lane === "raw" ? S.raw(rk) : S.get(key, undefined));
     const was = read();
-    const ok = row.lane === "raw" ? (value === null ? S.rawDel(rk) : S.rawSet(rk, String(value))) : S.set(key, value === null ? undefined : value);
+    const ok = row.lane === "raw" ? (v === null ? S.rawDel(rk) : S.rawSet(rk, String(v))) : S.set(key, v === null ? undefined : v);
     if (ok === false) throw new Error("storage refused the write");
     const now = read();
     return { key, was: was === undefined ? null : was, now: now === undefined ? null : now, reload: true };
@@ -586,7 +595,11 @@ const ApexBridge = (function () {
     const a = args || {};
     if (!KEYS.includes(a.key)) throw new Error("key must be one of " + KEYS.join(", "));
     const el = a.id != null ? usable(findEl({ id: a.id })[0], a.id) : (document.activeElement || document.body);
-    if (!el || deniedArea(el)) throw new Error("key refused: the focus is inside #" + deniedArea(el));
+    if (!el) throw new Error("nothing has the focus");
+    if (deniedArea(el)) throw new Error("key refused: the focus is inside #" + deniedArea(el));
+    // A key on the body reaches the page's global handlers, which act for whatever screen is up: not while a denied one is.
+    const up = a.id == null && (el === document.body || el === document.documentElement) ? TAP_DENY.find((p) => shown(byId(p))) : null;
+    if (up) throw new Error("key refused: #" + up + " is on screen and nothing in it has the focus");
     const k = a.key === "Space" ? " " : a.key;
     const init = { key: k, code: a.key, bubbles: true, cancelable: true, shiftKey: !!a.shift };
     const KE = typeof KeyboardEvent === "function" ? KeyboardEvent : Event;

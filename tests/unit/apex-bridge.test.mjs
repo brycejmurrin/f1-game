@@ -591,6 +591,11 @@ test("every TAP_DENY area names a real id in the shell or the game, so a renamed
     if (made[p]) assert.ok(fs.readFileSync(new URL("../../" + made[p], import.meta.url), "utf8").includes('"' + p), p + " is made by " + made[p]);
     else assert.equal(live, true, p + " (or " + p + "-…) is in index.html");
   }
+  // …and the scan the other way: no pairing, net, career or save id in the shell sits outside a denied area.
+  const covered = (id) => api.TAP_DENY.some((p) => id === p || id.startsWith(p + "-"));
+  const risky = [...ids].filter((id) => /phonepad|steerphone|^vsfriend|^vs-|career|^save-|saves|-files\b|lobby/.test(id));
+  assert.ok(risky.length > 20, "the scan finds the areas (" + risky.length + ")");
+  assert.deepEqual(risky.filter((id) => !covered(id)), [], "every pairing / net / career / save id is denied");
   // Every control the old allow-list named stays pressable (ld-skip: RACE!'s SKIP TO RACE, js/ui/loading-screen.js).
   for (const id of ["mb-tt", "mb-race", "sel-go", "rs-go", "cs-done", "cs-arrival-skip", "ld-skip", "pausebtn", "pm-resume", "pm-quit", "hud-end-session", "res-menu"])
     assert.equal(api.TAP_DENY.some((p) => id === p || id.startsWith(p + "-")), false, id + " is not in a denied area");
@@ -636,7 +641,10 @@ function wideDom() {
   const GameStore = { store: { get: (k, d) => (store.has(k) ? store.get(k) : d), set: (k, v) => { if (v === undefined) store.delete(k); else store.set(k, v); return true; },
     raw: (k) => (store.has(k) ? store.get(k) : null), rawSet: (k, v) => { store.set(k, v); return true; }, rawDel: (k) => { store.delete(k); return true; } } };
   const SettingsExport = { SPEC: [{ k: "radioChat", lane: "json", def: "normal", oneOf: ["off", "key", "normal", "chatty"] },
-    { k: "volMusic", lane: "json", def: 0.7 }, { k: "buildWorker", lane: "raw", def: "1", oneOf: ["0", "1"] }, { k: "voiceTune", lane: "json", def: {} }] };
+    { k: "volMusic", lane: "json", def: 0.7 }, { k: "buildWorker", lane: "raw", def: "1", oneOf: ["0", "1"] }, { k: "voiceTune", lane: "json", def: {} },
+    { k: "steerSchema", lane: "json", def: 1, info: true }, { k: "metrics", lane: "raw", def: null, noImport: true },
+    { k: "sndTune", lane: "json", def: () => ({}) }, { k: "freeNull", lane: "json", def: null },
+    { k: "helmetShake", lane: "raw", def: "100", normalize: (v) => (/^\d+$/.test(String(v)) && +v <= 150 ? String(v) : undefined) }] };
   class Event { constructor(type, o = {}) { this.type = type; Object.assign(this, o); } }
   return { log, files, sel, box, range, store, extra: { document, setTimeout, Date, Event, GameStore, SettingsExport } };
 }
@@ -650,6 +658,7 @@ test("wide tap: by visible label or data attribute; a denied area or an ambiguou
   assert.equal((await b.api.handle({ cmd: "tap", args: { data: { tab: "hud" } } })).value.tapped, "pm-tab-hud");
   assert.equal((await b.api.handle({ cmd: "tap", args: { text: "RESET" } })).error, "2 controls match text:RESET (pm-a, pm-b): add nth or within");
   assert.equal((await b.api.handle({ cmd: "tap", args: { text: "RESET", nth: 1 } })).value.tapped, "pm-b");
+  assert.equal((await b.api.handle({ cmd: "tap", args: { text: "RESET", nth: "x" } })).error, "nth must be a whole number from 0");
   assert.equal((await b.api.handle({ cmd: "tap", args: { text: "saves & data" } })).error, "no visible control matches text:SAVES & DATA", "a door into a denied area is not even found");
   assert.equal((await b.api.handle({ cmd: "tap", args: { id: "pm-open-files" } })).ok, false);
   assert.equal((await b.api.handle({ cmd: "tap", args: { data: { "bad name": "x" } } })).ok, false);
@@ -671,8 +680,11 @@ test("set: a control through its own UI path, or a SETTINGS FILE key through the
   assert.deepEqual(plain(k.value), { key: "radioChat", was: null, now: "chatty", reload: true });
   assert.equal((await b.api.handle({ cmd: "set", args: { key: "buildWorker", value: "0" } })).value.now, "0");
   assert.equal(w.store.get("apex26.buildWorker"), "0", "a raw-lane key is written as the settings file writes it");
-  for (const [key, value] of [["radioChat", "loud"], ["volMusic", "high"], ["voiceTune", {}], ["careerSlot", 1], ["bridgeToken", "x"], ["nope", 1]])
-    assert.equal((await b.api.handle({ cmd: "set", args: { key, value } })).ok, false, key);
+  assert.equal((await b.api.handle({ cmd: "set", args: { key: "helmetShake", value: "120" } })).value.now, "120", "normalize first, as the import does");
+  for (const [key, value] of [["radioChat", "loud"], ["volMusic", "high"], ["voiceTune", {}], ["voiceTune", "x"], ["sndTune", 3], ["freeNull", "on"],
+    ["steerSchema", 1], ["metrics", "on"], ["helmetShake", "999"], ["careerSlot", 1], ["bridgeToken", "x"], ["nope", 1]])
+    assert.equal((await b.api.handle({ cmd: "set", args: { key, value } })).ok, false, key + " = " + JSON.stringify(value));
+  assert.equal(w.store.has("steerSchema") || w.store.has("apex26.metrics") || w.store.has("voiceTune"), false, "nothing refused was written");
   assert.equal((await b.api.handle({ cmd: "set", args: { key: "radioChat" } })).error, "set needs a value");
 });
 
@@ -685,6 +697,8 @@ test("key goes to the focused element (allow-listed keys only); scroll moves the
   assert.equal((await b.api.handle({ cmd: "key", args: { key: "Space", id: "pm-mirror" } })).value.to, "pm-mirror");
   assert.equal((await b.api.handle({ cmd: "key", args: { key: "F12" } })).ok, false);
   assert.equal((await b.api.handle({ cmd: "key", args: { key: "Enter", id: "pm-open-files" } })).ok, false, "no key into a denied area");
+  w.extra.document.activeElement = w.extra.document.body;   // #career is on screen and nothing has the focus
+  assert.equal((await b.api.handle({ cmd: "key", args: { key: "Enter" } })).error, "key refused: #career is on screen and nothing in it has the focus");
   assert.equal((await b.api.handle({ cmd: "scroll", args: { by: 120 } })).value.top, 120);
   assert.equal((await b.api.handle({ cmd: "scroll", args: { id: "pausemenu", to: "bottom" } })).value.top, 900);
   assert.equal((await b.api.handle({ cmd: "scroll", args: { id: "career", by: 10 } })).ok, false);
