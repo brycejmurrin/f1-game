@@ -289,6 +289,8 @@
     "// coverage-merge is the only consumer of the raw V8 lists a flagged run",
     "// writes (APEX_JS_COVERAGE=1 / NODE_V8_COVERAGE); a url shape that stops",
     "// mapping reads as 0 %, not as an error, so its filters are pinned here. ~2 s.",
+    "// #6563 R1a corner-speed instrument: refs file validates, every cited turn resolves, one Monaco VM lap (~15 s).",
+    "tests/unit/corner-speeds.test.mjs",
     "tests/unit/coverage-merge.test.mjs",
     "tests/unit/cross-file-paths.test.mjs",
     "// cross-tool-guards: Cursor/Codex reach bash-guard through one adapter; .githooks",
