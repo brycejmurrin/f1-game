@@ -910,7 +910,8 @@ function heldDriver() {
   };
   const body = { kids: [], appendChild(n) { this.kids.push(n); n.remove = () => { this.kids = this.kids.filter((k) => k !== n); }; } };
   const document = { body, getElementById: () => null,
-    createElement: (tag) => ({ tag, style: {}, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } }) };
+    createElement: (tag) => ({ tag, style: {}, attrs: {}, kids: [], on: {}, setAttribute(k, v) { this.attrs[k] = v; },
+      appendChild(n) { this.kids.push(n); }, addEventListener(t, f) { this.on[t] = f; } }) };
   return { S, ends, body, extra: { SoakRun: S, setTimeout, Date, document } };
 }
 
@@ -981,4 +982,89 @@ test("#6581 status cadence (Bryce's D4): first edit 5 s after hello, 15 s while 
   gh.thread.push(cmd(78, { cmd: "ping" }));
   await b.api.pollOnce();
   assert.equal(b.api.statusDue(), now + 15000);
+});
+
+test("#6581 handsOff drive: passed to the driver, and the banner carries a big STOP that ends the drive", async () => {
+  const d = heldDriver();
+  const calls = [];
+  const drive0 = d.S.drive;
+  d.S.drive = (o) => { calls.push(o); return drive0(o); };
+  const b = load({ search: "", apex: { info: () => ({ state: "race" }) }, extra: d.extra });
+  assert.equal((await b.api.handle({ cmd: "drive", args: { laps: 1, handsOff: "yes" } })).ok, false, "handsOff takes a boolean");
+  await b.api.handle({ cmd: "drive", args: { laps: 1, wait: false, handsOff: true } });
+  assert.equal(calls[0].handsOff, true);
+  const banner = d.body.kids.find((k) => k.id === "apex-bridge-driving");
+  assert.match(banner.textContent, /HANDS OFF/);
+  const stop = banner.kids.find((k) => k.id === "apex-bridge-driving-stop");
+  assert.equal(stop.textContent, "STOP");
+  assert.match(stop.style.cssText, /pointer-events:auto/, "the one place a touch is taken");
+  assert.match(stop.style.cssText, /min-height:56px/, "big enough to hit without looking");
+  stop.on.click();
+  await flush();
+  assert.equal(d.body.kids.length, 0, "STOP ended the drive and the banner went with it");
+  // The default drive keeps today's behaviour: no handsOff, no STOP.
+  await b.api.handle({ cmd: "drive", args: { laps: 1, wait: false } });
+  assert.equal(calls[1].handsOff, undefined);
+  assert.equal(d.body.kids[0].kids.length, 0);
+});
+
+// A mini page for `rects` / `overlaps`: fixed boxes, one hidden, one inside a denied area.
+function rectDom() {
+  const box = (id, x, y, w, h, extra = {}) => ({ id, nodeType: 1, hidden: false, parentElement: null,
+    getBoundingClientRect: () => ({ left: x, top: y, width: w, height: h }), ...extra });
+  const els = {
+    "hud-speed": box("hud-speed", 600, 300, 120, 60),
+    "steer-right": box("steer-right", 700, 280, 140, 100),
+    "hud-pos": box("hud-pos", 10, 10, 80, 30),
+    "hud-gone": box("hud-gone", 0, 0, 50, 50, { hidden: true }),
+    "mb-career": box("mb-career", 0, 0, 100, 40),
+  };
+  const document = { getElementById: (id) => els[id] || null };
+  return { document, getComputedStyle: () => ({ fontSize: "14px", display: "block", visibility: "visible" }) };
+}
+
+test("#6581 rects + overlaps: device boxes for listed ids only; denied, missing and hidden ids say so", async () => {
+  const b = load({ search: "", extra: rectDom() });
+  const r = await b.api.handle({ cmd: "rects", args: { ids: ["hud-speed", "hud-gone", "nowhere", "mb-career"] } });
+  assert.equal(r.ok, true);
+  assert.deepEqual(plain(r.value.rects), [
+    { id: "hud-speed", x: 600, y: 300, w: 120, h: 60, visible: true, fontSize: "14px" },
+    { id: "hud-gone", x: 0, y: 0, w: 50, h: 50, visible: false, fontSize: "14px" },
+    { id: "nowhere", missing: true },
+    { id: "mb-career", refused: true },
+  ]);
+  assert.deepEqual(plain(r.value.viewport), [844, 390]);
+  const o = await b.api.handle({ cmd: "overlaps", args: { ids: ["hud-speed", "steer-right", "hud-pos", "hud-gone"] } });
+  assert.deepEqual(plain(o.value.overlaps), [{ a: "hud-speed", b: "steer-right", x: 700, y: 300, w: 20, h: 60, area: 1200 }], "#6518: SPEED under STEER RIGHT");
+  assert.deepEqual(plain(o.value.skipped), ["hud-gone"]);
+  for (const args of [{}, { ids: [] }, { ids: new Array(41).fill("hud-pos") }, { ids: ["#hud-pos"] }, { ids: ["div > span"] }, { ids: [7] }]) {
+    assert.equal((await b.api.handle({ cmd: "rects", args })).ok, false, JSON.stringify(args));
+  }
+});
+
+test("#6581 wake lock: held once linked, asked again when visible, released at the link's end; reported in facts and status", async () => {
+  const locks = [];
+  const wakeLock = { request: async (kind) => { const l = { kind, released: false, release: async () => { l.released = true; } }; locks.push(l); return l; } };
+  const listeners = {};
+  const document = { hidden: false, addEventListener: (t, f) => { listeners[t] = f; }, removeEventListener: (t) => { delete listeners[t]; },
+    getElementById: () => null, querySelector: () => null };
+  const gh = editingGitHub();
+  const b = load({ tok: "tok", gh, extra: { document, navigator: { userAgent: "test", gpu: {}, wakeLock } } });
+  await flush(); await flush();
+  assert.equal(locks.length, 1);
+  assert.equal(locks[0].kind, "screen");
+  assert.deepEqual(plain(b.api.facts().wakeLock), { supported: true, held: true, refused: null });
+  await b.api.status();
+  assert.equal(statusOf(gh.thread.find((c) => c.body.startsWith("```apex-status"))).wake, true);
+  // iOS drops it while hidden; back to visible asks again.
+  locks[0].released = true;
+  document.hidden = false;
+  listeners.visibilitychange();
+  await flush();
+  assert.equal(locks.length, 2);
+  b.api.stop("done");
+  assert.equal(locks[1].released, true, "released when the link ends");
+  // No Wake Lock API: nothing is asked, and facts say so.
+  const plainPage = load({ search: "" });
+  assert.deepEqual(plain(plainPage.api.facts().wakeLock), { supported: false, held: false, refused: null });
 });

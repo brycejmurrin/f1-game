@@ -264,7 +264,8 @@ const SoakRun = (function () {
   }
 
   let _drv = null, _drvLast = null;
-  function onRealInput(e) { if (e && e.isTrusted) endDrive("touch"); }
+  // `handsOff` (the bridge's drive, #6581): a touch no longer takes the car back (the banner's STOP, a pause or a key does).
+  function onRealInput(e) { if (e && e.isTrusted && !(_drv && _drv.handsOff && e.type !== "keydown")) endDrive("touch"); }
   const REAL = ["pointerdown", "touchstart", "keydown"];
   function endDrive(reason) {
     const G = _G, d = _drv;
@@ -312,7 +313,7 @@ const SoakRun = (function () {
     if (_drv) endDrive("replaced");
     const pol = policy(o.to === "box" ? "box" : "autopilot", { laps: o.laps });
     const secs = o.seconds > 0 ? o.seconds : 0;
-    const d = _drv = { pol, secs, raf: null, prev: 0, t0: performance.now(), lap0: (G.player && G.player.lap) || 0, phase: null, steps: [], waiters: [],
+    const d = _drv = { pol, secs, handsOff: !!o.handsOff, raf: null, prev: 0, t0: performance.now(), lap0: (G.player && G.player.lap) || 0, phase: null, steps: [], waiters: [],
       ms: Math.max(1000, Math.min(600000, secs ? secs * 1000 : o.ms > 0 ? o.ms : 240000)) };
     const p = new Promise((res) => d.waiters.push(res));
     try { for (const t of REAL) window.addEventListener(t, onRealInput, true); } catch (_) { /* no window */ }
@@ -324,7 +325,7 @@ const SoakRun = (function () {
   function driveStatus() {
     const d = _drv, c = _G && _G.player;
     if (!d) return Object.assign({ active: false }, _drvLast ? { last: _drvLast } : null);
-    return { active: true, policy: d.pol.name, phase: d.phase, ms: Math.round(performance.now() - d.t0), steps: d.steps,
+    return { active: true, policy: d.pol.name, handsOff: d.handsOff, phase: d.phase, ms: Math.round(performance.now() - d.t0), steps: d.steps,
       pit: c ? c.pitState || "none" : null, kph: c ? Math.round(c.speed * 3.6) : null };
   }
 

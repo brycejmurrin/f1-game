@@ -114,7 +114,7 @@ const ApexBridge = (function () {
       v: V, sha: meta ? meta.content : null, href: location.href,
       ua: nav.userAgent || null, dpr: window.devicePixelRatio, w: window.innerWidth, h: window.innerHeight,
       gpu: !!nav.gpu, cores: nav.hardwareConcurrency || null, mem: nav.deviceMemory || null,
-      apex: !!window.__apex, info, render: pathState(),
+      apex: !!window.__apex, info, render: pathState(), wakeLock: wakeState(_run),
     };
   }
 
@@ -714,11 +714,12 @@ const ApexBridge = (function () {
     const ms = Math.max(5000, Math.min(600000, Number(a.ms) || DRIVE_MS));
     // Straight after `nav`'s RACE! the garage drive-out is still playing (state "menu"): wait for the session.
     await until(() => { const st = gameState(); return st === "race" || st === "count"; }, DRIVE_START_MS);
-    const run = S.drive({ to: a.to, laps: a.laps, seconds: a.seconds != null ? Number(a.seconds) : undefined, ms });
+    if (a.handsOff != null && typeof a.handsOff !== "boolean") throw new Error("drive.handsOff takes true or false");
+    const run = S.drive({ to: a.to, laps: a.laps, seconds: a.seconds != null ? Number(a.seconds) : undefined, ms, handsOff: a.handsOff === true || undefined });
     // The banner goes when the drive ends for ANY reason (stop, a real touch, pause, hidden, quit, the link ending):
     // every end resolves this promise. A newer drive owns the banner, so the replaced one's end does not hide it.
     const mine = ++_drvTok;
-    drivingBanner(true);
+    drivingBanner(true, a.handsOff === true);
     const off = () => { if (mine === _drvTok) drivingBanner(false); };
     run.then(off, off);
     if (a.wait === false) { run.catch(() => {}); return Object.assign({ started: true }, S.driveStatus()); }
@@ -730,17 +731,59 @@ const ApexBridge = (function () {
     return Object.assign({ ok, screen: screenNow(), state: gameState(), pitActions: END_IDS.filter((id) => shown(byId(id))) }, r);
   }
 
+  // RECTS (#6581, #6582 unit 1): where HUD and menu elements sit, read on the device — `display` / `geom` give sizes
+  // only and `snap` is the canvas, so #6518's SPEED vs STEER RIGHT overlap could not be measured. Ids only, never a
+  // selector; an id inside a TAP_DENY area answers `refused`; at most RECTS_MAX. Read-only.
+  const RECTS_MAX = 40;
+  function rectsOf(args) {
+    const ids = args && Array.isArray(args.ids) ? args.ids : null;
+    if (!ids || !ids.length || ids.length > RECTS_MAX) throw new Error("ids must hold 1–" + RECTS_MAX + " element ids");
+    return ids.map((id) => {
+      if (typeof id !== "string" || !/^[A-Za-z][\w-]{0,80}$/.test(id)) throw new Error("not an element id: " + JSON.stringify(id));
+      const el = byId(id);
+      if (!el) return { id, missing: true };
+      if (deniedArea(el)) return { id, refused: true };
+      const r = el.getBoundingClientRect();
+      let fontSize = null;
+      try { fontSize = getComputedStyle(el).fontSize || null; } catch (_) { /* detached */ }
+      return { id, x: r2(r.left), y: r2(r.top), w: r2(r.width), h: r2(r.height), visible: shown(el) && r.width > 0 && r.height > 0, fontSize };
+    });
+  }
+  const rects = (args) => ({ viewport: [window.innerWidth, window.innerHeight], screen: screenNow(), rects: rectsOf(args) });
+  // Every visible pair that intersects, with the shared box (HudLayout's own collision boxes, js/ui/hud-layout.js).
+  function overlaps(args) {
+    const all = rectsOf(args), rs = all.filter((r) => r.visible), out = [];
+    for (let i = 0; i < rs.length; i++) for (let j = i + 1; j < rs.length; j++) {
+      const a = rs[i], b = rs[j], x = Math.max(a.x, b.x), y = Math.max(a.y, b.y);
+      const w = Math.min(a.x + a.w, b.x + b.w) - x, h = Math.min(a.y + a.h, b.y + b.h) - y;
+      if (w > 0 && h > 0) out.push({ a: a.id, b: b.id, x: r2(x), y: r2(y), w: r2(w), h: r2(h), area: r2(w * h) });
+    }
+    return { screen: screenNow(), checked: rs.map((r) => r.id), skipped: all.filter((r) => !r.visible).map((r) => r.id), overlaps: out };
+  }
+
   // A visible "CLAUDE DRIVING" strip (#6581) so Bryce knows not to touch, and why a touch ends it. pointer-events none:
   // the touch reaches the game, and SoakRun's real-input listener hands the car back.
   let _drvTok = 0, _drvBanner = null;
-  function drivingBanner(on) {
+  // `handsOff` (#6581 item 7): touches no longer take the car back, so the strip carries a big STOP that does.
+  function drivingBanner(on, handsOff) {
     if (typeof document === "undefined" || !document.body || typeof document.createElement !== "function") return;
-    if (!on) { if (_drvBanner) { try { _drvBanner.remove(); } catch (_) { /* gone */ } _drvBanner = null; } return; }
-    if (_drvBanner) return;
+    if (_drvBanner && (!on || _drvBanner.handsOff !== !!handsOff)) { try { _drvBanner.remove(); } catch (_) { /* gone */ } _drvBanner = null; }
+    if (!on || _drvBanner) return;
     const b = _drvBanner = document.createElement("div");
     b.id = "apex-bridge-driving";
+    b.handsOff = !!handsOff;
     b.setAttribute("role", "status");
-    b.textContent = "CLAUDE DRIVING · A TOUCH TAKES THE CAR BACK";
+    b.textContent = handsOff ? "CLAUDE DRIVING · HANDS OFF " : "CLAUDE DRIVING · A TOUCH TAKES THE CAR BACK";
+    if (handsOff) {
+      const stopBtn = document.createElement("button");
+      stopBtn.id = "apex-bridge-driving-stop";
+      stopBtn.type = "button";
+      stopBtn.textContent = "STOP";
+      stopBtn.style.cssText = "pointer-events:auto;min-width:96px;min-height:56px;margin-left:10px;border:0;border-radius:10px;"
+        + "font:800 18px system-ui,sans-serif;background:#fff;color:#b3401f;touch-action:manipulation";
+      stopBtn.addEventListener("click", () => { try { SoakRun.driveStop("stop button"); } catch (_) { /* no driver */ } });
+      b.appendChild(stopBtn);
+    }
     b.style.cssText = "position:fixed;top:calc(max(4px,env(safe-area-inset-top)) + 26px);left:50%;transform:translateX(-50%);"
       + "z-index:99999;pointer-events:none;padding:6px 14px;border-radius:8px;font:700 13px/1.3 system-ui,sans-serif;"
       + "letter-spacing:.08em;background:rgba(217,119,87,.95);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.35)";
@@ -768,6 +811,8 @@ const ApexBridge = (function () {
     scroll,
     screen: () => ({ screen: screenNow(), state: gameState() }),
     when,
+    rects,
+    overlaps,
     drive,
     batch,
   };
@@ -877,6 +922,25 @@ const ApexBridge = (function () {
   // shows it running. A hidden page posts with keepalive (iOS may freeze the page right after).
   const STATUS_BUSY_MS = 15000, STATUS_IDLE_MS = 60000, STATUS_FIRST_MS = 5000;
   const statusKey = (issue) => "apex26.bridgeStatus." + issue;
+  // WAKE LOCK (#6581 item 6): a linked phone must not auto-lock mid-window. iOS drops the lock whenever the page hides,
+  // so it is asked for again on visible; it cannot stop an app switch (the hidden-page handling stays).
+  const wakeApi = () => (typeof navigator !== "undefined" && navigator.wakeLock && typeof navigator.wakeLock.request === "function" ? navigator.wakeLock : null);
+  function wakeState(run) {
+    return { supported: !!wakeApi(), held: !!(run && run.wake && !run.wake.released), refused: (run && run.wakeErr) || null };
+  }
+  async function wakeAcquire(run) {
+    const w = wakeApi();
+    if (!w || (run.wake && !run.wake.released)) return;
+    try {
+      const l = await w.request("screen");
+      if (_run === run) { run.wake = l; run.wakeErr = null; } else wakeRelease({ wake: l });
+    } catch (e) { run.wake = null; run.wakeErr = String((e && e.name) || e); }
+  }
+  function wakeRelease(run) {
+    const l = run.wake;
+    run.wake = null;
+    try { if (l && !l.released) { const r = l.release(); if (r && r.catch) r.catch(() => {}); } } catch (_) { /* released */ }
+  }
   function statusOf(run, ended) {
     const d = typeof document !== "undefined" ? document : null;
     let sha = null, screen = null, driving = null;
@@ -884,7 +948,7 @@ const ApexBridge = (function () {
     try { screen = screenNow(); } catch (_) { /* no DOM */ }
     try { driving = typeof SoakRun !== "undefined" && SoakRun.driving ? !!SoakRun.driving() : null; } catch (_) { /* no driver */ }
     return { status: true, v: V, at: new Date().toISOString(), linked: !ended, ended: ended || undefined, sha, screen,
-      state: gameState(), visible: d ? !d.hidden : null, driving, served: run.served, last: run.last || null, hello: run.cutoff };
+      state: gameState(), visible: d ? !d.hidden : null, wake: wakeState(run).held, driving, served: run.served, last: run.last || null, hello: run.cutoff };
   }
   async function postStatus(run, ended, keepalive) {
     if (run.statusBusy) return null;
@@ -937,7 +1001,7 @@ const ApexBridge = (function () {
   async function start(issue, tok) {
     if (_run) return false;
     _run = { issue, token: tok, cutoff: null, since: null, etag: null, seen: new Set(), served: 0, backoff: 0, timer: null, state: "connecting",
-      last: null, statusId: 0, statusTimer: null, statusDue: 0, statusBusy: false, onVis: null };
+      last: null, statusId: 0, statusTimer: null, statusDue: 0, statusBusy: false, onVis: null, wake: null, wakeErr: null };
     paintBadge();
     try {
       const hello = await post({ hello: true, facts: facts() });
@@ -949,7 +1013,8 @@ const ApexBridge = (function () {
       schedule();
       armStatus(STATUS_FIRST_MS);
       const run = _run;
-      run.onVis = () => { if (_run === run) postStatus(run, null, !!document.hidden); };
+      wakeAcquire(run);
+      run.onVis = () => { if (_run !== run) return; if (!document.hidden) wakeAcquire(run); postStatus(run, null, !!document.hidden); };
       try { document.addEventListener("visibilitychange", run.onVis); } catch (_) { run.onVis = null; }
       return true;
     } catch (e) {
@@ -974,6 +1039,7 @@ const ApexBridge = (function () {
     clearTimeout(run.timer);
     clearTimeout(run.statusTimer);
     try { if (run.onVis) document.removeEventListener("visibilitychange", run.onVis); } catch (_) { /* no document */ }
+    wakeRelease(run);
     _run = null;
     if (run.statusId) postStatus(run, why || "stopped");   // the last edit says the link ended, and why
     say("link ended: " + (why || "stopped"));
