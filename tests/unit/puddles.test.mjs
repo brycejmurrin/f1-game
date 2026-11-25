@@ -232,7 +232,7 @@ test("the PUDDLES knob reaches every backend", () => {
   assert.match(m[0], /def: 1\.0/); assert.match(m[0], /u: "uPuddles"/); assert.match(m[0], /min: 0, max: 2/);
   const glx = read("js/render/glx/glx.js");
   assert.match(glx, /"uWetDark", "uPuddles"/, "GLX looks the uniform up");
-  assert.match(glx, /uf1\(litU\.uPuddles,\s*_litUf,\s*"puddles",\s*T && T\.puddles\s*!= null \? T\.puddles\s*: 1\.0\)/, "GLX uploads uPuddles");
+  assert.match(glx, /uf1\(litU\.uPuddles,\s*_litUf,\s*"puddles",\s*PostCommon\.knob\(T, "puddles"\)\)/, "GLX uploads uPuddles (TUNE_DEFS def 1, #6499)");
   assert.match(read("js/render/glx/shaders/glsl-lit.js"), /uniform float uPuddles;/);
   const tlx = read("js/render/three/tsl-lit.js");
   assert.match(tlx, /puddles:\s+uniform\(1\.0\)/); assert.match(tlx, /uf1\(U\.puddles, k\("puddles", 1\.0\)\)/, "TLX updates U.puddles");

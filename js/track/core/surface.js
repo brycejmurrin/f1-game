@@ -79,11 +79,10 @@ const TrackSurface = (function () {
     // Same omission class as the bankZones fix (ed5a310f).
     if (def.bridges) {
       const ds = track.total / n;
-      const dress = def._sceneryShift || 0;
       for (const bridge of def.bridges) {
-        const center = TrackSpace.wrap01(bridge.s + dress) * track.total;
+        const cs = TrackSpace.wrap01(bridge.s + TrackSpace.sceneryOriginDelta(def)) * track.total;
         for (let k = 0; k < n; k++) {
-          let d = Math.abs(k * ds - center);
+          let d = Math.abs(k * ds - cs);
           d = Math.min(d, track.total - d);
           if (d < bridge.halfM)
             ground[k] -= bridge.rise * 0.5 * (1 + Math.cos(Math.PI * d / bridge.halfM));
