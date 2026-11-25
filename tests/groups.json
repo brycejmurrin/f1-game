@@ -150,6 +150,8 @@
     "tests/unit/browser-workers.test.mjs",
     "tests/unit/build-client-drop.test.mjs",
     "tests/unit/build-gallery.test.mjs",
+    "// TrackSpace.bumpWindow == the old inline cosine window loop, bit-for-bit on Float32 (Gardener carve #6498 pin). ~0.5 s.",
+    "tests/unit/bump-window-pin.test.mjs",
     "tests/unit/cam-avoid.test.mjs",
     "tests/unit/cam-comfort.test.mjs",
     "// Camera tuner reads stored track/team once per Store revision (CPU-HUNT C6). VM, < 0.1 s.",

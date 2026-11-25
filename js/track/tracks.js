@@ -125,27 +125,11 @@ const Tracks = (function () {
     if (def.path && def.id && hasRealElevation(def.id)) surveyHeights(def, px, py, pz, n);
     const dress = TrackSpace.sceneryOriginDelta(def);
     const bridges = def.bridges;
-    if (bridges) for (const b of bridges) {
-      // wrap01 — same idiom as TrackSurface.profile's bridge carve; bare `% 1`
-      // is fine for the authored [0,1) range but disagrees if a float ever
-      // undershoots (JS % keeps the dividend's sign).
-      const cs = TrackSpace.wrap01(b.s + dress) * total;
-      for (let k = 0; k < n; k++) {
-        let d = Math.abs(k * ds - cs);
-        d = Math.min(d, total - d);                 // wrap-around distance
-        if (d < b.halfM) py[k] += b.rise * 0.5 * (1 + Math.cos(Math.PI * d / b.halfM));
-      }
-    }
+    // TrackSpace.bumpWindow — the same window TrackSurface.profile carves the terrain with.
+    if (bridges) for (const b of bridges) TrackSpace.bumpWindow(py, b.s + dress, b.halfM, b.rise, ds, total, 1);
     // elevation changes — terrain follows road (unlike BRIDGES where gY stays flat)
     const elevs = def.elevations;
-    if (elevs) for (const e of elevs) {
-      const cs = TrackSpace.wrap01(e.s + dress) * total;
-      for (let k = 0; k < n; k++) {
-        let d = Math.abs(k * ds - cs);
-        d = Math.min(d, total - d);
-        if (d < e.halfM) py[k] += e.rise * 0.5 * (1 + Math.cos(Math.PI * d / e.halfM));
-      }
-    }
+    if (elevs) for (const e of elevs) TrackSpace.bumpWindow(py, e.s + dress, e.halfM, e.rise, ds, total, 1);
     // Custom designs opt into this seeded ripple to preserve their road and ghosts.
     // Shipped circuits use the surveyed or authored road heights above.
     if (def.undulate === true) {
