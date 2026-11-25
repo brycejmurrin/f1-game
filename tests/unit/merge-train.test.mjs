@@ -12,7 +12,7 @@ import {
   trainHistory, foldCars, verifyTrain, trainRow, trainDisposition, carMessage, redOnRedTip, main,
   stuckGreen, retryAttempts, STUCK_GREEN_MIN, RETRY_MAX, isStackPr, strayTrainRefs, broadRetest, RETEST_BROAD,
   readScreen, screenAccept, screenFold, screenMain, soloLane, landRunsInFlight, resnapVerdict, resnapTree, SCREEN_BUDGET_MS,
-  STACK_PREFIX, stackRef, parseStackRef, readStack, stackPlan, trainInFlight, retestBudget, planTrain,
+  STACK_PREFIX, REBASE_WAIT_MAX_MIN, stackRef, parseStackRef, readStack, stackPlan, trainInFlight, retestBudget, planTrain,
 } from "../../tools/ci/merge-train.mjs";
 import { evaluate, isProtectedConfigPath, isConfigPath } from "../../tools/ci/merge-gate.mjs";
 import { planVerdict } from "../../tools/ci/ready-gate.mjs";
@@ -761,7 +761,7 @@ function stackFixture({ refuseStack = false, refsError = false, patchFail = new 
       const q = opened.find((x) => p === `pulls/${x.number}` || p === `issues/${x.number}/labels`);
       if (q && p.endsWith("/labels")) q.labels = [...new Set([...q.labels.map((l) => l.name), ...o.body.labels])].map((name) => ({ name }));
       else if (q) Object.assign(q, o.body);
-      if (p === "pulls/100" && o.body?.state === "closed") state.trainOpen = false;
+      if (p === "pulls/100" && o.body?.state === "closed") Object.assign(state, { trainOpen: false, closedAt: "2026-11-25T12:00:00Z" });
       return { json: {} };
     }
     if (p.startsWith("pulls?state=open")) return { json: [...(state.trainOpen ? [train] : []), ...opened.filter((q) => q.state === "open"), ...Object.values(state.pulls).filter((q) => q.state === "open")] };
@@ -774,6 +774,7 @@ function stackFixture({ refuseStack = false, refsError = false, patchFail = new 
       const out = spawnSync("git", ["for-each-ref", "--format=%(refname) %(objectname)", `refs/${prefix}`], { cwd: remote, encoding: "utf8" }).stdout.trim();
       return { json: out ? out.split("\n").map((l) => { const [ref, s] = l.split(" "); return { ref, object: { sha: s } }; }) : [] };
     }
+    if (p.startsWith(`commits/${N.head}/pulls`)) return { json: state.closedAt ? [{ ...train, state: "closed", closed_at: state.closedAt }] : [] };
     if (p.startsWith("actions/runs/1/jobs")) return { json: { jobs: state.jobs || [] } };
     if (p.startsWith("actions/workflows/land.yml/runs")) return { json: { workflow_runs: [] } };
     if (p.includes("/statuses")) return { json: [] };
@@ -786,7 +787,7 @@ function stackFixture({ refuseStack = false, refsError = false, patchFail = new 
   const screenFile = path.join(root, "screen.json");
   const screen = (cars, stack = true) => fs.writeFileSync(screenFile, JSON.stringify({ tip: N.head, ...(stack ? { stack: { pr: 100, head: N.head } } : {}), cars: cars.map((pr) => ({ pr, head: heads[pr], ok: true, why: "" })) }));
   const stacks = () => { const o = spawnSync("git", ["for-each-ref", "--format=%(refname:strip=2) %(objectname)", "refs/heads/train-next/"], { cwd: remote, encoding: "utf8" }).stdout.trim(); return o ? o.split("\n").map((l) => l.split(" ")) : []; };
-  const build = async () => { const logs = []; const code = await main(["--build", "--screen-file", screenFile], { request, cwd: dir, log: (l) => logs.push(l), now: Date.parse("2026-11-25T12:00:00Z"), carGate: () => ({ head: "", rows: Object.fromEntries(CAR_ROWS.map((k) => [k, { ok: true }])) }), tipCheck: () => ({ state: "green" }) }); return { code, logs }; };
+  const build = async (at = "2026-11-25T12:00:00Z", req = request) => { const logs = []; const code = await main(["--build", "--screen-file", screenFile], { request: req, cwd: dir, log: (l) => logs.push(l), now: Date.parse(at), carGate: () => ({ head: "", rows: Object.fromEntries(CAR_ROWS.map((k) => [k, { ok: true }])) }), tipCheck: () => ({ state: "green" }) }); return { code, logs }; };
   const merge = () => { // GitHub merges train #100 into the deploy branch
     const m = g("commit-tree", `${N.head}^{tree}`, "-p", base, "-p", N.head, "-m", "Merge pull request #100");
     g("push", "-q", "origin", `${m}:refs/heads/${DEPLOY}`);
@@ -1043,6 +1044,87 @@ test("#6652 nit 4: N merged between the screen and the build — the stacked scr
     assert.deepEqual(b.logs.slice(-1), [`= merge-train idle — the screen was stacked on train #100, which is no longer running (the tip ${moved.slice(0, 8)} moved past #100's merge); the next run screens onto the tip`]);
     assert.deepEqual(g.opened, []);
   } finally { g.rm(); }
+});
+
+// #6652 review (pr-reviewer on f07c5a51, Bryce ~22:55Z: fix 1-3 before the tap)
+const okGate = () => ({ head: "", rows: Object.fromEntries(CAR_ROWS.map((k) => [k, { ok: true }])) });
+/** A fixture where N closed red with #3,#4 stacked on it: the rebase is due and waits for its screen. */
+async function rebaseDue() {
+  const f = stackFixture();
+  f.screen([3, 4]);
+  assert.equal((await f.build()).code, 0);
+  f.state.ci = "failure";
+  assert.equal((await f.build()).code, 0);
+  const [[ref]] = f.stacks();
+  return { f, ref, screen: (o = {}) => screenMain({ out: f.screenFile, request: f.request, cwd: f.dir, log: () => {}, check: () => ({ ok: true }), gen: () => ({ ok: true }), carGate: okGate, ...o }) };
+}
+const moveTip = (f) => { // a solo merge lands on the deploy branch
+  f.g("switch", "-q", "--detach", f.state.tip); fs.writeFileSync(path.join(f.dir, "z.txt"), "z\n"); f.g("add", "."); f.g("commit", "-qm", "solo");
+  const t = f.g("rev-parse", "HEAD"); f.g("push", "-q", "origin", `${t}:refs/heads/${DEPLOY}`); f.state.tip = t; return t;
+};
+
+test("#6652 review 1: a rebase screen on a tip that has since moved is not this rebase's: the build waits again", async () => {
+  const { f, ref, screen } = await rebaseDue();
+  try {
+    assert.equal(await screen(), 0);
+    const t = moveTip(f);
+    const r = await f.build();
+    assert.equal(r.logs.at(-1), `= merge-train waiting — #3,#4 (${ref.slice(0, STACK_PREFIX.length + 12)}…) rebase onto the tip ${t.slice(0, 8)} once a screen measures that fold (the train under it closed unmerged (red, stale or by hand))`);
+    assert.deepEqual(f.stacks().map(([x]) => x), [ref], "the stack is kept for the next screen");
+    assert.equal(f.writes.filter((w) => w.p === "pulls" && w.method === "POST").length, 1, "no train opened");
+  } finally { f.rm(); }
+});
+
+test("#6652 review 3: a rebase that has waited past REBASE_WAIT_MAX_MIN since N closed logs `= merge-train error` naming the screen it lacks, exit 0", async () => {
+  const { f, ref } = await rebaseDue();
+  try {
+    const at = new Date(Date.parse("2026-11-25T12:00:00Z") + (REBASE_WAIT_MAX_MIN + 1) * 60_000).toISOString();
+    const r = await f.build(at);
+    assert.equal(r.code, 0);
+    assert.deepEqual(r.logs, [`= merge-train error — #3,#4 (${ref.slice(0, STACK_PREFIX.length + 12)}…) has waited ${REBASE_WAIT_MAX_MIN + 1} min (over ${REBASE_WAIT_MAX_MIN}) to rebase onto the tip ${f.base.slice(0, 8)}: the screen measured a fold stacked on #100, not ${ref}; is the train-screen job failing?`]);
+    fs.rmSync(f.screenFile);
+    assert.equal((await f.build(at)).logs.at(-1).split(": ").slice(1, 2)[0], `no valid screen verdict at ${f.screenFile}; is the train-screen job failing?`);
+    assert.equal(REBASE_WAIT_MAX_MIN, 90, "three land.yml sweeps at the :17/:47 cron");
+  } finally { f.rm(); }
+});
+
+test("#6652 review 2: the screen's stacked branches — a read error or a ref that is no stack skips (exit 0), a promote skips, no train open", async () => {
+  const { f, ref, screen } = await rebaseDue();
+  try {
+    const stacked = "train #3,#4 is stacked: the build promotes, restacks or rebases it";
+    const skipOf = () => readScreen(fs.readFileSync(f.screenFile, "utf8")).skip;
+    // degraded: a car's pulls row is unreadable
+    assert.equal(await screen({ request: (p, o) => (p === "pulls/3" ? { error: "HTTP 502: Bad Gateway" } : f.request(p, o)) }), 0);
+    assert.equal(skipOf(), `${stacked} (pulls/3: HTTP 502: Bad Gateway)`);
+    // invalid: the ref names a car its fold does not carry
+    const bogus = `${STACK_PREFIX}${f.N.head}-3`;
+    f.rg("update-ref", "-d", `refs/heads/${ref}`);
+    f.rg("update-ref", `refs/heads/${bogus}`, f.N.head);
+    assert.equal(await screen(), 0);
+    assert.equal(skipOf(), "train #3 is stacked: the build promotes, restacks or rebases it (0 commit(s) past its base, its ref names 1 car(s))");
+    f.rg("update-ref", "-d", `refs/heads/${bogus}`);
+  } finally { f.rm(); }
+  const g = stackFixture();
+  try { // not a rebase: N merged under an intact stack, so the build promotes it; the screen skips
+    g.screen([3, 4]);
+    assert.equal((await g.build()).code, 0);
+    g.merge();
+    const out = path.join(g.root, "s.json");
+    assert.equal(await screenMain({ out, request: g.request, cwd: g.dir, log: () => {}, check: () => assert.fail("no screen"), gen: () => assert.fail("no gen"), carGate: okGate }), 0);
+    assert.equal(readScreen(fs.readFileSync(out, "utf8")).skip, "train #3,#4 is stacked: the build promotes, restacks or rebases it");
+  } finally { g.rm(); }
+});
+
+test("#6652 review 2: a rebase screen whose stack is gone idles the build (never a plain train from it)", async () => {
+  const { f, ref, screen } = await rebaseDue();
+  try {
+    assert.equal(await screen(), 0);
+    f.rg("update-ref", "-d", `refs/heads/${ref}`);
+    const r = await f.build();
+    assert.equal(r.code, 0);
+    assert.equal(r.logs.at(-1), `= merge-train idle — the screen measured the rebase of ${ref}, which is no longer stacked; the next run screens onto the tip`);
+    assert.equal(f.writes.filter((w) => w.p === "pulls" && w.method === "POST").length, 1);
+  } finally { f.rm(); }
 });
 
 // ---- #6686 / #6679 follow-ups (#6667): one in-flight definition, fixer parity, the car cap by retest seconds -------

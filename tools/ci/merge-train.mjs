@@ -980,6 +980,27 @@ async function readStackState({ request, git, x, running, carGate = null }) {
   return { stack, cars, tip, onTip, plan: stackPlan({ stack, running, onTip, cars, bad }) };
 }
 
+/** How long a due rebase may wait for its screen before the build logs `= merge-train error` (#6652 review nit 3):
+ *  three land.yml sweeps at its :17/:47 cron. A screen of the fold normally lands at the first sweep after N closes. */
+export const REBASE_WAIT_MAX_MIN = 90;
+
+/** When the due rebase started waiting: N's close (the closed train PR whose head is the stack's base, read with
+ *  `commits/<base>/pulls`), else the stacked fold's own commit time (earlier, so it errs toward the error line). ms. */
+function rebaseWaitSince({ request, git, x }) {
+  const r = request(`commits/${x.base}/pulls?per_page=100`);
+  const n = (r.json || []).find((p) => String(p?.head?.sha || "").toLowerCase() === x.base && p.closed_at);
+  if (n) return Date.parse(n.closed_at);
+  return Number(String(git(["log", "-1", "--format=%ct", x.sha]).stdout || "").trim()) * 1000;
+}
+
+/** Why the screen file is not the due rebase's (the artifact the error line names). Pure. */
+function screenMiss(s, screenFile, ref, tip) {
+  if (!s) return `no valid screen verdict at ${screenFile || "(no path)"}`;
+  if (s.skip) return `the screen skipped (${s.skip})`;
+  if (s.rebase !== ref) return `the screen measured ${s.rebase ? s.rebase : s.stack ? `a fold stacked on #${s.stack.pr}` : `a plain fold onto ${s.tip.slice(0, 8)}`}, not ${ref}`;
+  return `the screen measured the fold onto ${s.tip.slice(0, 8)}, the tip is ${tip.slice(0, 8)}`;
+}
+
 /** The build's stacked-train step (stackPlan, then act). null: no stack is left and the build goes on as before;
  *  { code, msg }: this run is done; { degraded }: stacking failed (a refs read, a fetch, a car read), logged once, and
  *  the build goes on exactly as with ONE train at a time (FALLBACK: a LAND_TOKEN that may not create train-next/*, or
@@ -1013,7 +1034,12 @@ async function stackStep({ request, cwd, log, running, now, carGate = null, open
     const s = readScreen(text);
     if (!s || s.rebase !== x.ref || s.tip !== tip) {
       if (spec) closeSpec(request, log, spec, `the stack rebases onto the tip (${plan.why})`);
-      return { code: 0, msg: `= merge-train waiting — ${names(stack.cars)} (${x.ref.slice(0, STACK_PREFIX.length + 12)}…) rebase onto the tip ${tip.slice(0, 8)} once a screen measures that fold (${plan.why})` };
+      const short = `${x.ref.slice(0, STACK_PREFIX.length + 12)}…`;
+      const since = rebaseWaitSince({ request, git, x });
+      const min = Math.floor((now - since) / 60_000);
+      // A broken screen job must not wedge the stack silently: past the bound the line is an error the watcher greps.
+      if (Number.isFinite(min) && min > REBASE_WAIT_MAX_MIN) return { code: 0, msg: `= merge-train error — ${names(stack.cars)} (${short}) has waited ${min} min (over ${REBASE_WAIT_MAX_MIN}) to rebase onto the tip ${tip.slice(0, 8)}: ${screenMiss(s, screenFile, x.ref, tip)}; is the train-screen job failing?` };
+      return { code: 0, msg: `= merge-train waiting — ${names(stack.cars)} (${short}) rebase onto the tip ${tip.slice(0, 8)} once a screen measures that fold (${plan.why})` };
     }
     accept = screenAccept(s);
   }
