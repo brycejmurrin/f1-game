@@ -13,12 +13,13 @@ const ORIGIN = "https://apex.test";
 // #6627: a `?b=` bust the network cannot answer, with no shell >= b cached, gets
 // a no-store page that hops to the plain "./" navigation: never Response.error()
 // (the installed iOS app has no reload control) and never the stale shell itself.
-async function assertBustHop(res, msg) {
+async function assertBustHop(res, msg, to = `${ORIGIN}/`) {
   assert.equal(res.status, 200, msg);
   assert.equal(res.headers.get("cache-control"), "no-store", msg);
-  assert.equal(await res.text(), bustHopPage(`${ORIGIN}/`), msg);
+  assert.equal(await res.text(), bustHopPage(to), msg);
 }
-const bustHopPage = (to) => `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${to}"><title>Apex 26</title>`;
+const bustHopPage = (to) => `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="1;url=${to.replace(/&/g, "&amp;")}"><title>Apex 26</title>` +
+  `<script>location.replace(${JSON.stringify(to)} + location.hash)</script>`;
 
 function deferred() {
   let resolve;
@@ -762,6 +763,9 @@ test("a cache-bust navigation answered non-ok hops to ./, never the generic cach
   sub.stores.set("apex26-old", new Map([[`${ORIGIN}/index.html`, new Response("stale shell", { status: 200 })]]));
   const res = await sub.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/f1-game/?b=321` }).responsePromise;
   assert.equal(await res.text(), bustHopPage(`${ORIGIN}/f1-game/`));
+  // The hop keeps every other query parameter (?log=, deep links); only `b` goes.
+  const kept = await sub.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/f1-game/?log=net&b=321&inputdebug=1` }).responsePromise;
+  await assertBustHop(kept, "query kept", `${ORIGIN}/f1-game/?log=net&inputdebug=1`);
 });
 
 test("a failed cache-bust navigation with no cached shell at all still fails (nothing to hop to)", async () => {
@@ -2654,4 +2658,30 @@ test("the repair stands down for a healthy, foreign or superseded generation and
   assert.equal(d.lifetimes.length, 1);
   await d.responsePromise; await Promise.all(d.lifetimes);
   assert.equal(offline.stores.size, 0, "nothing re-created offline");
+});
+
+test("a failed repair backs off instead of re-downloading on every launch; a core-incomplete status forces one (#6629)", async () => {
+  let fail = true;
+  const shellReads = [];
+  const ok = installFetch();
+  const h = createHarness({ navigator: { onLine: true }, fetchImpl: (req, init) => {
+    if (requestKey(req).endsWith("/index.html")) shellReads.push(fail);
+    if (fail && requestKey(req).includes("/js/game.js")) return Promise.resolve(new Response("missing", { status: 404 }));
+    return ok(req, init);
+  } });
+  const launch = async () => { const n = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` }); await n.responsePromise; await Promise.all(n.lifetimes); };
+  await launch();
+  assert.equal(h.stores.get("apex26-321")?.has(`${ORIGIN}/__apex_install_settled__`) || false, false, "the essential 404 fails the repair");
+  fail = false;
+  await launch();
+  assert.deepEqual(shellReads, [true], "inside the back-off window the second launch starts no precache");
+  // SETTLED present but a required file gone: the page sees known && !coreReady and the ask forces a re-precache.
+  const healthy = createHarness({ navigator: { onLine: true }, fetchImpl: installFetch() });
+  await healthy.lifecycleEvent("install").done();
+  healthy.stores.get("apex26-321").delete(`${ORIGIN}/js/game.js?v=321`);
+  const first = await askOffline(healthy);
+  assert.equal(first.known, true);
+  assert.equal(first.coreReady, false);
+  for (let i = 0; i < 400 && !healthy.stores.get("apex26-321").has(`${ORIGIN}/js/game.js?v=321`); i++) await new Promise((r) => setTimeout(r, 2));
+  assert.equal((await askOffline(healthy)).coreReady, true, "the required file is back");
 });

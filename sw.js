@@ -305,13 +305,21 @@ async function shellAtLeast(b) {
 // URL bar or reload: the player had to kill it. The callers spend their one-shot
 // sessionStorage key before navigating, so no answer here can loop. Never the
 // stale shell itself under the bust URL (#3284's rule): a tiny page that
-// replaces the location with "./", a plain navigation that tries the network
-// once more and falls back to the cached shell, whose next foreground update
-// check retries the build. No cached shell at all → undefined (nothing to hop to).
+// replaces the location with the same address minus `b` (other query params and
+// the #fragment kept, as the boot guard and UpdateCheck.apply keep them), a
+// plain navigation that tries the network once more and falls back to the
+// cached shell, whose next foreground update check retries the build. The meta
+// refresh is the no-script fallback. No cached shell at all → undefined.
 async function bustFallback(url) {
   try { if (!(await matchPreferCurrent("index.html"))) return undefined; } catch (_) { return undefined; }
-  const to = new URL("./", url.href).href;
-  return new Response('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=' + to + '"><title>Apex 26</title>',
+  const target = new URL(url.href);
+  target.searchParams.delete("b");
+  target.hash = "";
+  const to = target.href;
+  const attr = to.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+  const js = JSON.stringify(to).replace(/</g, "\\u003c");
+  return new Response('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="1;url=' + attr + '"><title>Apex 26</title>'
+    + "<script>location.replace(" + js + " + location.hash)</script>",
     { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
 }
 
@@ -1221,27 +1229,32 @@ self.addEventListener("install", (event) => {
 // that finds the generation it was registered for (`sw.js?v=<build>`) without
 // INSTALL_SETTLED, with no newer worker installing or waiting, re-runs the
 // precache body into it. A newer deploy fails the body's shell-build check and
-// changes nothing. One attempt in flight; a settled generation is checked once.
-let _repair = null, _repairOk = "";
+// changes nothing. One attempt in flight; a settled generation is checked once;
+// a failed attempt (an essential 404, a full quota) waits REPAIR_RETRY_MS before
+// the next, so every launch does not re-download the whole set. `force` (the
+// page saw known && !coreReady: required files gone under a SETTLED marker)
+// re-runs it anyway; hashed entries already present are reused, not refetched.
+const REPAIR_RETRY_MS = 10 * 60 * 1000;
+let _repair = null, _repairOk = "", _repairFailedAt = -Infinity;
 function ownBuild() {
   try { return Number(new URL(self.location.href).searchParams.get("v")); } catch (_) { return NaN; }
 }
-async function repairGeneration() {
-  if (DEV_HOST || _killed) return false;
+async function repairGeneration(force) {
+  if (DEV_HOST || _killed || Date.now() - _repairFailedAt < REPAIR_RETRY_MS) return false;
   const name = await currentCacheName();
-  if (name === _repairOk || cacheBuild(name) !== ownBuild()) return false;
+  if ((name === _repairOk && !force) || cacheBuild(name) !== ownBuild()) return false;
   const reg = self.registration;
   if (reg && (reg.installing || reg.waiting)) return false;
-  if (await caches.match(INSTALL_SETTLED_URL, { cacheName: name })) { _repairOk = name; return false; }
+  if (!force && await caches.match(INSTALL_SETTLED_URL, { cacheName: name })) { _repairOk = name; return false; }
   swLog("warn", "offline cache " + name + " is incomplete; re-precaching");
   await precacheGeneration();
   _repairOk = name;
   return true;
 }
-function maybeRepair() {
+function maybeRepair(force) {
   if (!_repair) {
-    _repair = repairGeneration()
-      .catch((e) => { swLog("warn", "offline repair failed: " + errMsg(e)); return false; })
+    _repair = repairGeneration(force === true)
+      .catch((e) => { _repairFailedAt = Date.now(); swLog("warn", "offline repair failed: " + errMsg(e)); return false; })
       .finally(() => { _repair = null; });
   }
   return _repair;
@@ -1302,7 +1315,7 @@ self.addEventListener("message", (event) => {
       try {
         const status = await offlineStatus();
         // Unknown or core-incomplete: the generation may have been evicted (#6629).
-        if (!status.known || !status.coreReady) event.waitUntil(maybeRepair());
+        if (!status.known || !status.coreReady) event.waitUntil(maybeRepair(!!status.known));
         if (event.data.type === "apex-offline-retry" && status._cache && status.coreReady && status._missing.length) {
           const name = CACHE_PREFIX + status.build;
           if (!offlineRetries.has(name)) {
