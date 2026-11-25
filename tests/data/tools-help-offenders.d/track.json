@@ -1,0 +1,20 @@
+{
+  "//": "tools/track CLIs with no --help path yet (#6556 U0 baseline 2026-11-25). Fix one: add exitIfHelp from tools/lib/cli-args.mjs, then delete its line.",
+  "offenders": [
+    "tools/track/aero-zone-turns.cjs",
+    "tools/track/centreline-kinks.cjs",
+    "tools/track/clip-audit.cjs",
+    "tools/track/coplanar-audit.cjs",
+    "tools/track/corner-frames.cjs",
+    "tools/track/ground-audit.cjs",
+    "tools/track/line-audit.mjs",
+    "tools/track/measure-props-over-road.mjs",
+    "tools/track/official-corners.cjs",
+    "tools/track/props-tris.cjs",
+    "tools/track/refresh-f1-circuit-reference.mjs",
+    "tools/track/rotate-markings.cjs",
+    "tools/track/startline-snap.cjs",
+    "tools/track/stitch-osm-ring.mjs",
+    "tools/track/surveyor-scope.mjs"
+  ]
+}

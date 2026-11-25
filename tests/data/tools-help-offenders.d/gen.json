@@ -1,0 +1,23 @@
+{
+  "//": "tools/gen CLIs with no --help path yet (#6556 U0 baseline 2026-11-25). Fix one: add exitIfHelp from tools/lib/cli-args.mjs, then delete its line.",
+  "offenders": [
+    "tools/gen/compress-audio.mjs",
+    "tools/gen/garage-defaults.mjs",
+    "tools/gen/gen-arch-table.mjs",
+    "tools/gen/gen-flags-table.mjs",
+    "tools/gen/gen-ladder-figures.mjs",
+    "tools/gen/gen-quali-calib.mjs",
+    "tools/gen/gen-slider-doc.mjs",
+    "tools/gen/gen-test-groups.mjs",
+    "tools/gen/gen-tools-readme.mjs",
+    "tools/gen/import-models.mjs",
+    "tools/gen/move-tree.mjs",
+    "tools/gen/settings-defaults.mjs",
+    "tools/gen/targets.mjs",
+    "tools/gen/title-art.mjs",
+    "tools/gen/track-stills.mjs",
+    "tools/gen/trees/bake-trees.mjs",
+    "tools/gen/vendor-three.mjs",
+    "tools/gen/voicepack.mjs"
+  ]
+}

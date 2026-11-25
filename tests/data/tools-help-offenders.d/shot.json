@@ -1,0 +1,14 @@
+{
+  "//": "tools/shot CLIs with no --help path yet (#6556 U0 baseline 2026-11-25). Fix one: add exitIfHelp from tools/lib/cli-args.mjs, then delete its line.",
+  "offenders": [
+    "tools/shot/ab-gallery.mjs",
+    "tools/shot/capture-benchmark.mjs",
+    "tools/shot/capture-gallery.mjs",
+    "tools/shot/design-matrix.mjs",
+    "tools/shot/replay-camera-probe.mjs",
+    "tools/shot/repro-shot.mjs",
+    "tools/shot/run-capture-request.mjs",
+    "tools/shot/track-session.mjs",
+    "tools/shot/visor-lab-export.mjs"
+  ]
+}
