@@ -34,8 +34,8 @@ function fakeGitHub(thread = []) {
   return { fetch, calls, thread, bump: () => etag++ };
 }
 
-function load({ search = "?apex=1&bridge=42", tok = "", apex = {}, gh = fakeGitHub(), extra = {} } = {}) {
-  const store = new Map(tok ? [["apex26.bridgeToken", tok]] : []);
+function load({ search = "?apex=1&bridge=42", tok = "", apex = {}, gh = fakeGitHub(), extra = {}, store = new Map() } = {}) {
+  if (tok) store.set("apex26.bridgeToken", tok);
   const ctx = vm.createContext({
     window: { __apex: apex, devicePixelRatio: 3, innerWidth: 844, innerHeight: 390 },
     location: { search, href: "https://brycejmurrin.github.io/f1-game/" + search, reload() {} },
@@ -355,7 +355,10 @@ test("batch runs steps in order, stops at the first failure, and keeps reload la
   assert.equal(early.value[0].error, "reload must be the last step");
   const nest = await api.handle({ cmd: "batch", args: { steps: [{ cmd: "batch", args: { steps: [] } }] } });
   assert.equal(nest.value[0].error, "batch cannot nest");
-  assert.equal((await api.handle({ cmd: "batch", args: { steps: new Array(11).fill({ cmd: "ping" }) } })).ok, false);
+  // #6581 (Bryce's D5 on #6582): 25 steps fit one comment (a nav → drive → tap → snap recipe with its waits); 26 do not.
+  assert.equal(api.BATCH_MAX, 25);
+  assert.equal((await api.handle({ cmd: "batch", args: { steps: new Array(25).fill({ cmd: "ping" }) } })).value.length, 25);
+  assert.equal((await api.handle({ cmd: "batch", args: { steps: new Array(26).fill({ cmd: "ping" }) } })).ok, false);
 });
 
 test("tokenShape describes a pasted token without revealing it", () => {
@@ -799,4 +802,254 @@ test("snap waits for the renderer's next present and reads it in that task, not 
   g.GLX.awaitSoftPresent = () => Promise.resolve("stale");
   const s = await load({ search: "", extra: { document: g.doc, GLX: g.GLX } }).api.handle({ cmd: "snap" });
   assert.equal(s.value.fresh, "stale");
+});
+
+test("#6581 tap waitMs: waits for a control to appear and be enabled, then taps; refusals never wait", async () => {
+  const dom = menuDom();
+  const b = load({ search: "", apex: dom.apex, extra: dom.extra });
+  // TIME TRIAL opens SELECT 30 ms after its click: a tap on SELECT's GO in the same batch used to miss it.
+  const out = (await b.api.handle({ cmd: "batch", args: { steps: [{ cmd: "tap", args: { id: "mb-tt" } }, { cmd: "tap", args: { id: "sel-go", waitMs: 2000 } }] } })).value;
+  assert.deepEqual(plain(out.map((s) => [s.cmd, s.ok, s.value && s.value.tapped])), [["tap", true, "mb-tt"], ["tap", true, "sel-go"]]);
+  assert.ok(out[1].value.waited >= 0 && out[1].value.waited < 2000, "it answered once the button was up");
+  assert.ok(dom.log.includes("sel-go:click"));
+  // Disabled, then enabled: pressed only once enabled.
+  dom.els.get("rs-cancel").disabled = true;
+  setTimeout(() => { dom.els.get("rs-cancel").disabled = false; }, 150);
+  const en = await b.api.handle({ cmd: "tap", args: { id: "rs-cancel", waitMs: 2000 } });
+  assert.equal(en.ok, true);
+  assert.ok(en.value.waited >= 100, "waited for the enable");
+  // Never appears: the miss names the wait. Capped at 30 s whatever is asked.
+  const miss = await b.api.handle({ cmd: "tap", args: { id: "nowhere-at-all", waitMs: 300 } });
+  assert.equal(miss.error, "#nowhere-at-all not in the page after 300 ms");
+  // A denied area, a bad id or an ambiguous label fails at once: no wait cures it.
+  const t0 = Date.now();
+  assert.equal((await b.api.handle({ cmd: "tap", args: { id: "mb-career", waitMs: 5000 } })).error, "mb-career is refused: inside #mb-career (saves, career, net or the link)");
+  assert.equal((await b.api.handle({ cmd: "tap", args: { id: "#x", waitMs: 5000 } })).ok, false);
+  assert.ok(Date.now() - t0 < 1000, "refusals answer without waiting");
+});
+
+// A thread that also takes comment edits (PATCH /issues/comments/<id>), as the status post uses.
+function editingGitHub() {
+  const thread = [];
+  const calls = [];
+  const fetch = async (url, opts) => {
+    calls.push({ url, method: opts.method, keepalive: opts.keepalive });
+    const json = (status, body) => ({ status, ok: status < 300, json: async () => body, headers: { get: () => null } });
+    const m = /\/issues\/comments\/(\d+)$/.exec(url);
+    if (opts.method === "PATCH") {
+      const c = m && thread.find((x) => x.id === Number(m[1]));
+      if (!c) return json(404, { message: "Not Found" });
+      c.body = JSON.parse(opts.body).body;
+      return json(200, c);
+    }
+    if (opts.method === "POST") {
+      const c = { id: 9000 + calls.length, created_at: HELLO_AT, author_association: "OWNER", body: JSON.parse(opts.body).body };
+      thread.push(c);
+      return json(201, c);
+    }
+    return json(200, thread.slice());
+  };
+  return { fetch, calls, thread };
+}
+const statusOf = (c) => JSON.parse(c.body.replace(/```apex-status\n|\n```/g, ""));
+
+test("#6581 status: one apex-status comment, edited in place across reloads, never a new one per tick", async () => {
+  const gh = editingGitHub(), store = new Map();
+  const b = load({ tok: "tok", gh, store, apex: { info: () => ({ state: "menu" }) } });
+  await flush();
+  const id = await b.api.status();
+  const statuses = () => gh.thread.filter((c) => c.body.startsWith("```apex-status"));
+  assert.equal(statuses().length, 1);
+  assert.equal(store.get("apex26.bridgeStatus"), "42:" + id, "the id is kept on the device, with its issue");
+  const s1 = statusOf(statuses()[0]);
+  assert.equal(s1.status, true);
+  assert.equal(s1.linked, true);
+  assert.equal(s1.state, "menu");
+  assert.equal(s1.hello, HELLO_AT);
+  for (const k of ["at", "sha", "screen", "visible", "driving", "served", "last"]) assert.ok(k in s1, k);
+  // A command served since: the next tick edits the same comment and names it.
+  gh.thread.push(cmd(77, { cmd: "ping" }));
+  await b.api.pollOnce();
+  assert.equal(await b.api.status(), id);
+  assert.equal(statuses().length, 1, "edited, not posted again");
+  assert.deepEqual(plain(statusOf(statuses()[0]).last), { id: 77, cmd: "ping", busy: false });
+  assert.equal(gh.calls.at(-1).method, "PATCH");
+  assert.match(gh.calls.at(-1).url, new RegExp("/repos/brycejmurrin/f1-game/issues/comments/" + id + "$"));
+  // A reload (a fresh page, same device storage) edits the same comment.
+  b.api.stop("reload");
+  await flush();
+  assert.equal(statusOf(statuses()[0]).linked, false, "the link's end is the last edit");
+  assert.equal(statusOf(statuses()[0]).ended, "reload");
+  const b2 = load({ tok: "tok", gh, store });
+  await flush();
+  assert.equal(await b2.api.status(), id);
+  assert.equal(statuses().length, 1);
+  // Someone deleted it: a 404 edit posts a fresh one and keeps its id.
+  gh.thread.splice(gh.thread.indexOf(statuses()[0]), 1);
+  const id2 = await b2.api.status();
+  assert.notEqual(id2, id);
+  assert.equal(statuses().length, 1);
+  assert.equal(store.get("apex26.bridgeStatus"), "42:" + id2);
+  // Another issue's id is never edited: a link on a new issue posts its own.
+  store.set("apex26.bridgeStatus", "7:" + id2);
+  const b3 = load({ tok: "tok", gh, store, search: "?apex=1&bridge=43" });
+  await flush();
+  assert.notEqual(await b3.api.status(), id2);
+});
+
+test("#6581 status is not a command: an apex-status comment is never picked up", () => {
+  const { api } = load({ search: "" });
+  const c = { id: 1, created_at: "2026-10-30T20:00:05Z", author_association: "OWNER", body: '```apex-status\n{"cmd":"reload"}\n```' };
+  assert.deepEqual(plain(api.pickCommands([c], HELLO_AT, new Set())), []);
+});
+
+// A driver whose drive ends only when told to, the way a real touch, pause or stop ends SoakRun's.
+function heldDriver() {
+  const ends = [];
+  let active = false;
+  const S = {
+    driving: () => active,
+    drive() { active = true; return new Promise((res) => ends.push((reason) => { active = false; res({ reason, inBox: false, steps: [] }); })); },
+    driveStop(why) { const e = ends.at(-1); if (e) e(why); return { reason: why }; },
+    driveStatus: () => ({ active }),
+  };
+  const body = { kids: [], appendChild(n) { this.kids.push(n); n.remove = () => { this.kids = this.kids.filter((k) => k !== n); }; } };
+  const document = { body, getElementById: () => null,
+    createElement: (tag) => ({ tag, style: {}, attrs: {}, kids: [], on: {}, setAttribute(k, v) { this.attrs[k] = v; },
+      appendChild(n) { this.kids.push(n); }, addEventListener(t, f) { this.on[t] = f; } }) };
+  return { S, ends, body, extra: { SoakRun: S, setTimeout, Date, document } };
+}
+
+test("#6581 drive shows a CLAUDE DRIVING banner while it holds the car, gone on any end", async () => {
+  const d = heldDriver();
+  const b = load({ search: "", apex: { info: () => ({ state: "race" }) }, extra: d.extra });
+  const banner = () => d.body.kids.find((k) => k.id === "apex-bridge-driving");
+  assert.equal(banner(), undefined);
+  assert.equal((await b.api.handle({ cmd: "drive", args: { laps: 1, wait: false } })).ok, true);
+  assert.match(banner().textContent, /^CLAUDE DRIVING/);
+  assert.equal(banner().style.cssText.includes("pointer-events:none"), true, "a touch still reaches the game and ends the drive");
+  assert.equal(banner().attrs.role, "status");
+  assert.ok(/^apex-bridge(-|$)/.test(banner().id), "inside the TAP_DENY link area");
+  d.ends[0]("touch");
+  await flush();
+  assert.equal(banner(), undefined, "a real touch hands the car back and the banner goes");
+  // A drive replaced by a newer one: the first one's end leaves the newer drive's banner up.
+  await b.api.handle({ cmd: "drive", args: { laps: 1, wait: false } });
+  await b.api.handle({ cmd: "drive", args: { seconds: 30, wait: false } });
+  d.ends[1]("replaced");
+  await flush();
+  assert.ok(banner(), "the newer drive still owns it");
+  await b.api.handle({ cmd: "drive", args: { stop: true } });
+  await flush();
+  assert.equal(banner(), undefined, "stop removes it");
+  assert.equal(d.body.kids.length, 0);
+});
+
+test("#6581 when: waits for a screen, state or visibility; ok:false stops the batch; one condition only", async () => {
+  const dom = menuDom();
+  const b = load({ search: "", apex: dom.apex, extra: dom.extra });
+  const out = (await b.api.handle({ cmd: "batch", args: { steps: [{ cmd: "tap", args: { id: "mb-tt" } }, { cmd: "when", args: { screen: "select", ms: 2000 } }, { cmd: "screen" }] } })).value;
+  assert.deepEqual(plain(out.map((s) => [s.cmd, s.ok, s.value.ok ?? null])), [["tap", true, true], ["when", true, true], ["screen", true, null]]);
+  assert.equal(out[1].value.screen, "select");
+  const miss = (await b.api.handle({ cmd: "batch", args: { steps: [{ cmd: "when", args: { state: "race", ms: 200 } }, { cmd: "ping" }] } })).value;
+  assert.equal(miss.length, 1, "a when that never came true stops the batch");
+  assert.equal(miss[0].value.ok, false);
+  assert.equal(miss[0].value.state, "menu");
+  for (const args of [{}, { screen: "select", state: "menu" }, { screen: "nowhere" }, { visible: "yes" }]) {
+    assert.equal((await b.api.handle({ cmd: "when", args })).ok, false, JSON.stringify(args));
+  }
+  assert.equal((await b.api.handle({ cmd: "when", args: { visible: true, ms: 0 } })).value.ok, true);
+});
+
+test("#6581 status cadence (Bryce's D4): first edit 5 s after hello, 15 s while a command runs, 60 s idle, never postponed", async () => {
+  const timers = [];
+  let now = 1_000_000;
+  const clock = { now: () => now };
+  const FakeDate = class extends Date { static now() { return clock.now(); } };
+  const gh = editingGitHub();
+  const b = load({ tok: "tok", gh, extra: { Date: FakeDate, setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; } } });
+  await flush();
+  const statusTimers = () => timers.filter((t) => [5000, 15000, 60000].includes(t.ms)).map((t) => t.ms);
+  assert.deepEqual(statusTimers(), [5000]);
+  assert.equal(b.api.statusDue(), now + 5000);
+  // A command starts at +1 s: the 5 s edit is sooner than 15 s, so it stands.
+  now += 1000;
+  gh.thread.push(cmd(77, { cmd: "ping" }));
+  await b.api.pollOnce();
+  assert.equal(b.api.statusDue(), 1_000_000 + 5000, "a command never postpones a due edit");
+  // The 5 s edit fires while idle: the next one is 60 s out.
+  now += 4000;
+  await timers.find((t) => t.ms === 5000).fn();
+  assert.deepEqual(statusTimers(), [5000, 60000]);
+  assert.equal(statusOf(gh.thread.find((c) => c.body.startsWith("```apex-status"))).last.id, 77);
+  // A command arriving pulls the next edit in to 15 s.
+  now += 2000;
+  gh.thread.push(cmd(78, { cmd: "ping" }));
+  await b.api.pollOnce();
+  assert.equal(b.api.statusDue(), now + 15000);
+});
+
+test("#6581 review: the link's end always lands — queued behind an in-flight edit, and in the first seconds to the stored id", async () => {
+  const gh = editingGitHub(), store = new Map();
+  let hold = null;
+  const fetch = async (url, opts) => {
+    if (opts.method === "PATCH" && hold === "arm") await new Promise((res) => { hold = res; });
+    return gh.fetch(url, opts);
+  };
+  const b = load({ tok: "tok", gh: { fetch }, store });
+  await flush();
+  const id = await b.api.status();
+  hold = "arm";
+  const inFlight = b.api.status();   // a tick's edit, held at the network
+  await flush();
+  b.api.stop("ended on the phone");   // the link ends while it is in flight
+  hold();
+  await inFlight;
+  await flush(); await flush();
+  const last = statusOf(gh.thread.find((c) => c.id === id));
+  assert.equal(last.linked, false, "the queued final edit ran after the in-flight one");
+  assert.equal(last.ended, "ended on the phone");
+  assert.equal(gh.calls.at(-1).keepalive, true, "the final edit survives a reload");
+  // A reload in the first 5 s (no tick yet on this page): the end still edits the comment stored on the device.
+  const b2 = load({ tok: "tok", gh: { fetch }, store });
+  await flush();
+  b2.api.stop("reload");
+  await flush(); await flush();
+  assert.equal(statusOf(gh.thread.find((c) => c.id === id)).ended, "reload");
+  assert.equal(gh.thread.filter((c) => c.body.startsWith("```apex-status")).length, 1);
+});
+
+test("#6581 review: a rate-limited status edit (403 / 429) slows the cadence instead of hammering at 15 s", async () => {
+  const timers = [];
+  const gh = editingGitHub();
+  const fetch = async (url, opts) => (opts.method === "POST" && JSON.parse(opts.body).body.startsWith("```apex-status")
+    ? { status: 429, ok: false, json: async () => ({}), headers: { get: () => null } } : gh.fetch(url, opts));
+  const b = load({ tok: "tok", gh: { fetch }, extra: { setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; } } });
+  await flush();
+  await timers.find((t) => t.ms === 5000).fn();
+  assert.equal(timers.at(-1).ms, 300000, "the next edit waits 5 min");
+  gh.thread.push(cmd(80, { cmd: "ping" }));
+  await b.api.pollOnce();
+  assert.equal(timers.at(-1).ms, 300000, "a command does not pull a rate-limited edit back to 15 s");
+});
+
+test("#6581 review: tap waitMs is capped at 30 s; a link end mid-drive removes the banner", async () => {
+  const dom = menuDom();
+  const b = load({ search: "", apex: dom.apex, extra: dom.extra });
+  assert.equal((await b.api.handle({ cmd: "tap", args: { id: "nowhere-at-all", waitMs: 1 } })).error, "#nowhere-at-all not in the page after 1 ms");
+  // A clock that jumps 10 s per read: an asked-for 1e9 ms gives up at the 30 s cap, not never.
+  let t = 0;
+  const Jumpy = class extends Date { static now() { return (t += 10000); } };
+  const capped = load({ search: "", apex: dom.apex, extra: { ...dom.extra, Date: Jumpy } });
+  assert.equal((await capped.api.handle({ cmd: "tap", args: { id: "nowhere-at-all", waitMs: 1e9 } })).error, "#nowhere-at-all not in the page after 30000 ms");
+  // The link ends while Claude drives: SoakRun lets go and the banner goes.
+  const d = heldDriver();
+  const gh = editingGitHub();
+  const linked = load({ tok: "tok", gh, apex: { info: () => ({ state: "race" }) }, extra: d.extra });
+  await flush();
+  await linked.api.handle({ cmd: "drive", args: { laps: 1, wait: false } });
+  assert.ok(d.body.kids.some((k) => k.id === "apex-bridge-driving"));
+  linked.api.stop("ended on the phone");
+  await flush();
+  assert.equal(d.body.kids.some((k) => k.id === "apex-bridge-driving"), false);
 });

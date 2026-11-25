@@ -42,13 +42,13 @@ C = {
         "file": "code-hunter.md", "prefix": "FINDING", "cap": 12,
         "row": r"^FINDING (none\b|\d+ \| (bug|perf|dead-code|drift|contradiction|duplication|mess) \| sev (high|med|low) \|.*\| (CONFIRMED|CODE-TRACED|PLAUSIBLE)\b)",
         "shape": "FINDING <n> | bug|perf|dead-code|drift|contradiction|duplication|mess | sev high|med|low | file:line | ... | CONFIRMED|CODE-TRACED|PLAUSIBLE (or FINDING none)",
-        "need": [r"^covered:", r"^not covered:", r"^measured:"],
+        "need": [r"^covered:", r"^not covered:", r"^measured:", r"^tools used: lsp \d+ · grep \d+ · read \d+"],
     },
     "finding-verifier": {
         "file": "finding-verifier.md", "prefix": "CLAIM", "cap": 15,
         "row": r"^CLAIM (none\b|\d+ \| (CONFIRMED|STALE|REFUTED|NEEDS-BROWSER|UNREAD)\b)",
         "shape": "CLAIM <n> | CONFIRMED|STALE|REFUTED|NEEDS-BROWSER | evidence: ...",
-        "need": [r"^refuted: \d+/\d+ stale: \d+/\d+"],
+        "need": [r"^refuted: \d+/\d+ stale: \d+/\d+", r"^tools used: lsp \d+ · grep \d+ · read \d+"],
     },
     "prior-art-scout": {
         "file": "prior-art-scout.md", "prefix": "KNOWN", "cap": 30,
@@ -66,7 +66,7 @@ C = {
         "file": "physics-contract-auditor.md", "prefix": "SITE", "cap": 30,
         "row": r"^SITE\s+(none\b|\S+\s+\S+\s+column:(AI-only|assist-gated|broadcast-only|surface|BLOCKER|unverified)\s+in-table:(yes|no)\b)",
         "shape": "SITE  file:line  symbol  column:AI-only|assist-gated|broadcast-only|surface|BLOCKER|unverified  in-table:yes|no  why: ...",
-        "need": [r"^vstd-invariant: (pass|fail)", r"^curvature-channels: (pass|fail)", r"^covered:"],
+        "need": [r"^vstd-invariant: (pass|fail)", r"^curvature-channels: (pass|fail)", r"^covered:", r"^tools used: lsp \d+ · grep \d+ · read \d+"],
     },
     "ci-red-triage": {
         "file": "ci-red-triage.md",
@@ -77,7 +77,20 @@ C = {
         "file": "pr-reviewer.md", "prefix": "FINDING", "cap": 10,
         "row": r"^FINDING (none\b|\d+ \| (blocker-candidate|nit) \| \S+:\d+\S* — .+ — .+ — test: \S)",
         "shape": "FINDING <n> | blocker-candidate|nit | file:line — claim — why — test: <spec or unit test, or none> (or FINDING none)",
-        "need": [r"^REVIEW #\d+ @ [0-9a-f]{7,} · files \d+ · routed: ", r"^findings: \d+ \(blocker-candidate \d+\)"],
+        "need": [r"^REVIEW #\d+ @ [0-9a-f]{7,} · files \d+ · routed: ", r"^findings: \d+ \(blocker-candidate \d+\)", r"^tools used: lsp \d+ · grep \d+ · read \d+"],
+    },
+    # gardener (#6451, Bryce's decision: add-contract-row, 2026-11-25) and session-reader (#6469, decision: A+B).
+    "gardener": {
+        "file": "gardener.md", "prefix": "FINDING", "cap": 12,
+        "row": r"^FINDING (none\b|\d+ \| (duplication|mess|drift) \| sev (high|med|low) \|.*\| (CONFIRMED|CODE-TRACED|PLAUSIBLE) \| lsp: \S)",
+        "shape": "FINDING <n> | duplication|mess|drift | sev high|med|low | file:line | ... | CONFIRMED|CODE-TRACED|PLAUSIBLE | lsp: <query and count | n/a (text shape, grep)> (or FINDING none)",
+        "need": [r"^covered:", r"^not covered:", r"^measured:", r"^tools used: lsp \d+ · grep \d+ · read \d+"],
+    },
+    "session-reader": {
+        "file": "session-reader.md", "prefix": "SESSION", "cap": 40,
+        "row": r"^SESSION (none\b|\S+ \| \S+ \| updated \S+ \| .+)",
+        "shape": "SESSION <id> | <status_bucket> | updated <ISO> | <one line: what it is doing or how it ended> (or SESSION none)",
+        "need": [r"^pages: ", r"^not read: "],
     },
     "worker": {
         "file": "worker.md", "prefix": "WORKER", "cap": 1,

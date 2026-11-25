@@ -41,13 +41,14 @@ Long tasks are not measurable on iOS: `raceEntryProfile.supported` is false (com
 
 A second hands-off window on the same iPhone, Safari tab, three.js r187 on **WebGPU** (no fallback), 08:28Z on.
 
-- **Builds:** hello `d520d375` (08:28Z, portrait 393×695), then after a `reload` `8e4ff051` (08:33Z, landscape 852×368, dpr 3).
+- **Builds:** Safari tab: hello `d520d375` (08:28Z, portrait 393×695), then after a `reload` `8e4ff051` (08:33Z, landscape 852×368, dpr 3).
+  Home Screen app (standalone): `de36c731`, build 29443 (09:24Z, landscape 852×393, dpr 3, tier 4).
 
 | PR | Run | Numbers | Verdict |
 |---|---|---|---|
-| #6396 TT garage | 8e4ff051: `drive {to:"box"}` → `tap hud-end-session until:garage` → `cs-arrival-skip` → `screen` → `snap` | box in 43 s from mid-lap (lap → approach 196 km/h → entry 67 → lane → box); `pitActions` END SESSION + PIT WORK; garage in 331 ms; `{screen:garage, state:results}`; snap 320×138 shows the drawn garage, mean luma 52.7, sd 54.1 | PASS (route and visual) |
-| #6529 held viewport read | waits for a deploy containing de219675 | — | pending |
-| #6518 portrait chase camera | not in the live build; needs a portrait hold | — | next window |
+| #6396 TT garage | 8e4ff051 (Safari): `drive {to:"box"}` → `tap hud-end-session until:garage` → `cs-arrival-skip` → `screen` → `snap` | box in 43 s from mid-lap (lap → approach 196 km/h → entry 67 → lane → box); `pitActions` END SESSION + PIT WORK; garage in 331 ms; `{screen:garage, state:results}`; snap 320×138 shows the drawn garage, mean luma 52.7, sd 54.1 | PASS (route and visual; Bryce confirmed END TIME TRIAL → SKIP TO GARAGE → garage → VIEW RESULTS by eye) |
+| #6529 held viewport read | de36c731 (Home Screen): `display`, `geom`, `call race monza`, `go`, `frames 10`, `perf` | inner = client = visualViewport = 852×393 (scale 1); vh/svh/dvh/lvh all 393; insets L59 R59 B20; density compact, shape wide; Monza 10 s: 50 fps, p50 17, p95 42, p99 45, max 54 ms, over33 98/500; tier 4, phoneSlowLatch true, autoShed 1 | PASS on the viewport read; fps not comparable with window 1 (tier 4 app vs userTier 0 Safari) |
+| #6518 portrait chase camera | not in de36c731 (merge 0d99d2d3 ships with cdcbcedd); phone held landscape | — | next window, portrait hold |
 
 ### What the attempts taught
 
