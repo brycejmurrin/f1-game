@@ -85,6 +85,12 @@ const LoadingScreen = (function () {
     let fromGarage = false, wipeTimer = 0;   // the garage -> flyby hand-off sweep (setPhase)
     const WIPE_MS = 900;
     let garageRadioT = 0;   // the pit-exit radio line (garage())
+    /* SKIP WHEN READY (Bryce 2026-11-25: "keep what's needed but provide skips when ready"). The drive-out and
+     * the flyby are the cover for the race's build; `skipOk` is true once that build, its warm and introPrepare
+     * are done (game.js studioReady → ready()), and only then does the garage take a skip, with #ld-skip shown.
+     * NO SKIP BEFORE READY: a press then is ignored rather than latched, so every visible SKIP works on the
+     * frame it is pressed. The flyby ("run") is always after ready. A skip from either goes straight to the start. */
+    let skipOk = false, skipBtn = null;
     // This run's flyby: `cur` is its info (shot list, field), `view` what the
     // map slot shows ("map" | "grid"), `mapBox` the map's CSS box, `markN`
     // the turn marked on the map (0 none), and `radioState` the radio check
@@ -97,10 +103,10 @@ const LoadingScreen = (function () {
       try { return store && store.get ? store.get("flySkips", 0) : 0; } catch (_) { return 0; }
     }
     /** Record how the flyby ended. Only a FLYBY counts — the no-world card is
-     *  700 ms and nobody is choosing anything by letting it run, and a skip of the
-     *  garage leave is not a verdict on the flyby that still follows it. */
+     *  700 ms and nobody is choosing anything by letting it run. A garage skip
+     *  goes straight to the start (the flyby with it), so it counts as a skip. */
     function noteFlyby(skipped) {
-      if (phase !== "run") return;
+      if (phase !== "run" && !(skipped && phase === "garage")) return;   // a garage skip skips the flyby too: it counts
       try { if (store && store.set) store.set("flySkips", nextSkips(readSkips(), skipped)); }
       catch (_) { /* storage refused: the streak just does not build */ }
     }
@@ -144,6 +150,19 @@ const LoadingScreen = (function () {
     }
 
     function root() { return el || (el = $("loading")); }
+    /** #ld-skip, built here (the shell's node count is ratcheted), shown while a skip goes straight to the start. */
+    function showSkip() {
+      const r = root(), on = phase === "run" || (phase === "garage" && skipOk && !!skipCb);
+      if (!skipBtn && on && r && typeof document !== "undefined" && document.createElement) {
+        skipBtn = document.createElement("button"); skipBtn.id = "ld-skip"; skipBtn.type = "button";
+        skipBtn.onclick = () => onSkip();   // a screen reader's activation; a tap or key already skipped on pointerdown/keydown
+        r.appendChild(skipBtn);
+      }
+      if (!skipBtn) return;
+      const ses = cur && cur.session;   // as the garage's own SKIP TO TIME TRIAL (#6390)
+      skipBtn.textContent = ses === "tt" ? "SKIP TO TIME TRIAL" : ses === "quali" ? "SKIP TO QUALIFYING" : cur && cur.practice ? "SKIP TO PRACTICE" : "SKIP TO RACE";
+      skipBtn.hidden = !on;
+    }
     // The window changed under a card that is up (Safari's toolbar, a rotation): re-fit.
     if (typeof addEventListener === "function") addEventListener("resize", () => { if (phase) fitCard($); });
     // Redraw the graphic if the shared layout changes its map slot.
@@ -432,6 +451,7 @@ const LoadingScreen = (function () {
       phase = p;
       const r = root();
       if (r) r.dataset.phase = p;
+      showSkip();
       fitCard($);   // the screen is unhidden by now: the card's one layout read (gap 22)
       // THE HAND-OFF: the first phase after the garage shot (stop() set the flag)
       // opens on a sweep in the player's team colour, so the garage and the
@@ -484,9 +504,11 @@ const LoadingScreen = (function () {
       // drive-out and the streak does not count it. "prep" is cold compilation before
       // the garage leave — same skip contract as build.
       if (phase === "garage" || ((phase === "build" || phase === "prep") && skipCb)) {
-        if (!skipCb || Date.now() - flyT0 < SKIP_GRACE_MS) return;
+        if (!skipCb || (phase === "garage" && !skipOk) || Date.now() - flyT0 < SKIP_GRACE_MS) return;
         if (e) { if (e.cancelable && e.preventDefault) e.preventDefault(); if (e.stopPropagation) e.stopPropagation(); }
         const cb = skipCb; skipCb = null;
+        if (phase === "garage") noteFlyby(true);
+        showSkip();
         cb();
         return;
       }
@@ -585,7 +607,7 @@ const LoadingScreen = (function () {
     function stop() {
       clearTimeout(timer);
       timer = 0;
-      build = null; skipCb = null;
+      build = null; skipCb = null; skipOk = false;
       fromGarage = phase === "garage";
       if (garageRadioT) { clearTimeout(garageRadioT); garageRadioT = 0; }
       phase = "";
@@ -600,6 +622,7 @@ const LoadingScreen = (function () {
       if (padTimer) { clearInterval(padTimer); padTimer = 0; }
       const r = root();
       if (r) { r.hidden = true; r.dataset.phase = ""; }
+      showSkip();
     }
 
     /* THE EDITOR'S HOLD. The card's size and position cannot be authored blind,
@@ -661,15 +684,15 @@ const LoadingScreen = (function () {
      * the garage; no timer, and not active().
      * A tap, key or pad press calls `onSkip` (the card and the flyby are next).
      * Painted now, so building() or run() only has to fade it in. */
-    function garage(info, onSkipCb) {
+    function garage(info, onSkipCb, ready) {
       stop();
       const r = root();
       if (!r || !info || !info.track) return false;
       cur = info; paint(info);
       applyCard();
       r.hidden = false;
+      skipOk = !!ready; armSkip(onSkipCb);
       setPhase("garage");
-      armSkip(onSkipCb);
       garageRadioT = setTimeout(garageRadio, GARAGE_RADIO_MS);
       return true;
     }
@@ -770,6 +793,9 @@ const LoadingScreen = (function () {
 
     return {
       run, stop, hold, building, prep, garage, handoff, busy, lowerWaitPlate,
+      /** The race is ready (game.js studioReady): the garage takes a skip from now, and shows SKIP. */
+      ready() { skipOk = true; showSkip(); },
+      skipReady: () => skipOk,
       /** Material-pack settle gate for race-entry warm presents (garage #1477). */
       packSettled, warmPresentReady,
       /** The next flyby's length (the short cut for a habitual skipper), so its
