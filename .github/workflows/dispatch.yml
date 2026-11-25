@@ -84,8 +84,9 @@ jobs:
           else
             node tools/ci/dispatch.mjs --apply --fire
           fi
-      # .github/labels.json is the label list; nothing applies it. This step only REPORTS drift (a missing label,
-      # or a colour or description that differs) as warnings; it changes no label and never fails the cycle.
+      # .github/labels.json is the label list; labels-sync.yml (dispatch only) applies it. This step only REPORTS
+      # drift (a missing label, or a colour or description that differs) as warnings; it changes no label and never
+      # fails the cycle.
       - name: Labels drift (report only)
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         continue-on-error: true

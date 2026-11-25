@@ -45,6 +45,8 @@ import { speedLiteralViolations, stripNonCode, readFiles, violationKey, rosterFi
 // `code` is the line it lives on, so moving code around does not silently widen
 // the exemption: a threshold that migrates to a new line must be re-justified.
 const ALLOWED = [
+  {"file": "js/perf/soak-run.js", "expr": "p.speed > 0.2", "code": "return { steer, throttle: p.speed < vT, brake: p.speed > vT * 1.04 && p.speed > 0.2 };", "why": "the bridge drive's stopping car (#6397): a standstill floor so a held brake never backs it out of its pit box (brake at speed <= 0 is reverse), absolute m/s like the launch-grid check"},
+  {"file": "js/perf/soak-run.js", "expr": "Math.abs(c.speed) < 0.3", "code": "still = Math.abs(c.speed) < 0.3 ? still + dt : still;", "why": "the bridge drive's stopped-short detector at its pit box (#6397): an absolute standstill tolerance in m/s, never a fraction of racing speed"},
   {"file": "js/race/stopped-cars.js", "expr": "Math.abs(c.speed || 0) < STOP_V", "code": "if (!c || c.finished || !(Math.abs(c.speed || 0) < STOP_V) || !Number.isFinite(c.s)) continue;", "why": "race control's stopped-car hazard (W34): a car standing still on the road, an absolute standstill tolerance in metres per second like the launch-grid check above, never a fraction of racing speed"},
   {"file": "js/race/setup-trial-session.js", "expr": "Math.abs(c.speed) > 1", "code": "![\"count\", \"race\"].includes(G.state) || !Number.isFinite(c.speed) || Math.abs(c.speed) > 1 ||", "why": "absolute standstill verification for a fresh launch grid, matching the launch drill; this is motion tolerance in metres per second, not a fraction of racing speed"},
   // ── relative closing speed between two cars in contact ──

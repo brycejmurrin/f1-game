@@ -26,8 +26,10 @@ A SESSION playbook, never a subagent: a subagent never starts a browser (AGENTS.
    `apex-lsp` (skill `code-nav`).
 4. **Verify.** Agent `finding-verifier` on every claim (≤ 15 per call). Only CONFIRMED rows rank; NEEDS-BROWSER
    rows you could not settle stay in the note, named.
-5. **Write** `docs/notes/RUNTIME-HUNT-<MODE>-<YYYY-MM-DD>.md` (Pacific date) with the ranked table below and the
-   build sha you ran; ship it as a draft PR (skill `steward` §Open). Detach js-debugger, close the page.
+5. **Report as an issue**, not a docs PR (Bryce, 2026-11-25): write `docs/notes/RUNTIME-HUNT-<MODE>-<YYYY-MM-DD>.md`
+   (Pacific date) with the ranked table below and the build sha you ran, push it on the hunt's branch unmerged, and
+   open one `tracking` issue (`source:hunt` + its areas) whose checklist links each finding and the note (skill
+   `steward` `references/labels.md` §Hunt and survey output). Detach js-debugger, close the page.
 
 | # | Repro (exact calls) | file:line | Mechanism (trigger → effect) | Player impact | Fix sketch | Test that would catch it |
 |---|---|---|---|---|---|---|
@@ -65,4 +67,4 @@ from two places the hunter does not drive itself:
 ## Worked examples
 
 The first runs, 2026-11-24: the `RUNTIME-HUNT-PERF-2026-11-24` (mode A) and `RUNTIME-HUNT-PLAY-2026-11-24`
-(mode B) notes under `docs/notes/`, once their PRs land.
+(mode B) notes under `docs/notes/`; the 2026-11-25 audio/MP hunt is tracking issue #6460 (its note stays on its branch).

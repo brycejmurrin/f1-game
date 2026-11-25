@@ -6,6 +6,13 @@ writes. Every line below rests on a measured cost in `docs/notes/ORCHESTRATION-R
 brackets). A brief is task facts; the rules live in AGENTS.md and skill `steward`, so cite them, do not restate them:
 restated rules drifted into three wordings and one contradicted the skill [14].
 
+## Contents
+
+- Before launching
+- The brief
+- While workers run
+- Standing routines
+
 ## Before launching
 
 - Count first: open draft PRs and queued CI jobs (`node tools/ci/pr-board.mjs --json`, the Actions queue). Launch
@@ -20,6 +27,7 @@ restated rules drifted into three wordings and one contradicted the skill [14].
 - Adopt only a lapsed or handed-back lease, never a parked one (skill `steward` §Lane 3). `pr-board.mjs --brief`
   prints `lease …` and `churn: adopted Nx`; a churn PR (3+ adopters) gets one worker that stays until `land`.
 - Re-verify on the deploy tip first; a worker closes an already-fixed issue with evidence and opens no PR.
+- Filed issues: one type, `area:*`, `source:*`; a hunt or Gardener reports as a `tracking` issue (steward labels.md).
 - Settle every human step before launch (device check, `config-ok`, decision) and cite its comment URL [10].
 - `config-ok` on a ROUTINE config path and `ratchet-raise` you add yourself, after you have read the PR's config diff
   or its raise and the CEILING-HISTORY reason, with one comment per add naming them (D-034, D-042); never let the
