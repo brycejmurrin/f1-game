@@ -932,7 +932,8 @@ function ghExpr(src, github) {
   const contains = (hay, x) => (Array.isArray(hay) ? hay.includes(x) : String(hay ?? "").includes(x));
   const startsWith = (a, b) => String(a ?? "").startsWith(b);
   const cancelled = () => false;
-  return new Function("ctx", "format", "contains", "startsWith", "cancelled", "needs", "steps", "success", `return (${js.replace(/\bneeds\./g, "needs?.")});`)(github, format, contains, startsWith, cancelled, github?.needs, github?.steps, () => github?.success !== false);
+  const always = () => true;
+  return new Function("ctx", "format", "contains", "startsWith", "cancelled", "always", "needs", "steps", "success", `return (${js.replace(/\bneeds\./g, "needs?.")});`)(github, format, contains, startsWith, cancelled, always, github?.needs, github?.steps, () => github?.success !== false);
 }
 
 test("land.yml triggers: pull_request_target (never pull_request), workflow_run kept, check_suite gone", () => {
@@ -2206,7 +2207,12 @@ test("land.yml sweep (finding 2): a push to the deploy branch sweeps (rate-cappe
   assert.equal(ghExpr(job.if, push()), true, "a deploy-branch push runs the sweep");
   assert.equal(ghExpr(job.if, push("refs/heads/cursor/x")), false);
   assert.equal(ghExpr(LAND.jobs.resolve.if, push()), false, "a push is not a PR re-gate: resolve and everything after it skip");
-  assert.equal(ghExpr(LAND.jobs["train-screen"].if, push()), false);
+  // #6584 follow-up: the deploy-branch push runs the merge train too, so a merged train N promotes the stacked N+1 at
+  // its merge push, not the next Pages success or cron (#6652 nit 4). Only the deploy branch: `on.push` lists it alone.
+  for (const name of ["train-screen", "train"]) {
+    assert.equal(ghExpr(LAND.jobs[name].if, push()), true, `${name}: a deploy-branch push runs the train`);
+    assert.equal(ghExpr(LAND.jobs[name].if, push("refs/heads/train-next/abc-1-2")), false, `${name}: never another ref's push`);
+  }
   assert.equal(ghExpr(LAND.concurrency.group, push()), "land-stale-sweep", "pushes share the sweep's group, never a per-sha group");
   assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], push()), false);
   const [rate, sweep] = job.steps;
