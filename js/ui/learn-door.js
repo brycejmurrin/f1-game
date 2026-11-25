@@ -171,6 +171,8 @@ const LearnDoor = (function () {
       track: G.trackIdx, weather: G.raceWeather, changeable: G.raceChangeable, grid: G.raceGrid,
       duel: G.duel, dirtyAir: G.raceDirtyAir, wind: Wind.level(), goal: G.coach.practiceGoal(),
     };
+    // The quit tail runs after restore(): it gets the player's flow (#6713).
+    const quitFlow = { flow: G.flow, session: G.session };
     const guide = createAeroGuide(G);
     activate({
       guide,
@@ -190,6 +192,7 @@ const LearnDoor = (function () {
         setDirtyAir(previous.dirtyAir);
         Wind.setLevel(previous.wind);
         G.coach.setPracticeGoal(previous.goal);
+        if (typeof MenuQuitTail !== "undefined") MenuQuitTail.keepFlow(quitFlow.flow, quitFlow.session);
       },
     });
     UiExperience.leavePracticePick();
