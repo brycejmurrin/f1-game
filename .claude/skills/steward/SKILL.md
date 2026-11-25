@@ -21,7 +21,7 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 1. **Claim.** Comment `claims #<n> — <host>:<session id>` on the issue and add `claimed`. An older claim comment wins:
    stand down. Labels ONLY through MCP `issue_write`: the live list plus or minus ONE name ([`references/labels.md`](references/labels.md);
    `github-mcp-guard.sh` refuses any other list); never `gh`.
-2. **Draft PR at the first commit** (§Open) with `lane:<host>` and `Closes #<n>`.
+2. **Draft PR at the first commit** (§Open) with the lane label (§Open 3) and `Closes #<n>`.
 3. **Take over** on `CONTINUE PR #<n>`: remove `needs-owner` and post `adopts PR #<n>`
    yourself (the launching orchestrator may have done both). Work from the Hand-off block and the Plan. On a PR the NEWEST adoption comment
    wins (stand down if a newer one appears), the opposite of issue claims. **Ownership is a lease:** the Hand-off line
@@ -57,8 +57,9 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    `.github/pull_request_template.md`: Goal, Plan (exactly one `**now:**`; the LAST item is the gate-exempt
    `- [ ] land: …` line), Verified / Not run, the Hand-off fence (`head:`, `owner:`, `next:`). Never `deploy.mjs
    --pr`: it opens a READY PR without the template body.
-3. Add `lane:<host>` (the one-label recipe in [`references/labels.md`](references/labels.md); never `gh`). Every
-   draft push gets the fast tier on CI. Selected browser jobs start when the PR is ready and its diff needs them.
+3. Add the lane label: `lane:claude` for Claude Code, `lane:cursor` for Cursor, `lane:codex` for Codex (the one-label
+   recipe in [`references/labels.md`](references/labels.md); never `gh`). Every draft push gets the fast tier on CI.
+   Selected browser jobs start when the PR is ready and its diff needs them.
 
 ## Push
 
