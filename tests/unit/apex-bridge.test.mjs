@@ -355,10 +355,10 @@ test("batch runs steps in order, stops at the first failure, and keeps reload la
   assert.equal(early.value[0].error, "reload must be the last step");
   const nest = await api.handle({ cmd: "batch", args: { steps: [{ cmd: "batch", args: { steps: [] } }] } });
   assert.equal(nest.value[0].error, "batch cannot nest");
-  // #6581: 20 steps fit one comment (a nav → drive → tap → snap recipe with its waits); 21 do not.
-  assert.equal(api.BATCH_MAX, 20);
-  assert.equal((await api.handle({ cmd: "batch", args: { steps: new Array(20).fill({ cmd: "ping" }) } })).value.length, 20);
-  assert.equal((await api.handle({ cmd: "batch", args: { steps: new Array(21).fill({ cmd: "ping" }) } })).ok, false);
+  // #6581 (Bryce's D5 on #6582): 25 steps fit one comment (a nav → drive → tap → snap recipe with its waits); 26 do not.
+  assert.equal(api.BATCH_MAX, 25);
+  assert.equal((await api.handle({ cmd: "batch", args: { steps: new Array(25).fill({ cmd: "ping" }) } })).value.length, 25);
+  assert.equal((await api.handle({ cmd: "batch", args: { steps: new Array(26).fill({ cmd: "ping" }) } })).ok, false);
 });
 
 test("tokenShape describes a pasted token without revealing it", () => {
@@ -937,4 +937,48 @@ test("#6581 drive shows a CLAUDE DRIVING banner while it holds the car, gone on 
   await flush();
   assert.equal(banner(), undefined, "stop removes it");
   assert.equal(d.body.kids.length, 0);
+});
+
+test("#6581 when: waits for a screen, state or visibility; ok:false stops the batch; one condition only", async () => {
+  const dom = menuDom();
+  const b = load({ search: "", apex: dom.apex, extra: dom.extra });
+  const out = (await b.api.handle({ cmd: "batch", args: { steps: [{ cmd: "tap", args: { id: "mb-tt" } }, { cmd: "when", args: { screen: "select", ms: 2000 } }, { cmd: "screen" }] } })).value;
+  assert.deepEqual(plain(out.map((s) => [s.cmd, s.ok, s.value.ok ?? null])), [["tap", true, true], ["when", true, true], ["screen", true, null]]);
+  assert.equal(out[1].value.screen, "select");
+  const miss = (await b.api.handle({ cmd: "batch", args: { steps: [{ cmd: "when", args: { state: "race", ms: 200 } }, { cmd: "ping" }] } })).value;
+  assert.equal(miss.length, 1, "a when that never came true stops the batch");
+  assert.equal(miss[0].value.ok, false);
+  assert.equal(miss[0].value.state, "menu");
+  for (const args of [{}, { screen: "select", state: "menu" }, { screen: "nowhere" }, { visible: "yes" }]) {
+    assert.equal((await b.api.handle({ cmd: "when", args })).ok, false, JSON.stringify(args));
+  }
+  assert.equal((await b.api.handle({ cmd: "when", args: { visible: true, ms: 0 } })).value.ok, true);
+});
+
+test("#6581 status cadence (Bryce's D4): first edit 5 s after hello, 15 s while a command runs, 60 s idle, never postponed", async () => {
+  const timers = [];
+  let now = 1_000_000;
+  const clock = { now: () => now };
+  const FakeDate = class extends Date { static now() { return clock.now(); } };
+  const gh = editingGitHub();
+  const b = load({ tok: "tok", gh, extra: { Date: FakeDate, setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; } } });
+  await flush();
+  const statusTimers = () => timers.filter((t) => [5000, 15000, 60000].includes(t.ms)).map((t) => t.ms);
+  assert.deepEqual(statusTimers(), [5000]);
+  assert.equal(b.api.statusDue(), now + 5000);
+  // A command starts at +1 s: the 5 s edit is sooner than 15 s, so it stands.
+  now += 1000;
+  gh.thread.push(cmd(77, { cmd: "ping" }));
+  await b.api.pollOnce();
+  assert.equal(b.api.statusDue(), 1_000_000 + 5000, "a command never postpones a due edit");
+  // The 5 s edit fires while idle: the next one is 60 s out.
+  now += 4000;
+  await timers.find((t) => t.ms === 5000).fn();
+  assert.deepEqual(statusTimers(), [5000, 60000]);
+  assert.equal(statusOf(gh.thread.find((c) => c.body.startsWith("```apex-status"))).last.id, 77);
+  // A command arriving pulls the next edit in to 15 s.
+  now += 2000;
+  gh.thread.push(cmd(78, { cmd: "ping" }));
+  await b.api.pollOnce();
+  assert.equal(b.api.statusDue(), now + 15000);
 });

@@ -36,6 +36,7 @@ in `js/agent/apex-bridge.js`), not this table.
 | `bench` | `op` tests / start (+`test`) / stop / status / result / leg (+`i`) | BenchRun (SETTINGS > GRAPHICS > BENCHMARK); `start` reloads before it replies |
 | `snap` | `w`, `q` start quality | `{w, h, q, from, chars, jpeg: "data:image/jpeg;base64,…"}` |
 | `wait` | `ms` | `{waited}`; for spacing steps inside a `batch` |
+| `when` | ONE of `screen` (a `screen` name), `state` (`info().state`), `visible` true / false; `ms` (≤ 60 000) | `{ok, screen, state, waited}` once it reads the value, or `ok: false` at `ms` (a batch stops there); use it instead of a guessed `wait` |
 | `gpuTest` | `op` start / stop / status / active | GPU TEST (`GpuTestRun`) |
 | `recorder` | `op` start / stop / isOn / json | PHONE TEST recorder |
 | `screen` | — | `{screen, state}`: the topmost visible screen (`title`, `select`, `setup`, `garage`, `loading`, `quali`, `results`, `pause`), else `drive-out` (the garage-out, state still `menu`) or `race` |
@@ -45,7 +46,7 @@ in `js/agent/apex-bridge.js`), not this table.
 | `scroll` | `id` (else the page) and one of `by` px, `to` top / bottom, `into` true | `{scrolled, top, height, view}` |
 | `nav` | `flow` tt / race, `track`, `weather`, `tod`, `entry` setup / garage / daily, `go` (default true) | `{ok, screen, state, ms, steps:[{step, ok, screen, ms}], door}`; starts on the title; `door` = `menuPrep().door` |
 | `drive` | ONE of `to` "box", `laps` 1-5, `seconds` 1-600; `ms` cap (240 000); `wait` false; or `stop` / `status` true | `{ok, screen, state, reason, inBox, pit, laps, steps:[{phase, t, s, kph}], pitActions}` (outer `ms` too): `value.ok` = goal met; `reason` box / laps / seconds / timeout / missed / lane-closed / touch / paused / state:… (§Driving) |
-| `batch` | `steps[]` of `{cmd, args}`, up to `BATCH_MAX` (20) | one result per step; stops at the first failure (or a `tap` / `nav` / `drive` whose `value.ok` is false); `reload` / `path` only last |
+| `batch` | `steps[]` of `{cmd, args}`, up to `BATCH_MAX` (25) | one result per step; stops at the first failure (or a `tap` / `nav` / `drive` whose `value.ok` is false); `reload` / `path` only last |
 | `reload` | — | `{reloading}` (may be lost), then a new hello |
 
 ## Recipes
@@ -167,8 +168,8 @@ reads a car parked on its grid slot (the note above).
 ## Status comment
 
 #6581. While linked the phone keeps ONE ` ```apex-status ` comment on the issue (its id is stored on the device, so a
-reload edits the same one; a deleted one is posted afresh), edited about 5 s after each hello, every 3 min, on every
-visibility change and once when the link ends: `{at, linked, ended, sha, screen, state, visible, driving, served,
+reload edits the same one; a deleted one is posted afresh), edited about 5 s after each hello, then every 15 s while a
+command runs and every 60 s while idle (Bryce's D4, #6582), on every visibility change and once when the link ends: `{at, linked, ended, sha, screen, state, visible, driving, served,
 last:{id, cmd, busy}, hello}`. `at` is the phone's clock. A stale `at` with `visible: false` is iOS pausing the
 page; `last.busy: true` is a long command still running. It is never a command (`apex-cmd` fences only).
 

@@ -23,7 +23,7 @@
    a pause, a quit, a hidden page or a real touch (DRIVING below). A "CLAUDE DRIVING" banner shows while it holds the car.
 
    STATUS (#6581). While linked, ONE `apex-status` comment per issue (its id kept on this device, so a reload edits the
-   same one) is edited every STATUS_MS and on every visibility change: build, screen, state, visible, last command id.
+   same one) is edited every 15 s while a command runs, 60 s while idle (Bryce's D4, #6582), and on every visibility change: build, screen, state, visible, last command id.
    A phone iOS has paused reads as a stale `at`, not as silence.
 
    PERF COMMANDS. `path` pins the three.js path BENCHMARK pins (BenchRun.pathPrefs) and reloads, `bench` starts and
@@ -356,9 +356,9 @@ const ApexBridge = (function () {
   }
 
   // Several steps in one comment: one 4 s round trip instead of one each. Stops at the first failure; `reload` and
-  // a `path` change may only be the last step (the page is gone after them). 20 (#6581; was 10): a whole
-  // nav → drive → tap → snap recipe with its waits fits one comment.
-  const BATCH_MAX = 20;
+  // a `path` change may only be the last step (the page is gone after them). 25 (#6581, Bryce's D5 on #6582; was
+  // 10): a whole nav → drive → tap → snap recipe with its waits fits one comment.
+  const BATCH_MAX = 25;
   async function batch(args) {
     const steps = args && Array.isArray(args.steps) ? args.steps : null;
     if (!steps || !steps.length || steps.length > BATCH_MAX) throw new Error("batch.steps must hold 1–" + BATCH_MAX + " steps");
@@ -528,6 +528,20 @@ const ApexBridge = (function () {
     const ms = Math.max(0, Math.min(NAV_GO_MS, Number(a.ms) || NAV_STEP_MS));
     const ok = a.until == null ? true : await until(() => screenNow() === a.until, ms);
     return Object.assign({ tapped: what, screen: screenNow(), state: gameState(), ok }, wait ? { waited: Date.now() - t0 } : null);
+  }
+  // WHEN (#6581): wait until the screen, the game state or the page's visibility reads a value (≤ WHEN_MAX ms), so a
+  // batch step waits for what it needs instead of a guessed `wait`. `ok` false stops a batch.
+  const WHEN_MAX = 60000;
+  async function when(args) {
+    const a = args || {};
+    const keys = ["screen", "state", "visible"].filter((k) => a[k] != null);
+    if (keys.length !== 1) throw new Error("when takes ONE of screen, state, visible (and ms)");
+    if (a.screen != null && !SCREEN_NAMES.has(a.screen)) throw new Error("when.screen must be one of " + [...SCREEN_NAMES].join(", "));
+    if (a.visible != null && typeof a.visible !== "boolean") throw new Error("when.visible takes true or false");
+    const read = { screen: screenNow, state: gameState, visible: () => typeof document === "undefined" || !document.hidden }[keys[0]];
+    const ms = Math.max(0, Math.min(WHEN_MAX, Number(a.ms) || NAV_STEP_MS)), t0 = Date.now();
+    const ok = await until(() => read() === a[keys[0]], ms);
+    return { ok, [keys[0]]: read(), screen: screenNow(), state: gameState(), waited: Date.now() - t0 };
   }
   // One SettingRow (rs-<row>): tap its › chevron until the select reads `want`, at most once per option.
   async function setRow(row, want) {
@@ -753,6 +767,7 @@ const ApexBridge = (function () {
     key,
     scroll,
     screen: () => ({ screen: screenNow(), state: gameState() }),
+    when,
     drive,
     batch,
   };
@@ -845,6 +860,7 @@ const ApexBridge = (function () {
       if (_run !== run) break;
       run.seen.add(c.id);
       run.last = { id: c.id, cmd: c.msg && c.msg.cmd, busy: true };
+      armStatus(STATUS_BUSY_MS);   // busy: the next edit within 15 s
       const res = await handle(c.msg);
       run.last.busy = false;
       run.served++;
@@ -859,7 +875,7 @@ const ApexBridge = (function () {
 
   // STATUS (#6581): one comment, edited in place. A long batch blocks the poll chain, not this timer, so `last.busy`
   // shows it running. A hidden page posts with keepalive (iOS may freeze the page right after).
-  const STATUS_MS = 180000, STATUS_FIRST_MS = 5000;
+  const STATUS_BUSY_MS = 15000, STATUS_IDLE_MS = 60000, STATUS_FIRST_MS = 5000;
   const statusKey = (issue) => "apex26.bridgeStatus." + issue;
   function statusOf(run, ended) {
     const d = typeof document !== "undefined" ? document : null;
@@ -889,14 +905,19 @@ const ApexBridge = (function () {
       return id;
     } catch (e) { say("status failed: " + e.message); return null; } finally { run.statusBusy = false; }
   }
+  // Arms the next edit `ms` from now, unless one is already due sooner (a stream of commands never postpones it).
   function armStatus(ms) {
     const run = _run;
     if (!run) return;
+    const due = Date.now() + ms;
+    if (run.statusTimer && run.statusDue <= due) return;
     clearTimeout(run.statusTimer);
+    run.statusDue = due;
     run.statusTimer = setTimeout(async () => {
       if (_run !== run) return;
+      run.statusTimer = null;
       await postStatus(run);
-      if (_run === run) armStatus(STATUS_MS);
+      if (_run === run) armStatus(run.last && run.last.busy ? STATUS_BUSY_MS : STATUS_IDLE_MS);
     }, ms);
   }
 
@@ -916,7 +937,7 @@ const ApexBridge = (function () {
   async function start(issue, tok) {
     if (_run) return false;
     _run = { issue, token: tok, cutoff: null, since: null, etag: null, seen: new Set(), served: 0, backoff: 0, timer: null, state: "connecting",
-      last: null, statusId: 0, statusTimer: null, statusBusy: false, onVis: null };
+      last: null, statusId: 0, statusTimer: null, statusDue: 0, statusBusy: false, onVis: null };
     paintBadge();
     try {
       const hello = await post({ hello: true, facts: facts() });
@@ -1058,7 +1079,7 @@ const ApexBridge = (function () {
 
   boot();
   return { V, REPO, CALL_DENY, CALL_DENY_PREFIX, callAllowed, TAP_DENY, CMDS, issueOf, handle, pickCommands, pollOnce, start, stop, boot, frames, facts, display, geom, tokenShape,
-    status: () => (_run ? postStatus(_run) : Promise.resolve(null)), BATCH_MAX,
+    status: () => (_run ? postStatus(_run) : Promise.resolve(null)), statusDue: () => (_run ? _run.statusDue : 0), BATCH_MAX,
     active: () => !!_run };
 })();
 Object.freeze(ApexBridge);
