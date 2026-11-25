@@ -808,7 +808,7 @@ jobs:
           DRAFT_PAIR: ${{ inputs.concurrency_key == '' && github.event_name == 'pull_request' && github.event.pull_request.draft && '1' || '' }}
         run: |
           set -u
-          echo "guards-a=$A guards-b=$B guards-c=$C guards-d=$D${DRAFT_PAIR:+ (draft pairs: B's shard ran in A, D's in C)}"
+          echo "guards-a=$A guards-b=$B guards-c=$C guards-d=$D${DRAFT_PAIR:+ (draft pairs: shard 2 ran in A, shard 4 in C)}"
           # DRAFT PAIRS (guards-a): on a draft B and D skip by design and A and C carry their shards.
           if [ "$DRAFT_PAIR" = 1 ]; then
             [ "$A" = success ] && [ "$C" = success ] && [ "$B" = skipped ] && [ "$D" = skipped ]
