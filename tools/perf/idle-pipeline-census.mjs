@@ -84,6 +84,7 @@ export async function frames(page, n) {
 export const WARM_FRAMES = 120;   // driving on the throttle until everything the lap draws has been seen once
 export const WINDOWS = 6;
 export const WINDOW_FRAMES = 60;
+export const SPREAD_FRAMES = 120;   // the spread leg (#6485): ~2 s at 60 fps for every rival to settle its tier
 export const REPLAY_MARGIN = 1.5;   // the warm pass drives the counted frames x this, so a slower counted pass stays on warmed road
 
 /** Boot TLX (forceGL selects three's WebGL2 backend), race monza with GAS held through `gas(true|false)`
@@ -150,6 +151,28 @@ export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
       bindGroups: c1.bg - c0.bg, buffers: c1.b - c0.b, gpuBuilt: await page.evaluate(([a, b]) => window.__bpp.gpuLog.slice(a, b), [c0.g, c1.g]) });
   }
   const replay = { warmStart, countedStart: prog0, warmM: Math.round(warmM), countedM: Math.round((await progress()) - prog0) };
+  // THE SPREAD LEG (#6485): the field above stays bunched, so no rival changes LOD tier and no shared mesh reaches a new
+  // most-in-view count. Here, unwarmed, half the rivals jump to tier 1 (55-115 m: compound stripes on) and half past the
+  // far-body cut (280-460 m: the far-LOD wheel pair), on one compound. TLX mints a pool wrapper per occurrence, so a
+  // count CarDraw.primeRace did not reach shows up as bind groups in this window.
+  const spread = await (async () => {
+    const placed = await page.evaluate(() => {
+      const A = window.__apex, n = Math.max(0, (A.fieldState() || []).length - 1), list = [];
+      for (let i = 0; i < n; i++) {
+        const near = i % 2 === 0, j = i >> 1;
+        list.push({ dProg: near ? 55 + j * 6 : 280 + j * 18, dx: (i % 4 < 2 ? -1 : 1) * (1 + (j % 3) * 1.5) });
+      }
+      const ids = A.rivals(list);
+      A.snapCam();
+      return Array.isArray(ids) ? ids.length : 0;
+    });
+    const snap = () => page.evaluate(() => ({ p: window.__bpp.count, bg: window.__bpp.bindGroups, b: window.__bpp.buffers, g: window.__bpp.gpuLog.length }));
+    const c0 = await snap();
+    await frames(page, SPREAD_FRAMES);
+    const c1 = await snap();
+    return { window: "spread", placed, pipelines: c1.p - c0.p, bindGroups: c1.bg - c0.bg, buffers: c1.b - c0.b,
+      gpuBuilt: await page.evaluate(([a, b]) => window.__bpp.gpuLog.slice(a, b), [c0.g, c1.g]) };
+  })();
   const gov = { scale0: gov0.scale, tier0: gov0.tier, ...(await govAt()) };
   await page.evaluate(() => { window.__apex.govHold(false); window.__apex.renderScale(true); });
   await gas(false);
@@ -157,7 +180,7 @@ export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
   // Whether this run took TLX's soft-blit path (software adapter or headless): the spec exempts that path's readback
   // buffers and asserts the path was on whenever it does (#5387).
   const soft = await page.evaluate(() => { try { const b = GLX.__tlx.backendState(); return { softAdapter: !!b.softAdapter, headless: !!b.headless, softBlit: !!b.softBlit, reads: b.softRead ? b.softRead.gen | 0 : 0 }; } catch (_) { return null; } });
-  const out = { hook, forceGL, warm, gpuDevice, replay, gov, soft, windows };
+  const out = { hook, forceGL, warm, gpuDevice, replay, gov, soft, windows, spread };
   mkdirSync("artifacts/perf", { recursive: true });
   writeFileSync(`artifacts/perf/idle-pipeline-churn-${forceGL ? "gl" : "gpu"}.json`, JSON.stringify(out, null, 1));
   return out;
