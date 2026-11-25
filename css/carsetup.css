@@ -767,7 +767,8 @@
    worse; a swatch grid with the name in aria-label/title is the measured win.
    CREATE stays full-width; edit/del float over the swatch. */
 /* UI Fit r6: Garage LIVERY tap floor + finish tags */
-#cs-options.cs-liv-grid {
+#cs-options.cs-liv-grid,
+#cs-options.cs-liv-grid > details > div {
   display: grid;
   /* Two house-tap chips sit on one card (copy, or edit+delete on a custom
      row). A 72px auto-fill floor packed 26×26 --tap-min chips and clipped
@@ -782,7 +783,12 @@
   grid-column: 1 / -1;
   width: 100%;
 }
-#cs-options.cs-liv-grid > .cs-liv-row {
+/* The FACTORY fold's cards sit in its inner div (the same grid, above), so
+   card rules match .cs-liv-row as a DESCENDANT: a child combinator missed all
+   112 and stacked their ⧉ chips at one point (UI-MATRIX 2026-11-25 row 1). */
+#cs-options.cs-liv-grid > details { grid-column: 1 / -1; min-width: 0; }
+#cs-options.cs-liv-grid > details > summary { min-height: var(--tap); display: flex; align-items: center; cursor: pointer; }
+#cs-options.cs-liv-grid .cs-liv-row {
   position: relative;
   width: auto;
   flex-direction: column;
@@ -799,7 +805,7 @@
   content-visibility: auto;
   contain-intrinsic-block-size: auto 98px;
 }
-#cs-options.cs-liv-grid > .cs-liv-row > .cs-liv {
+#cs-options.cs-liv-grid .cs-liv-row > .cs-liv {
   flex: none;
   width: 100%;
   min-height: var(--chip-h);
@@ -812,7 +818,7 @@
 }
 #cs-options.cs-liv-grid .cs-opt-dot,
 #cs-options.cs-liv-grid .cs-opt-cost { display: none; }
-#cs-options.cs-liv-grid > .cs-liv-row .cs-liv-swatch {
+#cs-options.cs-liv-grid .cs-liv-row .cs-liv-swatch {
   /* Fill the tap-wide CARD so SATIN/CHROME paint in full (was 56px, CHROME
      measured scrollWidth 80). Not the CREATE row — that swatch stays a plus
      chip. Height stays the house tap, not a 52px literal. */
@@ -866,8 +872,7 @@
   left: auto;
   right: 1px;
 }
-#cs-options.cs-liv-grid .cs-liv-edit,
-#cs-options.cs-liv-grid .cs-liv-del {
+#cs-options.cs-liv-grid .cs-liv-edit {
   position: absolute;
   top: 2px;
   /* UI Fit r6: house --tap / --tap-paint floor (survey rank 1). The old
@@ -885,27 +890,17 @@
   opacity: 0.92;
 }
 #cs-options.cs-liv-grid .cs-liv-edit { right: 2px; }
-#cs-options.cs-liv-grid .cs-liv-del { left: 2px; }
-/* Armed = the career DELETE? treatment (css/career.css): one-of-a-kind paint
-   now takes two presses to destroy, and the armed press must read as danger. */
-.cs-liv-del.armed {
-  color: #fff; border-color: var(--red); background: var(--armed-fill);
-  opacity: 1;
-}
 @media (hover: hover) and (pointer: fine) {
-  #cs-options.cs-liv-grid .cs-liv-edit,
-  #cs-options.cs-liv-grid .cs-liv-del { opacity: 0; }
-  #cs-options.cs-liv-grid > .cs-liv-row:is(:hover, :focus-within) .cs-liv-edit,
-  #cs-options.cs-liv-grid > .cs-liv-row:is(:hover, :focus-within) .cs-liv-del { opacity: 1; }
+  #cs-options.cs-liv-grid .cs-liv-edit { opacity: 0; }
+  #cs-options.cs-liv-grid .cs-liv-row:is(:hover, :focus-within) .cs-liv-edit { opacity: 1; }
 }
 /* Touch keeps the icons visible — no hover to reveal them. */
-body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-edit,
-body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
+body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-edit { opacity: 0.95; }
 
-/* Edit / duplicate / delete affordances. These were 24x24 — half a thumb, and
+/* Edit / duplicate affordances. These were 24x24 — half a thumb, and
    sitting right next to the row that repaints the car, so a miss was expensive.
-   Sized off --chip-h like every other secondary control. */
-.cs-liv-del, .cs-liv-edit {
+   Sized off --chip-h like every other secondary control. DELETE is in the editor. */
+.cs-liv-edit {
   flex: 0 0 auto; align-self: center;
   width: var(--chip-h); height: var(--chip-h); min-width: var(--chip-h); min-height: var(--chip-h);
   border-radius: var(--r-md);
@@ -913,14 +908,6 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   font-size: 14px; font-weight: 700;
   cursor: pointer; margin: 0; padding: 0;
 }
-.cs-liv-del {
-  color: var(--del-ink);
-  background: color-mix(in srgb, var(--del-fill) 10%, transparent); border: 1px solid color-mix(in srgb, var(--del-fill) 25%, transparent);
-}
-@media (hover: hover) and (pointer: fine) {
-  .cs-liv-del:hover { background: color-mix(in srgb, var(--del-fill) 22%, transparent); color: #fff; }
-}
-.cs-liv-del:active { background: color-mix(in srgb, var(--del-fill) 30%, transparent); color: #fff; }
 .cs-liv-edit {
   color: var(--edit-ink);
   background: color-mix(in srgb, var(--edit-fill) 10%, transparent); border: 1px solid color-mix(in srgb, var(--edit-fill) 28%, transparent);
@@ -1026,12 +1013,18 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   background: var(--plate); border: 1px solid var(--card-line);
 }
 .cs-liv-ed-btns { display: flex; gap: calc(var(--gap) * 0.7); margin-top: 2px; }
-.cs-liv-ed-cancel, .cs-liv-ed-save {
+.cs-liv-ed-cancel, .cs-liv-ed-save, .cs-liv-del {
   flex: 1 1 0; width: auto; margin: 0; min-height: var(--tap);
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-3);
   padding: 9px 0; border-radius: var(--r-md); cursor: pointer;
 }
 .cs-liv-ed-cancel { background: var(--plate); color: var(--dim); border: 1px solid var(--card-line); }
+/* Editor DELETE (edit only, arm-then-confirm); armed = career's DELETE?. */
+.cs-liv-del {
+  color: var(--del-ink);
+  background: color-mix(in srgb, var(--del-fill) 10%, transparent); border: 1px solid color-mix(in srgb, var(--del-fill) 25%, transparent);
+}
+.cs-liv-del.armed { color: #fff; border-color: var(--red); background: var(--armed-fill); }
 .cs-liv-ed-save { background: var(--red); color: #fff; border: 1px solid var(--red); }
 
 /* ---------- foot ---------- */

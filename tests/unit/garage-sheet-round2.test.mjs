@@ -172,11 +172,16 @@ test("a refused cleanup leaves two usable paints and the older copy can be remov
   pane.querySelector(".cs-liv-ed-save").onclick();
   assert.ok(pane.querySelectorAll('[role="status"]').some(el => /previous copy was kept/.test(el.textContent)));
   const selected = h.G.getLiveryId("mercedes"); assert.notEqual(selected, f.old.id);
-  const removeOriginal = () => pane.querySelectorAll(".cs-liv-del").find(b => b.title && b.getAttribute("aria-label").includes("Original")).onclick();
+  // DELETE lives in the editor: open the older copy with ✎, then press DELETE.
+  const removeOriginal = () => {
+    pane.querySelectorAll(".cs-liv-edit").find(b => b.getAttribute("aria-label").includes("Original")).onclick();
+    pane.querySelector(".cs-liv-del").onclick();
+  };
   removeOriginal();
-  assert.ok(pane.querySelectorAll('[role="status"]').some(el => /Could not delete/.test(el.textContent)));
+  assert.ok(pane.querySelectorAll('[role="status"]').some(el => !el.hidden && /Could not delete/.test(el.textContent)));
   assert.equal(f.open().h.G.getCustomLiveries("mercedes").length, 2);
-  f.storage.refuse = () => false; removeOriginal();
+  // The refusal left the editor open on the older copy: DELETE again retries.
+  f.storage.refuse = () => false; pane.querySelector(".cs-liv-del").onclick();
   const g = f.open().h.G; assert.equal(g.getLiveryId("mercedes"), selected);
   assert.deepEqual(Array.from(g.getCustomLiveries("mercedes"), row => row.id), [selected]);
 });
@@ -184,6 +189,7 @@ test("a refused cleanup leaves two usable paints and the older copy can be remov
 test("refusing to move selection off a deleted livery preserves the fitted row after reload", () => {
   const f = paintFixture(), { pane } = f.open();
   f.storage.refuse = key => key === f.fit;
+  pane.querySelector(".cs-liv-edit").onclick();
   pane.querySelector(".cs-liv-del").onclick();
   const g = f.open().h.G;
   assert.equal(g.getLiveryId("mercedes"), f.old.id);
@@ -451,4 +457,14 @@ test("fitting a livery restores focus by data identity even for an imported id w
   const old = pane.querySelectorAll("[data-cs-livery]").find((e) => e.dataset.csLivery === liveries[1].id); old.focus(); old.click();
   const selected = pane.querySelectorAll("[data-cs-livery]").find((e) => e.dataset.csLivery === liveries[1].id);
   assert.notEqual(old, selected); assert.equal(h.dom.document.activeElement, selected); assert.equal(selected.getAttribute("aria-pressed"), "true");
+});
+
+test("a custom card carries ✎ only; DELETE is in the editor and only when editing", () => {
+  const f = paintFixture(), { pane } = f.open();
+  const card = pane.querySelectorAll(".cs-liv-row").find(r => r.querySelector(".cs-liv-custom"));
+  assert.ok(card, "the custom card renders");
+  assert.equal(card.querySelectorAll(".cs-liv-edit").length, 1);
+  assert.equal(card.querySelectorAll(".cs-liv-del").length, 0, "no delete chip beside ✎ on the card");
+  pane.querySelector(".cs-liv-create").onclick();
+  assert.equal(pane.querySelector(".cs-liv-del"), null, "a NEW paint job has nothing to delete");
 });
