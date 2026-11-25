@@ -213,3 +213,23 @@ test("W26: a parked player is retired after 60 s under green and under VSC / SC 
     G.applyCaution({ level: 0 });
   }
 });
+
+// #6631: aero and learn drills run as session "race" with practiceMode set; the stall sweep was
+// gated on !isTimeTrial() only, so a car parked 60 s in a drill (reading the coaching overlay)
+// was retired "CAR STATIONARY FOR 60 s". The sweep now reads !isPractice(), like the rest of
+// race control. Control in the same test: the same parked car in a real race still retires.
+test("#6631 a practice / drill car parked 120 s is never retired; the same car in a race is", async () => {
+  const G = g.G, A = g.apex;
+  const watch = (p, secs) => { let hi = 0; for (let t = 0; t < secs && !p.retired; t++) { A.step(1, 1); hi = Math.max(hi, p.stallT || 0); } return hi; };
+  let p = await drive();
+  G.practice = true;
+  try {
+    assert.equal(G.practice, true, "practice armed on a race session (what a drill sets)");
+    const t0 = G.raceT, hi = watch(p, 120);
+    assert.ok(G.raceT - t0 > 100, "the race clock ran (the case discriminates)");
+    assert.ok(!p.retired, `practice: retired ${p.retired} (${p.dnf}), max stallT ${hi}`);
+  } finally { G.practice = false; }
+  p = await drive();
+  const hi = watch(p, 300);
+  assert.ok(p.retired && p.dnf === "stationary", `control: a race still retires a parked car (max stallT ${hi}, dnf ${p.dnf})`);
+});

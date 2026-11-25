@@ -571,6 +571,57 @@ test("exemptions: caution, pit, finished/retired, troubled player, and non-race"
   assert.deepEqual(blueRun(w, f, 10), [], "troubled / stuck player");
 });
 
+// #6630: the HUD hides the blue flag (chip and radio call) under ANY caution or
+// while a give-back is owed; the watch used to reset only at VSC and above, so a
+// local yellow or an owed place still earned BLUE FLAG WARNING and +5 s.
+test("#6630 a local yellow or an owed give-back: no blue warning, no penalty", () => {
+  for (const [label, hit] of [
+    ["local yellow", (f) => { f.ctx.caution = 1; }],
+    ["give-back owed", (f) => { f.ctx.owed = 1; }],
+    ["yellow and owed", (f) => { f.ctx.caution = 1; f.ctx.owed = 2; }],
+  ]) {
+    const w = R.createBlueFlagWatch(), f = blueField(40);
+    hit(f);
+    assert.deepEqual(blueRun(w, f, 10), [], label);
+    assert.equal(w.info().hold, 0, label + ": no hold time banked");
+  }
+  // Control: the same lapper under green still warns, then charges.
+  const evs = blueRun(R.createBlueFlagWatch(), blueField(40), 10);
+  assert.deepEqual(evs.map((e) => e.type), ["warn", "penalty"], "a legitimate blue flag still bites");
+});
+
+test("#6630 parity: the watch and the HUD flag chip read one blue gate (levels 0-4, owed 0/1)", () => {
+  const hud = readFileSync(join(ROOT, "js/ui/hud.js"), "utf8");
+  assert.match(hud, /const caution = !!\(cn && \(cn\.level > 0 \|\| cn\.owed > 0\)\);\n(.*\n){5}  const blueCar = _blueHeld = !caution && /,
+    "hud.js speakHud's blue gate moved: re-pin it to SportingRegs.blueSuppressed");
+  for (let level = 0; level <= 4; level++) {
+    for (const owed of [0, 1]) {
+      const hudHides = level > 0 || owed > 0;
+      assert.equal(R.blueSuppressed(level, owed), hudHides, `level ${level} owed ${owed}`);
+      const f = blueField(40);
+      f.ctx.caution = level; f.ctx.owed = owed;
+      const charged = blueRun(R.createBlueFlagWatch(), f, 10).length > 0;
+      assert.equal(charged, !hudHides, `watch at level ${level} owed ${owed}`);
+    }
+  }
+});
+
+test("#6630 hysteresis: a flagged lapper drifting to 1.4 s keeps the watch's clock, as the HUD keeps its chip", () => {
+  const hctx = vm.createContext({});
+  vm.runInContext(readFileSync(join(ROOT, "js/race/sporting-regs.js"), "utf8") + ";this.SportingRegs=SportingRegs;", hctx,
+    { filename: absSrc("js/race/sporting-regs.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/ui/hud-readouts.js"), "utf8") + ";this.HudReadouts=HudReadouts;", hctx,
+    { filename: absSrc("js/ui/hud-readouts.js") });
+  const HR = hctx.HudReadouts, RS = hctx.SportingRegs;
+  const w = RS.createBlueFlagWatch(), f = blueField(40);   // 0.67 s: flagged
+  assert.ok(blueRun(w, f, 2).length === 0 && w.info().hold > 1.9, "flagged and counting");
+  f.lapper.prog = f.p.prog - 84 + L;                       // 84 m / 60 m/s = 1.4 s: inside the keep band
+  assert.equal(HR.blueFlag(f.p, f.all, L, VREF * 0.26, f.lapper), f.lapper, "the HUD keeps the chip for the held car");
+  assert.equal(HR.blueFlag(f.p, f.all, L, VREF * 0.26, null), null, "but would not raise it fresh at 1.4 s");
+  const evs = blueRun(w, f, 6.5);
+  assert.deepEqual(evs.map((e) => e.type), ["warn", "penalty"], "the watch did not reset on the flicker: " + JSON.stringify(w.info()));
+});
+
 test("SKIP after a player DNF under red applies the suspended-race compound tariff", async () => {
   const game = await createGame({ track: "monza", carMeshes: false });
   try {
