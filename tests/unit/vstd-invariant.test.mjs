@@ -139,13 +139,8 @@ const ALLOWED = [
   // REVERSE_MAX is a flat -5 m/s and REVERSE_ACCEL a flat 5 m/s^2, neither
   // PACE-scaled, so "stopped" and "crawling" are absolute by construction. Each
   // of these gates exists to sit inside or just outside that crawl.
-  {
-    file: "js/game.js", expr: "c.speed < 3",
-    code: "const stoppedOnTrack = gasPressed && c.speed < 3 && raceT > 2 && !(braking && ds < -0.01);",
-    // Re-keyed 2026-09-02: gated on the DRIVER's pedal (gasPressed), not the
-    // touch auto-throttle; the 3 m/s threshold and its reason are unchanged.
-    why: "stopped detector, on the absolute scale REVERSE_MAX (-5 m/s) sets",
-  },
+  // (stoppedOnTrack left this list 2026-11-25, #6546 P3: it reads vStd now, so a car pulling away at a low
+  // OVERALL SPEED is not read as parked.)
   {
     file: "js/game.js", expr: "c.speed < 4",
     code: "(beached || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack);",
