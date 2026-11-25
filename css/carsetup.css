@@ -335,7 +335,7 @@
   gap: calc(var(--gap) * 0.5);
   overflow-x: auto;
   overflow-y: hidden;
-  overscroll-behavior-x: contain; touch-action: pan-x;
+  overscroll-behavior-x: contain; touch-action: manipulation;
   scrollbar-width: none; scrollbar-gutter: auto;
   /* SNAP + PEEK. Without snap, a category parks mid-glyph at the trailing
      edge (390×844: SUSP 53/80 painted, BRAKES at 0 wide) and ScrollFade's
@@ -407,7 +407,7 @@
   max-height: none; min-width: 0;
   padding: 0;
   overflow-x: auto; overflow-y: hidden;
-  overscroll-behavior-x: contain; touch-action: pan-x;
+  overscroll-behavior-x: contain; touch-action: manipulation;
   scrollbar-width: none; scrollbar-gutter: auto;
   /* SNAP EACH CATEGORY. Compact (and tall stacked) flattens both .cs-tab-row
      into this one scroller (display: contents). Without snap, mid-strip
@@ -1198,7 +1198,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   scroll-padding-block-end: var(--pad);
   /* Restore the vertical .pane scroller the stacked strip overrides. */
   overflow-x: hidden; overflow-y: auto;
-  overscroll-behavior-y: contain; touch-action: pan-y;
+  overscroll-behavior-y: contain; touch-action: manipulation;
   scrollbar-width: thin; scrollbar-gutter: stable;
   scrollbar-color: color-mix(in oklab, var(--text) 38%, var(--carbon)) var(--carbon);
   /* Rows exactly as tall as a tab, packed from the top. Left to stretch, the
@@ -1211,9 +1211,9 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 }
 #cs-inner[data-pair="on"] #cs-tabs .cs-tab-row {
   display: contents;
-  /* These groups are horizontal strips only in the stacked layout. Their
-     pan-x restriction can block vertical swipes starting on a rail tab. */
-  touch-action: pan-y;
+  /* These groups are horizontal strips only in the stacked layout. A pan-x
+     restriction here blocked vertical swipes starting on a rail tab. */
+  touch-action: manipulation;
 }
 #cs-inner[data-pair="on"] #cs-tabs .cs-tab {
   flex: initial; white-space: normal;
@@ -1460,7 +1460,7 @@ body:not(.desktop) #cs-photo {
   #carsetup #cs-inner #cs-tabs {
     grid-column: 1; grid-row: 1; flex-direction: column; min-height: 0;
     max-height: 100%; overflow-x: hidden; overflow-y: auto;
-    scroll-snap-type: y proximity; overscroll-behavior-y: contain; touch-action: pan-y; padding-inline: 0;
+    scroll-snap-type: y proximity; overscroll-behavior-y: contain; touch-action: manipulation; padding-inline: 0;
   }
   #carsetup #cs-inner #cs-options { grid-column: 2; grid-row: 1; }
   #carsetup #cs-stack {
@@ -1914,7 +1914,7 @@ body:not(.desktop) #carsetup #cs-customize {
     flex-wrap: nowrap;
     overflow-x: auto;
     overscroll-behavior-x: contain;
-    touch-action: pan-x;
+    touch-action: manipulation;
   }
   #cs-cam-panel {
     max-height: min(20vh, 142px);

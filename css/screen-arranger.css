@@ -109,7 +109,7 @@ body:has(> main#overlay) {
   gap: calc(var(--gap, .75rem) / 4);
   overflow-x: auto;
   overscroll-behavior-x: contain;
-  touch-action: pan-x;
+  touch-action: manipulation;
 }
 #screen-arranger #screen-arranger-bar select {
   height: max(44px, 2.4em);
@@ -129,7 +129,7 @@ body:has(> main#overlay) {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  touch-action: pan-y;
+  touch-action: manipulation;
 }
 #screen-arranger .arrange-tools :is(h2, p) { margin: 0; }
 #screen-arranger .arrange-tools h2 { font-size: var(--fs-6); }
