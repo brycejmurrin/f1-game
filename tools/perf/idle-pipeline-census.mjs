@@ -156,6 +156,7 @@ export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
   // far-body cut (280-460 m: the far-LOD wheel pair), on one compound. TLX mints a pool wrapper per occurrence, so a
   // count CarDraw.primeRace did not reach shows up as bind groups in this window.
   const spread = await (async () => {
+    await restart();   // back onto the warmed stretch: only the field's placement is new in this window
     const placed = await page.evaluate(() => {
       const A = window.__apex, n = Math.max(0, (A.fieldState() || []).length - 1), list = [];
       for (let i = 0; i < n; i++) {
