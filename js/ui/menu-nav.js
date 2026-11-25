@@ -381,13 +381,14 @@ window.MenuNav = (function () {
     if (dy > 0) {
       const pane = from.closest && from.closest(SCROLLERS);
       if (pane) {
-        let foot = null, footAlong = Infinity;
+        // The pane's own controls below, off the band, first (UI matrix 2026-11-25 row 6).
+        let low = null, foot = null, lowCost = Infinity, footAlong = Infinity;
         for (const el of list) {
-          if (el === from || pane.contains(el)) continue;
-          const along = centre(el).y - a.y;
-          if (along > 1 && along < footAlong) { foot = el; footAlong = along; }
+          const b = centre(el), along = b.y - a.y, own = pane.contains(el), cost = along + (own ? gap(a.x, b.l, b.r) / 4 : 0);
+          if (el === from || along <= 1) continue;
+          if (own && cost < lowCost) { low = el; lowCost = cost; } else if (!own && along < footAlong) { foot = el; footAlong = along; }
         }
-        if (foot) return foot;
+        if (low || foot) return low || foot;
       }
     }
     // Up off a TAB RAIL with nothing above in its band: the sheet head's
@@ -493,6 +494,8 @@ window.MenuNav = (function () {
   }
   function ownsArrows(el, key, event) {
     if (!el) return false;
+    // A region routing every arrow itself (Data Hub head).
+    if (DIRS[key] && el.closest && el.closest("[data-nav='own']")) return true;
     // Physical editor keys belong to the widget; synthetic D-pad keys still navigate.
     if (el.dataset && el.dataset.arrows === "own" && DIRS[key] && (!event || event.isTrusted !== false)) return true;
     const t = el.tagName;
