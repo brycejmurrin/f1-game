@@ -7,6 +7,7 @@
 const PhonePadPage = (function () {
   const HELD = Object.freeze({ lookBack: 1 });
   const REPEAT_DELAY_MS = 380, REPEAT_RATE_MS = 110;
+  const CAM_MENU_HOLD_MS = 340;   // the game's CAM hold (js/camera/mode-switch.js HOLD_MS)
 
   // Dash flag bits (desktop → phone).
   const DASH = Object.freeze({ boost: 1, otArmed: 2, otActive: 4, xArmed: 8, xOpen: 16,
@@ -449,6 +450,11 @@ const PhonePadPage = (function () {
       const l = latches.get(k);
       if (l) { l.els.push(el); l.fingers.set(el, held); }
       const fire = () => { buzz(); if (session) session.event(k); };
+      // CAM: a tap cycles on the lift; held CAM_MENU_HOLD_MS it opens the game's full
+      // camera picker instead (#6271), which then shows this phone its menu pad.
+      const camHold = k === "camera";
+      let holdT = null, longFired = false;
+      const dropHold = () => { if (holdT) { timers.clearTimeout(holdT); holdT = null; } };
       el.addEventListener("click", (e) => { if (!e.detail) { e.preventDefault(); if (l) { buzz(); l.latch.tap(); paintLatch(k); } else fire(); } });
       el.addEventListener("pointerdown", (e) => {
         if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -461,6 +467,12 @@ const PhonePadPage = (function () {
         try { el.setPointerCapture(e.pointerId); } catch (err) { /* document release fanout still stops the repeat */ }
         el.classList.add("on");
         if (!first) return;
+        if (camHold) {
+          dropHold(); longFired = false;
+          holdT = timers.setTimeout(() => { holdT = null; longFired = true; buzz(); if (session) session.event("cameraMenu"); }, CAM_MENU_HOLD_MS);
+          if (holdT && holdT.unref) holdT.unref();
+          return;
+        }
         if (l) { buzz(); if (![...l.fingers.values()].some(f => f !== held && f.size)) l.latch.down(l.hold); paintLatch(k); return; }
         fire();
         if (repeat) r.start();
@@ -475,6 +487,12 @@ const PhonePadPage = (function () {
         }
         el.classList.remove("on");
         stop();
+        if (camHold) {
+          // Only a real lift is a tap: a cancelled touch or a lost window cycles nothing.
+          const tap = !!holdT && !longFired && e?.type === "pointerup";
+          dropHold();
+          if (tap) fire();
+        }
         if (l && lifted) { if (![...l.fingers.values()].some(f => f.size)) l.latch.up(l.hold); paintLatch(k); }
       };
       // Lost lift / blur / last-finger-up: same nets as hold() and the menu stick.

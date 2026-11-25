@@ -715,12 +715,13 @@ test("physical pad loss pauses only when the last driving pad disconnects", () =
     assert.equal(losses, expected, scenario);
     assert.equal(h.Input.throttleLevel(), ["spare driving", "idle spare"].includes(scenario) ? 1 : 0, scenario);
     if (["driver with idle spare", "driver after snapshot gap"].includes(scenario)) {
-      press(spare, 8);
+      // RECOVER (button 10), not CAM: CAM's press waits for its release since #6271.
+      press(spare, 10);
       h.Input.poll();
-      assert.equal(h.Input.consumeCameraCycle(), false, "the replacement's held action is not a new press");
-      press(spare, 8, false); h.Input.poll();
-      press(spare, 8); h.Input.poll();
-      assert.equal(h.Input.consumeCameraCycle(), true, "a fresh replacement press still works");
+      assert.equal(h.Input.consumeRecover(), false, "the replacement's held action is not a new press");
+      press(spare, 10, false); h.Input.poll();
+      press(spare, 10); h.Input.poll();
+      assert.equal(h.Input.consumeRecover(), true, "a fresh replacement press still works");
       assert.equal(losses, 1);
     }
   }
@@ -823,14 +824,15 @@ test("an empty pad poll clears free look without requiring a disconnect event", 
 });
 
 test("a spare pad disconnect preserves held action edge baselines", () => {
+  // RECOVER (button 10), not CAM: CAM's press waits for its release since #6271.
   const pad = { index: 0, connected: true, mapping: "standard", id: "active", axes: [0, 0, 0, 0],
-    buttons: Array.from({ length: 16 }, (_, i) => ({ pressed: i === 8, value: i === 8 ? 1 : 0 })) };
+    buttons: Array.from({ length: 16 }, (_, i) => ({ pressed: i === 10, value: i === 10 ? 1 : 0 })) };
   const spare = { index: 1, connected: true, mapping: "standard", id: "spare", axes: [0, 0, 0, 0], buttons: [] };
   let live = [pad, spare]; const h = bootInput({ pads: () => live });
   h.fire("gamepadconnected", { gamepad: pad }); h.Input.poll();
-  assert.equal(h.Input.consumeCameraCycle(), true);
+  assert.equal(h.Input.consumeRecover(), true);
   live = [pad]; h.fire("gamepaddisconnected", { gamepad: spare }); h.Input.poll();
-  assert.equal(h.Input.consumeCameraCycle(), false);
+  assert.equal(h.Input.consumeRecover(), false);
 });
 
 /* ── touch-control LABEL floor (GAS/BRAKE/BOOST/OT/PAUSE/CAM) ───────────────

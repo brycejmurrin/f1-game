@@ -41,6 +41,12 @@ const Input = (function () {
   let shiftDownPressed = false;
   // edge-triggered camera cycle (C key / CAM tap)
   let cameraCyclePressed = false;
+  // HOLD CAM OPENS THE FULL PICKER (#6271): the cycle walks only six views, and a pad or
+  // paired phone had no route to the rest. A pad's camera press cycles on RELEASE, like the
+  // HUD button; held CAM_MENU_HOLD_MS (mode-switch.js HOLD_MS's twin) it opens the grid instead.
+  const CAM_MENU_HOLD_MS = 340;
+  let cameraMenuPressed = false, padCamDownAt = -1, padCamIndex = -1;
+  const camPickerOpen = () => typeof CamPicker !== "undefined" && CamPicker.visible();
   let recoverPressed = false;   // edge-triggered manual recover / put-me-back
   let radioPressed = false;     // edge-triggered RADIO CHECK — ask the engineer for the gaps (js/race/race-radio.js)
   let mirrorPressed = false;    // edge-triggered REAR-VIEW MIRROR on/off (js/render/shared/mirror-pass.js)
@@ -381,7 +387,8 @@ const Input = (function () {
   // Remote driving follows the physical pad's ownership: title/navigation,
   // settings and capture tools own the controls. Menu edges remain available.
   function remoteDrivingBlocked() {
-    return !!axisCaptureCb || !!padCaptureCb || !!(window.UiLayers && window.UiLayers.navOpen());
+    // An open camera picker is a menu for the pad and the phone: they steer its focus, not the car.
+    return !!axisCaptureCb || !!padCaptureCb || !!(window.UiLayers && window.UiLayers.navOpen()) || camPickerOpen();
   }
   function photoLayerOpen() {
     const id = window.UiLayers?.top()?.id;
@@ -454,6 +461,7 @@ const Input = (function () {
     boost: () => { boostTogglePressed = true; },
     aero: () => { aeroTogglePressed = true; },
     camera: () => { cameraCyclePressed = true; },
+    cameraMenu: () => { cameraMenuPressed = true; },   // the phone's long-pressed CAM (#6271)
     recover: () => { recoverPressed = true; },
     radio: () => { radioPressed = true; },
     mirror: () => { mirrorPressed = true; },
@@ -1105,6 +1113,7 @@ const Input = (function () {
     padDpadTarget = padDpadVal = padDpadT = 0;
     padDpadLeftHeld = padDpadRightHeld = false;
     padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
+    padCamDownAt = -1;   // a lost pad's CAM press is neither a tap nor a hold
   }
   function padDpadSteer(pad) {
     // LAST PRESS WINS — same contract as keyboardSteer / buttonSteering.
@@ -1965,8 +1974,9 @@ const Input = (function () {
       // held LB/RB/trigger can never also queue a gear shift or camera cycle
       // that fires the instant the menu closes (see docs/research note above
       // clearEdges() for the bug class this avoids).
-      const menuOpen = window.UiLayers?.navOpen();
+      const menuOpen = window.UiLayers?.navOpen() || camPickerOpen();
       if (cameraPad || menuOpen || padCameraHeld) {
+        padCamDownAt = -1;   // a CAM hold never outlives the menu that took the pad
         lookStickX = lookStickY = 0;
         // ...and the PEDALS go with it. They were latched above this branch, so a
         // pad kept throttling/braking the car through the pause menu (the
@@ -1991,7 +2001,12 @@ const Input = (function () {
         if (padActEdge(pad, "aero")) aeroTogglePressed = true;
         if (padActEdge(pad, "shiftUp")) shiftUpPressed = true;
         if (padActEdge(pad, "shiftDown")) shiftDownPressed = true;
-        if (padActEdge(pad, "camera")) cameraCyclePressed = true;
+        if (padActEdge(pad, "camera")) { padCamDownAt = nowMs(); padCamIndex = pad.index; }
+        if (padCamDownAt >= 0 && pad.index !== padCamIndex) padCamDownAt = -1;   // another pad took over mid-press
+        if (padCamDownAt >= 0) {
+          if (!(padActVal(pad, "camera") > 0.5)) { cameraCyclePressed = true; padCamDownAt = -1; }
+          else if (nowMs() - padCamDownAt >= CAM_MENU_HOLD_MS) { cameraMenuPressed = true; padCamDownAt = -1; }
+        }
         if (padActEdge(pad, "recover")) recoverPressed = true;
         if (padActEdge(pad, "radio")) radioPressed = true;
         if (padActEdge(pad, "mirror")) mirrorPressed = true;
@@ -2220,6 +2235,11 @@ const Input = (function () {
   function consumeCameraCycle() {
     const v = cameraCyclePressed;
     cameraCyclePressed = false;
+    return v;
+  }
+  function consumeCameraMenu() {
+    const v = cameraMenuPressed;
+    cameraMenuPressed = false;
     return v;
   }
 
@@ -2749,6 +2769,7 @@ const Input = (function () {
     shiftUpPressed = false;
     shiftDownPressed = false;
     cameraCyclePressed = false;
+    cameraMenuPressed = false; padCamDownAt = -1;
     padSteer = 0;
     padSteerAnalog = false;
     padThrottle = false;
@@ -2806,6 +2827,7 @@ const Input = (function () {
   function clearEdges() {
     clearDriveEdges();
     cameraCyclePressed = false;
+    cameraMenuPressed = false; padCamDownAt = -1;
     radioPressed = false;
     mirrorPressed = false;
   }
@@ -2888,6 +2910,7 @@ const Input = (function () {
     consumeShiftUp,
     consumeShiftDown,
     consumeCameraCycle,
+    consumeCameraMenu,
     consumeRecover,
     requestRecover: () => { recoverPressed = true; },   // pause card RECOVER CAR: touch has no R key
     consumeRadio,
