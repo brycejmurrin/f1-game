@@ -349,7 +349,10 @@ const TouchButtonSettings = (() => {
       id, name, read, available,
       apply(value) {
         set(value);
-        const durable = id === "pad" ? store.set("pad", read()) : store.set("keys", read());
+        // Input persists an active device profile itself; the shared "pad" key stays the legacy map a wheel
+        // that has yet to migrate reads (key-binds.js save(), #6446).
+        const profiled = id === "pad" && !!Input.controllerProfile?.();
+        const durable = profiled || (id === "pad" ? store.set("pad", read()) : store.set("keys", read()));
         window.dispatchEvent(new Event("apexbuttonprofileapply"));
         return durable !== false && (id !== "pad" || Input.controllerProfile?.()?.saved !== false);
       },

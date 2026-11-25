@@ -707,6 +707,24 @@ test("a marker-only changed controller profile import retains saved wheel device
   }
 });
 
+test("a changes import that omits legacyClaimed keeps the receiver's claim (#6446)", () => {
+  // Bryce's own profile (the 2026-11-25 live export) has claimed the legacy pad map with his DualSense.
+  const live = JSON.parse(fs.readFileSync(absSrc("tests/data/settings-live-export-2026-11-25.json"), "utf8"));
+  const profiles = live.settings.driving.padProfiles;
+  assert.equal(profiles.legacyClaimed, true);
+  const disk = { "apex26.padProfiles": JSON.stringify(profiles) };
+  // A sender whose claim is still the default (false) omits it from a CHANGES file.
+  const wheel = { id: "Wheel", axes: { steer: 3, throttle: 2 }, buttons: { camera: [19] } };
+  const game = boot({ disk, realStore: true });
+  const result = game.loadSettings({
+    format: game.collect("changes").format, mode: "changes", settings: { driving: { padProfiles: { devices: [wheel] } } },
+  });
+  assert.deepEqual(result.sections.preferences, { applied: 1, skipped: 0, failed: 0 });
+  const stored = JSON.parse(game.disk.get("apex26.padProfiles"));
+  assert.equal(stored.legacyClaimed, true, "the claim survives, so input.js does not re-migrate the legacy pad map");
+  assert.deepEqual(stored.devices.map(d => d.id), ["Wheel"]);
+});
+
 test("changes-only backups restore complete solo race drafts and explicit HUD maps", () => {
   const mobile = true;
   const globals = { HudElements: { defaults: () => ({ speed: "off" }) } };
