@@ -17,7 +17,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { strictFlags, makeFlags } from "../lib/cli-args.mjs";
 import { BRYCE_WINDOWS, UI_SIZE_AXIS, openBrycePhone, readBackInPage, mismatches } from "../lib/bryce-phone.mjs";
-import { measurePaintInPage, summarisePaint, paintCounts, paintLine, judgePaint, PAINT_KINDS } from "../lib/paint-floor.mjs";
+import { measurePaintInPage, summarisePaint, paintCounts, paintLine, judgePaint, PAINT_KINDS, dockTargetInside } from "../lib/paint-floor.mjs";
 import { getScreen } from "./menu-screens.mjs";
 import { resetToTitleState } from "./ui-reset.mjs";
 import { menuReady, previewMapSettled } from "./menu-readiness.mjs";
@@ -42,9 +42,9 @@ export const USAGE = `usage: node tools/ui/bryce-paint.mjs [--window standalone,
 export const KNOWN = ["--window", "--ui-scale", "--screens", "--profile", "--no-profile", "--check", "--write", "--json", "--verbose"];
 
 /** argv → the run plan. Pure; throws on a bad value. */
-/** The profile the ceilings are measured on. `nov10`, not `live`, until #6681: on the 2026-11-25 export the counts
- *  RISE (garage outside the safe box, CAREER subtitle under 12 px), and a ceiling is never raised (Bryce, #6646 A). */
-export const PAINT_PROFILE = "nov10";
+/** The profile the ceilings are measured on: `live`, his newest dated export (tools/lib/bryce-phone.mjs). It was
+ *  `nov10` from #6646 until #6681 brought the 2026-11-25 export to the same counts (#6684). */
+export const PAINT_PROFILE = "live";
 
 export function planRun(flags) {
   const csv = (name, all) => { const v = flags.flag(name); return v ? String(v).split(",").filter(Boolean) : [...all]; };
@@ -169,7 +169,7 @@ export function ceilingsFrom(measured, prev = {}) {
     for (const [screen, paint] of Object.entries(screens)) if (!paint.error) cells[cell][screen] = paintCounts(paint);
   }
   return {
-    doc: "Owner-phone acceptance ceilings (issue #5262): the EXACT number of painted-size violations per cell (window@UI SIZE) and screen, measured by `node tools/ui/bryce-paint.mjs --write` and asserted by tests/specs/bryce-phone-paint.spec.js. taps = controls painting under 44 px; text = text nodes painting under 12 px; outside = items crossing the safe box; blocked = controls covered at their centre; scroll = the page scrolls. A count may only go DOWN (the spec fails above and below it). The cells are UI SIZE 50 (the phone floor, #5452), 70 (his stored value) and 109 (the touch default), on his live profile: tools/lib/bryce-phone.mjs `live`, the 2026-11-10 export (#5218). Never raise a number to get green.",
+    doc: "Owner-phone acceptance ceilings (issue #5262): the EXACT number of painted-size violations per cell (window@UI SIZE) and screen, measured by `node tools/ui/bryce-paint.mjs --write` and asserted by tests/specs/bryce-phone-paint.spec.js. taps = controls painting under 44 px; text = text nodes painting under 12 px; outside = items crossing the safe box; blocked = controls covered at their centre; scroll = the page scrolls. A count may only go DOWN (the spec fails above and below it). The cells are UI SIZE 50 (the phone floor, #5452), 70 (his stored value) and 109 (the touch default), on his live profile: tools/lib/bryce-phone.mjs `live`, his newest dated export (2026-11-25 since #6681). Never raise a number to get green.",
     floors: { tap: 44, text: 12 },
     kinds: [...PAINT_KINDS],
     // Known offenders: "cell screen kind" → the issue that fixes them. Hand-written, kept across --write; the exact
@@ -199,7 +199,7 @@ async function main(argv) {
         const side = (t) => Math.min(t.w, t.h);
         for (const t of p.raw.taps.filter((x) => side(x) < 43.5)) console.log(`  ${key} ${id} tap ${t.el} ${t.w}x${t.h}`);
         for (const t of p.raw.texts.filter((x) => x.px < 11.5)) console.log(`  ${key} ${id} text ${t.el} ${t.px}px "${t.text}"`);
-        for (const o of p.raw.outside) console.log(`  ${key} ${id} outside ${o.el} ${o.kind} at ${o.at}`);
+        for (const o of p.raw.outside) if (!(o.dock && dockTargetInside(o.dock, p.raw.safe, p.raw.viewport))) console.log(`  ${key} ${id} outside ${o.el} ${o.kind} at ${o.at}`);
         for (const b of p.raw.blocked) console.log(`  ${key} ${id} blocked ${b.el} under ${b.by} at ${b.at}`);
       }
       measured[key] = Object.fromEntries(Object.entries(cell.screens).map(([id, p]) => { const { raw, ...rest } = p; return [id, rest]; }));
