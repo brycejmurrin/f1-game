@@ -1696,7 +1696,7 @@ test("a guest seats the host's AI as host-owned remotes and poses them from the 
   net.stop(); net2.stop();
 });
 
-test("the host's actual AI retirement reaches a guest, including one that binds after it happened", () => {
+test("the host's actual AI retirement reaches a guest, including one that binds after it happened", (t) => {
   const host = poseG(3), guest = poseG(3);
   host.track.def = guest.track.def = { id: "monza" };
   guest.cars[0].local = guest.cars[0].human = false;
@@ -1736,7 +1736,10 @@ test("the host's actual AI retirement reaches a guest, including one that binds 
   hs.sent.length = 0; hn.tick(11500); hn.tick(13000);
   assert.ok(hs.sent.some((e) => e.t === NetPlay.EV.STRATEGY), "the 1 s strategy block ran on both ticks");
   assert.equal(hs.sent.filter((e) => e.t === "lap" && e.d.driverId === "drv2").length, 0, "the terminal state is not re-broadcast");
-  hs.deliver("model", ls.sent.find((e) => e.t === "model").d);   // another receiver binds: now it is owed again
+  // Another receiver binds: a NEW race epoch, past the MODEL rate window (#6623) — now it is owed again.
+  const wall = performance.now.bind(performance);
+  t.mock.method(performance, "now", () => wall() + 5000);
+  hs.deliver("model", { ...ls.sent.find((e) => e.t === "model").d, epoch: "rebound" });
   hs.sent.length = 0; hn.tick(14500);
   assert.equal(hs.sent.filter((e) => e.t === "lap" && e.d.driverId === "drv2").length, 1);
   hn.stop(); gn.stop(); ln.stop();
@@ -1758,6 +1761,62 @@ test("AI retirements require the host and the current receiver epoch", () => {
   assert.equal(!!host.cars[2].retired, false, "a guest cannot retire host AI");
   assert.equal(!!host.cars[1].retired, false, "nor can the spoof retire another car by accident");
   hn.stop();
+});
+
+// ---- #6623: MODEL is rate-gated, and only a NEW epoch forces the full strategy resend ----
+const strategySends = (sent) => sent.filter((e) => e.t === NetPlay.EV.STRATEGY).length;
+
+test("a repeated same-epoch MODEL forces no further full strategy rebroadcast (#6623)", (t) => {
+  const host = poseG(4), hn = netOf(host), a = stateSession(), b = stateSession();
+  host.track.def = { id: "monza" };
+  assert.equal(hn.start({ role: "host", session: a, sessions: [{ id: "a", session: a }, { id: "b", session: b }],
+    peers: [{ id: "a" }, { id: "b" }] }).ok, true);
+  const model = { physics: a.sent.find((e) => e.t === "model").d.physics, strategy: a.sent.find((e) => e.t === "model").d.strategy, epoch: "a" };
+  let wall = 0;
+  t.mock.method(performance, "now", () => wall);
+  b.deliver("model", { ...model, epoch: "b" });   // a receiver hears strategy only under its own epoch
+  a.deliver("model", model);
+  b.sent.length = 0; hn.tick(10_000);
+  const burst = strategySends(b.sent);
+  assert.ok(burst >= 2, "the first epoch still gets every car's state: " + burst);
+  // 100 repeats, one per host tick (and one per 600 ms of wall time, under MODEL_RATE): no tick inside the
+  // 1 s cadence may send a strategy to guest B again. Before the fix every tick re-sent the whole field.
+  b.sent.length = 0;
+  for (let i = 1; i <= 100; i++) { wall += 600; a.deliver("model", model); hn.tick(10_000 + i * 5); }
+  assert.equal(strategySends(b.sent), 0, "same epoch: no rebroadcast");
+  assert.equal(a.sent.filter((e) => e.t === "model" && e.d.ack).length, 101, "each MODEL under the rate is still acked");
+  // A NEW epoch is a new race for that receiver: it is owed the full state once more.
+  wall += 600; a.deliver("model", { ...model, epoch: "a2" }); hn.tick(10_600);
+  assert.equal(strategySends(b.sent), burst, "a new epoch resends the field once");
+  hn.stop();
+});
+
+test("the host drops a MODEL beyond MODEL_RATE per connection (#6623)", () => {
+  const host = poseG(3), hn = netOf(host), a = stateSession();
+  host.track.def = { id: "monza" };
+  assert.equal(hn.start({ role: "host", session: a }).ok, true);
+  const mine = a.sent.find((e) => e.t === "model").d;
+  a.sent.length = 0;
+  for (let i = 0; i < 20; i++) a.deliver("model", { physics: mine.physics, strategy: mine.strategy, epoch: "e" + i });
+  assert.equal(NetPlay.MODEL_RATE, 2);
+  assert.equal(a.sent.filter((e) => e.t === "model" && e.d.ack).length, NetPlay.MODEL_RATE, "a MODEL past the cap is dropped, not acked");
+  assert.equal(hn.status().events, 20, "the status log still counts what arrived");
+  hn.stop();
+});
+
+// ---- #6624: the host never retains a peer's unvalidated payload ----
+test("an oversized LAP is accepted but peerLaps keeps only its whitelisted fields (#6624)", () => {
+  const { net, s } = started("host");
+  const junk = "x".repeat(200_000);
+  s.deliver("lap", { lap: 2, time: 91.2, best: 90.5, code: "D1", junk, nested: { junk } });
+  s.deliver("quali", { driverId: "nobody", t: 1, junk });   // rejected by its own gate: still logged by type only
+  const laps = net.peerLaps();
+  assert.equal(laps.length, 1, "a guest still reports its own laps");
+  assert.deepEqual(laps[0], { lap: 2, time: 91.2, best: 90.5, code: "D1" });
+  s.deliver("lap", { lap: 3, time: 92, code: "D1", epoch: junk });   // an over-long string field is not kept
+  assert.equal(net.peerLaps().length, 2);
+  assert.equal("epoch" in net.peerLaps()[1], false);
+  net.stop();
 });
 
 // ---- #4270 §3: retired AI must leave the aged AI relay (stale-handoff proof) ----
