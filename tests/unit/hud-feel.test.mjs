@@ -114,6 +114,8 @@ function boot(opts = {}) {
   vm.runInNewContext(src("js/ui/hud-skin.js"), sb, { filename: absSrc("js/ui/hud-skin.js") });
   vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
   vm.runInNewContext(src("js/ui/hud-radio-lane.js"), sb, { filename: absSrc("js/ui/hud-radio-lane.js") });   // …and its HudRadioLane (#3261)
+  // GameHud builds its sector painter from it (#6500); `readouts: false` pins the no-HudReadouts fallbacks.
+  if (opts.readouts !== false) vm.runInNewContext(src("js/ui/hud-readouts.js"), sb, { filename: absSrc("js/ui/hud-readouts.js") });
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: absSrc("js/ui/hud.js") });
   // The OVERTAKE chip converts the allowance to MJ through the real module.
   vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: absSrc("js/race/overtake-mode.js") });
@@ -517,7 +519,7 @@ test("the TIME box's shell placeholder is fmtTime's own zero, so the first tick 
 });
 
 test("the race gap readout is smoothed: braking halves the divisor, the tenths do not double in one tick", () => {
-  const { player, G, els, tick } = boot();
+  const { player, G, els, tick } = boot({ readouts: false });   // the distance ÷ speed fallback, not HudReadouts.gaps
   const rival = { code: "NOR", prog: player.prog + 100, speed: 80, rank: 1 };
   G.ranked = [rival, player]; player.rank = 2; player.speed = 80; G.timeTrial = false;
   tick();

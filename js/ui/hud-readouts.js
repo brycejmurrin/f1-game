@@ -296,6 +296,168 @@ const HudReadouts = (function () {
     } else if (rowEl.dataset.secTiming != null) delete rowEl.dataset.secTiming;
   }
 
+  // The sign comes from the ROUNDED value: -0.0003 painted "-0.000" (R2-06).
+  function signedFixed(v) {
+    const t = v.toFixed(3);
+    return +t === 0 ? "+0.000" : (v > 0 ? "+" : "") + t;
+  }
+  // THE GAIN, not only the split: each sector row shows the split's delta to the
+  // best it was chasing for SPLIT_DELTA_MS, then the absolute time again.
+  const SPLIT_DELTA_MS = 3000;
+  /** GameHud's S1-S3 rows (#hud-sectors) and the race DELTA chip, moved from js/ui/hud.js (#6500).
+   *  `io` hands in hud.js's write-cached setters (hText/hStyle/hData/hHidden/hToggle), its static
+   *  chip nodes `rx`, the best-lap `trace` and `invalidateFit()` (a no-op until the fit exists). */
+  function sectors(G, els, io) {
+    const { hText, hStyle, hData, hHidden, hToggle, rx } = io;
+    let rows = null, deltaShown = false;   // deltaShown: DELTA has painted a number since it last went pending
+    const flash = [0, 0, 0], log = { last: -1, raceT: null, calls: 0, painted: 0 };
+    // prevBest is sectorBests as the last tick saw it — game.js writes the new
+    // best in the same crossing that writes sectorLast, so only the copy taken
+    // BEFORE the crossing still holds the time this split was measured against.
+    let prevBest = [Infinity, Infinity, Infinity], dlt = [0, 0, 0], dltT = [0, 0, 0];
+    // game.js calls this at the crossing, after writing sectorLast[i] and the new
+    // best — so the delta is taken against the pre-crossing copy (prevBest).
+    // A first-ever split has nothing to beat and keeps the absolute time.
+    function flashSector(i) {
+      if (!(i >= 0 && i < 3)) return;
+      flash[i] = 0.35; log.last = i; log.raceT = G.raceT ?? null; log.calls++;
+      const t = G.sectorLast && G.sectorLast[i];
+      const ok = t != null && isFinite(prevBest[i]);
+      dlt[i] = ok ? t - prevBest[i] : 0;
+      dltT[i] = ok ? SPLIT_DELTA_MS : 0;
+    }
+    function paintDelta(player, timeTrial) {
+      const box = rx.delta;   // static in index.html (.hud-top) — no injected markup
+      if (!box) return;
+      const n = rx.deltaN || box;
+      // Prefer a ghost reference (PB or rival). Without one, the player's own best
+      // lap THIS RACE (lapTrace, sampled per frame in updateHud); with
+      // neither — the opening lap of a race — nothing.
+      const ghost = typeof GhostShare !== "undefined" && GhostShare.hasGuest()
+        ? GhostShare
+        : (typeof Ghost !== "undefined" && Ghost.hasGhost() ? Ghost : null);
+      const trace = io.trace;
+      const ref = ghost || (trace && trace.has() && (player.lap | 0) >= 1 ? trace : null);
+      hData(box, "ref", ghost ? "ghost" : ref ? "best" : null);
+      // THE SLOT IS RESERVED ON DESKTOP, NOT REMOVED: a hidden DELTA that unhid
+      // after lap 1 widened the centred tower by half a box mid-race, so every
+      // other readout jumped sideways. With no number yet the plate keeps its
+      // place with only its value invisible (data-pending, css/hud.css), so the
+      // four live boxes read centred too. ON TOUCH the pending plate leaves the
+      // layout instead: its ~95px of top-band width capped the band at ~0.95 and
+      // dropped the gap chip under the tower on every phone (hud-mock
+      // 2026-10-14); the one re-centre at the first lap line costs less, and the
+      // paint below asks for a refit the moment the number lands (the fit key
+      // must not carry it: hud-fit-idempotent pins two fits as one).
+      hHidden(box, false);
+      // S4: before the first line crossing lapTime is the run-up clock (about 5.5 s
+      // of it on a flying start), not the lap the ghost was recorded on.
+      const ghostT = ref && (!ghost || (player.lap | 0) >= 1) ? ref.timeAt(player.s) : null;
+      if (ghostT == null || !(player.lapTime >= 0)) {
+        hData(box, "pending", "");
+        if (deltaShown && !document.body.classList.contains("desktop")) io.invalidateFit();   // the touch tower just lost a box (TT restart, lap 0, lost ghost)
+        deltaShown = false;
+        return;
+      }
+      deltaShown = true;
+      const wasPending = box.dataset ? box.dataset.pending != null : box.hasAttribute && box.hasAttribute("data-pending");
+      hData(box, "pending", null);
+      if (wasPending && !document.body.classList.contains("desktop")) io.invalidateFit();   // the touch tower just grew a box
+      const deltaTxt = signedFixed(player.lapTime - ghostT);
+      hText(n, deltaTxt);
+      hData(box, "sign", deltaTxt[0] === "-" || +deltaTxt === 0 ? "fast" : "slow");   // the ROUNDED sign, like the text
+      // Practice / TT: the gaps strip already says GHOST — keep DELTA as the
+      // glanceable centre-top number. Race: same chip, quieter label stays DELTA.
+      void timeTrial;
+    }
+    function buildRows() {
+      // Sector labels carry no identity colour: .sec-lbl inherits the row's ink.
+      // (S2 once wore the brand #e10600, ~4.2:1 on black at 14px — under the
+      // 4.5:1 AA floor; no HUD text uses the brand red.)
+      // Should they ever be coloured, they must NOT use the value palette's
+      // --sec-best or --faster, or purple would mean both "sector 1" and
+      // "session best". The minimap colours its arcs by sector (js/ui/hud-minimap.js:
+      // the podium metals, TrackMaps.sectorColors), where identity is the only
+      // thing distinguishing them.
+      const labels = ["S1", "S2", "S3"];
+      els.hudSectors.textContent = "";
+      rows = [];
+      for (let i = 0; i < 3; i++) {
+        const row = document.createElement("div"); row.className = "sec-row";
+        // The label keeps the row's dim ink: sector identity colours only the
+        // minimap's arcs, so a label can never collide with a timing colour.
+        const lbl = document.createElement("span"); lbl.className = "sec-lbl"; lbl.textContent = labels[i];
+        const val = document.createElement("span"); val.className = "sec-val"; val.textContent = "--";
+        row.appendChild(lbl); row.appendChild(val); els.hudSectors.appendChild(row);
+        rows.push(val);
+      }
+    }
+    function paintFlash(i, personalBest, hasSplit) {
+      const row = rows[i].parentElement, active = flash[i] > 0;
+      if (active) log.painted++;
+      hToggle(row, "sec-flash", active);
+      hToggle(row, "sec-flash-pb", active && personalBest);
+      hToggle(row, "sec-flash-slow", active && !personalBest && hasSplit);
+    }
+    /** One painted HUD tick of the rows (top-right): cached span nodes. True when it built them. */
+    function paint(tickMs) {
+      const built = !rows;
+      if (built) buildRows();
+      // A bare split makes the driver remember last lap's to read it. The arrow
+      // is the announce banner's own glyph (▼ personal best, ▲ slower) held
+      // for the whole lap, and lime is the HUD's existing "faster" colour (the
+      // ghost delta). sectorBests is updated in the same crossing, so a fresh
+      // PB reads t == best; a first-ever lap is every sector's best, correctly.
+      const bests = G.sectorBests, field = G.fieldSectorBests;
+      for (let i = 0; i < 3; i++) {
+        const t = G.sectorLast[i];
+        const pb = t != null && bests && t <= bests[i];
+        const sb = pb && field && t <= field[i];   // the FIELD's best — the timing screen's purple
+        // THREE STATES, THREE GLYPHS. The arrows already carried pb-vs-slower on a
+        // non-colour channel, but SESSION best and PERSONAL best both read "▼" and
+        // separated only as purple vs green — which is the textbook deuteranopia
+        // pair, on the one row where the distinction is the whole point.
+        // ★ is the session best, ▼ a personal best, ▲ slower than your own. Same
+        // single-glyph width as before, so the fixed row geometry is untouched.
+        // For SPLIT_DELTA_MS after the crossing the number is the GAIN on the best
+        // it was chasing ("▼-0.142", "▲+0.310"), then the split itself again: the
+        // same glyph and colour states, and the same character count for any
+        // split or delta under 10 s, so the row geometry does not move.
+        const dHeld = dltT[i] > 0 && t != null;
+        if (dltT[i] > 0) dltT[i] -= tickMs;
+        // signedFixed: the sign from the ROUNDED delta (-0.0004 read "-0.000"); a split
+        // of a minute or more spells m:ss.mmm like the lap clock, not "75.123".
+        const num = dHeld ? signedFixed(dlt[i]) : t == null ? "" : t >= 60 && G.fmtTime ? G.fmtTime(t) : t.toFixed(3);
+        hText(rows[i], t == null ? "--" : (sb ? "★" : pb ? "▼" : "▲") + num);
+        prevBest[i] = bests ? bests[i] : Infinity;   // the reference the NEXT crossing's delta is taken against
+        // Timing-screen colours: purple session best, green personal best,
+        // yellow slower than your own best; no split yet keeps the row's ink.
+        hStyle(rows[i], "color", t == null ? "" : sb ? "var(--sec-best)" : pb ? "var(--faster)" : "var(--sec-slow)");
+        hData(rows[i].parentElement, "split", t == null ? null : sb ? "session" : pb ? "personal" : "slow");
+        paintSectorRow(rows[i].parentElement, t, sb, pb);
+        if (flash[i] > 0) flash[i] = Math.max(0, flash[i] - 0.1);
+        paintFlash(i, pb, t != null);
+      }
+      return built;
+    }
+    /** An unpainted frame (HUD hidden): the held gains and flashes still run down. */
+    function decay(dtMs) {
+      for (let i = 0; i < 3; i++) {
+        if (dltT[i] > 0) dltT[i] -= dtMs;
+        if (flash[i] > 0) flash[i] = Math.max(0, flash[i] - dtMs / 1000);
+      }
+    }
+    /** An unpainted HUD tick: take the pre-crossing best copy the painted tick would have. */
+    function holdBests() { if (G.sectorBests) for (let i = 0; i < 3; i++) prevBest[i] = G.sectorBests[i]; }
+    function clearFlash() {
+      flash.fill(0);
+      if (rows) for (let i = 0; i < rows.length; i++) paintFlash(i, false, false);
+    }
+    function resetDeltas() { prevBest = [Infinity, Infinity, Infinity]; dltT = [0, 0, 0]; }
+    const read = () => ({ flash: flash.slice(), ...log });
+    return { flashSector, paintDelta, paint, decay, holdBests, clearFlash, resetDeltas, read };
+  }
+
   /** opt: { caution } | { blue: true } | null — only when the chip is visible. */
   function paintFlag(el, opt) {
     if (!el || !el.dataset) return;
@@ -375,6 +537,6 @@ const HudReadouts = (function () {
   return { inPit, pedalGrip, lapsApart, lapGapText, gapDecimals, fmtGapSec, fmtGap,
     ersState, energy, bbText, blueFlag, lapTrace, speaker, BLUE_S, gapClock, gaps,
     spdUnits, spdUnit, spdDigits, spdPlate, KPH_PER_MPH,
-    sectorTimingKind, flagCueKind, paintSectorRow, paintFlag };
+    sectorTimingKind, flagCueKind, paintSectorRow, paintFlag, signedFixed, sectors };
 })();
 Object.freeze(HudReadouts);
