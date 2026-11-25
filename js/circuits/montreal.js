@@ -61,7 +61,11 @@
     // APPROXIMATE, not the FIA timing lines: the FIA 2026 Canadian GP circuit map
     // puts S1/S2 at ~0.250 / 0.571 of the lap (#5316 CIRC3-05). Moving them
     // changes saved sector bests; kept until that is decided.
-    sectors: [0.277, 0.607],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.3, 0.62])
+    // sectors: the FIA 2026 timing lines (Canadian GP Doc 9, circuit map V2:
+    // INTERMEDIATE 1 [S1] 150 m before T6, [S2] 190 m before T10; sectors
+    // 1.092 / 1.396 / 1.873 km = 0.250 / 0.571 of the 4.361 km lap), placed from
+    // the official turns below (2026-11-25, #5316 CIRC3-05; was [0.277, 0.607]).
+    sectors: [0.2538, 0.5741],
     // turns[]: the FIA 2026 Canadian GP numbering (14 turns; F1 live-timing corner
     // markers fitted onto this centreline, rms 5.6 m), one built apex per number:
     // T1-T2 Senna S, T3-T4, T5 kink, T6-T7, T8-T9 chicane, T10 L'Épingle hairpin

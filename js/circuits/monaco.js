@@ -119,7 +119,12 @@
     // re-seats turns when the start line moves.
     // S1 matches the FIA 2026 Monaco GP circuit map (~0.315); S2 does NOT: the
     // FIA line is after Tabac (~0.740), this one before it (#5316 CIRC3-05).
-    sectors: [0.32, 0.68],
+    // sectors: the FIA 2026 timing lines (Monaco circuit map: INTERMEDIATE 1
+    // [S1] 60 m before T5, [S2] 70 m before T13 — after Tabac, in the run to
+    // the Swimming Pool; sectors 1.051 / 1.419 / 0.867 km = 0.315 / 0.740 of
+    // 3.337 km), placed from the official turns below (2026-11-25, #5316
+    // CIRC3-05; was [0.32, 0.68], S2 before Tabac).
+    sectors: [0.3251, 0.7421],
     // turns = the OFFICIAL F1 numbering (FIA 2026 Monaco GP circuit map; F1
     // live-timing corner markers, api.multiviewer.app circuits/22/2026,
     // similarity-fitted onto this centreline, rms 5.6 m), each seated on the
