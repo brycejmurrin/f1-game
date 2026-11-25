@@ -1046,6 +1046,9 @@ test("primeRace: the race's first rendered frame draws every warm-built mesh onc
   assert.equal((calls.getCarDecalMesh || 0) - built0, G.cars.length, "every field car's decal mesh is fetched in the prime frame's flush");
   assert.equal(drawn.every((d) => d.zero), true, "at the zero matrix");
   assert.equal(flaps.length, rivals * 3, "per rival: closed set, open set, moving elements");
+  // #6665: the rear-light set is one mesh drawn once per lit car; unprimed, the first frame with more cars lit than
+  // ever before minted a pool wrapper and bind group mid-race (geometry #494). Every car, the player included.
+  assert.equal(calls.drawRearLights, G.cars.length, "the rear-light set once per car");
   assert.deepEqual([...new Set(flaps.map((f) => `${f.b}:${f.still}`))].sort(), ["0.5:false", "0:true", "1:true"]);
   assert.equal(flaps.every((f) => f.zero && f.paint === paint), true, "with the frame's paint, at the zero matrix");
   assert.equal(prime(), 0, "the next frame: nothing (no warm held the primed one)");

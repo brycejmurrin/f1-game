@@ -1677,6 +1677,11 @@ const CarDraw = (function () {
           _ringOpts.emissive = 1;
           for (const a of [0.5, 1]) { _ringOpts.alpha = a; for (let k = 0; k < 4; k++) d(getBrakeRing(), _ringOpts); }
           _flameOpts.alpha = 0.5; d(pin(CarMesh.getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame)), _flameOpts);
+          // Rear-light set and mirror lamps, once per car as game.js draws them (#6665: geometry #494-#496, built and
+          // first drawn mid-race the moment more cars lit up than ever before).
+          CarMesh.drawRearLights(Z, 1); n++;
+          const mSt = teamDecalState(pt, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp), cm = mSt.parts && mSt.parts._visual && mSt.parts._visual.cockpit;
+          if (Car3D.mirrorLightAnchors) { CarMesh.drawMirrorLights(Z, Car3D.mirrorLightAnchors(Car3D.bodyStyleKey(c.team.id, livOf(pt).bodyStyle), cm && cm.mirror)); n++; }
           if (c.isPlayer) continue;
           if (_sharedRivalBody) d(sharedRivalBodyMesh(false, c), co);
           if (_farRivalBody) d(sharedRivalBodyMesh(true, c), co);
