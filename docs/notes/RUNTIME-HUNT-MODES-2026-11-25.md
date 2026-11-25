@@ -44,7 +44,7 @@ No NaN reached `careerState`, the season save or `world()`.
 
 ## Ranked findings
 
-`finding-verifier` verdicts are added below each finding.
+`finding-verifier` on `282eef07`: F1, F2 and F3 are all CONFIRMED (0 refuted, 0 stale). For F1 it confirmed the clobber statically; the browser consequences above are this hunt's runs.
 
 ### F1 — After a career round, NEXT ROUND opens a hub that has dropped out of career mode (software raster)
 - **Repro (3 of 3 runs):** start a career, race round 1 (quali → grid → `finishRace`), press `#res-next`.
@@ -81,7 +81,11 @@ No NaN reached `careerState`, the season save or `world()`.
   rAF and timers, and assert `flow === "career"` and `Career.inCareer()`. In `career.spec.js`, after
   `#res-next`, add `#cr-go` → `#rs-go` text START QUALIFYING. That runs on CI's software raster, so it catches
   this bug.
-- **Confidence:** high (reproduced three times and traced to the lines above).
+- **Same pattern elsewhere:** `js/garage/setup-trials.js:151,157` (RETURN TO / CANCEL SETUP COMPARISON) runs
+  `G.quitToMenu(); G.openGarageFrom("menu")`. The free-play garage it opens already expects `flow: gp`, so no
+  visible effect was traced. A continuation-based fix covers it too. The other `quitToMenu` callers
+  (`js/game.js:9012`, `9100`, `9300`) do nothing after it.
+- **Confidence:** high (reproduced three times and traced to the lines above; verifier CONFIRMED).
 
 ### F2 — STANDINGS stays hidden on the title after a Season round until reload
 - **Repro:** start a fresh standalone Season and complete round 1. At boot there is no season progress, so
