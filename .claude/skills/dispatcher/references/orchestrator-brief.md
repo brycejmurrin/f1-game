@@ -78,3 +78,21 @@ MESSAGE ME ONLY WHEN: blocked, refused (facts only), a decision is needed, merge
   orchestrator included, redoes the refused effect by another tool [10].
 - A goal the session cannot finish alone (it waits on Bryce, CI or another session) is answered once with the list
   of blockers and the time of the next check; it is not a reason to keep the turn open [7].
+
+## Standing routines
+
+Bryce, 2026-11-25 (memory `orchestrator-routines.md`): two scheduled tasks bound to the orchestrator's own session
+(`create_trigger`, initiation `human_request`; never minute 0). A successor re-creates both at start and disables the
+predecessor's with `update_trigger enabled:false`; never delete them.
+- **FULL, `19 * * * *`:** notifications until 0; deploy tip green, else the tip-red bulletin above, one `DEPLOY-RED`
+  fixer, pause pushes; a survey of open PRs (CI, gate, conflicts, Hand-off `owner:`) and live sessions through ONE
+  subagent, raw output to `scratch/`; act reversibly and log it (one `CONTINUE PR` for an ownerless red or conflict,
+  nudge idle owners, archive finished sessions, `rerun_failed_jobs` only for infra or a designed cancel, read the
+  diff before `config-ok`; protected or `needs-decision` items to Bryce by AskUserQuestion); queue health per #6463
+  (ready+land 3–6, drafts 8–14, no new FIX workers while ready ≥ 10); one Claude Link window per wave; the task list;
+  rotate at ~400k.
+- **LIGHT, `49 * * * *`, no subagent:** notifications, deploy tip, open PRs (`ci-watch` only on ready+land or newly
+  reported ones), then follow up: red or conflict → message the owner, or one `CONTINUE PR` with no owner; a draft
+  green over 30 min with an idle owner → nudge to ready and land; a gate row the owner can fix → message the owner;
+  a `config-ok` voided by a push → re-read the diff, protected or Bryce-only re-ticks by AskUserQuestion; a merge →
+  one line and archive the worker. Silent when nothing changed.
