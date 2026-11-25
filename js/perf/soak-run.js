@@ -19,6 +19,11 @@
    race and every assist-off rule are untouched. Classified in docs/PHYSICS.md §Curvature
    channels as assist-gated (soak-only input synthesiser, gated by start()).
 
+   DRIVE (#6397). drive() lends the same law to an agent: the phone bridge's `drive` command (to the pit box, or an
+   autopilot lap) and __apex.rollout's named policies ("autopilot", "box"). It is the same input-only seam with the
+   same gate — reachable only from a bridge or agent command, released on stop, pause, quit, a hidden page or a
+   real touch — and its lane lines are PitLane's own (laneX, laneDrive, entryV, approachV). DRIVE below.
+
    THE PAGE MUST STAY IN THE FOREGROUND. iOS Safari pauses a hidden or locked
    page (game.js pauses on document.hidden), so a soak that is backgrounded just
    stops; the game already holds a screen wake lock during a race
@@ -59,8 +64,10 @@ const SoakRun = (function () {
     return { aLat: A_LAT_DRY, aBrake: A_BRAKE_DRY };
   }
 
-  // One control frame: returns the _testInput to hold until the next frame.
-  function control(G, st, dt) {
+  // One control frame: returns the _testInput to hold until the next frame. `aim` (the bridge drive, below) bends
+  // the same law onto a lane: `x` a lateral to pursue instead of the centreline, `vMax` a cap under the envelope,
+  // `hold` a car meant to stop (no stall push, no off-road lift, no brake into reverse).
+  function control(G, st, dt, aim) {
     const p = probe(G);
     if (!p) return null;
     const T = G.track, P = G.player;
@@ -77,11 +84,16 @@ const SoakRun = (function () {
       if (vAllow < vT) vT = vAllow;
     }
     vT = Math.max(11, Math.min(VMAX, vT));
+    if (aim && aim.vMax != null) vT = Math.max(0, Math.min(vT, aim.vMax));
     st.hold = Math.min(vT, st.hold + 30 * dt); vT = st.hold;   // ease the target up from a standstill
     const L = Math.max(8, Math.min(38, p.speed * 0.6));
-    const latTarget = kSteer * L * L * 0.5;
+    const latTarget = kSteer * L * L * 0.5 + (aim && aim.x != null ? aim.x : 0);
     let steer = M4.clamp(KP * (Math.atan2(latTarget - p.x, L) - p.angle), -1, 1);
-    const offRoad = Math.abs(p.x) - p.hw > 0.4;
+    if (aim && aim.hold) {   // the lane is off the ribbon's hw and the stop IS a stall: neither rule below applies
+      st.stalled = 0; st.lastS = p.s;
+      return { steer, throttle: p.speed < vT, brake: p.speed > vT * 1.04 && p.speed > 0.2 };
+    }
+    const offRoad = !(aim && aim.x != null) && Math.abs(p.x) - p.hw > 0.4;
     if (st.lastS != null && p.s - st.lastS < 0.05) st.stalled++; else st.stalled = 0;   // no progress along the arc (a standing start counts, harmlessly)
     st.lastS = p.s;
     let throttle = p.speed < vT, brake = p.speed > vT * 1.04;
@@ -138,7 +150,7 @@ const SoakRun = (function () {
   async function start(opts) {
     const G = _G;
     opts = opts || {};
-    if (!G || _run) return false;
+    if (!G || _run || _drv) return false;
     const i = Tracks.LIST.findIndex((t) => t.id === (opts.track || TRACK_ID));
     if (i < 0) return false;
     try {
@@ -174,6 +186,147 @@ const SoakRun = (function () {
     return true;
   }
 
+  // ── DRIVE: agent control of the player car, for the phone bridge (`drive`, js/agent/apex-bridge.js) and
+  // __apex.rollout({policy:"<name>"}). The same seam and the same law as the soak: G._testInput only, `control`
+  // above, bent onto the pit lane by PitLane's OWN targets (laneX / laneDrive / entryV / approachV — the lines and
+  // envelopes the AI is steered by), so nothing here is a second controller. THE ARC RULE: like start(), it exists
+  // only between drive() (a bridge or agent command) and endDrive(), persists nothing, and lets go on stop, a quit, a
+  // pause, a hidden page or a real touch/key (an isTrusted event; the bridge's own taps are synthetic).
+  const POLICY_NAMES = ["autopilot", "box"];
+  const _ps = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+  // A named closed-loop policy: { name, step(dt) → input, done() → reason|null, phase() }.
+  function policy(name, opts) {
+    const G = _G;
+    if (!G || POLICY_NAMES.indexOf(name) < 0) return null;
+    const o = opts || {};
+    const st = { hold: Math.max(0, (G.player && G.player.speed) || 0), stalled: 0, lastS: null };
+    const lap0 = (G.player && G.player.lap) || 0, laps = o.laps > 0 ? o.laps : 0;
+    let done = null, phase = name === "box" ? "lap" : "drive", still = 0, armed = false;
+    const box = (dt) => {
+      const c = G.player, pits = G.pits, T = G.track, zz = pits && pits.zoneOf ? pits.zoneOf() : null;
+      if (!zz) { done = "no-pit-lane"; return null; }
+      if (c.pitState === "box") { done = "box"; phase = "box"; return { steer: 0, throttle: false, brake: false }; }
+      if (c.pitState === "out") { done = "released"; return null; }
+      if (!c.pitArmed && c.pitState !== "lane") {
+        if (!pits.arm(c, true)) { done = "lane-closed"; return null; }
+        armed = true;
+      }
+      const L = T.total, pl = T.pit, complex = !!(pl && !pl.painted);
+      Tracks.sample(T, c.s, _ps);
+      const hw = _ps.hw || 0, side = zz.side;
+      const aim = {};
+      if (pits.inLane(c)) {
+        phase = "lane"; aim.hold = true;
+        const togo = pits.boxThroughFor(c) - pits.info(c).atM;
+        if (togo < -PitGeom.BOX_TOL * 2) { done = "missed"; return null; }
+        aim.vMax = Math.min(pits.limit(), pits.approachV(c));
+        if (togo > pits.moveM + 10) aim.x = pits.laneX(c, hw, c.x || 0);   // the fast lane
+        else {
+          // THE BAY. A steered car makes its own diagonal, so aim at the bay's centre and slow for the move; a car
+          // not yet square crawls (under the latch speed) until it is, and one stopped short creeps on.
+          aim.x = pits.laneCentre(hw, side, c.s);
+          const sq = pits.boxSquare(c);
+          aim.vMax = Math.min(10, sq ? aim.vMax : Math.max(aim.vMax, PitGeom.CRAWL_V));
+          still = Math.abs(c.speed) < 0.3 ? still + dt : still;
+          if (still > 1.5) aim.vMax = PitGeom.CRAWL_V;
+        }
+      } else if (complex && PitGeom.inSpan(pl.sA, pl.sIn, c.s, L)) {
+        phase = "entry"; aim.x = pits.laneDrive(hw, side, c.s, true); aim.vMax = pits.entryV(c);
+      } else if (PitGeom.inWindow(zz, c.s, L)) {
+        // Over the line, a tick before the state turns to "lane"; past the box (or the grid): round again.
+        if (pits.info(c).atM <= pits.boxThroughFor(c)) { phase = "entry"; aim.x = pits.laneDrive(hw, side, c.s, false); aim.vMax = pits.limit(); }
+        else phase = "lap";
+      } else {
+        const d = pits.toEntry(c) - (complex ? pl.entryRoadM || 0 : 0);
+        if (d < PitGeom.APPROACH_M) { phase = "approach"; aim.vMax = pits.entryV(c); if (complex) aim.x = (hw - PitGeom.ROAD_IN) * side; }
+        else phase = "lap";
+      }
+      return control(G, st, dt, aim.x != null || aim.vMax != null ? aim : null);
+    };
+    return {
+      name,
+      step(dt) {
+        if (done || !G.player || !G.track) return null;
+        const inp = name === "box" ? box(dt) : control(G, st, dt);
+        if (!done && laps && (G.player.lap || 0) - lap0 >= laps) done = "laps";
+        return inp;
+      },
+      done: () => done,
+      phase: () => phase,
+      // Let go short of the box: a stop this driver called and the car never reached is called off, or the limiter
+      // would meet the player at the next pit line.
+      release() {
+        const c = G.player;
+        if (armed && c && c.pitArmed && (c.pitState || "none") === "none" && G.pits) G.pits.arm(c, false);
+        armed = false;
+      },
+    };
+  }
+
+  let _drv = null, _drvLast = null;
+  function onRealInput(e) { if (e && e.isTrusted) endDrive("touch"); }
+  const REAL = ["pointerdown", "touchstart", "keydown"];
+  function endDrive(reason) {
+    const G = _G, d = _drv;
+    if (!d) return null;
+    _drv = null;
+    if (d.raf !== null) cancelAnimationFrame(d.raf);
+    try { for (const t of REAL) window.removeEventListener(t, onRealInput, true); } catch (_) { /* no window */ }
+    try { document.removeEventListener("visibilitychange", onDriveHidden); } catch (_) { /* no document */ }
+    if (G) G._testInput = null;     // the real Input owns the car again
+    try { d.pol.release(); } catch (_) { /* the session is gone */ }
+    const c = G && G.player;
+    _drvLast = { reason, policy: d.pol.name, inBox: !!(c && c.pitState === "box"), ms: Math.round(performance.now() - d.t0),
+      laps: c ? (c.lap || 0) - d.lap0 : 0, steps: d.steps, pit: c ? c.pitState || "none" : null };
+    log("drive end " + reason);
+    for (const f of d.waiters) f(_drvLast);
+    return _drvLast;
+  }
+  function onDriveHidden() { if (typeof document !== "undefined" && document.hidden) endDrive("hidden"); }
+  function driveTick(ts) {
+    const d = _drv, G = _G;
+    if (!d) return;
+    d.raf = requestAnimationFrame(driveTick);
+    const dt = d.prev ? Math.min(0.1, Math.max(0.001, (ts - d.prev) / 1000)) : 1 / 60;
+    d.prev = ts;
+    if (G.paused) { endDrive("paused"); return; }
+    if (G.state !== "race" && G.state !== "count") { endDrive("state:" + G.state); return; }
+    if (performance.now() - d.t0 > d.ms) { endDrive(d.secs ? "seconds" : "timeout"); return; }
+    if (G.state !== "race") return;   // the lights: wait for them
+    const inp = d.pol.step(dt);
+    const ph = d.pol.phase(), c = G.player;
+    if (ph !== d.phase) { d.phase = ph; d.steps.push({ phase: ph, t: +((performance.now() - d.t0) / 1000).toFixed(1), s: Math.round(c.s), kph: Math.round(c.speed * 3.6) }); }
+    const why = d.pol.done();
+    if (why) { endDrive(why); return; }
+    G._testInput = inp;
+  }
+  // drive({to:"box"} | {laps:n} | {seconds:n}, ms) → resolves with endDrive's record. Refused while a soak runs.
+  function drive(opts) {
+    const G = _G, o = opts || {};
+    if (!G) return Promise.reject(new Error("SoakRun not bound"));
+    if (_run) return Promise.reject(new Error("a soak is running"));
+    if (G.state !== "race" && G.state !== "count") return Promise.reject(new Error("drive needs a running session (state " + G.state + ")"));
+    if (G.paused) return Promise.reject(new Error("the session is paused"));
+    if (G.netPlay && G.netPlay.active && G.netPlay.active()) return Promise.reject(new Error("not in a friend race"));
+    if (_drv) endDrive("replaced");
+    const pol = policy(o.to === "box" ? "box" : "autopilot", { laps: o.laps });
+    const secs = o.seconds > 0 ? o.seconds : 0;
+    const d = _drv = { pol, secs, raf: null, prev: 0, t0: performance.now(), lap0: (G.player && G.player.lap) || 0, phase: null, steps: [], waiters: [],
+      ms: Math.max(1000, Math.min(600000, secs ? secs * 1000 : o.ms > 0 ? o.ms : 240000)) };
+    const p = new Promise((res) => d.waiters.push(res));
+    try { for (const t of REAL) window.addEventListener(t, onRealInput, true); } catch (_) { /* no window */ }
+    try { document.addEventListener("visibilitychange", onDriveHidden); } catch (_) { /* no document */ }
+    log("drive " + (o.to || (o.laps ? o.laps + " laps" : secs + " s")));
+    d.raf = requestAnimationFrame(driveTick);
+    return p;
+  }
+  function driveStatus() {
+    const d = _drv, c = _G && _G.player;
+    if (!d) return Object.assign({ active: false }, _drvLast ? { last: _drvLast } : null);
+    return { active: true, policy: d.pol.name, phase: d.phase, ms: Math.round(performance.now() - d.t0), steps: d.steps,
+      pit: c ? c.pitState || "none" : null, kph: c ? Math.round(c.speed * 3.6) : null };
+  }
+
   // probe stays module-local (start/control use it). SOAK_MIN / TRACK_ID stay exported for harness.
   return {
     SOAK_MIN, TRACK_ID, control,
@@ -187,6 +340,7 @@ const SoakRun = (function () {
       return !!p.deploying;
     },
     start, stop: (why) => finish(why || "stopped"),
+    POLICY_NAMES, policy, drive, driveStop: (why) => endDrive(why || "stopped"), driveStatus, driving: () => !!_drv,
     active: () => !!_run,
     status: () => Object.assign({}, _last, _run ? { state: _run.started ? "racing" : "starting",
       elapsedMin: _run.started ? +((performance.now() - _run.tRace) / 60000).toFixed(2) : 0, minutes: _run.minutes } : null),

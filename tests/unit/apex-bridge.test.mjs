@@ -578,3 +578,55 @@ test("every TAP_OK id is a control the shell or the game creates (the lookup is 
     else assert.equal(shell.has(id), true, id + " is in index.html");
   }
 });
+
+// DRIVING (#6397): `drive` hands the car to SoakRun's driver (JSON in, no policy function); this pins the command's
+// argument contract, its goal verdict and the release paths. The driver itself: soak-run.test.mjs, drive-to-box-vm.
+function fakeDriver(result = { reason: "box", inBox: true, policy: "box", ms: 900, laps: 0, steps: [{ phase: "lane" }] }) {
+  const calls = [];
+  let active = false;
+  const S = {
+    driving: () => active,
+    drive(o) { calls.push(["drive", o]); active = true; return Promise.resolve(result).then((r) => { active = false; return r; }); },
+    driveStop(why) { calls.push(["stop", why]); const was = active; active = false; return was ? { reason: why } : null; },
+    driveStatus: () => ({ active, last: { reason: "box" } }),
+  };
+  const hud = { id: "hud-end-session", nodeType: 1, hidden: false, parentElement: null };
+  const extra = { SoakRun: S, setTimeout, Date, document: { getElementById: (id) => (id === "hud-end-session" ? hud : null) } };
+  return { S, calls, extra };
+}
+
+test("drive: JSON only — to:box drives into the box and reports the pit actions; bad shapes are refused up front", async () => {
+  const d = fakeDriver();
+  const b = load({ search: "", apex: { info: () => ({ state: "race" }) }, extra: d.extra });
+  assert.ok(b.api.CMDS.drive, "drive is a bridge command");
+  const r = await b.api.handle({ cmd: "drive", args: { to: "box" } });
+  assert.equal(r.ok, true);
+  assert.equal(r.value.ok, true, "the goal was met");
+  assert.equal(r.value.inBox, true);
+  assert.equal(r.value.state, "race");
+  assert.deepEqual(plain(r.value.pitActions), ["hud-end-session"], "END TIME TRIAL is on screen for the next tap");
+  assert.deepEqual(plain(d.calls[0]), ["drive", { to: "box", ms: 240000 }]);
+  for (const args of [{}, { to: "pit" }, { to: "box", laps: 1 }, { laps: 0 }, { laps: 9 }, { laps: 1.5 }, { seconds: 0 }, { seconds: 9999 }, { policy: "x => x" }]) {
+    const bad = await b.api.handle({ cmd: "drive", args });
+    assert.equal(bad.ok, false, JSON.stringify(args));
+  }
+  const grid = await b.api.handle({ cmd: "drive", args: { to: "grid" } });
+  assert.equal(grid.ok, false, "to:grid is refused with its reason");
+  assert.equal(d.calls.length, 1, "a refused drive never reaches the driver");
+});
+
+test("drive: a missed goal reads ok:false so a batch stops before its tap; wait:false answers at once; stop releases", async () => {
+  const d = fakeDriver({ reason: "timeout", inBox: false, policy: "box", steps: [] });
+  const b = load({ search: "", apex: { info: () => ({ state: "race" }) }, extra: d.extra });
+  const steps = [{ cmd: "drive", args: { to: "box" } }, { cmd: "tap", args: { id: "hud-end-session" } }];
+  const out = (await b.api.handle({ cmd: "batch", args: { steps } })).value;
+  assert.equal(out.length, 1, "the tap never ran");
+  assert.equal(out[0].value.ok, false);
+  const w = await b.api.handle({ cmd: "drive", args: { laps: 1, wait: false } });
+  assert.equal(w.value.started, true);
+  assert.deepEqual(plain(d.calls[1]), ["drive", { laps: 1, ms: 240000 }]);
+  const s = await b.api.handle({ cmd: "drive", args: { stop: true } });
+  assert.equal(s.ok, true);
+  assert.equal(d.calls[2][0], "stop");
+  assert.equal((await b.api.handle({ cmd: "drive", args: { status: true } })).value.active, false);
+});

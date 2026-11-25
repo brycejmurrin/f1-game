@@ -18,6 +18,9 @@
    Saves, career, garage files and every lobby / net hook are out. Replies are capped at
    MAX_REPLY chars (GitHub's comment limit is 65,536). The CLAUDE LINK badge counts commands; tapping it ends the link.
 
+   DRIVING. `drive` gives the car to SoakRun's driver (to the pit box, or an autopilot lap) and takes it back on `stop`,
+   a pause, a quit, a hidden page or a real touch (DRIVING below).
+
    PERF COMMANDS. `path` pins the three.js path BENCHMARK pins (BenchRun.pathPrefs) and reloads, `bench` starts and
    reads a BenchRun, `snap` returns a small JPEG of the canvas, `batch` runs up to BATCH_MAX steps from one comment.
    Recipes: .claude/skills/phone-bridge/references/commands.md. */
@@ -496,6 +499,39 @@ const ApexBridge = (function () {
     return done(true);
   }
 
+  // DRIVING (#6397). `drive` hands the player car to SoakRun's closed-loop driver (js/perf/soak-run.js drive(): the
+  // AUTO SOAK law plus PitLane's own lane lines) — agent control through the setInput seam, never a player assist. It
+  // runs only from this command, and lets go on `stop`, a quit, a pause, a hidden page or a real touch/key. `to:"box"`
+  // drives on to the pit entry, down the lane and stops in this car's box; `laps` / `seconds` is an autopilot lap.
+  // The bridge serves one command at a time, so a `wait:false` drive answers at once and `status` / `stop` follow.
+  // No `to:"grid"`: nothing in the game reads a car parked on its grid slot (the grid is placed by race(), a restart
+  // re-grids by itself), so there is no state for it to reach.
+  const DRIVE_MS = 240000, DRIVE_START_MS = 30000, END_IDS = ["hud-end-session", "hud-work"];
+  async function drive(args) {
+    const a = args || {};
+    const S = typeof SoakRun !== "undefined" ? SoakRun : null;
+    if (!S || typeof S.drive !== "function") throw new Error("SoakRun.drive unavailable");
+    if (a.stop) { const was = S.driving(), last = S.driveStop("bridge"); return { stopped: was, last: last || S.driveStatus().last || null }; }
+    if (a.status) return S.driveStatus();
+    if (a.to === "grid") throw new Error("drive.to grid: no game state reads a parked grid slot (race() places the grid)");
+    const n = [a.to != null, a.laps != null, a.seconds != null].filter(Boolean).length;
+    if (n !== 1) throw new Error('drive takes one of {to:"box"}, {laps:1-5}, {seconds:1-600}, {stop:true}, {status:true}');
+    if (a.to != null && a.to !== "box") throw new Error('drive.to must be "box"');
+    if (a.laps != null && !(Number.isInteger(a.laps) && a.laps >= 1 && a.laps <= 5)) throw new Error("drive.laps must be 1-5");
+    if (a.seconds != null && !(Number(a.seconds) >= 1 && Number(a.seconds) <= 600)) throw new Error("drive.seconds must be 1-600");
+    const ms = Math.max(5000, Math.min(600000, Number(a.ms) || DRIVE_MS));
+    // Straight after `nav`'s RACE! the garage drive-out is still playing (state "menu"): wait for the session.
+    await until(() => { const st = gameState(); return st === "race" || st === "count"; }, DRIVE_START_MS);
+    const run = S.drive({ to: a.to, laps: a.laps, seconds: a.seconds != null ? Number(a.seconds) : undefined, ms });
+    if (a.wait === false) { run.catch(() => {}); return Object.assign({ started: true }, S.driveStatus()); }
+    const r = await run;
+    // In the box: wait for the HUD to show the pit actions, so a following `tap` in the same batch finds them.
+    if (r.inBox) await until(() => END_IDS.some((id) => shown(byId(id))), 1500);
+    // `ok` false when the goal was not met, so a batch stops before a tap that would miss.
+    const ok = a.to === "box" ? r.inBox : r.reason === (a.laps != null ? "laps" : "seconds");
+    return Object.assign({ ok, screen: screenNow(), state: gameState(), pitActions: END_IDS.filter((id) => shown(byId(id))) }, r);
+  }
+
   const CMDS = {
     ping: () => ({ pong: true, t: Date.now() }),
     facts,
@@ -513,6 +549,7 @@ const ApexBridge = (function () {
     tap,
     nav,
     screen: () => ({ screen: screenNow(), state: gameState() }),
+    drive,
     batch,
   };
 
@@ -525,7 +562,7 @@ const ApexBridge = (function () {
 
   // bench / gpuTest / recorder / a path pin read LAZY_PERF globals, which land at idle (or never, after a dropped
   // fetch): ask the game's LazyBundles instance for the rig first, so the command waits instead of "unavailable".
-  const PERF_CMDS = new Set(["bench", "gpuTest", "recorder", "path"]);
+  const PERF_CMDS = new Set(["bench", "gpuTest", "recorder", "path", "drive"]);
   async function perfRig() {
     try {
       const lb = typeof LazyBundles !== "undefined" && LazyBundles.live ? LazyBundles.live() : null;
@@ -653,6 +690,7 @@ const ApexBridge = (function () {
 
   function stop(why) {
     if (!_run) return;
+    try { if (typeof SoakRun !== "undefined" && SoakRun.driving && SoakRun.driving()) SoakRun.driveStop("link ended"); } catch (_) { /* no driver */ }
     clearTimeout(_run.timer);
     _run = null;
     say("link ended: " + (why || "stopped"));
