@@ -1,0 +1,52 @@
+name: Tip alarm
+
+# Speaks when the deploy tip turns red (retro 2026-11-25 item 3: the first red signal sat unread for an hour). On
+# every completed run of pages.yml and every SCHEDULED run of ci.yml on the deploy branch it runs
+# tools/ci/tip-alarm.mjs, which posts ONE `tip-red:` comment on the Board (sha, failing job and test from the log,
+# run link) and labels the Board `deploy:red` (pages.yml only), never duplicating an open bulletin, and posts
+# `tip-green:` when that workflow next passes. The decision is pure and unit-tested (tests/unit/tip-alarm.test.mjs).
+#
+# Trust: `workflow_run` runs the default branch's copy of this file; the checkout pins the deploy branch's copy of
+# the one tool (sparse, no credentials, no npm install, no PR code). No field of the finished run is interpolated
+# into a script: its id reaches the tool as an env value and every other field is read back over REST. Never red:
+# a failed lookup or write is a warning.
+
+on:
+  workflow_run:   # zizmor: ignore[dangerous-triggers] the default branch's file, the deploy branch's checkout of one tool, no field of the run is interpolated or run
+    workflows: ["CI", "Deploy to GitHub Pages"]
+    types: [completed]
+    branches: [claude/f1-game-project-26h3ng]
+
+permissions: {}
+
+# Serialised, never cancelled: two runs finishing together must not both post a bulletin.
+concurrency:
+  group: tip-alarm
+  cancel-in-progress: false
+
+jobs:
+  alarm:
+    name: Post the tip bulletin
+    if: >-
+      github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng'
+      && (github.event.workflow_run.name == 'Deploy to GitHub Pages' || github.event.workflow_run.event == 'schedule')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: claude/f1-game-project-26h3ng
+          persist-credentials: false
+          sparse-checkout: tools/ci/tip-alarm.mjs
+          sparse-checkout-cone-mode: false
+      - name: Post tip-red / tip-green on the Board
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          DEPLOY_BRANCH: claude/f1-game-project-26h3ng
+          BOARD_ISSUE: "1780"
+        run: node tools/ci/tip-alarm.mjs --apply

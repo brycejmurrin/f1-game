@@ -142,6 +142,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/apt-cached-install.sh** | Installs CI apt packages without the mirror when it can: none if dpkg has them, cached .debs, then bounded apt. | — |
 | **ci/bot-pr-body.mjs** | Wrap a scheduled bot's one-line PR summary in the PR template (Goal, closed Plan, land item) the merge gate reads. | — |
 | **ci/branch-audit.mjs** | Verdicts for branches with no PR and no commit in 48 h: ancestry, merge-tree, line presence, CI (--all: every branch). | check-changes |
+| **ci/brief.mjs** | Worker brief: render from a JSON spec, lint a hand-written one (STOP AT, TIP), refuse a duplicate launch. | — |
 | **ci/bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`. | check-changes |
 | **ci/change-kind.mjs** | PR diff kind: docs-only, css-only (plus prose), or code — step-level skips, never a pull_request paths filter. | — |
 | **ci/ci-watch.mjs** | Watches a SHA's CI runs (`--pages`: the Pages train too); one `[ci-watch]` line per job, then a `= ci <verdict>` line. | steward |
@@ -172,6 +173,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/ship-pr.mjs** | Runs ready-gate on a draft PR; on a pass prints the two calls that land it (MCP draft:false flip, `land` label). | ship |
 | **ci/sweep-shards.mjs** | Deterministic measured-time packing for the geometry sweep CI matrix. | — |
 | **ci/sync-pr.mjs** | Syncs a PR branch to the deploy tip (fetch, merge, verify). Without --push: no push, HEAD left on sync-pr-<branch>. | check-changes |
+| **ci/tip-alarm.mjs** | Tip alarm: a red deploy-branch Pages / nightly CI run posts ONE tip-red: on the Board; tip-green: on the next pass. | — |
 | **ci/twinned-specs.mjs** | Browser specs whose assertions a VM twin replays on the fast gate. `--json`; exits 1 if a twin drifted. | — |
 | **ci/vendor-doctor.mjs** | Vendor doctor, reads only: per vendor (Claude, Cursor, Codex, Grok) CLI, sign-in, key state and the next fix. | — |
 | **ci/verification-receipt.mjs** | Source-bound evidence for ordinary local verification; never a landing permission. | — |
