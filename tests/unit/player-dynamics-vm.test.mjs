@@ -490,7 +490,15 @@ test("wheel state ON: a dry stop and launch are unchanged and never lock or spin
 });
 test("wheel state ON: over the circle the front locks and the stop gets longer", async () => {
   const { w, set } = await wheelGame("storm");
-  const setup = (P) => { P.tread = 0; P.brakeBias = 0.75; };   // slicks in a storm, bias forward
+  // Slicks in a storm, bias forward, on the NEUTRAL x1 stat car (statMult only: the
+  // AI-equivalent car). This pins a tyre shape, not a parts sheet: since #6565 the pin
+  // seat's empty sheet is the works car, whose storm tyre reads braking 0.905 against
+  // the works tyre, and that weaker pedal over-demands the front less (lock cost
+  // 0.41 m vs 0.91 m here). Bryce chose x1.0 parity (A) on #6572, 2026-11-25.
+  const S = w.sandbox, team = w.G.player.team, st = S.Career.teamStats(team) || team.stats;
+  const neutral = { speed: S.Parts.statMult(st.speed), accel: S.Parts.statMult(st.accel),
+    cornering: S.Parts.statMult(st.cornering), braking: S.Parts.statMult(st.braking) };
+  const setup = (P) => { P.tread = 0; P.brakeBias = 0.75; P.mods = Object.assign({}, neutral); };
   const d = {};
   for (const on of [false, true]) { set(on); d[on ? "on" : "off"] = stopFrom(w, 27.78, setup); }
   set(false); w.close();

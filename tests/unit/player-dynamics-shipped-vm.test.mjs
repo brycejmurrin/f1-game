@@ -7,15 +7,20 @@
  * The pin twin locks the driving model's SHAPES on an empty-sheet McLaren; this
  * one locks what the player actually drives. Measured on this tree (monza,
  * FRAC 0, `node tools/check/player-dyn.mjs --json --seat shipped`) after the
- * capacity-scaled brake ellipse fix (trail-brake-turnin):
- *   brake from vTop 60.5 m/s   3.39 g, 1.82 s, 54.2 m
- *   accel                      t100 3.32 s, t200 13.73 s
- *   step steer 50 m/s / 0.5    final yaw 0.448 rad/s
- *   turn-in 55 m/s / 0.75      yaw 1.035 coasting vs 0.963 braking (≥0.6×)
- *   skidpad 60 m/s / 0.8       5.42 g
- *   full lock 45 m/s           yawMax 1.63 rad/s, rear slip max 12.7°
- * The bands below sit ~8-15 % around those, so a deliberate retune or a new
- * GarageDefaults export moves them on purpose, not by noise. One pin shape
+ * capacity-scaled brake ellipse fix (trail-brake-turnin) and x1.0 parts parity
+ * (#6565: the player's parts read over the team's works build, Parts.playerMods;
+ * Bryce chose A, x1.0 parity, on #6572 at about 10:43Z 2026-11-25, after the
+ * raw-kit vs x1.0 table posted there). The shipped Red Bull signature kit reads
+ * accel 0.92 / cornering 0.97 / braking 0.92 over the works car:
+ *   brake from vTop 60.5 m/s   2.07 g, 2.98 s, 89.9 m   (raw kit: 3.39 g, 54.2 m)
+ *   accel                      t100 6.68 s, t200 23.43 s (raw kit: 3.32, 13.73)
+ *   step steer 50 m/s / 0.5    final yaw 0.433 rad/s
+ *   turn-in 55 m/s / 0.75      yaw 0.894 coasting vs 1.135 braking (≥0.6×)
+ *   skidpad 60 m/s / 0.8       3.35 g                   (raw kit: 5.42 g)
+ *   full lock 45 m/s           yawMax 1.17 rad/s, rear slip max 8.7°
+ * Each band keeps the relative width it had around the raw-kit value (lo/c and
+ * hi/c unchanged; none widened), so a deliberate retune or a new GarageDefaults
+ * export moves them on purpose, not by noise. One pin shape
  * still does NOT hold here: at 45 m/s full lock the front never reaches its
  * force peak (recorded, not asserted away). Trail-brake turn-in now meets the
  * ≥0.6× coasting target on this seat (was −0.224 vs 1.037 before the fix).
@@ -29,11 +34,20 @@ import { measure } from "../../tools/check/player-dyn.mjs";
 const require = createRequire(import.meta.url);
 const { createGame, SEATS } = require("../../tools/lib/game-vm.cjs");
 
-let g = null, m = null;
+let g = null, m = null, mKit = null;
 before(async () => {
   g = await createGame({ track: "monza", seat: "shipped", storage: { difficulty: "normal", autoThrottle: false } });
   await g.race("monza", "day", "dry");
   m = measure(g, 0);
+  const S = g.sandbox, custom = S.Teams.LIST.findIndex((t) => t.id === "custom");
+  const kit = await createGame({ track: "monza", seat: "pin", storage: { difficulty: "normal", autoThrottle: false,
+    team: custom, driver: 0, "parts.custom": { ...S.Parts.FACTORY_PRESETS.mercedes } } });
+  try {
+    await kit.race("monza", "day", "dry");
+    assert.equal(kit.G.player.team.id, "custom");
+    assert.ok(kit.G.player.mods.braking > 1.3, `big-brake kit braking ${kit.G.player.mods.braking}`);
+    mKit = measure(kit, 0);
+  } finally { kit.close(); }
 });
 after(() => { if (g) g.close(); });
 
@@ -60,23 +74,23 @@ test("every measurement is finite", () => { assert.ok(m.finite, JSON.stringify(m
 test("braking and acceleration sit in the shipped car's measured bands", () => {
   const top = Object.keys(m).find((k) => k.startsWith("brake_") && k !== "brake_27.8" && k !== "brake_55.6");
   const b = m[top];
-  within(b.g_avg, 3.1, 3.7, `${top} g_avg`);
-  within(b.t_s, 1.6, 2.05, `${top} t_s`);
-  within(m["brake_55.6"].g_avg, 3.1, 3.7, "brake_55.6 g_avg");
+  within(b.g_avg, 1.90, 2.25, `${top} g_avg`);
+  within(b.t_s, 2.62, 3.35, `${top} t_s`);
+  within(m["brake_55.6"].g_avg, 1.89, 2.24, "brake_55.6 g_avg");
   // The uploaded default changes the actual boot car from Mercedes to Red
-  // Bull. Re-centre the measured band around 3.32 s; its width shrinks from
-  // 0.9 to 0.7 s. Driving-model and handling assertions stay independent.
-  within(m.accel.t100, 3.0, 3.7, "accel t100");
-  within(m.accel.t200, 12.5, 16.5, "accel t200");
+  // Bull; x1.0 parity (#6565, decision A on #6572) re-centres it on 6.68 s with
+  // the same relative width. Driving-model and handling assertions stay independent.
+  within(m.accel.t100, 6.04, 7.44, "accel t100");
+  within(m.accel.t200, 21.4, 28.1, "accel t200");
 });
 
 test("cornering sits in the shipped car's measured bands", () => {
-  within(m.stepSteer.final, 0.40, 0.50, "step-steer final yaw");
-  within(m.turnIn_coast.yaw, 0.93, 1.15, "turn-in coasting yaw");
-  within(m.turnIn_brake.yaw, 0.80, 1.10, "turn-in braking yaw");
+  within(m.stepSteer.final, 0.39, 0.48, "step-steer final yaw");
+  within(m.turnIn_coast.yaw, 0.81, 0.99, "turn-in coasting yaw");
+  within(m.turnIn_brake.yaw, 0.95, 1.29, "turn-in braking yaw");
   const sk = m.skidpad.find((r) => r.v === 60 && r.steer === 0.8);
-  within(sk.ay_g, 4.8, 5.9, "skidpad 60 m/s / 0.8 ay_g");
-  within(m.fullLock.yawMax, 1.4, 1.8, "full-lock yawMax");
+  within(sk.ay_g, 2.97, 3.64, "skidpad 60 m/s / 0.8 ay_g");
+  within(m.fullLock.yawMax, 1.01, 1.29, "full-lock yawMax");
 });
 
 test("trail braking at 55 m/s keeps at least 0.6× coasting yaw (capacity-scaled ellipse)", () => {
@@ -96,8 +110,12 @@ test("the throttle charges the driven rear axle, never the undriven front", () =
   assert.ok(m.throttleCharge[0].axFracR > m.throttleCharge[m.throttleCharge.length - 1].axFracR, "traction-limited low, power-limited high");
 });
 
-test("a stamp on the brakes mid-corner does not spin the shipped car toward the apex", () => {
-  const co = m.midCorner_coast, br = m.midCorner_brake;
+// The mid-corner gate (≤8° rear, ≤15 % yaw rise) runs on the explicit big-brake kit
+// (MY TEAM on the Mercedes works sheet, braking ~1.49), as in trail-brake-turnin:
+// Bryce's decision A on #6572. At x1.0 grip the shipped car reads 18.2° and the
+// neutral AI-equivalent car ~15°: that snap is #6573's to fix, not this file's.
+test("a stamp on the brakes mid-corner does not spin the big-brake kit toward the apex", () => {
+  const co = mKit.midCorner_coast, br = mKit.midCorner_brake;
   assert.ok(br.aRmax <= 8, `rear slip ${br.aRmax}° (want ≤8°)`);
   assert.ok(br.yawMean <= co.yawMean * 1.15, `yaw rise ${br.yawMean} vs coast ${co.yawMean} (want ≤15%)`);
 });

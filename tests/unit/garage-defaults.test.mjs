@@ -304,7 +304,10 @@ function loadPartsVm() {
 // not depend on what the shipped builds cost (FREE BUILD is the default, which made the old
 // "only while FREE BUILD ships on" tripwire unable to fail).
 function overCapBuild(Teams, Parts) {
-  const team = Teams.LIST.find((t) => t.id === "mclaren");
+  // HAAS: the free-play cap is Parts.freeBudget(team) = works cost + BUDGET (#6572), and
+  // Haas has the cheapest works car, so its dearest build is still far over its cap
+  // (on McLaren the cap now covers every build).
+  const team = Teams.LIST.find((t) => t.id === "haas");
   const build = {};
   for (const cat of Parts.CATALOG) {
     const avail = cat.options.filter((o) => Parts.isOptionAvailable(o, team));
@@ -325,9 +328,9 @@ test("setup sheet: a swap on an over-cap build is accepted only while G.unlimite
   // FREE BUILD is what makes a single row clickable.
   const { ctx, Teams, Parts } = loadPartsVm();
   const over = overCapBuild(Teams, Parts);
-  assert.ok(over.cost - over.biggestSaving > Parts.BUDGET,
-    `the premise: no single swap can bring the build (${over.cost}) back under the cap (${Parts.BUDGET}) — saving at most ${over.biggestSaving}`);
-  const { team } = over;
+  const { team } = over, cap = Parts.freeBudget(team);
+  assert.ok(over.cost - over.biggestSaving > cap,
+    `the premise: no single swap can bring the build (${over.cost}) back under the cap (${cap}) — saving at most ${over.biggestSaving}`);
   const run = (unlimitedBudget) => {
     const dom = makeDom();
     const saved = [];

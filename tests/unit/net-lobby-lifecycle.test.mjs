@@ -812,8 +812,11 @@ test("the host tags relayed HELLOs and its own with the join rank", () => {
 test("modsFromProfile falls back to the factory setup when the declared parts exceed the budget", () => {
   const h = harness({
     scanFactory: () => ({ stop() {}, start() {} }),
+    // The cap is Parts.freeBudget(team) = works cost + BUDGET (#6572): here a works
+    // cost of 700, so 1480; "rich" is one credit over it, "fair" exactly on it.
     parts: { BUDGET: 780, getFactorySetup: (team) => "factory:" + team.id,
-             getCost: (setup) => (setup === "rich" ? 781 : 700) },
+             freeBudget: () => 700 + 780,
+             getCost: (setup) => (setup === "rich" ? 1481 : setup === "fair" ? 1480 : 700) },
   });
   h.G.modsFor = (team, parts) => ({ team: team.id, parts });
   assert.deepEqual(h.lobby.modsFromProfile({ team: "alpha", parts: "rich" }), { team: "alpha", parts: "factory:alpha" });

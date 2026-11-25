@@ -1005,7 +1005,9 @@ test("reports the full parts spec and its effect", async () => {
   const cats = c.parts.chosen.map((p) => p.category);
   contains(cats, "engine");
   contains(cats, "aero");
-  const cap = g.sandbox.Parts.BUDGET;
+  // Free play: the works car is free, BUDGET is the upgrade allowance on top (Parts.freeBudget, #6572).
+  const cap = g.sandbox.Parts.freeBudget(g.G.player.team);
+  assert.ok(cap > g.sandbox.Parts.BUDGET, "the works cost sits under the cap");
   assert.equal(c.parts.budget, cap);
   assert.equal(c.parts.spent + c.parts.remaining, cap);
   for (const k of ["speed", "accel", "cornering", "braking"]) isNum(c.parts.mods[k]);
