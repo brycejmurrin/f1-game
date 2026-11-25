@@ -37,7 +37,8 @@ var SessionRecords = (function () {
         weatherPlan: G.weatherArc ? [G.weatherArc.from, G.weatherArc.to, G.weatherArc.dur] : null,
         tyreWear: G.session === "tt" ? "off" : G.raceTyreWear, difficulty: G.difficulty, tod: G.raceTimeOfDay,
         // #5895: WIND OFF is its own class; the default REAL adds no field, so every older key stays valid.
-        wind: typeof Wind !== "undefined" && Wind.level() === "off" ? "off" : undefined };
+        wind: typeof Wind !== "undefined" && Wind.level() === "off" ? "off" : undefined,
+        ...(G.raceDamage ? { damage: true } : null) };   // only when ON: every existing ghost key stays valid (#3971)
     }
     function current() { return Ghost.contextKey(config()); }
     // Only the hidden GP wear preference differed in these historical TT keys.
