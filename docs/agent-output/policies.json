@@ -946,6 +946,11 @@
       "presentation": "native",
       "preserve": "the Tip alarm decision line with its reason and the bulletin body verbatim; lookup or write failure is a warning; always exit 0"
     },
+    "tools/ci/prepush-live-run.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One NOTICE block on stderr or nothing; always exit 0 (warn-only, never blocks a push); API failure is silence"
+    },
     "tools/ci/tooling-fast.mjs": {
       "action": "job-status",
       "presentation": "shared-levels",
