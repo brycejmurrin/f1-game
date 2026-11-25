@@ -4088,8 +4088,7 @@ function raceIntro(go) {
   if (world) applyRaceSettings();
   if (skipFly) {   // the race card (studioClose raised it) covers to the first race frame, as a flyby skip's does: no bare black frame
     _menuFly = null; RaceEntryProfile.mark("flyby:skipped");
-    try { go(); } catch (e) { Log.warn("gfx", "skip to start failed", e); }
-    return;
+    go(); return;   // a throw reaches afterGarageOut: stop() and one more go(), as a failed flyby hand-off does
   }
   // And fly the shots the EDITOR saved, for the same reason: a list edited in
   // the pause menu is only read here, so every run picks up the latest one.

@@ -160,7 +160,8 @@ const LoadingScreen = (function () {
       }
       if (!skipBtn) return;
       const ses = cur && cur.session;   // as the garage's own SKIP TO TIME TRIAL (#6390)
-      skipBtn.textContent = ses === "tt" ? "SKIP TO TIME TRIAL" : ses === "quali" ? "SKIP TO QUALIFYING" : cur && cur.practice ? "SKIP TO PRACTICE" : "SKIP TO RACE";
+      const label = ses === "tt" ? "SKIP TO TIME TRIAL" : ses === "quali" ? "SKIP TO QUALIFYING" : cur && cur.practice ? "SKIP TO PRACTICE" : "SKIP TO RACE";
+      if (skipBtn.textContent !== label) skipBtn.textContent = label;   // inside role=status: no re-announce per phase
       skipBtn.hidden = !on;
     }
     // The window changed under a card that is up (Safari's toolbar, a rotation): re-fit.

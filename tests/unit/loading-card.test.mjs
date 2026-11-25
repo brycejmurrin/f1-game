@@ -1147,7 +1147,7 @@ test("the garage phase (the drive-out before the flyby): no card, no timer, and 
   h.skip(); assert.equal(late, 0, "the preparation skip retains the double-click grace");
   h.tick(LS.SKIP_GRACE_MS + 10); h.skip(); h.skip();
   assert.equal(late, 1, "a preparation skip marks the cinematic once, without lowering its card");
-  assert.equal(h.saved.get("flySkips"), 1, "a preparation skip does not count toward the shorter cinematic (still the garage's one)");
+  assert.equal(h.saved.get("flySkips"), 1, "a preparation skip adds nothing to the streak (the 1 is the garage skip above)");
   assert.equal(h.screen.phase(), "build", "preparation continues safely after the skip");
   h.screen.stop();
   assert.equal((h.listeners.keydown || new Set()).size, 0, "cancellation removes preparation skip listeners");

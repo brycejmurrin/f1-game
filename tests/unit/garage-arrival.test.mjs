@@ -187,7 +187,7 @@ test('cold preparation settles before the drive-out; a warm world opens on the g
     'cold motion starts only after compilation settles');
   assert.match(warm, /const prepP = introPrepare\(live, key, info, n, false\); prepP\.then\(\(r\) => \{ if \(r && live\(\)\) studioReady\(n\); \}, \(\) => \{\}\);[^\n]*\n\s*await RaceEntryProfile\.spanAsync\("studioDone", \(\) => studioDone\(live, n\)\);/,
     'warm path: garage-out overlaps prepare, never blocked behind it');
-  assert.match(game, /const skipFly = !!built && _introSkip === _introRun;[\s\S]*?if \(skipFly\) \{[\s\S]*?try \{ go\(\); \}[\s\S]*?return;\n  \}\n  \/\/ And fly the shots/, 'a garage skip (offered only once ready) goes straight to the start, past the flyby (Bryce 2026-11-25)');
+  assert.match(game, /const skipFly = !!built && _introSkip === _introRun;[\s\S]*?if \(skipFly\) \{[\s\S]*?go\(\); return;[^\n]*\n  \}\n  \/\/ And fly the shots/, 'a garage skip (offered only once ready) goes straight to the start, past the flyby (Bryce 2026-11-25)');
   assert.match(game, /\|\| \(\(loadingScreen\.phase\(\) === "build" \|\| loadingScreen\.phase\(\) === "busy"\) && !setupPreviewOn\);/, 'the studio shows through the build card');
   const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
   assert.match(cam, /const arriving = home\.active \? null : driveOut \? stepDriveOut\(holdDriveOut\) : preview \? stepPreview\(dt\) : arrival\.step\(dt, arrivalHeld\(\)\);/, 'the wall clock, not the 1\/20 s capped render dt; the PREVIEW between the two');

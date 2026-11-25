@@ -14,7 +14,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
-import { gameSource } from "../helpers/game-source.mjs";
+import { gameSource, GAME_REL } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -63,6 +63,10 @@ test("the garage takes no skip before the race is ready; once ready(), SKIP show
   assert.equal(h.screen.skipReady(), true);
   assert.equal(h.btn().hidden, false, "SKIP appears the moment the race is ready");
   assert.equal(h.btn().textContent, "SKIP TO RACE");
+  let writes = 0; const b = h.btn(); let t = b.textContent;
+  Object.defineProperty(b, "textContent", { get: () => t, set: (v) => { writes++; t = v; } });
+  h.screen.ready(); h.screen.ready();
+  assert.equal(writes, 0, "the label is written only when it changes: the live region does not re-announce it");
   h.press();
   assert.equal(skipped, 1, "a press after ready skips");
   assert.equal(h.stored.flySkips, 1, "a garage skip skips the flyby too, so the habitual-skipper streak counts it");
@@ -102,7 +106,7 @@ test("game.js: studioReady offers the skip at once when the garage is up, else o
   const body = (name) => game.slice(game.indexOf("function " + name + "("), game.indexOf("\n}\n", game.indexOf("function " + name + "(")) + 3);
   let offered = 0;
   const c = { _studio: null, loadingScreen: { ready: () => { offered++; } } };
-  vm.createContext(c); vm.runInContext(body("studioReady"), c, { filename: absSrc("js/game.js") });
+  vm.createContext(c); vm.runInContext(body("studioReady"), c, { filename: absSrc(GAME_REL) });
   c.studioReady(1);
   assert.equal(offered, 0, "no studio: nothing to offer");
   c._studio = { n: 1, cardUp: true }; c.studioReady(2);
