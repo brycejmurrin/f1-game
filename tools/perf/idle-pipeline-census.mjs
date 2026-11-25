@@ -35,6 +35,28 @@ export function hookPipelines() {
   // The twin counters (#4783): bind groups and buffers minted on the GPUDevice itself, with the label of the
   // first few so a culprit is named. WebGL2 has no device: both stay 0 and `gpuDevice` says so.
   P.bindGroups = 0; P.buffers = 0; P.gpuLog = []; P.gpuDevice = false; P.gpuLogOn = false;   // the log opens after warm-up: warm-up alone fills any cap
+  // WHOSE bind group (deploy red 2026-11-25): three labels an object group "bindGroup_object", which names no culprit.
+  // Bindings.getForRender(renderObject) is the frame that mints a render object's bindings, so while it runs
+  // P.ro names that object (type:name, material, parent chain, geometry, render target) for the gpuLog rows.
+  P.ro = null;
+  const bnd = T.renderer._bindings;
+  if (bnd && typeof bnd.getForRender === "function") {
+    const og = bnd.getForRender;
+    bnd.getForRender = function (ro) {
+      const prev = P.ro;
+      if (P.gpuLogOn) {
+        try {
+          const ob = (ro && ro.object) || {}, m = (ro && ro.material) || {}, g = (ro && ro.geometry) || ob.geometry || {}, c = (ro && ro.context) || {};
+          let par = ob.parent; const chain = []; for (let i = 0; par && i < 4; i++) { chain.push(par.name || par.type); par = par.parent; }
+          const rt = c.renderTarget ? (c.renderTarget.texture && c.renderTarget.texture.name || c.renderTarget.name || "rt") + ":" + c.width + "x" + c.height : "canvas";
+          const ud = ob.userData || {};
+          P.ro = (ob.type || "") + ":" + (ob.name || "") + " mat " + (m.type || "") + ":" + (m.name || "") + " geo " + (g.type || "") + ":" + (g.name || "") + "#" + (g.id | 0) +
+            " in " + (chain.join("<") || "-") + " rt " + rt + (ob.__tlxIdent ? " pool" : "") + (ud.tlxLgRoad ? " road" : "");
+        } catch (_) { P.ro = "(unnamed)"; }
+      }
+      try { return og.apply(this, arguments); } finally { P.ro = prev; }
+    };
+  }
   const dev = be.device;
   if (dev && typeof dev.createBindGroup === "function" && typeof dev.createBuffer === "function") {
     P.gpuDevice = true;
@@ -42,7 +64,7 @@ export function hookPipelines() {
       const orig = dev[name];
       dev[name] = function (desc) {
         P[key]++;
-        try { if (P.gpuLogOn && P.gpuLog.length < 200) P.gpuLog.push({ at: P.frames, kind: name, label: String((desc && desc.label) || "(none)").slice(0, 80), size: desc && desc.size, usage: desc && desc.usage,
+        try { if (P.gpuLogOn && P.gpuLog.length < 200) P.gpuLog.push({ at: P.frames, kind: name, label: String((desc && desc.label) || "(none)").slice(0, 80), size: desc && desc.size, usage: desc && desc.usage, ro: P.ro ? String(P.ro).slice(0, 240) : undefined,
           from: (new Error().stack || "").split("\n").slice(2, 9).map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, "")).join(" < ").slice(0, 600) }); } catch (_) { /* naming is best-effort */ }
         return orig.apply(this, arguments);
       };
