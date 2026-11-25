@@ -410,9 +410,7 @@ body[data-shape="wide"]:not([hidden]) #overlay #menu-brand #disclaimer { font-si
 body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons {
   --home-g: calc(var(--gap) * .45);
   /* The cluster IS its track, never wider: a percent width does not shrink
-     under zoom, so a cluster 0.016 px over the box sent the fit through all
-     six passes (0.899) and WIDTH 100 painted SMALLER doors than 90 (measured
-     2026-11-10 on the first cut's 100% + 85.185%). */
+     under zoom, and 0.016 px over the box ran all six fit passes (2026-11-10). */
   grid-column: 2; grid-row: 1; justify-self: stretch; align-self: center;
   width: 100%; min-width: 0; max-width: none; height: auto; max-height: none;
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; grid-auto-rows: max-content;
@@ -442,7 +440,7 @@ body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons #menu-retention .bi
 body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons .mb-sub { display: none; }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#mb-career, #menu-retention) .mb-sub {
   display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  font-size: calc(var(--fs-micro) * .62 * var(--ui-compact-text, 1)); line-height: 1.1; letter-spacing: .06em;
+  font-size: max(calc(var(--fs-micro) * .62 * var(--ui-compact-text, 1)), var(--home-sub, 0em)); line-height: 1.1; letter-spacing: .06em;
 }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons #menu-create .bigbtn { font-size: calc(var(--fs-micro) * .74 * var(--ui-compact-text, 1)); padding-inline: calc(var(--gap) / 3); }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons #menu-secondary .bigbtn {
@@ -466,6 +464,7 @@ body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) .big
   /* Cap the text rung at 70%: --fs-micro compensates for a menu zoom the paint floor doesn't apply (#5452). */
   --home-fs: min(var(--fs-micro), calc(12px / .7 * var(--arrange-text-size, 1)));
   min-height: calc(44.2px / var(--home-b));
+  --home-sub: calc(12px / var(--home-b));   /* subtitles paint 12 px (#6681) */
 }
 body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) #menu-create .bigbtn { font-size: max(calc(var(--home-fs) * .74 * var(--ui-compact-text, 1)), calc(var(--home-fs) * .86 / var(--home-b))); }
 body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) #menu-secondary .bigbtn { font-size: max(calc(var(--home-fs) * .64 * var(--ui-compact-text, 1)), calc(var(--home-fs) * .86 / var(--home-b))); }
