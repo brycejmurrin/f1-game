@@ -980,16 +980,22 @@ const FlybySeq = (function () {
    *  its remaining plans would only stall the countdown. */
   function cancelWarm() { _warmGen++; }
   // The SAME array when nothing is dropped: bindCorners and the plans cache by identity.
-  /** The same plans as warm(), one shot per call, for a caller that owns the
-   *  pacing (the menu, between its idle slices). step() → true when all are planned. */
+  /** The same plans as warm(), one SLICE of a shot per call (a judged frame
+   *  or a planned eye, planShotG), for a caller that owns the pacing (the menu,
+   *  between its idle slices). step() → true when all are planned. */
   function planSteps(track, shots) {
     const list = bindCorners(track, (shots && shots.length) ? shots : DEFAULT);
-    let total = 0, i = 0;
+    let total = 0, i = 0, it = null;
     for (let j = 0; j < list.length; j++) total += list[j].dur || 0;
     return () => {
-      if (!(total > 0) || i >= list.length) return true;
-      const sh = landmarkFallback(track, list[i++]);
-      planShot(track, sh, (sh.dur || 1) / total);
+      if (!(total > 0)) return true;
+      if (!it) {
+        if (i >= list.length) return true;
+        const sh = landmarkFallback(track, list[i++]);
+        it = planShotG(track, sh, (sh.dur || 1) / total);
+      }
+      if (!it.next().done) return false;
+      it = null;
       return i >= list.length;
     };
   }
@@ -1566,7 +1572,13 @@ const FlybySeq = (function () {
     if (!onRoad) { if (prof) _fe[1] += liftAt(prof, e); floorEye(track, clearEye(track, _fe)); }
     return (shot.fov ? shot.fov[0] + (shot.fov[1] - shot.fov[0]) * e : 50) * (fovK || 1);
   }
-  function judgeMove(track, shot, eye, look, prof, onRoad, subj, at, coarse, fovK, withMix, lapCover) {
+  /* A PLAN IN SLICES (#6489). planShot is a generator underneath: it yields
+     after each judged frame and each planned eye, so planSteps' caller (the
+     menu, on a 3 ms budget) can stop between them — one whole shot was a
+     104-200 ms task. The work and its order are unchanged; nothing in the
+     module's scratch (_fe/_ft/_te/_tl) is live across a yield. */
+  const drain = (it) => { for (;;) { const r = it.next(); if (r.done) return r.value; } };
+  function* judgeMoveG(track, shot, eye, look, prof, onRoad, subj, at, coarse, fovK, withMix, lapCover) {
     const w = { cost: 0, near: 0, nearSubj: 0, inside: false, ground: 0, mixCost: 0, inF: 1, vis: 1, cover: null }, es = at || FRAME_AT;
     // `withMix`: the rest of the frame too (FlybySight.mix, a lap shot's
     // ground and sky) at the move's two ENDS, the worst added once — the end
@@ -1584,17 +1596,19 @@ const FlybySeq = (function () {
       if (f.vis < w.vis) w.vis = f.vis;
       if (f.cover != null && (w.cover == null || f.cover < w.cover)) w.cover = f.cover;
       if (f.inside) w.inside = true;
+      yield;
     }
     w.cost += w.mixCost;
     w.ok = !w.inside && w.nearSubj <= NEAR_SUBJ && w.near <= (onRoad ? NEAR_ROAD : NEAR_THIRD) && w.cost <= FRAME_OK;
     return w;
   }
   /** The most ground either end of a move shows (FlybySight.mix alone). */
-  function groundOf(track, shot, eye, look, prof, onRoad, fovK) {
+  function* groundOf(track, shot, eye, look, prof, onRoad, fovK) {
     let g = 0;
     for (const e of [0, 1]) {
       const fov = frameAt(track, shot, eye, look, prof, onRoad, e, fovK);
       g = Math.max(g, FlybySight.mix(track, FlybySight.camera(_fe, _ft, fov, 16 / 9)).ground);
+      yield;
     }
     return g;
   }
@@ -1621,10 +1635,10 @@ const FlybySeq = (function () {
       return Object.assign({}, look[i], { y: (look[i].y || 0) + k * Math.max(0, _te[1] - _tl[1]) });
     });
   }
-  function level(track, shot, frac, fin, onRoad, subj, fovK, best, cand, ref) {
+  function* level(track, shot, frac, fin, onRoad, subj, fovK, best, cand, ref) {
     if (fin.look[0].at !== "centre" || fin.look[1].at !== "centre") return null;
     const eye = fin.pe.eye, prof = fin.pe.prof, ok = FlybySight.GROUND_OK;
-    const g0 = groundOf(track, shot, eye, fin.look, prof, onRoad, fovK);
+    const g0 = yield* groundOf(track, shot, eye, fin.look, prof, onRoad, fovK);
     if (g0 <= ok) return null;
     const fov = frameAt(track, shot, eye, fin.look, prof, onRoad, 0.5, fovK);
     const H = _fe[1] - _ft[1], D = Math.hypot(_fe[0] - _ft[0], _fe[2] - _ft[2]);
@@ -1641,7 +1655,7 @@ const FlybySeq = (function () {
       dr += g - ok + TILT_PAD;
       const k = Math.min(TILT_MAX, dr * perRow), lk = tilt(track, eye, fin.look, k);
       if (!fin.fast && panRate(track, shot, frac, eye, lk, prof) > 1) break;
-      const j = judgeMove(track, shot, eye, lk, prof, onRoad, subj, FRAME_AT, false, fovK, true, !!(cand && cand.aim));
+      const j = yield* judgeMoveG(track, shot, eye, lk, prof, onRoad, subj, FRAME_AT, false, fovK, true, !!(cand && cand.aim));
       g = j.ground;
       const cost = j.cost + (j.ok ? 0 : FRAME_MISS) + lapLoss(ref || best, j, cand, LAP_TILT);
       if (cost < bestCost) { bestCost = cost; out = { j, f: Object.assign({}, fin, { look: lk }) }; }
@@ -1761,7 +1775,9 @@ const FlybySeq = (function () {
     return out;
   }
 
-  function planShot(track, shot, frac) {
+  /** The plan of `shot` at screen share `frac`, whole (planShotG one slice at a time). */
+  function planShot(track, shot, frac) { return drain(planShotG(track, shot, frac)); }
+  function* planShotG(track, shot, frac) {
     const cache = track._fbPlan || (track._fbPlan = new WeakMap());
     let plan = cache.get(shot);
     // REUSE WHAT STILL HOLDS. The slot is part of the key only for a shot aimed at
@@ -1773,13 +1789,16 @@ const FlybySeq = (function () {
     // …but only a plan made for NEARLY this much time: a plan squeezed for a
     // habitual skipper's 12 s flyby, reused once the flyby is 24 s again, played
     // the whole long flyby near-static until the track was rebuilt.
-    if (plan && plan.secs <= secs + 1e-6 && plan.secs >= secs * 0.8 && plan.slot === slot && plan.rows === rows) return plan;
+    const holds = (p) => !!p && p.secs <= secs + 1e-6 && p.secs >= secs * 0.8 && p.slot === slot && p.rows === rows;
+    if (holds(plan)) return plan;
+    const env = _flyS + "|" + _playerSlot + "|" + _gridSize;   // what the plan reads from the module, checked at the end
     const onRoad = onRoadPose(shot.eye[0]) && onRoadPose(shot.eye[1]);
     const noLift = new Float32Array(LIFT_N + 1);
-    const at = (src, k) => {
+    const at = function* (src, k) {
       const ey = k === 1 ? src.eye : squeeze(track, src.eye, k), lk = k === 1 ? src.look : squeeze(track, src.look, k);
       const pe = onRoad ? { eye: ey, prof: noLift } : planEye(track, ey);
       const rate = panRate(track, shot, frac, pe.eye, lk, pe.prof);
+      yield;
       return { k, pe, look: lk, rate, fast: rate > 1 };
     };
     const canSqueeze = (src) => squeeze(track, src.eye, 0.5) !== src.eye || squeeze(track, src.look, 0.5) !== src.look;
@@ -1789,30 +1808,32 @@ const FlybySeq = (function () {
     // measurement predicts the rung; walk down while too fast, then up while the
     // rung above still passes. One planEye is up to ~30 ms on a dense circuit,
     // and walking down from the top cost 657 ms for one shot (Mont-Tremblant).
-    const ladder = (src) => {
-      let best = at(src, 1);
+    const ladder = function* (src) {
+      let best = yield* at(src, 1);
       if (best.fast && canSqueeze(src)) {   // else nothing to squeeze
-        const rung = (n) => at(src, Math.pow(PAN_K, n));
+        const rung = (n) => at(src, Math.pow(PAN_K, n));   // a generator: yield* it
         const ahead = (c) => Math.max(1, Math.ceil(Math.log(1 / c.rate) / Math.log(PAN_K)));   // rungs the rate says are left
         let lo = 0, n = Math.min(PAN_RUNGS, ahead(best));
-        best = rung(n);
-        while (best.fast && n < PAN_RUNGS) { lo = n; best = rung(n = Math.min(PAN_RUNGS, n + ahead(best))); }
+        best = yield* rung(n);
+        while (best.fast && n < PAN_RUNGS) { lo = n; best = yield* rung(n = Math.min(PAN_RUNGS, n + ahead(best))); }
         // Too fast at rung `lo`, passing at `n`: the highest passing rung between them.
-        while (!best.fast && n - lo > 1) { const m = (lo + n) >> 1, c = rung(m); if (c.fast) lo = m; else { n = m; best = c; } }
+        while (!best.fast && n - lo > 1) { const m = (lo + n) >> 1, c = yield* rung(m); if (c.fast) lo = m; else { n = m; best = c; } }
       }
       return best;
     };
     // The squeezed look keeps the sightline rule: re-plan it against the eye.
     const finish = (c) => ({ pe: c.pe, k: c.k, fast: c.fast, look: c.look !== shot.look ? planLook(track, c.pe.eye, c.look) : c.look });
-    let fin = finish(ladder({ eye: shot.eye, look: planLook(track, shot.eye, shot.look) })), framing = 0, fovK = 1;
+    let fin = finish(yield* ladder({ eye: shot.eye, look: planLook(track, shot.eye, shot.look) })), framing = 0, fovK = 1;
     // THE FRAMING (see NEAR_SUBJ above): the plan as it will play, judged; an
     // alternative eye is planned at the same squeeze (down the ladder while it
     // is still too fast) and judged the same way.
+    // The scene the judged frames read, built in slices on a cold track (a pure memo: when it is built changes nothing).
+    if (typeof FlybySight !== "undefined" && FlybySight.sceneSteps) yield* FlybySight.sceneSteps(track);
     const subj = typeof FlybySight !== "undefined" ? subjectOf(track, shot) : null;
     const tried = [];
     let picked = null, lapRef = null;
     if (subj) {
-      const j0 = judgeMove(track, shot, fin.pe.eye, fin.look, fin.pe.prof, onRoad, subj);
+      const j0 = yield* judgeMoveG(track, shot, fin.pe.eye, fin.look, fin.pe.prof, onRoad, subj);
       let best = j0;
       tried.push(j0);
       if (!j0.ok || fin.fast || subj.lap) {
@@ -1835,7 +1856,7 @@ const FlybySeq = (function () {
             // Height buys sightline AND lawn: this round is judged with the
             // frame's ground/sky (FlybySight.mix) and its lap's cover, so the
             // incumbent pays them too.
-            const jr = judgeMove(track, shot, fin.pe.eye, fin.look, fin.pe.prof, onRoad, subj, FRAME_AT, false, fovK, true, true);
+            const jr = yield* judgeMoveG(track, shot, fin.pe.eye, fin.look, fin.pe.prof, onRoad, subj, FRAME_AT, false, fovK, true, true);
             bestCost += jr.cost - best.cost;
             ref = lapRef = jr;
           }
@@ -1848,13 +1869,13 @@ const FlybySeq = (function () {
             // On the road the sketch sees the whole move: a grid walk clears a
             // barrier mid-shot and meets it at the start (Monaco's, 31 %), and
             // a passing middle frame (on a coarse raster) ended the search a tier too soon.
-            const j = judgeMove(track, shot, ey, lk, null, onRoad, subj, onRoad ? FRAME_AT : SKETCH_AT, !onRoad, cands[i].fovK, false, round === 1);
+            const j = yield* judgeMoveG(track, shot, ey, lk, null, onRoad, subj, onRoad ? FRAME_AT : SKETCH_AT, !onRoad, cands[i].fovK, false, round === 1);
             sketched.push({ i, ey, lk, cost: j.cost + i * FRAME_TIE * 0.2 + lapLoss(ref, j, cands[i]) });
             if (j.ok && !subj.lap) pass = true;
           }
           sketched.sort((a, b) => a.cost - b.cost);
           for (let m = 0; m < Math.min(FRAME_SCREEN, sketched.length); m++) {
-            const c = sketched[m], j = judgeMove(track, shot, c.ey, c.lk, null, onRoad, subj, SCREEN_AT, false, cands[c.i].fovK, false, round === 1);
+            const c = sketched[m], j = yield* judgeMoveG(track, shot, c.ey, c.lk, null, onRoad, subj, SCREEN_AT, false, cands[c.i].fovK, false, round === 1);
             screened.push({ i: c.i, cost: Math.max(j.cost + lapLoss(ref, j, cands[c.i]), c.cost) + c.i * FRAME_TIE * 0.2 + (j.ok ? 0 : FRAME_MISS) });
           }
           screened.sort((a, b) => a.cost - b.cost);
@@ -1862,10 +1883,10 @@ const FlybySeq = (function () {
           // well framed: it pays like a missed framing.
           for (let m = 0; m < Math.min(FRAME_PLANS, screened.length); m++) {
             const i = screened[m].i, src = { eye: cands[i], look: aimed(track, cands[i], planLook(track, cands[i], shot.look), cands[i].aim) };
-            let n = n0, c = at(src, k);
-            while (c.fast && n < PAN_RUNGS && canSqueeze(src)) c = at(src, Math.pow(PAN_K, ++n));
+            let n = n0, c = yield* at(src, k);
+            while (c.fast && n < PAN_RUNGS && canSqueeze(src)) c = yield* at(src, Math.pow(PAN_K, ++n));
             const f = finish(c);
-            const j = judgeMove(track, shot, f.pe.eye, f.look, f.pe.prof, onRoad, subj, FRAME_AT, false, cands[i].fovK, round === 1, round === 1);
+            const j = yield* judgeMoveG(track, shot, f.pe.eye, f.look, f.pe.prof, onRoad, subj, FRAME_AT, false, cands[i].fovK, round === 1, round === 1);
             tried.push(j);
             const cost = j.cost + i * FRAME_TIE * 0.2 + (j.ok ? 0 : FRAME_MISS) + (f.fast ? FRAME_FAST : 0) + lapLoss(ref, j, cands[i]);
             if (cost < bestCost) { bestCost = cost; fin = f; framing = i; fovK = cands[i].fovK; best = j; picked = cands[i]; }
@@ -1874,12 +1895,19 @@ const FlybySeq = (function () {
         }
       }
       if (subj.lap) {
-        const lv = level(track, shot, frac, fin, onRoad, subj, fovK, best, picked, lapRef);
+        const lv = yield* level(track, shot, frac, fin, onRoad, subj, fovK, best, picked, lapRef);
         if (lv) { fin = lv.f; tried.push(lv.j); }
       }
     }
     plan = { eye: fin.pe.eye, look: fin.look, prof: fin.pe.prof, onRoad: onRoad, frac: frac, secs: secs, squeeze: fin.k, slot: slot, rows: rows,
              framing: framing, fovK: fovK, fast: !!fin.fast, tried: tried };
+    // SLICED, THE MODULE CAN MOVE UNDER A PLAN (planSteps yields between its
+    // frames): a duration or grid set mid-plan re-plans it whole, and a plan
+    // another caller (solve) finished meanwhile is kept, so its identity holds.
+    // Drained in one go neither can happen, so planShot is as it was.
+    if (env !== _flyS + "|" + _playerSlot + "|" + _gridSize) return drain(planShotG(track, shot, frac));
+    const held = cache.get(shot);
+    if (holds(held)) return held;
     cache.set(shot, plan);
     return plan;
   }
