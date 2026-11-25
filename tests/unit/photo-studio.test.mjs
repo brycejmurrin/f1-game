@@ -174,6 +174,32 @@ test("garage and race lens controls keep POV independent and pass the same focus
   assert.match(status.textContent, /Tap or click/);
 });
 
+test("a shot preset or a FOV slider hands the zoom back from FOCAL LENGTH (#6422 row 1)", async () => {
+  // render() lets lens.mm override every fovY, so a stale focal length froze DETAIL/WIDE and the FOV sliders.
+  const b = boot();
+  b.G.gfx.aspect = 2;
+  const slider = b.dom.byId("ps-focal-length"), frame = b.dom.byId("ps-car-frame");
+  const focal = (mm) => { slider.value = String(mm); b.dom.dispatch(slider, { type: "input" }); };
+  for (const source of ["garage", "race"]) {
+    assert.equal(b.api.open({ source }), true);
+    focal(80); assert.equal(b.PS.lens().mm, 80);
+    b.dom.dispatch(frame, { type: "click" });
+    assert.equal(b.PS.lens().mm, null, source + ": a preset drops the focal override");
+    b.api.close(false);
+  }
+  assert.equal(b.api.open({ source: "race" }), true);
+  for (const id of ["pc-fov", "fc-fov"]) {
+    focal(50);
+    b.windowEvents.get("input")({ target: { id: "ps-samples" } });
+    assert.equal(b.PS.lens().mm, 50, "an unrelated input keeps the lens");
+    b.windowEvents.get("input")({ target: { id } });
+    assert.equal(b.PS.lens().mm, null, id + " drops the focal override");
+  }
+  await Promise.resolve();
+  b.api.close(false);
+  assert.equal(b.windowEvents.has("input"), false);
+});
+
 const shot = (b, label) => b.dom.byId("ps-shots").children.find((el) => el.textContent === label);
 
 test("visor capture snapshots the rendered pose before asynchronous readback", async () => {

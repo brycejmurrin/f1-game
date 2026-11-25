@@ -25,7 +25,7 @@ import { failedSpecsFrom, unattributedFailuresFrom } from "../../tools/ci/junit-
 import { recall } from "../../tools/ci/select-recall.mjs";
 import { MEASURED, capacity, declaredTests, declaredTestsIn, honoursCircuitScope } from "../../tools/ci/select-budget.mjs";
 import { loadDb, TIMINGS_FILE } from "../../tools/ci/spec-timings.mjs";
-import { specTitles, unlistable, fatShardPlan, titleCosts, lptPieces, countSplitPieces, fatShardArgs, listFile, PW_ROOT_DIR } from "../../tools/ci/fat-shard.mjs";
+import { FAT_UI_SPEC, specTitles, unlistable, fatShardPlan, titleCosts, lptPieces, countSplitPieces, fatShardArgs, listFile, PW_ROOT_DIR } from "../../tools/ci/fat-shard.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import { spawnSync, execFileSync, spawn } from "node:child_process";
@@ -1134,6 +1134,35 @@ test("mega-sweep specs never share a selected Chromium", () => {
     const jobs = shards(cut, EMPTY).filter((j) => j.specs.split(" ").includes(mega));
     assert.ok(jobs.every((j) => j.specs === mega), `${mega} must run alone`);
   }
+});
+
+test("measured solo-class specs share an over-budget leg, never a Chromium; unmeasured ones stay solo (#6557 P6)", () => {
+  const megas = fs.readdirSync(path.join(ROOT, "tests/specs")).map((f) => `tests/specs/${f}`)
+    .filter((f) => isMegaSweepSpec(f) && !/menu-baseline/.test(f) && !FAT_UI_SPEC.test(f)).slice(0, 4);
+  assert.equal(megas.length, 4, "fixture: four solo-class specs");
+  // Measured at 40 s a spec: one leg's worth together, far under TARGET_SHARD_SEC.
+  const row = (f) => ({ s: [1, 2, 3].map((i) => [`2026-11-2${i}T00:00:00Z`, "llvmpipe", 40, declaredTests(f)]) });
+  const db = { specs: Object.fromEntries(megas.map((f) => [f, row(f)])) };
+  const cut = fit(megas, 30, { rank: () => 0, db });
+  const jobs = shards(cut, db).filter((j) => j.specs.split(" ").some((f) => megas.includes(f)));
+  const carried = jobs.flatMap((j) => j.specs.split(" ")).filter((f) => megas.includes(f));
+  // A mega with a VM twin is covered on the node gate and is in no leg either way.
+  const planned = [...cut.selected, ...cut.oversize, ...cut.overflow, ...cut.overBudgetRun].map((x) => x.file).filter((f) => megas.includes(f));
+  assert.ok(planned.length >= 2, `fixture: at least two megas reach the plan (${planned.join(", ")})`);
+  assert.deepEqual([...carried].sort(), [...planned].sort(), "every planned measured mega still runs, exactly once");
+  assert.ok(jobs.length < planned.length, `measured megas pack (${jobs.map((j) => j.specs).join(" | ")})`);
+  for (const j of jobs) {
+    assert.equal(j.name.replace(/\d+$/, ""), "overbudget-", `${j.name}: a packed mega rides the over-budget pool, never a budgeted selected-<i>`);
+    assert.equal(j.shard, "", "a packed leg carries no --shard");
+    assert.ok(j.timeout === shardCapMin(j.sec, j.perTest, MAX_SELECTED_JOB_MIN), "the declared per-test figure still prices the cap");
+    // run-playwright peels each into its own process: the leg shares a runner, not a Chromium.
+    const { mega, peeled } = partitionMegaSweepArgs(j.specs.split(" "));
+    if (j.specs.split(" ").length > 1) assert.ok(peeled && mega.length === j.specs.split(" ").filter((f) => megas.includes(f)).length,
+      `${j.name}: every mega in a shared leg is peeled into its own Playwright process`);
+  }
+  // Unmeasured, the declaration stands: each alone (the fallback rate is a guess, 8-38 s on paper, minutes on a runner).
+  const blind = shards(fit(megas, 30, { rank: () => 0, db: EMPTY }), EMPTY).filter((j) => j.specs.split(" ").some((f) => megas.includes(f)));
+  assert.ok(blind.length > 0 && blind.every((j) => megas.includes(j.specs)), "an unmeasured mega never shares a job");
 });
 
 test("partitionMegaSweepArgs peels terrain-over-road out of a packed circuits argv", () => {
@@ -2502,4 +2531,29 @@ test("noDrop: the plan is deterministic for a given input (same head, base, timi
   const b = select(undefined, DEFAULT_BUDGET_MIN, { files });
   assert.deepEqual(a.shards, b.shards, "identical matrix");
   assert.deepEqual([a.skipped, a.overBudgetSpecs], [[], []], "and a whole-suite route drops nothing");
+});
+
+test("never more --shard pieces than tests: an empty shard runs zero tests and fails selected-verdict", () => {
+  // PR #6525 run 45577534643: oversize-perf-boost-press-pipelines-gl 1of2 / 2of2
+  // ({tests: 1, sec: 202} each); Playwright gave 2of2 nothing.
+  const legs = (file, tests, sec) => shards({ selected: [], oversize: [{ file, tests, sec, rank: 0 }] }, EMPTY, new Set())
+    .filter((j) => j.specs.includes(file));
+  const fx = (name) => `fixture-${"specs"}/${name}.spec.js`; // not a real file
+  const pr6525 = legs(fx("perf-one-test"), 1, 404);
+  assert.equal(pr6525.length, 1, "a 1-test spec runs as exactly one leg");
+  assert.equal(pr6525[0].shard, "", "and is not a --shard piece");
+  assert.ok(pr6525[0].timeout <= MAX_SELECTED_JOB_MIN, "a leg the packed ceiling holds keeps it");
+  const long = legs(fx("perf-long-test"), 1, 20 * TARGET_SHARD_SEC);
+  assert.equal(long.length, 1, "a too-long single test is one leg, not a split");
+  assert.ok(long[0].timeout > MAX_SELECTED_JOB_MIN && long[0].timeout <= FAT_UI_SELECTED_JOB_MIN,
+    `and gets the larger ceiling (${long[0].timeout} min)`);
+  const fatFile = fx("career");
+  assert.ok(FAT_UI_SPEC.test(fatFile), "the fixture takes the fat-UI branch");
+  const fat = legs(fatFile, 3, 40 * 60 * 60);
+  assert.ok(fat.length >= 1 && fat.length <= 3, `a 3-test fat spec yields at most 3 pieces (${fat.length})`);
+  const hud = legs(fx("hud-layout"), 3, 60);
+  assert.ok(HUD_LAYOUT_MIN_PIECES > 3 && hud.length === 3, `the HUD floor never exceeds the test count (${hud.length})`);
+  assert.equal(legs(fx("career"), 1, 60).length, 1, "a 1-test fat spec is one piece, not FAT_UI_MIN_PIECES");
+  assert.equal(legs(fx("perf-three-test"), 3, 40 * 60 * 60).length, 3,
+    "a 3-test spec that wants many pieces gets one per test");
 });

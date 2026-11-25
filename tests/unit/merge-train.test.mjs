@@ -10,7 +10,8 @@ import {
   TRAIN_MAX, TRAIN_PREFIX, TRAIN_LABEL, CAR_ROWS, RESOLVE_CAP, newestRun, trainManifest, renderManifest, trainResult, trainBody,
   carCandidates, carVerdict, openTrainCarIds, boardedTrainOf, resolveLandable,
   trainHistory, foldCars, verifyTrain, trainRow, trainDisposition, carMessage, redOnRedTip, main,
-  readScreen, screenAccept, screenFold, screenMain,
+  stuckGreen, retryAttempts, STUCK_GREEN_MIN, RETRY_MAX,
+  readScreen, screenAccept, screenFold, screenMain, soloLane, landRunsInFlight, resnapVerdict, resnapTree, SCREEN_BUDGET_MS,
 } from "../../tools/ci/merge-train.mjs";
 import { evaluate, isProtectedConfigPath, isConfigPath } from "../../tools/ci/merge-gate.mjs";
 import { planVerdict } from "../../tools/ci/ready-gate.mjs";
@@ -50,11 +51,11 @@ test("carCandidates: land only, priority first then oldest, with an exact skip l
     pull(17, { head: { sha: sha("7"), ref: "f", repo: { full_name: "fork/r" } } }),
     pull(18), pull(19), pull(20, { labels: [] }),
   ];
-  const r = carCandidates(rows, { exclude: new Set([`18@${sha("8")}`]), gateOk: new Set([19]) });
+  const r = carCandidates(rows, { exclude: new Set([`18@${sha("8")}`]), solo: new Map([[19, "armed: auto-merge is on (it lands alone)"]]) });
   assert.deepEqual(r.cars.map((c) => c.pr), [12, 11, 13]);
   assert.deepEqual(r.skipped, [
     { pr: 14, why: "draft" }, { pr: 15, why: "hold" }, { pr: 16, why: "a train itself" }, { pr: 17, why: "a fork" },
-    { pr: 18, why: "alone in a red train at this head" }, { pr: 19, why: "its own gate already passed (it arms alone)" },
+    { pr: 18, why: "alone in a red train at this head" }, { pr: 19, why: "armed: auto-merge is on (it lands alone)" },
   ]);
 });
 
@@ -106,9 +107,10 @@ test("carVerdict: every CAR_ROWS row must pass; base and the merge rows are the 
 test("trainHistory bisects: a red train of n caps the next at floor(n/2); a lone red car is left out", () => {
   const now = Date.parse("2026-11-18T12:00:00Z");
   const car = (pr) => ({ pr, head: sha(String(pr % 10)) });
-  assert.equal(TRAIN_MAX, 10, "Bryce 2026-11-18 ~19:50Z: bigger trains 5→10");
-  assert.deepEqual(trainHistory([], { now }), { cap: 10, exclude: new Set() });
+  assert.equal(TRAIN_MAX, 12, "Bryce 2026-11-18 ~19:50Z: bigger trains 5→10; #6528 (2026-11-25): 10→12, trains are the default lane");
+  assert.deepEqual(trainHistory([], { now }), { cap: TRAIN_MAX, exclude: new Set() });
   const red = (n, closed = "2026-11-18T11:00:00Z") => ({ cars: Array.from({ length: n }, (_, i) => car(i + 1)), outcome: "red", closed });
+  assert.equal(trainHistory([red(12)], { now }).cap, 6, "a red train of 12 halves to 6");
   assert.equal(trainHistory([red(10)], { now }).cap, 5, "a red train of 10 halves to 5");
   assert.equal(trainHistory([red(5, "2026-11-18T11:30:00Z"), red(10)], { now }).cap, 2, "then a red 5 halves to 2");
   assert.equal(trainHistory([red(2, "2026-11-18T11:45:00Z"), red(5, "2026-11-18T11:30:00Z"), red(10)], { now }).cap, 1, "then a red 2 halves to 1");
@@ -146,6 +148,68 @@ test("trainDisposition: stale when a car moved, red on CI or gate failure, else 
   assert.deepEqual(newestRun({ workflow_runs: [{ id: 9, status: "completed", conclusion: "cancelled" }, { id: 12, status: "queued", conclusion: null }] }), { status: "queued", conclusion: "" });
   assert.equal(newestRun({ workflow_runs: [] }), null);
   assert.equal(newestRun(null), null);
+});
+
+test("T1 (train #6382): a gate success left unarmed closes the train stale; armed, fresh or still in budget keeps it", () => {
+  const m = { base: sha("a"), cars: [{ pr: 5, head: sha("b") }] };
+  const cars = new Map([[5, { state: "open", head: { sha: sha("b") }, labels: [{ name: "land" }] }]]);
+  // #6382: gate success 22:52:32Z, arm failed on a 503 at 22:55Z; still open at 00:27Z when a person closed it.
+  const gateAt = Date.parse("2026-11-24T22:52:32Z"), min = (n) => gateAt + n * 60_000;
+  const d = (stuck) => trainDisposition({ manifest: m, cars, ciConclusion: "success", gate: "success", stuck });
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "success", gate: "success" }), { close: false }, "no stuck inputs: as before");
+  assert.deepEqual(d({ armed: false, gateAt, now: min(16) }), { close: true, outcome: "stale", why: "gate success at 2026-11-24T22:52:32.000Z is still unarmed after 16 min" });
+  assert.equal(STUCK_GREEN_MIN, 15);
+  assert.deepEqual(d({ armed: false, gateAt, now: min(15) }), { close: false }, "at 15 min it may still be arming");
+  assert.deepEqual(d({ armed: true, gateAt, now: min(95) }), { close: false }, "an armed train is GitHub's to merge");
+  assert.deepEqual(d({ armed: false, gateAt: NaN, now: min(95) }), { close: false }, "an unreadable gate time closes nothing");
+  assert.deepEqual(d({ armed: false, gateAt, now: min(4), tipAt: min(2), attempts: RETRY_MAX }),
+    { close: true, outcome: "stale", why: `gate success at 2026-11-24T22:52:32.000Z measured an older deploy tip and its head spent the retry budget (${RETRY_MAX} of ${RETRY_MAX})` });
+  assert.deepEqual(d({ armed: false, gateAt, now: min(4), tipAt: min(2), attempts: RETRY_MAX - 1 }), { close: false }, "budget left: retry re-gates it");
+  assert.deepEqual(d({ armed: false, gateAt, now: min(4), tipAt: min(2), attempts: null }), { close: false }, "unread dispatches: wait for the age rule");
+  assert.deepEqual(d({ armed: false, gateAt, now: min(4), tipAt: min(-1), attempts: RETRY_MAX }), { close: false }, "tip unmoved since the success");
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "success", gate: "pending", stuck: { armed: false, gateAt, now: min(95) } }), { close: false }, "only a success is a stuck green");
+  assert.deepEqual(stuckGreen({ armed: false, gateAt, now: min(20) }).outcome, "stale", "stale, never red: no bisect");
+  const land = fs.readFileSync(path.join(ROOT, ".github/workflows/land.yml"), "utf8");
+  assert.equal(String(RETRY_MAX), /^ {2}RETRY_MAX: (\d+)$/m.exec(land)?.[1], "the builder's budget is land.yml's");
+});
+
+test("retryAttempts: the highest Land retry attempt for this PR at this head", () => {
+  const H = sha("b"), runs = (...t) => ({ workflow_runs: t.map((display_title) => ({ display_title })) });
+  assert.equal(retryAttempts(runs(`Land retry pr=6382 head=${H} attempt=1`, `Land retry pr=6382 head=${H} attempt=3`, `Land retry pr=6382 head=${sha("c")} attempt=2`, "Land stale sweep"), 6382, H), 3);
+  assert.equal(retryAttempts(runs(`Land retry pr=6383 head=${H} attempt=3`), 6382, H), 0, "another PR's budget");
+  assert.equal(retryAttempts(runs(`Land retry pr=6382 head=- attempt=2`), 6382, H), 2, "a hand dispatch with no head counts");
+  assert.equal(retryAttempts(runs(`Land retry pr=6382 head=${sha("c")} attempt=3`), 6382, H), 0, "an older head's budget");
+  assert.equal(retryAttempts({}, 6382, H), null);
+});
+
+test("main --build (T1): a train green and unarmed for 20 min is closed stale and the cars are rebuilt; an armed one waits", async () => {
+  const m = { base: sha("a"), cars: [{ pr: 5, head: sha("b"), ref: "claude/x" }] };
+  const now = Date.parse("2026-11-24T23:12:32Z");
+  const run = async (auto_merge) => {
+    const writes = [], logs = [];
+    let opens = 0;
+    const train = { number: 6382, head: { sha: sha("e"), ref: "train/x-5" }, body: renderManifest(m), auto_merge };
+    const request = (p, o) => {
+      if (o?.method) { writes.push({ p, ...o }); return { json: {} }; }
+      if (p.startsWith("pulls?state=open")) return opens++ ? { error: "stop here" } : { json: [train] };
+      if (p === "pulls/5") return { json: { state: "open", head: { sha: sha("b") }, labels: [{ name: "land" }] } };
+      if (p.includes("check-runs?check_name=CI")) return { json: { check_runs: [{ app: { slug: "github-actions" }, status: "completed", conclusion: "success" }] } };
+      if (p.includes("/statuses")) return { json: [{ context: "gate", state: "success", created_at: "2026-11-24T22:52:32Z" }] };
+      return { error: `unexpected ${p}` };
+    };
+    const code = await main(["--build"], { request, log: (l) => logs.push(l), now });
+    return { code, writes, logs };
+  };
+  const r = await run(null);
+  const close = r.writes.find((w) => w.p === "pulls/6382");
+  assert.ok(close, r.logs.join("\n"));
+  assert.equal(close.body.state, "closed");
+  assert.deepEqual(trainResult(close.body.body), { outcome: "stale", why: "gate success at 2026-11-24T22:52:32.000Z is still unarmed after 20 min" });
+  assert.deepEqual(r.logs.filter((l) => l.startsWith("= merge-train closed")), ["= merge-train closed #6382 (stale): gate success at 2026-11-24T22:52:32.000Z is still unarmed after 20 min"]);
+  const a = await run({ enabled_by: { login: "x" } });
+  assert.equal(a.code, 0);
+  assert.deepEqual(a.writes, [], "armed: GitHub merges it");
+  assert.deepEqual(a.logs, ["= merge-train waiting — train #6382 is still running"]);
 });
 
 test("redOnRedTip: a red train on a red tip closes stale (no bisect); a red on a green or unknown tip stays red", () => {
@@ -234,17 +298,17 @@ test("foldCars merges clean cars in order, drops a conflicting one, and verifyTr
   } finally { r.rm(); }
 });
 
-test("foldCars takes up to TRAIN_MAX (10) clean cars by default and caps an 11th", () => {
+test("foldCars takes up to TRAIN_MAX (12) clean cars by default and caps a 13th", () => {
   const r = repo();
   try {
-    const cars = Array.from({ length: 11 }, (_, i) => {
+    const cars = Array.from({ length: 13 }, (_, i) => {
       const n = i + 10;
       r.g("switch", "-qc", `car${n}`, r.base); fs.writeFileSync(path.join(r.dir, `f${n}.txt`), `${n}\n`); r.g("add", "."); r.g("commit", "-qm", `car${n}`);
       return { pr: n, head: r.g("rev-parse", "HEAD"), ref: `car${n}` };
     });
     r.g("switch", "-q", "main");
     const f = foldCars({ base: r.base, cars, cwd: r.dir });
-    assert.deepEqual(f.cars.map((c) => c.pr), [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
+    assert.deepEqual(f.cars.map((c) => c.pr), [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]);
     assert.equal(verifyTrain({ base: r.base, head: f.head, cars: f.cars, tip: r.base, cwd: r.dir }).ok, true);
   } finally { r.rm(); }
 });
@@ -377,4 +441,142 @@ test("main --build --screen-file: a missing or invalid screen opens no train; a 
     assert.equal(code, 0);
     assert.deepEqual(readScreen(fs.readFileSync(path.join(dir, "s.json"), "utf8")), { tip: "", skip: "train #9 is open", cars: [] });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ---- #6528: orphans board, trains are the default lane, stale line-count fragments are re-snapped on the fold ----
+
+test("#6528: a green, unarmed land PR with no land run in flight is an orphan and boards (fails on the pre-fix 'arms alone' skip)", () => {
+  const landing = [pull(44), pull(51, { auto_merge: { merge_method: "merge" } }), pull(52), pull(53)];
+  const gate = (p) => (p.number === 53 ? "pending" : "success");
+  const { solo, orphans } = soloLane(landing, { gate, runs: new Map([[52, 777]]) });
+  assert.deepEqual([...orphans], [44], "#6444: gate success, auto_merge null, no land run = orphan");
+  assert.deepEqual([...solo], [[51, "armed: auto-merge is on (it lands alone)"], [52, "its own gate passed and land run 777 is still in flight (it may arm alone)"]]);
+  const r = carCandidates(landing, { solo });
+  assert.deepEqual(r.cars.map((c) => c.pr), [53, 44], "oldest first: the orphan and the gate-pending PR both ride; nothing reads 'arms alone'");
+  assert.deepEqual(r.skipped, [...solo].map(([pr, why]) => ({ pr, why })), "only the armed and the mid-arm PR are left out");
+});
+
+test("#6528: landRunsInFlight names a PR's queued/running land runs, never a deploy-branch run or the builder's own", () => {
+  const pages = [{ workflow_runs: [
+    { id: 1, status: "in_progress", pull_requests: [{ number: 6527 }], display_title: "Gardener carve 7" },
+    { id: 2, status: "queued", pull_requests: [], display_title: "Land retry pr=6514 head=257abdec attempt=1" },
+    { id: 3, status: "completed", pull_requests: [{ number: 6444 }], display_title: "x" },
+    { id: 4, status: "in_progress", pull_requests: [], display_title: "Land" },
+    { id: 5, status: "waiting", pull_requests: [{ number: 6600 }], display_title: "y" },
+  ] }];
+  assert.deepEqual([...landRunsInFlight(pages, { selfRun: "5" })], [[6527, 1], [6514, 2]]);
+  // PR #6561 review: a workflow_run re-gate after a PR's CI names no PR and has no title; its head names it.
+  const heads = [pull(61), pull(62), pull(63)];
+  const wr = [{ workflow_runs: [
+    { id: 8, status: "in_progress", pull_requests: [], display_title: "", head_sha: sha("1"), head_branch: "claude/other" },
+    { id: 9, status: "queued", pull_requests: [], display_title: "", head_sha: sha("f"), head_branch: "claude/x-62" },
+    { id: 10, status: "queued", pull_requests: [], display_title: "", head_sha: sha("e"), head_branch: DEPLOY },
+  ] }];
+  assert.deepEqual([...landRunsInFlight(wr, { heads })], [[61, 8], [62, 9]], "matched by head sha or PR branch; a deploy-branch run names none");
+  assert.deepEqual([...soloLane(heads, { gate: () => "success", runs: landRunsInFlight(wr, { heads }) }).orphans], [63]);
+});
+
+test("PR #6561 review: planTrain reads every page of in-flight land runs and refuses a list too long to judge", async () => {
+  const { planTrain, LAND_RUN_PAGES } = await import("../../tools/ci/merge-train.mjs");
+  const seen = [];
+  const full = { workflow_runs: Array.from({ length: 100 }, (_, i) => ({ id: i, status: "queued", pull_requests: [] })) };
+  const request = (p) => {
+    if (p.startsWith("pulls?")) return { json: [] };
+    if (p.startsWith("actions/workflows/land.yml/runs")) { seen.push(p); return { json: full }; }
+    return { json: [] };
+  };
+  const r = await planTrain({ request, cwd: ROOT });
+  assert.deepEqual(r, { error: `land runs (queued): more than ${LAND_RUN_PAGES * 100}, refusing to judge orphans on a partial list` });
+  assert.equal(seen.length, LAND_RUN_PAGES);
+});
+
+test("#6528: SCREEN_BUDGET_MS fits a TRAIN_MAX screen at the measured ~70 s a car (653 s for 9 cars, 2026-11-25 01:37Z)", () => {
+  assert.ok(SCREEN_BUDGET_MS >= TRAIN_MAX * 70_000, `${SCREEN_BUDGET_MS} ms < ${TRAIN_MAX} cars × 70 s`);
+  const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/land.yml"), "utf8");
+  const job = yml.slice(yml.indexOf("  train-screen:"), yml.indexOf("  train:\n"));
+  const minutes = Number(/timeout-minutes: (\d+)/.exec(job)?.[1]);
+  assert.ok(minutes * 60_000 >= SCREEN_BUDGET_MS + 5 * 60_000, `train-screen timeout ${minutes} min leaves no room for npm ci past the ${SCREEN_BUDGET_MS / 60_000}-min budget`);
+});
+
+test("#6528: resnapVerdict re-snaps only a moved base's slack; a genuine overage, someone else's, or a big one still fails", () => {
+  const row = { file: "js/core/log.js", metric: "codeLines", slackMax: 219 };
+  const no = (why) => ({ ok: false, why });
+  const past = (over, own, slack, delta) => no(`over by ${over}, but the car grows it by ${own} since its merge base (slack ${slack} there) and its fragment carries ${delta}: growth past its own budget`);
+  // #6522's shape: the car snapped a loose ceiling (slack 2) into a −2 delta; a sibling spent the slack.
+  assert.deepEqual(resnapVerdict({ ...row, over: 2, own: 0, delta: -2, baseSlack: 2 }), { ok: true, why: "" });
+  // grew 5 past a ceiling loose by 2 (delta +3), a sibling spent the 2: the car gets back its own 2, no more
+  assert.deepEqual(resnapVerdict({ ...row, over: 2, own: 5, delta: 3, baseSlack: 2 }), { ok: true, why: "" });
+  assert.deepEqual(resnapVerdict({ ...row, over: 3, own: 5, delta: 3, baseSlack: 2 }), past(3, 5, 2, 3));
+  // a negative delta (its snap gave the base's slack away) is regained only up to its own growth: delta −8 + 10 = 2 = own
+  assert.deepEqual(resnapVerdict({ ...row, over: 10, own: 2, delta: -8, baseSlack: 10 }), { ok: true, why: "" });
+  assert.deepEqual(resnapVerdict({ ...row, over: 11, own: 2, delta: -8, baseSlack: 12 }), past(11, 2, 12, -8));
+  // over its own ceiling at its head (own − delta 3 > slack 2): never laundered
+  assert.deepEqual(resnapVerdict({ ...row, over: 3, own: 3, delta: 0, baseSlack: 2 }), past(3, 3, 2, 0));
+  // a row the car did not grow, or a fold already over before it: someone else's overage
+  assert.deepEqual(resnapVerdict({ ...row, over: 1, own: 0, delta: 0, baseSlack: 5 }), past(1, 0, 5, 0));
+  assert.deepEqual(resnapVerdict({ ...row, over: 1, parentOver: 1, own: 4, delta: 0, baseSlack: 5 }), no("the fold was already over by 1 before this car: not its overage"));
+  // the commit hook's own limits stay: past 40 lines, a slack-0 entry, a non-line metric, an unmeasurable growth
+  assert.deepEqual(resnapVerdict({ ...row, over: 41, own: 100, delta: 0, baseSlack: 100 }), no("past the 40-line auto-raise"));
+  assert.deepEqual(resnapVerdict({ ...row, slackMax: 0, over: 1, own: 1, delta: 0, baseSlack: 1 }), no("its entry carries slack 0 (exact) — never auto-raised"));
+  assert.deepEqual(resnapVerdict({ ...row, metric: "gMembers", over: 1, own: 1, delta: 0, baseSlack: 1 }), no("gMembers is not a line count — never auto-raised"));
+  assert.deepEqual(resnapVerdict({ ...row, over: 1, own: null, delta: 0, baseSlack: 1 }), no("its own growth since its merge base is unmeasurable"));
+});
+
+/** The fixture fragment of branch `y` (joined, so docs-integrity does not read it as a repo path). */
+const Y_FRAG = ["tests/data/ratchets.d", "y.json"].join("/");
+/** A repo whose ratchets.json holds g.js lines at 12 while g.js has 10 (slack 2). */
+function ratchetRepo() {
+  const dir = scratch("merge-train-rs-");
+  const g = (...a) => { const r = spawnSync("git", a, { cwd: dir, encoding: "utf8", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } }); assert.equal(r.status, 0, r.stderr); return r.stdout.trim(); };
+  const write = (f, s) => { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), s); };
+  const lines = (n, tag = "l") => Array.from({ length: n }, (_, i) => `${tag}${i}`).join("\n");
+  g("init", "-q", "-b", "main");
+  write("tests/data/ratchets.json", '{\n  "files": {\n    "g.js": {\n      "lines": 12\n    }\n  },\n  "tree": {}\n}\n');
+  write("g.js", lines(10)); g("add", "."); g("commit", "-qm", "base");
+  const base = g("rev-parse", "HEAD");
+  const branch = (name, files) => { g("switch", "-qc", name, base); for (const [f, s] of Object.entries(files)) write(f, s); g("add", "-A"); g("commit", "-qm", name); return g("rev-parse", "HEAD"); };
+  const body = (pre, post) => [pre, lines(10), post].filter(Boolean).join("\n");
+  // X: +2 lines at the top, inside the slack (no fragment)
+  const x = branch("x", { "g.js": body("x0\nx1", "") });
+  // Y: edits the last line (no growth) and its commit hook snapped the loose ceiling: lines −2 (#6522's shape)
+  const y = branch("y", { "g.js": lines(10).replace("l9", "Y9"), [Y_FRAG]: '{\n  "files": {\n    "g.js": {\n      "lines": -2\n    }\n  }\n}\n' });
+  // W: +3 lines at the bottom with no fragment: over its OWN ceiling by 1 (13 > 12)
+  const w = branch("w", { "g.js": body("", "w0\nw1\nw2") });
+  g("switch", "-q", "main");
+  return { dir, g, base, x, y, w, rm: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
+
+test("#6528: the fold re-snaps a fragment that is stale only because the base moved, and verifyTrain proves the re-snap", () => {
+  const r = ratchetRepo();
+  try {
+    const cars = [{ pr: 1, head: r.x, ref: "x" }, { pr: 2, head: r.y, ref: "y" }];
+    const f = foldCars({ base: r.base, cars, cwd: r.dir });
+    assert.deepEqual(f.dropped, []);
+    assert.deepEqual(f.cars.map((c) => [c.pr, c.resnapped || null]), [[1, null], [2, [{ file: "g.js", metric: "lines", over: 2 }]]]);
+    // −2 + 2 nets to zero: the fragment is gone and the fold's g.js (12 lines) sits at ratchets.json's 12
+    assert.equal(spawnSync("git", ["cat-file", "-e", `${f.head}:${Y_FRAG}`], { cwd: r.dir }).status, 128);
+    assert.equal(r.g("show", `${f.head}:g.js`).split("\n").length, 12);
+    assert.equal(r.g("log", "-1", "--format=%B", f.head).split("\n").at(-1), "ratchets re-snapped on the fold: g.js lines +2");
+    assert.equal(verifyTrain({ base: r.base, head: f.head, cars, tip: r.base, cwd: r.dir }).ok, true, "the gate re-derives the re-snap");
+    assert.equal(trainBody({ base: r.base, cars: f.cars }).split("\n").find((l) => l.startsWith("- [x] #2 ")), `- [x] #2 \`${r.y.slice(0, 12)}\` merged clean (ratchets re-snapped on the fold: g.js lines +2)`);
+    // the plain merge (no re-snap) is NOT the fold the gate accepts: a train cannot skip or forge the re-snap
+    const plain = r.g("merge-tree", "--write-tree", "--no-messages", f.head + "^1", r.y).split("\n")[0];
+    assert.notEqual(plain, r.g("rev-parse", `${f.head}^{tree}`));
+  } finally { r.rm(); }
+});
+
+test("#6528: a genuine overage (the car grows past its own budget) is not re-snapped: the tree stays the clean merge", () => {
+  const r = ratchetRepo();
+  try {
+    const parent = foldCars({ base: r.base, cars: [{ pr: 1, head: r.x, ref: "x" }], cwd: r.dir }).head;
+    const tree = r.g("merge-tree", "--write-tree", "--no-messages", parent, r.w).split("\n")[0];
+    const git = (args, extra = {}) => spawnSync("git", args, { cwd: r.dir, encoding: "utf8", ...extra });
+    const rs = resnapTree({ tree, parent, car: { pr: 3, head: r.w, ref: "w" }, base: r.base, git });
+    assert.equal(rs.tree, tree, "no ceiling raised for an overage the car itself made");
+    assert.deepEqual(rs.resnapped, []);
+    assert.deepEqual(rs.refused, [{ file: "g.js", metric: "lines", over: 3, why: "over by 3, but the car grows it by 3 since its merge base (slack 2 there) and its fragment carries 0: growth past its own budget" }]);
+    // and a car that never touched g.js is not handed someone else's overage either
+    const none = resnapTree({ tree, parent, car: { pr: 9, head: r.base, ref: "z" }, base: r.base, git });
+    assert.deepEqual([none.tree, none.resnapped, none.refused], [tree, [], []]);
+  } finally { r.rm(); }
 });

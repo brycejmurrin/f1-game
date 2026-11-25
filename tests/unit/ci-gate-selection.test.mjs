@@ -338,6 +338,66 @@ test("select plans the node-suites matrix and can skip unused slices (unit-plan 
     assert.ok(b.includes(n), `${n} runs at the end of tooling B`);
 });
 
+// DRAFT PAIRS (#6557 P9): a draft runs the four guard shards and tooling B's tail in two jobs; every other event keeps
+// four. Same files, same steps: A carries shard 2/4 and B's five tail steps verbatim but for the draft `if:`, C carries 4/4.
+test("draft PRs run the four guard shards in two jobs (A+B, C+D) with identical steps", () => {
+  const jobs = parseYAML(ciWorkflow).jobs;
+  const DRAFT = "inputs.concurrency_key == '' && github.event_name == 'pull_request' && github.event.pull_request.draft";
+  for (const id of ["guards-b", "guards-d"]) assert.equal(jobs[id].if, `\${{ !(${DRAFT}) }}`, `${id} skips on a draft only`);
+  for (const id of ["guards-a", "guards-c"]) assert.equal(jobs[id].if, undefined, `${id} runs on every event`);
+  for (const id of ["guards-a", "guards-c"]) {
+    assert.equal(jobs[id].env.DRAFT_PAIR, `\${{ ${DRAFT} && '1' || '' }}`, `${id}: DRAFT_PAIR is exactly the skip condition of its partner`);
+    assert.equal(jobs[id]["timeout-minutes"], `\${{ (${DRAFT}) && 30 || 18 }}`, `${id}: two shards' budget on a draft, 18 otherwise`);
+  }
+  const pairs = [["guards-a", "guards-b", "2/4"], ["guards-c", "guards-d", "4/4"]];
+  for (const [host, partner, shard] of pairs) {
+    const shardStep = (st) => /tooling-fast\.mjs.*--shard=/.test(st.run || "");
+    const own = jobs[partner].steps.find(shardStep);
+    const carried = jobs[host].steps.find((st) => st.name === `Tooling-fast shard ${shard} (draft pair)`);
+    assert.ok(carried, `${host} carries ${partner}'s shard ${shard} on a draft`);
+    assert.equal(carried.run, own.run, `${host}'s copy runs exactly ${partner}'s command`);
+    assert.deepEqual(carried.env, own.env, `${host}'s copy has ${partner}'s env`);
+    assert.equal(carried.if, `env.DRAFT_PAIR == '1' && ${own.if}`, `${host}'s copy runs on a draft only, under ${partner}'s own condition`);
+  }
+  // Tooling B's tail: every step after its shard and before the verdict-cache bookkeeping, copied into A.
+  const b = jobs["guards-b"].steps, a = jobs["guards-a"].steps;
+  const tail = b.slice(b.findIndex((st) => /--shard=2\/4/.test(st.run || "")) + 1, b.findIndex((st) => st.name === "Record green verdict"));
+  assert.equal(tail.length, 5, "tooling B's tail is five steps");
+  for (const st of tail) {
+    const copy = a.find((x) => x.name === `${st.name} (draft pair)`);
+    assert.ok(copy, `tooling A carries "${st.name}" on a draft`);
+    assert.equal(copy.run, st.run, `"${st.name}": same command`);
+    assert.deepEqual(copy.env, st.env, `"${st.name}": same env`);
+    assert.equal(copy.if, `env.DRAFT_PAIR == '1' && ${st.if}`, `"${st.name}": draft only, otherwise B's own condition`);
+  }
+  // The copies run before A's verdict is recorded, so a cached pair verdict proves both halves.
+  const rec = a.findIndex((st) => st.name === "Record green verdict");
+  for (const st of a.filter((x) => / \(draft pair\)$/.test(x.name || ""))) assert.ok(a.indexOf(st) < rec, `${st.name} runs before the verdict is cached`);
+  // Run each cache-key line (inputs hash and runner.os stubbed): a pair's key is its own, a lone shard's unchanged.
+  const key = (id, pair) => {
+    const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "guards-key-")), "out");
+    const line = jobs[id].steps.find((st) => st.id === "h").run
+      .replace("${{ runner.os }}", "Linux").replace("$(node tools/ci/inputs-hash.mjs guards)", "H");
+    cp.execFileSync("bash", ["-c", line], { env: { ...process.env, GITHUB_OUTPUT: out, GUARDS_MODE: "full", DRAFT_PAIR: pair } });
+    return fs.readFileSync(out, "utf8").trim();
+  };
+  assert.equal(key("guards-a", "1"), "key=guards-ab-Linux-full-H", "a draft pair keys its own cache (guards-ab-)");
+  assert.equal(key("guards-a", ""), "key=guards-a-Linux-full-H", "a lone shard keeps its key");
+  assert.equal(key("guards-c", "1"), "key=guards-cd-Linux-full-H", "and guards-cd-");
+  assert.equal(key("guards-c", ""), "key=guards-c-Linux-full-H");
+  // The aggregator: B and D skipped is green only on a draft, and only with A and C green.
+  const agg = jobs.guards.steps[0];
+  assert.equal(agg.env.DRAFT_PAIR, `\${{ ${DRAFT} && '1' || '' }}`);
+  const sh = (env) => cp.spawnSync("bash", ["-c", agg.run], { env: { ...process.env, ...env } }).status;
+  const all = (r) => ({ A: r, B: r, C: r, D: r });
+  assert.equal(sh({ ...all("success"), DRAFT_PAIR: "" }), 0, "ready: all four green");
+  assert.notEqual(sh({ ...all("success"), B: "skipped", DRAFT_PAIR: "" }), 0, "ready: a skipped half is red");
+  assert.equal(sh({ A: "success", B: "skipped", C: "success", D: "skipped", DRAFT_PAIR: "1" }), 0, "draft: pairs green, B and D skipped");
+  assert.notEqual(sh({ A: "failure", B: "skipped", C: "success", D: "skipped", DRAFT_PAIR: "1" }), 0, "draft: a red pair is red");
+  assert.notEqual(sh({ A: "success", B: "skipped", C: "skipped", D: "skipped", DRAFT_PAIR: "1" }), 0, "draft: a skipped pair is red");
+  assert.notEqual(sh({ ...all("success"), DRAFT_PAIR: "1" }), 0, "draft: a B that ran when it should have skipped is a wiring bug");
+});
+
 test("test:xr is path-gated (a filter step of select → xr) and feeds ci-verdict", () => {
   const filter = parseYAML(ciWorkflow).jobs.select.steps.find((st) => st.id === "xrfilter");
   assert.ok(filter, "the WebXR filter step is gone from select");

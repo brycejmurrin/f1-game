@@ -48,7 +48,9 @@ run-name: >-
 # https://docs.github.com/en/rest/checks/suites), so `resolve` reads each PR's state itself.
 #
 # NOISE. Job-level `if:` on `resolve` (no runner at all): a label other than `land`/`hold`, an event on a PR without
-# `land`, and a cancelled or skipped run exit at once.
+# `land`, and a cancelled or skipped run exit at once. GitHub filters `pull_request_target` by type and branch only, never
+# by label, so these runs are created and skipped (0 runner-minutes); every type listed is a gate input (#6536 R3).
+# A CI completion on a PR that does not ask runs resolve only: post is skipped when the head has no `gate` or a failure.
 # Such a label event also gets its own concurrency group, so it never cancels or replaces a PR's re-gate.
 # CONFIG-OK. Bryce's `config-ok` click (added or removed) on a PR that carries `land` is not noise: it re-gates that PR
 # in its own `land-<n>` group like a land/hold flip, so a stale `config=FAIL` does not wait for the next push, CI or
@@ -117,9 +119,12 @@ run-name: >-
 # the payload's `changes` object names what changed, so `changes.body` is set only for a body edit; the workflow-trigger
 # page lists `edited` among the types, https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request_target,
 # read 2026-10-30). Ticking or striking a Plan item re-gates a `land` PR at once (#3981 sat on "plan=FAIL" for 5 h after
-# its Plan closed). resolve acts only on an edit whose payload has `changes.body`; a title or base edit runs alone in a
-# noise group like a stray label. Trust is unchanged: the payload is read, no PR code runs, and the gate still reads the body
-# through the API.
+# its Plan closed). resolve acts only on an edit whose payload has `changes.body`, and (#6536 R3) only when the edit changed a
+# line the gate can read: a heading, a checklist item or an HTML-comment delimiter line (resolve's BODY-EDIT SCREEN). Every
+# edit, title or body, runs in its own `land-edit-<run id>` group: it never cancels or replaces the PR's `land-<n>` run.
+# Measured 2026-11-23..25 (48 h): 164 body edits re-ran the whole gate and 131 cancelled an in-flight one, 59 of them the
+# gate a `land` click had just started (the Hand-off refresh right after it). Trust is unchanged: the payload is read, no PR
+# code runs, and the gate still reads the body through the API.
 #
 # STALE GATE (`sweep` job). A `gate` older than the PR's last green `CI` run, or `pending` 15 min after CI finished, left
 # #3970 stuck (a label flip or a push was the only cure). On a schedule (`schedule` runs on the default branch, same page
@@ -158,6 +163,8 @@ on:
   # Pages workflow_run re-gates the land PRs a moved tip just made stale (audit 2026-11-21, finding 2).
   push:
     branches: [claude/f1-game-project-26h3ng]
+  # Kept as is (#6536 R3): it fired 4 times in 48 h (2026-11-23..25), so it is a backstop; the train screen rides the
+  # Pages `workflow_run` below (~42 a day). Thin it only with data showing another trigger fires the screen as often.
   schedule:
     - cron: "17,47 * * * *"
   workflow_run:   # zizmor: ignore[dangerous-triggers] same as pull_request_target above
@@ -203,20 +210,20 @@ env:
 # deploy:red / priority on a `land` PR: the gate's rows or resolve's order read them) is noise and runs alone in `land-noise-<run id>` (its resolve is skipped): before, it cancelled an
 # in-flight CI re-gate and left `gate` pending
 # on a green PR (WP-L3a). The train run and a PR run can still overlap: AT and arm's re-read of every veto cover that.
-# A dispatched re-gate joins its PR's `land-<n>` group and never cancels (cancel-in-progress is true only for
+# A body or title edit runs alone in `land-edit-<run id>` (EDITED BODY above). A dispatched re-gate joins its PR's `land-<n>` group and never cancels (cancel-in-progress is true only for
 # pull_request_target): it queues behind the run that dispatched it. "At most one … workflow run can be pending in the
 # concurrency group … any existing pending … run in the same group is canceled and replaced"
 # (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency, read 2026-10-27):
 # a pending CI re-gate and a pending dispatch of one PR do the same work, since resolve reads the PR's live state.
 concurrency:
   group: >-
-    ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng'
+    ${{ (github.event_name == 'pull_request_target' && github.event.action == 'edited' && format('land-edit-{0}', github.run_id))
+    || (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng'
         && github.event.workflow_run.head_repository.full_name == github.repository
         && (github.event.workflow_run.name != 'Deploy to GitHub Pages' || github.event.workflow_run.conclusion != 'success')
         && format('land-noise-{0}', github.run_id))
     || (github.event_name == 'pull_request_target' && (((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'land' && github.event.label.name != 'hold'
-        && !((github.event.label.name == 'config-ok' || github.event.label.name == 'ratchet-raise' || github.event.label.name == 'deploy:red' || github.event.label.name == 'priority') && contains(github.event.pull_request.labels.*.name, 'land')))
-    || (github.event.action == 'edited' && !github.event.changes.body)))
+        && !((github.event.label.name == 'config-ok' || github.event.label.name == 'ratchet-raise' || github.event.label.name == 'deploy:red' || github.event.label.name == 'priority') && contains(github.event.pull_request.labels.*.name, 'land')))))
     && format('land-noise-{0}', github.run_id)
     || format('land-{0}', github.event.pull_request.number || ((github.event_name == 'schedule' || github.event_name == 'push' || github.event.inputs.stale == 'true') && 'stale-sweep') || github.event.inputs.pr || github.event.workflow_run.pull_requests[0].number || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && 'tip') || format('sha-{0}', github.event.workflow_run.head_sha)) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
@@ -260,6 +267,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           RUN_NAME: ${{ github.event.workflow_run.name }}
           RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
@@ -275,6 +283,23 @@ jobs:
           # The moment the PR state was read, in WHOLE seconds like a status's `created_at`; post compares the two
           # as epoch seconds (a string compare of `…:05Z` against `…:05.123Z` read a same-second older status as newer).
           at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          # BODY-EDIT SCREEN (#6536 R3): the gate reads the body only through planVerdict (ready-gate.mjs) and
+          # trainManifest (merge-train.mjs). Both see only heading lines, checklist items and HTML-comment delimiter
+          # lines, so an edit that leaves those lines (split on every JS line terminator) unchanged cannot change the
+          # verdict: a Hand-off refresh or a prose edit re-gates nothing. A body that mentions merge-train is never
+          # screened. An unreadable payload re-gates, as before.
+          if [ "$EVENT" = pull_request_target ] && [ "${ACTION:-}" = edited ]; then
+            screen=$(jq -r 'def gate_lines: [splits("\r\n|[\r\n\u2028\u2029]")]
+                | map(select(test("^##[ \t]|^[ \t]*[-*][ \t]+\\[[ xX~]\\]|<!--|-->"))) | join("\n");
+              (.changes.body.from // "") as $a | (.pull_request.body // "") as $b
+              | if (($a + $b) | contains("merge-train")) or (($a | gate_lines) != ($b | gate_lines)) then "regate" else "same" end' \
+              "${GITHUB_EVENT_PATH:-/dev/null}" 2>/dev/null) || screen=regate
+            if [ "$screen" = same ]; then
+              echo "::notice::PR #$PR_NUMBER: body edit leaves the Plan checklist and train manifest unchanged; nothing to re-gate"
+              printf '%s\n' validated_tip= landable=false 'prs=[]' 'notasked=[]' 'disarm=[]' paused=false "at=$at" attempt=0 >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
           # merge_paused (finding 7, 2026-11-21): true only while the open `Dispatch` issue carries dispatch:merge-pause AND
           # that label's newest `labeled` event is the repository owner's own click (no app), as dispatch.mjs counts it; an
           # agent's pause is ignored. Prints true|false; fails, printing nothing, when a read fails.
@@ -413,6 +438,14 @@ jobs:
             else
               # A direct event publishes its invalidation. A tip pass only needs to invalidate an armed PR here.
               if [ "$train" = true ] && [ "$armed" != true ]; then continue; fi
+              # A PR's CI completion on a PR that does not ask (#6536 R3: 253 of 694 workflow_run runs in 48 h): post
+              # only turns an existing success or pending red, so a head with no `gate` or a failure needs no post job.
+              # An unreadable status still goes to post.
+              if [ "$EVENT" = workflow_run ] && [ "$armed" != true ] && [ "$dl" != true ] && g=$(gate_state "$head") \
+                  && { [ -z "$g" ] || [ "$g" = failure ]; }; then
+                echo "PR #$n: $why; gate '${g:-none}' on ${head:0:12} needs no invalidation"
+                continue
+              fi
               notasked=$(jq -c --argjson n "$n" --arg h "$head" --arg w "$why" --argjson d "$dl" '. + [{number: $n, head: $h, why: $w, draft: $d}]' <<<"$notasked")
               if [ "$armed" = true ]; then disarm=$(jq -c --argjson n "$n" '. + [$n]' <<<"$disarm"); fi
             fi
@@ -898,9 +931,42 @@ jobs:
               | jq -s -r --arg o "$GITHUB_REPOSITORY_OWNER" 'last | if . != null and .login == $o and .app == null then "true" else "false" end'
           }
           n=$(jq -r .number <<<"$ARM"); head=$(jq -r .head <<<"$ARM"); tip=$(jq -r .tip <<<"$ARM")
-          paused=$(merge_paused)
-          pr=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$n")
-          now=$(gh api "repos/$GITHUB_REPOSITORY/branches/$DEPLOY_BRANCH" --jq .commit.sha)
+          read_error=$(mktemp)
+          trap 'rm -f "$read_error"' EXIT
+          # T2 (train #6382, job 138837647849, 2026-11-24): one of the three reads below got `503 Service Unavailable
+          # "no healthy upstream"` and the step exited 1, so `retry` had no outputs and the green head was stranded.
+          # read_5xx <cmd…>: run a read; on a GitHub 5xx re-read it once after GATE_REREAD_S. Returns 75 when the 5xx
+          # outlasts the re-read, else the read's own status. on_read_fail: the rate limit defers as before (exit 1,
+          # backoff); a 5xx hands the PR to `retry` (RETRY_MAX per head) and exits 0; any other failure stays a failure.
+          read_5xx() {
+            local rc
+            "$@" 2>"$read_error" && return 0 || rc=$?
+            grep -Eiq 'HTTP 5[0-9][0-9]|status code: 5[0-9][0-9]' "$read_error" || return "$rc"
+            cat "$read_error" >&2
+            sleep "${GATE_REREAD_S:-5}"
+            "$@" 2>"$read_error" && return 0 || rc=$?
+            if grep -Eiq 'HTTP 5[0-9][0-9]|status code: 5[0-9][0-9]' "$read_error"; then return 75; fi
+            return "$rc"
+          }
+          on_read_fail() {
+            local rc=$1
+            defer_if_limited
+            [ "$rc" = 75 ] || { cat "$read_error" >&2; exit "$rc"; }
+            echo "::notice::not arming #$n: GitHub answered 5xx twice on the arm's first reads; re-gating within the existing retry budget" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+          defer_if_limited() {
+            cat "$read_error" >&2
+            if grep -Eiq 'HTTP 429|rate[ -]limit.*HTTP 403|HTTP 403.*rate[ -]limit' "$read_error"; then
+              echo 'backoff=true' >> "$GITHUB_OUTPUT"
+              echo "::error::GitHub rate limited the arm check for #$n; deferring retries to the next sweep." | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+          }
+          paused=$(read_5xx merge_paused) || on_read_fail "$?"
+          pr=$(read_5xx gh api "repos/$GITHUB_REPOSITORY/pulls/$n") || on_read_fail "$?"
+          now=$(read_5xx gh api "repos/$GITHUB_REPOSITORY/branches/$DEPLOY_BRANCH" --jq .commit.sha) || on_read_fail "$?"
           skip=""
           [ "$paused" = true ] && skip="dispatch:merge-pause is set"
           [ "$(jq -r .state <<<"$pr")" = open ] || skip="PR is $(jq -r .state <<<"$pr")"
@@ -918,16 +984,6 @@ jobs:
           # later, still listed the older pending first. Read up to three times, GATE_REREAD_S apart; a mismatch that
           # outlasts them is handed to `retry` (RETRY_MAX per head) instead of stopping, so the PR is not left green
           # and unarmed until a person dispatches it. Every other skip above stays final.
-          read_error=$(mktemp)
-          trap 'rm -f "$read_error"' EXIT
-          defer_if_limited() {
-            cat "$read_error" >&2
-            if grep -Eiq 'HTTP 429|rate[ -]limit.*HTTP 403|HTTP 403.*rate[ -]limit' "$read_error"; then
-              echo 'backoff=true' >> "$GITHUB_OUTPUT"
-              echo "::error::GitHub rate limited the arm check for #$n; deferring retries to the next sweep." | tee -a "$GITHUB_STEP_SUMMARY"
-              exit 1
-            fi
-          }
           regate=false
           if [ -z "$skip" ]; then
             for try in 1 2 3; do
@@ -1106,6 +1162,8 @@ jobs:
     timeout-minutes: 3
     permissions:
       actions: write
+      pull-requests: read
+      statuses: read
     steps:
       - name: Dispatch a fresh gate for each requested retry
         env:
@@ -1118,10 +1176,34 @@ jobs:
           a=0; [[ "${ATTEMPT:-}" =~ ^[0-9]{1,3}$ ]] && a=$ATTEMPT
           list=$(jq -c -n --arg p "${POST_RETRY:-}" --arg a "${ARM_RETRY:-}" \
             '((if $p == "" then [] else ($p | fromjson) end) + (if $a == "" then [] else [$a | fromjson] end)) | unique_by(.number)')
+          # P1 (#6379, the land-trigger churn note: 33 of 105 land-gate runs were this chain). Only one PR can
+          # merge per tip, so re-gate only the HEAD of the land queue, in resolve's order: train, then priority, then
+          # oldest. The queue is the ready, unarmed `land` PRs without `hold` whose `gate` is a success or a "tip moved"
+          # pending posted in the last 15 min, plus the PRs handed over here. An older one is the sweep's (and T1's),
+          # so a stuck PR never holds the queue. The rest keep their pending "re-gating" for the next train or sweep.
+          # An unreadable queue dispatches every handed-over PR, as before.
+          first=""
+          # shellcheck disable=SC2016 # GraphQL variables, bound by gh
+          [ "$a" -ge "$RETRY_MAX" ] || first=$(gh api graphql -f owner="${GITHUB_REPOSITORY%/*}" -f repo="${GITHUB_REPOSITORY#*/}" -f base="$DEPLOY_BRANCH" \
+            -f query='query($owner:String!,$repo:String!,$base:String!){repository(owner:$owner,name:$repo){pullRequests(states:OPEN,baseRefName:$base,labels:["land"],first:100){nodes{number isDraft createdAt autoMergeRequest{enabledAt} labels(first:50){nodes{name}} commits(last:1){nodes{commit{status{context(name:"gate"){state description createdAt}}}}}}}}}}' \
+            | jq -er --argjson asked "$list" --argjson now "$(date -u +%s)" '
+              select(.errors == null) | .data.repository.pullRequests.nodes | arrays
+              | map((.labels.nodes | map(.name)) as $l | (.commits.nodes[-1].commit.status.context // {}) as $g
+                  | select(.isDraft == false and .autoMergeRequest == null and ($l | index("hold") | not))
+                  | select(.number as $n | ($asked | any(.number == $n))
+                      or ((($g.state == "SUCCESS") or ($g.state == "PENDING" and ($g.description // "" | test("tip moved"))))
+                          and ($now - ($g.createdAt | fromdateiso8601)) <= 900))
+                  | {number, created: .createdAt, prio: (if ($l | index("train")) then -1 elif ($l | index("priority")) then 0 else 1 end)})
+              | sort_by(.prio, .created, .number) | first | .number') || first=""
+          [ "$a" -ge "$RETRY_MAX" ] || [[ "$first" =~ ^[0-9]+$ ]] || { first=""; echo "::notice::land queue unreadable: dispatching every requested re-gate" | tee -a "$GITHUB_STEP_SUMMARY"; }
           while IFS= read -r row <&3; do
             n=$(jq -r .number <<<"$row"); head=$(jq -r .head <<<"$row")
             if [ "$a" -ge "$RETRY_MAX" ]; then
               echo "::notice::#$n: retry budget spent ($a of $RETRY_MAX immediate re-gates on ${head:0:12}); the next train re-gates" | tee -a "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            if [ -n "$first" ] && [ "$n" != "$first" ]; then
+              echo "::notice::#$n: not the head of the land queue (#$first is); its pending re-gate waits for the next train or sweep" | tee -a "$GITHUB_STEP_SUMMARY"
               continue
             fi
             # POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches: `ref` + `inputs` (strings).
@@ -1208,8 +1290,8 @@ jobs:
           paused=$(merge_paused) || paused=unreadable
           if [ "$paused" != false ]; then say "stale-gate sweep skipped: dispatch:merge-pause is set (or unreadable: $paused)"; exit 0; fi
           now=$(date -u +%s)
-          lands=$(gh pr list --repo "$R" --state open --base "$DEPLOY_BRANCH" --label land --limit 100 --json number,headRefOid,isDraft,labels,autoMergeRequest \
-            --jq '.[] | select(.isDraft | not) | select([.labels[].name] | index("hold") | not) | {number, head: .headRefOid, armed: (.autoMergeRequest != null)} | @json') \
+          lands=$(gh pr list --repo "$R" --state open --base "$DEPLOY_BRANCH" --label land --limit 100 --json number,headRefOid,headRefName,isDraft,labels,autoMergeRequest \
+            --jq '.[] | select(.isDraft | not) | select([.labels[].name] | index("hold") | not) | {number, head: .headRefOid, armed: (.autoMergeRequest != null), train: ((.headRefName // "") | startswith("train/"))} | @json') \
             || { say "stale-gate sweep skipped: could not list the land PRs"; exit 0; }
           [ -n "$lands" ] || exit 0
           # One immutable dispatch-history snapshot for all candidates. GitHub lists runs newest first.
@@ -1236,7 +1318,7 @@ jobs:
           while IFS= read -r c <&3; do
             [ -n "$c" ] || continue
             if [ "$sent" -ge "$STALE_MAX" ]; then say "stale-gate sweep: cap of $STALE_MAX re-gates reached; the rest wait for the next sweep"; break; fi
-            n=$(jq -r .number <<<"$c"); head=$(jq -r .head <<<"$c"); armed=$(jq -r '.armed // false' <<<"$c")
+            n=$(jq -r .number <<<"$c"); head=$(jq -r .head <<<"$c"); armed=$(jq -r '.armed // false' <<<"$c"); train=$(jq -r '.train // false' <<<"$c")
             runs=$(gh api "repos/$R/actions/workflows/ci.yml/runs?head_sha=$head&per_page=100" --jq '.workflow_runs' 2>"$sweep_error") || { quota_exhausted && break; say "#$n: could not read the CI runs"; continue; }
             if jq -e 'any(.[]; .status != "completed")' <<<"$runs" >/dev/null; then echo "#$n: CI still running"; continue; fi
             ci_done=$(jq -r 'sort_by(.created_at) | last // {} | if .conclusion == "success" then (.updated_at | fromdateiso8601) else 0 end' <<<"$runs")
@@ -1265,7 +1347,13 @@ jobs:
                  | select(.pr == null or (.pr == $n and (.h == $head or .h == "-"))) | (.a // "0" | tonumber)]
               | [length, (max // 0)] | max' <<<"$history") \
               || { say "#$n: dispatch history does not cover this CI window; skipping"; continue; }
-            if [ "$spent" -ge "$RETRY_MAX" ]; then say "#$n: $why, but $spent re-gates since CI finished spent the budget of $RETRY_MAX; a push, a label flip or the next train re-gates"; continue; fi
+            if [ "$spent" -ge "$RETRY_MAX" ]; then
+              # T3 (#6382): no next train opens while this one is open, so a spent train PR is the merge-train
+              # build's to close `stale` (T1: unarmed past its gate, or tip moved with the budget spent).
+              if [ "$train" = true ]; then say "#$n: $why, but $spent re-gates since CI finished spent the budget of $RETRY_MAX; a train: the merge-train build closes it stale (T1) and rebuilds from its cars"
+              else say "#$n: $why, but $spent re-gates since CI finished spent the budget of $RETRY_MAX; a push, a label flip or the next train re-gates"; fi
+              continue
+            fi
             if gh api --method POST "repos/$R/actions/workflows/land.yml/dispatches" \
                  -f ref="$DEPLOY_BRANCH" -f "inputs[pr]=$n" -f "inputs[head]=$head" -f "inputs[attempt]=$((spent + 1))" >/dev/null 2>"$sweep_error"; then
               sent=$((sent + 1)); say "#$n: $why; re-gate dispatched ($((spent + 1)) of $RETRY_MAX on ${head:0:12})"
@@ -1275,7 +1363,7 @@ jobs:
             fi
           done 3< <(printf '%s\n' "$lands")
 
-  # MERGE TRAIN (tools/ci/merge-train.mjs; decision and design: docs/notes/MERGE-TRAIN-2026-11-18.md). Up to 10 (TRAIN_MAX) green `land` PRs whose own trusted rows pass (open, hold,
+  # MERGE TRAIN (tools/ci/merge-train.mjs; decision and design: docs/notes/MERGE-TRAIN-2026-11-18.md). Up to 12 (TRAIN_MAX) green `land` PRs whose own trusted rows pass (open, hold,
   # plan, ci, config, raise) are merged onto the deploy tip with merge commits on a `train/*` branch, opened as an
   # ordinary PR with `land` + `train`; that PR then lands through the same CI → `gate` → arm route as any other, and
   # each car's head reaching the deploy branch marks the car merged. merge-gate reads a train's config and raise rows
@@ -1293,6 +1381,9 @@ jobs:
   # the merge result's own scripts: so, like land-gate, a read-only token, no secret, no cache. Its verdict file leaves
   # as an artifact the build reads as DATA (merge-train.mjs readScreen): a forged file can only keep a car out or let
   # one ride that the train's own gate then measures, as before. A train still open: the file says skip.
+  # #6528: a green `land` PR that is neither armed nor in a land run of its own (an orphan whose arms lost to the tip)
+  # boards too, and a car's line-count ratchets.d fragment that is stale only because the base moved is re-snapped on
+  # the fold (merge-train.mjs resnapTree: pure git, no PR code, re-derived by the gate's verifyTrain).
   train-screen:
     name: merge train screen
     if: >-
@@ -1301,7 +1392,8 @@ jobs:
       || (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'Deploy to GitHub Pages'
           && github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 20 until #6528: the screen's own budget (SCREEN_BUDGET_MS) is 16 min for a 12-car train, plus npm ci and upload.
+    timeout-minutes: 25
     concurrency:
       group: land-train-screen
       cancel-in-progress: false

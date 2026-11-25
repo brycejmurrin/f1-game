@@ -18,7 +18,6 @@ import {
   baseVerdict, BASE_ESCAPE_LABELS, FIXER_LABEL, fixerProof, cleanTipSync, creditPriorCi, CREDIT_CHAIN_MAX,
 } from "../../tools/ci/merge-gate.mjs";
 import { tipState, codeRedJobs, platformStepFailed, readDeployTip, PLATFORM_STEP as TIP_PLATFORM_STEP } from "../../tools/ci/lib/deploy-tip.mjs";
-import { PLATFORM_STEP as DISPATCH_PLATFORM_STEP, platformFailure } from "../../tools/ci/dispatch.mjs";
 import { parse as parseYAML } from "yaml";
 import { planHash } from "../../tools/ci/ready-gate.mjs";
 import { AGENT_APP_SLUG, byAgent, byOwner } from "../../tools/ci/lib/provenance.mjs";
@@ -120,10 +119,10 @@ test("configVerdict (#5455): an agent's config-ok covers ROUTINE config paths on
   const T1 = "2026-11-03T10:00:00Z", T2 = "2026-11-03T11:00:00Z", T3 = "2026-11-03T12:00:00Z";
   const L = ["config-ok"];
   const agent = (at, o) => ev("config-ok", at, { app: APP, ...o });
-  const routine = [".github/workflows/dispatch.yml", "package.json", "tools/ci/dispatch.mjs", "js/game.js"];
-  const prot = [".github/workflows/land.yml", "tools/ci/dispatch.mjs"];
+  const routine = [".github/workflows/dispatch.yml", "package.json", "tools/ci/pr-board.mjs", "js/game.js"];
+  const prot = [".github/workflows/land.yml", "tools/ci/pr-board.mjs"];
   // 1. Bryce's own tap on a protected diff passes.
-  assert.deepEqual(configVerdict(prot, L, [ev("config-ok", T1)]), { ok: true, evidence: `config-ok by owner (brycejmurrin) at ${T1} covers .github/workflows/land.yml, tools/ci/dispatch.mjs` });
+  assert.deepEqual(configVerdict(prot, L, [ev("config-ok", T1)]), { ok: true, evidence: `config-ok by owner (brycejmurrin) at ${T1} covers .github/workflows/land.yml, tools/ci/pr-board.mjs` });
   // 2. An agent's label on a protected diff is refused and names the protected paths.
   assert.deepEqual(configVerdict(prot, L, [agent(T1)]),
     { ok: false, evidence: "needs config-ok from brycejmurrin himself: an agent's label (brycejmurrin via app claude) covers routine config paths only, and the diff edits protected path(s) .github/workflows/land.yml" });
@@ -132,7 +131,7 @@ test("configVerdict (#5455): an agent's config-ok covers ROUTINE config paths on
   assert.equal(configVerdict(["docs/a.md", "x", ".claude/hooks/a.sh"].concat(routine), L, [agent(T1)]).ok, false, "one protected path needs his tap for the whole row");
   // 3. An agent's label on a routine-only diff passes, and says so.
   assert.deepEqual(configVerdict(routine, L, [agent(T1)]),
-    { ok: true, evidence: `config-ok by agent (claude app), routine paths only (brycejmurrin via app claude) at ${T1} covers .github/workflows/dispatch.yml, package.json, tools/ci/dispatch.mjs` });
+    { ok: true, evidence: `config-ok by agent (claude app), routine paths only (brycejmurrin via app claude) at ${T1} covers .github/workflows/dispatch.yml, package.json, tools/ci/pr-board.mjs` });
   // D-034 (Bryce 2026-11-18 ~10:33Z "Shrink the list"): ci.yml, pick-tests and preflip-probe are ROUTINE, superseding
   // the 2026-11-11 "Protect ci.yml" call; still config paths, so they still need a config-ok, but an agent's counts.
   for (const p of [".github/workflows/ci.yml", "tools/ci/pick-tests.mjs", "tools/ci/preflip-probe.mjs"]) {
@@ -151,14 +150,14 @@ test("configVerdict (#5455): an agent's config-ok covers ROUTINE config paths on
     assert.equal(isProtectedConfigPath(p), true, `${p} stays protected (D-034)`);
     assert.match(configVerdict([p], L, [agent(T1)]).evidence, new RegExp(`^needs config-ok from brycejmurrin himself: .* protected path\\(s\\) ${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
   }
-  for (const p of ["tools/ci/dispatch.mjs", "tools/ci/tooling-fast.mjs", "tools/ci/sync-pr.mjs", ".github/workflows/dispatch.yml", ".github/workflows/pages.yml"])
+  for (const p of ["tools/ci/pr-board.mjs", "tools/ci/tooling-fast.mjs", "tools/ci/sync-pr.mjs", ".github/workflows/dispatch.yml", ".github/workflows/pages.yml"])
     assert.equal(isProtectedConfigPath(p), false, `${p} is routine`);
   for (const p of [".github/workflows/pages.yml", ".claude/agents/worker.md", ".claude/memory/MEMORY.md", ".mcp.json", "tools/mcp/apex-extras.mjs", "tools/lib/generated-paths.mjs", ".github/actions/setup/action.yml", ".github/ISSUE_TEMPLATE/task.yml"])
     assert.equal(configVerdict([p], L, [agent(T1)]).ok, true, `${p} is routine`);
   // 4. An agent's label older than the last config push is refused (the same timing rule as Bryce's).
-  const stale = configVerdict(routine, L, [agent(T1)], "brycejmurrin", { state: "after", evidence: "a push touching tools/ci/dispatch.mjs came" });
+  const stale = configVerdict(routine, L, [agent(T1)], "brycejmurrin", { state: "after", evidence: "a push touching tools/ci/pr-board.mjs came" });
   assert.equal(stale.ok, false);
-  assert.match(stale.evidence, /^needs a fresh config-ok: a push touching tools\/ci\/dispatch\.mjs came after the label at .* by agent \(claude app\), routine paths only/);
+  assert.match(stale.evidence, /^needs a fresh config-ok: a push touching tools\/ci\/pr-board\.mjs came after the label at .* by agent \(claude app\), routine paths only/);
   assert.equal(configVerdict(routine, L, [agent(T1)], "brycejmurrin", { state: "unknown", evidence: "x" }).pending, true);
   // 5. Bryce's own unlabel after an agent's label refuses, and voids a later agent re-add until his own.
   assert.equal(configVerdict(routine, [], [agent(T1), ev("config-ok", T2, { event: "unlabeled" })]).ok, false, "label gone");
@@ -941,6 +940,11 @@ test("land.yml triggers: pull_request_target (never pull_request), workflow_run 
   assert.equal(on.pull_request, undefined, "plain pull_request runs the PR's own copy of land.yml with its secrets");
   assert.deepEqual(on.pull_request_target, { types: ["labeled", "unlabeled", "ready_for_review", "converted_to_draft", "synchronize", "reopened", "edited"], branches: [DEPLOY_BRANCH] });
   assert.deepEqual(on.workflow_run, { workflows: ["CI", "Deploy to GitHub Pages"], types: ["completed"] }, "the CI / train re-gate stays");
+  // #6536 R3 (48 h, 2026-11-23..25): every type above is a gate input, and GitHub cannot filter this event by label, so
+  // thinning happens in resolve's if: and its screens, never by dropping a type. The cron is the sweep's and train's
+  // backstop (4 fires in 48 h; Pages workflow_run drives the train): changing it needs new data, not a test edit.
+  assert.deepEqual(on.schedule, [{ cron: "17,47 * * * *" }]);
+  assert.deepEqual(on.push, { branches: [DEPLOY_BRANCH] }, "a deploy-branch push sweeps (docs-only merges start no Pages train)");
   assert.deepEqual(Object.keys(on.workflow_dispatch.inputs), ["pr", "head", "attempt", "stale"], "the immediate re-gate: one PR, the head its budget counts against, the attempt; or the stale-gate sweep (no AUTO-SYNC input since 2026-11-03)");
   assert.equal(on.repository_dispatch, undefined);
   assert.equal(on.check_suite, undefined, "check_suite never fires for Actions-made suites (0 runs in 14 days)");
@@ -1106,6 +1110,8 @@ function runStep(script, env, files = {}) {
     `gh() { echo "gh $*" >> "$GH_LOG"; local q="" a data args=("$@");`,
     `  if [[ "$*" == *"/statuses?"* && -n "\${GH_ARM_STATUS_ERROR:-}" ]]; then echo "$GH_ARM_STATUS_ERROR" >&2; return 1; fi;`,
     `  if [[ "$*" == *"repos/$GITHUB_REPOSITORY/pulls "* && -n "\${GH_ARM_LIST_ERROR:-}" ]]; then echo "$GH_ARM_LIST_ERROR" >&2; return 1; fi;`,
+    // GH_5XX_ON <substring>: the first GH_5XX_N (default 1) calls whose argv holds it fail with GH_5XX_MSG (a 503).
+    `  if [ -n "\${GH_5XX_ON:-}" ] && [[ "$*" == *"$GH_5XX_ON"* ]] && [ "$(grep -cF -- "$GH_5XX_ON" "$GH_LOG")" -le "\${GH_5XX_N:-1}" ]; then echo "\${GH_5XX_MSG:-non-200 OK status code: 503 Service Unavailable body: \"no healthy upstream\"}" >&2; return 1; fi;`,
     `  if [ "\${GH_STALL:-}" = true ]; then read -r -t 60 _ <&9; fi;`,
     `  while [ $# -gt 0 ]; do a=$1; shift; case "$a" in --jq) q=$1; shift ;; esac; done;`,
     `  case " \${args[*]} " in`,
@@ -1186,7 +1192,7 @@ test("land.yml retry: workflow_dispatch on the deploy branch only, in the PR's o
 
 test("land.yml retry job: actions write only, no checkout, no repo code, no secret; runs after post and arm", () => {
   const j = LAND.jobs.retry;
-  assert.deepEqual(j.permissions, { actions: "write" });
+  assert.deepEqual(j.permissions, { actions: "write", "pull-requests": "read", statuses: "read" }, "P1 reads the land queue; the only write is the dispatch");
   assert.deepEqual(j.needs, ["resolve", "post", "arm"]);
   assert.equal(runsRepoCode(j), false);
   assert.equal(usesSecret(j), false, "GITHUB_TOKEN: its workflow_dispatch is one of the two events it may start");
@@ -1766,9 +1772,47 @@ test("land.yml retry: dispatches each PR once on the deploy branch with attempt+
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.calls.length, 0, "budget spent: nothing dispatched, the next train re-gates");
   r = go("junk; rm -rf /", `[${item}]`, "");
-  assert.match(r.calls[0], /inputs\[attempt\]=1$/, "a malformed attempt counts as 0, never runs");
+  assert.match(r.calls.find((c) => c.includes("--method POST")), /inputs\[attempt\]=1$/, "a malformed attempt counts as 0, never runs");
   r = go("0", `[${item}]`, "", { GH_POST_RC: "1" });
   assert.equal(r.status, 0, "a failed dispatch warns and leaves the next train to re-gate");
+});
+
+test("land.yml retry (P1): only the head of the land queue is re-gated; a stale or unreadable queue never blocks", () => {
+  const run = LAND.jobs.retry.steps[0].run;
+  const ago = (min) => new Date(Date.now() - min * 60000).toISOString().replace(/\.\d{3}Z$/, "Z");
+  const node = (number, created, gate, o = {}) => ({ number, isDraft: false, createdAt: created, autoMergeRequest: null, labels: { nodes: [{ name: "land" }, ...(o.labels || [])] },
+    commits: { nodes: [{ commit: { status: gate && { context: { createdAt: ago(gate.min), state: gate.state, description: gate.d || "= merge-gate passed" } } } }] }, ...o.pr });
+  const queue = (...nodes) => JSON.stringify({ data: { repository: { pullRequests: { nodes } } } });
+  const moved = { state: "PENDING", min: 1, d: "= merge-gate waiting — the deploy tip moved since the gate measured bbbbbbbbbbbb (now cccccccccccc): re-gating" };
+  const go = (asked, q, extra = {}) => runStep(run, { ATTEMPT: "0", POST_RETRY: JSON.stringify(asked.map((n) => ({ number: n, head: HEAD7 }))), ARM_RETRY: "", FAKE_WRAPPER_CHECKS: q, ...extra });
+  const sent = (r) => r.calls.filter((c) => c.includes("--method POST")).map((c) => Number(/inputs\[pr\]=(\d+)/.exec(c)[1]));
+  // Before P1 every handed-over PR was dispatched: #7 here, although #5 is older and also waiting on the moved tip.
+  let r = go([7], queue(node(5, "2026-11-24T10:00:00Z", moved), node(7, "2026-11-24T11:00:00Z", moved)));
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(sent(r), [], "#5 is the head of the queue: #7 waits");
+  const lines = (x) => x.summary.split("\n").filter(Boolean);
+  assert.deepEqual(lines(r), ["::notice::#7: not the head of the land queue (#5 is); its pending re-gate waits for the next train or sweep"]);
+  r = go([5, 7], queue(node(5, "2026-11-24T10:00:00Z", moved), node(7, "2026-11-24T11:00:00Z", moved)));
+  assert.deepEqual(sent(r), [5], "one dispatch per tip: the head");
+  r = go([7], queue(node(5, "2026-11-24T10:00:00Z", { ...moved, min: 40 }), node(7, "2026-11-24T11:00:00Z", moved)));
+  assert.deepEqual(sent(r), [7], "a head whose gate is over 15 min old is the sweep's: it never holds the queue");
+  r = go([7], queue(node(5, "2026-11-24T10:00:00Z", { state: "PENDING", min: 1, d: "= merge-gate waiting — open=ok ci=WAIT" }), node(7, "2026-11-24T11:00:00Z", moved)));
+  assert.deepEqual(sent(r), [7], "a PR waiting on its own CI is not in the queue");
+  r = go([7], queue(node(5, "2026-11-24T10:00:00Z", { state: "SUCCESS", min: 1 }, { pr: { autoMergeRequest: { enabledAt: "x" } } }), node(7, "2026-11-24T11:00:00Z", moved)));
+  assert.deepEqual(sent(r), [7], "an armed PR is GitHub's to merge");
+  r = go([7], queue(node(5, "2026-11-24T10:00:00Z", moved, { labels: [{ name: "hold" }] }), node(7, "2026-11-24T11:00:00Z", moved)));
+  assert.deepEqual(sent(r), [7], "a held PR is not in the queue");
+  r = go([5], queue(node(5, "2026-11-24T10:00:00Z", moved), node(9, "2026-11-24T12:00:00Z", moved, { labels: [{ name: "train" }] })));
+  assert.deepEqual(sent(r), [], "a train is the head (resolve's order: train, priority, oldest)");
+  r = go([7], queue(node(5, "2026-11-24T10:00:00Z", moved), node(7, "2026-11-24T11:00:00Z", null, { labels: [{ name: "priority" }] })));
+  assert.deepEqual(sent(r), [7], "a handed-over priority PR is in the queue even before its pending gate is read");
+  r = go([7, 8], "null");
+  assert.deepEqual(sent(r), [7, 8], "unreadable queue: dispatch as before");
+  assert.deepEqual(lines(r).slice(0, 1), ["::notice::land queue unreadable: dispatching every requested re-gate"]);
+  r = go([7], JSON.stringify({ errors: [{ message: "x" }] }));
+  assert.deepEqual(sent(r), [7], "a GraphQL error is unreadable too");
+  r = go([7], queue(), { ATTEMPT: String(LAND.env.RETRY_MAX) });
+  assert.equal(r.calls.length, 0, "budget spent: not even the queue read");
 });
 
 test("land.yml resolve: a dispatched re-gate is one PR, validated, and its budget resets when the head moved", () => {
@@ -2015,9 +2059,62 @@ test("land.yml edited: only a BODY edit on a `land` PR re-gates; a title edit ru
   assert.ok(!ghExpr(LAND.jobs.resolve.if, prt("edited", { title: { from: "x" } })), "a title edit does not");
   assert.ok(!ghExpr(LAND.jobs.resolve.if, prt("edited", { body: { from: "x" } }, [])), "a PR without `land` is not re-gated by an edit");
   const group = (github) => ghExpr(LAND.concurrency.group, github);
-  assert.equal(group(prt("edited", { title: { from: "x" } })), "land-noise-99", "a title edit never cancels the PR's evaluation");
-  assert.equal(group(prt("edited", { body: { from: "x" } })), "land-7");
+  // #6536 R3: every edit runs alone, so a Hand-off refresh right after `land` never cancels the gate that click started.
+  assert.equal(group(prt("edited", { title: { from: "x" } })), "land-edit-99", "a title edit never cancels the PR's evaluation");
+  assert.equal(group(prt("edited", { body: { from: "x" } })), "land-edit-99", "a body edit neither cancels nor replaces the PR's land-<n> run");
+  assert.equal(group(prt("synchronize", undefined)), "land-7", "a push still cancels the PR's in-flight evaluation");
   assert.equal(ghExpr(LAND.concurrency.group, { event_name: "schedule", run_id: 4, event: {} }), "land-stale-sweep");
+});
+
+// #6536 R3: the gate reads the body only through planVerdict and trainManifest; resolve re-gates an edit only when it
+// changed a line those can read, and every other outcome (a Plan change, a train body, an unreadable payload) re-gates.
+test("land.yml resolve: a body edit that leaves the Plan checklist and train manifest unchanged re-gates nothing", () => {
+  const RESOLVE_RUN = LAND.jobs.resolve.steps.find((s) => s.id === "pick").run;
+  const plan = (tick, handoff) => `## Goal\r\nx\r\n\r\n## Plan\r\n- [${tick}] **now:** fix\r\n- [ ] land: gate\r\n\r\n## Hand-off\r\n\`\`\`\r\nhead: ${handoff}\r\n\`\`\``;
+  const edit = (from, to, o = {}) => runStep(RESOLVE_RUN, { EVENT: "pull_request_target", ACTION: "edited", PR_NUMBER: "7",
+    IN_PR: "", IN_HEAD: "", IN_ATTEMPT: "", CANDIDATES: "null", FAKE_PR: pr7({ body: to }), GITHUB_EVENT_PATH: "event.json", ...o },
+  { "event.json": JSON.stringify({ action: "edited", changes: { body: { from } }, pull_request: { number: 7, body: to } }) });
+  const noop = edit(plan("x", "aaa"), plan("x", "bbb"));
+  assert.equal(noop.status, 0, noop.stderr);
+  assert.equal(noop.out.landable, "false");
+  assert.deepEqual([noop.out.prs, noop.out.notasked, noop.out.disarm], ["[]", "[]", "[]"], "post, arm and retry all stay skipped");
+  assert.deepEqual(noop.calls, [], "the screen reads only the event payload: no API call");
+  assert.match(noop.stdout, /nothing to re-gate/);
+  for (const [why, from, to, o] of [
+    ["a Plan tick", plan(" ", "aaa"), plan("x", "aaa")],
+    ["a new heading", plan("x", "aaa"), plan("x", "aaa") + "\n## Plan"],
+    ["a checklist line behind a bare CR (a JS line terminator)", plan("x", "aaa"), plan("x", "aaa") + "\rmore\r- [ ] new"],
+    ["an HTML-comment delimiter", plan("x", "aaa"), plan("x", "aaa") + "\n<!-- hidden"],
+    ["a train body", `x\n<!-- merge-train {"cars":[]} -->`, `y\n<!-- merge-train {"cars":[]} -->`],
+    ["an unreadable payload", plan("x", "aaa"), plan("x", "bbb"), { GITHUB_EVENT_PATH: "missing.json" }],
+  ]) {
+    const r = edit(from, to, o);
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(JSON.parse(r.out.prs), [{ number: 7, head: HEAD7 }], `${why} re-gates`);
+  }
+  const push = runStep(RESOLVE_RUN, { EVENT: "pull_request_target", ACTION: "synchronize", PR_NUMBER: "7", IN_PR: "", IN_HEAD: "", IN_ATTEMPT: "",
+    CANDIDATES: "null", FAKE_PR: pr7(), GITHUB_EVENT_PATH: "missing.json" });
+  assert.deepEqual(JSON.parse(push.out.prs), [{ number: 7, head: HEAD7 }], "the screen applies to `edited` only");
+});
+
+test("land.yml resolve: a CI completion on a PR that does not ask posts only when there is a gate to turn red", () => {
+  const RESOLVE_RUN = LAND.jobs.resolve.steps.find((s) => s.id === "pick").run;
+  const ci = (pr, statuses, o = {}) => runStep(RESOLVE_RUN, { EVENT: "workflow_run", RUN_BRANCH: "feature", RUN_REPO: "o/r", RUN_NAME: "CI",
+    RUN_CONCLUSION: "success", RUN_SHA: HEAD7, CANDIDATES: JSON.stringify([{ number: 7, base: { ref: DEPLOY_BRANCH } }]),
+    PR_NUMBER: "", IN_PR: "", IN_HEAD: "", IN_ATTEMPT: "", FAKE_PR: pr, FAKE_STATUSES: JSON.stringify(statuses), ...o });
+  const gate = (state) => [{ context: "gate", state }];
+  for (const [statuses, posts] of [[[], false], [gate("failure"), false], [gate("success"), true], [gate("pending"), true]]) {
+    const r = ci(pr7({ labels: [] }), statuses);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(JSON.parse(r.out.notasked).length, posts ? 1 : 0, `gate ${statuses[0]?.state || "none"}: post ${posts ? "runs" : "is skipped"}`);
+  }
+  assert.equal(JSON.parse(ci(pr7({ labels: [] }), [], { GH_DISCOVERY_FAILURE: "status" }).out.notasked || "[1]").length, 1, "an unreadable status still goes to post");
+  const armed = ci(pr7({ labels: [], auto_merge: { merge_method: "merge" } }), []);
+  assert.deepEqual(JSON.parse(armed.out.disarm), [7], "an armed PR is always disarmed");
+  assert.equal(JSON.parse(armed.out.notasked).length, 1);
+  const draftLand = ci(pr7({ draft: true }), []);
+  assert.equal(JSON.parse(draftLand.out.notasked)[0].draft, true, "`land` on a draft always gets its gate and comment");
+  assert.deepEqual(JSON.parse(ci(pr7(), []).out.prs), [{ number: 7, head: HEAD7 }], "a `land` PR is re-gated as before");
 });
 
 test("land.yml post: `land` on a draft writes a gate failure naming the flip, and comments once per head", () => {
@@ -2079,6 +2176,26 @@ test("land.yml sweep: re-gates a land PR whose gate is older than its green CI (
   ];
   for (const [env, want, why] of cases) assert.equal(dispatched(go(env)).length, want, why);
   assert.equal(go({ GH_POST_RC: "1" }).status, 0, "a failed dispatch warns, never fails the sweep");
+});
+
+test("land.yml sweep (T3, #6382): a train PR's spent budget names the merge-train build's stale close, not the next train", () => {
+  const run = LAND.jobs.sweep.steps.find((st) => st.name.startsWith("Re-gate the land PRs")).run;
+  const base = Math.floor((Date.now() - 40 * 60000) / 60000) * 60000;
+  const T = (m) => new Date(base + m * 60000).toISOString().replace(".000Z", "Z");
+  const H = "1".repeat(40);
+  const lands = (ref) => JSON.stringify([{ number: 7, headRefOid: H, headRefName: ref, isDraft: false, labels: [{ name: "land" }] }]);
+  const go = (ref) => runStep(run, { FAKE_LANDS: lands(ref), STALE_MAX: "4",
+    FAKE_RUNS: JSON.stringify({ workflow_runs: [{ status: "completed", conclusion: "success", created_at: T(0), updated_at: T(10) }] }),
+    FAKE_STATUSES: JSON.stringify([{ context: "gate", state: "success", created_at: T(12) }]),
+    FAKE_DISPATCHES: JSON.stringify({ total_count: 1, workflow_runs: [{ created_at: T(11), display_title: `Land retry pr=7 head=${H} attempt=${LAND.env.RETRY_MAX}` }] }) });
+  let r = go("train/20261124T2150-6334-6335-6371");
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.calls.filter((c) => c.includes("--method POST")).length, 0, "the budget still binds");
+  const said = (x) => x.summary.split("\n").filter((l) => l.startsWith("#7: "));
+  const spent = `#7: gate has been green for over 15 minutes without arming, but ${LAND.env.RETRY_MAX} re-gates since CI finished spent the budget of ${LAND.env.RETRY_MAX}`;
+  assert.deepEqual(said(r), [`${spent}; a train: the merge-train build closes it stale (T1) and rebuilds from its cars`]);
+  r = go("claude/x");
+  assert.deepEqual(said(r), [`${spent}; a push, a label flip or the next train re-gates`], "an ordinary PR keeps its cure");
 });
 
 test("land.yml sweep (finding 2): a push to the deploy branch sweeps (rate-capped); a green, unarmed gate older than the tip is re-gated", () => {
@@ -2292,9 +2409,6 @@ const SPEC_RED = [{ name: "ci / Selected specs (change-aware gate) (packed-2, te
   { name: "ci / CI", conclusion: "failure" }, { name: "deploy", conclusion: "skipped", steps: [] }];
 
 test("deploy tip (#5425): a spec-leg red is code; run 42880431465 (publish only) is platform; a deploy refusal without the marker is code", () => {
-  assert.equal(TIP_PLATFORM_STEP, DISPATCH_PLATFORM_STEP, "one marker: dispatch re-exports deploy-tip's");
-  const pf = (jobs) => platformFailure(() => ({ json: { jobs } }), 1);
-  assert.equal(pf(JOBS_42880431465), true, "dispatch's own platform test agrees on the real case");
   assert.equal(platformStepFailed(JOBS_42880431465), true);
   const real = tipState(RUN_42880431465, JOBS_42880431465);
   assert.equal(real.state, "platform", real.evidence);
@@ -2306,7 +2420,7 @@ test("deploy tip (#5425): a spec-leg red is code; run 42880431465 (publish only)
   assert.equal(spec.sha, RUN_42880431465.head_sha, "the commit the red run tested: what a fixer's head must contain");
   const refusal = [{ name: "deploy", conclusion: "failure", steps: [{ name: TIP_PLATFORM_STEP, conclusion: "skipped" }, { name: "Confirm this commit may still be published (under the Pages lock)", conclusion: "failure" }] }];
   assert.equal(tipState(RUN_42880431465, refusal).state, "code-red", "a refusal is a fixer's job, as dispatch treats it");
-  assert.equal(pf(refusal), false);
+  assert.equal(platformStepFailed(refusal), false);
   const both = [...SPEC_RED.slice(0, 1), JOBS_42880431465[4]];
   assert.deepEqual(codeRedJobs(both).map((j) => j.name), [SPEC_RED[0].name], "the marker excuses only `deploy`, never another red job");
   assert.equal(tipState({ ...RUN_42880431465, conclusion: "timed_out" }, [{ name: "ci / Smoke (1)", conclusion: "timed_out" }]).state, "code-red");
@@ -2913,6 +3027,33 @@ test("land.yml arm stops on quota during the status and armed-PR reads, even wit
     const transient = runStep(run, { ...env, [key]: "gh: Bad Gateway (HTTP 502)" });
     assert.equal(transient.status, 0);
     assert.deepEqual(JSON.parse(transient.out.retry), { number: 7, head: HEAD7 });
+  }
+});
+
+test("land.yml arm (T2, #6382 job 138837647849): a GitHub 5xx on a first read is re-read once, then handed to retry, never exit 1", () => {
+  const run = LAND.jobs.arm.steps.find((s) => s.id === "arm").run;
+  const go = (extra = {}) => runStep(run, { ARM: JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A }), FAKE_PR: pr7(), NOW_TIP: TIP_A, LAND_TOKEN: "lt", GITHUB_TOKEN: "t", FAKE_STATUSES: OWN_GATE, ...extra });
+  const armed = (r) => r.calls.some((c) => c.includes(`pr merge 7 --repo o/r --auto --merge --match-head-commit ${HEAD7}`));
+  for (const on of ["/issues -f", "repos/o/r/pulls/7", "/branches/"]) {
+    let r = go({ GH_5XX_ON: on, GH_5XX_N: "1" });
+    assert.equal(r.status, 0, `${on}: ${r.stderr}`);
+    assert.ok(armed(r), `${on}: one 503, then the re-read answers: arms as before`);
+    assert.equal(r.out.retry, undefined);
+    r = go({ GH_5XX_ON: on, GH_5XX_N: "2" });
+    assert.equal(r.status, 0, `${on}: a 5xx that outlasts the re-read is not a failed job (retry needs arm's outputs)`);
+    assert.deepEqual(JSON.parse(r.out.retry), { number: 7, head: HEAD7 }, `${on}: handed to retry`);
+    assert.equal(r.out.backoff, undefined);
+    assert.ok(!armed(r), `${on}: never arms on an unread state`);
+    assert.deepEqual(r.summary.split("\n").filter(Boolean), ["::notice::not arming #7: GitHub answered 5xx twice on the arm's first reads; re-gating within the existing retry budget"]);
+    assert.equal(r.calls.filter((c) => c.includes(on)).length, 2, `${on}: exactly one re-read`);
+    r = go({ GH_5XX_ON: on, GH_5XX_N: "2", GH_5XX_MSG: "gh: Bad Gateway (HTTP 502)" });
+    assert.deepEqual(JSON.parse(r.out.retry), { number: 7, head: HEAD7 }, `${on}: gh's own HTTP 502 form too`);
+    r = go({ GH_5XX_ON: on, GH_5XX_N: "1", GH_5XX_MSG: "gh: Not Found (HTTP 404)" });
+    assert.notEqual(r.status, 0, `${on}: a non-5xx failure still fails the job`);
+    assert.equal(r.out.retry, undefined);
+    r = go({ GH_5XX_ON: on, GH_5XX_N: "1", GH_5XX_MSG: "gh: API rate limit exceeded for installation (HTTP 403)" });
+    assert.notEqual(r.status, 0, `${on}: the rate limit defers as before`);
+    assert.equal(r.out.backoff, "true");
   }
 });
 

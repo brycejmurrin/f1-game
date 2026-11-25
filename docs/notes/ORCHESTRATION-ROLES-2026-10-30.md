@@ -55,7 +55,7 @@ I.e setup our roles as skills like worker doc should be a skill."
 ## Why not delete WORKERS.md
 
 Seven places outside my OWNED paths read it by name or by section (`dispatch.mjs` launch prompts, `context-cap.py`,
-`launch-gate.py`, `merge_policy.py`, `ship-pr.mjs`, the Cursor plugin skills, `dispatch.test.mjs`). Keeping the file
+`launch-gate.py`, `merge_policy.py`, `ship-pr.mjs`, the Cursor plugin skills, the dispatch unit test, retired with dispatch.mjs in #6536). Keeping the file
 and its headings lets those stand; a follow-up can retarget the launch prompts to "load skill `worker`" once E2's
 `dispatch.mjs` work lands.
 

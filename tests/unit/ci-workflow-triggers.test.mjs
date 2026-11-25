@@ -50,10 +50,16 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   assert.doesNotMatch(ciWorkflow, /smoke_only/, "the always-false smoke_only input and its guards are gone (2026-10-14)");
   // node-suites left the draft fast tier on 2026-10-16 (decision D1): its own
   // draft skip is pinned in ci-gate-selection; the fast-tier jobs carry no draft gate at all.
+  // DRAFT PAIRS (#6557 P9): guards-a carries guards-b's shard on a draft, so guards-b alone skips there (its exact
+  // `if:` and the copies are pinned in ci-gate-selection); the job heads still never opt out of the fast tier.
   for (const name of ["guards-a", "guards-b", "guards", "select"]) {
     const job = ciWorkflow.slice(ciWorkflow.indexOf(`\n  ${name}:\n`));
     const head = job.slice(0, job.indexOf("\n    steps:"));
-    assert.ok(!/run-ci|github\.event\.pull_request\.draft/.test(head), `${name} runs on every PR push, a draft included`);
+    const jobIf = /\n    if: (.*)/.exec(head)?.[1];
+    if (name === "guards-b") assert.equal(jobIf, "${{ !(inputs.concurrency_key == '' && github.event_name == 'pull_request' && github.event.pull_request.draft) }}",
+      "guards-b skips only a draft, whose tooling A runs its shard");
+    else assert.ok(jobIf === undefined || jobIf === "${{ !cancelled() }}", `${name} runs on every PR push, a draft included`);
+    assert.ok(!/run-ci/.test(head), `${name} has no run-ci opt-in`);
     assert.ok(!head.includes(fastTier), `${name} is part of the fast tier and must not opt out of ship/draft heavy skip`);
   }
 });
@@ -78,9 +84,9 @@ test("pages.yml is a release train: schedule + dispatch, one deploy branch, noth
   // with ci.yml's prose paths-ignore; one running + one pending run per the workflow group.
   assert.match(onBlock, /^\s+push:\n\s+branches:\n\s+- claude\/f1-game-project-26h3ng\n\s+paths-ignore:/m, "the train runs on push to the deploy branch");
   assert.match(onBlock, /paths-ignore:\n(\s+- "[^"]+"\n){5}/, "the same five prose globs ci.yml ignored");
-  // Every 6 h since 2026-10-26 (hourly from 2026-10-14): push + dispatch start the
-  // train and it re-arms itself (`rearm`), so the cron is only a backstop.
-  assert.match(onBlock, /schedule:\s*\n(\s+#[^\n]*\n)*\s+- cron: "41 \*\/6 \* \* \*"/, "one tick every 6 h, off the hour");
+  // Daily since 2026-11-25 (#6536 R4; every 6 h from 2026-10-26, hourly from 2026-10-14): push + dispatch start
+  // the train and it re-arms itself (`rearm`), so the cron is only a backstop.
+  assert.match(onBlock, /schedule:\s*\n(\s+#[^\n]*\n)*\s+- cron: "53 10 \* \* \*"/, "one tick a day, off the hour");
   assert.match(onBlock, /workflow_dispatch:/, "a dispatch is 'deploy now'");
   assert.match(onBlock, /^\s+DEPLOY_BRANCH: claude\/f1-game-project-26h3ng\s*$/m, "the one declaration of the deploy branch");
 

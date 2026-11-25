@@ -233,7 +233,7 @@ test("--digest: summary, prompts, replies, tally and failures within a hard size
   assert.doesNotMatch(big, /q{100}/, "an error's output is an excerpt, never the body");
 });
 
-import { attribution, tallySkills, cacheBreaks, renderCacheBreaks, parseArgs } from "../../tools/ci/session-transcript.mjs";
+import { attribution, tallySkills, tallyAgents, cacheBreaks, renderCacheBreaks, parseArgs } from "../../tools/ci/session-transcript.mjs";
 
 // tx-bryce-routines-failed X3 (2026-10-26): list_events on Bryce's archived ios session 017TA52 returned B·H11's events
 // ($77.68 cumulative on the page against $53.68 on the session). The page has no claude.ai id, so get_session is the witness.
@@ -265,7 +265,26 @@ test("--tally skills counts Skill calls by name; --tally cache-breaks lists turn
     { at: "2026-10-26T01:02:00Z", cacheRead: 12000 }, { at: "2026-10-26T01:03:00Z", cacheRead: 7000 }];
   assert.deepEqual(cacheBreaks(ctx).map((c) => [c.at, c.fall]), [["2026-10-26T01:02:00Z", 91]], "the 12k -> 7k step is 42 %, not a break");
   assert.equal(renderCacheBreaks(ctx), "01:02:00 cache read 131.0k -> 12.0k (-91%)\n= cache-breaks 1 of 4 turns (fall > 50%)", "match /01:02:00 cache read 131\\.0k -> 12\\.0k \\(-91%\\)\\n= cache-breaks 1 of 4 turns/");
-  assert.throws(() => parseArgs(["p.txt", "--tally", "bogus"]), /--tally takes skills,cache-breaks/);
+  assert.throws(() => parseArgs(["p.txt", "--tally", "bogus"]), /--tally takes skills,cache-breaks,agents/);
   assert.throws(() => parseArgs(["p.txt", "--definitely-not-a-flag"]), /unknown flag --definitely-not-a-flag/);
   assert.equal(parseArgs(["p.txt", "--grep", "--x"]).grep.source, "--x", "a value is not a flag");
+});
+
+// docs/notes/AGENT-ROLES-2026-11-25.md: the subagent tool-use audit, repeatable. A call made inside a subagent carries
+// parent_tool_use_id and subagent_type; a Bash pipeline counts as search only when a stage STARTS with grep/rg.
+test("--tally agents splits each thread's calls by method: lsp, grep, read, browser", () => {
+  const sub = (s, content, type) => wrap("assistant", s, { parent_tool_use_id: "toolu_p", subagent_type: type, message: { role: "assistant", content } });
+  const rows = normalize([
+    say(1, [use("a1", "Agent", { subagent_type: "code-hunter", description: "hunt" })]),
+    sub(2, [use("b1", "Grep", { pattern: "foo" })], "code-hunter"),
+    sub(3, [use("b2", "Bash", { command: "cd /x && grep -rn foo js | head" })], "code-hunter"),
+    sub(4, [use("b3", "Bash", { command: "git log --oneline -5 | grep fix" })], "code-hunter"),
+    sub(5, [use("b4", "mcp__apex-lsp__lsp_references", { symbol: "G.x" })], "code-hunter"),
+    sub(6, [use("b5", "Bash", { command: "node tools/mcp/lsp-mcp.mjs diag js/core/log.js" })], "code-hunter"),
+    sub(7, [use("b6", "Read", { file_path: "js/core/log.js" }), use("b7", "SubagentHandback", {})], "code-hunter"),
+    say(8, [use("a2", "mcp__playwright-official__browser_evaluate", {}), use("a3", "Bash", { command: "sed -n 1,9p js/core/log.js" })]),
+  ]);
+  assert.equal(tallyAgents(rows),
+    "= agent main calls 3 · lsp 0 (0%) · grep 0 (0%) · read 1 · browser 1 · bash 0 · other 1\n" +
+    "= agent code-hunter calls 6 · lsp 2 (33%) · grep 2 (33%) · read 1 · browser 0 · bash 1 · other 0");
 });

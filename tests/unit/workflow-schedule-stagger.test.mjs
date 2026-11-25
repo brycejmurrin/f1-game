@@ -1,5 +1,5 @@
-// workflow-schedule-stagger.test.mjs — phone-shots starts only for its purpose and escapes the two 2026-11-11
-// ghost runs, and the scheduled workflows do not share a cron minute (2026-11-21, workflow-waste audit).
+// workflow-schedule-stagger.test.mjs — the scheduled workflows do not share a cron minute (2026-11-21, workflow-waste
+// audit); the Pages backstop is daily and the lit-WGSL advisory runs on ready PRs only (#6536 R4, R7).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -12,24 +12,26 @@ const YAML = createRequire(import.meta.url)("yaml");
 const DIR = path.join(ROOT, ".github/workflows");
 const read = (f) => YAML.parse(fs.readFileSync(path.join(DIR, f), "utf8"));
 
-test("phone-shots: comment created only, app posts screened in the job if, per-issue job-level group", () => {
-  const wf = read("phone-shots.yml");
-  assert.deepEqual(wf.on.issue_comment.types, ["created"], "a comment edit is a dispatch backfill, not a trigger");
-  assert.equal(wf.concurrency, undefined, "no workflow-level group: a skipped run must not queue behind anything");
-  const job = wf.jobs.copy;
-  // The screen's terms, in one pin: owner sender, and no app on the comment or the issue (agents post as the owner).
-  const terms = ["github.event.sender.login == github.repository_owner", "!github.event.comment.performed_via_github_app",
-    "!github.event.issue.performed_via_github_app"];
-  assert.deepEqual(terms.filter((t) => !job.if.includes(t)), [], "phone-shots job if lost a screen term");
-  assert.equal(job.concurrency.group, "phone-shots-copy-${{ github.event.issue.number || inputs.issue }}");
-  assert.notEqual(job.concurrency.group, "phone-shots", "the retired group holds runs 43097279571 and 43098589151");
-  assert.equal(job.concurrency["cancel-in-progress"], false);
+test("pages.yml: one daily backstop cron, off the hour and outside 13:00-16:00 UTC (#6536 R4)", () => {
+  const sched = read("pages.yml").on.schedule;
+  assert.equal(sched.length, 1);
+  const [minute, hour, ...rest] = sched[0].cron.trim().split(/\s+/);
+  assert.deepEqual(rest, ["*", "*", "*"], "every day");
+  assert.ok(/^\d+$/.test(hour) && /^\d+$/.test(minute), `${sched[0].cron} names one hour and one minute`);
+  assert.ok(Number(minute) !== 0 && (Number(hour) < 13 || Number(hour) > 16), `${sched[0].cron} sits on a busy slot`);
+});
+
+test("lit-wgsl-advisory: pull_request into the deploy branch, its census job on ready PRs only (#6536 R7)", () => {
+  const wf = read("lit-wgsl-advisory.yml");
+  assert.deepEqual(Object.keys(wf.on), ["pull_request"]);
+  assert.deepEqual(wf.on.pull_request.types, ["opened", "synchronize", "reopened", "ready_for_review"]);
+  assert.equal(wf.jobs.census.if, "${{ !github.event.pull_request.draft }}", "a draft does nothing; the ready flip runs it");
 });
 
 // land.yml and ci.yml still sit on :17 (other open PRs edit them); they move in a follow-up.
 const PENDING = new Set(["land.yml", "ci.yml"]);
 
-test("scheduled workflows dispatch, flake-tally and ratchets-fold own their cron minute, off :00 :17 :30 :47", () => {
+test("scheduled workflows flake-tally, ratchets-fold and pages own their cron minute, off :00 :17 :30 :47", () => {
   const seen = new Map();
   for (const f of fs.readdirSync(DIR).filter((n) => /\.ya?ml$/.test(n)).sort()) {
     const sched = read(f)?.on?.schedule;
@@ -40,10 +42,10 @@ test("scheduled workflows dispatch, flake-tally and ratchets-fold own their cron
       seen.set(minute, [...(seen.get(minute) || []), f]);
     }
   }
-  const dispatch = read("dispatch.yml").on.schedule.map((s) => s.cron.split(" ")[0]);
+  const pages = read("pages.yml").on.schedule.map((s) => s.cron.split(" ")[0]);
   const flake = read("flake-tally.yml").on.schedule.map((s) => s.cron.split(" ")[0]);
   const fold = read("ratchets-fold.yml").on.schedule.map((s) => s.cron.split(" ")[0]);
-  for (const m of [...dispatch, ...flake, ...fold]) {
+  for (const m of [...pages, ...flake, ...fold]) {
     assert.ok(![0, 17, 30, 47].includes(Number(m)), `cron minute :${m} sits on a crowded minute`);
     assert.deepEqual(seen.get(m).length, 1, `minute :${m} is shared by ${seen.get(m).join(", ")}`);
   }

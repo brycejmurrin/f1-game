@@ -2718,7 +2718,7 @@ function entrySettings() {
   if (season && !_seasonEntryIds.has(season)) _seasonEntryIds.set(season, ++_nextSeasonEntryId);
   return JSON.stringify([trackIdx, flow, session, raceWeather, raceTimeOfDay, raceLaps,
     teamIdx, driverIdx, difficulty, raceGrid, champGrid, duelSetting(), duelLegend, raceTyreWear,
-    raceReliability, raceDirtyAir, raceAeroMode, simSeed(),   // not raceIndex: the body bumps it, and a repeat start would read as a new request
+    raceReliability, raceDirtyAir, DamageHandling.isEnabled(), raceAeroMode, simSeed(),   // not raceIndex: the body bumps it, and a repeat start would read as a new request
     wxArc.changeable, wxArc.plan && [wxArc.plan.to, wxArc.plan.dur],
     netPlay.active(), raceSettings && raceSettings.netRoom,
     season ? _seasonEntryIds.get(season) : null, season && season.round,
@@ -3106,6 +3106,9 @@ const G = {
     raceReliability = v; store.set("reliability", v);
   },
   armReliability: (field) => armReliability(field || cars),
+  // DAMAGE: HANDLING (#1578): the opt-in; a VS FRIEND room rule (#3971, LobbySettings RULES).
+  get raceDamage() { return DamageHandling.isEnabled(); },
+  set raceDamage(v) { DamageHandling.setEnabled(v === true); store.set("damageHandling", v === true); },
   // TYRE WEAR: the race setting and the live model (js/physics/tyre-model.js).
   get raceTyreWear() { return raceTyreWear; },
   set raceTyreWear(v) {
@@ -3423,7 +3426,7 @@ const G = {
   redFlagRestart,
   get daily() { return daily; },
   holdCaution: (level, cause) => raceCtl.hold(level, cause),   // a scripted flag (js/race/real-race.js); 0 releases it
-  resetEpisodeOwners() { IncidentSim.reset(); raceCtl.reset(); DebrisWorld.reset(); },
+  resetEpisodeOwners() { IncidentSim.reset(); raceCtl.reset(); DebrisWorld.reset(); paceRef().fill(0); },
   cameraDampingState() {
     return { eye: camEye.slice(), target: camTgt.slice(), fov: camFov,
       previousAnchor: [camAncX, camAncZ], nextAnchor: [camAncNX, camAncNZ],
@@ -3591,7 +3594,7 @@ qualiNet = QualiNet.create({
 // RACE SETTINGS sheet (js/race/race-settings.js).
 raceSettings = RaceSettings.create(G, {
   GameAudio, Tracks, SettingRow, DrivingLine, SeasonCal,
-  qualiResults: () => quali.results(), openQuali, enableTilt,
+  qualiResults: () => quali.results(), openQuali, enableTilt, gridFromQuali,   // gridFromQuali: GO reads startRace()'s grid rule (#6545)
   getSteerMode: () => steerMode, buildStandings, raceIntro: raceIntroFromSheet,
   previewWxPlan: (o) => wxArc.previewArc(o),   // the MIXED plan WITHOUT caching it (FORECAST line)
 });
@@ -5724,8 +5727,9 @@ function updateCarLongitudinal(c, dt, ranked, S) {
   // --- kerbs (drivable, unlike walls): riding one rumbles and costs a little
   // grip + speed, but you can stay on it. Distinct from going off into grass.
   // Speed cut follows kerbGripSm (λ=12), not raw onKerb — that flag flickers ~20 Hz.
+  // It fades in below vStd 10: flat, it beat drive from rest (#6481).
   c.kerbGripSm = damp(c.kerbGripSm ?? 1, c.onKerb ? 0.7 : 1, 12, dt);
-  if (c.kerbGripSm < 0.999) c.speed = Math.sign(c.speed) * Math.max(0, Math.abs(c.speed) - 6 * (1 - c.kerbGripSm) / 0.3 * dt);
+  if (c.kerbGripSm < 0.999) { const v = Math.abs(c.speed); c.speed = Math.sign(c.speed) * Math.max(0, v - 6 * (1 - c.kerbGripSm) / 0.3 * Math.min(1, vStd(v) / 10) * dt); }
   if (c.onKerb && c.isPlayer) c.kerbCueT = KERB_CUE_HOLD;
   // The raw onKerb flag is a floor-indexed per-node lookup (TrackMesh.onKerb)
   // and flickers at the ~4 m node rate at speed (≈20 Hz at 300 km/h) when the

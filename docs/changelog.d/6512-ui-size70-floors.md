@@ -1,0 +1,1 @@
+Fixed: At a small UI SIZE on a phone, the tuner headings and Preview buttons, the Car Studio preview text, the Data Hub race name and garage part name no longer paint under 12 px, the Data Hub source links get a 44 px touch target, and the title disclaimer reads at 12 px at the shipped phone size too.

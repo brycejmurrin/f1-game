@@ -522,11 +522,14 @@ test("W25a: debugger_profile refuses while paused; hitch uses evaluate", async (
 
 test("W25a: debugger_profile heap start/stop summarises sampling tree", async () => {
   const { s, c } = await attached();
-  c.reply = async (method) => method === "HeapProfiler.stopSampling"
+  let sampling = null;
+  c.reply = async (method, params) => (method === "HeapProfiler.startSampling" && (sampling = params), method === "HeapProfiler.stopSampling")
     ? { profile: { head: { callFrame: { functionName: "(root)", url: "", lineNumber: -1, columnNumber: -1 }, selfSize: 0,
       children: [{ callFrame: { functionName: "buf", url: "http://127.0.0.1/js/a.js", lineNumber: 0, columnNumber: 0 }, selfSize: 8192, children: [] }] } } }
     : {};
   assert.equal((await callTool(s, "debugger_profile", { action: "start", kind: "heap" })).isError, false);
+  assert.equal(sampling.includeObjectsCollectedByMinorGC, true, "allocation sampling counts garbage (#6505)");
+  assert.equal(sampling.includeObjectsCollectedByMajorGC, true);
   const stopped = await callTool(s, "debugger_profile", { action: "stop", kind: "heap", save: false });
   assert.equal(stopped.isError, false);
   assert.equal(stopped.structuredContent.summary.totalKb, 8);

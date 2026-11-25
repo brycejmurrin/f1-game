@@ -1322,7 +1322,7 @@ const TLX = (function () {
       // lifecycle state
       let renderScale = 1;
       // superSample (ULTRA+) / ss2x (CINEMA): renderScale may exceed 1 up to _ssCeil() (TLXAA.ssCeil: 1.5 at DPR <=
-      // 1.25, 2 while GfxQuality.cinema()). Desktop, not a software adapter. The governor steps it down like any
+      // 1.25 or at RESOLUTION MAX on any DPR (ssRetina, #6486), 2 while GfxQuality.cinema()). Desktop, not a software adapter. The governor steps it down like any
       // scale; begin() re-reads the ceiling every 32 frames (a shed or a cinema flip) and clamps or raises to it.
       const _ssOk = !isMobile && !_softAdapter && !!window.TLXAA;
       let _ssN = 0, _ssCine = false, _ssPrev = 1, _ssCineNow = false;
@@ -1333,7 +1333,7 @@ const TLX = (function () {
           const cine = _ssCineNow = !!(typeof GfxQuality !== "undefined" && GfxQuality.cinema && GfxQuality.cinema() && _gfxx("ss2x"));
           const dev = renderer.backend && renderer.backend.isWebGPUBackend && renderer.backend.device;
           return TLXAA.ssCeil({ superSample: _gfxx("superSample"), ss2x: !!cine, dpr: window.devicePixelRatio || 1,
-            presentW, presentH, maxDim: (dev && dev.limits && dev.limits.maxTextureDimension2D) || 8192 });
+            maxRes: _dprBoost > 0, deviceMemory: navigator.deviceMemory, presentW, presentH, maxDim: (dev && dev.limits && dev.limits.maxTextureDimension2D) || 8192 });
         } catch (_) { return 1; }
       }
       function _ssTick() {
@@ -5473,7 +5473,9 @@ const TLX = (function () {
         init() { return true; },             // already initialised by create()
         resize,
         setRenderScale(s) {
-          const v = Math.min(_ssOk ? _ssCeil() : 1, Math.max(0.5, +s || 0));   // superSample: the ceiling above 1
+          // RESOLUTION MAX (_dprBoost > 0) pins 1.0 (js/ui/scale.js): on a Retina desktop that means the ceiling (#6486 F2)
+          const want = _dprBoost > 0 && +s >= 1 ? 2 : +s;
+          const v = Math.min(_ssOk ? _ssCeil() : 1, Math.max(0.5, want || 0));   // superSample: the ceiling above 1
           if (Math.abs(v - renderScale) < 0.02) return false;   // PerfGov contract
           renderScale = v; resizeNow(); return true;
         },
