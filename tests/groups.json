@@ -933,6 +933,7 @@
     "tests/unit/race-control.test.mjs",
     "tests/unit/race-entry-cover.test.mjs",
     "tests/unit/race-entry-profile.test.mjs",
+    "tests/unit/race-entry-skip.test.mjs",
     "tests/unit/race-insights.test.mjs",
     "tests/unit/race-radio.test.mjs",
     "tests/unit/race-session-fixes.test.mjs",

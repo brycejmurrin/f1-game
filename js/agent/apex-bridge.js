@@ -370,7 +370,7 @@ const ApexBridge = (function () {
     "sel-go", "sel-back", "sel-car",                                                 // circuit picker
     "rs-go", "rs-cancel", "rs-preset-quick", "rs-preset-weekend", "rs-preset-endurance",   // SESSION / RACE SETUP
     ...ROWS.flatMap((r) => ["rs-" + r + "-prev", "rs-" + r + "-next"]),
-    "cs-done", "cs-back", "cs-arrival-skip",                                         // garage: DONE / VIEW RESULTS, SKIP
+    "cs-done", "cs-back", "cs-arrival-skip", "ld-skip",                              // garage: DONE / VIEW RESULTS, SKIP; RACE! SKIP TO RACE
     "pausebtn", "pm-resume", "pm-quit", "pm-skip-results", "hud-end-session",        // race: PAUSE/RESUME, END TIME TRIAL
     "res-menu", "ceremony-parc-skip", "ceremony-cooldown-skip", "retired-skip",
   ]);

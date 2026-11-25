@@ -572,7 +572,7 @@ test("every TAP_OK id is a control the shell or the game creates (the lookup is 
   const { api } = load({ search: "" });
   const html = fs.readFileSync(new URL("../../index.html", import.meta.url), "utf8");
   const shell = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
-  const runtime = { "ceremony-parc-skip": "js/race/parc-ferme.js", "ceremony-cooldown-skip": "js/race/cooldown-lap.js", "retired-skip": "js/race/retired-card.js" };
+  const runtime = { "ceremony-parc-skip": "js/race/parc-ferme.js", "ceremony-cooldown-skip": "js/race/cooldown-lap.js", "retired-skip": "js/race/retired-card.js", "ld-skip": "js/ui/loading-screen.js" };
   for (const id of api.TAP_OK) {
     if (runtime[id]) assert.ok(fs.readFileSync(new URL("../../" + runtime[id], import.meta.url), "utf8").includes('"' + id + '"'), id + " made by " + runtime[id]);
     else assert.equal(shell.has(id), true, id + " is in index.html");

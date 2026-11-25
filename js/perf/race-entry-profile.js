@@ -151,6 +151,16 @@ const RaceEntryProfile = (() => {
         t0: m.t, t1: e ? e.t : null,
       });
     }
+    // THE GARAGE SPLIT (hunt rows #4/#5, 2026-11-25): studioDone holds the wait for the garage's first frame (cover,
+    // soft present, first-frame compile) AND the drive-out's playback. The studioShown mark divides it into
+    // studioWait (loading) and driveOut (the cinematic), both nested in studioDone.
+    for (const r of rows.slice()) {
+      if (r.n !== "studioDone" || r.t1 == null) continue;
+      const shown = marks.find((x) => x && x.n === "studioShown" && x.t >= r.t0 && x.t <= r.t1);
+      if (!shown) continue;
+      rows.push({ n: "studioWait", ms: +(shown.t - r.t0).toFixed(2), kind: "span", open: false, t0: r.t0, t1: shown.t });
+      rows.push({ n: "driveOut", ms: +(r.t1 - shown.t).toFixed(2), kind: "span", open: false, t0: shown.t, t1: r.t1 });
+    }
     // SPANS NEST, SO `ms` DOES NOT ADD UP (#3674): gridCountdown encloses warmCarAssets and debrisPrime, mirrorPrepare
     // encloses programWarm. Summed, the Device Farm read 0.7-0.9 s of "grid" next to 0.7-1.4 s of car warm; the grid's
     // own work was 24-51 ms. `selfMs` is a closed span minus the closed spans directly inside it — the column to sum.
