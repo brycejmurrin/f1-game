@@ -860,7 +860,7 @@ test("#6581 status: one apex-status comment, edited in place across reloads, nev
   const id = await b.api.status();
   const statuses = () => gh.thread.filter((c) => c.body.startsWith("```apex-status"));
   assert.equal(statuses().length, 1);
-  assert.equal(store.get("apex26.bridgeStatus.42"), String(id), "the id is kept on the device");
+  assert.equal(store.get("apex26.bridgeStatus"), "42:" + id, "the id is kept on the device, with its issue");
   const s1 = statusOf(statuses()[0]);
   assert.equal(s1.status, true);
   assert.equal(s1.linked, true);
@@ -889,7 +889,12 @@ test("#6581 status: one apex-status comment, edited in place across reloads, nev
   const id2 = await b2.api.status();
   assert.notEqual(id2, id);
   assert.equal(statuses().length, 1);
-  assert.equal(store.get("apex26.bridgeStatus.42"), String(id2));
+  assert.equal(store.get("apex26.bridgeStatus"), "42:" + id2);
+  // Another issue's id is never edited: a link on a new issue posts its own.
+  store.set("apex26.bridgeStatus", "7:" + id2);
+  const b3 = load({ tok: "tok", gh, store, search: "?apex=1&bridge=43" });
+  await flush();
+  assert.notEqual(await b3.api.status(), id2);
 });
 
 test("#6581 status is not a command: an apex-status comment is never picked up", () => {
