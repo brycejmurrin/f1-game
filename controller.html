@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-o+Yf98lzGmWXYL+YEyaFHijcUl6dy+lziQU9e3qzZiI=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-awA1cj9JkSM4OGATtX2mdYj9sdieLeWe59vJp0Dma6I=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-o+Yf98lzGmWXYL+YEyaFHijcUl6dy+lziQU9e3qzZiI=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-d6o7OXR8T15a1AVoZX44ogTzF3pzo2cbAV7j1bYwzag=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <!-- Same generation marker as index.html: sw.js reads it before caching a navigation (a page with
      no marker is cached unconditionally, one with a stale marker is skipped). Stamped by the deploy. -->
@@ -374,6 +374,10 @@
              background: radial-gradient(110% 80% at 50% -15%, color-mix(in oklab, var(--red) 18%, transparent), transparent 60%), var(--bg); }
   body.linked.menu #menupad { display: grid; }
   body.menu #ctl { display: none; }
+  /* MOVE & SIZE opened from the Menu Pad's WHEEL LAYOUT (#6291) arranges the
+     wheel itself: the wheel shows while arranging; the stage eats its touches. */
+  body.linked.menu.arranging #ctl { display: grid; }
+  body.linked.menu.arranging #menupad { display: none; }
   #camera-pad, #phone-camera-return { display: none; }
   body.linked.camera-pad:not(.camera-panel) #menupad { display: none; }
   body.linked.camera-pad:not(.camera-panel) #camera-pad {
@@ -434,6 +438,14 @@
                   display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: var(--edge); }
   #b-pause-menu svg { width: 1.2em; height: 1.2em; fill: currentColor; }
   #b-pause-menu.on { background: var(--plate-press); border-color: var(--red); }
+  /* The phone's own settings, reachable out of a race (#6291): the wheel's
+     launcher and steering pick hide with the wheel in a menu. */
+  #mp-options { display: flex; gap: 8px; width: 100%; }
+  #mp-options label { flex: none; display: flex; }
+  #steering-mode-menu { height: 44px; padding: 0 6px; font: 700 16px/1 var(--font-ui); color: var(--text); background: var(--plate-opaque); border: 1px solid var(--plate-line); border-radius: 10px; }
+  #b-layout-menu { flex: 1 1 0; min-width: 0; min-height: 44px; padding: 0 10px; font-weight: 700; font-size: 13px; letter-spacing: .1em;
+                   border-radius: 10px; background: var(--plate-opaque); border: 1px solid var(--plate-line); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.camera-pad #mp-options { display: none; }
   /* A over B, on the diagonal a thumb sweeps. SELECT is the game's primary:
      the red gradient every confirm wears. BACK is a plate, smaller and up and
      in, so it is not hit by mistake — the same two-weight pair as a menu's
@@ -563,7 +575,7 @@
   <!-- ONE DISC, D-PAD AND STICK AT ONCE (PhonePad.pad → menuStick): tap an
        edge for that arrow, or put a thumb anywhere on it and drag; a held
        direction repeats. The arrows are painted, the disc takes the touches. -->
-  <div id="dpad" role="group" aria-label="Menu stick: tap an arrow or drag to move">
+  <div id="dpad" role="group" tabindex="0" aria-label="Menu stick: use the arrow keys, tap an arrow or drag to move">
     <span id="b-navUp" class="arr" aria-hidden="true"></span>
     <span id="b-navRight" class="arr" aria-hidden="true"></span>
     <span id="b-navDown" class="arr" aria-hidden="true"></span>
@@ -576,6 +588,10 @@
     <div id="mp-sub">DRAG OR TAP TO MOVE</div>
     <button id="b-pause-menu" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>PAUSE / RESUME</button>
     <button id="phone-camera-return" class="bigbtn alt" type="button">CAMERA CONTROLS</button>
+    <div id="mp-options">
+      <button id="b-layout-menu" type="button" aria-haspopup="dialog">WHEEL LAYOUT</button>
+      <label><select id="steering-mode-menu" aria-label="Phone steering mode"><option value="tilt">TILT</option><option value="touch">TOUCH</option></select></label>
+    </div>
   </div>
   <div id="ab">
     <button id="b-navBack" type="button" aria-label="Back"><b aria-hidden="true">B</b><small>BACK</small></button>
@@ -757,7 +773,7 @@ window.addEventListener("DOMContentLoaded", function () {
     return;
   }
   var ctl = PhonePad.pad({
-    steeringMode: $("steering-mode"), steer: $("steering-strip"), health: $("input-health"), healthAge: $("input-age"),
+    steeringMode: [$("steering-mode"), $("steering-mode-menu")], steer: $("steering-strip"), health: $("input-health"), healthAge: $("input-age"),
     body: document.body, status: status, codeIn: $("code"), connect: $("connect"),
     utility: { trigger: $("b-utility"), panel: $("utility-options"), choices: { camera: $("u-camera"), look: $("u-look"), radio: $("u-radio") } },
     gas: $("gas"), brake: $("brake"), lookBack: $("b-look"), center: $("b-center"), rim: $("rim"),
@@ -796,7 +812,7 @@ window.addEventListener("DOMContentLoaded", function () {
       body: document.body, home: $("keys"), grips: { L: $("left-keys"), R: $("right-keys") },
       keys: { overtake: $("b-overtake"), boost: $("b-boost"), aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"),
               look: $("b-look"), recover: $("b-recover"), pause: $("b-pause") },
-      sheet: $("layout-sheet"), responses: $("pedal-response-fields"), open: $("b-layout"), done: $("lay-done"), rows: $("lay-rows"), swapBtn: $("lay-swap"), pedalsBtn: $("lay-pedals"), stripBtn: $("lay-strip"), flickBtn: $("lay-flick-shifts"),
+      sheet: $("layout-sheet"), responses: $("pedal-response-fields"), open: [$("b-layout"), $("b-layout-menu")], done: $("lay-done"), rows: $("lay-rows"), swapBtn: $("lay-swap"), pedalsBtn: $("lay-pedals"), stripBtn: $("lay-strip"), flickBtn: $("lay-flick-shifts"),
       presets: Array.prototype.slice.call($("lay-presets").children), doc: document,
       stage: $("ctl"), arrangeBtn: $("lay-arrange"), bar: $("arrange-bar"), barName: $("arr-name"), minus: $("arr-minus"), plus: $("arr-plus"),
       picker: $("arr-select"), adjust: $("arr-adjust"), tools: $("arr-tools"), edge: $("arr-edge"), step: $("arr-step"),

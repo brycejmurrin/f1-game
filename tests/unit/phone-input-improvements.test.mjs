@@ -477,3 +477,73 @@ test("Wheel Layout keeps keyboard focus in the open sheet and restores its launc
   assert.equal(sheet.open, false);
   assert.equal(ui.document.activeElement, open);
 });
+
+const MENU_DASH = { gear: 0, kmh: 0, rpm: 0, lap: 1, laps: 1, pos: 1, cars: 1, ers: 0, flags: 0, caution: 0, lastLapMs: 0, state: 'menu', team: '#000' };
+test("Menu Pad (#6286): a phone keyboard's arrows drive the menu stick once per press, only while the Menu Pad shows", async () => {
+  const h = boot(), arrows = { navUp: element(), navDown: element(), navLeft: element(), navRight: element() };
+  const { ctl, actions } = await page(h, { stick: element(), nub: element(), arrows, body: element() });
+  const nav = () => actions().filter(k => k.startsWith('nav') && k !== 'navSelect');
+  const press = (key, fields = {}) => { const down = emit(h.document, 'keydown', { key, ...fields }); emit(h.document, 'keyup', { key, ...fields }); return down; };
+  ctl.paintHud({ ...MENU_DASH, state: 'race' });
+  press('ArrowUp');
+  assert.deepEqual(nav(), [], 'on the wheel the arrows are not menu input');
+  ctl.paintHud(MENU_DASH);
+  const down = press('ArrowUp');
+  assert.equal(down.defaultPrevented, true, 'the arrow is the pad\'s, not a page scroll');
+  for (const key of ['ArrowDown', 'ArrowLeft', 'ArrowRight']) press(key);
+  ctl.pump();
+  assert.deepEqual(nav(), ['navUp', 'navDown', 'navLeft', 'navRight'], 'four arrow presses are four wire edges');
+  emit(h.document, 'keydown', { key: 'ArrowDown' }); emit(h.document, 'keydown', { key: 'ArrowDown', repeat: true });
+  assert.equal(nav().length, 5, 'the OS auto-repeat is not a second edge; the stick repeats on its own cadence');
+  emit(h.document, 'keyup', { key: 'ArrowDown' });
+  const field = element(); field.closest = (sel) => (sel.includes('select') ? field : null);
+  const inField = new Event('keydown', { cancelable: true }); inField.key = 'ArrowUp';
+  Object.defineProperty(inField, 'target', { value: field }); h.document.dispatchEvent(inField);
+  assert.equal(nav().length, 5, 'a focused select keeps its own arrows');
+  ctl.cancel();
+});
+
+test("Wheel Layout (#6287): a file import still reading never replaces a newer preset pick", async () => {
+  const L = vm.runInContext('PhonePadPage', boot().ctx);
+  const saved = {}, store = { getItem: (k) => saved[k] ?? null, setItem: (k, v) => { saved[k] = v; } };
+  const mirror = element(); mirror.dataset.preset = 'mirror';
+  let finish;
+  const file = { size: 64, text: () => new Promise((ok) => { finish = ok; }) };
+  const importLayout = Object.assign(element(), { files: [file] }), fileStatus = element();
+  const api = L.layout({ body: element(), presets: [mirror], importLayout, fileStatus }, { store });
+  emit(importLayout, 'change');
+  emit(mirror, 'click');
+  assert.equal(api.get().swap, true, 'MIRRORED is picked while the file reads');
+  finish(JSON.stringify({ format: 'apex26-wheel', v: 1, layout: plain(L.LAYOUT_PRESETS.classic) }));
+  await new Promise((ok) => setTimeout(ok, 0));
+  assert.equal(api.get().swap, true, 'the older import does not replace the newer pick');
+  assert.equal(JSON.parse(saved['apex26.padLayout']).swap, true, 'nor overwrite what was saved');
+  assert.equal(fileStatus.textContent, '', 'and announces no import');
+});
+
+test("Menu Pad (#6291): Wheel Layout and the steering pick are on the Menu Pad too, and stay in step with the wheel's", async () => {
+  const page6291 = read('controller.html');
+  const menupad = page6291.slice(page6291.indexOf('<section id="menupad"'), page6291.indexOf('</section>', page6291.indexOf('<section id="menupad"')));
+  for (const id of ['b-layout-menu', 'steering-mode-menu']) assert.ok(menupad.includes(`id="${id}"`), `#${id} sits on the Menu Pad`);
+  assert.match(page6291, /steeringMode: \[\$\("steering-mode"\), \$\("steering-mode-menu"\)\]/, 'both picks are handed to PhonePad.pad');
+  assert.match(page6291, /open: \[\$\("b-layout"\), \$\("b-layout-menu"\)\]/, 'both launchers are handed to the layout sheet');
+  assert.match(page6291, /body\.linked\.menu\.arranging #ctl \{ display: grid; \}/, 'MOVE & SIZE from a menu shows the wheel it arranges');
+  const h = boot(), wheelPick = element(), menuPick = element();
+  const { ctl, w } = await page(h, { steeringMode: [wheelPick, menuPick] });
+  w.receive('event', h.P.encodeHello('host', false, true));
+  menuPick.value = 'touch'; emit(menuPick, 'change');
+  assert.deepEqual([ctl.state().steeringMode, wheelPick.value, menuPick.value], ['touch', 'touch', 'touch'], 'the Menu Pad pick sets the mode and the wheel shows it');
+  wheelPick.value = 'tilt'; emit(wheelPick, 'change');
+  assert.deepEqual([ctl.state().steeringMode, menuPick.value], ['tilt', 'tilt']);
+  ctl.cancel();
+  const L = vm.runInContext('PhonePadPage', h.ctx);
+  const ui = makeDom(), sheet = ui.byId('sheet');
+  sheet.showModal = () => { sheet.open = true; }; sheet.close = () => { sheet.open = false; };
+  const wheelOpen = ui.makeElement('button'), menuOpen = ui.makeElement('button'), done = ui.makeElement('button');
+  wheelOpen.getClientRects = () => []; menuOpen.getClientRects = () => [{}];   // in a menu the wheel's launcher is hidden
+  L.layout({ open: [wheelOpen, menuOpen], sheet, done, doc: ui.document, body: ui.body });
+  menuOpen.click();
+  assert.equal(sheet.open, true, 'the Menu Pad launcher opens Wheel Layout');
+  done.click();
+  assert.equal(ui.document.activeElement, menuOpen, 'and focus returns to it');
+});
