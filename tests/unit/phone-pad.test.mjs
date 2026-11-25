@@ -3541,3 +3541,27 @@ test("last-finger cleanup preserves mouse, pen and keyboard controls on the pair
     else globalThis.document = previous;
   }
 });
+
+test("a non-finite orientation angle is no reading: the last finite roll is kept (#6620 row 8)", async () => {
+  let receive, heartbeat;
+  const samples = [];
+  const h = wakePad({ rtc: () => ({
+    status: "open", pump() {}, close() {}, onClose() {}, onMessage(fn) { receive = fn; },
+    send(channel, data) {
+      if (channel === NetTransport.STATE) samples.push(PhonePad.decodeSample(data));
+      return true;
+    },
+  }) }, { sensor: true, interval(fn) { heartbeat = fn; return 1; } });
+  try {
+    await h.ctl.connect("ABC234");
+    receive("event", PhonePad.encodeHello("host", false, true));
+    assert.equal(h.ctl.setSteeringMode("tilt"), true);
+    h.fire("deviceorientation", { beta: 0, gamma: 20 });
+    heartbeat();
+    assert.equal(samples.at(-1).roll, 20, "a finite reading steers as before");
+    h.fire("deviceorientation", { beta: Infinity, gamma: 20 });
+    h.fire("deviceorientation", { beta: 0, gamma: -Infinity });
+    heartbeat();
+    assert.equal(samples.at(-1).roll, 20, "an infinite angle (rollDeg reads NaN) leaves the last finite roll in place");
+  } finally { h.ctl.cancel(); }
+});

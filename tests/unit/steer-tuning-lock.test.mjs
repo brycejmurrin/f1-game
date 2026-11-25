@@ -52,3 +52,35 @@ test("the fold summary escapes its labels, so a stored tiltDeg string never beco
   assert.equal(target.innerHTML, '<span data-fold="k">FEEL</span><span data-fold="sep"> · </span>'
     + '<span data-fold="val">TILT &#60;img src=x onerror=alert(1)&#62;</span>');
 });
+
+// #6620 row 4: a non-numeric stored slider value (a hand-edited apex26.* key) read through
+// numStore falls back to the knob's default instead of walking through clamp to a NaN car state.
+/** The REAL numStore line, cut out of the source and evaluated over a fake store. */
+function storedNumWith(stored) {
+  const line = SRC.split("\n").find((l) => l.startsWith("const numStore = "));
+  assert.ok(line, "numStore not found in steer-tuning.js");
+  const store = { get: (k, d) => (k in stored ? stored[k] : d) };
+  const numStore = new Function("store", `${line} return numStore;`)(store);
+  return (k, d) => numStore.get(k, d);
+}
+
+test("numStore.get: a finite number is returned untouched", () => {
+  const n = storedNumWith({ a: 7, b: 0, c: -3.5 });
+  assert.equal(n("a", 1), 7);
+  assert.equal(n("b", 1), 0);
+  assert.equal(n("c", 1), -3.5);
+  assert.equal(n("absent", 6), 6, "an absent key gets its default");
+});
+
+test("numStore.get: a string, NaN, Infinity, null, object or boolean falls back to the default", () => {
+  const n = storedNumWith({ s: "x", d: "5", nan: NaN, inf: Infinity, nul: null, o: {}, arr: [3], t: true });
+  for (const k of ["s", "d", "nan", "inf", "nul", "o", "arr", "t"]) assert.equal(n(k, 4), 4, k);
+});
+
+test("every slider read in applySteerTuning goes through numStore, not a raw store.get", () => {
+  const at = SRC.indexOf("function applySteerTuning(");
+  const body = SRC.slice(at, SRC.indexOf("\n}\n", at));
+  assert.doesNotMatch(body, /clamp\(store\.get\(/, "a raw store.get inside clamp lets a string through");
+  for (const k of ["steerRate", "steerLock", "drivingHelp", "pace", "carWeight", "padSaturation", "gripSteer"])
+    assert.match(body, new RegExp(`numStore\\.get\\("${k}"`), k);
+});

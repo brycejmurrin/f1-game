@@ -164,7 +164,7 @@ const PhonePadPage = (function () {
     function onOrient(e) {
       if (steeringMode !== "tilt" || surface === "camera" || (typeof document !== "undefined" && document.hidden)) return;
       const r = TiltRoll.rollDeg(e.beta, e.gamma, TiltRoll.screenAngle());
-      if (r === null) return;
+      if (r === null || !Number.isFinite(r)) return;
       roll = r;
       sensorOn = true;
       paintRoll();
