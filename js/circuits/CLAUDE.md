@@ -9,9 +9,8 @@ lazy-loaded (reference: `docs/SCENERY-API.md`).
   picker order.** Append a new id LAST, never interleave (a saved `apex26.track` is a
   positional index); a full def hydrates per pick via `LAZY_CIRCUIT`. A new circuit is
   `<id>.js` + `scenery/<id>.js` + its registration rows (skill new-track, workflow steps 1-2).
-- **Frac-keyed tables respect `def._sceneryShift`** — the engine consumes
-  them via the compensated idiom; write fracs in the def's own frame and
-  never pre-compensate by hand.
+- **Frac-keyed tables and `def._sceneryShift`**: write fracs in the def's own
+  frame; the rule lives in `js/track/CLAUDE.md`.
 - **A hero landmark is registered in `tests/data/landmarks/<id>.json`**
   (`{ "why": "...", "ids": [...] }`), one file per circuit: each id must be a
   `modelGroup("<id>", …, { required: true })` in `scenery/<id>.js`
