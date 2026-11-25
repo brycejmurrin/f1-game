@@ -1,25 +1,28 @@
 ---
 name: gardener
-description: "Use when working code needs tidying: decouple a module, dedupe copied helpers, a file to split, game.js façade bloat, unclear structure, or a structure survey and its one-carve cleanup PRs. Not for: dead code or a ratchet over → slim-bloat."
+description: "Use when working code needs tidying: decouple a module, dedupe copied helpers, a file to split, game.js façade bloat, unclear structure, or a structure survey into a cleanup plan issue. Not for: dead code or a ratchet over → slim-bloat."
 ---
 
 # Gardener — prune the structure, change no behaviour
 
 The Gardener is a hunter that does not hunt bugs, perf or features. It finds structure debt (copies instead of
 helpers, state parked on the wrong owner, coupling through `G`, a file doing fifteen jobs, two predicates for one
-concept) and removes it one behaviour-preserving PR at a time. Role definition: Bryce, 2026-11-25 ~02:15Z ("more like
+concept) and writes it up as a plan; the cleanup itself is separate implementation work. Role definition: Bryce, 2026-11-25 ~02:15Z ("more like
 a hunter but it doesn't focus on bugs or improvements or optimizations, it focuses on cleaning up code, making things
-clearer, cleaner, decoupling, structure etc"; ~02:17Z "the gardener can also use the lsp mcp/tools heavily"). First
-survey and the evidence for every rule below: the 2026-11-25 survey note of PR #6442 (`GARDENER-SURVEY-2026-11-25.md`
-under `docs/notes/`).
+clearer, cleaner, decoupling, structure etc"; ~02:17Z "the gardener can also use the lsp mcp/tools heavily"; ~02:41Z "I thought gardeners wouldn't
+create PRs, just issues or big design plans"). The first plans: tracking issues #6454 (js), #6455 (UI) and #6456
+(tooling); the evidence for the rules below is the survey note of PR #6442 (`GARDENER-SURVEY-2026-11-25.md`).
 
 **The boundary.** Too big or dead (a ratchet OVER, an unused symbol, dead CSS, a stale comment) → skill `slim-bloat`.
 Wrong shape (duplication, coupling, unclear ownership, a split along the jobs a file already has) → here. A bug found
-while gardening is an issue, never a hunk. A launch (when, how many) → skill `dispatcher`; owning the PR → `steward`.
+while gardening is a `bug` issue of its own. A launch (when, how many) → skill `dispatcher`; owning a CARVE PR →
+`steward`.
 
 ## apex-lsp first
 
-Every plan row carries measured numbers from these, not from grep (skill `code-nav` for the call shapes):
+Bryce, ~02:33Z: "it can use grep but should use the lsp". Every JS-symbol number in a plan row (callers, consumer
+files, copies, free names) comes from one of these and cites the query; skill `code-nav` has the call shapes and
+`.claude/rules/js-nav.md` the grep boundary:
 
 | tool | job |
 |---|---|
@@ -30,35 +33,39 @@ Every plan row carries measured numbers from these, not from grep (skill `code-n
 | `lsp_hover` | implicit-`any` seams a move would cross |
 | `lsp_diagnostics {file}` | the move type-checks, before the floor |
 
-grep only for text shapes (an inline `((x % L) + L) % L`, storage keys, CSS). Free names of a block:
+Grep is for text shapes only (an inline `((x % L) + L) % L`, storage keys, CSS, YAML, comments). Free names of a block:
 `node tools/check/extract-module.mjs <file> <start> <end>`. Same-scope twins: `node tools/check/dup-functions.mjs`.
 `G` fan-in figures are lower bounds where a module destructures `const {…} = G`; re-check a "1 consumer" row by text.
 
-## SURVEY — read-only
+## SURVEY — read-only; the output is an issue, never a PR
 
-1. Step 0: agent `prior-art-scout` on the slice (plus the newest `docs/notes/GARDENER-SURVEY-*.md`,
+1. Step 0: agent `prior-art-scout` on the slice (plus the open `tracking` issues of earlier surveys,
    `docs/notes/G-FACADE-REVIEW-2026-11-20.md`, `docs/notes/DEFECT-LEDGER.md` §8, `docs/ARCHITECTURE.md`
    §Extraction lessons): the `known:` list.
 2. Census: `node tools/check/ratchets.mjs --json` (which rows sit at slack 0, and what keeps raising them:
    `docs/notes/CEILING-HISTORY.md`), the apex-lsp passes above.
-3. One `code-hunter` per slice, in parallel, `focus: duplication` or `mess`, with `known:`. Ask each for the
-   job map of its largest file and the names that cross between jobs.
+3. One agent `gardener` per `js/` slice, in parallel, with `known:` (its `tools:` list leads with apex-lsp and its
+   rows cite the query behind each number); a non-JS slice (`tools/`, `css/`, tests) gets `code-hunter` with
+   `focus: duplication` or `mess`. Do the parent's own fan-in checks with the apex-lsp tools too.
 4. Agent `finding-verifier` on the cited rows before any of them enters the plan; unread rows stay PLAUSIBLE.
-5. Write `docs/notes/GARDENER-SURVEY-<date>.md` (`Kind: survey · Re-measure-by: <date>`): items ranked by
-   payoff ÷ risk, each with What/where, Hurts, Shape, PRs (one carve each), Pin first, Frees (ratchet lines,
-   `gMembers`, `topLets`), Risk, Collides (the open PRs on the same files). Land it as a docs-only PR. About
-   monthly; the `Re-measure-by:` line is the reminder.
+5. File ONE tracking issue per area (`issue_write`, labels `tracking` plus its `area:*`; never `ready`, which would
+   launch it): a checklist of items ranked by payoff ÷ risk, each with What/where, Hurts, Shape, PRs (one carve
+   each), Pin first, Frees (ratchet lines, `gMembers`, `topLets`), Risk, Collides (the open PRs on the same files);
+   each number cites its LSP query. The body ends with `Re-measure-by: <date>` and one line
+   `Tools used: lsp N · grep M · read K` (parent and agents together). A detail note too long for the body may sit on an
+   unmerged branch, linked from the issue. No PR, no commit to the deploy branch. About monthly.
 
-## CARVE — one cleanup PR at a time
+## CARVE — a worker's PR, only for an item Bryce picked
 
-Take the top unblocked item of the newest survey note; with no note, or one past its `Re-measure-by:` line,
-SURVEY first. Before the first edit:
+A CARVE starts only when Bryce picks one checklist item, by his own `ready` click on its sub-issue or a `decision:`
+comment on the tracking issue (that provenance is the grant: AGENTS.md §Coordination); the worker follows these
+rules and skill `steward`. Before the first edit:
 
 - **Quiet queue.** Carve only when the deploy tip is green (no open `deploy:red`, the latest Pages run on the tip
   passed) AND at most 10 PRs are ready or labelled `land` (`node tools/ci/pr-board.mjs --json`) AND no other
-  Gardener PR is open. Otherwise survey, or stop and report the count.
+  Gardener PR is open. Otherwise stop and report the count.
 - **No collisions.** List the files of every open non-docs PR (`pull_request_read` `get_files`, or the survey's
-  collision map refreshed). Skip any file one of them touches until it lands. D-033 allows parallel edits; the
+  Collides line refreshed). Skip any file one of them touches until it lands. D-033 allows parallel edits; the
   Gardener declines them on purpose, because a cleanup that conflicts with a feature costs the feature.
 - **`G` sub-façade moves** follow the E-then-A decision in `G-FACADE-REVIEW-2026-11-20.md`: a lane already in that
   domain, or Bryce's `decision:` (skill `steward` §Lane, item 6).
@@ -75,7 +82,7 @@ Then, in order:
 3. **Ratchets only go down** (the rule's home: `.claude/rules/game-code.md`). A Gardener PR never carries
    `ratchet-raise`; it may ADD a new per-file or shrink-only ceiling (a new row is not a raise).
 4. The floor (AGENTS.md rule 3), then the PR through skill `steward` (draft, one push per round, `pr-reviewer`
-   before the flip). The PR body names the survey item and its measured before/after numbers.
+   before the flip). The PR body names the tracking issue item and its measured before/after numbers; tick the item there.
 
 ## Never
 
@@ -83,4 +90,4 @@ Then, in order:
 - `updateCar()` / `render()` splits, the timestep, physics, IIFE→ESM, a "simplified" load-bearing quirk
   ([do-not.md](../slim-bloat/references/do-not.md)).
 - Renaming a stored key, an `__apex` hook name or a DOM id a spec or the bridge reads.
-- Two carves in one PR, or a second Gardener PR while one is open.
+- A PR from SURVEY; two carves in one PR; a second Gardener PR while one is open.

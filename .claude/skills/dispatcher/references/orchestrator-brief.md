@@ -38,7 +38,7 @@ judgement, not by an issue:
 
 | Role | Launch when | Never when | Brief |
 |---|---|---|---|
-| **Gardener** (skill `gardener`) | the skill's §CARVE quiet-queue check passes (its one home); the skill picks SURVEY or CARVE | that check fails: never on a red tip or a busy queue, one Gardener at a time | no issue address: `TASK: gardener <survey \| carve item N of <note>>`, and the worker opens its own PR (skill `steward` §Open); STATE lists the open PRs' files |
+| **Gardener** (skill `gardener`) | a SURVEY when no open `tracking` issue for the area is younger than its `Re-measure-by:` line; a CARVE worker only for an item Bryce picked (his `ready` or `decision:`), and only when the skill's §CARVE quiet-queue check passes (its one home) | that check fails: never on a red tip or a busy queue, one Gardener PR at a time; a SURVEY never opens a PR | `TASK: gardener survey <area>` (output: a tracking issue, e.g. #6454) or `ISSUE <n>` for the picked item; STATE lists the open PRs' files |
 
 ## The brief
 
