@@ -69,15 +69,17 @@ const InputPadMenu = (function () {
       if (!frame) return null;
       let doc = null;
       try { doc = frame.contentDocument; } catch (_) { /* cross-origin: not ours to walk */ }
-      return doc?.body ? { frame, doc } : null;
+      // A frame still loading (or with nothing to walk) leaves the parent in charge.
+      const list = doc?.body ? frameControls(doc) : [];
+      return list.length ? { frame, doc, list } : null;
     }
     function frameControls(doc) {
       return Array.from(doc.querySelectorAll(FRAME_FOCUSABLE)).filter((el) => !el.disabled &&
         el.getClientRects().length > 0 && !el.closest?.("[inert], [aria-hidden='true']"));
     }
-    function frameFocused(scope, list = frameControls(scope.doc)) {
+    function frameFocused(scope) {
       const el = scope.doc.activeElement;
-      return el && list.includes(el) ? el : null;
+      return el && scope.list.includes(el) ? el : null;
     }
     function frameFocus(scope, el) {
       scope.frame.focus?.({ preventScroll: true });
@@ -85,9 +87,8 @@ const InputPadMenu = (function () {
       el.scrollIntoView?.({ block: "nearest", inline: "nearest" });
     }
     function padFrameNav(scope, dir) {
-      const list = frameControls(scope.doc);
-      if (!list.length) return;
-      const cur = frameFocused(scope, list);
+      const { list } = scope;
+      const cur = frameFocused(scope);
       if (cur && padStepValue(cur, dir)) return;
       const step = dir === "up" || dir === "left" ? -1 : 1;
       const i = cur ? Math.max(0, Math.min(list.length - 1, list.indexOf(cur) + step)) : 0;
@@ -273,9 +274,8 @@ const InputPadMenu = (function () {
     function padActivate(guard) {
       const scope = padFrameScope();
       if (scope) {
-        const list = frameControls(scope.doc);
-        const el = frameFocused(scope, list);
-        if (!el) { if (list.length) frameFocus(scope, list[0]); return; }
+        const el = frameFocused(scope);
+        if (!el) { frameFocus(scope, scope.list[0]); return; }
         if (typeof guard === "function" && guard(el)) return false;
         const ty = (el.type || "").toLowerCase();
         if (el.tagName === "INPUT" && (ty === "range" || ty === "number")) return;

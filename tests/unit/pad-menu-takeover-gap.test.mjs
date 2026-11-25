@@ -199,6 +199,15 @@ test("#6275 the paired phone's arrows and SELECT use the lesson route too", () =
   assert.equal(h.clicks, 0);
 });
 
+test("#6275 a lesson frame with nothing to walk yet leaves the D-pad to the parent", () => {
+  const { h, inner, press } = frameRig();
+  inner.querySelectorAll = () => [];   // still loading
+  press(13);
+  assert.equal(h.dispatched.at(-1)?.key, "ArrowDown", "the arrow reaches the parent page");
+  press(0);
+  assert.equal(h.clicks, 1, "Cross clicks the parent's focused Back");
+});
+
 test("#6275 Learn marks its lesson frame as a pad scope", () => {
   assert.match(read("js/ui/learn-door.js"), /frame\.dataset\.padScope = /);
   assert.match(read("learn/sandbox.css"), /:root\[data-gamepad-nav="on"\] :focus/);
