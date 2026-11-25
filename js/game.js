@@ -366,6 +366,8 @@ const {
 // BEACHED: off the road and crawling at the grass-drag floor — the rescue gate
 // for the player AND the AI (the AI's own `offT > 0.5` read the track-limits
 // counter, which resets to -2 every 1.2 s, so its rescue could never fire).
+const _ersHeld = new WeakSet();   // cars inside a BOOST hold (lane limiter, box, caution) as of their last step (#6546 P4)
+const _beachGain = new WeakMap();   // car -> { v: last vStd, a: ~1 s EMA of its gain rate }: the player rescue's "not gaining" test (#6546 P3)
 function beachedAt(c) { return c.offroad && c.speed < GRASS_V * 0.6 * Math.max(driveTune.PACE, 0.05) + 1.5 * Math.max(driveTune.PACE, 0.05); }
 function dashKph(v) { return vStd(v) * 3.6; }
 // And the other direction: what the car ACTUALLY pulls on the ground right now,
@@ -5093,6 +5095,7 @@ function updateCar(c, dt, ranked) {
   // pitHeld: lane limiter only (OT earn / flaps also gate on it). ersHeld adds box + caution for BOOST.
   const pitHeld = pits.held(c);
   const ersHeld = pitHeld || cautionV >= 0 || c.pitState === "box"; let aiWantsBoost = false;   // no BOOST at the limiter, in the box or under a caution cap: it only hit the cap and drained ~0.23/s
+  if (ersHeld !== _ersHeld.has(c)) { if (ersHeld) { _ersHeld.add(c); c.boostOn = false; } else _ersHeld.delete(c); }   // the hold's START drops the toggle (#6546 P4: it resumed, and drained, after the stop or caution with no new press); a press made DURING the hold stays ON (the HUD's data-held, #5783 K3)
   // paceVmax(c) in two slots (#3109): its inputs (aeroX, _vmaxNow) move only at the flap/vmax stamp below, so
   // S.pvA serves every read before it (this step sees last step's flap) and S.pvB, taken in updateCarLateral, every read after.
   S.pvA = paceVmax(c);
@@ -6457,15 +6460,12 @@ function updateCarAdvance(c, dt, ranked, S) {
     // Two narrowings keep the original fix intact. contactT excludes a pile-up
     // shuffle: a car rubbing another car is not wedged against a barrier and must
     // not be teleported out of the pack. And the auto-gas branch tests the
-    // driveTune.PACE-NORMALISED speed, because the 3 m/s gate below is deliberately absolute
-    // (a stopped detector on the scale REVERSE_MAX sets, per the vstd-lint reason)
-    // — at a low OVERALL SPEED a car driving perfectly well sits under it, and a
-    // driver who never touched a pedal must not be teleported for driving slowly.
-    // vStd divides by driveTune.PACE, so this reads "stopped for its own pace", which is the
-    // question actually being asked.
+    // driveTune.PACE-NORMALISED speed, like the stopped gate below (#6546 P3: a raw 3 m/s
+    // gate read a car pulling away at a low OVERALL SPEED as parked). vStd divides by
+    // driveTune.PACE, so both read "stopped for its own pace", the question actually asked.
     const autoGas = autoThrottle() && (c.contactT || 0) === 0 && vStd(c.speed) < 3;
     const gasPressed = inp ? !!inp.throttle : (autoGas || Input.throttle());
-    const stoppedOnTrack = gasPressed && c.speed < 3 && raceT > 2 && !(braking && ds < -0.01);
+    const stoppedOnTrack = gasPressed && vStd(c.speed) < 3 && raceT > 2 && !(braking && ds < -0.01);
     // Under a RED flag the whole field is HELD below that gate on purpose (the
     // red cap is ~2 % of vTop): stopped is the instruction, not being stuck.
     const redHeld = raceCtl.level >= 4;
@@ -6488,7 +6488,12 @@ function updateCarAdvance(c, dt, ranked, S) {
     // gate and a beached car is never rescued; below ~0.57 the gate climbs past
     // ordinary run-off speeds and a driver in full control is teleported to
     // x = 0 after 3 s — both bugs above, through the OVERALL SPEED slider.
-    const beached = beachedAt(c);
+    // ...and NOT GAINING (#6546 P3): a car pulling away across the grass from rest is under
+    // the gate for seconds while it climbs, and was teleported to x = 0. ~1 s EMA of the vStd gain
+    // rate, each tick's rate clamped so a teleport (rescue, reset) is not read as a surge.
+    const vs = vStd(c.speed), gs = _beachGain.get(c) || { v: vs, a: 0 }; _beachGain.set(c, gs);
+    if (dt > 0) gs.a = damp(gs.a, clamp((vs - gs.v) / dt, -20, 20), 1, dt); gs.v = vs;
+    const beached = beachedAt(c) && gs.a < 1;
     // A car serving a stop is not stuck: it is held in its box at 0 with the
     // throttle down (touch auto-gas holds it for you), and creep-in plus the
     // 2.4 s hold crossed the 3 s gate — the rescue teleported it to x = 0
@@ -9434,7 +9439,7 @@ $("hud-restore").onclick = () => setHudUserHidden(false);
 const { setCamMode, cycleCam, hideCamPicker, showCamPicker } = CamModes.create(G);
 
 $("pm-resume").onclick = () => setPaused(false); $("pm-quick-doors").insertBefore(Object.assign(document.createElement("button"), { id: "pm-recover", type: "button", textContent: "RECOVER CAR", onclick: () => { setPaused(false); Input.requestRecover(); } }), $("pm-checkpoint"));   // RECOVER CAR = the R key; touch had none. Built here like REPLAY: shellNodes holds
-$("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); frozen = true; raceRestarting = true; startRace().then(() => { raceRestarting = false; if (state === "race") frozen = false; }, () => { raceRestarting = false; }); };   // frozen: the old race must not run (or be scored at its flag) through the async start; startRaceBody lifts it on a committed start, and a start cancelled for changed settings (or failed) ends on the title via quitToMenu — the old race is not handed back
+$("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); frozen = true; raceRestarting = true; let p; try { p = startRace(); } catch (e) { Log.error("game", "restart failed", e); raceRestarting = frozen = false; return; } p.then(() => { raceRestarting = false; if (state === "race") frozen = false; }, () => { raceRestarting = false; }); };   // frozen: the old race must not run (or be scored at its flag) through the async start; startRaceBody lifts it on a committed start, and a start cancelled for changed settings (or failed) ends on the title via quitToMenu — the old race is not handed back; a SYNC throw (#6544 item 2) returns no promise, so both flags drop here and the old race runs on
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
 
