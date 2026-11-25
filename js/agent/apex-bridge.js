@@ -1255,7 +1255,10 @@ const ApexBridge = (function () {
       if (_run !== run) return;
       const hidden = typeof document !== "undefined" && document.hidden;
       if (!hidden && Date.now() >= run.backoff) {
-        try { await pollOnce(); } catch (e) { run.lastRes = null; run.errors++; say("poll failed " + e.message); }
+        try { await pollOnce(); } catch (e) {
+          // A throw may follow a good read (a bad JSON page) that reset `errors`: hold at least POLL_MS * 3, as before.
+          run.lastRes = null; run.errors++; run.backoff = Math.max(run.backoff, Date.now() + POLL_MS * 3); say("poll failed " + e.message);
+        }
       }
       if (_run === run) schedule();   // a stop()+start() during the poll already armed the new run's own chain
     }, plan.ms);

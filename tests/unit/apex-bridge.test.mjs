@@ -1453,4 +1453,14 @@ test("#6582 AP-b schedule: fast after the hello and while a command runs, idle a
   limit = null;
   await pollTimer().fn();
   assert.equal(b.api.pollPlan().ms, b.api.POLL_MS, "a good read clears the back-off");
+  // A read that throws after a 200 (a bad JSON page) holds POLL_MS * 3, never a 2 s loop.
+  limit = { status: 200, ok: true, json: async () => { throw new Error("bad json"); }, headers: { get: () => null } };
+  await pollTimer().fn();
+  assert.deepEqual(plain(b.api.pollPlan()), { ms: b.api.POLL_MS * 3, busy: false, why: "backoff" });
+  // A 404 (issue gone) holds BACKOFF_MS, not the 1 s busy cadence.
+  now += b.api.POLL_MS * 3;
+  limit = { status: 404, ok: false, json: async () => ({}), headers: { get: () => null } };
+  await b.api.pollOnce();
+  assert.equal(b.api.pollPlan().why, "backoff");
+  assert.equal(b.api.pollPlan().ms, 60000);
 });
