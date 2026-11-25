@@ -751,6 +751,7 @@ async function precacheAssetLists() {
     // LAZY_GFX_HI — desktop EXTREME / CINEMA detail, fetched beside the backend when GfxQuality.detail() >= 2
     "js/render/shared/gfx-hi.js",
     "js/car/car-hero.js",
+    "js/render/three/tsl-surface.js",
     // LAZY_PERF — BENCHMARK / PHONE TEST rig, idle-loaded after boot
     "js/perf/soak-run.js",
     "js/perf/gpu-test-run.js",

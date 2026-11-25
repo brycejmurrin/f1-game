@@ -5,13 +5,13 @@ import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a gi
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import cp from "node:child_process";
 import path from "node:path";
 import { parse as parseYAML } from "yaml";
 import { report } from "../../tools/ci/ci-coverage.mjs";
 import { ciWorkflow, pagesWorkflow, selectJob, selectedJob, selectStep } from "../helpers/ci-workflow.mjs";
 import { DOCS_FAST_TEST_FILES } from "../../tools/ci/docs-fast-tests.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 test("every path a ci.yml change filter names still exists", () => {
   // The job filters are `grep -qE` alternations over the changed-file list, and
@@ -113,7 +113,7 @@ test("selection resolves the event-specific base and fails closed when it cannot
 test("the base resolver: a Pages call with no usable base selects everything, never HEAD~1", () => {
   const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
   const script = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../tools/ci/ci-resolve-before.sh");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-resolve-"));
+  const dir = mkTmpDir("apex-resolve-");
   const g = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
   const resolve = (env) => cp.spawnSync("bash", [script],
     { cwd: dir, encoding: "utf8", env: { PATH: process.env.PATH, HOME: process.env.HOME, ...env } });
@@ -375,7 +375,7 @@ test("draft PRs run the four guard shards in two jobs (A+B, C+D) with identical 
   for (const st of a.filter((x) => / \(draft pair\)$/.test(x.name || ""))) assert.ok(a.indexOf(st) < rec, `${st.name} runs before the verdict is cached`);
   // Run each cache-key line (inputs hash and runner.os stubbed): a pair's key is its own, a lone shard's unchanged.
   const key = (id, pair) => {
-    const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "guards-key-")), "out");
+    const out = path.join(mkTmpDir("guards-key-"), "out");
     const line = jobs[id].steps.find((st) => st.id === "h").run
       .replace("${{ runner.os }}", "Linux").replace("$(node tools/ci/inputs-hash.mjs guards)", "H");
     cp.execFileSync("bash", ["-c", line], { env: { ...process.env, GITHUB_OUTPUT: out, GUARDS_MODE: "full", DRAFT_PAIR: pair } });

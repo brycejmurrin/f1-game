@@ -2,13 +2,14 @@
 // One of five per-tool files split from capture-tools-regressions.test.mjs (T1-10, #3043); no browser.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, mkdirSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import sharp from 'sharp';
 import { poolMap, startWorkerPool, openPage } from '../../tools/shot/apex-capture.mjs';
 import { ROOT } from '../../tools/shot/capture-contract.mjs';
 import { recordCapture, stageRace, runBoundedCapture, visibleScreen, waitNextGameRender, captureContextOptions, captureFailureSnapshot, captureOperationBudget, captureOperation, parseCaptureProvenance, capturePageProvenance } from '../../tools/shot/capture-runtime.mjs';
 import { registerTeardownResource, shutdown } from '../../tools/lib/harness.mjs';
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 test('dynamic capture queue stays bounded, preserves job order and keeps going after failure', async () => {
   let active = 0, maxActive = 0;
@@ -50,7 +51,7 @@ test('mode capture failures retain a printable job name', async () => {
 
 test('capture runtime obeys actual soft screenshot file and numeric present-wait exports', async () => {
   mkdirSync(resolve(ROOT, 'scratch'), { recursive: true });
-  const dir = mkdtempSync(resolve(ROOT, 'scratch/capture-runtime-test-'));
+  const dir = mkTmpDir("capture-runtime-test-");
   const path = resolve(dir, 'scene.png');
   const png = await sharp({ create: { width: 96, height: 64, channels: 3, background: '#678' } }).composite([{ input: await sharp({ create: { width: 40, height: 30, channels: 3, background: '#abc' } }).png().toBuffer(), top: 14, left: 28 }]).png().toBuffer();
   let waits = 0;
@@ -94,7 +95,7 @@ test('capture operations cap the remaining whole-run budget without passing zero
 
 test('recordCapture passes the real CDP helper sixty-second cap or smaller remaining deadline', async () => {
   mkdirSync(resolve(ROOT, 'scratch'), { recursive: true });
-  const dir = mkdtempSync(resolve(ROOT, 'scratch/capture-cdp-budget-'));
+  const dir = mkTmpDir("capture-cdp-budget-");
   const png = await sharp({ create: { width: 96, height: 64, channels: 3, background: '#678' } }).composite([{ input: await sharp({ create: { width: 40, height: 30, channels: 3, background: '#abc' } }).png().toBuffer(), top: 14, left: 28 }]).png().toBuffer();
   const originalSet = globalThis.setTimeout, originalClear = globalThis.clearTimeout;
   const handles = new Set(), budgets = []; let detached = 0, presents = 0;

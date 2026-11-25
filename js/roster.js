@@ -920,7 +920,8 @@
   ],
     LAZY_GFX_HI: [
     "js/render/shared/gfx-hi.js",
-    "js/car/car-hero.js"
+    "js/car/car-hero.js",
+    "js/render/three/tsl-surface.js"
   ],
     LAZY_GFX_HI_EDGES: [],
     LAZY_TRACK_BUILD: [

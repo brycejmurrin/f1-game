@@ -1,0 +1,12 @@
+{
+  "files": {
+    "js/track/tracks.js": {
+      "lines": 1
+    }
+  },
+  "tree": {
+    "assertPins": 1,
+    "assertPinsAll": 1,
+    "eagerCodeBytes": 176
+  }
+}

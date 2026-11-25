@@ -1,0 +1,163 @@
+{
+  "//": [
+    "#6545 P1 characterization pin, read by tests/unit/settings-schema-consistency.test.mjs (measured on deploy tip afce76d6, 2026-11-25).",
+    "Each list is where a hand-kept settings list disagrees with SettingsExport.SPEC today. Empty lists are agreements the test now holds.",
+    "catalogTargetsBuiltByJs: search rows whose DOM id is not static in index.html but is built by js/ (not a bug; P4 derives CATALOG from SPEC).",
+    "registryExactShadowedBySpec: SaveSchemaRegistry EXACT rows for SPEC keys; ingestSettingsSpec wins, so these rows are never read.",
+    "callSiteDefaultMismatch: store.get(k, literal) for a SPEC key neither SettingsDefaults nor GarageDefaults answers, where the literal differs from SPEC def.",
+    "A PR that fixes or adds a drift edits this file in the same diff."
+  ],
+  "defaultsNotInSpec": [],
+  "defaultsDefMismatch": [],
+  "defaultsRawNotString": [],
+  "catalogTargetsMissing": [],
+  "catalogTargetsBuiltByJs": [
+    {
+      "id": "steering-return",
+      "target": "pm-steerreturn"
+    },
+    {
+      "id": "appearance-arrange-screen",
+      "target": "appearance-arrange-screen"
+    },
+    {
+      "id": "motion",
+      "target": "pm-motion-sel"
+    },
+    {
+      "id": "focus",
+      "target": "pm-focus-sel"
+    },
+    {
+      "id": "colour",
+      "target": "pm-cbcues-sel"
+    },
+    {
+      "id": "colour-vision",
+      "target": "pm-cvd-sel"
+    },
+    {
+      "id": "captions",
+      "target": "pm-captions-sel"
+    },
+    {
+      "id": "caption-size",
+      "target": "pm-caption-size-sel"
+    },
+    {
+      "id": "caption-position",
+      "target": "pm-caption-pos-sel"
+    },
+    {
+      "id": "caption-background",
+      "target": "pm-caption-bg-sel"
+    },
+    {
+      "id": "caption-speaker",
+      "target": "pm-caption-speaker-sel"
+    },
+    {
+      "id": "hold-gas",
+      "target": "pm-hold-throttle-sel"
+    },
+    {
+      "id": "hold-lookback",
+      "target": "pm-hold-lookback-sel"
+    },
+    {
+      "id": "wheel-lock",
+      "target": "pm-wheelmodel-sel"
+    },
+    {
+      "id": "touch-response",
+      "target": "pm-touch-response"
+    },
+    {
+      "id": "touch-shape",
+      "target": "pm-btnshape-sel"
+    },
+    {
+      "id": "button-profiles",
+      "target": "pm-button-profiles"
+    },
+    {
+      "id": "pad-gas-deadzone",
+      "target": "pm-padgasdz"
+    },
+    {
+      "id": "pad-brake-deadzone",
+      "target": "pm-padbrakedz"
+    },
+    {
+      "id": "files-health",
+      "target": "pm-files-health"
+    },
+    {
+      "id": "files-save",
+      "target": "pm-files-show-save"
+    },
+    {
+      "id": "files-restore",
+      "target": "pm-files-show-restore"
+    },
+    {
+      "id": "files-share",
+      "target": "pm-files-show-share"
+    },
+    {
+      "id": "save-backup",
+      "target": "pm-files-show-save"
+    },
+    {
+      "id": "restore-backup",
+      "target": "pm-files-show-restore"
+    },
+    {
+      "id": "share-code",
+      "target": "pm-files-show-share"
+    }
+  ],
+  "resetKeysNotInSpec": {
+    "RESET_INPUT": [],
+    "RESET_AIDS": [],
+    "RESET_ACCESS": [],
+    "RESET_LINE_DISPLAY": [],
+    "RESET_UI": [],
+    "RESET_ADVANCED": []
+  },
+  "registryExactShadowedBySpec": [
+    {
+      "key": "crewLook",
+      "exactLane": "raw",
+      "specLane": "raw"
+    },
+    {
+      "key": "garageLook",
+      "exactLane": "raw",
+      "specLane": "raw"
+    },
+    {
+      "key": "garageMood",
+      "exactLane": "raw",
+      "specLane": "raw"
+    },
+    {
+      "key": "wheelAssist",
+      "exactLane": "raw",
+      "specLane": "raw"
+    },
+    {
+      "key": "wheelState",
+      "exactLane": "raw",
+      "specLane": "raw"
+    }
+  ],
+  "callSiteDefaultMismatch": [
+    {
+      "file": "js/ui/hud-layout.js",
+      "key": "hudScale",
+      "literal": 100,
+      "spec": null
+    }
+  ]
+}

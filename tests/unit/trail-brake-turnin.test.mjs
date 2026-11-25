@@ -10,10 +10,8 @@
  *
  * Targets (player-dyn bench):
  *   - braked turn-in yaw ≥ 0.6 × coasting (pin, shipped, big-brake kit)
- *   - mid-corner brake stamp on the BIG-BRAKE KIT: rear slip ≤ 8° and yaw
- *     mean rise ≤ 15% (pin mid-corner aRmax is still the #1266 front-peak
- *     14.6° — the capacity scale is a no-op when mods.braking ≤ 1; do not
- *     reopen that snap by pretending this fix tightened it)
+ *   - mid-corner brake stamp: rear slip ≤ 8° and yaw mean rise ≤ 15% on
+ *     EVERY seat (pin, shipped, big-brake kit)
  *
  * THE BIG-BRAKE KIT (#6572, Bryce's decision A, 2026-11-25). Since factory
  * parts race at ×1.0 (Parts.playerMods, PHYSICS.md §Parts parity) the shipped
@@ -22,6 +20,15 @@
  * The capacity fix is still pinned on a kit that does: MY TEAM (no works
  * build, so playerMods is raw getMods) on the Mercedes works sheet, which
  * resolves to the universal equivalents (braking ≈ 1.49).
+ *
+ * THE ×1.0 SNAP (#6573). The capacity scale is a no-op at mods.braking ≤ 1,
+ * so the pin and the ×1.0 shipped car kept the #1266 front-peak snap: braking
+ * mid-corner, rear 14.5° / 18.2° and yaw +16 % / +29 %. The brake
+ * over-rotation damp in player-forces.js (an extra yaw damp while the pedal is
+ * in and |αR| > |αF|) holds them at 7.4° / 7.5° and −4 % (player-dyn, Monza,
+ * PACE notch 11) — the pin's relative gate (rear < 2.6×, yaw < 1.25×) is now
+ * the absolute one. A braked turn-in keeps |αR| ≤ |αF|, so trail-brake
+ * rotation is untouched (pin 0.933 vs 0.912 coasting, as before).
  *
  * Run: node --test tests/unit/trail-brake-turnin.test.mjs
  */
@@ -109,13 +116,12 @@ test("big-brake kit mid-corner brake stamp: rear ≤ 8°, yaw rise ≤ 15%", () 
   assertMidCorner(mKit, "big-brake kit", { absRear: true });
 });
 
-test("pin mid-corner: yaw rise ≤ 25% relative pin (#1266 aRmax stays ~14.6° when mods.braking ≤ 1)", () => {
-  // Capacity scale is a no-op on the empty-sheet pin (mods.braking ≤ 1), so
-  // the #1266 front-peak rear-slip jump is unchanged. Keep the relative
-  // snap gate; do not claim an absolute ≤8° this fix does not deliver.
-  const co = mPin.midCorner_coast, br = mPin.midCorner_brake;
-  assert.ok(br.aRmax < co.aRmax * 2.6, `pin rear holds: ${br.aRmax}° vs ${co.aRmax}°`);
-  assert.ok(br.yawMean < co.yawMean * 1.25, `pin no snap: yaw ${br.yawMean} vs ${co.yawMean}`);
+test("pin (×1.0 works seat) mid-corner brake stamp: rear ≤ 8°, yaw rise ≤ 15% (#6573; was 14.5°, +16%)", () => {
+  assertMidCorner(mPin, "pin", { absRear: true });
+});
+
+test("shipped seat mid-corner brake stamp: rear ≤ 8°, yaw rise ≤ 15% (#6573; was 18.2°, +29%)", () => {
+  assertMidCorner(mShip, "shipped", { absRear: true });
 });
 
 test("step-steer and skidpad magnitudes barely move on any seat", () => {

@@ -5,16 +5,16 @@ import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a gi
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import cp from "node:child_process";
 import path from "node:path";
 import { parse as parseYAML } from "yaml";
 import { ciWorkflow, evalTemplate } from "../helpers/ci-workflow.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 test("ship-filter: a ready PR skips smoke only when neither its own diff nor its base ships anything new (C2a)", () => {
   const step = parseYAML(ciWorkflow).jobs.select.steps.find((st) => st.id === "shipfilter");
   assert.ok(step && step.run, "the ship filter step is gone");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ship-filter-"));
+  const dir = mkTmpDir("ship-filter-");
   try {
     const git = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
     const write = (f, s) => { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), s); };
@@ -197,7 +197,7 @@ test("geometry planning avoids empty fanout without guessing an unknown diff is 
   assert.deepEqual(jobs.sweeps.needs, ["select"]);
   assert.match(jobs.sweeps.if, /needs\.select\.outputs\.geometry != 'false' \|\| needs\.select\.outputs\.geometry_targeted != ''/);
   assert.ok(!jobs.sweeps.steps.some((s) => s.name === filter.name), "shards must consume the shared decision");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "geometry-workflow-"));
+  const dir = mkTmpDir("geometry-workflow-");
   try {
     // Run the workflow's actual shell with a controlled changed-path list,
     // retaining the real package suite list and real geometry routing module.

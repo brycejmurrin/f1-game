@@ -7,10 +7,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const HOOK = path.join(ROOT, ".claude/hooks/context-cap.py");
@@ -37,7 +37,7 @@ function run(dir, payload, env = {}) {
 }
 
 test("no brief cap and no env cap: the hook says nothing", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ctxcap-"));
+  const dir = mkTmpDir("ctxcap-");
   try {
     const t = transcript(dir, "You are a worker. Fix the HUD.", 400);
     assert.equal(run(dir, { hook_event_name: "UserPromptSubmit", transcript_path: t, session_id: "s1" }), "");
@@ -45,7 +45,7 @@ test("no brief cap and no env cap: the hook says nothing", () => {
 });
 
 test("STOP AT sets the soft cap; the advisory fires once per level", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ctxcap-"));
+  const dir = mkTmpDir("ctxcap-");
   try {
     const t = transcript(dir, "CONTINUE PR #1. STOP AT: 150k.", 170);
     const ev = { hook_event_name: "UserPromptSubmit", transcript_path: t, session_id: "s2" };
@@ -57,7 +57,7 @@ test("STOP AT sets the soft cap; the advisory fires once per level", () => {
 });
 
 test("over the hard cap an Agent spawn is denied; create_session is not this hook's business; APEX_CTX_CAP=off silences it", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ctxcap-"));
+  const dir = mkTmpDir("ctxcap-");
   try {
     const t = transcript(dir, "STOP AT: 100k", 160);
     const spawn = (tool, prompt, env) => run(dir, { hook_event_name: "PreToolUse", transcript_path: t, session_id: "s3",
@@ -86,7 +86,7 @@ test("guard mode refuses malformed input while advisory mode stays silent", () =
 });
 
 test("--guard fails closed when the cap is known and the count is not; the FIRST STOP AT is the cap", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ctxcap-"));
+  const dir = mkTmpDir("ctxcap-");
   try {
     const g = (payload, env = {}) => {
       const r = spawnSync("python3", [HOOK, "--guard"], { input: JSON.stringify(payload), encoding: "utf8",
@@ -115,7 +115,7 @@ test("--guard fails closed when the cap is known and the count is not; the FIRST
 });
 
 test("STOP AT: start+<N>k is a budget above the first assistant entry's context (decision 4, 2026-11-11)", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ctxcap-"));
+  const dir = mkTmpDir("ctxcap-");
   const at = (k) => ({ type: "assistant", message: { usage: { input_tokens: 1000, cache_read_input_tokens: k * 1000 - 1000 } } });
   const write = (rows) => { const p = path.join(dir, "t.jsonl"); fs.writeFileSync(p, rows.map((r) => JSON.stringify(r)).join("\n") + "\n"); return p; };
   try {

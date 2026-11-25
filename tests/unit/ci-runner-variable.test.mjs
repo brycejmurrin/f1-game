@@ -5,10 +5,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import cp from "node:child_process";
 import { parse as parseYAML } from "yaml";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const WF_DIR = absSrc(".github/workflows");
 const workflows = fs.readdirSync(WF_DIR).filter((f) => /\.ya?ml$/.test(f))
@@ -127,7 +127,7 @@ test("browser-group: a fork `pr` is refused before checkout on a trial runner", 
   const s = steps[fork];
   assert.equal(s.if, "${{ inputs.pr != '' && vars.APEX_BROWSER_RUNNER != '' }}");
   // Behaviour, not text: run the step's own script against a fake `gh` that reports the PR's head repository.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-fork-check-"));
+  const dir = mkTmpDir("apex-fork-check-");
   try {
     fs.writeFileSync(path.join(dir, "gh"), '#!/bin/sh\n[ "$FAKE_FAIL" = 1 ] && exit 1\nprintf "%s\\n" "$FAKE_HEAD"\n', { mode: 0o755 });
     const run = (env) => cp.spawnSync("bash", ["-e", "-c", s.run], {

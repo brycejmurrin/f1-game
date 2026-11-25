@@ -29,7 +29,7 @@ in `js/agent/apex-bridge.js`), not this table.
 | cmd | args | value |
 |---|---|---|
 | `ping` | — | `{pong, t}` |
-| `facts` | — | `{sha, ua, dpr, w, h, gpu, cores, mem, info, render:{backend, threePath, live, engine, fallbackWhy}}` |
+| `facts` | — | `{sha, ua, dpr, w, h, gpu, cores, mem, info, render:{backend, threePath, live, engine, fallbackWhy}, wakeLock:{supported, held, refused}}` |
 | `display` | — | the CSS→device pixel ledger (#5166): `{dpr, inner, screen, client, visualViewport, standalone, vars:{root,hud} (--ui-scale, --vwz, --hud-scale…), game/soft:{css, rect, buffer, engine, chain}, hud:{chain:{steps, zoomProduct}, time, pos}, overlay, renderScale, build:{sha, build, swCaches, sw}}`; HUD painted px = fontSize × zoomProduct × visualViewport.scale × dpr; canvas backing = css × dpr × renderScale.scale |
 | `geom` | — | the geometry ledger (docs/notes/GEOMETRY-TRUTH-HUNT-2026-11-09.md): `{inner, client, visualViewport, screen, orientation, dpr, standalone, units:{vh,svh,dvh,lvh,vw,svw}, insets:{left,top,right,bottom}, zoom:{currentCSSZoom, rectOf100At2, vwInZoom2, envInZoom2}, media, tiers, wish:{ui,hud,btn}, paint:{hudTop,hudBot,dock,dockLeft,sheet,kb,…}}`; `rectOf100At2` 200 = standardized zoom, 100 = legacy; `wish` ≠ `paint` = a slider past its fit cap |
 | `frames` | `seconds` | `{frames, fps, meanMs, p50, p95, p99, maxMs, over33, longTasks, hidden}` (rAF intervals; `hidden: true` = void, `hidden: false` proves nothing: §Cannot measure) |
@@ -48,7 +48,9 @@ in `js/agent/apex-bridge.js`), not this table.
 | `key` | `key` (Escape, Enter, Space, Tab, arrows, Home, End, PageUp, PageDown, Backspace), `id`, `shift` | `{key, to, prevented, screen}`: keydown + keyup on the focused element (or `id`) |
 | `scroll` | `id` (else the page) and one of `by` px, `to` top / bottom, `into` true | `{scrolled, top, height, view}` |
 | `nav` | `flow` tt / race, `track`, `weather`, `tod`, `entry` setup / garage / daily, `go` (default true) | `{ok, screen, state, ms, steps:[{step, ok, screen, ms}], door}`; starts on the title; `door` = `menuPrep().door` |
-| `drive` | ONE of `to` "box", `laps` 1-5, `seconds` 1-600; `ms` cap (240 000); `wait` false; or `stop` / `status` true | `{ok, screen, state, reason, inBox, pit, laps, steps:[{phase, t, s, kph}], pitActions}` (outer `ms` too): `value.ok` = goal met; `reason` box / laps / seconds / timeout / missed / lane-closed / touch / paused / state:… (§Driving) |
+| `rects` | `ids[]` (1–40 element ids, never a selector) | `{viewport, screen, rects:[{id, x, y, w, h, visible, fontSize}]}` from `getBoundingClientRect` on the device; `{id, missing}` / `{id, refused}` (a denied id, whether or not it is in the page) |
+| `overlaps` | `ids[]` as `rects` | `{screen, checked, skipped, overlaps:[{a, b, x, y, w, h, area}]}`: every visible pair that intersects (#6518 SPEED vs STEER RIGHT) |
+| `drive` | ONE of `to` "box", `laps` 1-5, `seconds` 1-600; `ms` cap (240 000); `wait` false; `handsOff` true; or `stop` / `status` true | `{ok, screen, state, reason, inBox, pit, laps, steps:[{phase, t, s, kph}], pitActions}` (outer `ms` too): `value.ok` = goal met; `reason` box / laps / seconds / timeout / missed / lane-closed / touch / paused / state:… (§Driving) |
 | `batch` | `steps[]` of `{cmd, args}`, up to `BATCH_MAX` (25) | one result per step; stops at the first failure (or a `tap` / `nav` / `drive` whose `value.ok` is false); `reload` / `path` only last |
 | `reload` | — | `{reloading}` (may be lost), then a new hello |
 
@@ -150,6 +152,11 @@ assist: it starts only from this command and lets go on `stop`, a pause, a quit,
   batch with `waitMs` (a separate comment is a 4 s poll plus GitHub's lag, too late; #6581).
 - While `drive` holds the car the phone shows a CLAUDE DRIVING strip under the link badge (it lets touches through:
   Bryce's touch still takes the car back, and the strip goes with any end of the drive).
+- `{"handsOff":true}`: a touch no longer takes the car back, so a brush cannot cut a check short; the strip carries a
+  big STOP that does, and a pause or a real key still ends the drive. It is refused when the STOP cannot be shown, and
+  capped at 300 s. The default stays any-touch-takes-over.
+- Ending the link (TAP TO END on the badge) stops the drive AND the rest of a running batch: the next step answers
+  `the link ended` and no later `drive` takes the car (#6636).
 
 END TIME TRIAL, no human (Bryce on the title screen; one comment, ~2-3 min to the reply):
 
@@ -199,8 +206,9 @@ inside a plan; `plan batch reload path bench` cannot be steps.
 
 #6581. While linked the phone keeps ONE ` ```apex-status ` comment on the issue (its id is stored on the device, so a
 reload edits the same one; a deleted one is posted afresh), edited about 5 s after each hello, then every 15 s while a
-command runs and every 60 s while idle (Bryce's D4, #6582), on every visibility change and once when the link ends: `{at, linked, ended, sha, screen, state, visible, driving, served,
-last:{id, cmd, busy}, hello}`. `at` is the phone's clock. A stale `at` with `visible: false` is iOS pausing the
+command runs and every 60 s while idle (Bryce's D4, #6582), on every visibility change and once when the link ends: `{at, linked, ended, sha, screen, state, visible, wake, driving,
+served, last:{id, cmd, busy}, hello}`. `wake` is the screen wake lock the link holds so the phone does not auto-lock
+(asked for again on every return to visible; it cannot stop an app switch). `at` is the phone's clock. A stale `at` with `visible: false` is iOS pausing the
 page; `last.busy: true` is a long command still running. It is never a command (`apex-cmd` fences only).
 
 ## Cannot measure

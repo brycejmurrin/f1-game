@@ -158,83 +158,104 @@ function createDom(sandbox, runScriptFile) {
   const byId = new Map();
   const rect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 });
 
-  function makeElement(tag, id) {
-    tag = String(tag || "div").toLowerCase();
-    const ls = makeListeners();
-    const el = {
-      tagName: tag.toUpperCase(), nodeName: tag.toUpperCase(), nodeType: 1, localName: tag,
-      id: id || "", hidden: false, disabled: false, open: false, checked: false, selected: false,
-      textContent: "", innerHTML: "", innerText: "", value: "", className: "", title: "", href: "",
-      src: "", type: "", name: "", placeholder: "", tabIndex: -1, inert: false, draggable: false,
-      dataset: {}, children: [], childNodes: [], attributes: [],
-      parentNode: null, parentElement: null, firstChild: null, lastChild: null,
-      nextSibling: null, previousSibling: null, firstElementChild: null, lastElementChild: null,
-      nextElementSibling: null, previousElementSibling: null,
-      offsetWidth: 0, offsetHeight: 0, offsetTop: 0, offsetLeft: 0, offsetParent: null,
-      clientWidth: tag === "canvas" ? 1280 : 0, clientHeight: tag === "canvas" ? 720 : 0,
-      clientLeft: 0, clientTop: 0, scrollTop: 0, scrollLeft: 0, scrollHeight: 0, scrollWidth: 0,
-      width: tag === "canvas" ? 1280 : 300, height: tag === "canvas" ? 720 : 150,
-      naturalWidth: 0, naturalHeight: 0, complete: false, readyState: 0, duration: 0, volume: 1,
-      currentTime: 0, paused: true, muted: false, loop: false, files: [],
-      style: makeStyle(), isConnected: true,
-    };
+  // One shared prototype per DOM (#6559 S1): a boot makes ~2,900 stub elements,
+  // and each used to carry ~75 fresh closures, a style Proxy, a classList and a
+  // listener map. Methods and scalar defaults now live here; a write still lands
+  // on the element itself, so reads and writes behave as before. style,
+  // classList and the listener map are built on first use.
+  const ELEMENT = {
+    nodeType: 1, hidden: false, disabled: false, open: false, checked: false, selected: false,
+    value: "", className: "", title: "", href: "",
+    src: "", type: "", name: "", placeholder: "", tabIndex: -1, inert: false, draggable: false,
+    parentNode: null, parentElement: null, firstChild: null, lastChild: null,
+    nextSibling: null, previousSibling: null, firstElementChild: null, lastElementChild: null,
+    nextElementSibling: null, previousElementSibling: null,
+    offsetWidth: 0, offsetHeight: 0, offsetTop: 0, offsetLeft: 0, offsetParent: null,
+    clientWidth: 0, clientHeight: 0,
+    clientLeft: 0, clientTop: 0, scrollTop: 0, scrollLeft: 0, scrollHeight: 0, scrollWidth: 0,
+    width: 300, height: 150,
+    naturalWidth: 0, naturalHeight: 0, complete: false, readyState: 0, duration: 0, volume: 1,
+    currentTime: 0, paused: true, muted: false, loop: false, isConnected: true,
+    get style() { const s = makeStyle(); own(this, "style", s); return s; },
+    set style(v) { own(this, "style", v); },
+    get classList() { const c = makeClassList(this); own(this, "classList", c); return c; },
+    set classList(v) { own(this, "classList", v); },
     // A text/markup write REPLACES the children, as in a real DOM: kept, every UI
     // rebuild accumulated nodes and a heap census read ~6 MB per garage cycle of
     // growth that does not exist.
-    for (const k of ["textContent", "innerHTML", "innerText"]) {
-      let v = "";
-      Object.defineProperty(el, k, { configurable: true, enumerable: true, get: () => v,
-        set: (x) => { v = String(x == null ? "" : x); el.children.length = 0; el.childNodes.length = 0; } });
-    }
-    el.classList = makeClassList(el);
-    el.addEventListener = (t, fn) => ls.add(t, fn);
-    el.removeEventListener = (t, fn) => ls.remove(t, fn);
-    el.dispatchEvent = (ev) => { if (ev && !ev.target) ev.target = el; ls.fire(el, ev); const h = el["on" + (ev && ev.type)]; if (typeof h === "function") h.call(el, ev); return true; };
-    el.querySelector = () => makeElement("div");
-    el.querySelectorAll = () => [];
-    el.getElementsByClassName = () => [];
-    el.getElementsByTagName = () => [];
-    el.closest = () => makeElement("div");
-    el.matches = () => false;
-    el.contains = (n) => n === el;
-    el.appendChild = (c) => {
-      if (c && c.nodeType === 1) { el.children.push(c); c.parentNode = c.parentElement = el; }
-      el.childNodes.push(c);
+    get textContent() { return this._text.textContent; },
+    set textContent(x) { this._setText("textContent", x); },
+    get innerHTML() { return this._text.innerHTML; },
+    set innerHTML(x) { this._setText("innerHTML", x); },
+    get innerText() { return this._text.innerText; },
+    set innerText(x) { this._setText("innerText", x); },
+    _text: { textContent: "", innerHTML: "", innerText: "" },
+    _setText(k, x) {
+      if (!Object.prototype.hasOwnProperty.call(this, "_text")) hide(this, "_text", { textContent: "", innerHTML: "", innerText: "" });
+      this._text[k] = String(x == null ? "" : x); this.children.length = 0; this.childNodes.length = 0;
+    },
+    addEventListener(t, fn) { if (!this._ls) hide(this, "_ls", makeListeners()); this._ls.add(t, fn); },
+    removeEventListener(t, fn) { if (this._ls) this._ls.remove(t, fn); },
+    dispatchEvent(ev) { if (ev && !ev.target) ev.target = this; if (this._ls) this._ls.fire(this, ev); const h = this["on" + (ev && ev.type)]; if (typeof h === "function") h.call(this, ev); return true; },
+    querySelector() { return makeElement("div"); },
+    querySelectorAll() { return []; },
+    getElementsByClassName() { return []; },
+    getElementsByTagName() { return []; },
+    closest() { return makeElement("div"); },
+    matches() { return false; },
+    contains(n) { return n === this; },
+    appendChild(c) {
+      if (c && c.nodeType === 1) { this.children.push(c); c.parentNode = c.parentElement = this; }
+      this.childNodes.push(c);
       if (c && c.tagName === "SCRIPT" && c.src) runScriptFile(c);
       return c;
-    };
-    el.append = (...cs) => cs.forEach((c) => { if (c && typeof c === "object") el.appendChild(c); });
-    el.prepend = el.append;
-    el.insertBefore = (c) => el.appendChild(c);
-    el.insertAdjacentElement = (_, c) => el.appendChild(c);
-    el.insertAdjacentHTML = noop; el.insertAdjacentText = noop;
-    el.removeChild = (c) => { const i = el.children.indexOf(c); if (i >= 0) el.children.splice(i, 1); const j = el.childNodes.indexOf(c); if (j >= 0) el.childNodes.splice(j, 1); return c; };
-    el.replaceChildren = (...cs) => { el.children.length = 0; el.childNodes.length = 0; el.append(...cs); };
-    el.replaceChild = (n, o) => { el.removeChild(o); return el.appendChild(n); };
-    el.replaceWith = noop; el.remove = () => { if (el.parentNode) el.parentNode.removeChild(el); };
-    el.cloneNode = () => makeElement(tag);
-    el.setAttribute = (k, v) => { el.attributes[k] = String(v); if (k === "id") el.id = v; };
-    el.getAttribute = (k) => (k in el.attributes ? el.attributes[k] : null);
-    el.hasAttribute = (k) => k in el.attributes;
-    el.removeAttribute = (k) => { delete el.attributes[k]; };
-    el.toggleAttribute = (k, f) => { const on = f === undefined ? !(k in el.attributes) : !!f; if (on) el.attributes[k] = ""; else delete el.attributes[k]; return on; };
-    el.focus = noop; el.blur = noop; el.click = () => el.dispatchEvent({ type: "click" }); el.select = noop;
-    el.scrollIntoView = noop; el.scrollTo = noop; el.scrollBy = noop;
-    el.getBoundingClientRect = rect; el.getClientRects = () => [];
-    el.requestFullscreen = () => Promise.reject(new Error("fullscreen unavailable"));
-    el.requestPointerLock = noop; el.setPointerCapture = noop; el.releasePointerCapture = noop;
-    el.hasPointerCapture = () => false;
-    el.showModal = () => { el.open = true; }; el.show = () => { el.open = true; }; el.close = () => { el.open = false; };
-    el.animate = () => ({ cancel: noop, finish: noop, play: noop, pause: noop, finished: Promise.resolve(), onfinish: null });
-    el.getAnimations = () => [];
-    el.play = () => Promise.resolve(); el.pause = noop; el.load = noop; el.canPlayType = () => "";
-    el.captureStream = () => ({ getTracks: () => [] });
-    if (tag === "canvas") {
-      el.getContext = (kind) => (kind === "2d" ? make2d(el) : null);
-      el.toDataURL = () => "data:,";
-      el.toBlob = (cb) => { if (cb) cb(null); };
-      el.transferControlToOffscreen = () => { throw new Error("no offscreen canvas"); };
-    }
+    },
+    append(...cs) { cs.forEach((c) => { if (c && typeof c === "object") this.appendChild(c); }); },
+    prepend(...cs) { this.append(...cs); },
+    insertBefore(c) { return this.appendChild(c); },
+    insertAdjacentElement(_, c) { return this.appendChild(c); },
+    insertAdjacentHTML: noop, insertAdjacentText: noop,
+    removeChild(c) { const i = this.children.indexOf(c); if (i >= 0) this.children.splice(i, 1); const j = this.childNodes.indexOf(c); if (j >= 0) this.childNodes.splice(j, 1); return c; },
+    replaceChildren(...cs) { this.children.length = 0; this.childNodes.length = 0; this.append(...cs); },
+    replaceChild(n, o) { this.removeChild(o); return this.appendChild(n); },
+    replaceWith: noop,
+    remove() { if (this.parentNode) this.parentNode.removeChild(this); },
+    cloneNode() { return makeElement(this.localName); },
+    setAttribute(k, v) { this.attributes[k] = String(v); if (k === "id") this.id = v; },
+    getAttribute(k) { return k in this.attributes ? this.attributes[k] : null; },
+    hasAttribute(k) { return k in this.attributes; },
+    removeAttribute(k) { delete this.attributes[k]; },
+    toggleAttribute(k, f) { const on = f === undefined ? !(k in this.attributes) : !!f; if (on) this.attributes[k] = ""; else delete this.attributes[k]; return on; },
+    focus: noop, blur: noop, select: noop,
+    click() { return this.dispatchEvent({ type: "click" }); },
+    scrollIntoView: noop, scrollTo: noop, scrollBy: noop,
+    getBoundingClientRect: rect, getClientRects: () => [],
+    requestFullscreen: () => Promise.reject(new Error("fullscreen unavailable")),
+    requestPointerLock: noop, setPointerCapture: noop, releasePointerCapture: noop,
+    hasPointerCapture: () => false,
+    showModal() { this.open = true; }, show() { this.open = true; }, close() { this.open = false; },
+    animate: () => ({ cancel: noop, finish: noop, play: noop, pause: noop, finished: Promise.resolve(), onfinish: null }),
+    getAnimations: () => [],
+    play: () => Promise.resolve(), pause: noop, load: noop, canPlayType: () => "",
+    captureStream: () => ({ getTracks: () => [] }),
+  };
+  function own(el, k, v) { Object.defineProperty(el, k, { value: v, writable: true, enumerable: true, configurable: true }); }
+  function hide(el, k, v) { Object.defineProperty(el, k, { value: v, writable: true, enumerable: false, configurable: true }); }
+  const CANVAS = Object.assign(Object.create(ELEMENT), {
+    clientWidth: 1280, clientHeight: 720, width: 1280, height: 720,
+    getContext(kind) { return kind === "2d" ? make2d(this) : null; },
+    toDataURL: () => "data:,",
+    toBlob: (cb) => { if (cb) cb(null); },
+    transferControlToOffscreen: () => { throw new Error("no offscreen canvas"); },
+  });
+
+  function makeElement(tag, id) {
+    tag = String(tag || "div").toLowerCase();
+    const el = Object.create(tag === "canvas" ? CANVAS : ELEMENT);
+    el.tagName = el.nodeName = tag.toUpperCase();
+    el.localName = tag;
+    el.id = id || "";
+    el.dataset = {}; el.children = []; el.childNodes = []; el.attributes = []; el.files = [];
     if (tag === "template") el.content = makeElement("div");
     return el;
   }
@@ -727,13 +748,15 @@ async function settle(pred, maxTurns) {
  *   allowScriptErrors  true keeps a lazily injected script's load error in
  *           record.scripts instead of rejecting (createGame and race() reject
  *           by default; see assertScriptsLoaded)
- *   handle  { apex, G, ctx, sandbox, seat, step(n, dt), race(id, tod, wx, opts), aiOnly({untilAllFlagged}),
+ *   handle  { apex, G, made (MADE instances: made.QualiNet, made.RaceSettings), ctx, sandbox, seat, step(n, dt), race(id, tod, wx, opts), aiOnly({untilAllFlagged}),
  *             settle(pred), flushTimers(), pumpFrame(now) (throws on a frame
  *             fault), record, bootMs, trackMs }
  */
+const MADE = ["QualiNet", "RaceSettings"];
 async function createGame(opts) {
   opts = opts || {};
   let G = null;
+  const made = {};
   const world = buildSandbox(Object.assign({}, opts, {
     onScript: (rel, ctx) => {
       // apex.js is injected by game.js's own loader; capture the façade the
@@ -800,6 +823,14 @@ async function createGame(opts) {
     let bootPromise = null;
     for (const f of MANIFEST.FULL) {
       if (SKIP.has(f)) continue;
+      // The handles game.js keeps off G (#6496: the lobby gets them directly):
+      // capture each instance its factory returns, so a test can reach it as made.<Name>.
+      if (f === MANIFEST.PATHS.GAME) for (const name of MADE) {
+        const mod = ctx[name], orig = mod && mod.create;
+        if (typeof orig !== "function") continue;
+        // A frozen module (RaceSettings) cannot take the wrapper: rebind the global to a frozen copy.
+        ctx[name] = Object.freeze(Object.assign({}, mod, { create() { return (made[name] = orig.apply(this, arguments)); } }));
+      }
       const r = runFile(ctx, f, record);
       if (f === MANIFEST.PATHS.GAME) bootPromise = r;
     }
@@ -864,6 +895,7 @@ async function createGame(opts) {
       apex, ctx, sandbox, record, bootMs, trackMs: 0,
       _timers: timers,
       get G() { return G; },
+      made,
       get seat() { return seatReport(seatName, sandbox, G); },
       // Same shape the specs use: race(id, tod, wx) → wait info().track → go().
       async race(id, tod, wx, opts) {

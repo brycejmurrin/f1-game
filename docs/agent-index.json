@@ -1713,6 +1713,7 @@
         "tests/unit/settings-import-safety.test.mjs",
         "tests/unit/settings-one-home.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
+        "tests/unit/settings-schema-consistency.test.mjs",
         "tests/unit/settings-search.test.mjs",
         "tests/unit/settings-tabs.test.mjs",
         "tests/unit/share-code.test.mjs",
@@ -4666,6 +4667,11 @@
       "path": "js/render/three/tsl-sky.js",
       "global": "TLXShaders",
       "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tsl-surface.js",
+      "global": "TLXSurface",
+      "roster": "LAZY_GFX_HI"
     },
     {
       "path": "js/render/three/tsl-viewport.js",

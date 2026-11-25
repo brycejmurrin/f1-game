@@ -5,7 +5,8 @@
  * mods: a factory-kit player lapped Monza 10 % under the field. Parts.playerMods now reads the build over the works
  * one. Pinned here, driving the player's own physics:
  *   1. LAP PACE, Monza and Suzuka, McLaren and Williams: a factory-kit lap is within 0.5 % of the same car on
- *      neutral ×1 stat mods, and the old raw-factory mods lap ≥ 3 % faster — the gap this closes.
+ *      neutral ×1 stat mods, and the old raw-factory mods lap ≥ 3 % faster — the gap this closes (Monza Williams,
+ *      a small upgrade: ≥ 2 %, RAW_GAP below).
  *   2. STRAIGHT LINE (Ferrari, field benched, full throttle): an empty free-play sheet IS the works car, and a
  *      speed/accel upgrade above the works part still reaches 0.6·vTop sooner and runs a higher peak.
  *
@@ -74,6 +75,12 @@ async function lap(track, teamId, arm) {
   } finally { g.close(); }
 }
 
+// The raw factory kit's lap gain over the neutral car, per row (≥ 3 % unless named). #6573's brake over-rotation
+// damp stopped the neutral car losing time to mid-corner brake snaps (Monza Williams neutral 151.53 → 146.00 s), so
+// Williams' small-upgrade raw kit now measures 2.6 % at Monza (raw 142.20 s); Suzuka Williams 4.8 %, McLaren ≥ 22 %.
+// Re-anchored from those numbers by Bryce's decision A (PR #6662, 2026-11-25).
+const RAW_GAP = { "monza williams": 0.02 };
+
 for (const track of ["monza", "suzuka"]) for (const teamId of ["mclaren", "williams"]) {
   test(`${track} ${teamId}: the works car laps at neutral pace; the old raw factory kit did not`, { timeout: 300000 }, async () => {
     const neutral = await lap(track, teamId, "neutral");
@@ -81,7 +88,8 @@ for (const track of ["monza", "suzuka"]) for (const teamId of ["mclaren", "willi
     const raw = await lap(track, teamId, "raw");
     for (const k of K) assert.ok(Math.abs(factory.mods[k] - neutral.mods[k]) < 1e-9, `${k}: works mods are the neutral ×1 car`);
     assert.ok(Math.abs(factory.T / neutral.T - 1) <= 0.005, `works ${factory.T.toFixed(2)} s vs neutral ${neutral.T.toFixed(2)} s`);
-    assert.ok(raw.T < neutral.T * 0.97, `raw factory ${raw.T.toFixed(2)} s is the closed gap (neutral ${neutral.T.toFixed(2)} s)`);
+    const gap = RAW_GAP[`${track} ${teamId}`] ?? 0.03;
+    assert.ok(raw.T < neutral.T * (1 - gap), `raw factory ${raw.T.toFixed(2)} s is the closed gap (neutral ${neutral.T.toFixed(2)} s, ≥ ${gap * 100} %)`);
   });
 }
 
