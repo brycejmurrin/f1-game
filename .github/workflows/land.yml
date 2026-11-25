@@ -1482,9 +1482,21 @@ jobs:
           say() { echo "$1" | tee -a "$GITHUB_STEP_SUMMARY"; }
           if [ -z "$LAND_TOKEN" ]; then say "::warning::merge train skipped: LAND_TOKEN is not set (a GITHUB_TOKEN PR starts no CI)"; exit 0; fi
           export GH_TOKEN="$LAND_TOKEN"
-          paused=$(gh api --method GET "repos/$GITHUB_REPOSITORY/issues" -f state=open -f labels=dispatch:merge-pause -f per_page=50 \
-            --jq '[.[] | select(.title == "Dispatch" and (.pull_request | not))] | length > 0') || paused=unreadable
-          if [ "$paused" != false ]; then say "merge train skipped: dispatch:merge-pause is set (or unreadable: $paused)"; exit 0; fi
+          # merge_paused (finding 7, 2026-11-21): true only while the open `Dispatch` issue carries dispatch:merge-pause AND
+          # that label's newest `labeled` event is the repository owner's own click (no app), as dispatch.mjs counts it; an
+          # agent's pause is ignored. Prints true|false; fails, printing nothing, when a read fails.
+          merge_paused() {
+            local n
+            n=$(gh api --method GET "repos/$GITHUB_REPOSITORY/issues" -f state=open -f labels=dispatch:merge-pause -f per_page=50 \
+              --jq '[.[] | select(.title == "Dispatch" and (.pull_request | not)) | .number] | first // 0') || return 1
+            [[ "$n" =~ ^[0-9]+$ ]] || return 1
+            [ "$n" != 0 ] || { echo false; return 0; }
+            gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$n/events?per_page=100" \
+              --jq '.[] | select(.event == "labeled" and .label.name == "dispatch:merge-pause") | {login: .actor.login, app: .performed_via_github_app}' \
+              | jq -s -r --arg o "$GITHUB_REPOSITORY_OWNER" 'last | if . != null and .login == $o and .app == null then "true" else "false" end'
+          }
+          paused=$(merge_paused) || paused=unreadable   # #6456 side finding: the owner's click only; unreadable pauses (fail-safe)
+          if [ "$paused" != false ]; then say "merge train skipped: dispatch:merge-pause is set by the owner (or unreadable: ${paused:-empty})"; exit 0; fi
           # The push credential rides in git's environment config, never argv or .git/config.
           export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.https://github.com/.extraheader"
           GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$LAND_TOKEN" | base64 -w0)"; export GIT_CONFIG_VALUE_0
