@@ -223,3 +223,64 @@ test("Telemetry axis switching uses the other trace past the reference's last sa
   assert.equal(time.checked, true);
   assert.equal(reference.value, "1", "the selected comparison reference stays in place");
 });
+
+// #6459 row 8: the Aero Lab drill writes G.flow / G.session to start a Monza
+// GP race; restore() (run when the drill's race ends or cannot start) must put
+// them back, the flow through G's setter so Career and SeasonCal re-engage.
+function element() {
+  return {
+    hidden: false, width: 0, height: 0,
+    setAttribute() {}, append() {}, remove() { this.removed = true; },
+    getContext: () => null,
+  };
+}
+
+function loadLearnDoor() {
+  const path = new URL("../../js/ui/learn-door.js", import.meta.url);
+  const levels = [];
+  const context = {
+    document: { createElement: element, body: { append() {} } },
+    window: { matchMedia: () => ({ matches: false }) },
+    DrivingLine: { STRIDE: 8 },
+    Tracks: { LIST: [{ id: "bahrain" }, { id: "monza" }] },
+    Wind: { level: () => levels.at(-1) ?? "calm", setLevel: v => levels.push(v) },
+    UiExperience: { leavePracticePick() {} },
+    Float32Array,
+  };
+  vm.runInNewContext(readFileSync(path, "utf8") + "\nthis.LearnDoor = LearnDoor;", context,
+    { filename: fileURLToPath(path) });
+  return context.LearnDoor;
+}
+
+function makeG() {
+  const engaged = [];
+  let flow = "career", goal = "none";
+  const G = {
+    state: "menu", netPlay: { active: () => false },
+    get flow() { return flow; }, set flow(v) { flow = v; engaged.push(v); },
+    session: "quali", trackIdx: 0, raceWeather: "wet", raceChangeable: true, raceGrid: "real",
+    duel: true, raceDirtyAir: "modern",
+    coach: { practiceGoal: () => goal, setPracticeGoal: v => { goal = v; } },
+    startRace() { this.started = { flow, session: this.session, trackIdx: this.trackIdx }; },
+  };
+  return { G, engaged };
+}
+
+test("Aero Lab drill restore() puts flow and session back", () => {
+  const LearnDoor = loadLearnDoor();
+  const { G, engaged } = makeG();
+  let drill, dirtyAir = G.raceDirtyAir;
+  LearnDoor.launchAeroDrill(G, d => { drill = d; }, level => { dirtyAir = level; });
+
+  assert.deepEqual(G.started, { flow: "gp", session: "race", trackIdx: 1 }, "the drill races a Monza GP");
+  assert.ok(drill, "the drill is activated");
+
+  drill.restore();
+  assert.equal(G.flow, "career");
+  assert.equal(G.session, "quali");
+  assert.equal(engaged.at(-1), "career", "flow is restored through the setter (Career/SeasonCal re-engage)");
+  assert.equal(G.trackIdx, 0);
+  assert.equal(G.raceWeather, "wet");
+  assert.equal(G.duel, true);
+  assert.equal(dirtyAir, "modern");
+});
