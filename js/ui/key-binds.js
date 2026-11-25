@@ -99,6 +99,8 @@ function create(G) {
       delete btn.dataset.armed;
       window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("blur", disarmOnBlur);
+      window.removeEventListener("focusin", disarmOnFocus, true);
+      window.removeEventListener("cancel", onCancel, true);
       if (!dev.keys) Input.padCapture(null);
       return out;
     }
@@ -115,7 +117,7 @@ function create(G) {
       const focus = { id, slot };   // profile saves can synchronously re-render/disarm
       const r = dev.set(id, slot, v);
       if (!r.ok) {
-        const prefix = r.reason === "reserved" ? `${dev.label(v)} is reserved by the menus — ` : "";
+        const prefix = r.reason === "reserved" ? `${dev.label(v)} is reserved by the ${r.by === "browser" ? "browser" : "menus"} — ` : "";
         setNote(`${prefix}press another, or Esc.`);
         return;
       }
@@ -130,10 +132,12 @@ function create(G) {
     // document listener (the menu walker, the Escape handler, Input itself),
     // and swallows the key: a captured key must not also steer, page or close.
     // Synthetic keydowns (the gamepad walker dispatches ArrowUp/Down at the
-    // document to move focus) are not keys the player pressed — ignored. The
+    // document to move focus) are not keys the player pressed — ignored, but a
+    // synthetic Escape (browser Back, pad B) still cancels (#6262). The
     // controller section takes only Escape from the keyboard (cancel).
     function onKey(e) {
-      if (!armed || !e.isTrusted) return;
+      const esc = e.code === "Escape" || e.key === "Escape";
+      if (!armed || (!e.isTrusted && !esc)) return;
       if (!onScreen()) { disarm(true, false); return; }   // not consumed: the key is the race's
       /* AN IME IS TYPING, NOT BINDING. While a composition is active the
          browser reports keyCode 229 and a `key` of "Process" instead of the
@@ -144,9 +148,9 @@ function create(G) {
          the pairing MDN recommends. */
       if (e.isComposing || e.keyCode === 229) return;
       const erase = e.code === "Backspace" || e.code === "Delete";
-      if (dev.keys || erase || e.code === "Escape") { e.preventDefault(); e.stopPropagation(); }
+      if (dev.keys || erase || esc) { e.preventDefault(); e.stopPropagation(); }
       if (e.repeat) return;
-      if (e.code === "Escape") { disarm(); return; }
+      if (esc) { disarm(); return; }
       // BACKSPACE / DELETE UNBINDS the armed slot — on the pad table too, since a
       // controller button cannot mean "none". Input.clear*Binding had no caller,
       // so a slot could be moved but never emptied. The price: neither key can be
@@ -175,6 +179,8 @@ function create(G) {
       setNote(dev.armedNote);
       window.addEventListener("keydown", onKey, true);
       window.addEventListener("blur", disarmOnBlur);
+      window.addEventListener("focusin", disarmOnFocus, true);
+      window.addEventListener("cancel", onCancel, true);
       if (!dev.keys) Input.padCapture(accept);
     }
     function disarm(quiet, restoreFocus = true) {
@@ -184,6 +190,15 @@ function create(G) {
       if (!quiet) setNote(dev.idle);
     }
     function disarmOnBlur() { disarm(false, false); }
+    // Focus leaving the armed chip hands the next key to that control (#6281).
+    function disarmOnFocus(e) { if (armed && e.target !== armed.btn) disarm(false, false); }
+    // A dialog `cancel` (pad B, Android Back) cancels the recording, not the page.
+    function onCancel(e) {
+      if (!armed || !e.target || !e.target.contains || !e.target.contains(host)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      disarm();
+    }
 
     function slotButton(a, i) {
       const b = document.createElement("button");
@@ -278,7 +293,8 @@ function create(G) {
           if (primary.length && secondary.length) help.append(" / ");
           secondary.forEach((c) => help.append(chip(c)));
         }
-        if (tail) help.append(` ${tail}`);
+        const text = typeof tail === "function" ? tail() : tail;
+        if (text) help.append(` ${text}`);
       });
     }
     if (resetBtn) resetBtn.onclick = () => {
@@ -290,13 +306,17 @@ function create(G) {
       }
       save(); tick(); render(); setNote(dev.resetNote);
     };
-    const api = { render, arm, disarm, hidden: () => !!(wrap && wrap.hidden) };
+    const api = { render, renderHelp, arm, disarm, hidden: () => !!(wrap && wrap.hidden) };
     sections.push(api);
     render();
     return api;
   }
 
   const desktop = () => document.body.classList.contains("desktop");
+  // Help follows Accessibility's HOLD / TOGGLE rows (#6289).
+  const toggled = (id) => !!(Input.getHoldMode && Input.getHoldMode()[id] === "toggle");
+  const gasTail = () => (toggled("throttle") ? "tap to toggle" : "");
+  const lookTail = () => (toggled("lookBack") ? "tap to toggle" : "hold");
   // The one line a phone sees while both tables are hidden: what to press to
   // make them appear. Gone the moment either table shows, and on a desktop.
   const hint = $("pm-ctl-hint");
@@ -321,10 +341,10 @@ function create(G) {
     idle: "Tap a key slot, then press the key you want. Esc cancels, Backspace clears the slot. A key already used by another action moves here.",
     armedNote: "Press a key… (Esc cancels, Backspace clears)", resetNote: "Keys reset to the defaults.",
     groups: [
-      ["Steer", ["left", "right"]], ["Gas", ["throttle"]], ["Brake", ["brake"]],
+      ["Steer", ["left", "right"]], ["Gas", ["throttle"], gasTail], ["Brake", ["brake"]],
       ["Boost", ["boost"], "tap to toggle"], ["Overtake", ["overtake"]], ["Active aero", ["aero"]],
       ["Camera", ["camera"], "cycles"], ["Shift up", ["shiftUp"]], ["Shift down", ["shiftDown"], "when GEARS: MANUAL"],
-      ["Look back", ["lookBack"], "hold"], ["Recover", ["recover"]], ["Radio check", ["radio"], "gaps from the engineer"], ["Mirror", ["mirror"], "on / off"], ["Pause", ["pause"]],
+      ["Look back", ["lookBack"], lookTail], ["Recover", ["recover"]], ["Radio check", ["radio"], "gaps from the engineer"], ["Mirror", ["mirror"], "on / off"], ["Pause", ["pause"]],
     ],
   });
   // RESET clears the selected device's buttons, axes and saved stick centre.
@@ -361,10 +381,10 @@ function create(G) {
     idle: "Tap a slot, then press a button on the controller. Esc cancels, Backspace clears the slot. The stick and D‑pad steer.",
     armedNote: "Press a controller button… (Esc cancels, Backspace clears)", resetNote: "Controller reset to the defaults.",
     groups: [
-      ["Steer", "left stick / D‑pad"], ["Gas", ["throttle"]], ["Brake", ["brake"], "(triggers are analog)"],
+      ["Steer", "left stick / D‑pad"], ["Gas", ["throttle"], gasTail], ["Brake", ["brake"], "(triggers are analog)"],
       ["Boost", ["boost"], "toggle"], ["Overtake", ["overtake"]], ["Active aero", ["aero"]],
       ["Camera", ["camera"], "cycles"], ["Shift up", ["shiftUp"]], ["Shift down", ["shiftDown"]],
-      ["Look back", ["lookBack"], "hold"], ["Recover", ["recover"]], ["Radio check", ["radio"], "gaps from the engineer"], ["Mirror", ["mirror"], "on / off"], ["Pause", ["pause"]],
+      ["Look back", ["lookBack"], lookTail], ["Recover", ["recover"]], ["Radio check", ["radio"], "gaps from the engineer"], ["Mirror", ["mirror"], "on / off"], ["Pause", ["pause"]],
     ],
   });
   // A pad that appears mid-session (gamepadconnected fires on its first press)
@@ -698,6 +718,7 @@ function create(G) {
   }
   window.addEventListener("apexbuttonprofileapply", () => { disarmAll(); rerender(); });
   window.addEventListener("blur", cancelCalibration);
+  window.addEventListener("apexholdmodechange", () => { for (const s of sections) s.renderHelp(); });
   if (keys || pad) Log.info("ui", "KeyBinds.create");
   return {
     render() { for (const s of sections) s.render(); },

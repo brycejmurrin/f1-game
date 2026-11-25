@@ -1252,6 +1252,8 @@ const Input = (function () {
         (tag === "SELECT" && act === "pause" && printable);
       if (down && !e.repeat && (act === "pause" || e.code === "Escape") && !inTextField) {
       if (act === "pause") {
+        // A menu spent it (an arrow PAUSE moved focus): not also pause (#6282).
+        if (e.defaultPrevented) return;
         clearDriveToggles();
         if (onPauseCb) onPauseCb();
         return;
@@ -2929,7 +2931,10 @@ const Input = (function () {
     setPedalSlide(m) { pedalSlide = m === "ease" ? "ease" : "instant"; return pedalSlide; },
     pedalSlide: () => pedalSlide,
     setThrottleLatch(on) { throttleLatch = !!on; throttleLatched = false; btnThrottle = false; paintLatch(); },
-    setHoldMode(m) { holdMode = InputBindings.parseHoldMode(m); clearDriveToggles(); },
+    setHoldMode(m) {
+      holdMode = InputBindings.parseHoldMode(m); clearDriveToggles();
+      if (window.dispatchEvent && typeof Event === "function") window.dispatchEvent(new Event("apexholdmodechange"));   // Help wording
+    },
     getHoldMode: () => InputBindings.parseHoldMode(holdMode),
     // Every race starts OFF: touch latch + keyboard/pad toggles from the last race.
     dropLatch() {
