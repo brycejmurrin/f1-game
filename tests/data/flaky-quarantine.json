@@ -29,6 +29,17 @@
       "expires": "2026-12-02",
       "review": "Issue #6665. Exit: after the fix, three cold CI passes of the spread leg without retry reading pipelines 0 bindGroups 0 buffers 0, then remove this row; any extension needs fresh failed-run evidence and a new deadline.",
       "why": "Intermittent (~1 in 2 on CI since #6485 b8448f96): red on 3e60222a (job 139287992130), green on the same code at 1a7caffa (job 139271462975, spread placed 21; 0/0/0). Fixer probes: three mints a new RenderObject/bind group for an existing pool mesh (geo #494, MeshBasicNodeMaterial, owner @1449) with poolNew unchanged; issue #6665."
+    },
+    {
+      "spec": "tests/specs/perf-boost-press-pipelines-gl.spec.js",
+      "title": "TLX WebGL2: BOOST presses 2..N re-mint no BOOST pipelines and add no background ones",
+      "signature": "^Test timeout of 900000ms exceeded\\.$",
+      "owner": "brycejmurrin",
+      "since": "2026-11-25",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/45661985192/job/139374730606",
+      "expires": "2026-12-02",
+      "review": "Fix worker in flight (speed-up of the frame-count waits). Exit: after the fix, three cold CI passes of this spec without retry, then remove this row; any extension needs fresh failed-run evidence and a new deadline.",
+      "why": "Timed out at 903.7 s on #6669 47e16525 (job 139374730606) and 905.5 s on Pages 3834d98d (job 139242485717); passed in 652 s on 1a7caffa (job 139271463724). llvmpipe: slow steps are ~137 s frame-count waits (Wait for function); not caused by the cars."
     }
   ]
 }
