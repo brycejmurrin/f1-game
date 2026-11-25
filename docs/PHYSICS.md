@@ -970,13 +970,13 @@ separation pass per step. Its rules, each with the measurement that set it
 (`scratch/collision-bench.mjs`, `tests/unit/collision-contact-vm.test.mjs`):
 
 - **A rear-end is an impulse, `j = (1 + e) · relV / (invA + invB)`**, with
-  `AiDrive.bumpRestitution`: e = 0 below 1 m/s closing (a resting contact — a
+  `ContactGeometry.bumpRestitution`: e = 0 below 1 m/s closing (a resting contact — a
   car sitting on a bumper must not jitter off it), 0.1 from 3 m/s (real cars'
   floor at speed), a ramp between. The old `0.5 · relV` was (1 + e) = 0.5: the
   pair was still closing at half speed after it and penetration ate the rest
   over ~30 frames, which is why a bump read as being pushed along. The car in
   front takes the punt in full; a HUMAN in front is capped at a closing speed
-  of `AiDrive.humanPuntCap()` (8 m/s at PACE 1, pace-scaled) so an AI misjudging
+  of `ContactGeometry.humanPuntCap()` (8 m/s at PACE 1, pace-scaled) so an AI misjudging
   a braking zone cannot launch the player, while the AI still pays its share.
   The human's inverse mass stays 0.5 (`AiDrive.humanInvMass`): the player is
   the heavy car in every exchange.
@@ -985,7 +985,7 @@ separation pass per step. Its rules, each with the measurement that set it
   either car's `psi * yawMix(psi)` is non-zero — the player past 20 degrees of
   yaw, never an AI car, which has no real heading). Since 2026-09-16 that
   impulse carries restitution and Coulomb friction: `e` is the SAME
-  `AiDrive.bumpRestitution` ramp as the rear-end bullet above, and a tangential
+  `ContactGeometry.bumpRestitution` ramp as the rear-end bullet above, and a tangential
   impulse clamped to `0.5 * j` is what lets leaning on a rival transfer lateral
   momentum and yaw at all — before it, the resolver could only ever push along
   the contact normal, so a rub was a shove and never a scrub. The tangential
@@ -998,7 +998,7 @@ separation pass per step. Its rules, each with the measurement that set it
   does not run when both angles are zero, which is every AI pair and every
   player under the yaw floor.
 - **A side rub is a small deceleration, taken once a frame**
-  (`AiDrive.rubDecel`, 3 m/s² permanent / 3.5 street, on the yielder only). It
+  (`ContactGeometry.rubDecel`, 3 m/s² permanent / 3.5 street, on the yielder only). It
   was a 0.995 factor applied on every relaxation pass — 2 % a frame, 48 m/s² at
   40 m/s — and a player boxed between two AI cars lost 18 m/s in a second with
   zero slip. Bodywork on bodywork costs little; interlocking wheels are the

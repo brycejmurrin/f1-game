@@ -15,13 +15,13 @@
  *     pair was STILL closing at half speed after it and penetration ate the
  *     rest over ~30 frames — a bump read as being pushed along.
  *
- * Fixes: the rub is a small absolute deceleration (AiDrive.rubDecel) taken once
+ * Fixes: the rub is a small absolute deceleration (ContactGeometry.rubDecel) taken once
  * a frame; "behind" is less than half a car alongside (AiDrive.sideYieldsA,
  * the FIA's "significant portion alongside"); the yielding AI keeps its full
  * steering authority when steering AWAY from the contact and targets the
  * LATERALLY nearest car; the impulse is (1 + e) * relV / (invA + invB) with a
- * real restitution (AiDrive.bumpRestitution) and a pace-scaled cap on the
- * player's forward punt (AiDrive.humanPuntCap).
+ * real restitution (ContactGeometry.bumpRestitution) and a pace-scaled cap on the
+ * player's forward punt (ContactGeometry.humanPuntCap).
  *
  * Run: node --test tests/unit/collision-contact-vm.test.mjs   (~20 s, one boot)
  */
@@ -404,7 +404,7 @@ test("bump bounciness is taken from a pre-step speed, the impulse from the live 
   const src = readFileSync(join(ROOT_C, "js/physics/collide.js"), "utf8");
   assert.match(src, /for \(let i = 0; i < ranked\.length; i\+\+\) \{ const c = ranked\[i\]; if \(!ownsPose\(c\)\) c\._preColSpd = c\._nOk \? c\._nSpd : c\.speed; \}/,
     "local contact bodies need the snapshot, and a net car's reference is its predicted speed");
-  assert.match(src, /const e = AiDrive\.bumpRestitution\(relV0 > 0 \? relV0 : relV\);/,
+  assert.match(src, /const e = CG\.bumpRestitution\(relV0 > 0 \? relV0 : relV\);/,
     "the coefficient must read the pre-step closing speed");
   assert.match(src, /const jImp = \(1 \+ e\) \* relV \/ iSum;/,
     "the impulse must keep the LIVE relative velocity — that is momentum");
@@ -623,7 +623,7 @@ function netRearEnd(localBehind) {
   const remoteBefore = { speed: remote.speed, contactT: remote.contactT };
   const localV0 = local.speed;
   solver.resolveCollisions(f.G.cars, DT);
-  const e = vm.runInContext("AiDrive", f.ctx).bumpRestitution(10);
+  const e = vm.runInContext("ContactGeometry", f.ctx).bumpRestitution(10);
   return { dv: local.speed - localV0, e, remote, remoteBefore };
 }
 
@@ -636,7 +636,7 @@ test("a straight rear-end into a net-owned rival gives the local car the full (1
 
 test("rear-ended by a net-owned rival, the local car is punted no further than the full correction", () => {
   const { dv, e, remote, remoteBefore } = netRearEnd(false);
-  // The punt cap (AiDrive.humanPuntCap() = 8 at PACE 1) still bounds each
+  // The punt cap (ContactGeometry.humanPuntCap() = 8 at PACE 1) still bounds each
   // relaxation pass; an immovable rear car keeps closing after the first, so
   // the later passes top the local car up until the pair stops closing.
   const capV = 8;
@@ -745,8 +745,8 @@ test("an AI rear-end punts the player no further than the cap over all four pass
   solver.resolveCollisions([], DT);   // binds track / netPlay for pairContact
   const ct = solver.pairContact(ai, p);
   assert.ok(ct && !ct.oriented && !ct.sideContact, "the scenario must take the straight rear-end path");
-  const A = vm.runInContext("AiDrive", ctx);
-  const cap = ct.iB * (1 + A.bumpRestitution(30)) * A.humanPuntCap() / ct.iSum;   // the designed one-shove ceiling
+  const CG = vm.runInContext("ContactGeometry", ctx);
+  const cap = ct.iB * (1 + CG.bumpRestitution(30)) * CG.humanPuntCap() / ct.iSum;   // the designed one-shove ceiling
   solver.resolveCollisions([ai, p], DT);
   const gain = p.speed - 20;
   assert.ok(gain > 0, "the player was punted");
@@ -781,8 +781,8 @@ test("clean-room 34: a YAWED player rear-ended by an AI is punted no further tha
     const ct = solver.pairContact(ai, p);
     if (!ct || !ct.oriented) continue;
     oriented++;
-    const A = vm.runInContext("AiDrive", ctx), inv = A.humanInvMass(false);
-    cap = Math.max(cap, inv * 1.1 * A.humanPuntCap() / (inv + 1));
+    const inv = vm.runInContext("AiDrive", ctx).humanInvMass(false);
+    cap = Math.max(cap, inv * 1.1 * vm.runInContext("ContactGeometry", ctx).humanPuntCap() / (inv + 1));
     const v0 = Math.hypot(p.speed, p.vLat);
     solver.resolveCollisions([ai, p], DT);
     worst = Math.max(worst, Math.hypot(p.speed, p.vLat) - v0);

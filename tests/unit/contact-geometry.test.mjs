@@ -19,7 +19,7 @@ function setup(options = {}) {
   const collision=Collide.create(G,options.onEffect || (()=>{}));
   return {geometry,collision,G,ai,Collide};
 }
-const {geometry:C,ai:AI,Collide}=setup();
+const {geometry:C,Collide}=setup();
 const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-8,`${a} != ${b}`);
 test("SAT rejects rotated bounding-box overlap without touching bodywork",()=>{
   assert.equal(C.overlap(3,-3,Math.PI/3,Math.PI/3),null);
@@ -73,8 +73,8 @@ test("a yawed pair separates at the restitution fraction of its closing speed",(
   const b={angle:.6,invMass:1,invInertia:0,vx:10,vy:0,omega:0};
   const j=C.impulse(a,b,-4,0,n);
   close(j.closing,20);close(j.slide,0);
-  close((b.vx+j.bx)-(a.vx+j.ax),AI.bumpRestitution(20)*20);
-  assert.ok(AI.bumpRestitution(20)>0,"the shared ramp is what supplies e");
+  close((b.vx+j.bx)-(a.vx+j.ax),C.bumpRestitution(20)*20);
+  assert.ok(C.bumpRestitution(20)>0,"the shared ramp is what supplies e");
   // Under the ramp's floor a pair leaning on each other must not be pushed
   // apart at all, or a settled contact jitters for as long as it lasts.
   const s={angle:.6,invMass:1,invInertia:0,vx:11,vy:0,omega:0};
@@ -351,10 +351,29 @@ test("AI aim stays a pad inside the pit / exit wall line the contact clamp uses 
   close(CG.pitWallAim(tr,150,150,-9),-(lim.l-.35));    // mirrored on a left-hand pit
   tr.pit.painted=true;assert.equal(CG.pitWallAim(tr,150,150,5.9),5.9);   // painted lane: no wall
 });
+// Design checks moved with the functions from ai-drive.test.mjs (#6503).
+test("rubDecel is a small absolute deceleration, a touch firmer on streets", () => {
+  assert.equal(C.rubDecel(false), 3);
+  assert.ok(C.rubDecel(true) > C.rubDecel(false));
+  // Sanity: a second of rub at any speed costs a few m/s, not a third of it —
+  // the proportional 0.995/frame it replaced took 26 % a second (x4 per pass).
+  assert.ok(C.rubDecel(true) * 1 < 5);
+});
+
+test("bumpRestitution: resting below 1 m/s, a tenth from 3 m/s, a ramp between", () => {
+  assert.equal(C.bumpRestitution(0), 0);
+  assert.equal(C.bumpRestitution(0.9), 0);
+  assert.equal(C.bumpRestitution(2), 0.05);
+  assert.equal(C.bumpRestitution(3), 0.1);
+  assert.equal(C.bumpRestitution(30), 0.1, "never bouncier than a tenth");
+  assert.equal(C.bumpRestitution(undefined), 0);
+  assert.ok(C.humanPuntCap() >= 5 && C.humanPuntCap() <= 12, "a cap a player notices but is not launched by");
+});
+
 // #6503 pin: the player contact rules, bit for bit (Object.is), so moving them between modules
 // cannot change a value. Characterization of the shipped numbers, not a design claim.
 test("contact rules pin: bumpRestitution, rubDecel, humanPuntCap are bit-identical",()=>{
-  const R=AI;
+  const R=C;
   const table=[[0,0],[0.5,0],[1,0],[1.5,0.025],[2,0.05],[2.5,0.07500000000000001],[3,0.1],[5,0.1],[30,0.1],[-4,0],[undefined,0],[NaN,0]];
   for(const [v,e] of table) assert.ok(Object.is(R.bumpRestitution(v),e),`bumpRestitution(${v}) = ${R.bumpRestitution(v)}, pinned ${e}`);
   assert.ok(Object.is(R.rubDecel(false),3));assert.ok(Object.is(R.rubDecel(true),3.5));
