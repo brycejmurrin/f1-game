@@ -49,8 +49,23 @@ export function hookPipelines() {
     const ud = g.userData ? Object.keys(g.userData).slice(0, 4).join("/") : "";
     return " v" + (pos ? pos.count : 0) + " i" + (g.index ? g.index.count : 0) + " [" + Object.keys(a).sort().join(",") + "]" +
       " kind " + (g.__tlxKind || "?") + (bs ? " r" + bs.radius.toFixed(2) : "") + (ud ? " ud " + ud : "") +
-      " batch " + (g.__tlxDrawnBatch === undefined ? "-" : g.__tlxDrawnBatch) + (P.geoSeen.has(g.id) ? " seen" : " new");
+      " batch " + (g.__tlxDrawnBatch === undefined ? "-" : g.__tlxDrawnBatch) + (P.geoSeen.has(g.id) ? " seen" : " new") +
+      (g.__censusFrom ? " built " + g.__censusFrom : "");
   };
+  // WHO BUILT IT (#6665): the bind happens inside three's render, so its stack names no game code. Every mesh made
+  // from the hook on (gfx.createMesh; game.js's G.gfx is this object) carries the stack that built it into the rows.
+  const stackOf = () => (new Error().stack || "").split("\n").slice(3, 9).map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, "")).join(" < ").slice(0, 500);
+  for (const name of ["createMesh", "createTexMesh"]) {
+    const om = typeof GLX[name] === "function" ? GLX[name] : null;
+    if (!om) continue;
+    try {
+      GLX[name] = function () {
+        const r = om.apply(this, arguments);
+        try { if (r && r.geo) r.geo.__censusFrom = stackOf(); } catch (_) { /* naming is best-effort */ }
+        return r;
+      };
+    } catch (_) { /* a frozen facade: no creation stacks */ }
+  }
   const bnd = T.renderer._bindings;
   if (bnd && typeof bnd.getForRender === "function") {
     const og = bnd.getForRender;
@@ -91,7 +106,7 @@ export function hookPipelines() {
       const orig = dev[name];
       dev[name] = function (desc) {
         P[key]++;
-        try { if (P.gpuLogOn && P.gpuLog.length < 200) P.gpuLog.push({ at: P.frames, kind: name, label: String((desc && desc.label) || "(none)").slice(0, 80), size: desc && desc.size, usage: desc && desc.usage, ro: P.ro ? String(P.ro).slice(0, 400) : undefined,
+        try { if (P.gpuLogOn && P.gpuLog.length < 200) P.gpuLog.push({ at: P.frames, kind: name, label: String((desc && desc.label) || "(none)").slice(0, 80), size: desc && desc.size, usage: desc && desc.usage, ro: P.ro ? String(P.ro).slice(0, 900) : undefined,
           from: (new Error().stack || "").split("\n").slice(2, 9).map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, "")).join(" < ").slice(0, 600) }); } catch (_) { /* naming is best-effort */ }
         return orig.apply(this, arguments);
       };
