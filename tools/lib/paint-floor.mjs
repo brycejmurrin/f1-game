@@ -131,9 +131,10 @@ export function measurePaintInPage({ roots = "body", insets = null } = {}) {
       const s = n.nodeValue.trim();
       const el = n.parentElement;
       if (!s || !el || /^(script|style|noscript|template|option)$/i.test(el.tagName) || el.closest("[aria-hidden='true'], [inert]") || !visible(el)) continue;
-      // Screen-reader-only text (a 1x1 clipped live region, e.g. #announce-live) is never painted.
+      // Screen-reader-only text (a 1x1 CLIPPED live region, e.g. #announce-live) is never painted. A display:contents
+      // wrapper is 0x0 too but does not clip, so its text still counts.
       const er = el.getBoundingClientRect();
-      if (er.width < 2 || er.height < 2) continue;
+      if ((er.width < 2 || er.height < 2) && (clips(el) || getComputedStyle(el).clipPath !== "none")) continue;
       range.selectNodeContents(n);
       const r = range.getBoundingClientRect();
       if (r.width < 2 || r.height < 2) continue;
