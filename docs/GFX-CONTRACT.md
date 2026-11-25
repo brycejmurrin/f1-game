@@ -46,6 +46,9 @@ Lifecycle / capability:
   setDprBoost(n)/getDprBoost()  TLX + GLX (WGX lacks it; feature-detect): RESOLUTION MAX asks
     for DPR n (3) above the tier's cap; 0 drops it (every other RESOLUTION,
     PerfGov's budget shed). capDpr(n) (crash sentinel, TLX) still wins. #5222.
+  setDprPreset(n)            TLX + GLX (feature-detect): GRAPHICS HIGH's floor, sent by
+    PerfGov.setUserTier (2 at user tier 0, else 0): a phone's 1.5 becomes 2.
+    Raise-only like the boost; the budget shed leaves it. #5222.
   setSpatialUpscale(on)/getSpatialUpscale()  GLX + WGX + TLX SGSR1 spatial
     upscale (opt-in; feature-detect). See docs/research/UPSCALING-2026-09.md.
   width / height / aspect    getters (backing-store pixels).

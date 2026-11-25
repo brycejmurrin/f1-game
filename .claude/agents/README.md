@@ -37,7 +37,8 @@ the `total-audit` workflow. Curvature / PACE semantics →
 with `focus: dead-code` (parent applies via **slim-bloat**). A red Actions or
 Pages run → `ci-red-triage`. A hunt → `prior-art-scout`, then one
 `code-hunter` per slice, then `finding-verifier` on the rows before anyone
-fixes. A skill / agent / hook / rule / AGENTS.md edit → `surface-reviewer`
+fixes; the parent reports the verified rows as one `tracking` issue, never a
+docs PR (skill steward `references/labels.md` §Hunt and survey output). A skill / agent / hook / rule / AGENTS.md edit → `surface-reviewer`
 over the set of units it touches. A scoped implementation to hand off and talk
 to while it runs → `worker` (one per disjoint path set, named so peers can
 message it). The parent keeps the PR.

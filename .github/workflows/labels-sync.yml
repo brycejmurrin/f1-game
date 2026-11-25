@@ -1,0 +1,60 @@
+name: Labels sync
+
+# LABELS SYNC (Bryce's `decision: A`, 2026-11-25 ~02:55Z, via the orchestrator).
+# `.github/labels.json` is the label list (name, colour, description) and the scheme lives in skill steward
+# `references/labels.md`. Nothing applied it before this: dispatch.yml's "Labels drift" step only reports, and no
+# agent tool sets a label's colour or description. This job is the one writer: for each labels.json row it runs
+# `gh label create --force`, which creates a missing label or updates its colour and description in place. It NEVER
+# deletes or renames a label (a label left out of labels.json is untouched), and it changes no issue's labels.
+#
+# Dispatch only (Bryce's click; a label edit is a repo-wide change). `dry_run` prints what would change and writes
+# nothing. Least privilege: issues: write is what the labels API needs; contents: read for the checkout. The token is
+# GITHUB_TOKEN, so a label edit starts no workflow run.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "print the rows that differ, change nothing"
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: labels-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: claude/f1-game-project-26h3ng
+          persist-credentials: false
+      - name: Apply .github/labels.json (create or update; never delete)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          gh label list --repo "$GITHUB_REPOSITORY" --limit 500 --json name,color,description > "$RUNNER_TEMP/live.json"
+          changed=0
+          while IFS= read -r row; do
+            name=$(jq -r .name <<<"$row"); color=$(jq -r .color <<<"$row"); desc=$(jq -r .description <<<"$row")
+            have=$(jq -c --arg n "$name" '.[] | select(.name == $n)' "$RUNNER_TEMP/live.json")
+            if [ -n "$have" ] && [ "$(jq -r '.color | ascii_downcase' <<<"$have")" = "${color,,}" ] && [ "$(jq -r '.description // ""' <<<"$have")" = "$desc" ]; then
+              continue
+            fi
+            changed=$((changed + 1))
+            if [ -n "$have" ]; then verb=update; else verb=create; fi
+            echo "$verb: $name #$color — $desc"
+            if [ "$DRY_RUN" != true ]; then
+              gh label create "$name" --repo "$GITHUB_REPOSITORY" --color "$color" --description "$desc" --force
+            fi
+          done < <(jq -c '.[]' .github/labels.json)
+          echo "labels.json: $(jq length .github/labels.json) rows, $changed $( [ "$DRY_RUN" = true ] && echo 'would change' || echo 'changed')"

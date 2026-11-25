@@ -243,6 +243,22 @@ function placeFromTrack(car, sampled) {
   car.pz = sampled.p[2] + sampled.r[2] / rl * car.x;
   car.head = Math.atan2(sampled.t[0], sampled.t[2]);
 }
+// Teleport hygiene (jump/aiPlace): the wall/rescue accumulators describe the OLD spot; left, a wedge-then-jump
+// carries ~3 s of rescueT and fires a surprise auto-rescue mid-drive (measured).
+function settleCar(c) {
+  c.vLat = 0; c.yawRateCur = 0; c.rescueT = 0; c.wallT = 0; c.wasOnWall = false;
+  c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.offCut = false;
+}
+// frac → arc m in [0, L) (jump/aiPlace/reset): nil reads 0, −0.25 → 0.75. cinematic() keeps its own form (undefined → NaN; D8 #6495).
+const fracToProg = (frac) => ((((frac != null ? frac : 0) % 1) + 1) % 1) * G.track.total;
+// Shove each car keep(c) rejects `back` m behind itself, s and prog coupled (stop: also speed 0): clears the stage.
+const parkOthers = (keep, back = 800, stop = false) => G.cars.forEach((c) => { if (!keep(c)) { c.prog -= back; c.s = wrapS(c.s - back); if (stop) c.speed = 0; } });
+// rival()/rivals(): AI car c dProg m ahead, dx m beside the player, at speed (default the player's); no standing-start getaway.
+function placeBeside(c, dProg, dx, speed) {
+  const P = G.player, d = dProg || 0;
+  c.prog = P.prog + d; c.s = wrapS(P.s + d); c.x = P.x + (dx || 0); c.xVis = c.x;
+  c.speed = speed != null ? speed : P.speed; c.finished = false; c.lap = P.lap; c.launchOn = false;
+}
 
 let apexSeed = null;   // the last seed an agent set through seed(n) / reset(…, seed)
 const simTick = (d) => ApexLobby.tick(G, d);   // one step()/act() tick (apex-lobby.js)
@@ -255,8 +271,7 @@ const api = {
     // sort and every later physState read goes with it: refuse before touching state.
     if (!finiteOrNil(frac) || !finiteOrNil(speed) || !finiteOrNil(lateral)) return false;
     IncidentSim.release(G.player);
-    const f01 = (((frac || 0) % 1) + 1) % 1;
-    const sNew = wrapS(f01 * G.track.total);
+    const sNew = wrapS(fracToProg(frac));
     // prog is CUMULATIVE (lap*total + s, negative on the grid) — shift it by the
     // arc delta rather than assigning the raw fraction, which erased whole laps
     // from the ranked order on a mid-race jump (measured: lap 1, 5930 → 2889).
@@ -269,12 +284,7 @@ const api = {
     if (speed != null) G.player.speed = speed;
     Tracks.sample(G.track, G.player.s, smp);
     placeFromTrack(G.player, smp);
-    G.player.vLat = 0; G.player.yawRateCur = 0;
-    // Teleport hygiene: the wall/rescue accumulators describe the OLD location.
-    // Left alone, a wedge-then-jump sequence carries ~3 s of rescueT into the
-    // new spot and fires a surprise auto-rescue mid-drive (measured).
-    G.player.rescueT = 0; G.player.wallT = 0; G.player.wasOnWall = false;
-    G.player.wrongT = 0; G.player.wrongWay = false; G.player.offT = 0; G.player.offCut = false;
+    settleCar(G.player);
     if (!(opts && opts.keepLap)) G.player.incidentInvalidLap = true;
     // Sync render-interpolation anchors so lerpS(rPrevS,s,alpha)==s regardless of
     // renderAlpha — the WORLD pair too: playerAnchor()/renderPosOf() draw the
@@ -291,7 +301,7 @@ const api = {
     if (G.loadingScreen && G.loadingScreen.lowerWaitPlate) G.loadingScreen.lowerWaitPlate();
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
-    G.cars.forEach((c) => { if (!c.isPlayer) { c.prog -= 600; c.s = wrapS(c.s - 600); c.speed = 0; } });
+    parkOthers((c) => c.isPlayer, 600, true);
     const r = this.jump(frac, 0, lateral !== undefined ? lateral : 0);
     G.frozen = true;   // hold the scene still for a deterministic screenshot
     return r;
@@ -409,19 +419,19 @@ const api = {
   }),
   garageCam: () => ({
     exterior: typeof GaragePrebuild !== "undefined" && GaragePrebuild.instance() ? GaragePrebuild.instance().state().exterior : null,
-    on: G.setupPreviewOn, spin: G.setupPreviewSpin,
-    az: G.setupPreviewAz, el: G.setupPreviewEl, dist: G.setupPreviewDist,
+    on: G.setupPreviewOn, spin: G.setupCam.spin,
+    az: G.setupCam.az, el: G.setupCam.el, dist: G.setupCam.dist,
     // dist is the ZOOM's stored distance; effDist is what the camera actually
     // used last frame. They differ on the auto-turntable path, which is the one
     // that can misframe — fitD is the auto fit before the clamp, so a test can
     // see the fit diverge (fitD >> effDist) instead of only its symptom.
-    effDist: G.spEffDist, fitD: G.spEffFit, panelFrac: G.spEffPanel,
-    pan: G.setupPreviewPan.slice(),
+    effDist: G.setupCam.effDist, fitD: G.setupCam.effFit, panelFrac: G.setupCam.effPanel,
+    pan: G.setupCam.pan.slice(),
     // ACTIVE AERO in the garage: the switch and the FLAP TRAVEL it eases toward.
     // Separate fields on purpose — the button label follows the switch, so a
     // preview whose blend never moves still reads "X-MODE" while showing a car
     // that has not changed at all.
-    xOn: G.setupPreviewXOn, aeroX: G.setupPreviewAeroX,
+    xOn: G.setupCam.xOn, aeroX: G.setupCam.aeroX,
   }),
   // GARAGE PREBUILD (js/garage/prebuild.js): ready/blockers/last run ms/tap-to-first-frame ms.
   garagePrebuild: () => (typeof GaragePrebuild !== "undefined" && GaragePrebuild.instance() ? GaragePrebuild.instance().state() : null),
@@ -435,9 +445,9 @@ const api = {
   // reads the state; garageStep(dt) advances the ease by dt seconds. Shut: garage_closed.
   garageAero(on, opts) {
     if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
-    if (on !== undefined) G.setSetupAero(!!on, opts);
-    return { xOn: G.setupPreviewXOn, aeroX: +G.setupPreviewAeroX.toFixed(4),
-             mode: G.setupPreviewAeroX > 0.05 ? "X" : "Z" };
+    if (on !== undefined) G.setupCam.setSetupAero(!!on, opts);
+    return { xOn: G.setupCam.xOn, aeroX: +G.setupCam.aeroX.toFixed(4),
+             mode: G.setupCam.aeroX > 0.05 ? "X" : "Z" };
   },
   // Off-by-default X-mode TE strip (`CarMesh.drawAeroEdge`). Real cars do not
   // light their wings; `apex26.aeroEdge=1` is the debug latch.
@@ -452,7 +462,7 @@ const api = {
   garageStep(dt, n) {
     if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     const [step, count] = stepArgs(dt, n);
-    for (let i = 0; i < count; i++) G.stepSetupAero(step);
+    for (let i = 0; i < count; i++) G.setupCam.stepSetupAero(step);
     return this.garageAero();
   },
   // Switch garage car without opening #teampicker — same store writes as the tile
@@ -479,7 +489,7 @@ const api = {
     try { document.documentElement.dataset.team = t.id; } catch (_) { /* no DOM */ }
     // Drop the preview meshes AND the key naming the one still held, or a no-op
     // switch left setup-camera drawing a freed mesh (spMeshBust's two halves).
-    if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) { GarageScene.dropPreviewMeshes(); G._spMeshKey = ""; }
+    if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) { GarageScene.dropPreviewMeshes(); G.setupCam.meshKey = ""; }
     G.buildSetup();
     G.tickUi();
     return { ok: true, switched: true, label, seat };
@@ -488,7 +498,7 @@ const api = {
   garageFrame(view, opts) {
     if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     if (!view) return { ok: false, error: "no_view" };
-    if (view !== "free") G.setSetupView(view);   // a preset resets orbit/target/pan; absolutes go on top
+    if (view !== "free") G.setupCam.setSetupView(view);   // a preset resets orbit/target/pan; absolutes go on top
     let o = opts || {};
     const num = (v) => (Number.isFinite(v) ? v : null);
     const xyz = (v) => Array.isArray(v) && v.length === 3 && v.every((n) => Number.isFinite(+n));
@@ -504,20 +514,20 @@ const api = {
     // fov (deg) / centre: a matched-lens reference shot — its own vertical fov, the look-at in the
     // middle of the frame (no panel lens shift, no auto recentre). Absent = the player's camera.
     const lens = num(o.fov) > 0 || o.centre ? { fov: num(o.fov) > 0 ? Math.max(5, Math.min(90, o.fov)) : null, centre: !!o.centre } : null;
-    G.setSetupFree(o.clamp === false);   // a dev shot may leave the player's range; the next preset restores it
-    if (lens) G.setSetupFree(/** @type {any} */ (lens));   // a matched lens is a free dev shot too (setup-camera reads the object)
-    if (Array.isArray(o.target) && o.target.length === 3) G.setSetupAim(o.target.map(Number));   // orbit + look-at, car space
+    G.setupCam.setSetupFree(o.clamp === false);   // a dev shot may leave the player's range; the next preset restores it
+    if (lens) G.setupCam.setSetupFree(/** @type {any} */ (lens));   // a matched lens is a free dev shot too (setup-camera reads the object)
+    if (Array.isArray(o.target) && o.target.length === 3) G.setupCam.setSetupAim(o.target.map(Number));   // orbit + look-at, car space
     if (o.lamp !== undefined && typeof GarageScene !== "undefined" && GarageScene.spot) GarageScene.spot(o.lamp || null);
-    if (num(o.az) != null) G.nudgeSetupCam(o.az - G.setupPreviewAz, 0, 0);
-    if (num(o.el) != null) G.nudgeSetupCam(0, o.el - G.setupPreviewEl, 0);
-    if (num(o.dist) > 0) G.nudgeSetupZoom(o.dist / G.setupPreviewDist);   // clamped by the game
+    if (num(o.az) != null) G.setupCam.nudgeSetupCam(o.az - G.setupCam.az, 0, 0);
+    if (num(o.el) != null) G.setupCam.nudgeSetupCam(0, o.el - G.setupCam.el, 0);
+    if (num(o.dist) > 0) G.setupCam.nudgeSetupCam(0, 0, o.dist / G.setupCam.dist);   // clamped by the game
     const steps = (n, fn) => { for (let i = 0; i < Math.abs(n | 0); i++) fn(n > 0 ? 1 : -1); };
-    steps(o.azNudge != null ? o.azNudge : o.nudgeAz, (s) => G.nudgeSetupCam(0.18 * s, 0, 0));
-    steps(o.elNudge != null ? o.elNudge : o.nudgeEl, (s) => G.nudgeSetupCam(0, 0.12 * s, 0));
-    steps(o.zoom, (s) => G.nudgeSetupZoom(s > 0 ? 1 / 1.12 : 1.12));
-    steps(o.strafe, (s) => G.setupPan(0.15 * s, 0));
-    steps(o.dolly, (s) => G.setupPan(0, 0.15 * s));
-    if (Array.isArray(o.pan)) G.setupPan(+o.pan[0] || 0, +o.pan[1] || 0);
+    steps(o.azNudge != null ? o.azNudge : o.nudgeAz, (s) => G.setupCam.nudgeSetupCam(0.18 * s, 0, 0));
+    steps(o.elNudge != null ? o.elNudge : o.nudgeEl, (s) => G.setupCam.nudgeSetupCam(0, 0.12 * s, 0));
+    steps(o.zoom, (s) => G.setupCam.nudgeSetupCam(0, 0, s > 0 ? 1 / 1.12 : 1.12));
+    steps(o.strafe, (s) => G.setupCam.setupPan(0.15 * s, 0));
+    steps(o.dolly, (s) => G.setupCam.setupPan(0, 0.15 * s));
+    if (Array.isArray(o.pan)) G.setupCam.setupPan(+o.pan[0] || 0, +o.pan[1] || 0);
     const c = this.garageCam();
     return { ok: true, view, az: c.az, el: c.el, dist: c.effDist, pan: c.pan };
   },
@@ -532,7 +542,7 @@ const api = {
     G.saveTeamParts(team.id, cur);
     // Garage open: drop the preview, rebuild the sheet. Closed (menu / a race): DONE's recompute, so the next frame re-keys the player body, cockpit and wheel meshes.
     if (!G.setupPreviewOn) G.recomputePlayerMods();
-    else { if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) { GarageScene.dropPreviewMeshes(); G._spMeshKey = ""; } G.buildSetup(); }
+    else { if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) { GarageScene.dropPreviewMeshes(); G.setupCam.meshKey = ""; } G.buildSetup(); }
     return { ok: true, team: team.id, parts: cur, live: !G.setupPreviewOn };
   },
   // Debug: hide/show individual track meshes. e.g. meshToggle({props:true}) hides props.
@@ -865,7 +875,7 @@ const api = {
       c.x = i === 0 ? 0.6 : -0.6;   // overlap within the ~2 m car width
       c.xVis = c.x; c.lap = 0; c.finished = false;
     });
-    G.cars.forEach((c) => { if (c !== a && c !== b) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
+    parkOthers((c) => c === a || c === b);
     return { a: G.cars.indexOf(a), b: G.cars.indexOf(b) };
   },
   jam(n) {
@@ -876,27 +886,22 @@ const api = {
     const ai = G.cars.filter((c) => !c.isPlayer), m = Math.min(n || 5, ai.length);
     const prog = 0.5 * G.track.total;
     const ids = [];
-    ai.forEach((c, i) => {
-      if (i < m) {
-        c.prog = prog + (i - m / 2) * 0.4;     // tightly stacked longitudinally
-        c.s = wrapS(c.prog); c.speed = 2; c.x = (i - m / 2) * 0.3;  // and laterally
-        c.xVis = c.x; c.lap = 0; c.finished = false; c.stuckT = 0;
-        ids.push(G.cars.indexOf(c));
-      } else { c.prog -= 800; c.s = wrapS(c.s - 800); }
+    const stacked = ai.slice(0, m);
+    stacked.forEach((c, i) => {
+      c.prog = prog + (i - m / 2) * 0.4;     // tightly stacked longitudinally
+      c.s = wrapS(c.prog); c.speed = 2; c.x = (i - m / 2) * 0.3;  // and laterally
+      c.xVis = c.x; c.lap = 0; c.finished = false; c.stuckT = 0;
+      ids.push(G.cars.indexOf(c));
     });
-    G.cars.forEach((c) => { if (c.isPlayer) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
+    parkOthers((c) => stacked.includes(c));
     return ids;
   },
   rival(dProg, dx) {
     if (!G.player || !G.track) return false;
     const ai = G.cars.find((c) => !c.isPlayer);
     if (!ai || !finiteOrNil(dProg) || !finiteOrNil(dx)) return false;
-    ai.prog = G.player.prog + (dProg || 0);
-    ai.s = wrapS(G.player.s + (dProg || 0));
-    ai.x = G.player.x + (dx || 0);
-    ai.xVis = ai.x; ai.speed = G.player.speed; ai.finished = false; ai.lap = G.player.lap;
-    ai.launchOn = false;   // placed at speed: no standing-start reaction or getaway
-    G.cars.forEach((c) => { if (c !== ai && !c.isPlayer) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
+    placeBeside(ai, dProg, dx);
+    parkOthers((c) => c === ai || c.isPlayer);
     return { rival: G.cars.indexOf(ai) };
   },
   rivals(list) {
@@ -906,14 +911,10 @@ const api = {
     list.forEach((spec, i) => {
       const c = ai[i];
       if (!c) return;
-      c.prog = G.player.prog + (spec.dProg || 0);
-      c.s = wrapS(G.player.s + (spec.dProg || 0));
-      c.x = G.player.x + (spec.dx || 0);
-      c.xVis = c.x; c.speed = spec.speed != null ? spec.speed : G.player.speed;
-      c.finished = false; c.lap = G.player.lap; c.launchOn = false;
+      placeBeside(c, spec.dProg, spec.dx, spec.speed);
       used.push(c);
     });
-    ai.forEach((c) => { if (!used.includes(c)) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
+    parkOthers((c) => c.isPlayer || used.includes(c));
     return used.map((c) => G.cars.indexOf(c));
   },
   aim(relDeg) {
@@ -1646,7 +1647,7 @@ const api = {
   // renderScale({lite:true}) skips frameTimes (PerfGov.frameStats copies and sorts its 2048-frame ring). `effective`: ApexLifecycle.effectiveRes (#5166).
   renderScale(v) {
     const lite = !!(v && v.lite === true);
-    if (v === undefined || lite) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), lookPostShed: !!(PerfGov.lookPostShed && PerfGov.lookPostShed()), phoneSlowLatch: !!(PerfGov.phoneSlowLatch && PerfGov.phoneSlowLatch()), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), frameTimes: lite ? undefined : PerfGov.frameStats(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile(), tierHold: PerfGov.tierHold(), effective: typeof ApexLifecycle === "undefined" ? null : ApexLifecycle.effectiveRes(gfx, canvas) };
+    if (v === undefined || lite) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), chaseMs: PerfGov.chaseMs ? +PerfGov.chaseMs().toFixed(2) : 0, chaseFutile: !!(PerfGov.chaseFutile && PerfGov.chaseFutile()), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), lookPostShed: !!(PerfGov.lookPostShed && PerfGov.lookPostShed()), phoneSlowLatch: !!(PerfGov.phoneSlowLatch && PerfGov.phoneSlowLatch()), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), frameTimes: lite ? undefined : PerfGov.frameStats(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile(), tierHold: PerfGov.tierHold(), effective: typeof ApexLifecycle === "undefined" ? null : ApexLifecycle.effectiveRes(gfx, canvas) };
     if (v === true) { PerfGov.setAutoRes(true); return this.renderScale(); }
     // A FRACTION, 0.5..1 (the opposite unit to uiScale). Unchecked, "auto"
     // reached GLX/WGX as NaN (Math.max(0.5, NaN) is NaN: a NaN-sized buffer)
@@ -1949,20 +1950,13 @@ const api = {
     const c = G.cars[idx];
     if (c.isPlayer) return false;
     if (!finiteOrNil(frac) || !finiteOrNil(speed) || !finiteOrNil(x)) return false;   // same NaN refusal as jump()
-    const f01 = ((((frac != null ? frac : 0)) % 1) + 1) % 1;   // keep s and prog coupled
-    c.s = c._prevS = wrapS(f01 * G.track.total);
+    c.s = c._prevS = wrapS(fracToProg(frac));
     c.prog = ((c.lap || 0) - 1) * G.track.total + c.s;   // the engine's (lap-1)*L + s (see NetPlay's prog rebuild)
     if (x     != null) { c.x = x; c.xVis = x; }
     if (speed != null) c.speed = speed;
-    c.vLat = 0; c.yawRateCur = 0;
     Tracks.sample(G.track, c.s, smp2);
     placeFromTrack(c, smp2);
-    // THE SAME TELEPORT HYGIENE jump() carries, and for the same measured
-    // reason: the wall/rescue accumulators describe the OLD location, so a car
-    // placed after a wedge brings ~3 s of rescueT with it and auto-rescues
-    // itself somewhere it was never stuck.
-    c.rescueT = 0; c.wallT = 0; c.wasOnWall = false;
-    c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.offCut = false;
+    settleCar(c);   // the same teleport hygiene as jump()
     // rPrevHead with the rest: without it the yaw interpolator tweens from the
     // old heading and the car visibly swings into place over a frame.
     AgentView.syncRenderAnchors(c);
@@ -2098,9 +2092,8 @@ const api = {
     G.state = "race"; G.raceT = 0;
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
-    const f01 = ((((frac != null ? frac : 0)) % 1) + 1) % 1;   // keep s and prog coupled
-    G.player.s     = wrapS(f01 * G.track.total);
-    G.player.prog  = f01 * G.track.total;
+    G.player.prog  = fracToProg(frac);   // keep s and prog coupled
+    G.player.s     = wrapS(G.player.prog);
     G.player.speed = speed != null ? speed : 0;
     G.player.x     = x     != null ? x     : 0;
     G.player.xVis  = G.player.x;

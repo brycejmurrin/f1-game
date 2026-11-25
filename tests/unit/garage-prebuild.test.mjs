@@ -231,7 +231,7 @@ test("ready is keyed: a team pick or a livery bust re-arms it, and the warm is n
   assert.equal(h.pre.state().ready, false, "a team pick moves the key");
   assert.equal(await go(), true);
   assert.equal(h.gate.garageKey, "ferrari:parts:4|monza|day");
-  h.cam.meshKey = "";   // setup-sheet.js livery edit: G._spMeshKey = ""
+  h.cam.meshKey = "";   // setup-sheet.js livery edit: G.setupCam.meshKey = ""
   assert.equal(h.pre.state().ready, false, "a livery edit busts the cached car");
   assert.equal(await go(), true);
   assert.deepEqual(h.built.filter((p) => p === "car").length, 3, "one car build per run — the LRU sees one slot per key");
@@ -1203,7 +1203,7 @@ test("the cover lifts on the first frame the session's exterior is ready, and th
   const events = [];
   const g = vm.createContext({
     _studio: { n: 1, cardUp: true, info: { id: "x" }, at: 0 }, gfx: {}, introNow: () => h.clock.t,
-    sheetRelease: () => events.push("sheet"),
+    sheetRelease: () => events.push("sheet"), RaceEntryProfile: { mark() {} },
     loadingScreen: { garage: () => events.push({ at: h.clock.t, exterior: h.state(), shown: h.run("prepareExterior(ctx, { active: true, door: 0 })") }) },
   });
   vm.runInContext(symbolSource("function studioShown()"), g, { filename: absSrc(GAME_REL) });

@@ -286,7 +286,7 @@ test("nextAction: the land step is the MCP issue_write recipe, never a gh label 
 test("ship-pr: runs ready-gate; a pass prints the MCP flip and the land label call, a refusal prints neither; nothing is flipped itself", async () => {
   const { main: ship, nextCalls } = await import("../../tools/ci/ship-pr.mjs");
   const out = [], seen = [];
-  const go = (argv, code) => { out.length = 0; return [ship(argv, { run: (a) => (seen.push(a), code), log: (l) => out.push(l), closing: () => ({ ok: true, lines: [] }) }), out.join("\n")]; };
+  const go = (argv, code) => { out.length = 0; return [ship(argv, { run: (a) => (seen.push(a), code), log: (l) => out.push(l), closing: () => ({ ok: true, lines: [] }), getPr: () => ({ error: "offline" }) }), out.join("\n")]; };
   let [rc, text] = go(["--pr", "7"], 0);
   assert.equal(rc, 0);
   assert.deepEqual(seen.at(-1), ["--pr", "7"]);
@@ -298,6 +298,32 @@ test("ship-pr: runs ready-gate; a pass prints the MCP flip and the land label ca
   [rc] = go(["--pr", "x; rm"], 0);
   assert.equal(rc, 1, "a non-numeric PR is a usage error");
   assert.equal(nextCalls(9, "o/r").length, 3);
+});
+
+test("ship-pr on plan-open prints the exact Plan edit: each open line, its ticked and struck forms, the now: fold and a missing land: line (retro 2026-11-25 item 7)", async () => {
+  const { main: ship, planEdit, LAND_LINE } = await import("../../tools/ci/ship-pr.mjs");
+  const body = ["## Goal", "x", "## Plan", "- [x] tests green — abc", "- [ ] **now:** wire the alarm", "  * [ ] docs row", "- [ ] ~~old~~ — dropped", "## Verified", "- [ ] not a plan item"].join("\n");
+  const lines = planEdit(body, "0123456789abcdef");
+  const EV = "01234567: <evidence: the verdict line, test or run that proves it>";
+  assert.deepEqual(lines, [
+    "Plan edit (2 open of 4): replace each line below in the PR body (GitHub MCP update_pull_request body=…), then re-run ship-pr.",
+    "  was:    - [ ] **now:** wire the alarm",
+    `  tick:   - [x] **now:** wire the alarm — ${EV}`,
+    "  strike: - [ ] ~~**now:** wire the alarm~~ — dropped: <why>",
+    `  or fold what is left into the land: line: ${LAND_LINE} (after: wire the alarm)`,
+    "  was:      * [ ] docs row",
+    `  tick:     * [x] docs row — ${EV}`,
+    "  strike:   * [ ] ~~docs row~~ — dropped: <why>",
+    `  add as the LAST Plan item (it never blocks): ${LAND_LINE}`,
+  ], "each open line as it stands with its own indent and bullet, its ticked / struck forms, the now: fold, a missing land: line; nothing outside ## Plan");
+  const withLand = body.replace("## Verified", "- [ ] land: ready → land → gate\n## Verified");
+  assert.equal(planEdit(withLand, "s").filter((l) => l.startsWith("  add as the LAST")).length, 0, "a Plan with a land: line is not told to add one");
+  assert.deepEqual(planEdit("## Plan\n- [x] done — s\n- [ ] land: go", "s"), [], "a closed Plan needs no edit");
+  assert.deepEqual(planEdit("no plan", "s"), []);
+  const out = [];
+  assert.equal(ship(["--pr", "7"], { run: () => 1, log: (l) => out.push(l), closing: () => ({ ok: true, lines: [] }), getPr: () => ({ json: { body, head: { sha: "0123456789abcdef" } } }) }), 1);
+  assert.equal(out[0], lines[0], "the refusal prints the edit first");
+  assert.equal(out.at(-1), "ready-gate refused #7: fix what its `= ready-gate` line names, then re-run ship-pr (no flip, no `land` yet)");
 });
 
 test("a body with no ## Plan: ready-gate and the merge gate agree (both refuse; a bot's PR passes both)", async () => {

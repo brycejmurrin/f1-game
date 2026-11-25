@@ -1,0 +1,1 @@
+Improved: On a phone, GRAPHICS HIGH now draws the race at up to 2x the screen's CSS size (was 1.5x, #5222), a sharper picture with no frame-rate cost measured on an iPhone; MEDIUM and LOW keep 1.5x, and RESOLUTION MAX stays the opt-in full-resolution choice.
