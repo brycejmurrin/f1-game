@@ -26,9 +26,9 @@ const RR_SRC = fs.readFileSync(path.join(ROOT, "js/perf/render-rate.js"), "utf8"
 const SCALE_EPS = 0.02;   // GLX/TLX setRenderScale's dead zone, as perf-governor.test.mjs pins it
 
 // A frame costing `cost(s)` ms presents at the next multiple of the display's vsync.
-const vsync = (hz, cost) => (s) => Math.max(1, Math.ceil(cost(s) / (1000 / hz) - 1e-9)) * (1000 / hz);
+const vsync = (hz, cost) => (s, i) => Math.max(1, Math.ceil(cost(s, i) / (1000 / hz) - 1e-9)) * (1000 / hz);
 
-function run({ hz = 120, cost, frames = 7200, mobile = false, dpr = 2, css = 1000, target = "display", menuFrames = 600, auto = true, noChase = false }) {
+function run({ hz = 120, cost, frames = 7200, mobile = false, dpr = 2, css = 1000, target = "display", menuFrames = 600, auto = true, noChase = false, menu = null }) {
   const mem = { "apex26.desktopFpsTarget": target };
   globalThis.localStorage = { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; } };
   globalThis.window = { __APEX_BUILD: 1, innerWidth: css };
@@ -37,26 +37,26 @@ function run({ hz = 120, cost, frames = 7200, mobile = false, dpr = 2, css = 100
   // noChase: RenderRate without displayMs, the governor as it was before §gov-43 (chase target 0 on every path).
   const RenderRate = noChase ? { ...RR, displayMs: undefined } : RR;
   RenderRate.init({ isMobile: mobile });
-  let scale = 1, moves = 0, minScale = 1;
+  let scale = 1, moves = 0, minScale = 1, maxTier = 0;
   PerfGov.init({ isMobile: mobile, getRenderScale: () => scale, getPresentSize: () => ({ width: Math.round(css * dpr), height: 600 }),
     setRenderScale: (s) => { s = Math.max(0.5, Math.min(1, s)); if (Math.abs(s - scale) < SCALE_EPS) return false; scale = s; moves++; return true; } });
   if (!auto) PerfGov.setAutoRes(false);
-  const menu = 1000 / hz;   // the title draws at the display's refresh
-  for (let i = 0; i < menuFrames; i++) { RenderRate.observe(menu); RenderRate.gate(menu / 1000, menu, false, false); }
+  // The title draws at the display's refresh unless `menu(i)` says otherwise.
+  for (let i = 0; i < menuFrames; i++) { const m = menu ? menu(i) : 1000 / hz; RenderRate.observe(m); RenderRate.gate(m / 1000, m, false, false); }
   PerfGov.sentinelArm(true);
   const chaseAtStart = PerfGov.chaseMs ? PerfGov.chaseMs() : 0;
   const tail = [];
   const raf = vsync(hz, cost);
   for (let i = 0; i < frames; i++) {
-    const ms = raf(scale);
+    const ms = raf(scale, i);
     PerfGov.tick(ms, RenderRate.drew());
     RenderRate.observe(ms);
     RenderRate.gate(ms / 1000, ms, false, true);
     if (i >= frames - 1200) tail.push(ms);
-    minScale = Math.min(minScale, scale);
+    minScale = Math.min(minScale, scale); maxTier = Math.max(maxTier, PerfGov.tier());
   }
   const fast = tail.filter((ms) => ms < 1000 / hz + 0.01).length / tail.length;
-  return { PerfGov, RenderRate, scale, moves, minScale, tier: PerfGov.tier(), futile: PerfGov.chaseFutile ? PerfGov.chaseFutile() : false, chaseAtStart, fast,
+  return { PerfGov, RenderRate, scale, moves, minScale, maxTier, tier: PerfGov.tier(), futile: PerfGov.chaseFutile ? PerfGov.chaseFutile() : false, chaseAtStart, fast,
     displayMs: RR.displayMs() };
 }
 
@@ -114,15 +114,11 @@ test("a CPU-bound desktop (scale buys nothing) gives the chase up and keeps full
 });
 
 test("when even the chase floor misses the display, the race climbs back to the sharpest 60 fps scale", () => {
-  for (const cost of [(s) => 3 + 30 * s * s, (s) => 1 + 14 * s * s]) {   // 10.5 / 4.5 ms floors: 60 fps at best on 120 Hz... or not
-    const r = run({ cost }), before = run({ cost, noChase: true });
-    if (r.futile) assert.ok(r.scale >= before.scale - 0.11, `back near the pre-chase scale (${r.scale} vs ${before.scale})`);
-    else assert.ok(r.fast > 0.9, `reachable: holds 120 (${r.fast})`);
-    assert.equal(r.tier, 0);
-  }
-  const out = run({ cost: (s) => 3 + 30 * s * s });
+  const cost = (s) => 3 + 30 * s * s;   // 10.5 ms even at 0.5: 60 fps at best on 120 Hz
+  const out = run({ cost }), before = run({ cost, noChase: true });
   assert.equal(out.futile, true, "the floor was measured and the refresh is out of reach");
-  assert.ok(out.scale >= 0.6, `the race does not sit at the chase floor for nothing (${out.scale})`);
+  assert.ok(out.scale >= 0.6 && out.scale >= before.scale - 0.11, `back near the pre-chase scale (${out.scale} vs ${before.scale})`);
+  assert.equal(out.maxTier, 0, "no feature was shed on the way");
 });
 
 test("the chase never draws fewer buffer pixels than CSS pixels: a 1x display is never cut for it", () => {
@@ -130,6 +126,7 @@ test("the chase never draws fewer buffer pixels than CSS pixels: a 1x display is
   const r = run({ cost: fill12, dpr: 1 });
   assert.equal(r.moves, 0, `no cut below one pixel per CSS pixel (${JSON.stringify({ scale: r.scale, moves: r.moves })})`);
   assert.equal(r.scale, 1);
+  assert.equal(r.futile, false, "a 1x display never arms the chase, so it never reads as given up");
   const hi = run({ cost: fill12, dpr: 1.25 });
   assert.ok(hi.minScale >= 0.8 - 1e-9, `a 1.25x panel stops at 0.8 (${hi.minScale})`);
   assert.ok(hi.fast > 0.9, `and reaches 120 there (${hi.fast})`);
@@ -138,3 +135,28 @@ test("the chase never draws fewer buffer pixels than CSS pixels: a 1x display is
 test("a pinned RESOLUTION never moves the scale (HIGH / MAX / LOW / MED mean the scale they say)", () => {
   assert.equal(run({ cost: macFill, auto: false, frames: 1200 }).moves, 0);
 });
+
+test("a heavy section after the chase settled never sheds a feature (the ladder keeps a 60 fps budget)", () => {
+  // Settles at 120 on macFill, then frames 3000-3600 cost 12 ms at the current scale (a grid crowd, rain).
+  const cost = (s, i) => (i >= 3000 && i < 3600 ? 12 : macFill(s));
+  const r = run({ cost });
+  assert.equal(r.maxTier, 0, `no tier at any point (${r.maxTier})`);
+  assert.ok(r.minScale >= 0.5 - 1e-9, `the scale never leaves the chase floor's range (${r.minScale})`);
+});
+
+test("a failed cut on the 60 fps ladder does not strand the race: scale and tier recover", () => {
+  // A CPU stall section (scale cannot help: the ladder's cut fails and latches _scaleFutile), then a steady 12 ms
+  // that holds 60 at full scale. Before the fix the chase branch swallowed every evaluation and nothing restored.
+  const cost = (s, i) => (i < 1500 ? 40 : 1 + 11 * s * s);
+  const r = run({ cost });
+  assert.equal(r.tier, 0);
+  assert.ok(r.fast > 0.9 || r.futile, `either the chase reached 120 or gave up (${r.fast}, futile ${r.futile})`);
+  if (r.futile) assert.ok(r.scale > 0.9, `given up: the picture comes back (${r.scale})`);
+});
+
+test("a catch-up burst of short rAF intervals in a 60 Hz menu does not arm the chase", () => {
+  const r = run({ cost: macFill, hz: 60, frames: 600, menu: (i) => (i >= 300 && i < 320 ? 2 : 1000 / 60) });
+  assert.ok(r.displayMs > 15, `the menus still read 60 Hz (${r.displayMs})`);
+  assert.equal(r.chaseAtStart, 0);
+});
+

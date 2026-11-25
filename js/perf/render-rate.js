@@ -127,8 +127,8 @@ const RenderRate = (function () {
     // already-clamped step (game.js caps it at 1/4 s, then render clamps again:
     // 100 ms in the garage, 50 ms on the world). Sane frames fall through.
     const desktop = !presenting && racing ? desktopRate() : 0;
-    if (!racing && !presenting && ms > 0 && ms <= MAX_SANE_MS)
-      vsyncMs = Math.max(VSYNC_MIN_MS, ema < vsyncMs ? ema : vsyncMs + (ema - vsyncMs) * VSYNC_CREEP);
+    if (!racing && !presenting && ms > 0 && ms <= MAX_SANE_MS && Math.abs(ms - ema) < ema * 0.2)   // a steady cadence, not a catch-up burst
+      { const c = Math.max(VSYNC_MIN_MS, ms, ema); vsyncMs = c < vsyncMs ? c : vsyncMs + (c - vsyncMs) * VSYNC_CREEP; }
     targetBudgetMs = desktop ? 1000 / desktop : 0;
     if (!(ms > 0) || ms > MAX_SANE_MS) {
       accDt = 0; accMs = 0; credit = 0;
