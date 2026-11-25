@@ -163,7 +163,7 @@ test("attack-zone pull (#2356): soft edge wants and pulls from the dirty-air ban
     street: false, traits: mid, vTop, speed: 50, blockerSpeed: 50,
     freeSpeed: softUs, ourVmax: softUs, blockerVmax: softThem,
     blockerGap: 28, roomL: 3.5, roomR: 3.5, blockerAccel: 1, queueT: 0,
-    kAhead: 0, toTurnIn: 200, attackQ: 0.7, roll: 0.5,
+    kAhead: 0, toTurnIn: 800, attackQ: 0.7, roll: 0.5,
   };
   assert.equal(A.passHunger(trail), 1, "0.5 % stays below PASS_EDGE hunger (pull, not tow)");
   assert.ok(A.softPairEdgeN(softUs, softThem, 0, 0, vTop) > 0, "soft edge sees 0.5 %");
@@ -179,7 +179,9 @@ test("attack-zone pull (#2356): soft edge wants and pulls from the dirty-air ban
   assert.equal(A.otPull({ ...trail, street: true, blockerGap: 20, speed: 58, blockerSpeed: 52 }), 0,
     "street keep the 14 m ceiling");
   assert.equal(A.attackOK(trail), true, "soft edgeDrive clears attackOK on a straight");
-  assert.equal(A.passReach(trail), true, "aside-first allows 28 m with runway");
+  assert.equal(A.passReach(trail), true, "aside-first allows 28 m down a real straight");
+  assert.equal(A.passReach({ ...trail, toTurnIn: 200 }), false,
+    "12 m to the latch at 1 m/s needs 600 m: not 200 (#6546 P10)");
   assert.equal(A.passReach({ ...trail, toTurnIn: 40 }), false, "no aside-first without runway");
   // Sub-PULL_EDGE: no trail.
   const noise = { ...trail, blockerVmax: softUs * (1 - 0.002), ourVmax: softUs, freeSpeed: softUs };
@@ -187,6 +189,32 @@ test("attack-zone pull (#2356): soft edge wants and pulls from the dirty-air ban
   assert.equal(A.coverConcede({
     street: false, traits: mid, vTop, ourVmax: softThem, chaserVmax: softUs,
   }), 0, "soft edge does not cover-concede (PASS_EDGE/CONCEDE only)");
+});
+
+test("passReach soft edge (#6546 P10): runway is pace-scaled and the closing test stays", () => {
+  // A marginal +0.5 % edge 30 m back, 120 m from the turn-in: the old raw
+  // `to >= 80` committed it with ~1 m/s closing (14 m to the latch = 700 m).
+  const m = {
+    street: false, vTop, speed: 50, blockerSpeed: 50, freeSpeed: vTop,
+    ourVmax: vTop, blockerVmax: vTop * (1 - 0.005), blockerGap: 30, toTurnIn: 120,
+  };
+  assert.ok(A.softPairEdgeN(m.ourVmax, m.blockerVmax, 0, 0, vTop) > 0, "a soft edge");
+  assert.equal(A.passReach(m), false, "a marginal soft edge 30 m back does not commit");
+  assert.equal(A.passReach({ ...m, toTurnIn: 600 }), true, "with the straight to close it, it does");
+  assert.equal(A.passReach({ ...m, blockerGap: 15, toTurnIn: 20 }), true, "inside the latch window");
+  // Real closing (8 m/s) covers 14 m in 87.5 m: the runway floor decides.
+  const fast = { ...m, speed: 50, blockerSpeed: 42 };
+  assert.equal(A.passReach({ ...fast, toTurnIn: 75 }), false, "below the 80 m floor at PACE 1");
+  assert.equal(A.passReach({ ...fast, toTurnIn: 85 }), true, "above it");
+  // PACE 0.7: speeds and the floor scale together (80 m -> 56 m).
+  const k = 0.7, v7 = vTop * k;
+  const slow = {
+    ...m, vTop: v7, speed: 50 * k, blockerSpeed: 42 * k, freeSpeed: v7,
+    ourVmax: v7, blockerVmax: v7 * (1 - 0.005), blockerGap: 20,
+  };
+  assert.ok(A.pullReachM(v7) >= 20, "20 m is inside the PACE 0.7 reach");
+  assert.equal(A.passReach({ ...slow, toTurnIn: 60 }), true, "60 m clears the scaled 56 m floor");
+  assert.equal(A.passReach({ ...slow, toTurnIn: 50 }), false, "50 m does not");
 });
 
 test("latchLate + runExtra: hunger does not latch but stretches the run; streets untouched", () => {

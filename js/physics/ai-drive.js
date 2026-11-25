@@ -1280,21 +1280,22 @@ const AiDrive = (function () {
   // allowed because the late brake (brakeTarget) makes up the rest.
   function passReach(ctx) {
     const to = ctx.toTurnIn;
-    if (!(to < 1e8) || !(ctx.blockerGap > 0)) return true;
+    const g = ctx.blockerGap;
+    if (!(to < 1e8) || !(g > 0)) return true;
     const ref = ctx.vTop > 0 ? ctx.vTop : 72;
     if ((ctx.blockerSpeed || 0) < 0.12 * ref) return true;   // an obstacle: go now
-    const gain = ctx.blockerGap - SIDE_LEVEL;
+    let gain = g - SIDE_LEVEL;
     if (gain <= 0) return true;
     const bv = ctx.blockerVmax > 0 ? ctx.blockerVmax : (ctx.blockerSpeed || 0);
-    // Soft-edge aside-first (#2356): the pull clears dirty air; the latch still
-    // waits for ≤16 m. Judging a 30 m gap at 1 m/s closing refuses every
-    // Monza straight — allow when there is runway (≥80 m to turn-in).
+    // Soft edge (#2356): the pull clears dirty air, the latch waits for 16 m;
+    // so close to 16 m, not alongside, on 80 m runway at PACE 1 (#6546 P10).
     const softN = ctx.street ? 0
       : softPairEdgeN(ctx.ourVmax, ctx.blockerVmax, ctx.ourPace, ctx.blockerPace, ref);
     const reach = pullReachM(ref);
-    if (softN > 0 && reach > 16.5 && ctx.blockerGap <= reach) {
-      if (ctx.blockerGap <= 16) return true;
-      return !(to < 80);
+    if (softN > 0 && reach > 16.5 && g <= reach) {
+      if (g <= 16) return true;
+      if (to < 80 * ref / 72) return false;
+      gain = g - 16;
     }
     const dv = Math.max((ctx.speed || 0) - (ctx.blockerSpeed || 0), (ctx.freeSpeed || 0) - bv, ref / 72);
     return (ctx.speed || 0) * gain / dv <= 1.25 * to;
