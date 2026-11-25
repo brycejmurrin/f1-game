@@ -170,7 +170,19 @@ test("sidewall text: fictional string, every glyph in the font, packed floats ex
 
 test("sidewall text: cells stay inside the band, read left to right on both faces, upright at the top", () => {
   const T = CS.K.text, { ncol } = CS.text, rMid = (T.r0 + T.r1) / 2;
-  assert.ok(T.r1 < 0.34 * 0.84 && T.r0 > 0.34 * 0.68, "between the rim and the compound band (car-wheels.js radii)");
+  // car-wheels.js radii (r 0.34, rimR 0.68 r; band inner = max(0.76 e, 0.96 e - bandWidth), e the crown/shoulder):
+  // the default crown (0.948, bandWidth 0.09) keeps the band clear of the text; SH1/SH2 or a wide band reach into it,
+  // which is why the ink only prints on dark rubber (inkOn), never on the coloured band.
+  const R = 0.34, bandIn = (e, bw) => R * Math.max(0.76 * e, 0.96 * e - bw);
+  assert.ok(T.r0 > R * 0.68, "outboard of the rim");
+  assert.ok(T.r1 < bandIn(0.948, 0.09), "inboard of the default band");
+  assert.ok(bandIn(0.874, 0.132) < T.r1, "a wide SH2 band does overlap: the inkOn gate is load-bearing");
+  assert.equal(M.inkOn(0.16), 1, "sidewall rubber / dark ring (car-wheels.js SW 0.16) takes ink");
+  assert.equal(M.inkOn(0.85), 0, "a red/yellow/white compound band (max channel >= 0.85) never does");
+  // the TSL face select is the mirror's: x < 0 reads toward +th (side +1), else -th
+  const src = read("js/render/three/tsl-carsurf.js");
+  assert.match(src, /const side = select\(xa\.lessThan\(0\.0\), float\(1\.0\), float\(-1\.0\)\);/);
+  assert.match(src, /th\.mul\(side\)\.div\(Math\.PI\)\.add\(1\.0\)/);
   assert.equal(M.textCell(0, T.r1 - 0.25 * (T.r1 - T.r0) / T.rows, 1, ncol).row, -1, "the top half-row is margin");
   assert.equal(M.textCell(0, T.r1 - 0.75 * (T.r1 - T.r0) / T.rows, 1, ncol).row, 0, "row 0 (glyph top) outermost");
   // two repeats a turn: th and th + pi land on the same column

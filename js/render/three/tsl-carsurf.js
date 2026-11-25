@@ -44,7 +44,9 @@
  * - F1 slicks have no tread: the tyre gets sidewall micro-ribbing, a moulded segmented band, and shoulder graining
  *   only; the compound band and the geometric lettering blocks stay vertex colour.
  * - SIDEWALL TEXT (#6509 item 3): a FICTIONAL printed line (K.text.str, the game's own name; no real tyre brand,
- *   logo or layout) twice round each wall, inboard of the compound band. A 5x7 bitmap font packed into float
+ *   logo or layout) twice round each wall, between the rim and the compound band on the default crown. Wider bands
+ *   (shoulder SH1/SH2, bandWidth up to 0.132) reach into that radius range, so the ink only prints on DARK rubber
+ *   (albedo max below K.text.dark): a coloured compound band is never painted over. A 5x7 bitmap font packed into float
  *   constants (3 columns of 7 bits per float, exact below 2^24) and read by a balanced select tree, so it needs no
  *   texture, no sampler and no uniform. Albedo only (printed ink), and only at close range (K.text near/far and a
  *   footprint fade at one font pixel): the garage, replay and close cameras; a chase camera never resolves it.
@@ -70,7 +72,7 @@ const TLXCarSurf = (function () {
     saa: Object.freeze({ variance: 0.15, kappa: 0.18 }),
     // Sidewall text: radii r0..r1 hold `rows` font rows (7 inked + a half-row margin each side); `cols` font columns
     // per half turn; ink is the printed grey; the fade keeps it to close cameras (metres) and >= 1 px per font pixel.
-    text: Object.freeze({ str: "APEX 26 \u00b7 RACE SLICK", r0: 0.244, r1: 0.276, rows: 8, cols: 204, ink: 0.80, k: 0.85,
+    text: Object.freeze({ str: "APEX 26 \u00b7 RACE SLICK", r0: 0.244, r1: 0.276, rows: 8, cols: 204, ink: 0.80, k: 0.85, dark: Object.freeze([0.22, 0.34]),
       near: 1.5, far: 4.5, lo: 0.3, hi: 0.9 }),
   });
 
@@ -124,6 +126,8 @@ const TLXCarSurf = (function () {
     const row = Math.floor((T.r1 - r) / ((T.r1 - T.r0) / T.rows) - 0.5);
     return { col, row };
   }
+  // Ink weight on an albedo whose largest channel is m: 1 on dark rubber, 0 on a coloured band (descending smoothstep).
+  function inkOn(m) { return 1 - smooth(K.text.dark[0], K.text.dark[1], m); }
   const TEXT = packText(K.text.str);
 
   // ── pure maths (node-tested; the TSL below is the same formula, constant for constant) ──
@@ -319,7 +323,7 @@ const TLXCarSurf = (function () {
             const cb = cbAll.sub(floor(cbAll.add(0.5).div(128.0)).mul(128.0));
             const q = floor(cb.add(0.5).mul(exp2(row.negate()))).toVar();
             const bit = q.sub(floor(q.add(0.5).mul(0.5)).mul(2.0));
-            cs.txt.assign(bit.mul(xF).mul(tF).mul(X.k));
+            cs.txt.assign(bit.mul(xF).mul(X.k));
           });
           const seg = 6.2831853 / T.bandSeg, arc = r.mul(seg);
           const u = fract(th.div(seg)).sub(0.5).mul(arc), v = r.sub((T.band[0] + T.band[1]) * 0.5);
@@ -348,7 +352,10 @@ const TLXCarSurf = (function () {
     }
 
     // Panel-line occlusion, then the sidewall text's printed ink (txt is 0 everywhere else: the same albedo).
-    function applyAO(cs, albedo) { albedo.assign(mix(albedo.mul(cs.ao), vec3(K.text.ink), cs.txt)); }
+    function applyAO(cs, albedo) {
+      const ink = cs.txt.mul(smoothstep(K.text.dark[0], K.text.dark[1], max(albedo.r, max(albedo.g, albedo.b))).oneMinus());
+      albedo.assign(mix(albedo.mul(cs.ao), vec3(K.text.ink), ink));
+    }
 
     // 1. ANISOTROPIC sun lobe on carbon: returns D*Vis (isotropic DV where an == 0, exactly the same value).
     function anisoSun(cs, o) {
@@ -433,7 +440,7 @@ const TLXCarSurf = (function () {
   return {
     K, enabled, nodes,
     math: { fade, footprintFade, anisoAlphas, saaAlpha2, sdSegment, sdRoundBox, sdAnnulus, groove, grooveSlope,
-      perturb, edgeBend, flakeLod, refractOut, packText, textBit, textCell },
+      perturb, edgeBend, flakeLod, refractOut, packText, textBit, textCell, inkOn },
     text: TEXT, font: FONT,
   };
 })();
