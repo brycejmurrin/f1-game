@@ -526,9 +526,11 @@ var PitLane = (function () {
      *  everything the lane forbids it forbids for exactly this long: the speed
      *  cap (game.js), and overtake and X-mode, which are not a driver's to use
      *  between the entry line and the exit. It lifts at the exit, not at the
-     *  box, so a car cannot light the boost up on its way out of the complex. */
+     *  box, so a car cannot light the boost up on its way out of the complex.
+     *  A SHUT lane's tarmac too (onClosedLane): capped there, so OT, boost and
+     *  the HUD's held cue must agree with the cap. */
     function held(c) {
-      return inLane(c) || (!!c && c.pitState === "out" && roadOf(c) === "exit");
+      return inLane(c) || onClosedLane(c) || (!!c && c.pitState === "out" && roadOf(c) === "exit");
     }
 
     /** Inside the window at all — the arc test alone, without the lateral one. */

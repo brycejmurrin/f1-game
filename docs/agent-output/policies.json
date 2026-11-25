@@ -521,6 +521,11 @@
       "presentation": "shared-levels",
       "preserve": "Unknown PR set refusal; quiet period and survey exclusions"
     },
+    "tools/ci/brief.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "the rendered brief verbatim, each missing-line and duplicate line, and the = brief verdict; exit 1 on a duplicate or lint finding, 3 when it cannot judge"
+    },
     "tools/ci/bump-cache.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -940,6 +945,11 @@
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "Inherited stdout; forced busy-run caveat; exits/signals and infrastructure failure"
+    },
+    "tools/ci/tip-alarm.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "the Tip alarm decision line with its reason and the bulletin body verbatim; lookup or write failure is a warning; always exit 0"
     },
     "tools/ci/tooling-fast.mjs": {
       "action": "job-status",

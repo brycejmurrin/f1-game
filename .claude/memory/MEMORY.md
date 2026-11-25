@@ -1,14 +1,12 @@
 # Memory index
 
-Claude Code auto memory for this repo: one line per memory linking its topic
-file, detail in the topic file. User preferences and corrections only — a
-measured fact belongs in the doc that uses it or a `docs/notes/` note with a `Re-measure-by:` line, a rule
-in a hook or test, a decision in `docs/DECISIONS.md` (`D-NNN`). Coordination
-rules live in AGENTS.md §Coordination; do not restate them here. The tracked
-copy is the only store: `session-start.sh` restores it into the live memory dir
-one way (repo wins), and an edit is committed like any doc edit (docs/notes/AGENT-MEMORY.md).
-An entry that contradicts the current code or AGENTS.md is stale: fix or delete
-it, do not follow it. Hosts: `npm run memory:list` / `memory:show` / `memory:retire`.
+Claude Code auto memory for this repo: one line per memory linking its topic file, detail in the topic file. User
+preferences and corrections only — a measured fact belongs in the doc that uses it or a `docs/notes/` note with a
+`Re-measure-by:` line, a rule in a hook or test, a decision in `docs/DECISIONS.md` (`D-NNN`). Coordination rules live
+in AGENTS.md §Coordination; do not restate them here. The tracked copy is the only store: `session-start.sh` restores
+it into the live memory dir one way (repo wins), and an edit is committed like any doc edit
+(docs/notes/AGENT-MEMORY.md). An entry that contradicts the current code or AGENTS.md is stale: fix or delete it, do
+not follow it. Hosts: `npm run memory:list` / `memory:show` / `memory:retire`.
 - [Small steps for API analysis](small-steps-for-api-analysis.md) — prefer small incremental queries over bulk fetch scripts
 - [One subagent per skill](one-subagent-per-skill.md) — skill reviews, tests and walkthroughs: one reviewer per skill
 - [Survey then fix](survey-then-fix.md) — after an audit, land the ranked gap list the same session; the user asks "fix all of those"
@@ -22,6 +20,6 @@ it, do not follow it. Hosts: `npm run memory:list` / `memory:show` / `memory:ret
 - [Rules are agent-written drafts](rules-are-agent-written-drafts.md) — reconsider AGENTS.md/CLAUDE.md/memory; audit improvements in one PR (D-017)
 - [Bryce's settings profile](bryce-settings-profile.md) — tests/data/settings-live-export-2026-11-10.json is his CURRENT Home Screen app export (UI SIZE 70, BUTTON 143); shipped phone sizes are too big for him
 - [Orchestrator: check in and keep the task list](orchestrator-checkin-and-task-list.md) — each cycle read every live worker session (archive, nudge or relaunch) unprompted; keep the task list current after every state change
-- [Phone checks via Claude Link](phone-checks-via-claude-link.md) — run every device check over the phone bridge; the orchestrator drives, reads state and posts the results
+- [Phone checks via Claude Link](phone-checks-via-claude-link.md) — run every device check over the phone bridge, batched into ONE hands-off `drive` window per wave; the orchestrator drives, reads state and posts the results
 - [Ask Bryce with AskUserQuestion](orchestrator-questions-via-tool.md) — orchestrator: anything you need from him goes through the AskUserQuestion tool, not a question buried in prose
 - [Launch independent of the merge queue](launch-independent-of-merge-queue.md) — hunters/reviewers/workers launch now; only a real code dependency holds one

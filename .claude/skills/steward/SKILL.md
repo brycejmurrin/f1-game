@@ -86,7 +86,9 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    at its `timeout-minutes` cap with zero failures is a real red. Verdict table: [`references/ci-verdicts.md`](references/ci-verdicts.md).
 2. Agent `ci-red-triage` names the job, test and assertion; its `base:` line says whose it is.
 3. **A red you did not cause is someone else's first.** `node tools/ci/pr-board.mjs --json` (open PRs: heads, state,
-   failing jobs, owner), the Board issue and the `deploy:red` label: the first claimant fixes, the rest wait. A red
+   failing jobs, owner), the Board issue and the `deploy:red` label: the first claimant fixes, the rest wait. Read
+   the Board's newest `tip-red:` bulletin first ([orchestrator brief](../dispatcher/references/orchestrator-brief.md)
+   §While workers run): with a fixing PR named, copy none of its change; wait for it to land, then sync (§Red 5). A red
    deploy branch is claimed through the Board and fixed by a PR; the deploy branch is never pushed to. Before
    opening a tip fix, list the open PRs of the last hour that name the failing test or carry `deploy:red`; if one
    exists, comment there instead of opening a second. A path in another open PR's diff is NOT a blocker (D-033):
@@ -122,14 +124,15 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    only needs the label). On a pass it prints the two calls and flips nothing itself:
 3. GitHub MCP `update_pull_request` with `draft: false`, then add `land` (the one-label recipe in
    [`references/labels.md`](references/labels.md)).
-4. Refresh the Hand-off block; call `subscribe_pr_activity` again (the subscription dies at the flip); end the turn.
+4. Refresh the Hand-off block, `unsubscribe_pr_activity`, and end: no re-subscribe (wake turns were 19% of worker
+   cost, retro 2026-11-25). A later red or conflict is the orchestrator's or dispatch's `CONTINUE PR #<n>` (§After land).
    What `land.yml`'s `gate` status does next: [`references/land.md`](references/land.md). "Skip the gate" from the
    user: do it and record it under **Not run** with the user's words and the time; never silently, and never by
    widening a tolerance. A `hold` label vetoes (AGENTS.md §Coordination); body wording vetoes nothing.
 
 ## After land
 
-The subscribed owner fixes a red on its own head (§Red) while it still owns it. While `dispatch.yml` is disabled
+Before `land`, the subscribed owner fixes a red on its own head (§Red); after it, the owner is gone (§Land 4). While `dispatch.yml` is disabled
 (`gh api repos/<o>/<r>/actions/workflows/dispatch.yml -q .state`), the orchestrator session does what this section
 gives the Action. The dispatch Action re-owns only a
 silent owner: a PR idle past its window gets `needs-owner` and one `CONTINUE PR #<n>` launch; a `land` PR with no red

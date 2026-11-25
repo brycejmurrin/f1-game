@@ -403,41 +403,44 @@ const Input = (function () {
     remoteOwner = owner;
     const n = nowMs();
     remCamera = owner === "phone" && s.camera && remoteControlContext() === "camera" ? s.camera : null;
-    // FENCED: a drive sample the phone sent before it saw the drive surface
-    // return (PhonePad.link's Resume fence). The link stays live; nothing it
-    // carries drives, and the tilt filter starts fresh from the next sample.
-    if (s.driveFenced && !s.camera) { clearRemoteControls(true); remoteMs = n; return true; }
     // A STICK (an XR thumbstick, js/xr/xr-input.js) is an analog steer
     // command, not a lean: it used to be dressed up as a roll (steerToTilt) and
     // ride the phone's One-Euro filter, tilt dead zone and 8/s slew, and lamp 1's
     // calibrate() captured whatever deflection was held as the race's zero.
     remStick = typeof s.steer === "number" && isFinite(s.steer);
-    remSteer = remStick ? clamp(s.steer, -1, 1) : 0;
-    if (remStick && tiltRemote) tiltFilterClear();   // else the next roll sample slews from the old lean
     remRoll = !remStick && typeof s.roll === "number" && isFinite(s.roll);
-    if (remRoll) {
-      tiltRaw = s.roll;
-      let odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;
-      // A BURST IS NOT A DUPLICATE. odt is HOST arrival time, so two samples
-      // the network delivered in the same millisecond (Wi-Fi power save does
-      // this routinely) gave odt 0 and oneEuro() dropped the newer roll. The
-      // seq gap says how much SENDER time at least passed between them.
-      const seqOk = Number.isInteger(s.seq);
-      if (seqOk && remSeq != null) {
-        const gap = s.seq - remSeq;
-        if (gap >= 1 && gap < 30) odt = Math.max(odt, Math.min(0.1, gap * REMOTE_SAMPLE_GAP_S));
+    // FENCED: a drive sample the phone sent before it saw the drive surface
+    // return (PhonePad.link's Resume fence). The link stays live; nothing it
+    // carries drives, and the tilt filter starts fresh from the next sample.
+    // It still says what the phone has: Pause's tilt rows and CALIBRATE keep it.
+    if (s.driveFenced && !s.camera) clearRemoteControls(true, s);
+    else {
+      remSteer = remStick ? clamp(s.steer, -1, 1) : 0;
+      if (remStick && tiltRemote) tiltFilterClear();   // else the next roll sample slews from the old lean
+      if (remRoll) {
+        tiltRaw = s.roll;
+        let odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;
+        // A BURST IS NOT A DUPLICATE. odt is HOST arrival time, so two samples
+        // the network delivered in the same millisecond (Wi-Fi power save does
+        // this routinely) gave odt 0 and oneEuro() dropped the newer roll. The
+        // seq gap says how much SENDER time at least passed between them.
+        const seqOk = Number.isInteger(s.seq);
+        if (seqOk && remSeq != null) {
+          const gap = s.seq - remSeq;
+          if (gap >= 1 && gap < 30) odt = Math.max(odt, Math.min(0.1, gap * REMOTE_SAMPLE_GAP_S));
+        }
+        remSeq = seqOk ? s.seq : null;
+        lastOrientMs = n;
+        tiltSmoothed = oneEuro(tiltRaw, odt);
+        tiltSeen = tiltRemote = true;
       }
-      remSeq = seqOk ? s.seq : null;
-      lastOrientMs = n;
-      tiltSmoothed = oneEuro(tiltRaw, odt);
-      tiltSeen = tiltRemote = true;
+      remPedalDz = owner === "phone" && s.calibratedPedals === true ? 0 : REMOTE_PEDAL_ON;
+      remThr = clamp(+s.thr || 0, 0, 1);
+      remBrk = clamp(+s.brk || 0, 0, 1);
+      remHeld = s.held | 0;
+      remoteDriveReady = !remoteDrivingBlocked();
     }
-    remPedalDz = owner === "phone" && s.calibratedPedals === true ? 0 : REMOTE_PEDAL_ON;
-    remThr = clamp(+s.thr || 0, 0, 1);
-    remBrk = clamp(+s.brk || 0, 0, 1);
-    remHeld = s.held | 0;
     remoteMs = n;
-    remoteDriveReady = !remoteDrivingBlocked();
     if (hadPhoneTilt !== phoneTiltAvailable()) onPhoneTiltChange?.();
     if (remoteDriveReady && (remoteDriveEngaged() || remHeld)) {
       // Remote pedals take priority over the pad, but its steering does not.
@@ -488,15 +491,16 @@ const Input = (function () {
   // Forget the current remote command without tearing down the paired transport.
   // reset() uses this on blur/visibility loss; the next fresh sample can take
   // control again, while a real link loss additionally clears remoteOwner below.
-  function clearRemoteControls(clearSequence) {
+  function clearRemoteControls(clearSequence, k) {
     remoteDriveReady = false;
     const hadPhoneTilt = phoneTiltAvailable();
-    remoteMs = 0; remThr = remBrk = 0; remHeld = 0; remRoll = false; remStick = false; remSteer = 0;
+    remoteMs = 0; remThr = remBrk = 0; remHeld = 0; remSteer = 0;
+    if (!k) remRoll = remStick = false;   // k: a fenced sample, whose roll/stick remoteSample kept
     remCamera = null;
     if (clearSequence) remSeq = null;
-    if (tiltRemote || !gyroAttached) tiltSeen = false;
+    if (tiltRemote || !gyroAttached) { tiltSeen = remRoll; if (remRoll) { tiltRaw = k.roll; tiltRemote = true; } }   // a local gyro keeps its tilt
     if (tiltRemote) tiltFilterClear();
-    if (hadPhoneTilt) onPhoneTiltChange?.();
+    if (hadPhoneTilt && !k) onPhoneTiltChange?.();
   }
   // Resume requires a new driving sample. Keep the live link and its sensor
   // capability available to the menu, but start the steering filter fresh.
@@ -1252,6 +1256,8 @@ const Input = (function () {
         (tag === "SELECT" && act === "pause" && printable);
       if (down && !e.repeat && (act === "pause" || e.code === "Escape") && !inTextField) {
       if (act === "pause") {
+        // A menu spent it (an arrow PAUSE moved focus): not also pause (#6282).
+        if (e.defaultPrevented) return;
         clearDriveToggles();
         if (onPauseCb) onPauseCb();
         return;
@@ -1644,7 +1650,7 @@ const Input = (function () {
      https://developer.mozilla.org/en-US/docs/Web/API/Gamepad/mapping
      https://developer.mozilla.org/en-US/docs/Web/API/Gamepad/timestamp */
   const PAD_WAKE = 0.3;
-  const padUse = new Map();    // padKey -> { axes, btn, usedAt }
+  const padUse = new Map();    // padKey -> { axes, btn, prev, usedAt }; prev = btn one poll earlier
   const PAD_MENU_RELEASE = 0.12; // independent of the driving pedal calibration
   const padMenuButtons = new Map(); // consumed presses survive missing Gamepad snapshots
   const padUseLive = new Set(); // reused each poll; a fresh Set here was one alloc per frame
@@ -1662,7 +1668,7 @@ const Input = (function () {
       padUseLive.add(k);
       let rec = padUse.get(k), used = false;
       const first = !rec;
-      if (first) { rec = { axes: [], btn: [], usedAt: 0 }; padUse.set(k, rec); }
+      if (first) { rec = { axes: [], btn: [], prev: [], usedAt: 0 }; padUse.set(k, rec); }
       else {
         for (let a = 0; a < axes.length; a++) {
           if (typeof rec.axes[a] === "number" && Math.abs(readPadAxis(axes, a) - rec.axes[a]) >= PAD_WAKE) used = true;
@@ -1671,6 +1677,7 @@ const Input = (function () {
       for (let b = 0; b < nb; b++) {
         const down = btnDown(p, b);
         if (!first && down && !rec.btn[b]) used = true;
+        rec.prev[b] = first ? down : !!rec.btn[b];   // first sight: a held button counts as held
         rec.btn[b] = down;
       }
       const consumed = padMenuButtons.get(k);
@@ -1834,7 +1841,9 @@ const Input = (function () {
       if (padPrevButtons.length) padPrevButtons.length = 0;
       padPrevKey = null;
       padPrevByIndex.clear();
-      padMenu.reset();
+      // The hardware is still "available" for PAD_PROBE_FAST_MS (poll() below):
+      // drop the held direction but keep the focus ring until that grace ends (#6269).
+      padMenu.releaseDirection();
       if (inputSource === "controller") inputSource = null;
       return;
     }
@@ -1844,12 +1853,16 @@ const Input = (function () {
     // when another pad takes over, a button already held on it would read as
     // a fresh press (a boost, a shift, a camera cut). Reseed from the new
     // pad. Not on first connection: the press that woke a pad is a real one.
+    // Nor the press that took over: a pad watched by notePadUse last poll seeds
+    // from THAT reading, so its fresh Cross is the edge it is (#6255). A gap or
+    // a pad first seen this poll seeds from now: held stays held.
     const key = padKey(pad, Array.prototype.indexOf.call(pads, pad));
     if (padSnapshotLost || (padPrevKey !== null && key !== padPrevKey)) {
       resetPadDriveState();
+      const seen = padSnapshotLost ? null : padUse.get(key);
       const nb = pad.buttons ? pad.buttons.length : 0;
       padPrevButtons.length = nb;
-      for (let i = 0; i < nb; i++) padPrevButtons[i] = btnDown(pad, i);
+      for (let i = 0; i < nb; i++) padPrevButtons[i] = seen ? !!seen.prev[i] : btnDown(pad, i);
     }
     padSnapshotLost = false;
     padPrevKey = key;
@@ -2138,7 +2151,10 @@ const Input = (function () {
     pollGamepad();
     // An empty snapshot can be transient. Use the existing fast re-probe
     // window before relaying polling-only loss to the UI.
-    if (physicalPadAvailable && !padConnected && nowMs() - _padLostAt >= PAD_PROBE_FAST_MS) setPhysicalPadAvailable(false);
+    if (physicalPadAvailable && !padConnected && nowMs() - _padLostAt >= PAD_PROBE_FAST_MS) {
+      setPhysicalPadAvailable(false);
+      padMenu.reset();   // the grace is over: the controller's focus ring goes with it
+    }
     _navLatch = navBlocksTouchLive() ? 1 : 0;
     if (photoCamera?.isActive()) {
       const remote = remoteCamera();
@@ -2929,7 +2945,10 @@ const Input = (function () {
     setPedalSlide(m) { pedalSlide = m === "ease" ? "ease" : "instant"; return pedalSlide; },
     pedalSlide: () => pedalSlide,
     setThrottleLatch(on) { throttleLatch = !!on; throttleLatched = false; btnThrottle = false; paintLatch(); },
-    setHoldMode(m) { holdMode = InputBindings.parseHoldMode(m); clearDriveToggles(); },
+    setHoldMode(m) {
+      holdMode = InputBindings.parseHoldMode(m); clearDriveToggles();
+      if (window.dispatchEvent && typeof Event === "function") window.dispatchEvent(new Event("apexholdmodechange"));   // Help wording
+    },
     getHoldMode: () => InputBindings.parseHoldMode(holdMode),
     // Every race starts OFF: touch latch + keyboard/pad toggles from the last race.
     dropLatch() {

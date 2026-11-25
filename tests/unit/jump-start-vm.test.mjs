@@ -48,7 +48,12 @@ async function stepToRace(a, max = 600) {
 test("throttle held at lights-out adds +5 s", async () => {
   await onGrid();
   const a = g.apex;
+  const text = () => g.sandbox.document.getElementById("announce-text").textContent;
   a.setInput({ steer: 0, throttle: true });
+  for (let i = 0; i < 10; i++) a.step(1 / 60, 1);
+  // #5775 R7: the grid says lift before the lights go out, not only the fine after.
+  assert.equal(a.info().state, "count", "anti-vacuity: still on the grid");
+  assert.equal(text(), "LIFT — WAIT FOR LIGHTS", "throttle held on the grid: the engineer says lift");
   await stepToRace(a);
   a.clearInput();
   assert.equal(a.info().state, "race");
@@ -59,8 +64,14 @@ test("throttle held at lights-out adds +5 s", async () => {
 test("waiting for green before throttle accrues no false-start penalty", async () => {
   await onGrid();
   const a = g.apex;
+  const text = () => g.sandbox.document.getElementById("announce-text").textContent;
+  // #5775 R7: a throttle blipped on the grid and RELEASED gets the cue and no fine.
+  a.setInput({ steer: 0, throttle: true });
+  for (let i = 0; i < 10; i++) a.step(1 / 60, 1);
+  assert.equal(text(), "LIFT — WAIT FOR LIGHTS", "held on the grid: cue");
   a.setInput({ steer: 0, throttle: false });
   await stepToRace(a);
+  assert.notEqual(text(), "LIFT — WAIT FOR LIGHTS", "lights out: the grid cue is cleared off the card");
   for (let i = 0; i < 18; i++) a.step(1 / 60, 1);
   a.setInput({ steer: 0, throttle: true });
   for (let i = 0; i < 30; i++) a.step(1 / 60, 1);

@@ -91,6 +91,19 @@ export const SLICE_SCRIPTS = {
   "driving-model": [], // browser job: tests/specs/physics-characterization.spec.js
 };
 
+/** F4 of #3117 (2026-11-24): two `slow` riders that move to `page-a` when the matrix schedules BOTH rows. Measured
+ *  over 12 TAP logs (CI runs 45343830706, 45342162725, 45338161773, 45334736061): the `slow` step had a 425 s median
+ *  and these two were 61 s and 47 s of it, while page-a's job p50 was 64 s. `slow` stays their home in SLICE_SCRIPTS
+ *  (routing, the ci.yml `npm run` lines, gateNodeSuites): a diff that schedules `slow` without `page-a` (sw.js) runs
+ *  them there as before, and exactly one of the two rows runs them whenever `slow` is scheduled. */
+export const PAGE_A_GUESTS = ["test:mcp", "test:service-worker"];
+
+/** true when the matrix rows (select's `slices` output: `{slice, needed}`) schedule both `page-a` and `slow`. */
+export function guestsOnPageA(rows) {
+  const on = (s) => Array.isArray(rows) && rows.some((r) => r && r.slice === s && r.needed !== "false");
+  return on("page-a") && on("slow");
+}
+
 /** Elevation twin → both circuit shards. */
 const VM_A = ["vm-a1", "vm-a2"];
 /** game-vm-b partitions (the VM twins of the browser specs). */

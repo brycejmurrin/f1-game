@@ -115,3 +115,15 @@ test("CLI: offline run with saved pages exits 1 and prints JSON", () => {
   assert.equal(spawnSync(process.execPath, ["tools/ci/child-health.mjs"], { encoding: "utf8" }).status, 2);
   assert.equal(run(["--bogus"]).status, 2);
 });
+
+test("classifyChild: a blocked or need_input child is WAITING, not dead, and the brief names it", () => {
+  const b = classifyChild(row("session_waitFFFF", "BLOCKED", { post_turn_summary: { needs_action: "approve the Bash prompt" } }));
+  assert.equal(b.dead, false);
+  assert.equal(b.waiting, true);
+  assert.equal(b.needs, "approve the Bash prompt");
+  const n = classifyChild(row("session_waitGGGG", "WORKING", { post_turn_summary: { status_category: "need_input" } }));
+  assert.equal(n.waiting, true);
+  assert.equal(classifyChild(row("session_aliveCCCC", "WORKING")).waiting, false);
+  assert.equal(classifyChild(row("session_failedBBBB", "BLOCKED"), { is_error: true, result: "boom" }).waiting, false);
+  assert.match(render([b, n], []), /^WAITING session_waitFFFF need_input — .*approve the Bash prompt → answer it/m);
+});

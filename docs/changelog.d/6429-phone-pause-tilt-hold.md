@@ -1,0 +1,1 @@
+Fixed: With a phone as the controller, pausing no longer makes Settings say the phone has no tilt, and a BOOST, OT or AERO button set to HOLD that was held into Pause now switches off on Resume instead of staying on and reversing the next press.

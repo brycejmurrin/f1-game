@@ -48,6 +48,10 @@ Gently rolling farmland — real but modest relief, most of it through the Estor
 - 2003 changes: Château d'Eau and Lycée re-profiled (Wikipedia / racingcircuits.info / operator historic).
 - Modest banking throughout; no crests, no blind corners.
 
+## Turn numbering (#5652 survey, 2026-11-25)
+
+T9 is the 180° left hairpin (one built peak at 0.6154, about 190° of heading). T10 is the right that follows it (0.6355), and T11 is the left flick (0.6715) before the Imola chicane (T12–T13) and Château d'Eau (T14). The older list counted the hairpin twice and left out the T11 flick. Source: [WorldSBK track guide 2025](https://www.worldsbk.com/en/news/2025/09/03/guide-decouvrez-le-circuit-de-nevers-magny-cours/960641), which numbers 180° as T9, Imola as T12–13 and Château d'Eau as T14.
+
 ## 6. Modelling notes
 - Plant in ROWS, not clumps. Poplar windbreaks and hedged field boundaries are the entire visual identity.
 - Keep the backdrop deliberately shallow and low. Resist the urge to add hills.

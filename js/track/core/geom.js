@@ -443,8 +443,10 @@ const TrackGeom = (function () {
     const count = boxes.length / LIGHT_STRIDE, cells = new Map();
     const bounds = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
     // Dense forests contribute many small triangles. Copy and bin them in
-    // batches so the paced builder can return to the loading screen.
-    const batch = 2048;
+    // batches so the paced builder can return to the loading screen. A batch is
+    // counted in cell inserts, not records: one wide slab (monaco's sea and city
+    // fill) spans hundreds of cells, and 2048 such records were one 55 ms step (#6401).
+    let work = 0;
     for (let id = 0; id < count; id++) {
       const n = id * LIGHT_STRIDE;
       for (let i = 0; i < LIGHT_STRIDE; i++) boxes[n + i] = records[n + i];
@@ -458,9 +460,9 @@ const TrackGeom = (function () {
           const key = lightCellKey(x, z);
           let list = cells.get(key);
           if (!list) cells.set(key, list = []);
-          list.push(id);
+          list.push(id); work++;
         }
-      if ((id + 1) % batch === 0) yield;
+      if (++work > 8191) { work = 0; yield; }
     }
     let packed = 0;
     for (const [key, list] of cells) {

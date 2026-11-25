@@ -61,11 +61,32 @@ var JumpStartPenalty = (function () {
           && SportingRegs.jumpStartFastLaunch(t, c.speed || 0, vRef)) fine(c);
     }
 
+    // THE GRID CUE (#5775 R7). The fine is for throttle held AT lights-out while the
+    // car is locked on the grid, and nothing on the grid said so: the player found out
+    // from the +5 s. While the lights count and the throttle that WOULD be fined is
+    // held, the engineer says lift — once per hold, the card dropped from the queue
+    // once it is released. cueUp() reports (and forgets) that it was shown, so the
+    // caller can clear it off the screen at lights-out instead of holding LIGHTS OUT!
+    // behind the card's 3 s floor.
+    const GRID_CUE = "LIFT — WAIT FOR LIGHTS";
+    let cueHold = false, cueShown = false;
+    function heldOnGrid(c) {
+      return !!c && c.human && !c.jumpStartFined && !c.retired && standingRace()
+        && SportingRegs.jumpStartEarlyThrottle(throttleLevel(c), autoThrottle());
+    }
+    function tickGrid(c) {
+      if (!heldOnGrid(c)) { cueHold = false; return; }
+      if (cueHold || !c.isPlayer) return;
+      cueHold = true;
+      if (G.announce(GRID_CUE, 1.5, "penalty-warn", () => heldOnGrid(c))) cueShown = true;
+    }
+    function cueUp() { const u = cueShown; cueShown = false; cueHold = false; return u; }
+
     function reactWindowOpen() {
       return G.raceT - launchT0() <= SportingRegs.JUMP_START_REACT_S;
     }
 
-    return { tickAtGreen, tickReaction, reactWindowOpen };
+    return { tickAtGreen, tickReaction, reactWindowOpen, tickGrid, cueUp, GRID_CUE };
   }
 
   return { create };

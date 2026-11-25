@@ -617,8 +617,15 @@ test("first-person views cast the first-person caster at the cockpit matrix; ext
     }
     // The countdown is first person too (the car loop's race|count test).
     assert.equal(cast(1, f, which, "count").mesh, carDraw.cockpitShadowMesh(player.team, player), `count/${which}: the first-person caster`);
+    // A Photo Studio POV seat under the free camera (#6397) is first person whatever camMode is, menu included.
+    for (const [onboard, state] of [["helmet", "race"], ["cockpit", "race"], ["helmet", "count"]]) {
+      G.dbgCam = { eye: G.camEye, target: G.camTgt, fov: 60, onboard };
+      const k = cast(0, f, which, state);
+      assert.equal(k.mesh, carDraw.cockpitShadowMesh(player.team, player), `POV ${onboard}/${state}/${which}: the first-person caster`);
+      assert.deepEqual(k.m, drawnMat(), `POV ${onboard}/${state}/${which}: at the cockpit body's matrix`);
+    }
     // Exterior: chase, and the cockpit mode under a debug camera (no rig drawn).
-    for (const [mode, dbg, label] of [[0, null, "chase"], [1, { eye: [0, 50, 0] }, "debug cam"]]) {
+    for (const [mode, dbg, label] of [[0, null, "chase"], [1, { eye: [0, 50, 0] }, "debug cam"], [1, { eye: [0, 50, 0], onboard: "hood" }, "debug cam, no seat"]]) {
       G.dbgCam = dbg;
       const k = cast(mode, f, which);
       assert.equal(k.mesh, carDraw.teamMesh(player.team, player, true), `${label}/${which}: the exterior silhouette casts`);
@@ -628,6 +635,10 @@ test("first-person views cast the first-person caster at the cockpit matrix; ext
   }
   G.state = "menu";
   assert.equal(carDraw.cockpitCaster(player, smp, yv, new Float32Array(16)), null, "no first-person rig outside race/count");
+  // The title's circuit shoot is state "menu": its POV seat is first person (the shadow pass skips menu players itself).
+  G.dbgCam = { eye: G.camEye, target: G.camTgt, fov: 60, onboard: "helmet" };
+  assert.equal(carDraw.cockpitCaster(player, smp, yv, new Float32Array(16)), carDraw.cockpitShadowMesh(player.team, player), "a POV seat on the title circuit");
+  G.dbgCam = null;
   G.state = "race";
 });
 
@@ -1124,4 +1135,17 @@ test("cockpitKey: a hit builds no key string; the cockpit style and the livery's
   const fn = src.slice(src.indexOf("    function cockpitKey("), src.indexOf("    function cockpitBodyMesh("));
   const hit = fn.slice(0, fn.indexOf("if (team.id !== _cbId"));
   assert.ok(hit.length > 0 && !/\+\s*"/.test(hit) && !/"\s*\+/.test(hit), "no string is joined before the change test");
+});
+
+// #6397: ONE predicate decides the first-person rig for game.js's car loop and the caster above.
+test("GameCams.rigMode: race cockpit/helmet in race|count, or a Photo Studio POV seat under the free camera", () => {
+  const { ctx } = carDrawVm();
+  for (const f of ["js/camera/vantage-ride.js", "js/camera/vantage.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
+  const rig = ctx.GameCams.rigMode;
+  assert.equal(rig(null, "race", "cockpit"), "cockpit");
+  assert.equal(rig(null, "count", "helmet"), "helmet");
+  for (const [state, cam] of [["race", "chase"], ["race", "hood"], ["menu", "cockpit"], ["results", "helmet"]]) assert.equal(rig(null, state, cam), "", state + "/" + cam);
+  assert.equal(rig({ eye: [0, 0, 0] }, "race", "cockpit"), "", "a plain free camera never draws the rig (unchanged)");
+  assert.equal(rig({ onboard: "hood" }, "race", "chase"), "", "only the two driver's-eye seats");
+  for (const state of ["race", "menu"]) for (const seat of ["helmet", "cockpit"]) assert.equal(rig({ onboard: seat }, state, "chase"), seat, state + "/" + seat);
 });

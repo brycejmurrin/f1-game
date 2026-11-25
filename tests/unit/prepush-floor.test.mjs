@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import {
-  GENERATED_FILES, GENERATED_SEED_TESTS, generatedOnlyPaths, isGenShellOnlyChange, selectSyncMerge, selectToolingFastChanged,
+  GENERATED_FILES, GENERATED_SEED_TESTS, generatedOnlyPaths, generatorSourceTests, isGenShellOnlyChange, selectSyncMerge, selectToolingFastChanged,
   stripGenShellBlocks, syncMergePaths, syncMergeScope, SYNC_REGEN_SUBJECT, runToolingFast,
 } from "../../tools/ci/tooling-fast.mjs";
 import {
@@ -66,6 +66,27 @@ test("a generated file beside an authored source keeps the authored selection an
   const r = sel(["tests/data/impact-map.json", "tools/manifest.cjs"]);
   assert.equal(r.reason, "tracked", "manifest.cjs is authored and widens on its own merits");
   assert.equal(r.genCheck, true);
+});
+
+test("a header edit in an authored generator source selects that generator's --check test (#6380)", () => {
+  const archT = "tests/unit/gen-arch-table.test.mjs";
+  const docsT = "tests/unit/generated-docs.test.mjs";
+  assert.deepEqual([...generatorSourceTests([fake("js", "camera", "cam-picker.js")])], [archT]);
+  assert.deepEqual([...generatorSourceTests([fake("tools", "ci", "ci-watch.mjs")])], [docsT]);
+  assert.equal(generatorSourceTests([fake("docs", "x.md"), fake("css", "menu.css")]).size, 0);
+  // Synthetic: a js file pinned to one unrelated test still gets the arch-table check beside it.
+  const all = [archT, docsT, fake("tests", "unit", "other.test.mjs")];
+  const js = fake("js", "camera", "cam-picker.js");
+  const r = selectToolingFastChanged([js], { allFiles: all, topicalFiles: [], pinIndex: new Map([[js, new Set([all[2]])]]) });
+  assert.equal(r.reason, "matched");
+  assert.deepEqual(r.files.sort(), [archT, all[2]].sort());
+  // An unpinned edit keeps its fail-safe full run: the seed never narrows it.
+  assert.equal(selectToolingFastChanged([js], { allFiles: all, topicalFiles: [], pinIndex: new Map() }).reason, "no-pin-match");
+  // The real tree: #6368's c3a4ef4b diff (a cam-picker.js header edit) selected 219 files without the arch check.
+  const real = selectToolingFastChanged([js, fake("js", "input", "input.js")]);
+  const toolsSel = selectToolingFastChanged([fake("tools", "shot", "agent.mjs")]);
+  assert.deepEqual([real.files.indexOf(archT) >= 0, toolsSel.files.indexOf(docsT) >= 0], [true, true],
+    `${real.reason}/${toolsSel.reason}: the arch-table check (js/) or the tools/README.md check (tools/) is missing`);
 });
 
 test("syncMergePaths: a pure tip merge is a sync; a hand-resolved merge and a plain commit are not", () => {
