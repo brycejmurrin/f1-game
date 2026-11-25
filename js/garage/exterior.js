@@ -124,7 +124,7 @@ const GarageExterior = (function () {
     const now = () => typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
     const yieldTask = deps.yieldTask || (() => new Promise(resolve => setTimeout(resolve, 0)));
     let selected = null, key = "", generation = 0, status = "idle", error = null, readySet = null, job = null;
-    let queue = Promise.resolve(), attempts = 0, retryAt = 0;
+    let queue = Promise.resolve(), attempts = 0, retryAt = 0, reuses = 0;
     const material = { ground: {}, terrain: {}, road: {}, props: {}, bayFixtures: { emissive: 1, roughness: .65 }, scenery: {}, sceneryLights: {},
       glass: { roughness: .13, specular: .82, metalness: .12, clearcoat: 1 }, water: {} };
     let rainMesh = null;
@@ -165,15 +165,25 @@ const GarageExterior = (function () {
       Object.assign(material.sceneryLights, material.scenery, { emissive: lighting(selected).lightEmission });
       Object.assign(material.water, { roughness: wet ? .16 : .10, metalness: .05, specular: wet ? .85 : .92 });
     }
-    function state() { return { status, key, generation, error, attempts, retryAt, stats: readySet ? readySet.stats : null,
-      trackId: selected ? selected.trackId : null, weather: selected ? selected.weather : null, tod: selected ? selected.tod : null, rain: !!rainMesh, anchor: readySet ? readySet.anchor : null }; }
+    function state() { return { status, key, generation, error, attempts, retryAt, stats: readySet ? readySet.stats : null, parked: !!readySet && status !== "ready", reuses,
+      trackId: selected ? selected.trackId : null, weather: selected ? selected.weather : null, tod: selected ? selected.tod : null, rain: !!rainMesh, anchor: ready() ? readySet.anchor : null }; }
     function ready(s) { return !!readySet && status === "ready" && (!s || selectionKey(snapshot(s)) === key); }
     function viewLighting() {
-      const palette = readySet && readySet.palette;
+      const palette = ready() && readySet.palette;
       return lighting(palette ? Object.assign({}, selected, { def: Object.assign({}, selected.def, { pal: palette, palette }) }) : selected);
     }
     function discard() { free(readySet); readySet = null; freeWeather(); }
     function cancel() { generation++; selected = null; key = ""; if (job) job.cancel(); job = null; discard(); status = "idle"; error = null; attempts = 0; retryAt = 0; notify(); }
+    // A garage close (#6401): stop showing, keep the one built set (an LRU of 1, keyed by geometryKey) so the
+    // next open of the same circuit/team/night re-shows it instead of re-running the whole build. A request
+    // for another key, or cancel() (race start, a hard free), disposes it. An unfinished build is dropped.
+    function park() {
+      const keep = readySet && status === "ready" ? readySet : null;
+      if (keep) readySet = null;
+      cancel();
+      readySet = keep;
+      if (keep) notify();
+    }
     function request(value, opts) {
       const s = snapshot(value || {}), nextKey = selectionKey(s), geomKey = geometryKey(s);
       if (!s.trackId || !s.teamId) { cancel(); return Promise.resolve(false); }
@@ -185,7 +195,11 @@ const GarageExterior = (function () {
         // A frame loop may request forever; only explicit retry may restart a failed key.
         if (!(opts && opts.retry) || attempts >= 2 || Date.now() < retryAt) return Promise.resolve(false);
       } else {
-        selected = s; key = nextKey; generation++; if (job) job.cancel(); job = null; discard(); attempts = 0; retryAt = 0;
+        selected = s; key = nextKey; generation++; if (job) job.cancel(); job = null; attempts = 0; retryAt = 0;
+        if (readySet && readySet.geometryKey === geomKey && readySet.def === s.def) {   // the parked set (park), built from this def: re-show
+          reuses++; appearance(); status = "ready"; error = null; weatherMesh(); notify(); return Promise.resolve(ready());
+        }
+        discard();   // LRU 1: the parked set of another key goes before a new build allocates
       }
       appearance(); status = "loading"; error = null; attempts++;
       const mine = { geometryKey: geomKey, promise: null, cancel: null };
@@ -228,7 +242,7 @@ const GarageExterior = (function () {
             if (!current()) return false;
           }
           if (!current()) return false;
-          readySet = Object.assign({}, owned, { lamps: data.lamps || [], palette: data.palette || null, surface: data.surface || null, stats: Object.assign({}, data.stats,
+          readySet = Object.assign({}, owned, { geometryKey: geomKey, def: s.def, lamps: data.lamps || [], palette: data.palette || null, surface: data.surface || null, stats: Object.assign({}, data.stats,
             { maxSliceMs, uploadMs, buildWallMs: Math.max(0, now() - buildAt) }), anchor: data.anchor || null });
           for (const name of MESHES) delete owned[name];
           status = "ready"; weatherMesh(); return ready();
@@ -245,7 +259,7 @@ const GarageExterior = (function () {
       notify(); return mine.promise;
     }
     function appendLights(rig, level, energy) {
-      if (!readySet || !selected.night || !(level > 0 && energy > 0)) return;
+      if (!ready() || !selected.night || !(level > 0 && energy > 0)) return;
       for (const lamp of readySet.lamps) {
         if (rig.length + 15 > 48 * 15) break;
         const at = rig.length;
@@ -266,7 +280,7 @@ const GarageExterior = (function () {
       gfx.draw(rainMesh, rainMatrix, rainOpts);
       return true;
     }
-    return { request, ready, appendLights, draw, drawWeather, lighting: viewLighting, groundPose: (pose, follow) => ready() ? groundPose(pose, readySet.surface, follow) : pose, state, cancel, release: cancel, retry: s => request(s || selected, { retry: true }) };
+    return { request, ready, appendLights, draw, drawWeather, lighting: viewLighting, groundPose: (pose, follow) => ready() ? groundPose(pose, readySet.surface, follow) : pose, state, cancel, release: hard => hard ? cancel() : park(), retry: s => request(s || selected, { retry: true }) };
   }
   return Object.freeze({ create, lighting, fitPose, groundPose, poseMatrix });
 })();

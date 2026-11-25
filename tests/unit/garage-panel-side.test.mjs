@@ -47,7 +47,7 @@ test('garage gesture lifecycle drops old fingers and held owners without breakin
   for (const end of ['blur', 'pagehide', 'hidden', 'garage-exit', 'photo-exit', 'reset']) {
     const canvas = Object.assign(target(), { clientWidth: 1000 }), control = Object.assign(target(), { setPointerCapture() {} });
     const garage = { hidden: false }, photo = { hidden: true }, win = target(), doc = Object.assign(target(), { hidden: false });
-    const observers = new Map(), zooms = [], rates = { az: 1 }; let steps = 0;
+    const observers = new Map(), zooms = [], rates = { az: 1 }, exteriorReleases = []; let steps = 0;
     const c = vm.createContext({ window: win, document: doc, G: { setupPreviewOn: true, soundOn: false }, home: { active: false },
       $: id => ({ game: canvas, left: control, carsetup: garage, 'photo-studio': photo })[id] || null,
       driveOut: null, preview: false, arrival: { cancel() {} }, spHeld: null, setupPreviewAz: 0, setupPreviewEl: 0,
@@ -55,7 +55,7 @@ test('garage gesture lifecycle drops old fingers and held owners without breakin
       setSetupSpin() {}, endHome() {}, setupZoom: value => zooms.push(value), clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)),
       GarageExperience: { canOrbit: (on, _home, _photo, blocked) => on && !blocked },
       MutationObserver: class { constructor(fn) { this.fn = fn; } observe(el) { observers.set(el, this.fn); } },
-      rates, step: () => steps++,
+      rates, step: () => steps++, releaseExterior: (hard) => exteriorReleases.push(!!hard),
     });
     vm.runInContext(common + hold + orbit + reset + ';holdSetupCtl("left", rates, step);', c);
     const fire = (el, type, id, x = 0, y = 0) => { for (const fn of el.listeners[type] || []) fn({ type, pointerId: id, clientX: x, clientY: y, preventDefault() {} }); };
@@ -65,6 +65,8 @@ test('garage gesture lifecycle drops old fingers and held owners without breakin
     else if (end === 'reset') c.resetSetupCam();
     else fire(win, end);
     assert.equal(c.spHeld, null, end + ' clears the held rate');
+    // #6401: closing the garage or photo studio parks the exterior (a soft release); nothing else releases it.
+    assert.deepEqual(exteriorReleases, end === 'garage-exit' || end === 'photo-exit' ? [false] : [], end + ' exterior release');
     const az = c.setupPreviewAz;
     fire(win, 'pointermove', 11, 40); assert.equal(c.setupPreviewAz, az, end + ' ignores the old finger');
     fire(control, 'pointerdown', 31); assert.equal(steps, 2, end + ' releases the control owner'); fire(win, 'pointerup', 31);
