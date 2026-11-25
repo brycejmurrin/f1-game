@@ -288,15 +288,16 @@ function judgeSpecs(input) {
     reason = "selected specs passed";
     if (ev?.recovered?.length) reason += ` (the junit of ${ev.recovered.join(", ")} was lost; each shard's job concluded success and its own tally annotation names its tests, #5802)`;
   } else if (selected === "skipped" && String(input.reused ?? "") === "true") {
-    // THE READY FLIP REUSED THE DRAFT VERDICT (#5426). select's reuse step (tools/ci/reuse-draft-selected.mjs)
-    // proved the newest run on this head ran the same plan green on attempt 1, on the same base, with the deploy
-    // tip unmoved. Only a ready flip may claim it, and it must name the run it reused.
+    // A PASSED RUN ON THE SAME TREE WAS REUSED (#5426; keyed on the merge tree since #6585). select's reuse step
+    // (tools/ci/reuse-draft-selected.mjs) proved another run tested this base and merge tree with the same plan green
+    // on attempt 1, no run on those bytes is red, and the deploy tip is unmoved. Only a non-draft PR run may claim it,
+    // and it must name the run it reused.
     const run = String(input.reusedRun ?? "");
     if (!/^\d+$/.test(run)) {
       return { ok: false, reason: `the selected legs were skipped as reused, but no reused run id was given (REUSED_RUN=${JSON.stringify(run)}) — failing closed`, infraRetry: false, failedSpecs };
     }
     if (draft === "true" || called === "true") {
-      return { ok: false, reason: "the selected legs were skipped as reused on a run that is not a ready pull request — only a ready flip reuses its draft's verdict", infraRetry: false, failedSpecs };
+      return { ok: false, reason: "the selected legs were skipped as reused on a run that is not a ready pull request — only a non-draft pull request run reuses a passed verdict", infraRetry: false, failedSpecs };
     }
     reason = `selected specs reused from run ${run} (same head, same base, deploy tip unmoved, same plan; green on attempt 1)`;
   } else if (selected === "skipped") {

@@ -2108,7 +2108,7 @@ jobs:
       browser_exempt: ${{ steps.sel.outputs.browser_exempt }}
       shards: ${{ steps.sel.outputs.shards }}
       any: ${{ steps.sel.outputs.any }}
-      # `true` only on a ready flip whose same-sha draft verdict is sound to reuse (tools/ci/reuse-draft-selected.mjs):
+      # `true` only on a non-draft PR run whose same-tree passed verdict is sound to reuse (tools/ci/reuse-draft-selected.mjs):
       # the selected legs then skip and selected-verdict reports the reuse.
       selected_reused: ${{ steps.reuse_selected.outputs.reuse }}
       selected_reused_run: ${{ steps.reuse_selected.outputs.run }}
@@ -2389,21 +2389,23 @@ jobs:
       - name: Record the selected plan
         if: ${{ steps.sel.outcome == 'success' }}
         run: node tools/ci/reuse-draft-selected.mjs --record --sel sel.json
-      # THE READY FLIP REUSES THE DRAFT VERDICT (#5426; review 2026-11-11 P3, decision 2). When the newest run on this
-      # head is green on attempt 1, ran the same plan with nothing dropped, on the same base, and the deploy tip has not
-      # moved since that base, the selected legs skip; everything else on the ready tier runs. Every doubt, and every
-      # event but ready_for_review, is reuse=false. The rules: tools/ci/reuse-draft-selected.mjs.
+      # A PASSED RUN ON THE SAME TREE IS REUSED (#5426; keyed on the merge tree since #6585, Bryce "Skip re-runs on
+      # same tree"). When another run, on this head, this PR's branch or a train car's head, recorded this base and this
+      # merge tree, ran the same plan green on attempt 1 with nothing dropped, no run on those bytes is red, and the
+      # deploy tip has not moved since that base, the selected legs skip; everything else on the full tier runs. Every
+      # doubt, a draft, and the Pages call are reuse=false. The rules: tools/ci/reuse-draft-selected.mjs.
       - name: Name the dropped specs
         id: dropped_names
         if: ${{ steps.sel.outcome == 'success' }}
         run: node tools/ci/dropped-group-runs.mjs --names --sel sel.json >> "$GITHUB_OUTPUT"
-      - name: Reuse the same-sha draft verdict?
+      - name: Reuse a passed verdict on the same tree?
         id: reuse_selected
-        if: ${{ steps.sel.outcome == 'success' && github.event_name == 'pull_request' && github.event.action == 'ready_for_review' && inputs.concurrency_key == '' }}
+        if: ${{ steps.sel.outcome == 'success' && github.event_name == 'pull_request' && !github.event.pull_request.draft && contains(fromJSON('["ready_for_review","synchronize","opened","reopened"]'), github.event.action) && inputs.concurrency_key == '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_EVENT_ACTION: ${{ github.event.action }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: node tools/ci/reuse-draft-selected.mjs --sel sel.json >> "$GITHUB_OUTPUT"
       # THE TRAIN'S VM TWINS (audit4 D1 / ci-7d C2, 2026-10-26). The plan drops
