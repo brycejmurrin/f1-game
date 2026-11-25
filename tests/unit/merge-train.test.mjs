@@ -20,6 +20,12 @@ import { planVerdict } from "../../tools/ci/ready-gate.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DEPLOY = "claude/f1-game-project-26h3ng";
 const sha = (c) => c.repeat(40);
+// A log line's exact prefix (and suffix): equality on both ends, not a regex pin (#1682).
+const affix = (s, pre, post = "") => {
+  assert.equal(String(s).slice(0, pre.length), pre, s);
+  if (post) assert.equal(String(s).slice(-post.length), post, s);
+  assert.ok(String(s).length >= pre.length + post.length, s);
+};
 const pull = (n, o = {}) => ({ number: n, state: "open", draft: false, labels: [{ name: "land" }], head: { sha: sha(String(n % 10)), ref: `claude/x-${n}`, repo: { full_name: "o/r" } }, base: { ref: DEPLOY, repo: { full_name: "o/r" } }, created_at: `2026-11-18T0${n % 10}:00:00Z`, ...o });
 
 test("manifest round-trips and refuses malformed bodies", () => {
@@ -713,7 +719,7 @@ test("#6584: N merges, then N+1 — stacked on N's head while N runs (no PR, no 
     // the screen of a run with a stack skips (the build, not the screen, moves it)
     const so = path.join(f.root, "s.json");
     assert.equal(await screenMain({ out: so, request: f.request, cwd: f.dir, log: () => {}, check: () => assert.fail("no screen"), gen: () => assert.fail("no gen") }), 0);
-    assert.match(readScreen(fs.readFileSync(so, "utf8")).skip, /^train #3,#4 is stacked on #100/);
+    affix(readScreen(fs.readFileSync(so, "utf8")).skip, "train #3,#4 is stacked on #100");
     // N merges (GitHub's merge commit on the deploy branch): the stack is promoted to a train PR, same head, base N's head
     const merge = f.g("commit-tree", `${f.N.head}^{tree}`, "-p", f.base, "-p", f.N.head, "-m", "Merge pull request #100");
     f.g("push", "-q", "origin", `${merge}:refs/heads/${DEPLOY}`);
@@ -723,7 +729,7 @@ test("#6584: N merges, then N+1 — stacked on N's head while N runs (no PR, no 
     assert.equal(c.code, 0, c.logs.join("\n"));
     assert.equal(c.logs.at(-1), "= merge-train opened #200 — promoted #3,#4 (the train under it merged)");
     const open = f.writes.find((w) => w.p === "pulls" && w.method === "POST");
-    assert.match(open.body.head, /^train\/20261125T1200-3-4$/);
+    assert.equal(open.body.head, "train/20261125T1200-3-4");
     assert.equal(f.rg("rev-parse", `refs/heads/${open.body.head}`), head, "the PR's head is the stacked fold itself");
     const m = trainManifest(open.body.body);
     assert.deepEqual({ base: m.base, cars: m.cars.map((x) => x.pr), rebased: m.rebased }, { base: f.N.head, cars: [3, 4], rebased: undefined });
@@ -742,7 +748,7 @@ test("#6584: N red → N+1 is rebuilt on the tip without N's cars, marked rebase
     f.state.ci = "failure";
     const r = await f.build();
     assert.equal(r.code, 0, r.logs.join("\n"));
-    assert.ok(r.logs.includes("= merge-train closed #100 (red): CI failure on the train head"), r.logs.join("\n"));
+    assert.notEqual(r.logs.indexOf("= merge-train closed #100 (red): CI failure on the train head"), -1, r.logs.join("\n"));
     assert.equal(r.logs.at(-1), "= merge-train opened #200 — rebased #3,#4 (the train under it closed unmerged (red, stale or by hand))");
     const open = f.writes.find((w) => w.p === "pulls" && w.method === "POST");
     const m = trainManifest(open.body.body);
@@ -800,7 +806,7 @@ test("#6584 FALLBACK: a token that may not create train-next/* logs one line, ex
     assert.equal(a.code, 0, a.logs.join("\n"));
     const skipped = a.logs.filter((l) => l.startsWith("= merge-train stack skipped"));
     assert.equal(skipped.length, 1, a.logs.join("\n"));
-    assert.match(skipped[0], new RegExp(`^= merge-train stack skipped — push train-next/${f.N.head}-3-4: .*: one train at a time this run$`));
+    affix(skipped[0], `= merge-train stack skipped — push train-next/${f.N.head}-3-4: `, ": one train at a time this run");
     assert.deepEqual(f.stacks(), []);
     assert.deepEqual(f.writes, [], "train #100 is not closed, relabelled or touched: CI, gate and arm go on as today");
     // N merges: one train at a time, exactly as before #6584 (a plain screen onto the new tip opens the next train)
@@ -808,7 +814,7 @@ test("#6584 FALLBACK: a token that may not create train-next/* logs one line, ex
     fs.writeFileSync(f.screenFile, JSON.stringify({ tip, cars: [3, 4].map((pr) => ({ pr, head: f.heads[pr], ok: true, why: "" })) }));
     const b = await f.build();
     assert.equal(b.code, 0, b.logs.join("\n"));
-    assert.match(b.logs.at(-1), /^= merge-train opened #200 — cars=#3,#4 /);
+    affix(b.logs.at(-1), "= merge-train opened #200 — cars=#3,#4 ");
     assert.equal(trainManifest(f.writes.find((w) => w.p === "pulls" && w.method === "POST").body.body).base, tip);
   } finally { f.rm(); }
 });
@@ -832,6 +838,6 @@ test("#6584 FALLBACK: unreadable stacked refs never fail a run — the build wai
     fs.copyFileSync(so, f.screenFile);
     const b = await f.build();
     assert.equal(b.code, 0, b.logs.join("\n"));
-    assert.match(b.logs.at(-1), /^= merge-train opened #200 — cars=#3,#4,#5 /);
+    affix(b.logs.at(-1), "= merge-train opened #200 — cars=#3,#4,#5 ");
   } finally { f.rm(); }
 });
