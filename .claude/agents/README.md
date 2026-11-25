@@ -2,8 +2,9 @@
 
 Markdown agents with YAML frontmatter under `.claude/agents/`. Claude Code and
 Cursor both load this path (Cursor also accepts `.cursor/agents/`; we keep the
-single Claude tree to avoid drift). Twelve agents: **pr-reviewer** joined
-2026-11-24 (Bryce's `decision: A1` on PR #6377) to the eleven of 2026-11-03 (plan
+single Claude tree to avoid drift). Thirteen agents: **session-reader** joined
+2026-11-25 (the tool-use audit, `docs/notes/AGENT-ROLES-2026-11-25.md`);
+**pr-reviewer** joined 2026-11-24 (Bryce's `decision: A1` on PR #6377) to the eleven of 2026-11-03 (plan
 `docs/plans/2026-11-03-agent-surface-reset.md` §4.6): `bloat-auditor` folded
 into **code-hunter** (`focus: dead-code`), `agent-surface-reviewer` re-specced
 as the cross-file **surface-reviewer**; earlier folds: `worktree-regression-check`
@@ -21,6 +22,7 @@ as the cross-file **surface-reviewer**; earlier folds: `worktree-regression-chec
 | **prior-art-scout** | Step 0 of a hunt or audit: greps `docs/notes/DEFECT-LEDGER.md`, `docs/BUGS.md`, hunt/survey notes and `git log` for one slice or topic and returns ≤ 30 `KNOWN` rows — the do-not-re-report list. Haiku, 12 turns; never judges whether an item is still true. |
 | **code-hunter** | Bug / perf / dead-code / drift hunt over ONE slice, one agent per slice in parallel; takes the scout's list as `known:` and prints ≤ 12 `FINDING` rows as found, then `covered:` / `not covered:` / `measured:`. `focus: dead-code` on a skill, card or fat module runs the `bloat-scan.mjs` recipe. Node-only checks; the whole run stays well under 10 min. Tiered at spawn (the workflows pass haiku / sonnet / opus by slice shape). |
 | **surface-reviewer** | Cross-file review of a SET of agent-surface units (skills, cards, hooks, rules, settings, AGENTS.md sections): extracts every claim unit A makes about unit B and tests it against B (`--help`, anchors, the hook's pinned test, WebFetch for a host-doc claim), flags one-home collisions and pointer cycles, writes a ≤ 60-line report to `scratch/**.md` (`tools/hooks/scratch-md-only.sh`; no Bash writes) and returns `VERDICT` + `CLAIM` rows; `retest <old report>` adds BEFORE/AFTER. |
+| **session-reader** | The orchestrator's read of its worker sessions: `get_session` / `list_events` (the four read tools of claude-code-remote, nothing that sends or steers), saved pages digested by `session-transcript.mjs` (`--digest`, `--tally agents` for the lsp / grep / browser split per subagent type). Haiku; returns `SESSION` / `METHODS` rows. |
 | **finding-verifier** | Re-reads up to 15 `file:line — claim` rows on the current tree and returns `CONFIRMED / STALE / REFUTED / NEEDS-BROWSER` with evidence, then `refuted: k/N stale: k/N`. Run it before acting on any hunt, survey, review or audit finding; never fixes. A workflow's verifier schema carries `needsBrowser` so a renderer/HUD claim is reported, not refuted. |
 | **pr-reviewer** | Advisory read of ONE code PR (js/, css/, index.html, sw.js) before the ready flip (skill `steward` §Land): the diff, the linked issue's Done-when, the groups and specs `pick-tests.mjs` / `select-specs.mjs` route to it; returns ≤ 10 `FINDING` rows (`file:line — claim — why — test`), each `blocker-candidate` or `nit`, then `findings: n`. Read-only (`readonly-bash.sh`), sonnet; never edits, labels, comments on GitHub or starts a browser. Calibration: `docs/notes/PR-REVIEWER-CALIBRATION-2026-11-24.md`. |
 | **worker** | ONE scoped change handed off by the parent, in its own worktree (`isolation: worktree`), node-only verification, commits on its branch, coordinates mid-task with `SendMessage` (§Parent and child). The spawn prompt names goal, OWNED, FORBIDDEN, verify command, peers, and whether it pushes. No browser servers on its list; never merges, arms, readies or cancels. Ends with the fixed `WORKER <name>:` report. |
@@ -40,6 +42,35 @@ docs PR (skill steward `references/labels.md` §Hunt and survey output). A skill
 over the set of units it touches. A scoped implementation to hand off and talk
 to while it runs → `worker` (one per disjoint path set, named so peers can
 message it). The parent keeps the PR.
+
+## LSP-first — the evidence rule
+
+Bryce, 2026-11-25 ~02:33Z: "it can use grep but should use the lsp". Every card
+that lists the apex-lsp tools lists them FIRST, and its report ends with
+`tools used: lsp <n> · grep <m> · read <k>`. A row about a named JS symbol (a
+definition, a caller, a fan-in, "unused") cites the apex-lsp call that shows it,
+e.g. `lsp_references G.setupCam → 3 files`. A grep on that name is the
+cross-check for text consumers (HTML ids, `__apex` hooks, string lookups,
+`tools/manifest.cjs`), not the evidence. The audit that set this
+(`docs/notes/AGENT-ROLES-2026-11-25.md`) counted 5 lsp calls in 390 subagent
+calls. A low lsp share on a JS slice is the signal; re-measure with
+`node tools/ci/session-transcript.mjs <pages> --tally agents`.
+
+## Roles → the subagents each launches
+
+The brief's `SUBAGENTS:` line (skill `dispatcher` `references/orchestrator-brief.md`) names the row.
+
+| Role (session) | Subagents it launches |
+|---|---|
+| orchestrator | `session-reader` (worker status, how a turn ended, method split), `ci-red-triage`, `deploy-research` |
+| worker (one PR) | `Explore` (search), `pr-reviewer` (before ready), `ci-red-triage` (a red), `verify-agent` (same-red?) |
+| code hunter | `prior-art-scout`, one `code-hunter` per slice, then `finding-verifier` |
+| runtime hunter (drives the browser itself) | `prior-art-scout`, `code-hunter` for the code behind a repro, `finding-verifier` (a subagent never starts a browser) |
+| reviewer (merged set) | `finding-verifier` per batch, `code-hunter` for a regression trace |
+| gardener | `prior-art-scout`, `code-hunter` per slice (`focus: duplication` or `mess`), `finding-verifier` |
+| surveyor | `track-surveyor` per circuit |
+| deploy-red fixer | `ci-red-triage`, `verify-agent --base <tip>` |
+| agent-surface editor | `surface-reviewer` over the touched units |
 
 ## Enforcement — what actually stops an agent
 
@@ -91,7 +122,7 @@ and, in a worktree, its `SHARED` list).
 | cloud workers (launched by `dispatch.yml`) | sonnet, from `tools/ci/dispatch.json` | the brief is scoped and verified by CI |
 | implementers (`worker`, `track-surveyor`) | `inherit` — downshift only | they write code on the session's model; a parent may pass a cheaper tier at spawn, never a dearer one |
 | reviewers (`finding-verifier`, `surface-reviewer`, `ci-red-triage`, `physics-contract-auditor`, `pr-reviewer`) | sonnet | judgement on bounded input |
-| scouts (`Explore`, `prior-art-scout`, `deploy-research`, `verify-agent`) | haiku | scan-and-report |
+| scouts (`Explore`, `prior-art-scout`, `deploy-research`, `verify-agent`, `session-reader`) | haiku | scan-and-report |
 | `code-hunter` | sonnet in the card, tiered at spawn | the workflows pass `TIER_MODEL[effort]`: haiku for data-shaped slices, opus for the engine |
 | workflow critics / perf triage / synthesis | explicit opus in the script | the one place depth is the product |
 
