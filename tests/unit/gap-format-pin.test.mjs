@@ -14,6 +14,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { seedDom } from "../helpers/seed-dom.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -32,6 +33,8 @@ const HR = (() => {
   return c.HudReadouts;
 })();
 
+const Dom = seedDom(vm.createContext({})).Dom;
+
 const IN = [-1, -0, 0, 0.0005, 0.999, 9.994, 9.995, 59.999, 60, 99.5, 3599.9, NaN, Infinity, null, undefined, "+1 LAP"];
 const label = (v) => (Object.is(v, -0) ? "-0" : typeof v === "string" ? JSON.stringify(v) : String(v));
 const run = (f) => IN.map((v) => { try { return f(v); } catch { return "THROWS"; } });
@@ -41,9 +44,10 @@ function table(name, f, want) {
 }
 
 test("timing sheet: results.js gap cells print through Dom.fmtGap", () => {
-  table("results.fmtGap", lift("js/data/results.js", /function fmtGap\(v\) \{[\s\S]*?\n  \}/),
+  table("Dom.fmtGap", (v) => Dom.fmtGap(v),
     ["—", "—", "—", "+0.001", "+0.999", "+9.994", "+9.995", "+59.999", "+60.000", "+99.500", "+3599.900",
       null, null, null, null, "+1 LAP"]);
+  assert.doesNotMatch(read("js/data/results.js"), /function fmtGap\(/, "results.js keeps no copy");
 });
 
 test("timing sheet: the real-race-script.js outlier prints as it did (null —, 0 blank, negative/NaN printed through)", () => {

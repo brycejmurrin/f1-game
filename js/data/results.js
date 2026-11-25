@@ -35,13 +35,6 @@ const DataResults = (function () {
     return Dom.fmtRaceClock(s);
   }
 
-  function fmtGap(v) {
-    if (typeof v === "string") return v;          // "+1 LAP" and friends arrive pre-formatted
-    if (typeof v !== "number" || !isFinite(v)) return null;
-    if (v <= 0) return "—";                       // the leader's own gap
-    return "+" + v.toFixed(3);
-  }
-
   function statusOf(r) {
     if (r.dsq) return "DSQ";
     if (r.dns) return "DNS";
@@ -301,7 +294,7 @@ const DataResults = (function () {
         tr.appendChild(el("td", "dh-td-time", status || time || "—"));
         // A lapped finisher has no duration but a "+1 LAP" label: the label
         // is the whole gap, so it must not wait on the time.
-        const gap = typeof r.gap === "string" && r.gap && !status ? r.gap : (time && fmtGap(r.gap)) || "—";
+        const gap = typeof r.gap === "string" && r.gap && !status ? r.gap : (time && Dom.fmtGap(r.gap)) || "—";
         tr.appendChild(el("td", "dh-td-time", gap));
         if (kind === "race") tr.appendChild(el("td", "dh-td-pts", r.points !== null ? r.points : ""));
         tbody.appendChild(tr);
@@ -374,7 +367,7 @@ const DataResults = (function () {
         tr.appendChild(el("td", "dh-td-pos", n + 1));
         driverCells(tr, r, byNum);
         tr.appendChild(el("td", "dh-td-time", fmtLap(qSlot(r, i))));
-        tr.appendChild(el("td", "dh-td-time", fmtGap(qGap(r, i)) || "—"));
+        tr.appendChild(el("td", "dh-td-time", Dom.fmtGap(qGap(r, i)) || "—"));
         tbody.appendChild(tr);
         if (n === lastThrough) {
           const nx = ran[n + 1];
