@@ -30,6 +30,7 @@ comments and answers each with an ` ```apex-result ` comment. Routes ruled out, 
   is read; use `batch` for several steps.
 - The page polls every `POLL_MS`, plus GitHub's lag. Then `get_comments`: the reply is the OWNER-authored comment
   whose fenced JSON has `re` = your command's id (ignore other authors). `{ok:false,error}` is the answer: no resend.
+- Wait for a reply under Monitor, not a poll loop: `node tools/bridge/watch.mjs --issue <n> [--exit-on <cmd comment id>]` prints each new OWNER hello / `apex-result` within ~5 s and backs off on a low rate limit; it never posts.
 - A long command (`frames`, `wait`, a race build) answers late; read again after its duration, never a shell
   sleep loop. Nothing after a minute: the page is hidden or reloaded; ask Bryce.
 - Before quoting a number, read [`references/commands.md`](references/commands.md) §Cannot measure: a
