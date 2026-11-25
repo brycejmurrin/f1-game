@@ -47,7 +47,9 @@ test("timing sheet: results.js gap cells print through Dom.fmtGap", () => {
   table("Dom.fmtGap", (v) => Dom.fmtGap(v),
     ["—", "—", "—", "+0.001", "+0.999", "+9.994", "+9.995", "+59.999", "+60.000", "+99.500", "+3599.900",
       null, null, null, null, "+1 LAP"]);
-  assert.doesNotMatch(read("js/data/results.js"), /function fmtGap\(/, "results.js keeps no copy");
+  // No local copy, and both cells (race gap, qualifying gap) route through Dom.fmtGap.
+  assert.deepEqual(read("js/data/results.js").match(/(?:function |Dom\.)?fmtGap\((?:r\.gap|qGap|v)?/g),
+    ["Dom.fmtGap(r.gap", "Dom.fmtGap(qGap"], "results.js: no copy; race + quali cells call Dom.fmtGap");
 });
 
 test("timing sheet: the real-race-script.js outlier prints as it did (null —, 0 blank, negative/NaN printed through)", () => {
