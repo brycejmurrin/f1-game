@@ -71,8 +71,12 @@
     // re-seats turns when the start line moves.
     // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
     // researched real turn count. No researched sectors — consumers fall back to thirds.
+    // T9 is the 180-degree left hairpin (one built peak, 0.6154), T10 the right after
+    // it, T11 the left flick before the Imola chicane (T12-T13) and Chateau d'Eau (T14)
+    // — WorldSBK track guide 2025 numbering; #5652 survey. The old list counted the
+    // hairpin twice (T9 46 m before it, T10 on it) and left the T11 flick out.
     sectors: [0.335, 0.693],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.0905, 0.1450, 0.1675, 0.1830, 0.1945, 0.4130, 0.5350, 0.5475, 0.6050, 0.6165, 0.6355, 0.7575, 0.7695, 0.8170, 0.9540, 0.9780, 0.9840],
+    turns: [0.0905, 0.1450, 0.1675, 0.1830, 0.1945, 0.4130, 0.5350, 0.5475, 0.6154, 0.6355, 0.6715, 0.7575, 0.7695, 0.8170, 0.9540, 0.9780, 0.9840],
     furniture: { tree: "broad", fol: [0.22, 0.46, 0.22], lamp: "none" },  // Nivernais poplar and hedgerow
     kit: { marshal: "cabin",     rail: "wArmco",      fence: "mesh",      tyre: "stack",   board: "trivision", gantry: "box",        camera: "lattice",   hoarding: "panel" },
     standSet: ["navy", "alu", "concrete"],  // French blue on a plain 1990s facility

@@ -56,6 +56,10 @@ The model retains the authored crest and trough positions. The 2019 event media 
 - Three pinch points (T5–6, T13–14, T16–17); modern flat kerbs.
 - Very low tyre degradation surface — visually smooth, uniform, new-looking tarmac.
 
+## Turn numbering (#5652 survey, 2026-11-25)
+
+`turns[]` follows the 18-turn F1 numbering. T10 opens the back straight and the second DRS zone. T11 (right, 0.6149) and T12 (left, 0.7557) are the flat-out sweeps along it; drivers are still exiting T12 as they brake for T13. T13 is the heavy-braking right (0.778), T14 the 90° left (0.795), and T15–T16 the left-right pair (0.8405/0.856). The TUMFTM `Sochi.csv` centreline puts its curvature peaks within 8 m of each of these. The older list put T11/T12 on the real T13/T14 and two spare entries on T14's exit. Sources: [RaceFans track data](https://www.racefans.net/?p=318418), [F1 2014 "Sochi uncovered"](https://www.formula1.com/en/latest/features/2014/10/Sochi-uncovered---the-inside-track-on-Russias-first-F1-circuit.html), [TUMFTM racetrack-database](https://github.com/TUMFTM/racetrack-database) (LGPL-3.0).
+
 ## 6. Modelling notes
 - The park section must be architecturally led: big, clean, geometric volumes on open paving, each venue a distinct silhouette (shell / dome / glass box / spire / cube). Do not dress it with trees or crowd banks.
 - Make Turn 2 read as a wrap: put the plaza and the flame tower INSIDE it, so the whole corner is spent looking at the same object from changing angles.
