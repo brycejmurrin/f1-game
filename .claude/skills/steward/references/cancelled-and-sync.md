@@ -56,7 +56,7 @@ at merge" now means the two sides really share that much; one PR's own wide sele
 The fixer is never held, and needs no click from Bryce: branch from the red tip (or `sync-pr --onto-red-tip`) so the
 head CONTAINS the red commit, add `deploy:red` to the PR, then flip ready and add `land` in that order. `base` passes
 on the label plus that ancestry, and the PR's own green CI on top of the red is the proof. An infrastructure red (a
-runner, mirror or setup failure) holds the same way and clears on a re-run of the train, on the 6-hourly `pages.yml`
+runner, mirror or setup failure) holds the same way and clears on a re-run of the train, on the daily `pages.yml`
 cron, or through that same route with any PR whose CI is green on the tip.
 
 Merely behind is never a reason: merge-gate's `distance` row and `land.yml`'s AUTO-SYNC left on 2026-11-03 (gen and

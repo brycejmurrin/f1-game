@@ -2,7 +2,8 @@
 
 Markdown agents with YAML frontmatter under `.claude/agents/`. Claude Code and
 Cursor both load this path (Cursor also accepts `.cursor/agents/`; we keep the
-single Claude tree to avoid drift). Twelve agents: **pr-reviewer** joined
+single Claude tree to avoid drift). Thirteen agents: **gardener** joined 2026-11-25 (Bryce's
+Gardener role, PR #6451); **pr-reviewer** joined
 2026-11-24 (Bryce's `decision: A1` on PR #6377) to the eleven of 2026-11-03 (plan
 `docs/plans/2026-11-03-agent-surface-reset.md` §4.6): `bloat-auditor` folded
 into **code-hunter** (`focus: dead-code`), `agent-surface-reviewer` re-specced
@@ -23,6 +24,7 @@ as the cross-file **surface-reviewer**; earlier folds: `worktree-regression-chec
 | **surface-reviewer** | Cross-file review of a SET of agent-surface units (skills, cards, hooks, rules, settings, AGENTS.md sections): extracts every claim unit A makes about unit B and tests it against B (`--help`, anchors, the hook's pinned test, WebFetch for a host-doc claim), flags one-home collisions and pointer cycles, writes a ≤ 60-line report to `scratch/**.md` (`tools/hooks/scratch-md-only.sh`; no Bash writes) and returns `VERDICT` + `CLAIM` rows; `retest <old report>` adds BEFORE/AFTER. |
 | **finding-verifier** | Re-reads up to 15 `file:line — claim` rows on the current tree and returns `CONFIRMED / STALE / REFUTED / NEEDS-BROWSER` with evidence, then `refuted: k/N stale: k/N`. Run it before acting on any hunt, survey, review or audit finding; never fixes. A workflow's verifier schema carries `needsBrowser` so a renderer/HUD claim is reported, not refuted. |
 | **pr-reviewer** | Advisory read of ONE code PR (js/, css/, index.html, sw.js) before the ready flip (skill `steward` §Land): the diff, the linked issue's Done-when, the groups and specs `pick-tests.mjs` / `select-specs.mjs` route to it; returns ≤ 10 `FINDING` rows (`file:line — claim — why — test`), each `blocker-candidate` or `nit`, then `findings: n`. Read-only (`readonly-bash.sh`), sonnet; never edits, labels, comments on GitHub or starts a browser. Calibration: `docs/notes/PR-REVIEWER-CALIBRATION-2026-11-24.md`. |
+| **gardener** | Structure survey of ONE `js/` slice for skill `gardener` (copied helpers, coupling through `G`, a file doing many jobs), one per slice in parallel. Its `tools:` list leads with the apex-lsp tools and every JS-symbol number in its ≤ 12 `FINDING` rows cites the LSP query behind it; Grep only for text shapes; ends `tools used: lsp <n> · grep <m> · read <k>`. Read-only (`readonly-bash.sh`), sonnet; never a bug or perf hunt. |
 | **worker** | ONE scoped change handed off by the parent, in its own worktree (`isolation: worktree`), node-only verification, commits on its branch, coordinates mid-task with `SendMessage` (§Parent and child). The spawn prompt names goal, OWNED, FORBIDDEN, verify command, peers, and whether it pushes. No browser servers on its list; never merges, arms, readies or cancels. Ends with the fixed `WORKER <name>:` report. |
 
 **Token routing:** prefer these over attaching fat skills. Codebase search →
@@ -31,7 +33,7 @@ as the cross-file **surface-reviewer**; earlier folds: `worktree-regression-chec
 `verify-agent --base <ref>`. One circuit → `track-surveyor`. Stale prose →
 the `total-audit` workflow. Curvature / PACE semantics →
 `physics-contract-auditor`. A code PR before the ready flip →
-`pr-reviewer` (advisory). Fat skill / extract / dead code → `code-hunter`
+`pr-reviewer` (advisory). Structure debt in `js/` → `gardener` (parent: skill **gardener**). Fat skill / extract / dead code → `code-hunter`
 with `focus: dead-code` (parent applies via **slim-bloat**). A red Actions or
 Pages run → `ci-red-triage`. A hunt → `prior-art-scout`, then one
 `code-hunter` per slice, then `finding-verifier` on the rows before anyone
@@ -88,7 +90,7 @@ and, in a worktree, its `SHARED` list).
 
 | who | tier | why |
 |---|---|---|
-| cloud workers (launched by `dispatch.yml`) | sonnet, from `tools/ci/dispatch.json` | the brief is scoped and verified by CI |
+| cloud workers (launched by the orchestrator, `create_session`) | sonnet, named in the launch (skill `dispatcher`) | the brief is scoped and verified by CI |
 | implementers (`worker`, `track-surveyor`) | `inherit` — downshift only | they write code on the session's model; a parent may pass a cheaper tier at spawn, never a dearer one |
 | reviewers (`finding-verifier`, `surface-reviewer`, `ci-red-triage`, `physics-contract-auditor`, `pr-reviewer`) | sonnet | judgement on bounded input |
 | scouts (`Explore`, `prior-art-scout`, `deploy-research`, `verify-agent`) | haiku | scan-and-report |

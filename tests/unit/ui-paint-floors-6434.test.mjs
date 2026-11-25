@@ -36,13 +36,13 @@ test("text floors: 12 painted px at UI SIZE 70 (row 5)", () => {
   "pause tray step-down keeps the 0.92 notch above the floor (11.04 px)");
   assert.ok(rulesFor(rules("css/experience.css"), /#menu-brand #disclaimer$/, { context: /@layer layout/ }).some((r) =>
     /^max\(calc\(var\(--fs-micro\) \* \.52 \* var\(--ui-compact-brand-text, 1\)\), var\(--brand-fs-floor\)\)$/.test(r.decls.get("font-size") || "")),
-  "title disclaimer (8.9 px): floored by the brand zoom, gated off at UI SIZE >= 100 %, in `layout` to beat `responsive`");
+  "title disclaimer (8.9 px): floored by the brand zoom, in `layout` to beat `responsive`");
   assert.ok(rulesFor(rules("css/experience.css"), /#menu-brand #soundbtn$/, { context: /@layer layout/ }).some((r) =>
     /^max\(calc\(var\(--fs-micro\) \* \.6 \* var\(--ui-compact-brand-text, 1\)\), var\(--brand-fs-floor\)\)$/.test(r.decls.get("font-size") || "")),
-  "title SOUND (10.3 px): same brand floor and gate");
+  "title SOUND (10.3 px): same brand floor");
   assert.ok(declares(rules("css/experience.css"), /#menu-brand$/, "--brand-fs-floor",
-    "calc(12px / var(--tl-title-size, 1) / var(--tf, 1) * clamp(0, (1 - var(--ui-scale)) * 1000, 1))"),
-  "the brand zooms by TITLE SIZE x fit, so its floor divides by that; clamp() gates it off at UI SIZE >= 100 %");
+    "calc(12px / var(--tl-title-size, 1) / var(--tf, 1))"),
+  "the brand zooms by TITLE SIZE x fit, so its floor divides by that; ungated (#6512): the shipped 109 % phone painted 9.07 px");
   const MQ = /@media \(max-height: 519px\) and \(min-aspect-ratio: 1\/1\)/;
   const ctxOf = (f, layer) => rulesFor(rules(f), /#menu-brand #(disclaimer|soundbtn)$/, { context: layer })
     .filter((r) => r.decls.has("font-size")).map((r) => r.context.find((c) => /^@media/.test(c)));

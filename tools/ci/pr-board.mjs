@@ -41,7 +41,7 @@
  * LEASE reads that line's `until <ISO>` (skill `steward` §Lane 3, the owner lease, #5847): `live` until then, `lapsed`
  * after, `parked` while the PR carries `needs-decision` or `blocked` (up to PARK_GRACE_HOURS past the until-time),
  * `none` with no owner or `owner: none`, `open` for an owner line with no until-time. ADOPTED counts the distinct
- * sessions in the PR's `adopts PR #<n> — <host>:<session>` comments (dispatch.mjs ADOPT_RE); CHURN_ADOPTIONS or more
+ * sessions in the PR's `adopts PR #<n> — <host>:<session>` comments (lib/gh-rows.mjs ADOPT_RE); CHURN_ADOPTIONS or more
  * flags the row `churn` (#5303, #5296, #5491: PRs that change owners do not land).
  *
  *   node tools/ci/pr-board.mjs              # the table
@@ -60,7 +60,7 @@ import { createSnapshot, runsByHead } from "../lib/pr-snapshot.mjs";
 import { guardsVerdict, planVerdict } from "./ready-gate.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { needsSync, verdictLine } from "./needs-sync.mjs";
-import { ADOPT_RE } from "./dispatch.mjs";
+import { ADOPT_RE } from "./lib/gh-rows.mjs";
 
 export { DEPLOY };
 /** The one merge method allowed (AGENTS.md MERGE-COMMIT-ONLY). */

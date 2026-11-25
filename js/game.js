@@ -3426,7 +3426,7 @@ const G = {
   redFlagRestart,
   get daily() { return daily; },
   holdCaution: (level, cause) => raceCtl.hold(level, cause),   // a scripted flag (js/race/real-race.js); 0 releases it
-  resetEpisodeOwners() { IncidentSim.reset(); raceCtl.reset(); DebrisWorld.reset(); },
+  resetEpisodeOwners() { IncidentSim.reset(); raceCtl.reset(); DebrisWorld.reset(); paceRef().fill(0); },
   cameraDampingState() {
     return { eye: camEye.slice(), target: camTgt.slice(), fov: camFov,
       previousAnchor: [camAncX, camAncZ], nextAnchor: [camAncNX, camAncNZ],
@@ -3594,7 +3594,7 @@ qualiNet = QualiNet.create({
 // RACE SETTINGS sheet (js/race/race-settings.js).
 raceSettings = RaceSettings.create(G, {
   GameAudio, Tracks, SettingRow, DrivingLine, SeasonCal,
-  qualiResults: () => quali.results(), openQuali, enableTilt,
+  qualiResults: () => quali.results(), openQuali, enableTilt, gridFromQuali,   // gridFromQuali: GO reads startRace()'s grid rule (#6545)
   getSteerMode: () => steerMode, buildStandings, raceIntro: raceIntroFromSheet,
   previewWxPlan: (o) => wxArc.previewArc(o),   // the MIXED plan WITHOUT caching it (FORECAST line)
 });

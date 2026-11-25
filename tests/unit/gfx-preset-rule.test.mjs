@@ -80,3 +80,11 @@ test("phones: every shown row is off unless turned on, at every preset", () => {
     }
   } finally { delete globalThis.GLX; }
 });
+
+test("the Graphics panel's shed note (#6486 F3): empty at 0, else the count and each row's name", () => {
+  const t = eval(UI + ";DesktopGraphics").shedText;
+  assert.equal(t([]), "");
+  assert.equal(t(null), "");
+  assert.equal(t(["ssgi"]), "1 effect reduced to hold frame rate: Screen-space indirect lighting.");
+  assert.equal(t(["ssgi", "superSample"]), "2 effects reduced to hold frame rate: Screen-space indirect lighting, 1.5× supersampling.");
+});

@@ -317,8 +317,65 @@ function framePreset(name) {
   const was = G.soundOn;
   try { G.soundOn = false; b.click(); } finally { G.soundOn = was; }
 }
+// #6508: a tab switch changes no state, so a pane built earlier this visit is
+// parked off-DOM and moved back instead of a full buildSetup (LIVERY was 31–45 ms
+// per revisit at 852×393). Any other buildSetup is a state change: it drops them all.
+// The key is checked again on restore, so in-place edits a build missed still rebuild.
+// SETUP is never parked (its sliders change the part panes' tune mods in place), nor
+// the paint editor (it owns surface controls and a live preview).
+const csPanes = new Map();   // cat id -> { key, grid, nodes }
+let csPaneKeep = false, csBuilt = null, csViewGen = 0;
+// A resize (rotation, DPR, zoom) re-fits the livery swatches. Counted, not read:
+// innerWidth after the park forced a layout (47 ms over 6 clicks at 852x393).
+if (typeof addEventListener === "function") addEventListener("resize", () => csViewGen++);
+function csPaneKey(team) {
+  return JSON.stringify([team.id, G.driverIdx, getTeamParts(team.id), getLiveryId(team.id), getCustomLiveries(team.id).length,
+    typeof SetupTune !== "undefined" && SetupTune.get(team.id), G.careerOwned() && Career.data().money, G.unlimitedBudget,
+    csLivQuery, Parts.legalityKey && Parts.legalityKey(), csViewGen,
+    // TEAM's look chips and peer seats; the swatches' font readiness. (Its race and career
+    // locks hold for a whole visit, and every visit opens with a buildSetup.)
+    lookRowSpecs().map((r) => r.cur), G.peerSeats && G.peerSeats(), document.fonts && document.fonts.status]);
+}
+// Parks `from`'s pane, then moves `id`'s back in if its key still holds: true when it did.
+function swapCsPane(from, id) {
+  const el = $("cs-options"), nodes = [...el.childNodes || el.children];
+  el.replaceChildren();
+  if (from === "tune") csPanes.clear();
+  else if (csBuilt && csBuilt.cat === from && !(from === "livery" && csLivCreating)) {
+    // A one-shot status line ("Could not fit…") belongs to the click that wrote it.
+    csPanes.set(from, { key: csBuilt.key, grid: el.classList.contains("cs-liv-grid"),
+      nodes: nodes.filter((n) => n.role !== "status") });
+  }
+  const p = csPanes.get(id);
+  // (No editor check here: opening or closing the paint editor is a buildSetup.)
+  if (!p || p.key !== csPaneKey(Teams.LIST[G.teamIdx])) { csPanes.delete(id); return false; }
+  csPanes.delete(id); csBuilt = { cat: id, key: p.key };
+  // buildSetup's head, minus the work a state change needs (the key pins the team the
+  // build already captured, and the exit chrome only changes on a garage open).
+  clearTimeout(csLivSearchTimer); csLivSearchTimer = 0;
+  clearSurfaceControls();
+  if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end();
+  let on = null;
+  for (const tab of $("cs-tabs").querySelectorAll('[role="tab"]')) {
+    const a = tab.dataset.csCat === id;
+    if (a) on = tab;
+    tab.classList.toggle("active", a); tab.setAttribute("aria-selected", a); tab.tabIndex = a ? 0 : -1;
+  }
+  el.setAttribute("aria-labelledby", csTabId(id));
+  el.classList.toggle("cs-liv-grid", p.grid);
+  el.append(...p.nodes);
+  // The rebuild path's scroll fix-ups, one frame later: in the click they forced a
+  // layout of the moved-back pane that the next frame does anyway.
+  (typeof requestAnimationFrame === "function" ? requestAnimationFrame : (f) => f())(() => {
+    if (csActiveCat !== id) return;
+    el.scrollTop = 0;
+    on?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  });
+  return true;
+}
 function activateCsCat(id, focus) {
   if (csActiveCat !== id) {
+    const from = csActiveCat;
     csActiveCat = id;
     // Browse section previews this category, then restores the original tab.
     // A preview must not persist a tab choice or move the player's camera.
@@ -327,8 +384,11 @@ function activateCsCat(id, focus) {
       store.set("garageTab", id);
       if (G.soundOn) GameAudio.uiTick();
     }
-    buildSetup();
-    const pane = $("cs-options"); if (pane) pane.scrollTop = 0;
+    if (!swapCsPane(from, id)) {
+      csPaneKeep = true;
+      try { buildSetup(); } finally { csPaneKeep = false; }
+      const pane = $("cs-options"); if (pane) pane.scrollTop = 0;
+    }
     // LIVERY is about the wall crest as much as the paint chips: frame FRONT
     // on the category change only, never again while the tab stays open.
     if (!preview) {
@@ -716,6 +776,8 @@ function buildSetup() {
     if (activeTab) activeTab.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
 
+  if (!csPaneKeep) csPanes.clear();
+  csBuilt = { cat: csActiveCat, key: csPaneKey(team) };
   const optsEl = $("cs-options");
   optsEl.textContent = "";
   optsEl.setAttribute("role", "tabpanel");
