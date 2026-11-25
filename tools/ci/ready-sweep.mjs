@@ -20,13 +20,13 @@
 // the caller's write, with the row quoted in the closing comment.
 //
 // The cap row is one line, the same on every surface: launchable `ready` units against PRs merged into the repository in
-// the last `--days` (7). A unit is what one worker launch would take, by dispatch.mjs rule 1: `ready` without `claimed`,
-// `blocked`, `needs-decision` or `epic`, not a batch member, and with no open PR that closes it.
+// the last `--days` (7). A unit is what one worker launch would take, by the launch rule (skill `dispatcher`): `ready`
+// without `claimed`, `blocked`, `needs-decision` or `epic`, not a batch member, and with no open PR that closes it.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { api as githubApi, REPO } from "./github-api.mjs";
-import { getAll, labelsOf, batchMembers, closingIssues } from "./dispatch.mjs";
+import { getAll, labelsOf, batchMembers, closingIssues } from "./lib/gh-rows.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -72,7 +72,7 @@ export function sweepIssue(issue, tree) {
   return { number: issue.number, title: issue.title, verdict, cites, bad: bad.length, judged: judged.length };
 }
 
-/** The `ready` issues one worker launch each would take (dispatch.mjs rule 1, without its per-run caps). `issues` and
+/** The `ready` issues one worker launch each would take (the launch rule, skill `dispatcher`). `issues` and
  *  `prs` are the OPEN ones. Pure. */
 export function launchableReady(issues, prs, repo = REPO) {
   const member = new Set();

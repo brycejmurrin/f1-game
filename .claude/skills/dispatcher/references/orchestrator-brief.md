@@ -1,8 +1,8 @@
 # A worker brief written by an orchestrator session
 
-Read when a session, not the dispatch Action, launches workers (`create_session`). The Action's own one-line address
-and the saved worker prompt are `tools/ci/worker-prompt.md`; this is the longer brief a human-steered orchestrator
-writes. Every line below rests on a measured cost in `docs/notes/ORCHESTRATION-REVIEW-2026-11-11.md` (rank in
+Read when you launch workers (`create_session`): the orchestrator session is the only launcher since the dispatch
+Action retired (2026-11-25, #6536). The one-line address and the saved worker prompt are `tools/ci/worker-prompt.md`;
+this is the longer brief a human-steered orchestrator writes. Every line below rests on a measured cost in `docs/notes/ORCHESTRATION-REVIEW-2026-11-11.md` (rank in
 brackets). A brief is task facts; the rules live in AGENTS.md and skill `steward`, so cite them, do not restate them:
 restated rules drifted into three wordings and one contradicted the skill [14].
 
@@ -23,7 +23,7 @@ restated rules drifted into three wordings and one contradicted the skill [14].
   min (#5847). One issue or batch issue, one PR; a fix touching a generated or digest source gets its own PR [5]. A
   combined unit only for PRs that conflict with each other, three at most, fixed at launch [13].
 - Group at launch: at most 3 small `ready` issues of one area or the same files become one `batch` issue
-  (`## Members`, `## Merge order`; `dispatch.mjs` `batchMembers`), one worker, one PR, about 400 changed lines at most
+  (`## Members`, `## Merge order`; `tools/ci/lib/gh-rows.mjs` `batchMembers`), one worker, one PR, about 400 changed lines at most
   (Bryce's `decision: B1`, PR #6377); unrelated issues stay one PR each.
 - Adopt only a lapsed or handed-back lease, never a parked one (skill `steward` §Lane 3). `pr-board.mjs --brief`
   prints `lease …` and `churn: adopted Nx`; a churn PR (3+ adopters) gets one worker that stays until `land`.

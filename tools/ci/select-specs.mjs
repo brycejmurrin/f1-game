@@ -423,7 +423,9 @@ export const HUD_LAYOUT_MIN_PIECES = 4;
 // count rule made seven 46 s jobs of it — 20 of the 30 legs of ship run
 // 38041862767 ran under 2 min of tests, each paying setup and a queue slot.
 export const MAX_TESTS_PER_JOB = 8;
-// Specs that declare this much (or more) per test NEVER share a selected job.
+// Specs that declare this much (or more) per test NEVER share a Chromium: unmeasured, they never share a
+// selected job; measured, they may share an over-budget leg, each in a Playwright process of its own
+// (shards() MEASURED SOLO-CLASS SPEC PACKS; run-playwright partitionMegaSweepArgs).
 // terrain-over-road still declares 1500 s for an all-circuits walk (props-
 // over-road left that set on 2026-09-30 — one test per circuit at 120 s);
 // billed at the unmeasured fallback they look like 8–38 s and pack next to a
@@ -991,8 +993,20 @@ export function shards(r, db = timings(), quarantine = loadQuarantine(), base = 
       }
       continue;
     }
-    const solo = !!s.capacityFallback || /menu-baseline/.test(s.file) || (s.ownTimeoutSec || 0) >= SOLO_OWN_TIMEOUT_SEC || retries > 0;
-    items.push({ solo, budgeted: !!s.budgeted, pool: s.pool || false, name: `oversize-${base}`,
+    // A MEASURED SOLO-CLASS SPEC PACKS (#6557 P6, 2026-11-25). The declaration (SOLO_OWN_TIMEOUT_SEC) kept two
+    // dangers off a shared leg: an unmeasured walk billed at the fallback rate (8-38 s on paper, 5-10 min on a
+    // runner), and a long walk poisoning the Chromium its leg-mates reuse. A measured median answers the first; the
+    // second is run-playwright's: partitionMegaSweepArgs peels every such spec (isMegaSweepSpec, the same
+    // declaration) out of a shared argv into a Playwright process of its own. So a measured one that fits one
+    // leg (n === 1 here) packs into the over-budget pool's bins (`overbudget-<k>`, never a budgeted `selected-<i>`
+    // whose kill timer it would raise), longest-first to TARGET_SHARD_SEC, its declared per-test figure still
+    // pricing the leg's cap (shardCapMin). Before: ~9 legs of 0.5-4 min each on a wide train plan (camera, debris,
+    // ctx-lost-retry, perf-frametime, race-cycle-memory, phone-shipped-defaults, ...), each a runner start.
+    const declaredSolo = (s.ownTimeoutSec || 0) >= SOLO_OWN_TIMEOUT_SEC;
+    const measuredSoloPacks = declaredSolo && measured && !s.capacityFallback && !/menu-baseline/.test(s.file) && retries === 0;
+    const solo = !!s.capacityFallback || /menu-baseline/.test(s.file) || (declaredSolo && !measuredSoloPacks) || retries > 0;
+    items.push({ solo, budgeted: measuredSoloPacks ? false : !!s.budgeted,
+      pool: measuredSoloPacks && s.pool !== "spill" ? true : (s.pool || false), name: `oversize-${base}`,
       files: [s.file], shard: "", tests: s.tests, sec, perTest, workers: 1, retries, maxCapMin });
   }
   const bins = [];

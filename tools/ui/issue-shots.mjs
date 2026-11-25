@@ -12,12 +12,12 @@
 //   node tools/ui/issue-shots.mjs 5218 --json       # machine-readable rows
 //   node tools/ui/issue-shots.mjs 5218 --list       # URLs only, download nothing
 //   node tools/ui/issue-shots.mjs 5218 --branch     # read them from origin/phone-shots:<n>/ instead (a cloud worker's path)
-//   node tools/ui/issue-shots.mjs 5218 --author brycejmurrin --attachments-only --out shots/5218   # the runner's call
+//   node tools/ui/issue-shots.mjs 5218 --author brycejmurrin --attachments-only --out shots/5218   # the retired runner's call
 //
 // MEASURED 2026-11-10: a cloud session's proxy answers `github.com/user-attachments/...` with 403 ("sessions are bound
 // to their configured repositories"), so the direct download works on an Actions runner or a laptop and NOT in a
-// worker. A worker reads the copies .github/workflows/phone-shots.yml commits to the orphan `phone-shots` branch
-// (`--branch`; #5246). A refused download says so and names `--branch`.
+// worker. A worker reads the copies the retired phone-shots.yml workflow committed to the orphan `phone-shots` branch
+// (`--branch`; #5246; retired 2026-11-25, #6536, so newer issues have none). A refused download says so and names `--branch`.
 // The runner's call is hardened because issue text is untrusted: --author keeps only the images in the body/comments
 // that login wrote, --attachments-only keeps only GitHub-hosted attachment URLs, and every run takes at most
 // MAX_SHOTS images of at most MAX_BYTES each over https only; a file whose header is not PNG/JPEG/GIF/WebP is deleted.
