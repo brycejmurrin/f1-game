@@ -128,6 +128,30 @@ re-derives it, so the train head is still a proof: a tree that is the plain merg
 re-snap that was not due, refuses. The car's commit message and the train body name each re-snap. Tree-wide metrics
 are out of scope: the boot wall needs PR code, and the pin counters are already judged diff-relative on the merge.
 
+## Two trains in flight (#6584, 2026-11-25)
+
+Bryce picked "Two trains in flight" at about 10:15Z (relayed by the orchestrator). The next train is built while the
+open one runs CI. The change lives in `merge-train.mjs` alone; land.yml is unchanged.
+- **Stack.** While train N runs and nothing is stacked, the screen folds the next candidates (none of N's cars) onto
+  N's HEAD, in a worktree whose HEAD is that head. The build pushes the fold as a bare ref
+  `train-next/<N's head>-<cars>`. There is no PR, and ci.yml has no push trigger, so N+1 runs no CI and holds no
+  runner. land.yml still sees one open train. The fold itself is the manifest (`readStack`).
+- **Promote.** Once N's head is on the deploy branch (N merged), the build opens N+1's `train/*` PR from that very
+  fold. Its manifest base is N's head, which is now on the deploy branch, so `verifyTrain` and every gate row run as
+  for any train. Merges stay in order.
+- **Restack.** If an N+1 car moves, loses `land` or gets `hold` while N runs, the rest is refolded on N's head.
+- **Rebase.** If N closes unmerged (red, stale, or by hand), N+1's cars, without N's, are refolded on the tip and
+  opened at once. That train is marked `rebased`, so when it merges it does not end N's bisect: the train after it
+  still takes half of N's cars.
+- A screen skips while a train is stacked; the build acts on the stack. A screen stacked on a train that closed
+  before the build ran opens nothing, and the next run screens onto the tip.
+- **Measured** (23 trains opened in the 48 h to 2026-11-25 12:00Z): a merged train takes a median 24 min from open to
+  merge, the next train opened a median 23 min later, and a merged train carried 2.6 cars. The stack takes the
+  screen (~70 s a candidate) out of that gap, and a red base no longer costs a full screen cycle. The gap is left
+  waiting for the next trigger (the :17/:47 sweep or the Pages success, a median 28 min after a merge). Adding the
+  deploy-branch `push` event to the `train-screen`/`train` jobs would close most of it; that is a land.yml follow-up
+  after #6536.
+
 ## Residual risks (accepted)
 
 - A `hold` added to a car after the train's `gate` success and before GitHub merges the train is not re-read. This is
