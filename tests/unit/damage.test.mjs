@@ -83,6 +83,34 @@ test("contact: both cars booked from their own frame, debounced until observe() 
   assert.ok(D.state(sp).rw > 0 && D.state(sp).fwL + D.state(sp).fwR === 0);
 });
 
+test("contact (#6546 P2): a rub inside the cool-down no longer swallows the shunt after it", () => {
+  const { Damage: D } = load();
+  const alone = car({ prog: 100 }), ob = car({ prog: 104 });
+  D.contact(alone, ob, 0.9);
+  const ref = D.state(alone).worst;
+  const a = car({ prog: 100 }), b = car({ prog: 104 });
+  D.contact(a, b, 0.2);
+  for (let i = 0; i < 6; i++) { D.observe(a, 1 / 60, 90); D.observe(b, 1 / 60, 90); }   // +0.1 s
+  D.contact(a, b, 0.9);
+  assert.ok(D.state(a).worst >= ref - 1e-9, `rub then shunt ${D.state(a).worst} vs shunt alone ${ref}`);
+  assert.equal(D.state(a).hits, 2, "the harder hit is a new hit");
+  assert.equal(D.state(a).knock, 1, "knock reads the whole shunt, not its excess");
+});
+
+test("contact (#6546 P2): a 5 s side-by-side rub stays light", () => {
+  const { Damage: D } = load();
+  for (const [dl, dx] of [[4, 0], [0.5, 1.9]]) {   // nose-to-tail and flank geometry
+    const a = car({ prog: 100 }), b = car({ prog: 100 + dl, x: dx });
+    for (let i = 0; i < 300; i++) {
+      D.contact(a, b, 0.2);
+      D.observe(a, 1 / 60, 90); D.observe(b, 1 / 60, 90);
+    }
+    const w = Math.max(D.state(a).worst, D.state(b).worst);
+    assert.ok(w <= 0.3, `300 steps of 0.2 rub → worst ${w}`);
+    assert.equal(D.state(a).hits, 1, "one contact, one hit");
+  }
+});
+
 test("contact: a car lapping a backmarker is booked by on-road gap, not race distance", () => {
   const { Damage: D } = load();
   const L = 5000;

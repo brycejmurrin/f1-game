@@ -178,7 +178,7 @@ reads a car parked on its grid slot (the note above).
 ## Concurrency
 
 Each command is a READ or an ACTION (`isRead`, `READ_CMDS`, `CALL_READ` in `js/agent/apex-bridge.js`).
-- READ: `ping facts display geom frames screen snap`, `drive {stop}` / `{status}`, and `call` of a `CALL_READ`
+- READ: `ping facts display geom frames screen snap rects overlaps`, `drive {stop}` / `{status}`, and `call` of a `CALL_READ`
   method with read-only args (`perf` / `info` / `audio` / `lifecycle` … with none; `physState world field logs scene`
   with any; `renderScale` none or `{lite:true}`; `diag` only `{download:false}`; `frametimeBench` none or `"snapshot"`).
 - ACTION: everything else (`tap nav set key scroll drive wait when plan batch reload path bench gpuTest recorder`,
@@ -198,7 +198,7 @@ inside a plan; `plan batch reload path bench` cannot be steps.
   garage → tap `cs-arrival-skip` if shown → screen → snap w 320.
 - `raceSample {track="monza", seconds=10 (1-60)}`: display → geom → call race → when screen race → call go → wait
   3000 → frames → call perf.
-- `hudAudit`: geom → display → screen → snap (the `rects` read joins once #6581 lands it).
+- `hudAudit`: geom → display → screen → overlaps {hud-speed + touch buttons} → snap.
 
 `when {visible:"<id>"}` waits for an element to be shown; `visible` true / false is still the page.
 

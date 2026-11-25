@@ -69,6 +69,43 @@ test.describe("on-screen pedals report travel, not just a press", () => {
     expect(await page.evaluate(() => Input.braking())).toBe(false);
   });
 
+// #6618, Bryce's decision "hold throttle only": with THROTTLE = LATCH, one thumb
+// sliding GAS -> BRAKE -> GAS used to flip the latch on the arrival (the hand-off
+// pressed GAS like a fresh tap). A slide holds throttle while the thumb stays and
+// never toggles; only a fresh tap does. elementFromPoint is pinned to the button the
+// slide is over, so the hand-off's hit test does not depend on the title-screen layout.
+test("LATCH: a slide GAS -> BRAKE -> GAS never flips the latch; only a tap does (#6618)", async ({ page }) => {
+  const r = await page.evaluate(() => {
+    Input.reset();
+    Input.setThrottleLatch(true);
+    const gas = document.getElementById("btn-throttle"), brake = document.getElementById("btn-brake");
+    for (const el of [gas, brake]) { el.hidden = false; if (el.parentElement) el.parentElement.hidden = false; }
+    const hit = document.elementFromPoint;
+    let under = gas;
+    document.elementFromPoint = () => under;
+    const pe = (el, type, pointerId) => el.dispatchEvent(new PointerEvent(type, {
+      pointerId, pointerType: "touch", clientX: 10, clientY: 10, bubbles: true, cancelable: true }));
+    const read = () => [Input.throttleLatched(), Input.debugState().btn.throttle, Input.debugState().btn.brake];
+    try {
+      pe(gas, "pointerdown", 61);
+      const tapped = read();
+      under = brake; pe(gas, "pointermove", 61);
+      const onBrake = read();
+      under = gas; pe(brake, "pointermove", 61);
+      const back = read();
+      pe(gas, "pointerup", 61); window.dispatchEvent(new PointerEvent("pointerup", { pointerId: 61 }));
+      const lifted = read();
+      pe(gas, "pointerdown", 62); pe(gas, "pointerup", 62); window.dispatchEvent(new PointerEvent("pointerup", { pointerId: 62 }));
+      return { tapped, onBrake, back, lifted, second: read() };
+    } finally { document.elementFromPoint = hit; Input.setThrottleLatch(false); }
+  });
+  expect(r.tapped).toEqual([true, true, false]);
+  expect(r.onBrake).toEqual([true, true, true]);
+  expect(r.back, "arriving on GAS by a slide keeps the latch").toEqual([true, true, false]);
+  expect(r.lifted).toEqual([true, true, false]);
+  expect(r.second, "a fresh tap still lifts it").toEqual([false, false, false]);
+});
+
   test("a keyboard press outranks a part-open pedal", async ({ page }) => {
     // A desktop player must never be modulated by something they aren't holding.
     await press(page, "btn-throttle", 26, 300);
