@@ -80,7 +80,7 @@ var PitLane = {
     setPinnedStops(v, id) { if (G.store && G.store.set) G.store.set("pitPlan." + pinId(id), v == null ? "auto" : (v | 0)); },
     lossS: () => 0,
     compoundDue: () => false, nextCode: () => "", nextFor: () => null, replan: function () {},
-    laneX: (_c, _hw, x) => x, laneUniform: () => null, boxUniform: () => null,
+    laneX: (_c, _hw, x) => x, laneCentre: () => 0, laneDrive: () => 0, laneUniform: () => null, boxUniform: () => null,
     lastCue: () => null, canWork: () => false, addWork: () => 0,
     cue: () => null, windowOf: () => null, worthStopping: () => false,
     estimate: () => ({ lossS: 0, gapS: null, marginS: null, caution: false, estimated: true }),
