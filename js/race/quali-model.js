@@ -73,17 +73,17 @@ const Quali = (function () {
   // TRACK DESIGNER layout) takes CALIB_DEFAULT, the calendar median.
   // @gen-quali-calib start
   const CALIB = {
-    abudhabi: 0.9377, albert_park: 0.9268, anderstorp: 0.9427, bahrain: 0.9411, baku: 0.9586, brands_hatch: 0.9355,
-    buddh: 0.9308, buenos_aires: 0.9369, catalunya: 0.9326, cota: 0.9249, dijon: 0.9276, donington: 0.9537,
-    estoril: 0.9424, fuji: 0.9228, hockenheim: 0.9501, hungaroring: 0.9275, imola: 0.9704, indianapolis: 0.9397,
-    interlagos: 0.9387, istanbul: 0.9458, jacarepagua: 0.9302, jeddah: 0.9504, jerez: 0.9299, korea: 0.9303,
-    kyalami: 0.9424, madrid: 0.9370, magny_cours: 0.9474, mexico: 0.9292, miami: 0.9353, monaco: 0.9615,
-    mont_tremblant: 0.9628, montreal: 0.9461, monza: 0.9355, mosport: 0.9120, mugello: 0.9223, nurburgring: 0.9444,
-    okayama: 0.9396, paul_ricard: 0.9229, portimao: 0.9641, qatar: 0.9439, redbull: 0.9267, sepang: 0.9438,
-    shanghai: 0.9326, silverstone: 0.9212, singapore: 0.9457, sochi: 0.9400, spa: 0.9367, suzuka: 0.9280,
-    vegas: 0.9427, watkins_glen: 0.9571, zandvoort: 0.9498, zolder: 0.9486,
+    abudhabi: 0.9391, albert_park: 0.9297, anderstorp: 0.9436, bahrain: 0.9420, baku: 0.9602, brands_hatch: 0.9365,
+    buddh: 0.9315, buenos_aires: 0.9378, catalunya: 0.9327, cota: 0.9259, dijon: 0.9276, donington: 0.9553,
+    estoril: 0.9435, fuji: 0.9239, hockenheim: 0.9507, hungaroring: 0.9278, imola: 0.9716, indianapolis: 0.9397,
+    interlagos: 0.9392, istanbul: 0.9471, jacarepagua: 0.9297, jeddah: 0.9517, jerez: 0.9308, korea: 0.9311,
+    kyalami: 0.9430, madrid: 0.9384, magny_cours: 0.9485, mexico: 0.9303, miami: 0.9365, monaco: 0.9628,
+    mont_tremblant: 0.9630, montreal: 0.9484, monza: 0.9422, mosport: 0.9124, mugello: 0.9230, nurburgring: 0.9451,
+    okayama: 0.9396, paul_ricard: 0.9238, portimao: 0.9645, qatar: 0.9440, redbull: 0.9274, sepang: 0.9440,
+    shanghai: 0.9326, silverstone: 0.9219, singapore: 0.9457, sochi: 0.9410, spa: 0.9380, suzuka: 0.9280,
+    vegas: 0.9385, watkins_glen: 0.9571, zandvoort: 0.9512, zolder: 0.9385,
   };
-  const CALIB_DEFAULT = 0.9391;
+  const CALIB_DEFAULT = 0.9392;
   // @gen-quali-calib end
   const EXEC_SPREAD = 0.012;
   const QUALI_BIAS = 0.003;
@@ -249,6 +249,8 @@ const Quali = (function () {
     function diffRow() { return PhysicsConsts.DIFF[G.difficulty] || PhysicsConsts.DIFF.normal; }
     // Its corner authority as the driven AI is charged it: skill × the level's `corner` (ctx.diffCorner; a stub row, 1).
     function cornerFor(skill) { const dc = diffRow().corner; return skill * (dc > 0 ? dc : 1); }
+    // ...capped as the driven AI is (AiDrive.diffCorner).
+    function cornerCeil() { const dc = diffRow().corner; return dc > 1 ? dc : 1; }
     // ...and its wing: AiDrive scales lateral grip by aeroGrip(aeroLoad), so corner speed goes with its root. A HUMAN
     // reads the SEAT's wing (the AI's there; a human pays for wing in top speed, #5791): no setup slider buys grid
     // places and the sheet ignores which seat is the player (career.spec); not the neutral wing (#5786).
@@ -264,7 +266,7 @@ const Quali = (function () {
     function carLap(c, track, grip, raw) {
       const k = c.tier != null && typeof AiDrive != "undefined" && AiDrive.paceTrim ? AiDrive.paceTrim(Teams.TIER_V[c.tier] * c.skill) : 1;
       const free = G.vTop() * Math.min(PhysicsConsts.BAND_CEIL || 1, c.tierV * c.skill * diffRow().ai * k);
-      const t = lapTime(track, free, grip, { pace: paceNow(), free, corner: PACE_CORNER * Math.min(1, cornerFor(c.skill) * k) * wingFor(c) });
+      const t = lapTime(track, free, grip, { pace: paceNow(), free, corner: PACE_CORNER * Math.min(cornerCeil(), cornerFor(c.skill) * k) * wingFor(c) });
       return raw ? t : calibFor(track) * t;
     }
 

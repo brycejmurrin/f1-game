@@ -476,6 +476,10 @@ const AiDrive = (function () {
   }
 
   const ERS_BIAS = 0.06;
+  // Defend reserve (#6546 P1), every level. 0.12, not the 0.25 `desperate` floor: both end the flat-battery
+  // trains (0 % car-time at <= 0.02, was 11-15 %), but 0.25 held trains longer (stuck > 10 s Monza 158 -> 193
+  // over 3 seeds) and 0.12 does not (169; Red Bull Ring 172 -> 156). A/B in docs/notes/AI-HARD-PACE-2026-11-25.md.
+  const DEFEND_FLOOR = 0.12;
   function wantBoost(ctx) {
     const energy = ctx.energy || 0;
     if (energy <= 0.02) return false;
@@ -506,7 +510,8 @@ const AiDrive = (function () {
     const bank = ctx.traits.awareness > (0.8 - hs.hold * 0.08)
       && energy < (0.4 - hs.hold * 0.05 + (regen - 0.5) * 0.08) && !catching && !defending;
     if (bank) return false;
-    return desperate || defending || rich || (energy > 0.25 && straight && ctx.traits.awareness < 0.55);
+    // Defend only above a reserve (#6546 P1): trains drained to the 0.02 gate and sat on a flat battery.
+    return desperate || (defending && energy > DEFEND_FLOOR) || rich || (energy > 0.25 && straight && ctx.traits.awareness < 0.55);
   }
 
   function wantX(ctx) {
@@ -542,6 +547,13 @@ const AiDrive = (function () {
   // career development and the legend duel keep their old weight.
   const PACE_GAIN = 2.5, PACE_REF = 0.9332;
   function paceTrim(script) { return script > 0 ? 1 + PACE_GAIN * (script / PACE_REF - 1) : 1; }
+  // CORNER AUTHORITY (ctx.diffCorner): skill x this scales the AI's own grip envelope. The ceiling is the
+  // level's `corner` floored at 1, so EASY/NORMAL are unchanged and HARD (1.072 = sqrt(PLAYER_GRIP)) corners
+  // at the player's envelope (docs/notes/AI-HARD-PACE-2026-11-25.md). The band lifts up to it, never past.
+  function diffCorner(corner, skill, band, trim) {
+    const ceil = corner > 1 ? corner : 1;
+    return Math.min(ceil / skill, Math.min(ceil, corner * (1 + band)) * trim);
+  }
   function lateralScale(speed, load = 0.5, grip = 1, pace = 1, vmax = 72, aero = 1) {
     const q = Math.min(1, Math.abs(speed) / (Math.max(0.05, pace) * Math.max(1, vmax)));
     return (1 + (load - 0.5) * AERO_GRIP_K) * Math.max(0.01, grip) * (1 + AI_DF * aero * q * q);
@@ -1775,7 +1787,7 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
-    lateralScale, paceTrim, laneClear, slowHazard, SLOW_V_FRAC, aiErs, aeroGrip, AERO_GRIP_K, AI_ERS_SPAN, PACE_GAIN, PACE_REF, yawScale, lateralScales, sbsLimits, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
+    lateralScale, paceTrim, diffCorner, laneClear, slowHazard, SLOW_V_FRAC, aiErs, aeroGrip, AERO_GRIP_K, AI_ERS_SPAN, PACE_GAIN, PACE_REF, yawScale, lateralScales, sbsLimits, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     passHunger, hungerOf, coverConcede, pairEdgeN, softPairEdgeN, pullReachM,

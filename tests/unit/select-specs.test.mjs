@@ -25,7 +25,7 @@ import { failedSpecsFrom, unattributedFailuresFrom } from "../../tools/ci/junit-
 import { recall } from "../../tools/ci/select-recall.mjs";
 import { MEASURED, capacity, declaredTests, declaredTestsIn, honoursCircuitScope } from "../../tools/ci/select-budget.mjs";
 import { loadDb, TIMINGS_FILE } from "../../tools/ci/spec-timings.mjs";
-import { specTitles, unlistable, fatShardPlan, titleCosts, lptPieces, countSplitPieces, fatShardArgs, listFile, PW_ROOT_DIR, FAT_UI_SPEC } from "../../tools/ci/fat-shard.mjs";
+import { FAT_UI_SPEC, specTitles, unlistable, fatShardPlan, titleCosts, lptPieces, countSplitPieces, fatShardArgs, listFile, PW_ROOT_DIR } from "../../tools/ci/fat-shard.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import { spawnSync, execFileSync, spawn } from "node:child_process";
@@ -2531,4 +2531,29 @@ test("noDrop: the plan is deterministic for a given input (same head, base, timi
   const b = select(undefined, DEFAULT_BUDGET_MIN, { files });
   assert.deepEqual(a.shards, b.shards, "identical matrix");
   assert.deepEqual([a.skipped, a.overBudgetSpecs], [[], []], "and a whole-suite route drops nothing");
+});
+
+test("never more --shard pieces than tests: an empty shard runs zero tests and fails selected-verdict", () => {
+  // PR #6525 run 45577534643: oversize-perf-boost-press-pipelines-gl 1of2 / 2of2
+  // ({tests: 1, sec: 202} each); Playwright gave 2of2 nothing.
+  const legs = (file, tests, sec) => shards({ selected: [], oversize: [{ file, tests, sec, rank: 0 }] }, EMPTY, new Set())
+    .filter((j) => j.specs.includes(file));
+  const fx = (name) => `fixture-${"specs"}/${name}.spec.js`; // not a real file
+  const pr6525 = legs(fx("perf-one-test"), 1, 404);
+  assert.equal(pr6525.length, 1, "a 1-test spec runs as exactly one leg");
+  assert.equal(pr6525[0].shard, "", "and is not a --shard piece");
+  assert.ok(pr6525[0].timeout <= MAX_SELECTED_JOB_MIN, "a leg the packed ceiling holds keeps it");
+  const long = legs(fx("perf-long-test"), 1, 20 * TARGET_SHARD_SEC);
+  assert.equal(long.length, 1, "a too-long single test is one leg, not a split");
+  assert.ok(long[0].timeout > MAX_SELECTED_JOB_MIN && long[0].timeout <= FAT_UI_SELECTED_JOB_MIN,
+    `and gets the larger ceiling (${long[0].timeout} min)`);
+  const fatFile = fx("career");
+  assert.ok(FAT_UI_SPEC.test(fatFile), "the fixture takes the fat-UI branch");
+  const fat = legs(fatFile, 3, 40 * 60 * 60);
+  assert.ok(fat.length >= 1 && fat.length <= 3, `a 3-test fat spec yields at most 3 pieces (${fat.length})`);
+  const hud = legs(fx("hud-layout"), 3, 60);
+  assert.ok(HUD_LAYOUT_MIN_PIECES > 3 && hud.length === 3, `the HUD floor never exceeds the test count (${hud.length})`);
+  assert.equal(legs(fx("career"), 1, 60).length, 1, "a 1-test fat spec is one piece, not FAT_UI_MIN_PIECES");
+  assert.equal(legs(fx("perf-three-test"), 3, 40 * 60 * 60).length, 3,
+    "a 3-test spec that wants many pieces gets one per test");
 });
