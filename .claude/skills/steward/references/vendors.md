@@ -20,12 +20,27 @@ apex-lsp (`lsp_outline`, `lsp_definition`, `lsp_callers`, then `lsp_diagnostics`
 comments, docs, and CSS. Do not spawn task_v2 scouts. Gate order: edit, `npm run gen`, `tooling-fast --changed` once,
 commit, push. One more gate only when GitHub says CONFLICTING. Cursor's entry is `.cursor/rules/apex-shared.mdc`.
 
+Cursor loads `.claude/skills/` and `.claude/agents/` natively. It enforces a card's read-only status only through its
+own `readonly:` key, which our cards do not carry, so tell a reviewer subagent in its prompt not to edit. In a cloud
+agent the hooks `sessionStart` and the MCP ones do not fire; the shell, `preToolUse` and `subagentStart` hooks do.
+
 ## Codex thread (`lane:codex`, Bryce's own tool, pull-only)
 
 Write the Hand-off block at the first push and add `lane:codex`; the same `land` label lands you. A draft silent for
 6 h is re-owned without asking. AGENTS.md stays under 32 KiB because it is all a Codex thread loads; where it names a
 Claude-only tool (`Monitor`, `run_in_background`, `subscribe_pr_activity`), Codex uses its own equivalent or skips
-the step.
+the step: for CI, see [`host-watch.md`](host-watch.md) §Codex and Cursor.
+- **Subagents.** The built-in `explorer` and `worker` agents (no `.codex/agents/` cards exist yet), spawned in prose.
+  To use one of ours, tell it to read `.claude/agents/<name>.md` and follow it. Our hooks see no subagent id, so
+  the no-browser and no-guard-edit rules for subagents (AGENTS.md rule 10) hold only if the prompt states them.
+- **GitHub.** Codex writes through the `chatgpt-codex-connector` app (measured on #6334). The gate does not count
+  that app as an agent, so a `config-ok` or `ratchet-raise` a Codex lane adds does nothing: put the request in
+  `next:`. `lane:codex` and `land` work as for any lane.
+- **Hooks.** `.codex/hooks.json` loads only in a trusted project, after `/hooks` review; a changed hook is skipped
+  until it is re-trusted. Repo hooks in Codex cloud tasks are not documented, so treat them as absent: the
+  `.githooks/` pre-commit and pre-push hooks and CI still bind.
+- **Orchestrating from Codex:** skill `dispatcher` [`references/other-hosts.md`](../../dispatcher/references/other-hosts.md).
+  Facts and sources: `docs/notes/MULTI-AGENT-CODEX-CURSOR-2026-11-25.md`.
 
 ## `LAND_TOKEN` and the ruleset
 
