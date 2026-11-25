@@ -370,6 +370,9 @@ export function buildImpactMap(specList = testFiles()) {
 export function mergeImpactPinFiles(map) {
   for (const pins of readImpactPins()) {
     for (const [file, fnMap] of Object.entries(pins)) {
+      // The report maps js sources to functions; a tools/ or tests/data pin (or a `*` family, #6583) routes
+      // select-specs only (tools/lib/impact-map.mjs).
+      if (!/^js\/[^*]+\.js$/.test(file)) continue;
       if (!map[file]) map[file] = {};
       for (const [fn, specs] of Object.entries(fnMap)) {
         map[file][fn] = [...new Set([...(map[file][fn] || []), ...specs])].sort(cmpStr);

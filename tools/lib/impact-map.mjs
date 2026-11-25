@@ -34,12 +34,21 @@ export function readImpactPins(root = ROOT) {
   });
 }
 
+/** A pin key with `*` matches a family of files (`*` = any run of characters but `/`), e.g. a dated fixture a later
+ *  PR adds: tests/data/settings-live-export-*.json (#6583). Any other key matches its own path only. */
+export function pinKeyMatches(key, file) {
+  if (!key.includes("*")) return key === file;
+  const re = new RegExp("^" + key.split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join("[^/]*") + "$");
+  return re.test(file);
+}
+
 /** Browser specs explicitly assigned to a changed source. The generated report is never a selection input. */
 export function specsAffectedByImpact(changed, root = ROOT, fragments = readImpactPins(root)) {
   const hit = new Set();
   for (const pins of fragments) {
-    for (const file of changed) {
-      for (const spec of pins[file]?.narrow ?? []) {
+    for (const [key, row] of Object.entries(pins)) {
+      if (!changed.some((file) => pinKeyMatches(key, file))) continue;
+      for (const spec of row.narrow ?? []) {
         if (isBrowserPin(spec)) hit.add(spec);
       }
     }

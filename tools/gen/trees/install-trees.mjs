@@ -15,6 +15,13 @@ import crypto from "node:crypto";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { LOD_CAPS, SPECIES } from "./caps.mjs";
+import { exitIfHelp } from "../../lib/cli-args.mjs";
+
+// #6556: this wrote assets/pack/models/* and manifest.json at load time, whatever argv said.
+const USAGE = "usage: node tools/gen/trees/install-trees.mjs   (no flags; WRITES assets/pack/models/*_lod*.bin + manifest.json)";
+const argv = process.argv.slice(2);
+exitIfHelp(argv, USAGE);
+if (argv.length) { console.error(`install-trees: unknown argument ${argv.join(" ")}; nothing written\n\n${USAGE}`); process.exit(2); }
 
 const require = createRequire(import.meta.url);
 const { parseModel, PACK } = require("../../lib/pack-assets.cjs");

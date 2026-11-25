@@ -18,7 +18,9 @@ import path from "node:path";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 const require = createRequire(import.meta.url);
+const USAGE = "usage: node tools/gen/voice-corpus.mjs [out.json] [laps]   (~10 min at 3 laps; WRITES out.json, default tools/gen/voice-corpus.json)";
 const TRACKS = [["monza", "day", "clear"], ["spa", "day", "rain"], ["monaco", "day", "clear"], ["silverstone", "dusk", "mixed"], ["bahrain", "night", "clear"], ["singapore", "night", "rain"]];
 
 /* ALL OR NOTHING. voicepack.mjs harvests its phrases from this file, so a
@@ -34,6 +36,11 @@ export function writeCorpus(out, corpus, failures) {
 }
 
 async function main(argv) {
+  exitIfHelp(argv, USAGE);
+  // #6556: argv[0] is the output path, so `--help` wrote ./--help after a 10-minute race.
+  if (argv.length > 2 || argv.some((a) => a.startsWith("-")) || (argv[0] && !argv[0].endsWith(".json"))) {
+    throw new Error(`voice-corpus: unknown argument ${argv.join(" ")}; nothing written\n\n${USAGE}`);
+  }
   const { createGame } = require("../lib/game-vm.cjs");
   const out = argv[0] || "tools/gen/voice-corpus.json";
   const laps = +(argv[1] || 4);
@@ -93,5 +100,5 @@ async function main(argv) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { await main(process.argv.slice(2)); } catch (e) { console.error(e.message); process.exitCode = 1; }
+  try { await main(process.argv.slice(2)); } catch (e) { console.error(e.message); process.exitCode = /unknown argument/.test(e.message) ? 2 : 1; }
 }

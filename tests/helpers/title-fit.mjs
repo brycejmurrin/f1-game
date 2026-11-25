@@ -53,9 +53,11 @@ export function judgeFloor(m) {
   return bad;
 }
 
-/** What Bryce's phone stored on 2026-11-09 (tests/data/settings-live-export-2026-11-09.json; his
- *  CURRENT profile is the 2026-11-10 export, tools/lib/bryce-phone.mjs `live`): UI SIZE 61 %, and a landscape TITLE LAYOUT with
- *  BUTTONS SIZE 60, WIDTH 49, pushed right and up, the title pushed left. Over the older export. */
+/** What Bryce's phone stored on 2026-11-09 (tests/data/settings-live-export-2026-11-09.json): UI SIZE 61 %, and a
+ *  landscape TITLE LAYOUT with BUTTONS SIZE 60, WIDTH 49, pushed right and up, the title pushed left. Over the older
+ *  export. A FIXED regression cell, not "his phone today" (that is tools/lib/bryce-phone.mjs `live`, the newest dated
+ *  export): the touch-floor spec needs a stored BUTTONS SIZE under the floor and a WIDTH on the track, which the
+ *  2026-11-25 layout (SIZE 100, WIDTH 0) does not carry, so following `live` would make the check vacuous. */
 export const LIVE_TITLE = Object.freeze({ v: 2, wide: { btns: { x: 50, y: -42, size: 60, width: 49 }, title: { x: -50, y: 2, size: 100 }, art: { x: 0, y: 0, size: 100 }, layout: "grid", side: "auto" } });
 export function liveStore() {
   const exp = exportStore();
