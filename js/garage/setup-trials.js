@@ -148,13 +148,13 @@ const SetupTrials = (() => {
     button("RETURN TO SETUP COMPARISON", () => {
       if (!ownsSession()) return;
       invalidate("Returned to garage before drill completion");
-      G.quitToMenu(); G.openGarageFrom("menu");
+      G.quitToMenu(() => G.openGarageFrom("menu"));
     });
     button("CANCEL SETUP COMPARISON", () => {
       if (!ownsSession()) return;
       // Stop the live graph/session first, so restoring a sheet cannot leave
       // a candidate's old computed mods running against the restored values.
-      G.quitToMenu(); cancel(); G.openGarageFrom("menu");
+      G.quitToMenu(() => { cancel(); G.openGarageFrom("menu"); });
     });
     const paint = () => { const s = summary(); box.hidden = !ownsSession(); status.textContent = s ? "Setup comparison: " + s.reason + " Return keeps completed attempts; unfinished attempts are excluded. Cancel ends the session before restoring only the setup still owned by this comparison." : ""; };
     box.append(status, row); host.appendChild(box); listeners.add(paint); paint();

@@ -170,6 +170,7 @@ const DataHub = (function () {
     // gets the canonical brand-red title for free. The card is not a .sheet,
     // so data.css carries the two flex/compact deltas the grid would provide.
     const header = el("div", "sheet-head");
+    header.setAttribute("data-nav", "own");   // MenuNav leaves its arrows to the keydown below
     const title = el("h2", "", "F1 DATA HUB");
     title.id = "dh-title";
     header.appendChild(title);
@@ -236,32 +237,67 @@ const DataHub = (function () {
       if (openFlag && fromHelpDoor(ev.target)) close();
     }, true);
 
-    // Roving-tablist arrows only. Escape and Tab containment left with the
-    // dialog migration: Escape is the dialog's cancel (TopModal presses
-    // data-esc-close), Tab is platform focus containment, and the old
-    // "is the telemetry popup open" guard went with them — while the popup
-    // (a nested modal dialog) is topmost, tab focus cannot reach these
-    // buttons at all.
+    // THE HEAD ROW, BY ARROWS (UI matrix 2026-11-25 row 6). The head owns its
+    // arrows (data-nav="own": MenuNav's walker leaves them here), keyboard and
+    // pad alike. Left/Right walk ONE ring — the tabs, ⋯, ✕, wrapping — from the
+    // FOCUSED control: counting from the selected tab skipped the tab a pad had
+    // walked to, and the walker never reached ✕ or ⋯ (the scrolled strip's
+    // clipped last tab overlaps ⋯, so "right of ⋯" was that tab). Landing on a
+    // tab selects it (automatic activation); Home/End are the tab ends. Down
+    // goes into the panel at the control nearest below (from ⋯ it opens the
+    // menu onto EXPORT); Up has nothing above the head and stays (the walker
+    // wrapped it to the panel's last link). Escape and Tab
+    // containment left with the dialog migration: Escape is the dialog's
+    // cancel (TopModal presses data-esc-close), Tab is platform focus
+    // containment; under the telemetry popup (a nested modal) these are inert.
     document.addEventListener("keydown", function (ev) {
       if (!openFlag) return;
       const target = ev.target;
-      if (target && target.getAttribute && target.getAttribute("role") === "tab") {
-        const ids = TABS.filter(function (t) { return !t.developer; }).map(function (t) { return t.id; });
-        let idx = ids.indexOf(active);
-        if (ev.key === "ArrowRight") idx = (idx + 1) % ids.length;
-        else if (ev.key === "ArrowLeft") idx = (idx + ids.length - 1) % ids.length;
-        else if (ev.key === "Home") idx = 0;
-        else if (ev.key === "End") idx = ids.length - 1;
-        else idx = -1;
-        if (idx !== -1) {
-          ev.preventDefault();
-          doorTab = ids[idx];
-          showTab(ids[idx]);
-          tabButtons[ids[idx]].focus();
-          return;
-        }
-      }
+      let n = target;
+      while (n && n !== header) n = n.parentNode;
+      if (!n) return;
+      const ids = TABS.filter(function (t) { return !t.developer; }).map(function (t) { return t.id; });
+      const ring = ids.map(function (k) { return tabButtons[k]; }).concat([developerLabel, closeBtn]);
+      const exportBtn = tabButtons.export;
+      const at = target === exportBtn ? ring.indexOf(developerLabel) : ring.indexOf(target);
+      if (at < 0) return;
+      const isTab = at < ids.length;
+      let to;
+      if (ev.key === "ArrowRight") to = ring[(at + 1) % ring.length];
+      else if (ev.key === "ArrowLeft") to = ring[(at + ring.length - 1) % ring.length];
+      else if (isTab && ev.key === "Home") to = ring[0];
+      else if (isTab && ev.key === "End") to = ring[ids.length - 1];
+      else if (ev.key === "ArrowDown") to = target === developerLabel && exportBtn ? exportBtn : (panelEntry(target) || target);
+      else if (ev.key === "ArrowUp") to = target === exportBtn ? developerLabel : target;
+      else return;
+      ev.preventDefault();
+      // ⋯ is a menu button: Down opens it onto EXPORT; leaving EXPORT shuts it
+      // unless EXPORT is the page (showTab keeps it open then).
+      if (to === exportBtn) developerTools.open = true;
+      else if (target === exportBtn && active !== "export") developerTools.open = false;
+      const id = ev.key === "ArrowUp" || ev.key === "ArrowDown" ? null : ids.find(function (k) { return tabButtons[k] === to; });
+      if (id && id !== active) { doorTab = id; showTab(id); }
+      if (to !== document.activeElement && to.focus) to.focus();
     });
+    // Up out of the panel: the rail is one stop, the SELECTED tab. The walker
+    // picks the nearest head control, and focus on an unselected tab reads as
+    // selected (uihunt4 #1). Not a tap: a button takes focus on pointerdown,
+    // before its click selects it.
+    let tapAt = 0;
+    header.addEventListener("pointerdown", function () { tapAt = Date.now(); }, true);
+    header.addEventListener("focusin", function (ev) {
+      const t = ev.target, from = ev.relatedTarget, sel = tabButtons[active];
+      if (!sel || t === sel || !t || !t.getAttribute || t.getAttribute("role") !== "tab" || Date.now() - tapAt < 1000) return;
+      if (from && contentEl && contentEl.contains(from)) sel.focus();
+    });
+  }
+
+  // The panel control nearest below a tab, by MenuNav's own spatial walk.
+  function panelEntry(from) {
+    if (!contentEl || typeof MenuNav === "undefined" || !MenuNav.items || !MenuNav.step) return null;
+    const list = MenuNav.items(root).filter(function (el) { return contentEl.contains(el); });
+    if (!list.length) return null;
+    return MenuNav.step(from, 0, 1, list) || list[0];
   }
 
   function open(want, options) {
@@ -357,6 +393,13 @@ const DataHub = (function () {
     }
     if (id !== "live") stopLiveAuto();  // stop auto-refresh when leaving live tab
     active = id;
+    // Read the strip's overflow BEFORE the class / aria writes below: read after
+    // them it forced a synchronous layout on every tab switch (#6507 row 2, 7 ms
+    // each at 852x393). Moving .dh-tab.active (weight 800) shifts the strip by a
+    // few px at most; an overflowing strip still runs the clip check below.
+    const activeBtn = tabButtons[id];
+    const strip = activeBtn && (activeBtn.parentElement || activeBtn.parentNode);
+    const overflow = !!(strip && (strip.scrollWidth - strip.clientWidth > 1));
     for (const k in tabButtons) {
       tabButtons[k].classList.toggle("active", k === id);
       if (k !== "export") {
@@ -370,13 +413,10 @@ const DataHub = (function () {
     // Scroll the active tab into view only when the strip actually overflows
     // and the button is clipped — a wrap row (desktop) or a fully-visible
     // chip must not pan SCHEDULE off the left edge.
-    const activeBtn = tabButtons[id];
     if (contentEl && activeBtn) contentEl.setAttribute("aria-labelledby", activeBtn.id);
     // An explicit `behavior` beats CSS scroll-behavior, so neither reduced-
     // motion backstop (the OS query, MOTION: REDUCED's html[data-motion])
     // reaches this scroll: ask both here, as js/ui/hud.js motionReduced does.
-    const strip = activeBtn && (activeBtn.parentElement || activeBtn.parentNode);
-    const overflow = !!(strip && (strip.scrollWidth - strip.clientWidth > 1));
     if (overflow && activeBtn && activeBtn.scrollIntoView) {
       const left = activeBtn.offsetLeft || 0;
       const right = left + (activeBtn.offsetWidth || 0);

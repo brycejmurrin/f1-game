@@ -35,11 +35,13 @@ on:
       - ".cursor/**"
       - ".codex/**"
   schedule:
-    # Every 6 h since 2026-10-26 (audit lane X3; was hourly): push and dispatch start the train, so the cron
-    # only catches prose-only pushes and lost events, and GitHub delivers schedules hours late anyway ("The
+    # Daily since 2026-11-25 (#6536 R4; every 6 h from 2026-10-26, hourly before): push and dispatch start the
+    # train, pages-red-tip.yml re-arms a red tip on a prose push and land.yml's push sweep re-gates, so the cron
+    # only catches prose-only pushes and lost events. 10:53 UTC (02:53 Pacific): off the hour and outside the
+    # 13:00-16:00 UTC peak, and GitHub delivers schedules hours late anyway ("The
     # schedule event can be delayed during periods of high loads ... High load times include the start of every
     # hour": https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).
-    - cron: "41 */6 * * *"
+    - cron: "53 10 * * *"
   workflow_dispatch:
 
 env:
@@ -95,6 +97,12 @@ concurrency:
 #      merge whose base moved has a different tree and gets its own gate.
 #      Across several unpublished commits, a PR gate on the final tree
 #      does not prove the cumulative selection. Run that gate afresh.
+#      A BEHIND PR (#6557 P1, 2026-11-25) lands with a tree neither parent
+#      has, but its PR run tested GitHub's merge ref, and tooling A records
+#      that ref's base and tree: a green full run of the second parent whose
+#      record names this commit's first parent and this commit's tree tested
+#      these exact bytes. Same proof, the tree; see
+#      tools/ci/pages-reuse-verdict.sh THE MERGE-REF CANDIDATE.
 #
 # What this replaces, and why (kept short; the runs are in the history):
 #   - 2026-08-12: workflow-level concurrency. cancel-in-progress: true starved
@@ -189,7 +197,7 @@ jobs:
           if [ "$NOTHING_NEW" = "true" ]; then
             echo "**Nothing new**: the live site already serves \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
           elif [ "$REUSE" = "true" ]; then
-            echo "**Gate reused**: \`$GITHUB_SHA\` has the same tree as \`$SOURCE\`, which already passed $RUN" >> "$GITHUB_STEP_SUMMARY"
+            echo "**Gate reused**: \`$GITHUB_SHA\`'s exact tree already passed $RUN (as \`$SOURCE\`, or its PR merge ref)" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "**Gate runs**: no completed successful run found for this tree" >> "$GITHUB_STEP_SUMMARY"
           fi

@@ -10,7 +10,7 @@ import cp from "node:child_process";
 import path from "node:path";
 import { parse as parseYAML } from "yaml";
 import { report } from "../../tools/ci/ci-coverage.mjs";
-import { decide as rearmDecide } from "../../tools/ci/pages-rearm.mjs";
+import { decide as rearmDecide, decideRedTip, PROSE_GLOBS, isProse } from "../../tools/ci/pages-rearm.mjs";
 import { verifiedBase } from "../../tools/ci/pages-verified-base.mjs";
 import { select } from "../../tools/ci/select-specs.mjs";
 import { changedPaths, firstParentChanges, PAGES_HISTORY_LIMIT } from "../../tools/lib/changed-files.mjs";
@@ -464,6 +464,37 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   for (const [ann, why] of [[[{ title: "apex-guards", message: "mode=changed base=none" }], "narrowed guards"],
     [[{ title: "apex-guards", message: "mode=unknown base=none" }], "an unknown scope"], [[], "no record at all"]])
     assert.equal(verdict(M2, { [D]: [run()] }, { FAKE_ANN: JSON.stringify({ 500: ann }) }).reuse, "false", `${why} is not a full gate`);
+  // THE MERGE-REF CANDIDATE (#6557 P1). M1 = merge(C, B) has a tree neither parent has, but B's PR run tested
+  // GitHub's merge of B onto C, and its guards record names that ref's base and tree: base C, tree = M1's tree.
+  const T1 = git("rev-parse", `${M1}^{tree}`);
+  const onBase = (base, mode = "full", tree = T1) => ({ FAKE_ANN: JSON.stringify({ 500: [{ title: "apex-guards",
+    message: `mode=${mode} base=${base}${tree === null ? "" : ` tree=${tree}`}` }] }) });
+  assert.deepEqual(verdict(M1, { [B]: [run()] }, onBase(C)), { reuse: "true", source: B, run: "https://example.test/run/7" },
+    "a behind PR whose green full run recorded base M1^1 and M1's tree: the merge ref was these bytes, reuse");
+  assert.equal(verdict(M1, { [B]: [run()] }, onBase(C, "full", git("rev-parse", `${B}^{tree}`))).reuse, "false",
+    "the right base with another recorded tree is another tree: the gate runs");
+  assert.equal(verdict(M1, { [B]: [run()] }, onBase(C, "full", null)).reuse, "false",
+    "a record from before `tree=` existed proves no tree: the gate runs");
+  assert.equal(verdict(M1, { [B]: [run()] }, onBase(C, "full", "none")).reuse, "false", "tree=none proves nothing");
+  assert.equal(verdict(M2, { [D]: [run()] }, onBase("none", "full", null)).reuse, "true",
+    "the parent-tree candidate still reads an old record without `tree=`");
+  assert.equal(verdict(M1, { [B]: [run()] }, onBase(A)).reuse, "false",
+    "the same PR run on an older base tested another tree: the gate runs");
+  assert.equal(verdict(M1, { [B]: [run()] }, onBase("none")).reuse, "false", "a record with no base proves no merge ref");
+  assert.equal(verdict(M1, { [B]: [run()] }, onBase(C, "changed")).reuse, "false", "narrowed guards on the right base are still narrowed");
+  assert.equal(verdict(M1, { [B]: [run({ id: 8 })] }, onBase(C)).reuse, "false", "a draft run on the right base is the fast tier, not a gate");
+  assert.equal(verdict(M1, { [B]: [run({ run_attempt: 2 })] }, onBase(C)).reuse, "false", "a re-run pass on the right base is not a first-attempt pass");
+  assert.equal(verdict(M1, { [B]: [run({ event: "push" })] }, onBase(C)).reuse, "false",
+    "a branch push run tested B itself, not a merge ref: only a PR run counts for this candidate");
+  assert.equal(verdict(M1, { [B]: [run({ id: 11, path: ".github/workflows/pages.yml", event: "workflow_dispatch" })] }, onBase(C)).reuse, "false",
+    "a Pages run on B published B's tree, not M1's");
+  assert.equal(verdict(M1, { [B]: [run({ conclusion: "failure" })] }, onBase(C)).reuse, "false", "a failed run on the right base is not a gate");
+  // An evil merge (M1's bytes edited after the merge) keeps B as its second parent, but B's run recorded M1's
+  // tree, which is not the evil commit's: no reuse.
+  git("checkout", "-q", "-b", "evil", M1); write("g.txt", "EVIL"); git("commit", "-q", "--amend", "-am", "M1 evil");
+  const E = git("rev-parse", "HEAD");
+  assert.equal(git("rev-parse", `${E}^2`), B, "fixture: the evil merge keeps B as its second parent");
+  assert.equal(verdict(E, { [B]: [run()] }, onBase(C)).reuse, "false", "a merge whose tree differs from the run's recorded tree is not reused");
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -597,4 +628,48 @@ test("pages.yml: one job holds actions: write, runs only the re-arm tool, and ca
     cwd: new URL("../../", import.meta.url), env: { PATH: "/nonexistent", GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "b", GITHUB_SHA: "0".repeat(40) } });
   assert.equal(dead.status, 0, "no gh at all (every lookup fails): a warning, never a red job");
   assert.equal(dead.stdout.split("\n")[0].slice(0, 39), "::warning::pages-rearm: lookup failed (", "and it says so");
+});
+
+// ── 2026-11-25: a prose-only push that FIXES a red tip re-arms the train (pages-red-tip.yml, decideRedTip) ──
+test("decideRedTip: a prose-only push on a red tip with no train coming dispatches one; nothing else does", () => {
+  const TIP = "c".repeat(40), OLD = "b".repeat(40);
+  const run = (id, sha, status, conclusion, at) => ({ id, head_sha: sha, status, conclusion, created_at: at });
+  const red = [run(2, OLD, "completed", "failure", "2026-11-25T00:05:00Z"), run(1, OLD, "completed", "success", "2026-11-24T23:00:00Z")];
+  const docs = ["docs/PHYSICS.md", "AGENTS.md"];
+  // The #6406 replay: Pages run on the parent failed; the docs-only fix merged; nothing gated it.
+  assert.equal(decideRedTip({ sha: TIP, tip: TIP, files: docs, runs: red }).rearm, true);
+  const no = (q, why) => assert.equal(decideRedTip({ sha: TIP, tip: TIP, files: docs, runs: red, ...q }).rearm, false, why);
+  no({ runs: [run(3, OLD, "completed", "success", "2026-11-25T00:10:00Z"), ...red] }, "the newest completed run is green: the tip is not red");
+  no({ runs: [run(3, OLD, "completed", "cancelled", "2026-11-25T00:10:00Z"), ...red] }, "cancelled is not a red verdict here");
+  no({ runs: [run(4, TIP, "queued", null, "2026-11-25T00:20:00Z"), ...red] }, "a train is already coming");
+  no({ files: [...docs, "js/core/log.js"] }, "a mixed push: pages.yml's own push starts the train");
+  no({ files: ["docs/PHYSICS.md", "js/core/log.js"] }, "a rename lists its source too (previous_filename): a code file moved under docs/ is not prose-only");
+  no({ files: null }, "an unreadable diff decides nothing");
+  no({ truncated: true }, "a truncated compare decides nothing");
+  no({ tip: "d".repeat(40) }, "a newer push is the tip");
+  no({ tip: "" }, "an unreadable tip decides nothing");
+  no({ runs: [] }, "no completed run: nothing to cure");
+  for (const c of ["timed_out", "startup_failure"])
+    assert.equal(decideRedTip({ sha: TIP, tip: TIP, files: docs, runs: [run(5, OLD, "completed", c, "2026-11-25T00:05:00Z")] }).rearm, true, c);
+});
+
+test("pages-red-tip.yml runs on exactly the paths pages.yml ignores, holds the only actions: write, and is never red", () => {
+  const pages = parseYAML(pagesWorkflow);
+  const wf = parseYAML(fs.readFileSync(new URL("../../.github/workflows/pages-red-tip.yml", import.meta.url), "utf8"));
+  assert.deepEqual(pages.on.push["paths-ignore"], PROSE_GLOBS, "pages-rearm.mjs PROSE_GLOBS is pages.yml's paths-ignore, verbatim");
+  assert.deepEqual(wf.on.push.paths, PROSE_GLOBS, "pages-red-tip.yml's paths are pages.yml's paths-ignore, verbatim");
+  assert.deepEqual(wf.on.push.branches, pages.on.push.branches, "the deploy branch only");
+  assert.deepEqual(Object.keys(wf.on), ["push"]);
+  for (const f of ["docs/PHYSICS.md", "README.md", "js/circuits/AGENTS.md", ".claude/skills/steward/SKILL.md", ".cursor/rules/ci-tools.mdc", ".codex/config.toml"]) assert.equal(isProse(f), true, f);
+  for (const f of ["js/core/log.js", "tests/unit/a11y-label-in-name.test.mjs", "index.html", "css/a11y-loading.css"]) assert.equal(isProse(f), false, f);
+  assert.deepEqual(wf.permissions, { contents: "read" });
+  const job = wf.jobs.rearm;
+  assert.deepEqual(job.permissions, { contents: "read", actions: "write" });
+  assert.equal(job.steps[0].with["sparse-checkout"], "tools/ci/pages-rearm.mjs", "the job runs no other repository code");
+  assert.deepEqual(job.steps.map((st) => st.run || st.uses.split("@")[0]), ["actions/checkout", "node tools/ci/pages-rearm.mjs --red-tip --dispatch"]);
+  assert.equal(job.steps[1].env.BEFORE, "${{ github.event.before }}");
+  const dead = cp.spawnSync(process.execPath, ["tools/ci/pages-rearm.mjs", "--red-tip", "--dispatch"], { encoding: "utf8",
+    cwd: new URL("../../", import.meta.url), env: { PATH: "/nonexistent", GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "b", GITHUB_SHA: "0".repeat(40) } });
+  assert.equal(dead.status, 0, "no gh at all: a warning, never a red job");
+  assert.equal(dead.stdout.split("\n")[0].slice(0, 49), "::warning::pages-rearm --red-tip: lookup failed (", "and it says so");
 });

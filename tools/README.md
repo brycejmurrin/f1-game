@@ -142,6 +142,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/apt-cached-install.sh** | Installs CI apt packages without the mirror when it can: none if dpkg has them, cached .debs, then bounded apt. | — |
 | **ci/bot-pr-body.mjs** | Wrap a scheduled bot's one-line PR summary in the PR template (Goal, closed Plan, land item) the merge gate reads. | — |
 | **ci/branch-audit.mjs** | Verdicts for branches with no PR and no commit in 48 h: ancestry, merge-tree, line presence, CI (--all: every branch). | check-changes |
+| **ci/brief.mjs** | Worker brief: render from a JSON spec, lint a hand-written one (STOP AT, TIP), refuse a duplicate launch. | — |
 | **ci/bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`. | check-changes |
 | **ci/change-kind.mjs** | PR diff kind: docs-only, css-only (plus prose), or code — step-level skips, never a pull_request paths filter. | — |
 | **ci/ci-watch.mjs** | Watches a SHA's CI runs (`--pages`: the Pages train too); one `[ci-watch]` line per job, then a `= ci <verdict>` line. | steward |
@@ -165,13 +166,13 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/ready-gate.mjs** | Pre-flip gate: open draft, Plan closed, Structural guards or the local tooling-fast stamp green on the tip, memory ok. | steward |
 | **ci/release-provenance.mjs** | Proves the deployed revision by combining local git ancestry with live shell SHA/build metadata. | — |
 | **ci/remote-group.mjs** | One test:* browser group on 4 llvmpipe runners (browser-group.yml), time-packed shards; line per shard, then `= group`. | check-changes |
-| **ci/repo-size.mjs** | Full-history size report: largest blobs ever committed and on-disk totals per top-level directory (repo-size.yml). | check-changes |
 | **ci/run-group.mjs** | Runs every node `npm run test:<group>` from tests/groups.json; `--skip-tf` drops what the guards shards ran. | — |
 | **ci/session-status.mjs** | Prints the branch's handoff block (sessions, commits, dirty/unpushed, verdicts, live run); `--pr` adds live PR state. | check-changes |
 | **ci/session-transcript.mjs** | Digest saved `list_events` pages into a timeline: prompts, replies, commands, MCP calls, subagents, errors. | steward |
 | **ci/ship-pr.mjs** | Runs ready-gate on a draft PR; on a pass prints the two calls that land it (MCP draft:false flip, `land` label). | ship |
 | **ci/sweep-shards.mjs** | Deterministic measured-time packing for the geometry sweep CI matrix. | — |
 | **ci/sync-pr.mjs** | Syncs a PR branch to the deploy tip (fetch, merge, verify). Without --push: no push, HEAD left on sync-pr-<branch>. | check-changes |
+| **ci/tip-alarm.mjs** | Tip alarm: a red deploy-branch Pages / nightly CI run posts ONE tip-red: on the Board; tip-green: on the next pass. | — |
 | **ci/twinned-specs.mjs** | Browser specs whose assertions a VM twin replays on the fast gate. `--json`; exits 1 if a twin drifted. | — |
 | **ci/vendor-doctor.mjs** | Vendor doctor, reads only: per vendor (Claude, Cursor, Codex, Grok) CLI, sign-in, key state and the next fix. | — |
 | **ci/verification-receipt.mjs** | Source-bound evidence for ordinary local verification; never a landing permission. | — |
@@ -391,7 +392,6 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 |---|---|---|
 | **gfx/batch-visible-probe.mjs** | Read-only probe: is one instanced scenery batch (cota yellow tecpro) submitted and lit-visible on software or hardware. | — |
 | **gfx/census-verdict.mjs** | Reads one image's census + four game-check JSONs, prints the Verdict rows and fails on what the game reported. | renderer-debug |
-| **gfx/chunk-merge-timing.mjs** | Measure Three.js chunk-merge factors on hardware with isolated boots and matched parked scenes. | mcp-probe |
 | **gfx/chunk-reach.cjs** | How much chunked scenery a pass reaches, counted headlessly: re-bins triangles into 72 m cells like `createChunkedMesh`. | — |
 | **gfx/chunk-share-census.mjs** | Do adjacent chunks share a lamp list? Per baked `LampChunks` table: empty chunks, adjacent-equal pairs, longest run. | renderer-debug / lighting-tuner |
 | **gfx/frame-hitch.mjs** | Measures per-rAF-callback main-thread cost and finds PERIODIC hitches (spike train + autocorrelation). | playwright-probe / renderer-debug |
@@ -713,7 +713,6 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/ci-verdict.mjs** | Aggregate GitHub Actions `needs` results into one required-check verdict. |
 | **ci/coverage-merge.mjs** | Merges raw V8 coverage (APEX_JS_COVERAGE browser runs + NODE_V8_COVERAGE) into one lcov/html report. |
 | **ci/debug-unit.mjs** | Wrapper: npm run debug:unit -- <file> loads vm-debug-preload so vm-loaded js/ is file://-debuggable. |
-| **ci/dispatch.mjs** | The Actions dispatcher: launches, takeovers, deploy:red fixers, nudges, digests, the Board; --fire starts workers. |
 | **ci/dropped-group-runs.mjs** | Ready verdict: a dropped spec counts only when a same-head, same-base browser-group run ran it green on attempt 1. |
 | **ci/fat-shard.mjs** | Duration-balanced fat UI spec pieces: static titles + per-title timings, LPT-packed into --test-list files. |
 | **ci/file-verdict-reporter.mjs** | A `node --test` reporter writing per-file event counts, so a group runner can refuse an exit 0 that verified nothing. |
@@ -722,8 +721,10 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/github-api.mjs** | The one GitHub REST client: token on curl stdin, 5xx/429 backoff, ETag/304 GETs, JSON bodies; repo constants. |
 | **ci/github-token.mjs** | Resolve a GitHub token for read-only Actions tools: env first, then `gh auth token`. |
 | **ci/inputs-hash.mjs** | Per-job inputs hash for the CI verdict cache (#1712); sha256 of a declared path set + node version. |
+| **ci/issue-labels.mjs** | Issue label audit (reads only): open issues with no type, two types or no area:* label. |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
 | **ci/lib/deploy-tip.mjs** | Is the deploy tip red on code? Newest completed pages.yml run + its jobs; a Pages-side publish failure is not. |
+| **ci/lib/gh-rows.mjs** | Shared GitHub row helpers: labelsOf, paginated getAll, closingIssues, batchMembers, ADOPT_RE. |
 | **ci/lib/provenance.mjs** | Provenance of GitHub label events and comments: byOwner (owner, no app), byAgent, decision: comments, label events. |
 | **ci/lib/tip-gate.mjs** | Tip gate: the composition-budget unit tests on the bare deploy tip when no completed pages.yml run covers its sha. |
 | **ci/merge-gate.mjs** | Landing gate (`gate` check): open, hold (Bryce lifts), Plan, CI, config-ok, gen + ratchets + re-test on the merge. |
@@ -732,7 +733,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/node-plan.mjs** | Per-PR plan for ci.yml's node-suites job: slow VM scripts run only when pick-tests routes the diff to their group. |
 | **ci/pages-live-sha.sh** | Prints the live site's `apex-sha` (the commit stamped into index.html), or nothing if unreadable; never fails. |
 | **ci/pages-publishable.sh** | Pages monotonic guard: true when the live apex-sha is an ancestor of the given commit, else false. |
-| **ci/pages-reuse-verdict.sh** | Pages gate reuse: prints `reuse=true` (+source/run) when this tree already passed CI as this commit or a parent. |
+| **ci/pages-reuse-verdict.sh** | Pages gate reuse: prints `reuse=true` (+source/run) when this tree passed CI as this commit, a parent or a merge ref. |
 | **ci/pages-verified-base.mjs** | Resolve the last byte-verified Pages publication on the deploy commit's first-parent chain. |
 | **ci/pick-tests.mjs** | What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`). |
 | **ci/pick-unit-slices.mjs** | Which Pure-node CI matrix slices a diff needs (fail-safe → all). |
@@ -770,8 +771,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | File | Read by |
 |---|---|
 | **assets/procedural-room.example.json** | `tests/unit/free-design-tools.test.mjs` |
-| **ci/dispatch.json** | `ci/dispatch.mjs`, `ci/lib/provenance.mjs`, `tests/unit/dispatch.test.mjs` |
-| **ci/worker-prompt.md** | `ci/dispatch.mjs`, `tests/unit/dispatch.test.mjs` |
+| **ci/worker-prompt.md** | — |
 | **gen/voice-corpus.json** | `gen/voice-corpus.mjs`, `gen/voicepack.mjs`, `tests/unit/voice-pack.test.mjs` |
 | **lighting/look-survey-n10.json** | `lighting/look-survey-n10.mjs`, `tests/unit/cdmcp-measure.test.mjs` |
 | **mcp/apex-tools-mcp.json** | `manifest.cjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp-occupancy.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs` |

@@ -1,0 +1,59 @@
+name: Pages re-arm on a red tip (prose push)
+
+# A PROSE-ONLY PUSH CAN BE THE FIX (2026-11-25). pages.yml's push trigger ignores prose paths (docs/**, *.md,
+# agent config): a deploy per README edit would cost a full gate. But #6406, docs-only, was the fix for a red tip
+# (a stale note turned tooling C red at 00:00Z): it merged at 00:19Z, no train gated it, and the tip read red,
+# holding every PR at the merge gate's base row, until Bryce dispatched Pages by hand at 00:21Z.
+#
+# This workflow runs on exactly the pushes pages.yml ignores (its `paths` list IS pages.yml's paths-ignore; a mixed
+# push matches both, and the script stands down because pages.yml's own push starts that train). It dispatches ONE
+# pages.yml run only when the newest completed Pages run on the branch FAILED, no Pages run is live, and this push
+# is still the tip (tools/ci/pages-rearm.mjs decideRedTip; tests/unit/ci-pages-train.test.mjs). A green tip's prose
+# push still waits for the 6-hourly cron, as before. The dispatched run joins pages.yml's single-flight
+# `pages-train-<ref>` group like any dispatch. Never red: a failed lookup or dispatch is a warning.
+#
+# Smallest safe option: the other cure, letting the merge gate's base row accept a docs-only head's green CI,
+# would edit tools/ci/merge-gate.mjs (protected) and let a tip read green that no Pages gate ever saw.
+#
+# workflow_dispatch from GITHUB_TOKEN creates a run ("workflow_dispatch and repository_dispatch events always
+# create workflow runs": https://docs.github.com/en/actions/concepts/security/github_token). Path filters:
+# https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore
+
+on:
+  push:
+    branches:
+      - claude/f1-game-project-26h3ng
+    paths:
+      - "docs/**"
+      - "**/*.md"
+      - ".claude/**"
+      - ".cursor/**"
+      - ".codex/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-red-tip
+  cancel-in-progress: false
+
+jobs:
+  rearm:
+    name: Is the tip red with no train coming?
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write   # the one pages.yml dispatch; the job runs no other repository code
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/ci/pages-rearm.mjs
+          sparse-checkout-cone-mode: false
+      - name: Dispatch one train when the tip is red and this prose push started none
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_BRANCH: claude/f1-game-project-26h3ng
+          BEFORE: ${{ github.event.before }}
+        run: node tools/ci/pages-rearm.mjs --red-tip --dispatch

@@ -451,6 +451,8 @@ interface GameCtx {
 
   // ── Tyres: the race setting and the live wear model ───────────────────────
   raceTyreWear: TyreLevel;
+  /** DAMAGE: HANDLING opt-in (#1578); a VS FRIEND room rule (#3971). */
+  raceDamage: boolean;
   /** Dirty-air wake model: off / classic (default) / cfd. */
   raceDirtyAir: "off" | "classic" | "cfd";
   readonly tyres: TyreSession;
@@ -831,7 +833,7 @@ interface GameCtx {
   readonly update: (dt: number) => void;
   /** Arc position wrapped into [0, track.total). */
   readonly wrapS: (s: number) => number;
-  readonly quitToMenu: () => void;
+  readonly quitToMenu: (then?: () => void) => void;
 }
 
 // ── Module.create(G) ─────────────────────────────────────────────────────────

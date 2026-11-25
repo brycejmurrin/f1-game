@@ -32,7 +32,7 @@ The last Plan item keeps that shape: ready-gate ignores an item that starts `lan
      Draft PRs run the fast tier. Ready PRs run browser jobs when the diff needs them. -->
 
 ## Hand-off
-<!-- The dispatch Action and a takeover read this block (skill `steward`): refresh it at every push and
+<!-- The orchestrator and a takeover read this block (skill `steward`): refresh it at every push and
      when you add `land`, `needs-owner` or `needs-decision`. One value per line, no prose
      outside the fence. A hold is the `hold` label on the PR, not a line here. -->
 ```handoff

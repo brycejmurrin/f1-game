@@ -653,7 +653,7 @@
   /* Height was deliberately put on the floored token; the width literal was
      the gap — eleven colour wells painted 19.2px wide at UI SIZE 40%. The
      max() arm only wins below 100%. */
-  width: max(48px, var(--tap-min)); height: var(--chip-h); padding: 0; border: 1px solid var(--plate-line);
+  width: max(48px, var(--tap-min), var(--tap-floor44)); height: var(--chip-h); padding: 0; border: 1px solid var(--plate-line);
   border-radius: var(--r-sm); background: none; cursor: pointer; flex: none;
 }
 /* NONE'd colour well (game.js toggles cz-off) dims like its inline-livery twin
@@ -665,7 +665,8 @@
   padding: 10px; border-radius: var(--r-md); background: var(--plate);
 }
 #cz-swatch1, #cz-swatch2 { width: 26px; height: 26px; border-radius: var(--r-sm); border: 1px solid rgba(255,255,255,0.3); }
-#cz-pvtext { font-weight: 800; font-style: italic; letter-spacing: var(--ls-2); }
+/* max(1em, --fs-floor) (#6512): inherits 16 px, 11.2 painted at UI SIZE 70; unchanged at 75 % and up. */
+#cz-pvtext { font-size: max(1em, var(--fs-floor)); font-weight: 800; font-style: italic; letter-spacing: var(--ls-2); }
 #customize .cz-sep {
   margin: var(--gap) 0 6px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5);
   /* var(--dim), not white at 0.4 alpha: over the darkest ground the sheet can

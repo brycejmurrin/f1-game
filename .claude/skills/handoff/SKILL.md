@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: "Use when the user asks for a handoff or a prompt to continue in a new session, the session is long or near its context limit, or a worker hits its cap. Not for: editing skills or AGENTS.md → agent-config; driving a PR → steward."
+description: "Use when asked for a handoff or a prompt for a new session, the context is long or near its limit, or a worker hits its cap. Not for: editing skills → agent-config; driving a PR → steward."
 user-invocable: true
 ---
 
@@ -15,14 +15,21 @@ spawns over the hard cap; a session without a brief has no cap and hands off whe
 long. Before idling, write the follow-up prompts into the PR's Hand-off block. Model names and messaging routes are
 host-specific; use only exposed host capabilities.
 
-Two audiences, two endings (steps 1–2 are shared):
+Endings by audience (steps 1–2 are shared):
 
 - **Attended** (the user asked, or the context is long; no brief, so no cap advisory): steps 1–3, then output the
   prompt in chat in ONE code block. Add no `needs-owner` unless the user leaves the PR to the fleet.
 - **Unattended owner at its cap or stuck** (skill `steward` §Lane 5; `context-cap.py` advises against the cap in
   `tools/ci/worker-prompt.md`): steps 1–2, then add `needs-owner` (MCP `issue_write`: the live list plus it, skill `steward` `references/labels.md`)
   and end. No chat prompt: the takeover reads only the Hand-off
-  block and the Plan; the dispatch Action launches it once no live owner names the PR.
+  block and the Plan; the orchestrator launches it once no live owner names the PR.
+- **Orchestrator at ~400k context** (retro 2026-11-25: one orchestrator held 594M of 1,901M cache-read tokens):
+  write the handoff as a comment on the orchestration tracking issue or PR (open PRs, live sessions, decisions
+  pending, Bryce's grants quoted with their times, held items, the full task list), launch a fresh orchestrator with
+  `create_session` (environment_id `env_019j6UuJTdHnhCNbThaF5CRy`, "f1-game orchestrator"; permission_mode `auto`)
+  whose prompt links that comment, then stop. No chat prompt; the successor reads the comment, rebuilds the task list
+  before acting, re-creates the two standing routines and disables the predecessor's (dispatcher
+  `references/orchestrator-brief.md` §Standing routines).
 - **Quota wall** (a usage-limit warning or a 429 `usage_limit_reached`; six workers died on one at 2026-11-18
   22:32–23:37Z and two lost uncommitted work, #5844): do step 1 and refresh the Hand-off block NOW, before the
   next call, then end without arming a check-in; every wake re-hits the wall. Long waits: AGENTS.md rule 12.

@@ -106,15 +106,6 @@ const teamCss = (c) => {
 };
 // The minimap (#minimap) lives in js/ui/hud-minimap.js; fitKey is a getter because _fitKey moves.
 const _minimap = HudMinimap.create(G, { vpW, vpH, teamCss, replayGhost, motionReduced, fitKey: () => _fitKey });
-let _secRows = null;
-const _secFlash = [0, 0, 0], _secFlashLog = { last: -1, raceT: null, calls: 0, painted: 0 };
-// THE GAIN, not only the split: each sector row shows the split's delta to the
-// best it was chasing for SPLIT_DELTA_MS, then the absolute time again.
-// _secPrevBest is sectorBests as the last tick saw it — game.js writes the new
-// best in the same crossing that writes sectorLast, so only the copy taken
-// BEFORE the crossing still holds the time this split was measured against.
-const SPLIT_DELTA_MS = 3000;
-let _secPrevBest = [Infinity, Infinity, Infinity], _secDelta = [0, 0, 0], _secDeltaT = [0, 0, 0];
 // The lap clock's hold on the lap just driven (see the tick): the lap count and
 // lastLap as the last tick saw them, and whether this lap's hold is armed.
 let _holdLap = 0, _holdPrev = 0, _holdOn = false;
@@ -132,6 +123,10 @@ const _doc = typeof document !== "undefined" ? document : null;
 const _rx = _doc ? { delta: _doc.getElementById("hud-delta"), deltaN: _doc.getElementById("hud-delta-n"),
   energyBox: _doc.getElementById("hud-energy"), energyN: _doc.getElementById("hud-energy-n"),
   bb: _doc.getElementById("hud-bb") } : {};
+// The S1-S3 rows and the DELTA chip (HudReadouts.sectors, #6500); null in a harness without hud-readouts.js.
+const _sec = _ro ? _ro.sectors(G, els, { hText, hStyle, hData, hHidden, hToggle, rx: _rx, trace: _trace,
+  invalidateFit: () => invalidateFit() }) : null;   // hoisted; the tick runs only after create returns
+const signedFixed = _ro ? _ro.signedFixed : (v) => v.toFixed(3);   // the bare fallback is the harness's only
 let _ePrev = NaN, _blue = false, _blueSaid = null, _blueLaps = 0;
 const BCAM_IDS = { heli: 1, side: 1, cinematic: 1, low: 1, overhead: 1, rival: 1, pitwall: 1, drone: 1 };
 const ONBOARD_IDS = typeof CamGroups !== "undefined" ? CamGroups.ONBOARD : {};   // js/camera/cam-groups.js
@@ -213,94 +208,10 @@ function syncHudCamClasses() {
   // changes — camera+profile stay put, so the key above does not.
   syncHudVisClasses(modeId);
 }
-// game.js calls this at the crossing, after writing sectorLast[i] and the new
-// best — so the delta is taken against the pre-crossing copy (_secPrevBest).
-// A first-ever split has nothing to beat and keeps the absolute time.
-function flashSector(i) {
-  if (!(i >= 0 && i < 3)) return;
-  _secFlash[i] = 0.35; _secFlashLog.last = i; _secFlashLog.raceT = G.raceT ?? null; _secFlashLog.calls++;
-  const t = G.sectorLast && G.sectorLast[i];
-  const ok = t != null && isFinite(_secPrevBest[i]);
-  _secDelta[i] = ok ? t - _secPrevBest[i] : 0;
-  _secDeltaT[i] = ok ? SPLIT_DELTA_MS : 0;
-}
 // "tt" | "quali" | "practice" | "race". PRACTICE is G.practice (armed on a race
 // session from the pause menu), never a G.session value.
 function sessionOf(timeTrial) {
   return timeTrial ? "tt" : G.session === "quali" ? "quali" : G.practice ? "practice" : "race";
-}
-
-function paintHudDelta(player, timeTrial) {
-  const box = _rx.delta;   // static in index.html (.hud-top) — no injected markup
-  if (!box) return;
-  const n = _rx.deltaN || box;
-  // Prefer a ghost reference (PB or rival). Without one, the player's own best
-  // lap THIS RACE (HudReadouts.lapTrace, sampled per frame in updateHud); with
-  // neither — the opening lap of a race — nothing.
-  const ghost = typeof GhostShare !== "undefined" && GhostShare.hasGuest()
-    ? GhostShare
-    : (typeof Ghost !== "undefined" && Ghost.hasGhost() ? Ghost : null);
-  const ref = ghost || (_trace && _trace.has() && (player.lap | 0) >= 1 ? _trace : null);
-  hData(box, "ref", ghost ? "ghost" : ref ? "best" : null);
-  // THE SLOT IS RESERVED ON DESKTOP, NOT REMOVED: a hidden DELTA that unhid
-  // after lap 1 widened the centred tower by half a box mid-race, so every
-  // other readout jumped sideways. With no number yet the plate keeps its
-  // place with only its value invisible (data-pending, css/hud.css), so the
-  // four live boxes read centred too. ON TOUCH the pending plate leaves the
-  // layout instead: its ~95px of top-band width capped the band at ~0.95 and
-  // dropped the gap chip under the tower on every phone (hud-mock
-  // 2026-10-14); the one re-centre at the first lap line costs less, and the
-  // paint below asks for a refit the moment the number lands (the fit key
-  // must not carry it: hud-fit-idempotent pins two fits as one).
-  hHidden(box, false);
-  // S4: before the first line crossing lapTime is the run-up clock (about 5.5 s
-  // of it on a flying start), not the lap the ghost was recorded on.
-  const ghostT = ref && (!ghost || (player.lap | 0) >= 1) ? ref.timeAt(player.s) : null;
-  if (ghostT == null || !(player.lapTime >= 0)) {
-    hData(box, "pending", "");
-    if (_deltaShown && _invalidateFit && !document.body.classList.contains("desktop")) _invalidateFit();   // the touch tower just lost a box (TT restart, lap 0, lost ghost)
-    _deltaShown = false;
-    return;
-  }
-  _deltaShown = true;
-  const wasPending = box.dataset ? box.dataset.pending != null : box.hasAttribute && box.hasAttribute("data-pending");
-  hData(box, "pending", null);
-  if (wasPending && _invalidateFit && !document.body.classList.contains("desktop")) _invalidateFit();   // the touch tower just grew a box
-  const delta = player.lapTime - ghostT;
-  const deltaTxt = signedFixed(delta);
-  hText(n, deltaTxt);
-  hData(box, "sign", deltaTxt[0] === "-" || +deltaTxt === 0 ? "fast" : "slow");   // the ROUNDED sign, like the text
-  // Practice / TT: the gaps strip already says GHOST — keep DELTA as the
-  // glanceable centre-top number. Race: same chip, quieter label stays DELTA.
-  void timeTrial;
-}
-// The sign comes from the ROUNDED value: -0.0003 painted "-0.000" (R2-06).
-function signedFixed(v) {
-  const t = v.toFixed(3);
-  return +t === 0 ? "+0.000" : (v > 0 ? "+" : "") + t;
-}
-function buildSecRows() {
-  // Sector labels carry no identity colour: .sec-lbl inherits the row's ink.
-  // (S2 once wore the brand #e10600, ~4.2:1 on black at 14px — under the
-  // 4.5:1 AA floor; no HUD text uses the brand red.)
-  // Should they ever be coloured, they must NOT use the value palette's
-  // --sec-best or --faster, or purple would mean both "sector 1" and
-  // "session best". The minimap colours its arcs by sector (js/ui/hud-minimap.js:
-  // the podium metals, TrackMaps.sectorColors), where identity is the only
-  // thing distinguishing them.
-  const labels = ["S1", "S2", "S3"];
-  els.hudSectors.textContent = "";
-  _secRows = [];
-  for (let i = 0; i < 3; i++) {
-    const row = document.createElement("div"); row.className = "sec-row";
-    // The label keeps the row's dim ink: sector identity colours only the
-    // minimap's arcs, so a label can never collide with a timing colour.
-    const lbl = document.createElement("span"); lbl.className = "sec-lbl"; lbl.textContent = labels[i];
-    const val = document.createElement("span"); val.className = "sec-val"; val.textContent = "--";
-    row.appendChild(lbl); row.appendChild(val); els.hudSectors.appendChild(row);
-    _secRows.push(val);
-  }
-  if (els.hudLimits) _limitsDots = els.hudLimits.querySelector("span");
 }
 
 // THE AHEAD/BEHIND GAP READOUT SPELLS ITSELF TO FIT ITS SLOT. `.hud-gaps` sits
@@ -525,7 +436,7 @@ function syncComputedRootVars() {
 let _hudTop = null, _hudBottom = null, _dockL = null, _dockR = null;   // the four fit handles never change identity
 // LEFT-HANDED (body.mirror-controls) flips #hud-dock (row-reverse), so #dock-right paints on the LEFT. The fit
 // reasons in screen sides, so pick each handle by the side it is painted on (re-picked at every fit).
-let _dockMir = null, _deltaShown = false;   // _deltaShown: DELTA has painted a number since it last went pending
+let _dockMir = null;
 function pickDocks() { const m = document.body.classList.contains("mirror-controls"); if (_dockL && m === _dockMir) return; _dockMir = m; const a = document.getElementById("dock-left"), b = document.getElementById("dock-right"); _dockL = m ? b : a; _dockR = m ? a : b; }
 // fitHud's dock buttons, queried once per dock layout, not per 10 Hz tick: layoutDocks (game.js) re-parents GROUPS and
 // pickDocks swaps the handles, so the cache keys on [dockL, its children…, dockR, …]; invalidateFit drops it too.
@@ -827,7 +738,7 @@ function fitHud() {
   const gapLen = (els.gapA ? els.gapA.textContent.length : 0) * 100 +
     (els.gapB ? els.gapB.textContent.length : 0);
   // The sector box grows from bare padding to three rows the first time
-  // buildSecRows runs, and --hud-sec-h (the offset the track-limits chip hangs
+  // HudReadouts.sectors builds its rows, and --hud-sec-h (the offset the track-limits chip hangs
   // off) is measured from it. Nothing else in this key moves at that moment, so
   // without the row count the published height stayed at the empty box's for
   // the whole 3 s same-key backoff. childElementCount costs no layout.
@@ -1888,16 +1799,13 @@ function updateHud(force, dtMs) {
     const modeId = modes && modes[G.camMode] ? modes[G.camMode].id : "chase";
     if (typeof HudInputs !== "undefined") HudInputs.frame(G, player, dtMs, false,
       G.hudProfile === "minimal" || !!BCAM_IDS[modeId] || document.body.classList.contains("bc-on"));
-    for (let i = 0; i < 3; i++) {
-      if (_secDeltaT[i] > 0) _secDeltaT[i] -= dtMs;
-      if (_secFlash[i] > 0) _secFlash[i] = Math.max(0, _secFlash[i] - dtMs / 1000);
-    }
+    if (_sec) _sec.decay(dtMs);
     if (tick) {
       const spoken = speakHud(player, cars, timeTrial);
       if (!hudLayerHidden() && !document.body.classList.contains("desktop")) {
         syncDriveControls(player, timeTrial || G.tyres?.on(), timeTrial, false, spoken);
       }
-      if (G.sectorBests) for (let i = 0; i < 3; i++) _secPrevBest[i] = G.sectorBests[i];
+      if (_sec) _sec.holdBests();
     }
     return;
   }
@@ -2124,51 +2032,11 @@ function updateHud(force, dtMs) {
   // Lane re-pick can clear data-lane-collapsed; re-assert painted clearance
   // over SPEED/GEAR (phoneL broadcast @150%).
   radioPaintedCollapseTick(document.documentElement, force);
-  paintHudDelta(player, timeTrial);
+  if (_sec) _sec.paintDelta(player, timeTrial);
   if (typeof HudRelative !== "undefined") HudRelative.tick(G, player);   // opt-in RELATIVE box (js/ui/hud-relative.js)
   if (typeof HudStrategy !== "undefined") HudStrategy.tick(G, player, pitReadouts);   // opt-in STRATEGY panel (js/ui/hud-strategy.js)
-  // Sector split display (top-right) — cached span nodes, textContent per tick
-  if (els.hudSectors) {
-    if (!_secRows) buildSecRows();
-    // A bare split makes the driver remember last lap's to read it. The arrow
-    // is the announce banner's own glyph (▼ personal best, ▲ slower) held
-    // for the whole lap, and lime is the HUD's existing "faster" colour (the
-    // ghost delta). sectorBests is updated in the same crossing, so a fresh
-    // PB reads t == best; a first-ever lap is every sector's best, correctly.
-    const bests = G.sectorBests, field = G.fieldSectorBests;
-    for (let i = 0; i < 3; i++) {
-      const t = G.sectorLast[i];
-      const pb = t != null && bests && t <= bests[i];
-      const sb = pb && field && t <= field[i];   // the FIELD's best — the timing screen's purple
-      // THREE STATES, THREE GLYPHS. The arrows already carried pb-vs-slower on a
-      // non-colour channel, but SESSION best and PERSONAL best both read "▼" and
-      // separated only as purple vs green — which is the textbook deuteranopia
-      // pair, on the one row where the distinction is the whole point. A player
-      // who cannot split those hues saw "▼" twice and had no way to tell a
-      // session-topping sector from an ordinary personal best.
-      // ★ is the session best, ▼ a personal best, ▲ slower than your own. Same
-      // single-glyph width as before, so the fixed row geometry is untouched,
-      // and the colours stay exactly as they were for everyone reading them.
-      // For SPLIT_DELTA_MS after the crossing the number is the GAIN on the best
-      // it was chasing ("▼-0.142", "▲+0.310"), then the split itself again: the
-      // same glyph and colour states, and the same character count for any
-      // split or delta under 10 s, so the row geometry does not move.
-      const dHeld = _secDeltaT[i] > 0 && t != null;
-      if (_secDeltaT[i] > 0) _secDeltaT[i] -= HUD_TICK_MS;
-      // signedFixed: the sign from the ROUNDED delta (-0.0004 read "-0.000"); a split
-      // of a minute or more spells m:ss.mmm like the lap clock, not "75.123".
-      const num = dHeld ? signedFixed(_secDelta[i]) : t == null ? "" : t >= 60 && G.fmtTime ? G.fmtTime(t) : t.toFixed(3);
-      hText(_secRows[i], t == null ? "--" : (sb ? "★" : pb ? "▼" : "▲") + num);
-      _secPrevBest[i] = bests ? bests[i] : Infinity;   // the reference the NEXT crossing's delta is taken against
-      // Timing-screen colours: purple session best, green personal best,
-      // yellow slower than your own best; no split yet keeps the row's ink.
-      hStyle(_secRows[i], "color", t == null ? "" : sb ? "var(--sec-best)" : pb ? "var(--faster)" : "var(--sec-slow)");
-      hData(_secRows[i].parentElement, "split", t == null ? null : sb ? "session" : pb ? "personal" : "slow");
-      if (_ro && _ro.paintSectorRow) _ro.paintSectorRow(_secRows[i].parentElement, t, sb, pb);
-      if (_secFlash[i] > 0) _secFlash[i] = Math.max(0, _secFlash[i] - 0.1);
-      paintSectorFlash(i, pb, t != null);
-    }
-  }
+  // Sector split display (top-right): HudReadouts.sectors paints the cached rows (#6500).
+  if (els.hudSectors && _sec && _sec.paint(HUD_TICK_MS) && els.hudLimits) _limitsDots = els.hudLimits.querySelector("span");
   if (els.hudLimits) {
     const player = G.player;
     const cw = player ? (player.cutWarn | 0) : 0;
@@ -2247,21 +2115,13 @@ function invalidateMap() { _minimap.invalidate(); }
 // against the LAST race's finishing position and flashed "down" at lights-out.
 // The race DELTA's best lap and the spoken HUD's baselines are per race too.
 let _pitSideTrack = null, _pitSide = 1;
-function paintSectorFlash(i, personalBest, hasSplit) {
-  const row = _secRows[i].parentElement, active = _secFlash[i] > 0;
-  if (active) _secFlashLog.painted++;
-  hToggle(row, "sec-flash", active);
-  hToggle(row, "sec-flash-pb", active && personalBest);
-  hToggle(row, "sec-flash-slow", active && !personalBest && hasSplit);
-}
 function resetRace() {
-  _secFlash.fill(0);
-  if (_secRows) for (let i = 0; i < _secRows.length; i++) paintSectorFlash(i, false, false);
+  if (_sec) _sec.clearFlash();
   _pitSideTrack = null; _pitSide = 1;   // per race: left set, it pinned the last pit-cue circuit across races
   if (typeof HudInputs !== "undefined" && HudInputs.reset) HudInputs.reset();
   if (typeof Captions !== "undefined") Captions.clear();   // the last spotter call: #captions sits outside #hud
   _lastRank = 0; _posFlashT = 0; if (els.pos) delete els.pos.dataset.delta;
-  _holdLap = 0; _holdPrev = 0; _holdOn = false; if (_gapClk) _gapClk.reset(); _secPrevBest = [Infinity, Infinity, Infinity]; _secDeltaT = [0, 0, 0];
+  _holdLap = 0; _holdPrev = 0; _holdOn = false; if (_gapClk) _gapClk.reset(); if (_sec) _sec.resetDeltas();
   _ePrev = NaN; _blueSaid = null; _blueLaps = 0;
   // THE GAP CHIPS CARRY STATE ACROSS SESSIONS: a time trial paints the ghost
   // delta's colour inline, a race the neighbour's team bar, the tow halo and
@@ -2317,9 +2177,9 @@ function syncPhoneFit() {
   const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
   return !phonePaintedClash() && /^\d+$/.test(stamp);
 }
-_syncPhoneFit = syncPhoneFit; _secFlashRead = () => ({ flash: _secFlash.slice(), ..._secFlashLog });
+_syncPhoneFit = syncPhoneFit; _secFlashRead = () => (_sec ? _sec.read() : null);
 return {
-  updateHud, invalidateMap, flashSector, resetRace, invalidateFit, syncPhoneFit,
+  updateHud, invalidateMap, flashSector: (i) => { if (_sec) _sec.flashSector(i); }, resetRace, invalidateFit, syncPhoneFit,
   laneRectMisses, resetLaneRectMisses, secFlash: _secFlashRead,   // PERF probe (hud-radio-lane.js)
 };
 }

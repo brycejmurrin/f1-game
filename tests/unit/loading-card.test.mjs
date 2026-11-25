@@ -332,12 +332,10 @@ test("a harness-driven launch (navigator.webdriver) keeps the 700 ms card and ha
   assert.equal(player.els.loading.dataset.phase, "run", "a player under REDUCED still gets the flyby (#1290)");
 });
 
-test("a skip of the GARAGE leave is not a verdict on the flyby: the streak counts flyby skips only", () => {
+test("a skip of the GARAGE leave (offered once ready) goes straight to the start, so it counts as a flyby skip", () => {
   const src = fs.readFileSync(path.join(ROOT, "js/ui/loading-screen.js"), "utf8");
   const note = src.slice(src.indexOf("function noteFlyby("), src.indexOf("const MAP_W"));
-  assert.match(note, /if \(phase !== "run"\) return;/, "only the run phase records a skip or a watch");
-  const skipBlock = src.slice(src.indexOf('if (phase === "garage" || ((phase === "build" || phase === "prep") && skipCb)) {'), src.indexOf("if (!(phase && build) || Date.now() - flyT0 < SKIP_GRACE_MS) return;"));
-  assert.ok(!/noteFlyby/.test(skipBlock), "the garage / prep / build skip calls the callback and nothing else");
+  assert.match(note, /if \(phase !== "run" && !\(skipped && phase === "garage"\)\) return;/, "a flyby, or a garage skip that skips the flyby too");
   const run = src.slice(src.indexOf("function run(info, go)"), src.indexOf("function stop()"));
   assert.ok(!/prefers-reduced-motion/.test(run) && !/dataset\.motion/.test(run), "run() reads no motion flag: the flyby and the announcer always follow the garage leave");
 });
@@ -397,7 +395,7 @@ test("busy(): the card over the scrim without a circuit, no timer, no skip, not 
     "startRace sync-closes :modal (TopModal MutationObserver is a later task)");
   assert.match(game, /if \(garageReturn !== "pit" && !loadingScreen\.phase\(\)\) loadingScreen\.busy\("Returning"\)/,
     "CLOSE GARAGE / BACK raise the plate before hiding #carsetup");
-  assert.match(game, /if \(!_introSheet \|\| sheetPrep\) loadingScreen\.prep\(info, \(\) => studioSkip\(n\)\);/,
+  assert.match(game, /if \(!_introSheet \|\| sheetPrep\) loadingScreen\.prep\(info\);/,
     "race settings covers prep with the sheet on hardware; software GL still gets the prep scrim (sheetPrep) so progress is visible");
   assert.match(game, /body:yield/,
     "startRaceBody yields after the plate is up and before ensureAudio");
@@ -1063,7 +1061,7 @@ test("RACE! over a pending warm holds the card until it ends; the sheets that sk
   assert.match(intro, /if \(!gfx\.warm \|\| \(_warmKey === key && !\(gfx\.warming && gfx\.warming\(\)\)\)\) return false;/, "warmed and no warm pending: fly at once");
   assert.match(intro, /loadingScreen\.building\(loadingInfo\(\)\);/, "the card holds over the warm");
   assert.match(intro, /await introPrepare\(live, key, info, n, true\)/, "a built but unwarmed world joins planning and warm under the card before motion");
-  assert.match(intro, /const prepP = introPrepare\(live, key, info, n, false\); prepP\.catch\(\(\) => \{\}\);[^\n]*\n\s*await RaceEntryProfile\.spanAsync\("studioDone", \(\) => studioDone\(live, n\)\);/, "warm world: garage-out is not blocked behind prepare (its rejection handled meanwhile)");
+  assert.match(intro, /const prepP = introPrepare\(live, key, info, n, false\); prepP\.then\(\(r\) => \{ if \(r && live\(\)\) studioReady\(n\); \}, \(\) => \{\}\);[^\n]*\n\s*await RaceEntryProfile\.spanAsync\("studioDone", \(\) => studioDone\(live, n\)\);/, "warm world: garage-out is not blocked behind prepare (its rejection handled meanwhile)");
   const prepare = game.slice(game.indexOf("async function introPrepare("), game.indexOf("// A ready, warm world"));
   assert.match(prepare, /await awaitIntroWarm\(current\)/, "shared compile bound — never fly over pending warm");
   assert.match(intro, /announce\("PREPARATION FAILED/, "a warm timeout recovers to the menu with a visible message");
@@ -1119,11 +1117,11 @@ test("the card over the scene: black bars and a light hint in every theme, an un
   assert.match(ruleDecls(css, "#ld-wordmark").get("font-size"), /^clamp\(.*\b2\.8vw\b/, "#loading is not zoomed: --vwz shrank the wordmark as UI SIZE grew");
 });
 
-test("the garage phase (the drive-out before the flyby): no card, no timer, and a tap skips to the card + flyby, not counted as a flyby skip", () => {
+test("the garage phase (the drive-out before the flyby): no card, no timer, and once ready a tap skips to the start, counted as a flyby skip", () => {
   const h = gridHarness({ radioOn: false });
   const info = { track: { id: "monza", name: "MONZA", country: "Italy" }, laps: 5, hasWorld: true };
   let skips = 0;
-  assert.equal(h.screen.garage(info, () => skips++), true);
+  assert.equal(h.screen.garage(info, () => skips++, true), true);
   assert.equal(h.screen.phase(), "garage");
   assert.equal(h.els.loading.dataset.phase, "garage", "the stylesheet hides the card and the scrim on this phase");
   assert.equal(h.screen.active(), false, "not the flyby: game.js draws the garage");
@@ -1135,7 +1133,7 @@ test("the garage phase (the drive-out before the flyby): no card, no timer, and 
   assert.equal(skips, 0, "a key auto-repeat is not a press");
   h.skip(); h.skip();
   assert.equal(skips, 1, "one skip, once");
-  assert.equal(h.saved.get("flySkips"), undefined, "it is not a verdict on the flyby, which still follows: the streak does not count it");
+  assert.equal(h.saved.get("flySkips"), 1, "it skips the flyby too (Bryce 2026-11-25): the streak counts it");
   h.tick(60000);
   assert.equal(h.screen.phase(), "garage", "no timer: game.js ends the phase");
   // The card then comes up for the rest of a build (building) or with the flyby (run); both disarm the garage's skip.
@@ -1149,7 +1147,7 @@ test("the garage phase (the drive-out before the flyby): no card, no timer, and 
   h.skip(); assert.equal(late, 0, "the preparation skip retains the double-click grace");
   h.tick(LS.SKIP_GRACE_MS + 10); h.skip(); h.skip();
   assert.equal(late, 1, "a preparation skip marks the cinematic once, without lowering its card");
-  assert.equal(h.saved.get("flySkips"), undefined, "a preparation skip does not count toward the shorter cinematic either");
+  assert.equal(h.saved.get("flySkips"), 1, "a preparation skip adds nothing to the streak (the 1 is the garage skip above)");
   assert.equal(h.screen.phase(), "build", "preparation continues safely after the skip");
   h.screen.stop();
   assert.equal((h.listeners.keydown || new Set()).size, 0, "cancellation removes preparation skip listeners");

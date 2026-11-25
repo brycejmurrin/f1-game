@@ -1,0 +1,1 @@
+New: Once the race is ready, the garage drive-out and the flyby before it show SKIP TO RACE (or SKIP TO QUALIFYING, TIME TRIAL or PRACTICE); a tap, key or pad press skips straight to the start. They still play in full for anyone who does not skip.

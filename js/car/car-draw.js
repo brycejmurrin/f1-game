@@ -1061,10 +1061,16 @@ const CarDraw = (function () {
     // drained one piece a frame under the lights (game.js tickBody → drainDeferredCarWarm), in grid order; the
     // lights hold ~5 s for ≤ 22 pieces, and whatever is left still builds on its first draw, as before.
     const _deferredCarWarm = [];
-    function drainDeferredCarWarm(budgetMs) {
+    // SKIP a piece whose kind last cost more than the budget left (hunt 2026-11-24 #4: a 27-39 ms caster ran whole
+    // on a 4 ms race frame); it builds on its first draw. `first` (the lights) runs a call's first piece anyway, and
+    // the crew rig is never skipped, so it still warms before the box (#5051).
+    const _warmMs = [0, 0, 0];   // atlas, caster, crew (the crew is measured, never gated)
+    function drainDeferredCarWarm(budgetMs, first) {
       const t0 = performance.now(), budget = budgetMs > 0 ? budgetMs : 4;
-      while (_deferredCarWarm.length) {
-        const it = _deferredCarWarm.shift();
+      for (let i = 0; i < _deferredCarWarm.length;) {
+        const it = _deferredCarWarm[i], k = it.atlas ? 0 : it.caster ? 1 : 2, at = performance.now();
+        if (!first && k < 2 && _warmMs[k] > t0 + budget - at) { i++; continue; }
+        first = !_deferredCarWarm.splice(i, 1);   // take it; `first` is spent (splice returns an array)
         try {
           // Through the caches, never a kept handle: a leftover drained by a later countdown (a red-flag restart)
           // finds the atlas LRU may have dropped its texture since, and the cache rebuilds or hits as it should.
@@ -1072,7 +1078,7 @@ const CarDraw = (function () {
           else if (it.caster) teamMesh(it.c.team, it.c, true);
           else if (it.crew && typeof PitCrewAnim !== "undefined") PitCrewAnim.warm(G, it.c);   // #5051: the stop's rig, not on the box frame
         } catch (e) { Log.warn("gfx", "deferred car warm failed for " + (it.c && it.c.team && it.c.team.id), e); }
-        if (performance.now() - t0 >= budget) break;
+        if ((_warmMs[k] = performance.now() - at) + at - t0 >= budget) break;   // this piece's cost; past the budget, stop
       }
       return _deferredCarWarm.length;
     }
@@ -1651,6 +1657,13 @@ const CarDraw = (function () {
         const co = coOpt(paint), cars = G.cars;
         _primeWheelOpts.emissive = night ? 0.12 : 0;
         const wo = coOpt(_primeWheelOpts);
+        // #6485: shared stripe (4/car, per colour) + far wheels (2F 2R/rival), at most-in-view counts; any car may fit an AI compound.
+        const rings = new Map(), AI = typeof TyreModel !== "undefined" && TyreModel.AI_CLASS;
+        const ring = (col, n) => { const k = String(col), r = rings.get(k); if (!r) rings.set(k, { col, n }); else r.n = Math.min(cars.length, r.n + n); };
+        if (AI) for (const k in AI) if (AI[k].colour) ring(AI[k].colour, cars.length);
+        for (const c of cars) if (c && c.tyre && c.tyre.colour) ring(c.tyre.colour, 1);
+        for (const r of rings.values()) { const m = getCompoundRing(r.col); for (let k = 0; k < r.n * 4; k++) d(m, wo); }
+        const fw = FieldLod.on ? getFarWheels() : null;
         for (let i = 0; i < cars.length; i++) {
           const c = cars[i];
           if (!c) continue;
@@ -1672,6 +1685,7 @@ const CarDraw = (function () {
           for (const b of [0, 1, 0.5]) { deps.drawAeroFlaps(pt, aSt.val, b, Z, paint, aSt.aero, null, b !== 0.5); n++; }
           const wm = getFieldWheelMeshes(c.team, c);
           if (wm) for (let k = 0; k < 2; k++) { d(wm.F, wo); d(wm.R, wo); d(wm.FFixed, wo); d(wm.RFixed, wo); }
+          if (fw) for (let k = 0; k < 2; k++) { d(fw.F, wo); d(fw.R, wo); }
         }
       }
       return n;

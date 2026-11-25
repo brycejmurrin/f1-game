@@ -448,3 +448,29 @@ test("page keys over a pane that does not scroll reach its ends and stay inside 
   assert.equal(key("PageUp"), true);
   assert.equal(dom.document.activeElement, doors[0], "from the layer, PageUp reaches the layer's first item");
 });
+
+// UI matrix 2026-11-25 row 6: the Data Hub SCHEDULE pane ends in two credit links right of its reminder <select>, a
+// screen down and in no band of it, so Down off the select wrapped to the tab rail and no arrow reached Jolpica F1.
+test("step(): Down off a pane's last in-band control reaches the pane's own control below in another column first", () => {
+  const { step } = loadMenuNav();
+  const tab = el("tab", 241, 9, 66, 52);
+  const pick = el("pick", 167, 244, 154, 52);
+  const credit = el("credit", 395, 1404, 48, 52);
+  const foot = el("foot", 600, 1500, 80, 40);
+  const pane = { contains: (n) => n === pick || n === credit };
+  pick.closest = credit.closest = () => pane;
+  assert.equal(step(pick, 0, 1, [tab, pick, credit, foot]).id, "credit", "the pane's credit link, not the wrap to the tab");
+  assert.equal(step(credit, 0, 1, [tab, pick, credit, foot]).id, "foot", "the pane's last control still lands on the foot");
+});
+
+test("MenuNav leaves every arrow, keyboard and pad, to a region that routes them itself (data-nav=own)", () => {
+  const { ownsArrows } = loadMenuNav();
+  const region = {};
+  const inside = { tagName: "BUTTON", dataset: {}, getAttribute: () => null, closest: (sel) => (sel === "[data-nav='own']" ? region : null) };
+  for (const key of ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]) {
+    assert.equal(ownsArrows(inside, key, { isTrusted: true }), true, key);
+    assert.equal(ownsArrows(inside, key, { isTrusted: false }), true, key + " from the pad too");
+  }
+  for (const key of ["Home", "End", "PageDown", "Enter"]) assert.equal(ownsArrows(inside, key), false, key + " stays MenuNav's");
+  assert.equal(ownsArrows({ ...inside, closest: () => null }, "ArrowDown"), false, "outside the region the walker moves");
+});

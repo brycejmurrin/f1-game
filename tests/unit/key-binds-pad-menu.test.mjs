@@ -452,3 +452,59 @@ test("a Cmd/Ctrl chord never latches a driving key (macOS sends no key-up for it
   press("KeyP", { metaKey: false });
   assert.equal(paused, 1, "pause is handled above the chord gate");
 });
+
+// #6271: the CAM cycle walks six views, so a pad needs a route to the full picker.
+test("a pad's CAM tap cycles on release; held 340 ms it opens the full camera picker instead", () => {
+  const { Input, sb, fire } = boot();
+  let t = 0; sb.performance.now = () => t;
+  const pad = fakePad(sb, fire);
+  pad.press(8); Input.poll();
+  assert.equal(Input.consumeCameraCycle(), false, "the press alone waits to learn tap or hold");
+  t += 120; pad.release(8); Input.poll();
+  assert.equal(Input.consumeCameraCycle(), true, "a tap cycles on the release");
+  assert.equal(Input.consumeCameraMenu(), false);
+  pad.press(8); Input.poll();
+  t += 339; Input.poll();
+  assert.equal(Input.consumeCameraMenu(), false, "not before the hold time");
+  t += 1; Input.poll();
+  assert.equal(Input.consumeCameraMenu(), true, "a held CAM asks for the picker while still held");
+  t += 500; pad.release(8); Input.poll();
+  assert.equal(Input.consumeCameraCycle(), false, "the hold's release does not also cycle");
+  assert.equal(Input.consumeCameraMenu(), false, "and asks once");
+  pad.press(8); Input.poll();
+  sb.navigator.getGamepads = () => []; t += 100; Input.poll();
+  sb.navigator.getGamepads = () => [pad.pad]; t += 400; pad.release(8); Input.poll();
+  assert.equal(Input.consumeCameraCycle() || Input.consumeCameraMenu(), false, "a press the pad lost mid-way is neither");
+});
+
+test("an open camera picker takes the pad and the phone: D-pad moves it, A picks, B closes, no pedals", () => {
+  const { Input, sb, fire } = boot();
+  let t = 0; sb.performance.now = () => t;
+  let open = true;
+  sb.CamPicker = { visible: () => open };
+  sb.UiLayers.inRace = () => true;
+  sb.MenuNav = { activeLayer: () => null, FOCUSABLE: "button" };
+  const keys = [], clicks = [];
+  const item = (name) => ({ tagName: "BUTTON", disabled: false, matches: () => true,
+    closest: (sel) => (sel === '[role="menu"]' ? {} : null),
+    dispatchEvent: (e) => { keys.push(name + ":" + e.key); return true; }, click: () => clicks.push(name) });
+  const doc = sb.document;
+  doc.activeElement = item("heli");
+  const pad = fakePad(sb, fire);
+  const tick = () => { t += 16; Input.poll(); };
+  assert.equal(Input.remoteControlContext(), "menu", "a paired phone is shown its menu pad over the picker");
+  assert.equal(Input.remoteEvent("navDown"), true, "and its arrows reach the picker");
+  assert.deepEqual(keys, ["heli:ArrowDown"]);
+  pad.press(7); tick();
+  assert.equal(Input.throttle(), false, "the pad's gas waits while it drives the picker");
+  keys.length = 0;   // (the trigger's own edge pages the menu: the picker ignores PageDown)
+  pad.press(13); tick();
+  assert.deepEqual(keys, ["heli:ArrowDown"], "the D-pad walks the picker's own arrow keys");
+  pad.release(13); pad.press(0); tick();
+  assert.deepEqual(clicks, ["heli"], "A picks the focused view");
+  pad.release(0); pad.press(1); tick();
+  assert.deepEqual(keys.at(-1), "heli:Escape", "B closes it through its own Escape");
+  open = false; pad.release(1); tick(); tick();
+  assert.equal(Input.throttle(), true, "closed: the held trigger drives again");
+  assert.equal(Input.remoteControlContext(), "drive");
+});

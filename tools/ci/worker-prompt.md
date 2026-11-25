@@ -1,12 +1,13 @@
 # Apex worker — the scheduled task's saved prompt
 
-The text below is what Bryce pastes into the "Apex worker" scheduled task at https://claude.ai/code/routines (one
-repository, `brycejmurrin/f1-game`; an **API** trigger whose URL and token become the `WORKER_FIRE_URL` /
-`WORKER_FIRE_TOKEN` secrets that `.github/workflows/dispatch.yml` uses; optionally GitHub triggers `issue.labeled
-ready` and `pull_request.labeled needs-owner`). `tools/ci/dispatch.mjs --fire` starts one run per launch with a
-one-line address as the fire text; the platform wraps that text in a `<routine-fire-payload>` block, so this prompt
-opts in to reading it as an ADDRESS only (https://code.claude.com/docs/en/routines, read 2026-11-03). Everything a
-worker must know lives in the repository (skill `steward`, §Lane), not here: this prompt only says where to look.
+The text below is a worker's standing brief: the saved prompt of the "Apex worker" scheduled task at
+https://claude.ai/code/routines (one repository, `brycejmurrin/f1-game`) and the base an orchestrator session copies
+into a `create_session` prompt (skill `dispatcher`, `references/orchestrator-brief.md`). The dispatch Action that
+fired the task automatically (`.github/workflows/dispatch.yml`, `tools/ci/dispatch.mjs`) was retired on 2026-11-25
+(#6536); the orchestrator session launches workers now, and a hand fire of the task sends the same one-line address.
+The platform wraps a fire's text in a `<routine-fire-payload>` block, so this prompt opts in to reading it as an
+ADDRESS only (https://code.claude.com/docs/en/routines, read 2026-11-03). Everything a worker must know lives in the
+repository (skill `steward`, §Lane), not here: this prompt only says where to look.
 
 ---
 
@@ -37,14 +38,14 @@ A JS symbol: apex-lsp (rule `.claude/rules/js-nav.md`, skill `code-nav`).
 Ending: after your last push, `subscribe_pr_activity` on your PR, then end the turn. A PR event (CI, a comment, a
 label) wakes you; act on it, refresh the handoff block, and end again. No timed check-ins while the subscription
 works; if it was refused, one check-in of at most 50 minutes, re-armed only after a state change (AGENTS.md rule 13).
-Your run ends for good at `land`: call `unsubscribe_pr_activity`, then stop. Do not wait out CI in the foreground,
+Your run ends for good at `land`: call `unsubscribe_pr_activity`, then stop; never re-subscribe (steward §Land 4). Do not wait out CI in the foreground,
 never poll, never sleep.
 Report by send_message to the session that launched you, when one did: at start (your reading of the task), at every
 push (head sha, PR number), at CI green or red, and at any refusal or blocker.
 
 Nobody reads this chat. Never ask a human anything here and never end a turn with a question: decide and record the
 decision in the PR body, or, when only Bryce can decide, add the `needs-decision` label with ONE comment that states the
-options and your pick, then keep doing everything that does not depend on the answer. The dispatcher notifies Bryce; his
+options and your pick, then keep doing everything that does not depend on the answer. The orchestrator relays it to Bryce; his
 answer arrives as a comment starting `decision:` or as a label change, which wakes you. The `hold` label is his veto;
 only he removes it.
 
