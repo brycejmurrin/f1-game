@@ -1013,6 +1013,9 @@ body[data-width="narrow"] .dh-thint { display: none; }
 /* the legend's colour swatches are decoration inside their button, not the
    target — the button around them is what grew */
 .dh-legend-item .dh-legend-dot { flex: 0 0 auto; }
+/* 44 PAINTED px WIDE on touch, after the shared chip rule above (#6434 row 6): a four-digit year pill is 55 own px, 38 painted at UI SIZE 70. The
+   arm is 0 with a mouse and under the text width at UI SIZE 85 % and up, so only a small touch UI SIZE moves. */
+.dh-pill { min-width: max(var(--tap-min), var(--tap-floor44)); }
 /* EXPORT tab — browser-side OpenF1 start-line gathering */
 .dh-export { display: flex; flex-direction: column; gap: 10px; }
 .dh-export-note { font-size: var(--fs-2); line-height: 1.5; color: #b6b6c0; }

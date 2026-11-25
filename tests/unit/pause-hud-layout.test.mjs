@@ -125,7 +125,8 @@ test("the phone pause card (#5153 gap 10) is keyed on the body's own density + s
   assert.match(overlays, new RegExp(PHONE + String.raw` #pausemenu #pm-quick-doors \{[^}]*--tray-cols: 5`));
   // The tile label steps down one notch (CI on ec39facd / 354334ed: MESSAGES 74 px in a 71 px text box in the
   // 852-wide windows with 59 px insets). A flat step: a container unit fit locally but not on CI's Chromium.
-  assert.match(overlays, new RegExp(PHONE + String.raw` #pausemenu #pm-quick-doors > details \{ font-size: calc\(var\(--fs-micro\) \* 0\.92\); \}`));
+  // The notch keeps a 12 painted px floor at a small UI SIZE (#6434): max() leaves 75 % and up exactly as it was.
+  assert.match(overlays, new RegExp(PHONE + String.raw` #pausemenu #pm-quick-doors > details \{ font-size: max\(calc\(var\(--fs-micro\) \* 0\.92\), var\(--fs-floor\)\); \}`));
   assert.doesNotMatch(overlays, /#pm-quick-doors[^{]*\{[^}]*container-type/, "no container unit decides the tray's type");
   // The race line never grows the doors' row.
   assert.match(overlays, new RegExp(PHONE + String.raw` #pm-race-context \{[^}]*max-height: var\(--pm-door\)`));
