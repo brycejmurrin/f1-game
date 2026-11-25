@@ -415,3 +415,22 @@ test("custom-track production observer runs only once the committed entry still 
   const canceled = entry.begin("race", "c", () => {}, () => undefined, () => true);
   entry.cancel(); ctx.observe(canceled); await canceled; await tick(); assert.equal(hooks, 1);
 });
+
+// perf hunt 2026-11-24 #3: every startRace kicked a garage-exterior build of the race circuit (kickRaceBundles →
+// setupCam.prewarmExterior), a 308 ms task on a cold monza entry, cancelled by green when no drive-out showed it.
+// The prewarm now asks the drive-out's own gate (setup-camera driveOutPlays) first.
+test("startRace issues no garage-exterior request when the RACE! drive-out will not play", async () => {
+  const exterior = (h) => JSON.parse(vm.runInContext("JSON.stringify(GaragePrebuild.instance().state().exterior)", h.ctx));
+  for (const plays of [false, true]) {
+    const h = await createGame({ track: "monza" });
+    try {
+      h.G.store.set("garageArrival", plays ? null : { raceStart: false });
+      const before = exterior(h);
+      const request = h.G.startRace();
+      const during = exterior(h);
+      await request;
+      if (plays) assert.equal(during.status, "loading", "control: with the drive-out on, race entry prewarms its exterior");
+      else assert.deepEqual([during.status, during.generation], [before.status, before.generation], "drive-out off: no exterior request during entry");
+    } finally { h.close(); }
+  }
+});

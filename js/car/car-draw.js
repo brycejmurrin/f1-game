@@ -1061,10 +1061,15 @@ const CarDraw = (function () {
     // drained one piece a frame under the lights (game.js tickBody → drainDeferredCarWarm), in grid order; the
     // lights hold ~5 s for ≤ 22 pieces, and whatever is left still builds on its first draw, as before.
     const _deferredCarWarm = [];
-    function drainDeferredCarWarm(budgetMs) {
+    // Stop BEFORE a piece whose kind last cost more than the budget left (hunt 2026-11-24 #4: a 27-39 ms caster
+    // ran whole on a 4 ms race frame). `first` (under the lights) still runs a call's first piece.
+    const _warmCost = [0, 0, 0];   // atlas, caster, crew
+    function drainDeferredCarWarm(budgetMs, first) {
       const t0 = performance.now(), budget = budgetMs > 0 ? budgetMs : 4;
       while (_deferredCarWarm.length) {
-        const it = _deferredCarWarm.shift();
+        const it = _deferredCarWarm[0], k = it.atlas ? 0 : it.caster ? 1 : 2, at = performance.now();
+        if (!first && _warmCost[k] > budget - (at - t0)) break;
+        first = false; _deferredCarWarm.shift();
         try {
           // Through the caches, never a kept handle: a leftover drained by a later countdown (a red-flag restart)
           // finds the atlas LRU may have dropped its texture since, and the cache rebuilds or hits as it should.
@@ -1072,7 +1077,8 @@ const CarDraw = (function () {
           else if (it.caster) teamMesh(it.c.team, it.c, true);
           else if (it.crew && typeof PitCrewAnim !== "undefined") PitCrewAnim.warm(G, it.c);   // #5051: the stop's rig, not on the box frame
         } catch (e) { Log.warn("gfx", "deferred car warm failed for " + (it.c && it.c.team && it.c.team.id), e); }
-        if (performance.now() - t0 >= budget) break;
+        const end = performance.now(); _warmCost[k] = end - at;
+        if (end - t0 >= budget) break;
       }
       return _deferredCarWarm.length;
     }
