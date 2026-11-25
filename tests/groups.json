@@ -1205,6 +1205,8 @@
     "tests/unit/telemetry-view-resize.test.mjs",
     "tests/unit/terrain-falloff.test.mjs",
     "tests/unit/terrain-normals.test.mjs",
+    "// #6484 item 4a: the two terrain samplers, compared on 3 VM builds (~4 s).",
+    "tests/unit/terrain-sampler-pin.test.mjs",
     "tests/unit/terrain-y.test.mjs",
     "tests/unit/test-bg-outcome.test.mjs",
     "tests/unit/test-coverage-audit.test.mjs",
