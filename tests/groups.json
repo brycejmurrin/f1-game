@@ -134,6 +134,8 @@
     "tests/unit/boot-load-budget.test.mjs",
     "tests/unit/bootstrap-doctor.test.mjs",
     "tests/unit/bot-pr-body.test.mjs",
+    "// brakeTarget replays a recorded live Monza race bit for bit (#6505).",
+    "tests/unit/brake-target-characterization.test.mjs",
     "// ...and the branch audit it deletes by: ancestry, the merge-tree dry merge",
     "// and line presence, pinned against real git in a throwaway repo. ~1 s.",
     "tests/unit/branch-audit.test.mjs",
