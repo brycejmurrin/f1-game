@@ -179,6 +179,14 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/verify-live.mjs** | Post-deploy byte and SHA-256 verification for the shell, secondary pages, service worker, and lazy assets. | — |
 | **ci/wait-for.mjs** | The generic background waiter: block until the 1-min load drops, a file is non-empty, or a pid is gone (exit 0 / 124). | — |
 
+### `tools/bridge/`
+
+The session side of the phone bridge (skill phone-bridge): read-only watchers of the bridge issue.
+
+| Tool | Does | Suggested skill |
+|---|---|---|
+| **bridge/watch.mjs** | Phone-bridge watcher for Monitor: one line per new OWNER `apex-result`/hello; rate-limit backoff; never posts. | phone-bridge |
+
 ### `tools/check/`
 
 Static guards over the source — a red exit here is a defect, not a report.

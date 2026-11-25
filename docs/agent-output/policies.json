@@ -76,6 +76,11 @@
       "presentation": "native",
       "preserve": "Stage, approval refusals, geometry provenance and generated artifact paths; never infer approval from successful execution."
     },
+    "tools/bridge/watch.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One stdout line per new OWNER hello / apex-result as it arrives (a Monitor stream: never buffer or summarise), backoff notes on stderr, exit reason; the token appears nowhere."
+    },
     "tools/car/audit-aero.mjs": {
       "action": "keep-native",
       "presentation": "native",
