@@ -1,23 +1,30 @@
 ---
 name: orchestrator-checkin-and-task-list
-description: "Orchestrator sessions: check in on every live worker session each cycle, and keep the task list current after every state change"
+description: "Orchestrator sessions: build the FULL PLAN as tasks at session start, check in on every live worker each cycle, and keep the task list current after every state change"
 metadata:
   node_type: memory
   type: feedback
-  modified: 2026-11-20T07:15:00Z
+  modified: 2026-11-25T05:40:00Z
 ---
 
 Bryce (2026-11-20 ~07:14Z): "Update your memory to check in on sessions and also
 continuously update your task list". He asked for it after a night of managing
 ~20 worker sessions. Before that he had to say "read all sessions and archive
 those done or merged and launch more" and "update your task list to get full
-scope" himself.
+scope" himself. Again on 2026-11-25 ~05:27Z, after a rotated orchestrator started with a
+thin list (6 tasks) and built the full plan only when asked: "You need to update
+memory or orchestrator role to always have a task list of full plan."
 
 **Why:** an orchestrator that only reacts to the messages that arrive misses
 workers that went idle, capped out or got stuck in silence. A stale task list
 also hides scope. Bryce should never have to prompt the sweep.
 
 **How to apply:**
+- At session START, before any other work, build the FULL PLAN as tasks from the
+  handoff, the Board and a PR/session survey: every open PR (ready/draft, owner),
+  every live worker with its PR, every wait-on-Bryce item, every held or dependency
+  item ("after #n merges"), the standing routines, and the next launches. Each
+  cycle (the :19 and :49 routines) refreshes it; nothing in flight lives only in chat.
 - Each orchestrator cycle (and whenever no message has arrived for a while), list
   the child sessions (`list_sessions` with `children:true`; save large output to a
   file and summarise it with a script). Then for each live one:

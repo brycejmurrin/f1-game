@@ -15,8 +15,7 @@
  * factors are back to 1 the step after.
  *
  * Scope: the local car only. AI cars keep the readout-only contract, and in a
- * VS FRIEND race each screen applies its own setting to its own car (the
- * room's settings do not carry it; see the PR for #1578).
+ * VS FRIEND race the host's choice is a room rule (G.raceDamage, #3971).
  * Never reads track curvature or the racing line: inputs are the damage record.
  */
 var DamageHandling = (function () {

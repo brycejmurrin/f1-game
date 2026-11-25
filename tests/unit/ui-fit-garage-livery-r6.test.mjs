@@ -11,18 +11,18 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const css = fs.readFileSync(path.join(ROOT, "css/carsetup.css"), "utf8");
 const rules = cssRules(css);
 const GRID = "#cs-options.cs-liv-grid";
-const CHIP = "#cs-options.cs-liv-grid .cs-liv-edit, #cs-options.cs-liv-grid .cs-liv-del";
+const CHIP = "#cs-options.cs-liv-grid .cs-liv-edit";
 const TAG = "#cs-options.cs-liv-grid .cs-opt-tag";
-const SWATCH = "#cs-options.cs-liv-grid > .cs-liv-row .cs-liv-swatch";
+const SWATCH = "#cs-options.cs-liv-grid .cs-liv-row .cs-liv-swatch";
 
 test("LIVERY grid columns floor at 2× --tap (room for both chips + CHROME)", () => {
   assert.equal(
-    decl(rules, GRID, "grid-template-columns"),
+    decl(rules, `${GRID}, ${GRID} > details > div`, "grid-template-columns"),
     "repeat(auto-fill, minmax(min(max(72px, calc(var(--tap) * 2)), 100%), 1fr))",
   );
 });
 
-test("LIVERY grid edit/delete chips lift the hit box to --tap / --tap-paint", () => {
+test("LIVERY grid edit chips lift the hit box to --tap / --tap-paint", () => {
   assert.equal(decl(rules, CHIP, "box-sizing"), "content-box");
   assert.equal(decl(rules, CHIP, "width"), "var(--tap-min)");
   assert.equal(decl(rules, CHIP, "height"), "var(--tap-min)");
@@ -53,4 +53,25 @@ test("r6 carve stays Garage LIVERY grid (no foreign selectors)", () => {
   assert.doesNotMatch(m[0], /#hud|#lighting|#camtune|#ps-|tokens\.css|touch-controls|tuner\.css|menus\.css/,
     "must not retarget HUD / tuner / Photo Studio / other sheets");
   assert.match(m[0], /#cs-options\.cs-liv-grid/);
+});
+
+// UI-MATRIX 2026-11-25 row 1: the 112 factory cards live in
+// details.cs-liv-factory > div, one level below #cs-options. A child combinator
+// (`> .cs-liv-row`) missed them all, so their ⧉ chips had no positioned
+// ancestor and stacked at one point of the sheet.
+test("LIVERY card rules reach the factory fold (descendant, never child)", () => {
+  assert.deepEqual(rules.map(r => r.selector).filter(sel => /\.cs-liv-grid\s*>\s*\.cs-liv-row/.test(sel)), [],
+    "a child combinator misses the factory fold's cards");
+  assert.equal(decl(rules, `${GRID} .cs-liv-row`, "position"), "relative",
+    "every card (fold included) anchors its absolute chips");
+  const FOLD = `${GRID} > details`;
+  assert.equal(decl(rules, FOLD, "grid-column"), "1 / -1", "the fold spans the grid");
+  assert.equal(decl(rules, `${GRID}, ${FOLD} > div`, "display"), "grid",
+    "the fold's inner div IS the top-level grid rule (same columns)");
+});
+
+test("custom cards carry no delete chip beside ✎ (DELETE lives in the editor)", () => {
+  assert.deepEqual(rules.map(r => r.selector).filter(sel => sel.includes(".cs-liv-grid") && sel.includes(".cs-liv-del")), [],
+    "no grid card rule styles a delete chip");
+  assert.equal(decl(rules, ".cs-liv-del.armed", "background"), "var(--armed-fill)");
 });

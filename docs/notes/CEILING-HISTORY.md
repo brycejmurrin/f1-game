@@ -4067,3 +4067,10 @@ Fragment: `ratchets.d/cursor--telemetry-mobile-1124.json`.
 `js/ui/dom.js`; the `results.js` copy it replaces is lazy, so its removal frees no boot
 bytes. `assertPinsAll` 10454 → **10455** (+1): the pin asserts `results.js` keeps no copy.
 Fragment: `ratchets.d/claude--fmtgap-6504.json`.
+## 2026-11-25 — claude/issue-5496-damage-reland: DAMAGE: HANDLING room rule re-land (#5496)
+
+`js/game.js gMembers` 279 → **280** (+1) and `js/game.js lines` 9666 → **9667** (+1): the `G.raceDamage` accessor pair
+from the #4884 re-land. LobbySettings RULES snapshot and restore read `G[prop]`, so the rule has to be a façade member.
+Bryce's grant, 2026-11-25 ~05:56Z ("Raise the budget", then "Launch #5496 now"): raise exactly what the re-land uses.
+`(tree) assertPins` / `assertPinsAll` +1 and `eagerCodeBytes` +175 are inside the commit hook's absorb.
+Fragment: `ratchets.d/claude--issue-5496-damage-reland.json`.
