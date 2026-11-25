@@ -862,6 +862,8 @@
     "// The shared Bryce-phone preset, issue screenshots and the screenshot size matcher. Pure, ~1 s.",
     "tests/unit/phone-tools.test.mjs",
     "tests/unit/phone-touch-surface.test.mjs",
+    "// #6487: the four phone detectors share ONE held viewport read (UiScale.phone), dropped on resize. VM, ~0.1 s.",
+    "tests/unit/phone-viewport-cache.test.mjs",
     "tests/unit/photo-kit.test.mjs",
     "tests/unit/photo-studio.test.mjs",
     "// The physics baseline's provenance stamp (_blessed): reason, data hash,",
