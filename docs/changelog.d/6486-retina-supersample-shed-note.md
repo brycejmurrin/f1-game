@@ -1,0 +1,2 @@
+Improved: On a desktop Retina display, RESOLUTION MAX now supersamples the race above the panel's native resolution when 1.5× supersampling is on (ULTRA and EXTREME, three.js renderer, #6486); the frame-rate governor still drops it when the GPU cannot keep up. Phones are unchanged.
+Improved: The Graphics settings page now says when the governor has reduced effects to hold the frame rate, and names them.

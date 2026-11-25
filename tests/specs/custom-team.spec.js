@@ -260,12 +260,12 @@ test("custom livery actions are independent keyboard buttons", async ({ page }) 
 
   const select = page.getByRole("button", { name: "Select Test Paint livery" });
   const edit = page.getByRole("button", { name: "Edit Test Paint livery" });
-  const remove = page.getByRole("button", { name: "Delete Test Paint livery" });
   await expect(select).toBeVisible();
   await expect(edit).toBeVisible();
-  await expect(remove).toBeVisible();
   expect(await select.evaluate((row, action) => row.parentElement === action.parentElement, await edit.elementHandle())).toBe(true);
-  expect(await select.evaluate((row, action) => row.parentElement === action.parentElement, await remove.elementHandle())).toBe(true);
+  // DELETE is not a card chip any more: beside ✎ on a 102x84 card a slip
+  // deleted (UI-MATRIX 2026-11-25 row 4). It lives in the paint editor.
+  await expect(page.locator(".cs-liv-row .cs-liv-del")).toHaveCount(0);
 
   await select.focus();
   await page.keyboard.press("Tab");
@@ -274,14 +274,16 @@ test("custom livery actions are independent keyboard buttons", async ({ page }) 
   await expect(page.locator(".cs-liv-editor")).toBeVisible();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.livery.mclaren")))).toBe("default");
 
-  await page.locator(".cs-liv-ed-cancel").click();
-  await page.getByRole("button", { name: "Delete Test Paint livery" }).focus();
-  // Delete is arm-then-confirm now (G.armConfirm, the career DELETE? idiom —
-  // one tap used to destroy a one-of-a-kind paint with no undo). First press
-  // ARMS the button; the row must survive it. Second press confirms.
+  const remove = page.getByRole("button", { name: "Delete Test Paint livery" });
+  await remove.focus();
+  // Arm-then-confirm (G.armConfirm, the career DELETE? idiom). First press
+  // ARMS the button; the paint must survive it. Second press confirms and
+  // closes the editor.
   await page.keyboard.press("Space");
-  await expect(page.getByRole("button", { name: "Select Test Paint livery" })).toHaveCount(1);
+  await expect(page.locator(".cs-liv-editor")).toBeVisible();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.livery.custom.mclaren")).length)).toBe(1);
   await page.keyboard.press("Space");
+  await expect(page.locator(".cs-liv-editor")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Select Test Paint livery" })).toHaveCount(0);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.livery.mclaren")))).toBe("default");
 });

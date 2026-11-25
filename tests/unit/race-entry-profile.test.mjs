@@ -119,9 +119,24 @@ test("entry totals count only overlapping task time and drain queued records at 
   t = 200;
   profile.end();
   const snapshot = profile.snapshot();
-  assert.deepEqual(Array.from(snapshot.longTasks, task => [task.start, task.ms]), [[100, 10], [120, 60]]);
+  // The straddling task (20 → 110) keeps its whole 90 ms; blockMs sums only the in-window part (10 + 60).
+  assert.deepEqual(Array.from(snapshot.longTasks, task => [task.start, task.ms, task.overlapMs]), [[20, 90, 10], [120, 60, 60]]);
   assert.equal(snapshot.blockMs, 70);
-  assert.equal(snapshot.maxBlockMs, 60);
+  assert.equal(snapshot.maxBlockMs, 90);
+});
+
+// perf hunt 2026-11-24 #6: the clip to winT0 read maxBlockMs 147-237 ms against 246-306 ms seen independently.
+test("a task straddling winT0 reports its full duration, its in-window part beside it", () => {
+  let cb = null;
+  class FakePO { constructor(fn) { cb = fn; } observe() {} disconnect() {} }
+  FakePO.supportedEntryTypes = ["longtask"];
+  const P = load({ PerformanceObserver: FakePO, performance: { now: () => 1000 } });
+  P.begin("race");
+  cb({ getEntries: () => [{ startTime: 900, duration: 300, name: "self" }, { startTime: 800, duration: 150, name: "self" }] });
+  const s = P.snapshot();
+  assert.deepEqual(Array.from(s.longTasks, (k) => [k.start, k.ms, k.overlapMs]), [[900, 300, 200]], "the whole task; one that ended before the window is dropped");
+  assert.equal(s.maxBlockMs, 300);
+  assert.equal(s.blockMs, 200);
 });
 
 test("entry totals include tasks beyond the retained detail limit and reset for the next race", () => {

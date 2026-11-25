@@ -1641,16 +1641,25 @@ const AgentView = (function () {
         return fail("RaceOverError", "rollout() needs a running race (player already finished)",
                     'start one with __apex.race("<id>") then go()');
       }
-      if (o.policy != null && typeof o.policy !== "function") {
-        return fail("BadArgumentError", "policy must be a function",
-                    "policy is world => ({steer,throttle,brake}); use `input` for "
-                    + "a constant input instead");
+      // A NAMED policy (a string JSON can carry, e.g. over the phone bridge): SoakRun's closed-loop driver,
+      // "autopilot" (a lap on the soak law) or "box" (on into this car's pit box). It ends the rollout when done.
+      let named = null;
+      if (typeof o.policy === "string") {
+        const S = typeof SoakRun !== "undefined" ? SoakRun : null;
+        if (!S || typeof S.policy !== "function") return fail("UnavailableError", "named policies live in SoakRun (the perf rig), not loaded", "LazyBundles.live().ensurePerfRig() loads it");
+        named = S.POLICY_NAMES.indexOf(o.policy) >= 0 ? S.policy(o.policy, { laps: o.laps }) : null;
+        if (!named && S.POLICY_NAMES.indexOf(o.policy) >= 0) return fail("UnavailableError", "SoakRun is not bound to the game yet", "retry once the perf rig has loaded");
+        if (!named) return fail("BadArgumentError", "unknown policy name: " + o.policy, "one of " + S.POLICY_NAMES.join(", ") + ", or a function");
+      } else if (o.policy != null && typeof o.policy !== "function") {
+        return fail("BadArgumentError", "policy must be a function or a name",
+                    "policy is world => ({steer,throttle,brake}) or \"autopilot\" / \"box\"; "
+                    + "use `input` for a constant input instead");
       }
       const dt = clamp(numOr(o.dt, 1 / 60), 1 / 240, 1 / 10);
       const seconds = clamp(numOr(o.seconds, 5), 0.05, 120);
       const ticks = Math.max(1, Math.round(seconds / dt));
       const policy = typeof o.policy === "function" ? o.policy : null;
-      const policyEvery = Math.max(1, Math.round(1 / (numOr(o.policyHz, 10) * dt)));
+      const policyEvery = Math.max(1, Math.round(1 / (numOr(o.policyHz, named ? 1 / dt : 10) * dt)));
       const nSamples = clamp(o.samples | 0 || 12, 2, 60);
       const sampleEvery = Math.max(1, Math.floor(ticks / nSamples));
 
@@ -1693,6 +1702,11 @@ const AgentView = (function () {
         if (G.state !== "race" && G.state !== "count") {   // count = a red-flag restart, still this race
           stoppedEarly = { atS: r2(G.raceT - startT), reason: "state:" + G.state };
           break;
+        }
+        if (named && i % policyEvery === 0) {
+          let inp; try { inp = named.step(dt * policyEvery); } catch (e) { return fail("PolicyError", "the " + named.name + " policy threw: " + (e && e.message), "report it; the input was handed back"); }
+          if (named.done()) { stoppedEarly = { atS: r2(G.raceT - startT), reason: "policy:" + named.done() }; break; }
+          G._testInput = inp || null;
         }
         if (policy && i % policyEvery === 0) {
           let inp = null;
@@ -1771,8 +1785,9 @@ const AgentView = (function () {
         episodeId,
         ran: { ticks: ran, requestedTicks: ticks, dt: +dt.toFixed(5), seconds: r2(elapsed),
                stoppedEarly,
-               policy: policy ? "closed-loop at " + r1(1 / (policyEvery * dt)) + " Hz"
-                              : "open-loop constant input" },
+               policy: named ? named.name + " (named) at " + r1(1 / (policyEvery * dt)) + " Hz"
+                 : policy ? "closed-loop at " + r1(1 / (policyEvery * dt)) + " Hz"
+                 : "open-loop constant input" },
         from: { frac: +startFrac.toFixed(4), lap: startLap },
         to: { frac: +(p.s / G.track.total).toFixed(4), lap: p.lap || 0 },
         distanceM: r1((p.prog || 0) - startProg),
@@ -1796,6 +1811,7 @@ const AgentView = (function () {
       };
       } finally {
         lastPayload = savedPayload; lastSeq = savedSeq; seq = savedCounter; G._testInput = savedInput;
+        if (named) named.release();
       }
     }
 
@@ -1912,7 +1928,7 @@ const AgentView = (function () {
         },
         act: {
           "rollout({seconds,dt,input,policy,policyHz,samples})":
-            "drive an interval, return a digest instead of every frame",
+            "drive an interval, return a digest; policy: a function or \"autopilot\"|\"box\"",
           "terminal()": "{done, reason} — retired|finished|wrong_way|rescued|null",
           "ersPlan(plan?)": "sector ERS plan, 3× manual|deploy|save; get/set",
           "objective()": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints; read once",

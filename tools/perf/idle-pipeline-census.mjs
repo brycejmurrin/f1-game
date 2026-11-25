@@ -35,6 +35,28 @@ export function hookPipelines() {
   // The twin counters (#4783): bind groups and buffers minted on the GPUDevice itself, with the label of the
   // first few so a culprit is named. WebGL2 has no device: both stay 0 and `gpuDevice` says so.
   P.bindGroups = 0; P.buffers = 0; P.gpuLog = []; P.gpuDevice = false; P.gpuLogOn = false;   // the log opens after warm-up: warm-up alone fills any cap
+  // WHOSE bind group (deploy red 2026-11-25): three labels an object group "bindGroup_object", which names no culprit.
+  // Bindings.getForRender(renderObject) is the frame that mints a render object's bindings, so while it runs
+  // P.ro names that object (type:name, material, parent chain, geometry, render target) for the gpuLog rows.
+  P.ro = null;
+  const bnd = T.renderer._bindings;
+  if (bnd && typeof bnd.getForRender === "function") {
+    const og = bnd.getForRender;
+    bnd.getForRender = function (ro) {
+      const prev = P.ro;
+      if (P.gpuLogOn) {
+        try {
+          const ob = (ro && ro.object) || {}, m = (ro && ro.material) || {}, g = (ro && ro.geometry) || ob.geometry || {}, c = (ro && ro.context) || {};
+          let par = ob.parent; const chain = []; for (let i = 0; par && i < 4; i++) { chain.push(par.name || par.type); par = par.parent; }
+          const rt = c.renderTarget ? (c.renderTarget.texture && c.renderTarget.texture.name || c.renderTarget.name || "rt") + ":" + c.width + "x" + c.height : "canvas";
+          const ud = ob.userData || {};
+          P.ro = (ob.type || "") + ":" + (ob.name || "") + " mat " + (m.type || "") + ":" + (m.name || "") + " geo " + (g.type || "") + ":" + (g.name || "") + "#" + (g.id | 0) +
+            " in " + (chain.join("<") || "-") + " rt " + rt + (ob.__tlxIdent ? " pool" : "") + (ud.tlxLgRoad ? " road" : "");
+        } catch (_) { P.ro = "(unnamed)"; }
+      }
+      try { return og.apply(this, arguments); } finally { P.ro = prev; }
+    };
+  }
   const dev = be.device;
   if (dev && typeof dev.createBindGroup === "function" && typeof dev.createBuffer === "function") {
     P.gpuDevice = true;
@@ -42,7 +64,7 @@ export function hookPipelines() {
       const orig = dev[name];
       dev[name] = function (desc) {
         P[key]++;
-        try { if (P.gpuLogOn && P.gpuLog.length < 200) P.gpuLog.push({ at: P.frames, kind: name, label: String((desc && desc.label) || "(none)").slice(0, 80), size: desc && desc.size, usage: desc && desc.usage,
+        try { if (P.gpuLogOn && P.gpuLog.length < 200) P.gpuLog.push({ at: P.frames, kind: name, label: String((desc && desc.label) || "(none)").slice(0, 80), size: desc && desc.size, usage: desc && desc.usage, ro: P.ro ? String(P.ro).slice(0, 240) : undefined,
           from: (new Error().stack || "").split("\n").slice(2, 9).map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, "")).join(" < ").slice(0, 600) }); } catch (_) { /* naming is best-effort */ }
         return orig.apply(this, arguments);
       };
@@ -62,6 +84,7 @@ export async function frames(page, n) {
 export const WARM_FRAMES = 120;   // driving on the throttle until everything the lap draws has been seen once
 export const WINDOWS = 6;
 export const WINDOW_FRAMES = 60;
+export const SPREAD_FRAMES = 120;   // the spread leg (#6485): ~2 s at 60 fps for every rival to settle its tier
 export const REPLAY_MARGIN = 1.5;   // the warm pass drives the counted frames x this, so a slower counted pass stays on warmed road
 
 /** Boot TLX (forceGL selects three's WebGL2 backend), race monza with GAS held through `gas(true|false)`
@@ -128,6 +151,29 @@ export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
       bindGroups: c1.bg - c0.bg, buffers: c1.b - c0.b, gpuBuilt: await page.evaluate(([a, b]) => window.__bpp.gpuLog.slice(a, b), [c0.g, c1.g]) });
   }
   const replay = { warmStart, countedStart: prog0, warmM: Math.round(warmM), countedM: Math.round((await progress()) - prog0) };
+  // THE SPREAD LEG (#6485): the field above stays bunched, so no rival changes LOD tier and no shared mesh reaches a new
+  // most-in-view count. Here, unwarmed, half the rivals jump to tier 1 (55-115 m: compound stripes on) and half past the
+  // far-body cut (280-460 m: the far-LOD wheel pair), on one compound. TLX mints a pool wrapper per occurrence, so a
+  // count CarDraw.primeRace did not reach shows up as bind groups in this window.
+  const spread = await (async () => {
+    await restart();   // back onto the warmed stretch: only the field's placement is new in this window
+    const placed = await page.evaluate(() => {
+      const A = window.__apex, n = Math.max(0, (A.fieldState() || []).length - 1), list = [];
+      for (let i = 0; i < n; i++) {
+        const near = i % 2 === 0, j = i >> 1;
+        list.push({ dProg: near ? 55 + j * 6 : 280 + j * 18, dx: (i % 4 < 2 ? -1 : 1) * (1 + (j % 3) * 1.5) });
+      }
+      const ids = A.rivals(list);
+      A.snapCam();
+      return Array.isArray(ids) ? ids.length : 0;
+    });
+    const snap = () => page.evaluate(() => ({ p: window.__bpp.count, bg: window.__bpp.bindGroups, b: window.__bpp.buffers, g: window.__bpp.gpuLog.length }));
+    const c0 = await snap();
+    await frames(page, SPREAD_FRAMES);
+    const c1 = await snap();
+    return { window: "spread", placed, pipelines: c1.p - c0.p, bindGroups: c1.bg - c0.bg, buffers: c1.b - c0.b,
+      gpuBuilt: await page.evaluate(([a, b]) => window.__bpp.gpuLog.slice(a, b), [c0.g, c1.g]) };
+  })();
   const gov = { scale0: gov0.scale, tier0: gov0.tier, ...(await govAt()) };
   await page.evaluate(() => { window.__apex.govHold(false); window.__apex.renderScale(true); });
   await gas(false);
@@ -135,7 +181,7 @@ export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
   // Whether this run took TLX's soft-blit path (software adapter or headless): the spec exempts that path's readback
   // buffers and asserts the path was on whenever it does (#5387).
   const soft = await page.evaluate(() => { try { const b = GLX.__tlx.backendState(); return { softAdapter: !!b.softAdapter, headless: !!b.headless, softBlit: !!b.softBlit, reads: b.softRead ? b.softRead.gen | 0 : 0 }; } catch (_) { return null; } });
-  const out = { hook, forceGL, warm, gpuDevice, replay, gov, soft, windows };
+  const out = { hook, forceGL, warm, gpuDevice, replay, gov, soft, windows, spread };
   mkdirSync("artifacts/perf", { recursive: true });
   writeFileSync(`artifacts/perf/idle-pipeline-churn-${forceGL ? "gl" : "gpu"}.json`, JSON.stringify(out, null, 1));
   return out;

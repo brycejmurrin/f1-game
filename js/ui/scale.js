@@ -10,6 +10,28 @@ const UiScale = (() => {
   function media(query) {
     try { return window.matchMedia?.(query); } catch (_) { return null; }
   }
+  // The viewport's short side, read ONCE and held until the window resizes (#6487). innerWidth/innerHeight
+  // after a DOM write force a whole-document style recalc (~4 ms each at boot, ~200 ms across the four phone
+  // tests). Capture listeners run before every other window resize handler, so none reads a stale side.
+  let short = null, cached = false;
+  try {
+    const drop = () => { short = null; };
+    const on = (t, n) => t?.addEventListener?.(n, drop, { capture: true, passive: true });
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      on(window, "resize"); on(window, "orientationchange"); on(window.visualViewport, "resize");
+      cached = true;
+    }
+  } catch (_) { /* no events: read fresh every time */ }
+  function shortSide() {
+    if (short !== null) return short;
+    const s = Math.min(window.innerWidth, window.innerHeight);
+    if (cached) short = s;
+    return s;
+  }
+  /** The one phone test (hud-elements, screen-looks, title-layout and phoneUi below): touch AND a short side <= 500. */
+  function phone() {
+    try { return !!media("(pointer: coarse)")?.matches && shortSide() <= 500; } catch (_) { return false; }
+  }
   // Foldable hinge stamp: html[data-fold="horizontal"|"vertical"] from the viewport-segments
   // queries. The width tier html[data-layout] that sat beside it until 2026-11-07 is gone (UI
   // contract 2026-11-06 gap 20): it called an 852/844 landscape phone "tablet" and nothing in
@@ -70,7 +92,7 @@ const UiScale = (() => {
     const PHONE_UI_DEFAULT = 70;
     const coarsePointer = media("(pointer: coarse)");
     const coarseUi = () => !!coarsePointer?.matches;
-    const phoneUi = () => coarseUi() && Math.min(window.innerWidth, window.innerHeight) <= 500;
+    const phoneUi = () => coarseUi() && shortSide() <= 500;
     const roomyDesktop = media("(pointer: fine) and (min-width: 1600px) and (min-height: 900px)");
     const scaleSnap = (v, k) => {
       const n = Math.max(minFor(k), Math.min(maxFor(k), +v));
@@ -427,5 +449,5 @@ const UiScale = (() => {
   // A phone's UI SIZE FLOOR (#5452, Bryce 2026-11-11: "Down to 50 %"; it was 70 under #5235, which left the slider
   // stuck at its left end). A stored value under it is raised to it on load; one above it (his 61) is kept.
   const UI_PHONE_MIN = 50;
-  return { create, defaultResMode, migrateResMode, RES_SCHEMA, sizeRow, parseCaps };
+  return { create, phone, shortSide, defaultResMode, migrateResMode, RES_SCHEMA, sizeRow, parseCaps };
 })();

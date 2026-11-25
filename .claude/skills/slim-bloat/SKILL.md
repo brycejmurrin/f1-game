@@ -1,12 +1,14 @@
 ---
 name: slim-bloat
-description: "Use when files or docs are too big: a full size ratchet blocks a commit, dead or duplicate code, unused CSS, repeated doc rules, stale comments, or a file to split. Not for: CSS restructure → css-play; a fat SKILL.md → agent-config."
+description: "Use when files or docs are too big: a size ratchet blocks a commit, dead code, unused CSS, repeated doc rules, stale comments. Not for: duplication or structure → gardener; a fat SKILL.md → agent-config."
 ---
 
 # Cut bloat — shrink, split, dedupe, prove dead
 
 A session near its context cap needs **handoff**; trimming a skill or instruction budget
-needs **agent-config**. This workflow removes code/docs bloat with evidence.
+needs **agent-config**. This workflow removes code/docs bloat with evidence. The boundary: too big or dead → here; wrong shape
+(duplicated helpers, coupling, unclear ownership, a split along a file's jobs while it is under its ceiling) →
+**gardener**, which shares this skill's carve rules and leftover grep.
 
 Scan first. Dispatch **code-hunter** with `focus: dead-code`. Parent applies **one carve**.
 Preserve behaviour. Lower ratchets. Do not "simplify" a load-bearing

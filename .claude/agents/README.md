@@ -2,8 +2,8 @@
 
 Markdown agents with YAML frontmatter under `.claude/agents/`. Claude Code and
 Cursor both load this path (Cursor also accepts `.cursor/agents/`; we keep the
-single Claude tree to avoid drift). Thirteen agents: **session-reader** joined
-2026-11-25 (the tool-use audit, `docs/notes/AGENT-ROLES-2026-11-25.md`);
+single Claude tree to avoid drift). Fourteen agents: **gardener** and **session-reader** joined
+2026-11-25 (Bryce's Gardener role, PR #6451; the tool-use audit, `docs/notes/AGENT-ROLES-2026-11-25.md`);
 **pr-reviewer** joined 2026-11-24 (Bryce's `decision: A1` on PR #6377) to the eleven of 2026-11-03 (plan
 `docs/plans/2026-11-03-agent-surface-reset.md` §4.6): `bloat-auditor` folded
 into **code-hunter** (`focus: dead-code`), `agent-surface-reviewer` re-specced
@@ -25,6 +25,7 @@ as the cross-file **surface-reviewer**; earlier folds: `worktree-regression-chec
 | **session-reader** | The orchestrator's read of its worker sessions: `get_session` / `list_events` (the four read tools of claude-code-remote, nothing that sends or steers), saved pages digested by `session-transcript.mjs` (`--digest`, `--tally agents` for the lsp / grep / browser split per subagent type). Haiku; returns `SESSION` / `METHODS` rows. |
 | **finding-verifier** | Re-reads up to 15 `file:line — claim` rows on the current tree and returns `CONFIRMED / STALE / REFUTED / NEEDS-BROWSER` with evidence, then `refuted: k/N stale: k/N`. Run it before acting on any hunt, survey, review or audit finding; never fixes. A workflow's verifier schema carries `needsBrowser` so a renderer/HUD claim is reported, not refuted. |
 | **pr-reviewer** | Advisory read of ONE code PR (js/, css/, index.html, sw.js) before the ready flip (skill `steward` §Land): the diff, the linked issue's Done-when, the groups and specs `pick-tests.mjs` / `select-specs.mjs` route to it; returns ≤ 10 `FINDING` rows (`file:line — claim — why — test`), each `blocker-candidate` or `nit`, then `findings: n`. Read-only (`readonly-bash.sh`), sonnet; never edits, labels, comments on GitHub or starts a browser. Calibration: `docs/notes/PR-REVIEWER-CALIBRATION-2026-11-24.md`. |
+| **gardener** | Structure survey of ONE `js/` slice for skill `gardener` (copied helpers, coupling through `G`, a file doing many jobs), one per slice in parallel. Its `tools:` list leads with the apex-lsp tools and every JS-symbol number in its ≤ 12 `FINDING` rows cites the LSP query behind it; Grep only for text shapes; ends `tools used: lsp <n> · grep <m> · read <k>`. Read-only (`readonly-bash.sh`), sonnet; never a bug or perf hunt. |
 | **worker** | ONE scoped change handed off by the parent, in its own worktree (`isolation: worktree`), node-only verification, commits on its branch, coordinates mid-task with `SendMessage` (§Parent and child). The spawn prompt names goal, OWNED, FORBIDDEN, verify command, peers, and whether it pushes. No browser servers on its list; never merges, arms, readies or cancels. Ends with the fixed `WORKER <name>:` report. |
 
 **Token routing:** prefer these over attaching fat skills. Codebase search →
@@ -33,11 +34,12 @@ as the cross-file **surface-reviewer**; earlier folds: `worktree-regression-chec
 `verify-agent --base <ref>`. One circuit → `track-surveyor`. Stale prose →
 the `total-audit` workflow. Curvature / PACE semantics →
 `physics-contract-auditor`. A code PR before the ready flip →
-`pr-reviewer` (advisory). Fat skill / extract / dead code → `code-hunter`
+`pr-reviewer` (advisory). Structure debt in `js/` → `gardener` (parent: skill **gardener**). Fat skill / extract / dead code → `code-hunter`
 with `focus: dead-code` (parent applies via **slim-bloat**). A red Actions or
 Pages run → `ci-red-triage`. A hunt → `prior-art-scout`, then one
 `code-hunter` per slice, then `finding-verifier` on the rows before anyone
-fixes. A skill / agent / hook / rule / AGENTS.md edit → `surface-reviewer`
+fixes; the parent reports the verified rows as one `tracking` issue, never a
+docs PR (skill steward `references/labels.md` §Hunt and survey output). A skill / agent / hook / rule / AGENTS.md edit → `surface-reviewer`
 over the set of units it touches. A scoped implementation to hand off and talk
 to while it runs → `worker` (one per disjoint path set, named so peers can
 message it). The parent keeps the PR.
@@ -66,7 +68,7 @@ The brief's `SUBAGENTS:` line (skill `dispatcher` `references/orchestrator-brief
 | code hunter | `prior-art-scout`, one `code-hunter` per slice, then `finding-verifier` |
 | runtime hunter (drives the browser itself) | `prior-art-scout`, `code-hunter` for the code behind a repro, `finding-verifier` (a subagent never starts a browser) |
 | reviewer (merged set) | `finding-verifier` per batch, `code-hunter` for a regression trace |
-| gardener | `prior-art-scout`, `code-hunter` per slice (`focus: duplication` or `mess`), `finding-verifier` |
+| gardener | `prior-art-scout`, one `gardener` per `js/` slice (`code-hunter` for a non-JS slice; skill `gardener` SURVEY), `finding-verifier` |
 | surveyor | `track-surveyor` per circuit |
 | deploy-red fixer | `ci-red-triage`, `verify-agent --base <tip>` |
 | agent-surface editor | `surface-reviewer` over the touched units |

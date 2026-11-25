@@ -125,7 +125,8 @@ test("the phone pause card (#5153 gap 10) is keyed on the body's own density + s
   assert.match(overlays, new RegExp(PHONE + String.raw` #pausemenu #pm-quick-doors \{[^}]*--tray-cols: 5`));
   // The tile label steps down one notch (CI on ec39facd / 354334ed: MESSAGES 74 px in a 71 px text box in the
   // 852-wide windows with 59 px insets). A flat step: a container unit fit locally but not on CI's Chromium.
-  assert.match(overlays, new RegExp(PHONE + String.raw` #pausemenu #pm-quick-doors > details \{ font-size: calc\(var\(--fs-micro\) \* 0\.92\); \}`));
+  // The notch keeps a 12 painted px floor at a small UI SIZE (#6434): max() leaves 75 % and up exactly as it was.
+  assert.match(overlays, new RegExp(PHONE + String.raw` #pausemenu #pm-quick-doors > details \{ font-size: max\(calc\(var\(--fs-micro\) \* 0\.92\), var\(--fs-floor\)\); \}`));
   assert.doesNotMatch(overlays, /#pm-quick-doors[^{]*\{[^}]*container-type/, "no container unit decides the tray's type");
   // The race line never grows the doors' row.
   assert.match(overlays, new RegExp(PHONE + String.raw` #pm-race-context \{[^}]*max-height: var\(--pm-door\)`));
@@ -162,8 +163,8 @@ test("RESUME is the first door in the markup of every mode and is never taken ou
   }
   // A new reader of RESUME is a new way to lose it: name it here after reading what it does with the button.
   // The layout picker checks the Resume click to keep the pending race-camera request.
-  // The phone bridge (#6383) only lists it in TAP_OK and presses it, as a thumb does.
-  assert.deepEqual(refs.sort(), ["js/agent/apex-bridge.js", "js/camera/replay-buf.js", "js/game.js", "js/perf/bench-run.js", "js/ui/screen-regions.js"]);
+  // (The phone bridge presses it by id like any control since its tap became a deny-list, so it names it no more.)
+  assert.deepEqual(refs.sort(), ["js/camera/replay-buf.js", "js/game.js", "js/perf/bench-run.js", "js/ui/screen-regions.js"]);
   assert.match(fs.readFileSync(path.join(jsDir, "camera/replay-buf.js"), "utf8"), /const resume = document\.getElementById\("pm-resume"\);\s*if \(!resume \|\| !resume\.parentNode\) return;/, "replay-buf only uses RESUME as the anchor for its own tile");
   // No stylesheet positions, hides or collapses it: out of flow under a scroller's mask is how it vanished.
   for (const f of fs.readdirSync(path.join(ROOT, "css")).filter((n) => n.endsWith(".css"))) {

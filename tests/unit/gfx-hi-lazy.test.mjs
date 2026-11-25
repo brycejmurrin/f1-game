@@ -151,3 +151,22 @@ test("a temporarily shed extra is distinct from a disabled choice", () => {
   Q.setShed(0);
   assert.equal(Q.shedFeature("ssgi"), false);
 });
+
+test("the shed list (#6486 F3, __apex.perf().extrasShed and the panel note): only wanted extras, in SHED_ORDER", () => {
+  const { Q } = boot({ preset: "extreme", choices: { superSample: false } });
+  const shed = () => [...Q.SHED_ORDER].filter(Q.shedFeature);
+  assert.deepEqual(shed(), []);
+  Q.setShed(2);   // the last two of SHED_ORDER: ssgi, then superSample (turned off by choice: not shed)
+  assert.deepEqual(shed(), ["ssgi"]);
+  Q.setShed(Q.SHED_ORDER.length);
+  assert.deepEqual(shed(), [...Q.SHED_ORDER].filter(n => n !== "superSample" && Q.feature(n, false, true)));
+  Q.setShed(0);
+  assert.deepEqual(shed(), []);
+});
+
+test("the shed list on a phone: nothing to shed at detail 0", () => {
+  const { Q } = boot({ preset: "extreme", mobile: true });
+  Q.setShed(Q.SHED_ORDER.length);
+  assert.deepEqual([...Q.SHED_ORDER].filter(Q.shedFeature), []);
+  Q.setShed(0);
+});

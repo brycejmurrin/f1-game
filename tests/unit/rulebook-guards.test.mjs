@@ -55,7 +55,7 @@ const CANON = [
   // 2026-11-11 (decision 5, #5429): one reading of check-ins — event-driven, one fallback when the subscription is refused.
   ["no timers", /No timed\s+check-ins while it works/i, "AGENTS.md"],
   ["dirty ready flip", /ready flip\s+on a (?:dirty PR|CONFLICTING\/DIRTY head)\s+starts no CI/i, ".claude/skills/steward/SKILL.md"],
-  ["re-subscribe after ready", /call `subscribe_pr_activity` again/i, ".claude/skills/steward/SKILL.md"],
+  ["no re-subscribe at land", /`unsubscribe_pr_activity`, and end: no re-subscribe/i, ".claude/skills/steward/SKILL.md"],
   ["first claimant fixes", /the first claimant fixes, the rest wait/i, ".claude/skills/steward/SKILL.md"],
   ["memory-change line", /`memory-change: <reason>`/, ".github/pull_request_template.md"],
   // Rule 11's build-at-deploy half (Bryce 2026-10-28, "Build at deploy"; docs/notes/DEPLOY-TIME-GEN-2026-10-28.md).

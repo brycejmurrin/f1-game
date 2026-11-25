@@ -58,6 +58,10 @@ ridge line, and remember it is hidden by cloud as often as not.
 - The sector-2 esses are tight and tree-lined.
 - 100R and the Netz corner close the lap with a hairpin.
 
+## Turn numbering (#5652 survey, 2026-11-25)
+
+`turns[]` follows the 16-turn WEC/sim-guide numbering: T1 TGR, T2 right kink, T3 Coca-Cola, T4–T5 the 100R double apex, T6 ADVAN hairpin, T7 its left exit, T8 120R, T9 300R, T10–T12 the Dunlop chicane, T13 the off-camber right (30R), T14 the long left (45R), T15 the tight left (GR Supra, 25R) and T16 Panasonic. The built radii match the operator's radius names: Dunlop 15R is built at R15, GR Supra 25R at R21 and 30R at R37. The older list counted 100R three times, skipped 120R and 300R, and put a spare T13 on the 45R exit. Sources: [RaceControl LMU track guide](https://news.racecontrol.gg/tracks/le-mans-ultimate-fuji-speedway-track-guide/), [Fuji Speedway course guide](https://www.fsw.tv/guide/facility/racing.html), [Wikipedia corner list](https://en.wikipedia.org/wiki/Fuji_Speedway).
+
 ## 6. Modelling notes
 
 - Mount Fuji is the single most identifying object. It belongs on the WESTERN skyline as a large, low-frequency cone, snow-capped, never a generic ridge. Bearing 266.1 deg at 18.2 km, measured from the circuit (35.3714 N 138.9267 E) to the summit (35.3581 N 138.7311 E) — this brief said "north" for months and the scenery placed the cone at 321 deg to match. Registered as `fuji-mount-fuji` (`tests/data/landmarks/fuji.json`).
