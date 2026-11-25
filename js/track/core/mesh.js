@@ -206,7 +206,6 @@ const TrackMesh = (function () {
       // forward traversal like the rest of its dressing, and mirrored+shifted
       // 5 of its 6 land within 0.001 of the curated turn apexes (shift alone
       // moves two of them AWAY from their corners).
-      const dress = def._sceneryShift || 0;
       const mirror = def.reverse && def.sceneryLapMirror ? -1 : 1;
       const turns = (def.turns && def.turns.length) ? def.turns : null;
       const wrap01 = TrackSpace.wrap01;
@@ -242,7 +241,7 @@ const TrackMesh = (function () {
       const apexGap = (tf, f) => { const d = Math.abs(wrap01(tf) - f); return d > 0.5 ? 1 - d : d; };
       zones.forEach((z, i) => {
         if (centre[i] !== null) return;
-        const f = wrap01((z.frac || 0) * mirror + dress);
+        const f = wrap01((z.frac || 0) * mirror + TrackSpace.sceneryOriginDelta(def));
         centre[i] = f;
         if (!turns) return;
         if (Math.abs(ksm[Math.round(f * n) % n]) < BANK_STRAIGHT_K) { loose.push({ i, f }); return; }
