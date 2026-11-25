@@ -57,14 +57,23 @@ const HudLayout = (function () {
       strat: { x: -0.0003910213942059926, y: 27.819338888309076, s: 100.00001537409477 },
       inputs: { x: 74.12673609917152, y: -22.406435538592024, s: 70.76108399958467 },
     },
+    // Chase lanes (UI matrix 2026-11-25 row 2, 852×393 at UI 70 / BUTTON 143): SPEED beside the gearbox,
+    // ERS above both, OT and AERO side by side above ERS. The 11-20 seed put AERO on the speed digits.
     other: {
       tower: { x: 0, y: -5.4239903493137414e-15, s: 80 },
-      speed: { x: 9.474031690140844, y: 2.038273960983889, s: 100 },
-      energy: { x: 5.41006455399061, y: -11.279397823731712, s: 101.53846153846153 },
-      ot: { x: -5.247454576089348, y: -0.16698473282442747, s: 100 },
-      aero: { x: 19.800224960876363, y: 3.9042620865139805, s: 100 },
+      speed: { x: 10.04, y: -2.29, s: 100 },
+      energy: { x: 5.41, y: -14.25, s: 101.53846153846153 },
+      ot: { x: -7.5, y: -19.08, s: 100 },
+      aero: { x: 10.5, y: -19.08, s: 100 },
     },
   };
+  // Retired factory seeds: a stored entry still equal to one was never moved, so it takes today's seed.
+  const RETIRED_SEED = { other: {
+    speed: { x: 9.474031690140844, y: 2.038273960983889, s: 100 },
+    energy: { x: 5.41006455399061, y: -11.279397823731712, s: 101.53846153846153 },
+    ot: { x: -5.247454576089348, y: -0.16698473282442747, s: 100 },
+    aero: { x: 19.800224960876363, y: 3.9042620865139805, s: 100 },
+  } };
   const phoneStandard = () => typeof HudElements !== "undefined" && HudElements.phone?.() ? PHONE_STANDARD : null;
   const factorySet = (pn, sn) => (pn === "standard" && phoneStandard()?.[sn]) || {};
   /** A stored entry that is still the factory phone seed for its piece. */
@@ -203,7 +212,17 @@ const HudLayout = (function () {
   function stored() {
     const raw = store ? store.get(KEY, null) : null;
     if (draft && raw !== draftBase) draft = null;
-    return migrate(draft || (raw?.v === 4 ? raw : { v: 4, standard: phoneStandard() }));
+    return reseed(migrate(draft || (raw?.v === 4 ? raw : { v: 4, standard: phoneStandard() })));
+  }
+  function reseed(st) {
+    const ps = phoneStandard();
+    if (!ps) return st;
+    for (const sn of Object.keys(RETIRED_SEED)) {
+      const set = st.standard && st.standard[sn];
+      if (!set) continue;
+      for (const id of Object.keys(RETIRED_SEED[sn])) if (set[id] && ps[sn][id] && sameEl(set[id], normEl(RETIRED_SEED[sn][id]))) set[id] = normEl(ps[sn][id]);
+    }
+    return st;
   }
   /** The layout a style + set paints: stored, else shipped, for every element. Pure. */
   function effective(st, sn, pn) {

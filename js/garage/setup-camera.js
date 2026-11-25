@@ -195,6 +195,9 @@ function startDriveOut() {
 }
 // Wall ms of the drive-out still to play: stepDriveOut advances on the wall clock
 // (gap capped at 0.1 s), so a stalled frame delays it rather than skipping it.
+// Will a RACE! drive-out play (startDriveOut's gates)? The race-entry prewarm built an exterior nobody saw (hunt 2026-11-24 #3).
+const driveOutPlays = () => !G.headlessMode && GarageArrival.plays(GarageArrival.settings(G.store.get("garageArrival", null), "raceStart"), "raceStart") &&
+  !(typeof LoadingScreen !== "undefined" && LoadingScreen.isAutomation());
 function driveOutLeft() {
   return driveOut ? Math.max(0, GarageArrival.wallLeft(driveOut.cfg, "out", driveOut.t) * 1000 / driveOut.cfg.speed) : 0;
 }
@@ -1649,7 +1652,7 @@ return {
   get effDist() { return _spEffDist; },
   get effFit() { return _spEffFit; },
   get effPanel() { return _spEffPanel; },
-  prewarmExterior() { if (typeof prepareExterior === "function" && !driveOut && !(arrival.state && arrival.state.active)) prepareExterior(garageCtx(true), null, true); },   // never re-picks a playing sequence
+  prewarmExterior() { if (typeof prepareExterior === "function" && !driveOut && !(arrival.state && arrival.state.active) && driveOutPlays()) prepareExterior(garageCtx(true), null, true); },   // never re-picks a playing sequence
   exteriorState: () => exterior ? Object.assign(exterior.state(), { visible: exteriorDrawn }) : { status: exteriorBoot ? "loading" : "idle", visible: false },
   // GaragePrebuild (js/garage/prebuild.js): the setup garage's car and room,
   // built ahead of the GARAGE tap — keyed exactly as the first garage frame keys them.

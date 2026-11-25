@@ -20,9 +20,7 @@ const MenuQuitTail = (function () {
       try { d.DebrisWorld.reset(); } catch (_) { /* module absent */ }
       try { delete document.documentElement.dataset.team; } catch (_) { /* no DOM */ }
       d.season = d.SeasonCal.load();
-      const hasSeason = d.SeasonCal.hasProgress(d.season) && d.season.round < d.SeasonCal.rounds();
-      d.$("mb-standings").hidden = !hasSeason;
-      d.refreshCareerButton();
+      d.refreshCareerButton();   // TitleMenu.refresh repaints #mb-standings from it
     });
     d.CustomTracks.consumeTrackHash();
     if (/[#&]vs=/.test(location.hash)) d.ensureNet().then((ok) => { if (ok) d.netLobby.openFromUrl(); });

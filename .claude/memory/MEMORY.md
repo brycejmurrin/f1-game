@@ -3,10 +3,9 @@
 Claude Code auto memory for this repo: one line per memory linking its topic file, detail in the topic file. User
 preferences and corrections only — a measured fact belongs in the doc that uses it or a `docs/notes/` note with a
 `Re-measure-by:` line, a rule in a hook or test, a decision in `docs/DECISIONS.md` (`D-NNN`). Coordination rules live
-in AGENTS.md §Coordination; do not restate them here. The tracked copy is the only store: `session-start.sh` restores
-it into the live memory dir one way (repo wins), and an edit is committed like any doc edit
-(docs/notes/AGENT-MEMORY.md). An entry that contradicts the current code or AGENTS.md is stale: fix or delete it, do
-not follow it. Hosts: `npm run memory:list` / `memory:show` / `memory:retire`.
+in AGENTS.md §Coordination. The tracked copy is the only store: `session-start.sh` restores it into the live memory
+dir one way (repo wins); an edit is committed like any doc edit (docs/notes/AGENT-MEMORY.md). An entry that
+contradicts the current code or AGENTS.md is stale: fix or delete it. Hosts: `npm run memory:list` / `memory:show` / `memory:retire`.
 - [Small steps for API analysis](small-steps-for-api-analysis.md) — prefer small incremental queries over bulk fetch scripts
 - [One subagent per skill](one-subagent-per-skill.md) — skill reviews, tests and walkthroughs: one reviewer per skill
 - [Survey then fix](survey-then-fix.md) — after an audit, land the ranked gap list the same session; the user asks "fix all of those"
@@ -23,3 +22,4 @@ not follow it. Hosts: `npm run memory:list` / `memory:show` / `memory:retire`.
 - [Phone checks via Claude Link](phone-checks-via-claude-link.md) — run every device check over the phone bridge, batched into ONE hands-off `drive` window per wave; the orchestrator drives, reads state and posts the results
 - [Ask Bryce with AskUserQuestion](orchestrator-questions-via-tool.md) — orchestrator: anything you need from him goes through the AskUserQuestion tool, not a question buried in prose
 - [Launch independent of the merge queue](launch-independent-of-merge-queue.md) — hunters/reviewers/research launch any time; workers wait only on a real code dependency, fix workers also while 10+ PRs are ready+land
+- [Orchestrator standing routines](orchestrator-routines.md) — FULL cycle hourly at :19, LIGHT PR follow-up at :49, self-bound scheduled tasks; a successor re-creates them and disables the old ones

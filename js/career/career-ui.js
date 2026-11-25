@@ -1830,6 +1830,7 @@ function create(G) {
     // are choosing another one), so the "no career yet" branch below would never
     // be reached and NEW CAREER would silently go racing instead.
     if (!Career.active()) {
+      if (!draft) return;   // #cr-go is hidden on the slot picker (no draft yet); a click by id there threw on draft.flavour (F3)
       const errs = draftErrors(draft);
       if (Object.keys(errs).length) {
         draftFieldErr = errs;

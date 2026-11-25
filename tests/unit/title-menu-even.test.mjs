@@ -471,7 +471,7 @@ test("title refresh counts saves without cloning them and skips unchanged door t
   const ctx = vm.createContext({
     Log: { info() {} },
     Teams: { LIST: [{ id: "ferrari", name: "Ferrari" }] },
-    Tracks: { SEASON: [{ name: "MONZA" }] },
+    Tracks: { SEASON: [{ name: "MONZA" }] }, SeasonCal: { hasProgress: () => false, rounds: () => 24 },
     Career: {
       data: () => careerRow,
       load: () => { loadCalls++; throw new Error("refresh must not Career.load()"); },
@@ -529,7 +529,7 @@ test("Daily history populates the Saves and Data blueprint, keeps classes separa
     "2026-10-29": { best: 72 }, "2026-02-30": { best: 50 }, bad: { best: 20 }, "2026-10-28": 42 } };
   const before = structuredClone(data);
   const sandbox = vm.createContext({ document: dom.document, Log: { info() {} }, Career: { data: () => null },
-    Tracks: { SEASON: [] }, Teams: { LIST: [] } });
+    Tracks: { SEASON: [] }, Teams: { LIST: [] }, SeasonCal: { hasProgress: () => false, rounds: () => 24 } });
   vm.runInContext(read("js/ui/title-menu.js"), sandbox, { filename: absSrc("js/ui/title-menu.js") });
   const api = vm.runInContext("TitleMenu", sandbox).create({ $: dom.byId, store: {}, daily: { data: () => data,
     plan: () => ({ trackName: "Monza", weather: "dry" }) }, openTimeTrialPicker() {} });
@@ -565,7 +565,7 @@ test("the DAILY door repaints across a foreground midnight and after a hidden da
     setTimeout(fn, delay) { assert.equal(pending, null); pending = {fn, delay}; return 1; },
     clearTimeout() { pending = null; },
   };
-  const ctx = vm.createContext({ document: doc, Date: ClockDate, Log: { info() {} }, Career: { data: () => null }, Tracks: { SEASON: [] } });
+  const ctx = vm.createContext({ document: doc, Date: ClockDate, Log: { info() {} }, Career: { data: () => null }, Tracks: { SEASON: [] }, SeasonCal: { hasProgress: () => false, rounds: () => 24 } });
   vm.runInContext(read("js/ui/title-menu.js"), ctx, { filename: absSrc("js/ui/title-menu.js") });
   const api = vm.runInContext("TitleMenu.create", ctx)({
     $: (id) => nodes[id] || null, store: { raw: () => null },

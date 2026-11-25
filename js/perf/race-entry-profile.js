@@ -76,14 +76,14 @@ const RaceEntryProfile = (() => {
     marks.push({ n, t: +(now() - winT0).toFixed(2) });
   }
 
+  // `ms` is the whole task, `overlapMs` its part in the window, which blockMs sums (hunt 2026-11-24 #6: the clip
+  // to winT0 read maxBlockMs 147-237 ms vs 246-306 ms observed).
   function recordLongTasks(entries) {
     if (!armed) return;
     for (const e of entries) {
-      const start = Math.max(winT0, e.startTime);
-      // Only tasks that overlap this window (observer may be buffered).
-      const ms = e.startTime + e.duration - start;
-      if (ms <= 0) continue;
-      appendTask(start, ms, e.name || "unknown");
+      const overlap = e.startTime + e.duration - Math.max(winT0, e.startTime);
+      if (overlap <= 0) continue;   // ended before the window (a buffered entry)
+      appendTask(e.startTime, e.duration, e.name || "unknown", overlap);
     }
   }
 
@@ -429,11 +429,11 @@ const RaceEntryProfile = (() => {
     return request;
   }
 
-  function appendTask(start, ms, name) {
-    blockMs += ms;
+  function appendTask(start, ms, name, inside = ms) {
+    blockMs += inside;
     maxBlockMs = Math.max(maxBlockMs, ms);
     if (longTasks.length < MAX_TASKS) {
-      longTasks.push({ start: +start.toFixed(2), ms: +ms.toFixed(2), name });
+      longTasks.push({ start: +start.toFixed(2), ms: +ms.toFixed(2), overlapMs: +inside.toFixed(2), name });
     }
   }
 
