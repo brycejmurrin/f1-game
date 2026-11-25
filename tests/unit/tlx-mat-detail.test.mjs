@@ -264,6 +264,35 @@ test("Silverstone surface pilot builds in both shader languages and resets when 
   }
 });
 
+test("#6509 closeLayers / wearMask: absent = today's program; on = one branch lit only by setTrackWear", async () => {
+  for (const lang of ["wgsl", "glsl"]) {
+    const off = await build({}, lang);
+    const none = await build({ closeLayers: false, wearMask: false }, lang);
+    assert.equal(none.fs, off.fs, "both flags false = today's program, byte for byte");
+    assert.equal(off.lit.uniforms.surfOn, undefined);
+    let called = 0;
+    assert.equal(off.lit.setTrackWear(() => { called++; return null; }), false);
+    assert.equal(called, 0, "no branch compiled in: the strip is never built");
+    for (const flags of [{ closeLayers: true }, { wearMask: true }, { closeLayers: true, wearMask: true }]) {
+      const on = await build(flags, lang);
+      assert.notEqual(on.fs, off.fs, JSON.stringify(flags));
+      const { uniforms, setTrackWear } = on.lit;
+      assert.equal(uniforms.surfOn.value, 0, "starts off until a circuit opts in");
+      const data = new Uint8Array(2048 * 4).fill(128);
+      assert.equal(setTrackWear(() => ({ data, width: 2048, length: 5793 })), true);
+      assert.equal(uniforms.surfOn.value, 1);
+      assert.equal(uniforms.surfLen.value, 5793);
+      assert.equal(setTrackWear(null), false, "a circuit without surfaceDetail");
+      assert.equal(uniforms.surfOn.value, 0);
+      assert.equal(setTrackWear(() => ({ data: new Uint8Array(4), width: 1, length: 1 })), false, "wrong size is refused");
+      assert.equal(uniforms.surfOn.value, 0);
+    }
+    const both = await build({ closeLayers: true, wearMask: true }, lang);
+    const kerbOnly = await build({ closeLayers: true }, lang);
+    assert.notEqual(both.fs, kerbOnly.fs, "wearMask adds its own terms");
+  }
+});
+
 test("garage box projection builds on WebGPU using the existing cube taps", async () => {
   const ordinary = await build({}, "wgsl");
   const garage = await build({ garageProbeRequested: true }, "wgsl");

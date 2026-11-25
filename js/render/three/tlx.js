@@ -1942,6 +1942,8 @@ const TLX = (function () {
             envCube: envRT ? envRT.texture : null, matMaps, lampGrid, garageProbeRequested,
             brakeSpill: !isMobile && _gfxx("brakeLightSpill"),
             sharedUniforms: _sharedUniforms, circuitSurfaces: !isMobile && _gfxx("circuitSurfaces"),
+            // #6509 (FEATURES level 1: desktop ULTRA / EXTREME; phones never): close-up kerb/aggregate/paint, wear mask.
+            closeLayers: !isMobile && _gfxx("closeLayers"), wearMask: !isMobile && _gfxx("wearMask"),
             // EXTREME lightsHi: 128 slots on three's WebGPU backend only (LightBudget.tlxSlots).
             maxLights: _liteGpu ? LightBudget.LITE : LightBudget.tlxSlots(isWebGPU()) };
           // EXTREME material detail / env-everywhere (tsl-lit.js MAT_DETAIL, ENV_ALL): desktop WebGPU only; a
@@ -5557,6 +5559,9 @@ const TLX = (function () {
         },
 
         // resources
+        // #6509: tracks.js hands each built circuit's wear-strip thunk (null = none); the lit program runs it only
+        // when closeLayers / wearMask compiled the branch in. A value on every backend that has it; GLX/WGX lack it.
+        setTrackWear(make) { return !!(lit && lit.setTrackWear && lit.setTrackWear(make)); },
         chunkedTrackCoords: false, // chunked TSL variant deliberately omits road `trk` / markings
         // MUST be an explicit value, not an absence: game.js installs backends
         // by descriptor-copy onto GLX, so a missing name would inherit GLX's.

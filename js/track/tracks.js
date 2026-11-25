@@ -343,6 +343,7 @@ const Tracks = (function () {
         Log.warn("track", `${def.id}/${name} skipped: ${result.reason}`);
         return { pos: [], nrm: [], col: [], idx: [], mat: [] };
       };
+      if (G.setTrackWear) G.setTrackWear(def.surfaceDetail && track.line ? () => TrackLine.wearMask(track) : null);   // #6509: a thunk, built only if the lit program wants it
       const floorGeo = safe("floor", buildFloor(track)); lap("floor", "geo"); yield track; _t = _now();
       // farTerrain uploads the floor after the props (X.floor: its hills keep clear of them); today's slot otherwise.
       if (!(X && X.far)) track.meshes.floor = G.createMesh(floorGeo);

@@ -639,6 +639,35 @@ const TrackLine = (function () {
 
   function wrapS(L, s) { s %= L; if (s < 0) s += L; return s; }
 
+  // WEAR MASK (#6509 item 2): the lap as a W-texel RGBA8 strip along s for the road shader's rubbered-in line
+  // (tsl-lit.js WEAR). R = the racing line's lateral offset, (x + 16) / 32; G = rubber, 0.55 on a straight
+  // rising to 1 in a corner window (lineW); B = braking, ramping up to each corner's turn-in from a zone that
+  // lengthens with its curvature, held to the apex; A = the road half-width / 20 (the kerb's inner edge).
+  // RENDER-ONLY: a texture tap in the fragment shader; nothing here may feed grip (AGENTS.md §Physics).
+  function wearMask(track, W = 2048) {
+    const out = new Uint8Array(W * 4), n = track.n, L = track.total, ln = track.line;
+    if (!ln || !(n > 0) || !(L > 0)) return null;
+    const brake = new Float32Array(W);
+    for (const c of track.lineCorners || []) {
+      const sev = clamp(Math.abs(c.k) * 25, 0, 1), len = 40 + 120 * sev;
+      const run = wrapS(L, c.sApex - c.s0) + len;
+      for (let d = 0; d <= run; d += L / W) {
+        const t = wrapS(L, c.s0 - len + d), j = Math.floor(t / L * W) % W;
+        const v = sev * (d < len ? d / len : 1);
+        if (v > brake[j]) brake[j] = v;
+      }
+    }
+    const b8 = (v) => Math.round(clamp(v, 0, 1) * 255);
+    for (let j = 0; j < W; j++) {
+      const fi = (j + 0.5) / W * n, i = Math.floor(fi) % n, k = (i + 1) % n, f = fi - Math.floor(fi);
+      out[j * 4] = b8((lerp(ln[i], ln[k], f) + 16) / 32);
+      out[j * 4 + 1] = b8(0.55 + 0.45 * lerp(track.lineW[i], track.lineW[k], f));
+      out[j * 4 + 2] = b8(brake[j]);
+      out[j * 4 + 3] = b8(lerp(track.hw[i], track.hw[k], f) / 20);
+    }
+    return { data: out, width: W, length: L };
+  }
+
   const _out = { x: 0, w: 0 };
   _out.w = 0.5; _out.w = 0;   // born a Double field: a 0 literal is a Smi, and the first fractional lineW split the map mid-race (PERF-HUNT-5)
   // O(1) index + lerp, same math as TrackSpline.curvature. Returns a shared object.
@@ -662,6 +691,6 @@ const TrackLine = (function () {
     return _out;
   }
 
-  return { bake, at, attackAt, pathK, lineCurvature, K_ON, MARGIN, PATH_FLOOR, SLOPE_MAX };
+  return { bake, at, attackAt, pathK, lineCurvature, wearMask, K_ON, MARGIN, PATH_FLOOR, SLOPE_MAX };
 })();
 Object.freeze(TrackLine);
