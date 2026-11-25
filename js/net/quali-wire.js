@@ -55,18 +55,19 @@ const QualiWire = (function () {
     // two phases hold different truths about who a connection speaks for.
     // Rate limiting lives in the caller (lobby / bindSession) via rateGate so
     // QUALI and QLIVE share one window per connection (#1414).
-    function bindQuali(s, ownsDriver, G, onAccepted) {
+    // `sink` is game.js's qualiNet (onPeerQuali / onPeerQualiLive), handed in by the caller.
+    function bindQuali(s, ownsDriver, sink, onAccepted) {
       s.onEvent(EV.QUALI, (d) => {
         const q = validQuali(d);
         if (q && ownsDriver(q)) {
-          if (G.onPeerQuali) G.onPeerQuali(q);
+          if (sink && sink.onPeerQuali) sink.onPeerQuali(q);
           if (onAccepted) onAccepted(EV.QUALI, q);
         }
       });
       s.onEvent(EV.QLIVE, (d) => {
         const q = validQualiLive(d);
         if (q && ownsDriver(q)) {
-          if (G.onPeerQualiLive) G.onPeerQualiLive(q);
+          if (sink && sink.onPeerQualiLive) sink.onPeerQualiLive(q);
           if (onAccepted) onAccepted(EV.QLIVE, q);
         }
       });

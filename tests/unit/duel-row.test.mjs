@@ -84,10 +84,10 @@ test("room setup hides the solo Duel picker and preserves the selection on retur
   const row = g.sandbox.document.getElementById("rs-duel");
   try {
     choose("senna");
-    g.G.setNetRoom(true);
+    g.made.RaceSettings.setNetRoom(true);
     g.G.openRaceSettings("select");
     assert.equal(row.hidden, true);
-    g.G.setNetRoom(false);
+    g.made.RaceSettings.setNetRoom(false);
     g.G.openRaceSettings("select");
     assert.equal(row.hidden, false);
     assert.equal(g.G.duel, true);

@@ -200,11 +200,11 @@ test("cross-file entries: X.fn(ctx) hand-offs are followed without widening the 
     assert.equal(!!byFile.get(rel)?.some(e => e.fn === "collect" && e.argIndex === 1), ownsCollect, rel);
   }
   const want = ["ApexCam.hooks#0", "ApexTrack.hooks#0", "ApexLobby.hooks#0", "ApexNet.hooks#0",
-    "TvGraphics.create#0", "QualiWire.bindQuali#2", "SettingsExportBody.collect#1"];
+    "TvGraphics.create#0", "SettingsExportBody.collect#1"];   // QualiWire.bindQuali takes qualiNet, not G, since #6496
   assert.deepEqual(want.filter((w) => rows.indexOf(w) < 0), [], "not a scanned ctx entry — its G use is unchecked");
   assert.ok(rows.length > 30, `only ${rows.length} cross-file entries found`);   // actual 34 (2026-11-20)
   const files = usageFiles();
-  assert.deepEqual(["js/race/tv-graphics.js", "js/race/cooldown-lap.js", "js/net/quali-wire.js"]
+  assert.deepEqual(["js/race/tv-graphics.js", "js/race/cooldown-lap.js"]
     .filter((rel) => files.indexOf(rel) < 0), [], "these receive G and must be under the usage check");
   // The GameModuleFactory roster stays create-only: TvGraphics is reached through
   // Reflect.apply and is an entry, not a declared factory.

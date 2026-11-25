@@ -84,12 +84,12 @@ test("lightning strikes in a storm, and never flashes under REDUCED MOTION", asy
 
 test("a friend room keeps a storm staged: the lobby accepts it", () => {
   g.G.raceWeather = "storm";
-  g.G.setNetRoom(true);
+  g.made.RaceSettings.setNetRoom(true);
   try {
     assert.equal(g.G.raceWeather, "storm", "setNetRoom no longer coerces a solo STORM pick");
     g.G.openRaceSettings("select");
     assert.equal(g.G.raceWeather, "storm", "the room's sheet keeps storm");
-  } finally { g.G.setNetRoom(false); }
+  } finally { g.made.RaceSettings.setNetRoom(false); }
 });
 
 test("MIXED: the sheet's FORECAST line shows the plan the green arms, and STABLE hides it", async () => {
