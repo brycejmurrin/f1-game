@@ -14,23 +14,85 @@ const InputPadMenu = (function () {
     const PAD_NAV_REPEAT_MS = 130;  // interval between repeats while held
     const PAD_NAV_KEYS = { up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight" };
     let focusRoot = null;
+    let frameDoc = null;            // a lesson frame's document wearing the ring too
 
     // Synthetic arrows move DOM focus, but Safari can keep touch modality
     // and suppress :focus-visible. Arm the existing pad ring on actual input.
     function showGamepadFocus() {
-      if (focusRoot || !document.documentElement || !window.MenuNav?.activeLayer()) return;
-      focusRoot = document.documentElement;
-      focusRoot.dataset.gamepadNav = "on";
-      document.addEventListener("pointerdown", clearGamepadFocus, true);
-      window.addEventListener("keydown", clearGamepadFocus, true);
+      if (!document.documentElement || !window.MenuNav?.activeLayer()) return;
+      if (!focusRoot) {
+        focusRoot = document.documentElement;
+        focusRoot.dataset.gamepadNav = "on";
+        document.addEventListener("pointerdown", clearGamepadFocus, true);
+        window.addEventListener("keydown", clearGamepadFocus, true);
+      }
+      // A touch or key inside a lesson frame never reaches the parent's listeners.
+      const doc = padFrameScope()?.doc || null;
+      if (doc === frameDoc) return;
+      clearFrameRing();
+      if (!doc?.documentElement) return;
+      frameDoc = doc;
+      doc.documentElement.dataset.gamepadNav = "on";
+      doc.addEventListener("pointerdown", clearGamepadFocus, true);
+      doc.addEventListener("keydown", clearGamepadFocus, true);
+    }
+
+    function clearFrameRing() {
+      if (!frameDoc) return;
+      try {
+        delete frameDoc.documentElement.dataset.gamepadNav;
+        frameDoc.removeEventListener("pointerdown", clearGamepadFocus, true);
+        frameDoc.removeEventListener("keydown", clearGamepadFocus, true);
+      } catch (_) { /* the lesson already unloaded */ }
+      frameDoc = null;
     }
 
     function clearGamepadFocus(event) {
-      if (!focusRoot || event?.isTrusted === false) return;
+      if (event?.isTrusted === false) return;
+      clearFrameRing();
+      if (!focusRoot) return;
       delete focusRoot.dataset.gamepadNav;
       focusRoot = null;
       document.removeEventListener("pointerdown", clearGamepadFocus, true);
       window.removeEventListener("keydown", clearGamepadFocus, true);
+    }
+
+    /* A LESSON FRAME OWNS THE PAD. Learn's labs are same-origin iframes
+       (iframe[data-pad-scope], js/ui/learn-door.js); a synthetic arrow sent to
+       the parent only reached its Back button (#6275). While one is showing in
+       the active layer, directions and confirm walk the frame's own controls in
+       document order; B still goes to the layer, whose Back leaves the lesson. */
+    const FRAME_FOCUSABLE = "button, input:not([type=hidden]), select, textarea, summary, a[href], [tabindex]:not([tabindex='-1'])";
+    function padFrameScope() {
+      const layer = window.MenuNav?.activeLayer();
+      const frame = layer?.querySelector?.("iframe[data-pad-scope]:not([hidden])");
+      if (!frame) return null;
+      let doc = null;
+      try { doc = frame.contentDocument; } catch (_) { /* cross-origin: not ours to walk */ }
+      // A frame still loading (or with nothing to walk) leaves the parent in charge.
+      const list = doc?.body ? frameControls(doc) : [];
+      return list.length ? { frame, doc, list } : null;
+    }
+    function frameControls(doc) {
+      return Array.from(doc.querySelectorAll(FRAME_FOCUSABLE)).filter((el) => !el.disabled &&
+        el.getClientRects().length > 0 && !el.closest?.("[inert], [aria-hidden='true']"));
+    }
+    function frameFocused(scope) {
+      const el = scope.doc.activeElement;
+      return el && scope.list.includes(el) ? el : null;
+    }
+    function frameFocus(scope, el) {
+      scope.frame.focus?.({ preventScroll: true });
+      el.focus({ preventScroll: true });
+      el.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    }
+    function padFrameNav(scope, dir) {
+      const { list } = scope;
+      const cur = frameFocused(scope);
+      if (cur && padStepValue(cur, dir)) return;
+      const step = dir === "up" || dir === "left" ? -1 : 1;
+      const i = cur ? Math.max(0, Math.min(list.length - 1, list.indexOf(cur) + step)) : 0;
+      frameFocus(scope, list[i]);
     }
 
     // Dispatch a synthetic keydown at `document` (not `window`) — measured: an
@@ -68,58 +130,66 @@ const InputPadMenu = (function () {
     // the ordinary row move they are for the keyboard too.
     function padNavKey(dir, physical = false) {
       if (physical) showGamepadFocus();
+      const scope = padFrameScope();
+      if (scope) { padFrameNav(scope, dir); return; }
       const el = window.MenuNav ? padFocusableInLayer() : document.activeElement;
       const key = PAD_NAV_KEYS[dir];
       const horizontal = dir === "left" || dir === "right";
-      if (el && !el.disabled) {
-        const t = el.tagName;
-        const ty = t === "INPUT" ? String(el.type || "text").toLowerCase() : "";
-        if (t === "SELECT" && horizontal) {
-          if (el._srLive) { padDispatchKey(key); return; }
-          const opts = el.options || [];
-          const n = opts.length;
-          const d = dir === "right" ? 1 : -1;
-          let j = el.selectedIndex;
-          // Match the row chevrons: wrap and skip sentinels such as CUSTOM,
-          // which describe a slider-made state but are deliberately unpickable.
-          // Assigning selectedIndex directly does not honour `option.disabled`.
-          for (let seen = 0; seen < n; seen++) {
-            const k = j + d;
-            j = ((k % n) + n) % n;
-            if (!opts[j].disabled) break;
-          }
-          if (n && j !== el.selectedIndex && !opts[j].disabled) {
-            el.selectedIndex = j;
-            el.dispatchEvent(new Event("input", { bubbles: true }));
-            el.dispatchEvent(new Event("change", { bubbles: true }));
-          }
-          return;
+      if (el && horizontal && el.tagName === "SELECT" && el._srLive) { padDispatchKey(key); return; }
+      if (!padStepValue(el, dir)) padDispatchKey(key);
+    }
+
+    // Left/Right on a <select> or a range/number steps its value and fires
+    // input/change in the control's own realm; true when it handled the press.
+    function padStepValue(el, dir) {
+      if (!el || el.disabled || (dir !== "left" && dir !== "right")) return false;
+      const Ev = el.ownerDocument?.defaultView?.Event || Event;
+      const t = el.tagName;
+      const ty = t === "INPUT" ? String(el.type || "text").toLowerCase() : "";
+      if (t === "SELECT") {
+        const opts = el.options || [];
+        const n = opts.length;
+        const d = dir === "right" ? 1 : -1;
+        let j = el.selectedIndex;
+        // Match the row chevrons: wrap and skip sentinels such as CUSTOM,
+        // which describe a slider-made state but are deliberately unpickable.
+        // Assigning selectedIndex directly does not honour `option.disabled`.
+        for (let seen = 0; seen < n; seen++) {
+          const k = j + d;
+          j = ((k % n) + n) % n;
+          if (!opts[j].disabled) break;
         }
-        if (t === "INPUT" && (ty === "range" || ty === "number") && horizontal) {
-          const step = parseFloat(el.step) || 1;
-          const min = el.min === "" ? -Infinity : parseFloat(el.min), max = el.max === "" ? Infinity : parseFloat(el.max);
-          // ONE PRESS IS A VISIBLE MOVE. UI / HUD / BUTTON SIZE step 0.25 over a
-          // 130–260 span: stepping by `step` took 400–1040 D-pad presses. A pad
-          // press covers ~1/40 of a bounded range (or the slider's own
-          // data-pad-step), snapped to the step grid; never less than `step`.
-          const ds = parseFloat(el.dataset && el.dataset.padStep);
-          const span = max - min;
-          const coarse = ds > 0 ? ds : (isFinite(span) && span > 0 ? span / 40 : step);
-          const padStep = Math.max(step, Math.round(coarse / step) * step);
-          const dec = Math.min(6, (String(el.step).split(".")[1] || "").length);
-          const base = isFinite(min) ? min : 0;
-          let v = (parseFloat(el.value) || 0) + (dir === "right" ? padStep : -padStep);
-          v = +(base + Math.round((v - base) / step) * step).toFixed(dec);
-          v = Math.max(min, Math.min(max, v));
-          if (String(v) !== String(el.value)) {
-            el.value = String(v);
-            el.dispatchEvent(new Event("input", { bubbles: true }));
-            el.dispatchEvent(new Event("change", { bubbles: true }));
-          }
-          return;
+        if (n && j !== el.selectedIndex && !opts[j].disabled) {
+          el.selectedIndex = j;
+          el.dispatchEvent(new Ev("input", { bubbles: true }));
+          el.dispatchEvent(new Ev("change", { bubbles: true }));
         }
+        return true;
       }
-      padDispatchKey(key);
+      if (t === "INPUT" && (ty === "range" || ty === "number")) {
+        const step = parseFloat(el.step) || 1;
+        const min = el.min === "" ? -Infinity : parseFloat(el.min), max = el.max === "" ? Infinity : parseFloat(el.max);
+        // ONE PRESS IS A VISIBLE MOVE. UI / HUD / BUTTON SIZE step 0.25 over a
+        // 130–260 span: stepping by `step` took 400–1040 D-pad presses. A pad
+        // press covers ~1/40 of a bounded range (or the slider's own
+        // data-pad-step), snapped to the step grid; never less than `step`.
+        const ds = parseFloat(el.dataset && el.dataset.padStep);
+        const span = max - min;
+        const coarse = ds > 0 ? ds : (isFinite(span) && span > 0 ? span / 40 : step);
+        const padStep = Math.max(step, Math.round(coarse / step) * step);
+        const dec = Math.min(6, (String(el.step).split(".")[1] || "").length);
+        const base = isFinite(min) ? min : 0;
+        let v = (parseFloat(el.value) || 0) + (dir === "right" ? padStep : -padStep);
+        v = +(base + Math.round((v - base) / step) * step).toFixed(dec);
+        v = Math.max(min, Math.min(max, v));
+        if (String(v) !== String(el.value)) {
+          el.value = String(v);
+          el.dispatchEvent(new Ev("input", { bubbles: true }));
+          el.dispatchEvent(new Ev("change", { bubbles: true }));
+        }
+        return true;
+      }
+      return false;
     }
 
     function padNavDirOf(pad, dpadOnly) {
@@ -187,6 +257,7 @@ const InputPadMenu = (function () {
     function padSeedFocus() {
       if (!window.MenuNav || !window.MenuNav.activeLayer()) return;
       if (padFocusableInLayer()) return;
+      if (padFrameScope()) return;   // a lesson is open: the first press enters it
       padDispatchKey("ArrowDown");
     }
 
@@ -201,6 +272,16 @@ const InputPadMenu = (function () {
     // A as much as to a direction — and to the menu-open seed in padNavPoll.
     // `guard(el)` true = refuse this control (the phone's SELECT on a destructive one).
     function padActivate(guard) {
+      const scope = padFrameScope();
+      if (scope) {
+        const el = frameFocused(scope);
+        if (!el) { frameFocus(scope, scope.list[0]); return; }
+        if (typeof guard === "function" && guard(el)) return false;
+        const ty = (el.type || "").toLowerCase();
+        if (el.tagName === "INPUT" && (ty === "range" || ty === "number")) return;
+        el.click();
+        return;
+      }
       const focused = padFocusableInLayer();
       if (focused) {
         if (typeof guard === "function" && guard(focused)) return false;
@@ -293,7 +374,7 @@ const InputPadMenu = (function () {
 
     function remoteNav(dir) {
       if (!(window.MenuNav && window.MenuNav.activeLayer())) return;   // no menu on top: nothing to move
-      if (!padFocusableInLayer()) { padSeedFocus(); return; }
+      if (!padFocusableInLayer() && !padFrameScope()) { padSeedFocus(); return; }
       padNavKey(dir);
     }
     function reset() {

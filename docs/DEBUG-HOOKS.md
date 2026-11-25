@@ -705,7 +705,7 @@ In-game the same values live behind PAUSE → SETTINGS → **CAMERA TUNER**: a c
 per camera mode (which also switches the live camera) plus a slider per knob,
 comfort rows, THIS CAM / ALL CAMS scope, presets, copy-from, and IMPORT.
 
-### `freeCam(opts) → {open, eye, target, fov, roll, lens, speed, corner, anchor, poseErr} | false`
+### `freeCam(opts) → {open, eye, target, fov, roll, lens, speed, corner, anchor, poseErr, pov} | false`
 Drives the player-facing **FREE CAMERA** panel (the flyby editor's sub-mode:
 PAUSE → SETTINGS → DISPLAY → ADVANCED VISUALS → FLYBY SHOT EDITOR → FREE CAMERA,
 where SET SHOT START / END write the view into the selected shot and DONE returns
@@ -723,6 +723,7 @@ measured corners).
 | `freeCam({ roll, lens, speed })` | `roll` in degrees, clamped to ±45 (Q/E in the panel); `lens:"flyby"` renders through `FlybySeq.FAR/FOG/NEAR` (`dbgCam.cine`), `"race"` the photo-mode far plane and full fog; `speed` 5–200 m/s |
 | `freeCam({ snap: "car" })` | behind the player's car, along its heading |
 | `freeCam({ snap: "corner", n })` | corner `n` (1-based, wraps) seen from its outside, just before the apex; no `n` steps to the next |
+| `freeCam({ pov: "helmet" \| "cockpit" \| null })` | Photo Studio's driver's-eye seats: marks `dbgCam.onboard`, so render() solves the race rig's own HELMET / COCKPIT eye each frame and draws the cockpit rig; `fov` stays the free camera's. Fly or look input, a placement or a snap leaves the seat from the driver's eye; `state().pov` reads it |
 | `freeCam(false)` | close: the game camera comes back, level, race lens (and the settings page, if paused) |
 
 The panel's COPY VIEW writes the `__apex.view({eye,target,fov})` line for this

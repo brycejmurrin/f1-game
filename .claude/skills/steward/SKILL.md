@@ -86,7 +86,9 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    at its `timeout-minutes` cap with zero failures is a real red. Verdict table: [`references/ci-verdicts.md`](references/ci-verdicts.md).
 2. Agent `ci-red-triage` names the job, test and assertion; its `base:` line says whose it is.
 3. **A red you did not cause is someone else's first.** `node tools/ci/pr-board.mjs --json` (open PRs: heads, state,
-   failing jobs, owner), the Board issue and the `deploy:red` label: the first claimant fixes, the rest wait. A red
+   failing jobs, owner), the Board issue and the `deploy:red` label: the first claimant fixes, the rest wait. Read
+   the Board's newest `tip-red:` bulletin first ([orchestrator brief](../dispatcher/references/orchestrator-brief.md)
+   §While workers run): with a fixing PR named, copy none of its change; wait for it to land, then sync (§Red 5). A red
    deploy branch is claimed through the Board and fixed by a PR; the deploy branch is never pushed to. Before
    opening a tip fix, list the open PRs of the last hour that name the failing test or carry `deploy:red`; if one
    exists, comment there instead of opening a second. A path in another open PR's diff is NOT a blocker (D-033):

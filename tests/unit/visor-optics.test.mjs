@@ -1211,3 +1211,29 @@ test("photo visor lighting paints the captured angle without changing the drivin
   const night = V.captureLight(canvas, { ...G, frame: { ...NIGHT, lights: lamp(0, -25) } }, { level: "strong", style: "scratches" });
   assert.ok(night.glints.length > 0, "night lamps also feed photo lighting");
 });
+
+// #6397: a photo from outside the car painted the helmet's port rim (the "visor surround").
+// The port outline (rim sheen, fringe) is the HELMET seat's; any other angle gets light without it.
+test("photo visor light strokes the port outline only for a HELMET photo; capturePort paints the bezel", () => {
+  const { V, calls } = load({ helmet: false });
+  const g = ctx2d(calls), canvas = { width: 1920, height: 1080, getContext: () => g };
+  const strokes = [], fills = [];
+  g.stroke = (p) => { calls.stroke++; strokes.push(p); };
+  g.fill = (p, rule) => { if (p && p.d) fills.push({ p, rule, alpha: g.globalAlpha, filter: g.filter }); };   // path fills only (glows fill arcs)
+  const G = { camEye: DAY.eye, camTgt: DAY.tgt, camFov: DAY.fov, camRoll: 0, frame: { ...DAY, sunDir: [.15, .15, -1] } };
+  const outside = V.captureLight(canvas, G, { level: "strong", beams: "medium", style: "classic" });
+  assert.ok(outside.rim, "the sun gives the visor a rim term to paint");
+  assert.equal(strokes.filter((p) => p && p.d).length, 0, "no port-shaped stroke from outside the car");
+  strokes.length = 0;
+  V.captureLight(canvas, G, { level: "strong", beams: "medium", style: "classic", helmet: true });
+  const port = strokes.filter((p) => p && p.d);
+  assert.ok(port.length >= 1, "the helmet photo carries the rim sheen");
+  for (const p of port) assert.ok(p.d.startsWith("M") && p.d.includes("C") && p.d.endsWith("Z"), "traced on the eye port");
+  assert.equal(fills.length, 0, "light never fills a port-shaped path");
+  assert.equal(V.capturePort(canvas), true);
+  assert.equal(fills.length, 2, "soft falloff, then the edge");
+  assert.deepEqual(fills.map((f) => [f.rule, f.alpha]), [["evenodd", 0.55], ["evenodd", 0.93]]);
+  for (const f of fills) assert.ok(f.p.d.startsWith("M-400,-400H2320V1480H-400ZM"), "an over-sized frame, then the port cut out of it");
+  assert.equal(fills[1].p.d, "M-400,-400H2320V1480H-400Z" + V.portPath(1920, 1080, 0), "the edge is the true port");
+  assert.equal(V.capturePort({ width: 0, height: 0, getContext: () => g }), false);
+});

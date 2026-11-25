@@ -66,7 +66,7 @@ function harness({ career = false, era = null, unlimited = false, stored = {}, t
     invalidateDecalTextures: null, teamIdx: sb.Teams.LIST.indexOf(team), driverIdx: 0, soundOn: false,
     careerOwned: () => owned, unlimitedBudget: unlimited, peerSeats: () => [],
     armConfirm: (_button, _label, action) => action(), teamSwatch: () => dom.document.createElement("span"), setTeamPicker() {}, openCustomize() {},
-    livDraftOverride: null, _spMeshKey: "", setupPreviewOn: false,
+    livDraftOverride: null, setupCam: { meshKey: "" }, setupPreviewOn: false,
   };
   Object.assign(G, persistence);
   let customLiv;

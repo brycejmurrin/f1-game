@@ -36,8 +36,8 @@
     // GSI 1 m laser DEM, right-minus-left sections across 8 m of asphalt.
     bankZones: [
       { turn: 1, angleDeg: 1.2, widthM: 130 },
-      { turn: 7, angleDeg: 4.2, widthM: 180 },
-      { turn: 8, angleDeg: 2.0, widthM: 100 },
+      { turn: 6, angleDeg: 4.2, widthM: 180 },   // ADVAN hairpin
+      { turn: 10, angleDeg: 2.0, widthM: 100 },  // Dunlop
     ],
     pal: {
       zenith:        [0.38, 0.48, 0.60],
@@ -61,11 +61,17 @@
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    // turns: the 16 strongest curvature peaks of THIS centreline in lap order,
-    // 16 being the researched real turn count. No researched sectors — consumers
-    // fall back to thirds.
+    // turns: the 16 numbered turns (WEC/sim-guide numbering), each on its own
+    // curvature peak of THIS centreline: T1 TGR, T2 kink, T3 Coca-Cola, T4-T5 the
+    // 100R double apex, T6 ADVAN hairpin, T7 its left exit, T8 120R, T9 300R,
+    // T10-T12 Dunlop chicane, T13 the off-camber right (30R), T14 the long left
+    // (45R), T15 the tight left (GR Supra 25R), T16 Panasonic. The built radii
+    // match the operator's (Dunlop 15R built R15, 25R built R21, 30R built R37).
+    // #5652 survey: the old list counted 100R three times, skipped 120R/300R and
+    // put a spare T13 on the 45R exit. No researched sectors — consumers fall
+    // back to thirds.
     sectors: [0.333, 0.667],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.2502, 0.2823, 0.3718, 0.4123, 0.4397, 0.4708, 0.5248, 0.7073, 0.7202, 0.7388, 0.7702, 0.8077, 0.8193, 0.8337, 0.8772, 0.8972],
+    turns: [0.2502, 0.2823, 0.3718, 0.4397, 0.4708, 0.5248, 0.5464, 0.5950, 0.6384, 0.7073, 0.7202, 0.7388, 0.7702, 0.8077, 0.8337, 0.8972],
     furniture: { tree: "fir", fol: [0.16, 0.32, 0.20], lamp: "none" },
     kit: { marshal: "cabin", rail: "wArmco", fence: "panelled", tyre: "stack", board: "monopole", gantry: "portal", camera: "monopole", hoarding: "panel" },
     standSet: ["steel", "alu", "concrete"],

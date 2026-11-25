@@ -941,6 +941,7 @@ jobs:
         env:
           SLICE: ${{ matrix.slice }}
           NEEDED: ${{ matrix.needed }}
+          SLICE_ROWS: ${{ needs.select.outputs.slices }}
           APEX_REQUIRE_TOOLS: ${{ matrix.slice == 'slow' && 'pillow,numpy' || '' }}
         run: |
           # ONE SLICE PER RUNNER (matrix.slice). Every script stays on its own
@@ -955,6 +956,11 @@ jobs:
             exit 0
           fi
           . "${RUNNER_TEMP:-.}/node-plan.sh"
+          # GUESTS (F4 of #3117, 2026-11-24): test:mcp and test:service-worker (~108 s of slow's 425 s step) run on
+          # page-a when the matrix schedules BOTH rows, else on slow as before; every row reads the same SLICE_ROWS,
+          # so exactly one runs them. The list is PAGE_A_GUESTS in tools/ci/pick-unit-slices.mjs.
+          GUESTS="$(node --input-type=module -e 'import { PAGE_A_GUESTS, guestsOnPageA } from "./tools/ci/pick-unit-slices.mjs"; if (guestsOnPageA(JSON.parse(process.env.SLICE_ROWS || "[]"))) console.log(PAGE_A_GUESTS.join(" "));')"
+          guest() { case " $GUESTS " in *" $1 "*) echo "MOVED $1 to page-a (both rows scheduled)"; return 0;; esac; return 1; }
           case "$SLICE" in
             vm-a1)
               # The Node VM harness: js/game.js headless, exact parity with the
@@ -1018,6 +1024,10 @@ jobs:
               if planned test:vm-page-a; then
               npm run test:vm-page-a
               fi
+              # The slow guests (GUESTS above), the same command their npm scripts run; slow keeps the npm lines.
+              for g in $GUESTS; do
+                node tools/ci/run-group.mjs "$g" ${NODE_PLAN_SKIP_TF:+--skip-tf}
+              done
               ;;
             page-b)
               if planned test:vm-page-b; then
@@ -1030,19 +1040,23 @@ jobs:
               if planned test:node-slow; then
               npm run test:node-slow
               fi
-              # Riders (see vm-a1): steering-unit 6 s, mcp 5 s, service-worker 4 s,
-              # lifecycle-unit and agent-contract < 1 s, beside 168 s of node-slow.
+              # Riders (see vm-a1): steering-unit 6 s, lifecycle-unit and agent-contract < 1 s, beside node-slow;
+              # mcp (61 s) and service-worker (47 s) are GUESTS: page-a runs them when it is scheduled too.
               if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:steering-unit --skip-tf; else
               npm run test:steering-unit
               fi
               # The CLI-only MCP wrappers were here as test:mcp until 2026-09-10;
               # those suites (probe-mcp; tinyfish-mcp until its 2026-11-03 deletion) moved to tests/manual/ and
               # their fast-gate half is mcp-cli. environment-json stays gated here.
+              if ! guest test:mcp; then
               if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:mcp --skip-tf; else
               npm run test:mcp
               fi
+              fi
+              if ! guest test:service-worker; then
               if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:service-worker --skip-tf; else
               npm run test:service-worker
+              fi
               fi
               if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:lifecycle-unit --skip-tf; else
               npm run test:lifecycle-unit

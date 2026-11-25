@@ -180,7 +180,7 @@ describe("elevation smoothness (densified centreline)", () => {
         const drop = py[Math.round(n * 585 / 1131)] - py[Math.round(n * 765 / 1131)];
         assert.ok(Math.abs(drop - measuredDrop) < 0.8, `Fuji descent to Dunlop: ${drop} m`);
         // Across an 8 m section at the hairpin, GSI measures +0.50 m.
-        const station = def.turns[6] * total;
+        const station = def.turns[5] * total;  // T6, the ADVAN hairpin (#5652 WEC numbering)
         const right = ctx.Tracks.banking(track, station, 4, {}).dy;
         const left = ctx.Tracks.banking(track, station, -4, {}).dy;
         assert.ok(Math.abs(right - left - 0.50) < 0.12, "Fuji hairpin crossfall");
