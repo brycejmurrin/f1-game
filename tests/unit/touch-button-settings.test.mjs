@@ -532,6 +532,29 @@ test("custom touch actions cancel on viewport changes and still accept the next 
   }
 });
 
+test("a tap button whose pointerup iOS dropped takes the next press while another thumb is down (#6619)", () => {
+  const { model, actions } = boot({ window: { addEventListener() {} } });
+  const handlers = new Map(), captured = new Set(); let clicks = 0;
+  const el = { style: { setProperty() {}, removeProperty() {} }, setAttribute() {}, removeAttribute() {},
+    getAttribute: () => null, getBoundingClientRect: () => ({ left: 0, right: 20, top: 0, bottom: 20 }),
+    addEventListener: (type, fn) => handlers.set(type, fn), click: () => clicks++,
+    setPointerCapture: id => captured.add(id), hasPointerCapture: id => captured.has(id) };
+  actions.bindControl(el, "boost");
+  model.setButtonProfile("boost", { activation: "tap" });
+  const send = (type, timeStamp, pointerId) => handlers.get(type)({ pointerType: "touch", pointerId, timeStamp,
+    clientX: 10, clientY: 10, preventDefault() {}, stopImmediatePropagation() {} });
+  // Lost lift: capture went with the contact, but no pointerup, pointercancel or lostpointercapture arrived.
+  send("pointerdown", 0, 1); captured.delete(1);
+  send("pointerdown", 100, 2); send("pointerup", 150, 2);
+  assert.equal(clicks, 1, "the second press is not swallowed by the stale first contact");
+  // The same id re-pressed is stale by definition (its lift was lost).
+  send("pointerdown", 200, 3); send("pointerdown", 300, 3); send("pointerup", 350, 3);
+  assert.equal(clicks, 2);
+  // A live first contact (capture still held) keeps the button: a second finger does not double-fire.
+  send("pointerdown", 400, 4); send("pointerdown", 410, 5); send("pointerup", 420, 5); send("pointerup", 450, 4);
+  assert.equal(clicks, 3, "one press per live contact, as before");
+});
+
 test("a selected slide direction reaches either a higher or lower endpoint independently of hold", () => {
   const { host, dom, editor, model } = boot();
   editor.mount(host);
