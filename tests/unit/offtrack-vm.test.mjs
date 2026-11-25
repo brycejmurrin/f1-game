@@ -141,13 +141,26 @@ test("auto-rescue: a car beached deep off-track is recovered", async () => {
   a.setPhysics({ drift: 0 });
   let onTrack = false;
   a.jump(0.0, 0, -16);           // beached in the grass, stopped (the left: +x is the pit complex)
+  const G = g.G, p = G.player, C = g.sandbox.Collide, t0 = p.rescueLastT;
   for (let i = 0; i < 320; i++) {
     a.setInput({ steer: 0, throttle: false });
     a.step(1 / 60, 1);
-    if (Math.abs(a.physState().x) < 1) { onTrack = true; break; }
+    if (p.rescueLastT !== t0) { onTrack = true; break; }
   }
   a.clearInput();
-  assert.equal(onTrack, true);
+  assert.equal(onTrack, true, "rescued");
+  // Back on the road: the centre, or a car's width and a metre aside when a car is there (#5775 R5,
+  // Collide.rescueX). In this file's sequence an AI car is passing the spot at the rescue.
+  const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+  g.sandbox.Tracks.sample(G.track, p.s, smp);
+  const off = Math.min(C.WCAR + 1, smp.hw - C.WCAR / 2 - 0.3), x = a.physState().x;
+  assert.ok(Math.abs(x) < 1 || Math.abs(Math.abs(x) - off) < 0.05, "rescued to the centre or the rescue offset: x " + x);
+  const L = G.track.total;
+  for (const o of G.cars) {
+    if (o === p || o.finished) continue;
+    const d = ((o.s - p.s + L / 2) % L + L) % L - L / 2;
+    assert.ok(!(Math.abs(d) < C.LCAR && Math.abs((o.x || 0) - x) < C.WCAR), "not rescued onto " + o.code);
+  }
 });
 
 test("stopped on-track: throttle held is never stuck at 0; gas released is left parked", async () => {

@@ -83,6 +83,8 @@ const LearnDoor = (function () {
       }
       frame = document.createElement("iframe");
       frame.id = "learn-lab";
+      // Same-origin lab: a controller or paired phone walks its controls (js/input/pad-menu.js).
+      frame.dataset.padScope = "lesson";
       frame.hidden = true;
       body.append(index, frame);
 

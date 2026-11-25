@@ -84,7 +84,7 @@ test("a phone's first-paint UI SIZE and scale.js's phone default agree (#5358)",
   assert.ok(js, "js/ui/scale.js must declare PHONE_UI_DEFAULT");
   assert.equal(Number(m[3]), Number(js[1]) / 100, "the CSS mirror and the JS default are one number");
   assert.equal(Number(m[4]) * 100, Number(scaleJs.match(/const PHONE_BTN_DEFAULT = ([\d.]+);/)[1]));
-  const side = scaleJs.match(/const phoneUi = \(\) => coarseUi\(\) && Math\.min\(window\.innerWidth, window\.innerHeight\) <= (\d+);/);
+  const side = scaleJs.match(/const phoneUi = \(\) => coarseUi\(\) && shortSide\(\) <= (\d+);/);
   assert.ok(side, "phoneUi() is touch and a short side");
   assert.deepEqual([Number(m[1]), Number(m[2])], [Number(side[1]), Number(side[1])], "the media query and phoneUi() test the same short side");
 });

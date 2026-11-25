@@ -1,0 +1,1 @@
+Fixed: On a phone in the chase camera, the speed readout gets its own spot beside the gear, with ERS above them and the OVERTAKE and AERO chips above ERS, so nothing covers the speed. Your row in the RELATIVE tower is now dark text on a solid highlight, so it is easy to read.

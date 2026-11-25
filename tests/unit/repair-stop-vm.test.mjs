@@ -81,6 +81,7 @@ test("wear OFF + damage OFF: a car driven onto the shut lane is held to the limi
   a.setPhysics({ pace: 1, drift: 0 });
   sb.DamageHandling.setEnabled(false);
   const p = G.player, pits = G.pits, L = G.track.total;
+  pits.reset(p);   // the test above leaves the car "out" of its stop: inLane() would hold it, vacuously
   assert.equal(G.tyres.on(), false, "the VM pins tyre wear off");
   a.jump(0.985, 30, 0);
   const p0 = a.pit();
@@ -88,6 +89,9 @@ test("wear OFF + damage OFF: a car driven onto the shut lane is held to the limi
   a.jump(f, 30, a.pit().laneX); a.aim(0);
   assert.equal(pits.arm(p, true), false, "anti-vacuity: the lane is shut, no stop can be armed");
   assert.equal(pits.onClosedLane(p), true, "on the shut lane's tarmac");
+  // MERGED-REVIEW 2026-11-25 row 4: held() — the OT/boost gate and the HUD cue — agrees with the cap.
+  assert.equal(pits.inLane(p), false, "anti-vacuity: no stop state, only the shut lane's tarmac");
+  assert.equal(pits.held(p), true, "held on the shut lane: no OT or boost under the cap");
   for (let i = 0; i < 60; i++) { a.setInput({ steer: 0, throttle: true }); a.step(1 / 60, 1); }
   a.clearInput();
   assert.ok(p.speed <= pits.limit() + 1e-6, `the limiter holds on the shut lane (${p.speed.toFixed(2)} <= ${pits.limit().toFixed(2)} m/s)`);
@@ -95,4 +99,5 @@ test("wear OFF + damage OFF: a car driven onto the shut lane is held to the limi
   // On the racing line beside it: no limiter.
   a.jump(f, 30, 0); a.aim(0);
   assert.equal(pits.onClosedLane(p), false, "the racing line is not the lane");
+  assert.equal(pits.held(p), false, "not held on the racing line");
 });

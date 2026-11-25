@@ -22,7 +22,7 @@ function line(src, head) {
   return src.slice(at, src.indexOf("\n", at));
 }
 const LITE_LINE = line(TLX_SRC, "const _lite = liteTier(");
-const DPR_STATE_LINE = line(TLX_SRC, "let _dprBoost = 0, _dprCeil = 0;");
+const DPR_STATE_LINE = line(TLX_SRC, "let _dprBoost = 0, _dprCeil = 0, _dprPreset = 0;");
 const DPR_LINE = DPR_STATE_LINE + "\n" + line(TLX_SRC, "let DPR_CAP = ");
 const PRESENT_LINE = line(TLX_SRC, "if (_lite) liteOpts(opts);");
 

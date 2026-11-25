@@ -25,7 +25,7 @@ const TitleLayout = (function () {
   const PHONE_TALL = Object.freeze({
     ...DEFAULT, btns: Object.freeze({ x: 0, y: 0, size: 105, width: 0 }),
   });
-  const phone = () => { try { return typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(pointer: coarse)").matches && Math.min(window.innerWidth, window.innerHeight) <= 500; } catch (_) { return false; } };
+  const phone = () => { try { if (typeof UiScale !== "undefined") return UiScale.phone(); return typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(pointer: coarse)").matches && Math.min(window.innerWidth, window.innerHeight) <= 500; } catch (_) { return false; } };
   const shipped = (sh) => phone() ? (sh === "tall" ? PHONE_TALL : PHONE_WIDE) : DEFAULT;
   const SHAPES = ["wide", "tall"];
   const SHAPE_NAMES = { wide: "LANDSCAPE", tall: "PORTRAIT" };

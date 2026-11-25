@@ -117,7 +117,7 @@ it("compact #cs-tabs category tabs keep the tap floor (no tap-min 2-row crush)",
   // Livery ⧉ chips stay on the chip / WCAG-min rung — do not hoist them to --tap.
   assert.match(
     css,
-    /\.cs-liv-del,\s*\.cs-liv-edit\s*\{[^}]*min-height:\s*var\(--chip-h\)/s,
+    /\n\.cs-liv-edit\s*\{[^}]*min-height:\s*var\(--chip-h\)/s,
     "livery edit chips keep --chip-h, not the category-tab --tap floor");
   assert.match(fade, /"#cs-tabs"/,
     "ScrollFade watches #cs-tabs so the compact pan strip gets sf-l / sf-r");

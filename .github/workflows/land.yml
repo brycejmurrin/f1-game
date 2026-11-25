@@ -1330,7 +1330,7 @@ jobs:
             fi
           done 3< <(printf '%s\n' "$lands")
 
-  # MERGE TRAIN (tools/ci/merge-train.mjs; decision and design: docs/notes/MERGE-TRAIN-2026-11-18.md). Up to 10 (TRAIN_MAX) green `land` PRs whose own trusted rows pass (open, hold,
+  # MERGE TRAIN (tools/ci/merge-train.mjs; decision and design: docs/notes/MERGE-TRAIN-2026-11-18.md). Up to 12 (TRAIN_MAX) green `land` PRs whose own trusted rows pass (open, hold,
   # plan, ci, config, raise) are merged onto the deploy tip with merge commits on a `train/*` branch, opened as an
   # ordinary PR with `land` + `train`; that PR then lands through the same CI → `gate` → arm route as any other, and
   # each car's head reaching the deploy branch marks the car merged. merge-gate reads a train's config and raise rows
@@ -1348,6 +1348,9 @@ jobs:
   # the merge result's own scripts: so, like land-gate, a read-only token, no secret, no cache. Its verdict file leaves
   # as an artifact the build reads as DATA (merge-train.mjs readScreen): a forged file can only keep a car out or let
   # one ride that the train's own gate then measures, as before. A train still open: the file says skip.
+  # #6528: a green `land` PR that is neither armed nor in a land run of its own (an orphan whose arms lost to the tip)
+  # boards too, and a car's line-count ratchets.d fragment that is stale only because the base moved is re-snapped on
+  # the fold (merge-train.mjs resnapTree: pure git, no PR code, re-derived by the gate's verifyTrain).
   train-screen:
     name: merge train screen
     if: >-
@@ -1356,7 +1359,8 @@ jobs:
       || (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'Deploy to GitHub Pages'
           && github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 20 until #6528: the screen's own budget (SCREEN_BUDGET_MS) is 16 min for a 12-car train, plus npm ci and upload.
+    timeout-minutes: 25
     concurrency:
       group: land-train-screen
       cancel-in-progress: false

@@ -120,7 +120,9 @@ export const CONFIG_LABEL = "config-ok";
  *  their top level runs when the gate imports them and gen-test-groups decides generatedPkgVerdict, so each is a
  *  config path AND a protected one. A test fails on any closure module either list misses. */
 const GATE_MODULE_OUTSIDE_CI = ["tools/gen/gen-test-groups\\.mjs$", "tools/lib/changed-files\\.mjs$", "tools/lib/cli-args\\.mjs$",
-  "tools/lib/gate-receipt\\.mjs$", "tools/lib/work-tree-id\\.mjs$"];
+  "tools/lib/gate-receipt\\.mjs$", "tools/lib/work-tree-id\\.mjs$",
+  // #6528: merge-train's fragment re-snap (resnapTree) reads ceilings through these, inside verifyTrain.
+  "tools/check/ratchets\\.mjs$", "tools/check/merge-hygiene\\.mjs$"];
 export const CONFIG_PATH = new RegExp("^(" + [
   "\\.claude/hooks/", "\\.claude/settings(\\.local)?\\.json$", "\\.claude/agents/", "\\.claude/memory/",
   "\\.github/workflows/", "\\.github/actions/", "\\.github/ISSUE_TEMPLATE/", "\\.githooks/", "\\.mcp\\.json$",

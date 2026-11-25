@@ -523,6 +523,13 @@ test.describe.parallel("Career — a round", () => {
     await page.locator("#res-next").click();
     await expect(page.locator("#career")).toBeVisible();
     await expect(page.locator("#cr-meters")).toContainText("2 / " + st.rounds);   // the save's calendar length
+    // F1 (RUNTIME-HUNT-MODES-2026-11-25): on CI's software raster quitToMenu defers its tail, whose
+    // setFlow("gp") landed after the hub opened: GO RACING then ran a one-off GP (START RACE, no money).
+    // Let that deferred tail (rAF → setTimeout) run, then the hub must still race the scored round.
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 100)))));
+    expect(await page.evaluate(() => window.__apex.info().flow)).toBe("career");
+    await page.locator("#cr-go").click();
+    await expect(page.locator("#rs-go")).toContainText("START QUALIFYING");
   });
 
   test("the player takes the contracted seat on the grid", async ({ page }) => {
