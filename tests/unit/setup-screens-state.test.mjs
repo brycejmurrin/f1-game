@@ -744,7 +744,7 @@ test("garage: the paint editor and its live-preview override die with the screen
 // #6508: a Car Studio tab revisit moves the parked pane back; only a state change rebuilds.
 test("garage: a tab revisit does not run buildSetup; a state change does", () => {
   let fitted = "default";
-  const { ui, $, sb } = loadSetupUi({ getLiveryId: () => fitted });
+  const { ui, G, $, sb } = loadSetupUi({ getLiveryId: () => fitted });
   let builds = 0;
   const getCost = sb.Parts.getCost;
   sb.Parts.getCost = (...a) => { builds++; return getCost(...a); };   // once per buildSetup head
@@ -773,10 +773,16 @@ test("garage: a tab revisit does not run buildSetup; a state change does", () =>
   fitted = "f1";
   click("team");
   assert.equal(builds, 3, "a changed key rebuilds on the revisit");
+  // TEAM renders seat state the chips do not own: a peer taking a seat rebuilds it.
+  click("livery");
+  const b4 = builds;
+  G.peerSeats = () => [{ team: "haas", driver: 1 }];
+  click("team");
+  assert.equal(builds, b4 + 1, "a peer seat change rebuilds TEAM on the revisit");
   // Any other buildSetup is a state change: it drops every parked pane.
   ui.buildSetup();
   click("livery");
-  assert.equal(builds, 5);
+  assert.equal(builds, b4 + 3);
   assert.notEqual($("cs-options").querySelector(".cs-liv-create"), create);
 });
 

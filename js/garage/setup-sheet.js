@@ -331,32 +331,35 @@ if (typeof addEventListener === "function") addEventListener("resize", () => csV
 function csPaneKey(team) {
   return JSON.stringify([team.id, G.driverIdx, getTeamParts(team.id), getLiveryId(team.id), getCustomLiveries(team.id).length,
     typeof SetupTune !== "undefined" && SetupTune.get(team.id), G.careerOwned() && Career.data().money, G.unlimitedBudget,
-    csLivQuery, Parts.legalityKey && Parts.legalityKey(), csViewGen]);
+    csLivQuery, Parts.legalityKey && Parts.legalityKey(), csViewGen,
+    // TEAM's look chips and peer seats; the swatches' font readiness. (Its race and career
+    // locks hold for a whole visit, and every visit opens with a buildSetup.)
+    lookRowSpecs().map((r) => r.cur), G.peerSeats && G.peerSeats(), document.fonts && document.fonts.status]);
 }
 // Parks `from`'s pane, then moves `id`'s back in if its key still holds: true when it did.
 function swapCsPane(from, id) {
-  const el = $("cs-options"), team = Teams.LIST[G.teamIdx], nodes = [...el.childNodes || el.children];
+  const el = $("cs-options"), nodes = [...el.childNodes || el.children];
   el.replaceChildren();
   if (from === "tune") csPanes.clear();
   else if (csBuilt && csBuilt.cat === from && !(from === "livery" && csLivCreating)) {
     // A one-shot status line ("Could not fit…") belongs to the click that wrote it.
     csPanes.set(from, { key: csBuilt.key, grid: el.classList.contains("cs-liv-grid"),
-      nodes: nodes.filter((n) => !(n.getAttribute && n.getAttribute("role") === "status")) });
+      nodes: nodes.filter((n) => n.role !== "status") });
   }
   const p = csPanes.get(id);
-  if (!p || (id === "livery" && csLivCreating) || p.key !== csPaneKey(team)) return false;
+  // (No editor check here: opening or closing the paint editor is a buildSetup.)
+  if (!p || p.key !== csPaneKey(Teams.LIST[G.teamIdx])) { csPanes.delete(id); return false; }
   csPanes.delete(id); csBuilt = { cat: id, key: p.key };
-  // buildSetup's head, minus the work a state change needs.
+  // buildSetup's head, minus the work a state change needs (the key pins the team the
+  // build already captured, and the exit chrome only changes on a garage open).
   clearTimeout(csLivSearchTimer); csLivSearchTimer = 0;
   clearSurfaceControls();
   if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end();
-  syncGarageExitChrome();
-  tuneExperiments.capture(team);
   let on = null;
   for (const tab of $("cs-tabs").querySelectorAll('[role="tab"]')) {
     const a = tab.dataset.csCat === id;
     if (a) on = tab;
-    tab.classList.toggle("active", a); tab.setAttribute("aria-selected", "" + a); tab.tabIndex = a ? 0 : -1;
+    tab.classList.toggle("active", a); tab.setAttribute("aria-selected", a); tab.tabIndex = a ? 0 : -1;
   }
   el.setAttribute("aria-labelledby", csTabId(id));
   el.classList.toggle("cs-liv-grid", p.grid);
@@ -366,7 +369,7 @@ function swapCsPane(from, id) {
   (typeof requestAnimationFrame === "function" ? requestAnimationFrame : (f) => f())(() => {
     if (csActiveCat !== id) return;
     el.scrollTop = 0;
-    if (on) on.scrollIntoView({ block: "nearest", inline: "nearest" });
+    on?.scrollIntoView({ block: "nearest", inline: "nearest" });
   });
   return true;
 }
