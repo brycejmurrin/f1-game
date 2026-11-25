@@ -28,6 +28,12 @@ restated rules drifted into three wordings and one contradicted the skill [14].
   PR's own worker add either. A PROTECTED path (merge-gate `PROTECTED_CONFIG_PATH`: the gate's import closure,
   `land.yml`, every host's hooks and settings) needs Bryce's own tap (#5455); `ci.yml`, `pick-tests`, `preflip-probe`
   and the other `tools/ci/` files are routine. The gate cannot tell you from the worker: this half is a rule, not a check.
+- Launch with `create_session` environment_id `env_01T3kL7W7688bnn8RpTx8GsY` (environment "I") and permission_mode
+  `auto`, always; the orchestrator itself stays in auto mode. A `plan` or `default` child stalls on a prompt nobody
+  answers (retro 2026-11-25).
+- One Claude Link window per wave: batch every pending device check of the wave into ONE hands-off bridge run
+  (`drive`, #6425), one link and one ask to Bryce, not a link session per PR (~35 of his 115 prompts on 2026-11-24
+  were link plumbing). Memory `phone-checks-via-claude-link.md`.
 - A TAKEOVER brief states evidence, not a verdict: the lease line, the newest commit trailer and comment time on the
   PR, never "the owner cannot be reached" [11]. Post the adoption comment yourself before launching.
 
@@ -61,7 +67,9 @@ MESSAGE ME ONLY WHEN: blocked, refused (facts only), a decision is needed, merge
 - Each cycle, and on every child-session event, run the quota watchdog `tools/ci/child-health.mjs` (#5844; usage in
   its header): save `list_sessions {children:true}` and each failed child's `list_events kinds:["result"]` page, then
   act on every PARK / RELAUNCH row it prints (`needs-owner`, a `CONTINUE PR <n>` brief on another model or after the
-  reset). Six PRs sat ownerless 7.8–9.1 h on 2026-11-18 because nothing read the children between waves.
+  reset) and every WAITING row (a child in need_input: answer it, or park and relaunch its PR). Six PRs sat ownerless 7.8–9.1 h on 2026-11-18 because nothing read the children between waves.
+- Big reads stay out of your context: session transcripts (`list_events`), `actions_list` and job logs go through a
+  subagent, or to a file read with `jq`, never inline. At ~400k context, rotate: skill `handoff` (Orchestrator ending).
 - Messages reach a busy worker when its turn ends (median 0.3 min, p90 7.5, max 78). Send a hold or stop with
   priority "now", name its exceptions in the same message, and expect a push to cross it [12].
 - Push rules for every worker (D-046): one push per fix round, never while CI runs on that head; flip draft→ready only
