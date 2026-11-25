@@ -612,6 +612,7 @@ test("decideRedTip: a prose-only push on a red tip with no train coming dispatch
   no({ runs: [run(3, OLD, "completed", "cancelled", "2026-11-25T00:10:00Z"), ...red] }, "cancelled is not a red verdict here");
   no({ runs: [run(4, TIP, "queued", null, "2026-11-25T00:20:00Z"), ...red] }, "a train is already coming");
   no({ files: [...docs, "js/core/log.js"] }, "a mixed push: pages.yml's own push starts the train");
+  no({ files: ["docs/PHYSICS.md", "js/core/log.js"] }, "a rename lists its source too (previous_filename): a code file moved under docs/ is not prose-only");
   no({ files: null }, "an unreadable diff decides nothing");
   no({ truncated: true }, "a truncated compare decides nothing");
   no({ tip: "d".repeat(40) }, "a newer push is the tip");

@@ -59,6 +59,9 @@ export const isProse = (f) => /^(?:docs|\.claude|\.cursor|\.codex)\//.test(f) ||
  *   - its diff is readable, complete and prose-only (any other path means pages.yml's own push trigger fired);
  *   - no Pages run on the branch is live (a train is coming; the single-flight group would take it anyway);
  *   - the newest completed Pages run on the branch failed (green or cancelled: nothing to cure).
+ * Any such prose push re-arms, not only the one that is the fix: a README edit on a tip red for code dispatches one
+ * gate that fails again. Accepted: the single-flight group and the live-run check bound it to one train at a time.
+ * `files` names both ends of a rename (previous_filename), so a code file moved under docs/ is not prose-only.
  * @param {{ sha: string, tip: string, files: string[] | null, truncated?: boolean, runs: any[] }} q
  * @returns {{ rearm: boolean, reason: string }}
  */
@@ -97,7 +100,7 @@ function main(argv) {
       const before = process.env.BEFORE || "";
       let files = null, truncated = false;
       if (/^[0-9a-f]{40}$/.test(before) && !/^0+$/.test(before)) {
-        const cmp = JSON.parse(gh([`repos/${repo}/compare/${before}...${sha}`, "-q", "{n: (.files | length), files: [.files[].filename]}"]));
+        const cmp = JSON.parse(gh([`repos/${repo}/compare/${before}...${sha}`, "-q", "{n: (.files | length), files: [.files[] | .filename, (.previous_filename // empty)]}"]));
         files = cmp.files; truncated = cmp.n >= 300;   // the compare API lists at most 300 files
       }
       const runs = JSON.parse(gh(["-X", "GET", `repos/${repo}/actions/workflows/pages.yml/runs`,

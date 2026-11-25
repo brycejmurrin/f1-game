@@ -197,12 +197,13 @@ test("ageGate(): advisory on the tip, strict on a diff that touches docs/notes/ 
   assert.equal(ageGate().strict, true, "no arguments: strict");
 });
 
-test("ci.yml sets APEX_NOTES_AGE_ADVISORY on all four tooling shards, off pull requests only; nothing bakes it in", () => {
+test("ci.yml sets APEX_NOTES_AGE_ADVISORY on all four tooling shards, on the deploy branch off pull requests only; nothing bakes it in", () => {
   assert.equal(AGE_ADVISORY_ENV, "APEX_NOTES_AGE_ADVISORY");
   const ci = parseYAML(read(".github/workflows/ci.yml"));
   const shards = Object.values(ci.jobs).flatMap((j) => j.steps || []).filter((st) => /^Tooling-fast shard [1234]\/4$/.test(st.name || ""));
   assert.equal(shards.length, 4);
-  for (const st of shards) assert.equal(st.env?.[AGE_ADVISORY_ENV], "${{ github.event_name != 'pull_request' && '1' || '' }}", `${st.name}: off pull requests only`);
+  for (const st of shards) assert.equal(st.env?.[AGE_ADVISORY_ENV], "${{ github.event_name != 'pull_request' && github.ref_name == 'claude/f1-game-project-26h3ng' && '1' || '' }}",
+    `${st.name}: off pull requests, on the deploy branch only (a Pages workflow_call inherits its caller's ref; a bot/* branch's dispatch run stays strict)`);
   for (const f of ["package.json", "tools/ci/tooling-fast.mjs", ".githooks/pre-commit"]) if (files.includes(f))
     assert.equal(read(f).split(AGE_ADVISORY_ENV).length, 1, `${f} must not set it: a PR's own diff decides`);
 });

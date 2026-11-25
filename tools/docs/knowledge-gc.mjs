@@ -81,7 +81,8 @@ export const AGE_ADVISORY_ENV = "APEX_NOTES_AGE_ADVISORY";
  * WHY (2026-11-25). At 00:00Z docs/archive/notes/BOOST-FIRST-PRESS-MIRRORED-2026-11-03.md (then under docs/notes/) turned 22 days old: the deploy
  * tip went red on unchanged code (Pages runs 45512433737, 45513979133), the merge gate's base row held every PR,
  * and five workers archived the same note in five PRs. A clock is nobody's diff, so:
- *   - advisory (the tip: a deploy-branch push, the Pages train, a schedule) → warn; the nightly gc PR is the cure;
+ *   - advisory (the deploy tip: a push, the Pages train, a schedule or dispatch there) → warn; the nightly gc PR
+ *     archives a stale note, while an overdue Re-measure-by note (cited, so gc keeps it) needs a re-measure PR;
  *   - a diff that adds, edits, moves or removes a docs/notes/ path → fail: that author is in the notes tree;
  *   - an unreadable diff (no deploy base) → fail, like every --changed caller (changed-files.mjs);
  *   - any other diff → warn.
@@ -90,7 +91,7 @@ export const AGE_ADVISORY_ENV = "APEX_NOTES_AGE_ADVISORY";
  * @returns {{ strict: boolean, reason: string }}
  */
 export function ageGate({ advisory = false, changed = null } = {}) {
-  if (advisory) return { strict: false, reason: `${AGE_ADVISORY_ENV}=1 (the deploy tip): the nightly knowledge-gc PR archives` };
+  if (advisory) return { strict: false, reason: `${AGE_ADVISORY_ENV}=1 (the deploy tip): the nightly knowledge-gc PR archives a stale note; an overdue one needs a re-measure` };
   if (!Array.isArray(changed)) return { strict: true, reason: "no deploy base: the diff is unreadable, so the check fails as before" };
   const notes = changed.filter((f) => /^docs\/notes\//.test(f));
   if (notes.length) return { strict: true, reason: `this diff touches docs/notes/ (${notes.slice(0, 3).join(", ")}${notes.length > 3 ? ", …" : ""})` };
