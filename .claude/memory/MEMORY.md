@@ -22,4 +22,4 @@ not follow it. Hosts: `npm run memory:list` / `memory:show` / `memory:retire`.
 - [Orchestrator: check in and keep the task list](orchestrator-checkin-and-task-list.md) — each cycle read every live worker session (archive, nudge or relaunch) unprompted; keep the task list current after every state change
 - [Phone checks via Claude Link](phone-checks-via-claude-link.md) — run every device check over the phone bridge, batched into ONE hands-off `drive` window per wave; the orchestrator drives, reads state and posts the results
 - [Ask Bryce with AskUserQuestion](orchestrator-questions-via-tool.md) — orchestrator: anything you need from him goes through the AskUserQuestion tool, not a question buried in prose
-- [Launch independent of the merge queue](launch-independent-of-merge-queue.md) — hunters/reviewers/workers launch now; only a real code dependency holds one
+- [Launch independent of the merge queue](launch-independent-of-merge-queue.md) — hunters/reviewers/research launch any time; workers wait only on a real code dependency, fix workers also while 10+ PRs are ready+land
