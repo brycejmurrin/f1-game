@@ -47,8 +47,8 @@ test("the census is deterministic and every group says when it loads", () => {
   assert.deepEqual(census(), census());
   for (const g of c.groups) assert.ok(budget.groupWhen[g.group], `tests/data/load-budget.json groupWhen lacks ${g.group}`);
   for (const k of Object.keys(budget.groupWhen)) assert.ok(c.groups.some((g) => g.group === k), `groupWhen names unknown group ${k}`);
-  const md = toMarkdown(c);
-  for (const g of c.groups) assert.ok(md.includes(`| ${g.group} |`), g.group);
+  const mdGroups = toMarkdown(census()).split("## Load ladder")[0].split("\n").filter((l) => /^\| [A-Z]/.test(l) && !l.startsWith("| group")).map((l) => l.split(" | ")[0].slice(2));
+  assert.deepEqual(mdGroups, c.groups.map((g) => g.group), "the markdown has one row per group, in census order");
 });
 
 test("load-budget.json: P0..P4, phone budgets advisory (D1 b), sw budgets gate, no cinematics budget (D3)", () => {
