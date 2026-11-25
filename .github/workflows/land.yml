@@ -48,7 +48,9 @@ run-name: >-
 # https://docs.github.com/en/rest/checks/suites), so `resolve` reads each PR's state itself.
 #
 # NOISE. Job-level `if:` on `resolve` (no runner at all): a label other than `land`/`hold`, an event on a PR without
-# `land`, and a cancelled or skipped run exit at once.
+# `land`, and a cancelled or skipped run exit at once. GitHub filters `pull_request_target` by type and branch only, never
+# by label, so these runs are created and skipped (0 runner-minutes); every type listed is a gate input (#6536 R3).
+# A CI completion on a PR that does not ask runs resolve only: post is skipped when the head has no `gate` or a failure.
 # Such a label event also gets its own concurrency group, so it never cancels or replaces a PR's re-gate.
 # CONFIG-OK. Bryce's `config-ok` click (added or removed) on a PR that carries `land` is not noise: it re-gates that PR
 # in its own `land-<n>` group like a land/hold flip, so a stale `config=FAIL` does not wait for the next push, CI or
@@ -117,9 +119,12 @@ run-name: >-
 # the payload's `changes` object names what changed, so `changes.body` is set only for a body edit; the workflow-trigger
 # page lists `edited` among the types, https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request_target,
 # read 2026-10-30). Ticking or striking a Plan item re-gates a `land` PR at once (#3981 sat on "plan=FAIL" for 5 h after
-# its Plan closed). resolve acts only on an edit whose payload has `changes.body`; a title or base edit runs alone in a
-# noise group like a stray label. Trust is unchanged: the payload is read, no PR code runs, and the gate still reads the body
-# through the API.
+# its Plan closed). resolve acts only on an edit whose payload has `changes.body`, and (#6536 R3) only when the edit changed a
+# line the gate can read: a heading, a checklist item or an HTML-comment delimiter line (resolve's BODY-EDIT SCREEN). Every
+# edit, title or body, runs in its own `land-edit-<run id>` group: it never cancels or replaces the PR's `land-<n>` run.
+# Measured 2026-11-23..25 (48 h): 164 body edits re-ran the whole gate and 131 cancelled an in-flight one, 59 of them the
+# gate a `land` click had just started (the Hand-off refresh right after it). Trust is unchanged: the payload is read, no PR
+# code runs, and the gate still reads the body through the API.
 #
 # STALE GATE (`sweep` job). A `gate` older than the PR's last green `CI` run, or `pending` 15 min after CI finished, left
 # #3970 stuck (a label flip or a push was the only cure). On a schedule (`schedule` runs on the default branch, same page
@@ -158,6 +163,8 @@ on:
   # Pages workflow_run re-gates the land PRs a moved tip just made stale (audit 2026-11-21, finding 2).
   push:
     branches: [claude/f1-game-project-26h3ng]
+  # Kept as is (#6536 R3): it fired 4 times in 48 h (2026-11-23..25), so it is a backstop; the train screen rides the
+  # Pages `workflow_run` below (~42 a day). Thin it only with data showing another trigger fires the screen as often.
   schedule:
     - cron: "17,47 * * * *"
   workflow_run:   # zizmor: ignore[dangerous-triggers] same as pull_request_target above
@@ -203,20 +210,20 @@ env:
 # deploy:red / priority on a `land` PR: the gate's rows or resolve's order read them) is noise and runs alone in `land-noise-<run id>` (its resolve is skipped): before, it cancelled an
 # in-flight CI re-gate and left `gate` pending
 # on a green PR (WP-L3a). The train run and a PR run can still overlap: AT and arm's re-read of every veto cover that.
-# A dispatched re-gate joins its PR's `land-<n>` group and never cancels (cancel-in-progress is true only for
+# A body or title edit runs alone in `land-edit-<run id>` (EDITED BODY above). A dispatched re-gate joins its PR's `land-<n>` group and never cancels (cancel-in-progress is true only for
 # pull_request_target): it queues behind the run that dispatched it. "At most one … workflow run can be pending in the
 # concurrency group … any existing pending … run in the same group is canceled and replaced"
 # (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency, read 2026-10-27):
 # a pending CI re-gate and a pending dispatch of one PR do the same work, since resolve reads the PR's live state.
 concurrency:
   group: >-
-    ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng'
+    ${{ (github.event_name == 'pull_request_target' && github.event.action == 'edited' && format('land-edit-{0}', github.run_id))
+    || (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng'
         && github.event.workflow_run.head_repository.full_name == github.repository
         && (github.event.workflow_run.name != 'Deploy to GitHub Pages' || github.event.workflow_run.conclusion != 'success')
         && format('land-noise-{0}', github.run_id))
     || (github.event_name == 'pull_request_target' && (((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'land' && github.event.label.name != 'hold'
-        && !((github.event.label.name == 'config-ok' || github.event.label.name == 'ratchet-raise' || github.event.label.name == 'deploy:red' || github.event.label.name == 'priority') && contains(github.event.pull_request.labels.*.name, 'land')))
-    || (github.event.action == 'edited' && !github.event.changes.body)))
+        && !((github.event.label.name == 'config-ok' || github.event.label.name == 'ratchet-raise' || github.event.label.name == 'deploy:red' || github.event.label.name == 'priority') && contains(github.event.pull_request.labels.*.name, 'land')))))
     && format('land-noise-{0}', github.run_id)
     || format('land-{0}', github.event.pull_request.number || ((github.event_name == 'schedule' || github.event_name == 'push' || github.event.inputs.stale == 'true') && 'stale-sweep') || github.event.inputs.pr || github.event.workflow_run.pull_requests[0].number || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && 'tip') || format('sha-{0}', github.event.workflow_run.head_sha)) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
@@ -260,6 +267,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           RUN_NAME: ${{ github.event.workflow_run.name }}
           RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
@@ -275,6 +283,23 @@ jobs:
           # The moment the PR state was read, in WHOLE seconds like a status's `created_at`; post compares the two
           # as epoch seconds (a string compare of `…:05Z` against `…:05.123Z` read a same-second older status as newer).
           at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          # BODY-EDIT SCREEN (#6536 R3): the gate reads the body only through planVerdict (ready-gate.mjs) and
+          # trainManifest (merge-train.mjs). Both see only heading lines, checklist items and HTML-comment delimiter
+          # lines, so an edit that leaves those lines (split on every JS line terminator) unchanged cannot change the
+          # verdict: a Hand-off refresh or a prose edit re-gates nothing. A body that mentions merge-train is never
+          # screened. An unreadable payload re-gates, as before.
+          if [ "$EVENT" = pull_request_target ] && [ "${ACTION:-}" = edited ]; then
+            screen=$(jq -r 'def gate_lines: [splits("\r\n|[\r\n\u2028\u2029]")]
+                | map(select(test("^##[ \t]|^[ \t]*[-*][ \t]+\\[[ xX~]\\]|<!--|-->"))) | join("\n");
+              (.changes.body.from // "") as $a | (.pull_request.body // "") as $b
+              | if (($a + $b) | contains("merge-train")) or (($a | gate_lines) != ($b | gate_lines)) then "regate" else "same" end' \
+              "${GITHUB_EVENT_PATH:-/dev/null}" 2>/dev/null) || screen=regate
+            if [ "$screen" = same ]; then
+              echo "::notice::PR #$PR_NUMBER: body edit leaves the Plan checklist and train manifest unchanged; nothing to re-gate"
+              printf '%s\n' validated_tip= landable=false 'prs=[]' 'notasked=[]' 'disarm=[]' paused=false "at=$at" attempt=0 >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
           # merge_paused (finding 7, 2026-11-21): true only while the open `Dispatch` issue carries dispatch:merge-pause AND
           # that label's newest `labeled` event is the repository owner's own click (no app), as dispatch.mjs counts it; an
           # agent's pause is ignored. Prints true|false; fails, printing nothing, when a read fails.
@@ -413,6 +438,14 @@ jobs:
             else
               # A direct event publishes its invalidation. A tip pass only needs to invalidate an armed PR here.
               if [ "$train" = true ] && [ "$armed" != true ]; then continue; fi
+              # A PR's CI completion on a PR that does not ask (#6536 R3: 253 of 694 workflow_run runs in 48 h): post
+              # only turns an existing success or pending red, so a head with no `gate` or a failure needs no post job.
+              # An unreadable status still goes to post.
+              if [ "$EVENT" = workflow_run ] && [ "$armed" != true ] && [ "$dl" != true ] && g=$(gate_state "$head") \
+                  && { [ -z "$g" ] || [ "$g" = failure ]; }; then
+                echo "PR #$n: $why; gate '${g:-none}' on ${head:0:12} needs no invalidation"
+                continue
+              fi
               notasked=$(jq -c --argjson n "$n" --arg h "$head" --arg w "$why" --argjson d "$dl" '. + [{number: $n, head: $h, why: $w, draft: $d}]' <<<"$notasked")
               if [ "$armed" = true ]; then disarm=$(jq -c --argjson n "$n" '. + [$n]' <<<"$disarm"); fi
             fi
