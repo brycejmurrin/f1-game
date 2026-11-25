@@ -541,7 +541,7 @@ const NetLobby = (function () {
       if (NetRendezvous.usingPrivateRelay && NetRendezvous.usingPrivateRelay()) return;
       stopCodeWait();
       dropPending();
-      codeReopen = null; codeRotateDue = false;
+      codeReopen = null; codeParked = null; codeRotateDue = false;
       clearTimeout(codeReopenTimer); codeReopenTimer = null;
       _answersSeen = null;
       const fresh = NetRendezvous.makeCode && NetRendezvous.makeCode();

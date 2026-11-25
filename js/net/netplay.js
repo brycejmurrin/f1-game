@@ -129,7 +129,7 @@ const NetPlay = (function () {
   }
   let G_lapsTarget = () => 0;   // bound to the façade in create()
   // Host ingress caps per guest connection, per EVENT_WINDOW_MS (bindSession).
-  const LAP_RATE = 4, STRATEGY_RATE = 8, MODEL_RATE = 2;
+  const LAP_RATE = 4, STRATEGY_RATE = 8, MODEL_RATE = 4;   // MODEL: a start + its ack each count
   // A peer's LAP keeps only these scalar fields: the debug log must not pin a
   // hostile peer's extra payload for the rest of the race (#6624).
   const LAP_KEYS = ["lap", "time", "best", "code", "driverId", "fin", "retired", "invalid", "epoch"];

@@ -1779,7 +1779,7 @@ test("a repeated same-epoch MODEL forces no further full strategy rebroadcast (#
   b.sent.length = 0; hn.tick(10_000);
   const burst = strategySends(b.sent);
   assert.ok(burst >= 2, "the first epoch still gets every car's state: " + burst);
-  // 100 repeats, one per host tick (and one per 600 ms of wall time, under MODEL_RATE): no tick inside the
+  // 100 repeats, one per host tick (and one per 600 ms of wall time, inside MODEL_RATE): no tick inside the
   // 1 s cadence may send a strategy to guest B again. Before the fix every tick re-sent the whole field.
   b.sent.length = 0;
   for (let i = 1; i <= 100; i++) { wall += 600; a.deliver("model", model); hn.tick(10_000 + i * 5); }
@@ -1798,7 +1798,7 @@ test("the host drops a MODEL beyond MODEL_RATE per connection (#6623)", () => {
   const mine = a.sent.find((e) => e.t === "model").d;
   a.sent.length = 0;
   for (let i = 0; i < 20; i++) a.deliver("model", { physics: mine.physics, strategy: mine.strategy, epoch: "e" + i });
-  assert.equal(NetPlay.MODEL_RATE, 2);
+  assert.equal(NetPlay.MODEL_RATE, 4);
   assert.equal(a.sent.filter((e) => e.t === "model" && e.d.ack).length, NetPlay.MODEL_RATE, "a MODEL past the cap is dropped, not acked");
   assert.equal(hn.status().events, 20, "the status log still counts what arrived");
   hn.stop();
