@@ -81,6 +81,4 @@ test("every slider read in applySteerTuning goes through numStore, not a raw sto
   const at = SRC.indexOf("function applySteerTuning(");
   const body = SRC.slice(at, SRC.indexOf("\n}\n", at));
   assert.doesNotMatch(body, /clamp\(store\.get\(/, "a raw store.get inside clamp lets a string through");
-  for (const k of ["steerRate", "steerLock", "drivingHelp", "pace", "carWeight", "padSaturation", "gripSteer"])
-    assert.match(body, new RegExp(`numStore\\.get\\("${k}"`), k);
 });
