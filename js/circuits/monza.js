@@ -27,6 +27,7 @@
       { kind: "foliage", s0: 0.69, s1: 0.77 },           // flyover approaches
     ],
     sunAzimBias: 0.16,   // royal-park afternoon: western sun raking through the trees onto the Curva Grande
+    surfaceDetail: true,  // #6509 pilot: close-up kerb/aggregate/paint layers + rubbered-in line (desktop EXTREME, TLX)
     baseHW: 8,
     ownPitStraight: true,
     pal: {
