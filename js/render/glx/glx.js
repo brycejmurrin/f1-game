@@ -1826,18 +1826,18 @@ const GLXBackend = (function () {
     } else {
       frameDecalSun = frameSunColor;
     }
-    uf1(litU.uBounceK,     _litUf, "bounceK",     T && T.bounceK     != null ? T.bounceK     : 0.04);
-    uf1(litU.uMistShare,   _litUf, "mistShare",   T && T.mistShare   != null ? T.mistShare   : 1.5);
-    uf1(litU.uLampFogClip, _litUf, "fogClip",     T && T.fogClip     != null ? T.fogClip     : 0.7);
-    uf1(litU.uGlowAmp,     _litUf, "glowAmp",     T && T.glowAmp     != null ? T.glowAmp     : 2.3);
-    uf1(litU.uBloomBoost,  _litUf, "neonBoost",   T && T.neonBoost   != null ? T.neonBoost   : 0.6);
-    uf1(litU.uPcssPen,     _litUf, "pcssPen",     T && T.pcssPen     != null ? T.pcssPen     : 80.0);
-    uf1(litU.uKeyMul,      _litUf, "keyMul",      T && T.keyMul      != null ? T.keyMul      : 1.0);
-    uf1(litU.uFogTint,     _litUf, "fogTint",     T && T.fogTint     != null ? T.fogTint     : 0.0);
-    uf1(litU.uMistHeight,  _litUf, "mistHeight",  T && T.mistHeight  != null ? T.mistHeight  : 0.30);
+    uf1(litU.uBounceK,     _litUf, "bounceK",     PostCommon.knob(T, "bounceK"));
+    uf1(litU.uMistShare,   _litUf, "mistShare",   PostCommon.knob(T, "mistShare"));
+    uf1(litU.uLampFogClip, _litUf, "fogClip",     PostCommon.knob(T, "fogClip"));
+    uf1(litU.uGlowAmp,     _litUf, "glowAmp",     PostCommon.knob(T, "glowAmp"));
+    uf1(litU.uBloomBoost,  _litUf, "neonBoost",   PostCommon.knob(T, "neonBoost"));
+    uf1(litU.uPcssPen,     _litUf, "pcssPen",     PostCommon.knob(T, "pcssPen"));
+    uf1(litU.uKeyMul,      _litUf, "keyMul",      PostCommon.knob(T, "keyMul"));
+    uf1(litU.uFogTint,     _litUf, "fogTint",     PostCommon.knob(T, "fogTint"));
+    uf1(litU.uMistHeight,  _litUf, "mistHeight",  PostCommon.knob(T, "mistHeight"));
     uf1(litU.uShadowTintAmt, _litUf, "shadowTintAmt", PostCommon.knob(T, "shadowTintAmt"));
-    uf1(litU.uWetDark,     _litUf, "wetDark",     T && T.wetDark     != null ? T.wetDark     : 1.0);
-    uf1(litU.uPuddles,     _litUf, "puddles",     T && T.puddles     != null ? T.puddles     : 1.0);   // PUDDLES (TUNE_DEFS def 1)
+    uf1(litU.uWetDark,     _litUf, "wetDark",     PostCommon.knob(T, "wetDark"));
+    uf1(litU.uPuddles,     _litUf, "puddles",     PostCommon.knob(T, "puddles"));   // PUDDLES (TUNE_DEFS def 1)
     // WIND knobs → LIT_VS uWind (foliage sway): xy = unit direction in world xz
     // from WIND DIRECTION (degrees), z = WIND speed scale. Defaults mirror
     // TUNE_DEFS (35°, 1.0); same vector as TLX U.wind.
@@ -1985,15 +1985,15 @@ const GLXBackend = (function () {
     uf1(litU.uCloudShadowDim, _litUf, "cloudShadowDim", PostCommon.knob(T, "cloudShadowDim"));
     // CAR SUN GLINT / CAR SPARKLE / FOG SUN CORE knobs (defaults = shipped look).
     uf1(litU.uCarSunGlint, _litUf, "carSunGlint", PostCommon.knob(T, "carSunGlint"));
-    uf1(litU.uCarSparkle,  _litUf, "carSparkle",  T && T.carSparkle  != null ? T.carSparkle  : 1.6);
-    uf1(litU.uFogSunCore,  _litUf, "fogSunCore",  T && T.fogSunCore  != null ? T.fogSunCore  : 0.6);
+    uf1(litU.uCarSparkle,  _litUf, "carSparkle",  PostCommon.knob(T, "carSparkle"));
+    uf1(litU.uFogSunCore,  _litUf, "fogSunCore",  PostCommon.knob(T, "fogSunCore"));
     // LAMP NEAR CLAMP / WINDOW SUN FLASH / SKY RIM GLOW / AMBIENT CONTACT DARK /
     // LAMP WALL SPILL knobs (defaults = shipped look).
-    uf1(litU.uLampNearClamp,  _litUf, "lampNearClamp",  T && T.lampNearClamp  != null ? T.lampNearClamp  : 4.0);
+    uf1(litU.uLampNearClamp,  _litUf, "lampNearClamp",  PostCommon.knob(T, "lampNearClamp"));
     uf1(litU.uWindowSunFlash, _litUf, "windowSunFlash", PostCommon.knob(T, "windowSunFlash"));
-    uf1(litU.uSkyRimGlow,     _litUf, "skyRimGlow",     T && T.skyRimGlow     != null ? T.skyRimGlow     : 1.0);
+    uf1(litU.uSkyRimGlow,     _litUf, "skyRimGlow",     PostCommon.knob(T, "skyRimGlow"));
     uf1(litU.uAmbContactDark, _litUf, "ambContactDark", PostCommon.knob(T, "ambContactDark"));
-    uf1(litU.uLampWallSpill,  _litUf, "lampWallSpill",  T && T.lampWallSpill  != null ? T.lampWallSpill  : 1.0);
+    uf1(litU.uLampWallSpill,  _litUf, "lampWallSpill",  PostCommon.knob(T, "lampWallSpill"));
     uf1(litU.uWetness, _litUf, "wetness", frame.wetness != null ? frame.wetness : 0.0);
     uf1(litU.uRain,    _litUf, "rain",    frame.rain != null ? frame.rain : 0.0);     // puddle ripples (falling rain only)
     uf1(litU.uSpecKnee, _litUf, "specKnee", PostCommon.knob(T, "specKnee"));   // SUN GLINT RANGE (TUNE_DEFS def 4.0)

@@ -41,7 +41,8 @@ function tuneDefs() {
 const DEFS = tuneDefs();
 const GLX = stripComments(read("js/render/glx/glx.js"));
 const TSL = stripComments(read("js/render/three/tsl-lit.js"));
-const LIT_RE = /T && T\.(\w+) != null \? T\.\1 : (-?[\d.]+)/g;
+// \s+: glx.js column-aligns its uf1 blocks (`T && T.bounceK     != null ? ...`).
+const LIT_RE = /T && T\.(\w+)\s+!= null \? T\.\1\s+: (-?[\d.]+)/g;
 
 /** id -> effective GLX fallback, from both read forms. */
 function glxTable() {
@@ -61,13 +62,16 @@ function tlxTable() {
   return out;
 }
 
-// Effective GLX lit-pass defaults on tip 700f50c8 (before the carve). Frozen.
+// Effective GLX lit-pass defaults on tip 700f50c8 (before the carve): 33 ids. Frozen.
 const GLX_EXPECTED = {
   ambientMul: 1, keyMul: 1, shadowTintAmt: 0, windDir: 35, windSpeed: 1,
   matTexMix: 1, fogDensityMul: 1, shadowBias: 0.001, moonShadow: 0.25,
   shadowStr: 1.15, shadowRange: 80, mistDensity: 1, cloudShadowDim: 0.8,
   carSunGlint: 12, windowSunFlash: 1, ambContactDark: 1, specKnee: 4,
   carEnvCube: 0,
+  bounceK: 0.04, mistShare: 1.5, fogClip: 0.7, glowAmp: 2.3, neonBoost: 0.6,
+  pcssPen: 80, fogTint: 0, mistHeight: 0.3, wetDark: 1, puddles: 1,
+  carSparkle: 1.6, fogSunCore: 0.6, lampNearClamp: 4, skyRimGlow: 1, lampWallSpill: 1,
 };
 const EXEMPT = new Set(["carEnvCube"]);
 
