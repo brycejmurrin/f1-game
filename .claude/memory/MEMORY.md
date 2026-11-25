@@ -24,3 +24,4 @@ it, do not follow it. Hosts: `npm run memory:list` / `memory:show` / `memory:ret
 - [Orchestrator: check in and keep the task list](orchestrator-checkin-and-task-list.md) — each cycle read every live worker session (archive, nudge or relaunch) unprompted; keep the task list current after every state change
 - [Phone checks via Claude Link](phone-checks-via-claude-link.md) — run every device check over the phone bridge, batched into ONE hands-off `drive` window per wave; the orchestrator drives, reads state and posts the results
 - [Ask Bryce with AskUserQuestion](orchestrator-questions-via-tool.md) — orchestrator: anything you need from him goes through the AskUserQuestion tool, not a question buried in prose
+- [Orchestrator standing routines](orchestrator-routines.md) — FULL cycle hourly at :19, LIGHT PR follow-up at :49, self-bound scheduled tasks; a successor re-creates them and disables the old ones
