@@ -2340,9 +2340,10 @@ test("#6587 UI: a file whose every slot is skipped announces NOTHING RESTORED, n
   const envelope = { format: "apex26-career-backup-v1", slots: [
     { flavour: "driver", i: 0, data: "garbage" }, { flavour: "driver", i: "abc", data: save({ money: 9 }) }] };
   await ui.selectBackup(envelope, "left");
-  const notes = ui.G.$("cr-left").querySelectorAll(".cr-note").map((n) => n.textContent).join(" | ");
-  assert.match(notes, /Skipped: Driver career slot 1 \(slot-not-object\)/);
-  assert.match(notes, /Skipped: file row 2 \(bad-index\)/);
+  const notes = Array.from(ui.G.$("cr-left").querySelectorAll(".cr-note"), (n) => n.textContent);
+  assert.deepEqual(notes.filter((t) => t.startsWith("Skipped: ")), [
+    "Skipped: Driver career slot 1 (slot-not-object); your save there is unchanged",
+    "Skipped: file row 2 (bad-index); your save there is unchanged"]);
   await ui.clickImport("left");
   assert.equal(ui.notices.at(-1), "NOTHING RESTORED — 2 SLOTS SKIPPED; YOUR SAVES ARE UNCHANGED");
   assert.equal(h.store.get("career.driver.0").money, 321);
