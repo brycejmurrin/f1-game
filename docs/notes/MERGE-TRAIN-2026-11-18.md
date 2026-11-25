@@ -186,6 +186,39 @@ Bryce's "Yes, one PR" (about 17:45Z, relayed by the orchestrator) for four chang
 - **Pause.** The `train` job honours `dispatch:merge-pause` only on Bryce's own click, as resolve, arm and the sweep
   do. An unreadable read still pauses.
 
+## Follow-ups to trains-first (#6679, #6686; issue #6667, 2026-11-25)
+
+Bryce's "Tap now + follow-ups" (about 19:17Z, PR #6686 comment 7171942231) and the #6679 test follow-up (comment
+7171844314), from the reviews at PR #6679 comment 7171823128 and PR #6686 comment 7171914291.
+- **Car cap by retest seconds** (finding 5). The screen stops adding cars once the fold's own retest bound passes the
+  gate's own refusal line, `RETEST_REFUSE_MS` (0.8 × the 420 s cap = 336 s; merge-gate's retest row refuses at the
+  same constant). The bound is `retestBound`: the gate's `retestPlan`, `gateSelection` and committed timings
+  (`gateEstimate`, 3 workers), with the tip side read as reaching everything, because the tip merges after the
+  train's CI are not known at fold time. The first car always rides; a refused car is recorded red in the screen
+  verdict and rides a later train. No new number. Measured on the live folds of 2026-11-25: every train of the day
+  widens its own selection (`tests/data/load-budget.json`, `tools/manifest.cjs`, `tests/groups.json` or land.yml),
+  so its bound is only the touched `tests/unit` files: 74 s for 12-car #6687, 96 s for 7-car #6580. Only a fold
+  that never widens is bounded by its own selection, which is ~280 s for one `js/` file alone; #6580's first two
+  cars (#6466, #6514) read 425 s and 457 s, so the second would have waited. A retest that is broad because the base
+  aged (the tip side) is still closed `stale` by `broadRetest`, and the rebuild onto the fresh tip starts with no
+  tip side.
+- **Orphan stacked refs** (finding 1). land.yml post counts a `train-next/` ref as a train in flight only while it
+  backs an open `train/` PR with `train` and no `hold`: its base is that PR's head (the train under it), or its sha
+  is (its speculative PR). An orphan left by a degraded build parks nobody. The wait names the stacked train by its
+  cars: the ref's 40-hex base pushed the status past GitHub's 140 characters and cut the suffix the sweep matches.
+- **One in-flight definition** (finding 4). `trainInFlight` in merge-train.mjs (soloLane's `trainOpen`) and the
+  post, retry and sweep reads all count a ready `train/` PR of this repository with `train` + `land` and no `hold`.
+  A `deploy:red` PR keeps the soloLane exemption only while the deploy tip is red, as post exempts only the base
+  row's fixer; a stale label on a green tip boards like any car.
+
+### PRs that can never board (finding 2)
+
+A PR whose head conflicts with the cars ahead of it is dropped from every fold ("conflicts in …"). While trains run
+back to back, post never arms it solo ("waiting — train #N in flight"), so it lands only in a gap with no train in
+flight: the sweep re-gates its stale pending after 900 s, or a push or label flip does. The cure is the conflict's:
+`sync-pr.mjs` onto the tip after the conflicting car lands, and the next fold takes it. The orchestrator's escape for
+a stuck or looping train is a hand close with the `merge-train-result` stale marker.
+
 ## Residual risks (accepted)
 
 - A `hold` added to a car after the train's `gate` success and before GitHub merges the train is not re-read. This is

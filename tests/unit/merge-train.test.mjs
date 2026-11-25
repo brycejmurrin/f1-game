@@ -12,7 +12,7 @@ import {
   trainHistory, foldCars, verifyTrain, trainRow, trainDisposition, carMessage, redOnRedTip, main,
   stuckGreen, retryAttempts, STUCK_GREEN_MIN, RETRY_MAX, isStackPr, strayTrainRefs, broadRetest, RETEST_BROAD,
   readScreen, screenAccept, screenFold, screenMain, soloLane, landRunsInFlight, resnapVerdict, resnapTree, SCREEN_BUDGET_MS,
-  STACK_PREFIX, stackRef, parseStackRef, readStack, stackPlan,
+  STACK_PREFIX, stackRef, parseStackRef, readStack, stackPlan, trainInFlight, retestBudget, planTrain,
 } from "../../tools/ci/merge-train.mjs";
 import { evaluate, isProtectedConfigPath, isConfigPath } from "../../tools/ci/merge-gate.mjs";
 import { planVerdict } from "../../tools/ci/ready-gate.mjs";
@@ -721,7 +721,7 @@ test("#6584: a rebased train's merge keeps the red train's bisect for the train 
 /** A bare `origin` and a clone: the deploy branch at `base`, cars 1–4 at refs/pull/<n>/head, train #100 = the fold of
  *  cars 1 and 2 (its own refs/pull/100/head). `request` reads stacked refs from the bare remote and applies DELETEs to
  *  it, so several builds can run back to back on one state. */
-function stackFixture({ refuseStack = false, refsError = false } = {}) {
+function stackFixture({ refuseStack = false, refsError = false, patchFail = new Set() } = {}) {
   const root = scratch("merge-train-stack-");
   const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
   const gitAt = (cwd) => (...a) => { const r = spawnSync("git", a, { cwd, encoding: "utf8", env }); assert.equal(r.status, 0, `${a.join(" ")}: ${r.stderr}`); return r.stdout.trim(); };
@@ -750,6 +750,7 @@ function stackFixture({ refuseStack = false, refsError = false } = {}) {
   const request = (p, o) => {
     if (o?.method) {
       writes.push({ p, ...o });
+      if (o.method === "PATCH" && patchFail.has(p)) return { error: "HTTP 502: Bad Gateway" };
       if (o.method === "DELETE" && p.startsWith("git/refs/heads/")) spawnSync("git", ["update-ref", "-d", `refs/heads/${p.slice("git/refs/heads/".length)}`], { cwd: remote });
       if (p === "pulls" && o.method === "POST") {
         const number = 200 + opened.length;
@@ -964,5 +965,103 @@ test("#6584 FALLBACK: unreadable stacked refs never fail a run — the build wai
     const b = await f.build();
     assert.equal(b.code, 0, b.logs.join("\n"));
     affix(b.logs.at(-1), "= merge-train opened #200 — cars=#3,#4,#5 ");
+  } finally { f.rm(); }
+});
+
+// ---- #6686 / #6679 follow-ups (#6667): one in-flight definition, fixer parity, the car cap by retest seconds -------
+
+test("trainInFlight (#6686 finding 4): ready + `train` + `land`, no `hold`, not a fork, as land.yml post, retry and sweep count", () => {
+  const t = (o = {}) => pull(6687, { head: { sha: sha("7"), ref: "train/20261125-1900", repo: { full_name: "o/r" } }, labels: [{ name: "land" }, { name: TRAIN_LABEL }], ...o });
+  assert.equal(trainInFlight(t()), true);
+  for (const [why, p] of [["draft", t({ draft: true })], ["held", t({ labels: [{ name: "land" }, { name: TRAIN_LABEL }, { name: "hold" }] })],
+    ["no land (a speculative stack PR)", t({ labels: [{ name: TRAIN_LABEL }] })], ["no train label", t({ labels: [{ name: "land" }] })],
+    ["not a train/ ref", t({ head: { sha: sha("7"), ref: "claude/x", repo: { full_name: "o/r" } } })], ["a fork", t({ head: { sha: sha("7"), ref: "train/x", repo: { full_name: "fork/r" } } })],
+    ["closed", t({ state: "closed" })]]) assert.equal(trainInFlight(p), false, why);
+});
+
+test("planTrain wiring (#6686 finding 4): a held or draft train is not in flight, so a mid-arm green PR may arm alone; a ready one keeps it a car", async () => {
+  const f = stackFixture();
+  try {
+    const run = { id: 9, status: "in_progress", pull_requests: [{ number: 3 }], display_title: "Land" };
+    const why = "its own gate passed and land run 9 is still in flight (it may arm alone)";
+    const plan = async (trainOf, { pages = { error: "pages unread" }, labels3 = [{ name: "land" }] } = {}) => {
+      f.state.pulls[3] = { ...f.state.pulls[3], labels: labels3 };
+      const request = (p, o) => {
+        if (p.startsWith("pulls?state=open")) { const r = f.request(p, o); return { json: r.json.map((q) => (q.number === 100 ? trainOf(q) : q)) }; }
+        if (p === `commits/${f.heads[3]}/statuses?per_page=100`) return { json: [{ context: "gate", state: "success" }] };
+        if (p.startsWith("actions/workflows/land.yml/runs?status=in_progress")) return { json: { workflow_runs: [run] } };
+        if (p.startsWith("actions/workflows/pages.yml/runs")) return pages;
+        return f.request(p, o);
+      };
+      const seen = [];
+      const r = await planTrain({ request, cwd: f.dir, now: Date.parse("2026-11-25T12:00:00Z"), carGate: (pr) => { seen.push(pr); return { head: "", rows: {} }; } });
+      assert.equal(r.error, undefined, r.error);
+      return { seen, solo: r.dropped.some((d) => d.pr === 3 && d.why === why) ? why : "" };
+    };
+    let r = await plan((q) => q);
+    assert.equal(r.seen.includes(3), true, "train #100 is in flight: #3's land run only waits, so #3 is a car");
+    for (const [label, trainOf] of [["held", (q) => ({ ...q, labels: [...q.labels, { name: "hold" }] })], ["draft", (q) => ({ ...q, draft: true })], ["no land", (q) => ({ ...q, labels: [{ name: TRAIN_LABEL }] })]]) {
+      r = await plan(trainOf);
+      assert.deepEqual([r.seen.includes(3), r.solo], [false, why], `a ${label} train is not in flight: post arms #3 alone, so it stays off the train`);
+    }
+    // Fixer parity: `deploy:red` keeps a mid-arm PR solo only while the tip is red (post's fixer is the base row's).
+    const fx = [{ name: "land" }, { name: "deploy:red" }];
+    r = await plan((q) => q, { labels3: fx });
+    assert.deepEqual([r.seen.includes(3), r.solo], [false, why], "an unreadable tip keeps the fixer exemption (as before)");
+    r = await plan((q) => q, { labels3: fx, pages: { json: { workflow_runs: [{ id: 5, conclusion: "failure", head_sha: f.base }] } } });
+    assert.equal(r.solo, why, "a code-red tip: the fixer goes solo");
+    r = await plan((q) => q, { labels3: fx, pages: { json: { workflow_runs: [{ id: 5, conclusion: "success", head_sha: f.base }] } } });
+    assert.deepEqual([r.seen.includes(3), r.solo], [true, ""], "a stale `deploy:red` on a green tip boards like any car (post would only make it wait)");
+  } finally { f.rm(); }
+});
+
+test("retestBudget (#6686 finding 5): the screen stops adding cars once the fold's retest bound passes the gate's line; the first car always rides; doubt accepts", () => {
+  const r = repo();
+  try {
+    const tree = (h) => r.g("rev-parse", `${h}^{tree}`);
+    const asked = [];
+    const bound = (paths) => { asked.push(paths); return { ms: paths.length * 200_000, files: paths.map((p) => `tests/unit/${p}.test.mjs`), how: "the PR side" }; };
+    const b = retestBudget({ base: r.base, cwd: r.dir, bound, limitMs: 336_000 });
+    assert.deepEqual(b({ tree: tree(r.h1), kept: 0 }), { ok: true }, "the first car rides whatever its bound");
+    assert.deepEqual(asked, [], "and is not measured");
+    assert.deepEqual(b({ tree: tree(r.h1), kept: 1 }), { ok: true, ms: 200_000 });
+    const m = r.g("merge-tree", "--write-tree", r.h1, r.h2);
+    assert.deepEqual(b({ tree: m, kept: 1 }), { ok: false, ms: 400_000, why: "retest bound ~400 s with this car (2 unit file(s), the PR side), over the gate's 336 s line: it rides a later train" });
+    assert.deepEqual(asked.at(-1), ["c.txt", "d.txt"], "the fold's own paths against its base");
+    assert.equal(retestBudget({ base: r.base, cwd: r.dir, bound: () => ({ error: "selection failed" }), limitMs: 1 })({ tree: m, kept: 1 }).ok, true, "an unreadable bound accepts (the gate still measures)");
+    assert.equal(retestBudget({ base: r.base, cwd: r.dir, bound: () => ({ ms: null, files: [] }), limitMs: 1 })({ tree: m, kept: 1 }).ok, true, "no estimate accepts");
+    assert.equal(retestBudget({ base: sha("0"), cwd: r.dir, bound: () => assert.fail("no diff, no bound"), limitMs: 1 })({ tree: m, kept: 1 }).ok, true, "an unreadable diff accepts");
+    // In the screen: the refused car is recorded red (so the build leaves it out) and costs no ratchet run.
+    const out = [], checked = [];
+    const sf = screenFold({ tip: r.base, cwd: r.dir, check: ({ cwd }) => { checked.push(fs.readdirSync(cwd).filter((x) => x.endsWith(".txt")).sort().join(",")); return { ok: true }; }, prepare: () => ({ ok: true }), out, retest: b });
+    const f = foldCars({ base: r.base, cars: [{ pr: 1, head: r.h1, ref: "one" }, { pr: 2, head: r.h2, ref: "two" }], cwd: r.dir, accept: sf.accept });
+    sf.cleanup();
+    assert.deepEqual(f.cars.map((c) => c.pr), [1]);
+    assert.deepEqual(out.map((v) => [v.pr, v.ok]), [[1, true], [2, false]]);
+    affix(out[1].why, "retest bound ~400 s with this car");
+    assert.deepEqual(checked, ["a.txt,b.txt,c.txt"], "car 2 never reached the ratchets");
+  } finally { r.rm(); }
+});
+
+test("promote half-failure (#6679 finding 1): the labels land, the body PATCH errors; the PR is still a train (land), the ref is gone, the next build sees it running", async () => {
+  const f = stackFixture({ patchFail: new Set(["pulls/200"]) });
+  try {
+    f.screen([3, 4]);
+    assert.equal((await f.build()).code, 0);
+    const [[ref, head]] = f.stacks();
+    const spec = f.opened[0];
+    f.merge();
+    const c = await f.build();
+    assert.equal(c.code, 0, c.logs.join("\n"));
+    assert.deepEqual(c.logs.filter((l) => l.startsWith("  (body of")), ["  (body of #200 not rewritten: HTTP 502: Bad Gateway; its manifest still names the cars and base)"]);
+    assert.equal(c.logs.at(-1), "= merge-train promoted #200 — #3,#4 (the train under it merged; its CI already ran on this head)");
+    assert.deepEqual(spec.labels.map((l) => l.name), [TRAIN_LABEL, "land"], "the labels POST stood");
+    assert.deepEqual(trainManifest(spec.body).onto, 100, "the body is the old one: its manifest still says onto");
+    assert.equal(isStackPr(spec), false, "`land` makes it a train, whatever the manifest says");
+    assert.equal(trainInFlight({ ...spec, head: { ...spec.head } }), true, "and a train in flight to land.yml");
+    assert.deepEqual(f.stacks().map(([r]) => r).includes(ref), false, "the stacked ref is deleted");
+    assert.equal(spec.head.sha, head);
+    const d = await f.build();
+    assert.deepEqual(d.logs, [`= merge-train waiting — train #200 is still running; the screen was not stacked on its head ${head.slice(0, 8)}, nothing stacked`]);
   } finally { f.rm(); }
 });
