@@ -10,6 +10,7 @@ import {
   TRAIN_MAX, TRAIN_PREFIX, TRAIN_LABEL, CAR_ROWS, RESOLVE_CAP, newestRun, trainManifest, renderManifest, trainResult, trainBody,
   carCandidates, carVerdict, openTrainCarIds, boardedTrainOf, resolveLandable,
   trainHistory, foldCars, verifyTrain, trainRow, trainDisposition, carMessage, redOnRedTip, main,
+  stuckGreen, retryAttempts, STUCK_GREEN_MIN, RETRY_MAX,
   readScreen, screenAccept, screenFold, screenMain,
 } from "../../tools/ci/merge-train.mjs";
 import { evaluate, isProtectedConfigPath, isConfigPath } from "../../tools/ci/merge-gate.mjs";
@@ -146,6 +147,68 @@ test("trainDisposition: stale when a car moved, red on CI or gate failure, else 
   assert.deepEqual(newestRun({ workflow_runs: [{ id: 9, status: "completed", conclusion: "cancelled" }, { id: 12, status: "queued", conclusion: null }] }), { status: "queued", conclusion: "" });
   assert.equal(newestRun({ workflow_runs: [] }), null);
   assert.equal(newestRun(null), null);
+});
+
+test("T1 (train #6382): a gate success left unarmed closes the train stale; armed, fresh or still in budget keeps it", () => {
+  const m = { base: sha("a"), cars: [{ pr: 5, head: sha("b") }] };
+  const cars = new Map([[5, { state: "open", head: { sha: sha("b") }, labels: [{ name: "land" }] }]]);
+  // #6382: gate success 22:52:32Z, arm failed on a 503 at 22:55Z; still open at 00:27Z when a person closed it.
+  const gateAt = Date.parse("2026-11-24T22:52:32Z"), min = (n) => gateAt + n * 60_000;
+  const d = (stuck) => trainDisposition({ manifest: m, cars, ciConclusion: "success", gate: "success", stuck });
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "success", gate: "success" }), { close: false }, "no stuck inputs: as before");
+  assert.deepEqual(d({ armed: false, gateAt, now: min(16) }), { close: true, outcome: "stale", why: "gate success at 2026-11-24T22:52:32.000Z is still unarmed after 16 min" });
+  assert.equal(STUCK_GREEN_MIN, 15);
+  assert.deepEqual(d({ armed: false, gateAt, now: min(15) }), { close: false }, "at 15 min it may still be arming");
+  assert.deepEqual(d({ armed: true, gateAt, now: min(95) }), { close: false }, "an armed train is GitHub's to merge");
+  assert.deepEqual(d({ armed: false, gateAt: NaN, now: min(95) }), { close: false }, "an unreadable gate time closes nothing");
+  assert.deepEqual(d({ armed: false, gateAt, now: min(4), tipAt: min(2), attempts: RETRY_MAX }),
+    { close: true, outcome: "stale", why: `gate success at 2026-11-24T22:52:32.000Z measured an older deploy tip and its head spent the retry budget (${RETRY_MAX} of ${RETRY_MAX})` });
+  assert.deepEqual(d({ armed: false, gateAt, now: min(4), tipAt: min(2), attempts: RETRY_MAX - 1 }), { close: false }, "budget left: retry re-gates it");
+  assert.deepEqual(d({ armed: false, gateAt, now: min(4), tipAt: min(2), attempts: null }), { close: false }, "unread dispatches: wait for the age rule");
+  assert.deepEqual(d({ armed: false, gateAt, now: min(4), tipAt: min(-1), attempts: RETRY_MAX }), { close: false }, "tip unmoved since the success");
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "success", gate: "pending", stuck: { armed: false, gateAt, now: min(95) } }), { close: false }, "only a success is a stuck green");
+  assert.deepEqual(stuckGreen({ armed: false, gateAt, now: min(20) }).outcome, "stale", "stale, never red: no bisect");
+  const land = fs.readFileSync(path.join(ROOT, ".github/workflows/land.yml"), "utf8");
+  assert.equal(String(RETRY_MAX), /^ {2}RETRY_MAX: (\d+)$/m.exec(land)?.[1], "the builder's budget is land.yml's");
+});
+
+test("retryAttempts: the highest Land retry attempt for this PR at this head", () => {
+  const H = sha("b"), runs = (...t) => ({ workflow_runs: t.map((display_title) => ({ display_title })) });
+  assert.equal(retryAttempts(runs(`Land retry pr=6382 head=${H} attempt=1`, `Land retry pr=6382 head=${H} attempt=3`, `Land retry pr=6382 head=${sha("c")} attempt=2`, "Land stale sweep"), 6382, H), 3);
+  assert.equal(retryAttempts(runs(`Land retry pr=6383 head=${H} attempt=3`), 6382, H), 0, "another PR's budget");
+  assert.equal(retryAttempts(runs(`Land retry pr=6382 head=- attempt=2`), 6382, H), 2, "a hand dispatch with no head counts");
+  assert.equal(retryAttempts(runs(`Land retry pr=6382 head=${sha("c")} attempt=3`), 6382, H), 0, "an older head's budget");
+  assert.equal(retryAttempts({}, 6382, H), null);
+});
+
+test("main --build (T1): a train green and unarmed for 20 min is closed stale and the cars are rebuilt; an armed one waits", async () => {
+  const m = { base: sha("a"), cars: [{ pr: 5, head: sha("b"), ref: "claude/x" }] };
+  const now = Date.parse("2026-11-24T23:12:32Z");
+  const run = async (auto_merge) => {
+    const writes = [], logs = [];
+    let opens = 0;
+    const train = { number: 6382, head: { sha: sha("e"), ref: "train/x-5" }, body: renderManifest(m), auto_merge };
+    const request = (p, o) => {
+      if (o?.method) { writes.push({ p, ...o }); return { json: {} }; }
+      if (p.startsWith("pulls?state=open")) return opens++ ? { error: "stop here" } : { json: [train] };
+      if (p === "pulls/5") return { json: { state: "open", head: { sha: sha("b") }, labels: [{ name: "land" }] } };
+      if (p.includes("check-runs?check_name=CI")) return { json: { check_runs: [{ app: { slug: "github-actions" }, status: "completed", conclusion: "success" }] } };
+      if (p.includes("/statuses")) return { json: [{ context: "gate", state: "success", created_at: "2026-11-24T22:52:32Z" }] };
+      return { error: `unexpected ${p}` };
+    };
+    const code = await main(["--build"], { request, log: (l) => logs.push(l), now });
+    return { code, writes, logs };
+  };
+  const r = await run(null);
+  const close = r.writes.find((w) => w.p === "pulls/6382");
+  assert.ok(close, r.logs.join("\n"));
+  assert.equal(close.body.state, "closed");
+  assert.deepEqual(trainResult(close.body.body), { outcome: "stale", why: "gate success at 2026-11-24T22:52:32.000Z is still unarmed after 20 min" });
+  assert.deepEqual(r.logs.filter((l) => l.startsWith("= merge-train closed")), ["= merge-train closed #6382 (stale): gate success at 2026-11-24T22:52:32.000Z is still unarmed after 20 min"]);
+  const a = await run({ enabled_by: { login: "x" } });
+  assert.equal(a.code, 0);
+  assert.deepEqual(a.writes, [], "armed: GitHub merges it");
+  assert.deepEqual(a.logs, ["= merge-train waiting — train #6382 is still running"]);
 });
 
 test("redOnRedTip: a red train on a red tip closes stale (no bisect); a red on a green or unknown tip stays red", () => {
