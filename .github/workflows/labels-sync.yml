@@ -2,8 +2,8 @@ name: Labels sync
 
 # LABELS SYNC (Bryce's `decision: A`, 2026-11-25 ~02:55Z, via the orchestrator).
 # `.github/labels.json` is the label list (name, colour, description) and the scheme lives in skill steward
-# `references/labels.md`. Nothing applied it before this: dispatch.yml's "Labels drift" step only reports, and no
-# agent tool sets a label's colour or description. This job is the one writer: for each labels.json row it runs
+# `references/labels.md`. Nothing applied it before this: the retired dispatch.yml's "Labels drift" step only reported
+# (`dry_run: true` here is that report now, #6536), and no agent tool sets a label's colour or description. This job is the one writer: for each labels.json row it runs
 # `gh label create --force`, which creates a missing label or updates its colour and description in place. It NEVER
 # deletes or renames a label (a label left out of labels.json is untouched), and it changes no issue's labels.
 #

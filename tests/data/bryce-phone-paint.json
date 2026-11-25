@@ -16,7 +16,7 @@
     "safari@109": {
       "title": {
         "taps": 0,
-        "text": 5,
+        "text": 2,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -81,7 +81,7 @@
       },
       "garage": {
         "taps": 0,
-        "text": 1,
+        "text": 0,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -132,7 +132,7 @@
       },
       "garage": {
         "taps": 0,
-        "text": 1,
+        "text": 0,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -169,7 +169,7 @@
     "standalone@109": {
       "title": {
         "taps": 0,
-        "text": 3,
+        "text": 0,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -234,7 +234,7 @@
       },
       "garage": {
         "taps": 0,
-        "text": 1,
+        "text": 0,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -285,7 +285,7 @@
       },
       "garage": {
         "taps": 0,
-        "text": 1,
+        "text": 0,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -322,7 +322,7 @@
     "w844@109": {
       "title": {
         "taps": 0,
-        "text": 3,
+        "text": 0,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -387,7 +387,7 @@
       },
       "garage": {
         "taps": 0,
-        "text": 1,
+        "text": 0,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -438,7 +438,7 @@
       },
       "garage": {
         "taps": 0,
-        "text": 1,
+        "text": 0,
         "outside": 0,
         "blocked": 0,
         "scroll": 0

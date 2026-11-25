@@ -13,10 +13,14 @@
    (server time, so a reload never replays old commands). A command is a fenced `apex-cmd` JSON block; the answer is a
    fenced `apex-result` block naming the command's comment id.
 
-   NO EVAL. A command is one of CMDS; `call` reaches only the __apex methods in CALL_OK (perf, state reads, driving and
-   renderer A/B toggles); `tap` / `nav` press only the menu controls in TAP_OK and circuit tiles (UI NAVIGATION below).
-   Saves, career, garage files and every lobby / net hook are out. Replies are capped at
+   NO EVAL. A command is one of CMDS. `call` reaches any __apex method but the CALL_DENY ones; `tap` / `set` / `nav`
+   press or set any visible, enabled control outside the TAP_DENY areas (UI NAVIGATION below); `key` / `scroll` act
+   on the focused element or a visible one. Saves, career, garage files, every lobby / net hook and the link's own
+   token form are out, by deny-list. Replies are capped at
    MAX_REPLY chars (GitHub's comment limit is 65,536). The CLAUDE LINK badge counts commands; tapping it ends the link.
+
+   DRIVING. `drive` gives the car to SoakRun's driver (to the pit box, or an autopilot lap) and takes it back on `stop`,
+   a pause, a quit, a hidden page or a real touch (DRIVING below).
 
    PERF COMMANDS. `path` pins the three.js path BENCHMARK pins (BenchRun.pathPrefs) and reloads, `bench` starts and
    reads a BenchRun, `snap` returns a small JPEG of the canvas, `batch` runs up to BATCH_MAX steps from one comment.
@@ -32,18 +36,16 @@ const ApexBridge = (function () {
   const BACKOFF_MS = 60000;
   const MAX_REPLY = 60000;
   const CMD_RE = /```apex-cmd[ \t]*\n([\s\S]*?)```/;
-  const CALL_OK = new Set([
-    // read
-    "info", "perf", "physState", "obs", "world", "field", "scene", "probe", "viewState", "describe", "diag", "logs",
-    "lifecycle", "timing", "trackInfo", "tracks", "menuPrep", "assets", "texCensus", "thermalDrift", "buildProfile",
-    "raceProfile", "raceEntryProfile", "raceEntryStages", "frametimeBench", "renderClock", "envProbe", "lightState",
-    "modelDiagnostics", "geometryDiagnostics", "agentHelp", "sectorState", "lapHistory",
-    // drive
-    "race", "go", "jump", "park", "rollout", "setInput", "clearInput", "freeze", "seed", "setTimeOfDay", "weather",
-    // renderer A/B
-    "renderRate", "renderScale", "gpuTimer", "govHold", "mirror", "occlusionCull", "multiDraw", "spatialUpscale",
-    "matTex", "meshToggle", "stats",
-  ]);
+  // `call` reaches EVERY __apex method except these (Bryce 2026-11-25, "Broad allow-list"; was an allow-list of 50):
+  // saves and files (save, persistState, settingsFile, garageFile), career, the lobby and net, a write of the garage's
+  // stored parts (garageParts), a URL the page would fetch (loadCarModel). A prefix denies every method it starts.
+  // Nothing in __apex evaluates a string, and JSON carries no function, so `call` stays eval-free.
+  const CALL_DENY_PREFIX = ["save", "persist", "settingsFile", "garageFile", "career", "lobby", "net"];
+  const CALL_DENY = new Set(["garageParts", "loadCarModel", "eval"]);
+  function callAllowed(m) {
+    return typeof m === "string" && /^[a-z][A-Za-z0-9]{0,40}$/.test(m) && !(m in Object.prototype) &&
+      !CALL_DENY.has(m) && !CALL_DENY_PREFIX.some((p) => m.startsWith(p));
+  }
 
   let _run = null, _badge = null;
 
@@ -235,7 +237,7 @@ const ApexBridge = (function () {
 
   function call(args) {
     const m = args && args.method;
-    if (!CALL_OK.has(m)) throw new Error("method not allowed: " + m);
+    if (!callAllowed(m)) throw new Error("method not allowed: " + m);
     const api = window.__apex;
     if (!api || typeof api[m] !== "function") throw new Error("__apex." + m + " unavailable");
     return api[m].apply(api, Array.isArray(args.args) ? args.args : []);
@@ -315,28 +317,38 @@ const ApexBridge = (function () {
   }
 
   // A downscaled JPEG of what the player sees, as a data URL under SNAP_MAX chars (the reply cap minus the envelope).
-  // Drawn inside a rAF callback queued after the game's own, so a WebGL / WebGPU canvas without preserveDrawingBuffer
-  // still holds this frame. Quality steps down until the image fits.
-  const SNAP_MAX = 56000;
-  function snap(args) {
+  // Quality steps down until the image fits. A WebGL / WebGPU canvas without preserveDrawingBuffer is readable only in
+  // the task that PRESENTED it, and a bare rAF read can land before the game's draw or on a frame RenderRate skipped:
+  // the first snap after an idle gap came back solid black (#6417). So wait for the renderer's own next present
+  // (awaitSoftPresent(ms, "frame") resolves from inside present(); on the soft overlay, a newer blit) and read in that
+  // continuation with no await between. `fresh` says which: "frame", "blit", "stale" (nothing presented: paused) or
+  // "raf" (no renderer hook).
+  const SNAP_MAX = 56000, SNAP_WAIT_MS = 1500;
+  function snapRead(args, w, fresh) {
+    const soft = document.getElementById("game-soft");
+    const src = soft && !soft.hidden && soft.width ? soft : document.getElementById("game");
+    if (!src || !src.width || !src.height) throw new Error("no rendered canvas");
+    const c = document.createElement("canvas");
+    c.width = w; c.height = Math.max(1, Math.round(src.height * w / src.width));
+    c.getContext("2d").drawImage(src, 0, 0, c.width, c.height);
+    for (let q = Number(args && args.q) || 0.6; q >= 0.1; q = Math.round((q - 0.1) * 10) / 10) {
+      const url = c.toDataURL("image/jpeg", q);
+      if (url.length <= SNAP_MAX) return { w: c.width, h: c.height, q, from: src.id, fresh, chars: url.length, jpeg: url };
+    }
+    throw new Error("snapshot over " + SNAP_MAX + " chars at q 0.1; ask a smaller w");
+  }
+  async function snap(args) {
     const w = Math.max(64, Math.min(640, Number(args && args.w) || 320));
-    return new Promise((resolve, reject) => {
-      requestAnimationFrame(() => {
-        try {
-          const soft = document.getElementById("game-soft");
-          const src = soft && !soft.hidden && soft.width ? soft : document.getElementById("game");
-          if (!src || !src.width || !src.height) throw new Error("no rendered canvas");
-          const c = document.createElement("canvas");
-          c.width = w; c.height = Math.max(1, Math.round(src.height * w / src.width));
-          c.getContext("2d").drawImage(src, 0, 0, c.width, c.height);
-          for (let q = Number(args && args.q) || 0.6; q >= 0.1; q = Math.round((q - 0.1) * 10) / 10) {
-            const url = c.toDataURL("image/jpeg", q);
-            if (url.length <= SNAP_MAX) { resolve({ w: c.width, h: c.height, q, from: src.id, chars: url.length, jpeg: url }); return; }
-          }
-          throw new Error("snapshot over " + SNAP_MAX + " chars at q 0.1; ask a smaller w");
-        } catch (e) { reject(e); }
-      });
-    });
+    const R = typeof GLX !== "undefined" && GLX && typeof GLX.awaitSoftPresent === "function" ? GLX : null;
+    if (!R) { await new Promise((res) => requestAnimationFrame(res)); return snapRead(args, w, "raf"); }
+    const soft = typeof R.softPresent === "function" && !!R.softPresent();
+    let fresh;
+    try {
+      if (soft && typeof R.invalidateSoftPresent === "function") R.invalidateSoftPresent({ capture: true });   // ask for the blit
+      const r = await (soft ? R.awaitSoftPresent(SNAP_WAIT_MS) : R.awaitSoftPresent(SNAP_WAIT_MS, "frame"));
+      fresh = r === "stale" ? "stale" : soft ? "blit" : "frame";
+    } catch (_) { fresh = "stale"; }
+    return snapRead(args, w, fresh);   // synchronous: still inside the presenting task
   }
 
   // Several steps in one comment: one 4 s round trip instead of one each. Stops at the first failure; `reload` and
@@ -359,21 +371,27 @@ const ApexBridge = (function () {
     return out;
   }
 
-  // UI NAVIGATION (#6383). `tap` presses ONE menu control the player uses — an id in TAP_OK, or a circuit tile by
+  // UI NAVIGATION (#6383). `tap` presses ONE control the player uses — by id, label text, data attribute, or a circuit tile by
   // track id — with the real event sequence (pointerdown, pointerup, click) on the real element, so the same handlers,
   // focus moves and timers run as for a thumb. `nav` chains taps through a whole route and waits for each screen. Neither
-  // sets game state nor takes a selector: career, saves, garage files, the lobby and net are not in the list.
+  // sets game state nor takes a CSS selector, and nothing inside a TAP_DENY area (career, saves, garage files, the
+  // lobby and net, the token form) can be pressed.
   // A synthetic tap carries no user activation: audio unlock, haptics, tilt permission and fullscreen stay as they were.
   const ROWS = ["laps", "weather", "mixed", "time", "diff", "quali", "caution", "reliab", "line", "tyres", "dirty"];
-  const TAP_OK = new Set([
-    "mb-tt", "mb-race", "mb-daily", "mb-garage", "mb-practice",                    // title doors
-    "sel-go", "sel-back", "sel-car",                                                 // circuit picker
-    "rs-go", "rs-cancel", "rs-preset-quick", "rs-preset-weekend", "rs-preset-endurance",   // SESSION / RACE SETUP
-    ...ROWS.flatMap((r) => ["rs-" + r + "-prev", "rs-" + r + "-next"]),
-    "cs-done", "cs-back", "cs-arrival-skip", "ld-skip",                              // garage: DONE / VIEW RESULTS, SKIP; RACE! SKIP TO RACE
-    "pausebtn", "pm-resume", "pm-quit", "pm-skip-results", "hud-end-session",        // race: PAUSE/RESUME, END TIME TRIAL
-    "res-menu", "ceremony-parc-skip", "ceremony-cooldown-skip", "retired-skip",
-  ]);
+  // THE DENY-LIST (Bryce 2026-11-25, "Broad allow-list"): any visible, enabled control the player can press, EXCEPT
+  // what is inside these areas: saves and data, career, VS FRIEND / phone pairing (net), the garage and career files,
+  // and this link's own token form and badge. An id matches itself and every `<id>-…` below it, on the control or any
+  // ancestor, so the doors into an area (mb-career, pm-open-files) are refused with what is behind them.
+  const TAP_DENY = [
+    "career", "cr-career", "mb-career", "mb-continue",                                  // career
+    "save", "mb-saves", "pm-open-files", "pm-panel-files", "pm-files", "pm-settings-file", "pm-other-save-files",
+    "pm-share-code", "pm-restore", "pm-checkpoint-save", "cs-garage-file", "cs-garage-reset", "ct-import",   // saves & files
+    "vs", "vsfriend", "mb-vs", "mb-phonepad", "pm-phonepad", "mb-steerphone",           // net: VS FRIEND, phone pairing
+    "bridge-link", "apex-bridge",                                                         // the token form and the badge
+  ];
+  const CONTROL_TAGS = new Set(["BUTTON", "A", "SUMMARY", "INPUT", "SELECT", "LABEL", "OPTION"]);
+  const CONTROL_ROLES = new Set(["button", "tab", "switch", "menuitem", "menuitemradio", "menuitemcheckbox", "option", "checkbox", "radio", "link", "slider"]);
+  const CONTROLS = 'button,a,summary,input,select,label,[role],[data-track-idx],[tabindex]';
   // Topmost first: the first visible one names the screen; none = the race itself (info().state).
   const SCREENS = [["results", "results"], ["pausemenu", "pause"], ["quali", "quali"], ["race-settings", "setup"],
     ["loading", "loading"], ["carsetup", "garage"], ["select", "select"], ["overlay", "title"]];
@@ -414,18 +432,63 @@ const ApexBridge = (function () {
     el.dispatchEvent(mk("pointerup"));
     el.click();
   }
-  function tapEl(args) {
-    const a = args || {};
-    let el, what;
-    if (a.tile != null) { el = tileFor(a.tile); what = "tile:" + a.tile; }
-    else {
-      if (!TAP_OK.has(a.id)) throw new Error("tap not allowed: " + a.id);
-      el = byId(a.id); what = a.id;
-      if (!el) throw new Error("#" + a.id + " not in the page");
+  const attr = (el, k) => (el && typeof el.getAttribute === "function" ? el.getAttribute(k) : null);
+  function deniedArea(el) {
+    for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
+      const id = e.id || "";
+      if (id && TAP_DENY.some((p) => id === p || id.startsWith(p + "-"))) return id;
     }
+    return null;
+  }
+  function isControl(el) {
+    return CONTROL_TAGS.has(el.tagName) || CONTROL_ROLES.has(attr(el, "role")) || (el.dataset && el.dataset.trackIdx != null) || attr(el, "tabindex") != null;
+  }
+  const norm = (t) => String(t == null ? "" : t).replace(/\s+/g, " ").trim().toUpperCase();
+  const labelOf = (el) => norm(attr(el, "aria-label") || el.textContent || attr(el, "value") || "");
+  // One element from { id } | { tile } | { text } | { data: {name: value} } (+ `within`: an id to search under, `nth`).
+  function findEl(a) {
+    if (a.tile != null) return [tileFor(a.tile), "tile:" + a.tile];
+    if (a.id != null) {
+      if (!/^[A-Za-z][\w-]{0,80}$/.test(String(a.id))) throw new Error("id must be an element id (letters, digits, - and _)");
+      const el = byId(a.id);
+      if (!el) throw new Error("#" + a.id + " not in the page");
+      return [el, a.id];
+    }
+    const data = a.data && typeof a.data === "object" ? Object.entries(a.data) : null;
+    if (a.text == null && !data) throw new Error("name the control: id, tile, text or data");
+    if (data && (!data.length || data.length > 3 || data.some(([k, v]) => !/^[a-z][a-z0-9-]{0,40}$/.test(k) || String(v).length > 80))) throw new Error("data takes 1-3 {name: value} pairs (data-<name>)");
+    const root = a.within != null ? byId(a.within) : document;
+    if (!root || typeof root.querySelectorAll !== "function") throw new Error(a.within != null ? "#" + a.within + " not in the page" : "no document to search");
+    const want = a.text != null ? norm(a.text) : null;
+    if (want === "") throw new Error("text is empty");
+    const pool = Array.from(root.querySelectorAll(CONTROLS)).filter((el) => shown(el) && !deniedArea(el) &&
+      (!data || data.every(([k, v]) => attr(el, "data-" + k) === String(v))));
+    let hits = want == null ? pool : pool.filter((el) => labelOf(el) === want);
+    if (want != null && !hits.length) hits = pool.filter((el) => labelOf(el).startsWith(want));
+    const what = want != null ? "text:" + want : "data:" + data.map(([k, v]) => k + "=" + v).join(",");
+    if (!hits.length) throw new Error("no visible control matches " + what);
+    if (a.nth != null && !(Number.isInteger(a.nth) && a.nth >= 0)) throw new Error("nth must be a whole number from 0");
+    const nth = a.nth != null ? a.nth : null;
+    if (hits.length > 1 && nth == null) throw new Error(hits.length + " controls match " + what + " (" + hits.slice(0, 6).map((h) => h.id || h.tagName).join(", ") + "): add nth or within");
+    const el = hits[nth || 0];
+    if (!el) throw new Error("nth " + nth + " is past the " + hits.length + " matches");
+    return [el, el.id || what];
+  }
+  // The checks every press and every set makes: shown, enabled, a control, outside the denied areas.
+  function usable(el, what) {
+    const area = deniedArea(el);
+    if (area) throw new Error(what + " is refused: inside #" + area + " (saves, career, net or the link)");
+    if (!isControl(el)) throw new Error(what + " is not a control");
+    const forEl = el.tagName === "LABEL" ? (el.control || (attr(el, "for") ? byId(attr(el, "for")) : null)) : el;
+    if (forEl && forEl.tagName === "INPUT" && forEl.type === "file") throw new Error(what + " opens a file picker");
+    if (el.tagName === "A" && attr(el, "href") && !String(attr(el, "href")).startsWith("#")) throw new Error(what + " leaves the game");
     if (!shown(el)) throw new Error(what + " is not visible (screen " + screenNow() + ")");
-    if (el.disabled) throw new Error(what + " is disabled");
-    press(el);
+    if (el.disabled || attr(el, "aria-disabled") === "true") throw new Error(what + " is disabled");
+    return el;
+  }
+  function tapEl(args) {
+    const [el, what] = findEl(args || {});
+    press(usable(el, what));
     return what;
   }
   const pause = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -458,6 +521,106 @@ const ApexBridge = (function () {
     for (let k = 0; k <= values.length && sel.value !== String(want); k++) { tapEl({ id: "rs-" + row + "-next" }); await pause(60); }
     if (sel.value !== String(want)) throw new Error(row + " stuck at " + sel.value);
     return sel.value;
+  }
+  // SET (Bryce 2026-11-25). { id | text | data, value }: a control through its own UI path — a SettingRow's › chevron
+  // (its handler stores and applies the value, as a thumb does), a <select>'s change, a checkbox's click, a range's
+  // input + change. { key, value }: a preference by its SETTINGS FILE key (SettingsExport.SPEC: preferences only, by
+  // construction never the garage, saves or accounts), written the way a settings-file import writes it. Most screens
+  // read a stored key at the next reload, so that reply says `reload: true` (send `reload` after the last one).
+  const SET_KEY_DENY = /token|career|save|slot|lobby|net|relay|turn|spotify|account/i;
+  const fire = (el, type) => el.dispatchEvent(new Event(type, { bubbles: true }));
+  async function setControl(el, what, want) {
+    if (el.tagName === "SELECT") {
+      const values = Array.from(el.options || []).map((o) => o.value);
+      if (!values.includes(String(want))) throw new Error(what + " must be one of " + values.join(", "));
+      const sib = Array.from((el.parentElement && el.parentElement.children) || []).find((c) => attr(c, "data-step") === "1");
+      const next = sib || (el.id && el.id.endsWith("-sel") ? byId(el.id.slice(0, -4) + "-next") : null);
+      if (next && shown(next) && !next.disabled) {
+        for (let k = 0; k <= values.length && el.value !== String(want); k++) { press(next); await pause(60); }
+      } else if (el.value !== String(want)) { el.value = String(want); fire(el, "input"); fire(el, "change"); }
+      if (el.value !== String(want)) throw new Error(what + " stuck at " + el.value);
+      return el.value;
+    }
+    if (el.tagName === "INPUT" && (el.type === "checkbox" || el.type === "radio")) {
+      if (typeof want !== "boolean") throw new Error(what + " takes true or false");
+      if (!!el.checked !== want) press(el);
+      return !!el.checked;
+    }
+    if (el.tagName === "INPUT" && (el.type === "range" || el.type === "number")) {
+      const n = Number(want);
+      if (!Number.isFinite(n)) throw new Error(what + " takes a number");
+      el.value = String(n); fire(el, "input"); fire(el, "change");
+      return Number(el.value);
+    }
+    throw new Error(what + " is not a select, checkbox, radio or range");
+  }
+  // The SETTINGS FILE import's own rules (settings-export-body.js applySettings): never an `info` row (a migration
+  // version) or a `noImport` one, a row's `normalize` first, then its type and `oneOf`. Tables (an object or computed
+  // default) are set on their own screen, and a row with no default to type-check needs a `oneOf`.
+  function setKey(key, value) {
+    const SE = typeof SettingsExport !== "undefined" ? SettingsExport : null, S = gs();
+    if (!SE || !Array.isArray(SE.SPEC) || !S) throw new Error("the settings store is not up");
+    if (typeof key !== "string" || SET_KEY_DENY.test(key)) throw new Error("key not allowed: " + key);
+    const row = SE.SPEC.find((r) => r && r.k === key);
+    if (!row || row.info || row.noImport) throw new Error("not a settings key: " + key + " (the SPEC rows in js/ui/settings-export.js)");
+    const def = row.def;
+    if (typeof def === "function" || (def !== null && typeof def === "object")) throw new Error(key + " is a table: set it on its own screen");
+    if (value !== null && typeof value === "object") throw new Error(key + " takes a single value");
+    let v = value;
+    if (v !== null && row.normalize) { v = row.normalize(v); if (v === undefined) throw new Error(key + ": " + JSON.stringify(value) + " is not a value it takes"); }
+    if (v !== null && def == null && !row.oneOf) throw new Error(key + " has no type to check: set it on its own screen");
+    if (v !== null && def != null && typeof v !== typeof def) throw new Error(key + " takes a " + typeof def);
+    if (v !== null && row.oneOf && !row.oneOf.some((o) => o === v)) throw new Error(key + " must be one of " + row.oneOf.join(", "));
+    if (typeof v === "string" && v.length > 200) throw new Error(key + ": value too long");
+    const rk = "apex26." + key, read = () => (row.lane === "raw" ? S.raw(rk) : S.get(key, undefined));
+    const was = read();
+    const ok = row.lane === "raw" ? (v === null ? S.rawDel(rk) : S.rawSet(rk, String(v))) : S.set(key, v === null ? undefined : v);
+    if (ok === false) throw new Error("storage refused the write");
+    const now = read();
+    return { key, was: was === undefined ? null : was, now: now === undefined ? null : now, reload: true };
+  }
+  async function set(args) {
+    const a = args || {};
+    if (!Object.prototype.hasOwnProperty.call(a, "value")) throw new Error("set needs a value");
+    if (a.key != null) return setKey(a.key, a.value);
+    const [el, what] = findEl(a);
+    usable(el, what);
+    return { set: what, value: await setControl(el, what, a.value), screen: screenNow() };
+  }
+  // KEY / SCROLL. `key` sends one keydown + keyup (synthetic: not trusted, so it never ends a `drive`) to the focused
+  // element or a named one; `scroll` moves a visible element, or the page, by px, to its top / bottom, or brings an
+  // element into view.
+  const KEYS = ["Escape", "Enter", "Space", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Backspace"];
+  function key(args) {
+    const a = args || {};
+    if (!KEYS.includes(a.key)) throw new Error("key must be one of " + KEYS.join(", "));
+    const el = a.id != null ? usable(findEl({ id: a.id })[0], a.id) : (document.activeElement || document.body);
+    if (!el) throw new Error("nothing has the focus");
+    if (deniedArea(el)) throw new Error("key refused: the focus is inside #" + deniedArea(el));
+    // A key on the body reaches the page's global handlers, which act for whatever screen is up: not while a denied one is.
+    const up = a.id == null && (el === document.body || el === document.documentElement) ? TAP_DENY.find((p) => shown(byId(p))) : null;
+    if (up) throw new Error("key refused: #" + up + " is on screen and nothing in it has the focus");
+    const k = a.key === "Space" ? " " : a.key;
+    const init = { key: k, code: a.key, bubbles: true, cancelable: true, shiftKey: !!a.shift };
+    const KE = typeof KeyboardEvent === "function" ? KeyboardEvent : Event;
+    const go = el.dispatchEvent(new KE("keydown", init));
+    el.dispatchEvent(new KE("keyup", init));
+    return { key: a.key, to: el.id || el.tagName || "document", prevented: !go, screen: screenNow() };
+  }
+  function scroll(args) {
+    const a = args || {};
+    let el = null;
+    if (a.id != null) {
+      el = findEl({ id: a.id })[0];
+      if (deniedArea(el)) throw new Error("scroll refused: inside #" + deniedArea(el));
+      if (!shown(el)) throw new Error(a.id + " is not visible");
+    } else el = document.scrollingElement || document.documentElement;
+    if (a.into) { if (a.id == null) throw new Error("into needs an id"); el.scrollIntoView({ block: "center" }); }
+    else if (a.to === "top") el.scrollTop = 0;
+    else if (a.to === "bottom") el.scrollTop = el.scrollHeight;
+    else if (Number.isFinite(Number(a.by)) && a.by != null) el.scrollTop += Number(a.by);
+    else throw new Error("scroll takes by (px), to top / bottom, or into:true with an id");
+    return { scrolled: a.id || "page", top: Math.round(el.scrollTop || 0), height: el.scrollHeight || 0, view: el.clientHeight || 0 };
   }
   const FLOWS = { tt: "mb-tt", race: "mb-race" };
   async function nav(args) {
@@ -496,6 +659,39 @@ const ApexBridge = (function () {
     return done(true);
   }
 
+  // DRIVING (#6397). `drive` hands the player car to SoakRun's closed-loop driver (js/perf/soak-run.js drive(): the
+  // AUTO SOAK law plus PitLane's own lane lines) — agent control through the setInput seam, never a player assist. It
+  // runs only from this command, and lets go on `stop`, a quit, a pause, a hidden page or a real touch/key. `to:"box"`
+  // drives on to the pit entry, down the lane and stops in this car's box; `laps` / `seconds` is an autopilot lap.
+  // The bridge serves one command at a time, so a `wait:false` drive answers at once and `status` / `stop` follow.
+  // No `to:"grid"`: nothing in the game reads a car parked on its grid slot (the grid is placed by race(), a restart
+  // re-grids by itself), so there is no state for it to reach.
+  const DRIVE_MS = 240000, DRIVE_START_MS = 30000, END_IDS = ["hud-end-session", "hud-work"];
+  async function drive(args) {
+    const a = args || {};
+    const S = typeof SoakRun !== "undefined" ? SoakRun : null;
+    if (!S || typeof S.drive !== "function") throw new Error("SoakRun.drive unavailable");
+    if (a.stop) { const was = S.driving(), last = S.driveStop("bridge"); return { stopped: was, last: last || S.driveStatus().last || null }; }
+    if (a.status) return S.driveStatus();
+    if (a.to === "grid") throw new Error("drive.to grid: no game state reads a parked grid slot (race() places the grid)");
+    const n = [a.to != null, a.laps != null, a.seconds != null].filter(Boolean).length;
+    if (n !== 1) throw new Error('drive takes one of {to:"box"}, {laps:1-5}, {seconds:1-600}, {stop:true}, {status:true}');
+    if (a.to != null && a.to !== "box") throw new Error('drive.to must be "box"');
+    if (a.laps != null && !(Number.isInteger(a.laps) && a.laps >= 1 && a.laps <= 5)) throw new Error("drive.laps must be 1-5");
+    if (a.seconds != null && !(Number(a.seconds) >= 1 && Number(a.seconds) <= 600)) throw new Error("drive.seconds must be 1-600");
+    const ms = Math.max(5000, Math.min(600000, Number(a.ms) || DRIVE_MS));
+    // Straight after `nav`'s RACE! the garage drive-out is still playing (state "menu"): wait for the session.
+    await until(() => { const st = gameState(); return st === "race" || st === "count"; }, DRIVE_START_MS);
+    const run = S.drive({ to: a.to, laps: a.laps, seconds: a.seconds != null ? Number(a.seconds) : undefined, ms });
+    if (a.wait === false) { run.catch(() => {}); return Object.assign({ started: true }, S.driveStatus()); }
+    const r = await run;
+    // In the box: wait for the HUD to show the pit actions, so a following `tap` in the same batch finds them.
+    if (r.inBox) await until(() => END_IDS.some((id) => shown(byId(id))), 1500);
+    // `ok` false when the goal was not met, so a batch stops before a tap that would miss.
+    const ok = a.to === "box" ? r.inBox : r.reason === (a.laps != null ? "laps" : "seconds");
+    return Object.assign({ ok, screen: screenNow(), state: gameState(), pitActions: END_IDS.filter((id) => shown(byId(id))) }, r);
+  }
+
   const CMDS = {
     ping: () => ({ pong: true, t: Date.now() }),
     facts,
@@ -512,7 +708,11 @@ const ApexBridge = (function () {
     snap,
     tap,
     nav,
+    set,
+    key,
+    scroll,
     screen: () => ({ screen: screenNow(), state: gameState() }),
+    drive,
     batch,
   };
 
@@ -525,7 +725,7 @@ const ApexBridge = (function () {
 
   // bench / gpuTest / recorder / a path pin read LAZY_PERF globals, which land at idle (or never, after a dropped
   // fetch): ask the game's LazyBundles instance for the rig first, so the command waits instead of "unavailable".
-  const PERF_CMDS = new Set(["bench", "gpuTest", "recorder", "path"]);
+  const PERF_CMDS = new Set(["bench", "gpuTest", "recorder", "path", "drive"]);
   async function perfRig() {
     try {
       const lb = typeof LazyBundles !== "undefined" && LazyBundles.live ? LazyBundles.live() : null;
@@ -653,6 +853,7 @@ const ApexBridge = (function () {
 
   function stop(why) {
     if (!_run) return;
+    try { if (typeof SoakRun !== "undefined" && SoakRun.driving && SoakRun.driving()) SoakRun.driveStop("link ended"); } catch (_) { /* no driver */ }
     clearTimeout(_run.timer);
     _run = null;
     say("link ended: " + (why || "stopped"));
@@ -757,7 +958,7 @@ const ApexBridge = (function () {
   }
 
   boot();
-  return { V, REPO, CALL_OK, TAP_OK, CMDS, issueOf, handle, pickCommands, pollOnce, start, stop, boot, frames, facts, display, geom, tokenShape,
+  return { V, REPO, CALL_DENY, CALL_DENY_PREFIX, callAllowed, TAP_DENY, CMDS, issueOf, handle, pickCommands, pollOnce, start, stop, boot, frames, facts, display, geom, tokenShape,
     active: () => !!_run };
 })();
 Object.freeze(ApexBridge);

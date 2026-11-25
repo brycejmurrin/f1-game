@@ -108,7 +108,7 @@ export function archiveRefs(prune, reasons, shaOf) {
 
 export const DEPLOY = "claude/f1-game-project-26h3ng";
 // gh-pages, the claims board branch (retired 2026-10-27, kept as history) and phone-shots (the orphan branch
-// .github/workflows/phone-shots.yml fills with issue screenshots, #5246): state that is never merged and must never
+// of issue screenshots the retired phone-shots.yml filled, #5246, #6536): state that is never merged and must never
 // be audited away.
 export const ALWAYS_KEEP = [/^gh-pages$/, /^claude\/claims-board$/, /^phone-shots$/];
 export const CLAIMS = /^claude\/claims\//;

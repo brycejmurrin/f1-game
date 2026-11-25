@@ -1,0 +1,1 @@
+Fixed: Holding the phone upright in the chase camera, the speed readout sits beside the gear above the steer buttons, and the ERS, OVERTAKE and AERO chips stack above the tyres, so nothing covers a button or the gear.

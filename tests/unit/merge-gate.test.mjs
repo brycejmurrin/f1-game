@@ -18,7 +18,6 @@ import {
   baseVerdict, BASE_ESCAPE_LABELS, FIXER_LABEL, fixerProof, cleanTipSync, creditPriorCi, CREDIT_CHAIN_MAX,
 } from "../../tools/ci/merge-gate.mjs";
 import { tipState, codeRedJobs, platformStepFailed, readDeployTip, PLATFORM_STEP as TIP_PLATFORM_STEP } from "../../tools/ci/lib/deploy-tip.mjs";
-import { PLATFORM_STEP as DISPATCH_PLATFORM_STEP, platformFailure } from "../../tools/ci/dispatch.mjs";
 import { parse as parseYAML } from "yaml";
 import { planHash } from "../../tools/ci/ready-gate.mjs";
 import { AGENT_APP_SLUG, byAgent, byOwner } from "../../tools/ci/lib/provenance.mjs";
@@ -120,10 +119,10 @@ test("configVerdict (#5455): an agent's config-ok covers ROUTINE config paths on
   const T1 = "2026-11-03T10:00:00Z", T2 = "2026-11-03T11:00:00Z", T3 = "2026-11-03T12:00:00Z";
   const L = ["config-ok"];
   const agent = (at, o) => ev("config-ok", at, { app: APP, ...o });
-  const routine = [".github/workflows/dispatch.yml", "package.json", "tools/ci/dispatch.mjs", "js/game.js"];
-  const prot = [".github/workflows/land.yml", "tools/ci/dispatch.mjs"];
+  const routine = [".github/workflows/dispatch.yml", "package.json", "tools/ci/pr-board.mjs", "js/game.js"];
+  const prot = [".github/workflows/land.yml", "tools/ci/pr-board.mjs"];
   // 1. Bryce's own tap on a protected diff passes.
-  assert.deepEqual(configVerdict(prot, L, [ev("config-ok", T1)]), { ok: true, evidence: `config-ok by owner (brycejmurrin) at ${T1} covers .github/workflows/land.yml, tools/ci/dispatch.mjs` });
+  assert.deepEqual(configVerdict(prot, L, [ev("config-ok", T1)]), { ok: true, evidence: `config-ok by owner (brycejmurrin) at ${T1} covers .github/workflows/land.yml, tools/ci/pr-board.mjs` });
   // 2. An agent's label on a protected diff is refused and names the protected paths.
   assert.deepEqual(configVerdict(prot, L, [agent(T1)]),
     { ok: false, evidence: "needs config-ok from brycejmurrin himself: an agent's label (brycejmurrin via app claude) covers routine config paths only, and the diff edits protected path(s) .github/workflows/land.yml" });
@@ -132,7 +131,7 @@ test("configVerdict (#5455): an agent's config-ok covers ROUTINE config paths on
   assert.equal(configVerdict(["docs/a.md", "x", ".claude/hooks/a.sh"].concat(routine), L, [agent(T1)]).ok, false, "one protected path needs his tap for the whole row");
   // 3. An agent's label on a routine-only diff passes, and says so.
   assert.deepEqual(configVerdict(routine, L, [agent(T1)]),
-    { ok: true, evidence: `config-ok by agent (claude app), routine paths only (brycejmurrin via app claude) at ${T1} covers .github/workflows/dispatch.yml, package.json, tools/ci/dispatch.mjs` });
+    { ok: true, evidence: `config-ok by agent (claude app), routine paths only (brycejmurrin via app claude) at ${T1} covers .github/workflows/dispatch.yml, package.json, tools/ci/pr-board.mjs` });
   // D-034 (Bryce 2026-11-18 ~10:33Z "Shrink the list"): ci.yml, pick-tests and preflip-probe are ROUTINE, superseding
   // the 2026-11-11 "Protect ci.yml" call; still config paths, so they still need a config-ok, but an agent's counts.
   for (const p of [".github/workflows/ci.yml", "tools/ci/pick-tests.mjs", "tools/ci/preflip-probe.mjs"]) {
@@ -151,14 +150,14 @@ test("configVerdict (#5455): an agent's config-ok covers ROUTINE config paths on
     assert.equal(isProtectedConfigPath(p), true, `${p} stays protected (D-034)`);
     assert.match(configVerdict([p], L, [agent(T1)]).evidence, new RegExp(`^needs config-ok from brycejmurrin himself: .* protected path\\(s\\) ${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
   }
-  for (const p of ["tools/ci/dispatch.mjs", "tools/ci/tooling-fast.mjs", "tools/ci/sync-pr.mjs", ".github/workflows/dispatch.yml", ".github/workflows/pages.yml"])
+  for (const p of ["tools/ci/pr-board.mjs", "tools/ci/tooling-fast.mjs", "tools/ci/sync-pr.mjs", ".github/workflows/dispatch.yml", ".github/workflows/pages.yml"])
     assert.equal(isProtectedConfigPath(p), false, `${p} is routine`);
   for (const p of [".github/workflows/pages.yml", ".claude/agents/worker.md", ".claude/memory/MEMORY.md", ".mcp.json", "tools/mcp/apex-extras.mjs", "tools/lib/generated-paths.mjs", ".github/actions/setup/action.yml", ".github/ISSUE_TEMPLATE/task.yml"])
     assert.equal(configVerdict([p], L, [agent(T1)]).ok, true, `${p} is routine`);
   // 4. An agent's label older than the last config push is refused (the same timing rule as Bryce's).
-  const stale = configVerdict(routine, L, [agent(T1)], "brycejmurrin", { state: "after", evidence: "a push touching tools/ci/dispatch.mjs came" });
+  const stale = configVerdict(routine, L, [agent(T1)], "brycejmurrin", { state: "after", evidence: "a push touching tools/ci/pr-board.mjs came" });
   assert.equal(stale.ok, false);
-  assert.match(stale.evidence, /^needs a fresh config-ok: a push touching tools\/ci\/dispatch\.mjs came after the label at .* by agent \(claude app\), routine paths only/);
+  assert.match(stale.evidence, /^needs a fresh config-ok: a push touching tools\/ci\/pr-board\.mjs came after the label at .* by agent \(claude app\), routine paths only/);
   assert.equal(configVerdict(routine, L, [agent(T1)], "brycejmurrin", { state: "unknown", evidence: "x" }).pending, true);
   // 5. Bryce's own unlabel after an agent's label refuses, and voids a later agent re-add until his own.
   assert.equal(configVerdict(routine, [], [agent(T1), ev("config-ok", T2, { event: "unlabeled" })]).ok, false, "label gone");
@@ -2292,9 +2291,6 @@ const SPEC_RED = [{ name: "ci / Selected specs (change-aware gate) (packed-2, te
   { name: "ci / CI", conclusion: "failure" }, { name: "deploy", conclusion: "skipped", steps: [] }];
 
 test("deploy tip (#5425): a spec-leg red is code; run 42880431465 (publish only) is platform; a deploy refusal without the marker is code", () => {
-  assert.equal(TIP_PLATFORM_STEP, DISPATCH_PLATFORM_STEP, "one marker: dispatch re-exports deploy-tip's");
-  const pf = (jobs) => platformFailure(() => ({ json: { jobs } }), 1);
-  assert.equal(pf(JOBS_42880431465), true, "dispatch's own platform test agrees on the real case");
   assert.equal(platformStepFailed(JOBS_42880431465), true);
   const real = tipState(RUN_42880431465, JOBS_42880431465);
   assert.equal(real.state, "platform", real.evidence);
@@ -2306,7 +2302,7 @@ test("deploy tip (#5425): a spec-leg red is code; run 42880431465 (publish only)
   assert.equal(spec.sha, RUN_42880431465.head_sha, "the commit the red run tested: what a fixer's head must contain");
   const refusal = [{ name: "deploy", conclusion: "failure", steps: [{ name: TIP_PLATFORM_STEP, conclusion: "skipped" }, { name: "Confirm this commit may still be published (under the Pages lock)", conclusion: "failure" }] }];
   assert.equal(tipState(RUN_42880431465, refusal).state, "code-red", "a refusal is a fixer's job, as dispatch treats it");
-  assert.equal(pf(refusal), false);
+  assert.equal(platformStepFailed(refusal), false);
   const both = [...SPEC_RED.slice(0, 1), JOBS_42880431465[4]];
   assert.deepEqual(codeRedJobs(both).map((j) => j.name), [SPEC_RED[0].name], "the marker excuses only `deploy`, never another red job");
   assert.equal(tipState({ ...RUN_42880431465, conclusion: "timed_out" }, [{ name: "ci / Smoke (1)", conclusion: "timed_out" }]).state, "code-red");

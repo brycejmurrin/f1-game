@@ -601,7 +601,6 @@
     "tests/unit/renderer-picker-unavailable.test.mjs": 140,
     "tests/unit/renderer-soft-lifecycle.test.mjs": 390,
     "tests/unit/replay-buf.test.mjs": 62200,
-    "tests/unit/repo-size.test.mjs": 340,
     "tests/unit/report-server.test.mjs": 460,
     "tests/unit/res-scale-census.test.mjs": 220,
     "tests/unit/results-cam.test.mjs": 1040,
