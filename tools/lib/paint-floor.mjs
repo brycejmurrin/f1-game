@@ -18,7 +18,10 @@
 //            cannot press it there. A blocked control is not sized.
 //   text     every text node with a non-space character. Text inside a `pointer-events: none` layer (most of the race
 //            HUD) cannot be hit-tested, so it counts when visible; other text must own its centre.
-//   outside  a tap or text whose visible part crosses the SAFE BOX (the viewport minus the env() insets).
+//   outside  a tap or text whose visible part crosses the SAFE BOX (the viewport minus the env() insets). A race HUD
+//            touch button (#hud-dock .touchbtn) and its label follow the dock's own contract instead
+//            (js/ui/dock-layout.js limits(); Bryce's decision A on #6684): a placed button may reach into the inset
+//            while it stays whole on the display and 44 px of it (its whole side, if smaller) stays in the safe box.
 //   scroll   the page itself scrolls (the document is larger than the window, or is scrolled).
 
 export const TAP_PAINT_MIN = 44;
@@ -83,6 +86,14 @@ export function measurePaintInPage({ roots = "body", insets = null } = {}) {
     const left = Math.min(a.left, b.left), top = Math.min(a.top, b.top), right = Math.max(a.right, b.right), bottom = Math.max(a.bottom, b.bottom);
     return { left, top, right, bottom, width: right - left, height: bottom - top };
   };
+  // A dock button's full box, carried on its outside rows so summarisePaint can apply the dock contract.
+  const dockOf = (el) => {
+    const b = el.closest && el.closest("#hud-dock .touchbtn");
+    if (!b) return null;
+    const d = b.getBoundingClientRect();
+    return { left: d.left, top: d.top, right: d.right, bottom: d.bottom };
+  };
+  const off = (el, row) => { const dock = dockOf(el); outside.push(dock ? { ...row, dock } : row); };
   const box = (v) => `${Math.round(v.left)},${Math.round(v.top)} ${Math.round(v.right - v.left)}x${Math.round(v.bottom - v.top)}`;
   const TAP = "button, a[href], input:not([type=hidden]), select, textarea, summary, [role=button], [role=tab], [role=switch], [role=checkbox], [role=radio], [role=slider], [role=option], [role=menuitem], [tabindex]:not([tabindex='-1'])";
   const taps = [], blocked = [], texts = [], outside = [];
@@ -110,7 +121,7 @@ export function measurePaintInPage({ roots = "body", insets = null } = {}) {
         continue;
       }
       taps.push({ el: name(el), w: +r.width.toFixed(1), h: +r.height.toFixed(1), scale: +paintScale(el).toFixed(3) });
-      if (outsideSafe(v)) outside.push({ el: name(el), kind: "tap", at: box(v) });
+      if (outsideSafe(v)) off(el, { el: name(el), kind: "tap", at: box(v) });
     }
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     const range = document.createRange();
@@ -120,6 +131,9 @@ export function measurePaintInPage({ roots = "body", insets = null } = {}) {
       const s = n.nodeValue.trim();
       const el = n.parentElement;
       if (!s || !el || /^(script|style|noscript|template|option)$/i.test(el.tagName) || el.closest("[aria-hidden='true'], [inert]") || !visible(el)) continue;
+      // Screen-reader-only text (a 1x1 clipped live region, e.g. #announce-live) is never painted.
+      const er = el.getBoundingClientRect();
+      if (er.width < 2 || er.height < 2) continue;
       range.selectNodeContents(n);
       const r = range.getBoundingClientRect();
       if (r.width < 2 || r.height < 2) continue;
@@ -135,7 +149,7 @@ export function measurePaintInPage({ roots = "body", insets = null } = {}) {
       if (!(own > 0)) continue;
       const scale = paintScale(el);
       texts.push({ el: name(el), text: s.slice(0, 24), px: +(own * scale).toFixed(2), own: +own.toFixed(2), scale: +scale.toFixed(3) });
-      if (outsideSafe(v)) outside.push({ el: name(el), kind: "text", at: box(v), text: s.slice(0, 24) });
+      if (outsideSafe(v)) off(el, { el: name(el), kind: "text", at: box(v), text: s.slice(0, 24) });
     }
   }
   const se = document.scrollingElement || document.documentElement;
@@ -144,6 +158,18 @@ export function measurePaintInPage({ roots = "body", insets = null } = {}) {
   const zroot = rootEls.find(visible) || rootEls[0];
   const zoom = zroot ? +zoomOf(zroot).toFixed(3) : null;
   return { roots: selectors, rootsFound: rootEls.length, rootsVisible: rootEls.filter(visible).length, viewport: { width: vw, height: vh }, safe, zoom, taps, blocked, texts, outside, scroll };
+}
+
+/**
+ * Pure: the dock contract (js/ui/dock-layout.js limits(), #6684 decision A). `d` is a HUD touch button's box; true
+ * when it is whole on the display and min(44, side) px of it lies inside the safe box on each axis.
+ */
+export function dockTargetInside(d, safe, viewport) {
+  if (d.left < -PAINT_SLACK || d.top < -PAINT_SLACK || d.right > viewport.width + PAINT_SLACK || d.bottom > viewport.height + PAINT_SLACK) return false;
+  const w = Math.min(TAP_PAINT_MIN, d.right - d.left), h = Math.min(TAP_PAINT_MIN, d.bottom - d.top);
+  const ix = Math.min(d.right, safe.right) - Math.max(d.left, safe.left);
+  const iy = Math.min(d.bottom, safe.bottom) - Math.max(d.top, safe.top);
+  return ix >= w - PAINT_SLACK && iy >= h - PAINT_SLACK;
 }
 
 /**
@@ -156,7 +182,8 @@ export function summarisePaint(raw, { tapMin = TAP_PAINT_MIN, textMin = TEXT_PAI
   const texts = [...(raw.texts || [])].sort((a, b) => a.px - b.px || a.el.localeCompare(b.el));
   const underTaps = taps.filter((t) => side(t) < tapMin - PAINT_SLACK);
   const underText = texts.filter((t) => t.px < textMin - PAINT_SLACK);
-  const outside = raw.outside || [], blocked = raw.blocked || [];
+  const outside = (raw.outside || []).filter((o) => !(o.dock && raw.safe && raw.viewport && dockTargetInside(o.dock, raw.safe, raw.viewport)));
+  const blocked = raw.blocked || [];
   const sc = raw.scroll || { x: 0, y: 0, left: 0, top: 0 };
   const scrolls = sc.x > 1 || sc.y > 1 || sc.left !== 0 || sc.top !== 0;
   return {
