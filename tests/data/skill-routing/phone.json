@@ -30,6 +30,7 @@
     "race-incidents-control": { "fire": ["safety car never comes out", "cars flipping on contact", "debris stays on track forever"], "near": [{ "q": "ai dive bombs me", "expect": "ai-racecraft" }] },
     "race-weekend": { "fire": ["tyre wear too fast on softs", "pit stop takes forever", "quali results sheet wrong"], "near": [{ "q": "safety car stuck out", "expect": "race-incidents-control" }] },
     "renderer-debug": { "fire": ["black canvas on webgpu", "shadows broken on glx", "vr shows a black frame"], "near": [{ "q": "night looks washed out", "expect": "lighting-tuner" }] },
+    "runtime-hunt": { "fire": ["hunt leaks across race restarts", "runtime hunt by playing the game", "scripted play hunt ends black"], "near": [{ "q": "set a breakpoint in updateCar", "expect": "js-debugger" }] },
     "scenery-dress": { "fire": ["trees floating at spa", "grandstands sinking into the ground", "add billboards along the straight"], "near": [{ "q": "floodlights don't light up", "expect": "lighting-tuner" }] },
     "season-mode": { "fire": ["season calendar missing a round", "sprint toggle does nothing", "season points table wrong"], "near": [{ "q": "career season sprint broken", "expect": "career-mode" }] },
     "slim-bloat": { "fire": ["ratchet blocks my commit", "find dead code in game.js", "unused css everywhere"], "near": [{ "q": "trim this fat skill body", "expect": "agent-config" }] },
