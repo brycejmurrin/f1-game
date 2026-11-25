@@ -393,6 +393,13 @@ const DataHub = (function () {
     }
     if (id !== "live") stopLiveAuto();  // stop auto-refresh when leaving live tab
     active = id;
+    // Read the strip's overflow BEFORE the class / aria writes below: read after
+    // them it forced a synchronous layout on every tab switch (#6507 row 2, 7 ms
+    // each at 852x393). Moving .dh-tab.active (weight 800) shifts the strip by a
+    // few px at most; an overflowing strip still runs the clip check below.
+    const activeBtn = tabButtons[id];
+    const strip = activeBtn && (activeBtn.parentElement || activeBtn.parentNode);
+    const overflow = !!(strip && (strip.scrollWidth - strip.clientWidth > 1));
     for (const k in tabButtons) {
       tabButtons[k].classList.toggle("active", k === id);
       if (k !== "export") {
@@ -406,13 +413,10 @@ const DataHub = (function () {
     // Scroll the active tab into view only when the strip actually overflows
     // and the button is clipped — a wrap row (desktop) or a fully-visible
     // chip must not pan SCHEDULE off the left edge.
-    const activeBtn = tabButtons[id];
     if (contentEl && activeBtn) contentEl.setAttribute("aria-labelledby", activeBtn.id);
     // An explicit `behavior` beats CSS scroll-behavior, so neither reduced-
     // motion backstop (the OS query, MOTION: REDUCED's html[data-motion])
     // reaches this scroll: ask both here, as js/ui/hud.js motionReduced does.
-    const strip = activeBtn && (activeBtn.parentElement || activeBtn.parentNode);
-    const overflow = !!(strip && (strip.scrollWidth - strip.clientWidth > 1));
     if (overflow && activeBtn && activeBtn.scrollIntoView) {
       const left = activeBtn.offsetLeft || 0;
       const right = left + (activeBtn.offsetWidth || 0);

@@ -989,7 +989,7 @@ test("primeRace: the race's first rendered frame draws every warm-built mesh onc
   Object.assign(G, { raceTimeOfDay: "day", track: { total: 5000, def: {} }, dashKph: (sp) => sp * 3.6, raceT: 0 });
   const paint = { roughness: 0.3, carFinish: true };
   const drawn = [];
-  G.gfx.draw = (mesh, m) => drawn.push({ name: mesh && mesh.carMesh, arg: mesh && mesh.arg, zero: Array.from(m).every((x) => x === 0) });
+  G.gfx.draw = (mesh, m) => drawn.push({ name: mesh && mesh.carMesh, arg: mesh && mesh.arg, far: !!(mesh && mesh.far), zero: Array.from(m).every((x) => x === 0) });
   let warming = false, quads = [];
   G.gfx.warming = () => warming;
   G.gfx.drawShadow = (m) => quads.push({ kind: "shadow", zero: Array.from(m).every((x) => x === 0) });
@@ -1008,6 +1008,9 @@ test("primeRace: the race's first rendered frame draws every warm-built mesh onc
   const warmed0 = calls.getCarDecalMesh || 0;
   carDraw.warmCarAssets();
   assert.ok((calls.getCarDecalMesh || 0) - warmed0 >= G.cars.length, "the race warm fetches every field car's decal mesh");
+  // #6485: two AI compounds plus a player catalog band no AI runs (the harness loads no TyreModel).
+  ctx.TyreModel = { AI_CLASS: { soft: { colour: [0.9, 0.1, 0.1] }, wet: { colour: [0.1, 0.4, 0.9] } } };
+  for (const c of G.cars) c.tyre = { colour: c.isPlayer ? [0.5, 0.5, 0.5] : [0.9, 0.1, 0.1] };
   const n = prime();
   assert.ok(n > 0, "with no warm, the first free frame primes");
   assert.equal(drawn.every((d) => d.zero), true, "every prime draw is at the zero matrix");
@@ -1018,7 +1021,14 @@ test("primeRace: the race's first rendered frame draws every warm-built mesh onc
   // Bodies and wheels come from car-draw itself (not CarMesh). The pool keys a wrapper per OCCURRENCE, so a mesh shared
   // across cars is drawn once per car that can show it: per rival its team body, the shared near body (the harness has
   // no CarGeometry.decimate, so no far body), and its wheel set twice over (F, R, FFixed, RFixed: 2 front, 2 rear).
-  assert.equal(drawn.filter((d) => !d.name).length, rivals * (1 + 1 + 8), "per rival: team body, shared body, 8 wheel draws");
+  // Plus the far-LOD pair (FieldLod on): 2 F + 2 R per rival, the most a tier-2 field can show of each (#6485).
+  assert.equal(drawn.filter((d) => !d.name).length, rivals * (1 + 1 + 8 + 4), "per rival: team body, shared body, 8 wheel draws, 4 far wheels");
+  assert.equal(drawn.filter((d) => d.far).length, rivals * 4, "the far wheel pair, twice per rival");
+  // The compound stripe: 4 per car for every AI compound (any car may fit it), 4 per wearer for any other colour.
+  const ringN = (col) => drawn.filter((d) => d.name === "getCompoundRing" && String(d.arg) === String(col)).length;
+  assert.equal(ringN([0.9, 0.1, 0.1]), G.cars.length * 4, "an AI compound: four stripes per field car");
+  assert.equal(ringN([0.1, 0.4, 0.9]), G.cars.length * 4, "an AI compound no car wears yet: still four per field car");
+  assert.equal(ringN([0.5, 0.5, 0.5]), 4, "the player's own band: four, the one car that wears it");
   assert.equal(quads.filter((q) => q.kind === "shadow" && q.zero).length, G.cars.length, "one blob-shadow quad per field car");
   assert.equal(quads.filter((q) => q.kind === "mark" && q.zero).length, G.cars.length, "one skid-mark quad per field car");
   assert.equal(drawn.filter((d) => d.name === "getSpinDisc").length, G.cars.length * 4, "four spin discs per field car (one per wheel)");

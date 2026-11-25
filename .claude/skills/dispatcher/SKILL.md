@@ -12,7 +12,8 @@ the session Bryce steers in his own chat (skill `steward` §CI): it reads GitHub
 re-owns a silent PR (`needs-owner`, one `CONTINUE PR n`). A launched session loads skill `steward` §Lane.
 
 - The brief: [`references/orchestrator-brief.md`](references/orchestrator-brief.md) (what to check before a wave,
-  the brief template, what to send while workers run, standing routines). The base prompt every worker shares is
+  the brief template, the standing roles it may launch without an issue (the Gardener, skill `gardener`), what to
+  send while workers run, standing routines). The base prompt every worker shares is
   `tools/ci/worker-prompt.md` (also the "Apex worker" scheduled task's saved prompt, for a hand fire).
 - The launch rule: a `ready` issue without `claimed`, `blocked`, `needs-decision` or `epic`, not a `batched` member
   (its `batch` issue is the ONE launch), and with no open PR that closes it. `node tools/ci/ready-sweep.mjs` (GETs
