@@ -377,6 +377,8 @@ jobs:
         run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex
         if: steps.reuse.outputs.reuse != 'true'
+        with:
+          scenery-catalog: "true"   # #6569 rank 7: the guard shards' on-demand scenery catalog
       # GUARDS SCOPE (#3951): a pull request whose diff touches none of tools/,
       # tests/, .github/ or package.json runs `tooling-fast --changed` (still
       # sharded here). Ratchet deltas, the generated impact map and already-pinned
@@ -522,6 +524,8 @@ jobs:
         run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex
         if: steps.reuse.outputs.reuse != 'true'
+        with:
+          scenery-catalog: "true"   # #6569 rank 7: the guard shards' on-demand scenery catalog
       # GUARDS SCOPE (#3951): see guards-a.
       - name: Guards scope
         id: scope
@@ -653,6 +657,8 @@ jobs:
         run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex
         if: steps.reuse.outputs.reuse != 'true'
+        with:
+          scenery-catalog: "true"   # #6569 rank 7: the guard shards' on-demand scenery catalog
       # GUARDS SCOPE (#3951): see guards-a.
       - name: Guards scope
         id: scope
@@ -744,6 +750,8 @@ jobs:
         run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex
         if: steps.reuse.outputs.reuse != 'true'
+        with:
+          scenery-catalog: "true"   # #6569 rank 7: the guard shards' on-demand scenery catalog
       # GUARDS SCOPE (#3951): see guards-a.
       - name: Guards scope
         id: scope
