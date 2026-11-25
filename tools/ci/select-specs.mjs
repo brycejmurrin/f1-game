@@ -953,6 +953,9 @@ export function shards(r, db = timings(), quarantine = loadQuarantine(), base = 
     // the one shard megaShardPlan picked. partitionMegaSweepArgs no longer
     // peels a lone spec + --shard (PR #1113), and the config's
     // `fullyParallel: true` shards by test.
+    // At most one --shard piece per test: PR #6525 run 45577534643 cut a 1-test
+    // spec into 1of2/2of2 and Playwright gave 2of2 nothing ("ran zero tests").
+    const maxPieces = Math.max(1, Math.floor(s.tests) || 1);
     const fatUi = FAT_UI_SPEC.test(s.file);
     if (fatUi) {
       // ONE WORKER PER PIECE, AT LEAST TWO PIECES (2026-10-15). The two-worker
@@ -968,7 +971,8 @@ export function shards(r, db = timings(), quarantine = loadQuarantine(), base = 
       const secFat = Math.max(1, sec, s.tests * FAT_UI_SEC_PER_TEST);
       const minPieces = /(?:^|\/)hud-layout\.spec\.js$/.test(s.file)
         ? HUD_LAYOUT_MIN_PIECES : FAT_UI_MIN_PIECES;
-      const nFat = Math.max(minPieces, piecesToFitCap(secFat, s.tests, FAT_UI_SELECTED_JOB_MIN));
+      // Never more pieces than tests: an empty --shard runs nothing and fails selected-verdict.
+      const nFat = Math.min(maxPieces, Math.max(minPieces, piecesToFitCap(secFat, s.tests, FAT_UI_SELECTED_JOB_MIN)));
       for (let i = 1; i <= nFat; i++) {
         items.push({ solo: true, name: `oversize-${base}-${i}of${nFat}`, files: [s.file],
           shard: `${i}/${nFat}`, tests: Math.ceil(s.tests / nFat),
@@ -976,11 +980,16 @@ export function shards(r, db = timings(), quarantine = loadQuarantine(), base = 
       }
       continue;
     }
-    const n = Math.max(nTime, nTests, piecesToFitCap(sec, s.tests));
+    const want = Math.max(nTime, nTests, piecesToFitCap(sec, s.tests));
+    const n = Math.min(want, maxPieces);
+    // A piece the test count will not let us split further gets the fat-UI
+    // ceiling when the packed one cannot hold it: a too-long test is the
+    // spec's problem, not a kill timer's.
+    const maxCapMin = want > n && piecesToFitCap(sec / n) > 1 ? FAT_UI_SELECTED_JOB_MIN : undefined;
     if (n > 1) {
       for (let i = 1; i <= n; i++) {
         items.push({ solo: true, name: `oversize-${base}-${i}of${n}`, files: [s.file], shard: `${i}/${n}`,
-          tests: Math.ceil(s.tests / n), sec: sec / n, perTest, workers: 1, retries });
+          tests: Math.ceil(s.tests / n), sec: sec / n, perTest, workers: 1, retries, maxCapMin });
       }
       continue;
     }
@@ -998,7 +1007,7 @@ export function shards(r, db = timings(), quarantine = loadQuarantine(), base = 
     const solo = !!s.capacityFallback || /menu-baseline/.test(s.file) || (declaredSolo && !measuredSoloPacks) || retries > 0;
     items.push({ solo, budgeted: measuredSoloPacks ? false : !!s.budgeted,
       pool: measuredSoloPacks && s.pool !== "spill" ? true : (s.pool || false), name: `oversize-${base}`,
-      files: [s.file], shard: "", tests: s.tests, sec, perTest, workers: 1, retries });
+      files: [s.file], shard: "", tests: s.tests, sec, perTest, workers: 1, retries, maxCapMin });
   }
   const bins = [];
   for (const it of items.filter((x) => x.solo)) bins.push({ ...it, items: [it] });
