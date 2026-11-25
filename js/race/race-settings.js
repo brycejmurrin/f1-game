@@ -739,7 +739,10 @@ const RaceSettings = (function () {
       rsReturn = "pmsettings";
       buildRaceSettings();
       $("pmsettings").hidden = true;
-      $("race-settings").hidden = false;
+      const sheet = $("race-settings");
+      sheet.hidden = false;
+      // #6267: open now, not in TopModal's later microtask, so the result keeps focus.
+      if (typeof sheet.showModal === "function" && !sheet.open) { try { sheet.showModal(); } catch (_) { /* not connected */ } }
       if (arrived) arrived();
       return true;
     }

@@ -277,13 +277,17 @@ test("an open menu still takes a key that was already down, and the on-screen pe
   assert.equal(Input.throttle(), true, "title navOpen must not mute a driving key");
   key("KeyW", false);
 
-  // Real pause/settings: hold the key FIRST, then open — a pre-held key still
-  // drives; a fresh keydown is refused (menuOverlayOpen). Touch pedals gate on
-  // anyOpen(), matching the keyboard's menu gate, not title-only navOpen().
+  // Real pause/settings: hold the key FIRST, then open — the pre-held key is
+  // kept for Resume but no longer drives under the menu (#6268: a friend race
+  // simulates under the card); a fresh keydown is refused (menuOverlayOpen).
+  // Touch pedals gate on the same anyOpen(), not title-only navOpen().
   key("KeyW", true);
   anyOpen.on = true;
-  assert.equal(Input.throttle(), true, "a key held before the menu is not the touch path");
-  assert.equal(Input.throttleLevel(), 1);
+  assert.equal(Input.throttle(), false, "a key held before the menu does not drive under it");
+  assert.equal(Input.throttleLevel(), 0);
+  anyOpen.on = false;
+  assert.equal(Input.throttle(), true, "the held key drives again once the menu closes");
+  anyOpen.on = true;
   // A keydown WHILE the menu is open was already refused (menuOverlayOpen).
   key("KeyS", true);
   assert.equal(Input.braking(), false, "keyboard keydowns stay gated; this change is the touch path");

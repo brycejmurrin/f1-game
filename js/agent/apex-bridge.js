@@ -14,7 +14,8 @@
    fenced `apex-result` block naming the command's comment id.
 
    NO EVAL. A command is one of CMDS; `call` reaches only the __apex methods in CALL_OK (perf, state reads, driving and
-   renderer A/B toggles). Saves, career, garage files and every lobby / net hook are out. Replies are capped at
+   renderer A/B toggles); `tap` / `nav` press only the menu controls in TAP_OK and circuit tiles (UI NAVIGATION below).
+   Saves, career, garage files and every lobby / net hook are out. Replies are capped at
    MAX_REPLY chars (GitHub's comment limit is 65,536). The CLAUDE LINK badge counts commands; tapping it ends the link.
 
    PERF COMMANDS. `path` pins the three.js path BENCHMARK pins (BenchRun.pathPrefs) and reloads, `bench` starts and
@@ -353,9 +354,146 @@ const ApexBridge = (function () {
       else if (ends && i < steps.length - 1) r = { ok: false, error: s.cmd + " must be the last step" };
       else r = await handle(s);
       out.push(Object.assign({ cmd: s.cmd }, r));
-      if (!r.ok) break;
+      if (!r.ok || (r.value && r.value.ok === false)) break;   // a tap / nav that did not arrive stops the batch too
     }
     return out;
+  }
+
+  // UI NAVIGATION (#6383). `tap` presses ONE menu control the player uses — an id in TAP_OK, or a circuit tile by
+  // track id — with the real event sequence (pointerdown, pointerup, click) on the real element, so the same handlers,
+  // focus moves and timers run as for a thumb. `nav` chains taps through a whole route and waits for each screen. Neither
+  // sets game state nor takes a selector: career, saves, garage files, the lobby and net are not in the list.
+  // A synthetic tap carries no user activation: audio unlock, haptics, tilt permission and fullscreen stay as they were.
+  const ROWS = ["laps", "weather", "mixed", "time", "diff", "quali", "caution", "reliab", "line", "tyres", "dirty"];
+  const TAP_OK = new Set([
+    "mb-tt", "mb-race", "mb-daily", "mb-garage", "mb-practice",                    // title doors
+    "sel-go", "sel-back", "sel-car",                                                 // circuit picker
+    "rs-go", "rs-cancel", "rs-preset-quick", "rs-preset-weekend", "rs-preset-endurance",   // SESSION / RACE SETUP
+    ...ROWS.flatMap((r) => ["rs-" + r + "-prev", "rs-" + r + "-next"]),
+    "cs-done", "cs-back", "cs-arrival-skip",                                         // garage: DONE / VIEW RESULTS, SKIP
+    "pausebtn", "pm-resume", "pm-quit", "pm-skip-results", "hud-end-session",        // race: PAUSE/RESUME, END TIME TRIAL
+    "res-menu", "ceremony-parc-skip", "ceremony-cooldown-skip", "retired-skip",
+  ]);
+  // Topmost first: the first visible one names the screen; none = the race itself (info().state).
+  const SCREENS = [["results", "results"], ["pausemenu", "pause"], ["quali", "quali"], ["race-settings", "setup"],
+    ["loading", "loading"], ["carsetup", "garage"], ["select", "select"], ["overlay", "title"]];
+  const NAV_STEP_MS = 20000, NAV_GO_MS = 60000;
+  const byId = (id) => (typeof document !== "undefined" && document.getElementById ? document.getElementById(id) : null);
+  function shown(el) {
+    for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
+      if (e.hidden) return false;
+      try { if (typeof getComputedStyle === "function") { const st = getComputedStyle(e); if (st.display === "none" || (e === el && st.visibility === "hidden")) return false; } } catch (_) { /* detached */ }
+    }
+    return !!el;
+  }
+  function gameState() { try { return window.__apex && window.__apex.info ? window.__apex.info().state : null; } catch (_) { return null; } }
+  function door() {
+    try { const p = window.__apex && window.__apex.menuPrep ? window.__apex.menuPrep() : null; return p ? p.door || null : null; } catch (_) { return null; }
+  }
+  // The garage drive-out plays while the game state is still "menu": the door read says when it is up.
+  function screenNow() {
+    for (const [id, name] of SCREENS) if (shown(byId(id))) return name;
+    const st = gameState();
+    if (st === "menu" && (door() || {}).driveOut) return "drive-out";
+    return st === "count" || st === "race" ? "race" : st;
+  }
+  function tileFor(track) {
+    if (!/^[a-z0-9_-]{1,40}$/.test(String(track || ""))) throw new Error("tile must be a track id");
+    const T = typeof Tracks !== "undefined" ? Tracks : null;
+    const i = T && T.LIST ? T.LIST.findIndex((t) => t && t.id === track) : -1;
+    if (i < 0) throw new Error("unknown track: " + track);
+    const strip = byId("sel-tracks");
+    for (const r of (strip && strip.children) || []) if (r.dataset && r.dataset.trackIdx === String(i)) return r;
+    throw new Error("no " + track + " tile on the picker (open SELECT first)");
+  }
+  function press(el) {
+    const mk = (type) => (typeof PointerEvent === "function"
+      ? new PointerEvent(type, { bubbles: true, cancelable: true, pointerType: "touch", isPrimary: true, button: 0 })
+      : new Event(type, { bubbles: true, cancelable: true }));
+    el.dispatchEvent(mk("pointerdown"));
+    el.dispatchEvent(mk("pointerup"));
+    el.click();
+  }
+  function tapEl(args) {
+    const a = args || {};
+    let el, what;
+    if (a.tile != null) { el = tileFor(a.tile); what = "tile:" + a.tile; }
+    else {
+      if (!TAP_OK.has(a.id)) throw new Error("tap not allowed: " + a.id);
+      el = byId(a.id); what = a.id;
+      if (!el) throw new Error("#" + a.id + " not in the page");
+    }
+    if (!shown(el)) throw new Error(what + " is not visible (screen " + screenNow() + ")");
+    if (el.disabled) throw new Error(what + " is disabled");
+    press(el);
+    return what;
+  }
+  const pause = (ms) => new Promise((res) => setTimeout(res, ms));
+  async function until(pred, ms) {
+    const end = Date.now() + ms;
+    for (;;) {
+      let v = false;
+      try { v = pred(); } catch (_) { v = false; }
+      if (v) return true;
+      if (Date.now() >= end) return false;
+      await pause(100);
+    }
+  }
+  const SCREEN_NAMES = new Set(SCREENS.map((s) => s[1]).concat(["drive-out", "race"]));
+  async function tap(args) {
+    const a = args || {};
+    if (a.until != null && !SCREEN_NAMES.has(a.until)) throw new Error("tap.until must be one of " + [...SCREEN_NAMES].join(", "));
+    const what = tapEl(a);
+    const ms = Math.max(0, Math.min(NAV_GO_MS, Number(a.ms) || NAV_STEP_MS));
+    const ok = a.until == null ? true : await until(() => screenNow() === a.until, ms);
+    return { tapped: what, screen: screenNow(), state: gameState(), ok };
+  }
+  // One SettingRow (rs-<row>): tap its › chevron until the select reads `want`, at most once per option.
+  async function setRow(row, want) {
+    const sel = byId("rs-" + row + "-sel");
+    if (!sel) throw new Error("rs-" + row + " not in the page");
+    const values = Array.from(sel.options || []).map((o) => o.value);
+    if (!values.includes(String(want))) throw new Error(row + " must be one of " + values.join(", "));
+    if (sel.disabled) throw new Error(row + " is locked on this session");
+    for (let k = 0; k <= values.length && sel.value !== String(want); k++) { tapEl({ id: "rs-" + row + "-next" }); await pause(60); }
+    if (sel.value !== String(want)) throw new Error(row + " stuck at " + sel.value);
+    return sel.value;
+  }
+  const FLOWS = { tt: "mb-tt", race: "mb-race" };
+  async function nav(args) {
+    const a = args || {};
+    const entry = a.entry || "setup";
+    if (!["setup", "garage", "daily"].includes(entry)) throw new Error("nav.entry must be setup, garage or daily");
+    const flow = a.flow || "tt";
+    if (!FLOWS[flow]) throw new Error("nav.flow must be tt or race");
+    if (entry === "daily" && (flow !== "tt" || a.track != null || a.weather != null || a.tod != null)) throw new Error("daily pins its own circuit, weather and hour (flow tt, no track/weather/tod)");
+    if (entry !== "daily" && a.track == null) throw new Error("nav.track is required");
+    const steps = [];
+    const t0 = Date.now();
+    const step = async (name, act, wantScreen, ms) => {
+      const s0 = Date.now();
+      let out = null;
+      try { out = await act(); } catch (e) { steps.push({ step: name, ok: false, screen: screenNow(), error: String(e.message || e) }); return false; }
+      const ok = wantScreen ? await until(typeof wantScreen === "function" ? wantScreen : () => screenNow() === wantScreen, ms || NAV_STEP_MS) : true;
+      steps.push(Object.assign({ step: name, ok, screen: screenNow(), ms: Date.now() - s0 }, out != null && out !== true ? { value: out } : {}));
+      return ok;
+    };
+    const done = (ok) => ({ ok, flow, entry, screen: screenNow(), state: gameState(), ms: Date.now() - t0, steps, door: door() });
+    if (screenNow() !== "title") throw new Error("nav starts on the title screen (now " + screenNow() + ")");
+    const go = [
+      () => step(entry === "daily" ? "mb-daily" : FLOWS[flow], () => tapEl({ id: entry === "daily" ? "mb-daily" : FLOWS[flow] }), "select"),
+    ];
+    if (entry !== "daily") go.push(() => step("tile:" + a.track, () => { tapEl({ tile: a.track }); },
+      () => tileFor(a.track).getAttribute("aria-pressed") === "true"));
+    if (entry === "garage") {
+      go.push(() => step("sel-car", () => tapEl({ id: "sel-car" }), "garage"));
+      go.push(() => step("cs-done", () => tapEl({ id: "cs-done" }), "setup"));
+    } else go.push(() => step("sel-go", () => tapEl({ id: "sel-go" }), "setup"));
+    if (a.weather != null) go.push(() => step("weather", () => setRow("weather", a.weather)));
+    if (a.tod != null) go.push(() => step("time", () => setRow("time", a.tod)));
+    if (a.go !== false) go.push(() => step("rs-go", () => tapEl({ id: "rs-go" }), () => { const sc = screenNow(); return sc === "drive-out" || sc === "race"; }, NAV_GO_MS));
+    for (const g of go) if (!(await g())) return done(false);
+    return done(true);
   }
 
   const CMDS = {
@@ -372,6 +510,9 @@ const ApexBridge = (function () {
     path,
     bench,
     snap,
+    tap,
+    nav,
+    screen: () => ({ screen: screenNow(), state: gameState() }),
     batch,
   };
 
@@ -616,7 +757,7 @@ const ApexBridge = (function () {
   }
 
   boot();
-  return { V, REPO, CALL_OK, CMDS, issueOf, handle, pickCommands, pollOnce, start, stop, boot, frames, facts, display, geom, tokenShape,
+  return { V, REPO, CALL_OK, TAP_OK, CMDS, issueOf, handle, pickCommands, pollOnce, start, stop, boot, frames, facts, display, geom, tokenShape,
     active: () => !!_run };
 })();
 Object.freeze(ApexBridge);

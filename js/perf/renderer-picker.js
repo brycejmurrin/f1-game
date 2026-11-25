@@ -988,6 +988,8 @@ function initRenderer() {
     const next = document.getElementById("pm-renderer-next");
     if (prev) prev.onclick = function () { applyBackend(prevBackend(readBackend()), rb); };
     if (next) next.onclick = function () { applyBackend(nextBackend(readBackend()), rb); };
+    // ‹ RENDERER › is a stepper: the value cycles, it never drops a list down.
+    if (typeof SettingRow !== "undefined" && SettingRow.noPicker) SettingRow.noPicker(rb, function () { applyBackend(nextBackend(readBackend()), rb); });
     return;
   }
   rb.onclick = function () { applyBackend(nextBackend(readBackend()), rb); };

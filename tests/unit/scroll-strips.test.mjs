@@ -3,8 +3,9 @@
  *
  * WHY THIS EXISTS. `.pane` (css/components.css) is the primitive for a region
  * that scrolls DOWN, and it is complete: `overflow-x: hidden`,
- * `overscroll-behavior-y: contain`, `touch-action: pan-y`, `scrollbar-gutter:
- * stable`. Every consumer gets all four by adding one class.
+ * `overscroll-behavior-y: contain`, `touch-action: manipulation` (pan-y until
+ * 2026-11-24: iOS double-tap-zoomed every control inside a pan-only region),
+ * `scrollbar-gutter: stable`. Every consumer gets all four by adding one class.
  *
  * There is no horizontal twin, so the four screens that need one each invented
  * it — the garage's category rail, the data hub's tab strip, and the lighting

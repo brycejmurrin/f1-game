@@ -321,7 +321,8 @@ function resetSettings(section) {
 /** @type {null | (() => void)} */
 let resetPrompt = null;
 let resetLeave = false;
-function resetRow(section, button) {
+/** @param {{ focus?: boolean }} [opts] */
+function resetRow(section, button, opts) {
   const scope = resetInfo(section);
   if (!scope || !button?.parentNode) return;
   if (resetPrompt) resetPrompt();
@@ -347,7 +348,7 @@ function resetRow(section, button) {
   if (!resetLeave && typeof SettingsNav !== "undefined" && SettingsNav.onLeave) {
     SettingsNav.onLeave(() => { if (resetPrompt) resetPrompt(); }); resetLeave = true;
   }
-  confirm.focus();
+  if (!opts || opts.focus !== false) confirm.focus();
 }
 
 function writePreferences(writes) {

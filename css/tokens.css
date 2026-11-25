@@ -988,8 +988,13 @@ body:not(.desktop) {
      HUD labels and menu chrome must not highlight under a thumb. Real
      fields opt back in below; tuner .sp-uri already does the same.
      manipulation (not none, not auto): drop double-tap-to-zoom, which
-     blows the standalone PWA layout, while menus keep pan-y / pan-x via
-     their own rules. Driving already sets none on #game and in-race HUD. */
+     blows the standalone PWA layout. Driving already sets none on #game and
+     in-race HUD. SCROLL REGIONS STAY manipulation TOO, never pan-y / pan-x:
+     WebKit intersects a child's touch-action with its ancestors', and
+     `manipulation` under a `pan-y` pane computes to plain `pan-y` — which iOS
+     Safari still double-tap-zooms (Bryce, iPhone 15, 2026-11-24: Photo
+     Studio and other panes). overflow-x/-y already pick each pane's axis.
+     tests/unit/phone-touch-surface.test.mjs pins it. */
   -webkit-tap-highlight-color: transparent;
   -webkit-user-select: none; user-select: none;
   -webkit-touch-callout: none;

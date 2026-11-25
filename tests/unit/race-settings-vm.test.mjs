@@ -164,6 +164,18 @@ test("settings search reveals tyre wear without staging or normalizing the race 
   assert.equal(h.at("spa"), 3, "ordinary entry still stages its normal draft");
 });
 
+test("#6267: settings search opens the native Race Settings dialog before focusing its result", () => {
+  const h = sheet({ state: "menu" });
+  const dlg = h.G.$("race-settings"), order = [];
+  dlg.open = false; dlg.showModal = () => { order.push("showModal"); dlg.open = true; };
+  assert.equal(h.rs.openSettingSearch(() => {}, () => order.push(dlg.open ? "arrived-open" : "arrived-closed")), true);
+  assert.deepEqual(order, ["showModal", "arrived-open"], "the result is focused inside an already-open dialog");
+  h.G.$("rs-cancel").onclick();
+  dlg.open = true; order.length = 0;
+  h.rs.openSettingSearch(() => {}, () => order.push("arrived"));
+  assert.deepEqual(order, ["arrived"], "an already-open dialog is not reopened");
+});
+
 test("settings search cannot reveal race preferences during a live, championship, TT or room session", () => {
   for (const opts of [{ state: "race" }, { state: "menu", session: "tt" }, { state: "menu", flow: "career" }, { state: "menu", flow: "season" }]) {
     const h = sheet(opts);

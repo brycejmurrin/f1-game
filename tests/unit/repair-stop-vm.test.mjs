@@ -71,3 +71,28 @@ test("wear OFF + DAMAGE HANDLING: the lane opens for a repair-only stop; no tyre
   assert.equal(d.fwL + d.fwR + d.rw + d.floor, 0, "the stop repaired the car: " + JSON.stringify(d));
   assert.equal(p.tyre && p.tyre.id, tyre, "no tyre service on a repair-only stop");
 });
+
+// #5775 R12 (Bryce's decision A, 2026-11-24): with the lane SHUT (wear off, damage off, a race)
+// its tarmac and wall pin stay, and a car driven onto it was railed along at full speed (Monaco:
+// 49.6 m/s against a 14 m/s cap, no hold, no cut). Now the limiter holds it; no stop is offered.
+test("wear OFF + damage OFF: a car driven onto the shut lane is held to the limiter, no stop offered", () => {
+  const a = g.apex, G = g.G, sb = g.sandbox;
+  a.go();
+  a.setPhysics({ pace: 1, drift: 0 });
+  sb.DamageHandling.setEnabled(false);
+  const p = G.player, pits = G.pits, L = G.track.total;
+  assert.equal(G.tyres.on(), false, "the VM pins tyre wear off");
+  a.jump(0.985, 30, 0);
+  const p0 = a.pit();
+  const f = (((0.985 * L + (p0.boxM - p0.atM) * 0.2) / L) % 1 + 1) % 1;   // inside the window, short of the box
+  a.jump(f, 30, a.pit().laneX); a.aim(0);
+  assert.equal(pits.arm(p, true), false, "anti-vacuity: the lane is shut, no stop can be armed");
+  assert.equal(pits.onClosedLane(p), true, "on the shut lane's tarmac");
+  for (let i = 0; i < 60; i++) { a.setInput({ steer: 0, throttle: true }); a.step(1 / 60, 1); }
+  a.clearInput();
+  assert.ok(p.speed <= pits.limit() + 1e-6, `the limiter holds on the shut lane (${p.speed.toFixed(2)} <= ${pits.limit().toFixed(2)} m/s)`);
+  assert.equal(p.pitState || "none", "none", "no stop: the car is not serviced");
+  // On the racing line beside it: no limiter.
+  a.jump(f, 30, 0); a.aim(0);
+  assert.equal(pits.onClosedLane(p), false, "the racing line is not the lane");
+});

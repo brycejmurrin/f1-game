@@ -289,3 +289,46 @@ test("GLX SSR is a half-res pass, not a full-res composite march (F3 #3115)", ()
   assert.ok(halfW * halfH * 4 <= W * H + 3,
     `half-res SSR pixels ${halfW * halfH} must be ≤ 1/4 of full-res ${W * H}`);
 });
+
+// ---- GLX rows of the rendering hunt RL-1118 (#5777).
+//
+// R10: the particles' sun term is KEY LIGHT-scaled (frameDecalSun), as the
+//      decals and TLX (tsl-fx updateFrame). GLX uploaded the raw frame sun, so
+//      spray at night (keyMul 0.29) was 3.4x TLX's.
+// R12: the rear-view mirror's depth attachment is DontCare'd when its pass
+//      ends (begin() clears it next frame), as TLX and WGX discard theirs.
+
+function particleSun(tune) {
+  const h = bootGlx({ extensions: ["EXT_color_buffer_float"] });
+  h.GLX.begin(h.frame({ sunColor: [1, 0.8, 0.6], tune }));
+  h.reset();
+  h.GLX.drawParticles(new Float32Array(400).fill(1), 400, false, true);
+  const up = h.calls.filter((c) => c[0] === "uniform3fv" && c[1][0] && c[1][0].name === "uSunColor");
+  assert.equal(up.length, 1, "one particle sun upload");
+  return Array.from(up[0][1][1]);
+}
+
+test("R10: GLX particles upload sunColor * keyMul", () => {
+  const near = (a, b) => a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) < 1e-6);
+  assert.ok(near(particleSun(null), [1, 0.8, 0.6]), "no tune: the frame sun");
+  const night = particleSun({ keyMul: 0.29 });
+  assert.ok(near(night, [0.29, 0.232, 0.174]), "keyMul 0.29 scales it: got " + night);
+});
+
+test("R12: mirror end DontCares the mirror depth before the mip rebuild", () => {
+  const h = bootGlx({ extensions: ["EXT_color_buffer_float"] });
+  assert.equal(h.GLX.mirrorBegin(h.frame(), 160, 48), true);
+  h.reset();
+  h.GLX.mirrorEnd();
+  const i = h.calls.findIndex((c) => c[0] === "invalidateFramebuffer"
+    && c[1][1].length === 1 && c[1][1][0] === h.gl.DEPTH_ATTACHMENT);
+  assert.ok(i >= 0, "mirrorEnd invalidates DEPTH_ATTACHMENT");
+  const bind = h.calls.slice(0, i).filter((c) => c[0] === "bindFramebuffer").pop();
+  assert.ok(bind && bind[1][1], "with the mirror FBO (not the default framebuffer) bound");
+  const mip = h.calls.findIndex((c) => c[0] === "generateMipmap");
+  assert.ok(mip > i, "before generateMipmap");
+  // An aborted pass (begin threw) never ended: nothing to invalidate.
+  h.reset(); h.GLX.mirrorEnd();
+  assert.equal(h.calls.filter((c) => c[0] === "invalidateFramebuffer").length, 0, "no open pass: no call");
+});
+

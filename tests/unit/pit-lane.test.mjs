@@ -240,7 +240,7 @@ function commitSession({ hw = 7, vTop = 60, total = 5386, weather = "dry", real 
   ] }] };
   // The AI's planner, for think(): the plan fires on its lap and not before.
   ctx.AiDrive = { pitNow: (x) => (x.wrongTread ? "weather" : x.wear >= 1 ? "worn" : x.lapsToStop <= 0 && x.stopsLeft > 0 ? "plan" : ""),
-                  compoundFor: () => "medium", STRAT: { CAUTION_REACH: 6, FUEL_WEAR: 0.22 } };
+                  compoundFor: () => "medium", STRAT: { CAUTION_REACH: 6, FUEL_WEAR: 0.22 }, wornPays: realWornPays };
   // The garage row order. Real Teams.LIST is 12 entries; the count is what sets
   // how wide the row is, so the stub carries the same number rather than a
   // convenient few — a row that fits at 4 teams and not at 12 is the bug.
@@ -1293,6 +1293,18 @@ test("windowOf names a rival's window for the gap chips: P<lap> within three lap
 });
 
 // ── The plan against the tyres actually worn ─────────────────────────────────
+// The REAL worn-tyre payback (wetLapsToStop prices a short wet set with it, #5783 F2), from its
+// own context: strategySession loads ai-strategy.js into the session context, and a second
+// top-level `const AiStrategy` there would not parse.
+function realWornPays(q) {
+  if (!realWornPays.fn) {
+    const c = vm.createContext({});
+    vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), c, { filename: absSrc("js/core/mat4.js") });
+    vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-strategy.js"), "utf8") + "\n;globalThis.AiStrategy = AiStrategy;", c, { filename: absSrc("js/physics/ai-strategy.js") });
+    realWornPays.fn = c.AiStrategy.wornPays;
+  }
+  return realWornPays.fn(q);
+}
 // A session with the REAL planner (AiDrive.stintPlan) and the REAL rule
 // (SportingRegs), because every bug below lived in the seam between them and
 // this module — a stubbed planner would agree with anything.
@@ -1592,6 +1604,25 @@ test("wetLapsToStop de-fuels the measured rate: a set that reaches the flag on a
   assert.deepEqual(run(5), [99, 0], "the marginal wet set in a 5-lap race goes to the flag");
   // The same set in an 8-lap race really runs out (2.91 laps for 6 to run) and still stops once.
   assert.equal(run(8)[1], 1, "a wet set that cannot reach the flag still stops");
+});
+
+test("wetLapsToStop: a wet set a little short of the flag with two laps left runs on; the stop must pay (#5783 F2)", () => {
+  // VM, Bahrain dry->rain, 6 laps, seed 1: 6 of 21 AI made a second wet-for-wet stop at wear 0.45-0.81
+  // with two laps left and lost 12-20 s; the car that stayed out won at wear 0.88 with no cliff.
+  const s = commitSession({ weather: "rain" });
+  const seen = [];
+  s.ctx.AiDrive.pitNow = (q) => { seen.push([q.lapsToStop, q.stopsLeft]); return ""; };
+  const c = s.car(0);
+  c.human = false; c.local = false; c.pitStops = 1; c.tyreWear = 0.6; c.s = 0;
+  c.tyre = { code: "W", tread: 2 };
+  c.pitPlan = { stops: 1, seq: ["soft", "medium"], stints: [3, 3], lapsAt: [3], pitLossLaps: 0.2 };
+  s.G.tyres.lapsOn = () => 2; s.G.tyres.lapsLeft = () => 1.5;
+  const run = (laps, lap) => { s.G.lapsTarget = laps; c.lap = lap; seen.length = 0; s.pits.think(c); return seen[0]; };
+  // 2 laps to run on 1.5 (de-fuelled ~1.55): short, but it ends near wear 1.12; a fresh set wins back
+  // ~0.06 of a lap a lap, against a lane of 0.2 laps: no stop.
+  assert.deepEqual(run(6, 5), [99, 0], "two laps left on a set that is a little short: no wet-for-wet stop");
+  // The same set with 5 laps to run would end near wear 1.9: the cliff pays for the lane.
+  assert.equal(run(9, 5)[1], 1, "a wet set far short of the flag still stops");
 });
 
 test("lossS is the lane's net cost in seconds, and estimate agrees with it off a caution", () => {

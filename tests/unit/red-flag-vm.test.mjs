@@ -204,3 +204,27 @@ test("a queue held under the red flag is parked, not wedged: no AI accrues stuck
     assert.equal(maxStuck, 0, "no AI may count a red-flag queue as stuck");
   } finally { m.close(); }
 });
+
+test("the restart grid is the order when the red flag flew, not after the field braked for it (#5783 H1)", async () => {
+  // VM, Monza: cars passed one another while braking for the red (all within 1.8 s of the flag) and
+  // redFlagRestart's prog sort at the restart kept every swap on the grid. Here the "pass" is two
+  // AI cars swapped on the road after the flag is shown.
+  const m = await createGame({ track: "monza" });
+  try {
+    const G = m.G, A = m.apex;
+    A.go(); m.step(240);
+    G.applyCaution({ level: 4, cause: "test" });
+    m.step(2, 1 / 60);   // a frame of presentation ticks: race control is read with the flag out
+    assert.equal(G.cautionLevel(), 4, "the red flag is flying");
+    const rank = () => G.cars.filter((c) => !c.retired).sort((a, b) => b.prog - a.prog);
+    const atFlag = rank();
+    const ai = atFlag.filter((c) => !c.human);
+    const [x, y] = [ai[1], ai[2]];
+    for (const k of ["s", "prog", "lap", "x"]) { const t = x[k]; x[k] = y[k]; y[k] = t; }   // y now leads x on the road
+    assert.ok(rank().indexOf(y) < rank().indexOf(x), "the precondition: the swap is a pass by prog");
+    G.state = "race";
+    assert.equal(G.redFlagRestart(), true);
+    const ix = (list) => list.map((c) => G.cars.indexOf(c));
+    assert.deepEqual(ix(rank()), ix(atFlag), "grid boxes in the order at the flag");
+  } finally { m.close(); }
+});

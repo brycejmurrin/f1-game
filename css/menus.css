@@ -319,7 +319,7 @@ html[data-home-live] :where(body[data-shape="wide"]) #overlay #title {
 html[data-home-live] :where(body[data-shape="wide"]) #overlay #menu-buttons {
   grid-column: 2; grid-row: 1; width: 100%; max-height: 100%; align-self: center; align-content: start;
   overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain;
-  touch-action: pan-y; min-height: 0;
+  touch-action: manipulation; min-height: 0;
 }
 @media (max-height: 660px) {
   html[data-home-live] :where(body[data-shape="wide"]) #overlay #menu-buttons { gap: calc(var(--gap) * 0.5); }
@@ -339,7 +339,7 @@ html:not([data-home-live]) :where(body[data-shape="tall"]) #overlay #menu-button
 html[data-home-live] :where(body[data-shape="tall"]) #overlay #menu-buttons {
   align-self: stretch; align-content: start; min-height: 0; max-height: 100%;
   overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain;
-  touch-action: pan-y; margin-bottom: calc(var(--tap) + var(--gap) * 0.5);
+  touch-action: manipulation; margin-bottom: calc(var(--tap) + var(--gap) * 0.5);
 }
 /* Compact-wide: subgrid secondary; #menu-buttons scrolls (not display:contents). */
 html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay {
@@ -365,7 +365,7 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
   align-content: start; align-items: start; justify-items: stretch;
   width: auto; height: 100%; max-height: 100%; min-height: 0; align-self: stretch;
   overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain;
-  touch-action: pan-y; z-index: 2; background: transparent;
+  touch-action: manipulation; z-index: 2; background: transparent;
   padding-block: calc(var(--gap) * 0.5);
   padding-inline: var(--gap);
   pointer-events: none;

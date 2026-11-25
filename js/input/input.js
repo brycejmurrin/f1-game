@@ -212,6 +212,7 @@ const Input = (function () {
   let remPedalDz = REMOTE_PEDAL_ON;  // Legacy phone/XR samples are raw travel.
   let remHeld = 0;               // REMOTE_HELD bits
   let remoteDriveReady = false;
+  let remoteDriveGen = 0;        // bumped at each Resume: a link fences its in-flight samples on it (#6330)
   let remRoll = false;           // the last sample carried a roll: a phone with no sensor sends null
   let remStick = false, remSteer = 0;   // the last sample carried a STICK command (XR): -1..1, no tilt pipeline
   let remSeq = null;             // the last roll sample's seq (burst dt, below)
@@ -409,6 +410,10 @@ const Input = (function () {
     remoteOwner = owner;
     const n = nowMs();
     remCamera = owner === "phone" && s.camera && remoteControlContext() === "camera" ? s.camera : null;
+    // FENCED: a drive sample the phone sent before it saw the drive surface
+    // return (PhonePad.link's Resume fence). The link stays live; nothing it
+    // carries drives, and the tilt filter starts fresh from the next sample.
+    if (s.driveFenced && !s.camera) { clearRemoteControls(true); remoteMs = n; return true; }
     // A STICK (an XR thumbstick, js/xr/xr-input.js) is an analog steer
     // command, not a lean: it used to be dressed up as a roll (steerToTilt) and
     // ride the phone's One-Euro filter, tilt dead zone and 8/s slew, and lamp 1's
@@ -505,6 +510,7 @@ const Input = (function () {
   // capability available to the menu, but start the steering filter fresh.
   function invalidateRemoteDrive() {
     remoteDriveReady = false;
+    remoteDriveGen++;
     if (tiltRemote) tiltFilterClear();
   }
   // The link dropped: pedals off at once, and a phone-fed tilt reading must not
@@ -1255,6 +1261,8 @@ const Input = (function () {
         (tag === "SELECT" && act === "pause" && printable);
       if (down && !e.repeat && (act === "pause" || e.code === "Escape") && !inTextField) {
       if (act === "pause") {
+        // A menu spent it (an arrow PAUSE moved focus): not also pause (#6282).
+        if (e.defaultPrevented) return;
         clearDriveToggles();
         if (onPauseCb) onPauseCb();
         return;
@@ -2089,8 +2097,13 @@ const Input = (function () {
   }
   function steerNow() {
     if (padConnected) advanceDpad();
+    // A key HELD when a menu opened (Pause in a friend race, which keeps
+    // simulating) is the menu's: the wheel centres and the ramp restarts from 0
+    // on Resume instead of carrying the angle it had under the card (#6268).
+    const keyHeld = keyLeft || keyRight;
+    if (keyHeld && navBlocksTouch()) { keySteerVal = 0; keySteerT = nowMs(); return 0; }
     const k = keyboardSteer();
-    if (keyLeft || keyRight) return k;
+    if (keyHeld) return k;
     // The d-pad half of padSteer is digital and already ramped — it must not
     // also be curved and speed-scaled as if it were a deflection.
     if (padSteerActive()) return padSteerAnalog ? analogShape(padSteer, padIsWheel ? "wheel" : "pad") : padSteer;
@@ -2151,12 +2164,15 @@ const Input = (function () {
     } else remCamera = null;
   }
 
+  // Held keys stay held for Resume, but an open menu owns them: like the
+  // on-screen pedals, they do not drive under it (#6268).
+  function keyDrive(held) { return held && !navBlocksTouch(); }
   function throttle() {
-    return keyThrottle || (touchThrottleLevel() > 0 && !navBlocksTouch()) || padThrottle || remoteThrottle();
+    return keyDrive(keyThrottle) || (touchThrottleLevel() > 0 && !navBlocksTouch()) || padThrottle || remoteThrottle();
   }
 
   function braking() {
-    return keyBrake || (btnBrake && btnBrakeVal > 0 && !navBlocksTouch()) || padBrake || remoteBrake();
+    return keyDrive(keyBrake) || (btnBrake && btnBrakeVal > 0 && !navBlocksTouch()) || padBrake || remoteBrake();
   }
 
   // 0..1 pedal travel. A KEY is digital and is therefore always full travel; an
@@ -2173,14 +2189,14 @@ const Input = (function () {
     if (level > 0 && drivingPadKey !== null && !menuOverlayOpen()) drivingPadKey = null;
   }
   function throttleLevel() {
-    if (keyThrottle) return 1;
+    if (keyDrive(keyThrottle)) return 1;
     const touch = touchThrottleLevel();
     if (touch > 0 && !navBlocksTouch()) return touch;
     if (remoteThrottle()) return pedalLevel(remThr, remPedalDz);
     return padThrottleVal;
   }
   function brakeLevel() {
-    if (keyBrake) return 1;
+    if (keyDrive(keyBrake)) return 1;
     if (btnBrake && btnBrakeVal > 0 && !navBlocksTouch()) return btnBrakeVal;
     if (remoteBrake()) return pedalLevel(remBrk, remPedalDz);
     return padBrakeVal;
@@ -2249,7 +2265,7 @@ const Input = (function () {
      it was removed on request — the dock had grown to five buttons in one thumb
      column once PIT landed beside it, and a glance over the shoulder is the
      control that least deserves a permanent seat there. */
-  function lookingBack() { return keyLookBack || padLookBack || (remoteDriveActive() && !!(remHeld & REMOTE_HELD.lookBack)); }
+  function lookingBack() { return keyDrive(keyLookBack) || padLookBack || (remoteDriveActive() && !!(remHeld & REMOTE_HELD.lookBack)); }
 
   /* FREE-LOOK inputs for CamFeel. lookStick() is the latest right-stick sample
      (−1..1); consumeLookMouse() returns and clears RMB-drag pixel deltas.
@@ -2874,6 +2890,7 @@ const Input = (function () {
     init,
     reset,
     invalidateRemoteDrive,
+    remoteDriveGeneration: () => remoteDriveGen,
     keyBindings, setKeyBinding, clearKeyBinding, setKeyMap, getKeyMap, resetKeys, keysAreDefault, keyLabel, keyboardSeen, activeInputSource,
     padBindings, setPadBinding, clearPadBinding, setPadMap, getPadMap, resetPad, padsAreDefault, padLabel, padCapture, padPresent,
     debugState,
@@ -2937,7 +2954,10 @@ const Input = (function () {
     setPedalSlide(m) { pedalSlide = m === "ease" ? "ease" : "instant"; return pedalSlide; },
     pedalSlide: () => pedalSlide,
     setThrottleLatch(on) { throttleLatch = !!on; throttleLatched = false; btnThrottle = false; paintLatch(); },
-    setHoldMode(m) { holdMode = InputBindings.parseHoldMode(m); clearDriveToggles(); },
+    setHoldMode(m) {
+      holdMode = InputBindings.parseHoldMode(m); clearDriveToggles();
+      if (window.dispatchEvent && typeof Event === "function") window.dispatchEvent(new Event("apexholdmodechange"));   // Help wording
+    },
     getHoldMode: () => InputBindings.parseHoldMode(holdMode),
     // Every race starts OFF: touch latch + keyboard/pad toggles from the last race.
     dropLatch() {

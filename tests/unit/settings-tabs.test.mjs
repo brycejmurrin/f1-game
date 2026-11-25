@@ -509,3 +509,19 @@ test("closing Settings while the reset bundle loads does not focus a hidden conf
   panel.querySelector("[data-reset-settings]").click(); sheet.hidden = true;
   resolve(true); await tick(); assert.equal(prompts, 0);
 });
+
+test("#6263: a reset prompt that resolves after focus moved on does not steal it", async () => {
+  const { nav, dom, ctx } = boot({ ensure: () => true });
+  let resolve; const calls = [];
+  ctx.SettingsExport = { ready: () => new Promise(r => { resolve = r; }), resetRow: (id, _b, opts) => calls.push([id, opts]) };
+  const sheet = dom.byId("pmsettings"), panel = dom.byId("pm-panel-graphics");
+  sheet.hidden = false; nav.show("graphics");
+  const reset = panel.querySelector("[data-reset-settings]"), other = dom.document.createElement("button");
+  panel.appendChild(other);
+  reset.focus(); reset.click(); other.focus();
+  resolve(true); await tick();
+  assert.equal(calls.length, 1, "the prompt still opens");
+  assert.equal(calls[0][1].focus, false, "focus stays on the control the player moved to");
+  reset.focus(); reset.click(); resolve(true); await tick();
+  assert.equal(calls[1][1].focus, true, "pressed and waited: the confirmation takes focus");
+});
