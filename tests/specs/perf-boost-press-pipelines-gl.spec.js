@@ -34,6 +34,10 @@ test("TLX WebGL2: BOOST presses 2..N re-mint no BOOST pipelines and add no backg
   expect(hook, "three's backend must be reachable to count pipelines").toMatch(/^ok /);
   testInfo.annotations.push({ type: "backend", description: hook });
   testInfo.annotations.push({ type: "render pin", description: JSON.stringify(pin) });
+  // A pin that did not take only costs time, never the verdict; fail it by name, not as a 900 s timeout.
+  expect(pin && pin.before, "renderScale(0.5) + govHold(true) must hold from go() to the last press").toEqual(pin && pin.after);
+  expect(pin.before.tierHold, "govHold(true) must take").toBe(true);
+  expect(pin.before.scale, "renderScale(0.5) must take").toBeCloseTo(0.5, 2);
   testInfo.annotations.push({ type: "timings", description: `warm-up ${warmMs} ms; presses ${presses.map((p) => p.ms).join(",")} ms` });
   testInfo.annotations.push({ type: "press 1", description: `${presses[0].pipelines} pipelines on the first press (first-use warm-up, #3677)` });
   testInfo.annotations.push({ type: "control windows", description: presses.map((p) => p.control).join(",") + " pipelines in the equal no-BOOST windows" });
