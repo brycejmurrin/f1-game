@@ -16,7 +16,7 @@ The phone-landscape contract (the ONE layout per screen, the windows to test, th
   finished artifacts, and any run that launches Chromium (layout-audit, fit-audit, hud-mock, hud-survey,
   menu-mock, explorer) throws from `launchChromium` under `APEX_SUBAGENT` (`tools/lib/harness.mjs`; AGENTS.md rule 10).
 - **Saved and shipped settings.** The default iPhone 15 landscape viewport uses shipped settings. `ios-iphone-landscape-844`
-  is the generic 844x390 iPhone cell (AGENTS.md §Critical conventions); his own are `bryce-standalone` (852x393,
+  is the generic 844x390 iPhone cell (not his phone; every window: `tests/data/phone-windows.json`); his own are `bryce-standalone` (852x393,
   Home Screen app), `bryce-portrait` (393x852) and `bryce-safari` (`layout-audit --list`), which boot on his live export (`OWNER_PROFILES.live`
   in `tools/lib/bryce-phone.mjs`). Name them explicitly and run them first. `tests/data/settings-defaults-export.json`
   is his legacy 2026-10-05 export (`hud-survey.mjs --settings`, `explorer.mjs --settings`); every other cell and

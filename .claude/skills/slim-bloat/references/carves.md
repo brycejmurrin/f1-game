@@ -24,7 +24,7 @@ before/after counts (`bloat-scan.mjs --json`).
    hand-edited) + lower
    the ceilings: `node tools/check/ratchets.mjs --update --lower-only` (a delta in tests/data/ratchets.d on a topic branch).
 5. `lsp_references` every removed symbol (grep for text and comments). Then
-   `node tools/ci/tooling-fast.mjs --changed --jobs=3` (the full tier in the background only, AGENTS.md rule 4).
+   the local floor (AGENTS.md rule 3; the full tier in the background only, AGENTS.md rule 4).
    Near `game.js`: `tests/specs/physics-characterization.spec.js` is the master gate. It runs on CI, not
    locally (AGENTS.md rule 5): `node tools/ci/pick-tests.mjs` names the groups, the PR's own CI runs
    the browser shard (a whole group is Bryce's opt-in); the parent names any group not run.
@@ -78,7 +78,7 @@ mirrors that cite a **symbol**.
 
 ```sh
 node tools/check/bloat-scan.mjs --json
-node tools/ci/tooling-fast.mjs --changed --jobs=3
+# the local floor (AGENTS.md rule 3)
 node tools/ci/verify-change.mjs --plan --json
 ```
 

@@ -55,7 +55,7 @@ approves a permission prompt, changes settings, or lifts FORBIDDEN or a hook
 1. Orient: `git log --oneline -1`, the domain skill the change matches
    (`.claude/skills/README.md`).
 2. Make every edit, then verify once (AGENTS.md rule 2): `node --test <files>`;
-   `node tools/ci/tooling-fast.mjs --changed --jobs=3` for tools or tests;
+   the local floor (AGENTS.md rule 3) for tools or tests;
    `node tools/track/verify-track.cjs <id>` for a circuit;
    `node tools/ci/pick-tests.mjs` names the browser groups you report as not
    run. Over ~2 min goes in a background Bash task with a `Monitor` on its log.

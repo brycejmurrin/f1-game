@@ -11,7 +11,7 @@ concept) and writes it up as a plan; the cleanup itself is separate implementati
 a hunter but it doesn't focus on bugs or improvements or optimizations, it focuses on cleaning up code, making things
 clearer, cleaner, decoupling, structure etc"; ~02:17Z "the gardener can also use the lsp mcp/tools heavily"; ~02:41Z "I thought gardeners wouldn't
 create PRs, just issues or big design plans"). The first plans: tracking issues #6454 (js), #6455 (UI) and #6456
-(tooling); the evidence for the rules below is the survey note of PR #6442 (`GARDENER-SURVEY-2026-11-25.md`).
+(tooling); the evidence for the rules below is PR #6442 and those three issues.
 
 **The boundary.** Too big or dead (a ratchet OVER, an unused symbol, dead CSS, a stale comment) → skill `slim-bloat`.
 Wrong shape (duplication, coupling, unclear ownership, a split along the jobs a file already has) → here. A bug found
@@ -21,21 +21,8 @@ while gardening is a `bug` issue of its own. A launch (when, how many) → skill
 ## apex-lsp first
 
 Bryce, ~02:33Z: "it can use grep but should use the lsp". Every JS-symbol number in a plan row (callers, consumer
-files, copies, free names) comes from one of these and cites the query; skill `code-nav` has the call shapes and
-`.claude/rules/js-nav.md` the grep boundary:
-
-| tool | job |
-|---|---|
-| `lsp_outline {file}` | a module's shape: the map of the jobs a big file does |
-| `lsp_references` / `lsp_callers` `files: true` | fan-in and fan-out per file; `G.<member>` consumers (one consumer = state parked on `G`) |
-| `lsp_symbols {query}` | same-named copies across files: the duplicate finder |
-| `lsp_definition body: true` | two suspected twins side by side: a copy, or one rule spelled two ways? |
-| `lsp_hover` | implicit-`any` seams a move would cross |
-| `lsp_diagnostics {file}` | the move type-checks, before the floor |
-
-Grep is for text shapes only (an inline `((x % L) + L) % L`, storage keys, CSS, YAML, comments). Free names of a block:
-`node tools/check/extract-module.mjs <file> <start> <end>`. Same-scope twins: `node tools/check/dup-functions.mjs`.
-`G` fan-in figures are lower bounds where a module destructures `const {…} = G`; re-check a "1 consumer" row by text.
+files, copies, free names) comes from an apex-lsp query and cites it. The tool → job list, the grep boundary and the
+read-only Bash are agent `gardener` §apex-lsp is the method (its one home); call shapes: skill `code-nav`.
 
 ## SURVEY — read-only; the output is an issue, never a PR
 

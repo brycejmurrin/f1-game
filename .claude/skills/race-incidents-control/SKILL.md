@@ -85,7 +85,7 @@ Hooks:
 Commands:
 
 ```sh
-node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # diff-aware; the full suite runs on the PR
+# the local floor first (AGENTS.md rule 3); the full suite runs on the PR
 node --test tests/unit/race-control.test.mjs   # flags/caution rules, <1 s; also reliability, debris-*.test.mjs
 node --test tests/unit/incident-gate.test.mjs  # R2/R3/C1 takeovers: promote, window, handback, release
 APEX_VM_PAGE_GROUP=b node --test tests/unit/adapted-specs.test.mjs   # race-control.spec (flags only, no IncidentSim) VM-adapted, NO browser (test:vm-page-b)

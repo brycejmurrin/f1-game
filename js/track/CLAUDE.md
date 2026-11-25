@@ -32,8 +32,8 @@ tables, and `build-props.js` orchestration), and `tracks.js` at the root is
   `{ turn: N }` (1-based into `def.turns`, the curated FIA apex table,
   racing-space, no shift); frac zones that land on a straight >60 m from any
   apex are re-seated on the nearest one.
-- **scenery(api) is a frozen 114-member contract**
-  (`tests/unit/scenery-api-contract.test.mjs`). Adding a member is a
+- **scenery(api) is a frozen contract** (its size is `CONTRACT_SIZE` in
+  `tests/unit/scenery-api-contract.test.mjs`). Adding a member is a
   deliberate contract change: update the test in the same commit.
 - After ANY change here: `node tools/track/verify-track.cjs <id>` (2 s headless
   build) BEFORE running spec groups; `pick-tests` names the groups.
