@@ -999,11 +999,12 @@ test("#6581 handsOff drive: passed to the driver, and the banner carries a big S
   await b.api.handle({ cmd: "drive", args: { laps: 1, wait: false, handsOff: true } });
   assert.equal(calls[0].handsOff, true);
   const banner = d.body.kids.find((k) => k.id === "apex-bridge-driving");
-  assert.match(banner.textContent, /HANDS OFF/);
+  assert.equal(banner.textContent, "CLAUDE DRIVING · HANDS OFF ");
   const stop = banner.kids.find((k) => k.id === "apex-bridge-driving-stop");
   assert.equal(stop.textContent, "STOP");
-  assert.match(stop.style.cssText, /pointer-events:auto/, "the one place a touch is taken");
-  assert.match(stop.style.cssText, /min-height:56px/, "big enough to hit without looking");
+  const css = Object.fromEntries(stop.style.cssText.split(";").filter(Boolean).map((d) => d.split(":")));
+  assert.equal(css["pointer-events"], "auto", "the one place a touch is taken");
+  assert.equal(css["min-height"], "56px", "big enough to hit without looking");
   stop.on.click();
   await flush();
   assert.equal(d.body.kids.length, 0, "STOP ended the drive and the banner went with it");
