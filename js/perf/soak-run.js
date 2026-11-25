@@ -293,7 +293,8 @@ const SoakRun = (function () {
     if (G.state !== "race" && G.state !== "count") { endDrive("state:" + G.state); return; }
     if (performance.now() - d.t0 > d.ms) { endDrive(d.secs ? "seconds" : "timeout"); return; }
     if (G.state !== "race") return;   // the lights: wait for them
-    const inp = d.pol.step(dt);
+    let inp;
+    try { inp = d.pol.step(dt); } catch (e) { endDrive("error: " + ((e && e.message) || e)); return; }   // never steer on after a fault
     const ph = d.pol.phase(), c = G.player;
     if (ph !== d.phase) { d.phase = ph; d.steps.push({ phase: ph, t: +((performance.now() - d.t0) / 1000).toFixed(1), s: Math.round(c.s), kph: Math.round(c.speed * 3.6) }); }
     const why = d.pol.done();

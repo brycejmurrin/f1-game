@@ -1647,7 +1647,8 @@ const AgentView = (function () {
       if (typeof o.policy === "string") {
         const S = typeof SoakRun !== "undefined" ? SoakRun : null;
         if (!S || typeof S.policy !== "function") return fail("UnavailableError", "named policies live in SoakRun (the perf rig), not loaded", "LazyBundles.live().ensurePerfRig() loads it");
-        named = S.policy(o.policy, { laps: o.laps });
+        named = S.POLICY_NAMES.indexOf(o.policy) >= 0 ? S.policy(o.policy, { laps: o.laps }) : null;
+        if (!named && S.POLICY_NAMES.indexOf(o.policy) >= 0) return fail("UnavailableError", "SoakRun is not bound to the game yet", "retry once the perf rig has loaded");
         if (!named) return fail("BadArgumentError", "unknown policy name: " + o.policy, "one of " + S.POLICY_NAMES.join(", ") + ", or a function");
       } else if (o.policy != null && typeof o.policy !== "function") {
         return fail("BadArgumentError", "policy must be a function or a name",
@@ -1703,7 +1704,7 @@ const AgentView = (function () {
           break;
         }
         if (named && i % policyEvery === 0) {
-          const inp = named.step(dt * policyEvery);
+          let inp; try { inp = named.step(dt * policyEvery); } catch (e) { return fail("PolicyError", "the " + named.name + " policy threw: " + (e && e.message), "report it; the input was handed back"); }
           if (named.done()) { stoppedEarly = { atS: r2(G.raceT - startT), reason: "policy:" + named.done() }; break; }
           G._testInput = inp || null;
         }

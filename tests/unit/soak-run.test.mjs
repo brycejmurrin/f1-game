@@ -296,3 +296,12 @@ test("drive: `seconds` ends as its own success and `laps` on the lap count", asy
   assert.equal((await r.p).reason, "laps");
   assert.equal(r.G._testInput, null);
 });
+
+test("drive: a policy that throws ends the drive at once and hands the input back (no steering on after a fault)", async () => {
+  const r = await driving();
+  r.G.player = { get s() { throw new Error("car gone"); }, x: 0, head: 0, speed: 40 };
+  r.frame(16);
+  assert.equal(r.SoakRun.driving(), false);
+  assert.equal(r.G._testInput, null);
+  assert.equal((await r.p).reason, "error: car gone");
+});
