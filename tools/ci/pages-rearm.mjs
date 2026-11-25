@@ -14,7 +14,7 @@
 // looks, when it starts, at whether the tip lost its train this way, and dispatches one. The dispatched run
 // joins the same group as the one pending run; a newer push replaces it exactly as before.
 //
-// Exit 0 always (a lookup or dispatch failure is a warning: the 6-hourly cron is still the backstop, and a
+// Exit 0 always (a lookup or dispatch failure is a warning: the daily cron is still the backstop, and a
 // red job here would turn a good publish red). Env: GITHUB_REPOSITORY, GITHUB_SHA, GITHUB_RUN_ID,
 // DEPLOY_BRANCH, GH_TOKEN (actions: read; actions: write for --dispatch).
 import fs from "node:fs";

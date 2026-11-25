@@ -78,9 +78,9 @@ test("pages.yml is a release train: schedule + dispatch, one deploy branch, noth
   // with ci.yml's prose paths-ignore; one running + one pending run per the workflow group.
   assert.match(onBlock, /^\s+push:\n\s+branches:\n\s+- claude\/f1-game-project-26h3ng\n\s+paths-ignore:/m, "the train runs on push to the deploy branch");
   assert.match(onBlock, /paths-ignore:\n(\s+- "[^"]+"\n){5}/, "the same five prose globs ci.yml ignored");
-  // Every 6 h since 2026-10-26 (hourly from 2026-10-14): push + dispatch start the
-  // train and it re-arms itself (`rearm`), so the cron is only a backstop.
-  assert.match(onBlock, /schedule:\s*\n(\s+#[^\n]*\n)*\s+- cron: "41 \*\/6 \* \* \*"/, "one tick every 6 h, off the hour");
+  // Daily since 2026-11-25 (#6536 R4; every 6 h from 2026-10-26, hourly from 2026-10-14): push + dispatch start
+  // the train and it re-arms itself (`rearm`), so the cron is only a backstop.
+  assert.match(onBlock, /schedule:\s*\n(\s+#[^\n]*\n)*\s+- cron: "53 10 \* \* \*"/, "one tick a day, off the hour");
   assert.match(onBlock, /workflow_dispatch:/, "a dispatch is 'deploy now'");
   assert.match(onBlock, /^\s+DEPLOY_BRANCH: claude\/f1-game-project-26h3ng\s*$/m, "the one declaration of the deploy branch");
 

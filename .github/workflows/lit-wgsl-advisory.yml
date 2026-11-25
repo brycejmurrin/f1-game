@@ -10,6 +10,9 @@ name: Lit WGSL advisory
 # be able to turn a PR red or hold the merge; a separate pull_request workflow that is not a required check cannot.
 # `continue-on-error` on the job keeps even a tool failure out of the PR's checks.
 #
+# READY PRs ONLY (Bryce's answer on #6536 R7, 2026-11-25): the same ready-tier gate ci.yml's renderer-macos job
+# uses (`!github.event.pull_request.draft`), pinned by tests/unit/workflow-schedule-stagger.test.mjs. GitHub's `on:`
+# cannot filter on draft, so a draft push still records one skipped run; it starts no runner.
 # Draft PRs skip it; the ready flip runs it on the same head (2026-11-03: the `run-ci` label and the `CI: run`
 # body line left with ci.yml's draft opt-in). No `labeled` or `edited` trigger (audit 2026-10-26: 157 runs in
 # 7 days, 6 CHANGED, and label events re-ran it on unchanged heads). The paths filter is the lit shader's own inputs: the renderer

@@ -7,13 +7,13 @@
 //
 // Why (Bryce, 2026-11-25 ~02:44Z, relayed by the orchestrator): every issue carries one type, one or more areas and,
 // where it applies, a `source:*`. The backfill that day left 69 of 69 open issues on the scheme; this is the check
-// a dispatcher cycle or the Board runs so it stays that way. `source:*`, `phone` and `needs-device` apply only where
+// an orchestrator cycle runs so it stays that way. `source:*`, `phone` and `needs-device` apply only where
 // they fit, so nothing here can require them; the tool reports type and area only.
 import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { api as githubApi } from "./github-api.mjs";
-import { getAll, labelsOf } from "./dispatch.mjs";
+import { getAll, labelsOf } from "./lib/gh-rows.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));

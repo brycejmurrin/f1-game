@@ -611,16 +611,6 @@
       "presentation": "shared-levels",
       "preserve": "Running versus terminal; gate-only/plan/PR receipts; exact SHA; child exits"
     },
-    "tools/ci/dispatch.json": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/ci/dispatch.mjs": {
-      "action": "page-results",
-      "presentation": "shared-levels",
-      "preserve": "One CREATE_SESSION / CURSOR_LAUNCH / ARCHIVE_SESSION line per planned action and the labels it sets; --apply is the only mode that writes"
-    },
     "tools/ci/docs-fast-tests.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -680,6 +670,11 @@
       "action": "protocol-only",
       "presentation": "native",
       "preserve": "Empty list is real empty; consumers depend on paths only"
+    },
+    "tools/ci/lib/gh-rows.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Library: labelsOf / getAll / closingIssues / batchMembers / ADOPT_RE over GitHub REST rows; no CLI output"
     },
     "tools/ci/lib/deploy-tip.mjs": {
       "action": "keep-native",
@@ -835,11 +830,6 @@
       "action": "job-status",
       "presentation": "shared-levels",
       "preserve": "No-wait means dispatched not passed; timeout/cancelled/API exits; shard child streams"
-    },
-    "tools/ci/repo-size.mjs": {
-      "action": "targeted-summary",
-      "presentation": "shared-levels",
-      "preserve": "Full-clone refusal; packed versus raw and history-only distinctions"
     },
     "tools/ci/reuse-draft-fast.sh": {
       "action": "protocol-only",
@@ -1345,11 +1335,6 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "GitHub ::error annotations, unknown/missing evidence and existing nonzero gate exit."
-    },
-    "tools/gfx/chunk-merge-timing.mjs": {
-      "action": "artifact-first",
-      "presentation": "shared-levels",
-      "preserve": "Keep per-boot samples, adapter identity, repeat spread, missing measurements and the exit status."
     },
     "tools/gfx/chunk-reach.cjs": {
       "action": "keep-native",
