@@ -47,6 +47,7 @@ HUMAN STEPS ARRANGED: <e.g. "config-ok: send me the head sha once pushed"> | non
 STOP AND TELL ME: <the condition, e.g. a ceiling or budget blocks you: send the numbers, change nothing>
 STOP AT: start+<N>k (a context budget above the session's measured start; `context-cap.py` reads this form) [6]
 MESSAGE ME ONLY WHEN: blocked, refused (facts only), a decision is needed, merged, or handing off [8]
+SUBAGENTS: <the role's row in `.claude/agents/README.md` §Roles, e.g. "prior-art-scout, code-hunter per slice, finding-verifier">
 ```
 
 ## While workers run

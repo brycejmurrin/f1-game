@@ -6,7 +6,7 @@ omitClaudeMd: true
 maxTurns: 40
 background: true
 disallowedTools: Write, Edit, NotebookEdit
-tools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_definition
+tools: mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_definition, Bash, Read, Grep, Glob
 hooks:
   PreToolUse:
     - matcher: "Bash"
@@ -73,7 +73,8 @@ that says where it stopped is safe, one that implies completeness is not.
 SITE  file:line  symbol  column:AI-only|assist-gated|broadcast-only|surface|BLOCKER|unverified  in-table:yes|no  why: "<one clause under 140 chars>"
 ```
 
-End with `vstd-invariant: pass|fail`, `curvature-channels: pass|fail` and `covered: <paths>  not covered: <paths>`.
+End with `vstd-invariant: pass|fail`, `curvature-channels: pass|fail` and `covered: <paths>  not covered: <paths>`,
+then `tools used: lsp <n> · grep <m> · read <k>` (the evidence rule: `.claude/agents/README.md` §LSP-first).
 
 Before your LAST TWO TURNS, stop working and DELIVER what you have: a partial
 report with its gaps named beats silence. Hitting `maxTurns` hands the parent
