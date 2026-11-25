@@ -4,7 +4,8 @@
  * be larger". The calibration study (#6565, real 2026, 15 dry races) found the
  * AI field already AS WIDE as real F1 or wider in percent; what bunched it was
  * the RANDOM grid default (fast cars stuck behind slow ones). This pins the
- * shipped default (QUALIFYING, which grids a scripted start on team tier) so
+ * shipped default (QUALIFYING; a scripted start grids on team tier, the proxy
+ * for a qualifying order the VM does not drive) so
  * the field neither collapses into a train nor blows apart:
  *
  *   - lap 1: P10's gap to the leader (real median 6.5 s; ours runs ~2x on
@@ -36,14 +37,14 @@ for (const [track, seed] of CASES) {
     const s = summarize(await raceSpread({ track, laps: 5, seed, diff: "hard", wear: "off", storage: { raceGrid: null } }));
     const tag = JSON.stringify(s);
     assert.equal(s.laps, 5, tag);
-    assert.ok(s.lap1.p10 >= 6 && s.lap1.p10 <= 16, `lap-1 P10 gap ${s.lap1.p10} s outside [6, 16] — ${tag}`);
+    assert.ok(s.lap1.p10 >= 8 && s.lap1.p10 <= 15, `lap-1 P10 gap ${s.lap1.p10} s outside [8, 15] — ${tag}`);
     const f = s.flag;
     assert.ok(f.p2 <= f.p5 && f.p5 <= f.p10 && f.p10 <= f.last, `flag gaps grow with position — ${tag}`);
     assert.ok(f.last >= 25 && f.last <= 70, `P1 to last ${f.last} s outside [25, 70] — ${tag}`);
     assert.ok(s.racePacePct.p10 >= 1.0 && s.racePacePct.p10 <= 4.5, `race pace P10 ${s.racePacePct.p10} % outside [1.0, 4.5] — ${tag}`);
     assert.ok(s.racePacePct.p20 >= 3.0 && s.racePacePct.p20 <= 8.5, `race pace P20 ${s.racePacePct.p20} % outside [3.0, 8.5] — ${tag}`);
-    assert.ok(s.mateGapPct.mean <= 1.8, `teammate gap ${s.mateGapPct.mean} % over 1.8 — ${tag}`);
-    assert.ok(s.lapCvMedPct <= 1.2, `lap-time CV ${s.lapCvMedPct} % over 1.2 — ${tag}`);
+    assert.ok(s.mateGapPct.mean <= 1.6, `teammate gap ${s.mateGapPct.mean} % over 1.6 — ${tag}`);
+    assert.ok(s.lapCvMedPct >= 0.2 && s.lapCvMedPct <= 1.2, `lap-time CV ${s.lapCvMedPct} % outside [0.2, 1.2] (a metronome is as wrong as a lottery) — ${tag}`);
     assert.ok(s.moved >= 8, `only ${s.moved} cars finished off their grid slot: processional — ${tag}`);
   });
 }

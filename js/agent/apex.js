@@ -261,6 +261,7 @@ function placeBeside(c, dProg, dx, speed) {
 }
 
 let apexSeed = null;   // the last seed an agent set through seed(n) / reset(…, seed)
+let raceTok = 0;        // race(): the newest scripted start, so an older one never restores the grid rule over it
 const simTick = (d) => ApexLobby.tick(G, d);   // one step()/act() tick (apex-lobby.js)
 const api = {
   // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m). DELETES the lap in
@@ -1056,8 +1057,10 @@ const api = {
       G.duel = !!opts.duel;
       G.duelLegend = typeof opts.duel === "string" ? opts.duel : "";
     }
-    const started = startRace();
-    if (heldRule) Promise.resolve(started).finally(() => { if (G.raceGrid === "tier") G.raceGrid = heldRule; });
+    const started = startRace(), tok = ++raceTok;
+    // Observed on both arms (a bare .finally() re-raised a rejected start as unhandled); a newer race() owns the rule.
+    const restore = () => { if (tok === raceTok && G.raceGrid === "tier") G.raceGrid = heldRule; };
+    if (heldRule) Promise.resolve(started).then(restore, restore);
     return settled(started,
       { track: Tracks.LIST[i].id, timeOfDay: G.raceTimeOfDay, weather: G.raceWeather });
   },

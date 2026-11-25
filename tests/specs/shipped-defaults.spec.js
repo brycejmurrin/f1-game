@@ -166,9 +166,10 @@ test.describe("shipped defaults", () => {
     await page.locator("#cs-done").click();
     await expect(page.locator("#race-settings")).toBeVisible();
     await page.locator("#rs-go").click();
-    // The shipped grid rule is QUALIFYING (#6564): GO opens the sheet, and TO THE GRID takes the
-    // provisional (simulated) order a player who skips the lap gets.
+    // The shipped grid rule is QUALIFYING (#6564): GO opens the sheet; SIMULATE runs the session
+    // without a driven lap, and only then does TO THE GRID show (css/career.css #quali.q-done).
     await expect(page.locator("#quali")).toBeVisible();
+    await page.locator("#q-sim").click();
     await page.locator("#q-go").click();
     await page.evaluate(() => window.__apex.headless(false));
     await awaitGrid(page);
