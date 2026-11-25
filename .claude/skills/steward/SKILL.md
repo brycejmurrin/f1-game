@@ -122,14 +122,15 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    only needs the label). On a pass it prints the two calls and flips nothing itself:
 3. GitHub MCP `update_pull_request` with `draft: false`, then add `land` (the one-label recipe in
    [`references/labels.md`](references/labels.md)).
-4. Refresh the Hand-off block; call `subscribe_pr_activity` again (the subscription dies at the flip); end the turn.
+4. Refresh the Hand-off block, `unsubscribe_pr_activity`, and end: no re-subscribe (wake turns were 19% of worker
+   cost, retro 2026-11-25). A later red or conflict is the orchestrator's or dispatch's `CONTINUE PR #<n>` (§After land).
    What `land.yml`'s `gate` status does next: [`references/land.md`](references/land.md). "Skip the gate" from the
    user: do it and record it under **Not run** with the user's words and the time; never silently, and never by
    widening a tolerance. A `hold` label vetoes (AGENTS.md §Coordination); body wording vetoes nothing.
 
 ## After land
 
-The subscribed owner fixes a red on its own head (§Red) while it still owns it. While `dispatch.yml` is disabled
+Before `land`, the subscribed owner fixes a red on its own head (§Red); after it, the owner is gone (§Land 4). While `dispatch.yml` is disabled
 (`gh api repos/<o>/<r>/actions/workflows/dispatch.yml -q .state`), the orchestrator session does what this section
 gives the Action. The dispatch Action re-owns only a
 silent owner: a PR idle past its window gets `needs-owner` and one `CONTINUE PR #<n>` launch; a `land` PR with no red
