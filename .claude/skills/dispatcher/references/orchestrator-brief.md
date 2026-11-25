@@ -21,6 +21,9 @@ restated rules drifted into three wordings and one contradicted the skill [14].
 - Adopt only a lapsed or handed-back lease, never a parked one (skill `steward` §Lane 3). `pr-board.mjs --brief`
   prints `lease …` and `churn: adopted Nx`; a churn PR (3+ adopters) gets one worker that stays until `land`.
 - Re-verify on the deploy tip first; a worker closes an already-fixed issue with evidence and opens no PR.
+- Every issue you or a worker files gets one type, its `area:*` and its `source:*` (skill steward
+  `references/labels.md` §Issue scheme; `node tools/ci/issue-labels.mjs` lists the ones off it). A hunt, survey or
+  Gardener brief asks for a `tracking` issue as its output, not a docs PR (same file, §Hunt and survey output).
 - Settle every human step before launch (a device check, a `config-ok` the diff will need, a decision) and cite the
   comment URL, so the worker verifies it instead of waiting [10].
 - `config-ok` on a ROUTINE config path and `ratchet-raise` you add yourself, after you have read the PR's config diff
