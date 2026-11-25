@@ -122,7 +122,7 @@ const ApexBridge = (function () {
       v: V, sha: meta ? meta.content : null, href: location.href,
       ua: nav.userAgent || null, dpr: window.devicePixelRatio, w: window.innerWidth, h: window.innerHeight,
       gpu: !!nav.gpu, cores: nav.hardwareConcurrency || null, mem: nav.deviceMemory || null,
-      apex: !!window.__apex, info, render: pathState(),
+      apex: !!window.__apex, info, render: pathState(), wakeLock: wakeState(_run),
     };
   }
 
@@ -370,9 +370,11 @@ const ApexBridge = (function () {
   async function batch(args) {
     const steps = args && Array.isArray(args.steps) ? args.steps : null;
     if (!steps || !steps.length || steps.length > BATCH_MAX) throw new Error("batch.steps must hold 1–" + BATCH_MAX + " steps");
-    const out = [];
+    // #6636: a batch the link issued stops once that link ends (TAP TO END): no later step, above all no later drive.
+    const run = _run, out = [];
     for (let i = 0; i < steps.length; i++) {
       const s = steps[i] || {};
+      if (_run !== run) { out.push({ cmd: s.cmd, ok: false, error: "the link ended" }); break; }
       const ends = s.cmd === "reload" || (s.cmd === "path" && s.args && s.args.to != null && s.args.reload !== false);
       let r;
       if (s.cmd === "batch") r = { ok: false, error: "batch cannot nest" };
@@ -710,7 +712,7 @@ const ApexBridge = (function () {
   // A drive is an ACTION, but `status` / `stop` are READs (CONCURRENCY): they answer while the drive still runs.
   // No `to:"grid"`: nothing in the game reads a car parked on its grid slot (the grid is placed by race(), a restart
   // re-grids by itself), so there is no state for it to reach.
-  const DRIVE_MS = 240000, DRIVE_START_MS = 30000, END_IDS = ["hud-end-session", "hud-work"];
+  const DRIVE_MS = 240000, DRIVE_START_MS = 30000, HANDS_OFF_MS = 300000, END_IDS = ["hud-end-session", "hud-work"];
   async function drive(args) {
     const a = args || {};
     const S = typeof SoakRun !== "undefined" ? SoakRun : null;
@@ -723,14 +725,21 @@ const ApexBridge = (function () {
     if (a.to != null && a.to !== "box") throw new Error('drive.to must be "box"');
     if (a.laps != null && !(Number.isInteger(a.laps) && a.laps >= 1 && a.laps <= 5)) throw new Error("drive.laps must be 1-5");
     if (a.seconds != null && !(Number(a.seconds) >= 1 && Number(a.seconds) <= 600)) throw new Error("drive.seconds must be 1-600");
-    const ms = Math.max(5000, Math.min(600000, Number(a.ms) || DRIVE_MS));
+    if (a.handsOff != null && typeof a.handsOff !== "boolean") throw new Error("drive.handsOff takes true or false");
+    const hands = a.handsOff === true;
+    // A hands-off drive is capped shorter (no touch ends it) and needs its STOP on screen before the car is taken.
+    const ms = Math.max(5000, Math.min(hands ? HANDS_OFF_MS : 600000, Number(a.ms) || DRIVE_MS));
+    if (hands && a.seconds != null && Number(a.seconds) * 1000 > HANDS_OFF_MS) throw new Error("a hands-off drive is at most " + HANDS_OFF_MS / 1000 + " s");
+    const run0 = _run;
     // Straight after `nav`'s RACE! the garage drive-out is still playing (state "menu"): wait for the session.
     await until(() => { const st = gameState(); return st === "race" || st === "count"; }, DRIVE_START_MS);
-    const run = S.drive({ to: a.to, laps: a.laps, seconds: a.seconds != null ? Number(a.seconds) : undefined, ms });
+    if (run0 && _run !== run0) throw new Error("the link ended: drive refused");   // #6636
+    if (hands && !drivingBanner(true, true)) throw new Error("drive.handsOff needs the STOP banner on screen (no page body)");
+    const run = S.drive({ to: a.to, laps: a.laps, seconds: a.seconds != null ? Number(a.seconds) : undefined, ms, handsOff: hands || undefined });
     // The banner goes when the drive ends for ANY reason (stop, a real touch, pause, hidden, quit, the link ending):
     // every end resolves this promise. A newer drive owns the banner, so the replaced one's end does not hide it.
     const mine = ++_drvTok;
-    drivingBanner(true);
+    drivingBanner(true, hands);
     const off = () => { if (mine === _drvTok) drivingBanner(false); };
     run.then(off, off);
     if (a.wait === false) { run.catch(() => {}); return Object.assign({ started: true }, S.driveStatus()); }
@@ -742,21 +751,66 @@ const ApexBridge = (function () {
     return Object.assign({ ok, screen: screenNow(), state: gameState(), pitActions: END_IDS.filter((id) => shown(byId(id))) }, r);
   }
 
+  // RECTS (#6581, #6582 unit 1): where HUD and menu elements sit, read on the device — `display` / `geom` give sizes
+  // only and `snap` is the canvas, so #6518's SPEED vs STEER RIGHT overlap could not be measured. Ids only, never a
+  // selector; an id inside a TAP_DENY area answers `refused`; at most RECTS_MAX. Read-only.
+  const RECTS_MAX = 40;
+  function rectsOf(args) {
+    const ids = args && Array.isArray(args.ids) ? args.ids : null;
+    if (!ids || !ids.length || ids.length > RECTS_MAX) throw new Error("ids must hold 1–" + RECTS_MAX + " element ids");
+    return ids.map((id) => {
+      if (typeof id !== "string" || !/^[A-Za-z][\w-]{0,80}$/.test(id)) throw new Error("not an element id: " + JSON.stringify(id));
+      // A denied id answers `refused` whether or not it exists, so the answer never says what is in the page.
+      if (TAP_DENY.some((p) => id === p || id.startsWith(p + "-"))) return { id, refused: true };
+      const el = byId(id);
+      if (!el) return { id, missing: true };
+      if (deniedArea(el)) return { id, refused: true };
+      const r = el.getBoundingClientRect();
+      let fontSize = null;
+      try { fontSize = getComputedStyle(el).fontSize || null; } catch (_) { /* detached */ }
+      return { id, x: r2(r.left), y: r2(r.top), w: r2(r.width), h: r2(r.height), visible: shown(el) && r.width > 0 && r.height > 0, fontSize };
+    });
+  }
+  const rects = (args) => ({ viewport: [window.innerWidth, window.innerHeight], screen: screenNow(), rects: rectsOf(args) });
+  // Every visible pair that intersects, with the shared box (HudLayout's own collision boxes, js/ui/hud-layout.js).
+  function overlaps(args) {
+    const all = rectsOf(args), rs = all.filter((r) => r.visible), out = [];
+    for (let i = 0; i < rs.length; i++) for (let j = i + 1; j < rs.length; j++) {
+      const a = rs[i], b = rs[j], x = Math.max(a.x, b.x), y = Math.max(a.y, b.y);
+      const w = Math.min(a.x + a.w, b.x + b.w) - x, h = Math.min(a.y + a.h, b.y + b.h) - y;
+      if (w > 0 && h > 0) out.push({ a: a.id, b: b.id, x: r2(x), y: r2(y), w: r2(w), h: r2(h), area: r2(w * h) });
+    }
+    return { screen: screenNow(), checked: rs.map((r) => r.id), skipped: all.filter((r) => !r.visible).map((r) => r.id), overlaps: out };
+  }
+
   // A visible "CLAUDE DRIVING" strip (#6581) so Bryce knows not to touch, and why a touch ends it. pointer-events none:
   // the touch reaches the game, and SoakRun's real-input listener hands the car back.
   let _drvTok = 0, _drvBanner = null;
-  function drivingBanner(on) {
-    if (typeof document === "undefined" || !document.body || typeof document.createElement !== "function") return;
-    if (!on) { if (_drvBanner) { try { _drvBanner.remove(); } catch (_) { /* gone */ } _drvBanner = null; } return; }
-    if (_drvBanner) return;
+  // `handsOff` (#6581 item 7): touches no longer take the car back, so the strip carries a big STOP that does.
+  function drivingBanner(on, handsOff) {
+    if (typeof document === "undefined" || !document.body || typeof document.createElement !== "function") return false;
+    if (_drvBanner && (!on || _drvBanner.handsOff !== !!handsOff)) { try { _drvBanner.remove(); } catch (_) { /* gone */ } _drvBanner = null; }
+    if (!on || _drvBanner) return !!_drvBanner;
     const b = _drvBanner = document.createElement("div");
     b.id = "apex-bridge-driving";
+    b.handsOff = !!handsOff;
     b.setAttribute("role", "status");
-    b.textContent = "CLAUDE DRIVING · A TOUCH TAKES THE CAR BACK";
+    b.textContent = handsOff ? "CLAUDE DRIVING · HANDS OFF " : "CLAUDE DRIVING · A TOUCH TAKES THE CAR BACK";
+    if (handsOff) {
+      const stopBtn = document.createElement("button");
+      stopBtn.id = "apex-bridge-driving-stop";
+      stopBtn.type = "button";
+      stopBtn.textContent = "STOP";
+      stopBtn.style.cssText = "pointer-events:auto;min-width:96px;min-height:56px;margin-left:10px;border:0;border-radius:10px;"
+        + "font:800 18px system-ui,sans-serif;background:#fff;color:#b3401f;touch-action:manipulation";
+      stopBtn.addEventListener("click", () => { try { SoakRun.driveStop("stop button"); } catch (_) { /* no driver */ } });
+      b.appendChild(stopBtn);
+    }
     b.style.cssText = "position:fixed;top:calc(max(4px,env(safe-area-inset-top)) + 26px);left:50%;transform:translateX(-50%);"
       + "z-index:99999;pointer-events:none;padding:6px 14px;border-radius:8px;font:700 13px/1.3 system-ui,sans-serif;"
       + "letter-spacing:.08em;background:rgba(217,119,87,.95);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.35)";
     document.body.appendChild(b);
+    return true;
   }
 
   // PLANS (#6582 §2 item 5): a named test script that runs ON the phone and answers once. A plan is DATA in this
@@ -770,6 +824,7 @@ const ApexBridge = (function () {
     track: (v) => { if (!/^[a-z0-9_-]{1,40}$/.test(String(v))) throw new Error("plan.args.track must be a track id"); return String(v); },
     seconds: (v) => { const n = Number(v); if (!(Number.isInteger(n) && n >= 1 && n <= 60)) throw new Error("plan.args.seconds must be 1-60"); return n; },
   };
+  const HUD_AUDIT_IDS = ["hud-speed", "btn-brake", "btn-throttle", "btn-steer-left", "btn-steer-right", "btn-boost", "btn-ot", "btn-aero", "btn-cam"];
   const PLANS = {
     // TIME TRIAL → the pit box → END TIME TRIAL → the garage (skipping the arrival if it plays) → a picture.
     ttEndGarage: { args: { track: "monza" }, steps: (a) => [
@@ -794,11 +849,12 @@ const ApexBridge = (function () {
       { cmd: "frames", args: { seconds: a.seconds } },
       { cmd: "call", args: { method: "perf" } },
     ] },
-    // The HUD's geometry on this device, read where it stands. TODO(#6581): add the `rects` read once it lands.
+    // The HUD's geometry on this device, read where it stands: the speed readout against the touch buttons (#6518).
     hudAudit: { args: {}, steps: () => [
       { cmd: "geom" },
       { cmd: "display" },
       { cmd: "screen" },
+      { cmd: "overlaps", args: { ids: HUD_AUDIT_IDS } },
       { cmd: "snap", args: { w: 320 } },
     ] },
   };
@@ -875,6 +931,8 @@ const ApexBridge = (function () {
     scroll,
     screen: () => ({ screen: screenNow(), state: gameState() }),
     when,
+    rects,
+    overlaps,
     plan,
     drive,
     batch,
@@ -980,7 +1038,7 @@ const ApexBridge = (function () {
 
   // CONCURRENCY (#6582). READ: answers beside a running ACTION. `call` is a READ only for a CALL_READ method whose
   // args pass its check (a reader that takes an arg to reset, download or set something is a READ only without it).
-  const READ_CMDS = new Set(["ping", "facts", "display", "geom", "frames", "screen", "snap"]);
+  const READ_CMDS = new Set(["ping", "facts", "display", "geom", "frames", "screen", "snap", "rects", "overlaps"]);
   const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
   const none = (xs) => xs.length === 0, any = () => true;
   const CALL_READ = {
@@ -1047,10 +1105,35 @@ const ApexBridge = (function () {
 
   // STATUS (#6581): one comment, edited in place. A long batch blocks the poll chain, not this timer, so `last.busy`
   // shows it running. A hidden page posts with keepalive (iOS may freeze the page right after).
-  const STATUS_BUSY_MS = 15000, STATUS_IDLE_MS = 60000, STATUS_FIRST_MS = 5000;
+  const STATUS_BUSY_MS = 15000, STATUS_IDLE_MS = 60000, STATUS_FIRST_MS = 5000, STATUS_MIN_MS = 5000;
   // The status comment's id on this device, as "<issue>:<comment id>" (one literal key, save-schema-registry.js).
   const STATUS_KEY = "apex26.bridgeStatus";
   function storedStatusId(issue) { const m = /^(\d+):(\d+)$/.exec(raw(STATUS_KEY) || ""); return m && Number(m[1]) === issue ? Number(m[2]) : 0; }
+  // WAKE LOCK (#6581 item 6): a linked phone must not auto-lock mid-window. iOS drops the lock whenever the page hides,
+  // so it is asked for again on visible; it cannot stop an app switch (the hidden-page handling stays).
+  const wakeApi = () => (typeof navigator !== "undefined" && navigator.wakeLock && typeof navigator.wakeLock.request === "function" ? navigator.wakeLock : null);
+  function wakeState(run) {
+    return { supported: !!wakeApi(), held: !!(run && run.wake && !run.wake.released), refused: (run && run.wakeErr) || null };
+  }
+  // One request at a time (a visibility flip mid-request must not orphan a second sentinel); an older one is released.
+  function wakeAcquire(run) {
+    const w = wakeApi();
+    if (!w || run.wakePending || (run.wake && !run.wake.released)) return run.wakePending;
+    run.wakePending = (async () => {
+      try {
+        const l = await w.request("screen");
+        if (_run !== run) { wakeRelease({ wake: l }); return; }
+        if (run.wake && run.wake !== l) wakeRelease({ wake: run.wake });
+        run.wake = l; run.wakeErr = null;
+      } catch (e) { run.wake = null; run.wakeErr = String((e && e.name) || e); } finally { run.wakePending = null; }
+    })();
+    return run.wakePending;
+  }
+  function wakeRelease(run) {
+    const l = run.wake;
+    run.wake = null;
+    try { if (l && !l.released) { const r = l.release(); if (r && r.catch) r.catch(() => {}); } } catch (_) { /* released */ }
+  }
   function statusOf(run, ended) {
     const d = typeof document !== "undefined" ? document : null;
     let sha = null, screen = null, driving = null;
@@ -1058,7 +1141,7 @@ const ApexBridge = (function () {
     try { screen = screenNow(); } catch (_) { /* no DOM */ }
     try { driving = typeof SoakRun !== "undefined" && SoakRun.driving ? !!SoakRun.driving() : null; } catch (_) { /* no driver */ }
     return { status: true, v: V, at: new Date().toISOString(), linked: !ended, ended: ended || undefined, sha, screen,
-      state: gameState(), visible: d ? !d.hidden : null, driving, served: run.served, last: run.last || null, hello: run.cutoff,
+      state: gameState(), visible: d ? !d.hidden : null, wake: wakeState(run).held, driving, served: run.served, last: run.last || null, hello: run.cutoff,
       running: run.running || 0, queued: run.queue ? run.queue.length : 0 };
   }
   // An edit asked for while one is in flight (a visibility flip, the link's end) is queued and sent right after it, so
@@ -1078,9 +1161,17 @@ const ApexBridge = (function () {
     return p;
   }
   async function statusEdit(run, ended, keepalive) {
+    run.statusAt = Date.now();
     try {
       const body = { body: "```apex-status\n" + JSON.stringify(statusOf(run, ended)) + "\n```" };
-      let id = run.statusId || storedStatusId(run.issue);
+      let id = run.statusId;
+      // A stored id is edited only once it reads back as this issue's own apex-status comment: the key never steers an
+      // edit onto another comment (security review, #6639).
+      if (!id && (id = storedStatusId(run.issue))) {
+        const g = await gh("", { run, repoPath: "/issues/comments/" + id });
+        const c = g.ok ? await g.json() : null;
+        if (!c || !String(c.issue_url || "").endsWith("/issues/" + run.issue) || !String(c.body || "").startsWith("```apex-status")) id = 0;
+      }
       if (id) {
         const r = await gh("", { run, repoPath: "/issues/comments/" + id, method: "PATCH", body, keepalive });
         if (r.ok) { run.statusId = id; run.statusSlow = false; return id; }
@@ -1129,7 +1220,7 @@ const ApexBridge = (function () {
     if (_run) return false;
     _run = { issue, token: tok, cutoff: null, since: null, etag: null, seen: new Set(), served: 0, backoff: 0, timer: null, state: "connecting",
       queue: [], acting: null, running: 0, inflight: new Set(), outbox: [],   // CONCURRENCY
-      last: null, statusId: 0, statusTimer: null, statusDue: 0, statusBusy: null, statusAgain: null, statusSlow: false, onVis: null };
+      last: null, statusId: 0, statusTimer: null, statusDue: 0, statusBusy: null, statusAgain: null, statusSlow: false, statusAt: 0, onVis: null, wake: null, wakePending: null, wakeErr: null };
     paintBadge();
     try {
       const hello = await post({ hello: true, facts: facts() });
@@ -1141,7 +1232,13 @@ const ApexBridge = (function () {
       schedule();
       armStatus(STATUS_FIRST_MS);
       const run = _run;
-      run.onVis = () => { if (_run === run) postStatus(run, null, !!document.hidden); };
+      wakeAcquire(run);
+      // Visibility edits honour a rate limit (statusSlow) and a STATUS_MIN_MS floor: a flipping page cannot hammer the API.
+      run.onVis = () => {
+        if (_run !== run) return;
+        if (!document.hidden) wakeAcquire(run);
+        if (!run.statusSlow && Date.now() - run.statusAt >= STATUS_MIN_MS) postStatus(run, null, !!document.hidden);
+      };
       try { document.addEventListener("visibilitychange", run.onVis); } catch (_) { run.onVis = null; }
       return true;
     } catch (e) {
@@ -1166,10 +1263,11 @@ const ApexBridge = (function () {
     clearTimeout(run.timer);
     clearTimeout(run.statusTimer);
     try { if (run.onVis) document.removeEventListener("visibilitychange", run.onVis); } catch (_) { /* no document */ }
+    wakeRelease(run);
     run.queue.length = 0;   // queued ACTIONs never start; running ones finish unanswered
     _run = null;
     // The last edit says the link ended, and why — even in the first seconds (a reload), to the id stored on the device.
-    if (run.statusId || storedStatusId(run.issue)) postStatus(run, why || "stopped", true);
+    if (why !== "token rejected" && (run.statusId || storedStatusId(run.issue))) postStatus(run, why || "stopped", true);
     say("link ended: " + (why || "stopped"));
     paintBadge(why || "ended");
   }
