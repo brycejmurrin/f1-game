@@ -2,7 +2,7 @@
 // tools/ui/bryce-paint.mjs, tests/data/bryce-phone-paint.json). Pure: no browser.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PAINT_KINDS, judgePaint, paintCounts, paintInsets, paintLine, summarisePaint } from "../../tools/lib/paint-floor.mjs";
+import { PAINT_KINDS, dockTargetInside, judgePaint, paintCounts, paintInsets, paintLine, summarisePaint } from "../../tools/lib/paint-floor.mjs";
 import { appliedTag } from "../../tools/ui/ui-scale-axis.mjs";
 import fs from "node:fs";
 import { ACCEPT_ROOTS, PAINT_WINDOWS, ACCEPT_SCREENS, CEILINGS_FILE, ceilingsFrom, cellKey, judgeCells, planRun, readCeilings } from "../../tools/ui/bryce-paint.mjs";
@@ -29,6 +29,23 @@ test("summarisePaint judges what the SCREEN shows: 52x24.5 is under 44, 7.14 px 
   assert.equal(summarisePaint({ ...RAW, scroll: { x: 0, y: 40, left: 0, top: 0 } }).scroll.under, 1, "a document taller than the window scrolls");
   assert.equal(summarisePaint({ ...RAW, scroll: { x: 0, y: 1, left: 0, top: 0 } }).scroll.under, 0, "one px of rounding does not");
   assert.deepEqual(paintCounts(summarisePaint({})), { taps: 0, text: 0, outside: 0, blocked: 0, scroll: 0 });
+});
+
+test("#6684 A: a placed HUD dock button follows the dock contract: whole on the display, 44 px of it in the safe box", () => {
+  // Bryce's 852x393 Home Screen app, insets 59/20/59: the safe box is 59..793 x 0..373.
+  const viewport = { width: 852, height: 393 }, safe = { left: 59, top: 0, right: 793, bottom: 373 };
+  const steer = { left: 38, top: 272, right: 150, bottom: 375 };   // 21 px into the left inset, 2 px into the bottom one
+  assert.equal(dockTargetInside(steer, safe, viewport), true, "the layout he placed stays where he put it");
+  assert.equal(dockTargetInside({ left: 20, top: 272, right: 90, bottom: 375 }, safe, viewport), false, "31 px inside the inset edge is under the 44 px target");
+  assert.equal(dockTargetInside({ left: -4, top: 200, right: 108, bottom: 303 }, safe, viewport), false, "a button off the display is outside");
+  assert.equal(dockTargetInside({ left: 40, top: 200, right: 72, bottom: 232 }, safe, viewport), false, "an undersized button must lie wholly inside");
+  const raw = { safe, viewport, outside: [
+    { el: "button#btn-steer-left", kind: "tap", at: "38,272 112x103", dock: steer },
+    { el: "button#btn-brake", kind: "text", at: "689,162 120x62", dock: { left: 701, top: 132, right: 860, bottom: 254 } },
+    { el: "span.sec-lbl", kind: "text", at: "785,85 17x18" },
+  ] };
+  const p = summarisePaint(raw);
+  assert.deepEqual(p.outside.worst, ["button#btn-brake text at 689,162 120x62", "span.sec-lbl text at 785,85 17x18"], "only the dock rule's misses and non-dock items count");
 });
 
 test("judgePaint is a ratchet: above the ceiling is a regression, below it is a stale ceiling, equal holds", () => {
