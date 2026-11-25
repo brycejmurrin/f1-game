@@ -98,7 +98,7 @@
       "name": "rollout",
       "group": "act",
       "signature": "rollout({seconds,dt,input,policy,policyHz,samples})",
-      "summary": "drive an interval, return a digest instead of every frame"
+      "summary": "drive an interval, return a digest; policy: a function or \"autopilot\"|\"box\""
     },
     {
       "name": "terminal",
@@ -792,6 +792,7 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/elevation-tracks-vm.test.mjs",
         "tests/unit/episode-transients.test.mjs",
@@ -909,6 +910,7 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/episode-transients.test.mjs",
         "tests/unit/game-flow-5100-vm.test.mjs",
@@ -1058,6 +1060,7 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/lockup-bench-vm.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",
