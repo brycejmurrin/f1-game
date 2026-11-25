@@ -1,0 +1,1 @@
+New: Hold CAM on a Bluetooth controller or a paired phone to open the full camera picker; the D-pad or the phone's arrows move through it, A or SELECT picks a view, and B or BACK closes it. A quick press still cycles the views.

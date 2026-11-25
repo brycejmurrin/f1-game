@@ -685,7 +685,7 @@ let builtGridSlots = null, builtTrackBare = false;
 const bareStale = () => builtTrackBare && !!builtTrackId && sceneryResident(builtTrackId);
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0, netGreen = null;
-let pendingFinishQuit = false;
+let pendingFinishQuit = false, qThen;   // G.quitToMenu(then): `then` opens a screen after MenuQuitTail (deferred on a software raster, where its setFlow("gp") reset a career hub opened straight after, F1); kept across a settling finish
 const postFinish = { solo: false, since: -1 };   // RaceControl.finishDelay's post-finish wait (+ net, first)
 // Countdown setGridIdle opts — reused every frame (was a fresh {} on the
 // countdown return path, ~60 allocs/s until lights-out).
@@ -3440,7 +3440,7 @@ const G = {
   openGarageFrom: (from) => openGarage(from),
   startWeatherArc: (from, to, dur) => wxArc.startArc(from, to, dur),
   endWeatherSession: () => wxArc.endSession(true),   // the agent's race()/tt(): a start follows, so a plan set for it stays (race-settings-vm)
-  startRace, update, wrapS, quitToMenu,
+  startRace, update, wrapS, quitToMenu: (t) => (qThen = t, quitToMenu()),
   raceIntro,   // the pre-race screen, for a launch that is not RACE! (js/race/real-race.js: the Data Hub's JUMP IN)
 }; Object.preventExtensions(G);
 
@@ -4368,7 +4368,7 @@ function quitToMenu() {
   pendingFinishQuit = false;
   clearRaceEntrySoften();
   Ghost.flush();
-  cancelIntro();
+  cancelIntro(); const then = qThen; qThen = null;
   if (typeof MenuTeardown !== "undefined") MenuTeardown.beginQuit();
   els.pausemenu.hidden = true;
   Input.unlockLandscape();
@@ -4437,9 +4437,10 @@ function quitToMenu() {
   Particles.rainShow(false); Particles.clear(); Droplets.clear();
   if (soundOn) GameAudio.startMusic(-1);
   consumeGhostHash();
-  if (typeof MenuTeardown !== "undefined" && MenuTeardown.deferQuitTail(() => MenuQuitTail.afterOverlay(forgetGp))) return;
+  if (typeof MenuTeardown !== "undefined" && MenuTeardown.deferQuitTail(() => MenuQuitTail.afterOverlay(forgetGp), then)) return;
   MenuQuitTail.afterOverlay(forgetGp);
   if (typeof MenuTeardown !== "undefined") MenuTeardown.endQuit();
+  if (then) then();
 }
 
 
@@ -4486,7 +4487,7 @@ function update(dt) {
   if (!track) return;
   // Camera cycling works during the countdown and the race (set your view before
   // lights-out). Edge-triggered via the C key or the CAM button.
-  if ((state === "race" || state === "count") && Input.consumeCameraCycle()) cycleCam();
+  if (state === "race" || state === "count") { if (Input.consumeCameraCycle()) cycleCam(); if (Input.consumeCameraMenu()) showCamPicker(); }   // held pad / phone CAM: the picker (#6271)
   realRace.update(dt);   // every state: it arms in the countdown, places a mid-race jump-in on the first green frame, steps the script in the race, and stands down at the results
   flyingStart.update(dt);   // qualifying and time trial: a rolling start in place of the gantry (js/race/flying-start.js)
   /* MANUAL RECOVER. The auto-rescue only fires on its own terms (held throttle
@@ -8676,7 +8677,7 @@ function tickBody(now) {
     const dropped = steps === 5 && physAcc >= PHYS_DT ? physAcc - physAcc % PHYS_DT : 0;   // only what the line below drops; the sub-step remainder carries
     PerfGov.recordSimulation(steps, dropped);
     if (dropped) physAcc %= PHYS_DT;   // fell badly behind — drop the backlog, keep the sub-step remainder (a clean 5-step frame lost up to a step: Fix Your Timestep)
-    if ((state === "count" || state === "race") && typeof carDraw !== "undefined") carDraw.drainDeferredCarWarm(4);   // rear grid atlases + casters, a budget a frame under the lights or after a green that skips them (go, goRolling; #5830); no CarDraw: results-cam.test
+    if ((state === "count" || state === "race") && typeof carDraw !== "undefined") carDraw.drainDeferredCarWarm(4, state === "count");   // rear grid atlases + casters, a budget a frame under the lights or after a green that skips them (go, goRolling; #5830); no CarDraw: results-cam.test
     if (state === "count" && !netStart && !(netPlay && netPlay.awaitingStart && netPlay.awaitingStart())) countT += startLights.countCredit(_dtMs / 1000, dt, dropped);   // solo lights on the wall clock, not the step cap (#1882)
     _poseAt = now - physAcc * 1000;   // the stepped pose lags this frame by the unspent remainder
   } else _poseAt = null;
@@ -8881,7 +8882,7 @@ els.selBack.onclick = () => {
   if (daily.isActive()) daily.stop();
   vt(() => {
     els.select.hidden = true;
-    if (raceSettings.netRoom) $("vsfriend").hidden = false; else { els.overlay.hidden = false; consumeGhostHash(); }   // a #ghost= link deferred while the picker was up lands now (bug-hunt 2 H13)
+    if (raceSettings.netRoom) $("vsfriend").hidden = false; else { els.overlay.hidden = false; consumeGhostHash(); refreshCareerButton(); }   // a #ghost= link deferred while the picker was up lands now (bug-hunt 2 H13); the doors repaint (STANDINGS)
   });
   if (soundOn) GameAudio.uiSelect();
 };
@@ -9291,9 +9292,8 @@ els.resNext.onclick = () => {
     // title's own CAREER path). Hiding the sheet alone left state "results":
     // the hub's GARAGE drew the frozen race frame, and a race started later
     // from MAIN MENU sat on PREPARING… forever (every intro gates on "menu").
+    qThen = () => { trackIdx = Career.trackIndex(); openCareer(); };   // after the quit tail's setFlow("gp")
     quitToMenu();
-    trackIdx = Career.trackIndex();
-    openCareer();
     return;
   }
   if (isChampionship()) {
@@ -9432,7 +9432,7 @@ $("hud-restore").onclick = () => setHudUserHidden(false);
 // state (the render loop reads them); the module mutates them through G. The
 // façade exposes setCamMode as a deferred arrow (const initialised here), and
 // the update loop's `cycleCam()` closes over this const.
-const { setCamMode, cycleCam, hideCamPicker } = CamModes.create(G);
+const { setCamMode, cycleCam, hideCamPicker, showCamPicker } = CamModes.create(G);
 
 $("pm-resume").onclick = () => setPaused(false); $("pm-quick-doors").insertBefore(Object.assign(document.createElement("button"), { id: "pm-recover", type: "button", textContent: "RECOVER CAR", onclick: () => { setPaused(false); Input.requestRecover(); } }), $("pm-checkpoint"));   // RECOVER CAR = the R key; touch had none. Built here like REPLAY: shellNodes holds
 $("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); frozen = true; raceRestarting = true; startRace().then(() => { raceRestarting = false; if (state === "race") frozen = false; }, () => { raceRestarting = false; }); };   // frozen: the old race must not run (or be scored at its flag) through the async start; startRaceBody lifts it on a committed start, and a start cancelled for changed settings (or failed) ends on the title via quitToMenu — the old race is not handed back
@@ -9581,8 +9581,6 @@ trackIdx = idxOr(trackIdx, Tracks.LIST.length, 0);
 if (Tracks.LIST[trackIdx]) {
   store.set("trackId", Tracks.LIST[trackIdx].id); store.set("track", trackIdx);
 }
-{ const hasSeason = SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds();
-  $("mb-standings").hidden = !hasSeason; }
 const loadBootCareer = () => { Career.load(); clampDriverIdx(); refreshCareerButton(); };
 if (store.careerWriter && store.careerWriter.ready) store.careerWriter.ready.then(loadBootCareer);
 else loadBootCareer();

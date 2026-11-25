@@ -207,7 +207,7 @@ window.CamModes = (function () {
     // when the player already chose a preference.
     if (typeof CamComfort !== "undefined" && G.store) CamComfort.boot(G.store);
 
-    return { refreshCamBtn, setCamMode, cycleCam, hideCamPicker: camUi.hide };
+    return { refreshCamBtn, setCamMode, cycleCam, hideCamPicker: camUi.hide, showCamPicker: camUi.show };
   }
 
   return { CAM_MODES, fromSaved, toSaved, DRIVE, CHASE, PICKER_GROUPS, create };

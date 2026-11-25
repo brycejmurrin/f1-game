@@ -48,9 +48,10 @@ test("named keyboard, gamepad, touch and phone profiles use separate slots and p
 
 test('empty snapshots neutralize axes without replaying held actions on recovery', () => {
   const { Input: I, drive, state } = boot(), p = pad('recovering pad');
-  for (const [action, index] of [['camera', 8], ['shiftUp', 5], ['boost', 0]]) I.setPadBinding(action, 0, index);
+  // RECOVER, not CAM: CAM's press waits for its release since #6271.
+  for (const [action, index] of [['recover', 8], ['shiftUp', 5], ['boost', 0]]) I.setPadBinding(action, 0, index);
   const press = (down) => { for (const i of [8, 5, 0]) p.buttons[i] = { pressed: down, value: down ? 1 : 0 }; };
-  const edges = () => [I.consumeCameraCycle(), I.consumeShiftUp(), I.consumeBoostToggle()];
+  const edges = () => [I.consumeRecover(), I.consumeShiftUp(), I.consumeBoostToggle()];
   press(true); p.axes[0] = .8; p.axes[2] = .7; drive(p);
   assert.deepEqual(edges(), [true, true, true], 'first connection retains its wake press');
   for (let cycle = 0; cycle < 2; cycle++) {
@@ -66,7 +67,7 @@ test('empty snapshots neutralize axes without replaying held actions on recovery
   press(true); state.pads = [p]; for (let i = 0; i < 60; i++) I.poll();
   assert.deepEqual(edges(), [false, false, false], 'presses hidden by the gap also require a release');
   const other = pad('replacement'); other.buttons[8] = { pressed: true, value: 1 }; drive(other);
-  assert.equal(I.consumeCameraCycle(), false, 'device changes still seed already-held buttons');
+  assert.equal(I.consumeRecover(), false, 'device changes still seed already-held buttons');
 });
 test('real Input wheel→pad→wheel restores both axes/buttons, and reset changes only current profile', () => {
   const { Input: I, drive, storage } = boot();
@@ -189,16 +190,16 @@ test('pedal initialization belongs to each connected controller and axis map', (
 
 test('a reconnect in the same slot requires a release before repeating a held action', () => {
   const { Input: I, drive, disconnect } = boot(), p = pad('wireless');
-  p.buttons[8] = { pressed: true, value: 1 };
+  p.buttons[10] = { pressed: true, value: 1 };   // RECOVER: CAM waits for its release since #6271
   drive(p);
-  assert.equal(I.consumeCameraCycle(), true);
+  assert.equal(I.consumeRecover(), true);
   disconnect(p);
   I.poll();
   drive(p);
-  assert.equal(I.consumeCameraCycle(), false);
-  p.buttons[8] = { pressed: false, value: 0 }; I.poll();
-  p.buttons[8] = { pressed: true, value: 1 }; I.poll();
-  assert.equal(I.consumeCameraCycle(), true);
+  assert.equal(I.consumeRecover(), false);
+  p.buttons[10] = { pressed: false, value: 0 }; I.poll();
+  p.buttons[10] = { pressed: true, value: 1 }; I.poll();
+  assert.equal(I.consumeRecover(), true);
 });
 
 test('profile replacement keeps an unclaimed legacy wheel map reserved for the wheel', () => {

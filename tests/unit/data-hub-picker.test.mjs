@@ -23,7 +23,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function harness({ motion, latest = undefined, realTelemetry = false, drivers = [], sessions, scheduleOnline = true,
-                   emptyMeeting = null, emptyYear = null, clock = null } = {}) {
+                   emptyMeeting = null, emptyYear = null, clock = null, globals = {} } = {}) {
   let docRoot = null;
   const scrolls = [];
   class El {
@@ -56,7 +56,8 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
     querySelector(s) { const c = s.replace(/^\./, ""); for (const ch of this.children) { if (ch._cls.has(c)) return ch; const r = ch.querySelector(s); if (r) return r; } return null; }
     find(pred) { for (const ch of this.children) { if (pred(ch)) return ch; const r = ch.find(pred); if (r) return r; } return null; }
     selects() { const out = []; (function walk(n) { n.children.forEach((c) => { if (c.tagName === "SELECT") out.push(c); walk(c); }); })(this); return out; }
-    focus() {}
+    focus() { document.activeElement = this; }
+    contains(n) { for (; n; n = n.parentNode) if (n === this) return true; return false; }
     showModal() { this.open = true; }
     close() {
       if (!this.open) return;
@@ -117,7 +118,7 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
     setTimeout: clock ? clock.setTimeout : setTimeout, clearTimeout: clock ? clock.clearTimeout : clearTimeout, Teams: { LIST: [] },
     DataTelemetry: { create: () => ({ loadTelemetry: () => Promise.resolve(new El("div")), closeTelemPopup() {} }) },
     DataRealRace: { create: () => ({ loadRealRace: () => Promise.resolve(new El("div")), cancel() {} }) },
-    DataExport: { create: () => ({ loadExport: () => Promise.resolve(new El("div")) }) } });
+    DataExport: { create: () => ({ loadExport: () => Promise.resolve(new El("div")) }) }, ...globals });
   // realTelemetry: the real telemetry.js + model on a stubbed view (the canvas player is not under test).
   if (realTelemetry) {
     ctx.M4 = { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) };
@@ -869,6 +870,67 @@ for (const origin of ["live", "results", "telemetry"]) test(`a pending year sele
   assert.equal(h.content().selects()[1].children.find((o) => o.selected).value, "400");
   assert.ok(h.content().find((n) => n.tagName === "BUTTON" && n.textContent === String(year) && n.classList.contains("active")));
   h.DataHub.close();
+});
+
+// UI matrix 2026-11-25 row 6 (keyboard / D-pad): arrows counted from the SELECTED tab, not the focused one; Up/Down
+// left the head through MenuNav's walker (to the panel's last link, or <body>); ⋯ EXPORT and ✕ were never reached.
+test("the Data Hub head row walks from the focused control, enters the panel on Down and reaches ⋯ EXPORT and ✕", async () => {
+  let panelBtn = null;
+  const MenuNav = { items: () => (panelBtn ? [panelBtn] : []), step: (_from, _dx, _dy, list) => list[0] || null };
+  const h = harness({ globals: { MenuNav } });
+  h.DataHub.open(); await h.drain();
+  const byId = (id) => h.root.find((n) => n.id === id);
+  const head = h.root.find((n) => n.classList.contains("sheet-head"));
+  assert.equal(head.getAttribute("data-nav"), "own", "MenuNav leaves the head's arrows to the hub");
+  const summary = h.root.find((n) => n.tagName === "SUMMARY");
+  const menu = summary.parentNode;
+  const selected = () => ["schedule", "standings", "results", "live", "telemetry", "race"].find((id) => byId("dh-tab-" + id).getAttribute("aria-selected") === "true");
+  const key = (k, target = h.document.activeElement) => {
+    const ev = { key: k, target, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+    h.document.dispatch("keydown", ev);
+    return ev;
+  };
+  const focused = () => h.document.activeElement && (h.document.activeElement.id || h.document.activeElement.tagName);
+  assert.equal(selected(), "schedule");
+  byId("dh-tab-live").focus();                          // a pad walked here without selecting
+  key("ArrowRight");
+  assert.equal(focused(), "dh-tab-telemetry", "Right moves from the FOCUSED tab");
+  assert.equal(selected(), "telemetry", "and selects it");
+  key("ArrowRight"); assert.equal(focused(), "dh-tab-race");
+  key("ArrowRight"); assert.equal(focused(), "SUMMARY", "Right off the last tab reaches ⋯");
+  assert.equal(selected(), "race", "⋯ is not a tab: the selection stays");
+  key("ArrowDown");
+  assert.equal(focused(), "dh-tab-export", "Down on ⋯ opens the menu onto EXPORT");
+  assert.equal(menu.open, true);
+  key("ArrowUp"); assert.equal(focused(), "SUMMARY"); assert.equal(menu.open, false, "leaving EXPORT shuts the menu");
+  key("ArrowRight"); assert.equal(focused(), "dh-close-btn", "then ✕");
+  key("ArrowRight"); assert.equal(focused(), "dh-tab-schedule", "the row wraps");
+  key("ArrowLeft"); assert.equal(focused(), "dh-close-btn", "and back");
+  byId("dh-tab-schedule").focus(); key("ArrowRight");
+  assert.equal(selected(), "standings");
+  const up = key("ArrowUp");
+  assert.equal(up.defaultPrevented, true, "Up is consumed: nothing is above the head");
+  assert.equal(focused(), "dh-tab-standings", "Up stays on the tab");
+  byId("dh-tab-results").focus(); key("ArrowDown");
+  assert.equal(focused(), "dh-tab-results", "an empty panel: Down stays");
+  assert.equal(selected(), "standings", "Up/Down never select");
+  panelBtn = new (h.root.constructor)("button");
+  h.content().appendChild(panelBtn);
+  byId("dh-tab-standings").focus(); key("ArrowDown");
+  assert.equal(h.document.activeElement, panelBtn, "Down enters the panel");
+  // Up out of the panel lands on the SELECTED tab, whatever tab the walker picked.
+  byId("dh-tab-live").focus();
+  head.listeners.focusin.forEach((f) => f({ target: byId("dh-tab-live"), relatedTarget: panelBtn }));
+  assert.equal(focused(), "dh-tab-standings");
+  // A tap is not the walker: the tapped tab keeps the focus its pointerdown gave it, and its click selects it.
+  panelBtn.focus();
+  head.listeners.pointerdown.forEach((f) => f({ target: byId("dh-tab-live") }));
+  byId("dh-tab-live").focus();
+  head.listeners.focusin.forEach((f) => f({ target: byId("dh-tab-live"), relatedTarget: panelBtn }));
+  byId("dh-tab-live").dispatch("click");
+  assert.equal(focused(), "dh-tab-live", "a tapped tab is not pulled back to the old selection");
+  assert.equal(selected(), "live");
+  h.DataHub.close(); await h.drain();
 });
 
 // UI hunt 2026-10-29 #11: WATCH opens the hub on "race"; the DATA door then
