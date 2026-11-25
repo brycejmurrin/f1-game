@@ -88,7 +88,7 @@ and, in a worktree, its `SHARED` list).
 
 | who | tier | why |
 |---|---|---|
-| cloud workers (launched by `dispatch.yml`) | sonnet, from `tools/ci/dispatch.json` | the brief is scoped and verified by CI |
+| cloud workers (launched by the orchestrator, `create_session`) | sonnet, named in the launch (skill `dispatcher`) | the brief is scoped and verified by CI |
 | implementers (`worker`, `track-surveyor`) | `inherit` — downshift only | they write code on the session's model; a parent may pass a cheaper tier at spawn, never a dearer one |
 | reviewers (`finding-verifier`, `surface-reviewer`, `ci-red-triage`, `physics-contract-auditor`, `pr-reviewer`) | sonnet | judgement on bounded input |
 | scouts (`Explore`, `prior-art-scout`, `deploy-research`, `verify-agent`) | haiku | scan-and-report |

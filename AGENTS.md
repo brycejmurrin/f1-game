@@ -101,7 +101,7 @@ A hook or classifier denial is final for that action. An orchestrator does rever
 reports after (tick a Plan line, re-request a gate, close a duplicate, archive a finished session, message workers);
 it never merges or changes a label Bryce set. WORKERS NEVER CANCEL AN ACTIONS RUN; the orchestrator cancels, re-runs
 failed jobs or dispatches through the GitHub MCP, each act logged (skill `steward` §CI).
-Dispatch: `.github/workflows/dispatch.yml`; a launched session loads skill `steward` §Lane (labels).
+Dispatch: the orchestrator session launches workers (skill `dispatcher`); a launched session loads skill `steward` §Lane (labels).
 
 ## Agent extensions
 Available workflows are skills (index `.claude/skills/README.md`; Codex mirror `.agents/skills`); subagents

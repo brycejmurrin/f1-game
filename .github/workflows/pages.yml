@@ -35,11 +35,13 @@ on:
       - ".cursor/**"
       - ".codex/**"
   schedule:
-    # Every 6 h since 2026-10-26 (audit lane X3; was hourly): push and dispatch start the train, so the cron
-    # only catches prose-only pushes and lost events, and GitHub delivers schedules hours late anyway ("The
+    # Daily since 2026-11-25 (#6536 R4; every 6 h from 2026-10-26, hourly before): push and dispatch start the
+    # train, pages-red-tip.yml re-arms a red tip on a prose push and land.yml's push sweep re-gates, so the cron
+    # only catches prose-only pushes and lost events. 10:53 UTC (02:53 Pacific): off the hour and outside the
+    # 13:00-16:00 UTC peak, and GitHub delivers schedules hours late anyway ("The
     # schedule event can be delayed during periods of high loads ... High load times include the start of every
     # hour": https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).
-    - cron: "41 */6 * * *"
+    - cron: "53 10 * * *"
   workflow_dispatch:
 
 env:
