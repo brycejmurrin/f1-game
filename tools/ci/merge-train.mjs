@@ -475,7 +475,11 @@ export function readScreen(text) {
   const tip = String(j?.tip || "").toLowerCase();
   if (j?.skip) return { tip: SHA.test(tip) ? tip : "", skip: plainWhy(j.skip) || "skipped", cars: [] };
   if (!SHA.test(tip) || !Array.isArray(j.cars)) return null;
-  let stack = null;
+  let stack = null, rebase = "";
+  if (j.rebase != null) {
+    rebase = parseStackRef(j.rebase)?.ref || "";
+    if (!rebase || j.stack != null) return null;
+  }
   if (j.stack != null) {
     const pr = Number(j.stack?.pr), head = String(j.stack?.head || "").toLowerCase();
     if (!Number.isInteger(pr) || pr < 1 || head !== tip) return null;
@@ -487,7 +491,7 @@ export function readScreen(text) {
     if (!Number.isInteger(pr) || pr < 1 || !SHA.test(head) || typeof c.ok !== "boolean") return null;
     cars.push({ pr, head, ok: c.ok, why: plainWhy(c.why) });
   }
-  return stack ? { tip, skip: "", cars, stack } : { tip, skip: "", cars };
+  return stack ? { tip, skip: "", cars, stack } : rebase ? { tip, skip: "", cars, rebase } : { tip, skip: "", cars };
 }
 
 /** The build's accept: only a car the screen measured green at this very head rides. Pure. */
@@ -767,6 +771,12 @@ export function redOnRedTip(d, tip) {
  *                                              is on the deploy branch, so the gate's verifyTrain proves it as usual;
  *   N red, stale or closed (head not on tip) → rebase: refold N+1's cars, without N's, on the tip and open that,
  *                                              marked `rebased` so its merge keeps N's bisect for the train after it.
+ *                                              With --screen-file it waits for a screen of THAT fold (#6652 nit 2: the
+ *                                              next screen job, seeing a rebase due, measures the kept cars onto the
+ *                                              tip, `rebase: <ref>` in its file), as the build of any other train does.
+ *                                              Its cap stays full (none of its cars were suspects; trainHistory) and
+ *                                              `exclude` cannot name one (only a 1-car red train adds a head, and the
+ *                                              only train that closed while it was stacked is N, whose cars it lacks).
  * Merges stay in order: N+1 has no PR, so no CI, gate or arm, until N has merged or closed. */
 
 /** The ref prefix of a stacked train (no PR, no CI). */
@@ -933,39 +943,29 @@ function listStacks(request) {
 /** The one line a stacking failure logs (FALLBACK). Exported for the test. */
 export const stackSkipped = (why) => `= merge-train stack skipped — ${why}: one train at a time this run`;
 
-/** The build's stacked-train step (stackPlan, then act). null: no stack is left and the build goes on as before;
- *  { code, msg }: this run is done; { degraded }: stacking failed (a refs read, a fetch, a car read), logged once, and
- *  the build goes on exactly as with ONE train at a time (FALLBACK: a LAND_TOKEN that may not create train-next/*, or
- *  any other stacking error, never fails the run, the open train or its merge). */
-async function stackStep({ request, cwd, log, running, now, carGate = null, open = [] }) {
-  const degraded = (why) => { log(stackSkipped(why)); return { degraded: true }; };
-  const ls = listStacks(request);
-  if (ls.error) return degraded(ls.error);
-  const specs = open.filter(isStackPr);
-  if (!ls.refs.length) { for (const p of specs) closeSpec(request, log, p, "no stacked train is left"); return null; }
-  const git = gitIn(cwd);
-  const del = (x) => request(`git/refs/heads/${x.ref}`, { method: "DELETE" });
-  const runHead = String(running?.head?.sha || "").toLowerCase();
-  const [x, ...extra] = [...ls.refs].sort((a, b) => (b.base === runHead) - (a.base === runHead) || a.ref.localeCompare(b.ref));
-  for (const e of extra) { del(e); log(`  deleted ${e.ref}: one stacked train at a time`); }
-  // The speculative PR of this very fold (SPECULATIVE CI); any other is an orphan.
-  const spec = specs.find((p) => String(p.head?.sha || "").toLowerCase() === x.sha && trainManifest(p.body)?.base === x.base) || null;
-  for (const p of specs) if (p !== spec) closeSpec(request, log, p, `its fold is not the stacked train ${x.ref}`);
+/** The stacked ref the build acts on first (one on the running head, else by name), then the rest. Pure. */
+const pickStacks = (refs, runHead = "") => [...refs].sort((a, b) => (b.base === runHead) - (a.base === runHead) || a.ref.localeCompare(b.ref));
+
+/** Read stacked ref `x` back and plan it (stackPlan): fetch it and the deploy branch, read its cars' pulls rows, its
+ *  manifest (readStack), the tip, and with no train running each car's own trusted rows. Shared by the build
+ *  (stackStep) and the screen (a rebase due, #6652 nit 2). → { stack, cars, tip, onTip, plan } | { degraded: why }
+ *  (a read or fetch failed) | { invalid: why } (the ref is not a stack). Writes only git objects. */
+async function readStackState({ request, git, x, running, carGate = null }) {
   for (const spec of [`+refs/heads/${x.ref}:refs/remotes/origin/${x.ref}`, `+refs/heads/${DEPLOY}:refs/remotes/origin/${DEPLOY}`]) {
     const f = git(["fetch", "--quiet", "--no-tags", "origin", spec]);
-    if (f.status !== 0) return degraded(`fetch ${spec.split(":")[0].slice(1)}: ${String(f.stderr || "").trim()}`);
+    if (f.status !== 0) return { degraded: `fetch ${spec.split(":")[0].slice(1)}: ${String(f.stderr || "").trim()}` };
   }
   const cars = new Map();
   for (const pr of x.prs) {
     const q = request(`pulls/${pr}`);
-    if (q.error) return degraded(`pulls/${pr}: ${q.error}`);
+    if (q.error) return { degraded: `pulls/${pr}: ${q.error}` };
     cars.set(pr, q.json);
   }
   const stack = readStack({ base: x.base, head: x.sha, prs: x.prs, refOf: (n) => cars.get(n)?.head?.ref, git });
-  if (stack.error) { del(x); log(`= merge-train dropped ${x.ref}: ${stack.error}`); return null; }
+  if (stack.error) return { invalid: stack.error };
   const tipR = request(`branches/${encodeURIComponent(DEPLOY)}`);
   const tip = String(tipR.json?.commit?.sha || "").toLowerCase();
-  if (!tip) return degraded(`deploy tip: ${tipR.error || "no sha"}`);
+  if (!tip) return { degraded: `deploy tip: ${tipR.error || "no sha"}` };
   const onTip = git(["merge-base", "--is-ancestor", x.base, tip]).status === 0;
   const bad = new Map();
   if (!running) {
@@ -977,9 +977,72 @@ async function stackStep({ request, cwd, log, running, now, carGate = null, open
       if (!v.ok) bad.set(c.pr, v.why);
     }
   }
-  const plan = stackPlan({ stack, running, onTip, cars, bad });
+  return { stack, cars, tip, onTip, plan: stackPlan({ stack, running, onTip, cars, bad }) };
+}
+
+/** How long a due rebase may wait for its screen before the build logs `= merge-train error` (#6652 review nit 3):
+ *  three land.yml sweeps at its :17/:47 cron. A screen of the fold normally lands at the first sweep after N closes. */
+export const REBASE_WAIT_MAX_MIN = 90;
+
+/** When the due rebase started waiting: N's close (the closed train PR whose head is the stack's base, read with
+ *  `commits/<base>/pulls`), else the stacked fold's own commit time (earlier, so it errs toward the error line). ms. */
+function rebaseWaitSince({ request, git, x }) {
+  const r = request(`commits/${x.base}/pulls?per_page=100`);
+  const n = (r.json || []).find((p) => String(p?.head?.sha || "").toLowerCase() === x.base && p.closed_at);
+  if (n) return Date.parse(n.closed_at);
+  return Number(String(git(["log", "-1", "--format=%ct", x.sha]).stdout || "").trim()) * 1000;
+}
+
+/** Why the screen file is not the due rebase's (the artifact the error line names). Pure. */
+function screenMiss(s, screenFile, ref, tip) {
+  if (!s) return `no valid screen verdict at ${screenFile || "(no path)"}`;
+  if (s.skip) return `the screen skipped (${s.skip})`;
+  if (s.rebase !== ref) return `the screen measured ${s.rebase ? s.rebase : s.stack ? `a fold stacked on #${s.stack.pr}` : `a plain fold onto ${s.tip.slice(0, 8)}`}, not ${ref}`;
+  return `the screen measured the fold onto ${s.tip.slice(0, 8)}, the tip is ${tip.slice(0, 8)}`;
+}
+
+/** The build's stacked-train step (stackPlan, then act). null: no stack is left and the build goes on as before;
+ *  { code, msg }: this run is done; { degraded }: stacking failed (a refs read, a fetch, a car read), logged once, and
+ *  the build goes on exactly as with ONE train at a time (FALLBACK: a LAND_TOKEN that may not create train-next/*, or
+ *  any other stacking error, never fails the run, the open train or its merge). */
+async function stackStep({ request, cwd, log, running, now, carGate = null, open = [], screenFile = null }) {
+  const degraded = (why) => { log(stackSkipped(why)); return { degraded: true }; };
+  const ls = listStacks(request);
+  if (ls.error) return degraded(ls.error);
+  const specs = open.filter(isStackPr);
+  if (!ls.refs.length) { for (const p of specs) closeSpec(request, log, p, "no stacked train is left"); return null; }
+  const git = gitIn(cwd);
+  const del = (x) => request(`git/refs/heads/${x.ref}`, { method: "DELETE" });
+  const runHead = String(running?.head?.sha || "").toLowerCase();
+  const [x, ...extra] = pickStacks(ls.refs, runHead);
+  for (const e of extra) { del(e); log(`  deleted ${e.ref}: one stacked train at a time`); }
+  // The speculative PR of this very fold (SPECULATIVE CI); any other is an orphan.
+  const spec = specs.find((p) => String(p.head?.sha || "").toLowerCase() === x.sha && trainManifest(p.body)?.base === x.base) || null;
+  for (const p of specs) if (p !== spec) closeSpec(request, log, p, `its fold is not the stacked train ${x.ref}`);
+  const sr = await readStackState({ request, git, x, running, carGate });
+  if (sr.degraded) return degraded(sr.degraded);
+  if (sr.invalid) { del(x); log(`= merge-train dropped ${x.ref}: ${sr.invalid}`); return null; }
+  const { stack, tip, onTip, plan } = sr;
   const names = (cs) => cs.map((c) => `#${c.pr}`).join(",");
   // No speculative PR is opened while waiting: one per stacked ref, at the push that made it (cost bound).
+  // #6652 nit 2: with --screen-file a rebase rides only on a screen of that very fold onto this tip (the screen job
+  // measures it the run after N closes); the stack and its cars wait one run, never an unscreened train.
+  let accept = null;
+  if (plan.act === "rebase" && screenFile !== null) {
+    let text = null;
+    try { text = fs.readFileSync(screenFile, "utf8"); } catch { /* missing: wait */ }
+    const s = readScreen(text);
+    if (!s || s.rebase !== x.ref || s.tip !== tip) {
+      if (spec) closeSpec(request, log, spec, `the stack rebases onto the tip (${plan.why})`);
+      const short = `${x.ref.slice(0, STACK_PREFIX.length + 12)}…`;
+      const since = rebaseWaitSince({ request, git, x });
+      const min = Math.floor((now - since) / 60_000);
+      // A broken screen job must not wedge the stack silently: past the bound the line is an error the watcher greps.
+      if (Number.isFinite(min) && min > REBASE_WAIT_MAX_MIN) return { code: 0, msg: `= merge-train error — ${names(stack.cars)} (${short}) has waited ${min} min (over ${REBASE_WAIT_MAX_MIN}) to rebase onto the tip ${tip.slice(0, 8)}: ${screenMiss(s, screenFile, x.ref, tip)}; is the train-screen job failing?` };
+      return { code: 0, msg: `= merge-train waiting — ${names(stack.cars)} (${short}) rebase onto the tip ${tip.slice(0, 8)} once a screen measures that fold (${plan.why})` };
+    }
+    accept = screenAccept(s);
+  }
   if (plan.act === "wait") return { code: 0, msg: `= merge-train waiting — train #${running.number} is still running; ${names(stack.cars)} stacked on it (${x.ref}${spec ? `, speculative #${spec.number}` : ""})` };
   if (spec && plan.act !== "promote") closeSpec(request, log, spec, `the stack was ${plan.act === "drop" ? "dropped" : plan.act === "restack" ? "restacked" : "rebased onto the tip"} (${plan.why})`);
   if (plan.act === "drop") { del(x); log(`= merge-train dropped ${x.ref}: ${plan.why}`); return null; }
@@ -1006,7 +1069,7 @@ async function stackStep({ request, cwd, log, running, now, carGate = null, open
   }
   let head = x.sha, base = x.base, kept = stack.cars, dropped = [];
   if (plan.act === "rebase") {
-    const f = foldCars({ base: tip, cars: plan.keep, cwd, git });
+    const f = foldCars({ base: tip, cars: plan.keep, cwd, git, accept });
     if (f.error || !f.cars.length) { del(x); log(`= merge-train dropped ${x.ref}: ${f.error || "no car folds onto the tip"}`); return null; }
     ({ head, cars: kept, dropped } = f); base = tip;
   }
@@ -1062,7 +1125,12 @@ export async function main(argv, { request = api, cwd = ROOT, log = console.log,
       }
       const g = gateStatus(t.head.sha, request);
       let d = trainDisposition({ manifest: m, cars, ciConclusion, gate: g.state, gateWhy: g.why, ciRun, stuck: g.state === "success" ? stuckInputs(t, g, request, now) : null });
-      if (!d.close) { if (!running) { running = t; runNoteOf = runNote; } continue; }
+      if (!d.close) {
+        if (!running) { running = t; runNoteOf = runNote; }
+        // #6652 nit 3: one train at a time; a second one still running is named, never skipped silently.
+        else log(`= merge-train ignored #${t.number} — a second open train still running; this run follows #${running.number} (one train at a time)`);
+        continue;
+      }
       // The open list is a snapshot: a train that merged since reads its cars merged too, and is not closed.
       if (d.outside) {
         const fresh = request(`pulls/${t.number}`);
@@ -1082,7 +1150,7 @@ export async function main(argv, { request = api, cwd = ROOT, log = console.log,
       const dr = request(`git/refs/heads/${t.head.ref}`, { method: "DELETE" });
       log(`= merge-train closed #${t.number} (${d.outcome}): ${d.why}${dr.error ? ` (branch ${t.head.ref} not deleted: ${dr.error}; the next build sweeps it)` : ""}`);
     }
-    const st = await stackStep({ request, cwd, log, running, now, carGate, open: open.rows });
+    const st = await stackStep({ request, cwd, log, running, now, carGate, open: open.rows, screenFile });
     if (st?.degraded) { if (running) { log(`= merge-train waiting — train #${running.number} is still running${runNoteOf}`); return 0; } }
     else if (st) { log(st.msg); return st.code; }
     if (running) return stackBuild({ request, cwd, log, now, max, running, screenFile, note: runNoteOf, carGate });
@@ -1094,7 +1162,14 @@ export async function main(argv, { request = api, cwd = ROOT, log = console.log,
     screen = readScreen(text);
     if (!screen) { log(`= merge-train error — no valid screen verdict at ${screenFile || "(no path)"} (the train-screen job failed?): no train opened`); return 1; }
     if (screen.skip) { log(`= merge-train idle — the screen skipped (${screen.skip}); the next run screens and builds`); return 0; }
-    if (screen.stack) { log(`= merge-train idle — the screen was stacked on train #${screen.stack.pr}, which is no longer running; the next run screens onto the tip`); return 0; }
+    if (screen.rebase) { log(`= merge-train idle — the screen measured the rebase of ${screen.rebase}, which is no longer stacked; the next run screens onto the tip`); return 0; }
+    if (screen.stack) {
+      // #6652 nit 4: N merged between the screen and this build. When the tip's tree is still N's head's tree (nothing
+      // else merged), the screen's folds are the folds onto the tip, so the build goes on now instead of idling a cycle.
+      const why = stackedScreenOnTip({ screen, request, git: gitIn(cwd) });
+      if (why) { log(`= merge-train idle — the screen was stacked on train #${screen.stack.pr}, which is no longer running (${why}); the next run screens onto the tip`); return 0; }
+      log(`  the screen was stacked on train #${screen.stack.pr}, merged since with the tip's tree its head's: its verdicts hold onto the tip`);
+    }
   }
   const plan = await planTrain({ request, cwd, max, now, log: build ? log : () => {}, carGate, acceptFor: screen ? () => screenAccept(screen) : null });
   if (plan.error) { log(`= merge-train error — ${plan.error}`); return 1; }
@@ -1106,6 +1181,22 @@ export async function main(argv, { request = api, cwd = ROOT, log = console.log,
   if (o.error) { log(`= merge-train error — ${o.error}`); return 1; }
   log(`= merge-train opened #${o.number} — ${line}`);
   return 0;
+}
+
+/** #6652 nit 4: "" when a screen stacked on train N still holds onto the deploy tip — N merged and the tip's tree is N's
+ *  head's tree (its merge commit, nothing after it) — else why not. Fetches the deploy branch. */
+function stackedScreenOnTip({ screen, request, git }) {
+  const n = request(`pulls/${screen.stack.pr}`);
+  if (n.error) return `#${screen.stack.pr} unreadable: ${n.error}`;
+  if (!n.json?.merged_at) return `#${screen.stack.pr} closed unmerged`;
+  const tipR = request(`branches/${encodeURIComponent(DEPLOY)}`);
+  const tip = String(tipR.json?.commit?.sha || "").toLowerCase();
+  if (!SHA.test(tip)) return `deploy tip: ${tipR.error || "no sha"}`;
+  const f = git(["fetch", "--quiet", "--no-tags", "origin", `+refs/heads/${DEPLOY}:refs/remotes/origin/${DEPLOY}`]);
+  if (f.status !== 0) return `fetch ${DEPLOY}: ${String(f.stderr || "").trim().split("\n")[0]}`;
+  const tree = (c) => String(git(["rev-parse", "--verify", "-q", `${c}^{tree}`]).stdout || "").trim();
+  const a = tree(tip), b = tree(screen.stack.head);
+  return a && a === b ? "" : `the tip ${tip.slice(0, 8)} moved past #${screen.stack.pr}'s merge`;
 }
 
 /** The build while train `running` is still running and nothing is stacked on it: fold the cars a screen measured on
@@ -1149,7 +1240,15 @@ export async function screenMain({ out, request = api, cwd = ROOT, log = console
   const ls = listStacks(request);
   // FALLBACK: refs unreadable → never stack this run (one open train: skip as before; none: screen onto the tip).
   if (ls.error) { log(stackSkipped(ls.error)); if (trains.length) return skip(`train #${trains[0].number} is open (stacked refs unreadable)`); }
-  else if (ls.refs.length) return skip(`train ${ls.refs[0].prs.map((n) => `#${n}`).join(",")} is stacked${trains.length ? ` on #${trains[0].number}` : ""}: the build promotes, restacks or rebases it`);
+  let due = null; // #6652 nit 2: a stacked train whose rebase onto the tip is due (no train open): screen THAT fold
+  if (!ls.error && ls.refs.length) {
+    const stacked = `train ${ls.refs[0].prs.map((n) => `#${n}`).join(",")} is stacked${trains.length ? ` on #${trains[0].number}` : ""}: the build promotes, restacks or rebases it`;
+    if (trains.length) return skip(stacked);
+    const [x] = pickStacks(ls.refs);
+    const sr = await readStackState({ request, git: gitIn(cwd), x, running: null, carGate });
+    if (sr.degraded || sr.invalid || sr.plan.act !== "rebase") return skip(sr.degraded || sr.invalid ? `${stacked} (${sr.degraded || sr.invalid})` : stacked);
+    due = { x, ...sr };
+  }
   const onto = trains[0] || null;
   const gate = check ? null : await import("./merge-gate.mjs");
   const ratchets = check || gate.ratchetsOnMerge;
@@ -1163,6 +1262,16 @@ export async function screenMain({ out, request = api, cwd = ROOT, log = console
   const boundOf = bound || (gate ? (p) => gate.retestBound(p) : null);
   const line = limitMs ?? gate?.RETEST_REFUSE_MS ?? null;
   const retestFor = (tip) => (boundOf && Number.isFinite(line) ? retestBudget({ base: tip, cwd, bound: boundOf, limitMs: line, log }) : null);
+  if (due) { // the cars the build's rebase keeps, folded onto the tip in order, each cumulative fold screened
+    sf = screenFold({ tip: due.tip, cwd, check: ratchets, prepare, out: verdicts, now: clock, retest: retestFor(due.tip) });
+    const f = foldCars({ base: due.tip, cars: due.plan.keep, cwd, accept: sf.accept });
+    sf.cleanup();
+    if (f.error) { log(`= merge-train error — rebase screen of ${due.x.ref}: ${f.error}`); return 1; }
+    write({ tip: due.tip, rebase: due.x.ref, cars: verdicts });
+    for (const v of verdicts) log(`  ${v.ok ? "ok  " : "RED "} #${v.pr} ${v.head.slice(0, 8)}${v.ok ? "" : `: ${v.why}`}`);
+    log(`= merge-train screen — ${verdicts.filter((v) => v.ok).length} of ${verdicts.length} car(s) green on the rebase of ${due.x.ref.slice(0, STACK_PREFIX.length + 12)}… onto ${due.tip.slice(0, 12)} (${due.plan.why})`);
+    return 0;
+  }
   const plan = await planTrain({ request, cwd, max, now, log, onto, carGate, acceptFor: (tip) => (sf = screenFold({ tip, cwd, check: ratchets, prepare, out: verdicts, now: clock, retest: retestFor(tip) })).accept });
   sf?.cleanup();
   if (plan.error) { log(`= merge-train error — ${plan.error}`); return 1; }
