@@ -44,19 +44,31 @@ export async function frames(page, n) {
   await page.waitForFunction(([f, k]) => window.__apex.info().liveTicks >= f + k, [f0, n], { polling: 100, timeout: 180000 });
 }
 
-/** Boot TLX (forceGL selects three's WebGL2 backend), race monza with GAS held, and press BOOST PRESSES
+/** Boot TLX (forceGL selects three's WebGL2 backend), race monza with GAS held, and press BOOST `presses`
  *  times, each after a control window of the same length with BOOST off. Writes artifacts/perf/.
  *  `gas(true|false)` presses / releases the throttle with a REAL input device (the spec passes
- *  page.keyboard): BOOST deploys only while GAS is held, the iPhone sequence. */
-export async function measureBoostPresses(page, { forceGL, bootMs, gas }) {
-  await page.addInitScript((gl) => {
+ *  page.keyboard): BOOST deploys only while GAS is held, the iPhone sequence.
+ *  Cost on CI's llvmpipe (#6669, #6673): a frame takes 2-3 s, and every window is counted in live frames.
+ *  - `swRaceShed`: the game's own software-GL race path (apex26.swRaceShed=1; PostCommon.softwareRaceShed, off
+ *    under webdriver by default): 0.5 scale chosen before the first setSize and userTier 4 pinned at the first
+ *    race present, so every window draws the same cheap scene. The post chain is OFF on that path.
+ *  - `renderScale` (0.5..1): pin the scale and hold the governor's tier before go(), so the post chain of that
+ *    tier stays ON and fixed. Attempt 1 of #6673 measured this alone at MEDIUM: slower than the governor's drift.
+ *  Both are safe for the count: three's render-pipeline key (backend getRenderCacheKey) holds material state,
+ *  sample count, colour/depth FORMATS, topology and vertex layout, never a target's SIZE.
+ *  `render.before` (read after the warm-up window, before press 1) and `render.after` (after the last press)
+ *  record scale, tier and post shed, so a spec can prove the scene stayed fixed across every window. */
+export async function measureBoostPresses(page, { forceGL, bootMs, gas, renderScale = 0, swRaceShed = false,
+  presses: nPresses = PRESSES, deployFrames = DEPLOY_FRAMES, spacing = SPACING, tag = forceGL ? "gl" : "gpu" }) {
+  await page.addInitScript(([gl, shed]) => {
     try {
       localStorage.setItem("apex26.gfxBackend", "three");
       localStorage.setItem("apex26.tlxForceGL", gl);
       localStorage.setItem("apex26.gfxPreset", '"medium"');
       localStorage.setItem("apex26.gfxBootStepMs", "45000");   // TLX init can exceed 8 s on a busy software-GL runner
+      if (shed) localStorage.setItem("apex26.swRaceShed", "1");
     } catch (_) { /* private mode */ }
-  }, forceGL ? "1" : "0");
+  }, [forceGL ? "1" : "0", !!swRaceShed]);
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null && typeof GLX !== "undefined" && !!GLX.__tlx, null, { polling: 100, timeout: bootMs });
   const hook = await page.evaluate(hookPipelines);
@@ -65,34 +77,41 @@ export async function measureBoostPresses(page, { forceGL, bootMs, gas }) {
   await page.evaluate(() => { window.__apex.race("monza"); });
   await page.waitForFunction(() => { try { const i = window.__apex.info(); return i.track === "monza" && (i.state === "race" || i.state === "count"); } catch (_) { return false; } },
     null, { polling: 200, timeout: 300000 });
+  const renderState = () => page.evaluate(() => { const A = window.__apex, r = A.renderScale({ lite: true }), h = A.govHold();
+    return { scale: r.scale, tier: h.tier, tierHold: h.tierHold, lookPostShed: !!r.lookPostShed }; });
+  if (renderScale) await page.evaluate((s) => { window.__apex.renderScale(s); window.__apex.govHold(true); }, renderScale);
+  const t0 = Date.now();
   await page.evaluate(() => window.__apex.go());
   await page.waitForFunction(raceGate, null, { polling: 500, timeout: 300000 });
   await page.evaluate(() => window.__apex.setEnergy && window.__apex.setEnergy(1));
   await gas(true);                       // GAS held, the iPhone sequence
-  await frames(page, SPACING);           // driving on the throttle: everything but BOOST is warm
+  await frames(page, spacing);           // driving on the throttle: everything but BOOST is warm
+  const render = { asked: { renderScale, swRaceShed: !!swRaceShed }, before: await renderState() };
 
   // Each press is preceded by a CONTROL window of the same length with BOOST off: a pipeline built there is
   // ordinary driving (a prop or car coming into view), not BOOST, and is reported, not asserted.
   const count = () => page.evaluate(() => window.__bpp.count);
   const slice = (a, b) => page.evaluate(([x, y]) => window.__bpp.log.slice(x, y), [a, b]);
-  const presses = [];
-  for (let i = 1; i <= PRESSES; i++) {
-    const c0 = await count();
-    await frames(page, DEPLOY_FRAMES + SPACING);
+  const presses = [], warmMs = Date.now() - t0;
+  for (let i = 1; i <= nPresses; i++) {
+    const tp = Date.now(), c0 = await count();
+    await frames(page, deployFrames + spacing);
     const c1 = await count();
     await page.evaluate(() => { const A = window.__apex; if (A.setEnergy) A.setEnergy(1); A.setBoost(true); });
     await frames(page, 3);
     const deployed = await page.evaluate(() => { const e = window.__apex.carEffects(); return !!(e && e.ersDeploy); });
-    await frames(page, DEPLOY_FRAMES - 3);
+    await frames(page, deployFrames - 3);
     await page.evaluate(() => window.__apex.setBoost(false));
-    await frames(page, SPACING);
+    await frames(page, spacing);
     const c2 = await count();
-    presses.push({ press: i, deployed, control: c1 - c0, controlBuilt: await slice(c0, c1), pipelines: c2 - c1, built: await slice(c1, c2) });
+    presses.push({ press: i, deployed, control: c1 - c0, controlBuilt: await slice(c0, c1), pipelines: c2 - c1, built: await slice(c1, c2),
+      ms: Date.now() - tp });
   }
   await gas(false);
-  const out = { hook, forceGL, presses };
+  render.after = await renderState();
+  const out = { hook, forceGL, render, warmMs, presses };
   mkdirSync("artifacts/perf", { recursive: true });
-  writeFileSync(`artifacts/perf/boost-press-pipelines-${forceGL ? "gl" : "gpu"}.json`, JSON.stringify(out, null, 1));
+  writeFileSync(`artifacts/perf/boost-press-pipelines-${tag}.json`, JSON.stringify(out, null, 1));
   return out;
 }
 
