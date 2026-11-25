@@ -22,6 +22,9 @@
  * result is an error. The cause is `quota` when that result (or the row's summaries) names a usage or rate limit
  * (`usage_limit_reached`, "You've hit your … limit", 429), with the reset time when the text carries one; else
  * `failed` / `disconnected`. Without a saved result page a failed child's cause is `unknown` (save its page).
+ * A live child whose row reads status_bucket blocked or status_category need_input is WAITING (a permission prompt or a question no
+ * human is watching); the brief prints its needs_action so the orchestrator answers it or relaunches the PR
+ * (retro 2026-11-25).
  *
  * ACT per PR whose owner is dead, first match wins:
  *   NONE       the PR carries `land` (steward §After land: a land PR is never re-owned)
@@ -80,6 +83,7 @@ export function classifyChild(row, result = null) {
   const failed = bucket === "failed";
   const disconnected = row.connection_status === "disconnected";
   const dead = failed || disconnected || resultErr;
+  const waiting = !dead && (bucket === "blocked" || /need_?input/i.test(String(row.post_turn_summary?.status_category || "")));
   let cause = null;
   if (dead) {
     if ((resultErr && LIMIT.test(resultText)) || LIMIT.test(rowText)) cause = "quota";
@@ -89,7 +93,8 @@ export function classifyChild(row, result = null) {
   }
   const evidence = cause === "quota" ? (LIMIT.test(resultText) ? resultText : rowText) : resultText || rowText;
   return {
-    id: row.id, title: oneLine(row.title), bucket: bucket || "-", dead, cause,
+    id: row.id, title: oneLine(row.title), bucket: bucket || "-", dead, waiting, cause,
+    needs: waiting ? oneLine(row.post_turn_summary?.needs_action || row.post_turn_summary?.recent_action || "").slice(0, 120) : null,
     resets: cause === "quota" ? resetOf(evidence) : null,
     at: result?.created_at || row.updated_at || null,
     evidence: evidence.slice(0, 200),
@@ -127,6 +132,7 @@ export function render(children, rows) {
   const dead = children.filter((c) => c.dead);
   const lines = [`= child-health: ${children.length} children, ${dead.length} dead, ${rows.length} PR${rows.length === 1 ? "" : "s"} with a dead owner`];
   for (const c of dead) lines.push(`DEAD ${c.id} ${c.cause}${c.resets ? ` resets ${c.resets}` : ""} — ${c.title.slice(0, 70)}${c.cause === "unknown" ? " (save its list_events kinds:[result] page)" : ""}`);
+  for (const c of children.filter((k) => k.waiting)) lines.push(`WAITING ${c.id} need_input — ${c.title.slice(0, 50)}${c.needs ? ` · ${c.needs}` : ""} → answer it, or park and relaunch its PR`);
   for (const r of rows) lines.push(`${r.act.padEnd(8)} #${r.pr} owner ${r.session} (${r.cause}) → ${r.next}`);
   return lines.join("\n");
 }

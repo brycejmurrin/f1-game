@@ -43,6 +43,9 @@ test("TLX WebGPU: steady driving builds no render pipelines after warm-up", asyn
   // GPUDevice; the WebGL2 fallback has none, so there the check would pass vacuously and is skipped.
   if (gpuDevice) {
     testInfo.annotations.push({ type: "gpu-churn", description: `per window bindGroups ${windows.map((w) => w.bindGroups).join(",")} buffers ${windows.map((w) => w.buffers).join(",")}` });
+    // Whose bind groups (census `ro`, the render object three was binding): the label alone names no culprit.
+    const owners = [...new Set(windows.flatMap((w) => w.gpuBuilt.filter((b) => b.kind === "createBindGroup").map((b) => `w${w.window}@${b.at} ${b.ro || "(no render object)"}`)))];
+    testInfo.annotations.push({ type: "bind-group-owners", description: owners.join(" | ").slice(0, 4000) || "none" });
     // A geometry's FIRST draw makes its vertex/index buffer inside three's updateForRender (measured on lavapipe:
     // one 90480 B index buffer in window 3, same frame in two runs). That is a mesh coming into view, not churn, so
     // it is reported (annotation) and not failed; a size that recurs in a second window IS churn (released and

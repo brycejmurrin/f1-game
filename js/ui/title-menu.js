@@ -286,6 +286,10 @@ const TitleMenu = (function () {
         // WCAG 2.5.3 (label in name): the name must contain the visible label, "DAILY TIME TRIAL".
         setAttr(dailyBtn, "aria-label", "Daily time trial — " + dailySub.textContent);
       }
+
+      // STANDINGS follows the in-memory standalone season, on every title paint: a BACK chain from the
+      // Season quali sheet reaches the title without quitToMenu, so a door painted only there stayed hidden (F2).
+      setHidden($("mb-standings"), !(SeasonCal.hasProgress(G.season) && G.season.round < SeasonCal.rounds()));
     }
 
     // IndexedDB restoration finishes after the synchronous boot refresh.

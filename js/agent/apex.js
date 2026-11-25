@@ -409,19 +409,19 @@ const api = {
   }),
   garageCam: () => ({
     exterior: typeof GaragePrebuild !== "undefined" && GaragePrebuild.instance() ? GaragePrebuild.instance().state().exterior : null,
-    on: G.setupPreviewOn, spin: G.setupPreviewSpin,
-    az: G.setupPreviewAz, el: G.setupPreviewEl, dist: G.setupPreviewDist,
+    on: G.setupPreviewOn, spin: G.setupCam.spin,
+    az: G.setupCam.az, el: G.setupCam.el, dist: G.setupCam.dist,
     // dist is the ZOOM's stored distance; effDist is what the camera actually
     // used last frame. They differ on the auto-turntable path, which is the one
     // that can misframe — fitD is the auto fit before the clamp, so a test can
     // see the fit diverge (fitD >> effDist) instead of only its symptom.
-    effDist: G.spEffDist, fitD: G.spEffFit, panelFrac: G.spEffPanel,
-    pan: G.setupPreviewPan.slice(),
+    effDist: G.setupCam.effDist, fitD: G.setupCam.effFit, panelFrac: G.setupCam.effPanel,
+    pan: G.setupCam.pan.slice(),
     // ACTIVE AERO in the garage: the switch and the FLAP TRAVEL it eases toward.
     // Separate fields on purpose — the button label follows the switch, so a
     // preview whose blend never moves still reads "X-MODE" while showing a car
     // that has not changed at all.
-    xOn: G.setupPreviewXOn, aeroX: G.setupPreviewAeroX,
+    xOn: G.setupCam.xOn, aeroX: G.setupCam.aeroX,
   }),
   // GARAGE PREBUILD (js/garage/prebuild.js): ready/blockers/last run ms/tap-to-first-frame ms.
   garagePrebuild: () => (typeof GaragePrebuild !== "undefined" && GaragePrebuild.instance() ? GaragePrebuild.instance().state() : null),
@@ -435,9 +435,9 @@ const api = {
   // reads the state; garageStep(dt) advances the ease by dt seconds. Shut: garage_closed.
   garageAero(on, opts) {
     if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
-    if (on !== undefined) G.setSetupAero(!!on, opts);
-    return { xOn: G.setupPreviewXOn, aeroX: +G.setupPreviewAeroX.toFixed(4),
-             mode: G.setupPreviewAeroX > 0.05 ? "X" : "Z" };
+    if (on !== undefined) G.setupCam.setSetupAero(!!on, opts);
+    return { xOn: G.setupCam.xOn, aeroX: +G.setupCam.aeroX.toFixed(4),
+             mode: G.setupCam.aeroX > 0.05 ? "X" : "Z" };
   },
   // Off-by-default X-mode TE strip (`CarMesh.drawAeroEdge`). Real cars do not
   // light their wings; `apex26.aeroEdge=1` is the debug latch.
@@ -452,7 +452,7 @@ const api = {
   garageStep(dt, n) {
     if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     const [step, count] = stepArgs(dt, n);
-    for (let i = 0; i < count; i++) G.stepSetupAero(step);
+    for (let i = 0; i < count; i++) G.setupCam.stepSetupAero(step);
     return this.garageAero();
   },
   // Switch garage car without opening #teampicker — same store writes as the tile
@@ -479,7 +479,7 @@ const api = {
     try { document.documentElement.dataset.team = t.id; } catch (_) { /* no DOM */ }
     // Drop the preview meshes AND the key naming the one still held, or a no-op
     // switch left setup-camera drawing a freed mesh (spMeshBust's two halves).
-    if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) { GarageScene.dropPreviewMeshes(); G._spMeshKey = ""; }
+    if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) { GarageScene.dropPreviewMeshes(); G.setupCam.meshKey = ""; }
     G.buildSetup();
     G.tickUi();
     return { ok: true, switched: true, label, seat };
@@ -488,7 +488,7 @@ const api = {
   garageFrame(view, opts) {
     if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     if (!view) return { ok: false, error: "no_view" };
-    if (view !== "free") G.setSetupView(view);   // a preset resets orbit/target/pan; absolutes go on top
+    if (view !== "free") G.setupCam.setSetupView(view);   // a preset resets orbit/target/pan; absolutes go on top
     let o = opts || {};
     const num = (v) => (Number.isFinite(v) ? v : null);
     const xyz = (v) => Array.isArray(v) && v.length === 3 && v.every((n) => Number.isFinite(+n));
@@ -504,20 +504,20 @@ const api = {
     // fov (deg) / centre: a matched-lens reference shot — its own vertical fov, the look-at in the
     // middle of the frame (no panel lens shift, no auto recentre). Absent = the player's camera.
     const lens = num(o.fov) > 0 || o.centre ? { fov: num(o.fov) > 0 ? Math.max(5, Math.min(90, o.fov)) : null, centre: !!o.centre } : null;
-    G.setSetupFree(o.clamp === false);   // a dev shot may leave the player's range; the next preset restores it
-    if (lens) G.setSetupFree(/** @type {any} */ (lens));   // a matched lens is a free dev shot too (setup-camera reads the object)
-    if (Array.isArray(o.target) && o.target.length === 3) G.setSetupAim(o.target.map(Number));   // orbit + look-at, car space
+    G.setupCam.setSetupFree(o.clamp === false);   // a dev shot may leave the player's range; the next preset restores it
+    if (lens) G.setupCam.setSetupFree(/** @type {any} */ (lens));   // a matched lens is a free dev shot too (setup-camera reads the object)
+    if (Array.isArray(o.target) && o.target.length === 3) G.setupCam.setSetupAim(o.target.map(Number));   // orbit + look-at, car space
     if (o.lamp !== undefined && typeof GarageScene !== "undefined" && GarageScene.spot) GarageScene.spot(o.lamp || null);
-    if (num(o.az) != null) G.nudgeSetupCam(o.az - G.setupPreviewAz, 0, 0);
-    if (num(o.el) != null) G.nudgeSetupCam(0, o.el - G.setupPreviewEl, 0);
-    if (num(o.dist) > 0) G.nudgeSetupZoom(o.dist / G.setupPreviewDist);   // clamped by the game
+    if (num(o.az) != null) G.setupCam.nudgeSetupCam(o.az - G.setupCam.az, 0, 0);
+    if (num(o.el) != null) G.setupCam.nudgeSetupCam(0, o.el - G.setupCam.el, 0);
+    if (num(o.dist) > 0) G.setupCam.nudgeSetupCam(0, 0, o.dist / G.setupCam.dist);   // clamped by the game
     const steps = (n, fn) => { for (let i = 0; i < Math.abs(n | 0); i++) fn(n > 0 ? 1 : -1); };
-    steps(o.azNudge != null ? o.azNudge : o.nudgeAz, (s) => G.nudgeSetupCam(0.18 * s, 0, 0));
-    steps(o.elNudge != null ? o.elNudge : o.nudgeEl, (s) => G.nudgeSetupCam(0, 0.12 * s, 0));
-    steps(o.zoom, (s) => G.nudgeSetupZoom(s > 0 ? 1 / 1.12 : 1.12));
-    steps(o.strafe, (s) => G.setupPan(0.15 * s, 0));
-    steps(o.dolly, (s) => G.setupPan(0, 0.15 * s));
-    if (Array.isArray(o.pan)) G.setupPan(+o.pan[0] || 0, +o.pan[1] || 0);
+    steps(o.azNudge != null ? o.azNudge : o.nudgeAz, (s) => G.setupCam.nudgeSetupCam(0.18 * s, 0, 0));
+    steps(o.elNudge != null ? o.elNudge : o.nudgeEl, (s) => G.setupCam.nudgeSetupCam(0, 0.12 * s, 0));
+    steps(o.zoom, (s) => G.setupCam.nudgeSetupCam(0, 0, s > 0 ? 1 / 1.12 : 1.12));
+    steps(o.strafe, (s) => G.setupCam.setupPan(0.15 * s, 0));
+    steps(o.dolly, (s) => G.setupCam.setupPan(0, 0.15 * s));
+    if (Array.isArray(o.pan)) G.setupCam.setupPan(+o.pan[0] || 0, +o.pan[1] || 0);
     const c = this.garageCam();
     return { ok: true, view, az: c.az, el: c.el, dist: c.effDist, pan: c.pan };
   },
@@ -532,7 +532,7 @@ const api = {
     G.saveTeamParts(team.id, cur);
     // Garage open: drop the preview, rebuild the sheet. Closed (menu / a race): DONE's recompute, so the next frame re-keys the player body, cockpit and wheel meshes.
     if (!G.setupPreviewOn) G.recomputePlayerMods();
-    else { if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) { GarageScene.dropPreviewMeshes(); G._spMeshKey = ""; } G.buildSetup(); }
+    else { if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) { GarageScene.dropPreviewMeshes(); G.setupCam.meshKey = ""; } G.buildSetup(); }
     return { ok: true, team: team.id, parts: cur, live: !G.setupPreviewOn };
   },
   // Debug: hide/show individual track meshes. e.g. meshToggle({props:true}) hides props.
@@ -1646,7 +1646,7 @@ const api = {
   // renderScale({lite:true}) skips frameTimes (PerfGov.frameStats copies and sorts its 2048-frame ring). `effective`: ApexLifecycle.effectiveRes (#5166).
   renderScale(v) {
     const lite = !!(v && v.lite === true);
-    if (v === undefined || lite) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), lookPostShed: !!(PerfGov.lookPostShed && PerfGov.lookPostShed()), phoneSlowLatch: !!(PerfGov.phoneSlowLatch && PerfGov.phoneSlowLatch()), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), frameTimes: lite ? undefined : PerfGov.frameStats(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile(), tierHold: PerfGov.tierHold(), effective: typeof ApexLifecycle === "undefined" ? null : ApexLifecycle.effectiveRes(gfx, canvas) };
+    if (v === undefined || lite) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), chaseMs: PerfGov.chaseMs ? +PerfGov.chaseMs().toFixed(2) : 0, chaseFutile: !!(PerfGov.chaseFutile && PerfGov.chaseFutile()), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), lookPostShed: !!(PerfGov.lookPostShed && PerfGov.lookPostShed()), phoneSlowLatch: !!(PerfGov.phoneSlowLatch && PerfGov.phoneSlowLatch()), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), frameTimes: lite ? undefined : PerfGov.frameStats(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile(), tierHold: PerfGov.tierHold(), effective: typeof ApexLifecycle === "undefined" ? null : ApexLifecycle.effectiveRes(gfx, canvas) };
     if (v === true) { PerfGov.setAutoRes(true); return this.renderScale(); }
     // A FRACTION, 0.5..1 (the opposite unit to uiScale). Unchecked, "auto"
     // reached GLX/WGX as NaN (Math.max(0.5, NaN) is NaN: a NaN-sized buffer)

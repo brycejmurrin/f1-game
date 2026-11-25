@@ -1061,10 +1061,16 @@ const CarDraw = (function () {
     // drained one piece a frame under the lights (game.js tickBody → drainDeferredCarWarm), in grid order; the
     // lights hold ~5 s for ≤ 22 pieces, and whatever is left still builds on its first draw, as before.
     const _deferredCarWarm = [];
-    function drainDeferredCarWarm(budgetMs) {
+    // SKIP a piece whose kind last cost more than the budget left (hunt 2026-11-24 #4: a 27-39 ms caster ran whole
+    // on a 4 ms race frame); it builds on its first draw. `first` (the lights) runs a call's first piece anyway, and
+    // the crew rig is never skipped, so it still warms before the box (#5051).
+    const _warmMs = [0, 0, 0];   // atlas, caster, crew (the crew is measured, never gated)
+    function drainDeferredCarWarm(budgetMs, first) {
       const t0 = performance.now(), budget = budgetMs > 0 ? budgetMs : 4;
-      while (_deferredCarWarm.length) {
-        const it = _deferredCarWarm.shift();
+      for (let i = 0; i < _deferredCarWarm.length;) {
+        const it = _deferredCarWarm[i], k = it.atlas ? 0 : it.caster ? 1 : 2, at = performance.now();
+        if (!first && k < 2 && _warmMs[k] > t0 + budget - at) { i++; continue; }
+        first = !_deferredCarWarm.splice(i, 1);   // take it; `first` is spent (splice returns an array)
         try {
           // Through the caches, never a kept handle: a leftover drained by a later countdown (a red-flag restart)
           // finds the atlas LRU may have dropped its texture since, and the cache rebuilds or hits as it should.
@@ -1072,7 +1078,7 @@ const CarDraw = (function () {
           else if (it.caster) teamMesh(it.c.team, it.c, true);
           else if (it.crew && typeof PitCrewAnim !== "undefined") PitCrewAnim.warm(G, it.c);   // #5051: the stop's rig, not on the box frame
         } catch (e) { Log.warn("gfx", "deferred car warm failed for " + (it.c && it.c.team && it.c.team.id), e); }
-        if (performance.now() - t0 >= budget) break;
+        if ((_warmMs[k] = performance.now() - at) + at - t0 >= budget) break;   // this piece's cost; past the budget, stop
       }
       return _deferredCarWarm.length;
     }
@@ -1547,8 +1553,7 @@ const CarDraw = (function () {
     // Pinned against game.js's branch: tests/unit/car-presentation-canary.test.mjs.
     const _ckR = [0, 0, 0], _ckU = [0, 1, 0], _ckF = [0, 0, 0], _ckP = [0, 0, 0];
     function cockpitCaster(c, smp, yv, out, bankRoll) {
-      const id = !G.dbgCam && (G.state === "race" || G.state === "count") ? CamModes.CAM_MODES[G.camMode].id : "";
-      if (id !== "cockpit" && id !== "helmet") return null;
+      if (!GameCams.rigMode(G.dbgCam, G.state, CamModes.CAM_MODES[G.camMode].id)) return null;
       GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, _ckR, _ckU, _ckF, _ckP, GameCams.seatFwd(), GameCams.seatUp(), bankRoll);
       out[0] = _ckR[0]; out[1] = _ckR[1]; out[2] = _ckR[2]; out[3] = 0;
       out[4] = _ckU[0]; out[5] = _ckU[1]; out[6] = _ckU[2]; out[7] = 0;
@@ -1645,6 +1650,7 @@ const CarDraw = (function () {
       if (CockpitOpts.wheelHasScreen(ws)) for (let lit = 0; lit <= 9; lit++) d(getLedStrip(lit, ws), _rigFx);
       d(getErsBar(), _rigFx); _rigFxA.alpha = 0.75; d(getErsBar(), _rigFxA);
       d(getOtLamp(false), _rigFx); _rigFxA.alpha = 0.7; d(getOtLamp(true), _rigFxA);
+      for (const a of [0.6, 1]) { _ersLightOpts.alpha = a; d(pin(CarMesh.getErsLight()), _ersLightOpts); }
       if (typeof CarMesh.primeWheelExtras === "function") { CarMesh.primeWheelExtras(Z); n += 9; }
       if (ws === "retro" && typeof CarMesh.primeRetroDigits === "function") { CarMesh.primeRetroDigits(Z); n += 40; }
       if (paint) {
@@ -1660,6 +1666,10 @@ const CarDraw = (function () {
           queueCarDecals(pt, Z, carDecalNum(c.team, c), false, !!c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp); n++;
           _ringOpts.emissive = 0; _ringOpts.alpha = 0.5;
           for (let k = 0; k < 4; k++) d(getSpinDisc(), _ringOpts);
+          // Brake ring per wheel (both blend keys) + after-fire flame: else minted at the first hard stop (#6438).
+          _ringOpts.emissive = 1;
+          for (const a of [0.5, 1]) { _ringOpts.alpha = a; for (let k = 0; k < 4; k++) d(getBrakeRing(), _ringOpts); }
+          _flameOpts.alpha = 0.5; d(pin(CarMesh.getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame)), _flameOpts);
           if (c.isPlayer) continue;
           if (_sharedRivalBody) d(sharedRivalBodyMesh(false, c), co);
           if (_farRivalBody) d(sharedRivalBodyMesh(true, c), co);

@@ -141,6 +141,11 @@ test("open-bot-pr: a refusal fails, dispatches CI and opens ONE issue; it re-pin
   assert.equal(bare.code, 0, bare.out);
   assert.deepEqual(bare.calls, ["GH_TOKEN=pat pr create --repo o/r --base claude/f1-game-project-26h3ng --head bot/x --title t --body b"]);
   assert.match(bare.out, /::warning::open-bot-pr: tools\/ci\/bot-pr-body\.mjs failed; opening with the plain body/);
+  // knowledge-gc passes `labels: land` (2026-11-25): the label goes on with the PR's own token, after the create.
+  const labelled = runWithFakeGh(run, { refusePr: false, env: { ...base, PR_TOKEN: "pat", LABELS: "land" } });
+  assert.equal(labelled.code, 0, labelled.out);
+  assert.deepEqual(verbsOf(labelled.calls), ["pr create", "pr edit"]);
+  assert.equal(labelled.calls[1], "GH_TOKEN=pat pr edit https://x/o/r/pull/7 --repo o/r --add-label land");
 });
 
 test("selected-verdict reds a PR on a touched js dir with no coverage; the train only warns (ci-7d C7)", () => {

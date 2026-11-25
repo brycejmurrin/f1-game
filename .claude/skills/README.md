@@ -50,6 +50,7 @@ auto-selects on, so a fold that leaves the vocabulary behind makes the workflow 
 | **race-incidents-control** | debris, flags, VSC, safety car, retirements |
 | **race-weekend** | tyres, pit stops, strategy HUD, quali, weather, sporting rules |
 | **renderer-debug** | a wrong or black canvas on TLX/GLX/WGX (`js/render/**`) |
+| **runtime-hunt** | a full session hunting bugs by RUNNING the game: perf/leak loops or scripted play, ranked note |
 | **scenery-dress** | track scenery: props, grandstands, barriers, `scenery(api)` |
 | **season-mode** | the standalone Season screen |
 | **ship** | `/ship`: push, draft PR, ready, land — a pointer at steward §Open / §Land (user-only) |

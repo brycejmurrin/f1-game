@@ -1671,7 +1671,7 @@ function livePreviewDraft(team, d) {
   // seeds those colours into the draft instead).
   G.livDraftOverride = { teamId: team.id,
     liv: Object.assign({ id: "custom_draft", c1: hexToArr(d.c1), c2: hexToArr(d.c2) }, livDraftTo(d, true)) };
-  if (!skipMesh) G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
+  if (!skipMesh) G.setupCam.meshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 
 // A draft paints under its own decal keys (car-draw draftTag): drop only those, so the saved livery's
@@ -1693,7 +1693,7 @@ function endLivPreview(team) {
   // was live (a garage opened mid-race) holds the draft's paint (#2796 item 4).
   const cd = typeof CarDraw !== "undefined" && CarDraw.instance && CarDraw.instance();
   if (cd && cd.invalidateCustomMeshCaches) cd.invalidateCustomMeshCaches(team.id);
-  G._spMeshKey = "";
+  G.setupCam.meshKey = "";
 }
 
 function openSetup() {

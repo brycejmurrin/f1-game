@@ -1116,6 +1116,69 @@ test("TopModal: a ghost queued behind a slow screen build is judged by its own i
   assert.equal(click(map, 1950).stopped, false, "a tap made after the swap is a choice");
 });
 
+// UI matrix 2026-11-25 row 5 (flows doubletap, 852×393 touch, software GL): Title › GARAGE showed
+// #carsetup 2.7 s after the opening tap, aria-busy, and built its chips 9 s later; the double tap's
+// second tap (input 6.2 s) dispatched at 17.9 s onto driver chip "#6 Isack Hadjar".
+test("TopModal: a busy layer's shield holds to the first frame after its build (#carsetup, UI matrix row 5)", () => {
+  let now = 3317;
+  const frames = [];
+  const h = bootTopModal(["overlay", "carsetup"], {
+    Date: { now: () => now }, performance: { timeOrigin: 1000, now: () => now - 1000 },
+    requestAnimationFrame: (cb) => { frames.push(cb); return frames.length; },
+  });
+  const overlay = h.layer("overlay"), garage = h.layer("carsetup");
+  garage.hidden = true;
+  const door = h.add(overlay, "mb-garage", { y: 100 });
+  const chip = h.add(garage, "cs-driver-6", { y: 100 });
+  h.TopModal.scanLayers();
+  const ev = (type, target, at) => {
+    const e = { type, target, isTrusted: true, detail: type === "click" ? 1 : 0, clientX: 100, clientY: 110, timeStamp: at - 1000, stopped: false };
+    e.preventDefault = () => {};
+    e.stopPropagation = () => { e.stopped = true; };
+    e.stopImmediatePropagation = () => { e.stopped = true; };
+    h.TopModal.onClickShield(e);
+    return e;
+  };
+  assert.equal(ev("click", door, 3317).stopped, false, "the opening tap passes");
+  now = 6073;
+  garage.setAttribute("aria-busy", "true");           // openSetup: unhide, then mark busy in the same task
+  h.flip(garage, false);
+  now = 15228;                                         // buildSetup ran; the busy flag clears
+  garage.removeAttribute("aria-busy");
+  now = 17903;                                         // the queued second tap dispatches before the frame
+  assert.equal(ev("pointerdown", chip, 6208).stopped, true, "the ghost's pointerdown never reaches the chip");
+  assert.equal(ev("click", chip, 6209).stopped, true, "nor its click: the chip was not on screen at 6.2 s");
+  frames.splice(0).forEach((cb) => cb());              // the built sheet's first frame
+  assert.equal(ev("click", chip, 6300).stopped, true, "a tap stamped before that frame is still a ghost");
+  now = 18100;
+  assert.equal(ev("click", chip, 18100).stopped, false, "a tap after the frame is a choice");
+});
+
+test("TopModal: a busy layer whose build never clears releases its shield after SHOW_LATE_MS", () => {
+  let now = 1000;
+  const h = bootTopModal(["overlay", "carsetup"], {
+    Date: { now: () => now }, performance: { timeOrigin: 1000, now: () => now - 1000 },
+    requestAnimationFrame: () => 0,
+  });
+  const overlay = h.layer("overlay"), garage = h.layer("carsetup");
+  garage.hidden = true;
+  const door = h.add(overlay, "mb-garage", { y: 100 });
+  const chip = h.add(garage, "cs-driver-6", { y: 100 });
+  h.TopModal.scanLayers();
+  const click = (target, at) => {
+    const e = { type: "click", target, isTrusted: true, detail: 1, clientX: 100, clientY: 110, timeStamp: at - 1000, stopped: false };
+    e.preventDefault = () => {};
+    e.stopImmediatePropagation = () => { e.stopped = true; };
+    h.TopModal.onClickShield(e);
+    return e;
+  };
+  click(door, 1000);
+  now = 1200; garage.setAttribute("aria-busy", "true"); h.flip(garage, false);
+  assert.equal(click(chip, 2000).stopped, true, "still building: the spot under the thumb is shielded");
+  now = 7000;
+  assert.equal(click(chip, 7000).stopped, false, "a build stuck past SHOW_LATE_MS never eats taps for good");
+});
+
 test("TopModal: automation (navigator.webdriver) is never shielded — its fast clicks are deliberate", () => {
   let now = 1000;
   const h = bootTopModal(["overlay", "select"], { Date: { now: () => now }, navigator: { webdriver: true } });

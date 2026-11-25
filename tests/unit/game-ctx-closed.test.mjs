@@ -20,7 +20,7 @@ const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 // SHRINK-ONLY. Delete a name when its member goes; never add one.
 const PRIVATE_BASELINE = [
-  "_testInput", "_lastFloodEmit", "_s8Stamp", "_spMeshKey", "_ltStore", "_cloudBase",
+  "_testInput", "_lastFloodEmit", "_s8Stamp", "_ltStore", "_cloudBase",
   "_ltBase", "_photoPrevScale", "_studioRig", "_ltFlash", "_ltNextT", "_nightAmbientBand",
 ];
 
