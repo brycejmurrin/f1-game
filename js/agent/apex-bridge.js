@@ -31,6 +31,11 @@
    a poll picks it, beside the running ACTION, and polling never waits on either. So `drive {stop}` reaches a running
    drive, and `reload` / `path` / `bench` wait their turn behind it. Replies may arrive out of order: `re` is the key.
 
+   POLLING (#6582 AP-b). Every POLL_BUSY_MS while a command runs or waits, and for BUSY_TAIL_MS after a reply or the
+   hello; every POLL_MS otherwise (ETag: an unchanged thread is a 304). pollDelay mirrors the agent-side watcher
+   nextDelay (#6641): a 403 / 429 waits for retry-after or the reset, RATE_FLOOR calls left waits for the reset, RATE_LOW
+   polls 4× slower, a 5xx or network error doubles per failure (cap 60 s).
+
    PLANS (#6582). `plan {name, args}` runs one of PLANS: a code-reviewed list of CMDS steps (plus `when` waits) kept in
    this file, never sent in a comment, under the same deny-lists. It is an ACTION and answers once with every step.
 
@@ -44,7 +49,9 @@ const ApexBridge = (function () {
   const REPO = "brycejmurrin/f1-game";
   const API = "https://api.github.com";
   const TOKEN_KEY = "apex26.bridgeToken";
-  const POLL_MS = 4000;
+  const POLL_MS = 4000;                    // idle cadence
+  const POLL_BUSY_MS = 1000, BUSY_TAIL_MS = 60000;   // busy cadence, and how long it lasts after a reply
+  const RATE_LOW = 200, RATE_FLOOR = 25, RATE_MAX_WAIT_MS = 15 * 60000;   // as watch.mjs LOW / FLOOR / MAX_WAIT_MS
   const BACKOFF_MS = 60000;
   const MAX_REPLY = 60000;
   const CMD_RE = /```apex-cmd[ \t]*\n([\s\S]*?)```/;
@@ -1013,9 +1020,16 @@ const ApexBridge = (function () {
     if (_run !== run) return -1;
     // `since` (run.since) walks forward; `cutoff` stays the hello's time, the floor a command must be created after.
     const r = await gh("/comments?per_page=100&since=" + encodeURIComponent(run.since), { etag: run.etag });
+    run.lastRes = r;
+    run.errors = r.status === 200 || r.status === 304 ? 0 : run.errors + 1;
     if (r.status === 304) return 0;
     if (r.status === 401) { stop("token rejected"); setToken(""); return -1; }
-    if (!r.ok) { run.backoff = Date.now() + BACKOFF_MS; say("poll " + r.status + ", backing off"); return -1; }
+    if (!r.ok) {
+      // 403 / 429 / 5xx: pollDelay reads the headers; any other refusal (a 404 issue) holds BACKOFF_MS.
+      if (!(r.status === 403 || r.status === 429 || r.status >= 500)) run.backoff = Date.now() + BACKOFF_MS;
+      say("poll " + r.status + ", backing off");
+      return -1;
+    }
     run.etag = r.headers.get("etag") || null;
     const page = await r.json();
     // Advance the window to the newest comment on this page, so the next poll reads PAST it: a fixed `since` served
@@ -1059,6 +1073,7 @@ const ApexBridge = (function () {
   function dispatch(run, c) {
     run.seen.add(c.id);
     run.last = { id: c.id, cmd: c.msg && c.msg.cmd, busy: true };
+    run.activeAt = Date.now();
     if (!run.statusSlow) armStatus(STATUS_BUSY_MS);   // busy: the next edit within 15 s (not while rate-limited)
     if (isRead(c.msg)) track(run, serve(run, c));
     else { run.queue.push(c); pump(run); }
@@ -1079,6 +1094,7 @@ const ApexBridge = (function () {
     if (run.last) run.last.busy = run.running > 0 || run.queue.length > 0;
     if (_run !== run) return;
     run.served++;
+    run.activeAt = Date.now();
     paintBadge();
     await reply(run, Object.assign({ re: c.id, cmd: c.msg && c.msg.cmd }, res));
   }
@@ -1142,7 +1158,7 @@ const ApexBridge = (function () {
     try { driving = typeof SoakRun !== "undefined" && SoakRun.driving ? !!SoakRun.driving() : null; } catch (_) { /* no driver */ }
     return { status: true, v: V, at: new Date().toISOString(), linked: !ended, ended: ended || undefined, sha, screen,
       state: gameState(), visible: d ? !d.hidden : null, wake: wakeState(run).held, driving, served: run.served, last: run.last || null, hello: run.cutoff,
-      running: run.running || 0, queued: run.queue ? run.queue.length : 0 };
+      running: run.running || 0, queued: run.queue ? run.queue.length : 0, pollMs: run.poll ? run.poll.ms : null };
   }
   // An edit asked for while one is in flight (a visibility flip, the link's end) is queued and sent right after it, so
   // the newest state always lands; a 403 / 429 (GitHub's rate limits) slows the cadence to STATUS_SLOW_MS.
@@ -1203,22 +1219,55 @@ const ApexBridge = (function () {
     }, ms);
   }
 
+  // The wait before the next poll from the last poll's response (null = a network error); the agent-side watcher's
+  // nextDelay maths (#6641), so the phone and the agent's watcher back off alike.
+  function pollDelay(res, ctx) {
+    const baseMs = ctx.baseMs, now = ctx.now, errors = ctx.errors || 0;
+    if (!res) return { ms: Math.min(60000, baseMs * 2 ** Math.min(errors, 4)), why: "network error x" + errors };
+    const h = (n) => (res.headers && res.headers.get ? res.headers.get(n) : null);
+    const num = (n) => (h(n) == null ? null : Number(h(n)));
+    const remaining = num("x-ratelimit-remaining"), reset = num("x-ratelimit-reset"), retry = num("retry-after");
+    const untilReset = reset == null ? null : Math.max(0, reset * 1000 - now) + 1000;
+    if (res.status === 403 || res.status === 429) {
+      const ms = retry != null ? retry * 1000 : remaining === 0 && untilReset != null ? untilReset : 60000;
+      return { ms: Math.min(RATE_MAX_WAIT_MS, Math.max(baseMs, ms)), why: "rate limited (" + res.status + ")" };
+    }
+    if (res.status >= 500) return { ms: Math.min(60000, baseMs * 2 ** Math.min(errors, 4)), why: "server " + res.status };
+    if (remaining != null && remaining < RATE_FLOOR && untilReset != null)
+      return { ms: Math.min(RATE_MAX_WAIT_MS, Math.max(baseMs, untilReset)), why: "rate limit " + remaining + " left: waiting for the reset" };
+    if (remaining != null && remaining < RATE_LOW) return { ms: baseMs * 4, why: "rate limit " + remaining + " left: polling slower" };
+    return { ms: baseMs, why: null };
+  }
+  // Busy: a command running or queued, or a reply (or the hello) under BUSY_TAIL_MS old. A hidden page reads nothing.
+  function pollPlan(run, now) {
+    const busy = run.running > 0 || run.queue.length > 0 || !!run.acting || now - run.activeAt < BUSY_TAIL_MS;
+    const hidden = typeof document !== "undefined" && !!document.hidden;
+    const d = pollDelay(run.lastRes, { baseMs: busy && !hidden ? POLL_BUSY_MS : POLL_MS, now, errors: run.errors });
+    const held = run.backoff - now;
+    return held > d.ms ? { ms: held, busy, why: "backoff" } : { ms: d.ms, busy, why: d.why };
+  }
   function schedule() {
     const run = _run;
     if (!run) return;
+    const plan = run.poll = pollPlan(run, Date.now());
+    if (plan.why !== run.pollWhy) { if (plan.why) say("poll in " + Math.round(plan.ms / 1000) + " s: " + plan.why); run.pollWhy = plan.why; }
     run.timer = setTimeout(async () => {
       if (_run !== run) return;
       const hidden = typeof document !== "undefined" && document.hidden;
       if (!hidden && Date.now() >= run.backoff) {
-        try { await pollOnce(); } catch (e) { run.backoff = Date.now() + POLL_MS * 3; say("poll failed " + e.message); }
+        try { await pollOnce(); } catch (e) {
+          // A throw may follow a good read (a bad JSON page) that reset `errors`: hold at least POLL_MS * 3, as before.
+          run.lastRes = null; run.errors++; run.backoff = Math.max(run.backoff, Date.now() + POLL_MS * 3); say("poll failed " + e.message);
+        }
       }
       if (_run === run) schedule();   // a stop()+start() during the poll already armed the new run's own chain
-    }, POLL_MS);
+    }, plan.ms);
   }
 
   async function start(issue, tok) {
     if (_run) return false;
     _run = { issue, token: tok, cutoff: null, since: null, etag: null, seen: new Set(), served: 0, backoff: 0, timer: null, state: "connecting",
+      lastRes: { status: 200, headers: null }, errors: 0, activeAt: 0, poll: null, pollWhy: null,   // POLLING
       queue: [], acting: null, running: 0, inflight: new Set(), outbox: [],   // CONCURRENCY
       last: null, statusId: 0, statusTimer: null, statusDue: 0, statusBusy: null, statusAgain: null, statusSlow: false, statusAt: 0, onVis: null, wake: null, wakePending: null, wakeErr: null };
     paintBadge();
@@ -1226,6 +1275,7 @@ const ApexBridge = (function () {
       const hello = await post({ hello: true, facts: facts() });
       if (!_run) return false;
       _run.cutoff = _run.since = hello.created_at;
+      _run.activeAt = Date.now();   // a session commands right after the hello: poll fast for BUSY_TAIL_MS
       _run.state = "live";
       paintBadge();
       say("linked to issue #" + issue);
@@ -1374,6 +1424,8 @@ const ApexBridge = (function () {
     status: () => (_run ? postStatus(_run) : Promise.resolve(null)), statusDue: () => (_run ? _run.statusDue : 0), BATCH_MAX,
     READ_CMDS, CALL_READ, isRead, PLANS, PLAN_STEPS_MAX, planSteps, drain, OUTBOX_TRIES, OUTBOX_MAX,
     outbox: () => (_run ? _run.outbox.length : 0), backoff: () => (_run ? _run.backoff : 0),
+    pollDelay, POLL_MS, POLL_BUSY_MS, BUSY_TAIL_MS, RATE_LOW, RATE_FLOOR, RATE_MAX_WAIT_MS,
+    pollPlan: () => (_run ? pollPlan(_run, Date.now()) : null),
     active: () => !!_run };
 })();
 Object.freeze(ApexBridge);

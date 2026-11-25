@@ -1397,3 +1397,70 @@ test("#6582 outbox: a failed reply is retried one per poll, at most OUTBOX_TRIES
   await b.api.pollOnce();
   assert.equal(posts.length - before, 1, "one retry per poll");
 });
+
+// POLLING (#6582 AP-b): 1 s while busy and BUSY_TAIL_MS after a reply, 4 s idle; rate-limit back-off mirrors
+// the agent-side watcher's nextDelay (#6641). Clock and fetch are stubbed; no network.
+const res = (status, headers = {}) => ({ status, headers: { get: (k) => (k in headers ? String(headers[k]) : null) } });
+
+test("#6582 AP-b pollDelay: base cadence, rate-limit headers, retry-after, 5xx and network back-off", () => {
+  const { api } = load({ search: "" });
+  const now = 1_700_000_000_000;
+  const d = (r, baseMs = 1000, errors = 0) => plain(api.pollDelay(r, { baseMs, now, errors }));
+  assert.deepEqual(d(res(200)), { ms: 1000, why: null });
+  assert.deepEqual(d(res(304, { "x-ratelimit-remaining": 4000 }), 4000), { ms: 4000, why: null });
+  assert.equal(d(res(200, { "x-ratelimit-remaining": api.RATE_LOW - 1 })).ms, 4000, "under RATE_LOW: 4× slower");
+  const reset = now / 1000 + 120;   // two minutes out
+  assert.equal(d(res(200, { "x-ratelimit-remaining": 3, "x-ratelimit-reset": reset })).ms, 121000, "under RATE_FLOOR: the reset (+1 s)");
+  assert.equal(d(res(429, { "retry-after": 30 })).ms, 30000, "retry-after wins");
+  assert.equal(d(res(403, { "x-ratelimit-remaining": 0, "x-ratelimit-reset": reset })).ms, 121000, "403 with none left: the reset");
+  assert.equal(d(res(403)).ms, 60000, "a bare 403: a minute");
+  assert.equal(d(res(429, { "retry-after": 99999 })).ms, api.RATE_MAX_WAIT_MS, "capped");
+  assert.equal(d(res(502), 1000, 1).ms, 2000);
+  assert.equal(d(res(502), 1000, 9).ms, 16000, "doubling caps at 2^4");
+  assert.equal(d(null, 4000, 5).ms, 60000, "network error: capped at 60 s");
+  assert.equal(d(null, 1000, 2).why, "network error x2");
+});
+
+test("#6582 AP-b schedule: fast after the hello and while a command runs, idle after BUSY_TAIL_MS, slow on a 429", async () => {
+  let now = 2_000_000;
+  const FakeDate = class extends Date { static now() { return now; } };
+  const timers = [];
+  const gh = fakeGitHub();
+  let limit = null;
+  const fetch = async (url, opts) => (limit && opts.method !== "POST" ? limit : gh.fetch(url, opts));
+  const b = load({ tok: "tok", gh: { ...gh, fetch }, extra: { Date: FakeDate, setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; } } });
+  await flush();
+  const pollTimer = () => timers.filter((t) => [b.api.POLL_MS, b.api.POLL_BUSY_MS].includes(t.ms) || t.ms > 60000 || t.ms === 30000).at(-1);
+  assert.equal(timers[0].ms, b.api.POLL_BUSY_MS, "the first poll after the hello is fast");
+  // Idle past the tail: 4 s.
+  now += b.api.BUSY_TAIL_MS + 1;
+  assert.deepEqual(plain(b.api.pollPlan()), { ms: b.api.POLL_MS, busy: false, why: null });
+  // A command arrives and is answered: fast again for the tail.
+  gh.thread.push(cmd(90, { cmd: "ping" }));
+  gh.bump();
+  await b.api.pollOnce();
+  await b.api.drain();
+  assert.deepEqual(plain(b.api.pollPlan()), { ms: b.api.POLL_BUSY_MS, busy: true, why: null });
+  now += b.api.BUSY_TAIL_MS - 1;
+  assert.equal(b.api.pollPlan().ms, b.api.POLL_BUSY_MS, "still inside the tail");
+  now += 2;
+  assert.equal(b.api.pollPlan().ms, b.api.POLL_MS, "the tail is over");
+  // A 429 with retry-after on the read: the chain waits for it, whatever the cadence.
+  limit = { status: 429, ok: false, json: async () => ({}), headers: { get: (k) => (k === "retry-after" ? "30" : null) } };
+  await timers[0].fn();
+  assert.equal(pollTimer().ms, 30000, "the next poll waits retry-after");
+  assert.equal(b.api.pollPlan().why, "rate limited (429)");
+  limit = null;
+  await pollTimer().fn();
+  assert.equal(b.api.pollPlan().ms, b.api.POLL_MS, "a good read clears the back-off");
+  // A read that throws after a 200 (a bad JSON page) holds POLL_MS * 3, never a 2 s loop.
+  limit = { status: 200, ok: true, json: async () => { throw new Error("bad json"); }, headers: { get: () => null } };
+  await pollTimer().fn();
+  assert.deepEqual(plain(b.api.pollPlan()), { ms: b.api.POLL_MS * 3, busy: false, why: "backoff" });
+  // A 404 (issue gone) holds BACKOFF_MS, not the 1 s busy cadence.
+  now += b.api.POLL_MS * 3;
+  limit = { status: 404, ok: false, json: async () => ({}), headers: { get: () => null } };
+  await b.api.pollOnce();
+  assert.equal(b.api.pollPlan().why, "backoff");
+  assert.equal(b.api.pollPlan().ms, 60000);
+});

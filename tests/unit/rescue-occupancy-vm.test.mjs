@@ -58,3 +58,30 @@ test("rescuePlayer beside a car stopped on the line puts the player clear of it,
   G.rescuePlayer(p);
   assert.equal(p.x, 0, "clear road: rescued to the centre");
 });
+
+// #6546 P3: the rescue is for a car going NOWHERE. A driver pulling away across the grass from rest sits under
+// the beached gate for seconds while it climbs; it was teleported to the centreline at 3 s (Monza, x = +12, full
+// throttle: 2.3 -> 4.6 -> 6.7 m/s at 1/2/3 s, then x ~ 0.6). Every OVERALL SPEED: the gate and the gain test are
+// both PACE-scaled. A car held at the grass floor (the wrong-way-in-the-run-off case) is still rescued.
+test("a car pulling away on the grass is not rescued while it gains speed; one held at the floor still is (#6546 P3)", async () => {
+  const A = g.apex, G = g.G, pace0 = G.PACE;
+  const park = (p) => { const L = G.track.total; for (const o of G.cars) if (o !== p) { o.s = (p.s + L / 2) % L; o.prog = p.prog + L / 2; } };
+  try {
+    for (const pace of [0.44, 0.84, 1.34]) {
+      G.PACE = pace; A.reset(0.3, 0, 12); A.headless(true); A.go();
+      const p = G.player; park(p);
+      A.setInput({ throttle: true, steer: 0 });
+      const v = [];
+      for (let t = 1; t <= 6; t++) { g.step(60); v.push(p.speed); assert.equal(p.rescueLastT, null, `PACE ${pace}: rescued at ${t} s while pulling away (x ${p.x.toFixed(1)}, v ${v.map((s) => s.toFixed(1))})`); }
+      assert.ok(p.offroad || p.x > 6, `PACE ${pace}: the car is still out in the run-off, not back on the road`);
+      assert.ok(v[2] > v[0] + 1 && v[0] > 0.5, `PACE ${pace}: it really was climbing: ${v.map((s) => s.toFixed(1))}`);
+    }
+    // Held at the grass floor, gas down, going nowhere: rescued as before.
+    G.PACE = 0.84; A.reset(0.3, 0, 12); A.headless(true); A.go();
+    const p = G.player; park(p);
+    A.setInput({ throttle: true, steer: 0 });
+    const floor = 10.8 * 0.84 * 0.95;
+    for (let i = 0; i < 360 && p.rescueLastT == null; i++) { p.x = 12; p.speed = floor; g.step(1); }
+    assert.ok(p.rescueLastT != null, "a car stuck at the grass floor is still rescued");
+  } finally { G.PACE = pace0; }
+});

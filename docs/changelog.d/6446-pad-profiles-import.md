@@ -1,0 +1,1 @@
+Fixed: Loading a changes-only settings file no longer makes a claimed controller re-adopt the old shared pad bindings, and applying a Gamepad button profile no longer overwrites the bindings a wheel that has yet to migrate still reads (#6446).

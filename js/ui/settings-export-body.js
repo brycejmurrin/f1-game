@@ -463,6 +463,10 @@ function applySettings(file, G) {
     if (sparse && row.k === "padProfiles" && !Object.hasOwn(g[row.k], "devices") && Array.isArray(stored?.devices)) {
       v.devices = stored.devices;
     }
+    // Same for the claim: the cleaner fills legacyClaimed:false, and a reset claim re-migrates the legacy pad map (#6446).
+    if (sparse && row.k === "padProfiles" && !Object.hasOwn(g[row.k], "legacyClaimed") && typeof stored?.legacyClaimed === "boolean") {
+      v.legacyClaimed = stored.legacyClaimed;
+    }
     writes.push([row, sparse ? mergeChangedFields(stored, v, depth) : v]);
   }
   // Earlier files shared one response across both surfaces. Only copy a

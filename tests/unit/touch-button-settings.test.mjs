@@ -615,3 +615,29 @@ test("changing absolute crossover on the phone leaves relative crossover intact"
   choose("sliderEdge", "right");
   assert.equal(field("sliderEntry").value, "stay");
 });
+
+test("applying a Gamepad preset leaves the legacy pad key alone while a device profile is active (#6446)", () => {
+  const bindings = { throttle: [7, 0], brake: [6, 1] };
+  for (const profiled of [true, false]) {
+    const disk = new Map([["pad", { throttle: [0, null] }]]);
+    const store = { get: (k, d) => disk.has(k) ? JSON.parse(JSON.stringify(disk.get(k))) : d, set: (k, v) => { disk.set(k, v); return true; } };
+    let map = { throttle: [0, null] };
+    const Input = {
+      getPadMap: () => map, setPadMap: (v) => { map = v; }, padPresent: () => true, getKeyMap: () => ({}), setKeyMap() {},
+      controllerProfile: () => profiled ? { id: "Wheel", saved: true } : null,
+    };
+    const window = { addEventListener() {}, dispatchEvent() { return true; } };
+    const { dom, editor } = boot({ Input, window, Event: class { constructor(type) { this.type = type; } }, setTimeout, SettingRow: { paint() {} } });
+    const panel = dom.document.createElement("div"); panel.id = "pm-panel-controls"; dom.body.appendChild(panel);
+    store.set("controlButtonPresets", { v: 1, modes: { pad: [{ id: "profile-1", name: "Mine", values: bindings }] } });
+    editor.mountControls(store);
+    const fold = dom.byId("pm-button-profiles");
+    const [modeSelect, profileSelect] = fold.querySelectorAll("select");
+    modeSelect.value = "pad"; modeSelect.onchange();
+    profileSelect.value = "profile-1"; profileSelect.onchange();
+    fold.querySelectorAll("button").find(b => b.textContent === "Apply").onclick();
+    assert.deepEqual(JSON.parse(JSON.stringify(map)), bindings, "the preset reaches Input");
+    assert.deepEqual(JSON.parse(JSON.stringify(disk.get("pad"))), profiled ? { throttle: [0, null] } : bindings,
+      profiled ? "an active profile keeps the legacy key an unmigrated wheel reads" : "no profile: the shared key is the store");
+  }
+});
