@@ -2426,9 +2426,7 @@ body:not([data-hud-arrange]) #hud-rel[data-fit-drop]:not([data-hl-user]) { displ
 #hud-rel [data-k="gap"] { text-align: right; }
 #hud-rel [data-k="code"] { font-weight: 800; letter-spacing: 0.04em; }
 #hud-rel [data-k="lap"] { font-weight: 800; }
-/* YOUR ROW: dark ink on a solid --you fill, as the pit chips (#hud-pit). White on a 26 % lime wash
-   measured 2.77:1 over the frame (UI matrix 2026-11-25 row 3); the floor is 4.5:1. */
-#hud-rel > div[data-self] { background: var(--you); color: var(--bg); text-shadow: none; font-weight: 800; }
+#hud-rel > div[data-self] { background: var(--you); color: var(--bg); text-shadow: none; font-weight: 800; }   /* dark on solid --you: a 26 % wash read 2.77:1 (UI matrix 2026-11-25 #3) */
 /* A lap UP (lapping you) reads red, a lap DOWN blue — the "+1L" / "-1L" text says it first. */
 #hud-rel > div[data-lap="up"] { color: var(--slower-ink); }
 #hud-rel > div[data-lap="down"] { color: var(--edit-ink); }
