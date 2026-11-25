@@ -70,6 +70,7 @@ const SWEEPS_ONLY = new Map([
   ["prop-clipping.test.mjs", "test:sweeps — per-circuit geometry"],
   ["scenery-seats.test.mjs", "test:sweeps — per-circuit geometry (qatar verges, crowd under road, seats on terrain)"],
   ["props-tri-ratchet.test.mjs", "test:sweeps — per-circuit geometry"],
+  ["lod-census.test.mjs", "test:sweeps — per-circuit geometry (LOD census: every circuit at detail 0, #6547)"],
   ["build-steps.test.mjs", "test:sweeps — per-circuit geometry (stepped build is byte-identical)"],
   ["build-worker.test.mjs", "test:sweeps — per-circuit geometry (worker build + replay is byte-identical)"],
   ["props-over-road.test.mjs", "test:sweeps — per-circuit geometry"],

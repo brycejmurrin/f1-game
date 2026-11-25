@@ -1749,6 +1749,7 @@
         "tests/unit/kerb-berm-surface.test.mjs",
         "tests/unit/kerb-stripes.test.mjs",
         "tests/unit/lamp-fixture-anchor.test.mjs",
+        "tests/unit/lod-census.test.mjs",
         "tests/unit/pit-complex.test.mjs",
         "tests/unit/pit-signs.test.mjs",
         "tests/unit/prop-clipping.test.mjs",

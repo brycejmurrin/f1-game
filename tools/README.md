@@ -378,6 +378,7 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 | **perf/lit-wgsl-census.mjs** | Hash the WGSL a TLX WebGPU race compiles (lavapipe) and diff two trees: does a change re-key Safari's pipeline cache? | — |
 | **perf/live-render-matrix.mjs** | #2572 render matrix: rebuild A/B, context loss, quality tiers, visibility/resize, night/mirror per backend. | renderer-debug |
 | **perf/load-census.mjs** | Load census (#6609 step 1): raw / gzip -9 / stripped bytes per tools/manifest.cjs group, plus the P0–P4 phase budgets. | — |
+| **perf/lod-census.mjs** | LOD census (#6547): per circuit x detail 0/1/2, tris by channel, instances, batches, texture MB, lazy bytes. | scenery-dress |
 | **perf/mesh-census-lib.mjs** | Pure aggregation for mesh-census: pass/source/distance bands + #2657 recommend. | — |
 | **perf/mesh-census.mjs** | Mesh census (#2657/#2631): main/mirror tris by distance band and source. | playwright-probe / renderer-debug |
 | **perf/profile.mjs** | One profiler CLI (spans \| cpu \| hitch \| trace \| step) with --repeat noise floor and --base <ref> A/B delta table. | playwright-probe |
