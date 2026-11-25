@@ -39,11 +39,25 @@ export function hookPipelines() {
   // Bindings.getForRender(renderObject) is the frame that mints a render object's bindings, so while it runs
   // P.ro names that object (type:name, material, parent chain, geometry, render target) for the gpuLog rows.
   P.ro = null;
+  // WHICH MESH (#6665): a pool wrapper's geometry is anonymous (BufferGeometry, no name), so `geo` alone named no
+  // culprit. P.geoSeen holds every geometry id bound so far (from the hook on, warm-up included); a gpuLog row then
+  // carries the geometry's shape (vertex / index count, attribute names, TLX kind, bounding radius, userData keys) and
+  // whether it was bound before this frame ("new" = first ever bind: primeRace and warm-up never drew it).
+  P.geoSeen = new Set();
+  const geoDesc = (g) => {
+    const a = g.attributes || {}, pos = a.position, bs = g.boundingSphere;
+    const ud = g.userData ? Object.keys(g.userData).slice(0, 4).join("/") : "";
+    return " v" + (pos ? pos.count : 0) + " i" + (g.index ? g.index.count : 0) + " [" + Object.keys(a).sort().join(",") + "]" +
+      " kind " + (g.__tlxKind || "?") + (bs ? " r" + bs.radius.toFixed(2) : "") + (ud ? " ud " + ud : "") +
+      " batch " + (g.__tlxDrawnBatch === undefined ? "-" : g.__tlxDrawnBatch) + (P.geoSeen.has(g.id) ? " seen" : " new");
+  };
   const bnd = T.renderer._bindings;
   if (bnd && typeof bnd.getForRender === "function") {
     const og = bnd.getForRender;
     bnd.getForRender = function (ro) {
       const prev = P.ro;
+      let gid = -1;
+      try { const g0 = (ro && ro.geometry) || (ro && ro.object && ro.object.geometry); if (g0) gid = g0.id; } catch (_) { /* best-effort */ }
       if (P.gpuLogOn) {
         try {
           const ob = (ro && ro.object) || {}, m = (ro && ro.material) || {}, g = (ro && ro.geometry) || ob.geometry || {}, c = (ro && ro.context) || {};
@@ -51,10 +65,10 @@ export function hookPipelines() {
           const rt = c.renderTarget ? (c.renderTarget.texture && c.renderTarget.texture.name || c.renderTarget.name || "rt") + ":" + c.width + "x" + c.height : "canvas";
           const ud = ob.userData || {};
           P.ro = (ob.type || "") + ":" + (ob.name || "") + " mat " + (m.type || "") + ":" + (m.name || "") + " geo " + (g.type || "") + ":" + (g.name || "") + "#" + (g.id | 0) +
-            " in " + (chain.join("<") || "-") + " rt " + rt + (ob.__tlxIdent ? " pool" : "") + (ud.tlxLgRoad ? " road" : "");
+            " in " + (chain.join("<") || "-") + " rt " + rt + (ob.__tlxIdent ? " pool" : "") + (ud.tlxLgRoad ? " road" : "") + geoDesc(g);
         } catch (_) { P.ro = "(unnamed)"; }
       }
-      try { return og.apply(this, arguments); } finally { P.ro = prev; }
+      try { return og.apply(this, arguments); } finally { P.ro = prev; if (gid >= 0) P.geoSeen.add(gid); }
     };
   }
   const dev = be.device;
@@ -64,7 +78,7 @@ export function hookPipelines() {
       const orig = dev[name];
       dev[name] = function (desc) {
         P[key]++;
-        try { if (P.gpuLogOn && P.gpuLog.length < 200) P.gpuLog.push({ at: P.frames, kind: name, label: String((desc && desc.label) || "(none)").slice(0, 80), size: desc && desc.size, usage: desc && desc.usage, ro: P.ro ? String(P.ro).slice(0, 240) : undefined,
+        try { if (P.gpuLogOn && P.gpuLog.length < 200) P.gpuLog.push({ at: P.frames, kind: name, label: String((desc && desc.label) || "(none)").slice(0, 80), size: desc && desc.size, usage: desc && desc.usage, ro: P.ro ? String(P.ro).slice(0, 400) : undefined,
           from: (new Error().stack || "").split("\n").slice(2, 9).map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, "")).join(" < ").slice(0, 600) }); } catch (_) { /* naming is best-effort */ }
         return orig.apply(this, arguments);
       };
