@@ -37,6 +37,7 @@ var Damage = (function () {
   const LCAR = 4.8, WCAR = 2.0;    // car box (same numbers as js/physics/collide.js; copied, not read)
   const GAIN = 0.7;                // share of a hit's severity that lands on a weight-1 part
   const COOL_S = 0.35;             // one shunt = one hit (collideFx fires once per step while in contact)
+  const RUB_PER_S = 0.1;           // a contact that goes on books its severity at this rate per second (#6546 P2: it re-booked every COOL_S)
   const KNOCK_SEV = 0.55;          // a single side/front hit this hard knocks the suspension
   const WALL_MIN = 0.08;           // a wall touch below this severity is a kiss, not damage
   const SHOW = 0.15;               // the HUD chip appears when any part passes this
@@ -51,9 +52,9 @@ var Damage = (function () {
   const recs = new WeakMap();
 
   function blank() {
-    const r = { fwL: 0, fwR: 0, rw: 0, floor: 0, knock: 0, hits: 0, cool: 0, onWall: false, served: false, spd: 0, yaw: 0 };
+    const r = { fwL: 0, fwR: 0, rw: 0, floor: 0, knock: 0, hits: 0, cool: 0, last: 0, onWall: false, served: false, spd: 0, yaw: 0 };
     // Born Double, values kept: the 0s are Smi fields, and the first hit split every record's map (PERF-HUNT-5).
-    r.fwL = r.fwR = r.rw = r.floor = r.cool = r.spd = r.yaw = 0.5; r.fwL = r.fwR = r.rw = r.floor = r.cool = r.spd = r.yaw = 0;
+    r.fwL = r.fwR = r.rw = r.floor = r.cool = r.last = r.spd = r.yaw = 0.5; r.fwL = r.fwR = r.rw = r.floor = r.cool = r.last = r.spd = r.yaw = 0;
     return r;
   }
   function rec(c) {
@@ -70,27 +71,39 @@ var Damage = (function () {
   }
 
   /** Book one hit of severity `sev` (0..1) at car-frame (long, lat). Pure in
-   *  `r`; exported for the unit test. */
-  function apply(r, long, lat, sev) {
+   *  `r`; exported for the unit test. `knockSev` is the whole hit's severity
+   *  when `sev` is only part of it (default `sev`); `count` false books damage
+   *  without a new hit (a continuing rub). */
+  function apply(r, long, lat, sev, knockSev, count) {
     if (!(sev > 0)) return r;
     sev = Math.min(1, sev);
+    if (knockSev === undefined) knockSev = sev;
     const z = zoneOf(long, lat), w = W[z], right = lat > 0;
     const near = sev * w[0] * GAIN, far = sev * w[1] * GAIN;
     r.fwL = Math.min(1, r.fwL + (right ? far : near));
     r.fwR = Math.min(1, r.fwR + (right ? near : far));
     r.rw = Math.min(1, r.rw + sev * w[2] * GAIN);
     r.floor = Math.min(1, r.floor + sev * w[3] * GAIN);
-    if (z !== ZONE_REAR && sev >= KNOCK_SEV) r.knock = 1;
-    r.hits++;
+    if (z !== ZONE_REAR && knockSev >= KNOCK_SEV) r.knock = 1;
+    if (count !== false) r.hits++;
     return r;
   }
 
   // Rotate a track-frame offset into the car frame by its nose yaw ψ (+ right).
+  // Inside the cool-down a contact is the same shunt going on (#6546 P2): a
+  // harder one books only its excess over the last booked severity, so a rub
+  // no longer swallows the shunt after it; a softer or equal one is a rub and
+  // books at RUB_PER_S for the time since the last contact, so a long rub no
+  // longer re-books a whole hit every COOL_S. Each contact re-arms the cool.
   function hitAt(c, dLong, dLat, sev) {
+    if (!(sev > 0)) return;
+    sev = Math.min(1, sev);
     const r = rec(c);
-    if (r.cool > 0) return;
     const y = c.yawVis || 0, cs = Math.cos(y), sn = Math.sin(y);
-    apply(r, dLong * cs + dLat * sn, -dLong * sn + dLat * cs, sev);
+    const long = dLong * cs + dLat * sn, lat = -dLong * sn + dLat * cs;
+    if (r.cool <= 0) { apply(r, long, lat, sev); r.last = sev; }
+    else if (sev > r.last) { apply(r, long, lat, sev - r.last, sev); r.last = sev; }
+    else apply(r, long, lat, sev * RUB_PER_S * (COOL_S - r.cool), 0, false);
     r.cool = COOL_S;
   }
 
@@ -131,7 +144,7 @@ var Damage = (function () {
         // Steep nose-in: the front corner on the wall side; else a side scrape.
         if (inc > 0.3) apply(r, LCAR, side * WCAR * 0.4, sev);
         else apply(r, 0, side * WCAR, sev);
-        r.cool = COOL_S;
+        r.cool = COOL_S; r.last = sev;
       }
     }
     r.onWall = on;
@@ -141,7 +154,7 @@ var Damage = (function () {
 
   function reset(c) {
     const r = rec(c);
-    r.fwL = r.fwR = r.rw = r.floor = 0; r.knock = 0; r.hits = 0; r.cool = 0;
+    r.fwL = r.fwR = r.rw = r.floor = 0; r.knock = 0; r.hits = 0; r.cool = 0; r.last = 0;
   }
 
   /** The live record (do not mutate): the HUD reads this every frame. */
