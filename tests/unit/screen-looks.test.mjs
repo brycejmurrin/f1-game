@@ -659,6 +659,7 @@ function bootPlacement(durable = true, regions) {
       head: { appendChild: sheet => sheets.add(sheet) },
       getElementById: () => null,
       querySelector: () => ({ currentCSSZoom: 2 }),
+      querySelectorAll: () => [],
       createElement: () => ({ dataset: {}, remove() { sheets.delete(this); } }),
     },
   };
@@ -674,10 +675,65 @@ test("region preview uses viewport coordinates at UI zoom and keeps width indepe
   // The painted declarations, parsed: the values the region renders with, not the stylesheet's spelling.
   const decls = Object.fromEntries(sheet.textContent.split(/[;{}]/).map(part => part.trim())
     .filter(part => part.includes(":") && !part.includes(" {")).map(part => [part.slice(0, part.indexOf(":")).trim(), part.slice(part.indexOf(":") + 1).replace(/\s*!important$/, "").trim()]));
-  assert.deepEqual([decls.translate, decls.width, decls.height, decls.scale], ["-2vw 1vh", "25vw", "20vh", "1.25"]);
+  // The request is viewport units at UI zoom; the safe box caps it once the region's own scale is drawn (#6596).
+  assert.deepEqual([decls.translate, decls.width, decls.height, decls.scale], ["calc(-2vw + var(--sp-dx,0px)) calc(1vh + var(--sp-dy,0px))",
+    "min(25vw,calc((100vw - var(--sal,0px) - var(--sar,0px)) / 2.5))", "min(20vh,calc((100vh - var(--sat,0px) - var(--sab,0px)) / 2.5))", "1.25"]);
+  assert.equal(sheet.textContent.split("\n")[0], '@property --sp-dx{syntax:"<length>";inherits:false;initial-value:0px}', "the shift never reaches a nested region");
   assert.equal(store.value, undefined);
   model.restore("garage");
   assert.equal(sheets.size, 0);
+});
+
+test("safe-area clamp: the shift pulls a region back inside the insets and leaves an oversize axis alone (#6596)", () => {
+  const { model } = bootPlacement();
+  // iPhone 15 portrait 393x852, insets T59 B34: his garage camera bar at y 3 (25.6 px) ends at 844.
+  const portrait = { left: 0, top: 59, right: 393, bottom: 818 };
+  assert.deepEqual(plain(model.safeShift({ left: 20, right: 373, top: 800, bottom: 844 }, portrait)), { dx: 0, dy: -26 });
+  // Landscape 852x393, insets L59 R59 B20: #cs-options 551 → 809 sits 16 px into the right inset.
+  const landscape = { left: 59, top: 0, right: 793, bottom: 373 };
+  assert.deepEqual(plain(model.safeShift({ left: 551, right: 809, top: 40, bottom: 300 }, landscape)), { dx: -16, dy: 0 });
+  assert.deepEqual(plain(model.safeShift({ left: 40, right: 300, top: 10, bottom: 50 }, landscape)), { dx: 19, dy: 0 });
+  assert.deepEqual(plain(model.safeShift({ left: 551, right: 809, top: 343, bottom: 389 }, landscape, { x: false, y: true })), { dx: 0, dy: -16 },
+    "an axis the player never moved or sized is not touched");
+  assert.deepEqual(plain(model.safeShift({ left: 0, right: 852, top: 0, bottom: 393 }, landscape)), { dx: 0, dy: 0 }, "a full-bleed region cannot fit and stays");
+  assert.deepEqual(plain(model.safeShift({ left: 59.3, right: 793.4, top: 0, bottom: 373 }, landscape)), { dx: 0, dy: 0 }, "sub-pixel slack is inside");
+});
+
+test("safe-area clamp: an applied region measures, shifts through its own node and keeps the stored value (#6596)", () => {
+  const sheets = new Set();
+  const store = { value: undefined, get: () => store.value, set: (key, v) => { store.value = v; store.notify({ key }); return true; },
+    subscribe: fn => { store.notify = fn; } };
+  // One node whose painted rect follows the registered shift, at UI zoom 0.7.
+  const props = new Map();
+  const base = { left: 349, right: 809, top: 340, bottom: 389 };
+  const node = {
+    currentCSSZoom: 0.7,
+    style: { getPropertyValue: k => props.get(k) || "", setProperty: (k, v) => props.set(k, v), removeProperty: k => props.delete(k) },
+    getBoundingClientRect() {
+      const dx = 0.7 * (parseFloat(props.get("--sp-dx")) || 0), dy = 0.7 * (parseFloat(props.get("--sp-dy")) || 0);
+      return { left: base.left + dx, right: base.right + dx, top: base.top + dy, bottom: base.bottom + dy, width: 460, height: 49 };
+    },
+  };
+  const insets = { "--sal": "59px", "--sar": "59px", "--sat": "0px", "--sab": "20px" };
+  const sb = {
+    GameStore: { store }, matchMedia: () => ({ matches: false, addEventListener() {} }),
+    getComputedStyle: () => ({ getPropertyValue: k => insets[k] || "" }),
+    ScreenRegions: { garage: { root: "#carsetup", regions: { camera: { selector: ".stack" } } } },
+    document: {
+      head: { appendChild: sheet => sheets.add(sheet) }, documentElement: { clientWidth: 852, clientHeight: 393 },
+      getElementById: () => null, querySelector: () => node, querySelectorAll: () => [node],
+      createElement: () => ({ dataset: {}, remove() { sheets.delete(this); } }),
+    },
+  };
+  sb.window = sb;
+  vm.runInNewContext(read("js/ui/screen-placement.js"), sb, { filename: absSrc("js/ui/screen-placement.js") });
+  const saved = { camera: { x: 3.275, y: 2.326 } };
+  sb.ScreenPlacement.save("garage", "landscape", saved);
+  const r = node.getBoundingClientRect();
+  assert.ok(Math.abs(r.right - 793) <= 0.5 && Math.abs(r.bottom - 373) <= 0.5, `pulled inside the safe box, got right ${r.right} bottom ${r.bottom}`);
+  assert.deepEqual(plain(sb.ScreenPlacement.read("garage", "landscape")), saved, "the stored arrangement is unchanged");
+  sb.ScreenPlacement.apply("garage", {});
+  assert.equal(props.size, 0, "clearing the arrangement removes the shift");
 });
 
 test("region saves validate input, preserve both orientation and screen boundaries, and remove adaptive defaults", () => {
@@ -803,9 +859,9 @@ test("tuner windows reflow at zoom and reserve the same width for adjacent camer
     assert.deepEqual(plain(model.read(id, "portrait")), {});
     const rules = cssRules([...sheets][0].textContent);
     const windowRule = rules.find(({ decls }) => decls.has("width"));
-    assert.equal(windowRule.decls.get("width"), "20vw !important");
+    assert.equal(windowRule.decls.get("width"), "min(20vw,calc((100vw - var(--sal,0px) - var(--sar,0px)) / 2)) !important");
     assert.equal(windowRule.decls.has("scale"), false);
-    assert.equal(rules.find(({ selector }) => selector === "body:has(> #" + id + ":not([hidden]))").decls.get("--dock-w"), "20vw !important");
+    assert.equal(rules.find(({ selector }) => selector === "body:has(> #" + id + ":not([hidden]))").decls.get("--dock-w"), "min(20vw,calc((100vw - var(--sal,0px) - var(--sar,0px)) / 2)) !important");
   }
 });
 
@@ -848,7 +904,7 @@ test("Data Hub standings, trace selection and nested telemetry playback retain i
   assert.deepEqual(plain(model.read("telemetry-detail", "landscape")), popup);
   const popupSheet = [...sheets].find(sheet => sheet.textContent.includes(".dh-telem-main"));
   const trace = cssRules(popupSheet.textContent).find(rule => rule.selector.includes(".dh-telem-main"));
-  assert.equal(trace.decls.get("width"), "20vw !important");
+  assert.equal(trace.decls.get("width"), "min(20vw,calc((100vw - var(--sal,0px) - var(--sar,0px)) / 2)) !important");
   assert.equal(trace.decls.get("--dh-trace-flex"), "0 1 auto !important");
   assert.deepEqual(plain(model.read("telemetry-detail", "portrait")), {});
   model.save("telemetry-detail", "landscape", {});
