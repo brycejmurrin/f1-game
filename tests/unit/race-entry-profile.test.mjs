@@ -139,7 +139,6 @@ test("a task straddling winT0 reports its full duration, its in-window part besi
   assert.equal(s.blockMs, 200);
 });
 
-
 test("entry totals include tasks beyond the retained detail limit and reset for the next race", () => {
   let t = 0, callback;
   class Observer {

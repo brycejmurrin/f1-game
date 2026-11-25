@@ -431,7 +431,7 @@ test("warmCarAssetsAsync deferRear: the rear grid's uploads and casters wait for
 // perf hunt 2026-11-24 #4: the budget was checked only after each piece, so a 27-39 ms caster ran whole on a
 // 4 ms frame after a green that skips the lights (go, goRolling). A piece whose kind last cost more than the
 // budget left now waits; under the lights (first = true) the first piece of a frame still runs.
-test("drainDeferredCarWarm stops BEFORE a piece whose last measured cost exceeds the budget left", async () => {
+test("drainDeferredCarWarm skips a piece whose last measured cost exceeds the budget left; the crew rig is never stranded", async () => {
   const r = warmRig();
   r.v.field((c, i) => 3000 - 9 * i); r.v.G.cars.forEach((c, i) => { c.gridPos = i + 1; });
   assert.equal(await r.v.carDraw.warmCarAssetsAsync(() => true, 8, { deferRear: true }), true);
@@ -442,10 +442,15 @@ test("drainDeferredCarWarm stops BEFORE a piece whose last measured cost exceeds
   while (casters() === c0 && left > 0 && guard++ < 50) left = r.v.carDraw.drainDeferredCarWarm(4, true);
   assert.ok(casters() > c0, "a caster ran and was measured");
   assert.ok(left > 0, "pieces still queued");
+  // The crew rig (#5051) sits at the tail, behind atlases and casters known to cost 20-30 ms.
+  let crewWarms = 0;
+  r.v.ctx.PitCrewAnim = { warm: () => { crewWarms++; } };
+  const crew = 1;
   const c1 = casters(), u1 = r.got.uploads;
-  assert.equal(r.v.carDraw.drainDeferredCarWarm(4), left, "a race frame runs 0 pieces when the head's kind is known to cost 20-30 ms > 4 ms");
-  assert.deepEqual([casters(), r.got.uploads], [c1, u1], "no caster built, no atlas uploaded");
-  assert.equal(r.v.carDraw.drainDeferredCarWarm(4, true), left - 1, "under the lights the first piece of a frame still runs, so the countdown drains");
+  assert.equal(r.v.carDraw.drainDeferredCarWarm(4), left - crew, "a race frame skips every piece whose kind is known to cost 20-30 ms > 4 ms, and still warms the crew rig behind them");
+  assert.deepEqual([casters(), r.got.uploads, crewWarms], [c1, u1, 1], "no caster built, no atlas uploaded; the rig warmed");
+  assert.equal(r.v.carDraw.drainDeferredCarWarm(4), left - crew, "nothing left that fits: 0 pieces, no starving loop");
+  assert.equal(r.v.carDraw.drainDeferredCarWarm(4, true), left - crew - 1, "under the lights the first piece of a frame still runs, so the countdown drains");
   assert.equal(r.warns(), "[]");
 });
 test("warmCarAssetsAsync stops when current() goes false; carWarmSlice=0 is today's single task", async () => {
