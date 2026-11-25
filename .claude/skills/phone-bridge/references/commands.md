@@ -4,6 +4,7 @@
 - Commands
 - Recipes
 - Menu route: nav and tap
+- Driving: drive
 - Cannot measure
 
 Every command is one comment holding one fence. The reply is one comment:
@@ -38,7 +39,8 @@ in `js/agent/apex-bridge.js`), not this table.
 | `screen` | — | `{screen, state}`: the topmost visible screen (`title`, `select`, `setup`, `garage`, `loading`, `quali`, `results`, `pause`), else `drive-out` (the garage-out, state still `menu`) or `race` |
 | `tap` | `id` (one of `TAP_OK`) or `tile` (a track id); `until` a screen, `ms` | `{tapped, screen, state, ok}`: pointerdown, pointerup and click on the real control; a hidden, disabled or unlisted control is refused |
 | `nav` | `flow` tt / race, `track`, `weather`, `tod`, `entry` setup / garage / daily, `go` (default true) | `{ok, screen, state, ms, steps:[{step, ok, screen, ms}], door}`; starts on the title; `door` = `menuPrep().door` |
-| `batch` | `steps[]` of `{cmd, args}` | one result per step; stops at the first failure (or a `tap` / `nav` whose `value.ok` is false); `reload` / `path` only last |
+| `drive` | ONE of `to` "box", `laps` 1-5, `seconds` 1-600; `ms` cap (240 000); `wait` false; or `stop` / `status` true | `{ok, screen, state, reason, inBox, pit, laps, steps:[{phase, t, s, kph}], pitActions}` (outer `ms` too): `value.ok` = goal met; `reason` box / laps / seconds / timeout / missed / lane-closed / touch / paused / state:… (§Driving) |
+| `batch` | `steps[]` of `{cmd, args}` | one result per step; stops at the first failure (or a `tap` / `nav` / `drive` whose `value.ok` is false); `reload` / `path` only last |
 | `reload` | — | `{reloading}` (may be lost), then a new hello |
 
 ## Recipes
@@ -97,8 +99,37 @@ door: `built` (the circuit id built), `dark`, `readyFor` (the circuit, tod and w
 Then the same with `"entry":"garage"` (picker → YOUR CAR → garage DONE → SESSION SETUP → RACE!) and
 `{"cmd":"nav","args":{"entry":"daily"}}` (DAILY pins its own circuit, weather and hour). For the case that used to
 fail, run one entry right after a session with a different weather or hour: finish or quit it (`tap` `pausebtn`, then
-`pm-quit`) and `nav` again without a reload. END TIME TRIAL: drive into the box, then
-`{"cmd":"tap","args":{"id":"hud-end-session"}}`, `cs-arrival-skip` for SKIP, `cs-done` for VIEW RESULTS.
+`pm-quit`) and `nav` again without a reload. END TIME TRIAL with no human: §Driving.
+
+## Driving: drive
+
+#6397. `drive` gives the player car to SoakRun's driver (`js/perf/soak-run.js`: the AUTO SOAK law, and on the pit
+lane PitLane's own lines, the ones the AI follows). It is agent control through the `setInput` seam, never a player
+assist: it starts only from this command and lets go on `stop`, a pause, a quit, a hidden page, a REAL touch or key
+(Bryce taking over; the bridge's own taps do not count) and when the link ends. It waits up to 30 s for the session
+(`nav`'s RACE! answers during the garage drive-out), and refuses a menu, a paused game and VS FRIEND.
+
+- `{"to":"box"}`: on from wherever the car is, round to the pit entry, down the entry road and the lane at the
+  limiter, square into this car's box. About 60-110 s from mid-lap (every circuit reached its box in the VM,
+  `docs/notes/BRIDGE-DRIVE-2026-11-25.md`); a whole lap more when the car starts past its box. Ends `box` with
+  `pitActions` naming the pit buttons on screen. `lane-closed` = no stops this session (a race with wear off).
+- `{"laps":1}` / `{"seconds":30}`: an autopilot lap at a safe pace, then hand back.
+- The bridge serves one command at a time, so a `drive` that waits blocks `stop`. For a long drive send
+  `{"wait":false}` (answers `{started}` at once), then `{"status":true}` and `{"stop":true}`.
+- A TIME TRIAL holds the car in its box for the stop plus 4 s, and END TIME TRIAL exists only then: tap it in the SAME
+  batch (a separate comment is a 4 s poll plus GitHub's lag, too late).
+
+END TIME TRIAL, no human (Bryce on the title screen; one comment, ~2-3 min to the reply):
+
+```apex-cmd
+{"cmd":"batch","args":{"steps":[{"cmd":"nav","args":{"flow":"tt","track":"monza"}},{"cmd":"drive","args":{"to":"box"}},{"cmd":"tap","args":{"id":"hud-end-session","until":"garage","ms":10000}},{"cmd":"wait","args":{"ms":1500}},{"cmd":"tap","args":{"id":"cs-arrival-skip"}},{"cmd":"wait","args":{"ms":1000}},{"cmd":"screen"},{"cmd":"snap","args":{"w":320}}]}}
+```
+
+Read `steps[1].value.inBox` and `pitActions` (the box was reached and END TIME TRIAL was up), `steps[2].value.ok`
+(the garage opened), then the screen and snap; `cs-done` is VIEW RESULTS from there. As `__apex` calls (the sim
+stepped inside one call, so the screen freezes while it runs): `call rollout` with
+`[{"policy":"box","seconds":120}]`; `stoppedEarly.reason` `policy:box` is the box. No `to:"grid"`: nothing in the game
+reads a car parked on its grid slot (the note above).
 
 ## Cannot measure
 

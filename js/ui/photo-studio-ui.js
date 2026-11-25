@@ -268,8 +268,10 @@ function create(G, deps) {
     reticleTimer = setTimeout(hideReticle, 900);
     paintFocus();
   }
+  // The FOV sliders (#pc-fov, FreeCam #fc-fov) hand the zoom back to the camera; repaint after their own handler.
+  const fovInput = (e) => { const id = e?.target?.id; if ((id === "pc-fov" || id === "fc-fov") && lens.mm != null) { lens.mm = null; queueMicrotask(paintFocal); } };
   // A drag or a fly key can leave the HELMET seat (FreeCam): repaint the seat-only rows when one ends.
-  const tapHandlers = { pointerdown: beginTap, pointermove: moveTap, pointerup: (e) => { finishTap(e); paintPov(); }, pointercancel: cancelTap, lostpointercapture: cancelTap, keyup: () => paintPov() };
+  const tapHandlers = { pointerdown: beginTap, pointermove: moveTap, pointerup: (e) => { finishTap(e); paintPov(); }, pointercancel: cancelTap, lostpointercapture: cancelTap, keyup: () => paintPov(), input: fovInput };
   const cameraGroup = group("camera", "CAMERA", [
     shots, mk("p", { id: "ps-help", className: "adv-help" }),
     mk("label", { className: "tune-row" }, [mk("span", { className: "tune-label", textContent: "Focal length (35 mm eq.)" }), focalInput, focalValue]),
@@ -678,6 +680,7 @@ function create(G, deps) {
   function paintPov() { visorGroup.hidden = povNow() !== "helmet"; }
   function setShot(id, preserveInput = false) {
     if (st.busy || st.closing) return;
+    if (!preserveInput) lens.mm = null;   // a preset's own lens wins: render() lets lens.mm override every fov (#6422 row 1)
     if (isGarage()) { if (deps.garage && deps.garage.shot) deps.garage.shot(id); }
     else {
       const fc = camera(); if (!fc || !fc.cmd) return;
