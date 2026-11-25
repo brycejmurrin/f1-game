@@ -723,6 +723,10 @@ test("a changes import that omits legacyClaimed keeps the receiver's claim (#644
   const stored = JSON.parse(game.disk.get("apex26.padProfiles"));
   assert.equal(stored.legacyClaimed, true, "the claim survives, so input.js does not re-migrate the legacy pad map");
   assert.deepEqual(stored.devices.map(d => d.id), ["Wheel"]);
+  // A receiver with nothing stored has no claim to keep: it takes the sender's, which a CHANGES file omits only at false.
+  const fresh = boot({ disk: {}, realStore: true });
+  fresh.loadSettings({ format: fresh.collect("changes").format, mode: "changes", settings: { driving: { padProfiles: { devices: [wheel] } } } });
+  assert.deepEqual(JSON.parse(fresh.disk.get("apex26.padProfiles")), { v: 1, devices: [wheel], legacyClaimed: false });
 });
 
 test("changes-only backups restore complete solo race drafts and explicit HUD maps", () => {
