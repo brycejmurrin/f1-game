@@ -47,8 +47,8 @@ Endings by audience (steps 1–2 are shared):
 3. **The prompt**, in this order:
    - repo `brycejmurrin/f1-game`, branch, pushed head sha, PR number and URL
    - first: ADOPT the PR (skill `steward` §Lane 3): comment `adopts PR #<n> — <host>:<session id>`,
-     remove `needs-owner` if set (MCP `issue_write`: the live list minus it, skill `steward` `references/labels.md`; a
-     dispatch-launched owner skips this, the Action already did), set `owner:` in the Hand-off block
+     remove `needs-owner` if set (MCP `issue_write`: the live list minus it, skill `steward` `references/labels.md`; an
+     orchestrator-launched owner may already have done this), set `owner:` in the Hand-off block
    - Goal in one sentence; Plan: the done / now / next items from the PR body
    - what is not run, unverified or red, with the exact command to reproduce
    - accessible evidence links; ignored `artifacts/` or `scratch/` paths are

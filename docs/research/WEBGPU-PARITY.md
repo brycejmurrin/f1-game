@@ -127,7 +127,7 @@ guard had been reading an undefined `h.pipelines` and passing vacuously.
 Reproduce the live boot with:
 
 ```sh
-npx serve -l 3456 .        # the wrapper's Chrome needs a SECURE CONTEXT: 127.0.0.1
+python3 -m http.server -b 127.0.0.1 3456   # the wrapper's Chrome needs a SECURE CONTEXT: 127.0.0.1
 node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'
 ```
 

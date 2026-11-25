@@ -180,7 +180,8 @@ test("Bryce's real phone export loads on a phone with nothing skipped, failed or
   const nowDefault = ["appearance.homeScene", "appearance.uiContrast", "audio.sound"];
   const newlyDifferent = ["appearance.textSize", "audio.music", "audio.volMusic", "audio.volSfx",
     "camera.cockpitSeat", "camera.helmetVisorColor", "camera.helmetVisorIntensity",
-    "steering.adaptiveButtons"];   // pace: notch 11 is the default again (#6025 holds the notch-17 move)
+    "steering.adaptiveButtons",    // pace: notch 11 is the default again (#6025 holds the notch-17 move)
+    "driving.raceGrid"];           // #6564: the default grid is QUALIFYING now; his saved RANDOM loads unchanged (checked above)
   const expected = file.changed.filter(k => !nowDefault.includes(k)).concat(newlyDifferent).sort();
   assert.deepEqual(b.collect("all").changed.sort(), expected);
 });

@@ -701,7 +701,7 @@ function loadSetupUi(opts = {}) {
   const extra = {
     MutationObserver: class { constructor(cb) { this.cb = cb; observers.push(this); } observe(t, o) { this.target = t; this.opts = o; } },
     Parts: { STAT_KEYS: [{ key: "speed", label: "SPEED" }], displayStat: (x) => x,
-             getMods: () => ({ speed: 1, accel: 1, cornering: 1, braking: 1 }), CATALOG: [{ id: "aero", label: "AERO", options: [] }, { id: "floor", label: "FLOOR", options: [] }], BUDGET: 780,
+             getMods: () => ({ speed: 1, accel: 1, cornering: 1, braking: 1 }), playerMods: () => ({ speed: 1, accel: 1, cornering: 1, braking: 1 }), freeBudget: () => 780, CATALOG: [{ id: "aero", label: "AERO", options: [] }, { id: "floor", label: "FLOOR", options: [] }], BUDGET: 780,
              getCost: () => 0, isOptionAvailable: () => true, DEFAULTS: {}, getFactorySetup: () => ({}),
              getVisualTiers: () => ({ _visual: { wheels: { deflector: 0 } } }) },
     Teams: { LIST: TEAMS, isReal: (t) => !!t && !t.custom && !t.legends }, Car3D: { appearanceParts: p => p, PART_STYLE_FIELDS: { aeroShape: "aero", floorShape: "floor" }, FINISH_SURFACE: { satin: {}, chrome: {} } },
@@ -803,7 +803,7 @@ test("garage: Change Car shows the sheet with aria-busy before heavy buildSetup 
     requestAnimationFrame: (fn) => { rafQueue.push(fn); return rafQueue.length; },
     MutationObserver: class { constructor(cb) { this.cb = cb; } observe(t, o) { this.target = t; this.opts = o; } },
     Parts: { STAT_KEYS: [{ key: "speed", label: "SPEED" }], displayStat: (x) => x,
-             getMods: () => ({ speed: 1, accel: 1, cornering: 1, braking: 1 }), CATALOG: [], BUDGET: 780,
+             getMods: () => ({ speed: 1, accel: 1, cornering: 1, braking: 1 }), playerMods: () => ({ speed: 1, accel: 1, cornering: 1, braking: 1 }), freeBudget: () => 780, CATALOG: [], BUDGET: 780,
              getCost: () => 0, isOptionAvailable: () => true, DEFAULTS: {}, getFactorySetup: () => ({}),
              getVisualTiers: () => ({ _visual: { wheels: { deflector: 0 } } }) },
     Teams: { LIST: TEAMS, isReal: (t) => !!t && !t.custom && !t.legends }, Car3D: { appearanceParts: p => p, PART_STYLE_FIELDS: { aeroShape: "aero", floorShape: "floor" }, FINISH_SURFACE: { satin: {}, chrome: {} } },

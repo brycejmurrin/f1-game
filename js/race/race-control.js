@@ -316,6 +316,10 @@ const RaceControl = (function () {
     // `held` is the MAX of two holders: the script's (hold()) and the STORM's
     // (stormTick). Each keeps its own level; rehold() combines them.
     let scriptHeld = 0, scriptCause = "", wxHeld = 0;
+    // The hold is what keeps the flag up (#6628): set when a hold RAISES it, kept while the
+    // hazard picture alone would fly it lower, cleared on GREEN and when the picture
+    // carries it. rehold() steps down only an owned flag: a hazard SC stays out.
+    let holdOwned = false;
     // STORM: the shared race clock when the storm arrived, and whether it was
     // there at the start (a storm START runs behind the SC for SC_START_S; one
     // rolling in mid-race is neutralised until it eases back to rain, capped
@@ -328,7 +332,7 @@ const RaceControl = (function () {
 
     function reset() {
       caution = blank(); replayOwned = false;
-      held = 0; heldCause = "";
+      held = 0; heldCause = ""; holdOwned = false;
       scriptHeld = 0; scriptCause = ""; wxHeld = 0; stormSince = null; stormAtStart = false; stormLastT = 0;
       queryT = 0;
       if (port.stoppedReset) port.stoppedReset();
@@ -385,7 +389,7 @@ const RaceControl = (function () {
       caution.level = 0; caution.sector = -1; caution.frac = 0;
       caution.cause = ""; caution.sinceT = 0; caution.phase = "";
       flagAgeT = 0; flagPeak = 0;
-      stopOwned = false;
+      stopOwned = false; holdOwned = false;
       flag(prev, 0);
     }
 
@@ -443,6 +447,7 @@ const RaceControl = (function () {
         caution.level = held; caution.sector = -1; caution.frac = 0;
         caution.cause = heldCause; caution.sinceT = 0; caution.phase = "";
         episode(held);
+        holdOwned = true;
         flag(prev, held);
         publish();
       }
@@ -510,7 +515,8 @@ const RaceControl = (function () {
       // hazard picture persists (one never-despawning shard held an SC all race).
       // capHold stops an instant re-raise from the SAME stale picture; new
       // hazards re-arm after it expires.
-      if (held && desired < held) { desired = held; dsector = -1; dfrac = 0; dcause = heldCause; }
+      const lifted = held > 0 && desired < held;
+      if (lifted) { desired = held; dsector = -1; dfrac = 0; dcause = heldCause; }
       if (!(held && caution.level <= held) && capDropIfExpired()) return;
       if (capHoldT > 0) {
         capHoldT = Math.max(0, capHoldT - QUERY_EVERY);
@@ -545,6 +551,7 @@ const RaceControl = (function () {
       } else if (desired === 1 && dsector >= 0) {
         caution.sector = dsector; caution.frac = dfrac;   // track the worst sector
       }
+      holdOwned = lifted && caution.level <= held;
       publish();
     }
 
@@ -555,6 +562,7 @@ const RaceControl = (function () {
     function apply(d) {
       if (!d || typeof d !== "object") return false;
       replayOwned = d.replay === true;   // an ordinary apply releases recorded ownership
+      holdOwned = false;   // the host's flag, not a local hold's
       const prev = caution.level;
       caution.level = Math.max(0, Math.min(4, d.level | 0));
       caution.sector = Number.isInteger(d.sector) && d.sector >= -1 ? d.sector : -1;
@@ -591,7 +599,7 @@ const RaceControl = (function () {
       const prevHeld = held;
       held = Math.max(scriptHeld, wxHeld);
       heldCause = !held ? "" : scriptHeld >= wxHeld ? scriptCause : "STORM";
-      if (held < caution.level && caution.level <= prevHeld && caution.level < 4) {
+      if (holdOwned && held < caution.level && caution.level <= prevHeld && caution.level < 4) {
         if (held === 0) dropToGreen();
         else {
           const prev = caution.level;

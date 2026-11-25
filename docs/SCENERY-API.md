@@ -5,8 +5,8 @@ split of `js/circuits/<id>.js`) as a `scenery(api)` function (see [ARCHITECTURE.
 (`buildProps`, split across the `js/track/scenery/nature.js` / `city.js`
 / `structures.js` / `identity.js` modules and orchestrated by
 `js/track/scenery/build-props.js`) calls it once with an `api` of placement helpers, geometry
-primitives, and composite models. The **114-member `api` surface is a frozen
-contract** — `tests/unit/scenery-api-contract.test.mjs` fails on any rename/removal,
+primitives, and composite models. The **`api` surface is a frozen
+contract** (its member count is `CONTRACT_SIZE`) — `tests/unit/scenery-api-contract.test.mjs` fails on any rename/removal,
 because every circuit callback destructures from it. Everything emits
 flat-shaded geometry into the track's prop mesh.
 
@@ -170,7 +170,7 @@ through the same guarded emitters, so geometry and on-track suppression are
 unchanged — the build simply also leaves behind `track.graph`, a description of
 what stands where.
 
-This is internal to `js/track/`: the 114-member `scenery(api)` surface a circuit
+This is internal to `js/track/`: the frozen `scenery(api)` surface a circuit
 destructures is untouched, and circuit files need no changes. Gate any migration
 with `node tools/track/graph-parity.cjs --all`. See
 [research/SCENE-GRAPH-PLAN.md](research/SCENE-GRAPH-PLAN.md).
@@ -285,7 +285,7 @@ throws; bespoke posts go through `lampPost` / `floodMast`). Tuner
 `px/py/pz/hw` (per-node arrays), `pyMin` (lap's low point), plus resolved
 `sceneryTheme`, `landmarkKit`, and `circuitKit`.
 
-Also on the 114-member contract but not detailed in this doc: `MAT` (material
+Also on the frozen contract but not detailed in this doc: `MAT` (material
 ids), the math utilities `lerp` / `norm` / `cross` / `upOf`, the `night`
 session flag, `groundUnder` (world-XZ ground query — ribbon-aware, distinct
 from `terrainYAt`/`groundYAt`), the grounding helpers `seat` / `foundation` / `frameAt` / `cantilever` and

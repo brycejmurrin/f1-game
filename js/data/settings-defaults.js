@@ -12,7 +12,7 @@ const SettingsDefaults = (function () {
     // DRIVING (js/game.js, js/race/*)
     "difficulty": "hard",
     "tyreWear": "real",
-    "raceGrid": "random",
+    "raceGrid": "quali",
     "drivingCoach": false,
     "caution": false,
     "unlimitedBudget": true,

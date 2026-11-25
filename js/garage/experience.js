@@ -114,7 +114,7 @@ const GarageExperience = (function () {
 
   function compare(team, parts, cat, current, candidate, tune, cap) {
     const next = Object.assign({}, parts, { [cat.id]: candidate.id });
-    const before = Parts.getMods(parts, team, tune), after = Parts.getMods(next, team, tune);
+    const before = Parts.playerMods(parts, team, tune), after = Parts.playerMods(next, team, tune);
     const stats = statsOf(team);
     const deltas = Parts.STAT_KEYS.map(({ key, label }) => {
       const base = (stats && stats[key]) || 75;

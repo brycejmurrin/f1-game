@@ -193,6 +193,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/ai-race.mjs** | One entry for the AI instruments: pace / solo / field / tactics / line / human / ratings / band. | ai-racecraft |
 | **check/ai-ratings.mjs** | Pearson matrix and column stats over DriverRatings.BASE — the personality dial check. | ai-racecraft |
 | **check/ai-solo.mjs** | Each AI car alone on the circuit, fixed seed: best solo lap, field spread, and order vs tier x skill. | ai-racecraft |
+| **check/ai-spread.mjs** | AI-only race field spread: gaps to the leader at P2/P5/P10/last per lap, lapped cars, lap-time consistency. | ai-racecraft |
 | **check/ai-strategy-census.mjs** | The AI field's tyre strategy over a whole race with TYRE WEAR real: stop counts, stints, compounds, stop reasons. | ai-racecraft |
 | **check/ai-stuck.mjs** | AI stuck / rescue census: per-car stuckT episodes and rescue teleports over N seeds (VM, AI-only). | ai-racecraft |
 | **check/ai-tactics.mjs** | AI racecraft over N laps: intervals in s, stuck-behind-slower, attack conversion, swap-backs (+ --mode human). | ai-racecraft |
@@ -740,6 +741,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/pool-share.mjs** | Read-only runner-pool census: who held the 40 Linux slots while land.yml jobs queued (#5848). |
 | **ci/pr-board.mjs** | One read-only table of every open PR into the deploy branch, with a SUGGESTION per row for a Claude-run CI Watch. |
 | **ci/preflip-probe.mjs** | Pre-flip probe: merge the deploy tip into a PR head in a temp worktree, run ratchets + fixture audit + diff units. |
+| **ci/prepush-live-run.mjs** | Warn-only pre-push notice: this branch's PR is READY and a ci.yml run on the head you are replacing is still running. |
 | **ci/process-dashboard.mjs** | Nightly CI process dashboard: per-job p50/p90, cancel and re-gate rates, push-to-live. |
 | **ci/queue-depth.mjs** | Informational queue gauge, never a push hold: queued + running JOBS by OS vs 40 Linux / 5 macOS slots. |
 | **ci/ready-sweep.mjs** | Stale-`ready` sweep (reads only): each ready issue's `file:line` cites against the tree, and the "ready over cap" row. |

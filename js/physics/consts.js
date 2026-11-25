@@ -263,7 +263,8 @@ window.PhysicsConsts = {
     // the straight too. It is scoped to that one rival — every other AI car on
     // every grid, including an ordinary duel's, still sits under the ceiling
     // this comment describes.
-    hard:   { ai: 1.030, band: 0.02, corner: 1.00, err: 1.0 },  // band was 0.03 — smarter OT/ERS/brake cuts rubber-band need
+    // corner 1.072 = sqrt(PLAYER_GRIP): the player's envelope, never past it (AiDrive.diffCorner).
+    hard:   { ai: 1.030, band: 0.02, corner: 1.072, err: 1.0 },  // band was 0.03 — smarter OT/ERS/brake cuts rubber-band need
   },
 };
 // The top of that ladder: the fastest pace scale ANY level reaches with its

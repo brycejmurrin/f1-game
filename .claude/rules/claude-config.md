@@ -49,13 +49,14 @@ mentions a rule never trips it; a command they cannot tokenise is refused.
   differs from the live labels by anything but ONE name, removes `config-ok` or adds it on a PROTECTED path (D-042), or drops Bryce's `hold`, a run cancel, re-run or
   `ci.yml` / `pages.yml` dispatch from any session but the orchestrator (skill `steward` §CI), and an unparsable guarded call (the draft→ready flip
   is allowed: the Plan gate and the CI check judge it). `.githooks/pre-commit` owns `test:guards` for every host,
-  with no skip (AGENTS.md rule 12); `.githooks/pre-push` refuses force pushes, branch deletes and deploy-branch
+  with no skip (AGENTS.md §The loop step 5); `.githooks/pre-push` refuses force pushes, branch deletes and deploy-branch
   pushes.
 - `context-cap.py` (Agent) advises on live context against the brief's first `STOP AT` (`<N>k`, or `start+<N>k`
   above the first turn's context) and refuses spawns over the hard cap, or when a capped session's count cannot be
   read; `subagent-contract.py` flags a reporter agent's malformed report.
 - Advisory: `post-edit.sh` (a `js/` edit that does not parse or staled a generated file), `lsp-hint.py` (the
-  apex-lsp call after a bare-symbol code search, not a grep filtering a pipe).
+  apex-lsp call after a bare-symbol code search in any segment of a command, not a grep filtering a pipe; a subagent
+  gets the exact `mcp__apex-lsp__lsp_references` call).
 - Cursor (`.cursor/hooks.json`) and Codex (`.codex/hooks.json`) reach the same scripts through adapters; neither
   sends a subagent id per call, so the subagent rules hold in Claude Code only. Cursor cloud agents send MCP calls to
   `preToolUse` as `MCP:<tool>` (routed to the GitHub table); Codex guards `apply_patch` edits by path.

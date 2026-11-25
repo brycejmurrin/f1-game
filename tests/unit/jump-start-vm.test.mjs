@@ -81,10 +81,14 @@ test("waiting for green before throttle accrues no false-start penalty", async (
 });
 
 test("a manual launch inside the reaction window is a false start, and only when the car really moved", async () => {
-  const game = await createGame({ track: "monza", storage: { unlimitedBudget: true } });
+  // WILLIAMS (team 7): parts read over the works build (Parts.playerMods, #6565), and its
+  // works build is the softest, so the same top kit still reads accel x2.7 here (x1.9 on
+  // the default Mercedes seat, which no longer launches inside the window).
+  const game = await createGame({ track: "monza", storage: { unlimitedBudget: true, team: 7 } });
   try {
     const { apex: a, G, sandbox } = game;
     const { SportingRegs } = sandbox, team = G.player.team;
+    assert.equal(team.id, "williams", "the seat whose works build leaves the fast kit a real upgrade");
     const fast = {
       engine: "sprint", aero: "reg26_concept", suspension: "titanium_spring", brakes: "regen_brakes",
       tyres: "hypersoft", ers: "overcharge", gearbox: "seamless_shift", fuel: "custom_formula",
@@ -111,10 +115,11 @@ test("a manual launch inside the reaction window is a false start, and only when
 });
 
 test("auto-throttle is exempt through the reaction window, including a fast legal build", async () => {
-  const game = await createGame({ track: "monza", storage: { autoThrottle: true, tyreWear: "real", unlimitedBudget: true } });
+  const game = await createGame({ track: "monza", storage: { autoThrottle: true, tyreWear: "real", unlimitedBudget: true, team: 7 } });   // WILLIAMS: see above
   try {
     const { apex: a, G, sandbox } = game;
     const { Parts, Input, SportingRegs } = sandbox, team = G.player.team;
+    assert.equal(team.id, "williams", "the seat whose works build leaves the fast kit a real upgrade");
     const fast = {
       engine: "sprint", aero: "reg26_concept", suspension: "titanium_spring", brakes: "regen_brakes",
       tyres: "hypersoft", ers: "overcharge", gearbox: "seamless_shift", fuel: "custom_formula",

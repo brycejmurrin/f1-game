@@ -65,8 +65,7 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 
 - Before the floor, on each edited js/ file: `lsp_diagnostics {file}` (shell `node tools/mcp/lsp-mcp.mjs diag <file>`);
   symbol lookup: `.claude/rules/js-nav.md`.
-- The floor is AGENTS.md rule 3: `tooling-fast --changed --jobs=3 --quiet` (`verify-track.cjs <id>` for a circuit);
-  the PR's tiers prove the rest. Then ONE push per verified batch: a push over a live run cancels it and a killed job
+- The floor is AGENTS.md rule 3 (the command and the circuit case live there); the PR's tiers prove the rest. Then ONE push per verified batch: a push over a live run cancels it and a killed job
   runs no `if: always()` step, so its failures are lost.
 - Never push while a CI run on your head is still running: batch every fix of the round, wait for that run to finish,
   then push once (D-046; 77% of the 140 cancelled CI wall-hours in 48 h were heads replaced mid-run).

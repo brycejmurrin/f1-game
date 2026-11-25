@@ -15,7 +15,7 @@ Every command below boots Chromium (BROWSER-ONLY); `render-car` needs the `:3456
 
 ```sh
 node tools/car/carshot.mjs 40 day 2 artifacts/tmp/apex-carshot.jpg   # az tod teamIdx out (CLI; no MCP wrap since 2026-09)
-python3 -m http.server 3456        # or: npx serve -l 3456 .
+python3 -m http.server -b 127.0.0.1 3456   # AGENTS.md §The loop
 node tools/car/render-car.mjs                                   # mclaren hero
 node tools/car/render-car.mjs --team=ferrari --views=all
 node tools/car/render-car.mjs --team=redbull --preset=livery   # side / front-3/4 / rear-3/4 livery shot

@@ -4,10 +4,11 @@
 Agents reach for grep even with a code-intelligence server attached; the
 adoption write-ups (docs/notes/LSP-MCP-2026-10-18.md §Agent use) found that a
 tool gets used when it is named at the moment of the search. This hook reads
-the Grep tool's `pattern` (or a Bash `grep`/`rg`/`git grep` command's pattern),
-and when that pattern is a symbol (`Tracks\\.curvature`, `\\bGameHud\\b`,
+the Grep tool's `pattern` (or the pattern of every `grep`/`rg`/`git grep` segment
+of a Bash command, compound ones included), and when that pattern is a symbol (`Tracks\\.curvature`, `\\bGameHud\\b`,
 `function forTeam`) aimed at js/ or the whole tree, adds ONE factual line naming
-the semantic equivalent. Text, regexes, comments and CSS searches get nothing.
+the semantic equivalent; inside a subagent (payload `agent_id`) the line names the
+exact `mcp__apex-lsp__lsp_references {symbol: …}` call per symbol. Text, regexes, comments and CSS searches get nothing.
 
 PostToolUse, not PreToolUse: every PreToolUse hook here is a guard that must block
 when it fails (tests/unit/bash-guard-hardening.test.mjs), and an advisory hint must
@@ -99,18 +100,21 @@ def symbol_of(pattern, js_scoped=False):
     return sym, bool(m.group("decl"))
 
 
-def from_bash(command):
-    """(pattern, first path operand) of the first grep / rg / git grep in the command that searches FILES.
+def searches_in_bash(command):
+    """Every (pattern, first path operand) of a grep / rg / git grep in the command that searches FILES.
 
-    A grep that reads a pipe (`ps aux | grep Chrome`, `git log | grep Merge`) filters another command's output: it
-    has no path operand and is not first in its pipeline, so it is no code search and gets nothing."""
+    Each segment of a compound command (`cd x && grep -rn A js | head; rg B js`) is judged on its own: shellparse
+    splits pipelines, lists, subshells and substitutions (#6469: 128 of code-hunter's 159 Bash calls were compound,
+    and only the first grep in them was read). A grep that reads a pipe (`ps aux | grep Chrome`, `git log | grep
+    Merge`) filters another command's output: it has no path operand and is not first in its pipeline, so it is no
+    code search and gets nothing."""
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     try:
         from shellparse import commands
         cmds = commands(command)
     except Exception:
-        return None, None
-    first = {}
+        return []
+    first, out = {}, []
     for c in cmds:
         first.setdefault(c.pipe, c)
     for c in cmds:
@@ -141,36 +145,56 @@ def from_bash(command):
         piped = first.get(c.pipe) is not c
         if piped and not operands:
             continue                     # filtering a pipe, not searching the tree
-        return pattern, (operands[0] if operands else "")
-    return None, None
+        out.append((pattern, operands[0] if operands else ""))
+    return out
+
+
+def symbols_found(tool, inp):
+    """[(symbol, is_decl)] for every symbol search in one Grep call or every segment of one Bash command."""
+    if tool == "Grep":
+        if inp.get("type") not in (None, "", "js", "ts") or SKIP_PATH.search(str(inp.get("path") or "")) or outside_js(inp.get("path")) or SKIP_GLOB.search(str(inp.get("glob") or "")):
+            return []
+        searches = [(inp.get("pattern"), "", inp.get("path"))]
+    elif tool == "Bash":
+        searches = [(p, w, w) for p, w in searches_in_bash(inp.get("command") or "")]
+    else:
+        return []
+    out = []
+    for pattern, where, scope in searches:
+        if not pattern or SKIP_PATH.search((where or "").strip()) or (tool == "Bash" and outside_js(where)):
+            continue
+        sym, is_decl = symbol_of(pattern, in_js(scope))
+        for one in (sym.split(", ") if sym else []):
+            if one not in [s for s, _ in out]:
+                out.append((one, is_decl))
+    return out[:3]
 
 
 def main():
     if os.environ.get("APEX_LSP_HINT") == "off":
         return
     data = json.load(sys.stdin)
-    tool, inp = data.get("tool_name"), data.get("tool_input") or {}
-    if tool == "Grep":
-        pattern = inp.get("pattern")
-        if inp.get("type") not in (None, "", "js", "ts") or SKIP_PATH.search(str(inp.get("path") or "")) or outside_js(inp.get("path")) or SKIP_GLOB.search(str(inp.get("glob") or "")):
-            return
-        where = ""
-    elif tool == "Bash":
-        pattern, where = from_bash(inp.get("command") or "")
-    else:
+    found = symbols_found(data.get("tool_name"), data.get("tool_input") or {})
+    if not found:
         return
-    if not pattern or SKIP_PATH.search((where or "").strip()) or (tool == "Bash" and outside_js(where)):
-        return
-    sym, is_decl = symbol_of(pattern, in_js(inp.get("path") if tool == "Grep" else where))
-    if not sym:
-        return
+    calls = ["mcp__apex-lsp__%s {symbol: \"%s\"}" % ("lsp_definition" if d else "lsp_references", s) for s, d in found]
+    sym = ", ".join(s for s, _ in found)
+    one, is_decl = found[0]
     call = "lsp_definition" if is_decl else "lsp_references"
     cli = "def" if is_decl else "refs"
-    one = sym.split(", ")[0]
-    msg = (f"lsp-hint: `{sym}` {'are JS symbols' if ', ' in sym else 'is a JS symbol'}; for the next lookup apex-lsp answers this semantically "
-           f"(MCP {call} {{symbol: \"{one}\"}}, lsp_callers for who calls it; shell: node tools/mcp/lsp-mcp.mjs {cli} {one}) — "
-           "rows tagged [def|export|alias|use] with the enclosing function, comments and strings excluded. "
-           "grep stays right for text, comments, CSS and regexes.")
+    if data.get("agent_id"):
+        # Inside a subagent (the payload carries agent_id): name the exact call, one per symbol, because the card's
+        # report counts it (`tools used: lsp n · grep m · read k`, .claude/agents/README.md §LSP-first; #6469).
+        msg = (f"lsp-hint: `{sym}` {'are JS symbols' if len(found) > 1 else 'is a JS symbol'}. The apex-lsp call for the next lookup: "
+               + "; ".join(calls)
+               + " (lsp_callers for who calls it). Rows come tagged [def|export|alias|use] with the enclosing function, comments and "
+               "strings excluded, and each call counts as `lsp` in your report's `tools used:` line. grep stays right for text, comments, "
+               "CSS and regexes.")
+    else:
+        msg = (f"lsp-hint: `{sym}` {'are JS symbols' if len(found) > 1 else 'is a JS symbol'}; for the next lookup apex-lsp answers this semantically "
+               f"(MCP {call} {{symbol: \"{one}\"}}, lsp_callers for who calls it; shell: node tools/mcp/lsp-mcp.mjs {cli} {one}) — "
+               "rows tagged [def|export|alias|use] with the enclosing function, comments and strings excluded. "
+               "grep stays right for text, comments, CSS and regexes.")
     event = data.get("hook_event_name") or "PostToolUse"
     print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": msg}}))
 

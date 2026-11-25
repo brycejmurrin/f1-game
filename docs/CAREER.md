@@ -1165,7 +1165,8 @@ cap is `Career.budget()` instead (works-car cost × the RAISE THE CAP multiplier
 clamped by the catalog-derived `budgetCap()` — see *Economy and R&D* above) and the
 unlimited toggle is ignored (`js/garage/setup-sheet.js`). `Parts.getMods(setup, team)`
 takes a `{id, engine}` team object and returns `{speed, accel, cornering,
-braking}` multipliers. Supplier-exclusive options (e.g. `manu_mercedes`) are
+braking}` multipliers. A human car races on `Parts.playerMods`, the same figures divided by the team's works
+build, so the factory car is ×1.0 (PHYSICS.md §Parts parity). Supplier-exclusive options (e.g. `manu_mercedes`) are
 only shown when `team.engine` matches. `unlimitedBudget` (localStorage
 `apex26.unlimitedBudget`) removes the 780 cr cap outside career.
 

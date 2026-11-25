@@ -784,13 +784,35 @@ test.describe.parallel("Career — MY TEAM", () => {
     expect(await page.evaluate(() =>
       Career.setIdentityValue("livery.custom.custom", [{ id: "career-red", name: "Career red", c1: [1,0,0], c2: [0,0,0] }]) &&
       Career.setIdentityValue("livery.custom", "career-red"))).toBe(true);
+    // Record the garage's FIRST build too: the card must be career-red the moment it opens,
+    // whatever the pane parking below does.
+    await page.evaluate(() => {
+      const original = LiveryTex.paintSwatch, calls = window.__firstSwatch = [];
+      LiveryTex.paintSwatch = function (ctx, crest, liv, ...rest) {
+        calls.push({ canvas: ctx.canvas, id: liv.id, c1: liv.c1 });
+        return original.call(this, ctx, crest, liv, ...rest);
+      };
+      window.__firstSwatchRestore = () => { LiveryTex.paintSwatch = original; };
+    });
     await page.locator("#cr-garage").click();
     await expect(page.locator("#carsetup")).toBeVisible();
     // openSetup shows the sheet before its deferred DOM build completes.
     await expect(page.locator("#cs-tab-team")).toBeAttached({ timeout: RACE_BUILD_MS });
+    const first = await page.evaluate(() => {
+      window.__firstSwatchRestore();
+      const canvas = document.querySelector("#cs-team-card canvas");
+      const call = window.__firstSwatch.find((entry) => entry.canvas === canvas);
+      return { id: call?.id, c1: call?.c1 };
+    });
+    expect(first).toEqual({ id: "career-red", c1: [1,0,0] });
     const painted = await page.evaluate(() => {
-      // TEAM is the default tab; leave it so the next click rebuilds its card.
+      // TEAM is the default tab; leave it so the next click comes back to it.
       document.querySelector('#cs-tabs [data-cs-cat]:not([data-cs-cat="team"])').click();
+      // #6508 parks a tab's pane and moves it back unchanged while csPaneKey holds, so the
+      // click below repainted only when document.fonts.status happened to flip in between
+      // (a timing-dependent red since f588ad1a). A resize bumps the key's view generation:
+      // the TEAM pane rebuilds every time and its paint is observed.
+      dispatchEvent(new Event("resize"));
       const original = LiveryTex.paintSwatch, calls = [];
       LiveryTex.paintSwatch = function (ctx, crest, liv, ...rest) {
         calls.push({ canvas: ctx.canvas, id: liv.id, c1: liv.c1 });

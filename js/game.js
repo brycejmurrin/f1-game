@@ -871,8 +871,10 @@ let raceLaps = GAME_LAPS;      // user-selected lap count
 // (Formula 2's sprint-race rule); "revchamp" inverts the championship
 // standings; "random" sorts on gridUp's own jitter draw. (The pre-rule boolean
 // `raceQuali` key is no longer read: store.get returns SettingsDefaults first.)
+// DEFAULT "quali" (Bryce, 2026-11-25, PR #6564): a random grid put fast cars behind slow ones,
+// so 3-lap races ran as trains. No session falls back to the tier order; a saved choice is kept.
 const GRID_RULES = ["tier", "quali", "rev10", "revchamp", "random"];
-let raceGrid = store.get("raceGrid", "random");
+let raceGrid = store.get("raceGrid", "quali");
 if (GRID_RULES.indexOf(raceGrid) < 0) raceGrid = "tier";
 const qualiGrid = () => raceGrid === "quali" || raceGrid === "rev10";
 // A CHAMPIONSHIP with qualifying off grids in championship order (FIA 2026 SR
@@ -1187,7 +1189,7 @@ function careerFitted(teamId) {
 function getTeamParts(teamId) {
   const c = careerFitted(teamId);
   if (c) return { ...c.fitted };   // a COPY: the garage edits it, and a conflicted save must not mutate the live build (#5044)
-  return store.get("parts." + teamId, {});
+  return { ...Parts.getFactorySetup(Teams.LIST.find((t) => t.id === teamId)), ...store.get("parts." + teamId, {}) };   // unset = the works part
 }
 function saveTeamParts(teamId, parts) {
   const c = careerFitted(teamId);
@@ -1295,7 +1297,7 @@ function modsFor(team, setup, tune) {
   // with a RIVAL's declared parts to show their stats, and folding in
   // SetupTune.mods(team.id) there scored a peer's car with this player's
   // anti-roll bars whenever the two happened to share a team.
-  const mods = Parts.getMods(setup, team, tune || null);
+  const mods = Parts.playerMods(setup, team, tune || null);   // over the works build: factory = ×1.0
   return {
     speed:     Parts.statMult(stats.speed)     * mods.speed,
     accel:     Parts.statMult(stats.accel)     * mods.accel,
@@ -5466,7 +5468,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
       if (!directLook) AiDrive.pushLook(d, lkV, lkB, lkM);
       if (lkI < AI_LOOK_CAP) { lk.v[lkI] = lkV; lk.a[lkI] = ak; lk.b[lkI] = lkB; lk.m[lkI] = lkM; lk.n = lkI + 1; }
     }
-    _aiBr.traits = aiT; _aiBr.samples = directLook ? AiDrive.lookWindow(lk.v, lk.m, lkI, ss0 - c.s, dsN, lk.b) : AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = Math.min(1 / c.skill, Math.min(1, dd.corner * (1 + (c._bandNow || 0))) * AiDrive.paceTrim(TIER_V[c.tier] * c.skill)) * (c._trYT ? AiDrive.trailYieldCorner(c._trYT) : 1);   // the band lifts corner authority too, never past 1.0: a banded car drives like a better driver, not a faster car
+    _aiBr.traits = aiT; _aiBr.samples = directLook ? AiDrive.lookWindow(lk.v, lk.m, lkI, ss0 - c.s, dsN, lk.b) : AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = AiDrive.diffCorner(dd.corner, c.skill, c._bandNow || 0, AiDrive.paceTrim(TIER_V[c.tier] * c.skill)) * (c._trYT ? AiDrive.trailYieldCorner(c._trYT) : 1);   // the level's corner ceiling (AiDrive.diffCorner): the band lifts authority up to it, never past
     _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE * trMul * (gmC / gm0); _aiBr.pace = driveTune.PACE; _aiBr.vmax = VMAX;   // the tread's braking credit (docs/PHYSICS.md §Braking): the planner must stop as the executor below does, or it corners on wets and brakes on slicks
     _aiBr.grip = gmC * S.tyreGrip * dirtyAirMul(c.wake || 0, c.speed);   // the wake costs the AI its corner too
     _aiBr.speed = c.speed; _aiBr.blocker = !!blocker; _aiBr.blockerGap = blockerGap;

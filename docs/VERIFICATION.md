@@ -162,8 +162,9 @@ quarantined flake cannot red an otherwise green leg. Under `APEX_FAIL_ON_FLAKY=1
 test title matches an unexpired policy in `tests/data/flaky-quarantine.json`;
 the ledger names an accountable owner, evidence, expiry and review criteria.
 Quarantined tests still run and permanent failures remain red. Agents fix real
-failures; re-run a failed job at most once and only for timeout / infra errors
-(`tools/ci/ci-rerun.mjs`); never skip a test or loosen a tolerance to get green.
+failures; never skip a test or loosen a tolerance to get green, and a pass that
+needed a re-run is a red (AGENTS.md rule 9). Who may re-run what: skill `steward`
+§Red 4 (a worker pushes a fresh commit) and §CI (the orchestrator's acts).
 `tests/unit/flaky-quarantine.test.mjs` pins the ledger and the wiring.
 
 **Detection is daily, not by hand (2026-10-16).** `.github/workflows/flake-tally.yml`

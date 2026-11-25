@@ -6,6 +6,8 @@
 - Menu route: nav and tap
 - Any control: tap, set, key, scroll
 - Driving: drive
+- Concurrency
+- Plans
 - Status comment
 - Cannot measure
 
@@ -36,7 +38,8 @@ in `js/agent/apex-bridge.js`), not this table.
 | `bench` | `op` tests / start (+`test`) / stop / status / result / leg (+`i`) | BenchRun (SETTINGS > GRAPHICS > BENCHMARK); `start` reloads before it replies |
 | `snap` | `w`, `q` start quality | `{w, h, q, from, chars, jpeg: "data:image/jpeg;base64,…"}` |
 | `wait` | `ms` | `{waited}`; for spacing steps inside a `batch` |
-| `when` | ONE of `screen` (a `screen` name), `state` (`info().state`), `visible` true / false; `ms` (≤ 60 000) | `{ok, screen, state, waited}` once it reads the value, or `ok: false` at `ms` (a batch stops there); use it instead of a guessed `wait` |
+| `when` | ONE of `screen` (a `screen` name), `state` (`info().state`), `visible` true / false (the page) or an element id; `ms` (≤ 60 000) | `{ok, screen, state, waited}` once it reads the value, or `ok: false` at `ms` (a batch stops there); use it instead of a guessed `wait` |
+| `plan` | `name`, `args` | one summary of every step (§Plans) |
 | `gpuTest` | `op` start / stop / status / active | GPU TEST (`GpuTestRun`) |
 | `recorder` | `op` start / stop / isOn / json | PHONE TEST recorder |
 | `screen` | — | `{screen, state}`: the topmost visible screen (`title`, `select`, `setup`, `garage`, `loading`, `quali`, `results`, `pause`), else `drive-out` (the garage-out, state still `menu`) or `race` |
@@ -143,8 +146,8 @@ assist: it starts only from this command and lets go on `stop`, a pause, a quit,
   `docs/notes/BRIDGE-DRIVE-2026-11-25.md`); a whole lap more when the car starts past its box. Ends `box` with
   `pitActions` naming the pit buttons on screen. `lane-closed` = no stops this session (a race with wear off).
 - `{"laps":1}` / `{"seconds":30}`: an autopilot lap at a safe pace, then hand back.
-- The bridge serves one command at a time, so a `drive` that waits blocks `stop`. For a long drive send
-  `{"wait":false}` (answers `{started}` at once), then `{"status":true}` and `{"stop":true}`.
+- `{"stop":true}` and `{"status":true}` are READs (§Concurrency): they answer while a waiting `drive` still runs.
+  `{"wait":false}` still answers `{started}` at once.
 - A TIME TRIAL holds the car in its box for the stop plus 4 s, and END TIME TRIAL exists only then: tap it in the SAME
   batch with `waitMs` (a separate comment is a 4 s poll plus GitHub's lag, too late; #6581).
 - While `drive` holds the car the phone shows a CLAUDE DRIVING strip under the link badge (it lets touches through:
@@ -171,6 +174,33 @@ Read `steps[1].value.inBox` and `pitActions` (the box was reached and END TIME T
 stepped inside one call, so the screen freezes while it runs): `call rollout` with
 `[{"policy":"box","seconds":120}]`; `stoppedEarly.reason` `policy:box` is the box. No `to:"grid"`: nothing in the game
 reads a car parked on its grid slot (the note above).
+
+## Concurrency
+
+Each command is a READ or an ACTION (`isRead`, `READ_CMDS`, `CALL_READ` in `js/agent/apex-bridge.js`).
+- READ: `ping facts display geom frames screen snap`, `drive {stop}` / `{status}`, and `call` of a `CALL_READ`
+  method with read-only args (`perf` / `info` / `audio` / `lifecycle` … with none; `physState world field logs scene`
+  with any; `renderScale` none or `{lite:true}`; `diag` only `{download:false}`; `frametimeBench` none or `"snapshot"`).
+- ACTION: everything else (`tap nav set key scroll drive wait when plan batch reload path bench gpuTest recorder`,
+  any other `call`).
+- ACTIONs run one at a time, oldest first; a READ starts as soon as a poll picks it, beside the running ACTION.
+  Polling never stops. `reload`, `path` and `bench` wait behind the running ACTION.
+- Replies can arrive out of order: match on `re`. A reply whose post failed is posted again on the next poll.
+
+## Plans
+
+`{"cmd":"plan","args":{"name":"<plan>","args":{…}}}` runs one of `PLANS` (in `js/agent/apex-bridge.js`; a new plan
+is a PR, never a comment). It is an ACTION, ≤ 40 steps and 10 min, and answers once:
+`{plan, args, ok, failed, ms, steps:[{i, cmd, ok, ms, value|error|skipped}]}`. It stops at the first failing step
+(`failed` = its index). A big step value is cut to `{cut, head}` so the summary fits `MAX_REPLY`. The deny-lists hold
+inside a plan; `plan batch reload path bench` cannot be steps.
+- `ttEndGarage {track="monza"}`: nav tt → drive to box → when `hud-end-session` visible → tap it → when screen
+  garage → tap `cs-arrival-skip` if shown → screen → snap w 320.
+- `raceSample {track="monza", seconds=10 (1-60)}`: display → geom → call race → when screen race → call go → wait
+  3000 → frames → call perf.
+- `hudAudit`: geom → display → screen → snap (the `rects` read joins once #6581 lands it).
+
+`when {visible:"<id>"}` waits for an element to be shown; `visible` true / false is still the page.
 
 ## Status comment
 
