@@ -190,15 +190,15 @@ const InputHoldButtons = (function () {
         try { el.setPointerCapture(e.pointerId); } catch (_) { /* pointer already gone (cancelled between down and here); the button still works uncaptured */ }
         // Only the FIRST contact is a press edge: THROTTLE = LATCH toggles on every
         // apply(true), so a second finger landing on GAS cancelled the latch while
-        // the first was still down.
-        const firstContact = ids.size === 0;
+        // the first was still down. `arrived`: a slide hand-off, not a fresh tap;
+        // LATCH toggles only on a tap (#6618).
+        if (!ids.size) apply(true, arrived);
         ids.add(e.pointerId);
         if (e.pointerType === "touch") touchIds.add(e.pointerId);
         else touchIds.delete(e.pointerId);
         // A TRUSTED press hit-tested a rendered button, so it was visible: only a synthetic
         // (dispatched) event pays holdTargetGone's getComputedStyle walk up every ancestor.
         live.set(e.pointerId, e.isTrusted === false ? !holdTargetGone(el) : true);
-        if (firstContact) apply(true);
         if (level) {
           const crossingPedal = arrived && axis === "y";
           const profile = PedalTravel.contactProfile(opts?.button || id, slideEase?.() ? "ease" : "instant",
