@@ -42,7 +42,14 @@
  *   cone, so a crease the loft smoothed (< 55 deg, car-shade.js smooth()) catches its highlight. A split (hard)
  *   normal has no derivative across the triangle boundary, so this cannot bevel those (geometry's job).
  * - F1 slicks have no tread: the tyre gets sidewall micro-ribbing, a moulded segmented band, and shoulder graining
- *   only; the compound band and lettering stay vertex colour (normal detail never touches albedo there).
+ *   only; the compound band and the geometric lettering blocks stay vertex colour.
+ * - SIDEWALL TEXT (#6509 item 3): a FICTIONAL printed line (K.text.str, the game's own name; no real tyre brand,
+ *   logo or layout) twice round each wall, between the rim and the compound band on the default crown. Wider bands
+ *   (shoulder SH1/SH2, bandWidth up to 0.132) reach into that radius range, so the ink only prints on DARK rubber
+ *   (albedo max below K.text.dark): a coloured compound band is never painted over. A 5x7 bitmap font packed into float
+ *   constants (3 columns of 7 bits per float, exact below 2^24) and read by a balanced select tree, so it needs no
+ *   texture, no sampler and no uniform. Albedo only (printed ink), and only at close range (K.text near/far and a
+ *   footprint fade at one font pixel): the garage, replay and close cameras; a chase camera never resolves it.
  * NOT built (unseen inputs, no pretend stubs): brake-disc glow (no disc temperature reaches the shader), drilled
  * holes (the disc shares the metal/carbon ids with other parts), vents/louvres (no reliable region on the loft).
  */
@@ -63,7 +70,65 @@ const TLXCarSurf = (function () {
       rib: 0.0025, ribTilt: 0.18, band: Object.freeze([0.262, 0.282]), bandSeg: 24, bandTilt: 0.40, bandEdge: 0.0015,
       grain: 0.005, grainTilt: 0.10, shoulder: 0.6, near: 3, far: 15 }),
     saa: Object.freeze({ variance: 0.15, kappa: 0.18 }),
+    // Sidewall text: radii r0..r1 hold `rows` font rows (7 inked + a half-row margin each side); `cols` font columns
+    // per half turn; ink is the printed grey; the fade keeps it to close cameras (metres) and >= 1 px per font pixel.
+    text: Object.freeze({ str: "APEX 26 \u00b7 RACE SLICK", r0: 0.244, r1: 0.276, rows: 8, cols: 204, ink: 0.80, k: 0.85, dark: Object.freeze([0.22, 0.34]),
+      near: 1.5, far: 4.5, lo: 0.3, hi: 0.9 }),
   });
+
+  // 5x7 font, rows top to bottom ("#" = ink). Only the glyphs K.text.str uses; packText refuses any other.
+  const FONT = Object.freeze({
+    "A": [".###.", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
+    "P": ["####.", "#...#", "#...#", "####.", "#....", "#....", "#...."],
+    "E": ["#####", "#....", "#....", "####.", "#....", "#....", "#####"],
+    "X": ["#...#", "#...#", ".#.#.", "..#..", ".#.#.", "#...#", "#...#"],
+    "2": [".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"],
+    "6": ["..##.", ".#...", "#....", "####.", "#...#", "#...#", ".###."],
+    "R": ["####.", "#...#", "#...#", "####.", "#.#..", "#..#.", "#...#"],
+    "C": [".###.", "#...#", "#....", "#....", "#....", "#...#", ".###."],
+    "S": [".####", "#....", "#....", ".###.", "....#", "....#", "####."],
+    "L": ["#....", "#....", "#....", "#....", "#....", "#....", "#####"],
+    "I": [".###.", "..#..", "..#..", "..#..", "..#..", "..#..", ".###."],
+    "K": ["#...#", "#..#.", "#.#..", "##...", "#.#..", "#..#.", "#...#"],
+    "\u00b7": [".....", ".....", ".....", "..#..", ".....", ".....", "....."],
+    " ": [".....", ".....", ".....", ".....", ".....", ".....", "....."],
+  });
+  // Text -> font columns (5 per glyph + 1 spacing; bit r = row r from the top), packed 3 per float: c0 + 128 c1 + 16384 c2.
+  function packText(str) {
+    const cols = [];
+    for (const ch of str) {
+      const g = FONT[ch];
+      if (!g) throw new Error("TLXCarSurf: no glyph for " + JSON.stringify(ch));
+      for (let c = 0; c < 5; c++) { let v = 0; for (let r = 0; r < 7; r++) if (g[r][c] === "#") v += 1 << r; cols.push(v); }
+      cols.push(0);
+    }
+    const packed = [];
+    for (let i = 0; i < cols.length; i += 3) packed.push((cols[i] || 0) + 128 * (cols[i + 1] || 0) + 16384 * (cols[i + 2] || 0));
+    return { packed, ncol: cols.length };
+  }
+  // The shader's decode, op for op: +0.5 before each floor so an inexact exp2 can never drop a bit.
+  function textBit(packed, col, row) {
+    if (col < 0 || row < 0 || row > 6) return 0;
+    const fi = Math.floor((col + 0.5) / 3), sub = col - 3 * fi;
+    if (fi >= packed.length) return 0;
+    const cbAll = Math.floor((packed[fi] + 0.5) * Math.pow(2, -7 * sub));
+    const cb = cbAll - 128 * Math.floor((cbAll + 0.5) / 128);
+    const q = Math.floor((cb + 0.5) * Math.pow(2, -row));
+    return q - 2 * Math.floor((q + 0.5) / 2);
+  }
+  // Font column and row at a sidewall point: th = atan(dz, dy) about the axle, r its radius, side = sign of the
+  // axle-local x (the face). The +x face reads toward -th (left to right for a viewer on that side), letters upright
+  // at the top; two repeats per turn, each centred in its half.
+  function textCell(th, r, side, ncol) {
+    const T = K.text, s = side < 0 ? 1 : -1;
+    const hp = ((th * s / Math.PI + 1) % 1 + 1) % 1;
+    const col = Math.floor(hp * T.cols) - Math.floor((T.cols - ncol) / 2);
+    const row = Math.floor((T.r1 - r) / ((T.r1 - T.r0) / T.rows) - 0.5);
+    return { col, row };
+  }
+  // Ink weight on an albedo whose largest channel is m: 1 on dark rubber, 0 on a coloured band (descending smoothstep).
+  function inkOn(m) { return 1 - smooth(K.text.dark[0], K.text.dark[1], m); }
+  const TEXT = packText(K.text.str);
 
   // ── pure maths (node-tested; the TSL below is the same formula, constant for constant) ──
   const clamp01 = (x) => Math.min(1, Math.max(0, x));
@@ -127,7 +192,8 @@ const TLXCarSurf = (function () {
     const { If, float, vec2, vec3, vec4, floor, fract, dot, cross, mix, smoothstep, clamp, sqrt, abs, max, min,
       normalize, length, select, sin, cos, sign, atan, dFdx, dFdy, fwidth, modelWorldMatrix, attribute } = TSL;
     const hash21 = chunks && chunks.hash21;
-    if (!modelWorldMatrix || !atan || !sign || !hash21) throw new Error("TLXCarSurf: TSL lacks modelWorldMatrix/atan/sign");
+    const { exp2 } = TSL;
+    if (!modelWorldMatrix || !atan || !sign || !hash21 || !exp2) throw new Error("TLXCarSurf: TSL lacks modelWorldMatrix/atan/sign/exp2");
     const fadeN = (d, near, far) => clamp(d.sub(near).div(far - near).oneMinus(), 0.0, 1.0);
     const fpN = (px, size, lo, hi) => smoothstep(lo * size, hi * size, px).oneMinus();
     // Surface-gradient add on a var: N.assign(normalize(N - (g - N(N.g)) * k)).
@@ -143,6 +209,7 @@ const TLXCarSurf = (function () {
       const az = normalize(modelWorldMatrix.mul(vec4(0.0, 0.0, 1.0, 0.0)).xyz).toVar();
       const an = float(0.0).toVar();      // carbon anisotropy, set by weave()
       const ao = float(1.0).toVar();      // panel-line occlusion, applied to albedo by applyAO()
+      const txt = float(0.0).toVar();     // sidewall text ink coverage, applied to albedo by applyAO()
       // LOFT UVS (heroCar, js/car/car-geometry.js loftUv): the body lofts carry (developed station s, section arc
       // t from the top, -1) in metres on the trk vec3 every plain mesh already has (zero on everything else; the
       // road keys on trk.z > 0.5). Read once here, at the top level, with the other varyings.
@@ -160,7 +227,7 @@ const TLXCarSurf = (function () {
         const nb = normalize(Ngeo.add(t.mul(min(tl, c).div(tl))));
         Ngeo.assign(nb); N.assign(nb);
       });
-      return { K, px, ax, ay, az, an, ao, objP, vd, toW, toO, luv };
+      return { K, px, ax, ay, az, an, ao, txt, objP, vd, toW, toO, luv };
     }
 
     // Footprint fade of the existing twill (multiply its wvFade) and the anisotropy it carries.
@@ -236,7 +303,28 @@ const TLXCarSurf = (function () {
           const fr = fpN(cs.px, T.rib, 0.35, 1.0);
           g.addAssign(er.mul(cos(r.mul(6.2831853 / T.rib)).mul(T.ribTilt).mul(fr)));
           // moulded segmented band (lettering-like dashes) between T.band radii: rounded-box SDF in (arc, radial)
-          const th = atan(dz, dy);
+          const th = atan(dz, dy).toVar();
+          // SIDEWALL TEXT (textCell / textBit above, the same ops): font column and row, then the ink bit
+          const X = K.text, rowH = (X.r1 - X.r0) / X.rows, colW = Math.PI * 0.5 * (X.r0 + X.r1) / X.cols;
+          const side = select(xa.lessThan(0.0), float(1.0), float(-1.0));
+          const col = floor(fract(th.mul(side).div(Math.PI).add(1.0)).mul(X.cols)).sub(Math.floor((X.cols - TEXT.ncol) / 2)).toVar();
+          const row = floor(float(X.r1).sub(r).div(rowH).sub(0.5)).toVar();
+          const inSpan = col.greaterThanEqual(-2.0).and(col.lessThan(TEXT.ncol + 2)).toVar();
+          const xF = fadeN(cs.vd, X.near, X.far).mul(fpN(cs.px, colW, X.lo, X.hi)).toVar();
+          If(inSpan.and(col.greaterThanEqual(0.0)).and(col.lessThan(TEXT.ncol)).and(row.greaterThanEqual(0.0))
+            .and(row.lessThan(6.5)).and(xF.greaterThan(0.001)), () => {
+            const fi = floor(col.add(0.5).div(3.0)).toVar(), sub = col.sub(fi.mul(3.0));
+            const pick = (lo, hi) => {   // balanced select tree over the packed floats
+              if (hi - lo === 1) return float(TEXT.packed[lo]);
+              const mid = (lo + hi) >> 1;
+              return select(fi.lessThan(mid), pick(lo, mid), pick(mid, hi));
+            };
+            const cbAll = floor(pick(0, TEXT.packed.length).add(0.5).mul(exp2(sub.mul(-7.0)))).toVar();
+            const cb = cbAll.sub(floor(cbAll.add(0.5).div(128.0)).mul(128.0));
+            const q = floor(cb.add(0.5).mul(exp2(row.negate()))).toVar();
+            const bit = q.sub(floor(q.add(0.5).mul(0.5)).mul(2.0));
+            cs.txt.assign(bit.mul(xF).mul(X.k));
+          });
           const seg = 6.2831853 / T.bandSeg, arc = r.mul(seg);
           const u = fract(th.div(seg)).sub(0.5).mul(arc), v = r.sub((T.band[0] + T.band[1]) * 0.5);
           const bx = arc.mul(0.34), by = (T.band[1] - T.band[0]) * 0.5, rr = 0.002;
@@ -247,7 +335,9 @@ const TLXCarSurf = (function () {
           const gq = select(sd.greaterThan(0.0), out.div(max(length(out), 1e-6)),
             select(qx.greaterThan(qy), vec2(1.0, 0.0), vec2(0.0, 1.0)));
           const gu = gq.x.mul(sign(u)), gv = gq.y.mul(sign(v));
-          const ramp = smoothstep(0.0, T.bandEdge, abs(sd)).oneMinus().mul(fpN(cs.px, T.bandEdge * 4.0, 0.35, 1.0));
+          // the dashes give way to the text across its span (and a 2-column margin)
+          const ramp = smoothstep(0.0, T.bandEdge, abs(sd)).oneMinus().mul(fpN(cs.px, T.bandEdge * 4.0, 0.35, 1.0))
+            .mul(select(inSpan, float(0.0), float(1.0)));
           // raised dash: height rises inward (sd < 0), so grad h = -grad sd on the ramp
           g.addAssign(et.mul(gu).add(er.mul(gv)).mul(ramp).mul(-T.bandTilt));
         }).Else(() => {
@@ -261,7 +351,11 @@ const TLXCarSurf = (function () {
       });
     }
 
-    function applyAO(cs, albedo) { albedo.mulAssign(cs.ao); }
+    // Panel-line occlusion, then the sidewall text's printed ink (txt is 0 everywhere else: the same albedo).
+    function applyAO(cs, albedo) {
+      const ink = cs.txt.mul(smoothstep(K.text.dark[0], K.text.dark[1], max(albedo.r, max(albedo.g, albedo.b))).oneMinus());
+      albedo.assign(mix(albedo.mul(cs.ao), vec3(K.text.ink), ink));
+    }
 
     // 1. ANISOTROPIC sun lobe on carbon: returns D*Vis (isotropic DV where an == 0, exactly the same value).
     function anisoSun(cs, o) {
@@ -346,7 +440,8 @@ const TLXCarSurf = (function () {
   return {
     K, enabled, nodes,
     math: { fade, footprintFade, anisoAlphas, saaAlpha2, sdSegment, sdRoundBox, sdAnnulus, groove, grooveSlope,
-      perturb, edgeBend, flakeLod, refractOut },
+      perturb, edgeBend, flakeLod, refractOut, packText, textBit, textCell, inkOn },
+    text: TEXT, font: FONT,
   };
 })();
 Object.freeze(TLXCarSurf);

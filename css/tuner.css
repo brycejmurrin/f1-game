@@ -1548,6 +1548,9 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
 /* Keep the heading's intrinsic width so Preview wraps instead of covering it
    when the flying dock narrows to 300px. */
 .editor-workspace .ew-title { font: inherit; font-weight: 800; margin: 0; flex: 1 0 auto; min-width: min-content; }
+/* 12 PAINTED px FLOOR (#6512): the title (font: inherit), Preview and the tools summary inherit 16 px, 11.2 painted at
+   UI SIZE 70. max() changes nothing at UI SIZE 75 % and up; --fs-floor is 12 / --ui-scale. */
+.editor-workspace :is(.ew-toolbar, .ew-tools > summary) { font-size: max(1em, var(--fs-floor)); }
 .editor-workspace .ew-toolbar button, .editor-workspace .ew-tools > summary {
   min-height: var(--ew-tap); min-width: var(--ew-tap); touch-action: manipulation;
 }

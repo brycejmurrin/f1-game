@@ -13,6 +13,8 @@
   }
   .cs-inspection p { margin: 0; color: var(--dim); font-size: var(--fs-2); line-height: 1.4; }
   .cs-inspection > button { justify-self: start; }
+  /* The part name inherits 16 px, 11.2 painted at UI SIZE 70 (#6512); max() is inert at 75 % and up. */
+  .cs-inspection > strong { font-size: max(1em, var(--fs-floor)); }
   /* Short landscape (design pass 2b): the card was 131 of the list's 209 px at 844x390,
      so one part showed under it. Name and note on the left, the action on the right:
      65 px, and the next two parts come into view. */
