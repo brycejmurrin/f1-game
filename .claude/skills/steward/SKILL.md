@@ -21,7 +21,7 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 1. **Claim.** Comment `claims #<n> — <host>:<session id>` on the issue and add `claimed`. An older claim comment wins:
    stand down. Labels ONLY through MCP `issue_write`: the live list plus or minus ONE name ([`references/labels.md`](references/labels.md);
    `github-mcp-guard.sh` refuses any other list); never `gh`.
-2. **Draft PR at the first commit** (§Open) with `lane:<host>` and `Closes #<n>`.
+2. **Draft PR at the first commit** (§Open) with the lane label (§Open 3) and `Closes #<n>`.
 3. **Take over** on `CONTINUE PR #<n>`: remove `needs-owner` and post `adopts PR #<n>`
    yourself (the launching orchestrator may have done both). Work from the Hand-off block and the Plan. On a PR the NEWEST adoption comment
    wins (stand down if a newer one appears), the opposite of issue claims. **Ownership is a lease:** the Hand-off line
@@ -57,8 +57,9 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    `.github/pull_request_template.md`: Goal, Plan (exactly one `**now:**`; the LAST item is the gate-exempt
    `- [ ] land: …` line), Verified / Not run, the Hand-off fence (`head:`, `owner:`, `next:`). Never `deploy.mjs
    --pr`: it opens a READY PR without the template body.
-3. Add `lane:<host>` (the one-label recipe in [`references/labels.md`](references/labels.md); never `gh`). Every
-   draft push gets the fast tier on CI. Selected browser jobs start when the PR is ready and its diff needs them.
+3. Add the lane label: `lane:claude` for Claude Code, `lane:cursor` for Cursor, `lane:codex` for Codex (the one-label
+   recipe in [`references/labels.md`](references/labels.md); never `gh`). Every draft push gets the fast tier on CI.
+   Selected browser jobs start when the PR is ready and its diff needs them.
 
 ## Push
 
@@ -120,10 +121,11 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    **Review** (a diff touching `js/`, `css/`, `index.html` or `sw.js`): once that draft run has finished, run agent
    `pr-reviewer` on the PR and tick `- [x] review: <n> findings, <k> accepted (<reviewed sha>)`; accepted findings go in
    ONE push, whose draft run then gates the flip as above. Advisory: no gate row, no label (Bryce's `decision: A1`, PR #6377; blocking is re-decided after 2 weeks).
-   Bryce's own flip skips it: when the PR timeline has a `ready_for_review` or `labeled land` event whose actor is
-   `brycejmurrin` with no `performed_via_github_app` (his click, not an app's or an agent's), do not run the reviewer;
-   tick `- [x] review: skipped — Bryce's own <ready|land> at <ISO>` with that event as evidence. An agent-made flip or
-   label never skips it.
+   Bryce's own `land` skips it: when the PR timeline has a `labeled land` event whose actor is `brycejmurrin` with no
+   `performed_via_github_app` (his click, not an app's or an agent's), do not run the reviewer; tick `- [x] review:
+   skipped — Bryce's own land at <ISO>` with that event as evidence. A `ready_for_review` event never counts: GitHub
+   records no app on it even when an agent flipped (#6420, `docs/notes/MULTI-AGENT-CODEX-CURSOR-2026-11-25.md`
+   gap 8). An agent-made flip or label never skips it.
 2. `node tools/ci/ship-pr.mjs --pr <n>` (wraps `ready-gate.mjs`; an already-ready PR is refused as `not-draft` and
    only needs the label). On a pass it prints the two calls and flips nothing itself:
 3. GitHub MCP `update_pull_request` with `draft: false`, then add `land` (the one-label recipe in

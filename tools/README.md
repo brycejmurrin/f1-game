@@ -733,7 +733,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/node-plan.mjs** | Per-PR plan for ci.yml's node-suites job: slow VM scripts run only when pick-tests routes the diff to their group. |
 | **ci/pages-live-sha.sh** | Prints the live site's `apex-sha` (the commit stamped into index.html), or nothing if unreadable; never fails. |
 | **ci/pages-publishable.sh** | Pages monotonic guard: true when the live apex-sha is an ancestor of the given commit, else false. |
-| **ci/pages-reuse-verdict.sh** | Pages gate reuse: prints `reuse=true` (+source/run) when this tree already passed CI as this commit or a parent. |
+| **ci/pages-reuse-verdict.sh** | Pages gate reuse: prints `reuse=true` (+source/run) when this tree passed CI as this commit, a parent or a merge ref. |
 | **ci/pages-verified-base.mjs** | Resolve the last byte-verified Pages publication on the deploy commit's first-parent chain. |
 | **ci/pick-tests.mjs** | What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`). |
 | **ci/pick-unit-slices.mjs** | Which Pure-node CI matrix slices a diff needs (fail-safe → all). |
@@ -744,7 +744,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/queue-depth.mjs** | Informational queue gauge, never a push hold: queued + running JOBS by OS vs 40 Linux / 5 macOS slots. |
 | **ci/ready-sweep.mjs** | Stale-`ready` sweep (reads only): each ready issue's `file:line` cites against the tree, and the "ready over cap" row. |
 | **ci/reuse-draft-fast.sh** | On ready_for_review, reuse a green draft fast-tier run for the same PR head SHA and base SHA. |
-| **ci/reuse-draft-selected.mjs** | Ready flip: reuse the same-sha draft run's selected-spec legs when its plan, base and the deploy tip are unchanged. |
+| **ci/reuse-draft-selected.mjs** | Reuse a passed run's selected-spec legs when it tested the same merge tree and base (the deploy tip) and plan. |
 | **ci/run-node-group.mjs** | Run isolated Node benchmarks before the ordinary pool, forwarding npm arguments to every phase. |
 | **ci/run-playwright.mjs** | The engine behind every `npm run test:*`: a free port + port-suffixed report paths so runs never share a server. |
 | **ci/select-budget.mjs** | Can a change-aware CI job run what it selects? Bills each spec from `spec-timings.json`, else 7.5 s/test (llvmpipe). |

@@ -940,6 +940,11 @@ test("land.yml triggers: pull_request_target (never pull_request), workflow_run 
   assert.equal(on.pull_request, undefined, "plain pull_request runs the PR's own copy of land.yml with its secrets");
   assert.deepEqual(on.pull_request_target, { types: ["labeled", "unlabeled", "ready_for_review", "converted_to_draft", "synchronize", "reopened", "edited"], branches: [DEPLOY_BRANCH] });
   assert.deepEqual(on.workflow_run, { workflows: ["CI", "Deploy to GitHub Pages"], types: ["completed"] }, "the CI / train re-gate stays");
+  // #6536 R3 (48 h, 2026-11-23..25): every type above is a gate input, and GitHub cannot filter this event by label, so
+  // thinning happens in resolve's if: and its screens, never by dropping a type. The cron is the sweep's and train's
+  // backstop (4 fires in 48 h; Pages workflow_run drives the train): changing it needs new data, not a test edit.
+  assert.deepEqual(on.schedule, [{ cron: "17,47 * * * *" }]);
+  assert.deepEqual(on.push, { branches: [DEPLOY_BRANCH] }, "a deploy-branch push sweeps (docs-only merges start no Pages train)");
   assert.deepEqual(Object.keys(on.workflow_dispatch.inputs), ["pr", "head", "attempt", "stale"], "the immediate re-gate: one PR, the head its budget counts against, the attempt; or the stale-gate sweep (no AUTO-SYNC input since 2026-11-03)");
   assert.equal(on.repository_dispatch, undefined);
   assert.equal(on.check_suite, undefined, "check_suite never fires for Actions-made suites (0 runs in 14 days)");
@@ -2054,9 +2059,62 @@ test("land.yml edited: only a BODY edit on a `land` PR re-gates; a title edit ru
   assert.ok(!ghExpr(LAND.jobs.resolve.if, prt("edited", { title: { from: "x" } })), "a title edit does not");
   assert.ok(!ghExpr(LAND.jobs.resolve.if, prt("edited", { body: { from: "x" } }, [])), "a PR without `land` is not re-gated by an edit");
   const group = (github) => ghExpr(LAND.concurrency.group, github);
-  assert.equal(group(prt("edited", { title: { from: "x" } })), "land-noise-99", "a title edit never cancels the PR's evaluation");
-  assert.equal(group(prt("edited", { body: { from: "x" } })), "land-7");
+  // #6536 R3: every edit runs alone, so a Hand-off refresh right after `land` never cancels the gate that click started.
+  assert.equal(group(prt("edited", { title: { from: "x" } })), "land-edit-99", "a title edit never cancels the PR's evaluation");
+  assert.equal(group(prt("edited", { body: { from: "x" } })), "land-edit-99", "a body edit neither cancels nor replaces the PR's land-<n> run");
+  assert.equal(group(prt("synchronize", undefined)), "land-7", "a push still cancels the PR's in-flight evaluation");
   assert.equal(ghExpr(LAND.concurrency.group, { event_name: "schedule", run_id: 4, event: {} }), "land-stale-sweep");
+});
+
+// #6536 R3: the gate reads the body only through planVerdict and trainManifest; resolve re-gates an edit only when it
+// changed a line those can read, and every other outcome (a Plan change, a train body, an unreadable payload) re-gates.
+test("land.yml resolve: a body edit that leaves the Plan checklist and train manifest unchanged re-gates nothing", () => {
+  const RESOLVE_RUN = LAND.jobs.resolve.steps.find((s) => s.id === "pick").run;
+  const plan = (tick, handoff) => `## Goal\r\nx\r\n\r\n## Plan\r\n- [${tick}] **now:** fix\r\n- [ ] land: gate\r\n\r\n## Hand-off\r\n\`\`\`\r\nhead: ${handoff}\r\n\`\`\``;
+  const edit = (from, to, o = {}) => runStep(RESOLVE_RUN, { EVENT: "pull_request_target", ACTION: "edited", PR_NUMBER: "7",
+    IN_PR: "", IN_HEAD: "", IN_ATTEMPT: "", CANDIDATES: "null", FAKE_PR: pr7({ body: to }), GITHUB_EVENT_PATH: "event.json", ...o },
+  { "event.json": JSON.stringify({ action: "edited", changes: { body: { from } }, pull_request: { number: 7, body: to } }) });
+  const noop = edit(plan("x", "aaa"), plan("x", "bbb"));
+  assert.equal(noop.status, 0, noop.stderr);
+  assert.equal(noop.out.landable, "false");
+  assert.deepEqual([noop.out.prs, noop.out.notasked, noop.out.disarm], ["[]", "[]", "[]"], "post, arm and retry all stay skipped");
+  assert.deepEqual(noop.calls, [], "the screen reads only the event payload: no API call");
+  assert.match(noop.stdout, /nothing to re-gate/);
+  for (const [why, from, to, o] of [
+    ["a Plan tick", plan(" ", "aaa"), plan("x", "aaa")],
+    ["a new heading", plan("x", "aaa"), plan("x", "aaa") + "\n## Plan"],
+    ["a checklist line behind a bare CR (a JS line terminator)", plan("x", "aaa"), plan("x", "aaa") + "\rmore\r- [ ] new"],
+    ["an HTML-comment delimiter", plan("x", "aaa"), plan("x", "aaa") + "\n<!-- hidden"],
+    ["a train body", `x\n<!-- merge-train {"cars":[]} -->`, `y\n<!-- merge-train {"cars":[]} -->`],
+    ["an unreadable payload", plan("x", "aaa"), plan("x", "bbb"), { GITHUB_EVENT_PATH: "missing.json" }],
+  ]) {
+    const r = edit(from, to, o);
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(JSON.parse(r.out.prs), [{ number: 7, head: HEAD7 }], `${why} re-gates`);
+  }
+  const push = runStep(RESOLVE_RUN, { EVENT: "pull_request_target", ACTION: "synchronize", PR_NUMBER: "7", IN_PR: "", IN_HEAD: "", IN_ATTEMPT: "",
+    CANDIDATES: "null", FAKE_PR: pr7(), GITHUB_EVENT_PATH: "missing.json" });
+  assert.deepEqual(JSON.parse(push.out.prs), [{ number: 7, head: HEAD7 }], "the screen applies to `edited` only");
+});
+
+test("land.yml resolve: a CI completion on a PR that does not ask posts only when there is a gate to turn red", () => {
+  const RESOLVE_RUN = LAND.jobs.resolve.steps.find((s) => s.id === "pick").run;
+  const ci = (pr, statuses, o = {}) => runStep(RESOLVE_RUN, { EVENT: "workflow_run", RUN_BRANCH: "feature", RUN_REPO: "o/r", RUN_NAME: "CI",
+    RUN_CONCLUSION: "success", RUN_SHA: HEAD7, CANDIDATES: JSON.stringify([{ number: 7, base: { ref: DEPLOY_BRANCH } }]),
+    PR_NUMBER: "", IN_PR: "", IN_HEAD: "", IN_ATTEMPT: "", FAKE_PR: pr, FAKE_STATUSES: JSON.stringify(statuses), ...o });
+  const gate = (state) => [{ context: "gate", state }];
+  for (const [statuses, posts] of [[[], false], [gate("failure"), false], [gate("success"), true], [gate("pending"), true]]) {
+    const r = ci(pr7({ labels: [] }), statuses);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(JSON.parse(r.out.notasked).length, posts ? 1 : 0, `gate ${statuses[0]?.state || "none"}: post ${posts ? "runs" : "is skipped"}`);
+  }
+  assert.equal(JSON.parse(ci(pr7({ labels: [] }), [], { GH_DISCOVERY_FAILURE: "status" }).out.notasked || "[1]").length, 1, "an unreadable status still goes to post");
+  const armed = ci(pr7({ labels: [], auto_merge: { merge_method: "merge" } }), []);
+  assert.deepEqual(JSON.parse(armed.out.disarm), [7], "an armed PR is always disarmed");
+  assert.equal(JSON.parse(armed.out.notasked).length, 1);
+  const draftLand = ci(pr7({ draft: true }), []);
+  assert.equal(JSON.parse(draftLand.out.notasked)[0].draft, true, "`land` on a draft always gets its gate and comment");
+  assert.deepEqual(JSON.parse(ci(pr7(), []).out.prs), [{ number: 7, head: HEAD7 }], "a `land` PR is re-gated as before");
 });
 
 test("land.yml post: `land` on a draft writes a gate failure naming the flip, and comments once per head", () => {

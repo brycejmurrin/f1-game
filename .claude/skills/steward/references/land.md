@@ -10,8 +10,9 @@ Read when you need the detail behind SKILL.md §Land (the steps themselves are t
 - Adding `land` while CI still runs is fine: `gate` shows in progress ("waiting") and re-evaluates when CI ends. Going
   back to draft or removing `land` turns `gate` red.
 - `land` on a draft does nothing until the flip (`gate` reads "draft: flip ready first", one comment per head).
-  Removing and re-adding `land` re-gates a stale `gate` by hand; `land.yml` also re-gates on a PR-body edit, on a
-  `config-ok` click (on a `land` PR) and on a schedule.
+  Removing and re-adding `land` re-gates a stale `gate` by hand; `land.yml` also re-gates on a `config-ok` click (on a
+  `land` PR), on a schedule, and on a PR-body edit that changes a Plan checklist line, a heading or the train manifest.
+  A Hand-off or prose edit re-gates nothing, and no edit cancels a gate already running (#6536 R3).
 - Route: `node tools/ci/ship-pr.mjs --pr <n>` (runs ready-gate; prints the next two calls), the GitHub MCP
   `update_pull_request` with `draft:false`, then add `land` with MCP `issue_write`: the live list plus `land` ([`labels.md`](labels.md)).
 - PR body: name another PR without a closing keyword (`fix`/`close`/`resolve` and their -s/-d forms, colon or not, before
