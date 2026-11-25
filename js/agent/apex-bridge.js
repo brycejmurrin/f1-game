@@ -860,7 +860,7 @@ const ApexBridge = (function () {
       if (_run !== run) break;
       run.seen.add(c.id);
       run.last = { id: c.id, cmd: c.msg && c.msg.cmd, busy: true };
-      armStatus(STATUS_BUSY_MS);   // busy: the next edit within 15 s
+      if (!run.statusSlow) armStatus(STATUS_BUSY_MS);   // busy: the next edit within 15 s
       const res = await handle(c.msg);
       run.last.busy = false;
       run.served++;
@@ -888,24 +888,40 @@ const ApexBridge = (function () {
     return { status: true, v: V, at: new Date().toISOString(), linked: !ended, ended: ended || undefined, sha, screen,
       state: gameState(), visible: d ? !d.hidden : null, driving, served: run.served, last: run.last || null, hello: run.cutoff };
   }
+  // An edit asked for while one is in flight (a visibility flip, the link's end) is queued and sent right after it, so
+  // the newest state always lands; a 403 / 429 (GitHub's rate limits) slows the cadence to STATUS_SLOW_MS.
+  const STATUS_SLOW_MS = 300000;
   async function postStatus(run, ended, keepalive) {
-    if (run.statusBusy) return null;
-    run.statusBusy = true;
+    if (run.statusBusy) {
+      run.statusAgain = { ended: ended || (run.statusAgain && run.statusAgain.ended), keepalive: keepalive || (run.statusAgain && run.statusAgain.keepalive) };
+      return run.statusBusy;
+    }
+    const p = run.statusBusy = statusEdit(run, ended, keepalive).finally(() => {
+      run.statusBusy = null;
+      const again = run.statusAgain;
+      run.statusAgain = null;
+      if (again) postStatus(run, again.ended, again.keepalive);
+    });
+    return p;
+  }
+  async function statusEdit(run, ended, keepalive) {
     try {
       const body = { body: "```apex-status\n" + JSON.stringify(statusOf(run, ended)) + "\n```" };
       let id = run.statusId || storedStatusId(run.issue);
       if (id) {
         const r = await gh("", { run, repoPath: "/issues/comments/" + id, method: "PATCH", body, keepalive });
-        if (r.ok) { run.statusId = id; return id; }
+        if (r.ok) { run.statusId = id; run.statusSlow = false; return id; }
+        run.statusSlow = r.status === 403 || r.status === 429;
         if (r.status !== 404) throw new Error("edit " + r.status);   // 404: deleted, post a fresh one
       }
       const r = await gh("/comments", { run, body, keepalive });
+      run.statusSlow = r.status === 403 || r.status === 429;
       if (!r.ok) throw new Error("post " + r.status);
       id = (await r.json()).id;
       run.statusId = id;
       rawSet(STATUS_KEY, run.issue + ":" + id);
       return id;
-    } catch (e) { say("status failed: " + e.message); return null; } finally { run.statusBusy = false; }
+    } catch (e) { say("status failed: " + e.message); return null; }
   }
   // Arms the next edit `ms` from now, unless one is already due sooner (a stream of commands never postpones it).
   function armStatus(ms) {
@@ -919,7 +935,7 @@ const ApexBridge = (function () {
       if (_run !== run) return;
       run.statusTimer = null;
       await postStatus(run);
-      if (_run === run) armStatus(run.last && run.last.busy ? STATUS_BUSY_MS : STATUS_IDLE_MS);
+      if (_run === run) armStatus(run.statusSlow ? STATUS_SLOW_MS : run.last && run.last.busy ? STATUS_BUSY_MS : STATUS_IDLE_MS);
     }, ms);
   }
 
@@ -939,7 +955,7 @@ const ApexBridge = (function () {
   async function start(issue, tok) {
     if (_run) return false;
     _run = { issue, token: tok, cutoff: null, since: null, etag: null, seen: new Set(), served: 0, backoff: 0, timer: null, state: "connecting",
-      last: null, statusId: 0, statusTimer: null, statusDue: 0, statusBusy: false, onVis: null };
+      last: null, statusId: 0, statusTimer: null, statusDue: 0, statusBusy: null, statusAgain: null, statusSlow: false, onVis: null };
     paintBadge();
     try {
       const hello = await post({ hello: true, facts: facts() });
@@ -977,7 +993,8 @@ const ApexBridge = (function () {
     clearTimeout(run.statusTimer);
     try { if (run.onVis) document.removeEventListener("visibilitychange", run.onVis); } catch (_) { /* no document */ }
     _run = null;
-    if (run.statusId) postStatus(run, why || "stopped");   // the last edit says the link ended, and why
+    // The last edit says the link ended, and why — even in the first seconds (a reload), to the id stored on the device.
+    if (run.statusId || storedStatusId(run.issue)) postStatus(run, why || "stopped", true);
     say("link ended: " + (why || "stopped"));
     paintBadge(why || "ended");
   }
