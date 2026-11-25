@@ -222,13 +222,15 @@ const RaceSettings = (function () {
     const {
       GameAudio, Tracks, SettingRow, DrivingLine, SeasonCal,
       qualiResults, openQuali, enableTilt, getSteerMode, buildStandings, raceIntro, previewWxPlan,
+      gridFromQuali,
     } = deps;
     if (typeof EnergyPlan !== "undefined") EnergyPlan.fromStore(store);   // #1580: the stored sector plan, default MANUAL ×3
     if (typeof DamageHandling !== "undefined") DamageHandling.fromStore(store);   // #1578: the stored DAMAGE choice, default DISPLAY
     const isTimeTrial = () => G.session === "tt";
     const isChampionship = () => G.flow === "season" || G.flow === "career";
     const sessionLaps = (n) => SeasonCal.lapsFor(n, G.season);   // what the green runs: a sprint divides (#6341)
-    const gridFromQuali = () => (isChampionship() ? SeasonCal.quali() : (G.raceQuali && !isTimeTrial()));
+    // gridFromQuali is game.js's own predicate (deps), the one startRace() reads: a copy here dropped the
+    // real-race check, so GO on a Data Hub JUMP IN opened #quali when startRace() would not (#6545 D1).
     // The one flow whose setup is remembered: a solo one-off GP. Time trial
     // (and the Daily inside it), championship rounds and a VS FRIEND room all
     // stage laps/weather/time of their own, and a REAL RACE never reaches here.

@@ -123,7 +123,7 @@ function sheet(o = {}) {
   const disk = new Map();
   const store = { get: (k, d) => (disk.has(k) ? JSON.parse(disk.get(k)) : d), set: (k, v) => { disk.set(k, JSON.stringify(v)); return true; } };
   const LIST = [{ id: "spa", gpLaps: 44 }, { id: "monaco", gpLaps: 79 }, { id: "zandvoort", gpLaps: 72 }];
-  let starts = 0;
+  let starts = 0, qualis = 0;
   const G = {
     flow: "gp", session: "race", trackIdx: 0, season: null, daily: null, netLobby: { roomChanged() {} },
     raceLaps: 3, raceWeather: "dry", raceTimeOfDay: "default", raceChangeable: false, wxArcPlan: null,
@@ -138,14 +138,52 @@ function sheet(o = {}) {
   const rs = ctx.RaceSettings.create(G, {
     GameAudio: {}, Tracks: { LIST }, SettingRow: { paint() {}, disable() {}, wire() {} },
     DrivingLine: { mode: () => "off" }, SeasonCal: { formatLaps: (n) => n, quali: () => false, qualiNext: () => false },
-    qualiResults: () => null, openQuali() {}, enableTilt() {}, getSteerMode: () => "buttons", buildStandings() {},
+    qualiResults: () => null, openQuali() { qualis++; }, enableTilt() {}, getSteerMode: () => "buttons", buildStandings() {},
     raceIntro: (go) => go(),
+    // game.js's predicate as game.js builds it; G.realRace stands in for the real-race session
+    gridFromQuali: () => !!G.raceQuali && G.session !== "tt" && !(G.realRace && G.realRace.status().active),
   });
   rs.wireButtons();
   const at = (id) => { G.trackIdx = LIST.findIndex((t) => t.id === id); rs.openRaceSettings("select"); return G.raceLaps; };
   const start = () => dom.byId("rs-go").onclick();
-  return { G, rs, disk, at, start, starts: () => starts };
+  return { G, rs, disk, at, start, starts: () => starts, qualis: () => qualis };
 }
+
+// ── #6545 D1: GO reads game.js's grid rule, the one startRace() reads ────────
+// A Data Hub JUMP IN (a real race) has its own grid and never opens #quali in
+// startRace(); race-settings kept a copy of the predicate without that check,
+// so GO with the QUALI grid rule opened qualifying for a real race.
+test("#6545: GO on a real-race event with the QUALI grid starts the race, not qualifying", () => {
+  const live = { active: true };
+  const h = sheet({ raceQuali: true, realRace: { status: () => live } });
+  h.at("spa");
+  assert.equal(h.G.$("rs-go").textContent, "START RACE", "a real race's CTA never offers qualifying");
+  h.start();
+  assert.equal(h.qualis(), 0, "GO never opens #quali for a real race");
+  assert.equal(h.starts(), 1, "GO goes straight to startRace(), as startRace() itself would");
+  live.active = false;
+  h.at("spa");
+  assert.equal(h.G.$("rs-go").textContent, "START QUALIFYING", "the same grid rule outside a real race qualifies first");
+  h.start();
+  assert.equal(h.qualis(), 1);
+  assert.equal(h.starts(), 1);
+});
+
+test("#6545: in the live game, a real race's GO and startRace() read one grid predicate", () => {
+  const G = g.G, rr = G.realRace, status0 = rr.status;
+  G.timeTrial = false; G.seasonMode = false;
+  try {
+    G.raceGrid = "quali"; G.raceQuali = true;
+    rr.status = () => ({ active: true });
+    G.trackIdx = idx("monza"); G.openRaceSettings("select");
+    assert.equal(G.$("rs-go").textContent, "START RACE", "a real race is not offered qualifying from the sheet");
+    rr.status = status0;
+    G.openRaceSettings("select");
+    assert.equal(G.$("rs-go").textContent, "START QUALIFYING", "the QUALI grid rule qualifies a one-off");
+  } finally {
+    rr.status = status0; G.raceQuali = false;
+  }
+});
 
 test("settings search reveals tyre wear without staging or normalizing the race draft and returns to search", () => {
   const h = sheet({ state: "menu", raceLaps: 7, raceWeather: "storm", raceTimeOfDay: "night", raceChangeable: true });
