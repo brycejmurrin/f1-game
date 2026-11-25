@@ -21,6 +21,8 @@ the gaps too long; the half-hour light check closes them.
   session, initiation `human_request`: FULL at `19 * * * *`, LIGHT at
   `49 * * * *` (never minute 0). Their checklists live in skill `dispatcher`
   `references/orchestrator-brief.md` §Standing routines.
+- FULL keeps queue health per #6463: ready+land 3–6, drafts 8–14, no new FIX
+  workers while ready ≥ 10.
 - LIGHT is the PR follow-up: message the owner of a red, conflicting or stalled
   PR, or launch one `CONTINUE PR` when it has none; silent when nothing changed.
 - A successor re-creates both and disables the predecessor's with
