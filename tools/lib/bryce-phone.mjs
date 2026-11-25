@@ -39,6 +39,8 @@ export function newestLiveExport(root = ROOT) {
  *  October file older tests pin to. */
 export const OWNER_PROFILES = Object.freeze({
   live: newestLiveExport(),
+  // The export bryce-phone-paint's ceilings were measured on; pinned until #6681 fixes the paint rises on `live` (#6646 A).
+  nov10: "tests/data/settings-live-export-2026-11-10.json",
   legacy: "tests/data/settings-defaults-export.json",
 });
 export const OWNER_EXPORT = OWNER_PROFILES.live;
