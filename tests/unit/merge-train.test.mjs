@@ -633,12 +633,15 @@ test("#6584: a rebased train's merge keeps the red train's bisect for the train 
 /** A bare `origin` and a clone: the deploy branch at `base`, cars 1–4 at refs/pull/<n>/head, train #100 = the fold of
  *  cars 1 and 2 (its own refs/pull/100/head). `request` reads stacked refs from the bare remote and applies DELETEs to
  *  it, so several builds can run back to back on one state. */
-function stackFixture() {
+function stackFixture({ refuseStack = false, refsError = false } = {}) {
   const root = scratch("merge-train-stack-");
   const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
   const gitAt = (cwd) => (...a) => { const r = spawnSync("git", a, { cwd, encoding: "utf8", env }); assert.equal(r.status, 0, `${a.join(" ")}: ${r.stderr}`); return r.stdout.trim(); };
   const remote = path.join(root, "origin.git"), dir = path.join(root, "work");
   spawnSync("git", ["init", "-q", "--bare", remote]);
+  if (refuseStack) { // a token that may not create train-next/* (the FALLBACK case): the remote refuses those refs only
+    fs.writeFileSync(path.join(remote, "hooks", "pre-receive"), "#!/bin/sh\nwhile read o n r; do case \"$r\" in refs/heads/train-next/*) echo \"refusing $r\" >&2; exit 1;; esac; done\nexit 0\n", { mode: 0o755 });
+  }
   fs.mkdirSync(dir);
   const g = gitAt(dir), rg = gitAt(remote);
   g("init", "-q", "-b", DEPLOY); g("remote", "add", "origin", remote);
@@ -666,6 +669,7 @@ function stackFixture() {
     if (p.startsWith("pulls?state=closed")) return { json: [] };
     if (/^pulls\/\d+$/.test(p)) return { json: state.pulls[Number(p.slice(6))] };
     if (p.startsWith("git/matching-refs/heads/train-next/")) {
+      if (refsError) return { error: "HTTP 403: Resource not accessible by integration" };
       const out = spawnSync("git", ["for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/train-next/"], { cwd: remote, encoding: "utf8" }).stdout.trim();
       return { json: out ? out.split("\n").map((l) => { const [ref, s] = l.split(" "); return { ref, object: { sha: s } }; }) : [] };
     }
@@ -681,7 +685,14 @@ function stackFixture() {
   const screen = (cars, stack = true) => fs.writeFileSync(screenFile, JSON.stringify({ tip: N.head, ...(stack ? { stack: { pr: 100, head: N.head } } : {}), cars: cars.map((pr) => ({ pr, head: heads[pr], ok: true, why: "" })) }));
   const stacks = () => { const o = spawnSync("git", ["for-each-ref", "--format=%(refname:strip=2) %(objectname)", "refs/heads/train-next/"], { cwd: remote, encoding: "utf8" }).stdout.trim(); return o ? o.split("\n").map((l) => l.split(" ")) : []; };
   const build = async () => { const logs = []; const code = await main(["--build", "--screen-file", screenFile], { request, cwd: dir, log: (l) => logs.push(l), now: Date.parse("2026-11-25T12:00:00Z"), carGate: () => ({ head: "", rows: Object.fromEntries(CAR_ROWS.map((k) => [k, { ok: true }])) }), tipCheck: () => ({ state: "green" }) }); return { code, logs }; };
-  return { root, dir, remote, g, rg, base, heads, N, state, writes, request, screen, stacks, build, rm: () => fs.rmSync(root, { recursive: true, force: true }) };
+  const merge = () => { // GitHub merges train #100 into the deploy branch
+    const m = g("commit-tree", `${N.head}^{tree}`, "-p", base, "-p", N.head, "-m", "Merge pull request #100");
+    g("push", "-q", "origin", `${m}:refs/heads/${DEPLOY}`);
+    Object.assign(state, { tip: m, trainOpen: false });
+    for (const n of [1, 2]) state.pulls[n] = { ...state.pulls[n], state: "closed", merged_at: "2026-11-25T11:50:00Z" };
+    return m;
+  };
+  return { root, dir, remote, g, rg, base, heads, N, state, writes, request, screen, screenFile, stacks, build, merge, rm: () => fs.rmSync(root, { recursive: true, force: true }) };
 }
 
 test("#6584: N merges, then N+1 — stacked on N's head while N runs (no PR, no CI), opened from that very fold once N merged", async () => {
@@ -778,5 +789,49 @@ test("#6584: the screen stacks on the one open train: it folds onto that head an
     const b = await f.build();
     assert.deepEqual(b.logs, [`= merge-train waiting — train #100 is still running; the screen was not stacked on its head ${f.N.head.slice(0, 8)}, nothing stacked`]);
     assert.deepEqual(f.stacks(), []);
+  } finally { f.rm(); }
+});
+
+test("#6584 FALLBACK: a token that may not create train-next/* logs one line, exits 0, leaves train N alone; the next train opens as today", async () => {
+  const f = stackFixture({ refuseStack: true });
+  try {
+    f.screen([3, 4]);
+    const a = await f.build();
+    assert.equal(a.code, 0, a.logs.join("\n"));
+    const skipped = a.logs.filter((l) => l.startsWith("= merge-train stack skipped"));
+    assert.equal(skipped.length, 1, a.logs.join("\n"));
+    assert.match(skipped[0], new RegExp(`^= merge-train stack skipped — push train-next/${f.N.head}-3-4: .*: one train at a time this run$`));
+    assert.deepEqual(f.stacks(), []);
+    assert.deepEqual(f.writes, [], "train #100 is not closed, relabelled or touched: CI, gate and arm go on as today");
+    // N merges: one train at a time, exactly as before #6584 (a plain screen onto the new tip opens the next train)
+    const tip = f.merge();
+    fs.writeFileSync(f.screenFile, JSON.stringify({ tip, cars: [3, 4].map((pr) => ({ pr, head: f.heads[pr], ok: true, why: "" })) }));
+    const b = await f.build();
+    assert.equal(b.code, 0, b.logs.join("\n"));
+    assert.match(b.logs.at(-1), /^= merge-train opened #200 — cars=#3,#4 /);
+    assert.equal(trainManifest(f.writes.find((w) => w.p === "pulls" && w.method === "POST").body.body).base, tip);
+  } finally { f.rm(); }
+});
+
+test("#6584 FALLBACK: unreadable stacked refs never fail a run — the build waits on N or opens as today, the screen screens onto the tip", async () => {
+  const f = stackFixture({ refsError: true });
+  try {
+    f.screen([3, 4]);
+    const a = await f.build();
+    assert.equal(a.code, 0, a.logs.join("\n"));
+    assert.deepEqual(a.logs, ["= merge-train stack skipped — stacked trains: HTTP 403: Resource not accessible by integration: one train at a time this run", "= merge-train waiting — train #100 is still running"]);
+    assert.deepEqual(f.writes, []);
+    const so = path.join(f.root, "s.json");
+    assert.equal(await screenMain({ out: so, request: f.request, cwd: f.dir, log: () => {}, check: () => assert.fail("no stacked screen"), gen: () => assert.fail("no gen") }), 0);
+    assert.equal(readScreen(fs.readFileSync(so, "utf8")).skip, "train #100 is open (stacked refs unreadable)");
+    const tip = f.merge();
+    const ok = await screenMain({ out: so, request: f.request, cwd: f.dir, log: () => {}, check: () => ({ ok: true }), gen: () => ({ ok: true }), carGate: () => ({ head: "", rows: Object.fromEntries(CAR_ROWS.map((k) => [k, { ok: true }])) }) });
+    assert.equal(ok, 0);
+    const s = readScreen(fs.readFileSync(so, "utf8"));
+    assert.deepEqual({ tip: s.tip, stack: s.stack, cars: s.cars.map((c) => c.pr) }, { tip, stack: undefined, cars: [3, 4, 5] });
+    fs.copyFileSync(so, f.screenFile);
+    const b = await f.build();
+    assert.equal(b.code, 0, b.logs.join("\n"));
+    assert.match(b.logs.at(-1), /^= merge-train opened #200 — cars=#3,#4,#5 /);
   } finally { f.rm(); }
 });

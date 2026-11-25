@@ -773,11 +773,17 @@ function listStacks(request) {
   return { refs: (r.json || []).map((x) => ({ ...parseStackRef(x?.ref), sha: String(x?.object?.sha || "").toLowerCase() })).filter((x) => x.base && SHA.test(x.sha)) };
 }
 
+/** The one line a stacking failure logs (FALLBACK). Exported for the test. */
+export const stackSkipped = (why) => `= merge-train stack skipped — ${why}: one train at a time this run`;
+
 /** The build's stacked-train step (stackPlan, then act). null: no stack is left and the build goes on as before;
- *  else { code, msg }: this run is done. */
+ *  { code, msg }: this run is done; { degraded }: stacking failed (a refs read, a fetch, a car read), logged once, and
+ *  the build goes on exactly as with ONE train at a time (FALLBACK: a LAND_TOKEN that may not create train-next/*, or
+ *  any other stacking error, never fails the run, the open train or its merge). */
 async function stackStep({ request, cwd, log, running, now, carGate = null }) {
+  const degraded = (why) => { log(stackSkipped(why)); return { degraded: true }; };
   const ls = listStacks(request);
-  if (ls.error) return { code: 1, msg: `= merge-train error — ${ls.error}` };
+  if (ls.error) return degraded(ls.error);
   if (!ls.refs.length) return null;
   const git = gitIn(cwd);
   const del = (x) => request(`git/refs/heads/${x.ref}`, { method: "DELETE" });
@@ -786,19 +792,19 @@ async function stackStep({ request, cwd, log, running, now, carGate = null }) {
   for (const e of extra) { del(e); log(`  deleted ${e.ref}: one stacked train at a time`); }
   for (const spec of [`+refs/heads/${x.ref}:refs/remotes/origin/${x.ref}`, `+refs/heads/${DEPLOY}:refs/remotes/origin/${DEPLOY}`]) {
     const f = git(["fetch", "--quiet", "--no-tags", "origin", spec]);
-    if (f.status !== 0) return { code: 1, msg: `= merge-train error — fetch ${spec.split(":")[0].slice(1)}: ${String(f.stderr || "").trim()}` };
+    if (f.status !== 0) return degraded(`fetch ${spec.split(":")[0].slice(1)}: ${String(f.stderr || "").trim()}`);
   }
   const cars = new Map();
   for (const pr of x.prs) {
     const q = request(`pulls/${pr}`);
-    if (q.error) return { code: 1, msg: `= merge-train error — pulls/${pr}: ${q.error}` };
+    if (q.error) return degraded(`pulls/${pr}: ${q.error}`);
     cars.set(pr, q.json);
   }
   const stack = readStack({ base: x.base, head: x.sha, prs: x.prs, refOf: (n) => cars.get(n)?.head?.ref, git });
   if (stack.error) { del(x); log(`= merge-train dropped ${x.ref}: ${stack.error}`); return null; }
   const tipR = request(`branches/${encodeURIComponent(DEPLOY)}`);
   const tip = String(tipR.json?.commit?.sha || "").toLowerCase();
-  if (!tip) return { code: 1, msg: `= merge-train error — deploy tip: ${tipR.error || "no sha"}` };
+  if (!tip) return degraded(`deploy tip: ${tipR.error || "no sha"}`);
   const onTip = git(["merge-base", "--is-ancestor", x.base, tip]).status === 0;
   const bad = new Map();
   if (!running) {
@@ -819,7 +825,7 @@ async function stackStep({ request, cwd, log, running, now, carGate = null }) {
     if (f.error || !f.cars.length) { del(x); log(`= merge-train dropped ${x.ref}: ${f.error || "no car folds"}`); return null; }
     const ref = stackRef(x.base, f.cars);
     const push = git(["push", "--quiet", "origin", `${f.head}:refs/heads/${ref}`], { timeout: 300_000 });
-    if (push.status !== 0) return { code: 1, msg: `= merge-train error — push ${ref}: ${String(push.stderr || "").trim()}` };
+    if (push.status !== 0) return { code: 0, msg: stackSkipped(`push ${ref}: ${String(push.stderr || "").trim().split("\n")[0]}`) };
     if (ref !== x.ref) del(x);
     return { code: 0, msg: `= merge-train restacked ${names(f.cars)} on train #${running.number} (${plan.why})` };
   }
@@ -892,7 +898,8 @@ export async function main(argv, { request = api, cwd = ROOT, log = console.log,
       log(`= merge-train closed #${t.number} (${d.outcome}): ${d.why}`);
     }
     const st = await stackStep({ request, cwd, log, running, now, carGate });
-    if (st) { log(st.msg); return st.code; }
+    if (st?.degraded) { if (running) { log(`= merge-train waiting — train #${running.number} is still running${runNoteOf}`); return 0; } }
+    else if (st) { log(st.msg); return st.code; }
     if (running) return stackBuild({ request, cwd, log, now, max, running, screenFile, note: runNoteOf, carGate });
   }
   let screen = null;
@@ -936,7 +943,8 @@ async function stackBuild({ request, cwd, log, now, max, running, screenFile, no
   if (!plan.enough) return wait(`; too few cars to stack (${line})`);
   const ref = stackRef(plan.base, plan.cars);
   const push = gitIn(cwd)(["push", "--quiet", "origin", `${plan.head}:refs/heads/${ref}`], { timeout: 300_000 });
-  if (push.status !== 0) { log(`= merge-train error — push ${ref}: ${String(push.stderr || "").trim()}`); return 1; }
+  // FALLBACK: a refused push (LAND_TOKEN may not create train-next/*) is one logged line; train #running is untouched.
+  if (push.status !== 0) { log(stackSkipped(`push ${ref}: ${String(push.stderr || "").trim().split("\n")[0]}`)); return 0; }
   log(`= merge-train stacked ${ref.slice(0, STACK_PREFIX.length + 12)}… on train #${running.number} — ${line}`);
   return 0;
 }
@@ -953,8 +961,9 @@ export async function screenMain({ out, request = api, cwd = ROOT, log = console
   if (trains.length > 1) return skip(`trains ${trains.map((p) => `#${p.number}`).join(",")} are open`);
   // Two trains in flight (#6584): one open train → screen the next onto its head; a stacked train → the build acts on it.
   const ls = listStacks(request);
-  if (ls.error) { log(`= merge-train error — ${ls.error}`); return 1; }
-  if (ls.refs.length) return skip(`train ${ls.refs[0].prs.map((n) => `#${n}`).join(",")} is stacked${trains.length ? ` on #${trains[0].number}` : ""}: the build promotes, restacks or rebases it`);
+  // FALLBACK: refs unreadable → never stack this run (one open train: skip as before; none: screen onto the tip).
+  if (ls.error) { log(stackSkipped(ls.error)); if (trains.length) return skip(`train #${trains[0].number} is open (stacked refs unreadable)`); }
+  else if (ls.refs.length) return skip(`train ${ls.refs[0].prs.map((n) => `#${n}`).join(",")} is stacked${trains.length ? ` on #${trains[0].number}` : ""}: the build promotes, restacks or rebases it`);
   const onto = trains[0] || null;
   const gate = check ? null : await import("./merge-gate.mjs");
   const ratchets = check || gate.ratchetsOnMerge;
