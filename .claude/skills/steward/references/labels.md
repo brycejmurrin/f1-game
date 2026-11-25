@@ -39,7 +39,7 @@ issue), ONE label per call:
 | `bug` / `enhancement` / `perf` / `refactor` / `flaky` / `tracking` / `epic` / `documentation` | issue | the TYPE, exactly one (§Issue scheme) |
 | `base-red` | issue | a red on the base (advisory; the auto issue is typed `tracking`) |
 | `area:*` | issue | the subsystem, one or more; `area:input` is controls (phone pad, gamepad, keyboard, touch, tilt) |
-| `source:hunt` / `source:gardener` / `source:review` | issue | where it came from: a hunt, audit or survey; a Gardener survey; a review |
+| `source:hunt` / `source:gardener` / `source:review` / `source:orchestrator` | issue | where it came from: a hunt, audit or survey; a Gardener survey; a review; the orchestrator (stalls, land/CI bugs, follow-ups) |
 | `phone` / `needs-device` | issue | shows on Bryce's iPhone or the phone controller; only a real device can verify it |
 
 ## Issue scheme
@@ -49,13 +49,14 @@ Bryce's scheme (2026-11-25 ~02:44Z, relayed by the orchestrator). Every issue, w
   (behaviour-neutral cleanup, a Gardener carve), `flaky` (a test, AGENTS.md rule 9), `tracking` (a checklist of
   findings or checks), `epic` (the work is in sub-issues) or `documentation`;
 - **one or more `area:*`;**
-- **`source:*`** when it came from a hunt, a Gardener survey or a review; `phone` / `needs-device` where they apply.
+- **`source:*`** when it came from a hunt, a Gardener survey, a review or the orchestrator; `phone` / `needs-device` where they apply.
 
 Ownership is not a label of this scheme: `lane:*` on the PR and `claimed` on the issue (§Lane). `node
 tools/ci/issue-labels.mjs` lists open issues with no type, two types or no area (GETs only; exit 2 when any).
 Fix a row with the one-label recipe above, after reading the issue.
 
-**Families** (one colour each in `.github/labels.json`; `.github/workflows/labels-sync.yml`, dispatched by Bryce,
+**Families** (colours are meaning-coded in `.github/labels.json`, Bryce's pick 2026-11-25: red stop/veto, amber
+attention, green merge flow, pastel areas, grey `source:*`, purple dispatch; `.github/workflows/labels-sync.yml`, dispatched by Bryce,
 applies the file: create or update, never delete): type, `area:*`, `source:*`, `lane:*`, status (`ready`, `claimed`,
 `blocked`, `needs-*`, `hold`), device (`phone`), process (`land`, `train`, `config-ok`, `ratchet-raise`, `deploy:red`,
 `memory-change`, `dispatch:*`, `fleet-board`, `batch`, `batched`, `base-red`), priority. Overlaps, one meaning each:
@@ -64,11 +65,11 @@ time and download weight as a whole: profilers, budgets, census); a perf fix ins
 subsystem's area. `area:input` is controls (pad, gamepad, keyboard, touch, tilt); `area:ui` is menus, HUD and layout.
 `batch` is the batch issue, `batched` each member. `phone` is a device tag beside the area.
 
-**Retired** (grey, description says what replaces it; nothing is deleted, Bryce decides): `ui` → `area:ui`. Retire
-candidates: `area:data` → `area:net`; `urgent` → `priority`; `test-review` → `source:review`; `question` →
-`needs-decision`; `lane:claude-cloud`, `lane:claude-code`, `lane:claude-code-web`, `lane:platform`, `lane:visuals` →
-`lane:claude`; `run-ci` (retired 2026-11-03); the unused GitHub defaults `duplicate`, `invalid`, `wontfix`,
-`good first issue`, `help wanted` (close with a state reason instead). Never put a retired label on an issue.
+**Retired** (grey, description says what replaces it): `run-ci` (retired 2026-11-03; off-repo Cursor/Codex briefs
+still add it, so the row stays). Retire candidate: `wontfix` (unused GitHub default; close as not planned instead).
+Deleted by Bryce 2026-11-25 (rows gone, so the labels sync never re-creates them): `ui`, `area:data`, `urgent`,
+`test-review`, `question`, `lane:claude-cloud`, `lane:claude-code`, `lane:claude-code-web`, `lane:platform`,
+`lane:visuals`, `duplicate`, `invalid`, `good first issue`, `help wanted`. Never put a retired label on an issue.
 
 ## Hunt and survey output
 
