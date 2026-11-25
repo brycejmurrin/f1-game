@@ -119,13 +119,18 @@ test("touch auto-throttle never counts as a driver asking for a rescue; a presse
     assert.ok(vMax < 3, `the scenario held the car under the rescue gate (peak ${vMax.toFixed(2)} m/s)`);
     assert.equal(p.rescueLastT, null, "auto gas is not a driver asking: no rescue fired in 5 s");
     // Positive control — the wedged-against-a-wall promise: the same car with
-    // the driver's pedal DOWN is rescued.
+    // the driver's pedal DOWN is rescued. Pinned at a standstill, like Row 2b:
+    // since #6546 P3 the stopped gate reads vStd (stopped FOR ITS PACE), and at
+    // pace 0.05 a free car crawling at 0.3 m/s is already 6 m/s of pace-normal
+    // speed — pulling away, not going nowhere. contactT > 0 shuts the touch
+    // auto-gas branch, so only the pressed pedal can be what asks.
     I.throttle = () => true;
     a.jump(0.0, 0, 0); p.rescueT = 0;
-    for (let i = 0; i < 300; i++) a.step(1 / 60, 1);
+    for (let i = 0; i < 300; i++) { p.speed = 0; p.contactT = 0.22; a.step(1 / 60, 1); }
     assert.ok(p.rescueLastT != null, "a pressed pedal on a car going nowhere still rescues");
   } finally {
     Object.assign(I, keep);
+    p.contactT = 0;
     a.setPhysics(PHYS0);
   }
 });

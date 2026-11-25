@@ -1099,7 +1099,7 @@ test("launch unification: every session the player starts reaches raceIntro; the
   assert.match(game, /const off = \(real && \(real\.watch \|\| real\.startLap > 1\)\) \|\| headlessMode \|\| document\.hidden;/);
   // QUICK on purpose: RACE AGAIN / TRY AGAIN, pause RESTART. (Net / headless / hidden fall back inside startRaceFromSheet.)
   assert.match(game, /else if \(isChampionship\(\)\) startRaceFromSheet\(\);[^\n]*\n\s*else startRaceCovered\(\);/, "RACE AGAIN / TRY AGAIN stay card-only restarts");
-  assert.match(game, /\$\("pm-restart"\)\.onclick = \(\) => \{[^\n]*startRace\(\)\.then\(/, "pause RESTART calls startRace() directly");
+  assert.match(game, /\$\("pm-restart"\)\.onclick = \(\) => \{[^\n]*= startRace\(\);[^\n]*\.then\(/, "pause RESTART calls startRace() directly");   // through a try (#6544 item 2)
   assert.doesNotMatch(game.match(/\$\("pm-restart"\)\.onclick[^\n]*/)[0], /raceIntro|startRaceFromSheet|startRaceCovered/);
   // Agent / dev starts (__apex.race()/tt(), Daily.open) keep the synchronous start the specs are written against.
   assert.match(read("js/race/daily-challenge.js"), /function open\(day, mode = "standard"\) \{[\s\S]*?G\.startRace\(\);/);
