@@ -31,8 +31,10 @@ const SaveSchemaRegistry = (function () {
     disposable() { return true; },
   };
 
-  function entry(owner, lane, v, validate) {
-    return { owner, lane, v: v | 0 || 1, validate: validators[validate] || validators.json };
+  function entry(owner, lane, v, validate, deviceOnly) {
+    const e = { owner, lane, v: v | 0 || 1, validate: validators[validate] || validators.json };
+    if (deviceOnly) e.deviceOnly = true;
+    return e;
   }
 
   const PREFIX = [
@@ -88,7 +90,7 @@ const SaveSchemaRegistry = (function () {
     "gfxBackendProbe": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "gfxDebug": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "inspector": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
-    "bridgeToken": entry("js/agent/apex-bridge.js (device-only GitHub token for the phone bridge; never exported)", "raw", 1, "rawScalar"),
+    "bridgeToken": entry("js/agent/apex-bridge.js (device-only GitHub token for the phone bridge; never exported)", "raw", 1, "rawScalar", true),
     "bridgeStatus": entry("js/agent/apex-bridge.js (apex-status comment id)", "raw", 1, "rawScalar"),
     "gpuCapture": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag, #2964 Spector/webgl-lint)", "raw", 1, "rawScalar"),
     "gfxTlxFail": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
@@ -255,6 +257,9 @@ const SaveSchemaRegistry = (function () {
     try { return e.validate(value); } catch (_) { return false; }
   }
 
+  // A credential: never copied or restored by a key snapshot (#6638).
+  function deviceOnly(k) { const e = resolve(k); return !!(e && e.deviceOnly); }
+
   let strict = false;
   function noteWrite(k, lane) {
     const e = resolve(k);
@@ -268,7 +273,7 @@ const SaveSchemaRegistry = (function () {
   // PREFIX / EXACT / validators stay module-private: resolve/validateKey/
   // ingestSettingsSpec are the only external seams (save-schema-registry tests).
   return {
-    resolve, validateKey, noteWrite, ingestSettingsSpec,
+    resolve, validateKey, noteWrite, ingestSettingsSpec, deviceOnly,
     get strict() { return strict; },
     set strict(v) { strict = !!v; },
     get settingsSpec() { return _settings; },

@@ -334,3 +334,37 @@ test("Graphics opens the real Benchmark dialog for arrangement without running a
   assert.ok(dialog.querySelector('[aria-label="Test"]'));
   assert.deepEqual(writes,[]);
 });
+
+// #6638: the phone bridge's GitHub token is device-only (SaveSchemaRegistry). A benchmark must not copy it into its
+// plan, and its restore must not write a token back that was revoked or forgotten while the run was going.
+test("bench-run never snapshots or restores the device-only bridge token (#6638)", async () => {
+  const REG = readFileSync(join(ROOT, "js/core/save-schema-registry.js"), "utf8");
+  const run = async (legacy) => {
+    const data = new Map([["apex26.bridgeToken", "ghp_secret"], ["apex26.gfxBackend", "glx"]]);
+    const ls = { get length() { return data.size; }, key: i => [...data.keys()][i],
+      getItem: k => data.get(k) ?? null, setItem: (k, v) => data.set(k, v), removeItem: k => data.delete(k) };
+    const page = () => {
+      const visibility = [];
+      const document = { hidden: false, getElementById: () => null, addEventListener: (type, fn) => { if (type === "visibilitychange") visibility.push(fn); } };
+      const ctx = vm.createContext({ localStorage: ls, document, location: { reload: () => { document.hidden = true; visibility.forEach(fn => fn()); } }, setTimeout: () => 0 });
+      vm.runInContext(REG, ctx, { filename: absSrc("js/core/save-schema-registry.js") });
+      const B = vm.runInContext(SRC + "\n;BenchRun", ctx, { filename: absSrc("js/perf/bench-run.js") });
+      B.create({ state: "menu" });
+      return { B, hide: () => ctx.location.reload() };
+    };
+    assert.equal(page().B.run("graphics"), true);
+    await new Promise(resolve => setImmediate(resolve));
+    const plan = JSON.parse(ls.getItem("apex26.benchRun"));
+    assert.equal(plan.restore["apex26.gfxBackend"], "glx", "ordinary keys are still snapshotted");
+    assert.equal("apex26.bridgeToken" in plan.restore, false, "the token is not copied into the plan");
+    assert.doesNotMatch(ls.getItem("apex26.benchRun"), /ghp_secret/);
+    if (legacy) { plan.restore["apex26.bridgeToken"] = "ghp_secret"; ls.setItem("apex26.benchRun", JSON.stringify(plan)); }
+    ls.removeItem("apex26.bridgeToken");   // FORGET TOKEN (or a revoke) during the run
+    page().hide();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual([JSON.parse(ls.getItem("apex26.benchRun")).state, ls.getItem("apex26.bridgeToken"), ls.getItem("apex26.gfxBackend")],
+      ["stopped", null, "glx"], "a forgotten token stays gone" + (legacy ? " (older plan's snapshot)" : ""));
+  };
+  await run(false);
+  await run(true);
+});
