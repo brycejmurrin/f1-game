@@ -653,7 +653,7 @@
   /* Height was deliberately put on the floored token; the width literal was
      the gap — eleven colour wells painted 19.2px wide at UI SIZE 40%. The
      max() arm only wins below 100%. */
-  width: max(48px, var(--tap-min)); height: var(--chip-h); padding: 0; border: 1px solid var(--plate-line);
+  width: max(48px, var(--tap-min), var(--tap-floor44)); height: var(--chip-h); padding: 0; border: 1px solid var(--plate-line);
   border-radius: var(--r-sm); background: none; cursor: pointer; flex: none;
 }
 /* NONE'd colour well (game.js toggles cz-off) dims like its inline-livery twin

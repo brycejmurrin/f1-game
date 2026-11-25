@@ -210,8 +210,9 @@
 }
 #cs-titlebar { display: flex; align-items: center; gap: calc(var(--gap) * 0.8); flex-wrap: wrap; min-width: 0; }
 #cs-titlebar h2 { margin: 0; letter-spacing: var(--ls-5); color: var(--text); }
+/* max(--label, --fs-floor) (#6434 row 5): --label is a flat 14, 9.8 painted at UI SIZE 70; same below. */
 #cs-team {
-  font-size: var(--label); font-weight: 800; font-style: italic; letter-spacing: var(--ls-4);
+  font-size: max(var(--label), var(--fs-floor)); font-weight: 800; font-style: italic; letter-spacing: var(--ls-4);
   color: var(--steel);
 }
 
@@ -237,7 +238,7 @@
 }
 #cs-budget-row { display: flex; align-items: center; justify-content: space-between; gap: calc(var(--gap) * 0.8); }
 #cs-budget {
-  font-size: var(--label); letter-spacing: var(--ls-3); color: var(--dim); min-width: 0;
+  font-size: max(var(--label), var(--fs-floor)); letter-spacing: var(--ls-3); color: var(--dim); min-width: 0;
 }
 #cs-budget.tight { color: var(--spark); }
 #cs-budget.over  { color: var(--red); }

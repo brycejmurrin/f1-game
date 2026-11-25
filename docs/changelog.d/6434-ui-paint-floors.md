@@ -1,0 +1,1 @@
+Fixed: At a small UI SIZE on a phone, qualifying names, the pause menu, the title disclaimer and the garage budget no longer paint under 12 px, and the lighting and camera tuner chips, Data Hub year pills, team colour wells and credits links get a 44 px touch target, without changing the layout at larger sizes.

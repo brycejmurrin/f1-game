@@ -1,4 +1,10 @@
 @layer overlays {
+/* --tap-floor44, the 44 PAINTED px ELEMENT FLOOR (#6434 row 6): a max() arm for the few touch controls that lay out
+   under 44 painted at a small UI SIZE (own px = 44.2 / --ui-scale, the #5358 hair). 0 with a mouse, so a desktop rule
+   that adds it is unchanged. Here, not in tokens.css: the title critical path has no bytes to spare, and every user
+   is a deferred sheet. */
+:root { --tap-floor44: 0px; }
+body:not(.desktop) { --tap-floor44: calc(44.2px / var(--ui-scale)); }
 /* The lesson's instruction card leaves all driving input with the HUD. */
 #learn-aero-guide {
   position: fixed;
@@ -1232,7 +1238,10 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
    A flat step, not a container unit: `min(--fs-micro, 3.75cqi)` fit here but CI's Chromium kept the full size after a
    layout switch (the SIDEBAR cell). The contract lets type scale, never a label overflow (#5153 §3 rule 3). */
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors button,
-body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors > details { font-size: calc(var(--fs-micro) * 0.92); }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors > details { font-size: max(calc(var(--fs-micro) * 0.92), var(--fs-floor)); }
+/* 12 PAINTED px FLOOR (#6434 row 5): the step-down above and the door buttons' inherited 16 px both paint 11 at
+   UI SIZE 70. max() keeps every size at UI SIZE 75 % and up exactly as it was; --fs-floor is 12 / --ui-scale. */
+#pausemenu .sheet-body > button { font-size: max(1em, var(--fs-floor)); }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet #pm-quit { grid-area: quit; margin-top: 0; }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quit::before { content: none; }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu :is(#pm-standings, #pm-skip-results) { grid-column: 1 / -1; }
