@@ -9,6 +9,7 @@ restated rules drifted into three wordings and one contradicted the skill [14].
 ## Contents
 
 - Before launching
+- Roles
 - The brief
 - While workers run
 - Standing routines
