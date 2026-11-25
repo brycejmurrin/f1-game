@@ -231,7 +231,7 @@ test("ready is keyed: a team pick or a livery bust re-arms it, and the warm is n
   assert.equal(h.pre.state().ready, false, "a team pick moves the key");
   assert.equal(await go(), true);
   assert.equal(h.gate.garageKey, "ferrari:parts:4|monza|day");
-  h.cam.meshKey = "";   // setup-sheet.js livery edit: G._spMeshKey = ""
+  h.cam.meshKey = "";   // setup-sheet.js livery edit: G.setupCam.meshKey = ""
   assert.equal(h.pre.state().ready, false, "a livery edit busts the cached car");
   assert.equal(await go(), true);
   assert.deepEqual(h.built.filter((p) => p === "car").length, 3, "one car build per run — the LRU sees one slot per key");
