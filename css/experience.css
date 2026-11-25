@@ -194,3 +194,23 @@
   body[data-shape="wide"][data-density="compact"]:has(> #overlay:not([hidden])) #ios-install { bottom: var(--safe-b); }
   @keyframes screen-in { from { opacity: 0; } }
 }
+/* 12 PAINTED px DISCLAIMER FLOOR (#6434 row 5). At UI SIZE 70 it painted 8.9 px. The brand zooms by TITLE SIZE x fit
+   (css/menu-destinations.css #soundbtn), so the floor divides by that, not --ui-scale. Here, not in the blocking sheet:
+   the title critical path has no bytes to spare (css-critical-path.test.mjs), and the title opens after boot, when
+   this sheet is in. `layout`, because the rule it floors is in `responsive`. Ungated since #6512: the shipped 109 %
+   phone painted it near 8 px too; Bryce approved re-blessing title-phone-landscape for it (2026-11-25, "All fixes"). */
+@layer layout {
+  /* The SAME media query as the rule it floors: unconditional, it overrode the desktop clamp() (9.6 px on a MacBook). */
+  @media (max-height: 519px) and (min-aspect-ratio: 1/1) {
+    body[data-shape="wide"]:not([hidden]) #overlay #menu-brand {
+      --brand-fs-floor: calc(12px / var(--tl-title-size, 1) / var(--tf, 1));
+    }
+    body[data-shape="wide"]:not([hidden]) #overlay #menu-brand #disclaimer {
+      font-size: max(calc(var(--fs-micro) * .52 * var(--ui-compact-brand-text, 1)), var(--brand-fs-floor));
+    }
+    /* SOUND, the brand's other plate: 10.3 px at UI SIZE 70, same zoom, same floor. */
+    body[data-shape="wide"]:not([hidden]) #overlay #menu-brand #soundbtn {
+      font-size: max(calc(var(--fs-micro) * .6 * var(--ui-compact-brand-text, 1)), var(--brand-fs-floor));
+    }
+  }
+}

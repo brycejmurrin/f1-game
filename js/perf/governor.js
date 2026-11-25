@@ -175,6 +175,29 @@ function _xMove(ev, up) {
   return true;
 }
 
+// DESKTOP REFRESH CHASE (#6417). Why: docs/GOVERNOR-RATIONALE.md §gov-43.
+let _chaseFutile = false, _chaseMiss = 0;
+const LADDER_60 = 1000 / 60;
+function _chaseTarget() {
+  if (_chaseFutile || !_autoRes || !_gfx || _gfx.isMobile || typeof RenderRate === "undefined" || !RenderRate.displayMs) return 0;
+  const want = RenderRate.desktopTarget ? RenderRate.desktopTarget() : "display";
+  if (want === "60") return 0;
+  const ms = want === "120" ? Math.max(+RenderRate.displayMs() || 0, 1000 / 120) : +RenderRate.displayMs() || 0;
+  return ms > 0 && ms < LADDER_60 - 2 ? ms : 0;
+}
+function _chaseFloor() {
+  try {
+    const p = _gfx.getPresentSize(), w = +window.innerWidth;
+    if (p && p.width > 0 && w > 0) return Math.min(1, Math.max(0.5, w / p.width));
+  } catch (_) { /* no size yet */ }
+  return 1;
+}
+// The ladder's budget goes back to 60: a floor the chase dragged to the display's cadence would shed features for it.
+function _chaseGiveUp() {
+  _chaseFutile = true; _chaseMiss = 0; _scaleCap = Infinity; _armCapProbe();
+  _floorMs = Math.max(_floorMs, LADDER_60); _floorShadowMs = Math.max(_floorShadowMs, LADDER_60);
+}
+
 // The restore climb's top: _resCeil, or the backend's supersampling ceiling above 1 (§gov-42).
 function _climbTop() {
   let m;
@@ -244,6 +267,10 @@ function _latchBound() {
   if (_floorMinMs < _floorMs) _floorMs = _floorMinMs;
 }
 
+// GRAPHICS HIGH (tier 0, no crash floor) lifts a phone's DPR cap 1.5 -> 2 (#5222, Bryce 2026-11-24); not budget-shed.
+function _syncPresetDpr() {
+  if (_gfx && typeof _gfx.setDprPreset === "function") _gfx.setDprPreset(_floorTier() === 0 ? 2 : 0);
+}
 function init(gfx) {
   Log.info("game", "PerfGov.init");
   _gfx = gfx;
@@ -282,6 +309,7 @@ function init(gfx) {
   _perfTierFloor = _floorFromStrikes(_crashStrikes);
   _perfTier = _perfTierFloor;
   _autoShed = 0;
+  _syncPresetDpr();
   _phoneSlowLatch = false;
   _xShed = 0; _xFutile = false;
   try { if (_xq()) gfx.gpuTimer(true); } catch (_) { /* timing is optional */ }
@@ -313,7 +341,7 @@ function sentinelArm(on) {
             _sinceUp = -1; _scaleCap = Infinity; _capProbeMs = CLIMB_SURVIVE_MS;
             _scaleMoves = 0; _degradeArm = 0;
             // A futile ladder measured in a DRY race must not block the next (wet) race's shed.
-            _tierFutile = false; _scaleFutile = false; _xFutile = false;
+            _tierFutile = false; _scaleFutile = false; _xFutile = false; _chaseFutile = false; _chaseMiss = 0;
             _computeBound = false; _cheapSeen = false; _floorMinMs = 16.7; _floorShadowMs = 16.7; _phoneSlowLatch = false; } else _live = false;   // §2au verdicts are race-local too
   if (!_gfx || !_gfx.isMobile) return;
   if (on) {
@@ -341,6 +369,7 @@ function _setCrashFloor() {
   const prev = _perfTierFloor;
   _perfTierFloor = _floorFromStrikes(_crashStrikes);
   if (_perfTierFloor < prev && _perfTier > _perfTierFloor) { _perfTier = _perfTierFloor; _autoShed = 0; }
+  if (_perfTierFloor !== prev) _syncPresetDpr();
 }
 
 // Bounded raw-frame history supplements the EMA: occasional hitches must not
@@ -445,7 +474,7 @@ function tick(dtMs, drawn) {
     const v = _pendingVerify; _pendingVerify = null;
     // Why: docs/GOVERNOR-RATIONALE.md §gov-26.
     const failed = v.up ? (ev > v.ema + VERIFY_MARGIN)
-                        : (ev > v.ema - (v.big ? Math.max(VERIFY_MARGIN, (v.ema - _floorMs) / 2) : VERIFY_MARGIN));
+                        : (ev > v.ema - (v.big ? Math.max(VERIFY_MARGIN, (v.ema - (v.chase || _floorMs)) / 2) : VERIFY_MARGIN));
     if (failed) {
       // Env may already be off while bloom is still expensive. Test the next
       // rung before declaring the whole ladder futile. Keep the original
@@ -463,10 +492,10 @@ function tick(dtMs, drawn) {
       }
       if (v.kind === "scale") {
         // Why: docs/GOVERNOR-RATIONALE.md §gov-27.
-        const now = _gfx.getRenderScale ? _gfx.getRenderScale() : 1, big = 0.5;
+        const now = _gfx.getRenderScale ? _gfx.getRenderScale() : 1, big = v.chase ? _chaseFloor() : 0.5;
         if (!v.up && !v.big && _autoRes && big < now - 0.05 && _gfx.setRenderScale(big)) {
           _scaleCap = Math.min(_scaleCap, now); _armCapProbe();   // the small cut's scale missed too
-          _pendingVerify = { kind: "scale", prev: v.prev, ema: v.ema, big: true };
+          _pendingVerify = { kind: "scale", prev: v.prev, ema: v.ema, big: true, chase: v.chase };
           _govCool = 30; _scaleMoves++;
           return;
         }
@@ -479,6 +508,7 @@ function tick(dtMs, drawn) {
         // this device has just answered for. (An UP step failing says the
         // opposite — there was no headroom — and implies nothing about fill.)
         if (!v.up) _scaleFutile = true;
+        if (v.chase && !v.up) _chaseGiveUp();
       } else if (v.kind === "xshed") { _xSet(v.prev); if (!v.up) _xFutile = true; }
       else { _perfTier = v.prev; _autoShed = v.shed; if (!v.up) _tierFutile = true; }
       _govCoolMs = VERIFY_COOL;
@@ -510,14 +540,20 @@ function tick(dtMs, drawn) {
     // above, not this one evaluation, is what restores the backoff.
   }
 
-  const budgetMs = _drawBudgetMs();
+  const cur = _gfx.getRenderScale ? _gfx.getRenderScale() : 1;
+  let chase = _chaseTarget(), chaseFloor = chase ? _chaseFloor() : 1;
+  if (chaseFloor >= 1 - 1e-9) chase = 0;
+  if (chase && cur <= chaseFloor + 0.02 && ev > chase + DEGRADE_OVER) { if (++_chaseMiss >= 3) { _chaseGiveUp(); chase = 0; } }
+  else _chaseMiss = 0;
+  // While the chase is armed the feature ladder keeps a 60 fps budget: only resolution is spent on the refresh.
+  const budgetMs = chase ? Math.max(_drawBudgetMs(), LADDER_60) : _drawBudgetMs();
   const degradeAt = budgetMs + DEGRADE_OVER, restoreAt = budgetMs + RESTORE_WITHIN;
   // §2au guard (see _computeBound): a latched degrade step must clear the held
   // threshold by the margin twice.
   const boundOver = _computeBound ? DEGRADE_OVER : 0;
-  const cur = _gfx.getRenderScale ? _gfx.getRenderScale() : 1;
+  const chaseAt = chase && cur > chaseFloor + 1e-9 ? chase + DEGRADE_OVER : Infinity;
   // Why: docs/GOVERNOR-RATIONALE.md §gov-28.
-  if (ev <= degradeAt) _degradeArm = 0;
+  if (ev <= Math.min(degradeAt, chaseAt)) _degradeArm = 0;
   else if (_scaleMoves > 0 && ++_degradeArm < DEGRADE_CONFIRM) return;
   if (ev > degradeAt + boundOver) {                 // meaningfully slower than THIS device's own floor: degrade PROMPTLY
     if (_xMove(ev, false)) { _degradeArm = 0; return; }   // §gov-42
@@ -542,6 +578,12 @@ function tick(dtMs, drawn) {
       _scaleFutile = false;
       _scaleCap = Infinity; _armCapProbe();
     }
+  } else if (ev > chaseAt + boundOver) {   // §gov-43
+    if (!_scaleFutile && _gfx.setRenderScale(Math.max(chaseFloor, cur - 0.1))) {
+      _pendingVerify = { kind: "scale", prev: cur, ema: ev, chase };
+      _scaleCap = cur; _armCapProbe();
+      _govCool = 30; _downHold = _chargeCut(); _scaleMoves++; _degradeArm = 0;
+    } else _chaseGiveUp();
   } else if (_frameEMA < restoreAt && _downHold === 0) {   // clear, SETTLED headroom (~10 s since the last cut): restore slowly
     _scaleFutile = false;   // headroom is back — nothing about the old verdict still applies
     _xFutile = false;
@@ -559,7 +601,7 @@ function tick(dtMs, drawn) {
     // from an untouched ceiling would pin every healthy device at 0.9.
     const top = _climbTop();
     const ceil = !Number.isFinite(_scaleCap) ? top : Math.max(0.5, Math.min(top, _scaleCap - 0.1));
-    if (_autoRes && cur < ceil - 1e-9) {
+    if (_autoRes && cur < ceil - 1e-9 && (!chase || _frameEMA < chase + RESTORE_WITHIN)) {   // §gov-43: never climb out of the refresh
       // Why: docs/GOVERNOR-RATIONALE.md §gov-32.
       const gap = ceil - cur;
       const next = gap < 0.12 ? ceil : Math.min(ceil, cur + Math.max(0.06, gap / 2));
@@ -669,7 +711,8 @@ return {
     if (t === _userTier) return;
     const prev = _userTier;
     _userTier = t;
-    _tierFutile = false;   // a new preset changes what a step means
+    _syncPresetDpr();
+    _tierFutile = false; _chaseFutile = false;   // a new preset changes what a step means
     _scaleCap = Infinity; _armCapProbe();   // ...and what the frame costs, so the measured ceiling expires with it
     // Why: docs/GOVERNOR-RATIONALE.md §gov-36.
     if (t < prev) {
@@ -703,6 +746,9 @@ return {
   // held at the race's observed minimum while the ladder finishes its work.
   computeBound: () => _computeBound,
   autoRes: () => _autoRes,
+  // §gov-43
+  chaseMs: () => _chaseTarget(),
+  chaseFutile: () => _chaseFutile,
   // The configured ceiling of the resolution stage (see _resCeil). Clamped to the stage's own
   // range; it never moves the scale by itself: the caller that lowers it also lowers the scale.
   resCeil: () => _resCeil,
@@ -715,7 +761,7 @@ return {
   // only the scale kind is dropped. The cooldown gives the EMA time to settle
   // at the new scale before stage 2 judges anything against it.
   setAutoRes: (on) => {
-    _autoRes = !!on;
+    _autoRes = !!on; _chaseFutile = false;
     if (_pendingVerify && _pendingVerify.kind === "scale") _pendingVerify = null;
     if (_live) _govCoolMs = Math.max(_govCoolMs, VERIFY_COOL);   // see _live: never before the first race tick
   },

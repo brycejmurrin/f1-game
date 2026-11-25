@@ -808,3 +808,21 @@ test("season-mode references quote only unit-test names that exist", () => {
   }
   assert.deepEqual(missing, []);
 });
+
+// 2026-11-25 (Bryce, PR #6451: "the gardener can also use the lsp mcp/tools heavily"; ~02:33Z "it can use grep but
+// should use the lsp"). The first Gardener's subagents made ~2% of their calls through apex-lsp: prose advice did not
+// move it, the tools: list does. The card lists every apex-lsp tool, FIRST, and the skill launches the card.
+test("the gardener card leads with the apex-lsp tools and the gardener skill launches it", () => {
+  const card = read(".claude/agents/gardener.md");
+  const tools = (card.match(/^tools:\s*(.+)$/m) || [])[1] || "";
+  const list = tools.split(",").map((s) => s.trim());
+  const lsp = ["lsp_outline", "lsp_references", "lsp_callers", "lsp_symbols", "lsp_definition", "lsp_hover",
+    "lsp_diagnostics", "output_read"].map((n) => `mcp__apex-lsp__${n}`);
+  assert.deepEqual(list.slice(0, lsp.length), lsp, "gardener tools: the apex-lsp tools first, all of them");
+  assert.ok(list.includes("Grep"), "Grep stays (Bryce ~02:33Z), for text shapes only");
+  assert.match(card, /^disallowedTools: Write, Edit, NotebookEdit$/m);
+  assert.match(card, /^tools used: lsp <n> · grep <m> · read <k>$/m, "the report counts lsp vs grep calls");
+  const skill = read(".claude/skills/gardener/SKILL.md");
+  assert.match(skill, /agent `gardener`/);
+  assert.match(skill, /Tools used: lsp N · grep M · read K/);
+});

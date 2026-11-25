@@ -28,6 +28,12 @@ inputs:
   what:
     description: short name of the job, for the issue text ("changelog fold")
     required: true
+  labels:
+    description: >-
+      optional comma-separated labels added once the PR is open (knowledge-gc passes `land`: a bot PR nobody
+      labels sits open, and the next nightly run skips while it does). A refused label is a warning, not a red.
+    required: false
+    default: ""
   pr-token:
     description: token that may open PRs (secrets.LAND_TOKEN); empty falls back to github-token
     required: false
@@ -48,6 +54,7 @@ runs:
         EVIDENCE: ${{ inputs.evidence }}
         ISSUE_TITLE: ${{ inputs.issue-title }}
         WHAT: ${{ inputs.what }}
+        LABELS: ${{ inputs.labels }}
         PR_TOKEN: ${{ inputs.pr-token }}
         GH_TOKEN: ${{ inputs.github-token }}
       run: |
@@ -69,6 +76,10 @@ runs:
         if pr_url="$(GH_TOKEN="$tok" gh pr create --repo "$GITHUB_REPOSITORY" --base claude/f1-game-project-26h3ng \
           --head "$BRANCH" --title "$PR_TITLE" --body "$PR_BODY" 2> "$err")"; then
           PR_OK=1; echo "PR opened with $via: $pr_url"
+          if [ -n "${LABELS:-}" ]; then
+            GH_TOKEN="$tok" gh pr edit "$pr_url" --repo "$GITHUB_REPOSITORY" --add-label "$LABELS" \
+              || echo "::warning::open-bot-pr: could not add labels '$LABELS' to $pr_url; add them by hand"
+          fi
         else
           PR_OK=0; cat "$err"
         fi

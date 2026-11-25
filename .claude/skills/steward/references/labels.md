@@ -1,7 +1,9 @@
 # Labels — the state machine
 
 Source of truth: `.github/labels.json` (name, colour, description); this table adds where each goes and what a
-session does with it. A new row reaches GitHub through Bryce (no MCP tool creates a label).
+session does with it. No MCP tool creates or recolours a label: the first `issue_write` that names a new one creates
+it in GitHub's default grey; its colour and description come from `.github/labels.json` when Bryce dispatches
+`labels-sync.yml` (`dispatch.yml`'s drift step reports the difference until then).
 
 **Adding or removing a label** (owner decision 2026-11-11: agents never write with `gh`, whose writes GitHub records
 as Bryce's own click; `bash-guard.sh` refuses them). Use the GitHub MCP `issue_write` (method `update`; a PR is an
@@ -34,9 +36,48 @@ issue), ONE label per call:
 | `dispatch:merge-pause` | Dispatch issue | `land.yml` arms nothing; removing the label takes effect on each PR's next event |
 | `deploy:red` | Board issue, PR | Board issue: the latest Pages train failed; one fixer is launched. PR: the fixer's claim. While the tip is red on code, merge-gate's `base` row holds every merge except the fixer's: `deploy:red` (anyone's) on a head that contains the red commit (`sync-pr --onto-red-tip`), whose green CI is the proof, or Bryce's own click of `deploy:red` / `priority` after the red started (#5425) |
 | `fleet-board` | Board issue | the Board issue itself (#1780); the Action rewrites its Board comment |
-| `bug` | issue | something is broken (GitHub's default label) |
-| `flaky` / `base-red` | issue | a test that passed on retry or fails across branches (AGENTS.md rule 9); a red on the base (advisory) |
-| `area:*` | issue | the subsystem |
+| `bug` / `enhancement` / `perf` / `refactor` / `flaky` / `tracking` / `epic` / `documentation` | issue | the TYPE, exactly one (§Issue scheme) |
+| `base-red` | issue | a red on the base (advisory; the auto issue is typed `tracking`) |
+| `area:*` | issue | the subsystem, one or more; `area:input` is controls (phone pad, gamepad, keyboard, touch, tilt) |
+| `source:hunt` / `source:gardener` / `source:review` | issue | where it came from: a hunt, audit or survey; a Gardener survey; a review |
+| `phone` / `needs-device` | issue | shows on Bryce's iPhone or the phone controller; only a real device can verify it |
+
+## Issue scheme
+
+Bryce's scheme (2026-11-25 ~02:44Z, relayed by the orchestrator). Every issue, when it is filed, carries:
+- **one type:** `bug` (broken), `enhancement` (new), `perf` (frame, load, memory or CI time), `refactor`
+  (behaviour-neutral cleanup, a Gardener carve), `flaky` (a test, AGENTS.md rule 9), `tracking` (a checklist of
+  findings or checks), `epic` (the work is in sub-issues) or `documentation`;
+- **one or more `area:*`;**
+- **`source:*`** when it came from a hunt, a Gardener survey or a review; `phone` / `needs-device` where they apply.
+
+Ownership is not a label of this scheme: `lane:*` on the PR and `claimed` on the issue (§Lane). `node
+tools/ci/issue-labels.mjs` lists open issues with no type, two types or no area (GETs only; exit 2 when any).
+Fix a row with the one-label recipe above, after reading the issue.
+
+**Families** (one colour each in `.github/labels.json`; `.github/workflows/labels-sync.yml`, dispatched by Bryce,
+applies the file: create or update, never delete): type, `area:*`, `source:*`, `lane:*`, status (`ready`, `claimed`,
+`blocked`, `needs-*`, `hold`), device (`phone`), process (`land`, `train`, `config-ok`, `ratchet-raise`, `deploy:red`,
+`memory-change`, `dispatch:*`, `fleet-board`, `batch`, `batched`, `base-red`), priority. Overlaps, one meaning each:
+`perf` is the TYPE (the work is a speed, load, memory or CI-time win), `area:perf` the AREA (the frame budget, load
+time and download weight as a whole: profilers, budgets, census); a perf fix inside one subsystem takes that
+subsystem's area. `area:input` is controls (pad, gamepad, keyboard, touch, tilt); `area:ui` is menus, HUD and layout.
+`batch` is the batch issue, `batched` each member. `phone` is a device tag beside the area.
+
+**Retired** (grey, description says what replaces it; nothing is deleted, Bryce decides): `ui` → `area:ui`. Retire
+candidates: `area:data` → `area:net`; `urgent` → `priority`; `test-review` → `source:review`; `question` →
+`needs-decision`; `lane:claude-cloud`, `lane:claude-code`, `lane:claude-code-web`, `lane:platform`, `lane:visuals` →
+`lane:claude`; `run-ci` (retired 2026-11-03); the unused GitHub defaults `duplicate`, `invalid`, `wontfix`,
+`good first issue`, `help wanted` (close with a state reason instead). Never put a retired label on an issue.
+
+## Hunt and survey output
+
+A hunt, audit or survey (`code-hunter` slices, a runtime or UI matrix run, a Gardener survey) reports as ISSUES,
+never as a docs PR (Bryce, 2026-11-25): one `tracking` issue with `source:hunt` (a Gardener: `source:gardener`) and
+its areas, whose body is a checklist with one line per verified finding (`file:line`, mechanism in one clause, and
+the issue or PR that owns it, or "not filed yet"). The detailed note may live on the hunt's branch, unmerged, linked
+from the issue by branch and head sha. Findings worth fixing now are filed as their own typed issues and linked from
+the checklist; the rest are filed by whoever picks them.
 
 Retired 2026-11-03: `run-ci` (every draft push starts the fast tier automatically). The Board is issue
 #1780; the Dispatch issue (Bryce's switches) is #3899.

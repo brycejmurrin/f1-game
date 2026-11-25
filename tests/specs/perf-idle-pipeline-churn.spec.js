@@ -21,7 +21,7 @@ test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
 
 test("TLX WebGPU: steady driving builds no render pipelines after warm-up", async ({ page }, testInfo) => {
   test.setTimeout(900000);
-  const { hook, warm, gpuDevice, replay, gov, soft, windows } = await measureIdleWindows(page, { forceGL: false, bootMs: BOOT_MS * 2,
+  const { hook, warm, gpuDevice, replay, gov, soft, windows, spread } = await measureIdleWindows(page, { forceGL: false, bootMs: BOOT_MS * 2,
     gas: (on) => (on ? page.keyboard.down("ArrowUp") : page.keyboard.up("ArrowUp")) });
   expect(hook, "three's backend must be reachable to count pipelines").toMatch(/^ok /);
   testInfo.annotations.push({ type: "backend", description: hook });
@@ -43,6 +43,9 @@ test("TLX WebGPU: steady driving builds no render pipelines after warm-up", asyn
   // GPUDevice; the WebGL2 fallback has none, so there the check would pass vacuously and is skipped.
   if (gpuDevice) {
     testInfo.annotations.push({ type: "gpu-churn", description: `per window bindGroups ${windows.map((w) => w.bindGroups).join(",")} buffers ${windows.map((w) => w.buffers).join(",")}` });
+    // Whose bind groups (census `ro`, the render object three was binding): the label alone names no culprit.
+    const owners = [...new Set(windows.flatMap((w) => w.gpuBuilt.filter((b) => b.kind === "createBindGroup").map((b) => `w${w.window}@${b.at} ${b.ro || "(no render object)"}`)))];
+    testInfo.annotations.push({ type: "bind-group-owners", description: owners.join(" | ").slice(0, 4000) || "none" });
     // A geometry's FIRST draw makes its vertex/index buffer inside three's updateForRender (measured on lavapipe:
     // one 90480 B index buffer in window 3, same frame in two runs). That is a mesh coming into view, not churn, so
     // it is reported (annotation) and not failed; a size that recurs in a second window IS churn (released and
@@ -60,6 +63,13 @@ test("TLX WebGPU: steady driving builds no render pipelines after warm-up", asyn
     const other = windows.map((w) => ({ window: w.window, bindGroups: w.bindGroups, built: w.gpuBuilt.filter((b) => !firstUse(b) && !softRead(b)).slice(0, 6) }))
       .filter((w) => w.bindGroups > 0 || w.built.length > 0);
     expect(other, "idle windows that created bind groups or non-first-draw buffers after warm-up").toEqual([]);
+    // The spread leg (#6485): rivals jump to tier 1 (compound stripes) and past the far-body cut (far-LOD wheel pair)
+    // only now. CarDraw.primeRace drew every such shared mesh at its most-in-view count, so this mints no bind group.
+    const spreadBg = spread.gpuBuilt.filter((b) => b.kind === "createBindGroup").map((b) => `@${b.at} ${b.ro || b.label}`);
+    testInfo.annotations.push({ type: "spread", description: `placed ${spread.placed}; pipelines ${spread.pipelines} bindGroups ${spread.bindGroups} buffers ${spread.buffers}; ${spreadBg.join(" | ").slice(0, 2000) || "no bind groups"}` });
+    expect(spread.placed, "the spread leg placed the field").toBeGreaterThan(0);
+    expect({ pipelines: spread.pipelines, bindGroups: spread.bindGroups, owners: spreadBg.slice(0, 8) },
+      "a strung-out field minted GPU objects: a shared mesh drawn more times than primeRace drew it (#6485)").toEqual({ pipelines: 0, bindGroups: 0, owners: [] });
     const seen = new Map();
     for (const w of windows) for (const b of w.gpuBuilt.filter(firstUse)) { const k = String(b.size); seen.set(k, (seen.get(k) || new Set()).add(w.window)); }
     testInfo.annotations.push({ type: "first-draw-buffers", description: [...seen].map(([size, ws]) => `${size}B@w${[...ws].join(",")}`).join(" ") || "none" });

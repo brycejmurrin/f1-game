@@ -99,6 +99,8 @@ function sheet(o = {}) {
     SeasonCal: { formatLaps: (n) => n, quali: () => false, qualiNext: () => false },
     qualiResults: () => null, openQuali() {}, enableTilt() {},
     getSteerMode: () => "buttons", buildStandings() {}, raceIntro: (go) => go(),
+    // game.js's predicate, shaped as game.js builds it (one-off: the grid rule, not TT, not a real race)
+    gridFromQuali: () => !!G.raceQuali && G.session !== "tt",
   });
   rs.wireButtons();
   return { G, rs, dom, LIST };

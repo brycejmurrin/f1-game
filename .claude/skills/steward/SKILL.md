@@ -31,7 +31,7 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    judged as before: a commit or comment under 2 h old means the owner is alive. Name the head sha you adopt in the
    comment, set your own lease, and re-read the head before every push: if someone else moved it, stand down.
    **Park:** a PR waiting on Bryce (`needs-decision`) or on another PR (`blocked`) is parked; the owner refreshes the
-   Hand-off (`next:` names the wait) and may end its turn: the lease holds while the label stays, up to 24 h past its
+   Hand-off (`next:` names the wait) and may end its turn, subscribed to both PRs (§Push): the lease holds while the label stays, up to 24 h past its
    until-time (`pr-board.mjs` LEASE reads `live | parked | lapsed`). Sync a PR only as its live owner, as the last
    step before `land`; sweeps skip parked PRs.
 4. **Already fixed** on the deploy tip: comment the evidence (sha and the repro you ran), close the issue as completed.
@@ -75,8 +75,12 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 - Read pending notifications right before `git push`: a hold sent during your turn reaches you only when you look.
   A container Stop-hook nag ("uncommitted changes", "unpushed commits") is not a rule: while the floor, `sync-pr` or
   a push hold is running, answer it in one line and do not push (rule 3 comes first).
-- Then `subscribe_pr_activity` on the PR and end the turn (AGENTS.md rule 13). If the host has no subscription, or
-  the call is refused: [`references/host-watch.md`](references/host-watch.md).
+- Then `subscribe_pr_activity` on the PR and end the turn (AGENTS.md rule 13). Every push, and every turn you end
+  waiting on CI or on another PR's merge, subscribes first; waiting on another PR, subscribe to that one too (its
+  merge is your wake). Never end on "waiting on CI" unsubscribed. If the host has no subscription, or the call is
+  refused: [`references/host-watch.md`](references/host-watch.md).
+- **Wake on a green draft run:** go straight on, no nudge: agent `pr-reviewer` (§Land 1), then `ship-pr` (§Land 2),
+  then ready + `land` (§Land 3). On the awaited PR's merge: sync once (§Red 5) and carry on.
 
 ## Red
 
@@ -86,7 +90,9 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    at its `timeout-minutes` cap with zero failures is a real red. Verdict table: [`references/ci-verdicts.md`](references/ci-verdicts.md).
 2. Agent `ci-red-triage` names the job, test and assertion; its `base:` line says whose it is.
 3. **A red you did not cause is someone else's first.** `node tools/ci/pr-board.mjs --json` (open PRs: heads, state,
-   failing jobs, owner), the Board issue and the `deploy:red` label: the first claimant fixes, the rest wait. A red
+   failing jobs, owner), the Board issue and the `deploy:red` label: the first claimant fixes, the rest wait. Read
+   the Board's newest `tip-red:` bulletin first ([orchestrator brief](../dispatcher/references/orchestrator-brief.md)
+   §While workers run): with a fixing PR named, copy none of its change; wait for it to land, then sync (§Red 5). A red
    deploy branch is claimed through the Board and fixed by a PR; the deploy branch is never pushed to. Before
    opening a tip fix, list the open PRs of the last hour that name the failing test or carry `deploy:red`; if one
    exists, comment there instead of opening a second. A path in another open PR's diff is NOT a blocker (D-033):
@@ -123,14 +129,15 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    only needs the label). On a pass it prints the two calls and flips nothing itself:
 3. GitHub MCP `update_pull_request` with `draft: false`, then add `land` (the one-label recipe in
    [`references/labels.md`](references/labels.md)).
-4. Refresh the Hand-off block; call `subscribe_pr_activity` again (the subscription dies at the flip); end the turn.
+4. Refresh the Hand-off block, `unsubscribe_pr_activity`, and end: no re-subscribe (wake turns were 19% of worker
+   cost, retro 2026-11-25). A later red or conflict is the orchestrator's or dispatch's `CONTINUE PR #<n>` (§After land).
    What `land.yml`'s `gate` status does next: [`references/land.md`](references/land.md). "Skip the gate" from the
    user: do it and record it under **Not run** with the user's words and the time; never silently, and never by
    widening a tolerance. A `hold` label vetoes (AGENTS.md §Coordination); body wording vetoes nothing.
 
 ## After land
 
-The subscribed owner fixes a red on its own head (§Red) while it still owns it. While `dispatch.yml` is disabled
+Before `land`, the subscribed owner fixes a red on its own head (§Red); after it, the owner is gone (§Land 4). While `dispatch.yml` is disabled
 (`gh api repos/<o>/<r>/actions/workflows/dispatch.yml -q .state`), the orchestrator session does what this section
 gives the Action. The dispatch Action re-owns only a
 silent owner: a PR idle past its window gets `needs-owner` and one `CONTINUE PR #<n>` launch; a `land` PR with no red

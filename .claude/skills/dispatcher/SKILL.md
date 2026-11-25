@@ -24,7 +24,8 @@ session loads skill `steward` §Lane.
 
 A session that launches workers itself (`create_session`) while the Action is off writes its briefs from
 [`references/orchestrator-brief.md`](references/orchestrator-brief.md): what to check before a wave, the brief
-template, and what to send while workers run.
+template, the standing roles it may launch without an issue (the Gardener, skill `gardener`), and what to send
+while workers run.
 An orchestrator on Codex or Cursor (no `create_session`, no `send_message`: GitHub is the whole bus, Bryce launches):
 [`references/other-hosts.md`](references/other-hosts.md).
 Channels, `land` lanes, relayed grants and a shared phone, from a five-worker run:

@@ -368,7 +368,7 @@ const CarWheels = (function () {
       const BAND = bandColor || [0.85, 0.10, 0.08];
       const bandWidth = tyreStyle && tyreStyle.bandWidth != null ? tyreStyle.bandWidth : 0.09;
       // bandArcs (B·D6): 0 full ring; 2 / 4 split the band into
-      // arcs with a gap between each, the 2019+ Pirelli sidewall. letters: 1
+      // arcs with a gap between each, a modern split-band sidewall. letters: 1
       // white glyph blocks in each gap, 2 a big lettering ring inboard of the
       // band all the way round (the 1970s raised-letter wall).
       const bandArcs = tyreStyle && (tyreStyle.bandArcs === 2 || tyreStyle.bandArcs === 4) ? tyreStyle.bandArcs : 0;

@@ -414,9 +414,10 @@ test("warmCarAssetsAsync deferRear: the rear grid's uploads and casters wait for
   assert.ok(casters(rear) < casters(eager), "fewer casters before the lights (" + casters(rear) + " < " + casters(eager) + ")");
   assert.equal(rear.v.ctx.Log.records({ ns: "gfx" }).filter((r) => /^race car assets ready/.test(r.msg || "")).length, 1, "the ready line, once");
   // The countdown drains one piece a frame (a 4 ms budget with the fake clock charging 20-40 ms a piece).
-  let left = rear.v.carDraw.drainDeferredCarWarm(4), frames = 1;
+  const lights = true;   // game.js under state "count": each frame's first piece runs
+  let left = rear.v.carDraw.drainDeferredCarWarm(4, lights), frames = 1;
   const first = left;
-  while (left > 0 && frames < 100) { left = rear.v.carDraw.drainDeferredCarWarm(4); frames++; }
+  while (left > 0 && frames < 100) { left = rear.v.carDraw.drainDeferredCarWarm(4, lights); frames++; }
   assert.equal(left, 0, "drained");
   // The fake clock moves only on a heavy piece (a caster build), so a frame drains the uploads before it and one caster.
   assert.ok(frames > 1 && frames <= first, "the queue drains across frames, a budget each (" + frames + " frames for " + first + " pieces)");
@@ -426,6 +427,31 @@ test("warmCarAssetsAsync deferRear: the rear grid's uploads and casters wait for
   assert.deepEqual(sig(rear), sig(eager), "the same bodies and casters in the end (order aside)");
   assert.equal(rear.v.carDraw.drainDeferredCarWarm(4), 0, "idempotent when empty");
   assert.deepEqual([eager.warns(), rear.warns()], ["[]", "[]"], "no phase threw");
+});
+// perf hunt 2026-11-24 #4: the budget was checked only after each piece, so a 27-39 ms caster ran whole on a
+// 4 ms frame after a green that skips the lights (go, goRolling). A piece whose kind last cost more than the
+// budget left now waits; under the lights (first = true) the first piece of a frame still runs.
+test("drainDeferredCarWarm skips a piece whose last measured cost exceeds the budget left; the crew rig is never stranded", async () => {
+  const r = warmRig();
+  r.v.field((c, i) => 3000 - 9 * i); r.v.G.cars.forEach((c, i) => { c.gridPos = i + 1; });
+  assert.equal(await r.v.carDraw.warmCarAssetsAsync(() => true, 8, { deferRear: true }), true);
+  const casters = () => r.v.rec.builds.filter((b) => b.kind === "sh").length;
+  // Drain up to the first caster, which measures its kind at 30 ms (one fake Car3D build).
+  let left = r.v.carDraw.drainDeferredCarWarm(4, true), guard = 0;
+  const c0 = casters();
+  while (casters() === c0 && left > 0 && guard++ < 50) left = r.v.carDraw.drainDeferredCarWarm(4, true);
+  assert.ok(casters() > c0, "a caster ran and was measured");
+  assert.ok(left > 0, "pieces still queued");
+  // The crew rig (#5051) sits at the tail, behind atlases and casters known to cost 20-30 ms.
+  let crewWarms = 0;
+  r.v.ctx.PitCrewAnim = { warm: () => { crewWarms++; } };
+  const crew = 1;
+  const c1 = casters(), u1 = r.got.uploads;
+  assert.equal(r.v.carDraw.drainDeferredCarWarm(4), left - crew, "a race frame skips every piece whose kind is known to cost 20-30 ms > 4 ms, and still warms the crew rig behind them");
+  assert.deepEqual([casters(), r.got.uploads, crewWarms], [c1, u1, 1], "no caster built, no atlas uploaded; the rig warmed");
+  assert.equal(r.v.carDraw.drainDeferredCarWarm(4), left - crew, "nothing left that fits: 0 pieces, no starving loop");
+  assert.equal(r.v.carDraw.drainDeferredCarWarm(4, true), left - crew - 1, "under the lights the first piece of a frame still runs, so the countdown drains");
+  assert.equal(r.warns(), "[]");
 });
 test("warmCarAssetsAsync stops when current() goes false; carWarmSlice=0 is today's single task", async () => {
   {
@@ -617,8 +643,15 @@ test("first-person views cast the first-person caster at the cockpit matrix; ext
     }
     // The countdown is first person too (the car loop's race|count test).
     assert.equal(cast(1, f, which, "count").mesh, carDraw.cockpitShadowMesh(player.team, player), `count/${which}: the first-person caster`);
+    // A Photo Studio POV seat under the free camera (#6397) is first person whatever camMode is, menu included.
+    for (const [onboard, state] of [["helmet", "race"], ["cockpit", "race"], ["helmet", "count"]]) {
+      G.dbgCam = { eye: G.camEye, target: G.camTgt, fov: 60, onboard };
+      const k = cast(0, f, which, state);
+      assert.equal(k.mesh, carDraw.cockpitShadowMesh(player.team, player), `POV ${onboard}/${state}/${which}: the first-person caster`);
+      assert.deepEqual(k.m, drawnMat(), `POV ${onboard}/${state}/${which}: at the cockpit body's matrix`);
+    }
     // Exterior: chase, and the cockpit mode under a debug camera (no rig drawn).
-    for (const [mode, dbg, label] of [[0, null, "chase"], [1, { eye: [0, 50, 0] }, "debug cam"]]) {
+    for (const [mode, dbg, label] of [[0, null, "chase"], [1, { eye: [0, 50, 0] }, "debug cam"], [1, { eye: [0, 50, 0], onboard: "hood" }, "debug cam, no seat"]]) {
       G.dbgCam = dbg;
       const k = cast(mode, f, which);
       assert.equal(k.mesh, carDraw.teamMesh(player.team, player, true), `${label}/${which}: the exterior silhouette casts`);
@@ -628,6 +661,10 @@ test("first-person views cast the first-person caster at the cockpit matrix; ext
   }
   G.state = "menu";
   assert.equal(carDraw.cockpitCaster(player, smp, yv, new Float32Array(16)), null, "no first-person rig outside race/count");
+  // The title's circuit shoot is state "menu": its POV seat is first person (the shadow pass skips menu players itself).
+  G.dbgCam = { eye: G.camEye, target: G.camTgt, fov: 60, onboard: "helmet" };
+  assert.equal(carDraw.cockpitCaster(player, smp, yv, new Float32Array(16)), carDraw.cockpitShadowMesh(player.team, player), "a POV seat on the title circuit");
+  G.dbgCam = null;
   G.state = "race";
 });
 
@@ -1124,4 +1161,17 @@ test("cockpitKey: a hit builds no key string; the cockpit style and the livery's
   const fn = src.slice(src.indexOf("    function cockpitKey("), src.indexOf("    function cockpitBodyMesh("));
   const hit = fn.slice(0, fn.indexOf("if (team.id !== _cbId"));
   assert.ok(hit.length > 0 && !/\+\s*"/.test(hit) && !/"\s*\+/.test(hit), "no string is joined before the change test");
+});
+
+// #6397: ONE predicate decides the first-person rig for game.js's car loop and the caster above.
+test("GameCams.rigMode: race cockpit/helmet in race|count, or a Photo Studio POV seat under the free camera", () => {
+  const { ctx } = carDrawVm();
+  for (const f of ["js/camera/vantage-ride.js", "js/camera/vantage.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
+  const rig = ctx.GameCams.rigMode;
+  assert.equal(rig(null, "race", "cockpit"), "cockpit");
+  assert.equal(rig(null, "count", "helmet"), "helmet");
+  for (const [state, cam] of [["race", "chase"], ["race", "hood"], ["menu", "cockpit"], ["results", "helmet"]]) assert.equal(rig(null, state, cam), "", state + "/" + cam);
+  assert.equal(rig({ eye: [0, 0, 0] }, "race", "cockpit"), "", "a plain free camera never draws the rig (unchanged)");
+  assert.equal(rig({ onboard: "hood" }, "race", "chase"), "", "only the two driver's-eye seats");
+  for (const state of ["race", "menu"]) for (const seat of ["helmet", "cockpit"]) assert.equal(rig({ onboard: seat }, state, "chase"), seat, state + "/" + seat);
 });

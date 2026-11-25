@@ -64,6 +64,12 @@ const DesktopGraphics = (() => {
       ss2x: ["2× cinema supersampling", "Renders cinematic views at twice the resolution before scaling them down for a cleaner image."],
     },
   };
+  // The panel's shed note for a list of shed effect names: "" when none, else the count and each row's name.
+  function shedText(names) {
+    if (!(names && names.length)) return "";
+    const rows = Object.assign({}, ...Object.values(groups));
+    return `${names.length} effect${names.length > 1 ? "s" : ""} reduced to hold frame rate: ${names.map(n => (rows[n] || [n])[0]).join(", ")}.`;
+  }
   let expand;
   function mount() {
     const panel = document.getElementById("pm-panel-graphics");
@@ -99,6 +105,14 @@ const DesktopGraphics = (() => {
           if (RenderRate.setDesktopTarget(value)) GameStore.store.rawSet("apex26.desktopFpsTarget", value);
         },
       });
+    }
+    // #6486 F3: the governor's live shed (the wanted extras GfxQuality.shedFeature says it took away), visible
+    // without opening the details; __apex.perf().extrasShed reads the same list.
+    if (!GLX.isMobile) {
+      const note = add(panel, "p"), paint = () => note.hidden = !(note.textContent = shedText(GfxQuality.SHED_ORDER.filter(GfxQuality.shedFeature)));
+      note.className = "adv-help"; note.id = "pm-graphics-shed"; note.setAttribute("role", "status");
+      document.addEventListener("apex-graphics-shed", paint);
+      paint();
     }
     const fold = add(panel, "details");
     fold.dataset.desktopGraphics = "";
@@ -224,5 +238,5 @@ const DesktopGraphics = (() => {
     SettingsSearch.register("graphics-details", options);
     indexed = true;
   }
-  return Object.freeze({ mount, indexSearch });
+  return Object.freeze({ mount, indexSearch, shedText });
 })();

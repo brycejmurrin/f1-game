@@ -72,6 +72,42 @@ test("HOLD: the press switches it on, the lift switches it off, the colour is on
   assert.equal(sent.length, 4, "nothing to switch off when the host already ended it");
 });
 
+test("HOLD lifted where the host drops edges (Pause, a menu): the off edge waits for the wheel", () => {
+  const { latch, sent, clock } = latchOf("overtake");
+  latch.hud(0);
+  latch.down(true);
+  clock.t = 100; latch.hud(D.otOn);
+  assert.deepEqual(sent, ["overtake"]);
+  clock.t = 200; latch.up(true, true);
+  assert.deepEqual(sent, ["overtake"], "no edge into the pause card, where the host would drop it and the next press invert");
+  clock.t = 1000; latch.hud(D.otOn);
+  latch.heard();
+  assert.deepEqual(sent, ["overtake", "overtake"], "back on the drive surface, the owed lift switches it off");
+  latch.heard();
+  assert.equal(sent.length, 2, "once");
+  clock.t = 2000; latch.hud(0);
+  latch.down(true);
+  assert.equal(sent.length, 3, "the next press switches it on, not off");
+  const ended = latchOf("boost");
+  ended.latch.hud(0); ended.latch.down(true);
+  ended.clock.t = 100; ended.latch.hud(D.boost); ended.latch.up(true, true);
+  ended.clock.t = 900; ended.latch.hud(0); ended.latch.heard();
+  assert.deepEqual(ended.sent, ["boost"], "nothing owed once the host ended it itself");
+  const fresh = latchOf("aero");
+  fresh.latch.down(true); fresh.latch.up(true, true); fresh.latch.heard(true); fresh.latch.heard();
+  assert.deepEqual(fresh.sent, ["aero"], "a new session forgets a lift owed to the old link");
+  const t = latchOf("boost");
+  t.latch.down(false); t.latch.up(false, true); t.latch.heard();
+  assert.deepEqual(t.sent, ["boost"], "TOGGLE owes nothing on a lift");
+  const re = latchOf("overtake");
+  re.latch.hud(0); re.latch.down(true); re.clock.t = 100; re.latch.hud(D.otOn);
+  re.latch.up(true, true); re.clock.t = 900; re.latch.hud(D.otOn);
+  re.latch.down(true); re.latch.heard();
+  assert.deepEqual(re.sent, ["overtake"], "a press while a lift is owed takes it over: on stays on, nothing sent");
+  re.latch.up(true);
+  assert.deepEqual(re.sent, ["overtake", "overtake"], "and its own lift switches it off");
+});
+
 test("no state from the host: the local latch; unlinked: nothing changes", () => {
   const { latch, sent } = latchOf("aero");
   latch.down(false);

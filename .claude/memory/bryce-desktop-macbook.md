@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: user
   source: user (2026-11-20 "save the new phone and desktop pixel layouts 5977"), PR #5977
-  modified: 2026-11-20T09:45:00Z
+  modified: 2026-11-25T01:30:00Z
 ---
 
 The owner's desktop is a **16-inch MacBook Pro (2024, M4 Pro or M4 Max)** (PR #5977, Bryce 2026-11-20). Pixel layout:
@@ -17,6 +17,11 @@ The owner's desktop is a **16-inch MacBook Pro (2024, M4 Pro or M4 Max)** (PR #5
 - Full-display capture after #5977: `node tools/ui/layout-audit.mjs --screen=<screen> --viewport=desktop-macbook-pro-16-m4`.
 
 He also plays the desktop with his phone as the controller (phone-as-controller pairing, 2026-11-20 report).
+
+Measured over Claude Link on 2026-11-25 (#6416, #6417): he runs Chrome 159 and the installed app at **175% page zoom**
+(dpr 3.5, CSS viewport ~987 px wide) with **RESOLUTION MAX** stored, both by choice. When told MAX costs ~45 fps in a
+race (vs ~120 at lower resolution on the 120 Hz panel), he said: "I set max but don't worry about it." Don't flag MAX
+or the zoom as problems; measure desktop defaults (AUTO) separately.
 
 **How to apply:** a desktop UI report reproduces at 1728x1117 @2x with a mouse first, not the 1280x720 default. Phone
 layout: [User plays on a phone](user-plays-on-phone.md).
