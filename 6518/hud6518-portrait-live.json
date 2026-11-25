@@ -1,0 +1,214 @@
+{
+ "window": "portrait",
+ "variant": "live",
+ "sha": "f5396219",
+ "emulation": {
+  "mismatches": [],
+  "insets": {
+   "top": 59,
+   "left": 0,
+   "bottom": 34,
+   "right": 0
+  },
+  "uiScaleVar": "0.7",
+  "stored": {
+   "uiScale": "70",
+   "hudScale": null,
+   "hudBtnScale": "143.25",
+   "textSize": "\"large\"",
+   "steerMode": "\"buttons\"",
+   "camMode": "19"
+  }
+ },
+ "rotateGate": false,
+ "portraitOk": "1",
+ "cam": "chase",
+ "viewport": [
+  393,
+  852
+ ],
+ "hudElements": "{\"speed\":\"off\",\"gear\":\"off\",\"energy\":\"off\",\"ot\":\"off\",\"aero\":\"off\"}",
+ "all": [
+  {
+   "id": "pausebtn",
+   "kind": "control",
+   "rect": {
+    "x": 320,
+    "y": 67,
+    "w": 63,
+    "h": 63,
+    "r": 383,
+    "b": 130
+   }
+  },
+  {
+   "id": "btn-steer-left",
+   "kind": "control",
+   "rect": {
+    "x": 16,
+    "y": 706,
+    "w": 96,
+    "h": 96,
+    "r": 112,
+    "b": 802
+   }
+  },
+  {
+   "id": "btn-steer-right",
+   "kind": "control",
+   "rect": {
+    "x": 124,
+    "y": 706,
+    "w": 96,
+    "h": 96,
+    "r": 221,
+    "b": 802
+   }
+  },
+  {
+   "id": "btn-boost",
+   "kind": "control",
+   "rect": {
+    "x": 290,
+    "y": 517,
+    "w": 87,
+    "h": 87,
+    "r": 377,
+    "b": 604
+   }
+  },
+  {
+   "id": "btn-ot",
+   "kind": "control",
+   "rect": {
+    "x": 290,
+    "y": 418,
+    "w": 87,
+    "h": 87,
+    "r": 377,
+    "b": 505
+   }
+  },
+  {
+   "id": "btn-aero",
+   "kind": "control",
+   "rect": {
+    "x": 290,
+    "y": 319,
+    "w": 87,
+    "h": 87,
+    "r": 377,
+    "b": 406
+   }
+  },
+  {
+   "id": "btn-brake",
+   "kind": "control",
+   "rect": {
+    "x": 290,
+    "y": 616,
+    "w": 87,
+    "h": 87,
+    "r": 377,
+    "b": 703
+   }
+  },
+  {
+   "id": "btn-throttle",
+   "kind": "control",
+   "rect": {
+    "x": 290,
+    "y": 715,
+    "w": 87,
+    "h": 87,
+    "r": 377,
+    "b": 802
+   }
+  },
+  {
+   "id": "btn-cam",
+   "kind": "control",
+   "rect": {
+    "x": 268,
+    "y": 134,
+    "w": 115,
+    "h": 63,
+    "r": 383,
+    "b": 197
+   }
+  },
+  {
+   "id": "hud-tyre",
+   "kind": "readout",
+   "rect": {
+    "x": 191,
+    "y": 612,
+    "w": 12,
+    "h": 78,
+    "r": 203,
+    "b": 690
+   }
+  },
+  {
+   "id": "hud-box-pos",
+   "kind": "readout",
+   "rect": {
+    "x": 106,
+    "y": 65,
+    "w": 43,
+    "h": 28,
+    "r": 149,
+    "b": 93
+   }
+  },
+  {
+   "id": "hud-box-lap",
+   "kind": "readout",
+   "rect": {
+    "x": 149,
+    "y": 65,
+    "w": 42,
+    "h": 28,
+    "r": 191,
+    "b": 93
+   }
+  },
+  {
+   "id": "hud-box-time",
+   "kind": "readout",
+   "rect": {
+    "x": 191,
+    "y": 65,
+    "w": 48,
+    "h": 28,
+    "r": 239,
+    "b": 93
+   }
+  },
+  {
+   "id": "hud-box-best",
+   "kind": "readout",
+   "rect": {
+    "x": 239,
+    "y": 65,
+    "w": 48,
+    "h": 28,
+    "r": 287,
+    "b": 93
+   }
+  },
+  {
+   "id": "hud-sectors",
+   "kind": "readout",
+   "rect": {
+    "x": 236,
+    "y": 201,
+    "w": 42,
+    "h": 60,
+    "r": 278,
+    "b": 261
+   }
+  }
+ ],
+ "overlaps": []
+}
