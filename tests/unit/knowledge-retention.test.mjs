@@ -3,11 +3,18 @@
  * The rule (docs/plans/2026-11-03-agent-surface-reset.md §4.9, Bryce's grant
  * D-001): a note earns its place by being cited. tools/docs/knowledge-gc.mjs
  * is the one scanner; this file holds its verdict as a guard, on the REAL
- * clock on purpose — a note nobody cites turns red 21 days after its date with
+ * clock on purpose — a note nobody cites is stale 21 days after its date with
  * no code change, and the cure is to cite it, archive it (`knowledge-gc.mjs
- * --apply`, or the weekly .github/workflows/knowledge-gc.yml PR) or, for the
- * grandfathered backlog, to leave it in tests/data/notes-uncited-allow.json,
- * which only shrinks. Same for the 40 KB cap and tests/data/notes-size-allow.json.
+ * --apply`, or the NIGHTLY .github/workflows/knowledge-gc.yml PR, which archives
+ * at GC_DAYS = 18, before the window closes) or, for the grandfathered backlog,
+ * to leave it in tests/data/notes-uncited-allow.json, which only shrinks. Same
+ * for the 40 KB cap and tests/data/notes-size-allow.json.
+ *
+ * NO DATE BOMBS (2026-11-25): the two clock-only checks (stale, overdue) FAIL
+ * only on a diff that touches docs/notes/ (or whose diff is unreadable) and
+ * WARN everywhere else — the deploy tip (APEX_NOTES_AGE_ADVISORY=1, set by
+ * ci.yml's tooling shards off pull requests) and any PR that leaves the notes
+ * tree alone. ageGate() in knowledge-gc.mjs is the rule; it is pinned below.
  *
  * Run: node --test tests/unit/knowledge-retention.test.mjs
  */
@@ -15,8 +22,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { parse as parseYAML } from "yaml";
+import { changedWithUntracked, resolveDeployBase } from "../../tools/lib/changed-files.mjs";
 import {
-  ROOT, DAYS, SIZE_CAP, SIZE_ALLOW, UNCITED_ALLOW, INDEX, REFUSED_PREFIX, KIND_REQUIRED_FROM,
+  ROOT, DAYS, GC_DAYS, AGE_ADVISORY_ENV, ageGate, SIZE_CAP, SIZE_ALLOW, UNCITED_ALLOW, INDEX, REFUSED_PREFIX, KIND_REQUIRED_FROM,
   scan, header, renderIndexBlock, indexHasGeneratedBlock, demoteArchiveLinks, liveDocNoArchive, tracked,
 } from "../../tools/docs/knowledge-gc.mjs";
 
@@ -24,6 +33,16 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 const files = tracked();
 const r = scan({ files });
 const name = (n) => `${n.file} (${n.date}, ${n.age} d)`;
+const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
+const changed = (() => {
+  try { const b = resolveDeployBase(DEPLOY_BRANCH); return b ? changedWithUntracked(b.sha) : null; } catch { return null; }
+})();
+const gate = ageGate({ advisory: process.env.APEX_NOTES_AGE_ADVISORY === "1", changed });
+/** A clock-only list: fail when ageGate says strict, else one ::warning:: line per entry. */
+const clockOnly = (rows, msg) => {
+  if (gate.strict || !rows.length) { assert.deepEqual(rows, [], `${msg} (strict: ${gate.reason})`); return; }
+  for (const row of rows) console.warn(`::warning::${row} — ${msg} (advisory: ${gate.reason})`);
+};
 
 test("the scan sees the notes tree and both allow-lists", () => {
   assert.ok(r.notes.length > 100, `only ${r.notes.length} notes scanned`);
@@ -35,7 +54,7 @@ test("the scan sees the notes tree and both allow-lists", () => {
 });
 
 test(`no stale note: every docs/notes file is cited by a live file, younger than ${DAYS} days, or in ${UNCITED_ALLOW}`, () => {
-  assert.deepEqual(r.stale.map(name), [],
+  clockOnly(r.stale.map(name),
     `uncited past the window — cite it from the doc, skill, tool or test that uses it, or archive it: node tools/docs/knowledge-gc.mjs --apply`);
 });
 
@@ -50,7 +69,7 @@ test(`a note is at most ${SIZE_CAP / 1024} KB unless ${SIZE_ALLOW} names it`, ()
 });
 
 test("a Re-measure-by date in the past fails: re-measure, or archive the note", () => {
-  assert.deepEqual(r.overdue.map((n) => `${n.file} (Re-measure-by: ${n.remeasure})`), [],
+  clockOnly(r.overdue.map((n) => `${n.file} (Re-measure-by: ${n.remeasure})`),
     "the measured fact is older than its own expiry — re-measure and move the date, or archive");
 });
 
@@ -159,4 +178,52 @@ test("demoteArchiveLinks() turns a live doc's link into archive into plain text 
   assert.equal(demoteArchiveLinks("[`P.md`](../archive/plans/P.md)", `${D}plans`), "`P.md` (archived)");
   assert.ok(liveDocNoArchive(`${D}plans/x.md`) && liveDocNoArchive(`${D}TESTING.md`));
   assert.ok(!liveDocNoArchive(`${D}notes/x.md`) && !liveDocNoArchive(`${D}README.md`) && !liveDocNoArchive(`${D}NOTES-INDEX.md`) && !liveDocNoArchive("AGENTS.md"));
+});
+
+// ---------------------------------------------------------------------------
+// No date bombs (2026-11-25): the clock-only checks warn on the tip, fail on a diff in the notes tree
+
+test("ageGate(): advisory on the tip, strict on a diff that touches docs/notes/ or cannot be read, advisory otherwise", () => {
+  const note = r.notes.find((n) => !n.dir).file;
+  const batch = r.notes.find((n) => n.dir);
+  const archived = note.replace(/^docs\//, "docs/archive/");
+  assert.equal(ageGate({ advisory: true, changed: [note] }).strict, false, "the tip warns even when its last merge touched a note");
+  assert.equal(ageGate({ changed: [note] }).strict, true, "adding or editing a note");
+  assert.equal(ageGate({ changed: [archived, note] }).strict, true, "archiving one (a rename names both ends)");
+  if (batch) assert.equal(ageGate({ changed: [batch.head] }).strict, true, "a batch directory");
+  assert.equal(ageGate({ changed: null }).strict, true, "no deploy base: fail as before");
+  assert.equal(ageGate({ changed: [] }).strict, false, "the deploy tip itself (empty diff)");
+  assert.equal(ageGate({ changed: ["js/core/log.js", "docs/PHYSICS.md", UNCITED_ALLOW] }).strict, false, "a diff outside docs/notes/");
+  assert.equal(ageGate().strict, true, "no arguments: strict");
+});
+
+test("ci.yml sets APEX_NOTES_AGE_ADVISORY on all four tooling shards, off pull requests only; nothing bakes it in", () => {
+  assert.equal(AGE_ADVISORY_ENV, "APEX_NOTES_AGE_ADVISORY");
+  const ci = parseYAML(read(".github/workflows/ci.yml"));
+  const shards = Object.values(ci.jobs).flatMap((j) => j.steps || []).filter((st) => /^Tooling-fast shard [1234]\/4$/.test(st.name || ""));
+  assert.equal(shards.length, 4);
+  for (const st of shards) assert.equal(st.env?.[AGE_ADVISORY_ENV], "${{ github.event_name != 'pull_request' && '1' || '' }}", `${st.name}: off pull requests only`);
+  for (const f of ["package.json", "tools/ci/tooling-fast.mjs", ".githooks/pre-commit"]) if (files.includes(f))
+    assert.equal(read(f).split(AGE_ADVISORY_ENV).length, 1, `${f} must not set it: a PR's own diff decides`);
+});
+
+test(`knowledge-gc.yml runs nightly at GC_DAYS (${GC_DAYS}), before the ${DAYS}-day window, and opens its PR with \`land\``, () => {
+  assert.ok(GC_DAYS > 0 && GC_DAYS <= DAYS - 2, "at least two nights of slack before a note can go stale");
+  const wf = parseYAML(read(".github/workflows/knowledge-gc.yml"));
+  const cron = wf.on.schedule.map((x) => x.cron);
+  assert.equal(cron.length, 1);
+  assert.deepEqual(cron[0].split(" ").slice(2), ["*", "*", "*"], "nightly: every day of every month and week");
+  assert.equal(wf.on.workflow_dispatch.inputs.days.default, String(GC_DAYS), "the dispatch default is GC_DAYS");
+  const steps = wf.jobs.gc.steps;
+  const gc = steps.find((st) => st.id === "gc");
+  assert.equal(gc.env.DAYS, `\${{ inputs.days || '${GC_DAYS}' }}`, "the schedule's days is GC_DAYS");
+  const lines = (run) => String(run).split("\n").map((l) => l.trim());
+  assert.equal(lines(gc.run).find((l) => l.startsWith("node tools/docs/knowledge-gc.mjs")), 'node tools/docs/knowledge-gc.mjs --apply "--days=$DAYS" | tee gc.log');
+  assert.deepEqual(lines(gc.run).filter((l) => l.startsWith("git") && l.includes(" push ")).map((l) => l.split(" ").pop()), ['"$GC_BRANCH"'], "the one push is the gc branch, never the deploy branch");
+  const open = steps.find((st) => String(st.uses || "").startsWith("./.github/actions/open-bot-pr"));
+  assert.equal(open.with.labels, "land", "the bot PR carries `land`");
+  const action = parseYAML(read(".github/actions/open-bot-pr/action.yml"));
+  assert.equal(action.inputs.labels.default, "");
+  assert.equal(lines(action.runs.steps[0].run).find((l) => l.startsWith('GH_TOKEN="$tok" gh pr edit')),
+    'GH_TOKEN="$tok" gh pr edit "$pr_url" --repo "$GITHUB_REPOSITORY" --add-label "$LABELS" \\', "open-bot-pr applies the labels input");
 });
