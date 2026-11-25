@@ -204,7 +204,9 @@ Bryce's "Tap now + follow-ups" (about 19:17Z, PR #6686 comment 7171942231) and t
   tip side.
 - **Orphan stacked refs** (finding 1). land.yml post counts a `train-next/` ref as a train in flight only while it
   backs an open `train/` PR with `train` and no `hold`: its base is that PR's head (the train under it), or its sha
-  is (its speculative PR). An orphan left by a degraded build parks nobody. The wait names the stacked train by its
+  is (its speculative PR). In the promote window (train N merged, N+1 not yet promoted; the #6692 review's
+  finding 1) it also counts while its base is on the deploy branch and every car of it is open with `land`. An
+  orphan left by a degraded build parks nobody. The wait names the stacked train by its
   cars: the ref's 40-hex base pushed the status past GitHub's 140 characters and cut the suffix the sweep matches.
 - **One in-flight definition** (finding 4). `trainInFlight` in merge-train.mjs (soloLane's `trainOpen`) and the
   post, retry and sweep reads all count a ready `train/` PR of this repository with `train` + `land` and no `hold`.

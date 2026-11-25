@@ -1031,6 +1031,10 @@ test("retestBudget (#6686 finding 5): the screen stops adding cars once the fold
     assert.equal(retestBudget({ base: r.base, cwd: r.dir, bound: () => ({ error: "selection failed" }), limitMs: 1 })({ tree: m, kept: 1 }).ok, true, "an unreadable bound accepts (the gate still measures)");
     assert.equal(retestBudget({ base: r.base, cwd: r.dir, bound: () => ({ ms: null, files: [] }), limitMs: 1 })({ tree: m, kept: 1 }).ok, true, "no estimate accepts");
     assert.equal(retestBudget({ base: sha("0"), cwd: r.dir, bound: () => assert.fail("no diff, no bound"), limitMs: 1 })({ tree: m, kept: 1 }).ok, true, "an unreadable diff accepts");
+    // #6692 finding 4: a bound that throws (an unreadable timings file) accepts and logs; the screen job never fails on it.
+    const logs = [];
+    assert.deepEqual(retestBudget({ base: r.base, cwd: r.dir, bound: () => { throw new Error("timings unreadable\nstack"); }, limitMs: 1, log: (l) => logs.push(l) })({ tree: m, kept: 1 }), { ok: true, ms: null });
+    assert.deepEqual(logs, ["  (retest bound threw: timings unreadable; the car is accepted and the gate's retest row still measures it)"]);
     // In the screen: the refused car is recorded red (so the build leaves it out) and costs no ratchet run.
     const out = [], checked = [];
     const sf = screenFold({ tip: r.base, cwd: r.dir, check: ({ cwd }) => { checked.push(fs.readdirSync(cwd).filter((x) => x.endsWith(".txt")).sort().join(",")); return { ok: true }; }, prepare: () => ({ ok: true }), out, retest: b });

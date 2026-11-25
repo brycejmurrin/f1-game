@@ -544,14 +544,19 @@ export function screenFold({ tip, cwd = ROOT, git = gitIn(cwd), check, prepare =
  * always rides (a 1-car train re-tests no more than that PR would alone); a refused car rides a later train. */
 
 /** The screen's retest budget for folds onto `base`: `bound(paths)` → { ms, files, how } | { error }; `limitMs` the
- *  gate's line. Every doubt (a diff or bound that cannot be read, no estimate) accepts: the train's own retest row
+ *  gate's line. Every doubt (a diff or bound that cannot be read or throws, no estimate) accepts: the train's own retest row
  *  still measures it, as before. → ({ tree, kept }) → { ok, why?, ms? }. */
-export function retestBudget({ base, cwd = ROOT, git = gitIn(cwd), bound, limitMs }) {
+export function retestBudget({ base, cwd = ROOT, git = gitIn(cwd), bound, limitMs, log = () => {} }) {
   return ({ tree, kept = 0 }) => {
     if (!kept) return { ok: true };
     const d = git(["diff", "--name-only", base, tree]);
     if (d.status !== 0) return { ok: true };
-    const b = bound(String(d.stdout || "").split("\n").map((l) => l.trim()).filter(Boolean));
+    let b;
+    // A throw (an unreadable timings file, say) must not fail the screen job and stop every train (#6692 finding 4).
+    try { b = bound(String(d.stdout || "").split("\n").map((l) => l.trim()).filter(Boolean)); } catch (e) {
+      log(`  (retest bound threw: ${String(e?.message || e).split("\n")[0]}; the car is accepted and the gate's retest row still measures it)`);
+      return { ok: true, ms: null };
+    }
     if (!b || b.error || !Number.isFinite(b.ms) || b.ms <= limitMs) return { ok: true, ms: b?.ms ?? null };
     return { ok: false, ms: b.ms, why: `retest bound ~${Math.round(b.ms / 1000)} s with this car (${b.files.length} unit file(s), ${b.how}), over the gate's ${Math.round(limitMs / 1000)} s line: it rides a later train` };
   };
@@ -1157,7 +1162,7 @@ export async function screenMain({ out, request = api, cwd = ROOT, log = console
   let sf = null;
   const boundOf = bound || (gate ? (p) => gate.retestBound(p) : null);
   const line = limitMs ?? gate?.RETEST_REFUSE_MS ?? null;
-  const retestFor = (tip) => (boundOf && Number.isFinite(line) ? retestBudget({ base: tip, cwd, bound: boundOf, limitMs: line }) : null);
+  const retestFor = (tip) => (boundOf && Number.isFinite(line) ? retestBudget({ base: tip, cwd, bound: boundOf, limitMs: line, log }) : null);
   const plan = await planTrain({ request, cwd, max, now, log, onto, carGate, acceptFor: (tip) => (sf = screenFold({ tip, cwd, check: ratchets, prepare, out: verdicts, now: clock, retest: retestFor(tip) })).accept });
   sf?.cleanup();
   if (plan.error) { log(`= merge-train error — ${plan.error}`); return 1; }

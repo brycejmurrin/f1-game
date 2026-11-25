@@ -3451,7 +3451,18 @@ test("land.yml post (trains as default): a passing PR waits pending for the open
   assert.equal(r.out.arm, "");
   r = go({ FAKE_STACKS: stack, FAKE_ARM_BOARD: JSON.stringify([trainPR({ draft: true, head: { sha: SB, ref: "train/20261125-1800", repo: { full_name: "o/r" } } })]) });
   assert.equal(posted(r)[0].state, "pending", "backed by the train under it (here a draft, so the first read did not name it)");
-  armed(go({ FAKE_STACKS: stack }), "an orphan ref (no open train PR at all) parks nobody");
+  armed(go({ FAKE_STACKS: stack }), "an orphan ref (no open train PR, its cars not open with `land`) parks nobody");
+  // #6692 finding 1, the promote window: train N merged (its PR closed, so nothing open backs the ref), N+1 not yet
+  // promoted. The ref still counts while its base is on the deploy branch and every car is open with `land`.
+  const cars = [6531, 6532].map((n) => pr7({ number: n, head: { sha: HEAD7, ref: `claude/x-${n}`, repo: { full_name: "o/r" } } }));
+  const onTip = (status, open = cars) => go({ FAKE_STACKS: stack, FAKE_ARM_BOARD: JSON.stringify(open.map((c) => JSON.parse(c))), FAKE_ARM_COMPARE: JSON.stringify({ status }) });
+  r = onTip("ahead");
+  assert.deepEqual(posted(r).map((b) => [b.state, b.description]), [["pending", "= merge-gate waiting — a stacked train (#6531,#6532) in flight; this PR boards the next train"]], "promote window: pending");
+  assert.equal(r.calls.filter((c) => c.includes(`/compare/${SB}...${DEPLOY_BRANCH}`)).length, 1, "one compare, of the ref's base against the deploy branch");
+  assert.equal(posted(onTip("identical"))[0].state, "pending", "base is the tip itself");
+  armed(onTip("diverged"), "a base not on the deploy branch (a closed, unmerged train under it) parks nobody");
+  armed(onTip("ahead", cars.slice(0, 1)), "a car of the stack gone (merged, closed or lost `land`): the build restacks; nobody waits on it");
+  armed(go({ FAKE_STACKS: stack, FAKE_ARM_BOARD: JSON.stringify(cars.map((c) => JSON.parse(c))), FAKE_ARM_COMPARE: "not json" }), "an unreadable compare waits nothing");
   armed(go({ FAKE_STACKS: stack, FAKE_ARM_BOARD: JSON.stringify([trainPR({ labels: [{ name: "land" }, { name: "train" }, { name: "hold" }] })]) }), "a held train under another head backs no ref");
   armed(go({ FAKE_STACKS: stack, FAKE_ARM_BOARD: JSON.stringify([spec({ labels: [{ name: "train" }, { name: "hold" }] })]) }), "a held speculative PR backs nothing");
   armed(go({ FAKE_STACKS: stack, FAKE_ARM_BOARD: JSON.stringify([spec({ head: { sha: SS, ref: "train/x", repo: { full_name: "fork/r" } } })]) }), "a fork's train/ PR backs nothing");
