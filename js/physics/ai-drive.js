@@ -610,7 +610,8 @@ const AiDrive = (function () {
     const diffCorner = ctx.diffCorner || 1;
     // One loop over Float64Array columns: the window's own arrays, or the pooled rows staged into scratch
     // columns. A typed-array store is ToNumber, and every original read was numeric after its `|| 0`, so the
-    // staged values give the same results (bankGrip only when the row has no mu, as before).
+    // staged values give the same results (bankGrip only when the row has no mu, as before). A bank is staged
+    // only as a number: the old Number.isFinite(bank) gave a string or boolean bank no gravity support.
     const col = btCols(sampleN), dv = col[0];
     let kv = col[1], muv = col[2], bankv = col[3];
     if (window) {
@@ -619,7 +620,7 @@ const AiDrive = (function () {
     } else {
       for (let i = 0; i < sampleN; i++) {
         const s = samples[i];
-        dv[i] = s.d; kv[i] = s.k; bankv[i] = s.bank; muv[i] = s.mu !== undefined ? s.mu : bankGrip(s.bank);
+        dv[i] = s.d; kv[i] = s.k; bankv[i] = typeof s.bank === "number" ? s.bank : 0; muv[i] = s.mu !== undefined ? s.mu : bankGrip(s.bank);
       }
     }
     for (let i = 0; i < sampleN; i++) {
