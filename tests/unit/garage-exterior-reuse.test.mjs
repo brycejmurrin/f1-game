@@ -40,15 +40,18 @@ function rig() {
 const pick = (trackId, over = {}) => Object.assign({ trackId, teamId: "ferrari", weather: "dry", tod: "day", night: false, def: { id: trackId } }, over);
 
 test("a second garage open of the same geometry key reuses the parked set: one build, nothing freed", async () => {
-  const r = rig();
-  assert.equal(await r.exterior.request(pick("monaco")), true);
+  const r = rig(), base = pick("monaco");
+  r.firstDef = base.def;
+  assert.equal(await r.exterior.request(base), true);
   const meshes = new Set(r.live);
   r.exterior.release();   // #carsetup hidden
   assert.equal(r.exterior.ready(), false, "a parked set is not drawn");
   assert.equal(r.exterior.draw(), false);
   assert.equal(r.exterior.state().parked, true);
   assert.equal(r.freed.length, 0, "release keeps the built meshes");
-  assert.equal(await r.exterior.request(pick("monaco", { weather: "rain", tod: "dusk" })), true, "weather/tod are appearance, not geometry");
+  const again = pick("monaco", { weather: "rain", tod: "dusk" });
+  again.def = r.firstDef;   // the garage passes the same Tracks.LIST def object every time
+  assert.equal(await r.exterior.request(again), true, "weather/tod are appearance, not geometry");
   assert.equal(r.builds(), 1, "no rebuild for the same geometry key");
   assert.deepEqual([...r.live].filter((h) => !meshes.has(h)).length <= 1, true, "only the rain sheet is new");
   assert.equal(r.exterior.state().reuses, 1);
@@ -101,4 +104,18 @@ test("a release during an unfinished build drops it; nothing half-built is parke
   assert.equal(r.exterior.state().parked, false);
   assert.equal(await r.exterior.request(pick("monaco")), true, "the next open builds afresh");
   assert.equal(r.live.size, 3);
+});
+
+test("a parked set is reused only for the def it was built from (a re-made circuit def rebuilds)", async () => {
+  const r = rig(), a = pick("custom"), same = pick("custom"), remade = pick("custom");
+  same.def = a.def;   // hydrate fills a def in place: the same object
+  await r.exterior.request(a);
+  r.exterior.release();
+  await r.exterior.request(same);
+  assert.equal(r.builds(), 1, "the same def object re-shows the parked set");
+  r.exterior.release();
+  assert.notEqual(remade.def, a.def);
+  assert.equal(await r.exterior.request(remade), true);
+  assert.equal(r.builds(), 2, "a new def object with the same id rebuilds");
+  assert.equal(r.live.size, 3, "and the stale set was freed");
 });

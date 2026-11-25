@@ -196,7 +196,7 @@ const GarageExterior = (function () {
         if (!(opts && opts.retry) || attempts >= 2 || Date.now() < retryAt) return Promise.resolve(false);
       } else {
         selected = s; key = nextKey; generation++; if (job) job.cancel(); job = null; attempts = 0; retryAt = 0;
-        if (readySet && readySet.geometryKey === geomKey) {   // the parked set (park): re-show, no rebuild
+        if (readySet && readySet.geometryKey === geomKey && readySet.def === s.def) {   // the parked set (park), built from this def: re-show
           reuses++; appearance(); status = "ready"; error = null; weatherMesh(); notify(); return Promise.resolve(ready());
         }
         discard();   // LRU 1: the parked set of another key goes before a new build allocates
@@ -242,7 +242,7 @@ const GarageExterior = (function () {
             if (!current()) return false;
           }
           if (!current()) return false;
-          readySet = Object.assign({}, owned, { geometryKey: geomKey, lamps: data.lamps || [], palette: data.palette || null, surface: data.surface || null, stats: Object.assign({}, data.stats,
+          readySet = Object.assign({}, owned, { geometryKey: geomKey, def: s.def, lamps: data.lamps || [], palette: data.palette || null, surface: data.surface || null, stats: Object.assign({}, data.stats,
             { maxSliceMs, uploadMs, buildWallMs: Math.max(0, now() - buildAt) }), anchor: data.anchor || null });
           for (const name of MESHES) delete owned[name];
           status = "ready"; weatherMesh(); return ready();
