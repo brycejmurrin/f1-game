@@ -1677,12 +1677,13 @@ const CarDraw = (function () {
           _ringOpts.emissive = 1;
           for (const a of [0.5, 1]) { _ringOpts.alpha = a; for (let k = 0; k < 4; k++) d(getBrakeRing(), _ringOpts); }
           _flameOpts.alpha = 0.5; d(pin(CarMesh.getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame)), _flameOpts);
+          // Flaps shut, open, mid-swing, as the race draws them; the player too (#6665: its first swing minted them).
+          const aSt = c.isPlayer ? teamDecalState(pt, true) : teamDecalState(pt, false, c.visualSetup, c.visStamp);
+          for (const b of [0, 1, 0.5]) { deps.drawAeroFlaps(pt, aSt.val, b, Z, paint, aSt.aero, null, b !== 0.5); n++; }
           if (c.isPlayer) continue;
           if (_sharedRivalBody) d(sharedRivalBodyMesh(false, c), co);
           if (_farRivalBody) d(sharedRivalBodyMesh(true, c), co);
           d(teamBodyMesh(c.team, c), paint);
-          const aSt = teamDecalState(pt, false, c.visualSetup, c.visStamp);
-          for (const b of [0, 1, 0.5]) { deps.drawAeroFlaps(pt, aSt.val, b, Z, paint, aSt.aero, null, b !== 0.5); n++; }
           const wm = getFieldWheelMeshes(c.team, c);
           if (wm) for (let k = 0; k < 2; k++) { d(wm.F, wo); d(wm.R, wo); d(wm.FFixed, wo); d(wm.RFixed, wo); }
           if (fw) for (let k = 0; k < 2; k++) { d(fw.F, wo); d(fw.R, wo); }

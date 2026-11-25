@@ -1045,7 +1045,10 @@ test("primeRace: the race's first rendered frame draws every warm-built mesh onc
   // BUILD, which used to wait for a car's first close view, is what the prime moves to race start.
   assert.equal((calls.getCarDecalMesh || 0) - built0, G.cars.length, "every field car's decal mesh is fetched in the prime frame's flush");
   assert.equal(drawn.every((d) => d.zero), true, "at the zero matrix");
-  assert.equal(flaps.length, rivals * 3, "per rival: closed set, open set, moving elements");
+  // #6665: the player too — its first X-mode swing minted the moving elements mid-race (geometry #494, the spread leg).
+  assert.equal(flaps.length, G.cars.length * 3, "per car, the player included: closed set, open set, moving elements");
+  const player = G.cars.find((c) => c.isPlayer);
+  assert.equal(flaps.filter((f) => f.team === player.team.id && f.b === 0.5 && f.still === false).length >= 1, true, "the player's moving elements are primed");
   assert.deepEqual([...new Set(flaps.map((f) => `${f.b}:${f.still}`))].sort(), ["0.5:false", "0:true", "1:true"]);
   assert.equal(flaps.every((f) => f.zero && f.paint === paint), true, "with the frame's paint, at the zero matrix");
   assert.equal(prime(), 0, "the next frame: nothing (no warm held the primed one)");
