@@ -26,7 +26,8 @@
 //
 // Bisect on red (trainHistory): a closed, unmerged train of n cars caps the next train at floor(n/2) cars, so the
 // suspect set halves each round; a car that was alone in a red train is left out until its head changes. A train
-// closed because a car moved or lost `land` is `stale`, not red. A train that goes red while its base (the deploy tip
+// closed because a car moved or lost `land` is `stale`, not red. So is a train whose `gate` success stays unarmed
+// (stuckGreen, T1 of the #6379 land-trigger note). A train that goes red while its base (the deploy tip
 // it was built on) is itself red is `stale` too (redOnRedTip): its cars were never the suspects. One train is open at a time.
 //
 // ORPHANS AND THE DEFAULT LANE (#6528, 2026-11-25; Bryce ~07:00Z "1 + 2 + 4 now"): a car whose own `gate` reads success
@@ -515,10 +516,25 @@ function listPulls(request, state) {
   return { rows };
 }
 
-const gateState = (sha, request) => {
+const gateStatus = (sha, request) => {
   const r = request(`commits/${sha}/statuses?per_page=100`);
-  return r.error ? "" : ((r.json || []).find((s) => s.context === "gate")?.state || "");
+  const g = r.error ? null : (r.json || []).find((s) => s.context === "gate");
+  return { state: g?.state || "", at: Date.parse(g?.created_at || "") };
 };
+const gateState = (sha, request) => gateStatus(sha, request).state;
+
+/** T1's inputs for an open train whose `gate` is a success: read the tip's commit time and the retry dispatches only
+ *  when the age rule alone does not already close it. */
+function stuckInputs(t, g, request, now) {
+  const s = { armed: t.auto_merge != null, gateAt: g.at, now, tipAt: null, attempts: null };
+  if (s.armed || !Number.isFinite(g.at) || stuckGreen(s).close) return s;
+  const tip = request(`branches/${encodeURIComponent(DEPLOY)}`);
+  s.tipAt = tip.error ? null : Date.parse(tip.json?.commit?.commit?.committer?.date || "");
+  if (!(s.tipAt > g.at)) return s;
+  const runs = request(`actions/workflows/land.yml/runs?event=workflow_dispatch&branch=${encodeURIComponent(DEPLOY)}&per_page=100`);
+  s.attempts = runs.error ? null : retryAttempts(runs.json, t.number, String(t.head?.sha || "").toLowerCase());
+  return s;
+}
 
 /** The next train from live state. Reads GitHub and fetches car heads into `cwd`; writes only git objects. */
 export async function planTrain({ request = api, cwd = ROOT, max = TRAIN_MAX, now = Date.now(), log = () => {}, acceptFor = null } = {}) {
@@ -584,7 +600,7 @@ export function newestRun(json) {
  *  run was cancelled at 01:33Z, no `CI` check ever completed, and the builder waited on it for an hour, holding every
  *  later train). A completed run that was cancelled closes the train `stale` (nothing failed, so no bisect); a
  *  failure, timeout or startup failure closes it `red`. */
-export function trainDisposition({ manifest, cars, ciConclusion, gate, ciRun = null }) {
+export function trainDisposition({ manifest, cars, ciConclusion, gate, ciRun = null, stuck = null }) {
   if (!manifest) return { close: true, outcome: "stale", why: "no manifest" };
   const moved = manifest.cars.filter((c) => { const p = cars.get(c.pr); return !p || (!p.merged_at && (String(p.head?.sha || "").toLowerCase() !== c.head || !labelNames(p.labels).includes("land") || p.state !== "open")); });
   if (moved.length) return { close: true, outcome: "stale", why: `car${moved.length > 1 ? "s" : ""} ${moved.map((c) => `#${c.pr}`).join(" ")} moved, closed or lost land` };
@@ -594,6 +610,39 @@ export function trainDisposition({ manifest, cars, ciConclusion, gate, ciRun = n
     if (["failure", "timed_out", "startup_failure"].includes(ciRun.conclusion)) return { close: true, outcome: "red", why: `the CI run on the train head ended ${ciRun.conclusion} before its CI check completed` };
   }
   if (gate === "failure") return { close: true, outcome: "red", why: "gate failure on the train head (gen, ratchets, retest or a car row)" };
+  if (gate === "success" && stuck) return stuckGreen(stuck);
+  return { close: false };
+}
+
+/** Minutes a train's `gate` success may stay unarmed before the builder closes it (about two train cycles). */
+export const STUCK_GREEN_MIN = 15;
+/** land.yml's RETRY_MAX: immediate re-gates per head (a test pins the two equal). */
+export const RETRY_MAX = 3;
+const RETRY_TITLE = /^Land retry pr=(\d+) head=([0-9a-f]{40}|-) attempt=(\d{1,3})$/;
+
+/** The highest `attempt` land.yml's `retry` dispatched for this PR at this head, from a land.yml workflow_dispatch
+ *  runs page (display_title `Land retry pr=<n> head=<sha> attempt=<a>`). 0 when none; null when unreadable. Pure. */
+export function retryAttempts(json, pr, head) {
+  if (!Array.isArray(json?.workflow_runs)) return null;
+  let max = 0;
+  for (const r of json.workflow_runs) {
+    const m = RETRY_TITLE.exec(String(r?.display_title || ""));
+    if (m && Number(m[1]) === pr && (m[2] === head || m[2] === "-")) max = Math.max(max, Number(m[3]));
+  }
+  return max;
+}
+
+/** T1 (train #6382, 2026-11-24): a `gate` success that never armed. Its arm job failed on a GitHub 503 at 22:55Z, the
+ *  retry budget was spent, and the open train held every later train until a person closed it at 00:27Z. Close it
+ *  `stale` (no bisect: the cars stay eligible) when the success is unarmed past STUCK_GREEN_MIN, or when the tip moved
+ *  after it and the head has spent RETRY_MAX re-gates (nothing re-gates it again). An armed train is GitHub's to merge.
+ *  `stuck`: { armed, gateAt, now, tipAt, attempts } (times in ms; tipAt and attempts null when not read). Pure. */
+export function stuckGreen({ armed, gateAt, now, tipAt = null, attempts = null }) {
+  if (armed || !Number.isFinite(gateAt) || !Number.isFinite(now)) return { close: false };
+  const at = new Date(gateAt).toISOString();
+  const min = Math.floor((now - gateAt) / 60_000);
+  if (now - gateAt > STUCK_GREEN_MIN * 60_000) return { close: true, outcome: "stale", why: `gate success at ${at} is still unarmed after ${min} min` };
+  if (Number.isFinite(tipAt) && tipAt > gateAt && attempts >= RETRY_MAX) return { close: true, outcome: "stale", why: `gate success at ${at} measured an older deploy tip and its head spent the retry budget (${attempts} of ${RETRY_MAX})` };
   return { close: false };
 }
 
@@ -640,7 +689,8 @@ export async function main(argv, { request = api, cwd = ROOT, log = console.log,
         if (wr.error) runNote = ` (its CI run could not be read: ${wr.error})`;
         else ciRun = newestRun(wr.json);
       }
-      let d = trainDisposition({ manifest: m, cars, ciConclusion, gate: gateState(t.head.sha, request), ciRun });
+      const g = gateStatus(t.head.sha, request);
+      let d = trainDisposition({ manifest: m, cars, ciConclusion, gate: g.state, ciRun, stuck: g.state === "success" ? stuckInputs(t, g, request, now) : null });
       if (!d.close) { log(`= merge-train waiting — train #${t.number} is still running${runNote}`); return 0; }
       if (d.outcome === "red" && m) { // the base row's own signal, on the sha the train was built on
         const pages = readDeployTip(DEPLOY, request);
