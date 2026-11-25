@@ -922,6 +922,14 @@ test("the Data Hub head row walks from the focused control, enters the panel on 
   byId("dh-tab-live").focus();
   head.listeners.focusin.forEach((f) => f({ target: byId("dh-tab-live"), relatedTarget: panelBtn }));
   assert.equal(focused(), "dh-tab-standings");
+  // A tap is not the walker: the tapped tab keeps the focus its pointerdown gave it, and its click selects it.
+  panelBtn.focus();
+  head.listeners.pointerdown.forEach((f) => f({ target: byId("dh-tab-live") }));
+  byId("dh-tab-live").focus();
+  head.listeners.focusin.forEach((f) => f({ target: byId("dh-tab-live"), relatedTarget: panelBtn }));
+  byId("dh-tab-live").dispatch("click");
+  assert.equal(focused(), "dh-tab-live", "a tapped tab is not pulled back to the old selection");
+  assert.equal(selected(), "live");
   h.DataHub.close(); await h.drain();
 });
 

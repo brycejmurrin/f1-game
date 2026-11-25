@@ -281,10 +281,13 @@ const DataHub = (function () {
     });
     // Up out of the panel: the rail is one stop, the SELECTED tab. The walker
     // picks the nearest head control, and focus on an unselected tab reads as
-    // selected (uihunt4 #1).
+    // selected (uihunt4 #1). Not a tap: a button takes focus on pointerdown,
+    // before its click selects it.
+    let tapAt = 0;
+    header.addEventListener("pointerdown", function () { tapAt = Date.now(); }, true);
     header.addEventListener("focusin", function (ev) {
       const t = ev.target, from = ev.relatedTarget, sel = tabButtons[active];
-      if (!sel || t === sel || !t || !t.getAttribute || t.getAttribute("role") !== "tab") return;
+      if (!sel || t === sel || !t || !t.getAttribute || t.getAttribute("role") !== "tab" || Date.now() - tapAt < 1000) return;
       if (from && contentEl && contentEl.contains(from)) sel.focus();
     });
   }
