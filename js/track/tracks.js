@@ -123,7 +123,7 @@ const Tracks = (function () {
       bank[k] = lerp(dbank[di], dbank[di + 1], f);
     }
     if (def.path && def.id && hasRealElevation(def.id)) surveyHeights(def, px, py, pz, n);
-    const dress = def._sceneryShift || 0;
+    const dress = TrackSpace.sceneryOriginDelta(def);
     const bridges = def.bridges;
     if (bridges) for (const b of bridges) {
       // wrap01 — same idiom as TrackSurface.profile's bridge carve; bare `% 1`
