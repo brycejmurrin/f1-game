@@ -122,7 +122,18 @@ rear is loaded past 0.55 of its tyre peak, the pedal's rear share eases toward
 never engages it. Without it a stamp on the brakes at the cornering limit took
 the rear's grip twice (the pedal AND the load moving forward) and spun the car
 toward the apex (owner report 2026-09-29; `player-dyn.mjs` `midCorner_*`: 22°
-of rear slip against 4.5° coasting, now 5.8°). Engine braking — the coast
+of rear slip against 4.5° coasting, now 5.8°). **Brake over-rotation**
+(#6573, `BRAKE_OVER_*` in `js/physics/player-forces.js`): brake stability
+gates only the pedal's share, so the load moving forward still unloads the
+rear. With factory parts at ×1.0 (§Parts parity) no car had the grip reserve
+that hid it, and a mid-corner stamp slid the rear past the front (shipped seat
+18.2° and yaw +29 %, pin 14.5° and +16 %). While the pedal is in, an extra yaw
+damp engages as the rear's slip angle runs past the front's (0 at equal slip,
+full 1° beyond, gain 80/s per `YAW_DAMP`, applied implicitly so it cannot flip
+the yaw rate's sign), and the car pushes wide instead: 7.4° / 7.5° and −4 %
+(`trail-brake-turnin.test.mjs`: rear ≤ 8°, yaw rise ≤ 15 % on every seat). A
+braked turn-in keeps |αR| ≤ |αF| and keeps its rotation. It reads only the
+axles' own slip angles, never the road. Engine braking — the coast
 part of a deceleration, `brakeMix` ramps the pedal's share in from coast drag
 to 1.5× it — and the THROTTLE charge the driven rear only: the undriven front
 spends nothing on the pedal, so a planted throttle at the limit of a slow exit
