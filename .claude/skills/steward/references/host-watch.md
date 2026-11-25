@@ -21,3 +21,12 @@ unsubscribe other PRs to "free" it. Use step 1 above and say so in the Hand-off 
 only after a state change (AGENTS.md rule 13), and none while a subscription works: a wake after an hour
 of idle re-reads the whole context (measured $3–10 a wake, against $0.25–0.60 inside the hour;
 `docs/notes/ORCHESTRATION-REVIEW-2026-11-11.md` rank 9).
+
+## Codex and Cursor
+
+- **Codex** has no PR subscription. Its thread scheduled task (it returns to the same chat; a local one needs the
+  desktop app running) is the timed check-in of §A refused subscription: one of at most 50 minutes, re-armed only
+  after a state change (AGENTS.md rule 13), deleted at `land`. Without one, use step 1 or 3 above, and name the
+  missing wake in the Hand-off block.
+- **Cursor cloud agents** subscribe with `subscribe_github_ci` and `subscribe_github_pr` ([`vendors.md`](vendors.md)).
+  A Cursor Automation (cron) is Bryce's to create, never an agent's.
