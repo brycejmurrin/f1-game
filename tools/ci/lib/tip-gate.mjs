@@ -15,6 +15,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 
 /** The composition-sensitive unit tests: each sums a size over many files, so two green PRs can cross it together. */
 export const TIP_GATE_TESTS = Object.freeze([
@@ -27,6 +28,32 @@ export const TIP_GATE_TIMEOUT_MS = 120_000;
 const git = (run, args, cwd, extra = {}) => run("git", args, { cwd, encoding: "utf8", timeout: 120_000, ...extra });
 const short = (s) => String(s || "").slice(0, 8) || "?";
 
+/** This process's run id: a worktree path carrying it belongs to this run alone (#6494). */
+export const RUN_ID = `${process.pid}-${randomBytes(3).toString("hex")}`;
+
+/**
+ * A worktree path of this run's own under `dir`: `<prefix>-<pid>-<hex>`. Only its owner removes it; a leftover of a
+ * run whose pid is gone (killed mid-gate) is swept here, a live run's never. `alive` is injectable for tests.
+ */
+export function ownWorktreePath(dir, prefix, runId = RUN_ID, { alive = pidAlive } = {}) {
+  let names = [];
+  try { names = fs.readdirSync(dir); } catch { /* no dir yet */ }
+  for (const n of names) {
+    const m = n.startsWith(`${prefix}-`) && /-(\d+)-[0-9a-f]+$/.exec(n);
+    if (m && `${m[1]}` !== runId.split("-")[0] && !alive(Number(m[1]))) fs.rmSync(path.join(dir, n), { recursive: true, force: true });
+  }
+  return path.join(dir, `${prefix}-${runId}`);
+}
+function pidAlive(pid) {
+  try { process.kill(pid, 0); return true; } catch (e) { return e.code === "EPERM"; }
+}
+
+/** The reason in git's stderr: the `fatal:`/`error:` line, else the last line (the first is often "Preparing worktree …"). Pure. */
+export function gitReason(stderr) {
+  const lines = String(stderr || "").split("\n").map((l) => l.trim()).filter(Boolean);
+  return lines.find((l) => /^(fatal|error):/.test(l)) || lines.pop() || "(no stderr)";
+}
+
 /** The failing test names in `node --test` TAP output (top-level `not ok` lines). Pure. */
 export function failedTests(out) {
   return [...String(out || "").matchAll(/^not ok \d+ - (.+)$/gm)].map((m) => m[1].trim());
@@ -37,7 +64,7 @@ export function failedTests(out) {
  * Fetches `base` when the sha is not in this clone; builds BUILT_PATHS in the worktree (ensure-built, node only);
  * caches the verdict per sha and test list under artifacts/merge-gate/tip-gate/ so one gate job pays it once.
  */
-export function runTipGate({ sha, base, root, run = spawnSync, tests = TIP_GATE_TESTS, now = Date.now } = {}) {
+export function runTipGate({ sha, base, root, run = spawnSync, tests = TIP_GATE_TESTS, now = Date.now, runId = RUN_ID } = {}) {
   const full = String(sha || "").toLowerCase();
   if (!/^[0-9a-f]{40}$/.test(full)) return { error: `tip gate: not a commit sha: ${sha || "(none)"}` };
   const dir = path.join(root, "artifacts", "merge-gate", "tip-gate");
@@ -50,12 +77,13 @@ export function runTipGate({ sha, base, root, run = spawnSync, tests = TIP_GATE_
     git(run, ["fetch", "--quiet", "--no-tags", "origin", `+refs/heads/${base}:refs/remotes/origin/${base}`], root);
     if (git(run, ["cat-file", "-e", `${full}^{commit}`], root).status !== 0) return { error: `tip gate: ${short(full)} is not in this clone after fetching ${base}` };
   }
-  const wt = path.join(dir, `wt-${full.slice(0, 12)}`);
+  // One worktree per RUN, not per sha (#6494): two gates on one tip used to share `wt-<sha12>`, and each one's
+  // pre-clean removed the other's tree, so the loser held a green PR as `base: WAIT`. The verdict cache stays per sha.
+  const wt = ownWorktreePath(dir, `wt-${full.slice(0, 12)}`, runId);
   const cleanup = () => { git(run, ["worktree", "remove", "--force", wt], root); git(run, ["worktree", "prune"], root); fs.rmSync(wt, { recursive: true, force: true }); };
-  cleanup();
   const t0 = now();
   const add = git(run, ["worktree", "add", "--detach", wt, full], root);
-  if (add.status !== 0) { cleanup(); return { error: `tip gate: worktree add ${short(full)} failed: ${String(add.stderr || "").trim().split("\n")[0]}` }; }
+  if (add.status !== 0) { cleanup(); return { error: `tip gate: worktree add ${short(full)} failed: ${gitReason(add.stderr)}` }; }
   const env = { ...process.env };
   delete env.NODE_TEST_CONTEXT;   // a nested `node --test` inherits it and then exits 0 on a failure (merge-gate ratchetsOnMerge)
   const built = run(process.execPath, ["tools/gen/ensure-built.mjs", "--quiet"], { cwd: wt, env, encoding: "utf8", timeout: TIP_GATE_TIMEOUT_MS });
