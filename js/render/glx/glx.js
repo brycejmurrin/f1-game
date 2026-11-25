@@ -129,6 +129,7 @@ const GLXBackend = (function () {
   let glowProg = null, glowU = null, glowVAO = null, glowVBO = null, glowCap = 0;
   let lineProg = null, lineU = null, lineVAO = null, lineVBO = null, lineCap = 0;   // DRIVING LINE ribbon
   let glowData = null;   // CPU-side dynamic vertex buffer for light-glow billboards
+  let glowUpVBO = null;  // the glowVBO glowData was last uploaded to (#6577 row 6: a restored context re-uploads)
   let particleProg = null, particleU = null, particleVAO = [], particleVBO = [], particleCap = [0, 0];
   let _partEpochs = new WeakMap(), _partEpoch = 0, _partResident = [];
   let skyVAO = null;     // empty VAO (WebGL2 still needs one bound)
@@ -2616,7 +2617,11 @@ const GLXBackend = (function () {
     frontCCW();
     const nL = (lights.length / 15) | 0;  // stride-15 light records (see frame.lights)
     const floatsPerLamp = 6 * 9;
-    if (!glowData || glowData.length < nL * floatsPerLamp) glowData = new Float32Array(nL * floatsPerLamp);
+    // #6577 row 6 (as tlx.js drawGlow): repack a lamp only when one of its 7 values moved (vertex 0 holds them),
+    // upload only then; every write lands below p and a dirty frame uploads [0, p), so glowData equals the VBO.
+    let dirty = glowUpVBO !== glowVBO;
+    if (!glowData || glowData.length < nL * floatsPerLamp) { glowData = new Float32Array(nL * floatsPerLamp); dirty = true; }
+    const fr = Math.fround;
     let p = 0, nDraw = 0;
     const ex = frameEye ? frameEye[0] : 0, ey = frameEye ? frameEye[1] : 0, ez = frameEye ? frameEye[2] : 0;
     for (let i = 0; i < nL; i++) {
@@ -2644,13 +2649,16 @@ const GLXBackend = (function () {
       // Billboard size: a small LENS HALO hugging the lamp head — NOT a beam cone.
       // Sized to the lens housing (~2 m) and scaled by the lamp's glare weight.
       const brad = Math.min(2.2, rad * 0.10) * (0.7 + 0.6 * Math.min(glareW, 2));
-      for (let v = 0; v < 6; v++) {
-        const c = _glowCorners[v];
-        glowData[p++] = c[0]; glowData[p++] = c[1];
-        glowData[p++] = cx; glowData[p++] = cy; glowData[p++] = cz;
-        glowData[p++] = r; glowData[p++] = g; glowData[p++] = b;
-        glowData[p++] = brad;
+      if (dirty || glowData[p + 2] !== fr(cx) || glowData[p + 3] !== fr(cy) || glowData[p + 4] !== fr(cz)
+        || glowData[p + 5] !== fr(r) || glowData[p + 6] !== fr(g) || glowData[p + 7] !== fr(b) || glowData[p + 8] !== fr(brad)) {
+        for (let v = 0, q = p; v < 6; v++) {
+          const c = _glowCorners[v];
+          glowData[q++] = c[0]; glowData[q++] = c[1]; glowData[q++] = cx; glowData[q++] = cy; glowData[q++] = cz;
+          glowData[q++] = r; glowData[q++] = g; glowData[q++] = b; glowData[q++] = brad;
+        }
+        dirty = true;
       }
+      p += floatsPerLamp;
       nDraw++;
     }
     if (!nDraw) return;
@@ -2660,11 +2668,12 @@ const GLXBackend = (function () {
     gl.uniform1f(glowU.uStr, str);
     bindVAO(glowVAO);
     gl.bindBuffer(gl.ARRAY_BUFFER, glowVBO);
-    if (p > glowCap) {
-      glowCap = p;
+    if (p > glowCap || glowUpVBO !== glowVBO) {
+      glowCap = Math.max(p, glowUpVBO !== glowVBO ? 0 : glowCap);   // a new VBO (context restore) has no storage yet
       gl.bufferData(gl.ARRAY_BUFFER, glowCap * 4, gl.DYNAMIC_DRAW);
+      dirty = true;   // bufferData drops the old contents
     }
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, glowData, 0, p);
+    if (dirty) { gl.bufferSubData(gl.ARRAY_BUFFER, 0, glowData, 0, p); glowUpVBO = glowVBO; }
     // Additive, depth-tested (halos occlude behind walls) but no depth write.
     // Alpha is masked like drawParticles below: GLOW_FS writes a=1.0 under
     // ONE/ONE blending, and unmasked that saturated the scene alpha — the SSR

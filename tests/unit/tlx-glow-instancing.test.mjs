@@ -42,7 +42,9 @@ test('glow growth disposes previous geometry; shrink, zero and moving eye preser
  f.api.drawGlow(many(40),1);assert.equal(disposed,1);assert.deepEqual(f.disposed,[first]);assert.equal(f.glowStream.cap,64);
  const grown=f.glowStream.geo;f.api.drawGlow(many(2),1);assert.equal(f.glowStream.geo,grown);assert.equal(grown.instanceCount,2);
  const before=f.records.length;f.context.frameEye=[1000,0,0];f.api.drawGlow(many(2),1);assert.equal(grown.instanceCount,0);assert.equal(f.records.length,before);
- f.context.frameEye=[0,0,0];f.api.drawGlow(many(1),1);assert.equal(grown.instanceCount,1);assert.equal(f.glowStream.ib.updateRanges[0].count,7);
+ // #6577 row 6: the halo the 40-lamp upload already holds is not re-sent; a moved one uploads its live prefix.
+ f.context.frameEye=[0,0,0];const v=f.glowStream.ib.version;f.api.drawGlow(many(1),1);assert.equal(grown.instanceCount,1);assert.equal(f.glowStream.ib.version,v);
+ f.context.frameEye=[100,0,0];f.api.drawGlow(many(1),1);assert.equal(f.glowStream.ib.version,v+1);assert.equal(f.glowStream.ib.updateRanges[0].count,7);
 });
 
 test('glow wrappers survive actual idle pruning after initial allocation and growth',()=>{
