@@ -2701,13 +2701,16 @@ test("#6621: a stranger on a re-link is REJECTed or times out, the SAME code is 
   assert.equal(h.ctl.state().phase, "waiting", "a timeout re-hosts like REJECT");
   assert.equal(minted, 1);
 
-  // Strikes: RELINK_STRIKES (3) rejects in one re-link and the code is given up.
-  await join(h, PEER_B); c.asks.at(-1).answer(false); await settle();
-  assert.equal(h.ctl.state().phase, "waiting", "strike 2 still re-hosts");
+  // Strikes: RELINK_STRIKES (3) in one re-link and the code is given up. A stranger that hangs up
+  // under the card (no REJECT) is strike 2 and still frees the slot.
+  await join(h, PEER_B);
+  drop(pairs.at(-1)); await settle();
+  assert.equal(h.ctl.state().phase, "waiting", "a stranger leaving before ALLOW re-hosts too");
+  assert.equal(h.ui.lostN, 0);
   await join(h, PEER_B); c.asks.at(-1).answer(false); await settle();
   assert.equal(h.ctl.state().phase, "lost", "strike 3: a looping stranger ends the re-link");
   assert.equal(h.ui.lostN, 1);
-  assert.match(h.ui.said.at(-1), /^!Phone rejected/);
+  assert.equal(h.ui.said.at(-1), "!Phone rejected — press STEER THIS GAME WITH A PHONE for a new code.");
   h.ctl.cancel();
 });
 

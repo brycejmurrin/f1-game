@@ -492,16 +492,17 @@ const PhonePad = (function () {
               onClose: (why) => {
                 if (phase === "cancelled") return;
                 dismissAsk();
+                // #6621: during a RE-LINK, a phone that is REJECTed (or times out) or hangs up before it
+                // links frees the slot: the SAME code is hosted again so the trusted phone can still
+                // answer it, up to RELINK_STRIKES times.
+                if (phase !== "linked" && relink && trusted && !deps.usingPrivateRelay() && ++strikes < RELINK_STRIKES) {
+                  active = null; transport = null;
+                  dropRoom();
+                  Log.info("input", "phone pad re-link: another phone " + (why === "rejected" ? "rejected" : "left") + " (" + strikes + "/" + RELINK_STRIKES + ") — hosting again");
+                  open();
+                  return;
+                }
                 if (why === "rejected") {
-                  // #6621: a stranger rejected during a RE-LINK frees the slot: the SAME code is hosted
-                  // again so the trusted phone can still answer it, up to RELINK_STRIKES times.
-                  if (relink && trusted && !deps.usingPrivateRelay() && ++strikes < RELINK_STRIKES) {
-                    active = null; transport = null;
-                    dropRoom();
-                    Log.info("input", "phone pad re-link: another phone rejected (" + strikes + "/" + RELINK_STRIKES + ") — hosting again");
-                    open();
-                    return;
-                  }
                   phase = "lost"; relink = false; active = null; transport = null;
                   dropRoom();
                   say("Phone rejected — press STEER THIS GAME WITH A PHONE for a new code.", true);
