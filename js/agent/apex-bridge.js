@@ -318,28 +318,38 @@ const ApexBridge = (function () {
   }
 
   // A downscaled JPEG of what the player sees, as a data URL under SNAP_MAX chars (the reply cap minus the envelope).
-  // Drawn inside a rAF callback queued after the game's own, so a WebGL / WebGPU canvas without preserveDrawingBuffer
-  // still holds this frame. Quality steps down until the image fits.
-  const SNAP_MAX = 56000;
-  function snap(args) {
+  // Quality steps down until the image fits. A WebGL / WebGPU canvas without preserveDrawingBuffer is readable only in
+  // the task that PRESENTED it, and a bare rAF read can land before the game's draw or on a frame RenderRate skipped:
+  // the first snap after an idle gap came back solid black (#6417). So wait for the renderer's own next present
+  // (awaitSoftPresent(ms, "frame") resolves from inside present(); on the soft overlay, a newer blit) and read in that
+  // continuation with no await between. `fresh` says which: "frame", "blit", "stale" (nothing presented: paused) or
+  // "raf" (no renderer hook).
+  const SNAP_MAX = 56000, SNAP_WAIT_MS = 1500;
+  function snapRead(args, w, fresh) {
+    const soft = document.getElementById("game-soft");
+    const src = soft && !soft.hidden && soft.width ? soft : document.getElementById("game");
+    if (!src || !src.width || !src.height) throw new Error("no rendered canvas");
+    const c = document.createElement("canvas");
+    c.width = w; c.height = Math.max(1, Math.round(src.height * w / src.width));
+    c.getContext("2d").drawImage(src, 0, 0, c.width, c.height);
+    for (let q = Number(args && args.q) || 0.6; q >= 0.1; q = Math.round((q - 0.1) * 10) / 10) {
+      const url = c.toDataURL("image/jpeg", q);
+      if (url.length <= SNAP_MAX) return { w: c.width, h: c.height, q, from: src.id, fresh, chars: url.length, jpeg: url };
+    }
+    throw new Error("snapshot over " + SNAP_MAX + " chars at q 0.1; ask a smaller w");
+  }
+  async function snap(args) {
     const w = Math.max(64, Math.min(640, Number(args && args.w) || 320));
-    return new Promise((resolve, reject) => {
-      requestAnimationFrame(() => {
-        try {
-          const soft = document.getElementById("game-soft");
-          const src = soft && !soft.hidden && soft.width ? soft : document.getElementById("game");
-          if (!src || !src.width || !src.height) throw new Error("no rendered canvas");
-          const c = document.createElement("canvas");
-          c.width = w; c.height = Math.max(1, Math.round(src.height * w / src.width));
-          c.getContext("2d").drawImage(src, 0, 0, c.width, c.height);
-          for (let q = Number(args && args.q) || 0.6; q >= 0.1; q = Math.round((q - 0.1) * 10) / 10) {
-            const url = c.toDataURL("image/jpeg", q);
-            if (url.length <= SNAP_MAX) { resolve({ w: c.width, h: c.height, q, from: src.id, chars: url.length, jpeg: url }); return; }
-          }
-          throw new Error("snapshot over " + SNAP_MAX + " chars at q 0.1; ask a smaller w");
-        } catch (e) { reject(e); }
-      });
-    });
+    const R = typeof GLX !== "undefined" && GLX && typeof GLX.awaitSoftPresent === "function" ? GLX : null;
+    if (!R) { await new Promise((res) => requestAnimationFrame(res)); return snapRead(args, w, "raf"); }
+    const soft = typeof R.softPresent === "function" && !!R.softPresent();
+    let fresh;
+    try {
+      if (soft && typeof R.invalidateSoftPresent === "function") R.invalidateSoftPresent({ capture: true });   // ask for the blit
+      const r = await (soft ? R.awaitSoftPresent(SNAP_WAIT_MS) : R.awaitSoftPresent(SNAP_WAIT_MS, "frame"));
+      fresh = r === "stale" ? "stale" : soft ? "blit" : "frame";
+    } catch (_) { fresh = "stale"; }
+    return snapRead(args, w, fresh);   // synchronous: still inside the presenting task
   }
 
   // Several steps in one comment: one 4 s round trip instead of one each. Stops at the first failure; `reload` and

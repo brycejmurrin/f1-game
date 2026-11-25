@@ -630,3 +630,45 @@ test("drive: a missed goal reads ok:false so a batch stops before its tap; wait:
   assert.equal(d.calls[2][0], "stop");
   assert.equal((await b.api.handle({ cmd: "drive", args: { status: true } })).value.active, false);
 });
+
+// #6417: the first snap after an idle gap read solid black. A canvas without preserveDrawingBuffer holds a frame only
+// in the task that presented it; this fake clears it in the NEXT task, as the compositor does, so only a read made
+// in present()'s own continuation sees the picture.
+function presentingCanvas() {
+  const st = { buffer: "black", reads: [], waits: [] };
+  const waiters = [];
+  const GLX = {
+    softPresent: () => false,
+    awaitSoftPresent(ms, mode) { st.waits.push([ms, mode]); return new Promise((res) => waiters.push(res)); },
+  };
+  const present = () => {
+    st.buffer = "frame";
+    for (const w of waiters.splice(0)) w("frame");
+    setTimeout(() => { st.buffer = "black"; }, 0);   // composited: the drawing buffer is gone
+  };
+  const doc = {
+    getElementById: (id) => (id === "game" ? { id: "game", width: 1600, height: 900, hidden: false } : null),
+    createElement: () => ({ width: 0, height: 0, getContext: () => ({ drawImage: () => st.reads.push(st.buffer) }),
+      toDataURL: () => "data:image/jpeg;base64,AAAA" }),
+  };
+  return { st, GLX, present, doc };
+}
+
+test("snap waits for the renderer's next present and reads it in that task, not a rAF later (#6417)", async () => {
+  const f = presentingCanvas();
+  const b = load({ search: "", extra: { document: f.doc, GLX: f.GLX, setTimeout, requestAnimationFrame: () => { throw new Error("no rAF read"); } } });
+  const p = b.api.handle({ cmd: "snap", args: { w: 320 } });
+  await flush();
+  assert.deepEqual(plain(f.st.waits), [[1500, "frame"]], "a headed canvas waits for a frame from inside present()");
+  assert.deepEqual(f.st.reads, [], "nothing is read before the game draws");
+  setTimeout(f.present, 5);
+  const r = await p;
+  assert.equal(r.ok, true);
+  assert.deepEqual(f.st.reads, ["frame"], "read while the presented frame is still in the buffer");
+  assert.equal(r.value.fresh, "frame");
+  // Nothing presents (paused): the read still answers, and says it is stale.
+  const g = presentingCanvas();
+  g.GLX.awaitSoftPresent = () => Promise.resolve("stale");
+  const s = await load({ search: "", extra: { document: g.doc, GLX: g.GLX } }).api.handle({ cmd: "snap" });
+  assert.equal(s.value.fresh, "stale");
+});
