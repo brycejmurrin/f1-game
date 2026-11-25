@@ -12,7 +12,7 @@
 command, one browser, no heredoc:
 
 ```sh
-npx serve -l 3456 .          # the page must be on 127.0.0.1 (see the trap below)
+python3 -m http.server -b 127.0.0.1 3456   # the page must be on 127.0.0.1 (see the trap below)
 node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error' \
   --eval 'return JSON.stringify({gpuErrors: WGX.gpuErrors ? WGX.gpuErrors() : "n/a"});'
 node tools/mcp/mcp-cli.mjs probe --dry-run --backend three   # inspect the batch, no browser

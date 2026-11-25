@@ -118,8 +118,8 @@ measured before/after, in one command, with the browser held constant:
 
 ```sh
 # each server as its own run_in_background task (AGENTS.md rule 4), not a shell `&`:
-npx serve -l 3456 /the/pre-fix/tree       # control
-npx serve -l 3466 /the/fixed/tree         # patch
+python3 -m http.server -b 127.0.0.1 3456 -d /the/pre-fix/tree   # control
+python3 -m http.server -b 127.0.0.1 3466 -d /the/fixed/tree     # patch
 for P in 3456 3466; do node tools/mcp/mcp-cli.mjs probe \
   --url http://127.0.0.1:$P/index.html --backend three \
   --wait 14000 --eval scratch/my-probe.js; done

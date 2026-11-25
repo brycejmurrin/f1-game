@@ -104,7 +104,7 @@ never hand-edit those (see `AGENTS.md` rule 11).
 
 | Command | When |
 |---|---|
-| `npx serve -l 3456 .` | Local play |
+| `python3 -m http.server -b 127.0.0.1 3456` | Local play |
 | `node tools/ci/verify-change.mjs --fast --json` | Diff-aware edit-loop gate; reports selected tooling files and critical-path budget |
 | `node tools/ci/tooling-fast.mjs --changed --jobs=3` | Diff-aware structural edit-loop runner |
 | `npm run test:tooling-fast` | The whole structural rung; runs on the PR as `Structural guards` |

@@ -2203,7 +2203,7 @@ like success.
 `about:blank`:
 
 ```sh
-npx serve -l 3456 .
+python3 -m http.server -b 127.0.0.1 3456
 node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'
 ```
 
