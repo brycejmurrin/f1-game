@@ -24,7 +24,7 @@
    KEYED, NOT ONE-SHOT. `_menuGate.garageKey` is setupCam.prebuildKey() (team,
    parts, seat, and the room's ctx); a team pick, a seat, a part or the circuit
    moves it, and a livery edit busts the mesh key (setup-sheet.js
-   G._spMeshKey = "") — either re-arms the prebuild on the next idle title.
+   G.setupCam.meshKey = "") — either re-arms the prebuild on the next idle title.
 
    DRAWN, NOT JUST BUILT. `_menuGate.garageReady` means the setup garage DREW
    for that key (render() sets it: the hidden warm frames or a visible garage

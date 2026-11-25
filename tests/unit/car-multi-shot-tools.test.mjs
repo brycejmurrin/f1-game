@@ -285,10 +285,10 @@ test("garageFrame takes an absolute camera, not only counted clicks", () => {
   assert.match(body, /nudgeAz/, "their nudgeAz / nudgeEl aliases keep working");
   assert.match(body, /num\(o\.az\) != null/, "absolute az applied after the preset");
   assert.match(body, /num\(o\.el\) != null/, "absolute el applied after the preset");
-  assert.match(body, /o\.dist \/ G\.setupPreviewDist/,
+  assert.match(body, /o\.dist \/ G\.setupCam\.dist/,
     "absolute dist goes through the game's own zoom clamp");
   assert.match(body, /view !== "free"/, "`free` keeps the camera the last call left");
-  assert.match(body, /nudgeSetupCam/, "orbit goes through G.nudgeSetupCam");
+  assert.match(body, /nudgeSetupCam/, "orbit goes through G.setupCam.nudgeSetupCam");
 });
 
 test("every garage camera preset is one a PLAYER can reach", () => {
@@ -376,7 +376,7 @@ test("garage-angles: ranges, targets, lamps, seats, DPR, `all`, base lists and a
   assert.match(src, /function writeMatrixSheet/, "rows × cameras contact sheet");
   assert.match(src, /oracleHiddenPct\(teamId,/, "occlusion is recorded per SHOT, not only on rollups");
   const hook = read("js/agent/apex.js");
-  assert.match(hook, /G\.setSetupAim\(o\.target\.map\(Number\)\)/, "garageFrame aims the orbit at a car-space point");
+  assert.match(hook, /G\.setupCam\.setSetupAim\(o\.target\.map\(Number\)\)/, "garageFrame aims the orbit at a car-space point");
   assert.match(hook, /GarageScene\.spot\(o\.lamp \|\| null\)/, "garageFrame aims the lamp");
   assert.match(hook, /garageTeam\(id, seatWanted\)/, "garageTeam takes a seat");
   const plan = (args) => JSON.parse(execFileSync("node",
@@ -419,10 +419,10 @@ test("garage-angles: stations, field→station picking, pairs, flat art, a free 
   assert.match(src, /async function writePairs/, "pairs get a Δ% AND a diff overlay");
   assert.match(src, /async function finishRun/, "the run tail is re-runnable for --watch");
   const hook = read("js/agent/apex.js");
-  assert.match(hook, /G\.setSetupFree\(o\.clamp === false\)/, "clamp:false lifts the player's floors for a dev shot");
+  assert.match(hook, /G\.setupCam\.setSetupFree\(o\.clamp === false\)/, "clamp:false lifts the player's floors for a dev shot");
   assert.match(hook, /el: Math\.asin\(/, "an explicit eye becomes the orbit's own terms");
   const game = read("js/game.js");
-  assert.match(game, /setSetupFree: \(on\)/, "the façade exposes the free range");
+  assert.match(game, /get setupCam\(\) \{ return setupCam; \}/, "the façade exposes the setup camera");
   const cam = read("js/garage/setup-camera.js");
   assert.match(cam, /setupPreviewFree = false;   \/\/ a preset is the player's range again/, "a preset restores the player's clamps");
   assert.match(cam, /clamp\(setupPreviewEl \+ dEl, spElMin\(\), SP_EL_MAX\)/, "the nudge path clamps through the free-aware floor");

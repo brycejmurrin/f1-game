@@ -223,6 +223,38 @@ interface PhotoAxis { x: number; y: number; }
     Owner: js/lighting/profiles.js; tuner.js mutates it for RESET/COPY VALUES. */
 type LightProfiles = Record<string, Record<string, unknown>>;
 
+/** The setup-garage camera, js/garage/setup-camera.js (G.setupCam). Only the members
+ *  modules read through the façade are typed; the rest stay `unknown`. */
+interface SetupCam {
+  readonly spin: boolean;
+  readonly az: number;
+  readonly el: number;
+  readonly dist: number;
+  /** Last frame's RESOLVED turntable distance — what the camera used, which is
+   *  `dist` only when the auto-fit is off. */
+  readonly effDist: number;
+  /** The auto fit BEFORE its cap/clamp, so a test can see the fit diverge on a
+   *  narrow viewport rather than only the clamped symptom. */
+  readonly effFit: number;
+  /** Fraction of the canvas width the docked settings sheet covered. */
+  readonly effPanel: number;
+  readonly pan: Vec3;
+  readonly aeroX: number;
+  readonly xOn: boolean;
+  /** The preview mesh cache key; "" busts it so the next garage frame rebuilds. */
+  meshKey: string;
+  readonly stepSetupAero: (dt: number) => void;
+  readonly setSetupView: (name: string) => void;
+  /** Orbit about and look at a car-space point (garageFrame's `target`); a preset resets it. */
+  readonly setSetupAim: (p: number[]) => void;
+  /** garageFrame clamp:false lifts the player's el/dist floors for a dev shot; a {fov, centre} lens too (until the next preset). */
+  readonly setSetupFree: (on: boolean) => void;
+  readonly setupPan: (strafe: number, dolly: number) => void;
+  readonly nudgeSetupCam: (dAz: number, dEl: number, zoom?: number) => void;
+  readonly setSetupAero: (on: boolean, opts?: { keepCam?: boolean }) => void;
+  readonly [key: string]: unknown;
+}
+
 /** The caution/flag picture race control publishes — js/race/race-control.js. */
 interface CautionInfo {
   level: number; sector: number; frac: number; total: number;
@@ -557,22 +589,9 @@ interface GameCtx {
 
   // ── Garage / setup preview (js/garage/setup-sheet.js) ──────────────────────────
   livDraftOverride: unknown;
-  _spMeshKey: string;
+  /** The setup-garage camera (js/garage/setup-camera.js): orbit state and controls. */
+  readonly setupCam: SetupCam;
   setupPreviewOn: boolean;
-  readonly setupPreviewSpin: boolean;
-  readonly setupPreviewAz: number;
-  readonly setupPreviewEl: number;
-  readonly setupPreviewDist: number;
-  /** Last frame's RESOLVED turntable distance — what the camera used, which is
-   *  setupPreviewDist only when the auto-fit is off. */
-  readonly spEffDist: number;
-  /** The auto fit BEFORE its cap/clamp, so a test can see the fit diverge on a
-   *  narrow viewport rather than only the clamped symptom. */
-  readonly spEffFit: number;
-  /** Fraction of the canvas width the docked settings sheet covered. */
-  readonly spEffPanel: number;
-  readonly setupPreviewPan: Vec3;
-  readonly setupPreviewAeroX: number;
 
   // ── Active aero: the race setting and the loaded circuit's zones ──────────
   raceAeroMode: AeroMode;
@@ -580,16 +599,6 @@ interface GameCtx {
   readonly aeroZoneAt: (s: number) => AeroZone | null;
   /** Metres to the next zone; 0 inside one, Infinity on a circuit with none. */
   readonly aeroZoneAhead: (s: number) => number;
-  readonly stepSetupAero: (dt: number) => void;
-  readonly setSetupView: (name: string) => void;
-  /** Orbit about and look at a car-space point (garageFrame's `target`); a preset resets it. */
-  readonly setSetupAim: (p: number[]) => void;
-  readonly setSetupFree: (on: boolean) => void;
-  readonly setupPan: (strafe: number, dolly: number) => void;
-  readonly nudgeSetupCam: (dAz: number, dEl: number, zoom?: number) => void;
-  readonly nudgeSetupZoom: (mul: number) => void;
-  readonly setSetupAero: (on: boolean, opts?: { keepCam?: boolean }) => void;
-  readonly setupPreviewXOn: boolean;
 
   // ── Player settings persisted through store ───────────────────────────────
   soundOn: boolean;
