@@ -20,7 +20,14 @@
  * own smoothing state (`steerSm`, and since 2026-09-08 `aiHead` / `aiBias` /
  * `aiFam`). Anything of that shape belongs in reset()'s clearing block.
  *
- * Run: node --test tests/unit/determinism-replay-vm.test.mjs   (~20 s, one boot)
+ * A LONG EPISODE matters too (#6560): state that only one car READS can stay
+ * invisible for tens of seconds. The AI pace profile paceRef() (pace-math.js)
+ * that a human's paceF is judged against outlived reset(), so the second
+ * replay of a seed judged the player against the first's learned profile; the
+ * first AI motion differed only at 26.5 s on monza. The 60 s pins below digest
+ * EVERY primitive field of all 22 cars on two circuits, not only motion.
+ *
+ * Run: node --test tests/unit/determinism-replay-vm.test.mjs   (~30 s, two boots)
  */
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -143,4 +150,64 @@ test("a 20 s race with a weather arc, reliability and an incident replays byte-i
   assert.ok(new Set(cps.map(orderOf)).size > 1,
     "the running order never changed in 20 s: this episode would not see an overtake-order divergence");
   assert.notEqual(raceEpisode(7), a, "another seed must not replay the same long race");
+});
+
+/** Every primitive field of every car: a leak no motion field shows yet
+ * (paceF, a haptic timer) still breaks the digest (#6560). */
+function fullSnap(game) {
+  return game.G.cars.map((c, id) => {
+    const o = { id };
+    for (const k of Object.keys(c)) {
+      const v = c[k];
+      if (typeof v === "number" || typeof v === "boolean" || typeof v === "string") o[k] = v;
+    }
+    return o;
+  });
+}
+
+function longEpisode(game, seed, secs) {
+  const A = game.apex;
+  A.headless(true);
+  A.reset(0.02, 55, 0, seed);
+  const cps = [fullSnap(game)];
+  try {
+    for (let seconds = 10; seconds <= secs; seconds += 10) {
+      A.rollout({ seconds: 10, input: { steer: 0.05, throttle: true } });
+      cps.push(fullSnap(game));
+    }
+    return cps;
+  } finally { A.headless(false); }
+}
+
+/** The first checkpoint and car field that differ, for a readable failure. */
+function firstDiff(a, b) {
+  for (let i = 0; i < a.length; i++) for (let c = 0; c < a[i].length; c++) {
+    for (const k of new Set([...Object.keys(a[i][c]), ...Object.keys(b[i][c])])) {
+      if (!Object.is(a[i][c][k], b[i][c][k])) return `t=${i * 10} s car ${a[i][c].code || c} .${k}: ${a[i][c][k]} vs ${b[i][c][k]}`;
+    }
+  }
+  return null;
+}
+
+/** `paceF`: the player must have sampled the AI profile (true on monza; at
+ * monaco the player's 0.05 steer finds a wall first). */
+function assertLongReplay(game, track, secs, paceF) {
+  const a = longEpisode(game, 42, secs), b = longEpisode(game, 42, secs), c = longEpisode(game, 42, secs);
+  assert.equal(a[0].length, 22, `${track}: the pin needs the full 22-car field`);
+  assert.equal(firstDiff(a, b), null, `${track}: the second ${secs} s replay of seed 42 differs`);
+  assert.equal(firstDiff(a, c), null, `${track}: the third ${secs} s replay of seed 42 differs`);
+  const ai = a.at(-1).filter((x) => !x.isPlayer);
+  assert.ok(ai.every((x, i) => x.prog !== a[0].find((y) => y.id === x.id).prog), `${track}: every AI must drive`);
+  if (paceF) assert.ok(a.at(-1).some((x) => x.isPlayer && x.paceF > 0),
+    `${track}: the player's paceF never sampled the AI profile, so the #6560 leak would go unseen`);
+}
+
+test("a 60 s 22-car episode replays byte-identically in every car field (monza)", () => {
+  assertLongReplay(g, "monza", 60, true);
+});
+
+test("a 90 s 22-car episode replays byte-identically in every car field (monaco)", async () => {
+  const m = await createGame({ track: "monaco" });
+  // 90 s: the haptic-timer leak (oslipHapT) first showed at 76 s here.
+  try { await m.race("monaco"); assertLongReplay(m, "monaco", 90, false); } finally { m.close(); }
 });

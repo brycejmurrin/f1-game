@@ -1,6 +1,6 @@
 ---
 name: check-changes
-description: "Use when asked did I break anything, which tests this change needs, validate or pre-push, verify track edits, js/css shell/cache version bump, deploy checks on a dirty tree, a Playwright timeout or a background run to wait on. Not for: red Actions → ci-red-triage; opening or landing the PR → steward."
+description: "Use when asked did I break anything, which tests a change needs, pre-push checks, track edits, a cache version bump, a Playwright timeout or a background run. Not for: red Actions → ci-red-triage; landing a PR → steward."
 ---
 
 # Validate changes before committing/pushing

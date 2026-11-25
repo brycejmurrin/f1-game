@@ -356,8 +356,9 @@ export function absorbOf(raw, label = "entry") {
   return raw.absorb;
 }
 
-/** A ceiling entry is a bare number, or {ceiling, slack[, absorb]} when its guard is tighter. */
-function entry(raw, label) {
+/** A ceiling entry is a bare number, or {ceiling, slack[, absorb]} when its guard is tighter. Exported for the merge
+ *  train's fragment re-snap (merge-train.mjs resnapTree), which reads ceilings from git blobs. */
+export function entry(raw, label) {
   const ceiling = typeof raw === "number" ? raw : raw?.ceiling;
   if (typeof ceiling !== "number") throw new Error(`${label}: no ceiling`);
   // NaN / Infinity compare false against everything, so such a ceiling would

@@ -4,7 +4,7 @@ Kind: design · Re-measure-by: 2026-12-18
 
 Decision: Bryce, orchestrator chat 2026-11-18 ~10:15Z (relayed in its brief with the time), asked "How do we still have so many open PRs can we somehow merge them" and then picked "Merge train (Recommended)". He tapped `config-ok` on #5731 in person at 11:18:45Z. Its docs/DECISIONS.md row is D-035 (#5742).
 
-Summary: 91 open PRs and 23 at `land` (10:12Z) drained at 4–6 merges an hour: each merge moves the tip and every other `land` PR re-gates or retests. A merge train lands up to 10 green `land` PRs with one CI run and one `gate`. Native merge queue: not available here. Custom train: `tools/ci/merge-train.mjs` and land.yml's `train` job. It needs no ruleset or settings change. Re-measure: merges per hour and train red rate after a week of trains.
+Summary: 91 open PRs and 23 at `land` (10:12Z) drained at 4–6 merges an hour: each merge moves the tip and every other `land` PR re-gates or retests. A merge train lands up to 12 (10 until #6528) green `land` PRs with one CI run and one `gate`. Native merge queue: not available here. Custom train: `tools/ci/merge-train.mjs` and land.yml's `train` job. It needs no ruleset or settings change. Re-measure: merges per hour and train red rate after a week of trains.
 
 ## The two options
 
@@ -47,8 +47,10 @@ that is not a clean merge of the named heads onto a deploy-branch commit refuses
 
 ## Picking and bisecting
 
-- Candidates: open, ready, `land`, no `hold`, not a fork, not a train. `priority` goes first, then oldest. A car whose
-  own `gate` already reads success is skipped: it arms alone. Each candidate's trusted rows must pass. `base` is
+- Candidates: open, ready, `land`, no `hold`, not a fork, not a train. `priority` goes first, then oldest. Only a PR
+  that is landing alone is skipped: auto-merge armed, or its own `gate` reads success while a land run for it is still
+  queued or running (`soloLane`, `landRunsInFlight`; #6528). Until #6528 every car whose `gate` read success was
+  skipped as "it arms alone", which orphaned a PR whose arms all lost to the tip (§Orphans). Each candidate's trusted rows must pass. `base` is
   the train's row, and gen, ratchets and retest are measured on the train.
 - Screen (#5864): trains #5840 and #5862 closed red on the gate because cars that were each red alone on the tip
   boarded on their trusted rows. land.yml's `train-screen` job (read-only token, no secret) runs
@@ -58,7 +60,7 @@ that is not a clean merge of the named heads onto a deploy-branch commit refuses
   is open the screen skips. #5862 measured alone: #5668 hud.js codeLines and eagerBytes +147, #5679 eagerBytes
   +2057, #5730 assertPins +1. The sum, +2204, is the train's eagerBytes overage.
 - Fold onto the tip in order; a conflicting car is left out ("conflicts in … (sync-pr.mjs)") and the next is tried.
-  At least 2 cars, unless the bisect cap is 1.
+  At least 2 cars, unless the bisect cap is 1 or the one car is an orphan (§Orphans).
 - One train is open at a time. The builder closes a train when a car moved (`stale`: rebuilt from the current state)
   or when its CI or `gate` failed (`red`).
   With no completed `CI` check-run, it reads the head's newest CI workflow run: cancelled closes the train `stale`,
@@ -67,7 +69,64 @@ that is not a clean merge of the named heads onto a deploy-branch commit refuses
   lane -1, a group of its own per leg (PR #5809; train #5804's 42 legs waited 2.7 h in the lanes).
 - Bisect: a red train of n cars caps the next at floor(n/2). A car alone in a red train is left out until its head
   changes. A merged train resets the cap to `TRAIN_MAX`, 10 (5 until Bryce's 2026-11-18 ~19:50Z "Bigger trains 5→10"): a red
-  train of 10 bisects to 5, 2, then 1. The window is 24 h of closed trains.
+  train of 10 bisects to 5, 2, then 1. The window is 24 h of closed trains. `TRAIN_MAX` is 12 since #6528 (§Cap).
+
+## Orphans and the default lane (#6528, 2026-11-25)
+
+Bryce, orchestrator chat ~07:00Z: "1 + 2 + 4 now" and "Train re-counts budgets". Evidence: #6444 (head `215eba44`)
+read `gate` success at 05:20Z; each of its 3 arms lost to a moving tip; land.yml run 45552131968 logged "retry budget
+spent (3 of 3) … the next train re-gates"; train #6524 (06:44Z) then listed it under "Not in this train" as "its own
+gate already passed (it arms alone)". It sat about 1h20m; #6451 the same (issue #6528).
+
+- A green `land` PR with `auto_merge` null and no land run of its own in flight is an orphan: it boards. Armed, or a
+  run still queued/running for it (a `pull_request_target` run naming it, or a `Land retry pr=<n>` dispatch), it is
+  left out as landing alone. Deploy-branch runs (sweep, Pages, schedule) name no PR and are not counted, nor the run
+  building the train (`GITHUB_RUN_ID`).
+- With that, every green `land` PR that is not mid-arm rides: 2 or more of them make a train at the next train run
+  (the :17/:47 schedule or a Pages success), and a lone orphan rides a 1-car train.
+- Not changed: land.yml's own arm still takes a PR whose gate passes first (one arm per run); a train still holds its
+  cars (`resolveLandable`, `queue_blocker` "car of open train"). The arms that lose the race no longer strand.
+
+## Cap (#6528)
+
+The cap had never bound (docs/notes/PROCESS-REVIEW-2026-11-24.md §3.2: trains averaged 2.5 cars), because green PRs
+that armed alone were not candidates. Closed trains from the API, 2026-11-25 07:30Z:
+
+| window | trains | merged / red / stale | per-car red rate (MLE, independent cars) | best single-shot size |
+|---|---|---|---|---|
+| since 2026-11-18 | 67 | 27 / 21 / rest | 0.185 | ~5 |
+| since 2026-11-20 (the screen) | 41 | 20 / 6 / rest | 0.105 | ~9 |
+
+The six reds since the screen: #6061 (gen+ratchets), #6229 and #6346 (retest), #6241 and #6510 (CI), #6473
+(ratchets, the stale-fragment shape §Re-snap now cures). Taking one ratchet red out puts the rate near 0.085, whose
+single-shot optimum is ~11–12 cars; the bisect recovers part of a red train, which favours the larger side. So
+`TRAIN_MAX` = 12 (10 by Bryce's 2026-11-18 "Bigger trains 5→10"). Every 10-car train of 2026-11-19 (before the
+screen) closed red; the largest since, 9 cars (#6462), merged. The screen costs about 70 s a car (653 s for 9 cars,
+2026-11-25 01:37Z), so `SCREEN_BUDGET_MS` is 16 min (was 12) and train-screen's job timeout 25 min (was 20);
+tests/unit/merge-train.test.mjs pins both against `TRAIN_MAX`. Re-measure the red rate by size on the Re-measure-by date.
+
+## Re-snap: the train re-counts line-count fragments (#6528)
+
+#6522 and #6421 went red after another PR merged: a `tests/data/ratchets.d` fragment snapped against the old base
+left the merge result over by 1–2 on js/game.js codeLines/lines. A topic branch's `--update` sets a touched file's
+ceiling to its value, so a LOOSE base ceiling (slack s) is folded into its delta; a sibling that spends s leaves the
+merge over by s although neither grew past its own budget (#6522's fragment: game.js codeLines −2, lines −1).
+
+`resnapTree` re-snaps the car's own fragment on each fold step, with `ratchets.mjs`'s own functions
+(`applyFragments`, `mergeFragment`: delta += value − ceiling, as `--update` writes it), never a hand edit. A row is
+re-snapped only when all hold (`resnapVerdict`):
+
+- a line-count row (`lines`, `codeLines`) of a file the car changed since its merge base with the train base;
+- the fold was not already over on it before this car (someone else's overage is never the car's to raise);
+- the commit hook would absorb it (`autoRaiseBlockReason`: at most 40, not a slack-0 entry);
+- the overage is at most min(own growth − its fragment's delta, the slack at its merge base): the car gets back exactly
+  the slack its own snap counted on. A car over its own ceiling at its head, or growing past it on the merge, is not
+  re-snapped; the screen and the gate's ratchets row then red it as before, and `ratchet-raise` stays Bryce's.
+
+It is pure git + JSON (blobs, a private index, `write-tree`): no PR code, so the build job runs it, and `verifyTrain`
+re-derives it, so the train head is still a proof: a tree that is the plain merge where a re-snap was due, or a
+re-snap that was not due, refuses. The car's commit message and the train body name each re-snap. Tree-wide metrics
+are out of scope: the boot wall needs PR code, and the pin counters are already judged diff-relative on the merge.
 
 ## Residual risks (accepted)
 

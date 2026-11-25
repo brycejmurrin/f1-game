@@ -9,6 +9,7 @@ restated rules drifted into three wordings and one contradicted the skill [14].
 ## Contents
 
 - Before launching
+- Roles
 - The brief
 - While workers run
 - Standing routines
@@ -40,6 +41,15 @@ restated rules drifted into three wordings and one contradicted the skill [14].
   Bryce (~35 of his 115 prompts on 2026-11-24 were link plumbing; memory `phone-checks-via-claude-link.md`).
 - A TAKEOVER brief states evidence, not a verdict: the lease line, the newest commit trailer and comment time on the
   PR, never "the owner cannot be reached" [11]. Post the adoption comment yourself before launching.
+
+## Roles
+
+Most launches are an issue or a PR (`ISSUE n`, `CONTINUE PR n`, `DEPLOY-RED`). One standing role is launched by
+judgement, not by an issue:
+
+| Role | Launch when | Never when | Brief |
+|---|---|---|---|
+| **Gardener** (skill `gardener`) | a SURVEY when no open `tracking` issue for the area is younger than its `Re-measure-by:` line; a CARVE worker only for an item Bryce picked (his `ready` or `decision:`), and only when the skill's §CARVE quiet-queue check passes (its one home) | that check fails: never on a red tip or a busy queue, one Gardener PR at a time; a SURVEY never opens a PR | `TASK: gardener survey <area>` (output: a tracking issue, e.g. #6454) or `ISSUE <n>` for the picked item; STATE lists the open PRs' files |
 
 ## The brief
 

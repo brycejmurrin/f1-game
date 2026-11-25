@@ -27,7 +27,9 @@ test("predictSteps: routine config → orchestrator config-ok, protected → pro
   assert.deepEqual(predictSteps(["js/ui/hud.js", "docs/PHYSICS.md"]), []);
   assert.deepEqual(predictSteps(["tools/ci/ready-gate.mjs"]), ["PROTECTED (tools/ci/ready-gate.mjs): only Bryce's own config-ok tap covers it; propose the change instead of making it"]);
   assert.equal(predictSteps([".github/workflows/land.yml"])[0].split(" ")[0], "PROTECTED");
-  assert.deepEqual(predictSteps(["tests/data/ratchets.d/claude--bridge-nav-6383.json"]), ["ratchet-raise (tests/data/ratchets.d/claude--bridge-nav-6383.json): Bryce's own click; send the raise and its CEILING-HISTORY reason"]);
+  // A hypothetical fragment name, built so docs-integrity's path scan sees no literal: a real one is deleted by the next fold.
+  const frag = ["tests/data/ratchets.d", "claude--example-0000.json"].join("/");
+  assert.deepEqual(predictSteps([frag]), [`ratchet-raise (${frag}): Bryce's own click; send the raise and its CEILING-HISTORY reason`]);
   assert.deepEqual(predictSteps(["./.github/workflows/ci.yml"]), ["config-ok (routine: .github/workflows/ci.yml): the orchestrator adds it after reading the diff; send the head sha once pushed"]);
   const b = renderBrief({ ...SPEC, humanSteps: ["config-ok: send me the head sha"] });
   assert.equal(b.split("config-ok").length - 1, 1, "a step the spec already names is not predicted twice");
