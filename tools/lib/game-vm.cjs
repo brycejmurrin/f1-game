@@ -727,13 +727,15 @@ async function settle(pred, maxTurns) {
  *   allowScriptErrors  true keeps a lazily injected script's load error in
  *           record.scripts instead of rejecting (createGame and race() reject
  *           by default; see assertScriptsLoaded)
- *   handle  { apex, G, ctx, sandbox, seat, step(n, dt), race(id, tod, wx, opts), aiOnly({untilAllFlagged}),
+ *   handle  { apex, G, made (MADE instances: made.QualiNet, made.RaceSettings), ctx, sandbox, seat, step(n, dt), race(id, tod, wx, opts), aiOnly({untilAllFlagged}),
  *             settle(pred), flushTimers(), pumpFrame(now) (throws on a frame
  *             fault), record, bootMs, trackMs }
  */
+const MADE = ["QualiNet", "RaceSettings"];
 async function createGame(opts) {
   opts = opts || {};
   let G = null;
+  const made = {};
   const world = buildSandbox(Object.assign({}, opts, {
     onScript: (rel, ctx) => {
       // apex.js is injected by game.js's own loader; capture the façade the
@@ -797,6 +799,14 @@ async function createGame(opts) {
     let bootPromise = null;
     for (const f of MANIFEST.FULL) {
       if (SKIP.has(f)) continue;
+      // The handles game.js keeps off G (#6496: the lobby gets them directly):
+      // capture each instance its factory returns, so a test can reach it as made.<Name>.
+      if (f === MANIFEST.PATHS.GAME) for (const name of MADE) {
+        const mod = ctx[name], orig = mod && mod.create;
+        if (typeof orig !== "function") continue;
+        // A frozen module (RaceSettings) cannot take the wrapper: rebind the global to a frozen copy.
+        ctx[name] = Object.freeze(Object.assign({}, mod, { create() { return (made[name] = orig.apply(this, arguments)); } }));
+      }
       const r = runFile(ctx, f, record);
       if (f === MANIFEST.PATHS.GAME) bootPromise = r;
     }
@@ -861,6 +871,7 @@ async function createGame(opts) {
       apex, ctx, sandbox, record, bootMs, trackMs: 0,
       _timers: timers,
       get G() { return G; },
+      made,
       get seat() { return seatReport(seatName, sandbox, G); },
       // Same shape the specs use: race(id, tod, wx) → wait info().track → go().
       async race(id, tod, wx, opts) {

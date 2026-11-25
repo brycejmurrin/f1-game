@@ -868,7 +868,7 @@ test("NEXT ROUND's qualifying sheet hides the finished race's HUD", async () => 
     g.apex.go(); g.step(10); g.apex.finishRace();
     assert.equal(G.state, "results");
     assert.equal($("hud").hidden, false, "the results keep the race HUD");
-    G.openQualiForNet(null);   // openQuali → openQualiBody, the transition res-next makes in a season
+    g.made.QualiNet.openQualiForNet(null);   // openQuali → openQualiBody, the transition res-next makes in a season
     await g.settle(() => G.session === "quali" && G.state === "menu" && !$("quali").hidden, 3000);
     assert.equal($("quali").hidden, false, "the sheet is up");
     assert.equal($("results").hidden, true);

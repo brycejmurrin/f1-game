@@ -162,7 +162,8 @@ const NetPlay = (function () {
   let epochSerial = 0;
   const { strategyState, applyStrategy, STRATEGY_VERSION, modelRevision } = StrategyWire.create();
 
-  function create(G) {
+  // deps.qualiNet: game.js's QualiNet, the in-race QUALI/QLIVE receiver (#6496).
+  function create(G, deps = {}) {
     G_lapsTarget = () => G.lapsTarget;
     const sessions = new Map(), peerEpochs = new Map();
     const sessionKinds = new Map(), peerInfo = new Map();
@@ -759,7 +760,7 @@ const NetPlay = (function () {
       // in it: an unknown id would grow qualiLive / qualiPeers forever (#5012).
       const seated = (d) => role === "host"
         || remoteList().some((r) => r.car && r.car.driverId === d.driverId);
-      bindQuali(s, (d) => qualiGate() && sendersOwnDriver(d) && seated(d), G);
+      bindQuali(s, (d) => qualiGate() && sendersOwnDriver(d) && seated(d), deps.qualiNet);
     }
 
     function handBackToAI(reason, id) {

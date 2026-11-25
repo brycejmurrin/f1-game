@@ -4068,3 +4068,12 @@ from the #4884 re-land. LobbySettings RULES snapshot and restore read `G[prop]`,
 Bryce's grant, 2026-11-25 ~05:56Z ("Raise the budget", then "Launch #5496 now"): raise exactly what the re-land uses.
 `(tree) assertPins` / `assertPinsAll` +1 and `eagerCodeBytes` +175 are inside the commit hook's absorb.
 Fragment: `ratchets.d/claude--issue-5496-damage-reland.json`.
+
+## 2026-11-25 — claude/issue-6496-net-relays: gardener carve 1, net relays off G (#6496)
+
+`js/game.js gMembers` 280 → **274** (−6), `lines` 9667 → **9660** (−7), `codeLines` 5530 → **5524** (−6) and
+`(tree) eagerCodeBytes` 4036240 → **4035951** (−289): the six relay rows `setNetRoom`, `openRaceSetup`, `onPeerQuali`,
+`onPeerQualiLive`, `openQualiForNet` and `refreshQualiGate` left G; `NetLobby.create` and `NetPlay.create` take
+`raceSettings` / `qualiNet` directly. Bryce's D1 (#6495, ~06:44Z): lower by the full amount, no slot held back.
+`js/net/lobby.js lines` +1 (the deps helper) is inside the commit hook's absorb.
+Fragment: `ratchets.d/claude--issue-6496-net-relays.json`.

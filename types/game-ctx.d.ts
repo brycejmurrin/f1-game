@@ -784,21 +784,15 @@ interface GameCtx {
   /** Publish current race state to the HUD/minimap immediately. */
   readonly refreshHud: (force?: boolean) => void;
 
-  // ── The waiting room reuses the real menus rather than reimplementing them ─
-  readonly setNetRoom: (on: boolean) => void;
+  // ── The waiting room reuses the real menus (raceSettings / qualiNet reach NetLobby.create directly, #6496) ─
   /** Forget RACE SETTINGS' per-track draft: another writer (the Daily) staged laps/weather/time of day. */
   readonly resetRaceDraft: () => void;
-  readonly openRaceSetup: () => void;
   /** Ask for motion permission (iOS) and attach tilt, inside a click. */
   readonly enableTilt: () => void;
   readonly getSteerMode: () => string;
   readonly netRoom: boolean;
   /** Seats held by the OTHER players; empty off-line. */
   readonly peerSeats: () => PeerSeat[];
-  readonly onPeerQuali: (d: unknown) => void;
-  readonly onPeerQualiLive: (d: unknown) => void;
-  readonly openQualiForNet: (done: () => void) => void;
-  readonly refreshQualiGate: () => void;
   /** A view of raceGrid: true for "quali" | "rev10". */
   raceQuali: boolean;
   /** "tier" pace order | "quali" | "rev10" (F2 sprint rule) | "revchamp" | "random". */

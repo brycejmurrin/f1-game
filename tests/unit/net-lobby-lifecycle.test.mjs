@@ -24,7 +24,7 @@ function deferred() {
 }
 
 function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transportStatus, handshake, parts,
-                   rendezvous, net, gProps, href = "https://x.test/play?renderer=glx#keep=1&vs=invite" } = {}) {
+                   rendezvous, net = { raceSettings: {}, qualiNet: {} }, gProps, href = "https://x.test/play?renderer=glx#keep=1&vs=invite" } = {}) {
   const elements = new Map();
   const element = (id) => {
     const kids = [];
@@ -185,7 +185,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
 }
 
 test("peer leave refreshes the friend-quali gate so a dropped rival unlocks the sheet", () => {
-  assert.match(SOURCE, /renderRoom\(\); if \(G\.refreshQualiGate\) G\.refreshQualiGate\(\);/);
+  assert.match(SOURCE, /renderRoom\(\); if \(qn\(\)\.refreshQualiGate\) qn\(\)\.refreshQualiGate\(\);/);
   assert.match(SOURCE, /if \(!sessions\.size\) \{ friendQualifying = false; clearInterval\(pumpTimer\); pumpTimer = null; close\(\); return; \}/);
   assert.match(SOURCE, /if \(G\.quitToMenu\) G\.quitToMenu\(\)/);
   assert.match(SOURCE, /cancel\(\);\s*\n\s*if \(G\.quitToMenu\) G\.quitToMenu\(\)/);
@@ -879,7 +879,7 @@ test("two guests claiming one seat: only the EARLIER may post its qualifying tim
   // the later claimant's QUALI overwrote the holder's time (last write wins).
   const { h, made } = await connectedHost();
   const heard = [];
-  h.G.onPeerQuali = (q) => heard.push([q.driverId, q.t]);
+  h.net.qualiNet.onPeerQuali = (q) => heard.push([q.driverId, q.t]);
   try {
     await h.lobby.inviteAnother();
     await h.lobby.host();
@@ -1214,7 +1214,7 @@ test("a guest sees the rule that cleared ready and keeps their solo Duel choice 
     h.lobby.setReady(true);
     assert.doesNotMatch(h.elements.get("vs-race-note").textContent, /Host changed/);
     let duelDuringQualifying;
-    h.G.openQualiForNet = async () => {
+    h.net.qualiNet.openQualiForNet = async () => {
       duelDuringQualifying = h.G.duel;
       throw new Error("qualifying scene failed");
     };
@@ -1359,7 +1359,7 @@ function closableHarness(extra = {}) {
     const t = { status: "open", onClose(fn) { closers.push(fn); }, close() { t.status = "closed"; } };
     return t;
   });
-  h.G.setNetRoom = (v) => flags.push(!!v);
+  h.net.raceSettings.setNetRoom = (v) => flags.push(!!v);
   return { h, made, closers, flags };
 }
 
@@ -1416,7 +1416,7 @@ test("host leave during 3p friend quali forgets relayed rivals (QualiNet unlock)
   // 2p never saw it: there is no relayed roster there.
   const { h, made, closers } = closableHarness();
   h.G.raceQuali = true;
-  h.G.openQualiForNet = (done) => { h.G._qualiDone = done; };
+  h.net.qualiNet.openQualiForNet = (done) => { h.G._qualiDone = done; };
   try {
     await h.lobby.join();
     h.lobby.watchForOpen();
@@ -1806,7 +1806,7 @@ function codeRoomHarness() {
     ts.push(t);
     return t;
   });
-  h.G.setNetRoom = (v) => flags.push(!!v);
+  h.net.raceSettings.setNetRoom = (v) => flags.push(!!v);
   const until = async (fn, what) => {
     for (let i = 0; i < 60 && !fn(); i++) await new Promise((r) => setTimeout(r, 50));
     assert.ok(fn(), what);
@@ -2435,11 +2435,11 @@ async function guestInQuali(extra = {}, sheetUp) {
   const ctx = closableHarness(extra);
   const { h, made } = ctx;
   h.G.raceQuali = true;
-  h.G.openQualiForNet = (done) => { h.G._qualiDone = done; };
+  h.net.qualiNet.openQualiForNet = (done) => { h.G._qualiDone = done; };
   if (sheetUp !== undefined) {
     // game.js openQuali: resolves once the sheet is up OR once its onFail has run quitToMenu (sheet closed).
     h.elements.set("quali", { id: "quali", hidden: !sheetUp, focus() {}, setAttribute() {}, removeAttribute() {} });
-    h.G.openQualiForNet = (done) => { h.G._qualiDone = done; return Promise.resolve(); };
+    h.net.qualiNet.openQualiForNet = (done) => { h.G._qualiDone = done; return Promise.resolve(); };
   }
   h.lobby.open();
   await h.lobby.join();
@@ -3076,7 +3076,7 @@ test("pin #6496: guest friend-quali start, gate refresh and room close reach rac
   const spies = relaySpies();
   const { setNetRoom } = spies.gProps;
   const { h, made, closers } = closableHarness({ net: spies.net, gProps: spies.gProps });
-  h.G.setNetRoom = setNetRoom;   // closableHarness swaps in its own flag recorder
+  h.G.setNetRoom = h.net.raceSettings.setNetRoom = setNetRoom;   // closableHarness swaps in its own flag recorder
   h.G.raceQuali = true;
   try {
     await h.lobby.join();

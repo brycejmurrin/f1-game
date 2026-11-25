@@ -38,9 +38,9 @@ const full = (id) => tracks().LIST[idx(id)].gpLaps;
 // host's choice is authoritative. Solo sessions initialize on first entry and
 // preserve edits while backing through the picker or garage.
 function open(trackId, room = true) {
-  g.G.setNetRoom(room);
+  g.made.RaceSettings.setNetRoom(room);
   try { g.G.trackIdx = idx(trackId); g.G.openRaceSettings("select"); return g.G.raceLaps; }
-  finally { g.G.setNetRoom(false); }
+  finally { g.made.RaceSettings.setNetRoom(false); }
 }
 
 test("FULL is the circuit's own distance and differs between circuits", () => {
