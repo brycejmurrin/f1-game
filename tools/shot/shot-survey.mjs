@@ -46,7 +46,7 @@ function usage(code = 2) {
 
 if (has("--list-locations")) {
   const track = flag("--track", flag("--tracks", ""));
-  console.log(JSON.stringify({ locations: track ? listSurveyLocations(track, customDesigns) : SURVEY_LOCATIONS,
+  console.log(JSON.stringify({ locations: track ? listSurveyLocations(track, customDesigns, { oneTrack: true }) : SURVEY_LOCATIONS,
     ...(track ? { track } : { hint: "Pass --track ID to list authored turns and anchors for any circuit." }),
     cameras: CAMERA_RECIPES }, null, 2));
   process.exit(0);

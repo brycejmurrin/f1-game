@@ -4,6 +4,20 @@ description: >-
   one copy here means one place to bump the Node version or the setup-node pin.
   Browser binaries are NOT installed here: only the browser jobs pay for
   Chromium, through ./.github/actions/playwright-chromium.
+inputs:
+  scenery-catalog:
+    description: >-
+      "true" restores (and, on a miss, saves at job end) the on-demand scenery
+      catalog tools/shot/scenery-locations.json with its receipt. A fresh
+      checkout has neither, so the first reader in a job rebuilt all 52
+      circuits: ~47 s idle, ~200 s on a loaded 4-vCPU guard shard, where
+      apex-tools-mcp-args ran a 217-224 s CI median against 16 s with the file
+      present (#6569 rank 7). The key is the catalog's own input digest
+      (tools/shot/scenery-source-hash.cjs), so a hit carries exactly the inputs
+      this tree has; ensureCatalog() still checks the receipt (inputs digest and
+      file sha) and rebuilds on any mismatch, so a stale hit cannot pass.
+    required: false
+    default: "false"
 runs:
   using: composite
   steps:
@@ -21,3 +35,21 @@ runs:
     # tests or stages the checkout. Skipped on a commit older than the tool.
     - run: if [ -f tools/gen/ensure-built.mjs ]; then node tools/gen/ensure-built.mjs; fi
       shell: bash
+    # https://github.com/actions/cache (restore now, save in the post step on a miss; a job that built
+    # nothing has nothing to save, which is a warning, not a failure).
+    - name: Scenery catalog key
+      id: scenery
+      if: inputs.scenery-catalog == 'true'
+      shell: bash
+      run: |
+        if [ -f tools/shot/scenery-source-hash.cjs ]; then
+          echo "key=scenery-catalog-$(node -e 'process.stdout.write(require("./tools/shot/scenery-source-hash.cjs").scenerySourceDigest("."))')" >> "$GITHUB_OUTPUT"
+        fi
+    - name: Scenery catalog cache
+      if: inputs.scenery-catalog == 'true' && steps.scenery.outputs.key != ''
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          tools/shot/scenery-locations.json
+          artifacts/cache/scenery-catalog.json
+        key: ${{ steps.scenery.outputs.key }}

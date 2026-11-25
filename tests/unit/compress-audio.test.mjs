@@ -15,6 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CAP_KBPS, TRACKS, check, scanMp3 } from "../../tools/gen/compress-audio.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -56,7 +57,7 @@ test("every listed soundtrack track is at the cap, 44.1 kHz stereo, and full len
 });
 
 test("check() names an over-cap, re-sampled or truncated track", () => {
-  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "compress-audio-test-"));
+  const dir = mkTmpDir("compress-audio-test-");
   try {
     const t = TRACKS[0];
     fs.mkdirSync(path.join(dir, path.dirname(t.file)), { recursive: true });

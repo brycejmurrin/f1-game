@@ -15,7 +15,8 @@ var JumpStartPenalty = (function () {
     const isTimeTrial = deps.isTimeTrial;
 
     function standingRace() {
-      return G.session === "race" && !isQuali() && !isTimeTrial();
+      // An armed PRACTICE session is unscored (#6612): no false-start fine, no grid cue.
+      return G.session === "race" && !G.practice && !isQuali() && !isTimeTrial();
     }
 
     function throttleLevel(c) {

@@ -1800,7 +1800,7 @@ const GLXBackend = (function () {
     // defaults here MUST mirror LightTune.TUNE_DEFS (js/lighting/knobs.js) so a missing tune object
     // (unit harnesses driving GLX directly) renders the shipped look.
     const T = frame.tune || null;
-    const _ambM = T && T.ambientMul != null ? T.ambientMul : 1;
+    const _ambM = PostCommon.knob(T, "ambientMul");
     if (_ambM !== 1) {
       const g = frame.ambientGround, s = frame.ambientSky;
       _ambScratchG[0] = g[0] * _ambM; _ambScratchG[1] = g[1] * _ambM; _ambScratchG[2] = g[2] * _ambM;
@@ -1817,7 +1817,7 @@ const GLXBackend = (function () {
     }
     // Same for the KEY LIGHT slider on the decals' sun term (raw frameSunColor
     // stays untouched for the god-ray/flare passes, which are not keyMul-lit).
-    const _kM = T && T.keyMul != null ? T.keyMul : 1.0;
+    const _kM = PostCommon.knob(T, "keyMul");
     if (_kM !== 1 && frameSunColor) {
       _decalSunScr[0] = frameSunColor[0] * _kM;
       _decalSunScr[1] = frameSunColor[1] * _kM;
@@ -1826,39 +1826,39 @@ const GLXBackend = (function () {
     } else {
       frameDecalSun = frameSunColor;
     }
-    uf1(litU.uBounceK,     _litUf, "bounceK",     T && T.bounceK     != null ? T.bounceK     : 0.04);
-    uf1(litU.uMistShare,   _litUf, "mistShare",   T && T.mistShare   != null ? T.mistShare   : 1.5);
-    uf1(litU.uLampFogClip, _litUf, "fogClip",     T && T.fogClip     != null ? T.fogClip     : 0.7);
-    uf1(litU.uGlowAmp,     _litUf, "glowAmp",     T && T.glowAmp     != null ? T.glowAmp     : 2.3);
-    uf1(litU.uBloomBoost,  _litUf, "neonBoost",   T && T.neonBoost   != null ? T.neonBoost   : 0.6);
-    uf1(litU.uPcssPen,     _litUf, "pcssPen",     T && T.pcssPen     != null ? T.pcssPen     : 80.0);
-    uf1(litU.uKeyMul,      _litUf, "keyMul",      T && T.keyMul      != null ? T.keyMul      : 1.0);
-    uf1(litU.uFogTint,     _litUf, "fogTint",     T && T.fogTint     != null ? T.fogTint     : 0.0);
-    uf1(litU.uMistHeight,  _litUf, "mistHeight",  T && T.mistHeight  != null ? T.mistHeight  : 0.30);
-    uf1(litU.uShadowTintAmt, _litUf, "shadowTintAmt", T && T.shadowTintAmt != null ? T.shadowTintAmt : 0.0);
-    uf1(litU.uWetDark,     _litUf, "wetDark",     T && T.wetDark     != null ? T.wetDark     : 1.0);
-    uf1(litU.uPuddles,     _litUf, "puddles",     T && T.puddles     != null ? T.puddles     : 1.0);   // PUDDLES (TUNE_DEFS def 1)
+    uf1(litU.uBounceK,     _litUf, "bounceK",     PostCommon.knob(T, "bounceK"));
+    uf1(litU.uMistShare,   _litUf, "mistShare",   PostCommon.knob(T, "mistShare"));
+    uf1(litU.uLampFogClip, _litUf, "fogClip",     PostCommon.knob(T, "fogClip"));
+    uf1(litU.uGlowAmp,     _litUf, "glowAmp",     PostCommon.knob(T, "glowAmp"));
+    uf1(litU.uBloomBoost,  _litUf, "neonBoost",   PostCommon.knob(T, "neonBoost"));
+    uf1(litU.uPcssPen,     _litUf, "pcssPen",     PostCommon.knob(T, "pcssPen"));
+    uf1(litU.uKeyMul,      _litUf, "keyMul",      PostCommon.knob(T, "keyMul"));
+    uf1(litU.uFogTint,     _litUf, "fogTint",     PostCommon.knob(T, "fogTint"));
+    uf1(litU.uMistHeight,  _litUf, "mistHeight",  PostCommon.knob(T, "mistHeight"));
+    uf1(litU.uShadowTintAmt, _litUf, "shadowTintAmt", PostCommon.knob(T, "shadowTintAmt"));
+    uf1(litU.uWetDark,     _litUf, "wetDark",     PostCommon.knob(T, "wetDark"));
+    uf1(litU.uPuddles,     _litUf, "puddles",     PostCommon.knob(T, "puddles"));   // PUDDLES (TUNE_DEFS def 1)
     // WIND knobs → LIT_VS uWind (foliage sway): xy = unit direction in world xz
     // from WIND DIRECTION (degrees), z = WIND speed scale. Defaults mirror
     // TUNE_DEFS (35°, 1.0); same vector as TLX U.wind.
     {
-      const wd = (T && T.windDir != null ? T.windDir : 35) * (Math.PI / 180);
+      const wd = PostCommon.knob(T, "windDir") * (Math.PI / 180);
       _windScr[0] = Math.cos(wd); _windScr[1] = Math.sin(wd);
-      _windScr[2] = T && T.windSpeed != null ? T.windSpeed : 1.0;
+      _windScr[2] = PostCommon.knob(T, "windSpeed");
       uf3(litU.uWind, _litUf, "wind", _windScr);
     }
     // BAKED MATERIALS knob. Ships at 1.0 (mirrors TUNE_DEFS matTexMix def);
     // __apex.matTex(0) is the A/B off-switch back to pure procedural. A missing
     // pack still renders procedural — bindMaterialMaps forces uMatTexMix to 0
     // whenever no albedo array is loaded, whatever the slider says.
-    bindMaterialMaps(T && T.matTexMix != null ? T.matTexMix : 1.0);
+    bindMaterialMaps(PostCommon.knob(T, "matTexMix"));
     uf3(litU.uFogColor, _litUf, "fogColor", frame.fogColor);
     // FOG DENSITY knob: scale the per-condition haze depth (multiplier, def 1).
     // Default a missing fogDensity to 0 (fog off), like every sibling scalar here
     // and both other backends — an omitted field is documented-valid and must not
     // upload `undefined * mul = NaN`, which blacks out the whole scene.
-    uf1(litU.uFogDensity, _litUf, "fogDensity", (frame.fogDensity != null ? frame.fogDensity : 0) * (T && T.fogDensityMul != null ? T.fogDensityMul : 1));
-    _particleFog.density = (frame.fogDensity != null ? frame.fogDensity : 0) * (T && T.fogDensityMul != null ? T.fogDensityMul : 1);
+    uf1(litU.uFogDensity, _litUf, "fogDensity", (frame.fogDensity != null ? frame.fogDensity : 0) * PostCommon.knob(T, "fogDensityMul"));
+    _particleFog.density = (frame.fogDensity != null ? frame.fogDensity : 0) * PostCommon.knob(T, "fogDensityMul");
     if (frame.fogColor) _particleFog.color = frame.fogColor;
     // uBlockerMap's UNIT IS ASSIGNED UNCONDITIONALLY, the bind is not. It is the
     // only `sampler2D` in LIT_FS and uShadowMap on unit 0 is a `sampler2DShadow`,
@@ -1886,7 +1886,7 @@ const GLXBackend = (function () {
       // rewrite of SHD.lightVP is still seen.
       ufM4(litU.uLightVP, _litUf, "lightVP", SHD.lightVP);
       // SHADOW BIAS / DARKNESS knobs (repair + artistic; defaults mirror TUNE_DEFS).
-      uf1(litU.uShadowBias, _litUf, "shadowBias", T && T.shadowBias != null ? T.shadowBias : 0.001);
+      uf1(litU.uShadowBias, _litUf, "shadowBias", PostCommon.knob(T, "shadowBias"));
       // Fade the cast shadow out as the KEY light dims toward moonlight: props stop
       // casting into the map once the key is dim (game.js shadow-pass perf skip is
       // now gated on key brightness, not sunDir.y — the night moon-key is held high
@@ -1904,12 +1904,12 @@ const GLXBackend = (function () {
       // moon, low cloud, dry road, no fog; or, above 0.5, the knob itself
       // forcing the gate open regardless of weather). 0 = old fade-to-nothing
       // night.
-      const _mSh = (T && T.moonShadow != null ? T.moonShadow : 0.25) * (frame.moonGate || 0);
+      const _mSh = PostCommon.knob(T, "moonShadow") * (frame.moonGate || 0);
       if (_mSh > _hf) _hf = _mSh;
-      _decalSh[0] = (T && T.shadowStr != null ? T.shadowStr : 1.15) * _hf;
+      _decalSh[0] = PostCommon.knob(T, "shadowStr") * _hf;
       uf1(litU.uShadowStr, _litUf, "shadowStr", _decalSh[0]);
       // SHADOW DISTANCE knob: box half-size, drives the receiver-distance fade.
-      uf1(litU.uShadowRange, _litUf, "shadowRange", T && T.shadowRange != null ? T.shadowRange : 80.0);
+      uf1(litU.uShadowRange, _litUf, "shadowRange", PostCommon.knob(T, "shadowRange"));
       // Fade anchor: the UNSNAPPED forward-biased ground point the shadow box is
       // snapped around (game.js shadow pass). It glides continuously with the
       // camera, so the fade front never jumps on a box recentre.
@@ -1966,7 +1966,7 @@ const GLXBackend = (function () {
     // FOG HEIGHT FALLOFF knob (absolute; def 0.018 matches the shipped palette).
     uf1(litU.uFogHeight, _litUf, "fogHeight", T && T.fogHeight != null ? T.fogHeight : (frame.fogHeight != null ? frame.fogHeight : 0.0));
     // GROUND MIST knob: scale the per-condition mist amount (multiplier, def 1).
-    uf1(litU.uGroundMist, _litUf, "groundMist", (frame.groundMist != null ? frame.groundMist : 0.0) * (T && T.mistDensity != null ? T.mistDensity : 1));
+    uf1(litU.uGroundMist, _litUf, "groundMist", (frame.groundMist != null ? frame.groundMist : 0.0) * PostCommon.knob(T, "mistDensity"));
     // THE PIT LANE, as (entry s, window length, side, lap length) — painted by
     // roadMarkings(). A null/absent frame.pitLane means no lane, and the zero
     // LENGTH is what the shader tests, so nothing is drawn until one is armed.
@@ -1982,21 +1982,21 @@ const GLXBackend = (function () {
     uf1(litU.uTime, _litUf, "time", frame.time != null ? frame.time : 0.0);
     uf1(litU.uCloudCover, _litUf, "cloudCover", frame.cloud != null ? frame.cloud : 0.0);
     uf1(litU.uCloudSpeed, _litUf, "cloudSpeed", frame.cloudSpeed != null ? frame.cloudSpeed : 1.0);
-    uf1(litU.uCloudShadowDim, _litUf, "cloudShadowDim", T && T.cloudShadowDim != null ? T.cloudShadowDim : 0.80);
+    uf1(litU.uCloudShadowDim, _litUf, "cloudShadowDim", PostCommon.knob(T, "cloudShadowDim"));
     // CAR SUN GLINT / CAR SPARKLE / FOG SUN CORE knobs (defaults = shipped look).
-    uf1(litU.uCarSunGlint, _litUf, "carSunGlint", T && T.carSunGlint != null ? T.carSunGlint : 12.0);
-    uf1(litU.uCarSparkle,  _litUf, "carSparkle",  T && T.carSparkle  != null ? T.carSparkle  : 1.6);
-    uf1(litU.uFogSunCore,  _litUf, "fogSunCore",  T && T.fogSunCore  != null ? T.fogSunCore  : 0.6);
+    uf1(litU.uCarSunGlint, _litUf, "carSunGlint", PostCommon.knob(T, "carSunGlint"));
+    uf1(litU.uCarSparkle,  _litUf, "carSparkle",  PostCommon.knob(T, "carSparkle"));
+    uf1(litU.uFogSunCore,  _litUf, "fogSunCore",  PostCommon.knob(T, "fogSunCore"));
     // LAMP NEAR CLAMP / WINDOW SUN FLASH / SKY RIM GLOW / AMBIENT CONTACT DARK /
     // LAMP WALL SPILL knobs (defaults = shipped look).
-    uf1(litU.uLampNearClamp,  _litUf, "lampNearClamp",  T && T.lampNearClamp  != null ? T.lampNearClamp  : 4.0);
-    uf1(litU.uWindowSunFlash, _litUf, "windowSunFlash", T && T.windowSunFlash != null ? T.windowSunFlash : 1.0);
-    uf1(litU.uSkyRimGlow,     _litUf, "skyRimGlow",     T && T.skyRimGlow     != null ? T.skyRimGlow     : 1.0);
-    uf1(litU.uAmbContactDark, _litUf, "ambContactDark", T && T.ambContactDark != null ? T.ambContactDark : 1.0);
-    uf1(litU.uLampWallSpill,  _litUf, "lampWallSpill",  T && T.lampWallSpill  != null ? T.lampWallSpill  : 1.0);
+    uf1(litU.uLampNearClamp,  _litUf, "lampNearClamp",  PostCommon.knob(T, "lampNearClamp"));
+    uf1(litU.uWindowSunFlash, _litUf, "windowSunFlash", PostCommon.knob(T, "windowSunFlash"));
+    uf1(litU.uSkyRimGlow,     _litUf, "skyRimGlow",     PostCommon.knob(T, "skyRimGlow"));
+    uf1(litU.uAmbContactDark, _litUf, "ambContactDark", PostCommon.knob(T, "ambContactDark"));
+    uf1(litU.uLampWallSpill,  _litUf, "lampWallSpill",  PostCommon.knob(T, "lampWallSpill"));
     uf1(litU.uWetness, _litUf, "wetness", frame.wetness != null ? frame.wetness : 0.0);
     uf1(litU.uRain,    _litUf, "rain",    frame.rain != null ? frame.rain : 0.0);     // puddle ripples (falling rain only)
-    uf1(litU.uSpecKnee, _litUf, "specKnee", T && T.specKnee != null ? T.specKnee : 4.0);   // SUN GLINT RANGE (TUNE_DEFS def 4.0)
+    uf1(litU.uSpecKnee, _litUf, "specKnee", PostCommon.knob(T, "specKnee"));   // SUN GLINT RANGE (TUNE_DEFS def 4.0)
     // Env probe: dedicated unit 6 (0 shadow / 5 decal / 7 blocker). A COMPLETE
     // cube must ALWAYS be bound here with uEnvCube pointed at it — even with no
     // probe (menu / setup viewer / tools) — otherwise the samplerCube defaults to

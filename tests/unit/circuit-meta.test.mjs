@@ -2,12 +2,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync, mkdtempSync, readdirSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const require = createRequire(import.meta.url);
@@ -34,7 +34,7 @@ test("ensure-built: BUILT_PATHS carries the roster, buildInto renders it, a seco
   assert.deepEqual(again.map((r) => r.was), BUILT_PATHS.map(() => "fresh"), "idempotent: nothing left to write");
   assert.equal(builtLine(again), "", "a fresh checkout prints nothing");
   assert.equal(builtLine([{ target: "x.js", was: "missing" }, { target: "y.js", was: "stale" }]), "ensure-built: built x.js (missing); rebuilt y.js (stale)");
-  const dir = mkdtempSync(join(tmpdir(), "apex-built-"));
+  const dir = mkTmpDir("apex-built-");
   try {
     assert.deepEqual(buildInto(dir), [...BUILT_PATHS]);
     assert.equal(readFileSync(join(dir, MANIFEST.CIRCUIT_META), "utf8"), generate());

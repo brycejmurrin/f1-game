@@ -112,18 +112,23 @@ test.describe("Car setup catalog — all categories render", () => {
 test.describe("Car setup catalog — option interaction", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("GEARBOX Standard option is active by default", async ({ page }) => {
+  // An unset category is the team's WORKS part (free-play sheet merged over the
+  // works build, Parts.playerMods / #6572), not the catalogue's Standard row.
+  const worksId = (page, cat, team = "mclaren") => page.evaluate(([c, t]) =>
+    Parts.getFactorySetup(Teams.LIST.find((x) => x.id === t))[c], [cat, team]);
+
+  test("GEARBOX: the works part is active by default", async ({ page }) => {
     await openSetup(page);
 
     await openCat(page, "gearbox");
-    await expect(opt(page, "standard")).toHaveClass(/active/);
+    await expect(opt(page, await worksId(page, "gearbox"))).toHaveClass(/active/);
   });
 
-  test("FUEL Standard option is active by default", async ({ page }) => {
+  test("FUEL: the works part is active by default", async ({ page }) => {
     await openSetup(page, "mclaren", { draw: true });
 
     await openCat(page, "fuel");
-    await expect(opt(page, "standard")).toHaveClass(/active/);
+    await expect(opt(page, await worksId(page, "fuel"))).toHaveClass(/active/);
   });
 
   test("clicking Close Ratio gearbox makes it active", async ({ page }) => {

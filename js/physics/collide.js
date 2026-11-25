@@ -287,6 +287,7 @@ const Collide = (() => {
   _lim.laneMin = 0.5; _lim.laneMin = 0;   // born Double, like _traf
 
   function create(G, collideFx, ownsPose = () => false) {
+    const CG = ContactGeometry;   // the player contact rules (#6503)
     // Contact SEVERITY reads closing speed on the pace-normalised scale, anchored at the
     // shipped slider default so a default-pace hit scores exactly what it always did: the
     // same shunt at OVERALL SPEED min/max used to score 0.36 / 1.0 (wall strikes: #4947).
@@ -391,7 +392,7 @@ const Collide = (() => {
       if (!(gain > 0)) return;
       const w1 = hb.omega + dw, rot = hb.invInertia > 0 ? (w1 * w1 - hb.omega * hb.omega) / hb.invInertia : 0;
       if (!((v1 * v1 - v0 * v0) / hb.invMass + rot > 0)) return;
-      const cap = hb.invMass * (1 + AiDrive.bumpRestitution(j.closing)) * AiDrive.humanPuntCap() * Math.max(G.PACE, 0.05) / (hb.invMass + ob.invMass);
+      const cap = hb.invMass * (1 + CG.bumpRestitution(j.closing)) * CG.humanPuntCap() * Math.max(G.PACE, 0.05) / (hb.invMass + ob.invMass);
       const give = punt(h, gain, cap);
       if (give >= gain) return;
       const f = give / gain;
@@ -641,7 +642,7 @@ const Collide = (() => {
         // their original meaning: the human's gates their stuck rescue (a car
         // rubbing another is shuffling, not wedged), the AI's makes it compliant so
         // a player leaning on it can move it. The yielder still pays the scrub.
-        // `rubScrub` is this STEP's speed loss (AiDrive.rubDecel x dt) and this runs
+        // `rubScrub` is this STEP's speed loss (ContactGeometry.rubDecel x dt) and this runs
         // once per relaxation pass — four times a frame — so it is taken on the last
         // pass only. The old form was a 0.995 factor applied on every pass: 2 % a
         // frame, 48 m/s^2 at 40 m/s, and a player rubbing wheels lost 18 m/s in a
@@ -680,14 +681,14 @@ const Collide = (() => {
             const aSp0 = Number.isFinite(a._preColSpd) ? a._preColSpd : aSp;
             const bSp0 = Number.isFinite(b._preColSpd) ? b._preColSpd : bSp;
             const relV0 = sgn >= 0 ? bSp0 - aSp0 : aSp0 - bSp0;
-            const e = AiDrive.bumpRestitution(relV0 > 0 ? relV0 : relV);
+            const e = CG.bumpRestitution(relV0 > 0 ? relV0 : relV);
             const jImp = (1 + e) * relV / iSum;
             // BY DESIGN (#2565): the car in front takes the punt in full, but a
             // HUMAN in front gains only a capped punt (a pace-scaled closing speed,
             // per STEP across the passes: punt(), #5894) while the AI behind pays
             // its whole share (54 -> ~0 m/s in one tick): momentum is not conserved
             // on purpose, the player is never launched. Hard hits go to Rapier.
-            const capV = AiDrive.humanPuntCap() * Math.max(G.PACE, 0.05);
+            const capV = CG.humanPuntCap() * Math.max(G.PACE, 0.05);
             if (sgn >= 0) {
               if (iB) b.speed = floorFwd(b, b.speed - iB * jImp);
               if (iA) a.speed += a.human ? punt(a, iA * jImp, iA * (1 + e) * capV / iSum) : iA * jImp;
@@ -796,9 +797,9 @@ const Collide = (() => {
       // depended on solver order. The impulse keeps the live relV (momentum); a net car's is its prediction.
       for (let i = 0; i < ranked.length; i++) { const c = ranked[i]; if (!ownsPose(c)) c._preColSpd = c._nOk ? c._nSpd : c.speed; }
       for (let i = 0; i < ranked.length; i++) { const c = ranked[i]; if (c.human && !ownsPose(c)) c._puntGot = 0; }
-      // Side-rub speed loss for this step, in m/s: a deceleration (AiDrive.rubDecel)
+      // Side-rub speed loss for this step, in m/s: a deceleration (ContactGeometry.rubDecel)
       // times the step, so the headless harness's arbitrary dt scrubs per second.
-      const rubScrub = AiDrive.rubDecel(!!track.street) * (dt || FIXED_DT);
+      const rubScrub = CG.rubDecel(!!track.street) * (dt || FIXED_DT);
       // Tiny fields: all-pairs is fine and avoids bucket rebuild cost. Larger
       // fields (MP / expanded AI) use arc buckets so pairContact stays O(n·k).
       const useBuckets = ranked.length > 12;

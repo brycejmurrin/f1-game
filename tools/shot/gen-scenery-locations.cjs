@@ -98,11 +98,17 @@ function bounds(pos) {
   return { center: lo.map((v, j) => (v + hi[j]) / 2), groundY: lo[1] };
 }
 
-function generate() {
+/**
+ * Build the catalog rows. `tracks` limits the build to those circuits (a one-track listing, ~2 s, never written:
+ * shot-survey --list-locations on a stale receipt); the all-circuit viewpoint check runs only on a full build.
+ * @param {{ tracks?: string[] }} [opts]
+ */
+function generate({ tracks } = {}) {
   const context = buildContext();
   const rows = [], omitted = [];
   for (const file of fs.readdirSync(dir).filter(f => f.endsWith(".json")).sort()) {
     const trackId = path.basename(file, ".json");
+    if (tracks && !tracks.includes(trackId)) continue;
     const ids = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8")).ids;
     const def = context.Tracks.LIST.find(d => d.id === trackId);
     if (!def) throw new Error(`Unknown landmark track ${trackId}`);
@@ -144,7 +150,7 @@ function generate() {
     context.trim(mark);
   }
   if (new Set(rows.map(r => r.id)).size !== rows.length) throw new Error("Duplicate scenery location IDs");
-  for (const id of Object.keys(VIEWPOINTS)) if (!rows.some(r => r.modelId === id)) throw new Error(`Viewpoint ${id} no longer emits`);
+  if (!tracks) for (const id of Object.keys(VIEWPOINTS)) if (!rows.some(r => r.modelId === id)) throw new Error(`Viewpoint ${id} no longer emits`);
   return { schema: 3, method: "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise", locations: rows, omitted };
 }
 
@@ -180,7 +186,7 @@ function ensureCatalog() {
   return was;
 }
 
-module.exports = { ensureCatalog, receiptHolds, TARGET: "tools/shot/scenery-locations.json" };
+module.exports = { ensureCatalog, receiptHolds, generate, TARGET: "tools/shot/scenery-locations.json" };
 
 if (require.main === module) {
   const check = process.argv.includes("--check");

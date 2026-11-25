@@ -21,7 +21,7 @@ function loadMesh() {
   const ctx = vm.createContext({
     TrackGeom: { cross: () => [0, 1, 0], MAT: { SAND: 1, SNOW: 2, CONCRETE: 3, GRASS: 0 } },
     TrackSpline: { curvature: (_t, s) => curv(s), cr: () => 0 },
-    TrackSpace: { wrap01: (v) => ((v % 1) + 1) % 1 },
+    TrackSpace: { wrap01: (v) => ((v % 1) + 1) % 1, sceneryOriginDelta: (d) => (d && d._sceneryShift) || 0 },
     M4: { lerp: (a, b, t) => a + (b - a) * t },
   });
   const src = absSrc("js/track/core/mesh.js");
@@ -66,7 +66,7 @@ test("a near-straight loose zone (≤ BANK_RESEAT_M) does not claim its apex", (
   const ctx = vm.createContext({
     TrackGeom: { cross: () => [0, 1, 0], MAT: { SAND: 1, SNOW: 2, CONCRETE: 3, GRASS: 0 } },
     TrackSpline: { curvature: (_t, s) => curv(s), cr: () => 0 },
-    TrackSpace: { wrap01: (v) => ((v % 1) + 1) % 1 },
+    TrackSpace: { wrap01: (v) => ((v % 1) + 1) % 1, sceneryOriginDelta: (d) => (d && d._sceneryShift) || 0 },
     M4: { lerp: (a, b, t) => a + (b - a) * t },
   });
   const src = absSrc("js/track/core/mesh.js");

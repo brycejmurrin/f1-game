@@ -4,8 +4,9 @@
 const NetLobby = (function () {
   const CONNECT_TIMEOUT_MS = 60000;
 
-  function create(G) {
+  function create(G, deps = {}) {   // deps: game.js's raceSettings + qualiNet, handed in, not relayed on G (#6496)
     Log.info("net", "lobby create");
+    const rs = () => deps.raceSettings || {}, qn = () => deps.qualiNet || {};
     const $ = (id) => document.getElementById(id);
     const transports = new Map();
     let transport = null;                  // the pending one, mid-handshake
@@ -140,7 +141,7 @@ const NetLobby = (function () {
       if (!team) return null;
       try {
         let parts = p.parts || Parts.getFactorySetup(team);
-        if (Parts.getCost(parts, team) > Parts.BUDGET) parts = Parts.getFactorySetup(team);
+        if (Parts.getCost(parts, team) > Parts.freeBudget(team)) parts = Parts.getFactorySetup(team);
         return G.modsFor(team, parts);
       } catch (e) { return null; }
     }
@@ -276,7 +277,7 @@ const NetLobby = (function () {
             // evicted player cannot walk back in on the old one.
             selfReady = false;
             _verify.delete(id); _verified.delete(id);
-            if (G.setNetRoom) G.setNetRoom(true);
+            if (rs().setNetRoom) rs().setNetRoom(true);
             // Only a CODE room rotates: a link/QR room never advertised one, and
             // minting it here left a public code up to expire later (H3-7).
             const hadCode = !!(codeRoom || codeReopenTimer);
@@ -289,11 +290,11 @@ const NetLobby = (function () {
             show("room");
             if (hadCode) rotateRoomAfterEvict();
             renderRoom();
-            if (G.refreshQualiGate) G.refreshQualiGate();
+            if (qn().refreshQualiGate) qn().refreshQualiGate();
             return;
           } else {
             myRank = Infinity; restoreOwnRules();
-            if (G.setNetRoom) G.setNetRoom(false);
+            if (rs().setNetRoom) rs().setNetRoom(false);
             // …and stop ADVERTISING it: the code onConnected reopened (and its
             // pending transport) would answer the old code and pull us back in.
             sealRoom(); stopScan();   // a camera INVITE ANOTHER opened must not outlive the room (#2200)
@@ -325,7 +326,7 @@ const NetLobby = (function () {
           // A removed player must not walk back in on the code onConnected reopened.
           if (wasHostEvict && role === "host" && !friendQualifying && !(typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace()) && (codeRoom || codeReopenTimer)) rotateRoomAfterEvict();
         }
-        renderRoom(); if (G.refreshQualiGate) G.refreshQualiGate();
+        renderRoom(); if (qn().refreshQualiGate) qn().refreshQualiGate();
       });
       return transport;
     }
@@ -733,7 +734,7 @@ const NetLobby = (function () {
         }
         _peers.delete(d.from); _ready.delete(d.from);
         clashDrop(d.from);
-        renderRoom(); if (G.refreshQualiGate) G.refreshQualiGate();
+        renderRoom(); if (qn().refreshQualiGate) qn().refreshQualiGate();
       });
       // The sender-binding NetPlay's bindSession applies (sendersOwnDriver
       // there) has to hold HERE too, or it guards the wrong phase: qualifying
@@ -765,7 +766,7 @@ const NetLobby = (function () {
       // binding is this phase's. Qualifying runs while the LOBBY still holds
       // the connection, so they have to be registered on this side too or
       // they only work after the race has already started — which is never.
-      NetPlay.bindQuali(made, sendersOwnDriver, G, (type, lap) => {
+      NetPlay.bindQuali(made, sendersOwnDriver, qn(), (type, lap) => {
         if (role !== "host") return;
         // Guests have no direct links to each other. Relay only a validated,
         // sender-bound lap, and never echo it to its owner.
@@ -781,7 +782,7 @@ const NetLobby = (function () {
         const seat = heldSeat(id);
         if (!seat) return;
         const q = { driverId: seat, t: Infinity, noTime: true };
-        if (G.onPeerQuali) G.onPeerQuali(q);
+        if (qn().onPeerQuali) qn().onPeerQuali(q);
         for (const [other, sess] of sessions) {
           if (other !== id) try { sess.sendEvent(NetPlay.EV.QUALI, { driverId: q.driverId, t: null, noTime: true }); } catch (e) { /* departing peer */ }
         }
@@ -856,7 +857,7 @@ const NetLobby = (function () {
       show("room");
       // The lobby is a dialog over the menu, and the room is where both players
       // now wait — so it must survive the screens it opens.
-      if (G.setNetRoom) G.setNetRoom(true);
+      if (rs().setNetRoom) rs().setNetRoom(true);
       renderRoom();
       say(role === "host"
         ? "Pick the race, then start when you are both ready."
@@ -1349,15 +1350,15 @@ const NetLobby = (function () {
       if (soloDuel === null) soloDuel = !!G.duel;
       G.duel = false;   // qualifying and the race both use the full room grid
       qualiAborted = false;
-      if (G.raceQuali && G.openQualiForNet) {
+      if (G.raceQuali && qn().openQualiForNet) {
         friendQualifying = true;
         say("Qualifying…");
         let opened;
         sealRoom();
-        if (G.setNetRoom) G.setNetRoom(false);
+        if (rs().setNetRoom) rs().setNetRoom(false);
         try {
           G.flow = "gp";
-          opened = G.openQualiForNet(finishStart);   // calls back when TO THE GRID is pressed
+          opened = qn().openQualiForNet(finishStart);   // calls back when TO THE GRID is pressed
         } catch (e) {
           qualifyingFailed();
           return;
@@ -1393,7 +1394,7 @@ const NetLobby = (function () {
       const current = () => operationCurrent(gen) && (!session || startingSessions.has(session));
       say("Starting race…");
       sealRoom();      // idempotent: the quali branch may already have run it
-      if (G.setNetRoom) G.setNetRoom(false);
+      if (rs().setNetRoom) rs().setNetRoom(false);
       try {
         // A friend race is a one-off Grand Prix, never a championship round
         // or a time trial. flow/session are the authority (js/game.js).
@@ -2131,7 +2132,7 @@ const NetLobby = (function () {
     function abortQuali() {
       friendQualifying = false;
       if (role === "guest") { qualiAborted = true; broadcast(QABORT, null); }   // host waits on every rival
-      if (G.setNetRoom) G.setNetRoom(true);
+      if (rs().setNetRoom) rs().setNetRoom(true);
       const e = els();
       if (e.screen) e.screen.hidden = false;
       show("room");
@@ -2164,7 +2165,7 @@ const NetLobby = (function () {
       role = null;
       _peers.clear(); _ready.clear(); selfReady = false; clashClear(); myRank = Infinity; restoreOwnRules();
       // THE ROOM FLAG DIES WITH THE ROOM: only a race start cleared netRoom, so after CLOSE a solo START re-showed this dialog.
-      if (G.setNetRoom) G.setNetRoom(false);
+      if (rs().setNetRoom) rs().setNetRoom(false);
       close();
     }
 
@@ -2199,7 +2200,7 @@ const NetLobby = (function () {
       on("vs-paste-invite", () => pasteInto("invite"));
       on("vs-paste-answer", () => pasteInto("answer"));
       on("vs-scan-cancel", () => { stopScan(); say(""); });
-      on("vs-edit-race", () => { if (role === "host" && G.openRaceSetup) G.openRaceSetup(); });
+      on("vs-edit-race", () => { if (role === "host" && rs().openRaceSetup) rs().openRaceSetup(); });
       // Withdraw READY BEFORE the garage opens (#1919): the garage edits G.driverIdx
       // live, and a host seeing our old profile as READY could start with it.
       // Exit (roomChanged("car")) re-announces; READY again is the player's call.
@@ -2261,7 +2262,7 @@ const NetLobby = (function () {
         teardown(); role = null; resetSteps();
         // An emptied room's INVITE ANOTHER hid the JOIN routes and left the
         // room flag up; with nobody connected the pick is a fresh start, as open().
-        if (G.setNetRoom) G.setNetRoom(false);
+        if (rs().setNetRoom) rs().setNetRoom(false);
         if ($("vs-join")) $("vs-join").hidden = false;
         if ($("vs-code-join")) $("vs-code-join").hidden = false;
         show("pick"); say("");

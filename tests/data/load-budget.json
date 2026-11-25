@@ -1,0 +1,167 @@
+{
+  "_comment": "The #6609 load ladder (§2): five phases, each with a phone budget and a sw (headless CI) budget. Read by tools/perf/load-census.mjs and tests/unit/load-census.test.mjs. Bryce's decisions on #6609 (2026-11-25 ~11:29Z): D1 (b) — the sw budgets gate on CI, the phone budgets stay ADVISORY (advisory: true) until one Claude Link window measures them, then they are ratcheted; D3 — the race-entry cinematics stay unchanged, so P3 carries no cinematics budget. A sw row with enforcedBy null is a target a later #6609 step wires up (step names it); a phone figure marked est is a target, not a measurement. readings are the recorded numbers the issue's §1.2 cites, with their source; the census prints them and measures no time itself. Re-measure-by: 2026-12-25.",
+  "phases": [
+    {
+      "id": "P0",
+      "name": "shell",
+      "endsWhen": "index.html parsed, backend bound, first title frame",
+      "phone": {
+        "advisory": true,
+        "coldMs": 2500,
+        "swWarmMs": 1000,
+        "eagerCodeBytes": 2800000,
+        "eagerScripts": 220,
+        "est": true
+      },
+      "sw": {
+        "gate": true,
+        "eagerCodeBytes": "ratchet",
+        "titleShownMs": 1500,
+        "enforcedBy": "tests/unit/boot-load-budget.test.mjs (eagerCodeBytes); titleShownMs from step 2"
+      },
+      "readings": {
+        "sw": {
+          "domContentLoadedMs": 906,
+          "loadMs": 981,
+          "source": "#6609 §1.2, headless TLX at 0e500ddb"
+        },
+        "phone": {
+          "bootMs": 1500,
+          "source": "PHONE-PERF-MEASURE-2026-11-10 (software path)"
+        }
+      }
+    },
+    {
+      "id": "P1",
+      "name": "title",
+      "endsWhen": "title interactive and idle 1.2 s",
+      "phone": {
+        "advisory": true,
+        "longTaskMaxMs": 200,
+        "idleLoadGzBytes": 1500000,
+        "est": true
+      },
+      "sw": {
+        "gate": true,
+        "longTasksAfterTitle": "count",
+        "enforcedBy": null,
+        "step": 2
+      },
+      "readings": {
+        "phone": {
+          "apexReadyMs": "2200-4300",
+          "source": "LOAD-HUNT-2026-10-24 (desktop)"
+        }
+      }
+    },
+    {
+      "id": "P2",
+      "name": "garage / select",
+      "endsWhen": "picked circuit built, menu warm done",
+      "phone": {
+        "advisory": true,
+        "buildMs": 2000,
+        "menuWarmMs": 4000,
+        "sliceMs": 50,
+        "est": true
+      },
+      "sw": {
+        "gate": true,
+        "warmHistory": "total + maxBlock",
+        "enforcedBy": null,
+        "step": 9
+      },
+      "readings": {
+        "phone": {
+          "menuWarmMs": 10900,
+          "source": "#5629 (post 5268, draw 3027, mirror 2227 ms)"
+        }
+      }
+    },
+    {
+      "id": "P3",
+      "name": "race entry",
+      "endsWhen": "session:committed",
+      "phone": {
+        "advisory": true,
+        "workMs": 1500,
+        "reEntryFloorMs": 200,
+        "est": true
+      },
+      "sw": {
+        "gate": true,
+        "workLegMs": 3000,
+        "enforcedBy": null,
+        "step": 9
+      },
+      "readings": {
+        "sw": {
+          "raceEntryMs": 7500,
+          "loadTrackMs": 1766,
+          "warmCarAssetsMs": 1867,
+          "programWarmMs": 2403,
+          "maxBlockMs": 564,
+          "source": "#6609 §1.2, race(\"monza\") menu world cold"
+        },
+        "phone": {
+          "firstRaceMs": 5700,
+          "compileMs": 4000,
+          "reEntryMs": 200,
+          "source": "HITCH-MEM-LOAD-2026-11-18"
+        }
+      }
+    },
+    {
+      "id": "P4",
+      "name": "in race / restart",
+      "endsWhen": "each restart back at the menu",
+      "phone": {
+        "advisory": true,
+        "tabKillsIn10Restarts": 0,
+        "est": true
+      },
+      "sw": {
+        "gate": true,
+        "heapSlopeMiBPerCycle": 10,
+        "softMiBPerCycle": 2,
+        "enforcedBy": "tests/helpers/race-cycle-memory.mjs (race-cycle-memory spec)"
+      },
+      "readings": {
+        "sw": {
+          "jsHeapAtRaceMB": 220,
+          "source": "#6609 §1.3, performance.memory, headless Monza"
+        }
+      }
+    }
+  ],
+  "groupWhen": {
+    "FULL": "P0: every boot, before the title",
+    "DEFERRED.three": "P0: at boot, beside the backend pick",
+    "DEFERRED.webgl2": "P0: fallback backend",
+    "DEFERRED.webgpu": "door: opt-in WGX",
+    "VENDOR_THREE": "P0: the importmap's dynamic import()",
+    "LAZY_TRACK_BUILD": "P1: first Tracks.build",
+    "LAZY_CIRCUIT": "P2: ensureCircuit on pick",
+    "LAZY_SCENERY": "P2: one file per circuit, on pick",
+    "LAZY_RACE_SESSION": "P1: startRace, plus an idle prefetch",
+    "LAZY_RACE": "P1: idle, then race start",
+    "LAZY_AUDIO": "door: first sound gesture, chunked",
+    "LAZY_NET": "door: VS FRIEND",
+    "LAZY_DATA": "door: Data Hub",
+    "LAZY_EDITOR": "door: track designer",
+    "LAZY_AGENT": "door: __apex / bridge only",
+    "LAZY_GFX_HI": "door: desktop detail >= 2 only",
+    "LAZY_LEARN": "door: the title's Learn door",
+    "LAZY_DEV": "door: ?gfxdebug=1 only",
+    "LAZY_PERF": "P1: idle after boot (SoakRun / BenchRun)",
+    "LAZY_REAL_RACE": "door: real-race / WATCH",
+    "LAZY_GARAGE_EXTERIOR": "P2: garage view, optional pit slice",
+    "LAZY_WORKER": "door: apex26.buildWorker prototype",
+    "LAZY_XR": "door: ENTER VR",
+    "LAZY_CAM_EDITOR": "door: pause-menu camera tuner / flyby editor",
+    "LAZY_CAREER_UI": "door: career screen (SW required pool)",
+    "LAZY_UI_PRESETS": "door: first APPEARANCE enter",
+    "LAZY_SAVES_DATA": "P1: idle, garage door, career screen",
+    "LAZY_RESULTS_SHEET": "door: results sheet / share card"
+  }
+}

@@ -409,6 +409,22 @@ const PlayerForces = (function () {
     const speedYawDamp = 1 + SPEED_YAW_EXTRA * _syT * _syT * (3 - 2 * _syT);
     const yawBrakeCap = BRAKE * (1 + (brakeScale - 1) * brakeMix);
     const brakeYawDamp = 1 + 1.4 * clamp(decel / yawBrakeCap, 0, 1) + coastYaw;
+    // BRAKE OVER-ROTATION (#6573). Braking at the limit mid-corner unloads the
+    // rear (load transfer), and with factory parts at ×1.0 (#6572) no car has
+    // the grip reserve that hid it: the rear slid past the front and the nose
+    // snapped to the apex (rear slip 18.2°, yaw +29 % on the shipped seat).
+    // While the pedal is in, an extra yaw damp engages as the rear's slip angle
+    // runs past the front's (0 at equal slip, full 1° beyond), so the car
+    // pushes wide instead of spinning in. A braked TURN-IN keeps |αR| ≤ |αF|
+    // and is untouched (trail-brake rotation stays). Own state only: the two
+    // axles' slip angles, never the road's curvature (PHYSICS.md §Curvature
+    // channels). Applied implicitly (÷(1 + D·dt)) so a stiff gain cannot flip
+    // the yaw rate's sign; exactly 1 when off (coast, throttle, straight line).
+    const BRAKE_OVER_K = 80, BRAKE_OVER_LO = 0, BRAKE_OVER_HI = 1;   // 1/s per YAW_DAMP; degrees of αR − αF
+    const brakeOver = braking
+      ? YAW_DAMP * BRAKE_OVER_K * brakeMix
+        * clamp(((Math.abs(slipR) - Math.abs(slipF)) * (180 / Math.PI) - BRAKE_OVER_LO) / (BRAKE_OVER_HI - BRAKE_OVER_LO), 0, 1)
+      : 0;
     // Capture body-frame state for the longitudinal couple BEFORE yaw/vLat
     // integrate — couple below still reads the pre-integrate (vLat0, r0).
     const vLat0 = c.vLat || 0;
@@ -429,7 +445,7 @@ const PlayerForces = (function () {
       // forces scaled to zero near a standstill, a spun or shunted stopped car skated sideways at
       // constant speed into the wall (2.000 -> 1.999 m/s over 4 s, measured). Coulomb bleed only.
       if (sp < 1 && c.vLat) c.vLat = Math.sign(c.vLat) * Math.max(0, Math.abs(c.vLat) - muBase * (1 - sp) * dt);
-      c.yawRateCur = clamp(r0 + rdot * dt, -4, 4);
+      c.yawRateCur = clamp((r0 + rdot * dt) / (1 + brakeOver * dt), -4, 4);
       // Increasing head = CCW / left; +yaw rate = nose right, so SUBTRACT.
       c.head -= c.yawRateCur * dt;
     } else {
@@ -437,7 +453,7 @@ const PlayerForces = (function () {
       const rdot1 = (af * Fyf * cosD - ar * Fyr) / kz2 - YAW_DAMP * brakeYawDamp * speedYawDamp * r0;
       let v1 = clamp(vLat0 + (ay - u0 * r0) * dt, -40, 40);
       if (sp < 1 && v1) v1 = Math.sign(v1) * Math.max(0, Math.abs(v1) - muBase * (1 - sp) * dt);
-      const r1 = clamp(r0 + rdot1 * dt, -4, 4);
+      const r1 = clamp((r0 + rdot1 * dt) / (1 + brakeOver * dt), -4, 4);
       const head1 = c.head - r1 * dt;
       // N substeps with refreshed slip/Fy each half-step — kills the period-2
       // mode. Smoothstep weight → 0 as vAbs → LOW_YAW_V so the blend meets the
@@ -453,7 +469,7 @@ const PlayerForces = (function () {
         const rdotI = (af * FyfI * cosD - ar * FyrI) / kz2 - YAW_DAMP * brakeYawDamp * speedYawDamp * r;
         vL = clamp(vL + (ayI - u0 * r) * h, -40, 40);
         if (sp < 1 && vL) vL = Math.sign(vL) * Math.max(0, Math.abs(vL) - muBase * (1 - sp) * h);
-        r = clamp(r + rdotI * h, -4, 4);
+        r = clamp((r + rdotI * h) / (1 + brakeOver * h), -4, 4);
         head -= r * h;
       }
       const _lyT = clamp((LOW_YAW_V - vAbs) / LOW_YAW_V, 0, 1);

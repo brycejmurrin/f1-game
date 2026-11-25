@@ -14,12 +14,13 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, CONFIG_LABEL, ROWS, openVerdict, holdVerdict, configVerdict, planRow, ciVerdict, isConfigPath,
-  configFiles, filePaths, configPushState, isProtectedConfigPath, configLabelKind, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict, retestOnMerge, retestPlan, gateEstimate, RETEST_JOBS, RETEST_FILE_TIMEOUT_S, RETEST_TIMEOUT_MS, newerTipPaths, ciRecordedBase, RETEST_MARGIN_MIN, LOCAL_ROWS, RAISE_LABEL, treeCeilingsAt, prRaisesAt, treeRaises, raiseVerdict, raisesCovered,
-  baseVerdict, BASE_ESCAPE_LABELS, FIXER_LABEL, fixerProof, cleanTipSync, creditPriorCi, CREDIT_CHAIN_MAX,
+  configFiles, filePaths, configPushState, isProtectedConfigPath, configLabelKind, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, progressLine, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict, retestOnMerge, retestPlan, gateEstimate, RETEST_JOBS, RETEST_FILE_TIMEOUT_S, RETEST_TIMEOUT_MS, newerTipPaths, ciRecordedBase, RETEST_MARGIN_MIN, LOCAL_ROWS, RAISE_LABEL, treeCeilingsAt, prRaisesAt, treeRaises, raiseVerdict, raisesCovered,
+  baseVerdict, BASE_ESCAPE_LABELS, FIXER_LABEL, fixerProof, cleanTipSync, creditPriorCi, CREDIT_CHAIN_MAX, ciRecord, sameMergeTree,
 } from "../../tools/ci/merge-gate.mjs";
 import { tipState, codeRedJobs, platformStepFailed, readDeployTip, PLATFORM_STEP as TIP_PLATFORM_STEP } from "../../tools/ci/lib/deploy-tip.mjs";
 import { parse as parseYAML } from "yaml";
 import { planHash } from "../../tools/ci/ready-gate.mjs";
+import { RETEST_BROAD, broadRetest } from "../../tools/ci/merge-train.mjs";
 import { AGENT_APP_SLUG, byAgent, byOwner } from "../../tools/ci/lib/provenance.mjs";
 import { BOUND_MAX_AGE_MIN, receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN, GATE_FILES, gateFileHashes, gateFilesVerdict, gateClosure, staticImports, MAX_FUTURE_S, headPinProblem } from "../../tools/lib/gate-receipt.mjs";
 
@@ -493,6 +494,50 @@ test("localMergeGenCheck: a gen:check failure and a conflict each return the fet
   } finally { fs.rmSync(T, { recursive: true, force: true }); }
 });
 
+test("localMergeGenCheck: two gates on one PR at once each merge in their own worktree and both finish (#6494)", () => {
+  const T = scratch("merge-gate-race-");
+  const git = (cwd, ...a) => { const r = spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd, encoding: "utf8" }); assert.equal(r.status, 0, `${a.join(" ")}: ${r.stderr}`); return r.stdout.trim(); };
+  const write = (root, rel, text) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); };
+  try {
+    const remote = path.join(T, "remote.git"), W = path.join(T, "w");
+    git(T, "init", "-q", "--bare", remote); git(T, "clone", "-q", remote, W); git(W, "checkout", "-q", "-b", "deploy-x");
+    write(W, "docs/a.md", "base\n"); git(W, "add", "-A"); git(W, "commit", "-q", "-m", "base"); git(W, "push", "-q", "origin", "deploy-x");
+    const B = ["docs", "b.md"].join("/");   // built, not spelled: the path-reference lint reads no phantom file
+    git(W, "checkout", "-q", "-b", "pr", "deploy-x"); write(W, B, "pr\n"); git(W, "add", "-A"); git(W, "commit", "-q", "-m", "the PR"); git(W, "push", "-q", "origin", "pr");
+    const head = git(W, "rev-parse", "pr");
+    const seen = { A: [], B: [] }, steps = [];
+    let inner = null;
+    const ok = { ok: true, evidence: "hold" };
+    const gate = (who, runId, nest) => localMergeGenCheck({ pr: 4, head, headRef: "pr", cwd: W, base: "deploy-x", runId, ratchets: () => ok, progress: (m) => steps.push(`${who}: ${m}`),
+      run: (cmd, argv, o) => {
+        seen[who].push({ cmd, cwd: o.cwd, merged: fs.existsSync(path.join(o.cwd, B)) });
+        if (nest && cmd === "npm") inner = gate("B", `${process.pid}-bbbbbb`, false);   // B runs whole while A sits in gen:check
+        return { status: 0, stdout: "", stderr: "" };
+      } });
+    const outer = gate("A", `${process.pid}-aaaaaa`, true);
+    assert.equal(inner?.ok, true, `the inner gate finishes: ${inner?.evidence}`);
+    assert.equal(outer.ok, true, `the outer gate finishes: ${outer.evidence}`);
+    assert.notEqual(seen.A[0].cwd, seen.B[0].cwd, "a worktree per run, not per PR");
+    assert.ok([...seen.A, ...seen.B].every((s) => s.merged), "neither run's merge was removed under it (the catalog step ran on a live tree)");
+    assert.equal(git(W, "worktree", "list").split("\n").length, 1, "each owner removed and pruned its own");
+    assert.deepEqual(steps.filter((l) => l.startsWith("A: ")).map((l) => l.split(" ")[1]), ["fetched;", "gen:check", "scenery", "ratchets"], "progress per step (no retest without a green CI run)");
+  } finally { fs.rmSync(T, { recursive: true, force: true }); }
+});
+
+test("main: progress lines go to the note sink while it runs, never on the `= ` lines land.yml greps (#6494)", () => {
+  const f = fakes();
+  const logs = [], notes = [];
+  let t = 1_000;
+  const localMerge = (a) => { a.progress?.("gen:check on the merge result"); return f.deps.localMerge(a); };
+  assert.equal(main(["--pr", "7", "--sha", HEAD, "--check"], { ...f.deps, localMerge, log: (l) => logs.push(l), note: (l) => notes.push(l), now: () => (t += 500) }), 0);
+  assert.ok(notes.length >= 4, notes.join("\n"));
+  assert.ok(notes.every((l) => l.startsWith("· merge-gate +") && !l.startsWith("= ")), notes.join("\n"));
+  assert.equal(notes[0], "· merge-gate +0.5s PR #7: reading GitHub");
+  assert.ok(notes.some((l) => /base row: ok$/.test(l)) && notes.some((l) => l.endsWith("gen:check on the merge result")), notes.join("\n"));
+  assert.ok(logs.every((l) => l.startsWith("= ")), "stdout keeps only rows");
+  assert.equal(progressLine(163_000, "x"), "· merge-gate +163.0s x");
+});
+
 /** A fake GitHub plus fake merge for the evaluator; `pull`, `checks`, `events` and `files` are mutable per case. */
 function fakes() {
   const pull = { state: "open", draft: false, labels: [], user: { login: "brycejmurrin" }, head: { sha: HEAD, ref: "cursor/x" }, base: { ref: "deploy-x" }, body: "## Plan\n- [x] done\n- [ ] land: flip + label\n" };
@@ -932,7 +977,8 @@ function ghExpr(src, github) {
   const contains = (hay, x) => (Array.isArray(hay) ? hay.includes(x) : String(hay ?? "").includes(x));
   const startsWith = (a, b) => String(a ?? "").startsWith(b);
   const cancelled = () => false;
-  return new Function("ctx", "format", "contains", "startsWith", "cancelled", "needs", "steps", "success", `return (${js.replace(/\bneeds\./g, "needs?.")});`)(github, format, contains, startsWith, cancelled, github?.needs, github?.steps, () => github?.success !== false);
+  const always = () => true;
+  return new Function("ctx", "format", "contains", "startsWith", "cancelled", "always", "needs", "steps", "success", `return (${js.replace(/\bneeds\./g, "needs?.")});`)(github, format, contains, startsWith, cancelled, always, github?.needs, github?.steps, () => github?.success !== false);
 }
 
 test("land.yml triggers: pull_request_target (never pull_request), workflow_run kept, check_suite gone", () => {
@@ -1143,6 +1189,7 @@ function runStep(script, env, files = {}) {
     `      if [[ " \${args[*]} " == *" --paginate "* ]] && [ -n "\${FAKE_ARM_BOARD_PAGE2:-}" ]; then echo "$data"; data=$FAKE_ARM_BOARD_PAGE2; fi;`,
     `      if [ "\${GH_QUEUE_FAILURE:-}" = list ]; then echo "$data"; echo "page 2: HTTP 403" >&2; return 31; fi ;;`,
     `    *"/compare/"*) data=\${FAKE_ARM_COMPARE:-null} ;;`,
+    `    *"/git/matching-refs/"*) data=\${FAKE_STACKS:-[]} ;;`,
     `    *" api graphql "*) [ "\${GH_QUEUE_FAILURE:-}" != checks ] || { echo "\${GH_WRAPPER_ERROR:-Bad Gateway (HTTP 502)}" >&2; return 31; }; data=\${FAKE_WRAPPER_CHECKS:-null} ;;`,
         `    *"/statuses"*) [ "\${GH_DISCOVERY_FAILURE:-}" != status ] || return 31; src=\${FAKE_STATUSES:-[]}; if [ -n "\${FAKE_STATUSES_AFTER+x}" ] && [ "$(grep -c '/statuses' "$GH_LOG")" -gt "\${FAKE_STATUSES_READS:-1}" ]; then src=$FAKE_STATUSES_AFTER; fi;`,
         `      data=$(jq -c --arg h "$(sed -n 's#.*commits/\\([0-9a-f]*\\)/statuses.*#\\1#p' <<<"\${args[*]}")" 'if type == "object" then (.[$h] // []) else . end' <<<"$src") ;;`,
@@ -1840,7 +1887,7 @@ test("land.yml resolve: a dispatched re-gate is one PR, validated, and its budge
   assert.equal(r.out.attempt, "0", "every other event starts at 0");
 });
 
-test("land.yml dispatch:merge-pause (finding 7): counts only when the owner's own click added it, in resolve, arm and the sweep", () => {
+test("land.yml dispatch:merge-pause (finding 7): counts only when the owner's own click added it, in resolve, arm, the sweep and the train", () => {
   // dispatch.mjs counts the label only when its newest `labeled` event is the owner's, with no app; land.yml honoured it
   // from any labeller. An agent's pause is ignored here too, as it is on the Board.
   const ev = (login, app = null) => JSON.stringify([{ event: "labeled", label: { name: "dispatch:merge-pause" }, actor: { login }, performed_via_github_app: app },
@@ -1871,6 +1918,43 @@ test("land.yml dispatch:merge-pause (finding 7): counts only when the owner's ow
     FAKE_STATUSES: "[]", STALE_MAX: "4", PAUSED: "true", FAKE_PAUSE_EVENTS: events }).calls.filter((c) => c.includes("land.yml/dispatches")).length;
   assert.equal(sw(ev("someone")), 1, "an agent's pause does not stop the sweep");
   assert.equal(sw(ev("o")), 0, "the owner's pause does");
+  // the merge train (#6456 side finding): it honoured the label from any labeller; now the same provenance, and an
+  // unreadable read still pauses (fail-safe). `node` is stubbed: the build itself is merge-train.test.mjs's.
+  const build = LAND.jobs.train.steps.find((st) => st.name === "merge-train --build").run;
+  const tr = (env) => {
+    const r = runStep(`node() { echo "node $*" >> "$GH_LOG"; }\nexport -f node\n${build}`, { LAND_TOKEN: "fixture-land-token", PAUSED: "true", ...env });
+    return { built: r.calls.filter((c) => c.startsWith("node tools/ci/merge-train.mjs --build")).length, skipped: r.summary.split("\n").filter((l) => l.startsWith("merge train skipped")).length, status: r.status };
+  };
+  assert.deepEqual(tr({ FAKE_PAUSE_EVENTS: ev("someone") }), { built: 1, skipped: 0, status: 0 }, "another labeller's pause does not stop the train");
+  assert.deepEqual(tr({ FAKE_PAUSE_EVENTS: ev("o", { slug: "claude" }) }), { built: 1, skipped: 0, status: 0 }, "nor the owner's account through an app (an agent)");
+  assert.deepEqual(tr({ FAKE_PAUSE_EVENTS: ev("o") }), { built: 0, skipped: 1, status: 0 }, "the owner's own click pauses it");
+  assert.deepEqual(tr({ PAUSED: "false" }), { built: 1, skipped: 0, status: 0 });
+  assert.deepEqual(tr({ PAUSED: "unreadable" }), { built: 0, skipped: 1, status: 0 }, "an unreadable pause read pauses (fail-safe)");
+});
+
+test("land.yml (#6456 item 10, Bryce's B): the inline merge_paused and say copies stay byte-identical", () => {
+  // The write jobs run no repo code (the trust test above), so these helpers stay inline in each step rather than in a
+  // shared script; this keeps the copies from drifting apart. Each copy is the function plus its comment block.
+  const runs = Object.entries(LAND.jobs).flatMap(([job, j]) => (j.steps || []).map((st) => [job, st.run || ""]));
+  const copies = (start, end) => runs.flatMap(([where, run]) => {
+    const lines = run.split("\n").map((l) => l.trimStart()), out = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (!start(lines[i])) continue;
+      let k = i;
+      while (k > 0 && lines[k - 1].startsWith("# ")) k--;
+      let e = i;
+      while (!end(lines[e], i === e)) e++;
+      out.push([where, lines.slice(k, e + 1).join("\n")]);
+    }
+    return out;
+  });
+  const paused = copies((l) => l === "merge_paused() {", (l) => l === "}");
+  assert.deepEqual(paused.map(([w]) => w), ["resolve", "arm", "sweep", "train"], "one copy in each of resolve, arm, the sweep and the train (#6456 side finding)");
+  for (const [where, text] of paused.slice(1)) assert.equal(text, paused[0][1], `${where}: merge_paused differs from resolve's copy`);
+  assert.equal(paused[0][1].split("\n").length, 13, "the copy is the 3-line comment and the 10-line function");
+  const say = copies((l) => l.startsWith("say() {"), (l, first) => first);
+  assert.equal(say.length, 2, "say: the sweep and the train");
+  assert.equal(say[1][1], say[0][1], `${say[1][0]}: say differs from ${say[0][0]}`);
 });
 
 test("tip-candidate mode stops on open Plan and unfinished CI before reading deployment or config", () => {
@@ -2206,7 +2290,12 @@ test("land.yml sweep (finding 2): a push to the deploy branch sweeps (rate-cappe
   assert.equal(ghExpr(job.if, push()), true, "a deploy-branch push runs the sweep");
   assert.equal(ghExpr(job.if, push("refs/heads/cursor/x")), false);
   assert.equal(ghExpr(LAND.jobs.resolve.if, push()), false, "a push is not a PR re-gate: resolve and everything after it skip");
-  assert.equal(ghExpr(LAND.jobs["train-screen"].if, push()), false);
+  // #6584 follow-up: the deploy-branch push runs the merge train too, so a merged train N promotes the stacked N+1 at
+  // its merge push, not the next Pages success or cron (#6652 nit 4). Only the deploy branch: `on.push` lists it alone.
+  for (const name of ["train-screen", "train"]) {
+    assert.equal(ghExpr(LAND.jobs[name].if, push()), true, `${name}: a deploy-branch push runs the train`);
+    assert.equal(ghExpr(LAND.jobs[name].if, push("refs/heads/train-next/abc-1-2")), false, `${name}: never another ref's push`);
+  }
   assert.equal(ghExpr(LAND.concurrency.group, push()), "land-stale-sweep", "pushes share the sweep's group, never a per-sha group");
   assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], push()), false);
   const [rate, sweep] = job.steps;
@@ -2698,6 +2787,8 @@ test("#5407 retest: a tip merge newer than the CI run's base re-runs the unit te
     assert.equal(broad.ok, false);
     assert.deepEqual(asked, [["tests/unit/tools-runnable.test.mjs"]], "the estimate is of the files the re-test would run");
     assert.equal(broad.evidence, `1 tip merge(s) since the CI run (${tip.slice(0, 8)}); the re-test would run 1 unit file(s) (the unit files both sides select (tooling-fast's --changed selection: newer tip 1, the PR 0) and the touched tests/unit files), measured ~400 s at --jobs=3, over the 420 s cap — too broad to re-test at merge: sync-pr.mjs and push, so a fresh CI run tests this combination`);
+    assert.equal(broad.broad, true, "#6667: a breadth refusal is marked, so merge-train closes a train on it stale, not red");
+    assert.equal(red.broad, undefined, "a re-test that ran and failed is a real crossing");
     assert.equal(calls.length, 0);
     assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt, run, select, estimate: () => 30_000 }).ok, true, "a measured-small re-test runs");
     assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt, run, select, estimate: () => 336_000 }).ok, true, "the line is 0.8 of the cap, exclusive");
@@ -2746,6 +2837,64 @@ test("#5407 retest: a tip merge newer than the CI run's base re-runs the unit te
   } finally { fs.rmSync(T, { recursive: true, force: true }); }
 });
 
+test("SPECULATIVE CI retest: the tip merges since the run are all in the head AND the run's recorded tree is this merge's → nothing re-runs; any doubt re-tests as before", () => {
+  const T = scratch("merge-gate-same-tree-");
+  const W = path.join(T, "w");
+  const git = (...a) => { const r = spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd: W, encoding: "utf8" }); assert.equal(r.status, 0, `${a.join(" ")}: ${r.stderr}`); return r.stdout.trim(); };
+  const write = (rel, text) => { fs.mkdirSync(path.dirname(path.join(W, rel)), { recursive: true }); fs.writeFileSync(path.join(W, rel), text); };
+  try {
+    fs.mkdirSync(W);
+    git("init", "-q", "-b", "deploy-x");
+    write(U("a"), "// a\n"); git("add", "-A"); git("commit", "-q", "-m", "base");
+    const B = git("rev-parse", "HEAD");
+    // train N (one car) on B, and the speculative N+1 stacked on N's head
+    git("checkout", "-q", "-b", "n"); write(U("n"), "// n\n"); git("add", "-A"); git("commit", "-q", "-m", "train N");
+    const N = git("rev-parse", "HEAD");
+    git("checkout", "-q", "-b", "next"); write(U("next"), "// n+1\n"); git("add", "-A"); git("commit", "-q", "-m", "train N+1");
+    const H = git("rev-parse", "HEAD");
+    // N+1's CI ran on the merge ref onto B: its tree is H's own (B is in H)
+    const ciTree = git("merge-tree", "--write-tree", B, H).split("\n")[0];
+    // GitHub merges N: a merge commit onto the deploy branch
+    const M = git("commit-tree", `${N}^{tree}`, "-p", B, "-p", N, "-m", "Merge pull request #100");
+    git("update-ref", "refs/heads/deploy-x", M);
+    const calls = [];
+    const run = (cmd, argv) => { calls.push(argv); return { status: 0, stdout: "", stderr: "" }; };
+    const select = (paths) => ({ files: paths.filter((f) => f.startsWith("tests/unit/")), reason: "matched" });
+    const args = { cwd: W, tip: M, head: H, ciAt: "2000-01-01T00:00:00Z", ciBase: B, run, select, estimate: () => null };
+    const same = retestOnMerge({ ...args, ciTree });
+    assert.deepEqual([same.ok, same.evidence], [true, `1 tip merge(s) since the CI run's recorded base ${B.slice(0, 8)} (${M.slice(0, 8)}) are already in the head, and the run's merge tree ${ciTree.slice(0, 8)} is this merge's own: CI tested exactly this combination`]);
+    assert.equal(calls.length, 0, "nothing re-runs on the bytes CI already tested");
+    // any doubt: no tree record, another tree, no recorded base, or a credited head → the re-test runs as before
+    for (const a of [{ ciTree: "" }, { ciTree: "f".repeat(40) }, { ciTree, ciBase: "" }, { ciTree, credited: H }]) {
+      calls.length = 0;
+      const r = retestOnMerge({ ...args, ...a });
+      assert.equal(r.ok, true, r.evidence);
+      assert.equal(calls.length, 1, JSON.stringify(a));
+    }
+    // a solo PR merged onto the tip that the head does not hold: not contained, so it is re-tested
+    git("checkout", "-q", "deploy-x"); write(U("solo"), "// s\n"); git("add", "-A"); git("commit", "-q", "-m", "solo");
+    const S = git("rev-parse", "HEAD");
+    assert.equal(sameMergeTree({ cwd: W, tip: S, head: H, ciBase: B, ciTree, commits: [S, M] }), "");
+    assert.equal(sameMergeTree({ cwd: W, tip: M, head: H, ciBase: B, ciTree, commits: [M] }).length > 0, true);
+    // a merge whose tree is a hand edit, not the clean merge of its parents
+    write(U("edit"), "// e\n"); git("add", "-A");
+    const E = git("commit-tree", git("write-tree"), "-p", B, "-p", N, "-m", "edited merge");
+    assert.equal(sameMergeTree({ cwd: W, tip: E, head: H, ciBase: B, ciTree, commits: [E] }), "");
+  } finally { fs.rmSync(T, { recursive: true, force: true }); }
+});
+
+test("#6667 rowLines: a breadth-only retest refusal carries RETEST_BROAD, and merge-train reads exactly that line as stale", () => {
+  const ok = (e = "") => ({ ok: true, evidence: e });
+  const rows = Object.fromEntries(ROWS.map((k) => [k, ok()]));
+  const v = (retest) => ({ ok: false, waiting: false, rows: { ...rows, retest }, pr: 9, head: "e".repeat(40), tip: "f".repeat(40) });
+  const broadLine = rowLines(v({ ok: false, evidence: "too broad", broad: true })).at(-1);
+  assert.equal(broadLine, `= merge-gate refused — ${ROWS.map((k) => `${k}=${k === "retest" ? "FAIL" : "ok"}`).join(" ")} ${RETEST_BROAD} pr=#9 sha=${"e".repeat(40)} tip=${"f".repeat(40)}`);
+  assert.equal(broadRetest(broadLine.slice(0, 140)), true, "the word survives land.yml's 140-character status description");
+  const redLine = rowLines(v({ ok: false, evidence: "crossed" })).at(-1);
+  assert.equal(broadRetest(redLine), false);
+  assert.equal(redLine.split(" ").includes(RETEST_BROAD), false);
+});
+
 test("#5407 ciRecordedBase: the green run's tooling A `apex-guards` annotation names the base its merge ref sat on; unreadable is \"\"", () => {
   const B = "b".repeat(40);
   const req = (p) => p.startsWith("actions/runs/500/jobs") ? { json: { jobs: [{ id: 11, name: "Smoke (a)" }, { id: 12, name: "Structural guards (tooling A)" }] } }
@@ -2754,6 +2903,12 @@ test("#5407 ciRecordedBase: the green run's tooling A `apex-guards` annotation n
   assert.equal(ciRecordedBase({ id: 500 }, (p) => (p.startsWith("check-runs/") ? { json: [{ title: "apex-guards", message: "mode=full base=none" }] } : req(p))), "");
   assert.equal(ciRecordedBase({ id: 500 }, () => ({ error: "HTTP 502" })), "");
   assert.equal(ciRecordedBase(undefined, req), "");
+  // SPECULATIVE CI: the record's tree too (#6557 P1 wrote it), read in the same two calls
+  const TR = "c".repeat(40);
+  const withTree = (p) => (p.startsWith("check-runs/") ? { json: [{ title: "apex-guards", message: `mode=changed base=${B} tree=${TR}` }] } : req(p));
+  assert.deepEqual(ciRecord({ id: 500 }, withTree), { base: B, tree: TR });
+  assert.deepEqual(ciRecord({ id: 500 }, req), { base: B, tree: "" });
+  assert.deepEqual(ciRecord({ id: 500 }, () => ({ error: "HTTP 502" })), { base: "", tree: "" });
 });
 
 test("#5407 #5597 retestPlan: the files both sides select plus the touched unit files, kept to files the merge has; a widened selection falls back to the touched unit files and says so", () => {
@@ -3264,3 +3419,81 @@ test("D-045 retest: a credited head is never skipped, and a red re-test refuses"
     assert.deepEqual([empty.ok, empty.kind], [false, "nothing"], empty.evidence);
   } finally { fs.rmSync(T, { recursive: true, force: true }); }
 });
+
+// ---- trains as default (Bryce 2026-11-25 ~18:28Z): train #6671 re-gated 3× in 15 min, never arming, while solo merges
+// kept moving the tip. While a train is in flight a passing non-train PR waits (pending) and boards the next train.
+const trainPR = (o = {}) => ({ number: 6671, state: "open", draft: false, head: { sha: TIP_B, ref: "train/20261125-1734", repo: { full_name: "o/r" } },
+  labels: [{ name: "land" }, { name: "train" }], ...o });
+
+test("land.yml post (trains as default): a passing PR waits pending for the open train, no arm and no retry; exemptions arm", () => {
+  const { env, files } = postFixture();
+  const post = LAND.jobs.post.steps.find(s => s.id === "post");
+  const go = (extra = {}, e = env) => runStep(post.run, { ...e, ...extra }, files);
+  const posted = (r) => r.calls.filter((c) => c.startsWith("body ")).map((c) => JSON.parse(c.slice(5)));
+  let r = go({ FAKE_ARM_BOARD: JSON.stringify([trainPR()]) });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(posted(r).map((b) => [b.state, b.description]), [["pending", "= merge-gate waiting — train #6671 in flight; this PR boards the next train"]]);
+  assert.equal(r.out.arm, "", "not armed: it is the next train's car");
+  assert.equal(r.out.retry, "[]", "no immediate re-gate: the train's merge or close re-gates it");
+  r = go({ FAKE_STACKS: JSON.stringify([{ ref: "refs/heads/train-next/abc-6531-6532" }]) });
+  assert.equal(posted(r)[0].description, "= merge-gate waiting — a stacked train (train-next/abc-6531-6532) in flight; this PR boards the next train", "a stacked train-next/ ref is a train in flight");
+  assert.equal(r.out.arm, "");
+  // Exemptions and non-trains: each arms exactly as before.
+  const armed = (x, why) => { assert.equal(x.status, 0, x.stderr); assert.equal(posted(x)[0]?.state, "success", why); assert.ok(x.out.arm, why); };
+  armed(go({ FAKE_ARM_BOARD: "[]" }), "no train open: today's lane (a lone orphan still lands alone)");
+  armed(go({ FAKE_ARM_BOARD: "not json" }), "an unreadable train list waits nothing; arm re-checks the queue");
+  armed(go({ FAKE_ARM_BOARD: JSON.stringify([trainPR(), { ...trainPR({ number: 7 }) }]), FAKE_PR: pr7({ head: { sha: HEAD7, ref: "train/20261125-1800" } }) }), "the train PR itself");
+  const fixer = { ...env, TRUSTED: JSON.stringify([{ ...JSON.parse(env.TRUSTED)[0], fixer: true }]) };
+  armed(go({ FAKE_ARM_BOARD: JSON.stringify([trainPR()]) }, fixer), "the red-tip fixer (trusted-rows fixer) still goes solo");
+  for (const [why, t] of [["held train", trainPR({ labels: [{ name: "land" }, { name: "train" }, { name: "hold" }] })], ["draft train", trainPR({ draft: true })],
+    ["train without `land`", trainPR({ labels: [{ name: "train" }] })], ["a fork's train/ ref", trainPR({ head: { sha: TIP_B, ref: "train/x", repo: { full_name: "fork/r" } } })],
+    ["a train/ ref without the `train` label", trainPR({ labels: [{ name: "land" }] })]]) armed(go({ FAKE_ARM_BOARD: JSON.stringify([t]) }), why);
+});
+
+test("land.yml trusted-rows (trains as default): `fixer` is true only when the base row passed as the red-tip fixer", () => {
+  const run = LAND.jobs["trusted-rows"].steps.find(s => s.id === "rows").run;
+  const go = (base) => {
+    const out = [`= gate base: ok ${base}`, `= merge-gate passed — open=ok base=ok pr=#7 sha=${HEAD7} tip=${TIP_A}`].join("\n");
+    const r = runStep(`node() { printf '%s\\n' "$FAKE_NODE_OUT"; }\n${run}`, { PRS: JSON.stringify([{ number: 7, head: HEAD7 }]), VALIDATED_TIP: "", FAKE_NODE_OUT: out });
+    assert.equal(r.status, 0, r.stderr);
+    return JSON.parse(r.out.rows)[0].fixer;
+  };
+  assert.equal(go("the deploy tip is green on code"), false);
+  assert.equal(go("tip red on code at bbbbbbbb; `deploy:red` is set and this head contains the red commit bbbbbbbb: its CI ran on top of the red tip, so the ci row is the proof (the fixer)"), true);
+  assert.equal(go("tip red; `priority` added by brycejmurrin in person at 2026-11-25T18:00:00Z: this PR may land over the red tip (the fixer)"), true);
+});
+
+test("land.yml retry (trains as default): no solo re-gate is dispatched while a train is open; trains and deploy:red still are", () => {
+  const run = LAND.jobs.retry.steps[0].run;
+  const node = (number, o = {}) => ({ number, isDraft: false, createdAt: "2026-11-25T18:00:00Z", headRefName: o.ref || `claude/x-${number}`, autoMergeRequest: null,
+    labels: { nodes: [{ name: "land" }, ...(o.labels || [])] }, commits: { nodes: [{ commit: { status: null } }] } });
+  const train = node(6671, { ref: "train/20261125-1734", labels: [{ name: "train" }] });
+  const queue = (...nodes) => JSON.stringify({ data: { repository: { pullRequests: { nodes } } } });
+  const go = (asked, q) => runStep(run, { ATTEMPT: "0", POST_RETRY: JSON.stringify(asked.map((n) => ({ number: n, head: HEAD7 }))), ARM_RETRY: "", FAKE_WRAPPER_CHECKS: q });
+  const sent = (r) => r.calls.filter((c) => c.includes("--method POST")).map((c) => Number(/inputs\[pr\]=(\d+)/.exec(c)[1]));
+  let r = go([7], queue(train, node(7)));
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(sent(r), [], "#7 would only wait for train #6671");
+  assert.deepEqual(r.summary.split("\n").filter(Boolean), ["::notice::#7: a train is in flight; this PR boards the next train, so no solo re-gate is dispatched"]);
+  assert.deepEqual(sent(go([7, 6671], queue(train, node(7)))), [6671], "the train itself is re-gated");
+  assert.deepEqual(sent(go([8], queue(train, node(8, { labels: [{ name: "deploy:red" }] })))), [8], "a deploy:red fixer is re-gated");
+  assert.deepEqual(sent(go([7], queue(node(7)))), [7], "no train open: as before");
+  assert.deepEqual(sent(go([7], queue({ ...train, labels: { nodes: [{ name: "land" }, { name: "train" }, { name: "hold" }] } }, node(7)))), [7], "a held train is not in flight");
+});
+
+test("land.yml sweep (trains as default): a PR waiting on the open train is not re-gated; once no train is open it is", () => {
+  const sweep = LAND.jobs.sweep.steps.find((st) => st.name.startsWith("Re-gate the land PRs")).run;
+  const h = "1".repeat(40);
+  const car = { number: 7, headRefOid: h, headRefName: "claude/x", isDraft: false, labels: [{ name: "land" }], autoMergeRequest: null };
+  const train = { number: 6671, headRefOid: "2".repeat(40), headRefName: "train/20261125-1734", isDraft: false, labels: [{ name: "land" }, { name: "train" }], autoMergeRequest: null };
+  const waiting = JSON.stringify({ [h]: [{ context: "gate", state: "pending", created_at: "2026-01-01T01:00:00Z", description: "= merge-gate waiting — train #6671 in flight; this PR boards the next train" }] });
+  const sw = (lands) => runStep(sweep, { FAKE_LANDS: JSON.stringify(lands), STALE_MAX: "4", FAKE_STATUSES: waiting,
+    FAKE_RUNS: JSON.stringify({ workflow_runs: [{ status: "completed", conclusion: "success", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:30:00Z" }] }) });
+  const sent = (r) => r.calls.filter((c) => c.includes("land.yml/dispatches")).map((c) => Number(/inputs\[pr\]=(\d+)/.exec(c)[1]));
+  let r = sw([car, train]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(sent(r).includes(7), false, "#7 waits for train #6671: no sweep churn");
+  assert.deepEqual(r.stdout.split("\n").filter((l) => l.startsWith("#7:")), ["#7: waits for the train in flight (boards the next one)"]);
+  assert.deepEqual(sent(sw([car])), [7], "the train is gone (merged or closed): the stale pending is re-gated");
+});
+

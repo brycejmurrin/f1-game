@@ -238,7 +238,7 @@ test("G5: the stat bars read Career.teamStats (development), not the base team.s
   const h = harness({ career: true, tab: "team", tdev: 6 });
   h.ui.buildSetup();
   const vals = h.dom.byId("cs-stats-inner").querySelectorAll(".cs-stat-val").map((v) => Number(v.textContent));
-  const P = h.sb.Parts, mods = P.getMods({}, h.team, null);
+  const P = h.sb.Parts, mods = P.playerMods({}, h.team, null);
   const want = P.STAT_KEYS.map(({ key }) => Math.round(P.displayStat((h.team.stats[key] + 6) * mods[key])));
   assert.deepEqual([...vals], [...want]);
   const base = harness({ career: true, tab: "team", tdev: 0 });
@@ -358,7 +358,7 @@ test("G4: a career board ignores the free-play flag (its cap is the career budge
 
 test("G5: the wall stat board reads Career.teamStats", () => {
   const dev = sceneBoard({ owned: true, tdev: 6 }), flat = sceneBoard({ owned: true, tdev: 0 });
-  const P = vm.runInContext("Parts", dev.ctx), mods = P.getMods({}, dev.team, null);
+  const P = vm.runInContext("Parts", dev.ctx), mods = P.playerMods({}, dev.team, null);
   const num = (h) => h.texts.filter((t) => /^\d+$/.test(t)).map(Number);
   assert.ok(num(dev).includes(Math.round(P.displayStat((dev.team.stats.speed + 6) * mods.speed))), "developed speed on the board");
   assert.notDeepEqual([...num(dev)], [...num(flat)]);
@@ -373,11 +373,11 @@ test("G5: the wall stat board folds SetupTune.mods the same way the DOM bars do"
   flat.ctx.GameStore.store.rev++;
   Dress.releaseDress();
   const tuned = Dress.boardInfo(flat.team, flat.getParts, 0, flat.c);
-  const want = P.getMods({}, flat.team, S.mods(flat.team.id));
+  const want = P.playerMods({}, flat.team, S.mods(flat.team.id));
   for (let i = 0; i < P.STAT_KEYS.length; i++) {
     const key = P.STAT_KEYS[i].key, base = flat.team.stats[key] || 75;
     assert.equal(tuned.stats[i].value, Math.round(P.displayStat(base * want[key])),
-      `${key}: wall matches Parts.getMods(..., SetupTune.mods)`);
+      `${key}: wall matches Parts.playerMods(..., SetupTune.mods)`);
   }
   assert.notDeepEqual(tuned.stats.map((s) => s.value), works.stats.map((s) => s.value),
     "a mechanical set-up change moves the wall numbers");

@@ -73,6 +73,114 @@ window.ScreenPlacement = (function () {
     return GameStore.store.set(KEY, Object.keys(next.screens).length ? next : undefined);
   }
 
+  // Safe-area clamp (#6596). The stored offsets and sizes are viewport units
+  // and stay exactly as saved; the applied sheet caps sizes at the safe box and
+  // a measured shift pulls a moved region back inside it. The shift lives in
+  // two registered, non-inherited properties on the region's own node.
+  const SHIFT = ["--sp-dx", "--sp-dy"];
+  const shiftRule = SHIFT.map(name => '@property ' + name + '{syntax:"<length>";inherits:false;initial-value:0px}').join('\n');
+  const clamped = new Map();
+  let observer = null;
+  // Pixels to move [lo, hi] into [min, max]; an extent larger than the box is
+  // left alone (it cannot fit, and its start edge is the screen's own choice).
+  function axisShift(lo, hi, min, max) {
+    if (hi - lo > max - min + 0.5) return 0;
+    if (lo < min - 0.5) return min - lo;
+    if (hi > max + 0.5) return max - hi;
+    return 0;
+  }
+  function safeShift(rect, box, axes = { x: true, y: true }) {
+    return { dx: axes.x ? axisShift(rect.left, rect.right, box.left, box.right) : 0,
+      dy: axes.y ? axisShift(rect.top, rect.bottom, box.top, box.bottom) : 0 };
+  }
+  function safeBox() {
+    const de = document.documentElement, cs = getComputedStyle(de);
+    const inset = name => parseFloat(cs.getPropertyValue(name)) || 0;
+    const vw = de.clientWidth || window.innerWidth, vh = de.clientHeight || window.innerHeight;
+    return { left: inset("--sal"), top: inset("--sat"), right: vw - inset("--sar"), bottom: vh - inset("--sab") };
+  }
+  // A size never exceeds the safe box once the region's own scale is drawn.
+  const safeSize = (n, z, unit, scale = 1) => 'min(' + n / z + unit + ',calc((100' + unit + ' - ' +
+    (unit === 'vw' ? 'var(--sal,0px) - var(--sar,0px)' : 'var(--sat,0px) - var(--sab,0px)') + ') / ' + z * scale + '))';
+  const rectOf = node => typeof CssZoom !== "undefined" ? CssZoom.viewportRect(node) : node.getBoundingClientRect();
+  const zoomOf = node => typeof CssZoom !== "undefined" ? CssZoom.of(node) : node.currentCSSZoom || 1;
+  // Each clamp starts from no shift, so a rect read mid entry animation (the
+  // sheet-in rise) is replaced on animationend rather than kept. The shift is
+  // in the node's zoomed units; later passes trim what the first left over.
+  function clampNode(node, axes) {
+    for (const name of SHIFT) node.style.removeProperty(name);
+    for (let pass = 0; pass < 3; pass++) {
+      const r = rectOf(node);
+      if (!r.width && !r.height) return;
+      const { dx, dy } = safeShift(r, safeBox(), axes);
+      if (!dx && !dy) return;
+      const z = zoomOf(node);
+      [dx, dy].forEach((d, i) => {
+        if (!d) return;
+        const was = parseFloat(node.style.getPropertyValue(SHIFT[i])) || 0;
+        node.style.setProperty(SHIFT[i], Math.round(100 * (was + d / z)) / 100 + 'px');
+      });
+    }
+  }
+  // Nodes are queried on every clamp: a tab or list the host rebuilds after
+  // apply is picked up (and observed) the next time anything re-runs it.
+  function clampRegions(id) {
+    const entry = clamped.get(id);
+    if (!entry) return;
+    for (const { target, axes } of entry.regions) {
+      for (const node of document.querySelectorAll(target)) {
+        if (!entry.nodes.has(node)) { entry.nodes.add(node); observer?.observe(node); }
+        clampNode(node, axes);
+      }
+    }
+  }
+  function unclamp(id) {
+    const entry = clamped.get(id);
+    if (!entry) return;
+    for (const node of entry.nodes) {
+      for (const name of SHIFT) node.style.removeProperty(name);
+      observer?.unobserve(node);
+    }
+    entry.mutations?.disconnect();
+    clamped.delete(id);
+  }
+  let pending = new Set(), frame = 0;
+  function later(id) {
+    pending.add(id);
+    if (frame) return;
+    frame = window.requestAnimationFrame(() => {
+      const ids = pending;
+      pending = new Set(); frame = 0;
+      for (const key of ids) clampRegions(key);
+    });
+  }
+  // A screen applied while hidden measures 0x0: its first layout and later
+  // resizes come from the size observer, rebuilt children from the root's
+  // mutations, and the settled position from the end of an entry animation.
+  function watch(id, root) {
+    const entry = clamped.get(id);
+    if (!entry) return;
+    if (typeof ResizeObserver !== "undefined") {
+      observer ||= new ResizeObserver(entries => {
+        for (const e of entries) for (const [key, value] of clamped) if (value.nodes.has(e.target)) later(key);
+      });
+      for (const node of entry.nodes) observer.observe(node);
+    }
+    if (typeof MutationObserver !== "undefined") {
+      entry.mutations = new MutationObserver(() => later(id));
+      for (const node of document.querySelectorAll(root)) entry.mutations.observe(node, { childList: true, subtree: true });
+    }
+  }
+  if (typeof document !== "undefined" && document.addEventListener) {
+    const settled = event => {
+      for (const [key, value] of clamped) {
+        for (const node of value.nodes) if (event.target === node || event.target.contains?.(node)) { later(key); break; }
+      }
+    };
+    document.addEventListener("animationend", settled, true);
+    document.addEventListener("transitionend", settled, true);
+  }
+
   // One stylesheet per customized screen also covers children rebuilt after
   // entry (career tabs, standings, etc). Removing it restores the live host's
   // styles, even if the host updated them while the editor was open.
@@ -80,6 +188,7 @@ window.ScreenPlacement = (function () {
     if (typeof document === "undefined" || !Object.hasOwn(registry(), id)) return;
     const map = cleanRegions(id, raw);
     let sheet = sheets.get(id);
+    unclamp(id);
     if (!Object.keys(map).length) {
       if (sheet) {
         sheet.remove();
@@ -95,7 +204,7 @@ window.ScreenPlacement = (function () {
       zoom = editorZoom.get(editor);
       if (!zoom) { zoom = new Map(); editorZoom.set(editor, zoom); }
     }
-    const rules = [];
+    const rules = [], moved = [];
     if (Object.values(map).some(fields => fields.textSize)) {
       // Resolve the global accessibility ladder on the root, before overriding
       // the same tokens in a region. Theme and text-size changes stay live.
@@ -111,7 +220,10 @@ window.ScreenPlacement = (function () {
         zoom?.set(region, z);
       }
       const declarations = [];
-      if (fields.x || fields.y) declarations.push('translate:' + ((fields.x || 0) / z) + 'vw ' + ((fields.y || 0) / z) + 'vh');
+      if (fields.x || fields.y) {
+        declarations.push('translate:calc(' + ((fields.x || 0) / z) + 'vw + var(--sp-dx,0px)) calc(' + ((fields.y || 0) / z) + 'vh + var(--sp-dy,0px))');
+        moved.push({ target, axes: { x: !!(fields.x || fields.width), y: !!(fields.y || fields.height) } });
+      }
       if (fields.diameter) {
         const stick = config.regions[region].diameter;
         const disc = stick === ":scope" ? target : ':is(' + target + ') ' + stick;
@@ -129,7 +241,7 @@ window.ScreenPlacement = (function () {
         }
       }
       if (fields.width) {
-        const width = fields.width / z + 'vw';
+        const width = safeSize(fields.width, z, 'vw', fields.scale);
         declarations.push('width:' + width);
         // Wide telemetry uses spare row space until the player gives the trace a width.
         if (id === "telemetry-detail" && region === "charts") declarations.push('--dh-trace-flex:0 1 auto');
@@ -152,7 +264,7 @@ window.ScreenPlacement = (function () {
           declarations.push('max-width:100%', 'box-sizing:border-box');
         }
       }
-      if (fields.height) declarations.push('height:' + fields.height / z + 'vh', 'overflow:auto');
+      if (fields.height) declarations.push('height:' + safeSize(fields.height, z, 'vh', fields.scale), 'overflow:auto');
       if (fields.scale) declarations.push('scale:' + fields.scale);
       const scope = ':is(' + target + ')';
       if (fields.textSize) {
@@ -200,10 +312,17 @@ window.ScreenPlacement = (function () {
       document.head.appendChild(sheet);
       sheets.set(id, sheet);
     }
+    if (moved.length) rules.unshift(shiftRule);
     const css = rules.join('\n');
     if (sheet.textContent !== css) {
       sheet.textContent = css;
       if (id === "carsetup") { garageRevision++; garagePanelMoved = !!map.panel; }
+    }
+    if (moved.length) {
+      const nodes = new Set(moved.flatMap(({ target }) => [...document.querySelectorAll(target)]));
+      clamped.set(id, { regions: moved, nodes });
+      clampRegions(id);
+      watch(id, config.root);
     }
   }
   // These settings belong to one screen across both orientations. Popup
@@ -263,6 +382,6 @@ window.ScreenPlacement = (function () {
       else if (change.key === "uiScale") resized();
     });
   }
-  return Object.freeze({ read, save, apply, restore, restoreAll, normalize, orientation, resetLegacy, fieldValue, formControls,
+  return Object.freeze({ read, save, apply, restore, restoreAll, normalize, orientation, resetLegacy, fieldValue, formControls, safeShift, safeSize,
     get garageRevision() { return garageRevision; }, get garagePanelMoved() { return garagePanelMoved; } });
 })();

@@ -5,7 +5,7 @@ const AgentView = (function () {
   // Same resolution as js/garage/setup-sheet.js, which is the enforcing side.
   const _partsCap = (team) =>
     (typeof Career !== "undefined" && Career.owned && team && Career.owned(team.id))
-      ? Career.budget() : Parts.BUDGET;
+      ? Career.budget() : Parts.freeBudget(team);
   "use strict";
 
   const API_VERSION = 1;

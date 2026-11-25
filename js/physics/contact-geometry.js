@@ -49,6 +49,29 @@ const ContactGeometry = (function () {
     const b = Math.abs(w) < 1e-8 ? 0 : Math.sign(w) * HALF_WIDE;
     out.x = a * c - b * s; out.y = a * s + b * c;
   }
+  // Side-rub deceleration, m/s^2 — a FORCE, absolute like BRAKE (ai-drive.js's
+  // offroad block says why a scrub rate does not ride the pace scale). Bodywork
+  // on bodywork costs little speed; wheels interlocking is the incident sim's job.
+  // It replaced a proportional 0.5 %/frame (12 m/s^2 at 40 m/s, and applied per
+  // relaxation pass, 48): the racecraft bench's alongside standoffs were pairs
+  // sitting at the throttle-vs-scrub balance that rate produced.
+  function rubDecel(street) {
+    return street ? 3.5 : 3;
+  }
+
+  // Rear-end restitution by closing speed: 0 below 1 m/s (a resting contact —
+  // Box2D's velocity threshold, so a car sitting on a bumper does not jitter
+  // off it), 0.1 from 3 m/s up (crash reconstruction's floor for real cars at
+  // speed), a ramp between. Zero to a tenth: bumps are near-inelastic.
+  function bumpRestitution(relV) {
+    const v = relV || 0;
+    if (v <= 1) return 0;
+    if (v >= 3) return 0.1;
+    return 0.1 * (v - 1) / 2;
+  }
+  // Closing speed (m/s at PACE 1) above which the player's forward punt from a
+  // rear-end stops growing. The AI behind pays its full share regardless.
+  function humanPuntCap() { return 8; }
   // CONTACT MATERIAL — restitution and Coulomb friction, ORIENTED PAIRS ONLY.
   //
   // Why the gate. Two call sites reach impulse(), and one of them (collide.js
@@ -63,7 +86,7 @@ const ContactGeometry = (function () {
   // pairs that must not move, and those come out bit-identical: `-(1 + 0) * r`
   // is `-r` in IEEE754, and the friction block does not run.
   //
-  // RESTITUTION is `AiDrive.bumpRestitution`, the SAME ramp the heuristic
+  // RESTITUTION is `bumpRestitution` above, the SAME ramp the heuristic
   // rear-end path in collide.js has used since the bump was measured: zero
   // under 1 m/s of closing so a car resting on a bumper cannot jitter off it,
   // reaching 0.1 by 3 m/s (docs/PHYSICS.md, "Car-to-car contact"). One curve,
@@ -96,7 +119,7 @@ const ContactGeometry = (function () {
     const denom = a.invMass + b.invMass + ca * ca * a.invInertia + cb * cb * b.invInertia;
     const oriented = a.angle !== 0 || b.angle !== 0;
     const closing = relative < 0 ? -relative : 0;
-    const e = oriented ? AiDrive.bumpRestitution(closing) : 0;
+    const e = oriented ? bumpRestitution(closing) : 0;
     const j = relative < 0 && denom > 0 ? -(1 + e) * relative / denom : 0;
     let jax = j * a.invMass * nx, jay = j * a.invMass * ny, jaw = j * ca * a.invInertia;
     let jbx = -j * b.invMass * nx, jby = -j * b.invMass * ny, jbw = -j * cb * b.invInertia;
@@ -172,6 +195,6 @@ const ContactGeometry = (function () {
   }
 
   // `radius` is internal to overlap()/sweep(); nothing outside ever read it.
-  return Object.freeze({ overlap, sweep, impulse, wallLimits, pitWallX, pitWallAim, INERTIA, FRICTION });
+  return Object.freeze({ overlap, sweep, impulse, wallLimits, pitWallX, pitWallAim, rubDecel, bumpRestitution, humanPuntCap, INERTIA, FRICTION });
 })();
 Object.freeze(ContactGeometry);

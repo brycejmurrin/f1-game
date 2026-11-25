@@ -141,7 +141,7 @@ const SaveHealth = (function () {
           if (!token.ok) { status.textContent = "Cannot preview restore: " + token.reason + "."; return; }
           const points = Array.from(list.children);
           const confirmation = node(doc, "div");
-          confirmation.appendChild(node(doc, "p", "Replace this slot's current progress (" + (token.current ? token.current.year + ", round " + (token.current.round + 1) : "empty") + ") with " + token.point.year + ", round " + (token.point.round + 1) + "?"));
+          confirmation.appendChild(node(doc, "p", "Replace this slot's current progress (" + (token.currentDamaged ? "damaged; it cannot be kept as a restore point" : token.current ? token.current.year + ", round " + (token.current.round + 1) : "empty") + ") with " + token.point.year + ", round " + (token.point.round + 1) + "?"));
           const accept = node(doc, "button", "RESTORE THIS POINT"), cancel = node(doc, "button", "CANCEL"); accept.type = cancel.type = "button"; accept.className = cancel.className = "sel-chip";
           accept.onclick = async () => {
             if (revision !== historyRevision || accept.disabled) return;

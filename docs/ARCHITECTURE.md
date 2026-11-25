@@ -228,7 +228,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
-| `dom.js` | `Dom` | tag | Dom: the three DOM/format helpers every DOM-built screen shares (el / paintFold / fmtLap / fmtRaceClock). |
+| `dom.js` | `Dom` | tag | Dom: the DOM/format helpers every DOM-built screen shares (el / paintFold / fmtLap / fmtRaceClock / fmtGap). |
 | `title-fx.js` | `TitleFx` | tag | TitleFx: title-screen motion, wash and the background drawing. |
 | `track-maps.js` | `TrackMaps` | tag | TrackMaps: offline 2D circuit outlines for the track picker. |
 | `flags.js` | `Flags` | tag | national flags as inline SVG, for the circuit picker's flag strip and the hero caption beside a circuit's name. |
@@ -726,6 +726,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `tlx-post.js` | `TLXShaders` | DEFERRED:three | TLXShaders.postChain: the post-processing ORCHESTRATION for the TLX backend (M8). |
 | `tlx-mem.js` | `TLXShaders` | DEFERRED:three | TLXShaders.memCensus: the texture / render-target / buffer byte census for the TLX backend, the three-path answer to GLX.texCensus() (glx.js). |
 | `tlx.js` | `TLX` | DEFERRED:three | TLX: default three.js/TSL renderer behind js/render/gfx.js. |
+| `tsl-surface.js` | `TLXSurface` | LAZY_GFX_HI | TLXSurface: close-up road surfaces for the TLX lit program (#6509 items 1 + 2; GfxQuality features `closeLayers` and `wearMask`, FEATURES level 2: desktop… |
 
 **`js/agent/`**
 
@@ -1335,7 +1336,7 @@ palette/geometry values explicitly, preserving reference identity.
 | `liverytex.js` | `LiveryTex` | per-team livery texture atlas (canvas-2D; stylised fan-art crests, invented sponsor wordmarks, car number onto a 1024² atlas mapped by panel UVs) |
 | `livery-graphics.js` | `LiveryGraphics` | cover/fin graphic recipes; shared stripe, twin and ridge painters; atlas/cache ownership stays in `LiveryTex` |
 | `js/data/driver-ratings.js` (data dir, not `js/car/`) | `DriverRatings` | the five-axis skill table for the grid (pace / racecraft / awareness / consistency / experience), keyed by driver CODE. Feeds every AI car's `skill` in EVERY mode, not just career. Kept out of `teams.js` because that is verified real-world data and is also loaded by `tools/carview.html` |
-| `parts.js` | `Parts` | upgrade catalog — the ordered `CATALOG` categories, `getMods`, `getCost`, `statMult`, the `BUDGET` credit cap (see CAREER.md) |
+| `parts.js` | `Parts` | upgrade catalog — the ordered `CATALOG` categories, `getMods`, `playerMods` (over the works build), `getCost`, `statMult`, the `BUDGET` credit cap (see CAREER.md) |
 | `ghost.js` | `Ghost` | time-trial ghost: records the player's lap as parallel `(t, s, x)` arrays, replays the best one; pure data layer — game.js feeds samples and draws |
 | `ghost-share.js` | `GhostShare` | APXG1 fragment/file codec plus the in-memory guest rival; `#ghost=` is consumed at boot/hashchange and removed from history without writing the guest to `apex26.ghost.v1` |
 | `input-ghost.js` | `InputGhost` | deterministic local ghost: per-`FIXED_DT` steer/throttle/brake + `seed` + `PhysicsConsts.REVISION` + `__APEX_BUILD`; `apex26.inputGhost.v1`; refuses replay on version mismatch; pose Ghost remains the translucent draw |

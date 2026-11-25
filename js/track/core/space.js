@@ -159,10 +159,23 @@ const TrackSpace = (function () {
       : { s0: a, s1: b };
   }
 
+  // One cosine bump window, shared by tracks.js (bridge decks and elevations,
+  // sign +1) and TrackSurface.profile's bridge carve (sign -1): centred at lap
+  // frac `s` (wrapped), half-width `halfM` metres, peak `rise`, on an array of
+  // nodes `ds` apart around a `total`-metre loop (wrap-around distance).
+  function bumpWindow(arr, s, halfM, rise, ds, total, sign) {
+    const cs = wrap01(s) * total;
+    for (let k = 0; k < arr.length; k++) {
+      let d = Math.abs(k * ds - cs);
+      d = Math.min(d, total - d);
+      if (d < halfM) arr[k] += sign * (rise * 0.5 * (1 + Math.cos(Math.PI * d / halfM)));
+    }
+  }
+
   return {
     wrap01, toRacingFrac, toSourceFrac,
     sourceNodeToRacing, racingNodeToSource, sampleSource,
-    scenerySpace, sceneryFrac, sceneryNode, sceneryNodeToAuthored, sceneryRange, sceneryOriginDelta, range,
+    scenerySpace, sceneryFrac, sceneryNode, sceneryNodeToAuthored, sceneryRange, sceneryOriginDelta, range, bumpWindow,
   };
 })();
 Object.freeze(TrackSpace);

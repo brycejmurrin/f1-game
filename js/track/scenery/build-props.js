@@ -2267,7 +2267,7 @@ const TrackBuildProps = (function () {
     // through RAW so the supports beside the raised deck actually ship.
     const brs = def.bridges;
     if (brs) for (const b of brs) {
-      const kc = Math.round(TrackSpace.wrap01(b.s + (def._sceneryShift || 0)) * n) % n;
+      const kc = Math.round(TrackSpace.wrap01(b.s + TrackSpace.sceneryOriginDelta(def)) * n) % n;
       for (const off of [-18, -9, 9, 18]) {
         const k = ((kc + off) % n + n) % n;
         const deckY = py[k];

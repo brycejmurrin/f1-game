@@ -75,7 +75,7 @@ const { load: loadBackendScripts } = ScriptLoader.create();
 const lazyBundles = LazyBundles.create({
   els, loadBackendScripts, getContext: () => G,
   applyLightTuneIfReady: () => { if (ltStore) applyLightTune(); },
-  createNetwork: () => { netPlay = NetPlay.create(G); netLobby = NetLobby.create(G); return netLobby; },
+  createNetwork: () => { netPlay = NetPlay.create(G, { qualiNet }); netLobby = NetLobby.create(G, { raceSettings, qualiNet }); return netLobby; },
   bindAgent: () => { if (typeof ApexApi !== "undefined") { window.__apex = ApexApi.create(G, restoreFreePlaySelection); window.__apex.visorScene = () => typeof VisorOptics !== "undefined" ? VisorOptics.sceneFromG(G) : null; } },
   // Recreate audio instances after LAZY_AUDIO reinjects the real `var` globals; `once` latches each part (a retry re-runs only the one that threw).
   onAudioReady: (once = (k, f) => f()) => {
@@ -871,8 +871,10 @@ let raceLaps = GAME_LAPS;      // user-selected lap count
 // (Formula 2's sprint-race rule); "revchamp" inverts the championship
 // standings; "random" sorts on gridUp's own jitter draw. (The pre-rule boolean
 // `raceQuali` key is no longer read: store.get returns SettingsDefaults first.)
+// DEFAULT "quali" (Bryce, 2026-11-25, PR #6564): a random grid put fast cars behind slow ones,
+// so 3-lap races ran as trains. No session falls back to the tier order; a saved choice is kept.
 const GRID_RULES = ["tier", "quali", "rev10", "revchamp", "random"];
-let raceGrid = store.get("raceGrid", "random");
+let raceGrid = store.get("raceGrid", "quali");
 if (GRID_RULES.indexOf(raceGrid) < 0) raceGrid = "tier";
 const qualiGrid = () => raceGrid === "quali" || raceGrid === "rev10";
 // A CHAMPIONSHIP with qualifying off grids in championship order (FIA 2026 SR
@@ -1187,7 +1189,7 @@ function careerFitted(teamId) {
 function getTeamParts(teamId) {
   const c = careerFitted(teamId);
   if (c) return { ...c.fitted };   // a COPY: the garage edits it, and a conflicted save must not mutate the live build (#5044)
-  return store.get("parts." + teamId, {});
+  return { ...Parts.getFactorySetup(Teams.LIST.find((t) => t.id === teamId)), ...store.get("parts." + teamId, {}) };   // unset = the works part
 }
 function saveTeamParts(teamId, parts) {
   const c = careerFitted(teamId);
@@ -1295,7 +1297,7 @@ function modsFor(team, setup, tune) {
   // with a RIVAL's declared parts to show their stats, and folding in
   // SetupTune.mods(team.id) there scored a peer's car with this player's
   // anti-roll bars whenever the two happened to share a team.
-  const mods = Parts.getMods(setup, team, tune || null);
+  const mods = Parts.playerMods(setup, team, tune || null);   // over the works build: factory = ×1.0
   return {
     speed:     Parts.statMult(stats.speed)     * mods.speed,
     accel:     Parts.statMult(stats.accel)     * mods.accel,
@@ -3398,10 +3400,7 @@ const G = {
   // Debug teleports can run while a headless/SwiftShader frame is starved.
   // Let apex.js synchronise its observable HUD state without waiting for rAF.
   refreshHud: (...a) => updateHud(...a),   // const initialised below — defer
-  // The waiting room reuses the real menus rather than reimplementing them.
-  setNetRoom: (...a) => raceSettings.setNetRoom(...a),
   resetRaceDraft: () => raceSettings.resetDraft(),
-  openRaceSetup: (...a) => raceSettings.openRaceSetup(...a),
   // The lobby's buttons ask for TILT permission inside their own click: a
   // friend race starts from the network, with no gesture to ask in.
   enableTilt: () => enableTilt(),
@@ -3412,10 +3411,6 @@ const G = {
   // room grows past two. Empty off-line, which is what keeps every solo mode
   // exactly as it was.
   peerSeats: () => (netLobby && netLobby.peerSeats ? netLobby.peerSeats() : []),
-  onPeerQuali: (...a) => qualiNet.onPeerQuali(...a),
-  onPeerQualiLive: (...a) => qualiNet.onPeerQualiLive(...a),
-  openQualiForNet: (...a) => qualiNet.openQualiForNet(...a),
-  refreshQualiGate: (...a) => qualiNet.refreshQualiGate(...a),
   // raceQuali is a VIEW of the grid rule (quali | rev10). The setter keeps an
   // older peer's boolean meaningful: it only moves the rule across the
   // qualifying line, never off a finer rule that already agrees with it.

@@ -349,6 +349,9 @@ test.describe.parallel("Career — the settlement", () => {
   });
 
   test("a Grand Prix never inherits a career round's earnings panel", async ({ page }) => {
+    // The follow-up GP must start on GO: pin the non-qualifying RANDOM rule (fixtures.js does the
+    // same, #6564), or the shipped QUALIFYING default opens #quali and no race is built.
+    await page.addInitScript(() => { try { localStorage.setItem("apex26.raceGrid", JSON.stringify("random")); } catch (_) {} });
     await boot(page);
     await startCareer(page);
     await goRacing(page);
