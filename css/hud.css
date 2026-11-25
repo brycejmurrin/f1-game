@@ -402,7 +402,7 @@ body[data-hl-set="helmet"] #hud-gearbox {
 body.hud-prof-minimal #hud-sectors,
 body.hud-prof-minimal #hud-box-best,
 body.hud-prof-minimal #hud-energy,
-body.hud-prof-minimal #hud-ot { display: none !important; }
+body.hud-prof-minimal #hud-ot { display: none; }
 /* …BUT THE PIT CUE IS PROMOTED, NOT DROPPED. MINIMAL hides the map, and with it
    the only other thing that says where the pit entry is — so the cue, the one
    element that knows both the direction (its arrow) and the distance (its
@@ -430,8 +430,8 @@ body.hud-gaps-low.hud-hide-map .hud-gaps {
 body.hud-bcam #hud-gearbox,
 body.hud-bcam #hud-ot,
 body.hud-bcam #hud-energy,
-body.hud-bcam #hud-limits { display: none !important; }
-body.hud-bcam:not(.hud-prof-broadcast) #hud-sectors { display: none !important; }
+body.hud-bcam #hud-limits { display: none; }
+body.hud-bcam:not(.hud-prof-broadcast) #hud-sectors { display: none; }
 /* TV cameras keep speed and drop the gearbox plate, so the number sat on the
    asphalt as bare italic (heli / TV, 852×393). The dock still parks it on the
    bottom edge; the plate is what makes it a readout instead of a caption.
@@ -526,7 +526,7 @@ body.hud-prof-broadcast.hud-bcam .hud-bottom { display: none !important; }
 body.hud-met-timing #hud-energy,
 body.hud-met-timing #hud-ot,
 body.hud-met-compact #hud-energy,
-body.hud-met-compact #hud-ot { display: none !important; }
+body.hud-met-compact #hud-ot { display: none; }
 /* BRAKE BIAS is a desktop readout by default: on a touch device its extra row
    lifted OVERTAKE / AERO into the sector box (hud-layout.spec broadcast + heli).
    A player who places it in MOVE & SIZE (data-hl-user) still gets it. */
@@ -541,7 +541,7 @@ body[data-hud-hide~="bb"] #hud-bb { display: none; }
 body.hud-met-driver #hud-sectors,
 body.hud-met-driver #hud-box-best,
 body.hud-met-compact #hud-sectors,
-body.hud-met-compact #hud-box-best { display: none !important; }
+body.hud-met-compact #hud-box-best { display: none; }
 
 /* Saved placements use this width at every breakpoint. Responsive widths
    in this sheet and the overlays layer apply only to automatic readouts. */
@@ -608,17 +608,17 @@ body.hud-met-compact #hud-box-best { display: none !important; }
 #hud-delta[data-ref="ghost"] .hud-label::after { content: "\25CB"; margin-left: 0.15em; color: var(--ghost); font-style: normal; }
 /* Per-element HUD toggles (js/ui/hud-elements.js). body[data-hud-hide~=id]. */
 body[data-hud-hide~="pos"] #hud-box-pos,
-body[data-hud-hide~="lap"] #hud-box-lap { display: none !important; }
+body[data-hud-hide~="lap"] #hud-box-lap { display: none; }
 body[data-hud-hide~="time"] #hud-box-time,
-body[data-hud-hide~="best"] #hud-box-best { display: none !important; }
+body[data-hud-hide~="best"] #hud-box-best { display: none; }
 body[data-hud-hide~="delta"] #hud-delta,
-body[data-hud-hide~="sectors"] #hud-sectors { display: none !important; }
+body[data-hud-hide~="sectors"] #hud-sectors { display: none; }
 body[data-hud-hide~="speed"] #hud-speed,
-body[data-hud-hide~="gear"] #hud-gearbox { display: none !important; }
+body[data-hud-hide~="gear"] #hud-gearbox { display: none; }
 body[data-hud-hide~="energy"] #hud-energy,
-body[data-hud-hide~="tyre"] #hud-tyre { display: none !important; }
+body[data-hud-hide~="tyre"] #hud-tyre { display: none; }
 body[data-hud-hide~="ot"] #hud-ot,
-body[data-hud-hide~="limits"] #hud-limits { display: none !important; }
+body[data-hud-hide~="limits"] #hud-limits { display: none; }
 /* SETTINGS checklist for the toggles above (runtime #pm-hud-elements). */
 #pm-hud-elements-list {
   display: grid;
@@ -771,7 +771,7 @@ body[data-hud-hide~="limits"] #hud-limits { display: none !important; }
    only feedback that the dwell is registering. So the layouts reach the chip's
    idle readout only; the player's own TYRE toggle still hides it outright. */
 body.hud-met-timing #hud-tyre,
-body.hud-met-compact #hud-tyre { display: none !important; }
+body.hud-met-compact #hud-tyre { display: none; }
 body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyre[data-pit]:not([hidden]) { display: flex !important; }
 /* LAPS LEFT on the set (js/ui/hud.js sets data-laps from the tyre model):
    over the bar, in the code chip's ink, so it reads on fill and plate alike. */
@@ -935,7 +935,7 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   }
   /* A readable sector plate and the centred caution banner cannot share a
      390 px row. Stack the flag under the plate (the data-flag-low slot). */
-  body:not(.desktop):not(.hud-prof-broadcast):has(> :where(#hud) > #hud-sectors) #hud-flag {
+  body:not(.desktop):not(.hud-prof-broadcast) #hud-sectors ~ #hud-flag {
     top: max(
       calc(var(--hud-sec-bottom, 0px) / var(--hud-z) + 8px),
       calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 8px),
@@ -2356,10 +2356,10 @@ body[data-helmet-cam]:not([data-helmet-visor="off"]) #hud::before {
    (touch 32 + 4px, desktop 48 + 6px); this chip 2.9em of svg + 0.6 --gap. A
    limits chip crossed left (data-limits-left) still reserves its slot here, as
    INPUTS always did. */
-body:not([data-hud-hide~="limits"]):has(> :where(#hud) > #hud-limits:not([hidden])) :is(#hud-damage, #hud-rel) { --rc-limits-h: 2.6em; }
+body:not([data-hud-hide~="limits"]) #hud-limits:not([hidden]) ~ :is(#hud-damage, #hud-rel) { --rc-limits-h: 2.6em; }
 body:not([data-hud-hide~="inputs"]):has(> :where(#hud) > #hud-inputs:not([hidden])) :is(#hud-damage, #hud-rel) { --rc-inputs-h: calc(2.6em + 3px); }
 body.desktop:not([data-hud-hide~="inputs"]):has(> :where(#hud) > #hud-inputs:not([hidden])) :is(#hud-damage, #hud-rel) { --rc-inputs-h: calc(3.9em + 3px); }
-body:not([data-hud-hide~="damage"]):has(> :where(#hud) > #hud-damage:not([hidden])) #hud-rel { --rc-damage-h: 3.3em; }
+body:not([data-hud-hide~="damage"]) #hud-damage:not([hidden]) ~ #hud-rel { --rc-damage-h: 3.3em; }
 #hud-damage svg { width: 1.6em; height: 2.9em; flex: none; }
 #hud-damage [data-part] { fill: color-mix(in srgb, var(--text) 18%, transparent); stroke: color-mix(in srgb, var(--text) 55%, transparent); stroke-width: 0.6; }
 #hud-damage [data-part="body"] { fill: none; }
@@ -2370,7 +2370,7 @@ body:not([data-hud-hide~="damage"]):has(> :where(#hud) > #hud-damage:not([hidden
 body.hud-prof-minimal #hud-damage,
 body.hud-bcam #hud-damage,
 body.bc-on #hud-damage,
-body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
+body[data-hud-hide~="damage"] #hud-damage { display: none; }
 /* OPT-IN READOUTS — RELATIVE (js/ui/hud-relative.js), STRATEGY
    (js/ui/hud-strategy.js), INPUTS (js/ui/hud-inputs.js). Shipped off
    (js/ui/hud-elements.js), placed by MOVE & SIZE (js/ui/hud-layout.js).
@@ -2497,8 +2497,8 @@ body:not(.desktop) #hud-strat {
   top: calc(max(var(--hud-left-h, 152px), var(--hud-metrics-b, 0px)) + 8px + 2.6em + 8px);
 }
 /* STRATEGY under REL (was a 168px sidestep that sat on REL at HUD 150%). */
-body:not([data-hud-hide~="rel"]):has(> :where(#hud) > #hud-rel:not([hidden])) #hud-strat { --rc-rel-h: 7.2em; }
-body:not(.desktop):has(> :where(#hud) > #hud-rel:not([hidden])) #hud-strat:not([data-hl-user]) {
+body:not([data-hud-hide~="rel"]) #hud-rel:not([hidden]) ~ #hud-strat { --rc-rel-h: 7.2em; }
+body:not(.desktop) #hud-rel:not([hidden]) ~ #hud-strat:not([data-hl-user]) {
   left: calc(10px + var(--sal) / var(--hud-z));
   top: calc(var(--hud-left-h, 152px) + 8px + var(--rc-rel-h, 7.2em));
 }
@@ -2547,7 +2547,7 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) #hud-inputs-cv {
    (limits at +15px, this trace at +12px), so a strike painted one over the other in 12 of the 13
    quick-matrix cells (survey 2026-10-10: 2.7k px² at 1280x720). The chip is ~2.6em tall (DAMAGE steps
    the same amount, below). The reserve is only while the chip has a box. */
-body:not([data-hud-hide~="limits"]):has(> :where(#hud) > #hud-limits:not([hidden])) #hud-inputs { --inputs-below-limits: calc(2.6em + 3px); }
+body:not([data-hud-hide~="limits"]) #hud-limits:not([hidden]) ~ #hud-inputs { --inputs-below-limits: calc(2.6em + 3px); }
 body.desktop #hud-inputs:not([data-hl-user]) {
   left: auto;
   right: calc(10px + var(--sar) / var(--hud-z));
