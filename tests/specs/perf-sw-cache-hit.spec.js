@@ -123,8 +123,9 @@ test("real service worker preserves a settled release across offline launch and 
       { timeout: 30000, intervals: [100, 250] }).toBe(null);
     const interrupted = await pwaRecoverySnapshot(page);
     expect(interrupted.controller?.scriptURL).toBe(`${server.origin}/sw.js?v=${buildA}`);
-    expect(interrupted.generations.find((g) => g.name === `apex26-${buildB}`)).toBeDefined();
-    expect(interrupted.generations.find((g) => g.name === `apex26-${buildB}`)?.settled).toBe(false);
+    // #6625: the failed install deletes its partial generation, because settled A still serves.
+    expect(interrupted.generations.find((g) => g.name === `apex26-${buildB}`)).toBeUndefined();
+    expect(interrupted.generations.find((g) => g.name === `apex26-${buildA}`)?.settled).toBe(true);
     const interruptedGeneration = await pwaServedGeneration(page);
     expect(interruptedGeneration).toBe(buildA);
     matrix.cells.push({ label: "B essential fetch fails; A remains active", snapshot: interrupted, servedGeneration: interruptedGeneration, attempt });
