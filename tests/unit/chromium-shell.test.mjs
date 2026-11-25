@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { resolveChromium, normalizeBrowserFlavor } from "../../tools/lib/chromium-path.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 test("a headless shell answers when the full Chromium archive was never unpacked", () => {
-  const root = mkdtempSync(path.join(tmpdir(), "pw-shell-"));
+  const root = mkTmpDir("pw-shell-");
   const exe = path.join(root, "chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell");
   mkdirSync(path.dirname(exe), { recursive: true });
   writeFileSync(exe, "#!/bin/sh\n");
@@ -25,7 +25,7 @@ test("a headless shell answers when the full Chromium archive was never unpacked
 });
 
 test("explicit browser flavor selects only its archive while executable environment overrides win", () => {
-  const root = mkdtempSync(path.join(tmpdir(), "pw-flavors-"));
+  const root = mkTmpDir("pw-flavors-");
   const full = path.join(root, "chromium-999999/chrome-linux64/chrome");
   const shell = path.join(root, "chromium_headless_shell-999999/chrome-headless-shell-linux64/chrome-headless-shell");
   for (const file of [full, shell]) { mkdirSync(path.dirname(file), { recursive: true }); writeFileSync(file, "#!/bin/sh\n"); chmodSync(file, 0o755); }

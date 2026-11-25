@@ -17,12 +17,12 @@ import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a gi
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { parse as parseYAML } from "yaml";
 import { capOverride, verdict, legReport, readArtifacts, main, LEGS, lsDetail, tierGate } from "../../tools/gfx/census-verdict.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TOOL = path.join(ROOT, "tools/gfx/census-verdict.mjs");
@@ -45,7 +45,7 @@ test("the census runs only tracked tools: four controls, no scratch/ scripts, no
   for (const out of ["garage_ab", "reanalysis", "livery"]) assert.equal(plan.outputs[out], undefined, `${out} output retired`);
 
   const py = split.run.slice(split.run.indexOf("\n", split.run.indexOf("<<'PY'")) + 1).split("\nPY")[0];
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "census-experiment-"));
+  const dir = mkTmpDir("census-experiment-");
   try {
     fs.mkdirSync(path.join(dir, ".github"));
     const output = (event, req) => {
@@ -243,7 +243,7 @@ test("every pre-existing gate still fails: missing leg, unfinished leg, GPU and 
 });
 
 test("readArtifacts reads the files the legs write and maps unreadable ones to null", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "census-verdict-"));
+  const dir = mkTmpDir("census-verdict-");
   try {
     fs.writeFileSync(path.join(dir, "census-macos-latest.json"), JSON.stringify(HW));
     fs.writeFileSync(path.join(dir, "game-glx-macos-latest.json"), JSON.stringify(glx()));
@@ -257,7 +257,7 @@ test("readArtifacts reads the files the legs write and maps unreadable ones to n
 });
 
 test("the CLI: step env in, rows to the summary and stdout, ::error:: lines and exit 1 on a failed gate", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "census-verdict-"));
+  const dir = mkTmpDir("census-verdict-");
   try {
     fs.writeFileSync(path.join(dir, "census-macos-latest.json"), JSON.stringify(HW));
     for (const [leg, json] of Object.entries(healthy())) fs.writeFileSync(path.join(dir, `game-${leg}-macos-latest.json`), JSON.stringify(json));
@@ -300,7 +300,7 @@ test("the plan gate: the nightly skips an unchanged renderer, an inherited push 
   const gate = WF.jobs.plan.steps.find((s) => s.id === "gate");
   const git = (cwd, ...a) => spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", ...a], { cwd, encoding: "utf8" });
   if (git(ROOT, "--version").status !== 0) { t.skip("no git on this box"); return; }
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "census-gate-"));
+  const dir = mkTmpDir("census-gate-");
   try {
     const repo = path.join(dir, "repo"), bin = path.join(dir, "bin");
     fs.mkdirSync(path.join(repo, "js/render"), { recursive: true });

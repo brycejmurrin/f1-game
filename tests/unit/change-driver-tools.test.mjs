@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { selectionReceipt } from "../../tools/ci/pick-tests.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const run = (args, opts = {}) => {
@@ -27,9 +28,7 @@ const run = (args, opts = {}) => {
 // Keep verdict tests bounded and offline. A plan never needs these stubs;
 // a run's CI advisory must not read real git refs or contact GitHub here.
 function driverEnv(t, { stubFastGate = false } = {}) {
-  const tmpRoot = path.join(ROOT, "artifacts/tmp");
-  fs.mkdirSync(tmpRoot, { recursive: true });
-  const dir = fs.mkdtempSync(path.join(tmpRoot, "change-driver-"));
+  const dir = mkTmpDir("change-driver-");
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   fs.writeFileSync(path.join(dir, "git"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
   if (stubFastGate) {
@@ -215,9 +214,7 @@ test("bump-cache: --check catches drift, --apply hashes assets and keeps the gen
   // the directory, and read as flaky in a fresh one because whichever suite got
   // there first created it for the rest. Same fix, same idiom, as
   // the since-deleted lighting-campaign test: own the mkdir, and use artifacts/tmp.
-  const tmpRoot = path.join(ROOT, "artifacts", "tmp");
-  fs.mkdirSync(tmpRoot, { recursive: true });
-  const dir = fs.mkdtempSync(path.join(tmpRoot, "bumpfix-"));
+  const dir = mkTmpDir("bumpfix-");
   try {
     fs.writeFileSync(path.join(dir, "a.js"), "alpha\n");
     fs.writeFileSync(path.join(dir, "b.css"), "beta\n");
@@ -338,7 +335,7 @@ test("W6: a generated file in the diff runs gen:check in verify-change's fast ph
 });
 
 test("test-honesty --strict: a test NAME is not a reason; bare and reasonless skip/todo options are scanned", () => {
-  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts/tmp-test-honesty-"));
+  const dir = mkTmpDir("tmp-test-honesty-");
   try {
     fs.mkdirSync(path.join(dir, "tests"), { recursive: true });
     const site = (name, body) => fs.writeFileSync(path.join(dir, "tests", `${name}.test.mjs`), body);
@@ -380,7 +377,7 @@ test("test-honesty --strict: a test NAME is not a reason; bare and reasonless sk
 });
 
 test("test-honesty --strict (#5014): an early bare return before any assert is unexplained; nested, valued and late returns are not", () => {
-  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts/tmp-test-honesty-"));
+  const dir = mkTmpDir("tmp-test-honesty-");
   try {
     fs.mkdirSync(path.join(dir, "tests"), { recursive: true });
     const site = (name, body) => fs.writeFileSync(path.join(dir, "tests", `${name}.test.mjs`), body);
