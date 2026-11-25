@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, CONFIG_LABEL, ROWS, openVerdict, holdVerdict, configVerdict, planRow, ciVerdict, isConfigPath,
-  configFiles, filePaths, configPushState, isProtectedConfigPath, configLabelKind, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict, retestOnMerge, retestPlan, gateEstimate, RETEST_JOBS, RETEST_FILE_TIMEOUT_S, RETEST_TIMEOUT_MS, newerTipPaths, ciRecordedBase, RETEST_MARGIN_MIN, LOCAL_ROWS, RAISE_LABEL, treeCeilingsAt, prRaisesAt, treeRaises, raiseVerdict, raisesCovered,
+  configFiles, filePaths, configPushState, isProtectedConfigPath, configLabelKind, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, progressLine, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict, retestOnMerge, retestPlan, gateEstimate, RETEST_JOBS, RETEST_FILE_TIMEOUT_S, RETEST_TIMEOUT_MS, newerTipPaths, ciRecordedBase, RETEST_MARGIN_MIN, LOCAL_ROWS, RAISE_LABEL, treeCeilingsAt, prRaisesAt, treeRaises, raiseVerdict, raisesCovered,
   baseVerdict, BASE_ESCAPE_LABELS, FIXER_LABEL, fixerProof, cleanTipSync, creditPriorCi, CREDIT_CHAIN_MAX,
 } from "../../tools/ci/merge-gate.mjs";
 import { tipState, codeRedJobs, platformStepFailed, readDeployTip, PLATFORM_STEP as TIP_PLATFORM_STEP } from "../../tools/ci/lib/deploy-tip.mjs";
@@ -493,6 +493,50 @@ test("localMergeGenCheck: a gen:check failure and a conflict each return the fet
   } finally { fs.rmSync(T, { recursive: true, force: true }); }
 });
 
+test("localMergeGenCheck: two gates on one PR at once each merge in their own worktree and both finish (#6494)", () => {
+  const T = scratch("merge-gate-race-");
+  const git = (cwd, ...a) => { const r = spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd, encoding: "utf8" }); assert.equal(r.status, 0, `${a.join(" ")}: ${r.stderr}`); return r.stdout.trim(); };
+  const write = (root, rel, text) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); };
+  try {
+    const remote = path.join(T, "remote.git"), W = path.join(T, "w");
+    git(T, "init", "-q", "--bare", remote); git(T, "clone", "-q", remote, W); git(W, "checkout", "-q", "-b", "deploy-x");
+    write(W, "docs/a.md", "base\n"); git(W, "add", "-A"); git(W, "commit", "-q", "-m", "base"); git(W, "push", "-q", "origin", "deploy-x");
+    const B = ["docs", "b.md"].join("/");   // built, not spelled: the path-reference lint reads no phantom file
+    git(W, "checkout", "-q", "-b", "pr", "deploy-x"); write(W, B, "pr\n"); git(W, "add", "-A"); git(W, "commit", "-q", "-m", "the PR"); git(W, "push", "-q", "origin", "pr");
+    const head = git(W, "rev-parse", "pr");
+    const seen = { A: [], B: [] }, steps = [];
+    let inner = null;
+    const ok = { ok: true, evidence: "hold" };
+    const gate = (who, runId, nest) => localMergeGenCheck({ pr: 4, head, headRef: "pr", cwd: W, base: "deploy-x", runId, ratchets: () => ok, progress: (m) => steps.push(`${who}: ${m}`),
+      run: (cmd, argv, o) => {
+        seen[who].push({ cmd, cwd: o.cwd, merged: fs.existsSync(path.join(o.cwd, B)) });
+        if (nest && cmd === "npm") inner = gate("B", `${process.pid}-bbbbbb`, false);   // B runs whole while A sits in gen:check
+        return { status: 0, stdout: "", stderr: "" };
+      } });
+    const outer = gate("A", `${process.pid}-aaaaaa`, true);
+    assert.equal(inner?.ok, true, `the inner gate finishes: ${inner?.evidence}`);
+    assert.equal(outer.ok, true, `the outer gate finishes: ${outer.evidence}`);
+    assert.notEqual(seen.A[0].cwd, seen.B[0].cwd, "a worktree per run, not per PR");
+    assert.ok([...seen.A, ...seen.B].every((s) => s.merged), "neither run's merge was removed under it (the catalog step ran on a live tree)");
+    assert.equal(git(W, "worktree", "list").split("\n").length, 1, "each owner removed and pruned its own");
+    assert.deepEqual(steps.filter((l) => l.startsWith("A: ")).map((l) => l.split(" ")[1]), ["fetched;", "gen:check", "scenery", "ratchets"], "progress per step (no retest without a green CI run)");
+  } finally { fs.rmSync(T, { recursive: true, force: true }); }
+});
+
+test("main: progress lines go to the note sink while it runs, never on the `= ` lines land.yml greps (#6494)", () => {
+  const f = fakes();
+  const logs = [], notes = [];
+  let t = 1_000;
+  const localMerge = (a) => { a.progress?.("gen:check on the merge result"); return f.deps.localMerge(a); };
+  assert.equal(main(["--pr", "7", "--sha", HEAD, "--check"], { ...f.deps, localMerge, log: (l) => logs.push(l), note: (l) => notes.push(l), now: () => (t += 500) }), 0);
+  assert.ok(notes.length >= 4, notes.join("\n"));
+  assert.ok(notes.every((l) => l.startsWith("· merge-gate +") && !l.startsWith("= ")), notes.join("\n"));
+  assert.equal(notes[0], "· merge-gate +0.5s PR #7: reading GitHub");
+  assert.ok(notes.some((l) => /base row: ok$/.test(l)) && notes.some((l) => l.endsWith("gen:check on the merge result")), notes.join("\n"));
+  assert.ok(logs.every((l) => l.startsWith("= ")), "stdout keeps only rows");
+  assert.equal(progressLine(163_000, "x"), "· merge-gate +163.0s x");
+});
+
 /** A fake GitHub plus fake merge for the evaluator; `pull`, `checks`, `events` and `files` are mutable per case. */
 function fakes() {
   const pull = { state: "open", draft: false, labels: [], user: { login: "brycejmurrin" }, head: { sha: HEAD, ref: "cursor/x" }, base: { ref: "deploy-x" }, body: "## Plan\n- [x] done\n- [ ] land: flip + label\n" };
@@ -932,7 +976,8 @@ function ghExpr(src, github) {
   const contains = (hay, x) => (Array.isArray(hay) ? hay.includes(x) : String(hay ?? "").includes(x));
   const startsWith = (a, b) => String(a ?? "").startsWith(b);
   const cancelled = () => false;
-  return new Function("ctx", "format", "contains", "startsWith", "cancelled", "needs", "steps", "success", `return (${js.replace(/\bneeds\./g, "needs?.")});`)(github, format, contains, startsWith, cancelled, github?.needs, github?.steps, () => github?.success !== false);
+  const always = () => true;
+  return new Function("ctx", "format", "contains", "startsWith", "cancelled", "always", "needs", "steps", "success", `return (${js.replace(/\bneeds\./g, "needs?.")});`)(github, format, contains, startsWith, cancelled, always, github?.needs, github?.steps, () => github?.success !== false);
 }
 
 test("land.yml triggers: pull_request_target (never pull_request), workflow_run kept, check_suite gone", () => {
@@ -1873,6 +1918,31 @@ test("land.yml dispatch:merge-pause (finding 7): counts only when the owner's ow
   assert.equal(sw(ev("o")), 0, "the owner's pause does");
 });
 
+test("land.yml (#6456 item 10, Bryce's B): the inline merge_paused and say copies stay byte-identical", () => {
+  // The write jobs run no repo code (the trust test above), so these helpers stay inline in each step rather than in a
+  // shared script; this keeps the copies from drifting apart. Each copy is the function plus its comment block.
+  const runs = Object.entries(LAND.jobs).flatMap(([job, j]) => (j.steps || []).map((st) => [job, st.run || ""]));
+  const copies = (start, end) => runs.flatMap(([where, run]) => {
+    const lines = run.split("\n").map((l) => l.trimStart()), out = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (!start(lines[i])) continue;
+      let k = i;
+      while (k > 0 && lines[k - 1].startsWith("# ")) k--;
+      let e = i;
+      while (!end(lines[e], i === e)) e++;
+      out.push([where, lines.slice(k, e + 1).join("\n")]);
+    }
+    return out;
+  });
+  const paused = copies((l) => l === "merge_paused() {", (l) => l === "}");
+  assert.deepEqual(paused.map(([w]) => w), ["resolve", "arm", "sweep"], "one copy in each of resolve, arm and the sweep");
+  for (const [where, text] of paused.slice(1)) assert.equal(text, paused[0][1], `${where}: merge_paused differs from resolve's copy`);
+  assert.equal(paused[0][1].split("\n").length, 13, "the copy is the 3-line comment and the 10-line function");
+  const say = copies((l) => l.startsWith("say() {"), (l, first) => first);
+  assert.equal(say.length, 2, "say: the sweep and the train");
+  assert.equal(say[1][1], say[0][1], `${say[1][0]}: say differs from ${say[0][0]}`);
+});
+
 test("tip-candidate mode stops on open Plan and unfinished CI before reading deployment or config", () => {
   const f = fakes(), reads = [];
   f.pull.labels = [{ name: "land" }];
@@ -2206,7 +2276,12 @@ test("land.yml sweep (finding 2): a push to the deploy branch sweeps (rate-cappe
   assert.equal(ghExpr(job.if, push()), true, "a deploy-branch push runs the sweep");
   assert.equal(ghExpr(job.if, push("refs/heads/cursor/x")), false);
   assert.equal(ghExpr(LAND.jobs.resolve.if, push()), false, "a push is not a PR re-gate: resolve and everything after it skip");
-  assert.equal(ghExpr(LAND.jobs["train-screen"].if, push()), false);
+  // #6584 follow-up: the deploy-branch push runs the merge train too, so a merged train N promotes the stacked N+1 at
+  // its merge push, not the next Pages success or cron (#6652 nit 4). Only the deploy branch: `on.push` lists it alone.
+  for (const name of ["train-screen", "train"]) {
+    assert.equal(ghExpr(LAND.jobs[name].if, push()), true, `${name}: a deploy-branch push runs the train`);
+    assert.equal(ghExpr(LAND.jobs[name].if, push("refs/heads/train-next/abc-1-2")), false, `${name}: never another ref's push`);
+  }
   assert.equal(ghExpr(LAND.concurrency.group, push()), "land-stale-sweep", "pushes share the sweep's group, never a per-sha group");
   assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], push()), false);
   const [rate, sweep] = job.steps;

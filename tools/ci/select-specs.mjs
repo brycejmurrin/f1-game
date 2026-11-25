@@ -1391,6 +1391,8 @@ export const SOURCE_AFFECTED = [
   // js/xr has its own job, js/roster.js is generated (jsCoverageGaps skips it).
   ...["track-switch-release", "circuit-foundation"].map((s) => [/^js\/track\/build-(worker|client)\.js$/, `tests/specs/${s}.spec.js`]),
   [/^js\/workers\/bitmap-decode-(worker|client)\.js$/, "tests/specs/garage-livery-fit.spec.js"],
+  // ARRANGE's safe-area clamp (#6596): his saved placement on the iPhone 15 insets, emulated.
+  [/^js\/ui\/screen-(placement|regions)\.js$/, "tests/specs/arrange-safe-area.spec.js"],
   // THE SHIPPED RENDERER (audit W31 row 12, 2026-11-10): every other driven race
   // to the flag runs GLX, so a three.js-WebGPU reload after the finish shipped
   // unseen. Any renderer, loop or vendored-library edit runs the unpinned spec.

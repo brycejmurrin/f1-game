@@ -161,6 +161,9 @@ on:
   # The stale-gate sweep (`sweep` job, STALE GATE in the header): reads `gate` and CI, dispatches re-gates, runs no PR code.
   # A push to the deploy branch sweeps too: pages.yml ignores docs-only pushes (paths-ignore), so after a docs merge no
   # Pages workflow_run re-gates the land PRs a moved tip just made stale (audit 2026-11-21, finding 2).
+  # It also runs the merge train (`train-screen` + `train`, #6584 follow-up): a merged train N moves the deploy branch,
+  # so the stacked N+1 is promoted at that push, not at the next Pages success or :17/:47 cron. Deploy branch ONLY: a
+  # push to `train/**` or `train-next/**` would run THAT ref's land.yml (the fold of PR code) with LAND_TOKEN.
   push:
     branches: [claude/f1-game-project-26h3ng]
   # Kept as is (#6536 R3): it fired 4 times in 48 h (2026-11-23..25), so it is a backstop; the train screen rides the
@@ -1369,7 +1372,11 @@ jobs:
   # each car's head reaching the deploy branch marks the car merged. merge-gate reads a train's config and raise rows
   # from its cars after proving the head is exactly the clean fold of their heads onto a deploy-branch commit. One
   # train is open at a time; a red train is closed and the next one takes half its cars (bisect). Runs with the sweep
-  # (schedule, or a dispatch with stale=true) and after each Pages train on the deploy branch (a train just landed).
+  # (schedule, or a dispatch with stale=true), after each Pages train on the deploy branch (a train just landed), and on
+  # each push to the deploy branch (#6584 follow-up): a merge promotes the stacked train at once instead of idling
+  # until the next trigger (median 28 min after a merge, 48 h to 2026-11-25 12:00Z), and a merge that lands between a
+  # run's screen and its build (#6652 nit 4) queues that push's run behind it in `land-train`, which re-reads the state.
+  # Pushes share the `land-stale-sweep` run group (at most one pending: the newest push replaces an older pending one).
   # TRUST: checks out the deploy branch only; car heads are FETCHED as git objects and combined with merge-tree /
   # commit-tree (no worktree, no hooks, no npm, no PR code), so LAND_TOKEN never meets PR code; the per-car
   # ratchets that need PR code ran in `train-screen` above, and only its verdict file (data) reaches this job. LAND_TOKEN pushes the
@@ -1388,6 +1395,7 @@ jobs:
     name: merge train screen
     if: >-
       github.event_name == 'schedule'
+      || (github.event_name == 'push' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng')
       || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng' && github.event.inputs.stale == 'true')
       || (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'Deploy to GitHub Pages'
           && github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && github.event.workflow_run.conclusion == 'success')
@@ -1437,6 +1445,7 @@ jobs:
     # always(): a failed screen still lets the build close a finished train; with no verdict file it opens none.
     if: >-
       always() && (github.event_name == 'schedule'
+      || (github.event_name == 'push' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng')
       || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng' && github.event.inputs.stale == 'true')
       || (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'Deploy to GitHub Pages'
           && github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && github.event.workflow_run.conclusion == 'success'))

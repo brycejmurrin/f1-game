@@ -10,7 +10,7 @@ A quoted string or a heredoc fed to anything but a shell is data: mentioning a r
   2. a subagent (the payload's `agent_id`) never starts a browser run: the Playwright test runner and binary, a
      Chromium binary, `npm test` / `npm run test` / a browser test group, test-bg (but --status/--tail/--stop),
      verify-change without --fast/--plan, the chrome daemon, the phone-browser server, an apex-tools CLI call of a
-     browser tool. Every in-repo launcher refuses on its own through tools/lib/harness.mjs launchChromium when
+     browser tool, tools/check/offline-precache-check.cjs (it launches playwright's chromium itself). Every in-repo launcher refuses on its own through tools/lib/harness.mjs launchChromium when
      APEX_SUBAGENT is set, which this hook exports into a subagent's node / npm / shell commands (updatedInput).
      A subagent also never writes the .claude/allow-* hatches or a guard file.
   3. the commit gate stays reachable: no `git commit --no-verify` / `-n`, no core.hooksPath write or `-c` override.
@@ -210,6 +210,8 @@ def is_browser(c, groups):
             return True
         return False
     s, args = script_of(c)
+    if s == "offline-precache-check.cjs":    # its own chromium.launch, not launchChromium: APEX_SUBAGENT never reaches it (#6544 U14);
+        return not any(x in ("--help", "-h") for x in args)   # it honours only --help/-h: a bare `help` is a circuit id and boots Chromium
     if s is None or has_help(args):
         return False
     if s in ("cli.js", "playwright", "playwright.js") and "playwright" in next(x for x in a[1:] if not x.startswith("-")):
