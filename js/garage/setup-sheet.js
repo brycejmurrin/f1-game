@@ -1577,6 +1577,7 @@ function buildLiveryCreator(container, team) {
   if (csLivEditId) {
     // Arm-then-confirm (the career DELETE? idiom): one-of-a-kind paint, no undo.
     const id = csLivEditId, del = document.createElement("button"); del.type = "button"; del.className = "cs-liv-del"; del.textContent = "DELETE";
+    del.setAttribute("aria-label", "Delete " + (d.name || "this") + " livery");
     del.onclick = () => G.armConfirm(del, "DELETE?", () => {
       if (customLiv.removeCustomLivery(team.id, id)) return discard();
       saveStatus.hidden = false; saveStatus.textContent = "Could not delete this paint job. It is still in your library.";
