@@ -9,7 +9,6 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync, execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns, cureableConflicts,
@@ -20,6 +19,7 @@ import { alive } from "../../tools/lib/process-tree.mjs";
 import { DEPLOY_BRANCH as PICK_BRANCH } from "../../tools/ci/pick-tests.mjs";
 import { GEOMETRY_ERE, GEOMETRY_PATHS, namedPaths, fleetFiles, TARGETED, targetedSuites, PARTS_ERE, partsFiles } from "../../tools/ci/geometry-paths.mjs";
 import { createRequire } from "node:module";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 // The throwaway repos' cleanup: `git commit` can leave a gc / maintenance
 // child still writing .git/objects when the test's `finally` runs, and a bare
@@ -74,7 +74,7 @@ test("a typo'd flag exits 2 with the usage BEFORE any fetch or log stamp (audit3
 });
 
 test("touchedCircuits reads circuit and scenery ids out of a diff — exactly", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-touched-ids-"));
+  const dir = mkTmpDir("apex-touched-ids-");
   const g = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
   try {
     g("init", "-q", "-b", "main");
@@ -107,7 +107,7 @@ test("touchedCircuits reads circuit and scenery ids out of a diff — exactly", 
  * verified none. The shape assertion above cannot catch that, so this builds a
  * real diverged history and checks the semantics. */
 test("touchedCircuits reports OUR side only on a diverged history", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-touched-"));
+  const dir = mkTmpDir("apex-touched-");
   const g = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
   try {
     g("init", "-q", "-b", "main");
@@ -132,7 +132,7 @@ test("touchedCircuits reports OUR side only on a diverged history", () => {
 });
 
 test("merge-tree: clean, real conflicts, and an ERROR with no CONFLICT line (unrelated histories); a shallow clone is named up front", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-mergetree-"));
+  const dir = mkTmpDir("apex-mergetree-");
   const g = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe", encoding: "utf8" });
   const mt = (a, b) => {
     const r = spawnSync("git", ["merge-tree", "--write-tree", a, b], { cwd: dir, encoding: "utf8" });
@@ -176,7 +176,7 @@ test("preflight returns a list of refusals, never throws", () => {
 });
 
 test("preflight(cwd) judges the fixture repo's tree, not the checkout's", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-preflight-"));
+  const dir = mkTmpDir("apex-preflight-");
   try {
     const g = (...a) => execFileSync("git", ["-C", dir, ...a], { stdio: "ignore" });
     g("init", "-q");
@@ -309,7 +309,7 @@ test("prose docs are never cured: no doc carries generated ladder digits any mor
  * regenerateDerived write a follow-up commit for a reason that has nothing to
  * do with the unit-file merge under test, and this assertion went red. */
 test("two sides that each add a unit file merge clean with no derived follow-up", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-regen-"));
+  const dir = mkTmpDir("apex-regen-");
   const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
   const genCheck = () => spawnSync("npm", ["run", "-s", "gen:check"], { cwd: dir, encoding: "utf8" });
   try {
@@ -364,7 +364,7 @@ test("two sides that each add a unit file merge clean with no derived follow-up"
  * hours — past a deploy that had reported green. These cover the filter that
  * closes it, and the fact that it stays conditional. */
 function geomRepo() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-geom-"));
+  const dir = mkTmpDir("apex-geom-");
   const g = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
   const write = (rel, body) => {
     const f = path.join(dir, rel);
@@ -793,7 +793,7 @@ test("every source a sweep suite reads is covered by a tier that runs that suite
 });
 
 test("--targeted prints the suites for a change list, and nothing for a game.js-only one", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-targeted-"));
+  const dir = mkTmpDir("apex-targeted-");
   try {
     const list = path.join(dir, "changed.txt");
     fs.writeFileSync(list, "js/game.js\njs/physics/debris-world.js\nREADME.md\n");
@@ -847,7 +847,7 @@ test("--train reports the nightly rota, and reads its jobs rather than the rollu
 });
 
 test("--train answers without Git planning or preflight, and names both signals offline", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-train-offline-"));
+  const dir = mkTmpDir("apex-train-offline-");
   const gitCalls = path.join(dir, "git-calls");
   try {
     // Fail every Git operation, including fetch/merge-tree. The real command
@@ -896,7 +896,7 @@ test("advisoryGet: token on stdin when present, unauthenticated without, null on
 });
 
 test("deploy JSON child retains complete large stdout and late failure while stderr stays live", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-deploy-output-"));
+  const dir = mkTmpDir("apex-deploy-output-");
   try {
     const moduleUrl = new URL('../../tools/ci/deploy.mjs', import.meta.url).href;
     const chunk = 'λ evidence\n'.repeat(8192);
@@ -924,7 +924,7 @@ catch(e){console.log(JSON.stringify({status:'failed',error:e.message,stdoutArtif
 });
 
 test("deploy child keeps default native streams and JSON launch errors identify retained evidence", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-deploy-output-"));
+  const dir = mkTmpDir("apex-deploy-output-");
   try {
     const moduleUrl = new URL('../../tools/ci/deploy.mjs', import.meta.url).href;
     const entry = `import {run} from ${JSON.stringify(moduleUrl)};await run(process.execPath,['-e',"process.stdout.write('native stdout');process.stderr.write('native stderr')"],'fixture',{json:false});`;
@@ -1032,7 +1032,7 @@ for (const rel of [BUILT_PATHS[0], ...ON_DEMAND_PATHS, ...RETIRED_PATHS]) test(`
     assert.deepEqual(c.builtF, [p]);
   }
   assert.equal(cureableConflicts([rel, "tools/manifest.cjs"]).cureable, false, "a real conflict beside it still stops");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-built-cure-"));
+  const dir = mkTmpDir("apex-built-cure-");
   const g = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe", encoding: "utf8" });
   try {
     g("init", "-q", "-b", "tip");

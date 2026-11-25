@@ -18,6 +18,7 @@ import { gameSource } from "../helpers/game-source.mjs";
 import * as M from "../../tools/lib/hud-survey-matrix.mjs";
 import { REPAINT_FRAMES, applyCell, bootStore, chromiumArgs, hudFitState, parseArgs, probeWithTransients, repaintFrames, runExtras, shotTimeoutMs } from "../../tools/shot/hud-survey.mjs";
 import { analyzeSamples, parseArgs as parseLive, summarize } from "../../tools/shot/hud-live-sample.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CLI = path.join(ROOT, "tools/shot/hud-survey.mjs");
@@ -856,7 +857,6 @@ test("expectedVisibility: a touch cockpit never expects the floating SPEED, nor 
 });
 
 // ── tools/lib/ui-mock-core.mjs + tools/ui/menu-mock.mjs (pure parts) ────────
-import os from "node:os";
 import * as Core from "../../tools/lib/ui-mock-core.mjs";
 import * as MM from "../../tools/ui/menu-mock.mjs";
 
@@ -869,7 +869,7 @@ test("ui-mock-core: cellKey ignores key order, and moves with the tool, the tree
 });
 
 test("ui-mock-core: inputsHash follows js/css/index.html content and nothing else", () => {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), "uimock-"));
+  const d = mkTmpDir("uimock-");
   fs.mkdirSync(path.join(d, "js")); fs.mkdirSync(path.join(d, "css")); fs.mkdirSync(path.join(d, "docs"));
   fs.writeFileSync(path.join(d, "index.html"), "<html>"); fs.writeFileSync(path.join(d, "js", "a.js"), "1"); fs.writeFileSync(path.join(d, "css", "a.css"), "a{}");
   const h1 = Core.inputsHash(d);
@@ -882,7 +882,7 @@ test("ui-mock-core: inputsHash follows js/css/index.html content and nothing els
 });
 
 test("ui-mock-core: cellCache round-trips a row and its image; a null tree hash or enabled:false never hits", () => {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), "uimock-"));
+  const d = mkTmpDir("uimock-");
   const img = path.join(d, "src.jpg"); fs.writeFileSync(img, "JPEGDATA");
   const c = Core.cellCache(path.join(d, "cache"), "t", "tree1");
   const key = c.key({ a: 1 });

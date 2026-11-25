@@ -7,10 +7,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { cureRatchets, effectiveRatchetsAt, unfoldFragments } from "../../tools/ci/deploy.mjs";
 import { applyFragments } from "../../tools/check/ratchets.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const RATCHETS = "tests/data/ratchets.json", FRAG_DIR = "tests/data/ratchets.d", FRAG = `${FRAG_DIR}/claude--tip-raise.json`;
 const FILE = ["fixture", "a.js"].join("/"); // a fixture row, not a repo path
@@ -19,7 +19,7 @@ const json = (o) => JSON.stringify(o, null, 2) + "\n";
 const ratchets = (lines) => json({ files: { [FILE]: { lines } }, tree: { eagerBytes: { ceiling: 1000, slack: 0 } } });
 
 function fixture() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-ratchet-frag-"));
+  const dir = mkTmpDir("apex-ratchet-frag-");
   const g = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe", encoding: "utf8" });
   const put = (rel, text) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text); };
   g("init", "-q", "-b", "tip"); g("config", "user.email", "t@t"); g("config", "user.name", "t");

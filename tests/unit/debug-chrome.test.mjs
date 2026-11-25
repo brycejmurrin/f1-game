@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { chromeArgs, refusal, stop, owns, DEVICES, headlessGamePlan, discoveryFile, browserOccupant } from "../../tools/mcp/debug-chrome.mjs";
 import { readLock, lockPayload, reapStaleLock } from "../../tools/mcp/job-admission.mjs";
 import { processBirth } from "../../tools/mcp/job-admission.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 const REPO = nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url)), "../..");
 
 test("discovery honors an absolute XDG config root without redirecting home", () => {
@@ -75,10 +76,10 @@ test("phone-landscape sends the iPhone UA (the mobile render tier is UA-driven);
 });
 test("browser-use discovery file: Chrome's port + path format, removed only while it names our port", async () => {
   const { discoveryText, removeDiscovery, runningEndpoint } = await import("../../tools/mcp/debug-chrome.mjs");
-  const { mkdtempSync, writeFileSync, existsSync } = await import("node:fs");
-  const os = await import("node:os"); const path = await import("node:path");
+  const { writeFileSync, existsSync } = await import("node:fs");
+  const path = await import("node:path");
   assert.equal(discoveryText(9222, "ws://127.0.0.1:9222/devtools/browser/abc"), "9222\n/devtools/browser/abc\n");
-  const f = path.join(mkdtempSync(path.join(os.tmpdir(), "dc-")), "DevToolsActivePort");
+  const f = path.join(mkTmpDir("dc-"), "DevToolsActivePort");
   writeFileSync(f, "9333\n/devtools/browser/x\n");
   assert.equal(removeDiscovery(9222, f), false); assert.ok(existsSync(f), "another browser's file stays");
   assert.equal(removeDiscovery(9333, f), true); assert.ok(!existsSync(f));

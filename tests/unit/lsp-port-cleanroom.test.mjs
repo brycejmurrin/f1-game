@@ -6,13 +6,13 @@ import "../helpers/git-fixture-env.mjs";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Lsp, callTool } from "../../tools/mcp/lsp-mcp.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 function fixture(files) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lsp-port-"));
+  const dir = mkTmpDir("lsp-port-");
   const w = (file, text) => { fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true }); fs.writeFileSync(path.join(dir, file), text); };
   w("jsconfig.json", JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, typeAcquisition: { enable: false }, include: ["src/**/*.js", "types/**/*.d.ts"] }));
   for (const [f, t] of Object.entries(files)) w(f, t);

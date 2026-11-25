@@ -24,13 +24,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 import { stageSite } from "../../tools/desktop/stage.mjs";
 import { fileURLToPath } from "node:url";
 import { STAGE_DIRS, STAGE_EXCLUDE, STAGE_ROOT_FILES, stageExcluded, stagedNames } from "../../tools/desktop/stage-files.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const { LAZY_DATA, SW_LEARN, SW_LOCALES } = createRequire(import.meta.url)("../../tools/manifest.cjs");
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -204,7 +204,7 @@ test("a stamped tree keys every lazy file the runtime can request (apex-lazy-v a
   const want = [...new Set(rosters.flatMap((n) => strings(M[n])))].sort();
   assert.ok(want.includes("js/garage/exterior.js") && want.length > 100, "the rosters resolved to real file lists");
 
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lazy-sri-"));
+  const dir = mkTmpDir("lazy-sri-");
   const put = (rel, body) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), body); };
   try {
     for (const rel of want) put(rel, fs.readFileSync(path.join(ROOT, rel)));
@@ -228,7 +228,7 @@ test("the repo shell carries no lazy map (it is stamped at deploy only)", () => 
 
 
 test("real stageSite preserves manifest-declared locale catalogs and SW locale bytes", () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "locale-stage-"));
+  const tmp = mkTmpDir("locale-stage-");
   const root = path.join(tmp, "source"), dest = path.join(tmp, "site");
   const put = (rel, bytes) => {
     fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
@@ -300,7 +300,7 @@ test("every BUILT_PATHS file is gitignored, untracked, and rendered into the sta
     assert.equal(git("ls-files", "--", p).stdout.trim(), "", `${p} must not be tracked`);
     assert.ok(STAGE_DIRS.includes(p.split("/")[0]), `${p} must sit under a staged directory`);
   }
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "built-stage-"));
+  const tmp = mkTmpDir("built-stage-");
   const root = path.join(tmp, "source");
   try {
     for (const name of STAGE_ROOT_FILES) { fs.mkdirSync(root, { recursive: true }); fs.writeFileSync(path.join(root, name), "fixture\n"); }
@@ -331,7 +331,7 @@ test("stageSite skips STAGE_EXCLUDE paths and keeps their siblings", () => {
   assert.equal(stageExcluded("assets/atlases/atlas-arch-albedo.png"), true);
   assert.equal(stageExcluded("assets/atlases-old/x.png"), false);
   assert.equal(stageExcluded("assets/pack/mat-albedo-128.png"), false);
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "exclude-stage-"));
+  const tmp = mkTmpDir("exclude-stage-");
   const root = path.join(tmp, "source"), dest = path.join(tmp, "site");
   const put = (rel) => {
     fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
@@ -359,7 +359,7 @@ test("All Learn lesson frames and local dependencies stage with bare offline URL
       assets.add(path.posix.join(dir, rel));
     }
   }
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "learn-stage-"));
+  const tmp = mkTmpDir("learn-stage-");
   const root = path.join(tmp, "source"), dest = path.join(tmp, "site");
   try {
     for (const dir of STAGE_DIRS) fs.mkdirSync(path.join(root, dir), { recursive: true });

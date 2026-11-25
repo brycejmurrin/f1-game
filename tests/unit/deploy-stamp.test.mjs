@@ -9,12 +9,12 @@ import { createRequire } from "node:module";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { STAGE_ROOT_FILES } from "../../tools/desktop/stage-files.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const pages = fs.readFileSync(path.join(ROOT, ".github/workflows/pages.yml"), "utf8");
@@ -72,7 +72,7 @@ test("a RELATIVE --root (pages.yml passes `_site`) stamps too", () => {
 });
 
 test("bump-cache --apply --at N --root <dir> stamps a staged copy and leaves the repo alone", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-stamp-"));
+  const dir = mkTmpDir("apex-stamp-");
   try {
     fs.writeFileSync(path.join(dir, "a.js"), "console.log(1);\n");
     fs.writeFileSync(path.join(dir, "index.html"),

@@ -8,7 +8,6 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import test from "node:test";
@@ -19,12 +18,13 @@ import {
   ensureWritableDir,
   installCloudCwdShim,
 } from "../../tools/mcp/lsp-mcp.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const MCP = path.join(ROOT, "tools/mcp/lsp-mcp.mjs");
 
 function tmpDir(prefix) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  return mkTmpDir(prefix);
 }
 
 /** Minimal /agent/repos/<name> tree with the two shell wrappers the shim needs. */

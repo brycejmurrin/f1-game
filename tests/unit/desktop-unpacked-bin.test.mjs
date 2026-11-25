@@ -5,16 +5,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { findUnpackedBinary } from "../../desktop/scripts/unpacked-bin.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DESKTOP = path.join(ROOT, "desktop");
 
 test("findUnpackedBinary resolves linux-unpacked/<name> when present", () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-unpacked-"));
+  const tmp = mkTmpDir("apex-unpacked-");
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(DESKTOP, "package.json"), "utf8"));
     fs.writeFileSync(path.join(tmp, "package.json"), JSON.stringify(pkg));
@@ -32,7 +32,7 @@ test("findUnpackedBinary resolves linux-unpacked/<name> when present", () => {
 });
 
 test("findUnpackedBinary throws a helpful error when pack was not run", () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-unpacked-miss-"));
+  const tmp = mkTmpDir("apex-unpacked-miss-");
   try {
     fs.writeFileSync(
       path.join(tmp, "package.json"),
@@ -48,7 +48,7 @@ test("findUnpackedBinary throws a helpful error when pack was not run", () => {
 });
 
 test("findUnpackedBinary resolves win-unpacked productName.exe (builder default)", () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-unpacked-win-"));
+  const tmp = mkTmpDir("apex-unpacked-win-");
   try {
     fs.writeFileSync(
       path.join(tmp, "package.json"),

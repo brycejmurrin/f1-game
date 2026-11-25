@@ -29,6 +29,7 @@ import {
   DEPLOY_BRANCH,
   ARTIFACT_PREFIX,
 } from "../../tools/ci/flake-tally.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const FIX = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "flake-tally");
 
@@ -491,8 +492,7 @@ test("lastSuccessfulBaseRedRun lists this workflow's successful runs and reports
 
 test("runFlakeTally --base-red: a run whose jobs call fails is a printed note, and the open issue stays open", async () => {
   const { runFlakeTally } = await import("../../tools/ci/flake-tally.mjs");
-  const os = await import("node:os");
-  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "flake-tally-"));
+  const workDir = mkTmpDir("flake-tally-");
   const calls = [];
   const json = (o, status = 200) => ({ status, arrayBuffer: async () => Buffer.from(JSON.stringify(o)) });
   setFlakeTallyTestHooks({

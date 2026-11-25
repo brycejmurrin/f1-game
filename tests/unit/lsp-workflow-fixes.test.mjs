@@ -2,16 +2,16 @@ import "../helpers/git-fixture-env.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Lsp, callTool } from "../../tools/mcp/lsp-mcp.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TSC = path.join(ROOT, "node_modules/.bin/tsc");
 
 function fixture() {
-  const root = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), "lsp-workflow-fixes-"));
+  const root = mkTmpDir("lsp-workflow-fixes-");
   const files = {
     "jsconfig.json": JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, typeAcquisition: { enable: false }, include: ["src/**/*.js"] }),
     "src/owner.js": `"use strict";
@@ -44,7 +44,7 @@ function unrelatedOwner() { return Hidden.KEY(); } /*@unrelated-owner*/
 }
 
 function repeatedIifeFixture() {
-  const root = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), "lsp-repeated-iife-"));
+  const root = mkTmpDir("lsp-repeated-iife-");
   const files = {
     "jsconfig.json": JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, typeAcquisition: { enable: false }, include: ["src/**/*.js"] }),
     "src/a-stub.js": `"use strict";
@@ -184,7 +184,7 @@ test("same-statement reinjections contribute each distinct member definition onc
 });
 
 test("hover at a use follows the shorthand export to the documented declaration", { timeout: 60000 }, async () => {
-  const root = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), "lsp-hover-docs-"));
+  const root = mkTmpDir("lsp-hover-docs-");
   fs.mkdirSync(path.join(root, "src"));
   fs.writeFileSync(path.join(root, "jsconfig.json"), JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, typeAcquisition: { enable: false }, include: ["src/**/*.js"] }));
   fs.writeFileSync(path.join(root, "src/m.js"), `var M = (function () {

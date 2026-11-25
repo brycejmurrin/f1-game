@@ -7,10 +7,10 @@
 import "../helpers/git-fixture-env.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Lsp, callTool, classify, nearNames, staleNote } from "../../tools/mcp/lsp-mcp.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 test("classify: a call argument is a use, a numeric literal declares, a member read aliases", () => {
   const tag = (line, word) => classify(line, line.indexOf(word));
@@ -30,7 +30,7 @@ test("staleNote: only a server whose own files changed appends the restart line"
 });
 
 test("refs follow destructures, callers count the declaring file, no file-IIFE frame, no self-alias declaration", { timeout: 60000 }, async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lsp-stress-"));
+  const dir = mkTmpDir("lsp-stress-");
   const w = (f, t) => { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), t); };
   w("jsconfig.json", JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, typeAcquisition: { enable: false }, include: ["src/**/*.js"] }));
   w("src/prims.js", `"use strict";
@@ -72,7 +72,7 @@ document.addEventListener("click", frame, true);
 
 // A throwaway workspace: files under src/, one Lsp over it, `q` returns the answer's lines (asserting no error).
 async function withFixture(files, fn, { anchor = Object.keys(files)[0] } = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lsp-stress-"));
+  const dir = mkTmpDir("lsp-stress-");
   const w = (f, t) => { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), t); };
   w("jsconfig.json", JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, typeAcquisition: { enable: false }, include: ["src/**/*.js"] }));
   for (const [f, t] of Object.entries(files)) w(f, t);
@@ -131,7 +131,7 @@ process.stdin.on("data", d => {
 });
 `;
 function hungFixture() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lsp-hung-"));
+  const dir = mkTmpDir("lsp-hung-");
   fs.mkdirSync(path.join(dir, "src"));
   fs.writeFileSync(path.join(dir, "src/a.js"), "const Alpha = { ping() { return 1; } };\n");
   fs.writeFileSync(path.join(dir, "jsconfig.json"), "{}");
@@ -173,7 +173,7 @@ test("serve: ping answers while a tools/call waits on a hung tsc (B3)", { timeou
 
 test("an untracked or staged new js file keeps the HEAD subtraction for other files (B4)", { timeout: 60000 }, async () => {
   const { execFileSync } = await import("node:child_process");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lsp-b4-"));
+  const dir = mkTmpDir("lsp-b4-");
   const w = (f, t) => { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), t); };
   const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "ignore" });
   w("jsconfig.json", JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, typeAcquisition: { enable: false }, include: ["src/**/*.js"] }));

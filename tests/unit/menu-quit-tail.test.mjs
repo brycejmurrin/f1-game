@@ -108,3 +108,68 @@ test("MenuTeardown.deferQuitTail runs its continuation after the deferred tail",
   while (raf.length || timers.length) { while (raf.length) raf.shift()(); while (timers.length) timers.shift()(); }
   assert.deepEqual(order, ["tail", "then"]);
 });
+
+// #6713: the Aero Lab drill's restore() runs BEFORE this tail, so the tail's gp/race reset overwrote the
+// player's flow. keepFlow is one-shot: it shapes the next quit only, and every other quit keeps gp/race.
+test("keepFlow: the next quit restores the kept flow/session, later quits reset to gp/race", () => {
+  const { MenuQuitTail, deps, calls } = load();
+  MenuQuitTail.keepFlow("career", "quali");
+  deps.session = "race";
+  MenuQuitTail.afterOverlay();
+  assert.deepEqual(calls.setFlow, ["career"]);
+  assert.equal(deps.session, "quali");
+  MenuQuitTail.afterOverlay();
+  assert.deepEqual(calls.setFlow, ["career", "gp"], "a plain quit after it is unchanged");
+  assert.equal(deps.session, "race");
+});
+
+function element() {
+  return { hidden: false, width: 0, height: 0, setAttribute() {}, append() {}, remove() {}, getContext: () => null };
+}
+
+test("Aero Lab drill: quitting returns the player to the flow and session they came from (#6713)", () => {
+  const { MenuQuitTail, deps, calls } = load();
+  const path = join(ROOT, "js/ui/learn-door.js");
+  const levels = [];
+  const ctx = {
+    document: { createElement: element, body: { append() {} } },
+    window: { matchMedia: () => ({ matches: false }) },
+    DrivingLine: { STRIDE: 8 },
+    Tracks: { LIST: [{ id: "bahrain" }, { id: "monza" }] },
+    Wind: { level: () => levels.at(-1) ?? "calm", setLevel: (v) => levels.push(v) },
+    UiExperience: { leavePracticePick() {} },
+    Float32Array, MenuQuitTail,
+  };
+  const LearnDoor = vm.runInNewContext(readFileSync(path, "utf8") + "\n;LearnDoor", ctx, { filename: absSrc("js/ui/learn-door.js") });
+  let goal = "none";
+  const G = {
+    state: "menu", netPlay: { active: () => false },
+    flow: "career", session: "quali", trackIdx: 0, raceWeather: "wet", raceChangeable: true, raceGrid: "real",
+    duel: true, raceDirtyAir: "modern",
+    coach: { practiceGoal: () => goal, setPracticeGoal: (v) => { goal = v; } },
+    startRace() { this.started = { flow: this.flow, session: this.session }; },
+  };
+  // The wired tail drives game.js's setFlow / session, which G.flow / G.session read in game.
+  deps.setFlow = (v) => { calls.setFlow.push(v); G.flow = v; };
+  Object.defineProperty(deps, "session", { get: () => G.session, set: (v) => { G.session = v; } });
+  let drill;
+  LearnDoor.launchAeroDrill(G, (x) => { drill = x; }, () => {});
+  assert.deepEqual(G.started, { flow: "gp", session: "race" }, "the drill races a GP");
+  // js/game.js quitToMenu: restore() first, then the (possibly deferred) tail.
+  drill.restore();
+  MenuQuitTail.afterOverlay();
+  assert.equal(G.flow, "career");
+  assert.equal(G.session, "quali");
+  assert.deepEqual(calls.setFlow, ["career"], "the tail sets the player's flow, not gp");
+});
+
+test("keepFlow: a quit that throws before quit-session still consumes the kept flow", () => {
+  const { MenuQuitTail, deps, calls } = load();
+  MenuQuitTail.keepFlow("career", "quali");
+  deps.mirrorPass = { cancelPreparation() { throw new Error("boom"); } };
+  assert.throws(() => MenuQuitTail.afterOverlay());
+  deps.mirrorPass = { cancelPreparation() {} };
+  MenuQuitTail.afterOverlay();
+  assert.deepEqual(calls.setFlow, ["gp"]);
+  assert.equal(deps.session, "race");
+});

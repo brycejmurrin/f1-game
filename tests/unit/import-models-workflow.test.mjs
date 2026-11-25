@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const workflow = fs.readFileSync(
@@ -83,14 +84,13 @@ test("model imports check the generated shell and commit without a bump", () => 
 
 test("15-F9: the bot never force-pushes a branch it did not create", async () => {
   const cp = await import("node:child_process");
-  const os = await import("node:os");
   const guard = /# BEGIN force-push guard[^\n]*\n([\s\S]*?)\n\s*# END force-push guard/.exec(workflow)?.[1]
     .replace(/^ {10}/gm, "");
   assert.ok(guard, "the force-push guard is present in the commit step");
   assert.doesNotMatch(workflow, /git push -f\b|git push --force(?!-with-lease)/, "no unconditional force push");
   assert.match(workflow, /git push \$\{PUSH_LEASE:\+"\$PUSH_LEASE"\} origin "\$COMMIT_BRANCH"/);
 
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "import-models-guard-"));
+  const dir = mkTmpDir("import-models-guard-");
   const sh = (cwd, ...a) => cp.execFileSync("git", a, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
   try {
     const origin = path.join(dir, "origin.git"), work = path.join(dir, "work");
