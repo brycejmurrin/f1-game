@@ -8,7 +8,7 @@ const DataRealRace = (function () {
     fmtLap, fmtGap, pitDuel, traceDetails, SCRIPT_V
   } = DataRealRaceScript;
   const {
-    fetchRaw, forgetRaw, cached, remember, fetchTraces, packTrace, traceGet, tracePut,
+    fetchRaw, forgetRaw, cached, provisional, remember, fetchTraces, packTrace, traceGet, tracePut,
     traceFits, OPENF1, TRACE_V, TRACE_MAX, CACHE_KEY, CACHE_MAX
   } = DataRealRaceFetch;
 
@@ -52,7 +52,8 @@ const DataRealRace = (function () {
     function scriptFor(sessionKey, fresh, current) {
       const hit = !fresh && cached(sessionKey);
       if (hit) return Promise.resolve(Object.assign({}, hit, { provenance: "cached" }));
-      return fetchRaw(sessionKey, !!fresh).then((raw) => {
+      const stale = !fresh && provisional(sessionKey);   // past its 30 min: refetch the stewards' bodies (#6603)
+      return fetchRaw(sessionKey, !!fresh, { revalidate: !!stale }).then((raw) => {
         if (current && !current()) throw new Error("cancelled");
         const script = build(raw, findTeam, tracks());
         // Forget an incomplete race BEFORE the no-drivers throw: an empty pre-race
@@ -60,6 +61,9 @@ const DataRealRace = (function () {
         if (script.complete) remember(script); else if (!fresh) forgetRaw(sessionKey);
         if (!script.drivers.length) throw new Error(NO_RACE_MSG);
         return Object.assign({}, script, { provenance: "fetched" });
+      }, (error) => {
+        if (stale && !(current && !current())) return Object.assign({}, stale, { provenance: "cached" });   // offline: the provisional script beats no race
+        throw error;
       });
     }
 
