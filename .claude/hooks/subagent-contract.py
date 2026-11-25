@@ -73,6 +73,12 @@ C = {
         # Step 0 of the card: with no current red the report says so instead of inventing a SHA line.
         "need": [r"^(SHA \S+ · run \S+|no (current|confirmed) red\b)", r"^(base: (already-red-on-base|new-on-this-push|unknown)\b|no (current|confirmed) red\b)", r"^next: \S"],
     },
+    "pr-reviewer": {
+        "file": "pr-reviewer.md", "prefix": "FINDING", "cap": 10,
+        "row": r"^FINDING (none\b|\d+ \| (blocker-candidate|nit) \| \S+:\d+\S* — .+ — .+ — test: \S)",
+        "shape": "FINDING <n> | blocker-candidate|nit | file:line — claim — why — test: <spec or unit test, or none> (or FINDING none)",
+        "need": [r"^REVIEW #\d+ @ [0-9a-f]{7,} · files \d+ · routed: ", r"^findings: \d+ \(blocker-candidate \d+\)"],
+    },
     "worker": {
         "file": "worker.md", "prefix": "WORKER", "cap": 1,
         "row": r"^WORKER \S+: (DONE|PARTIAL|BLOCKED)\b",
