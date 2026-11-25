@@ -268,7 +268,7 @@ test("a stored career's money and salaries are clamped to what play can produce"
   assert.equal(SaveMigrate.migrateCareer(Object.assign(oldCareer(1), { money: -5 })).money, 0);
 });
 
-test("career-backup refuses an import whose money or salary is out of range", () => {
+test("career-backup skips (and reports) a slot whose money or salary is out of range", () => {
   const ctx = vm.createContext({ Math, JSON, Object, Array, String, Number, Set, Map, isNaN, isFinite, console,
     Blob: class { constructor(p) { this.size = String(p[0]).length; } }, Promise });
   seedLog(ctx);
@@ -277,10 +277,10 @@ test("career-backup refuses an import whose money or salary is out of range", ()
   const B = vm.runInContext("CareerBackup", ctx);
   const env = (data) => ({ format: B.FORMAT, slots: [{ flavour: "driver", i: 0, data }] });
   assert.equal(B.validate(env(oldCareer(1))).ok, true);
-  assert.equal(B.validate(env(Object.assign(oldCareer(1), { money: -5 }))).reason, "money-range");
-  assert.equal(B.validate(env(Object.assign(oldCareer(1), { money: 1e308 }))).reason, "money-range");
-  assert.equal(B.validate(env(Object.assign(oldCareer(1), { offers: [{ team: "haas", salary: 1e12 }] }))).reason, "salary-range");
-  assert.equal(B.validate(env(Object.assign(oldCareer(1), { deal: { salary: -1 } }))).reason, "salary-range");
+  assert.equal(B.validate(env(Object.assign(oldCareer(1), { money: -5 }))).rejected[0].reason, "money-range");
+  assert.equal(B.validate(env(Object.assign(oldCareer(1), { money: 1e308 }))).rejected[0].reason, "money-range");
+  assert.equal(B.validate(env(Object.assign(oldCareer(1), { offers: [{ team: "haas", salary: 1e12 }] }))).rejected[0].reason, "salary-range");
+  assert.equal(B.validate(env(Object.assign(oldCareer(1), { deal: { salary: -1 } }))).rejected[0].reason, "salary-range");
 });
 
 test("hirePending() (the __apex.careerHire hook) is null with no career loaded, as the sibling hooks", () => {

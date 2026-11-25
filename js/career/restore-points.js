@@ -77,15 +77,26 @@ const CareerRestorePoints = (function () {
       try {
         const raw = JSON.stringify(data);
         if (!withinBudget(data, raw, flavour)) return null;
-        const copy = JSON.parse(raw);
-        if (!Number.isSafeInteger(copy.v) || copy.v < 0 ||
-            (typeof SaveMigrate !== "undefined" && copy.v > SaveMigrate.CAREER_V) ||
-            (copy.flavour && copy.flavour !== flavour)) return null;
+        const copy = JSON.parse(raw), v = SaveMigrate.careerVersion(copy.v);
+        if (v === null || v > SaveMigrate.CAREER_V || (copy.flavour && copy.flavour !== flavour)) return null;
+        copy.v = v;
         const migrated = typeof SaveMigrate !== "undefined" ? SaveMigrate.migrateCareer(copy) : null;
         if (!migrated || migrated.flavour !== flavour) return null;
         const json = JSON.stringify(migrated);
         return withinBudget(migrated, json, flavour) ? json : null;
       } catch (_) { return null; }
+    }
+    // Parses, but is no career of this flavour (#6604). A numeric v this build
+    // can't read, a newer v or a save that is only too big is NOT damaged: it
+    // still needs its snapshot, so capture() refuses it as before.
+    function damaged(d, f) {
+      if (d == null) return false;
+      if (typeof d !== "object" || Array.isArray(d)) return true;
+      const v = SaveMigrate.careerVersion(d.v);
+      if (v === null) return typeof d.v !== "number";
+      if (v > SaveMigrate.CAREER_V) return false;
+      if (d.flavour && d.flavour !== f) return true;
+      try { const m = SaveMigrate.migrateCareer(JSON.parse(JSON.stringify(Object.assign({}, d, { v })))); return !m || m.flavour !== f; } catch (_) { return true; }
     }
     function summary(json) {
       const d = JSON.parse(json), season = d.season || {};
@@ -157,8 +168,9 @@ const CareerRestorePoints = (function () {
       const key = "career." + slotKey(flavour, i);
       try {
         const raw = disk.getItem("apex26." + key), current = store.get(key, null);
-        const token = Object.freeze({ ok: true, flavour, slot: i, id,
-          current: current ? summary(JSON.stringify(current)) : null, point: summary(row.json), at: row.at, reason: row.reason });
+        const currentDamaged = damaged(current, flavour);
+        const token = Object.freeze({ ok: true, flavour, slot: i, id, currentDamaged,
+          current: current && !currentDamaged ? summary(JSON.stringify(current)) : null, point: summary(row.json), at: row.at, reason: row.reason });
         previews.set(token, { key, revision: store.keyRevision(key), raw, session: JSON.stringify(current), json: row.json });
         return token;
       } catch (_) { return refused("storage-unavailable"); }
@@ -177,8 +189,9 @@ const CareerRestorePoints = (function () {
         if (!unchanged()) return refused("slot-changed");
         // Keep the value being replaced when possible; failure to retain it is
         // explicit and prevents an undo operation from silently losing its undo.
-        const current = parse(p.session);
-        if (current) {
+        // A damaged slot can't be kept: skip its snapshot and say so (#6604).
+        const current = parse(p.session), snapshot = damaged(current, token.flavour) ? "skipped-damaged" : null;
+        if (current && !snapshot) {
           const saved = await capture(token.flavour, token.slot, current, { reason: "before-restore" });
           if (!saved.ok) return saved;
         }
@@ -188,7 +201,7 @@ const CareerRestorePoints = (function () {
         if (!checked) return refused("invalid-point");
         const result = store.write(p.key, JSON.parse(checked));
         if (result.ok && opts.onRestored) opts.onRestored(token.flavour, token.slot);
-        return Object.assign({}, result, { reloadRequired: result.ok === true });
+        return Object.assign({}, result, { reloadRequired: result.ok === true }, snapshot && { snapshot });
       } catch (_) { return refused("restore-failed"); }
     }
     return { capture, list, preview, restore, health, limits: { perSlot: LIMIT, snapshotBytes: SNAPSHOT_BYTES, progressBytes: PROGRESS_BYTES, identityBytes: IDENTITY_BYTES, totalBytes: LIMIT * SNAPSHOT_BYTES * 6 } };
