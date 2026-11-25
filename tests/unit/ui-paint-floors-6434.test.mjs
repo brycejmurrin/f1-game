@@ -25,7 +25,12 @@ test("--tap-floor44: 0 with a mouse, 44.2 painted on touch", () => {
 
 test("text floors: 12 painted px at UI SIZE 70 (row 5)", () => {
   has("css/career.css", "#quali .res-row", "font-size", "max(1em, var(--fs-floor))", "quali names 11.2 px");
-  has("css/overlays.css", "#pausemenu .sheet-body > button", "font-size", "max(1em, var(--fs-floor))", "pause doors 11.2 px");
+  assert.ok(rulesFor(rules("css/overlays.css"), "#pausemenu .sheet-body > button", { context: /@layer base/ })
+    .some((r) => r.decls.get("font-size") === "max(1em, var(--fs-floor))"), "pause doors 11.2 px, floored as a DEFAULT");
+  assert.ok(!rulesFor(rules("css/overlays.css"), "#pausemenu .sheet-body > button").some((r) =>
+    r.decls.has("font-size") && !r.context.some((c) => /@layer base/.test(c))),
+  "outside `base` it outranks #pm-resume's --fs-5 (components) and shrinks RESUME at every size");
+  assert.ok(declares(rules("css/dialogs.css"), "#pm-resume", "font-size", "var(--fs-5)"), "the rule the base floor must not shadow");
   assert.ok(rulesFor(rules("css/overlays.css"), /#pm-quick-doors > details$/).some((r) =>
     /^max\(calc\(var\(--fs-micro\) \* 0\.92\), var\(--fs-floor\)\)$/.test(r.decls.get("font-size") || "")),
   "pause tray step-down keeps the 0.92 notch above the floor (11.04 px)");

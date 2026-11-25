@@ -1239,9 +1239,8 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
    layout switch (the SIDEBAR cell). The contract lets type scale, never a label overflow (#5153 §3 rule 3). */
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors button,
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors > details { font-size: max(calc(var(--fs-micro) * 0.92), var(--fs-floor)); }
-/* 12 PAINTED px FLOOR (#6434 row 5): the step-down above and the door buttons' inherited 16 px both paint 11 at
-   UI SIZE 70. max() keeps every size at UI SIZE 75 % and up exactly as it was; --fs-floor is 12 / --ui-scale. */
-#pausemenu .sheet-body > button { font-size: max(1em, var(--fs-floor)); }
+/* 12 PAINTED px FLOOR (#6434 row 5): the step-down above keeps its notch but never paints under 12 px. The door
+   buttons' inherited 16 px is floored in `@layer base` at the end of this file. */
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet #pm-quit { grid-area: quit; margin-top: 0; }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quit::before { content: none; }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu :is(#pm-standings, #pm-skip-results) { grid-column: 1 / -1; }
@@ -1888,3 +1887,11 @@ body[data-density="compact"] #ceremony-podium .sheet-foot { margin-top: calc(var
 }
 
 } /* @layer components */
+
+/* 12 PAINTED px DOOR FLOOR (#6434 row 5): RESTART / SETTINGS / QUIT inherit 16 px, 11.2 painted at UI SIZE 70. In
+   `base`, so it is only the DEFAULT: it beats the reset's `font: inherit` but loses to every component rule
+   (#pm-resume's --fs-5, dialogs.css). In `overlays` it shrank RESUME on desktop (pr-reviewer, PR #6468).
+   max() leaves UI SIZE 75 % and up as it was; --fs-floor is 12 / --ui-scale. */
+@layer base {
+  #pausemenu .sheet-body > button { font-size: max(1em, var(--fs-floor)); }
+}
