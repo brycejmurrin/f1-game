@@ -816,6 +816,11 @@
       "presentation": "native",
       "preserve": "Missing/stale stamp; exact tip tree; --local scope; open Plan; missing fleet-block field on a cursor/ branch"
     },
+    "tools/ci/issue-labels.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "OFF rows with their gaps; = issue-labels verdict; exit 2 off the scheme; exit 3 unreadable GitHub"
+    },
     "tools/ci/ready-sweep.mjs": {
       "action": "keep-native",
       "presentation": "native",

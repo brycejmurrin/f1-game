@@ -24,7 +24,9 @@ Single-slice hunts do not need a workflow: agent `prior-art-scout` builds the
 `known` list (also the input for either script's `known` arg), one
 `code-hunter` per slice finds (`focus: dead-code` for the former bloat-auditor
 recipe), and `finding-verifier` re-checks the rows (the skeptic step) before
-anything is fixed (`.claude/agents/README.md`).
+anything is fixed (`.claude/agents/README.md`). A hunt's or a workflow run's
+output is a `tracking` issue with `source:hunt`, not a docs PR (skill steward
+`references/labels.md` §Hunt and survey output).
 
 Ground rules baked into every script: agents are read-only (or worktree-
 isolated), NEVER run browser/Playwright tests (4-core box — suites run in the
