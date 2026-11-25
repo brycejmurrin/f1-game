@@ -843,10 +843,12 @@ function editingGitHub() {
       return json(200, c);
     }
     if (opts.method === "POST") {
-      const c = { id: 9000 + calls.length, created_at: HELLO_AT, author_association: "OWNER", body: JSON.parse(opts.body).body };
+      const c = { id: 9000 + calls.length, created_at: HELLO_AT, author_association: "OWNER", body: JSON.parse(opts.body).body,
+        issue_url: url.replace(/\/comments$/, "") };
       thread.push(c);
       return json(201, c);
     }
+    if (m) { const c = thread.find((x) => x.id === Number(m[1])); return c ? json(200, c) : json(404, { message: "Not Found" }); }
     return json(200, thread.slice());
   };
   return { fetch, calls, thread };
@@ -1138,4 +1140,89 @@ test("#6581 review: tap waitMs is capped at 30 s; a link end mid-drive removes t
   linked.api.stop("ended on the phone");
   await flush();
   assert.equal(d.body.kids.some((k) => k.id === "apex-bridge-driving"), false);
+});
+
+test("#6636: ending the link stops a running batch — no later step runs, above all no later drive", async () => {
+  const d = heldDriver();
+  const drives = [];
+  const drive0 = d.S.drive;
+  d.S.drive = (o) => { drives.push(o); return drive0(o); };
+  const b = load({ tok: "tok", gh: editingGitHub(), apex: { info: () => ({ state: "race" }) }, extra: d.extra });
+  await flush();
+  const p = b.api.handle({ cmd: "batch", args: { steps: [{ cmd: "wait", args: { ms: 150 } }, { cmd: "drive", args: { laps: 1, wait: false } }, { cmd: "ping" }] } });
+  b.api.stop("ended on the phone");   // TAP TO END while the first step waits
+  const r = await p;
+  assert.deepEqual(plain(r.value.map((s) => [s.cmd, s.ok])), [["wait", true], ["drive", false]]);
+  assert.equal(r.value[1].error, "the link ended");
+  assert.equal(drives.length, 0, "the car is never taken after the link ended");
+});
+
+test("security review: a stored status id is edited only once it reads back as this issue's apex-status comment", async () => {
+  const gh = editingGitHub(), store = new Map();
+  gh.thread.push({ id: 555, created_at: HELLO_AT, author_association: "OWNER", body: "decision: A", issue_url: "https://api.github.com/repos/brycejmurrin/f1-game/issues/42" });
+  store.set("apex26.bridgeStatus", "42:555");
+  const b = load({ tok: "tok", gh, store });
+  await flush();
+  const id = await b.api.status();
+  assert.notEqual(id, 555);
+  assert.equal(gh.thread.find((c) => c.id === 555).body, "decision: A", "Bryce's comment is never overwritten");
+  assert.equal(store.get("apex26.bridgeStatus"), "42:" + id);
+  // A rejected token ends the link without a final edit that could only fail.
+  const before = gh.calls.length;
+  b.api.stop("token rejected");
+  await flush();
+  assert.equal(gh.calls.length, before);
+});
+
+test("security review: visibility edits honour a rate limit and a 5 s floor", async () => {
+  let now = 1_000_000;
+  const FakeDate = class extends Date { static now() { return now; } };
+  const listeners = {};
+  const document = { hidden: false, addEventListener: (t, f) => { listeners[t] = f; }, removeEventListener() {}, getElementById: () => null, querySelector: () => null };
+  const gh = editingGitHub();
+  const b = load({ tok: "tok", gh, extra: { Date: FakeDate, document } });
+  await flush();
+  await b.api.status();
+  const patches = () => gh.calls.filter((c) => c.method === "PATCH" || (c.method === "POST" && c.url.endsWith("/comments"))).length;
+  const n0 = patches();
+  now += 1000; document.hidden = true; listeners.visibilitychange(); await flush();
+  assert.equal(patches(), n0, "under 5 s since the last edit: no edit");
+  now += 5000; listeners.visibilitychange(); await flush(); await flush();
+  assert.equal(patches(), n0 + 1);
+  assert.equal(gh.calls.at(-1).keepalive, true, "a hidden page's edit carries keepalive");
+});
+
+test("security review: wake lock asks once while a request is pending, and an older sentinel is released", async () => {
+  let resolveReq = null;
+  const reqs = [];
+  const wakeLock = { request: () => { reqs.push(1); return new Promise((res) => { resolveReq = res; }); } };
+  const listeners = {};
+  const document = { hidden: false, addEventListener: (t, f) => { listeners[t] = f; }, removeEventListener() {}, getElementById: () => null, querySelector: () => null };
+  const b = load({ tok: "tok", gh: editingGitHub(), extra: { document, navigator: { userAgent: "test", gpu: {}, wakeLock } } });
+  await flush();
+  listeners.visibilitychange();   // a flip while the first request is pending
+  assert.equal(reqs.length, 1);
+  const l = { released: false, release: async () => { l.released = true; } };
+  resolveReq(l);
+  await flush();
+  b.api.stop("done");
+  assert.equal(l.released, true, "nothing is left holding the screen awake");
+});
+
+test("security review: a hands-off drive needs its STOP on screen and is capped at 300 s; rects never says whether a denied id exists", async () => {
+  const d = heldDriver();
+  const drives = [];
+  const drive0 = d.S.drive;
+  d.S.drive = (o) => { drives.push(o); return drive0(o); };
+  const noBody = { ...d.extra, document: { getElementById: () => null } };
+  const b = load({ search: "", apex: { info: () => ({ state: "race" }) }, extra: noBody });
+  assert.equal((await b.api.handle({ cmd: "drive", args: { laps: 1, handsOff: true } })).error, "drive.handsOff needs the STOP banner on screen (no page body)");
+  assert.equal(drives.length, 0, "the car is never taken without a STOP");
+  const ok = load({ search: "", apex: { info: () => ({ state: "race" }) }, extra: d.extra });
+  assert.equal((await ok.api.handle({ cmd: "drive", args: { seconds: 400, handsOff: true } })).ok, false, "over 300 s refused");
+  await ok.api.handle({ cmd: "drive", args: { laps: 1, wait: false, handsOff: true } });
+  assert.equal(drives[0].ms, 240000);
+  await ok.api.handle({ cmd: "drive", args: { stop: true } });
+  const r = await load({ search: "", extra: rectDom() }).api.handle({ cmd: "rects", args: { ids: ["mb-career", "career-not-in-page"] } });
+  assert.deepEqual(plain(r.value.rects), [{ id: "mb-career", refused: true }, { id: "career-not-in-page", refused: true }]);
 });

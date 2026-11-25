@@ -362,9 +362,11 @@ const ApexBridge = (function () {
   async function batch(args) {
     const steps = args && Array.isArray(args.steps) ? args.steps : null;
     if (!steps || !steps.length || steps.length > BATCH_MAX) throw new Error("batch.steps must hold 1–" + BATCH_MAX + " steps");
-    const out = [];
+    // #6636: a batch the link issued stops once that link ends (TAP TO END): no later step, above all no later drive.
+    const run = _run, out = [];
     for (let i = 0; i < steps.length; i++) {
       const s = steps[i] || {};
+      if (run && _run !== run) { out.push({ cmd: s.cmd, ok: false, error: "the link ended" }); break; }
       const ends = s.cmd === "reload" || (s.cmd === "path" && s.args && s.args.to != null && s.args.reload !== false);
       let r;
       if (s.cmd === "batch") r = { ok: false, error: "batch cannot nest" };
@@ -698,7 +700,7 @@ const ApexBridge = (function () {
   // The bridge serves one command at a time, so a `wait:false` drive answers at once and `status` / `stop` follow.
   // No `to:"grid"`: nothing in the game reads a car parked on its grid slot (the grid is placed by race(), a restart
   // re-grids by itself), so there is no state for it to reach.
-  const DRIVE_MS = 240000, DRIVE_START_MS = 30000, END_IDS = ["hud-end-session", "hud-work"];
+  const DRIVE_MS = 240000, DRIVE_START_MS = 30000, HANDS_OFF_MS = 300000, END_IDS = ["hud-end-session", "hud-work"];
   async function drive(args) {
     const a = args || {};
     const S = typeof SoakRun !== "undefined" ? SoakRun : null;
@@ -711,15 +713,21 @@ const ApexBridge = (function () {
     if (a.to != null && a.to !== "box") throw new Error('drive.to must be "box"');
     if (a.laps != null && !(Number.isInteger(a.laps) && a.laps >= 1 && a.laps <= 5)) throw new Error("drive.laps must be 1-5");
     if (a.seconds != null && !(Number(a.seconds) >= 1 && Number(a.seconds) <= 600)) throw new Error("drive.seconds must be 1-600");
-    const ms = Math.max(5000, Math.min(600000, Number(a.ms) || DRIVE_MS));
+    if (a.handsOff != null && typeof a.handsOff !== "boolean") throw new Error("drive.handsOff takes true or false");
+    const hands = a.handsOff === true;
+    // A hands-off drive is capped shorter (no touch ends it) and needs its STOP on screen before the car is taken.
+    const ms = Math.max(5000, Math.min(hands ? HANDS_OFF_MS : 600000, Number(a.ms) || DRIVE_MS));
+    if (hands && a.seconds != null && Number(a.seconds) * 1000 > HANDS_OFF_MS) throw new Error("a hands-off drive is at most " + HANDS_OFF_MS / 1000 + " s");
+    const run0 = _run;
     // Straight after `nav`'s RACE! the garage drive-out is still playing (state "menu"): wait for the session.
     await until(() => { const st = gameState(); return st === "race" || st === "count"; }, DRIVE_START_MS);
-    if (a.handsOff != null && typeof a.handsOff !== "boolean") throw new Error("drive.handsOff takes true or false");
-    const run = S.drive({ to: a.to, laps: a.laps, seconds: a.seconds != null ? Number(a.seconds) : undefined, ms, handsOff: a.handsOff === true || undefined });
+    if (run0 && _run !== run0) throw new Error("the link ended: drive refused");   // #6636
+    if (hands && !drivingBanner(true, true)) throw new Error("drive.handsOff needs the STOP banner on screen (no page body)");
+    const run = S.drive({ to: a.to, laps: a.laps, seconds: a.seconds != null ? Number(a.seconds) : undefined, ms, handsOff: hands || undefined });
     // The banner goes when the drive ends for ANY reason (stop, a real touch, pause, hidden, quit, the link ending):
     // every end resolves this promise. A newer drive owns the banner, so the replaced one's end does not hide it.
     const mine = ++_drvTok;
-    drivingBanner(true, a.handsOff === true);
+    drivingBanner(true, hands);
     const off = () => { if (mine === _drvTok) drivingBanner(false); };
     run.then(off, off);
     if (a.wait === false) { run.catch(() => {}); return Object.assign({ started: true }, S.driveStatus()); }
@@ -740,6 +748,8 @@ const ApexBridge = (function () {
     if (!ids || !ids.length || ids.length > RECTS_MAX) throw new Error("ids must hold 1–" + RECTS_MAX + " element ids");
     return ids.map((id) => {
       if (typeof id !== "string" || !/^[A-Za-z][\w-]{0,80}$/.test(id)) throw new Error("not an element id: " + JSON.stringify(id));
+      // A denied id answers `refused` whether or not it exists, so the answer never says what is in the page.
+      if (TAP_DENY.some((p) => id === p || id.startsWith(p + "-"))) return { id, refused: true };
       const el = byId(id);
       if (!el) return { id, missing: true };
       if (deniedArea(el)) return { id, refused: true };
@@ -766,9 +776,9 @@ const ApexBridge = (function () {
   let _drvTok = 0, _drvBanner = null;
   // `handsOff` (#6581 item 7): touches no longer take the car back, so the strip carries a big STOP that does.
   function drivingBanner(on, handsOff) {
-    if (typeof document === "undefined" || !document.body || typeof document.createElement !== "function") return;
+    if (typeof document === "undefined" || !document.body || typeof document.createElement !== "function") return false;
     if (_drvBanner && (!on || _drvBanner.handsOff !== !!handsOff)) { try { _drvBanner.remove(); } catch (_) { /* gone */ } _drvBanner = null; }
-    if (!on || _drvBanner) return;
+    if (!on || _drvBanner) return !!_drvBanner;
     const b = _drvBanner = document.createElement("div");
     b.id = "apex-bridge-driving";
     b.handsOff = !!handsOff;
@@ -788,6 +798,7 @@ const ApexBridge = (function () {
       + "z-index:99999;pointer-events:none;padding:6px 14px;border-radius:8px;font:700 13px/1.3 system-ui,sans-serif;"
       + "letter-spacing:.08em;background:rgba(217,119,87,.95);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.35)";
     document.body.appendChild(b);
+    return true;
   }
 
   const CMDS = {
@@ -874,8 +885,8 @@ const ApexBridge = (function () {
   }
   const fence = (obj) => "```apex-result\n" + JSON.stringify(obj) + "\n```";
 
-  async function post(obj) {
-    const r = await gh("/comments", { body: { body: fence(obj) } });
+  async function post(obj, run) {
+    const r = await gh("/comments", { body: { body: fence(obj) }, run });
     if (!r.ok) {
       let msg = "";
       try { msg = String((await r.json()).message || ""); } catch (_) { /* no JSON body */ }
@@ -910,7 +921,7 @@ const ApexBridge = (function () {
       run.last.busy = false;
       run.served++;
       paintBadge();
-      await post(Object.assign({ re: c.id, cmd: c.msg && c.msg.cmd }, res));
+      await post(Object.assign({ re: c.id, cmd: c.msg && c.msg.cmd }, res), run);   // `run`: the link may have ended mid-command
     }
     // Only after every command is served: a throwing post() leaves the window where it was, so the next poll re-reads
     // the unserved commands (`seen` drops the ones already handled) instead of skipping past them.
@@ -920,7 +931,7 @@ const ApexBridge = (function () {
 
   // STATUS (#6581): one comment, edited in place. A long batch blocks the poll chain, not this timer, so `last.busy`
   // shows it running. A hidden page posts with keepalive (iOS may freeze the page right after).
-  const STATUS_BUSY_MS = 15000, STATUS_IDLE_MS = 60000, STATUS_FIRST_MS = 5000;
+  const STATUS_BUSY_MS = 15000, STATUS_IDLE_MS = 60000, STATUS_FIRST_MS = 5000, STATUS_MIN_MS = 5000;
   // The status comment's id on this device, as "<issue>:<comment id>" (one literal key, save-schema-registry.js).
   const STATUS_KEY = "apex26.bridgeStatus";
   function storedStatusId(issue) { const m = /^(\d+):(\d+)$/.exec(raw(STATUS_KEY) || ""); return m && Number(m[1]) === issue ? Number(m[2]) : 0; }
@@ -930,13 +941,19 @@ const ApexBridge = (function () {
   function wakeState(run) {
     return { supported: !!wakeApi(), held: !!(run && run.wake && !run.wake.released), refused: (run && run.wakeErr) || null };
   }
-  async function wakeAcquire(run) {
+  // One request at a time (a visibility flip mid-request must not orphan a second sentinel); an older one is released.
+  function wakeAcquire(run) {
     const w = wakeApi();
-    if (!w || (run.wake && !run.wake.released)) return;
-    try {
-      const l = await w.request("screen");
-      if (_run === run) { run.wake = l; run.wakeErr = null; } else wakeRelease({ wake: l });
-    } catch (e) { run.wake = null; run.wakeErr = String((e && e.name) || e); }
+    if (!w || run.wakePending || (run.wake && !run.wake.released)) return run.wakePending;
+    run.wakePending = (async () => {
+      try {
+        const l = await w.request("screen");
+        if (_run !== run) { wakeRelease({ wake: l }); return; }
+        if (run.wake && run.wake !== l) wakeRelease({ wake: run.wake });
+        run.wake = l; run.wakeErr = null;
+      } catch (e) { run.wake = null; run.wakeErr = String((e && e.name) || e); } finally { run.wakePending = null; }
+    })();
+    return run.wakePending;
   }
   function wakeRelease(run) {
     const l = run.wake;
@@ -969,9 +986,17 @@ const ApexBridge = (function () {
     return p;
   }
   async function statusEdit(run, ended, keepalive) {
+    run.statusAt = Date.now();
     try {
       const body = { body: "```apex-status\n" + JSON.stringify(statusOf(run, ended)) + "\n```" };
-      let id = run.statusId || storedStatusId(run.issue);
+      let id = run.statusId;
+      // A stored id is edited only once it reads back as this issue's own apex-status comment: the key never steers an
+      // edit onto another comment (security review, #6639).
+      if (!id && (id = storedStatusId(run.issue))) {
+        const g = await gh("", { run, repoPath: "/issues/comments/" + id });
+        const c = g.ok ? await g.json() : null;
+        if (!c || !String(c.issue_url || "").endsWith("/issues/" + run.issue) || !String(c.body || "").startsWith("```apex-status")) id = 0;
+      }
       if (id) {
         const r = await gh("", { run, repoPath: "/issues/comments/" + id, method: "PATCH", body, keepalive });
         if (r.ok) { run.statusId = id; run.statusSlow = false; return id; }
@@ -1019,7 +1044,7 @@ const ApexBridge = (function () {
   async function start(issue, tok) {
     if (_run) return false;
     _run = { issue, token: tok, cutoff: null, since: null, etag: null, seen: new Set(), served: 0, backoff: 0, timer: null, state: "connecting",
-      last: null, statusId: 0, statusTimer: null, statusDue: 0, statusBusy: null, statusAgain: null, statusSlow: false, onVis: null, wake: null, wakeErr: null };
+      last: null, statusId: 0, statusTimer: null, statusDue: 0, statusBusy: null, statusAgain: null, statusSlow: false, statusAt: 0, onVis: null, wake: null, wakePending: null, wakeErr: null };
     paintBadge();
     try {
       const hello = await post({ hello: true, facts: facts() });
@@ -1032,7 +1057,12 @@ const ApexBridge = (function () {
       armStatus(STATUS_FIRST_MS);
       const run = _run;
       wakeAcquire(run);
-      run.onVis = () => { if (_run !== run) return; if (!document.hidden) wakeAcquire(run); postStatus(run, null, !!document.hidden); };
+      // Visibility edits honour a rate limit (statusSlow) and a STATUS_MIN_MS floor: a flipping page cannot hammer the API.
+      run.onVis = () => {
+        if (_run !== run) return;
+        if (!document.hidden) wakeAcquire(run);
+        if (!run.statusSlow && Date.now() - run.statusAt >= STATUS_MIN_MS) postStatus(run, null, !!document.hidden);
+      };
       try { document.addEventListener("visibilitychange", run.onVis); } catch (_) { run.onVis = null; }
       return true;
     } catch (e) {
@@ -1060,7 +1090,7 @@ const ApexBridge = (function () {
     wakeRelease(run);
     _run = null;
     // The last edit says the link ended, and why — even in the first seconds (a reload), to the id stored on the device.
-    if (run.statusId || storedStatusId(run.issue)) postStatus(run, why || "stopped", true);
+    if (why !== "token rejected" && (run.statusId || storedStatusId(run.issue))) postStatus(run, why || "stopped", true);
     say("link ended: " + (why || "stopped"));
     paintBadge(why || "ended");
   }

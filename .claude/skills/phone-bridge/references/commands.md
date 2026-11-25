@@ -45,7 +45,7 @@ in `js/agent/apex-bridge.js`), not this table.
 | `key` | `key` (Escape, Enter, Space, Tab, arrows, Home, End, PageUp, PageDown, Backspace), `id`, `shift` | `{key, to, prevented, screen}`: keydown + keyup on the focused element (or `id`) |
 | `scroll` | `id` (else the page) and one of `by` px, `to` top / bottom, `into` true | `{scrolled, top, height, view}` |
 | `nav` | `flow` tt / race, `track`, `weather`, `tod`, `entry` setup / garage / daily, `go` (default true) | `{ok, screen, state, ms, steps:[{step, ok, screen, ms}], door}`; starts on the title; `door` = `menuPrep().door` |
-| `rects` | `ids[]` (1–40 element ids, never a selector) | `{viewport, screen, rects:[{id, x, y, w, h, visible, fontSize}]}` from `getBoundingClientRect` on the device; `{id, missing}` / `{id, refused}` (inside a denied area) |
+| `rects` | `ids[]` (1–40 element ids, never a selector) | `{viewport, screen, rects:[{id, x, y, w, h, visible, fontSize}]}` from `getBoundingClientRect` on the device; `{id, missing}` / `{id, refused}` (a denied id, whether or not it is in the page) |
 | `overlaps` | `ids[]` as `rects` | `{screen, checked, skipped, overlaps:[{a, b, x, y, w, h, area}]}`: every visible pair that intersects (#6518 SPEED vs STEER RIGHT) |
 | `drive` | ONE of `to` "box", `laps` 1-5, `seconds` 1-600; `ms` cap (240 000); `wait` false; `handsOff` true; or `stop` / `status` true | `{ok, screen, state, reason, inBox, pit, laps, steps:[{phase, t, s, kph}], pitActions}` (outer `ms` too): `value.ok` = goal met; `reason` box / laps / seconds / timeout / missed / lane-closed / touch / paused / state:… (§Driving) |
 | `batch` | `steps[]` of `{cmd, args}`, up to `BATCH_MAX` (25) | one result per step; stops at the first failure (or a `tap` / `nav` / `drive` whose `value.ok` is false); `reload` / `path` only last |
@@ -150,7 +150,10 @@ assist: it starts only from this command and lets go on `stop`, a pause, a quit,
 - While `drive` holds the car the phone shows a CLAUDE DRIVING strip under the link badge (it lets touches through:
   Bryce's touch still takes the car back, and the strip goes with any end of the drive).
 - `{"handsOff":true}`: a touch no longer takes the car back, so a brush cannot cut a check short; the strip carries a
-  big STOP that does, and a pause or a real key still ends the drive. The default stays any-touch-takes-over.
+  big STOP that does, and a pause or a real key still ends the drive. It is refused when the STOP cannot be shown, and
+  capped at 300 s. The default stays any-touch-takes-over.
+- Ending the link (TAP TO END on the badge) stops the drive AND the rest of a running batch: the next step answers
+  `the link ended` and no later `drive` takes the car (#6636).
 
 END TIME TRIAL, no human (Bryce on the title screen; one comment, ~2-3 min to the reply):
 
