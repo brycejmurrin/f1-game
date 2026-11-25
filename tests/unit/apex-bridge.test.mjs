@@ -1464,3 +1464,52 @@ test("#6582 AP-b schedule: fast after the hello and while a command runs, idle a
   assert.equal(b.api.pollPlan().why, "backoff");
   assert.equal(b.api.pollPlan().ms, 60000);
 });
+
+test("#6636: a nav or a waiting tap in flight stops pressing once the link that issued it ends", async () => {
+  const dom = menuDom();
+  const b = load({ tok: "tok", gh: editingGitHub(), apex: dom.apex, extra: dom.extra });
+  await flush();
+  const p = b.api.handle({ cmd: "nav", args: { flow: "tt", track: "monza" } });
+  b.api.stop("ended on the phone");   // TAP TO END after TIME TRIAL was pressed, while nav waits for SELECT
+  const r = await p;
+  assert.equal(r.value.ok, false);
+  assert.deepEqual(plain(r.value.steps.map((s) => [s.step, s.ok, s.error || null])), [["mb-tt", true, null], ["tile:monza", false, "the link ended"]]);
+  assert.deepEqual(dom.log.filter((l) => ["sel-go", "rs-go"].includes(l.split(":")[0])), [], "no later control is pressed");
+
+  const dom2 = menuDom();
+  const b2 = load({ tok: "tok", gh: editingGitHub(), apex: dom2.apex, extra: dom2.extra });
+  await flush();
+  dom2.els.get("mb-race").disabled = true;
+  setTimeout(() => { dom2.els.get("mb-race").disabled = false; }, 150);
+  const t = b2.api.handle({ cmd: "tap", args: { id: "mb-race", waitMs: 2000 } });
+  b2.api.stop("ended on the phone");
+  const tr = await t;
+  assert.equal(tr.error, "the link ended: tap refused");
+  await new Promise((res) => setTimeout(res, 250));
+  assert.equal(dom2.log.filter((l) => l === "mb-race:click").length, 0, "the control enabled after the link ended is never pressed");
+
+  // A tap with no link (the dev page) is never refused for it.
+  const dom3 = menuDom();
+  const b3 = load({ search: "", apex: dom3.apex, extra: dom3.extra });
+  assert.equal((await b3.api.handle({ cmd: "tap", args: { id: "mb-race" } })).ok, true);
+});
+
+test("#6637: call finishRace is refused while a DRIVER CAREER round is live (or the flow cannot be read)", async () => {
+  const hit = [];
+  let flow = "career";
+  const apex = { info: () => { if (flow === "throw") throw new Error("no G"); return { state: "race", flow }; }, finishRace: () => { hit.push(flow); return { state: "results" }; } };
+  const { api } = load({ search: "", apex });
+  for (const f of ["career", "throw", undefined]) {
+    flow = f;
+    const r = await api.handle({ cmd: "call", args: { method: "finishRace" } });
+    assert.equal(r.ok, false, String(f));
+    assert.equal(r.error, "finishRace refused: it would score a DRIVER CAREER round");
+  }
+  assert.deepEqual(hit, [], "a career round is never scored through the bridge");
+  for (const f of ["gp", "season"]) {
+    flow = f;
+    const r = await api.handle({ cmd: "call", args: { method: "finishRace" } });
+    assert.equal(r.ok, true, f + ": " + r.error);
+  }
+  assert.deepEqual(hit, ["gp", "season"]);
+});

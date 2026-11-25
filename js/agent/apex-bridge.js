@@ -67,6 +67,9 @@ const ApexBridge = (function () {
   }
 
   let _run = null, _badge = null;
+  // #6636: a command the link issued (run0 = _run when it began) stops pressing once that link has ended (TAP TO END).
+  // A command run with no link (run0 null: the dev page, a unit test) is never refused.
+  const linkEnded = (run0) => !!run0 && _run !== run0;
 
   function say(msg) {
     try { Log.info("apex", "[bridge] " + msg); } catch (_) { /* Log may not be up */ }
@@ -254,11 +257,18 @@ const ApexBridge = (function () {
     return out;
   }
 
+  // #6637: these end the session through G.endRace, and a DRIVER CAREER round's endRace scores it into the career save
+  // (Career.scoreRound). Refused while a career round is live, and whenever the flow cannot be read (fail closed).
+  const CALL_CAREER_SCORES = new Set(["finishRace"]);
+  function careerLive(api) {
+    try { const i = api.info(); return !i || i.flow === "career" || i.flow == null; } catch (_) { return true; }
+  }
   function call(args) {
     const m = args && args.method;
     if (!callAllowed(m)) throw new Error("method not allowed: " + m);
     const api = window.__apex;
     if (!api || typeof api[m] !== "function") throw new Error("__apex." + m + " unavailable");
+    if (CALL_CAREER_SCORES.has(m) && careerLive(api)) throw new Error(m + " refused: it would score a DRIVER CAREER round");
     return api[m].apply(api, Array.isArray(args.args) ? args.args : []);
   }
 
@@ -534,9 +544,10 @@ const ApexBridge = (function () {
   async function tap(args) {
     const a = args || {};
     if (a.until != null && !SCREEN_NAMES.has(a.until)) throw new Error("tap.until must be one of " + [...SCREEN_NAMES].join(", "));
-    const wait = Math.max(0, Math.min(TAP_WAIT_MAX, Number(a.waitMs) || 0)), t0 = Date.now();
+    const wait = Math.max(0, Math.min(TAP_WAIT_MAX, Number(a.waitMs) || 0)), t0 = Date.now(), run0 = _run;
     let what;
     for (;;) {
+      if (linkEnded(run0)) throw new Error("the link ended: tap refused");   // #6636: no press after TAP TO END
       try { what = tapEl(a); break; } catch (e) {
         if (!e || !e.notYet || Date.now() - t0 >= wait) throw new Error(String((e && e.message) || e) + (wait && e && e.notYet ? " after " + wait + " ms" : ""));
         await pause(100);
@@ -685,10 +696,11 @@ const ApexBridge = (function () {
     if (entry === "daily" && (flow !== "tt" || a.track != null || a.weather != null || a.tod != null)) throw new Error("daily pins its own circuit, weather and hour (flow tt, no track/weather/tod)");
     if (entry !== "daily" && a.track == null) throw new Error("nav.track is required");
     const steps = [];
-    const t0 = Date.now();
+    const t0 = Date.now(), run0 = _run;
     const step = async (name, act, wantScreen, ms) => {
       const s0 = Date.now();
       let out = null;
+      if (linkEnded(run0)) { steps.push({ step: name, ok: false, screen: screenNow(), error: "the link ended" }); return false; }   // #6636
       try { out = await act(); } catch (e) { steps.push({ step: name, ok: false, screen: screenNow(), error: String(e.message || e) }); return false; }
       const ok = wantScreen ? await until(typeof wantScreen === "function" ? wantScreen : () => screenNow() === wantScreen, ms || NAV_STEP_MS) : true;
       steps.push(Object.assign({ step: name, ok, screen: screenNow(), ms: Date.now() - s0 }, out != null && out !== true ? { value: out } : {}));
@@ -740,7 +752,7 @@ const ApexBridge = (function () {
     const run0 = _run;
     // Straight after `nav`'s RACE! the garage drive-out is still playing (state "menu"): wait for the session.
     await until(() => { const st = gameState(); return st === "race" || st === "count"; }, DRIVE_START_MS);
-    if (run0 && _run !== run0) throw new Error("the link ended: drive refused");   // #6636
+    if (linkEnded(run0)) throw new Error("the link ended: drive refused");   // #6636
     if (hands && !drivingBanner(true, true)) throw new Error("drive.handsOff needs the STOP banner on screen (no page body)");
     const run = S.drive({ to: a.to, laps: a.laps, seconds: a.seconds != null ? Number(a.seconds) : undefined, ms, handsOff: hands || undefined });
     // The banner goes when the drive ends for ANY reason (stop, a real touch, pause, hidden, quit, the link ending):
