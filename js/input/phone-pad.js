@@ -32,6 +32,8 @@ const PhonePad = (function () {
   const MIN_SAMPLE_GAP_MS = 15;    // and at most ~66 Hz — the sensor's own rate
   const HUD_MS = 66;               // the dash refreshes ~15 Hz, like the game's own HUD tick
   const FRESH_PAIR_MS = 5 * 60000; // a code this screen minted admits its first phone without ALLOW this long
+  const ASK_MS = 20000;            // an unanswered ALLOW card is a REJECT after this long (#6621)
+  const RELINK_STRIKES = 3;        // REJECTs a re-link absorbs before the code is given up (#6621)
 
   // ── desktop: the focus ring the phone moves ──────────────────────────────
   // The D-pad reaches MenuNav as SYNTHETIC arrow keys, and whether the browser
@@ -336,6 +338,7 @@ const PhonePad = (function () {
       confirm: (text) => askOnScreen(typeof document !== "undefined" ? document : null, text),
       now: () => Date.now(),
       freshMs: FRESH_PAIR_MS,
+      askMs: ASK_MS,
     }, deps || {});
     const say = (t, bad) => { if (ui.say) { try { ui.say(t, !!bad); } catch (e) { /* ui's problem */ } } };
     const qr = (url, code) => { if (ui.qr) { try { ui.qr(url, code); } catch (e) { /* ui's problem */ } } };
@@ -358,6 +361,7 @@ const PhonePad = (function () {
     // player just pressed the button and is holding the phone. Everything else still asks: a
     // re-hosted code (a re-link) answered by another peer, or a code older than the window.
     let trusted = null, asking = null, mintedAt = 0;
+    let strikes = 0;              // REJECTs (or ALLOW timeouts) since the trusted phone last linked
     const HELLO_WAIT_MS = 1500;   // how long a re-link waits for the phone to name itself
     const samePeer = (p) => !!trusted && ((!!trusted.id && p.id === trusted.id) || (!!trusted.fp && p.fp === trusted.fp));
     async function admit(p, whenId) {
@@ -378,8 +382,20 @@ const PhonePad = (function () {
       if (ui.asking) { try { ui.asking(); } catch (e) { /* ui's problem */ } }
       try { c = deps.confirm("A phone joined with this game's room code. Let it steer this game?"); } catch (e) { c = null; }
       asking = c && typeof c.dismiss === "function" ? c : null;
+      // #6621: the card times out as a REJECT, so a stranger cannot hold the one slot (and a paused race) forever.
+      let timer = null;
+      const timedOut = new Promise((r) => {
+        if (!(deps.askMs > 0) || typeof setTimeout !== "function") return;
+        timer = setTimeout(() => r("timeout"), deps.askMs);
+        if (timer && typeof timer.unref === "function") timer.unref();
+      });
       let ok = false;
-      try { ok = (await (c && c.result !== undefined ? c.result : c)) === true; } catch (e) { ok = false; }
+      try {
+        const v = await Promise.race([c && c.result !== undefined ? c.result : c, timedOut]);
+        if (v === "timeout") { Log.info("input", "phone pad: ALLOW card timed out — treated as REJECT"); dismissAsk(); }
+        else ok = v === true;
+      } catch (e) { ok = false; }
+      if (timer !== null) clearTimeout(timer);
       asking = null;
       return ok && phase === "confirming";
     }
@@ -468,7 +484,7 @@ const PhonePad = (function () {
                 qr(null, null);
               },
               onAdmitted: (p) => {
-                phase = "linked"; relink = false; trusted = p;
+                phase = "linked"; relink = false; trusted = p; strikes = 0;
                 say("Phone connected — tilt to steer. RECALIBRATE TILT levels it.");
                 Log.info("input", "phone pad linked");
                 if (ui.linked) { try { ui.linked(); } catch (e) { /* ui's problem */ } }
@@ -476,6 +492,16 @@ const PhonePad = (function () {
               onClose: (why) => {
                 if (phase === "cancelled") return;
                 dismissAsk();
+                // #6621: during a RE-LINK, a phone that is REJECTed (or times out) or hangs up before it
+                // links frees the slot: the SAME code is hosted again so the trusted phone can still
+                // answer it, up to RELINK_STRIKES times.
+                if (phase !== "linked" && relink && trusted && !deps.usingPrivateRelay() && ++strikes < RELINK_STRIKES) {
+                  active = null; transport = null;
+                  dropRoom();
+                  Log.info("input", "phone pad re-link: another phone " + (why === "rejected" ? "rejected" : "left") + " (" + strikes + "/" + RELINK_STRIKES + ") — hosting again");
+                  open();
+                  return;
+                }
                 if (why === "rejected") {
                   phase = "lost"; relink = false; active = null; transport = null;
                   dropRoom();

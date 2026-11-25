@@ -2667,6 +2667,53 @@ test("host(): a re-link from the ALLOWed phone is let back in; another peer on t
   h.ctl.cancel();
 });
 
+test("#6621: a stranger on a re-link is REJECTed or times out, the SAME code is hosted again and the real phone re-links; strikes end it", async () => {
+  const c = handConfirm();
+  const pairs = [];
+  let minted = 0;
+  const rtc = () => { const p = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(70 + pairs.length) }); p[0].pump(0); p[1].pump(0); pairs.push(p); return p[1]; };
+  const drop = ([padEnd, hostEnd]) => { padEnd.status = hostEnd.status = "closed"; hostEnd._emit("close", "wire"); padEnd._emit("close", "wire"); };
+  const hello = (p, id) => { p[0].send(NetTransport.EVENT, PhonePad.encodeHello("pad", false, true, id)); p[1].pump(10); };
+  const join = async (h, id) => { await h.room.onJoiner(null, "ANSWER"); await settle(); hello(pairs.at(-1), id); await settle(); };
+  const h = hostHarness({ rtc, confirm: c.confirm, askMs: 30, makeCode: () => { minted++; return "ABC234"; } });
+  await settle(); await join(h, PEER_A);
+  assert.equal(h.ctl.state().phase, "linked");
+  drop(pairs[0]); await settle();
+  assert.equal(h.ctl.state().phase, "waiting", "re-link: the same code is hosted again");
+  // A stranger answers first and is asked; the player taps REJECT.
+  await join(h, PEER_B);
+  assert.equal(h.ctl.state().phase, "confirming"); assert.equal(c.asks.length, 1);
+  c.asks[0].answer(false); await settle();
+  assert.equal(pairs[1][1].status, "closed", "the stranger's transport is closed");
+  assert.equal(h.ctl.state().phase, "waiting", "REJECT frees the slot: the room is hosted again, not lost");
+  assert.equal(h.ctl.state().code, "ABC234"); assert.equal(minted, 1, "on the SAME code");
+  assert.equal(h.ui.lostN, 0, "the page is not told to re-pair");
+  // The real phone answers that same code and is let straight back in.
+  await join(h, PEER_A);
+  assert.equal(h.ctl.state().phase, "linked"); assert.equal(c.asks.length, 1, "the trusted phone is not asked");
+
+  // An ALLOW card nobody answers is a REJECT after askMs: dismissed, the room hosted again.
+  drop(pairs.at(-1)); await settle();
+  await join(h, PEER_B);
+  assert.equal(h.ctl.state().phase, "confirming");
+  await new Promise((r) => setTimeout(r, 60)); await settle();
+  assert.equal(c.asks.at(-1).dismissed, 1, "the timed-out card is taken down");
+  assert.equal(h.ctl.state().phase, "waiting", "a timeout re-hosts like REJECT");
+  assert.equal(minted, 1);
+
+  // Strikes: RELINK_STRIKES (3) in one re-link and the code is given up. A stranger that hangs up
+  // under the card (no REJECT) is strike 2 and still frees the slot.
+  await join(h, PEER_B);
+  drop(pairs.at(-1)); await settle();
+  assert.equal(h.ctl.state().phase, "waiting", "a stranger leaving before ALLOW re-hosts too");
+  assert.equal(h.ui.lostN, 0);
+  await join(h, PEER_B); c.asks.at(-1).answer(false); await settle();
+  assert.equal(h.ctl.state().phase, "lost", "strike 3: a looping stranger ends the re-link");
+  assert.equal(h.ui.lostN, 1);
+  assert.equal(h.ui.said.at(-1), "!Phone rejected — press STEER THIS GAME WITH A PHONE for a new code.");
+  h.ctl.cancel();
+});
+
 test("the codec carries the page's peer id in its hello, hex only (W26 row 11b)", () => {
   const id = PhonePadCodec.makePeerId();
   assert.equal(id.length, 32);

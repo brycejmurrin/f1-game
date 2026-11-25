@@ -1,0 +1,1 @@
+Fixed: When a linked phone controller drops and the game re-hosts its code, another phone answering first no longer blocks the real one: REJECT, or an ALLOW card left unanswered for 20 seconds, opens the same code again so your phone reconnects on its own; after three rejected phones the game asks for a new code (#6621).
