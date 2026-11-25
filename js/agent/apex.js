@@ -67,7 +67,7 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   "kTurn", "_alPrev", "_alPrevDp",
   // The last three appear only on a STREET circuit with real contact — sweep
   // tracks, not just monza.
-  "_preColS", "_preColX", "collideT", "uslipHapT", "fxSparkI",
+  "_preColS", "_preColX", "collideT", "uslipHapT", "oslipHapT", "lockHapT", "fxSparkI",
   // The tyre-force model (js/physics/tyre-model.js) and the smoothed
   // control-demand fields (game.js "--- lateral ---"), every one read with a
   // `|| 0` / Number.isFinite fallback for the cold-car case (tyre-model.js's
