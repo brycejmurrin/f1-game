@@ -1,7 +1,9 @@
 // @ts-check
 // Tests for car setup budget system:
-// - Budget display at the Parts.BUDGET default (read from the page, not
-//   hardcoded: the cap moves when the catalog grows)
+// - Budget display at the free-play cap, Parts.freeBudget(team) = the works
+//   build's cost + Parts.BUDGET (read from the page, not hardcoded: the cap
+//   moves when the catalog grows). The works car is free, so a fresh sheet
+//   reads "BUDGET: <BUDGET> / <freeBudget> cr remaining" (#6572).
 // - Budget decrements on part selection
 // - Over-budget parts show visual warning and can't be selected (without unlimited)
 // - Unlimited toggle removes cap and persists via localStorage
@@ -29,7 +31,33 @@ async function pickOpt(page, catId, optId) {
   await page.locator(`#cs-options [data-cs-opt="${optId}"]`).click();
 }
 
-async function openSetup(page) {
+// Every price this file asserts is a DELTA over the team's works part: a free-play
+// sheet reads over the works build (#6572), so swapping one row spends
+// option.cost − works.cost, which may be negative.
+async function budgetOf(page, team, swap) {
+  return page.evaluate(([id, sw]) => {
+    const t = Teams.LIST.find((x) => x.id === id), works = Parts.getFactorySetup(t);
+    const base = Parts.getCost(works, t);
+    return { allowance: Parts.BUDGET, cap: Parts.freeBudget(t), worksCost: base,
+      delta: sw ? Parts.getCost(Object.assign({}, works, sw), t) - base : 0 };
+  }, [team, swap || null]);
+}
+
+// The dearest row over the works part in each category for `team`, richest first.
+async function upgradeRows(page, team) {
+  return page.evaluate((id) => {
+    const t = Teams.LIST.find((x) => x.id === id), works = Parts.getFactorySetup(t);
+    const base = Parts.getCost(works, t);
+    return Parts.CATALOG.map((cat) => {
+      const rows = cat.options.filter((o) => Parts.isOptionAvailable(o, t))
+        .map((o) => ({ cat: cat.id, id: o.id, d: Parts.getCost(Object.assign({}, works, { [cat.id]: o.id }), t) - base }))
+        .sort((a, b) => b.d - a.d);
+      return { cat: cat.id, rows };
+    }).filter((c) => c.rows.length && c.rows[0].d > 0).sort((a, b) => b.rows[0].d - a.rows[0].d);
+  }, team);
+}
+
+async function openSetup(page, team = "mclaren") {
   // Back to the title from wherever the previous test stopped, then the same
   // clean-storage start the old addInitScript gave a fresh page — done on the
   // LIVE page, which means the store's cache has to forget the keys too. (The
@@ -38,8 +66,9 @@ async function openSetup(page) {
   await toMenu(page);
   await forgetStored(page, ["parts.*", "unlimitedBudget"]);
   // Empty factory sheet, not a miss: forgetStored of parts.* would otherwise
-  // let GarageDefaults fill the McLaren signature kit (−1220 / 780).
-  await pinFreePlay(page, { team: "mclaren", click: false });
+  // let GarageDefaults fill the team's signature kit. Either way the sheet
+  // reads over the works build, which the free-play cap already pays for.
+  await pinFreePlay(page, { team, click: false });
   // THE GARAGE DOOR, not the race flow. This used to walk mb-race -> select ->
   // sel-go, which builds the circuit picker and then the track itself before it
   // ever reaches the screen these tests are about. Measured on this box:
@@ -59,7 +88,7 @@ async function openSetup(page) {
   // Two `let`s the forgotten keys cannot reach: the team the garage shows and
   // FREE BUILD. A fresh boot read both out of empty storage; the shared page
   // has whatever the last test chose.
-  await garageTeam(page, "mclaren");
+  await garageTeam(page, team);
   await freeBuildOff(page);
   // STOP THE RENDER LOOP for the click-heavy part. The garage draws a live
   // turntable and getSetupPreviewMesh() re-keys on partsVisualKey, so every
@@ -103,16 +132,21 @@ async function shot(page, name) {
   await page.evaluate(() => window.__apex.headless(true));
 }
 
+const readFill = (page) => page.locator("#cs-budget-fill").evaluate((el) =>
+  parseFloat((/scaleX\(([^)]+)\)/.exec(el.style.transform) || [0, "NaN"])[1]));
+
 test.describe("Budget system — display", () => {
   test("shows the full cap at all defaults", async ({ page }) => {
     await openSetup(page);
     // Read the cap from Parts rather than hardcoding it — the budget rises when
     // the catalog gains options, and a literal here just breaks on that.
-    const cap = await page.evaluate(() => Parts.BUDGET);
+    const b = await budgetOf(page, "mclaren");
     const text = await page.locator("#cs-budget").textContent();
-    // Nothing is spent at defaults, so remaining equals the cap (setup-ui.js
-    // renders "BUDGET: <remaining> / <cap> cr remaining").
-    expect(text).toContain(cap + " / " + cap + " cr remaining");
+    // The works car is free: at defaults the whole allowance remains, against
+    // the works cost + allowance cap (setup-sheet.js renders
+    // "BUDGET: <remaining> / <cap> cr remaining").
+    expect(b.cap).toBe(b.worksCost + b.allowance);
+    expect(text).toContain(b.allowance + " / " + b.cap + " cr remaining");
     await shot(page, "budget-default.png");
   });
 
@@ -122,47 +156,67 @@ test.describe("Budget system — display", () => {
     expect(cls ?? "").not.toContain("over");
   });
 
-  test("budget bar fill is zero at all defaults", async ({ page }) => {
+  test("budget bar fill is the works car's share of the cap at defaults", async ({ page }) => {
     await openSetup(page);
-    const transform = await page.locator("#cs-budget-fill").evaluate((el) =>
-      el.style.transform
-    );
-    expect(transform).toContain("scaleX(0)");
+    // The bar is spent / cap (setup-sheet.js), and a fresh sheet has spent the
+    // works build: the bar starts at worksCost / (worksCost + BUDGET), not 0.
+    const b = await budgetOf(page, "mclaren");
+    const fill = await readFill(page);
+    expect(fill).toBeCloseTo(b.worksCost / b.cap, 4);
   });
 });
 
 test.describe("Budget system — part selection", () => {
-  test("selecting the race engine spends exactly its catalog price", async ({ page }) => {
+  test("selecting the race engine spends exactly its price over the works engine", async ({ page }) => {
     await openSetup(page);
     await pickOpt(page, "engine", "race");
-    // Read the price from the catalog, like the cap above. Hardcoding it pinned
+    // Read the prices from the catalog, like the cap above. Hardcoding it pinned
     // 160 cr, and the ladder re-space repriced the row — a spec that fails
     // because a part is cheaper is measuring the number, not the behaviour.
-    const left = await page.evaluate(() => Parts.BUDGET -
-      Parts.CATALOG.find((c) => c.id === "engine").options.find((o) => o.id === "race").cost);
+    // The swap is priced against the works engine it replaces (#6572), so it
+    // can refund: McLaren's race engine is cheaper than its works PU.
+    const b = await budgetOf(page, "mclaren", { engine: "race" });
     const text = await page.locator("#cs-budget").textContent();
-    expect(text).toContain(String(left));
+    expect(text).toContain((b.allowance - b.delta) + " / " + b.cap + " cr remaining");
     await shot(page, "budget-race-engine.png");
   });
 
   test("budget fill bar increases after selecting a paid part", async ({ page }) => {
     await openSetup(page);
-    await pickOpt(page, "engine", "race");
-    const transform = await page.locator("#cs-budget-fill").evaluate((el) =>
-      el.style.transform
-    );
-    // A paid part must move the bar off zero (the race engine against the cap).
-    expect(transform).toMatch(/scaleX\(0\.[1-9]/);
+    const before = await readFill(page);
+    // The dearest engine over the works one: a swap that costs, not one that refunds.
+    const engine = (await upgradeRows(page, "mclaren")).find((c) => c.cat === "engine");
+    expect(engine, "mclaren has an engine dearer than its works PU").toBeTruthy();
+    await pickOpt(page, "engine", engine.rows[0].id);
+    const b = await budgetOf(page, "mclaren", { engine: engine.rows[0].id });
+    const after = await readFill(page);
+    expect(after).toBeGreaterThan(before);
+    expect(after).toBeCloseTo((b.worksCost + b.delta) / b.cap, 4);
   });
 
   test("parts that exceed budget show over-budget class", async ({ page }) => {
-    await openSetup(page);
-    // Spend enough that the dearest engine no longer fits: the top ERS, gearbox
-    // and fuel rows together leave well under the dearest engine against the
-    // 780 cap. Prices move with the ladder; the three dearest rows do not.
-    await pickOpt(page, "ers", "overcharge");
-    await pickOpt(page, "gearbox", "seamless_shift");
-    await pickOpt(page, "fuel", "custom_formula");
+    // HAAS, not McLaren: the allowance is spent over the WORKS build (#6572),
+    // and McLaren's works kit is so dear that every upgrade above it together
+    // stays under the 780 allowance — nothing can ever be over budget there.
+    // Haas has the cheapest works build, so its upgrades clear the allowance.
+    // Four swaps at SwiftShader speed: the same budget as the 'over' test below.
+    test.setTimeout(240_000);
+    await openSetup(page, "haas");
+    // Spend, at normal prices, until the dearest engine no longer fits: richest
+    // category first, the dearest row in it that still fits. Rows are read from
+    // the ladder, so they move with it.
+    const cats = await upgradeRows(page, "haas");
+    const engineMax = cats.find((c) => c.cat === "engine").rows[0].d;
+    let left = (await budgetOf(page, "haas")).allowance;
+    for (const c of cats) {
+      if (left < engineMax) break;
+      if (c.cat === "engine") continue;
+      const r = c.rows.find((x) => x.d > 0 && x.d <= left);
+      if (!r) continue;
+      await pickOpt(page, r.cat, r.id);
+      left -= r.d;
+    }
+    expect(left, "the picks leave less than the dearest engine upgrade").toBeLessThan(engineMax);
     // Switch to engine so over-budget options are visible in #cs-options
     await page.locator('#cs-tabs [data-cs-cat="engine"]').click();
     const overBudgetCount = await page.locator("#cs-options .cs-opt.over-budget").count();
@@ -172,23 +226,27 @@ test.describe("Budget system — part selection", () => {
 
   test("budget label gets 'over' class when spending exceeds the cap", async ({ page }) => {
     // FOUR PART SWAPS IS THE ARITHMETIC MINIMUM, so this test cannot be made
-    // cheaper the way the rest of the file was. Summing the dearest option in
-    // each category, richest first against the 780 cap: ers/overcharge 230,
-    // gearbox/seamless_shift 210 (440), fuel/custom_formula 210 (650), and only
-    // the fourth crosses. Every swap rebuilds the car mesh and repaints the
-    // bay, and that is the test, not overhead around it. Measured 133.2 s at
-    // one worker after the garage-door change took the rest of the file to
-    // 13-116 s; the 120 s default is the only thing it fails.
+    // cheaper the way the rest of the file was. HAAS, as above: the allowance
+    // is spent over the works build (#6572), and McLaren's upgrades above its
+    // works kit never add up to the 780 allowance. Summing Haas's dearest
+    // upgrade in each category, richest first (2026-11-25 ladder: tyres 205,
+    // ers 200, exhaust 200, floor 190), only the fourth crosses. Every swap
+    // rebuilds the car mesh and repaints the bay, and that is the test, not
+    // overhead around it. Measured 133.2 s at one worker for the McLaren
+    // version; the 120 s default is the only thing it fails.
     test.setTimeout(240_000);
-    await openSetup(page);
+    await openSetup(page, "haas");
     // Unlimited mode to select a combo past the cap, then disable to reveal it.
     await page.locator("#cs-unlimited").click();
-    await pickOpt(page, "ers", "overcharge");
-    await pickOpt(page, "gearbox", "seamless_shift");
-    await pickOpt(page, "fuel", "custom_formula");
-    await pickOpt(page, "engine", "quali_engine");
-    // The four dearest rows together clear the 780 cap by a wide margin, so the
-    // label goes "over" whatever the ladder prices them at.
+    const cats = await upgradeRows(page, "haas");
+    let spent = 0;
+    const allowance = (await budgetOf(page, "haas")).allowance;
+    for (const c of cats) {
+      if (spent > allowance) break;
+      await pickOpt(page, c.cat, c.rows[0].id);
+      spent += c.rows[0].d;
+    }
+    expect(spent, "the dearest upgrades clear the allowance").toBeGreaterThan(allowance);
     await page.locator("#cs-unlimited").click();
     const cls = await page.locator("#cs-budget").getAttribute("class");
     expect(cls).toContain("over");
@@ -214,8 +272,8 @@ test.describe("Budget system — unlimited toggle", () => {
 
   test("unlimited mode hides budget fill bar", async ({ page }) => {
     await openSetup(page);
-    // Buy a part FIRST: with nothing bought the bar reads scaleX(0) in both
-    // modes (js/garage/setup-sheet.js), so the old test could not fail.
+    // Buy a part FIRST, so the bar is off zero for a reason the test controls
+    // (a fresh sheet already reads the works share of the cap, #6572).
     await pickOpt(page, "engine", "race");
     const fill = () => page.locator("#cs-budget-fill").evaluate((el) => el.style.transform);
     expect(await fill(), "a paid part moves the bar off zero").toMatch(/scaleX\(0\.[1-9]/);
@@ -264,9 +322,9 @@ test.describe("Budget system — unlimited toggle", () => {
     await openSetup(page);
     await page.locator("#cs-unlimited").click(); // ON
     await page.locator("#cs-unlimited").click(); // OFF
-    const cap = await page.evaluate(() => Parts.BUDGET);
+    const b = await budgetOf(page, "mclaren");
     const budgetText = await page.locator("#cs-budget").textContent();
-    expect(budgetText).toContain(String(cap));
+    expect(budgetText).toContain(b.allowance + " / " + b.cap + " cr remaining");
     const cls = await page.locator("#cs-unlimited").getAttribute("class");
     expect(cls).not.toContain(" on");
   });

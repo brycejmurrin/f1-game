@@ -35,7 +35,10 @@ async function lap(track, teamId, arm) {
   try {
     const A = g.apex, G = g.G, P = g.sandbox.Parts;
     A.tt(track, "day");
-    assert.ok(await g.settle(() => G.timeTrial && G.track && G.player), "time trial up");
+    // A SOLO time trial, not the race createGame booted: A.tt sets G.timeTrial at once but swaps the 22-car grid
+    // for the lone TT car a host turn later, and settle() tests before it yields — so `G.timeTrial` alone let the
+    // lap run in race traffic, whose outcome moved with the host (CI 169.27 s vs 171.40 s locally, Suzuka Williams).
+    assert.ok(await g.settle(() => G.timeTrial && G.track && G.player && G.cars.length === 1 && G.state !== "race"), "time trial up");
     const t = G.player.team, st = g.sandbox.Career.teamStats(t) || t.stats;
     assert.equal(t.id, teamId);
     const raw = P.getMods(P.getFactorySetup(t), t);
