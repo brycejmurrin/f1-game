@@ -974,6 +974,9 @@ const Parts = (function () {
     return m;
   }
 
+  // Free-play cap: the works car is free, BUDGET is the upgrade allowance on top of it.
+  function freeBudget(team) { return BUDGET + factoryResolved(team).cost; }
+
   function getCost(setup, team) {
     return resolveSetup(setup, team).cost;
   }
@@ -1062,7 +1065,7 @@ const Parts = (function () {
     CATALOG, DEFAULTS, FACTORY_PRESETS, VISUAL_FIELD_REGISTRY, BUDGET,
     resolveSetup, isOptionAvailable, ownId, ownIdOf,
     getFactorySetup, factoryKey,
-    getMods, playerMods, getCost, getVisualTiers, statMult, displayStat, STAT_KEYS, aeroLoad, ersProfile, tread, RH_GAIN,
+    getMods, playerMods, freeBudget, getCost, getVisualTiers, statMult, displayStat, STAT_KEYS, aeroLoad, ersProfile, tread, RH_GAIN,
     setLegality, legalityKey, legality,
   };
 })();

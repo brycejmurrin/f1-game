@@ -69,7 +69,7 @@ function boardInfo(team, getParts, driverIdx, ctx) {
     // empty bar, two metres from a DOM panel reading the true figure, and it
     // stayed at 0 however much was unfitted. Four of the seven starter teams are
     // over 780 on the factory build alone, and MY TEAM is 900.
-    const cap = owned ? Career.budget() : Parts.BUDGET;
+    const cap = owned ? Career.budget() : Parts.freeBudget(team);
     // FREE BUILD has no cap to spend against (the DOM sheet says so): the board
     // prints it instead of "0 cr OF 780 REMAINING" over an empty bar.
     _boardInfo = { stats, spec, driver: drv, budget: cap, unlimited,

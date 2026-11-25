@@ -93,3 +93,11 @@ test("a career regulation keys the norm: a banned works part costs the player no
     for (const k of K) assert.ok(Math.abs(m[k] - 1) < 1e-12, `${k} ${m[k]}`);
   } finally { Parts.setLegality(null, ""); }
 });
+
+test("free-play cap: the works car is free, BUDGET is the upgrade allowance on top of it", () => {
+  for (const t of REAL) {
+    const works = Parts.getCost(Parts.getFactorySetup(t), t);
+    assert.equal(Parts.freeBudget(t) - works, Parts.BUDGET, `${t.id}: ${works} + ${Parts.BUDGET}`);
+  }
+  assert.equal(Parts.freeBudget({ id: "custom", engine: null }), Parts.BUDGET + Parts.getCost({}, { id: "custom", engine: null }));
+});

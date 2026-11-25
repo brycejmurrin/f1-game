@@ -498,6 +498,8 @@ read it:
 - **No works build (MY TEAM) divides by 1**, so it is unchanged.
 - **A free-play sheet is read over the works build** (`getTeamParts`), so an unset category is the works part. The
   test seat's empty `parts.mclaren` is therefore the real McLaren works car.
+- **The free-play cap** is `Parts.freeBudget(team)`, the works cost plus `BUDGET`. The works car is free, and the 780 cr
+  are the upgrade allowance on top of it. The garage, the wall board, agentview and the lobby's rival check all read it.
 - **Raw `getMods` is unchanged** for `ai-dev.js` ranking and `buildPace`, which compare two builds of one team.
 - **Saves are untouched.** A career's `fitted` is a full map, and the mods are derived at every race start, so
   nothing migrates. A hand-stripped stock build now reads below ×1.0, because stock is a downgrade from the works car.

@@ -622,7 +622,7 @@ function buildSetup() {
   if (partsChanged) saveTeamParts(team.id, parts);
 
   const owned = G.careerOwned();
-  const cap = owned ? Career.budget() : Parts.BUDGET;
+  const cap = owned ? Career.budget() : Parts.freeBudget(team);
   const unlimited = !owned && G.unlimitedBudget;
 
   const spent = Parts.getCost(parts, team);
