@@ -519,6 +519,11 @@ test("Wheel Layout (#6287): a file import still reading never replaces a newer p
   assert.equal(api.get().swap, true, 'the older import does not replace the newer pick');
   assert.equal(JSON.parse(saved['apex26.padLayout']).swap, true, 'nor overwrite what was saved');
   assert.equal(fileStatus.textContent, '', 'and announces no import');
+  emit(importLayout, 'change');
+  api.arrange(true);
+  finish(JSON.stringify({ format: 'apex26-wheel', v: 1, layout: plain(L.LAYOUT_PRESETS.classic) }));
+  await new Promise((ok) => setTimeout(ok, 0));
+  assert.equal(api.get().swap, true, 'nor does one that resolves after MOVE & SIZE opens');
 });
 
 test("Menu Pad (#6291): Wheel Layout and the steering pick are on the Menu Pad too, and stay in step with the wheel's", async () => {

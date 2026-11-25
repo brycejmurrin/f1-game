@@ -1401,7 +1401,7 @@ const PhonePadPage = (function () {
     function restore(snapshot) { changeSerial++; cur = applyLayout(dom, snapshot); paint(); pick(picked); }
     function arrange(on, accept = true) {
       if (on === arranging()) return;
-      if (on) { baseline = cur; opener = dom.doc?.activeElement; }
+      if (on) { changeSerial++; baseline = cur; opener = dom.doc?.activeElement; }   // an import still reading never lands on an arrangement in progress
       else { stopDrag(true); if (accept && cur !== baseline) set(cur); else restore(baseline); }
       dom.body.classList.toggle("arranging", on);
       if (dom.bar) dom.bar.hidden = !on;
