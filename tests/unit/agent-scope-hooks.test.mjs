@@ -78,7 +78,7 @@ test("surveyor-scope.sh: the circuit pair, scratch/ and artifacts/ only; scratch
 });
 
 test("every reporter card wires readonly-bash.sh on Bash; the two writers wire their scope hook on Write|Edit", () => {
-  const readers = ["Explore", "deploy-research", "verify-agent", "prior-art-scout", "finding-verifier", "physics-contract-auditor", "ci-red-triage", "code-hunter", "surface-reviewer"];
+  const readers = ["Explore", "deploy-research", "verify-agent", "prior-art-scout", "finding-verifier", "physics-contract-auditor", "ci-red-triage", "code-hunter", "surface-reviewer", "pr-reviewer"];
   for (const id of readers) {
     const fm = frontmatter(fs.readFileSync(path.join(AGENTS, `${id}.md`), "utf8"));
     assert.match(fm, /^hooks:\n  PreToolUse:\n    - matcher: "Bash"\n      hooks:\n        - type: command\n          command: "[^"\n]*tools\/hooks\/readonly-bash\.sh/m, `${id}: hooks: PreToolUse Bash → readonly-bash.sh`);

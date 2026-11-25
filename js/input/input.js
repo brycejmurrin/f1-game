@@ -205,6 +205,8 @@ const Input = (function () {
   let remThr = 0, remBrk = 0;    // 0..1 pedal travel from the phone
   let remPedalDz = REMOTE_PEDAL_ON;  // Legacy phone/XR samples are raw travel.
   let remHeld = 0;               // REMOTE_HELD bits
+  let remoteDriveReady = false;
+  let remoteDriveGen = 0;        // bumped at each Resume: a link fences its in-flight samples on it (#6330)
   let remRoll = false;           // the last sample carried a roll: a phone with no sensor sends null
   let remStick = false, remSteer = 0;   // the last sample carried a STICK command (XR): -1..1, no tilt pipeline
   let remSeq = null;             // the last roll sample's seq (burst dt, below)
@@ -215,7 +217,10 @@ const Input = (function () {
 
   let onPauseCb = null;
   /** @type {(() => void) | null} */
-  let onPadLostCb = null;      // fired when a controller disconnects and no other driver owns the car
+  let onPadLostCb = null;      // fired when the driving controller is lost and no other driver owns the car
+  // Drive ownership survives a missing Gamepad API snapshot. The selected
+  // pad and its button history can also belong to an idle or menu-only pad.
+  let drivingPadKey = null;
   let onPhoneTiltChange = null;
 
   // SIM TIME vs WALL TIME. The steering RAMPS (keyboard, and the tilt slew) are
@@ -353,7 +358,7 @@ const Input = (function () {
   }
 
   function tiltActive() {
-    return steerMode === "tilt" && localTiltFresh() && (!tiltRemote || remoteSteers());
+    return steerMode === "tilt" && localTiltFresh() && (!tiltRemote || (remoteDriveReady && remoteSteers()));
   }
   function localTiltFresh() {
     if (tiltSeen && !tiltRemote && nowMs() - lastOrientMs >= LOCAL_TILT_STALE_MS) {
@@ -398,6 +403,10 @@ const Input = (function () {
     remoteOwner = owner;
     const n = nowMs();
     remCamera = owner === "phone" && s.camera && remoteControlContext() === "camera" ? s.camera : null;
+    // FENCED: a drive sample the phone sent before it saw the drive surface
+    // return (PhonePad.link's Resume fence). The link stays live; nothing it
+    // carries drives, and the tilt filter starts fresh from the next sample.
+    if (s.driveFenced && !s.camera) { clearRemoteControls(true); remoteMs = n; return true; }
     // A STICK (an XR thumbstick, js/xr/xr-input.js) is an analog steer
     // command, not a lean: it used to be dressed up as a roll (steerToTilt) and
     // ride the phone's One-Euro filter, tilt dead zone and 8/s slew, and lamp 1's
@@ -428,9 +437,11 @@ const Input = (function () {
     remBrk = clamp(+s.brk || 0, 0, 1);
     remHeld = s.held | 0;
     remoteMs = n;
+    remoteDriveReady = !remoteDrivingBlocked();
     if (hadPhoneTilt !== phoneTiltAvailable()) onPhoneTiltChange?.();
-    if (!remoteDrivingBlocked() && (remThr > remPedalDz || remBrk > remPedalDz || remHeld ||
-      (remStick ? Math.abs(remSteer) > 0.05 : remRoll && Math.abs(s.roll - tiltZero) > 2))) {
+    if (remoteDriveReady && (remoteDriveEngaged() || remHeld)) {
+      // Remote pedals take priority over the pad, but its steering does not.
+      if (drivingPadKey !== null && remoteDriveEngaged(padSteerActive())) drivingPadKey = null;
       noteInputSource(owner === "phone" || !remStick ? "phone" : "controller");
     }
     return true;
@@ -478,6 +489,7 @@ const Input = (function () {
   // reset() uses this on blur/visibility loss; the next fresh sample can take
   // control again, while a real link loss additionally clears remoteOwner below.
   function clearRemoteControls(clearSequence) {
+    remoteDriveReady = false;
     const hadPhoneTilt = phoneTiltAvailable();
     remoteMs = 0; remThr = remBrk = 0; remHeld = 0; remRoll = false; remStick = false; remSteer = 0;
     remCamera = null;
@@ -485,6 +497,13 @@ const Input = (function () {
     if (tiltRemote || !gyroAttached) tiltSeen = false;
     if (tiltRemote) tiltFilterClear();
     if (hadPhoneTilt) onPhoneTiltChange?.();
+  }
+  // Resume requires a new driving sample. Keep the live link and its sensor
+  // capability available to the menu, but start the steering filter fresh.
+  function invalidateRemoteDrive() {
+    remoteDriveReady = false;
+    remoteDriveGen++;
+    if (tiltRemote) tiltFilterClear();
   }
   // The link dropped: pedals off at once, and a phone-fed tilt reading must not
   // keep steering a device whose own sensor is not attached.
@@ -702,6 +721,7 @@ const Input = (function () {
     clearCanvasSteering();
   }
   function setLocalControlDevice(device, availabilityChanged = false) {
+    if (!availabilityChanged && device !== "controller") drivingPadKey = null;
     const before = controlDevice();
     localControlDevice = device;
     const after = controlDevice();
@@ -1232,6 +1252,8 @@ const Input = (function () {
         (tag === "SELECT" && act === "pause" && printable);
       if (down && !e.repeat && (act === "pause" || e.code === "Escape") && !inTextField) {
       if (act === "pause") {
+        // A menu spent it (an arrow PAUSE moved focus): not also pause (#6282).
+        if (e.defaultPrevented) return;
         clearDriveToggles();
         if (onPauseCb) onPauseCb();
         return;
@@ -1739,11 +1761,10 @@ const Input = (function () {
   // and their header comment for why B needs its own branch.
   let remoteWas = false;        // the phone was live on the previous poll
   function reportControllerLoss(source) {
-    const localDriving = keyLeft || keyRight || keyThrottle || keyBrake ||
-      btnSteerLeft || btnSteerRight || btnThrottle || btnBrake || activeTouch;
+    const localDriving = localDriveEngaged() || btnSteerLeft || btnSteerRight || btnThrottle || btnBrake;
     const anotherDriver = source === "remote"
       ? padConnected && (inputSource === "controller" || padSteerActive() || padThrottle || padBrake)
-      : remoteActive() && remoteOwner === "phone" && inputSource === "phone";
+      : remoteActive() && remoteDriveEngaged();
     if (localDriving || anotherDriver) return;
     try { onPadLostCb?.(); } catch (_) { /* the game's handler must not break input teardown */ }
   }
@@ -1906,8 +1927,9 @@ const Input = (function () {
     // A connected pad is not active input. Record only a real deflection or a
     // newly pressed button, so an idle Bluetooth pad cannot steal Help/coach
     // wording from the keyboard or touch player.
-    let padActive = Math.abs(stick) > 0.05 || Math.abs(dpad) > 0.05 ||
+    const padDriveActive = Math.abs(stick) > 0.05 || Math.abs(dpad) > 0.05 ||
       throttleInput > 0 || padBrakeVal > 0;
+    let padActive = padDriveActive;
     if (!padActive && pad.buttons) {
       for (let i = 0; i < pad.buttons.length; i++) {
         if (btnDown(pad, i) && !padPrevButtons[i]) { padActive = true; break; }
@@ -1915,7 +1937,10 @@ const Input = (function () {
     }
     if (padActive) {
       noteInputSource("controller");
-      if (padOwnsDrive) setLocalControlDevice("controller");
+      if (padOwnsDrive) {
+        if (padDriveActive && !localDriveEngaged()) drivingPadKey = key;
+        setLocalControlDevice("controller");
+      }
     }
     if (axisCaptureCb) {
       // The wheel wizard owns the frame: turning the wheel to answer "which
@@ -2057,15 +2082,20 @@ const Input = (function () {
   }
   function steerNow() {
     if (padConnected) advanceDpad();
+    // A key HELD when a menu opened (Pause in a friend race, which keeps
+    // simulating) is the menu's: the wheel centres and the ramp restarts from 0
+    // on Resume instead of carrying the angle it had under the card (#6268).
+    const keyHeld = keyLeft || keyRight;
+    if (keyHeld && navBlocksTouch()) { keySteerVal = 0; keySteerT = nowMs(); return 0; }
     const k = keyboardSteer();
-    if (keyLeft || keyRight) return k;
+    if (keyHeld) return k;
     // The d-pad half of padSteer is digital and already ramped — it must not
     // also be curved and speed-scaled as if it were a deflection.
     if (padSteerActive()) return padSteerAnalog ? analogShape(padSteer, padIsWheel ? "wheel" : "pad") : padSteer;
     if (Math.abs(k) > 0.001) return k;
     // A paired phone WITH a sensor: the tilt pipeline fed by remoteSample,
     // whatever the local mode. Pedals-only phones fall through to it.
-    if (remoteSteers()) return remoteDrivingBlocked() ? 0 : remStick ? analogShape(remSteer, "pad") : analogShape(tiltSteering(), "tilt");
+    if (remoteDriveReady && remoteSteers()) return remoteDrivingBlocked() ? 0 : remStick ? analogShape(remSteer, "pad") : analogShape(tiltSteering(), "tilt");
     // On-screen buttons and the drag wheel. A friend race keeps simulating
     // under the pause menu; the pad already zeroes itself while a menu is open.
     // Gate on anyOpen(), NOT navOpen(): navOpen() is also true on the title
@@ -2080,10 +2110,14 @@ const Input = (function () {
     return navBlocksTouch() ? 0 : analogShape(touchSteering(), "touch");
   }
 
-  // remoteActive() FIRST: it is a clock compare, and with no phone paired (the common case) it ends the
-  // test before remoteDrivingBlocked() walks the UI layers — that walk ran every physics step (B·H11).
-  function remoteThrottle() { return remoteActive() && !remoteDrivingBlocked() && remThr > remPedalDz; }
-  function remoteBrake() { return remoteActive() && !remoteDrivingBlocked() && remBrk > remPedalDz; }
+  // Most sessions have no active remote, so check the sample before walking UI layers.
+  function remoteDriveActive() { return remoteDriveReady && remoteActive() && !remoteDrivingBlocked(); }
+  function remoteThrottle() { return remoteDriveActive() && remThr > remPedalDz; }
+  function remoteBrake() { return remoteDriveActive() && remBrk > remPedalDz; }
+  function remoteDriveEngaged(steeringBlocked = false) {
+    return remThr > remPedalDz || remBrk > remPedalDz ||
+      (!steeringBlocked && (remStick ? Math.abs(remSteer) > 0.05 : remRoll && Math.abs(tiltRaw - tiltZero) > 2));
+  }
   // anyOpen() = pause/settings/sheets. navOpen() also covers title #overlay.
   // LATCHED ONCE PER FRAME, at the end of poll() (PERF-HUNT-2 S5): updateCar asks
   // throttle/braking/steer/…Level 3-6 times per physics step and each anyOpen() walks
@@ -2115,12 +2149,15 @@ const Input = (function () {
     } else remCamera = null;
   }
 
+  // Held keys stay held for Resume, but an open menu owns them: like the
+  // on-screen pedals, they do not drive under it (#6268).
+  function keyDrive(held) { return held && !navBlocksTouch(); }
   function throttle() {
-    return keyThrottle || (touchThrottleLevel() > 0 && !navBlocksTouch()) || padThrottle || remoteThrottle();
+    return keyDrive(keyThrottle) || (touchThrottleLevel() > 0 && !navBlocksTouch()) || padThrottle || remoteThrottle();
   }
 
   function braking() {
-    return keyBrake || (btnBrake && btnBrakeVal > 0 && !navBlocksTouch()) || padBrake || remoteBrake();
+    return keyDrive(keyBrake) || (btnBrake && btnBrakeVal > 0 && !navBlocksTouch()) || padBrake || remoteBrake();
   }
 
   // 0..1 pedal travel. A KEY is digital and is therefore always full travel; an
@@ -2129,15 +2166,22 @@ const Input = (function () {
   // the keyboard wins over everything so a desktop player is never modulated by
   // a stray pad axis.
   function touchThrottleLevel() { return btnThrottle ? (throttleLatched ? 1 : btnThrottleVal) : 0; }
+  function localDriveEngaged() {
+    return keyLeft || keyRight || keyThrottle || keyBrake ||
+      touchThrottleLevel() > 0 || btnBrakeVal > 0 || btnSteerLeftVal > 0 || btnSteerRightVal > 0 || !!activeTouch;
+  }
+  function noteTouchDrive(level) {
+    if (level > 0 && drivingPadKey !== null && !menuOverlayOpen()) drivingPadKey = null;
+  }
   function throttleLevel() {
-    if (keyThrottle) return 1;
+    if (keyDrive(keyThrottle)) return 1;
     const touch = touchThrottleLevel();
     if (touch > 0 && !navBlocksTouch()) return touch;
     if (remoteThrottle()) return pedalLevel(remThr, remPedalDz);
     return padThrottleVal;
   }
   function brakeLevel() {
-    if (keyBrake) return 1;
+    if (keyDrive(keyBrake)) return 1;
     if (btnBrake && btnBrakeVal > 0 && !navBlocksTouch()) return btnBrakeVal;
     if (remoteBrake()) return pedalLevel(remBrk, remPedalDz);
     return padBrakeVal;
@@ -2201,7 +2245,7 @@ const Input = (function () {
      it was removed on request — the dock had grown to five buttons in one thumb
      column once PIT landed beside it, and a glance over the shoulder is the
      control that least deserves a permanent seat there. */
-  function lookingBack() { return keyLookBack || padLookBack || (remoteActive() && !remoteDrivingBlocked() && !!(remHeld & REMOTE_HELD.lookBack)); }
+  function lookingBack() { return keyDrive(keyLookBack) || padLookBack || (remoteDriveActive() && !!(remHeld & REMOTE_HELD.lookBack)); }
 
   /* FREE-LOOK inputs for CamFeel. lookStick() is the latest right-stick sample
      (−1..1); consumeLookMouse() returns and clears RMB-drag pixel deltas.
@@ -2563,8 +2607,8 @@ const Input = (function () {
       // latch outright rather than toggling it (see holdReleaseAll).
       if (throttleLatch) { if (v) { throttleLatched = !throttleLatched; paintLatch(); } btnThrottle = throttleLatched; }
       else btnThrottle = v;
-    }, function (l) { btnThrottleVal = l; }, { button: "gas", sibling: "btn-brake" });
-    wireHold("btn-brake", function (v) { btnBrake = v; }, function (l) { btnBrakeVal = l; }, { button: "brake", sibling: "btn-throttle" });
+    }, function (l) { btnThrottleVal = l; noteTouchDrive(l); }, { button: "gas", sibling: "btn-brake" });
+    wireHold("btn-brake", function (v) { btnBrake = v; }, function (l) { btnBrakeVal = l; noteTouchDrive(l); }, { button: "brake", sibling: "btn-throttle" });
     wireTap("btn-boost", function () { boostTogglePressed = true; });
     wireTap("btn-ot", function () { overtakePressed = true; });
     wireTap("btn-aero", function () { aeroTogglePressed = true; });
@@ -2574,11 +2618,11 @@ const Input = (function () {
     wireHold("btn-steer-left", function (v) {
       if (v && !btnSteerLeft) btnSteerLeftSeq = ++btnSteerSeq;
       btnSteerLeft = v; if (!v) btnSteerLeftVal = 0;
-    }, function (l, command, p) { btnSteerLeftVal = l; leftCommand = command; leftSpeedMix = arrowSpeedMix(p); }, { button: "left", command: steerButtonCommand, axis: "x", dir: -1, sibling: "btn-steer-right" });
+    }, function (l, command, p) { btnSteerLeftVal = l; noteTouchDrive(l); leftCommand = command; leftSpeedMix = arrowSpeedMix(p); }, { button: "left", command: steerButtonCommand, axis: "x", dir: -1, sibling: "btn-steer-right" });
     wireHold("btn-steer-right", function (v) {
       if (v && !btnSteerRight) btnSteerRightSeq = ++btnSteerSeq;
       btnSteerRight = v; if (!v) btnSteerRightVal = 0;
-    }, function (l, command, p) { btnSteerRightVal = l; rightCommand = command; rightSpeedMix = arrowSpeedMix(p); }, { button: "right", command: steerButtonCommand, axis: "x", dir: 1, sibling: "btn-steer-left" });
+    }, function (l, command, p) { btnSteerRightVal = l; noteTouchDrive(l); rightCommand = command; rightSpeedMix = arrowSpeedMix(p); }, { button: "right", command: steerButtonCommand, axis: "x", dir: 1, sibling: "btn-steer-left" });
 
     // LIVE INPUT-SOURCE READOUT, for a bug that only reproduces on a real
     // phone: a player reported the throttle behaving always-on after an
@@ -2640,6 +2684,9 @@ const Input = (function () {
       if (!still) { _padLostAt = nowMs(); _padNextProbeMs = 0; } else { _padLostAt = 0; _padNextProbeMs = 0; }
       padConnected = still;
       const lostActive = e.gamepad && padPrevByIndex.get(e.gamepad.index) === padPrevButtons;
+      const lostDrivingPad = drivingPadKey !== null &&
+        (e.gamepad ? drivingPadKey === padKey(e.gamepad, e.gamepad.index) : !still);
+      if (lostDrivingPad) drivingPadKey = null;
       if (!still || lostActive) {
         padSteer = padThrottleVal = padBrakeVal = 0;
         padThrottle = padBrake = padSteerAnalog = padLookBack = false;
@@ -2661,18 +2708,18 @@ const Input = (function () {
       catch (_) { /* Log absent */ }
       /* A PAD LEAVING MID-RACE IS AN EVENT, not just a state change. Zeroing
          the inputs (above) stops a stale axis snapshot pinning the throttle,
-         which was already right — but the race carried on regardless, so a
-         flat battery at 300 km/h meant watching the car coast into a wall with
-         no way to intervene. Console certification treats disconnect recovery
-         as a tested failure mode for exactly this reason. Only when NO pad is
-         left: swapping one of two pads is not an interruption. */
+         but the race carried on regardless, so a flat battery at 300 km/h
+         meant watching the car coast into a wall. Only the DRIVING pad counts:
+         an idle spare leaving, or a spare left behind, is not an interruption,
+         and another input that is driving keeps the race running. */
       if (e.gamepad) cameraHeldPads.delete(padKey(e.gamepad, e.gamepad.index));
-      if (!still) reportControllerLoss("physical");
+      if (lostDrivingPad) reportControllerLoss("physical");
     });
     ready = true;
   }
 
   function reset() {
+    drivingPadKey = null;
     heldKeys.clear();
     touches.clear();
     hideDragAnchor();
@@ -2820,6 +2867,8 @@ const Input = (function () {
   return {
     init,
     reset,
+    invalidateRemoteDrive,
+    remoteDriveGeneration: () => remoteDriveGen,
     keyBindings, setKeyBinding, clearKeyBinding, setKeyMap, getKeyMap, resetKeys, keysAreDefault, keyLabel, keyboardSeen, activeInputSource,
     padBindings, setPadBinding, clearPadBinding, setPadMap, getPadMap, resetPad, padsAreDefault, padLabel, padCapture, padPresent,
     debugState,
@@ -2882,7 +2931,10 @@ const Input = (function () {
     setPedalSlide(m) { pedalSlide = m === "ease" ? "ease" : "instant"; return pedalSlide; },
     pedalSlide: () => pedalSlide,
     setThrottleLatch(on) { throttleLatch = !!on; throttleLatched = false; btnThrottle = false; paintLatch(); },
-    setHoldMode(m) { holdMode = InputBindings.parseHoldMode(m); clearDriveToggles(); },
+    setHoldMode(m) {
+      holdMode = InputBindings.parseHoldMode(m); clearDriveToggles();
+      if (window.dispatchEvent && typeof Event === "function") window.dispatchEvent(new Event("apexholdmodechange"));   // Help wording
+    },
     getHoldMode: () => InputBindings.parseHoldMode(holdMode),
     // Every race starts OFF: touch latch + keyboard/pad toggles from the last race.
     dropLatch() {

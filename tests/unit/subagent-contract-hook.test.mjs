@@ -53,7 +53,10 @@ const GOOD = {
   "surface-reviewer": `VERDICT FIX — two false claims | report: scratch/review/x.md\n${sclaim(1)}\n${sclaim(2, "false")}\n${sclaim(3, "stale")}\ncollisions: none\ncycles: none`,
   "physics-contract-auditor": `${site(1)}\nvstd-invariant: pass\ncurvature-channels: pass\ncovered: js/physics  not covered: none`,
   "ci-red-triage": "SHA abc1234 · run https://g/1 · fast · RED\nspec — Expected 1 Received 2 — lane: ui\nbase: unknown  (base run unread)\nnext: fix X\n- job ui, log line 12",
-  "worker": "WORKER B1: DONE\nbranch: cursor/x-1234 @ 0123abc   (worktree /w)\nchanged: a.js b.mjs\nverified: node --test tests/unit/ratchets.test.mjs -> pass 3/3\nnot run: smoke (browser)\nnext: merge the branch",
+  "pr-reviewer": "REVIEW #6385 @ 36294c3 · files 3 · routed: unit; specs 2\n"
+    + "FINDING 1 | blocker-candidate | js/ui/hud.js:42 — the id moved — index.html still names it — test: tests/specs/hud-layout.spec.js\n"
+    + "FINDING 2 | nit | css/hud.css:7 — dead rule — nothing matches it — test: none\nfindings: 2 (blocker-candidate 1)",
+  "worker":"WORKER B1: DONE\nbranch: cursor/x-1234 @ 0123abc   (worktree /w)\nchanged: a.js b.mjs\nverified: node --test tests/unit/ratchets.test.mjs -> pass 3/3\nnot run: smoke (browser)\nnext: merge the branch",
 };
 
 test("a good report from every contracted agent passes", () => {
@@ -61,6 +64,22 @@ test("a good report from every contracted agent passes", () => {
   passes(stop("code-hunter", "FINDING none\ncovered: a\nnot covered: b\nmeasured: none"), "zero findings is legitimate");
   passes(stop("surface-reviewer", "VERDICT OK — every claim holds | report: scratch/r.md\nCLAIM none\ncollisions: none\ncycles: none"), "a clean set");
   passes(stop("worker", "WORKER x: PARTIAL\nbranch: b @ abcdef1\nchanged: -\nverified: none\nnot run: all\nnext: resume"), "partial");
+});
+
+test("pr-reviewer: header, ≤10 rows, kind and file:line — claim — why — test", () => {
+  const prow = (n, k = "nit") => `FINDING ${n} | ${k} | js/ui/hud.js:${n} — claim — why — test: none`;
+  const head = "REVIEW #1 @ abcdef1 · files 2 · routed: unit; specs 0";
+  const tally = "findings: 0 (blocker-candidate 0)";
+  passes(stop("pr-reviewer", `${head}\nFINDING none\n${tally}`), "no findings");
+  passes(stop("pr-reviewer", [head, ...Array.from({ length: 10 }, (_, i) => prow(i + 1)), tally].join("\n")), "exactly 10");
+  blocks(stop("pr-reviewer", [head, ...Array.from({ length: 11 }, (_, i) => prow(i + 1)), tally].join("\n")), /11 FINDING rows, over the cap of 10/, "11 rows");
+  blocks(stop("pr-reviewer", `${head}\n${prow(1, "major")}\n${tally}`), /does not match the shape/, "unknown kind");
+  blocks(stop("pr-reviewer", `${head}\nFINDING 1 | nit | js/ui/hud.js — claim — why — test: none\n${tally}`), /does not match/, "no line number");
+  blocks(stop("pr-reviewer", `${head}\nFINDING 1 | nit | js/ui/hud.js:3 — claim — why\n${tally}`), /does not match/, "no test field");
+  blocks(stop("pr-reviewer", `Reviewed it.\n${prow(1)}\n${tally}`), /REVIEW #/, "no header");
+  blocks(stop("pr-reviewer", `${head}\n${prow(1)}`), /findings:/, "no tally");
+  blocks(stop("pr-reviewer", `${head}\n${tally}`), /no FINDING row/, "neither rows nor FINDING none");
+  passes(stop("pr-reviewer", "UNREAD: every route was denied"), "denial contract");
 });
 
 test("over the row cap blocks", () => {

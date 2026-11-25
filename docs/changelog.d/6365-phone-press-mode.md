@@ -1,0 +1,2 @@
+Fixed: On the paired phone controller, BOOST, OVERTAKE and AERO now stay lit while the game has them switched on, and go dark when the game ends them (empty battery, pit, race end). Previously they lit only under your finger.
+New: A PRESS MODE setting (TOGGLE or HOLD) for each of the phone's BOOST, OVERTAKE and AERO buttons in TOUCH BUTTON RESPONSE. TOGGLE (the default, and the old behaviour) switches the effect on or off with each press. HOLD keeps it on only while you press.

@@ -36,10 +36,10 @@ const PedalTravel = (function () {
   const phoneButtons = Object.freeze(["gas", "brake", "shiftUp", "shiftDown", "boost", "overtake", "aero",
     "camera", "pause", "radio", "recover", "look", "calib", "navSelect", "navBack"]);
   const gestureTiming = Object.freeze({
-    quick: { key: "quickMs", label: "QUICK TAP LIMIT", defaultMs: 180, min: 80, max: 600 },
-    hold: { key: "holdMs", label: "HOLD TIME", defaultMs: 450, min: 150, max: 2000 },
-    long: { key: "longHoldMs", label: "LONG HOLD TIME", defaultMs: 900, min: 350, max: 3000 },
-    double: { key: "doubleTapMs", label: "DOUBLE TAP WINDOW", defaultMs: 350, min: 150, max: 1000 },
+    quick: { key: "quickMs", defaultMs: 180, min: 80, max: 600 },
+    hold: { key: "holdMs", defaultMs: 450, min: 150, max: 2000 },
+    long: { key: "longHoldMs", defaultMs: 900, min: 350, max: 3000 },
+    double: { key: "doubleTapMs", defaultMs: 350, min: 150, max: 1000 },
   });
   const allButtons = new Set([...Object.keys(raceButtons), ...phoneButtons]);
   const colors = Object.freeze({ red: "--red", green: "--faster", blue: "--zone", purple: "--sec-best", orange: "--spark", yellow: "--gold", white: "--hud-ink-light" });
@@ -131,6 +131,9 @@ const PedalTravel = (function () {
         const ms = Math.max(min, Math.min(max, Math.round(value[key] / 10) * 10));
         if (ms !== defaultMs) out[key] = ms;
       }
+      // PRESS MODE (#6365): the phone's latching toggles (PhonePadPage.latchButtons, test-pinned). TOGGLE is the
+      // default (each press flips the host's effect, as the race HUD's tap does); stored only when HOLD.
+      if (value.latch === "hold" && /^(boost|overtake|aero)$/.test(id)) out.latch = "hold";
       return out;
     }
     if (value.press === "progressive") out.press = value.press;
@@ -232,11 +235,13 @@ const PedalTravel = (function () {
     if (profile.sliderEdge) profile.sliderBounds = el.getBoundingClientRect();
     else if (crossover && profile.slide !== "response") {
       // The inherited, untuned profile keeps its original crossover. An
-      // explicit profile resumes from full input without jumping to its start.
+      // explicit pedal resumes from full input without jumping to its start;
+      // an explicit arrow starts its response afresh (#6305). A
+      // hold target alone shapes no build, so it is not a tuning.
       profile.trackCrossover = !!buttonOverrides(id).slide || profile.press === "progressive" || profile.travel !== TRAVEL_PX ||
         !!(profile.direction || profile.slideCurve || profile.fullEdge || profile.buildMs) ||
-        profile.start != null || profile.end != null || profile.holdEnd != null;
-      profile.start = 100;
+        profile.start != null || profile.end != null;
+      if (id === "gas" || id === "brake") profile.start = 100;
     } else if (profile.fullEdge && event) {
       const amount = positionLevel(profile.fullEdge, el.getBoundingClientRect(), event);
       if (amount !== undefined) profile.start = 100 * amount;

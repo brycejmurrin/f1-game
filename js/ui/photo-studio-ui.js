@@ -498,7 +498,7 @@ function create(G, deps) {
   const placement = (label, id, min, max, step, unit) => {
     const out = mk("output", { id: id + "-value", textContent: "0" + unit });
     const input = mk("input", { id, type: "range", min: String(min), max: String(max), step: String(step), value: "0" });
-    input.addEventListener("input", () => { out.textContent = input.value + unit; placeCar(id !== "ps-car-rotation"); });
+    input.addEventListener("input", () => { out.textContent = input.value + unit; placed.add(id); placeCar(id !== "ps-car-rotation"); });
     return mk("label", { className: "tune-row" }, [mk("span", { className: "tune-label", textContent: label }), input, out]);
   };
   const carGroup = group("car", "PLACE YOUR CAR", [
@@ -587,18 +587,23 @@ function create(G, deps) {
   function camera() { return deps.freeCam || (typeof FreeCam !== "undefined" ? FreeCam : null); }
   function isGarage() { return st.source === "home" || st.source === "garage"; }
   function hasCar() { return st.open && !!releaseCar; }
-  function placeCar(reframe = true) {
+  // Sliders moved since open(); an untouched one keeps the exact value, not its rounded copy (#6272).
+  const placed = new Set();
+  function placeCar(reframe = true, all = false) {
     if (st.busy || st.closing || !hasCar() || !G.player || !G.track) return;
     if (st.source === "race" && (!G.paused || G.netPlay?.active?.())) return;
     const c = G.player, sample = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
-    c.s = (+E["ps-car-position"].value % 100) * G.track.total / 100;
-    c.x = c.xVis = +E["ps-car-offset"].value;
+    const use = (id) => all || placed.has(id);
+    if (use("ps-car-position")) c.s = (+E["ps-car-position"].value % 100) * G.track.total / 100;
+    if (use("ps-car-offset")) c.x = c.xVis = +E["ps-car-offset"].value;
     Tracks.sample(G.track, c.s, sample);
-    const len = Math.hypot(sample.r[0], sample.r[2]) || 1; // horizontal metres, as worldFromTrack
-    c.px = sample.p[0] + sample.r[0] / len * c.x;
-    c.pz = sample.p[2] + sample.r[2] / len * c.x;
-    c.yawVis = +E["ps-car-rotation"].value * Math.PI / 180;
-    c.head = Math.atan2(sample.t[0], sample.t[2]) - c.yawVis;
+    if (use("ps-car-position") || use("ps-car-offset")) {
+      const len = Math.hypot(sample.r[0], sample.r[2]) || 1; // horizontal metres, as worldFromTrack
+      c.px = sample.p[0] + sample.r[0] / len * c.x;
+      c.pz = sample.p[2] + sample.r[2] / len * c.x;
+    }
+    if (use("ps-car-rotation")) c.yawVis = +E["ps-car-rotation"].value * Math.PI / 180;
+    c.head = Math.atan2(sample.t[0], sample.t[2]) - (c.yawVis || 0);
     c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevPx = c.px; c.rPrevPz = c.pz;
     c.rPrevHead = c.head; c.rPrevYawVis = c.yawVis; c.speed = 0;
     if (reframe) setShot("car", true);
@@ -681,7 +686,8 @@ function create(G, deps) {
         : id === "ps-car-offset" ? c.x : (c.yawVis || 0) * 180 / Math.PI;
       E[id].value = String(value); E[id + "-value"].textContent = value.toFixed(1) + unit;
     }
-    if (st.source === "home-track") placeCar(); // race photos open exactly where the race was paused
+    placed.clear();
+    if (st.source === "home-track") placeCar(true, true); // race photos open exactly where the race was paused
     condGroup.hidden = isGarage(); lineGroup.hidden = isGarage();
     if (!isGarage()) SettingRow.paint(lineRow, DrivingLine.shown() ? "on" : "off");
     looksChanged = false; paintLooks();
@@ -764,13 +770,15 @@ function create(G, deps) {
     if (looksChanged && deps.garage && deps.garage.looked) deps.garage.looked();
     looksChanged = false;
     // Let the caller paint its restored visibility after modal isolation settles.
-    if (back && target && target.focus) requestAnimationFrame(() => requestAnimationFrame(() => {
-      const top = typeof UiLayers === "undefined" ? null : UiLayers.top();
-      if (!st.open && st.generation === generation && target.isConnected &&
+    // #6259: a focus newer than the first frame's settled one wins over the opener.
+    if (back && target && target.focus) requestAnimationFrame(() => { const settled = document.activeElement; requestAnimationFrame(() => {
+      const top = typeof UiLayers === "undefined" ? null : UiLayers.top(), now = document.activeElement;
+      const moved = now !== settled && now && now !== document.body && now !== target && now.isConnected !== false && !root.contains(now);
+      if (!moved && !st.open && st.generation === generation && target.isConnected &&
           (!top || (typeof MenuNav === "undefined" ? top.contains(target) : MenuNav.ownsFocus(top, target)))) {
         target.focus({ preventScroll: true });
       }
-    }));
+    }); });
   }
   let activePass = null;
   function releasePass(pass) {

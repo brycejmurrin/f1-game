@@ -541,7 +541,7 @@ test("circuit select is a flag strip over a hero, not two panes", () => {
   assert.equal(decl(menus, "#sel-tracks", "overflow-x"), "auto",
     "the flag strip is the one sideways scroller");
   assert.equal(decl(menus, "#sel-tracks", "overflow-y"), "hidden");
-  assert.equal(decl(menus, "#sel-tracks", "touch-action"), "pan-x");
+  assert.equal(decl(menus, "#sel-tracks", "touch-action"), "manipulation");
   assert.equal(decl(menus, "#sel-track-section", "flex"), "1 1 0",
     "the hero section is the flex remainder under the shelf");
   assert.ok(!declares(menus, "#sel-inner", "--pair-at"),
@@ -2436,7 +2436,7 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] > .sheet-foot', "position"), "static",
     "compact flyby foot must not stick over the shot strip");
   assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots.lt-tabs', "overflow-x"), "auto");
-  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots.lt-tabs', "touch-action"), "pan-x");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots.lt-tabs', "touch-action"), "manipulation");
   assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots.lt-tabs', "overscroll-behavior-x"), "contain");
   assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots .lt-tab', "min-height"), "var(--tap-paint)");
   assert.equal(decl(tuner, "#lt-tabs .lt-tab, #ct-modes .lt-tab, #fb-shots .lt-tab", "min-height"), "var(--tap-paint)",
@@ -2453,7 +2453,7 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(narrowTabs.decls.get("flex-wrap"), "nowrap");
   assert.equal(narrowTabs.decls.get("overflow-x"), "auto");
   assert.equal(narrowTabs.decls.get("overscroll-behavior-x"), "contain");
-  assert.equal(narrowTabs.decls.get("touch-action"), "pan-x");
+  assert.equal(narrowTabs.decls.get("touch-action"), "manipulation");
   assert.equal(decl(css("css/tuner.css"), ".adv-sec", "color"), "var(--steel)", "section chrome, not a leftover red headline");
   assert.equal(decl(menus, ".track-row.active .track-row-name", "color"), "var(--text)");
   const settings = css("css/settings.css");

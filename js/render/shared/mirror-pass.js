@@ -23,12 +23,14 @@ const MirrorPass = (function () {
   //         apex26.mirrorInstEvery=1 restores a full re-cull every frame.
   //   lite  a phone (gfx.mobileTier) or governor tier 1: every frame, but no
   //         instanced prop batches (a second frustum re-culls and re-uploads
-  //         every pack each frame), no glass or water (frame.mirrorLite, read
-  //         by drawWorldMeshes), a 180 m radius, rivals within 140 m, a target
+  //         every pack each frame), a 180 m radius, rivals within 140 m, a target
   //         at 60% of the frame's pixels (the composite filters it up).
   //   low   tier 2-3: lite at half rate and half resolution.
   //   min   tier 4+ (GRAPHICS: LOW pins 4): a third of the frame rate, 40%.
   // Every frame is the default because a half-rate mirror reads as LAG.
+  // NO RUNG draws building glass or water: drawWorldMeshes (game.js) draws them only when
+  // frame.mirrorLite === undefined, i.e. outside the mirror (#5777 R14). Letting the full rung
+  // draw them is a parked desktop look change, not a fix.
   let _instEvery = 2;
   try {
     const ie = localStorage.getItem("apex26.mirrorInstEvery");

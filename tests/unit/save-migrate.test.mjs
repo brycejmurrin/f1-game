@@ -481,3 +481,23 @@ test("paidSponsors keeps only small non-negative integer window ids", () => {
   assert.equal(flooded.paidSponsors.length, max, "length capped at max windows/season");
   assert.equal(SM.LIMITS.PAID_SPONSORS_MAX, max, "LIMITS.PAID_SPONSORS_MAX = CAL_MAX/min window");
 });
+
+// #6327: `finiteNumber(year) | 0` wrapped 3e9 to -1294967296.
+test("year and year0 clamp to the supported range instead of wrapping", () => {
+  const SM = load();
+  const { YEAR_MIN, YEAR_MAX } = SM.LIMITS;
+  const big = SM.migrateCareer({ v: 2, year: 3e9, year0: 3e9, sponsorPicks: { "2027:3": 1 } });
+  assert.equal(big.year, YEAR_MAX);
+  assert.equal(big.year0, YEAR_MAX);
+  assert.deepEqual(JSON.parse(JSON.stringify(big.sponsorPicks)), { "2027:3": 1 }, "sponsor history kept");
+  const low = SM.migrateCareer({ v: 2, year: -3e9, year0: -5 });
+  assert.equal(low.year, YEAR_MIN);
+  assert.equal(low.year0, YEAR_MIN);
+  const ok = SM.migrateCareer({ v: 2, year: 2031, year0: 2026 });
+  assert.equal(ok.year, 2031, "a valid year is untouched");
+  assert.equal(ok.year0, 2026, "a valid year0 is untouched");
+  const none = SM.migrateCareer({ v: 2, year: "x" });
+  assert.equal(none.year, 2026, "junk reads as the first season");
+  assert.equal("year0" in none, false, "an absent year0 stays absent (reads as 2026)");
+  assert.equal("year0" in SM.migrateCareer({ v: 2, year0: "x" }), false, "a junk year0 is dropped");
+});

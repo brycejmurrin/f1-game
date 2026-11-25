@@ -212,7 +212,7 @@ window.TopModal = (function () {
   const TEXTY = /^(text|search|url|email|password|tel|number)$/;
   const isTexty = (el) => el.tagName === "TEXTAREA" ||
     (el.tagName === "INPUT" && TEXTY.test((el.type || "text").toLowerCase()));
-  // The rotate blocker manages its own focus. Photo mode remembers its own
+  // The rotate blocker places its own focus (onFocusIn contains it). Photo mode remembers its own
   // opener because the toolbar and its dock are separate sibling layers.
   const LAYER_SKIP = {
     "rotate-device": 1, "photo-controls": 1,
@@ -245,6 +245,12 @@ window.TopModal = (function () {
         if (!nav.ownsFocus(layer, t)) focusShown(nav.currentItem(layer, nav.items(layer)));
         return;
       }
+    }
+    // #6261: contain the CSS-shown rotate blocker (Tab reached the covered Pause).
+    if (layer.id === "rotate-device") {
+      if (t && layer.contains(t)) return;
+      const first = firstFocusable(layer, false); if (first) focusShown(first);
+      return;
     }
     if (LAYER_SKIP[layer.id]) return;
     if (layer.tagName === "DIALOG") {
@@ -484,6 +490,7 @@ window.TopModal = (function () {
     Log.info("ui", "TopModal.init");
     scan();
     scanLayers();
+    const rotate = document.getElementById("rotate-device"); if (rotate) tabWrap(rotate);
     syncMenuIsolation();
     document.addEventListener("keydown", onEscape, true);
     document.addEventListener("focusin", onFocusIn, true);

@@ -1,0 +1,1 @@
+Fixed: Settings search now focuses Race Settings rows, a slow section Reset no longer pulls focus into its confirmation, Tab stays inside the portrait rotation prompt, and Photo Studio keeps your newer focus and leaves the car in place when you change only Rotation.

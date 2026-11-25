@@ -97,6 +97,24 @@ function feature(name, building = false, ignoreShed = false) {
   const i = SHED_ORDER.indexOf(name);
   return ignoreShed || i < 0 || i < SHED_ORDER.length - _shed || _holdExtras();
 }
+// The preset rule of one Graphics details row (the "Use preset · On" text and its help line): the lowest preset
+// that turns it on with no override and nothing shed — "high" | "ultra" | "extreme" | "cinema" (EXTREME in
+// garage, photo and replay) | null (off at every preset, and every row on a phone). Options outside FEATURES are
+// read at their consumer: detail() > 0 (msaa post.js/tlx.js, the _detailOpt maps tlx.js, rivalLod field-lod.js)
+// or matDetail (the four material sub-rows, tlx.js); agx is null (its EXTREME switch is apex26.tlxAgx).
+const PRESET_FROM = Object.freeze({ msaa: 1, sunMap: 1, carMap: 1, envMap: 1, envProbe: 1, anisotropy: 1, rivalLod: 1,
+  hexTiling: 2, wallBlend: 2, detailNormal: 2, gravelRelief: 2 });
+const RULE_NAMES = [null, "ultra", "extreme", "cinema"];
+function presetRule(name, mobile = phoneDetail()) {
+  if (mobile || optInEffects.has(name)) return null;
+  if (automaticEffects.has(name)) return "high";
+  return RULE_NAMES[FEATURES[name] || PRESET_FROM[name] || 0] || null;
+}
+function presetDefault(name, presetId, mobile = phoneDetail()) {
+  const from = presetRule(name, mobile), p = presetById(presetId);
+  if (!from || !p) return false;
+  return from === "high" ? p.tier === 0 : (DETAIL[p.id] || 0) >= RULE_NAMES.indexOf(from === "cinema" ? "extreme" : from);
+}
 // The governor's upper ladder: n extras shed (0..SHED_ORDER.length), last in SHED_ORDER first.
 function setShed(n) { _shed = Math.max(0, Math.min(SHED_ORDER.length, n | 0)); return _shed; }
 function setCinema(on) { _cinema = !!on; return _cinema; }
@@ -361,7 +379,7 @@ return {
   maxId, capId, isIPhone, isWeakPhone, PHONE_MAX_ID, PHONE_ULTRA_NOTE, EXTREME_NOTE,
   hasShedExtras: () => detail() > 0 || (!phoneDetail() && SHED_ORDER.some(name => overrides()[name] === true)),
   shedFeature: name => SHED_ORDER.includes(name) && feature(name, false, true) && !feature(name),
-  detail, feature, option, supportsOption, choicesKey, needsBundle, setShed, setCinema, forceDetail, holdExtras, shed: () => _shed, cinema: () => _cinema, FEATURES, SHED_ORDER,
+  detail, feature, option, presetRule, presetDefault, supportsOption, choicesKey, needsBundle, setShed, setCinema, forceDetail, holdExtras, shed: () => _shed, cinema: () => _cinema, FEATURES, SHED_ORDER,
 };
 })();
 Object.freeze(GfxQuality);

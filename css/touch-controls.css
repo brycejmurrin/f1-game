@@ -199,6 +199,7 @@
              color: #04240f; }
 #btn-boost.on { background: rgba(13, 84, 40, 0.96); color: #d8ffe4; border-color: #35c96c;
                 box-shadow: 0 0 20px rgba(40, 200, 100, 0.85); opacity: 1; }
+#btn-boost.on[data-held] { border-style: dashed; box-shadow: none; opacity: 0.55; }   /* ON, nothing deploys: box, limiter, caution (#5783 K3) */
 /* OT is YELLOW and AERO is GREEN, and each DARKENS when it is doing something.
    One hue per control, brightness for state: you can tell what a button is by
    its colour without reading it, and whether it is live without comparing it to

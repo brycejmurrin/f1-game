@@ -368,7 +368,7 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
   grid-column: 1; grid-row: 2;
   flex-direction: column; align-items: stretch; justify-content: flex-start;
   overflow-x: hidden; overflow-y: auto;
-  overscroll-behavior-x: auto; overscroll-behavior-y: contain; touch-action: pan-y;
+  overscroll-behavior-x: auto; overscroll-behavior-y: contain; touch-action: manipulation;
   padding: 0 calc(var(--gap) * 0.5) calc(var(--gap) * 0.5) var(--pad);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -396,7 +396,7 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
   grid-column: auto; grid-row: auto;
   flex-direction: row; align-items: center;
   overflow-x: auto; overflow-y: hidden;
-  overscroll-behavior-x: contain; overscroll-behavior-y: auto; touch-action: pan-x;
+  overscroll-behavior-x: contain; overscroll-behavior-y: auto; touch-action: manipulation;
   padding: 0 var(--pad) calc(var(--gap) * 0.35);
   border-right: none;
 }
@@ -1780,7 +1780,7 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
   gap: calc(var(--gap) * 0.4); min-width: 0;
   padding: 0 var(--pad) calc(var(--gap) * 0.35);
   overflow-x: auto; overflow-y: hidden;
-  overscroll-behavior-x: contain; touch-action: pan-x;
+  overscroll-behavior-x: contain; touch-action: manipulation;
   scrollbar-width: none;
 }
 #htp-contents > :first-child, #cg-contents > :first-child, #ch-contents > :first-child {

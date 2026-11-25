@@ -5022,7 +5022,7 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
   assert.match(game, /function clearMenuScreens\(\) \{\s*cancelIntro\(\);\s*loadingScreen\.stop\(\);/,
     "the screen is disarmed before the sweep hides it, or its pending timer fires into a running race");
   assert.match(game, /if \(menuBlank && !\(track && _menuGate\.warm > 0\) && !warmQueuedHere\) return;/);
-  const resultsFreeze = /if \(state === "results" && !resultsCam\.live\(\) && !ceremony\?\.needsWorldFrame\(\)\) return;/;
+  const resultsFreeze = /if \(state === "results" && !resultsCam\.live\(\) && !ceremony\?\.needsWorldFrame\(\) && !setupPreviewOn\) return;/;   // an open garage over results still draws (#6390)
   // endRace's OWN call: over all of game.js the match began at startRaceBody's
   // rainShow(false), so deleting endRace's still passed (audit 2026-09-29).
   assert.match(fnSource(game, "function endRace(forcedOrder)"), /Particles\.rainShow\(false\);\s*if \(soundOn\) GameAudio\.finish\(\);/,

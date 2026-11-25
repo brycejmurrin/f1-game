@@ -98,7 +98,7 @@
   min-height: 0; min-width: 0;
   overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain;
   overscroll-behavior-x: none;
-  touch-action: pan-y;
+  touch-action: manipulation;
   /* ScrollFade draws .sf-scroll::before; hide the native gutter so the orange
      thumb is not stacked on a grey bar that eats the NEXT / name field lane
      (1440×900, 1280×800 — #1893). */
@@ -458,7 +458,7 @@
 }
 /* Mode navigation stays outside the inspector's scrollport. */
 #trackdesigner [data-role="mode-bar"] { grid-column: 1; grid-row: 1; min-width: 0; }
-#trackdesigner [data-role="mode-bar"] > .td-chips { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; touch-action: pan-x; }
+#trackdesigner [data-role="mode-bar"] > .td-chips { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; touch-action: manipulation; }
 #trackdesigner [data-role="mode-bar"] .sel-chip {
   flex: 1 0 auto;
   justify-content: center;

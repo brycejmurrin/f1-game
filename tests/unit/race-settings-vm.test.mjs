@@ -164,6 +164,18 @@ test("settings search reveals tyre wear without staging or normalizing the race 
   assert.equal(h.at("spa"), 3, "ordinary entry still stages its normal draft");
 });
 
+test("#6267: settings search opens the native Race Settings dialog before focusing its result", () => {
+  const h = sheet({ state: "menu" });
+  const dlg = h.G.$("race-settings"), order = [];
+  dlg.open = false; dlg.showModal = () => { order.push("showModal"); dlg.open = true; };
+  assert.equal(h.rs.openSettingSearch(() => {}, () => order.push(dlg.open ? "arrived-open" : "arrived-closed")), true);
+  assert.deepEqual(order, ["showModal", "arrived-open"], "the result is focused inside an already-open dialog");
+  h.G.$("rs-cancel").onclick();
+  dlg.open = true; order.length = 0;
+  h.rs.openSettingSearch(() => {}, () => order.push("arrived"));
+  assert.deepEqual(order, ["arrived"], "an already-open dialog is not reopened");
+});
+
 test("settings search cannot reveal race preferences during a live, championship, TT or room session", () => {
   for (const opts of [{ state: "race" }, { state: "menu", session: "tt" }, { state: "menu", flow: "career" }, { state: "menu", flow: "season" }]) {
     const h = sheet(opts);
@@ -720,4 +732,45 @@ test("tile -> SETTINGS -> weather/time chips -> RACE! builds the world once; onl
     assert.equal(syncBuilds, 0, "and no synchronous rebuild either: the intro reuses the joined world");
     assert.equal(G.track.def.id, "spa");
   } finally { h.close(); }
+});
+
+test("a sprint's STRATEGY and FORECAST preview the sprint distance; the GP after it previews the base (#6341)", async () => {
+  // SEASON SETUP ▸ SPRINT ON, 5 LAPS: the green arms SeasonCal.lapsFor(5) = 2 on the sprint leg,
+  // so the sheet's stint plan and MIXED forecast must read 2 there and 5 for the Grand Prix.
+  const asked = [];
+  const g2 = await createGame({ track: "monza", carMeshes: false, storage: { tyreWear: "real" }, onSandbox: (S) => {
+    let real;
+    Object.defineProperty(S, "WeatherArc", { configurable: true, get: () => real, set: (v) => {
+      real = Object.assign({}, v, { create: (...a) => {
+        const w = v.create(...a), prev = w.previewArc;
+        w.previewArc = (o) => { asked.push(o && o.laps); return prev(o); };
+        return w;
+      } });
+    } });
+  } });
+  try {
+    const G = g2.G, S = vm.runInContext("SeasonCal", g2.ctx), T = vm.runInContext("Tracks", g2.ctx);
+    G.flow = "season"; G.timeTrial = false; G.raceTyreWear = "real"; G.raceChangeable = true;
+    const r = S.applyConfig(Object.assign(S.fresh(), { quali: false, sprint: true, laps: 5, trackIds: ["monza", "spa"] }));
+    assert.ok(r.ok && r.season, "the sprint season applies");
+    G.season = r.season; G.trackIdx = T.LIST.findIndex((d) => d.id === "monza");
+    const sprint = S.lapsFor(5, G.season);
+    assert.equal(S.stage(G.season), "sprint", "round 1 opens on its sprint leg");
+    assert.ok(sprint < 5, `anti-vacuity: the sprint divides 5 laps (${sprint})`);
+    assert.ok(G.pits && G.pits.zoneOf(), "monza's pit complex is built: the plan assertions run");
+    const plans = [], planFor = G.pits.planFor;
+    G.pits.planFor = function (...a) { plans.push(a[2]); return planFor.apply(this, a); };
+    const paint = () => { plans.length = 0; asked.length = 0; G.raceLaps = 5; G.openRaceSettings("select"); };
+    paint();
+    assert.equal(G.raceLaps, 5, "#rs-laps keeps the editable base distance");
+    assert.ok(plans.length > 0 && asked.length > 0, `both previews painted (plan ${plans}, forecast ${asked})`);
+    assert.deepEqual([...new Set(plans)], [sprint], "STRATEGY plans the sprint's laps");
+    assert.deepEqual([...new Set(asked)], [sprint], "FORECAST previews the sprint's laps");
+    G.season = Object.assign({}, G.season, { stage: "race" });
+    assert.equal(S.stage(G.season), "race");
+    paint();
+    assert.deepEqual([...new Set(plans)], [5], "the Grand Prix after it plans the base distance");
+    assert.deepEqual([...new Set(asked)], [5], "…and forecasts it");
+    G.pits.planFor = planFor;
+  } finally { g2.close(); }
 });

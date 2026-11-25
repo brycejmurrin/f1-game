@@ -1045,6 +1045,63 @@ test("the garage's pause never drops the wake lock: the return to the tab re-hol
   } finally { g.close(); }
 });
 
+for (const [pauseWith, resumeWith] of [["KeyP", "KeyP"], ["Start", "Start"], ["KeyP", "Resume button"]]) {
+  test(`a touch Pause double tap cannot cross ${pauseWith} Pause and ${resumeWith} Resume`, async () => {
+    const g = await createGame({ track: "monza", carMeshes: false });
+    try {
+      const { G, apex, ctx, sandbox } = g;
+      apex.headless(true);
+      assert.ok((await g.stepUntil(() => G.state === "race" && G.raceT > 1, { maxSteps: 60 * 30 })).ok);
+      G.els.howtoplay.hidden = G.els.pmsettings.hidden = true;
+      const button = G.els.pausebtn;
+      button.getBoundingClientRect = () => ({ left: 0, top: 0, right: 50, bottom: 50 });
+      // The game VM does not select shell controls or process capture before bubble.
+      const handlers = new Map(), register = button.addEventListener.bind(button);
+      button.addEventListener = (type, fn, capture) => capture ? handlers.set(type, fn) : register(type, fn);
+      vm.runInContext('PedalTravel.setButtonProfile("pause", { activation: "double", doubleTapMs: 1000 }); TouchButtonActions.bindControl(document.getElementById("pausebtn"), "pause");', ctx);
+      const tap = start => {
+        for (const [type, timeStamp] of [["pointerdown", start], ["pointerup", start + 30]]) {
+          handlers.get(type)({ type, timeStamp, pointerId: 1, pointerType: "touch", clientX: 10, clientY: 10,
+            preventDefault() {}, stopImmediatePropagation() {} });
+        }
+      };
+      const input = vm.runInContext("Input", ctx);
+      const pad = { index: 0, id: "Xbox Wireless Controller", connected: true, mapping: "standard", axes: [0, 0, 0, 0],
+        buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
+      if (pauseWith === "Start") {
+        sandbox.navigator.getGamepads = () => [pad];
+        sandbox.dispatchEvent({ type: "gamepadconnected", gamepad: pad });
+        input.poll();
+      }
+      const press = control => {
+        if (control === "KeyP") {
+          for (const type of ["keydown", "keyup"]) {
+            sandbox.dispatchEvent({ type, key: "p", code: "KeyP", preventDefault() {}, stopImmediatePropagation() {} });
+          }
+        } else if (control === "Start") {
+          for (const pressed of [true, false]) {
+            pad.buttons[9] = { pressed, value: pressed ? 1 : 0 };
+            input.poll();
+          }
+        } else {
+          sandbox.document.getElementById("pm-resume").onclick();
+        }
+      };
+      tap(100);
+      assert.equal(G.paused, false, "the first touch only arms the gesture");
+      press(pauseWith);
+      assert.equal(G.paused, true, "the requested control pauses the race");
+      press(resumeWith);
+      assert.equal(G.paused, false, "the requested control resumes the race");
+      tap(550);
+      assert.equal(G.paused, false, "one tap after Resume cannot complete the old gesture");
+      press("Resume button");
+      tap(700);
+      assert.equal(G.paused, true, "two new taps still pause, even across a same-state request");
+    } finally { g.close(); }
+  });
+}
+
 
 async function justFinishedPlayer(penalty = 0) {
   const g = await createGame({ track: "monza", carMeshes: false });

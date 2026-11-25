@@ -747,7 +747,8 @@ function blueFlagCall(ev) {
 const PIT_LAMP_GREEN = ["near", "enter", "armed", "lane", "keep", "near-box", "square", "stop", "box"];
 let /** @type {ReturnType<typeof RaceEngineer.create> | null} */ engineer = null;  // RaceEngineer.create(G), same deferral
 function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
-function updateCaution(dt) { raceCtl.update(dt); }
+const redOrder = new Map();   // the field's order when a red flag first shows: redFlagRestart grids from it (#5783 H1)
+function updateCaution(dt) { raceCtl.update(dt); if (raceCtl.level < 4) redOrder.clear(); else if (!redOrder.size) cars.filter((c) => !c.retired).sort((a, b) => b.prog - a.prog).forEach((c, i) => redOrder.set(c, i)); }
 function applyCaution(d) { return raceCtl.apply(d); }
 function cautionInfo() { const i = raceCtl.info(), w = scWatch.info(); i.owed = w.owed; i.owedT = w.t; i.owedCode = w.code; return i; }   // + the give-back window (hud.js flag chip)
 function cautionLevel() { return raceCtl.level; }   // allocation-free, for per-tick readers
@@ -1637,7 +1638,7 @@ function redFlagRestart() {
   if (state !== "race" || !track || cars.some((c) => c.finished)) return false;
   IncidentSim.reset(); DebrisWorld.reset(); DebrisWorld.prime();
   const L = track.total;
-  const order = cars.filter((c) => !c.retired).sort((a, b) => b.prog - a.prog);
+  const rk = (c) => (redOrder.has(c) ? redOrder.get(c) : Infinity), order = cars.filter((c) => !c.retired).sort((a, b) => (rk(a) - rk(b)) || (b.prog - a.prog)); redOrder.clear();   // passes made braking for the red do not stand
   // THE REWIND IS THE LEADER'S. Stepping each car back its OWN lap would put a
   // car 150 m behind a leader that had just crossed (one lap number lower, not
   // lapped) a full lap down after the restart. The leader re-runs its lap; every
@@ -2209,7 +2210,13 @@ function menuPrep() {
   const key = trackIdx >= 0 ? menuKey(trackIdx) : "", p = _menuGate.prep, def = Tracks.LIST[trackIdx];
   return { state, trackId: def ? def.id : null, key, world: menuWorld(), building: !!(p && p.building), done: !!key && _menuGate.done === key,
     warmable: !!gfx.warm, warmKey: _warmKey, warmed: !!key && _warmKey === key, warmFrames: _menuGate.warm, warming: !!(gfx.warming && gfx.warming()),
-    garageReady: !!_menuGate.garageReady, cars: carDraw.menuCarAssets || null };
+    garageReady: !!_menuGate.garageReady, cars: carDraw.menuCarAssets || null, door: doorWorld() };
+}
+// THE WORLD BEHIND THE GARAGE DOOR (#6383, the bridge's #5835 check): the circuit actually built, its dark flag, the
+// session (tod|weather) its menu readiness was for, against the session now asked for (a mismatch = the wrong world); driveOut = the garage-out is on screen.
+function doorWorld() {
+  const [i, tod, weather] = (_menuGate.ready || "").split("|"), d = i ? Tracks.LIST[+i] : null;
+  return { built: builtTrackId, dark: builtTrackNight, readyFor: d ? { trackId: d.id, tod, weather } : null, want: { tod: raceTimeOfDay, weather: raceWeather }, driveOut: !!_studio };
 }
 // THE GARAGE, PRE-BUILT ON RACE SETTINGS AND THE IDLE TITLE. RACE! opens on the
 // garage drive-out and GARAGE on the garage, and an undrawn garage's first frame
@@ -2950,7 +2957,7 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
     qualiNet.refreshQualiGate();
     return;
   }
-  if (isTimeTrial()) { buildTTResults(); els.results.hidden = false; return; }
+  if (isTimeTrial()) { buildTTResults(); ttGarageDoor(false); els.results.hidden = false; return; }
   careerSettlement = null;   // whatever the last career round paid is not this race's news
   // The only human RETIRED and the race ended early (RaceControl.finishDelay
   // counts a retired human as done). An AI whose drawn failure it had already
@@ -4965,7 +4972,7 @@ function updateCar(c, dt, ranked) {
   // vTop() inside PitLane, so it rides OVERALL SPEED and a player's measured pit
   // loss does not move when they change the pace slider.
   let pitV = -1;
-  if (pits.inLane(c)) {
+  if (pits.inLane(c) || pits.onClosedLane(c)) {   // a SHUT lane's tarmac too (#5775 R12)
     pitV = pits.limit();
     // The AI brakes for its own box; a human does that themselves, and a game
     // that did it for them would be driving the one part of a stop the driver
@@ -7337,7 +7344,7 @@ function render(dt) {
   // frame (env probe, shadows, rain, debris upload) was unpaid work — keep the
   // last race present and return. Race-settings flyby and live race still draw.
   const ceremony = state === "results" ? RaceCeremony.get() : null, ceremonyView = ceremony?.cameraPhase();
-  if (state === "results" && !resultsCam.live() && !ceremony?.needsWorldFrame()) return;
+  if (state === "results" && !resultsCam.live() && !ceremony?.needsWorldFrame() && !setupPreviewOn) return;   // the TT garage over results draws (#6390)
   // HELD GARAGE (studioDone): a world frame that kicks TLX's program warm paints nothing, so the
   // garage's last frame stays up — no hidden canvas, no black card before the flyby.
   const heldWarm = !!(_studio && _studio.held && track && _menuGate.warm > 0); if (heldWarm) _menuGate.warm--;
@@ -9222,7 +9229,7 @@ function garageBack() {
   if (garageReturn === "pit") { if (!setupCam.skipPitOut()) setupCam.startPitOut(closePitWork); return; }
   leaveGarage();
   if (garageReturn === "tt-results") {
-    els.results.hidden = false;
+    els.results.hidden = false; ttGarageDoor(true);
     setTimeout(() => { if (!setupPreviewOn) garagePre.release(); }, 0);
   }
   else if (garageReturn === "vsfriend") { $("vsfriend").hidden = false; netLobby.roomChanged("car"); }
@@ -9334,7 +9341,9 @@ function setPaused(p, why) {
   // (RETURN TO RACE charged a dead race and droned the engine), RESUME + RETURN TO RACE ran the race
   // with the wake lock released (bug-hunt 3, 2026-10-10). The garage is the screen; it stays paused.
   if (p && garageReturn === "pit" && !$("carsetup").hidden) { paused = true; return; }
+  if (paused && !p) Input.invalidateRemoteDrive();
   if (paused !== !!p) Log.info("game", "Race " + (p ? "paused" : "resumed") + " why=" + (why || "button") + " state=" + state + " raceT=" + raceT.toFixed(1));
+  if (paused !== !!p && typeof TouchButtonActions !== "undefined") TouchButtonActions.cancelAll();
   paused = p; GameAudio.resetReplayScrub(); replayBuf.onPause(!!p); // REPLAY overlay while paused
   if (p) learnAeroDrill?.guide.hide();
   if (!netPlay.active()) { if (p) dropRaceWake(); else holdRaceWake(); UiExperience.resumeArm(G, !p && why !== "restart" && state === "race" && !realRace.isWatch()); }   // a paused screen may sleep; a networked race runs on under the card, and never holds for a resume countdown
@@ -9368,16 +9377,21 @@ function endTimeTrialFromBox() {
   if (state !== "race" || !isTimeTrial() || !pits.canWork(player) || paused || netPlay.active()) return;
   paused = true;
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain(); radioVoice.halt();
-  openGarage("pit");
-  setupCam.startPitIn(() => {
+  openGarage("pit"); $("cs-done").textContent = "SKIP TO GARAGE";   // DONE/BACK/Escape skip the drive-in here, not return to the run (#6390)
+  setupCam.startPitIn((to) => {
     setupCam.cancelArrival();
     G.endRace();
     els.results.hidden = true;
     garageReturn = "tt-results";
     $("cs-done").textContent = "VIEW RESULTS";
     buildSetup();
+    if (to && to.results) garageBack();   // SKIP TO RESULTS (#6390): the sheet now; its GARAGE door comes back here
   });
 }
+// The TT sheet reached from the garage offers the way back (GARAGE, and Escape); a new TT sheet starts without it (endRace).
+function ttGarageDoor(on) { $("res-garage").hidden = !on; if (on) els.results.setAttribute("data-esc-close", "res-garage"); else els.results.removeAttribute("data-esc-close"); }
+{ const b = document.createElement("button"); b.id = "res-garage"; Object.assign(b, { type: "button", className: "bigbtn alt", hidden: true, textContent: "GARAGE" }); els.resMenu.parentNode?.insertBefore(b, els.resMenu); }   // built here: shellNodes
+$("res-garage").onclick = () => { ttGarageDoor(false); els.results.hidden = true; openGarage("tt-results"); $("cs-done").textContent = "VIEW RESULTS"; };
 els.workBtn.onclick = openPitWork;
 els.endSessionBtn.onclick = endTimeTrialFromBox;
 

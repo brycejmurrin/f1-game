@@ -1362,3 +1362,31 @@ test("cloud bank misses skip the procedural four-octave noise above the horizon 
     }
   } finally { renderer.dispose(); }
 });
+
+// #5777 R11: two exact-zero gates GLX SKY_FS already has (glsl-sky.js `up < 0.51`, `cov > 0.0`). The azimuth
+// atan + vnoise multiplies c by 1.0 once up >= 0.5; with cov == 0 the thickness FBM and the cloud lighting stack
+// feed only mix(c, lit, 0) = c and a cityThick every consumer multiplies by cityCov = 0. Identical pixels by
+// construction; the gain and the pixels still need gfx-probe + gpu-census.yml on a real GPU.
+test("TLX sky gates the azimuth noise on up < 0.51 and the cloud lighting on cov > 0 (#5777 R11)", async () => {
+  vm.runInThisContext(read("js/render/three/tsl-sky.js"), { filename: absSrc("js/render/three/tsl-sky.js") });
+  const fg = makeFakeGL();
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true });
+  await renderer.init();
+  renderer.backend.utils.getTextureSampleData = () => ({ primarySamples: 1 });
+  const COV = /^if \( \( nodeVar\d+ > 0\.0 \) \)$/;
+  try {
+    for (const cache of [false, true]) for (const Builder of [THREE.WGSLNodeBuilder, THREE.GLSLNodeBuilder]) {
+      const sky = globalThis.TLXShaders.sky(THREE, TSL, { cache, cacheSize: 64 });
+      const geo = new THREE.PlaneGeometry(), material = new THREE.MeshBasicNodeMaterial();
+      material.fragmentNode = sky.node;
+      try {
+        const builder = new Builder(new THREE.Mesh(geo, material), renderer);
+        builder.camera = new THREE.PerspectiveCamera(); builder.scene = new THREE.Scene(); builder.build();
+        const src = builder.fragmentShader, tag = `${Builder.name} cache=${cache}`;
+        assertGated(tag + " azimuth", src, /atan\(/, /< 0\.51/, 1);
+        assertGated(tag + " thickness FBM", src, /apexSkyFbm\( \( \( [^;]*\* vec2(?:<f32>)?\( 0\.55 \) \)/, COV, 1);
+        assertGated(tag + " cloud tops", src, /vec3(?:<f32>)?\( 0\.58, 0\.62, 0\.7 \)/, COV, 1);
+      } finally { geo.dispose(); material.dispose(); sky.dispose(); }
+    }
+  } finally { renderer.dispose(); }
+});

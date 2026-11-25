@@ -434,3 +434,147 @@ test("geom reads the device's own geometry: insets, viewport units, the zoom sel
   assert.equal(bare.value.insets, null);
   assert.equal(bare.value.zoom, null);
 });
+
+// UI NAVIGATION (#6383): a mini DOM that plays the TIME TRIAL route the way the game's own handlers do. Every screen
+// change happens inside an onclick, so a nav that arrives proves the bridge pressed the real controls.
+function menuDom({ state = "menu", dailyLocked = false } = {}) {
+  const els = new Map();
+  const log = [];
+  const game = { state, door: { built: null, dark: null, readyFor: null, want: { tod: "default", weather: "dry" }, driveOut: false } };
+  const el = (id, { parent = null, hidden = false, tag = "BUTTON" } = {}) => {
+    const n = { id, tagName: tag, nodeType: 1, hidden, disabled: false, parentElement: parent, children: [], dataset: {}, attrs: {}, onclick: null,
+      getAttribute: (k) => n.attrs[k] ?? null, setAttribute: (k, v) => { n.attrs[k] = String(v); },
+      dispatchEvent: (e) => { log.push(id + ":" + e.type); return true; },
+      click: () => { log.push(id + ":click"); if (n.onclick) n.onclick({ type: "click" }); } };
+    if (parent) parent.children.push(n);
+    if (id) els.set(id, n);
+    return n;
+  };
+  const show = (id) => { for (const s of ["overlay", "select", "race-settings", "carsetup"]) els.get(s).hidden = s !== id; };
+  const overlay = el("overlay", { tag: "DIV" });
+  for (const id of ["mb-tt", "mb-race", "mb-daily", "mb-career", "mb-vs"]) el(id, { parent: overlay });
+  const select = el("select", { tag: "DIV", hidden: true });
+  const strip = el("sel-tracks", { parent: select, tag: "DIV" });
+  ["spa", "monza"].forEach((t, i) => {
+    const r = el(null, { parent: strip });
+    r.dataset.trackIdx = String(i);
+    r.onclick = () => { for (const c of strip.children) c.setAttribute("aria-pressed", c === r ? "true" : "false"); game.door.readyFor = { trackId: t, tod: game.door.want.tod, weather: game.door.want.weather }; };
+  });
+  for (const id of ["sel-go", "sel-car", "sel-back"]) el(id, { parent: select });
+  const rs = el("race-settings", { tag: "DIALOG", hidden: true });
+  const row = (name, values, key) => {
+    const sel = el("rs-" + name + "-sel", { parent: rs, tag: "SELECT" });
+    sel.options = values.map((value) => ({ value }));
+    sel.value = values[0];
+    sel.disabled = dailyLocked;
+    const next = el("rs-" + name + "-next", { parent: rs });
+    next.onclick = () => { sel.value = values[(values.indexOf(sel.value) + 1) % values.length]; game.door.want[key] = sel.value; if (game.door.readyFor) game.door.readyFor[key] = sel.value; };   // scheduleFlybyTrack re-preps
+    el("rs-" + name + "-prev", { parent: rs });
+  };
+  row("weather", ["dry", "wet", "rain", "storm", "overcast", "fog"], "weather");
+  row("time", ["default", "dawn", "day", "dusk", "night"], "tod");
+  const go = el("rs-go", { parent: rs });
+  el("rs-cancel", { parent: rs });
+  const cs = el("carsetup", { tag: "DIV", hidden: true });
+  const done = el("cs-done", { parent: cs });
+  els.get("mb-tt").onclick = () => setTimeout(() => show("select"), 30);   // the title's View Transition lands later
+  els.get("mb-daily").onclick = () => { strip.children[1].onclick(); show("select"); };
+  els.get("sel-go").onclick = () => show("race-settings");
+  els.get("sel-car").onclick = () => show("carsetup");
+  done.onclick = () => show("race-settings");
+  // RACE!: the garage drive-out plays while the state is still "menu", then the countdown.
+  go.onclick = () => {
+    rs.hidden = true;
+    setTimeout(() => { game.door.driveOut = true; game.door.built = game.door.readyFor.trackId; }, 50);
+    setTimeout(() => { game.door.driveOut = false; game.state = "count"; }, 1500);
+  };
+  const document = { getElementById: (id) => els.get(id) || null };
+  const apex = { info: () => ({ state: game.state }), menuPrep: () => ({ door: plain(game.door) }) };
+  const extra = { document, setTimeout, Date, Tracks: { LIST: [{ id: "spa" }, { id: "monza" }] },
+    Event: class { constructor(type) { this.type = type; } } };
+  return { els, log, game, apex, extra };
+}
+
+test("tap: only TAP_OK ids and circuit tiles, with the real pointer + click sequence", async () => {
+  const dom = menuDom();
+  const b = load({ search: "", apex: dom.apex, extra: dom.extra });
+  for (const id of ["mb-career", "mb-vs", "pm-settings", "sel-tracks", "#mb-tt", "rs-go, mb-career", undefined]) {
+    const r = await b.api.handle({ cmd: "tap", args: { id } });
+    assert.equal(r.ok, false, String(id));
+    assert.equal(r.error, "tap not allowed: " + id);
+  }
+  for (const tile of ["../x", "monza']", "nowhere"]) assert.equal((await b.api.handle({ cmd: "tap", args: { tile } })).ok, false, tile);
+  assert.equal(dom.log.length, 0, "a refused tap touches nothing");
+  for (const bad of ["mb-career", "mb-vs", "mb-continue", "pm-files", "pm-open-files", "save-export"]) assert.equal(b.api.TAP_OK.has(bad), false, bad);
+  // A hidden control is refused, not clicked.
+  assert.equal((await b.api.handle({ cmd: "tap", args: { id: "sel-go" } })).error, "sel-go is not visible (screen title)");
+  const r = await b.api.handle({ cmd: "tap", args: { id: "mb-tt", until: "select", ms: 2000 } });
+  assert.equal(r.ok, true);
+  assert.deepEqual(plain(r.value), { tapped: "mb-tt", screen: "select", state: "menu", ok: true });
+  assert.deepEqual(dom.log, ["mb-tt:pointerdown", "mb-tt:pointerup", "mb-tt:click"]);
+  assert.equal((await b.api.handle({ cmd: "tap", args: { id: "sel-go", until: "nowhere" } })).ok, false, "until names a screen");
+  assert.deepEqual(plain((await b.api.handle({ cmd: "screen" })).value), { screen: "select", state: "menu" });
+});
+
+test("nav tt/setup: title → TIME TRIAL → tile → SESSION SETUP → weather/time chevrons → RACE!, a screen per step", async () => {
+  const dom = menuDom();
+  const b = load({ search: "", apex: dom.apex, extra: dom.extra });
+  const r = await b.api.handle({ cmd: "nav", args: { flow: "tt", track: "monza", weather: "rain", tod: "night", entry: "setup" } });
+  assert.equal(r.ok, true, r.error);
+  const v = r.value;
+  assert.equal(v.ok, true, JSON.stringify(v.steps));
+  assert.deepEqual(plain(v.steps.map((s) => [s.step, s.screen, s.ok])), [
+    ["mb-tt", "select", true], ["tile:monza", "select", true], ["sel-go", "setup", true],
+    ["weather", "setup", true], ["time", "setup", true], ["rs-go", "drive-out", true],
+  ]);
+  assert.equal(v.steps[3].value, "rain");
+  assert.equal(v.state, "menu", "RACE! answers once the drive-out is up, not after it");
+  assert.ok(v.steps[5].ms < 1000);
+  assert.deepEqual(plain(v.door), { built: "monza", dark: null, readyFor: { trackId: "monza", tod: "night", weather: "rain" }, want: { tod: "night", weather: "rain" }, driveOut: true });
+  assert.equal(dom.log.filter((l) => l === "rs-weather-next:click").length, 2, "dry → wet → rain by the chevron, as a thumb would");
+  assert.ok(JSON.stringify(r).length < 60000);
+});
+
+test("nav garage entry goes through YOUR CAR and the garage's DONE; daily pins its own world", async () => {
+  const g = menuDom();
+  const bg = load({ search: "", apex: g.apex, extra: g.extra });
+  const rg = await bg.api.handle({ cmd: "nav", args: { track: "spa", entry: "garage", go: false } });
+  assert.deepEqual(plain(rg.value.steps.map((s) => s.step + "@" + s.screen)), ["mb-tt@select", "tile:spa@select", "sel-car@garage", "cs-done@setup"]);
+  assert.equal(rg.value.screen, "setup", "go:false stops on SESSION SETUP");
+  const d = menuDom({ dailyLocked: true });
+  const bd = load({ search: "", apex: d.apex, extra: d.extra });
+  assert.equal((await bd.api.handle({ cmd: "nav", args: { entry: "daily", weather: "rain" } })).error, "daily pins its own circuit, weather and hour (flow tt, no track/weather/tod)");
+  const rd = await bd.api.handle({ cmd: "nav", args: { entry: "daily" } });
+  assert.deepEqual(plain(rd.value.steps.map((s) => s.step)), ["mb-daily", "sel-go", "rs-go"]);
+  assert.equal(rd.value.door.built, "monza");
+});
+
+test("nav refuses a bad route up front and reports where a route stopped", async () => {
+  const dom = menuDom();
+  const b = load({ search: "", apex: dom.apex, extra: dom.extra });
+  assert.equal((await b.api.handle({ cmd: "nav", args: { track: "monza", entry: "lobby" } })).error, "nav.entry must be setup, garage or daily");
+  assert.equal((await b.api.handle({ cmd: "nav", args: { track: "monza", flow: "career" } })).error, "nav.flow must be tt or race");
+  assert.equal((await b.api.handle({ cmd: "nav", args: {} })).error, "nav.track is required");
+  const bad = await b.api.handle({ cmd: "nav", args: { track: "monza", weather: "snow" } });
+  assert.equal(bad.value.ok, false);
+  assert.deepEqual(plain(bad.value.steps.at(-1)), { step: "weather", ok: false, screen: "setup", error: "weather must be one of dry, wet, rain, storm, overcast, fog" });
+  // Not on the title any more: nav refuses rather than guessing a route from mid-menu.
+  assert.equal((await b.api.handle({ cmd: "nav", args: { track: "monza" } })).error, "nav starts on the title screen (now setup)");
+  // In a batch, a nav that did not arrive stops the steps after it.
+  const dom2 = menuDom({ dailyLocked: true });
+  const b2 = load({ search: "", apex: dom2.apex, extra: dom2.extra });
+  const out = await b2.api.handle({ cmd: "batch", args: { steps: [{ cmd: "nav", args: { track: "monza", tod: "night" } }, { cmd: "ping" }] } });
+  assert.equal(out.value.length, 1);
+  assert.equal(out.value[0].value.steps.at(-1).error, "time is locked on this session");
+});
+
+test("every TAP_OK id is a control the shell or the game creates (the lookup is dynamic, so this is its static check)", () => {
+  const { api } = load({ search: "" });
+  const html = fs.readFileSync(new URL("../../index.html", import.meta.url), "utf8");
+  const shell = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
+  const runtime = { "ceremony-parc-skip": "js/race/parc-ferme.js", "ceremony-cooldown-skip": "js/race/cooldown-lap.js", "retired-skip": "js/race/retired-card.js" };
+  for (const id of api.TAP_OK) {
+    if (runtime[id]) assert.ok(fs.readFileSync(new URL("../../" + runtime[id], import.meta.url), "utf8").includes('"' + id + '"'), id + " made by " + runtime[id]);
+    else assert.equal(shell.has(id), true, id + " is in index.html");
+  }
+});
