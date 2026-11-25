@@ -4,14 +4,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { KINDS, WRITABLE_KINDS, writeReceipt, readReceipt, receiptPath, receiptVerdict } from "../../tools/lib/gate-receipt.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const HEAD = "c".repeat(40);
 
 test("writeReceipt refuses the merge kind and writes nothing; ready still writes", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rcpt-merge-kind-"));
+  const dir = mkTmpDir("rcpt-merge-kind-");
   try {
     assert.deepEqual([...WRITABLE_KINDS], ["ready"]);
     assert.deepEqual(KINDS, ["merge", "ready"], "readers keep both kinds");
@@ -24,7 +24,7 @@ test("writeReceipt refuses the merge kind and writes nothing; ready still writes
 });
 
 test("readers stay tolerant: a merge receipt on disk is still read and judged by receiptVerdict", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rcpt-merge-read-"));
+  const dir = mkTmpDir("rcpt-merge-read-");
   try {
     const now = Date.parse("2026-10-27T12:00:00Z");
     fs.mkdirSync(path.dirname(receiptPath(dir, "merge", 9)), { recursive: true });

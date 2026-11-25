@@ -2,15 +2,15 @@ import "../helpers/git-fixture-env.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { Lsp, callTool } from "../../tools/mcp/lsp-mcp.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 async function fixture(fn) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lsp-nav-"));
+  const root = mkTmpDir("lsp-nav-");
   const files = {
     "jsconfig.json": JSON.stringify({ compilerOptions: { allowJs: true, noEmit: true }, typeAcquisition: { enable: false }, include: ["src/**/*.js"] }),
     "src/core/log.js": '"use strict";\n',

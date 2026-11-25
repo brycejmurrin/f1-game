@@ -12,11 +12,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readAX26, ax26Version } from "../helpers/ax26.mjs";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import zlib from "node:zlib";
 import cp from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -71,7 +71,7 @@ function buildFixture(dir) {
 }
 
 test("import-models bakes gltf+bin+atlas into AX26 with sampled colours", async () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-imp-"));
+  const tmp = mkTmpDir("apex-imp-");
   const src = path.join(tmp, "pack"), out = path.join(tmp, "out");
   fs.mkdirSync(src, { recursive: true }); fs.mkdirSync(out, { recursive: true });
   try {
@@ -139,7 +139,7 @@ function pngIndexed(w, h, indices, palette /* RGB triples */) {
 }
 
 test("import-models samples indexed (colour-type 3) Kenney-style colormaps", async () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-imp-idx-"));
+  const tmp = mkTmpDir("apex-imp-idx-");
   const src = path.join(tmp, "pack"), out = path.join(tmp, "out");
   fs.mkdirSync(path.join(src, "textures"), { recursive: true });
   fs.mkdirSync(out, { recursive: true });
@@ -203,7 +203,7 @@ test("importExitCode: a partial import exits 0, an import where every file was s
 });
 
 test("the importer CLI exits 2 when every model file fails, and 0 with the good file beside a bad one", () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-imp-"));
+  const tmp = mkTmpDir("apex-imp-");
   const bad = path.join(tmp, "bad"), mixed = path.join(tmp, "mixed"), out = path.join(tmp, "out");
   for (const d of [bad, mixed, out]) fs.mkdirSync(d, { recursive: true });
   try {
@@ -228,7 +228,7 @@ test("the importer CLI exits 2 when every model file fails, and 0 with the good 
 });
 
 test("--scale keeps a kit's relative sizes: a uniform metres-per-unit factor when --height is 0", async () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-imp-"));
+  const tmp = mkTmpDir("apex-imp-");
   const src = path.join(tmp, "pack"), out = path.join(tmp, "out");
   fs.mkdirSync(src, { recursive: true }); fs.mkdirSync(out, { recursive: true });
   try {

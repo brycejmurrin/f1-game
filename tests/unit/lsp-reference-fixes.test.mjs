@@ -1,16 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Lsp, callTool } from "../../tools/mcp/lsp-mcp.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TSC = path.join(ROOT, "node_modules/.bin/tsc");
 
 function fixture() {
-  const root = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), "apex-lsp-ref-fixes-"));
+  const root = mkTmpDir("apex-lsp-ref-fixes-");
   fs.mkdirSync(path.join(root, "src"));
   fs.writeFileSync(path.join(root, "jsconfig.json"), JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, include: ["src/**/*.js"] }));
   fs.writeFileSync(path.join(root, "src/case.js"), `"use strict";
@@ -47,7 +47,7 @@ window.Same = { value: "first" }; window.Same = { value: "second" }; /*@same-lin
 }
 
 function cjsFixture() {
-  const root = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), "apex-lsp-cjs-refs-"));
+  const root = mkTmpDir("apex-lsp-cjs-refs-");
   fs.mkdirSync(path.join(root, "src"));
   fs.writeFileSync(path.join(root, "jsconfig.json"), JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, include: ["src/**/*.js"] }));
   fs.writeFileSync(path.join(root, "src/case.js"), `"use strict";

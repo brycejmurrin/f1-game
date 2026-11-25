@@ -5,10 +5,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { stashJunit, clearJunitStash } from "../../tools/ci/run-playwright.mjs";
 import { claimedUnits, readJunits } from "../../tools/ci/remote-group.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const HUB = "tests/specs/career-hub.spec.js", DESIGNER = "tests/specs/track-designer.spec.js", QUALI = "tests/specs/quali.spec.js";
 const PORT = "41234";
@@ -18,7 +18,7 @@ const fail = (file) => `<testcase classname="${file.replace(/^tests\//, "")}" na
 /** One invocation as run-playwright runs it: each process REWRITES test-results-<port>/ (Playwright clears its
  *  outputDir), and the finished process's junit is stashed before the next one starts. `null` = wrote no junit. */
 function invocation(processes, { stash = true } = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-junit-"));
+  const dir = mkTmpDir("apex-junit-");
   const out = path.join(dir, `test-results-${PORT}`);
   clearJunitStash(dir, PORT);
   processes.forEach((cases, i) => {
