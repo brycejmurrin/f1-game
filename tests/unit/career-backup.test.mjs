@@ -2330,3 +2330,32 @@ test("a recovery file (one slot) still refuses whole on a bad slot", () => {
   const r = h.CareerBackup.recoveryEnvelope({ format: "apex26-recovery-v1", career: save({ v: 2 ** 32 }) }, { flavour: "driver", i: 0 });
   assert.equal(r.ok, false);
 });
+
+// pr-reviewer on #6655: an all-skipped file says nothing was restored; a
+// rejected other-mode row asks no confirm and is counted once.
+test("#6587 UI: a file whose every slot is skipped announces NOTHING RESTORED, not CAREER RESTORED", async () => {
+  const h = loadHarness();
+  h.store.set("career.driver.0", save({ money: 321 }));
+  const ui = bootBackupUi(h);
+  const envelope = { format: "apex26-career-backup-v1", slots: [
+    { flavour: "driver", i: 0, data: "garbage" }, { flavour: "driver", i: "abc", data: save({ money: 9 }) }] };
+  await ui.selectBackup(envelope, "left");
+  const notes = ui.G.$("cr-left").querySelectorAll(".cr-note").map((n) => n.textContent).join(" | ");
+  assert.match(notes, /Skipped: Driver career slot 1 \(slot-not-object\)/);
+  assert.match(notes, /Skipped: file row 2 \(bad-index\)/);
+  await ui.clickImport("left");
+  assert.equal(ui.notices.at(-1), "NOTHING RESTORED — 2 SLOTS SKIPPED; YOUR SAVES ARE UNCHANGED");
+  assert.equal(h.store.get("career.driver.0").money, 321);
+});
+
+test("#6587: a rejected other-mode row asks no confirm and is reported by its own pass only", () => {
+  const h = loadHarness();
+  const envelope = { format: "apex26-career-backup-v1", slots: [
+    { flavour: "driver", i: 0, data: save({ money: 444 }) }, { flavour: "myteam", i: 1, data: "x" }] };
+  const driver = h.CareerBackup.apply(envelope, { focusFlavour: "driver" });
+  assert.equal(driver.needsConfirm, false, "nothing of the other mode can import");
+  assert.equal(driver.rejected.length, 0, "the MY TEAM row belongs to the MY TEAM pass");
+  assert.equal(h.CareerBackup.preview(envelope, { flavours: ["driver"] }).rejected.length, 0);
+  assert.deepEqual(Array.from(h.CareerBackup.preview(envelope, { flavours: ["myteam"] }).rejected, (r) => r.slot), ["myteam:1"]);
+  assert.equal(JSON.parse(h.disk.get("apex26.career.driver.0")).money, 444);
+});

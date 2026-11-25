@@ -316,6 +316,11 @@ const CareerBackup = (function () {
     return FLAVOURS.includes(f) && Number.isInteger(row.i) && row.i >= 0 && row.i < SLOTS ? f + ":" + row.i : null;
   }
   function rejectedRows(checked) { return new Set((checked.rejected || []).map((r) => r.row)); }
+  // Report a rejected row once, with the pass whose flavours own its slot (a
+  // row naming no real slot rides with every pass).
+  function rejectedFor(checked, allowed) {
+    return (checked.rejected || []).filter((r) => !r.slot || allowed.includes(r.slot.split(":")[0]));
+  }
 
   // Recovery exports contain one active snapshot, not six named slots. The
   // destination is explicit and this adapter only reviews; apply owns writes.
@@ -604,12 +609,12 @@ const CareerBackup = (function () {
     return false;
   }
 
-  function otherFlavourPending(envelope, focusFlavour) {
+  function otherFlavourPending(envelope, focusFlavour, bad) {
     const focus = flavourIn(focusFlavour);
     const other = focus === "myteam" ? "driver" : "myteam";
     for (let i = 0; i < (envelope.slots || []).length; i++) {
       const row = envelope.slots[i];
-      if (!row || row.data == null) continue;
+      if (!row || row.data == null || (bad && bad.has(i))) continue;
       if (flavourIn(row.flavour) === other) return true;
     }
     return false;
@@ -835,7 +840,7 @@ const CareerBackup = (function () {
       if (envelope.records != null) extras.push("Records: add missing entries");
     }
     if (slots.some(r => r.flavour === "myteam")) extras.push("MY TEAM identity: restore separately with each imported career; other careers and one-off GP appearance are preserved");
-    return { ok: true, slots, extras, rejected: checked.rejected };
+    return { ok: true, slots, extras, rejected: rejectedFor(checked, allowed) };
   }
 
   const DRY = 1, UNDO_READY = 2;
@@ -918,7 +923,7 @@ const CareerBackup = (function () {
     const allowed = o.flavours
       ? o.flavours.map(flavourIn)
       : (focus && !o.otherFlavourConfirmed ? [focus] : FLAVOURS.slice());
-    const pendingOther = !!(focus && !o.otherFlavourConfirmed && otherFlavourPending(envelope, focus));
+    const pendingOther = !!(focus && !o.otherFlavourConfirmed && otherFlavourPending(envelope, focus, rejectedRows(checked)));
 
     const s = store();
     if (s && s.careerWriteStatus && !s.careerWriteStatus().ok) return s.careerWriteStatus();
@@ -941,7 +946,7 @@ const CareerBackup = (function () {
       return result;
     };
     const skipped = [];
-    const rejected = checked.rejected.slice(), bad = rejectedRows(checked);
+    const rejected = rejectedFor(checked, allowed), bad = rejectedRows(checked);
     const reject = (id, reason) => { rejected.push({ slot: id, reason }); log("warn", "career backup: " + id + " skipped (" + reason + ")"); };
 
     // Snapshot disk first so a mid-apply conflict can leave nothing half-done

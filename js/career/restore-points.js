@@ -86,10 +86,17 @@ const CareerRestorePoints = (function () {
         return withinBudget(migrated, json, flavour) ? json : null;
       } catch (_) { return null; }
     }
-    // Parses, but no career this build can keep (not newer, not merely big): #6604.
+    // Parses, but is no career of this flavour (#6604). A numeric v this build
+    // can't read, a newer v or a save that is only too big is NOT damaged: it
+    // still needs its snapshot, so capture() refuses it as before.
     function damaged(d, f) {
-      const v = d && SaveMigrate.careerVersion(d.v);
-      return d != null && !clean(d, f) && !(v > SaveMigrate.CAREER_V) && JSON.stringify(d).length * 2 <= PROGRESS_BYTES;
+      if (d == null) return false;
+      if (typeof d !== "object" || Array.isArray(d)) return true;
+      const v = SaveMigrate.careerVersion(d.v);
+      if (v === null) return typeof d.v !== "number";
+      if (v > SaveMigrate.CAREER_V) return false;
+      if (d.flavour && d.flavour !== f) return true;
+      try { const m = SaveMigrate.migrateCareer(JSON.parse(JSON.stringify(Object.assign({}, d, { v })))); return !m || m.flavour !== f; } catch (_) { return true; }
     }
     function summary(json) {
       const d = JSON.parse(json), season = d.season || {};

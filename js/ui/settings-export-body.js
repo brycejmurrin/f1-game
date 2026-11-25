@@ -666,6 +666,7 @@ async function applyCareer(file, revisions) {
   if (typeof CareerBackup === "undefined") return refused("career backup unavailable");
   const slots = [];
   let skipped = 0, liveSlot;
+  const skippedSlots = new Set();
   for (const k of Object.keys(bag)) {
     if (!isCareerKey(k)) { skipped++; continue; }
     if (k === "careerSlot") {
@@ -675,12 +676,15 @@ async function applyCareer(file, revisions) {
     }
     const match = CAREER_SLOT_RE.exec(k);
     // A newer build's slot is skipped and counted, never written; the rest imports (#6602 D2(a)).
-    if (futureCareerSlot(bag[k], match[1])) { skipped++; continue; }
-    if (poisonedCareerMoney(bag[k], match[1])) { skipped++; continue; }
+    const skip = () => { skipped++; skippedSlots.add(match[1] + ":" + match[2]); };
+    if (futureCareerSlot(bag[k], match[1])) { skip(); continue; }
+    if (poisonedCareerMoney(bag[k], match[1])) { skip(); continue; }
     const c = migrateSlot(bag[k]);
-    if (!c) { skipped++; continue; }
+    if (!c) { skip(); continue; }
     slots.push({ flavour: match[1], i: Number(match[2]), data: c });
   }
+  // Never point the device at a slot this file's own row was skipped for.
+  if (liveSlot != null && skippedSlots.has(liveSlot)) { liveSlot = undefined; skipped++; }
   const envelope = { format: CareerBackup.FORMAT, slots };
   for (const name of Object.keys(CAREER_EXTRA_KEYS)) if (file[name] != null) envelope[name] = file[name];
   const hasExtras = Object.keys(envelope).length > 2;

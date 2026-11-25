@@ -196,7 +196,8 @@ function create(G) {
       G.refreshCareerButton();
       pending.unconfirmed = pending.unconfirmed || result.durable === false || !!result.failed;
       const bad = (result.rejected || []).length;
-      const restored = (pending.unconfirmed
+      const nothing = bad && !(result.written || []).length && !(result.applied || []).length;
+      const restored = nothing ? "NOTHING RESTORED — " + bad + " SLOT" + (bad > 1 ? "S" : "") + " SKIPPED; YOUR SAVES ARE UNCHANGED" : (pending.unconfirmed
         ? "RESTORED FOR THIS SESSION — SAVE NOT CONFIRMED; KEEP YOUR BACKUP"
         : "CAREER RESTORED") + (bad ? ` — ${bad} SLOT${bad > 1 ? "S" : ""} SKIPPED` : "");
       if (result.needsConfirm && !otherConfirmed) {

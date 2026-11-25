@@ -2099,6 +2099,17 @@ test("a future final row is skipped and the rest of the mixed legacy import appl
   }
 });
 
+test("the career file never points the device at a slot whose own row it skipped (#6655 review)", async () => {
+  const b = boot({ career: true, disk: { "apex26.careerSlot": '"driver:0"' } });
+  const result = await b.loadCareer({ format: b.SettingsExport.CAREER_FORMAT, careers: {
+    "career.driver.1": CAREER_SAVE, careerSlot: "driver:2",
+    "career.driver.2": { ...CAREER_SAVE, v: b.careerVersion + 1 } } });
+  assert.equal(result.ok, true);
+  assert.equal(result.skipped, 2, "the future row and the pointer to it");
+  assert.equal(JSON.parse(b.disk.get("apex26.careerSlot")), "driver:0");
+  assert.equal(b.disk.has("apex26.career.driver.2"), false);
+});
+
 test("future preflight retains legacy migration, scope and slot/selection revision gates", async () => {
   const b = boot({ career: true });
   const result = await b.loadCareer({ format: b.SettingsExport.CAREER_FORMAT, careers: {

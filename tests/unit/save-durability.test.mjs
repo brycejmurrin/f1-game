@@ -786,6 +786,12 @@ test("#6604: restore over a damaged slot skips the before-restore point and repo
   assert.equal(newer.currentDamaged, false, "a newer build's save is not damaged");
   assert.equal((await p.restore(newer)).ok, false, "it can't be snapshotted, so it is never replaced");
   assert.equal(h.store.get("career.driver.0").v, 99);
+  // An unreadable numeric v (2^60) may be a future build's: never replaced unsnapshotted.
+  h.store.write("career.driver.0", { ...save(5), v: 2 ** 60 });
+  const huge = await p.preview("driver", 0, id);
+  assert.equal(huge.currentDamaged, false);
+  assert.equal((await p.restore(huge)).ok, false);
+  assert.equal(h.store.get("career.driver.0").v, 2 ** 60);
   // A legacy slot with no `v` (v0) is a career: it is kept as a restore point, not skipped.
   const legacy = save(4); delete legacy.v;
   h.store.write("career.driver.0", legacy);
