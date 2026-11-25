@@ -27,7 +27,7 @@ test("reflected draws correct facing with culling disabled and restore the follo
   model[0] = -1;
   h.GLX.draw(mesh, model, { doubleSided: true });
   assert.deepEqual(seen[1], { facing: h.gl.CW, culling: false }, "double-sided reflected draw keeps outward faces front-facing");
-  assert.equal(facing, h.gl.CCW, "reflected draw restores the renderer default");
+  assert.equal(h.count("frontFace"), 1, "a reflected draw leaves CW set for the next reflected one (#5777 R12b)");
   model[0] = 1;
   h.GLX.draw(mesh, model);
   assert.deepEqual(seen[2], { facing: h.gl.CCW, culling: true }, "following draw inherits normal facing and culling");
@@ -37,17 +37,60 @@ test("reflected draws correct facing with culling disabled and restore the follo
   assert.equal(h.count("frontFace"), 2, "two reflected axes preserve orientation");
 });
 
-test("a throwing reflected draw restores counter-clockwise facing", () => {
+test("a throwing reflected draw leaves CW cached, and the next frame's begin() restores counter-clockwise facing", () => {
   const h = bootGlx();
-  let facing = h.gl.CCW;
+  let facing = h.gl.CCW, fault = true;
   h.answers.frontFace = (mode) => { facing = mode; };
-  h.answers.drawElements = () => { assert.equal(facing, h.gl.CW); throw new Error("draw fault"); };
+  h.answers.drawElements = () => { if (fault) { assert.equal(facing, h.gl.CW); throw new Error("draw fault"); } };
   const model = [...IDENTITY]; model[0] = -1;
   const mesh = { vao: {}, count: 3, indexType: h.gl.UNSIGNED_SHORT };
   h.GLX.begin(h.frame()); h.reset();
   assert.throws(() => h.GLX.draw(mesh, model), /draw fault/);
-  assert.equal(facing, h.gl.CCW);
+  assert.equal(facing, h.gl.CW, "cache and GL agree on CW after the throw");
+  h.GLX.begin(h.frame());
+  assert.equal(facing, h.gl.CCW, "begin() re-asserts the renderer default");
+  fault = false; h.reset();
+  h.GLX.draw(mesh, model);
+  assert.equal(h.count("frontFace"), 1, "the cache was resynced with GL: the next reflected draw flips again");
+});
+
+// #5777 R12b: the garage floor draws its mirrored car and wheels as ONE run of reflected draws. The bracket issued
+// CW + CCW per draw (10 calls for 5 draws); the cache issues CW once and CCW once, at the next unreflected draw.
+test("a run of reflected draws flips facing once each way (#5777 R12b)", () => {
+  const h = bootGlx();
+  const mesh = { vao: {}, count: 3, indexType: h.gl.UNSIGNED_SHORT };
+  const mirrored = [...IDENTITY]; mirrored[5] = -1;
+  h.GLX.begin(h.frame()); h.reset();
+  for (let i = 0; i < 5; i++) h.GLX.draw(mesh, mirrored, { doubleSided: i > 0 });
+  h.GLX.draw(mesh, [...IDENTITY]);
   assert.deepEqual(h.calls.filter(([name]) => name === "frontFace").map(([, args]) => args[0]), [h.gl.CW, h.gl.CCW]);
+});
+
+// CW must never leak out of draw(): every other rasterising entry restores CCW before it draws.
+test("entry points after a reflected draw rasterise counter-clockwise (#5777 R12b)", () => {
+  const h = bootGlx();
+  let facing = h.gl.CCW;
+  const seen = [];
+  h.answers.frontFace = (mode) => { facing = mode; };
+  h.answers.drawArrays = h.answers.drawElementsInstanced = () => seen.push(facing);
+  const mesh = { vao: {}, count: 3, indexType: h.gl.UNSIGNED_SHORT };
+  const mirrored = [...IDENTITY]; mirrored[0] = -1;
+  const entries = {
+    drawSky: () => h.GLX.drawSky(h.frame().sky || { invViewProj: [...IDENTITY], zenith: [0, 0, 1], horizon: [1, 1, 1], sunDir: [0, 1, 0], sunColor: [1, 1, 1] }),
+    drawParticles: () => h.GLX.drawParticles(new Float32Array(60), 60, false, true),
+    present: () => h.GLX.present(),
+    mirrorEnd: () => h.GLX.mirrorEnd(),
+  };
+  for (const [name, run] of Object.entries(entries)) {
+    if (name === "mirrorEnd") assert.equal(h.GLX.mirrorBegin(h.frame(), 256, 128), true, "the mirror pass opens");
+    else h.GLX.begin(h.frame());
+    h.GLX.draw(mesh, mirrored);
+    assert.equal(facing, h.gl.CW, name + ": precondition, the reflected draw left CW");
+    seen.length = 0;
+    try { run(); } catch (_) { /* a mock-side throw past the restore still proves the restore ran first */ }
+    assert.equal(facing, h.gl.CCW, name + " restores CCW");
+    assert.ok(seen.every((f) => f === h.gl.CCW), name + " rasterises CCW");
+  }
 });
 
 test("R2-GW-2: createTexture resets the UNPACK flags and deletes the texture when texImage2D throws", () => {

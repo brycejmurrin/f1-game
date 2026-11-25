@@ -9,6 +9,22 @@ const CAPTURE_MS = 8000;   // a frame readback that has not come back by then ne
 const TODS = [["dawn", "Dawn"], ["day", "Day"], ["dusk", "Dusk"], ["night", "Night"], ["default", "Track default"]];
 const WXS = [["dry", "Dry"], ["overcast", "Overcast"], ["fog", "Fog"], ["wet", "Wet"], ["rain", "Rain"], ["storm", "Storm"]];
 let live = null, samplePass = null;
+// TRACK POSITION: the slider stays percent of the lap; ◀ ▶, held, and ←/→ step in metres
+// along the lap, wrapping at the line. A held press steps 1 m a tick, then 5 m, then 25 m.
+const POS_HOLD_MS = 380, POS_REPEAT_MS = 70;
+function stepPosition(pct, total, metres) {
+  if (!(total > 0)) return +pct || 0;
+  const s = (((+pct || 0) / 100 * total + metres) % total + total) % total;
+  return s / total * 100;
+}
+const holdMetres = (tick) => (tick < 12 ? 1 : tick < 30 ? 5 : 25);
+// CAMERA › HELMET / COCKPIT: the race camera's driver's-eye seats (FreeCam {pov}). Only the
+// HELMET seat looks through the visor, so only it carries the visor frame and visor light (#6397).
+const POV_SHOTS = Object.freeze({ helmet: Object.freeze({ pov: "helmet", visor: true }), cockpit: Object.freeze({ pov: "cockpit", visor: false }) });
+function visorOptions(garage, pov, v) {
+  return !garage && POV_SHOTS[pov] && POV_SHOTS[pov].visor ? { ...v, helmet: true } : { level: "off", frame: "off", helmet: false };
+}
+const positionLabel = (pct, total) => (total > 0 ? Math.round((+pct || 0) / 100 * total) + " m" : (+pct || 0).toFixed(1) + "%");
 // Hammersley points at the centres of equally spaced strata on both axes.
 // Every prefix used here is a power of two, with a zero-mean pixel offset.
 function capturePass(count) {
@@ -252,7 +268,10 @@ function create(G, deps) {
     reticleTimer = setTimeout(hideReticle, 900);
     paintFocus();
   }
-  const tapHandlers = { pointerdown: beginTap, pointermove: moveTap, pointerup: finishTap, pointercancel: cancelTap, lostpointercapture: cancelTap };
+  // The FOV sliders (#pc-fov, FreeCam #fc-fov) hand the zoom back to the camera; repaint after their own handler.
+  const fovInput = (e) => { const id = e?.target?.id; if ((id === "pc-fov" || id === "fc-fov") && lens.mm != null) { lens.mm = null; queueMicrotask(paintFocal); } };
+  // A drag or a fly key can leave the HELMET seat (FreeCam): repaint the seat-only rows when one ends.
+  const tapHandlers = { pointerdown: beginTap, pointermove: moveTap, pointerup: (e) => { finishTap(e); paintPov(); }, pointercancel: cancelTap, lostpointercapture: cancelTap, keyup: () => paintPov(), input: fovInput };
   const cameraGroup = group("camera", "CAMERA", [
     shots, mk("p", { id: "ps-help", className: "adv-help" }),
     mk("label", { className: "tune-row" }, [mk("span", { className: "tune-label", textContent: "Focal length (35 mm eq.)" }), focalInput, focalValue]),
@@ -501,24 +520,69 @@ function create(G, deps) {
     input.addEventListener("input", () => { out.textContent = input.value + unit; placed.add(id); placeCar(id !== "ps-car-rotation"); });
     return mk("label", { className: "tune-row" }, [mk("span", { className: "tune-label", textContent: label }), input, out]);
   };
+  // Circuit position: a fine slider plus ◀ ▶ that step 1 m (hold to repeat and speed up);
+  // the readout is metres along the lap, so a spot can be found again.
+  const lapTotal = () => (G.track && G.track.total > 0 ? G.track.total : 0);
+  // step "any": a stepped thumb would snap each metre to a multiple of the step (cm off on a long lap).
+  const posInput = mk("input", { id: "ps-car-position", type: "range", min: "0", max: "100", step: "any", value: "0",
+    attrs: { "aria-labelledby": "ps-car-position-label" } });
+  const posOut = mk("output", { id: "ps-car-position-value", textContent: "0 m", attrs: { for: "ps-car-position" } });
+  function paintPosition() {
+    posOut.textContent = positionLabel(posInput.value, lapTotal());
+    posInput.setAttribute("aria-valuetext", posOut.textContent + " along the lap");
+  }
+  function nudgePosition(metres) {
+    if (posInput.disabled || st.busy || st.closing || !lapTotal()) return;   // the car would not move: keep the readout honest
+    posInput.value = String(stepPosition(posInput.value, lapTotal(), metres));
+    placed.add("ps-car-position"); paintPosition(); placeCar();
+  }
+  posInput.addEventListener("input", () => { placed.add("ps-car-position"); paintPosition(); placeCar(); });
+  // A keyboard's ←/→ step one metre (a 0.001 % thumb step is centimetres); the pad's
+  // synthetic arrows still walk focus (MenuNav) onto ◀ ▶, whose A press steps the same metre.
+  posInput.addEventListener("keydown", (e) => {
+    if ((e.key !== "ArrowLeft" && e.key !== "ArrowRight") || e.isTrusted === false || e.altKey || e.ctrlKey || e.metaKey) return;
+    e.preventDefault(); nudgePosition((e.key === "ArrowRight" ? 1 : -1) * (e.shiftKey ? 10 : 1));
+  });
+  const hold = { timer: 0, tick: 0, dir: 0 };
+  function stopHold() { clearTimeout(hold.timer); hold.timer = 0; hold.dir = 0; }
+  const nudge = (dir, label, id) => {
+    const b = mk("button", { type: "button", id, textContent: dir < 0 ? "◀" : "▶", attrs: { "aria-label": label, "data-nudge": dir < 0 ? "back" : "fwd" } });
+    const repeat = () => { nudgePosition(hold.dir * holdMetres(hold.tick++)); hold.timer = setTimeout(repeat, POS_REPEAT_MS); };
+    b.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 || b.disabled) return;
+      stopHold(); hold.dir = dir; hold.tick = 0;
+      nudgePosition(dir); hold.timer = setTimeout(() => { hold.tick = 1; repeat(); }, POS_HOLD_MS);
+    });
+    for (const type of ["pointerup", "pointercancel", "pointerleave", "lostpointercapture"]) b.addEventListener(type, stopHold);
+    // Keyboard Enter/Space and the pad's A arrive as a click with detail 0 (no pointer press): one metre.
+    // A pointer click (detail ≥ 1) already stepped on pointerdown.
+    b.addEventListener("click", (e) => { if (!(e.detail > 0)) nudgePosition(dir); });
+    return b;
+  };
+  const posRow = mk("div", { className: "tune-row" }, [
+    mk("span", { id: "ps-car-position-label", className: "tune-label", textContent: "Circuit position" }),
+    mk("div", { id: "ps-pos-row" }, [nudge(-1, "Back 1 metre", "ps-car-position-back"), posInput, nudge(1, "Forward 1 metre", "ps-car-position-fwd")]),
+    posOut,
+  ]);
   const carGroup = group("car", "PLACE YOUR CAR", [
-    placement("Circuit position", "ps-car-position", 0, 100, .1, "%"),
+    posRow,
     placement("Sideways", "ps-car-offset", -20, 20, .1, " m"),
     placement("Rotation", "ps-car-rotation", -180, 180, 1, "°"),
     button("FRAME CAR", () => setShot("car"), "ps-car-frame"),
   ]);
   const sampleRow = select("Capture quality", [["1", "Instant"], ["8", "8 samples"], ["32", "32 samples"]],
     () => String(st.samples), (v) => { if (!st.busy && !G.netPlay?.active?.()) st.samples = +v; }, "ps-samples");
-  const photoVisor = { level: "off", beams: "medium", style: "classic" };
+  const photoVisor = { frame: "on", level: "off", beams: "medium", style: "classic" };
   const visorRow = (key, label, choices) => select(label, choices, () => photoVisor[key], v => {
     if (st.busy || st.closing) return;
-    photoVisor[key] = v; say("Press Capture to preview the new visor lighting.");
+    photoVisor[key] = v; say("Press Capture to preview the new visor look.");
   }, "ps-visor-" + key);
   const strengths = [["off", "Off"], ["light", "Light"], ["medium", "Medium"], ["strong", "Strong"]];
-  const visorGroup = group("visor", "VISOR LIGHTING", [
+  const visorGroup = group("visor", "HELMET VISOR", [
+    visorRow("frame", "Visor frame", [["on", "Shown"], ["off", "Hidden"]]),
     visorRow("level", "Reflections", strengths), visorRow("beams", "Beams", strengths),
     visorRow("style", "Style", [["classic", "Classic"], ["compact", "Compact"], ["scratches", "Short rays"]]),
-    mk("p", { className: "adv-help", textContent: "Light effects over any angle, without the helmet frame. Capture previews them and includes them in downloads, saved photos and backgrounds. Driving settings stay unchanged." }),
+    mk("p", { className: "adv-help", textContent: "The HELMET view only: the visor frame and its light go into the photo when you capture. Driving settings stay unchanged." }),
   ]);
   const panel = mk("section", { id: "ps-panel", className: "sheet", attrs: { "aria-label": "Photo Studio" } }, [
     mk("header", { className: "sheet-head" }, [mk("h2", { textContent: "PHOTO STUDIO" }), focusCamera]),
@@ -606,13 +670,25 @@ function create(G, deps) {
     c.head = Math.atan2(sample.t[0], sample.t[2]) - (c.yawVis || 0);
     c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevPx = c.px; c.rPrevPz = c.pz;
     c.rPrevHead = c.head; c.rPrevYawVis = c.yawVis; c.speed = 0;
-    if (reframe) setShot("car", true);
+    if (reframe && !povNow()) setShot("car", true);   // a driver's-eye seat rides the moved car by itself
   }
+  function povNow() {
+    if (isGarage()) return null;
+    const fc = camera(), cur = fc && (fc.state ? fc.state() : fc.cmd ? fc.cmd() : null);
+    return cur && POV_SHOTS[cur.pov] ? cur.pov : null;
+  }
+  function paintPov() { visorGroup.hidden = povNow() !== "helmet"; }
   function setShot(id, preserveInput = false) {
     if (st.busy || st.closing) return;
+    if (!preserveInput) lens.mm = null;   // a preset's own lens wins: render() lets lens.mm override every fov (#6422 row 1)
     if (isGarage()) { if (deps.garage && deps.garage.shot) deps.garage.shot(id); }
     else {
       const fc = camera(); if (!fc || !fc.cmd) return;
+      if (POV_SHOTS[id]) {
+        // The race camera's standstill lens for that seat; FOCAL LENGTH and depth focus work on it as on any shot.
+        fc.cmd({ pov: id, fov: typeof CamFeel !== "undefined" && CamFeel.modeFov ? CamFeel.modeFov(id, 0, 0) : 64, preserveInput });
+        paintPov(); paintFocal(); return;
+      }
       const fov = id === "detail" ? 35 : id === "wide" ? 80 : 60;
       if (hasCar() && G.player && id !== "corner") {
         // Keep the subject above the phone sticks and left of the studio sheet.
@@ -624,7 +700,7 @@ function create(G, deps) {
           target: [c.px - fz * 3, y + .5, c.pz + fx * 3], fov, preserveInput });
       } else fc.cmd(id === "corner" ? { snap: "corner" } : { snap: "car", fov });
     }
-    paintFocal();
+    paintPov(); paintFocal();
   }
   function open(opts) {
     opts = opts || {};
@@ -679,13 +755,14 @@ function create(G, deps) {
     SettingRow.paint(depthRow, depthFocus ? "on" : "off");
     SettingRow.paint(sampleRow, online ? "1" : String(st.samples));
     SettingRow.disable(sampleRow, online);
-    carGroup.hidden = !hasCar(); visorGroup.hidden = isGarage(); focusCamera.hidden = isGarage();
+    carGroup.hidden = !hasCar(); paintPov(); focusCamera.hidden = isGarage();
     for (const [id, unit] of [["ps-car-position", "%"], ["ps-car-offset", " m"], ["ps-car-rotation", "°"]]) {
       const c = st.source === "race" && hasCar() ? G.player : null;
       const value = !c ? 0 : id === "ps-car-position" ? ((c.s % G.track.total + G.track.total) % G.track.total) / G.track.total * 100
         : id === "ps-car-offset" ? c.x : (c.yawVis || 0) * 180 / Math.PI;
       E[id].value = String(value); E[id + "-value"].textContent = value.toFixed(1) + unit;
     }
+    stopHold(); paintPosition();
     placed.clear();
     if (st.source === "home-track") placeCar(true, true); // race photos open exactly where the race was paused
     condGroup.hidden = isGarage(); lineGroup.hidden = isGarage();
@@ -703,7 +780,7 @@ function create(G, deps) {
     E["ps-context"].textContent = text(st.metadata.title || (isGarage() ? "Your garage" : G.track && (G.track.name || G.track.id)) || "Race photo");
     E["ps-help"].textContent = isGarage() ? "Choose a shot or drag the scene to orbit. Guides stay out of the exported photo." : "WASD move · drag to look · R/F height · Shift boost. Guides and HUD stay out of the photo.";
     shots.replaceChildren();
-    const list = isGarage() ? [["hero", "HERO"], ["front", "FRONT"], ["side", "SIDE"], ["rear", "REAR"], ["top", "TOP"]] : [["car", "CHASE"], ["wide", "WIDE"], ["detail", "DETAIL"], ["corner", "CORNER"]];
+    const list = isGarage() ? [["hero", "HERO"], ["front", "FRONT"], ["side", "SIDE"], ["rear", "REAR"], ["top", "TOP"]] : [["car", "CHASE"], ["wide", "WIDE"], ["detail", "DETAIL"], ["corner", "CORNER"], ["helmet", "HELMET"], ["cockpit", "COCKPIT"]];
     for (const [id, label] of list) shots.appendChild(button(label, () => setShot(id)));
     st.closing = false; paintFocal(); guides(); busy(false); say("Capture the frame, then save or download it. Frame and Caption recrop your photo; moving the camera leaves it unchanged until CAPTURE."); paintLibrary(); E["ps-close"].focus();
     return true;
@@ -730,6 +807,7 @@ function create(G, deps) {
   /** @type {(() => void) | null} */
   let cancelStudioRead = null;
   function finishClose(back) {
+    stopHold();
     if (!st.open && !st.closing) return;
     cancelStudioRead?.();
     if (activePass) releasePass(activePass);
@@ -866,7 +944,7 @@ function create(G, deps) {
     }
     return canvas;
   }
-  function options() { return { visor: isGarage() ? { level: "off" } : { ...photoVisor }, maxEdge: st.highRes ? 3840 : 2048, aspect: st.aspect, postcard: st.postcard, metadata: { title: st.metadata.title || G.track && G.track.name || "GARAGE", subtitle: st.metadata.subtitle || (isGarage() ? "PERSONAL PHOTO" : "RACE MOMENT") } }; }
+  function options() { return { visor: visorOptions(isGarage(), povNow(), photoVisor), maxEdge: st.highRes ? 3840 : 2048, aspect: st.aspect, postcard: st.postcard, metadata: { title: st.metadata.title || G.track && G.track.name || "GARAGE", subtitle: st.metadata.subtitle || (isGarage() ? "PERSONAL PHOTO" : "RACE MOMENT") } }; }
   function recompose() {
     if (!raw || !capturedOptions) return;
     last = compose(raw, { ...capturedOptions, aspect: st.aspect, postcard: st.postcard });
@@ -992,13 +1070,15 @@ function create(G, deps) {
   }
   async function capture() {
     if (!st.open || st.busy) return false;
-    const gen = st.generation, opts = options(); busy(true); say("Capturing the rendered scene…");
+    const gen = st.generation, opts = options(); paintPov(); busy(true); say("Capturing the rendered scene…");
     try {
       const source = await fullRes(async () => {
         let snapshot;
-        const rendered = opts.visor.level !== "off" ? () => { snapshot = VisorOptics.captureSnapshot(G); } : null;
+        const optics = typeof VisorOptics !== "undefined" ? VisorOptics : null;
+        const rendered = optics && opts.visor.level !== "off" ? () => { snapshot = optics.captureSnapshot(G); } : null;
         const image = await sampledFrame(G.netPlay?.active?.() ? 1 : st.samples, opts.maxEdge, rendered);
-        if (gen === st.generation && opts.visor.level !== "off") VisorOptics.captureLight(image, G, { ...opts.visor, snapshot });
+        if (gen === st.generation && optics && opts.visor.level !== "off") optics.captureLight(image, G, { ...opts.visor, snapshot });
+        if (gen === st.generation && optics && opts.visor.helmet && opts.visor.frame !== "off" && optics.capturePort) optics.capturePort(image);
         return image;
       }, st.highRes); if (gen !== st.generation) return false;
       keepSource(source, opts); last = compose(raw, opts); E["ps-preview"].src = thumbnail(last); E["ps-preview"].hidden = false;
@@ -1134,6 +1214,6 @@ function create(G, deps) {
   live = api; busy(false); return api;
 }
 // ASPECTS / LIMIT stay module-private (crop + library only); no external callers.
-return Object.freeze({ get sampling() { return samplePass; }, create, shareCancelled, background, setBackground, crop, filename, album: () => live ? live.album() : Promise.reject(new Error("Photo library unavailable")), contactSheet: (times, seek, cancelled) => live ? live.contactSheet(times, seek, cancelled) : Promise.reject(new Error("Photo capture unavailable")), state: () => live ? live.state() : { open: false } });
+return Object.freeze({ get sampling() { return samplePass; }, create, stepPosition, holdMetres, positionLabel, POV_SHOTS, visorOptions, shareCancelled, background, setBackground, crop, filename, album: () => live ? live.album() : Promise.reject(new Error("Photo library unavailable")), contactSheet: (times, seek, cancelled) => live ? live.contactSheet(times, seek, cancelled) : Promise.reject(new Error("Photo capture unavailable")), state: () => live ? live.state() : { open: false } });
 })();
 Object.freeze(PhotoStudioBody);

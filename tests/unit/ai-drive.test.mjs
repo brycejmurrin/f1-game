@@ -1735,17 +1735,22 @@ test("the cover starts a time behind, grows as the attacker closes, and awarenes
 /* LET PASS IS A BLUE FLAG. The move-aside used to wave ANY quicker car through after a
  * few seconds on the gearbox, so a same-lap rival (the player included) was handed the
  * place instead of having to take it. Only a car LAPPING us is waved through now. */
-test("letPassCase: a lapping car closing on the gearbox is waved through; a same-lap rival never is", () => {
+test("letPassCase: a lapping car within 1.2 s on the gearbox is waved through; a same-lap rival never is", () => {
   const on = (o = {}) => A.letPassCase(o.racing ?? true, o.blocker ?? null, "chaser" in o ? o.chaser : {}, o.gap ?? 6,
-    o.vC ?? 60, o.v ?? 55, o.vs ?? 1, o.lapping ?? true);
-  assert.equal(on(), true, "lapping, 6 m back, 5 m/s quicker: blue flag");
+    o.vC ?? 60, o.lapping ?? true);
+  assert.equal(on(), true, "lapping, 6 m back: blue flag");
+  // #5775 R6: a lapper in the TOW at 10-20 m, at our speed, met "< 9 m AND > 2.5 m/s quicker" never
+  // at one instant, so a lapped AI held it up for 50-90 s. The gate is a time gap now.
+  assert.equal(on({ gap: 15 }), true, "15 m at 60 m/s (0.25 s), not closing: blue flag");
+  assert.equal(on({ gap: 70 }), true, "70 m at 60 m/s is 1.17 s: inside the window");
+  assert.equal(on({ gap: 75 }), false, "75 m at 60 m/s is 1.25 s: not yet");
+  assert.equal(on({ gap: 15, vC: 12 }), false, "15 m at 12 m/s is 1.25 s: the window is seconds, so it holds at any pace");
   assert.equal(on({ lapping: false }), false, "the same car on the SAME lap is raced, not waved through");
-  assert.equal(on({ gap: 12 }), false, "not yet on the gearbox");
-  assert.equal(on({ vC: 57 }), false, "not closing fast enough (under 2.5 m/s at pace 5)");
-  assert.equal(on({ vC: 57, vs: 0.5 }), true, "the closing band rides the pace scale");
+  assert.equal(on({ lapping: false, gap: 3 }), false, "...however close");
   assert.equal(on({ blocker: {} }), false, "a car ahead of US is holding it up anyway");
   assert.equal(on({ racing: false }), false, "only in the race");
   assert.equal(on({ chaser: null }), false);
+  assert.equal(on({ gap: NaN }), false, "no gap, no flag");
   const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
   assert.match(game, /AiDrive\.letPassCase\([\s\S]{0,200}chaser\._snapProg - c\.prog > track\.total \* 0\.5\)/,
     "game.js asks the rule with LAPPING = a lap or more ahead in progress");
@@ -1838,7 +1843,7 @@ test("AI heading reuses current grip without changing normal or recovery steerin
 // a different fraction of the envelope at every OVERALL SPEED setting: at pace
 // 0.469 (vTop 33.8 m/s) a 2 m/s "still closing" band is 6 % of top speed, at
 // pace 1 it is 3 %. Each band is written on the pace-5 scale and rides
-// vScale = vTop()/VMAX, the convention letPassCase and queueBrake use. At the
+// vScale = vTop()/VMAX, the convention queueBrake uses. At the
 // reference pace 1.0 (notch 14) vScale is exactly 1 and the AI is bit-identical;
 // the shipped default notch 11 (0.840) is one of the settings this corrects.
 for (const p of [1, 0.469]) {

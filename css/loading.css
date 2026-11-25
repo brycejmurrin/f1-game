@@ -397,4 +397,13 @@ body.in-race #xr-enter[aria-pressed="false"] { display: none; }
 #xr-enter[hidden] { display: none !important; }
 /* #2625: RETRY / BACK TO MENU when the race-session bundle fails (see failed() in loading-screen); the buttons reuse the menu opt-btn style. */
 #ld-fail { display: flex; flex-wrap: wrap; gap: var(--gap); margin-top: var(--gap); pointer-events: auto; }
+/* SKIP WHEN READY (loading-screen.js showSkip): the drive-out and the flyby are the build's cover; once the race is
+   ready this goes straight to the start. Top right, clear of the bottom-anchored card and the notch; a tap target
+   like the garage's own SKIP TO RACE (#cs-arrival-skip). Above the letterbox bars. */
+#ld-skip {
+  position: absolute; z-index: 2;
+  top: max(var(--pad), env(safe-area-inset-top)); right: max(var(--pad), env(safe-area-inset-right));
+  min-height: var(--tap); pointer-events: auto;   /* the global button look, as #cs-arrival-skip */
+}
+#ld-skip[hidden] { display: none; }
 } /* @layer overlays */

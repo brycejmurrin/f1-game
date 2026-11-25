@@ -37,7 +37,7 @@ A JS symbol: apex-lsp (rule `.claude/rules/js-nav.md`, skill `code-nav`).
 Ending: after your last push, `subscribe_pr_activity` on your PR, then end the turn. A PR event (CI, a comment, a
 label) wakes you; act on it, refresh the handoff block, and end again. No timed check-ins while the subscription
 works; if it was refused, one check-in of at most 50 minutes, re-armed only after a state change (AGENTS.md rule 13).
-Your run ends for good at `land`: call `unsubscribe_pr_activity`, then stop. Do not wait out CI in the foreground,
+Your run ends for good at `land`: call `unsubscribe_pr_activity`, then stop; never re-subscribe (steward §Land 4). Do not wait out CI in the foreground,
 never poll, never sleep.
 Report by send_message to the session that launched you, when one did: at start (your reading of the task), at every
 push (head sha, PR number), at CI green or red, and at any refusal or blocker.

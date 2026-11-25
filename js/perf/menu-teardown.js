@@ -97,9 +97,10 @@ const MenuTeardown = (function () {
   }
   function beginGarageClose() { release(GARAGE); }   // legacy mask cleared; #carsetup hidden gates readback
   function endGarageClose() { release(GARAGE); }
-  function deferQuitTail(fn) {
+  /** `then` (optional) runs once the tail and endQuit are done: quitToMenu(then)'s continuation. */
+  function deferQuitTail(fn, then) {
     if (!software()) return false;
-    deferUi(() => { try { fn(); } finally { endQuit(); } });
+    deferUi(() => { try { fn(); } finally { endQuit(); } if (then) then(); });
     return true;
   }
   function report() {

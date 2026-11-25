@@ -1021,23 +1021,8 @@ function makeLiveryRow(team, liv, cur, isCustom) {
       if (G.soundOn) GameAudio.uiSelect();
       buildSetup();
     };
+    // DELETE is in the editor: beside ✎ on the card, a slip deleted (UI-MATRIX 2026-11-25 row 4).
     rowWrap.appendChild(edit);
-    const del = document.createElement("button");
-    del.type = "button";
-    del.className = "cs-liv-del"; del.textContent = "✕";
-    del.title = "Delete this livery";
-    del.setAttribute("aria-label", "Delete " + liv.name + " livery");
-    del.onclick = () => {
-      // Arm-then-confirm (G.armConfirm, the career DELETE? idiom): this was
-      // one tap from destroying a one-of-a-kind paint job with no undo.
-      if (G.soundOn) GameAudio.uiTick();
-      G.armConfirm(del, "✕?", () => {
-        const removed = customLiv.removeCustomLivery(team.id, liv.id);
-        buildSetup();
-        if (!removed) paintStatus("Could not delete this paint job. It is still in your library.");
-      });
-    };
-    rowWrap.appendChild(del);
   } else {
     const tag = document.createElement("span");
     tag.className = "cs-opt-cost free";
@@ -1586,9 +1571,19 @@ function buildLiveryCreator(container, team) {
     csLivCreating = false; csLivDraft = null; csLivEditId = null; endLivPreview(team);
     if (G.soundOn) GameAudio.uiSelect();
     buildSetup();
-    if (result.keptCopy) paintStatus("New paint fitted. The previous copy was kept. Use its Delete button to remove it.");
+    if (result.keptCopy) paintStatus("New paint fitted. The previous copy was kept. Open it with ✎ and press DELETE to remove it.");
     focusFitted();
   };
+  if (csLivEditId) {
+    // Arm-then-confirm (the career DELETE? idiom): one-of-a-kind paint, no undo.
+    const id = csLivEditId, del = document.createElement("button"); del.type = "button"; del.className = "cs-liv-del"; del.textContent = "DELETE";
+    del.setAttribute("aria-label", "Delete " + (d.name || "this") + " livery");
+    del.onclick = () => G.armConfirm(del, "DELETE?", () => {
+      if (customLiv.removeCustomLivery(team.id, id)) return discard();
+      saveStatus.hidden = false; saveStatus.textContent = "Could not delete this paint job. It is still in your library.";
+    });
+    btns.append(del);
+  }
   btns.append(cancel, save);
   wrap.appendChild(btns);
 
@@ -1671,7 +1666,7 @@ function livePreviewDraft(team, d) {
   // seeds those colours into the draft instead).
   G.livDraftOverride = { teamId: team.id,
     liv: Object.assign({ id: "custom_draft", c1: hexToArr(d.c1), c2: hexToArr(d.c2) }, livDraftTo(d, true)) };
-  if (!skipMesh) G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
+  if (!skipMesh) G.setupCam.meshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 
 // A draft paints under its own decal keys (car-draw draftTag): drop only those, so the saved livery's
@@ -1693,7 +1688,7 @@ function endLivPreview(team) {
   // was live (a garage opened mid-race) holds the draft's paint (#2796 item 4).
   const cd = typeof CarDraw !== "undefined" && CarDraw.instance && CarDraw.instance();
   if (cd && cd.invalidateCustomMeshCaches) cd.invalidateCustomMeshCaches(team.id);
-  G._spMeshKey = "";
+  G.setupCam.meshKey = "";
 }
 
 function openSetup() {

@@ -1131,14 +1131,35 @@ const VisorOptics = (function () {
     const scene = snapshot.scene;
     const m = lightMap(scene, w, h, { level, beams: BEAMS[opts.beams] ?? 1, style: opts.style || "classic",
       bloom: snapshot.bloom, glare: snapshot.glare, visibilitySamples: 9 });
-    const paths = typeof Path2D === "function" ? { rim: new Path2D(portPath(w, h, Math.min(w, h) * .03)) } : null;
+    // The rim sheen and fringe trace the helmet's eye port: a photo from the HELMET seat only
+    // (opts.helmet). Any other angle gets the glints and beams with no port outline (#6397).
+    const base = Math.min(w, h), shape = opts.shape || _shape;
+    const paths = opts.helmet && typeof Path2D === "function" ? { rim: new Path2D(portPath(w, h, base * .03, shape)),
+      out: new Path2D(portPath(w, h, base * .006, shape)), inn: new Path2D(portPath(w, h, base * .014, shape)) } : null;
     g.save();
     try { _paint(m, g, w, h, paths, false); } finally { g.restore(); }
     return m;
   }
+  // The helmet's eye-port bezel painted into a HELMET photo: the live --visor-port layer is DOM,
+  // so a canvas readback never carries it. Same two layers as portImage: a soft inner falloff, then the edge.
+  function capturePort(canvas, opts = {}) {
+    const g = canvas.getContext("2d"), w = canvas.width, h = canvas.height;
+    if (!g || !w || !h || typeof Path2D !== "function") return false;
+    const shape = opts.shape || _shape, soft = Math.max(4, w * 0.02), sharp = Math.max(1.2, w * 0.004);
+    const frame = "M-400,-400H" + (w + 400) + "V" + (h + 400) + "H-400Z";
+    g.save();
+    try {
+      g.fillStyle = "#07070c";
+      for (const [inset, alpha, blur] of [[soft * 0.9, 0.55, soft], [0, 0.93, sharp]]) {
+        if ("filter" in g) g.filter = "blur(" + r2(blur) + "px)";
+        g.globalAlpha = alpha; g.fill(new Path2D(frame + portPath(w, h, inset, shape)), "evenodd");
+      }
+    } finally { g.restore(); }
+    return true;
+  }
 
   // camBasis / projectDir / LEVEL / FRINGE stay module-private: lightMap + tick
   // close over them; no js/ or test reader used the public VisorOptics.* forms.
-  return { bind, setCockpitOccluder, tick, clear, captureLight, captureSnapshot, lightField, frameLens, folded, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG };
+  return { bind, setCockpitOccluder, tick, clear, captureLight, capturePort, captureSnapshot, lightField, frameLens, folded, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG };
 })();
 Object.freeze(VisorOptics);

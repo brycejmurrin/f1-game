@@ -1,4 +1,10 @@
 @layer overlays {
+/* --tap-floor44, the 44 PAINTED px ELEMENT FLOOR (#6434 row 6): a max() arm for the few touch controls that lay out
+   under 44 painted at a small UI SIZE (own px = 44.2 / --ui-scale, the #5358 hair). 0 with a mouse, so a desktop rule
+   that adds it is unchanged. Here, not in tokens.css: the title critical path has no bytes to spare, and every user
+   is a deferred sheet. */
+:root { --tap-floor44: 0px; }
+body:not(.desktop) { --tap-floor44: calc(44.2px / var(--ui-scale)); }
 /* The lesson's instruction card leaves all driving input with the HUD. */
 #learn-aero-guide {
   position: fixed;
@@ -1232,7 +1238,9 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
    A flat step, not a container unit: `min(--fs-micro, 3.75cqi)` fit here but CI's Chromium kept the full size after a
    layout switch (the SIDEBAR cell). The contract lets type scale, never a label overflow (#5153 §3 rule 3). */
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors button,
-body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors > details { font-size: calc(var(--fs-micro) * 0.92); }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors > details { font-size: max(calc(var(--fs-micro) * 0.92), var(--fs-floor)); }
+/* 12 PAINTED px FLOOR (#6434 row 5): the step-down above keeps its notch but never paints under 12 px. The door
+   buttons' inherited 16 px is floored in `@layer base` at the end of this file. */
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet #pm-quit { grid-area: quit; margin-top: 0; }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quit::before { content: none; }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu :is(#pm-standings, #pm-skip-results) { grid-column: 1 / -1; }
@@ -1879,3 +1887,11 @@ body[data-density="compact"] #ceremony-podium .sheet-foot { margin-top: calc(var
 }
 
 } /* @layer components */
+
+/* 12 PAINTED px DOOR FLOOR (#6434 row 5): RESTART / SETTINGS / QUIT inherit 16 px, 11.2 painted at UI SIZE 70. In
+   `base`, so it is only the DEFAULT: it beats the reset's `font: inherit` but loses to every component rule
+   (#pm-resume's --fs-5, dialogs.css). In `overlays` it shrank RESUME on desktop (pr-reviewer, PR #6468).
+   max() leaves UI SIZE 75 % and up as it was; --fs-floor is 12 / --ui-scale. */
+@layer base {
+  #pausemenu .sheet-body > button { font-size: max(1em, var(--fs-floor)); }
+}

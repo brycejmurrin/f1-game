@@ -1360,8 +1360,9 @@ test("SetupCamera public release frees common wheels off-screen and preserves a 
   const h = garageWheelHarness(), wheels = h.Wheels.createGarage(h.gfx), G = { setupPreviewOn: true };
   wheels.prepare("car", {}, { tyres: 1, brakes: 1 });
   let roomReleases = 0;
-  const release = new Function("departureWheels", "G", "GarageScene", `let _spMesh, _spMeshKey = "car", _spBase;
-    return ({${fnSource(read("js/garage/setup-camera.js"), "release() {")}}).release;`)(wheels, G, { release() { roomReleases++; } });
+  const exteriorReleases = [];   // race start hard-frees the exterior (#6401: a garage close only parks it)
+  const release = new Function("departureWheels", "G", "GarageScene", "releaseExterior", `let _spMesh, _spMeshKey = "car", _spBase;
+    return ({${fnSource(read("js/garage/setup-camera.js"), "release() {")}}).release;`)(wheels, G, { release() { roomReleases++; } }, (hard) => exteriorReleases.push(hard));
   assert.equal(release(), false);
   assert.equal(h.freed.length, 0, "the visible garage retains all four wheel layers");
   assert.equal(roomReleases, 0);
@@ -1369,6 +1370,7 @@ test("SetupCamera public release frees common wheels off-screen and preserves a 
   assert.equal(release(), true);
   assert.equal(h.freed.length, 4, "phone/prewarm release drops all common wheel GPU handles");
   assert.equal(roomReleases, 1);
+  assert.deepEqual(exteriorReleases, [true], "the race-start release frees the exterior hard, not a park");
   release();
   assert.equal(h.freed.length, 4, "public release does not double-free wheel layers");
   wheels.prepare("car", {}, { tyres: 1, brakes: 1 });

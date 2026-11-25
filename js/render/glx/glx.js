@@ -496,7 +496,14 @@ const GLXBackend = (function () {
       _polyOn = false;
     }
   }
+  // FRONT-FACE CACHE (#5777 R12b): draw() leaves CW set across a run of reflected
+  // draws; every other rasterising entry calls frontCCW() first, and begin()
+  // re-asserts CCW, so CW never leaks past draw().
+  let _frontCW = false;
+  function frontCW() { if (!_frontCW) { gl.frontFace(gl.CW); _frontCW = true; } }
+  function frontCCW() { if (_frontCW) { gl.frontFace(gl.CCW); _frontCW = false; } }
   function resetDrawState() {
+    gl.frontFace(gl.CCW); _frontCW = false;
     gl.enable(gl.CULL_FACE);
     gl.colorMask(true, true, true, true);
     gl.polygonOffset(0, 0);
@@ -1012,7 +1019,7 @@ const GLXBackend = (function () {
   let renderScale = 1;
   // RESOLUTION MAX (js/ui/scale.js setDprBoost): 0, or the DPR asked for (at most 3). It only RAISES the tier's cap
   // below; resize() still takes the lower of the cap and window.devicePixelRatio. TLX's twin: tlx.js dprCapFor.
-  let _dprBoost = 0;
+  let _dprBoost = 0, _dprPreset = 0;   // _dprPreset: GRAPHICS HIGH's 2 on a phone (PerfGov.setUserTier, #5222), raise-only too
   let presentW = 0, presentH = 0;
   let spatialUpscale = false;
   try {
@@ -1057,8 +1064,8 @@ const GLXBackend = (function () {
     // Mobile: cap DPR at 1.5 (was 2) — every full-screen target scales with the
     // square of this; 1.5 is 56% of the pixels of 2 with little visible loss on
     // a ~6" screen, and it multiplies with every other saving.
-    // RESOLUTION MAX's _dprBoost (setDprBoost) only RAISES that cap, and never above the device's own DPR.
-    const dpr = Math.min(window.devicePixelRatio || 1, Math.max(MOBILE_TIER ? 1.5 : 2, _dprBoost));
+    // RESOLUTION MAX's _dprBoost and GRAPHICS HIGH's _dprPreset only RAISE that cap, never above the device's own DPR.
+    const dpr = Math.min(window.devicePixelRatio || 1, Math.max(MOBILE_TIER ? 1.5 : 2, _dprBoost, _dprPreset));
     const css = cssSize();
     const lastPW = presentW, lastPH = presentH;
     presentW = Math.max(1, Math.round(css.width * dpr));
@@ -1112,13 +1119,15 @@ const GLXBackend = (function () {
   function getRenderScale() { return renderScale; }
   // RESOLUTION MAX asks for the device's own DPR; every other RESOLUTION and PerfGov's budget shed pass 0.
   // True = the boost changed (TLX answers "the cap moved"; GLX has no capDpr ceiling, so the two agree here).
-  function setDprBoost(n) {
+  // setDprPreset: the same for GRAPHICS HIGH's floor (PerfGov.setUserTier sends 2 or 0; the budget shed leaves it).
+  function setDpr(preset, n) {
     const v = n > 0 ? Math.min(+n, 3) : 0;
-    if (v === _dprBoost) return false;
-    _dprBoost = v;
+    if (v === (preset ? _dprPreset : _dprBoost)) return false;
+    if (preset) _dprPreset = v; else _dprBoost = v;
     if (gl) resize();
     return true;
   }
+  const setDprBoost = (n) => setDpr(false, n), setDprPreset = (n) => setDpr(true, n);
   function getDprBoost() { return _dprBoost; }
 
   function toF32(a) {
@@ -1432,6 +1441,7 @@ const GLXBackend = (function () {
   let _decalVPToken = -1, _lastDecalGlow = NaN;
   function drawDecal(mesh, modelMat, tex, opts) {
     if (ctxGone() || !decalProg || !mesh || !tex) return;
+    frontCCW();
     useProg(decalProg);
     gl.uniformMatrix4fv(decalU.uModel, false, modelMat);
     // Frame-constant uniforms once per frame (same token pattern as
@@ -1600,6 +1610,7 @@ const GLXBackend = (function () {
     return _envInvVP;
   }
   function envFaceEnd(face) {
+    if (gl && !ctxGone()) frontCCW();
     if (_envFrame) {
       _envFrame.viewProj = _envSvVP;
       _envFrame.eye = _envSvEye;
@@ -1643,6 +1654,7 @@ const GLXBackend = (function () {
   }
   function mirrorEnd() {
     if (!PST || !PST.mirror.active()) return;
+    if (!ctxGone()) frontCCW();
     PST.mirror.end();
     bindOutputViewport();
   }
@@ -2395,6 +2407,7 @@ const GLXBackend = (function () {
   // translucent work through draw() instead.
   function drawInstanced(batch, opts) {
     if (ctxGone() || !batch || !batch.instances) return;
+    frontCCW();
     batch = _passBatch(batch);
     // IDENTITY model matrix: the transform lives entirely in the instance
     // columns. Passing anything else would be silently ignored by the shader and
@@ -2455,17 +2468,13 @@ const GLXBackend = (function () {
     // no depth (alpha < 1), and everything opaque after it overwrites it.
     const _ndt = opts && opts.noDepthTest;
     if (_ndt) gl.disable(gl.DEPTH_TEST);
-    // Reflections reverse winding even without culling. Restore CCW for later
-    // passes; mutable model matrices cannot be cached by identity.
+    // Reflections reverse winding even without culling (cached: frontCW above).
     const m = modelMat;
     const reflected = m[0] * (m[5] * m[10] - m[6] * m[9])
       - m[4] * (m[1] * m[10] - m[2] * m[9])
       + m[8] * (m[1] * m[6] - m[2] * m[5]) < 0;
-    if (reflected) {
-      gl.frontFace(gl.CW);
-      try { gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0); }
-      finally { gl.frontFace(gl.CCW); }
-    } else gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
+    if (reflected) frontCW(); else frontCCW();
+    gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
     if (_ndt) gl.enable(gl.DEPTH_TEST);
     if (_db) { setPolyOffset(null); }
     if (dbl) setCull(true);
@@ -2474,6 +2483,7 @@ const GLXBackend = (function () {
 
   function drawSky(sky) {
     if (ctxGone() || !sky) return;
+    frontCCW();
     useProg(skyProg);
     gl.uniformMatrix4fv(skyU.uInvViewProj, false, sky.invViewProj);
     uf3(skyU.uZenith, _skyUf, "zenith", sky.zenith);
@@ -2509,10 +2519,11 @@ const GLXBackend = (function () {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  function drawShadow(modelMat, w, l) { if (BLOB) BLOB.drawShadow(modelMat, w, l); }
+  function drawShadow(modelMat, w, l) { if (BLOB) { if (!ctxGone()) frontCCW(); BLOB.drawShadow(modelMat, w, l); } }
 
   function drawMark(modelMat, w, l) {
     if (ctxGone()) return;
+    frontCCW();
     useProg(markProg);
     if (_vpTok.mark !== _frameToken) {
       gl.uniformMatrix4fv(markU.uViewProj, false, frameViewProj);
@@ -2534,6 +2545,7 @@ const GLXBackend = (function () {
   // batch path is unavailable (caller falls back to per-mark drawMark).
   function drawSkidBatch(verts, vertCount, dirty) {
     if (ctxGone()) return true; // no-op; per-mark fallback would also fail
+    frontCCW();
     if (!markBatchProg || vertCount <= 0) return !markBatchProg ? false : true;
     useProg(markBatchProg);
     gl.uniformMatrix4fv(markBatchU.uViewProj, false, frameViewProj);
@@ -2563,6 +2575,7 @@ const GLXBackend = (function () {
   const LINE_COLS_F1 = [0.10, 0.95, 0.35, 1.00, 0.72, 0.10, 1.00, 0.12, 0.10];
   function drawDrivingLine(verts, vertCount, dirty, opts) {
     if (ctxGone()) return true;
+    frontCCW();
     if (!lineProg) return false;
     if (!(vertCount > 0)) return true;
     useProg(lineProg);
@@ -2600,6 +2613,7 @@ const GLXBackend = (function () {
   const _glowCorners = [[-1, 0], [1, 0], [1, 1], [-1, 0], [1, 1], [-1, 1]];
   function drawGlow(lights, str) {
     if (ctxGone() || !glowProg || !lights || !lights.length || !(str > 0)) return;
+    frontCCW();
     const nL = (lights.length / 15) | 0;  // stride-15 light records (see frame.lights)
     const floatsPerLamp = 6 * 9;
     if (!glowData || glowData.length < nL * floatsPerLamp) glowData = new Float32Array(nL * floatsPerLamp);
@@ -2681,6 +2695,7 @@ const GLXBackend = (function () {
   // residency; dirty=false alone never proves the selected buffer is current.
   function drawParticles(data, floatCount, additive, dirty) {
     if (ctxGone() || !particleProg || !(floatCount > 0) || !frameEye) return;
+    frontCCW();
     if (dirty !== false && !data) return;
     useProg(particleProg);
     gl.uniformMatrix4fv(particleU.uViewProj, false, frameViewProj);
@@ -2762,7 +2777,7 @@ const GLXBackend = (function () {
     freeChunkedMesh: (mesh) => CHK.freeChunkedMesh(mesh),
     begin,
     draw,
-    drawChunked: (mesh, modelMat, opts) => { if (_envActive) return; CHK.drawChunked(mesh, modelMat, opts); },
+    drawChunked: (mesh, modelMat, opts) => { if (_envActive) return; if (!ctxGone()) frontCCW(); CHK.drawChunked(mesh, modelMat, opts); },
     castShadowChunked: (mesh, model, reach) => CHK.castShadowChunked(mesh, model, reach),
     // Cull-test helpers, so a caller outside the draw path (the agent world
     // view's visible()) runs the same frustum maths the GPU path runs.
@@ -2786,6 +2801,7 @@ const GLXBackend = (function () {
     setRenderSizeOverride,
     present: (opts) => {
       if (ctxGone()) return;
+      frontCCW();   // #5777 R12b: post's fullscreen chain and the blob flush draw CCW
       if (BLOB && BLOB.pending()) BLOB.flush();   // F5: before post takes GL state
       // Occlusion queries go LAST and before post, which is the only moment in
       // the frame when the opaque depth buffer is both complete and still
@@ -2843,7 +2859,7 @@ const GLXBackend = (function () {
     mirrorEnd,
     mirrorRect: (r, flip) => { if (PST) PST.mirror.rect(r, flip); },   // flip: false = the broadcast PiP (mirror-pass.js)
     mirrorState: () => (PST ? PST.mirror.state() : { ready: false, dead: true }), releaseMirror: () => !!(PST && PST.mirror.release()),   // release: quit-to-menu frees the target
-    drawMirrorGlass: (mesh, model, opts) => !!(PST && !ctxGone() && PST.mirror.glass(mesh, model, opts)),   // the cockpit's live glass (post.js)
+    drawMirrorGlass: (mesh, model, opts) => { if (!PST || ctxGone()) return false; frontCCW(); return !!PST.mirror.glass(mesh, model, opts); },   // the cockpit's live glass (post.js)
     get envProbeOptOut() { return _envDisabled; },
     envProbeReady() { return envReady; },
     // New track/session: the cube still holds the OLD circuit — hold the
@@ -2884,7 +2900,7 @@ const GLXBackend = (function () {
     msaa: () => PST.msaa(),
     pcss: () => SHD.pcssEnabled,
     setPhotoCaptureSize(size) { cssSizeCache.photoSize = size; resize(); },
-    setRenderScale, getRenderScale, setDprBoost, getDprBoost,
+    setRenderScale, getRenderScale, setDprBoost, getDprBoost, setDprPreset,
     setSpatialUpscale, getSpatialUpscale,
     // GPU frame timer. gpuTimer(true|false) toggles timing (returns whether it's
     // supported + on); gpuTimer() reads state. gpuMs() returns the most recent
