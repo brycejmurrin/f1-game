@@ -29,17 +29,20 @@ const PhonePadPage = (function () {
   const LATCH_BITS = Object.freeze({ boost: DASH.boost, overtake: DASH.otOn | DASH.otActive, aero: DASH.xOpen });
   const CONFIRM_MS = 600, latchButtons = Object.freeze(Object.keys(LATCH_BITS));
   function pressLatch(k, send, clock = () => Date.now()) {
-    let host = null, local = false, expect = null, sentAt = -Infinity;
+    let host = null, local = false, expect = null, sentAt = -Infinity, pending = false;
     const on = () => host === null ? local : expect !== null && clock() - sentAt < CONFIRM_MS ? expect : host;
     const fire = () => {
       const want = !on();
       if (send(k) === false) return;
       local = want; expect = host === null ? null : want; sentAt = clock();
     };
+    const heard = (drop) => { if (pending) { pending = false; if (!drop && on()) fire(); } };
     return {
       // TOGGLE: every press flips the effect. HOLD: the press switches it on, the lift switches it off.
-      down(hold) { if (!hold || !on()) fire(); },
-      up(hold) { if (hold && on()) fire(); },
+      down(hold) { pending = false; if (!hold || !on()) fire(); },
+      // deferred: lifted where the host drops edges (Pause, menu); heard() sends it back on the wheel.
+      up(hold, later) { if (!hold) return; pending ||= !later || on(); if (!later) heard(); },
+      heard,   // heard(true): a new link drops it
       tap: fire,
       hud(flags) {
         host = !!(flags & LATCH_BITS[k]);
@@ -374,10 +377,12 @@ const PhonePadPage = (function () {
     }
     function applySteeringMode(mode) {
       steeringMode = mode; steer = 0;
-      if (dom.steeringMode) dom.steeringMode.value = mode;
+      for (const sel of modeSelects) sel.value = mode;
       if (dom.steer) dom.steer.hidden = mode !== "touch";
     }
-    if (dom.steeringMode) dom.steeringMode.addEventListener("change", () => { if (!setSteeringMode(dom.steeringMode.value)) dom.steeringMode.value = steeringMode; });
+    // One pick on the wheel and one on the Menu Pad (#6291): both show the live mode.
+    const modeSelects = [].concat(dom.steeringMode || []).filter(Boolean);
+    for (const sel of modeSelects) sel.addEventListener("change", () => { if (!setSteeringMode(sel.value)) sel.value = steeringMode; });
     if (dom.steer) {
       let steeringPointer = null, anchorX = 0, stripW = 40;   // strip width read once per gesture, not per move (audit4 UB4)
       const steeringKeys = new Set();
@@ -475,7 +480,7 @@ const PhonePadPage = (function () {
         }
         el.classList.remove("on");
         stop();
-        if (l && lifted) { if (![...l.fingers.values()].some(f => f.size)) l.latch.up(l.hold); paintLatch(k); }
+        if (l && lifted) { if (![...l.fingers.values()].some(f => f.size)) l.latch.up(l.hold, surface && surface !== "drive"); paintLatch(k); }
       };
       // Lost lift / blur / last-finger-up: same nets as hold() and the menu stick.
       releases.push(() => up());
@@ -630,7 +635,7 @@ const PhonePadPage = (function () {
     // a thumb on the diagonal does not flicker between two arrows.
     function menuStick(base, nub, arrows) {
       if (!base) return;
-      let id = null, dir = null, cx = 0, cy = 0, rad = 1, localPerViewport = 1;
+      let id = null, dir = null, cx = 0, cy = 0, rad = 1, localPerViewport = 1, keyDir = null;
       const reps = {};
       const lit = (k, on) => { const a = arrows && arrows[k]; if (a && a.classList) a.classList.toggle("on", on); };
       const aim = (k) => {
@@ -655,6 +660,7 @@ const PhonePadPage = (function () {
       base.addEventListener("pointerdown", (e) => {
         if ((e.pointerType === "mouse" && e.button !== 0) || id !== null) return;
         rememberPointer(e);
+        if (keyDir) { keyDir = null; aim(null); }   // a thumb takes over from a held key
         id = e.pointerId;
         try { base.setPointerCapture(e.pointerId); } catch (err) { /* not a pointer target */ }
         const b = base.getBoundingClientRect();
@@ -676,8 +682,37 @@ const PhonePadPage = (function () {
       };
       // In the release nets too: a lost lift otherwise repeats forever and
       // `id` stays set, so the stick refuses every later press.
-      const release = () => { if (id !== null) up({ pointerId: id }); };
+      const release = () => {
+        if (id !== null) up({ pointerId: id });
+        else if (keyDir) { keyDir = null; aim(null); base.classList.remove("on"); }
+      };
       releases.push(release);
+      // A KEYBOARD ON THE PHONE (#6286): the arrows drive the same stick while
+      // the Menu Pad shows, wherever focus sits on it (Select has it by
+      // default); a held key repeats at the stick's own cadence, not the OS's.
+      // A field, the Wheel Layout sheet and MOVE & SIZE keep their own arrows.
+      const KEY_DIR = { ArrowUp: "navUp", ArrowDown: "navDown", ArrowLeft: "navLeft", ArrowRight: "navRight" };
+      const padKey = (e) => {
+        const k = KEY_DIR[e.key];
+        if (!k || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return null;
+        if (!(surface === "menu" || (surface === "camera" && dom.body?.classList?.contains?.("camera-panel")))) return null;
+        if (dom.body?.classList?.contains?.("arranging")) return null;
+        if (e.target?.closest?.("input, select, textarea, dialog, #arrange-bar")) return null;
+        return k;
+      };
+      if (typeof document !== "undefined") {
+        document.addEventListener("keydown", (e) => {
+          const k = padKey(e);
+          if (!k) return;
+          e.preventDefault();
+          if (e.repeat || id !== null || k === keyDir) return;
+          keyDir = k; base.classList.add("on"); aim(k);
+        });
+        document.addEventListener("keyup", (e) => {
+          if (KEY_DIR[e.key] && KEY_DIR[e.key] === keyDir) { e.preventDefault(); release(); }
+        });
+        if (typeof window !== "undefined") window.addEventListener?.("blur", release);
+      }
       if (typeof window !== "undefined") window.addEventListener?.("resize", release);
       if (typeof document !== "undefined") document.addEventListener("focusin", e => {
         if (e.target?.closest?.("#screen-arranger")) release();
@@ -767,6 +802,8 @@ const PhonePadPage = (function () {
         surface = next;
         closeUtilities();
         if (changedFrom) releaseAll();
+        // A new link's first dash forgets an owed lift.
+        if (!changedFrom || next === "drive") for (const l of latches.values()) l.latch.heard(!changedFrom);
         dom.body?.classList.remove("camera-panel");
         push();
         paintHud(dom.hud, h);
@@ -1269,7 +1306,11 @@ const PhonePadPage = (function () {
       if (dom.pedalsBtn) dom.pedalsBtn.setAttribute("aria-pressed", String(cur.pedals === "side"));
       if (dom.stripBtn) dom.stripBtn.setAttribute("aria-pressed", String(cur.strip === "column"));
     }
+    // Every change bumps this, so a file import still reading when a preset, a
+    // toggle or another import lands is dropped instead of replacing it (#6287).
+    let changeSerial = 0;
     function set(lay) {
+      changeSerial++;
       cur = applyLayout(dom, lay);
       let durable = false;
       try { if (store) { store.setItem(LAYOUT_KEY, JSON.stringify(cur)); durable = true; } } catch (e) { /* session fallback */ }
@@ -1284,19 +1325,18 @@ const PhonePadPage = (function () {
       dom.doc.body.appendChild(link); link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     });
-    let importSerial = 0;
     dom.importLayout?.addEventListener("change", async () => {
-      const serial = ++importSerial;
+      const serial = ++changeSerial;
       const file = dom.importLayout.files[0];
       dom.importLayout.value = "";
       if (!file) return;
       try {
         if (file.size > 32768) throw new Error();
         const next = readWheelBackup(JSON.parse(await file.text()));
-        if (serial !== importSerial) return;
+        if (serial !== changeSerial) return;
         const durable = set(next);
         dom.fileStatus.textContent = durable ? "Wheel layout imported." : "Wheel layout imported for this session.";
-      } catch { if (serial === importSerial) dom.fileStatus.textContent = "Choose an Apex 26 wheel layout file."; }
+      } catch { if (serial === changeSerial) dom.fileStatus.textContent = "Choose an Apex 26 wheel layout file."; }
     });
     for (const el of dom.presets || []) el.addEventListener("click", () => set(LAYOUT_PRESETS[el.dataset.preset] || LAYOUT_PRESETS.classic));
     dom.flickBtn?.addEventListener("click", () => set({ ...cur, shifts: cur.shifts === "flick" ? "paddles" : "flick" }));
@@ -1305,6 +1345,11 @@ const PhonePadPage = (function () {
     if (dom.pedalsBtn) dom.pedalsBtn.addEventListener("click", () => set(Object.assign({}, cur, { pedals: cur.pedals === "side" ? "stack" : "side" })));
     if (dom.stripBtn) dom.stripBtn.addEventListener("click", () => set(Object.assign({}, cur, { strip: cur.strip === "column" ? "row" : "column" })));
     dom.sheet?.addEventListener("cancel", e => { e.preventDefault(); show(false); });
+    // The wheel's launcher and the Menu Pad's (#6291): focus returns to the one
+    // that opened the sheet, else to whichever is on screen.
+    const launchers = [].concat(dom.open || []).filter(Boolean);
+    let lastLauncher = null;
+    const launcher = () => [lastLauncher, ...launchers].find(el => el && (!el.getClientRects || el.getClientRects().length)) || launchers[0];
     function show(on) {
       if (on) dom.releaseControls?.();
       if (dom.sheet) {
@@ -1315,7 +1360,7 @@ const PhonePadPage = (function () {
       if (on && dom.responses && typeof TouchButtonSettings !== "undefined") {
         TouchButtonSettings.mount(dom.responses, PedalTravel.phoneButtons, { standalone: true });
       }
-      (on ? dom.done : dom.open)?.focus?.();
+      (on ? dom.done : launcher())?.focus?.();
     }
     // ARRANGE: capture-phase pointers on the stage, so a drag on GAS moves GAS and never presses it.
     const A = dom.arrange || {}, idOf = new Map(Object.entries(A).map(([id, el]) => [el, id]));
@@ -1361,11 +1406,12 @@ const PhonePadPage = (function () {
       put(id, { ...p, s: Math.max(minScale(r.width, r.height, p.s), Math.min(250, Math.round(p.s * factor))) }, save);
     }
     const arranging = () => !!(dom.body && dom.body.classList && dom.body.classList.contains("arranging"));
-    function restore(snapshot) { cur = applyLayout(dom, snapshot); paint(); pick(picked); }
+    function restore(snapshot) { changeSerial++; cur = applyLayout(dom, snapshot); paint(); pick(picked); }
     function arrange(on, accept = true) {
       if (on === arranging()) return;
       if (on) {
         dom.releaseControls?.();
+        changeSerial++;   // an import still reading never lands on an arrangement in progress
         baseline = cur; opener = dom.doc?.activeElement;
       }
       else { stopDrag(true); if (accept && cur !== baseline) set(cur); else restore(baseline); }
@@ -1390,7 +1436,7 @@ const PhonePadPage = (function () {
       } else {
         pick(null);
         if (dom.sheet?.contains?.(opener)) show(true);
-        (opener?.getClientRects?.().length ? opener : dom.open)?.focus?.();
+        (opener?.getClientRects?.().length ? opener : launcher())?.focus?.();
       }
     }
     function paintDrag() {
@@ -1515,7 +1561,7 @@ const PhonePadPage = (function () {
     if (typeof window !== "undefined") {
       for (const name of ["blur", "resize"]) window.addEventListener(name, () => stopDrag(false));
     }
-    if (dom.open) dom.open.addEventListener("click", () => show(true));
+    for (const el of launchers) el.addEventListener("click", () => { lastLauncher = el; show(true); });
     if (dom.done) dom.done.addEventListener("click", () => show(false));
     cur = applyLayout(dom, cur); paint();
     return { get: () => normaliseLayout(cur), set, show, arrange, sizeBy: (id, f) => sizeBy(id, f, true) };

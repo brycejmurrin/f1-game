@@ -5,7 +5,12 @@
    tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["monza"] =
-  function (api) {
+  function (api, stepped = false) {
+    const steps = buildSteps();
+    if (stepped) return steps;
+    while (!steps.next().done) { /* synchronous scenery callers */ }
+
+    function* buildSteps() {
       const { K, lapBounds, out, MAT, n, ds, pyMin, prop, every,
         onTrack, hash, pine, tree, bush, hedge, ridge, building, motorhome, tower,
         cypress, stonePine, tieredBowl,
@@ -86,6 +91,7 @@
       // Parabolica steel grandstandEx@0.775 gap 30 — Rank D crowns at gap
       // 42–72 overlapped outer tiers (clip-audit 4.68 m cone×box @ 0.824).
       const parabolicaStandClear = (s) => s >= 0.74 && s <= 0.88;
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       every(24, (k) => {
         const h = hash(k * 31);
         const s = k / n;
@@ -99,6 +105,7 @@
           stonePine(k, -side, 11 + h * 7, 14 + h * 6, PINE, { spread: 0.70, lean: 0.25 });
       });
       // Rank B — broadleaf trees interleaved with pines (oaks, maples, ashes).
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       every(28, (k) => {
         const h = hash(k * 53 + 9);
         const s = k / n;
@@ -112,6 +119,7 @@
       // Rank C — set-back taller pines (deep-park wall). Parabolica inner
       // (s≈0.80–0.96, right-hander infield) used pine() cones that read as
       // stick diamonds from the racing line; stonePine is the park's umbrella.
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       every(36, (k) => {
         const h = hash(k * 41 + 3);
         const s = k / n;
@@ -131,6 +139,7 @@
         }
       });
       // Rank D — outermost broadleaf rank blending to backdrop.
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       every(55, (k) => {
         const h = hash(k * 67 + 17);
         const s = k / n;
@@ -141,6 +150,7 @@
         if (!thin && h > 0.7) tree(k, h > 0.85 ? -1 : 1, 55 + h * 22, 11 + h * 8, LEAF);
       });
       // Low underbrush / shrubs along the verge for ground texture.
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       every(24, (k) => {
         const h = hash(k * 97 + 23);
         if (h < 0.50) return;
@@ -167,10 +177,12 @@
       hedge(0.06, 0.18, -1, 20, 6, [0.12, 0.33, 0.16]);
       // Leave an opening at the tight approach to Curva Grande; straight
       // hedge sections overlap on the inside of the bend.
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       hedge(0.06, 0.125, 1, 21, 6, [0.12, 0.33, 0.16]);
       hedge(0.131, 0.18, 1, 21, 6, [0.12, 0.33, 0.16]);
       hedge(0.32, 0.46, -1, 22, 5, [0.13, 0.34, 0.17]);
       hedge(0.66, 0.78,  1, 22, 5, [0.13, 0.34, 0.17]);
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       hedge(0.82, 0.94, -1, 24, 5, [0.12, 0.33, 0.16]);
       // West park lake was one continuous hedge(0.19–0.28)@18 — abutting
       // segments shared side planes (coplanar-audit: 5.0 + 4.1 m² stacks).
@@ -180,6 +192,7 @@
       hedge(0.36, 0.42,  1, 22, 4.5, [0.13, 0.35, 0.17]);   // Villa lake
       hedge(0.58, 0.638, 1, 24, 4.5, [0.13, 0.35, 0.17]);  // Villa Reale approach
       hedge(0.647, 0.66, 1, 24, 4.5, [0.13, 0.35, 0.17]);  // resume past the Ascari bend
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       every(14, (k) => {
         const s = k / n;
         if (s < 0.43 || s > 0.54) return;
@@ -229,9 +242,11 @@
           }, { required: true });
         }
       }
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       grandstandEx(0.005, -1, 18, 160, null, null,
         { livery: "crimson", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
       // Secondary lower stand behind Centrale (historic structure).
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       grandstandEx(0.955, -1, 10, 110, null, null, { livery: "concrete", endWalls: true });
       // Facing grandstand across the straight (right side) — modernized.
       grandstandEx(0.02, 1, 12, 120, null, null, { livery: "steel", endWalls: true });
@@ -271,6 +286,7 @@
       // keep=14 band and outside the garages — visible from Tribuna, not inside
       // the pits. Columns live INSIDE the group so ground-audit BFS reaches grade
       // (a floating roof alone was unsupported). Same Jerez Ovni pattern.
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       {
         const aPit = anchor(K(0.975), 1, 26);
         const b = [aPit.r, aPit.u, aPit.t];
@@ -343,10 +359,13 @@
       gantry(0.98, 8.5, [0.14, 0.14, 0.17]);
 
       // Pit-straight furniture: armco both sides, debris fence behind left stand.
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       guardrail(0.93, 0.07, 1, 3.5, [0.85, 0.85, 0.88]);
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       fence(0.95, 0.06, -1, 8, 4, [0.74, 0.76, 0.80]);
       // Hoarding panels on grounded plinths (billboard() posts were unsupported
       // after pit/tribuna reseats — panels hung with no footing).
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       for (const [s, side, gap] of [
         [0.94, -1, 12], [0.97, -1, 12], [0.015, -1, 14], [0.04, -1, 14],
         [0.95, 1, 26], [0.03, 1, 36],
@@ -444,6 +463,7 @@
       // Lesmo 1 & 2 (apexes s 0.3705 / 0.4321, both right) — gravel + tyre on the outside.
       groundPatch(K(0.3705), -1, 5, [18, 0.18, 26], GRAVEL,
         { id: "monza-lesmo-one-gravel", samples: 5 });
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       groundPatch(K(0.4321), -1, 5, [18, 0.18, 24], GRAVEL,
         { id: "monza-lesmo-two-gravel", samples: 5 });
       tyreWall(0.36, 0.38, -1, 4, [0.85, 0.78, 0.20]);
@@ -469,11 +489,13 @@
       for (const s of [0.789, 0.829]) billboard(K(s), -1, 18, 13, 5, [0.90, 0.86, 0.30]);   // gap 18: clear of the stonePine rank (gap 12 read as a leaning plank)
 
       // Catch fences behind the major spectator zones.
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       fence(0.089, 0.119, 1, 7, 4, [0.74, 0.76, 0.80]);
       fence(0.295, 0.32, 1, 8, 4, [0.74, 0.76, 0.80]);
       fence(0.623, 0.653, -1, 9, 4, [0.74, 0.76, 0.80]);
       fence(0.809, 0.849, 1, 9, 4, [0.74, 0.76, 0.80]);
 
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       for (const [s0, s1] of [
         [0.125, 0.28], [0.32, 0.355], [0.385, 0.42], [0.445, 0.61],
         [0.665, 0.795], [0.86, 0.93],
@@ -483,6 +505,7 @@
       }
 
       // Marshal posts sprinkled around the rest of the lap.
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       for (const s of [0.12, 0.20, 0.38, 0.58, 0.66, 0.84, 0.96]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
@@ -599,6 +622,7 @@
         bakedModel("k_pylon", k, 1, 5.0, { scale: 1.3 });
       });
 
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       waterSurface(K(0.40), 1, 95, [180, 0.18, 230], [0.30, 0.50, 0.70],
         { id: "monza-villa-lake", required: true });
       waterSurface(K(0.24), -1, 90, [140, 0.18, 170], [0.28, 0.48, 0.68],
@@ -828,6 +852,7 @@
         });
       })();
 
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       {
         const kerbR = [0.88, 0.16, 0.12], kerbW = [0.94, 0.94, 0.92];
         const strips = [
@@ -858,6 +883,7 @@
 
       // Past the Curva Grande hedge@20/21 (was stonePine@10–13.5 + pine@20–25
       // into the hedge boxes — clip addCyl×hedge @ frac 0.089 / 0.100).
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       every(14, (k) => {
         const s = k / n;
         if (s < 0.08 || s > 0.18) return;
@@ -873,6 +899,7 @@
         if (h > 0.50 && !standL) pine(k,  1, 33 + h * 5, 15 + h * 8, PINE);
       });
 
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       spectatorHill(0.08, 0.18, -1, 13, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });
       spectatorHill(0.43, 0.54,  1, 13, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });
       // Wave-3 Curva Grande densify — sparse mid-outer ring, grounded.
@@ -889,6 +916,7 @@
         pine(k, -1, gap, 14 + h * 6, PINE_D);
       });
 
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       every(42, (k) => {
         const s = k / n;
         const grande = s >= 0.09 && s <= 0.155;
@@ -972,4 +1000,5 @@
       grandstandEx(0.032, 1, 32, 54, null, null, { livery: "crimson", roof: "none", h: 7 });
       grandstandEx(0.295, -1, 28, 50, null, null, { livery: "concrete", roof: "none", h: 6.5 });
       grandstandEx(0.775, 1, 30, 58, null, null, { livery: "steel", roof: "none", h: 7 });
-    };
+    }
+  };

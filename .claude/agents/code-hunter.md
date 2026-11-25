@@ -1,6 +1,6 @@
 ---
 name: code-hunter
-description: Use when hunting bugs, perf wins, dead code or agent bloat in ONE slice of the tree (a dir, subsystem, backend, skill or agent card), one agent per slice in parallel. Traces callers; returns ≤ 12 FINDING rows with file:line, mechanism, fix, test, confidence. focus dead-code runs the bloat-scan recipe (the former bloat-auditor). Read-only, no browser. Pairs with the code-survey and total-audit workflows and finding-verifier.
+description: Use when hunting bugs, perf wins, dead code or agent bloat in ONE slice of the tree (a dir, subsystem, backend, skill or agent card), one agent per slice in parallel. Traces callers; returns ≤ 12 FINDING rows with file:line, mechanism, fix, test, confidence. focus dead-code runs the bloat-scan recipe (the former bloat-auditor). Read-only, no browser; tags runtime-only suspects needs-browser for skill runtime-hunt. Pairs with code-survey, total-audit and finding-verifier.
 model: sonnet
 omitClaudeMd: true
 maxTurns: 35
@@ -97,11 +97,17 @@ For a slice that is a skill, an agent card, a rule file or a fat module:
 ## Return format (cap 12 rows)
 
 ```
-FINDING <n> | bug|perf|dead-code|drift|contradiction|duplication|mess | sev high|med|low | file:line | mechanism (trigger → effect) | proposed fix | test that would catch it | CONFIRMED|CODE-TRACED|PLAUSIBLE
+FINDING <n> | bug|perf|dead-code|drift|contradiction|duplication|mess | sev high|med|low | file:line | mechanism (trigger → effect) | proposed fix | test that would catch it | CONFIRMED|CODE-TRACED|PLAUSIBLE [| runtime: needs-browser]
 covered: <files read in full>
 not covered: <files in the slice you did not read, and why>
 measured: <exact command + numbers, or none>
 ```
+
+A suspect only a RUNNING game can confirm (a leak across restarts, a hitch, a
+black frame after a transition, a race between async loads) keeps its row with
+confidence `PLAUSIBLE` or `CODE-TRACED` and appends ` | runtime: needs-browser`
+after the confidence; never start a browser to settle it (AGENTS.md rule 10).
+The parent queues those rows for a session that follows skill `runtime-hunt`.
 
 Zero findings is a legitimate answer: say `FINDING none`, then the three lines.
 A suspect (or a `known:` row) already fixed at HEAD is not a FINDING: put it

@@ -1022,6 +1022,10 @@ test("primeRace: the race's first rendered frame draws every warm-built mesh onc
   assert.equal(quads.filter((q) => q.kind === "shadow" && q.zero).length, G.cars.length, "one blob-shadow quad per field car");
   assert.equal(quads.filter((q) => q.kind === "mark" && q.zero).length, G.cars.length, "one skid-mark quad per field car");
   assert.equal(drawn.filter((d) => d.name === "getSpinDisc").length, G.cars.length * 4, "four spin discs per field car (one per wheel)");
+  // Braking and lift-off draws (perf-idle-pipeline-churn red: the first hard stop minted 4 brake-ring wrappers mid-lap).
+  assert.equal(drawn.filter((d) => d.name === "getBrakeRing").length, G.cars.length * 8, "four brake rings per field car, blended and opaque");
+  assert.equal(drawn.filter((d) => d.name === "getExhaustFlame").length, G.cars.length, "one after-fire flame per field car");
+  assert.equal(drawn.filter((d) => d.name === "getErsLight").length, 2, "the player's ERS strip, both pulse states");
   // Each car's decal set is QUEUED at the zero matrix; game.js's flushDecals after the car loop builds and draws it.
   drawn.length = 0;
   G.gfx.drawDecal = (mesh, m) => drawn.push({ name: mesh && mesh.carMesh, zero: Array.from(m).every((x) => x === 0) });

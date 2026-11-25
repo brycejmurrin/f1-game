@@ -52,7 +52,7 @@ function dirtyExitFixture(from) {
     getTeamParts: () => ({}), saveTeamParts() {}, getLiveryId: () => 'default', saveLiveryId() {},
     getCustomLiveries: () => [], setCustomLiveries() {}, getLiveries: () => [], invalidateDecalTextures() {},
     teamIdx: 1, driverIdx: 0, soundOn: false, careerOwned: () => false, unlimitedBudget: false, peerSeats: () => [],
-    teamSwatch: () => document.createElement('span'), setTeamPicker() {}, openCustomize() {}, livDraftOverride: null, _spMeshKey: '',
+    teamSwatch: () => document.createElement('span'), setTeamPicker() {}, openCustomize() {}, livDraftOverride: null, setupCam: { meshKey: '' },
     armConfirm: context.armConfirm, setupPreviewOn: true,
   };
   run('js/garage/setup-sheet.js'); context.G = G;
@@ -314,7 +314,7 @@ test('palette rebuild preserves only palette-owned focus, including repeated mat
     getTeamParts: () => ({}), saveTeamParts() {}, getLiveryId: () => 'default', saveLiveryId() {},
     getCustomLiveries: () => [], setCustomLiveries() {}, getLiveries: () => [], invalidateDecalTextures() {},
     teamIdx: 1, driverIdx: 0, soundOn: false, careerOwned: () => false, unlimitedBudget: false, peerSeats: () => [],
-    teamSwatch: () => document.createElement('span'), setTeamPicker() {}, openCustomize() {}, livDraftOverride: null, _spMeshKey: '',
+    teamSwatch: () => document.createElement('span'), setTeamPicker() {}, openCustomize() {}, livDraftOverride: null, setupCam: { meshKey: '' },
   };
   context.G = G; run('js/garage/setup-sheet.js');
   const ui = vm.runInContext('SetupUI.create(G)', context); ui.buildSetup(); dom.byId('cs-options').querySelector('.cs-liv-create').onclick();

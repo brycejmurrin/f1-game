@@ -2327,7 +2327,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/hud.css"), "body:not(.desktop) #hud-inputs:not([data-hl-user])", "top"),
     "calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z) + 12px + var(--inputs-below-limits, 0px))",
     "phone INPUTS park under the sector plate, and below the #hud-limits chip only while it shows");
-  assert.equal(decl(css("css/hud.css"), 'body:not([data-hud-hide~="limits"]):has(> :where(#hud) > #hud-limits:not([hidden])) #hud-inputs', "--inputs-below-limits"), "calc(2.6em + 3px)",
+  assert.equal(decl(css("css/hud.css"), 'body:not([data-hud-hide~="limits"]) #hud-limits:not([hidden]) ~ #hud-inputs', "--inputs-below-limits"), "calc(2.6em + 3px)",
     "the limits step is the chip's own rule");
   assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #hud-flag', "top"), "max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px), calc(var(--hud-gaps-b, 0px) + 8px))",
     "compact flag clears --hud-gaps-b (72px alone sat inside the gaps strip at phoneL 150%)");

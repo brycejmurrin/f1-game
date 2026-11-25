@@ -1547,8 +1547,7 @@ const CarDraw = (function () {
     // Pinned against game.js's branch: tests/unit/car-presentation-canary.test.mjs.
     const _ckR = [0, 0, 0], _ckU = [0, 1, 0], _ckF = [0, 0, 0], _ckP = [0, 0, 0];
     function cockpitCaster(c, smp, yv, out, bankRoll) {
-      const id = !G.dbgCam && (G.state === "race" || G.state === "count") ? CamModes.CAM_MODES[G.camMode].id : "";
-      if (id !== "cockpit" && id !== "helmet") return null;
+      if (!GameCams.rigMode(G.dbgCam, G.state, CamModes.CAM_MODES[G.camMode].id)) return null;
       GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, _ckR, _ckU, _ckF, _ckP, GameCams.seatFwd(), GameCams.seatUp(), bankRoll);
       out[0] = _ckR[0]; out[1] = _ckR[1]; out[2] = _ckR[2]; out[3] = 0;
       out[4] = _ckU[0]; out[5] = _ckU[1]; out[6] = _ckU[2]; out[7] = 0;
@@ -1645,6 +1644,7 @@ const CarDraw = (function () {
       if (CockpitOpts.wheelHasScreen(ws)) for (let lit = 0; lit <= 9; lit++) d(getLedStrip(lit, ws), _rigFx);
       d(getErsBar(), _rigFx); _rigFxA.alpha = 0.75; d(getErsBar(), _rigFxA);
       d(getOtLamp(false), _rigFx); _rigFxA.alpha = 0.7; d(getOtLamp(true), _rigFxA);
+      for (const a of [0.6, 1]) { _ersLightOpts.alpha = a; d(pin(CarMesh.getErsLight()), _ersLightOpts); }
       if (typeof CarMesh.primeWheelExtras === "function") { CarMesh.primeWheelExtras(Z); n += 9; }
       if (ws === "retro" && typeof CarMesh.primeRetroDigits === "function") { CarMesh.primeRetroDigits(Z); n += 40; }
       if (paint) {
@@ -1660,6 +1660,10 @@ const CarDraw = (function () {
           queueCarDecals(pt, Z, carDecalNum(c.team, c), false, !!c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp); n++;
           _ringOpts.emissive = 0; _ringOpts.alpha = 0.5;
           for (let k = 0; k < 4; k++) d(getSpinDisc(), _ringOpts);
+          // Brake ring per wheel (both blend keys) + after-fire flame: else minted at the first hard stop (#6438).
+          _ringOpts.emissive = 1;
+          for (const a of [0.5, 1]) { _ringOpts.alpha = a; for (let k = 0; k < 4; k++) d(getBrakeRing(), _ringOpts); }
+          _flameOpts.alpha = 0.5; d(pin(CarMesh.getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame)), _flameOpts);
           if (c.isPlayer) continue;
           if (_sharedRivalBody) d(sharedRivalBodyMesh(false, c), co);
           if (_farRivalBody) d(sharedRivalBodyMesh(true, c), co);

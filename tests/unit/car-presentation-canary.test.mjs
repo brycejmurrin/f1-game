@@ -208,6 +208,7 @@ test("the first-person caster is pinned to the car loop's cockpit branch", () =>
     "the car loop restores the player's smp2 from _smpPlayer");
   assert.match(game, /const yv = yawVisInterp\(c\);/);
   // The mode test and the axes call the twin in car-draw.js mirrors.
-  assert.match(game, /const cockpitRigOnly = !dbgCam && \(state === "race" \|\| state === "count"\) && \(CAM_MODES\[camMode\]\.id === "cockpit" \|\| CAM_MODES\[camMode\]\.id === "helmet"\);/);
+  // One predicate (GameCams.rigMode, #6397) for both; car-draw.js's use is behaviour-tested in car-presentation-vm.
+  assert.match(game, /const cockpitRigOnly = !!GameCams\.rigMode\(dbgCam, state, CAM_MODES\[camMode\]\.id\);/);
   assert.match(game, /GameCams\.cockpitViewmodelAxes\(smp2\.r, smp2\.t, yv, camEye, tmpR, _cockU, tmpF, _cockP,\s*GameCams\.seatFwd\(\), GameCams\.seatUp\(\), bankC \? bankC\.roll : 0\);\s*basisMat\(tmpR, _cockU, tmpF, _cockP, _cockMat\);\s*drawCockpitRig\(c, _cockMat,/);
 });

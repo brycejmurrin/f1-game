@@ -351,3 +351,39 @@ test("snap to a corner on built Monza: the real planner frames it from the outsi
   assert.ok(dist > 20 && dist < 60, `a corner-sized framing distance, got ${dist.toFixed(1)} m`);
   assert.ok(pose.eye[1] > pose.target[1] + 2, "from above the apex, not at kerb level");
 });
+
+// #6397: Photo Studio's HELMET / COCKPIT seats. FreeCam only marks dbgCam.onboard; render() solves
+// the race rig's eye for that mode. Flying or looking leaves the seat from the driver's eye.
+test("a POV seat marks dbgCam.onboard until fly or look input leaves it from the driver's eye", () => {
+  const { G, FC, api } = boot();
+  assert.deepEqual(plain(FC.POV_MODES), ["helmet", "cockpit"]);
+  assert.deepEqual(["helmet", "cockpit", "hood", "chase", null, undefined].map(FC.povMode), ["helmet", "cockpit", null, null, null, null]);
+  assert.equal(FC.cmd({ pov: "helmet", fov: 64 }).pov, "helmet");
+  assert.equal(G.dbgCam.onboard, "helmet"); assert.equal(G.dbgCam.fov, 64, "the photo lens stays the free camera's");
+  assert.equal(FC.cmd({ pov: "hood" }).pov, null, "only the two driver's-eye seats");
+  FC.cmd({ pov: "cockpit" });
+  G.camEye = [10, 3, 50]; G.camTgt = [10, 3, 80];                     // what render() drew from the seat
+  G.photoCam.pitch += 0.005; api.decorate(G.dbgCam, 0);               // a depth-focus tap's jitter
+  assert.equal(api.state().pov, "cockpit", "sub-threshold jitter keeps the seat");
+  G.photoCam.pos[2] -= 1;                                              // W: one metre forward (−Z at yaw 0)
+  const cam = { eye: G.photoCam.pos.slice(), target: [0, 0, 0], fov: 64 };
+  api.decorate(cam, 0);
+  assert.equal(api.state().pov, null); assert.equal(cam.onboard, undefined);
+  assert.deepEqual(plain(cam.eye), [10, 3, 49], "continues from the driver's eye, plus that frame's move");
+  assert.ok(Math.abs(G.photoCam.yaw - Math.PI) < 1e-9 || Math.abs(G.photoCam.yaw + Math.PI) < 1e-9, "faces down the seat's aim");
+  FC.cmd({ pov: "helmet" });
+  FC.cmd({ snap: "car" });
+  assert.equal(api.state().pov, null, "any placement leaves the seat");
+  FC.cmd({ pov: "helmet" }); FC.cmd(false);
+  assert.equal(api.state().pov, null, "closing leaves it too");
+});
+
+test("povExit carries the input's delta over from the seat's eye and aim", () => {
+  const { FC } = boot();
+  const at = [0, 0, 0, 0, 0], pc = { pos: [1, 0.5, -2], yaw: 0.1, pitch: -0.05 };
+  const out = FC.povExit(at, pc, [100, 2, 100], [100, 2, 70]);          // the seat looks −Z: yaw 0
+  assert.deepEqual(plain(pc.pos), [101, 2.5, 98]);
+  assert.ok(Math.abs(pc.yaw - 0.1) < 1e-12 && Math.abs(pc.pitch + 0.05) < 1e-12);
+  assert.deepEqual(plain(out.eye), plain(pc.pos));
+  assert.ok(out.target[2] < out.eye[2], "target is ahead of the eye");
+});

@@ -780,6 +780,9 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
       const uiMin = device.touch && Math.min(device.viewport.width, device.viewport.height) <= 500 ? 50 : 40;
       for (const pct of [uiMin,80,100,130,150,200]) {
         await press('#mb-settings'); await press('#pm-open-appearance');
+        // Appearance is a lazy bundle: SettingsNav stays on "home" until it loads, and BACK on
+        // "home" closes the sheet. #pm-uiscale is static markup, so wait for the page itself.
+        await expect(page.locator('#pm-panel-appearance')).toBeVisible();
         await expect(page.locator('#pm-uiscale'), `${device.name}: UI SIZE minimum`).toHaveAttribute('min', String(uiMin));
         await page.locator('#pm-uiscale').evaluate((e,n) => { e.value=String(n); e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true})); }, pct);
         await expect(page.locator('#pm-uiscale')).toHaveValue(String(pct));
