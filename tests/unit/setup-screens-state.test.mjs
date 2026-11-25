@@ -716,7 +716,7 @@ function loadSetupUi(opts = {}) {
   const sb = sandbox(dom, extra);
   vm.runInNewContext(src("js/garage/setup-experiments.js"), sb, { filename: absSrc("js/garage/setup-experiments.js") });
   vm.runInNewContext(src("js/garage/setup-sheet.js"), sb, { filename: absSrc("js/garage/setup-sheet.js") });
-  return { dom, ui: sb.SetupUI.create(G), G, $: G.$, observers };
+  return { dom, ui: sb.SetupUI.create(G), G, $: G.$, observers, sb };
 }
 
 test("garage: the paint editor and its live-preview override die with the screen", () => {
@@ -739,6 +739,51 @@ test("garage: the paint editor and its live-preview override die with the screen
   ui.buildSetup();
   assert.equal($("cs-options").querySelector(".cs-liv-editor"), null, "next visit opens the swatch grid, not the editor");
   assert.ok($("cs-options").classList.contains("cs-liv-grid"));
+});
+
+// #6508: a Car Studio tab revisit moves the parked pane back; only a state change rebuilds.
+test("garage: a tab revisit does not run buildSetup; a state change does", () => {
+  let fitted = "default";
+  const { ui, G, $, sb } = loadSetupUi({ getLiveryId: () => fitted });
+  let builds = 0;
+  const getCost = sb.Parts.getCost;
+  sb.Parts.getCost = (...a) => { builds++; return getCost(...a); };   // once per buildSetup head
+  const click = (id) => [...$("cs-tabs").querySelectorAll('[role="tab"]')].find((t) => t.dataset.csCat === id).onclick();
+  ui.openSetup();
+  assert.equal(builds, 1, "the visit builds once (LIVERY, the stored tab)");
+  const create = $("cs-options").querySelector(".cs-liv-create");
+  assert.ok(create);
+  click("team");
+  assert.equal(builds, 2, "a first TEAM visit builds its pane");
+  assert.ok(!$("cs-options").classList.contains("cs-liv-grid"), "TEAM never inherits the livery grid");
+  for (let i = 0; i < 3; i++) { click("livery"); click("team"); }
+  assert.equal(builds, 2, "LIVERY <-> TEAM x3 runs no buildSetup");
+  click("livery");
+  assert.equal($("cs-options").querySelector(".cs-liv-create"), create, "the same pane, not a rebuild");
+  assert.ok($("cs-options").classList.contains("cs-liv-grid"));
+  assert.equal($("cs-options").getAttribute("aria-labelledby"), "cs-tab-livery");
+  const tabs = [...$("cs-tabs").querySelectorAll('[role="tab"]')];
+  for (const tab of tabs) {
+    const on = tab.dataset.csCat === "livery";
+    assert.equal(tab.getAttribute("aria-selected"), on ? "true" : "false", tab.id);
+    assert.equal(tab.tabIndex, on ? 0 : -1, tab.id);
+    assert.equal(tab.classList.contains("active"), on, tab.id);
+  }
+  // State changed in place (no buildSetup): the parked pane's key no longer matches.
+  fitted = "f1";
+  click("team");
+  assert.equal(builds, 3, "a changed key rebuilds on the revisit");
+  // TEAM renders seat state the chips do not own: a peer taking a seat rebuilds it.
+  click("livery");
+  const b4 = builds;
+  G.peerSeats = () => [{ team: "haas", driver: 1 }];
+  click("team");
+  assert.equal(builds, b4 + 1, "a peer seat change rebuilds TEAM on the revisit");
+  // Any other buildSetup is a state change: it drops every parked pane.
+  ui.buildSetup();
+  click("livery");
+  assert.equal(builds, b4 + 3);
+  assert.notEqual($("cs-options").querySelector(".cs-liv-create"), create);
 });
 
 test("garage: Change Car shows the sheet with aria-busy before heavy buildSetup work", () => {
