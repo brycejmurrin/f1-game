@@ -14,7 +14,9 @@ import { test, expect, BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
 
 const EXPORT = "tests/data/settings-live-export-2026-11-25.json";
 const GARAGE = ["cs-cam", "cs-photo", "cs-aero", "cs-options", "cs-done"];
-const STUDIO = ["ps-capture", "ps-close", "ps-panel", "ps-focus-camera"];
+// #ps-focus-camera (MOVE CAMERA) is the circuit studio's: the garage studio hides it (js/ui/photo-studio-ui.js
+// `focusCamera.hidden = isGarage()`), so this garage walk has no rect for it. Every control the garage studio draws is here.
+const STUDIO = ["ps-capture", "ps-close", "ps-panel"];
 const TUNER = ["lt-close", "pc-toggle", "lt-rows"];
 
 async function boot(page, geo) {
