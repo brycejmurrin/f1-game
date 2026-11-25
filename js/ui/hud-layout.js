@@ -78,8 +78,9 @@ const HudLayout = (function () {
   // bottom-left to x 221 and the pedal column starts at x 290, so the landscape shares landed SPEED on STEER RIGHT
   // and OT / AERO / ERS on the gearbox. SPEED sits left of the gearbox above the steer row; ERS, OT and AERO
   // stack above the tyre plate on the centre line. Not the landscape lane: a portrait screen has no side room.
-  const PORTRAIT_OTHER = { speed: { x: -20, y: -12.9, s: 100 }, energy: { x: 0, y: -30.6, s: 101.53846153846153 },
-    ot: { x: 0, y: -32.7, s: 100 }, aero: { x: 0, y: -37.4, s: 100 } };
+  // Shares hold from 360×780 to 430×932: the controls and the cluster are pixels, the offsets a share of the screen.
+  const PORTRAIT_OTHER = { speed: { x: -20, y: -13.4, s: 100 }, energy: { x: 0, y: -33.4, s: 101.53846153846153 },
+    ot: { x: 0, y: -35.8, s: 100 }, aero: { x: 0, y: -41, s: 100 } };
   const PHONE_PORTRAIT = { helmet: PHONE_STANDARD.helmet, other: Object.assign({}, PHONE_STANDARD.other, PORTRAIT_OTHER) };
   // A portrait PHONE (css/hud.css's (orientation: portrait) and (max-width: 500px)); a portrait tablet keeps the landscape seed.
   const portraitPhone = () => typeof window !== "undefined" && window.innerHeight > window.innerWidth && window.innerWidth <= 500;

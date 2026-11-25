@@ -1969,34 +1969,51 @@ test("the RELATIVE player row reaches 4.5:1 in every --you palette", () => {
   }
 });
 
-// #6476: portrait 393×852 chase (Bryce's export, UI SIZE 70; UI 100 paints smaller chips). Boxes from
-// hud-survey --device bryce-393x852 --cam chase: bottom home y 806, centre x 196.5; the steer pair spans x 16..220.5
-// from y 705.8, the pedal column starts at x 289.9; the gearbox and tyre plate stay in the cluster on the centre line.
-// Chip widths are the WIDEST labels, scaled as in the landscape test above.
-test("the portrait chase seed keeps SPEED, ERS, OT and AERO off each other, the gearbox and the controls at 393×852", () => {
+// #6476: portrait chase (Bryce's export, UI SIZE 70; UI 100 paints smaller chips). Boxes from hud-survey
+// --device bryce-393x852 --cam chase: bottom home 46 px up, chips centred on the screen's middle; the steer pair is
+// pinned left (x 16..220.5, 146 px tall), the pedal column right (103 px in); the gearbox and tyre plate stay in the
+// cluster on the centre line. Chip widths are the WIDEST labels, scaled as in the landscape test above. Other
+// portrait phones carry the same pixel controls at other widths, so the shares must hold across them.
+test("the portrait chase seed keeps SPEED, ERS, OT and AERO off each other, the gearbox and the controls (360-430 wide)", () => {
   const ctx = { window: { innerWidth: 393, innerHeight: 852 } };
   const { H } = load({}, { phone: true, ctx });
-  const W = 393, Hh = 852, HOME = 806, PAD = 27;
-  const wide = (measured, chars, widest) => PAD + (measured - PAD) / chars * widest;
+  const PAD = 27, wide = (measured, chars, widest) => PAD + (measured - PAD) / chars * widest;
   const sizes = { speed: [73.3, 37], energy: [132, 14.2], ot: [wide(90.7, 10, 16), 36], aero: [wide(106.9, 9, 13), 36] };
-  const rect = (id) => {
-    const e = H.get(id, "other"), [w, h] = sizes[id], cx = W / 2 + e.x * W / 100, b = HOME + e.y * Hh / 100;
-    return { id, l: cx - w / 2, r: cx + w / 2, t: b - h, b };
-  };
-  const chips = ["speed", "energy", "ot", "aero"].map(rect);
-  const fixed = [{ id: "gearbox", l: 162.5, r: 230.5, t: 612, b: 691.8 }, { id: "tyre", l: 162.5, r: 230.5, t: 550, b: 608 },
-    { id: "steer", l: 16, r: 220.5, t: 705.8, b: 802 }, { id: "pedals", l: 289.9, r: 377, t: 318.5, b: 802 },
-    { id: "strat", l: 7.3, r: 156.1, t: 295.4, b: 356 }];
-  const boxes = chips.concat(fixed);
-  for (const a of chips) {
-    assert.ok(a.l >= 4 && a.r <= W - 4 && a.b <= Hh, `${a.id} stays on screen`);
-    for (const b of boxes) if (a !== b) {
-      const ox = Math.min(a.r, b.r) - Math.max(a.l, b.l), oy = Math.min(a.b, b.b) - Math.max(a.t, b.t);
-      assert.ok(ox <= 0 || oy <= 0, `${a.id} × ${b.id} overlap ${ox.toFixed(1)}×${oy.toFixed(1)} px`);
+  for (const [W, Hh] of [[360, 780], [375, 812], [393, 852], [430, 932]]) {
+    ctx.window.innerWidth = W; ctx.window.innerHeight = Hh;
+    const HOME = Hh - 46, mid = W / 2;
+    const rect = (id) => {
+      const e = H.get(id, "other"), [w, h] = sizes[id], cx = mid + e.x * W / 100, b = HOME + e.y * Hh / 100;
+      return { id, l: cx - w / 2, r: cx + w / 2, t: b - h, b };
+    };
+    const chips = ["speed", "energy", "ot", "aero"].map(rect);
+    const fixed = [{ id: "gearbox", l: mid - 34, r: mid + 34, t: Hh - 240, b: Hh - 160.2 }, { id: "tyre", l: mid - 34, r: mid + 34, t: Hh - 302, b: Hh - 244 },
+      { id: "steer", l: 16, r: 220.5, t: Hh - 146.2, b: Hh - 50 }, { id: "pedals", l: W - 103.1, r: W - 16, t: Hh - 533.5, b: Hh - 50 },
+      { id: "strat", l: 7.3, r: 156.1, t: 295.4, b: 356 }];
+    const boxes = chips.concat(fixed);
+    for (const a of chips) {
+      assert.ok(a.l >= 4 && a.r <= W - 4 && a.b <= Hh, `${W}: ${a.id} stays on screen`);
+      for (const b of boxes) if (a !== b) {
+        const ox = Math.min(a.r, b.r) - Math.max(a.l, b.l), oy = Math.min(a.b, b.b) - Math.max(a.t, b.t);
+        assert.ok(ox <= 0 || oy <= 0, `${W}: ${a.id} × ${b.id} overlap ${ox.toFixed(1)}×${oy.toFixed(1)} px`);
+      }
     }
   }
   ctx.window.innerWidth = 852; ctx.window.innerHeight = 393;
   assert.deepEqual({ ...H.get("speed", "other") }, { x: 10.04, y: -2.29, s: 100 }, "landscape keeps its own lane");
+});
+
+test("a rotation re-paints the chase chips with the new screen's seed", () => {
+  const handlers = [];
+  const ctx = { window: { innerWidth: 852, innerHeight: 393, addEventListener: (type, fn) => { if (type === "resize") handlers.push(fn); } } };
+  const { els } = load({}, { phone: true, ctx });
+  const x = () => els["#hud-speed"].props["--hl-x"];
+  assert.equal(x(), "10.04");
+  assert.equal(handlers.length, 1, "one resize listener");
+  ctx.window.innerWidth = 393; ctx.window.innerHeight = 852; handlers[0]();
+  assert.equal(x(), "-20", "portrait seed painted");
+  ctx.window.innerWidth = 852; ctx.window.innerHeight = 393; handlers[0]();
+  assert.equal(x(), "10.04", "landscape seed painted again");
 });
 
 test("an unmoved chase chip follows the screen's seed both ways; a moved one keeps its spot", () => {
