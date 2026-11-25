@@ -33,6 +33,13 @@ restated rules drifted into three wordings and one contradicted the skill [14].
 
 ## The brief
 
+Generate it, do not hand-write it: `node tools/ci/brief.mjs render --spec <spec.json> --sessions <list_sessions.json>`
+prints the template below from task facts (role, issue/PR, scope, owned and forbidden paths, STOP AT, the tip state,
+env and permission mode), predicts the `config-ok` / `ratchet-raise` human steps from the owned paths, and refuses a
+duplicate launch (an open PR closing the issue, or a live session tagged `apex:issue-<n>` / `apex:pr-<n>`; PR #6349
+was launched twice). Pass the tag it prints to `create_session`. A hand-edited brief: `brief.mjs lint <file>` before
+sending (missing STOP AT or tip state refuses). Spec fields and exits: the tool's header.
+
 ```text
 <ISSUE n | CONTINUE PR n> for orchestrator <session id>. AGENTS.md and skill `steward` bind; this
 brief adds only task facts.
