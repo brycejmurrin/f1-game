@@ -11,7 +11,9 @@
  * (#6565: the player's parts read over the team's works build, Parts.playerMods;
  * Bryce chose A, x1.0 parity, on #6572 at about 10:43Z 2026-11-25, after the
  * raw-kit vs x1.0 table posted there). The shipped Red Bull signature kit reads
- * accel 0.92 / cornering 0.97 / braking 0.92 over the works car:
+ * accel 0.92 / cornering 0.97 / braking 0.92 over the works car (the table below; #6705, Bryce's pick B,
+ * then gave the works car a half grip reserve: cornering x1.41 / braking x1.18 on this kit, and brake
+ * 2.66 g / 2.32 s / 69.8 m, turn-in coast 1.038, skidpad 4.60 g, full lock 1.49 rad/s and 11.6 deg):
  *   brake from vTop 60.5 m/s   2.07 g, 2.98 s, 89.9 m   (raw kit: 3.39 g, 54.2 m)
  *   accel                      t100 6.68 s, t200 23.43 s (raw kit: 3.32, 13.73)
  *   step steer 50 m/s / 0.5    final yaw 0.433 rad/s
@@ -74,9 +76,10 @@ test("every measurement is finite", () => { assert.ok(m.finite, JSON.stringify(m
 test("braking and acceleration sit in the shipped car's measured bands", () => {
   const top = Object.keys(m).find((k) => k.startsWith("brake_") && k !== "brake_27.8" && k !== "brake_55.6");
   const b = m[top];
-  within(b.g_avg, 1.90, 2.25, `${top} g_avg`);
-  within(b.t_s, 2.62, 3.35, `${top} t_s`);
-  within(m["brake_55.6"].g_avg, 1.89, 2.24, "brake_55.6 g_avg");
+  // #6705 (Bryce's pick B, half grip reserve): 2.07 → 2.66 g, 2.98 → 2.32 s; same relative width.
+  within(b.g_avg, 2.44, 2.89, `${top} g_avg`);
+  within(b.t_s, 2.04, 2.61, `${top} t_s`);
+  within(m["brake_55.6"].g_avg, 2.43, 2.88, "brake_55.6 g_avg");
   // The uploaded default changes the actual boot car from Mercedes to Red
   // Bull; x1.0 parity (#6565, decision A on #6572) re-centres it on 6.68 s with
   // the same relative width. Driving-model and handling assertions stay independent.
@@ -86,11 +89,12 @@ test("braking and acceleration sit in the shipped car's measured bands", () => {
 
 test("cornering sits in the shipped car's measured bands", () => {
   within(m.stepSteer.final, 0.39, 0.48, "step-steer final yaw");
-  within(m.turnIn_coast.yaw, 0.81, 0.99, "turn-in coasting yaw");
+  // #6705 half grip reserve: coast 0.894 → 1.038, skidpad 3.35 → 4.60 g, full lock 1.17 → 1.49 (same relative widths).
+  within(m.turnIn_coast.yaw, 0.94, 1.15, "turn-in coasting yaw");
   within(m.turnIn_brake.yaw, 0.95, 1.29, "turn-in braking yaw");
   const sk = m.skidpad.find((r) => r.v === 60 && r.steer === 0.8);
-  within(sk.ay_g, 2.97, 3.64, "skidpad 60 m/s / 0.8 ay_g");
-  within(m.fullLock.yawMax, 1.01, 1.29, "full-lock yawMax");
+  within(sk.ay_g, 4.08, 5.00, "skidpad 60 m/s / 0.8 ay_g");
+  within(m.fullLock.yawMax, 1.29, 1.64, "full-lock yawMax");
 });
 
 test("trail braking at 55 m/s keeps at least 0.6× coasting yaw (capacity-scaled ellipse)", () => {

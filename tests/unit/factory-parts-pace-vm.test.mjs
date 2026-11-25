@@ -4,9 +4,10 @@
  * category product of a team's FACTORY_PRESETS build (McLaren 1.12 / 2.07 / 2.76 / 1.93), and the AI never reads
  * mods: a factory-kit player lapped Monza 10 % under the field. Parts.playerMods now reads the build over the works
  * one. Pinned here, driving the player's own physics:
- *   1. LAP PACE, Monza and Suzuka, McLaren and Williams: a factory-kit lap is within 0.5 % of the same car on
- *      neutral ×1 stat mods, and the old raw-factory mods lap ≥ 3 % faster — the gap this closes (Monza Williams,
- *      a small upgrade: ≥ 2 %, RAW_GAP below).
+ *   1. LAP PACE, Monza and Suzuka, McLaren and Williams: a factory-kit lap is no slower than the same car on
+ *      neutral ×1 stat mods (within 0.5 %), its mods are that car × the half grip reserve (#6705, Parts.worksMods),
+ *      and the old raw-factory mods lap quicker still and ≥ 3 % under neutral (Monza Williams, a small upgrade:
+ *      ≥ 2 %, RAW_GAP below).
  *   2. STRAIGHT LINE (Ferrari, field benched, full throttle): an empty free-play sheet IS the works car, and a
  *      speed/accel upgrade above the works part still reaches 0.6·vTop sooner and runs a higher peak.
  *
@@ -29,6 +30,11 @@ async function seat(track, teamId, parts) {
   const ti = probe.sandbox.Teams.LIST.findIndex((t) => t.id === teamId);
   probe.close();
   return createGame({ track, carMeshes: false, storage: { team: ti, driver: 0, ["parts." + teamId]: parts || {} } });
+}
+
+async function worksOf(teamId) {
+  const g = await createGame({ carMeshes: false });
+  try { const t = g.sandbox.Teams.LIST.find((x) => x.id === teamId); return { ...g.sandbox.Parts.worksMods(t) }; } finally { g.close(); }
 }
 
 async function lap(track, teamId, arm) {
@@ -80,14 +86,20 @@ async function lap(track, teamId, arm) {
 // Williams' small-upgrade raw kit now measures 2.6 % at Monza (raw 142.20 s); Suzuka Williams 4.8 %, McLaren ≥ 22 %.
 // Re-anchored from those numbers by Bryce's decision A (PR #6662, 2026-11-25).
 const RAW_GAP = { "monza williams": 0.02 };
+// THE GRIP RESERVE (#6705, Bryce's pick B after "braking and grip got worse"): the works car keeps half (log share)
+// of its cornering/braking bonus, so it laps between the neutral car and the raw kit. Measured (neutral / works / raw):
+// Monza McLaren 143.87 / 135.73 / 111.33 s, Williams 146.00 / 146.07 / 142.20 (its works cornering is under ×1, so
+// only braking ×1.02 is kept); Suzuka McLaren 166.87 / 153.07 / 127.40, Williams 169.67 / 169.53 / 161.47.
 
 for (const track of ["monza", "suzuka"]) for (const teamId of ["mclaren", "williams"]) {
-  test(`${track} ${teamId}: the works car laps at neutral pace; the old raw factory kit did not`, { timeout: 300000 }, async () => {
+  test(`${track} ${teamId}: the works car laps at or under neutral pace; the old raw factory kit is quicker still`, { timeout: 300000 }, async () => {
     const neutral = await lap(track, teamId, "neutral");
     const factory = await lap(track, teamId, "factory");
     const raw = await lap(track, teamId, "raw");
-    for (const k of K) assert.ok(Math.abs(factory.mods[k] - neutral.mods[k]) < 1e-9, `${k}: works mods are the neutral ×1 car`);
-    assert.ok(Math.abs(factory.T / neutral.T - 1) <= 0.005, `works ${factory.T.toFixed(2)} s vs neutral ${neutral.T.toFixed(2)} s`);
+    const w = await worksOf(teamId);
+    for (const k of K) assert.ok(Math.abs(factory.mods[k] - neutral.mods[k] * w[k]) < 1e-9, `${k}: works mods are the neutral car × the grip reserve`);
+    assert.ok(factory.T <= neutral.T * 1.005, `works ${factory.T.toFixed(2)} s is not slower than neutral ${neutral.T.toFixed(2)} s`);
+    assert.ok(raw.T < factory.T, `raw factory ${raw.T.toFixed(2)} s stays quicker than the reserve car ${factory.T.toFixed(2)} s`);
     const gap = RAW_GAP[`${track} ${teamId}`] ?? 0.03;
     assert.ok(raw.T < neutral.T * (1 - gap), `raw factory ${raw.T.toFixed(2)} s is the closed gap (neutral ${neutral.T.toFixed(2)} s, ≥ ${gap * 100} %)`);
   });

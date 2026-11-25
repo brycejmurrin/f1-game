@@ -495,14 +495,21 @@ an agent, rather than something it has to infer from lap times.
 
 ### Parts parity
 
-Since 2026-11-25 the works car races at ×1.0. This was Bryce's decision: scale factory parts to about ×1.0. The
+Since 2026-11-25 the works car races at ×1.0 plus a grip reserve. This was Bryce's decision: scale factory parts
+to about ×1.0, then (#6705) keep half the grip bonus. The
 catalog multiplies twelve categories, so a team's `FACTORY_PRESETS` build read 1.1–2.8× per stat, while the AI
 never reads mods (it runs on `tierV × skill`). As a result, a factory-kit player lapped Monza at 101.7–104.8 s against
 the field's 114.0 s. Now `Parts.playerMods(setup, team, tune)` divides raw `getMods` by the team's works build
 (`factoryResolved`, legality-keyed), and `modsFor`, the garage stat bars, the part comparison and the wall board all
 read it:
 
-- **The works build is exactly ×1.0 per stat.** A part above the works one multiplies in as before: upgrades and
+- **The works build is ×1.0 in speed and accel, and keeps a GRIP RESERVE in cornering and braking.** The reserve
+  (`Parts.worksMods`, `Parts.RESERVE`) is half the works bonus as a log share, `max(1, raw)^0.5`: a works Red Bull
+  corners ×1.46 and brakes ×1.29, McLaren ×1.66 / ×1.39, and Williams (whose works cornering is under ×1) ×1.0 / ×1.02.
+  Bryce picked it (B, #6705, 2026-11-25 ~21:51Z) after "braking and grip got worse". The full ×1.0 had cut the
+  shipped car's braking from 108 m to 181 m (300→100 km/h) and its skidpad grip by half. With the reserve it is 141 m
+  on his profile, and a works McLaren laps Monza in 135.7 s against 143.9 s neutral and 111.3 s for the raw kit
+  (`docs/notes/BRAKE-GRIP-AB-2026-11-25.md`). A part above the works one multiplies in as before: upgrades and
   career R&D (`Career.teamStats` → `statMult`) stack unchanged.
 - **Team character stays** in `statMult(team.stats)`, the tier-ordered chassis line the field is built from, and in
   `aeroLoad` / `ersProfile`, which read the fitted wing and ERS unit themselves.

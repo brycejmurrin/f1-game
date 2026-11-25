@@ -71,7 +71,10 @@ Point t is bit-identical to b, and n is bit-identical to a in every row. `tuning
 - **#6527 (collide / contact-geometry) and #6654 (numStore) are ruled out:** t = b and n = a, exactly.
 - **#6695 (damage, train #6703)** only books damage records (`js/race/damage.js`) and does not touch the player's forces.
 
-## Options for Bryce (no fix landed; he picks)
+## Options put to Bryce
+
+**He picked B** (AskUserQuestion via the orchestrator, ~21:51Z; recorded on #6705). It shipped in the PR that
+closes #6705: `Parts.RESERVE` / `Parts.worksMods` in `js/car/parts.js`.
 
 - **A: keep ×1.0.** The car now has the field's neutral grip. The lost reserve is the price of parity.
 - **B: a partial grip reserve.** Cornering and braking keep half (log share) of a works bonus above ×1.0:
@@ -86,3 +89,14 @@ Point t is bit-identical to b, and n is bit-identical to a in every row. `tuning
   rotation, trail-brake rotation, the mid-corner stamp guard and the shipped-seat bands). The car's lap pace against the
   field would also need measuring before it could land.
 - **C: revert #6572.** This puts back the ×2 reserve and the 10 % lap gap to the field.
+
+## B as built: lap pace against the neutral (field-equivalent) car
+
+`tests/unit/factory-parts-pace-vm.test.mjs`, the curvature-fed policy scaled by the car's own mods (neutral / works / raw):
+
+| row | neutral ×1 | works + reserve | raw kit |
+|---|---|---|---|
+| Monza McLaren | 143.87 s | 135.73 s (−5.7 %) | 111.33 s |
+| Monza Williams | 146.00 s | 146.07 s | 142.20 s |
+| Suzuka McLaren | 166.87 s | 153.07 s (−8.3 %) | 127.40 s |
+| Suzuka Williams | 169.67 s | 169.53 s | 161.47 s |
