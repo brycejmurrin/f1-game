@@ -3594,7 +3594,7 @@ qualiNet = QualiNet.create({
 // RACE SETTINGS sheet (js/race/race-settings.js).
 raceSettings = RaceSettings.create(G, {
   GameAudio, Tracks, SettingRow, DrivingLine, SeasonCal,
-  qualiResults: () => quali.results(), openQuali, enableTilt,
+  qualiResults: () => quali.results(), openQuali, enableTilt, gridFromQuali,   // gridFromQuali: GO reads startRace()'s grid rule (#6545)
   getSteerMode: () => steerMode, buildStandings, raceIntro: raceIntroFromSheet,
   previewWxPlan: (o) => wxArc.previewArc(o),   // the MIXED plan WITHOUT caching it (FORECAST line)
 });
