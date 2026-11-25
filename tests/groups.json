@@ -509,6 +509,7 @@
     "// driving-model gate runs here in seconds rather than in a browser job.",
     "tests/unit/game-vm.test.mjs",
     "tests/unit/gantry-cantilever-legs.test.mjs",
+    "tests/unit/gap-format-pin.test.mjs",
     "// Garage AERO button toggles flaps only: setSetupAero never moves the camera (VM).",
     "tests/unit/garage-aero-no-camera.test.mjs",
     "tests/unit/garage-arrival.test.mjs",
