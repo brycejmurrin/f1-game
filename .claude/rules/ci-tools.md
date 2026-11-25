@@ -11,8 +11,8 @@ paths:
 - Every PR push runs CI: a DRAFT push gets the fast tier plus the `selected`
   browser legs under a 5-min budget with no overflow (one leg for a typical
   diff; a wide diff still fans out, since select-specs never drops a routed
-  spec); ready gets the full tier, minus the `selected` legs when the same-sha draft
-  passed them first try with the same plan and the deploy tip has not moved
+  spec); ready gets the full tier, minus the `selected` legs when another run tested the same
+  merge tree on the same base (the unmoved deploy tip) green first try with the same plan, and no run on that tree is red
   (`tools/ci/reuse-draft-selected.mjs`). No label or body line opts in. `= ci none` after a push means no open PR carries the sha (not
   pushed, or no PR yet). A whole browser group: `node tools/ci/remote-group.mjs
   <group>` dispatches on the pushed branch only with Bryce's opt-in (`APEX_GH_OWNER_WRITE=1`, his alone: a dispatch
