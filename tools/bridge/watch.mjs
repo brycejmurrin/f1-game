@@ -15,6 +15,17 @@
  */
 import { githubToken, NO_TOKEN_HINT } from "../ci/github-token.mjs";
 import { pathToFileURL } from "node:url";
+import { exitIfHelp } from "../lib/cli-args.mjs";
+
+const USAGE = `usage: node tools/bridge/watch.mjs --issue <n> [--repo o/r] [--since ISO] [--every 5] [--exit-on <cmd comment id>] [--minutes 60]
+  Watches the phone-bridge issue; prints one line per new OWNER \`apex-result\` or hello comment; never posts.
+  --issue <n>      bridge issue number (required)
+  --repo o/r       repository (default brycejmurrin/f1-game)
+  --since ISO      ignore comments created before this time
+  --every <s>      poll interval in seconds (min 2, default 5)
+  --exit-on <id>   exit once the result replying to this command comment arrives
+  --minutes <m>    time budget (default 60)
+  exit: 0 done or budget spent, 1 auth/404, 2 bad args, 3 no token`;
 
 const RESULT_RE = /```apex-result[ \t]*\n([\s\S]*?)```/;
 export const LOW = 200; // remaining calls under this: slow down
@@ -140,6 +151,7 @@ export async function watch(o, io) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+  exitIfHelp(process.argv.slice(2), USAGE);
   let o;
   try { o = parseArgs(process.argv.slice(2)); } catch (e) { console.error(String(e.message)); process.exit(2); }
   const token = githubToken();
