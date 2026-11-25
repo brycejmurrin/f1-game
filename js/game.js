@@ -4538,6 +4538,7 @@ function update(dt) {
       countT += dt;
     }
     const lit = Math.min(COUNTDOWN_S, Math.floor(countT));
+    jumpStartPenalty.tickGrid(player);   // LIFT — WAIT FOR LIGHTS while a fined throttle is held (#5775 R7)
     if (lit > lightsLit) {
       // Light EVERY lamp up to `lit`, not just the newest. countT can advance
       // by more than one second in a frame — a networked countdown is pinned to
@@ -4576,6 +4577,7 @@ function update(dt) {
       // every later race and suppresses quali flying laps. Ledger 2026-09-22.
       const wasRestart = feel.restartPending;
       feel.restartPending = false;
+      if (jumpStartPenalty.cueUp()) banner.clear();   // the grid cue is moot now: LIGHTS OUT! (or the fine) goes up at once
       for (const c of cars) jumpStartPenalty.tickAtGreen(c);
       // Nothing consumes RECOVER/shift/boost edges before green, so a tap on the grid fired at lights-out (a free ~58 km/h re-place, or 2nd gear with no drive).
       Input.clearDriveEdges();
@@ -5074,7 +5076,7 @@ function updateCar(c, dt, ranked) {
     // never to a literal, so the window holds at every OVERALL SPEED.
     // BLUE FLAGS ONLY (AiDrive.letPassCase): the chaser must be LAPPING us — a lap or more ahead in progress.
     const letPassCase = AiDrive.letPassCase(state === "race", blocker, chaser, chaserGap, chaser ? chaser._snapSpeed : 0,
-      c.speed, vT / VMAX, !!chaser && chaser._snapProg - c.prog > track.total * 0.5);
+      !!chaser && chaser._snapProg - c.prog > track.total * 0.5);
     if (letPassCase) c.letPassT = (c.letPassT || 0) + dt;
     else c.letPassT = Math.max(0, (c.letPassT || 0) - dt * 1.5);
     if (AiDrive.trailYieldStep(c, ranked[c.rank], !!track.street)) { letPass = true; vmax *= AiDrive.trailYieldEase(c._trYT, aiT); } else letPass = (c.letPassT || 0) > AiDrive.letPassDelay(aiT);   // ...or a quicker car has trailed us past its patience: the lift goes in BEFORE _vmaxNow, so paceVmax shows the trailer the slower car (AiDrive.trailYieldStep)
@@ -6578,12 +6580,12 @@ function rescuePlayer(c) {
   // (same authority rule as __apex.jump) — hand the car back first.
   incidentSim.release(c);
   Tracks.sample(track, c.s, smp);
-  c.x = 0; c.xVis = 0;
+  c.x = Collide.rescueX(c, cars, track.total, smp.hw); c.xVis = c.x;   // centre, unless a car is there (#5775 R5)
   c.head = Math.atan2(smp.t[0], smp.t[2]);   // aligned with the track ahead
   c.vLat = 0; c.yawRateCur = 0;
   // The pace-scaled recovery speed, never the car's own (#5876); never above vTop().
   c.speed = Math.min(vTop(), 16 * Math.max(driveTune.PACE, 0.05));
-  c.px = smp.p[0]; c.pz = smp.p[2];
+  const rw = worldFromTrack(c.s, c.x, smp); c.px = rw.x; c.pz = rw.z;   // x = 0: the centre line exactly
   c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevHead = c.head;   // re-seed the render anchors (as retireCar does) or the car smears from the wall for a frame
   c.boostOn = false; c.deploying = false;
   c.xOn = false; c.aeroX = 0; c.xArmed = false;   // rescue drops back to Z-mode
