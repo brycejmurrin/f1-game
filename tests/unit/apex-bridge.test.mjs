@@ -919,7 +919,8 @@ function heldDriver() {
   };
   const body = { kids: [], appendChild(n) { this.kids.push(n); n.remove = () => { this.kids = this.kids.filter((k) => k !== n); }; } };
   const document = { body, getElementById: () => null,
-    createElement: (tag) => ({ tag, style: {}, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } }) };
+    createElement: (tag) => ({ tag, style: {}, attrs: {}, kids: [], on: {}, setAttribute(k, v) { this.attrs[k] = v; },
+      appendChild(n) { this.kids.push(n); }, addEventListener(t, f) { this.on[t] = f; } }) };
   return { S, ends, body, extra: { SoakRun: S, setTimeout, Date, document } };
 }
 
@@ -1098,4 +1099,69 @@ test("#6582 when visible:<id> waits for an element; a timeout answers ok:false c
   const hit = await b.api.handle({ cmd: "when", args: { visible: "sel-go", ms: 2000 } });
   assert.equal(hit.value.ok, true);
   assert.equal(hit.value.id, "sel-go");
+});
+
+test("#6581 review: the link's end always lands — queued behind an in-flight edit, and in the first seconds to the stored id", async () => {
+  const gh = editingGitHub(), store = new Map();
+  let hold = null;
+  const fetch = async (url, opts) => {
+    if (opts.method === "PATCH" && hold === "arm") await new Promise((res) => { hold = res; });
+    return gh.fetch(url, opts);
+  };
+  const b = load({ tok: "tok", gh: { fetch }, store });
+  await flush();
+  const id = await b.api.status();
+  hold = "arm";
+  const inFlight = b.api.status();   // a tick's edit, held at the network
+  await flush();
+  b.api.stop("ended on the phone");   // the link ends while it is in flight
+  hold();
+  await inFlight;
+  await flush(); await flush();
+  const last = statusOf(gh.thread.find((c) => c.id === id));
+  assert.equal(last.linked, false, "the queued final edit ran after the in-flight one");
+  assert.equal(last.ended, "ended on the phone");
+  assert.equal(gh.calls.at(-1).keepalive, true, "the final edit survives a reload");
+  // A reload in the first 5 s (no tick yet on this page): the end still edits the comment stored on the device.
+  const b2 = load({ tok: "tok", gh: { fetch }, store });
+  await flush();
+  b2.api.stop("reload");
+  await flush(); await flush();
+  assert.equal(statusOf(gh.thread.find((c) => c.id === id)).ended, "reload");
+  assert.equal(gh.thread.filter((c) => c.body.startsWith("```apex-status")).length, 1);
+});
+
+test("#6581 review: a rate-limited status edit (403 / 429) slows the cadence instead of hammering at 15 s", async () => {
+  const timers = [];
+  const gh = editingGitHub();
+  const fetch = async (url, opts) => (opts.method === "POST" && JSON.parse(opts.body).body.startsWith("```apex-status")
+    ? { status: 429, ok: false, json: async () => ({}), headers: { get: () => null } } : gh.fetch(url, opts));
+  const b = load({ tok: "tok", gh: { fetch }, extra: { setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; } } });
+  await flush();
+  await timers.find((t) => t.ms === 5000).fn();
+  assert.equal(timers.at(-1).ms, 300000, "the next edit waits 5 min");
+  gh.thread.push(cmd(80, { cmd: "ping" }));
+  await b.api.pollOnce();
+  assert.equal(timers.at(-1).ms, 300000, "a command does not pull a rate-limited edit back to 15 s");
+});
+
+test("#6581 review: tap waitMs is capped at 30 s; a link end mid-drive removes the banner", async () => {
+  const dom = menuDom();
+  const b = load({ search: "", apex: dom.apex, extra: dom.extra });
+  assert.equal((await b.api.handle({ cmd: "tap", args: { id: "nowhere-at-all", waitMs: 1 } })).error, "#nowhere-at-all not in the page after 1 ms");
+  // A clock that jumps 10 s per read: an asked-for 1e9 ms gives up at the 30 s cap, not never.
+  let t = 0;
+  const Jumpy = class extends Date { static now() { return (t += 10000); } };
+  const capped = load({ search: "", apex: dom.apex, extra: { ...dom.extra, Date: Jumpy } });
+  assert.equal((await capped.api.handle({ cmd: "tap", args: { id: "nowhere-at-all", waitMs: 1e9 } })).error, "#nowhere-at-all not in the page after 30000 ms");
+  // The link ends while Claude drives: SoakRun lets go and the banner goes.
+  const d = heldDriver();
+  const gh = editingGitHub();
+  const linked = load({ tok: "tok", gh, apex: { info: () => ({ state: "race" }) }, extra: d.extra });
+  await flush();
+  await linked.api.handle({ cmd: "drive", args: { laps: 1, wait: false } });
+  assert.ok(d.body.kids.some((k) => k.id === "apex-bridge-driving"));
+  linked.api.stop("ended on the phone");
+  await flush();
+  assert.equal(d.body.kids.some((k) => k.id === "apex-bridge-driving"), false);
 });
