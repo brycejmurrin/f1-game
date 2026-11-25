@@ -9,10 +9,10 @@ import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a gi
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import cp from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SCRIPT = path.join(ROOT, "tools/ci/ci-pr-base.sh");
@@ -20,7 +20,7 @@ const ci = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
 const resolver = fs.readFileSync(path.join(ROOT, "tools/ci/ci-resolve-before.sh"), "utf8");
 
 test("a merge checkout answers its first parent; anything else echoes the fallback", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-pr-base-"));
+  const dir = mkTmpDir("apex-pr-base-");
   const g = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
   const run = (fallback) => cp.spawnSync("bash", [SCRIPT, fallback], { cwd: dir, encoding: "utf8" });
   try {
@@ -110,7 +110,7 @@ test("Structural guards ignores ship ceiling raises but still rejects a PR raise
 });
 
 test("15-F5: a green draft run is reused only on its first attempt and the same base SHA", () => {
-  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "reuse-draft-"));
+  const dir = mkTmpDir("reuse-draft-");
   try {
     const BASE = "b".repeat(40);
     // A stub `gh`: one green pull_request ci.yml run, its jobs, and its tooling A record (an annotation).

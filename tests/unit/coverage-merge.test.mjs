@@ -20,9 +20,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { ROOT, sourcePathOf, attachSource, readDir, mergeCoverage } from "../../tools/ci/coverage-merge.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 test("sourcePathOf maps every url shape a run produces, and refuses the rest", () => {
   assert.equal(sourcePathOf("http://localhost:3456/js/core/log.js?v=dev"), "js/core/log.js");
@@ -62,7 +62,7 @@ test("attachSource picks the text V8 actually measured — rewritten for the VM,
 });
 
 test("readDir takes both the bare list (browser) and the {result} dump (node), and counts junk instead of throwing", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-cov-"));
+  const dir = mkTmpDir("apex-cov-");
   try {
     fs.writeFileSync(path.join(dir, "a.json"), JSON.stringify([entry(1)]));
     fs.writeFileSync(path.join(dir, "b.json"), JSON.stringify({ result: [entry(2), entry(3)] }));
@@ -78,7 +78,7 @@ test("readDir takes both the bare list (browser) and the {result} dump (node), a
 });
 
 test("a node dump merges into an lcov report with one row per game source", async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-cov-"));
+  const dir = mkTmpDir("apex-cov-");
   const out = path.join(dir, "report");
   try {
     fs.writeFileSync(path.join(dir, "node.json"), JSON.stringify({ result: [
@@ -96,7 +96,7 @@ test("a node dump merges into an lcov report with one row per game source", asyn
 });
 
 test("an empty union is a reported reason, never a throw (the reporter calls this after the verdict line)", async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-cov-"));
+  const dir = mkTmpDir("apex-cov-");
   try {
     const r = await mergeCoverage({ inputs: [dir, path.join(dir, "missing")], outputDir: path.join(dir, "report") });
     assert.equal(r.ok, false);

@@ -11,11 +11,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { parseNameStatusZ, changedPaths, changedWithUntracked, resolveDeployBase, untrackedPaths } from "../../tools/lib/changed-files.mjs";
 import { changedVsDeploy, changedHeader } from "../../tools/ci/tooling-fast.mjs";
 import { pick } from "../../tools/ci/pick-unit-slices.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 test("parseNameStatusZ reads plain statuses and both ends of R and C records", () => {
   const z = (...f) => f.join("\0") + "\0";
@@ -28,7 +28,7 @@ test("parseNameStatusZ reads plain statuses and both ends of R and C records", (
 });
 
 test("a real rename lists its source, and the circuit rules fire on it", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-rename-"));
+  const dir = mkTmpDir("apex-rename-");
   const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
   try {
     g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
@@ -53,7 +53,7 @@ test("a real rename lists its source, and the circuit rules fire on it", () => {
 // back to HEAD~1 (the last commit's selection, reported green), and a new file
 // was invisible to `git diff <base>` until `git add`.
 test("deploy base: origin, else the local branch, else null; untracked files count as changed", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-deploy-base-"));
+  const dir = mkTmpDir("apex-deploy-base-");
   const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
   try {
     g("init", "-q", "-b", "work"); g("config", "user.email", "t@t"); g("config", "user.name", "t");

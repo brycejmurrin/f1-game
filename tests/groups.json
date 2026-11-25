@@ -1307,6 +1307,8 @@
     "tests/unit/tlx-viewport.test.mjs",
     "// TLX WebGPU perf pass (2026-10-30): the real vendored WebGPU attribute utility shows a changed merged-chunk set reaching the GPU index (W1), merge-index regrowth O(log) with release (W2), merged chunk shadow casts (W3), setSsrMrt repeat no-ops (W4), unread time uniforms unwritten (W5).",
     "tests/unit/tlx-webgpu-perf.test.mjs",
+    "// #6552 item 1: tests/unit temp dirs go through mkTmpDir(), not the OS temp dir; offender ratchet in tests/data/tmpdir-offenders.json.",
+    "tests/unit/tmpdir-ratchet.test.mjs",
     "// tools/check/tolerance-diff.mjs: a widened test tolerance next to production changes fails unless excepted (#1685).",
     "tests/unit/tolerance-diff.test.mjs",
     "tests/unit/tool-hook-fixes.test.mjs",

@@ -12,6 +12,7 @@ import { spawnSync, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ZERO = "0".repeat(40);
@@ -25,7 +26,7 @@ const HOOK_ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => 
 // that a live GitHub call must never be used to reproduce.
 function adapterFixture(adapter, delegate, script, payload = {}) {
   fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
-  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "adapter-verdict-"));
+  const dir = mkTmpDir("adapter-verdict-");
   try {
     for (const [file, source] of [[adapter, fs.readFileSync(path.join(ROOT, adapter), "utf8")], [delegate, script]]) {
       fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
@@ -220,7 +221,7 @@ test("Codex MCP adapter leaves unrelated hosted providers and read operations ou
 const gitEnv = (extra = {}) => ({ ...HOOK_ENV, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", ...extra });
 
 test("pre-push refuses the deploy branch, deletes and rewrites; passes a fast-forward and a new branch", () => {
-  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "prepush-"));
+  const dir = mkTmpDir("prepush-");
   try {
     const git = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", env: gitEnv() }).trim();
     git("init", "-q");
@@ -249,7 +250,7 @@ test("pre-push refuses the deploy branch, deletes and rewrites; passes a fast-fo
 // another author's commit since this checkout last pushed it, within the window, and we merged it → the push is refused
 // until APEX_FOREIGN_PUSH_OK=1; our own commits, old foreign commits, a first push and an AUTO-SYNC merge pass.
 test("pre-push refuses a push over another author's fresh commits; own, old, first-push and auto-sync shapes pass", () => {
-  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "prepush-foreign-"));
+  const dir = mkTmpDir("prepush-foreign-");
   try {
     // No remote needed: the hook reads the tracking ref's reflog (an "update by push" entry is what `git push` writes)
     // and local objects, exactly what a fetched-then-merged branch looks like before the next push.
@@ -310,7 +311,7 @@ test("pre-commit only honours the explicit guards-maintenance bypass", () => {
 });
 test("a real worktree commit isolates guard fixtures while preserving its branch and staged index", () => {
   fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
-  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "precommit-context-"));
+  const dir = mkTmpDir("precommit-context-");
   const base = path.join(dir, "base"), linked = path.join(dir, "linked"), other = path.join(dir, "other");
   const env = { ...HOOK_ENV, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", CLAUDECODE: "", APEX_SKIP_GUARDS: "" };
   // The regression itself must also be safe when a caller runs it from a hook.

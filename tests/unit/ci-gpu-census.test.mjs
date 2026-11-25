@@ -5,11 +5,11 @@ import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a gi
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import cp from "node:child_process";
 import path from "node:path";
 import { parse as parseYAML } from "yaml";
 import { ciWorkflow, gpuWorkflow, evalTemplate } from "../helpers/ci-workflow.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 test("path-filtered WebGPU census defers ordinary drafts and runs on ready or dispatch", () => {
   for (const [file, job] of [["perf-census-webgpu", "census"]]) {
@@ -183,7 +183,7 @@ test("gpu-census threads an entry input (api default; menu / menu-full = the pla
   assert.equal(uses.length, 4, "every game check (three/webgpu, three/webgl2, glx, wgx) must enter the plan-resolved way");
   // The plan's allowlist, executed, for a PUSH request too (the request JSON bypasses the choice list).
   const py = split.run.slice(split.run.indexOf("\n", split.run.indexOf("<<'PY'")) + 1).split("\nPY")[0];
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "census-plan-"));
+  const dir = mkTmpDir("census-plan-");
   const outOf = (env, req) => {
     if (req) { fs.mkdirSync(path.join(dir, ".github"), { recursive: true }); fs.writeFileSync(path.join(dir, ".github/gpu-census-request.json"), JSON.stringify(req)); }
     const r = cp.spawnSync("python3", ["-c", py], { cwd: dir, encoding: "utf8",

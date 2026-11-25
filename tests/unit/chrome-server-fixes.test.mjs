@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { materializeRuntime } from '../../tools/mcp/chrome-devtools-runtime.mjs';
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const INPUT_FRAGMENT = `                    await handle.asLocator().click({
                         count: request.params.dblClick ? 2 : 1,
@@ -18,7 +19,7 @@ const CONTEXT_FRAGMENT = `        await page.pptrPage.close({ runBeforeUnload: f
 const sha = value => crypto.createHash('sha256').update(value).digest('hex');
 
 function fixture() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chrome-server-fixes-'));
+  const root = mkTmpDir("chrome-server-fixes-");
   const source = path.join(root, 'source');
   const input = `const logger=()=>{}; export async function click(request,handle){\n${INPUT_FRAGMENT}\n}\n`;
   const context = `export class McpContext {\n    async closePage(page) {\n${CONTEXT_FRAGMENT} { return false; }\n}\n`;
