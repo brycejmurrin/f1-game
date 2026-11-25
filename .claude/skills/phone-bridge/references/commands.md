@@ -6,6 +6,7 @@
 - Menu route: nav and tap
 - Any control: tap, set, key, scroll
 - Driving: drive
+- Status comment
 - Cannot measure
 
 Every command is one comment holding one fence. The reply is one comment:
@@ -38,13 +39,13 @@ in `js/agent/apex-bridge.js`), not this table.
 | `gpuTest` | `op` start / stop / status / active | GPU TEST (`GpuTestRun`) |
 | `recorder` | `op` start / stop / isOn / json | PHONE TEST recorder |
 | `screen` | — | `{screen, state}`: the topmost visible screen (`title`, `select`, `setup`, `garage`, `loading`, `quali`, `results`, `pause`), else `drive-out` (the garage-out, state still `menu`) or `race` |
-| `tap` | one of `id`, `text` (the visible label, exact or prefix, case-blind), `data` ({name: value} for `data-<name>`), `tile` (a track id); `within` an id, `nth`; `until` a screen, `ms` | `{tapped, screen, state, ok}`: pointerdown, pointerup and click on the real control; hidden, disabled, not a control, ambiguous (add `nth`), or inside a denied area (§Any control) is refused with the reason |
+| `tap` | one of `id`, `text` (the visible label, exact or prefix, case-blind), `data` ({name: value} for `data-<name>`), `tile` (a track id); `within` an id, `nth`; `until` a screen, `ms`; `waitMs` (≤ 30 000) | `{tapped, screen, state, ok, waited}`: `waitMs` polls until the control is in the page, visible and enabled, then taps (a refusal never waits); pointerdown, pointerup and click on the real control; hidden, disabled, not a control, ambiguous (add `nth`), or inside a denied area (§Any control) is refused with the reason |
 | `set` | a control (`id` / `text` / `data`) and `value`; or `key` (a SETTINGS FILE key) and `value` | control: `{set, value, screen}` through its own UI (a SettingRow's chevron, a select's change, a checkbox's click, a range's input + change); key: `{key, was, now, reload: true}` |
 | `key` | `key` (Escape, Enter, Space, Tab, arrows, Home, End, PageUp, PageDown, Backspace), `id`, `shift` | `{key, to, prevented, screen}`: keydown + keyup on the focused element (or `id`) |
 | `scroll` | `id` (else the page) and one of `by` px, `to` top / bottom, `into` true | `{scrolled, top, height, view}` |
 | `nav` | `flow` tt / race, `track`, `weather`, `tod`, `entry` setup / garage / daily, `go` (default true) | `{ok, screen, state, ms, steps:[{step, ok, screen, ms}], door}`; starts on the title; `door` = `menuPrep().door` |
 | `drive` | ONE of `to` "box", `laps` 1-5, `seconds` 1-600; `ms` cap (240 000); `wait` false; or `stop` / `status` true | `{ok, screen, state, reason, inBox, pit, laps, steps:[{phase, t, s, kph}], pitActions}` (outer `ms` too): `value.ok` = goal met; `reason` box / laps / seconds / timeout / missed / lane-closed / touch / paused / state:… (§Driving) |
-| `batch` | `steps[]` of `{cmd, args}` | one result per step; stops at the first failure (or a `tap` / `nav` / `drive` whose `value.ok` is false); `reload` / `path` only last |
+| `batch` | `steps[]` of `{cmd, args}`, up to `BATCH_MAX` (20) | one result per step; stops at the first failure (or a `tap` / `nav` / `drive` whose `value.ok` is false); `reload` / `path` only last |
 | `reload` | — | `{reloading}` (may be lost), then a new hello |
 
 ## Recipes
@@ -142,12 +143,14 @@ assist: it starts only from this command and lets go on `stop`, a pause, a quit,
 - The bridge serves one command at a time, so a `drive` that waits blocks `stop`. For a long drive send
   `{"wait":false}` (answers `{started}` at once), then `{"status":true}` and `{"stop":true}`.
 - A TIME TRIAL holds the car in its box for the stop plus 4 s, and END TIME TRIAL exists only then: tap it in the SAME
-  batch (a separate comment is a 4 s poll plus GitHub's lag, too late).
+  batch with `waitMs` (a separate comment is a 4 s poll plus GitHub's lag, too late; #6581).
+- While `drive` holds the car the phone shows a CLAUDE DRIVING strip under the link badge (it lets touches through:
+  Bryce's touch still takes the car back, and the strip goes with any end of the drive).
 
 END TIME TRIAL, no human (Bryce on the title screen; one comment, ~2-3 min to the reply):
 
 ```apex-cmd
-{"cmd":"batch","args":{"steps":[{"cmd":"nav","args":{"flow":"tt","track":"monza"}},{"cmd":"drive","args":{"to":"box"}},{"cmd":"tap","args":{"id":"hud-end-session","until":"garage","ms":10000}},{"cmd":"wait","args":{"ms":1500}},{"cmd":"tap","args":{"id":"cs-arrival-skip"}},{"cmd":"wait","args":{"ms":1000}},{"cmd":"screen"},{"cmd":"snap","args":{"w":320}}]}}
+{"cmd":"batch","args":{"steps":[{"cmd":"nav","args":{"flow":"tt","track":"monza"}},{"cmd":"drive","args":{"to":"box"}},{"cmd":"tap","args":{"id":"hud-end-session","waitMs":3000,"until":"garage","ms":10000}},{"cmd":"tap","args":{"id":"cs-arrival-skip","waitMs":5000}},{"cmd":"wait","args":{"ms":1000}},{"cmd":"screen"},{"cmd":"snap","args":{"w":320}}]}}
 ```
 
 From ANY screen (a race running, the pause menu, a sheet open), the same check with no human at all. First, back
@@ -160,6 +163,14 @@ Read `steps[1].value.inBox` and `pitActions` (the box was reached and END TIME T
 stepped inside one call, so the screen freezes while it runs): `call rollout` with
 `[{"policy":"box","seconds":120}]`; `stoppedEarly.reason` `policy:box` is the box. No `to:"grid"`: nothing in the game
 reads a car parked on its grid slot (the note above).
+
+## Status comment
+
+#6581. While linked the phone keeps ONE ` ```apex-status ` comment on the issue (its id is stored on the device, so a
+reload edits the same one; a deleted one is posted afresh), edited about 5 s after each hello, every 3 min, on every
+visibility change and once when the link ends: `{at, linked, ended, sha, screen, state, visible, driving, served,
+last:{id, cmd, busy}, hello}`. `at` is the phone's clock. A stale `at` with `visible: false` is iOS pausing the
+page; `last.busy: true` is a long command still running. It is never a command (`apex-cmd` fences only).
 
 ## Cannot measure
 

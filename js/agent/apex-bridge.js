@@ -20,7 +20,11 @@
    MAX_REPLY chars (GitHub's comment limit is 65,536). The CLAUDE LINK badge counts commands; tapping it ends the link.
 
    DRIVING. `drive` gives the car to SoakRun's driver (to the pit box, or an autopilot lap) and takes it back on `stop`,
-   a pause, a quit, a hidden page or a real touch (DRIVING below).
+   a pause, a quit, a hidden page or a real touch (DRIVING below). A "CLAUDE DRIVING" banner shows while it holds the car.
+
+   STATUS (#6581). While linked, ONE `apex-status` comment per issue (its id kept on this device, so a reload edits the
+   same one) is edited every STATUS_MS and on every visibility change: build, screen, state, visible, last command id.
+   A phone iOS has paused reads as a stale `at`, not as silence.
 
    PERF COMMANDS. `path` pins the three.js path BENCHMARK pins (BenchRun.pathPrefs) and reloads, `bench` starts and
    reads a BenchRun, `snap` returns a small JPEG of the canvas, `batch` runs up to BATCH_MAX steps from one comment.
@@ -352,8 +356,9 @@ const ApexBridge = (function () {
   }
 
   // Several steps in one comment: one 4 s round trip instead of one each. Stops at the first failure; `reload` and
-  // a `path` change may only be the last step (the page is gone after them).
-  const BATCH_MAX = 10;
+  // a `path` change may only be the last step (the page is gone after them). 20 (#6581; was 10): a whole
+  // nav → drive → tap → snap recipe with its waits fits one comment.
+  const BATCH_MAX = 20;
   async function batch(args) {
     const steps = args && Array.isArray(args.steps) ? args.steps : null;
     if (!steps || !steps.length || steps.length > BATCH_MAX) throw new Error("batch.steps must hold 1–" + BATCH_MAX + " steps");
@@ -415,6 +420,8 @@ const ApexBridge = (function () {
     if (st === "menu" && (door() || {}).driveOut) return "drive-out";
     return st === "count" || st === "race" ? "race" : st;
   }
+  // A miss that a wait can cure (not in the page yet, hidden, disabled): `tap {waitMs}` retries these, nothing else.
+  const notYet = (msg) => Object.assign(new Error(msg), { notYet: true });
   function tileFor(track) {
     if (!/^[a-z0-9_-]{1,40}$/.test(String(track || ""))) throw new Error("tile must be a track id");
     const T = typeof Tracks !== "undefined" ? Tracks : null;
@@ -422,7 +429,7 @@ const ApexBridge = (function () {
     if (i < 0) throw new Error("unknown track: " + track);
     const strip = byId("sel-tracks");
     for (const r of (strip && strip.children) || []) if (r.dataset && r.dataset.trackIdx === String(i)) return r;
-    throw new Error("no " + track + " tile on the picker (open SELECT first)");
+    throw notYet("no " + track + " tile on the picker (open SELECT first)");
   }
   function press(el) {
     const mk = (type) => (typeof PointerEvent === "function"
@@ -451,7 +458,7 @@ const ApexBridge = (function () {
     if (a.id != null) {
       if (!/^[A-Za-z][\w-]{0,80}$/.test(String(a.id))) throw new Error("id must be an element id (letters, digits, - and _)");
       const el = byId(a.id);
-      if (!el) throw new Error("#" + a.id + " not in the page");
+      if (!el) throw notYet("#" + a.id + " not in the page");
       return [el, a.id];
     }
     const data = a.data && typeof a.data === "object" ? Object.entries(a.data) : null;
@@ -466,7 +473,7 @@ const ApexBridge = (function () {
     let hits = want == null ? pool : pool.filter((el) => labelOf(el) === want);
     if (want != null && !hits.length) hits = pool.filter((el) => labelOf(el).startsWith(want));
     const what = want != null ? "text:" + want : "data:" + data.map(([k, v]) => k + "=" + v).join(",");
-    if (!hits.length) throw new Error("no visible control matches " + what);
+    if (!hits.length) throw notYet("no visible control matches " + what);
     if (a.nth != null && !(Number.isInteger(a.nth) && a.nth >= 0)) throw new Error("nth must be a whole number from 0");
     const nth = a.nth != null ? a.nth : null;
     if (hits.length > 1 && nth == null) throw new Error(hits.length + " controls match " + what + " (" + hits.slice(0, 6).map((h) => h.id || h.tagName).join(", ") + "): add nth or within");
@@ -482,8 +489,8 @@ const ApexBridge = (function () {
     const forEl = el.tagName === "LABEL" ? (el.control || (attr(el, "for") ? byId(attr(el, "for")) : null)) : el;
     if (forEl && forEl.tagName === "INPUT" && forEl.type === "file") throw new Error(what + " opens a file picker");
     if (el.tagName === "A" && attr(el, "href") && !String(attr(el, "href")).startsWith("#")) throw new Error(what + " leaves the game");
-    if (!shown(el)) throw new Error(what + " is not visible (screen " + screenNow() + ")");
-    if (el.disabled || attr(el, "aria-disabled") === "true") throw new Error(what + " is disabled");
+    if (!shown(el)) throw notYet(what + " is not visible (screen " + screenNow() + ")");
+    if (el.disabled || attr(el, "aria-disabled") === "true") throw notYet(what + " is disabled");
     return el;
   }
   function tapEl(args) {
@@ -503,13 +510,24 @@ const ApexBridge = (function () {
     }
   }
   const SCREEN_NAMES = new Set(SCREENS.map((s) => s[1]).concat(["drive-out", "race"]));
+  // `waitMs` (#6581, capped TAP_WAIT_MAX): poll until the control is in the page, visible and enabled, then press it —
+  // END TIME TRIAL appears only once the car is in its box, so a tap sent with the drive no longer races it. Only a
+  // notYet miss is retried; a refused area, a bad name or an ambiguous label fails at once.
+  const TAP_WAIT_MAX = 30000;
   async function tap(args) {
     const a = args || {};
     if (a.until != null && !SCREEN_NAMES.has(a.until)) throw new Error("tap.until must be one of " + [...SCREEN_NAMES].join(", "));
-    const what = tapEl(a);
+    const wait = Math.max(0, Math.min(TAP_WAIT_MAX, Number(a.waitMs) || 0)), t0 = Date.now();
+    let what;
+    for (;;) {
+      try { what = tapEl(a); break; } catch (e) {
+        if (!e || !e.notYet || Date.now() - t0 >= wait) throw new Error(String((e && e.message) || e) + (wait && e && e.notYet ? " after " + wait + " ms" : ""));
+        await pause(100);
+      }
+    }
     const ms = Math.max(0, Math.min(NAV_GO_MS, Number(a.ms) || NAV_STEP_MS));
     const ok = a.until == null ? true : await until(() => screenNow() === a.until, ms);
-    return { tapped: what, screen: screenNow(), state: gameState(), ok };
+    return Object.assign({ tapped: what, screen: screenNow(), state: gameState(), ok }, wait ? { waited: Date.now() - t0 } : null);
   }
   // One SettingRow (rs-<row>): tap its › chevron until the select reads `want`, at most once per option.
   async function setRow(row, want) {
@@ -683,6 +701,12 @@ const ApexBridge = (function () {
     // Straight after `nav`'s RACE! the garage drive-out is still playing (state "menu"): wait for the session.
     await until(() => { const st = gameState(); return st === "race" || st === "count"; }, DRIVE_START_MS);
     const run = S.drive({ to: a.to, laps: a.laps, seconds: a.seconds != null ? Number(a.seconds) : undefined, ms });
+    // The banner goes when the drive ends for ANY reason (stop, a real touch, pause, hidden, quit, the link ending):
+    // every end resolves this promise. A newer drive owns the banner, so the replaced one's end does not hide it.
+    const mine = ++_drvTok;
+    drivingBanner(true);
+    const off = () => { if (mine === _drvTok) drivingBanner(false); };
+    run.then(off, off);
     if (a.wait === false) { run.catch(() => {}); return Object.assign({ started: true }, S.driveStatus()); }
     const r = await run;
     // In the box: wait for the HUD to show the pit actions, so a following `tap` in the same batch finds them.
@@ -690,6 +714,23 @@ const ApexBridge = (function () {
     // `ok` false when the goal was not met, so a batch stops before a tap that would miss.
     const ok = a.to === "box" ? r.inBox : r.reason === (a.laps != null ? "laps" : "seconds");
     return Object.assign({ ok, screen: screenNow(), state: gameState(), pitActions: END_IDS.filter((id) => shown(byId(id))) }, r);
+  }
+
+  // A visible "CLAUDE DRIVING" strip (#6581) so Bryce knows not to touch, and why a touch ends it. pointer-events none:
+  // the touch reaches the game, and SoakRun's real-input listener hands the car back.
+  let _drvTok = 0, _drvBanner = null;
+  function drivingBanner(on) {
+    if (typeof document === "undefined" || !document.body || typeof document.createElement !== "function") return;
+    if (!on) { if (_drvBanner) { try { _drvBanner.remove(); } catch (_) { /* gone */ } _drvBanner = null; } return; }
+    if (_drvBanner) return;
+    const b = _drvBanner = document.createElement("div");
+    b.id = "apex-bridge-driving";
+    b.setAttribute("role", "status");
+    b.textContent = "CLAUDE DRIVING · A TOUCH TAKES THE CAR BACK";
+    b.style.cssText = "position:fixed;top:calc(max(4px,env(safe-area-inset-top)) + 26px);left:50%;transform:translateX(-50%);"
+      + "z-index:99999;pointer-events:none;padding:6px 14px;border-radius:8px;font:700 13px/1.3 system-ui,sans-serif;"
+      + "letter-spacing:.08em;background:rgba(217,119,87,.95);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.35)";
+    document.body.appendChild(b);
   }
 
   const CMDS = {
@@ -760,13 +801,15 @@ const ApexBridge = (function () {
     return out;
   }
 
+  // `path` is under this issue; `o.repoPath` is under the repo (a comment edit). `o.run`: a run that just ended.
   function gh(path, opts) {
-    const o = opts || {};
-    const headers = { Accept: "application/vnd.github+json", Authorization: "Bearer " + _run.token, "X-GitHub-Api-Version": "2022-11-28" };
+    const o = opts || {}, run = o.run || _run;
+    const headers = { Accept: "application/vnd.github+json", Authorization: "Bearer " + run.token, "X-GitHub-Api-Version": "2022-11-28" };
     if (o.etag) headers["If-None-Match"] = o.etag;
     if (o.body) headers["Content-Type"] = "application/json";
-    return fetch(API + "/repos/" + REPO + "/issues/" + _run.issue + path, {
-      method: o.body ? "POST" : "GET", headers, body: o.body ? JSON.stringify(o.body) : undefined, cache: "no-store",
+    return fetch(API + "/repos/" + REPO + (o.repoPath || "/issues/" + run.issue + path), {
+      method: o.method || (o.body ? "POST" : "GET"), headers, body: o.body ? JSON.stringify(o.body) : undefined, cache: "no-store",
+      keepalive: !!o.keepalive,
     });
   }
   const fence = (obj) => "```apex-result\n" + JSON.stringify(obj) + "\n```";
@@ -801,7 +844,9 @@ const ApexBridge = (function () {
     for (const c of cmds) {
       if (_run !== run) break;
       run.seen.add(c.id);
+      run.last = { id: c.id, cmd: c.msg && c.msg.cmd, busy: true };
       const res = await handle(c.msg);
+      run.last.busy = false;
       run.served++;
       paintBadge();
       await post(Object.assign({ re: c.id, cmd: c.msg && c.msg.cmd }, res));
@@ -810,6 +855,49 @@ const ApexBridge = (function () {
     // the unserved commands (`seen` drops the ones already handled) instead of skipping past them.
     if (_run === run) run.since = newest;
     return cmds.length;
+  }
+
+  // STATUS (#6581): one comment, edited in place. A long batch blocks the poll chain, not this timer, so `last.busy`
+  // shows it running. A hidden page posts with keepalive (iOS may freeze the page right after).
+  const STATUS_MS = 180000, STATUS_FIRST_MS = 5000;
+  const statusKey = (issue) => "apex26.bridgeStatus." + issue;
+  function statusOf(run, ended) {
+    const d = typeof document !== "undefined" ? document : null;
+    let sha = null, screen = null, driving = null;
+    try { const m = d && d.querySelector ? d.querySelector('meta[name="apex-sha"]') : null; sha = m ? m.content : null; } catch (_) { /* no head */ }
+    try { screen = screenNow(); } catch (_) { /* no DOM */ }
+    try { driving = typeof SoakRun !== "undefined" && SoakRun.driving ? !!SoakRun.driving() : null; } catch (_) { /* no driver */ }
+    return { status: true, v: V, at: new Date().toISOString(), linked: !ended, ended: ended || undefined, sha, screen,
+      state: gameState(), visible: d ? !d.hidden : null, driving, served: run.served, last: run.last || null, hello: run.cutoff };
+  }
+  async function postStatus(run, ended, keepalive) {
+    if (run.statusBusy) return null;
+    run.statusBusy = true;
+    try {
+      const body = { body: "```apex-status\n" + JSON.stringify(statusOf(run, ended)) + "\n```" };
+      let id = run.statusId || Number(raw(statusKey(run.issue))) || 0;
+      if (id) {
+        const r = await gh("", { run, repoPath: "/issues/comments/" + id, method: "PATCH", body, keepalive });
+        if (r.ok) { run.statusId = id; return id; }
+        if (r.status !== 404) throw new Error("edit " + r.status);   // 404: deleted, post a fresh one
+      }
+      const r = await gh("/comments", { run, body, keepalive });
+      if (!r.ok) throw new Error("post " + r.status);
+      id = (await r.json()).id;
+      run.statusId = id;
+      rawSet(statusKey(run.issue), String(id));
+      return id;
+    } catch (e) { say("status failed: " + e.message); return null; } finally { run.statusBusy = false; }
+  }
+  function armStatus(ms) {
+    const run = _run;
+    if (!run) return;
+    clearTimeout(run.statusTimer);
+    run.statusTimer = setTimeout(async () => {
+      if (_run !== run) return;
+      await postStatus(run);
+      if (_run === run) armStatus(STATUS_MS);
+    }, ms);
   }
 
   function schedule() {
@@ -827,7 +915,8 @@ const ApexBridge = (function () {
 
   async function start(issue, tok) {
     if (_run) return false;
-    _run = { issue, token: tok, cutoff: null, since: null, etag: null, seen: new Set(), served: 0, backoff: 0, timer: null, state: "connecting" };
+    _run = { issue, token: tok, cutoff: null, since: null, etag: null, seen: new Set(), served: 0, backoff: 0, timer: null, state: "connecting",
+      last: null, statusId: 0, statusTimer: null, statusBusy: false, onVis: null };
     paintBadge();
     try {
       const hello = await post({ hello: true, facts: facts() });
@@ -837,6 +926,10 @@ const ApexBridge = (function () {
       paintBadge();
       say("linked to issue #" + issue);
       schedule();
+      armStatus(STATUS_FIRST_MS);
+      const run = _run;
+      run.onVis = () => { if (_run === run) postStatus(run, null, !!document.hidden); };
+      try { document.addEventListener("visibilitychange", run.onVis); } catch (_) { run.onVis = null; }
       return true;
     } catch (e) {
       // 401 on the hello is the token itself (wrong, expired, revoked, cut short): forget it and ask again, or every
@@ -854,8 +947,14 @@ const ApexBridge = (function () {
   function stop(why) {
     if (!_run) return;
     try { if (typeof SoakRun !== "undefined" && SoakRun.driving && SoakRun.driving()) SoakRun.driveStop("link ended"); } catch (_) { /* no driver */ }
-    clearTimeout(_run.timer);
+    _drvTok++;
+    drivingBanner(false);
+    const run = _run;
+    clearTimeout(run.timer);
+    clearTimeout(run.statusTimer);
+    try { if (run.onVis) document.removeEventListener("visibilitychange", run.onVis); } catch (_) { /* no document */ }
     _run = null;
+    if (run.statusId) postStatus(run, why || "stopped");   // the last edit says the link ended, and why
     say("link ended: " + (why || "stopped"));
     paintBadge(why || "ended");
   }
@@ -959,6 +1058,7 @@ const ApexBridge = (function () {
 
   boot();
   return { V, REPO, CALL_DENY, CALL_DENY_PREFIX, callAllowed, TAP_DENY, CMDS, issueOf, handle, pickCommands, pollOnce, start, stop, boot, frames, facts, display, geom, tokenShape,
+    status: () => (_run ? postStatus(_run) : Promise.resolve(null)), BATCH_MAX,
     active: () => !!_run };
 })();
 Object.freeze(ApexBridge);
