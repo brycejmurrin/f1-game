@@ -162,11 +162,13 @@ test("15-F5: a green draft run is reused only on its first attempt and the same 
     const out = path.join(dir, "out");
     const rec = cp.spawnSync("bash", [script, "--record"], { encoding: "utf8", cwd: ROOT,
       env: { ...process.env, GITHUB_REPOSITORY: "o/r", GITHUB_EVENT_NAME: "pull_request", GITHUB_OUTPUT: out, SCOPE_MODE: "full", REUSED_MODE: "" } });
-    assert.match(rec.stdout, /^::notice title=apex-guards::mode=full base=[0-9a-f]{40}$/m, rec.stderr);
+    const headTree = cp.execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd: ROOT, encoding: "utf8" }).trim();
+    assert.match(rec.stdout, new RegExp(`^::notice title=apex-guards::mode=full base=[0-9a-f]{40} tree=${headTree}$`, "m"), rec.stderr);
     assert.equal(fs.readFileSync(out, "utf8"), "guards_mode=full\n");
     const odd = cp.spawnSync("bash", [script, "--record"], { encoding: "utf8", cwd: ROOT,
       env: { ...process.env, GITHUB_REPOSITORY: "o/r", GITHUB_EVENT_NAME: "schedule", GITHUB_OUTPUT: "", SCOPE_MODE: "weird" } });
-    assert.equal(odd.stdout, "::notice title=apex-guards::mode=unknown base=none\n", "an unexpected scope is recorded as unknown, off a PR there is no base");
+    assert.equal(odd.stdout, `::notice title=apex-guards::mode=unknown base=none tree=${headTree}\n`,
+      "an unexpected scope is recorded as unknown, off a PR there is no base; the tree is the checkout's (#6557 P1)");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   assert.match(ci, /bash tools\/ci\/reuse-draft-fast\.sh --record/, "tooling A records its guards scope");
 });

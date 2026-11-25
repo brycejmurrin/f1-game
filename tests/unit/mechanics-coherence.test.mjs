@@ -114,8 +114,13 @@ test("every difficulty carries both dimensions, the ladder is monotonic, and no 
   vm.createContext(ctx); vm.runInContext(src, ctx);
   const C = ctx.window.PhysicsConsts, DIFF = C.DIFF;
   const order = ["easy", "normal", "hard"];
+  // `corner` is corner speed relative to the AI's own grip envelope (AiDrive.diffCorner). A level may go past 1
+  // (HARD), but never past the PLAYER's envelope: the player has PLAYER_GRIP more lateral grip, sqrt of it in
+  // corner speed. Above that the AI out-corners a same-spec player, the corner twin of the straight-line rule below.
+  const tune = readFileSync(new URL("../../js/physics/drive-tune.js", import.meta.url), "utf8");
+  const playerCorner = Math.sqrt(parseFloat(tune.match(/PLAYER_GRIP: ([0-9.]+)/)[1]));
   for (const k of order) {
-    assert.ok(DIFF[k].corner > 0 && DIFF[k].corner <= 1, `${k} corner ${DIFF[k].corner} is a real factor at or below the grip model`);
+    assert.ok(DIFF[k].corner > 0 && DIFF[k].corner <= playerCorner, `${k} corner ${DIFF[k].corner} is a real factor at or below the player's grip envelope ${playerCorner.toFixed(4)}`);
     assert.ok(DIFF[k].ai > 0, `${k} has a pace scale`);
     assert.ok(DIFF[k].err > 0, `${k} has a mistake-rate scale`);
   }

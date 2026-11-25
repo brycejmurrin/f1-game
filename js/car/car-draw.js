@@ -1657,6 +1657,13 @@ const CarDraw = (function () {
         const co = coOpt(paint), cars = G.cars;
         _primeWheelOpts.emissive = night ? 0.12 : 0;
         const wo = coOpt(_primeWheelOpts);
+        // #6485: shared stripe (4/car, per colour) + far wheels (2F 2R/rival), at most-in-view counts; any car may fit an AI compound.
+        const rings = new Map(), AI = typeof TyreModel !== "undefined" && TyreModel.AI_CLASS;
+        const ring = (col, n) => { const k = String(col), r = rings.get(k); if (!r) rings.set(k, { col, n }); else r.n = Math.min(cars.length, r.n + n); };
+        if (AI) for (const k in AI) if (AI[k].colour) ring(AI[k].colour, cars.length);
+        for (const c of cars) if (c && c.tyre && c.tyre.colour) ring(c.tyre.colour, 1);
+        for (const r of rings.values()) { const m = getCompoundRing(r.col); for (let k = 0; k < r.n * 4; k++) d(m, wo); }
+        const fw = FieldLod.on ? getFarWheels() : null;
         for (let i = 0; i < cars.length; i++) {
           const c = cars[i];
           if (!c) continue;
@@ -1678,6 +1685,7 @@ const CarDraw = (function () {
           for (const b of [0, 1, 0.5]) { deps.drawAeroFlaps(pt, aSt.val, b, Z, paint, aSt.aero, null, b !== 0.5); n++; }
           const wm = getFieldWheelMeshes(c.team, c);
           if (wm) for (let k = 0; k < 2; k++) { d(wm.F, wo); d(wm.R, wo); d(wm.FFixed, wo); d(wm.RFixed, wo); }
+          if (fw) for (let k = 0; k < 2; k++) { d(fw.F, wo); d(fw.R, wo); }
         }
       }
       return n;

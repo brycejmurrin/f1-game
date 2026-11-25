@@ -289,7 +289,7 @@
     ],
     "SubagentStop": [
       {
-        "matcher": "^(code-hunter|finding-verifier|prior-art-scout|surface-reviewer|physics-contract-auditor|ci-red-triage|pr-reviewer|worker)$",
+        "matcher": "^(code-hunter|finding-verifier|prior-art-scout|surface-reviewer|physics-contract-auditor|ci-red-triage|pr-reviewer|gardener|session-reader|worker)$",
         "hooks": [
           {
             "type": "command",

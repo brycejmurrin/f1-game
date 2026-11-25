@@ -28,6 +28,7 @@
 //   node tools/ci/session-transcript.mjs <page.txt> --raw         # keep every quota-retry row (default folds them)
 //   node tools/ci/session-transcript.mjs <page.txt>... --session <id> --session-json <saved get_session>   # refuse a page that is not that session's
 //   node tools/ci/session-transcript.mjs <page.txt>... --tally skills,cache-breaks   # Skill calls by name; turns whose cache read fell > 50 %
+//   node tools/ci/session-transcript.mjs <page.txt>... --tally agents   # per thread (main / subagent type): lsp · grep · read · browser shares
 //
 // MISATTRIBUTION (tx-bryce-routines-failed X3, 2026-10-26): `list_events` on an archived session can return ANOTHER
 // session's events (one that later used the same container); 2 of Bryce's 4 own sessions read as someone else's. The
@@ -108,13 +109,15 @@ export function normalize(rawEvents) {
   for (const { k, b, at } of evs) {
     const t = hhmmss(at);
     const sub = b.parent_tool_use_id || null;
+    const agent = sub ? String(b.subagent_type || "subagent") : "main";
     if (k === "assistant") {
       for (const c of b.message?.content || []) {
         if (c.type === "text" && oneLine(c.text)) rows.push({ t, kind: "say", tag: "SAY", text: oneLine(c.text), sub });
         if (c.type === "tool_use") {
           const row = { t, kind: "call", tag: callTag(c.name), tool: c.name, ...(c.name === "Skill" && c.input?.skill ? { skill: String(c.input.skill) } : {}),
             text: `${c.name.startsWith("mcp__") ? mcpName(c.name) + " " : callTag(c.name) === "TOOL" ? c.name + " " : ""}${describeCall(c.name, c.input)}`,
-            note: c.input?.description && c.name === "Bash" ? oneLine(c.input.description) : "", sub, id: c.id };
+            note: c.input?.description && c.name === "Bash" ? oneLine(c.input.description) : "", sub, agent, id: c.id,
+            ...(c.name === "Bash" ? { cmd: String(c.input?.command || "") } : {}) };
           calls.set(c.id, row);
           rows.push(row);
         }
@@ -365,6 +368,38 @@ export function tallySkills(rows) {
   return `= skills ${list.reduce((n, [, c]) => n + c, 0)} calls${list.length ? `: ${list.map(([k, n]) => `${k}×${n}`).join(" ")}` : " (none on these pages)"}`;
 }
 
+// --tally agents: per thread (main, or the subagent_type a call ran under), how the calls split by METHOD —
+// apex-lsp (the MCP tools or the lsp-mcp.mjs shell), text search (Grep, or a Bash pipeline that STARTS with
+// grep/rg/git grep; a `| grep` filter is not a search), file reads (Read, or cat/sed -n/head/tail first), browser
+// MCP (playwright, chrome-devtools, js-debugger). The audit in docs/notes/AGENT-ROLES-2026-11-25.md: a card's
+// `tools:` list, not its prose, decides these shares. Pure; the hand-back pseudo-tool is not a call.
+const BROWSER = /^mcp__(playwright[^_]*|chrome-devtools|js-debugger|browserstack)__/;
+export function methodOf(row) {
+  const t = row.tool || "";
+  if (t.startsWith("mcp__apex-lsp__")) return "lsp";
+  if (t === "Grep") return "grep";
+  if (t === "Read") return "read";
+  if (BROWSER.test(t)) return "browser";
+  if (t !== "Bash") return "other";
+  const heads = String(row.cmd || "").split(/&&|\|\||;|\n/).map((seg) => seg.trim().replace(/^cd \S+\s*/, "").replace(/^\(\s*/, ""));
+  if (heads.some((h) => /(^|\s)node \S*lsp-mcp\.mjs\b/.test(h))) return "lsp";
+  if (heads.some((h) => /^(rg|grep|egrep|git grep)\b/.test(h))) return "grep";
+  if (heads.some((h) => /^(cat|sed -n|head|tail|nl)\b/.test(h))) return "read";
+  return "bash";
+}
+export function tallyAgents(rows) {
+  const by = {};
+  for (const r of rows) {
+    if (r.kind !== "call" || !r.tool || r.tool === "SubagentHandback") continue;
+    const a = (by[r.agent || "main"] ||= { calls: 0, lsp: 0, grep: 0, read: 0, browser: 0, bash: 0, other: 0 });
+    a.calls++; a[methodOf(r)]++;
+  }
+  const pct = (n, d) => `${d ? Math.round((100 * n) / d) : 0}%`;
+  const list = Object.entries(by).sort((x, y) => (x[0] === "main" ? -1 : y[0] === "main" ? 1 : y[1].calls - x[1].calls));
+  if (!list.length) return "= agents 0 calls (none on these pages)";
+  return list.map(([k, a]) => `= agent ${k} calls ${a.calls} · lsp ${a.lsp} (${pct(a.lsp, a.calls)}) · grep ${a.grep} (${pct(a.grep, a.calls)}) · read ${a.read} · browser ${a.browser} · bash ${a.bash} · other ${a.other}`).join("\n");
+}
+
 // --tally cache-breaks: main-thread turns whose cache read fell by more than CACHE_BREAK_FALL against the turn before
 // (a prompt-cache miss re-bills the whole prefix at the write rate). Input: contextRows(). Pure.
 export const CACHE_BREAK_FALL = 0.5;
@@ -408,7 +443,7 @@ export function eventsFromJsonl(text) {
   });
 }
 
-export const TALLY = ["skills", "cache-breaks"];
+export const TALLY = ["skills", "cache-breaks", "agents"];
 const VALUE_FLAGS = ["--only", "--grep", "--width", "--cap", "--title", "--session", "--session-json", "--tally"];
 const BOOL_FLAGS = ["--hooks", "--json", "--summary", "--raw", "--ctx", "--digest", "--help"];
 
@@ -471,6 +506,7 @@ function main() {
   if (opts.tally.length) {
     if (opts.tally.includes("skills")) console.log(tallySkills(normalize(events)));
     if (opts.tally.includes("cache-breaks")) console.log(renderCacheBreaks(contextRows(events)));
+    if (opts.tally.includes("agents")) console.log(tallyAgents(normalize(events)));
     return;
   }
   if (opts.ctx) { const c = contextRows(events); console.log(opts.json ? JSON.stringify(c) : renderCtx(c, opts.cap)); return; }

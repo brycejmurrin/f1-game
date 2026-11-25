@@ -147,8 +147,8 @@ const ScreenLooks = (function () {
   const knobOf = (s, k) => { for (const n of s.knobs) if (n.k === k) return n; return null; };
 
   // ── store ───────────────────────────────────────────────────────────────
-  // The same test as js/ui/scale.js phoneUi(), asked on every read (a rotation keeps the short side).
-  const phone = () => { try { return typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(pointer: coarse)").matches && Math.min(window.innerWidth, window.innerHeight) <= 500; } catch (_) { return false; } };
+  // UiScale.phone() (js/ui/scale.js), which holds the viewport read until a resize (#6487); inline without it.
+  const phone = () => { try { if (typeof UiScale !== "undefined") return UiScale.phone(); return typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(pointer: coarse)").matches && Math.min(window.innerWidth, window.innerHeight) <= 500; } catch (_) { return false; } };
   /** What an UNSET knob reads on this device: `phone` on a phone, else `def`. */
   const shipDef = (n) => (n.phone !== undefined && phone() ? n.phone : n.def);
   function clampKnob(n, v) {

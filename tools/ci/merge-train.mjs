@@ -26,8 +26,28 @@
 //
 // Bisect on red (trainHistory): a closed, unmerged train of n cars caps the next train at floor(n/2) cars, so the
 // suspect set halves each round; a car that was alone in a red train is left out until its head changes. A train
-// closed because a car moved or lost `land` is `stale`, not red. A train that goes red while its base (the deploy tip
+// closed because a car moved or lost `land` is `stale`, not red. So is a train whose `gate` success stays unarmed
+// (stuckGreen, T1 of the #6379 land-trigger note). A train that goes red while its base (the deploy tip
 // it was built on) is itself red is `stale` too (redOnRedTip): its cars were never the suspects. One train is open at a time.
+//
+// ORPHANS AND THE DEFAULT LANE (#6528, 2026-11-25; Bryce ~07:00Z "1 + 2 + 4 now"): a car whose own `gate` reads success
+// used to be skipped as "it arms alone". #6444 (gate success 05:20Z) lost all three arms to a moving tip, land.yml's
+// retry budget was spent ("the next train re-gates"), and train #6524 then skipped it the same way: orphaned ~1h20m
+// (#6451 too). Now only a PR that IS landing alone is left out: auto-merge armed, or a land run for it still queued or
+// running (landRunsInFlight). Every other green `land` PR boards, so with 2 or more of them a train is the lane, and a
+// lone orphan rides a 1-car train instead of waiting for a push.
+//
+// FRAGMENT RE-SNAP (#6528: #6522 and #6421 went red after another PR merged, js/game.js codeLines/lines over by 1–2).
+// A topic branch's tests/data/ratchets.d fragment is snapped against ITS base: a touched file's ceiling is set to its
+// value, so a LOOSE base ceiling is folded into the delta. Once a sibling spends that slack, the merge is over by the
+// slack, though neither branch grew past its own budget. resnapTree re-snaps such a row on the fold the way
+// `ratchets.mjs --update` would on the car's own branch (mergeFragment: delta += value − ceiling), bounded so that a
+// genuine overage still fails: only a line-count row (AUTO_RAISE_METRICS) of a file the car itself changed, never on a
+// row the fold was already over before the car, within the commit hook's own auto-raise (autoRaiseBlockReason), and
+// never past the car's own growth since its merge base (the re-snapped delta ≤ that growth, i.e. the car gets back
+// exactly the slack its own snap counted on). Pure git + JSON: no PR code, so the build job may run it, and verifyTrain
+// re-derives it, so a train head is still a proof. Tree metrics need PR code (boot wall) or are diff-relative already
+// (pin counters): the screen and the gate measure those as before.
 //
 // Exit: 0 done (or nothing to do), 1 usage, API or git error.
 import { spawnSync } from "node:child_process";
@@ -37,14 +57,19 @@ import { fileURLToPath } from "node:url";
 import { api, DEPLOY, REPO } from "./github-api.mjs";
 import { readDeployTip } from "./lib/deploy-tip.mjs";
 import { runTipGate, tipView } from "./lib/tip-gate.mjs";
+import { applyFragments, AUTO_RAISE_METRICS, autoRaiseBlockReason, entry as ratchetEntry, fragmentName, mergeFragment, METRICS } from "../check/ratchets.mjs";
+import { stableStringify } from "../check/merge-hygiene.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 /** A train PR's head branch prefix: merge-gate treats only these as trains. */
 export const TRAIN_PREFIX = "train/";
 /** The label the builder adds to a train PR (with `land`), so boards and the dispatcher can tell it apart. */
 export const TRAIN_LABEL = "train";
-/** Cars per train (Bryce: "about 5 PRs at a time"; 2026-11-18 ~19:50Z "Bigger trains 5→10"). */
-export const TRAIN_MAX = 10;
+/** Cars per train (Bryce: "about 5 PRs at a time"; 2026-11-18 ~19:50Z "Bigger trains 5→10"; #6528 10→12: once trains
+ *  are the default lane the cap can bind, and the 41 trains since the screen (2026-11-20..25) fit a per-car red rate
+ *  of about 0.105, optimum ~9 cars per shot, ~11–12 once the base-moved fragment reds are re-snapped. Note
+ *  docs/notes/MERGE-TRAIN-2026-11-18.md §Cap). */
+export const TRAIN_MAX = 12;
 /** How far back closed trains count for the bisect (hours). */
 export const HISTORY_H = 24;
 /** The manifest in a train PR body: one JSON object, `{"base":sha,"cars":[{"pr":n,"head":sha,"ref":branch}]}`. */
@@ -96,7 +121,7 @@ export function trainBody({ base, cars, dropped = [] }) {
     "## Goal", "",
     `Merge train (docs/notes/MERGE-TRAIN-2026-11-18.md): ${cars.length} green \`land\` PR${cars.length === 1 ? "" : "s"} merged onto the deploy tip \`${base.slice(0, 12)}\` with merge commits, so one CI run and one \`gate\` land them all. Each car's own rows (hold, plan, ci, config, raise) are re-read by the gate.`, "",
     "## Plan", "",
-    ...cars.map((c) => `- [x] #${c.pr} \`${c.head.slice(0, 12)}\` merged clean`),
+    ...cars.map((c) => `- [x] #${c.pr} \`${c.head.slice(0, 12)}\` merged clean${c.resnapped?.length ? ` (ratchets re-snapped on the fold: ${c.resnapped.map(resnapLine).join(", ")})` : ""}`),
     "- [ ] land: CI green on this head, then `gate` (each car's own rows) arms it", "",
   ];
   if (dropped.length) lines.push("## Not in this train", "", ...dropped.map((d) => `- #${d.pr}: ${d.why}`), "");
@@ -106,8 +131,9 @@ export function trainBody({ base, cars, dropped = [] }) {
 
 // ---- picking --------------------------------------------------------------------------------------------
 
-/** Candidate cars from open PRs (pulls list rows), in landing order: `priority` first, then oldest. Pure. */
-export function carCandidates(pulls, { exclude = new Set(), gateOk = new Set() } = {}) {
+/** Candidate cars from open PRs (pulls list rows), in landing order: `priority` first, then oldest. `solo` maps a PR
+ *  number to why it is landing alone (soloLane); nothing else keeps a green car off the train. Pure. */
+export function carCandidates(pulls, { exclude = new Set(), solo = new Map() } = {}) {
   const out = [], skipped = [];
   for (const p of pulls || []) {
     const n = p?.number, names = labelNames(p?.labels), head = String(p?.head?.sha || "").toLowerCase(), ref = String(p?.head?.ref || "");
@@ -115,11 +141,52 @@ export function carCandidates(pulls, { exclude = new Set(), gateOk = new Set() }
     const why = p.state !== "open" ? "not open" : p.draft ? "draft" : names.includes("hold") ? "hold" : ref.startsWith(TRAIN_PREFIX) ? "a train itself"
       : p.head?.repo?.full_name && p.base?.repo?.full_name && p.head.repo.full_name !== p.base.repo.full_name ? "a fork"
       : p.base?.ref && p.base.ref !== DEPLOY ? `base is ${p.base.ref}` : exclude.has(`${n}@${head}`) ? "alone in a red train at this head"
-      : gateOk.has(n) ? "its own gate already passed (it arms alone)" : "";
+      : solo.get(n) || "";
     if (why) skipped.push({ pr: n, why }); else out.push({ pr: n, head, ref, priority: names.includes("priority"), created: String(p.created_at || "") });
   }
   out.sort((a, b) => (b.priority - a.priority) || a.created.localeCompare(b.created) || a.pr - b.pr);
   return { cars: out.map(({ pr, head, ref }) => ({ pr, head, ref })), skipped };
+}
+
+/** Land runs still queued or running for one PR (#6528), from actions/workflows/land.yml/runs pages: a
+ *  pull_request_target run names its PR in `pull_requests`, a retry dispatch in its title (`Land retry pr=<n> …`),
+ *  and a `workflow_run` re-gate after a PR's CI (whose `pull_requests` can be empty, and whose run-name is '') carries
+ *  that PR's head as `head_sha` / `head_branch` (`heads`: [{number, head:{sha, ref}}], the landing PRs; PR #6561 review).
+ *  Deploy-branch runs (sweep, Pages, schedule) name no PR and do not count, nor does `selfRun`, the run building
+ *  the train. → Map(pr → run id). Pure. */
+/** Pages of 100 read per run status before the builder refuses (landRunsInFlight). */
+export const LAND_RUN_PAGES = 5;
+export const LIVE_RUN = new Set(["queued", "in_progress", "waiting", "requested", "pending"]);
+export function landRunsInFlight(pages, { selfRun = "", heads = [] } = {}) {
+  const out = new Map();
+  for (const page of pages || []) for (const r of page?.workflow_runs || []) {
+    if (!r || !LIVE_RUN.has(String(r.status || "")) || String(r.id) === String(selfRun)) continue;
+    const prs = (r.pull_requests || []).map((p) => Number(p?.number)).filter(Number.isInteger);
+    const m = /^Land retry pr=(\d+)\b/.exec(String(r.display_title || ""));
+    if (m) prs.push(Number(m[1]));
+    const sha = String(r.head_sha || "").toLowerCase(), branch = String(r.head_branch || "");
+    for (const p of heads) {
+      const h = String(p?.head?.sha || "").toLowerCase(), ref = String(p?.head?.ref || "");
+      if ((h && h === sha) || (ref && branch !== DEPLOY && ref === branch)) prs.push(p.number);
+    }
+    for (const n of prs) if (!out.has(n)) out.set(n, r.id);
+  }
+  return out;
+}
+
+/** Which green `land` PRs are landing alone (#6528) → Map(pr → why). Armed (auto-merge on): GitHub merges it. Gate
+ *  success with a land run still in flight: that run may arm it. Gate success, unarmed, no run: an ORPHAN (its arms
+ *  lost to the tip, the retry budget is spent) and a train candidate, never "arms alone". Pure. */
+export function soloLane(landing, { gate = () => "", runs = new Map() } = {}) {
+  const solo = new Map(), orphans = new Set();
+  for (const p of landing || []) {
+    const n = p?.number;
+    if (p?.auto_merge) { solo.set(n, "armed: auto-merge is on (it lands alone)"); continue; }
+    if (gate(p) !== "success") continue;
+    if (runs.has(n)) solo.set(n, `its own gate passed and land run ${runs.get(n)} is still in flight (it may arm alone)`);
+    else orphans.add(n);
+  }
+  return { solo, orphans };
 }
 
 function eligibleManifest(p, pulls) {
@@ -193,6 +260,96 @@ export function trainHistory(closed, { now = Date.now(), hours = HISTORY_H, max 
 /** The commit message of one car's merge, as GitHub writes it. Pure. */
 export const carMessage = (c, owner = REPO.split("/")[0]) => `Merge pull request #${c.pr} from ${owner}/${c.ref || `pr-${c.pr}`}\n\nmerge-train car #${c.pr}`;
 
+// ---- ratchet fragment re-snap (#6528; FRAGMENT RE-SNAP in the header) ------------------------------------
+
+export const RATCHETS_JSON = "tests/data/ratchets.json";
+export const FRAG_DIR_REL = "tests/data/ratchets.d";
+const resnapLine = (r) => `${r.file} ${r.metric} ${r.over > 0 ? "+" : ""}${r.over}`;
+
+/** One over row on the fold after a car's merge → { ok, why }. `over` = value − effective ceiling on the fold,
+ *  `parentOver` = the same row before this car, `own` = the car's own growth of the row since its merge base (null:
+ *  unmeasurable), `delta` = what the car's fragment already carries for it, `baseSlack` = ceiling − value of the row at
+ *  the car's merge base (the room its own snap counted on), `slackMax` = the entry's slack rule. The room is
+ *  min(own − delta, baseSlack): own − delta past baseSlack means the car was over its own ceiling at its head. Pure. */
+export function resnapVerdict({ file, metric, over, parentOver = 0, own, delta = 0, baseSlack, slackMax }) {
+  if (!(over > 0)) return { ok: false, why: "not over" };
+  if (parentOver > 0) return { ok: false, why: `the fold was already over by ${parentOver} before this car: not its overage` };
+  const hook = autoRaiseBlockReason({ file, metric, over, slackMax, tree: false });
+  if (hook) return { ok: false, why: hook };
+  if (!Number.isFinite(own) || !Number.isFinite(baseSlack)) return { ok: false, why: "its own growth since its merge base is unmeasurable" };
+  const room = Math.max(0, Math.min(own - delta, baseSlack));
+  if (over > room) return { ok: false, why: `over by ${over}, but the car grows it by ${own} since its merge base (slack ${baseSlack} there) and its fragment carries ${delta}: growth past its own budget` };
+  return { ok: true, why: "" };
+}
+
+/** Re-snap `car`'s fragment on `tree` (the clean merge of the car onto `parent`). Writes only git objects (a blob and
+ *  a tree, through a private index file). Deterministic in its inputs, so verifyTrain re-derives it.
+ *  → { tree, resnapped: [{file, metric, over}], refused: [{file, metric, over, why}] }. */
+export function resnapTree({ tree, parent, car, base, git }) {
+  const out = { tree, resnapped: [], refused: [] };
+  const name = fragmentName(car?.ref || "");
+  if (!name) return out;
+  const blob = (rev, p) => { const r = git(["cat-file", "blob", `${rev}:${p}`], { maxBuffer: 64 << 20 }); return r.status === 0 ? r.stdout : null; };
+  const effective = (rev) => {
+    const raw = blob(rev, RATCHETS_JSON);
+    if (raw === null) return null;
+    const ls = git(["ls-tree", "--name-only", `${rev}:${FRAG_DIR_REL}`]);
+    const frags = (ls.status === 0 ? ls.stdout.split("\n").filter((f) => f.endsWith(".json")).sort() : [])
+      .map((f) => ({ name: f, data: JSON.parse(blob(rev, `${FRAG_DIR_REL}/${f}`) || "{}") }));
+    return { data: applyFragments(JSON.parse(raw), frags), frag: frags.find((f) => f.name === name)?.data || null };
+  };
+  const mbR = git(["merge-base", car.head, base]);
+  if (mbR.status !== 0) return out;
+  const mb = mbR.stdout.trim();
+  const touched = new Set(git(["diff", "--name-only", "--no-renames", mb, car.head]).stdout.split("\n").filter(Boolean));
+  let now, before, atMb;
+  try { now = effective(tree); before = effective(parent); atMb = effective(mb); } catch { return out; }
+  if (!now) return out;
+  const measure = (rev, file, metric) => { const t = blob(rev, file); return t === null ? null : METRICS[metric](file, t); };
+  const rows = [];
+  try {
+    for (const [file, metrics] of Object.entries(now.data.files || {})) {
+      if (!touched.has(file)) continue;
+      for (const [metric, raw] of Object.entries(metrics)) {
+        if (!AUTO_RAISE_METRICS.has(metric)) continue;
+        const value = measure(tree, file, metric);
+        if (value === null) continue;
+        const { ceiling, slackMax } = ratchetEntry(raw, `${file} ${metric}`);
+        const over = value - ceiling;
+        if (over <= 0) continue;
+        const pRaw = before?.data.files?.[file]?.[metric], pValue = measure(parent, file, metric);
+        const parentOver = pRaw === undefined || pValue === null ? 0 : Math.max(0, pValue - ratchetEntry(pRaw, file).ceiling);
+        const atHead = measure(car.head, file, metric), atBase = measure(mb, file, metric);
+        const own = atHead === null ? null : atHead - (atBase ?? 0);
+        const mbRaw = atMb?.data.files?.[file]?.[metric];
+        const baseSlack = mbRaw === undefined || atBase === null ? 0 : ratchetEntry(mbRaw, file).ceiling - atBase;
+        const delta = now.frag?.files?.[file]?.[metric] || 0;
+        const v = resnapVerdict({ file, metric, over, parentOver, own, delta, baseSlack, slackMax });
+        if (v.ok) rows.push({ file, metric, value, ceiling, over });
+        else out.refused.push({ file, metric, over, why: v.why });
+      }
+    }
+  } catch { return { tree, resnapped: [], refused: [] }; /* a malformed ceiling: no re-snap; the screen and gate judge it */ }
+  if (!rows.length) return out;
+  const frag = mergeFragment(JSON.parse(JSON.stringify(now.frag || {})), rows);
+  const empty = !Object.keys(frag.files || {}).length && !Object.keys(frag.tree || {}).length;
+  const fpath = `${FRAG_DIR_REL}/${name}`;
+  const gd = git(["rev-parse", "--absolute-git-dir"]);
+  if (gd.status !== 0) return out;
+  const env = { ...process.env, GIT_INDEX_FILE: path.join(gd.stdout.trim(), `apex-resnap-${process.pid}.index`) };
+  try {
+    if (git(["read-tree", tree], { env }).status !== 0) return out;
+    if (empty) { if (git(["update-index", "--force-remove", fpath], { env }).status !== 0) return out; }
+    else {
+      const h = git(["hash-object", "-w", "--stdin"], { input: stableStringify(frag) });
+      if (h.status !== 0 || git(["update-index", "--add", "--cacheinfo", `100644,${h.stdout.trim()},${fpath}`], { env }).status !== 0) return out;
+    }
+    const wt = git(["write-tree"], { env });
+    if (wt.status !== 0) return out;
+    return { tree: wt.stdout.trim(), resnapped: rows.map(({ file, metric, over }) => ({ file, metric, over })), refused: out.refused };
+  } finally { fs.rmSync(env.GIT_INDEX_FILE, { force: true }); }
+}
+
 /** Fold the car heads onto `base` in order: one clean merge commit each, a conflicting car is dropped. Writes only
  *  git objects (merge-tree + commit-tree): no worktree, no checkout, no hooks, no PR code. */
 export function foldCars({ base, cars, cwd = ROOT, git = gitIn(cwd), max = TRAIN_MAX, env = {}, accept = null }) {
@@ -210,20 +367,24 @@ export function foldCars({ base, cars, cwd = ROOT, git = gitIn(cwd), max = TRAIN
       dropped.push({ pr: c.pr, why: mt.status === 1 ? `conflicts${files.length ? ` in ${files.slice(0, 4).join(", ")}` : ""} (sync-pr.mjs)` : `merge-tree failed: ${String(mt.stderr || "").trim().split("\n")[0]}` });
       continue;
     }
-    const tree = String(mt.stdout).split("\n")[0].trim();
+    // A stale line-count fragment is re-snapped on the fold before the screen measures it (resnapTree).
+    const rs = resnapTree({ tree: String(mt.stdout).split("\n")[0].trim(), parent: cur, car: c, base, git });
+    const tree = rs.tree;
     // The screen (screenFold on the tokenless screen job, screenAccept on the build): a car whose merge turns the fold
     // red is left out and the fold stays where it was, so the next car is measured without it.
     const a = accept ? accept({ car: c, tree, parent: cur, kept: kept.length }) : { ok: true };
     if (!a?.ok) { dropped.push({ pr: c.pr, why: String(a?.why || "refused by the screen") }); continue; }
-    const ct = git(["commit-tree", tree, "-p", cur, "-p", c.head, "-m", carMessage(c)], { env: cenv });
+    const msg = carMessage(c) + (rs.resnapped.length ? `\n\nratchets re-snapped on the fold: ${rs.resnapped.map(resnapLine).join(", ")}` : "");
+    const ct = git(["commit-tree", tree, "-p", cur, "-p", c.head, "-m", msg], { env: cenv });
     if (ct.status !== 0) return { error: `commit-tree for #${c.pr} failed: ${String(ct.stderr || "").trim()}` };
     cur = ct.stdout.trim();
-    kept.push(c);
+    kept.push(rs.resnapped.length ? { ...c, resnapped: rs.resnapped } : c);
   }
   return { head: cur, cars: kept, dropped };
 }
 
-/** The gate's purity check: `head` is exactly the fold of `cars` onto `base`, and `base` is on `tip`. git only. */
+/** The gate's purity check: `head` is exactly the fold of `cars` onto `base` (each tree the clean merge of its parents,
+ *  re-snapped by resnapTree exactly as the build does), and `base` is on `tip`. git only. */
 export function verifyTrain({ base, head, cars, tip, cwd = ROOT, git = gitIn(cwd) }) {
   if (!cars?.length) return { ok: false, why: "the manifest names no car" };
   for (const s of [base, head, ...cars.map((c) => c.head)]) if (git(["cat-file", "-e", `${s}^{commit}`]).status !== 0) return { ok: false, why: `${String(s).slice(0, 8)} is not in this clone` };
@@ -238,7 +399,7 @@ export function verifyTrain({ base, head, cars, tip, cwd = ROOT, git = gitIn(cwd
     if (p1 !== prev || p2 !== cars[i].head || extra) return { ok: false, why: `commit ${sha.slice(0, 8)} is not the merge of #${cars[i].pr} ${cars[i].head.slice(0, 8)} onto ${prev.slice(0, 8)}` };
     const mt = git(["merge-tree", "--write-tree", "--no-messages", p1, p2]);
     const tree = git(["rev-parse", `${sha}^{tree}`]).stdout.trim();
-    if (mt.status !== 0 || mt.stdout.split("\n")[0].trim() !== tree) return { ok: false, why: `commit ${sha.slice(0, 8)} (#${cars[i].pr}) is not the clean merge of its parents` };
+    if (mt.status !== 0 || resnapTree({ tree: mt.stdout.split("\n")[0].trim(), parent: p1, car: cars[i], base, git }).tree !== tree) return { ok: false, why: `commit ${sha.slice(0, 8)} (#${cars[i].pr}) is not the clean merge of its parents` };
     prev = sha;
   }
   return { ok: true, why: `${head.slice(0, 8)} is the clean fold of ${cars.map((c) => `#${c.pr}`).join(" ")} onto ${base.slice(0, 8)}` };
@@ -278,7 +439,7 @@ export function trainRow({ manifest, head, headRef, tip, verify, carGate, carPul
  * screenAccept): a forged file can only leave cars out; the train's own gate still measures everything. */
 
 /** Screen wall-clock budget: a car the budget did not reach is "not screened" and waits for the next run. */
-export const SCREEN_BUDGET_MS = 12 * 60_000;
+export const SCREEN_BUDGET_MS = 16 * 60_000;   // 12 until #6528: the 9-car screen of 2026-11-25 01:37Z took 653 s (~70 s a car); TRAIN_MAX 12 needs ~14 min
 const SCREEN_WHY_MAX = 200;
 /** A verdict's why as plain one-line text: it lands in the train PR body beside the manifest marker. Pure. */
 const plainWhy = (w) => String(w ?? "").replace(/[<>`\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, SCREEN_WHY_MAX);
@@ -355,10 +516,25 @@ function listPulls(request, state) {
   return { rows };
 }
 
-const gateState = (sha, request) => {
+const gateStatus = (sha, request) => {
   const r = request(`commits/${sha}/statuses?per_page=100`);
-  return r.error ? "" : ((r.json || []).find((s) => s.context === "gate")?.state || "");
+  const g = r.error ? null : (r.json || []).find((s) => s.context === "gate");
+  return { state: g?.state || "", at: Date.parse(g?.created_at || "") };
 };
+const gateState = (sha, request) => gateStatus(sha, request).state;
+
+/** T1's inputs for an open train whose `gate` is a success: read the tip's commit time and the retry dispatches only
+ *  when the age rule alone does not already close it. */
+function stuckInputs(t, g, request, now) {
+  const s = { armed: t.auto_merge != null, gateAt: g.at, now, tipAt: null, attempts: null };
+  if (s.armed || !Number.isFinite(g.at) || stuckGreen(s).close) return s;
+  const tip = request(`branches/${encodeURIComponent(DEPLOY)}`);
+  s.tipAt = tip.error ? null : Date.parse(tip.json?.commit?.commit?.committer?.date || "");
+  if (!(s.tipAt > g.at)) return s;
+  const runs = request(`actions/workflows/land.yml/runs?event=workflow_dispatch&branch=${encodeURIComponent(DEPLOY)}&per_page=100`);
+  s.attempts = runs.error ? null : retryAttempts(runs.json, t.number, String(t.head?.sha || "").toLowerCase());
+  return s;
+}
 
 /** The next train from live state. Reads GitHub and fetches car heads into `cwd`; writes only git objects. */
 export async function planTrain({ request = api, cwd = ROOT, max = TRAIN_MAX, now = Date.now(), log = () => {}, acceptFor = null } = {}) {
@@ -374,8 +550,19 @@ export async function planTrain({ request = api, cwd = ROOT, max = TRAIN_MAX, no
   }).filter(Boolean);
   const hist = trainHistory(past, { now, max });
   const landing = open.rows.filter((p) => labelNames(p.labels).includes("land") && !p.draft);
-  const gateOk = new Set(landing.filter((p) => gateState(p.head.sha, request) === "success").map((p) => p.number));
-  const { cars: cands, skipped } = carCandidates(open.rows, { exclude: hist.exclude, gateOk });
+  const pages = [];
+  // Every page: a truncated list would read a mid-arm PR as an orphan (PR #6561 review), so a full last page refuses.
+  for (const st of ["queued", "in_progress", "waiting"]) {
+    for (let page = 1; ; page++) {
+      const r = request(`actions/workflows/land.yml/runs?status=${st}&per_page=100&page=${page}`);
+      if (r.error) return { error: `land runs (${st}): ${r.error}` };
+      pages.push(r.json);
+      if ((r.json?.workflow_runs || []).length < 100) break;
+      if (page === LAND_RUN_PAGES) return { error: `land runs (${st}): more than ${LAND_RUN_PAGES * 100}, refusing to judge orphans on a partial list` };
+    }
+  }
+  const { solo, orphans } = soloLane(landing, { gate: (p) => gateState(p.head.sha, request), runs: landRunsInFlight(pages, { selfRun: process.env.GITHUB_RUN_ID || "", heads: landing }) });
+  const { cars: cands, skipped } = carCandidates(open.rows, { exclude: hist.exclude, solo });
   const tipR = request(`branches/${encodeURIComponent(DEPLOY)}`);
   const tip = String(tipR.json?.commit?.sha || "").toLowerCase();
   if (!tip) return { error: `deploy tip: ${tipR.error || "no sha"}` };
@@ -393,8 +580,10 @@ export async function planTrain({ request = api, cwd = ROOT, max = TRAIN_MAX, no
   }
   const fold = foldCars({ base: tip, cars: ready, cwd, git, max: hist.cap, accept: acceptFor ? acceptFor(tip) : null });
   if (fold.error) return { error: fold.error };
+  // A lone ORPHAN (green gate, unarmed, no land run: soloLane) rides a 1-car train; nothing else would land it (#6528).
   const min = hist.cap >= 2 ? 2 : 1;
-  return { tip, cap: hist.cap, running: running.map((p) => p.number), cars: fold.cars, head: fold.head, dropped: [...fold.dropped, ...skipped], enough: fold.cars.length >= min };
+  const enough = fold.cars.length >= min || (fold.cars.length === 1 && orphans.has(fold.cars[0].pr));
+  return { tip, cap: hist.cap, running: running.map((p) => p.number), cars: fold.cars, head: fold.head, dropped: [...fold.dropped, ...skipped], enough };
 }
 
 /** The newest CI workflow run on a head ({ status, conclusion }) from an actions/workflows/ci.yml/runs page; null
@@ -411,7 +600,7 @@ export function newestRun(json) {
  *  run was cancelled at 01:33Z, no `CI` check ever completed, and the builder waited on it for an hour, holding every
  *  later train). A completed run that was cancelled closes the train `stale` (nothing failed, so no bisect); a
  *  failure, timeout or startup failure closes it `red`. */
-export function trainDisposition({ manifest, cars, ciConclusion, gate, ciRun = null }) {
+export function trainDisposition({ manifest, cars, ciConclusion, gate, ciRun = null, stuck = null }) {
   if (!manifest) return { close: true, outcome: "stale", why: "no manifest" };
   const moved = manifest.cars.filter((c) => { const p = cars.get(c.pr); return !p || (!p.merged_at && (String(p.head?.sha || "").toLowerCase() !== c.head || !labelNames(p.labels).includes("land") || p.state !== "open")); });
   if (moved.length) return { close: true, outcome: "stale", why: `car${moved.length > 1 ? "s" : ""} ${moved.map((c) => `#${c.pr}`).join(" ")} moved, closed or lost land` };
@@ -421,6 +610,39 @@ export function trainDisposition({ manifest, cars, ciConclusion, gate, ciRun = n
     if (["failure", "timed_out", "startup_failure"].includes(ciRun.conclusion)) return { close: true, outcome: "red", why: `the CI run on the train head ended ${ciRun.conclusion} before its CI check completed` };
   }
   if (gate === "failure") return { close: true, outcome: "red", why: "gate failure on the train head (gen, ratchets, retest or a car row)" };
+  if (gate === "success" && stuck) return stuckGreen(stuck);
+  return { close: false };
+}
+
+/** Minutes a train's `gate` success may stay unarmed before the builder closes it (about two train cycles). */
+export const STUCK_GREEN_MIN = 15;
+/** land.yml's RETRY_MAX: immediate re-gates per head (a test pins the two equal). */
+export const RETRY_MAX = 3;
+const RETRY_TITLE = /^Land retry pr=(\d+) head=([0-9a-f]{40}|-) attempt=(\d{1,3})$/;
+
+/** The highest `attempt` land.yml's `retry` dispatched for this PR at this head, from a land.yml workflow_dispatch
+ *  runs page (display_title `Land retry pr=<n> head=<sha> attempt=<a>`). 0 when none; null when unreadable. Pure. */
+export function retryAttempts(json, pr, head) {
+  if (!Array.isArray(json?.workflow_runs)) return null;
+  let max = 0;
+  for (const r of json.workflow_runs) {
+    const m = RETRY_TITLE.exec(String(r?.display_title || ""));
+    if (m && Number(m[1]) === pr && (m[2] === head || m[2] === "-")) max = Math.max(max, Number(m[3]));
+  }
+  return max;
+}
+
+/** T1 (train #6382, 2026-11-24): a `gate` success that never armed. Its arm job failed on a GitHub 503 at 22:55Z, the
+ *  retry budget was spent, and the open train held every later train until a person closed it at 00:27Z. Close it
+ *  `stale` (no bisect: the cars stay eligible) when the success is unarmed past STUCK_GREEN_MIN, or when the tip moved
+ *  after it and the head has spent RETRY_MAX re-gates (nothing re-gates it again). An armed train is GitHub's to merge.
+ *  `stuck`: { armed, gateAt, now, tipAt, attempts } (times in ms; tipAt and attempts null when not read). Pure. */
+export function stuckGreen({ armed, gateAt, now, tipAt = null, attempts = null }) {
+  if (armed || !Number.isFinite(gateAt) || !Number.isFinite(now)) return { close: false };
+  const at = new Date(gateAt).toISOString();
+  const min = Math.floor((now - gateAt) / 60_000);
+  if (now - gateAt > STUCK_GREEN_MIN * 60_000) return { close: true, outcome: "stale", why: `gate success at ${at} is still unarmed after ${min} min` };
+  if (Number.isFinite(tipAt) && tipAt > gateAt && attempts >= RETRY_MAX) return { close: true, outcome: "stale", why: `gate success at ${at} measured an older deploy tip and its head spent the retry budget (${attempts} of ${RETRY_MAX})` };
   return { close: false };
 }
 
@@ -445,7 +667,7 @@ const USAGE = `usage: node tools/ci/merge-train.mjs --plan|--screen --out <file>
 export async function main(argv, { request = api, cwd = ROOT, log = console.log, now = Date.now(), tipCheck = runTipGate } = {}) {
   if (argv.includes("--help") || argv.includes("-h") || !(argv.includes("--plan") || argv.includes("--build") || argv.includes("--screen"))) { log(USAGE); return argv.includes("--help") || argv.includes("-h") ? 0 : 1; }
   const i = argv.indexOf("--max");
-  const max = i >= 0 ? Math.max(1, Math.min(10, Number(argv[i + 1]) || TRAIN_MAX)) : TRAIN_MAX;
+  const max = i >= 0 ? Math.max(1, Math.min(TRAIN_MAX, Number(argv[i + 1]) || TRAIN_MAX)) : TRAIN_MAX;
   const build = argv.includes("--build");
   const argOf = (k) => { const j = argv.indexOf(k); return j >= 0 ? argv[j + 1] || "" : null; };
   if (argv.includes("--screen") && !build) return screenMain({ argv, out: argOf("--out"), request, cwd, log, now, max });
@@ -467,7 +689,8 @@ export async function main(argv, { request = api, cwd = ROOT, log = console.log,
         if (wr.error) runNote = ` (its CI run could not be read: ${wr.error})`;
         else ciRun = newestRun(wr.json);
       }
-      let d = trainDisposition({ manifest: m, cars, ciConclusion, gate: gateState(t.head.sha, request), ciRun });
+      const g = gateStatus(t.head.sha, request);
+      let d = trainDisposition({ manifest: m, cars, ciConclusion, gate: g.state, ciRun, stuck: g.state === "success" ? stuckInputs(t, g, request, now) : null });
       if (!d.close) { log(`= merge-train waiting — train #${t.number} is still running${runNote}`); return 0; }
       if (d.outcome === "red" && m) { // the base row's own signal, on the sha the train was built on
         const pages = readDeployTip(DEPLOY, request);
