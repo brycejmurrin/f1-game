@@ -830,10 +830,12 @@ const ApexBridge = (function () {
   async function plan(args) {
     const a = args || {};
     const [pa, steps] = planSteps(a.name, a.args);
-    const t0 = Date.now(), out = [];
+    const t0 = Date.now(), out = [], run = _run;
     let failed = null;
     for (let i = 0; i < steps.length && failed == null; i++) {
       const s = steps[i];
+      // The link ended (a badge tap, a re-link): no further step starts (a step already running finishes).
+      if (_run !== run) { out.push({ i, cmd: s.cmd, ok: false, error: "link ended" }); failed = i; break; }
       if (s.ifVisible && !shown(byId(s.ifVisible))) { out.push({ i, cmd: s.cmd, ok: true, skipped: true }); continue; }
       const left = PLAN_MS - (Date.now() - t0);
       let r, timer = null;
@@ -940,14 +942,16 @@ const ApexBridge = (function () {
     if (!r.ok) {
       let msg = "";
       try { msg = String((await r.json()).message || ""); } catch (_) { /* no JSON body */ }
-      throw new Error("post " + r.status + (msg ? " " + msg.slice(0, 80) : ""));
+      throw Object.assign(new Error("post " + r.status + (msg ? " " + msg.slice(0, 80) : "")), { status: r.status });
     }
     return r.json();
   }
 
   async function pollOnce() {
     const run = _run;
-    for (const o of run.outbox.splice(0)) await reply(run, o);   // replies whose post failed: once more, oldest first
+    const o = run.outbox.shift();   // ONE failed reply per poll, oldest first (never a burst of POSTs)
+    if (o) await reply(run, o.obj, o.tries);
+    if (o && Date.now() < run.backoff) return -1;   // that retry failed: its hold covers this poll's read too
     if (_run !== run) return -1;
     // `since` (run.since) walks forward; `cutoff` stays the hello's time, the floor a command must be created after.
     const r = await gh("/comments?per_page=100&since=" + encodeURIComponent(run.since), { etag: run.etag });
@@ -969,7 +973,7 @@ const ApexBridge = (function () {
       dispatch(run, c);
     }
     // Only once every command on the page is dispatched (seen + started or queued): a stop() mid-page leaves the window
-    // where it was. A reply that fails to post waits in run.outbox for the next poll, so nothing is skipped.
+    // where it was. A reply that fails to post waits in run.outbox (bounded: see reply).
     if (_run === run) run.since = newest;
     return cmds.length;
   }
@@ -1004,11 +1008,11 @@ const ApexBridge = (function () {
   function pump(run) {
     if (run.acting || !run.queue.length || _run !== run) return;
     const c = run.acting = run.queue.shift();
-    track(run, serve(run, c).then(() => { run.acting = null; pump(run); }));
+    track(run, serve(run, c).finally(() => { run.acting = null; pump(run); }));
   }
   function track(run, p) {
     run.inflight.add(p);
-    p.then(() => run.inflight.delete(p));
+    p.finally(() => run.inflight.delete(p)).catch(() => { /* serve reports its own failure */ });
   }
   async function serve(run, c) {
     run.running++;
@@ -1020,12 +1024,19 @@ const ApexBridge = (function () {
     paintBadge();
     await reply(run, Object.assign({ re: c.id, cmd: c.msg && c.msg.cmd }, res));
   }
-  async function reply(run, obj) {
+  // A failed reply waits in run.outbox: at most OUTBOX_TRIES posts each, OUTBOX_MAX entries (the oldest drops first).
+  // A 403 / 429 (GitHub's rate limits) holds the poll REPLY_SLOW_MS, as statusSlow slows the status edit.
+  const OUTBOX_TRIES = 3, OUTBOX_MAX = 10, REPLY_SLOW_MS = 60000;
+  async function reply(run, obj, tries) {
+    const n = (tries || 0) + 1;
     try { await post(obj, run); } catch (e) {
       if (_run !== run) return;
-      run.outbox.push(obj);
-      run.backoff = Date.now() + POLL_MS * 3;
-      say("reply to " + obj.re + " failed (" + e.message + "), retried next poll");
+      const slow = e.status === 403 || e.status === 429;
+      run.backoff = Math.max(run.backoff, Date.now() + (slow ? REPLY_SLOW_MS : POLL_MS * 3));
+      if (n >= OUTBOX_TRIES) { say("reply to " + obj.re + " dropped after " + n + " tries (" + e.message + ")"); return; }
+      run.outbox.push({ obj, tries: n });
+      if (run.outbox.length > OUTBOX_MAX) say("reply to " + run.outbox.shift().obj.re + " dropped (outbox full)");
+      say("reply to " + obj.re + " failed (" + e.message + "), retried " + (slow ? "after " + REPLY_SLOW_MS / 1000 + " s" : "next poll"));
     }
   }
   // Every command dispatched so far has answered (or failed to post). Tests and plans' callers await it.
@@ -1263,7 +1274,8 @@ const ApexBridge = (function () {
   boot();
   return { V, REPO, CALL_DENY, CALL_DENY_PREFIX, callAllowed, TAP_DENY, CMDS, issueOf, handle, pickCommands, pollOnce, start, stop, boot, frames, facts, display, geom, tokenShape,
     status: () => (_run ? postStatus(_run) : Promise.resolve(null)), statusDue: () => (_run ? _run.statusDue : 0), BATCH_MAX,
-    READ_CMDS, CALL_READ, isRead, PLANS, PLAN_STEPS_MAX, planSteps, drain,
+    READ_CMDS, CALL_READ, isRead, PLANS, PLAN_STEPS_MAX, planSteps, drain, OUTBOX_TRIES, OUTBOX_MAX,
+    outbox: () => (_run ? _run.outbox.length : 0), backoff: () => (_run ? _run.backoff : 0),
     active: () => !!_run };
 })();
 Object.freeze(ApexBridge);

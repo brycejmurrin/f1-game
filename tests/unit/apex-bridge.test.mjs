@@ -1165,3 +1165,62 @@ test("#6581 review: tap waitMs is capped at 30 s; a link end mid-drive removes t
   await flush();
   assert.equal(d.body.kids.some((k) => k.id === "apex-bridge-driving"), false);
 });
+
+test("#6582 a running plan stops when the link ends: no step after stop(), so it never acts beside the next run", async () => {
+  let release;
+  const calls = [];
+  const apex = { info: () => ({ state: "menu" }), race: () => { calls.push("race"); return new Promise((res) => { release = res; }); },
+    go: () => { calls.push("go"); return "race"; } };
+  const b = load({ tok: "tok", apex, extra: { setTimeout, clearTimeout } });
+  await flush();
+  assert.equal(b.api.active(), true);
+  const p = b.api.handle({ cmd: "plan", args: { name: "raceSample", args: { seconds: 1 } } });
+  for (let i = 0; i < 5 && !release; i++) await flush();
+  assert.equal(typeof release, "function", "the plan reached its race step");
+  b.api.stop("badge tap");
+  release({ ok: true });
+  const r = await p;
+  assert.equal(r.value.ok, false);
+  assert.equal(r.value.failed, 3);
+  assert.equal(r.value.steps[3].error, "link ended");
+  assert.deepEqual(calls, ["race"], "go never ran after the link ended");
+});
+
+test("#6582 outbox: a failed reply is retried one per poll, at most OUTBOX_TRIES times; 403/429 backs off 60 s; the outbox is capped", async () => {
+  const gh = fakeGitHub();
+  let limited = false;
+  const posts = [];
+  const fetch = async (url, opts) => {
+    if (limited && opts.method === "POST") { posts.push(JSON.parse(opts.body).body); return { status: 429, ok: false, json: async () => ({ message: "secondary rate limit" }), headers: { get: () => null } }; }
+    return gh.fetch(url, opts);
+  };
+  const b = load({ tok: "tok", gh: { ...gh, fetch }, extra: { setTimeout: () => 0 } });
+  await flush();
+  limited = true;
+  gh.thread.push(cmd(1, { cmd: "ping" }));
+  gh.bump();
+  const t0 = Date.now();
+  await b.api.pollOnce();
+  await b.api.drain();
+  assert.equal(posts.length, 1);
+  assert.equal(b.api.outbox(), 1);
+  assert.ok(b.api.backoff() >= t0 + 60000, "a 429 holds the poll a minute");
+  const reads = () => gh.calls.filter((c) => c.opts.method !== "POST").length;
+  const r0 = reads();
+  assert.equal(await b.api.pollOnce(), -1, "a failed retry holds this poll");
+  assert.equal(reads(), r0, "no read of the thread under the hold");
+  await b.api.pollOnce();
+  assert.equal(posts.length, b.api.OUTBOX_TRIES, "posted OUTBOX_TRIES times in all");
+  assert.equal(b.api.outbox(), 0, "then dropped");
+  await b.api.pollOnce();
+  assert.equal(posts.length, b.api.OUTBOX_TRIES, "never again");
+  // A burst of failures: the outbox keeps the newest OUTBOX_MAX, and a poll replays only one of them.
+  for (let i = 0; i < b.api.OUTBOX_MAX + 3; i++) gh.thread.push(cmd(10 + i, { cmd: "ping" }));
+  gh.bump();
+  await b.api.pollOnce();
+  await b.api.drain();
+  assert.equal(b.api.outbox(), b.api.OUTBOX_MAX);
+  const before = posts.length;
+  await b.api.pollOnce();
+  assert.equal(posts.length - before, 1, "one retry per poll");
+});
