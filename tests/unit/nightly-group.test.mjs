@@ -8,6 +8,7 @@ import fs from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { ROTATION, EXCLUDED, UNSCHEDULED, groupForDay, dayIndex, bare } from "../../tools/ci/nightly-group.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const GROUPS = JSON.parse(fs.readFileSync(new URL("../../tests/groups.json", import.meta.url), "utf8")).groups;
 const PKG = JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
@@ -145,9 +146,8 @@ test("the CLI prints GROUP=<bare name>, which is what ci.yml's `npm run test:$GR
 });
 
 test("main guard fires when the script path needs URL-encoding (#4481)", async () => {
-  const { mkdtempSync, cpSync, rmSync } = fs;
-  const os = await import("node:os");
-  const dir = mkdtempSync(path.join(os.tmpdir(), "nightly dir "));   // a space → %20 in import.meta.url
+  const { cpSync, rmSync } = fs;
+  const dir = mkTmpDir("nightly dir ");   // a space → %20 in import.meta.url
   try {
     const root = path.resolve(import.meta.dirname, "..", "..");
     fs.mkdirSync(path.join(dir, "tools", "ci"), { recursive: true });

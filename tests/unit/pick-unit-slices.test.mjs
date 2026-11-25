@@ -3,8 +3,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 const ROOT = path.resolve(new URL("../..", import.meta.url).pathname);
 import {
   SLICES, NODE_SLICES, SLICE_COST_P50_SEC, SLICE_SCRIPTS, pick, costs, testFileOwners, ciOutputs, characterizationCircuits,
@@ -158,7 +158,7 @@ test("--all selects every slice for schedule/dispatch", () => {
 });
 
 test("--github-output writes any_node / driving / slices", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pick-unit-"));
+  const dir = mkTmpDir("pick-unit-");
   const ghOut = path.join(dir, "github_output");
   fs.writeFileSync(ghOut, "");
   execFileSync(

@@ -9,12 +9,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { carBundle, circuitData, viewerHtml, teamIds } from "../../tools/viewer/viewer-data.mjs";
 import { parseArgs, resolveSelection, DEFAULT_CIRCUITS } from "../../tools/viewer/build-viewer.mjs";
 import { parseSheet, pixelDiffPct, CAT_FRAME } from "../../tools/viewer/viewer-shots.mjs";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 test("the page's embedded car roster builds the same mesh the game's loader does", () => {
   // The page builds cars itself from carBundle(); run that exact script in a VM
@@ -95,7 +95,7 @@ test("close-ups: the pair diff measures pixels", async (t) => {
   let sharp;
   try { sharp = (await import("sharp")).default; }
   catch (e) { t.skip(`sharp is not installed here (${e.code || e.message}) — the PNG diff is not checkable`); return; }
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "viewer-diff-"));
+  const dir = mkTmpDir("viewer-diff-");
   try {
     const png = (name, g) => sharp({ create: { width: 10, height: 10, channels: 3, background: { r: g, g, b: g } } }).png().toFile(path.join(dir, name)).then(() => path.join(dir, name));
     const [a, b, c] = await Promise.all([png("a.png", 0), png("b.png", 0), png("c.png", 200)]);

@@ -13,10 +13,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
-import os from "node:os";
 import path from "node:path";
 import { check, readSpec, readDefaults, reviewKeys } from "../../tools/gen/settings-defaults.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const DEFAULTS_SRC = new URL("../../js/data/settings-defaults.js", import.meta.url);
 const STORE_SRC = new URL("../../js/core/store.js", import.meta.url);
@@ -201,7 +201,7 @@ test("readSpec() parses EVERY SPEC row, whatever optional properties it carries"
 
 
 test("readSpec structurally reads nested defaults and multiline callbacks without executing them", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "apex-spec-parser-"));
+  const root = mkTmpDir("apex-spec-parser-");
   try {
     fs.mkdirSync(path.join(root, "js/ui"), { recursive: true });
     fs.writeFileSync(path.join(root, "js/ui/settings-export.js"), `

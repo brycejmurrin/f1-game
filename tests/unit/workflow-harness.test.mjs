@@ -1,20 +1,20 @@
 import "../helpers/git-fixture-env.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import test from "node:test";
 import { WorkflowHarness, PROBE_HELP, TOOL_SCHEMAS, ALL_TOOL_SCHEMAS } from "../../tools/mcp/workflow-harness-core.mjs";
 import { startServer } from "../../tools/mcp/workflow-harness.mjs";
 import { runClient } from "../../tools/mcp/workflow-harness-client.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 // Synthetic paths live only inside temporary fixture repositories.
 const VALUE_FILE = ["js", "value.js"].join("/"), GENERATED_FILE = ["js", "generated.js"].join("/"), ESCAPE_FILE = ["js", "escape.js"].join("/");
 const STYLE_FILE = ["css", "site.css"].join("/");
 const git = (cwd, args) => execFileSync("git", args, { cwd, encoding: "utf8" });
 function fixture() {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-harness-")), repo = path.join(base, "repo"); fs.mkdirSync(repo);
+  const base = mkTmpDir("workflow-harness-"), repo = path.join(base, "repo"); fs.mkdirSync(repo);
   git(repo,["init","-q"]); git(repo,["config","user.email","test@example.invalid"]); git(repo,["config","user.name","Test"]);
   fs.mkdirSync(path.join(repo,"js")); fs.mkdirSync(path.join(repo,"css")); fs.mkdirSync(path.join(repo,"docs"));
   fs.writeFileSync(path.join(repo,"js","value.js"),'"use strict"; const Value = (() => ({ number: 7 }))();\n');

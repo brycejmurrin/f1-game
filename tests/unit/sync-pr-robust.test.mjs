@@ -1,9 +1,9 @@
 import "../helpers/git-fixture-env.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 /* sync-pr-robust.test.mjs — #2663: stale sync branch cleanup, moved-remote refusal, tooling-fast --stop parse, and a real --stop. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { runProbe } from "../../tools/ci/preflip-probe.mjs";
@@ -81,7 +81,7 @@ test("staleSyncBranch: a leftover with no commits of its own is stale; one with 
 });
 
 test("sync publication requires the original live head and a fast-forward at push time (#6076)", (t) => {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "sync-publish-"));
+  const cwd = mkTmpDir("sync-publish-");
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
   const run = (args) => gitRun(args, { cwd });
   const git = (...args) => gitMust(run(args), args.join(" "));
@@ -141,7 +141,7 @@ test("tooling-fast accepts --stop (and still rejects unknown flags)", () => {
 });
 
 test("stop kills a real registered process tree and nothing else", async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "stop-real-"));
+  const dir = mkTmpDir("stop-real-");
   const pidFile = path.join(dir, "grandchild.pid");
   // the registered process spawns a grandchild of its own, as tooling-fast's workers do
   const child = spawn(process.execPath, ["-e",

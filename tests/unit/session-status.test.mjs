@@ -10,10 +10,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { parseVerdict, toMarkdown, toSummary, collect, ciSummary, livePrLines, fetchLivePr } from "../../tools/ci/session-status.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 // ── live PR state (--pr): pure formatting over mocked API answers ────────────
 const SHA = "a".repeat(40), OTHER = "b".repeat(40), AT = "2026-10-10T08:00:00Z";
@@ -108,7 +108,7 @@ test("collect runs against the real checkout without throwing", () => {
 });
 
 test("collect preserves the first porcelain status column and complete path", (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "session-status-git-"));
+  const dir = mkTmpDir("session-status-git-");
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   fs.writeFileSync(path.join(dir, "git"), '#!/bin/sh\nif [ "$1" = status ]; then printf " M docs/README.md\\n?? new-file.md\\n"; else exit 1; fi\n', { mode: 0o755 });
   const previousPath = process.env.PATH;
@@ -398,7 +398,7 @@ test("pr-wait: oversized fixture inventories retain observed failures with incom
 });
 
 test("advisory CLIs reject oversized JSON files before parsing and refuse unknown or missing flags", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-advisory-bounds-"));
+  const dir = mkTmpDir("apex-advisory-bounds-");
   const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
   try {
     const fixture = path.join(dir, "oversized.json"), brief = path.join(dir, "brief.json");
