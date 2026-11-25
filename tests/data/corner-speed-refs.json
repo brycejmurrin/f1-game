@@ -1,0 +1,70 @@
+{
+  "//": [
+    "Real-world corner MINIMUM speeds (km/h) for tools/check/corner-speeds.mjs (#6563 R1a).",
+    "Every row cites its source. The values are the 2025 dry pole laps read from OpenF1 car_data",
+    "(about 3.7 samples a second, so a real minimum may read a few km/h high), as tabled in the",
+    "realism audit #6563. `approx: true` marks a value the audit wrote with a tilde.",
+    "`turn` is the game's FIA turn label (Tracks def.turns, __apex.trackInfo corners); `to` makes the",
+    "row a span (the minimum over every corner from `turn` through `to`). A merged game corner such",
+    "as T12-T13 matches a ref on either number. Speeds compare on the PACE-1 scale (vStd), docs/PHYSICS.md §PACE."
+  ],
+  "version": 1,
+  "sources": {
+    "openf1": "OpenF1 car_data, 2025 qualifying pole lap: https://api.openf1.org/v1/car_data?session_key=<session>&driver_number=<driver>",
+    "audit": "Realism audit, Corner minimum speeds table: https://github.com/brycejmurrin/f1-game/issues/6563"
+  },
+  "circuits": {
+    "monza": {
+      "session": 9908, "driver": 1, "year": 2025,
+      "corners": [
+        { "name": "Rettifilo (T1)", "turn": "T1", "minKph": 73, "source": "openf1" },
+        { "name": "Lesmo 2", "turn": "T7", "minKph": 190, "source": "openf1" },
+        { "name": "Ascari", "turn": "T8", "to": "T10", "minKph": 195, "approx": true, "source": "openf1" },
+        { "name": "Parabolica", "turn": "T11", "minKph": 217, "source": "openf1" }
+      ]
+    },
+    "monaco": {
+      "session": 9975, "driver": 4, "year": 2025,
+      "corners": [
+        { "name": "Casino", "turn": "T4", "minKph": 154, "approx": true, "source": "openf1" },
+        { "name": "Grand Hotel hairpin", "turn": "T6", "minKph": 46, "source": "openf1" },
+        { "name": "Piscine", "turn": "T13", "to": "T14", "minKph": 128, "approx": true, "source": "openf1" },
+        { "name": "Rascasse", "turn": "T18", "minKph": 65, "source": "openf1" }
+      ]
+    },
+    "spa": {
+      "session": 9935, "driver": 4, "year": 2025,
+      "corners": [
+        { "name": "La Source", "turn": "T1", "minKph": 83, "source": "openf1" },
+        { "name": "Pouhon", "turn": "T10", "to": "T11", "minKph": 192, "source": "openf1" },
+        { "name": "Bus Stop", "turn": "T18", "to": "T19", "minKph": 75, "source": "openf1" }
+      ]
+    },
+    "silverstone": {
+      "session": 9943, "driver": 1, "year": 2025,
+      "corners": [
+        { "name": "The Loop", "turn": "T4", "minKph": 89, "source": "openf1" },
+        { "name": "Maggotts-Becketts", "turn": "T10", "to": "T13", "minKph": 230, "source": "openf1" },
+        { "name": "Stowe", "turn": "T15", "minKph": 239, "source": "openf1" },
+        { "name": "Vale", "turn": "T16", "minKph": 106, "source": "openf1" }
+      ]
+    },
+    "suzuka": {
+      "session": 10002, "driver": 1, "year": 2025,
+      "corners": [
+        { "name": "Esses", "turn": "T3", "to": "T7", "minKph": 178, "source": "openf1" },
+        { "name": "Hairpin", "turn": "T11", "minKph": 77, "source": "openf1" },
+        { "name": "Spoon", "turn": "T13", "to": "T14", "minKph": 186, "source": "openf1" },
+        { "name": "Casio triangle", "turn": "T16", "to": "T17", "minKph": 91, "source": "openf1" }
+      ]
+    },
+    "bahrain": {
+      "session": 10010, "driver": 81, "year": 2025,
+      "corners": [
+        { "name": "T1", "turn": "T1", "minKph": 67, "source": "openf1" },
+        { "name": "T4", "turn": "T4", "minKph": 123, "source": "openf1" },
+        { "name": "T13", "turn": "T13", "minKph": 141, "approx": true, "source": "openf1" }
+      ]
+    }
+  }
+}
