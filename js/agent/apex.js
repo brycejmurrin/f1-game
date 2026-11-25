@@ -261,6 +261,7 @@ function placeBeside(c, dProg, dx, speed) {
 }
 
 let apexSeed = null;   // the last seed an agent set through seed(n) / reset(…, seed)
+let raceTok = 0;        // race(): the newest scripted start, so an older one never restores the grid rule over it
 const simTick = (d) => ApexLobby.tick(G, d);   // one step()/act() tick (apex-lobby.js)
 const api = {
   // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m). DELETES the lap in
@@ -1046,12 +1047,21 @@ const api = {
     if (G.endWeatherSession) G.endWeatherSession();
     G.raceWeather = (weather === "wet" || weather === "rain" || weather === "overcast" || weather === "fog" || weather === "storm") ? weather : "dry";
     G.raceTimeOfDay = timeOfDay || "default";
+    // NO SHEET (#6564): the shipped rule is QUALIFYING, so a scripted start with no opts.grid grids
+    // THIS start on team tier ("tier when there's no quali", Bryce 2026-11-25) instead of stalling
+    // on #quali; opts.grid "quali" keeps the sheet. The rule is restored once the start settles.
+    let heldRule = null;
     if (opts && opts.grid != null) G.raceGrid = opts.grid;   // the game's setter validates the name
+    else if (G.raceQuali) { heldRule = G.raceGrid; G.raceGrid = "tier"; }
     if (opts && opts.duel != null) {
       G.duel = !!opts.duel;
       G.duelLegend = typeof opts.duel === "string" ? opts.duel : "";
     }
-    return settled(startRace(),
+    const started = startRace(), tok = ++raceTok;
+    // Observed on both arms (a bare .finally() re-raised a rejected start as unhandled); a newer race() owns the rule.
+    const restore = () => { if (tok === raceTok && G.raceGrid === "tier") G.raceGrid = heldRule; };
+    if (heldRule) Promise.resolve(started).then(restore, restore);
+    return settled(started,
       { track: Tracks.LIST[i].id, timeOfDay: G.raceTimeOfDay, weather: G.raceWeather });
   },
   // LAZY_CIRCUIT hydrate (title boots meta stubs). Specs that read path.pts

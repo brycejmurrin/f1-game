@@ -871,8 +871,10 @@ let raceLaps = GAME_LAPS;      // user-selected lap count
 // (Formula 2's sprint-race rule); "revchamp" inverts the championship
 // standings; "random" sorts on gridUp's own jitter draw. (The pre-rule boolean
 // `raceQuali` key is no longer read: store.get returns SettingsDefaults first.)
+// DEFAULT "quali" (Bryce, 2026-11-25, PR #6564): a random grid put fast cars behind slow ones,
+// so 3-lap races ran as trains. No session falls back to the tier order; a saved choice is kept.
 const GRID_RULES = ["tier", "quali", "rev10", "revchamp", "random"];
-let raceGrid = store.get("raceGrid", "random");
+let raceGrid = store.get("raceGrid", "quali");
 if (GRID_RULES.indexOf(raceGrid) < 0) raceGrid = "tier";
 const qualiGrid = () => raceGrid === "quali" || raceGrid === "rev10";
 // A CHAMPIONSHIP with qualifying off grids in championship order (FIA 2026 SR
