@@ -600,7 +600,8 @@ The native PNG sizes are 1179 × 2556 and 2556 × 1179 respectively. Choose `--w
 
 - `node tools/ui/issue-shots.mjs <n> [--branch]` saves the screenshots attached to an issue and names the window each
   one shows from its aspect. A cloud worker's proxy refuses GitHub attachment URLs: use `--branch`, which reads
-  `origin/phone-shots:<n>/`, filled by `.github/workflows/phone-shots.yml` whenever the owner attaches an image (#5246).
+  `origin/phone-shots:<n>/`, the copies `phone-shots.yml` made until it was retired on 2026-11-25 (#6536; no eligible
+  image had arrived since #6060): issues filed after that have none, so a worker asks Bryce for the numbers instead.
 - `node tools/ui/phone-shot-diff.mjs --shot <image> [--eval "<js>"]` boots the preset, reaches the screen and reports
   which elements are a different SIZE in the screenshot (screen-wide factor, per-element outliers, score per row; ~2 min).
 - `node tools/ci/pr-board.mjs --brief` is one line per open PR (state, ci, gate, suggestion, owner, the Plan's `now:`).
