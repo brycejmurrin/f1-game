@@ -884,6 +884,7 @@
     "tests/unit/perf-try.test.mjs",
     "tests/unit/phone-recorder.test.mjs",
     "tests/unit/phone-shipped-defaults.test.mjs",
+    "tests/unit/phone-tap-floor-6600.test.mjs",
     "// The shared Bryce-phone preset, issue screenshots and the screenshot size matcher. Pure, ~1 s.",
     "tests/unit/phone-tools.test.mjs",
     "tests/unit/phone-touch-surface.test.mjs",

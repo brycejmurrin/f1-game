@@ -1,0 +1,1 @@
+Fixed: On a phone at a small UI SIZE, the photo-mode climb/dive buttons and EXIT, the FREE CAMERA buttons in the portrait lighting tuner and flyby editor, and SOUND on the portrait title are now at least 44 px to tap (were down to 34 px, #6600).
