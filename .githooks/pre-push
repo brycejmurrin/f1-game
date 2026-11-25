@@ -67,5 +67,13 @@ while read -r lref lsha rref rsha; do
       rc=1
     fi
   fi
+  # Warn-only (#6557 P5, Bryce 2026-11-25): a READY PR whose ci.yml run on the head
+  # this push replaces is still running — the push cancels it. Never changes rc.
+  case "${2:-}" in *brycejmurrin/f1-game*)
+    notice="$(git rev-parse --show-toplevel 2>/dev/null)/tools/ci/prepush-live-run.mjs"
+    if [ "${APEX_PREPUSH_NOTICE:-}" != 0 ] && [ -f "$notice" ] && command -v node >/dev/null 2>&1; then
+      timeout 15 node "$notice" --branch "${rref#refs/heads/}" --sha "$rsha" </dev/null || true
+    fi ;;
+  esac
 done
 exit $rc
