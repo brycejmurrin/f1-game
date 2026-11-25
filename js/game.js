@@ -75,7 +75,7 @@ const { load: loadBackendScripts } = ScriptLoader.create();
 const lazyBundles = LazyBundles.create({
   els, loadBackendScripts, getContext: () => G,
   applyLightTuneIfReady: () => { if (ltStore) applyLightTune(); },
-  createNetwork: () => { netPlay = NetPlay.create(G); netLobby = NetLobby.create(G); return netLobby; },
+  createNetwork: () => { netPlay = NetPlay.create(G, { qualiNet }); netLobby = NetLobby.create(G, { raceSettings, qualiNet }); return netLobby; },
   bindAgent: () => { if (typeof ApexApi !== "undefined") { window.__apex = ApexApi.create(G, restoreFreePlaySelection); window.__apex.visorScene = () => typeof VisorOptics !== "undefined" ? VisorOptics.sceneFromG(G) : null; } },
   // Recreate audio instances after LAZY_AUDIO reinjects the real `var` globals; `once` latches each part (a retry re-runs only the one that threw).
   onAudioReady: (once = (k, f) => f()) => {
@@ -3398,10 +3398,7 @@ const G = {
   // Debug teleports can run while a headless/SwiftShader frame is starved.
   // Let apex.js synchronise its observable HUD state without waiting for rAF.
   refreshHud: (...a) => updateHud(...a),   // const initialised below — defer
-  // The waiting room reuses the real menus rather than reimplementing them.
-  setNetRoom: (...a) => raceSettings.setNetRoom(...a),
   resetRaceDraft: () => raceSettings.resetDraft(),
-  openRaceSetup: (...a) => raceSettings.openRaceSetup(...a),
   // The lobby's buttons ask for TILT permission inside their own click: a
   // friend race starts from the network, with no gesture to ask in.
   enableTilt: () => enableTilt(),
@@ -3412,10 +3409,6 @@ const G = {
   // room grows past two. Empty off-line, which is what keeps every solo mode
   // exactly as it was.
   peerSeats: () => (netLobby && netLobby.peerSeats ? netLobby.peerSeats() : []),
-  onPeerQuali: (...a) => qualiNet.onPeerQuali(...a),
-  onPeerQualiLive: (...a) => qualiNet.onPeerQualiLive(...a),
-  openQualiForNet: (...a) => qualiNet.openQualiForNet(...a),
-  refreshQualiGate: (...a) => qualiNet.refreshQualiGate(...a),
   // raceQuali is a VIEW of the grid rule (quali | rev10). The setter keeps an
   // older peer's boolean meaningful: it only moves the rule across the
   // qualifying line, never off a finer rule that already agrees with it.
