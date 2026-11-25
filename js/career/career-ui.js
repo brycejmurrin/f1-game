@@ -1818,7 +1818,8 @@ function create(G) {
     // career alias and sanitises the round, and the repair is persisted. Reading
     // the raw key handed the menu an unsanitised save.
     G.season = SeasonCal.load();
-    G.refreshCareerButton();   // repaints #mb-standings from G.season too (TitleMenu refresh)
+    G.refreshCareerButton();
+    { const mb = $("mb-standings"); if (mb) mb.hidden = !(SeasonCal.hasProgress(G.season) && G.season && G.season.round < SeasonCal.rounds()); }
     if (G.soundOn) GameAudio.uiSelect();
   };
   $("cr-garage").onclick = () => { if (writerRefused()) return; close(); G.openGarage("career"); };
