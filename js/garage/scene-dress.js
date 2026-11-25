@@ -50,11 +50,11 @@ function boardInfo(team, getParts, driverIdx, ctx) {
     // (setup-sheet.js renderStatBars → Parts.getMods(..., tune)), so a mechanical
     // set-up change cannot leave the wall quoting different numbers.
     const tune = typeof SetupTune !== "undefined" ? SetupTune.mods(team.id) : null;
-    const r = Parts.resolveSetup(getParts(team.id), team, tune);
+    const r = Parts.resolveSetup(getParts(team.id), team, tune), pm = Parts.playerMods(getParts(team.id), team, tune);
     const base = GarageExperience.statsOf(team) || { speed: 85, accel: 85, cornering: 85, braking: 85 };
     const stats = Parts.STAT_KEYS.map((k) => {
       const b = base[k.key] || 75;
-      const value = Math.round(Parts.displayStat(b * r.mods[k.key]));
+      const value = Math.round(Parts.displayStat(b * pm[k.key]));
       return { value, delta: value - b };
     });
     const spec = Parts.CATALOG.map((cat) => {

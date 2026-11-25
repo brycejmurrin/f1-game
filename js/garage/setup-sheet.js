@@ -28,7 +28,7 @@ const displayStat = Parts.displayStat;
 function renderStatBars(container, team) {
   const stats = (typeof GarageExperience !== "undefined" ? GarageExperience.statsOf(team) : team.stats) || { speed: 85, accel: 85, cornering: 85, braking: 85 };
   const tune = typeof SetupTune !== "undefined" ? SetupTune.mods(team.id) : null;
-  const mods = Parts.getMods(getTeamParts(team.id), team, tune);   // the bars move with the SETUP sheet too
+  const mods = Parts.playerMods(getTeamParts(team.id), team, tune);   // the bars move with the SETUP sheet too
   container.textContent = "";
   for (const { key, label } of CS_STATS) {
     const base = stats[key] || 75;

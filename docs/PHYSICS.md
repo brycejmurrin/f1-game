@@ -482,6 +482,28 @@ They are equal in the dry and on slicks, and separate only once it is wet —
 which makes "am I on the right tyre for these conditions?" one subtraction for
 an agent, rather than something it has to infer from lap times.
 
+### Parts parity
+
+Since 2026-11-25 the works car races at ×1.0. This was Bryce's decision: scale factory parts to about ×1.0. The
+catalog multiplies twelve categories, so a team's `FACTORY_PRESETS` build read 1.1–2.8× per stat, while the AI
+never reads mods (it runs on `tierV × skill`). As a result, a factory-kit player lapped Monza at 101.7–104.8 s against
+the field's 114.0 s. Now `Parts.playerMods(setup, team, tune)` divides raw `getMods` by the team's works build
+(`factoryResolved`, legality-keyed), and `modsFor`, the garage stat bars, the part comparison and the wall board all
+read it:
+
+- **The works build is exactly ×1.0 per stat.** A part above the works one multiplies in as before: upgrades and
+  career R&D (`Career.teamStats` → `statMult`) stack unchanged.
+- **Team character stays** in `statMult(team.stats)`, the tier-ordered chassis line the field is built from, and in
+  `aeroLoad` / `ersProfile`, which read the fitted wing and ERS unit themselves.
+- **No works build (MY TEAM) divides by 1**, so it is unchanged.
+- **A free-play sheet is read over the works build** (`getTeamParts`), so an unset category is the works part. The
+  test seat's empty `parts.mclaren` is therefore the real McLaren works car.
+- **Raw `getMods` is unchanged** for `ai-dev.js` ranking and `buildPace`, which compare two builds of one team.
+- **Saves are untouched.** A career's `fitted` is a full map, and the mods are derived at every race start, so
+  nothing migrates. A hand-stripped stock build now reads below ×1.0, because stock is a downgrade from the works car.
+
+Pinned by `tests/unit/factory-parts-parity.test.mjs`.
+
 ### The AI field is assumed competent
 
 AI cars carry no stat mods — `modsFor` is player-only and `updateCar` falls
