@@ -79,7 +79,10 @@ export async function raceSpread({ track = "bahrain", laps = 10, seed = 1, diff 
   }
   const leadAt = lapAt.get(ai.reduce((a, c) => (c.prog > a.prog ? c : a), ai[0]));
   const leadLap = leadAt.length > 2 ? med(leadAt.slice(2).map((x, i) => x - leadAt[i + 1])) : null;
-  return { track, laps, seed, diff, wear, leadLapS: r2(leadLap, 2), lapCvMedPct: r2(100 * med(cv), 3), perCar, gapsByLap };
+  // Not processional: cars whose finishing place differs from their grid place (AI-only ranks).
+  const byGrid = ai.slice().sort((a, b) => a.gridPos - b.gridPos), byEnd = ai.filter((c) => !c.retired).sort((a, b) => b.prog - a.prog);
+  const moved = byEnd.filter((c, i) => byGrid.indexOf(c) !== i).length;
+  return { track, laps, seed, diff, wear, leadLapS: r2(leadLap, 2), lapCvMedPct: r2(100 * med(cv), 3), moved, perCar, gapsByLap };
 }
 
 /** Race pace by pace rank: each car's median green lap vs the fastest car's, in % (real-F1 shape: P2/P5/P10/P20). */
@@ -114,6 +117,7 @@ export function summarize(r) {
     racePacePct: racePace(r.perCar),
     mateGapPct: mateGap(r.perCar),
     lapCvMedPct: r.lapCvMedPct,
+    moved: r.moved,
   };
 }
 
@@ -124,8 +128,8 @@ if (isMain) {
   if (argv.includes("--help")) { console.log("ai-spread [--track bahrain[,monza]] [--laps 10] [--runs 3] [--seed 1] [--diff normal] [--wear off] [--set dirtyAir=off] [--json]"); process.exit(0); }
   const tracks = flag("track", "bahrain").split(","), laps = +flag("laps", 10), runs = +flag("runs", 3), seed0 = +flag("seed", 1);
   const diff = flag("diff", "normal"), wear = wearArg(argv), out = [];
-  // --set key=value[,key=value]: extra settings for an A/B (e.g. --set dirtyAir=off).
-  const storage = Object.fromEntries((flag("set", "") || "").split(",").filter(Boolean).map((kv) => kv.split("=")));
+  // --set key=value[,key=value]: extra settings for an A/B (e.g. --set dirtyAir=off; raceGrid=null boots the shipped default).
+  const storage = Object.fromEntries((flag("set", "") || "").split(",").filter(Boolean).map((kv) => { const [k, v] = kv.split("="); return [k, v === "null" ? null : v]; }));
   for (const tr of tracks) for (let k = 0; k < runs; k++) {
     const s = summarize(await raceSpread({ track: tr, laps, seed: seed0 + k, diff, wear, storage }));
     out.push(s);
