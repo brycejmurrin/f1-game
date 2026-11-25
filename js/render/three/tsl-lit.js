@@ -382,7 +382,16 @@
     let _tuneT = null;
     const _tk = (id, def) => (_tuneT && _tuneT[id] != null ? _tuneT[id] : def);
     const _s3m = (u, a, m) => { if (a) u.value.set(a[0] * (m ?? 1), a[1] * (m ?? 1), a[2] * (m ?? 1)); };
+    // #6577 row 5: SPLIT IN TWO. updateFrameShared writes what every view of a frame shares (sun, sky, fog colour,
+    // the tuner knobs); updateView what one view owns: the fog density (game.js thins it around begin() only), the
+    // mirror's MIRROR_TUNE overrides (mirror-pass.js: carSunGlint, carSparkle, windowSunFlash, shadowStr), the shadow
+    // block (shadowCtr falls back to the eye; the lamp slots are off in the mirror) and the lamp arrays. tlx.js
+    // mirrorBegin runs both before the main begin() of the same frame, which then runs updateView only.
     function updateFrame(frame, mirror) {
+      updateFrameShared(frame);
+      updateView(frame, mirror);
+    }
+    function updateFrameShared(frame) {
       const T = (frame && frame.tune) || null;
       _tuneT = T;
       const k = _tk, s3 = _s3m;
@@ -395,7 +404,6 @@
       s3(U.skyZenith, frame.skyZenith || [0.18, 0.40, 0.78]);
       s3(U.skyHorizon, frame.skyHorizon || [0.62, 0.74, 0.88]);
       s3(U.fogColor, frame.fogColor || [0.04, 0.04, 0.06]);
-      U.fogDensity.value = (frame.fogDensity || 0) * k("fogDensityMul", 1);
       uf1(U.fogHeight, T && T.fogHeight != null ? T.fogHeight
         : (frame.fogHeight != null ? frame.fogHeight : 0.0));
       U.groundMist.value = (frame.groundMist != null ? frame.groundMist : 0) * k("mistDensity", 1);
@@ -431,15 +439,21 @@
       uf1(U.puddles, k("puddles", 1.0));
       uf1(U.matTexMix, k("matTexMix", 1.0));   // TUNE_DEFS def (was 0.0 — see the declaration)
       uf1(U.cloudShadowDim, k("cloudShadowDim", 0.80));
-      uf1(U.carSunGlint, k("carSunGlint", 12.0));
-      uf1(U.carSparkle, k("carSparkle", 1.6));
       uf1(U.fogSunCore, k("fogSunCore", 0.6));
       uf1(U.lampNearClamp, k("lampNearClamp", 4.0));
-      uf1(U.windowSunFlash, k("windowSunFlash", 1.0));
       uf1(U.skyRimGlow, k("skyRimGlow", 1.0));
       uf1(U.ambContactDark, k("ambContactDark", 1.0));
       uf1(U.lampWallSpill, k("lampWallSpill", 1.0));
       U.envStr.value = 0;   // M9: overwritten by lit.setEnvStr() in tlx.js begin() from the probe-ready state
+    }
+    function updateView(frame, mirror) {
+      const T = (frame && frame.tune) || null;
+      _tuneT = T;
+      const k = _tk;
+      U.fogDensity.value = (frame.fogDensity || 0) * k("fogDensityMul", 1);
+      uf1(U.carSunGlint, k("carSunGlint", 12.0));
+      uf1(U.carSparkle, k("carSparkle", 1.6));
+      uf1(U.windowSunFlash, k("windowSunFlash", 1.0));
       // M4 shadow upload (1:1 with the litU.uShadow* block in glx.js)
       if (shadowOn) {
         uf1(U.shadowBias, k("shadowBias", 0.001));
@@ -3500,7 +3514,7 @@
       if (i >= 0) _mats.splice(i, 1);
     }
 
-    return { makeMaterial, makeViz, releaseMaterial, uniforms: U, sharedUniforms: SHARED_UNIFORMS, updateFrame, setEnvStr, setEnvCube, setLampGrid, setLampGridColors, setLampBake, setCrowdExcite,
+    return { makeMaterial, makeViz, releaseMaterial, uniforms: U, sharedUniforms: SHARED_UNIFORMS, updateFrame, updateView, setEnvStr, setEnvCube, setLampGrid, setLampGridColors, setLampBake, setCrowdExcite,
              decalLight: { shadow: decalShadow, pool: decalPool },
              setSsrMrt, setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS,
              detail: { matDetail: MAT_DETAIL, envAll: ENV_ALL }, carSurf: !!CSN,

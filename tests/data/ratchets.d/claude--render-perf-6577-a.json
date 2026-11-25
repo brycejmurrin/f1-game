@@ -1,0 +1,11 @@
+{
+  "files": {
+    "js/render/glx/glx.js": {
+      "lines": 9
+    }
+  },
+  "tree": {
+    "assertPins": 4,
+    "assertPinsAll": 3
+  }
+}
