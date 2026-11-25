@@ -761,9 +761,14 @@
           const deepBlue = vec3(0.10, 0.30, 0.72);
           c.assign(mix(c, mix(c, deepBlue, 0.30),
             clamp(D.dayClear.mul(bandLM).mul(U.daySkyBlue), 0.0, 1.0)));
-          const az = vnoise(vec2(atan(dir.z, dir.x).mul(2.2), up.mul(6.0))).sub(0.5);
-          c.mulAssign(az.mul(0.05).mul(D.dayClear)
-            .mul(smoothstep(0.0, 0.5, up).oneMinus()).add(1.0));
+          // Exact-zero gate (GLX SKY_FS hunt 2 G3, WGX): 1 - smoothstep(0, 0.5, up)
+          // is exactly 0 once up >= 0.5, so the atan + vnoise multiply c by 1.0.
+          // The 0.51 margin keeps the gate clear of a GPU divide at the edge (#5777 R11).
+          If(up.lessThan(0.51), () => {
+            const az = vnoise(vec2(atan(dir.z, dir.x).mul(2.2), up.mul(6.0))).sub(0.5);
+            c.mulAssign(az.mul(0.05).mul(D.dayClear)
+              .mul(smoothstep(0.0, 0.5, up).oneMinus()).add(1.0));
+          });
         });
         // Golden-hour + low-sun band: both amounts are 0 when sunE >= 0.72
         // (GLX SKY_FS). A low moon key must never activate sunset bands.
@@ -827,7 +832,6 @@
             thickN.assign(tap(D.cD3).z);
           }).Else(() => {
             f.assign(fbm(cp1));
-            thickN.assign(fbm(cp2.mul(0.55).add(D.thickOff)));
           });
         }
         // Base coverage; fade in just above the horizon.
@@ -858,72 +862,78 @@
           // Firmer edges so cumulus look solid, not gauzy.
           cov.assign(mix(cov, smoothstep(0.18, 0.82, cov), cloudRich.mul(0.5)));
         });
-        // Second FBM gives per-cloud thickness (thin = backlit, thick = dark).
-        const thick = clamp((C ? thickN : fbm(cp2.mul(0.55).add(D.thickOff)))
-          .mul(2.0).sub(0.55), 0.0, 1.0).toVar();
-        // SKY ATMO cloud self-shadow: the coverage one step toward the sun on the cloud plane (A.shOff),
-        // Beer-attenuated, darkens the body of a cloud whose sunward side is deep. From the cache when
-        // its window holds (the same texel channel as f), else one more per-pixel FBM.
-        const selfSh = ATMO ? float(1.0).toVar() : null;
-        if (ATMO) {
-          If(A.shK.greaterThan(0.0), () => {
-            const fS = float(0.0).toVar();
-            if (C) {
-              If(useC, () => { fS.assign(tap(D.cD1.add(A.shOff)).x); })
-                .Else(() => { fS.assign(fbm(cp1.add(A.shOff))); });
-            } else fS.assign(fbm(cp1.add(A.shOff)));
-            const dS = smoothstep(D.covLo, 0.84, fS);
-            selfSh.assign(mix(float(1.0), exp(dS.mul(-2.2)).mul(0.6).add(0.4), A.shK));
+        // cov == 0 (clear sky between clouds): the thickness FBM and the whole
+        // lighting stack feed only mix(c, lit, 0) = c and a cityThick every
+        // consumer multiplies by cityCov = 0 — skip it, as GLX SKY_FS does (#5777 R11).
+        If(cov.greaterThan(0.0), () => {
+          if (C) If(useC.not(), () => { thickN.assign(fbm(cp2.mul(0.55).add(D.thickOff))); });
+          // Second FBM gives per-cloud thickness (thin = backlit, thick = dark).
+          const thick = clamp((C ? thickN : fbm(cp2.mul(0.55).add(D.thickOff)))
+            .mul(2.0).sub(0.55), 0.0, 1.0).toVar();
+          // SKY ATMO cloud self-shadow: the coverage one step toward the sun on the cloud plane (A.shOff),
+          // Beer-attenuated, darkens the body of a cloud whose sunward side is deep. From the cache when
+          // its window holds (the same texel channel as f), else one more per-pixel FBM.
+          const selfSh = ATMO ? float(1.0).toVar() : null;
+          if (ATMO) {
+            If(A.shK.greaterThan(0.0), () => {
+              const fS = float(0.0).toVar();
+              if (C) {
+                If(useC, () => { fS.assign(tap(D.cD1.add(A.shOff)).x); })
+                  .Else(() => { fS.assign(fbm(cp1.add(A.shOff))); });
+              } else fS.assign(fbm(cp1.add(A.shOff)));
+              const dS = smoothstep(D.covLo, 0.84, fS);
+              selfSh.assign(mix(float(1.0), exp(dS.mul(-2.2)).mul(0.6).add(0.4), A.shK));
+            });
+          }
+          const sl = pow(sd, 2.0).toVar();
+          // Under heavy overcast even a bright sun gives grey clouds (effSunBright,
+          // goldenC == golden: derive()).
+          // Sunlit tops: white in daylight, warm/red at golden hour.
+          const cloudTop = mix(vec3(0.58, 0.62, 0.70), vec3(1.0, 0.97, 0.91), sl).toVar();
+          cloudTop.mulAssign(D.topK);
+          cloudTop.assign(mix(cloudTop, cloudTop.mul(D.topTint), sl.mul(D.topWarm)));
+          cloudTop.assign(mix(cloudTop, vec3(0.62, 0.63, 0.65), overcast.mul(0.65)));
+          // Dark undersides: cooler/dimmer, warm pink under-glow at sunset —
+          // no per-pixel input at all, so the whole colour is derive()d.
+          const cloudBot = D.cloudBot;
+          const capf = clamp(thick.oneMinus().mul(0.75).add(0.18), 0.0, 1.0).toVar();
+          const lit = mix(cloudBot, cloudTop, capf).toVar();
+          // Day: widen the top-bottom contrast (gated; twilight keeps soft grading).
+          lit.assign(mix(lit, mix(cloudBot.mul(0.80), cloudTop.mul(1.14), capf), daytime.mul(0.45)));
+          if (ATMO) lit.mulAssign(selfSh);
+          // Silver lining: thin sun-facing edges glow (backlit forward scatter).
+          const silver = pow(sd, 6.0).mul(thick.oneMinus()).mul(D.silverK);
+          lit.addAssign(D.silverCol.mul(silver));
+          // SKY ATMO silver lining: a Henyey-Greenstein forward lobe (g 0.75, peak-normalised:
+          // (1-g)^3 / (1+g^2-2g mu)^1.5 is 1 looking at the sun) on the cloud EDGES (cov (1-cov), peak at
+          // half cover) of thin cloud, so the rim lights up around the sun, not the body.
+          if (ATMO) {
+            const hgN = pow(max(sd.mul(-1.5).add(1.5625), 1e-4), -1.5).mul(0.015625);
+            lit.addAssign(D.silverCol.mul(hgN.mul(cov.mul(cov.oneMinus()).mul(4.0)).mul(thick.oneMinus()).mul(A.silK)));
+          }
+          // Twilight: broad warm wash. twilight is a uniform — 0 on default
+          // day / night (GLX SKY_FS). Dawn/dusk still enter.
+          If(twilight.greaterThan(0.001), () => {
+          lit.addAssign(D.washCol.mul(pow(sd, 2.5)));
           });
-        }
-        const sl = pow(sd, 2.0).toVar();
-        // Under heavy overcast even a bright sun gives grey clouds (effSunBright,
-        // goldenC == golden: derive()).
-        // Sunlit tops: white in daylight, warm/red at golden hour.
-        const cloudTop = mix(vec3(0.58, 0.62, 0.70), vec3(1.0, 0.97, 0.91), sl).toVar();
-        cloudTop.mulAssign(D.topK);
-        cloudTop.assign(mix(cloudTop, cloudTop.mul(D.topTint), sl.mul(D.topWarm)));
-        cloudTop.assign(mix(cloudTop, vec3(0.62, 0.63, 0.65), overcast.mul(0.65)));
-        // Dark undersides: cooler/dimmer, warm pink under-glow at sunset —
-        // no per-pixel input at all, so the whole colour is derive()d.
-        const cloudBot = D.cloudBot;
-        const capf = clamp(thick.oneMinus().mul(0.75).add(0.18), 0.0, 1.0).toVar();
-        const lit = mix(cloudBot, cloudTop, capf).toVar();
-        // Day: widen the top-bottom contrast (gated; twilight keeps soft grading).
-        lit.assign(mix(lit, mix(cloudBot.mul(0.80), cloudTop.mul(1.14), capf), daytime.mul(0.45)));
-        if (ATMO) lit.mulAssign(selfSh);
-        // Silver lining: thin sun-facing edges glow (backlit forward scatter).
-        const silver = pow(sd, 6.0).mul(thick.oneMinus()).mul(D.silverK);
-        lit.addAssign(D.silverCol.mul(silver));
-        // SKY ATMO silver lining: a Henyey-Greenstein forward lobe (g 0.75, peak-normalised:
-        // (1-g)^3 / (1+g^2-2g mu)^1.5 is 1 looking at the sun) on the cloud EDGES (cov (1-cov), peak at
-        // half cover) of thin cloud, so the rim lights up around the sun, not the body.
-        if (ATMO) {
-          const hgN = pow(max(sd.mul(-1.5).add(1.5625), 1e-4), -1.5).mul(0.015625);
-          lit.addAssign(D.silverCol.mul(hgN.mul(cov.mul(cov.oneMinus()).mul(4.0)).mul(thick.oneMinus()).mul(A.silK)));
-        }
-        // Twilight: broad warm wash. twilight is a uniform — 0 on default
-        // day / night (GLX SKY_FS). Dawn/dusk still enter.
-        If(twilight.greaterThan(0.001), () => {
-        lit.addAssign(D.washCol.mul(pow(sd, 2.5)));
+          // The cloud body follows the same authored twilight radiance ratio as
+          // the grey gradient. Day/night stay unchanged; moon and flash follow.
+          lit.mulAssign(mix(daytime.mul(0.65).add(0.35), float(1.0), D.nightSky));
+          // Moon tints nearby clouds faintly blue-silver.
+          If(U.moon.greaterThan(0.0), () => {
+            const moonLit = U.moon.mul(cov).mul(thick.mul(0.6).oneMinus()).mul(0.18);
+            lit.assign(mix(lit, lit.add(vec3(0.08, 0.10, 0.16)), moonLit));
+          });
+          // LIGHTNING: the deck flares — thick bellies brightest (bolt inside/
+          // behind the deck), cool blue-white, HDR >1 so it blooms.
+          If(U.lightning.greaterThan(0.001), () => {
+            const ltFlash = vec3(0.82, 0.94, 1.30).mul(thick.mul(1.2).add(1.0));
+            lit.assign(mix(lit, ltFlash, clamp(U.lightning.mul(thick.mul(0.60).add(0.40)), 0.0, 1.0)));
+          });
+          c.assign(mix(c, lit, cov));
+          cityThick.assign(thick);
         });
-        // The cloud body follows the same authored twilight radiance ratio as
-        // the grey gradient. Day/night stay unchanged; moon and flash follow.
-        lit.mulAssign(mix(daytime.mul(0.65).add(0.35), float(1.0), D.nightSky));
-        // Moon tints nearby clouds faintly blue-silver.
-        If(U.moon.greaterThan(0.0), () => {
-          const moonLit = U.moon.mul(cov).mul(thick.mul(0.6).oneMinus()).mul(0.18);
-          lit.assign(mix(lit, lit.add(vec3(0.08, 0.10, 0.16)), moonLit));
-        });
-        // LIGHTNING: the deck flares — thick bellies brightest (bolt inside/
-        // behind the deck), cool blue-white, HDR >1 so it blooms.
-        If(U.lightning.greaterThan(0.001), () => {
-          const ltFlash = vec3(0.82, 0.94, 1.30).mul(thick.mul(1.2).add(1.0));
-          lit.assign(mix(lit, ltFlash, clamp(U.lightning.mul(thick.mul(0.60).add(0.40)), 0.0, 1.0)));
-        });
-        c.assign(mix(c, lit, cov));
         cityCov.assign(cov);
-        cityThick.assign(thick);
       });
 
       // LIGHTNING sky-gradient lift: the clear dome between the clouds picks

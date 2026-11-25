@@ -43,7 +43,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior-y: contain;
-  touch-action: pan-y;
+  touch-action: manipulation;
   /* One themed thumb on narrow: plate-line on transparent, not OS white. */
   scrollbar-width: thin;
   scrollbar-color: var(--plate-line) transparent;
@@ -510,14 +510,14 @@
 .duel-option-name { font-weight: 800; letter-spacing: var(--ls-3); }
 .duel-option-meta { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-4); }
 /* Two rows need their control clusters plus labels and the sheet gutters. */
-/* At narrow effective widths the select is the complete control. Repeating
-   step buttons beside it would squeeze the chosen value at larger text sizes. */
+/* At narrow effective widths the value is the complete control: a tap cycles
+   it (no dropdown, js/ui/setting-row.js noPicker). Repeating step buttons
+   beside it would squeeze the chosen value at larger text sizes. */
 @container sheet (max-width: 360px) {
   #rs-body .set-row > div { flex: 1 1 12rem; }
   #rs-body .set-row > div > button[data-step] { display: none; }
   #rs-body .set-row > div > select {
     flex: 1 1 100%; width: 100%; min-width: 0;
-    appearance: auto; -webkit-appearance: auto;
     height: auto; min-height: max(var(--chip-h), 1.6em);
     line-height: 1.3; padding-block: calc(var(--gap) * .25);
   }
@@ -653,7 +653,7 @@
   /* Height was deliberately put on the floored token; the width literal was
      the gap — eleven colour wells painted 19.2px wide at UI SIZE 40%. The
      max() arm only wins below 100%. */
-  width: max(48px, var(--tap-min)); height: var(--chip-h); padding: 0; border: 1px solid var(--plate-line);
+  width: max(48px, var(--tap-min), var(--tap-floor44)); height: var(--chip-h); padding: 0; border: 1px solid var(--plate-line);
   border-radius: var(--r-sm); background: none; cursor: pointer; flex: none;
 }
 /* NONE'd colour well (game.js toggles cz-off) dims like its inline-livery twin

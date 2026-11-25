@@ -348,7 +348,7 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   /* reserve the desktop scrollbar so content does not jump sideways the moment
      a list grows past its box */
   scrollbar-gutter: stable;
-  touch-action: pan-y;
+  touch-action: manipulation;
 }
 /* .sf-t / .sf-b / .sf-l / .sf-r are set by js/game/scrollfade.js on panes
    that still have content hidden on that edge. No class = no mask, so a pane

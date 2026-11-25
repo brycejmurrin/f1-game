@@ -73,7 +73,13 @@
     // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
     // researched real turn count. No researched sectors — consumers fall back to thirds.
     sectors: [0.336, 0.665],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.0470, 0.1720, 0.1780, 0.3185, 0.3940, 0.4400, 0.4675, 0.5210, 0.5365, 0.5860, 0.7780, 0.7950, 0.8045, 0.8105, 0.8405, 0.8560, 0.9220, 0.9475],
+    // T11/T12 are the flat-out right and left sweeps of the back straight (T10 opens
+    // the second DRS zone; drivers brake for T13 while still exiting T12), seated on
+    // their own sub-threshold kinks. T13 is the heavy-braking right, T14 the 90-degree
+    // left, T15-T16 the left-right pair: #5652 survey (racefans/F1 track guides, TUMFTM
+    // Sochi.csv curvature, peaks within 8 m). The old list put T11/T12 on the real
+    // T13/T14 and two spare entries on T14's exit.
+    turns: [0.0470, 0.1720, 0.1780, 0.3185, 0.3940, 0.4400, 0.4675, 0.5210, 0.5365, 0.5860, 0.6149, 0.7557, 0.7780, 0.7950, 0.8405, 0.8560, 0.9220, 0.9475],
     furniture: { tree: "broad", fol: [0.20, 0.44, 0.20], lamp: "globe", lc: [0.94, 0.96, 1.0], treeCrown: "columnar" },  // landscaped Olympic-park planting
     kit: { marshal: "kiosk",     rail: "jersey",      fence: "panelled",  tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "monopole",  hoarding: "led" },
     standSet: ["alu", "teal", "darkSteel"],  // 2014 Olympic-park metal and glass

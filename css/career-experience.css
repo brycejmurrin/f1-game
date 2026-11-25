@@ -4,7 +4,7 @@
 [data-career-part="nav"] {
   display: flex; flex-wrap: nowrap; gap: var(--gap);
   min-width: 0; overflow-x: auto; overflow-y: hidden;
-  overscroll-behavior-x: contain; touch-action: pan-x;
+  overscroll-behavior-x: contain; touch-action: manipulation;
   scrollbar-width: none;
 }
 [data-career-part="nav"]::-webkit-scrollbar { display: none; }

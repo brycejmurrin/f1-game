@@ -100,7 +100,7 @@
   min-width: 0;
   overflow-x: auto; overflow-y: hidden;
   overscroll-behavior-x: contain;
-  touch-action: pan-x;
+  touch-action: manipulation;
   scrollbar-width: none;
 }
 #sel-track-filter::-webkit-scrollbar { display: none; }
@@ -164,7 +164,7 @@
   padding-inline-end: calc(var(--pad) + var(--chip-h));
   overflow-x: auto; overflow-y: hidden;
   overscroll-behavior-x: contain;
-  touch-action: pan-x;
+  touch-action: manipulation;
   scroll-snap-type: x proximity;
   scroll-padding-inline: var(--pad);
   scroll-padding-inline-end: calc(var(--pad) + var(--chip-h));

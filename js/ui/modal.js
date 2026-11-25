@@ -461,21 +461,33 @@ window.TopModal = (function () {
      script's el.click() (untrusted) and automation (navigator.webdriver,
      whose bot-speed clicks are deliberate, as loading-card.js treats it)
      always pass; tests/unit/menu-a11y-audit.test.mjs covers the guard.
-     Pointer down/up too (W34); only a click opens a window. */
+     Pointer down/up too (W34); only a click opens a window. An aria-busy
+     layer (#carsetup builds off the click stack) holds it to the frame after
+     its build: a ghost stamped before that frame picked GARAGE driver chip #6
+     (UI matrix 2026-11-25 row 5). */
   const SHIELD_MS = 350, SHIELD_PX = 32, SHOW_LATE_MS = 5000;
   let lastTap = null, shield = null;
   // Time an event by its input stamp: a slow build queues the ghost (W34).
   const evtAt = (e) => (e && e.timeStamp > 0 && typeof performance !== "undefined" && performance.timeOrigin > 0
     ? performance.timeOrigin + e.timeStamp : Date.now());
   function shieldLayer(layer) {
-    if (lastTap && Date.now() - lastTap.at < SHOW_LATE_MS) shield = { layer, until: lastTap.at + SHIELD_MS, x: lastTap.x, y: lastTap.y };
+    shield = null;
+    if (!lastTap || Date.now() - lastTap.at >= SHOW_LATE_MS) return;
+    const s = shield = { layer, until: lastTap.at + SHIELD_MS, x: lastTap.x, y: lastTap.y, cap: Date.now() + SHOW_LATE_MS };
+    // A rAF runs just before its frame paints: the first one past the build stamps the frame.
+    const tick = () => {
+      if (shield !== s || Date.now() > s.cap) return;
+      if (layer.getAttribute("aria-busy") === "true") requestAnimationFrame(tick);
+      else { s.building = false; s.until = Math.max(s.until, Date.now()); }
+    };
+    if (layer.getAttribute && layer.getAttribute("aria-busy") === "true" && typeof requestAnimationFrame === "function") { s.building = true; requestAnimationFrame(tick); }
   }
   function onClickShield(e) {
     const isClick = e.type === "click";
     if (!e.isTrusted || (isClick && e.detail === 0)) return;
     if (typeof navigator !== "undefined" && navigator && navigator.webdriver === true) return;
     const s = shield, now = evtAt(e);
-    if (s && now < s.until && s.layer.contains(e.target) &&
+    if (s && (s.building ? now < s.cap : now < s.until) && s.layer.contains(e.target) &&
         Math.hypot(e.clientX - s.x, e.clientY - s.y) <= SHIELD_PX) {
       e.preventDefault();
       // A pointer event stops short of its target only: other window-capture

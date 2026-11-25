@@ -1085,6 +1085,23 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   dash.value = { ...dash.value, flags: dash.value.flags & ~PhonePad.DASH.otOn };
   for (let i = 0; i < 6; i++) frame();
   assert.ok(dom.buttons.overtake.every(b => !b.classes.has("on") && b.attrs["aria-pressed"] === "false"), "the host ending OT returns both to idle");
+  // CAM (#6271): a tap cycles on the lift; held 340 ms it opens the game's full camera picker.
+  dom.buttons.camera.dispatch("pointerdown", {});
+  for (let i = 0; i < 3; i++) frame();
+  assert.equal(desk.Input.consumeCameraCycle(), false, "CAM waits for the lift to know tap from hold");
+  dom.buttons.camera.dispatch("pointerup", { type: "pointerup" });
+  for (let i = 0; i < 3; i++) frame();
+  assert.equal(desk.Input.consumeCameraCycle(), true, "a tap cycles");
+  dom.buttons.camera.dispatch("pointerdown", {});
+  timers.advance(340); for (let i = 0; i < 3; i++) frame();
+  assert.equal(desk.Input.consumeCameraMenu(), true, "a held CAM opens the picker while the thumb is still down");
+  dom.buttons.camera.dispatch("pointerup", { type: "pointerup" });
+  for (let i = 0; i < 3; i++) frame();
+  assert.equal(desk.Input.consumeCameraCycle(), false, "and its lift cycles nothing");
+  dom.buttons.camera.dispatch("pointerdown", {}); dom.buttons.camera.dispatch("pointercancel", { type: "pointercancel" });
+  timers.advance(1000); for (let i = 0; i < 3; i++) frame();
+  assert.equal(desk.Input.consumeCameraCycle() || desk.Input.consumeCameraMenu(), false, "a cancelled touch is neither");
+  assert.equal(timers.pending(), 0, "and leaves no timer");
   // MENU PAD: a held direction repeats at a keyboard's cadence (380 ms, then every 110 ms); the release stops it.
   const e0 = link.stats().events;
   dom.buttons.navDown.dispatch("pointerdown", {});
@@ -1151,6 +1168,51 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   assert.equal(ctl.state().linked, false); assert.ok(!dom.body.classes.has("linked"));
   assert.match(dom.status.textContent, /Disconnected/);
   assert.equal(dom.connect.disabled, false, "CONNECT is offered again");
+});
+
+test("#6372 × #6334: a HOLD button held into Pause is switched off on Resume, and the next press is not inverted", async () => {
+  const desk = bootInput();
+  const layers = { open: false };
+  desk.sb.UiLayers = { inRace: () => true, anyOpen: () => layers.open, navOpen: () => layers.open, top: () => null };
+  const [padEnd, hostEnd] = NetTransport.loopback({ latencyMs: 2, rnd: NetTransport.seededRnd(5) });
+  padEnd.pump(0); hostEnd.pump(0);
+  const clock = desk.clock;
+  let boostOn = false;   // the host's BOOST, flipped by each edge it accepts (game.js consumeBoostToggle)
+  const hud = () => ({ gear: 3, kmh: 100, rpm: 0.5, lap: 1, laps: 5, pos: 1, cars: 2, ers: 0.5, flags: boostOn ? PhonePad.DASH.boost : 0,
+    caution: 0, lastLapMs: 0, state: "race", surface: layers.open ? "menu" : "drive", team: "" });
+  const link = PhonePad.link(hostEnd, { input: desk.Input, pump: false, now: () => clock.t, hud });
+  const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(),
+    center: fakeEl(), rim: fakeEl(), buttons: Object.fromEntries(PhonePad.EVENTS.map((k) => [k, fakeEl()])), hud: lcd() };
+  PedalTravel.setButtonProfile("boost", { latch: "hold" });
+  let ctl;
+  try {
+    ctl = PhonePad.pad(dom, { now: () => clock.t, timers: fakeTimers(), deps: {
+      rtc: () => padEnd, prefetchIce: async () => null, normalise: (c) => String(c).toUpperCase(), valid: (c) => c.length === 6,
+      swap: async (o) => { const ans = await o.reply("OFFER"); return ans ? { ok: true } : { ok: false, error: "reply_failed" }; },
+      acceptInvite: async () => ({ ok: true, code: "ANSWER" }),
+    } });
+    assert.deepEqual(await ctl.connect("abc234"), { ok: true });
+    const frames = (n) => { for (let i = 0; i < n; i++) { clock.t += 70; ctl.pump(); link.pump(); desk.Input.poll(); if (desk.Input.consumeBoostToggle()) boostOn = !boostOn; } };
+    frames(4);
+    assert.ok(dom.body.classes.has("linked"), "the wheel is up");
+    dom.buttons.boost.dispatch("pointerdown", {});
+    frames(4);
+    assert.equal(boostOn, true, "HOLD: the press switches BOOST on");
+
+    layers.open = true;   // Pause with the thumb still on BOOST: the phone flips to the menu pad and lets go
+    frames(12);
+    assert.equal(boostOn, true, "the host drops driving edges under the pause card (input.js remoteEvent)");
+
+    layers.open = false; desk.Input.invalidateRemoteDrive();   // Resume (game.js setPaused)
+    frames(6);
+    assert.equal(boostOn, false, "back on the wheel with no finger on it: the owed lift switches BOOST off");
+    dom.buttons.boost.dispatch("pointerdown", {});
+    frames(4);
+    assert.equal(boostOn, true, "the first press after Resume switches it ON, not off");
+    dom.buttons.boost.dispatch("pointerup", {});
+    frames(4);
+    assert.equal(boostOn, false, "and its lift switches it off");
+  } finally { ctl?.cancel(); PedalTravel.resetButtonProfile("boost"); }
 });
 
 test("pad(): a lost lift on the menu stick or a held arrow is caught by the all-fingers-up / hidden nets (hunt3 7-F5)", async () => {
@@ -3273,6 +3335,85 @@ test("the phone uses the configured slide endpoint and independent absolute cros
   } finally {
     ctl?.cancel(); PedalTravel.resetButtonProfile("gas"); PedalTravel.resetButtonProfile("brake");
     if (oldDoc === undefined) delete globalThis.document; else globalThis.document = oldDoc;
+  }
+});
+
+test("opening Wheel Layout or Move & Size retires a captured Gas touch without dropping the link", async () => {
+  const dom = makeDom(), previousDocument = globalThis.document, previousWindow = globalThis.window;
+  const [transport, host] = NetTransport.loopback({ latencyMs: 0 });
+  transport.pump(0); host.pump(0);
+  const samples = [];
+  host.onMessage((channel, data) => { if (channel === NetTransport.STATE) samples.push(PhonePad.decodeSample(data)); });
+  const window = { addEventListener(type, fn) { if (type === "DOMContentLoaded") fn(); } };
+  const document = dom.document, gas = dom.byId("gas"), sheet = dom.byId("layout-sheet");
+  const byId = document.getElementById;
+  document.getElementById = id => {
+    const el = byId(id);
+    el.getClientRects = () => el.hidden ? [] : [{}];
+    return el;
+  };
+  sheet.hidden = true;
+  sheet.showModal = () => { sheet.open = true; };
+  sheet.close = () => { sheet.open = false; };
+  sheet.append(dom.byId("lay-arrange"), dom.byId("lay-done"));
+  let captured;
+  gas.setPointerCapture = pointerId => { captured = pointerId; };
+  const send = (el, type, pointerId, clientY = 0) => dom.dispatch(el, {
+    type, pointerId, pointerType: "touch", button: 0, clientX: 0, clientY, bubbles: true,
+  });
+  const tap = id => {
+    const el = dom.byId(id);
+    el.focus();
+    send(el, "pointerdown", 2);
+    send(el, "pointerup", 2);
+    send(el, "click", 2);
+  };
+  try {
+    globalThis.document = document; globalThis.window = window;
+    const scripts = [...read("controller.html").matchAll(/<script>([\s\S]*?)<\/script>/g)];
+    const pad = (elements, opts) => PhonePad.pad(elements, { ...opts, now: () => 0, deps: {
+      rtc: () => transport, prefetchIce: async () => null, normalise: c => c,
+      valid: () => true, privateRelay: () => false, swap: async () => ({ ok: true }),
+    } });
+    vm.runInNewContext(scripts.at(-1)[1], { window, document, location: { search: "" }, NetTransport,
+      PhonePad: { ...PhonePad, pad }, PhonePadPage }, { filename: absSrc("controller.html") });
+    const ctl = window.__apexPad, layout = window.__apexPadLayout;
+    assert.equal((await ctl.connect("ABC234")).ok, true);
+    host.send(NetTransport.EVENT, PhonePad.encodeHello("host", false, true));
+    ctl.pump();
+    assert.equal(ctl.setSteeringMode("touch"), true);
+
+    for (const arranging of [false, true]) {
+      send(gas, "pointerdown", 1);
+      assert.equal(captured, 1);
+      host.pump(0);
+      assert.equal(samples.at(-1).thr, 1);
+      if (arranging) layout.arrange(true);
+      else tap("b-layout");
+      assert.equal(dom.body.classList.contains("arranging"), arranging);
+      assert.equal(sheet.open === true, !arranging);
+      host.pump(0);
+      assert.equal(ctl.state().thr, 0);
+      assert.equal(samples.at(-1).thr, 0, "release reaches the host immediately");
+      send(gas, "pointermove", 1, 40);
+      assert.equal(ctl.state().thr, 0);
+      if (arranging) tap("arr-done");
+      else tap("lay-done");
+      assert.equal(dom.body.classList.contains("arranging"), false);
+      assert.equal(sheet.open === true, false);
+      send(gas, "pointermove", 1, 20);
+      assert.equal(ctl.state().thr, 0, "closing the editor cannot revive the retired contact");
+      send(gas, "pointerup", 1);
+      assert.equal(ctl.state().linked, true);
+      assert.equal(ctl.state().steeringMode, "touch");
+    }
+    send(gas, "pointerdown", 3);
+    host.pump(0);
+    assert.equal(samples.at(-1).thr, 1, "a fresh touch works after closing the editor");
+  } finally {
+    window.__apexPad?.cancel();
+    if (previousDocument === undefined) delete globalThis.document; else globalThis.document = previousDocument;
+    if (previousWindow === undefined) delete globalThis.window; else globalThis.window = previousWindow;
   }
 });
 

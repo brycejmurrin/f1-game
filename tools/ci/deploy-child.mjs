@@ -20,6 +20,9 @@ function identity(pid) {
 
 export async function superviseDeployChild(cmd, args, {
   cwd, env, stdio, timeoutMs, graceMs = 1000, cleanupMs = 5000,
+  // The deadline clock. Tests inject one so the deadline fires after their fixtures
+  // report ready, not at a wall-clock instant that races child start-up under load.
+  startTimer = setTimeout,
 } = {}) {
   let child, timer, stopping, resolveStop, interrupted = null, launchError = null;
   const stopped = new Promise(resolve => { resolveStop = resolve; });
@@ -66,7 +69,7 @@ export async function superviseDeployChild(cmd, args, {
       child.once("error", error => { launchError = error; });
       child.once("close", (status, signal) => resolve({ status, signal }));
     });
-    timer = setTimeout(() => { void stop("ETIMEDOUT"); }, timeoutMs);
+    timer = startTimer(() => { void stop("ETIMEDOUT"); }, timeoutMs);
     // Cleanup has its own ceiling: never await a SIGTERM-resistant child first.
     const result = await Promise.race([exit, stopped]);
     if (stopping) result.survivors = await stopping;

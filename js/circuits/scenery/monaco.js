@@ -5,7 +5,12 @@
    tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["monaco"] =
-  function (api) {
+  function (api, stepped = false) {
+    const steps = buildSteps();
+    if (stepped) return steps;
+    while (!steps.next().done) { /* synchronous scenery callers */ }
+
+    function* buildSteps() {
       const { K, out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, terrainYAt, night, addBox, addPrism, addCyl, addCone, addFrustum, modelGroup, overheadSpan, lampPost, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, bush, hedge, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, bakedModel, seat, motorhome } = api;
       // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
       // Ask the same question first, so a hill that overlaps a parallel stretch
@@ -187,7 +192,9 @@
       // stretch — docs/research/STREET-PIT-LANES-PLAN-2026-09.md §4.
       wall(0.0, 0.1526, -1, 1.2, 0.8, ARMCO, 0.22);
       wall(0.2570, FULL_LAP, -1, 1.2, 0.8, ARMCO, 0.22);
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       wall(0.0, FULL_LAP, 1, 1.2, 0.8, ARMCO, 0.22);
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       guardrail(0.02, 0.07, -1, 0.5, ARMCO);
 
       // Sainte Devote chapel (racing 0.0655, the T1 apex, outside = R) — small
@@ -579,6 +586,7 @@
         }
       }
 
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       {
         // Portals are authored in racing space, from the measured positions of
         // the old KOLD(0.478..0.553) bore. Rain uses these same roof dimensions.
@@ -1160,6 +1168,7 @@
       }
 
       // ── PIT WALL & START GRANDSTAND (s=0.03, R) ──────────────────────────
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       wall(0.0, 0.06, 1, 1.5, 1.0, [0.66, 0.67, 0.69], 0.6);
       scaffoldStand(0.016, 0.048, 1, 9, {
         rows: 5, rise: 1.1, setback: 1.7, legEvery: 1,
@@ -1261,6 +1270,7 @@
         grandstandEx(0.76 + i * gsHalf, -1, 9, gsLen, null, null,
           { livery: "scaffold", tiers: 2, roof: "truss", endWalls: true, pylons: true }); // Grandstand K
       }
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       grandstandEx(0.25,  1, 7, 40, null, null, { livery: "alu", tiers: 1, roof: "flat" });
       grandstandEx(0.72,  1, 9, 36, null, null, { livery: "pastel", tiers: 1, roof: "cantilever", suites: true });
 
@@ -1338,6 +1348,7 @@
       palm(KRACE(0.149), racingSide(-1), 14, 9.3, [0.25, 0.45, 0.22]);
 
       const harbourStations = [0.365, 0.545, 0.59]; // AUTHORED (source-frame) fracs, passed to K(); the basin they land on was measured in the Node build (x -400..-80, z 160..430), not by racing frac
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       for (let station = 0; station < harbourStations.length; station++) {
         waterField(K(harbourStations[station]), 1, 16, 300, 72, 12, SEA,
           { id: `monaco-harbour-water-${station}`, required: true });
@@ -1598,6 +1609,7 @@
       //
       // NOTHING SOUTH OR EAST. That half is the Mediterranean, and a hill
       // there would close the one open horizon the circuit has.
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       {
         const bear = (deg) => { const r = deg * Math.PI / 180; return [-Math.sin(r), Math.cos(r)]; };
         for (const [deg, dist, w, h, sd, rock] of [
@@ -1638,6 +1650,7 @@
       // EAST rim from (-366, 428) to (-290, 210), and the sea is beyond the
       // tunnel's seawall. The trace is rotated against true north, so the
       // amphitheatre bearings above do not carry over to the coastline.
+      yield;   // paced scenery: a step boundary between complete landmarks (#6401)
       {
         const FLOOR = pyMin - 1;   // surface.js floorY
         const inPoly = (poly, x, z) => {
@@ -1682,6 +1695,7 @@
             else { flush(); if (sea) run = [ix, ix]; }
           }
           flush();
+          if ((iz + 210) % 34 === 33) yield;   // paced: whole rows of sea cells per step
         }
 
         // City fill: the principality is wall-to-wall six-to-twelve-storey
@@ -1692,7 +1706,9 @@
           [0.95, 0.93, 0.88], [0.90, 0.74, 0.66], [0.84, 0.80, 0.70]];
         const ROOF = [0.60, 0.32, 0.22];
         const CC = 34;
+        yield;   // paced scenery: the city fill reads only finished cells
         for (let iz = -30; iz <= 32; iz++) for (let ix = -32; ix <= 34; ix++) {
+          if (ix === -32 && (iz + 30) % 16 === 15) yield;   // paced: whole rows of city blocks per step
           const h1 = hash(ix * 7.13 + iz * 3.71), h2 = hash(ix * 1.97 + iz * 9.31);
           if (h1 > 0.62) continue;
           const x = (ix + 0.5) * CC + (h2 - 0.5) * 6, z = (iz + 0.5) * CC + (h1 - 0.3) * 6;
@@ -1721,4 +1737,5 @@
         }
         out._mat = 0;
       }
-    };
+    }
+  };

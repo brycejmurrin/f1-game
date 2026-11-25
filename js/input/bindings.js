@@ -87,8 +87,10 @@ const InputBindings = (function () {
     // Ctrl and Alt too: Alt is the key-release-all chord (Alt+Tab), and with Ctrl
     // bound a Ctrl+W on the default GAS closes the tab — browsers never hand those
     // chords to a page (https://developer.chrome.com/docs/capabilities/web-apis/keyboard-lock).
+    // And the browser's (reload, fullscreen, devtools, history: #6288).
+    const KEY_BROWSER = { F5: 1, F11: 1, F12: 1, BrowserBack: 1, BrowserForward: 1, BrowserRefresh: 1 };
     const KEY_RESERVED = { Escape: 1, Enter: 1, NumpadEnter: 1, Tab: 1, Backquote: 1, F9: 1, MetaLeft: 1, MetaRight: 1, ContextMenu: 1,
-      AltLeft: 1, AltRight: 1, ControlLeft: 1, ControlRight: 1 };
+      AltLeft: 1, AltRight: 1, ControlLeft: 1, ControlRight: 1, ...KEY_BROWSER };
     const keyMap = {};
     let codeToAction = {};
     // Either Shift / Ctrl / Alt counts as the one key: the default SHIFT DOWN was
@@ -135,7 +137,7 @@ const InputBindings = (function () {
     function setKeyBinding(id, slot, code) {
       if (!keyMap[id] || !(slot === 0 || slot === 1) || !code) return { ok: false, reason: "invalid" };
       code = normCode(String(code));
-      if (KEY_RESERVED[code]) return { ok: false, reason: "reserved" };
+      if (KEY_RESERVED[code]) return KEY_BROWSER[code] ? { ok: false, reason: "reserved", by: "browser" } : { ok: false, reason: "reserved" };
       const conflict = claim(KEY_ACTIONS, keyMap, id, slot, code);
       rebuildKeyIndex();
       return { ok: true, conflict };

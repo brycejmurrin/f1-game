@@ -411,7 +411,7 @@
       // Separate stand blocks at the T9 apex where the two canopy runs intersect.
       arcStand(0.520, 0.531, -1, 18, { rows: 8 });
       arcStand(0.542, 0.575, -1, 18, { rows: 8 });
-      arcStand(0.795, 0.845, 1, 16, { rows: 7, span: 8.5 });  // T12/T13/T14 (spans T12-T15)
+      arcStand(0.795, 0.845, 1, 16, { rows: 7, span: 8.5 });  // T14/T15 (the 90-degree left into the T15-T16 pair)
 
       groundPatch(K(0.045), -1, 5, [26, 0.18, 34], GRAVEL,
         { id: "sochi-t1-gravel", samples: 6 });

@@ -371,3 +371,41 @@ test("#5241 G4: js/fx and sw.js route to the spec that exercises them (#5181, #5
     assert.ok(got.includes(n === 5181 ? "tests/specs/tlx-probes.spec.js" : "tests/specs/perf-sw-cache-hit.spec.js"), `#${n}`);
   }
 });
+
+test("F4 of #3117: the slow guests run on exactly one row whenever slow is scheduled (2026-11-24)", async () => {
+  const { PAGE_A_GUESTS, guestsOnPageA } = await import("../../tools/ci/pick-unit-slices.mjs");
+  const rows = (o) => Object.entries(o).map(([slice, needed]) => ({ slice, needed }));
+  // slow stays their home row (routing, the npm lines, gateNodeSuites); page-a hosts only when both are scheduled.
+  assert.deepEqual(PAGE_A_GUESTS.filter((g) => SLICE_SCRIPTS.slow.includes(g)), ["test:mcp", "test:service-worker"]);
+  assert.deepEqual([
+    rows({ "page-a": "true", slow: "true" }), rows({ slow: "true" }), rows({ "page-a": "false", slow: "true" }),
+    rows({ "page-a": "true" }), rows({ "page-a": "true", slow: "false" }), [], undefined,
+  ].map(guestsOnPageA), [true, false, false, false, false, false, false]);
+  // Behaviour, not a source pin: run the step's own shell for every row with npm and run-group stubbed, against the
+  // matrices a PR can produce, and read which row ran each guest.
+  const ci = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
+  const step = ci.slice(ci.indexOf("- name: Pure-node unit suites")).split(/\n      - name: /)[0];
+  const body = step.slice(step.indexOf("run: |\n") + 7).split("\n");
+  const script = body.slice(0, body.findIndex((l) => l && !l.startsWith(" ".repeat(10)))).map((l) => l.slice(10)).join("\n");
+  const tmp = fs.mkdtempSync(path.join(ROOT, "artifacts", "f4-guests-"));
+  try {
+    fs.mkdirSync(path.join(tmp, "tools/ci"), { recursive: true });
+    fs.mkdirSync(path.join(tmp, "bin"));
+    fs.writeFileSync(path.join(tmp, "tools/ci/pick-unit-slices.mjs"), `export * from ${JSON.stringify(path.join(ROOT, "tools/ci/pick-unit-slices.mjs"))};\n`);
+    fs.writeFileSync(path.join(tmp, "tools/ci/run-group.mjs"), "console.log('RAN ' + process.argv.slice(2).join(' '));\n");
+    fs.writeFileSync(path.join(tmp, "bin/npm"), "#!/bin/sh\necho \"RAN $2\"\n", { mode: 0o755 });
+    fs.writeFileSync(path.join(tmp, "node-plan.sh"), "planned() { return 0; }\n");
+    fs.writeFileSync(path.join(tmp, "step.sh"), script);
+    const ran = (matrix, skipTf = "") => Object.fromEntries(matrix.map(({ slice }) => [slice, execFileSync("bash", ["-e", "step.sh"], {
+      cwd: tmp, encoding: "utf8",
+      env: { ...process.env, PATH: `${path.join(tmp, "bin")}:${process.env.PATH}`, RUNNER_TEMP: tmp, SLICE: slice, NEEDED: "true",
+        SLICE_ROWS: JSON.stringify(matrix), NODE_PLAN_SKIP_TF: skipTf },
+    }).split("\n").filter((l) => PAGE_A_GUESTS.some((g) => l.startsWith(`RAN ${g}`)))]));
+    const both = rows({ "page-a": "true", slow: "true" });
+    assert.deepEqual([ran(both), ran(both, "1"), ran(rows({ slow: "true" }))], [
+      { "page-a": ["RAN test:mcp", "RAN test:service-worker"], slow: [] },
+      { "page-a": ["RAN test:mcp --skip-tf", "RAN test:service-worker --skip-tf"], slow: [] },
+      { slow: ["RAN test:mcp", "RAN test:service-worker"] },
+    ]);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});

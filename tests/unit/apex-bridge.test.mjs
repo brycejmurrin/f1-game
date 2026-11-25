@@ -591,6 +591,9 @@ test("every TAP_DENY area names a real id in the shell or the game, so a renamed
     if (made[p]) assert.ok(fs.readFileSync(new URL("../../" + made[p], import.meta.url), "utf8").includes('"' + p), p + " is made by " + made[p]);
     else assert.equal(live, true, p + " (or " + p + "-…) is in index.html");
   }
+  // Every control the old allow-list named stays pressable (ld-skip: RACE!'s SKIP TO RACE, js/ui/loading-screen.js).
+  for (const id of ["mb-tt", "mb-race", "sel-go", "rs-go", "cs-done", "cs-arrival-skip", "ld-skip", "pausebtn", "pm-resume", "pm-quit", "hud-end-session", "res-menu"])
+    assert.equal(api.TAP_DENY.some((p) => id === p || id.startsWith(p + "-")), false, id + " is not in a denied area");
 });
 
 // THE WIDE SURFACE (Bryce 2026-11-25, "Broad allow-list"): find by label text or data attribute, set a control or a

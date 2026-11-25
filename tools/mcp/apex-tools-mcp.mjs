@@ -849,7 +849,7 @@ const CATALOG = [
   {
     name: "apex_hud_survey",
     kind: "browser",
-    description: "Browser (lock first) — the race-HUD survey over a matrix: quick (13 cells, 3 boots, ~10 min), leads (static-audit repros with numeric checks, ~25 min), full (pairwise, ~33 cells / 20 boots, ~45 min), exhaustive (~470 cells, shard required) or a matrix JSON under scratch/ or artifacts/. By default it runs as apex_job_start hud_survey and returns a jobId at once (poll apex_job_status). async:false blocks instead and returns the findings summary + resource_links to findings.md / index.html / report.json. Skill: survey-ui-matrix.",
+    description: "Browser (lock first) — survey the race HUD over the quick, leads (static-audit repros with numeric checks), full (pairwise), or exhaustive (shard required) matrix, or use a matrix JSON under scratch/ or artifacts/. Run `node tools/shot/hud-survey.mjs --plan --matrix <name>` for current cell and boot counts. By default it runs as apex_job_start hud_survey and returns a jobId at once (poll apex_job_status). async:false blocks instead and returns the findings summary + resource_links to findings.md / index.html / report.json. Skill: survey-ui-matrix.",
     inputSchema: {
       type: "object",
       properties: {

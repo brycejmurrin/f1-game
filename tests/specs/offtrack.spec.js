@@ -151,10 +151,14 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
       window.__apex.setPhysics({ drift: 0 });
       let onTrack = false;
       window.__apex.jump(0.0, 0, -16);           // beached in the grass, stopped (the left: +x is the pit complex)
+      // Rescued to the centre, or a car's width and a metre aside when a car is there (#5775 R5,
+      // Collide.rescueX; Monza's start straight is wide enough for the full offset).
+      const off = Collide.WCAR + 1;
       for (let i = 0; i < 320; i++) {
         window.__apex.setInput({ steer: 0, throttle: false });
         window.__apex.step(1 / 60, 1);
-        if (Math.abs(window.__apex.physState().x) < 1) { onTrack = true; break; }
+        const x = Math.abs(window.__apex.physState().x);
+        if (x < 1 || Math.abs(x - off) < 0.05) { onTrack = true; break; }
       }
       window.__apex.clearInput();
       return { onTrack };

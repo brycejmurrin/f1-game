@@ -156,7 +156,7 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   flex-wrap: wrap;
   overflow-x: hidden;
   overscroll-behavior-x: auto;
-  touch-action: pan-y;
+  touch-action: manipulation;
   scrollbar-width: none;
 }
 .dh-tabs::-webkit-scrollbar { display: none; }
@@ -268,7 +268,7 @@ body[data-shape="tall"][data-width="narrow"] .dh-tabs {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   overflow-x: hidden;
   overscroll-behavior-x: auto;
-  touch-action: pan-y;
+  touch-action: manipulation;
   /* Compact-size tabs in the grid, so its rows cost var(--tap-paint) each
      instead of var(--tap): 52 painted on touch, not 56.7 — the space goes to
      the content on a portrait phone. */
@@ -296,11 +296,11 @@ body[data-shape="tall"][data-width="narrow"] .dh-tab {
   flex: 1 1 auto;
   overflow-y: auto; overflow-x: hidden;
   /* a flick at the end of a long standings table shouldn't rubber-band the page
-     behind the hub; pan-y + overscroll-x:none keep a vertical flick from
+     behind the hub; overflow-x:hidden + overscroll-x:none keep a vertical flick from
      nudging a phantom x-axis (the sf thumb used to inflate scrollWidth). */
   overscroll-behavior-y: contain;
   overscroll-behavior-x: none;
-  touch-action: pan-y;
+  touch-action: manipulation;
   /* ScrollFade draws .sf-scroll::before; hide the native gutter so desktop does
      not show a grey bar beside the orange thumb (settings #pm-settings-body). */
   scrollbar-width: none;
@@ -978,7 +978,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
 .dh-pick-years {
   display: flex; flex-wrap: nowrap; gap: calc(var(--gap) / 3);
   overflow-x: auto; overflow-y: hidden;
-  overscroll-behavior-x: contain; touch-action: pan-x;
+  overscroll-behavior-x: contain; touch-action: manipulation;
   scrollbar-width: none;
 }
 .dh-pick-years::-webkit-scrollbar { display: none; }
@@ -1013,6 +1013,9 @@ body[data-width="narrow"] .dh-thint { display: none; }
 /* the legend's colour swatches are decoration inside their button, not the
    target — the button around them is what grew */
 .dh-legend-item .dh-legend-dot { flex: 0 0 auto; }
+/* 44 PAINTED px WIDE on touch, after the shared chip rule above (#6434 row 6): a four-digit year pill is 55 own px, 38 painted at UI SIZE 70. The
+   arm is 0 with a mouse and under the text width at UI SIZE 85 % and up, so only a small touch UI SIZE moves. */
+.dh-pill { min-width: max(var(--tap-min), var(--tap-floor44)); }
 /* EXPORT tab — browser-side OpenF1 start-line gathering */
 .dh-export { display: flex; flex-direction: column; gap: 10px; }
 .dh-export-note { font-size: var(--fs-2); line-height: 1.5; color: #b6b6c0; }
@@ -1038,7 +1041,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
      nothing to scroll sideways to — `overflow: auto` turned the other axis on
      by shorthand, not by intent. Same trap as #overlay in css/menus.css. */
   max-height: 320px; overflow-y: auto; overflow-x: hidden;
-  overscroll-behavior-y: contain; touch-action: pan-y;
+  overscroll-behavior-y: contain; touch-action: manipulation;
 }
 .dh-pick-field { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.25); }
 .dh-pick-label { font-size: var(--fs-micro); letter-spacing: var(--ls-5); color: var(--dim); }
@@ -1184,7 +1187,7 @@ body[data-density="compact"][data-width="wide"] {
     width: 260px;
     flex-shrink: 0;
     overflow-y: auto;
-    overscroll-behavior-y: contain; touch-action: pan-y;
+    overscroll-behavior-y: contain; touch-action: manipulation;
     overflow-x: hidden;
     padding: 10px var(--gap);
     border-right: 1px solid rgba(255, 255, 255, 0.08);
@@ -1193,7 +1196,7 @@ body[data-density="compact"][data-width="wide"] {
   .dh-split-R {
     flex: 1;
     overflow-y: auto;
-    overscroll-behavior-y: contain; touch-action: pan-y;
+    overscroll-behavior-y: contain; touch-action: manipulation;
     overflow-x: hidden;
     padding: 10px 14px;
     min-width: 0;
@@ -1296,7 +1299,7 @@ body[data-density="compact"][data-width="wide"] {
   display: flex; flex-direction: column;
   overflow-y: auto;
   /* what .pane gives every other scroll region in the app */
-  overscroll-behavior-y: contain; touch-action: pan-y;
+  overscroll-behavior-y: contain; touch-action: manipulation;
 }
 
 /* Content areas */
@@ -1351,12 +1354,12 @@ body[data-width="wide"] {
   .dh-telem-main {
     flex: var(--dh-trace-flex, 1); min-width: 0;
     overflow-y: auto; overflow-x: hidden;
-    overscroll-behavior-y: contain; touch-action: pan-y;
+    overscroll-behavior-y: contain; touch-action: manipulation;
   }
   .dh-telem-side {
     flex-shrink: 0;
     overflow-y: auto; overflow-x: hidden;
-    overscroll-behavior-y: contain; touch-action: pan-y;
+    overscroll-behavior-y: contain; touch-action: manipulation;
     border-left: 1px solid rgba(255, 255, 255, 0.08);
   }
 }
@@ -1370,7 +1373,7 @@ body[data-width="wide"][data-density="compact"] {
   /* Short landscape phone: the body is the one scroller (a column that scrolled
      on its own hid the map legend behind the card edge), the chart takes the
      free width, and the readout is two fixed columns whose labels wrap. */
-  .dh-tpopup-body { overflow-y: auto; align-items: flex-start; overscroll-behavior-y: contain; touch-action: pan-y; }
+  .dh-tpopup-body { overflow-y: auto; align-items: flex-start; overscroll-behavior-y: contain; touch-action: manipulation; }
   .dh-telem-main { overflow: visible; }
   .dh-telem-side { overflow: visible; }
   .dh-telem-main .dh-canvas, .dh-telem-main .dh-delta { max-width: none; }
@@ -1446,7 +1449,7 @@ body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tabs {
   flex-wrap: nowrap;
   overflow-x: auto;
   overscroll-behavior-x: contain;
-  touch-action: pan-x;
+  touch-action: manipulation;
   scroll-snap-type: x proximity;
   scrollbar-width: none;
 }
@@ -1459,7 +1462,7 @@ body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tab { scroll-
   max-width: 100%;
   overflow-x: auto;
   overscroll-behavior-x: contain;
-  touch-action: pan-x;
+  touch-action: manipulation;
   scroll-padding-inline: var(--gap);
 }
 [data-xscroll]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -1606,7 +1609,7 @@ body[data-width="wide"][data-density="compact"] [data-track-focus] [data-map-sca
   body[data-width="narrow"] [data-telemetry-view-header] { flex-wrap: wrap; }
   body[data-width="narrow"] [data-telemetry-views] { order: 1; width: 100%; }
   .dh-tpopup[open] .dh-tpopup-body[data-telemetry-replay-view] {
-    flex-direction: column; align-items: stretch; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
+    flex-direction: column; align-items: stretch; overflow-y: auto; overscroll-behavior: contain; touch-action: manipulation;
     padding: 0 calc(var(--gap) * 4 / 3);
   }
   .dh-tpopup-body > [data-telemetry-replay] { flex: none; }
@@ -1623,7 +1626,7 @@ body[data-width="wide"][data-density="compact"] [data-track-focus] [data-map-sca
   [data-telemetry-replay] .dh-canvas[data-map-gestures="true"] { touch-action: none; cursor: grab; }
   [data-telemetry-replay] p { margin-block: calc(var(--gap) / 3); }
   [data-replay-lanes] { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--gap); }
-  [data-replay-expanded] .dh-tpopup-body { flex-direction: column; align-items: stretch; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding: var(--gap) calc(var(--gap) * 4 / 3); }
+  [data-replay-expanded] .dh-tpopup-body { flex-direction: column; align-items: stretch; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; touch-action: manipulation; padding: var(--gap) calc(var(--gap) * 4 / 3); }
   [data-replay-expanded] [data-telemetry-replay] { padding-block: 0; }
   [data-replay-expanded] [data-telemetry-replay] > .dh-section { display: none; }
 }

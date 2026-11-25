@@ -171,8 +171,16 @@ test("face/shoulder buttons fire edge-triggered actions exactly once", async ({ 
   expect(down).toBe(true);
 
   await poll(page, { buttons: {} }, () => true);
-  const cam = await poll(page, { buttons: { 8: 1 } }, () => Input.consumeCameraCycle());
-  expect(cam).toBe(true);
+  // CAM cycles on the RELEASE of a tap (#6271: a 340 ms hold opens the picker
+  // instead). Press and release in ONE evaluate so no frame-loop poll can age
+  // the press past the hold threshold in between.
+  const cam = await poll(page, { buttons: { 8: 1 } }, () => {
+    const onPress = Input.consumeCameraCycle();
+    navigator.getGamepads()[0].buttons[8] = { pressed: false, value: 0, touched: false };
+    Input.poll();
+    return { onPress, onRelease: Input.consumeCameraCycle(), menu: Input.consumeCameraMenu() };
+  });
+  expect(cam).toEqual({ onPress: false, onRelease: true, menu: false });
 });
 
 test("on the title overlay the pad routes to menu-nav, never the driving latches", async ({ page }) => {

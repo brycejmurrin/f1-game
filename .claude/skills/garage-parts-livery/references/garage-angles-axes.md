@@ -152,7 +152,7 @@ Legacy aliases still work: `--spine-logo`, `--spine-side`.
 
 The game clamps the player's orbit (el ≥ 0, a per-view `minDist`); a survey
 does not have to live inside it. `__apex.garageFrame("free", {clamp: false})` lifts
-both floors for one framing (`G.setSetupFree`; the next preset restores them).
+both floors for one framing (`G.setupCam.setSetupFree`; the next preset restores them).
 
 | flag | meaning |
 |---|---|
