@@ -313,13 +313,28 @@ test("a stepped race switch under go() keeps the loop alive and step() safe whil
  * when a deferred rival entered caster range). perf-idle-pipeline-churn read that as a bind group + object buffer
  * in an idle window (#5830: `[car] build haas` / `build ferrari` inside the counted stretch). The race frames
  * drain it now, a budget a frame. Own handle: it reorders the grid. */
+/* The VM queues setTimeout until flushTimers(), so an async warm whose 8 ms slice runs over budget (a loaded box)
+ * waits on yieldWarm's 0 ms timer forever: Node ends the file with "Promise resolution is still pending" and every
+ * later test fails (#6680). Drive it the way a browser's task loop would: a macrotask turn, then the due timers. */
+async function driveWarm(h, p) {
+  let state = "pending", out;
+  p.then((v) => { state = "ok"; out = v; }, (e) => { state = "err"; out = e; });
+  for (let i = 0; i < 5000 && state === "pending"; i++) {
+    await new Promise((r) => setImmediate(r));
+    if (state === "pending") h.flushTimers(true);
+  }
+  if (state === "err") throw out;
+  assert.equal(state, "ok", "the stepped warm settled");
+  return out;
+}
+const poleGrid = (h) => { const me = h.G.cars.find((c) => c.isPlayer); let k = 2; for (const c of h.G.cars) c.gridPos = c === me ? 1 : k++; };
+
 test("a green that skipped the lights still drains the rear grid's deferred car warm (#5830)", async () => {
   const h = await createGame({ track: "monza" });
   try {
     const cd = vm.runInContext("CarDraw.instance()", h.ctx);
-    const me = h.G.cars.find((c) => c.isPlayer);
-    let k = 2; for (const c of h.G.cars) c.gridPos = c === me ? 1 : k++;   // pole: every rival but P2 is rear grid
-    assert.equal(await cd.warmCarAssetsAsync(() => true, 8, { deferRear: true }), true, "race entry's stepped warm");
+    poleGrid(h);                               // pole: every rival but P2 is rear grid
+    assert.equal(await driveWarm(h, cd.warmCarAssetsAsync(() => true, 8, { deferRear: true })), true, "race entry's stepped warm");
     gt(cd.drainDeferredCarWarm(1e-9), 0, "the warm queued rear-grid pieces for the lights (one taken here)");
     h.apex.go();
     assert.equal(h.G.state, "race", "go(): green with no countdown");
@@ -327,6 +342,22 @@ test("a green that skipped the lights still drains the rear grid's deferred car 
     for (let i = 0; i < 10; i++) { now += 16.7; h.pumpFrame(now); }
     assert.equal(cd.drainDeferredCarWarm(1e-9), 0, "race frames drained what the skipped lights owed");
   } finally { h.close(); }
+});
+
+/* #6680's pin: the loaded-box case made certain. A clock that jumps 10 ms per read puts every slice over the 8 ms
+ * budget, so the warm yields before each phase; it must still resolve (it hung on the bare await). */
+test("the stepped car warm resolves in the VM when every slice runs over budget (#6680)", async () => {
+  const h = await createGame({ track: "monza" });
+  const perf = h.ctx.performance, st = h.ctx.setTimeout;
+  try {
+    const cd = vm.runInContext("CarDraw.instance()", h.ctx);
+    poleGrid(h);
+    let t = perf.now(), zeroTimers = 0;
+    h.ctx.performance = { now: () => (t += 10) };
+    h.ctx.setTimeout = (fn, ms, ...a) => { if (!(+ms > 0)) zeroTimers++; return st(fn, ms, ...a); };
+    assert.equal(await driveWarm(h, cd.warmCarAssetsAsync(() => true, 8, { deferRear: true })), true, "ran to the end");
+    gt(zeroTimers, h.G.cars.length, "it really yielded, at least once per car (else this pins nothing)");
+  } finally { h.ctx.performance = perf; h.ctx.setTimeout = st; h.close(); }
 });
 
 /* jump() under updateCarAdvance's 20 m teleport threshold (the browser's pole
