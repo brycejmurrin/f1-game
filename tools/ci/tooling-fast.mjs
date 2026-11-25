@@ -736,6 +736,31 @@ export const GENERATED_FILES = Object.freeze({
   "tools/carview.html": { source: "tools/manifest.cjs", blocks: true },
 });
 
+/**
+ * GENERATOR SOURCES -> the test that runs that generator's `--check` (#6380). Some committed docs are generated from
+ * a comment inside authored files, so an edit to that comment makes the doc stale while the doc itself is not in the
+ * diff: GENERATED_FILES above never sees it and no test names the edited file, so the pin index selects nothing that
+ * runs the check. #6368's `c3a4ef4b` changed js/camera/cam-picker.js's header line, `--changed` selected 219 files
+ * without gen-arch-table.test.mjs, and CI's guards-d shard caught docs/ARCHITECTURE.md stale (run 45480555321).
+ * An authored path matching `source` seeds `test` into every narrowed selection.
+ */
+export const GENERATOR_SOURCE_TESTS = Object.freeze([
+  // docs/ARCHITECTURE.md module index: the first sentence of each js/ file's header (tools/gen/gen-arch-table.mjs).
+  Object.freeze({ source: /^js\/.+\.js$/, test: "tests/unit/gen-arch-table.test.mjs" }),
+  // tools/README.md: each tools/ script's `@doc` header line (tools/gen/gen-tools-readme.mjs).
+  Object.freeze({ source: /^tools\/.+\.(mjs|cjs|js)$/, test: "tests/unit/generated-docs.test.mjs" }),
+]);
+
+/** The generator-check tests that `changed` (authored paths) makes due. */
+export function generatorSourceTests(changed) {
+  const out = new Set();
+  for (const f of changed) {
+    const norm = String(f).replace(/\\/g, "/");
+    for (const { source, test } of GENERATOR_SOURCE_TESTS) if (source.test(norm)) out.add(test);
+  }
+  return out;
+}
+
 /** Tests every generated-only diff runs beside `gen:check`. */
 export const GENERATED_SEED_TESTS = Object.freeze([
   "tests/unit/generated-docs.test.mjs",
@@ -1193,6 +1218,8 @@ export function selectToolingFastChanged(changed, opts = {}) {
   }
 
   if (!selected.size) return full("no-pin-match");
+  // After the no-pin-match test: a generator seed must not turn an unpinned edit's fail-safe full run into a narrow one.
+  for (const t of generatorSourceTests(changed.filter((f) => !benignNarrow.has(f.replace(/\\/g, "/"))))) selected.add(t);
 
   const files = [...allFiles, ...pool].filter((f) => selected.has(f));
   if (!files.length) return full("no-listed-match");

@@ -1170,6 +1170,51 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   assert.equal(dom.connect.disabled, false, "CONNECT is offered again");
 });
 
+test("#6372 × #6334: a HOLD button held into Pause is switched off on Resume, and the next press is not inverted", async () => {
+  const desk = bootInput();
+  const layers = { open: false };
+  desk.sb.UiLayers = { inRace: () => true, anyOpen: () => layers.open, navOpen: () => layers.open, top: () => null };
+  const [padEnd, hostEnd] = NetTransport.loopback({ latencyMs: 2, rnd: NetTransport.seededRnd(5) });
+  padEnd.pump(0); hostEnd.pump(0);
+  const clock = desk.clock;
+  let boostOn = false;   // the host's BOOST, flipped by each edge it accepts (game.js consumeBoostToggle)
+  const hud = () => ({ gear: 3, kmh: 100, rpm: 0.5, lap: 1, laps: 5, pos: 1, cars: 2, ers: 0.5, flags: boostOn ? PhonePad.DASH.boost : 0,
+    caution: 0, lastLapMs: 0, state: "race", surface: layers.open ? "menu" : "drive", team: "" });
+  const link = PhonePad.link(hostEnd, { input: desk.Input, pump: false, now: () => clock.t, hud });
+  const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(),
+    center: fakeEl(), rim: fakeEl(), buttons: Object.fromEntries(PhonePad.EVENTS.map((k) => [k, fakeEl()])), hud: lcd() };
+  PedalTravel.setButtonProfile("boost", { latch: "hold" });
+  let ctl;
+  try {
+    ctl = PhonePad.pad(dom, { now: () => clock.t, timers: fakeTimers(), deps: {
+      rtc: () => padEnd, prefetchIce: async () => null, normalise: (c) => String(c).toUpperCase(), valid: (c) => c.length === 6,
+      swap: async (o) => { const ans = await o.reply("OFFER"); return ans ? { ok: true } : { ok: false, error: "reply_failed" }; },
+      acceptInvite: async () => ({ ok: true, code: "ANSWER" }),
+    } });
+    assert.deepEqual(await ctl.connect("abc234"), { ok: true });
+    const frames = (n) => { for (let i = 0; i < n; i++) { clock.t += 70; ctl.pump(); link.pump(); desk.Input.poll(); if (desk.Input.consumeBoostToggle()) boostOn = !boostOn; } };
+    frames(4);
+    assert.ok(dom.body.classes.has("linked"), "the wheel is up");
+    dom.buttons.boost.dispatch("pointerdown", {});
+    frames(4);
+    assert.equal(boostOn, true, "HOLD: the press switches BOOST on");
+
+    layers.open = true;   // Pause with the thumb still on BOOST: the phone flips to the menu pad and lets go
+    frames(12);
+    assert.equal(boostOn, true, "the host drops driving edges under the pause card (input.js remoteEvent)");
+
+    layers.open = false; desk.Input.invalidateRemoteDrive();   // Resume (game.js setPaused)
+    frames(6);
+    assert.equal(boostOn, false, "back on the wheel with no finger on it: the owed lift switches BOOST off");
+    dom.buttons.boost.dispatch("pointerdown", {});
+    frames(4);
+    assert.equal(boostOn, true, "the first press after Resume switches it ON, not off");
+    dom.buttons.boost.dispatch("pointerup", {});
+    frames(4);
+    assert.equal(boostOn, false, "and its lift switches it off");
+  } finally { ctl?.cancel(); PedalTravel.resetButtonProfile("boost"); }
+});
+
 test("pad(): a lost lift on the menu stick or a held arrow is caught by the all-fingers-up / hidden nets (hunt3 7-F5)", async () => {
   const desk = bootInput();
   const [padEnd, hostEnd] = NetTransport.loopback({ latencyMs: 2, rnd: NetTransport.seededRnd(3) });

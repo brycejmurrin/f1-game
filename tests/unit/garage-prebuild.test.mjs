@@ -231,7 +231,7 @@ test("ready is keyed: a team pick or a livery bust re-arms it, and the warm is n
   assert.equal(h.pre.state().ready, false, "a team pick moves the key");
   assert.equal(await go(), true);
   assert.equal(h.gate.garageKey, "ferrari:parts:4|monza|day");
-  h.cam.meshKey = "";   // setup-sheet.js livery edit: G._spMeshKey = ""
+  h.cam.meshKey = "";   // setup-sheet.js livery edit: G.setupCam.meshKey = ""
   assert.equal(h.pre.state().ready, false, "a livery edit busts the cached car");
   assert.equal(await go(), true);
   assert.deepEqual(h.built.filter((p) => p === "car").length, 3, "one car build per run — the LRU sees one slot per key");
@@ -797,7 +797,9 @@ test('exterior coalesces work, owns its meshes, and updates weather without rebu
   assert.equal(await h.ext.request(wet),true); assert.equal(h.builds(),1);
   assert.equal(h.ext.ready(a),false); assert.equal(h.ext.ready(wet),true);
   h.ext.draw(); assert.equal(h.draws[4].opts.roughness,.24);
-  h.ext.release(); assert.equal(h.freed.length,3); assert.equal(h.ext.draw(),false);
+  // #6401: a garage close parks the built set (no free, not drawn); cancel is the hard free.
+  h.ext.release(); assert.equal(h.freed.length,0); assert.equal(h.ext.draw(),false);
+  h.ext.cancel(); assert.equal(h.freed.length,3);
 });
 
 test('exterior owns terrain, scenery, tagged lights, glass and water across draws, weather and release', async () => {
@@ -813,7 +815,8 @@ test('exterior owns terrain, scenery, tagged lights, glass and water across draw
   h.ext.draw(); assert.equal(h.draws[19].opts.emissive, 0, 'pit frontage keeps its local lamp rig');
   assert.equal(h.draws[20].opts.emissive, 0, 'ordinary architecture cannot become a glowing white slab');
   assert.equal(h.draws[21].opts.emissive, .78, 'only authored light-source faces receive night emission');
-  h.ext.release(); assert.equal(h.freed.length, 16);
+  h.ext.release(); assert.equal(h.freed.length, 8, 'the night rebuild freed the day set; release parks the night one (#6401)');
+  h.ext.cancel(); assert.equal(h.freed.length, 16);
 });
 
 test("departure lamp levels scale only exterior energy and preserve the room rig", async () => {
@@ -1153,7 +1156,7 @@ function exteriorSection({ steps = 3, supported = true, hang = false } = {}) {
   c.deps = { prepareExterior: (id) => hang ? new Promise(() => {}) : Promise.resolve(tracks.find((t) => t.id === id) || null) };
   vm.runInContext(read("js/garage/exterior.js"), c, { filename: absSrc("js/garage/exterior.js") });
   const cam = read("js/garage/setup-camera.js");
-  const a = cam.indexOf("// Optional, detached circuit slice"), b = cam.indexOf("function releaseExterior()");
+  const a = cam.indexOf("// Optional, detached circuit slice"), b = cam.indexOf("function releaseExterior(");
   assert.ok(a > 0 && b > a, "the exterior section is where this test reads it");
   vm.runInContext(cam.slice(a, b), c, { filename: absSrc("js/garage/setup-camera.js") });
   const run = (expr) => vm.runInContext(expr, c, { filename: absSrc("js/garage/setup-camera.js") });

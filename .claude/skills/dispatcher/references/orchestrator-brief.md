@@ -61,8 +61,11 @@ MESSAGE ME ONLY WHEN: blocked, refused (facts only), a decision is needed, merge
   after the draft CI run has finished. A flip or push that cancels a live run is the orchestrator's to name in the PR.
 - Never push to, flip or label a live owner's PR, nor edit its body beyond ticking a Plan line: message the owner
   [11, 17]. What you may do unasked and report after: AGENTS.md §Coordination.
-- A base red: one message naming the failing leg and the one fix PR; workers hold, the fixer lands, then one release
-  message. After a shared cure lands, each PR syncs once [4, 5].
+- **Tip-red bulletin.** On a red deploy tip, name the failing job and test (agent `ci-red-triage`) and the one fixing
+  PR (the `deploy:red` claim, skill `steward` [`references/labels.md`](../../steward/references/labels.md)); launch a
+  fixer only if none exists. Then post ONE comment on the Board issue (#1780) starting `tip-red:` (red sha, failing
+  test, fixing PR) and send it to every live worker session; when the fix lands, one `tip-green:` comment and message.
+  Five workers each archived the same aged note while #6406 fixed it (2026-11-25). After a shared cure lands, each PR syncs once [4, 5].
 - What needs Bryce goes in ONE list, first line first, each entry a link and the exact `decision:` line or label
   [8, 10]. Worker status does not go to Bryce.
 - Never tell a worker to cancel, re-run or dispatch a run [17]; your own CI acts follow skill `steward` §CI (logged).
