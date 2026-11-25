@@ -951,6 +951,7 @@
     "tests/unit/race-entry-skip.test.mjs",
     "tests/unit/race-insights.test.mjs",
     "tests/unit/race-radio.test.mjs",
+    "tests/unit/race-rules-practice-hold.test.mjs",
     "tests/unit/race-session-fixes.test.mjs",
     "// Race Settings CUSTOM preset + WEEKEND · QUALIFYING FIRST header, plus",
     "// Season SETUP scroll/chip pins (layer on #1082 chrome).",
