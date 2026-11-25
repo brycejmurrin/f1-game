@@ -29,17 +29,20 @@ const PhonePadPage = (function () {
   const LATCH_BITS = Object.freeze({ boost: DASH.boost, overtake: DASH.otOn | DASH.otActive, aero: DASH.xOpen });
   const CONFIRM_MS = 600, latchButtons = Object.freeze(Object.keys(LATCH_BITS));
   function pressLatch(k, send, clock = () => Date.now()) {
-    let host = null, local = false, expect = null, sentAt = -Infinity;
+    let host = null, local = false, expect = null, sentAt = -Infinity, pending = false;
     const on = () => host === null ? local : expect !== null && clock() - sentAt < CONFIRM_MS ? expect : host;
     const fire = () => {
       const want = !on();
       if (send(k) === false) return;
       local = want; expect = host === null ? null : want; sentAt = clock();
     };
+    const heard = (drop) => { if (pending) { pending = false; if (!drop && on()) fire(); } };
     return {
       // TOGGLE: every press flips the effect. HOLD: the press switches it on, the lift switches it off.
-      down(hold) { if (!hold || !on()) fire(); },
-      up(hold) { if (hold && on()) fire(); },
+      down(hold) { pending = false; if (!hold || !on()) fire(); },
+      // deferred: lifted where the host drops edges (Pause, menu); heard() sends it back on the wheel.
+      up(hold, later) { if (!hold) return; pending ||= !later || on(); if (!later) heard(); },
+      heard,   // heard(true): a new link drops it
       tap: fire,
       hud(flags) {
         host = !!(flags & LATCH_BITS[k]);
@@ -475,7 +478,7 @@ const PhonePadPage = (function () {
         }
         el.classList.remove("on");
         stop();
-        if (l && lifted) { if (![...l.fingers.values()].some(f => f.size)) l.latch.up(l.hold); paintLatch(k); }
+        if (l && lifted) { if (![...l.fingers.values()].some(f => f.size)) l.latch.up(l.hold, surface && surface !== "drive"); paintLatch(k); }
       };
       // Lost lift / blur / last-finger-up: same nets as hold() and the menu stick.
       releases.push(() => up());
@@ -767,6 +770,8 @@ const PhonePadPage = (function () {
         surface = next;
         closeUtilities();
         if (changedFrom) releaseAll();
+        // A new link's first dash forgets an owed lift.
+        if (!changedFrom || next === "drive") for (const l of latches.values()) l.latch.heard(!changedFrom);
         dom.body?.classList.remove("camera-panel");
         push();
         paintHud(dom.hud, h);

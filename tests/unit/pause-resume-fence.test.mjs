@@ -75,7 +75,8 @@ function bootInput() {
     "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"])
     vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
-  Input.init(el(), { onPause() {}, onPadLost() {} });
+  const tiltChanges = { n: 0 };
+  Input.init(el(), { onPause() {}, onPadLost() {}, onPhoneTiltChange() { tiltChanges.n++; } });
   Input.reset();
   const key = (k, down) => (listeners[down ? "keydown" : "keyup"] || [])
     .forEach((f) => f({ key: k, code: k, repeat: false, preventDefault() {}, target: { tagName: "BODY" } }));
@@ -83,7 +84,7 @@ function bootInput() {
   // closes it and calls Input.invalidateRemoteDrive() (game.js setPaused).
   const pause = () => { layers.open = true; Input.poll(); };
   const resume = () => { layers.open = false; Input.invalidateRemoteDrive(); Input.poll(); };
-  return { Input, key, clock, pause, resume, layers };
+  return { Input, key, clock, pause, resume, layers, tiltChanges };
 }
 
 test("#6268: keys held into Pause stop driving under the card and the steering ramp restarts on Resume", () => {
@@ -184,6 +185,33 @@ test("#6330: a drive sample in flight across Resume stays neutral until a post-R
   phone.thr = 1; phone.brk = 0; phone.held = 0; phone.roll = 0;
   for (let i = 0; i < 12; i++) frame();
   assert.equal(Input.throttle(), true, "a post-Resume sample drives");
+});
+
+test("#6330 × #6319: fenced samples under Pause keep the phone's tilt for the menu, and drive nothing", () => {
+  const h = pair();
+  const { Input, phone, frame, pause, resume, tiltChanges } = h;
+  phone.thr = 1; phone.roll = 0;
+  for (let i = 0; i < 20; i++) frame();
+  assert.equal(Input.phoneTiltAvailable(), true, "a tilting phone drives");
+  const before = tiltChanges.n;
+
+  pause();
+  phone.thr = 0.7; phone.brk = 0.4; phone.held = PhonePad.HELD.lookBack; phone.roll = 20;
+  for (let i = 0; i < 30; i++) frame();
+  assert.ok(h.link.stats().fenced > 0, "the samples under the pause card are fenced");
+  assert.equal(Input.phoneTiltAvailable(), true, "the settings tilt rows and CALIBRATE still see the phone's tilt under Pause");
+  assert.equal(tiltChanges.n, before, "no 'phone tilt gone' notice for a fenced sample");
+  assert.equal(Input.remoteActive(), true);
+  assert.equal(Input.throttle(), false, "fenced throttle stays neutral");
+  assert.equal(Input.braking(), false, "fenced brake stays neutral");
+  assert.equal(Input.lookingBack(), false, "fenced look-back stays neutral");
+  assert.equal(Input.steer(), 0, "fenced tilt does not steer");
+
+  resume();
+  phone.thr = 1; phone.brk = 0; phone.held = 0; phone.roll = 0;
+  for (let i = 0; i < 12; i++) frame();
+  assert.equal(Input.throttle(), true, "a post-Resume sample drives");
+  assert.equal(Input.phoneTiltAvailable(), true);
 });
 
 test("#6330: two quick resumes with no menu dash between still fence the in-flight sample", () => {

@@ -403,41 +403,44 @@ const Input = (function () {
     remoteOwner = owner;
     const n = nowMs();
     remCamera = owner === "phone" && s.camera && remoteControlContext() === "camera" ? s.camera : null;
-    // FENCED: a drive sample the phone sent before it saw the drive surface
-    // return (PhonePad.link's Resume fence). The link stays live; nothing it
-    // carries drives, and the tilt filter starts fresh from the next sample.
-    if (s.driveFenced && !s.camera) { clearRemoteControls(true); remoteMs = n; return true; }
     // A STICK (an XR thumbstick, js/xr/xr-input.js) is an analog steer
     // command, not a lean: it used to be dressed up as a roll (steerToTilt) and
     // ride the phone's One-Euro filter, tilt dead zone and 8/s slew, and lamp 1's
     // calibrate() captured whatever deflection was held as the race's zero.
     remStick = typeof s.steer === "number" && isFinite(s.steer);
-    remSteer = remStick ? clamp(s.steer, -1, 1) : 0;
-    if (remStick && tiltRemote) tiltFilterClear();   // else the next roll sample slews from the old lean
     remRoll = !remStick && typeof s.roll === "number" && isFinite(s.roll);
-    if (remRoll) {
-      tiltRaw = s.roll;
-      let odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;
-      // A BURST IS NOT A DUPLICATE. odt is HOST arrival time, so two samples
-      // the network delivered in the same millisecond (Wi-Fi power save does
-      // this routinely) gave odt 0 and oneEuro() dropped the newer roll. The
-      // seq gap says how much SENDER time at least passed between them.
-      const seqOk = Number.isInteger(s.seq);
-      if (seqOk && remSeq != null) {
-        const gap = s.seq - remSeq;
-        if (gap >= 1 && gap < 30) odt = Math.max(odt, Math.min(0.1, gap * REMOTE_SAMPLE_GAP_S));
+    // FENCED: a drive sample the phone sent before it saw the drive surface
+    // return (PhonePad.link's Resume fence). The link stays live; nothing it
+    // carries drives, and the tilt filter starts fresh from the next sample.
+    // It still says what the phone has: Pause's tilt rows and CALIBRATE keep it.
+    if (s.driveFenced && !s.camera) clearRemoteControls(true, s);
+    else {
+      remSteer = remStick ? clamp(s.steer, -1, 1) : 0;
+      if (remStick && tiltRemote) tiltFilterClear();   // else the next roll sample slews from the old lean
+      if (remRoll) {
+        tiltRaw = s.roll;
+        let odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;
+        // A BURST IS NOT A DUPLICATE. odt is HOST arrival time, so two samples
+        // the network delivered in the same millisecond (Wi-Fi power save does
+        // this routinely) gave odt 0 and oneEuro() dropped the newer roll. The
+        // seq gap says how much SENDER time at least passed between them.
+        const seqOk = Number.isInteger(s.seq);
+        if (seqOk && remSeq != null) {
+          const gap = s.seq - remSeq;
+          if (gap >= 1 && gap < 30) odt = Math.max(odt, Math.min(0.1, gap * REMOTE_SAMPLE_GAP_S));
+        }
+        remSeq = seqOk ? s.seq : null;
+        lastOrientMs = n;
+        tiltSmoothed = oneEuro(tiltRaw, odt);
+        tiltSeen = tiltRemote = true;
       }
-      remSeq = seqOk ? s.seq : null;
-      lastOrientMs = n;
-      tiltSmoothed = oneEuro(tiltRaw, odt);
-      tiltSeen = tiltRemote = true;
+      remPedalDz = owner === "phone" && s.calibratedPedals === true ? 0 : REMOTE_PEDAL_ON;
+      remThr = clamp(+s.thr || 0, 0, 1);
+      remBrk = clamp(+s.brk || 0, 0, 1);
+      remHeld = s.held | 0;
+      remoteDriveReady = !remoteDrivingBlocked();
     }
-    remPedalDz = owner === "phone" && s.calibratedPedals === true ? 0 : REMOTE_PEDAL_ON;
-    remThr = clamp(+s.thr || 0, 0, 1);
-    remBrk = clamp(+s.brk || 0, 0, 1);
-    remHeld = s.held | 0;
     remoteMs = n;
-    remoteDriveReady = !remoteDrivingBlocked();
     if (hadPhoneTilt !== phoneTiltAvailable()) onPhoneTiltChange?.();
     if (remoteDriveReady && (remoteDriveEngaged() || remHeld)) {
       // Remote pedals take priority over the pad, but its steering does not.
@@ -488,15 +491,16 @@ const Input = (function () {
   // Forget the current remote command without tearing down the paired transport.
   // reset() uses this on blur/visibility loss; the next fresh sample can take
   // control again, while a real link loss additionally clears remoteOwner below.
-  function clearRemoteControls(clearSequence) {
+  function clearRemoteControls(clearSequence, k) {
     remoteDriveReady = false;
     const hadPhoneTilt = phoneTiltAvailable();
-    remoteMs = 0; remThr = remBrk = 0; remHeld = 0; remRoll = false; remStick = false; remSteer = 0;
+    remoteMs = 0; remThr = remBrk = 0; remHeld = 0; remSteer = 0;
+    if (!k) remRoll = remStick = false;   // k: a fenced sample, whose roll/stick remoteSample kept
     remCamera = null;
     if (clearSequence) remSeq = null;
-    if (tiltRemote || !gyroAttached) tiltSeen = false;
+    if (remRoll) { tiltRaw = k.roll; tiltSeen = tiltRemote = true; } else if (tiltRemote || !gyroAttached) tiltSeen = false;
     if (tiltRemote) tiltFilterClear();
-    if (hadPhoneTilt) onPhoneTiltChange?.();
+    if (hadPhoneTilt && !k) onPhoneTiltChange?.();
   }
   // Resume requires a new driving sample. Keep the live link and its sensor
   // capability available to the menu, but start the steering filter fresh.
