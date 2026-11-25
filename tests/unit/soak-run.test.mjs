@@ -41,6 +41,7 @@ function rig({ curveAt = null, k = 0.02, realRecorder = false, rafId } = {}) {
     requestAnimationFrame: (f) => { calls.raf.push(f); return rafId ?? calls.raf.length; },
     cancelAnimationFrame: () => { calls.cancel++; },
     document: { hidden: false, addEventListener(t, f) { calls.vis = f; }, removeEventListener() { calls.vis = null; }, getElementById: (id) => (id === "pausebtn" ? { click() { calls.pauseClicks++; } } : null) },
+    window: { addEventListener(t, f) { (calls.win ||= {})[t] = f; }, removeEventListener(t) { if (calls.win) delete calls.win[t]; } },
     Tracks, CamModes: { CAM_MODES: [{ id: "tv" }, { id: "chase" }] },
     Log: { info() {} }, M4: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) },   // the shared clamp soak-run.js calls
     PhoneRecorder: { start() { calls.recStart++; ctx.PhoneRecorder._on = true; return true; }, stop() { calls.recStop++; ctx.PhoneRecorder._on = false; }, isOn: () => !!ctx.PhoneRecorder._on },
@@ -237,3 +238,70 @@ test("a hidden page ends the soak and hands the input back; the listener is remo
   assert.equal(calls.vis, null);
 });
 function rigDocHidden(calls) { calls.hide(); }
+
+// DRIVE (the phone bridge's `drive`, #6397): agent control through the same seam, released by every way out.
+async function driving(opts = { seconds: 60 }) {
+  const r = rig();
+  r.G.state = "race";
+  const p = r.SoakRun.drive(opts);
+  r.frame(16);
+  assert.equal(r.SoakRun.driving(), true);
+  assert.ok(r.G._testInput && typeof r.G._testInput.steer === "number", "the driver writes the input seam");
+  return { ...r, p };
+}
+
+test("drive: idle until asked — no listener, no rAF, no input; refused in a menu or while a soak runs", async () => {
+  const r = rig();
+  assert.equal(r.SoakRun.driving(), false);
+  assert.equal(r.calls.win, undefined, "no input listener while idle");
+  await assert.rejects(r.SoakRun.drive({ seconds: 5 }), /running session/);
+  await r.SoakRun.start({ minutes: 5 });
+  r.G.state = "race";
+  await assert.rejects(r.SoakRun.drive({ seconds: 5 }), /soak is running/);
+  assert.equal(r.SoakRun.POLICY_NAMES.join(","), "autopilot,box");
+  assert.equal(r.SoakRun.policy("nope"), null, "an unknown name is no policy");
+});
+
+test("drive: a REAL touch or key takes the car back; the bridge's own synthetic taps do not", async () => {
+  const { SoakRun, G, calls, p } = await driving();
+  calls.win.pointerdown({ isTrusted: false });
+  assert.equal(SoakRun.driving(), true, "a synthetic (bridge) tap leaves the drive running");
+  calls.win.pointerdown({ isTrusted: true });
+  assert.equal(SoakRun.driving(), false);
+  assert.equal(G._testInput, null, "the real Input owns the car again");
+  assert.equal((await p).reason, "touch");
+  assert.deepEqual(Object.keys(calls.win), [], "the listeners are removed");
+});
+
+test("drive: stop, a pause, a quit and a hidden page each release the input", async () => {
+  let r = await driving();
+  assert.equal(r.SoakRun.driveStop("bridge").reason, "bridge");
+  assert.equal(r.G._testInput, null);
+  r = await driving(); r.G.paused = true; r.frame(16);
+  assert.equal((await r.p).reason, "paused"); assert.equal(r.G._testInput, null);
+  r = await driving(); r.G.state = "menu"; r.frame(16);
+  assert.equal((await r.p).reason, "state:menu"); assert.equal(r.G._testInput, null);
+  r = await driving(); r.calls.hide();
+  assert.equal((await r.p).reason, "hidden"); assert.equal(r.G._testInput, null);
+  assert.equal(r.SoakRun.driveStatus().active, false);
+  assert.equal(r.SoakRun.driveStatus().last.reason, "hidden");
+});
+
+test("drive: `seconds` ends as its own success and `laps` on the lap count", async () => {
+  let r = await driving({ seconds: 1 });
+  r.frame(1200);
+  assert.equal((await r.p).reason, "seconds");
+  r = await driving({ laps: 1 });
+  r.G.player.lap = 1; r.frame(16);
+  assert.equal((await r.p).reason, "laps");
+  assert.equal(r.G._testInput, null);
+});
+
+test("drive: a policy that throws ends the drive at once and hands the input back (no steering on after a fault)", async () => {
+  const r = await driving();
+  r.G.player = { get s() { throw new Error("car gone"); }, x: 0, head: 0, speed: 40 };
+  r.frame(16);
+  assert.equal(r.SoakRun.driving(), false);
+  assert.equal(r.G._testInput, null);
+  assert.equal((await r.p).reason, "error: car gone");
+});
