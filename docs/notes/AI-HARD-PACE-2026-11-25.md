@@ -65,9 +65,32 @@ every level as a ratio to the reference, +-0.4 %).
 The ceiling alone is racecraft-neutral: no new contact, no dive-bomb signal (contact flat or down, inside-pass share
 inside the base range). The defend reserve adds stuck-behind time (episodes > 10 s +15 Monza, +8 Red Bull): a
 defender keeps its charge for the next straight instead of draining it, so trains hold longer. Its pace win is the
-#6546 measurement (car-time on a flat battery 18 % -> 0); the trade-off is named on the PR.
+#6546 measurement (car-time on a flat battery 18 % -> 0). The 0.25 reserve was then re-tuned to 0.12 (next section),
+which keeps the flat-battery fix and drops the stuck-behind cost.
 
 ## Also in this PR: ERS defend reserve (#6546 P1)
 
 `AiDrive.wantBoost` deployed to defend with no energy floor, so a train ran on a flat battery. Defending now needs
-charge above 0.25 (the `desperate` floor). Pinned in `tests/unit/ai-drive.test.mjs`.
+charge above `DEFEND_FLOOR` 0.12. `wantBoost` has no difficulty gate, so this applies at EVERY level, unlike the corner
+ceiling (EASY/NORMAL are bit-identical only for the ceiling). Pinned in `tests/unit/ai-drive.test.mjs`.
+
+### Reserve A/B (HARD, 5 laps, seeds 1-3, wear off, on top of the corner ceiling)
+
+`ai-tactics --diff hard --laps 5 --runs 3`, plus a flat-battery probe (AI car-time with energy <= 0.02, after 30 s,
+pit cars excluded; a throwaway VM script, not committed). Stuck = faster-behind-slower episodes > 10 s, per seed and
+summed; passes and attack success are medians.
+
+| floor | circuit | stuck > 10 s | sum | faster-behind-slower s | passes / car / lap | attack success % | flat battery % |
+|---|---|---|---:|---:|---:|---:|---|
+| none (deploy tip) | Monza | 47/56/55 | 158 | 1544 | 1.56 | 23.0 | 11.7/13.6/11.1 |
+| none (deploy tip) | Red Bull Ring | 64/54/54 | 172 | 1416 | 1.20 | 25.1 | 14.6/10.9/13.0 |
+| 0.25 | Monza | 51/72/70 | 193 | 1762 | 1.38 | 22.6 | 0/0/0 |
+| 0.25 | Red Bull Ring | 64/47/62 | 173 | 1575 | 1.28 | 23.4 | 0/0/0 |
+| 0.25, released when the chaser is < 6 m | Monza | 52/58/75 | 185 | 1475 | 1.46 | 24.2 | 6.3/6.2/6.3 |
+| 0.25, released when the chaser is < 6 m | Red Bull Ring | 54/47/50 | 151 | 1408 | 1.33 | 24.0 | 5.4/6.5/6.4 |
+| **0.12 (shipped)** | Monza | 46/55/68 | 169 | 1401 | 1.44 | 25.1 | 0/0/0 |
+| **0.12 (shipped)** | Red Bull Ring | 49/48/59 | 156 | 1282 | 1.43 | 27.1 | 0/0/0 |
+
+0.12 keeps the flat battery at zero and has the least faster-behind-slower time, the most passes and the best attack
+conversion. Against the deploy tip, stuck episodes are +11 at Monza (inside the seed spread: 46-68 per seed) and -16 at
+Red Bull Ring. The release-on-attack variant brings the drain back (about 6 %) and is not better on stuck time.

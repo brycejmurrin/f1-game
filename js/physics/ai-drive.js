@@ -476,6 +476,10 @@ const AiDrive = (function () {
   }
 
   const ERS_BIAS = 0.06;
+  // Defend reserve (#6546 P1), every level. 0.12, not the 0.25 `desperate` floor: both end the flat-battery
+  // trains (0 % car-time at <= 0.02, was 11-15 %), but 0.25 held trains longer (stuck > 10 s Monza 158 -> 193
+  // over 3 seeds) and 0.12 does not (169; Red Bull Ring 172 -> 156). A/B in docs/notes/AI-HARD-PACE-2026-11-25.md.
+  const DEFEND_FLOOR = 0.12;
   function wantBoost(ctx) {
     const energy = ctx.energy || 0;
     if (energy <= 0.02) return false;
@@ -509,7 +513,6 @@ const AiDrive = (function () {
     // Defend only above a reserve (#6546 P1): trains drained to the 0.02 gate and sat on a flat battery.
     return desperate || (defending && energy > DEFEND_FLOOR) || rich || (energy > 0.25 && straight && ctx.traits.awareness < 0.55);
   }
-  const DEFEND_FLOOR = 0.25;
 
   function wantX(ctx) {
     if (ctx && ctx.armed === false) return false;
