@@ -5,10 +5,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { NOTICE_SOURCES, buildNoticesText } from "../../desktop/scripts/notices.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -33,7 +33,7 @@ test("gitignore ignores generated THIRD-PARTY-NOTICES.txt not the entitlements",
   const gi = fs.readFileSync(path.join(ROOT, ".gitignore"), "utf8");
   assert.match(gi, /desktop\/build\/THIRD-PARTY-NOTICES\.txt/);
   assert.ok(fs.existsSync(path.join(ROOT, "desktop/build/entitlements.mac.plist")));
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-notices-"));
+  const tmp = mkTmpDir("apex-notices-");
   try {
     assert.ok(buildNoticesText(ROOT).length > 1000);
   } finally {

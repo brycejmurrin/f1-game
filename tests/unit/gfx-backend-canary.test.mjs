@@ -32,7 +32,6 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { fnSource } from "../helpers/fn-source.mjs";
 import { glxSoftHarness } from "../helpers/glx-soft-harness.mjs";
-import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -47,6 +46,7 @@ import { gameSource, symbolSource, GAME_REL } from "../helpers/game-source.mjs";
 import { bootRendererBoot } from "../helpers/renderer-boot-vm.mjs";
 import { cssRules, decl } from "../helpers/css-rules.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const readFile = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -1487,7 +1487,7 @@ const wgxLegJson = (gfxOver = {}) => ({
 
 function runVerdict(script, { census, legs, ls = "" }) {
   const image = "macos-latest";
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-verdict-"));
+  const dir = mkTmpDir("apex-verdict-");
   try {
     if (census !== undefined) fs.writeFileSync(path.join(dir, `census-${image}.json`), JSON.stringify(census));
     for (const [leg, json] of Object.entries(legs)) {

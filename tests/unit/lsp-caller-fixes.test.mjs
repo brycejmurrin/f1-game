@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Lsp, callTool } from "../../tools/mcp/lsp-mcp.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 test("callers follow aliases and declaration anchors while preserving lexical owners", { timeout: 60000 }, async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lsp-caller-fixes-"));
+  const dir = mkTmpDir("lsp-caller-fixes-");
   const write = (file, text) => { fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true }); fs.writeFileSync(path.join(dir, file), text); };
   write("jsconfig.json", JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, typeAcquisition: { enable: false }, include: ["src/**/*.js"] }));
   write("src/callers.js", `"use strict";
@@ -49,7 +49,7 @@ globalThis.keep = { direct, arrow, objA, objB, aliasCaller, destructuredCaller }
 });
 
 test("callers count calls apart from property uses and keep every row", { timeout: 60000 }, async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lsp-caller-kinds-"));
+  const dir = mkTmpDir("lsp-caller-kinds-");
   fs.mkdirSync(path.join(dir, "src"));
   fs.writeFileSync(path.join(dir, "jsconfig.json"), JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, typeAcquisition: { enable: false }, include: ["src/**/*.js"] }));
   fs.writeFileSync(path.join(dir, "src/kinds.js"), `"use strict";

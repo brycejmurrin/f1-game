@@ -8,11 +8,11 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // Load via a path relative to this file so docs-integrity / cross-file-paths
@@ -56,7 +56,7 @@ test("parseByteRange handles closed, open-end, suffix, and unsatisfiable", () =>
 });
 
 test("resolveSafePath maps / to index.html and rejects traversal", () => {
-  const root = mkdtempSync(join(tmpdir(), "apex-proto-"));
+  const root = mkTmpDir("apex-proto-");
   try {
     writeFileSync(join(root, "index.html"), "<!doctype html>");
     mkdirSync(join(root, "js"));
@@ -104,18 +104,18 @@ async function withHandler(fn) {
     if (request === "electron") return { protocol: { handle: (scheme, h) => { assert.equal(scheme, "app"); handler = h; } } };
     return realLoad.call(this, request, ...rest);
   };
-  const root = mkdtempSync(join(tmpdir(), "apex-scheme-"));
+  const root = mkTmpDir("apex-scheme-");
   try {
     writeFileSync(join(root, "index.html"), "<!doctype html>");
     writeFileSync(join(root, "data.bin"), "0123456789");
-    writeFileSync(join(tmpdir(), `apex-scheme-secret-${process.pid}.txt`), "secret");
+    writeFileSync(join(root, "..", `apex-scheme-secret-${process.pid}.txt`), "secret");
     proto.handleScheme(root);
     assert.equal(typeof handler, "function", "handleScheme must register a handler for the scheme");
     await fn((pathname, headers = {}, host = "apex") => handler(new Request(`app://${host}${pathname}`, { headers })));
   } finally {
     Module._load = realLoad;
     rmSync(root, { recursive: true, force: true });
-    rmSync(join(tmpdir(), `apex-scheme-secret-${process.pid}.txt`), { force: true });
+    rmSync(join(root, "..", `apex-scheme-secret-${process.pid}.txt`), { force: true });
   }
 }
 

@@ -4,7 +4,8 @@
  * (AGENTS.md: regenerable output goes in artifacts/ or scratch/, never /tmp). A tests/unit file that
  * calls mkdtempSync and reads the OS temp dir fails here unless it is:
  *   - ALLOWED: it needs a dir outside the repo (dropped-group-runs copies a tool out to prove it has no
- *     repo imports; git-fixture-env builds fixture repos that must not nest inside a repo), or
+ *     repo imports; git-fixture-env builds fixture repos that must not nest inside a repo; f1-dev-tools
+ *     points a symlink at a dir outside artifacts/ and scratch/ to prove the escape is refused), or
  *   - an OFFENDER row in tests/data/tmpdir-offenders.json: a file not migrated yet. The list only
  *     shrinks: a migrated file must drop its row, and no new row may be added.
  *
@@ -19,7 +20,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const UNIT = path.join(ROOT, "tests", "unit");
 const SELF = path.basename(fileURLToPath(import.meta.url));
-const ALLOWED = new Set(["dropped-group-runs.test.mjs", "git-fixture-env.test.mjs"]);
+const ALLOWED = new Set(["dropped-group-runs.test.mjs", "f1-dev-tools.test.mjs", "git-fixture-env.test.mjs"]);
 const DATA = JSON.parse(fs.readFileSync(path.join(ROOT, "tests", "data", "tmpdir-offenders.json"), "utf8"));
 const OFFENDERS = DATA.offenders;
 

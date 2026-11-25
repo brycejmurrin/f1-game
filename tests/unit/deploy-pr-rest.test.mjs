@@ -11,10 +11,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { openPrRest, DEPLOY_BRANCH } from "../../tools/ci/deploy.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 function fakeCurl(dir, replies) {
   // Each invocation appends its argv and its stdin to a log, and answers by URL.
@@ -41,7 +41,7 @@ printf '%s\\n%s' "$body" "${replies.status || 200}"
 }
 
 function withFakeCurl(replies, fn) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-fake-curl-"));
+  const dir = mkTmpDir("apex-fake-curl-");
   fakeCurl(dir, replies);
   const PATH = process.env.PATH;
   process.env.PATH = `${dir}${path.delimiter}${PATH}`;

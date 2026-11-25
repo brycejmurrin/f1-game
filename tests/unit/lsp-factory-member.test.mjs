@@ -2,13 +2,13 @@
 // carries the text matches of `.name` so the reader verifies them instead of deleting a live function.
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Lsp, callTool } from "../../tools/mcp/lsp-mcp.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 test("a factory member's zero names its text matches; a resolved symbol gets no such note", { timeout: 60000 }, async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lsp-factory-member-"));
+  const dir = mkTmpDir("lsp-factory-member-");
   const write = (file, text) => { fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true }); fs.writeFileSync(path.join(dir, file), text); };
   write("jsconfig.json", JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, typeAcquisition: { enable: false }, include: ["src/**/*.js"] }));
   write("src/factory.js", `"use strict";

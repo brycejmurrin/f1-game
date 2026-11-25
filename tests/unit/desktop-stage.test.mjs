@@ -6,7 +6,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -17,6 +16,7 @@ import {
   stageSite,
   stampStaged,
 } from "../../tools/desktop/stage.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -28,7 +28,7 @@ test("desktopVersionFromBuild maps version.json build → <apexVersion>.<build>"
 });
 
 test("stageSite copies every allow-listed root file and directory", () => {
-  const dest = fs.mkdtempSync(path.join(os.tmpdir(), "apex-stage-"));
+  const dest = mkTmpDir("apex-stage-");
   try {
     stageSite(dest, { root: ROOT });
     for (const f of STAGE_ROOT_FILES) {
@@ -52,7 +52,7 @@ test("stageSite copies every allow-listed root file and directory", () => {
 });
 
 test("stampStaged rewrites ?v=dev tags to content hashes", () => {
-  const dest = fs.mkdtempSync(path.join(os.tmpdir(), "apex-stamp-"));
+  const dest = mkTmpDir("apex-stamp-");
   try {
     stageSite(dest, { root: ROOT });
     const before = fs.readFileSync(path.join(dest, "index.html"), "utf8");
@@ -75,7 +75,7 @@ test("stampStaged rewrites ?v=dev tags to content hashes", () => {
 
 test("default desktop stages must match HEAD while explicit overrides stay intentional", () => {
   const { resolveSiteDir } = createRequire(import.meta.url)("../../desktop/lib/site.cjs");
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-site-freshness-"));
+  const tmp = mkTmpDir("apex-site-freshness-");
   const desktop = path.join(tmp, "desktop");
   const dist = path.join(desktop, "dist-site");
   const head = "a".repeat(40);

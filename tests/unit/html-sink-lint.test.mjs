@@ -13,11 +13,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { lintSource, isConstantHtml, audit, readAllowlist, rhsHash, rehash } from "../../tools/check/html-sink-lint.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const TOOL = fileURLToPath(new URL("../../tools/check/html-sink-lint.mjs", import.meta.url));
 
@@ -103,7 +103,7 @@ test("every HTML sink in js/ is constant or audited, and the allowlist is exact"
 // The key says WHERE markup is written; `rhs` pins WHAT. An audited site whose
 // expression later takes a URL or a driver name must not stay green on its key.
 test("an audited site whose right-hand side changes fails as CHANGED", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "html-sink-"));
+  const root = mkTmpDir("html-sink-");
   const A = ["js", "a.js"].join("/"), B = ["js", "b.js"].join("/");   // fixture paths, not tree paths
   try {
     fs.mkdirSync(path.join(root, "js"));
