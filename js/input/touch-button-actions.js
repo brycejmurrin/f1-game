@@ -71,6 +71,9 @@ const TouchButtonActions = (() => {
       touchClick = e.pointerType === "touch" && !!mode;
       if (!touchClick) return;
       consume(e);
+      // A stale contact (#6619): iOS can drop the pointerup while another thumb holds GAS, so
+      // noFingers never runs. Reclaim it when the same id comes back or its capture is gone.
+      if (pointer === e.pointerId || el.hasPointerCapture?.(pointer) === false) cancelPress(true);
       if (pointer !== null || el.disabled || el.getAttribute?.("aria-disabled") === "true") return;
       pointer = e.pointerId; began = e.timeStamp;
       activePresses.add(cancelPress);

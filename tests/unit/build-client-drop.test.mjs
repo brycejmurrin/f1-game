@@ -257,3 +257,160 @@ test("replay cancellation during cooperative preparation releases pending payloa
   assert.equal(uploads, 0); assert.equal(rec.prepared, null);
   assert.equal(data._tlxPrepared, undefined);
 });
+
+// ---- worker-readiness wait shared by post and previewMap (Gardener plan #6640 C2 pin) ----
+// Both call sites spawn the worker, race its "ready" against ANSWER_MS, drop a worker whose
+// init never answered, and give up when the worker changed. Pinned at BOTH sites so the carve
+// into one awaitWorkerReady() stays behaviour-neutral: timer lengths, warning text, termination.
+function readyPage({ adopt = () => true } = {}) {
+  const workers = [], timers = [], warns = [];
+  const store = new Map([["apex26.buildWorker", "1"]]);
+  class FakeWorker {
+    constructor() { this.posts = []; this.terminated = false; workers.push(this); }
+    postMessage(m) { this.posts.push(m); }
+    terminate() { this.terminated = true; }
+  }
+  const def = { id: "monza", path: { pts: [[0, 0], [1, 0], [1, 1]] } };
+  const adopted = [];
+  const ctx = vm.createContext({
+    console, URL, Promise,
+    Worker: FakeWorker,
+    localStorage: { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, v) },
+    location: { href: "https://example.test/index.html" },
+    document: { readyState: "complete", getElementById: () => null, querySelectorAll: () => [] },
+    ApexRoster: { TRACK_VM: ["fixture-track-a.js"], TRACK_WORKER_EXTRA: [] },
+    Log: { warn: (_ns, m) => warns.push(m), info() {} },
+    Tracks: { LIST: [{ id: "spa" }, def], adoptPreviewCenterline: (d, t) => { adopted.push([d.id, t]); return adopt(d, t); } },
+    // Manual clock: every cap is fired by the test, not waited for.
+    setTimeout: (fn, ms) => { timers.push({ fn, ms, live: true }); return timers.length; },
+    clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].live = false; },
+  });
+  ctx.window = ctx;
+  vm.runInContext(src, ctx, { filename: absSrc("js/track/build-client.js") });
+  const liveTimers = () => timers.filter((t) => t.live).map((t) => t.ms);
+  const fire = () => { for (const t of timers) if (t.live) { t.live = false; t.fn(); } };
+  return { client: ctx.TrackBuildClient, workers, warns, timers, liveTimers, fire, def, adopted };
+}
+
+
+
+const INIT_WARN = "build worker off: worker init gave no answer in 30 s";
+
+// ---- build → post ---------------------------------------------------------
+
+test("post: the init wait is one 30 s timer, and a silent init is dropped with the init warning", async () => {
+  const { client, workers, warns, liveTimers, fire } = readyPage();
+  const built = client.build(1, { id: "monza" }, opts, gfx, null);
+  await settle();
+  assert.deepEqual(liveTimers(), [30000], "only the init cap is armed");
+  assert.deepEqual(workers[0].posts.map((m) => m.type), ["init"]);
+  fire();
+  assert.equal(await built, null);
+  assert.equal(workers[0].terminated, true);
+  assert.deepEqual(warns, [INIT_WARN]);
+  assert.deepEqual(workers[0].posts.map((m) => m.type), ["init"], "no build was posted");
+});
+
+test("post: a ready worker clears the init timer, then arms one 30 s answer timer", async () => {
+  const { client, workers, liveTimers, timers } = readyPage();
+  const built = client.build(1, { id: "monza" }, opts, gfx, null);
+  await settle();
+  workers[0].onmessage({ data: { type: "ready" } });
+  await settle();
+  assert.equal(timers[0].live, false, "the init timer was cleared");
+  assert.deepEqual(liveTimers(), [30000], "the answer cap");
+  const m = workers[0].posts.at(-1);
+  assert.equal(m.type, "build");
+  assert.equal(m.seq, 1);
+  assert.equal(m.idx, 1);
+  client.set(false);
+  assert.equal(await built, null);
+});
+
+test("post: a caller that went stale while the worker loaded gets null and posts nothing", async () => {
+  const { client, workers, warns } = readyPage();
+  let alive = true;
+  const built = client.build(1, { id: "monza" }, opts, gfx, null, () => alive);
+  await settle();
+  alive = false;
+  workers[0].onmessage({ data: { type: "ready" } });
+  assert.equal(await built, null);
+  assert.deepEqual(workers[0].posts.map((m) => m.type), ["init"]);
+  assert.equal(workers[0].terminated, false, "the worker stays up for the next caller");
+  assert.deepEqual(warns, []);
+});
+
+test("post: an init error settles the wait with null (no init-timeout warning)", async () => {
+  const { client, workers, warns } = readyPage();
+  const built = client.build(1, { id: "monza" }, opts, gfx, null);
+  await settle();
+  workers[0].onmessage({ data: { type: "error", message: "boom" } });
+  assert.equal(await built, null);
+  assert.equal(warns.filter((w) => w === INIT_WARN).length, 0);
+});
+
+// ---- previewMap -----------------------------------------------------------
+
+test("previewMap: a silent init is dropped after 30 s with the same warning, and answers false", async () => {
+  const { client, workers, warns, liveTimers, fire, def } = readyPage();
+  const p = client.previewMap(def);
+  await settle();
+  assert.deepEqual(liveTimers(), [30000]);
+  fire();
+  assert.equal(await p, false);
+  assert.equal(workers[0].terminated, true);
+  assert.deepEqual(warns, [INIT_WARN]);
+  assert.deepEqual(workers[0].posts.map((m) => m.type), ["init"]);
+});
+
+test("previewMap: ready → one preview message, an 8 s cap, the answer adopted with its shift", async () => {
+  const { client, workers, liveTimers, timers, def, adopted } = readyPage();
+  const p = client.previewMap(def);
+  await settle();
+  workers[0].onmessage({ data: { type: "ready" } });
+  await settle();
+  assert.equal(timers[0].live, false, "the init timer was cleared");
+  assert.deepEqual(liveTimers(), [8000], "the preview cap is min(ANSWER_MS, 8000)");
+  const m = workers[0].posts.at(-1);
+  assert.deepEqual({ ...m }, { type: "preview", seq: 1, idx: 1, id: "monza", banking: false });
+  workers[0].onmessage({ data: { type: "preview", seq: 1, track: { n: 3 }, sceneryShift: 0.25 } });
+  assert.equal(await p, true);
+  assert.equal(def._sceneryShift, 0.25);
+  assert.deepEqual(adopted, [["monza", { n: 3 }]]);
+  assert.deepEqual(liveTimers(), [], "the answered preview's timer is cleared");
+});
+
+test("previewMap: an unanswered preview gives false after 8 s and keeps the worker", async () => {
+  const { client, workers, warns, fire, def } = readyPage();
+  const p = client.previewMap(def);
+  await settle();
+  workers[0].onmessage({ data: { type: "ready" } });
+  await settle();
+  fire();
+  assert.equal(await p, false);
+  assert.equal(workers[0].terminated, false, "a slow preview never drops the worker");
+  assert.deepEqual(warns, []);
+});
+
+test("previewMap: turning the worker off while it loads answers false", async () => {
+  const { client, workers, def } = readyPage();
+  const p = client.previewMap(def);
+  await settle();
+  client.set(false);
+  assert.equal(await p, false);
+  assert.equal(workers[0].terminated, true);
+});
+
+test("previewMap and a build share one worker and one readiness wait", async () => {
+  const { client, workers, def } = readyPage();
+  const p = client.previewMap(def);
+  const built = client.build(1, { id: "monza" }, opts, gfx, null);
+  await settle();
+  assert.equal(workers.length, 1, "one spawn");
+  workers[0].onmessage({ data: { type: "ready" } });
+  await settle();
+  assert.deepEqual(workers[0].posts.map((m) => m.type).sort(), ["build", "init", "preview"]);
+  client.set(false);
+  assert.equal(await p, false);
+  assert.equal(await built, null);
+});

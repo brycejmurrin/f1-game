@@ -68,7 +68,7 @@
     },
     "eagerCodeBytes": {
       "absorb": 5000,
-      "ceiling": 4024158,
+      "ceiling": 4024119,
       "slack": 0
     },
     "eagerScripts": {

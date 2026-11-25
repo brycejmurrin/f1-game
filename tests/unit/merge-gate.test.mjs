@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, CONFIG_LABEL, ROWS, openVerdict, holdVerdict, configVerdict, planRow, ciVerdict, isConfigPath,
-  configFiles, filePaths, configPushState, isProtectedConfigPath, configLabelKind, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, progressLine, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict, retestOnMerge, retestPlan, gateEstimate, RETEST_JOBS, RETEST_FILE_TIMEOUT_S, RETEST_TIMEOUT_MS, newerTipPaths, ciRecordedBase, RETEST_MARGIN_MIN, LOCAL_ROWS, RAISE_LABEL, treeCeilingsAt, prRaisesAt, treeRaises, raiseVerdict, raisesCovered,
+  configFiles, filePaths, configPushState, isProtectedConfigPath, configLabelKind, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, progressLine, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict, retestOnMerge, retestPlan, gateEstimate, RETEST_JOBS, RETEST_FILE_TIMEOUT_S, RETEST_TIMEOUT_MS, newerTipPaths, ciRecordedBase, RETEST_MARGIN_MIN, RETEST_REFUSE_MS, retestBound, LOCAL_ROWS, RAISE_LABEL, treeCeilingsAt, prRaisesAt, treeRaises, raiseVerdict, raisesCovered,
   baseVerdict, BASE_ESCAPE_LABELS, FIXER_LABEL, fixerProof, cleanTipSync, creditPriorCi, CREDIT_CHAIN_MAX, ciRecord, sameMergeTree,
 } from "../../tools/ci/merge-gate.mjs";
 import { tipState, codeRedJobs, platformStepFailed, readDeployTip, PLATFORM_STEP as TIP_PLATFORM_STEP } from "../../tools/ci/lib/deploy-tip.mjs";
@@ -1175,7 +1175,7 @@ function runStep(script, env, files = {}) {
     `      case " \${GH_PUT_FAIL:-} " in *" $(sed -n 's#.*/pulls/\\([0-9]*\\)/update-branch.*#\\1#p' <<<"\${args[*]}") "*) echo "gh: merge conflict (HTTP 422)" >&2; return 1 ;; esac`,
     `      echo '{"message":"Updating pull request branch."}'; return 0 ;;`,
     `    *"/issues/"*"/comments"*) data=\${FAKE_COMMENTS:-[]} ;;`,
-    `    *"/issues/"*"/events"*) data=\${FAKE_PAUSE_EVENTS:-'[{"event":"labeled","label":{"name":"dispatch:merge-pause"},"actor":{"login":"o"},"performed_via_github_app":null}]'} ;;`,
+    `    *"/issues/"*"/events"*) [ -z "\${GH_EVENTS_FAIL:-}" ] || { echo "$GH_EVENTS_FAIL" >&2; return 1; }; data=\${FAKE_PAUSE_EVENTS:-'[{"event":"labeled","label":{"name":"dispatch:merge-pause"},"actor":{"login":"o"},"performed_via_github_app":null}]'} ;;`,
     // PAUSED true|false is the Dispatch issue list (open, labelled) the first read sees; PAUSED_AFTER the later ones;
     // anything else is answered as-is (unreadable).
     `    *"/issues"*) if [ "$(grep -c '/issues -f' "$GH_LOG")" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != pause ] || return 31; p="\${PAUSED_AFTER-\${PAUSED:-false}}"; else p="\${PAUSED:-false}"; fi;`,
@@ -1951,6 +1951,12 @@ test("land.yml dispatch:merge-pause (finding 7): counts only when the owner's ow
   assert.deepEqual(tr({ FAKE_PAUSE_EVENTS: ev("o") }), { built: 0, skipped: 1, status: 0 }, "the owner's own click pauses it");
   assert.deepEqual(tr({ PAUSED: "false" }), { built: 1, skipped: 0, status: 0 });
   assert.deepEqual(tr({ PAUSED: "unreadable" }), { built: 0, skipped: 1, status: 0 }, "an unreadable pause read pauses (fail-safe)");
+  // #6679 finding 4: the Dispatch issue reads, its label events do not (jq -s still prints "false" on no input; the
+  // pipeline's status must win): the train is skipped, never built on an unread pause.
+  const unread = runStep(`node() { echo "node $*" >> "$GH_LOG"; }\nexport -f node\n${build}`, { LAND_TOKEN: "fixture-land-token", PAUSED: "true", GH_EVENTS_FAIL: "HTTP 502: Bad Gateway" });
+  assert.equal(unread.status, 0, unread.stderr);
+  assert.deepEqual(unread.summary.split("\n").filter((l) => l.startsWith("merge train")), ["merge train skipped: dispatch:merge-pause is set by the owner (or unreadable: unreadable)"]);
+  assert.equal(unread.calls.filter((c) => c.startsWith("node ")).length, 0, "no build");
 });
 
 test("land.yml (#6456 item 10, Bryce's B): the inline merge_paused and say copies stay byte-identical", () => {
@@ -3456,11 +3462,33 @@ test("land.yml post (trains as default): a passing PR waits pending for the open
   assert.deepEqual(posted(r).map((b) => [b.state, b.description]), [["pending", "= merge-gate waiting — train #6671 in flight; this PR boards the next train"]]);
   assert.equal(r.out.arm, "", "not armed: it is the next train's car");
   assert.equal(r.out.retry, "[]", "no immediate re-gate: the train's merge or close re-gates it");
-  r = go({ FAKE_STACKS: JSON.stringify([{ ref: "refs/heads/train-next/abc-6531-6532" }]) });
-  assert.equal(posted(r)[0].description, "= merge-gate waiting — a stacked train (train-next/abc-6531-6532) in flight; this PR boards the next train", "a stacked train-next/ ref is a train in flight");
-  assert.equal(r.out.arm, "");
-  // Exemptions and non-trains: each arms exactly as before.
   const armed = (x, why) => { assert.equal(x.status, 0, x.stderr); assert.equal(posted(x)[0]?.state, "success", why); assert.ok(x.out.arm, why); };
+  // #6686 finding 1: a stacked train-next/ ref is in flight only while it backs an open `train/` PR (train, no hold):
+  // its base is that PR's head (the train under it) or its sha is (its speculative PR, `train` without `land`).
+  const SB = "e".repeat(40), SS = "f".repeat(40), stack = JSON.stringify([{ ref: `refs/heads/train-next/${SB}-6531-6532`, object: { sha: SS } }]);
+  const spec = (o = {}) => trainPR({ number: 6690, head: { sha: SS, ref: "train/20261125T1900-6531-6532-on6687", repo: { full_name: "o/r" } }, labels: [{ name: "train" }], ...o });
+  r = go({ FAKE_STACKS: stack, FAKE_ARM_BOARD: JSON.stringify([spec()]) });
+  assert.equal(posted(r)[0].description, "= merge-gate waiting — a stacked train (#6531,#6532) in flight; this PR boards the next train", "backed by its speculative PR; named by its cars (a 40-hex ref would cut the 140-char status before the suffix the sweep matches)");
+  assert.equal(r.out.arm, "");
+  r = go({ FAKE_STACKS: stack, FAKE_ARM_BOARD: JSON.stringify([trainPR({ draft: true, head: { sha: SB, ref: "train/20261125-1800", repo: { full_name: "o/r" } } })]) });
+  assert.equal(posted(r)[0].state, "pending", "backed by the train under it (here a draft, so the first read did not name it)");
+  armed(go({ FAKE_STACKS: stack }), "an orphan ref (no open train PR, its cars not open with `land`) parks nobody");
+  // #6692 finding 1, the promote window: train N merged (its PR closed, so nothing open backs the ref), N+1 not yet
+  // promoted. The ref still counts while its base is on the deploy branch and every car is open with `land`.
+  const cars = [6531, 6532].map((n) => pr7({ number: n, head: { sha: HEAD7, ref: `claude/x-${n}`, repo: { full_name: "o/r" } } }));
+  const onTip = (status, open = cars) => go({ FAKE_STACKS: stack, FAKE_ARM_BOARD: JSON.stringify(open.map((c) => JSON.parse(c))), FAKE_ARM_COMPARE: JSON.stringify({ status }) });
+  r = onTip("ahead");
+  assert.deepEqual(posted(r).map((b) => [b.state, b.description]), [["pending", "= merge-gate waiting — a stacked train (#6531,#6532) in flight; this PR boards the next train"]], "promote window: pending");
+  assert.equal(r.calls.filter((c) => c.includes(`/compare/${SB}...${DEPLOY_BRANCH}`)).length, 1, "one compare, of the ref's base against the deploy branch");
+  assert.equal(posted(onTip("identical"))[0].state, "pending", "base is the tip itself");
+  armed(onTip("diverged"), "a base not on the deploy branch (a closed, unmerged train under it) parks nobody");
+  armed(onTip("ahead", cars.slice(0, 1)), "a car of the stack gone (merged, closed or lost `land`): the build restacks; nobody waits on it");
+  armed(go({ FAKE_STACKS: stack, FAKE_ARM_BOARD: JSON.stringify(cars.map((c) => JSON.parse(c))), FAKE_ARM_COMPARE: "not json" }), "an unreadable compare waits nothing");
+  armed(go({ FAKE_STACKS: stack, FAKE_ARM_BOARD: JSON.stringify([trainPR({ labels: [{ name: "land" }, { name: "train" }, { name: "hold" }] })]) }), "a held train under another head backs no ref");
+  armed(go({ FAKE_STACKS: stack, FAKE_ARM_BOARD: JSON.stringify([spec({ labels: [{ name: "train" }, { name: "hold" }] })]) }), "a held speculative PR backs nothing");
+  armed(go({ FAKE_STACKS: stack, FAKE_ARM_BOARD: JSON.stringify([spec({ head: { sha: SS, ref: "train/x", repo: { full_name: "fork/r" } } })]) }), "a fork's train/ PR backs nothing");
+  armed(go({ FAKE_STACKS: JSON.stringify([{ ref: "refs/heads/train-next/abc-6531-6532", object: { sha: "0".repeat(40) } }]), FAKE_ARM_BOARD: JSON.stringify([spec()]) }), "an unparsable ref with an unknown sha backs nothing");
+  // Exemptions and non-trains: each arms exactly as before.
   armed(go({ FAKE_ARM_BOARD: "[]" }), "no train open: today's lane (a lone orphan still lands alone)");
   armed(go({ FAKE_ARM_BOARD: "not json" }), "an unreadable train list waits nothing; arm re-checks the queue");
   armed(go({ FAKE_ARM_BOARD: JSON.stringify([trainPR(), { ...trainPR({ number: 7 }) }]), FAKE_PR: pr7({ head: { sha: HEAD7, ref: "train/20261125-1800" } }) }), "the train PR itself");
@@ -3482,6 +3510,40 @@ test("land.yml trusted-rows (trains as default): `fixer` is true only when the b
   assert.equal(go("the deploy tip is green on code"), false);
   assert.equal(go("tip red on code at bbbbbbbb; `deploy:red` is set and this head contains the red commit bbbbbbbb: its CI ran on top of the red tip, so the ci row is the proof (the fixer)"), true);
   assert.equal(go("tip red; `priority` added by brycejmurrin in person at 2026-11-25T18:00:00Z: this PR may land over the red tip (the fixer)"), true);
+});
+
+test("land.yml trusted-rows (#6686 finding 6): baseVerdict's REAL fixer output, through rowLines, sets `fixer`; a rewording fails here", () => {
+  const run = LAND.jobs["trusted-rows"].steps.find(s => s.id === "rows").run;
+  const go = (base) => {
+    const out = rowLines({ ok: base.ok, pr: 7, head: HEAD7, tip: TIP_A, rows: { open: { ok: true, evidence: "open" }, base } }).join("\n");
+    const r = runStep(`node() { printf '%s\\n' "$FAKE_NODE_OUT"; }\n${run}`, { PRS: JSON.stringify([{ number: 7, head: HEAD7 }]), VALIDATED_TIP: "", FAKE_NODE_OUT: out });
+    assert.equal(r.status, 0, r.stderr);
+    return JSON.parse(r.out.rows)[0].fixer;
+  };
+  const red = { state: "code-red", sha: TIP_A, runAt: "2026-11-25T18:00:00Z", evidence: `pages.yml run 9 on ${TIP_A.slice(0, 8)} concluded failure on code: failed job(s) \`build\`` };
+  const proof = baseVerdict(red, [{ name: FIXER_LABEL }], [], "o", { contains: true });
+  assert.equal(proof.ok, true, proof.evidence);
+  assert.equal(go(proof), true, "route 1: `deploy:red` and the head contains the red commit");
+  const events = [{ event: "labeled", label: { name: BASE_ESCAPE_LABELS[0] }, actor: { login: "o" }, performed_via_github_app: null, created_at: "2026-11-25T18:30:00Z" }];
+  const owner = baseVerdict(red, [{ name: BASE_ESCAPE_LABELS[0] }], events, "o", null);
+  assert.equal(owner.ok, true, owner.evidence);
+  assert.equal(go(owner), true, "route 2: the owner's own click after the red run started");
+  assert.equal(go(baseVerdict({ state: "green", evidence: "pages.yml run 9 concluded success" }, [{ name: FIXER_LABEL }])), false, "a stale `deploy:red` on a green tip is no fixer");
+  assert.equal(go(baseVerdict(red, [{ name: FIXER_LABEL }], [], "o", { contains: false })), false, "a waiting base row is no fixer");
+});
+
+test("retestBound (#6686 finding 5): the gate's own plan with the tip side unknown; RETEST_REFUSE_MS is the retest row's breadth line", () => {
+  assert.equal(RETEST_REFUSE_MS, RETEST_TIMEOUT_MS * 0.8);
+  const est = (files) => files.length * 10_000;
+  const sel = (files) => ({ files: files.map((f) => U(f.replace(/\W+/g, "-"))), reason: "matched" });
+  assert.deepEqual(retestBound(["js/a.js", "js/b.js"], { select: sel, estimate: est }), { ms: 20_000, files: [U("js-a-js"), U("js-b-js")], how: "the unit files both sides select (tooling-fast's --changed selection: newer tip every file, the PR 2) and the touched tests/unit files" }, "the PR side's own selection");
+  const wide = retestBound(["tools/manifest.cjs", U("x")], { select: () => ({ files: ["a", "b", "c"], widened: "tools/manifest.cjs forces full suite" }), estimate: est });
+  assert.deepEqual([wide.ms, wide.files], [10_000, [U("x")]], "a widened selection re-tests only the touched tests/unit files (retestPlan)");
+  assert.deepEqual(retestBound(["docs/notes/MERGE-TRAIN-2026-11-18.md"], { select: () => ({ files: [] }), estimate: () => assert.fail("nothing to estimate") }).ms, 0);
+  assert.deepEqual(retestBound(["js/a.js"], { select: () => ({ error: "selection failed" }) }), { error: "selection failed" });
+  // The real selection and the committed timings: a docs-only fold is cheap and finite.
+  const real = retestBound(["docs/notes/MERGE-TRAIN-2026-11-18.md"]);
+  assert.ok(Number.isFinite(real.ms) && real.ms < RETEST_REFUSE_MS, JSON.stringify(real));
 });
 
 test("land.yml retry (trains as default): no solo re-gate is dispatched while a train is open; trains and deploy:red still are", () => {

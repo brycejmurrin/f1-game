@@ -694,6 +694,33 @@ test("THROTTLE = LATCH: sliding off a latched GAS keeps the latch, and BRAKE sti
   assert.deepEqual([btn().throttle, btn().brake], [true, false]);
 });
 
+test("THROTTLE = LATCH: a slide GAS -> BRAKE -> GAS holds throttle and never flips the latch; only a tap does (#6618)", () => {
+  const { Input, gas, brake, mid, lift, btn } = bootDock();
+  Input.setThrottleLatch(true);
+  // A fresh tap latches; the same thumb slides to BRAKE and back without lifting.
+  gas.fire("pointerdown", mid("btn-throttle"));
+  assert.equal(Input.throttleLatched(), true, "the tap is the toggle edge");
+  gas.fire("pointermove", mid("btn-brake"));
+  assert.deepEqual([btn().throttle, btn().brake, Input.throttleLatched()], [true, true, true]);
+  brake.fire("pointermove", mid("btn-throttle"));
+  assert.equal(Input.throttleLatched(), true, "arriving on GAS by a slide must not cancel the latch");
+  assert.deepEqual([btn().throttle, btn().brake], [true, false]);
+  lift("btn-throttle");
+  assert.deepEqual([btn().throttle, Input.throttleLatched()], [true, true], "the latch outlives the lift");
+  // Unlatched: a thumb that lands on BRAKE and slides onto GAS gets throttle only while it stays there.
+  gas.fire("pointerdown", { pointerId: 2, ...mid("btn-throttle") }); lift("btn-throttle", 2);
+  assert.deepEqual([btn().throttle, Input.throttleLatched()], [false, false], "a second tap lifts it");
+  brake.fire("pointerdown", { pointerId: 3, ...mid("btn-brake") });
+  brake.fire("pointermove", { pointerId: 3, ...mid("btn-throttle") });
+  assert.deepEqual([btn().throttle, btn().brake, Input.throttleLatched()], [true, false, false], "a slide holds GAS, no latch");
+  assert.equal(Input.throttleLevel() > 0, true);
+  gas.fire("pointermove", { pointerId: 3, ...mid("btn-brake") });
+  assert.deepEqual([btn().throttle, btn().brake, Input.throttleLatched()], [false, true, false], "sliding off drops it");
+  brake.fire("pointermove", { pointerId: 3, ...mid("btn-throttle") });
+  lift("btn-throttle", 3);
+  assert.deepEqual([btn().throttle, btn().brake, Input.throttleLatched()], [false, false, false], "lifting a slid thumb leaves GAS off");
+});
+
 test("changing a device's bindings releases only that device's toggled throttle", () => {
   const { Input, listeners, poll, button } = bootPad();
   Input.setHoldMode({ throttle: "toggle" });

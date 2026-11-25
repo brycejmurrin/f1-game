@@ -2936,6 +2936,34 @@ test("removing one of two code-room guests rotates the room code (the removed pl
   } finally { h.lobby.cancel(); }
 });
 
+// #6622: a remove that lands while ANOTHER guest's answer is mid-ICE. onJoiner had closed the room
+// (codeRoom null, codeReopen = the old code), so the old guard rotated nothing and the reopen after
+// that guest settled re-advertised the code the removed player still holds.
+for (const settle of ["connects", "fails"]) {
+  test(`removing a guest while another answer negotiates reopens a FRESH code when it ${settle} (#6622)`, async () => {
+    const { h, rooms, ts, made, until, withGuest, codes } = codeRoomHarness();
+    await withGuest();
+    try {
+      await rooms[1].onJoiner("g2", "answer-2");
+      ts[1].status = "open";
+      await until(() => made.length === 2, "guest 2's session was bound");
+      await until(() => rooms.length >= 3, "the code reopened for a third seat");
+      await rooms[2].onJoiner("g3", "answer-3");          // guest 3 answers: the room closes while it negotiates
+      assert.equal(rooms[2].stopped, 1, "the room is closed mid-handshake");
+      const before = rooms.length;
+      codes.next = "NEW567";
+      assert.equal(h.lobby.removeGuest("g1"), true);
+      for (const fn of ts[0].closers) fn();
+      await new Promise((r) => setTimeout(r, 400));
+      assert.equal(rooms.length, before, "nothing is rotated while guest 3 is mid-ICE (its handshake is not dropped)");
+      if (settle === "connects") ts[2].status = "open"; else ts[2].status = "closed";
+      await until(() => rooms.length > before, "a room was hosted once guest 3 settled");
+      assert.equal(rooms[rooms.length - 1].code, "NEW567", "the removed player's code is never reopened");
+      assert.ok(rooms.every((r, i) => i < before || r.code !== "ABC234"), "no later room re-advertises the old code");
+    } finally { h.lobby.cancel(); }
+  });
+}
+
 // ── H3-7 (2026-10-22): removing the LAST guest rotates only a CODE room ──────
 // Closed PR #3535 (cursor/net-lobby-evict-rotate-h3a7): quiet rotate expiry
 // must use host copy, not nostr's guest "six characters" line.

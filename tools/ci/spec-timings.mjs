@@ -36,6 +36,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const TIMINGS_FILE = "tests/data/spec-timings.json";
@@ -454,6 +455,16 @@ function rowsFromFile(file) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
   const VALUED = new Set(["--into", "--env", "--keep", "--factor", "--bucket"]);
+  const USAGE = `usage: node tools/ci/spec-timings.mjs [junit.xml|live.log ...] [--dry-run] [--json] [--into f] [--env b] [--keep n]
+       node tools/ci/spec-timings.mjs --check [--factor n] [--json]
+       node tools/ci/spec-timings.mjs --steps [--bucket b,...] [--md|--json]
+  the merge mode (no --check/--steps, no --dry-run) WRITES tests/data/spec-timings.json`;
+  exitIfHelp(argv, USAGE);
+  // #6556: --help (or any typo) fell through to the merge path and saved the tracked file.
+  const BOOL = new Set(["--json", "--check", "--steps", "--md", "--dry-run"]);
+  const bad = argv.filter((a, i) => (a.startsWith("-") ? !BOOL.has(a) && !VALUED.has(a)
+    : !VALUED.has(argv[i - 1]) && !fs.existsSync(path.resolve(a))));
+  if (bad.length) { console.error(`spec-timings: unknown argument or missing file ${bad.join(" ")}; nothing written\n\n${USAGE}`); process.exit(2); }
   const flag = (name, fallback = null) => {
     const i = argv.indexOf(name);
     return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;

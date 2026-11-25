@@ -165,6 +165,9 @@ function create(G) {
 Log.info("input", "SteerTuning.create");
 // Stable helpers from the game.js closure.
 const { $, store, clamp } = G;
+// The store, read as numbers: a stored notch counts only as a finite number,
+// else its default, since clamp lets a string through to a NaN car (#6620).
+const numStore = { get(k, d) { const v = store.get(k, d); return typeof v === "number" && isFinite(v) ? v : d; } };
 if ((typeof BrakeCue !== "undefined") && BrakeCue.create) BrakeCue.create(G);
 if ((typeof DrivingCues !== "undefined") && DrivingCues.create) DrivingCues.create(G);
 
@@ -603,16 +606,16 @@ function applySteerTuning() {
   // computes a negative wheelbase, not an error. The ten oninput handlers below
   // are DOM-clamped by the range input's own min/max and never take this path;
   // this is the one that runs on every boot, reading whatever localStorage holds.
-  const rate    = clamp(store.get("steerRate",  2), SLIDER_MIN, SLIDER_MAX);
-  const expo    = clamp(store.get("steerExpo",  6), SLIDER_MIN, SLIDER_MAX);
-  const smooth  = clamp(store.get("steerSmooth", 3), SLIDER_MIN, SLIDER_MAX);
+  const rate    = clamp(numStore.get("steerRate",  2), SLIDER_MIN, SLIDER_MAX);
+  const expo    = clamp(numStore.get("steerExpo",  6), SLIDER_MIN, SLIDER_MAX);
+  const smooth  = clamp(numStore.get("steerSmooth", 3), SLIDER_MIN, SLIDER_MAX);
   const tiltdeg = clamp(Number(store.get("tiltDeg", 8)) || 8, SLIDER_MIN, SLIDER_MAX);   // 8→25° for full lock (tiltDegFromRange: 56.5 - 4.5*(v-1))
-  const lock    = clamp(store.get("steerLock",  7), SLIDER_MIN, SLIDER_MAX);
-  const spdsteer = clamp(store.get("steerSpeed", 7), SLIDER_MIN, SLIDER_MAX);
-  const help    = clamp(store.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);   // default: assist OFF
-  const pace    = clamp(store.get("pace", PACE_DEF), PACE_MIN, PACE_MAX);   // 11 -> 0.840 (14 is the 1.0 reference)
-  const line    = clamp(store.get("raceLine",   0), LINE_MIN, LINE_MAX);
-  const adapt   = clamp(store.get("adaptiveButtons", PRESETS.standard.adaptiveButtons), SLIDER_MIN, SLIDER_MAX);
+  const lock    = clamp(numStore.get("steerLock",  7), SLIDER_MIN, SLIDER_MAX);
+  const spdsteer = clamp(numStore.get("steerSpeed", 7), SLIDER_MIN, SLIDER_MAX);
+  const help    = clamp(numStore.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);   // default: assist OFF
+  const pace    = clamp(numStore.get("pace", PACE_DEF), PACE_MIN, PACE_MAX);   // 11 -> 0.840 (14 is the 1.0 reference)
+  const line    = clamp(numStore.get("raceLine",   0), LINE_MIN, LINE_MAX);
+  const adapt   = clamp(numStore.get("adaptiveButtons", PRESETS.standard.adaptiveButtons), SLIDER_MIN, SLIDER_MAX);
   // CAR WEIGHT is the ONE slider of the shipped profile that is device-aware,
   // and it is device-aware because it collides with a measurement rather than
   // with a taste. 10 (YAW_INERTIA 1.0) is what they drive on a PHONE, where the
@@ -628,15 +631,14 @@ function applySteerTuning() {
                   window.matchMedia("(pointer: coarse)").matches) ? 10 : 5; }
     catch (_) { return 5; }
   })();
-  const weight  = clamp(store.get("carWeight", heavyDefault), SLIDER_MIN, SLIDER_MAX);   // 5 = as shipped
+  const weight  = clamp(numStore.get("carWeight", heavyDefault), SLIDER_MIN, SLIDER_MAX);   // 5 = as shipped
   G.PACE           = paceFromSlider(pace);
   G.WHEELBASE      = wheelbaseFromSlider(rate);
   G.STEER_EXPO     = expoFromSlider(expo);
   G.STEER_MAX_SLIP = lockFromSlider(lock);
   G.STEER_SPEED_REF = speedRefFromSlider(spdsteer);
   G.ROAD_FOLLOW    = helpFromSlider(help);
-  const gripRaw = store.get("gripSteer", 1);
-  const grip = clamp(typeof gripRaw === "number" && isFinite(gripRaw) ? gripRaw : 1, SLIDER_MIN, SLIDER_MAX);
+  const grip = clamp(numStore.get("gripSteer", 1), SLIDER_MIN, SLIDER_MAX);
   if ((typeof GripSteer !== "undefined") && GripSteer.setLevel) GripSteer.setLevel(grip);
   G.YAW_INERTIA    = weightFromSlider(weight);
   G.YAW_DAMP       = yawDampFromSlider(weight);
@@ -657,21 +659,21 @@ function applySteerTuning() {
      fixed range every player already has, so an absent key reproduces today's
      drag at every speed and no schema step is owed. Notch 10 opts in to
      ADAPTIVE BUTTONS' shed in full. */
-  const tiltCurve   = clamp(store.get("tiltCurve", 5), SLIDER_MIN, SLIDER_MAX);
-  const touchCurve  = clamp(store.get("touchCurve", 5), SLIDER_MIN, SLIDER_MAX);
-  const padCurve    = clamp(store.get("padCurve", 5), SLIDER_MIN, SLIDER_MAX);
-  const touchRange  = clamp(store.get("touchRange", 5), SLIDER_MIN, SLIDER_MAX);
-  const touchDrag   = clamp(store.get("touchDragSpeed", 1), SLIDER_MIN, SLIDER_MAX);
-  const dragSmooth  = clamp(store.get("dragSmooth", 1), SLIDER_MIN, SLIDER_MAX);
-  const steerRate2  = clamp(store.get("digitalRate", 5), SLIDER_MIN, SLIDER_MAX);
+  const tiltCurve   = clamp(numStore.get("tiltCurve", 5), SLIDER_MIN, SLIDER_MAX);
+  const touchCurve  = clamp(numStore.get("touchCurve", 5), SLIDER_MIN, SLIDER_MAX);
+  const padCurve    = clamp(numStore.get("padCurve", 5), SLIDER_MIN, SLIDER_MAX);
+  const touchRange  = clamp(numStore.get("touchRange", 5), SLIDER_MIN, SLIDER_MAX);
+  const touchDrag   = clamp(numStore.get("touchDragSpeed", 1), SLIDER_MIN, SLIDER_MAX);
+  const dragSmooth  = clamp(numStore.get("dragSmooth", 1), SLIDER_MIN, SLIDER_MAX);
+  const steerRate2  = clamp(numStore.get("digitalRate", 5), SLIDER_MIN, SLIDER_MAX);
   const returnRaw = store.get("digitalRecenterRate", 0);
   const returnRate = Number.isInteger(returnRaw) ? clamp(returnRaw, 0, SLIDER_MAX) : 0;
-  const analogSpd   = clamp(store.get("analogSpeedSteer", 1), SLIDER_MIN, SLIDER_MAX);
-  const haptics     = clamp(store.get("haptics", 6), SLIDER_MIN, SLIDER_MAX);
+  const analogSpd   = clamp(numStore.get("analogSpeedSteer", 1), SLIDER_MIN, SLIDER_MAX);
+  const haptics     = clamp(numStore.get("haptics", 6), SLIDER_MIN, SLIDER_MAX);
   const padDz       = storedPadDeadzone();
-  const padSat      = clamp(store.get("padSaturation", 0), 0, 30);
-  const gasDz       = clamp(store.get("padGasDeadzone", 12), 0, 30);
-  const brakeDz     = clamp(store.get("padBrakeDeadzone", 12), 0, 30);
+  const padSat      = clamp(numStore.get("padSaturation", 0), 0, 30);
+  const gasDz       = clamp(numStore.get("padGasDeadzone", 12), 0, 30);
+  const brakeDz     = clamp(numStore.get("padBrakeDeadzone", 12), 0, 30);
   Input.setAnalogTrim("tilt", curveTrimFromSlider(tiltCurve));
   Input.setAnalogTrim("touch", curveTrimFromSlider(touchCurve));
   Input.setAnalogTrim("pad", curveTrimFromSlider(padCurve));
@@ -697,11 +699,9 @@ function applySteerTuning() {
   // panel (it shared this key until the rename to lineBrakeCue) reached
   // setLevel, failed its `typeof v === "number"` guard, and left the slider
   // unrestored with nothing logged. A number is the only thing this ever meant.
-  const cueRaw = store.get("brakeCue", 1);
-  const cue = clamp(typeof cueRaw === "number" && isFinite(cueRaw) ? cueRaw : 1, SLIDER_MIN, SLIDER_MAX);
+  const cue = clamp(numStore.get("brakeCue", 1), SLIDER_MIN, SLIDER_MAX);
   if ((typeof BrakeCue !== "undefined")) BrakeCue.setLevel(cue);
-  const audioRaw = store.get("audioCues", 1);
-  const audioCues = clamp(typeof audioRaw === "number" && isFinite(audioRaw) ? audioRaw : 1, SLIDER_MIN, SLIDER_MAX);
+  const audioCues = clamp(numStore.get("audioCues", 1), SLIDER_MIN, SLIDER_MAX);
   if ((typeof DrivingCues !== "undefined")) DrivingCues.setLevel(audioCues);
   $("pm-rate").value    = rate;    $("pm-rate-v").textContent    = rate;
   $("pm-expo").value    = expo;    $("pm-expo-v").textContent    = expo;

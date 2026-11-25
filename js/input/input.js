@@ -2635,12 +2635,13 @@ const Input = (function () {
     canvas.addEventListener("touchend", onTouchEnd, { passive: false });
     canvas.addEventListener("touchcancel", onTouchEnd, { passive: false });
 
-    wireHold("btn-throttle", function (v) {
+    wireHold("btn-throttle", function (v, arrived) {
       // Toggle on the DOWN edge only: the matching up-edge must not undo it, and
       // holdReleaseAll()'s apply(false) must not either — that path CLEARS the
-      // latch outright rather than toggling it (see holdReleaseAll).
-      if (throttleLatch) { if (v) { throttleLatched = !throttleLatched; paintLatch(); } btnThrottle = throttleLatched; }
-      else btnThrottle = v;
+      // latch outright rather than toggling it (see holdReleaseAll). A thumb that SLID
+      // onto GAS (arrived) holds throttle while it stays and never flips the latch (#6618).
+      if (throttleLatch && v && !arrived) { throttleLatched = !throttleLatched; paintLatch(); }
+      btnThrottle = throttleLatch ? throttleLatched || !!arrived : v;
     }, function (l) { btnThrottleVal = l; noteTouchDrive(l); }, { button: "gas", sibling: "btn-brake" });
     wireHold("btn-brake", function (v) { btnBrake = v; }, function (l) { btnBrakeVal = l; noteTouchDrive(l); }, { button: "brake", sibling: "btn-throttle" });
     wireTap("btn-boost", function () { boostTogglePressed = true; });

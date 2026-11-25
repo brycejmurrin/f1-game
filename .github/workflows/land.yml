@@ -722,22 +722,51 @@ jobs:
           # want_retry <n> <head>: hand the PR to the `retry` job (an immediate re-gate, RETRY_MAX per head).
           want_retry() { retry=$(jq -c --argjson n "$1" --arg h "$2" '(. + [{number: $n, head: $h}]) | unique_by(.number)' <<<"$retry"); }
           # TRAINS AS DEFAULT (Bryce 2026-11-25 ~18:28Z, train #6671 starved by solo merges): while a train is in flight
-          # (an open, ready `train/` PR with `train` + `land` and no `hold`, or a stacked `train-next/` ref) a passing
-          # non-train PR is not armed: its `gate` reads pending "waiting — train #N" and it boards the next train
-          # (merge-train soloLane keeps it a car). Exempt: a train PR itself, and the red-tip fixer (trusted-rows
-          # `fixer`: the base row passed as the fixer). Read once per run into WAIT_ON ("" = none); an unreadable read
-          # waits nothing (as before).
+          # (an open, ready `train/` PR with `train` + `land` and no `hold`, or a stacked `train-next/` ref that backs an
+          # open `train/` PR with `train` and no `hold`: its base is that PR's head, the train under it, or its sha is, its
+          # speculative PR; or, in the promote window after N merged, whose base is on the deploy branch and whose cars
+          # are all open with `land`) a passing non-train PR is not armed: its `gate` reads pending "waiting — train #N"
+          # and it boards the next train (merge-train soloLane keeps it a car). Exempt: a train PR itself, and the red-tip
+          # fixer (trusted-rows `fixer`: the base row passed as the fixer). Read once per run into WAIT_ON ("" = none); an unreadable read
+          # waits nothing (as before). An orphan `train-next/` ref (a degraded build's, #6686 finding 1) backs no open
+          # PR and parks nobody: the build's next stackStep drops it. The stacked train is named by its cars: the ref's
+          # 40-hex base would push the status past GitHub's 140 characters and cut the suffix the sweep matches.
           train_seen=false
           WAIT_ON=""
           train_in_flight() {
             local t
             if [ "$train_seen" = false ]; then
               train_seen=true
-              t=$(gh api --paginate --method GET "repos/$R/pulls" -f state=open -f base="$DEPLOY_BRANCH" -F per_page=100 2>/dev/null | jq -rs --arg repo "$R" '
-                add // [] | map(select(.draft == false and (.head.ref // "" | startswith("train/")) and .head.repo.full_name == $repo
-                  and ([.labels[].name] | index("train") != null and index("land") != null and index("hold") == null)))
-                | sort_by(.number) | first | if . == null then "" else "train #\(.number)" end' 2>/dev/null) || t=""
-              [ -n "$t" ] || t=$(gh api "repos/$R/git/matching-refs/heads/train-next/" --jq 'first | if . == null then "" else "a stacked train (\(.ref | sub("^refs/heads/"; "")))" end' 2>/dev/null) || t=""
+              local pulls heads
+              t=""
+              pulls=$(gh api --paginate --method GET "repos/$R/pulls" -f state=open -f base="$DEPLOY_BRANCH" -F per_page=100 2>/dev/null | jq -cs 'add // []' 2>/dev/null) || pulls=""
+              if [ -n "$pulls" ]; then
+                t=$(jq -r --arg repo "$R" '
+                  map(select(.draft == false and (.head.ref // "" | startswith("train/")) and .head.repo.full_name == $repo
+                    and ([.labels[].name] | index("train") != null and index("land") != null and index("hold") == null)))
+                  | sort_by(.number) | first | if . == null then "" else "train #\(.number)" end' <<<"$pulls" 2>/dev/null) || t=""
+                if [ -z "$t" ]; then
+                  heads=$(jq -c --arg repo "$R" '[.[] | select((.head.ref // "" | startswith("train/")) and .head.repo.full_name == $repo
+                    and ([.labels[].name] | index("train") != null and index("hold") == null)) | .head.sha // "" | ascii_downcase]' <<<"$pulls" 2>/dev/null) || heads='[]'
+                  # The promote window (#6692 review finding 1): train N merged, so no open PR backs N+1's ref yet; the
+                  # ref still counts while its base is on the deploy branch and every car of it is open with `land`.
+                  local rows b name st
+                  rows=$(gh api "repos/$R/git/matching-refs/heads/train-next/" 2>/dev/null | jq -c --argjson h "$heads" \
+                    --argjson open "$(jq -c '[.[] | select([.labels[].name] | index("land") != null) | .number]' <<<"$pulls" 2>/dev/null || echo '[]')" '
+                    map(((.ref // "" | capture("^refs/heads/train-next/(?<b>[0-9a-f]{40})-(?<c>[0-9]+(?:-[0-9]+)*)$")?) // {b: "", c: ""}) as $m
+                      | (.object.sha // "" | ascii_downcase) as $s | ($m.c | if . == "" then [] else split("-") | map(tonumber) end) as $cars
+                      | {base: $m.b, name: "a stacked train (\($cars | map("#\(.)") | join(",") | if . == "" then "train-next/" else . end))",
+                         backed: (($m.b != "" and ($h | index($m.b)) != null) or ($s != "" and ($h | index($s)) != null)),
+                         cars: ($cars != [] and all($cars[]; . as $n | $open | index($n) != null))})' 2>/dev/null) || rows='[]'
+                  t=$(jq -r 'map(select(.backed)) | first | .name // ""' <<<"$rows" 2>/dev/null) || t=""
+                  if [ -z "$t" ]; then
+                    while read -r b name; do
+                      st=$(gh api "repos/$R/compare/$b...$DEPLOY_BRANCH" --jq .status 2>/dev/null) || st=""
+                      if [ "$st" = ahead ] || [ "$st" = identical ]; then t=$name; break; fi
+                    done < <(jq -r '.[] | select(.cars and .base != "") | "\(.base) \(.name)"' <<<"$rows" 2>/dev/null)
+                  fi
+                fi
+              fi
               WAIT_ON=$t
             fi
           }
@@ -1216,9 +1245,9 @@ jobs:
           first=""
           # shellcheck disable=SC2016 # GraphQL variables, bound by gh
           [ "$a" -ge "$RETRY_MAX" ] || first=$(gh api graphql -f owner="${GITHUB_REPOSITORY%/*}" -f repo="${GITHUB_REPOSITORY#*/}" -f base="$DEPLOY_BRANCH" \
-            -f query='query($owner:String!,$repo:String!,$base:String!){repository(owner:$owner,name:$repo){pullRequests(states:OPEN,baseRefName:$base,labels:["land"],first:100){nodes{number isDraft createdAt headRefName autoMergeRequest{enabledAt} labels(first:50){nodes{name}} commits(last:1){nodes{commit{status{context(name:"gate"){state description createdAt}}}}}}}}}}' \
+            -f query='query($owner:String!,$repo:String!,$base:String!){repository(owner:$owner,name:$repo){pullRequests(states:OPEN,baseRefName:$base,labels:["land"],first:100){nodes{number isDraft isCrossRepository createdAt headRefName autoMergeRequest{enabledAt} labels(first:50){nodes{name}} commits(last:1){nodes{commit{status{context(name:"gate"){state description createdAt}}}}}}}}}}' \
             | jq -er --argjson asked "$list" --argjson now "$(date -u +%s)" '
-              def train: (.headRefName // "" | startswith("train/")) and (.labels.nodes | map(.name) | index("train") != null);
+              def train: (.headRefName // "" | startswith("train/")) and (.labels.nodes | map(.name) | index("train") != null) and (.isCrossRepository != true);
               select(.errors == null) | .data.repository.pullRequests.nodes | arrays
               # TRAINS AS DEFAULT (post: "waiting — train #N"): while a ready train without `hold` is open, a non-train
               # PR would only wait, so only trains and `deploy:red` PRs stay in the queue; none left → 0 (no dispatch).
@@ -1330,12 +1359,13 @@ jobs:
           paused=$(merge_paused) || paused=unreadable
           if [ "$paused" != false ]; then say "stale-gate sweep skipped: dispatch:merge-pause is set (or unreadable: $paused)"; exit 0; fi
           now=$(date -u +%s)
-          lands=$(gh pr list --repo "$R" --state open --base "$DEPLOY_BRANCH" --label land --limit 100 --json number,headRefOid,headRefName,isDraft,labels,autoMergeRequest \
-            --jq '.[] | select(.isDraft | not) | select([.labels[].name] | index("hold") | not) | {number, head: .headRefOid, armed: (.autoMergeRequest != null), train: ((.headRefName // "") | startswith("train/"))} | @json') \
+          lands=$(gh pr list --repo "$R" --state open --base "$DEPLOY_BRANCH" --label land --limit 100 --json number,headRefOid,headRefName,isDraft,isCrossRepository,labels,autoMergeRequest \
+            --jq '.[] | select(.isDraft | not) | select([.labels[].name] | index("hold") | not) | {number, head: .headRefOid, armed: (.autoMergeRequest != null), train: ((.headRefName // "") | startswith("train/")), rides: (((.headRefName // "") | startswith("train/")) and ([.labels[].name] | index("train") != null) and (.isCrossRepository != true))} | @json') \
             || { say "stale-gate sweep skipped: could not list the land PRs"; exit 0; }
           [ -n "$lands" ] || exit 0
           # TRAINS AS DEFAULT: a PR post parked as "waiting — … in flight" is the next train's car while a train PR is open.
-          inflight=$(jq -rs 'any(.[]; .train)' <<<"$lands") || inflight=false
+          # In flight as post counts it (#6686 finding 4): a ready `train/` PR with `train` + `land`, no `hold`, not a fork.
+          inflight=$(jq -rs 'any(.[]; .rides)' <<<"$lands") || inflight=false
           # One immutable dispatch-history snapshot for all candidates. GitHub lists runs newest first.
           # Unknown (older) titles might target any candidate; count each conservatively. A partial
           # page proves coverage only for CI that finished strictly after its oldest returned run.

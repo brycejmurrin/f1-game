@@ -149,7 +149,7 @@ assist: it starts only from this command and lets go on `stop`, a pause, a quit,
 - `{"stop":true}` and `{"status":true}` are READs (§Concurrency): they answer while a waiting `drive` still runs.
   `{"wait":false}` still answers `{started}` at once.
 - A TIME TRIAL holds the car in its box for the stop plus 4 s, and END TIME TRIAL exists only then: tap it in the SAME
-  batch with `waitMs` (a separate comment is a 4 s poll plus GitHub's lag, too late; #6581).
+  batch with `waitMs` (a separate comment is a 1–4 s poll plus GitHub's lag, too late; #6581).
 - While `drive` holds the car the phone shows a CLAUDE DRIVING strip under the link badge (it lets touches through:
   Bryce's touch still takes the car back, and the strip goes with any end of the drive).
 - `{"handsOff":true}`: a touch no longer takes the car back, so a brush cannot cut a check short; the strip carries a
@@ -178,7 +178,7 @@ reads a car parked on its grid slot (the note above).
 ## Concurrency
 
 Each command is a READ or an ACTION (`isRead`, `READ_CMDS`, `CALL_READ` in `js/agent/apex-bridge.js`).
-- READ: `ping facts display geom frames screen snap`, `drive {stop}` / `{status}`, and `call` of a `CALL_READ`
+- READ: `ping facts display geom frames screen snap rects overlaps`, `drive {stop}` / `{status}`, and `call` of a `CALL_READ`
   method with read-only args (`perf` / `info` / `audio` / `lifecycle` … with none; `physState world field logs scene`
   with any; `renderScale` none or `{lite:true}`; `diag` only `{download:false}`; `frametimeBench` none or `"snapshot"`).
 - ACTION: everything else (`tap nav set key scroll drive wait when plan batch reload path bench gpuTest recorder`,
@@ -186,6 +186,10 @@ Each command is a READ or an ACTION (`isRead`, `READ_CMDS`, `CALL_READ` in `js/a
 - ACTIONs run one at a time, oldest first; a READ starts as soon as a poll picks it, beside the running ACTION.
   Polling never stops. `reload`, `path` and `bench` wait behind the running ACTION.
 - Replies can arrive out of order: match on `re`. A reply whose post failed is posted again on the next poll.
+- Polling (#6582 AP-b): every 1 s while a command runs or is queued and for 60 s after a reply or the hello, else every
+  4 s (`POLL_BUSY_MS`, `BUSY_TAIL_MS`, `POLL_MS`). A 403 / 429 waits for `retry-after` or the rate-limit reset; under 25
+  calls left it waits for the reset, under 200 it polls 4× slower; a 5xx or network error doubles per failure (cap
+  60 s). The maths is the agent-side watcher's `nextDelay` (#6641); the status comment's `pollMs` shows the current wait.
 
 ## Plans
 
@@ -198,7 +202,7 @@ inside a plan; `plan batch reload path bench` cannot be steps.
   garage → tap `cs-arrival-skip` if shown → screen → snap w 320.
 - `raceSample {track="monza", seconds=10 (1-60)}`: display → geom → call race → when screen race → call go → wait
   3000 → frames → call perf.
-- `hudAudit`: geom → display → screen → snap (the `rects` read joins once #6581 lands it).
+- `hudAudit`: geom → display → screen → overlaps {hud-speed + touch buttons} → snap.
 
 `when {visible:"<id>"}` waits for an element to be shown; `visible` true / false is still the page.
 

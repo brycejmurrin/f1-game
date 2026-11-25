@@ -38,7 +38,7 @@
  *
  * Run: node --test tests/unit/race-flow-fixes-vm.test.mjs
  */
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import vm from "node:vm";
@@ -55,8 +55,123 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
 const { createGame, settle } = require("../../tools/lib/game-vm.cjs");
 
+// ---- BOOT REUSE (#6569 A4) -------------------------------------------------------------------------------
+// A cold createGame({ track: "monza" }) is ~0.5 s of boot plus ~1.8 s for the first monza build; a second race
+// on the same game is ~12 ms (the circuit is cached). So a test that asks for nothing but the default boot takes
+// ONE booted game per option set and starts from the game's own fresh-race path: quitToMenu(), the sim stream put
+// back where the boot left it, then the same race() createGame runs. A test that seeds storage, hooks the sandbox
+// or races another circuit keeps its own createGame.
+// THE GUARD: a shared test cannot leak into the next one unseen. After every fresh race the state a test could
+// carry over (settings G reads at start, the RNG stream, the grid, the track tables, patched module members,
+// the shell's sheets, storage, pending timers) is compared with the fingerprint of the boot's first fresh-path
+// race; any difference throws, naming the field. APEX_VM_BOOT_PER_TEST=1 gives every test its own boot (the A/B).
+// Measured 2026-11-25 (3 runs each, same box): 112.7 s median before, 69.4 s after; 58/58 both, and 58/58 cold.
+const SCREEN_IDS = [...fs.readFileSync(new URL("../../index.html", import.meta.url), "utf8").matchAll(/<[a-z]+\b[^>]*>/g)]
+  .map((m) => m[0]).filter((t) => /\bclass="[^"]*\bscreen\b/.test(t)).map((t) => (/\bid="([^"]+)"/.exec(t) || [])[1]).filter(Boolean);
+const PER_TEST = process.env.APEX_VM_BOOT_PER_TEST === "1";
+const RACE = ["monza", "day", "dry"];
+const pool = new Map();
+// RECORDS the game writes as a side effect of racing go back to the boot's values on the fresh path (they are read
+// through G.store, so the next race reads the restored value): the resume card's lastSession, the incident log,
+// the season table, the onboarding marks, the earned-badge log, the garage arrival's cosmetic visit counter and the
+// backend this boot bound (read only by the NEXT page load). A SETTING is never restored: one the boot never wrote
+// may appear later only AT ITS SHIPPED DEFAULT (SettingsExport.SPEC def — a mirror of an unchanged in-memory value);
+// any other settings change is a leak the guard fails.
+const RECORDS = ["lastSession", "incidentLog", "season", "onboarded", "onboardRaces", "onboardRaceBase", "pitTaught",
+  "badges", "crewVisit", "gfxBootBound"].map((k) => "apex26." + k);
+const GUARD_IDS = ["overlay", "hud", "lights", "loading", "announce", "pausemenu", "pmsettings", "standings", "howtoplay",
+  "track-detail", "quali", "results", "race-settings", "carsetup", "lighting", "pausebtn"];
+const GUARD_MODULES = ["GameAudio", "RaceEntryProfile", "GLX", "PerfGov", "Input", "PedalTravel", "TouchButtonActions"];
+function fingerprint(g) {
+  const { G, apex: a, sandbox: sb, ctx } = g, ls = sb.localStorage, doc = sb.document, fp = {};
+  for (const k of ["state", "session", "flow", "seasonMode", "practice", "timeTrial", "paused", "frozen", "photoMode",
+    "headlessMode", "raceGrid", "raceWeather", "raceLaps", "raceChangeable", "raceTimeOfDay", "raceTyreWear", "trackIdx",
+    "soundOn", "setupPreviewOn", "PACE", "DRIFT", "PLAYER_GRIP", "FRONT_GRIP", "ROAD_FOLLOW", "raceT"]) fp["G." + k] = G[k];
+  fp["gfx.isMobile"] = G.gfx && G.gfx.isMobile;
+  fp.caution = JSON.stringify(a.caution());
+  fp.flagHold = a.flagHold().on;
+  fp.seed = G.simSeed() + "/" + G.simSeed(undefined, true);
+  fp.daily = !!(G.daily && G.daily.isActive && G.daily.isActive());
+  fp.wxArcPlan = JSON.stringify(G.wxArcPlan);
+  fp.grid = G.cars.map((c) => [c.team && c.team.name, c.human ? "H" : "A", c.s.toFixed(3), c.x.toFixed(3), c.speed.toFixed(3), c.dnfAt].join(":")).join(" ");
+  fp.track = G.track.def.id + ":" + G.track.n + ":" + Array.prototype.reduce.call(G.track.toTurnIn, (s, v) => s + v, 0).toFixed(3);
+  fp.netPlay = ["active", "awaitingStart"].map((k) => G.netPlay && G.netPlay[k] && G.netPlay[k].toString().length).join(",");
+  for (const m of GUARD_MODULES) {
+    const mod = vm.runInContext(`typeof ${m} === "undefined" ? null : ${m}`, ctx, { filename: "vm-snippet:race-flow-guard" });
+    fp["mod." + m] = mod;
+    if (mod) for (const k of Object.keys(mod)) if (typeof mod[k] === "function") fp[`mod.${m}.${k}`] = mod[k];
+  }
+  for (const id of new Set([...GUARD_IDS, ...SCREEN_IDS])) fp["#" + id] = doc.getElementById(id).hidden;
+  fp.bodyClass = doc.body.className;
+  fp.qsa = doc.querySelectorAll;
+  fp.wakeLock = sb.navigator.wakeLock;
+  fp.getGamepads = sb.navigator.getGamepads;
+  fp.matchMedia = sb.matchMedia;
+  const keys = [];
+  for (let i = 0; i < ls.length; i++) keys.push(ls.key(i));
+  const spec = vm.runInContext("SettingsExport.SPEC", ctx), defs = new Map(spec.map((r) => ["apex26." + r.k, r.def]));
+  const isDefault = (k, v) => defs.has(k) && (v === JSON.stringify(defs.get(k)) || v === String(defs.get(k)));
+  for (const k of keys) fp["ls." + k] = { v: ls.getItem(k), def: isDefault(k, ls.getItem(k)) };
+  fp.timers = g.resourceSnapshot().timers;
+  return fp;
+}
+// The fresh-race path: the previous race's queued timers run out (the VM flushes by hand, so they would otherwise
+// fire inside the next test's first flushTimers()), QUIT TO MENU, the sim stream back where the boot left it, race.
+const show = (v) => String(v && typeof v === "object" && "v" in v ? v.v : v).slice(0, 80);
+async function raceFresh(e) {
+  const { g } = e, doc = g.sandbox.document;
+  // Harness surfaces go back to the boot's (agent toggles, the stub DOM's sheet flags, withScreens' query patch);
+  // GAME state is never reset here — the guard below fails a test that leaks it, and that test keeps its own boot.
+  g.apex.setInput({ throttle: false, brake: false, steer: 0 });
+  g.apex.headless(false);
+  if (e.dom) { doc.querySelectorAll = e.dom.qsa; for (const [id, h] of e.dom.hidden) doc.getElementById(id).hidden = h; }
+  if (e.records) for (const [k, v] of e.records) { if (v == null) g.sandbox.localStorage.removeItem(k); else g.sandbox.localStorage.setItem(k, v); }
+  g.flushTimers();
+  g.G.quitToMenu();
+  g.flushTimers();
+  g.G.simSeed(e.stream[0], e.stream[1]);
+  await g.race(...RACE);
+}
+async function bootShared(opts) {
+  // createGame({ track }) with the circuit seeded but not raced, so the stream position the first race starts from
+  // can be read and handed back before every later race. The seed loop writes the same apex26.trackId either way.
+  // Even the first test runs through raceFresh, so every shared test starts from one state and the guard compares
+  // like with like; APEX_VM_BOOT_PER_TEST=1 is the cold-boot control for all of them.
+  const g = await createGame({ ...opts, track: undefined, storage: { trackId: RACE[0] } });
+  const e = { g, stream: [g.G.simSeed(), g.G.simSeed(undefined, true)], uses: 0 };
+  await g.race(...RACE);
+  const doc = g.sandbox.document;
+  e.records = RECORDS.map((k) => [k, g.sandbox.localStorage.getItem(k)]);
+  e.dom = { qsa: doc.querySelectorAll, hidden: [...new Set([...GUARD_IDS, ...SCREEN_IDS])].map((id) => [id, doc.getElementById(id).hidden]) };
+  await raceFresh(e);
+  e.base = fingerprint(g);
+  return e;
+}
+async function freshRace(opts = {}) {
+  if (PER_TEST) return createGame({ ...opts, track: RACE[0] });
+  const key = JSON.stringify(opts);
+  let e = pool.get(key);
+  if (!e) pool.set(key, e = await bootShared(opts));
+  else {
+    await raceFresh(e);
+    const now = fingerprint(e.g), same = (k) => k.startsWith("ls.")
+      ? (now[k] ? now[k].v : null) === (e.base[k] ? e.base[k].v : null) || (!e.base[k] && now[k].def)
+      : Object.is(now[k], e.base[k]);
+    const diff = [...new Set([...Object.keys(e.base), ...Object.keys(now)])].filter((k) => !same(k));
+    if (diff.length) {
+      pool.delete(key); e.g.close();   // the next test boots clean: one leak fails one test, not the rest of the file
+      throw new Error(`shared boot ${key}: state leaked from the previous test (use #${e.uses}): ` +
+        diff.map((k) => `${k} ${show(now[k])} (boot ${show(e.base[k])})`).join("; ") +
+        " — give the leaking test its own createGame");
+    }
+  }
+  e.uses++;
+  return Object.assign(Object.create(e.g), { close() {} });   // the test's finally closes nothing; after() does
+}
+after(() => { for (const { g } of pool.values()) g.close(); });
+
 test("a red flag holds the field: no stuck-rescue kicks for the AI, no rescue for a player on the throttle", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await createGame({ track: "monza" });   // own boot: caution(true) persists apex26.caution
   try {
     const a = g.apex, G = g.G;
     a.caution(true);
@@ -93,7 +208,7 @@ test("a red flag holds the field: no stuck-rescue kicks for the AI, no rescue fo
 });
 
 test("finishers coast home at the floor and never collide with each other", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await freshRace();
   try {
     const a = g.apex, G = g.G;
     g.step(60 * 3);
@@ -120,7 +235,7 @@ test("finishers coast home at the floor and never collide with each other", asyn
 });
 
 test("the only human retiring retires only the AI it had already PASSED the failure point of", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await freshRace();
   try {
     const G = g.G;
     g.apex.setInput({ throttle: true, steer: 0 });   // the player must cross the line for a distance-keyed DNF to fire
@@ -142,7 +257,7 @@ test("the only human retiring retires only the AI it had already PASSED the fail
 });
 
 test("AI auto-rescue: a car crawling in the run-off builds its rescue timer; one at race pace does not", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await createGame({ track: "monza" });   // own boot: setPhysics({ pace }) is session-wide
   try {
     await g.race("monza", "day", "dry");
     const a = g.apex;
@@ -186,7 +301,7 @@ test("a RECOVER or shift-up tapped during the start lights never fires at green"
 });
 
 test("a track build that ends during the countdown leaves the race's crash sentinel armed", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await createGame({ track: "monza" });   // own boot: it sets G.gfx.isMobile (the sentinel is mobile-only)
   try {
     const G = g.G;
     G.gfx.isMobile = true;   // the sentinel is mobile-only (PerfGov.sentinelArm)
@@ -201,7 +316,7 @@ test("a track build that ends during the countdown leaves the race's crash senti
 });
 
 test("a car that reverses over a sector line never records the fragment as a field sector best", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await freshRace();
   try {
     const a = g.apex, G = g.G;
     g.step(60);
@@ -223,7 +338,7 @@ test("a car that reverses over a sector line never records the fragment as a fie
 });
 
 test("a backlogged frame reports only the whole steps it drops, never the remainder it carries", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await freshRace();
   try {
     g.apex.headless(true);
     const Perf = vm.runInContext("PerfGov", g.ctx), DT = vm.runInContext("PhysicsConsts.FIXED_DT", g.ctx);
@@ -240,7 +355,7 @@ test("a backlogged frame reports only the whole steps it drops, never the remain
 });
 
 test("WAITING FOR PLAYERS squelches and speaks on its first show, not on every 3 s refresh", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await createGame({ track: "monza" });   // own boot: it stubs netPlay.awaitingStart and wraps GameAudio.radioSting
   try {
     const G = g.G;
     G.daily.stop(); G.timeTrial = false; G.practice = false;
@@ -269,7 +384,7 @@ function entryBarrier() {
 }
 
 test("quitToMenu() during a race load cancels it: the body does not go on to count the grid down", async () => {
-  const g = await createGame({ track: "monza", carMeshes: false });
+  const g = await freshRace({ carMeshes: false });
   const profile = g.ctx.RaceEntryProfile, barrier = entryBarrier();
   try {
     const G = g.G;
@@ -304,7 +419,7 @@ test("quitToMenu() during a race load cancels it: the body does not go on to cou
 });
 
 test("a second startRace() while the first is in flight joins it: one race, round +1 once committed, state stays count", async () => {
-  const g = await createGame({ track: "monza", carMeshes: false });
+  const g = await freshRace({ carMeshes: false });
   const profile = g.ctx.RaceEntryProfile, barrier = entryBarrier();
   try {
     const G = g.G;
@@ -329,7 +444,7 @@ test("a second startRace() while the first is in flight joins it: one race, roun
 });
 
 test("manual RECOVER does nothing to a car serving a pit stop; on the track it still puts the car back", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await freshRace();
   try {
     const G = g.G, p = G.player;
     g.step(60 * 3);
@@ -358,7 +473,7 @@ test("startRaceBody aborts to the menu when the race-session bundle failed to lo
 });
 
 test("RESUME holds a solo race ~1.2 s on the start plate, a pause cancels it, and a net race resumes at once", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await freshRace();
   try {
     const G = g.G, $ = (id) => g.sandbox.document.getElementById(id), lights = $("lights");
     g.apex.headless(true);
@@ -403,7 +518,7 @@ test("RESUME holds a solo race ~1.2 s on the start plate, a pause cancels it, an
   } finally { g.close(); }
 });
 test("a flag that falls under the pause closes the pause tools: no lt-open / photo mode / previewed night into RACE AGAIN (2-F1)", async () => {
-  const g = await createGame({ track: "monza", carMeshes: false });
+  const g = await freshRace({ carMeshes: false });
   try {
     const G = g.G, doc = g.sandbox.document, $ = (id) => doc.getElementById(id);
     g.step(30);
@@ -427,7 +542,7 @@ test("a flag that falls under the pause closes the pause tools: no lt-open / pho
 });
 
 test("QUIT from the pit WORK garage closes it at the title without starting the engine (2-F2)", async () => {
-  const g = await createGame({ track: "monza", carMeshes: false });
+  const g = await createGame({ track: "monza", carMeshes: false });   // own boot: it wraps GameAudio.startEngine and turns sound on
   try {
     const sb = g.sandbox, G = g.G, $ = (id) => sb.document.getElementById(id);
     g.step(30);
@@ -446,7 +561,7 @@ test("QUIT from the pit WORK garage closes it at the title without starting the 
 });
 
 test("championship NEXT ROUND -> qualifying sheet hides the finished race's HUD, so BACK x3 reaches a clean title (2-F3)", async () => {
-  const g = await createGame({ track: "monza", carMeshes: false });
+  const g = await createGame({ track: "monza", carMeshes: false });   // own boot: the season round arms its MIXED weather
   try {
     const sb = g.sandbox, G = g.G, $ = (id) => sb.document.getElementById(id);
     g.step(10);
@@ -486,7 +601,7 @@ test("3.1 a race started on a portrait phone does not start the engine / rain un
 });
 
 test("3.2 a real race (Data Hub JUMP IN) is never diverted into a qualifying sheet when GRID = QUALIFYING LAP", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await createGame({ track: "monza" });   // own boot: it sets GRID = QUALIFYING LAP
   try {
     const G = g.G;
     G.daily.stop(); G.timeTrial = false; G.practice = false;
@@ -505,7 +620,7 @@ test("3.2 a real race (Data Hub JUMP IN) is never diverted into a qualifying she
 });
 
 test("3.4 practice is per-session: quitToMenu and the top of startRace clear it before the loading card reads it", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await freshRace();
   try {
     const G = g.G;
     G.daily.stop(); G.timeTrial = false;
@@ -534,7 +649,7 @@ test("3.5 quitToMenu after a time trial restores the race tyre model", async () 
 });
 
 test("3.6 the derived MIXED-weather plan is cached until a setting it reads changes; a host's assigned plan survives settings applied after it", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await createGame({ track: "monza" });   // own boot: it rewrites the race settings (laps, weather, circuit, MIXED)
   try {
     const G = g.G;
     G.raceChangeable = true; G.wxArcPlan = null;
@@ -563,7 +678,7 @@ test("3.6 the derived MIXED-weather plan is cached until a setting it reads chan
 });
 
 test("3.12 a finished or retired car's squeal / smoke / ERS cue state is zeroed by its early-out, not frozen at the last value", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await freshRace();
   try {
     const a = g.apex, G = g.G;
     g.step(60 * 3);
@@ -586,7 +701,7 @@ test("3.12 a finished or retired car's squeal / smoke / ERS cue state is zeroed 
 });
 
 test("7.6 the AI's mistake-roll key for a braking zone just past the start line is wrapped, like its siblings", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await createGame({ track: "monza" });   // own boot: it rewrites the cached circuit's toTurnIn table
   try {
     const G = g.G, a = g.apex, L = G.track.total;
     G.track.toTurnIn.fill(30 + L / G.track.n);   // a turn-in ~30 m ahead of the car, wherever it is (attackAt subtracts the offset within the cell)
@@ -600,7 +715,7 @@ test("7.6 the AI's mistake-roll key for a braking zone just past the start line 
 });
 
 test("3.11 race, Daily, race: stopping the Daily resumes the sim stream where it was, instead of rewinding it to the seed", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await freshRace();
   try {
     const G = g.G;
     G.daily.stop();
@@ -621,7 +736,7 @@ test("3.11 race, Daily, race: stopping the Daily resumes the sim stream where it
 });
 
 test("3.10 pause-menu RESTART does not run the old race through the async start window", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await freshRace();
   try {
     const G = g.G;
     G.daily.stop(); G.timeTrial = false; G.practice = false;
@@ -645,7 +760,7 @@ test("3.10 pause-menu RESTART does not run the old race through the async start 
 });
 
 test("3.10b pause-menu RESTART keeps the build plate up and the governor off until the new grid commits (#3283)", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await freshRace();
   try {
     const G = g.G, Perf = vm.runInContext("PerfGov", g.ctx), plate = g.sandbox.document.getElementById("loading");
     G.daily.stop(); G.timeTrial = false; G.practice = false;
@@ -687,7 +802,7 @@ async function untilGarageOrGrid(g, max = 3000) {
 }
 
 test("3.14 qualifying: TO THE GRID plays the garage drive-out before the countdown (state menu, then the garage), not the card straight up", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await createGame({ track: "monza" });   // own boot: it sets GRID = QUALIFYING LAP
   try {
     const G = g.G, doc = g.sandbox.document;
     G.daily.stop(); G.timeTrial = false; G.practice = false;
@@ -706,7 +821,7 @@ test("3.14 qualifying: TO THE GRID plays the garage drive-out before the countdo
 });
 
 test("3.14 qualifying: DRIVE plays the garage drive-out too, and stays the one-lap session", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await createGame({ track: "monza" });   // own boot: it sets GRID = QUALIFYING LAP
   try {
     const G = g.G, doc = g.sandbox.document;
     G.daily.stop(); G.timeTrial = false; G.practice = false;
@@ -753,7 +868,7 @@ test("3.14 season NEXT RACE with qualifying off: the garage drive-out, then the 
 // audited route by route; the quick restarts (RACE AGAIN / TRY AGAIN, pause RESTART, WATCH) are pinned as quick on purpose.
 test("launch: Data Hub JUMP IN (opts.intro) plays the garage drive-out before the countdown; a bare launch() still starts at once", async () => {
   for (const intro of [true, false]) {
-    const g = await createGame({ track: "monza" });
+    const g = await createGame({ track: "monza" });   // own boot: it stubs GLX.makeFrustumPlanes
     try {
       const G = g.G;
       g.sandbox.GLX.makeFrustumPlanes = () => null;   // the VM's stub returns [] (no planes): the menu grid's rivals would index into it
@@ -780,7 +895,7 @@ test("launch: Data Hub JUMP IN (opts.intro) plays the garage drive-out before th
 
 test("launch: a TIME TRIAL and the DAILY, started from RACE SETTINGS, play the garage drive-out; TRY AGAIN after a trial stays a quick restart", async () => {
   for (const daily of [false, true]) {
-  const g = await createGame({ track: "monza" });
+  const g = await freshRace();
   try {
     const G = g.G, doc = g.sandbox.document;
     G.daily.stop(); G.practice = false;
@@ -809,8 +924,6 @@ test("launch: a TIME TRIAL and the DAILY, started from RACE SETTINGS, play the g
 // ---- R3-STATES / R3-STATES-3 (hunt3 train) --------------------------------
 // The VM DOM has no markup, so its querySelectorAll(".screen") is empty and
 // closeRaceSheets()' sweep would be inert: hand it the shell's own `.screen` list.
-const SCREEN_IDS = [...fs.readFileSync(new URL("../../index.html", import.meta.url), "utf8").matchAll(/<[a-z]+\b[^>]*>/g)]
-  .map((m) => m[0]).filter((t) => /\bclass="[^"]*\bscreen\b/.test(t)).map((t) => (/\bid="([^"]+)"/.exec(t) || [])[1]).filter(Boolean);
 function withScreens(g) {
   const doc = g.sandbox.document, qsa = doc.querySelectorAll;
   doc.querySelectorAll = (sel) => (sel === ".screen" ? SCREEN_IDS.map((id) => doc.getElementById(id)) : qsa(sel));
@@ -823,7 +936,7 @@ test("the shell marks every pause-reachable sheet .screen (the sweep's contract)
 });
 
 test("QUIT over the pit-stop garage closes it: no turntable, no stale RETURN TO RACE on the title", async () => {
-  const g = await createGame({ carMeshes: false, track: "monza" });
+  const g = await createGame({ track: "monza", carMeshes: false });   // own boot: DONE opens RACE SETTINGS, which arms MIXED
   try {
     const doc = withScreens(g), $ = (id) => doc.getElementById(id), G = g.G;
     g.step(30);
@@ -844,7 +957,7 @@ test("QUIT over the pit-stop garage closes it: no turntable, no stale RETURN TO 
 
 for (const sheet of ["pm-settings", "pm-standings", "pm-howto"]) {
   test(`the portrait blocker's EXIT under ${sheet.slice(3).toUpperCase()} leaves no race sheet over the title`, async () => {
-    const g = await createGame({ carMeshes: false, track: "monza" });
+    const g = await freshRace({ carMeshes: false });
     try {
       const doc = withScreens(g), $ = (id) => doc.getElementById(id), G = g.G;
       for (const id of SCREEN_IDS) $(id).hidden = true;   // the shell's start: every sheet down
@@ -862,7 +975,7 @@ for (const sheet of ["pm-settings", "pm-standings", "pm-howto"]) {
 }
 
 test("NEXT ROUND's qualifying sheet hides the finished race's HUD", async () => {
-  const g = await createGame({ carMeshes: false, track: "monza" });
+  const g = await freshRace({ carMeshes: false });
   try {
     const doc = withScreens(g), $ = (id) => doc.getElementById(id), G = g.G;
     g.apex.go(); g.step(10); g.apex.finishRace();
@@ -903,7 +1016,7 @@ test("a red-flag restart breaks the instant-replay timeline (the re-grid is a te
 });
 
 async function finishedPlayerWithRunner() {
-  const g = await createGame({ track: "monza", carMeshes: false });
+  const g = await freshRace({ carMeshes: false });
   const a = g.apex, G = g.G;
   a.headless(true);
   await a.race("monza", "default", "dry", { laps: 3 });
@@ -946,7 +1059,7 @@ test("POST-FINISH (solo): QUIT TO MENU after the flag settles the result first",
 });
 
 test("PLAYER DNF (solo): the race keeps running for the field instead of ending 2.2 s later; the cap ends it as a short run", async () => {
-  const g = await createGame({ track: "monza", carMeshes: false });
+  const g = await freshRace({ carMeshes: false });
   try {
     const a = g.apex, G = g.G;
     a.headless(true);
@@ -1047,7 +1160,7 @@ test("the garage's pause never drops the wake lock: the return to the tab re-hol
 
 for (const [pauseWith, resumeWith] of [["KeyP", "KeyP"], ["Start", "Start"], ["KeyP", "Resume button"]]) {
   test(`a touch Pause double tap cannot cross ${pauseWith} Pause and ${resumeWith} Resume`, async () => {
-    const g = await createGame({ track: "monza", carMeshes: false });
+    const g = await createGame({ track: "monza", carMeshes: false });   // own boot: it persists a touch-button profile
     try {
       const { G, apex, ctx, sandbox } = g;
       apex.headless(true);
@@ -1104,7 +1217,7 @@ for (const [pauseWith, resumeWith] of [["KeyP", "KeyP"], ["Start", "Start"], ["K
 
 
 async function justFinishedPlayer(penalty = 0) {
-  const g = await createGame({ track: "monza", carMeshes: false });
+  const g = await freshRace({ carMeshes: false });
   const { G, apex: a } = g;
   a.headless(true); await g.race("monza", "default", "dry", { laps: 3 }); g.step(1);
   const p = G.player, L = G.track.total, ai = G.cars.filter(c => !c.human), rival = ai[0];
@@ -1156,7 +1269,7 @@ test("new session clears a deferred finish QUIT", async () => {
 });
 
 for (const ending of ["green-to-SC", "SC-to-green"]) test(`the finishing-step pass uses its governing flag across ${ending}`, async () => {
-  const g = await createGame({ track: "monza", carMeshes: false });
+  const g = await createGame({ track: "monza", carMeshes: false });   // own boot: caution(false) persists apex26.caution
   try {
     const { G, apex: a } = g;
     a.headless(true); await g.race("monza", "default", "dry", { laps: 3 }); g.step(1);
@@ -1182,7 +1295,7 @@ for (const ending of ["green-to-SC", "SC-to-green"]) test(`the finishing-step pa
 });
 
 test("restarted MIXED weather progresses from the fresh race clock", async () => {
-  const g = await createGame({ track: "monza", carMeshes: false });
+  const g = await createGame({ track: "monza", carMeshes: false });   // own boot: it arms MIXED weather and a plan
   try {
     const { G, apex: a } = g;
     a.headless(true); await g.race("monza", "default", "dry", { laps: 10 });
@@ -1254,7 +1367,7 @@ test("deferred QUIT completes when the corrected-time opportunity expires, retai
 // on the racing line for ~60 s of green after it (retired at ~120 s). The clock now runs under
 // yellow/VSC/SC too (not under a red, which holds the field on purpose).
 test("#5892 a player stopped on the racing line is retired 60 s after it stops, caution or not", async () => {
-  const g = await createGame({ track: "monza" });
+  const g = await createGame({ track: "monza" });   // own boot: caution(true) persists apex26.caution
   try {
     const a = g.apex, G = g.G;
     a.caution(true);
