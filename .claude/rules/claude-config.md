@@ -55,7 +55,8 @@ mentions a rule never trips it; a command they cannot tokenise is refused.
   above the first turn's context) and refuses spawns over the hard cap, or when a capped session's count cannot be
   read; `subagent-contract.py` flags a reporter agent's malformed report.
 - Advisory: `post-edit.sh` (a `js/` edit that does not parse or staled a generated file), `lsp-hint.py` (the
-  apex-lsp call after a bare-symbol code search, not a grep filtering a pipe).
+  apex-lsp call after a bare-symbol code search in any segment of a command, not a grep filtering a pipe; a subagent
+  gets the exact `mcp__apex-lsp__lsp_references` call).
 - Cursor (`.cursor/hooks.json`) and Codex (`.codex/hooks.json`) reach the same scripts through adapters; neither
   sends a subagent id per call, so the subagent rules hold in Claude Code only. Cursor cloud agents send MCP calls to
   `preToolUse` as `MCP:<tool>` (routed to the GitHub table); Codex guards `apply_patch` edits by path.
