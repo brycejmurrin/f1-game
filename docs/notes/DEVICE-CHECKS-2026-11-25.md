@@ -36,3 +36,26 @@ Long tasks are not measurable on iOS: `raceEntryProfile.supported` is false (com
   `ld-skip`, use `nav {go:false}` + `tap rs-go` + a wait.
 - When Bryce switches to chat, the page pauses: `drive` answers "the session is paused". Re-send once he is back.
 - Bridge gaps worth adding (all read-only): `garagePrebuild` in `CALL_OK`, a GLX route in `path`, `#res-garage` in `TAP_OK`.
+
+## Window 2 (bridge #6571)
+
+A second hands-off window on the same iPhone, Safari tab, three.js r187 on **WebGPU** (no fallback), 08:28Z on.
+
+- **Builds:** hello `d520d375` (08:28Z, portrait 393×695), then after a `reload` `8e4ff051` (08:33Z, landscape 852×368, dpr 3).
+
+| PR | Run | Numbers | Verdict |
+|---|---|---|---|
+| #6396 TT garage | 8e4ff051: `drive {to:"box"}` → `tap hud-end-session until:garage` → `cs-arrival-skip` → `screen` → `snap` | box in 43 s from mid-lap (lap → approach 196 km/h → entry 67 → lane → box); `pitActions` END SESSION + PIT WORK; garage in 331 ms; `{screen:garage, state:results}`; snap 320×138 shows the drawn garage, mean luma 52.7, sd 54.1 | PASS (route and visual) |
+| #6529 held viewport read | waits for a deploy containing de219675 | — | pending |
+| #6518 portrait chase camera | not in the live build; needs a portrait hold | — | next window |
+
+### What the attempts taught
+
+- A real touch ends `drive` (`reason: "touch"`), twice here (pit lane at 175 s; mid-lap at 150 s). The phone must be left alone.
+- `call rollout [{policy:"box"}]` reaches the box (sim-stepped, `stoppedEarly policy:box`), but a `tap hud-end-session` in the
+  same batch answers "not visible (screen race)": the HUD has not rendered after the synchronous rollout. Use real-time `drive`.
+- The TT starts at frac 0.977, past Monza's pit entry, so `to:"box"` from the start needs a full lap (~140–175 s) and a
+  120 s rollout does not reach the box.
+- A batch over 10 steps is refused whole (`batch.steps must hold 1–10 steps`).
+- Bridge asks for a later PR: `tap` with a wait-for-visible, a periodic `watch` status post, a longer batch or a `when` step,
+  and an on-screen "CLAUDE DRIVING" banner while `drive` holds the car.
