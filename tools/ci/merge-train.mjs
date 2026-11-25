@@ -148,17 +148,26 @@ export function carCandidates(pulls, { exclude = new Set(), solo = new Map() } =
 }
 
 /** Land runs still queued or running for one PR (#6528), from actions/workflows/land.yml/runs pages: a
- *  pull_request_target run names its PR in `pull_requests`, a retry dispatch in its title (`Land retry pr=<n> …`).
+ *  pull_request_target run names its PR in `pull_requests`, a retry dispatch in its title (`Land retry pr=<n> …`),
+ *  and a `workflow_run` re-gate after a PR's CI (whose `pull_requests` can be empty, and whose run-name is '') carries
+ *  that PR's head as `head_sha` / `head_branch` (`heads`: [{number, head:{sha, ref}}], the landing PRs; PR #6561 review).
  *  Deploy-branch runs (sweep, Pages, schedule) name no PR and do not count, nor does `selfRun`, the run building
  *  the train. → Map(pr → run id). Pure. */
+/** Pages of 100 read per run status before the builder refuses (landRunsInFlight). */
+export const LAND_RUN_PAGES = 5;
 export const LIVE_RUN = new Set(["queued", "in_progress", "waiting", "requested", "pending"]);
-export function landRunsInFlight(pages, { selfRun = "" } = {}) {
+export function landRunsInFlight(pages, { selfRun = "", heads = [] } = {}) {
   const out = new Map();
   for (const page of pages || []) for (const r of page?.workflow_runs || []) {
     if (!r || !LIVE_RUN.has(String(r.status || "")) || String(r.id) === String(selfRun)) continue;
     const prs = (r.pull_requests || []).map((p) => Number(p?.number)).filter(Number.isInteger);
     const m = /^Land retry pr=(\d+)\b/.exec(String(r.display_title || ""));
     if (m) prs.push(Number(m[1]));
+    const sha = String(r.head_sha || "").toLowerCase(), branch = String(r.head_branch || "");
+    for (const p of heads) {
+      const h = String(p?.head?.sha || "").toLowerCase(), ref = String(p?.head?.ref || "");
+      if ((h && h === sha) || (ref && branch !== DEPLOY && ref === branch)) prs.push(p.number);
+    }
     for (const n of prs) if (!out.has(n)) out.set(n, r.id);
   }
   return out;
@@ -526,12 +535,17 @@ export async function planTrain({ request = api, cwd = ROOT, max = TRAIN_MAX, no
   const hist = trainHistory(past, { now, max });
   const landing = open.rows.filter((p) => labelNames(p.labels).includes("land") && !p.draft);
   const pages = [];
+  // Every page: a truncated list would read a mid-arm PR as an orphan (PR #6561 review), so a full last page refuses.
   for (const st of ["queued", "in_progress", "waiting"]) {
-    const r = request(`actions/workflows/land.yml/runs?status=${st}&per_page=100`);
-    if (r.error) return { error: `land runs (${st}): ${r.error}` };
-    pages.push(r.json);
+    for (let page = 1; ; page++) {
+      const r = request(`actions/workflows/land.yml/runs?status=${st}&per_page=100&page=${page}`);
+      if (r.error) return { error: `land runs (${st}): ${r.error}` };
+      pages.push(r.json);
+      if ((r.json?.workflow_runs || []).length < 100) break;
+      if (page === LAND_RUN_PAGES) return { error: `land runs (${st}): more than ${LAND_RUN_PAGES * 100}, refusing to judge orphans on a partial list` };
+    }
   }
-  const { solo, orphans } = soloLane(landing, { gate: (p) => gateState(p.head.sha, request), runs: landRunsInFlight(pages, { selfRun: process.env.GITHUB_RUN_ID || "" }) });
+  const { solo, orphans } = soloLane(landing, { gate: (p) => gateState(p.head.sha, request), runs: landRunsInFlight(pages, { selfRun: process.env.GITHUB_RUN_ID || "", heads: landing }) });
   const { cars: cands, skipped } = carCandidates(open.rows, { exclude: hist.exclude, solo });
   const tipR = request(`branches/${encodeURIComponent(DEPLOY)}`);
   const tip = String(tipR.json?.commit?.sha || "").toLowerCase();

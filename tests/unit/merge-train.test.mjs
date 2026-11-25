@@ -402,6 +402,29 @@ test("#6528: landRunsInFlight names a PR's queued/running land runs, never a dep
     { id: 5, status: "waiting", pull_requests: [{ number: 6600 }], display_title: "y" },
   ] }];
   assert.deepEqual([...landRunsInFlight(pages, { selfRun: "5" })], [[6527, 1], [6514, 2]]);
+  // PR #6561 review: a workflow_run re-gate after a PR's CI names no PR and has no title; its head names it.
+  const heads = [pull(61), pull(62), pull(63)];
+  const wr = [{ workflow_runs: [
+    { id: 8, status: "in_progress", pull_requests: [], display_title: "", head_sha: sha("1"), head_branch: "claude/other" },
+    { id: 9, status: "queued", pull_requests: [], display_title: "", head_sha: sha("f"), head_branch: "claude/x-62" },
+    { id: 10, status: "queued", pull_requests: [], display_title: "", head_sha: sha("e"), head_branch: DEPLOY },
+  ] }];
+  assert.deepEqual([...landRunsInFlight(wr, { heads })], [[61, 8], [62, 9]], "matched by head sha or PR branch; a deploy-branch run names none");
+  assert.deepEqual([...soloLane(heads, { gate: () => "success", runs: landRunsInFlight(wr, { heads }) }).orphans], [63]);
+});
+
+test("PR #6561 review: planTrain reads every page of in-flight land runs and refuses a list too long to judge", async () => {
+  const { planTrain, LAND_RUN_PAGES } = await import("../../tools/ci/merge-train.mjs");
+  const seen = [];
+  const full = { workflow_runs: Array.from({ length: 100 }, (_, i) => ({ id: i, status: "queued", pull_requests: [] })) };
+  const request = (p) => {
+    if (p.startsWith("pulls?")) return { json: [] };
+    if (p.startsWith("actions/workflows/land.yml/runs")) { seen.push(p); return { json: full }; }
+    return { json: [] };
+  };
+  const r = await planTrain({ request, cwd: ROOT });
+  assert.deepEqual(r, { error: `land runs (queued): more than ${LAND_RUN_PAGES * 100}, refusing to judge orphans on a partial list` });
+  assert.equal(seen.length, LAND_RUN_PAGES);
 });
 
 test("#6528: SCREEN_BUDGET_MS fits a TRAIN_MAX screen at the measured ~70 s a car (653 s for 9 cars, 2026-11-25 01:37Z)", () => {
@@ -421,6 +444,9 @@ test("#6528: resnapVerdict re-snaps only a moved base's slack; a genuine overage
   // grew 5 past a ceiling loose by 2 (delta +3), a sibling spent the 2: the car gets back its own 2, no more
   assert.deepEqual(resnapVerdict({ ...row, over: 2, own: 5, delta: 3, baseSlack: 2 }), { ok: true, why: "" });
   assert.deepEqual(resnapVerdict({ ...row, over: 3, own: 5, delta: 3, baseSlack: 2 }), past(3, 5, 2, 3));
+  // a negative delta (its snap gave the base's slack away) is regained only up to its own growth: delta −8 + 10 = 2 = own
+  assert.deepEqual(resnapVerdict({ ...row, over: 10, own: 2, delta: -8, baseSlack: 10 }), { ok: true, why: "" });
+  assert.deepEqual(resnapVerdict({ ...row, over: 11, own: 2, delta: -8, baseSlack: 12 }), past(11, 2, 12, -8));
   // over its own ceiling at its head (own − delta 3 > slack 2): never laundered
   assert.deepEqual(resnapVerdict({ ...row, over: 3, own: 3, delta: 0, baseSlack: 2 }), past(3, 3, 2, 0));
   // a row the car did not grow, or a fold already over before it: someone else's overage
