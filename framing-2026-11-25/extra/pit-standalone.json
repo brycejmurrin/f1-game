@@ -1,0 +1,304 @@
+{
+ "window": "standalone",
+ "task": "pit",
+ "viewport": {
+  "width": 852,
+  "height": 393
+ },
+ "insets": {
+  "top": 0,
+  "left": 59,
+  "bottom": 20,
+  "right": 59
+ },
+ "uiScale": "0.7",
+ "hudBtn": "130",
+ "pit0": {
+  "atM": 5183.9,
+  "lenM": 370,
+  "limitKph": 95.3,
+  "enabled": false
+ },
+ "startFrac": 0.8324,
+ "lane": {
+  "at": 19,
+  "stop": null,
+  "state": "lane",
+  "inLane": true,
+  "limitKph": 95.3,
+  "kph": 93.33166236749466,
+  "speedo": "0",
+  "cue": "▶STAY IN LANE · 80 LIMIT",
+  "rects": {
+   "hud-pit": {
+    "x": 347,
+    "y": 323.3,
+    "w": 185.9,
+    "h": 21,
+    "r": 533,
+    "b": 344.3
+   },
+   "hud-pit-arrow": {
+    "x": 347,
+    "y": 323.3,
+    "w": 17.9,
+    "h": 21,
+    "r": 365,
+    "b": 344.3
+   },
+   "hud-speed": null,
+   "hud-box-lap": {
+    "x": 361.5,
+    "y": 6.1,
+    "w": 56.5,
+    "h": 37.6,
+    "r": 418,
+    "b": 43.7
+   },
+   "pausebtn": {
+    "x": 739,
+    "y": 8,
+    "w": 44,
+    "h": 44,
+    "r": 783,
+    "b": 52
+   }
+  }
+ },
+ "box": {
+  "at": 26,
+  "stop": null,
+  "state": "box",
+  "inLane": true,
+  "limitKph": 95.3,
+  "kph": 0,
+  "speedo": "0",
+  "cue": "▶STAY IN LANE · 80 LIMIT",
+  "cueNow": "▶STOP",
+  "rects": {
+   "hud-pit": {
+    "x": 334.3,
+    "y": 276.7,
+    "w": 54.8,
+    "h": 21,
+    "r": 389.1,
+    "b": 297.7
+   },
+   "hud-pit-actions": {
+    "x": 334.3,
+    "y": 305.7,
+    "w": 216.8,
+    "h": 46.7,
+    "r": 551,
+    "b": 352.3
+   },
+   "pit-end-tt": null,
+   "pausebtn": {
+    "x": 739,
+    "y": 8,
+    "w": 44,
+    "h": 44,
+    "r": 783,
+    "b": 52
+   }
+  },
+  "actions": [
+   {
+    "id": "hud-work",
+    "text": "WORK ON CAR",
+    "w": 106.7,
+    "h": 44,
+    "x": 334.3,
+    "y": 308.3
+   },
+   {
+    "id": "hud-end-session",
+    "text": "END SESSION",
+    "w": 102.1,
+    "h": 44,
+    "x": 448.9,
+    "y": 308.3
+   }
+  ]
+ },
+ "trace": [
+  [
+   "none",
+   236.2,
+   null,
+   null
+  ],
+  [
+   "none",
+   252.9,
+   null,
+   null
+  ],
+  [
+   "none",
+   160.6,
+   null,
+   null
+  ],
+  [
+   "none",
+   66.3,
+   null,
+   null
+  ],
+  [
+   "none",
+   55.4,
+   null,
+   null
+  ],
+  [
+   "none",
+   94.4,
+   null,
+   null
+  ],
+  [
+   "none",
+   128.6,
+   null,
+   null
+  ],
+  [
+   "none",
+   138.7,
+   null,
+   null
+  ],
+  [
+   "none",
+   162.6,
+   null,
+   null
+  ],
+  [
+   "none",
+   184.9,
+   null,
+   null
+  ],
+  [
+   "none",
+   160.9,
+   null,
+   null
+  ],
+  [
+   "none",
+   139.4,
+   null,
+   null
+  ],
+  [
+   "none",
+   96.8,
+   null,
+   null
+  ],
+  [
+   "none",
+   95.9,
+   null,
+   null
+  ],
+  [
+   "none",
+   95.7,
+   null,
+   null
+  ],
+  [
+   "lane",
+   95.3,
+   null,
+   null
+  ],
+  [
+   "lane",
+   94.4,
+   null,
+   null
+  ],
+  [
+   "lane",
+   93.8,
+   null,
+   null
+  ],
+  [
+   "lane",
+   93.5,
+   null,
+   null
+  ],
+  [
+   "lane",
+   93.3,
+   "▶STAY IN LANE · 80 LIMIT",
+   null
+  ],
+  [
+   "lane",
+   93.2,
+   "▶STAY IN LANE · 80 LIMIT",
+   null
+  ],
+  [
+   "lane",
+   93.1,
+   "▶STAY IN LANE · 80 LIMIT",
+   null
+  ],
+  [
+   "lane",
+   83.6,
+   "▶STAY IN LANE · 80 LIMIT",
+   null
+  ],
+  [
+   "lane",
+   36.1,
+   "▶STAY IN LANE · 80 LIMIT",
+   null
+  ],
+  [
+   "lane",
+   36.3,
+   "▶STAY IN LANE · 80 LIMIT",
+   null
+  ],
+  [
+   "lane",
+   36.5,
+   "▶STAY IN LANE · 80 LIMIT",
+   null
+  ],
+  [
+   "box",
+   0,
+   "▶STAY IN LANE · 80 LIMIT",
+   null
+  ]
+ ],
+ "laps": {
+  "before": {
+   "n": 0,
+   "lap": 1
+  },
+  "after": {
+   "n": 1,
+   "last": {
+    "lap": 1,
+    "time": 42.294,
+    "valid": false
+   },
+   "s": 1.662626968941515
+  }
+ },
+ "errors": []
+}

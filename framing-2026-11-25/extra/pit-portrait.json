@@ -1,0 +1,280 @@
+{
+ "window": "portrait",
+ "task": "pit",
+ "viewport": {
+  "width": 393,
+  "height": 852
+ },
+ "insets": {
+  "top": 59,
+  "left": 0,
+  "bottom": 34,
+  "right": 0
+ },
+ "uiScale": "0.7",
+ "hudBtn": "130",
+ "pit0": {
+  "atM": 5183.9,
+  "lenM": 370,
+  "limitKph": 95.3,
+  "enabled": false
+ },
+ "startFrac": 0.8324,
+ "lane": {
+  "at": 18,
+  "stop": null,
+  "state": "lane",
+  "inLane": true,
+  "limitKph": 95.3,
+  "kph": 93.49275433231614,
+  "speedo": "0",
+  "cue": "▶STAY IN LANE · 80 LIMIT",
+  "rects": {
+   "hud-pit": {
+    "x": 102.9,
+    "y": 683.8,
+    "w": 187.3,
+    "h": 21,
+    "r": 290.1,
+    "b": 704.8
+   },
+   "hud-pit-arrow": {
+    "x": 102.9,
+    "y": 683.8,
+    "w": 17.9,
+    "h": 21,
+    "r": 120.8,
+    "b": 704.8
+   },
+   "hud-speed": null,
+   "hud-box-lap": {
+    "x": 140.7,
+    "y": 62.8,
+    "w": 49.9,
+    "h": 33.9,
+    "r": 190.6,
+    "b": 96.7
+   },
+   "pausebtn": {
+    "x": 327.2,
+    "y": 67,
+    "w": 55.8,
+    "h": 55.8,
+    "r": 383,
+    "b": 122.8
+   }
+  }
+ },
+ "box": {
+  "at": 26,
+  "stop": null,
+  "state": "box",
+  "inLane": true,
+  "limitKph": 95.3,
+  "kph": 0,
+  "speedo": "0",
+  "cue": "▶PULL IN · 31m",
+  "cueNow": "▶PULL IN · 31m",
+  "rects": {
+   "hud-pit": {
+    "x": 154.6,
+    "y": 687.6,
+    "w": 83.8,
+    "h": 15,
+    "r": 238.4,
+    "b": 702.6
+   },
+   "hud-pit-actions": null,
+   "pit-end-tt": null,
+   "pausebtn": {
+    "x": 337.2,
+    "y": 67,
+    "w": 45.8,
+    "h": 45.8,
+    "r": 383,
+    "b": 112.8
+   }
+  },
+  "actions": []
+ },
+ "trace": [
+  [
+   "none",
+   236.2,
+   null,
+   null
+  ],
+  [
+   "none",
+   252.9,
+   null,
+   null
+  ],
+  [
+   "none",
+   160.6,
+   null,
+   null
+  ],
+  [
+   "none",
+   66.3,
+   null,
+   null
+  ],
+  [
+   "none",
+   55.4,
+   null,
+   null
+  ],
+  [
+   "none",
+   94.4,
+   null,
+   null
+  ],
+  [
+   "none",
+   128.6,
+   null,
+   null
+  ],
+  [
+   "none",
+   140,
+   null,
+   null
+  ],
+  [
+   "none",
+   165.6,
+   null,
+   null
+  ],
+  [
+   "none",
+   187.6,
+   null,
+   null
+  ],
+  [
+   "none",
+   162.4,
+   null,
+   null
+  ],
+  [
+   "none",
+   136.6,
+   null,
+   null
+  ],
+  [
+   "none",
+   97.3,
+   null,
+   null
+  ],
+  [
+   "none",
+   95.4,
+   null,
+   null
+  ],
+  [
+   "none",
+   95.4,
+   null,
+   null
+  ],
+  [
+   "lane",
+   95.1,
+   null,
+   null
+  ],
+  [
+   "lane",
+   94.3,
+   null,
+   null
+  ],
+  [
+   "lane",
+   93.8,
+   null,
+   null
+  ],
+  [
+   "lane",
+   93.5,
+   "▶STAY IN LANE · 80 LIMIT",
+   null
+  ],
+  [
+   "lane",
+   93.3,
+   "▶STAY IN LANE · 80 LIMIT",
+   null
+  ],
+  [
+   "lane",
+   93.2,
+   "▶STAY IN LANE · 80 LIMIT",
+   null
+  ],
+  [
+   "lane",
+   93.1,
+   "▶STAY IN LANE · 80 LIMIT",
+   null
+  ],
+  [
+   "lane",
+   69.5,
+   "▶STAY IN LANE · 80 LIMIT",
+   null
+  ],
+  [
+   "lane",
+   36.6,
+   "▶STAY IN LANE · 80 LIMIT",
+   null
+  ],
+  [
+   "lane",
+   35.8,
+   "▶PULL IN · 31m",
+   null
+  ],
+  [
+   "lane",
+   33.2,
+   "▶PULL IN · 31m",
+   null
+  ],
+  [
+   "box",
+   0,
+   "▶PULL IN · 31m",
+   null
+  ]
+ ],
+ "laps": {
+  "before": {
+   "n": 0,
+   "lap": 1
+  },
+  "after": {
+   "n": 1,
+   "last": {
+    "lap": 1,
+    "time": 42.2,
+    "valid": false
+   },
+   "s": 1.648420624179575
+  }
+ },
+ "errors": []
+}

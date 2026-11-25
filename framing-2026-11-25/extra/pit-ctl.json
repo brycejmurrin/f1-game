@@ -1,0 +1,42 @@
+{
+ "window": "standalone",
+ "task": "pit",
+ "viewport": {
+  "width": 852,
+  "height": 393
+ },
+ "insets": {
+  "top": 0,
+  "left": 59,
+  "bottom": 20,
+  "right": 59
+ },
+ "uiScale": "0.7",
+ "hudBtn": "130",
+ "pit0": {
+  "atM": 5183.9,
+  "lenM": 370,
+  "limitKph": 95.3,
+  "enabled": false
+ },
+ "startFrac": 0.8324,
+ "lane": null,
+ "box": null,
+ "trace": [],
+ "laps": {
+  "before": {
+   "n": 0,
+   "lap": 1
+  },
+  "after": {
+   "n": 1,
+   "last": {
+    "lap": 1,
+    "time": 18.91,
+    "valid": true
+   },
+   "s": 78.71861143851581
+  }
+ },
+ "errors": []
+}
