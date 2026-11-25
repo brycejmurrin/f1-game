@@ -1644,7 +1644,7 @@ const Input = (function () {
      https://developer.mozilla.org/en-US/docs/Web/API/Gamepad/mapping
      https://developer.mozilla.org/en-US/docs/Web/API/Gamepad/timestamp */
   const PAD_WAKE = 0.3;
-  const padUse = new Map();    // padKey -> { axes, btn, usedAt }
+  const padUse = new Map();    // padKey -> { axes, btn, prev, usedAt }; prev = btn one poll earlier
   const PAD_MENU_RELEASE = 0.12; // independent of the driving pedal calibration
   const padMenuButtons = new Map(); // consumed presses survive missing Gamepad snapshots
   const padUseLive = new Set(); // reused each poll; a fresh Set here was one alloc per frame
@@ -1662,7 +1662,7 @@ const Input = (function () {
       padUseLive.add(k);
       let rec = padUse.get(k), used = false;
       const first = !rec;
-      if (first) { rec = { axes: [], btn: [], usedAt: 0 }; padUse.set(k, rec); }
+      if (first) { rec = { axes: [], btn: [], prev: [], usedAt: 0 }; padUse.set(k, rec); }
       else {
         for (let a = 0; a < axes.length; a++) {
           if (typeof rec.axes[a] === "number" && Math.abs(readPadAxis(axes, a) - rec.axes[a]) >= PAD_WAKE) used = true;
@@ -1671,6 +1671,7 @@ const Input = (function () {
       for (let b = 0; b < nb; b++) {
         const down = btnDown(p, b);
         if (!first && down && !rec.btn[b]) used = true;
+        rec.prev[b] = first ? down : !!rec.btn[b];   // first sight: a held button counts as held
         rec.btn[b] = down;
       }
       const consumed = padMenuButtons.get(k);
@@ -1834,7 +1835,9 @@ const Input = (function () {
       if (padPrevButtons.length) padPrevButtons.length = 0;
       padPrevKey = null;
       padPrevByIndex.clear();
-      padMenu.reset();
+      // The hardware is still "available" for PAD_PROBE_FAST_MS (poll() below):
+      // drop the held direction but keep the focus ring until that grace ends (#6269).
+      padMenu.releaseDirection();
       if (inputSource === "controller") inputSource = null;
       return;
     }
@@ -1844,12 +1847,16 @@ const Input = (function () {
     // when another pad takes over, a button already held on it would read as
     // a fresh press (a boost, a shift, a camera cut). Reseed from the new
     // pad. Not on first connection: the press that woke a pad is a real one.
+    // Nor the press that took over: a pad watched by notePadUse last poll seeds
+    // from THAT reading, so its fresh Cross is the edge it is (#6255). A gap or
+    // a pad first seen this poll seeds from now: held stays held.
     const key = padKey(pad, Array.prototype.indexOf.call(pads, pad));
     if (padSnapshotLost || (padPrevKey !== null && key !== padPrevKey)) {
       resetPadDriveState();
+      const seen = padSnapshotLost ? null : padUse.get(key);
       const nb = pad.buttons ? pad.buttons.length : 0;
       padPrevButtons.length = nb;
-      for (let i = 0; i < nb; i++) padPrevButtons[i] = btnDown(pad, i);
+      for (let i = 0; i < nb; i++) padPrevButtons[i] = seen ? !!seen.prev[i] : btnDown(pad, i);
     }
     padSnapshotLost = false;
     padPrevKey = key;
@@ -2138,7 +2145,10 @@ const Input = (function () {
     pollGamepad();
     // An empty snapshot can be transient. Use the existing fast re-probe
     // window before relaying polling-only loss to the UI.
-    if (physicalPadAvailable && !padConnected && nowMs() - _padLostAt >= PAD_PROBE_FAST_MS) setPhysicalPadAvailable(false);
+    if (physicalPadAvailable && !padConnected && nowMs() - _padLostAt >= PAD_PROBE_FAST_MS) {
+      setPhysicalPadAvailable(false);
+      padMenu.reset();   // the grace is over: the controller's focus ring goes with it
+    }
     _navLatch = navBlocksTouchLive() ? 1 : 0;
     if (photoCamera?.isActive()) {
       const remote = remoteCamera();
