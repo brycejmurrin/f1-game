@@ -25,7 +25,7 @@ test("menuPrep()/info() after a picker tap never build synchronously; the steppe
     G.trackIdx = 1; G.scheduleFlybyTrack(true);           // a tap on another circuit drops the world, settles 400 ms
     assert.equal(G.track, null, "the tap freed the old world");
     const p0 = A.menuPrep();
-    A.info(); A.probe();
+    A.info(); A.probe(); A.texCensus(); A.agentHelp(); A.garageCam(); A.garagePrebuild();
     assert.equal(builds, 1, "read-only hooks in the settle window ran no synchronous Tracks.build");
     assert.equal(G.track, null);
     assert.equal(p0.world, false);

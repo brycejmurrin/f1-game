@@ -199,7 +199,7 @@ function simCareerRound() {
 // not quote that text (quoting it moves the slice and invents a hook called
 // `for`).
 // READ-ONLY hooks never force it (#6488: menuPrep pollers in a picker tap's settle froze 0.5-1 s, replacing the stepped build).
-const LAZY_READ_ONLY = new Set(["menuPrep", "info", "probe", "diag", "texCensus", "agentHelp", "garagePrebuild", "garageCam"]);
+const LAZY_READ_ONLY = new Set(["menuPrep", "info", "probe", "texCensus", "agentHelp", "garagePrebuild", "garageCam"]);
 function lazyTrackEnsure(o) {
   for (const k of Object.keys(o)) {
     const fn = o[k];
@@ -387,7 +387,7 @@ const api = {
                return !o.teamId || (p && p.team && p.team.id === o.teamId); })() };
   },
   // track reflects the ACTIVE race track — null at the menu/select even though a
-  // track is loaded for the background flyby (matches the documented contract).
+  // track is loaded for the background flyby. Read-only (#6488): n/total/sectors/turns stay null until a world is built.
   // sectors: [s1End, s2End] racing-lap fractions; turns: curated FIA turn count.
   // `flow`/`session` are the real mode state; timeTrial/seasonMode are the older
   // derived booleans, kept verbatim so existing harnesses do not have to change.
