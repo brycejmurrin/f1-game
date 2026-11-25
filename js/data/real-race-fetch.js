@@ -11,6 +11,9 @@ const DataRealRaceFetch = (function () {
   const CACHE_LRU = "apex26.realrace.lru";
   const CACHE_MAX = 8;
   const API_CACHE_PREFIX = "apex26.api.";   // js/data/api.js CACHE_PREFIX — the bodies of an unfinished race are dropped so the next open refetches them
+  // The bodies stewards rewrite after the flag (penalties, DSQs, reclassification):
+  // a provisional rebuild refetches only these, so the 7-day cache stays for the rest.
+  const REVALIDATE_PATHS = ["/session_result?", "/race_control?"];
   const RAW_PATHS = ["/sessions?", "/drivers?", "/laps?", "/stints?", "/pit?", "/overtakes?", "/race_control?", "/weather?", "/session_result?", "/position?", "/team_radio?"];
   // The real positions (OpenF1 /location, ~3.7 Hz per car, 2-5 MB a car for a race) — fetched once
   // per car, kept at TRACE_HZ in IndexedDB (a 22-car race is ~1.5 MB there), never in localStorage.
@@ -25,7 +28,11 @@ const DataRealRaceFetch = (function () {
   const arr = (v) => (Array.isArray(v) ? v : []);
 
   // ── Fetching: one script per session, through F1API's queue and rate window ──
-  function fetchRaw(sessionKey, fresh) {
+  /** options.revalidate: drop the cached REVALIDATE_PATHS bodies first, so the
+   *  rebuild of a provisional script reads the stewards' latest (and the shared
+   *  cache the Results tab reads is refreshed with it). Through F1API's paced queue. */
+  function fetchRaw(sessionKey, fresh, options) {
+    if (!fresh && options && options.revalidate) forgetPaths(sessionKey, REVALIDATE_PATHS);
     const q = (path, opts) => F1API.request(OPENF1 + path + "session_key=" + encodeURIComponent(sessionKey), TTL, fresh ? Object.assign({}, opts, { cache: false }) : opts);
     return Promise.all([
       q("/sessions?"), q("/drivers?"), q("/laps?", { cache: false }), q("/stints?"), q("/pit?"), q("/overtakes?"),
@@ -46,9 +53,10 @@ const DataRealRaceFetch = (function () {
   /** Drop the cached bodies of a race that was not complete, so the next open
    *  refetches them: api.js caches each for seven days, which would otherwise
    *  freeze an unfinished classification for a week. */
-  function forgetRaw(sessionKey) {
+  function forgetRaw(sessionKey) { forgetPaths(sessionKey, RAW_PATHS); }
+  function forgetPaths(sessionKey, paths) {
     try {
-      for (const path of RAW_PATHS) {
+      for (const path of paths) {
         const url = OPENF1 + path + "session_key=" + encodeURIComponent(sessionKey);
         if (typeof F1API !== "undefined" && F1API.forget) F1API.forget(url);   // memory too: a body over 256K never reaches localStorage
         else localStorage.removeItem(API_CACHE_PREFIX + url);
@@ -240,7 +248,7 @@ const DataRealRaceFetch = (function () {
 
   // A script assembled within a day of the start is PROVISIONAL: stewards'
   // penalties, DSQs and late lap rows land after the flag, so it is reused for
-  // PROVISIONAL_MS and then rebuilt (through the raw cache's own TTLs). One
+  // PROVISIONAL_MS and then rebuilt, refetching REVALIDATE_PATHS (#6603). One
   // fetched a day or more after the start is final. No dates (an older cache)
   // reads as final rather than refetching forever (hunt #5694 B3).
   const SETTLED_MS = 24 * 3600 * 1000, PROVISIONAL_MS = 30 * 60 * 1000;
@@ -249,15 +257,25 @@ const DataRealRaceFetch = (function () {
     if (!Number.isFinite(at) || !Number.isFinite(start) || at - start >= SETTLED_MS) return true;
     return now - at >= 0 && now - at < PROVISIONAL_MS;
   }
-  function cached(sessionKey) {
+  function stored(sessionKey) {
     try {
       const raw = localStorage.getItem(CACHE_KEY + sessionKey);
       const s = raw ? JSON.parse(raw) : null;
-      const ok = s && s.v === SCRIPT_V && s.complete === true && s.laps > 0 && Array.isArray(s.drivers) &&
-        settled(s, Date.now()) ? s : null;
-      if (ok) lruWrite(lruFront(sessionKey));
-      return ok;
+      return s && s.v === SCRIPT_V && s.complete === true && s.laps > 0 && Array.isArray(s.drivers) ? s : null;
     } catch (e) { return null; }
+  }
+  function cached(sessionKey) {
+    const s = stored(sessionKey);
+    const ok = s && settled(s, Date.now()) ? s : null;
+    if (ok) lruWrite(lruFront(sessionKey));
+    return ok;
+  }
+  /** The stored script whose provisional window lapsed (cached() returns null for
+   *  it): the rebuild revalidates the stewards' bodies, and serves this one if the
+   *  network fails. Null when there is none, or it is still fresh or final. */
+  function provisional(sessionKey) {
+    const s = stored(sessionKey);
+    return s && !settled(s, Date.now()) ? s : null;
   }
   function lruRead() {
     try { const a = JSON.parse(localStorage.getItem(CACHE_LRU) || "[]"); return Array.isArray(a) ? a.map(String) : []; } catch (e) { return []; }
@@ -285,6 +303,6 @@ const DataRealRaceFetch = (function () {
     try { localStorage.setItem(CACHE_KEY + script.sessionKey, JSON.stringify(script)); lruWrite(order); } catch (e) { /* quota: the next open refetches */ }
   }
 
-  return { fetchRaw, forgetRaw, cached, remember, fetchTraces, packTrace, traceGet, tracePut, traceFits, OPENF1, TRACE_V, TRACE_MAX, CACHE_KEY, CACHE_MAX };
+  return { fetchRaw, forgetRaw, cached, provisional, remember, fetchTraces, packTrace, traceGet, tracePut, traceFits, OPENF1, TRACE_V, TRACE_MAX, CACHE_KEY, CACHE_MAX };
 })();
 Object.freeze(DataRealRaceFetch);

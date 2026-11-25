@@ -1119,3 +1119,68 @@ test("every 2026 OpenF1 circuit_short_name resolves to its game circuit by name 
   assert.equal(D.trackIdFor({ circuit_short_name: "Madring", country_name: "Spain" }, roster), "madrid",
     "Madrid's Spanish GP is not Spain's first circuit");
 });
+
+// #6603: the 30-min provisional rebuild read the 7-day raw cache, so a penalty
+// published after the first build never reached the rebuilt script. The
+// network is stubbed: a test never fetches.
+test("a provisional rebuild refetches the stewards' bodies; the rest stay cached; offline serves the old script", async () => {
+  const store = new Map();
+  const localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) };
+  const BODY = { sessions: "session", drivers: "drivers", laps: "laps", stints: "stints", pit: "pits", overtakes: "overtakes",
+    race_control: "raceControl", weather: "weather", session_result: "result", position: "positions", team_radio: "teamRadio" };
+  const live = rawBaku();
+  const cache = new Map(), network = [];
+  let offline = false;
+  const F1API = {
+    request(url, _ttl, opts) {
+      const useCache = !(opts && opts.cache === false);
+      if (useCache && cache.has(url)) return Promise.resolve(cache.get(url));
+      network.push(url);
+      if (offline) return Promise.reject(new Error("offline"));
+      const key = BODY[url.match(/\/v1\/(\w+)\?/)[1]];
+      const body = host(key === "session" ? [live.session] : live[key]);
+      if (useCache) cache.set(url, body);
+      return Promise.resolve(body);
+    },
+    forget: (url) => cache.delete(url),
+    meetings: () => Promise.resolve([]),
+    cancelAll() {},
+  };
+  const { D, ctx, findTeam } = load({ localStorage, F1API });
+  const url = (p) => vm.runInContext("DataRealRaceFetch.OPENF1", ctx) + "/" + p + "?session_key=11377";
+  // The first build, two hours after lights out: the winner still classified P1.
+  for (const p of Object.keys(BODY)) if (p !== "laps" && p !== "position") cache.set(url(p), host(p === "sessions" ? [live.session] : live[BODY[p]]));
+  const first = host(D.build(rawBaku(), findTeam, TRACKS));
+  const winner = first.drivers.find((d) => d.pos === 1).num;
+  const H = 3600 * 1000, now = Date.now();
+  const putProvisional = () => store.set(D.CACHE_KEY + "11377", JSON.stringify({ ...first,
+    fetchedAt: new Date(now - 31 * 60 * 1000).toISOString(), dateStart: new Date(now - 3 * H).toISOString() }));
+  putProvisional();
+  // Five hours after the start the stewards disqualify the winner.
+  // OpenF1 reclassifies: the winner loses the position, everyone behind moves up one.
+  live.result = live.result.map((r) => (r.driver_number === winner ? { ...r, dsq: true, position: null }
+    : r.position > 1 ? { ...r, position: r.position - 1 } : r));
+  live.raceControl = live.raceControl.concat([{ date: new Date(now - H).toISOString(), category: "Other", message: "CAR " + winner + " DISQUALIFIED" }]);
+  const tab = D.create({});
+  const rebuilt = host(await tab.scriptFor(11377));
+  assert.equal(rebuilt.provenance, "fetched");
+  assert.ok(network.includes(url("session_result")) && network.includes(url("race_control")), "the classification and race control went out uncached");
+  for (const p of ["sessions", "drivers", "stints", "pit", "overtakes", "weather", "team_radio"]) {
+    assert.ok(!network.includes(url(p)), p + " stays on the 7-day cache (rate limits)");
+  }
+  const d = rebuilt.drivers.find((x) => x.num === winner);
+  assert.equal(d.dsq, true, "the post-race DSQ reached the rebuilt script");
+  assert.equal(rebuilt.complete, true, "the reclassified race is still complete");
+  assert.notEqual(rebuilt.drivers.find((x) => x.pos === 1).num, winner, "P2 inherits the win");
+  assert.deepEqual(host(cache.get(url("session_result"))), host(live.result), "the shared cache holds the stewards' latest");
+  // A fresh provisional script is reused with no request.
+  network.length = 0;
+  store.set(D.CACHE_KEY + "11377", JSON.stringify({ ...rebuilt, fetchedAt: new Date(now - 60 * 1000).toISOString(), dateStart: new Date(now - 3 * H).toISOString() }));
+  assert.equal(host(await tab.scriptFor(11377)).provenance, "cached");
+  assert.deepEqual(network, []);
+  // Offline at the next rebuild: the provisional script beats no race.
+  putProvisional();
+  offline = true;
+  const served = host(await tab.scriptFor(11377));
+  assert.deepEqual([served.provenance, served.laps], ["cached", first.laps]);
+});
