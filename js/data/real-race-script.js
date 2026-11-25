@@ -414,6 +414,7 @@ const DataRealRaceScript = (function () {
     const ms = Math.round(t * 1000), m = Math.floor(ms / 60000), sec = (ms - m * 60000) / 1000;   // round first: never "1:60.000"
     return m + ":" + (sec < 10 ? "0" : "") + sec.toFixed(3);
   }
+  // Not Dom.fmtGap: this board blanks the leader (0 → "") and prints null as "—" (pin: gap-format-pin.test.mjs).
   function fmtGap(v) { return v == null ? "—" : v === 0 ? "" : "+" + v.toFixed(3); }
 
   /** Rain lap by lap (index = real lap, true when any weather sample inside that

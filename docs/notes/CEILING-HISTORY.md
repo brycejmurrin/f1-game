@@ -4061,6 +4061,12 @@ Fragment: `ratchets.d/codex--mobile-visor-paint-cost.json`.
 regression coverage verifies track focus preserves its existing map and cursor.
 Fragment: `ratchets.d/cursor--telemetry-mobile-1124.json`.
 
+## 2026-11-25 — claude/fmtgap-6504: Dom.fmtGap, the timing-sheet gap's one home (#6504)
+
+`(tree) eagerCodeBytes` 4036065 → **4036179** (+114): `Dom.fmtGap` lives in the eager
+`js/ui/dom.js`; the `results.js` copy it replaces is lazy, so its removal frees no boot
+bytes. `assertPinsAll` 10454 → **10455** (+1): the pin asserts `results.js` keeps no copy.
+Fragment: `ratchets.d/claude--fmtgap-6504.json`.
 ## 2026-11-25 — claude/issue-5496-damage-reland: DAMAGE: HANDLING room rule re-land (#5496)
 
 `js/game.js gMembers` 279 → **280** (+1) and `js/game.js lines` 9666 → **9667** (+1): the `G.raceDamage` accessor pair
