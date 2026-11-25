@@ -102,15 +102,19 @@ window.ScreenPlacement = (function () {
   // A size never exceeds the safe box once the region's own scale is drawn.
   const safeSize = (n, z, unit, scale = 1) => 'min(' + n / z + unit + ',calc((100' + unit + ' - ' +
     (unit === 'vw' ? 'var(--sal,0px) - var(--sar,0px)' : 'var(--sat,0px) - var(--sab,0px)') + ') / ' + z * scale + '))';
-  // The shift is in the node's zoomed units; later passes trim what the
-  // first left over (rounding, or how a zoomed node scales a registered length).
+  const rectOf = node => typeof CssZoom !== "undefined" ? CssZoom.viewportRect(node) : node.getBoundingClientRect();
+  const zoomOf = node => typeof CssZoom !== "undefined" ? CssZoom.of(node) : node.currentCSSZoom || 1;
+  // Each clamp starts from no shift, so a rect read mid entry animation (the
+  // sheet-in rise) is replaced on animationend rather than kept. The shift is
+  // in the node's zoomed units; later passes trim what the first left over.
   function clampNode(node, axes) {
+    for (const name of SHIFT) node.style.removeProperty(name);
     for (let pass = 0; pass < 3; pass++) {
-      const r = node.getBoundingClientRect();
+      const r = rectOf(node);
       if (!r.width && !r.height) return;
       const { dx, dy } = safeShift(r, safeBox(), axes);
       if (!dx && !dy) return;
-      const z = node.currentCSSZoom || 1;
+      const z = zoomOf(node);
       [dx, dy].forEach((d, i) => {
         if (!d) return;
         const was = parseFloat(node.style.getPropertyValue(SHIFT[i])) || 0;
@@ -118,11 +122,16 @@ window.ScreenPlacement = (function () {
       });
     }
   }
+  // Nodes are queried on every clamp: a tab or list the host rebuilds after
+  // apply is picked up (and observed) the next time anything re-runs it.
   function clampRegions(id) {
     const entry = clamped.get(id);
     if (!entry) return;
     for (const { target, axes } of entry.regions) {
-      for (const node of document.querySelectorAll(target)) clampNode(node, axes);
+      for (const node of document.querySelectorAll(target)) {
+        if (!entry.nodes.has(node)) { entry.nodes.add(node); observer?.observe(node); }
+        clampNode(node, axes);
+      }
     }
   }
   function unclamp(id) {
@@ -132,19 +141,44 @@ window.ScreenPlacement = (function () {
       for (const name of SHIFT) node.style.removeProperty(name);
       observer?.unobserve(node);
     }
+    entry.mutations?.disconnect();
     clamped.delete(id);
   }
-  // A screen applied while hidden measures 0x0; its first layout (and any
-  // later resize) re-runs the clamp from the size observer.
-  function watch(id) {
-    const entry = clamped.get(id);
-    if (!entry || typeof ResizeObserver === "undefined") return;
-    observer ||= new ResizeObserver(entries => {
-      const ids = new Set();
-      for (const e of entries) for (const [key, value] of clamped) if (value.nodes.has(e.target)) ids.add(key);
+  let pending = new Set(), frame = 0;
+  function later(id) {
+    pending.add(id);
+    if (frame) return;
+    frame = window.requestAnimationFrame(() => {
+      const ids = pending;
+      pending = new Set(); frame = 0;
       for (const key of ids) clampRegions(key);
     });
-    for (const node of entry.nodes) observer.observe(node);
+  }
+  // A screen applied while hidden measures 0x0: its first layout and later
+  // resizes come from the size observer, rebuilt children from the root's
+  // mutations, and the settled position from the end of an entry animation.
+  function watch(id, root) {
+    const entry = clamped.get(id);
+    if (!entry) return;
+    if (typeof ResizeObserver !== "undefined") {
+      observer ||= new ResizeObserver(entries => {
+        for (const e of entries) for (const [key, value] of clamped) if (value.nodes.has(e.target)) later(key);
+      });
+      for (const node of entry.nodes) observer.observe(node);
+    }
+    if (typeof MutationObserver !== "undefined") {
+      entry.mutations = new MutationObserver(() => later(id));
+      for (const node of document.querySelectorAll(root)) entry.mutations.observe(node, { childList: true, subtree: true });
+    }
+  }
+  if (typeof document !== "undefined" && document.addEventListener) {
+    const settled = event => {
+      for (const [key, value] of clamped) {
+        for (const node of value.nodes) if (event.target === node || event.target.contains?.(node)) { later(key); break; }
+      }
+    };
+    document.addEventListener("animationend", settled, true);
+    document.addEventListener("transitionend", settled, true);
   }
 
   // One stylesheet per customized screen also covers children rebuilt after
@@ -288,7 +322,7 @@ window.ScreenPlacement = (function () {
       const nodes = new Set(moved.flatMap(({ target }) => [...document.querySelectorAll(target)]));
       clamped.set(id, { regions: moved, nodes });
       clampRegions(id);
-      watch(id);
+      watch(id, config.root);
     }
   }
   // These settings belong to one screen across both orientations. Popup

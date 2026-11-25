@@ -732,6 +732,9 @@ test("safe-area clamp: an applied region measures, shifts through its own node a
   const r = node.getBoundingClientRect();
   assert.ok(Math.abs(r.right - 793) <= 0.5 && Math.abs(r.bottom - 373) <= 0.5, `pulled inside the safe box, got right ${r.right} bottom ${r.bottom}`);
   assert.deepEqual(plain(sb.ScreenPlacement.read("garage", "landscape")), saved, "the stored arrangement is unchanged");
+  const first = props.get("--sp-dx");
+  sb.ScreenPlacement.restoreAll();
+  assert.equal(props.get("--sp-dx"), first, "a re-clamp starts from no shift, so it lands on the same value");
   sb.ScreenPlacement.apply("garage", {});
   assert.equal(props.size, 0, "clearing the arrangement removes the shift");
 });

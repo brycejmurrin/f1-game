@@ -93,6 +93,9 @@ test.describe(`#6596 his placement, landscape ${LANDSCAPE.width}x${LANDSCAPE.hei
     const placement = await boot(page, LANDSCAPE);
     await openGarage(page);
     await expectInside(page, GARAGE, "garage landscape");
+    // A tab switch swaps the options panel after apply; the clamp follows it (#6596 lists every garage tab).
+    await page.evaluate(() => document.getElementById("cs-tab-team")?.click());
+    await expectInside(page, GARAGE, "garage landscape, TEAM tab");
     await page.evaluate(() => document.getElementById("cs-photo").click());
     await page.waitForFunction(() => { const s = document.getElementById("photo-studio"); const b = document.getElementById("ps-capture"); return s && !s.hidden && b && b.getBoundingClientRect().width > 0; }, null, { polling: 100, timeout: BOOT_MS });
     await expectInside(page, STUDIO, "photo studio landscape");
