@@ -940,7 +940,7 @@ const HARD_EDGES = [
 
   // pit-lane / engineer / radio → LAZY_RACE_SESSION_EDGES (M4 is FULL; call-time after ensure)
   ["js/core/mat4.js", "js/physics/brake-cue.js"],        // BrakeCue aliases M4.clamp at eval
-  ["js/physics/ai-drive.js", "js/physics/contact-geometry.js"],  // the impulse reads AiDrive.bumpRestitution (call time, keep ordered)
+  ["js/physics/contact-geometry.js", "js/physics/collide.js"],  // collide reads ContactGeometry.rubDecel/bumpRestitution/humanPuntCap (call time, keep ordered)
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
   ["js/physics/collide.js", "js/game.js"],                // game.js calls Collide.create(G, …) at eval
   ["js/core/mat4.js", "js/physics/wall-clamp.js"],       // WallClamp binds M4.clamp at eval
