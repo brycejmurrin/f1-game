@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { runTipGate, tipView, failedTests, TIP_GATE_TESTS } from "../../tools/ci/lib/tip-gate.mjs";
+import { runTipGate, tipView, failedTests, TIP_GATE_TESTS, gitReason, ownWorktreePath } from "../../tools/ci/lib/tip-gate.mjs";
 
 const ROOT = new URL("../../", import.meta.url).pathname;
 /** A fixture path no tree carries, built so the source-path lint does not read it as a reference. */
@@ -88,5 +88,52 @@ test("runTipGate: a detached worktree of the tip, ensure-built, the tests, a ver
     assert.equal(runTipGate({ sha, base: "deploy-x", root: W, tests: ["y"], run: noBuild }).error, `tip gate: ensure-built failed on ${s8}: Error: circuit def`);
     assert.equal(runTipGate({ sha: "f".repeat(40), base: "deploy-x", root: W, run: fake({ status: 0 }) }).error, "tip gate: ffffffff is not in this clone after fetching deploy-x");
     assert.equal(runTipGate({ sha: "t".repeat(40), base: "deploy-x", root: W }).error, `tip gate: not a commit sha: ${"t".repeat(40)}`);
+  } finally { fs.rmSync(T, { recursive: true, force: true }); }
+});
+
+test("two gates on one tip sha at once each keep their own worktree and both get a verdict (#6494)", () => {
+  const T = scratch("tip-gate-race-");
+  const git = (cwd, ...a) => { const r = spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd, encoding: "utf8" }); assert.equal(r.status, 0, `${a.join(" ")}: ${r.stderr}`); return r.stdout.trim(); };
+  try {
+    const W = path.join(T, "w");
+    fs.mkdirSync(path.join(W, "tests/unit"), { recursive: true });
+    git(W, "init", "-q", "-b", "deploy-x");
+    fs.writeFileSync(path.join(W, U("a")), "// a\n");
+    git(W, "add", "-A"); git(W, "commit", "-q", "-m", "tip");
+    const sha = git(W, "rev-parse", "HEAD");
+    const tests = [U("a")];
+    // Gate B runs whole while gate A sits in its ensure-built step (one tip, two PRs' trusted rows): the old shared
+    // `wt-<sha12>` path had B's pre-clean remove A's tree, and A's worktree add / tests then failed → `base: WAIT`.
+    const seen = { A: [], B: [] };
+    let inner = null;
+    const fake = (who, nest) => (cmd, args, opts) => {
+      if (cmd === "git") return spawnSync(cmd, args, opts);
+      seen[who].push({ step: args[0], cwd: opts.cwd, exists: fs.existsSync(path.join(opts.cwd, U("a"))) });
+      if (nest && args[0] !== "--test") inner = runTipGate({ sha, base: "deploy-x", root: W, tests, runId: `${process.pid}-bbbbbb`, run: fake("B", false) });
+      return args[0] === "--test" ? { status: 0, stdout: "ok 1 - a\n" } : { status: 0, stdout: "", stderr: "" };
+    };
+    const outer = runTipGate({ sha, base: "deploy-x", root: W, tests, runId: `${process.pid}-aaaaaa`, run: fake("A", true) });
+    assert.equal(inner?.state, "green", `the inner gate gets a verdict: ${JSON.stringify(inner)}`);
+    assert.equal(outer.state, "green", `the outer gate gets a verdict too: ${JSON.stringify(outer)}`);
+    assert.notEqual(seen.A[0].cwd, seen.B[0].cwd, "a worktree per run, not per sha");
+    assert.ok(seen.A.every((s) => s.exists) && seen.B.every((s) => s.exists), "neither run's tree was removed under it");
+    assert.ok(seen.A[0].cwd.endsWith(`wt-${sha.slice(0, 12)}-${process.pid}-aaaaaa`), seen.A[0].cwd);
+    assert.equal(git(W, "worktree", "list").split("\n").length, 1, "each owner removed and pruned its own");
+  } finally { fs.rmSync(T, { recursive: true, force: true }); }
+});
+
+test("gitReason quotes git's fatal line, not its first progress line (#6494)", () => {
+  assert.equal(gitReason("Preparing worktree (detached HEAD 7bf61a61)\nfatal: '/x/wt' already exists\n"), "fatal: '/x/wt' already exists");
+  assert.equal(gitReason("Preparing worktree (detached HEAD 7bf61a61)\nsomething else\n"), "something else", "no fatal: the last line");
+  assert.equal(gitReason(""), "(no stderr)");
+});
+
+test("ownWorktreePath: this run's own path; a dead run's leftover is swept, a live run's never (#6494)", () => {
+  const T = scratch("tip-gate-own-");
+  try {
+    for (const n of ["wt-abc-111-aa", "wt-abc-222-bb", "wt-other-111-aa", "wt-abc"]) fs.mkdirSync(path.join(T, n));
+    const p = ownWorktreePath(T, "wt-abc", "333-cc", { alive: (pid) => pid === 222 });
+    assert.equal(p, path.join(T, "wt-abc-333-cc"));
+    assert.deepEqual(fs.readdirSync(T).sort(), ["wt-abc", "wt-abc-222-bb", "wt-other-111-aa"], "only the dead pid 111's tree for this prefix goes");
   } finally { fs.rmSync(T, { recursive: true, force: true }); }
 });
