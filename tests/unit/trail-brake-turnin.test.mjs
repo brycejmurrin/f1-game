@@ -41,6 +41,7 @@ import { fileURLToPath } from "node:url";
 import { measure } from "../../tools/check/player-dyn.mjs";
 
 const require = createRequire(import.meta.url);
+const { neutralMods } = require("./neutral-mods-vm.cjs");
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -51,9 +52,7 @@ before(async () => {
   {
     // The pin is the NEUTRAL ×1 car (statMult only) — the works McLaren before #6705's grip reserve, so every
     // pin anchor below is the car it was measured on. The reserve itself is the shipped seat's.
-    const S = gPin.sandbox, team = gPin.G.player.team, st = S.Career.teamStats(team) || team.stats;
-    gPin.G.player.mods = { speed: S.Parts.statMult(st.speed), accel: S.Parts.statMult(st.accel),
-      cornering: S.Parts.statMult(st.cornering), braking: S.Parts.statMult(st.braking) };
+    gPin.G.player.mods = neutralMods(gPin);
   }
   mPin = measure(gPin, 0);
   gShip = await createGame({ track: "monza", seat: "shipped", storage: { difficulty: "normal", autoThrottle: false, pace: 11 } });

@@ -23,6 +23,7 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
+const { neutralMods } = require("./neutral-mods-vm.cjs");
 const K = ["speed", "accel", "cornering", "braking"];
 
 async function seat(track, teamId, parts) {
@@ -46,14 +47,14 @@ async function lap(track, teamId, arm) {
     // for the lone TT car a host turn later, and settle() tests before it yields — so `G.timeTrial` alone let the
     // lap run in race traffic, whose outcome moved with the host (CI 169.27 s vs 171.40 s locally, Suzuka Williams).
     assert.ok(await g.settle(() => G.timeTrial && G.track && G.player && G.cars.length === 1 && G.state !== "race"), "time trial up");
-    const t = G.player.team, st = g.sandbox.Career.teamStats(t) || t.stats;
+    const t = G.player.team;
     assert.equal(t.id, teamId);
     const raw = P.getMods(P.getFactorySetup(t), t);
     A.headless(true);
     A.reset(0.02, 25, 0, 4242);
     if (arm !== "factory") {
-      const m = {};
-      for (const k of K) m[k] = P.statMult(st[k]) * (arm === "raw" ? raw[k] : 1);
+      const m = neutralMods(g, t);
+      if (arm === "raw") for (const k of K) m[k] *= raw[k];
       G.player.mods = m;
     }
     const mods = G.player.mods, tuning = A.tuning();
@@ -86,6 +87,8 @@ async function lap(track, teamId, arm) {
 // Williams' small-upgrade raw kit now measures 2.6 % at Monza (raw 142.20 s); Suzuka Williams 4.8 %, McLaren ≥ 22 %.
 // Re-anchored from those numbers by Bryce's decision A (PR #6662, 2026-11-25).
 const RAW_GAP = { "monza williams": 0.02 };
+// The works car's lap is no more than 10 % under neutral (the lower bound; #6731).
+const WORKS_FLOOR = 0.9;
 // THE GRIP RESERVE (#6705, Bryce's pick B after "braking and grip got worse"): the works car keeps half (log share)
 // of its cornering/braking bonus, so it laps between the neutral car and the raw kit. Measured (neutral / works / raw):
 // Monza McLaren 143.87 / 135.73 / 111.33 s, Williams 146.00 / 146.07 / 142.20 (its works cornering is under ×1, so
@@ -99,6 +102,9 @@ for (const track of ["monza", "suzuka"]) for (const teamId of ["mclaren", "willi
     const w = await worksOf(teamId);
     for (const k of K) assert.ok(Math.abs(factory.mods[k] - neutral.mods[k] * w[k]) < 1e-9, `${k}: works mods are the neutral car × the grip reserve`);
     assert.ok(factory.T <= neutral.T * 1.005, `works ${factory.T.toFixed(2)} s is not slower than neutral ${neutral.T.toFixed(2)} s`);
+    // Two-sided (#6731): the reserve is HALF the bonus, so a growing one cannot pass unnoticed. Widest measured
+    // gain: Suzuka McLaren 153.07 / 166.87 s = 0.917 × neutral.
+    assert.ok(factory.T >= neutral.T * WORKS_FLOOR, `works ${factory.T.toFixed(2)} s stays within ${(1 - WORKS_FLOOR) * 100} % of neutral ${neutral.T.toFixed(2)} s (a growing reserve?)`);
     assert.ok(raw.T < factory.T, `raw factory ${raw.T.toFixed(2)} s stays quicker than the reserve car ${factory.T.toFixed(2)} s`);
     const gap = RAW_GAP[`${track} ${teamId}`] ?? 0.03;
     assert.ok(raw.T < neutral.T * (1 - gap), `raw factory ${raw.T.toFixed(2)} s is the closed gap (neutral ${neutral.T.toFixed(2)} s, ≥ ${gap * 100} %)`);
