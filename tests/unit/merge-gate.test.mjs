@@ -1918,6 +1918,31 @@ test("land.yml dispatch:merge-pause (finding 7): counts only when the owner's ow
   assert.equal(sw(ev("o")), 0, "the owner's pause does");
 });
 
+test("land.yml (#6456 item 10, Bryce's B): the inline merge_paused and say copies stay byte-identical", () => {
+  // The write jobs run no repo code (the trust test above), so these helpers stay inline in each step rather than in a
+  // shared script; this keeps the copies from drifting apart. Each copy is the function plus its comment block.
+  const runs = Object.entries(LAND.jobs).flatMap(([job, j]) => (j.steps || []).map((st) => [job, st.run || ""]));
+  const copies = (start, end) => runs.flatMap(([where, run]) => {
+    const lines = run.split("\n").map((l) => l.trimStart()), out = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (!start(lines[i])) continue;
+      let k = i;
+      while (k > 0 && lines[k - 1].startsWith("# ")) k--;
+      let e = i;
+      while (!end(lines[e], i === e)) e++;
+      out.push([where, lines.slice(k, e + 1).join("\n")]);
+    }
+    return out;
+  });
+  const paused = copies((l) => l === "merge_paused() {", (l) => l === "}");
+  assert.deepEqual(paused.map(([w]) => w), ["resolve", "arm", "sweep"], "one copy in each of resolve, arm and the sweep");
+  for (const [where, text] of paused.slice(1)) assert.equal(text, paused[0][1], `${where}: merge_paused differs from resolve's copy`);
+  assert.equal(paused[0][1].split("\n").length, 13, "the copy is the 3-line comment and the 10-line function");
+  const say = copies((l) => l.startsWith("say() {"), (l, first) => first);
+  assert.equal(say.length, 2, "say: the sweep and the train");
+  assert.equal(say[1][1], say[0][1], `${say[1][0]}: say differs from ${say[0][0]}`);
+});
+
 test("tip-candidate mode stops on open Plan and unfinished CI before reading deployment or config", () => {
   const f = fakes(), reads = [];
   f.pull.labels = [{ name: "land" }];
