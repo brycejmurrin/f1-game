@@ -766,7 +766,7 @@ function stackFixture({ refuseStack = false, refsError = false, patchFail = new 
     }
     if (p.startsWith("pulls?state=open")) return { json: [...(state.trainOpen ? [train] : []), ...opened.filter((q) => q.state === "open"), ...Object.values(state.pulls).filter((q) => q.state === "open")] };
     if (p.startsWith("pulls?state=closed")) return { json: [] };
-    if (p === "pulls/100") return { json: state.trainOpen ? train : { ...train, state: "closed" } };
+    if (p === "pulls/100") return { json: state.trainOpen ? train : { ...train, state: "closed", ...(state.merged ? { merged_at: state.merged } : {}) } };
     if (/^pulls\/\d+$/.test(p)) return { json: state.pulls[Number(p.slice(6))] || opened.find((q) => q.number === Number(p.slice(6))) };
     if (p.startsWith("git/matching-refs/heads/train")) {
       const prefix = p.slice("git/matching-refs/".length);
@@ -790,7 +790,7 @@ function stackFixture({ refuseStack = false, refsError = false, patchFail = new 
   const merge = () => { // GitHub merges train #100 into the deploy branch
     const m = g("commit-tree", `${N.head}^{tree}`, "-p", base, "-p", N.head, "-m", "Merge pull request #100");
     g("push", "-q", "origin", `${m}:refs/heads/${DEPLOY}`);
-    Object.assign(state, { tip: m, trainOpen: false });
+    Object.assign(state, { tip: m, trainOpen: false, merged: "2026-11-25T11:50:00Z" });
     for (const n of [1, 2]) state.pulls[n] = { ...state.pulls[n], state: "closed", merged_at: "2026-11-25T11:50:00Z" };
     return m;
   };
@@ -856,7 +856,14 @@ test("#6584: N red → N+1 is rebuilt on the tip without N's cars, marked rebase
     const r = await f.build();
     assert.equal(r.code, 0, r.logs.join("\n"));
     assert.notEqual(r.logs.indexOf("= merge-train closed #100 (red): CI failure on the train head"), -1, r.logs.join("\n"));
-    assert.equal(r.logs.at(-1), "= merge-train opened #201 — rebased #3,#4 (the train under it closed unmerged (red, stale or by hand))");
+    // #6652 nit 2: the rebase waits one run for a screen of that very fold onto the tip
+    const [[ref]] = f.stacks();
+    assert.equal(r.logs.at(-1), `= merge-train waiting — #3,#4 (${ref.slice(0, STACK_PREFIX.length + 12)}…) rebase onto the tip ${f.base.slice(0, 8)} once a screen measures that fold (the train under it closed unmerged (red, stale or by hand))`);
+    assert.equal(await screenMain({ out: f.screenFile, request: f.request, cwd: f.dir, log: () => {}, check: () => ({ ok: true }), gen: () => ({ ok: true }), carGate: () => ({ head: "", rows: Object.fromEntries(CAR_ROWS.map((k) => [k, { ok: true }])) }) }), 0);
+    const sc = readScreen(fs.readFileSync(f.screenFile, "utf8"));
+    assert.deepEqual({ tip: sc.tip, rebase: sc.rebase, cars: sc.cars.map((c) => c.pr) }, { tip: f.base, rebase: ref, cars: [3, 4] });
+    const r2 = await f.build();
+    assert.equal(r2.logs.at(-1), "= merge-train opened #201 — rebased #3,#4 (the train under it closed unmerged (red, stale or by hand))", r2.logs.join("\n"));
     assert.equal(f.opened[0].state, "closed", "the speculative PR of the stale fold is closed");
     assert.equal(trainResult(f.opened[0].body).outcome, "stale");
     assert.equal(spawnSync("git", ["rev-parse", "--verify", "-q", `refs/heads/${f.opened[0].head.ref}`], { cwd: f.remote }).status, 1, "and its branch deleted");
@@ -966,6 +973,76 @@ test("#6584 FALLBACK: unreadable stacked refs never fail a run — the build wai
     assert.equal(b.code, 0, b.logs.join("\n"));
     affix(b.logs.at(-1), "= merge-train opened #200 — cars=#3,#4,#5 ");
   } finally { f.rm(); }
+});
+
+// ---- #6652: the four follow-up nits from the #6591 review -------------------------------------------------------
+// Nit 1 (stackPlan accepted a merged car whose PR head differs from the stacked head) was fixed by #6667 before this
+// issue's worker started: a merged car now always leaves the stack ("merged outside the train"), see the stackPlan test.
+
+test("#6652 nit 2: the rebase rides only the cars a screen of THAT fold onto the tip measured green", async () => {
+  const f = stackFixture();
+  try {
+    f.screen([3, 4]);
+    assert.equal((await f.build()).code, 0);
+    f.state.ci = "failure";
+    assert.equal((await f.build()).code, 0); // N closes red; the stack waits for its screen
+    // a screen file of another fold (the stale stacked screen) is not this rebase's: it still waits
+    f.screen([3, 4]);
+    const w = await f.build();
+    assert.deepEqual(w.logs.map((l) => l.split(" — ")[0]), ["= merge-train waiting"], w.logs.join("\n"));
+    // the screen measures the kept cars' cumulative folds onto the tip: car 4 is red on it
+    const gate = () => ({ head: "", rows: Object.fromEntries(CAR_ROWS.map((k) => [k, { ok: true }])) });
+    const red = ({ cwd }) => (fs.existsSync(path.join(cwd, "c4.txt")) ? { ok: false, evidence: "over a ratchet" } : { ok: true });
+    assert.equal(await screenMain({ out: f.screenFile, request: f.request, cwd: f.dir, log: () => {}, check: red, gen: () => ({ ok: true }), carGate: gate }), 0);
+    const r = await f.build();
+    assert.equal(r.logs.at(-1), "= merge-train opened #201 — rebased #3 (the train under it closed unmerged (red, stale or by hand))", r.logs.join("\n"));
+    const m = trainManifest(f.writes.filter((w) => w.p === "pulls" && w.method === "POST")[1].body.body);
+    assert.deepEqual({ base: m.base, cars: m.cars.map((c) => c.pr), rebased: m.rebased }, { base: f.base, cars: [3], rebased: true });
+    assert.deepEqual(f.stacks(), []);
+  } finally { f.rm(); }
+});
+
+test("#6652 nit 2: readScreen keeps a rebase screen's stacked ref and refuses one that is not a stack or is also stacked", () => {
+  const tip = sha("a"), ref = `${STACK_PREFIX}${sha("b")}-3-4`, cars = [{ pr: 3, head: sha("3"), ok: true, why: "" }];
+  assert.deepEqual(readScreen(JSON.stringify({ tip, rebase: ref, cars })), { tip, skip: "", cars, rebase: ref });
+  assert.equal(readScreen(JSON.stringify({ tip, rebase: "train/x", cars })), null);
+  assert.equal(readScreen(JSON.stringify({ tip, rebase: ref, stack: { pr: 1, head: tip }, cars })), null);
+});
+
+test("#6652 nit 3: with two open train PRs the build names the one it ignores", async () => {
+  const f = stackFixture();
+  try {
+    const cars = [{ pr: 5, head: f.heads[5], ref: "car-5" }];
+    f.opened.push({ number: 150, state: "open", draft: false, labels: [{ name: "land" }, { name: TRAIN_LABEL }], head: { sha: f.heads[5], ref: "train/x-5" }, base: { ref: DEPLOY }, body: renderManifest({ base: f.base, cars }), created_at: "2026-11-25T10:00:00Z" });
+    const r = await f.build();
+    assert.deepEqual(r.logs.filter((l) => l.split(" — ")[0] === "= merge-train ignored #150"),
+      ["= merge-train ignored #150 — a second open train still running; this run follows #100 (one train at a time)"], r.logs.join("\n"));
+  } finally { f.rm(); }
+});
+
+test("#6652 nit 4: N merged between the screen and the build — the stacked screen holds onto the tip only while the tip's tree is N's", async () => {
+  const f = stackFixture();
+  try {
+    f.screen([3, 4]);
+    const tip = f.merge();
+    const a = await f.build();
+    assert.equal(a.code, 0, a.logs.join("\n"));
+    affix(a.logs.at(-1), "= merge-train opened #200 — cars=#3,#4 ");
+    assert.equal(trainManifest(f.writes.find((w) => w.p === "pulls" && w.method === "POST").body.body).base, tip);
+  } finally { f.rm(); }
+  const g = stackFixture();
+  try {
+    g.screen([3, 4]);
+    const m = g.merge();
+    // another merge lands after N's: the screen's folds are no longer the folds onto the tip
+    g.g("switch", "-q", "--detach", m); fs.writeFileSync(path.join(g.dir, "z.txt"), "z\n"); g.g("add", "."); g.g("commit", "-qm", "solo");
+    const moved = g.g("rev-parse", "HEAD");
+    g.g("push", "-q", "origin", `${moved}:refs/heads/${DEPLOY}`);
+    g.state.tip = moved;
+    const b = await g.build();
+    assert.deepEqual(b.logs.slice(-1), [`= merge-train idle — the screen was stacked on train #100, which is no longer running (the tip ${moved.slice(0, 8)} moved past #100's merge); the next run screens onto the tip`]);
+    assert.deepEqual(g.opened, []);
+  } finally { g.rm(); }
 });
 
 // ---- #6686 / #6679 follow-ups (#6667): one in-flight definition, fixer parity, the car cap by retest seconds -------
