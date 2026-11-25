@@ -181,14 +181,18 @@ export function landRunsInFlight(pages, { selfRun = "", heads = [] } = {}) {
 }
 
 /** Which green `land` PRs are landing alone (#6528) → Map(pr → why). Armed (auto-merge on): GitHub merges it. Gate
- *  success with a land run still in flight: that run may arm it. Gate success, unarmed, no run: an ORPHAN (its arms
- *  lost to the tip, the retry budget is spent) and a train candidate, never "arms alone". Pure. */
-export function soloLane(landing, { gate = () => "", runs = new Map() } = {}) {
+ *  success with a land run still in flight: that run may arm it, unless `trainOpen` (a train PR or stacked ref is in
+ *  flight): land.yml post then answers "waiting — train #N" and arms only a `deploy:red` fixer, so the PR stays a car
+ *  (trains as default, 2026-11-25). Gate success, unarmed, no run: an ORPHAN (its arms lost to the tip, the retry
+ *  budget is spent) and a train candidate, never "arms alone". Pure. */
+const FIXER_LABEL = "deploy:red"; // merge-gate FIXER_LABEL (imported lazily there, so not imported here)
+export function soloLane(landing, { gate = () => "", runs = new Map(), trainOpen = false } = {}) {
   const solo = new Map(), orphans = new Set();
   for (const p of landing || []) {
     const n = p?.number;
     if (p?.auto_merge) { solo.set(n, "armed: auto-merge is on (it lands alone)"); continue; }
     if (gate(p) !== "success") continue;
+    if (runs.has(n) && trainOpen && !labelNames(p.labels).includes(FIXER_LABEL)) continue;
     if (runs.has(n)) solo.set(n, `its own gate passed and land run ${runs.get(n)} is still in flight (it may arm alone)`);
     else orphans.add(n);
   }
@@ -579,7 +583,7 @@ export async function planTrain({ request = api, cwd = ROOT, max = TRAIN_MAX, no
       if (page === LAND_RUN_PAGES) return { error: `land runs (${st}): more than ${LAND_RUN_PAGES * 100}, refusing to judge orphans on a partial list` };
     }
   }
-  const { solo, orphans } = soloLane(landing, { gate: (p) => gateState(p.head.sha, request), runs: landRunsInFlight(pages, { selfRun: process.env.GITHUB_RUN_ID || "", heads: landing }) });
+  const { solo, orphans } = soloLane(landing, { gate: (p) => gateState(p.head.sha, request), runs: landRunsInFlight(pages, { selfRun: process.env.GITHUB_RUN_ID || "", heads: landing }), trainOpen: running.length > 0 || Boolean(onto) });
   const { cars: all, skipped } = carCandidates(open.rows, { exclude: hist.exclude, solo });
   const under = new Set((onto ? trainManifest(onto.body)?.cars || [] : []).map((c) => c.pr));
   const cands = all.filter((c) => !under.has(c.pr));

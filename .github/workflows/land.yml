@@ -523,8 +523,10 @@ jobs:
               if [ "$tip" != "$VALIDATED_TIP" ]; then break; fi
               case "$code" in 0) ;; 2|3) continue ;; *) break ;; esac
             fi
-            rows=$(jq -c --argjson n "$n" --arg h "$h" --argjson c "$code" --arg l "$line" --arg t "$tip" \
-              '. + [{number: $n, head: $h, code: $c, line: $l, tip: $t}]' <<<"$rows")
+            # fixer: the base row passed as the red-tip fixer (merge-gate baseRow); post lets only that PR skip a train.
+            fixer=false; grep -qE '^= gate base: ok .*\(the fixer\)$' <<<"$out" && fixer=true
+            rows=$(jq -c --argjson n "$n" --arg h "$h" --argjson c "$code" --arg l "$line" --arg t "$tip" --argjson f "$fixer" \
+              '. + [{number: $n, head: $h, code: $c, line: $l, tip: $t, fixer: $f}]' <<<"$rows")
             [ "$code" != 4 ] || break   # trusted transport observed quota; leave later heads for the sweep
             if [ -n "$VALIDATED_TIP" ]; then break; fi
           done 3< <(jq -c '.[]' <<<"$PRS")
@@ -717,6 +719,26 @@ jobs:
           }
           # want_retry <n> <head>: hand the PR to the `retry` job (an immediate re-gate, RETRY_MAX per head).
           want_retry() { retry=$(jq -c --argjson n "$1" --arg h "$2" '(. + [{number: $n, head: $h}]) | unique_by(.number)' <<<"$retry"); }
+          # TRAINS AS DEFAULT (Bryce 2026-11-25 ~18:28Z, train #6671 starved by solo merges): while a train is in flight
+          # (an open, ready `train/` PR with `train` + `land` and no `hold`, or a stacked `train-next/` ref) a passing
+          # non-train PR is not armed: its `gate` reads pending "waiting — train #N" and it boards the next train
+          # (merge-train soloLane keeps it a car). Exempt: a train PR itself, and the red-tip fixer (trusted-rows
+          # `fixer`: the base row passed as the fixer). Read once per run into WAIT_ON ("" = none); an unreadable read
+          # waits nothing (as before).
+          train_seen=false
+          WAIT_ON=""
+          train_in_flight() {
+            local t
+            if [ "$train_seen" = false ]; then
+              train_seen=true
+              t=$(gh api --paginate --method GET "repos/$R/pulls" -f state=open -f base="$DEPLOY_BRANCH" -F per_page=100 2>/dev/null | jq -rs --arg repo "$R" '
+                add // [] | map(select(.draft == false and (.head.ref // "" | startswith("train/")) and .head.repo.full_name == $repo
+                  and ([.labels[].name] | index("train") != null and index("land") != null and index("hold") == null)))
+                | sort_by(.number) | first | if . == null then "" else "train #\(.number)" end' 2>/dev/null) || t=""
+              [ -n "$t" ] || t=$(gh api "repos/$R/git/matching-refs/heads/train-next/" --jq 'first | if . == null then "" else "a stacked train (\(.ref | sub("^refs/heads/"; "")))" end' 2>/dev/null) || t=""
+              WAIT_ON=$t
+            fi
+          }
           gate_errors=$(mktemp)
           trap 'rm -f "$gate_errors"' EXIT
           retry='[]'
@@ -847,6 +869,10 @@ jobs:
                  elif [ "$now" != "$tip" ]; then
                    write_gate "$head" in_progress "" "= merge-gate waiting — the deploy tip moved since the gate measured ${tip:0:12} (now ${now:0:12}): re-gating" "$line"$'\n\n'"$out" || ok=false
                    want_retry "$n" "$head"
+                 elif ! jq -e '.head.ref // "" | startswith("train/")' <<<"$pr" >/dev/null && [ "$(jq -r '.fixer // false' <<<"$t")" != true ] \
+                      && train_in_flight && [ -n "$WAIT_ON" ]; then
+                   # No arm and no retry: the train's merge (Pages, push) or its close (sweep) re-gates this PR.
+                   write_gate "$head" in_progress "" "= merge-gate waiting — $WAIT_ON in flight; this PR boards the next train" "$line"$'\n\n'"$out" || ok=false
                  elif write_gate "$head" completed success "$line" "$out"; then
                    # ONE arm per run, in resolve's order: the first pass wins; the merge it makes moves the tip.
                    [ -n "$arm" ] || [ "$WROTE" != success ] || arm=$(jq -c -n --argjson n "$n" --arg h "$head" --arg t "$tip" '{number: $n, head: $h, tip: $t}')
@@ -1188,21 +1214,30 @@ jobs:
           first=""
           # shellcheck disable=SC2016 # GraphQL variables, bound by gh
           [ "$a" -ge "$RETRY_MAX" ] || first=$(gh api graphql -f owner="${GITHUB_REPOSITORY%/*}" -f repo="${GITHUB_REPOSITORY#*/}" -f base="$DEPLOY_BRANCH" \
-            -f query='query($owner:String!,$repo:String!,$base:String!){repository(owner:$owner,name:$repo){pullRequests(states:OPEN,baseRefName:$base,labels:["land"],first:100){nodes{number isDraft createdAt autoMergeRequest{enabledAt} labels(first:50){nodes{name}} commits(last:1){nodes{commit{status{context(name:"gate"){state description createdAt}}}}}}}}}}' \
+            -f query='query($owner:String!,$repo:String!,$base:String!){repository(owner:$owner,name:$repo){pullRequests(states:OPEN,baseRefName:$base,labels:["land"],first:100){nodes{number isDraft createdAt headRefName autoMergeRequest{enabledAt} labels(first:50){nodes{name}} commits(last:1){nodes{commit{status{context(name:"gate"){state description createdAt}}}}}}}}}}' \
             | jq -er --argjson asked "$list" --argjson now "$(date -u +%s)" '
+              def train: (.headRefName // "" | startswith("train/")) and (.labels.nodes | map(.name) | index("train") != null);
               select(.errors == null) | .data.repository.pullRequests.nodes | arrays
+              # TRAINS AS DEFAULT (post: "waiting — train #N"): while a ready train without `hold` is open, a non-train
+              # PR would only wait, so only trains and `deploy:red` PRs stay in the queue; none left → 0 (no dispatch).
+              | (any(.[]; train and .isDraft == false and (.labels.nodes | map(.name) | index("hold") | not))) as $inflight
+              | map(select(($inflight | not) or train or (.labels.nodes | map(.name) | index("deploy:red") != null)))
               | map((.labels.nodes | map(.name)) as $l | (.commits.nodes[-1].commit.status.context // {}) as $g
                   | select(.isDraft == false and .autoMergeRequest == null and ($l | index("hold") | not))
                   | select(.number as $n | ($asked | any(.number == $n))
                       or ((($g.state == "SUCCESS") or ($g.state == "PENDING" and ($g.description // "" | test("tip moved"))))
                           and ($now - ($g.createdAt | fromdateiso8601)) <= 900))
                   | {number, created: .createdAt, prio: (if ($l | index("train")) then -1 elif ($l | index("priority")) then 0 else 1 end)})
-              | sort_by(.prio, .created, .number) | first | .number') || first=""
+              | sort_by(.prio, .created, .number) | first | .number // (if $inflight then 0 else null end)') || first=""
           [ "$a" -ge "$RETRY_MAX" ] || [[ "$first" =~ ^[0-9]+$ ]] || { first=""; echo "::notice::land queue unreadable: dispatching every requested re-gate" | tee -a "$GITHUB_STEP_SUMMARY"; }
           while IFS= read -r row <&3; do
             n=$(jq -r .number <<<"$row"); head=$(jq -r .head <<<"$row")
             if [ "$a" -ge "$RETRY_MAX" ]; then
               echo "::notice::#$n: retry budget spent ($a of $RETRY_MAX immediate re-gates on ${head:0:12}); the next train re-gates" | tee -a "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            if [ "$first" = 0 ]; then
+              echo "::notice::#$n: a train is in flight; this PR boards the next train, so no solo re-gate is dispatched" | tee -a "$GITHUB_STEP_SUMMARY"
               continue
             fi
             if [ -n "$first" ] && [ "$n" != "$first" ]; then
@@ -1297,6 +1332,8 @@ jobs:
             --jq '.[] | select(.isDraft | not) | select([.labels[].name] | index("hold") | not) | {number, head: .headRefOid, armed: (.autoMergeRequest != null), train: ((.headRefName // "") | startswith("train/"))} | @json') \
             || { say "stale-gate sweep skipped: could not list the land PRs"; exit 0; }
           [ -n "$lands" ] || exit 0
+          # TRAINS AS DEFAULT: a PR post parked as "waiting — … in flight" is the next train's car while a train PR is open.
+          inflight=$(jq -rs 'any(.[]; .train)' <<<"$lands") || inflight=false
           # One immutable dispatch-history snapshot for all candidates. GitHub lists runs newest first.
           # Unknown (older) titles might target any candidate; count each conservatively. A partial
           # page proves coverage only for CI that finished strictly after its oldest returned run.
@@ -1327,9 +1364,11 @@ jobs:
             ci_done=$(jq -r 'sort_by(.created_at) | last // {} | if .conclusion == "success" then (.updated_at | fromdateiso8601) else 0 end' <<<"$runs")
             [ "${ci_done:-0}" -gt 0 ] || { echo "#$n: no successful CI on ${head:0:12}"; continue; }
             g=$(gh api "repos/$R/commits/$head/statuses?per_page=100" \
-              --jq '[.[] | select(.context == "gate") | {s: .state, t: (.created_at | fromdateiso8601)}]' 2>"$sweep_error") || { quota_exhausted && break; say "#$n: could not read the gate status"; continue; }
-            newest_t=$(jq -r '.[0].t // 0' <<<"$g"); newest_s=$(jq -r '.[0].s // ""' <<<"$g")
+              --jq '[.[] | select(.context == "gate") | {s: .state, t: (.created_at | fromdateiso8601), d: (.description // "")}]' 2>"$sweep_error") || { quota_exhausted && break; say "#$n: could not read the gate status"; continue; }
+            newest_t=$(jq -r '.[0].t // 0' <<<"$g"); newest_s=$(jq -r '.[0].s // ""' <<<"$g"); newest_d=$(jq -r '.[0].d // ""' <<<"$g")
             if [ "$newest_t" -lt "$ci_done" ]; then why="gate (${newest_s:-none}) is older than the last green CI"
+            elif [ "$newest_s" = pending ] && [ "$inflight" = true ] && [ "$train" != true ] && [[ "$newest_d" == "= merge-gate waiting — "*" in flight; this PR boards the next train" ]]; then
+              echo "#$n: waits for the train in flight (boards the next one)"; continue
             elif [ "$newest_s" = pending ] && [ $((now - newest_t)) -gt 900 ]; then why="gate has been pending for $(((now - newest_t) / 60)) min with CI finished"
             elif [ "$newest_s" = success ] && [ "$armed" != true ] && [ "$tip_t" -gt "$newest_t" ]; then
               # Green but never armed, and the tip moved since: the pass measured an older tip, and no Pages run (a
