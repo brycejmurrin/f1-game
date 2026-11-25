@@ -10,6 +10,7 @@ const MenuQuitTail = (function () {
   // quitToMenu before the deferred tail. Extra call args are ignored.
   function afterOverlay() {
     if (!d) return;
+    const keep = kept; kept = null;   // consumed even if an earlier step throws
     const run = (label, fn) => (typeof MenuTeardown !== "undefined" && MenuTeardown.runSync)
       ? MenuTeardown.runSync(label, fn) : fn();
     run("quit-mirror", () => d.mirrorPass.cancelPreparation());
@@ -17,7 +18,6 @@ const MenuQuitTail = (function () {
       d.stormFx._ltNextT = 0; d.stormFx._thunderT = -1;
     });
     run("quit-session", () => {
-      const keep = kept; kept = null;
       d.setFlow(keep ? keep.flow : "gp"); d.session = keep ? keep.session : "race"; d.tyres.setLevel(d.raceTyreWear);
       try { d.IncidentSim.reset(); } catch (_) { /* module absent */ }
       try { d.DebrisWorld.reset(); } catch (_) { /* module absent */ }

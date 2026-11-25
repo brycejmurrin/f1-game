@@ -162,3 +162,14 @@ test("Aero Lab drill: quitting returns the player to the flow and session they c
   assert.equal(G.session, "quali");
   assert.deepEqual(calls.setFlow, ["career"], "the tail sets the player's flow, not gp");
 });
+
+test("keepFlow: a quit that throws before quit-session still consumes the kept flow", () => {
+  const { MenuQuitTail, deps, calls } = load();
+  MenuQuitTail.keepFlow("career", "quali");
+  deps.mirrorPass = { cancelPreparation() { throw new Error("boom"); } };
+  assert.throws(() => MenuQuitTail.afterOverlay());
+  deps.mirrorPass = { cancelPreparation() {} };
+  MenuQuitTail.afterOverlay();
+  assert.deepEqual(calls.setFlow, ["gp"]);
+  assert.equal(deps.session, "race");
+});
