@@ -67,8 +67,6 @@
     // markers, api.multiviewer.app circuits/151/2026, fitted onto this centreline;
     // FIA 2026 Miami GP circuit map), each on its curvature apex nearest the marker.
     // T9/T10 are sub-PEAK_K kinks (0.3770 kink; 0.4374 = max |k| of the long left).
-    // APPROXIMATE, not the FIA timing lines: the FIA 2026 Miami GP circuit map puts
-    // S1/S2 at ~0.345 / 0.664 of the lap (#5316 CIRC3-05).
     // sectors: the FIA 2026 timing lines (Miami event circuit map: INTERMEDIATE 1
     // [S1] 110 m after T8, [S2] 70 m after T16), placed from the official turns
     // below (2026-11-25, #5316 CIRC3-05; was [0.3, 0.641]). The FIA sector

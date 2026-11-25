@@ -58,9 +58,6 @@
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    // APPROXIMATE, not the FIA timing lines: the FIA 2026 Canadian GP circuit map
-    // puts S1/S2 at ~0.250 / 0.571 of the lap (#5316 CIRC3-05). Moving them
-    // changes saved sector bests; kept until that is decided.
     // sectors: the FIA 2026 timing lines (Canadian GP Doc 9, circuit map V2:
     // INTERMEDIATE 1 [S1] 150 m before T6, [S2] 190 m before T10; sectors
     // 1.092 / 1.396 / 1.873 km = 0.250 / 0.571 of the 4.361 km lap), placed from

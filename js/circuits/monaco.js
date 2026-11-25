@@ -117,8 +117,6 @@
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    // S1 matches the FIA 2026 Monaco GP circuit map (~0.315); S2 does NOT: the
-    // FIA line is after Tabac (~0.740), this one before it (#5316 CIRC3-05).
     // sectors: the FIA 2026 timing lines (Monaco circuit map: INTERMEDIATE 1
     // [S1] 60 m before T5, [S2] 70 m before T13 — after Tabac, in the run to
     // the Swimming Pool; sectors 1.051 / 1.419 / 0.867 km = 0.315 / 0.740 of
