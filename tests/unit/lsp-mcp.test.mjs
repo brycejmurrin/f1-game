@@ -343,6 +343,31 @@ test("lsp-hint.py: builtins and lowercase heads stay quiet; option values are no
     assert.equal(hint(quiet), false, JSON.stringify(quiet));
 });
 
+// #6469 (Bryce's decision: A+B, 2026-11-25): code-hunter searched mostly with compound Bash (128 of 159 calls), and
+// only the first grep of a command was read. Every segment counts now; inside a subagent the hint names the exact call.
+test("lsp-hint.py: every segment of a compound command is read; a subagent gets the exact lsp_references call", () => {
+  const hook = path.join(ROOT, ".claude/hooks/lsp-hint.py");
+  const ctx = (command, extra = {}) => {
+    const r = spawnSync("python3", [hook], { input: JSON.stringify({ hook_event_name: "PostToolUse", tool_name: "Bash", tool_input: { command }, ...extra }), encoding: "utf8", env: { ...process.env, APEX_LSP_HINT: "" } });
+    return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.additionalContext : null;
+  };
+  const sub = { agent_id: "a1", agent_type: "code-hunter" };
+  // The named symbols, and (in a subagent) the exact MCP calls the line spells out.
+  const named = (t) => t && t.slice(t.indexOf("`") + 1, t.indexOf("`", t.indexOf("`") + 1));
+  const calls = (t) => [...(t || "").matchAll(/mcp__apex-lsp__(lsp_\w+) \{symbol: "([^"]+)"\}/g)].map((m) => m[1] + " " + m[2]);
+  assert.deepEqual([
+    named(ctx('grep -rn "TODO" docs; grep -rn GameHud js')),
+    named(ctx("grep -n TURN x.txt && grep -rn GameHud js/ui | head")),
+    named(ctx('ls js && grep -rn "foo bar" tools; rg -n Tracks.curvature js')),
+  ], ["GameHud", "GameHud", "Tracks.curvature"], "a symbol grep after a text grep, after a grep outside js/, in the third segment");
+  const both = ctx('cd /w && grep -rn GameHud js | head && grep -rn "function forTeam" js', sub);
+  assert.deepEqual(calls(both), ["lsp_references GameHud", "lsp_definition forTeam"], "subagent: one exact call per symbol");
+  assert.equal(both.includes("`tools used:`"), true, "names the report line the call counts toward");
+  assert.deepEqual(calls(ctx("grep -rn GameHud js")), [], "the main session keeps the short hint");
+  for (const quiet of ["ps aux | grep Chrome; git log | grep Merge", 'grep -rn "the race" js/ui && grep -n TURN /root/x.txt', "cd js && ls | head"])
+    assert.equal(ctx(quiet, sub), null, quiet);
+});
+
 test("advertised argument constraints and JSON-RPC envelopes fail before starting tsc", async () => {
   const { handleRpc } = await import("../../tools/mcp/lsp-mcp.mjs");
   const never = { prepare() { throw Error("unexpected tsc start"); } };
