@@ -115,13 +115,28 @@ test("#6577 row 5: mirror updateFrame + main updateView leaves the uniforms exac
   assert.ok(Math.abs(split.uniforms.fogDensity.value - 0.001 * 1.3) < 1e-12, "the thinned fog of the main view");
 });
 
-test("#6577 row 5: tlx.js wiring — mirrorBegin marks the frame, begin() takes updateView only for that frame", () => {
+test("#6577 row 5: mirrorBegin marks the frame; begin() takes updateView only for that frame", () => {
   const mb = TLX.slice(TLX.indexOf("        mirrorBegin(frame, w, h, rearView) {"), TLX.indexOf("        mirrorEnd() {"));
   assert.match(mb, /_litSharedFor = frame;[^\n]*\n\s*return true;\n\s*\},\s*$/, "marked last, on the success path");
-  const begin = TLX.slice(TLX.indexOf("        begin(frame) {"), TLX.indexOf("        begin(frame) {") + 12000);
-  assert.match(begin, /const litShared = _litSharedFor === frame && !!\(lit && lit\.updateView\);\n\s*_litSharedFor = null;/,
-    "consumed and cleared on every begin(), right before the lit update");
-  assert.match(begin, /if \(litShared\) lit\.updateView\(frame, false\); else lit\.updateFrame\(frame\);/);
+  // begin()'s REAL lit-update block, run over a stub lit: the mark is consumed and cleared on every begin().
+  const b0 = TLX.indexOf("const litShared = _litSharedFor === frame"), END = "else lit.updateFrame(frame);";
+  const b1 = TLX.indexOf(END, b0);
+  assert.ok(b0 > 0 && b1 > b0 && b1 - b0 < 400, "begin()'s lit block is one short span");
+  const run = new Function("st", "lit", "frame", `"use strict"; let _litSharedFor = st.mark;
+    ${TLX.slice(b0, b1 + END.length)} }
+    st.mark = _litSharedFor;`);
+  const calls = [], lit = { updateView: (f, full) => calls.push(["view", f, full]), updateFrame: (f) => calls.push(["frame", f]) };
+  const f1 = {}, f2 = {}, st = { mark: f1 };
+  run(st, lit, f1);
+  assert.deepEqual(calls, [["view", f1, false]], "the marked frame takes updateView only");
+  assert.equal(st.mark, null, "the mark is cleared");
+  calls.length = 0; run(st, lit, f1);
+  assert.deepEqual(calls, [["frame", f1]], "the next begin() of the same frame, unmarked, takes the whole update");
+  calls.length = 0; st.mark = f1; run(st, lit, f2);
+  assert.deepEqual(calls, [["frame", f2]], "a mark for another frame is not honoured");
+  assert.equal(st.mark, null, "and is cleared all the same");
+  calls.length = 0; st.mark = f1; run(st, { updateFrame: lit.updateFrame }, f1);
+  assert.deepEqual(calls, [["frame", f1]], "a lit without updateView takes the whole update");
 });
 
 // ---- row 6 ------------------------------------------------------------------------------------------------------
