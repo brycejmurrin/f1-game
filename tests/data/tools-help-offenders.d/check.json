@@ -1,0 +1,29 @@
+{
+  "//": "tools/check CLIs with no --help path yet (#6556 U0 baseline 2026-11-25). Fix one: add exitIfHelp from tools/lib/cli-args.mjs, then delete its line.",
+  "offenders": [
+    "tools/check/boot-wall.mjs",
+    "tools/check/brake-cue-calibrate.mjs",
+    "tools/check/check-gctx.mjs",
+    "tools/check/check-js-types.mjs",
+    "tools/check/class-usage.mjs",
+    "tools/check/cross-file-paths.mjs",
+    "tools/check/destructure-usage.mjs",
+    "tools/check/doctor.mjs",
+    "tools/check/dup-keys.mjs",
+    "tools/check/evaluate-scope-lint.mjs",
+    "tools/check/html-sink-lint.mjs",
+    "tools/check/i18n-lint.mjs",
+    "tools/check/lifecycle-census.mjs",
+    "tools/check/lockup-bench.mjs",
+    "tools/check/merge-hygiene.mjs",
+    "tools/check/quali-calibrate.mjs",
+    "tools/check/reject-lint.mjs",
+    "tools/check/shader-validate.mjs",
+    "tools/check/shell-ids.mjs",
+    "tools/check/tree-counts.mjs",
+    "tools/check/vm-filename-lint.mjs",
+    "tools/check/vm-portable.mjs",
+    "tools/check/wait-polling-lint.mjs",
+    "tools/check/workflow-lint.mjs"
+  ]
+}

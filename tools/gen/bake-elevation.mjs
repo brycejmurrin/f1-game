@@ -43,11 +43,16 @@
 
 import { writeFileSync, readFileSync, existsSync } from "node:fs";
 import vm from "node:vm";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
+const USAGE = `usage: node tools/gen/bake-elevation.mjs [<circuit id> ...]
+  no ids: re-bake every circuit (network: bacinger GeoJSON + api.opentopodata.org)
+  WRITES js/track/circuit-elevations.js; an unknown id or any flag is refused before the network.`;
+exitIfHelp(process.argv.slice(2), USAGE);
 const SAMPLES = 64; // profile resolution around the lap
 
 // Apex 26 circuit id -> bacinger/f1-circuits geojson id (from f1-locations.json).
@@ -575,6 +580,11 @@ const existing = existsSync(outPath)
   ? vm.runInNewContext(readFileSync(outPath, "utf8") + ";CircuitElevations", {})
   : {};
 const requested = process.argv.slice(2);
+// #6556: argv WAS the id list, so `--help` or a typo fetched and rewrote the shipped file.
+const knownIds = new Set([...Object.keys(MAP), ...Object.keys(osmTable), ...Object.keys(existing),
+  ...[...readFileSync(fileURLToPath(import.meta.url), "utf8").matchAll(/id === "(\w+)"/g)].map((m) => m[1])]);
+const stray = requested.filter((a) => a.startsWith("-") || !knownIds.has(a));
+if (stray.length) { console.error(`bake-elevation: unknown argument ${stray.join(" ")}; nothing written\n\n${USAGE}`); process.exit(2); }
 const ids = requested.length ? requested : [...new Set([...Object.keys(MAP), ...Object.keys(existing), "okayama"])];
 const baked = await bake(ids);
 const data = { ...existing, ...baked };

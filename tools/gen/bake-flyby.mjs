@@ -30,6 +30,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { ROOT, isMain } from "./gen-lib.mjs";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
 export const TARGET = "js/camera/flyby-seq.js";
 export const EASES = ["linear", "in", "out", "inOut"];
@@ -205,8 +206,17 @@ export function bake(src, list) {
   return src.replace(DEFAULT_RE, () => render(list, notes));
 }
 
+const USAGE = `usage: node tools/gen/bake-flyby.mjs <file> | -   (stdin)
+  WRITES js/camera/flyby-seq.js's DEFAULT list from a copied \`window.FlybyShots = [...]\` blob.`;
+
 function main() {
-  const arg = process.argv[2];
+  const argv = process.argv.slice(2);
+  exitIfHelp(argv, USAGE);
+  // #6556: `--help` was read as the input path; a flag or a second path is refused before any read.
+  if (argv.length > 1 || (argv[0] && argv[0] !== "-" && argv[0].startsWith("-"))) {
+    console.error(`bake-flyby: unknown argument ${argv.join(" ")}; nothing written\n\n${USAGE}`); process.exit(2);
+  }
+  const arg = argv[0];
   let raw;
   try { raw = (arg && arg !== "-") ? readFileSync(arg, "utf8") : readFileSync(0, "utf8"); }
   catch (e) { console.error("Could not read the input:", e.message); process.exit(1); }
