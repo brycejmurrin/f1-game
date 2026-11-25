@@ -221,8 +221,14 @@ test.describe("Parts persistence — team isolation", () => {
 
     await reopenSetup(page);
 
+    // The other team's fresh sheet reads over ITS works build (#6572): its own
+    // works gearbox is the active row, not "standard" and not the pick made
+    // for the first team.
+    const works = await page.evaluate((o) => Parts.getFactorySetup(Teams.LIST[o]).gearbox, other);
+    expect(works, "the other team's works gearbox is not the first team's pick").not.toBe("f1_spec");
     await page.locator('#cs-tabs [data-cs-cat="gearbox"]').click();
-    await expect(page.locator('#cs-options [data-cs-opt="standard"]')).toHaveClass(/active/);
+    await expect(page.locator(`#cs-options [data-cs-opt="${works}"]`)).toHaveClass(/active/);
+    await expect(page.locator('#cs-options [data-cs-opt="f1_spec"]')).not.toHaveClass(/active/);
   });
 });
 
