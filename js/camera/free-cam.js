@@ -53,6 +53,26 @@ function aim(eye, target) {
   return { yaw: Math.atan2(dx, -dz), pitch: clamp(Math.asin(clamp(dy, -1, 1)), -1.45, 1.45) };
 }
 
+// POV (Photo Studio HELMET / COCKPIT): cam.onboard asks render() to solve the race rig's own eye
+// for that mode each frame and draw the cockpit rig (js/game.js). Any fly or look input since the
+// seat was taken leaves it, continuing from the driver's eye. `at` is [x, y, z, yaw, pitch].
+const POV_MODES = Object.freeze(["helmet", "cockpit"]);
+const povMode = (v) => (POV_MODES.includes(v) ? v : null);
+function povMoved(at, pc) {
+  if (!at) return true;
+  // A tap to set depth focus may jitter a pixel or two of look (0.0032 rad/px): ~5 px of drag leaves.
+  return Math.abs(pc.pos[0] - at[0]) + Math.abs(pc.pos[1] - at[1]) + Math.abs(pc.pos[2] - at[2]) > 0.05
+    || Math.abs(pc.yaw - at[3]) > 0.015 || Math.abs(pc.pitch - at[4]) > 0.015;
+}
+/** Leave the seat: the fly-cam continues from the driver's eye plus the input that moved it. */
+function povExit(at, pc, eye, tgt) {
+  const a = aim(eye, tgt);
+  for (let i = 0; i < 3; i++) pc.pos[i] = eye[i] + pc.pos[i] - at[i];
+  pc.yaw = a.yaw + pc.yaw - at[3]; pc.pitch = clamp(a.pitch + pc.pitch - at[4], -1.45, 1.45);
+  const cp = Math.cos(pc.pitch);
+  return { eye: pc.pos.slice(), target: [pc.pos[0] + Math.sin(pc.yaw) * cp * 100, pc.pos[1] + Math.sin(pc.pitch) * 100, pc.pos[2] - Math.cos(pc.yaw) * cp * 100] };
+}
+
 const CAR_BACK = 9, CAR_UP = 3.2, CAR_AHEAD = 14, CAR_LOOK_UP = 1;
 /** A chase-style framing of a car at world (px, pz), heading `head`
  *  (c.head = atan2(t.x, t.z), so forward is [sin head, cos head]), road at y. */
@@ -115,7 +135,7 @@ const { $, photoCam } = G;
 // editor's FREE CAMERA button, enterFrom below). DONE then returns to that tool
 // rather than to the pause menu, and the tool's pose actions show in #fc-shot.
 const st = { open: false, speed: SPD_DEF, roll: 0, lens: "race", corner: 0, anchor: "—", poseErr: null, statusT: 0,
-  back: null, actions: null, overlays: true, grid: "off", dofFocus: 0.4, dofBlur: 0 };
+  back: null, actions: null, overlays: true, grid: "off", dofFocus: 0.4, dofBlur: 0, pov: null, povAt: null };
 const rk = { q: false, e: false };
 // Composition grid + soft DoF overlays (js/camera/photo-kit.js) — viewport, not panel.
 const kitOverlays = (typeof PhotoKit !== "undefined" && typeof document !== "undefined")
@@ -229,7 +249,12 @@ function paintActions() {
   box.hidden = !list.length;
 }
 
+function setPov(mode) {
+  st.pov = povMode(mode);
+  st.povAt = st.pov ? [photoCam.pos[0], photoCam.pos[1], photoCam.pos[2], photoCam.yaw, photoCam.pitch] : null;
+}
 function place(eye, target, fov, preserveInput = false) {
+  setPov(null);
   photoCam.pos[0] = eye[0]; photoCam.pos[1] = eye[1]; photoCam.pos[2] = eye[2];
   const a = aim(eye, target); photoCam.yaw = a.yaw; photoCam.pitch = a.pitch;
   if (fov != null) setFov(fov);
@@ -272,6 +297,11 @@ const stepCorner = (d) => snapCorner((st.corner || (d > 0 ? 0 : 1)) + d);
 function speed(boost) { return st.speed * (boost ? BOOST : 1); }
 function decorate(cam, dt) {
   if (!st.open || !cam) return;
+  if (st.pov && !povMoved(st.povAt, photoCam)) cam.onboard = st.pov;
+  else if (st.pov) {
+    const at = st.povAt; setPov(null);
+    if (at && G.camEye && G.camTgt) Object.assign(cam, povExit(at, photoCam, G.camEye, G.camTgt));
+  }
   const d = (rk.e ? 1 : 0) - (rk.q ? 1 : 0);
   if (d && dt > 0) { st.roll = clampRoll(st.roll + d * ROLL_RATE * dt); paint(); }
   cam.roll = st.roll * Math.PI / 180;
@@ -345,7 +375,7 @@ function close(showPauseMenu, keepPhotoMode) {
   if (!st.open) return;
   Log.info("game", "FreeCam.close");
   const back = st.back;
-  st.open = false; st.overlays = true; st.roll = 0; st.lens = "race"; st.back = null; st.actions = null;
+  st.open = false; st.overlays = true; st.roll = 0; st.lens = "race"; st.back = null; st.actions = null; setPov(null);
   paintActions();
   releaseKeys();
   if (root) root.hidden = true;
@@ -411,7 +441,7 @@ function state() {
     open: st.open, speed: r2(st.speed), roll: r2(st.roll), lens: st.lens, corner: st.corner,
     eye: c ? c.eye.map(r2) : null, target: c ? c.target.map(r2) : null, fov: c ? r2(c.fov) : null,
     anchor: st.anchor, poseErr: st.poseErr,
-    grid: st.grid, dofFocus: r2(st.dofFocus), dofBlur: r2(st.dofBlur),
+    grid: st.grid, dofFocus: r2(st.dofFocus), dofBlur: r2(st.dofBlur), pov: st.pov,
   };
 }
 function cmd(opts) {
@@ -426,6 +456,7 @@ function cmd(opts) {
   if (opts.snap === "corner" && !(opts.n != null ? snapCorner(opts.n) : stepCorner(1))) return false;
   if (opts.eye && opts.target) place(opts.eye, opts.target, opts.fov, opts.preserveInput === true);
   else if (opts.fov != null) setFov(opts.fov);
+  if (opts.pov !== undefined) { if (!opts.preserveInput && photo && photo.releaseKeys) photo.releaseKeys(); setPov(opts.pov); }
   publish();
   return state();
 }
@@ -508,7 +539,7 @@ return Object.freeze({
   close: (showPauseMenu, keepPhotoMode) => { if (live) live.close(showPauseMenu, keepPhotoMode); },
   panel: () => live ? live.panel() : null,
   speedFromSlider, sliderFromSpeed, clampSpeed, wheelSpeed, clampRoll, clampFov,
-  viewSnippet, aim, carPose, cornerPose, anchorText,
+  viewSnippet, aim, carPose, cornerPose, anchorText, povMode, povMoved, povExit, POV_MODES,
   SPD_MIN, SPD_MAX, SPD_DEF, ROLL_MAX, BOOST,
 });
 })();

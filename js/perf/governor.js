@@ -267,6 +267,10 @@ function _latchBound() {
   if (_floorMinMs < _floorMs) _floorMs = _floorMinMs;
 }
 
+// GRAPHICS HIGH (tier 0, no crash floor) lifts a phone's DPR cap 1.5 -> 2 (#5222, Bryce 2026-11-24); not budget-shed.
+function _syncPresetDpr() {
+  if (_gfx && typeof _gfx.setDprPreset === "function") _gfx.setDprPreset(_floorTier() === 0 ? 2 : 0);
+}
 function init(gfx) {
   Log.info("game", "PerfGov.init");
   _gfx = gfx;
@@ -305,6 +309,7 @@ function init(gfx) {
   _perfTierFloor = _floorFromStrikes(_crashStrikes);
   _perfTier = _perfTierFloor;
   _autoShed = 0;
+  _syncPresetDpr();
   _phoneSlowLatch = false;
   _xShed = 0; _xFutile = false;
   try { if (_xq()) gfx.gpuTimer(true); } catch (_) { /* timing is optional */ }
@@ -364,6 +369,7 @@ function _setCrashFloor() {
   const prev = _perfTierFloor;
   _perfTierFloor = _floorFromStrikes(_crashStrikes);
   if (_perfTierFloor < prev && _perfTier > _perfTierFloor) { _perfTier = _perfTierFloor; _autoShed = 0; }
+  if (_perfTierFloor !== prev) _syncPresetDpr();
 }
 
 // Bounded raw-frame history supplements the EMA: occasional hitches must not
@@ -705,6 +711,7 @@ return {
     if (t === _userTier) return;
     const prev = _userTier;
     _userTier = t;
+    _syncPresetDpr();
     _tierFutile = false; _chaseFutile = false;   // a new preset changes what a step means
     _scaleCap = Infinity; _armCapProbe();   // ...and what the frame costs, so the measured ceiling expires with it
     // Why: docs/GOVERNOR-RATIONALE.md §gov-36.

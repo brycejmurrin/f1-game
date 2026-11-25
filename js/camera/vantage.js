@@ -870,6 +870,13 @@ function publishListenerBasis(modeId, eye, tgt) {
 // Debug free camera (__apex.view): copy its eye/target into the render's
 // camera vectors and publish it as the external audio listener, in one call
 // so game.js render() stays at +0 lines.
+// Which first-person rig the frame draws ("" = the exterior car): the race camera's COCKPIT /
+// HELMET in a race or countdown, or a Photo Studio POV seat under the free camera (dbgCam.onboard,
+// js/camera/free-cam.js). game.js's car loop and car-draw.js's first-person caster both read it.
+function rigMode(dbgCam, state, camId) {
+  if (dbgCam) return dbgCam.onboard === "helmet" || dbgCam.onboard === "cockpit" ? dbgCam.onboard : "";
+  return (state === "race" || state === "count") && (camId === "cockpit" || camId === "helmet") ? camId : "";
+}
 function applyFreeCam(cam, eyeOut, tgtOut) {
   for (let i = 0; i < 3; i++) { eyeOut[i] = cam.eye[i]; tgtOut[i] = cam.target[i]; }
   publishListenerBasis("free", cam.eye, cam.target);
@@ -877,5 +884,5 @@ function applyFreeCam(cam, eyeOut, tgtOut) {
 function getListenerBasis() { return _listener.valid ? _listener : null; }
 
 return { init, vantage, resetSmoothing, cockpitViewmodelAxes, eyeInsideCar, seatFwd, seatUp, headState, COCKPIT_EYE_FWD, COCKPIT_EYE_UP,
-  HELMET_EYE_FWD, HEAD_MAX, CHASE_CORNER_LEAD_DEFAULT, publishListenerBasis, applyFreeCam, getListenerBasis, playerFrameRivalPan };
+  HELMET_EYE_FWD, HEAD_MAX, CHASE_CORNER_LEAD_DEFAULT, publishListenerBasis, rigMode, applyFreeCam, getListenerBasis, playerFrameRivalPan };
 })();

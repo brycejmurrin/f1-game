@@ -892,10 +892,11 @@ test.describe("Selection screen — iOS phone portrait touch scrolling", () => {
       touchAction: getComputedStyle(element).touchAction,
     }));
     expect(list.scrollWidth).toBeGreaterThan(list.clientWidth);
-    // contain + pan-x is what stops a sideways flick from rubber-banding the
-    // whole page on iOS; both halves are load-bearing, so both are asserted.
+    // contain is what stops a sideways flick from rubber-banding the whole
+    // page on iOS; manipulation (not pan-x, 2026-11-24) pans the strip and
+    // refuses double-tap zoom on its chips. Both halves are asserted.
     expect(list.overscrollX).toBe("contain");
-    expect(list.touchAction).toBe("pan-x");
+    expect(list.touchAction).toBe("manipulation");
   });
 });
 

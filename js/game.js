@@ -3234,18 +3234,10 @@ const G = {
   get _ltNextT() { return stormFx._ltNextT; }, set _ltNextT(v) { stormFx._ltNextT = v; },
   // Mutable state consumed by js/garage/setup-sheet.js.
   get livDraftOverride() { return customLiv.livDraftOverride; }, set livDraftOverride(v) { customLiv.livDraftOverride = v; },
-  get _spMeshKey() { return setupCam.meshKey; }, set _spMeshKey(v) { setupCam.meshKey = v; },
+  // The setup-garage camera (js/garage/setup-camera.js) as ONE member: its orbit state
+  // (az/el/dist/spin/pan/aeroX/xOn/effDist/effFit/effPanel), meshKey and controls.
+  get setupCam() { return setupCam; },
   get setupPreviewOn() { return setupPreviewOn; }, set setupPreviewOn(v) { setupPreviewOn = v; },
-  // Read-only garage-camera state for __apex.garageCam().
-  get setupPreviewSpin() { return setupCam.spin; },
-  get setupPreviewAz() { return setupCam.az; },
-  get setupPreviewEl() { return setupCam.el; },
-  get setupPreviewDist() { return setupCam.dist; },
-  get spEffDist() { return setupCam.effDist; },
-  get spEffFit() { return setupCam.effFit; },
-  get spEffPanel() { return setupCam.effPanel; },
-  get setupPreviewPan() { return setupCam.pan; },
-  get setupPreviewAeroX() { return setupCam.aeroX; },
   get raceAeroMode() { return raceAeroMode; },
   // Repaint the pause-menu button too: __apex.aeroMode() and the button are two
   // doors onto one value, and a stale label is a lie about the car's behaviour.
@@ -3253,15 +3245,6 @@ const G = {
   get aeroZones() { return aeroZ ? aeroZ.zones : []; },
   aeroZoneAt: (s) => aeroZ.at(s),
   aeroZoneAhead: (s) => aeroZ.ahead(s),
-  stepSetupAero: (dt) => setupCam.stepSetupAero(dt),
-  setSetupView: (...a) => setupCam.setSetupView(...a),
-  setSetupAim: (p) => setupCam.setSetupAim(p),   // garageFrame target: orbit about and look at a car-space point
-  setSetupFree: (on) => setupCam.setSetupFree(on),   // garageFrame clamp:false — lift the player's el/dist floors for a dev shot; a {fov, centre} lens too (until the next preset)
-  setupPan: (...a) => setupCam.setupPan(...a),
-  nudgeSetupCam: (...a) => setupCam.nudgeSetupCam(...a),
-  nudgeSetupZoom: (mul) => setupCam.nudgeSetupCam(0, 0, mul),
-  setSetupAero: (on, opts) => setupCam.setSetupAero(on, opts),
-  get setupPreviewXOn() { return setupCam.xOn; },
   get soundOn() { return soundOn; }, set soundOn(v) { soundOn = v; },
   // A preset that bundles assists (ROOKIE) may set keys game.js owns —
   // autoThrottle among them — so it calls this to re-read them and repaint.
@@ -4538,6 +4521,7 @@ function update(dt) {
       countT += dt;
     }
     const lit = Math.min(COUNTDOWN_S, Math.floor(countT));
+    jumpStartPenalty.tickGrid(player);   // LIFT — WAIT FOR LIGHTS while a fined throttle is held (#5775 R7)
     if (lit > lightsLit) {
       // Light EVERY lamp up to `lit`, not just the newest. countT can advance
       // by more than one second in a frame — a networked countdown is pinned to
@@ -4576,6 +4560,7 @@ function update(dt) {
       // every later race and suppresses quali flying laps. Ledger 2026-09-22.
       const wasRestart = feel.restartPending;
       feel.restartPending = false;
+      if (jumpStartPenalty.cueUp()) banner.clear();   // the grid cue is moot now: LIGHTS OUT! (or the fine) goes up at once
       for (const c of cars) jumpStartPenalty.tickAtGreen(c);
       // Nothing consumes RECOVER/shift/boost edges before green, so a tap on the grid fired at lights-out (a free ~58 km/h re-place, or 2nd gear with no drive).
       Input.clearDriveEdges();
@@ -5074,7 +5059,7 @@ function updateCar(c, dt, ranked) {
     // never to a literal, so the window holds at every OVERALL SPEED.
     // BLUE FLAGS ONLY (AiDrive.letPassCase): the chaser must be LAPPING us — a lap or more ahead in progress.
     const letPassCase = AiDrive.letPassCase(state === "race", blocker, chaser, chaserGap, chaser ? chaser._snapSpeed : 0,
-      c.speed, vT / VMAX, !!chaser && chaser._snapProg - c.prog > track.total * 0.5);
+      !!chaser && chaser._snapProg - c.prog > track.total * 0.5);
     if (letPassCase) c.letPassT = (c.letPassT || 0) + dt;
     else c.letPassT = Math.max(0, (c.letPassT || 0) - dt * 1.5);
     if (AiDrive.trailYieldStep(c, ranked[c.rank], !!track.street)) { letPass = true; vmax *= AiDrive.trailYieldEase(c._trYT, aiT); } else letPass = (c.letPassT || 0) > AiDrive.letPassDelay(aiT);   // ...or a quicker car has trailed us past its patience: the lift goes in BEFORE _vmaxNow, so paceVmax shows the trailer the slower car (AiDrive.trailYieldStep)
@@ -6578,12 +6563,12 @@ function rescuePlayer(c) {
   // (same authority rule as __apex.jump) — hand the car back first.
   incidentSim.release(c);
   Tracks.sample(track, c.s, smp);
-  c.x = 0; c.xVis = 0;
+  c.x = Collide.rescueX(c, cars, track.total, smp.hw); c.xVis = c.x;   // centre, unless a car is there (#5775 R5)
   c.head = Math.atan2(smp.t[0], smp.t[2]);   // aligned with the track ahead
   c.vLat = 0; c.yawRateCur = 0;
   // The pace-scaled recovery speed, never the car's own (#5876); never above vTop().
   c.speed = Math.min(vTop(), 16 * Math.max(driveTune.PACE, 0.05));
-  c.px = smp.p[0]; c.pz = smp.p[2];
+  const rw = worldFromTrack(c.s, c.x, smp); c.px = rw.x; c.pz = rw.z;   // x = 0: the centre line exactly
   c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevHead = c.head;   // re-seed the render anchors (as retireCar does) or the car smears from the wall for a frame
   c.boostOn = false; c.deploying = false;
   c.xOn = false; c.aeroX = 0; c.xArmed = false;   // rescue drops back to Z-mode
@@ -7569,6 +7554,11 @@ function render(dt) {
   // farPlane with its own value right below, so debug/photo-mode is untouched.
   let fovY, farPlane = 900 * (LT.renderDistMul != null ? LT.renderDistMul : 1);
   if (cine) farPlane = FlybySeq.FAR;   // flat, not scaled by RENDER DISTANCE: the editor previews ONE number
+  if (dbgCam && dbgCam.onboard && player) {   // Photo Studio POV seat (FreeCam {pov}): the race rig's own eye, att-seated like the rig below; the photo lens stays
+    const pa = playerAnchor(player), rp = renderPosOf(player), bk = Tracks.banking(track, pa.cS, pa.cX, _bankScratchCam, true);
+    const v = camVantage(dbgCam.onboard, pa.cS, pa.cX, 0, performance.now(), { att: player, noLook: true, reduceMotion: true, dt: 0, bankDy: bk ? bk.dy : 0, carPos: rp.world ? [rp.x, rp.z] : null, carHead: headInterp(player) });
+    dbgCam.eye = v.eye.slice(); dbgCam.target = v.tgt.slice();
+  }
   if (dbgCam) {
     GameCams.applyFreeCam(dbgCam, camEye, camTgt);
     fovY = dbgCam.fov * Math.PI / 180;
@@ -7843,7 +7833,7 @@ function render(dt) {
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
   // (wheel/halo/mirrors) + the car's shadow instead, body mesh skipped. Was two
   // always-equal booleans, so the `hide && !rig` skip they guarded never fired.
-  const cockpitRigOnly = !dbgCam && (state === "race" || state === "count") && (CAM_MODES[camMode].id === "cockpit" || CAM_MODES[camMode].id === "helmet");
+  const cockpitRigOnly = !!GameCams.rigMode(dbgCam, state, CAM_MODES[camMode].id);
   // A steep or wide lens can see behind its horizontal heading. Bound the
   // entire frustum (including roll and lens shift) by its widest corner ray.
   let _camFwdX = camTgt[0] - camEye[0], _camFwdZ = camTgt[2] - camEye[2];

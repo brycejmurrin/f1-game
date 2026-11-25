@@ -58,7 +58,7 @@ test("tall-narrow hub tabs are a 3-column grid (not one full-width column)", () 
 });
 
 test(".dh-content cancels sf-thumb width (no dead horizontal scroll)", () => {
-  assert.equal(decl(rules, ".dh-content", "touch-action"), "pan-y");
+  assert.equal(decl(rules, ".dh-content", "touch-action"), "manipulation");
   assert.equal(decl(rules, ".dh-content", "overscroll-behavior-x"), "none");
   // Sticky .sf-scroll::before is 6px in-flow; cancel it like height's margin-bottom.
   assert.equal(decl(rules, ".dh-content.sf-scroll::before", "margin-right"), "-6px");
@@ -122,7 +122,7 @@ test("gap 15: the compact landscape hub head is ONE row and the tab strip is its
   assert.equal(strip.decls.get("min-width"), "0");
   assert.equal(strip.decls.get("flex-wrap"), "nowrap", "one row: the strip never wraps into a second head row");
   assert.equal(strip.decls.get("overflow-x"), "auto", "…it scrolls sideways instead");
-  assert.equal(strip.decls.get("touch-action"), "pan-x", "the strip claims the horizontal gesture (scroll-strips contract)");
+  assert.equal(strip.decls.get("touch-action"), "manipulation", "manipulation pans the strip and refuses iOS double-tap zoom (scroll-strips contract)");
   assert.equal(strip.decls.get("overscroll-behavior-x"), "contain");
   assert.equal(decl(rules, ".dh-card > .sheet-head > .dh-tabs", "flex"), "1 1 0", "the head-row strip grows between the title and the buttons");
 });

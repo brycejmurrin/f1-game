@@ -273,7 +273,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
      painted region at the threshold; at >=100% the 84 literal wins. */
   flex: 1 1 auto; overflow-y: auto; overscroll-behavior-y: contain;
   min-height: max(84px, calc(44px / var(--ui-scale)));
-  touch-action: pan-y;
+  touch-action: manipulation;
   padding-right: 10px;
 }
 #lt-rows.sf-scroll::before, #ct-rows.sf-scroll::before, #fb-rows.sf-scroll::before { margin-right: -8px; }
@@ -803,7 +803,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 #flyby-inner[data-density="compact"] #fb-scrub { margin: calc(var(--gap) / 6) 0; }
 #flyby-inner[data-density="compact"] #fb-shots.lt-tabs {
   display: flex; flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain;
-  touch-action: pan-x;
+  touch-action: manipulation;
   margin: 0 calc(var(--gap) * -7 / 6) calc(var(--gap) / 3);
   padding: calc(var(--gap) * 5 / 12) calc(var(--gap) * 7 / 6) calc(var(--gap) / 2);
   scrollbar-width: none;
@@ -957,7 +957,7 @@ body:not(.photo-mode):has(> #flyby:not([hidden]) > #flyby-inner[data-density="co
      that wrap. */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-tabs {
     display: flex; flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain;
-    touch-action: pan-x;
+    touch-action: manipulation;
     margin: 0 -14px 4px; padding: 5px 14px 6px;
     scrollbar-width: none;
   }
@@ -1203,7 +1203,7 @@ body:not(.photo-mode):has(> #flyby:not([hidden]) > #flyby-inner[data-density="co
        back-navigation gesture. Four copies of one pattern is how that happens;
        tests/unit/scroll-strips.test.mjs now fails if a fifth diverges. */
     display: flex; flex-wrap: nowrap;
-    overflow-x: auto; overscroll-behavior-x: contain; touch-action: pan-x;
+    overflow-x: auto; overscroll-behavior-x: contain; touch-action: manipulation;
     scrollbar-width: none;
   }
   body.photo-mode:not(.pc-nopanel) :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-tabs, #ct-modes) .lt-tab {
@@ -1219,7 +1219,7 @@ body:not(.photo-mode):has(> #flyby:not([hidden]) > #flyby-inner[data-density="co
 @container sheet (max-width: 480px) {
   .lt-tabs {
     display: flex; flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain;
-    touch-action: pan-x;
+    touch-action: manipulation;
     scrollbar-width: none;
   }
   #lt-tabs .lt-tab, #ct-modes .lt-tab, #fb-shots .lt-tab { white-space: nowrap; flex: 0 0 auto; }

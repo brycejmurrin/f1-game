@@ -333,7 +333,8 @@ test("double-tap zoom is refused while menu pinch remains native and driving own
   assert.equal(decl(tk, "html, body", "overscroll-behavior"), "none", "no root rubber-band");
   assert.equal(decl(tk, "#game", "touch-action"), "none", "the canvas owns every gesture while driving");
   assert.equal(decl(css("css/touch-controls.css"), ".touchbtn", "touch-action"), "none");
-  assert.equal(decl(css("css/components.css"), ".pane", "touch-action"), "pan-y", "menus keep native pan");
+  assert.equal(decl(css("css/components.css"), ".pane", "touch-action"), "manipulation",
+    "menus keep native pan AND refuse double-tap zoom: a pan-y pane let iOS double-tap-zoom it (below)");
 });
 
 test("rapid control taps keep their native click while background double taps are guarded", () => {
@@ -1113,3 +1114,178 @@ test("THUMB layout preset pins popups button scale at 150", () => {
   M.apply("thumb");
   assert.equal(S.read("popups").btn, 150, "apply() writes the taller popup buttons");
 });
+
+/* ── touch-action-double-tap.test.mjs — iOS double-tap zoom stays refused in
+ * EVERY menu panel, not just at the root.
+ *
+ * Bryce, iPhone 15 Safari, 2026-11-24: "in some panels the iOS safari double
+ * tap zoom is still not blocked". The root reset (`* { touch-action:
+ * manipulation }`, css/tokens.css) was in place; the leak was the scroll
+ * panes. WebKit intersects an element's touch-action with its ancestors' and a
+ * `manipulation` child under a `pan-y` (or `pan-x`) pane computes to plain
+ * `pan-y`, which iOS still double-tap-zooms. `.pane` (every .sheet-body,
+ * Photo Studio's #ps-body included) and ~40 other scroll regions declared
+ * exactly that. A pane's overflow-x/-y already choose its scroll axis.
+ *
+ * The rule: no stylesheet declares touch-action other than `manipulation` or
+ * `none` (a surface whose JS owns every gesture), except the named surfaces
+ * below whose JS owns a horizontal drag and must leave vertical scroll native.
+ */
+
+// selector → why it keeps a pan-only value. Adding a row is a decision: its
+// double-taps zoom on iOS.
+const JS_DRAG_SURFACES = new Map([
+  ['[data-telemetry-replay] input[type="range"]', "the replay scrubber drags sideways; the page still scrolls past it"],
+  ['[data-telemetry-replay] .dh-canvas', "the replay map pans sideways under JS; the page still scrolls past it"],
+]);
+
+test("no stylesheet narrows touch-action to a pan-only value (iOS double-tap zooms it)", () => {
+  const bad = [];
+  for (const f of fs.readdirSync(path.join(ROOT, "css")).filter((n) => n.endsWith(".css"))) {
+    for (const r of css(`css/${f}`)) {
+      const v = r.decls.get("touch-action");
+      if (v == null || v === "manipulation" || v === "none") continue;
+      if (JS_DRAG_SURFACES.has(r.selector) && /^pan-[xy]$/.test(v)) continue;
+      bad.push(`css/${f}: ${r.selector} { touch-action: ${v} }`);
+    }
+  }
+  assert.deepEqual(bad, [], "use touch-action: manipulation on scroll regions (overflow picks the axis); " +
+    "pan-x / pan-y / auto let iOS Safari double-tap-zoom every control inside them");
+});
+
+test("the root reset and the shared pane both refuse double-tap zoom", () => {
+  const tk = css("css/tokens.css");
+  assert.equal(decl(tk, "*", "touch-action"), "manipulation");
+  assert.equal(decl(tk, "html, body", "touch-action"), "manipulation");
+  assert.equal(decl(css("css/components.css"), ".pane", "touch-action"), "manipulation",
+    ".pane is every .sheet-body (Photo Studio, Settings, garage sheets)");
+});
+
+test("no script sets a pan-only or auto touch-action on game UI", () => {
+  const bad = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${e.name}`;
+      if (e.isDirectory()) { if (!/vendor|three$/.test(e.name)) walk(rel); continue; }
+      if (!e.name.endsWith(".js") || rel.startsWith("js/agent/")) continue;   // agent overlays are not game UI
+      const src = read(rel);
+      for (const m of src.matchAll(/touchAction\s*[:=]\s*["']([^"']+)["']|touch-action:\s*(pan-[xy]|auto)\b/g)) {
+        const v = m[1] || m[2];
+        if (v !== "manipulation" && v !== "none") bad.push(`${rel}: ${v}`);
+      }
+    }
+  };
+  walk("js");
+  assert.deepEqual(bad, []);
+});
+
+/* ── setting-row-no-picker.test.mjs — a ‹ VALUE › stepper never drops a list down.
+ *
+ * Bryce, iPhone 15 Safari, 2026-11-24 (PHOTO STUDIO → YOUR PHOTO): "if I click
+ * the arrow it should switch without drop down and if I click the middle then
+ * it can just cycle, I don't want the drop down at all". ROOT CAUSE of the
+ * arrow tap opening the list: the chevron click handed focus to the <select>
+ * (Safari focuses a tabindex=-1 button on tap) and a scripted focus() on an
+ * iOS <select> inside a tap OPENS ITS PICKER. Pinned here: a touch chevron
+ * never focuses the select; the value cycles on tap/click/Space/Enter and
+ * every picker-opening press is cancelled.
+ */
+
+function boot() {
+  const dom = makeDom();
+  const sb = { document: dom.document, Date };
+  sb.window = sb;
+  vm.createContext(sb);
+  vm.runInContext(read("js/ui/setting-row.js"), sb, { filename: absSrc("js/ui/setting-row.js") });
+  const R = vm.runInContext("SettingRow", sb);
+  let v = "normal";
+  const writes = [];
+  const row = R.build("ps-resolution-row", "Capture resolution", [["normal", "Standard HD"], ["4k", "Up to 4K"], ["8k", "8K"]]);
+  dom.document.body.appendChild(row.row);
+  R.wire(row.row, { read: () => v, write: (x) => { v = x; writes.push(x); } });
+  const focus = row.sel.focus;
+  let focused = 0;
+  row.sel.focus = () => { focused++; focus(); };
+  const fire = (el, type, extra = {}) => {
+    const ev = { type, cancelable: true, ...extra };
+    el.dispatchEvent(ev);
+    return ev;
+  };
+  return { dom, R, row, fire, value: () => v, writes, focused: () => focused };
+}
+
+test("a finger on ‹ / › steps the value and never focuses the select (focus opens the iOS picker)", () => {
+  const h = boot();
+  h.fire(h.row.next, "pointerdown", { pointerType: "touch" });
+  h.row.next.focus();                       // Safari focuses a tabindex=-1 button on tap
+  h.fire(h.row.next, "click");
+  assert.equal(h.value(), "4k");
+  assert.equal(h.focused(), 0, "no select.focus() after a touch chevron tap");
+  h.fire(h.row.prev, "pointerdown", { pointerType: "touch" });
+  h.row.prev.focus();
+  h.fire(h.row.prev, "click");
+  assert.equal(h.value(), "normal");
+  assert.equal(h.focused(), 0);
+});
+
+test("a mouse chevron click still hands focus to the select (keyboard stays on the row)", () => {
+  const h = boot();
+  h.fire(h.row.next, "pointerdown", { pointerType: "mouse" });
+  h.row.next.focus();
+  h.fire(h.row.next, "click");
+  assert.equal(h.value(), "4k");
+  assert.equal(h.focused(), 1);
+});
+
+test("tapping the value cycles forward and wraps; the touchend is cancelled so iOS never focuses it", () => {
+  const h = boot();
+  const t1 = h.fire(h.row.sel, "touchend", { touches: [] });
+  assert.equal(t1.defaultPrevented, true, "touchend cancelled: no picker");
+  assert.equal(h.value(), "4k");
+  h.fire(h.row.sel, "click");               // a stray compat click must not double-step
+  assert.equal(h.value(), "4k");
+  h.fire(h.row.sel, "touchend", { touches: [] });
+  h.fire(h.row.sel, "touchend", { touches: [] });
+  assert.equal(h.value(), "normal", "wraps 8k → normal");
+  assert.equal(h.focused(), 0);
+});
+
+test("a scroll that ends on the value does not cycle it", () => {
+  const h = boot();
+  h.fire(h.row.sel, "touchstart", { touches: [{ clientX: 10, clientY: 10 }] });
+  h.fire(h.row.sel, "touchmove", { touches: [{ clientX: 10, clientY: 60 }] });
+  h.fire(h.row.sel, "touchend", { touches: [] });
+  assert.equal(h.value(), "normal");
+});
+
+test("a mouse press on the value is cancelled (no list) and its click cycles", () => {
+  const h = boot();
+  const md = h.fire(h.row.sel, "mousedown", { button: 0 });
+  assert.equal(md.defaultPrevented, true, "mousedown cancelled before the UA opens the list");
+  h.fire(h.row.sel, "click");
+  assert.equal(h.value(), "4k");
+});
+
+
+test("keys: Space/Enter cycle, F4 and Alt+Down are swallowed, Left/Right still step", () => {
+  const h = boot();
+  const space = h.fire(h.row.sel, "keydown", { key: " " });
+  assert.equal(space.defaultPrevented, true);
+  assert.equal(h.value(), "4k");
+  h.fire(h.row.sel, "keydown", { key: "Enter" });
+  assert.equal(h.value(), "8k");
+  assert.equal(h.fire(h.row.sel, "keydown", { key: "F4" }).defaultPrevented, true);
+  assert.equal(h.fire(h.row.sel, "keydown", { key: "ArrowDown", altKey: true }).defaultPrevented, true);
+  assert.equal(h.value(), "8k");
+  h.fire(h.row.sel, "keydown", { key: "ArrowLeft" });
+  assert.equal(h.value(), "4k");
+});
+
+test("re-wiring does not stack the no-picker listeners", () => {
+  const h = boot();
+  h.R.wire(h.row.row, { read: h.value, write: (x) => h.writes.push(x) });
+  h.fire(h.row.sel, "keydown", { key: " " });
+  assert.equal(h.writes.length, 1);
+});
+
+

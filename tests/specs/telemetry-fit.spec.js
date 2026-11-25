@@ -229,7 +229,7 @@ for (const v of HEAD_WINDOWS) {
         expect(h.lastIsClose, cell + ": ✕ is the last thing on the row").toBe(true);
         expect(h.wrap, cell + ": the strip does not wrap").toBe("nowrap");
         expect(h.overflowX, cell + ": the strip is the scroller").toBe("auto");
-        expect(h.touch, cell + ": a finger pans the strip sideways").toBe("pan-x");
+        expect(h.touch, cell + ": a finger pans the strip sideways (manipulation: no double-tap zoom)").toBe("manipulation");
         expect(h.closeRight, cell + ": ✕ inside the right safe inset").toBeLessThanOrEqual(h.vw - v.sar + 1);
         expect(h.cardLeft, cell + ": card clear of the notch").toBeGreaterThanOrEqual(v.sal - 1);
         expect(h.cardRight, cell + ": card inside the right inset").toBeLessThanOrEqual(h.vw - v.sar + 1);

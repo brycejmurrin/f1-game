@@ -650,7 +650,7 @@ test("TLX capDpr only ever lowers the cap and re-sizes; RESOLUTION MAX's boost c
     mobileTier: true, _lite: null, resized: 0 });
   vm.runInContext(tlx.replace(/^const TLX = /m, "var TLX = "), ctx, { filename: absSrc("js/render/three/tlx.js") });
   ctx.dprCapFor = ctx.TLX.dprCapFor;
-  vm.runInContext("function resizeNow() { resized++; }\n" + slice("let _dprBoost = 0, _dprCeil = 0;", "\n") +
+  vm.runInContext("function resizeNow() { resized++; }\n" + slice("let _dprBoost = 0, _dprCeil = 0, _dprPreset = 0;", "\n") +
     slice("let DPR_CAP = ", "\n") + slice("function reCapDpr() {", "\n      }") +
     "\nvar f = {" + slice("capDpr(n) {", "getDprBoost() { return _dprBoost; },") + "};", ctx, { filename: absSrc("js/render/three/tlx.js") });
   const cap = () => vm.runInContext("DPR_CAP", ctx);
@@ -1934,4 +1934,42 @@ test("a desktop with a 60 FPS target keeps scale during a 15 ms rendering worklo
   const uncapped = replay("auto", raf, 1800, { mobile: false });
   assert.equal(capped.moves, 0);
   assert.ok(uncapped.moves > 0);
+});
+
+// GRAPHICS HIGH lifts a phone's DPR cap to 2 (#5222, Bryce's decision 2026-11-24): PerfGov sends the preset floor
+// from the effective tier floor (user preset + crash sentinel), at init and on every preset change; never shed for budget.
+function makeGovPreset(strikes = 0) {
+  const mem = strikes ? { "apex26.crashStrikes": String(strikes), "apex26.crashStrikesBuild": "1" } : {};
+  globalThis.localStorage = { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; } };
+  globalThis.window = { __APEX_BUILD: 1 };
+  delete globalThis.RenderRate; delete globalThis.ThermalDrift;
+  const PerfGov = eval(SRC + ";PerfGov");
+  let scale = 1;
+  const calls = [];
+  PerfGov.init({ isMobile: true, getRenderScale: () => scale,
+    setRenderScale: (s) => { s = Math.max(0.5, Math.min(1, s)); if (s === scale) return false; scale = s; return true; },
+    setDprPreset: (n) => { calls.push(n); return true; } });
+  return { PerfGov, calls };
+}
+
+test("GRAPHICS presets: HIGH sends the phone's DPR floor 2, MEDIUM and LOW send 0 (the tier's 1.5)", () => {
+  const { PerfGov, calls } = makeGovPreset();
+  const rows = [["medium", 2, 0], ["low", 4, 0], ["high", 0, 2], ["low", 4, 0]];   // boot is HIGH (tier 0): change first
+  const seen = rows.map(([id, tier]) => { calls.length = 0; PerfGov.setUserTier(tier); return [id, tier, calls.at(-1)]; });
+  assert.deepEqual(seen, rows);
+});
+
+test("GRAPHICS HIGH: init sends 2 at boot, and a budget miss never takes it back", () => {
+  const { PerfGov, calls } = makeGovPreset();
+  assert.deepEqual(calls, [2], "user tier 0 (HIGH) at boot");
+  feed(PerfGov, () => 16.7, 600);
+  for (let i = 0; i < 3000; i++) PerfGov.tick(26);
+  assert.deepEqual(calls, [2], "the frame budget sheds features, not the preset's DPR");
+});
+
+test("GRAPHICS HIGH: a crash-sentinel floor keeps a struck phone at 1.5 until the floor pays down", () => {
+  const { PerfGov, calls } = makeGovPreset(1);
+  assert.deepEqual([PerfGov.strikes(), calls], [1, [0]], "one strike: HIGH boots at the tier's 1.5");
+  PerfGov.setUserTier(2); PerfGov.setUserTier(0);
+  assert.deepEqual(calls, [0, 0, 0], "the floor (tier 2) wins over the HIGH preset");
 });
