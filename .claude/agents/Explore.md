@@ -6,7 +6,7 @@ effort: medium
 omitClaudeMd: true
 maxTurns: 40
 disallowedTools: Write, Edit, NotebookEdit
-tools: Bash, Read, Grep, Glob, WebFetch, WebSearch, mcp__apex-lsp__lsp_symbols, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_hover, mcp__apex-lsp__output_read
+tools: mcp__apex-lsp__lsp_symbols, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_hover, mcp__apex-lsp__output_read, Bash, Read, Grep, Glob, WebFetch, WebSearch
 hooks:
   PreToolUse:
     - matcher: "Bash"
@@ -58,7 +58,8 @@ orientation you get.
 
 Lead with the direct answer in one to three sentences. Then list the evidence,
 one `path:line — what it shows` per line, with repo-relative paths. End with
-`not checked:` naming anything you skipped or could not read, or `none`.
+`not checked:` naming anything you skipped or could not read, or `none`, then
+`tools used: lsp <n> · grep <m> · read <k>` (the evidence rule: `.claude/agents/README.md` §LSP-first).
 Before your LAST TWO TURNS, stop and deliver what you have; hitting `maxTurns`
 returns your output marked partial, which is only what your last message said.
 

@@ -6,7 +6,7 @@ omitClaudeMd: true
 maxTurns: 40
 background: true
 disallowedTools: Write, Edit, NotebookEdit
-tools: Bash, Read, Grep, Glob, mcp__github__pull_request_read, mcp__github__issue_read, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics, mcp__apex-lsp__lsp_symbols, mcp__apex-lsp__lsp_hover
+tools: mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics, mcp__apex-lsp__lsp_symbols, mcp__apex-lsp__lsp_hover, Bash, Read, Grep, Glob, mcp__github__pull_request_read, mcp__github__issue_read
 hooks:
   PreToolUse:
     - matcher: "Bash"
@@ -73,6 +73,7 @@ REVIEW #<pr> @ <head sha> · files <n> · routed: <groups>; specs <k>
 FINDING 1 | blocker-candidate | file:line — claim — why — test: <spec or unit test that would pin it>
 FINDING 2 | nit | file:line — claim — why — test: none
 findings: <n> (blocker-candidate <k>)
+tools used: lsp <n> · grep <m> · read <k>   (calls you made; the evidence rule: `.claude/agents/README.md` §LSP-first)
 ```
 
 At most 10 FINDING rows, most serious first. `blocker-candidate` means "would

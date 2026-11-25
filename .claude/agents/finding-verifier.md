@@ -6,7 +6,7 @@ omitClaudeMd: true
 maxTurns: 45
 background: true
 disallowedTools: Write, Edit, NotebookEdit
-tools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics, mcp__apex-lsp__lsp_symbols, mcp__apex-lsp__lsp_hover
+tools: mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics, mcp__apex-lsp__lsp_symbols, mcp__apex-lsp__lsp_hover, Bash, Read, Grep, Glob
 hooks:
   PreToolUse:
     - matcher: "Bash"
@@ -57,6 +57,7 @@ CLAIM <n> | REFUTED | evidence: file:line "quote" — why the claim is wrong
 CLAIM <n> | NEEDS-BROWSER | what only a rendered run can show; probe: <hook or spec>
 CLAIM <n> | UNREAD | reason (a denied tool, an unreadable file)
 refuted: k/N stale: k/N
+tools used: lsp <n> · grep <m> · read <k>   (calls you made; the evidence rule: `.claude/agents/README.md` §LSP-first)
 ```
 
 N is the number of rows you decided. If the parent asks for a report file,
