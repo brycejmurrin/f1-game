@@ -67,10 +67,10 @@ test("landing builds the scenery catalog in the actual merged checkout (built on
         git(cwd, "push", "-q", "origin", "pr");
         const head = git(cwd, "rev-parse", "pr");
         const tip = git(cwd, "rev-parse", "deploy-x"), calls = [];
-        const wt = path.join(cwd, "artifacts", "merge-gate", "wt-17");
+        const wt = path.join(cwd, "artifacts", "merge-gate", `wt-17-${process.pid}-fixture`);   // one worktree per run (#6494)
         let ratchetCalls = 0, argv = null;
         const RETEST = { ok: true, evidence: "fixture re-test holds" };
-        const result = localMergeGenCheck({ pr: 17, head, headRef: "pr", cwd, base: "deploy-x",
+        const result = localMergeGenCheck({ pr: 17, head, headRef: "pr", cwd, base: "deploy-x", runId: `${process.pid}-fixture`,
           run: (cmd, args, options) => {
             calls.push(cmd);
             assert.equal(options.cwd, wt);
