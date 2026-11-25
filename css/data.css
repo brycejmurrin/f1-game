@@ -406,8 +406,11 @@ body[data-density="compact"] .dh-footnote {
 .dh-footnote + [data-feed] { margin-top: calc(var(--gap) / 3); font-size: var(--fs-2); color: var(--dim); text-align: right; }
 .dh-footnote + [data-feed] a { display: inline-flex; align-items: center; min-height: var(--tap-paint); color: inherit; text-decoration: underline; }
 /* 44 PAINTED px WIDE on touch (#6512): "OpenF1" is 57 own px, 39.7 painted at UI SIZE 70. A cancelling pad + negative
-   margin widens the hit box, not the line (the credits-link recipe, css/settings.css); 0 with a mouse (--tap-floor44). */
-.dh-footnote + [data-feed] a { padding-inline: calc(var(--tap-floor44) * 0.12); margin-inline: calc(var(--tap-floor44) * -0.12); }
+   margin widens the hit box, not the line (the credits-link recipe, css/settings.css); 0 with a mouse (--tap-floor44).
+   OUTER side only, of the FEED link: its start neighbour is the "Data: " text, but its end neighbour is a ", " gap of
+   ~4 own px before the licence link, so an end pad would overlap that link and lose the tap to it (pr-reviewer). The
+   licence link is already wider than 44. */
+.dh-footnote + [data-feed] a:first-of-type { padding-inline-start: calc(var(--tap-floor44) * 0.12); margin-inline-start: calc(var(--tap-floor44) * -0.12); }
 
 /* schedule */
 [data-nextgp="tile"] {

@@ -24,8 +24,12 @@ test("text floors at UI SIZE 70 (#6512)", () => {
 });
 
 test("tap floor: the Data Hub source links (#6512)", () => {
-  has("css/data.css", ".dh-footnote + [data-feed] a", "padding-inline", "calc(var(--tap-floor44) * 0.12)",
-    "OpenF1 39.7 px wide at UI SIZE 70");
-  has("css/data.css", ".dh-footnote + [data-feed] a", "margin-inline", "calc(var(--tap-floor44) * -0.12)",
+  const sel = ".dh-footnote + [data-feed] a:first-of-type";
+  has("css/data.css", sel, "padding-inline-start", "calc(var(--tap-floor44) * 0.12)", "OpenF1 39.7 px wide at UI SIZE 70");
+  has("css/data.css", sel, "margin-inline-start", "calc(var(--tap-floor44) * -0.12)",
     "an equal negative margin, so the text does not move");
+  const r = cssRules(fs.readFileSync(path.join(ROOT, "css/data.css"), "utf8"))
+    .filter((x) => /\[data-feed\] a/.test(x.selector) && /tap-floor44/.test([...x.decls.values()].join(" ")));
+  assert.ok(r.every((x) => ![...x.decls.keys()].some((k) => /^(padding|margin)-inline(-end)?$/.test(k))),
+    "no END-side pad: the gap to the licence link is a ~4 own px \", \"; an end pad overlaps it and the later link wins the tap");
 });
