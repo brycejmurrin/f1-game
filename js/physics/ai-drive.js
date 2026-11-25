@@ -584,7 +584,7 @@ const AiDrive = (function () {
     const samples = ctx.samples || [];
     const window = samples === _lookWindow ? _lookWindow : null;
     const sampleN = window ? window.n : samples.length;
-    let windowD = window ? window.d : 0;
+    const windowD = window ? window.d : 0;
     const load = ctx.aeroLoad != null ? ctx.aeroLoad : 0.5;
     const latMax = (ctx.latMax || 22) * (1 + (load - 0.5) * AERO_GRIP_K);
     const gravity = ctx.gravity ?? 9;   // live caller supplies PhysicsConsts.GRAVITY_SLOPE
@@ -595,31 +595,56 @@ const AiDrive = (function () {
     // Keep the same solve as cornerSpeed without reclamping pace/vmax per node.
     const vs = Math.max(0.05, ctx.pace === undefined ? 1 : ctx.pace);   // vTop()/VMAX
     const V = vs * Math.max(1, ctx.vmax === undefined ? 72 : ctx.vmax), vSq = V * V;
-    let vLimSq = Infinity, bVC = 0, bD = 1;
+    // ALLOCATION-FREE LOOP (#6505). In the race this loop runs as a copy inlined into game.js updateCarBrakePlan
+    // (which tiers between Maglev and TurboFan), and there its loop-carried doubles and `c ? double : 0` merges
+    // were boxed: a heap number per update, ~490 B a call, ~37 MB/min at 21 AI cars. They live in a Float64Array
+    // scratch instead (an unboxed, exact double in every tier), and the
+    // loop reads Float64Array columns only, never a tagged row field. Race outputs pinned bit for bit:
+    // tests/unit/brake-target-characterization.test.mjs.
+    const acc = _btAcc;   // [windowD, vLimSq, bVC, bD, support, vE]
+    acc[0] = windowD; acc[1] = Infinity; acc[2] = 0; acc[3] = 1;
     const scrub = 2 * brake * 0.85;   // the same ((2·brake)·0.85)·d product as before, so bit-identical
     // The game's pooled look-ahead arrives with d ascending, so dSq = scrub·max(d, 1) never falls while vLimSq
     // never rises: past the first skip every later sample skips too, and `break` returns the same answer (#3109).
     const ascending = (window ? Number.isFinite(windowD) && Number.isFinite(window.step) && window.step >= 0 : samples === _look && _lookSorted) && scrub > 0;
+    const diffCorner = ctx.diffCorner || 1;
+    // One loop over Float64Array columns: the window's own arrays, or the pooled rows staged into scratch
+    // columns. A typed-array store is ToNumber, and every original read was numeric after its `|| 0`, so the
+    // staged values give the same results (bankGrip only when the row has no mu, as before).
+    const col = btCols(sampleN), dv = col[0];
+    let kv = col[1], muv = col[2], bankv = col[3];
+    if (window) {
+      kv = window.v; muv = window.mu; bankv = window.bank || bankv.fill(0, 0, sampleN);
+      for (let i = 0; i < sampleN; i++) { dv[i] = acc[0]; acc[0] += window.step; }
+    } else {
+      for (let i = 0; i < sampleN; i++) {
+        const s = samples[i];
+        dv[i] = s.d; kv[i] = s.k; bankv[i] = s.bank; muv[i] = s.mu !== undefined ? s.mu : bankGrip(s.bank);
+      }
+    }
     for (let i = 0; i < sampleN; i++) {
-      const s = window ? null : samples[i];
       // Distance budget: can scrub ~0.85·BRAKE over d metres (arcade, not perfect).
-      const d = Math.max((window ? windowD : s.d) || 0, 1);
-      if (window) windowD += window.step;
+      const d = Math.max(dv[i] || 0, 1);
       const dSq = scrub * d;
       // EXACT SKIP (PERF-HUNT-4 B-F4): entrySq = vC² + dSq >= dSq, so once the distance term alone reaches
       // the tightest budget so far this sample cannot win — skip its corner solve. `continue`, not `break`:
       // the result stays independent of sample order. A NaN dSq falls through to the original test.
-      if (dSq >= vLimSq) { if (ascending) break; continue; }
-      const k = Math.max(Math.abs((window ? window.v[i] : s.k) || 0), 1e-5);
-      const bankMu = window ? window.mu[i] : s.mu !== undefined ? s.mu : bankGrip(s.bank);   // indexed/pooled samples carry it; hand-built ones may not
-      const bank = window ? window.bank && window.bank[i] : s.bank;
-      const support = bank && Number.isFinite(bank) ? gravity * Math.sin(bank) : 0;
-      const vC = cornerSpeedEnvelope(k, Math.max(0, latMax * bankMu * grip), V, vSq, support) * skill * (ctx.diffCorner || 1);
+      if (dSq >= acc[1]) { if (ascending) break; continue; }
+      const k = Math.max(Math.abs(kv[i] || 0), 1e-5), bank = bankv[i];
+      acc[4] = 0;
+      if (bank && Number.isFinite(bank)) acc[4] = gravity * Math.sin(bank);
+      const support = acc[4];
+      // cornerSpeedEnvelope, inlined op for op (a call boxes its 5 double arguments and its result).
+      const L = Math.max(0, latMax * muv[i] * grip), den = k - L * AI_DF / vSq;
+      acc[5] = Math.sqrt(Math.max(0, L * (1 + AI_DF) + support) / k);
+      if (den > 0) { const vA = Math.sqrt(Math.max(0, L + support) / den); if (vA <= V) acc[5] = vA; }
+      const vC = acc[5] * skill * diffCorner;
       const entrySq = vC * vC + dSq;
-      if (entrySq >= 0 && entrySq < vLimSq) { vLimSq = entrySq; bVC = vC; bD = d; }
+      if (entrySq >= 0 && entrySq < acc[1]) { acc[1] = entrySq; acc[2] = vC; acc[3] = d; }
     }
     // sqrt is monotonic: choose the tightest entry budget before taking it.
     // The tightest sample remains independent of sample order.
+    const vLimSq = acc[1], bVC = acc[2], bD = acc[3];
     let vLim = Math.sqrt(vLimSq);
     if (!Number.isFinite(vLim)) vLim = 1e6;
     const vLimRaw = vLim;
@@ -646,6 +671,12 @@ const AiDrive = (function () {
     return vLim;
   }
   const _bind = { vC: 0, d: 1 };
+  const _btAcc = new Float64Array(6);   // brakeTarget's loop-carried scratch
+  let _btCols = [];   // brakeTarget's staging columns [d, k, mu, bank], grown on demand
+  function btCols(n) {
+    if (!(_btCols.length && _btCols[0].length >= n)) _btCols = [0, 1, 2, 3].map(() => new Float64Array(Math.max(64, n)));
+    return _btCols;
+  }
 
   const _br = { braking: false, brakeLvl: 0, vLim: 0, excess: 0, ff: 0 };
   _br.brakeLvl = _br.ff = 0.5; _br.brakeLvl = _br.ff = 0;   // born Double, like _defOnce
