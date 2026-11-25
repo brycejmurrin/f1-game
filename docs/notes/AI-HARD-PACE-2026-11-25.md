@@ -66,3 +66,8 @@ The ceiling alone is racecraft-neutral: no new contact, no dive-bomb signal (con
 inside the base range). The defend reserve adds stuck-behind time (episodes > 10 s +15 Monza, +8 Red Bull): a
 defender keeps its charge for the next straight instead of draining it, so trains hold longer. Its pace win is the
 #6546 measurement (car-time on a flat battery 18 % -> 0); the trade-off is named on the PR.
+
+## Also in this PR: ERS defend reserve (#6546 P1)
+
+`AiDrive.wantBoost` deployed to defend with no energy floor, so a train ran on a flat battery. Defending now needs
+charge above 0.25 (the `desperate` floor). Pinned in `tests/unit/ai-drive.test.mjs`.

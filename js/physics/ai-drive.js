@@ -506,8 +506,10 @@ const AiDrive = (function () {
     const bank = ctx.traits.awareness > (0.8 - hs.hold * 0.08)
       && energy < (0.4 - hs.hold * 0.05 + (regen - 0.5) * 0.08) && !catching && !defending;
     if (bank) return false;
-    return desperate || defending || rich || (energy > 0.25 && straight && ctx.traits.awareness < 0.55);
+    // Defend only above a reserve (#6546 P1): trains drained to the 0.02 gate and sat on a flat battery.
+    return desperate || (defending && energy > DEFEND_FLOOR) || rich || (energy > 0.25 && straight && ctx.traits.awareness < 0.55);
   }
+  const DEFEND_FLOOR = 0.25;
 
   function wantX(ctx) {
     if (ctx && ctx.armed === false) return false;

@@ -226,6 +226,13 @@ test("wantBoost catches and defends; banks when aware and rich-not-needed", () =
   }), true);
 });
 
+test("wantBoost keeps a reserve when defending: no defence below 0.25 charge (#6546 P1)", () => {
+  const defend = { traits: mid, kAhead60: 0.001, otActive: false, chaser: true, chaserGap: 8, chaserSpeed: 56, speed: 55 };
+  assert.equal(A.wantBoost({ ...defend, energy: 0.1 }), false, "a train defence must not drain the battery flat");
+  assert.equal(A.wantBoost({ ...defend, energy: 0.24 }), false);
+  assert.equal(A.wantBoost({ ...defend, energy: 0.3 }), true, "with a reserve it still defends");
+});
+
 // Physics hunt 2026-10-10 (item 6): the catching / defending / attacking closing
 // rates were raw m/s (towSpeed - 1, speed - 2, blockerSpeed - 1), so the same
 // situation on the standard scale flipped with OVERALL SPEED. They ride vTop now.
