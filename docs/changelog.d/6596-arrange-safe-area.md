@@ -1,0 +1,1 @@
+Fixed: ARRANGE no longer pushes a screen's controls under the iPhone notch or home indicator. A moved, widened or heightened region (the garage, Photo Studio, the lighting tuner and every other arrangeable screen) is kept inside the safe area when it is shown; your saved arrangement is not changed (#6596).
