@@ -115,11 +115,19 @@ const CareerBackup = (function () {
     return v == null ? null : v;
   }
 
-  function collectSlots() {
+  // A stored slot that is not an object (a primitive or an array) cannot be a
+  // career: it is left out of the file and reported, never exported as junk
+  // or allowed to throw and block every other slot's export (#6587).
+  function collectSlots(skipped) {
     const out = [];
     for (const f of FLAVOURS) {
       for (let i = 0; i < SLOTS; i++) {
-        const raw = readSlotRaw(f, i);
+        let raw = readSlotRaw(f, i);
+        if (raw != null && !isObj(raw)) {
+          log("warn", "career backup: " + slotKey(f, i) + " is not a career object; left out of the export");
+          if (skipped) skipped.push({ slot: f + ":" + i, reason: "slot-not-object" });
+          raw = null;
+        }
         let data = null;
         if (raw != null) {
           // Deep clone so the envelope never holds the store cache object.
@@ -176,12 +184,12 @@ const CareerBackup = (function () {
     try { return SettingsExport.garageValue(k, v); } catch (e) { return undefined; }
   }
 
-  function build() {
+  function build(skipped) {
     const envelope = {
       format: FORMAT,
       exportedAt: new Date().toISOString(),
       build: (typeof window !== "undefined" && window.__APEX_BUILD) ? window.__APEX_BUILD : null,
-      slots: collectSlots(),
+      slots: collectSlots(skipped),
     };
     Object.assign(envelope, optionalExtras());
     return envelope;
@@ -219,7 +227,8 @@ const CareerBackup = (function () {
   }
 
   function exportAll() {
-    const envelope = build();
+    const skipped = [];
+    const envelope = build(skipped);
     // Preserve raw future careers for recovery, but never download extras that
     // this reader would reject or truncate. Export has no destination checks.
     for (const k of EXTRA_KEYS) {
@@ -231,7 +240,7 @@ const CareerBackup = (function () {
       return Promise.resolve({ ok: false, reason: "too-large" });
     }
     return download(envelope).then(function (r) {
-      return Object.assign({ envelope: envelope }, r || { ok: true });
+      return Object.assign({ envelope: envelope, skipped: skipped }, r || { ok: true });
     });
   }
 
@@ -255,22 +264,26 @@ const CareerBackup = (function () {
     if (raw.format !== FORMAT) return { ok: false, reason: "wrong-format" };
     if (!Array.isArray(raw.slots)) return { ok: false, reason: "slots-not-array" };
     if (raw.slots.length > 12) return { ok: false, reason: "too-many-slots" };
-    // One row per slot (build() never exports two): apply() writes row by row,
-    // so a second row for the same slot either overwrote the first or, with a
-    // pinned revision, wrote the first and THEN reported "conflict". Refused
-    // here, before anything is written.
+    // A bad ROW (corrupt payload, a newer build's save, a junk index or
+    // flavour) is skipped and reported in `rejected`; the rest of the file
+    // still imports (#6587, #6601; Bryce's #6602 D2(a)). The index must be an
+    // integer slot: `| 0` coercion let "abc", true, 1.5 and 2^32+1 land in
+    // slot 0 or 1. One row per slot (build() never exports two): apply()
+    // writes row by row, so a second row for the same slot either overwrote
+    // the first or, with a pinned revision, wrote the first and THEN reported
+    // "conflict". Refused here, before anything is written.
     const seenSlots = {};
+    const rejected = [];
     for (let i = 0; i < raw.slots.length; i++) {
       const row = raw.slots[i];
-      if (!isObj(row)) return { ok: false, reason: "slot-row-not-object" };
+      const reject = (reason) => rejected.push({ row: i, slot: isObj(row) ? slotIdOf(row) : null, reason });
+      if (!isObj(row)) { reject("slot-row-not-object"); continue; }
       const f = flavourIn(row.flavour);
-      if (row.flavour != null && row.flavour !== "driver" && row.flavour !== "myteam") {
-        return { ok: false, reason: "bad-flavour" };
-      }
-      const idx = slotIn(row.i);
-      if (row.i != null && (row.i | 0) !== idx) return { ok: false, reason: "bad-index" };
+      if (row.flavour != null && row.flavour !== "driver" && row.flavour !== "myteam") { reject("bad-flavour"); continue; }
+      if (!Number.isInteger(row.i) || row.i < 0 || row.i >= SLOTS) { reject("bad-index"); continue; }
+      const idx = row.i;
       const chk = slotPayloadOk(row.data, row.flavour);
-      if (!chk.ok) return chk;
+      if (!chk.ok) { reject(chk.reason); continue; }
       const slotId = f + ":" + idx;
       if (Object.prototype.hasOwnProperty.call(seenSlots, slotId)) return { ok: false, reason: "duplicate-slot" };
       seenSlots[slotId] = true;
@@ -294,8 +307,15 @@ const CareerBackup = (function () {
     if (raw.ghost != null || raw.ghosts != null || raw["ghost.v1"] != null) {
       return { ok: false, reason: "ghosts-forbidden" };
     }
-    return { ok: true, envelope: raw };
+    for (const r of rejected) log("warn", "career backup: file row " + r.row + " skipped (" + r.reason + ")");
+    return { ok: true, envelope: raw, rejected };
   }
+  // A rejected row's slot, only when the row names a real one ("driver:1").
+  function slotIdOf(row) {
+    const f = row.flavour == null ? "driver" : row.flavour;
+    return FLAVOURS.includes(f) && Number.isInteger(row.i) && row.i >= 0 && row.i < SLOTS ? f + ":" + row.i : null;
+  }
+  function rejectedRows(checked) { return new Set((checked.rejected || []).map((r) => r.row)); }
 
   // Recovery exports contain one active snapshot, not six named slots. The
   // destination is explicit and this adapter only reviews; apply owns writes.
@@ -352,7 +372,9 @@ const CareerBackup = (function () {
       if (clone.season.qualiOrder != null && typeof cleanQualifying !== "function") return { ok: false, reason: "unsupported-qualifying" };
       envelope.season = clone.season;
     }
+    // A recovery file restores ONE slot: a rejected row refuses it whole.
     const checked = validate(envelope, rawText || text);
+    if (checked.ok && checked.rejected.length) return { ok: false, reason: checked.rejected[0].reason };
     return checked.ok ? { ok: true, envelope, recovery: true } : checked;
   }
 
@@ -800,7 +822,8 @@ const CareerBackup = (function () {
     const focus = o.focusFlavour != null ? flavourIn(o.focusFlavour) : null;
     const allowed = o.flavours ? o.flavours.map(flavourIn)
       : (focus && !o.otherFlavourConfirmed ? [focus] : FLAVOURS);
-    const slots = envelope.slots.filter(r => r.data != null && allowed.includes(flavourIn(r.flavour)))
+    const bad = rejectedRows(checked);
+    const slots = envelope.slots.filter((r, n) => !bad.has(n) && r.data != null && allowed.includes(flavourIn(r.flavour)))
       .map(r => ({ flavour: flavourIn(r.flavour), i: slotIn(r.i),
         current: readSlotRaw(flavourIn(r.flavour), slotIn(r.i)), incoming: r.data }));
     const extras = [], s = store();
@@ -812,7 +835,7 @@ const CareerBackup = (function () {
       if (envelope.records != null) extras.push("Records: add missing entries");
     }
     if (slots.some(r => r.flavour === "myteam")) extras.push("MY TEAM identity: restore separately with each imported career; other careers and one-off GP appearance are preserved");
-    return { ok: true, slots, extras };
+    return { ok: true, slots, extras, rejected: checked.rejected };
   }
 
   const DRY = 1, UNDO_READY = 2;
@@ -918,13 +941,15 @@ const CareerBackup = (function () {
       return result;
     };
     const skipped = [];
+    const rejected = checked.rejected.slice(), bad = rejectedRows(checked);
+    const reject = (id, reason) => { rejected.push({ slot: id, reason }); log("warn", "career backup: " + id + " skipped (" + reason + ")"); };
 
     // Snapshot disk first so a mid-apply conflict can leave nothing half-done
     // for the slots we intended to touch — we write only after every check.
     const plan = [];
     for (let i = 0; i < envelope.slots.length; i++) {
       const row = envelope.slots[i];
-      if (!row) continue;
+      if (!row || bad.has(i)) continue;
       const f = flavourIn(row.flavour);
       const idx = slotIn(row.i);
       if (allowed.indexOf(f) === -1) { skipped.push(f + ":" + idx); continue; }
@@ -947,9 +972,9 @@ const CareerBackup = (function () {
       let data;
       try {
         data = migrate(JSON.parse(JSON.stringify(row.data)));
-        if (!data) return { ok: false, reason: "migrate-failed", slot: id };
-        if (f === "myteam" && typeof CareerTeamIdentity !== "undefined") data.myTeamIdentity = CareerTeamIdentity.sanitize(data.myTeamIdentity || envelope.myTeam || CareerTeamIdentity.capture(s));
-      } catch (_) { return { ok: false, reason: "migrate-failed", slot: id }; }
+        if (data && f === "myteam" && typeof CareerTeamIdentity !== "undefined") data.myTeamIdentity = CareerTeamIdentity.sanitize(data.myTeamIdentity || envelope.myTeam || CareerTeamIdentity.capture(s));
+      } catch (_) { data = null; }
+      if (!data) { reject(id, "migrate-failed"); continue; }
       plan.push({ f: f, i: idx, data, id: id });
     }
 
@@ -1039,6 +1064,7 @@ const CareerBackup = (function () {
       failed: failed,
       selectionWritten: selectionWritten,
       skipped: skipped,
+      rejected: rejected,
       identity: identity,
       reason: issues.length ? issues[0].reason : null,
       needsConfirm: pendingOther,

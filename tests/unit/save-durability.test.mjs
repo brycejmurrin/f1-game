@@ -763,3 +763,34 @@ test("garage reset refuses an unread mirror inventory instead of hiding recovera
   await recovered.store.mirror.ready;
   assert.equal(recovered.store.getStored("setup.ferrari").arbF, 11, "unread recovery data is preserved");
 });
+// #6604: a damaged (parseable, not a career) slot is restorable from a good point; a newer build's save is not.
+test("#6604: restore over a damaged slot skips the before-restore point and reports it; newer saves stay refused", async () => {
+  for (const damaged of [[1], { v: 1, flavour: "myteam" }, "junk", { v: "x", flavour: "driver" }]) {
+    const h = boot(); await h.store.mirror.ready; const p = points(h);
+    await p.capture("driver", 0, save(1), { reason: "round" }); const id = (await p.list("driver", 0)).items[0].id;
+    h.store.write("career.driver.0", damaged);
+    const token = await p.preview("driver", 0, id);
+    assert.equal(token.ok, true, JSON.stringify(damaged));
+    assert.equal(token.currentDamaged, true);
+    const r = await p.restore(token);
+    assert.equal(r.ok, true, JSON.stringify(damaged) + " " + r.reason);
+    assert.equal(r.snapshot, "skipped-damaged");
+    assert.equal(h.store.get("career.driver.0").season.round, 1);
+    assert.equal((await p.list("driver", 0)).items.length, 1, "no restore point was made of the damaged value");
+    await h.store.mirrorFlush();
+  }
+  const h = boot(); await h.store.mirror.ready; const p = points(h);
+  await p.capture("driver", 0, save(1), { reason: "round" }); const id = (await p.list("driver", 0)).items[0].id;
+  h.store.write("career.driver.0", { ...save(5), v: 99 });
+  const newer = await p.preview("driver", 0, id);
+  assert.equal(newer.currentDamaged, false, "a newer build's save is not damaged");
+  assert.equal((await p.restore(newer)).ok, false, "it can't be snapshotted, so it is never replaced");
+  assert.equal(h.store.get("career.driver.0").v, 99);
+  // A legacy slot with no `v` (v0) is a career: it is kept as a restore point, not skipped.
+  const legacy = save(4); delete legacy.v;
+  h.store.write("career.driver.0", legacy);
+  const r = await p.restore(await p.preview("driver", 0, id));
+  assert.equal(r.ok, true); assert.equal(r.snapshot, undefined);
+  assert.ok((await p.list("driver", 0)).items.some((x) => x.summary.round === 4 && x.reason === "before-restore"));
+  await h.store.mirrorFlush();
+});

@@ -195,9 +195,10 @@ function create(G) {
     if (result.ok) {
       G.refreshCareerButton();
       pending.unconfirmed = pending.unconfirmed || result.durable === false || !!result.failed;
-      const restored = pending.unconfirmed
+      const bad = (result.rejected || []).length;
+      const restored = (pending.unconfirmed
         ? "RESTORED FOR THIS SESSION — SAVE NOT CONFIRMED; KEEP YOUR BACKUP"
-        : "CAREER RESTORED";
+        : "CAREER RESTORED") + (bad ? ` — ${bad} SLOT${bad > 1 ? "S" : ""} SKIPPED` : "");
       if (result.needsConfirm && !otherConfirmed) {
         pendingImport = pending;
         armedImport = `${focusFlavour}:other`;
@@ -324,7 +325,8 @@ function create(G) {
       armedDelete = "";
       exp.disabled = true;
       CareerBackup.exportAll().then((r) => {
-        announce(r && r.ok === false ? "EXPORT FAILED" : "CAREER BACKUP SAVED");
+        const left = r && r.skipped && r.skipped.length;
+        announce(r && r.ok === false ? "EXPORT FAILED" : "CAREER BACKUP SAVED" + (left ? ` — ${left} DAMAGED SLOT${left > 1 ? "S" : ""} LEFT OUT` : ""));
       }).catch((e) => announce(typeof NativeDownload !== "undefined" && NativeDownload.isCancelled(e) ? "EXPORT CANCELLED" : "EXPORT FAILED"))
         .finally(() => { exp.disabled = false; });
     };
@@ -397,6 +399,7 @@ function create(G) {
         card.appendChild(el("div", "cr-note", "Backup: " + summary(row.incoming, true)));
       }
       for (const text of preview.extras || []) card.appendChild(el("div", "cr-note", text));
+      for (const r of preview.rejected || []) card.appendChild(el("div", "cr-note", `Skipped: ${r.slot ? r.slot.replace(/^(\w+):(\d)$/, (_, f, n) => (f === "myteam" ? "My Team" : "Driver career") + " slot " + (+n + 1)) : "file row " + (r.row + 1)} (${r.reason}); your save there is unchanged`));
       card.appendChild(el("div", "cr-note", "Empty backup slots leave existing saves unchanged."));
       if (pendingImport.recovery) {
         if (pendingImport.envelope.season) {

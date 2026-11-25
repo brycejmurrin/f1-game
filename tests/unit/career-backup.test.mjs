@@ -277,17 +277,26 @@ test("hostile payloads are rejected with a reason and change nothing", () => {
     [{ format: "apex26-career-backup-v1", slots: [
       { flavour: "driver", i: 1, data: save({ flavour: "driver", money: 1 }) },
       { flavour: "driver", i: 1, data: save({ flavour: "driver", money: 2 }) }] }, "duplicate-slot"],
-    // A missing flavour/index is the driver set's slot 0, so it collides with it.
-    [{ format: "apex26-career-backup-v1", slots: [
-      { data: save({ flavour: "driver", money: 1 }) },
-      { flavour: "driver", i: 0, data: save({ flavour: "driver", money: 2 }) }] }, "duplicate-slot"],
+    // A missing index is no longer slot 0 (#6601): that row is skipped as
+    // bad-index, so only a real second row for one slot is a duplicate.
   ];
+  // A bad ROW is skipped and reported, the file still validates (#6587,
+  // #6602 D2(a)); with no good row left nothing is written.
+  const ROW_LEVEL = new Set(["nan-money", "driver-code", "driver-name", "driver-num", "slot-not-object",
+    "team-not-string", "year-not-number", "flavour-mismatch"]);
   for (const [payload, reason] of cases) {
     const r = h.CareerBackup.validate(payload);
-    assert.equal(r.ok, false, reason);
-    assert.equal(r.reason, reason);
     const applied = h.CareerBackup.apply(payload, { otherFlavourConfirmed: true });
-    assert.equal(applied.ok, false);
+    if (ROW_LEVEL.has(reason)) {
+      assert.equal(r.ok, true, reason);
+      assert.deepEqual(Array.from(r.rejected, (x) => x.reason), [reason]);
+      assert.equal(applied.written.length, 0, reason + " wrote a skipped row");
+      assert.deepEqual(Array.from(applied.rejected, (x) => x.reason), [reason]);
+    } else {
+      assert.equal(r.ok, false, reason);
+      assert.equal(r.reason, reason);
+      assert.equal(applied.ok, false);
+    }
     assert.deepEqual(slotSnap(h.disk), before, reason + " mutated disk");
   }
 
@@ -1669,17 +1678,19 @@ for (const flavour of ["driver", "myteam"]) for (let i = 0; i < 3; i++) {
   });
 }
 
-test("a future schema in the last incoming backup row rejects the whole bag before writes", () => {
+test("a future schema in the last incoming backup row is skipped and the rest imports (#6602 D2(a))", () => {
   const source = loadHarness();
   fillSix(source);
   const envelope = source.CareerBackup.build();
   envelope.slots[5].data.v = 2 ** 32;
   const target = loadHarness();
   fillSix(target);
-  const before = [...target.disk.entries()];
+  const before = target.disk.get("apex26.career.myteam.2");
   const result = target.CareerBackup.apply(envelope, { otherFlavourConfirmed: true });
-  assert.equal(result.reason, "newer-version");
-  assert.deepEqual([...target.disk.entries()], before);
+  assert.equal(result.ok, true);
+  assert.deepEqual(Array.from(result.rejected, (r) => [r.slot, r.reason]), [["myteam:2", "newer-version"]]);
+  assert.deepEqual(Array.from(result.written), ["driver:0", "driver:1", "driver:2", "myteam:0", "myteam:1"]);
+  assert.equal(target.disk.get("apex26.career.myteam.2"), before, "the skipped slot's local save is untouched");
 });
 
 test("bulk import preserves destinations with invalid explicit versions and accepts current controls", () => {
@@ -1945,7 +1956,7 @@ for (const action of ["delete-arm", "delete-confirm", "close", "normal"]) test(`
   assert.equal(review, action === "normal", "abandoned file must not recreate an import review");
 });
 
-for (const failsWith of ["throw", "null"]) test(`late ${failsWith} migration failure refuses the whole import before persistence`, () => {
+for (const failsWith of ["throw", "null"]) test(`late ${failsWith} migration failure skips only that slot (#6587)`, () => {
   const h = loadHarness();
   fillSix(h);
   const envelope = h.CareerBackup.build();
@@ -1961,12 +1972,13 @@ for (const failsWith of ["throw", "null"]) test(`late ${failsWith} migration fai
       return migrate(c);
     } });
   })()`, h.ctx);
+  const beforeSkipped = h.disk.get("apex26.career.myteam.2");
   const result = h.CareerBackup.apply(envelope, { liveSlot: "myteam:2" });
-  assert.equal(result.ok, false);
-  assert.equal(result.reason, "migrate-failed");
-  assert.equal(result.slot, "myteam:2");
-  assert.deepEqual([...h.disk.entries()], before, "slots, selection and extras remain unchanged");
-  assert.equal(h.store.rev, beforeRevision, "no cache write or mirror queue was started");
+  assert.equal(result.ok, true);
+  assert.deepEqual(Array.from(result.rejected, (r) => [r.slot, r.reason]), [["myteam:2", "migrate-failed"]]);
+  assert.equal(h.disk.get("apex26.career.myteam.2"), beforeSkipped, "the slot that failed migration is untouched");
+  assert.equal(JSON.parse(h.disk.get("apex26.career.driver.0")).money, 777, "the good rows import");
+  assert.ok(before.length && beforeRevision != null);
   assert.equal(JSON.stringify(envelope), original, "preflight never mutates the imported envelope");
 });
 
@@ -2000,10 +2012,11 @@ test("object schema versions are refused before coercion or any import write", (
     fillSix(h);
     const envelope = h.CareerBackup.build();
     envelope.slots[5].data.v = v;
-    const before = [...h.disk.entries()];
-    assert.equal(h.CareerBackup.validate(envelope).reason, "invalid-version");
-    assert.equal(h.CareerBackup.apply(envelope).reason, "invalid-version");
-    assert.deepEqual([...h.disk.entries()], before);
+    const before = h.disk.get("apex26.career.myteam.2");
+    // A bad row is skipped and named, never coerced or written (#6587).
+    assert.deepEqual(Array.from(h.CareerBackup.validate(envelope).rejected, (r) => [r.row, r.reason]), [[5, "invalid-version"]]);
+    assert.deepEqual(Array.from(h.CareerBackup.apply(envelope).rejected, (r) => r.reason), ["invalid-version"]);
+    assert.equal(h.disk.get("apex26.career.myteam.2"), before);
   }
 });
 
@@ -2247,4 +2260,73 @@ test("a refused slot-card deletion keeps the active save available for retry", (
   clickDelete(); clickDelete();
   assert.equal(h.Career.active(), false);
   assert.equal(loadHarness({ disk: h.disk }).store.get("career.driver.0", null), null);
+});
+
+// #6587 / #6601 / #6602 D2(a): a bad slot row is skipped and reported; the rest of the file imports.
+test("#6587: a string slot is skipped and reported, the good slot still restores", () => {
+  const h = loadHarness();
+  const envelope = { format: "apex26-career-backup-v1", slots: [
+    { flavour: "driver", i: 0, data: save({ money: 555 }) },
+    { flavour: "driver", i: 1, data: "garbage" },
+    { flavour: "myteam", i: 2, data: { v: -1 } },
+  ] };
+  const checked = h.CareerBackup.validate(envelope, JSON.stringify(envelope));
+  assert.equal(checked.ok, true);
+  assert.deepEqual(Array.from(checked.rejected, (r) => [r.slot, r.reason]),
+    [["driver:1", "slot-not-object"], ["myteam:2", "invalid-version"]]);
+  const preview = h.CareerBackup.preview(envelope);
+  assert.equal(preview.slots.length, 1);
+  assert.equal(preview.rejected.length, 2, "the preview lists every skipped row before anything is written");
+  const result = h.CareerBackup.apply(envelope, { otherFlavourConfirmed: true });
+  assert.equal(result.ok, true);
+  assert.deepEqual(Array.from(result.written), ["driver:0"]);
+  assert.equal(result.rejected.length, 2);
+  assert.equal(JSON.parse(h.disk.get("apex26.career.driver.0")).money, 555);
+  assert.equal(h.disk.has("apex26.career.driver.1"), false);
+  assert.equal(h.disk.has("apex26.career.myteam.2"), false);
+});
+
+test("#6587: a primitive stored My Team slot is left out of EXPORT ALL instead of throwing", async () => {
+  const h = loadHarness();
+  fillSix(h);
+  h.store.set("career.myteam.2", 7);
+  h.store.set("career.driver.2", [1]);
+  const exported = await h.CareerBackup.exportAll();
+  assert.equal(exported.ok, true);
+  assert.deepEqual(Array.from(exported.skipped, (r) => [r.slot, r.reason]),
+    [["driver:2", "slot-not-object"], ["myteam:2", "slot-not-object"]]);
+  const rows = Object.fromEntries(Array.from(exported.envelope.slots, (r) => [r.flavour + ":" + r.i, r.data]));
+  assert.equal(rows["myteam:2"], null);
+  assert.equal(rows["driver:2"], null);
+  assert.equal(rows["myteam:1"].money, 220, "every other slot still exports");
+  assert.equal(h.CareerBackup.validate(exported.envelope).rejected.length, 0, "the file it wrote reads back clean");
+});
+
+test("#6601: a junk slot index is skipped as bad-index and never lands in slot 0 or 1", () => {
+  for (const i of ["abc", {}, true, 1.5, 4294967297, "1", [1], -1, 3, null, undefined]) {
+    const h = loadHarness();
+    fillSix(h);
+    const before = slotSnap(h.disk);
+    const row = { flavour: "driver", data: save({ money: 999 }) };
+    if (i !== undefined) row.i = i;
+    const envelope = { format: "apex26-career-backup-v1", slots: [row] };
+    const checked = h.CareerBackup.validate(envelope);
+    assert.equal(checked.ok, true, JSON.stringify(i));
+    assert.deepEqual(Array.from(checked.rejected, (r) => r.reason), ["bad-index"], JSON.stringify(i));
+    const result = h.CareerBackup.apply(envelope, { otherFlavourConfirmed: true });
+    assert.equal(result.written.length, 0, JSON.stringify(i) + " wrote a slot");
+    assert.deepEqual(slotSnap(h.disk), before, JSON.stringify(i) + " changed a local slot");
+  }
+  const h = loadHarness();
+  fillSix(h);
+  const result = h.CareerBackup.apply({ format: "apex26-career-backup-v1",
+    slots: [{ flavour: "driver", i: 2, data: save({ money: 999 }) }] }, { otherFlavourConfirmed: true });
+  assert.deepEqual(Array.from(result.written), ["driver:2"], "a valid integer row still restores");
+  assert.equal(JSON.parse(h.disk.get("apex26.career.driver.2")).money, 999);
+});
+
+test("a recovery file (one slot) still refuses whole on a bad slot", () => {
+  const h = loadHarness();
+  const r = h.CareerBackup.recoveryEnvelope({ format: "apex26-recovery-v1", career: save({ v: 2 ** 32 }) }, { flavour: "driver", i: 0 });
+  assert.equal(r.ok, false);
 });

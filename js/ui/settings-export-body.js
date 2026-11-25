@@ -577,18 +577,21 @@ function migrateSlot(raw) {
 // Ask the shared authority about opaque future saves before migration can
 // discard them. Check only the version so unrelated legacy coercion, shape
 // and size decisions cannot hide a future discriminator.
+// validate() skips a bad row and names it in `rejected` instead of refusing the file.
+function careerRowReason(flavour, data) {
+  const r = CareerBackup.validate({ format: CareerBackup.FORMAT, slots: [{ flavour, i: 0, data }] });
+  return r.reason || (r.rejected && r.rejected[0] && r.rejected[0].reason) || null;
+}
 function futureCareerSlot(raw, flavour) {
   if (typeof CareerBackup === "undefined") return false;
-  return CareerBackup.validate({ format: CareerBackup.FORMAT,
-    slots: [{ flavour, i: 0, data: { v: raw && raw.v } }] }).reason === "newer-version";
+  return careerRowReason(flavour, { v: raw && raw.v }) === "newer-version";
 }
 // migrateSlot coerces money:"abc" to 0, which would restore a poisoned file as
 // a zero-credit career; ask the backup gate about the RAW money first.
 function poisonedCareerMoney(raw, flavour) {
   if (typeof CareerBackup === "undefined" || !raw || typeof raw !== "object"
       || !Object.prototype.hasOwnProperty.call(raw, "money")) return false;
-  return CareerBackup.validate({ format: CareerBackup.FORMAT,
-    slots: [{ flavour, i: 0, data: { money: raw.money } }] }).reason === "nan-money";
+  return careerRowReason(flavour, { money: raw.money }) === "nan-money";
 }
 // Clean-room fix 70: the season save, licence badges and daily history travel in the career
 // file too, under CareerBackup's envelope names, so a player with no career still backs them up.
@@ -671,7 +674,8 @@ async function applyCareer(file, revisions) {
       continue;
     }
     const match = CAREER_SLOT_RE.exec(k);
-    if (futureCareerSlot(bag[k], match[1])) return refused("newer-version");
+    // A newer build's slot is skipped and counted, never written; the rest imports (#6602 D2(a)).
+    if (futureCareerSlot(bag[k], match[1])) { skipped++; continue; }
     if (poisonedCareerMoney(bag[k], match[1])) { skipped++; continue; }
     const c = migrateSlot(bag[k]);
     if (!c) { skipped++; continue; }
@@ -690,7 +694,7 @@ async function applyCareer(file, revisions) {
   if (!r.ok) return refused(r.reason);
   const failed = r.failed || 0;
   const applied = Array.isArray(r.applied) ? r.applied.length : r.written.length + (r.selectionWritten ? 1 : 0);
-  return { ok: true, applied, skipped, failed, reason: null };
+  return { ok: true, applied, skipped: skipped + (Array.isArray(r.rejected) ? r.rejected.length : 0), failed, reason: null };
 }
 
 async function download(obj, name) {
@@ -871,7 +875,7 @@ function create(G) {
         // Storage refused some writes: a reload would drop them, so say so and stay.
         if (settingsFile) receipt(restoreSummary(r), r.applied > 0 && !r.failed);
         if (r.failed) { flash(b, label, `STORAGE FULL — ${r.failed} NOT SAVED${r.applied ? "" : ", NOTHING CHANGED"}`, 3200); return; }
-        if (!r.applied) { flash(b, label, "NO CHANGES", 2200); return; }
+        if (!r.applied) { flash(b, label, `NO CHANGES${r.skipped ? ` — ${r.skipped} SKIPPED` : ""}`, 2200); return; }
         // A reload is the honest way to apply this: half these values are read
         // once at boot (the backend pick, the grid, every tuner's first
         // paint), so re-reading them without one would leave the page showing
