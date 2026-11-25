@@ -5727,8 +5727,9 @@ function updateCarLongitudinal(c, dt, ranked, S) {
   // --- kerbs (drivable, unlike walls): riding one rumbles and costs a little
   // grip + speed, but you can stay on it. Distinct from going off into grass.
   // Speed cut follows kerbGripSm (λ=12), not raw onKerb — that flag flickers ~20 Hz.
+  // It fades in below vStd 10: flat, it beat drive from rest (#6481).
   c.kerbGripSm = damp(c.kerbGripSm ?? 1, c.onKerb ? 0.7 : 1, 12, dt);
-  if (c.kerbGripSm < 0.999) c.speed = Math.sign(c.speed) * Math.max(0, Math.abs(c.speed) - 6 * (1 - c.kerbGripSm) / 0.3 * dt);
+  if (c.kerbGripSm < 0.999) { const v = Math.abs(c.speed); c.speed = Math.sign(c.speed) * Math.max(0, v - 6 * (1 - c.kerbGripSm) / 0.3 * Math.min(1, vStd(v) / 10) * dt); }
   if (c.onKerb && c.isPlayer) c.kerbCueT = KERB_CUE_HOLD;
   // The raw onKerb flag is a floor-indexed per-node lookup (TrackMesh.onKerb)
   // and flickers at the ~4 m node rate at speed (≈20 Hz at 300 km/h) when the

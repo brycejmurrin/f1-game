@@ -898,9 +898,42 @@ jobs:
               | jq -s -r --arg o "$GITHUB_REPOSITORY_OWNER" 'last | if . != null and .login == $o and .app == null then "true" else "false" end'
           }
           n=$(jq -r .number <<<"$ARM"); head=$(jq -r .head <<<"$ARM"); tip=$(jq -r .tip <<<"$ARM")
-          paused=$(merge_paused)
-          pr=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$n")
-          now=$(gh api "repos/$GITHUB_REPOSITORY/branches/$DEPLOY_BRANCH" --jq .commit.sha)
+          read_error=$(mktemp)
+          trap 'rm -f "$read_error"' EXIT
+          # T2 (train #6382, job 138837647849, 2026-11-24): one of the three reads below got `503 Service Unavailable
+          # "no healthy upstream"` and the step exited 1, so `retry` had no outputs and the green head was stranded.
+          # read_5xx <cmd…>: run a read; on a GitHub 5xx re-read it once after GATE_REREAD_S. Returns 75 when the 5xx
+          # outlasts the re-read, else the read's own status. on_read_fail: the rate limit defers as before (exit 1,
+          # backoff); a 5xx hands the PR to `retry` (RETRY_MAX per head) and exits 0; any other failure stays a failure.
+          read_5xx() {
+            local rc
+            "$@" 2>"$read_error" && return 0 || rc=$?
+            grep -Eiq 'HTTP 5[0-9][0-9]|status code: 5[0-9][0-9]' "$read_error" || return "$rc"
+            cat "$read_error" >&2
+            sleep "${GATE_REREAD_S:-5}"
+            "$@" 2>"$read_error" && return 0 || rc=$?
+            if grep -Eiq 'HTTP 5[0-9][0-9]|status code: 5[0-9][0-9]' "$read_error"; then return 75; fi
+            return "$rc"
+          }
+          on_read_fail() {
+            local rc=$1
+            defer_if_limited
+            [ "$rc" = 75 ] || { cat "$read_error" >&2; exit "$rc"; }
+            echo "::notice::not arming #$n: GitHub answered 5xx twice on the arm's first reads; re-gating within the existing retry budget" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+          defer_if_limited() {
+            cat "$read_error" >&2
+            if grep -Eiq 'HTTP 429|rate[ -]limit.*HTTP 403|HTTP 403.*rate[ -]limit' "$read_error"; then
+              echo 'backoff=true' >> "$GITHUB_OUTPUT"
+              echo "::error::GitHub rate limited the arm check for #$n; deferring retries to the next sweep." | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+          }
+          paused=$(read_5xx merge_paused) || on_read_fail "$?"
+          pr=$(read_5xx gh api "repos/$GITHUB_REPOSITORY/pulls/$n") || on_read_fail "$?"
+          now=$(read_5xx gh api "repos/$GITHUB_REPOSITORY/branches/$DEPLOY_BRANCH" --jq .commit.sha) || on_read_fail "$?"
           skip=""
           [ "$paused" = true ] && skip="dispatch:merge-pause is set"
           [ "$(jq -r .state <<<"$pr")" = open ] || skip="PR is $(jq -r .state <<<"$pr")"
@@ -918,16 +951,6 @@ jobs:
           # later, still listed the older pending first. Read up to three times, GATE_REREAD_S apart; a mismatch that
           # outlasts them is handed to `retry` (RETRY_MAX per head) instead of stopping, so the PR is not left green
           # and unarmed until a person dispatches it. Every other skip above stays final.
-          read_error=$(mktemp)
-          trap 'rm -f "$read_error"' EXIT
-          defer_if_limited() {
-            cat "$read_error" >&2
-            if grep -Eiq 'HTTP 429|rate[ -]limit.*HTTP 403|HTTP 403.*rate[ -]limit' "$read_error"; then
-              echo 'backoff=true' >> "$GITHUB_OUTPUT"
-              echo "::error::GitHub rate limited the arm check for #$n; deferring retries to the next sweep." | tee -a "$GITHUB_STEP_SUMMARY"
-              exit 1
-            fi
-          }
           regate=false
           if [ -z "$skip" ]; then
             for try in 1 2 3; do
@@ -1106,6 +1129,8 @@ jobs:
     timeout-minutes: 3
     permissions:
       actions: write
+      pull-requests: read
+      statuses: read
     steps:
       - name: Dispatch a fresh gate for each requested retry
         env:
@@ -1118,10 +1143,34 @@ jobs:
           a=0; [[ "${ATTEMPT:-}" =~ ^[0-9]{1,3}$ ]] && a=$ATTEMPT
           list=$(jq -c -n --arg p "${POST_RETRY:-}" --arg a "${ARM_RETRY:-}" \
             '((if $p == "" then [] else ($p | fromjson) end) + (if $a == "" then [] else [$a | fromjson] end)) | unique_by(.number)')
+          # P1 (#6379, the land-trigger churn note: 33 of 105 land-gate runs were this chain). Only one PR can
+          # merge per tip, so re-gate only the HEAD of the land queue, in resolve's order: train, then priority, then
+          # oldest. The queue is the ready, unarmed `land` PRs without `hold` whose `gate` is a success or a "tip moved"
+          # pending posted in the last 15 min, plus the PRs handed over here. An older one is the sweep's (and T1's),
+          # so a stuck PR never holds the queue. The rest keep their pending "re-gating" for the next train or sweep.
+          # An unreadable queue dispatches every handed-over PR, as before.
+          first=""
+          # shellcheck disable=SC2016 # GraphQL variables, bound by gh
+          [ "$a" -ge "$RETRY_MAX" ] || first=$(gh api graphql -f owner="${GITHUB_REPOSITORY%/*}" -f repo="${GITHUB_REPOSITORY#*/}" -f base="$DEPLOY_BRANCH" \
+            -f query='query($owner:String!,$repo:String!,$base:String!){repository(owner:$owner,name:$repo){pullRequests(states:OPEN,baseRefName:$base,labels:["land"],first:100){nodes{number isDraft createdAt autoMergeRequest{enabledAt} labels(first:50){nodes{name}} commits(last:1){nodes{commit{status{context(name:"gate"){state description createdAt}}}}}}}}}}' \
+            | jq -er --argjson asked "$list" --argjson now "$(date -u +%s)" '
+              select(.errors == null) | .data.repository.pullRequests.nodes | arrays
+              | map((.labels.nodes | map(.name)) as $l | (.commits.nodes[-1].commit.status.context // {}) as $g
+                  | select(.isDraft == false and .autoMergeRequest == null and ($l | index("hold") | not))
+                  | select(.number as $n | ($asked | any(.number == $n))
+                      or ((($g.state == "SUCCESS") or ($g.state == "PENDING" and ($g.description // "" | test("tip moved"))))
+                          and ($now - ($g.createdAt | fromdateiso8601)) <= 900))
+                  | {number, created: .createdAt, prio: (if ($l | index("train")) then -1 elif ($l | index("priority")) then 0 else 1 end)})
+              | sort_by(.prio, .created, .number) | first | .number') || first=""
+          [ "$a" -ge "$RETRY_MAX" ] || [[ "$first" =~ ^[0-9]+$ ]] || { first=""; echo "::notice::land queue unreadable: dispatching every requested re-gate" | tee -a "$GITHUB_STEP_SUMMARY"; }
           while IFS= read -r row <&3; do
             n=$(jq -r .number <<<"$row"); head=$(jq -r .head <<<"$row")
             if [ "$a" -ge "$RETRY_MAX" ]; then
               echo "::notice::#$n: retry budget spent ($a of $RETRY_MAX immediate re-gates on ${head:0:12}); the next train re-gates" | tee -a "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            if [ -n "$first" ] && [ "$n" != "$first" ]; then
+              echo "::notice::#$n: not the head of the land queue (#$first is); its pending re-gate waits for the next train or sweep" | tee -a "$GITHUB_STEP_SUMMARY"
               continue
             fi
             # POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches: `ref` + `inputs` (strings).
@@ -1208,8 +1257,8 @@ jobs:
           paused=$(merge_paused) || paused=unreadable
           if [ "$paused" != false ]; then say "stale-gate sweep skipped: dispatch:merge-pause is set (or unreadable: $paused)"; exit 0; fi
           now=$(date -u +%s)
-          lands=$(gh pr list --repo "$R" --state open --base "$DEPLOY_BRANCH" --label land --limit 100 --json number,headRefOid,isDraft,labels,autoMergeRequest \
-            --jq '.[] | select(.isDraft | not) | select([.labels[].name] | index("hold") | not) | {number, head: .headRefOid, armed: (.autoMergeRequest != null)} | @json') \
+          lands=$(gh pr list --repo "$R" --state open --base "$DEPLOY_BRANCH" --label land --limit 100 --json number,headRefOid,headRefName,isDraft,labels,autoMergeRequest \
+            --jq '.[] | select(.isDraft | not) | select([.labels[].name] | index("hold") | not) | {number, head: .headRefOid, armed: (.autoMergeRequest != null), train: ((.headRefName // "") | startswith("train/"))} | @json') \
             || { say "stale-gate sweep skipped: could not list the land PRs"; exit 0; }
           [ -n "$lands" ] || exit 0
           # One immutable dispatch-history snapshot for all candidates. GitHub lists runs newest first.
@@ -1236,7 +1285,7 @@ jobs:
           while IFS= read -r c <&3; do
             [ -n "$c" ] || continue
             if [ "$sent" -ge "$STALE_MAX" ]; then say "stale-gate sweep: cap of $STALE_MAX re-gates reached; the rest wait for the next sweep"; break; fi
-            n=$(jq -r .number <<<"$c"); head=$(jq -r .head <<<"$c"); armed=$(jq -r '.armed // false' <<<"$c")
+            n=$(jq -r .number <<<"$c"); head=$(jq -r .head <<<"$c"); armed=$(jq -r '.armed // false' <<<"$c"); train=$(jq -r '.train // false' <<<"$c")
             runs=$(gh api "repos/$R/actions/workflows/ci.yml/runs?head_sha=$head&per_page=100" --jq '.workflow_runs' 2>"$sweep_error") || { quota_exhausted && break; say "#$n: could not read the CI runs"; continue; }
             if jq -e 'any(.[]; .status != "completed")' <<<"$runs" >/dev/null; then echo "#$n: CI still running"; continue; fi
             ci_done=$(jq -r 'sort_by(.created_at) | last // {} | if .conclusion == "success" then (.updated_at | fromdateiso8601) else 0 end' <<<"$runs")
@@ -1265,7 +1314,13 @@ jobs:
                  | select(.pr == null or (.pr == $n and (.h == $head or .h == "-"))) | (.a // "0" | tonumber)]
               | [length, (max // 0)] | max' <<<"$history") \
               || { say "#$n: dispatch history does not cover this CI window; skipping"; continue; }
-            if [ "$spent" -ge "$RETRY_MAX" ]; then say "#$n: $why, but $spent re-gates since CI finished spent the budget of $RETRY_MAX; a push, a label flip or the next train re-gates"; continue; fi
+            if [ "$spent" -ge "$RETRY_MAX" ]; then
+              # T3 (#6382): no next train opens while this one is open, so a spent train PR is the merge-train
+              # build's to close `stale` (T1: unarmed past its gate, or tip moved with the budget spent).
+              if [ "$train" = true ]; then say "#$n: $why, but $spent re-gates since CI finished spent the budget of $RETRY_MAX; a train: the merge-train build closes it stale (T1) and rebuilds from its cars"
+              else say "#$n: $why, but $spent re-gates since CI finished spent the budget of $RETRY_MAX; a push, a label flip or the next train re-gates"; fi
+              continue
+            fi
             if gh api --method POST "repos/$R/actions/workflows/land.yml/dispatches" \
                  -f ref="$DEPLOY_BRANCH" -f "inputs[pr]=$n" -f "inputs[head]=$head" -f "inputs[attempt]=$((spent + 1))" >/dev/null 2>"$sweep_error"; then
               sent=$((sent + 1)); say "#$n: $why; re-gate dispatched ($((spent + 1)) of $RETRY_MAX on ${head:0:12})"

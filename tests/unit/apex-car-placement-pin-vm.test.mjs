@@ -33,9 +33,10 @@ SCENARIOS["rival(12,1.5)"] = (A) => A.rival(12, 1.5);
 SCENARIOS["rival()"] = (A) => A.rival();
 SCENARIOS["rivals"] = (A) => A.rivals([{ dProg: 8, dx: -1 }, { dProg: -6, dx: 1.5, speed: 20 }, {}]);
 
-// sha256(JSON)[0:16] per scenario, recorded on 700f50c8 (pre-carve). Re-recorded for #6568, an intended AI change
-// (Bryce #6565: HARD corners at the player's envelope, DIFF.hard.corner 1.072, plus the ERS defend floor 0.12):
-// only the AI field's motion in the step(30) preamble moved; every reset(*) digest is unchanged.
+// sha256(JSON)[0:16] per scenario, recorded on 700f50c8 (pre-carve); re-recorded for #6481 (the kerb cut fades
+// in below vStd 10, so the from-rest pre-roll field moves; the reset(*) rows are unchanged); re-recorded on top for
+// #6568 (Bryce #6565: HARD corners at the player's envelope, DIFF.hard.corner 1.072, + ERS defend floor 0.12 move
+// the AI field in the same pre-roll; the reset(*) rows are unchanged again).
 const PIN = {
   "jump(undefined)": "fa8a375a6c5c482f",
   "park(undefined)": "9b764dc61217432f",

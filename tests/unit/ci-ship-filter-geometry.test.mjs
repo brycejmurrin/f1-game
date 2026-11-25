@@ -146,9 +146,10 @@ test("a draft push runs the fast tier with a selection plan and defers browser j
   };
   const on = (v) => Object.entries(v.jobs).filter(([, x]) => x).map(([id]) => id).sort();
   const draft = view(ctx());
-  for (const id of ["guards-a", "guards-b", "guards-c", "guards-d", "guards", "lints", "sweeps-parts", "select", "selected-verdict", "ci-verdict"])
+  for (const id of ["guards-a", "guards-c", "guards", "lints", "sweeps-parts", "select", "selected-verdict", "ci-verdict"])
     assert.ok(draft.jobs[id], `a draft push runs ${id}`);
-  for (const id of ["selected", "driving-model", "node-suites", "smoke", "staged-boot", "sweeps", "renderer-macos", "xr", "train-twins", "baseline-trial"])
+  // DRAFT PAIRS (#6557 P9): a draft's guard shards 2/4 and 4/4 run in tooling A and C (ci-gate-selection pins the copies).
+  for (const id of ["guards-b", "guards-d", "selected", "driving-model", "node-suites", "smoke", "staged-boot", "sweeps", "renderer-macos", "xr", "train-twins", "baseline-trial"])
     assert.ok(!draft.jobs[id], `a draft push does not run ${id} (ready_for_review does)`);
   assert.equal(draft.verdict, "CI (draft fast tier)", "a draft never supplies the required `CI` name (#2664)");
   assert.equal(draft.group, "ci-pr-77", "a draft push replaces the PR's live run (keyed on the PR number)");
@@ -157,6 +158,7 @@ test("a draft push runs the fast tier with a selection plan and defers browser j
   for (const action of ["synchronize", "ready_for_review"]) {
     const ready = view(ctx({ action, draft: false }));
     assert.equal(ready.verdict, "CI");
+    for (const id of ["guards-a", "guards-b", "guards-c", "guards-d"]) assert.ok(ready.jobs[id], `${action} (ready) runs ${id}: four guard jobs for wall time`);
     assert.equal(ready.budget, "", "ready keeps select-specs' default budget");
     for (const id of on(draft)) assert.ok(ready.jobs[id], `ready still runs ${id}`);
     for (const id of ["selected", "driving-model", "node-suites", "smoke", "staged-boot", "sweeps", "renderer-macos", "xr"]) assert.ok(ready.jobs[id], `ready runs ${id}`);

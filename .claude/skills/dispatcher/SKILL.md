@@ -25,6 +25,8 @@ re-owns a silent PR (`needs-owner`, one `CONTINUE PR n`). A launched session loa
 - The Board is issue #1780: the orchestrator posts `tip-red:` bulletins there; `tip-alarm.yml` posts the tip's red
   and green notes and labels it `deploy:red`.
 
+An orchestrator on Codex or Cursor (no `create_session`, no `send_message`: GitHub is the whole bus, Bryce launches):
+[`references/other-hosts.md`](references/other-hosts.md).
 Channels, `land` lanes, relayed grants and a shared phone, from a five-worker run:
 [`references/sibling-sessions.md`](references/sibling-sessions.md).
 

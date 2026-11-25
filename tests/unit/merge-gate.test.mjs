@@ -1105,6 +1105,8 @@ function runStep(script, env, files = {}) {
     `gh() { echo "gh $*" >> "$GH_LOG"; local q="" a data args=("$@");`,
     `  if [[ "$*" == *"/statuses?"* && -n "\${GH_ARM_STATUS_ERROR:-}" ]]; then echo "$GH_ARM_STATUS_ERROR" >&2; return 1; fi;`,
     `  if [[ "$*" == *"repos/$GITHUB_REPOSITORY/pulls "* && -n "\${GH_ARM_LIST_ERROR:-}" ]]; then echo "$GH_ARM_LIST_ERROR" >&2; return 1; fi;`,
+    // GH_5XX_ON <substring>: the first GH_5XX_N (default 1) calls whose argv holds it fail with GH_5XX_MSG (a 503).
+    `  if [ -n "\${GH_5XX_ON:-}" ] && [[ "$*" == *"$GH_5XX_ON"* ]] && [ "$(grep -cF -- "$GH_5XX_ON" "$GH_LOG")" -le "\${GH_5XX_N:-1}" ]; then echo "\${GH_5XX_MSG:-non-200 OK status code: 503 Service Unavailable body: \"no healthy upstream\"}" >&2; return 1; fi;`,
     `  if [ "\${GH_STALL:-}" = true ]; then read -r -t 60 _ <&9; fi;`,
     `  while [ $# -gt 0 ]; do a=$1; shift; case "$a" in --jq) q=$1; shift ;; esac; done;`,
     `  case " \${args[*]} " in`,
@@ -1185,7 +1187,7 @@ test("land.yml retry: workflow_dispatch on the deploy branch only, in the PR's o
 
 test("land.yml retry job: actions write only, no checkout, no repo code, no secret; runs after post and arm", () => {
   const j = LAND.jobs.retry;
-  assert.deepEqual(j.permissions, { actions: "write" });
+  assert.deepEqual(j.permissions, { actions: "write", "pull-requests": "read", statuses: "read" }, "P1 reads the land queue; the only write is the dispatch");
   assert.deepEqual(j.needs, ["resolve", "post", "arm"]);
   assert.equal(runsRepoCode(j), false);
   assert.equal(usesSecret(j), false, "GITHUB_TOKEN: its workflow_dispatch is one of the two events it may start");
@@ -1765,9 +1767,47 @@ test("land.yml retry: dispatches each PR once on the deploy branch with attempt+
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.calls.length, 0, "budget spent: nothing dispatched, the next train re-gates");
   r = go("junk; rm -rf /", `[${item}]`, "");
-  assert.match(r.calls[0], /inputs\[attempt\]=1$/, "a malformed attempt counts as 0, never runs");
+  assert.match(r.calls.find((c) => c.includes("--method POST")), /inputs\[attempt\]=1$/, "a malformed attempt counts as 0, never runs");
   r = go("0", `[${item}]`, "", { GH_POST_RC: "1" });
   assert.equal(r.status, 0, "a failed dispatch warns and leaves the next train to re-gate");
+});
+
+test("land.yml retry (P1): only the head of the land queue is re-gated; a stale or unreadable queue never blocks", () => {
+  const run = LAND.jobs.retry.steps[0].run;
+  const ago = (min) => new Date(Date.now() - min * 60000).toISOString().replace(/\.\d{3}Z$/, "Z");
+  const node = (number, created, gate, o = {}) => ({ number, isDraft: false, createdAt: created, autoMergeRequest: null, labels: { nodes: [{ name: "land" }, ...(o.labels || [])] },
+    commits: { nodes: [{ commit: { status: gate && { context: { createdAt: ago(gate.min), state: gate.state, description: gate.d || "= merge-gate passed" } } } }] }, ...o.pr });
+  const queue = (...nodes) => JSON.stringify({ data: { repository: { pullRequests: { nodes } } } });
+  const moved = { state: "PENDING", min: 1, d: "= merge-gate waiting — the deploy tip moved since the gate measured bbbbbbbbbbbb (now cccccccccccc): re-gating" };
+  const go = (asked, q, extra = {}) => runStep(run, { ATTEMPT: "0", POST_RETRY: JSON.stringify(asked.map((n) => ({ number: n, head: HEAD7 }))), ARM_RETRY: "", FAKE_WRAPPER_CHECKS: q, ...extra });
+  const sent = (r) => r.calls.filter((c) => c.includes("--method POST")).map((c) => Number(/inputs\[pr\]=(\d+)/.exec(c)[1]));
+  // Before P1 every handed-over PR was dispatched: #7 here, although #5 is older and also waiting on the moved tip.
+  let r = go([7], queue(node(5, "2026-11-24T10:00:00Z", moved), node(7, "2026-11-24T11:00:00Z", moved)));
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(sent(r), [], "#5 is the head of the queue: #7 waits");
+  const lines = (x) => x.summary.split("\n").filter(Boolean);
+  assert.deepEqual(lines(r), ["::notice::#7: not the head of the land queue (#5 is); its pending re-gate waits for the next train or sweep"]);
+  r = go([5, 7], queue(node(5, "2026-11-24T10:00:00Z", moved), node(7, "2026-11-24T11:00:00Z", moved)));
+  assert.deepEqual(sent(r), [5], "one dispatch per tip: the head");
+  r = go([7], queue(node(5, "2026-11-24T10:00:00Z", { ...moved, min: 40 }), node(7, "2026-11-24T11:00:00Z", moved)));
+  assert.deepEqual(sent(r), [7], "a head whose gate is over 15 min old is the sweep's: it never holds the queue");
+  r = go([7], queue(node(5, "2026-11-24T10:00:00Z", { state: "PENDING", min: 1, d: "= merge-gate waiting — open=ok ci=WAIT" }), node(7, "2026-11-24T11:00:00Z", moved)));
+  assert.deepEqual(sent(r), [7], "a PR waiting on its own CI is not in the queue");
+  r = go([7], queue(node(5, "2026-11-24T10:00:00Z", { state: "SUCCESS", min: 1 }, { pr: { autoMergeRequest: { enabledAt: "x" } } }), node(7, "2026-11-24T11:00:00Z", moved)));
+  assert.deepEqual(sent(r), [7], "an armed PR is GitHub's to merge");
+  r = go([7], queue(node(5, "2026-11-24T10:00:00Z", moved, { labels: [{ name: "hold" }] }), node(7, "2026-11-24T11:00:00Z", moved)));
+  assert.deepEqual(sent(r), [7], "a held PR is not in the queue");
+  r = go([5], queue(node(5, "2026-11-24T10:00:00Z", moved), node(9, "2026-11-24T12:00:00Z", moved, { labels: [{ name: "train" }] })));
+  assert.deepEqual(sent(r), [], "a train is the head (resolve's order: train, priority, oldest)");
+  r = go([7], queue(node(5, "2026-11-24T10:00:00Z", moved), node(7, "2026-11-24T11:00:00Z", null, { labels: [{ name: "priority" }] })));
+  assert.deepEqual(sent(r), [7], "a handed-over priority PR is in the queue even before its pending gate is read");
+  r = go([7, 8], "null");
+  assert.deepEqual(sent(r), [7, 8], "unreadable queue: dispatch as before");
+  assert.deepEqual(lines(r).slice(0, 1), ["::notice::land queue unreadable: dispatching every requested re-gate"]);
+  r = go([7], JSON.stringify({ errors: [{ message: "x" }] }));
+  assert.deepEqual(sent(r), [7], "a GraphQL error is unreadable too");
+  r = go([7], queue(), { ATTEMPT: String(LAND.env.RETRY_MAX) });
+  assert.equal(r.calls.length, 0, "budget spent: not even the queue read");
 });
 
 test("land.yml resolve: a dispatched re-gate is one PR, validated, and its budget resets when the head moved", () => {
@@ -2078,6 +2118,26 @@ test("land.yml sweep: re-gates a land PR whose gate is older than its green CI (
   ];
   for (const [env, want, why] of cases) assert.equal(dispatched(go(env)).length, want, why);
   assert.equal(go({ GH_POST_RC: "1" }).status, 0, "a failed dispatch warns, never fails the sweep");
+});
+
+test("land.yml sweep (T3, #6382): a train PR's spent budget names the merge-train build's stale close, not the next train", () => {
+  const run = LAND.jobs.sweep.steps.find((st) => st.name.startsWith("Re-gate the land PRs")).run;
+  const base = Math.floor((Date.now() - 40 * 60000) / 60000) * 60000;
+  const T = (m) => new Date(base + m * 60000).toISOString().replace(".000Z", "Z");
+  const H = "1".repeat(40);
+  const lands = (ref) => JSON.stringify([{ number: 7, headRefOid: H, headRefName: ref, isDraft: false, labels: [{ name: "land" }] }]);
+  const go = (ref) => runStep(run, { FAKE_LANDS: lands(ref), STALE_MAX: "4",
+    FAKE_RUNS: JSON.stringify({ workflow_runs: [{ status: "completed", conclusion: "success", created_at: T(0), updated_at: T(10) }] }),
+    FAKE_STATUSES: JSON.stringify([{ context: "gate", state: "success", created_at: T(12) }]),
+    FAKE_DISPATCHES: JSON.stringify({ total_count: 1, workflow_runs: [{ created_at: T(11), display_title: `Land retry pr=7 head=${H} attempt=${LAND.env.RETRY_MAX}` }] }) });
+  let r = go("train/20261124T2150-6334-6335-6371");
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.calls.filter((c) => c.includes("--method POST")).length, 0, "the budget still binds");
+  const said = (x) => x.summary.split("\n").filter((l) => l.startsWith("#7: "));
+  const spent = `#7: gate has been green for over 15 minutes without arming, but ${LAND.env.RETRY_MAX} re-gates since CI finished spent the budget of ${LAND.env.RETRY_MAX}`;
+  assert.deepEqual(said(r), [`${spent}; a train: the merge-train build closes it stale (T1) and rebuilds from its cars`]);
+  r = go("claude/x");
+  assert.deepEqual(said(r), [`${spent}; a push, a label flip or the next train re-gates`], "an ordinary PR keeps its cure");
 });
 
 test("land.yml sweep (finding 2): a push to the deploy branch sweeps (rate-capped); a green, unarmed gate older than the tip is re-gated", () => {
@@ -2909,6 +2969,33 @@ test("land.yml arm stops on quota during the status and armed-PR reads, even wit
     const transient = runStep(run, { ...env, [key]: "gh: Bad Gateway (HTTP 502)" });
     assert.equal(transient.status, 0);
     assert.deepEqual(JSON.parse(transient.out.retry), { number: 7, head: HEAD7 });
+  }
+});
+
+test("land.yml arm (T2, #6382 job 138837647849): a GitHub 5xx on a first read is re-read once, then handed to retry, never exit 1", () => {
+  const run = LAND.jobs.arm.steps.find((s) => s.id === "arm").run;
+  const go = (extra = {}) => runStep(run, { ARM: JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A }), FAKE_PR: pr7(), NOW_TIP: TIP_A, LAND_TOKEN: "lt", GITHUB_TOKEN: "t", FAKE_STATUSES: OWN_GATE, ...extra });
+  const armed = (r) => r.calls.some((c) => c.includes(`pr merge 7 --repo o/r --auto --merge --match-head-commit ${HEAD7}`));
+  for (const on of ["/issues -f", "repos/o/r/pulls/7", "/branches/"]) {
+    let r = go({ GH_5XX_ON: on, GH_5XX_N: "1" });
+    assert.equal(r.status, 0, `${on}: ${r.stderr}`);
+    assert.ok(armed(r), `${on}: one 503, then the re-read answers: arms as before`);
+    assert.equal(r.out.retry, undefined);
+    r = go({ GH_5XX_ON: on, GH_5XX_N: "2" });
+    assert.equal(r.status, 0, `${on}: a 5xx that outlasts the re-read is not a failed job (retry needs arm's outputs)`);
+    assert.deepEqual(JSON.parse(r.out.retry), { number: 7, head: HEAD7 }, `${on}: handed to retry`);
+    assert.equal(r.out.backoff, undefined);
+    assert.ok(!armed(r), `${on}: never arms on an unread state`);
+    assert.deepEqual(r.summary.split("\n").filter(Boolean), ["::notice::not arming #7: GitHub answered 5xx twice on the arm's first reads; re-gating within the existing retry budget"]);
+    assert.equal(r.calls.filter((c) => c.includes(on)).length, 2, `${on}: exactly one re-read`);
+    r = go({ GH_5XX_ON: on, GH_5XX_N: "2", GH_5XX_MSG: "gh: Bad Gateway (HTTP 502)" });
+    assert.deepEqual(JSON.parse(r.out.retry), { number: 7, head: HEAD7 }, `${on}: gh's own HTTP 502 form too`);
+    r = go({ GH_5XX_ON: on, GH_5XX_N: "1", GH_5XX_MSG: "gh: Not Found (HTTP 404)" });
+    assert.notEqual(r.status, 0, `${on}: a non-5xx failure still fails the job`);
+    assert.equal(r.out.retry, undefined);
+    r = go({ GH_5XX_ON: on, GH_5XX_N: "1", GH_5XX_MSG: "gh: API rate limit exceeded for installation (HTTP 403)" });
+    assert.notEqual(r.status, 0, `${on}: the rate limit defers as before`);
+    assert.equal(r.out.backoff, "true");
   }
 });
 

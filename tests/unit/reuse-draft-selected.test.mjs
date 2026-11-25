@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parse as parseYAML } from "yaml";
-import { decide, planKey, droppedCount, recordLine, parseRecord, RECORD_TITLE } from "../../tools/ci/reuse-draft-selected.mjs";
+import { decide, planKey, droppedCount, recordLine, parseRecord, parseGuardsRecord, RECORD_TITLE } from "../../tools/ci/reuse-draft-selected.mjs";
 import { selectedGateVerdict } from "../../tools/ci/selected-gate-verdict.mjs";
 import { verdict } from "../../tools/ci/ci-verdict.mjs";
 import { ciWorkflow } from "../helpers/ci-workflow.mjs";
@@ -132,4 +132,12 @@ test("ci.yml wiring: select asks on ready_for_review only, the legs skip on a re
   assert.match(env.REUSED_RUN, /selected_reused_run/);
   const req = jobs["ci-verdict"].steps.find((s) => s.name === "Aggregate job results").env.REQUIRE_SUCCESS;
   assert.match(req, /'[^']*\bselected-verdict\b[^']*'/, "#5403 part 1: the full tier requires the verdict job it may reuse");
+});
+
+// #6557 P1: tooling A's record gained `tree=`; a record from before it still parses, with tree "none".
+test("parseGuardsRecord reads the record with and without tree=", () => {
+  const b = "a".repeat(40), t = "b".repeat(40);
+  assert.deepEqual(parseGuardsRecord(`mode=full base=${b} tree=${t}`), { mode: "full", base: b, tree: t });
+  assert.deepEqual(parseGuardsRecord(`mode=changed base=${b}`), { mode: "changed", base: b, tree: "none" });
+  assert.equal(parseGuardsRecord(`mode=full base=${b} tree=xyz`), null, "a malformed tree is no record");
 });
