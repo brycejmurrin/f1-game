@@ -28,8 +28,8 @@ test("pickEvents: OWNER only, after since, each once, oldest first", () => {
   ];
   const ev = pickEvents(list, state);
   assert.deepEqual(ev.map((e) => e.c.id), [2, 4]);
-  assert.match(ev[0].line, /^hello id=2 .* sha=abc1234 render=tlx-webgpu$/);
-  assert.match(ev[1].line, /^result id=4 re=3 cmd=ping ok=true /);
+  assert.equal(ev[0].line, "hello id=2 at=2026-11-25T12:00:10Z sha=abc1234 render=tlx-webgpu");
+  assert.equal(ev[1].line, 'result id=4 re=3 cmd=ping ok=true {"re":3,"cmd":"ping","ok":true}');
   assert.equal(pickEvents(list, state).length, 0, "seen ids never print twice");
 });
 
@@ -39,8 +39,7 @@ test("nextDelay backs off from the rate-limit headers", () => {
   assert.deepEqual(nextDelay({ status: 200, headers: hdrs({ "x-ratelimit-remaining": 4000 }) }, base), { ms: 5000, why: null });
   assert.equal(nextDelay({ status: 200, headers: hdrs({ "x-ratelimit-remaining": LOW - 1 }) }, base).ms, 20000);
   const low = nextDelay({ status: 200, headers: hdrs({ "x-ratelimit-remaining": FLOOR - 1, "x-ratelimit-reset": now / 1000 + 120 }) }, base);
-  assert.equal(low.ms, 121000);
-  assert.match(low.why, /reset/);
+  assert.deepEqual(low, { ms: 121000, why: `rate limit ${FLOOR - 1} left: waiting for the reset` });
   assert.equal(nextDelay({ status: 403, headers: hdrs({ "retry-after": 30 }) }, base).ms, 30000);
   assert.equal(nextDelay({ status: 429, headers: hdrs({ "x-ratelimit-remaining": 0, "x-ratelimit-reset": now / 1000 + 60 }) }, base).ms, 61000);
   assert.ok(nextDelay({ status: 403, headers: hdrs({ "x-ratelimit-remaining": 0, "x-ratelimit-reset": now / 1000 + 7200 }) }, base).ms <= 15 * 60_000, "capped");
@@ -73,12 +72,12 @@ test("watch: GETs only, ETag 304s, exits on the awaited reply, token never logge
   assert.equal(calls.length, 3);
   for (const c of calls) {
     assert.equal(c.opts.method, "GET", "never posts");
-    assert.ok(!c.url.includes(TOKEN));
+    assert.equal(c.url, calls[0].url, "one fixed URL: the token is never in it (pinned exactly below)");
     assert.equal(c.opts.headers.Authorization, "Bearer " + TOKEN);
   }
   assert.equal(calls[0].opts.headers["If-None-Match"], undefined);
   assert.equal(calls[1].opts.headers["If-None-Match"], '"e1"');
-  assert.match(calls[0].url, /\/repos\/brycejmurrin\/f1-game\/issues\/6600\/comments\?per_page=100&since=2026-11-25T12%3A00%3A00Z$/);
+  assert.equal(calls[0].url, "https://api.github.com/repos/brycejmurrin/f1-game/issues/6600/comments?per_page=100&since=2026-11-25T12%3A00%3A00Z");
   assert.equal(lines.filter((l) => /^(hello|result) /.test(l)).length, 2, "hello once, then the result");
   assert.ok(lines.every((l) => !l.includes(TOKEN)));
 });
