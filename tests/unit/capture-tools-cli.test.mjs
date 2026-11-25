@@ -2,7 +2,7 @@
 // One of five per-tool files split from capture-tools-regressions.test.mjs (T1-10, #3043); no browser.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, mkdirSync, mkdtempSync, writeFileSync, existsSync, rmSync, symlinkSync, realpathSync, statSync } from 'node:fs';
+import { readFileSync, mkdirSync, writeFileSync, existsSync, rmSync, symlinkSync, realpathSync, statSync } from 'node:fs';
 import { resolve, join, relative, isAbsolute, basename, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import vm from 'node:vm';
@@ -16,6 +16,7 @@ import { parseBenchmarkArgs, summarizeBenchmarkSamples, captureSample } from '..
 import { cameraDelta } from '../../tools/shot/replay-camera-probe.mjs';
 import { parseCaptureOptions, captureViewport, captureContextOptions as profileContextOptions, captureScreenshotOptions, captureExtension, captureLaunchOptions, applyCaptureProfile } from '../../tools/shot/capture-options.mjs';
 import { captureBrowserDiagnostics, assertCaptureGpuCapability, startCaptureTrace } from '../../tools/shot/capture-diagnostics.mjs';
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 test('capture parsers reject nonfinite dimensions, scales and unknown flags; seed zero stays explicit', () => {
   for (const viewport of ['Infinityx720', '-2x720', '100.5x720', '0x720', '8193x720']) assert.throws(() => parseCssPlayArgs(['--viewport', viewport]), /viewport/);
@@ -27,7 +28,7 @@ test('capture parsers reject nonfinite dimensions, scales and unknown flags; see
   assert.throws(() => parseCaptureArgs(['--out', '/tmp/capture'], 'lifecycle-census'), /out/);
   assert.throws(() => parseCaptureArgs(['--track', 'unknown-track'], 'lifecycle-census'), /unknown track/);
   mkdirSync(resolve(ROOT, 'scratch'), { recursive: true });
-  const dir = mkdtempSync(resolve(ROOT, 'scratch/capture-path-test-'));
+  const dir = mkTmpDir("capture-path-test-");
   try { symlinkSync(resolve(ROOT, 'js'), resolve(dir, 'source-link')); assert.throws(() => parseCaptureArgs(['--out', resolve(dir, 'source-link', 'bad')], 'lifecycle-census'), /out real/); }
   finally { rmSync(dir, { recursive: true, force: true }); }
   for (const argv of [['monza', '--wat'], ['monza', 'before', 'NaN'], ['monza', 'before', '0,2'], ['monza', 'before', '0,,1']]) assert.throws(() => parseSurveyTrackArgs(argv));
@@ -84,7 +85,7 @@ test('single-screen layout dispatch actually forwards 130 percent and rejects sc
 
 test('garage reset plan preserves existing evidence and invalid part enum never creates output', () => {
   mkdirSync(resolve(ROOT, 'scratch'), { recursive: true });
-  const dir = mkdtempSync(resolve(ROOT, 'scratch/capture-plan-test-'));
+  const dir = mkTmpDir("capture-plan-test-");
   try {
     writeFileSync(resolve(dir, 'preserved.txt'), 'evidence');
     const planned = spawnSync(process.execPath, ['tools/shot/garage-angles.mjs', '--plan', '--reset', '--out=' + dir], { cwd: ROOT, encoding: 'utf8', timeout: 10000 });
@@ -154,7 +155,7 @@ const PATH_DEPS = { existsSync, readFileSync, realpathSync, statSync, mkdirSync,
 
 test('garage diff takes a shot name or a PNG under artifacts/ or scratch/ only, symlinks resolved', () => {
   mkdirSync(resolve(ROOT, 'scratch'), { recursive: true });
-  const dir = mkdtempSync(resolve(ROOT, 'scratch/garage-diff-path-'));
+  const dir = mkTmpDir("garage-diff-path-");
   try {
     writeFileSync(resolve(dir, 'mine.png'), 'png');
     symlinkSync(resolve(ROOT, 'package.json'), resolve(dir, 'link.png'));
@@ -172,7 +173,7 @@ test('garage diff takes a shot name or a PNG under artifacts/ or scratch/ only, 
 
 test('track-session diff containment is outDir + separator, not a bare prefix', () => {
   mkdirSync(resolve(ROOT, 'scratch'), { recursive: true });
-  const dir = mkdtempSync(resolve(ROOT, 'scratch/track-diff-path-'));
+  const dir = mkTmpDir("track-diff-path-");
   try {
     const outDir = resolve(dir, 'out');
     mkdirSync(outDir); mkdirSync(outDir + '-x');
@@ -252,7 +253,7 @@ test('GPU diagnostics clean up sessions created after a timeout without changing
 });
 
 test('Chromium capture trace streams bounded data, closes IO, and stop is idempotent', async () => {
-  const dir = mkdtempSync(resolve(ROOT, 'scratch/trace-stream-'));
+  const dir = mkTmpDir("trace-stream-");
   const session = new EventEmitter(), calls = []; let detached = 0;
   session.detach = async () => { detached++; };
   session.send = async (method, args) => {
@@ -276,7 +277,7 @@ test('Chromium capture trace streams bounded data, closes IO, and stop is idempo
 });
 
 test('Chromium capture trace rejects oversized or absent streams and removes partial files', async () => {
-  const dir = mkdtempSync(resolve(ROOT, 'scratch/trace-errors-'));
+  const dir = mkTmpDir("trace-errors-");
   try {
     for (const mode of ['oversized', 'no-stream', 'timeout']) {
       const session = new EventEmitter(); let detached = 0, closed = 0;

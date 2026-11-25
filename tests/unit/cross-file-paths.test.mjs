@@ -14,9 +14,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { referencesIn, audit } from "../../tools/check/cross-file-paths.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 test("a static import is found", () => {
   const { refs } = referencesIn(`import { x } from "./helpers/fixtures.js";`, "a.js");
@@ -61,7 +61,7 @@ test("it actually FAILS on a broken reference — anti-vacuity on the resolver",
   // stopped working, the tree below would read clean forever. So: build the
   // exact shape R2 produces — a file that moved one directory deeper while its
   // "../" reference did not follow — and require a complaint.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "xfp-"));
+  const dir = mkTmpDir("xfp-");
   try {
     fs.mkdirSync(path.join(dir, "tests", "specs"), { recursive: true });
     fs.mkdirSync(path.join(dir, "tools"), { recursive: true });

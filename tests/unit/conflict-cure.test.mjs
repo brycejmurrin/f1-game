@@ -13,9 +13,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { resolveGenBlocks, mergeJson3, mergePackageJson } from "../../tools/lib/conflict-cure.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const SHELL = (scripts, extra = "", after = "") => `<head>
 <!-- @gen-shell:scripts -->
@@ -71,7 +71,7 @@ test("mergeJson3 keeps a dependency one side added, a deletion the other left al
 });
 
 test("a real conflicted merge: hand edits on both sides survive the cure", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-cure-"));
+  const dir = mkTmpDir("apex-cure-");
   const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" });
   const write = (f, s) => fs.writeFileSync(path.join(dir, f), s);
   const pkg = (o) => JSON.stringify(o, null, 2) + "\n";

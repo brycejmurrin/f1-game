@@ -168,7 +168,7 @@ test("no_slot rolls back the car role and disposes the unadopted session", () =>
   // claim one of these cars before it discovers that the local side is absent.
   for (const car of G.cars) { car.local = false; car.human = false; car.isPlayer = false; }
   G.player = null;
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const s = fakeSession();
 
   const out = net.start({ role: "guest", session: s });
@@ -189,6 +189,7 @@ test("no_slot rolls back the car role and disposes the unadopted session", () =>
  *  What the game was handed is recorded beside the fake (rec(G)), never on it: G has no such members. */
 const REC = new WeakMap();
 const rec = (G) => REC.get(G);
+const netOf = (G) => NetPlay.create(G, { qualiNet: REC.has(G) ? REC.get(G).qualiNet : undefined });
 function stubG(n) {
   const r = { cautions: [], quali: [], qLive: [], announcements: [] };
   const G = netStubG(n || 2, 0, {
@@ -196,9 +197,9 @@ function stubG(n) {
     gridPreOrdered: undefined, retireCar: undefined,   // real members a test sets later
     announce: (message) => { r.announcements.push(message); },
     applyCaution: (d) => { r.cautions.push(d); },
-    onPeerQuali: (d) => { r.quali.push(d); },
-    onPeerQualiLive: (d) => { r.qLive.push(d); },
   });
+  // game.js's qualiNet reaches NetPlay.create as a dep, not through G (#6496).
+  r.qualiNet = { onPeerQuali: (d) => { r.quali.push(d); }, onPeerQualiLive: (d) => { r.qLive.push(d); } };
   REC.set(G, r);
   return G;
 }
@@ -206,7 +207,7 @@ function stubG(n) {
 /** A started NetPlay in `role`, plus the session its peer speaks over. */
 function started(role) {
   const G = stubG();
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const s = fakeSession();
   const r = net.start({ role, session: s });
   assert.equal(r.ok, true, `start() must succeed for a ${role}: ${r.error || ""}`);
@@ -355,8 +356,8 @@ test("a GUEST rate-limits the host's QUALI/QLIVE at the room's window (#5012)", 
 test("lobby relay hook sees only sender-bound, normalized qualifying events", () => {
   const s = fakeSession();
   const accepted = [];
-  const G = { onPeerQuali() {}, onPeerQualiLive() {} };
-  NetPlay.bindQuali(s, (d) => d.driverId === "bravo:1", G,
+  const sink = { onPeerQuali() {}, onPeerQualiLive() {} };
+  NetPlay.bindQuali(s, (d) => d.driverId === "bravo:1", sink,
     (type, d) => accepted.push({ type, driverId: d.driverId, t: d.t }));
   s.deliver("quali", { driverId: "alpha:0", t: 71 });
   s.deliver("quali", { driverId: "bravo:1", t: "71" });
@@ -421,7 +422,7 @@ test("a guest's CAUTION neither applies on a two-guest host nor reaches the othe
   // could reach guest B is the host applying or relaying it. Pin both offices
   // shut on a host actually holding two guests.
   const G = stubG(3);
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const sa = fakeSession();
   const sb = fakeSession();
   const r = net.start({
@@ -442,7 +443,7 @@ test("on a two-guest host, each guest's QUALI is accepted for its own seat only"
   // The binding is PER CONNECTION, not "any driver some guest owns": guest B
   // must not be able to post guest A's time either.
   const G = stubG(3);
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const sa = fakeSession();
   const sb = fakeSession();
   const r = net.start({
@@ -520,14 +521,14 @@ function lobbyG() {
     teamIdx: 0, driverIdx: 0,             // the local player holds alpha:0
     trackIdx: 0, raceLaps: 3, raceWeather: "dry", raceTimeOfDay: "day",
     raceQuali: true, raceGrid: "quali", difficulty: "normal", raceChangeable: false, wxArcPlan: null,
-    onPeerQuali: (d) => { r.quali.push(d); },
-    onPeerQualiLive: (d) => { r.qLive.push(d); },
     raceTyreWear: "off", raceReliability: "off",   // a test re-defines these as persisting accessors
-    setNetRoom: () => {},
     store: { get: (k, dflt) => dflt, set: () => {} },
     // Real members a test sets, or beginRace writes, later (the fake is closed, #5982).
-    openQualiForNet: undefined, seed: 0, flow: undefined, duel: false,
+    seed: 0, flow: undefined, duel: false,
   });
+  // raceSettings / qualiNet reach NetLobby.create as deps, not through G (#6496).
+  r.raceSettings = { setNetRoom: () => {} };
+  r.qualiNet = { onPeerQuali: (d) => { r.quali.push(d); }, onPeerQualiLive: (d) => { r.qLive.push(d); }, openQualiForNet: undefined };
   REC.set(G, r);
   return G;
 }
@@ -537,7 +538,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** A REAL lobby in `role`, connected over loopback; `peerSays` is the far end. */
 async function lobbyUp(role) {
   const G = lobbyG();
-  const lobby = NetLobby.create(G);
+  const lobby = NetLobby.create(G, { raceSettings: rec(G).raceSettings, qualiNet: rec(G).qualiNet });
   let far = null;
   lobby.setTransportFactory(() => {
     const pair = NetTransport.loopback({ latencyMs: 0 });
@@ -967,7 +968,7 @@ test("a peer WITHOUT a grid slot cannot arm the start", () => {
   // its circuit: the skipped-countdown bug, reintroduced through the side
   // door. stubG(2) has exactly one free car, so peer 2 goes slotless.
   const G = stubG(2);
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const seated = fakeSession(), slotless = fakeSession();
   const r = net.start({
     role: "host",
@@ -1002,13 +1003,13 @@ test("pickRemoteSlot keeps any-fallback only when profile is null", () => {
   };
 
   const Gany = tagged(4);
-  const netAny = NetPlay.create(Gany);
+  const netAny = netOf(Gany);
   const ok = netAny.start({ role: "host", session: fakeSession() });
   assert.equal(ok.ok, true, `null profile must still seat any free car: ${ok.error || ""}`);
   assert.equal(netAny.status().slotFallback, "any");
 
   const Gmiss = tagged(4);
-  const netMiss = NetPlay.create(Gmiss);
+  const netMiss = netOf(Gmiss);
   const miss = netMiss.start({
     role: "host",
     session: fakeSession(),
@@ -1022,7 +1023,7 @@ test("pickRemoteSlot keeps any-fallback only when profile is null", () => {
 
 test("strategy events require this race epoch and the sender's own car", () => {
   const G = stubG(3); G.track.def = { id: "monza" };
-  const net = NetPlay.create(G), a = fakeSession(), b = fakeSession();
+  const net = netOf(G), a = fakeSession(), b = fakeSession();
   net.start({ role: "host", session: a, sessions: [{id:"a",session:a},{id:"b",session:b}] });
   const model = a.sent.find(e => e.t === NetPlay.EV.MODEL).d;
   a.deliver(NetPlay.EV.MODEL, {...model, epoch:"peer-a"});
@@ -1053,7 +1054,7 @@ test("host AI strategy crosses real sessions with human state and survives host 
     const send = session.sendEvent.bind(session);
     session.sendEvent = (t, d) => { events.push({ t, d }); return send(t, d); };
   }
-  const hn = NetPlay.create(host), gn = NetPlay.create(guest);
+  const hn = netOf(host), gn = netOf(guest);
   hn.start({ role: "host", session: hs }); gn.start({ role: "guest", session: gs });
   const tyre = { id: "medium", code: "M", tread: 0, life: 0.9, colour: [0.9, 0.8, 0] };
   Object.assign(host.cars[0], { pitState: "box", pitStops: 1, tyreWear: 0.6 });
@@ -1088,7 +1089,7 @@ test("host AI strategy crosses real sessions with human state and survives host 
 
 test("AI strategy publishes on phase changes, bounded cadence, and every new receiver epoch", () => {
   const G = poseG(4); G.track.def = { id: "monza" };
-  const net = NetPlay.create(G), s = stateSession();
+  const net = netOf(G), s = stateSession();
   net.start({ role: "host", session: s });
   const model = s.sent.find((e) => e.t === NetPlay.EV.MODEL).d;
   s.deliver(NetPlay.EV.MODEL, { ...model, epoch: "first-receiver" });
@@ -1119,7 +1120,7 @@ test("AI strategy publishes on phase changes, bounded cadence, and every new rec
   assert.equal(updates().length, 4, "a new epoch receives AI state immediately");
   assert.equal(late.epoch, "late-receiver");
   const guest = poseG(4); guest.track.def = { id: "monza" };
-  const gn = NetPlay.create(guest), gs = stateSession();
+  const gn = netOf(guest), gs = stateSession();
   gn.start({ role: "guest", session: gs });
   const epoch = gs.sent.find((e) => e.t === NetPlay.EV.MODEL).d.epoch;
   gs.deliver(NetPlay.EV.STRATEGY, { ...late, epoch });
@@ -1137,7 +1138,7 @@ test("AI strategy publishes on phase changes, bounded cadence, and every new rec
 
 test("AI strategy rejects stale epochs, bad models/tracks, wrong hosts, and guest forgeries", () => {
   const G = poseG(4); G.track.def = { id: "monza" };
-  const net = NetPlay.create(G), host = fakeSession(), forged = fakeSession();
+  const net = netOf(G), host = fakeSession(), forged = fakeSession();
   net.start({ role: "guest", session: host, sessions: [{ id: "host", session: host }, { id: "wrong", session: forged }],
     peers: [{ id: "host" }] });
   const epoch = host.sent.find((e) => e.t === NetPlay.EV.MODEL).d.epoch;
@@ -1152,7 +1153,7 @@ test("AI strategy rejects stale epochs, bad models/tracks, wrong hosts, and gues
   host.deliver(NetPlay.EV.STRATEGY, data);
   assert.equal(G.cars[2].pitStops, 1, "the connected host's valid current update is accepted");
   const hostG = poseG(4); hostG.track.def = { id: "monza" };
-  const hn = NetPlay.create(hostG), a = fakeSession(), b = fakeSession();
+  const hn = netOf(hostG), a = fakeSession(), b = fakeSession();
   hn.start({ role: "host", session: a, sessions: [{ id: "a", session: a }, { id: "b", session: b }] });
   const hostEpoch = a.sent.find((e) => e.t === NetPlay.EV.MODEL).d.epoch;
   for (const wire of [0, 2, 3]) a.deliver(NetPlay.EV.STRATEGY, { ...data, epoch: hostEpoch, wire });
@@ -1281,7 +1282,7 @@ function guestWithHostAi() {
   const G = stubG(3);                                  // 0 = us, 1 = the host's human, 2 = the host's AI
   const retired = [];                                  // what retireCar was handed (not a G member)
   G.retireCar = (c, why) => { c.retired = true; c.dnf = why; retired.push(c.code); };
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const s = fakeSession();
   assert.equal(net.start({ role: "guest", session: s }).ok, true);
   return { G, net, s, ai: G.cars[2], retired };
@@ -1304,7 +1305,7 @@ test("a GUEST parks the host's AI when the host reports its retirement", () => {
 test("a HOST ignores a guest's claim that one of the host's AI retired", () => {
   const G = stubG(3);
   G.retireCar = () => { throw new Error("a guest cannot retire the host's AI"); };
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const s = fakeSession();
   assert.equal(net.start({ role: "host", session: s }).ok, true);
   const ai = G.cars.find((c) => !c.human);
@@ -1407,7 +1408,7 @@ test("a stale disconnect reason does not outlive the race: stop() on an inactive
 test("a mid-race BYE keeps lastReason and does not fire onStop (race continues offline)", () => {
   for (const role of ["guest", "host"]) {
     const G = stubG();
-    const net = NetPlay.create(G);
+    const net = netOf(G);
     const s = fakeSession();
     let onStopCalls = 0;
     assert.equal(net.start({ role, session: s, onStop: () => { onStopCalls++; } }).ok, true);
@@ -1420,7 +1421,7 @@ test("a mid-race BYE keeps lastReason and does not fire onStop (race continues o
   // Host with another guest still racing: close() reports "local", but the
   // leave was clean — reason must stay "bye" while active remains true.
   const G = stubG(3);
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const sA = fakeSession(), sB = fakeSession();
   let onStopCalls = 0;
   assert.equal(net.start({
@@ -1439,7 +1440,7 @@ test("a mid-race BYE keeps lastReason and does not fire onStop (race continues o
 // received said why:"local" for a clean leave.
 test("a guest BYE tells the other guests why:\"bye\", not the close() artefact \"local\"", () => {
   const G = stubG(3);
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const sA = fakeSession(), sB = fakeSession();
   assert.equal(net.start({
     role: "host", session: sA,
@@ -1455,7 +1456,7 @@ test("a guest BYE tells the other guests why:\"bye\", not the close() artefact \
 // Same close() artefact on the host's incompatible-build drop (found while fixing the BYE one).
 test("dropping one incompatible guest tells the others why:\"incompatible_physics\", not \"local\"", () => {
   const G = stubG(3);
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const sA = fakeSession(), sB = fakeSession();
   assert.equal(net.start({
     role: "host", session: sA,
@@ -1470,7 +1471,7 @@ test("dropping one incompatible guest tells the others why:\"incompatible_physic
 
 test("a local stop fires onStop once and keeps reason local through socket teardown", () => {
   const G = stubG();
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const s = fakeSession();
   let onStopCalls = 0;
   assert.equal(net.start({ role: "guest", session: s, onStop: () => { onStopCalls++; } }).ok, true);
@@ -1485,7 +1486,7 @@ test("a local stop fires onStop once and keeps reason local through socket teard
 // at speed) behind where we actually were (bug hunt 2026-09-28).
 test("the published snapshot carries the pose time the game loop hands in", () => {
   const G = stubG();
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const s = fakeSession();
   const ticks = [];
   s.sendState = (bytes) => { const d = NetSnapshot.decodeSnapshot(bytes); if (d) ticks.push(d.tick); return true; };
@@ -1519,7 +1520,7 @@ const lapPose = (sv) => ({ s: sv, x: 0, head: 0, speed: 60, gear: 5, lap: 1 });
 
 test("the host relays every other guest's car in ONE aged datagram per guest, each with its own stamp", () => {
   const G = poseG(4);
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const ss = { a: stateSession(), b: stateSession(), c: stateSession() };
   assert.equal(net.start({ role: "host", session: ss.a,
     sessions: Object.entries(ss).map(([id, session]) => ({ id, session })),
@@ -1548,7 +1549,7 @@ test("the host relays every other guest's car in ONE aged datagram per guest, ea
 
 test("the host stops relaying a rival that has gone quiet instead of stamping its frozen pose fresh (NP-5)", () => {
   const G = poseG(4);
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const ss = { a: stateSession(), b: stateSession(), c: stateSession() };
   assert.equal(net.start({ role: "host", session: ss.a,
     sessions: Object.entries(ss).map(([id, session]) => ({ id, session })),
@@ -1587,7 +1588,7 @@ test("poseRemote samples the spline once per pose: the world position's sample f
   // The real façade (game.js worldFromTrack) fills `out` with the sample at s when the caller hands one in.
   G.worldFromTrack = (sv, x, out) => { samples++; if (out) orig(null, sv, out); return { x, z: sv }; };
   try {
-    const net = NetPlay.create(G);
+    const net = netOf(G);
     const s = stateSession();
     assert.equal(net.start({ role: "guest", session: s }).ok, true);
     let poses = 0;
@@ -1605,7 +1606,7 @@ test("poseRemote samples the spline once per pose: the world position's sample f
 
 test("a guest poses each entry of an aged relay at ITS OWN stamp (tick − age)", () => {
   const G = poseG(3);
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const s = stateSession();
   // A guest seats the host and the relayed second guest (the lobby's roster).
   assert.equal(net.start({ role: "guest", session: s, peers: [{ id: "peer" }, { id: "g2" }] }).ok, true);
@@ -1622,7 +1623,7 @@ test("a guest poses each entry of an aged relay at ITS OWN stamp (tick − age)"
 test("the publish rate is a fixed 20 Hz at 30, 60 and 144 fps", () => {
   for (const fps of [30, 60, 144]) {
     const G = poseG(2);
-    const net = NetPlay.create(G);
+    const net = netOf(G);
     const s = stateSession();
     assert.equal(net.start({ role: "guest", session: s }).ok, true);
     const frame = 1000 / fps;
@@ -1636,7 +1637,7 @@ test("the publish rate is a fixed 20 Hz at 30, 60 and 144 fps", () => {
 test("a rival's lag is measured from the transport's ARRIVAL stamp, not the frame that drained it", () => {
   const run = (stamp) => {
     const G = poseG(2);
-    const net = NetPlay.create(G);
+    const net = netOf(G);
     const s = stateSession();
     assert.equal(net.start({ role: "guest", session: s }).ok, true);
     // Every packet ARRIVES 40 ms after its tick and is drained by a frame 30 ms later.
@@ -1657,7 +1658,7 @@ test("a rival's lag is measured from the transport's ARRIVAL stamp, not the fram
 // ---- L8-f: AI replication + the race silence grace (docs/notes/MULTIPLAYER-AI-REPLICATION.md) ----
 test("the host publishes its AI field at 10 Hz in each guest's aged packet, never that guest's own car", () => {
   const G = poseG(5);                 // cars[0] host, [1] guest a, [2..4] AI
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const a = stateSession();
   assert.equal(net.start({ role: "host", session: a }).ok, true);
   let t = 10_000;
@@ -1674,7 +1675,7 @@ test("the host publishes its AI field at 10 Hz in each guest's aged packet, neve
 
 test("a guest seats the host's AI as host-owned remotes and poses them from the packet", () => {
   const G = poseG(4);                 // cars[0] guest (local), [1] host, [2..3] AI
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const s = stateSession();
   assert.equal(net.start({ role: "guest", session: s }).ok, true);
   const ai = G.cars[2];
@@ -1689,7 +1690,7 @@ test("a guest seats the host's AI as host-owned remotes and poses them from the 
   assert.ok(ai.s > 400 && ai.s < 450, "posed from the host's packets: s=" + ai.s);
   assert.equal(net.owns(G.cars[1]), true, "the host's own car is a human rival as before");
   // Without replication (hostAi: false) the guest simulates its own AI, as before.
-  const G2 = poseG(4), net2 = NetPlay.create(G2);
+  const G2 = poseG(4), net2 = netOf(G2);
   assert.equal(net2.start({ role: "guest", session: stateSession(), hostAi: false }).ok, true);
   assert.equal(net2.owns(G2.cars[2]), false);
   net.stop(); net2.stop();
@@ -1700,7 +1701,7 @@ test("the host's actual AI retirement reaches a guest, including one that binds 
   host.track.def = guest.track.def = { id: "monza" };
   guest.cars[0].local = guest.cars[0].human = false;
   guest.cars[1].local = guest.cars[1].human = true; guest.player = guest.cars[1];
-  const hn = NetPlay.create(host), gn = NetPlay.create(guest), hs = stateSession(), gs = stateSession();
+  const hn = netOf(host), gn = netOf(guest), hs = stateSession(), gs = stateSession();
   hn.start({ role: "host", session: hs }); gn.start({ role: "guest", session: gs });
   const hm = hs.sent.find((e) => e.t === "model").d, gm = gs.sent.find((e) => e.t === "model").d;
   hs.deliver("model", gm); gs.deliver("model", hm);
@@ -1723,7 +1724,7 @@ test("the host's actual AI retirement reaches a guest, including one that binds 
   assert.equal(guest.cars[2].retired, true, "an older unreliable pose cannot resurrect terminal state");
   // A new receiver epoch simulates late binding/rejoining after the DNF event.
   const late = poseG(3); late.track.def = { id: "monza" };
-  const ln = NetPlay.create(late), ls = stateSession(); ln.start({ role: "guest", session: ls });
+  const ln = netOf(late), ls = stateSession(); ln.start({ role: "guest", session: ls });
   hs.deliver("model", ls.sent.find((e) => e.t === "model").d);
   hs.sent.length = 0; hn.tick(10000);
   const repeated = hs.sent.find((e) => e.t === "lap" && e.d.driverId === "drv2");
@@ -1742,7 +1743,7 @@ test("the host's actual AI retirement reaches a guest, including one that binds 
 });
 
 test("AI retirements require the host and the current receiver epoch", () => {
-  const G = poseG(3), net = NetPlay.create(G), s = stateSession();
+  const G = poseG(3), net = netOf(G), s = stateSession();
   net.start({ role: "guest", session: s });
   const epoch = s.sent.find((e) => e.t === "model").d.epoch;
   const retirement = { driverId: "drv2", code: "D2", lap: 1, retired: "engine", invalid: true };
@@ -1751,7 +1752,7 @@ test("AI retirements require the host and the current receiver epoch", () => {
   }
   s.deliver("lap", { ...retirement, epoch }); assert.equal(G.cars[2].retired, true);
   net.stop();
-  const host = poseG(3), hn = NetPlay.create(host), hs = stateSession();
+  const host = poseG(3), hn = netOf(host), hs = stateSession();
   hn.start({ role: "host", session: hs });
   hs.deliver("lap", { ...retirement, epoch: hs.sent.find((e) => e.t === "model").d.epoch });
   assert.equal(!!host.cars[2].retired, false, "a guest cannot retire host AI");
@@ -1766,7 +1767,7 @@ test("AI retirements require the host and the current receiver epoch", () => {
 // parked (updateCar early-outs on c.retired) while live AI and reconnect stay intact.
 test("the host stops relaying a retired AI car in the aged AI field (#4270)", () => {
   const G = poseG(5);                 // cars[0] host, [1] guest a, [2..4] AI
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const a = stateSession();
   assert.equal(net.start({ role: "host", session: a }).ok, true);
   a.feed(9_980, 1, lapPose(50), 9_990);
@@ -1793,7 +1794,7 @@ test("stale handoff after a retired host-AI goes quiet: car stays parked, live A
   host.track.def = guest.track.def = { id: "monza" };
   guest.cars[0].local = guest.cars[0].human = false;
   guest.cars[1].local = guest.cars[1].human = true; guest.player = guest.cars[1];
-  const hn = NetPlay.create(host), gn = NetPlay.create(guest);
+  const hn = netOf(host), gn = netOf(guest);
   const hs = stateSession(), gs = stateSession();
   hn.start({ role: "host", session: hs }); gn.start({ role: "guest", session: gs });
   const hm = hs.sent.find((e) => e.t === "model").d, gm = gs.sent.find((e) => e.t === "model").d;
@@ -1845,7 +1846,7 @@ test("stale handoff after a retired host-AI goes quiet: car stays parked, live A
 
 test("silence grace: a rival quiet > 2 s is the local AI's, back on the wire when it speaks; the race session waits 25 s", () => {
   const G = poseG(3);
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const s = stateSession();
   let timeout = null;
   s.setTimeoutMs = (ms) => { timeout = ms; return ms; };
@@ -1872,7 +1873,7 @@ test("silence grace: a rival quiet > 2 s is the local AI's, back on the wire whe
 
 test("reordered poses cannot renew ownership of a rival whose newest pose stopped advancing", () => {
   for (const role of ["host", "guest"]) {
-    const G = poseG(3), net = NetPlay.create(G), s = stateSession();
+    const G = poseG(3), net = netOf(G), s = stateSession();
     assert.equal(net.start({ role, session: s }).ok, true);
     const rival = G.cars[1];
     s.feed(10000, 1, lapPose(100), 10010);
@@ -1899,7 +1900,7 @@ test("reordered poses cannot renew ownership of a rival whose newest pose stoppe
 test("temporary fallback cannot finish a connected human or remove it from the result wait", () => {
   const RaceControl = eval(src("js/race/race-control.js") + ";RaceControl");
   for (const crossing of [false, true]) {
-    const G = poseG(2), net = NetPlay.create(G), s = stateSession();
+    const G = poseG(2), net = netOf(G), s = stateSession();
     G.track.total = 5000; G.lapsTarget = 3; G.raceT = 120;
     net.start({ role: "host", session: s, interpDelayMs: 0 });
     const rival = G.cars[1];
@@ -1926,7 +1927,7 @@ test("temporary fallback cannot finish a connected human or remove it from the r
 });
 
 test("an owner finish arriving during fallback is preserved when its finishing pose resumes", () => {
-  const G = poseG(2), net = NetPlay.create(G), s = stateSession();
+  const G = poseG(2), net = netOf(G), s = stateSession();
   G.track.total = 5000; G.lapsTarget = 3; G.raceT = 120;
   net.start({ role: "host", session: s, interpDelayMs: 100 });
   const rival = G.cars[1];
@@ -1952,7 +1953,7 @@ test("an owner finish arriving during fallback is preserved when its finishing p
 // which read only the lobby phase's `from`: it seated the leaver as a human nobody would move, and
 // finishDelay waited the 360 s/lap hard cap on it.
 test("the host tells a guest that arms late about a rival that left before it was built", () => {
-  const host = poseG(3), hn = NetPlay.create(host);
+  const host = poseG(3), hn = netOf(host);
   const ss = { a: stateSession(), b: stateSession() };
   assert.equal(hn.start({ role: "host", session: ss.a,
     sessions: Object.entries(ss).map(([k, session], i) => ({ id: i + 1, session })),
@@ -1966,7 +1967,7 @@ test("the host tells a guest that arms late about a rival that left before it wa
   ss.a.deliver(NetPlay.EV.ARMED, {});                              // ARMED is re-sent each second until START lands
   assert.equal(lefts(ss.a).length, 2, "…once per arriving guest, not on every repeat");
   // The guest that was building: seated b as a human rival; the resent LEFT frees it.
-  const guest = poseG(3), gn = NetPlay.create(guest), gs = stateSession();
+  const guest = poseG(3), gn = netOf(guest), gs = stateSession();
   assert.equal(gn.start({ role: "guest", session: gs, peers: [{ id: 1 }, { id: 2 }] }).ok, true);
   assert.equal(guest.cars[2].human, true, "precondition: seated as a human rival");
   gs.deliver(NetPlay.EV.LEFT, lefts(ss.a)[1].d);
@@ -1975,7 +1976,7 @@ test("the host tells a guest that arms late about a rival that left before it wa
 });
 
 test("a human rival that never speaks is the local AI's after the start's own backstop, not never", () => {
-  const G = poseG(3), net = NetPlay.create(G), s = stateSession();
+  const G = poseG(3), net = netOf(G), s = stateSession();
   assert.equal(net.start({ role: "guest", session: s, peers: [{ id: 1 }, { id: 2 }] }).ok, true);
   const rival = G.cars[2];
   let t = 10_000;
@@ -1997,7 +1998,7 @@ test("a session ending hands the HOST's AI cars back scrubbed too, not only the 
   // advanced: the first line crossing after the host timed out recorded a
   // short bogus best lap for ~19 cars (fastest-lap badge, radio call, results).
   const G = poseG(4);                 // cars[0] guest, [1] host, [2..3] the host's AI
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   assert.equal(net.start({ role: "guest", session: stateSession() }).ok, true);
   assert.equal(net.status().hostAi, 2, "two cars are the host's AI");
   for (const c of G.cars.slice(1)) { c.lapTime = 0; c._secT0 = 0; c.incidentInvalidLap = false; c.dnfAt = 5; c.dnfWhy = "x"; c._nOk = true; }
@@ -2016,7 +2017,7 @@ test("a hidden tab keeps pumping the session but publishes no pose; it resumes o
   // last speed. Publishing it made peers solve contact against a ghost and
   // kept the silence rule (-> local AI) from ever firing.
   const G = stubG();
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const s = fakeSession();
   const published = [];
   let pumps = 0;
@@ -2055,7 +2056,7 @@ test("a 20-car field's strategy wire: scalars on the 1 Hz refresh, one JSON.stri
   const tyre = { id: "medium", code: "M", tread: 0, life: 0.9, colour: [0.9, 0.8, 0] };
   const log = [{ code: "S", id: "soft", colour: [1, 0, 0], lap0: 0, lap1: 12 }, { code: "M", id: "medium", colour: [0.9, 0.8, 0], lap0: 12, lap1: null }];
   for (const c of G.cars) Object.assign(c, { tyre, tyreLog: log, tyreStints: 1, tyreWear: 0.3, pitState: "none" });
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const peers = [stateSession(), stateSession(), stateSession()];
   const sendEvent0 = peers[0].sendEvent;
   peers[0].sentJson = [];
@@ -2094,7 +2095,7 @@ test("a 20-car field's strategy wire: scalars on the 1 Hz refresh, one JSON.stri
 
 test("a receiver that arrives late still gets a relayed human's full tyre state, not only its scalar echo (perf hunt 6 review)", () => {
   const G = poseG(4); G.track.def = { id: "monza" };
-  const net = NetPlay.create(G), a = stateSession(), b = stateSession();
+  const net = netOf(G), a = stateSession(), b = stateSession();
   net.start({ role: "host", session: a, sessions: [{ id: "a", session: a }, { id: "b", session: b }] });
   const model = a.sent.find((e) => e.t === NetPlay.EV.MODEL).d;
   a.deliver(NetPlay.EV.MODEL, { ...model, epoch: "peer-a" });
@@ -2121,7 +2122,7 @@ test("broadcast() serialises an event ONCE for every session, and each session's
   const G = stubG(4);
   const wires = [[], [], []];
   const sessions = wires.map((w, i) => ({ id: "g" + i, session: NetSession.create({ transport: { send: (ch, b) => { if (ch === "event") w.push(b); return true; }, onMessage() {}, onClose() {} } }) }));
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const r = net.start({ role: "host", session: sessions[0].session, sessions, peers: sessions.map((s) => ({ id: s.id })) });
   assert.equal(r.ok, true, r.error || "");
   for (const w of wires) w.length = 0;
@@ -2138,7 +2139,7 @@ test("broadcast() serialises an event ONCE for every session, and each session's
 test("a partial lobby roster seats connected drivers awaiting HELLO after named peers", () => {
   const G = stubG(4);
   G.cars[1].team = { id: "alpha" }; G.cars[1].seat = 0;
-  const net = NetPlay.create(G);
+  const net = netOf(G);
   const profiled = fakeSession(), late = fakeSession(), watching = fakeSession();
   const started = net.start({
     role: "host", session: profiled,
@@ -2159,7 +2160,7 @@ test("a partial lobby roster seats connected drivers awaiting HELLO after named 
 
 test("a guest receives the last host settings after a burst and cancels a pending revision on exit", async () => {
   const { G, lobby, peerSays, settle } = await lobbyUp("guest");
-  let starts = 0; G.openQualiForNet = () => { starts++; };
+  let starts = 0; rec(G).qualiNet.openQualiForNet = () => { starts++; };
   const send = (laps, revision) => peerSays("settings", {
     track: 1, laps, weather: "dry", tod: "day", quali: true, difficulty: "normal", revision,
   });
@@ -2186,7 +2187,7 @@ test("a guest receives the last host settings after a burst and cancels a pendin
 
 test("a GO behind a burst of unchanged settings starts the approved race once", async () => {
   const { G, lobby, peerSays, settle } = await lobbyUp("guest");
-  let starts = 0; G.openQualiForNet = () => { starts++; };
+  let starts = 0; rec(G).qualiNet.openQualiForNet = () => { starts++; };
   try {
     lobby.setReady(true);
     for (let i = 0; i < 6; i++) peerSays("settings", {

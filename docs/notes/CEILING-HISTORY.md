@@ -4061,6 +4061,12 @@ Fragment: `ratchets.d/codex--mobile-visor-paint-cost.json`.
 regression coverage verifies track focus preserves its existing map and cursor.
 Fragment: `ratchets.d/cursor--telemetry-mobile-1124.json`.
 
+## 2026-11-25 — claude/fmtgap-6504: Dom.fmtGap, the timing-sheet gap's one home (#6504)
+
+`(tree) eagerCodeBytes` 4036065 → **4036179** (+114): `Dom.fmtGap` lives in the eager
+`js/ui/dom.js`; the `results.js` copy it replaces is lazy, so its removal frees no boot
+bytes. `assertPinsAll` 10454 → **10455** (+1): the pin asserts `results.js` keeps no copy.
+Fragment: `ratchets.d/claude--fmtgap-6504.json`.
 ## 2026-11-25 — claude/issue-5496-damage-reland: DAMAGE: HANDLING room rule re-land (#5496)
 
 `js/game.js gMembers` 279 → **280** (+1) and `js/game.js lines` 9666 → **9667** (+1): the `G.raceDamage` accessor pair
@@ -4068,3 +4074,12 @@ from the #4884 re-land. LobbySettings RULES snapshot and restore read `G[prop]`,
 Bryce's grant, 2026-11-25 ~05:56Z ("Raise the budget", then "Launch #5496 now"): raise exactly what the re-land uses.
 `(tree) assertPins` / `assertPinsAll` +1 and `eagerCodeBytes` +175 are inside the commit hook's absorb.
 Fragment: `ratchets.d/claude--issue-5496-damage-reland.json`.
+
+## 2026-11-25 — claude/issue-6496-net-relays: gardener carve 1, net relays off G (#6496)
+
+`js/game.js gMembers` 280 → **274** (−6), `lines` 9667 → **9660** (−7), `codeLines` 5530 → **5524** (−6) and
+`(tree) eagerCodeBytes` 4036240 → **4035951** (−289): the six relay rows `setNetRoom`, `openRaceSetup`, `onPeerQuali`,
+`onPeerQualiLive`, `openQualiForNet` and `refreshQualiGate` left G; `NetLobby.create` and `NetPlay.create` take
+`raceSettings` / `qualiNet` directly. Bryce's D1 (#6495, ~06:44Z): lower by the full amount, no slot held back.
+`js/net/lobby.js lines` +1 (the deps helper) is inside the commit hook's absorb.
+Fragment: `ratchets.d/claude--issue-6496-net-relays.json`.

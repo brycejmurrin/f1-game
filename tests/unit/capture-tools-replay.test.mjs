@@ -2,12 +2,13 @@
 // One of five per-tool files split from capture-tools-regressions.test.mjs (T1-10, #3043); no browser.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, mkdirSync, mkdtempSync, writeFileSync, existsSync, rmSync, truncateSync } from 'node:fs';
+import { readFileSync, mkdirSync, writeFileSync, existsSync, rmSync, truncateSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parseCaptureArgs, ROOT } from '../../tools/shot/capture-contract.mjs';
 import { lifecycleSoak, pendingWatchCancellation } from '../../tools/check/lifecycle-census.mjs';
 import { loadFixture, exitReplayThroughUi, preflightReplayFixture, cameraOnlyFixture, controlClickGuard, verifiedControlClick } from '../../tools/shot/replay-camera-probe.mjs';
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 test('lifecycle pending WATCH cancellation prevents stale trace completion launching replay', async () => {
   const cancellation = await pendingWatchCancellation();
@@ -41,7 +42,7 @@ test('replay fixture plan is offline and bounded', () => {
 
 test('replay fixture rejects oversized regular files before parsing and rejects nonfiles', () => {
   mkdirSync(resolve(ROOT, 'scratch'), { recursive: true });
-  const dir = mkdtempSync(resolve(ROOT, 'scratch/capture-fixture-test-'));
+  const dir = mkTmpDir("capture-fixture-test-");
   const path = resolve(dir, 'large.json');
   try {
     writeFileSync(path, 'not valid JSON'); truncateSync(path, 9 * 1024 * 1024);

@@ -193,6 +193,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/ai-race.mjs** | One entry for the AI instruments: pace / solo / field / tactics / line / human / ratings / band. | ai-racecraft |
 | **check/ai-ratings.mjs** | Pearson matrix and column stats over DriverRatings.BASE — the personality dial check. | ai-racecraft |
 | **check/ai-solo.mjs** | Each AI car alone on the circuit, fixed seed: best solo lap, field spread, and order vs tier x skill. | ai-racecraft |
+| **check/ai-spread.mjs** | AI-only race field spread: gaps to the leader at P2/P5/P10/last per lap, lapped cars, lap-time consistency. | ai-racecraft |
 | **check/ai-strategy-census.mjs** | The AI field's tyre strategy over a whole race with TYRE WEAR real: stop counts, stints, compounds, stop reasons. | ai-racecraft |
 | **check/ai-stuck.mjs** | AI stuck / rescue census: per-car stuckT episodes and rescue teleports over N seeds (VM, AI-only). | ai-racecraft |
 | **check/ai-tactics.mjs** | AI racecraft over N laps: intervals in s, stuck-behind-slower, attack conversion, swap-backs (+ --mode human). | ai-racecraft |
@@ -375,6 +376,7 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 | **perf/lib.mjs** | Aggregation + A/B diff for tools/perf/profile.mjs (median of repeats, spread, win/regress/noise verdict). | — |
 | **perf/lit-wgsl-census.mjs** | Hash the WGSL a TLX WebGPU race compiles (lavapipe) and diff two trees: does a change re-key Safari's pipeline cache? | — |
 | **perf/live-render-matrix.mjs** | #2572 render matrix: rebuild A/B, context loss, quality tiers, visibility/resize, night/mirror per backend. | renderer-debug |
+| **perf/load-census.mjs** | Load census (#6609 step 1): raw / gzip -9 / stripped bytes per tools/manifest.cjs group, plus the P0–P4 phase budgets. | — |
 | **perf/mesh-census-lib.mjs** | Pure aggregation for mesh-census: pass/source/distance bands + #2657 recommend. | — |
 | **perf/mesh-census.mjs** | Mesh census (#2657/#2631): main/mirror tris by distance band and source. | playwright-probe / renderer-debug |
 | **perf/profile.mjs** | One profiler CLI (spans \| cpu \| hitch \| trace \| step) with --repeat noise floor and --base <ref> A/B delta table. | playwright-probe |

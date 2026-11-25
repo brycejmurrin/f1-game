@@ -48,8 +48,7 @@ The figures live in `tests/data/agent-config-budgets.json` (the test reads them 
 1. Survey: spawn agent `surface-reviewer` on the SET of files the change touches (read-only, writes a report to
    `scratch/`): it tests every claim file A makes about file B against B.
 2. Fix the description first (it is what routes), then the body.
-3. Retest with the local floor (AGENTS.md rule 3), the one list: `node tools/ci/tooling-fast.mjs --changed --jobs=3
-   --quiet` selects every unit file that pins an edited path (skills, hooks, `phone.json`); then
+3. Retest with the local floor (AGENTS.md rule 3), the one list: it selects every unit file that pins an edited path (skills, hooks, `phone.json`); then
    `bash tools/env/mirror-skills.sh --check` and `npm run gen:check` (`tools/README.md` is generated from `@doc` /
    `@skill` headers). The PR's tiers run the rest.
 4. A/B the routing (optional, model calls). It needs the `claude` CLI on PATH, logged in, and spends one `claude -p`

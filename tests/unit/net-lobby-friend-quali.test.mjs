@@ -42,10 +42,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function hostUp(startRace) {
   const G = { teamIdx: 0, driverIdx: 0, trackIdx: 0, raceLaps: 3, raceWeather: "dry", raceTimeOfDay: "day",
     raceQuali: true, raceGrid: "quali", difficulty: 1, raceChangeable: false, wxArcPlan: null,
-    onPeerQuali() {}, onPeerQualiLive() {}, setNetRoom() {}, store: { get: (k, d) => d, set() {} },
+    store: { get: (k, d) => d, set() {} },
     netPlay: { start: () => true }, startRace };
-  G.openQualiForNet = (done) => { G._done = done; };
-  const lobby = NetLobby.create(G);
+  // game.js hands raceSettings / qualiNet to NetLobby.create directly (#6496).
+  const qualiNet = { onPeerQuali() {}, onPeerQualiLive() {}, openQualiForNet: (done) => { G._done = done; } };
+  const lobby = NetLobby.create(G, { raceSettings: { setNetRoom() {} }, qualiNet });
   let far = null;
   lobby.setTransportFactory(() => { const p = NetTransport.loopback({ latencyMs: 0 }); far = p[1]; return p[0]; });
   const old = NetTransport.prefetchIce; NetTransport.prefetchIce = () => null;
@@ -55,7 +56,7 @@ async function hostUp(startRace) {
   peerSays("hello", { team: "bravo", driver: 1 }); await sleep(80);
   peerSays("ready", { ready: true }); await sleep(80);
   lobby.setReady(true); await sleep(80);
-  return { G, lobby, peerSays, far };
+  return { G, lobby, peerSays, far, qualiNet };
 }
 
 for (const [name, startRace] of [
@@ -322,9 +323,9 @@ test("quitting an unfinished friend qualifying with a deleted lap reports NO TIM
 
 // bug-hunt 2 follow-ups: a guest's BACK from the quali sheet, and the host-side relay cap.
 test("a guest that backs out of friend quali releases the host's wait on its lap", async () => {
-  const { G, lobby, peerSays } = await hostUp(async () => ({ ok: true }));
+  const { lobby, peerSays, qualiNet } = await hostUp(async () => ({ ok: true }));
   const laps = [];
-  G.onPeerQuali = (q) => laps.push(q);
+  qualiNet.onPeerQuali = (q) => laps.push(q);
   try {
     assert.equal(lobby.startFromRoom(), true);
     assert.equal(lobby.qualifying(), true);
@@ -337,9 +338,9 @@ test("a guest that backs out of friend quali releases the host's wait on its lap
 });
 
 test("a qabort outside friend quali does nothing", async () => {
-  const { G, lobby, peerSays } = await hostUp(async () => ({ ok: true }));
+  const { lobby, peerSays, qualiNet } = await hostUp(async () => ({ ok: true }));
   const laps = [];
-  G.onPeerQuali = (q) => laps.push(q);
+  qualiNet.onPeerQuali = (q) => laps.push(q);
   try {
     peerSays("qabort", null); await sleep(30);          // still in the room
     assert.equal(laps.length, 0);
@@ -347,9 +348,9 @@ test("a qabort outside friend quali does nothing", async () => {
 });
 
 test("the host drops a guest's QABORT flood: each one is a QUALI relayed to every other guest", async () => {
-  const { G, lobby, peerSays } = await hostUp(async () => ({ ok: true }));
+  const { lobby, peerSays, qualiNet } = await hostUp(async () => ({ ok: true }));
   const laps = [];
-  G.onPeerQuali = (q) => laps.push(q);
+  qualiNet.onPeerQuali = (q) => laps.push(q);
   try {
     assert.equal(lobby.startFromRoom(), true);
     for (let i = 0; i < 200; i++) peerSays("qabort", null);
@@ -360,10 +361,10 @@ test("the host drops a guest's QABORT flood: each one is a QUALI relayed to ever
 });
 
 test("the host drops a guest's QUALI/QLIVE flood past a small per-second cap", async () => {
-  const { G, lobby, peerSays } = await hostUp(async () => ({ ok: true }));
+  const { lobby, peerSays, qualiNet } = await hostUp(async () => ({ ok: true }));
   let live = 0, driven = 0;
-  G.onPeerQualiLive = () => { live++; };
-  G.onPeerQuali = () => { driven++; };
+  qualiNet.onPeerQualiLive = () => { live++; };
+  qualiNet.onPeerQuali = () => { driven++; };
   try {
     assert.equal(lobby.startFromRoom(), true);
     // ~2.5 per second is what a real client sends (quali-net.js reportLive: 400 ms).

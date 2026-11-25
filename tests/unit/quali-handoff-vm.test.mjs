@@ -35,7 +35,7 @@ after(() => { if (g) g.close(); });
 test("the friend-race gate survives openQuali's await, and TO THE GRID runs the lobby's callback", async () => {
   const doc = g.sandbox.document;
   let called = 0;
-  g.G.openQualiForNet(() => { called++; });
+  g.made.QualiNet.openQualiForNet(() => { called++; });
 
   // This is the window the defect lived in: openQuali is suspended on
   // `await ensureScenery`, and its continuation is what used to wipe the gate.
@@ -75,7 +75,7 @@ test("a failed openQuali lands on the menu instead of rejecting into the void", 
     return remove.apply(this, a);
   };
   try {
-    const p = g.G.openQualiForNet(() => {});
+    const p = g.made.QualiNet.openQualiForNet(() => {});
     await flush();
     await p;
   } finally { sheet.classList.remove = remove; }
@@ -88,7 +88,7 @@ test("a failed openQuali lands on the menu instead of rejecting into the void", 
 test("friend quali: after SIMULATE BACK becomes MENU, and a second press quits cleanly (a silent rival cannot trap the player)", async () => {
   const doc = g.sandbox.document;
   let called = 0;
-  g.G.openQualiForNet(() => { called++; });
+  g.made.QualiNet.openQualiForNet(() => { called++; });
   assert.ok(await settle(() => { const el = doc.getElementById("quali"); return el && el.hidden === false; }, 4000));
   await flush();
   const q = doc.getElementById("quali"), back = doc.getElementById("q-back");
@@ -106,7 +106,7 @@ test("friend quali: after SIMULATE BACK becomes MENU, and a second press quits c
 
 test("solo quali: after SIMULATE the sheet has a MENU exit (one press) and Escape's door works", async () => {
   const doc = g.sandbox.document;
-  g.G.openQualiForNet();   // no lobby callback = the solo sheet
+  g.made.QualiNet.openQualiForNet();   // no lobby callback = the solo sheet
   assert.ok(await settle(() => { const el = doc.getElementById("quali"); return el && el.hidden === false; }, 4000));
   await flush();
   const q = doc.getElementById("quali"), back = doc.getElementById("q-back");

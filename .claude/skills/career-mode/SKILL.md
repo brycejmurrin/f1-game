@@ -67,13 +67,13 @@ Commands:
 node tools/car/career-economy.mjs --help     # boots Chromium: session only (AGENTS.md rule 10)
 node tools/ci/pick-tests.mjs                 # the groups this diff needs (career specs: `modes`)
 # the browser specs (`test:modes`) run in the PR's own CI; a whole group (remote-group.mjs) is Bryce's opt-in
-node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet
+# the local floor (AGENTS.md rule 3)
 node --test tests/unit/season-cal.test.mjs     # VM: the calendar/format gates (career neutral)
 node --test tests/unit/career-settle.test.mjs  # VM: settleRound, mid-weekend `stage`
 ```
 
 Browser specs are never run locally (AGENTS.md rule 5): CI proves them. Node-VM unit tests (no browser):
-`tests/unit/career-*.test.mjs`, `season-cal`, `apex-career-delete`; `tooling-fast --changed` picks the ones a diff
+`tests/unit/career-*.test.mjs`, `season-cal`, `apex-career-delete`; the floor picks the ones a diff
 pins, and CI runs the rest (most sit in the always-on `state-unit` group).
 
 Deep reference: `docs/CAREER.md`.

@@ -1079,6 +1079,15 @@
       t.needsUpdate = true;
       return t;
     }
+    // #6509 close-up surfaces + wear mask (EXTREME closeLayers / wearMask; js/render/three/tsl-surface.js, LAZY_GFX_HI).
+    // Read at the first material or track, not here: renderer-boot awaits that bundle only after the backend's create.
+    let _sfn;
+    const sfn = () => {
+      if (_sfn !== undefined || !(ctx.closeLayers || ctx.wearMask)) return _sfn || null;
+      try { _sfn = typeof TLXSurface !== "undefined" ? TLXSurface.nodes(THREE, TSL, ctx, texGroup, ctx.chunks) : null; } catch (_) { _sfn = null; }
+      if (!_sfn) Log.warn("gfx", "TLX: closeLayers/wearMask on but TLXSurface absent — today's road");
+      return _sfn;
+    };
     function retireBakeTexture(texture, blank) {
       if (texture === blank) return;
       try { texture.dispose(); } catch (_) { /* already gone */ }
@@ -2101,6 +2110,10 @@
           });
         }
 
+        // #6509 (tsl-surface.js): footprint at the top level, the kerb / tarmac / wear terms, then the paint after.
+        const SFN = sfn(), sf = SFN && trkA && !instanced ? SFN.begin(trkA) : null;
+        const paintPre = sf ? SFN.apply(sf, { albedo, rough, matA, wp, k: U.matTexMix }) : null;
+
         // painted road markings (js/render/glx/shaders/glsl-lit.js)
         // AFTER the material grain and the baked texture, exactly as GLX
         // orders it, so the paint sits ON the tarmac rather than under it.
@@ -2111,6 +2124,7 @@
           albedo.assign(packedPaint.xyz);
           rough.assign(packedPaint.w);
         }
+        if (sf) SFN.paint(sf, paintPre, { albedo, wp, k: U.matTexMix });
 
         // specular AA: widen roughness by the pre-material normal's
         //    screen-space variance (WGX geo+peel mix). dFdx(N) after the
@@ -3489,7 +3503,8 @@
     return { makeMaterial, makeViz, releaseMaterial, uniforms: U, sharedUniforms: SHARED_UNIFORMS, updateFrame, setEnvStr, setEnvCube, setLampGrid, setLampGridColors, setLampBake, setCrowdExcite,
              decalLight: { shadow: decalShadow, pool: decalPool },
              setSsrMrt, setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS,
-             detail: { matDetail: MAT_DETAIL, envAll: ENV_ALL }, carSurf: !!CSN };
+             detail: { matDetail: MAT_DETAIL, envAll: ENV_ALL }, carSurf: !!CSN,
+             get surface() { const s = sfn(); return s ? s.uniforms : null; }, setTrackWear: (t) => !!sfn() && sfn().setTrackWear(t) };
   }
 
   // The plain-JS twin of matDetail's weight maths (mdHexGrid / mdBiW / mdVarScale above), for node tests only:

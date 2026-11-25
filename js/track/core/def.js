@@ -156,6 +156,8 @@ const TrackDef = (function () {
       // banked corners. Absent → engine defaults (flat kerbs, no forced berms).
       ...(d.kerbStyle === "sausage" || d.kerbStyle === "rumble" || d.kerbStyle === "flat" ? { kerbStyle: d.kerbStyle } : {}),
       ...(d.berms === true || d.berms === false ? { berms: !!d.berms } : {}),
+      // Desktop close-up surface pilot (#6509): kerb / aggregate / paint layers + the wear mask (tsl-surface.js).
+      ...(d.surfaceDetail === true ? { surfaceDetail: true } : {}),
       barrierGap: d.barrierGap || null,
       terrainOuter: d.terrainOuter,
       // Opt-in gradual outer terrain descent; absent/invalid preserves the

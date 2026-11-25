@@ -273,6 +273,21 @@ test("drive: a REAL touch or key takes the car back; the bridge's own synthetic 
   assert.deepEqual(Object.keys(calls.win), [], "the listeners are removed");
 });
 
+test("drive handsOff (#6581): a real touch no longer takes the car back; a real key, a pause or stop still do", async () => {
+  const { SoakRun, calls, p } = await driving({ seconds: 60, handsOff: true });
+  assert.equal(SoakRun.driveStatus().handsOff, true);
+  calls.win.pointerdown({ isTrusted: true, type: "pointerdown" });
+  calls.win.touchstart({ isTrusted: true, type: "touchstart" });
+  assert.equal(SoakRun.driving(), true, "an accidental brush leaves the drive running");
+  calls.win.keydown({ isTrusted: true, type: "keydown" });
+  assert.equal(SoakRun.driving(), false, "a real key still takes over");
+  assert.equal((await p).reason, "touch");
+  const again = await driving({ seconds: 60, handsOff: true });
+  again.G.paused = true;
+  again.frame(32);
+  assert.equal((await again.p).reason, "paused", "the pause button still ends it");
+});
+
 test("drive: stop, a pause, a quit and a hidden page each release the input", async () => {
   let r = await driving();
   assert.equal(r.SoakRun.driveStop("bridge").reason, "bridge");

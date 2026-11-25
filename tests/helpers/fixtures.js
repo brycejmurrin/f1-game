@@ -170,6 +170,9 @@ async function installMocks(context, shipped = false) {
     // WIND (js/race/wind.js) the same way: a seeded per-race wind would move every
     // top speed and lateral trace; "off" is a true no-op (tests/unit/wind.test.mjs).
     try { localStorage.setItem("apex26.wind", JSON.stringify("off")); } catch (_) {}
+    // GRID RANDOM (#6564): it shipped as the default until the QUALIFYING default; every
+    // race spec's grid (and __apex.race's start) was recorded on it.
+    try { localStorage.setItem("apex26.raceGrid", JSON.stringify("random")); } catch (_) {}
   }, { spec: LOG_SPEC, shipped });
   await context.route("https://api.jolpi.ca/**", (route) =>
     route.fulfill({

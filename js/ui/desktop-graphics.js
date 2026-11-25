@@ -37,6 +37,8 @@ const DesktopGraphics = (() => {
       adaptiveModels: ["Adaptive rival models", "Keeps rivals in their detailed models farther away when rendering above 720p with spare frame time."],
       rivalLiveryLod: ["Distant team colours", "Keeps two livery colours visible when rivals switch to simplified models farther down the track."],
       circuitSurfaces: ["Silverstone surface detail", "Shows worn asphalt, resurfaced patches and scuffed kerb paint at Silverstone with the three.js renderer."],
+      closeLayers: ["Close-up kerbs and tarmac", "Adds chipped kerb paint, rubber on the kerb lip, worn line paint and tarmac grain on circuits that support it. Requires three.js."],
+      wearMask: ["Rubbered-in racing line", "Darkens the rubbered racing line and braking zones, with marbles off line, on circuits that support it. Requires three.js."],
       tyreWearVisual: ["Visible tyre wear", "Shows scuffing as tyres wear. Preview fresh and worn tyres in the garage."],
       meshHi: ["Car mesh detail", "Uses finer geometry to smooth the outlines of curved bodywork and wheels."],
       heroCar: ["Modelled player car parts", "Adds individually modelled parts to the player car. Look closely at the bodywork in the garage."],

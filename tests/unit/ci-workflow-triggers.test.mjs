@@ -5,7 +5,6 @@ import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a gi
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import cp from "node:child_process";
 import path from "node:path";
 import vm from "node:vm";
@@ -14,6 +13,7 @@ import { selectedGateVerdict } from "../../tools/ci/selected-gate-verdict.mjs";
 import { report } from "../../tools/ci/ci-coverage.mjs";
 import { ciWorkflow, pagesWorkflow, selectJob, shipFilter } from "../helpers/ci-workflow.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   // A commit that touches only docs / markdown / agent config ships nothing;
@@ -157,7 +157,7 @@ test("base-verdict.sh: the newest deploy-branch run strictly below this head, na
   // commit's own run (that is the push, not its base), or report a conclusion
   // without the job names (which is the whole reason a session opens the run).
   // A -> B -> C on the deploy line; X branches from A and is never merged.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "base-verdict-"));
+  const dir = mkTmpDir("base-verdict-");
   const git = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
   git("init", "-q", "-b", "deploy"); git("config", "user.email", "t@t"); git("config", "user.name", "t");
   const commit = (msg) => { fs.writeFileSync(path.join(dir, "f.txt"), msg); git("add", "."); git("commit", "-q", "-m", msg); return git("rev-parse", "HEAD"); };
@@ -233,7 +233,7 @@ test("ci.yml runs the base verdict where the checkout can answer it, and never l
 });
 
 test("pages-live-sha.sh: the live apex-sha or nothing, and never a failure", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pages-live-"));
+  const dir = mkTmpDir("pages-live-");
   const bin = path.join(dir, "bin"); fs.mkdirSync(bin);
   fs.writeFileSync(path.join(bin, "curl"),
     '#!/usr/bin/env bash\ncase "${FAKE_LIVE_SHA:-}" in\n  fail) exit 22 ;;\n  "") echo "<html></html>" ;;\n  *) echo "<meta name=\\"apex-build\\" content=\\"1\\">\n<meta name=\\"apex-sha\\" content=\\"${FAKE_LIVE_SHA}\\">" ;;\nesac\n');

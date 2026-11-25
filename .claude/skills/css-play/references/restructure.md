@@ -15,7 +15,7 @@ it rename things?** Renaming is not restructuring.
 ```sh
 node tools/ui/layout-audit.mjs                    # the screen x viewport matrix, ONCE as the before-count (never per edit)
 node tools/ci/pick-tests.mjs --staged             # which groups this change needs
-node tools/ci/tooling-fast.mjs --changed --jobs=3 # diff-aware no-browser guard suite
+# then the local floor (AGENTS.md rule 3): the diff-aware no-browser guard suite
 ```
 
 **Record the before-numbers.** A restructure with no before/after count is an

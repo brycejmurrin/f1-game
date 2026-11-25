@@ -940,7 +940,7 @@ const HARD_EDGES = [
 
   // pit-lane / engineer / radio → LAZY_RACE_SESSION_EDGES (M4 is FULL; call-time after ensure)
   ["js/core/mat4.js", "js/physics/brake-cue.js"],        // BrakeCue aliases M4.clamp at eval
-  ["js/physics/ai-drive.js", "js/physics/contact-geometry.js"],  // the impulse reads AiDrive.bumpRestitution (call time, keep ordered)
+  ["js/physics/contact-geometry.js", "js/physics/collide.js"],  // collide reads ContactGeometry.rubDecel/bumpRestitution/humanPuntCap (call time, keep ordered)
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
   ["js/physics/collide.js", "js/game.js"],                // game.js calls Collide.create(G, …) at eval
   ["js/core/mat4.js", "js/physics/wall-clamp.js"],       // WallClamp binds M4.clamp at eval
@@ -1419,6 +1419,7 @@ const LAZY_RESULTS_SHEET_EDGES = [["js/share/share-card-layout.js", "js/share/sh
 const LAZY_GFX_HI = [
   "js/render/shared/gfx-hi.js", // GfxHi: the EXTREME render / perf extras (governor upper ladder, cascades, lamp maps, light slots)
   "js/car/car-hero.js",         // CarHero: the EXTREME car detail (hero refine, modelled parts, bevels, loft UVs)
+  "js/render/three/tsl-surface.js", // TLXSurface: EXTREME close-up kerbs / tarmac / paint + wear strip (#6509), read by tsl-lit at factory time
 ];
 const LAZY_GFX_HI_EDGES = [];
 

@@ -226,6 +226,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/check/ai-spread.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c1"
+    },
     "tools/check/ai-race.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -2220,6 +2225,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Per-row `= row <name> <verdict>` lines, the final `= live-render-matrix` summary and the checkpointed --json report."
+    },
+    "tools/perf/load-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The two markdown tables (bytes per manifest group, the P0–P4 load ladder), the final `= load-census` summary line and the --json census."
     },
     "tools/perf/mesh-census-lib.mjs": {
       "action": "no-direct-output",

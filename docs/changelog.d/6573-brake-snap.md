@@ -1,0 +1,1 @@
+Fixed: Braking hard in the middle of a corner no longer snaps the rear out and pulls the car toward the apex now that factory parts race at ×1.0 (#6573); the car pushes wide instead, and braking into the turn-in still rotates it as before.

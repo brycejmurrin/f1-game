@@ -178,8 +178,12 @@ test.describe("Parts persistence — survives page reload", () => {
     // ladder re-space repriced `engine/race` to 145 — a spec that goes red
     // because a part got cheaper is measuring the price, not the persistence
     // it is named for.
-    const left = await page.evaluate(() => Parts.BUDGET -
-      Parts.CATALOG.find((c) => c.id === "engine").options.find((o) => o.id === "race").cost);
+    // Free play: the cap is Parts.freeBudget (works cost + BUDGET) and the
+    // unset categories are the works parts (#6572).
+    const left = await page.evaluate(() => {
+      const t = Teams.LIST.find((x) => x.id === "mclaren");
+      return Parts.freeBudget(t) - Parts.getCost(Object.assign({}, Parts.getFactorySetup(t), { engine: "race" }), t);
+    });
     const budgetText = await page.locator("#cs-budget").textContent();
     expect(budgetText).toContain(String(left));
   });
@@ -217,8 +221,14 @@ test.describe("Parts persistence — team isolation", () => {
 
     await reopenSetup(page);
 
+    // The other team's fresh sheet reads over ITS works build (#6572): its own
+    // works gearbox is the active row, not "standard" and not the pick made
+    // for the first team.
+    const works = await page.evaluate((o) => Parts.getFactorySetup(Teams.LIST[o]).gearbox, other);
+    expect(works, "the other team's works gearbox is not the first team's pick").not.toBe("f1_spec");
     await page.locator('#cs-tabs [data-cs-cat="gearbox"]').click();
-    await expect(page.locator('#cs-options [data-cs-opt="standard"]')).toHaveClass(/active/);
+    await expect(page.locator(`#cs-options [data-cs-opt="${works}"]`)).toHaveClass(/active/);
+    await expect(page.locator('#cs-options [data-cs-opt="f1_spec"]')).not.toHaveClass(/active/);
   });
 });
 

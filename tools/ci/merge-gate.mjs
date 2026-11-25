@@ -92,8 +92,8 @@ import { renderPkg } from "../gen/gen-test-groups.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { AGENT_APP_SLUG, OWNER, byAgent, byOwner, describeActor, labelEvents, newestLabelEvent, ownerSet } from "./lib/provenance.mjs";
 import { readDeployTip } from "./lib/deploy-tip.mjs";
-import { runTipGate, tipView } from "./lib/tip-gate.mjs";
-import { TRAIN_PREFIX, trainManifest, trainRow, verifyTrain, boardedTrainOf } from "./merge-train.mjs";
+import { runTipGate, tipView, ownWorktreePath, gitReason } from "./lib/tip-gate.mjs";
+import { TRAIN_PREFIX, trainManifest, trainRow, verifyTrain, boardedTrainOf, RETEST_BROAD } from "./merge-train.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 /** The deploy branch's required CI check (ci.yml `ci-verdict`, Bryce 2026-10-15). */
@@ -846,18 +846,22 @@ export function newerTipPaths({ cwd, tip, head, ciAt, ciBase = "", gitRun = git 
   return { commits, newer: [...newer].sort(), pr, base: recorded ? ciBase : "" };
 }
 
-/** The base SHA the green CI run's merge ref sat on, from its tooling A `apex-guards` annotation
- *  (`mode=<m> base=<sha>`, tools/ci/reuse-draft-fast.sh THE RECORD) → sha, or "" when unreadable. GitHub reads only. */
-export function ciRecordedBase(run, request) {
-  if (!run?.id) return "";
+/** The base SHA the green CI run's merge ref sat on and the tree it checked out, from its tooling A `apex-guards`
+ *  annotation (`mode=<m> base=<sha> tree=<sha>`, tools/ci/reuse-draft-fast.sh THE RECORD) → { base, tree }, each ""
+ *  when unreadable. GitHub reads only. */
+export function ciRecord(run, request) {
+  const none = { base: "", tree: "" };
+  if (!run?.id) return none;
   const jobs = listAll(`actions/runs/${run.id}/jobs`, request, (j) => j?.jobs, 5);
-  if (jobs.error) return "";
+  if (jobs.error) return none;
   const a = jobs.rows.find((j) => String(j?.name || "").replace(/^ci \/ /, "") === "Structural guards (tooling A)");
-  if (!a?.id) return "";
+  if (!a?.id) return none;
   const ann = request(`check-runs/${a.id}/annotations?per_page=100`);
-  const rec = (Array.isArray(ann.json) ? ann.json : []).find((x) => x?.title === "apex-guards");
-  return /\bbase=([0-9a-f]{40})\b/.exec(String(rec?.message || ""))?.[1] || "";
+  const msg = String((Array.isArray(ann.json) ? ann.json : []).find((x) => x?.title === "apex-guards")?.message || "");
+  return { base: /\bbase=([0-9a-f]{40})\b/.exec(msg)?.[1] || "", tree: /\btree=([0-9a-f]{40})\b/.exec(msg)?.[1] || "" };
 }
+/** The base half of ciRecord → sha, or "". */
+export const ciRecordedBase = (run, request) => ciRecord(run, request).base;
 
 /** The gate checkout's own tooling-fast `--changed` selection for `paths` (never the PR's copy: a PR must not choose
  *  what re-tests it). A child process, because tooling-fast needs node_modules, which only the land-gate leg has. */
@@ -900,12 +904,37 @@ export function retestPlan({ newer = [], pr = [], selection, sides = {}, exists 
   return { files, how: `the unit files both sides select (tooling-fast's --changed selection: newer tip ${count(n)}, the PR ${count(p)}) and the touched tests/unit files` };
 }
 
+/** A retest refused for breadth alone (#6667): merge-train closes a train `stale` on it, not red (rowLines' RETEST_BROAD). */
+const broadRow = (evidence) => ({ ...row(false, evidence), broad: true });
+
+/**
+ * The SAME MERGE TREE credit (SPECULATIVE CI, merge-train.mjs): every tip merge past the CI run's RECORDED base is
+ * already in the head (a two-parent merge, its second parent an ancestor of the head, its tree the clean merge-tree of
+ * its parents: the merge of train N under a speculative N+1), AND the tree that run checked out (`apex-guards tree=`)
+ * is byte for byte the gate's own merge of the head onto the live tip. Then the run tested exactly what would land,
+ * and nothing the tip gained is new to the head: a re-test runs the same files on the same bytes. Any doubt (no
+ * recorded base or tree, a commit not contained, a different tree) → "" and the re-test runs as before. Git only.
+ */
+export function sameMergeTree({ cwd, tip, head, ciBase = "", ciTree = "", commits = [], gitRun = git }) {
+  if (!/^[0-9a-f]{40}$/.test(ciBase) || !/^[0-9a-f]{40}$/.test(ciTree) || !commits.length) return "";
+  for (const c of commits) {
+    if (gitRun(["merge-base", "--is-ancestor", c, ciBase], cwd).status === 0) continue; // in the merge the run tested
+    const p = String(gitRun(["rev-list", "--parents", "-n", "1", c], cwd).stdout || "").trim().split(/\s+/);
+    if (p.length !== 3 || gitRun(["merge-base", "--is-ancestor", p[2], head], cwd).status !== 0) return "";
+    const m = gitRun(["merge-tree", "--write-tree", "--no-messages", p[1], p[2]], cwd);
+    if (m.status !== 0 || String(m.stdout || "").split("\n")[0].trim() !== String(gitRun(["rev-parse", `${c}^{tree}`], cwd).stdout || "").trim()) return "";
+  }
+  const now = gitRun(["merge-tree", "--write-tree", "--no-messages", tip, head], cwd);
+  if (now.status !== 0 || String(now.stdout || "").split("\n")[0].trim() !== ciTree) return "";
+  return `${commits.length} tip merge(s) since the CI run's recorded base ${ciBase.slice(0, 8)} (${commits.slice(0, 3).map((c) => c.slice(0, 8)).join(", ")}) are already in the head, and the run's merge tree ${ciTree.slice(0, 8)} is this merge's own: CI tested exactly this combination`;
+}
+
 /**
  * retest row, on the merge result in `cwd`: no tip merge since the CI run (less the margin) → ok without running
  * anything; otherwise run the planned unit files (retestPlan) with the merge result's tooling-fast, stripped environment, once.
  * Every failure to read, select or run refuses (never a silent pass). → { ok, evidence }.
  */
-export function retestOnMerge({ cwd, tip, head, ciAt, ciBase = "", credited = "", run = spawnSync, gitRun = git, select = gateSelection, estimate = gateEstimate } = {}) {
+export function retestOnMerge({ cwd, tip, head, ciAt, ciBase = "", ciTree = "", credited = "", run = spawnSync, gitRun = git, select = gateSelection, estimate = gateEstimate } = {}) {
   // A credited CI (D-045) tested the prior head, not this one: compare the tip against THAT head, and never skip. When
   // the run's window and base leave nothing, every tip commit not in the credited head is re-tested (stricter only).
   const tested = credited || head;
@@ -917,6 +946,8 @@ export function retestOnMerge({ cwd, tip, head, ciAt, ciBase = "", credited = ""
     if (!t.commits.length) return { ...row(false, `re-test not runnable: the credited head ${String(credited).slice(0, 8)} already holds the tip ${String(tip).slice(0, 8)}, so the credit has nothing to stand for`), kind: "nothing" };
   }
   if (!t.commits.length) return row(true, `no tip merge since the CI run's base (created ${ciAt}, margin ${RETEST_MARGIN_MIN} min${t.base ? `; recorded base ${t.base.slice(0, 8)}` : "; no recorded base"}): CI tested this combination`);
+  const same = !credited && sameMergeTree({ cwd, tip, head, ciBase: t.base, ciTree, commits: t.commits, gitRun });
+  if (same) return row(true, same);
   const sel = select([...new Set([...t.newer, ...t.pr])].sort());
   if (sel?.error) return row(false, `re-test not runnable: ${sel.error}`);
   // Once per side (#5597): only a test both sides select can cross. A widened union keeps the touched-files plan.
@@ -930,7 +961,7 @@ export function retestOnMerge({ cwd, tip, head, ciAt, ciBase = "", credited = ""
   // into the same refusal. The cure is the one a timeout gets: sync, push, and the fresh CI run tests the combination.
   const estMs = sel?.widened ? null : estimate(plan.files);
   if (Number.isFinite(estMs) && estMs > RETEST_TIMEOUT_MS * 0.8) {
-    return row(false, `${since}; the re-test would run ${plan.files.length} unit file(s) (${plan.how}), measured ~${Math.round(estMs / 1000)} s at --jobs=${RETEST_JOBS}, over the ${RETEST_TIMEOUT_MS / 1000} s cap — too broad to re-test at merge: sync-pr.mjs and push, so a fresh CI run tests this combination`);
+    return broadRow(`${since}; the re-test would run ${plan.files.length} unit file(s) (${plan.how}), measured ~${Math.round(estMs / 1000)} s at --jobs=${RETEST_JOBS}, over the ${RETEST_TIMEOUT_MS / 1000} s cap — too broad to re-test at merge: sync-pr.mjs and push, so a fresh CI run tests this combination`);
   }
   const env = untrustedEnv();
   delete env.NODE_TEST_CONTEXT;
@@ -964,7 +995,7 @@ export function retestOnMerge({ cwd, tip, head, ciAt, ciBase = "", credited = ""
  */
 export function fetchForGate({ pr, head, headRef, cwd = ROOT, base = DEPLOY } = {}) {
   const f1 = git(["fetch", "--quiet", "--no-tags", "origin", `+refs/heads/${base}:refs/remotes/origin/${base}`], cwd);
-  if (f1.status !== 0) return { error: `fetch ${base} failed: ${(f1.stderr || "").trim().split("\n")[0]}` };
+  if (f1.status !== 0) return { error: `fetch ${base} failed: ${gitReason(f1.stderr)}` };
   if (headRef) git(["fetch", "--quiet", "--no-tags", "origin", `+refs/heads/${headRef}:refs/remotes/origin/${headRef}`], cwd);
   // A fork's branch is not under refs/heads here; GitHub mirrors every PR head as refs/pull/<n>/head.
   if (git(["cat-file", "-e", `${head}^{commit}`], cwd).status !== 0) git(["fetch", "--quiet", "--no-tags", "origin", `+refs/pull/${pr}/head:refs/remotes/origin/pr/${pr}`], cwd);
@@ -976,17 +1007,18 @@ export function fetchForGate({ pr, head, headRef, cwd = ROOT, base = DEPLOY } = 
 
 /** Built on demand, never tracked (ON_DEMAND_PATHS): the gate builds it on the merge. */
 const SCENERY_CATALOG = "tools/shot/scenery-locations.json";
-export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLOY, run = spawnSync, ratchets = ratchetsOnMerge, ciAt = null, ciBase = "", credited = "", retest = retestOnMerge } = {}) {
-  const wt = path.join(cwd, "artifacts", "merge-gate", `wt-${pr}`);
+export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLOY, run = spawnSync, ratchets = ratchetsOnMerge, ciAt = null, ciBase = "", ciTree = "", credited = "", retest = retestOnMerge, runId, progress = () => {} } = {}) {
+  // This run's own worktree (#6494): two gates on one PR no longer remove each other's tree.
+  const wt = ownWorktreePath(path.join(cwd, "artifacts", "merge-gate"), `wt-${pr}`, ...(runId ? [runId] : []));
   const cleanup = () => { git(["worktree", "remove", "--force", wt], cwd); git(["worktree", "prune"], cwd); fs.rmSync(wt, { recursive: true, force: true }); };
   const fetched = fetchForGate({ pr, head, headRef, cwd, base });
   if (fetched.error) return { ok: false, evidence: fetched.error, tip: "", error: true };
   const tip = fetched.tip;
   // A refusal carries the fetched tip: land.yml compares it with the deploy tip at post time (2026-10-27 23:20Z, #3964).
   const fail = (why) => { cleanup(); return { ok: false, evidence: why, tip }; };
-  cleanup();
+  progress(`fetched; merging ${String(head).slice(0, 8)} onto the tip ${tip.slice(0, 8)}`);
   const add = git(["worktree", "add", "--detach", wt, tip], cwd);
-  if (add.status !== 0) return { ok: false, evidence: `worktree add failed: ${(add.stderr || "").trim().split("\n")[0]}`, tip, error: true };
+  if (add.status !== 0) { cleanup(); return { ok: false, evidence: `worktree add failed: ${gitReason(add.stderr)}`, tip, error: true }; }
   // A runner has no user.name/user.email and a merge without one fails even under --no-commit. Nothing is committed.
   const m = git(["-c", "user.name=merge-gate", "-c", "user.email=merge-gate@localhost", "merge", "--no-commit", "--no-ff", "--quiet", head], wt, { timeout: 300_000 });
   if (m.status !== 0) {
@@ -994,6 +1026,7 @@ export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLO
     return fail(conflicted.length ? `conflicts with the current tip ${tip.slice(0, 8)}: ${conflicted.slice(0, 6).join(", ")}${conflicted.length > 6 ? ", …" : ""} — sync-pr.mjs first` : `merge onto ${tip.slice(0, 8)} failed: ${(m.stderr || m.stdout || "").trim().split("\n")[0]}`);
   }
   try { fs.symlinkSync(path.join(cwd, "node_modules"), path.join(wt, "node_modules")); } catch { /* exists */ }
+  progress("gen:check on the merge result");
   const gen = run("npm", ["run", "-s", "gen:check"], { cwd: wt, env: untrustedEnv(), encoding: "utf8", timeout: 600_000, maxBuffer: 16 << 20 });
   if (gen.status !== 0) {
     const first = `${gen.stdout || ""}\n${gen.stderr || ""}`.split("\n").map((l) => l.trim()).filter((l) => l && !/^>|^npm /.test(l)).slice(-3).join(" | ");
@@ -1006,15 +1039,18 @@ export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLO
   // PR code runs in a child with the same stripped environment as gen:check.
   const tracked = git(["ls-files", "--", SCENERY_CATALOG], wt).stdout.trim();
   if (tracked) return fail(`scenery catalog fails on the merge onto ${tip.slice(0, 8)}: ${SCENERY_CATALOG} is tracked; it is built on demand — git rm --cached it on the synced branch and push`);
+  progress(`scenery catalog (ensure-built --with ${SCENERY_CATALOG})`);
   const catalog = run(process.execPath, ["tools/gen/ensure-built.mjs", "--quiet", "--with", SCENERY_CATALOG], { cwd: wt, env: untrustedEnv(), encoding: "utf8", timeout: 600_000, maxBuffer: 16 << 20 });
   if (catalog.error || catalog.status !== 0) {
     const detail = catalog.error?.message || `${catalog.stdout || ""}\n${catalog.stderr || ""}`.split("\n")
       .map((line) => line.trim()).find((line) => /Error:|FAILED/.test(line)) || `exit ${catalog.status}`;
     return fail(`scenery catalog fails on the merge onto ${tip.slice(0, 8)}: ${detail} — node tools/gen/ensure-built.mjs --with ${SCENERY_CATALOG} on the synced branch names the circuit`);
   }
+  progress("ratchets on the merge result");
   const rat = ratchets({ cwd: wt, run });
+  if (ciAt !== null) progress("retest on the merge result");
   // `ciAt` null: the ci row has no green run to compare against, so the re-test waits for it (evaluate says so).
-  const re = ciAt === null ? null : retest({ cwd: wt, tip, head, ciAt, ciBase, run, ...(credited ? { credited } : {}) });
+  const re = ciAt === null ? null : retest({ cwd: wt, tip, head, ciAt, ciBase, run, ...(ciTree ? { ciTree } : {}), ...(credited ? { credited } : {}) });
   cleanup();
   return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog build 0`, tip, ratchets: rat, retest: re };
 }
@@ -1115,7 +1151,8 @@ export function ciCredit({ pr, pull, head, base, request, root = ROOT }) {
   return creditPriorCi({ cwd: root, head, base, ciOf });
 }
 
-export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge = localMergeGenCheck, trusted = false, queueCandidate = false, owner = OWNER, trainCheck = trainGate, tipCheck = runTipGate, credit = ciCredit, openPulls, forTrainCar = false } = {}) {
+export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge = localMergeGenCheck, trusted = false, queueCandidate = false, owner = OWNER, trainCheck = trainGate, tipCheck = runTipGate, credit = ciCredit, openPulls, forTrainCar = false, progress } = {}) {
+  const say = progress || (() => {});
   const order = trusted ? TRUSTED_ROWS : ROWS;
   const one = request(`pulls/${pr}`);
   if (one.error) return { error: `PR #${pr}: ${one.error}` };
@@ -1171,6 +1208,7 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
     } else rows.ci = { ...rows.ci, evidence: `${rows.ci.evidence} (no CI credit: ${c.none})` };
   }
   if (trusted && queueCandidate && !rows.ci.ok) return { skip: rows.ci.evidence };
+  say(`ci row: ${rows.ci.ok ? "ok" : rows.ci.pending ? "WAIT" : "FAIL"}; reading the deploy tip`);
   const pages = readDeployTip(base, request);
   if (pages.error) return { error: pages.error };
   // The tip itself (#5714 + #5634, 2026-11-19): Pages lags the tip by hours in a backlog, so when no completed run
@@ -1187,6 +1225,7 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
     if (proof.error) return { error: proof.error };
   }
   rows.base = baseVerdict(deployTip, pull.labels, ev.rows, owner, proof);
+  say(`base row: ${rows.base.ok ? "ok" : rows.base.pending ? "WAIT" : "FAIL"}`);
   // A merge train (tools/ci/merge-train.mjs; docs/notes/MERGE-TRAIN-2026-11-18.md): its config and raise rows are
   // its cars' own rows, read per car, after proving the head is exactly the clean fold of those car heads onto a deploy-branch commit.
   const isTrain = String(pull.head?.ref || "").startsWith(TRAIN_PREFIX);
@@ -1228,15 +1267,17 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
     // The re-test compares against the green CI run's creation (the merge ref it tested is that old or newer).
     if (credited) ciRun = credited.run;
     const ciAt = rows.ci.ok ? String(ciRun?.created_at || "") : null;
-    const ciBase = rows.ci.ok ? ciRecordedBase(ciRun, request) : "";
-    const g = localMerge({ pr, head, headRef: pull.head?.ref || "", cwd: root, base, ciAt, ciBase, ...(credited ? { credited: credited.sha } : {}) });
+    const rec = rows.ci.ok ? ciRecord(ciRun, request) : { base: "", tree: "" };
+    const ciBase = rec.base;
+    say("API rows read; the local rows (gen, ratchets, retest) on a throw-away merge — about 2-3 min");
+    const g = localMerge({ pr, head, headRef: pull.head?.ref || "", cwd: root, base, ciAt, ciBase, ...(rec.tree && !credited ? { ciTree: rec.tree } : {}), ...(credited ? { credited: credited.sha } : {}), ...(progress ? { progress } : {}) });
     if (g.error) return { error: g.evidence };
     tip = g.tip || "";
     rows.gen = row(g.ok, g.evidence);
     rows.ratchets = g.ratchets ? row(g.ratchets.ok, g.ratchets.evidence) : row(false, "not evaluated: the merge or gen:check refused first");
     rows.retest = !rows.ci.ok
       ? { ...row(false, "not evaluated: waits for a green ci row (the CI run's base is what it compares against)"), ...(rows.ci.pending ? { pending: true } : {}) }
-      : g.retest ? row(g.retest.ok, g.retest.evidence) : row(false, "not evaluated: the merge or gen:check refused first");
+      : g.retest ? { ...row(g.retest.ok, g.retest.evidence), ...(g.retest.broad ? { broad: true } : {}) } : row(false, "not evaluated: the merge or gen:check refused first");
   }
   const ordered = {};
   for (const k of order) ordered[k] = rows[k];
@@ -1251,7 +1292,8 @@ export function rowLines(v) {
   const mark = (r) => (r.ok ? "ok" : r.pending ? "WAIT" : "FAIL");
   const lines = ROWS.filter((k) => v.rows?.[k]).map((k) => `= gate ${k}: ${mark(v.rows[k])} ${v.rows[k].evidence}`);
   const credit = v.rows?.ci?.credited ? ` credited=${v.rows.ci.credited}` : "";
-  lines.push(`= merge-gate ${v.ok ? "passed" : v.waiting ? "waiting" : "refused"} — ${ROWS.filter((k) => v.rows?.[k]).map((k) => `${k}=${mark(v.rows[k])}`).join(" ")}${credit} pr=#${v.pr} sha=${v.head || ""} tip=${v.tip || ""}`);
+  const broad = v.rows?.retest?.broad && !v.rows.retest.ok ? ` ${RETEST_BROAD}` : "";
+  lines.push(`= merge-gate ${v.ok ? "passed" : v.waiting ? "waiting" : "refused"} — ${ROWS.filter((k) => v.rows?.[k]).map((k) => `${k}=${mark(v.rows[k])}`).join(" ")}${broad}${credit} pr=#${v.pr} sha=${v.head || ""} tip=${v.tip || ""}`);
   return lines;
 }
 
@@ -1269,9 +1311,13 @@ const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--ch
   --queue-candidate with --trusted: stop at an ineligible candidate (exit 5) before reading the remaining rows.
   --trusted: only the rows that run no PR code (open, hold, plan, ci, base, config, raise); land.yml's trusted-rows job.
   A row still waiting (CI, a red deploy tip) prints WAIT. Exit 0 all rows ok, 2 a row failed, 3 waiting (every other
-  row ok, CI not finished or the tip red on code), 1 usage or API/git error. Writes nothing but an optional --json summary.`;
+  row ok, CI not finished or the tip red on code), 4 --trusted GitHub quota backoff, 5 --queue-candidate skipped, 1 usage
+  or API/git error. Progress lines (\`· merge-gate +<s>s <step>\`) go to stderr while it runs. Writes nothing but an optional --json summary.`;
 
-export function main(argv, { request = api, root = ROOT, log = console.log, localMerge = localMergeGenCheck, write = fs.writeFileSync, owner = OWNER, credit = ciCredit } = {}) {
+/** A progress line (stderr, so stdout keeps only rows): `· merge-gate +<s>s <step>`. Never starts `= `, which land.yml greps. */
+export const progressLine = (ms, msg) => `· merge-gate +${(ms / 1000).toFixed(1)}s ${msg}`;
+
+export function main(argv, { request = api, root = ROOT, log = console.log, localMerge = localMergeGenCheck, write = fs.writeFileSync, owner = OWNER, credit = ciCredit, note = (l) => process.stderr.write(l + "\n"), now = Date.now } = {}) {
   exitIfHelp(argv, USAGE);
   const opt = (k) => { const i = argv.indexOf(k); return i < 0 ? null : argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : null; };
   const pr = Number(opt("--pr"));
@@ -1288,7 +1334,11 @@ export function main(argv, { request = api, root = ROOT, log = console.log, loca
     if (result.rateLimited) quota = result;
     return result;
   };
-  const v = evaluate({ pr, sha: opt("--sha") || "", request: trusted ? trustedRequest : request, root, localMerge, trusted, queueCandidate: argv.includes("--queue-candidate"), owner, credit });
+  // #6494: a full run is ~163 s; it used to print nothing until the end, so a timeout left no evidence of where it was.
+  const t0 = now();
+  const progress = (msg) => note(progressLine(now() - t0, msg));
+  progress(`PR #${pr}${trusted ? " --trusted" : ""}: reading GitHub`);
+  const v = evaluate({ pr, sha: opt("--sha") || "", request: trusted ? trustedRequest : request, root, localMerge, trusted, queueCandidate: argv.includes("--queue-candidate"), owner, credit, progress });
   if (quota) { log(`= merge-gate deferred — GitHub API rate limit: ${quota.error}`); return 4; }
   if (v.skip) { log(`= merge-gate skipped — ${v.skip}`); return 5; }
   if (v.error) { log(`= merge-gate error — ${v.error}`); return 1; }

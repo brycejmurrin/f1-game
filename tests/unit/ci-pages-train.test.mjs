@@ -5,7 +5,6 @@ import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a gi
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import cp from "node:child_process";
 import path from "node:path";
 import { parse as parseYAML } from "yaml";
@@ -15,6 +14,7 @@ import { verifiedBase } from "../../tools/ci/pages-verified-base.mjs";
 import { select } from "../../tools/ci/select-specs.mjs";
 import { changedPaths, firstParentChanges, PAGES_HISTORY_LIMIT } from "../../tools/lib/changed-files.mjs";
 import { ciWorkflow, pagesWorkflow, selectedJob, shipFilter } from "../helpers/ci-workflow.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 test("no workflow demotes the change-aware gate to advisory", () => {
   assert.doesNotMatch(pagesWorkflow, /^\s+advisory:/m);
@@ -22,7 +22,7 @@ test("no workflow demotes the change-aware gate to advisory", () => {
 });
 
 test("the Pages selector keeps reverted CSS and individually oversized specs from separate merges", (t) => {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "pages-history-"));
+  const cwd = mkTmpDir("pages-history-");
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
   const git = (...args) => cp.execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
   const css = "css/hud.css";
@@ -226,7 +226,7 @@ test("a deploy-only rerun publishes the artifact from the successful staging att
   const { stage, deploy } = parseYAML(pagesWorkflow).jobs;
   const name = stage.steps.find(step => step.id === "artifact");
   const upload = stage.steps.find(step => step.uses?.startsWith("actions/upload-pages-artifact@"));
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pages-artifact-"));
+  const dir = mkTmpDir("pages-artifact-");
   try {
     for (const attempt of [1, 4]) {
       const output = path.join(dir, "outputs-" + attempt);
@@ -251,7 +251,7 @@ test("pages-publishable.sh: forward-only, and a CDN hiccup cannot wedge deploys"
   // on PATH that serves whatever apex-sha the case names. The verdict is the
   // ONLY thing on stdout, by design: the workflow writes it straight into
   // $GITHUB_OUTPUT.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pages-pub-"));
+  const dir = mkTmpDir("pages-pub-");
   const git = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
   git("init", "-q"); git("config", "user.email", "t@t"); git("config", "user.name", "t");
   const shas = [];
@@ -320,7 +320,7 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   // C merged in. M1 = merge(C, B) has a tree neither parent has (both sides
   // changed). M2 = merge(C, D) has D's tree exactly. A fake `gh` on PATH serves
   // whatever runs FAKE_RUNS names for the head_sha in the URL.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pages-reuse-"));
+  const dir = mkTmpDir("pages-reuse-");
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const git = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
   const write = (f, s) => fs.writeFileSync(path.join(dir, f), s);

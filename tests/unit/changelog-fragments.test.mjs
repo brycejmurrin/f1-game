@@ -14,6 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { parseFragment, fold, foldBuild } from "../../tools/gen/gen-changelog.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BASE_BRANCH = "claude/f1-game-project-26h3ng";
@@ -75,7 +76,7 @@ function baseRef() {
 // (each PR inserting under the same `## <build>` / `### Fixed`) is the control and DOES conflict.
 test("fragments from two PRs and a fold on the tip merge clean; the old top-of-file insert conflicts", (t) => {
   fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
-  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "changelog-hotspot-"));
+  const dir = mkTmpDir("changelog-hotspot-");
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const git = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   const FRAGS = "docs/changelog.d";

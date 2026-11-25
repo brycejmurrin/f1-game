@@ -171,7 +171,7 @@ test("quit invalidates a qualifying sheet whose scenery script is pending", asyn
   g.sandbox.document.getElementById("quali").hidden = true;
   const h = holdScenery("bahrain");
   try {
-    const p = g.G.openQualiForNet(() => {});
+    const p = g.made.QualiNet.openQualiForNet(() => {});
     await tick(); assert.ok(h.held);
     g.G.quitToMenu(); h.release();
     const outcome = await p;
@@ -277,10 +277,10 @@ test("a rival's quali time that lands during the scenery load survives to the sh
   const h = holdScenery("suzuka");
   const doc = g.sandbox.document;
   try {
-    const p = g.G.openQualiForNet(() => {});
+    const p = g.made.QualiNet.openQualiForNet(() => {});
     await tick(); assert.ok(h.held);
     assert.equal(doc.getElementById("loading").hidden, false, "the load is covered by the card");
-    g.G.onPeerQuali({ driverId: "rival:0", t: 80 });
+    g.made.QualiNet.onPeerQuali({ driverId: "rival:0", t: 80 });
     h.release();
     await p;
     assert.equal(doc.getElementById("q-go").disabled, false, "the rival's time is still there: the gate opens");

@@ -26,6 +26,14 @@
    same one) is edited every 15 s while a command runs, 60 s while idle (Bryce's D4, #6582), and on every visibility change: build, screen, state, visible, last command id.
    A phone iOS has paused reads as a stale `at`, not as silence.
 
+   CONCURRENCY (#6582). Every command is a READ (READ_CMDS, `drive {stop|status}`, `call` of a CALL_READ method with
+   the args it allows) or an ACTION (everything else). ACTIONs run one at a time, oldest first; a READ starts the moment
+   a poll picks it, beside the running ACTION, and polling never waits on either. So `drive {stop}` reaches a running
+   drive, and `reload` / `path` / `bench` wait their turn behind it. Replies may arrive out of order: `re` is the key.
+
+   PLANS (#6582). `plan {name, args}` runs one of PLANS: a code-reviewed list of CMDS steps (plus `when` waits) kept in
+   this file, never sent in a comment, under the same deny-lists. It is an ACTION and answers once with every step.
+
    PERF COMMANDS. `path` pins the three.js path BENCHMARK pins (BenchRun.pathPrefs) and reloads, `bench` starts and
    reads a BenchRun, `snap` returns a small JPEG of the canvas, `batch` runs up to BATCH_MAX steps from one comment.
    Recipes: .claude/skills/phone-bridge/references/commands.md. */
@@ -114,7 +122,7 @@ const ApexBridge = (function () {
       v: V, sha: meta ? meta.content : null, href: location.href,
       ua: nav.userAgent || null, dpr: window.devicePixelRatio, w: window.innerWidth, h: window.innerHeight,
       gpu: !!nav.gpu, cores: nav.hardwareConcurrency || null, mem: nav.deviceMemory || null,
-      apex: !!window.__apex, info, render: pathState(),
+      apex: !!window.__apex, info, render: pathState(), wakeLock: wakeState(_run),
     };
   }
 
@@ -362,9 +370,11 @@ const ApexBridge = (function () {
   async function batch(args) {
     const steps = args && Array.isArray(args.steps) ? args.steps : null;
     if (!steps || !steps.length || steps.length > BATCH_MAX) throw new Error("batch.steps must hold 1–" + BATCH_MAX + " steps");
-    const out = [];
+    // #6636: a batch the link issued stops once that link ends (TAP TO END): no later step, above all no later drive.
+    const run = _run, out = [];
     for (let i = 0; i < steps.length; i++) {
       const s = steps[i] || {};
+      if (_run !== run) { out.push({ cmd: s.cmd, ok: false, error: "the link ended" }); break; }
       const ends = s.cmd === "reload" || (s.cmd === "path" && s.args && s.args.to != null && s.args.reload !== false);
       let r;
       if (s.cmd === "batch") r = { ok: false, error: "batch cannot nest" };
@@ -530,18 +540,22 @@ const ApexBridge = (function () {
     return Object.assign({ tapped: what, screen: screenNow(), state: gameState(), ok }, wait ? { waited: Date.now() - t0 } : null);
   }
   // WHEN (#6581): wait until the screen, the game state or the page's visibility reads a value (≤ WHEN_MAX ms), so a
-  // batch step waits for what it needs instead of a guessed `wait`. `ok` false stops a batch.
+  // batch step waits for what it needs instead of a guessed `wait`. `ok` false stops a batch. `visible` true / false
+  // is the page; `visible: "<id>"` (#6582) waits for that element to be shown (the `shown` test a tap makes).
   const WHEN_MAX = 60000;
   async function when(args) {
     const a = args || {};
     const keys = ["screen", "state", "visible"].filter((k) => a[k] != null);
     if (keys.length !== 1) throw new Error("when takes ONE of screen, state, visible (and ms)");
     if (a.screen != null && !SCREEN_NAMES.has(a.screen)) throw new Error("when.screen must be one of " + [...SCREEN_NAMES].join(", "));
-    if (a.visible != null && typeof a.visible !== "boolean") throw new Error("when.visible takes true or false");
-    const read = { screen: screenNow, state: gameState, visible: () => typeof document === "undefined" || !document.hidden }[keys[0]];
+    const elId = typeof a.visible === "string" && /^[A-Za-z][\w-]{0,80}$/.test(a.visible) ? a.visible : null;
+    if (a.visible != null && typeof a.visible !== "boolean" && !elId) throw new Error("when.visible takes true, false or an element id");
+    const read = elId ? () => shown(byId(elId))
+      : { screen: screenNow, state: gameState, visible: () => typeof document === "undefined" || !document.hidden }[keys[0]];
+    const want = elId ? true : a[keys[0]];
     const ms = Math.max(0, Math.min(WHEN_MAX, Number(a.ms) || NAV_STEP_MS)), t0 = Date.now();
-    const ok = await until(() => read() === a[keys[0]], ms);
-    return { ok, [keys[0]]: read(), screen: screenNow(), state: gameState(), waited: Date.now() - t0 };
+    const ok = await until(() => read() === want, ms);
+    return Object.assign({ ok, [keys[0]]: read(), screen: screenNow(), state: gameState(), waited: Date.now() - t0 }, elId ? { id: elId } : null);
   }
   // One SettingRow (rs-<row>): tap its › chevron until the select reads `want`, at most once per option.
   async function setRow(row, want) {
@@ -695,10 +709,10 @@ const ApexBridge = (function () {
   // AUTO SOAK law plus PitLane's own lane lines) — agent control through the setInput seam, never a player assist. It
   // runs only from this command, and lets go on `stop`, a quit, a pause, a hidden page or a real touch/key. `to:"box"`
   // drives on to the pit entry, down the lane and stops in this car's box; `laps` / `seconds` is an autopilot lap.
-  // The bridge serves one command at a time, so a `wait:false` drive answers at once and `status` / `stop` follow.
+  // A drive is an ACTION, but `status` / `stop` are READs (CONCURRENCY): they answer while the drive still runs.
   // No `to:"grid"`: nothing in the game reads a car parked on its grid slot (the grid is placed by race(), a restart
   // re-grids by itself), so there is no state for it to reach.
-  const DRIVE_MS = 240000, DRIVE_START_MS = 30000, END_IDS = ["hud-end-session", "hud-work"];
+  const DRIVE_MS = 240000, DRIVE_START_MS = 30000, HANDS_OFF_MS = 300000, END_IDS = ["hud-end-session", "hud-work"];
   async function drive(args) {
     const a = args || {};
     const S = typeof SoakRun !== "undefined" ? SoakRun : null;
@@ -711,14 +725,21 @@ const ApexBridge = (function () {
     if (a.to != null && a.to !== "box") throw new Error('drive.to must be "box"');
     if (a.laps != null && !(Number.isInteger(a.laps) && a.laps >= 1 && a.laps <= 5)) throw new Error("drive.laps must be 1-5");
     if (a.seconds != null && !(Number(a.seconds) >= 1 && Number(a.seconds) <= 600)) throw new Error("drive.seconds must be 1-600");
-    const ms = Math.max(5000, Math.min(600000, Number(a.ms) || DRIVE_MS));
+    if (a.handsOff != null && typeof a.handsOff !== "boolean") throw new Error("drive.handsOff takes true or false");
+    const hands = a.handsOff === true;
+    // A hands-off drive is capped shorter (no touch ends it) and needs its STOP on screen before the car is taken.
+    const ms = Math.max(5000, Math.min(hands ? HANDS_OFF_MS : 600000, Number(a.ms) || DRIVE_MS));
+    if (hands && a.seconds != null && Number(a.seconds) * 1000 > HANDS_OFF_MS) throw new Error("a hands-off drive is at most " + HANDS_OFF_MS / 1000 + " s");
+    const run0 = _run;
     // Straight after `nav`'s RACE! the garage drive-out is still playing (state "menu"): wait for the session.
     await until(() => { const st = gameState(); return st === "race" || st === "count"; }, DRIVE_START_MS);
-    const run = S.drive({ to: a.to, laps: a.laps, seconds: a.seconds != null ? Number(a.seconds) : undefined, ms });
+    if (run0 && _run !== run0) throw new Error("the link ended: drive refused");   // #6636
+    if (hands && !drivingBanner(true, true)) throw new Error("drive.handsOff needs the STOP banner on screen (no page body)");
+    const run = S.drive({ to: a.to, laps: a.laps, seconds: a.seconds != null ? Number(a.seconds) : undefined, ms, handsOff: hands || undefined });
     // The banner goes when the drive ends for ANY reason (stop, a real touch, pause, hidden, quit, the link ending):
     // every end resolves this promise. A newer drive owns the banner, so the replaced one's end does not hide it.
     const mine = ++_drvTok;
-    drivingBanner(true);
+    drivingBanner(true, hands);
     const off = () => { if (mine === _drvTok) drivingBanner(false); };
     run.then(off, off);
     if (a.wait === false) { run.catch(() => {}); return Object.assign({ started: true }, S.driveStatus()); }
@@ -730,21 +751,163 @@ const ApexBridge = (function () {
     return Object.assign({ ok, screen: screenNow(), state: gameState(), pitActions: END_IDS.filter((id) => shown(byId(id))) }, r);
   }
 
+  // RECTS (#6581, #6582 unit 1): where HUD and menu elements sit, read on the device — `display` / `geom` give sizes
+  // only and `snap` is the canvas, so #6518's SPEED vs STEER RIGHT overlap could not be measured. Ids only, never a
+  // selector; an id inside a TAP_DENY area answers `refused`; at most RECTS_MAX. Read-only.
+  const RECTS_MAX = 40;
+  function rectsOf(args) {
+    const ids = args && Array.isArray(args.ids) ? args.ids : null;
+    if (!ids || !ids.length || ids.length > RECTS_MAX) throw new Error("ids must hold 1–" + RECTS_MAX + " element ids");
+    return ids.map((id) => {
+      if (typeof id !== "string" || !/^[A-Za-z][\w-]{0,80}$/.test(id)) throw new Error("not an element id: " + JSON.stringify(id));
+      // A denied id answers `refused` whether or not it exists, so the answer never says what is in the page.
+      if (TAP_DENY.some((p) => id === p || id.startsWith(p + "-"))) return { id, refused: true };
+      const el = byId(id);
+      if (!el) return { id, missing: true };
+      if (deniedArea(el)) return { id, refused: true };
+      const r = el.getBoundingClientRect();
+      let fontSize = null;
+      try { fontSize = getComputedStyle(el).fontSize || null; } catch (_) { /* detached */ }
+      return { id, x: r2(r.left), y: r2(r.top), w: r2(r.width), h: r2(r.height), visible: shown(el) && r.width > 0 && r.height > 0, fontSize };
+    });
+  }
+  const rects = (args) => ({ viewport: [window.innerWidth, window.innerHeight], screen: screenNow(), rects: rectsOf(args) });
+  // Every visible pair that intersects, with the shared box (HudLayout's own collision boxes, js/ui/hud-layout.js).
+  function overlaps(args) {
+    const all = rectsOf(args), rs = all.filter((r) => r.visible), out = [];
+    for (let i = 0; i < rs.length; i++) for (let j = i + 1; j < rs.length; j++) {
+      const a = rs[i], b = rs[j], x = Math.max(a.x, b.x), y = Math.max(a.y, b.y);
+      const w = Math.min(a.x + a.w, b.x + b.w) - x, h = Math.min(a.y + a.h, b.y + b.h) - y;
+      if (w > 0 && h > 0) out.push({ a: a.id, b: b.id, x: r2(x), y: r2(y), w: r2(w), h: r2(h), area: r2(w * h) });
+    }
+    return { screen: screenNow(), checked: rs.map((r) => r.id), skipped: all.filter((r) => !r.visible).map((r) => r.id), overlaps: out };
+  }
+
   // A visible "CLAUDE DRIVING" strip (#6581) so Bryce knows not to touch, and why a touch ends it. pointer-events none:
   // the touch reaches the game, and SoakRun's real-input listener hands the car back.
   let _drvTok = 0, _drvBanner = null;
-  function drivingBanner(on) {
-    if (typeof document === "undefined" || !document.body || typeof document.createElement !== "function") return;
-    if (!on) { if (_drvBanner) { try { _drvBanner.remove(); } catch (_) { /* gone */ } _drvBanner = null; } return; }
-    if (_drvBanner) return;
+  // `handsOff` (#6581 item 7): touches no longer take the car back, so the strip carries a big STOP that does.
+  function drivingBanner(on, handsOff) {
+    if (typeof document === "undefined" || !document.body || typeof document.createElement !== "function") return false;
+    if (_drvBanner && (!on || _drvBanner.handsOff !== !!handsOff)) { try { _drvBanner.remove(); } catch (_) { /* gone */ } _drvBanner = null; }
+    if (!on || _drvBanner) return !!_drvBanner;
     const b = _drvBanner = document.createElement("div");
     b.id = "apex-bridge-driving";
+    b.handsOff = !!handsOff;
     b.setAttribute("role", "status");
-    b.textContent = "CLAUDE DRIVING · A TOUCH TAKES THE CAR BACK";
+    b.textContent = handsOff ? "CLAUDE DRIVING · HANDS OFF " : "CLAUDE DRIVING · A TOUCH TAKES THE CAR BACK";
+    if (handsOff) {
+      const stopBtn = document.createElement("button");
+      stopBtn.id = "apex-bridge-driving-stop";
+      stopBtn.type = "button";
+      stopBtn.textContent = "STOP";
+      stopBtn.style.cssText = "pointer-events:auto;min-width:96px;min-height:56px;margin-left:10px;border:0;border-radius:10px;"
+        + "font:800 18px system-ui,sans-serif;background:#fff;color:#b3401f;touch-action:manipulation";
+      stopBtn.addEventListener("click", () => { try { SoakRun.driveStop("stop button"); } catch (_) { /* no driver */ } });
+      b.appendChild(stopBtn);
+    }
     b.style.cssText = "position:fixed;top:calc(max(4px,env(safe-area-inset-top)) + 26px);left:50%;transform:translateX(-50%);"
       + "z-index:99999;pointer-events:none;padding:6px 14px;border-radius:8px;font:700 13px/1.3 system-ui,sans-serif;"
       + "letter-spacing:.08em;background:rgba(217,119,87,.95);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.35)";
     document.body.appendChild(b);
+    return true;
+  }
+
+  // PLANS (#6582 §2 item 5): a named test script that runs ON the phone and answers once. A plan is DATA in this
+  // file: its default args and a function from the checked args to a list of CMDS steps, never code from a comment.
+  // Each step goes through handle(), so CALL_DENY, TAP_DENY and SET_KEY_DENY hold inside a plan as anywhere. A step
+  // with `ifVisible: "<id>"` is skipped (ok) while that element is not shown. The plan stops at the first step that
+  // fails (ok false, or a value whose ok is false, as in a batch). Limits: PLAN_STEPS_MAX steps, PLAN_MS in all.
+  const PLAN_STEPS_MAX = 40, PLAN_MS = 600000;
+  const PLAN_REFUSE = new Set(["plan", "batch", "reload", "path", "bench"]);   // the page or the queue would be gone
+  const PLAN_ARG = {
+    track: (v) => { if (!/^[a-z0-9_-]{1,40}$/.test(String(v))) throw new Error("plan.args.track must be a track id"); return String(v); },
+    seconds: (v) => { const n = Number(v); if (!(Number.isInteger(n) && n >= 1 && n <= 60)) throw new Error("plan.args.seconds must be 1-60"); return n; },
+  };
+  const HUD_AUDIT_IDS = ["hud-speed", "btn-brake", "btn-throttle", "btn-steer-left", "btn-steer-right", "btn-boost", "btn-ot", "btn-aero", "btn-cam"];
+  const PLANS = {
+    // TIME TRIAL → the pit box → END TIME TRIAL → the garage (skipping the arrival if it plays) → a picture.
+    ttEndGarage: { args: { track: "monza" }, steps: (a) => [
+      { cmd: "nav", args: { flow: "tt", track: a.track } },
+      { cmd: "drive", args: { to: "box" } },
+      { cmd: "when", args: { visible: "hud-end-session", ms: 30000 } },
+      { cmd: "tap", args: { id: "hud-end-session" } },
+      { cmd: "when", args: { screen: "garage", ms: 30000 } },
+      { cmd: "tap", args: { id: "cs-arrival-skip" }, ifVisible: "cs-arrival-skip" },
+      { cmd: "screen" },
+      { cmd: "snap", args: { w: 320 } },
+    ] },
+    // A race start and a frame sample. `when screen race` (state count or race): race() answers at the grid, and its
+    // state is the countdown until `go`, so a `when state race` before `go` could never come true.
+    raceSample: { args: { track: "monza", seconds: 10 }, steps: (a) => [
+      { cmd: "display" },
+      { cmd: "geom" },
+      { cmd: "call", args: { method: "race", args: [a.track] } },
+      { cmd: "when", args: { screen: "race", ms: 60000 } },
+      { cmd: "call", args: { method: "go" } },
+      { cmd: "wait", args: { ms: 3000 } },
+      { cmd: "frames", args: { seconds: a.seconds } },
+      { cmd: "call", args: { method: "perf" } },
+    ] },
+    // The HUD's geometry on this device, read where it stands: the speed readout against the touch buttons (#6518).
+    hudAudit: { args: {}, steps: () => [
+      { cmd: "geom" },
+      { cmd: "display" },
+      { cmd: "screen" },
+      { cmd: "overlaps", args: { ids: HUD_AUDIT_IDS } },
+      { cmd: "snap", args: { w: 320 } },
+    ] },
+  };
+  const own = (o, k) => typeof k === "string" && Object.prototype.hasOwnProperty.call(o, k);
+  function planSteps(name, given) {
+    if (!own(PLANS, name)) throw new Error("unknown plan: " + name + " (plans: " + Object.keys(PLANS).join(", ") + ")");
+    const p = PLANS[name], g = given == null ? {} : given;
+    if (typeof g !== "object" || Array.isArray(g)) throw new Error("plan.args must be an object");
+    for (const k of Object.keys(g)) if (!own(p.args, k)) throw new Error("plan " + name + " takes " + (Object.keys(p.args).join(", ") || "no args"));
+    const pa = {};
+    for (const k of Object.keys(p.args)) pa[k] = PLAN_ARG[k](g[k] == null ? p.args[k] : g[k]);
+    const steps = p.steps(pa);
+    if (steps.length > PLAN_STEPS_MAX) throw new Error("plan " + name + " has " + steps.length + " steps (max " + PLAN_STEPS_MAX + ")");
+    return [pa, steps];
+  }
+  // The summary fits MAX_REPLY: the biggest step values are cut to a head first, so every step's ok / ms survives.
+  function fitSteps(out, budget) {
+    const size = (v) => (v === undefined ? 0 : JSON.stringify(v).length);
+    while (JSON.stringify(out).length > budget) {
+      let big = -1, n = 0;
+      out.forEach((s, i) => { const k = size(s.value); if (k > n) { n = k; big = i; } });
+      if (big < 0) break;
+      const s = out[big];
+      out[big] = Object.assign({}, s, { value: undefined, cut: n, head: JSON.stringify(s.value).slice(0, 200) });
+    }
+    return out;
+  }
+  const PLAN_LATE = "plan time limit (" + PLAN_MS + " ms)";
+  async function plan(args) {
+    const a = args || {};
+    const [pa, steps] = planSteps(a.name, a.args);
+    const t0 = Date.now(), out = [], run = _run;
+    let failed = null;
+    for (let i = 0; i < steps.length && failed == null; i++) {
+      const s = steps[i];
+      // The link ended (a badge tap, a re-link): no further step starts (a step already running finishes).
+      if (_run !== run) { out.push({ i, cmd: s.cmd, ok: false, error: "link ended" }); failed = i; break; }
+      if (s.ifVisible && !shown(byId(s.ifVisible))) { out.push({ i, cmd: s.cmd, ok: true, skipped: true }); continue; }
+      const left = PLAN_MS - (Date.now() - t0);
+      let r, timer = null;
+      if (PLAN_REFUSE.has(s.cmd)) r = { ok: false, error: s.cmd + " cannot run inside a plan" };
+      else if (left <= 0) r = { ok: false, error: PLAN_LATE };
+      else {
+        r = await Promise.race([handle({ cmd: s.cmd, args: s.args }),
+          new Promise((res) => { timer = setTimeout(() => res({ ok: false, error: PLAN_LATE }), left); })]);
+        clearTimeout(timer);
+        // Out of time mid-drive: give the car back, as a stop would.
+        if (r.error === PLAN_LATE) try { if (typeof SoakRun !== "undefined" && SoakRun.driving()) SoakRun.driveStop("plan limit"); } catch (_) { /* no driver */ }
+      }
+      out.push(Object.assign({ i, cmd: s.cmd }, r));
+      if (!r.ok || (r.value && r.value.ok === false)) failed = i;
+    }
+    return { plan: a.name, args: pa, ok: failed == null, failed, ms: Date.now() - t0, steps: fitSteps(out, MAX_REPLY - 2000) };
   }
 
   const CMDS = {
@@ -768,6 +931,9 @@ const ApexBridge = (function () {
     scroll,
     screen: () => ({ screen: screenNow(), state: gameState() }),
     when,
+    rects,
+    overlaps,
+    plan,
     drive,
     batch,
   };
@@ -829,18 +995,22 @@ const ApexBridge = (function () {
   }
   const fence = (obj) => "```apex-result\n" + JSON.stringify(obj) + "\n```";
 
-  async function post(obj) {
-    const r = await gh("/comments", { body: { body: fence(obj) } });
+  async function post(obj, run) {
+    const r = await gh("/comments", { run, body: { body: fence(obj) } });
     if (!r.ok) {
       let msg = "";
       try { msg = String((await r.json()).message || ""); } catch (_) { /* no JSON body */ }
-      throw new Error("post " + r.status + (msg ? " " + msg.slice(0, 80) : ""));
+      throw Object.assign(new Error("post " + r.status + (msg ? " " + msg.slice(0, 80) : "")), { status: r.status });
     }
     return r.json();
   }
 
   async function pollOnce() {
     const run = _run;
+    const o = run.outbox.shift();   // ONE failed reply per poll, oldest first (never a burst of POSTs)
+    if (o) await reply(run, o.obj, o.tries);
+    if (o && Date.now() < run.backoff) return -1;   // that retry failed: its hold covers this poll's read too
+    if (_run !== run) return -1;
     // `since` (run.since) walks forward; `cutoff` stays the hello's time, the floor a command must be created after.
     const r = await gh("/comments?per_page=100&since=" + encodeURIComponent(run.since), { etag: run.etag });
     if (r.status === 304) return 0;
@@ -858,27 +1028,112 @@ const ApexBridge = (function () {
     const cmds = pickCommands(page, run.cutoff, run.seen);
     for (const c of cmds) {
       if (_run !== run) break;
-      run.seen.add(c.id);
-      run.last = { id: c.id, cmd: c.msg && c.msg.cmd, busy: true };
-      if (!run.statusSlow) armStatus(STATUS_BUSY_MS);   // busy: the next edit within 15 s
-      const res = await handle(c.msg);
-      run.last.busy = false;
-      run.served++;
-      paintBadge();
-      await post(Object.assign({ re: c.id, cmd: c.msg && c.msg.cmd }, res));
+      dispatch(run, c);
     }
-    // Only after every command is served: a throwing post() leaves the window where it was, so the next poll re-reads
-    // the unserved commands (`seen` drops the ones already handled) instead of skipping past them.
+    // Only once every command on the page is dispatched (seen + started or queued): a stop() mid-page leaves the window
+    // where it was. A reply that fails to post waits in run.outbox (bounded: see reply).
     if (_run === run) run.since = newest;
     return cmds.length;
   }
 
+  // CONCURRENCY (#6582). READ: answers beside a running ACTION. `call` is a READ only for a CALL_READ method whose
+  // args pass its check (a reader that takes an arg to reset, download or set something is a READ only without it).
+  const READ_CMDS = new Set(["ping", "facts", "display", "geom", "frames", "screen", "snap", "rects", "overlaps"]);
+  const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+  const none = (xs) => xs.length === 0, any = () => true;
+  const CALL_READ = {
+    perf: none, info: none, timing: none, lapHistory: none, classification: none, audio: none, lifecycle: none, flags: none,
+    inputState: none, cameraState: none, raceEntryProfile: none, raceEntryStages: none, texCensus: none, assets: none, probe: none,
+    physState: any, world: any, field: any, logs: any, scene: any,   // option bags that only filter or shape the read
+    renderScale: (xs) => xs.length === 0 || (xs.length === 1 && isObj(xs[0]) && xs[0].lite === true && Object.keys(xs[0]).length === 1),
+    diag: (xs) => xs.length === 1 && isObj(xs[0]) && xs[0].download === false,
+    frametimeBench: (xs) => xs.length === 0 || (xs.length === 1 && xs[0] === "snapshot"),
+  };
+  function isRead(msg) {
+    const c = msg && msg.cmd, a = (msg && isObj(msg.args) && msg.args) || {};
+    if (READ_CMDS.has(c)) return true;
+    if (c === "drive") return !!(a.stop || a.status);
+    if (c !== "call" || !own(CALL_READ, a.method) || !callAllowed(a.method)) return false;
+    return CALL_READ[a.method](Array.isArray(a.args) ? a.args : []);
+  }
+  function dispatch(run, c) {
+    run.seen.add(c.id);
+    run.last = { id: c.id, cmd: c.msg && c.msg.cmd, busy: true };
+    if (!run.statusSlow) armStatus(STATUS_BUSY_MS);   // busy: the next edit within 15 s (not while rate-limited)
+    if (isRead(c.msg)) track(run, serve(run, c));
+    else { run.queue.push(c); pump(run); }
+  }
+  function pump(run) {
+    if (run.acting || !run.queue.length || _run !== run) return;
+    const c = run.acting = run.queue.shift();
+    track(run, serve(run, c).finally(() => { run.acting = null; pump(run); }));
+  }
+  function track(run, p) {
+    run.inflight.add(p);
+    p.finally(() => run.inflight.delete(p)).catch(() => { /* serve reports its own failure */ });
+  }
+  async function serve(run, c) {
+    run.running++;
+    let res;
+    try { res = await handle(c.msg); } finally { run.running--; }
+    if (run.last) run.last.busy = run.running > 0 || run.queue.length > 0;
+    if (_run !== run) return;
+    run.served++;
+    paintBadge();
+    await reply(run, Object.assign({ re: c.id, cmd: c.msg && c.msg.cmd }, res));
+  }
+  // A failed reply waits in run.outbox: at most OUTBOX_TRIES posts each, OUTBOX_MAX entries (the oldest drops first).
+  // A 403 / 429 (GitHub's rate limits) holds the poll REPLY_SLOW_MS, as statusSlow slows the status edit.
+  const OUTBOX_TRIES = 3, OUTBOX_MAX = 10, REPLY_SLOW_MS = 60000;
+  async function reply(run, obj, tries) {
+    const n = (tries || 0) + 1;
+    try { await post(obj, run); } catch (e) {
+      if (_run !== run) return;
+      const slow = e.status === 403 || e.status === 429;
+      run.backoff = Math.max(run.backoff, Date.now() + (slow ? REPLY_SLOW_MS : POLL_MS * 3));
+      if (n >= OUTBOX_TRIES) { say("reply to " + obj.re + " dropped after " + n + " tries (" + e.message + ")"); return; }
+      run.outbox.push({ obj, tries: n });
+      if (run.outbox.length > OUTBOX_MAX) say("reply to " + run.outbox.shift().obj.re + " dropped (outbox full)");
+      say("reply to " + obj.re + " failed (" + e.message + "), retried " + (slow ? "after " + REPLY_SLOW_MS / 1000 + " s" : "next poll"));
+    }
+  }
+  // Every command dispatched so far has answered (or failed to post). Tests and plans' callers await it.
+  async function drain() {
+    const run = _run;
+    while (run && run.inflight.size) await Promise.all([...run.inflight]);
+  }
+
   // STATUS (#6581): one comment, edited in place. A long batch blocks the poll chain, not this timer, so `last.busy`
   // shows it running. A hidden page posts with keepalive (iOS may freeze the page right after).
-  const STATUS_BUSY_MS = 15000, STATUS_IDLE_MS = 60000, STATUS_FIRST_MS = 5000;
+  const STATUS_BUSY_MS = 15000, STATUS_IDLE_MS = 60000, STATUS_FIRST_MS = 5000, STATUS_MIN_MS = 5000;
   // The status comment's id on this device, as "<issue>:<comment id>" (one literal key, save-schema-registry.js).
   const STATUS_KEY = "apex26.bridgeStatus";
   function storedStatusId(issue) { const m = /^(\d+):(\d+)$/.exec(raw(STATUS_KEY) || ""); return m && Number(m[1]) === issue ? Number(m[2]) : 0; }
+  // WAKE LOCK (#6581 item 6): a linked phone must not auto-lock mid-window. iOS drops the lock whenever the page hides,
+  // so it is asked for again on visible; it cannot stop an app switch (the hidden-page handling stays).
+  const wakeApi = () => (typeof navigator !== "undefined" && navigator.wakeLock && typeof navigator.wakeLock.request === "function" ? navigator.wakeLock : null);
+  function wakeState(run) {
+    return { supported: !!wakeApi(), held: !!(run && run.wake && !run.wake.released), refused: (run && run.wakeErr) || null };
+  }
+  // One request at a time (a visibility flip mid-request must not orphan a second sentinel); an older one is released.
+  function wakeAcquire(run) {
+    const w = wakeApi();
+    if (!w || run.wakePending || (run.wake && !run.wake.released)) return run.wakePending;
+    run.wakePending = (async () => {
+      try {
+        const l = await w.request("screen");
+        if (_run !== run) { wakeRelease({ wake: l }); return; }
+        if (run.wake && run.wake !== l) wakeRelease({ wake: run.wake });
+        run.wake = l; run.wakeErr = null;
+      } catch (e) { run.wake = null; run.wakeErr = String((e && e.name) || e); } finally { run.wakePending = null; }
+    })();
+    return run.wakePending;
+  }
+  function wakeRelease(run) {
+    const l = run.wake;
+    run.wake = null;
+    try { if (l && !l.released) { const r = l.release(); if (r && r.catch) r.catch(() => {}); } } catch (_) { /* released */ }
+  }
   function statusOf(run, ended) {
     const d = typeof document !== "undefined" ? document : null;
     let sha = null, screen = null, driving = null;
@@ -886,7 +1141,8 @@ const ApexBridge = (function () {
     try { screen = screenNow(); } catch (_) { /* no DOM */ }
     try { driving = typeof SoakRun !== "undefined" && SoakRun.driving ? !!SoakRun.driving() : null; } catch (_) { /* no driver */ }
     return { status: true, v: V, at: new Date().toISOString(), linked: !ended, ended: ended || undefined, sha, screen,
-      state: gameState(), visible: d ? !d.hidden : null, driving, served: run.served, last: run.last || null, hello: run.cutoff };
+      state: gameState(), visible: d ? !d.hidden : null, wake: wakeState(run).held, driving, served: run.served, last: run.last || null, hello: run.cutoff,
+      running: run.running || 0, queued: run.queue ? run.queue.length : 0 };
   }
   // An edit asked for while one is in flight (a visibility flip, the link's end) is queued and sent right after it, so
   // the newest state always lands; a 403 / 429 (GitHub's rate limits) slows the cadence to STATUS_SLOW_MS.
@@ -905,9 +1161,17 @@ const ApexBridge = (function () {
     return p;
   }
   async function statusEdit(run, ended, keepalive) {
+    run.statusAt = Date.now();
     try {
       const body = { body: "```apex-status\n" + JSON.stringify(statusOf(run, ended)) + "\n```" };
-      let id = run.statusId || storedStatusId(run.issue);
+      let id = run.statusId;
+      // A stored id is edited only once it reads back as this issue's own apex-status comment: the key never steers an
+      // edit onto another comment (security review, #6639).
+      if (!id && (id = storedStatusId(run.issue))) {
+        const g = await gh("", { run, repoPath: "/issues/comments/" + id });
+        const c = g.ok ? await g.json() : null;
+        if (!c || !String(c.issue_url || "").endsWith("/issues/" + run.issue) || !String(c.body || "").startsWith("```apex-status")) id = 0;
+      }
       if (id) {
         const r = await gh("", { run, repoPath: "/issues/comments/" + id, method: "PATCH", body, keepalive });
         if (r.ok) { run.statusId = id; run.statusSlow = false; return id; }
@@ -955,7 +1219,8 @@ const ApexBridge = (function () {
   async function start(issue, tok) {
     if (_run) return false;
     _run = { issue, token: tok, cutoff: null, since: null, etag: null, seen: new Set(), served: 0, backoff: 0, timer: null, state: "connecting",
-      last: null, statusId: 0, statusTimer: null, statusDue: 0, statusBusy: null, statusAgain: null, statusSlow: false, onVis: null };
+      queue: [], acting: null, running: 0, inflight: new Set(), outbox: [],   // CONCURRENCY
+      last: null, statusId: 0, statusTimer: null, statusDue: 0, statusBusy: null, statusAgain: null, statusSlow: false, statusAt: 0, onVis: null, wake: null, wakePending: null, wakeErr: null };
     paintBadge();
     try {
       const hello = await post({ hello: true, facts: facts() });
@@ -967,7 +1232,13 @@ const ApexBridge = (function () {
       schedule();
       armStatus(STATUS_FIRST_MS);
       const run = _run;
-      run.onVis = () => { if (_run === run) postStatus(run, null, !!document.hidden); };
+      wakeAcquire(run);
+      // Visibility edits honour a rate limit (statusSlow) and a STATUS_MIN_MS floor: a flipping page cannot hammer the API.
+      run.onVis = () => {
+        if (_run !== run) return;
+        if (!document.hidden) wakeAcquire(run);
+        if (!run.statusSlow && Date.now() - run.statusAt >= STATUS_MIN_MS) postStatus(run, null, !!document.hidden);
+      };
       try { document.addEventListener("visibilitychange", run.onVis); } catch (_) { run.onVis = null; }
       return true;
     } catch (e) {
@@ -992,9 +1263,11 @@ const ApexBridge = (function () {
     clearTimeout(run.timer);
     clearTimeout(run.statusTimer);
     try { if (run.onVis) document.removeEventListener("visibilitychange", run.onVis); } catch (_) { /* no document */ }
+    wakeRelease(run);
+    run.queue.length = 0;   // queued ACTIONs never start; running ones finish unanswered
     _run = null;
     // The last edit says the link ended, and why — even in the first seconds (a reload), to the id stored on the device.
-    if (run.statusId || storedStatusId(run.issue)) postStatus(run, why || "stopped", true);
+    if (why !== "token rejected" && (run.statusId || storedStatusId(run.issue))) postStatus(run, why || "stopped", true);
     say("link ended: " + (why || "stopped"));
     paintBadge(why || "ended");
   }
@@ -1099,6 +1372,8 @@ const ApexBridge = (function () {
   boot();
   return { V, REPO, CALL_DENY, CALL_DENY_PREFIX, callAllowed, TAP_DENY, CMDS, issueOf, handle, pickCommands, pollOnce, start, stop, boot, frames, facts, display, geom, tokenShape,
     status: () => (_run ? postStatus(_run) : Promise.resolve(null)), statusDue: () => (_run ? _run.statusDue : 0), BATCH_MAX,
+    READ_CMDS, CALL_READ, isRead, PLANS, PLAN_STEPS_MAX, planSteps, drain, OUTBOX_TRIES, OUTBOX_MAX,
+    outbox: () => (_run ? _run.outbox.length : 0), backoff: () => (_run ? _run.backoff : 0),
     active: () => !!_run };
 })();
 Object.freeze(ApexBridge);

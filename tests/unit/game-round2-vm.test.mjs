@@ -207,7 +207,7 @@ test("NET: a failed openQuali prepare cancels the lobby it was opened for", asyn
     let cancelled = 0;
     G.netLobby.cancel = () => { cancelled++; };
     ev(g, `Assets = Object.create(Assets, { modelsReady: { value: () => Promise.reject(new Error("scenery down")) } })`);   // ensureScenery (the PREPARE step) rejects
-    await G.openQualiForNet(() => {});
+    await g.made.QualiNet.openQualiForNet(() => {});
     assert.equal(cancelled, 1, "quitToMenu cancelled the lobby (friendQualifying would gate every later quali save)");
   } finally { g.close(); }
 });

@@ -10,7 +10,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import {
   foldCallEvent,
@@ -64,6 +63,7 @@ import {
   downloadArtifact,
   agentUsage,
 } from "../../tools/ci/cursor-agents.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const sse = (rows) => rows.map(([e, d]) => `event: ${e}\ndata: ${JSON.stringify(d)}\n`).join("\n");
 
@@ -129,7 +129,7 @@ function stub(...replies) {
   };
   return calls;
 }
-const tmpAllow = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), "cursor-agents-")), "launched.json");
+const tmpAllow = () => path.join(mkTmpDir("cursor-agents-"), "launched.json");
 const err = (code, message = "m") => ({ error: { code, message } });
 const after = () => {
   globalThis.fetch = realFetch;
@@ -318,7 +318,7 @@ function fakeClock() {
   t.restore = () => Object.assign(clock, real);
   return t;
 }
-const tmpDir = () => fs.mkdtempSync(path.join(os.tmpdir(), "cursor-agents-"));
+const tmpDir = () => mkTmpDir("cursor-agents-");
 
 test("dump skips a 410 stream_expired, counts it, and keeps going", async () => {
   const dir = tmpDir();

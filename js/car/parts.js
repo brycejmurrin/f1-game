@@ -967,6 +967,16 @@ const Parts = (function () {
     return resolveSetup(setup, team, tune).mods;
   }
 
+  // A human car's stats over its works build: factory = x1.0 (docs/PHYSICS.md §Parts parity).
+  function playerMods(setup, team, tune) {
+    const m = getMods(setup, team, tune), w = factoryResolved(team).mods;
+    for (const k of STAT_ORDER) m[k] /= w[k];
+    return m;
+  }
+
+  // Free-play cap: the works car is free, BUDGET is the upgrade allowance on top of it.
+  function freeBudget(team) { return BUDGET + factoryResolved(team).cost; }
+
   function getCost(setup, team) {
     return resolveSetup(setup, team).cost;
   }
@@ -1055,7 +1065,7 @@ const Parts = (function () {
     CATALOG, DEFAULTS, FACTORY_PRESETS, VISUAL_FIELD_REGISTRY, BUDGET,
     resolveSetup, isOptionAvailable, ownId, ownIdOf,
     getFactorySetup, factoryKey,
-    getMods, getCost, getVisualTiers, statMult, displayStat, STAT_KEYS, aeroLoad, ersProfile, tread, RH_GAIN,
+    getMods, playerMods, freeBudget, getCost, getVisualTiers, statMult, displayStat, STAT_KEYS, aeroLoad, ersProfile, tread, RH_GAIN,
     setLegality, legalityKey, legality,
   };
 })();

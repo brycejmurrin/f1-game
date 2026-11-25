@@ -364,6 +364,9 @@ bench needs it. `opts.grid` (`"tier" | "quali" | "rev10" | "revchamp" |
 "random"`) pins the one-off's grid rule; it is in-memory state, and a guest in a
 friend room takes the HOST's, so on a shared page a later solo start inherited
 `"quali"`, opened qualifying and rejected with "did not reach the grid".
+Without `opts.grid`, a qualifying rule (the shipped default since #6564) grids THAT
+start on team tier and hands the rule back once it settles, so a scripted start never
+stalls on `#quali`; `opts.grid: "quali"` keeps the sheet, as the player's GO does.
 The recommended entry point for any harness.
 
 ### `ensureCircuit(idx) → Promise<void>`
