@@ -73,17 +73,17 @@ const Quali = (function () {
   // TRACK DESIGNER layout) takes CALIB_DEFAULT, the calendar median.
   // @gen-quali-calib start
   const CALIB = {
-    abudhabi: 0.9391, albert_park: 0.9297, anderstorp: 0.9436, bahrain: 0.9420, baku: 0.9602, brands_hatch: 0.9365,
-    buddh: 0.9315, buenos_aires: 0.9378, catalunya: 0.9327, cota: 0.9259, dijon: 0.9276, donington: 0.9553,
-    estoril: 0.9435, fuji: 0.9239, hockenheim: 0.9507, hungaroring: 0.9278, imola: 0.9716, indianapolis: 0.9397,
-    interlagos: 0.9392, istanbul: 0.9471, jacarepagua: 0.9297, jeddah: 0.9517, jerez: 0.9308, korea: 0.9311,
-    kyalami: 0.9430, madrid: 0.9384, magny_cours: 0.9485, mexico: 0.9303, miami: 0.9365, monaco: 0.9628,
-    mont_tremblant: 0.9630, montreal: 0.9484, monza: 0.9422, mosport: 0.9124, mugello: 0.9230, nurburgring: 0.9451,
-    okayama: 0.9396, paul_ricard: 0.9238, portimao: 0.9645, qatar: 0.9440, redbull: 0.9274, sepang: 0.9440,
-    shanghai: 0.9326, silverstone: 0.9219, singapore: 0.9457, sochi: 0.9410, spa: 0.9380, suzuka: 0.9280,
-    vegas: 0.9385, watkins_glen: 0.9571, zandvoort: 0.9512, zolder: 0.9385,
+    abudhabi: 0.9386, albert_park: 0.9278, anderstorp: 0.9428, bahrain: 0.9408, baku: 0.9582, brands_hatch: 0.9352,
+    buddh: 0.9308, buenos_aires: 0.9383, catalunya: 0.9359, cota: 0.9249, dijon: 0.9324, donington: 0.9534,
+    estoril: 0.9422, fuji: 0.9248, hockenheim: 0.9513, hungaroring: 0.9305, imola: 0.9701, indianapolis: 0.9461,
+    interlagos: 0.9390, istanbul: 0.9447, jacarepagua: 0.9314, jeddah: 0.9496, jerez: 0.9297, korea: 0.9320,
+    kyalami: 0.9438, madrid: 0.9355, magny_cours: 0.9467, mexico: 0.9293, miami: 0.9372, monaco: 0.9610,
+    mont_tremblant: 0.9638, montreal: 0.9480, monza: 0.9464, mosport: 0.9119, mugello: 0.9224, nurburgring: 0.9436,
+    okayama: 0.9415, paul_ricard: 0.9221, portimao: 0.9654, qatar: 0.9473, redbull: 0.9274, sepang: 0.9458,
+    shanghai: 0.9358, silverstone: 0.9213, singapore: 0.9454, sochi: 0.9379, spa: 0.9361, suzuka: 0.9260,
+    vegas: 0.9382, watkins_glen: 0.9583, zandvoort: 0.9485, zolder: 0.9385,
   };
-  const CALIB_DEFAULT = 0.9392;
+  const CALIB_DEFAULT = 0.9385;
   // @gen-quali-calib end
   const EXEC_SPREAD = 0.012;
   const QUALI_BIAS = 0.003;

@@ -1,0 +1,1 @@
+Improved: NORMAL and EASY AI are quicker and closer to a strong lap. The fastest NORMAL car now laps about 3-4 % off it (it was 9-10 %) and the fastest EASY car about 8 % off (it was 14-15 %). HARD is unchanged at about 1 %. NORMAL and EASY qualifying sheets and time-trial medal targets move with them.

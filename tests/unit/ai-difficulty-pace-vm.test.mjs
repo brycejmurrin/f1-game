@@ -27,8 +27,8 @@ const PLAYER_CORNER = Math.sqrt(parseFloat(tune.match(/PLAYER_GRIP: ([0-9.]+)/)[
 
 // Measured ratio of each level's flying lap to the reference lap, per circuit (see the note). Band: +-0.4 %.
 const BANDS = {
-  monza: { hard: 1.0087, normal: 1.0886, easy: 1.1346 },     // ref 116.867 s (2026-11-25; HARD was 1.0272 at corner 1.00)
-  redbull: { hard: 1.0102, normal: 1.0867, easy: 1.1297 },   // ref 89.817 s (HARD was 1.0323)
+  monza: { hard: 1.0087, normal: 1.0292, easy: 1.0714 },     // ref 116.867 s (2026-11-25; HARD was 1.0272 at corner 1.00; #6565 AI1: NORMAL was 1.0886, EASY 1.1346)
+  redbull: { hard: 1.0102, normal: 1.0308, easy: 1.0727 },   // ref 89.817 s (HARD was 1.0323; AI1: NORMAL was 1.0867, EASY 1.1297)
 };
 const TOL = 0.004;
 
@@ -83,8 +83,11 @@ for (const track of Object.keys(BANDS)) {
     for (const [level, want] of Object.entries(BANDS[track])) {
       assert.ok(Math.abs(got[level] - want) <= TOL, `${level} ${got[level].toFixed(4)} outside ${want} +-${TOL} — ${msg}`);
     }
-    // The ladder itself: HARD challenges the reference, each level below is clearly slower.
+    // The ladder itself: HARD challenges the reference, each level below is clearly slower. #6565's targets (fastest
+    // car, best of 2 laps: HARD 0 to +1 %, NORMAL +3 to +4 %, EASY +7 to +9 %) put HARD->NORMAL at 2-4 %; this first
+    // flying lap reads 1.8-2.3 % there (AI1, 2026-11-25), so a step is 1.5 %+ (it was 3 % with NORMAL at +9 %).
     assert.ok(got.hard < 1.02, `HARD within 2 % of a strong player — ${msg}`);
-    assert.ok(got.normal > got.hard + 0.03 && got.easy > got.normal + 0.03, `levels 3 %+ apart — ${msg}`);
+    assert.ok(got.normal < 1.045 && got.easy < 1.095, `NORMAL / EASY inside #6565's target ceilings — ${msg}`);
+    assert.ok(got.normal > got.hard + 0.015 && got.easy > got.normal + 0.03, `levels 1.5 % / 3 %+ apart — ${msg}`);
   });
 }
