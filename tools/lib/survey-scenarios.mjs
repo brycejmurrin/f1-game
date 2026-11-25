@@ -19,15 +19,28 @@ const require = createRequire(import.meta.url);
 // ensure-built on first use, which rebuilds a missing, stale or hand-edited copy (~47 s cold, ~50 ms after) and
 // throws when the generator does, so a survey never runs on an old catalog.
 let sceneryLocations;
+const sceneryCatalogGen = () => require('../shot/gen-scenery-locations.cjs');
+const sceneryRow = l => ({ ...l, kind: 'scenery',
+  aliases: [...new Set([l.id.split('/')[1], l.modelId, l.name.toLowerCase()])],
+  verification: `required scenery model emitted; ${l.stationMethod === 'source-viewpoint' ? 'source-backed viewing station' : 'nearest-road camera candidate'} ${l.viewDistanceM} m from model; framing unverified${l.viewDistanceM > 150 ? `; distant landmark${l.stationMethod === 'source-viewpoint' ? '' : ', road viewpoint uncertain'}` : ''}`,
+});
 function sceneryLocationRows() {
   if (sceneryLocations) return sceneryLocations;
   // Read the path ensure-built just built (relative to the repo root), never a hard-coded copy beside this file.
   const { target } = ensureOnDemand('tools/shot/scenery-locations.json');
   const sceneryCatalog = JSON.parse(readFileSync(new URL(`../../${target}`, import.meta.url), 'utf8'));
-  return (sceneryLocations = sceneryCatalog.locations.map(l => ({ ...l, kind: 'scenery',
-    aliases: [...new Set([l.id.split('/')[1], l.modelId, l.name.toLowerCase()])],
-    verification: `required scenery model emitted; ${l.stationMethod === 'source-viewpoint' ? 'source-backed viewing station' : 'nearest-road camera candidate'} ${l.viewDistanceM} m from model; framing unverified${l.viewDistanceM > 150 ? `; distant landmark${l.stationMethod === 'source-viewpoint' ? '' : ', road viewpoint uncertain'}` : ''}`,
-  })));
+  return (sceneryLocations = sceneryCatalog.locations.map(sceneryRow));
+}
+// ONE circuit's scenery rows. A fresh receipt reads the catalog (~50 ms). A missing or stale one would rebuild all
+// 52 circuits (~60 s), so a one-track listing (`oneTrack`) builds only that circuit instead (~2 s) and writes
+// nothing; a survey, and every other caller, keeps the all-circuit catalog. `deps` is the unit-test seam.
+const oneTrackRows = new Map();
+export function sceneryRowsFor(track, { oneTrack = false, deps } = {}) {
+  const d = deps || { fresh: () => sceneryCatalogGen().receiptHolds(), all: sceneryLocationRows,
+    one: id => sceneryCatalogGen().generate({ tracks: [id] }).locations.map(sceneryRow) };
+  if (!oneTrack || sceneryLocations || d.fresh()) return d.all().filter(l => l.track === track);
+  if (!oneTrackRows.has(track)) oneTrackRows.set(track, d.one(track));
+  return oneTrackRows.get(track);
 }
 let circuitLocations;
 
@@ -57,12 +70,12 @@ function indexedLocations() {
   return circuitLocations;
 }
 
-export function listSurveyLocations(track, custom = null) {
+export function listSurveyLocations(track, custom = null, { oneTrack = false } = {}) {
   if (custom?.locations.has(track)) return custom.locations.get(track).map(l => ({ ...l }));
   const all = indexedLocations();
   if (!all.has(track)) throw new Error(`Unknown track ${track}; choose ${[...all.keys()].join(', ')}`);
   return [...SURVEY_LOCATIONS.filter(l => l.track === track).map(l => ({ ...l, kind: 'named' })),
-    ...sceneryLocationRows().filter(l => l.track === track), ...all.get(track)];
+    ...sceneryRowsFor(track, { oneTrack }), ...all.get(track)];
 }
 export const CAMERA_RECIPES = {
   overview: { cam: 'orbit', az: 40, el: 40, dist: 90, h: 1.5, fov: 55 },
