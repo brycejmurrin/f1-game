@@ -2078,7 +2078,7 @@ test("career export preserves opaque future saves in every slot without altering
   }
 });
 
-test("future final row refuses the entire mixed legacy import before slots or selection change", async () => {
+test("a future final row is skipped and the rest of the mixed legacy import applies (#6602 D2(a))", async () => {
   const version = boot({ career: true }).careerVersion;
   for (const flavour of ["driver", "myteam"]) {
     const b = boot({ career: true, disk: { "apex26.careerSlot": '"myteam:1"',
@@ -2090,11 +2090,24 @@ test("future final row refuses the entire mixed legacy import before slots or se
       careerSlot: "driver:0",
       ["career." + flavour + ".2"]: { ...CAREER_SAVE, flavour, v: version + 1 },
     } });
-    assert.equal(result.ok, false);
-    assert.equal(result.reason, "newer-version");
-    assert.equal(result.applied, 0);
-    assert.deepEqual([...b.disk.entries()], before, "neither earlier rows nor the pointer may be written");
+    assert.equal(before.some(([k]) => k === "apex26.career." + flavour + ".2"), false);
+    assert.equal(result.ok, true);
+    assert.equal(result.skipped, 1, "the future row is counted as skipped");
+    assert.equal(b.disk.has("apex26.career." + flavour + ".2"), false, "a newer build's slot is never written");
+    assert.equal(JSON.parse(b.disk.get("apex26.career.driver.0")).money, 120, "the good rows import");
+    assert.equal(JSON.parse(b.disk.get("apex26.careerSlot")), "driver:0");
   }
+});
+
+test("the career file never points the device at a slot whose own row it skipped (#6655 review)", async () => {
+  const b = boot({ career: true, disk: { "apex26.careerSlot": '"driver:0"' } });
+  const result = await b.loadCareer({ format: b.SettingsExport.CAREER_FORMAT, careers: {
+    "career.driver.1": CAREER_SAVE, careerSlot: "driver:2",
+    "career.driver.2": { ...CAREER_SAVE, v: b.careerVersion + 1 } } });
+  assert.equal(result.ok, true);
+  assert.equal(result.skipped, 2, "the future row and the pointer to it");
+  assert.equal(JSON.parse(b.disk.get("apex26.careerSlot")), "driver:0");
+  assert.equal(b.disk.has("apex26.career.driver.2"), false);
 });
 
 test("future preflight retains legacy migration, scope and slot/selection revision gates", async () => {
@@ -2399,7 +2412,8 @@ test("#4748: CAREER FILE load awaits the lazy CareerBackup before its future-ver
     "career.driver.2": { ...CAREER_SAVE, v: b.careerVersion + 1 } } });
   pickerFile(b, button, { text: () => Promise.resolve(file) });
   for (let i = 0; i < 8; i++) await new Promise(setImmediate);
-  assert.match(button.textContent, /NEWER-VERSION/, "futureCareerSlot ran with CareerBackup loaded, not 'unavailable'");
+  // The future row is skipped (#6602 D2(a)); "UNAVAILABLE" would mean the gate ran without CareerBackup.
+  assert.match(button.textContent, /NO CHANGES — 1 SKIPPED/, "futureCareerSlot ran with CareerBackup loaded, not 'unavailable'");
   assert.equal(b.reloads(), 0);
 });
 
