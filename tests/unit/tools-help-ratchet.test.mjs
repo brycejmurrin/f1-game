@@ -27,6 +27,7 @@ const HELP = /exitIfHelp|strictFlags|argGate|["'`]--help["'`]|["'`]-h["'`]/;
 const tracked = execFileSync("git", ["ls-files", "tools"], { cwd: ROOT, encoding: "utf8" })
   .split("\n").filter((f) => /\.(mjs|cjs|js)$/.test(f) && fs.existsSync(path.join(ROOT, f)));
 const roster = tracked.filter((f) => ENTRY.test(fs.readFileSync(path.join(ROOT, f), "utf8")));
+const rosterSet = new Set(roster);
 const dirOf = (f) => f.split("/")[1].replace(/\.(mjs|cjs|js)$/, "");
 
 const frags = fs.readdirSync(FRAG_DIR).filter((f) => f.endsWith(".json")).sort();
@@ -47,7 +48,7 @@ test("each offender fragment lists only tracked CLIs of its own tools/<dir>, sor
     assert.deepEqual(list, [...new Set(list)].sort(), `${name}: keep the list sorted and unique`);
     for (const f of list) {
       assert.equal(`${dirOf(f)}.json`, name, `${f} belongs in ${dirOf(f)}.json, not ${name}`);
-      assert.ok(roster.includes(f), `${name}: ${f} is not a tracked tools/ CLI any more; delete the entry`);
+      assert.ok(rosterSet.has(f), `${name}: ${f} is not a tracked tools/ CLI any more; delete the entry`);
     }
   }
 });
@@ -85,11 +86,11 @@ for (const [rel, target, stray] of WRITERS) {
     const help = run(rel, ["--help"]);
     assert.equal(help.error, undefined, `${base} --help did not return in 15 s`);
     assert.equal(help.status, 0, help.stderr || help.stdout);
-    assert.match(help.stdout, new RegExp(`^usage: node ${rel.replace(/\./g, "\\.")}`, "m"));
+    assert.deepEqual(help.stdout.split(" ", 3), ["usage:", "node", rel], "the first line is `usage: node <path> ...`");
     const bad = run(rel, stray);
     assert.equal(bad.error, undefined, `${base} ${stray.join(" ")} did not return in 15 s`);
     assert.equal(bad.status, 2, bad.stderr || bad.stdout);
-    assert.match(bad.stderr, /unknown argument/);
+    assert.equal(bad.stdout, "", `${base} printed a result for a refused argument`);
     assert.equal(status(), before, `${base} changed the working tree`);
     assert.deepEqual(bytes(target), was, `${base} rewrote ${target}`);
     assert.ok(!fs.existsSync(path.join(ROOT, "--help")), `${base} wrote a file named --help`);

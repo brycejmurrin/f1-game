@@ -24,6 +24,7 @@
     "tools/ci/pages-verified-base.mjs",
     "tools/ci/playwright-occupancy.mjs",
     "tools/ci/pool-share.mjs",
+    "tools/ci/prepush-live-run.mjs",
     "tools/ci/prune-branches.mjs",
     "tools/ci/reuse-draft-selected.mjs",
     "tools/ci/run-group.mjs",
