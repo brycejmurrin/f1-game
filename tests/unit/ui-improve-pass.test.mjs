@@ -1049,12 +1049,12 @@ function bootCamModes(camMode = 2, extra = {}) {
   const api = sb.CamModes.create(G);
   const trigger = dom.byId("btn-cam");
   const open = () => { dom.dispatch(trigger, { type: "contextmenu" }); return dom.document.querySelector("#campicker"); };
-  return { dom, G, api, store, trigger, open, runTimers: () => sb.__timers.splice(0).forEach((fn) => fn()), key: (el, k) => dom.dispatch(el, { type: "keydown", key: k }), active: () => dom.document.activeElement };
+  return { dom, G, sb, api, store, trigger, open, runTimers: () => sb.__timers.splice(0).forEach((fn) => fn()), key: (el, k) => dom.dispatch(el, { type: "keydown", key: k }), active: () => dom.document.activeElement };
 }
 
 test("camera picker is a keyboard radio menu and cannot outlive the race layer", () => {
   const h = bootCamModes(2);
-  assert.deepEqual(Object.keys(h.api).sort(), ["cycleCam", "hideCamPicker", "refreshCamBtn", "setCamMode"], "CamModes.create surface");
+  assert.deepEqual(Object.keys(h.api).sort(), ["cycleCam", "hideCamPicker", "refreshCamBtn", "setCamMode", "showCamPicker"], "CamModes.create surface");
   assert.equal(h.trigger.getAttribute("aria-haspopup"), "menu");
   assert.equal(h.trigger.getAttribute("aria-expanded"), "false");
   const picker = h.open();
@@ -1085,6 +1085,21 @@ test("camera picker is a keyboard radio menu and cannot outlive the race layer",
   const game = gameCode();
   assert.match(fnBody(game, "quitToMenu", "game entry"), /hideCamPicker\(\s*\)/);
   assert.match(fnBody(game, "setPaused", "game entry"), /hideCamPicker\(\s*\)/);
+});
+
+// #6271: a held pad / phone CAM is Input's latch; game.js opens the picker the HUD button opens.
+test("a held controller or phone CAM opens the same picker, and Input can see it open", () => {
+  const h = bootCamModes(2);
+  const CamPicker = h.sb.CamPicker;
+  assert.equal(CamPicker.visible(), false);
+  assert.equal(h.api.showCamPicker(), true, "showCamPicker opens it in a race");
+  const picker = h.dom.document.querySelector("#campicker");
+  assert.equal(picker.hidden, false);
+  assert.equal(h.active().getAttribute("aria-checked"), "true", "with the current view focused, ready for the D-pad");
+  assert.equal(CamPicker.visible(), true, "Input routes the pad and phone to it while open");
+  h.key(picker, "Escape");
+  assert.equal(CamPicker.visible(), false);
+  assert.ok(gameCode().includes("if (Input.consumeCameraMenu()) showCamPicker();"), "the game loop consumes the latch");
 });
 
 test("camera picker stays visible while adjusting its controls and closes on an outside press", () => {

@@ -251,6 +251,15 @@ const InputPadMenu = (function () {
       return (nav.ownsFocus?.(layer, active) ?? layer.contains(active)) ? active : null;
     }
 
+    // A FOCUSED POPUP MENU THAT IS NO SCREEN: the in-race camera picker (#campicker,
+    // role=menu, js/camera/cam-picker.js) owns its arrows and Escape on its own
+    // keydown, and no UiLayers entry covers it, so with no layer on top the pad and
+    // the phone act on its focused item directly (#6271).
+    function popupItem() {
+      const active = document.activeElement;
+      return active?.closest?.('[role="menu"]') && !active.disabled ? active : null;
+    }
+
     // One ArrowDown into MenuNav — the empty path padActivate takes.
     // MenuNav has no seed helper of its own (it exports activeLayer / FOCUSABLE
     // only), so this is the one mover; never .focus() a node from here.
@@ -282,7 +291,7 @@ const InputPadMenu = (function () {
         el.click();
         return;
       }
-      const focused = padFocusableInLayer();
+      const focused = padFocusableInLayer() || (!window.MenuNav?.activeLayer() ? popupItem() : null);
       if (focused) {
         if (typeof guard === "function" && guard(focused)) return false;
         // A click on a focused range/number jumps the thumb to the click
@@ -315,7 +324,7 @@ const InputPadMenu = (function () {
     // Escape would.
     function padEscape() {
       const layer = window.UiLayers && window.UiLayers.top();
-      if (!layer) return;
+      if (!layer) { if (popupItem()) padDispatchKey("Escape"); return; }
       // A NESTED modal (the Data Hub's telemetry popup: a showModal() dialog
       // inside #datahub, not a UiLayers entry) owns BACK, as it owns keyboard
       // Escape in js/ui/modal.js — cancelling the layer closed the whole hub.
@@ -373,7 +382,7 @@ const InputPadMenu = (function () {
     }
 
     function remoteNav(dir) {
-      if (!(window.MenuNav && window.MenuNav.activeLayer())) return;   // no menu on top: nothing to move
+      if (!(window.MenuNav && window.MenuNav.activeLayer())) { if (popupItem()) padNavKey(dir); return; }   // no screen on top: only a popup menu moves
       if (!padFocusableInLayer() && !padFrameScope()) { padSeedFocus(); return; }
       padNavKey(dir);
     }
