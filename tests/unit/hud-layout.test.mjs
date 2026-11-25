@@ -1908,3 +1908,63 @@ test("HUD panel dimensions and type round-trip independently in their profile an
   assert.equal(card.props["--hl-height"], undefined);
   assert.equal(card.props["--hl-width"], undefined);
 });
+
+// UI matrix 2026-11-25 row 2: Bryce's phone (852×393 landscape, his export: UI SIZE 70, BUTTON 143), chase cam.
+// The detached bottom chips hang from the screen centre and the bottom home (css/hud.css [data-hl-bottom]); an
+// offset is a share of the screen. Boxes measured by hud-survey --device bryce-852x393 --cam chase on this tree:
+// the bottom home sits at y 361, the gearbox stays in the cluster, and the steer / OT-AERO button columns bound the lane.
+// Chip widths are the WIDEST labels (hud.js): "OVERTAKE 0.50 MJ" and "STRAIGHT MODE", scaled per character from
+// the measured "OT · LAP 1" (90.7 px) and "AERO 320m" (106.9 px) past a 27 px padding + stripe.
+test("the chase phone seed keeps SPEED, ERS, OT and AERO off each other and the controls at Bryce's 852×393", () => {
+  const { H } = load({}, true);
+  const W = 852, Hh = 393, HOME = 361, PAD = 27;
+  const wide = (measured, chars, widest) => PAD + (measured - PAD) / chars * widest;
+  const sizes = { speed: [78.9, 40], energy: [132, 15.2], ot: [wide(90.7, 10, 16), 36], aero: [wide(106.9, 9, 13), 36] };
+  const rect = (id) => {
+    const e = H.get(id, "other"), [w, h] = sizes[id], cx = W / 2 + e.x * W / 100, b = HOME + e.y * Hh / 100;
+    return { id, l: cx - w / 2, r: cx + w / 2, t: b - h, b };
+  };
+  const boxes = ["speed", "energy", "ot", "aero"].map(rect).concat({ id: "gearbox", l: 406.7, r: 466, t: 309.1, b: 352.3 });
+  for (const a of boxes) {
+    assert.ok(a.l >= 284.9 + 4 && a.r <= 593.2 - 4, `${a.id} ${a.l.toFixed(1)}..${a.r.toFixed(1)} clears the steer and button columns`);
+    assert.ok(a.b <= Hh, `${a.id} stays on screen`);
+    for (const b of boxes) if (a !== b) {
+      const ox = Math.min(a.r, b.r) - Math.max(a.l, b.l), oy = Math.min(a.b, b.b) - Math.max(a.t, b.t);
+      assert.ok(ox <= 0 || oy <= 0, `${a.id} × ${b.id} overlap ${ox.toFixed(1)}×${oy.toFixed(1)} px`);
+    }
+  }
+  const sp = rect("speed"), gb = boxes[4];
+  assert.ok(sp.l >= gb.r && sp.b > gb.t, "SPEED has its own lane beside the gearbox");
+});
+
+test("a stored chase chip still at the retired 11-20 seed takes today's seed; a moved one keeps its spot", () => {
+  const old = { speed: { x: 9.474031690140844, y: 2.038273960983889, s: 100 }, ot: { x: -5.247454576089348, y: -0.16698473282442747, s: 100 },
+    aero: { x: 19.800224960876363, y: 3.9042620865139805, s: 100 }, energy: { x: 5.41006455399061, y: -11.279397823731712, s: 101.53846153846153 } };
+  const moved = { x: 1, y: 2, s: 100 };
+  const raw = { hudLayout: { v: 4, standard: { other: { ...old, tower: { x: 0, y: 0, s: 80 }, aero: moved } } } };
+  const fresh = load({}, true).H, { H } = load(raw, true);
+  for (const id of ["speed", "ot", "energy"]) assert.deepEqual({ ...H.get(id, "other") }, { ...fresh.get(id, "other") }, id);
+  assert.notDeepEqual({ ...H.get("ot", "other") }, old.ot);
+  assert.deepEqual({ ...H.get("aero", "other") }, moved);
+  assert.deepEqual({ ...load(raw).H.get("ot", "other") }, old.ot, "a desktop store is never reseeded");
+});
+
+// UI matrix 2026-11-25 row 3: white on a 26 % --you wash read 2.77:1. The player row is HUD --bg ink on solid --you.
+test("the RELATIVE player row reaches 4.5:1 in every --you palette", () => {
+  const rule = CSS.match(/#hud-rel > div\[data-self\] \{([^}]*)\}/);
+  assert.ok(rule, "the player-row rule exists");
+  assert.match(rule[1], /background:\s*var\(--you\)/);
+  assert.match(rule[1], /color:\s*var\(--bg\)/);
+  const tokens = fs.readFileSync(path.join(ROOT, "css/tokens.css"), "utf8");
+  const hudBg = tokens.match(/:is\(#hud, #announce, #game-metrics\) \{[^}]*--bg:\s*(#[0-9a-f]{6})/i)[1];
+  const lum = (hex) => {
+    const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const yous = [...tokens.matchAll(/--you:\s*(#[0-9a-f]{6})/gi)].map((m) => m[1]);
+  assert.ok(yous.length >= 3);
+  for (const you of yous) {
+    const [a, b] = [lum(you), lum(hudBg)].sort((p, q) => q - p);
+    assert.ok((a + 0.05) / (b + 0.05) >= 4.5, `${hudBg} on ${you}`);
+  }
+});
