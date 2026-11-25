@@ -668,6 +668,7 @@
     "// D·DP3: warmFlaps mints flap set/element meshes during race/menu warm (not solve-only).",
     "tests/unit/lazy-race-geom-warm.test.mjs",
     "tests/unit/lazy-track-build.test.mjs",
+    "tests/unit/lazy-track-ensure-menu-prep.test.mjs",
     "tests/unit/learn-curriculum.test.mjs",
     "tests/unit/legends.test.mjs",
     "tests/unit/lexical-window-guard.test.mjs",
