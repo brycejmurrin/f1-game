@@ -44,7 +44,8 @@ test("braking drill: a tap and a coast fails with its reason; a held brake passe
   drive({throttle:false,brake:true,steer:0},60*6);
   last=ins.summary().lastDrill;
   assert.equal(last.clean,true);
-  const ideal=50*50/(2*vm.runInContext("PhysicsConsts",g.ctx).BRAKE);   // v²/2a from the physics constant, before the smoothing lag
+  // v²/2a from the physics constant and the works car's brake reserve (#6705, Parts.worksMods), before the smoothing lag
+  const ideal=50*50/(2*vm.runInContext("PhysicsConsts",g.ctx).BRAKE*g.sandbox.Parts.worksMods(g.G.player.team).braking);
   assert.ok(last.score>ideal*.9&&last.score<ideal*1.6,`stopping distance ${last.score} m near v²/2a=${ideal.toFixed(0)} m`);
   assert.equal(g.G.store.get("circuitMastery").entries.at(-1).completed,1);
   assert.match(ins.journal().at(-1).text,/Completed: Brake to a controlled stop · stopped \d+ m after braking/);
