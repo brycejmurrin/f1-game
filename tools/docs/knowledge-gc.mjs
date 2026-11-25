@@ -71,6 +71,32 @@ export const SIZE_ALLOW = "tests/data/notes-size-allow.json";
 export const UNCITED_ALLOW = "tests/data/notes-uncited-allow.json";
 export const INDEX = "docs/NOTES-INDEX.md";
 export const TABLE = "artifacts/NOTES-TABLE.md";
+/** The nightly gc (.github/workflows/knowledge-gc.yml) archives at this age, three days before DAYS turns a note red. */
+export const GC_DAYS = 18;
+/** The env ci.yml's tooling shards set off pull requests: the clock-only checks warn there instead of failing. */
+export const AGE_ADVISORY_ENV = "APEX_NOTES_AGE_ADVISORY";
+
+/**
+ * Do the CLOCK-ONLY checks (stale: uncited past DAYS; overdue: a Re-measure-by in the past) fail this run? Pure.
+ * WHY (2026-11-25). At 00:00Z docs/archive/notes/BOOST-FIRST-PRESS-MIRRORED-2026-11-03.md (then under docs/notes/) turned 22 days old: the deploy
+ * tip went red on unchanged code (Pages runs 45512433737, 45513979133), the merge gate's base row held every PR,
+ * and five workers archived the same note in five PRs. A clock is nobody's diff, so:
+ *   - advisory (the deploy tip: a push, the Pages train, a schedule or dispatch there) → warn; the nightly gc PR
+ *     archives a stale note, while an overdue Re-measure-by note (cited, so gc keeps it) needs a re-measure PR;
+ *   - a diff that adds, edits, moves or removes a docs/notes/ path → fail: that author is in the notes tree;
+ *   - an unreadable diff (no deploy base) → fail, like every --changed caller (changed-files.mjs);
+ *   - any other diff → warn.
+ * The refused-prefix, size, Kind: and allow-list checks are not clock-only and always fail.
+ * @param {{ advisory?: boolean, changed?: string[] | null }} q
+ * @returns {{ strict: boolean, reason: string }}
+ */
+export function ageGate({ advisory = false, changed = null } = {}) {
+  if (advisory) return { strict: false, reason: `${AGE_ADVISORY_ENV}=1 (the deploy tip): the nightly knowledge-gc PR archives a stale note; an overdue one needs a re-measure` };
+  if (!Array.isArray(changed)) return { strict: true, reason: "no deploy base: the diff is unreadable, so the check fails as before" };
+  const notes = changed.filter((f) => /^docs\/notes\//.test(f));
+  if (notes.length) return { strict: true, reason: `this diff touches docs/notes/ (${notes.slice(0, 3).join(", ")}${notes.length > 3 ? ", …" : ""})` };
+  return { strict: false, reason: "this diff touches no docs/notes/ path: a note's age is not its fault" };
+}
 const TEXT_EXT = /\.(?:md|mdc|mjs|cjs|js|ts|sh|py|json|ya?ml|html|css|txt|toml|patch)$/;
 // The allow-lists name notes without reading them, so they are not citers either.
 const NOT_A_CITER = /^(?:docs\/notes\/|docs\/archive\/|docs\/research\/|docs\/NOTES-INDEX\.md$|tests\/data\/notes-(?:size|uncited)-allow\.json$|artifacts\/|scratch\/|node_modules\/)/;

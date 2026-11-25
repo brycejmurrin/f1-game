@@ -411,6 +411,7 @@ jobs:
         env:
           GUARDS_CHANGED: ${{ steps.scope.outputs.mode == 'changed' && '1' || '' }}
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
+          APEX_NOTES_AGE_ADVISORY: ${{ github.event_name != 'pull_request' && github.ref_name == 'claude/f1-game-project-26h3ng' && '1' || '' }}   # knowledge-gc.mjs ageGate: a note's age warns on the deploy tip only (a bot branch's dispatch stays strict)
         # --bail (2026-10-16 CI jobs review): stop STARTING files after the first
         # failure. A red shard ran a mean 5.9 min after its first failure; files
         # already in flight finish and the log names each. The local
@@ -485,6 +486,7 @@ jobs:
         env:
           GUARDS_CHANGED: ${{ steps.scope.outputs.mode == 'changed' && '1' || '' }}
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
+          APEX_NOTES_AGE_ADVISORY: ${{ github.event_name != 'pull_request' && github.ref_name == 'claude/f1-game-project-26h3ng' && '1' || '' }}   # knowledge-gc.mjs ageGate: a note's age warns on the deploy tip only (a bot branch's dispatch stays strict)
         run: node tools/ci/tooling-fast.mjs ${GUARDS_CHANGED:+--changed} --jobs=4 --shard=2/4 --bail
       # RATCHETS, AUDIT, COVERAGE AND BEHIND-SHIP (moved from the `Structural
       # guards` aggregator 2026-10-15): the same tree and node_modules, no
@@ -617,6 +619,7 @@ jobs:
         env:
           GUARDS_CHANGED: ${{ steps.scope.outputs.mode == 'changed' && '1' || '' }}
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
+          APEX_NOTES_AGE_ADVISORY: ${{ github.event_name != 'pull_request' && github.ref_name == 'claude/f1-game-project-26h3ng' && '1' || '' }}   # knowledge-gc.mjs ageGate: a note's age warns on the deploy tip only (a bot branch's dispatch stays strict)
         # --bail (2026-10-16 CI jobs review): stop STARTING files after the first
         # failure. A red shard ran a mean 5.9 min after its first failure; files
         # already in flight finish and the log names each. The local
@@ -691,6 +694,7 @@ jobs:
         env:
           GUARDS_CHANGED: ${{ steps.scope.outputs.mode == 'changed' && '1' || '' }}
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
+          APEX_NOTES_AGE_ADVISORY: ${{ github.event_name != 'pull_request' && github.ref_name == 'claude/f1-game-project-26h3ng' && '1' || '' }}   # knowledge-gc.mjs ageGate: a note's age warns on the deploy tip only (a bot branch's dispatch stays strict)
         run: node tools/ci/tooling-fast.mjs ${GUARDS_CHANGED:+--changed} --jobs=4 --shard=4/4 --bail
       - name: Record green verdict
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()
