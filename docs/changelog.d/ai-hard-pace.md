@@ -1,0 +1,1 @@
+Improved: HARD AI drivers now corner up to your own car's grip limit (they were capped below it), so the fastest HARD car laps within about 1 % of a strong lap instead of 3-4 % off; EASY and NORMAL are unchanged. HARD time-trial medal targets move with it.

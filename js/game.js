@@ -5466,7 +5466,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
       if (!directLook) AiDrive.pushLook(d, lkV, lkB, lkM);
       if (lkI < AI_LOOK_CAP) { lk.v[lkI] = lkV; lk.a[lkI] = ak; lk.b[lkI] = lkB; lk.m[lkI] = lkM; lk.n = lkI + 1; }
     }
-    _aiBr.traits = aiT; _aiBr.samples = directLook ? AiDrive.lookWindow(lk.v, lk.m, lkI, ss0 - c.s, dsN, lk.b) : AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = Math.min(1 / c.skill, Math.min(1, dd.corner * (1 + (c._bandNow || 0))) * AiDrive.paceTrim(TIER_V[c.tier] * c.skill)) * (c._trYT ? AiDrive.trailYieldCorner(c._trYT) : 1);   // the band lifts corner authority too, never past 1.0: a banded car drives like a better driver, not a faster car
+    _aiBr.traits = aiT; _aiBr.samples = directLook ? AiDrive.lookWindow(lk.v, lk.m, lkI, ss0 - c.s, dsN, lk.b) : AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = AiDrive.diffCorner(dd.corner, c.skill, c._bandNow || 0, AiDrive.paceTrim(TIER_V[c.tier] * c.skill)) * (c._trYT ? AiDrive.trailYieldCorner(c._trYT) : 1);   // the level's corner ceiling (AiDrive.diffCorner): the band lifts authority up to it, never past
     _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE * trMul * (gmC / gm0); _aiBr.pace = driveTune.PACE; _aiBr.vmax = VMAX;   // the tread's braking credit (docs/PHYSICS.md §Braking): the planner must stop as the executor below does, or it corners on wets and brakes on slicks
     _aiBr.grip = gmC * S.tyreGrip * dirtyAirMul(c.wake || 0, c.speed);   // the wake costs the AI its corner too
     _aiBr.speed = c.speed; _aiBr.blocker = !!blocker; _aiBr.blockerGap = blockerGap;

@@ -542,6 +542,13 @@ const AiDrive = (function () {
   // career development and the legend duel keep their old weight.
   const PACE_GAIN = 2.5, PACE_REF = 0.9332;
   function paceTrim(script) { return script > 0 ? 1 + PACE_GAIN * (script / PACE_REF - 1) : 1; }
+  // CORNER AUTHORITY (ctx.diffCorner): skill x this scales the AI's own grip envelope. The ceiling is the
+  // level's `corner` floored at 1, so EASY/NORMAL are unchanged and HARD (1.072 = sqrt(PLAYER_GRIP)) corners
+  // at the player's envelope (docs/notes/AI-HARD-PACE-2026-11-25.md). The band lifts up to it, never past.
+  function diffCorner(corner, skill, band, trim) {
+    const ceil = corner > 1 ? corner : 1;
+    return Math.min(ceil / skill, Math.min(ceil, corner * (1 + band)) * trim);
+  }
   function lateralScale(speed, load = 0.5, grip = 1, pace = 1, vmax = 72, aero = 1) {
     const q = Math.min(1, Math.abs(speed) / (Math.max(0.05, pace) * Math.max(1, vmax)));
     return (1 + (load - 0.5) * AERO_GRIP_K) * Math.max(0.01, grip) * (1 + AI_DF * aero * q * q);
@@ -1743,7 +1750,7 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
-    lateralScale, paceTrim, laneClear, slowHazard, SLOW_V_FRAC, aiErs, aeroGrip, AERO_GRIP_K, AI_ERS_SPAN, PACE_GAIN, PACE_REF, yawScale, lateralScales, sbsLimits, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
+    lateralScale, paceTrim, diffCorner, laneClear, slowHazard, SLOW_V_FRAC, aiErs, aeroGrip, AERO_GRIP_K, AI_ERS_SPAN, PACE_GAIN, PACE_REF, yawScale, lateralScales, sbsLimits, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     passHunger, hungerOf, coverConcede, pairEdgeN, softPairEdgeN, pullReachM,
