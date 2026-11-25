@@ -198,22 +198,22 @@ function simCareerRound() {
 // it as a hook, so the loop must sit above the literal AND this comment must
 // not quote that text (quoting it moves the slice and invents a hook called
 // `for`).
+// READ-ONLY hooks never force it (#6488: menuPrep pollers in a picker tap's settle froze 0.5-1 s, replacing the stepped build).
+const LAZY_READ_ONLY = new Set(["menuPrep", "info", "probe", "texCensus", "agentHelp", "garagePrebuild", "garageCam"]);
 function lazyTrackEnsure(o) {
   for (const k of Object.keys(o)) {
     const fn = o[k];
-    if (typeof fn !== "function") continue;   // tiltSim (namespace)
+    if (typeof fn !== "function" || LAZY_READ_ONLY.has(k)) continue;   // tiltSim (namespace)
     // Never under the loading screen, nor over a stepped or worker build in flight:
     // RACE!'s intro owns the build and `track` is null by design until it lands; race()/tt() build their OWN circuit (a cold title-pick build here doubled race entry, CI 38604708051).
     // Title boots LAZY_CIRCUIT meta stubs (_metaOnly, no path): a sync loadTrack
     // here throws "has no path" before race()/startRace can await ensureCircuit.
     // Leave track null; ensureScenery → ensureCircuit hydrates, then the body builds.
     const entering = () => { const l = typeof document !== "undefined" && document.getElementById("loading"); return !!(l && !l.hidden && l.dataset && l.dataset.phase); };
-    const payloadReady = (def) => !!(Tracks.circuitPayloadResident
-      ? Tracks.circuitPayloadResident(def)
-      : (def && def.path && def.path.pts && def.path.pts.length && !def._metaOnly));
+    const payloadReady = (def) => !!(Tracks.circuitPayloadResident ? Tracks.circuitPayloadResident(def) : (def && def.path && def.path.pts && def.path.pts.length && !def._metaOnly));
     o[k] = function (...a) {
       if (k !== "race" && k !== "tt" && !G.track && !entering() && !Tracks.building()
-          && !(typeof TrackBuildClient !== "undefined" && TrackBuildClient.busy())) {
+          && !(typeof TrackBuildClient !== "undefined" && TrackBuildClient.busy()) && !(G.menuPrep && (G.menuPrep() || {}).building)) {   // menuPrep: the picker's stepped load owns it from ensureCircuit on
         const def = Tracks.LIST[G.trackIdx];
         // LAZY_TRACK_BUILD: ensureScenery hydrates the circuit BESIDE the toolkit.
         // Sync loadTrack here while the toolkit is still in flight throws
@@ -397,7 +397,7 @@ const api = {
                return !o.teamId || (p && p.team && p.team.id === o.teamId); })() };
   },
   // track reflects the ACTIVE race track — null at the menu/select even though a
-  // track is loaded for the background flyby (matches the documented contract).
+  // track is loaded for the background flyby. Read-only (#6488): n/total/sectors/turns stay null until a world is built.
   // sectors: [s1End, s2End] racing-lap fractions; turns: curated FIA turn count.
   // `flow`/`session` are the real mode state; timeTrial/seasonMode are the older
   // derived booleans, kept verbatim so existing harnesses do not have to change.
