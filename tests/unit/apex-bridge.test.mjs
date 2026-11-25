@@ -101,6 +101,7 @@ test("a poll runs the owner's command once and answers with its comment id", asy
   gh.thread.push(cmd(78, { cmd: "call", args: { method: "perf" } }, { author_association: "CONTRIBUTOR" }));
   gh.bump();
   assert.equal(await b.api.pollOnce(), 1);
+  await b.api.drain();
   const reply = JSON.parse(gh.thread.at(-1).body.replace(/```apex-result\n|\n```/g, ""));
   assert.equal(reply.re, 77);
   assert.equal(reply.ok, true);
@@ -382,9 +383,12 @@ test("a failing reply post does not skip the queued commands behind it (HUNT-202
   await flush();
   for (const o of [1, 2, 3]) gh.add({ id: 200 + o, body: "```apex-cmd\n" + JSON.stringify({ cmd: "call", args: { method: "perf", args: [o] } }) + "\n```" });
   failNext = true;
-  await assert.rejects(b.api.pollOnce());
-  for (let i = 0; i < 3; i++) await b.api.pollOnce();
+  await b.api.pollOnce();
+  await b.api.drain();
+  for (let i = 0; i < 3; i++) { await b.api.pollOnce(); await b.api.drain(); }
   assert.deepEqual([...new Set(ran)].sort(), [1, 2, 3], "commands 2 and 3 still ran after command 1's reply failed");
+  assert.deepEqual(ran, [1, 2, 3], "each ran once");
+  for (const o of [1, 2, 3]) assert.equal(gh.thread.filter((c) => c.body.includes('"re":' + (200 + o) + ",")).length, 1, "the failed reply was posted again, once");
 });
 
 test("geom reads the device's own geometry: insets, viewport units, the zoom self-test, and wish vs painted scale", async () => {
@@ -949,7 +953,7 @@ test("#6581 when: waits for a screen, state or visibility; ok:false stops the ba
   assert.equal(miss.length, 1, "a when that never came true stops the batch");
   assert.equal(miss[0].value.ok, false);
   assert.equal(miss[0].value.state, "menu");
-  for (const args of [{}, { screen: "select", state: "menu" }, { screen: "nowhere" }, { visible: "yes" }]) {
+  for (const args of [{}, { screen: "select", state: "menu" }, { screen: "nowhere" }, { visible: 3 }, { visible: "../x" }]) {
     assert.equal((await b.api.handle({ cmd: "when", args })).ok, false, JSON.stringify(args));
   }
   assert.equal((await b.api.handle({ cmd: "when", args: { visible: true, ms: 0 } })).value.ok, true);
@@ -981,4 +985,112 @@ test("#6581 status cadence (Bryce's D4): first edit 5 s after hello, 15 s while 
   gh.thread.push(cmd(78, { cmd: "ping" }));
   await b.api.pollOnce();
   assert.equal(b.api.statusDue(), now + 15000);
+});
+
+// CONCURRENCY + PLANS (#6582): READs answer beside one FIFO ACTION; plans are named data run through handle().
+const replies = (gh) => gh.thread.filter((c) => c.body.startsWith("```apex-result")).map((c) => JSON.parse(c.body.replace(/```apex-result\n|\n```/g, ""))).filter((r) => r.re);
+
+test("#6582 a READ and drive {stop} answer while a drive runs; ACTIONs never overlap and reload waits its turn", async () => {
+  const d = heldDriver();
+  const gh = fakeGitHub();
+  const calls = [];
+  const apex = { info: () => ({ state: "race" }), perf: () => ({ fps: 60 }), go: () => { calls.push("go"); return "race"; } };
+  const b = load({ tok: "tok", gh, apex, extra: { ...d.extra, setTimeout: () => 0, document: { getElementById: () => null } } });
+  await flush();
+  gh.thread.push(cmd(1, { cmd: "drive", args: { laps: 1 } }), cmd(2, { cmd: "call", args: { method: "go" } }), cmd(3, { cmd: "reload" }),
+    cmd(4, { cmd: "call", args: { method: "perf" } }), cmd(5, { cmd: "drive", args: { status: true } }));
+  gh.bump();
+  assert.equal(await b.api.pollOnce(), 5, "the poll returns once all five are dispatched, not when the drive ends");
+  for (let i = 0; i < 5; i++) await flush();
+  assert.deepEqual(plain(replies(gh).map((r) => r.re).sort()), [4, 5], "the READs answered; the drive still runs");
+  assert.equal(replies(gh).find((r) => r.re === 5).ok, true);
+  assert.deepEqual(calls, [], "the second ACTION waits for the first");
+  gh.thread.push(cmd(6, { cmd: "drive", args: { stop: true } }));
+  gh.bump();
+  await b.api.pollOnce();
+  await b.api.drain();
+  assert.deepEqual(plain(replies(gh).map((r) => r.re)), [4, 5, 6, 1, 2, 3], "stop served during the drive; then go, then reload, in order");
+  assert.equal(replies(gh).find((r) => r.re === 1).value.reason, "bridge");
+  assert.deepEqual(calls, ["go"]);
+});
+
+test("#6582 the READ class: listed commands, drive stop/status, and only allow-set calls with read-only args", () => {
+  const { api } = load({ search: "" });
+  const R = (cmd, args) => api.isRead({ cmd, args });
+  for (const c of ["ping", "facts", "display", "geom", "frames", "screen", "snap"]) assert.equal(R(c), true, c);
+  for (const c of ["tap", "nav", "set", "key", "scroll", "drive", "reload", "path", "bench", "gpuTest", "recorder", "batch", "wait", "when", "plan", "nope"]) assert.equal(R(c, {}), false, c);
+  assert.equal(R("drive", { stop: true }), true);
+  assert.equal(R("drive", { status: true }), true);
+  assert.equal(R("call", { method: "perf" }), true);
+  assert.equal(R("call", { method: "perf", args: [{ reset: true }] }), false, "perf with an arg resets spans");
+  assert.equal(R("call", { method: "diag" }), false, "diag downloads by default");
+  assert.equal(R("call", { method: "diag", args: [{ download: false }] }), true);
+  assert.equal(R("call", { method: "renderScale", args: [0.5] }), false);
+  assert.equal(R("call", { method: "frametimeBench", args: ["reset"] }), false);
+  assert.equal(R("call", { method: "race" }), false);
+  assert.equal(R("call", { method: "constructor" }), false);
+  // Every allow-set name is a real __apex method, so a rename cannot leave a stale READ.
+  const src = ["apex.js", "apex-lobby.js", "apex-cam.js"].map((f) => fs.readFileSync(new URL("../../js/agent/" + f, import.meta.url), "utf8")).join("\n");
+  for (const m of Object.keys(api.CALL_READ)) assert.match(src, new RegExp("^\\s*" + m + "(\\s*:|\\()", "m"), m);
+});
+
+test("#6582 plans: data steps of CMDS only, under the caps; unknown names and bad args refused", () => {
+  const { api } = load({ search: "" });
+  assert.deepEqual(Object.keys(api.PLANS).sort(), ["hudAudit", "raceSample", "ttEndGarage"]);
+  for (const name of Object.keys(api.PLANS)) {
+    const [, steps] = api.planSteps(name, {});
+    assert.ok(steps.length >= 1 && steps.length <= api.PLAN_STEPS_MAX, name);
+    for (const s of steps) {
+      assert.ok(Object.prototype.hasOwnProperty.call(api.CMDS, s.cmd), name + ": " + s.cmd);
+      assert.ok(!["plan", "batch", "reload", "path", "bench"].includes(s.cmd), name + " ends the page or nests: " + s.cmd);
+      if (s.cmd === "call") assert.ok(api.callAllowed(s.args.method), s.args.method);
+    }
+  }
+  assert.deepEqual(plain(api.planSteps("ttEndGarage", {})[1].map((s) => s.cmd)), ["nav", "drive", "when", "tap", "when", "tap", "screen", "snap"]);
+  assert.deepEqual(plain(api.planSteps("raceSample", { track: "spa", seconds: 5 })[0]), { track: "spa", seconds: 5 });
+  assert.throws(() => api.planSteps("eval", {}), /unknown plan: eval/);
+  assert.throws(() => api.planSteps("constructor", {}), /unknown plan/);
+  assert.throws(() => api.planSteps("raceSample", { track: "../x" }), /track id/);
+  assert.throws(() => api.planSteps("raceSample", { seconds: 999 }), /1-60/);
+  assert.throws(() => api.planSteps("hudAudit", { steps: [] }), /takes no args/);
+});
+
+test("#6582 plan: stops at its first failing step and reports it; an unknown plan is refused", async () => {
+  const dom = menuDom();
+  const b = load({ search: "", apex: dom.apex, extra: { ...dom.extra, clearTimeout } });
+  assert.equal((await b.api.handle({ cmd: "plan", args: { name: "nope" } })).ok, false);
+  const r = await b.api.handle({ cmd: "plan", args: { name: "ttEndGarage" } });
+  assert.equal(r.ok, true);
+  assert.equal(r.value.ok, false);
+  assert.equal(r.value.failed, 1, "nav arrived; the drive had no driver");
+  assert.deepEqual(plain(r.value.steps.map((s) => [s.cmd, s.ok])), [["nav", true], ["drive", false]], "nothing after the failure ran");
+  assert.equal(r.value.steps[1].error, "SoakRun.drive unavailable");
+});
+
+test("#6582 plan: runs to the end; a long value is cut so the summary fits", async () => {
+  let t = 0;
+  const big = "x".repeat(59000);
+  const apex = { info: () => ({ state: "race" }), race: () => ({ ok: true }), go: () => "race", perf: () => big };
+  const b = load({ search: "", apex, extra: { setTimeout, clearTimeout, requestAnimationFrame: (cb) => setImmediate(() => cb((t += 500))) } });
+  const r = await b.api.handle({ cmd: "plan", args: { name: "raceSample", args: { seconds: 1 } } });
+  assert.equal(r.ok, true);
+  assert.equal(r.value.ok, true, JSON.stringify(r.value.steps.map((s) => s.error || s.cmd)));
+  assert.equal(r.value.steps.length, 8);
+  const last = r.value.steps[7];
+  assert.equal(last.cut > 59000, true, "the big value was cut to a head");
+  assert.ok(JSON.stringify(r).length < 60000);
+});
+
+test("#6582 when visible:<id> waits for an element; a timeout answers ok:false cleanly", async () => {
+  const dom = menuDom();
+  const b = load({ search: "", apex: dom.apex, extra: dom.extra });
+  const miss = await b.api.handle({ cmd: "when", args: { visible: "sel-go", ms: 150 } });
+  assert.equal(miss.ok, true);
+  assert.equal(miss.value.ok, false);
+  assert.equal(miss.value.visible, false);
+  assert.ok(miss.value.waited >= 100);
+  setTimeout(() => { dom.els.get("overlay").hidden = true; dom.els.get("select").hidden = false; }, 50);
+  const hit = await b.api.handle({ cmd: "when", args: { visible: "sel-go", ms: 2000 } });
+  assert.equal(hit.value.ok, true);
+  assert.equal(hit.value.id, "sel-go");
 });
