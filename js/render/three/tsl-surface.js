@@ -21,7 +21,7 @@
 const TLXSurface = (function () {
   "use strict";
   const W = 2048;
-  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v), lerp = (a, b, t) => a + (b - a) * t;
+  const sat = (v) => Math.min(1, Math.max(0, v)), lerp = (a, b, t) => a + (b - a) * t; // no private clamp (lsp-eval pins M4.clamp as the one)
   const wrap = (L, s) => { s %= L; return s < 0 ? s + L : s; };
 
   function wearMask(track) {
@@ -29,13 +29,13 @@ const TLXSurface = (function () {
     if (!ln || !(n > 0) || !(L > 0)) return null;
     const out = new Uint8Array(W * 4), brake = new Float32Array(W);
     for (const c of track.lineCorners || []) {
-      const sev = clamp(Math.abs(c.k) * 25, 0, 1), len = 40 + 120 * sev, run = wrap(L, c.sApex - c.s0) + len;
+      const sev = sat(Math.abs(c.k) * 25), len = 40 + 120 * sev, run = wrap(L, c.sApex - c.s0) + len;
       for (let d = 0; d <= run; d += L / W) {
         const j = Math.floor(wrap(L, c.s0 - len + d) / L * W) % W, v = sev * (d < len ? d / len : 1);
         if (v > brake[j]) brake[j] = v;
       }
     }
-    const b8 = (v) => Math.round(clamp(v, 0, 1) * 255);
+    const b8 = (v) => Math.round(sat(v) * 255);
     for (let j = 0; j < W; j++) {
       const fi = (j + 0.5) / W * n, i = Math.floor(fi) % n, k = (i + 1) % n, f = fi - Math.floor(fi);
       out[j * 4] = b8((lerp(ln[i], ln[k], f) + 16) / 32);
