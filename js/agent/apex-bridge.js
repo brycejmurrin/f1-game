@@ -876,7 +876,9 @@ const ApexBridge = (function () {
   // STATUS (#6581): one comment, edited in place. A long batch blocks the poll chain, not this timer, so `last.busy`
   // shows it running. A hidden page posts with keepalive (iOS may freeze the page right after).
   const STATUS_BUSY_MS = 15000, STATUS_IDLE_MS = 60000, STATUS_FIRST_MS = 5000;
-  const statusKey = (issue) => "apex26.bridgeStatus." + issue;
+  // The status comment's id on this device, as "<issue>:<comment id>" (one literal key, save-schema-registry.js).
+  const STATUS_KEY = "apex26.bridgeStatus";
+  function storedStatusId(issue) { const m = /^(\d+):(\d+)$/.exec(raw(STATUS_KEY) || ""); return m && Number(m[1]) === issue ? Number(m[2]) : 0; }
   function statusOf(run, ended) {
     const d = typeof document !== "undefined" ? document : null;
     let sha = null, screen = null, driving = null;
@@ -891,7 +893,7 @@ const ApexBridge = (function () {
     run.statusBusy = true;
     try {
       const body = { body: "```apex-status\n" + JSON.stringify(statusOf(run, ended)) + "\n```" };
-      let id = run.statusId || Number(raw(statusKey(run.issue))) || 0;
+      let id = run.statusId || storedStatusId(run.issue);
       if (id) {
         const r = await gh("", { run, repoPath: "/issues/comments/" + id, method: "PATCH", body, keepalive });
         if (r.ok) { run.statusId = id; return id; }
@@ -901,7 +903,7 @@ const ApexBridge = (function () {
       if (!r.ok) throw new Error("post " + r.status);
       id = (await r.json()).id;
       run.statusId = id;
-      rawSet(statusKey(run.issue), String(id));
+      rawSet(STATUS_KEY, run.issue + ":" + id);
       return id;
     } catch (e) { say("status failed: " + e.message); return null; } finally { run.statusBusy = false; }
   }
