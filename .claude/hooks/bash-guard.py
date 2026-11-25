@@ -210,6 +210,8 @@ def is_browser(c, groups):
             return True
         return False
     s, args = script_of(c)
+    if s == "offline-precache-check.cjs":    # its own chromium.launch, not launchChromium: APEX_SUBAGENT never reaches it (#6544 U14);
+        return not any(x in ("--help", "-h") for x in args)   # it honours only --help/-h: a bare `help` is a circuit id and boots Chromium
     if s is None or has_help(args):
         return False
     if s in ("cli.js", "playwright", "playwright.js") and "playwright" in next(x for x in a[1:] if not x.startswith("-")):
@@ -224,8 +226,6 @@ def is_browser(c, groups):
         return bool(args) and args[0] in ("start", "restart", "launch")
     if s == "browser-http-up.mjs":
         return "--stop" not in args
-    if s == "offline-precache-check.cjs":    # its own chromium.launch, not launchChromium: APEX_SUBAGENT never reaches it (#6544 U14)
-        return True
     if s == "probe-mcp.py":
         return "chrome-start" in args
     if s in ("apex-tools-mcp.mjs", "apex-tools-mcp.sh", "mcp-cli.mjs") and args[:1] == ["call"] and len(args) > 1:

@@ -106,7 +106,8 @@ fi
 dirty=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
 load=$(cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo "?")
 status+=("branch $branch (ahead/behind deploy tip $ab, dirty $dirty)" "loadavg $load")
-# orchestrator: the github-mcp-guard.sh actions_run_trigger predicate minus agent_id (no payload at SessionStart):
+# orchestrator: a TWIN of the github-mcp-guard.sh actions_run_trigger predicate (`orch = …`) minus agent_id (no
+# payload at SessionStart); change both together:
 # APEX_ROLE=orchestrator in this process env, not as a child session unless APEX_ORCH_ENV has the env_ shape, and
 # neither key planted in a settings `env` (#5819). Anything unreadable prints "no" (#6458 item 2).
 orch=no
