@@ -6,7 +6,7 @@ omitClaudeMd: true
 maxTurns: 35
 background: true
 disallowedTools: Write, Edit, NotebookEdit
-tools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics, mcp__apex-lsp__lsp_symbols, mcp__apex-lsp__lsp_hover
+tools: mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics, mcp__apex-lsp__lsp_symbols, mcp__apex-lsp__lsp_hover, Bash, Read, Grep, Glob
 hooks:
   PreToolUse:
     - matcher: "Bash"
@@ -101,6 +101,7 @@ FINDING <n> | bug|perf|dead-code|drift|contradiction|duplication|mess | sev high
 covered: <files read in full>
 not covered: <files in the slice you did not read, and why>
 measured: <exact command + numbers, or none>
+tools used: lsp <n> · grep <m> · read <k>   (calls you made; the evidence rule: `.claude/agents/README.md` §LSP-first)
 ```
 
 A suspect only a RUNNING game can confirm (a leak across restarts, a hitch, a
