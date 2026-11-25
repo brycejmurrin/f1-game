@@ -96,6 +96,16 @@ test("HOLD lifted where the host drops edges (Pause, a menu): the off edge waits
   const fresh = latchOf("aero");
   fresh.latch.down(true); fresh.latch.up(true, true); fresh.latch.heard(true); fresh.latch.heard();
   assert.deepEqual(fresh.sent, ["aero"], "a new session forgets a lift owed to the old link");
+  const t = latchOf("boost");
+  t.latch.down(false); t.latch.up(false, true); t.latch.heard();
+  assert.deepEqual(t.sent, ["boost"], "TOGGLE owes nothing on a lift");
+  const re = latchOf("overtake");
+  re.latch.hud(0); re.latch.down(true); re.clock.t = 100; re.latch.hud(D.otOn);
+  re.latch.up(true, true); re.clock.t = 900; re.latch.hud(D.otOn);
+  re.latch.down(true); re.latch.heard();
+  assert.deepEqual(re.sent, ["overtake"], "a press while a lift is owed takes it over: on stays on, nothing sent");
+  re.latch.up(true);
+  assert.deepEqual(re.sent, ["overtake", "overtake"], "and its own lift switches it off");
 });
 
 test("no state from the host: the local latch; unlinked: nothing changes", () => {

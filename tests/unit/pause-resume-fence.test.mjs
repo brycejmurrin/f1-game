@@ -206,12 +206,35 @@ test("#6330 × #6319: fenced samples under Pause keep the phone's tilt for the m
   assert.equal(Input.braking(), false, "fenced brake stays neutral");
   assert.equal(Input.lookingBack(), false, "fenced look-back stays neutral");
   assert.equal(Input.steer(), 0, "fenced tilt does not steer");
+  phone.roll = null;   // the phone's tilt switched off under the card: one notice, and the rows follow
+  for (let i = 0; i < 6; i++) frame();
+  assert.equal(Input.phoneTiltAvailable(), false);
+  assert.equal(tiltChanges.n, before + 1, "a real change under Pause notifies once");
+  phone.roll = 20;
+  for (let i = 0; i < 6; i++) frame();
+  assert.equal(Input.phoneTiltAvailable(), true);
+  assert.equal(tiltChanges.n, before + 2);
 
   resume();
   phone.thr = 1; phone.brk = 0; phone.held = 0; phone.roll = 0;
   for (let i = 0; i < 12; i++) frame();
   assert.equal(Input.throttle(), true, "a post-Resume sample drives");
   assert.equal(Input.phoneTiltAvailable(), true);
+});
+
+test("#6330 × #6319: a fenced STICK sample (XR) keeps the stick and drives nothing", () => {
+  const { Input, tiltChanges, clock } = bootInput();
+  clock.t = 1000;
+  Input.remoteSample({ source: "xr", steer: 0.6, thr: 1, brk: 0, held: 0, seq: 1 });
+  Input.poll();
+  assert.ok(Input.steer() > 0, "the stick steers before Pause");
+  const n = tiltChanges.n;
+  Input.remoteSample({ source: "xr", steer: 0.6, thr: 1, brk: 0, held: 0, seq: 2, driveFenced: true });
+  assert.equal(Input.remoteSteers(), true, "the fenced stick is still a stick");
+  assert.equal(Input.phoneTiltAvailable(), false, "a stick is not phone tilt");
+  assert.equal(tiltChanges.n, n);
+  assert.equal(Input.steer(), 0, "a fenced stick does not steer");
+  assert.equal(Input.throttle(), false);
 });
 
 test("#6330: two quick resumes with no menu dash between still fence the in-flight sample", () => {

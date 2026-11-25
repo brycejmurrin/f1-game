@@ -498,7 +498,7 @@ const Input = (function () {
     if (!k) remRoll = remStick = false;   // k: a fenced sample, whose roll/stick remoteSample kept
     remCamera = null;
     if (clearSequence) remSeq = null;
-    if (remRoll) { tiltRaw = k.roll; tiltSeen = tiltRemote = true; } else if (tiltRemote || !gyroAttached) tiltSeen = false;
+    if (tiltRemote || !gyroAttached) { tiltSeen = remRoll; if (remRoll) { tiltRaw = k.roll; tiltRemote = true; } }   // a local gyro keeps its tilt
     if (tiltRemote) tiltFilterClear();
     if (hadPhoneTilt && !k) onPhoneTiltChange?.();
   }
