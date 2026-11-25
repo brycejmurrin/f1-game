@@ -1,6 +1,6 @@
 ---
 name: gardener
-description: "Use when working code needs tidying: decouple a module, dedupe copied helpers, a file to split, game.js façade bloat, unclear structure, or a structure survey into a cleanup plan issue. Not for: dead code or a ratchet over → slim-bloat."
+description: "Use when working code needs tidying: decouple a module, dedupe copied helpers, split a file, clean up or survey structure. Not for: dead code → slim-bloat."
 ---
 
 # Gardener — prune the structure, change no behaviour

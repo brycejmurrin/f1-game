@@ -1,6 +1,6 @@
 ---
 name: slim-bloat
-description: "Use when files or docs are too big: a full size ratchet blocks a commit, dead code, unused CSS, repeated doc rules, stale comments, or a file over its ceiling. Not for: decoupling, duplication or structure → gardener; a fat SKILL.md → agent-config."
+description: "Use when files or docs are too big: a size ratchet blocks a commit, dead code, unused CSS, repeated doc rules, stale comments. Not for: duplication or structure → gardener; a fat SKILL.md → agent-config."
 ---
 
 # Cut bloat — shrink, split, dedupe, prove dead
