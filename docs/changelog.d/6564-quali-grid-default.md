@@ -1,0 +1,1 @@
+Improved: A one-off race now grids by QUALIFYING by default (was RANDOM, which put the fast cars behind the slow ones and turned short races into trains): GO opens the qualifying sheet, where TO THE GRID takes the simulated order if you skip your lap. A grid rule you already saved, RANDOM included, is kept; GRID in Race Settings still offers every rule.

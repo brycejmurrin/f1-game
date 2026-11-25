@@ -713,7 +713,7 @@ async function settle(pred, maxTurns) {
 /**
  * createGame({ track, tod, wx, verbose }) → Promise<handle>
  *   track   circuit id ("monza") — when given, race()+go() before returning
- *   storage { key: value } pre-seeded into localStorage (apex26. prefix optional)
+ *   storage { key: value } pre-seeded into localStorage (apex26. prefix optional); null lifts a pin
  *   onSandbox(sandbox, ctx)  run once after the sandbox is built and BEFORE the
  *           first manifest file — the VM's equivalent of page.addInitScript
  *   carMeshes false stubs Car3D's builders (~1 s a process; see stubCarMeshes)
@@ -775,9 +775,12 @@ async function createGame(opts) {
   const seatName = opts.seat == null ? "pin" : String(opts.seat);
   if (!Object.prototype.hasOwnProperty.call(SEATS, seatName))
     throw new Error(`game-vm: unknown seat "${seatName}" (want ${Object.keys(SEATS).join("|")})`);
-  const seed = Object.assign({ tyreWear: "off", wind: "off" }, SEATS[seatName],
+  // GRID RANDOM, pinned for the same reason (#6564): the shipped rule became QUALIFYING, and
+  // every recorded VM trace and AI-instrument number was taken on the old random draw.
+  const seed = Object.assign({ tyreWear: "off", wind: "off", raceGrid: "random" }, SEATS[seatName],
                              opts.track ? { trackId: opts.track } : {}, opts.storage || {});
   for (const k of Object.keys(seed)) {
+    if (seed[k] === null) continue;   // `storage: { key: null }` lifts a pin: the shipped default's miss path
     sandbox.localStorage.setItem(k.startsWith("apex26.") ? k : "apex26." + k, JSON.stringify(seed[k]));
   }
   // ADDITIVE HOOK, for tests/helpers/vm-page.js's addInitScript: the one moment
