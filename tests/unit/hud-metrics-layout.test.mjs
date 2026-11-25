@@ -444,8 +444,48 @@ test("saved TYRES and ERS keep their base width across responsive layers", () =>
 test("F-13 slice 7 ratchet: css/hud.css gains no !important line and no :has( site (#4448)", () => {
   // Lower these as the remaining rules fold into plain cascade wins; never raise them.
   const lines = fs.readFileSync(path.join(root, "css/hud.css"), "utf8").split("\n");
-  assert.ok(lines.filter((l) => l.includes("!important")).length <= 71, "!important lines (71 after the readout width fold)");
+  assert.ok(lines.filter((l) => l.includes("!important")).length <= 56, "!important lines (56 after the slice-7 hide fold)");
   // :has( counted in PARSED selectors (comments excluded; 6 of the file's 31 raw hits are prose).
   const hasSites = parseCss(readCssSource("css/hud.css")).reduce((n, r) => n + r.selector.split(":has(").length - 1, 0);
-  assert.ok(hasSites <= 25, ":has( selector sites (25 at 2026-11-20)");
+  assert.ok(hasSites <= 19, ":has( selector sites (19 after the slice-7 sibling fold)");
+});
+
+test("F-13 slice 7: the per-element, profile, camera and metrics hides need no !important", () => {
+  // Every display these ids get is a (1,0,0)/(1,1,0) show in @layer hud or a hide; nothing in a later layer shows them.
+  for (const id of ["hud-ot", "hud-limits", "hud-sectors", "hud-box-pos", "hud-box-lap", "hud-box-time", "hud-box-best",
+    "hud-speed", "hud-gearbox", "hud-energy", "hud-damage"]) {
+    const { hides } = assertPlainHidesWin(id);
+    for (const h of hides.filter((r) => r.file === "hud.css"))
+      assert.doesNotMatch(h.body, /!important/, `${h.sel} needs no !important`);
+  }
+  // TYRES: the hides fold too; the PIT-cue show keeps its !important (it must beat the cockpit hide in @layer overlays).
+  const tyre = cssRules().filter((r) => subjectHas(r.sel, "hud-tyre") && displayOf(r.body) && r.file === "hud.css");
+  for (const h of tyre.filter((r) => /^none\b/.test(displayOf(r.body)))) assert.doesNotMatch(h.body, /!important/, h.sel);
+  const pit = tyre.find((r) => r.sel.endsWith("#hud-tyre[data-pit]:not([hidden])"));
+  assert.match(pit.body, /flex !important/);
+  for (const h of tyre.filter((r) => /^body\.hud-met-(timing|compact) #hud-tyre$/.test(r.sel)))
+    assert.ok(beats(specificity(pit.sel), specificity(h.sel)) > 0, "the PIT cue still out-ranks " + h.sel);
+});
+
+test("F-13 slice 7: the #hud stack reads earlier siblings with ~, not body:has()", () => {
+  // A sibling selector matches what the :has() form did only while both are children of #hud in this order.
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const hud = html.slice(html.indexOf('<div id="hud" '), html.indexOf('<div id="lights"'));
+  const order = ["hud-sectors", "hud-limits", "hud-damage", "hud-flag", "hud-rel", "hud-strat", "hud-inputs"];
+  const at = order.map((id) => hud.indexOf(`<div id="${id}"`));
+  assert.ok(at.every((i, k) => i > 0 && (k === 0 || i > at[k - 1])), "the stack is in source order inside #hud");
+  // Each pair: the ~ rule and the :has() form it replaced, at the same weight so no neighbouring rule changes winner.
+  const sel = hudCssRules().map((r) => r.sel), has = (s) => `:has(> :where(#hud) > ${s})`;
+  for (const [now, was] of [
+    ["body:not(.desktop):not(.hud-prof-broadcast) #hud-sectors ~ #hud-flag", `body:not(.desktop):not(.hud-prof-broadcast)${has("#hud-sectors")} #hud-flag`],
+    ['body:not([data-hud-hide~="limits"]) #hud-limits:not([hidden]) ~ :is(#hud-damage, #hud-rel)', `body:not([data-hud-hide~="limits"])${has("#hud-limits:not([hidden])")} :is(#hud-damage, #hud-rel)`],
+    ['body:not([data-hud-hide~="damage"]) #hud-damage:not([hidden]) ~ #hud-rel', `body:not([data-hud-hide~="damage"])${has("#hud-damage:not([hidden])")} #hud-rel`],
+    ['body:not([data-hud-hide~="rel"]) #hud-rel:not([hidden]) ~ #hud-strat', `body:not([data-hud-hide~="rel"])${has("#hud-rel:not([hidden])")} #hud-strat`],
+    ["body:not(.desktop) #hud-rel:not([hidden]) ~ #hud-strat:not([data-hl-user])", `body:not(.desktop)${has("#hud-rel:not([hidden])")} #hud-strat:not([data-hl-user])`],
+    ['body:not([data-hud-hide~="limits"]) #hud-limits:not([hidden]) ~ #hud-inputs', `body:not([data-hud-hide~="limits"])${has("#hud-limits:not([hidden])")} #hud-inputs`],
+  ]) {
+    assert.ok(sel.includes(now), now);
+    assert.ok(!sel.includes(was), "the :has() form is gone: " + was);
+    assert.deepEqual(specificity(now), specificity(was), now);
+  }
 });
