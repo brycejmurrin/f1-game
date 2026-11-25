@@ -955,3 +955,36 @@ CINEMA (level 3: dof / motionBlur / ss2x) is not on this ladder: game.js
 tickBody sets GfxQuality.setCinema(garage || photo mode || replay scrub)
 every frame, and only EXTREME lifts those features.
 ```
+
+### gov-43
+
+Above `let _chaseFutile = false;` (#6417, 2026-11-25).
+
+```text
+DESKTOP REFRESH CHASE. The budget above is "60 fps or this device's own
+floor", and the floor resets to 16.7 ms at race start. A 120 Hz desktop that
+is fill-bound at full scale presents every second or third vsync (16.7 /
+25 ms), which the floor absorbs, so nothing ever reads as a miss: Bryce's
+16-inch MacBook raced Monza at 45 fps at scale 1 and a solid 120 at 0.67
+(issue #6417, comment 7149301256).
+On a desktop at RESOLUTION AUTO the resolution stage also chases the
+display: RenderRate.displayMs() is the lowest cadence EMA the MENUS showed
+(never a race frame; it creeps back up slowly so a slower panel is
+forgotten). When that is at least 2 ms faster than the ladder's budget, an
+evaluation inside the budget but over displayMs + DEGRADE_OVER cuts the
+scale 0.1, verified like any cut, with the same one quantum probe (§gov-27)
+to the CHASE FLOOR instead of 0.5. The restore gate is measured from the
+chase target while it holds, so a climb never gives the refresh back.
+THE CHASE FLOOR is one buffer pixel per CSS pixel (CSS width / present
+width, clamped 0.5..1): 0.5 on a 2x panel, 0.8 at 1.25x, 1 on a 1x monitor,
+which is never cut for frame rate. Features are never shed for the chase.
+GIVING UP. A chase cut that bought nothing (CPU-bound, or capped), or any
+frame state at the floor still over the target, sets _chaseFutile for the
+race and clears the measured ceiling, so the usual verified climb returns
+to the sharpest scale that holds the ladder's own budget. Cleared at race
+start, by a GRAPHICS change and by setAutoRes.
+INERT on a phone (RenderRate halves a 120 Hz phone instead), on any pinned
+RESOLUTION (LOW / MED / HIGH / MAX mean the scale they say), at the 60 FPS
+race target, and on a 60 Hz display: tests/unit/perf-governor-chase.test.mjs
+replays those frame for frame against the chase disabled.
+```
