@@ -74,7 +74,18 @@ const HudLayout = (function () {
     ot: { x: -5.247454576089348, y: -0.16698473282442747, s: 100 },
     aero: { x: 19.800224960876363, y: 3.9042620865139805, s: 100 },
   } };
-  const phoneStandard = () => typeof HudElements !== "undefined" && HudElements.phone?.() ? PHONE_STANDARD : null;
+  // Portrait phone chase (#6476, hud-survey bryce-393x852 --cam chase at UI 70 / 100): the steer pair fills the
+  // bottom-left to x 221 and the pedal column starts at x 290, so the landscape shares landed SPEED on STEER RIGHT
+  // and OT / AERO / ERS on the gearbox. SPEED sits left of the gearbox above the steer row; ERS, OT and AERO
+  // stack above the tyre plate on the centre line. Not the landscape lane: a portrait screen has no side room.
+  const PORTRAIT_OTHER = { speed: { x: -20, y: -12.9, s: 100 }, energy: { x: 0, y: -30.6, s: 101.53846153846153 },
+    ot: { x: 0, y: -32.7, s: 100 }, aero: { x: 0, y: -37.4, s: 100 } };
+  const PHONE_PORTRAIT = { helmet: PHONE_STANDARD.helmet, other: Object.assign({}, PHONE_STANDARD.other, PORTRAIT_OTHER) };
+  // A portrait PHONE (css/hud.css's (orientation: portrait) and (max-width: 500px)); a portrait tablet keeps the landscape seed.
+  const portraitPhone = () => typeof window !== "undefined" && window.innerHeight > window.innerWidth && window.innerWidth <= 500;
+  const phoneStandard = () => typeof HudElements !== "undefined" && HudElements.phone?.() ? (portraitPhone() ? PHONE_PORTRAIT : PHONE_STANDARD) : null;
+  // Every factory seed a stored "other" entry may still hold: it was never moved, so it takes the one for this screen.
+  const KNOWN_SEEDS = [RETIRED_SEED.other, PHONE_STANDARD.other, PORTRAIT_OTHER];
   const factorySet = (pn, sn) => (pn === "standard" && phoneStandard()?.[sn]) || {};
   /** A stored entry that is still the factory phone seed for its piece. */
   const isSeedEl = (id, entry, sn, pn) => { const f = factorySet(pn, sn)[id]; return !!(entry && f && sameEl(normEl(f), normEl(entry))); };
@@ -217,10 +228,10 @@ const HudLayout = (function () {
   function reseed(st) {
     const ps = phoneStandard();
     if (!ps) return st;
-    for (const sn of Object.keys(RETIRED_SEED)) {
-      const set = st.standard && st.standard[sn];
-      if (!set) continue;
-      for (const id of Object.keys(RETIRED_SEED[sn])) if (set[id] && ps[sn][id] && sameEl(set[id], normEl(RETIRED_SEED[sn][id]))) set[id] = normEl(ps[sn][id]);
+    const set = st.standard && st.standard.other;
+    if (!set) return st;
+    for (const id of Object.keys(PORTRAIT_OTHER)) {
+      if (set[id] && KNOWN_SEEDS.some((seed) => sameEl(set[id], normEl(seed[id])))) set[id] = normEl(ps.other[id]);
     }
     return st;
   }
@@ -1269,7 +1280,10 @@ const HudLayout = (function () {
   }
 
   // #4798 gate: build only
-  function init(gate) { apply(); if (gate) gate(build); else build(); watchPackUnhide(); watchReadoutSizes(); if (typeof Input !== "undefined") Input.onPointerKindChange(() => setTimeout(apply, 0)); }
+  // A rotation swaps the chase seed (PHONE_PORTRAIT): re-paint when the portrait-phone answer flips.
+  let wasPortrait = null;
+  const onRotate = () => { const p = portraitPhone(); if (wasPortrait !== null && p !== wasPortrait && phoneStandard()) apply(); wasPortrait = p; };
+  function init(gate) { apply(); onRotate(); if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("resize", onRotate, { passive: true }); if (gate) gate(build); else build(); watchPackUnhide(); watchReadoutSizes(); if (typeof Input !== "undefined") Input.onPointerKindChange(() => setTimeout(apply, 0)); }
   apply();
   _pub = true;
   if (doc) {
