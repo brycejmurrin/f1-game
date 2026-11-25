@@ -351,3 +351,13 @@ test("AI aim stays a pad inside the pit / exit wall line the contact clamp uses 
   close(CG.pitWallAim(tr,150,150,-9),-(lim.l-.35));    // mirrored on a left-hand pit
   tr.pit.painted=true;assert.equal(CG.pitWallAim(tr,150,150,5.9),5.9);   // painted lane: no wall
 });
+// #6503 pin: the player contact rules, bit for bit (Object.is), so moving them between modules
+// cannot change a value. Characterization of the shipped numbers, not a design claim.
+test("contact rules pin: bumpRestitution, rubDecel, humanPuntCap are bit-identical",()=>{
+  const R=AI;
+  const table=[[0,0],[0.5,0],[1,0],[1.5,0.025],[2,0.05],[2.5,0.07500000000000001],[3,0.1],[5,0.1],[30,0.1],[-4,0],[undefined,0],[NaN,0]];
+  for(const [v,e] of table) assert.ok(Object.is(R.bumpRestitution(v),e),`bumpRestitution(${v}) = ${R.bumpRestitution(v)}, pinned ${e}`);
+  assert.ok(Object.is(R.rubDecel(false),3));assert.ok(Object.is(R.rubDecel(true),3.5));
+  assert.ok(Object.is(R.rubDecel(0),3));assert.ok(Object.is(R.rubDecel(1),3.5));
+  assert.ok(Object.is(R.humanPuntCap(),8));
+});
