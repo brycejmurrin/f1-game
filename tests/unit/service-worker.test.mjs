@@ -10,6 +10,16 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const SW_SOURCE = await readFile(new URL("../../sw.js", import.meta.url), "utf8");
 const ORIGIN = "https://apex.test";
 
+// #6627: a `?b=` bust the network cannot answer, with no shell >= b cached, gets
+// a no-store page that hops to the plain "./" navigation: never Response.error()
+// (the installed iOS app has no reload control) and never the stale shell itself.
+async function assertBustHop(res, msg) {
+  assert.equal(res.status, 200, msg);
+  assert.equal(res.headers.get("cache-control"), "no-store", msg);
+  assert.equal(await res.text(), bustHopPage(`${ORIGIN}/`), msg);
+}
+const bustHopPage = (to) => `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${to}"><title>Apex 26</title>`;
+
 function deferred() {
   let resolve;
   let reject;
@@ -640,8 +650,9 @@ test("a slow online navigate serves the precached shell", async () => {
   assert.equal(await res.text(), "precached shell");
 });
 
-test("a dead online shell-bust navigate with no shell at or above b fails after the bust deadline", async () => {
-  // The stale shell (< b) is never served; the bounded BUST_WAIT_MS deadline still ends a fetch that never answers.
+test("a dead online shell-bust navigate with no shell at or above b hops to ./ after the bust deadline (#6627)", async () => {
+  // The stale shell (< b) is never served under the bust; the bounded BUST_WAIT_MS deadline still ends a fetch that
+  // never answers, and the answer is the hop to the plain shell navigation, not the browser's error page.
   const harness = createHarness({
     immediateTimeoutMs: 15000,
     navigator: { onLine: true },
@@ -652,7 +663,7 @@ test("a dead online shell-bust navigate with no shell at or above b fails after 
   ]));
 
   const bust = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=321` });
-  assert.equal((await bust.responsePromise).status, 0);
+  await assertBustHop(await bust.responsePromise);
 });
 
 test("a slow-but-alive online shell bust with no cached shell at or above b returns the late network shell (#4924)", async () => {
@@ -737,12 +748,24 @@ test("an online cache-first miss with a dead network returns an error response",
   assert.equal((await ev.responsePromise).status, 0);
 });
 
-test("a cache-bust navigation never falls back to the generic cached shell", async () => {
-  const harness = createHarness({ fetchImpl: async () => new Response("server error", { status: 500 }) });
-  harness.stores.set("apex26-old", new Map([
-    [`${ORIGIN}/index.html`, new Response("stale shell", { status: 200 })],
-  ]));
+test("a cache-bust navigation answered non-ok hops to ./, never the generic cached shell (#6627)", async () => {
+  for (const status of [500, 503, 404]) {
+    const harness = createHarness({ navigator: { onLine: true }, fetchImpl: async () => new Response("server error", { status }) });
+    harness.stores.set("apex26-old", new Map([
+      [`${ORIGIN}/index.html`, new Response("stale shell", { status: 200 })],
+    ]));
+    const bust = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=321` });
+    await assertBustHop(await bust.responsePromise, `HTTP ${status}`);
+  }
+  // A deploy under a sub-path hops to that directory, not the origin root.
+  const sub = createHarness({ fetchImpl: async () => new Response("unavailable", { status: 503 }) });
+  sub.stores.set("apex26-old", new Map([[`${ORIGIN}/index.html`, new Response("stale shell", { status: 200 })]]));
+  const res = await sub.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/f1-game/?b=321` }).responsePromise;
+  assert.equal(await res.text(), bustHopPage(`${ORIGIN}/f1-game/`));
+});
 
+test("a failed cache-bust navigation with no cached shell at all still fails (nothing to hop to)", async () => {
+  const harness = createHarness({ navigator: { onLine: true }, fetchImpl: async () => new Response("unavailable", { status: 503 }) });
   const bust = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=321` });
   assert.equal((await bust.responsePromise).status, 0);
 });
@@ -803,7 +826,7 @@ for (const [label, online, fetchImpl] of [
   ["offline", false, () => Promise.reject(new TypeError("offline"))],
   ["on a slow link", true, () => new Promise(() => {})],
 ]) {
-  test(`${label}, a spent ?b= reloads the cached shell; a newer one still fails fast`, async () => {
+  test(`${label}, a spent ?b= reloads the cached shell; a newer one hops to ./ (#6627)`, async () => {
     for (const b of ["321", "300"]) {
       const h = settledShellHarness({ online, fetchImpl });
       const nav = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=${b}` });
@@ -813,14 +836,14 @@ for (const [label, online, fetchImpl] of [
     }
     const h = settledShellHarness({ online, fetchImpl });
     const fresh = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=322` });
-    assert.equal((await fresh.responsePromise).status, 0, "a bust newer than the cache never gets the stale shell");
+    await assertBustHop(await fresh.responsePromise, "a bust newer than the cache never gets the stale shell");
   });
 }
 
 // #3284: the cache order is settled-first, so an OLDER settled shell came
 // before a NEWER unsettled one that already held index.html — and the first
 // shell found below `b` ended the search, failing a bust the newer cache could
-// answer. A qualifying shell anywhere in the order wins; none still fails.
+// answer. A qualifying shell anywhere in the order wins; none hops to ./ (#6627).
 for (const [label, online, fetchImpl] of [
   ["offline", false, () => Promise.reject(new TypeError("offline"))],
   ["on a slow link", true, () => new Promise(() => {})],
@@ -836,7 +859,7 @@ for (const [label, online, fetchImpl] of [
     assert.equal(res.status, 200, "the newer unsettled cache holds a shell >= the bust");
     assert.equal(await res.text(), "shell 322");
     const newer = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=323` });
-    assert.equal((await newer.responsePromise).status, 0, "nothing cached is >= 323");
+    await assertBustHop(await newer.responsePromise, "nothing cached is >= 323");
   });
 }
 
@@ -1265,6 +1288,7 @@ test("the worker never enables navigation preload and a plain navigation revalid
     return new Response("network shell", { status: 200 });
   };
   const h = createHarness({ fetchImpl: net });
+  h.stores.set("apex26-321", new Map([[`${ORIGIN}/__apex_install_settled__`, new Response("settled")]]));
   await h.lifecycleEvent("activate").done();
   seen.length = 0;
   const nav = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` },
@@ -2110,8 +2134,11 @@ for (const asset of ["js/career/career-ui.js", "js/career/career-planning-ui.js"
       ]));
       await assert.rejects(h.lifecycleEvent("install").done());
       assert.equal(h.skipped, 0);
-      assert.deepEqual(h.deleted, []);
-      assert.equal(h.stores.get("apex26-322").has(`${ORIGIN}/__apex_install_complete__`), false);
+      // #6625: the partial apex26-322 (shell + part of the required set) goes with
+      // the failed install, because the settled apex26-321 still serves.
+      assert.deepEqual(h.deleted, ["apex26-322"]);
+      assert.equal(h.stores.has("apex26-322"), false);
+      assert.ok(h.stores.get("apex26-321").has(`${ORIGIN}/__apex_install_settled__`));
       offline = true;
       // A rejected installing worker never controls clients; the previous worker
       // continues serving the retained generation, including after a restart.
@@ -2121,6 +2148,9 @@ for (const asset of ["js/career/career-ui.js", "js/career/career-planning-ui.js"
       assert.equal(await (await nav.responsePromise).text(), "old shell");
       const lazy = active.fetchEvent({ method: "GET", url: `${ORIGIN}/js/career/career-ui.js?v=aaaaaaaaaaaa` });
       assert.equal(await (await lazy.responsePromise).text(), "old career");
+      // The update reload's ?b=322 is never answered from the dropped partial shell.
+      const bust = active.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=322` });
+      await assertBustHop(await bust.responsePromise, "no shell >= 322 survives the failed install");
     });
   }
 }
@@ -2505,4 +2535,123 @@ test("kill switch: a version.json without the flag (or swKill false) changes not
     assert.equal(unregistered(), 0, body);
     assert.ok(h.stores.has("apex26-320"), body);
   }
+});
+
+// #6625: a failed install takes its partial generation with it, but only while an
+// older SETTLED generation can serve; a first install, or a build that already
+// settled once, keeps its cache.
+test("a failed install drops its partial cache only when an older settled generation remains (#6625)", async () => {
+  const settledGen = (body) => new Map([
+    [`${ORIGIN}/index.html`, new Response(body)],
+    [`${ORIGIN}/__apex_install_complete__`, new Response("complete")],
+    [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
+  ]);
+  const first = createHarness({ fetchImpl: installFetch({ failEssential: true }) });
+  await assert.rejects(first.lifecycleEvent("install").done());
+  assert.deepEqual(first.deleted, [], "a first install has nothing else to serve: keep it");
+  assert.ok(first.stores.get("apex26-321").has(`${ORIGIN}/index.html`));
+
+  const unsettledOlder = createHarness({ fetchImpl: installFetch({ failEssential: true }) });
+  unsettledOlder.stores.set("apex26-320", new Map([[`${ORIGIN}/index.html`, new Response("old, never settled")]]));
+  await assert.rejects(unsettledOlder.lifecycleEvent("install").done());
+  assert.deepEqual(unsettledOlder.deleted, [], "an unsettled older cache is no fallback");
+
+  const resettle = createHarness({ fetchImpl: installFetch({ failEssential: true }) });
+  resettle.stores.set("apex26-320", settledGen("shell 320"));
+  resettle.stores.set("apex26-321", settledGen("shell 321"));
+  await assert.rejects(resettle.lifecycleEvent("install").done());
+  assert.deepEqual(resettle.deleted, [], "a generation that already settled is never deleted by a failed re-install");
+
+  const update = createHarness({ immediateTimeoutMs: 15000, navigator: { onLine: true }, fetchImpl: installFetch({ failEssential: true }) });
+  update.stores.set("apex26-320", settledGen("shell 320"));
+  await assert.rejects(update.lifecycleEvent("install").done());
+  assert.deepEqual(update.deleted, ["apex26-321"]);
+  // The update reload's ?b=321 no longer finds the partial shell; the active worker hops it to "./".
+  const active = createHarness({ immediateTimeoutMs: 15000, navigator: { onLine: true }, fetchImpl: () => new Promise(() => {}) });
+  for (const [name, store] of update.stores) active.stores.set(name, store);
+  await assertBustHop(await active.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=321` }).responsePromise);
+});
+
+// #6627 timeout branch, offline branch: same hop as the non-ok answer.
+test("an offline ?b= bust newer than every cached shell hops to ./ instead of an error page (#6627)", async () => {
+  const h = createHarness({ navigator: { onLine: false }, fetchImpl: () => Promise.reject(new TypeError("offline")) });
+  h.stores.set("apex26-320", new Map([[`${ORIGIN}/index.html`, new Response("stale shell")]]));
+  await assertBustHop(await h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=999` }).responsePromise);
+  // The hop target is a plain navigation, which the cached shell answers offline.
+  const plain = await h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` }).responsePromise;
+  assert.equal(await plain.text(), "stale shell");
+});
+
+// #6629: iOS can evict apex26-<N> while keeping the registration. The active
+// worker registered for N re-precaches it on the next plain online launch, or
+// when the page asks for the offline status, and writes the markers again.
+async function untilSettled(h, name = "apex26-321") {
+  for (let i = 0; i < 400; i++) {
+    const store = h.stores.get(name);
+    if (store && store.has(`${ORIGIN}/__apex_install_settled__`)) return true;
+    await new Promise((r) => setTimeout(r, 2));
+  }
+  return false;
+}
+function askOffline(h, type = "apex-offline-status") {
+  const ch = new MessageChannel();
+  const reply = new Promise((resolve) => ch.port1.once("message", resolve));
+  h.messageEvent({ type }, [ch.port2]);
+  return reply.finally(() => ch.port1.close());
+}
+
+test("an evicted generation is re-precached by the next plain online launch (#6629)", async () => {
+  const h = createHarness({ navigator: { onLine: true }, fetchImpl: installFetch() });
+  // Eviction kept the registration and then one runtime put re-created a marker-less apex26-321.
+  h.stores.set("apex26-321", new Map([[`${ORIGIN}/assets/sfx/beep.mp3`, new Response("runtime")]]));
+  assert.equal((await askOffline(h)).known, false, "the damage reads as unknown");
+  const nav = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
+  await nav.responsePromise;
+  await Promise.all(nav.lifetimes);
+  const store = h.stores.get("apex26-321");
+  for (const k of ["index.html", "js/game.js?v=321", "css/style.css?v=321", "__apex_install_complete__", "__apex_install_settled__"]) {
+    assert.ok(store.has(`${ORIGIN}/${k}`), k + " restored");
+  }
+  assert.ok(store.has(`${ORIGIN}/assets/sfx/beep.mp3`), "runtime entries survive the repair");
+  assert.equal(h.skipped, 0, "a repair never calls skipWaiting");
+  const status = await askOffline(h);
+  assert.equal(status.known, true);
+  assert.equal(status.coreReady, true);
+});
+
+test("the page's offline-status ask starts the repair of a missing generation (#6629)", async () => {
+  const h = createHarness({ navigator: { onLine: true }, fetchImpl: installFetch() });
+  assert.equal((await askOffline(h, "apex-offline-retry")).known, false);
+  assert.equal(await untilSettled(h), true, "the required set and SETTLED are written back");
+  assert.equal((await askOffline(h)).known, true);
+});
+
+test("the repair stands down for a healthy, foreign or superseded generation and offline (#6629)", async () => {
+  let fetches = 0;
+  const counting = (inner) => (req, init) => { fetches++; return inner(req, init); };
+  // Healthy: one SETTLED check, no precache fetch beyond the navigation and version.json.
+  const healthy = createHarness({ navigator: { onLine: true }, fetchImpl: counting(installFetch()) });
+  healthy.stores.set("apex26-321", new Map([[`${ORIGIN}/__apex_install_settled__`, new Response("settled")]]));
+  const a = healthy.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
+  await a.responsePromise; await Promise.all(a.lifetimes);
+  assert.equal(fetches, 2, "the navigation and its version.json read only");
+  // Registered for an older build: version.json naming 321 is the next worker's to install.
+  fetches = 0;
+  const foreign = createHarness({ navigator: { onLine: true }, workerURL: `${ORIGIN}/sw.js?v=320`, fetchImpl: counting(installFetch()) });
+  const b = foreign.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
+  await b.responsePromise; await Promise.all(b.lifetimes);
+  assert.equal(foreign.stores.get("apex26-321")?.has(`${ORIGIN}/__apex_install_settled__`) || false, false);
+  assert.equal(fetches, 2);
+  // A newer worker is installing: it owns the generation.
+  fetches = 0;
+  const superseded = createHarness({ navigator: { onLine: true }, registration: { installing: {}, waiting: null }, fetchImpl: counting(installFetch()) });
+  const c = superseded.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
+  await c.responsePromise; await Promise.all(c.lifetimes);
+  assert.equal(fetches, 2);
+  // Offline: no attempt at all.
+  const offline = createHarness({ navigator: { onLine: false }, fetchImpl: () => Promise.reject(new TypeError("offline")) });
+  const d = offline.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
+  assert.equal(d.lifetimes.length, 1);
+  await d.responsePromise; await Promise.all(d.lifetimes);
+  assert.equal(offline.stores.size, 0, "nothing re-created offline");
 });

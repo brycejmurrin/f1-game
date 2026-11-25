@@ -300,6 +300,21 @@ async function shellAtLeast(b) {
   return undefined;
 }
 
+// A `?b=` BUST THE NETWORK COULD NOT ANSWER, with no shell at or above b cached
+// (#6627). Response.error() left the installed iOS app on an error page with no
+// URL bar or reload: the player had to kill it. The callers spend their one-shot
+// sessionStorage key before navigating, so no answer here can loop. Never the
+// stale shell itself under the bust URL (#3284's rule): a tiny page that
+// replaces the location with "./", a plain navigation that tries the network
+// once more and falls back to the cached shell, whose next foreground update
+// check retries the build. No cached shell at all → undefined (nothing to hop to).
+async function bustFallback(url) {
+  try { if (!(await matchPreferCurrent("index.html"))) return undefined; } catch (_) { return undefined; }
+  const to = new URL("./", url.href).href;
+  return new Response('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=' + to + '"><title>Apex 26</title>',
+    { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+}
+
 // OPPORTUNISTIC SWEEP. `activate` deletes older generations once, but a worker
 // that outlives a deploy — or a fetch that opened a newer build's cache before
 // that build's worker installed — leaves stale apex26-* caches behind until
@@ -1077,93 +1092,160 @@ async function pooled(items, limit, fn) {
   await Promise.all(workers);
 }
 
-self.addEventListener("install", (event) => {
-  event.waitUntil((async () => {
-    const [name, urls] = await Promise.all([currentCacheName(), precacheAssetLists()]);
-    const build = name.slice(CACHE_PREFIX.length);
-    if (urls.shellBuild !== build) throw new Error("Application shell build does not match cache build " + build);
-    const cache = await openCache(name);
-    // GLX is the fallback renderer every device can run: when TLX/WGX are not
-    // cached (or fail), an offline boot without it is "graphics unavailable".
-    // Career UI is also required: an update must not replace working offline
-    // career access with a shell whose strict lazy group was not fully cached.
-    // Stamp these files exactly as ScriptLoader requests them.
-    const isRequiredLazy = (u) => /^js\/render\/glx\//.test(u) || REQUIRED_LAZY.includes(u);
-    const isShell = (u) => u === "./" || u === "index.html";
-    // A lazy file's key: its content hash from the shell's map, else the build.
-    const lazyV = urls.lazyV || new Map();
-    const stampKey = (u) => u + "?v=" + (lazyV.get(u) || build);
-    const required = urls.essential.filter((u) => !isShell(u)).concat(urls.optional.filter(isRequiredLazy).map(stampKey));
-    await Promise.all(["./", "index.html"].map((u) => cache.put(u, urls.shellResponse())));
-    await pooled(required, 6, async (u) => { if (!(await reuseHashed(cache, u)) && !(await reusePinned(cache, u))) await cacheRequiredAsset(cache, u); });
-    await cache.put(INSTALL_COMPLETE_URL, new Response("complete"));
-    invalidateCacheOrder();   // a marker is a rank input (computeCacheOrder)
-    // The DEFERRED backends are the one group in `optional` that is NOT pinned
-    // by path — js/game.js:loadBackendScripts injects them as `<path>?v=<build>`,
-    // mirroring the shell's tags. Seeded bare they were cached under a key
-    // nothing ever requests: the fetch handler matches without `ignoreSearch`,
-    // so offline the query'd URL missed, the fetch rejected, the script's
-    // onerror resolved with the global absent, and an opted-in TLX/WGX player
-    // silently fell back to GLX. Stamp the same build here. Safe against
-    // staleness because the cache NAME already carries the build and `activate`
-    // deletes older generations, so a key inside this cache can only ever
-    // be this build's. Everything else in the list stays bare — the vendored
-    // three.js reaches the network through the importmap with no query at all.
-    // Everything loadBackendScripts() injects is requested as `<path>?v=<build>`,
-    // so it must be SEEDED under that key: the DEFERRED backends, and now the
-    // race payload (light-presets + the per-circuit scenery closures) too.
-    // Stamp regex covers ScriptLoader injects: DEFERRED + LAZY_* incl. js/race/
-    // (LAZY_RACE_SESSION), js/workers/ (bitmap-decode), and the phone-pad trio
-    // (codec, page, session — all three are injected, none is a shell tag).
-    // Keep both path classes.
-    // The stamp is the deploy's CONTENT HASH where the shell's map names one
-    // (stampKey above), so an unchanged file keeps its key across deploys.
-    // Seed the new build's own manifest before activation. Carrying the older
-    // manifest or relying on the first online boot loses the pack after an update.
-    const packManifest = PACK_MANIFEST_KEY_PREFIX + build;
-    const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/fx\/visor-optics\.js$|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/(?:phone-pad(?:-codec|-page)?|touch-button-actions)\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|touch-button-settings|appearance-(?:studio-ui|arrangement-picker)|companion-return|photo-studio-ui|results-sheet|quali-sheet|watch-transport|progress-backup|save-health|settings-export-body|learn-door|circuit-details-panel|hud-inputs|screen-(regions|placement|arranger)|hud-arrange|hud-layout-editor|desktop-graphics|dock-toolbar)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/(presets|tuner-panel)\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
-        ? stampKey(u) : u).filter((u) => {
-          const bare = u.replace(/\?v=.*$/, "");
-          // GLX and career UI went in `required`; runtime-only doors are skipped.
-          return !isRequiredLazy(bare) && !isRuntimeOnlyOptional(bare);
-        }).concat(packManifest);
-    // INSTALL-CRITICAL first (chosen backend = TLX + three.js), then the
-    // BACKGROUND pool (in the seed's order: race-entry bundles, then circuits +
-    // scenery, then data / net — not runtime-only doors), then
-    // SETTLED, then skipWaiting. The order of the pools is a download priority,
-    // nothing more: skipWaiting() only SETS A FLAG, and the browser reads it
-    // after every install extend-lifetime promise has settled
-    // (https://w3c.github.io/ServiceWorker/ — Install, then Try Activate). A
-    // skipWaiting between the pools — the old layout — activated nothing early
-    // and only read as if it did; activation always followed SETTLED.
-    const critical = stamped.filter((u) => isInstallCriticalOptional(u.replace(/\?v=.*$/, "")));
-    const background = stamped.filter((u) => isBackgroundOptional(u.replace(/\?v=.*$/, "")));
-    let optionalMissed = 0, firstMissed = "";
-    for (const pool of [critical, background]) {
-      await pooled(pool, 4, async (u) => {
-        if (!(await reuseHashed(cache, u)) && !(await reusePinned(cache, u)) && !(await cacheOptionalAsset(cache, u)) && !optionalMissed++) firstMissed = u;
-      });
+// THE PRECACHE BODY: install runs it, and so does repairGeneration() (#6629)
+// when an active worker finds its own generation evicted or unsettled.
+// `onName` learns the target before the first write, so a failed install can
+// clean up after itself (#6625).
+async function precacheGeneration(onName) {
+  const [name, urls] = await Promise.all([currentCacheName(), precacheAssetLists()]);
+  if (onName) onName(name);
+  const build = name.slice(CACHE_PREFIX.length);
+  if (urls.shellBuild !== build) throw new Error("Application shell build does not match cache build " + build);
+  const cache = await openCache(name);
+  // GLX is the fallback renderer every device can run: when TLX/WGX are not
+  // cached (or fail), an offline boot without it is "graphics unavailable".
+  // Career UI is also required: an update must not replace working offline
+  // career access with a shell whose strict lazy group was not fully cached.
+  // Stamp these files exactly as ScriptLoader requests them.
+  const isRequiredLazy = (u) => /^js\/render\/glx\//.test(u) || REQUIRED_LAZY.includes(u);
+  const isShell = (u) => u === "./" || u === "index.html";
+  // A lazy file's key: its content hash from the shell's map, else the build.
+  const lazyV = urls.lazyV || new Map();
+  const stampKey = (u) => u + "?v=" + (lazyV.get(u) || build);
+  const required = urls.essential.filter((u) => !isShell(u)).concat(urls.optional.filter(isRequiredLazy).map(stampKey));
+  await Promise.all(["./", "index.html"].map((u) => cache.put(u, urls.shellResponse())));
+  await pooled(required, 6, async (u) => { if (!(await reuseHashed(cache, u)) && !(await reusePinned(cache, u))) await cacheRequiredAsset(cache, u); });
+  await cache.put(INSTALL_COMPLETE_URL, new Response("complete"));
+  invalidateCacheOrder();   // a marker is a rank input (computeCacheOrder)
+  // The DEFERRED backends are the one group in `optional` that is NOT pinned
+  // by path — js/game.js:loadBackendScripts injects them as `<path>?v=<build>`,
+  // mirroring the shell's tags. Seeded bare they were cached under a key
+  // nothing ever requests: the fetch handler matches without `ignoreSearch`,
+  // so offline the query'd URL missed, the fetch rejected, the script's
+  // onerror resolved with the global absent, and an opted-in TLX/WGX player
+  // silently fell back to GLX. Stamp the same build here. Safe against
+  // staleness because the cache NAME already carries the build and `activate`
+  // deletes older generations, so a key inside this cache can only ever
+  // be this build's. Everything else in the list stays bare — the vendored
+  // three.js reaches the network through the importmap with no query at all.
+  // Everything loadBackendScripts() injects is requested as `<path>?v=<build>`,
+  // so it must be SEEDED under that key: the DEFERRED backends, and now the
+  // race payload (light-presets + the per-circuit scenery closures) too.
+  // Stamp regex covers ScriptLoader injects: DEFERRED + LAZY_* incl. js/race/
+  // (LAZY_RACE_SESSION), js/workers/ (bitmap-decode), and the phone-pad trio
+  // (codec, page, session — all three are injected, none is a shell tag).
+  // Keep both path classes.
+  // The stamp is the deploy's CONTENT HASH where the shell's map names one
+  // (stampKey above), so an unchanged file keeps its key across deploys.
+  // Seed the new build's own manifest before activation. Carrying the older
+  // manifest or relying on the first online boot loses the pack after an update.
+  const packManifest = PACK_MANIFEST_KEY_PREFIX + build;
+  const stamped = urls.optional.map((u) =>
+    /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/fx\/visor-optics\.js$|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/(?:phone-pad(?:-codec|-page)?|touch-button-actions)\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|touch-button-settings|appearance-(?:studio-ui|arrangement-picker)|companion-return|photo-studio-ui|results-sheet|quali-sheet|watch-transport|progress-backup|save-health|settings-export-body|learn-door|circuit-details-panel|hud-inputs|screen-(regions|placement|arranger)|hud-arrange|hud-layout-editor|desktop-graphics|dock-toolbar)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/(presets|tuner-panel)\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      ? stampKey(u) : u).filter((u) => {
+        const bare = u.replace(/\?v=.*$/, "");
+        // GLX and career UI went in `required`; runtime-only doors are skipped.
+        return !isRequiredLazy(bare) && !isRuntimeOnlyOptional(bare);
+      }).concat(packManifest);
+  // INSTALL-CRITICAL first (chosen backend = TLX + three.js), then the
+  // BACKGROUND pool (in the seed's order: race-entry bundles, then circuits +
+  // scenery, then data / net — not runtime-only doors), then
+  // SETTLED, then skipWaiting. The order of the pools is a download priority,
+  // nothing more: skipWaiting() only SETS A FLAG, and the browser reads it
+  // after every install extend-lifetime promise has settled
+  // (https://w3c.github.io/ServiceWorker/ — Install, then Try Activate). A
+  // skipWaiting between the pools — the old layout — activated nothing early
+  // and only read as if it did; activation always followed SETTLED.
+  const critical = stamped.filter((u) => isInstallCriticalOptional(u.replace(/\?v=.*$/, "")));
+  const background = stamped.filter((u) => isBackgroundOptional(u.replace(/\?v=.*$/, "")));
+  let optionalMissed = 0, firstMissed = "";
+  for (const pool of [critical, background]) {
+    await pooled(pool, 4, async (u) => {
+      if (!(await reuseHashed(cache, u)) && !(await reusePinned(cache, u)) && !(await cacheOptionalAsset(cache, u)) && !optionalMissed++) firstMissed = u;
+    });
+  }
+  // Runtime-only doors (WGX, designer, XR, camera editors) are never fetched
+  // here, but a door the player opened keeps its file across a deploy that
+  // left its content hash alone (#5007): a CacheStorage copy, never the network.
+  await pooled(urls.optional.filter(isRuntimeOnlyOptional).map(stampKey), 4, (u) => reuseHashed(cache, u));
+  try { await carryRuntime(cache, name); } catch (e) { swLog("warn", "runtime carry: " + errMsg(e)); }
+  if (optionalMissed) swLog("warn", "precache: " + optionalMissed + " of " + stamped.length + " optional assets not cached (first: " + firstMissed + ")");
+  await cache.put(OFFLINE_STATUS_URL, new Response(JSON.stringify({
+    build: Number(build), required: ["./", "index.html", ...required], optional: stamped,
+  }), { headers: { "Content-Type": "application/json" } }));
+  await cache.put(INSTALL_SETTLED_URL, new Response("settled"));
+  invalidateCacheOrder();
+  return name;
+}
+
+// A FAILED INSTALL TAKES ITS PARTIAL CACHE WITH IT (#6625). The shell is written
+// before the required set, so a rejected install left apex26-<N+1> holding
+// index.html and part of the rest: shellAtLeast(N+1) answered the next `?b=`
+// bust from it, offline the new shell's missing ?v= files missed, and it held
+// iOS quota. Deleted only when unsettled AND an older SETTLED generation
+// remains to serve; a first install keeps whatever it got (nothing else exists).
+async function dropFailedGeneration(name) {
+  const build = cacheBuild(name);
+  if (!(build > 0)) return;
+  const keys = await caches.keys();
+  if (!keys.includes(name) || await caches.match(INSTALL_SETTLED_URL, { cacheName: name })) return;
+  for (const k of keys) {
+    const b = cacheBuild(k);
+    if (b > 0 && b < build && await caches.match(INSTALL_SETTLED_URL, { cacheName: k })) {
+      await caches.delete(name);
+      invalidateCacheOrder();
+      swLog("warn", "install failed: removed partial " + name + " (kept " + k + ")");
+      return;
     }
-    // Runtime-only doors (WGX, designer, XR, camera editors) are never fetched
-    // here, but a door the player opened keeps its file across a deploy that
-    // left its content hash alone (#5007): a CacheStorage copy, never the network.
-    await pooled(urls.optional.filter(isRuntimeOnlyOptional).map(stampKey), 4, (u) => reuseHashed(cache, u));
-    try { await carryRuntime(cache, name); } catch (e) { swLog("warn", "runtime carry: " + errMsg(e)); }
-    if (optionalMissed) swLog("warn", "precache: " + optionalMissed + " of " + stamped.length + " optional assets not cached (first: " + firstMissed + ")");
-    await cache.put(OFFLINE_STATUS_URL, new Response(JSON.stringify({
-      build: Number(build), required: ["./", "index.html", ...required], optional: stamped,
-    }), { headers: { "Content-Type": "application/json" } }));
-    await cache.put(INSTALL_SETTLED_URL, new Response("settled"));
-    invalidateCacheOrder();
+  }
+}
+
+self.addEventListener("install", (event) => {
+  let target = null;
+  event.waitUntil((async () => {
+    try { await precacheGeneration((n) => { target = n; }); } catch (e) {
+      // An essential miss or an unreadable build aborts the install (the old
+      // worker and its cache stay in charge). Say so, then keep the rejection.
+      swLog("warn", "install failed: " + errMsg(e));
+      if (target) { try { await dropFailedGeneration(target); } catch (err) { swLog("warn", "install cleanup: " + errMsg(err)); } }
+      throw e;
+    }
     await self.skipWaiting();
-  })().catch((e) => {
-    // An essential miss or an unreadable build aborts the install (the old
-    // worker and its cache stay in charge). Say so, then keep the rejection.
-    swLog("warn", "install failed: " + errMsg(e));
-    throw e;
-  }));
+  })());
 });
+
+// SELF-REPAIR (#6629). WebKit can drop a Home Screen app's Cache Storage under
+// storage pressure while keeping the registration. Install never re-runs (the
+// worker bytes are unchanged), runtime puts used to re-create a marker-less
+// apex26-<N>, and offline stayed broken until the next deploy. An ACTIVE worker
+// that finds the generation it was registered for (`sw.js?v=<build>`) without
+// INSTALL_SETTLED, with no newer worker installing or waiting, re-runs the
+// precache body into it. A newer deploy fails the body's shell-build check and
+// changes nothing. One attempt in flight; a settled generation is checked once.
+let _repair = null, _repairOk = "";
+function ownBuild() {
+  try { return Number(new URL(self.location.href).searchParams.get("v")); } catch (_) { return NaN; }
+}
+async function repairGeneration() {
+  if (DEV_HOST || _killed) return false;
+  const name = await currentCacheName();
+  if (name === _repairOk || cacheBuild(name) !== ownBuild()) return false;
+  const reg = self.registration;
+  if (reg && (reg.installing || reg.waiting)) return false;
+  if (await caches.match(INSTALL_SETTLED_URL, { cacheName: name })) { _repairOk = name; return false; }
+  swLog("warn", "offline cache " + name + " is incomplete; re-precaching");
+  await precacheGeneration();
+  _repairOk = name;
+  return true;
+}
+function maybeRepair() {
+  if (!_repair) {
+    _repair = repairGeneration()
+      .catch((e) => { swLog("warn", "offline repair failed: " + errMsg(e)); return false; })
+      .finally(() => { _repair = null; });
+  }
+  return _repair;
+}
 
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
@@ -1219,6 +1301,8 @@ self.addEventListener("message", (event) => {
     event.waitUntil((async () => {
       try {
         const status = await offlineStatus();
+        // Unknown or core-incomplete: the generation may have been evicted (#6629).
+        if (!status.known || !status.coreReady) event.waitUntil(maybeRepair());
         if (event.data.type === "apex-offline-retry" && status._cache && status.coreReady && status._missing.length) {
           const name = CACHE_PREFIX + status.build;
           if (!offlineRetries.has(name)) {
@@ -1523,12 +1607,14 @@ self.addEventListener("fetch", (event) => {
       return res;
     });
     // Register during dispatch, including when a cache fallback wins the race.
-    event.waitUntil(network.then(() => cacheWrite, () => undefined));
-    event.respondWith((async () => {
+    const written = network.then(() => cacheWrite, () => undefined);
+    const answer = (async () => {
       const online = typeof navigator !== "undefined" && navigator.onLine;
       // FAIL FAST ONLY WHERE A STALE ANSWER IS WORSE THAN NO ANSWER: version.json
-      // (a stale build number makes the shell guard skip its reload) and the
-      // `?b=` shell bust (the one-shot guard blocks a second try). A PLAIN
+      // (a stale build number makes the shell guard skip its reload). The `?b=`
+      // bust used to fail fast too, but in the installed iOS app an error page
+      // has no reload control: a bust the network cannot answer (non-ok, slow
+      // past BUST_WAIT_MS, offline) now gets bustFallback()'s hop to "./" (#6627). A PLAIN
       // navigation that loses the race while navigator.onLine is true used to
       // return Response.error() too — an installed PWA on a slow link opened to
       // the browser's error page instead of the shell it had precached, and
@@ -1541,7 +1627,7 @@ self.addEventListener("fetch", (event) => {
       // query navigation — failing it left that URL on the browser's error
       // page offline and on a slow link, for good.
       const bustShell = isShellBust ? await shellAtLeast(url.searchParams.get("b")) : undefined;
-      const failFast = online && (isVersion || (isShellBust && !bustShell));
+      const failFast = online && isVersion;
       const timeout = new Promise((resolve) => setTimeout(() => resolve(null), isShellBust && !bustShell ? BUST_WAIT_MS : NAV_RACE_MS));
       try {
         let res;
@@ -1566,7 +1652,7 @@ self.addEventListener("fetch", (event) => {
       // request with the shell's HTML (survivable only because the version
       // guard swallows the parse error).
       if (isVersion) return (await matchPreferCurrent("version.json")) || Response.error();
-      if (isShellBust) return bustShell || Response.error();
+      if (isShellBust) return bustShell || (await bustFallback(url)) || Response.error();
       const ownURL = new URL(url.href);
       ownURL.search = "";
       ownURL.hash = "";
@@ -1583,7 +1669,13 @@ self.addEventListener("fetch", (event) => {
       }
       try { const late = await network; if (late) return late; } catch (_) { /* offline: nothing to show */ }
       return Response.error();
-    })());
+    })();
+    event.respondWith(answer);
+    // After the page has its answer, a plain online launch checks that this
+    // worker's generation is still whole and re-precaches it if not (#6629).
+    const repair = req.mode === "navigate" && url.search === "" && isShellDocument(url)
+      && !(typeof navigator !== "undefined" && navigator.onLine === false);
+    event.waitUntil(repair ? Promise.all([written, answer.then(maybeRepair, maybeRepair)]) : written);
     return;
   }
 
