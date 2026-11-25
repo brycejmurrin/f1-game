@@ -56,13 +56,15 @@ test("the player at rest on a kerb accelerates away under throttle, with no resc
 // Characterization: the kerb's slowing AT SPEED is unchanged by #6481. The
 // penalty is the road trial's speed gain minus the kerb trial's over 0.5 s, at
 // a ground speed whose vStd is past the fade. Measured on 0d28a237, before
-// the fix: 20 m/s → 0.7688 m/s, 40 m/s → 0.3837 m/s.
+// the fix: 20 m/s → 0.7688 m/s, 40 m/s → 0.3837 m/s. The 1e-2 band is there
+// so an unrelated drag/aero/kerb-grip retune need not re-pin; a fade leaking
+// past vStd 10 (or a re-scaled cut) moves the penalty by more than that.
 test("at speed the kerb costs the same speed as before #6481", () => {
   for (const [v, pinned] of [[20, 0.7688], [40, 0.3837]]) {
     const kerb = run(X_KERB, v, 30), road = run(X_ROAD, v, 30);
     assert.ok(kerb.kerb > 0 && road.kerb === 0, `${v} m/s: kerb trial touches the kerb, road trial does not`);
     const penalty = road.dv - kerb.dv;
-    assert.ok(Math.abs(penalty - pinned) < 1e-3, `${v} m/s: kerb penalty ${penalty.toFixed(4)} m/s, pinned ${pinned}`);
+    assert.ok(Math.abs(penalty - pinned) < 1e-2, `${v} m/s: kerb penalty ${penalty.toFixed(4)} m/s, pinned ${pinned}`);
   }
 });
 
@@ -72,16 +74,18 @@ test("Suzuka seed 5, AI-only: no car stalls on a kerb (ANT sat at 0 for 4.7 s be
     h.apex.seed(5); await h.race("suzuka"); h.aiOnly();
     const G = h.G, cars = G.cars.filter((c) => !c.isPlayer && !c.human);
     const slowOnKerb = new Map();
-    let worst = { code: "", t: 0, raceT: 0 };
+    let worst = { code: "", t: 0, raceT: 0 }, kerbFrames = 0;
     for (let f = 0; f < 50 * 60; f++) {
       h.step(1, DT);
       for (const c of cars) {
         if (c.retired || c.finished) continue;
+        if (c.onKerb) kerbFrames++;
         const t = c.speed < 3 && c.onKerb && G.raceT > 5 ? (slowOnKerb.get(c.code) || 0) + DT : 0;
         slowOnKerb.set(c.code, t);
         if (t > worst.t) worst = { code: c.code, t, raceT: G.raceT };
       }
     }
+    assert.ok(kerbFrames > 0, "the field rode a kerb at all (else this passes vacuously)");
     assert.ok(G.raceT > 45, `the race ran past the repro window (raceT ${G.raceT.toFixed(1)})`);
     assert.ok(worst.t < 0.75, `${worst.code} under 3 m/s on a kerb for ${worst.t.toFixed(2)} s (at raceT ${worst.raceT.toFixed(1)})`);
   } finally { h.close(); }
