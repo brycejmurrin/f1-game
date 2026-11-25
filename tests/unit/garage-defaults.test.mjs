@@ -344,7 +344,7 @@ test("setup sheet: a swap on an over-cap build is accepted only while G.unlimite
       getCustomLiveries: () => [], setCustomLiveries() {}, getLiveries: () => [], invalidateDecalTextures: null,
       teamIdx: Teams.LIST.indexOf(team), driverIdx: 0, soundOn: false, careerOwned: () => false, unlimitedBudget,
       peerSeats: () => [], teamSwatch: () => dom.document.createElement("span"),
-      setTeamPicker() {}, openCustomize() {}, livDraftOverride: null, _spMeshKey: "", setupPreviewOn: false,
+      setTeamPicker() {}, openCustomize() {}, livDraftOverride: null, setupCam: { meshKey: "" }, setupPreviewOn: false,
     };
     Object.assign(ctx, {
       document: Object.assign(Object.create(dom.document), { createTextNode: (t) => { const n = dom.document.createElement("span"); n.textContent = String(t); return n; } }),
