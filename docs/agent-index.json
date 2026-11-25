@@ -1712,6 +1712,7 @@
         "tests/unit/settings-import-safety.test.mjs",
         "tests/unit/settings-one-home.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
+        "tests/unit/settings-schema-consistency.test.mjs",
         "tests/unit/settings-search.test.mjs",
         "tests/unit/settings-tabs.test.mjs",
         "tests/unit/share-code.test.mjs",
