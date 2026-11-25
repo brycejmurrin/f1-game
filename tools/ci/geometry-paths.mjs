@@ -168,6 +168,11 @@ const HAND_TARGETED = [
   // 2026-10-09 (M36): the ratchet the suite reads. A baseline-only PR (raise or
   // lower one circuit's cap) matched no tier, so the suite that validates it ran
   // for the first time on a later unrelated geometry diff and reddened THAT one.
+  // #6569 rank 3: the corner-frame roster moved here from the floor; its shrink-only baseline is
+  // an input no fleet path names, so a baseline-only PR must still run the suite that reads it.
+  { ere: "^tests/data/corner-frames-baseline\\.json$",
+    suites: ["tests/unit/corner-frames-roster.test.mjs"],
+    why: "the shrink-only baseline the roster half of the corner-frame guard reads (a deleted or grown row is red)" },
   { ere: "^tests/data/scenery-audit-baseline\\.json$",
     suites: ["tests/unit/scenery-ground-audit.test.mjs"],
     why: "the fleet baseline tools/track/ground-audit.cjs readBaseline() loads; a stale cap 'silently permits a regression' (the suite gates every circuit, APEX_CIRCUITS-scoped)" },
