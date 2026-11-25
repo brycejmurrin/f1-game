@@ -7,11 +7,11 @@
 // Safari has two measured heights: 368 (#5218, assumed insets) and 283 (#6049, measured insets).
 // w844 is an iPhone 12–14 comparison cell. CDP emulates the safe area; display-mode stays browser.
 //
-// THE PROFILE. `live` is tests/data/settings-live-export-2026-11-10.json, his CURRENT export from the installed Home
-// Screen app (#5218): UI SIZE 70 %, BUTTON SIZE 143.25 %, HUD SIZE / button opacity unset = the defaults, resMode high,
-// textSize large, gfxPreset high, uiContrast off, per-screen looks (pause, race, select, garage, designer), custom title
-// and HUD layouts, HUD speed / gear / energy / ot / aero off. The 2026-11-09 export (UI SIZE 61, BUTTON unset) beside
-// it is history: it was `live` until #5218. `legacy` is the 2026-10-05 export
+// THE PROFILE. `live` is the NEWEST dated settings export in tests/data (settings-live-export-<YYYY-MM-DD>.json) by the date in its name
+// (`newestLiveExport`, Bryce's #6602 decision D5(a): a new export he drops in is `live` with no code edit). The
+// 2026-11-25 export (#6590) is landscape at the top level (appearanceShapes.live "wide") with the portrait shape parked
+// (appearanceShapes.park): UI SIZE unset = shipped, BUTTON SIZE 130 %, uiContrast high. Older dated exports beside it
+// are history (2026-11-10: UI SIZE 70, BUTTON 143.25; 2026-11-09: UI SIZE 61). `legacy` is the 2026-10-05 export
 // (tests/data/settings-defaults-export.json: HUD SIZE 155, BUTTON SIZE 245) that ~59 tests pin to; it no longer
 // describes his phone. `uiScale` (a percent, as the store keeps it) overrides the profile's UI SIZE.
 //
@@ -22,9 +22,25 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-/** His settings exports by name. `live` is what his phone runs today; `legacy` is the October file older tests pin to. */
+export const LIVE_EXPORT_DIR = "tests/data";
+export const LIVE_EXPORT_RE = /^settings-live-export-(\d{4})-(\d{2})-(\d{2})\.json$/;
+/** The newest dated export among `names` (bare file names), by the date in the name; null when none matches. Pure. */
+export function pickNewestLiveExport(names) {
+  const dated = names.filter((n) => LIVE_EXPORT_RE.test(n)).sort();   // YYYY-MM-DD sorts as text
+  return dated.length ? dated[dated.length - 1] : null;
+}
+/** The repo path of the newest dated settings export in tests/data (readdir, no network). */
+export function newestLiveExport(root = ROOT) {
+  const name = pickNewestLiveExport(fs.readdirSync(root + LIVE_EXPORT_DIR));
+  if (!name) throw new Error(`bryce-phone: no ${LIVE_EXPORT_DIR}/settings-live-export-YYYY-MM-DD.json`);
+  return `${LIVE_EXPORT_DIR}/${name}`;
+}
+/** His settings exports by name. `live` is the newest dated export (what his phone runs today); `legacy` is the
+ *  October file older tests pin to. */
 export const OWNER_PROFILES = Object.freeze({
-  live: "tests/data/settings-live-export-2026-11-10.json",
+  live: newestLiveExport(),
+  // The export bryce-phone-paint's ceilings were measured on; pinned until #6681 fixes the paint rises on `live` (#6646 A).
+  nov10: "tests/data/settings-live-export-2026-11-10.json",
   legacy: "tests/data/settings-defaults-export.json",
 });
 export const OWNER_EXPORT = OWNER_PROFILES.live;

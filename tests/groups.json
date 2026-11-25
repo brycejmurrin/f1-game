@@ -707,6 +707,8 @@
     "tests/unit/lighting-tuner-sweep.test.mjs",
     "// tools/perf/lit-wgsl-census.mjs: WGSL normalise/classify/hash/diff core for the lit-WGSL re-key census (#3672). < 1 s, no browser.",
     "tests/unit/lit-wgsl-census.test.mjs",
+    "// #6583: bryce-phone `live` = the newest dated settings export; that file is landscape on top, portrait parked. Pure, < 0.1 s.",
+    "tests/unit/live-export-resolver.test.mjs",
     "// GATE GAP (2026-09-10): these three garage files and the three steering",
     "// files below sat in test:garage-unit / test:steering-unit, which ran in NO",
     "// gate — not here, not ci.yml's node step, so not deploy.mjs either. Each is",

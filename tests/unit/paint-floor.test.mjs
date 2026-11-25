@@ -59,7 +59,7 @@ test("planRun: the default plan is every window × the UI SIZE axis × the seven
   assert.deepEqual(plan.windows, ["standalone", "safari", "w844"]);
   assert.deepEqual(plan.scales, [50, 70, 109]);
   assert.deepEqual(plan.screens, ["title", "select", "garage", "settings", "hud", "pause", "results"]);
-  assert.equal(plan.profile, true);
+  assert.equal(plan.profile, "nov10", "the ceilings are measured on the nov10 profile until #6681 (#6646 A)");
   assert.deepEqual(planRun(flags({ "--screens": "results,title", "--ui-scale": "61", "--window": "safari", "--profile": "legacy" })),
     { windows: ["safari"], scales: [61], screens: ["title", "results"], profile: "legacy" });
   assert.throws(() => planRun(flags({ "--window": "ipad" })), /unknown "ipad"/);
