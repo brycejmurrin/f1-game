@@ -1,0 +1,1 @@
+Improved: Your team's factory car now races the AI on equal terms. Its parts read as ×1.0 instead of up to 2.8× in cornering. A factory kit used to lap Monza about 10 % under the field. Parts above the factory ones still add pace as before, and each team keeps its own wing and ERS character.
