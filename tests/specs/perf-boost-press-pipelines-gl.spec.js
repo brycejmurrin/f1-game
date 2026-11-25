@@ -18,6 +18,10 @@
 //     (reported as an annotation): a press window that builds while its control window stays at 0 is BOOST's.
 // This file is the TLX WebGL2 leg (tlxForceGL); perf-boost-press-pipelines.spec.js is TLX on WebGPU, Bryce's path.
 // One leg per spec file: a second TLX boot in one Chromium process stalls (tools/perf/boost-press-census.mjs).
+// RUNTIME (#6669): on CI's llvmpipe this leg drew under 1 fps and its 510 live ticks hit the 900 s budget (903.7 s,
+// 905.5 s; a 652 s pass). It now draws at renderScale 0.5 with the governor's tier held, pinned before go() and
+// before the warm-up window. Same windows, same presses, same verdict: a pipeline's key never holds a target's
+// size (measureBoostPresses' note), and the pin also stops the governor stepping scale or tier inside a window.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { measureBoostPresses, boostVerdict } from "../../tools/perf/boost-press-census.mjs";
 
@@ -25,10 +29,12 @@ test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
 
 test("TLX WebGL2: BOOST presses 2..N re-mint no BOOST pipelines and add no background ones", async ({ page }, testInfo) => {
   test.setTimeout(900000);
-  const { hook, presses } = await measureBoostPresses(page, { forceGL: true, bootMs: BOOT_MS * 2,
+  const { hook, presses, pin, warmMs } = await measureBoostPresses(page, { forceGL: true, bootMs: BOOT_MS * 2, renderScale: 0.5,
     gas: (on) => (on ? page.keyboard.down("ArrowUp") : page.keyboard.up("ArrowUp")) });
   expect(hook, "three's backend must be reachable to count pipelines").toMatch(/^ok /);
   testInfo.annotations.push({ type: "backend", description: hook });
+  testInfo.annotations.push({ type: "render pin", description: JSON.stringify(pin) });
+  testInfo.annotations.push({ type: "timings", description: `warm-up ${warmMs} ms; presses ${presses.map((p) => p.ms).join(",")} ms` });
   testInfo.annotations.push({ type: "press 1", description: `${presses[0].pipelines} pipelines on the first press (first-use warm-up, #3677)` });
   testInfo.annotations.push({ type: "control windows", description: presses.map((p) => p.control).join(",") + " pipelines in the equal no-BOOST windows" });
   for (const p of presses) expect(p.deployed, `press ${p.press} never deployed ERS: the count would pass vacuously`).toBe(true);

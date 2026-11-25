@@ -47,8 +47,14 @@ export async function frames(page, n) {
 /** Boot TLX (forceGL selects three's WebGL2 backend), race monza with GAS held, and press BOOST PRESSES
  *  times, each after a control window of the same length with BOOST off. Writes artifacts/perf/.
  *  `gas(true|false)` presses / releases the throttle with a REAL input device (the spec passes
- *  page.keyboard): BOOST deploys only while GAS is held, the iPhone sequence. */
-export async function measureBoostPresses(page, { forceGL, bootMs, gas }) {
+ *  page.keyboard): BOOST deploys only while GAS is held, the iPhone sequence.
+ *  `renderScale` (0.5..1, optional) pins the internal resolution AND holds the governor's tier before go(), so
+ *  every window draws one fixed scene at a fixed cost. A software-GL runner draws under 1 fps at full scale, which
+ *  put the 510 live ticks past the 900 s budget (#6669). Safe for the count: three's render-pipeline key
+ *  (backend getRenderCacheKey) holds the material state, sample count, colour/depth FORMATS, topology and vertex
+ *  layout, never a target's SIZE, and the pin lands before the warm-up window, so no window sees it. Without
+ *  the pin the governor itself steps the scale and sheds tiers mid-run, inside the windows. */
+export async function measureBoostPresses(page, { forceGL, bootMs, gas, renderScale = 0 }) {
   await page.addInitScript((gl) => {
     try {
       localStorage.setItem("apex26.gfxBackend", "three");
@@ -65,6 +71,14 @@ export async function measureBoostPresses(page, { forceGL, bootMs, gas }) {
   await page.evaluate(() => { window.__apex.race("monza"); });
   await page.waitForFunction(() => { try { const i = window.__apex.info(); return i.track === "monza" && (i.state === "race" || i.state === "count"); } catch (_) { return false; } },
     null, { polling: 200, timeout: 300000 });
+  const pinState = () => page.evaluate(() => { const A = window.__apex, h = A.govHold();
+    return { scale: A.renderScale({ lite: true }).scale, tierHold: h.tierHold, tier: h.tier }; });
+  let pin = null;
+  if (renderScale) {
+    await page.evaluate((s) => { window.__apex.renderScale(s); window.__apex.govHold(true); }, renderScale);
+    pin = { asked: renderScale, before: await pinState() };
+  }
+  const t0 = Date.now();
   await page.evaluate(() => window.__apex.go());
   await page.waitForFunction(raceGate, null, { polling: 500, timeout: 300000 });
   await page.evaluate(() => window.__apex.setEnergy && window.__apex.setEnergy(1));
@@ -75,9 +89,9 @@ export async function measureBoostPresses(page, { forceGL, bootMs, gas }) {
   // ordinary driving (a prop or car coming into view), not BOOST, and is reported, not asserted.
   const count = () => page.evaluate(() => window.__bpp.count);
   const slice = (a, b) => page.evaluate(([x, y]) => window.__bpp.log.slice(x, y), [a, b]);
-  const presses = [];
+  const presses = [], warmMs = Date.now() - t0;
   for (let i = 1; i <= PRESSES; i++) {
-    const c0 = await count();
+    const tp = Date.now(), c0 = await count();
     await frames(page, DEPLOY_FRAMES + SPACING);
     const c1 = await count();
     await page.evaluate(() => { const A = window.__apex; if (A.setEnergy) A.setEnergy(1); A.setBoost(true); });
@@ -87,10 +101,12 @@ export async function measureBoostPresses(page, { forceGL, bootMs, gas }) {
     await page.evaluate(() => window.__apex.setBoost(false));
     await frames(page, SPACING);
     const c2 = await count();
-    presses.push({ press: i, deployed, control: c1 - c0, controlBuilt: await slice(c0, c1), pipelines: c2 - c1, built: await slice(c1, c2) });
+    presses.push({ press: i, deployed, control: c1 - c0, controlBuilt: await slice(c0, c1), pipelines: c2 - c1, built: await slice(c1, c2),
+      ms: Date.now() - tp });
   }
   await gas(false);
-  const out = { hook, forceGL, presses };
+  if (pin) pin.after = await pinState();
+  const out = { hook, forceGL, pin, warmMs, presses };
   mkdirSync("artifacts/perf", { recursive: true });
   writeFileSync(`artifacts/perf/boost-press-pipelines-${forceGL ? "gl" : "gpu"}.json`, JSON.stringify(out, null, 1));
   return out;

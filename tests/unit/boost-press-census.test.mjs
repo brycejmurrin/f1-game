@@ -82,3 +82,23 @@ test("a press made during a hold is read after physics has seen it, and every wi
     });
   } finally { process.chdir(cwd); fs.rmSync(tmp, { recursive: true, force: true }); }
 });
+
+test("renderScale pins the scale and holds the tier before go(), and reports both ends (#6669)", async () => {
+  const world = fakeGame({ heldFrames: 0 }), calls = [];
+  const A = world.win.__apex, go = A.go;
+  let scale = 1, hold = false;
+  A.renderScale = (v) => { if (typeof v === "number") { calls.push("scale"); scale = v; } return { scale }; };
+  A.govHold = (on) => { if (on !== undefined) { calls.push("hold"); hold = !!on; } return { tierHold: hold, tier: 2 }; };
+  A.go = () => { calls.push("go"); return go(); };
+  const cwd = process.cwd(), tmp = fs.mkdtempSync(path.join(os.tmpdir(), "boost-census-"));
+  process.chdir(tmp);
+  try {
+    await withGlobals(world, async () => {
+      const out = await measureBoostPresses(world.page, { forceGL: true, bootMs: 1000, renderScale: 0.5, gas: async (on) => { world.g.gas = on; } });
+      assert.deepEqual(calls, ["scale", "hold", "go"]);
+      assert.deepEqual(out.pin, { asked: 0.5, before: { scale: 0.5, tierHold: true, tier: 2 }, after: { scale: 0.5, tierHold: true, tier: 2 } });
+      assert.equal(out.presses.length, PRESSES);
+      assert.ok(out.presses.every((p) => p.ms >= 0));
+    });
+  } finally { process.chdir(cwd); fs.rmSync(tmp, { recursive: true, force: true }); }
+});
