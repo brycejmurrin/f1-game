@@ -106,6 +106,18 @@ fi
 dirty=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
 load=$(cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo "?")
 status+=("branch $branch (ahead/behind deploy tip $ab, dirty $dirty)" "loadavg $load")
+# orchestrator: a TWIN of the github-mcp-guard.sh actions_run_trigger predicate (`orch = …`) minus agent_id (no
+# payload at SessionStart); change both together:
+# APEX_ROLE=orchestrator in this process env, not as a child session unless APEX_ORCH_ENV has the env_ shape, and
+# neither key planted in a settings `env` (#5819). Anything unreadable prints "no" (#6458 item 2).
+orch=no
+if [ "${APEX_ROLE:-}" = orchestrator ] && { [ "${CLAUDE_CODE_CHILD_SESSION:-}" != 1 ] || [[ "${APEX_ORCH_ENV:-}" =~ ^env_[A-Za-z0-9]{6,}$ ]]; }; then
+  planted=$(python3 -c 'import json,os,sys
+try: print(any(k in (json.load(open(f)).get("env") or {}) for f in sys.argv[1:] if os.path.exists(f) for k in ("APEX_ROLE","APEX_ORCH_ENV")))
+except Exception: print(True)' "$ROOT/.claude/settings.json" "$ROOT/.claude/settings.local.json" "$HOME/.claude/settings.json" 2>/dev/null)
+  [ "$planted" = False ] && orch=yes
+fi
+status+=("orchestrator: $orch")
 # An open guard hatch is named at every start (it lifts protect-files / context-cap for the main session).
 for h in .claude/allow-protected .claude/allow-context-cap; do
   [ -e "$h" ] && status+=("HATCH ACTIVE: $h (remove it when the assigned edit is done)")
