@@ -328,10 +328,6 @@
     U.lampDir = uniformArray(lampDir);
     U.lampGeo = uniformArray(lampGeo);
     if (ctx.circuitSurfaces) U.silverstoneSurface = uniform(0.0);
-    // #6509 close-up surfaces (ctx.closeLayers) + track-space wear mask (ctx.wearMask): desktop ULTRA+ (tlx.js),
-    // lit by setTrackWear on a circuit whose def sets surfaceDetail. surfOn 0 = today's pixels.
-    const WEAR = !!(ctx.closeLayers || ctx.wearMask);
-    if (WEAR) { U.surfOn = uniform(0.0); U.surfLen = uniform(1.0); }
     if (ctx.brakeSpill) U.brakeSpillCount = uniform(0.0);
     if (envCubeNode && ctx.garageProbeRequested) {
       U.garageBoxOn = uniform(0.0);
@@ -1083,24 +1079,10 @@
       t.needsUpdate = true;
       return t;
     }
-    // The wear strip (TrackLine.wearMask): one fixed 2048x1 RGBA8 texture, refilled in place per circuit.
-    const WEAR_W = 2048;
-    const _wearTex = WEAR ? new THREE.DataTexture(new Uint8Array(WEAR_W * 4), WEAR_W, 1, THREE.RGBAFormat, THREE.UnsignedByteType) : null;
-    if (_wearTex) {
-      _wearTex.minFilter = _wearTex.magFilter = THREE.LinearFilter;
-      _wearTex.wrapS = THREE.RepeatWrapping; _wearTex.wrapT = THREE.ClampToEdgeWrapping;
-      _wearTex.generateMipmaps = false; _wearTex.colorSpace = THREE.NoColorSpace; _wearTex.needsUpdate = true;
-    }
-    const WEAR_NODE = _wearTex ? texGroup(texture(_wearTex)) : null;
-    // make: a thunk returning { data, width, length } or null; called only when this program draws the wear.
-    function setTrackWear(make) {
-      if (!WEAR) return false;
-      const m = typeof make === "function" ? make() : null;
-      if (!m || m.width !== WEAR_W || !m.data || m.data.length !== WEAR_W * 4) { U.surfOn.value = 0; return false; }
-      _wearTex.image.data.set(m.data); _wearTex.needsUpdate = true;
-      U.surfLen.value = m.length; U.surfOn.value = 1;
-      return true;
-    }
+    // #6509 close-up surfaces + wear mask (EXTREME closeLayers / wearMask; js/render/three/tsl-surface.js, lazy).
+    const SFN = (() => {
+      try { return (ctx.closeLayers || ctx.wearMask) && typeof TLXSurface !== "undefined" ? TLXSurface.nodes(THREE, TSL, ctx, texGroup, ctx.chunks) : null; } catch (_) { return null; }
+    })();
     function retireBakeTexture(texture, blank) {
       if (texture === blank) return;
       try { texture.dispose(); } catch (_) { /* already gone */ }
@@ -2123,57 +2105,9 @@
           });
         }
 
-        // #6509 CLOSE-UP SURFACES + WEAR MASK (Monza pilot; desktop ULTRA+, TLX only: GLX/WGX keep today's look).
-        // One tap of TrackLine.wearMask at s / lap: R line offset, G rubber, B braking, A half-width. Every term
-        // scales by matTexMix, so __apex.matTex(0) is the A/B. Render-only: nothing here reaches grip.
-        const SURF = !!(U.surfOn && trkA && !instanced);
-        const surfPix = SURF ? max(fwidth(trkA.xy), vec2(1e-4)).toVar() : null;
-        if (SURF) {
-          If(U.surfOn.greaterThan(0.5), () => {
-            const s = trkA.x, x = trkA.y, hwv = trkA.z, k = U.matTexMix;
-            const wm = WEAR_NODE.sample(vec2(s.div(U.surfLen), 0.5)).level(0).toVar();
-            const terr = floor(matA.add(0.5)).toVar();
-            const corner = clamp(wm.y.sub(0.55).mul(2.2), 0.0, 1.0).toVar();
-            If(terr.equal(16.0).and(hwv.greaterThan(0.5)).and(abs(x).lessThan(hwv)), () => {
-              if (ctx.wearMask) {
-                // Rubbered-in line (~1.1 m sigma), heavier and streaked in braking zones; marbles 2.5-4.5 m off line.
-                const d = abs(x.sub(wm.x.mul(32.0).sub(16.0))).toVar();
-                const streak = vnoise(vec2(s.mul(0.04), x.mul(2.5)));
-                const brk = wm.z.mul(exp(d.mul(d).mul(-1.4))).mul(streak.mul(0.8).add(0.4));
-                const rub = clamp(exp(d.mul(d).mul(-0.8)).mul(wm.y).mul(0.75).add(brk.mul(0.6)), 0.0, 1.0).mul(k).toVar();
-                albedo.mulAssign(float(1.0).sub(rub.mul(0.24)));
-                rough.assign(mix(rough, rough.mul(0.78), rub));
-                const marb = smoothstep(2.2, 3.2, d).mul(smoothstepDown(5.0, 3.8, d)).mul(corner);
-                const grit = smoothstep(0.5, 0.8, vnoise(wp.xz.mul(3.1))).mul(marb).mul(k).toVar();
-                albedo.assign(mix(albedo, vec3(0.06, 0.055, 0.05), grit.mul(0.35)));
-                rough.assign(mix(rough, float(0.95), grit));
-              }
-              if (ctx.closeLayers) {
-                // Aggregate: stone grain and sparse bright chips, gone once a pixel spans ~3 cm.
-                const near = smoothstepDown(0.03, 0.006, max(surfPix.x, surfPix.y)).mul(k).toVar();
-                const chip = step(0.955, hash21(floor(wp.xz.mul(42.0)))).mul(near).toVar();
-                albedo.mulAssign(vnoise(wp.xz.mul(19.0)).sub(0.5).mul(near).mul(0.16).add(1.0));
-                albedo.addAssign(vec3(chip.mul(0.07)));
-                rough.assign(mix(rough, float(0.32), chip.mul(0.7)));
-              }
-            });
-            if (ctx.closeLayers) {
-              // Kerb ribbon (hw 0): paint chips, denser at the inner lip, and tyre rubber on the lip in corners.
-              If(terr.equal(0.0).and(hwv.equal(0.0)).and(abs(x).greaterThan(2.0)), () => {
-                const lip = max(abs(x).sub(wm.w.mul(20.0)), 0.0).toVar();
-                const fade = smoothstepDown(0.65, 0.15, max(surfPix.x, surfPix.y)).mul(k);
-                const chips = smoothstep(0.62, 0.70, vnoise(vec2(s.mul(3.2), x.mul(7.0))))
-                  .mul(smoothstepDown(1.4, 0.0, lip).mul(0.6).add(0.4)).mul(fade).toVar();
-                albedo.assign(mix(albedo, vec3(0.42, 0.41, 0.39), chips.mul(0.8)));
-                const rubK = smoothstepDown(0.9, 0.0, lip).mul(corner).mul(vnoise(vec2(s.mul(0.6), lip.mul(3.0))).mul(0.7).add(0.3)).mul(k).toVar();
-                albedo.assign(mix(albedo, vec3(0.05, 0.05, 0.05), rubK.mul(0.55)));
-                rough.assign(mix(rough, float(0.85), max(chips, rubK.mul(0.5))));
-              });
-            }
-          });
-        }
-        const paintPre = SURF && ctx.closeLayers ? vec3(0.0).toVar() : null;
-        if (paintPre) paintPre.assign(albedo);
+        // #6509 (tsl-surface.js): footprint at the top level, the kerb / tarmac / wear terms, then the paint after.
+        const sf = SFN && trkA && !instanced ? SFN.begin(trkA) : null;
+        const paintPre = sf ? SFN.apply(sf, { albedo, rough, matA, wp, k: U.matTexMix }) : null;
 
         // painted road markings (js/render/glx/shaders/glsl-lit.js)
         // AFTER the material grain and the baked texture, exactly as GLX
@@ -2185,13 +2119,7 @@
           albedo.assign(packedPaint.xyz);
           rough.assign(packedPaint.w);
         }
-        // closeLayers: worn line paint, the tarmac showing through where roadMarkings lifted the albedo (close range).
-        if (paintPre) If(U.surfOn.greaterThan(0.5), () => {
-          const lift = clamp(dot(albedo.sub(paintPre), vec3(0.333)).mul(3.0), 0.0, 1.0);
-          const worn = smoothstep(0.45, 0.8, vnoise(wp.xz.mul(9.0))).mul(lift)
-            .mul(smoothstepDown(0.05, 0.01, max(surfPix.x, surfPix.y))).mul(U.matTexMix);
-          albedo.assign(mix(albedo, paintPre, worn.mul(0.45)));
-        });
+        if (sf) SFN.paint(sf, paintPre, { albedo, wp, k: U.matTexMix });
 
         // specular AA: widen roughness by the pre-material normal's
         //    screen-space variance (WGX geo+peel mix). dFdx(N) after the
@@ -3569,8 +3497,9 @@
 
     return { makeMaterial, makeViz, releaseMaterial, uniforms: U, sharedUniforms: SHARED_UNIFORMS, updateFrame, setEnvStr, setEnvCube, setLampGrid, setLampGridColors, setLampBake, setCrowdExcite,
              decalLight: { shadow: decalShadow, pool: decalPool },
-             setSsrMrt, setMaterialMaps, setTrackWear, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS,
-             detail: { matDetail: MAT_DETAIL, envAll: ENV_ALL }, carSurf: !!CSN };
+             setSsrMrt, setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS,
+             detail: { matDetail: MAT_DETAIL, envAll: ENV_ALL }, carSurf: !!CSN,
+             surface: SFN ? SFN.uniforms : null, setTrackWear: (t) => !!SFN && SFN.setTrackWear(t) };
   }
 
   // The plain-JS twin of matDetail's weight maths (mdHexGrid / mdBiW / mdVarScale above), for node tests only:

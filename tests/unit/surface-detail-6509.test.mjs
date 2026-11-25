@@ -1,7 +1,8 @@
-/* surface-detail-6509.test.mjs — #6509 items 1 + 2 (closeLayers, wearMask): the tier gate (desktop ULTRA and
- * EXTREME only; phones and HIGH and below unchanged), the Monza def flag that opts a circuit in, the wear strip
- * TrackLine.wearMask packs from the racing line, and tracks.js handing it to a backend that asks.
- * The lit-program build (off = no new uniform, on = a new branch) is in tlx-mat-detail.test.mjs.
+/* surface-detail-6509.test.mjs — #6509 items 1 + 2 (closeLayers, wearMask): the tier gate (desktop
+ * EXTREME only; phones and ULTRA and below unchanged), the Monza def flag that opts a circuit in, the wear strip
+ * TLXSurface.wearMask (js/render/three/tsl-surface.js, lazy) packs from the racing line, and tracks.js handing the
+ * built track to a backend that asks.
+ * The lit-program build (off / bundle absent = today's program, on = a new branch) is in tlx-mat-detail.test.mjs.
  *
  * Run: node --test tests/unit/surface-detail-6509.test.mjs
  */
@@ -13,6 +14,8 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
 import { seedStoreGlobal } from "../helpers/seed-store.mjs";
+import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
@@ -30,18 +33,19 @@ function boot(preset, overrides = {}) {
 }
 const NAMES = ["closeLayers", "wearMask"];
 
-test("desktop: on at ULTRA and EXTREME, off at HIGH and below", () => {
-  for (const [preset, on] of [["low", false], ["medium", false], ["high", false], ["ultra", true], ["extreme", true]]) {
+test("desktop: on at EXTREME, off at ULTRA and below", () => {
+  for (const [preset, on] of [["low", false], ["medium", false], ["high", false], ["ultra", false], ["extreme", true]]) {
     const Q = boot(preset);
     for (const n of NAMES) {
       assert.equal(Q.feature(n), on, `${n} at ${preset}`);
-      assert.equal(Q.presetRule(n), "ultra", n);
+      assert.equal(Q.presetRule(n), "extreme", n);
     }
   }
-  // The Graphics details row turns it off at ULTRA (and nothing else).
-  const Q = boot("ultra", { closeLayers: false });
+  // The Graphics details row turns one off at EXTREME (and nothing else); an EXTREME override loads the bundle.
+  const Q = boot("extreme", { closeLayers: false });
   assert.equal(Q.feature("closeLayers"), false);
   assert.equal(Q.feature("wearMask"), true);
+  assert.equal(boot("high", { wearMask: true }).needsBundle(), true, "a desktop override fetches LAZY_GFX_HI");
 });
 
 test("phones: off at every preset, and a phone override cannot turn it on", () => {
@@ -58,6 +62,13 @@ test("phones: off at every preset, and a phone override cannot turn it on", () =
 });
 
 const T = buildContext(null, { quiet: true });
+const SRC = "js/render/three/tsl-surface.js";
+const S = vm.runInNewContext(fs.readFileSync(path.join(ROOT, SRC), "utf8") + ";TLXSurface", {}, { filename: absSrc(SRC) });
+const MANIFEST = require(path.join(ROOT, "tools/manifest.cjs"));
+
+test("tsl-surface.js is in the lazy EXTREME bundle, not on the boot wall", () => {
+  assert.ok(MANIFEST.LAZY_GFX_HI.includes(SRC));   // boot-load-budget.test.mjs keeps every lazy group off the wall
+});
 
 test("Monza is the pilot: its built def carries surfaceDetail, others do not", () => {
   assert.equal(T.LIST.find((d) => d.id === "monza").surfaceDetail, true);
@@ -70,12 +81,12 @@ test("wearMask packs the racing line, rubber, braking and half-width along s", (
   let track;
   try { track = T.build(T.LIST.find((d) => d.id === "monza")); } finally { delete G.setTrackWear; }
   assert.equal(seen.length, 1);
-  assert.equal(typeof seen[0], "function", "Monza hands a thunk; nothing is built until the backend calls it");
-  const m = seen[0]();
+  assert.equal(seen[0], track, "Monza hands its built track; the strip is built only by a lit program that wants it");
+  const m = S.wearMask(track);
   assert.equal(m.width, 2048);
   assert.equal(m.data.length, 2048 * 4);
   assert.equal(m.length, track.total);
-  const L = T._vmContext.TrackLine;
+  const L = T._vmContext.TrackLine;   // the racing line the strip must carry
   let brakeTexels = 0, cornerTexels = 0;
   for (let j = 0; j < m.width; j++) {
     const s = (j + 0.5) / m.width * track.total;
@@ -90,7 +101,7 @@ test("wearMask packs the racing line, rubber, braking and half-width along s", (
   assert.ok(brakeTexels > 40, `Monza has braking zones (${brakeTexels} texels)`);
   assert.ok(cornerTexels > 40, `Monza has corner windows (${cornerTexels} texels)`);
   // No line, no strip.
-  assert.equal(L.wearMask({ n: 10, total: 100, line: null }), null);
+  assert.equal(S.wearMask({ n: 10, total: 100, line: null }), null);
 });
 
 test("a circuit without the flag hands null (the lit program turns the branch off)", () => {

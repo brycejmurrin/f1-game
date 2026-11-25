@@ -726,6 +726,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `tlx-post.js` | `TLXShaders` | DEFERRED:three | TLXShaders.postChain: the post-processing ORCHESTRATION for the TLX backend (M8). |
 | `tlx-mem.js` | `TLXShaders` | DEFERRED:three | TLXShaders.memCensus: the texture / render-target / buffer byte census for the TLX backend, the three-path answer to GLX.texCensus() (glx.js). |
 | `tlx.js` | `TLX` | DEFERRED:three | TLX: default three.js/TSL renderer behind js/render/gfx.js. |
+| `tsl-surface.js` | `TLXSurface` | LAZY_GFX_HI | TLXSurface: close-up road surfaces for the TLX lit program (#6509 items 1 + 2; GfxQuality features `closeLayers` and `wearMask`, FEATURES level 2: desktop… |
 
 **`js/agent/`**
 

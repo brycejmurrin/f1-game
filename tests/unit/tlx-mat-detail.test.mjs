@@ -13,7 +13,7 @@ import * as THREE from "../../vendor/three-0.187.0/three.webgpu.min.js";
 const read = (rel) => fs.readFileSync(new URL("../../" + rel, import.meta.url), "utf8");
 installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
-for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"])
+for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-surface.js"])
   vm.runInThisContext(read(f), { filename: absSrc(f) });
 const M = globalThis.TLXShaders.matDetailMath;
 const TLX = read("js/render/three/tlx.js");
@@ -264,28 +264,28 @@ test("Silverstone surface pilot builds in both shader languages and resets when 
   }
 });
 
-test("#6509 closeLayers / wearMask: absent = today's program; on = one branch lit only by setTrackWear", async () => {
+test("#6509 closeLayers / wearMask: off = today's program; on = one branch lit only by setTrackWear", async () => {
   for (const lang of ["wgsl", "glsl"]) {
+    await build({}, lang);   // warm-up: three orders the shared render-struct members by first registration
     const off = await build({}, lang);
     const none = await build({ closeLayers: false, wearMask: false }, lang);
     assert.equal(none.fs, off.fs, "both flags false = today's program, byte for byte");
-    assert.equal(off.lit.uniforms.surfOn, undefined);
-    let called = 0;
-    assert.equal(off.lit.setTrackWear(() => { called++; return null; }), false);
-    assert.equal(called, 0, "no branch compiled in: the strip is never built");
+    assert.equal(off.lit.surface, null);
+    assert.equal(off.lit.setTrackWear({ def: { surfaceDetail: true } }), false, "no branch compiled in");
     for (const flags of [{ closeLayers: true }, { wearMask: true }, { closeLayers: true, wearMask: true }]) {
       const on = await build(flags, lang);
       assert.notEqual(on.fs, off.fs, JSON.stringify(flags));
-      const { uniforms, setTrackWear } = on.lit;
-      assert.equal(uniforms.surfOn.value, 0, "starts off until a circuit opts in");
+      const { surface, setTrackWear } = on.lit;
+      assert.equal(surface.surfOn.value, 0, "starts off until a circuit opts in");
       const data = new Uint8Array(2048 * 4).fill(128);
-      assert.equal(setTrackWear(() => ({ data, width: 2048, length: 5793 })), true);
-      assert.equal(uniforms.surfOn.value, 1);
-      assert.equal(uniforms.surfLen.value, 5793);
+      assert.equal(setTrackWear({ data, width: 2048, length: 5793 }), true);
+      assert.equal(surface.surfOn.value, 1);
+      assert.equal(surface.surfLen.value, 5793);
       assert.equal(setTrackWear(null), false, "a circuit without surfaceDetail");
-      assert.equal(uniforms.surfOn.value, 0);
-      assert.equal(setTrackWear(() => ({ data: new Uint8Array(4), width: 1, length: 1 })), false, "wrong size is refused");
-      assert.equal(uniforms.surfOn.value, 0);
+      assert.equal(surface.surfOn.value, 0);
+      assert.equal(setTrackWear({ data: new Uint8Array(4), width: 1, length: 1 }), false, "wrong size is refused");
+      assert.equal(setTrackWear({ def: {}, n: 4, total: 40, line: new Float32Array(4) }), false, "a track without the flag");
+      assert.equal(surface.surfOn.value, 0);
     }
     const both = await build({ closeLayers: true, wearMask: true }, lang);
     const kerbOnly = await build({ closeLayers: true }, lang);

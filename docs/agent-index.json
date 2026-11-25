@@ -4648,6 +4648,11 @@
       "roster": "DEFERRED:three"
     },
     {
+      "path": "js/render/three/tsl-surface.js",
+      "global": "TLXSurface",
+      "roster": "LAZY_GFX_HI"
+    },
+    {
       "path": "js/render/three/tsl-viewport.js",
       "global": "TLXShaders",
       "roster": "DEFERRED:three"
