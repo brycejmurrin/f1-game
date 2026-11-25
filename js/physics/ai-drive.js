@@ -345,36 +345,16 @@ const AiDrive = (function () {
     return street ? 0.42 : 0.5;
   }
 
-  // Side-rub deceleration, m/s^2 — a FORCE, absolute like BRAKE (the offroad
-  // block says why a scrub rate does not ride the pace scale). Bodywork on
-  // bodywork costs little speed; wheels interlocking is the incident sim's job.
-  // It replaced a proportional 0.5 %/frame (12 m/s^2 at 40 m/s, and applied per
-  // relaxation pass, 48): the racecraft bench's alongside standoffs were pairs
-  // sitting at the throttle-vs-scrub balance that rate produced.
-  function rubDecel(street) {
-    return street ? 3.5 : 3;
-  }
-
-  // Rear-end restitution by closing speed: 0 below 1 m/s (a resting contact —
-  // Box2D's velocity threshold, so a car sitting on a bumper does not jitter
-  // off it), 0.1 from 3 m/s up (crash reconstruction's floor for real cars at
-  // speed), a ramp between. Zero to a tenth: bumps are near-inelastic.
-  function bumpRestitution(relV) {
-    const v = relV || 0;
-    if (v <= 1) return 0;
-    if (v >= 3) return 0.1;
-    return 0.1 * (v - 1) / 2;
-  }
-  // Closing speed (m/s at PACE 1) above which the player's forward punt from a
-  // rear-end stops growing. The AI behind pays its full share regardless.
-  function humanPuntCap() { return 8; }
+  // The player contact rules (rubDecel, bumpRestitution, humanPuntCap) live in
+  // contact-geometry.js beside the impulse that reads them (#6503).
 
   // SQUEEZED: in contact, ours to yield, and no room on the side away from the
   // other car. A yielder that can move away does (the planner constraint); one
   // that cannot backs OUT — its pace ceiling drops under the other car's speed
-  // until it is clear. Without this the rub being cheap (rubDecel) let AI pairs
-  // grind along a barrier for seconds (racecraft bench: prolonged-contact pairs
-  // 0 -> 4 on monaco once the scrub no longer knocked the trailing car back).
+  // until it is clear. Without this the rub being cheap (ContactGeometry.rubDecel)
+  // let AI pairs grind along a barrier for seconds (racecraft bench: prolonged-
+  // contact pairs 0 -> 4 on monaco once the scrub no longer knocked the trailing
+  // car back).
   function squeezeEase(street) {
     return street ? 0.88 : 0.9;
   }
@@ -1785,7 +1765,7 @@ const AiDrive = (function () {
     letPassCase, letPassDelay, letPassPull, letPassSide, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     digOutBudget, digOutEscalated, digOutHeld,
     edgeHead, EDGE_KEEP_M, stoppedHazard, hazardReach, hazardClear, hazardHead, hazardSide, stallStep, stallSweep, STALL_RETIRE_S, otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
-    launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, trailStep, trailYieldStep, trailYieldEase, trailYieldCorner, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
+    launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, trailStep, trailYieldStep, trailYieldEase, trailYieldCorner, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
     tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor, strategyTemper, tasteRoll, lodLab,

@@ -1079,24 +1079,6 @@ test("otWant: a blocker that is slow but PULLING AWAY is a launching car, not an
   assert.equal(A.otWant({ ...base, vTop: 30, blockerSpeed: 4, blockerAccel: 0 }), false, "4 m/s is not a crawl at half pace");
 });
 
-test("rubDecel is a small absolute deceleration, a touch firmer on streets", () => {
-  assert.equal(A.rubDecel(false), 3);
-  assert.ok(A.rubDecel(true) > A.rubDecel(false));
-  // Sanity: a second of rub at any speed costs a few m/s, not a third of it —
-  // the proportional 0.995/frame it replaced took 26 % a second (x4 per pass).
-  assert.ok(A.rubDecel(true) * 1 < 5);
-});
-
-test("bumpRestitution: resting below 1 m/s, a tenth from 3 m/s, a ramp between", () => {
-  assert.equal(A.bumpRestitution(0), 0);
-  assert.equal(A.bumpRestitution(0.9), 0);
-  assert.equal(A.bumpRestitution(2), 0.05);
-  assert.equal(A.bumpRestitution(3), 0.1);
-  assert.equal(A.bumpRestitution(30), 0.1, "never bouncier than a tenth");
-  assert.equal(A.bumpRestitution(undefined), 0);
-  assert.ok(A.humanPuntCap() >= 5 && A.humanPuntCap() <= 12, "a cap a player notices but is not launched by");
-});
-
 test("squeezeEase drops a pinned yielder under the other car's speed, more so on a street", () => {
   assert.ok(A.squeezeEase(false) < 1 && A.squeezeEase(false) >= 0.85);
   assert.ok(A.squeezeEase(true) < A.squeezeEase(false));
