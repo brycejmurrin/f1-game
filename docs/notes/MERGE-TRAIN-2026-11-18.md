@@ -148,9 +148,16 @@ open one runs CI. The change lives in `merge-train.mjs` alone; land.yml is uncha
 - **Measured** (23 trains opened in the 48 h to 2026-11-25 12:00Z): a merged train takes a median 24 min from open to
   merge, the next train opened a median 23 min later, and a merged train carried 2.6 cars. The stack takes the
   screen (~70 s a candidate) out of that gap, and a red base no longer costs a full screen cycle. The gap is left
-  waiting for the next trigger (the :17/:47 sweep or the Pages success, a median 28 min after a merge). Adding the
-  deploy-branch `push` event to the `train-screen`/`train` jobs would close most of it; that is a land.yml follow-up
-  after #6536.
+  waiting for the next trigger (the :17/:47 sweep or the Pages success, a median 28 min after a merge). The
+  land.yml follow-up below closes most of it.
+- **Push trigger (land.yml, #6584 follow-up).** `train-screen` and `train` also run on a push to the deploy branch,
+  the event `on.push` already carried for the sweep. A merged train N moves the deploy branch, so that push's run
+  promotes the stacked N+1 at once (or screens onto the new tip when nothing was stacked). It also cures #6652 nit 4:
+  when N merges between one run's screen and its build, the merge push's run queues behind that build in the
+  `land-train` job group and re-reads N's state, so no sweep cycle idles. Push runs share the `land-stale-sweep` run
+  group: the newest pending push replaces an older one, which re-reads the same state. Not on `train/**` or
+  `train-next/**`: a push event runs the pushed ref's own land.yml, which there is the fold of PR code, with
+  LAND_TOKEN. Cost: one screen (npm ci, then a skip while a train is open) per deploy-branch merge.
 
 ## Residual risks (accepted)
 

@@ -77,6 +77,8 @@ test("2. a subagent never starts a browser run, by any entry point; browser-free
     "node tools/mcp/browser-http-up.mjs", "node tools/mcp/apex-tools-mcp.mjs call apex_shot '{\"track\":\"monza\"}'",
     "node tools/mcp/apex-tools-mcp.mjs call apex_eval '{\"expr\":\"1\"}'", "/opt/pw-browsers/chromium-1243/chrome-linux64/chrome --headless",
     "chromium --headless about:blank", "APEX_X=1 npx playwright test", "bash -c 'npm test'",
+    "node tools/check/offline-precache-check.cjs", "node ./tools/check/offline-precache-check.cjs --json",
+    "node tools/check/offline-precache-check.cjs help", "node tools/check/offline-precache-check.cjs spa help",   // `help` is a circuit id there
   ];
   const nodeOnly = [
     "node tools/ci/test-bg.mjs --status", "node tools/ci/test-bg.mjs --tail smoke", "node tools/ci/test-bg.mjs --stop", "node tools/ci/verify-change.mjs --fast --json",
@@ -92,6 +94,9 @@ test("2. a subagent never starts a browser run, by any entry point; browser-free
   for (const cmd of browser) refused(cmd, /subagent never starts a browser run/, SUB);
   for (const cmd of nodeOnly) allowed(cmd, SUB);
   for (const cmd of browser.slice(0, 8)) allowed(cmd);                                   // the main session decides for itself
+  allowed("node tools/check/offline-precache-check.cjs");                                // #6544 U14: refused for a subagent only
+  allowed("node tools/check/offline-precache-check.cjs --help", SUB);
+  allowed("node tools/check/offline-precache-check.cjs spa -h", SUB);
   // agent_type alone is the session's --agent, not a subagent: only agent_id marks one
   allowed("npm test", { agent_type: "worker" });
   allowed("npm test", { transcript_path: "/root/.claude/projects/p/s/subagents/agent-abc.jsonl" });

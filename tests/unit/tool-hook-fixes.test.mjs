@@ -153,3 +153,26 @@ test("session-start.sh dry mode: names the bounded install and an open hatch, an
     assert.match(src, /timeout -k 5 120 npm ci/, "the install is bounded inside the 300 s hook");
   } finally { r.rm(); }
 });
+
+test("session-start.sh prints orchestrator: yes|no with github-mcp-guard's predicate, no when unknown (#6458 item 2)", () => {
+  const r = hookRepo("session-orch-");
+  try {
+    r.put("package.json", "{}\n"); r.put("package-lock.json", "{}\n");
+    const line = (env) => {
+      const out = spawnSync("bash", [path.join(ROOT, ".claude/hooks/session-start.sh")], { encoding: "utf8", timeout: 60000,
+        env: { ...process.env, CLAUDE_PROJECT_DIR: r.dir, HOME: r.dir, APEX_SESSION_START_DRY: "1", APEX_SKIP_SESSION_INSTALL: "",
+          APEX_ROLE: "", APEX_ORCH_ENV: "", CLAUDE_CODE_CHILD_SESSION: "", ...env } });
+      assert.equal(out.status, 0, out.stderr);
+      return (out.stdout.match(/orchestrator: (yes|no);/) || [])[1];
+    };
+    assert.equal(line({}), "no");
+    assert.equal(line({ APEX_ROLE: "orchestrator" }), "yes");
+    assert.equal(line({ APEX_ROLE: "orchestrator", CLAUDE_CODE_CHILD_SESSION: "1" }), "no", "a child needs APEX_ORCH_ENV");
+    assert.equal(line({ APEX_ROLE: "orchestrator", CLAUDE_CODE_CHILD_SESSION: "1", APEX_ORCH_ENV: "env_abc123XYZ" }), "yes");
+    assert.equal(line({ APEX_ROLE: "orchestrator", CLAUDE_CODE_CHILD_SESSION: "1", APEX_ORCH_ENV: "env_x" }), "no", "the id's shape is checked");
+    r.put(".claude/settings.json", JSON.stringify({ env: { APEX_ROLE: "orchestrator" } }));
+    assert.equal(line({ APEX_ROLE: "orchestrator" }), "no", "a key planted in a settings env is never trusted");
+    r.put(".claude/settings.json", "{not json");
+    assert.equal(line({ APEX_ROLE: "orchestrator" }), "no", "an unreadable settings file fails closed");
+  } finally { r.rm(); }
+});
