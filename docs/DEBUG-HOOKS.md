@@ -3283,6 +3283,9 @@ an external cap like iOS Low Power Mode's 30 fps `requestAnimationFrame`
 throttle instead of judging that device against a 60 fps target it cannot
 reach; see `docs/research/PLATFORM-INPUT-NOTES.md` §9c. `autoTier` / `userTier`
 split the governor's measured ladder from the GRAPHICS preset floor.
+`chaseMs` is the display interval the desktop refresh chase is cutting resolution toward (0: none: a phone, a
+pinned RESOLUTION, the 60 FPS race target, a display no faster than `floorMs`), and `chaseFutile` says this race
+gave it up (the chase floor, one buffer pixel per CSS pixel, still missed it); `docs/GOVERNOR-RATIONALE.md` §gov-43.
 
 `autoShed` is the third term and the one to read when a feature is held off:
 `autoTier` is WHERE THE LADDER STANDS, and the degrade branch steps from

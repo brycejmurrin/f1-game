@@ -842,6 +842,7 @@
     "tests/unit/pause-taps.test.mjs",
     "tests/unit/penalty-why.test.mjs",
     "tests/unit/perf-frametime.test.mjs",
+    "tests/unit/perf-governor-chase.test.mjs",
     "tests/unit/perf-governor-upper.test.mjs",
     "tests/unit/perf-governor.test.mjs",
     "// Hot-function microbench in the game VM (step, physState, nodeAt): 6x the checked-in per-call baseline, and a 4x within-run window spread.",
