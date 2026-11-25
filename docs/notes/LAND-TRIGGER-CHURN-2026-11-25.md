@@ -87,3 +87,44 @@ cancelled gate legs died before `trusted-rows` finished, so they wasted under 2 
 **Recommended next PR: P1.** It needs no change to what `gate` proves. It is measurable the same way, by `land-gate`
 runs per merge (3.75 here; P1's target is about 2). The `retry` and `train-screen` jobs already compute the inputs it
 needs.
+
+## Case: train #6382 stayed unarmed on a `gate` success (2026-11-24)
+
+The orchestrator closed train PR #6382 (cars #6334, #6335 and #6371) by hand at 00:27Z. It had a `gate` success
+from 22:52:32Z and was never armed. The tip moved 33 commits while it was open, and because only one train can be
+open at a time, it blocked every later train for about 1 h 35 min.
+
+What happened, read from the `gate` statuses on `2baca95f` and the jobs of each run:
+
+| time (Z) | run | event | result |
+|---|---|---|---|
+| 21:53:57 | 45494435931 | CI re-gate | pending `ci=WAIT` |
+| 22:18:19 | 45498158160 | — | pending: the tip moved since `3e832217`; re-gating |
+| 22:29:38 | 45499954967 | `Land retry … attempt=1` | success at tip `0f252d0b`. `arm` succeeded but found the tip moved, so `retry` dispatched attempt 2 |
+| 22:41:13 | 45501880560 | `… attempt=2` | pending: the tip moved since `ba953e7b`; re-gating |
+| 22:52:32 | 45503326628 | `… attempt=3` | success at tip `36294c33`. **`arm` failed** (job 138837647849): `non-200 OK status code: 503 Service Unavailable body: "no healthy upstream"`, then exit 1 under `set -euo pipefail` |
+
+Why nothing recovered it:
+
+1. **`arm` treats a GitHub 5xx as a hard failure.** Its `defer_if_limited` matches only `HTTP 429` and the 403
+   rate-limit form, so a 503 on one `gh api` read failed the job before it reached any skip or arm branch.
+2. **`retry` cannot run after a failed `arm`.** `retry` reads `needs.arm.outputs.retry`, and a failed job has no
+   outputs. The head was also at `attempt=3`, which is `RETRY_MAX`, so the budget was spent either way.
+3. **The sweep refused on the shared budget.** `sweep` re-gates a green, unarmed PR whose `gate` is older than the
+   tip, but at most `RETRY_MAX` times per head since CI finished. It counts the `Land retry` dispatches too. So its
+   answer was "spent the budget of 3; a push, a label flip or the next train re-gates". For a train PR the next
+   train is exactly what cannot open.
+4. **`trainDisposition` (tools/ci/merge-train.mjs) has no rule for a stuck green.** It closes a train when a car
+   moved (`stale`), when CI or the run went red or was cancelled, or when `gate === "failure"` (`red`). A `gate`
+   success that is never armed returns `{ close: false }` for as long as the train is open.
+
+### Proposals for this case (both files are protected, so these are proposals only)
+
+| # | change | where | why |
+|---|---|---|---|
+| T1 | **Close a train `stale` when it is unarmed past its gate.** The rule: `gate` is success, `auto_merge` is null and the success is older than N minutes (N = 15, about two train cycles), or the success's `tip=` is no longer the deploy tip and the head has spent `RETRY_MAX`. `stale` (not `red`) keeps the cars eligible, unbisected, for the next train. | `trainDisposition` in `tools/ci/merge-train.mjs`. It needs the gate's age and the PR's `auto_merge`, which `--build` already reads for the car rows. | With T1, #6382 closes at about 23:07Z instead of being closed by hand at 00:27Z. This is the deadlock breaker: one stuck train no longer holds every later one. |
+| T2 | **Treat a GitHub 5xx in `arm` like the rate limit.** Retry the read once after `GATE_REREAD_S`. If it still fails, exit 0 with `retry` requested rather than exit 1. | `arm` in `land.yml` (`defer_if_limited`) | A platform blip should cost one re-gate, not strand a green head. |
+| T3 | **Do not let `retry` dispatches spend the sweep's budget on a train PR.** Alternatively, have the sweep's refusal hand a train PR to T1 instead of naming "the next train". | `sweep` in `land.yml` | The refusal's own cure ("the next train re-gates") is impossible for a train. |
+
+T1 alone would have unblocked #6382. T2 removes this particular trigger. P1 above (retry only the head of the queue)
+also shortens the window: #6382 used its whole budget on two tip moves before the 503.
