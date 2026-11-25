@@ -23,6 +23,7 @@ const NetLobby = (function () {
     // The code INVITE ANOTHER stopped with guests in: CLOSE back to the room
     // reopens it, since the host was last told it is "still open" (#2197).
     let codeParked = null;
+    let codeRotateDue = false;         // a remove landed mid-handshake: the next reopen mints a NEW code (#6622)
     const mintGuestId = () => "g" + (++nextGuestId);
     let pendingId = null;
     const MAX_GUESTS = 3;
@@ -280,7 +281,7 @@ const NetLobby = (function () {
             if (rs().setNetRoom) rs().setNetRoom(true);
             // Only a CODE room rotates: a link/QR room never advertised one, and
             // minting it here left a public code up to expire later (H3-7).
-            const hadCode = !!(codeRoom || codeReopenTimer);
+            const hadCode = !!(codeRoom || codeReopenTimer || codeReopen || codeParked);
             stopCodeWait();
             dropPending();
             codeReopen = null;
@@ -324,7 +325,10 @@ const NetLobby = (function () {
             }
           }
           // A removed player must not walk back in on the code onConnected reopened.
-          if (wasHostEvict && role === "host" && !friendQualifying && !(typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace()) && (codeRoom || codeReopenTimer)) rotateRoomAfterEvict();
+          // Another guest mid-ICE (codeReopen) or a parked code: rotating now drops that handshake, so the reopen rotates.
+          if (wasHostEvict && role === "host" && !friendQualifying && !(typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace())) {
+            if (codeRoom || codeReopenTimer) rotateRoomAfterEvict(); else if (codeReopen || codeParked) codeRotateDue = true;
+          }
         }
         renderRoom(); if (qn().refreshQualiGate) qn().refreshQualiGate();
       });
@@ -374,7 +378,7 @@ const NetLobby = (function () {
       // onJoiner stamps codeReopen before waitForOpen; a failed ICE then
       // teardowns with nobody connected — leaving the string made the next
       // unrelated onConnected quietly reopen that dead room code.
-      codeReopen = null;
+      codeReopen = null; codeRotateDue = false;
       clearTimeout(codeReopenTimer); codeReopenTimer = null;
       for (const s of sessions.values()) { try { s.close(); } catch (e) { /* already gone */ } }
       sessions.clear(); session = null;
@@ -517,6 +521,7 @@ const NetLobby = (function () {
     function reopenRoom(ok) {
       const again = codeReopen;
       codeReopen = null;
+      const rotate = codeRotateDue; codeRotateDue = false;
       if (!again || !ok) return;
       const gen = operationGeneration;
       clearTimeout(codeReopenTimer);
@@ -524,6 +529,7 @@ const NetLobby = (function () {
       codeReopenTimer = setTimeout(() => {
         codeReopenTimer = null;
         if (!operationCurrent(gen)) return;
+        if (rotate) { rotateRoomAfterEvict(); return; }   // never the code the removed player holds
         codeHost({ code: again, quiet: true }).catch((e) => { Log.warn("net", "room reopen for the next guest failed:", e && e.message); });
       }, 250);
     }
@@ -535,7 +541,7 @@ const NetLobby = (function () {
       if (NetRendezvous.usingPrivateRelay && NetRendezvous.usingPrivateRelay()) return;
       stopCodeWait();
       dropPending();
-      codeReopen = null;
+      codeReopen = null; codeParked = null; codeRotateDue = false;
       clearTimeout(codeReopenTimer); codeReopenTimer = null;
       _answersSeen = null;
       const fresh = NetRendezvous.makeCode && NetRendezvous.makeCode();
@@ -1327,7 +1333,7 @@ const NetLobby = (function () {
     // race-settings exits back to the hidden #vsfriend dialog. Nobody can join a
     // race that has already started, so stop advertising one.
     function sealRoom() {
-      codeReopen = null; codeParked = null;     // no silent reopen on some later, unrelated connect
+      codeReopen = null; codeParked = null; codeRotateDue = false;     // no silent reopen on some later, unrelated connect
       clearTimeout(codeReopenTimer); codeReopenTimer = null;   // incl. one already in flight
       stopCodeWait();        // cancel the poll loop AND close the Nostr room
       dropPending();         // and the half-built invite transport it minted
@@ -1879,7 +1885,7 @@ const NetLobby = (function () {
         }
         if (!sub.ok) { say(sub.message || "Could not open that room.", true); return sub; }
         codeRoom = sub; codeRoomCode = code;
-        if (!opts.quiet) codeParked = null;   // a new code replaces a parked one
+        if (!opts.quiet) { codeParked = null; codeRotateDue = false; }   // a new code replaces a parked one
         // First publish path returned ok — safe to share the code now.
         if (!opts.quiet) {
           paintHostCode(code);
