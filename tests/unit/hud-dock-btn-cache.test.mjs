@@ -45,7 +45,7 @@ function boot({ portrait = false, extra = {} } = {}) {
   };
   Object.assign(sb, extra);
   sb.window = sb;
-  for (const f of ["js/ui/live-region.js", "js/ui/hud-minimap.js", "js/ui/hud-radio-lane.js", "js/ui/hud.js", "js/race/overtake-mode.js"]) {
+  for (const f of ["js/ui/live-region.js", "js/ui/hud-minimap.js", "js/ui/hud-radio-lane.js", "js/ui/hud-readouts.js", "js/ui/hud.js", "js/race/overtake-mode.js"]) {
     vm.runInNewContext(src(f), sb, { filename: absSrc(f) });
   }
   const $ = (id) => dom.byId(id);

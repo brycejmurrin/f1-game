@@ -611,6 +611,7 @@
     "tests/unit/hud-feel.test.mjs",
     "tests/unit/hud-metrics-layout.test.mjs",
     "tests/unit/hud-minimap-pitmark.test.mjs",
+    "tests/unit/hud-sector-pin.test.mjs",
     "// #4351 (re-land of #4613): a custom accent's --accent-ink reaches WCAG AA 4.5:1. ~0.05 s.",
     "tests/unit/hud-skin-ink.test.mjs",
     "// #3317: Hungaroring pit-straight fir-rank carve + pale 2025 pit mass (day/dry orbit@0).",
