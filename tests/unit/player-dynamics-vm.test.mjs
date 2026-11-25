@@ -20,10 +20,21 @@ import { measure, bench } from "../../tools/check/player-dyn.mjs";
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 let g = null, m = null;
+// THE NEUTRAL CAR. These are shapes of the driving MODEL, calibrated on ×1 stat mods (statMult only: the
+// AI-equivalent car). Since #6705 (Bryce's pick B) the pin seat's works McLaren keeps a grip reserve
+// (cornering ×1.66, braking ×1.39), and the fixed bench speeds and locks no longer reach its limit; the
+// bench drives the ×1 car instead, as the wheel-state storm row below already did. The reserve car's own
+// numbers are pinned in player-dynamics-shipped-vm and trail-brake-turnin.
+function neutralMods(w) {
+  const S = w.sandbox, team = w.G.player.team, st = S.Career.teamStats(team) || team.stats;
+  return { speed: S.Parts.statMult(st.speed), accel: S.Parts.statMult(st.accel),
+    cornering: S.Parts.statMult(st.cornering), braking: S.Parts.statMult(st.braking) };
+}
 before(async () => {
   // Keep the bench at its measured ground-speed scale.
   g = await createGame({ track: "monza", storage: { difficulty: "normal", autoThrottle: false, pace: 11 } });
   await g.race("monza", "day", "dry");
+  g.G.player.mods = neutralMods(g);
   m = measure(g, 0);
 });
 after(() => { if (g) g.close(); });
@@ -495,9 +506,7 @@ test("wheel state ON: over the circle the front locks and the stop gets longer",
   // seat's empty sheet is the works car, whose storm tyre reads braking 0.905 against
   // the works tyre, and that weaker pedal over-demands the front less (lock cost
   // 0.41 m vs 0.91 m here). Bryce chose x1.0 parity (A) on #6572, 2026-11-25.
-  const S = w.sandbox, team = w.G.player.team, st = S.Career.teamStats(team) || team.stats;
-  const neutral = { speed: S.Parts.statMult(st.speed), accel: S.Parts.statMult(st.accel),
-    cornering: S.Parts.statMult(st.cornering), braking: S.Parts.statMult(st.braking) };
+  const neutral = neutralMods(w);
   const setup = (P) => { P.tread = 0; P.brakeBias = 0.75; P.mods = Object.assign({}, neutral); };
   const d = {};
   for (const on of [false, true]) { set(on); d[on ? "on" : "off"] = stopFrom(w, 27.78, setup); }
@@ -541,7 +550,8 @@ test("wheel state ON: full throttle on grass spins the rear and pulls slower", (
 // Repeated heavy stops heat the discs; past the fade onset the pads deliver less, so the stop gets
 // LONGER. OFF is byte-identical (no temperature is ever written).
 test("brake thermal (#1577): repeated heavy stops heat the discs and lengthen the stop; OFF changes nothing", () => {
-  const w = dry.w, P = w.G.player;
+  const w = dry.w, P = w.G.player, mods0 = P.mods;
+  P.mods = neutralMods(w);   // the ×1 car (see neutralMods): the reserve brake has fade headroom at this stop's heat
   const set = (ws, bt) => { w.apex.setPhysics({ wheelState: ws, brakeThermal: bt }); };
   const run = (bt) => {
     set(true, bt); P.brakeTF = P.brakeTR = undefined;
@@ -559,4 +569,5 @@ test("brake thermal (#1577): repeated heavy stops heat the discs and lengthen th
   assert.equal(w.apex.setPhysics({ brakeThermal: true }).brakeThermal, true);
   assert.equal(w.apex.setPhysics({ brakeThermal: false }).brakeThermal, false);
   assert.ok("brakeTemp" in w.apex.physState());
+  P.mods = mods0;
 });

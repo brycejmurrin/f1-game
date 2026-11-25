@@ -27,6 +27,11 @@ before(async () => {
   // Keep the speed-to-steering relationship used for these measured bounds.
   g = await createGame({ track: "monza", storage: { difficulty: "normal", autoThrottle: false, pace: 11 } });
   await g.race("monza", "day", "dry");
+  // The NEUTRAL ×1 car (statMult only) these bounds were measured on: since #6705 the works car keeps a grip
+  // reserve, and 45 m/s at lock 0.8 no longer reaches its limit.
+  const S = g.sandbox, P = g.G.player, st = S.Career.teamStats(P.team) || P.team.stats;
+  P.mods = { speed: S.Parts.statMult(st.speed), accel: S.Parts.statMult(st.accel),
+    cornering: S.Parts.statMult(st.cornering), braking: S.Parts.statMult(st.braking) };
 });
 after(() => { if (g) g.close(); });
 
