@@ -73,8 +73,9 @@ export function parseRecord(message) {
   return m ? { key: m[1], dropped: Number(m[2]), base: m[3] } : null;
 }
 export function parseGuardsRecord(message) {
-  const m = /^mode=(full|changed|unknown) base=([0-9a-f]{40}|none)$/.exec(String(message || "").trim());
-  return m ? { mode: m[1], base: m[2] } : null;
+  // `tree=` since 2026-11-25 (#6557 P1); an older record has none and reads as tree "none".
+  const m = /^mode=(full|changed|unknown) base=([0-9a-f]{40}|none)(?: tree=([0-9a-f]{40}|none))?$/.exec(String(message || "").trim());
+  return m ? { mode: m[1], base: m[2], tree: m[3] || "none" } : null;
 }
 
 const strip = (name) => String(name || "").replace(/^ci \/ /, "");

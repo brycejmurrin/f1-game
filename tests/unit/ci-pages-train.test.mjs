@@ -465,10 +465,19 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     [[{ title: "apex-guards", message: "mode=unknown base=none" }], "an unknown scope"], [[], "no record at all"]])
     assert.equal(verdict(M2, { [D]: [run()] }, { FAKE_ANN: JSON.stringify({ 500: ann }) }).reuse, "false", `${why} is not a full gate`);
   // THE MERGE-REF CANDIDATE (#6557 P1). M1 = merge(C, B) has a tree neither parent has, but B's PR run tested
-  // GitHub's merge of B onto C when its guards record names base C: that IS M1's tree.
-  const onBase = (base, mode = "full") => ({ FAKE_ANN: JSON.stringify({ 500: [{ title: "apex-guards", message: `mode=${mode} base=${base}` }] }) });
+  // GitHub's merge of B onto C, and its guards record names that ref's base and tree: base C, tree = M1's tree.
+  const T1 = git("rev-parse", `${M1}^{tree}`);
+  const onBase = (base, mode = "full", tree = T1) => ({ FAKE_ANN: JSON.stringify({ 500: [{ title: "apex-guards",
+    message: `mode=${mode} base=${base}${tree === null ? "" : ` tree=${tree}`}` }] }) });
   assert.deepEqual(verdict(M1, { [B]: [run()] }, onBase(C)), { reuse: "true", source: B, run: "https://example.test/run/7" },
-    "a behind PR whose green full run merged onto exactly M1^1: the merge ref was M1's tree, reuse");
+    "a behind PR whose green full run recorded base M1^1 and M1's tree: the merge ref was these bytes, reuse");
+  assert.equal(verdict(M1, { [B]: [run()] }, onBase(C, "full", git("rev-parse", `${B}^{tree}`))).reuse, "false",
+    "the right base with another recorded tree is another tree: the gate runs");
+  assert.equal(verdict(M1, { [B]: [run()] }, onBase(C, "full", null)).reuse, "false",
+    "a record from before `tree=` existed proves no tree: the gate runs");
+  assert.equal(verdict(M1, { [B]: [run()] }, onBase(C, "full", "none")).reuse, "false", "tree=none proves nothing");
+  assert.equal(verdict(M2, { [D]: [run()] }, onBase("none", "full", null)).reuse, "true",
+    "the parent-tree candidate still reads an old record without `tree=`");
   assert.equal(verdict(M1, { [B]: [run()] }, onBase(A)).reuse, "false",
     "the same PR run on an older base tested another tree: the gate runs");
   assert.equal(verdict(M1, { [B]: [run()] }, onBase("none")).reuse, "false", "a record with no base proves no merge ref");
@@ -480,12 +489,12 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   assert.equal(verdict(M1, { [B]: [run({ id: 11, path: ".github/workflows/pages.yml", event: "workflow_dispatch" })] }, onBase(C)).reuse, "false",
     "a Pages run on B published B's tree, not M1's");
   assert.equal(verdict(M1, { [B]: [run({ conclusion: "failure" })] }, onBase(C)).reuse, "false", "a failed run on the right base is not a gate");
-  // The candidate needs the merge to reproduce: a merge commit whose tree is not merge-tree(p1, p2) (an evil merge,
-  // here M1's bytes edited after the merge) gets no merge-ref candidate at all.
+  // An evil merge (M1's bytes edited after the merge) keeps B as its second parent, but B's run recorded M1's
+  // tree, which is not the evil commit's: no reuse.
   git("checkout", "-q", "-b", "evil", M1); write("g.txt", "EVIL"); git("commit", "-q", "--amend", "-am", "M1 evil");
   const E = git("rev-parse", "HEAD");
   assert.equal(git("rev-parse", `${E}^2`), B, "fixture: the evil merge keeps B as its second parent");
-  assert.equal(verdict(E, { [B]: [run()] }, onBase(C)).reuse, "false", "a merge whose tree differs from merge-tree(p1, p2) is not reused");
+  assert.equal(verdict(E, { [B]: [run()] }, onBase(C)).reuse, "false", "a merge whose tree differs from the run's recorded tree is not reused");
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

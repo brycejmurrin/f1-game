@@ -70,17 +70,18 @@
 # tip, so the merge commit's tree matches neither parent: 103 of 117 deploys in
 # 3.5 days paid the whole gate again. A pull_request run does not test its head,
 # though; it tests GitHub's merge of the head onto the base tip of that moment,
-# and tooling A records that base (`apex-guards` ... base=<sha>, the merge ref's
-# first parent). So when this commit is a merge whose second parent's green PR
-# run recorded base == this commit's FIRST parent, and `git merge-tree` of those
-# two parents gives exactly this commit's tree, that run tested these bytes: the
-# same tree, the same workflow, and a selection over the same one first-parent
-# change pages.yml requires (it calls this script only when SHA^1 is the verified
-# publication). Only a ci.yml pull_request run counts here, with every check
-# above (first attempt, gate jobs ran, guards mode=full). Its history check is
-# skipped on purpose: the run executed on this exact tree, not on an ancestor
-# that might have had different gate inputs. A record naming any other base, a
-# merge that conflicts or gives another tree, or no record at all is no reuse.
+# and tooling A records that ref (`apex-guards` ... base=<sha> tree=<sha>: the
+# merge ref's first parent and the tree it checked out). So when this commit is a
+# merge whose second parent's green PR run recorded base == this commit's FIRST
+# parent AND tree == this commit's tree, that run tested these bytes: the same
+# tree, the same workflow, and a selection over the same one first-parent change
+# pages.yml requires (it calls this script only when SHA^1 is the verified
+# publication). The tree is read from the run's own record, never recomputed
+# here: GitHub's merge is the one that ran. Only a ci.yml pull_request run counts,
+# with every check above (first attempt, gate jobs ran, guards mode=full). Its
+# history check is skipped on purpose: the run executed on this exact tree, not
+# on an ancestor that might have had different gate inputs. A record naming any
+# other base or tree, or none (every record before 2026-11-25), is no reuse.
 #
 # Every failure of the lookup (no `gh`, an API error) is a `reuse=false`: the
 # cost of being wrong that way is one gate run, which is what happens today.
@@ -141,19 +142,20 @@ gate_ran() {
       }
     });' || true
 }
-# guards_full <job-id> [base]: prints `yes` when that tooling A job's record says it
-# ran the whole guards floor (`mode=full`) and, when a base is given, that its merge
-# ref sat on exactly that base. A missing or unreadable record is not full.
+# guards_full <job-id> [base tree]: prints `yes` when that tooling A job's record says
+# it ran the whole guards floor (`mode=full`) and, when a base and tree are given, that
+# its merge ref sat on exactly that base and checked out exactly that tree. A missing
+# or unreadable record is not full.
 guards_full() {
   local json
   json="$(gh api "repos/$REPO/check-runs/$1/annotations?per_page=100" 2>/dev/null)" || return 0
-  printf '%s' "$json" | WANT_BASE="${2:-}" node -e '
+  printf '%s' "$json" | WANT_BASE="${2:-}" WANT_TREE="${3:-}" node -e '
     let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
       let rows = []; try { rows = JSON.parse(s); } catch (_) { return; }
       const r = (Array.isArray(rows) ? rows : []).find((a) => a && a.title === "apex-guards");
-      const m = r && /^mode=full base=([0-9a-f]{40}|none)$/.exec(String(r.message || "").trim());
-      const want = process.env.WANT_BASE || "";
-      if (m && (!want || m[1] === want)) process.stdout.write("yes");
+      const m = r && /^mode=full base=([0-9a-f]{40}|none)(?: tree=([0-9a-f]{40}|none))?$/.exec(String(r.message || "").trim());
+      const want = process.env.WANT_BASE || "", wantTree = process.env.WANT_TREE || "";
+      if (m && (!want || (m[1] === want && m[2] === wantTree))) process.stdout.write("yes");
     });' || true
 }
 
@@ -171,16 +173,13 @@ for parent in "$SHA^1" "$SHA^2"; do
 done
 
 # The merge-ref candidate (see the header): this commit's second parent, whose
-# PR run may have tested merge(SHA^1, SHA^2), the very tree of this commit.
+# PR run may have tested merge(SHA^1, SHA^2), the very tree of this commit. Its
+# guards record must name base SHA^1 and tree TREE.
 P1="$(git rev-parse --verify -q "$SHA^1" 2>/dev/null)" || P1=""
 P2="$(git rev-parse --verify -q "$SHA^2" 2>/dev/null)" || P2=""
 if [ -n "$P1" ] && [ -n "$P2" ] && [ "$(tree_of "$P2")" != "$TREE" ]; then
-  if MT="$(git merge-tree --write-tree "$P1" "$P2" 2>/dev/null)" && [ "${MT%%$'\n'*}" = "$TREE" ]; then
-    say "merge-tree($P1, $P2) is $SHA's tree: $P2's PR run on base $P1 tested these bytes"
-    candidates="$candidates mergeref:$P2"
-  else
-    say "merge-tree($P1, $P2) is not $SHA's tree (or conflicts): no merge-ref candidate"
-  fi
+  say "merge-ref candidate: $P2's PR run, if its record names base $P1 and tree $TREE"
+  candidates="$candidates mergeref:$P2"
 fi
 
 for cand in $candidates; do
@@ -223,9 +222,9 @@ for cand in $candidates; do
       say "run $id ($path $event) concluded success but its gate jobs (CI, sweeps, selected verdict, smoke) did not all run and pass — not a gate"
       continue
     fi
-    if [ "$(guards_full "${ran#yes }" "$want_base")" != yes ]; then
+    if [ "$(guards_full "${ran#yes }" "$want_base" "${want_base:+$TREE}")" != yes ]; then
       if [ -n "$want_base" ]; then
-        say "run $id ($path $event): its guards record is not mode=full on base $want_base (another base, narrowed or unrecorded) — not this tree"
+        say "run $id ($path $event): its guards record is not mode=full on base $want_base and tree $TREE (another base or tree, narrowed or unrecorded) — not this tree"
       else
         say "run $id ($path $event): its guards record is not mode=full (narrowed, reused or unrecorded) — not a gate"
       fi

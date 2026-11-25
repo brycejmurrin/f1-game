@@ -27,8 +27,11 @@
 # reused, so the ready run tests the head again.
 #
 # THE RECORD. Tooling A writes one annotation, title `apex-guards`, message
-# `mode=<full|changed|unknown> base=<sha|none>`: the guards scope it ran (or the
-# scope of the draft it reused) and the base SHA its merge commit sits on.
+# `mode=<full|changed|unknown> base=<sha|none> tree=<sha|none>`: the guards scope it
+# ran (or the scope of the draft it reused), the base SHA its merge commit sits on,
+# and the tree that checkout tested (on a PR, the merge ref's; #6557 P1: the Pages
+# merge-ref reuse compares it to the deploy commit's tree). Readers accept a record
+# without `tree=` (written before 2026-11-25) as tree unknown.
 # Annotations are readable through the check-runs API (a job's id is its check
 # run id), so a later run can ask what an earlier one tested. `mode` is also a
 # step output (`guards_mode`). tools/ci/pages-reuse-verdict.sh reads the same
@@ -50,7 +53,8 @@ if [ "${1:-}" = "--record" ]; then
   mode="${SCOPE_MODE:-${REUSED_MODE:-}}"
   case "$mode" in full|changed) ;; *) mode=unknown ;; esac
   base="$(current_base)"
-  echo "::notice title=apex-guards::mode=$mode base=${base:-none}"
+  tree="$(git rev-parse --verify -q 'HEAD^{tree}' 2>/dev/null)" || tree=""
+  echo "::notice title=apex-guards::mode=$mode base=${base:-none} tree=${tree:-none}"
   [ -n "${GITHUB_OUTPUT:-}" ] && echo "guards_mode=$mode" >> "$GITHUB_OUTPUT"
   exit 0
 fi
@@ -99,7 +103,7 @@ record="$(printf '%s' "$annotations_json" | node -e '
   let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
     let rows = []; try { rows = JSON.parse(s); } catch (_) {}
     const r = (Array.isArray(rows) ? rows : []).find((a) => a && a.title === "apex-guards");
-    const m = r && /^mode=(full|changed|unknown) base=([0-9a-f]{40}|none)$/.exec(String(r.message || "").trim());
+    const m = r && /^mode=(full|changed|unknown) base=([0-9a-f]{40}|none)(?: tree=(?:[0-9a-f]{40}|none))?$/.exec(String(r.message || "").trim());
     if (m) process.stdout.write(`${m[1]} ${m[2]}`);
   });')" || record=""
 [ -n "$record" ] || no "ci.yml run $hit has no readable guards record — run the fast tier"
