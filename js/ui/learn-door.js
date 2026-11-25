@@ -168,7 +168,7 @@ const LearnDoor = (function () {
     const monza = Tracks.LIST.findIndex(def => def.id === "monza");
     if (monza < 0) return;
     const previous = {
-      track: G.trackIdx, weather: G.raceWeather, changeable: G.raceChangeable, grid: G.raceGrid,
+      flow: G.flow, session: G.session, track: G.trackIdx, weather: G.raceWeather, changeable: G.raceChangeable, grid: G.raceGrid,
       duel: G.duel, dirtyAir: G.raceDirtyAir, wind: Wind.level(), goal: G.coach.practiceGoal(),
     };
     const guide = createAeroGuide(G);
@@ -182,6 +182,8 @@ const LearnDoor = (function () {
       },
       restore() {
         guide.remove();
+        G.flow = previous.flow;   // through the setter: re-engages Career and SeasonCal for the player's own flow
+        G.session = previous.session;
         G.trackIdx = previous.track;
         G.raceWeather = previous.weather;
         G.raceChangeable = previous.changeable;
