@@ -590,6 +590,8 @@
     "// #2153: GLX resize() snaps a ±1 px present/render jitter (WGX hysteresis) so the post chain is not rebuilt (mock).",
     "tests/unit/glx-resize-hysteresis.test.mjs",
     "tests/unit/glx-resource-balance.test.mjs",
+    "// #6499: GLX vs TLX lit-pass knob fallbacks = TUNE_DEFS def (source scan), < 0.1 s.",
+    "tests/unit/glx-tlx-knob-defaults.test.mjs",
     "tests/unit/godray-keep-nearest.test.mjs",
     "tests/unit/gpu-allocation-estimator.test.mjs",
     "// PhoneRecorder (#1633): sampler cadence, JSON serializer, SHARE/COPY fallbacks. VM, < 0.5 s.",
