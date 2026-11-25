@@ -149,3 +149,39 @@ test("tsl-lit.js: every carSurf hook is a JS-time `cs` guard, and CSN is read on
   assert.ok(uses.length >= 7, `hooks found: ${uses.length}`);
   for (const l of uses) assert.match(l, /\bcs \?|if \(cs\)|CSN && !chunked && !instanced/, l.trim());
 });
+
+// #6509 item 3: the FICTIONAL sidewall text (no texture, no uniform; a packed 5x7 font).
+test("sidewall text: fictional string, every glyph in the font, packed floats exact and decoded back", () => {
+  const T = CS.K.text;
+  assert.equal(T.str, "APEX 26 · RACE SLICK", "the line is the game's own name; a change here needs a licence look");
+  assert.throws(() => M.packText("Q"), /no glyph/);
+  const { packed, ncol } = CS.text;
+  assert.equal(ncol, [...T.str].length * 6);
+  for (const v of packed) assert.ok(Number.isInteger(v) && v >= 0 && v < 2 ** 21, `${v} exact in float32`);
+  assert.ok(Math.fround(packed[0]) === packed[0]);
+  [...T.str].forEach((ch, i) => {
+    for (let r = 0; r < 7; r++) for (let c = 0; c < 6; c++) {
+      const want = c < 5 && CS.font[ch][r][c] === "#" ? 1 : 0;
+      assert.equal(M.textBit(packed, i * 6 + c, r), want, `${ch} r${r} c${c}`);
+    }
+  });
+  for (const [col, row] of [[-1, 0], [ncol, 0], [0, -1], [0, 7]]) assert.equal(M.textBit(packed, col, row), 0);
+});
+
+test("sidewall text: cells stay inside the band, read left to right on both faces, upright at the top", () => {
+  const T = CS.K.text, { ncol } = CS.text, rMid = (T.r0 + T.r1) / 2;
+  assert.ok(T.r1 < 0.34 * 0.84 && T.r0 > 0.34 * 0.68, "between the rim and the compound band (car-wheels.js radii)");
+  assert.equal(M.textCell(0, T.r1 - 0.25 * (T.r1 - T.r0) / T.rows, 1, ncol).row, -1, "the top half-row is margin");
+  assert.equal(M.textCell(0, T.r1 - 0.75 * (T.r1 - T.r0) / T.rows, 1, ncol).row, 0, "row 0 (glyph top) outermost");
+  // two repeats a turn: th and th + pi land on the same column
+  for (const th of [-2.5, -1, 0.3, 1.2]) assert.equal(M.textCell(th, rMid, 1, ncol).col, M.textCell(th + Math.PI, rMid, 1, ncol).col);
+  // +x face: reading advances as th falls; -x face: as th rises (a viewer's left to right on either side)
+  const d = 0.05, t0 = 1.2;
+  assert.ok(M.textCell(t0 - d, rMid, 1, ncol).col > M.textCell(t0, rMid, 1, ncol).col);
+  assert.ok(M.textCell(t0 + d, rMid, -1, ncol).col > M.textCell(t0, rMid, -1, ncol).col);
+  // a font pixel is about square (radial row height vs arc column width)
+  const rowH = (T.r1 - T.r0) / T.rows, colW = Math.PI * rMid / T.cols;
+  assert.ok(colW / rowH > 0.8 && colW / rowH < 1.25, `${colW} / ${rowH}`);
+  assert.ok(ncol < T.cols, "the line fits its half turn");
+  assert.ok(T.far <= 6, "close cameras only");
+});
