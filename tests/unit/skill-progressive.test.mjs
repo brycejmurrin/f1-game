@@ -313,9 +313,9 @@ test("every custom subagent declares name, description, and model", () => {
   const files = fs.readdirSync(AGENTS).filter((f) => f.endsWith(".md") && f !== "README.md");
   assert.deepEqual(files.sort(), [
     "Explore.md",
-    "ci-red-triage.md", "code-hunter.md", "deploy-research.md", "finding-verifier.md",
+    "ci-red-triage.md", "code-hunter.md", "deploy-research.md", "finding-verifier.md", "gardener.md",
     "physics-contract-auditor.md", "pr-reviewer.md", "prior-art-scout.md", "surface-reviewer.md", "track-surveyor.md", "verify-agent.md", "worker.md",
-  ], "twelve agents since 2026-11-24 (pr-reviewer: Bryce's decision A1 on PR #6377); eleven since 2026-11-03 (plan §4.6: bloat-auditor folded into code-hunter, agent-surface-reviewer re-specced as the cross-file surface-reviewer; Explore overrides the built-in; ci-watcher and merge-desk deleted 2026-10-26; release-auditor → deploy-research; worker 2026-10-15; code-hunter, finding-verifier, prior-art-scout 2026-10-14; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
+  ], "thirteen agents since 2026-11-25 (gardener: Bryce's Gardener role, PR #6451); twelve since 2026-11-24 (pr-reviewer: Bryce's decision A1 on PR #6377); eleven since 2026-11-03 (plan §4.6: bloat-auditor folded into code-hunter, agent-surface-reviewer re-specced as the cross-file surface-reviewer; Explore overrides the built-in; ci-watcher and merge-desk deleted 2026-10-26; release-auditor → deploy-research; worker 2026-10-15; code-hunter, finding-verifier, prior-art-scout 2026-10-14; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
   // Model tiering (2026-09-22; table in plan §4.6, 2026-11-03): a scan-and-report agent runs on a cheaper
   // tier; judgement stays on the session's model. Anything else is a typo.
   const TIER = {
@@ -325,6 +325,8 @@ test("every custom subagent declares name, description, and model", () => {
     "code-hunter.md": "sonnet", "finding-verifier.md": "sonnet", "prior-art-scout.md": "haiku",
     // 2026-11-24: the advisory pre-ready PR review (PR #6377 decision A1) runs on sonnet.
     "pr-reviewer.md": "sonnet",
+    // 2026-11-25: the Gardener's per-slice structure surveyor (skill gardener SURVEY) runs on sonnet, like code-hunter.
+    "gardener.md": "sonnet",
     // Writes only its scratch/**.md report, so it is not in the readonly list below — like track-surveyor.
     "surface-reviewer.md": "sonnet",
     // 2026-10-15: the all-tools implementation worker runs on the session's
@@ -427,7 +429,7 @@ test("coverage skills exist for input, season, data-hub, and AI", () => {
 
 test("readonly review agents stay --fast and never start Playwright", () => {
   for (const id of ["physics-contract-auditor", "verify-agent", "deploy-research", "ci-red-triage",
-    "code-hunter", "finding-verifier", "prior-art-scout", "pr-reviewer", "Explore"]) {
+    "code-hunter", "finding-verifier", "prior-art-scout", "pr-reviewer", "gardener", "Explore"]) {
     const file = path.join(AGENTS, `${id}.md`);
     assert.ok(fs.existsSync(file), `missing .claude/agents/${id}.md`);
     const text = fs.readFileSync(file, "utf8");
