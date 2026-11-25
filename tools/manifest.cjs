@@ -1419,6 +1419,7 @@ const LAZY_RESULTS_SHEET_EDGES = [["js/share/share-card-layout.js", "js/share/sh
 const LAZY_GFX_HI = [
   "js/render/shared/gfx-hi.js", // GfxHi: the EXTREME render / perf extras (governor upper ladder, cascades, lamp maps, light slots)
   "js/car/car-hero.js",         // CarHero: the EXTREME car detail (hero refine, modelled parts, bevels, loft UVs)
+  "js/render/three/tsl-surface.js", // TLXSurface: EXTREME close-up kerbs / tarmac / paint + wear strip (#6509), read by tsl-lit at factory time
 ];
 const LAZY_GFX_HI_EDGES = [];
 
