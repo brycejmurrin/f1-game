@@ -1322,7 +1322,7 @@ const TLX = (function () {
       // lifecycle state
       let renderScale = 1;
       // superSample (ULTRA+) / ss2x (CINEMA): renderScale may exceed 1 up to _ssCeil() (TLXAA.ssCeil: 1.5 at DPR <=
-      // 1.25, 2 while GfxQuality.cinema()). Desktop, not a software adapter. The governor steps it down like any
+      // 1.25 or at RESOLUTION MAX on any DPR (ssRetina, #6486), 2 while GfxQuality.cinema()). Desktop, not a software adapter. The governor steps it down like any
       // scale; begin() re-reads the ceiling every 32 frames (a shed or a cinema flip) and clamps or raises to it.
       const _ssOk = !isMobile && !_softAdapter && !!window.TLXAA;
       let _ssN = 0, _ssCine = false, _ssPrev = 1, _ssCineNow = false;
@@ -1333,7 +1333,7 @@ const TLX = (function () {
           const cine = _ssCineNow = !!(typeof GfxQuality !== "undefined" && GfxQuality.cinema && GfxQuality.cinema() && _gfxx("ss2x"));
           const dev = renderer.backend && renderer.backend.isWebGPUBackend && renderer.backend.device;
           return TLXAA.ssCeil({ superSample: _gfxx("superSample"), ss2x: !!cine, dpr: window.devicePixelRatio || 1,
-            presentW, presentH, maxDim: (dev && dev.limits && dev.limits.maxTextureDimension2D) || 8192 });
+            maxRes: _dprBoost > 0, deviceMemory: navigator.deviceMemory, presentW, presentH, maxDim: (dev && dev.limits && dev.limits.maxTextureDimension2D) || 8192 });
         } catch (_) { return 1; }
       }
       function _ssTick() {

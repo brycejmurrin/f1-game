@@ -112,6 +112,19 @@ test("supersample ceiling: 1.5 at DPR <= 1.25, 2 in CINEMA, capped by the device
   assert.equal(A.ssCeil({ superSample: true, dpr: 1, presentW: 9000, presentH: 9000, maxDim: 8192 }), 1, "never below 1");
 });
 
+test("supersample on Retina (#6486 F2): RESOLUTION MAX lifts the DPR rule on desktop, guarded by memory and the pixel budget", () => {
+  const mac = { superSample: true, dpr: 2, presentW: 3456, presentH: 2234, maxDim: 8192 };
+  assert.equal(A.ssCeil(mac), 1, "HIGH / AUTO on a 2x panel: unchanged, already sampled by its DPR");
+  assert.equal(A.ssCeil({ ...mac, maxRes: true }), 1.46, "MAX on the 16-inch panel: above native, capped by MAX_PX");
+  assert.equal(A.ssCeil({ ...mac, maxRes: true, deviceMemory: 8 }), 1.46, "Chrome's 8 GB report passes");
+  assert.equal(A.ssCeil({ ...mac, maxRes: true, deviceMemory: 4 }), 1, "memory guard: under 8 GB keeps the DPR rule");
+  assert.equal(A.ssCeil({ ...mac, maxRes: true, superSample: false }), 1, "superSample shed or off: no supersample at MAX");
+  assert.equal(A.ssCeil({ superSample: true, maxRes: true, dpr: 3, presentW: 2962, presentH: 1915, maxDim: 8192 }), 1.5, "175% zoom at DPR 3");
+  assert.equal(A.ssRetina({ maxRes: true }), true);
+  assert.equal(A.ssRetina({ maxRes: false }), false);
+  assert.equal(A.ssRetina({}), false);
+});
+
 test("HDR peak: only a confirmed rgba16float + extended canvas on an HDR display; SDR (1) otherwise", () => {
   const cfg = { format: "rgba16float", toneMapping: { mode: "extended" } };
   assert.equal(A.hdrPeak({ want: true, webgpu: true, displayHdr: true, config: cfg }), A.HDR_PEAK);
