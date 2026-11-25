@@ -243,6 +243,10 @@ test("the dated-record exemption and DOC_PATH_RE still see what they claim to", 
 // Source files that are ALLOWED to name a path that does not resolve, with the
 // reason. Keep this list short and justified — everything else is drift.
 const SOURCE_EXEMPT = new Map([
+  // Retired with the dispatch Action (#6536, 2026-11-25). provenance.mjs is a PROTECTED config path (merge-gate
+  // PROTECTED_CONFIG_PATH: Bryce's own config-ok), so its header comment is updated in the protected follow-up.
+  ["tools/ci/dispatch.mjs", /ci\/lib\/provenance\.mjs|docs-integrity/],
+  ["tools/ci/dispatch.json", /ci\/lib\/provenance\.mjs|docs-integrity/],
   // A forward reference: tools/gen/bake-elevation.mjs GENERATES this file, and the
   // manifest records where it would slot in. It is legitimately absent until
   // someone bakes a profile.

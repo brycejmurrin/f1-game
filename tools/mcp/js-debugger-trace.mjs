@@ -334,7 +334,10 @@ export function profileMethods() {
           await cdp.send("Profiler.start", {}, 5000);
         } else {
           await cdp.send("HeapProfiler.enable", {}, 5000);
-          await cdp.send("HeapProfiler.startSampling", { samplingInterval: Math.max(1000, interval * 32) }, 5000);
+          // Allocation sampling counts garbage too (#6505): without the two flags only the survivors of the window
+          // are reported, and a hot short-lived allocator (heap numbers, scratch arrays) never shows up.
+          await cdp.send("HeapProfiler.startSampling", { samplingInterval: Math.max(1000, interval * 32),
+            includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true }, 5000);
         }
         this.profiling = { kind, startedAt: Date.now(), intervalUs: interval };
         return {

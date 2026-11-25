@@ -48,7 +48,7 @@ the step: for CI, see [`host-watch.md`](host-watch.md) §Codex and Cursor.
 Contents, Pull requests and Workflows, each read and write; Workflows is needed to merge a PR that touches
 `.github/workflows/`). Without it the workflow falls back to `GITHUB_TOKEN`, which still lands the PR, but "events
 triggered by the GITHUB_TOKEN will not create a new workflow run": the merge starts no Pages train, and the change
-ships on the 6-hourly cron or a manual dispatch. The job summary says so when it fell back.
+ships on the daily cron or a manual dispatch. The job summary says so when it fell back.
 
 The deploy branch ruleset "Deploy-reset" (set in the GitHub UI by Bryce; since 2026-10-27 the only rule, classic
 branch protection is deleted) requires ONE check, `gate` (source: GitHub Actions). `CI` is not a GitHub-required

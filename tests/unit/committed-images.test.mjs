@@ -1,5 +1,5 @@
 // committed-images — keep screenshots from bloating every clone again.
-// Measured 2026-10-01 on full history (.github/workflows/repo-size.yml):
+// Measured 2026-10-01 on full history (the retired repo-size.yml report, #6536):
 // 1,077 MB packed, 90% of it PNG, and 780 MB of that under tests/ — almost all
 // from ONE two-day burst (2026-06-20..21) in which a lap audit committed
 // ~1,700 versions of tests/ui-screenshots/lap-audit/*.png. They were deleted

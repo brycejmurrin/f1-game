@@ -79,7 +79,8 @@ test("sector colours and glyphs match the HUD predicate", () => {
   assert.deepEqual(plain(Feed.sector(21, 20, 19)), { value: 21, tone: "yellow", glyph: "▲" });
   assert.deepEqual(plain(Feed.sector(null, 20, 19)), { value: null, tone: "", glyph: "" });
 
-  const hud = source("js/ui/hud.js");
+  // The sector painter lives in HudReadouts.sectors since the #6500 carve.
+  const hud = source("js/ui/hud-readouts.js");
   assert.match(hud, /const pb = t != null && bests && t <= bests\[i\]/);
   assert.match(hud, /const sb = pb && field && t <= field\[i\]/);
 });
