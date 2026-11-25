@@ -1189,7 +1189,7 @@ function careerFitted(teamId) {
 function getTeamParts(teamId) {
   const c = careerFitted(teamId);
   if (c) return { ...c.fitted };   // a COPY: the garage edits it, and a conflicted save must not mutate the live build (#5044)
-  return store.get("parts." + teamId, {});
+  return { ...Parts.getFactorySetup(Teams.LIST.find((t) => t.id === teamId)), ...store.get("parts." + teamId, {}) };   // unset = the works part
 }
 function saveTeamParts(teamId, parts) {
   const c = careerFitted(teamId);
@@ -1297,7 +1297,7 @@ function modsFor(team, setup, tune) {
   // with a RIVAL's declared parts to show their stats, and folding in
   // SetupTune.mods(team.id) there scored a peer's car with this player's
   // anti-roll bars whenever the two happened to share a team.
-  const mods = Parts.getMods(setup, team, tune || null);
+  const mods = Parts.playerMods(setup, team, tune || null);   // over the works build: factory = ×1.0
   return {
     speed:     Parts.statMult(stats.speed)     * mods.speed,
     accel:     Parts.statMult(stats.accel)     * mods.accel,

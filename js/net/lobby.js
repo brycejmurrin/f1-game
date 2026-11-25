@@ -140,7 +140,7 @@ const NetLobby = (function () {
       if (!team) return null;
       try {
         let parts = p.parts || Parts.getFactorySetup(team);
-        if (Parts.getCost(parts, team) > Parts.BUDGET) parts = Parts.getFactorySetup(team);
+        if (Parts.getCost(parts, team) > Parts.freeBudget(team)) parts = Parts.getFactorySetup(team);
         return G.modsFor(team, parts);
       } catch (e) { return null; }
     }

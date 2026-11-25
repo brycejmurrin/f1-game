@@ -1335,7 +1335,7 @@ palette/geometry values explicitly, preserving reference identity.
 | `liverytex.js` | `LiveryTex` | per-team livery texture atlas (canvas-2D; stylised fan-art crests, invented sponsor wordmarks, car number onto a 1024² atlas mapped by panel UVs) |
 | `livery-graphics.js` | `LiveryGraphics` | cover/fin graphic recipes; shared stripe, twin and ridge painters; atlas/cache ownership stays in `LiveryTex` |
 | `js/data/driver-ratings.js` (data dir, not `js/car/`) | `DriverRatings` | the five-axis skill table for the grid (pace / racecraft / awareness / consistency / experience), keyed by driver CODE. Feeds every AI car's `skill` in EVERY mode, not just career. Kept out of `teams.js` because that is verified real-world data and is also loaded by `tools/carview.html` |
-| `parts.js` | `Parts` | upgrade catalog — the ordered `CATALOG` categories, `getMods`, `getCost`, `statMult`, the `BUDGET` credit cap (see CAREER.md) |
+| `parts.js` | `Parts` | upgrade catalog — the ordered `CATALOG` categories, `getMods`, `playerMods` (over the works build), `getCost`, `statMult`, the `BUDGET` credit cap (see CAREER.md) |
 | `ghost.js` | `Ghost` | time-trial ghost: records the player's lap as parallel `(t, s, x)` arrays, replays the best one; pure data layer — game.js feeds samples and draws |
 | `ghost-share.js` | `GhostShare` | APXG1 fragment/file codec plus the in-memory guest rival; `#ghost=` is consumed at boot/hashchange and removed from history without writing the guest to `apex26.ghost.v1` |
 | `input-ghost.js` | `InputGhost` | deterministic local ghost: per-`FIXED_DT` steer/throttle/brake + `seed` + `PhysicsConsts.REVISION` + `__APEX_BUILD`; `apex26.inputGhost.v1`; refuses replay on version mismatch; pose Ghost remains the translucent draw |
