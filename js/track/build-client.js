@@ -240,9 +240,11 @@ const TrackBuildClient = (function () {
     _inflight++;
     try { return await mine.p; } finally { _inflight--; if (_last === mine) _last = null; }
   }
-  async function post(idx, def, opts, gfx, sceneryFile, live) {
-    if (!isLive(live)) return null;
-    if (opts && opts.retainGraph && !_graphNoted) { _graphNoted = true; Log.info("track", "build worker: scenery graph not retained (__apex.trackGraph is null)"); }
+  // Spawn (or reuse) the worker and wait for its init, at most ANSWER_MS. A worker
+  // whose init never answered is dropped. Resolves the worker when it is up and
+  // still the current one, else null: the caller builds in steps (post, previewMap).
+  // Callers re-check `worker === _w`: they resume a microtask later, after a drop() could land.
+  async function awaitWorkerReady() {
     const r = spawn();
     if (!r) return null;
     let initTimer = null, timedOut = false;
@@ -251,8 +253,14 @@ const TrackBuildClient = (function () {
     })]);
     if (initTimer != null) clearTimeout(initTimer);
     if (timedOut && _ready === r) drop("worker init gave no answer in " + ANSWER_MS / 1000 + " s");
-    if (!up || !_w || _ready !== r || !isLive(live)) return null;
-    const seq = ++_seq, worker = _w;
+    return up && _w && _ready === r ? _w : null;
+  }
+  async function post(idx, def, opts, gfx, sceneryFile, live) {
+    if (!isLive(live)) return null;
+    if (opts && opts.retainGraph && !_graphNoted) { _graphNoted = true; Log.info("track", "build worker: scenery graph not retained (__apex.trackGraph is null)"); }
+    const worker = await awaitWorkerReady();
+    if (!worker || worker !== _w || !isLive(live)) return null;
+    const seq = ++_seq;
     // { detail, detailFeatures } (js/track/scenery/detail.js, lazy); none = the worker's level 0 (no GfxQuality there).
     let det;
     try { det = TrackDetail.config(); } catch (_) { /* detail 0 */ }
@@ -466,16 +474,9 @@ const TrackBuildClient = (function () {
     if (typeof Tracks === "undefined" || !Tracks.LIST || !Tracks.adoptPreviewCenterline) return false;
     const idx = Tracks.LIST.indexOf(def);
     if (idx < 0) return false;
-    const r = spawn();
-    if (!r) return false;
-    let initTimer = null, timedOut = false;
-    const up = await Promise.race([r, new Promise((res) => {
-      if (typeof setTimeout === "function") initTimer = setTimeout(() => { timedOut = true; res(false); }, ANSWER_MS);
-    })]);
-    if (initTimer != null) clearTimeout(initTimer);
-    if (timedOut && _ready === r) drop("worker init gave no answer in " + ANSWER_MS / 1000 + " s");
-    if (!up || !_w || _ready !== r) return false;
-    const seq = ++_seq, worker = _w;
+    const worker = await awaitWorkerReady();
+    if (!worker || worker !== _w) return false;
+    const seq = ++_seq;
     const msg = await new Promise((resolve) => {
       let timer = null;
       if (typeof setTimeout === "function") timer = setTimeout(() => {

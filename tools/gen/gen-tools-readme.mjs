@@ -199,6 +199,7 @@ export const GROUPS = [
   ["transcripts", "Stream Grok Bot ReadTranscript JSONL dumps: search, export, digest (line-by-line; no SQLite / no UI)."],
   ["lib", "Shared harnesses and helpers other tools load: the browser+server harness, the two Node-VM harnesses, the output-path contract, the WebGPU flag set."],
   ["ci", "The test runner and the release pipeline: what to run, how to run it in the background, what CI selected, and the deploy."],
+  ["bridge", "The session side of the phone bridge (skill phone-bridge): read-only watchers of the bridge issue."],
   ["check", "Static guards over the source — a red exit here is a defect, not a report."],
   ["gen", "Author-time generation: the generated doc blocks, the shell, and the asset bakes."],
   ["docs", "Agent-facing generated pages: the coverage table, the hook index and the static impact map."],

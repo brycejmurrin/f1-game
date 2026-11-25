@@ -1,0 +1,21 @@
+{
+  "doc": "#6583 / #6602 D5(a): the specs that seed bryce-phone `live` (the newest dated settings export). A change to the resolver or a new dated export selects them.",
+  "pins": {
+    "tools/lib/bryce-phone.mjs": {
+      "narrow": [
+        "tests/specs/appearance-orientation.spec.js",
+        "tests/specs/bryce-phone-paint.spec.js",
+        "tests/specs/real-profile-dock.spec.js",
+        "tests/specs/settings-stepper-paint.spec.js"
+      ]
+    },
+    "tests/data/settings-live-export-*.json": {
+      "narrow": [
+        "tests/specs/appearance-orientation.spec.js",
+        "tests/specs/bryce-phone-paint.spec.js",
+        "tests/specs/real-profile-dock.spec.js",
+        "tests/specs/settings-stepper-paint.spec.js"
+      ]
+    }
+  }
+}

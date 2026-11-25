@@ -181,22 +181,34 @@ export function landRunsInFlight(pages, { selfRun = "", heads = [] } = {}) {
 }
 
 /** Which green `land` PRs are landing alone (#6528) → Map(pr → why). Armed (auto-merge on): GitHub merges it. Gate
- *  success with a land run still in flight: that run may arm it, unless `trainOpen` (a train PR or stacked ref is in
- *  flight): land.yml post then answers "waiting — train #N" and arms only a `deploy:red` fixer, so the PR stays a car
+ *  success with a land run still in flight: that run may arm it, unless `trainOpen` (a train is in flight:
+ *  trainInFlight): land.yml post then answers "waiting — train #N" and arms only a `deploy:red` fixer, so the PR stays a car
  *  (trains as default, 2026-11-25). Gate success, unarmed, no run: an ORPHAN (its arms lost to the tip, the retry
  *  budget is spent) and a train candidate, never "arms alone". Pure. */
 const FIXER_LABEL = "deploy:red"; // merge-gate FIXER_LABEL (imported lazily there, so not imported here)
-export function soloLane(landing, { gate = () => "", runs = new Map(), trainOpen = false } = {}) {
+// `tipRed` (#6686 finding 4): post exempts only the red-tip fixer (its base row passed as the fixer), so a `deploy:red`
+// label counts here only while the deploy tip is red; a stale label on a green tip boards like any car.
+export function soloLane(landing, { gate = () => "", runs = new Map(), trainOpen = false, tipRed = true } = {}) {
   const solo = new Map(), orphans = new Set();
   for (const p of landing || []) {
     const n = p?.number;
     if (p?.auto_merge) { solo.set(n, "armed: auto-merge is on (it lands alone)"); continue; }
     if (gate(p) !== "success") continue;
-    if (runs.has(n) && trainOpen && !labelNames(p.labels).includes(FIXER_LABEL)) continue;
+    if (runs.has(n) && trainOpen && !(tipRed && labelNames(p.labels).includes(FIXER_LABEL))) continue;
     if (runs.has(n)) solo.set(n, `its own gate passed and land run ${runs.get(n)} is still in flight (it may arm alone)`);
     else orphans.add(n);
   }
   return { solo, orphans };
+}
+
+/** A train in flight, as land.yml's post, retry and sweep count one (#6686 finding 4): an open, ready `train/` PR of
+ *  this repository with `train` + `land` and no `hold`. A draft, held, unlabelled or fork `train/` PR, and a
+ *  speculative stacked PR (no `land`), are not. Pure. */
+export function trainInFlight(p) {
+  const names = labelNames(p?.labels);
+  return p?.state === "open" && !p.draft && String(p.head?.ref || "").startsWith(TRAIN_PREFIX)
+    && !(p.head?.repo?.full_name && p.base?.repo?.full_name && p.head.repo.full_name !== p.base.repo.full_name)
+    && names.includes(TRAIN_LABEL) && names.includes("land") && !names.includes("hold");
 }
 
 function eligibleManifest(p, pulls) {
@@ -491,7 +503,7 @@ export function screenAccept(screen) {
 /** The screen job's accept: materialise each candidate fold in ONE throw-away worktree whose HEAD is the tip (so the
  *  pin counters judge the growth the fold adds, as the gate's own row does) and run `check` (merge-gate
  *  ratchetsOnMerge) there. Records every verdict in `out`. → { accept, cleanup }. */
-export function screenFold({ tip, cwd = ROOT, git = gitIn(cwd), check, prepare = null, out = [], now = Date.now, budgetMs = SCREEN_BUDGET_MS, fsx = fs }) {
+export function screenFold({ tip, cwd = ROOT, git = gitIn(cwd), check, prepare = null, out = [], now = Date.now, budgetMs = SCREEN_BUDGET_MS, fsx = fs, retest = null }) {
   const wt = path.join(cwd, "artifacts", "merge-train", "screen-wt");
   const started = now();
   let ready = null;
@@ -503,9 +515,12 @@ export function screenFold({ tip, cwd = ROOT, git = gitIn(cwd), check, prepare =
     try { fsx.symlinkSync(path.join(cwd, "node_modules"), path.join(wt, "node_modules")); } catch { /* exists */ }
     return "";
   };
-  const accept = ({ car, tree }) => {
+  const accept = ({ car, tree, kept = 0 }) => {
     const record = (ok, why) => { out.push({ pr: car.pr, head: car.head, ok, why: plainWhy(why) }); return { ok, why }; };
     if (now() - started > budgetMs) return { ok: false, why: "not screened (screen time budget spent)" };
+    // The car cap by retest seconds (retestBudget), before the ratchets: a car it refuses costs no screen time.
+    const rb = retest ? retest({ tree, kept }) : null;
+    if (rb && !rb.ok) return record(false, rb.why);
     if (ready === null) ready = setup();
     if (ready) return record(false, `screen: ${ready}`);
     const rt = git(["read-tree", "-u", "--reset", tree], { cwd: wt });
@@ -519,6 +534,32 @@ export function screenFold({ tip, cwd = ROOT, git = gitIn(cwd), check, prepare =
     return record(Boolean(r?.ok), r?.ok ? "" : r?.evidence || "over a ratchet");
   };
   return { accept, cleanup };
+}
+
+/* CAR CAP BY RETEST SECONDS (#6686 finding 5; #6610, #6538 and #6662 refused retest=FAIL retest-broad, ~458 s, at
+ * 18:26–18:30Z 2026-11-25). A train whose retest row refuses for breadth closes `stale` and is rebuilt from the same
+ * cars, so a fold too broad to re-test could loop. The screen now stops adding cars once the fold's own retest bound
+ * (merge-gate retestBound: the gate's own selection and committed timings, the tip side read as reaching everything)
+ * passes the gate's own refusal line (RETEST_REFUSE_MS, 336 s). No new number: the line is the gate's. The first car
+ * always rides (a 1-car train re-tests no more than that PR would alone); a refused car rides a later train. */
+
+/** The screen's retest budget for folds onto `base`: `bound(paths)` → { ms, files, how } | { error }; `limitMs` the
+ *  gate's line. Every doubt (a diff or bound that cannot be read or throws, no estimate) accepts: the train's own retest row
+ *  still measures it, as before. → ({ tree, kept }) → { ok, why?, ms? }. */
+export function retestBudget({ base, cwd = ROOT, git = gitIn(cwd), bound, limitMs, log = () => {} }) {
+  return ({ tree, kept = 0 }) => {
+    if (!kept) return { ok: true };
+    const d = git(["diff", "--name-only", base, tree]);
+    if (d.status !== 0) return { ok: true };
+    let b;
+    // A throw (an unreadable timings file, say) must not fail the screen job and stop every train (#6692 finding 4).
+    try { b = bound(String(d.stdout || "").split("\n").map((l) => l.trim()).filter(Boolean)); } catch (e) {
+      log(`  (retest bound threw: ${String(e?.message || e).split("\n")[0]}; the car is accepted and the gate's retest row still measures it)`);
+      return { ok: true, ms: null };
+    }
+    if (!b || b.error || !Number.isFinite(b.ms) || b.ms <= limitMs) return { ok: true, ms: b?.ms ?? null };
+    return { ok: false, ms: b.ms, why: `retest bound ~${Math.round(b.ms / 1000)} s with this car (${b.files.length} unit file(s), ${b.how}), over the gate's ${Math.round(limitMs / 1000)} s line: it rides a later train` };
+  };
 }
 
 // ---- live state (--plan / --build) ----------------------------------------------------------------------
@@ -583,7 +624,11 @@ export async function planTrain({ request = api, cwd = ROOT, max = TRAIN_MAX, no
       if (page === LAND_RUN_PAGES) return { error: `land runs (${st}): more than ${LAND_RUN_PAGES * 100}, refusing to judge orphans on a partial list` };
     }
   }
-  const { solo, orphans } = soloLane(landing, { gate: (p) => gateState(p.head.sha, request), runs: landRunsInFlight(pages, { selfRun: process.env.GITHUB_RUN_ID || "", heads: landing }), trainOpen: running.length > 0 || Boolean(onto) });
+  // The fixer exemption needs a red tip (soloLane `tipRed`): read only when a landing PR carries the label; an
+  // unreadable tip keeps the exemption (as before).
+  const tipRed = landing.some((p) => labelNames(p.labels).includes(FIXER_LABEL)) ? (() => { const t = readDeployTip(DEPLOY, request); return Boolean(t.error) || t.state === "code-red"; })() : false;
+  const trainOpen = open.rows.some(trainInFlight);
+  const { solo, orphans } = soloLane(landing, { gate: (p) => gateState(p.head.sha, request), runs: landRunsInFlight(pages, { selfRun: process.env.GITHUB_RUN_ID || "", heads: landing }), trainOpen, tipRed });
   const { cars: all, skipped } = carCandidates(open.rows, { exclude: hist.exclude, solo });
   const under = new Set((onto ? trainManifest(onto.body)?.cars || [] : []).map((c) => c.pr));
   const cands = all.filter((c) => !under.has(c.pr));
@@ -1092,7 +1137,7 @@ async function stackBuild({ request, cwd, log, now, max, running, screenFile, no
 
 /** `--screen`: the train-screen job. Skips (writes `{skip}`) while a train is open: the build closes it first and the
  *  next run screens. `check` defaults to merge-gate's ratchetsOnMerge, `gen` to gen:check (both run the fold's own scripts). Exit 0 with a file written, 1 on an error. */
-export async function screenMain({ out, request = api, cwd = ROOT, log = console.log, now = Date.now(), max = TRAIN_MAX, check = null, gen = null, clock = Date.now, carGate = null }) {
+export async function screenMain({ out, request = api, cwd = ROOT, log = console.log, now = Date.now(), max = TRAIN_MAX, check = null, gen = null, clock = Date.now, carGate = null, bound = null, limitMs = null }) {
   if (!out) { log(USAGE); return 1; }
   const write = (j) => { fs.mkdirSync(path.dirname(path.resolve(cwd, out)), { recursive: true }); fs.writeFileSync(path.resolve(cwd, out), `${JSON.stringify(j)}\n`); };
   const open = listPulls(request, "open");
@@ -1115,7 +1160,10 @@ export async function screenMain({ out, request = api, cwd = ROOT, log = console
   } : null);
   const verdicts = [];
   let sf = null;
-  const plan = await planTrain({ request, cwd, max, now, log, onto, carGate, acceptFor: (tip) => (sf = screenFold({ tip, cwd, check: ratchets, prepare, out: verdicts, now: clock })).accept });
+  const boundOf = bound || (gate ? (p) => gate.retestBound(p) : null);
+  const line = limitMs ?? gate?.RETEST_REFUSE_MS ?? null;
+  const retestFor = (tip) => (boundOf && Number.isFinite(line) ? retestBudget({ base: tip, cwd, bound: boundOf, limitMs: line, log }) : null);
+  const plan = await planTrain({ request, cwd, max, now, log, onto, carGate, acceptFor: (tip) => (sf = screenFold({ tip, cwd, check: ratchets, prepare, out: verdicts, now: clock, retest: retestFor(tip) })).accept });
   sf?.cleanup();
   if (plan.error) { log(`= merge-train error — ${plan.error}`); return 1; }
   write({ tip: plan.base, ...(onto ? { stack: { pr: onto.number, head: plan.base } } : {}), cars: verdicts });

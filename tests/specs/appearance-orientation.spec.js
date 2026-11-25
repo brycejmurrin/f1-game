@@ -1,5 +1,5 @@
 // #4529 part 1, the device-safe check the issue asks for before landing: Bryce's phone (tools/lib/bryce-phone.mjs,
-// standalone 852x393 + insets) seeded with his 2026-11-10 export. The reverted #4897 (#5143: "UI squished, zoom
+// standalone 852x393 + insets) seeded with his live export (bryce-phone `live`, the newest dated one). The reverted #4897 (#5143: "UI squished, zoom
 // remapped") swapped sizes on a stale boot shape and was SEPARATE by default.
 //   1. SHARED (shipped): a rotation, and a launch that reads the portrait pair before landscape, change no stored
 //      key and no painted size (--ui-scale, --hud-btn-scale).
@@ -25,8 +25,8 @@ function stateInPage() {
 /** Past AppearanceStudio's SHAPE_SETTLE_MS (2000) since the last shape answer, with margin. */
 const settled = (page) => page.waitForFunction(() => performance.now() - window.__shapeAt > 2600, null, { polling: 100, timeout: 15000 });
 
-async function boot(browser, baseURL, { extra = null, first = "standalone" } = {}) {
-  const { context, page, cdp } = await openBrycePhone(browser, { window: first, dpr: 1 });
+async function boot(browser, baseURL, { extra = null, first = "standalone", profile = true } = {}) {
+  const { context, page, cdp } = await openBrycePhone(browser, { window: first, dpr: 1, profile });
   await context.addInitScript((e) => {
     window.__TEST_MODE = true;
     try { localStorage.setItem("apex26.gfxBackend", "webgl2"); if (e) for (const [k, v] of Object.entries(e)) localStorage.setItem(k, v); } catch (_) { /* read-back fails loudly */ }
@@ -44,9 +44,11 @@ async function boot(browser, baseURL, { extra = null, first = "standalone" } = {
 test.describe("PORTRAIT & LANDSCAPE on Bryce's phone (#4529)", () => {
   test.setTimeout(180000);
 
+  // SHARED needs a profile with no appearanceShapes key: the 2026-11-10 export (bryce-phone `nov10`). His 2026-11-25
+  // export (`live`) stores SEPARATE mode, which the SEPARATE test below covers (#6646).
   test("SHARED: a rotation and a stale portrait launch change no stored key and no painted size", async ({ browser, baseURL }) => {
     let before;
-    const { context, page, cdp } = await boot(browser, baseURL);
+    const { context, page, cdp } = await boot(browser, baseURL, { profile: "nov10" });
     try {
       await settled(page);
       before = await page.evaluate(stateInPage);
@@ -64,7 +66,7 @@ test.describe("PORTRAIT & LANDSCAPE on Bryce's phone (#4529)", () => {
     } finally { await context.close(); }
 
     // A Home-Screen launch that reports the portrait pair first, then lays out landscape.
-    const stale = await boot(browser, baseURL, { first: "portrait" });
+    const stale = await boot(browser, baseURL, { first: "portrait", profile: "nov10" });
     try {
       await rotateIPhone15(stale.page, stale.cdp, "standalone");
       await stale.page.waitForFunction(() => document.body.dataset.shape === "wide", null, { polling: 100, timeout: 10000 });

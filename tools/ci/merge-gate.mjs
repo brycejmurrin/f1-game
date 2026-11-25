@@ -797,6 +797,9 @@ export function ratchetsOnMerge({ cwd = ROOT, run = spawnSync } = {}) {
 export const RETEST_MARGIN_MIN = 15;
 /** Cap on one re-test (the land-gate job is 20 min with gen:check and the ratchets): a timeout refuses. */
 export const RETEST_TIMEOUT_MS = 420_000;
+/** The estimate line the retest row refuses at for breadth (80% of RETEST_TIMEOUT_MS: the measured timings are a
+ *  median, a runner is slower); merge-train's screen caps a train's cars by the same line (retestBound). */
+export const RETEST_REFUSE_MS = RETEST_TIMEOUT_MS * 0.8;
 const UNIT_TEST = /^tests\/unit\/.+\.test\.mjs$/;
 /** Workers for the re-test (a land-gate runner has 4 vCPU, gen:check and the ratchets already ran; the committed
  *  timings the estimate reads were recorded at 4 workers). 2 until #5597: the 56 files both sides of #5568 × #5566
@@ -904,6 +907,19 @@ export function retestPlan({ newer = [], pr = [], selection, sides = {}, exists 
   return { files, how: `the unit files both sides select (tooling-fast's --changed selection: newer tip ${count(n)}, the PR ${count(p)}) and the touched tests/unit files` };
 }
 
+/**
+ * The most a fold's own `paths` can make the retest row run (#6686 finding 5): retestPlan with the tip side read as
+ * reaching every file (the tip merges after the fold's CI are not known when it is built), so the plan is the PR
+ * side's own selection, or only the touched tests/unit files when that selection widens. The gate's own selection
+ * and timings (gateSelection, gateEstimate). → { ms, files, how } (ms null when unreadable) | { error }.
+ */
+export function retestBound(paths, { select = gateSelection, estimate = gateEstimate, exists = () => true } = {}) {
+  const sel = select([...new Set(paths || [])].sort());
+  if (sel?.error) return { error: sel.error };
+  const plan = retestPlan({ pr: paths || [], selection: sel, sides: { newer: { widened: "the tip side, unknown at fold time" }, pr: sel }, exists });
+  return { ms: plan.files.length ? estimate(plan.files) : 0, files: plan.files, how: plan.how };
+}
+
 /** A retest refused for breadth alone (#6667): merge-train closes a train `stale` on it, not red (rowLines' RETEST_BROAD). */
 const broadRow = (evidence) => ({ ...row(false, evidence), broad: true });
 
@@ -960,7 +976,7 @@ export function retestOnMerge({ cwd, tip, head, ciAt, ciBase = "", ciTree = "", 
   // Too broad to finish inside the cap (tooling-fast's measured timings): refuse now instead of burning the runner
   // into the same refusal. The cure is the one a timeout gets: sync, push, and the fresh CI run tests the combination.
   const estMs = sel?.widened ? null : estimate(plan.files);
-  if (Number.isFinite(estMs) && estMs > RETEST_TIMEOUT_MS * 0.8) {
+  if (Number.isFinite(estMs) && estMs > RETEST_REFUSE_MS) {
     return broadRow(`${since}; the re-test would run ${plan.files.length} unit file(s) (${plan.how}), measured ~${Math.round(estMs / 1000)} s at --jobs=${RETEST_JOBS}, over the ${RETEST_TIMEOUT_MS / 1000} s cap — too broad to re-test at merge: sync-pr.mjs and push, so a fresh CI run tests this combination`);
   }
   const env = untrustedEnv();
