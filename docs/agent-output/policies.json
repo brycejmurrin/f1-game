@@ -2221,6 +2221,11 @@
       "presentation": "native",
       "preserve": "Per-row `= row <name> <verdict>` lines, the final `= live-render-matrix` summary and the checkpointed --json report."
     },
+    "tools/perf/lod-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Exact per-channel triangle, instance and batch counts per circuit x detail; the --json schema and the --write data file."
+    },
     "tools/perf/mesh-census-lib.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
