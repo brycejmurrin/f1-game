@@ -470,6 +470,16 @@ test("#6528: a green, unarmed land PR with no land run in flight is an orphan an
   assert.deepEqual(r.skipped, [...solo].map(([pr, why]) => ({ pr, why })), "only the armed and the mid-arm PR are left out");
 });
 
+test("trains as default (2026-11-25): with a train open, a mid-arm green PR stays a car (its run only waits); a deploy:red fixer and an armed PR stay solo", () => {
+  const landing = [pull(52), pull(54, { labels: [{ name: "land" }, { name: "deploy:red" }] }), pull(55, { auto_merge: { merge_method: "merge" } })];
+  const runs = new Map([[52, 777], [54, 778]]);
+  const { solo, orphans } = soloLane(landing, { gate: () => "success", runs, trainOpen: true });
+  assert.deepEqual([...solo.keys()], [54, 55], "#52's land run answers 'waiting — train #N', so it cannot arm alone");
+  assert.deepEqual([...orphans], [], "a mid-arm PR is a car, not an orphan (the 1-car train rule is unchanged)");
+  assert.deepEqual(carCandidates(landing, { solo }).cars.map((c) => c.pr), [52]);
+  assert.deepEqual([...soloLane(landing, { gate: () => "success", runs }).solo.keys()], [52, 54, 55], "no train open: today's lane");
+});
+
 test("#6528: landRunsInFlight names a PR's queued/running land runs, never a deploy-branch run or the builder's own", () => {
   const pages = [{ workflow_runs: [
     { id: 1, status: "in_progress", pull_requests: [{ number: 6527 }], display_title: "Gardener carve 7" },

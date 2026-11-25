@@ -1188,6 +1188,7 @@ function runStep(script, env, files = {}) {
     `      if [[ " \${args[*]} " == *" --paginate "* ]] && [ -n "\${FAKE_ARM_BOARD_PAGE2:-}" ]; then echo "$data"; data=$FAKE_ARM_BOARD_PAGE2; fi;`,
     `      if [ "\${GH_QUEUE_FAILURE:-}" = list ]; then echo "$data"; echo "page 2: HTTP 403" >&2; return 31; fi ;;`,
     `    *"/compare/"*) data=\${FAKE_ARM_COMPARE:-null} ;;`,
+    `    *"/git/matching-refs/"*) data=\${FAKE_STACKS:-[]} ;;`,
     `    *" api graphql "*) [ "\${GH_QUEUE_FAILURE:-}" != checks ] || { echo "\${GH_WRAPPER_ERROR:-Bad Gateway (HTTP 502)}" >&2; return 31; }; data=\${FAKE_WRAPPER_CHECKS:-null} ;;`,
         `    *"/statuses"*) [ "\${GH_DISCOVERY_FAILURE:-}" != status ] || return 31; src=\${FAKE_STATUSES:-[]}; if [ -n "\${FAKE_STATUSES_AFTER+x}" ] && [ "$(grep -c '/statuses' "$GH_LOG")" -gt "\${FAKE_STATUSES_READS:-1}" ]; then src=$FAKE_STATUSES_AFTER; fi;`,
         `      data=$(jq -c --arg h "$(sed -n 's#.*commits/\\([0-9a-f]*\\)/statuses.*#\\1#p' <<<"\${args[*]}")" 'if type == "object" then (.[$h] // []) else . end' <<<"$src") ;;`,
@@ -3339,3 +3340,81 @@ test("D-045 retest: a credited head is never skipped, and a red re-test refuses"
     assert.deepEqual([empty.ok, empty.kind], [false, "nothing"], empty.evidence);
   } finally { fs.rmSync(T, { recursive: true, force: true }); }
 });
+
+// ---- trains as default (Bryce 2026-11-25 ~18:28Z): train #6671 re-gated 3× in 15 min, never arming, while solo merges
+// kept moving the tip. While a train is in flight a passing non-train PR waits (pending) and boards the next train.
+const trainPR = (o = {}) => ({ number: 6671, state: "open", draft: false, head: { sha: TIP_B, ref: "train/20261125-1734", repo: { full_name: "o/r" } },
+  labels: [{ name: "land" }, { name: "train" }], ...o });
+
+test("land.yml post (trains as default): a passing PR waits pending for the open train, no arm and no retry; exemptions arm", () => {
+  const { env, files } = postFixture();
+  const post = LAND.jobs.post.steps.find(s => s.id === "post");
+  const go = (extra = {}, e = env) => runStep(post.run, { ...e, ...extra }, files);
+  const posted = (r) => r.calls.filter((c) => c.startsWith("body ")).map((c) => JSON.parse(c.slice(5)));
+  let r = go({ FAKE_ARM_BOARD: JSON.stringify([trainPR()]) });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(posted(r).map((b) => [b.state, b.description]), [["pending", "= merge-gate waiting — train #6671 in flight; this PR boards the next train"]]);
+  assert.equal(r.out.arm, "", "not armed: it is the next train's car");
+  assert.equal(r.out.retry, "[]", "no immediate re-gate: the train's merge or close re-gates it");
+  r = go({ FAKE_STACKS: JSON.stringify([{ ref: "refs/heads/train-next/abc-6531-6532" }]) });
+  assert.equal(posted(r)[0].description, "= merge-gate waiting — a stacked train (train-next/abc-6531-6532) in flight; this PR boards the next train", "a stacked train-next/ ref is a train in flight");
+  assert.equal(r.out.arm, "");
+  // Exemptions and non-trains: each arms exactly as before.
+  const armed = (x, why) => { assert.equal(x.status, 0, x.stderr); assert.equal(posted(x)[0]?.state, "success", why); assert.ok(x.out.arm, why); };
+  armed(go({ FAKE_ARM_BOARD: "[]" }), "no train open: today's lane (a lone orphan still lands alone)");
+  armed(go({ FAKE_ARM_BOARD: "not json" }), "an unreadable train list waits nothing; arm re-checks the queue");
+  armed(go({ FAKE_ARM_BOARD: JSON.stringify([trainPR(), { ...trainPR({ number: 7 }) }]), FAKE_PR: pr7({ head: { sha: HEAD7, ref: "train/20261125-1800" } }) }), "the train PR itself");
+  const fixer = { ...env, TRUSTED: JSON.stringify([{ ...JSON.parse(env.TRUSTED)[0], fixer: true }]) };
+  armed(go({ FAKE_ARM_BOARD: JSON.stringify([trainPR()]) }, fixer), "the red-tip fixer (trusted-rows fixer) still goes solo");
+  for (const [why, t] of [["held train", trainPR({ labels: [{ name: "land" }, { name: "train" }, { name: "hold" }] })], ["draft train", trainPR({ draft: true })],
+    ["train without `land`", trainPR({ labels: [{ name: "train" }] })], ["a fork's train/ ref", trainPR({ head: { sha: TIP_B, ref: "train/x", repo: { full_name: "fork/r" } } })],
+    ["a train/ ref without the `train` label", trainPR({ labels: [{ name: "land" }] })]]) armed(go({ FAKE_ARM_BOARD: JSON.stringify([t]) }), why);
+});
+
+test("land.yml trusted-rows (trains as default): `fixer` is true only when the base row passed as the red-tip fixer", () => {
+  const run = LAND.jobs["trusted-rows"].steps.find(s => s.id === "rows").run;
+  const go = (base) => {
+    const out = [`= gate base: ok ${base}`, `= merge-gate passed — open=ok base=ok pr=#7 sha=${HEAD7} tip=${TIP_A}`].join("\n");
+    const r = runStep(`node() { printf '%s\\n' "$FAKE_NODE_OUT"; }\n${run}`, { PRS: JSON.stringify([{ number: 7, head: HEAD7 }]), VALIDATED_TIP: "", FAKE_NODE_OUT: out });
+    assert.equal(r.status, 0, r.stderr);
+    return JSON.parse(r.out.rows)[0].fixer;
+  };
+  assert.equal(go("the deploy tip is green on code"), false);
+  assert.equal(go("tip red on code at bbbbbbbb; `deploy:red` is set and this head contains the red commit bbbbbbbb: its CI ran on top of the red tip, so the ci row is the proof (the fixer)"), true);
+  assert.equal(go("tip red; `priority` added by brycejmurrin in person at 2026-11-25T18:00:00Z: this PR may land over the red tip (the fixer)"), true);
+});
+
+test("land.yml retry (trains as default): no solo re-gate is dispatched while a train is open; trains and deploy:red still are", () => {
+  const run = LAND.jobs.retry.steps[0].run;
+  const node = (number, o = {}) => ({ number, isDraft: false, createdAt: "2026-11-25T18:00:00Z", headRefName: o.ref || `claude/x-${number}`, autoMergeRequest: null,
+    labels: { nodes: [{ name: "land" }, ...(o.labels || [])] }, commits: { nodes: [{ commit: { status: null } }] } });
+  const train = node(6671, { ref: "train/20261125-1734", labels: [{ name: "train" }] });
+  const queue = (...nodes) => JSON.stringify({ data: { repository: { pullRequests: { nodes } } } });
+  const go = (asked, q) => runStep(run, { ATTEMPT: "0", POST_RETRY: JSON.stringify(asked.map((n) => ({ number: n, head: HEAD7 }))), ARM_RETRY: "", FAKE_WRAPPER_CHECKS: q });
+  const sent = (r) => r.calls.filter((c) => c.includes("--method POST")).map((c) => Number(/inputs\[pr\]=(\d+)/.exec(c)[1]));
+  let r = go([7], queue(train, node(7)));
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(sent(r), [], "#7 would only wait for train #6671");
+  assert.deepEqual(r.summary.split("\n").filter(Boolean), ["::notice::#7: a train is in flight; this PR boards the next train, so no solo re-gate is dispatched"]);
+  assert.deepEqual(sent(go([7, 6671], queue(train, node(7)))), [6671], "the train itself is re-gated");
+  assert.deepEqual(sent(go([8], queue(train, node(8, { labels: [{ name: "deploy:red" }] })))), [8], "a deploy:red fixer is re-gated");
+  assert.deepEqual(sent(go([7], queue(node(7)))), [7], "no train open: as before");
+  assert.deepEqual(sent(go([7], queue({ ...train, labels: { nodes: [{ name: "land" }, { name: "train" }, { name: "hold" }] } }, node(7)))), [7], "a held train is not in flight");
+});
+
+test("land.yml sweep (trains as default): a PR waiting on the open train is not re-gated; once no train is open it is", () => {
+  const sweep = LAND.jobs.sweep.steps.find((st) => st.name.startsWith("Re-gate the land PRs")).run;
+  const h = "1".repeat(40);
+  const car = { number: 7, headRefOid: h, headRefName: "claude/x", isDraft: false, labels: [{ name: "land" }], autoMergeRequest: null };
+  const train = { number: 6671, headRefOid: "2".repeat(40), headRefName: "train/20261125-1734", isDraft: false, labels: [{ name: "land" }, { name: "train" }], autoMergeRequest: null };
+  const waiting = JSON.stringify({ [h]: [{ context: "gate", state: "pending", created_at: "2026-01-01T01:00:00Z", description: "= merge-gate waiting — train #6671 in flight; this PR boards the next train" }] });
+  const sw = (lands) => runStep(sweep, { FAKE_LANDS: JSON.stringify(lands), STALE_MAX: "4", FAKE_STATUSES: waiting,
+    FAKE_RUNS: JSON.stringify({ workflow_runs: [{ status: "completed", conclusion: "success", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:30:00Z" }] }) });
+  const sent = (r) => r.calls.filter((c) => c.includes("land.yml/dispatches")).map((c) => Number(/inputs\[pr\]=(\d+)/.exec(c)[1]));
+  let r = sw([car, train]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(sent(r).includes(7), false, "#7 waits for train #6671: no sweep churn");
+  assert.deepEqual(r.stdout.split("\n").filter((l) => l.startsWith("#7:")), ["#7: waits for the train in flight (boards the next one)"]);
+  assert.deepEqual(sent(sw([car])), [7], "the train is gone (merged or closed): the stale pending is re-gated");
+});
+
