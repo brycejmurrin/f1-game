@@ -15,11 +15,12 @@ import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, CONFIG_LABEL, ROWS, openVerdict, holdVerdict, configVerdict, planRow, ciVerdict, isConfigPath,
   configFiles, filePaths, configPushState, isProtectedConfigPath, configLabelKind, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, ciRetryVerdict, generatedPkgVerdict, retestOnMerge, retestPlan, gateEstimate, RETEST_JOBS, RETEST_FILE_TIMEOUT_S, RETEST_TIMEOUT_MS, newerTipPaths, ciRecordedBase, RETEST_MARGIN_MIN, LOCAL_ROWS, RAISE_LABEL, treeCeilingsAt, prRaisesAt, treeRaises, raiseVerdict, raisesCovered,
-  baseVerdict, BASE_ESCAPE_LABELS, FIXER_LABEL, fixerProof, cleanTipSync, creditPriorCi, CREDIT_CHAIN_MAX,
+  baseVerdict, BASE_ESCAPE_LABELS, FIXER_LABEL, fixerProof, cleanTipSync, creditPriorCi, CREDIT_CHAIN_MAX, ciRecord, sameMergeTree,
 } from "../../tools/ci/merge-gate.mjs";
 import { tipState, codeRedJobs, platformStepFailed, readDeployTip, PLATFORM_STEP as TIP_PLATFORM_STEP } from "../../tools/ci/lib/deploy-tip.mjs";
 import { parse as parseYAML } from "yaml";
 import { planHash } from "../../tools/ci/ready-gate.mjs";
+import { RETEST_BROAD, broadRetest } from "../../tools/ci/merge-train.mjs";
 import { AGENT_APP_SLUG, byAgent, byOwner } from "../../tools/ci/lib/provenance.mjs";
 import { BOUND_MAX_AGE_MIN, receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN, GATE_FILES, gateFileHashes, gateFilesVerdict, gateClosure, staticImports, MAX_FUTURE_S, headPinProblem } from "../../tools/lib/gate-receipt.mjs";
 
@@ -1841,7 +1842,7 @@ test("land.yml resolve: a dispatched re-gate is one PR, validated, and its budge
   assert.equal(r.out.attempt, "0", "every other event starts at 0");
 });
 
-test("land.yml dispatch:merge-pause (finding 7): counts only when the owner's own click added it, in resolve, arm and the sweep", () => {
+test("land.yml dispatch:merge-pause (finding 7): counts only when the owner's own click added it, in resolve, arm, the sweep and the train", () => {
   // dispatch.mjs counts the label only when its newest `labeled` event is the owner's, with no app; land.yml honoured it
   // from any labeller. An agent's pause is ignored here too, as it is on the Board.
   const ev = (login, app = null) => JSON.stringify([{ event: "labeled", label: { name: "dispatch:merge-pause" }, actor: { login }, performed_via_github_app: app },
@@ -1872,6 +1873,18 @@ test("land.yml dispatch:merge-pause (finding 7): counts only when the owner's ow
     FAKE_STATUSES: "[]", STALE_MAX: "4", PAUSED: "true", FAKE_PAUSE_EVENTS: events }).calls.filter((c) => c.includes("land.yml/dispatches")).length;
   assert.equal(sw(ev("someone")), 1, "an agent's pause does not stop the sweep");
   assert.equal(sw(ev("o")), 0, "the owner's pause does");
+  // the merge train (#6456 side finding): it honoured the label from any labeller; now the same provenance, and an
+  // unreadable read still pauses (fail-safe). `node` is stubbed: the build itself is merge-train.test.mjs's.
+  const build = LAND.jobs.train.steps.find((st) => st.name === "merge-train --build").run;
+  const tr = (env) => {
+    const r = runStep(`node() { echo "node $*" >> "$GH_LOG"; }\nexport -f node\n${build}`, { LAND_TOKEN: "fixture-land-token", PAUSED: "true", ...env });
+    return { built: r.calls.filter((c) => c.startsWith("node tools/ci/merge-train.mjs --build")).length, skipped: r.summary.split("\n").filter((l) => l.startsWith("merge train skipped")).length, status: r.status };
+  };
+  assert.deepEqual(tr({ FAKE_PAUSE_EVENTS: ev("someone") }), { built: 1, skipped: 0, status: 0 }, "another labeller's pause does not stop the train");
+  assert.deepEqual(tr({ FAKE_PAUSE_EVENTS: ev("o", { slug: "claude" }) }), { built: 1, skipped: 0, status: 0 }, "nor the owner's account through an app (an agent)");
+  assert.deepEqual(tr({ FAKE_PAUSE_EVENTS: ev("o") }), { built: 0, skipped: 1, status: 0 }, "the owner's own click pauses it");
+  assert.deepEqual(tr({ PAUSED: "false" }), { built: 1, skipped: 0, status: 0 });
+  assert.deepEqual(tr({ PAUSED: "unreadable" }), { built: 0, skipped: 1, status: 0 }, "an unreadable pause read pauses (fail-safe)");
 });
 
 test("tip-candidate mode stops on open Plan and unfinished CI before reading deployment or config", () => {
@@ -2704,6 +2717,8 @@ test("#5407 retest: a tip merge newer than the CI run's base re-runs the unit te
     assert.equal(broad.ok, false);
     assert.deepEqual(asked, [["tests/unit/tools-runnable.test.mjs"]], "the estimate is of the files the re-test would run");
     assert.equal(broad.evidence, `1 tip merge(s) since the CI run (${tip.slice(0, 8)}); the re-test would run 1 unit file(s) (the unit files both sides select (tooling-fast's --changed selection: newer tip 1, the PR 0) and the touched tests/unit files), measured ~400 s at --jobs=3, over the 420 s cap — too broad to re-test at merge: sync-pr.mjs and push, so a fresh CI run tests this combination`);
+    assert.equal(broad.broad, true, "#6667: a breadth refusal is marked, so merge-train closes a train on it stale, not red");
+    assert.equal(red.broad, undefined, "a re-test that ran and failed is a real crossing");
     assert.equal(calls.length, 0);
     assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt, run, select, estimate: () => 30_000 }).ok, true, "a measured-small re-test runs");
     assert.equal(retestOnMerge({ cwd: W, tip, head, ciAt, run, select, estimate: () => 336_000 }).ok, true, "the line is 0.8 of the cap, exclusive");
@@ -2752,6 +2767,64 @@ test("#5407 retest: a tip merge newer than the CI run's base re-runs the unit te
   } finally { fs.rmSync(T, { recursive: true, force: true }); }
 });
 
+test("SPECULATIVE CI retest: the tip merges since the run are all in the head AND the run's recorded tree is this merge's → nothing re-runs; any doubt re-tests as before", () => {
+  const T = scratch("merge-gate-same-tree-");
+  const W = path.join(T, "w");
+  const git = (...a) => { const r = spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd: W, encoding: "utf8" }); assert.equal(r.status, 0, `${a.join(" ")}: ${r.stderr}`); return r.stdout.trim(); };
+  const write = (rel, text) => { fs.mkdirSync(path.dirname(path.join(W, rel)), { recursive: true }); fs.writeFileSync(path.join(W, rel), text); };
+  try {
+    fs.mkdirSync(W);
+    git("init", "-q", "-b", "deploy-x");
+    write(U("a"), "// a\n"); git("add", "-A"); git("commit", "-q", "-m", "base");
+    const B = git("rev-parse", "HEAD");
+    // train N (one car) on B, and the speculative N+1 stacked on N's head
+    git("checkout", "-q", "-b", "n"); write(U("n"), "// n\n"); git("add", "-A"); git("commit", "-q", "-m", "train N");
+    const N = git("rev-parse", "HEAD");
+    git("checkout", "-q", "-b", "next"); write(U("next"), "// n+1\n"); git("add", "-A"); git("commit", "-q", "-m", "train N+1");
+    const H = git("rev-parse", "HEAD");
+    // N+1's CI ran on the merge ref onto B: its tree is H's own (B is in H)
+    const ciTree = git("merge-tree", "--write-tree", B, H).split("\n")[0];
+    // GitHub merges N: a merge commit onto the deploy branch
+    const M = git("commit-tree", `${N}^{tree}`, "-p", B, "-p", N, "-m", "Merge pull request #100");
+    git("update-ref", "refs/heads/deploy-x", M);
+    const calls = [];
+    const run = (cmd, argv) => { calls.push(argv); return { status: 0, stdout: "", stderr: "" }; };
+    const select = (paths) => ({ files: paths.filter((f) => f.startsWith("tests/unit/")), reason: "matched" });
+    const args = { cwd: W, tip: M, head: H, ciAt: "2000-01-01T00:00:00Z", ciBase: B, run, select, estimate: () => null };
+    const same = retestOnMerge({ ...args, ciTree });
+    assert.deepEqual([same.ok, same.evidence], [true, `1 tip merge(s) since the CI run's recorded base ${B.slice(0, 8)} (${M.slice(0, 8)}) are already in the head, and the run's merge tree ${ciTree.slice(0, 8)} is this merge's own: CI tested exactly this combination`]);
+    assert.equal(calls.length, 0, "nothing re-runs on the bytes CI already tested");
+    // any doubt: no tree record, another tree, no recorded base, or a credited head → the re-test runs as before
+    for (const a of [{ ciTree: "" }, { ciTree: "f".repeat(40) }, { ciTree, ciBase: "" }, { ciTree, credited: H }]) {
+      calls.length = 0;
+      const r = retestOnMerge({ ...args, ...a });
+      assert.equal(r.ok, true, r.evidence);
+      assert.equal(calls.length, 1, JSON.stringify(a));
+    }
+    // a solo PR merged onto the tip that the head does not hold: not contained, so it is re-tested
+    git("checkout", "-q", "deploy-x"); write(U("solo"), "// s\n"); git("add", "-A"); git("commit", "-q", "-m", "solo");
+    const S = git("rev-parse", "HEAD");
+    assert.equal(sameMergeTree({ cwd: W, tip: S, head: H, ciBase: B, ciTree, commits: [S, M] }), "");
+    assert.equal(sameMergeTree({ cwd: W, tip: M, head: H, ciBase: B, ciTree, commits: [M] }).length > 0, true);
+    // a merge whose tree is a hand edit, not the clean merge of its parents
+    write(U("edit"), "// e\n"); git("add", "-A");
+    const E = git("commit-tree", git("write-tree"), "-p", B, "-p", N, "-m", "edited merge");
+    assert.equal(sameMergeTree({ cwd: W, tip: E, head: H, ciBase: B, ciTree, commits: [E] }), "");
+  } finally { fs.rmSync(T, { recursive: true, force: true }); }
+});
+
+test("#6667 rowLines: a breadth-only retest refusal carries RETEST_BROAD, and merge-train reads exactly that line as stale", () => {
+  const ok = (e = "") => ({ ok: true, evidence: e });
+  const rows = Object.fromEntries(ROWS.map((k) => [k, ok()]));
+  const v = (retest) => ({ ok: false, waiting: false, rows: { ...rows, retest }, pr: 9, head: "e".repeat(40), tip: "f".repeat(40) });
+  const broadLine = rowLines(v({ ok: false, evidence: "too broad", broad: true })).at(-1);
+  assert.equal(broadLine, `= merge-gate refused — ${ROWS.map((k) => `${k}=${k === "retest" ? "FAIL" : "ok"}`).join(" ")} ${RETEST_BROAD} pr=#9 sha=${"e".repeat(40)} tip=${"f".repeat(40)}`);
+  assert.equal(broadRetest(broadLine.slice(0, 140)), true, "the word survives land.yml's 140-character status description");
+  const redLine = rowLines(v({ ok: false, evidence: "crossed" })).at(-1);
+  assert.equal(broadRetest(redLine), false);
+  assert.equal(redLine.split(" ").includes(RETEST_BROAD), false);
+});
+
 test("#5407 ciRecordedBase: the green run's tooling A `apex-guards` annotation names the base its merge ref sat on; unreadable is \"\"", () => {
   const B = "b".repeat(40);
   const req = (p) => p.startsWith("actions/runs/500/jobs") ? { json: { jobs: [{ id: 11, name: "Smoke (a)" }, { id: 12, name: "Structural guards (tooling A)" }] } }
@@ -2760,6 +2833,12 @@ test("#5407 ciRecordedBase: the green run's tooling A `apex-guards` annotation n
   assert.equal(ciRecordedBase({ id: 500 }, (p) => (p.startsWith("check-runs/") ? { json: [{ title: "apex-guards", message: "mode=full base=none" }] } : req(p))), "");
   assert.equal(ciRecordedBase({ id: 500 }, () => ({ error: "HTTP 502" })), "");
   assert.equal(ciRecordedBase(undefined, req), "");
+  // SPECULATIVE CI: the record's tree too (#6557 P1 wrote it), read in the same two calls
+  const TR = "c".repeat(40);
+  const withTree = (p) => (p.startsWith("check-runs/") ? { json: [{ title: "apex-guards", message: `mode=changed base=${B} tree=${TR}` }] } : req(p));
+  assert.deepEqual(ciRecord({ id: 500 }, withTree), { base: B, tree: TR });
+  assert.deepEqual(ciRecord({ id: 500 }, req), { base: B, tree: "" });
+  assert.deepEqual(ciRecord({ id: 500 }, () => ({ error: "HTTP 502" })), { base: "", tree: "" });
 });
 
 test("#5407 #5597 retestPlan: the files both sides select plus the touched unit files, kept to files the merge has; a widened selection falls back to the touched unit files and says so", () => {

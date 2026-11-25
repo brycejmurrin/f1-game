@@ -159,6 +159,33 @@ open one runs CI. The change lives in `merge-train.mjs` alone; land.yml is uncha
   `train-next/**`: a push event runs the pushed ref's own land.yml, which there is the fold of PR code, with
   LAND_TOKEN. Cost: one screen (npm ci, then a skip while a train is open) per deploy-branch merge.
 
+## Speculative CI, stale cars, cleanup and the pause (#6667, 2026-11-25)
+
+Bryce's "Yes, one PR" (about 17:45Z, relayed by the orchestrator) for four changes in `merge-train.mjs`,
+`merge-gate.mjs` and land.yml's `train` job.
+- **Speculative CI.** When the build pushes the stacked ref, it also opens that same fold commit as a PR of its own
+  (`train/<stamp>-<cars>-on<N>`, manifest `onto: N`, label `train`, no `land`). It gets the full `pull_request` tier
+  while N runs. Without `land`, land.yml, the builder (`isStackPr`) and the bisect history all ignore it. On promote,
+  the build adds `land` to that PR and drops `onto`. No new PR opens and no new run starts: the gate's ci row reads
+  that PR's own CI on the same head, and verifyTrain and every car's rows run as before. Its retest row re-tests the
+  tip merges since that run (N's merge commit among them) unless every one is already in the head AND the run's
+  recorded merge tree (`apex-guards tree=`) is byte for byte the gate's own merge (`sameMergeTree`). Restack, rebase
+  and drop close the speculative PR and delete its branch.
+- **Cost bound.** At most one run per stacked ref: a PR is opened only at the push that makes the ref, never while
+  waiting, and the build never pushes to it. No run starts while N is red (its CI check or run failed, a job failed,
+  or a read failed). On the merged path the run costs nothing extra: it is the run the promoted PR used to start. A
+  stack closed after its run started wastes that one run (a full tier is ~117 runner-min; trains went red or stale in
+  9 of 22 cases over 49 h, so about 45 runner-min per stack on average). The gain is N+1's CI time (median ~16 min)
+  taken off every two-train cycle.
+- **#6667.** A car that merged outside an open train closes the train `stale` (train #6580 sat ~6 h). A `gate` that
+  refuses only its retest row for breadth closes it `stale` too, not red: merge-gate's summary line carries
+  `retest-broad`, and `broadRetest` reads it.
+- **Cleanup.** Each build deletes `train/*` branches that no open PR has as its head, and `train-next/*` refs whose
+  name does not parse. The build already owns train refs, and prune-branches.yml stays dispatch-only ("nothing may
+  delete branches on its own").
+- **Pause.** The `train` job honours `dispatch:merge-pause` only on Bryce's own click, as resolve, arm and the sweep
+  do. An unreadable read still pauses.
+
 ## Residual risks (accepted)
 
 - A `hold` added to a car after the train's `gate` success and before GitHub merges the train is not re-read. This is
