@@ -24,6 +24,10 @@ import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function boot(page) {
+  // GRID RANDOM, as tests/helpers/fixtures.js pins it (#6564): the shipped rule is QUALIFYING now, so a
+  // one-off Grand Prix would open #quali. These tests guard session routing on a non-qualifying rule;
+  // that GO opens the sheet under the shipped default is tests/specs/shipped-defaults.spec.js's.
+  await page.addInitScript(() => { try { localStorage.setItem("apex26.raceGrid", JSON.stringify("random")); } catch (_) {} });
   await page.goto("/");
   // Hot CI shards: cold __apex boot can exceed BOOT_MS (45 s); race builds use
   // raceFrom()'s RACE_BUILD_MS. Title boot gets the same build margin here.
@@ -77,7 +81,7 @@ test.describe("Qualifying — the session", () => {
   });
 
   test("a one-off Grand Prix still goes straight to the race", async ({ page }) => {
-    // A quick-blast uses the configured non-qualifying grid; only a weekend
+    // A quick-blast on a non-qualifying grid (boot() pins RANDOM); only a weekend
     // earns a qualifying classification. The exact rule is a generated
     // preference/default, not a qualifying contract.
     await boot(page);
