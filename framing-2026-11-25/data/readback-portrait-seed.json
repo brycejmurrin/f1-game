@@ -1,0 +1,61 @@
+{
+ "window": "portrait",
+ "path": "seed",
+ "viewport": {
+  "width": 393,
+  "height": 852
+ },
+ "exportedAt": "2026-11-25T10:32:13.911Z",
+ "receipt": null,
+ "emulation": [],
+ "emuRaw": {
+  "screen": {
+   "width": 393,
+   "height": 852
+  },
+  "viewport": {
+   "width": 393,
+   "height": 852
+  },
+  "deviceScaleFactor": 1,
+  "insets": {
+   "top": 59,
+   "left": 0,
+   "bottom": 34,
+   "right": 0
+  },
+  "coarse": true,
+  "hover": false,
+  "standalone": false,
+  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Mobile/15E148 Safari/604.1",
+  "uiScaleVar": "0.7",
+  "hudScaleVar": "1",
+  "stored": {
+   "uiScale": null,
+   "hudScale": null,
+   "hudBtnScale": "130",
+   "textSize": "\"normal\"",
+   "steerMode": "\"buttons\"",
+   "camMode": "19"
+  }
+ },
+ "shape": "tall",
+ "vars": {
+  "uiScale": "0.7",
+  "hudScale": "1",
+  "btn": "1.3"
+ },
+ "storedShapes": {
+  "live": "tall",
+  "mode": "separate"
+ },
+ "totals": {
+  "exportKeys": 231,
+  "matched": 231,
+  "differ": 0,
+  "notInSpec": 0
+ },
+ "diff": [],
+ "notInSpec": [],
+ "errors": []
+}

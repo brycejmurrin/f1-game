@@ -1,0 +1,438 @@
+{
+ "window": "portrait",
+ "camera": "stored",
+ "camInfo": {
+  "mode": "helmet",
+  "index": 18,
+  "modes": [
+   "chase",
+   "far",
+   "drift",
+   "cockpit",
+   "hood",
+   "overhead",
+   "heli",
+   "reverse",
+   "side",
+   "cinematic",
+   "low",
+   "tcam",
+   "rear",
+   "trackside",
+   "rival",
+   "pitwall",
+   "drone",
+   "tv",
+   "helmet"
+  ]
+ },
+ "emulation": [],
+ "insets": {
+  "top": 59,
+  "left": 0,
+  "bottom": 34,
+  "right": 0
+ },
+ "viewport": [
+  393,
+  852
+ ],
+ "cam": null,
+ "overflowX": false,
+ "all": [
+  {
+   "id": "pausebtn",
+   "kind": "control",
+   "rect": {
+    "x": 338,
+    "y": 67,
+    "w": 45,
+    "h": 45,
+    "r": 383,
+    "b": 112
+   }
+  },
+  {
+   "id": "btn-steer-left",
+   "kind": "control",
+   "rect": {
+    "x": 0,
+    "y": 774,
+    "w": 82,
+    "h": 75,
+    "r": 82,
+    "b": 849
+   }
+  },
+  {
+   "id": "btn-steer-right",
+   "kind": "control",
+   "rect": {
+    "x": 82,
+    "y": 774,
+    "w": 82,
+    "h": 75,
+    "r": 163,
+    "b": 849
+   }
+  },
+  {
+   "id": "btn-boost",
+   "kind": "control",
+   "rect": {
+    "x": 267,
+    "y": 650,
+    "w": 50,
+    "h": 50,
+    "r": 317,
+    "b": 700
+   }
+  },
+  {
+   "id": "btn-ot",
+   "kind": "control",
+   "rect": {
+    "x": 267,
+    "y": 712,
+    "w": 50,
+    "h": 50,
+    "r": 317,
+    "b": 762
+   }
+  },
+  {
+   "id": "btn-aero",
+   "kind": "control",
+   "rect": {
+    "x": 267,
+    "y": 774,
+    "w": 50,
+    "h": 50,
+    "r": 317,
+    "b": 824
+   }
+  },
+  {
+   "id": "btn-brake",
+   "kind": "control",
+   "rect": {
+    "x": 326,
+    "y": 662,
+    "w": 64,
+    "h": 80,
+    "r": 390,
+    "b": 742
+   }
+  },
+  {
+   "id": "btn-throttle",
+   "kind": "control",
+   "rect": {
+    "x": 326,
+    "y": 754,
+    "w": 64,
+    "h": 80,
+    "r": 390,
+    "b": 834
+   }
+  },
+  {
+   "id": "btn-cam",
+   "kind": "control",
+   "rect": {
+    "x": 287,
+    "y": 116,
+    "w": 96,
+    "h": 45,
+    "r": 383,
+    "b": 160
+   }
+  },
+  {
+   "id": "hud-box-pos",
+   "kind": "readout",
+   "rect": {
+    "x": 89,
+    "y": 63,
+    "w": 52,
+    "h": 34,
+    "r": 141,
+    "b": 97
+   },
+   "parent": ""
+  },
+  {
+   "id": "hud-box-lap",
+   "kind": "readout",
+   "rect": {
+    "x": 141,
+    "y": 63,
+    "w": 50,
+    "h": 34,
+    "r": 191,
+    "b": 97
+   },
+   "parent": ""
+  },
+  {
+   "id": "hud-box-time",
+   "kind": "readout",
+   "rect": {
+    "x": 191,
+    "y": 63,
+    "w": 58,
+    "h": 34,
+    "r": 249,
+    "b": 97
+   },
+   "parent": ""
+  },
+  {
+   "id": "hud-box-best",
+   "kind": "readout",
+   "rect": {
+    "x": 249,
+    "y": 63,
+    "w": 58,
+    "h": 34,
+    "r": 306,
+    "b": 97
+   },
+   "parent": ""
+  },
+  {
+   "id": "dock-left",
+   "kind": "readout",
+   "rect": {
+    "x": 0,
+    "y": 774,
+    "w": 163,
+    "h": 75,
+    "r": 163,
+    "b": 849
+   },
+   "parent": "hud-dock"
+  },
+  {
+   "id": "dock-right",
+   "kind": "readout",
+   "rect": {
+    "x": 253,
+    "y": 626,
+    "w": 126,
+    "h": 174,
+    "r": 379,
+    "b": 799
+   },
+   "parent": "hud-dock"
+  },
+  {
+   "id": "hud-mirror",
+   "kind": "readout",
+   "rect": {
+    "x": 126,
+    "y": 131,
+    "w": 141,
+    "h": 40,
+    "r": 267,
+    "b": 171
+   },
+   "parent": "hud"
+  },
+  {
+   "id": "minimap",
+   "kind": "readout",
+   "rect": {
+    "x": 2,
+    "y": 59,
+    "w": 136,
+    "h": 136,
+    "r": 138,
+    "b": 195
+   },
+   "parent": "hud"
+  },
+  {
+   "id": "hud-sectors",
+   "kind": "readout",
+   "rect": {
+    "x": 328,
+    "y": 96,
+    "w": 35,
+    "h": 49,
+    "r": 362,
+    "b": 145
+   },
+   "parent": "hud"
+  },
+  {
+   "id": "hud-tyre",
+   "kind": "readout",
+   "rect": {
+    "x": 27,
+    "y": 511,
+    "w": 65,
+    "h": 17,
+    "r": 92,
+    "b": 528
+   },
+   "parent": "hud"
+  }
+ ],
+ "overlaps": [
+  {
+   "a": "pausebtn",
+   "b": "hud-sectors",
+   "kinds": "control/readout",
+   "area": 384,
+   "ix": 24,
+   "iy": 16
+  },
+  {
+   "a": "btn-steer-left",
+   "b": "dock-left",
+   "kinds": "control/readout",
+   "area": 6150,
+   "ix": 82,
+   "iy": 75
+  },
+  {
+   "a": "btn-steer-right",
+   "b": "dock-left",
+   "kinds": "control/readout",
+   "area": 6075,
+   "ix": 81,
+   "iy": 75
+  },
+  {
+   "a": "btn-boost",
+   "b": "dock-right",
+   "kinds": "control/readout",
+   "area": 2500,
+   "ix": 50,
+   "iy": 50
+  },
+  {
+   "a": "btn-ot",
+   "b": "dock-right",
+   "kinds": "control/readout",
+   "area": 2500,
+   "ix": 50,
+   "iy": 50
+  },
+  {
+   "a": "btn-aero",
+   "b": "dock-right",
+   "kinds": "control/readout",
+   "area": 1250,
+   "ix": 50,
+   "iy": 25
+  },
+  {
+   "a": "btn-brake",
+   "b": "dock-right",
+   "kinds": "control/readout",
+   "area": 4240,
+   "ix": 53,
+   "iy": 80
+  },
+  {
+   "a": "btn-throttle",
+   "b": "dock-right",
+   "kinds": "control/readout",
+   "area": 2385,
+   "ix": 53,
+   "iy": 45
+  },
+  {
+   "a": "btn-cam",
+   "b": "hud-sectors",
+   "kinds": "control/readout",
+   "area": 986,
+   "ix": 34,
+   "iy": 29
+  },
+  {
+   "a": "hud-box-pos",
+   "b": "minimap",
+   "kinds": "readout/readout",
+   "area": 1666,
+   "ix": 49,
+   "iy": 34
+  },
+  {
+   "a": "hud-mirror",
+   "b": "minimap",
+   "kinds": "readout/readout",
+   "area": 480,
+   "ix": 12,
+   "iy": 40
+  }
+ ],
+ "unsafe": [
+  {
+   "id": "btn-steer-left",
+   "kind": "control",
+   "rect": {
+    "x": 0,
+    "y": 774,
+    "w": 82,
+    "h": 75,
+    "r": 82,
+    "b": 849
+   }
+  },
+  {
+   "id": "btn-steer-right",
+   "kind": "control",
+   "rect": {
+    "x": 82,
+    "y": 774,
+    "w": 82,
+    "h": 75,
+    "r": 163,
+    "b": 849
+   }
+  },
+  {
+   "id": "btn-aero",
+   "kind": "control",
+   "rect": {
+    "x": 267,
+    "y": 774,
+    "w": 50,
+    "h": 50,
+    "r": 317,
+    "b": 824
+   }
+  },
+  {
+   "id": "btn-throttle",
+   "kind": "control",
+   "rect": {
+    "x": 326,
+    "y": 754,
+    "w": 64,
+    "h": 80,
+    "r": 390,
+    "b": 834
+   }
+  },
+  {
+   "id": "dock-left",
+   "kind": "readout",
+   "rect": {
+    "x": 0,
+    "y": 774,
+    "w": 163,
+    "h": 75,
+    "r": 163,
+    "b": 849
+   }
+  }
+ ],
+ "offscreen": [],
+ "smallTaps": [],
+ "smallText": [],
+ "errors": []
+}

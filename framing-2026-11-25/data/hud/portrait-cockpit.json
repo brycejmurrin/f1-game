@@ -1,0 +1,393 @@
+{
+ "window": "portrait",
+ "camera": "cockpit",
+ "camInfo": {
+  "mode": "cockpit",
+  "index": 3,
+  "modes": [
+   "chase",
+   "far",
+   "drift",
+   "cockpit",
+   "hood",
+   "overhead",
+   "heli",
+   "reverse",
+   "side",
+   "cinematic",
+   "low",
+   "tcam",
+   "rear",
+   "trackside",
+   "rival",
+   "pitwall",
+   "drone",
+   "tv",
+   "helmet"
+  ]
+ },
+ "emulation": [],
+ "insets": {
+  "top": 59,
+  "left": 0,
+  "bottom": 34,
+  "right": 0
+ },
+ "viewport": [
+  393,
+  852
+ ],
+ "cam": null,
+ "overflowX": false,
+ "all": [
+  {
+   "id": "pausebtn",
+   "kind": "control",
+   "rect": {
+    "x": 326,
+    "y": 67,
+    "w": 57,
+    "h": 57,
+    "r": 383,
+    "b": 124
+   }
+  },
+  {
+   "id": "btn-steer-left",
+   "kind": "control",
+   "rect": {
+    "x": 0,
+    "y": 757,
+    "w": 104,
+    "h": 95,
+    "r": 104,
+    "b": 852
+   }
+  },
+  {
+   "id": "btn-steer-right",
+   "kind": "control",
+   "rect": {
+    "x": 104,
+    "y": 757,
+    "w": 104,
+    "h": 95,
+    "r": 208,
+    "b": 852
+   }
+  },
+  {
+   "id": "btn-boost",
+   "kind": "control",
+   "rect": {
+    "x": 236,
+    "y": 623,
+    "w": 64,
+    "h": 64,
+    "r": 300,
+    "b": 686
+   }
+  },
+  {
+   "id": "btn-ot",
+   "kind": "control",
+   "rect": {
+    "x": 236,
+    "y": 698,
+    "w": 64,
+    "h": 64,
+    "r": 300,
+    "b": 762
+   }
+  },
+  {
+   "id": "btn-aero",
+   "kind": "control",
+   "rect": {
+    "x": 236,
+    "y": 774,
+    "w": 64,
+    "h": 64,
+    "r": 300,
+    "b": 838
+   }
+  },
+  {
+   "id": "btn-brake",
+   "kind": "control",
+   "rect": {
+    "x": 309,
+    "y": 632,
+    "w": 82,
+    "h": 102,
+    "r": 390,
+    "b": 734
+   }
+  },
+  {
+   "id": "btn-throttle",
+   "kind": "control",
+   "rect": {
+    "x": 309,
+    "y": 746,
+    "w": 82,
+    "h": 102,
+    "r": 390,
+    "b": 848
+   }
+  },
+  {
+   "id": "btn-cam",
+   "kind": "control",
+   "rect": {
+    "x": 258,
+    "y": 128,
+    "w": 125,
+    "h": 57,
+    "r": 383,
+    "b": 185
+   }
+  },
+  {
+   "id": "hud-box-pos",
+   "kind": "readout",
+   "rect": {
+    "x": 6,
+    "y": 65,
+    "w": 53,
+    "h": 35,
+    "r": 59,
+    "b": 99
+   },
+   "parent": ""
+  },
+  {
+   "id": "hud-box-lap",
+   "kind": "readout",
+   "rect": {
+    "x": 59,
+    "y": 65,
+    "w": 51,
+    "h": 35,
+    "r": 110,
+    "b": 99
+   },
+   "parent": ""
+  },
+  {
+   "id": "hud-box-time",
+   "kind": "readout",
+   "rect": {
+    "x": 110,
+    "y": 65,
+    "w": 59,
+    "h": 35,
+    "r": 169,
+    "b": 99
+   },
+   "parent": ""
+  },
+  {
+   "id": "hud-box-best",
+   "kind": "readout",
+   "rect": {
+    "x": 6,
+    "y": 99,
+    "w": 59,
+    "h": 35,
+    "r": 65,
+    "b": 134
+   },
+   "parent": ""
+  },
+  {
+   "id": "dock-left",
+   "kind": "readout",
+   "rect": {
+    "x": 0,
+    "y": 757,
+    "w": 208,
+    "h": 95,
+    "r": 208,
+    "b": 852
+   },
+   "parent": "hud-dock"
+  },
+  {
+   "id": "dock-right",
+   "kind": "readout",
+   "rect": {
+    "x": 221,
+    "y": 583,
+    "w": 157,
+    "h": 216,
+    "r": 379,
+    "b": 799
+   },
+   "parent": "hud-dock"
+  },
+  {
+   "id": "hud-mirror",
+   "kind": "readout",
+   "rect": {
+    "x": 154,
+    "y": 140,
+    "w": 86,
+    "h": 24,
+    "r": 239,
+    "b": 164
+   },
+   "parent": "hud"
+  },
+  {
+   "id": "minimap",
+   "kind": "readout",
+   "rect": {
+    "x": 7,
+    "y": 140,
+    "w": 91,
+    "h": 91,
+    "r": 99,
+    "b": 231
+   },
+   "parent": "hud"
+  },
+  {
+   "id": "hud-sectors",
+   "kind": "readout",
+   "rect": {
+    "x": 200,
+    "y": 189,
+    "w": 41,
+    "h": 59,
+    "r": 241,
+    "b": 247
+   },
+   "parent": "hud"
+  }
+ ],
+ "overlaps": [
+  {
+   "a": "btn-steer-left",
+   "b": "dock-left",
+   "kinds": "control/readout",
+   "area": 9880,
+   "ix": 104,
+   "iy": 95
+  },
+  {
+   "a": "btn-steer-right",
+   "b": "dock-left",
+   "kinds": "control/readout",
+   "area": 9880,
+   "ix": 104,
+   "iy": 95
+  },
+  {
+   "a": "btn-boost",
+   "b": "dock-right",
+   "kinds": "control/readout",
+   "area": 4032,
+   "ix": 64,
+   "iy": 63
+  },
+  {
+   "a": "btn-ot",
+   "b": "dock-right",
+   "kinds": "control/readout",
+   "area": 4096,
+   "ix": 64,
+   "iy": 64
+  },
+  {
+   "a": "btn-aero",
+   "b": "dock-right",
+   "kinds": "control/readout",
+   "area": 1600,
+   "ix": 64,
+   "iy": 25
+  },
+  {
+   "a": "btn-brake",
+   "b": "dock-right",
+   "kinds": "control/readout",
+   "area": 7140,
+   "ix": 70,
+   "iy": 102
+  },
+  {
+   "a": "btn-throttle",
+   "b": "dock-right",
+   "kinds": "control/readout",
+   "area": 3710,
+   "ix": 70,
+   "iy": 53
+  }
+ ],
+ "unsafe": [
+  {
+   "id": "btn-steer-left",
+   "kind": "control",
+   "rect": {
+    "x": 0,
+    "y": 757,
+    "w": 104,
+    "h": 95,
+    "r": 104,
+    "b": 852
+   }
+  },
+  {
+   "id": "btn-steer-right",
+   "kind": "control",
+   "rect": {
+    "x": 104,
+    "y": 757,
+    "w": 104,
+    "h": 95,
+    "r": 208,
+    "b": 852
+   }
+  },
+  {
+   "id": "btn-aero",
+   "kind": "control",
+   "rect": {
+    "x": 236,
+    "y": 774,
+    "w": 64,
+    "h": 64,
+    "r": 300,
+    "b": 838
+   }
+  },
+  {
+   "id": "btn-throttle",
+   "kind": "control",
+   "rect": {
+    "x": 309,
+    "y": 746,
+    "w": 82,
+    "h": 102,
+    "r": 390,
+    "b": 848
+   }
+  },
+  {
+   "id": "dock-left",
+   "kind": "readout",
+   "rect": {
+    "x": 0,
+    "y": 757,
+    "w": 208,
+    "h": 95,
+    "r": 208,
+    "b": 852
+   }
+  }
+ ],
+ "offscreen": [],
+ "smallTaps": [],
+ "smallText": [],
+ "errors": []
+}

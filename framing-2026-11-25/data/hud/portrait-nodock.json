@@ -1,0 +1,321 @@
+{
+ "window": "portrait",
+ "camera": "stored",
+ "camInfo": {
+  "mode": "helmet",
+  "index": 18,
+  "modes": [
+   "chase",
+   "far",
+   "drift",
+   "cockpit",
+   "hood",
+   "overhead",
+   "heli",
+   "reverse",
+   "side",
+   "cinematic",
+   "low",
+   "tcam",
+   "rear",
+   "trackside",
+   "rival",
+   "pitwall",
+   "drone",
+   "tv",
+   "helmet"
+  ]
+ },
+ "emulation": [],
+ "insets": {
+  "top": 59,
+  "left": 0,
+  "bottom": 34,
+  "right": 0
+ },
+ "viewport": [
+  393,
+  852
+ ],
+ "cam": null,
+ "overflowX": false,
+ "all": [
+  {
+   "id": "pausebtn",
+   "kind": "control",
+   "rect": {
+    "x": 326,
+    "y": 67,
+    "w": 57,
+    "h": 57,
+    "r": 383,
+    "b": 124
+   }
+  },
+  {
+   "id": "btn-steer-left",
+   "kind": "control",
+   "rect": {
+    "x": 16,
+    "y": 715,
+    "w": 87,
+    "h": 87,
+    "r": 103,
+    "b": 802
+   }
+  },
+  {
+   "id": "btn-steer-right",
+   "kind": "control",
+   "rect": {
+    "x": 115,
+    "y": 715,
+    "w": 87,
+    "h": 87,
+    "r": 203,
+    "b": 802
+   }
+  },
+  {
+   "id": "btn-boost",
+   "kind": "control",
+   "rect": {
+    "x": 298,
+    "y": 541,
+    "w": 79,
+    "h": 79,
+    "r": 377,
+    "b": 620
+   }
+  },
+  {
+   "id": "btn-ot",
+   "kind": "control",
+   "rect": {
+    "x": 298,
+    "y": 450,
+    "w": 79,
+    "h": 79,
+    "r": 377,
+    "b": 529
+   }
+  },
+  {
+   "id": "btn-aero",
+   "kind": "control",
+   "rect": {
+    "x": 298,
+    "y": 359,
+    "w": 79,
+    "h": 79,
+    "r": 377,
+    "b": 438
+   }
+  },
+  {
+   "id": "btn-brake",
+   "kind": "control",
+   "rect": {
+    "x": 298,
+    "y": 632,
+    "w": 79,
+    "h": 79,
+    "r": 377,
+    "b": 711
+   }
+  },
+  {
+   "id": "btn-throttle",
+   "kind": "control",
+   "rect": {
+    "x": 298,
+    "y": 723,
+    "w": 79,
+    "h": 79,
+    "r": 377,
+    "b": 802
+   }
+  },
+  {
+   "id": "btn-cam",
+   "kind": "control",
+   "rect": {
+    "x": 261,
+    "y": 128,
+    "w": 122,
+    "h": 57,
+    "r": 383,
+    "b": 185
+   }
+  },
+  {
+   "id": "hud-box-pos",
+   "kind": "readout",
+   "rect": {
+    "x": 89,
+    "y": 63,
+    "w": 52,
+    "h": 34,
+    "r": 141,
+    "b": 97
+   },
+   "parent": ""
+  },
+  {
+   "id": "hud-box-lap",
+   "kind": "readout",
+   "rect": {
+    "x": 141,
+    "y": 63,
+    "w": 50,
+    "h": 34,
+    "r": 191,
+    "b": 97
+   },
+   "parent": ""
+  },
+  {
+   "id": "hud-box-time",
+   "kind": "readout",
+   "rect": {
+    "x": 191,
+    "y": 63,
+    "w": 58,
+    "h": 34,
+    "r": 249,
+    "b": 97
+   },
+   "parent": ""
+  },
+  {
+   "id": "hud-box-best",
+   "kind": "readout",
+   "rect": {
+    "x": 249,
+    "y": 63,
+    "w": 58,
+    "h": 34,
+    "r": 306,
+    "b": 97
+   },
+   "parent": ""
+  },
+  {
+   "id": "hud-gap-ahead",
+   "kind": "readout",
+   "rect": {
+    "x": 146,
+    "y": 61,
+    "w": 44,
+    "h": 11,
+    "r": 190,
+    "b": 72
+   },
+   "parent": ""
+  },
+  {
+   "id": "hud-gap-behind",
+   "kind": "readout",
+   "rect": {
+    "x": 146,
+    "y": 72,
+    "w": 44,
+    "h": 11,
+    "r": 190,
+    "b": 83
+   },
+   "parent": ""
+  },
+  {
+   "id": "hud-mirror",
+   "kind": "readout",
+   "rect": {
+    "x": 115,
+    "y": 131,
+    "w": 141,
+    "h": 40,
+    "r": 257,
+    "b": 171
+   },
+   "parent": "hud"
+  },
+  {
+   "id": "minimap",
+   "kind": "readout",
+   "rect": {
+    "x": 2,
+    "y": 59,
+    "w": 136,
+    "h": 136,
+    "r": 138,
+    "b": 195
+   },
+   "parent": "hud"
+  },
+  {
+   "id": "hud-sectors",
+   "kind": "readout",
+   "rect": {
+    "x": 328,
+    "y": 189,
+    "w": 35,
+    "h": 49,
+    "r": 362,
+    "b": 239
+   },
+   "parent": "hud"
+  },
+  {
+   "id": "hud-tyre",
+   "kind": "readout",
+   "rect": {
+    "x": 27,
+    "y": 511,
+    "w": 65,
+    "h": 17,
+    "r": 92,
+    "b": 528
+   },
+   "parent": "hud"
+  }
+ ],
+ "overlaps": [
+  {
+   "a": "hud-box-pos",
+   "b": "minimap",
+   "kinds": "readout/readout",
+   "area": 1666,
+   "ix": 49,
+   "iy": 34
+  },
+  {
+   "a": "hud-box-lap",
+   "b": "hud-gap-ahead",
+   "kinds": "readout/readout",
+   "area": 396,
+   "ix": 44,
+   "iy": 9
+  },
+  {
+   "a": "hud-box-lap",
+   "b": "hud-gap-behind",
+   "kinds": "readout/readout",
+   "area": 484,
+   "ix": 44,
+   "iy": 11
+  },
+  {
+   "a": "hud-mirror",
+   "b": "minimap",
+   "kinds": "readout/readout",
+   "area": 920,
+   "ix": 23,
+   "iy": 40
+  }
+ ],
+ "unsafe": [],
+ "offscreen": [],
+ "smallTaps": [],
+ "smallText": [],
+ "errors": []
+}

@@ -1,0 +1,266 @@
+photostudio   bryce-standalone             paint: zoom 1; taps under 44px 0/10 (smallest 46.4px button#ps-capture); text under 12px 0/13 (smallest 12px button); outside safe box 7; blocked 0; page scroll no
+photostudio   bryce-standalone             clipped  1  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  3  starved  0  deepScroll  1  xOverflow no   err 0
+photostudio   bryce-portrait               paint: zoom 1; taps under 44px 0/10 (smallest 44.2px button#ps-capture); text under 12px 0/12 (smallest 12px button); outside safe box 0; blocked 0; page scroll no
+photostudio   bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+photostudiocircuit bryce-portrait               paint: zoom 1; taps under 44px 0/10 (smallest 44.2px button#ps-capture); text under 12px 0/13 (smallest 12px button); outside safe box 0; blocked 0; page scroll no
+photostudiocircuit bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  2  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+photostudiocircuit bryce-standalone             paint: zoom 1; taps under 44px 0/12 (smallest 46.4px button#ps-capture); text under 12px 0/12 (smallest 12px button); outside safe box 8; blocked 0; page scroll no
+photostudiocircuit bryce-standalone             clipped  1  offscreen  0  tapUnder24  0  tapSoft  2  trunc  0  underHW  4  starved  0  deepScroll  1  xOverflow no   err 0
+title         bryce-portrait               paint: zoom 1; taps under 44px 1/19 (smallest 41.6px button#soundbtn); text under 12px 3/24 (smallest 9.6px button#soundbtn); outside safe box 0; blocked 0; page scroll no
+title         bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+title         bryce-standalone             paint: zoom 1; taps under 44px 0/19 (smallest 44.2px button#mb-career); text under 12px 2/24 (smallest 10.69px span#mb-career-sub); outside safe box 0; blocked 0; page scroll no
+title         bryce-standalone             clipped  1  offscreen  0  tapUnder24  0  tapSoft 19  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+select        bryce-portrait               paint: zoom 1; taps under 44px 0/12 (smallest 44.2px button.sel-chip); text under 12px 1/31 (smallest 9.8px h3#sel-circuit-label); outside safe box 0; blocked 0; page scroll no
+select        bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0  map 187x275 fill9%
+select        bryce-standalone             paint: zoom 1; taps under 44px 0/22 (smallest 44.2px button.sel-chip); text under 12px 0/15 (smallest 12px button.sel-chip); outside safe box 0; blocked 0; page scroll no
+select        bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0  map 193x286 fill4%
+garage        bryce-portrait               paint: zoom 1; taps under 44px 0/9 (smallest 44px button#cs-aero); text under 12px 0/19 (smallest 12px button.sel-chip); outside safe box 7; blocked 0; page scroll no
+garage        bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  3  trunc  0  underHW  3  starved  0  deepScroll  2  xOverflow no   err 0
+garage        bryce-standalone             paint: zoom 1; taps under 44px 0/9 (smallest 44px button#cs-aero); text under 12px 0/21 (smallest 12px button.sel-chip); outside safe box 6; blocked 0; page scroll no
+garage        bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  3  trunc  0  underHW  2  starved  0  deepScroll  2  xOverflow no   err 0
+season-setup  bryce-portrait               paint: zoom 1; taps under 44px 0/28 (smallest 59.7px button.sel-chip); text under 12px 1/49 (smallest 9.8px h3.sel-label); outside safe box 0; blocked 0; page scroll no
+season-setup  bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+season-setup  bryce-standalone             paint: zoom 1; taps under 44px 0/26 (smallest 59.7px button.sel-chip); text under 12px 4/40 (smallest 9.8px h3.sel-label); outside safe box 0; blocked 0; page scroll no
+season-setup  bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  2  xOverflow no   err 0
+career        bryce-portrait               paint: zoom 1; taps under 44px 0/9 (smallest 44.2px button); text under 12px 3/22 (smallest 9.8px div#cr-sub); outside safe box 0; blocked 0; page scroll no
+career        bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+career        bryce-standalone             paint: zoom 1; taps under 44px 0/9 (smallest 44.2px button); text under 12px 3/23 (smallest 9.8px div#cr-sub); outside safe box 0; blocked 0; page scroll no
+career        bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+datahub       bryce-portrait               paint: zoom 1; taps under 44px 0/11 (smallest 44.2px button#dh-close-btn); text under 12px 0/27 (smallest 12px button); outside safe box 0; blocked 0; page scroll no
+datahub       bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+datahub       bryce-standalone             paint: zoom 1; taps under 44px 0/11 (smallest 49.4px button#dh-tab-live); text under 12px 0/27 (smallest 12px button); outside safe box 0; blocked 0; page scroll no
+datahub       bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+trackdesigner bryce-portrait               paint: zoom 0.525; taps under 44px 0/24 (smallest 44px button.sel-chip); text under 12px 0/29 (smallest 12px button.sel-chip); outside safe box 0; blocked 0; page scroll no
+trackdesigner bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+trackdesigner bryce-standalone             paint: zoom 0.525; taps under 44px 0/24 (smallest 44px button.sel-chip); text under 12px 0/27 (smallest 12px button.sel-chip); outside safe box 0; blocked 0; page scroll no
+trackdesigner bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+howtoplay     bryce-portrait               paint: zoom 1; taps under 44px 0/10 (smallest 52px button#htp-controls-refresher); text under 12px 0/21 (smallest 12px a); outside safe box 0; blocked 0; page scroll no
+howtoplay     bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+howtoplay     bryce-standalone             paint: zoom 1; taps under 44px 0/7 (smallest 52px summary.adv-more-btn); text under 12px 0/16 (smallest 12px a); outside safe box 0; blocked 0; page scroll no
+howtoplay     bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+settings      bryce-portrait               paint: zoom 1; taps under 44px 0/14 (smallest 44.2px button#pm-settings-close); text under 12px 1/31 (smallest 11.2px label); outside safe box 0; blocked 0; page scroll no
+settings      bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settings      bryce-standalone             paint: zoom 1; taps under 44px 0/13 (smallest 44.2px button#pm-audio); text under 12px 0/27 (smallest 12px button#pm-audio); outside safe box 0; blocked 0; page scroll no
+settings      bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingscontrols bryce-portrait               paint: zoom 1; taps under 44px 0/17 (smallest 44.2px button#pm-advanced); text under 12px 1/21 (smallest 10px small); outside safe box 0; blocked 0; page scroll no
+settingscontrols bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingscontrols bryce-standalone             paint: zoom 1; taps under 44px 0/10 (smallest 44.2px button#pm-advanced); text under 12px 1/14 (smallest 10.5px small); outside safe box 0; blocked 0; page scroll no
+settingscontrols bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+settingsdriving bryce-portrait               paint: zoom 1; taps under 44px 0/13 (smallest 44.2px button#pm-settings-close); text under 12px 0/27 (smallest 12px button#pm-preset-pro); outside safe box 0; blocked 0; page scroll no
+settingsdriving bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingsdriving bryce-standalone             paint: zoom 1; taps under 44px 0/12 (smallest 44.2px button#pm-preset-pro); text under 12px 0/21 (smallest 12px h2#dlg-settings); outside safe box 0; blocked 0; page scroll no
+settingsdriving bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingsdisplay bryce-portrait               paint: zoom 1; taps under 44px 0/6 (smallest 44.2px button); text under 12px 0/21 (smallest 12px button); outside safe box 0; blocked 0; page scroll no
+settingsdisplay bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingsdisplay bryce-standalone             paint: zoom 1; taps under 44px 0/6 (smallest 44.2px button); text under 12px 0/21 (smallest 12px h2#dlg-settings); outside safe box 0; blocked 0; page scroll no
+settingsdisplay bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingsgraphics bryce-portrait               paint: zoom 1; taps under 44px 0/16 (smallest 44.2px button); text under 12px 1/18 (smallest 10px small); outside safe box 0; blocked 0; page scroll no
+settingsgraphics bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingsgraphics bryce-standalone             paint: zoom 1; taps under 44px 0/12 (smallest 44.2px button#pm-bench-open); text under 12px 1/12 (smallest 10px small); outside safe box 0; blocked 0; page scroll no
+settingsgraphics bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+settingsvisual bryce-portrait               paint: zoom 1; taps under 44px 0/3 (smallest 44.2px button#pm-garrival); text under 12px 3/11 (smallest 8.96px p#why-race-only-why-1); outside safe box 0; blocked 0; page scroll no
+settingsvisual bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingsvisual bryce-standalone             paint: zoom 1; taps under 44px 0/3 (smallest 44.2px button#pm-garrival); text under 12px 3/11 (smallest 8.96px p#why-race-only-why-1); outside safe box 0; blocked 0; page scroll no
+settingsvisual bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingsprogress bryce-portrait               paint: zoom 1; taps under 44px 0/2 (smallest 44.2px button#pm-settings-close); text under 12px 0/11 (smallest 12px li); outside safe box 0; blocked 0; page scroll no
+settingsprogress bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingsprogress bryce-standalone             paint: zoom 1; taps under 44px 0/2 (smallest 44.2px button#pm-settings-close); text under 12px 0/11 (smallest 12px h2#dlg-settings); outside safe box 0; blocked 0; page scroll no
+settingsprogress bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingscredits bryce-portrait               paint: zoom 1; taps under 44px 0/7 (smallest 44.2px button#pm-settings-close); text under 12px 0/12 (smallest 12px a); outside safe box 0; blocked 0; page scroll no
+settingscredits bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingscredits bryce-standalone             paint: zoom 1; taps under 44px 0/7 (smallest 44.2px button#pm-settings-close); text under 12px 0/11 (smallest 12px a); outside safe box 0; blocked 0; page scroll no
+settingscredits bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingsfiles bryce-portrait               paint: zoom 1; taps under 44px 0/11 (smallest 44.2px button#pm-settings-close); text under 12px 0/17 (smallest 12px button#pm-career-save); outside safe box 0; blocked 0; page scroll no
+settingsfiles bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingsfiles bryce-standalone             paint: zoom 1; taps under 44px 0/8 (smallest 44.2px button#pm-files-show-restore); text under 12px 0/11 (smallest 12px h2#dlg-settings); outside safe box 0; blocked 0; page scroll no
+settingsfiles bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingspractice bryce-portrait               paint: zoom 1; taps under 44px 0/3 (smallest 44.2px button#pm-settings-close); text under 12px 0/11 (smallest 12px button#pm-practice-retry); outside safe box 0; blocked 0; page scroll no
+settingspractice bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingspractice bryce-standalone             paint: zoom 1; taps under 44px 0/3 (smallest 44.2px button#pm-settings-close); text under 12px 0/9 (smallest 12px h2#dlg-settings); outside safe box 0; blocked 0; page scroll no
+settingspractice bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingsstrategy bryce-portrait               paint: zoom 1; taps under 44px 0/2 (smallest 44.2px button#pm-settings-close); text under 12px 0/8 (smallest 12px p#pm-energy-forecast); outside safe box 0; blocked 0; page scroll no
+settingsstrategy bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingsstrategy bryce-standalone             paint: zoom 1; taps under 44px 0/2 (smallest 44.2px button#pm-settings-close); text under 12px 0/8 (smallest 12px h2#dlg-settings); outside safe box 0; blocked 0; page scroll no
+settingsstrategy bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingsreview bryce-portrait               paint: zoom 1; taps under 44px 0/4 (smallest 44.2px button#pm-settings-close); text under 12px 0/7 (smallest 12px li); outside safe box 0; blocked 0; page scroll no
+settingsreview bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingsreview bryce-standalone             paint: zoom 1; taps under 44px 0/4 (smallest 44.2px button#pm-settings-close); text under 12px 0/7 (smallest 12px h2#dlg-settings); outside safe box 0; blocked 0; page scroll no
+settingsreview bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingsappearance bryce-portrait               paint: zoom 1; taps under 44px 0/10 (smallest 44.2px button.arrange-route); text under 12px 1/13 (smallest 11.2px label); outside safe box 0; blocked 0; page scroll no
+settingsappearance bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+settingsappearance bryce-standalone             paint: zoom 1; taps under 44px 0/22 (smallest 44.2px button); text under 12px 1/26 (smallest 11.2px label); outside safe box 0; blocked 0; page scroll no
+settingsappearance bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+settingsa11y  bryce-portrait               paint: zoom 1; taps under 44px 0/17 (smallest 44.2px button); text under 12px 0/14 (smallest 12px button); outside safe box 0; blocked 0; page scroll no
+settingsa11y  bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+settingsa11y  bryce-standalone             paint: zoom 1; taps under 44px 0/13 (smallest 44.2px button#pm-settings-close); text under 12px 0/9 (smallest 12px h2#dlg-settings); outside safe box 0; blocked 0; page scroll no
+settingsa11y  bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+vsfriend      bryce-portrait               paint: zoom 1; taps under 44px 0/5 (smallest 59.7px button#vs-close); text under 12px 0/8 (smallest 12px p.vs-hint); outside safe box 0; blocked 0; page scroll no
+vsfriend      bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+vsfriend      bryce-standalone             paint: zoom 1; taps under 44px 0/5 (smallest 59.7px button#vs-close); text under 12px 0/8 (smallest 12px p.vs-hint); outside safe box 0; blocked 0; page scroll no
+vsfriend      bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+teampicker    bryce-portrait               SKIPPED: page.click: Timeout 12000ms exceeded.
+teampicker    bryce-standalone             SKIPPED: page.click: Timeout 12000ms exceeded.
+racesettings  bryce-portrait               paint: zoom 1; taps under 44px 0/20 (smallest 44.2px button#rs-cancel); text under 12px 0/15 (smallest 12px p#rs-summary); outside safe box 0; blocked 0; page scroll no
+racesettings  bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+racesettings  bryce-standalone             paint: zoom 1; taps under 44px 0/19 (smallest 44.2px button#rs-cancel); text under 12px 0/14 (smallest 12px h2#dlg-racesettings); outside safe box 0; blocked 0; page scroll no
+racesettings  bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+duelpicker    bryce-portrait               paint: zoom 1; taps under 44px 0/15 (smallest 59.7px button#duel-close); text under 12px 14/30 (smallest 11.2px span.duel-option-name); outside safe box 0; blocked 0; page scroll no
+duelpicker    bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+duelpicker    bryce-standalone             paint: zoom 1; taps under 44px 0/11 (smallest 59.7px button.duel-option); text under 12px 10/20 (smallest 11.2px span.duel-option-name); outside safe box 0; blocked 0; page scroll no
+duelpicker    bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+hudpause      bryce-portrait               paint: zoom 1; taps under 44px 0/14 (smallest 44.2px button#pm-drivingline); text under 12px 0/20 (smallest 12px button#pm-drivingline); outside safe box 0; blocked 0; page scroll no
+hudpause      bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+hudpause      bryce-standalone             paint: zoom 1; taps under 44px 0/14 (smallest 44px button#pm-howto); text under 12px 0/16 (smallest 12px button#pm-drivingline); outside safe box 0; blocked 0; page scroll no
+hudpause      bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+trackdetail   bryce-portrait               paint: zoom 1; taps under 44px 0/9 (smallest 52px button.sel-chip); text under 12px 0/28 (smallest 12px button.sel-chip); outside safe box 0; blocked 0; page scroll no
+trackdetail   bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0  map 382x565 fill38%
+trackdetail   bryce-standalone             paint: zoom 1; taps under 44px 0/9 (smallest 52px button.sel-chip); text under 12px 0/28 (smallest 12px button.sel-chip); outside safe box 0; blocked 0; page scroll no
+trackdetail   bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0  map 932x630 fill71%
+quali         bryce-portrait               paint: zoom 1; taps under 44px 0/3 (smallest 59.7px button#q-back); text under 12px 0/67 (smallest 12px span.res-name); outside safe box 0; blocked 0; page scroll no
+quali         bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+quali         bryce-standalone             paint: zoom 1; taps under 44px 0/3 (smallest 52px button#q-back); text under 12px 0/70 (smallest 12px h2#q-title); outside safe box 0; blocked 0; page scroll no
+quali         bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+standings     bryce-portrait               paint: zoom 1; taps under 44px 0/2 (smallest 59.7px button#standings-card); text under 12px 2/6 (smallest 9.8px div.sel-label); outside safe box 0; blocked 0; page scroll no
+standings     bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+standings     bryce-standalone             paint: zoom 1; taps under 44px 0/2 (smallest 59.7px button#standings-card); text under 12px 2/6 (smallest 9.8px div.sel-label); outside safe box 0; blocked 0; page scroll no
+standings     bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+customize     bryce-portrait               paint: zoom 1; taps under 44px 0/10 (smallest 44.2px input#cz-color); text under 12px 0/13 (smallest 12px div.cz-sep); outside safe box 0; blocked 0; page scroll no
+customize     bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+customize     bryce-standalone             paint: zoom 1; taps under 44px 0/10 (smallest 44.2px input#cz-color); text under 12px 0/9 (smallest 12px div.cz-sep); outside safe box 0; blocked 0; page scroll no
+customize     bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+advanced      bryce-portrait               paint: zoom 1; taps under 44px 0/4 (smallest 44.2px button); text under 12px 0/7 (smallest 12px b#pm-pace-v); outside safe box 0; blocked 0; page scroll no
+advanced      bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+advanced      bryce-standalone             paint: zoom 1; taps under 44px 0/4 (smallest 44.2px button); text under 12px 0/7 (smallest 12px b#pm-pace-v); outside safe box 0; blocked 0; page scroll no
+advanced      bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+audioset      bryce-portrait               paint: zoom 1; taps under 44px 0/12 (smallest 44.2px button); text under 12px 2/36 (smallest 8.96px p#why-mix-stop-why-0); outside safe box 0; blocked 0; page scroll no
+audioset      bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+audioset      bryce-standalone             paint: zoom 1; taps under 44px 0/9 (smallest 44.2px button#pm-settings-close); text under 12px 0/26 (smallest 12px h2#dlg-settings); outside safe box 0; blocked 0; page scroll no
+audioset      bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+spotify       bryce-portrait               paint: zoom 1; taps under 44px 0/2 (smallest 59.7px button#sp-close); text under 12px 2/16 (smallest 8.96px p#why-sp-sheet-why-0); outside safe box 0; blocked 0; page scroll no
+spotify       bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+spotify       bryce-standalone             paint: zoom 1; taps under 44px 0/1 (smallest 59.7px button#sp-close); text under 12px 2/11 (smallest 8.96px p#why-sp-sheet-why-0); outside safe box 0; blocked 0; page scroll no
+spotify       bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+loading       bryce-portrait               paint: zoom 1; taps under 44px 0/0 (smallest none); text under 12px 0/13 (smallest 17.14px dd); outside safe box 0; blocked 0; page scroll no
+loading       bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+loading       bryce-standalone             paint: zoom 1; taps under 44px 0/0 (smallest none); text under 12px 0/13 (smallest 17.14px dd); outside safe box 0; blocked 0; page scroll no
+loading       bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+ui-reset careerguide bryce-portrait: stuck at loading; hidden=true fallback for loading
+ui-reset careerguide bryce-standalone: stuck at loading; hidden=true fallback for loading
+careerguide   bryce-portrait               paint: zoom 1; taps under 44px 0/13 (smallest 52px summary#cg-a-weekend); text under 12px 8/16 (smallest 9.8px summary#cg-a-weekend); outside safe box 0; blocked 0; page scroll no
+careerguide   bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+careerguide   bryce-standalone             paint: zoom 1; taps under 44px 0/9 (smallest 52px summary#cg-a-weekend); text under 12px 2/10 (smallest 9.8px summary#cg-a-weekend); outside safe box 0; blocked 0; page scroll no
+careerguide   bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+bench         bryce-portrait               paint: zoom 1; taps under 44px 0/10 (smallest 59.7px button.bigbtn); text under 12px 0/13 (smallest 12px button.sel-chip); outside safe box 0; blocked 0; page scroll no
+bench         bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+bench         bryce-standalone             paint: zoom 1; taps under 44px 0/10 (smallest 59.7px button.bigbtn); text under 12px 0/12 (smallest 12px button.sel-chip); outside safe box 0; blocked 0; page scroll no
+bench         bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+careerhub     bryce-portrait               paint: zoom 1; taps under 44px 0/10 (smallest 44.2px button.sel-chip); text under 12px 11/32 (smallest 9.8px div#cr-sub); outside safe box 0; blocked 0; page scroll no
+careerhub     bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+careerhub     bryce-standalone             paint: zoom 1; taps under 44px 0/8 (smallest 44.2px button.sel-chip); text under 12px 2/17 (smallest 9.8px div#cr-sub); outside safe box 0; blocked 0; page scroll no
+careerhub     bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+careerhistory bryce-portrait               paint: zoom 1; taps under 44px 0/3 (smallest 59.7px a); text under 12px 2/23 (smallest 9.8px h3#ch-seasons); outside safe box 0; blocked 0; page scroll no
+careerhistory bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+careerhistory bryce-standalone             paint: zoom 1; taps under 44px 0/3 (smallest 59.7px a); text under 12px 2/23 (smallest 9.8px h3#ch-seasons); outside safe box 0; blocked 0; page scroll no
+careerhistory bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+careeroffers  bryce-portrait               paint: zoom 1; taps under 44px 0/6 (smallest 59.7px button#co-back); text under 12px 5/30 (smallest 9.8px h3.sel-label); outside safe box 0; blocked 0; page scroll no
+careeroffers  bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+careeroffers  bryce-standalone             paint: zoom 1; taps under 44px 0/5 (smallest 59.7px button#co-back); text under 12px 4/17 (smallest 9.8px h3.sel-label); outside safe box 0; blocked 0; page scroll no
+careeroffers  bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+garagelivery  bryce-portrait               paint: zoom 1; taps under 44px 0/11 (smallest 44px button#cs-aero); text under 12px 0/17 (smallest 12px button.cs-liv-edit); outside safe box 7; blocked 0; page scroll no
+garagelivery  bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  3  trunc  0  underHW  3  starved  0  deepScroll  1  xOverflow no   err 0
+garageteam    bryce-portrait               SKIPPED: page.click: Timeout 12000ms exceeded.
+garagelivery  bryce-standalone             paint: zoom 1; taps under 44px 0/11 (smallest 44px button#cs-aero); text under 12px 0/17 (smallest 12px button.cs-liv-edit); outside safe box 6; blocked 0; page scroll no
+garagelivery  bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  3  trunc  0  underHW  2  starved  0  deepScroll  1  xOverflow no   err 0
+datatelemetry bryce-portrait               paint: zoom 1; taps under 44px 0/19 (smallest 44.2px button.dh-dchip); text under 12px 0/25 (smallest 11.9px span); outside safe box 0; blocked 0; page scroll no
+datatelemetry bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+garageteam    bryce-standalone             paint: zoom 1; taps under 44px 0/10 (smallest 44px button#cs-aero); text under 12px 3/18 (smallest 9.8px h3.sel-label); outside safe box 4; blocked 0; page scroll no
+garageteam    bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  3  trunc  0  underHW  2  starved  0  deepScroll  2  xOverflow no   err 0
+dataschedule  bryce-portrait               paint: zoom 1; taps under 44px 0/11 (smallest 44.2px button#dh-close-btn); text under 12px 0/27 (smallest 12px button); outside safe box 0; blocked 0; page scroll no
+dataschedule  bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+datatelemetry bryce-standalone             paint: zoom 1; taps under 44px 0/16 (smallest 44.2px button.dh-pill); text under 12px 0/23 (smallest 12px a); outside safe box 0; blocked 0; page scroll no
+datatelemetry bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+dataschedule  bryce-standalone             paint: zoom 1; taps under 44px 0/11 (smallest 49.4px button#dh-tab-live); text under 12px 0/27 (smallest 12px button); outside safe box 0; blocked 0; page scroll no
+dataschedule  bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+lightingtuner bryce-portrait               paint: zoom 1; taps under 44px 1/16 (smallest 33.6px button#pc-toggle); text under 12px 0/20 (smallest 12px b#lt-v-godrayAniso); outside safe box 0; blocked 0; page scroll no
+lightingtuner bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  1  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+cameratuner   bryce-portrait               paint: zoom 1; taps under 44px 0/18 (smallest 44px button.ew-preview); text under 12px 0/28 (smallest 12px b#ct-cv-bob); outside safe box 0; blocked 0; page scroll no
+cameratuner   bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+lightingtuner bryce-standalone             paint: zoom 1; taps under 44px 0/18 (smallest 44px button.ew-preview); text under 12px 0/16 (smallest 12px b#lt-v-keyMul); outside safe box 9; blocked 0; page scroll no
+lightingtuner bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  3  starved  0  deepScroll  1  xOverflow no   err 0
+cameratuner   bryce-standalone             paint: zoom 1; taps under 44px 0/17 (smallest 44px button.ew-preview); text under 12px 0/18 (smallest 12px button.ew-preview); outside safe box 0; blocked 0; page scroll no
+cameratuner   bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  2  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+flybyeditor   bryce-portrait               paint: zoom 1; taps under 44px 1/11 (smallest 33.6px button#fb-freecam); text under 12px 1/20 (smallest 11.2px button#fb-card-reset); outside safe box 0; blocked 0; page scroll no
+flybyeditor   bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  1  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+flybyeditor   bryce-standalone             paint: zoom 1; taps under 44px 0/5 (smallest 44px button.ew-preview); text under 12px 0/14 (smallest 12px b#fb-u-val); outside safe box 0; blocked 0; page scroll no
+flybyeditor   bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+lightingtunerfly bryce-portrait               paint: zoom 1; taps under 44px 1/12 (smallest 33.6px button#pc-toggle); text under 12px 0/15 (smallest 12px b#lt-v-keyMul); outside safe box 0; blocked 0; page scroll no
+lightingtunerfly bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  1  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+lightingtunerfly bryce-standalone             paint: zoom 1; taps under 44px 0/14 (smallest 44px button.ew-preview); text under 12px 2/14 (smallest 11.2px button#lt-copy); outside safe box 8; blocked 0; page scroll no
+lightingtunerfly bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  2  starved  0  deepScroll  1  xOverflow no   err 0
+photocontrols bryce-portrait               paint: zoom 1; taps under 44px 3/8 (smallest 39.2px button#pc-down); text under 12px 0/10 (smallest 12px button#pc-exit); outside safe box 0; blocked 0; page scroll no
+photocontrols bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  3  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+photocontrols bryce-standalone             paint: zoom 1; taps under 44px 1/8 (smallest 42.1px button#pc-exit); text under 12px 0/10 (smallest 12px button#pc-exit); outside safe box 0; blocked 0; page scroll no
+photocontrols bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  1  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+datastandings bryce-portrait               paint: zoom 1; taps under 44px 0/8 (smallest 44.2px button#dh-close-btn); text under 12px 0/80 (smallest 12px button#dh-tab-live); outside safe box 0; blocked 0; page scroll no
+datastandings bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+datastandings bryce-standalone             paint: zoom 1; taps under 44px 0/8 (smallest 49.4px button#dh-tab-live); text under 12px 0/125 (smallest 12px button#dh-tab-live); outside safe box 0; blocked 0; page scroll no
+datastandings bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+dataresults   bryce-portrait               paint: zoom 1; taps under 44px 0/15 (smallest 44.2px button.dh-pill); text under 12px 0/30 (smallest 12px button.dh-pill); outside safe box 0; blocked 0; page scroll no
+dataresults   bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+dataresults   bryce-standalone             paint: zoom 1; taps under 44px 0/15 (smallest 44.2px button.dh-pill); text under 12px 0/29 (smallest 12px button.dh-pill); outside safe box 0; blocked 0; page scroll no
+dataresults   bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+datalive      bryce-portrait               paint: zoom 1; taps under 44px 0/16 (smallest 44.2px button.dh-livebtn); text under 12px 0/21 (smallest 11.9px span); outside safe box 0; blocked 0; page scroll no
+datalive      bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+datalive      bryce-standalone             paint: zoom 1; taps under 44px 0/16 (smallest 44.2px button.dh-pill); text under 12px 0/22 (smallest 12px a); outside safe box 0; blocked 0; page scroll no
+datalive      bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+dataexport    bryce-portrait               paint: zoom 1; taps under 44px 0/16 (smallest 44.2px button#dh-close-btn); text under 12px 0/25 (smallest 12px a); outside safe box 0; blocked 0; page scroll no
+dataexport    bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+dataexport    bryce-standalone             paint: zoom 1; taps under 44px 0/16 (smallest 45px a); text under 12px 0/20 (smallest 12px button.dh-pill); outside safe box 0; blocked 0; page scroll no
+dataexport    bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+resultsseason bryce-portrait               paint: zoom 1; taps under 44px 0/5 (smallest 59.7px button#res-menu); text under 12px 0/31 (smallest 12px button#res-race-card); outside safe box 0; blocked 2; page scroll no
+resultsseason bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+resultsseason bryce-standalone             paint: zoom 1; taps under 44px 0/3 (smallest 59.7px button#res-menu); text under 12px 0/21 (smallest 12px button#res-race-card); outside safe box 0; blocked 0; page scroll no
+resultsseason bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+hudtouch      bryce-portrait               paint: zoom 1; taps under 44px 0/3 (smallest 79px button#btn-aero); text under 12px 0/20 (smallest 14px div#hud-gap-ahead); outside safe box 0; blocked 0; page scroll no
+hudtouch      bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+hudtouch      bryce-standalone             paint: zoom 1; taps under 44px 0/3 (smallest 70.2px button#btn-aero); text under 12px 0/21 (smallest 14px div#hud-gap-ahead); outside safe box 0; blocked 0; page scroll no
+hudtouch      bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  3  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+hudbuttons    bryce-portrait               paint: zoom 1; taps under 44px 0/6 (smallest 61.3px button#btn-aero); text under 12px 0/23 (smallest 14px div#hud-gap-ahead); outside safe box 6; blocked 0; page scroll no
+hudbuttons    bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  2  trunc  0  underHW  4  starved  0  deepScroll  0  xOverflow no   err 0
+hudbuttons    bryce-standalone             paint: zoom 1; taps under 44px 0/6 (smallest 75.8px button#btn-aero); text under 12px 0/24 (smallest 14px div#hud-gap-ahead); outside safe box 5; blocked 0; page scroll no
+hudbuttons    bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  2  trunc  0  underHW  5  starved  0  deepScroll  0  xOverflow no   err 0
+garagewheels  bryce-portrait               paint: zoom 1; taps under 44px 0/9 (smallest 44px button#cs-aero); text under 12px 0/17 (smallest 12px button.sel-chip); outside safe box 7; blocked 0; page scroll no
+garagewheels  bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  3  trunc  0  underHW  3  starved  0  deepScroll  2  xOverflow no   err 0
+garagewheels  bryce-standalone             paint: zoom 1; taps under 44px 0/9 (smallest 44px button#cs-aero); text under 12px 0/17 (smallest 12px button.sel-chip); outside safe box 5; blocked 0; page scroll no
+garagewheels  bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  3  trunc  0  underHW  2  starved  0  deepScroll  2  xOverflow no   err 0
+hudmanual     bryce-portrait               paint: zoom 1; taps under 44px 0/6 (smallest 52.3px button#btn-aero); text under 12px 0/23 (smallest 14px div#hud-gap-ahead); outside safe box 6; blocked 0; page scroll no
+hudmanual     bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  2  trunc  0  underHW  4  starved  0  deepScroll  0  xOverflow no   err 0
+hudmanual     bryce-standalone             paint: zoom 1; taps under 44px 0/6 (smallest 75.8px button#btn-aero); text under 12px 0/24 (smallest 14px div#hud-gap-ahead); outside safe box 5; blocked 0; page scroll no
+hudmanual     bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  2  trunc  0  underHW  5  starved  0  deepScroll  0  xOverflow no   err 0
+results       bryce-portrait               paint: zoom 1; taps under 44px 0/7 (smallest 59.7px button#res-menu); text under 12px 0/31 (smallest 12px button#res-race-card); outside safe box 0; blocked 1; page scroll no
+results       bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+results       bryce-standalone             paint: zoom 1; taps under 44px 0/5 (smallest 44px summary); text under 12px 0/22 (smallest 12px button#res-race-card); outside safe box 0; blocked 0; page scroll no
+results       bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  1  xOverflow no   err 0
+pause         bryce-standalone             paint: zoom 1; taps under 44px 0/14 (smallest 44px button#pm-howto); text under 12px 0/16 (smallest 12px button#pm-drivingline); outside safe box 0; blocked 0; page scroll no
+pause         bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+pause         bryce-portrait               paint: zoom 1; taps under 44px 0/14 (smallest 44.2px button#pm-drivingline); text under 12px 0/20 (smallest 12px button#pm-drivingline); outside safe box 0; blocked 0; page scroll no
+pause         bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+hud           bryce-standalone             paint: zoom 1; taps under 44px 0/0 (smallest none); text under 12px 0/17 (smallest 14px div#hud-gap-ahead); outside safe box 0; blocked 0; page scroll no
+hud           bryce-standalone             clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+hud           bryce-portrait               paint: zoom 1; taps under 44px 0/0 (smallest none); text under 12px 0/16 (smallest 14px div#hud-gap-ahead); outside safe box 0; blocked 0; page scroll no
+hud           bryce-portrait               clipped  0  offscreen  0  tapUnder24  0  tapSoft  0  trunc  0  underHW  0  starved  0  deepScroll  0  xOverflow no   err 0
+
+126 cells, 16 with something to look at, 3 skipped (nothing measured) -> artifacts/layout-audit/index.html
+  36 cells scroll more than 3 screens — INFORMATION, not findings.
+  A long list is allowed to be long; read the worst and judge:
+     21.6 screens  div.sheet-body.pane — howtoplay bryce-standalone
+     20.2 screens  #fb-rows — flybyeditor bryce-standalone
+       20 screens  #ps-body — photostudiocircuit bryce-standalone
+     19.7 screens  #ps-body — photostudiocircuit bryce-portrait
+     13.4 screens  div.sheet-body.pane — howtoplay bryce-portrait
+     11.6 screens  #ct-rows — cameratuner bryce-standalone
+     11.2 screens  #pm-settings-body — settingsappearance bryce-standalone
+     10.4 screens  #cs-options — garage bryce-portrait
+    3x page.click: Timeout Nms exceeded.
+  a skip is NOT a pass. Re-run those cells alone before believing them:
+    node tools/ui/layout-audit.mjs --viewports=bryce-portrait,bryce-standalone --screens=teampicker,garageteam --jobs=1

@@ -1,0 +1,212 @@
+{
+ "window": "standalone",
+ "viewport": {
+  "width": 852,
+  "height": 393
+ },
+ "insets": {
+  "top": 0,
+  "left": 59,
+  "bottom": 20,
+  "right": 59
+ },
+ "results": [
+  {
+   "id": "mb-tt",
+   "emu": [],
+   "root": "sel-track-section",
+   "title": "",
+   "docOverflowX": false,
+   "docOverflowY": false,
+   "unsafe": [],
+   "small": [],
+   "tiny": [],
+   "tinyN": 0,
+   "clipped": [],
+   "shot": "artifacts/framing/entries/mb-tt__standalone.png",
+   "errors": []
+  },
+  {
+   "id": "mb-practice",
+   "emu": [],
+   "root": "sel-track-section",
+   "title": "",
+   "docOverflowX": false,
+   "docOverflowY": false,
+   "unsafe": [],
+   "small": [],
+   "tiny": [],
+   "tinyN": 0,
+   "clipped": [],
+   "shot": "artifacts/framing/entries/mb-practice__standalone.png",
+   "errors": []
+  },
+  {
+   "id": "mb-watch",
+   "emu": [],
+   "root": "datahub",
+   "title": "F1 DATA HUB",
+   "docOverflowX": false,
+   "docOverflowY": false,
+   "unsafe": [],
+   "small": [],
+   "tiny": [],
+   "tinyN": 0,
+   "clipped": [],
+   "shot": "artifacts/framing/entries/mb-watch__standalone.png",
+   "errors": []
+  },
+  {
+   "id": "mb-learn",
+   "emu": [],
+   "root": "learn-group-strategy",
+   "title": "",
+   "docOverflowX": false,
+   "docOverflowY": false,
+   "unsafe": [],
+   "small": [],
+   "tiny": [],
+   "tinyN": 0,
+   "clipped": [],
+   "shot": "artifacts/framing/entries/mb-learn__standalone.png",
+   "errors": []
+  },
+  {
+   "id": "mb-daily",
+   "emu": [],
+   "root": "sel-track-section",
+   "title": "",
+   "docOverflowX": false,
+   "docOverflowY": false,
+   "unsafe": [],
+   "small": [],
+   "tiny": [],
+   "tinyN": 0,
+   "clipped": [],
+   "shot": "artifacts/framing/entries/mb-daily__standalone.png",
+   "errors": []
+  },
+  {
+   "id": "mb-visual",
+   "emu": [],
+   "root": "pm-panel-visual",
+   "title": "",
+   "docOverflowX": false,
+   "docOverflowY": false,
+   "unsafe": [],
+   "small": [],
+   "tiny": [
+    {
+     "el": "why-race-only-why-1",
+     "px": 8.96,
+     "text": "Only during a race"
+    },
+    {
+     "el": "why-race-only-why-2",
+     "px": 8.96,
+     "text": "Only during a race"
+    },
+    {
+     "el": "why-race-only-why-3",
+     "px": 8.96,
+     "text": "Only during a race"
+    }
+   ],
+   "tinyN": 3,
+   "clipped": [],
+   "shot": "artifacts/framing/entries/mb-visual__standalone.png",
+   "errors": []
+  },
+  {
+   "id": "mb-phonepad",
+   "emu": [],
+   "root": "pair",
+   "title": "APEX 26 · PHONE CONTROLLER",
+   "docOverflowX": false,
+   "docOverflowY": false,
+   "unsafe": [],
+   "small": [],
+   "tiny": [],
+   "tinyN": 0,
+   "clipped": [],
+   "shot": "artifacts/framing/entries/mb-phonepad__standalone.png",
+   "errors": []
+  },
+  {
+   "id": "mb-saves",
+   "emu": [],
+   "root": "pm-files-save",
+   "title": "",
+   "docOverflowX": false,
+   "docOverflowY": false,
+   "unsafe": [],
+   "small": [],
+   "tiny": [],
+   "tinyN": 0,
+   "clipped": [],
+   "shot": "artifacts/framing/entries/mb-saves__standalone.png",
+   "errors": []
+  },
+  {
+   "id": "mb-race",
+   "emu": [],
+   "root": "sel-track-section",
+   "title": "",
+   "docOverflowX": false,
+   "docOverflowY": false,
+   "unsafe": [],
+   "small": [],
+   "tiny": [],
+   "tinyN": 0,
+   "clipped": [],
+   "shot": "artifacts/framing/entries/mb-race__standalone.png",
+   "errors": []
+  },
+  {
+   "id": "mb-career",
+   "emu": [],
+   "root": "career",
+   "title": "CAREER MODES",
+   "docOverflowX": false,
+   "docOverflowY": false,
+   "unsafe": [],
+   "small": [],
+   "tiny": [
+    {
+     "el": "cr-sub",
+     "px": 9.8,
+     "text": "Two ways to play a championshi"
+    },
+    {
+     "el": "h3.sel-label",
+     "px": 9.8,
+     "text": "DRIVER CAREER"
+    },
+    {
+     "el": "h3.sel-label",
+     "px": 9.8,
+     "text": "MY TEAM"
+    }
+   ],
+   "tinyN": 3,
+   "clipped": [],
+   "shot": "artifacts/framing/entries/mb-career__standalone.png",
+   "errors": []
+  },
+  {
+   "id": "mb-season",
+   "emu": [],
+   "root": "sel-track-section",
+   "title": "",
+   "docOverflowX": false,
+   "docOverflowY": false,
+   "unsafe": [],
+   "small": [],
+   "tiny": [],
+   "tinyN": 0,
+   "clipped": [],
+   "shot": "artifacts/framing/entries/mb-season__standalone.png",
+   "errors": []
+  }
+ ]
+}
