@@ -177,7 +177,9 @@ test("saves, career and net hooks are not callable", async () => {
     assert.equal(r.error, "method not allowed: " + m);
   }
   assert.deepEqual(hit, []);
-  for (const m of api.CALL_OK) assert.equal(/^(career|lobby|net|save|garageFile|settingsFile|persist)/.test(m), false, m);
+  for (const m of ["careerMoney", "careerSlotDelete", "lobbyHost", "netStop", "save", "persistState", "settingsFile", "garageFile", "garageParts", "loadCarModel", "constructor", "__proto__", "hasOwnProperty", "Eval"])
+    assert.equal(api.callAllowed(m), false, m);
+  for (const m of ["info", "rollout", "pit", "tt", "weather", "garageTeam", "hud", "uiScale"]) assert.equal(api.callAllowed(m), true, m);
 });
 
 test("unknown commands and inherited keys are refused", async () => {
@@ -495,17 +497,25 @@ function menuDom({ state = "menu", dailyLocked = false } = {}) {
   return { els, log, game, apex, extra };
 }
 
-test("tap: only TAP_OK ids and circuit tiles, with the real pointer + click sequence", async () => {
+test("tap: any visible control outside the denied areas, with the real pointer + click sequence", async () => {
   const dom = menuDom();
   const b = load({ search: "", apex: dom.apex, extra: dom.extra });
-  for (const id of ["mb-career", "mb-vs", "pm-settings", "sel-tracks", "#mb-tt", "rs-go, mb-career", undefined]) {
+  const refused = {
+    "mb-career": "mb-career is refused: inside #mb-career (saves, career, net or the link)",
+    "mb-vs": "mb-vs is refused: inside #mb-vs (saves, career, net or the link)",
+    "sel-tracks": "sel-tracks is not a control",
+    "#mb-tt": "id must be an element id (letters, digits, - and _)",
+    "rs-go, mb-career": "id must be an element id (letters, digits, - and _)",
+    "nowhere-at-all": "#nowhere-at-all not in the page",
+  };
+  for (const [id, error] of Object.entries(refused)) {
     const r = await b.api.handle({ cmd: "tap", args: { id } });
-    assert.equal(r.ok, false, String(id));
-    assert.equal(r.error, "tap not allowed: " + id);
+    assert.equal(r.ok, false, id);
+    assert.equal(r.error, error, id);
   }
+  assert.equal((await b.api.handle({ cmd: "tap", args: {} })).error, "name the control: id, tile, text or data");
   for (const tile of ["../x", "monza']", "nowhere"]) assert.equal((await b.api.handle({ cmd: "tap", args: { tile } })).ok, false, tile);
   assert.equal(dom.log.length, 0, "a refused tap touches nothing");
-  for (const bad of ["mb-career", "mb-vs", "mb-continue", "pm-files", "pm-open-files", "save-export"]) assert.equal(b.api.TAP_OK.has(bad), false, bad);
   // A hidden control is refused, not clicked.
   assert.equal((await b.api.handle({ cmd: "tap", args: { id: "sel-go" } })).error, "sel-go is not visible (screen title)");
   const r = await b.api.handle({ cmd: "tap", args: { id: "mb-tt", until: "select", ms: 2000 } });
@@ -568,15 +578,116 @@ test("nav refuses a bad route up front and reports where a route stopped", async
   assert.equal(out.value[0].value.steps.at(-1).error, "time is locked on this session");
 });
 
-test("every TAP_OK id is a control the shell or the game creates (the lookup is dynamic, so this is its static check)", () => {
+test("every TAP_DENY area names a real id in the shell or the game, so a renamed area cannot open silently", () => {
   const { api } = load({ search: "" });
   const html = fs.readFileSync(new URL("../../index.html", import.meta.url), "utf8");
-  const shell = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
-  const runtime = { "ceremony-parc-skip": "js/race/parc-ferme.js", "ceremony-cooldown-skip": "js/race/cooldown-lap.js", "retired-skip": "js/race/retired-card.js" };
-  for (const id of api.TAP_OK) {
-    if (runtime[id]) assert.ok(fs.readFileSync(new URL("../../" + runtime[id], import.meta.url), "utf8").includes('"' + id + '"'), id + " made by " + runtime[id]);
-    else assert.equal(shell.has(id), true, id + " is in index.html");
+  const ids = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
+  const made = { "cr-career": "js/ui/settings-export-body.js", "pm-files": "js/ui/settings-export-body.js", "pm-settings-file": "js/ui/settings-export-body.js",
+    "pm-other-save-files": "js/ui/settings-export-body.js", "pm-share-code": "js/ui/settings-export-body.js", "pm-restore": "js/ui/settings-export-body.js",
+    "cs-garage-file": "js/ui/settings-export-body.js", "cs-garage-reset": "js/ui/settings-export-body.js", "ct-import": "js/camera/tuner-panel.js",
+    "bridge-link": "js/agent/bridge-link.js", "apex-bridge": "js/agent/apex-bridge.js" };
+  for (const p of api.TAP_DENY) {
+    const live = ids.has(p) || [...ids].some((id) => id.startsWith(p + "-"));
+    if (made[p]) assert.ok(fs.readFileSync(new URL("../../" + made[p], import.meta.url), "utf8").includes('"' + p), p + " is made by " + made[p]);
+    else assert.equal(live, true, p + " (or " + p + "-…) is in index.html");
   }
+});
+
+// THE WIDE SURFACE (Bryce 2026-11-25, "Broad allow-list"): find by label text or data attribute, set a control or a
+// settings key, send a key, scroll. A small DOM with querySelectorAll; every press is logged.
+function wideDom() {
+  const log = [];
+  const all = [];
+  const node = (tag, props = {}, parent = null) => {
+    const n = { tagName: tag, nodeType: 1, hidden: false, disabled: false, parentElement: parent, children: [], dataset: {}, attrs: {}, textContent: "",
+      scrollTop: 0, scrollHeight: 900, clientHeight: 300, value: "", checked: false, type: "", options: [], onclick: null,
+      getAttribute: (k) => n.attrs[k] ?? null, setAttribute: (k, v) => { n.attrs[k] = String(v); },
+      dispatchEvent: (e) => { log.push((n.id || tag) + ":" + e.type + (e.key ? "=" + e.key : "")); return true; },
+      click: () => { log.push((n.id || tag) + ":click"); if (n.onclick) n.onclick(); },
+      scrollIntoView: () => log.push((n.id || tag) + ":into"), ...props };
+    if (parent) parent.children.push(n);
+    all.push(n);
+    return n;
+  };
+  const body = node("BODY", { id: "" });
+  const pm = node("DIV", { id: "pausemenu" }, body);
+  const audio = node("BUTTON", { id: "pm-audio", textContent: " MUSIC & SOUND…  Music, radio " }, pm);
+  const files = node("BUTTON", { id: "pm-open-files", textContent: "SAVES & DATA…" }, pm);
+  node("BUTTON", { id: "pm-a", textContent: "RESET" }, pm);
+  node("BUTTON", { id: "pm-b", textContent: "RESET" }, pm);
+  const tab = node("DIV", { id: "pm-tab-hud", textContent: "HUD" }, pm); tab.attrs.role = "tab"; tab.attrs["data-tab"] = "hud";
+  const row = node("DIV", { id: "pm-units" }, pm);
+  const sel = node("SELECT", { id: "pm-units-sel", value: "kph", options: [{ value: "kph" }, { value: "mph" }] }, row);
+  const next = node("BUTTON", { id: "pm-units-next" }, row); next.attrs["data-step"] = "1";
+  next.onclick = () => { sel.value = sel.value === "kph" ? "mph" : "kph"; };
+  const box = node("INPUT", { id: "pm-mirror", type: "checkbox" }, pm);
+  box.onclick = () => { box.checked = !box.checked; };
+  const range = node("INPUT", { id: "pm-fov", type: "range", value: "60" }, pm);
+  const career = node("DIV", { id: "career" }, body);
+  node("BUTTON", { id: "cr-x", textContent: "MUSIC & SOUND" }, career);   // same label, inside a denied area
+  const document = { body, activeElement: audio, scrollingElement: body,
+    getElementById: (id) => all.find((n) => n.id === id) || null,
+    querySelectorAll: () => all.filter((n) => n.tagName !== "BODY" && n.tagName !== "DIV" || n.attrs.role) };
+  pm.querySelectorAll = () => document.querySelectorAll().filter((n) => { for (let e = n; e; e = e.parentElement) if (e === pm) return true; return false; });
+  const store = new Map();
+  const GameStore = { store: { get: (k, d) => (store.has(k) ? store.get(k) : d), set: (k, v) => { if (v === undefined) store.delete(k); else store.set(k, v); return true; },
+    raw: (k) => (store.has(k) ? store.get(k) : null), rawSet: (k, v) => { store.set(k, v); return true; }, rawDel: (k) => { store.delete(k); return true; } } };
+  const SettingsExport = { SPEC: [{ k: "radioChat", lane: "json", def: "normal", oneOf: ["off", "key", "normal", "chatty"] },
+    { k: "volMusic", lane: "json", def: 0.7 }, { k: "buildWorker", lane: "raw", def: "1", oneOf: ["0", "1"] }, { k: "voiceTune", lane: "json", def: {} }] };
+  class Event { constructor(type, o = {}) { this.type = type; Object.assign(this, o); } }
+  return { log, files, sel, box, range, store, extra: { document, setTimeout, Date, Event, GameStore, SettingsExport } };
+}
+
+test("wide tap: by visible label or data attribute; a denied area or an ambiguous label is refused with its reason", async () => {
+  const w = wideDom();
+  const b = load({ search: "", extra: w.extra });
+  const r = await b.api.handle({ cmd: "tap", args: { text: "music & sound" } });
+  assert.equal(r.ok, true, r.error);
+  assert.equal(r.value.tapped, "pm-audio", "the label prefix finds the one visible control outside #career");
+  assert.equal((await b.api.handle({ cmd: "tap", args: { data: { tab: "hud" } } })).value.tapped, "pm-tab-hud");
+  assert.equal((await b.api.handle({ cmd: "tap", args: { text: "RESET" } })).error, "2 controls match text:RESET (pm-a, pm-b): add nth or within");
+  assert.equal((await b.api.handle({ cmd: "tap", args: { text: "RESET", nth: 1 } })).value.tapped, "pm-b");
+  assert.equal((await b.api.handle({ cmd: "tap", args: { text: "saves & data" } })).error, "no visible control matches text:SAVES & DATA", "a door into a denied area is not even found");
+  assert.equal((await b.api.handle({ cmd: "tap", args: { id: "pm-open-files" } })).ok, false);
+  assert.equal((await b.api.handle({ cmd: "tap", args: { data: { "bad name": "x" } } })).ok, false);
+  assert.equal(w.log.filter((l) => l.startsWith("pm-open-files") || l.startsWith("cr-x")).length, 0, "nothing denied was pressed");
+});
+
+test("set: a control through its own UI path, or a SETTINGS FILE key through the store; tables and unknown keys refused", async () => {
+  const w = wideDom();
+  const b = load({ search: "", extra: w.extra });
+  const s1 = await b.api.handle({ cmd: "set", args: { id: "pm-units-sel", value: "mph" } });
+  assert.equal(s1.value.value, "mph");
+  assert.ok(w.log.includes("pm-units-next:click"), "a SettingRow is stepped by its own chevron");
+  assert.equal((await b.api.handle({ cmd: "set", args: { id: "pm-units-sel", value: "furlongs" } })).error, "pm-units-sel must be one of kph, mph");
+  assert.equal((await b.api.handle({ cmd: "set", args: { id: "pm-mirror", value: true } })).value.value, true);
+  assert.equal((await b.api.handle({ cmd: "set", args: { id: "pm-fov", value: 72 } })).value.value, 72);
+  assert.ok(w.log.includes("pm-fov:input") && w.log.includes("pm-fov:change"), "a range fires input then change");
+  assert.equal((await b.api.handle({ cmd: "set", args: { id: "pm-audio", value: 1 } })).ok, false, "a button is not settable");
+  const k = await b.api.handle({ cmd: "set", args: { key: "radioChat", value: "chatty" } });
+  assert.deepEqual(plain(k.value), { key: "radioChat", was: null, now: "chatty", reload: true });
+  assert.equal((await b.api.handle({ cmd: "set", args: { key: "buildWorker", value: "0" } })).value.now, "0");
+  assert.equal(w.store.get("apex26.buildWorker"), "0", "a raw-lane key is written as the settings file writes it");
+  for (const [key, value] of [["radioChat", "loud"], ["volMusic", "high"], ["voiceTune", {}], ["careerSlot", 1], ["bridgeToken", "x"], ["nope", 1]])
+    assert.equal((await b.api.handle({ cmd: "set", args: { key, value } })).ok, false, key);
+  assert.equal((await b.api.handle({ cmd: "set", args: { key: "radioChat" } })).error, "set needs a value");
+});
+
+test("key goes to the focused element (allow-listed keys only); scroll moves the page or a visible element", async () => {
+  const w = wideDom();
+  const b = load({ search: "", extra: w.extra });
+  const k = await b.api.handle({ cmd: "key", args: { key: "Escape" } });
+  assert.equal(k.value.to, "pm-audio");
+  assert.ok(w.log.includes("pm-audio:keydown=Escape") && w.log.includes("pm-audio:keyup=Escape"));
+  assert.equal((await b.api.handle({ cmd: "key", args: { key: "Space", id: "pm-mirror" } })).value.to, "pm-mirror");
+  assert.equal((await b.api.handle({ cmd: "key", args: { key: "F12" } })).ok, false);
+  assert.equal((await b.api.handle({ cmd: "key", args: { key: "Enter", id: "pm-open-files" } })).ok, false, "no key into a denied area");
+  assert.equal((await b.api.handle({ cmd: "scroll", args: { by: 120 } })).value.top, 120);
+  assert.equal((await b.api.handle({ cmd: "scroll", args: { id: "pausemenu", to: "bottom" } })).value.top, 900);
+  assert.equal((await b.api.handle({ cmd: "scroll", args: { id: "career", by: 10 } })).ok, false);
+  await b.api.handle({ cmd: "scroll", args: { id: "pm-fov", into: true } });
+  assert.ok(w.log.includes("pm-fov:into"));
+  assert.equal((await b.api.handle({ cmd: "scroll", args: {} })).ok, false);
 });
 
 // DRIVING (#6397): `drive` hands the car to SoakRun's driver (JSON in, no policy function); this pins the command's

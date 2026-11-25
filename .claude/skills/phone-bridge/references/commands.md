@@ -4,6 +4,7 @@
 - Commands
 - Recipes
 - Menu route: nav and tap
+- Any control: tap, set, key, scroll
 - Driving: drive
 - Cannot measure
 
@@ -29,7 +30,7 @@ in `js/agent/apex-bridge.js`), not this table.
 | `display` | — | the CSS→device pixel ledger (#5166): `{dpr, inner, screen, client, visualViewport, standalone, vars:{root,hud} (--ui-scale, --vwz, --hud-scale…), game/soft:{css, rect, buffer, engine, chain}, hud:{chain:{steps, zoomProduct}, time, pos}, overlay, renderScale, build:{sha, build, swCaches, sw}}`; HUD painted px = fontSize × zoomProduct × visualViewport.scale × dpr; canvas backing = css × dpr × renderScale.scale |
 | `geom` | — | the geometry ledger (docs/notes/GEOMETRY-TRUTH-HUNT-2026-11-09.md): `{inner, client, visualViewport, screen, orientation, dpr, standalone, units:{vh,svh,dvh,lvh,vw,svw}, insets:{left,top,right,bottom}, zoom:{currentCSSZoom, rectOf100At2, vwInZoom2, envInZoom2}, media, tiers, wish:{ui,hud,btn}, paint:{hudTop,hudBot,dock,dockLeft,sheet,kb,…}}`; `rectOf100At2` 200 = standardized zoom, 100 = legacy; `wish` ≠ `paint` = a slider past its fit cap |
 | `frames` | `seconds` | `{frames, fps, meanMs, p50, p95, p99, maxMs, over33, longTasks, hidden}` (rAF intervals; `hidden: true` = void, `hidden: false` proves nothing: §Cannot measure) |
-| `call` | `method`, `args[]` | one `__apex` method in `CALL_OK` (see `js/agent/apex-bridge.js`) |
+| `call` | `method`, `args[]` | any `__apex` method but the deny-list (`CALL_DENY`, `CALL_DENY_PREFIX` in `js/agent/apex-bridge.js`: saves and files, career, lobby / net, `garageParts`, `loadCarModel`) |
 | `path` | `to` webgpu / webgl2 / auto, `reload` | `{was, pinned, reloading}` (may be lost to the reload); no `to` = the `render` state alone |
 | `bench` | `op` tests / start (+`test`) / stop / status / result / leg (+`i`) | BenchRun (SETTINGS > GRAPHICS > BENCHMARK); `start` reloads before it replies |
 | `snap` | `w`, `q` start quality | `{w, h, q, from, chars, jpeg: "data:image/jpeg;base64,…"}` |
@@ -37,7 +38,10 @@ in `js/agent/apex-bridge.js`), not this table.
 | `gpuTest` | `op` start / stop / status / active | GPU TEST (`GpuTestRun`) |
 | `recorder` | `op` start / stop / isOn / json | PHONE TEST recorder |
 | `screen` | — | `{screen, state}`: the topmost visible screen (`title`, `select`, `setup`, `garage`, `loading`, `quali`, `results`, `pause`), else `drive-out` (the garage-out, state still `menu`) or `race` |
-| `tap` | `id` (one of `TAP_OK`) or `tile` (a track id); `until` a screen, `ms` | `{tapped, screen, state, ok}`: pointerdown, pointerup and click on the real control; a hidden, disabled or unlisted control is refused |
+| `tap` | one of `id`, `text` (the visible label, exact or prefix, case-blind), `data` ({name: value} for `data-<name>`), `tile` (a track id); `within` an id, `nth`; `until` a screen, `ms` | `{tapped, screen, state, ok}`: pointerdown, pointerup and click on the real control; hidden, disabled, not a control, ambiguous (add `nth`), or inside a denied area (§Any control) is refused with the reason |
+| `set` | a control (`id` / `text` / `data`) and `value`; or `key` (a SETTINGS FILE key) and `value` | control: `{set, value, screen}` through its own UI (a SettingRow's chevron, a select's change, a checkbox's click, a range's input + change); key: `{key, was, now, reload: true}` |
+| `key` | `key` (Escape, Enter, Space, Tab, arrows, Home, End, PageUp, PageDown, Backspace), `id`, `shift` | `{key, to, prevented, screen}`: keydown + keyup on the focused element (or `id`) |
+| `scroll` | `id` (else the page) and one of `by` px, `to` top / bottom, `into` true | `{scrolled, top, height, view}` |
 | `nav` | `flow` tt / race, `track`, `weather`, `tod`, `entry` setup / garage / daily, `go` (default true) | `{ok, screen, state, ms, steps:[{step, ok, screen, ms}], door}`; starts on the title; `door` = `menuPrep().door` |
 | `drive` | ONE of `to` "box", `laps` 1-5, `seconds` 1-600; `ms` cap (240 000); `wait` false; or `stop` / `status` true | `{ok, screen, state, reason, inBox, pit, laps, steps:[{phase, t, s, kph}], pitActions}` (outer `ms` too): `value.ok` = goal met; `reason` box / laps / seconds / timeout / missed / lane-closed / touch / paused / state:… (§Driving) |
 | `batch` | `steps[]` of `{cmd, args}` | one result per step; stops at the first failure (or a `tap` / `nav` / `drive` whose `value.ok` is false); `reload` / `path` only last |
@@ -101,6 +105,26 @@ Then the same with `"entry":"garage"` (picker → YOUR CAR → garage DONE → S
 fail, run one entry right after a session with a different weather or hour: finish or quit it (`tap` `pausebtn`, then
 `pm-quit`) and `nav` again without a reload. END TIME TRIAL with no human: §Driving.
 
+## Any control: tap, set, key, scroll
+
+Bryce, 2026-11-25: "Let's just make it so Claude link can basically drive the whole game or do anything it wants to
+test", then he picked a broad allow-list over eval. So the bridge presses or sets ANY visible, enabled control and calls
+any `__apex` method, EXCEPT the deny-lists. `TAP_DENY` covers career, saves and data, the garage and career files, VS
+FRIEND and phone pairing, and the link's token form and badge. It matches an id, its `<id>-…` family and every element
+inside one, so the doors (`mb-career`, `pm-open-files`) are refused along with what is behind them. A control inside one
+is never even FOUND by `text` or `data`. `CALL_DENY` covers save / persist / settingsFile / garageFile, every career,
+lobby and net hook, `garageParts` and `loadCarModel`. Still no eval: no command evaluates a string, and JSON carries
+no function.
+
+- Find by what Bryce sees: `{"cmd":"tap","args":{"text":"MUSIC & SOUND"}}`. A label shared by two controls answers
+  `2 controls match … (ids)`; add `nth` or `within`.
+- `set` by control goes through the control's own handlers, so it stores and applies exactly as a thumb would:
+  `{"cmd":"set","args":{"id":"rs-weather-sel","value":"rain"}}`. `set` by key writes a SETTINGS FILE key (the
+  `settingsFile` list; tables are refused) the way an import does. Most screens read a stored key at load, so the reply
+  says `reload: true`: put a `reload` last.
+- `key` events are synthetic. A handler that checks `isTrusted` ignores them, the browser does not move focus on a
+  synthetic Tab, and they never end a `drive` (only Bryce's real touch does).
+
 ## Driving: drive
 
 #6397. `drive` gives the player car to SoakRun's driver (`js/perf/soak-run.js`: the AUTO SOAK law, and on the pit
@@ -124,6 +148,11 @@ END TIME TRIAL, no human (Bryce on the title screen; one comment, ~2-3 min to th
 ```apex-cmd
 {"cmd":"batch","args":{"steps":[{"cmd":"nav","args":{"flow":"tt","track":"monza"}},{"cmd":"drive","args":{"to":"box"}},{"cmd":"tap","args":{"id":"hud-end-session","until":"garage","ms":10000}},{"cmd":"wait","args":{"ms":1500}},{"cmd":"tap","args":{"id":"cs-arrival-skip"}},{"cmd":"wait","args":{"ms":1000}},{"cmd":"screen"},{"cmd":"snap","args":{"w":320}}]}}
 ```
+
+From ANY screen (a race running, the pause menu, a sheet open), the same check with no human at all. First, back
+to the title: `{"cmd":"batch","args":{"steps":[{"cmd":"key","args":{"key":"Escape"}},{"cmd":"wait","args":{"ms":800}},{"cmd":"screen"}]}}`.
+If that reads `pause`, `{"cmd":"tap","args":{"id":"pm-quit","until":"title","ms":15000}}`; if `results`,
+`{"cmd":"tap","args":{"id":"res-menu","until":"title","ms":15000}}`. Then the recipe above.
 
 Read `steps[1].value.inBox` and `pitActions` (the box was reached and END TIME TRIAL was up), `steps[2].value.ok`
 (the garage opened), then the screen and snap; `cs-done` is VIEW RESULTS from there. As `__apex` calls (the sim
