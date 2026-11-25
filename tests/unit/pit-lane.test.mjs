@@ -1747,7 +1747,18 @@ const require = createRequire(import.meta.url);
 const { buildContext } = require(join(ROOT, "tools/lib/track-build-vm.cjs"));
 const BUILT = (() => {
   const { Tracks } = buildContext(), memo = {};
-  return { Tracks, build: (id) => memo[id] || (memo[id] = Tracks.build(Tracks.LIST.find((d) => d.id === id))) };
+  const def = (id) => Tracks.LIST.find((d) => d.id === id);
+  // The pit model alone: Tracks.buildSteps sets track.pit (TrackPit.build, which alone writes hasBays and painted)
+  // right after the centreline and before terrain, scenery and props, so stopping the generator there reads the
+  // same model as the full build at a fraction of its cost (#6569 rank 2: the 52-circuit roster test was 69-96 s).
+  const pitOnly = (id) => {
+    if (memo[id]) return memo[id].pit;
+    const it = Tracks.buildSteps(def(id));
+    try {
+      for (;;) { const r = it.next(); if (r.done) return r.value.pit; if (r.value && r.value.pit) return r.value.pit; }
+    } finally { it.return(); }
+  };
+  return { Tracks, pitOnly, build: (id) => memo[id] || (memo[id] = Tracks.build(def(id))) };
 })();
 
 /** A human at the box of the last row (MY TEAM's bay) of circuit `id`, stationary at lateral `x`. */
@@ -1986,7 +1997,7 @@ test("every circuit without pit.bays === false keeps its garage bays (#5699 row 
   const SHORT_WINDOW = new Set(["mont_tremblant"]);
   const lost = [];
   for (const d of BUILT.Tracks.LIST) {
-    const p = BUILT.build(d.id).pit;
+    const p = BUILT.pitOnly(d.id);
     const wantBays = !(d.pit && d.pit.bays === false) && !p.painted && !SHORT_WINDOW.has(d.id);
     if (wantBays !== p.hasBays) lost.push(`${d.id}: hasBays ${p.hasBays}`);
   }
