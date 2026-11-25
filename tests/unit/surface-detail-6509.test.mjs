@@ -98,7 +98,7 @@ test("wearMask packs the racing line, rubber, braking and half-width along s", (
     const i = Math.floor(s / track.total * track.n);
     assert.ok(Math.abs(m.data[j * 4 + 3] / 255 * 20 - track.hw[i]) < 0.5, `half-width at texel ${j}`);
   }
-  assert.ok(brakeTexels > 40, `Monza has braking zones (${brakeTexels} texels)`);
+  assert.ok(brakeTexels > 40 && brakeTexels < m.width / 2, `Monza has braking zones, not a braking lap (${brakeTexels} texels)`);
   assert.ok(cornerTexels > 40, `Monza has corner windows (${cornerTexels} texels)`);
   // No line, no strip.
   assert.equal(S.wearMask({ n: 10, total: 100, line: null }), null);

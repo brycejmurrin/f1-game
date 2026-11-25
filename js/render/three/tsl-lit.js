@@ -1079,10 +1079,15 @@
       t.needsUpdate = true;
       return t;
     }
-    // #6509 close-up surfaces + wear mask (EXTREME closeLayers / wearMask; js/render/three/tsl-surface.js, lazy).
-    const SFN = (() => {
-      try { return (ctx.closeLayers || ctx.wearMask) && typeof TLXSurface !== "undefined" ? TLXSurface.nodes(THREE, TSL, ctx, texGroup, ctx.chunks) : null; } catch (_) { return null; }
-    })();
+    // #6509 close-up surfaces + wear mask (EXTREME closeLayers / wearMask; js/render/three/tsl-surface.js, LAZY_GFX_HI).
+    // Read at the first material or track, not here: renderer-boot awaits that bundle only after the backend's create.
+    let _sfn;
+    const sfn = () => {
+      if (_sfn !== undefined || !(ctx.closeLayers || ctx.wearMask)) return _sfn || null;
+      try { _sfn = typeof TLXSurface !== "undefined" ? TLXSurface.nodes(THREE, TSL, ctx, texGroup, ctx.chunks) : null; } catch (_) { _sfn = null; }
+      if (!_sfn) Log.warn("gfx", "TLX: closeLayers/wearMask on but TLXSurface absent — today's road");
+      return _sfn;
+    };
     function retireBakeTexture(texture, blank) {
       if (texture === blank) return;
       try { texture.dispose(); } catch (_) { /* already gone */ }
@@ -2106,7 +2111,7 @@
         }
 
         // #6509 (tsl-surface.js): footprint at the top level, the kerb / tarmac / wear terms, then the paint after.
-        const sf = SFN && trkA && !instanced ? SFN.begin(trkA) : null;
+        const SFN = sfn(), sf = SFN && trkA && !instanced ? SFN.begin(trkA) : null;
         const paintPre = sf ? SFN.apply(sf, { albedo, rough, matA, wp, k: U.matTexMix }) : null;
 
         // painted road markings (js/render/glx/shaders/glsl-lit.js)
@@ -3499,7 +3504,7 @@
              decalLight: { shadow: decalShadow, pool: decalPool },
              setSsrMrt, setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS,
              detail: { matDetail: MAT_DETAIL, envAll: ENV_ALL }, carSurf: !!CSN,
-             surface: SFN ? SFN.uniforms : null, setTrackWear: (t) => !!SFN && SFN.setTrackWear(t) };
+             get surface() { const s = sfn(); return s ? s.uniforms : null; }, setTrackWear: (t) => !!sfn() && sfn().setTrackWear(t) };
   }
 
   // The plain-JS twin of matDetail's weight maths (mdHexGrid / mdBiW / mdVarScale above), for node tests only:
