@@ -226,6 +226,25 @@ test("wantBoost catches and defends; banks when aware and rich-not-needed", () =
   }), true);
 });
 
+test("wantBoost keeps a reserve when defending: no defence at or below 0.12 charge (#6546 P1)", () => {
+  const defend = { traits: mid, kAhead60: 0.001, otActive: false, chaser: true, chaserGap: 8, chaserSpeed: 56, speed: 55 };
+  assert.equal(A.wantBoost({ ...defend, energy: 0.05 }), false, "a train defence must not drain the battery flat");
+  assert.equal(A.wantBoost({ ...defend, energy: 0.12 }), false);
+  assert.equal(A.wantBoost({ ...defend, energy: 0.15 }), true, "above the reserve it still defends (0.25 held trains longer)");
+});
+
+test("diffCorner: a level with corner <= 1 is the pre-#6565 formula exactly; HARD caps at its own corner", () => {
+  const old = (corner, skill, band, trim) => Math.min(1 / skill, Math.min(1, corner * (1 + band)) * trim);
+  for (const [corner, band] of [[0.93, 0.18], [0.97, 0.08], [1, 0.02]]) {
+    for (const skill of [0.86, 0.93, 1, 1.04]) for (const trim of [0.95, 1, 1.03]) {
+      assert.equal(A.diffCorner(corner, skill, band, trim), old(corner, skill, band, trim), `corner ${corner} skill ${skill} trim ${trim}`);
+    }
+  }
+  for (const skill of [0.9, 1, 1.05]) for (const trim of [0.97, 1, 1.05]) {
+    assert.ok(skill * A.diffCorner(1.072, skill, 0.02, trim) <= 1.072 + 1e-12, "HARD never past sqrt(PLAYER_GRIP)");
+  }
+});
+
 // Physics hunt 2026-10-10 (item 6): the catching / defending / attacking closing
 // rates were raw m/s (towSpeed - 1, speed - 2, blockerSpeed - 1), so the same
 // situation on the standard scale flipped with OVERALL SPEED. They ride vTop now.
