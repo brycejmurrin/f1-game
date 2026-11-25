@@ -29,6 +29,7 @@ function fakeGame({ heldFrames }) {
       info: () => ({ track: "monza", state: "race", liveTicks: g.live, warming: g.raf <= heldFrames }),
       raceEntryProfile: () => ({ marks: [{ n: "begin:race" }, { n: "warm:noop" }] }),
       setEnergy() {}, setBoost(on) { g.boostOn = !!on; },
+      renderScale: () => ({ scale: 1, lookPostShed: false }), govHold: () => ({ tierHold: false, tier: 0 }),
       carEffects: () => ({ ersDeploy: g.deploying }),
     },
   };
@@ -83,22 +84,50 @@ test("a press made during a hold is read after physics has seen it, and every wi
   } finally { process.chdir(cwd); fs.rmSync(tmp, { recursive: true, force: true }); }
 });
 
-test("renderScale pins the scale and holds the tier before go(), and reports both ends (#6669)", async () => {
+function pinnableGame() {
   const world = fakeGame({ heldFrames: 0 }), calls = [];
   const A = world.win.__apex, go = A.go;
   let scale = 1, hold = false;
-  A.renderScale = (v) => { if (typeof v === "number") { calls.push("scale"); scale = v; } return { scale }; };
+  A.renderScale = (v) => { if (typeof v === "number") { calls.push("scale"); scale = v; } return { scale, lookPostShed: false }; };
   A.govHold = (on) => { if (on !== undefined) { calls.push("hold"); hold = !!on; } return { tierHold: hold, tier: 2 }; };
   A.go = () => { calls.push("go"); return go(); };
+  return { world, calls };
+}
+async function inTmp(run) {
   const cwd = process.cwd(), tmp = fs.mkdtempSync(path.join(os.tmpdir(), "boost-census-"));
   process.chdir(tmp);
-  try {
-    await withGlobals(world, async () => {
-      const out = await measureBoostPresses(world.page, { forceGL: true, bootMs: 1000, renderScale: 0.5, gas: async (on) => { world.g.gas = on; } });
-      assert.deepEqual(calls, ["scale", "hold", "go"]);
-      assert.deepEqual(out.pin, { asked: 0.5, before: { scale: 0.5, tierHold: true, tier: 2 }, after: { scale: 0.5, tierHold: true, tier: 2 } });
-      assert.equal(out.presses.length, PRESSES);
-      assert.ok(out.presses.every((p) => p.ms >= 0));
-    });
-  } finally { process.chdir(cwd); fs.rmSync(tmp, { recursive: true, force: true }); }
+  try { await run(); } finally { process.chdir(cwd); fs.rmSync(tmp, { recursive: true, force: true }); }
+}
+
+test("renderScale pins the scale and holds the tier before go(), and reports both ends (#6669)", async () => {
+  const { world, calls } = pinnableGame();
+  await inTmp(() => withGlobals(world, async () => {
+    const out = await measureBoostPresses(world.page, { forceGL: true, bootMs: 1000, renderScale: 0.5, gas: async (on) => { world.g.gas = on; } });
+    assert.deepEqual(calls, ["scale", "hold", "go"]);
+    const st = { scale: 0.5, tier: 2, tierHold: true, lookPostShed: false };
+    assert.deepEqual(out.render, { asked: { renderScale: 0.5, swRaceShed: false }, before: st, after: st });
+    assert.equal(out.presses.length, PRESSES);
+    assert.ok(out.presses.every((p) => p.ms >= 0));
+  }));
+});
+
+test("presses / deployFrames / spacing size the run; swRaceShed sets the knob and pins nothing itself (#6673)", async () => {
+  const { world, calls } = pinnableGame();
+  const ls = {};
+  world.page.addInitScript = async (fn, arg) => {
+    const saved = globalThis.localStorage;
+    globalThis.localStorage = { setItem: (k, v) => { ls[k] = v; } };
+    try { fn(arg); } finally { if (saved === undefined) delete globalThis.localStorage; else globalThis.localStorage = saved; }
+  };
+  await inTmp(() => withGlobals(world, async () => {
+    const out = await measureBoostPresses(world.page, { forceGL: true, bootMs: 1000, swRaceShed: true, presses: 2, deployFrames: 15, spacing: 10,
+      tag: "t", gas: async (on) => { world.g.gas = on; } });
+    assert.equal(ls["apex26.swRaceShed"], "1");
+    assert.equal(ls["apex26.tlxForceGL"], "1");
+    assert.deepEqual(calls, ["go"]);
+    assert.equal(out.presses.length, 2);
+    assert.deepEqual(out.presses.map((p) => p.deployed), [true, true]);
+    assert.equal(world.g.live, 10 + 2 * (15 + 10 + 15 + 10));
+    assert.ok(fs.existsSync("artifacts/perf/boost-press-pipelines-t.json"));
+  }));
 });
