@@ -366,6 +366,7 @@ const {
 // BEACHED: off the road and crawling at the grass-drag floor — the rescue gate
 // for the player AND the AI (the AI's own `offT > 0.5` read the track-limits
 // counter, which resets to -2 every 1.2 s, so its rescue could never fire).
+const _ersHeld = new WeakSet();   // cars inside a BOOST hold (lane limiter, box, caution) as of their last step (#6546 P4)
 const _beachGain = new WeakMap();   // car -> { v: last vStd, a: ~1 s EMA of its gain rate }: the player rescue's "not gaining" test (#6546 P3)
 function beachedAt(c) { return c.offroad && c.speed < GRASS_V * 0.6 * Math.max(driveTune.PACE, 0.05) + 1.5 * Math.max(driveTune.PACE, 0.05); }
 function dashKph(v) { return vStd(v) * 3.6; }
@@ -5093,7 +5094,8 @@ function updateCar(c, dt, ranked) {
   // Short-circuit empty battery before the LUT sample AiDrive would ignore anyway.
   // pitHeld: lane limiter only (OT earn / flaps also gate on it). ersHeld adds box + caution for BOOST.
   const pitHeld = pits.held(c);
-  const ersHeld = pitHeld || cautionV >= 0 || c.pitState === "box"; let aiWantsBoost = false; if (ersHeld) c.boostOn = false;   // no BOOST at the limiter, in the box or under a caution cap: it only hit the cap and drained ~0.23/s. The toggle drops too (#6546 P4): it resumed, and drained, after the stop or caution with no new press
+  const ersHeld = pitHeld || cautionV >= 0 || c.pitState === "box"; let aiWantsBoost = false;   // no BOOST at the limiter, in the box or under a caution cap: it only hit the cap and drained ~0.23/s
+  if (ersHeld !== _ersHeld.has(c)) { if (ersHeld) { _ersHeld.add(c); c.boostOn = false; } else _ersHeld.delete(c); }   // the hold's START drops the toggle (#6546 P4: it resumed, and drained, after the stop or caution with no new press); a press made DURING the hold stays ON (the HUD's data-held, #5783 K3)
   // paceVmax(c) in two slots (#3109): its inputs (aeroX, _vmaxNow) move only at the flap/vmax stamp below, so
   // S.pvA serves every read before it (this step sees last step's flap) and S.pvB, taken in updateCarLateral, every read after.
   S.pvA = paceVmax(c);
