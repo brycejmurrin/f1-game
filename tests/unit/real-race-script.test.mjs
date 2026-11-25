@@ -1164,10 +1164,9 @@ test("a provisional rebuild refetches the stewards' bodies; the rest stay cached
   const tab = D.create({});
   const rebuilt = host(await tab.scriptFor(11377));
   assert.equal(rebuilt.provenance, "fetched");
-  assert.ok(network.includes(url("session_result")) && network.includes(url("race_control")), "the classification and race control went out uncached");
-  for (const p of ["sessions", "drivers", "stints", "pit", "overtakes", "weather", "team_radio"]) {
-    assert.ok(!network.includes(url(p)), p + " stays on the 7-day cache (rate limits)");
-  }
+  const sent = (p) => network.indexOf(url(p)) >= 0;
+  assert.deepEqual(["session_result", "race_control"].map(sent), [true, true], "the classification and race control went out uncached");
+  assert.deepEqual(["sessions", "drivers", "stints", "pit", "overtakes", "weather", "team_radio"].filter(sent), [], "the rest stays on the 7-day cache (rate limits)");
   const d = rebuilt.drivers.find((x) => x.num === winner);
   assert.equal(d.dsq, true, "the post-race DSQ reached the rebuilt script");
   assert.equal(rebuilt.complete, true, "the reclassified race is still complete");
