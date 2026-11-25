@@ -215,13 +215,11 @@ APIs aren't hammered.
 
 ## Running it
 
-Any static file server works:
+Serve the tree (AGENTS.md §The loop):
 
 ```sh
-npx serve -l 3456 .
-# or
-python3 -m http.server 3456
-# then open http://localhost:3456
+python3 -m http.server -b 127.0.0.1 3456   # not npx serve: it leaks fds
+# then open http://127.0.0.1:3456
 ```
 
 For tilt steering on a phone, serve over HTTPS (e.g. GitHub Pages) — motion
@@ -269,11 +267,10 @@ node tools/track/verify-track.cjs --all            # headless build check, all 5
 `docs/TESTING.md` is the full reference: every group, every spec, the fixtures
 and the philosophy.
 
-Development server (pick either):
+Development server:
 
 ```sh
-python3 -m http.server 3456
-npx serve -l 3456 .
+python3 -m http.server -b 127.0.0.1 3456
 ```
 
 Development happens on `cursor/<topic>-<hash>` feature branches; the deploy branch is

@@ -31,7 +31,7 @@ alwaysApply: false
   before `device.onuncapturederror` (deaf on iOS/Safari 26.0–26.5); WebKit caps
   module-scope `var<private>` at 8,192 bytes per module.
 - A unit test is not boot evidence. Boot it live from a secure context
-  (`npx serve -l 3456 .`, then
+  (`python3 -m http.server -b 127.0.0.1 3456`, then
   `node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'`)
   and confirm one positive signal: a clean WGX boot writes nothing, so assert
   `canvas.getContext("webgl2") === null`. Traps: `docs/ARCHITECTURE.md`

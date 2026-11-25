@@ -51,7 +51,7 @@ mentions a rule never trips it; a command they cannot tokenise is refused.
   differs from the live labels by anything but ONE name, removes `config-ok` or adds it on a PROTECTED path (D-042), or drops Bryce's `hold`, a run cancel, re-run or
   `ci.yml` / `pages.yml` dispatch from any session but the orchestrator (skill `steward` §CI), and an unparsable guarded call (the draft→ready flip
   is allowed: the Plan gate and the CI check judge it). `.githooks/pre-commit` owns `test:guards` for every host,
-  with no skip (AGENTS.md rule 12); `.githooks/pre-push` refuses force pushes, branch deletes and deploy-branch
+  with no skip (AGENTS.md §The loop step 5); `.githooks/pre-push` refuses force pushes, branch deletes and deploy-branch
   pushes.
 - `context-cap.py` (Agent) advises on live context against the brief's first `STOP AT` (`<N>k`, or `start+<N>k`
   above the first turn's context) and refuses spawns over the hard cap, or when a capped session's count cannot be

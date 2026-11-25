@@ -8,7 +8,7 @@ at a representative lap fraction, chase camera, HUD off.
 
 ```sh
 # Serve the game (Chrome MCP needs a live URL — not file://)
-npx serve -l 3456 .
+python3 -m http.server -b 127.0.0.1 3456
 
 # Single circuit — all 20 tod×weather combos
 python3 tools/mcp/cdmcp-cli.py look-survey monaco --frac 0.45

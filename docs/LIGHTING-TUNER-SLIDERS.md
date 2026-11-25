@@ -828,7 +828,7 @@ node tools/lighting/slider-effect.mjs --filter --a a.png --b b.png --out dir/
 
 ```sh
 # Serve the game first (required — Chrome MCP needs a URL):
-npx serve -l 3456 .
+python3 -m http.server -b 127.0.0.1 3456
 
 # All 20 conditions for a circuit
 python3 tools/mcp/cdmcp-cli.py look-survey monaco --frac 0.45
