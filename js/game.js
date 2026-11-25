@@ -7554,6 +7554,11 @@ function render(dt) {
   // farPlane with its own value right below, so debug/photo-mode is untouched.
   let fovY, farPlane = 900 * (LT.renderDistMul != null ? LT.renderDistMul : 1);
   if (cine) farPlane = FlybySeq.FAR;   // flat, not scaled by RENDER DISTANCE: the editor previews ONE number
+  if (dbgCam && dbgCam.onboard && player) {   // Photo Studio POV seat (FreeCam {pov}): the race rig's own eye, att-seated like the rig below; the photo lens stays
+    const pa = playerAnchor(player), rp = renderPosOf(player), bk = Tracks.banking(track, pa.cS, pa.cX, _bankScratchCam, true);
+    const v = camVantage(dbgCam.onboard, pa.cS, pa.cX, 0, performance.now(), { att: player, noLook: true, reduceMotion: true, dt: 0, bankDy: bk ? bk.dy : 0, carPos: rp.world ? [rp.x, rp.z] : null, carHead: headInterp(player) });
+    dbgCam.eye = v.eye.slice(); dbgCam.target = v.tgt.slice();
+  }
   if (dbgCam) {
     GameCams.applyFreeCam(dbgCam, camEye, camTgt);
     fovY = dbgCam.fov * Math.PI / 180;
@@ -7828,7 +7833,7 @@ function render(dt) {
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
   // (wheel/halo/mirrors) + the car's shadow instead, body mesh skipped. Was two
   // always-equal booleans, so the `hide && !rig` skip they guarded never fired.
-  const cockpitRigOnly = !dbgCam && (state === "race" || state === "count") && (CAM_MODES[camMode].id === "cockpit" || CAM_MODES[camMode].id === "helmet");
+  const cockpitRigOnly = !!GameCams.rigMode(dbgCam, state, CAM_MODES[camMode].id);
   // A steep or wide lens can see behind its horizontal heading. Bound the
   // entire frustum (including roll and lens shift) by its widest corner ray.
   let _camFwdX = camTgt[0] - camEye[0], _camFwdZ = camTgt[2] - camEye[2];
