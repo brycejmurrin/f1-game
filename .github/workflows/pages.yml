@@ -95,6 +95,12 @@ concurrency:
 #      merge whose base moved has a different tree and gets its own gate.
 #      Across several unpublished commits, a PR gate on the final tree
 #      does not prove the cumulative selection. Run that gate afresh.
+#      A BEHIND PR (#6557 P1, 2026-11-25) lands with a tree neither parent
+#      has, but its PR run tested GitHub's merge ref, and tooling A records
+#      that ref's base: a green full run of the second parent whose record
+#      names this commit's first parent, where merge-tree of the two parents
+#      gives this commit's tree, tested these exact bytes. Same proof, the
+#      tree; see tools/ci/pages-reuse-verdict.sh THE MERGE-REF CANDIDATE.
 #
 # What this replaces, and why (kept short; the runs are in the history):
 #   - 2026-08-12: workflow-level concurrency. cancel-in-progress: true starved
@@ -189,7 +195,7 @@ jobs:
           if [ "$NOTHING_NEW" = "true" ]; then
             echo "**Nothing new**: the live site already serves \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
           elif [ "$REUSE" = "true" ]; then
-            echo "**Gate reused**: \`$GITHUB_SHA\` has the same tree as \`$SOURCE\`, which already passed $RUN" >> "$GITHUB_STEP_SUMMARY"
+            echo "**Gate reused**: \`$GITHUB_SHA\`'s exact tree already passed $RUN (as \`$SOURCE\`, or its PR merge ref)" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "**Gate runs**: no completed successful run found for this tree" >> "$GITHUB_STEP_SUMMARY"
           fi

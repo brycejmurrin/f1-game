@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# @doc Pages gate reuse: prints `reuse=true` (+source/run) when this tree already passed CI as this commit or a parent.
+# @doc Pages gate reuse: prints `reuse=true` (+source/run) when this tree passed CI as this commit, a parent or a merge ref.
 # @section runner
 #
 # pages-reuse-verdict.sh <commit-sha>
@@ -66,6 +66,22 @@
 # produced the head's own tree, so the earlier, older base merged into it the
 # same way. A merge whose base moved has a different tree and no candidate.
 #
+# THE MERGE-REF CANDIDATE (#6557 P1, 2026-11-25). Most PRs land BEHIND the
+# tip, so the merge commit's tree matches neither parent: 103 of 117 deploys in
+# 3.5 days paid the whole gate again. A pull_request run does not test its head,
+# though; it tests GitHub's merge of the head onto the base tip of that moment,
+# and tooling A records that base (`apex-guards` ... base=<sha>, the merge ref's
+# first parent). So when this commit is a merge whose second parent's green PR
+# run recorded base == this commit's FIRST parent, and `git merge-tree` of those
+# two parents gives exactly this commit's tree, that run tested these bytes: the
+# same tree, the same workflow, and a selection over the same one first-parent
+# change pages.yml requires (it calls this script only when SHA^1 is the verified
+# publication). Only a ci.yml pull_request run counts here, with every check
+# above (first attempt, gate jobs ran, guards mode=full). Its history check is
+# skipped on purpose: the run executed on this exact tree, not on an ancestor
+# that might have had different gate inputs. A record naming any other base, a
+# merge that conflicts or gives another tree, or no record at all is no reuse.
+#
 # Every failure of the lookup (no `gh`, an API error) is a `reuse=false`: the
 # cost of being wrong that way is one gate run, which is what happens today.
 #
@@ -125,16 +141,19 @@ gate_ran() {
       }
     });' || true
 }
-# guards_full <job-id>: prints `yes` when that tooling A job's record says it ran
-# the whole guards floor (`mode=full`). A missing or unreadable record is not full.
+# guards_full <job-id> [base]: prints `yes` when that tooling A job's record says it
+# ran the whole guards floor (`mode=full`) and, when a base is given, that its merge
+# ref sat on exactly that base. A missing or unreadable record is not full.
 guards_full() {
   local json
   json="$(gh api "repos/$REPO/check-runs/$1/annotations?per_page=100" 2>/dev/null)" || return 0
-  printf '%s' "$json" | node -e '
+  printf '%s' "$json" | WANT_BASE="${2:-}" node -e '
     let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
       let rows = []; try { rows = JSON.parse(s); } catch (_) { return; }
       const r = (Array.isArray(rows) ? rows : []).find((a) => a && a.title === "apex-guards");
-      if (r && /^mode=full base=([0-9a-f]{40}|none)$/.test(String(r.message || "").trim())) process.stdout.write("yes");
+      const m = r && /^mode=full base=([0-9a-f]{40}|none)$/.exec(String(r.message || "").trim());
+      const want = process.env.WANT_BASE || "";
+      if (m && (!want || m[1] === want)) process.stdout.write("yes");
     });' || true
 }
 
@@ -151,14 +170,30 @@ for parent in "$SHA^1" "$SHA^2"; do
   fi
 done
 
-for c in $candidates; do
-  if reuse_invalidated "$c" "$SHA"; then
+# The merge-ref candidate (see the header): this commit's second parent, whose
+# PR run may have tested merge(SHA^1, SHA^2), the very tree of this commit.
+P1="$(git rev-parse --verify -q "$SHA^1" 2>/dev/null)" || P1=""
+P2="$(git rev-parse --verify -q "$SHA^2" 2>/dev/null)" || P2=""
+if [ -n "$P1" ] && [ -n "$P2" ] && [ "$(tree_of "$P2")" != "$TREE" ]; then
+  if MT="$(git merge-tree --write-tree "$P1" "$P2" 2>/dev/null)" && [ "${MT%%$'\n'*}" = "$TREE" ]; then
+    say "merge-tree($P1, $P2) is $SHA's tree: $P2's PR run on base $P1 tested these bytes"
+    candidates="$candidates mergeref:$P2"
+  else
+    say "merge-tree($P1, $P2) is not $SHA's tree (or conflicts): no merge-ref candidate"
+  fi
+fi
+
+for cand in $candidates; do
+  c="${cand#mergeref:}"; want_base=""
+  if [ "$c" != "$cand" ]; then
+    want_base="$P1"   # the run must have merged onto exactly SHA^1, and be a PR run
+  elif reuse_invalidated "$c" "$SHA"; then
     say "not reusing $c; a workflow, staging, or test-selection input changed after it"
     continue
   fi
   json="$(gh api "repos/$REPO/actions/runs?head_sha=$c&status=success&per_page=30" 2>/dev/null)" \
     || { say "::warning::could not list workflow runs for $c; running the full gate"; continue; }
-  hit="$(printf '%s' "$json" | node -e '
+  hit="$(printf '%s' "$json" | PR_ONLY="${want_base:+1}" node -e '
     let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
       let runs = []; try { runs = JSON.parse(s).workflow_runs || []; } catch (_) {}
       const self = process.env.GITHUB_RUN_ID || "";
@@ -168,9 +203,11 @@ for c in $candidates; do
       // dropped that trigger on 2026-10-14 — merge queues need an
       // organisation-owned repo.)
       const fullPush = (r) => r.event === "push" && deployBranch !== "" && r.head_branch !== deployBranch;
+      // A merge-ref candidate: only a PR run tested a merge ref (PR_ONLY).
+      const prOnly = process.env.PR_ONLY === "1";
       const gate = (r) => r.status === "completed" && r.conclusion === "success" && String(r.id) !== self && (
-        (r.path === ".github/workflows/ci.yml" && (fullPush(r) || r.event === "pull_request")) ||
-        (r.path === ".github/workflows/pages.yml" && (r.event === "push" || r.event === "workflow_dispatch" || r.event === "schedule")));
+        (r.path === ".github/workflows/ci.yml" && (r.event === "pull_request" || (!prOnly && fullPush(r)))) ||
+        (!prOnly && r.path === ".github/workflows/pages.yml" && (r.event === "push" || r.event === "workflow_dispatch" || r.event === "schedule")));
       for (const r of runs.filter(gate)) console.log(`${r.id} ${Number.isInteger(r.run_attempt) && r.run_attempt > 0 ? r.run_attempt : "unknown"} ${r.path} ${r.event} ${r.html_url || r.id}`);
     });')"
   while read -r id attempt path event url; do
@@ -186,8 +223,12 @@ for c in $candidates; do
       say "run $id ($path $event) concluded success but its gate jobs (CI, sweeps, selected verdict, smoke) did not all run and pass — not a gate"
       continue
     fi
-    if [ "$(guards_full "${ran#yes }")" != yes ]; then
-      say "run $id ($path $event): its guards record is not mode=full (narrowed, reused or unrecorded) — not a gate"
+    if [ "$(guards_full "${ran#yes }" "$want_base")" != yes ]; then
+      if [ -n "$want_base" ]; then
+        say "run $id ($path $event): its guards record is not mode=full on base $want_base (another base, narrowed or unrecorded) — not this tree"
+      else
+        say "run $id ($path $event): its guards record is not mode=full (narrowed, reused or unrecorded) — not a gate"
+      fi
       continue
     fi
     say "REUSING the gate: $c already passed $path $event"

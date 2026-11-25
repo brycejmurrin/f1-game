@@ -324,7 +324,9 @@ jobs:
   guards-a:
     name: Structural guards (tooling A)
     runs-on: ubuntu-latest
-    timeout-minutes: 18   # 12 cancelled this job at load 6+ with every file passing (2026-10-21); the shards are balanced since #3389
+    # 12 cancelled this job at load 6+ with every file passing (2026-10-21); the shards are balanced since #3389.
+    # A draft runs two shards and tooling B's tail here (DRAFT PAIRS below), so it gets two shards' worth.
+    timeout-minutes: ${{ (inputs.concurrency_key == '' && github.event_name == 'pull_request' && github.event.pull_request.draft) && 30 || 18 }}
     permissions:
       contents: read
       actions: read
@@ -338,6 +340,13 @@ jobs:
       # #1712: nightly schedule is the NO_MEMO auditor (always runs); other events
       # may skip on an inputs-hash verdict-cache hit.
       NO_MEMO: ${{ github.event_name == 'schedule' && '1' || '' }}
+      # DRAFT PAIRS (#6557 P9, 2026-11-25): a draft PR runs the four guard shards in TWO jobs, not four. Tooling A
+      # runs shards 1/4 and 2/4 plus tooling B's tail (ratchets, tolerances, test:audit, coverage, behind-ship);
+      # tooling C runs 3/4 and 4/4; B and D skip. The same files and the same steps run on the same tree: a draft
+      # takes two runner slots instead of four while the pool is saturated (89 draft pushes a day). Ready PRs, the
+      # train, dispatch and the nightly keep four jobs for wall time. A pair's verdict cache keys `guards-ab-` (and
+      # `guards-cd-`), so a hit there proves both shards; a ready run's `guards-a-` key never reads it.
+      DRAFT_PAIR: ${{ inputs.concurrency_key == '' && github.event_name == 'pull_request' && github.event.pull_request.draft && '1' || '' }}
     steps:
       # BLOB-LESS FULL HISTORY (2026-10-14, Actions audit C6: 25 s -> 9 s).
       # Every history read in guards-a/-b/guards, unit-plan and xr-filter is a
@@ -397,7 +406,7 @@ jobs:
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
         env:
           GUARDS_MODE: ${{ steps.scope.outputs.mode }}
-        run: echo "key=guards-a-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
+        run: echo "key=guards-a${DRAFT_PAIR:+b}-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
       - name: Verdict cache lookup
         id: memo
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
@@ -417,6 +426,54 @@ jobs:
         # already in flight finish and the log names each. The local
         # `npm run test:tooling-fast` stays without it so an author sees every red.
         run: node tools/ci/tooling-fast.mjs ${GUARDS_CHANGED:+--changed} --jobs=4 --shard=1/4 --bail
+      # Tooling B's shard, on a draft only (DRAFT PAIRS above).
+      - name: Tooling-fast shard 2/4 (draft pair)
+        if: env.DRAFT_PAIR == '1' && steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
+        env:
+          GUARDS_CHANGED: ${{ steps.scope.outputs.mode == 'changed' && '1' || '' }}
+          APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
+          APEX_NOTES_AGE_ADVISORY: ${{ github.event_name != 'pull_request' && github.ref_name == 'claude/f1-game-project-26h3ng' && '1' || '' }}   # knowledge-gc.mjs ageGate: a note's age warns on the deploy tip only (a bot branch's dispatch stays strict)
+        run: node tools/ci/tooling-fast.mjs ${GUARDS_CHANGED:+--changed} --jobs=4 --shard=2/4 --bail
+      # Tooling B's tail, on a draft only (DRAFT PAIRS above): the same five steps, byte for byte but the `if:`.
+      - name: Ratchet ceilings vs the base (draft pair)
+        if: env.DRAFT_PAIR == '1' && steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
+        env:
+          RATCHET_BASE: ${{ github.event.pull_request.base.sha || (github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && github.event.before) || (inputs.concurrency_key != '' && github.sha) || 'origin/claude/f1-game-project-26h3ng' }}
+          RATCHET_MODE: ${{ (github.event_name == 'push' || inputs.concurrency_key != '') && '--advisory' || '' }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          base="$RATCHET_BASE"
+          # The event base can lag the base that this PR merge was built on;
+          # count only this PR's ceiling changes, not intervening ship raises.
+          [ "$EVENT" = pull_request ] && base="$(bash tools/ci/ci-pr-base.sh "$base")"
+          case "$base" in 0000000000000000000000000000000000000000|"") base=origin/claude/f1-game-project-26h3ng ;; esac
+          git cat-file -e "$base^{commit}" 2>/dev/null || base=origin/claude/f1-game-project-26h3ng
+          echo "ratchet base: $base ${RATCHET_MODE:+(advisory)}"
+          node tools/check/ratchets.mjs --base "$base" $RATCHET_MODE
+      # A PR that loosens a test tolerance next to production changes fails (#1685; AGENTS.md rule 9). Rows that
+      # are genuinely right go in tests/data/tolerance-exceptions.json with a reason.
+      - name: Test tolerances are not loosened (draft pair)
+        if: env.DRAFT_PAIR == '1' && steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true') && github.event_name == 'pull_request'
+        env:
+          TOL_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          base="$(bash tools/ci/ci-pr-base.sh "$TOL_BASE")"
+          git cat-file -e "$base^{commit}" 2>/dev/null || base=origin/claude/f1-game-project-26h3ng
+          node tools/check/tolerance-diff.mjs --base "$base"
+      - name: Every test file belongs to a topical group (draft pair)
+        if: env.DRAFT_PAIR == '1' && steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
+        run: npm run test:audit
+      - name: What does this gate cover? (draft pair)
+        if: env.DRAFT_PAIR == '1' && steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
+        run: node tools/ci/ci-coverage.mjs
+      - name: How far behind ship? (draft pair)
+        if: env.DRAFT_PAIR == '1' && github.event_name == 'pull_request' && steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
+        env:
+          BEHIND_SHIP_HEAD: ${{ github.event.pull_request.head.sha }}
+          BEHIND_SHIP_SHIP: origin/claude/f1-game-project-26h3ng
+        run: |
+          git fetch --no-tags --depth=1 origin claude/f1-game-project-26h3ng 2>/dev/null || true
+          node tools/ci/behind-ship.mjs
       - name: Record green verdict
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()
         run: date -u > .verdict-guards-a
@@ -437,6 +494,9 @@ jobs:
 
   guards-b:
     name: Structural guards (tooling B)
+    # DRAFT PAIRS (guards-a): a draft runs this shard in tooling A; this job skips there, so a draft takes two
+    # guard runners, not four. Every other event runs it.
+    if: ${{ !(inputs.concurrency_key == '' && github.event_name == 'pull_request' && github.event.pull_request.draft) }}
     runs-on: ubuntu-latest
     timeout-minutes: 18   # same budget as tooling A
     permissions:
@@ -551,7 +611,8 @@ jobs:
   guards-c:
     name: Structural guards (tooling C)
     runs-on: ubuntu-latest
-    timeout-minutes: 18   # same budget as tooling A
+    # Same budget as tooling A, two shards' worth on a draft (DRAFT PAIRS, guards-a).
+    timeout-minutes: ${{ (inputs.concurrency_key == '' && github.event_name == 'pull_request' && github.event.pull_request.draft) && 30 || 18 }}
     permissions:
       contents: read
       actions: read
@@ -560,6 +621,8 @@ jobs:
       # #1712: nightly schedule is the NO_MEMO auditor (always runs); other events
       # may skip on an inputs-hash verdict-cache hit.
       NO_MEMO: ${{ github.event_name == 'schedule' && '1' || '' }}
+      # DRAFT PAIRS (guards-a): on a draft this job also runs shard 4/4, and tooling D skips.
+      DRAFT_PAIR: ${{ inputs.concurrency_key == '' && github.event_name == 'pull_request' && github.event.pull_request.draft && '1' || '' }}
     steps:
       # BLOB-LESS FULL HISTORY (2026-10-14, Actions audit C6: 25 s -> 9 s).
       # Every history read in guards-c/-b/guards, unit-plan and xr-filter is a
@@ -605,7 +668,7 @@ jobs:
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
         env:
           GUARDS_MODE: ${{ steps.scope.outputs.mode }}
-        run: echo "key=guards-c-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
+        run: echo "key=guards-c${DRAFT_PAIR:+d}-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
       - name: Verdict cache lookup
         id: memo
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
@@ -625,6 +688,14 @@ jobs:
         # already in flight finish and the log names each. The local
         # `npm run test:tooling-fast` stays without it so an author sees every red.
         run: node tools/ci/tooling-fast.mjs ${GUARDS_CHANGED:+--changed} --jobs=4 --shard=3/4 --bail
+      # Tooling D's shard, on a draft only (DRAFT PAIRS above).
+      - name: Tooling-fast shard 4/4 (draft pair)
+        if: env.DRAFT_PAIR == '1' && steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
+        env:
+          GUARDS_CHANGED: ${{ steps.scope.outputs.mode == 'changed' && '1' || '' }}
+          APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
+          APEX_NOTES_AGE_ADVISORY: ${{ github.event_name != 'pull_request' && github.ref_name == 'claude/f1-game-project-26h3ng' && '1' || '' }}   # knowledge-gc.mjs ageGate: a note's age warns on the deploy tip only (a bot branch's dispatch stays strict)
+        run: node tools/ci/tooling-fast.mjs ${GUARDS_CHANGED:+--changed} --jobs=4 --shard=4/4 --bail
       - name: Record green verdict
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()
         run: date -u > .verdict-guards-c
@@ -645,6 +716,9 @@ jobs:
 
   guards-d:
     name: Structural guards (tooling D)
+    # DRAFT PAIRS (guards-a): a draft runs this shard in tooling C; this job skips there, so a draft takes two
+    # guard runners, not four. Every other event runs it.
+    if: ${{ !(inputs.concurrency_key == '' && github.event_name == 'pull_request' && github.event.pull_request.draft) }}
     runs-on: ubuntu-latest
     timeout-minutes: 18   # same budget as tooling A
     permissions:
@@ -731,10 +805,16 @@ jobs:
           B: ${{ needs.guards-b.result }}
           C: ${{ needs.guards-c.result }}
           D: ${{ needs.guards-d.result }}
+          DRAFT_PAIR: ${{ inputs.concurrency_key == '' && github.event_name == 'pull_request' && github.event.pull_request.draft && '1' || '' }}
         run: |
           set -u
-          echo "guards-a=$A guards-b=$B guards-c=$C guards-d=$D"
-          [ "$A" = success ] && [ "$B" = success ] && [ "$C" = success ] && [ "$D" = success ]
+          echo "guards-a=$A guards-b=$B guards-c=$C guards-d=$D${DRAFT_PAIR:+ (draft pairs: B's shard ran in A, D's in C)}"
+          # DRAFT PAIRS (guards-a): on a draft B and D skip by design and A and C carry their shards.
+          if [ "$DRAFT_PAIR" = 1 ]; then
+            [ "$A" = success ] && [ "$C" = success ] && [ "$B" = skipped ] && [ "$D" = skipped ]
+          else
+            [ "$A" = success ] && [ "$B" = success ] && [ "$C" = success ] && [ "$D" = success ]
+          fi
 
   lints:
     name: Workflow and shader lints
