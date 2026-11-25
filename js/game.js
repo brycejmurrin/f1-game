@@ -4486,7 +4486,7 @@ function update(dt) {
   if (!track) return;
   // Camera cycling works during the countdown and the race (set your view before
   // lights-out). Edge-triggered via the C key or the CAM button.
-  if ((state === "race" || state === "count") && Input.consumeCameraCycle()) cycleCam();
+  if (state === "race" || state === "count") { if (Input.consumeCameraCycle()) cycleCam(); if (Input.consumeCameraMenu()) showCamPicker(); }   // held pad / phone CAM: the picker (#6271)
   realRace.update(dt);   // every state: it arms in the countdown, places a mid-race jump-in on the first green frame, steps the script in the race, and stands down at the results
   flyingStart.update(dt);   // qualifying and time trial: a rolling start in place of the gantry (js/race/flying-start.js)
   /* MANUAL RECOVER. The auto-rescue only fires on its own terms (held throttle
@@ -8676,7 +8676,7 @@ function tickBody(now) {
     const dropped = steps === 5 && physAcc >= PHYS_DT ? physAcc - physAcc % PHYS_DT : 0;   // only what the line below drops; the sub-step remainder carries
     PerfGov.recordSimulation(steps, dropped);
     if (dropped) physAcc %= PHYS_DT;   // fell badly behind — drop the backlog, keep the sub-step remainder (a clean 5-step frame lost up to a step: Fix Your Timestep)
-    if ((state === "count" || state === "race") && typeof carDraw !== "undefined") carDraw.drainDeferredCarWarm(4);   // rear grid atlases + casters, a budget a frame under the lights or after a green that skips them (go, goRolling; #5830); no CarDraw: results-cam.test
+    if ((state === "count" || state === "race") && typeof carDraw !== "undefined") carDraw.drainDeferredCarWarm(4, state === "count");   // rear grid atlases + casters, a budget a frame under the lights or after a green that skips them (go, goRolling; #5830); no CarDraw: results-cam.test
     if (state === "count" && !netStart && !(netPlay && netPlay.awaitingStart && netPlay.awaitingStart())) countT += startLights.countCredit(_dtMs / 1000, dt, dropped);   // solo lights on the wall clock, not the step cap (#1882)
     _poseAt = now - physAcc * 1000;   // the stepped pose lags this frame by the unspent remainder
   } else _poseAt = null;
@@ -9432,7 +9432,7 @@ $("hud-restore").onclick = () => setHudUserHidden(false);
 // state (the render loop reads them); the module mutates them through G. The
 // façade exposes setCamMode as a deferred arrow (const initialised here), and
 // the update loop's `cycleCam()` closes over this const.
-const { setCamMode, cycleCam, hideCamPicker } = CamModes.create(G);
+const { setCamMode, cycleCam, hideCamPicker, showCamPicker } = CamModes.create(G);
 
 $("pm-resume").onclick = () => setPaused(false); $("pm-quick-doors").insertBefore(Object.assign(document.createElement("button"), { id: "pm-recover", type: "button", textContent: "RECOVER CAR", onclick: () => { setPaused(false); Input.requestRecover(); } }), $("pm-checkpoint"));   // RECOVER CAR = the R key; touch had none. Built here like REPLAY: shellNodes holds
 $("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); frozen = true; raceRestarting = true; startRace().then(() => { raceRestarting = false; if (state === "race") frozen = false; }, () => { raceRestarting = false; }); };   // frozen: the old race must not run (or be scored at its flag) through the async start; startRaceBody lifts it on a committed start, and a start cancelled for changed settings (or failed) ends on the title via quitToMenu — the old race is not handed back

@@ -414,9 +414,10 @@ test("warmCarAssetsAsync deferRear: the rear grid's uploads and casters wait for
   assert.ok(casters(rear) < casters(eager), "fewer casters before the lights (" + casters(rear) + " < " + casters(eager) + ")");
   assert.equal(rear.v.ctx.Log.records({ ns: "gfx" }).filter((r) => /^race car assets ready/.test(r.msg || "")).length, 1, "the ready line, once");
   // The countdown drains one piece a frame (a 4 ms budget with the fake clock charging 20-40 ms a piece).
-  let left = rear.v.carDraw.drainDeferredCarWarm(4), frames = 1;
+  const lights = true;   // game.js under state "count": each frame's first piece runs
+  let left = rear.v.carDraw.drainDeferredCarWarm(4, lights), frames = 1;
   const first = left;
-  while (left > 0 && frames < 100) { left = rear.v.carDraw.drainDeferredCarWarm(4); frames++; }
+  while (left > 0 && frames < 100) { left = rear.v.carDraw.drainDeferredCarWarm(4, lights); frames++; }
   assert.equal(left, 0, "drained");
   // The fake clock moves only on a heavy piece (a caster build), so a frame drains the uploads before it and one caster.
   assert.ok(frames > 1 && frames <= first, "the queue drains across frames, a budget each (" + frames + " frames for " + first + " pieces)");
@@ -426,6 +427,31 @@ test("warmCarAssetsAsync deferRear: the rear grid's uploads and casters wait for
   assert.deepEqual(sig(rear), sig(eager), "the same bodies and casters in the end (order aside)");
   assert.equal(rear.v.carDraw.drainDeferredCarWarm(4), 0, "idempotent when empty");
   assert.deepEqual([eager.warns(), rear.warns()], ["[]", "[]"], "no phase threw");
+});
+// perf hunt 2026-11-24 #4: the budget was checked only after each piece, so a 27-39 ms caster ran whole on a
+// 4 ms frame after a green that skips the lights (go, goRolling). A piece whose kind last cost more than the
+// budget left now waits; under the lights (first = true) the first piece of a frame still runs.
+test("drainDeferredCarWarm skips a piece whose last measured cost exceeds the budget left; the crew rig is never stranded", async () => {
+  const r = warmRig();
+  r.v.field((c, i) => 3000 - 9 * i); r.v.G.cars.forEach((c, i) => { c.gridPos = i + 1; });
+  assert.equal(await r.v.carDraw.warmCarAssetsAsync(() => true, 8, { deferRear: true }), true);
+  const casters = () => r.v.rec.builds.filter((b) => b.kind === "sh").length;
+  // Drain up to the first caster, which measures its kind at 30 ms (one fake Car3D build).
+  let left = r.v.carDraw.drainDeferredCarWarm(4, true), guard = 0;
+  const c0 = casters();
+  while (casters() === c0 && left > 0 && guard++ < 50) left = r.v.carDraw.drainDeferredCarWarm(4, true);
+  assert.ok(casters() > c0, "a caster ran and was measured");
+  assert.ok(left > 0, "pieces still queued");
+  // The crew rig (#5051) sits at the tail, behind atlases and casters known to cost 20-30 ms.
+  let crewWarms = 0;
+  r.v.ctx.PitCrewAnim = { warm: () => { crewWarms++; } };
+  const crew = 1;
+  const c1 = casters(), u1 = r.got.uploads;
+  assert.equal(r.v.carDraw.drainDeferredCarWarm(4), left - crew, "a race frame skips every piece whose kind is known to cost 20-30 ms > 4 ms, and still warms the crew rig behind them");
+  assert.deepEqual([casters(), r.got.uploads, crewWarms], [c1, u1, 1], "no caster built, no atlas uploaded; the rig warmed");
+  assert.equal(r.v.carDraw.drainDeferredCarWarm(4), left - crew, "nothing left that fits: 0 pieces, no starving loop");
+  assert.equal(r.v.carDraw.drainDeferredCarWarm(4, true), left - crew - 1, "under the lights the first piece of a frame still runs, so the countdown drains");
+  assert.equal(r.warns(), "[]");
 });
 test("warmCarAssetsAsync stops when current() goes false; carWarmSlice=0 is today's single task", async () => {
   {
