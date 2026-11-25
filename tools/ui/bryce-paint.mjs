@@ -6,7 +6,7 @@
 //   node tools/ui/bryce-paint.mjs --window standalone --ui-scale 70 --screens title,settings
 //   node tools/ui/bryce-paint.mjs --check                          # compare with tests/data/bryce-phone-paint.json; exit 1 on a difference
 //   node tools/ui/bryce-paint.mjs --write                          # record the measured counts as the ceilings (only ever lower one by hand or by this)
-//   --profile live|legacy   --no-profile   --json   --verbose (list every offender, not the first five)
+//   --profile live|nov10|legacy (default PAINT_PROFILE)   --no-profile   --json   --verbose (list every offender, not the first five)
 //
 // The spec and this CLI share `measureCell`, so a ceiling measured here is the number CI asserts. It starts a browser:
 // parent session only, one browser at a time (AGENTS.md rule 5). A ceiling is an EXACT count of today's violations
@@ -34,7 +34,7 @@ export const ACCEPT_ROOTS = Object.freeze({ title: "#overlay", select: "#select"
 export const cellKey = (window, uiScale) => `${window}@${uiScale}`;
 
 export const USAGE = `usage: node tools/ui/bryce-paint.mjs [--window standalone,safari,w844] [--ui-scale 50,70,109] [--screens title,select,garage,settings,hud,pause,results]
-                                     [--profile live|legacy] [--no-profile] [--check | --write] [--json] [--verbose]
+                                     [--profile live|nov10|legacy] [--no-profile] [--check | --write] [--json] [--verbose]
   Painted sizes on Bryce's phone (tools/lib/bryce-phone.mjs + tools/lib/paint-floor.mjs): text >= 12 px, taps >= 44 px, nothing outside
   the safe box, no page scroll. --check compares with ${CEILINGS_FILE} (exit 1 on any difference); --write records the counts.
   Pass --window portrait to measure the portrait viewport separately.
@@ -42,6 +42,10 @@ export const USAGE = `usage: node tools/ui/bryce-paint.mjs [--window standalone,
 export const KNOWN = ["--window", "--ui-scale", "--screens", "--profile", "--no-profile", "--check", "--write", "--json", "--verbose"];
 
 /** argv → the run plan. Pure; throws on a bad value. */
+/** The profile the ceilings are measured on. `nov10`, not `live`, until #6681: on the 2026-11-25 export the counts
+ *  RISE (garage outside the safe box, CAREER subtitle under 12 px), and a ceiling is never raised (Bryce, #6646 A). */
+export const PAINT_PROFILE = "nov10";
+
 export function planRun(flags) {
   const csv = (name, all) => { const v = flags.flag(name); return v ? String(v).split(",").filter(Boolean) : [...all]; };
   const windows = csv("--window", PAINT_WINDOWS);
@@ -50,7 +54,7 @@ export function planRun(flags) {
   const screens = csv("--screens", ACCEPT_SCREENS);
   for (const s of screens) if (!ACCEPT_SCREENS.includes(s)) throw new Error(`--screens: unknown "${s}" (${ACCEPT_SCREENS.join(" | ")})`);
   if (flags.has("--check") && flags.has("--write")) throw new Error("--check and --write are exclusive");
-  return { windows, scales, screens: ACCEPT_SCREENS.filter((s) => screens.includes(s)), profile: flags.has("--no-profile") ? false : (flags.flag("--profile") || true) };
+  return { windows, scales, screens: ACCEPT_SCREENS.filter((s) => screens.includes(s)), profile: flags.has("--no-profile") ? false : (flags.flag("--profile") || PAINT_PROFILE) };
 }
 
 export function readCeilings(root = ROOT) {
@@ -86,7 +90,7 @@ async function measureRoot(page, screen, preset) {
  * One cell: boot the working tree on the preset, open each screen the way a player reaches it, measure its paint.
  * The caller owns `browser`. Returns { preset, readBack, mismatches, hudScale, screens: { [id]: paint | { error } } }.
  */
-export async function measureCell(browser, baseUrl, { window = "standalone", uiScale = null, profile = true, screens = ACCEPT_SCREENS, log = () => {} } = {}) {
+export async function measureCell(browser, baseUrl, { window = "standalone", uiScale = null, profile = PAINT_PROFILE, screens = ACCEPT_SCREENS, log = () => {} } = {}) {
   const { context, page, preset } = await openBrycePhone(browser, { window, dpr: 1, uiScale, profile });
   // What tests/helpers/fixtures.js pins for every spec: the GLX backend (cheapest under SwiftShader) and test mode.
   await context.addInitScript(() => { window.__TEST_MODE = true; try { localStorage.setItem("apex26.gfxBackend", "webgl2"); } catch (_) { /* storage refused */ } });

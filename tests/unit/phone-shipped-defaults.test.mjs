@@ -8,13 +8,13 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
-import { OWNER_EXPORT } from "../../tools/lib/bryce-phone.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 const plain = (o) => JSON.parse(JSON.stringify(o));
 const EXPORT = JSON.parse(read("tests/data/phone-appearance-2026-11-20.json")).settings;
-const OLD = JSON.parse(read(OWNER_EXPORT)).settings;
+// The November 10 export, pinned: it has no tall title shape, which the "missing shapes" case needs (`live` moved on, #6583).
+const OLD = JSON.parse(read("tests/data/settings-live-export-2026-11-10.json")).settings;
 
 const DEVICES = {
   phone: { coarse: true, innerWidth: 852, innerHeight: 393 },

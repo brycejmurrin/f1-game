@@ -6,7 +6,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { BRYCE_WINDOWS, LEGACY_EXPORT, OWNER_EXPORT, UI_SIZE_AXIS, brycePhone, classifyShot, mismatches, ownerStore, storeEntries } from "../../tools/lib/bryce-phone.mjs";
+import { BRYCE_WINDOWS, LEGACY_EXPORT, OWNER_EXPORT, UI_SIZE_AXIS, brycePhone, newestLiveExport, classifyShot, mismatches, ownerStore, storeEntries } from "../../tools/lib/bryce-phone.mjs";
 import { describe, presetOptions } from "../../tools/ui/bryce-phone.mjs";
 import { collect, filterRows, imageSize, imageUrls, MAX_SHOTS, shotStem } from "../../tools/ui/issue-shots.mjs";
 import { contrast, crop, halve, matchElement, median, resample, summarize } from "../../tools/lib/shot-match.mjs";
@@ -23,11 +23,12 @@ test("the preset is his standalone window: 852x393, DPR 3, env() insets 59/0/59/
   assert.equal(p.contextOptions.isMobile && p.contextOptions.hasTouch, true);
   assert.match(p.contextOptions.userAgent, /iPhone/);
   assert.equal(p.profile.file, OWNER_EXPORT);
-  assert.equal(OWNER_EXPORT, "tests/data/settings-live-export-2026-11-10.json", "his CURRENT export (#5218)");
-  assert.equal(p.localStorage["apex26.uiScale"], "70", "his UI SIZE is 70 %, stored as a percent (what js/ui/scale.js reads)");
-  assert.equal(p.uiScale, 70);
-  assert.equal(p.localStorage["apex26.hudBtnScale"], "143.25", "his BUTTON SIZE is 143.25 %");
-  assert.equal(p.localStorage["apex26.textSize"], JSON.stringify("large"), "a store.set key is JSON");
+  assert.equal(OWNER_EXPORT, newestLiveExport(), "his CURRENT export is the newest dated one (#6602 D5(a))");
+  assert.equal(OWNER_EXPORT, "tests/data/settings-live-export-2026-11-25.json", "today the 2026-11-25 export (#6590)");
+  assert.equal("apex26.uiScale" in p.localStorage, false, "his UI SIZE is unset = shipped");
+  assert.equal(p.uiScale, null);
+  assert.equal(p.localStorage["apex26.hudBtnScale"], "130", "his BUTTON SIZE is 130 %");
+  assert.equal(p.localStorage["apex26.uiContrast"], JSON.stringify("high"), "a store.set key is JSON");
   for (const k of ["hudScale", "hudBtnOpacity"]) assert.equal("apex26." + k in p.localStorage, false, `${k} is unset on his phone (the default)`);
   assert.equal(JSON.parse(p.localStorage["apex26.hudElements"]).speed, "off");
   assert.equal(brycePhone({ uiScale: 51 }).localStorage["apex26.uiScale"], "51", "--ui-scale overrides the export, in percent");
@@ -71,8 +72,8 @@ test("ownerStore splits the export into the json and raw lanes and drops unset k
 test("mismatches: [] when the page reports the preset, one line per difference otherwise", () => {
   const p = brycePhone({ profile: "legacy" });
   const got = { screen: p.contextOptions.screen, viewport: { width: 852, height: 393 }, deviceScaleFactor: 3, insets: { top: 0, left: 59, bottom: 20, right: 59 }, coarse: true, stored: { hudBtnScale: "245", uiScale: null } };
-  assert.deepEqual(mismatches(brycePhone(), got), ["stored uiScale = null, seeded 70", "stored hudBtnScale = 245, seeded 143.25"],
-    "the live profile seeds UI SIZE 70 and BUTTON SIZE 143.25");
+  assert.deepEqual(mismatches(brycePhone(), got), ["stored hudBtnScale = 245, seeded 130"],
+    "the live profile seeds BUTTON SIZE 130 and leaves UI SIZE unset");
   assert.deepEqual(mismatches(p, got), []);
   const safari = brycePhone({ window: "safari", profile: "legacy" });
   assert.deepEqual(mismatches(safari, { ...got, insets: safari.insets, viewport: safari.viewport, screen: safari.viewport }),
