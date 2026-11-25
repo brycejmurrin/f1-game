@@ -140,12 +140,18 @@ var Damage = (function () {
       const side = (c.x || 0) >= 0 ? 1 : -1;
       const inc = Math.min(1, Math.abs(Math.sin(yaw)));
       const sev = Math.min(1, Math.abs(spd) / Math.max(1, vTop || 1) * (0.25 + 0.75 * inc) * 1.6);
-      if (sev >= WALL_MIN && r.cool <= 0) {
+      // Inside a cool-down (a car contact or an earlier strike) the same rule
+      // as hitAt (#6715): a harder strike books its excess over the last
+      // booked severity (knock reads the whole strike); a softer one books
+      // nothing, as before. Each qualifying strike re-arms the cool.
+      if (sev >= WALL_MIN && (r.cool <= 0 || sev > r.last)) {
+        const part = r.cool <= 0 ? sev : sev - r.last;
         // Steep nose-in: the front corner on the wall side; else a side scrape.
-        if (inc > 0.3) apply(r, LCAR, side * WCAR * 0.4, sev);
-        else apply(r, 0, side * WCAR, sev);
-        r.cool = COOL_S; r.last = sev;
+        if (inc > 0.3) apply(r, LCAR, side * WCAR * 0.4, part, sev);
+        else apply(r, 0, side * WCAR, part, sev);
+        r.last = sev;
       }
+      if (sev >= WALL_MIN) r.cool = COOL_S;
     }
     r.onWall = on;
     r.spd = spd;
