@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { pinKeyMatches, specsAffectedByImpact } from "../../tools/lib/impact-map.mjs";
 import { LIVE_EXPORT_RE, OWNER_PROFILES, newestLiveExport, pickNewestLiveExport, readProfile } from "../../tools/lib/bryce-phone.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -35,4 +36,15 @@ test("the chosen export parses with landscape at the top level and portrait park
   assert.equal(shapes.live, "wide", "the top-level values are the landscape (wide) shape");
   assert.equal(typeof shapes.park, "object", "the portrait shape is parked under appearanceShapes.park");
   assert.ok(shapes.park && "hudBtnScale" in shapes.park, "the parked shape carries its own scale values");
+});
+
+test("select-specs routes the resolver and any dated export to the four specs that seed `live`", () => {
+  const seeding = ["tests/specs/appearance-orientation.spec.js", "tests/specs/bryce-phone-paint.spec.js",
+    "tests/specs/real-profile-dock.spec.js", "tests/specs/settings-stepper-paint.spec.js"];
+  assert.deepEqual(specsAffectedByImpact(["tools/lib/bryce-phone.mjs"]), seeding);
+  const data = (name) => ["tests", "data", name].join("/");   // built, so no comment-path lint reads a fixture that is not there
+  assert.deepEqual(specsAffectedByImpact([data("settings-live-export-2031-02-03.json")]), seeding, "a future export, by its pattern");
+  assert.deepEqual(specsAffectedByImpact(["tests/data/settings-defaults-export.json"]), [], "legacy is not `live`");
+  assert.equal(pinKeyMatches(data("settings-live-export-*.json"), data("sub/settings-live-export-x.json")), false, "* stops at /");
+  assert.equal(pinKeyMatches(["js", "a.js"].join("/"), "js/aXjs"), false, "a plain key is its own path, dots literal");
 });
