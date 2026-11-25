@@ -205,15 +205,14 @@ window.SettingRow = (function () {
     return p.el;
   }
 
-  /* THE VALUE IS A CYCLE BUTTON, NOT A DROPDOWN. css/settings-controls.css
-     gives the select pointer-events:none, so a finger or mouse lands on the
-     cluster <div> behind it: a click inside the select's box steps forward.
-     The listeners on the select itself cover a host without that rule (and
-     the unit tests' mini DOM): a mouse press is cancelled before the UA opens
-     the list, a finger's touchend is cancelled before iOS focuses it (focus
-     IS what opens the iOS picker), and the click that follows cycles. The
-     keys that OPEN a native list (Space, Enter, F4, Alt+Up/Down) never reach
-     the UA: Space/Enter cycle like a tap, the rest do nothing.
+  /* THE VALUE IS A CYCLE BUTTON, NOT A DROPDOWN (Bryce, 2026-11-24: "I
+     don't want the drop down at all"). The select stays hit-testable (layout
+     audits and specs check it receives input); its own listeners keep the
+     list shut: a mouse press is cancelled before the UA opens it, a finger's
+     touchend is cancelled before iOS focuses it (focus IS what opens the iOS
+     picker), and the tap or click cycles. The keys that OPEN a native list
+     (Space, Enter, F4, Alt+Up/Down) never reach the UA: Space/Enter cycle
+     like a tap, the rest do nothing.
      `next()` steps the value forward; RendererPicker's own row uses it too. */
   function noPicker(sel, next) {
     if (!sel || !sel.addEventListener || sel._srNoPicker) return;
@@ -254,16 +253,6 @@ window.SettingRow = (function () {
       if (quiet(e)) return;
       cycle();
     });
-    const box = sel.parentNode;
-    if (box && box.addEventListener && !box._srCycle) {
-      box._srCycle = true;
-      box.addEventListener("click", (e) => {
-        if (!e || e.target !== box) return;   // a chevron (or the select) already handled it
-        const r = typeof sel.getBoundingClientRect === "function" ? sel.getBoundingClientRect() : null;
-        if (r && r.width && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) return;
-        cycle();
-      });
-    }
   }
 
   /* The chevrons are pointer affordances for the native <select>, not a second

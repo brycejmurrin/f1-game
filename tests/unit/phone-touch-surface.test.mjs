@@ -1188,7 +1188,7 @@ test("no script sets a pan-only or auto touch-action on game UI", () => {
  * (Safari focuses a tabindex=-1 button on tap) and a scripted focus() on an
  * iOS <select> inside a tap OPENS ITS PICKER. Pinned here: a touch chevron
  * never focuses the select; the value cycles on tap/click/Space/Enter and
- * every picker-opening press is cancelled; the CSS lets the pointer through.
+ * every picker-opening press is cancelled.
  */
 
 function boot() {
@@ -1266,15 +1266,6 @@ test("a mouse press on the value is cancelled (no list) and its click cycles", (
   assert.equal(h.value(), "4k");
 });
 
-test("a click on the cluster inside the value's box cycles (CSS lets the pointer through the select)", () => {
-  const h = boot();
-  const box = h.row.sel.parentNode;
-  h.row.sel._rect = { left: 50, right: 150, top: 0, bottom: 40, width: 100, height: 40 };
-  h.fire(box, "click", { target: box, clientX: 100, clientY: 20 });
-  assert.equal(h.value(), "4k");
-  h.fire(box, "click", { target: box, clientX: 160, clientY: 20 });
-  assert.equal(h.value(), "4k", "a gap outside the value's box does nothing");
-});
 
 test("keys: Space/Enter cycle, F4 and Alt+Down are swallowed, Left/Right still step", () => {
   const h = boot();
@@ -1297,8 +1288,4 @@ test("re-wiring does not stack the no-picker listeners", () => {
   assert.equal(h.writes.length, 1);
 });
 
-test("css: a stepper's select lets the pointer through to its cycling cluster", () => {
-  const rules = css("css/settings-controls.css");
-  assert.equal(decl(rules, ".set-row > div:has(> button[data-step]) > select", "pointer-events"), "none");
-});
 
