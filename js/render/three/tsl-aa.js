@@ -174,7 +174,7 @@
   // 2x on a 2880x1800 laptop panel is already ~700 MB). Never below 1.
   // RETINA (#6486 F2): RESOLUTION MAX (maxRes: TLX's setDprBoost > 0, desktop only) lifts the DPR rule, so a 2x
   // panel supersamples above native too. Memory guard: a reported deviceMemory under 8 GB keeps the DPR rule
-  // (Chrome reports at most 8). The fps guard is the governor: it sheds the DPR boost first (§gov-39), then
+  // (Chrome reports at most 8). Unreported (Safari, Firefox) passes: every Apple-silicon Mac ships with >= 8 GB. The fps guard is the governor: it sheds the DPR boost first (§gov-39), then
   // superSample (SHED_ORDER), and either drops this ceiling back to 1 on TLX's next 32-frame re-read.
   const SS_MAX = 1.5, SS_CINE = 2, MAX_PX = 3840 * 2160 * 2, SS_RETINA_MEM_GB = 8;
   function ssRetina(o) {

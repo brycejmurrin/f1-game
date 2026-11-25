@@ -5471,7 +5471,9 @@ const TLX = (function () {
         init() { return true; },             // already initialised by create()
         resize,
         setRenderScale(s) {
-          const v = Math.min(_ssOk ? _ssCeil() : 1, Math.max(0.5, +s || 0));   // superSample: the ceiling above 1
+          // RESOLUTION MAX (_dprBoost > 0) pins 1.0 (js/ui/scale.js): on a Retina desktop that means the ceiling (#6486 F2)
+          const want = _dprBoost > 0 && +s >= 1 ? 2 : +s;
+          const v = Math.min(_ssOk ? _ssCeil() : 1, Math.max(0.5, want || 0));   // superSample: the ceiling above 1
           if (Math.abs(v - renderScale) < 0.02) return false;   // PerfGov contract
           renderScale = v; resizeNow(); return true;
         },

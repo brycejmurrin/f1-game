@@ -192,7 +192,7 @@ const GfxDebug = (() => {
     p.hdrOut = T(() => (matchMedia("(dynamic-range: high)").matches ? YES(aa.hdrPeak > 1) : NO("the display is not HDR")));
     const ceil = T(() => glx.maxRenderScale());
     p.superSample = typeof ceil !== "number" ? (ceil || NO("no maxRenderScale")) :
-      (ceil <= 1.001 && (typeof devicePixelRatio === "number" ? devicePixelRatio : 1) > 1.25 ? NO("DPR above 1.25 without RESOLUTION MAX: no supersample headroom") : YES(ceil > 1.001));
+      (ceil <= 1.001 && (typeof devicePixelRatio === "number" ? devicePixelRatio : 1) > 1.25 ? NO("DPR above 1.25: no supersample headroom (RESOLUTION MAX off, or superSample shed)") : YES(ceil > 1.001));
     p.ss2x = !cine ? NO("CINEMA only (replay / photo / garage)") : YES(typeof ceil === "number" && ceil > 1.5);
     p.mirrorHi = T(() => YES(Array.isArray(glx.mirrorMax) && glx.mirrorMax[0] > 1024));
     const sx = T(() => (glx.shadowX ? glx.shadowX.state() : null));

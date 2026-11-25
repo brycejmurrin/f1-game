@@ -118,6 +118,7 @@ test("supersample on Retina (#6486 F2): RESOLUTION MAX lifts the DPR rule on des
   assert.equal(A.ssCeil({ ...mac, maxRes: true }), 1.46, "MAX on the 16-inch panel: above native, capped by MAX_PX");
   assert.equal(A.ssCeil({ ...mac, maxRes: true, deviceMemory: 8 }), 1.46, "Chrome's 8 GB report passes");
   assert.equal(A.ssCeil({ ...mac, maxRes: true, deviceMemory: 4 }), 1, "memory guard: under 8 GB keeps the DPR rule");
+  assert.equal(A.ssCeil({ ...mac, maxRes: true, deviceMemory: undefined }), 1.46, "unreported memory (Safari, Firefox) passes");
   assert.equal(A.ssCeil({ ...mac, maxRes: true, superSample: false }), 1, "superSample shed or off: no supersample at MAX");
   assert.equal(A.ssCeil({ superSample: true, maxRes: true, dpr: 3, presentW: 2962, presentH: 1915, maxDim: 8192 }), 1.5, "175% zoom at DPR 3");
   assert.equal(A.ssRetina({ maxRes: true }), true);
