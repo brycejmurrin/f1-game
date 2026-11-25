@@ -685,7 +685,7 @@ let builtGridSlots = null, builtTrackBare = false;
 const bareStale = () => builtTrackBare && !!builtTrackId && sceneryResident(builtTrackId);
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0, netGreen = null;
-let pendingFinishQuit = false;
+let pendingFinishQuit = false, qThen;   // G.quitToMenu(then): `then` opens a screen after MenuQuitTail (deferred on a software raster, where its setFlow("gp") reset a career hub opened straight after, F1); kept across a settling finish
 const postFinish = { solo: false, since: -1 };   // RaceControl.finishDelay's post-finish wait (+ net, first)
 // Countdown setGridIdle opts — reused every frame (was a fresh {} on the
 // countdown return path, ~60 allocs/s until lights-out).
@@ -3457,7 +3457,7 @@ const G = {
   openGarageFrom: (from) => openGarage(from),
   startWeatherArc: (from, to, dur) => wxArc.startArc(from, to, dur),
   endWeatherSession: () => wxArc.endSession(true),   // the agent's race()/tt(): a start follows, so a plan set for it stays (race-settings-vm)
-  startRace, update, wrapS, quitToMenu,
+  startRace, update, wrapS, quitToMenu: (t) => (qThen = t, quitToMenu()),
   raceIntro,   // the pre-race screen, for a launch that is not RACE! (js/race/real-race.js: the Data Hub's JUMP IN)
 }; Object.preventExtensions(G);
 
@@ -4368,7 +4368,7 @@ function quitToMenu() {
   pendingFinishQuit = false;
   clearRaceEntrySoften();
   Ghost.flush();
-  cancelIntro();
+  cancelIntro(); const then = qThen; qThen = null;
   if (typeof MenuTeardown !== "undefined") MenuTeardown.beginQuit();
   els.pausemenu.hidden = true;
   Input.unlockLandscape();
@@ -4437,9 +4437,10 @@ function quitToMenu() {
   Particles.rainShow(false); Particles.clear(); Droplets.clear();
   if (soundOn) GameAudio.startMusic(-1);
   consumeGhostHash();
-  if (typeof MenuTeardown !== "undefined" && MenuTeardown.deferQuitTail(() => MenuQuitTail.afterOverlay(forgetGp))) return;
+  if (typeof MenuTeardown !== "undefined" && MenuTeardown.deferQuitTail(() => MenuQuitTail.afterOverlay(forgetGp), then)) return;
   MenuQuitTail.afterOverlay(forgetGp);
   if (typeof MenuTeardown !== "undefined") MenuTeardown.endQuit();
+  if (then) then();
 }
 
 
@@ -8874,7 +8875,7 @@ els.selBack.onclick = () => {
   if (daily.isActive()) daily.stop();
   vt(() => {
     els.select.hidden = true;
-    if (raceSettings.netRoom) $("vsfriend").hidden = false; else { els.overlay.hidden = false; consumeGhostHash(); }   // a #ghost= link deferred while the picker was up lands now (bug-hunt 2 H13)
+    if (raceSettings.netRoom) $("vsfriend").hidden = false; else { els.overlay.hidden = false; consumeGhostHash(); refreshCareerButton(); }   // a #ghost= link deferred while the picker was up lands now (bug-hunt 2 H13); the doors repaint (STANDINGS)
   });
   if (soundOn) GameAudio.uiSelect();
 };
@@ -9284,9 +9285,8 @@ els.resNext.onclick = () => {
     // title's own CAREER path). Hiding the sheet alone left state "results":
     // the hub's GARAGE drew the frozen race frame, and a race started later
     // from MAIN MENU sat on PREPARING… forever (every intro gates on "menu").
+    qThen = () => { trackIdx = Career.trackIndex(); openCareer(); };   // after the quit tail's setFlow("gp")
     quitToMenu();
-    trackIdx = Career.trackIndex();
-    openCareer();
     return;
   }
   if (isChampionship()) {
@@ -9574,8 +9574,6 @@ trackIdx = idxOr(trackIdx, Tracks.LIST.length, 0);
 if (Tracks.LIST[trackIdx]) {
   store.set("trackId", Tracks.LIST[trackIdx].id); store.set("track", trackIdx);
 }
-{ const hasSeason = SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds();
-  $("mb-standings").hidden = !hasSeason; }
 const loadBootCareer = () => { Career.load(); clampDriverIdx(); refreshCareerButton(); };
 if (store.careerWriter && store.careerWriter.ready) store.careerWriter.ready.then(loadBootCareer);
 else loadBootCareer();

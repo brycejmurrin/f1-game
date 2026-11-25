@@ -1818,8 +1818,7 @@ function create(G) {
     // career alias and sanitises the round, and the repair is persisted. Reading
     // the raw key handed the menu an unsanitised save.
     G.season = SeasonCal.load();
-    G.refreshCareerButton();
-    { const mb = $("mb-standings"); if (mb) mb.hidden = !(SeasonCal.hasProgress(G.season) && G.season && G.season.round < SeasonCal.rounds()); }
+    G.refreshCareerButton();   // repaints #mb-standings from G.season too (TitleMenu refresh)
     if (G.soundOn) GameAudio.uiSelect();
   };
   $("cr-garage").onclick = () => { if (writerRefused()) return; close(); G.openGarage("career"); };
@@ -1830,6 +1829,7 @@ function create(G) {
     // are choosing another one), so the "no career yet" branch below would never
     // be reached and NEW CAREER would silently go racing instead.
     if (!Career.active()) {
+      if (!draft) return;   // #cr-go is hidden on the slot picker (no draft yet); a click by id there threw on draft.flavour (F3)
       const errs = draftErrors(draft);
       if (Object.keys(errs).length) {
         draftFieldErr = errs;

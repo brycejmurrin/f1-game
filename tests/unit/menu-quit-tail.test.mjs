@@ -88,3 +88,23 @@ test("MenuTeardown: a stale endQuit release does not clear a newer quit's cover"
   flush();
   assert.equal(MT.cover(), false, "its own endQuit still releases");
 });
+
+// quitToMenu(then) (F1 of RUNTIME-HUNT-MODES-2026-11-25): on software GL the tail is deferred, and `then`
+// runs only once the tail and endQuit have, so a screen opened from it is not reset to flow "gp" by the tail.
+test("MenuTeardown.deferQuitTail runs its continuation after the deferred tail", () => {
+  const raf = [], timers = [], order = [];
+  const ctx = {
+    PerfGov: { softwareRaster: () => true },
+    requestAnimationFrame: (fn) => raf.push(fn),
+    setTimeout: (fn) => timers.push(fn), clearTimeout: () => {},
+    performance: { now: () => 0 },
+    document: { getElementById: () => null },
+  };
+  const MT = vm.runInNewContext(readFileSync(join(ROOT, "js/perf/menu-teardown.js"), "utf8") + "\n;MenuTeardown", ctx,
+    { filename: absSrc("js/perf/menu-teardown.js") });
+  MT.beginQuit();
+  assert.equal(MT.deferQuitTail(() => order.push("tail"), () => order.push("then")), true);
+  assert.deepEqual(order, [], "nothing runs in the click's task");
+  while (raf.length || timers.length) { while (raf.length) raf.shift()(); while (timers.length) timers.shift()(); }
+  assert.deepEqual(order, ["tail", "then"]);
+});

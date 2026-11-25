@@ -820,7 +820,7 @@ interface GameCtx {
   readonly update: (dt: number) => void;
   /** Arc position wrapped into [0, track.total). */
   readonly wrapS: (s: number) => number;
-  readonly quitToMenu: () => void;
+  readonly quitToMenu: (then?: () => void) => void;
 }
 
 // ── Module.create(G) ─────────────────────────────────────────────────────────

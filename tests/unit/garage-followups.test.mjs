@@ -452,11 +452,12 @@ test('A/A control drift suppresses observed delta and attempt receipts are bound
 
 test('pause comparison return preserves completed receipts, excludes incomplete run and safely stops before cancellation restore',async()=>{
  const h=measuredFixture(),pause=h.dom.makeElement('div'),body=h.dom.makeElement('div');body.className='sheet-body';pause.appendChild(body);h.dom.body.appendChild(pause);const calls=[];
- const G={$:()=>pause,quitToMenu:()=>calls.push(['quit',h.S.get('haas').arbF]),openGarageFrom:from=>calls.push(['garage',from])};
+ let held=null;const G={$:()=>pause,quitToMenu:then=>{calls.push(['quit',h.S.get('haas').arbF]);held=then;},openGarageFrom:from=>calls.push(['garage',from])};
+ const release=()=>{assert.equal(calls.at(-1)[0],'quit','nothing opens before the quit tail runs (a software raster defers it)');const t=held;held=null;t();};
  const ui=h.T.mountPause(G);assert.equal(h.T.mountPause(G),ui,'mount is idempotent');assert.equal(ui.section.hidden,true);
  h.begin();await h.T.attempt('baseline');h.T.record({mode:'launch',clean:true,score:3},h.context());await h.T.attempt('candidate');
- const buttons=ui.section.querySelectorAll('button');buttons.find(b=>b.textContent==='RETURN TO SETUP COMPARISON').onclick();assert.equal(h.T.active(),true);assert.equal(h.T.summary().receipts.length,2);assert.equal(h.T.summary().receipts[0].valid,true);assert.equal(h.T.summary().receipts[1].valid,false);assert.deepEqual(calls.map(x=>x[0]),['quit','garage']);
- buttons.find(b=>b.textContent==='CANCEL SETUP COMPARISON').onclick();assert.equal(calls[2][0],'quit');assert.equal(calls[2][1],h.candidate.arbF,'session stops before store restoration');assert.deepEqual(plain(h.S.get('haas')),plain(h.baseline));assert.equal(h.T.active(),false);assert.equal(ui.section.hidden,true);ui.dispose();
+ const buttons=ui.section.querySelectorAll('button');buttons.find(b=>b.textContent==='RETURN TO SETUP COMPARISON').onclick();release();assert.equal(h.T.active(),true);assert.equal(h.T.summary().receipts.length,2);assert.equal(h.T.summary().receipts[0].valid,true);assert.equal(h.T.summary().receipts[1].valid,false);assert.deepEqual(calls.map(x=>x[0]),['quit','garage']);
+ buttons.find(b=>b.textContent==='CANCEL SETUP COMPARISON').onclick();assert.equal(calls[2][0],'quit');assert.equal(calls[2][1],h.candidate.arbF,'session stops before store restoration');release();assert.equal(calls[3][0],'garage');assert.deepEqual(plain(h.S.get('haas')),plain(h.baseline));assert.equal(h.T.active(),false);assert.equal(ui.section.hidden,true);ui.dispose();
 });
 test('explicit cancellation calls runtime cancellation while its async launch lease is still valid',async()=>{
  const h=measuredFixture();let lease,finish,cancelled=false;h.T.create({teamId:'haas',store:h.store,baseline:h.baseline,candidate:h.candidate,launch:o=>{lease=o.isCurrent;return new Promise(r=>finish=r);},cancelRuntime:()=>{cancelled=lease();}});
