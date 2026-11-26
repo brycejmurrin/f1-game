@@ -316,3 +316,26 @@ test("link-local IPv6, loopback and non-numeric ports are not packed", () => {
   // Nothing reachable at all: nothing to pack, as before.
   assert.equal(NetSdp.pack(withCands(["1 1 udp 2113937151 fe80::2 5 typ host generation 0"])), null);
 });
+
+// ---------------------------------------------------------------------------
+// unpack() applies the same candidate filter as pack() (#6632 S1)
+// ---------------------------------------------------------------------------
+test("unpack drops loopback, link-local v6 and port-0 candidates a hostile code carries", () => {
+  const hand = (cands) => {
+    const b = [1, 0, cands.length, ...new Array(32).fill(0xab), 1, 0x61, 1, 0x62];
+    for (const c of cands) b.push(c.kind, ...c.addr, c.port >> 8, c.port & 0xff);
+    return new Uint8Array(b);
+  };
+  const good = { kind: 1, addr: [8, 8, 4, 4], port: 5000 };
+  const bad = [
+    { kind: 1, addr: [127, 0, 0, 1], port: 5000 },
+    { kind: 1, addr: [8, 8, 8, 8], port: 0 },
+    { kind: 4, addr: [0xfe, 0x80, ...new Array(14).fill(0)], port: 5000 },
+    { kind: 4, addr: [...new Array(15).fill(0), 1], port: 5000 },
+  ];
+  const sdp = NetSdp.unpack(hand([...bad, good]));
+  assert.ok(sdp, "the good candidate survives");
+  const lines = sdp.split(/\r?\n/).filter((l) => l.startsWith("a=candidate:"));
+  assert.deepEqual(lines.map((l) => l.split(" ").slice(4, 6).join(":")), ["8.8.4.4:5000"]);
+  assert.equal(NetSdp.unpack(hand(bad)), null, "nothing usable left is refused");
+});
