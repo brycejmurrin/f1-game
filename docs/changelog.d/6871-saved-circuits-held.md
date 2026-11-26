@@ -1,0 +1,2 @@
+Fixed: A saved circuit that a newer version of the game can no longer read stays in your saved data instead of being erased the next time you save, delete or import another circuit (#6871). It is hidden from MY CIRCUITS until a later fix can load it again.
+Fixed: Opening an exported circuit file (.apextrack.json) now loads the full design it carries, and uses the share code only when the design can't be read (#6871).
