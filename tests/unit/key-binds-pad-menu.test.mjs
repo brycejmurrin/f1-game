@@ -508,3 +508,30 @@ test("an open camera picker takes the pad and the phone: D-pad moves it, A picks
   assert.equal(Input.throttle(), true, "closed: the held trigger drives again");
   assert.equal(Input.remoteControlContext(), "drive");
 });
+
+// #6835 (#6544 r9): LT/RT page a pane but were never consumed, so a trigger held to page leaked as pedal on close.
+test("#6835 RT held to page a pane is not gas after the menu closes, until it is released", () => {
+  const h = menuRig();
+  const pad = fakePad(h.sb, h.fire, "Xbox Wireless Controller");
+  h.tick();
+  pad.press(7); h.tick();
+  assert.ok(h.dispatched.some((e) => e.key === "PageDown"), "RT pages the pane");
+  h.navOpen.on = false; h.tick(); h.tick();
+  assert.equal(h.Input.throttleLevel(), 0, "RT still belongs to the menu");
+  pad.release(7); h.tick();
+  pad.press(7); h.tick();
+  assert.equal(h.Input.throttleLevel(), 1, "a fresh RT press drives");
+});
+
+test("#6835 LT held to page a pane is not brake after the menu closes, until it is released", () => {
+  const h = menuRig();
+  const pad = fakePad(h.sb, h.fire, "Xbox Wireless Controller");
+  h.tick();
+  pad.press(6); h.tick();
+  assert.ok(h.dispatched.some((e) => e.key === "PageUp"), "LT pages the pane");
+  h.navOpen.on = false; h.tick(); h.tick();
+  assert.equal(h.Input.brakeLevel(), 0, "LT still belongs to the menu");
+  pad.release(6); h.tick();
+  pad.press(6); h.tick();
+  assert.equal(h.Input.brakeLevel(), 1, "a fresh LT press brakes");
+});
