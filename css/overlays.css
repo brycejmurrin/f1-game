@@ -32,6 +32,31 @@ body:not(.desktop) { --tap-floor44: calc(44.2px / var(--ui-scale)); }
 #learn-aero-guide strong, #learn-aero-guide span { display: block; }
 #learn-aero-guide strong { font-size: var(--fs-3); }
 #learn-aero-guide span { font-size: var(--fs-2); color: var(--dim); }
+/* LEARN's THUMB DRILL (js/learn-drills/thumb-drill.js): the corner's script cue in the aero card's place, and a lap
+   card that takes taps (RETRY LAP, DRIVE ON) while the cue card leaves every touch to the dock. */
+#thumb-drill, #thumb-drill-lap {
+  position: fixed; z-index: 8; left: 50%; transform: translateX(-50%);
+  top: max(calc(var(--sat) + 3.25rem), 17%);
+  width: max-content; max-width: min(52vw, 30rem);
+  padding: var(--pad) calc(var(--pad) * 1.5);
+  border: 1px solid var(--plate-line); border-radius: var(--r-md);
+  color: var(--text); background: var(--plate); font-family: var(--font-hud); text-align: center;
+}
+#thumb-drill { pointer-events: none; }
+#thumb-drill strong, #thumb-drill span { display: block; }
+#thumb-drill strong { font-size: var(--fs-3); }
+#thumb-drill span { font-size: var(--fs-2); color: var(--dim); }
+#thumb-drill-lap { z-index: 9; display: grid; gap: var(--gap); }
+#thumb-drill-lap[hidden] { display: none; }
+#thumb-drill-lap > strong { font-size: var(--fs-3); }
+#td-corners { display: flex; flex-wrap: wrap; justify-content: center; gap: .25rem .5rem; font-size: var(--fs-2); }
+#td-corners [data-grade="good"] { color: var(--faster); }
+#td-corners [data-grade="low"] { color: var(--red); }
+#td-actions { display: flex; justify-content: center; gap: var(--gap); }
+#thumb-drill-lap button { min-height: var(--tap); min-width: var(--tap); padding: 0 var(--pad); font: inherit; font-weight: 700; }
+@media (max-height: 500px) {
+  #thumb-drill, #thumb-drill-lap { top: max(calc(var(--sat) + 2rem), 13%); padding: .25rem .45rem; }
+}
 /* LEARN's THUMB TRAINER (js/ui/thumb-trainer.js): the real race dock in its preview, and the drill sized by JS into the
    free screen between the buttons. Only the dock's drive buttons stay live; everything else on the HUD goes. */
 body[data-thumb-trainer] #hud > :not(#hud-dock),

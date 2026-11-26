@@ -113,6 +113,7 @@ export const RULES = [
   // remembers to extend a regex. The blanket-route count in
   // tests/data/ratchets.json is what catches a file no rule names.
   [/^learn\//, ["ui", "service-worker"], "the Learn lesson UI and offline asset loading"],
+  [/^js\/learn-drills\//, ["ui"], "LEARN's on-track drills (thumb-drill.js): tests/unit/thumb-drill.test.mjs and the learn specs"],
   [/^js\/overlay\//, ["state-unit"], "stream overlay frame schema and transform-only DOM painter"],
   [/^tools\/lib\/game-vm\.cjs/, ["game-vm"], "the Node VM game harness and its parity test"],
   [/^tools\/lib\/vm-debug-preload\.cjs/, ["tooling-fast"], "opt-in vm filename rewrite; vm-debug-preload.test.mjs"],

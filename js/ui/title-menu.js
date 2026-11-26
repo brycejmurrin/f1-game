@@ -211,9 +211,9 @@ const TitleMenu = (function () {
         }
       }
       // THUMB TRAINER (LAZY_LEARN with the door): over the title, on the previewed race dock.
-      const openTrainer = onClose => {
+      const openTrainer = (onClose, drive) => {   // drive: its on-track drill (ThumbTrainer.open)
         if (!titleReady() || typeof ThumbTrainer === "undefined") { onClose(); return; }
-        ThumbTrainer.open(G, { preview: previewControls, onClose });
+        ThumbTrainer.open(G, { preview: previewControls, onClose, drive });
       };
       if (lesson) door.dataset.openLesson = lesson;
       LearnDoor.open(door, openDataHub, launchAeroDrill, openTrainer);

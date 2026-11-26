@@ -1,0 +1,1 @@
+New: LEARN › VEGAS THUMB DRILL (and ON TRACK in the Thumb Trainer) drives a Las Vegas Time Trial on your own touch buttons with the trainer's cue for every corner, scores your brake, arrow and gas timing live, and sums each lap on a card with RETRY LAP (#6927).

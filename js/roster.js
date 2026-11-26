@@ -258,7 +258,8 @@
   ],
     LAZY_LEARN: [
     "js/ui/learn-door.js",
-    "js/ui/thumb-trainer.js"
+    "js/ui/thumb-trainer.js",
+    "js/learn-drills/thumb-drill.js"
   ],
     LAZY_RACE: [
     "js/data/garage-entrance-motion.js",
