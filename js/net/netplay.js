@@ -95,11 +95,17 @@ const NetPlay = (function () {
   // three packets a lap (5 laps in 1.5 s of wire). A rise also needs a whole
   // lap at the wire's speed ceiling of race clock since the last one.
   const MID_LO = 0.25, MID_HI = 0.75;
+  const GAP_WINDOW_S = 2;   // a resync allowance lives this long after goWire, then it is gone
   function gateLap(c, st, total, now) {
     const prev = Math.max(0, Math.floor(Number(c.lap) || 0));
     let lap = prev;
     if (!(total > 0)) lap = Math.min(st.lap, prev);
     else if (st.lap === prev) lap = prev;
+    // After a silence the crossings it hid cannot be seen (no mid-lap packet), so
+    // take the wire lap once, bounded by the laps the silence could hold at SPEED_LIMIT.
+    else if (st.lap > prev && c._nGapLaps > 0 && now <= c._nGapUntil) {
+      lap = Math.min(st.lap, prev + c._nGapLaps); c._nGapLaps = 0; c._nMid = false; c._nRiseT = now;
+    }
     // A fall re-arms the next rise, so it nets zero: needed when an
     // extrapolated sample crossed early and the next real packet is short. The rise
     // stamp goes too: kept, it refused the REAL crossing that follows (total / SPEED_LIMIT).
@@ -250,7 +256,7 @@ const NetPlay = (function () {
     // Keep owner lap evidence apart from speculative motion: fallback crossings
     // cannot finish a connected human, validate a LAP event, or seed gateLap.
     function goLocal(r) {
-      r.stale = true;
+      r.stale = true; r._gapRaceS = null;
       if (!r.hostAi) { r.car._nOwnerLap = r.car.lap; r.car._nOwnerS = r.car.s; r.car._nFallback = true; }
       if (!r.hostAi) G.setCarRole(r.car, false, false);
       r.car.netInput = null;
@@ -258,6 +264,11 @@ const NetPlay = (function () {
     }
     function goWire(r) {
       r.stale = false;
+      const gap = r._gapRaceS, tot = (G.track && G.track.total) || 0;
+      if (role === "host" && !r.hostAi && gap > 0 && tot > 0 && Number.isFinite(raceTime())) {
+        r.car._nGapLaps = Math.floor(gap * SPEED_LIMIT / tot); r.car._nGapUntil = raceTime() + GAP_WINDOW_S;
+      }
+      r._gapRaceS = null;
       if (!r.hostAi) {
         r.car.lap = r.car._nOwnerLap; r.car.s = r.car._nOwnerS;
         r.car._nFallback = false;
@@ -502,6 +513,9 @@ const NetPlay = (function () {
         // renews ownership. Old backlog must not keep an exhausted pose frozen
         // on the wire, or reclaim a car already handed to the local AI.
         if (r && r.interp.adopt(t - (entry.age || 0), entry, arrival) && r.interp.newest() === entry) {
+          // race clock across a silence: goWire's bound on the laps it may have hidden
+          if (!r.stale) r._gapRaceS = 0; else if (r._gapRaceS == null) r._gapRaceS = raceTime() - r._heardRaceT;   // first packet's gap wins
+          r._heardRaceT = raceTime();
           r.heardAt = Number.isFinite(arrival) ? arrival : (G.netNow != null ? G.netNow : r.heardAt);
           r.everHeard = true;
         }
@@ -534,6 +548,11 @@ const NetPlay = (function () {
       // sessions retain the old callback contract and decode at this boundary.
       if (typeof s.onSnapshot === "function") s.onSnapshot((pkt, at) => onState(pkt, s, id, at));
       else s.onState((bytes, at) => onState(NetSnapshot.decodeSnapshot(bytes), s, id, at));
+      // A clock step re-times every packet: buffered poses carry the OLD offset.
+      if (typeof s.onClockStep === "function") s.onClockStep(() => {
+        for (const r of remotes.values()) r.interp.clear();
+        for (const r of aiRemotes.values()) r.interp.clear();
+      });
       s.onClose((why) => {
         // We close a BYE/incompatible peer ourselves, so close() reports "local"; the
         // LEFT other guests are told and the hand-back must keep the real reason.
@@ -742,7 +761,7 @@ const NetPlay = (function () {
             // a lap early (or park fin under the wrong _nFinLap).
             if (role === "host" && fr) {
               const ownerLap = Number(d.lap);
-              const lapOut = Number.isFinite(ownerLap) ? Math.floor(ownerLap) : fr.car.lap;
+              const lapOut = Number.isFinite(ownerLap) ? Math.min(Math.max(Math.floor(ownerLap), 0), (G.lapsTarget || 0) + 1) : fr.car.lap;
               const out = { lap: lapOut, time: ltOk ? lt : null, best: bestOk ? best : null,
                 code: fr.car.code, driverId: fr.car.driverId, fin: finOk && finishAllowed(finLap) ? fin : undefined, invalid: !!d.invalid,
                 retired: ret || undefined };
