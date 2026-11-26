@@ -1679,22 +1679,18 @@ function redFlagRestart() {
     c.lap = lapNew;
     c.prog = c.lap * L - (L - c.s);
     c._progGift = (c._progGift || 0) + (c.prog - progWas);
-    c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
-    c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.lane = c.lanePref; c.laneClr = 0;   // as gridUp
-    c.gear = 1; c.rpm = IDLE_RPM;   // a standing start in 2nd+ has gearLo > 0, so manual drive is zero until a downshift
-    c.xOn = false; c.aeroX = 0; c.xArmed = false; c.towing = 0; c.wake = 0; c.wheelLock = 0;
-    clearRacingScratch(c);
+    c.head = 0;
     // A CAR ON A GRID BOX IS STATIONARY, ALONE AND ON CLEAN TARMAC. This path
     // reuses the SAME car objects (gridUp builds a race, makeCars is not
     // re-run), so anything the racing wrote survived onto the box: contactT
     // decays rather than being recomputed, so the AI ran its contact branch
     // from a standing start; wrongWay/rescue/off/wall said the car was in a
-    // gravel trap; otT/otE held a move that ended when the flag flew.
-    // Energy, tyreClass and phaseRoll are NOT cleared — same race, and the
-    // strategy and the ERS state legitimately carry through a red flag.
-    c.contactT = 0; c.wrongWay = false; c.wrongT = 0; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false;
-    c.offT = 0; c.offCut = false; c.wallT = 0; c.wasOnWall = false; OvertakeMode.reset(c); WheelState.resetThermal(c);   // #6877 P6
-    c.kerbGripSm = 1; c.kerbCueT = 0; c.brakeStab = null; c.axEstSm = 0;   // stationary: no brake-stability or longitudinal-accel history (flatSpot stays: same tyres)
+    // gravel trap; otT/otE held a move that ended when the flag flew. Energy,
+    // tyreClass, phaseRoll, errCount and flatSpot are NOT cleared — same race.
+    // Each plain-value reset, with its value and why: js/race/car-fields.js RESETS (op redFlag).
+    if (typeof CarFields !== "undefined") CarFields.resetFor(c, "redFlag");
+    c.lane = c.lanePref;   // the table's CALLER row: the car's own lane
+    OvertakeMode.reset(c); WheelState.resetThermal(c);   // #6877 P6
     // A STOP IN FLIGHT IS SCRATCH, not strategy: the grid boxes sit INSIDE the
     // pit window on most circuits, so a car holding the lane when the flag flew
     // would restart still reading inLane() — pinned at the pit limiter for ~12 s
@@ -1775,7 +1771,6 @@ function gridUp(preOrder) {
     if (typeof CarFields !== "undefined") CarFields.resetFor(c, "newRace");
     c.prog = -(14 + i * 8); c.lane = c.lanePref;   // the table's CALLER rows: the grid slot's head start, the car's own lane
     OvertakeMode.reset(c); Damage.reset(c);
-    clearRacingScratch(c);
     // The launch plan and the pace phase (AiDrive): one hash per car per race,
     // never a simRnd() draw — the stream's draw count is a contract. Season /
     // career round + seasonSeed match armReliability (docs/BUGS.md B6).
@@ -1833,17 +1828,6 @@ function seedPlayerPose() {
   player.head = Math.atan2(smp.t[0], smp.t[2]);
   player.rPrevHead = player.head;
   player.vLat = 0; player.yawRateCur = 0;
-}
-// Racecraft scratch a re-grid must drop: a pass latch, a defensive move or a
-// mistake phase that outlives the field it was made against runs from the
-// grid box. Same list apex.js reset() clears.
-function clearRacingScratch(c) {
-  c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null;
-  c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1; c.queueT = 0; c._qOf = null; c.trailT = 0; c._trOf = null; c._trYT = 0; c._trYS = 0;
-  c.calmUntil = 0; c.calm = 0; c.sbsT = 0; c.atkOn = c.atkWant = false; c.runT = 0; c._alPrev = null; c.paceF = 0;   // racecraft state (AiDrive startCalm / sbs / runExtra / repassLock / paceSample)
-  // errCount is NOT cleared here — a red-flag re-grid is the SAME race, so the
-  // mistakes counted before the flag stay on the car (as energy and tyreClass
-  // do). gridUp zeroes it beside c.hits/c.cuts, where a new race's counters live.
 }
 
 // Car decal / effect-quad / cockpit-instrument geometry lives in

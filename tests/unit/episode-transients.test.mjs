@@ -1,9 +1,10 @@
 /* episode-transients.test.mjs — a per-car field must not survive reset().
  *
- * js/agent/apex.js's EPISODE_TRANSIENTS array (plus reset()'s own hand-written
- * clearing block) is a list a human maintains by re-deriving it from a diff:
- * its header comment says it is "every key that differed between consecutive
- * post-reset snapshots at the same seed", found by hand, after the fact, only
+ * The episode op of js/race/car-fields.js RESETS (applied by js/agent/apex.js
+ * reset(); until #6946 the EPISODE_TRANSIENTS array plus reset()'s hand-written
+ * clearing block) is a table a human maintains by re-deriving it from a diff:
+ * every key that differed between consecutive post-reset snapshots at the same
+ * seed. That list was found by hand, after the fact, only
  * when tests/specs/agent-determinism.spec.js (a browser spec) happened to
  * notice a symptom. On 2026-09-15/16 that list fell behind twice in a row —
  * once for five fields (a STREET-only defect), once for sixteen (the tyre-force
@@ -36,9 +37,9 @@ for (const track of TRACKS) {
     if (rows.length) {
       const detail = rows.map((r) => `${r.field} (${r.cars} car(s), e.g. ${r.example.cold} -> ${r.example.warm})`).join("; ");
       assert.fail(`${rows.length} field(s) leaked across reset() on ${track}: ${detail}\n`
-        + "Add the field to EPISODE_TRANSIENTS in js/agent/apex.js (or its reset()"
-        + " clearing block) if it should be gone on a cold car, matching a freshly"
-        + " loaded page's undefined state.");
+        + "Add the field's row to the RESETS table in js/race/car-fields.js with an"
+        + " episode value (undefined if it should be gone on a cold car, matching a"
+        + " freshly loaded page's state); never a list in apex.js.");
     }
   });
 }

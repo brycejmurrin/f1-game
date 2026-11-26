@@ -63,9 +63,9 @@ var SimState = (function () {
 
   // ── the car part (moved from js/race/driving-coach.js, #6860) ─────────────
   // The generic sweep is deliberate: a car carries ~60 live primitives and an
-  // explicit list would rot silently — see EPISODE_TRANSIENTS in
-  // js/agent/apex.js, which had to be built by measurement rather than
-  // inspection for exactly that reason. Never a career or a remote car.
+  // explicit list would rot silently — see the episode op of the RESETS table
+  // in js/race/car-fields.js (once apex.js's EPISODE_TRANSIENTS), which had to
+  // be built by measurement rather than inspection for exactly that reason. Never a career or a remote car.
   const PRIM = (v) => v == null || ["number", "boolean", "string"].includes(typeof v);
   // WHICH car fields are which kind is car-state definition, declared once in
   // js/race/car-fields.js (CarFields.SNAPSHOT, beside the per-car reset table;

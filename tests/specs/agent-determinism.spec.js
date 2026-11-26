@@ -98,7 +98,7 @@ test.describe("simulation determinism", () => {
   // over these four seconds — twenty-five leaking fields hid behind that for a
   // long time, surfacing only as a permuted grid order at the back. This asks
   // the question straight: after an episode, does a second reset put the cars
-  // back in the state the first one did? EPISODE_TRANSIENTS in apex.js is a
+  // back in the state the first one did? The episode op of car-fields.js RESETS is a
   // written list, and a written list rots; this is what keeps it honest, and it
   // names the offending FIELD instead of leaving a digest diff to interpret.
   test("reset() leaves no episode state on the cars", async ({ page }) => {
