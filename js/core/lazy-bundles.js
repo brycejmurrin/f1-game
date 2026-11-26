@@ -1161,7 +1161,7 @@ watchRouteCss();
 // After every const above (loadBackendScripts reads AUDIO_FILES): a flag-gated inject, never awaited.
 bootDevPanels();
 mountBridgeLinkDoor();
-return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureReplayBroadcast, ensureNet, ensureAudio, adoptAudio, audioHandle, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, ensureRouteCss, ensureSavesData, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
+return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureReplayBroadcast, ensureNet, ensureAudio, adoptAudio, audioHandle, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, ensureRouteCss, ensureSavesData, wantAgentSurface, loadAgentSurface, bootAgentSurface, awaitPackSettled };
 }
   // The instance game.js made, for modules that load outside it (#5555): the global is only this factory.
   let live = null;

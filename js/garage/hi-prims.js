@@ -267,7 +267,6 @@ const GarageHiPrims = (function () {
   const live = (name) => hiOn(name) && api;
   // GaragePrims.run: a room ("room", garageHi; lookKey carries the bit) or crew ("crew" / "pit", crewHi) build, dense when live.
   const run = (kind, fn, undo) => (live(kind === "room" ? "garageHi" : "crewHi") ? build(kind, fn, undo) : fn());
-  function hiReset() { for (const k in _on) delete _on[k]; }
   // GaragePrims.lookKey: the room's geometry identity carries the EXTREME bit (strings made once, no per-frame garbage).
   const HI_LOOK = {};
   const key = (look) => live("garageHi") && (HI_LOOK[look] || (HI_LOOK[look] = look + "+hi"));
@@ -323,7 +322,7 @@ const GarageHiPrims = (function () {
   }
 
   const api = Object.freeze({ densifyLoft, bevelBox, spline, sweep, lathe, tyre, roomExtras, TYRE_PROFILE,
-    segs, dense, isDense: () => _prims, detail, isDetail: () => _crew, denseSpec, hiOn, live, hiReset, key, build,
+    segs, dense, isDense: () => _prims, detail, isDetail: () => _crew, denseSpec, hiOn, live, key, build,
     block, hose, slick, wheel, stack, pull, bezel, run, lookKey });
   // Landing installs the EXTREME seams GaragePrims keeps as today's stubs (lookKey = lookId, run = call):
   // from here the room key and PitCrewAnim's rig key (crewHi) change, the bay crew is freed, and each rebuilds dense.

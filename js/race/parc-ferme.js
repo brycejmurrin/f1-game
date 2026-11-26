@@ -252,7 +252,7 @@ var ParcFerme = (function () {
 
   return {
     create, PARC_S, ORBIT_PERIOD_S, ORBIT_RADIUS, ORBIT_HEIGHT, FRAME_DT,
-    CAPTION, SKIP_LABEL, HOST_ID, SKIP_ID,
+    CAPTION, SKIP_LABEL,
     frozenPath, pitSubject, parkAnchor, parkPose,
   };
 })();
