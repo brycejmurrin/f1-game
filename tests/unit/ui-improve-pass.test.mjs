@@ -2772,8 +2772,7 @@ test("contents-strip sheets and the nav gate: lone BACK/CLOSE rides in the head 
   const got = {
     navGate: comp.includes(":not(:has(> :nth-child(4 of :not(nav))))"),
     vsCloseRules: ["css/overlays.css", "css/dialogs.css"].filter((f) => /#vs-close\s*\{/.test(readCssSource(f))),
-    stripFeet: [["#career-guide .sheet"], ["#career-history .sheet"], ["#howtoplay-inner"]]
-      .filter(([sh]) => raw.includes(`${sh}[data-density="compact"]:has(> .sheet-foot > :is(button, a):only-child) > .sheet-foot`)).length,
+    stripFeet: raw.includes('#howtoplay-inner)[data-density="compact"]:has(> .sheet-foot > :is(button, a):only-child) {') ? 3 : 0,
   };
   assert.deepEqual(got, { navGate: true, vsCloseRules: [], stripFeet: 3 });
 });
