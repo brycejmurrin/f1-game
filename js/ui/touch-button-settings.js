@@ -166,6 +166,11 @@ const TouchButtonSettings = (() => {
     const sliderEnd = choice("sliderEnd", "END EDGE INPUT", percentages);
     const sliderCurve = choice("sliderCurve", "EDGE-TO-EDGE RESPONSE", curves);
     const relative = node("div"); response.appendChild(relative); section = relative;
+    // RESPONSE preset (#6794): a one-tap view of five existing fields on the steer arrows; no stored key of its own.
+    const preset = choice("preset", "RESPONSE", [["ease", "SLIDE TO EASE"], ["full", "FULL ONLY"], ["custom", "CUSTOM"]]);
+    preset.children[2].disabled = true;
+    const presetHelp = node("p"); presetHelp.className = "adv-help"; presetHelp.id = host.id + "-preset-help";
+    preset.setAttribute("aria-describedby", presetHelp.id); section.appendChild(presetHelp);
     const press = choice("press", "FIRST TOUCH", [["instant", "INSTANT"], ["progressive", "PROGRESSIVE"]]);
     const help = node("p"); help.className = "adv-help"; help.id = host.id + "-help";
     press.setAttribute("aria-describedby", help.id); section.appendChild(help);
@@ -225,6 +230,18 @@ const TouchButtonSettings = (() => {
       gestureAmount.textContent = label;
       gestureTime.setAttribute("aria-valuetext", label);
     }
+    const FULL_ONLY = { start: 100, end: 100, press: "instant", buildMs: 0, adaptive: 1 };
+    const EASE = { start: null, end: null, press: "instant", buildMs: 0, adaptive: "inherit" };
+    function presetOf(id) {
+      const o = PedalTravel.buttonOverrides(id);
+      if (o.start == null && o.end == null && !o.press && !o.buildMs && o.adaptive == null) return "ease";
+      return o.start === 100 && o.end === 100 && !o.press && !o.buildMs && o.adaptive === 1 ? "full" : "custom";
+    }
+    function arrowsDiffer() {
+      if (!ids.includes("left") || !ids.includes("right")) return false;
+      const l = PedalTravel.buttonProfile("left"), r = PedalTravel.buttonProfile("right");
+      return presetOf("left") !== presetOf("right") || l.travel !== r.travel || (l.slideCurve || "linear") !== (r.slideCurve || "linear");
+    }
     function distance(px) {
       amount.textContent = px + " px";
       travel.setAttribute("aria-valuetext", px + " pixels");
@@ -264,6 +281,16 @@ const TouchButtonSettings = (() => {
       }
       gestureHelp.textContent = (gestureHints[profile.activation] || "Default keeps the original gesture for this action.") +
         (id === "camera" && !standalone ? " A longer hold opens the view grid." : "");
+      const arrow = id === "left" || id === "right";
+      preset.parentElement.parentElement.hidden = presetHelp.hidden = !arrow;
+      if (arrow) {
+        preset.value = presetOf(id);
+        const split = ids.includes("left") && ids.includes("right") && presetOf("left") !== presetOf("right");
+        presetHelp.textContent = "Slide to Ease eases steering as you slide toward the other arrow. Full Only gives full input for the whole press: it sets Starting Input and Slide End Input to 100, First Touch to Instant, Hold Build Time off and Adaptive Buttons to 1. Editing any of those shows Custom." +
+          (split ? " The left and right arrows use different responses, so this applies to " + id.toUpperCase() + " only." : "") +
+          (arrowsDiffer() ? " Left and right arrows differ: slide distance is " + PedalTravel.buttonProfile("left").travel + " px left and " +
+            PedalTravel.buttonProfile("right").travel + " px right." : "");
+      }
       press.value = profile.press; travel.value = String(profile.travel); distance(profile.travel);
       slide.parentElement.parentElement.hidden = slideHelp.hidden = !pedal || !!profile.sliderEdge;
       feedbackHelp.textContent = id === "gas" ? "Gas brightens with throttle input. A tread mark warns of wheelspin." : id === "brake" ? "Brake brightens with braking input. Double bars warn of lock-up." : "The arrow brightens as its steering input increases.";
@@ -316,6 +343,13 @@ const TouchButtonSettings = (() => {
     for (const control of [idle, pressed, activation, latch]) control.onchange = () => change({ [control.dataset.field]: control.value });
     slider.onchange = () => change({ sliderEdge: slider.value });
     sliderEntry.onchange = () => change({ sliderEntry: sliderEntry.value });
+    preset.onchange = () => {
+      if (preset.value === "custom") return;
+      const patch = preset.value === "full" ? FULL_ONLY : EASE, id = button.value;
+      const both = (id === "left" || id === "right") && ids.includes("left") && ids.includes("right") && presetOf("left") === presetOf("right");
+      for (const target of both ? ["left", "right"] : [id]) PedalTravel.setButtonProfile(target, patch);
+      note.textContent = ""; refresh();
+    };
     press.onchange = () => change({ press: press.value });
     travel.oninput = () => distance(travel.value);
     travel.onchange = () => change({ travel: Number(travel.value) });
