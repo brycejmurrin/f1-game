@@ -393,6 +393,9 @@ body:not(.desktop) #pmsettings-inner:not([data-shape="tall"]) { --compact-at: 62
   border-color: var(--plate-line);
   box-shadow: none;
 }
+/* A settings door's blurb outside the index (#pm-advanced, #pm-bench-open) took the UA `smaller`: 10 painted px at
+   UI SIZE 70 (#6599). The floored rung keeps it at 12. */
+#pmsettings-inner .pm-group button > small { font-size: var(--fs-micro); }
 #learn .pm-doors small,
 #pm-settings-index small {
   display: block;

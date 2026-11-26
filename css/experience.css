@@ -213,4 +213,12 @@
       font-size: max(calc(var(--fs-micro) * .6 * var(--ui-compact-brand-text, 1)), var(--brand-fs-floor));
     }
   }
+  /* PORTRAIT (#6599): the brand zooms by UI SIZE x TITLE SIZE x fit (css/responsive.css), so --fs-micro's --ui-scale
+     floor alone left SOUND and the disclaimer at 9.6 painted px on the owner's phone (UI SIZE 70, TITLE SIZE 80). */
+  body[data-shape="tall"]:not([data-density="compact"]) #overlay #menu-brand {
+    --brand-fs-floor: calc(12px / var(--ui-scale, 1) / var(--tl-title-size, 1) / var(--tf, 1));
+  }
+  body[data-shape="tall"]:not([data-density="compact"]) #overlay #menu-brand :is(#soundbtn, #disclaimer) {
+    font-size: max(var(--fs-micro), var(--brand-fs-floor));
+  }
 }
