@@ -166,6 +166,25 @@ test("a token GitHub rejects never links, and is forgotten so the box asks again
   assert.equal(b.store.has("apex26.bridgeToken"), false);
 });
 
+test("a def()'d read-only hook is callable and needsTrack answers no_track", async () => {
+  // js/agent/apex-play.js with test-only fixtures; a def hook runs as an ACTION (CALL_READ pins names to source).
+  const play = vm.createContext({ Object });
+  vm.runInContext(fs.readFileSync(new URL("../../js/agent/apex-play.js", import.meta.url), "utf8") + "\n;globalThis.ApexPlay = ApexPlay;", play, { filename: absSrc("js/agent/apex-play.js") });
+  play.ApexPlay.def("playFixture", { readOnly: true, doc: "fixture", args: "{x}", fn: (G, o) => ({ ok: true, x: o && o.x }) });
+  play.ApexPlay.def("playFixtureTrack", { needsTrack: true, doc: "fixture", args: "()", fn: () => ({ ok: true }) });
+  const G = { track: null };
+  const apex = Object.assign({}, play.ApexPlay.hooks(G));
+  const { api } = load({ search: "", apex });
+  const r = await api.handle({ cmd: "call", args: { method: "playFixture", args: [{ x: 7 }] } });
+  assert.equal(r.ok, true);
+  assert.equal(JSON.stringify(r.value), JSON.stringify({ ok: true, x: 7 }));
+  const n = await api.handle({ cmd: "call", args: { method: "playFixtureTrack" } });
+  assert.equal(JSON.stringify(n.value), JSON.stringify({ ok: false, error: "no_track" }));
+  G.track = {};
+  const y = await api.handle({ cmd: "call", args: { method: "playFixtureTrack" } });
+  assert.equal(y.value.ok, true);
+});
+
 test("saves, career and net hooks are not callable", async () => {
   const hit = [];
   const apex = {};
