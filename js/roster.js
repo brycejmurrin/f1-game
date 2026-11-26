@@ -275,6 +275,7 @@
     "js/data/garage-departure-motion.js",
     "js/garage/departure-wheels.js",
     "js/race/reliability.js",
+    "js/core/sim-state.js",
     "js/race/damage.js",
     "js/race/damage-handling.js",
     "js/race/duel.js",
@@ -320,6 +321,10 @@
     [
       "js/race/spotter.js",
       "js/race/race-radio.js"
+    ],
+    [
+      "js/core/sim-state.js",
+      "js/race/damage.js"
     ]
   ],
     CIRCUITS_DIR: "js/circuits",

@@ -118,3 +118,13 @@ test("the scan covers the surfaces it claims (a moved tree must not turn this in
 test("AGENTS.md stays under Codex's native 32 KiB cap", () => {
   assert.ok(Buffer.byteLength(text.get("AGENTS.md"), "utf8") < 32 * 1024, "AGENTS.md is over 32 KiB");
 });
+
+test("the local floor command has one home: AGENTS.md rule 3 (no restated copies)", () => {
+  const COPY = /tooling-fast(?:\.mjs)?\s+--changed\s+--jobs=3/;
+  const bad = [];
+  for (const [f, body] of text) {
+    if (f === "AGENTS.md") continue;
+    body.split("\n").forEach((line, i) => { if (COPY.test(line)) bad.push(`${f}:${i + 1}: ${line.trim().slice(0, 100)}`); });
+  }
+  assert.deepEqual(bad, [], `point to "AGENTS.md rule 3" instead of restating the floor command:\n${bad.join("\n")}`);
+});

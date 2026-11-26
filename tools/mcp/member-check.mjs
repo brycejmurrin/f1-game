@@ -1,7 +1,10 @@
 // @doc apex-lsp diag APX1/APX2: a call or read of a Module.member or factory-instance member nothing defines.
 // Finds uses of Module.member / instance.member where no declaration of that module (or factory return)
 // defines the member. TypeScript cannot report these: object literals in JavaScript files are open-ended.
-import { analyze } from "eslint-scope";
+import { createRequire } from "node:module";
+
+// Lazy: see lsp-mcp.mjs (#6867).
+const analyze = (...a) => createRequire(import.meta.url)("eslint-scope").analyze(...a);
 
 const FN = ["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"];
 const BUILTIN = new Set(["hasOwnProperty", "toString", "constructor", "valueOf", "call", "apply", "bind", "name", "length", "prototype", "then"]);

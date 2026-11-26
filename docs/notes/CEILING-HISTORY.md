@@ -5,6 +5,12 @@
 `(tree) eagerCodeBytes` −13294, `eagerScripts` −2 (lowers, no `ratchet-raise`). `circuit-lore.js` moves to LAZY_AUDIO (before the
 announcer, its reader; flyby-seq is typeof-guarded) and `thermal-drift.js` to LAZY_PERF; `PerfGov.resyncDrift()` arms a saved
 opt-in once the rig lands. Fragment: `ratchets.d/claude--boot-lazy-lore-drift-6911.json`.
+## 2026-11-26 — claude/simstate-registry-6860: the SimState registry captures the AI pace profile (#6860 phase 1)
+
+`js/game.js gMembers` 274 → **275** (+1). Deliberate raise, which needs a `ratchet-raise` label (D-042). The new member is `G.paceRef`, a one-line getter for the per-node AI pace profile (`js/race/pace-math.js` `paceRef`, the #6560 leak). The profile lives inside the `PaceMath` instance, and no existing G member reaches it.
+The SimState "pace" part (`js/core/sim-state.js`) needs it to restore the profile. Without it, a race restored at t=20 s diverges on the first step: the player's `paceF` is judged against a profile from the future. `tests/unit/sim-state-vm.test.mjs` proves both sides: the restore digest matches, and dropping the part changes it.
+`js/game.js` lines/codeLines +1, `(tree) eagerCodeBytes` +166, `assertPins` +1 and `assertPinsAll` +3 are each within their absorb.
+Fragment: `ratchets.d/claude--simstate-registry-6860.json`.
 
 ## 2026-11-23 — PR #6246 (cursor/photo-panel-focus-b27e) — camera focus and pedal calibration boot code
 
@@ -4090,6 +4096,15 @@ Fragment: `ratchets.d/claude--issue-5496-damage-reland.json`.
 `js/net/lobby.js lines` +1 (the deps helper) is inside the commit hook's absorb.
 Fragment: `ratchets.d/claude--issue-6496-net-relays.json`.
 
+## 2026-11-26 — claude/livery-colours-6875: livery colour fixes (#6875)
+
+`(tree) eagerCodeBytes` 4045854 → **4046469** (+615) and `js/car/car3d.js lines` +1. The bytes are the SWAP COLOURS
+fix in `js/garage/livery-design-editor.js` (hex↔rgb helpers plus the `designPair` seed, ~470 B), the `designPair`
+export (~12 B), helmet `alt` (~9 B) and the `_ckAcc` colour guard (~110 B incl. the +1 line). They buy: a swapped
+lightning / twoTone / keylineSplit design no longer vanishes into the body colour (H1), a shifted helmet keeps its
+accent (H2), and a string colour slot no longer gives NaN cockpit colours (H4); #6864. The editor cannot reuse
+`livDraftTo`/`hexToArr` (they live in setup-sheet.js, a global the editor never reaches, and its VM test loads it
+alone), so the small parse/format helpers stay local. Fragment: `ratchets.d/claude--livery-colours-6875.json`.
 ## 2026-11-26 — claude/hud-tyres-aria-memo-6752: HUD tyres aria-label memo (#6752 row 5, #6506 row 5)
 
 `(tree) eagerCodeBytes` 4045914 → **4046097** (+183, exactly the measured overage: the entry is slack 0; the first cut was +147, and the pr-reviewer's two accepted findings, a null-laps key collision and a missing locale in the key, added 36 B): `HudTyres.paint` builds a joined key

@@ -73,7 +73,10 @@ function boot({ idb = database(), initial = [], disk = new Map(initial), navigat
     setItem(k, v) { if (blocked) throw Object.assign(new Error("full"), { name: "QuotaExceededError" }); disk.set(k, String(v)); }, removeItem: (k) => disk.delete(k) };
   const c = vm.createContext({ console, setTimeout, clearTimeout, Promise, navigator, indexedDB: idb, localStorage: storage,
     Log: { info() {}, warn() {} }, Teams: { LIST: [] }, window: { addEventListener() {} } });
-  seedSaveMigrate(c); vm.runInContext(src("js/core/store.js") + ";globalThis.store=GameStore.store", c, { filename: absSrc("js/core/store.js") });
+  seedSaveMigrate(c);
+  // The shell loads the registry just before store.js; its families drive the mirror and SaveHealth (#6602).
+  vm.runInContext(src("js/core/save-schema-registry.js"), c, { filename: absSrc("js/core/save-schema-registry.js") });
+  vm.runInContext(src("js/core/store.js") + ";globalThis.store=GameStore.store", c, { filename: absSrc("js/core/store.js") });
   return { c, store: c.store, disk, storage, idb, block: (on) => { blocked = on; } };
 }
 const tick = () => new Promise((r) => setImmediate(r));

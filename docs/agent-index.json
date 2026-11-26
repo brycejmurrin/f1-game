@@ -867,6 +867,7 @@
         "tests/unit/season-seat-move-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
+        "tests/unit/sim-state-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/spoken-lang-offer-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
@@ -992,6 +993,7 @@
         "tests/unit/season-seat-move-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
+        "tests/unit/sim-state-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/spoken-lang-offer-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
@@ -1119,6 +1121,7 @@
         "tests/unit/season-seat-move-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
+        "tests/unit/sim-state-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/spoken-lang-offer-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
@@ -3310,6 +3313,11 @@
       "path": "js/core/script-loader.js",
       "global": "ScriptLoader",
       "roster": "tag"
+    },
+    {
+      "path": "js/core/sim-state.js",
+      "global": "SimState",
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/core/store.js",

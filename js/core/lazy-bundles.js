@@ -33,6 +33,7 @@ const RACE_SESSION_READY = {
   "js/data/garage-departure-motion.js": () => typeof GarageDepartureMotion !== "undefined",
   "js/garage/departure-wheels.js": () => typeof GarageDepartureWheels !== "undefined",
   "js/race/reliability.js": () => typeof Reliability !== "undefined" && !!Reliability && !Reliability._stub,
+  "js/core/sim-state.js": () => typeof SimState !== "undefined" && !!SimState,
   "js/race/damage.js": () => typeof Damage !== "undefined" && !!Damage && !Damage._stub,
   "js/race/damage-handling.js": () => typeof DamageHandling !== "undefined" && !!DamageHandling && !DamageHandling._stub,
   "js/race/duel.js": () => typeof Duel !== "undefined" && !!Duel && !Duel._stub,

@@ -102,6 +102,27 @@ test("on an explicit time of day the wildcard still replaces the formula base (n
   assert.notDeepEqual(wild.frame.ambientSky, bare.frame.ambientSky, "the day base is a formula, the pack should still refine it");
 });
 
+// Bryce's decision 2026-11-26 (#6910, "Keep warm dusk/dawn"): the wildcard env no
+// longer replaces the formula ambient of an explicit dusk or dawn.
+test("explicit dusk/dawn keep their warm formula ambient over the wildcard env (#6910)", async () => {
+  const plain = (v) => JSON.parse(JSON.stringify(v));
+  for (const tod of ["dusk", "dawn"]) {
+    const bare = await run({ env: {}, palette: PAL, tod });
+    const wild = await run({ env: { ["*|" + tod]: ENV_WILD }, palette: PAL, tod });
+    assert.deepEqual(plain(wild.frame.ambientSky), plain(bare.frame.ambientSky), tod + " ambientSky");
+    assert.deepEqual(plain(wild.frame.ambientGround), plain(bare.frame.ambientGround), tod + " ambientGround");
+    assert.notDeepEqual(plain(bare.frame.ambientGround), ENV_WILD.ambientGround, "fixture: not vacuous");
+    const exact = await run({ env: { ["*|" + tod]: ENV_WILD, ["testtrack|" + tod]: ENV_EXACT }, palette: PAL, tod });
+    assert.deepEqual(plain(exact.frame.ambientGround), ENV_EXACT.ambientGround, tod + ": exact key still wins");
+  }
+});
+
+test("default time of day still takes the pack env where the palette authored nothing (#6910)", async () => {
+  const { ambientSky, ambientGround, ...noAmbient } = PAL;
+  const wild = await run({ env: { "*|default": ENV_WILD }, palette: noAmbient });
+  assert.deepEqual(JSON.parse(JSON.stringify(wild.frame.ambientGround)), ENV_WILD.ambientGround);
+});
+
 test("an exact key's zenith/horizon also override an authored palette sky", async () => {
   const bare = await run({ env: {}, palette: PAL });
   const exact = await run({ env: { "testtrack|default": { ...ENV_EXACT, skyZenith: [0.9, 0.1, 0.1], skyHorizon: [0.8, 0.2, 0.2] } }, palette: PAL });

@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { absSrc } from '../helpers/abs-src.mjs';
 
 function fixture({ realInsights = false } = {}) {
   const nodes = new Map(['pm-coach-status', 'pm-coach-tip', 'pm-coach-summary', 'pm-drill-status', 'pm-lap-report', 'pm-practice-state', 'pm-driving-trace'].map(id => [id, { textContent: '' }]));
@@ -45,6 +46,8 @@ function fixture({ realInsights = false } = {}) {
   });
   if (realInsights) vm.runInContext(readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), ctx);
   // Shell order (#4748): the FULL façade, then the LAZY_RACE_SESSION body it creates.
+  // LAZY_RACE_SESSION loads the SimState registry (js/core/sim-state.js, #6860) before the body that captures through it.
+  vm.runInContext(readFileSync(new URL('../../js/core/sim-state.js', import.meta.url), 'utf8'), ctx, { filename: absSrc('js/core/sim-state.js') });
   for (const f of ['driving-coach-boot.js', 'driving-coach.js'])
     vm.runInContext(readFileSync(new URL('../../js/race/' + f, import.meta.url), 'utf8'), ctx);
   const coach = vm.runInContext('DrivingCoach', ctx).create(G);
