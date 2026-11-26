@@ -111,7 +111,6 @@ test('audition: music setting unset defaults to OFF, matching game.js (#6886 row
   A.stop();
 });
 test('soundtrack: SOUND OFF refuses playTrackId (#6886 row 7)', () => {
-  const { S } = auditionMusicHarness();
   let on = true; const ctx = vm.createContext({ Log: { info() {}, warn() {} }, document: { hidden: false }, Audio: function () { return { play: () => Promise.resolve(), pause() {}, load() {}, removeAttribute() {} }; }, setTimeout, clearTimeout });
   vm.runInContext(read('js/audio/soundtrack.js'), ctx, { filename: absSrc('js/audio/soundtrack.js') });
   ctx.host = { context: () => ({ state: 'running', createGain: () => ({ gain: { value: 1, setTargetAtTime() {} }, connect() {} }), createMediaElementSource: () => ({ connect() {} }) }), master: () => ({}), clamp01: (v) => v, now: () => 0, enabled: () => on, engineRunning: () => false, sfxOk: () => true };
@@ -120,5 +119,4 @@ test('soundtrack: SOUND OFF refuses playTrackId (#6886 row 7)', () => {
   on = false;
   assert.equal(T.playTrackId('user:1'), false); assert.equal(T.currentTrackId(), null);
   on = true; assert.equal(T.playTrackId('user:1'), true);
-  void S;
 });
