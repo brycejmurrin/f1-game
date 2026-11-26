@@ -200,9 +200,8 @@ test("LAMP DENSITY below 1 keeps every gap-th post and wraps like a ring", () =>
   const extras = records(api, t, 1).length - 60;           // constant start-gantry lights
   api.LT.lampDensity = 0.5;
   const gap = api.lampStrideNodes(t.total / t.n);
-  assert.ok(gap >= 4, `fixture: density 0.5 should give a wide gap (got ${gap})`);
-  assert.equal(records(api, t, 0.5).length - extras, Math.ceil(60 / gap),
-    "first post kept, then one per gap nodes");
+  assert.equal(records(api, t, 0.5).length - extras, Math.floor(60 / gap),
+    "first post kept, then one per gap nodes; the last-kept lamp is dropped when it sits inside the wrap gap");
 });
 
 test("dressingExcluded lamps aliases match floodlights/lighting rules", () => {
@@ -224,4 +223,22 @@ test("street posts and flood banks share one lampPosts bake, one LAMPS tab", () 
   assert.ok(lamps.some((d) => d.id === "floodDay" && d.label === "DAYTIME LAMPS"));
   assert.ok(lamps.some((d) => d.id === "lampLevel"));
   assert.equal(api.TUNE_DEFS.filter((d) => d.group === "FLOODLIGHTS").length, 0);
+});
+
+test("R9: density < 1 keeps custom posts and measures the wrap span", () => {
+  const api = loadLightTune();
+  // ds = 5.5 m, density 0.5 -> targetGap = 8 nodes. Posts every 3 nodes (incl. k=0 and k=57).
+  const track = ringTrack(every(3, 60).map((p, i) => (i === 7 ? { ...p, custom: true } : p)));
+  const kept = records(api, track, 0.5);
+  const ks = kept.slice(0, kept.length - 3).map((r) => {
+    let best = 0, bd = Infinity;
+    for (let k = 0; k < track.n; k++) {
+      const d = Math.hypot(r[0] - (track.px[k] + track.rx[k] * 13 * 1), r[2] - (track.pz[k] + track.rz[k] * 13 * 1));
+      const d2 = Math.hypot(r[0] - (track.px[k] - track.rx[k] * 13), r[2] - (track.pz[k] - track.rz[k] * 13));
+      if (Math.min(d, d2) < bd) { bd = Math.min(d, d2); best = k; }
+    }
+    return best;
+  }).sort((a, b) => a - b);
+  const gaps = ks.map((k, i) => (ks[(i + 1) % ks.length] - k + track.n) % track.n);
+  assert.ok(ks.includes(21) && gaps[gaps.length - 1] >= 8, `custom k=21 kept and wrap span >= 8: ks ${ks} gaps ${gaps}`);
 });
