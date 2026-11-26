@@ -221,7 +221,7 @@ test("P3 overtake and chequered-flag swells are capped", () => {
   assert.ok(afterFlag.bed <= 0.11 + 1e-6, `flag swell capped, bed=${afterFlag.bed}`);
 
   GameAudio.finish();
-  assert.ok(CrowdAudio.inspect().bed <= 0.11 + 1e-6, "finish() swell still capped");
+  assert.ok(CrowdAudio.inspect().bed <= 0.11 + 1e-6, "bed stays capped after finish() (a no-op for the crowd)");
 });
 
 test("attach builds a fixed graph; update allocates no nodes", () => {
