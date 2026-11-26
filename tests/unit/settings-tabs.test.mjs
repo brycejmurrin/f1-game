@@ -537,3 +537,10 @@ test("a page opened with focus is announced through LiveRegion; home and silent 
   assert.match(said.at(-1)[0], /MUSIC|AUDIO|SOUND/i);
   assert.equal(said.at(-1)[1], "hud");
 });
+
+test("the page announce precedes an after() note, so the specific message is the newest (#6883 row 5)", () => {
+  const { nav, said } = boot({ ensure: () => Promise.resolve(true), stub: false });
+  nav.show("audio", true, () => { said.push(["note from after()", "hud"]); return false; });
+  assert.equal(said.length, 2);
+  assert.equal(said[1][0], "note from after()");
+});
