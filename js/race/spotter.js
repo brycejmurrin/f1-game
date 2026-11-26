@@ -37,7 +37,8 @@ var Spotter = (() => {
     let occ = 0;
     if (!player || !Number.isFinite(player.s) || !Number.isFinite(player.x ?? 0) || !cars || !(lapLen > 0) || !Number.isFinite(lapLen)) return 0;
     const half = lapLen * 0.5;
-    for (const c of cars) {
+    for (let i = 0; i < cars.length; i++) {
+      const c = cars[i];
       if (c === player || c.retired || !Number.isFinite(c.s) || !Number.isFinite(c.x ?? 0) || (c.pitState && c.pitState !== "none")) continue;
       const arc = ((c.s - player.s) % lapLen + lapLen + half) % lapLen - half;
       const lat = (c.x || 0) - (player.x || 0), side = lat < 0 ? LEFT : RIGHT;
@@ -89,6 +90,9 @@ var Spotter = (() => {
   function create(G) {
     let st = fresh(), lastCars = null, occupied = 0, spoke = false;   // spoke: the pack may hold a spotter clip
     const on = () => G.store.get("spotter", false) !== false;
+    // Hoisted: update() runs once per frame, and these were two fresh closures per call.
+    const dirty = () => spoke || !!(st.cur || st.cand || st.called || st.stillSaid);
+    const reset = (pack) => { st = fresh(); spoke = false; if (pack && pack.stop) pack.stop("spotter"); };
 
     // `quiet`: a REAL RACE WATCH (js/race/race-radio.js) — every car is a
     // puppet and nobody is driving, so there is nobody to spot for.
@@ -96,25 +100,22 @@ var Spotter = (() => {
       if (!Number.isFinite(dt) || dt <= 0) return "";
       const pack = G.radio && G.radio.pack;
       const p = G.player;
-      // RESET ONLY WHEN THERE IS SOMETHING TO RESET. These two early-outs run on EVERY physics step
-      // while the spotter is off (the default), not racing, or in the pits; each used to allocate a
-      // fresh state and call pack.stop("spotter") (which allocates too) — 600 steps, 601 stops
-      // (bug-hunt 3, 2026-10-10). A state that never spoke has nothing to stop; one that handed the pack
-      // a clip (`spoke`, even if valid() since discarded it) may still have it on air, so it IS stopped.
-      const dirty = () => spoke || !!(st.cur || st.cand || st.called || st.stillSaid);
-      const reset = () => { st = fresh(); spoke = false; if (pack && pack.stop) pack.stop("spotter"); };
+      // RESET ONLY WHEN THERE IS SOMETHING TO RESET. These early-outs run once per frame while the
+      // spotter is off (the default), not racing, or in the pits; a state that never spoke has nothing
+      // to stop; one that handed the pack a clip (`spoke`, even if valid() since discarded it) may
+      // still have it on air, so it IS stopped (bug-hunt 3, 2026-10-10).
       if (quiet || G.state !== "race" || G.paused || !p || p.finished || p.retired || !G.track
           || Math.abs(p.speed || 0) < G.vTop() * 0.12 || (p.pitState && p.pitState !== "none")) {
-        if (dirty()) reset();
+        if (dirty()) reset(pack);
         occupied = 0; return "";
       }
-      if (G.cars !== lastCars) { lastCars = G.cars; occupied = 0; if (dirty()) reset(); }
+      if (G.cars !== lastCars) { lastCars = G.cars; occupied = 0; if (dirty()) reset(pack); }
       // Occupancy is computed while racing even with the spotter OFF: race-radio reads occupied() to hold the
       // engineer's routine lines in traffic.
       occupied = occupancy(p, G.cars, G.track.total, occupied);
       // Awareness also gates the coach and routine radio with speech muted.
       if (!pack || !on() || !G.soundOn || (G.radio.volume && G.radio.volume() <= 0)) {
-        if (dirty()) reset();
+        if (dirty()) reset(pack);
         return "";
       }
       // The engineer's chosen voice, from its radio pack (where the spotter's calls are).

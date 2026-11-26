@@ -123,8 +123,12 @@ test("a correction of numerical dust does not count as contact", async () => {
   assert.ok(body.includes("if (corr > CORR_EPS) { if (!netPlay.owns(a)) a.contactT = 0.22; if (!netPlay.owns(b)) b.contactT = 0.22; }"),
     "the rear-end arm lost its CORR_EPS gate or its net-ownership guard");
   assert.ok(body.includes("if (a.human || b.human) a.contactT = b.contactT = 0.22;"), "the side branch lost its human-pair arm");
-  assert.ok(body.includes("if (AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : AiDrive.cornerK(a.kTurn, b.kTurn))) { if (last) a.speed = scrub(a.speed, rubScrub); a.contactT = 0.22; }"),
-    "the side branch no longer scrubs (once a frame) and flags exactly the yielder");
+  // A STATIC yielder (iA/iB 0: a parked retirement, a net-owned rival) hands the yield to the moving car (#6743 P5).
+  for (const line of ["let yA = AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : AiDrive.cornerK(a.kTurn, b.kTurn));",
+    "if (yA ? !iA && iB : !iB && iA) yA = !yA;",
+    "if (yA) { if (last) a.speed = scrub(a.speed, rubScrub); a.contactT = 0.22; }",
+    "else { if (last) b.speed = scrub(b.speed, rubScrub); b.contactT = 0.22; }"])
+    assert.ok(body.includes(line), `the side branch no longer scrubs (once a frame) and flags exactly the yielder: missing \`${line}\``);
   // scrub() takes MAGNITUDE (a human reversing keeps its sign); for a car rolling forwards it is the old floor.
   assert.ok(src.includes("function scrub(v, d) { return v > 0 ? Math.max(0, v - d) : Math.min(0, v + d); }"), "scrub() lost its magnitude form");
   for (const guard of ["if (corr > CORR_EPS) {", "if (corr > CORR_EPS) { if (!netPlay.owns(a)) a.contactT"])

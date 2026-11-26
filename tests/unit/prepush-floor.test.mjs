@@ -4,7 +4,6 @@ import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a gi
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import {
@@ -15,6 +14,7 @@ import {
   NEW_MODULE_CHECKLIST, addedGlobals, assetSpecs, extraSpecs, newModuleTriggers, sharedUiSpecs, standaloneSpecs,
 } from "../../tools/ci/pick-tests.mjs";
 import { preflipAdvisory, probeState, probeSteps, probeVerdictLine, runProbe, stepTimedOut } from "../../tools/ci/preflip-probe.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 // Fixture paths built at runtime: docs-integrity scans string literals for files that must exist.
 const fake = (...p) => p.join("/");
@@ -90,7 +90,7 @@ test("a header edit in an authored generator source selects that generator's --c
 });
 
 test("syncMergePaths: a pure tip merge is a sync; a hand-resolved merge and a plain commit are not", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sync-merge-"));
+  const dir = mkTmpDir("sync-merge-");
   const git = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   try {
     git("init", "-q", "-b", "tip"); git("config", "user.email", "t@t"); git("config", "user.name", "t");
@@ -121,7 +121,7 @@ test("selectSyncMerge: gen:check + docs-integrity only", () => {
 });
 
 test("syncMergeScope: names what the MERGE decided — both-sides paths and non-tip content — through a regen commit", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sync-scope-"));
+  const dir = mkTmpDir("sync-scope-");
   const git = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   const put = (f, t) => fs.writeFileSync(path.join(dir, f), t);
   try {
@@ -163,7 +163,7 @@ test("selectSyncMerge: impure paths add only their own tests; a run-all impure p
 });
 
 test("--quiet ends a red run with the failing file names and the log path", async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "quiet-red-"));
+  const dir = mkTmpDir("quiet-red-");
   const bad = path.join(dir, "bad.test.mjs");
   fs.writeFileSync(bad, 'import t from "node:test"; import a from "node:assert"; t("x", () => a.equal(1, 2));\n');
   const logPath = path.join(dir, "run.log");
@@ -182,7 +182,7 @@ test("standaloneSpecs names a spec that addScriptTag-loads a changed module (#41
   const specs = { "photo-studio.spec.js": 'await tab.addScriptTag({ url: "/js/ui/photo-studio.js" });', "other.spec.js": "// js/ui/photo-studio.js mentioned in a comment only" };
   const r = standaloneSpecs(["js/ui/photo-studio.js"], { specsDir: "x", read: (n) => specs[n], });
   assert.deepEqual(r, []);   // readdir of the fake dir fails closed
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "specs-"));
+  const dir = mkTmpDir("specs-");
   try {
     for (const [n, t] of Object.entries(specs)) fs.writeFileSync(path.join(dir, n), t);
     const got = standaloneSpecs(["js/ui/photo-studio.js", fake("js", "other.js")], { specsDir: dir });
@@ -201,7 +201,7 @@ test("the real tree: photo-studio.js reaches photo-studio.spec.js; the shared UI
 test("assetSpecs names a spec that names the changed file's assets/ subdirectory, path or escaped regex (#5334)", () => {
   const specs = { "a.spec.js": "if (/assets\\/sfx\\/f1_engine\\.mp3/.test(url)) hit++;", "b.spec.js": 'await fetch("/assets/pack/index.json");', "c.spec.js": "// sfx only in prose" };
   const specPath = (n) => path.posix.join("tests", "specs", n);   // fake names: built, so no comment-path check sees them
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "specs-"));
+  const dir = mkTmpDir("specs-");
   try {
     for (const [n, t] of Object.entries(specs)) fs.writeFileSync(path.join(dir, n), t);
     assert.deepEqual(assetSpecs(["assets/sfx/f1_engine.mp3", "assets/music/menu.mp3", "js/ui/dom.js"], { specsDir: dir }),
@@ -260,15 +260,15 @@ test("runProbe: merges the tip, runs every step, reports red steps and a conflic
     if (cmd === "node" && args.some((a) => a.includes("ratchets.mjs")) && failName) return { status: 1, stdout: "10 over its ceiling", stderr: "" };
     return { status: 0, stdout: "", stderr: "" };
   };
-  const green = runProbe({ head: "hhh", skipUnits: true, exec: mk(0, false), root: fs.mkdtempSync(path.join(os.tmpdir(), "probe-")) });
+  const green = runProbe({ head: "hhh", skipUnits: true, exec: mk(0, false), root: mkTmpDir("probe-") });
   assert.equal(green.state, "passed");
   assert.equal(green.steps.length, 3);
   assert.ok(calls.some((c) => c.startsWith("git worktree remove")), "worktree removed");
-  const red = runProbe({ head: "hhh", skipUnits: true, exec: mk(0, true), root: fs.mkdtempSync(path.join(os.tmpdir(), "probe-")) });
+  const red = runProbe({ head: "hhh", skipUnits: true, exec: mk(0, true), root: mkTmpDir("probe-") });
   assert.equal(red.state, "failed");
   matches(red.steps[0].tail, /over its ceiling/);
   matches(probeVerdictLine(red), /^= preflip failed - ratchets red on the merge/);
-  const conflict = runProbe({ head: "hhh", skipUnits: true, exec: mk(1, false), root: fs.mkdtempSync(path.join(os.tmpdir(), "probe-")) });
+  const conflict = runProbe({ head: "hhh", skipUnits: true, exec: mk(1, false), root: mkTmpDir("probe-") });
   assert.equal(conflict.state, "conflict");
   assert.deepEqual(conflict.conflicts, [fake("js", "other.js")]);
   matches(probeVerdictLine(conflict), /^= preflip conflict/);
@@ -295,7 +295,7 @@ test("preflip: a step at its own cap with no FAIL line reads timeout, not failed
     if (cmd === "node" && args.includes("tools/ci/tooling-fast.mjs")) return { ...capped, stdout: "PASS  1/756 a.test.mjs\n", stderr: "" };
     return { status: 0, stdout: "", stderr: "" };
   };
-  const r = runProbe({ head: "hhh", exec, root: fs.mkdtempSync(path.join(os.tmpdir(), "probe-")) });
+  const r = runProbe({ head: "hhh", exec, root: mkTmpDir("probe-") });
   assert.equal(r.state, "timeout");
   assert.equal(r.ok, false, "a capped step is never a pass");
   assert.equal(r.steps.at(-1).timedOut, true);

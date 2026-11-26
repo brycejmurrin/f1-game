@@ -12,7 +12,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { plan, toShell, SCOPED, RUN_ALL_PATHS, ALWAYS_ON_TOPICAL, THINNED_VM, topicalTfOverlap, adaptedGroups, circuitsOf, scriptBuilds, unitFileOwnership } from "../../tools/ci/node-plan.mjs";
-import os from "node:os";
 import { filesFor, runGroup } from "../../tools/ci/run-group.mjs";
 import { spawnSync } from "node:child_process";
 import { nodeGroupPhases, fileVerdicts, runNodeGroup, withFileVerdict } from "../../tools/ci/run-node-group.mjs";
@@ -20,6 +19,7 @@ import { collect } from "../../tools/ci/file-verdict-reporter.mjs";
 import { TOOLING_FAST_FILES, guardsRanFiles } from "../../tools/ci/tooling-fast.mjs";
 import { gateNodeSuites } from "../../tools/ci/deploy.mjs";
 import { ADAPTED, ADAPTED_RUNNER } from "../../tools/ci/twinned-specs.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const ci = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
@@ -335,7 +335,7 @@ test("W6: a full guards run still thins the riders; an unknown guards run thins 
 
 test("W6: run-group fails a phase whose clean exit verified nothing, per file", () => {
   const doc = { isolatedFiles: [], groups: { "test:fixture": { kind: "node", files: ["a.test.mjs", "b.test.mjs"] } } };
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "apex-run-group-"));
+  const cwd = mkTmpDir("apex-run-group-");
   try {
     const summaryFor = (b) => ({ [path.join(cwd, "a.test.mjs")]: { enqueued: 2, done: 2, pass: 2, fail: 0, skipped: 0, todo: 0, fileMarker: null },
       [path.join(cwd, "b.test.mjs")]: b });
@@ -373,7 +373,7 @@ test("W6: fileVerdicts names each empty, truncated or all-skipped file", () => {
 });
 
 test("W6: run-node-group fails a real `node --test` phase whose file process.exit(0)s", async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-run-node-group-"));
+  const dir = mkTmpDir("apex-run-node-group-");
   try {
     fs.writeFileSync(path.join(dir, "ok.test.mjs"), 'import { test } from "node:test"; test("one", () => {});\n');
     fs.writeFileSync(path.join(dir, "early.test.mjs"), 'import { test } from "node:test"; process.exit(0); test("never", () => {});\n');

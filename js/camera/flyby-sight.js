@@ -82,22 +82,32 @@ const FlybySight = (function () {
    *  the box's floor below road + 1 m) is over-covering and is dropped; bridges
    *  and gantries sit above that height and keep their boxes. Applied to
    *  propBoxes by sceneOf (the planner) and by frame-report.mjs alike. */
-  function offRoad(boxes, track) {
+  const drain = (it) => { for (;;) { const r = it.next(); if (r.done) return r.value; } };
+  function offRoad(boxes, track) { return drain(offRoadG(boxes, track)); }
+  // In slices of OFF_ROAD_SLICE boxes (#6489): a cold scene was a 25-35 ms task
+  // inside the menu's first judged frame. Same boxes, same order.
+  const OFF_ROAD_SLICE = 48;
+  function* offRoadG(boxes, track) {
     if (!(track.n > 0 && track.px)) return boxes;              // no spline (a test's bare box list): no road to clear
     const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
     const prOut = { s: 0, lat: 0, k: 0, heading: 0, dist: 0 };
     let dropped = 0;
-    const kept = boxes.filter((b) => {
-      if (b.part || !(b.w > 2 && b.d > 2)) return true;           // trees and thin parts: their own model
-      for (let k = 0; k < 25; k++) {             // 5 x 5 over the footprint: a 93 m stand is crossed mid-edge
-        const x = b.x + ((k % 5) / 2 - 1) * b.w / 2 * 0.9, z = b.z + (Math.floor(k / 5) / 2 - 1) * b.d / 2 * 0.9;
-        const pr = Tracks.project(track, x, z, null, b.y, prOut);
-        if (!pr || !isFinite(pr.lat)) continue;
-        Tracks.sample(track, pr.s, smp);
-        if (Math.abs(pr.lat) < (smp.hw || 7) - 0.5 && b.y - b.h / 2 < smp.p[1] + 1) { dropped++; return false; }
+    const kept = [];
+    for (let i = 0; i < boxes.length; i++) {
+      if (i && i % OFF_ROAD_SLICE === 0) yield;
+      const b = boxes[i];
+      let over = false;
+      if (!(b.part || !(b.w > 2 && b.d > 2))) {                 // trees and thin parts: their own model
+        for (let k = 0; k < 25; k++) {           // 5 x 5 over the footprint: a 93 m stand is crossed mid-edge
+          const x = b.x + ((k % 5) / 2 - 1) * b.w / 2 * 0.9, z = b.z + (Math.floor(k / 5) / 2 - 1) * b.d / 2 * 0.9;
+          const pr = Tracks.project(track, x, z, null, b.y, prOut);
+          if (!pr || !isFinite(pr.lat)) continue;
+          Tracks.sample(track, pr.s, smp);
+          if (Math.abs(pr.lat) < (smp.hw || 7) - 0.5 && b.y - b.h / 2 < smp.p[1] + 1) { over = true; break; }
+        }
       }
-      return true;
-    });
+      if (over) dropped++; else kept.push(b);
+    }
     kept.droppedOverRoad = dropped;
     return kept;
   }
@@ -145,9 +155,13 @@ const FlybySight = (function () {
     for (let k = 1; k < pos.length; k += 3) if (pos[k] > m) m = pos[k];
     return m;
   }
-  function sceneOf(track) {
+  function sceneOf(track) { return track._fsScene || drain(sceneSteps(track)); }
+  /** sceneOf in slices, for a caller that yields between them (FlybySeq's
+   *  planShotG); a scene another caller built meanwhile is the one kept. */
+  function* sceneSteps(track) {
     if (track._fsScene) return track._fsScene;
-    const boxes = offRoad(propBoxes(track), track).concat(spanBoxes(track));
+    const boxes = (yield* offRoadG(propBoxes(track), track)).concat(spanBoxes(track));
+    if (track._fsScene) return track._fsScene;
     const cells = new Map();
     for (let i = 0; i < boxes.length; i++) {
       const b = boxes[i];
@@ -599,5 +613,5 @@ const FlybySight = (function () {
     return { inF, vis, nearSubj, near, thirds: th, inside, steep, cover, mix: m, mixCost: mc, cost };
   }
 
-  return Object.freeze({ propBoxes, offRoad, spanBoxes, sceneOf, transmit, nearThirds, mix, mixCost, frame, camera, project, GROUND_OK });
+  return Object.freeze({ propBoxes, offRoad, spanBoxes, sceneOf, sceneSteps, transmit, nearThirds, mix, mixCost, frame, camera, project, GROUND_OK });
 })();
