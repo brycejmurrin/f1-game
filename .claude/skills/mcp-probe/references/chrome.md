@@ -208,8 +208,8 @@ p50/p95/p99 spans and LoAF), `__apex.frametimeBench("reset"|"snapshot")` and `__
 
 ## Census tools
 
-Measured before/after for phone memory, heap growth, CPU-side
-copies and GPU budgets): `tools/perf/vm-leak-census.mjs`, `tools/gfx/mem-census.mjs`
+Tools measured before/after for phone memory, heap growth, CPU-side
+copies and GPU budgets: `tools/perf/vm-leak-census.mjs`, `tools/gfx/mem-census.mjs`
 (track-switch heap compare; CDP counters via the `tools/perf/runtime-memory.mjs` library),
 `tools/perf/mesh-census.mjs`, `tools/perf/garage-census.mjs` (flags: `--help` or file
 header); `tools/perf/profile.mjs` / `query.mjs` for game-loop CPU; frame stutter: §pageId and frame hooks above. Record
@@ -220,6 +220,6 @@ GPU — SwiftShader here is not player evidence.
 ## Private chat attachment (recovering the private chat MCP tunnel or gateway)
 
 For existing-tunnel startup/recovery, namespaced gateway contracts and environment
-checks, follow [free design tooling](../../../docs/DESIGN-TOOLS.md). Local readiness
+checks, follow [free design tooling](../../../../docs/DESIGN-TOOLS.md). Local readiness
 and live native chat verification are separate. Keep existing app identities,
 credential references, and the configured upstream catalog.
