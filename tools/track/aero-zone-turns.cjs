@@ -55,7 +55,7 @@ function turnIndexBefore(turns, frac) {
 
 function report(Tracks, id) {
   const def = Tracks.LIST.find((d) => d.id === id);
-  if (!def) { console.log(`${id}: not found`); return; }
+  if (!def) { console.log(`${id}: not found`); process.exitCode = 1; return; }
   const { runs, total } = runsFor(Tracks, def);
   const turns = def.turns || [];
   console.log(`\n${id}  (${turns.length} turns, lap ${total.toFixed(0)} m)`);
