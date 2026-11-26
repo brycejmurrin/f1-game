@@ -150,4 +150,13 @@ test("paint memoizes the aria-label: same words skip label(), a change rebuilds 
   assert.equal(attrs["aria-label"], "Medium tyres, about 2 laps left");
   H.paint(el, { tempS: 60, tempOpt: 90, tempWindow: 15 }, { code: "M", lapsLeft: 2.2, spent: 0.5, plan: "BOX L12" });
   assert.equal(attrs["aria-label"], "Medium tyres, cold, about 2 laps left, BOX L12");
+  // null laps is silent; a small value after it is "under a lap left" (not the same key)
+  H.paint(el, info, { code: "S", lapsLeft: null, spent: 0 });
+  assert.equal(attrs["aria-label"], "Soft tyres");
+  H.paint(el, info, { code: "S", lapsLeft: 0.3, spent: 0 });
+  assert.equal(attrs["aria-label"], "Soft tyres, under a lap left");
+  // a language switch rebuilds the label for the same inputs
+  ctx.I18n._installCatalog("de", { "hud.tyre.name.soft": "Weich", "hud.tyre.label": "{name}-Reifen" });
+  H.paint(el, info, { code: "S", lapsLeft: 0.3, spent: 0 });
+  assert.match(attrs["aria-label"], /^Weich-Reifen/);
 });

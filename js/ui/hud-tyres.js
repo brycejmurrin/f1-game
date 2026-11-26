@@ -89,7 +89,7 @@ const HudTyres = (function () {
     }
     if (extra && typeof tyreEl.setAttribute === "function") {
       // label() reads only these: laps round to what it speaks, so a 10 Hz paint with the same words skips it.
-      const k = [extra.code, s, Math.round(extra.lapsLeft), extra.spent >= 1, extra.plan].join("|");
+      const k = [I18n.lang(), extra.code, s, extra.lapsLeft == null ? "" : Math.round(extra.lapsLeft), extra.spent >= 1, extra.plan].join("|");
       if (k !== _key) {
         _key = k;
         const l = label(extra.code, s, extra.lapsLeft, extra.spent) + (extra.plan ? ", " + extra.plan : "");
