@@ -1,0 +1,367 @@
+{
+ "format": "apex26-career-backup-v1",
+ "exportedAt": "2026-11-25T00:00:00.000Z",
+ "build": "golden",
+ "slots": [
+  {
+   "flavour": "driver",
+   "i": 0,
+   "data": {
+    "v": 2,
+    "flavour": "driver",
+    "year": 2026,
+    "money": 110,
+    "rep": 30,
+    "seat": 0,
+    "driver": {
+     "name": "Golden driver 0",
+     "code": "GLD",
+     "num": 40
+    },
+    "seed": 110,
+    "team": "haas",
+    "season": {
+     "round": 1,
+     "pts": {},
+     "teamPts": {},
+     "driverCodes": {},
+     "finishes": {},
+     "roundPts": {}
+    },
+    "owned": [],
+    "fitted": {},
+    "results": [],
+    "history": [],
+    "dev": {},
+    "tdev": {},
+    "seats": {},
+    "offers": [],
+    "obj": null,
+    "budgetLvl": 0,
+    "facility": 0,
+    "moves": [],
+    "paidSponsors": [],
+    "deal": {
+     "salary": 0,
+     "bonusPt": 0,
+     "left": 1,
+     "years": 1
+    },
+    "briefStake": null,
+    "sponsorPicks": {},
+    "tally": {
+     "seasons": 0,
+     "wins": 0,
+     "podiums": 0,
+     "titles": 0,
+     "cTitles": 0,
+     "pts": 0
+    },
+    "aiParts": {},
+    "objPick": null,
+    "roster": null
+   }
+  },
+  {
+   "flavour": "driver",
+   "i": 1,
+   "data": {
+    "v": 2,
+    "flavour": "driver",
+    "year": 2026,
+    "money": 120,
+    "rep": 31,
+    "seat": 0,
+    "driver": {
+     "name": "Golden driver 1",
+     "code": "GLD",
+     "num": 41
+    },
+    "seed": 120,
+    "team": "haas",
+    "season": {
+     "round": 2,
+     "pts": {},
+     "teamPts": {},
+     "driverCodes": {},
+     "finishes": {},
+     "roundPts": {}
+    },
+    "owned": [],
+    "fitted": {},
+    "results": [],
+    "history": [],
+    "dev": {},
+    "tdev": {},
+    "seats": {},
+    "offers": [],
+    "obj": null,
+    "budgetLvl": 0,
+    "facility": 0,
+    "moves": [],
+    "paidSponsors": [],
+    "deal": {
+     "salary": 0,
+     "bonusPt": 0,
+     "left": 1,
+     "years": 1
+    },
+    "briefStake": null,
+    "sponsorPicks": {},
+    "tally": {
+     "seasons": 0,
+     "wins": 0,
+     "podiums": 0,
+     "titles": 0,
+     "cTitles": 0,
+     "pts": 0
+    },
+    "aiParts": {},
+    "objPick": null,
+    "roster": null
+   }
+  },
+  {
+   "flavour": "driver",
+   "i": 2,
+   "data": {
+    "v": 2,
+    "flavour": "driver",
+    "year": 2026,
+    "money": 130,
+    "rep": 32,
+    "seat": 0,
+    "driver": {
+     "name": "Golden driver 2",
+     "code": "GLD",
+     "num": 42
+    },
+    "seed": 130,
+    "team": "haas",
+    "season": {
+     "round": 3,
+     "pts": {},
+     "teamPts": {},
+     "driverCodes": {},
+     "finishes": {},
+     "roundPts": {}
+    },
+    "owned": [],
+    "fitted": {},
+    "results": [],
+    "history": [],
+    "dev": {},
+    "tdev": {},
+    "seats": {},
+    "offers": [],
+    "obj": null,
+    "budgetLvl": 0,
+    "facility": 0,
+    "moves": [],
+    "paidSponsors": [],
+    "deal": {
+     "salary": 0,
+     "bonusPt": 0,
+     "left": 1,
+     "years": 1
+    },
+    "briefStake": null,
+    "sponsorPicks": {},
+    "tally": {
+     "seasons": 0,
+     "wins": 0,
+     "podiums": 0,
+     "titles": 0,
+     "cTitles": 0,
+     "pts": 0
+    },
+    "aiParts": {},
+    "objPick": null,
+    "roster": null
+   }
+  },
+  {
+   "flavour": "myteam",
+   "i": 0,
+   "data": {
+    "v": 2,
+    "flavour": "myteam",
+    "year": 2026,
+    "money": 210,
+    "rep": 30,
+    "seat": 0,
+    "driver": {
+     "name": "Golden myteam 0",
+     "code": "GLD",
+     "num": 40
+    },
+    "seed": 210,
+    "team": "custom",
+    "season": {
+     "round": 1,
+     "pts": {},
+     "teamPts": {},
+     "driverCodes": {},
+     "finishes": {},
+     "roundPts": {}
+    },
+    "owned": [],
+    "fitted": {},
+    "results": [],
+    "history": [],
+    "dev": {},
+    "tdev": {},
+    "seats": {},
+    "offers": [],
+    "obj": null,
+    "budgetLvl": 0,
+    "facility": 0,
+    "moves": [],
+    "paidSponsors": [],
+    "deal": {
+     "salary": 0,
+     "bonusPt": 0,
+     "left": 1,
+     "years": 1
+    },
+    "briefStake": null,
+    "sponsorPicks": {},
+    "tally": {
+     "seasons": 0,
+     "wins": 0,
+     "podiums": 0,
+     "titles": 0,
+     "cTitles": 0,
+     "pts": 0
+    },
+    "aiParts": {},
+    "objPick": null,
+    "roster": null
+   }
+  },
+  {
+   "flavour": "myteam",
+   "i": 1,
+   "data": {
+    "v": 2,
+    "flavour": "myteam",
+    "year": 2026,
+    "money": 220,
+    "rep": 31,
+    "seat": 0,
+    "driver": {
+     "name": "Golden myteam 1",
+     "code": "GLD",
+     "num": 41
+    },
+    "seed": 220,
+    "team": "custom",
+    "season": {
+     "round": 2,
+     "pts": {},
+     "teamPts": {},
+     "driverCodes": {},
+     "finishes": {},
+     "roundPts": {}
+    },
+    "owned": [],
+    "fitted": {},
+    "results": [],
+    "history": [],
+    "dev": {},
+    "tdev": {},
+    "seats": {},
+    "offers": [],
+    "obj": null,
+    "budgetLvl": 0,
+    "facility": 0,
+    "moves": [],
+    "paidSponsors": [],
+    "deal": {
+     "salary": 0,
+     "bonusPt": 0,
+     "left": 1,
+     "years": 1
+    },
+    "briefStake": null,
+    "sponsorPicks": {},
+    "tally": {
+     "seasons": 0,
+     "wins": 0,
+     "podiums": 0,
+     "titles": 0,
+     "cTitles": 0,
+     "pts": 0
+    },
+    "aiParts": {},
+    "objPick": null,
+    "roster": null
+   }
+  },
+  {
+   "flavour": "myteam",
+   "i": 2,
+   "data": {
+    "v": 2,
+    "flavour": "myteam",
+    "year": 2026,
+    "money": 230,
+    "rep": 32,
+    "seat": 0,
+    "driver": {
+     "name": "Golden myteam 2",
+     "code": "GLD",
+     "num": 42
+    },
+    "seed": 230,
+    "team": "custom",
+    "season": {
+     "round": 3,
+     "pts": {},
+     "teamPts": {},
+     "driverCodes": {},
+     "finishes": {},
+     "roundPts": {}
+    },
+    "owned": [],
+    "fitted": {},
+    "results": [],
+    "history": [],
+    "dev": {},
+    "tdev": {},
+    "seats": {},
+    "offers": [],
+    "obj": null,
+    "budgetLvl": 0,
+    "facility": 0,
+    "moves": [],
+    "paidSponsors": [],
+    "deal": {
+     "salary": 0,
+     "bonusPt": 0,
+     "left": 1,
+     "years": 1
+    },
+    "briefStake": null,
+    "sponsorPicks": {},
+    "tally": {
+     "seasons": 0,
+     "wins": 0,
+     "podiums": 0,
+     "titles": 0,
+     "cTitles": 0,
+     "pts": 0
+    },
+    "aiParts": {},
+    "objPick": null,
+    "roster": null
+   }
+  }
+ ],
+ "badges": {
+  "v": 1,
+  "got": {
+   "first-win": 1764028800000
+  }
+ }
+}
