@@ -804,7 +804,7 @@ const api = {
   // Lets a harness measure pure side-by-side jitter without pack chaos.
   pair(frac, speed) {
     if (!G.track) return false;
-    G.cmd.setState("race", "agent-go"); G.raceT = Math.max(G.raceT, 1);
+    G.cmd.setState("race", "agent-pair"); G.raceT = Math.max(G.raceT, 1);
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     const f = frac == null ? 0.3 : frac, v = speed == null ? 55 : speed;
@@ -822,7 +822,7 @@ const api = {
   },
   jam(n) {
     if (!G.track) return false;
-    G.cmd.setState("race", "agent-go"); G.raceT = Math.max(G.raceT, 1);
+    G.cmd.setState("race", "agent-jam"); G.raceT = Math.max(G.raceT, 1);
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     const ai = G.cars.filter((c) => !c.isPlayer), m = Math.min(n || 5, ai.length);
@@ -869,7 +869,7 @@ const api = {
   go() {
     if (G.flyingStart) G.flyingStart.stop();   // a rolling start's run-up (js/race/flying-start.js): the wheel is the caller's now
     if (!G.player || !G.cars.length) return false;   // no race() built a grid: "race" with zero cars is a dead tick loop (#2532)
-    G.cmd.setState("race", "agent-jam"); G.raceT = Math.max(G.raceT, 0.5);
+    G.cmd.setState("race", "agent-go"); G.raceT = Math.max(G.raceT, 0.5);
     if (G.loadingScreen && G.loadingScreen.lowerWaitPlate) G.loadingScreen.lowerWaitPlate();
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade

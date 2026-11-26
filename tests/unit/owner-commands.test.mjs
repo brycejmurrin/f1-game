@@ -36,6 +36,20 @@ test("G.cmd / G.agentCtl write the owned state; a direct write throws", async ()
     assert.equal(G.skyViewOverride, o);
     G.agentCtl.setSkyOverride(null);
     assert.equal(G.skyViewOverride, null);
+    // park goes through G.cmd.setState, so select-screen's menu-exit wrap sees it (ctx-lost card)
+    const seen = [], real = G.cmd.setState;
+    G.cmd.setState = (n, why) => { seen.push([n, why]); return real(n, why); };
+    G.agentCtl.park(1);
+    G.cmd.setState = real;
+    assert.deepEqual(seen, [["race", "agent-park"]]);
+    assert.ok(G.raceT >= 1);
+    // pause: a real pause only in race/count (setPaused gates on state)
+    G.cmd.setState("menu", "t"); G.cmd.pause(true, "t");
+    assert.equal(G.paused, false, "cmd.pause is a no-op in the menu");
+    G.cmd.setState("race", "t"); G.cmd.pause(true, "t");
+    assert.equal(G.paused, true);
+    G.cmd.pause(false, "t");
+    assert.equal(G.paused, false);
     assert.throws(() => { "use strict"; G.state = "race"; }, TypeError);
     assert.throws(() => { "use strict"; G.frozen = true; }, TypeError);
     assert.throws(() => { "use strict"; G.paused = true; }, TypeError);

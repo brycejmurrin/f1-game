@@ -3429,7 +3429,7 @@ const G = {
     freeze: (v) => { frozen = !!v; return frozen; },
     setSkyOverride: (o) => { skyViewOverride = o || null; },
     snapCam: (paint) => snapGameCam(paint),
-    park: (minRaceT) => { skyViewOverride = null; setState("race", "agent-park"); raceT = Math.max(raceT, minRaceT); },   // sky override off, race on, raceT floored
+    park: (minRaceT) => { skyViewOverride = null; G.cmd.setState("race", "agent-park"); raceT = Math.max(raceT, minRaceT); },   // sky override off, race on, raceT floored
   },
 }; Object.preventExtensions(G);
 
