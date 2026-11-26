@@ -1010,18 +1010,20 @@ async function carryEntry(cache, req, old) {
     const init = { cache: "no-store", headers, priority: "low" };
     if (idle.signal) init.signal = idle.signal;
     let res = null;
-    try {
-      res = await Promise.race([fetch(url.href, init), idle.expired]);
-      if (res && res.ok) res = await readIdle(res, idle);           // a changed body: idle-bounded per chunk
-    } catch (_) { res = null; }
-    idle.clear();
-    if (!res) { await cache.put(req, old); return; }               // no answer: keep
+    try { res = await Promise.race([fetch(url.href, init), idle.expired]); } catch (_) { res = null; }
+    if (!res) { idle.clear(); await cache.put(req, old); return; } // no answer: keep
     // Unchanged: a 304, or a 200 carrying the same validator (an engine that
     // answered the conditional from its own HTTP cache instead of passing the
-    // 304 through still reports the stored ETag / Last-Modified).
+    // 304 through still reports the stored ETag / Last-Modified). Decided from
+    // the headers, so an unchanged body is never read.
     const same = res.status === 304 || (res.ok && (etag ? res.headers.get("ETag") === etag : res.headers.get("Last-Modified") === modified));
-    if (same) { await cache.put(req, old); return; }
-    if (res.ok && !url.search) await cache.put(req, res);          // changed: the new file
+    if (same) { idle.clear(); await cache.put(req, old); return; }
+    if (!res.ok || url.search) return;                             // removed, or a keyed file that changed: drop
+    // Changed: the new body, idle-bounded per chunk; a stall keeps the old copy.
+    let fresh = null;
+    try { fresh = await readIdle(res, idle); } catch (_) { fresh = null; }
+    idle.clear();
+    await cache.put(req, fresh || old);
   } finally { idle.clear(); }
 }
 async function carryRuntime(cache, name) {
@@ -1093,6 +1095,7 @@ async function readIdle(res, idle) {
   const reader = res.body && typeof res.body.getReader === "function" ? res.body.getReader() : null;
   let body;
   if (!reader) {
+    idle.arm();   // one fresh idle window for an engine without a readable body stream
     body = await Promise.race([res.arrayBuffer(), idle.expired]);
     if (!body) return null;
   } else {

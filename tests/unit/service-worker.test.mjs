@@ -2825,7 +2825,8 @@ test("a slow optional body that keeps arriving is cached past the 4 s mark (#682
 });
 
 test("an optional body that stalls past the idle window is still abandoned (#6823 17d)", async () => {
-  const { h, url } = trickleHarness({ gapMs: 1000, stallAfter: 3 });
+  // Three chunks 3 s apart (6 s in), then silence: cut only after 4 s with no chunk.
+  const { h, url } = trickleHarness({ gapMs: 3000, stallAfter: 3 });
   await h.lifecycleEvent("install").done();
   assert.equal(h.stores.get("apex26-322").has(url), false, "no chunk for 4 s gives up on the asset");
   assert.equal(h.skipped, 1, "a stalled optional body never blocks the install");
