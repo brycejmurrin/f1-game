@@ -306,7 +306,7 @@ test("5-F5: while begin() drives the frame, resize() schedules no rAF; with no b
 
 test("TLX-11: present()'s failure-ladder closures are hoisted; update ranges reuse one object per attribute", () => {
   const pi = TLX.indexOf("present(opts) {");
-  const present = TLX.slice(pi, TLX.indexOf("__tlx: {", pi));
+  const present = TLX.slice(pi, TLX.indexOf("__tlx: TLXDebug.create(", pi))   // the __tlx block moved to tlx-debug.js (#6821);
   for (const n of ["persistFail", "paintCanvas", "dropTo"]) {
     assert.ok(!new RegExp("const " + n + " = ").test(present), n + " is no longer re-created per present()");
     assert.ok(new RegExp("const " + n + " = ").test(TLX), n + " exists once, hoisted");
