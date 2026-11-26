@@ -44,6 +44,7 @@
       "js/render/three/tlx-post.js",
       "js/render/three/tlx-mem.js",
       "js/render/three/tlx-util.js",
+      "js/render/three/tlx-texpool.js",
       "js/render/three/tlx.js"
     ]
   },
@@ -166,6 +167,10 @@
     ],
     [
       "js/render/three/tlx-util.js",
+      "js/render/three/tlx.js"
+    ],
+    [
+      "js/render/three/tlx-texpool.js",
       "js/render/three/tlx.js"
     ]
   ],
