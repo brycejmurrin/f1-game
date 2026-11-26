@@ -142,7 +142,16 @@ test.describe(`thumb trainer follows the house UI ${GEO.width}x${GEO.height}-sta
     expect(larger.cue, "TEXT SIZE larger grows the cue").toBeGreaterThan(base.cue);
     const sharp = await page.evaluate(trainerStyleUnder, { "data-look-popups-corners": "sharp" });
     expect(sharp.radius, "POPUPS CORNERS sharp squares the trainer's controls").toBe("0px");
-    const tall = await page.evaluate(trainerStyleUnder, { "data-look-popups-btn": "120" }, { "--look-popups-btn": "1.2" });
-    expect(tall.go, "POPUPS BUTTON HEIGHT 120 grows START").toBeGreaterThan(base.go + 4);
+    // Through the real setter, not a raw attribute: ScreenLooks.apply() deletes a hand-stamped data-look-* at its default,
+    // which raced this measurement on a slow runner (#6929 selected-3). set() stamps the attribute and the token together.
+    const tall = await page.evaluate(async () => {
+      const go = () => document.getElementById("tt-go").getBoundingClientRect().height, frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      ScreenLooks.set("popups", "btn", 120);
+      await frames();
+      const h = go();
+      ScreenLooks.set("popups", "btn", 100);
+      return h;
+    });
+    expect(tall, "POPUPS BUTTON HEIGHT 120 grows START").toBeGreaterThan(base.go + 4);
   });
 });
