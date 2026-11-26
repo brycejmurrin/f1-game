@@ -35,7 +35,7 @@ const RaceMixAudition = (() => {
       if (get("sfx", true) && audio.enginePlaybackGeneration && audio.stopEngineIfGeneration) {
         audio.startEngine(); current.engine = audio.enginePlaybackGeneration(); audio.setEngine(0.45, 0, false, 0.45, 4);
       }
-      if (get("music", true) && !audio.currentTrackId() && !audio.musicBackend() && audio.musicPlaybackGeneration && audio.stopMusicIfGeneration) {
+      if (get("music", false) && !audio.currentTrackId() && !audio.musicBackend() && audio.musicPlaybackGeneration && audio.stopMusicIfGeneration) {
         audio.startMusic(-1); current.music = audio.musicPlaybackGeneration();
       }
       later(1200, () => { if (ownsEngine() && get("sfx", true)) { audio.setEngine(0.85, 0, false, 0.8, 6); audio.setSkid(0.4); } });
@@ -48,7 +48,7 @@ const RaceMixAudition = (() => {
       // Watch mute changes even when no scheduled sample is due.
       for (let ms = 200; ms < 6000; ms += 200) later(ms, () => {
         if (ownsEngine() && !get("sfx", true)) { audio.stopEngineIfGeneration(current.engine); current.engine = null; }
-        if (current.music != null && !get("music", true)) { audio.stopMusicIfGeneration(current.music); current.music = null; }
+        if (current.music != null && !get("music", false)) { audio.stopMusicIfGeneration(current.music); current.music = null; }
         if (current.voice != null && !get("radioVoice", false)) { current.radio.stopPreviewIfGeneration(current.voice); current.voice = null; }
       });
       later(6000, stop); notify(); return true;
