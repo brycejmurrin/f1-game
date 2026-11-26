@@ -1305,6 +1305,8 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-restart { grid-area: restart; }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-settings { grid-area: settings; }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors { grid-area: tools; --tray-cols: 5; align-content: start; flex-basis: auto; }
+/* A lone leftover tile (a time trial adds RETRY LAP, so REVIEW INPUTS wraps alone) fills at most two 5-up tiles: it never outgrows RESUME (ui-resize "no door larger than RESUME"). */
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors > * { max-width: calc((100% - (var(--tray-cols) - 1) * var(--tray-gap)) / var(--tray-cols) * 2 + var(--tray-gap)); }
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors button,
 body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors > details > summary { min-height: max(40px, calc(44px / var(--ui-scale))); padding: calc(var(--gap) / 6); }   /* gap/6 inline (~2px): MESSAGES is 3px wider than a 5-up tile's text box at gap/3 */
 /* The 5-up tile label steps down one notch: in the Home Screen and Safari windows the 59 px insets leave a 393 own px

@@ -1166,6 +1166,7 @@ const LAZY_RACE_SESSION = [
   "js/race/start-lights.js",
   "js/race/marshal-panels.js",
   "js/race/flying-start.js",
+  "js/race/lap-retry.js",      // LapRetry: RETRY LAP back to the flying-start drop-in through SimState (#6965)
   "js/race/jump-start-penalty.js",
   "js/ui/podium-beat.js",   // PodiumBeat: ceremony podium overlay (#4070 slice 4); ResultsStory is FULL
   "js/race/podium-beat.js", // RacePodium: podium beat + results handoff (#4070)

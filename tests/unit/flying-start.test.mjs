@@ -22,7 +22,7 @@ function runUpMetres(vDrop, total) {
 }
 
 // production only calls update() in "count" and "race" (game.js update(); never in the menu), so the rigs do too.
-function rig({ session = "quali", timeTrial = false, practice = false, real = false, total = 5000, dropV = 60 } = {}) {
+function rig({ session = "quali", timeTrial = false, practice = false, real = false, total = 5000, dropV = 60, LapRetry } = {}) {
   const plate = [], said = [], seated = [];
   let calibrated = 0;
   const ctx = {
@@ -32,6 +32,7 @@ function rig({ session = "quali", timeTrial = false, practice = false, real = fa
     // seatOnRoad is the real one's contract: re-seed the pose from the road at the car's current s (stubbed tangent = +z)
     RealRace: { dropSpeed: () => dropV, seatOnRoad: (tr, c) => { seated.push(c.s); c.head = 0; } },
   };
+  if (LapRetry) ctx.LapRetry = LapRetry;
   vm.createContext(ctx);
   vm.runInContext(read("js/race/flying-start.js") + "\n;globalThis.FlyingStart = FlyingStart;", ctx, { filename: absSrc("js/race/flying-start.js") });
   const player = { s: 4990, x: 2, speed: 0, lap: 0, prog: -14, human: true, local: true, isPlayer: true, launchOn: true, launch: {} };
@@ -44,7 +45,7 @@ function rig({ session = "quali", timeTrial = false, practice = false, real = fa
     handoverCount: (v) => plate.push(v),
     announce: (t) => said.push(t),
   };
-  const fs_ = ctx.FlyingStart.create(G, { realRace: () => real });
+  const fs_ = ctx.FlyingStart.create(G, { realRace: () => real, setPaused: "SP" });
   return { FS: ctx.FlyingStart, fs: fs_, G, player, plate, said, seated, calibrated: () => calibrated };
 }
 
@@ -157,4 +158,43 @@ test("the qualifying model is a flying lap too: no standing start charged", () =
   assert.match(src, /const base = carLap\(c, track, grip\);/);
   const apex = read("js/agent/apex.js");
   assert.match(apex, /go\(\) \{\n\s+if \(G\.flyingStart\) G\.flyingStart\.stop\(\);/);
+});
+
+// #6965 LAP RETRY: the drop callback fires once the car is placed AND green; rearm() runs the run-up again.
+test("FlyingStart creates its RETRY LAP and captures once at the drop-in, after goRolling, with the car placed", () => {
+  const drops = [], made = [];
+  let r = null;
+  const LapRetry = { create: (G, deps) => { made.push(deps); return { capture: () => drops.push({ state: r.G.state, prog: r.player.prog, human: r.player.human }) }; } };
+  r = rig({ session: "tt", timeTrial: true, practice: true, LapRetry });
+  assert.equal(made.length, 1);
+  assert.equal(made[0].flyingStart, r.fs, "LapRetry is handed the instance that created it");
+  assert.equal(made[0].setPaused, "SP", "…and game.js's setPaused");
+  assert.equal(r.fs.retry, made.length && r.fs.retry, "exposed as .retry");
+  r.G.state = "count"; r.fs.update(1 / 60);
+  assert.equal(drops.length, 1);
+  assert.equal(drops[0].state, "race", "captured in the frame count flipped to race");
+  assert.ok(drops[0].prog < 0, "the car is already on the run-up");
+  assert.equal(drops[0].human, false, "the AI holds the wheel at the capture");
+  for (let i = 0; i < 60; i++) r.fs.update(1 / 60);
+  assert.equal(drops.length, 1, "never again mid-race");
+  assert.equal(rig().fs.retry, null, "no LapRetry loaded: no retry");
+});
+
+test("rearm() rebuilds the handover and counts HANDOVER_S again", () => {
+  const r = rig({ session: "tt", timeTrial: true, practice: true });
+  r.G.state = "count"; r.fs.update(1 / 60);
+  for (let i = 0; i < 60 * HANDOVER_S + 2; i++) r.fs.update(1 / 60);
+  assert.equal(r.fs.active(), false); assert.equal(r.player.human, true, "the wheel was handed over");
+  r.player.s = 1234; r.player.prog = 800; r.player.speed = 10;   // a lap in progress
+  const plateAt = r.plate.length;
+  assert.equal(r.fs.rearm(), true);
+  assert.equal(r.G.state, "race", "no countdown re-entry");
+  assert.equal(r.fs.active(), true);
+  assert.equal(r.player.human, false, "the AI drives the run-up again");
+  assert.equal(r.player.prog, -runUpMetres(60, 5000), "placed at the same drop-in");
+  assert.equal(r.plate[plateAt], HANDOVER_S, "the plate counts HANDOVER_S again");
+  for (let i = 0; i < 60 * HANDOVER_S + 2; i++) r.fs.update(1 / 60);
+  assert.equal(r.player.human, true);
+  assert.deepEqual(r.plate.slice(plateAt, plateAt + 4), [3, 2, 1, "GO"]);
+  assert.equal(r.said.filter((t) => t === "YOU HAVE CONTROL").length, 2);
 });
