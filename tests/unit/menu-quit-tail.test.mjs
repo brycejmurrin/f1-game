@@ -140,7 +140,9 @@ test("Aero Lab drill: quitting returns the player to the flow and session they c
     UiExperience: { leavePracticePick() {} },
     Float32Array, MenuQuitTail,
   };
-  const LearnDoor = vm.runInNewContext(readFileSync(path, "utf8") + "\n;LearnDoor", ctx, { filename: absSrc("js/ui/learn-door.js") });
+  const DrillRegistry = vm.runInNewContext(readFileSync(join(ROOT, "js/learn-drills/registry.js"), "utf8") + "\n;DrillRegistry", ctx, { filename: absSrc("js/learn-drills/registry.js") });
+  ctx.DrillRegistry = DrillRegistry;
+  vm.runInNewContext(readFileSync(path, "utf8") + "\n;LearnDoor", ctx, { filename: absSrc("js/ui/learn-door.js") }).defineDrills();
   let goal = "none";
   const G = {
     state: "menu", netPlay: { active: () => false },
@@ -152,11 +154,11 @@ test("Aero Lab drill: quitting returns the player to the flow and session they c
   // The wired tail drives game.js's setFlow / session, which G.flow / G.session read in game.
   deps.setFlow = (v) => { calls.setFlow.push(v); G.flow = v; };
   Object.defineProperty(deps, "session", { get: () => G.session, set: (v) => { G.session = v; } });
-  let drill;
-  LearnDoor.launchAeroDrill(G, (x) => { drill = x; }, () => {});
+  const drills = DrillRegistry.create(G, { setDirtyAir: () => {} });
+  drills.launch("aero");
   assert.deepEqual(G.started, { flow: "gp", session: "race" }, "the drill races a GP");
-  // js/game.js quitToMenu: restore() first, then the (possibly deferred) tail.
-  drill.restore();
+  // quitToMenu: the host's end() restores first, then the (possibly deferred) tail.
+  drills.end("quit");
   MenuQuitTail.afterOverlay();
   assert.equal(G.flow, "career");
   assert.equal(G.session, "quali");

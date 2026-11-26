@@ -3840,6 +3840,11 @@
       "roster": "LAZY_RACE_SESSION"
     },
     {
+      "path": "js/learn-drills/registry.js",
+      "global": "DrillRegistry",
+      "roster": "LAZY_LEARN"
+    },
+    {
       "path": "js/learn-drills/thumb-drill.js",
       "global": "ThumbDrill",
       "roster": "LAZY_LEARN"

@@ -35,7 +35,8 @@ const LearnDoor = (function () {
   let frame;
   const lessonDoors = new Map();
 
-  function open(door, openDataHub, launchAeroDrill, openTrainer) {
+  function open(door, openDataHub, launchDrill, openTrainer) {
+    defineDrills();
     if (!dialog) build();
     dialog.hidden = false;
     // A deep link (js/ui/deep-link.js) names the lesson on the door it clicks.
@@ -80,7 +81,7 @@ const LearnDoor = (function () {
             if (id === "thumbs" || id === "thumbs-drive") {
               if (!openTrainer) return;
               dialog.hidden = true;
-              queueMicrotask(() => openTrainer(() => { open(door, openDataHub, launchAeroDrill, openTrainer); button.focus(); }, id === "thumbs-drive"));
+              queueMicrotask(() => openTrainer(() => { open(door, openDataHub, launchDrill, openTrainer); button.focus(); }, id === "thumbs-drive"));
               return;
             }
             activeLesson = button;
@@ -141,11 +142,12 @@ const LearnDoor = (function () {
             UiLayers.top() !== dialog) return;
         if (event.data?.type === "apex-learn-close") close.click();
         if (event.data?.type === "apex-learn-scenario") {
-          if (!launchAeroDrill || event.data.id !== "aero" || sheet.dataset.lesson !== "aero") return;
+          const drill = typeof DrillRegistry !== "undefined" ? DrillRegistry.get(event.data.id) : null;
+          if (!launchDrill || !drill || drill.lesson !== sheet.dataset.lesson) return;
           leaveLesson();
           dialog.hidden = true;
           queueMicrotask(() => {
-            if (dialog.hidden && UiLayers.top()?.id === "overlay") launchAeroDrill();
+            if (dialog.hidden && UiLayers.top()?.id === "overlay") launchDrill(drill.id);
           });
           return;
         }
@@ -177,53 +179,16 @@ const LearnDoor = (function () {
     }
   }
 
-  // Use the production race, wind, aero and checkpoint code. These settings
-  // belong to the drill and are restored when its race ends or cannot start.
-  function launchAeroDrill(G, activate, setDirtyAir) {
-    if (G.state !== "menu" || G.netPlay.active()) return;
-    const monza = Tracks.LIST.findIndex(def => def.id === "monza");
-    if (monza < 0) return;
-    const previous = {
-      flow: G.flow, session: G.session, track: G.trackIdx, weather: G.raceWeather, changeable: G.raceChangeable, grid: G.raceGrid,
-      duel: G.duel, dirtyAir: G.raceDirtyAir, wind: Wind.level(), goal: G.coach.practiceGoal(),
-    };
-    // The quit tail runs after restore(): it gets the player's flow (#6713).
-    const quitFlow = { flow: G.flow, session: G.session };
-    const guide = createAeroGuide(G);
-    activate({
-      guide,
-      staging: false,
-      begin() {
-        this.staging = false;
-        guide.hide();
-        return beginAeroDrill(G);
-      },
-      restore() {
-        guide.remove();
-        G.flow = previous.flow;   // through the setter: re-engages Career and SeasonCal for the player's own flow
-        G.session = previous.session;
-        G.trackIdx = previous.track;
-        G.raceWeather = previous.weather;
-        G.raceChangeable = previous.changeable;
-        G.raceGrid = previous.grid;
-        G.duel = previous.duel;
-        setDirtyAir(previous.dirtyAir);
-        Wind.setLevel(previous.wind);
-        G.coach.setPracticeGoal(previous.goal);
-        if (typeof MenuQuitTail !== "undefined") MenuQuitTail.keepFlow(quitFlow.flow, quitFlow.session);
-      },
+  // The Aero Lab's Scenario: a Monza GP, both cars at speed in the tow (js/learn-drills/registry.js hosts it).
+  // Defined lazily, never at eval: LAZY_LEARN loads with no edges, so the registry may evaluate after this file.
+  function defineDrills() {
+    if (typeof DrillRegistry === "undefined") return;
+    DrillRegistry.define({
+      id: "aero", lesson: "aero",
+      setup: { flow: "gp", session: "race", track: "monza", weather: "dry", changeable: false, grid: "tier", duel: false, dirtyAir: "classic", wind: "real" },
+      begin: beginAeroDrill,
+      guide: createAeroGuide,
     });
-    UiExperience.leavePracticePick();
-    G.flow = "gp";
-    G.session = "race";
-    G.trackIdx = monza;
-    G.raceWeather = "dry";
-    G.raceChangeable = false;
-    G.raceGrid = "tier";
-    G.duel = false;
-    setDirtyAir("classic");
-    Wind.setLevel("real");
-    G.startRace();
   }
 
   function beginAeroDrill(G) {
@@ -477,6 +442,6 @@ const LearnDoor = (function () {
     return { draw, hide, car: () => demo, remove: () => root.remove() };
   }
 
-  return { open, launchAeroDrill };
+  return { open, defineDrills };
 })();
 Object.freeze(LearnDoor);
