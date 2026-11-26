@@ -28,7 +28,6 @@
     "tools/ci/prune-branches.mjs",
     "tools/ci/reuse-draft-selected.mjs",
     "tools/ci/run-group.mjs",
-    "tools/ci/run-node-group.mjs",
     "tools/ci/select-budget.mjs",
     "tools/ci/select-recall.mjs",
     "tools/ci/selected-gate-verdict.mjs",

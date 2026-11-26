@@ -3612,3 +3612,74 @@ test("a non-finite orientation angle is no reading: the last finite roll is kept
     assert.equal(samples.at(-1).roll, 20, "an infinite angle (rollDeg reads NaN) leaves the last finite roll in place");
   } finally { h.ctl.cancel(); }
 });
+
+test("#6459 row 7: a latch whose edge was not sent stays unpainted", () => {
+  const sent = [];
+  const refused = PhonePadPage.pressLatch("boost", (k) => { sent.push(k); return false; });
+  refused.down(false);
+  assert.deepEqual(sent, ["boost"]);
+  assert.equal(refused.active(), false, "send() === false: nothing went out, nothing paints ON");
+  const ok = PhonePadPage.pressLatch("boost", () => true);
+  ok.down(false);
+  assert.equal(ok.active(), true, "a sent edge still paints ON");
+  // The page's own send wrapper: no session, or session.event() false, is a refusal.
+  const src = read("js/input/phone-pad-page.js");
+  assert.ok(src.includes("session.event(key) !== false"), "the page reports PadSession.event's false");
+});
+
+test("#6459 row 6: a surface flip releases the controls but keeps the tilt reading", async () => {
+  let receive, heartbeat;
+  const samples = [];
+  const h = wakePad({ rtc: () => ({
+    status: "open", pump() {}, close() {}, onClose() {}, onMessage(fn) { receive = fn; },
+    send(channel, data) {
+      if (channel === NetTransport.STATE) samples.push(PhonePad.decodeSample(data));
+      return true;
+    },
+  }) }, { sensor: true, interval(fn) { heartbeat = fn; return 1; } });
+  try {
+    await h.ctl.connect("ABC234");
+    const hud = (surface) => PhonePad.encodeHud({ gear: 3, kmh: 100, rpm: 0.5, lap: 1, laps: 5, pos: 1, cars: 2, ers: 0.5,
+      flags: 0, caution: 0, lastLapMs: 0, state: "race", surface, team: "" }, false, true);
+    receive(NetTransport.STATE, hud("drive"));
+    h.fire("deviceorientation", { beta: 0, gamma: 25 });
+    heartbeat();
+    assert.equal(samples.at(-1).roll, 25, "live tilt before the flip");
+    receive(NetTransport.STATE, hud("menu"));
+    heartbeat();
+    assert.equal(samples.at(-1).roll, 25, "drive -> menu keeps the roll in the next sample");
+    receive(NetTransport.STATE, hud("drive"));
+    heartbeat();
+    assert.equal(samples.at(-1).roll, 25, "menu -> drive keeps it too");
+  } finally { h.ctl.cancel(); }
+});
+
+test("#6459 row 9: a re-dial that times out backs off at 5 s then 15 s then 30 s, then gives up", async () => {
+  let n = 0;
+  const wires = [];
+  const h = wakePad({
+    rtc: () => {
+      const dead = ++n > 1;   // the first link opens; every re-dial's answer never does
+      const t = { status: dead ? "connecting" : "open", send: () => true, pump() {}, onMessage() {}, onOpen() {}, onClose(f) { t.cb = f; },
+        close(why) { t.status = "closed"; if (t.cb) t.cb(why); } };
+      wires.push(t); return t;
+    },
+    swap: async (o) => { if (n > 1) { const code = await o.reply("OFFER"); return { ok: !!code }; } return { ok: true }; },
+    acceptInvite: async () => ({ ok: true, code: "ANSWER" }),
+  });
+  await h.ctl.connect("ABC234");
+  wires[0].close("disconnected"); await settle();   // lost signal: the automatic re-dial starts
+  const armed = () => h.timeouts.filter((t) => !t.cleared);
+  for (const wait of [5000, 15000, 30000]) {
+    const d = armed().at(-1);
+    assert.equal(d.ms, 15000, "the re-dial's connect deadline is live");
+    d.fn(); await settle();   // its answer never opened
+    const back = armed().at(-1);
+    assert.equal(back.ms, wait, "the timed-out re-dial schedules backoff step " + wait);
+    back.fn(); await settle();   // the backoff fires: re-dial again
+  }
+  const before = h.timeouts.length;
+  armed().at(-1).fn(); await settle();   // the fourth deadline
+  assert.equal(h.timeouts.slice(before).some((t) => t.ms === 5000 || t.ms === 15000 || t.ms === 30000), false, "tries exhausted: no further retry");
+  assert.equal(h.ctl.state().linked, false);
+});

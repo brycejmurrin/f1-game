@@ -13,6 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { plan, toShell, SCOPED, RUN_ALL_PATHS, ALWAYS_ON_TOPICAL, THINNED_VM, topicalTfOverlap, adaptedGroups, circuitsOf, scriptBuilds, unitFileOwnership } from "../../tools/ci/node-plan.mjs";
 import { filesFor, runGroup } from "../../tools/ci/run-group.mjs";
+import { spawnSync } from "node:child_process";
 import { nodeGroupPhases, fileVerdicts, runNodeGroup, withFileVerdict } from "../../tools/ci/run-node-group.mjs";
 import { collect } from "../../tools/ci/file-verdict-reporter.mjs";
 import { TOOLING_FAST_FILES, guardsRanFiles } from "../../tools/ci/tooling-fast.mjs";
@@ -390,4 +391,10 @@ test("W6: run-node-group fails a real `node --test` phase whose file process.exi
       assert.ok(lines.some((l) => l.includes(bad)), lines.join("\n"));
     }
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("#6757: run-node-group --help prints usage and exits 0 before reading the roster", () => {
+  const r = spawnSync(process.execPath, ["tools/ci/run-node-group.mjs", "--help"], { encoding: "utf8" });
+  assert.equal(r.status, 0);
+  assert.equal(r.stdout.split(" ").slice(0, 3).join(" "), "usage: node tools/ci/run-node-group.mjs");
 });

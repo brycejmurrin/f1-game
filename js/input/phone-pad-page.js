@@ -511,7 +511,7 @@ const PhonePadPage = (function () {
       el.addEventListener("contextmenu", (e) => e.preventDefault());
     }
     for (const k of latchButtons) {
-      latches.set(k, { latch: pressLatch(k, key => !!session && (session.event(key), true), opts.now), els: [], fingers: new Map(), hold: false });
+      latches.set(k, { latch: pressLatch(k, key => !!session && session.event(key) !== false, opts.now), els: [], fingers: new Map(), hold: false });
       PedalTravel.watchButtonProfile(k, p => { const l = latches.get(k); l.hold = p.latch === "hold"; if (l.els.length) paintLatch(k); });
     }
     // An action may have more than one button (OT on the grip AND on the face).
@@ -819,7 +819,8 @@ const PhonePadPage = (function () {
         const changedFrom = surface;
         surface = next;
         closeUtilities();
-        if (changedFrom) releaseAll();
+        // Controls up, tilt kept: a surface flip is no loss of the sensor (pagehide/cancel clear it).
+        if (changedFrom) releaseControls();
         // A new link's first dash forgets an owed lift.
         if (!changedFrom || next === "drive") for (const l of latches.values()) l.latch.heard(!changedFrom);
         dom.body?.classList.remove("camera-panel");
@@ -955,7 +956,17 @@ const PhonePadPage = (function () {
           connectDeadline = setTimeout(() => {
             connectDeadline = null;
             if (attempt !== owner || owner.opened) return;
+            // A timed-out automatic re-dial takes the next backoff step, as a failed one does.
+            const again = owner.isRedial && redialTries < REDIAL_BACKOFF_MS.length;
+            const tries = redialTries, mode = reconnectSteering;
             cancel();
+            if (again) {
+              reconnectSteering = mode;
+              redialTries = tries + 1;
+              say("Link lost — reconnecting… (try " + redialTries + " of " + REDIAL_BACKOFF_MS.length + ")", true);
+              redialTimer = setTimeout(() => { redialTimer = null; redial = code; redialNow(); }, REDIAL_BACKOFF_MS[tries]);
+              return;
+            }
             say("The game is not offering that code any more — choose MAKE NEW CODE in its phone-controller settings, then CONNECT.", true);
           }, CONNECT_DEADLINE_MS);
         };
