@@ -602,6 +602,9 @@ const TT_LAPS = 4;          // time trial: four flying laps (a rolling start: js
 // TyreModel.treadFor). Atmosphere profiles keep reading raceWeather enum.
 function isWetRoad() { return trackWetness() >= 0.25; }
 function isRaining() { return trackWetness() >= 0.72; }
+// The view's own sky / surface (a local storm cell, js/race/rain-cells.js), not the lap mean: lightning, thunder and wet-car SFX follow what the player is under.
+function isRainingView() { return wxArc ? wxArc.viewRainfall() >= 0.72 : isRaining(); }
+function isWetAt(c) { return (c && wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness()) >= 0.25; }
 // Road grip by weather AND fitted tyre (table WET_GRIP) — see docs/PHYSICS.md
 // "Weather and tyres". No car => the slick column.
 function trackWetness() { return wxArc ? wxArc.wetness() : TyreModel.wetness(raceWeather, null); } function roadWetness() { return trackWetness(); }   // the arc's lagged road state (js/race/weather-arc.js); roadWetness = alias for grip / pits / engineer
@@ -3328,6 +3331,7 @@ const G = {
   satAdjust: (rgb, amt) => satAdjust(rgb, amt),
   viewRainfall: () => wxArc ? wxArc.viewRainfall() : 0,
   isWetRoad: () => isWetRoad(),
+  isWetAt: (c) => isWetAt(c),
   initRainDrops: () => initRainDrops(),
   isFloodActiveSession: () => isFloodActiveSession(),
   _nightAmbientBand: () => _nightAmbientBand(),
@@ -7086,7 +7090,7 @@ function renderLightingPrep(dt, hasLivePlayerShadow) {
   }
   // ── Lightning (active rain only) ─────────────────────────────────────────
   const wet = isWetRoad();      // wet-road material applies to "wet" AND "rain"
-  const raining = isRaining();  // falling rain, lightning + thunder only in "rain"
+  const raining = isRainingView();  // falling rain AT THE VIEW: lightning + thunder only in "rain"
   stormFx.step(dt, {
     raining, state, raceT, skyT: _skyT, seed: simSeed(), weather: raceWeather,
     reduced: motionReduced(), frame, LT, clamp,

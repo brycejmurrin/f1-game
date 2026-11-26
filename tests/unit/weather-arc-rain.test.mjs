@@ -143,6 +143,17 @@ test("real game: road thresholds, drizzle seeding and rendered rain retain separ
     live.t = (lo + hi) / 2;
     assert.ok(Math.abs(G.trackWetness() - target) < 1e-9, "the real surface reaches the requested boundary fixture");
   };
+  // The lightning gate reads the view's falling rain (#6891), so its boundary fixture bisects the real viewRainfall.
+  const rainfall = (target) => {
+    const live = arc("dry", "rain", 120);
+    let lo = 0, hi = 240;
+    for (let i = 0; i < 45; i++) {
+      live.t = (lo + hi) / 2;
+      if (G.viewRainfall() < target) lo = live.t; else hi = live.t;
+    }
+    live.t = (lo + hi) / 2;
+    assert.ok(Math.abs(G.viewRainfall() - target) < 1e-6, "the real view rainfall reaches the requested boundary fixture");
+  };
   try {
     await t.test("grip's wet-road predicate crosses 0.25 even while the weather chip remains dry", () => {
       for (const [wetness, wet] of [[0.249, false], [0.251, true]]) {
@@ -151,16 +162,16 @@ test("real game: road thresholds, drizzle seeding and rendered rain retain separ
         assert.equal(G.isWetRoad(), wet, `surface ${wetness}`);
       }
     });
-    await t.test("the rendered lightning clock crosses the real 0.72 surface gate", () => {
+    await t.test("the rendered lightning clock crosses the real 0.72 view-rainfall gate", () => {
       A.lightTune({ lightning: 1 });
       G.raceT = 100;
-      for (const [wetness, raining] of [[0.719, false], [0.721, true]]) {
-        surface(wetness);
+      for (const [fall, raining] of [[0.719, false], [0.721, true]]) {
+        rainfall(fall);
         G._ltBase = { ambientSky: [0.2, 0.2, 0.2], ambientGround: [0.1, 0.1, 0.1], exposure: 1 };
         G._ltFlash = 0; G._ltNextT = 99;
         paint();
         assert.equal(G._ltNextT, raining ? 100 : 99,
-          `surface ${wetness}: only an eligible rain frame advances the lightning window`);
+          `rainfall ${fall}: only an eligible rain frame advances the lightning window`);
       }
     });
     await t.test("initRainDrops keeps static wet drizzle sparse but reserves the full pool for live arcs", () => {
