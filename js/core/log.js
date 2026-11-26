@@ -13,6 +13,7 @@ const Log = (function () {
   // which is multiplayer signalling and would drown it.
   const NAMESPACES = [
     "scenery",
+    "scopes",
     "track",
     "gfx",
     "game",

@@ -125,6 +125,7 @@ const FULL = [
   // Log must be first: every module below may log at evaluation time.
   "js/core/log.js",
   "js/core/dev-flags.js",
+  "js/core/scopes.js",      // Scopes: lifecycle scope bus — WHEN a transition clears what (#6949); game.js registers at eval
   "js/core/mat4.js",
   "js/core/hash32.js",
   "js/core/clipboard.js",   // ApexClipboard: write/read + textarea fallback (call-time; early so panels/lobby can use it)
@@ -668,6 +669,7 @@ const HARD_EDGES = [
   ["js/core/store.js", "js/career/restore-points.js"],
   ["js/career/save-migrate.js", "js/career/restore-points.js"],
   ["js/ui/loading-card.js", "js/ui/loading-screen.js"], // LoadingScreen destructures LoadingCard at eval
+  ["js/core/scopes.js", "js/game.js"],   // game.js calls Scopes.register at eval time
   ["js/core/script-loader.js", "js/game.js"],
   ["js/core/menu-sheet-gate.js", "js/game.js"],
   ["js/core/menu-sheet-gate.js", "js/garage/prebuild.js"],
