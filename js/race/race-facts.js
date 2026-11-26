@@ -123,8 +123,13 @@ var RaceFacts = (function () {
     function rank(list) {
       order.length = 0;
       for (let i = 0; i < list.length; i++) if (!list[i].retired) order.push(list[i]);   // indexed: no iterator per step
-      // Stable insertion sort: the order is nearly sorted frame to frame, and sort() allocates its scratch.
-      for (let i = 1; i < order.length; i++) {
+      // Nobody flagged: byRace is plain descending distance (a consistent order), so a stable insertion sort gives
+      // exactly sort()'s answer, nearly sorted frame to frame, without sort()'s scratch array. Once any car has
+      // finished byRace is not transitive (laps/clock vs distance), so that short phase keeps the built-in sort.
+      let anyFin = false;
+      for (let i = 0; i < order.length; i++) if (order[i].finished) { anyFin = true; break; }
+      if (anyFin) order.sort(byRace);
+      else for (let i = 1; i < order.length; i++) {
         const c = order[i]; let j = i - 1;
         while (j >= 0 && byRace(order[j], c) > 0) { order[j + 1] = order[j]; j--; }
         order[j + 1] = c;

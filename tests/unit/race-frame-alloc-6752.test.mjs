@@ -1,4 +1,4 @@
-/* #6752 (#6506 rows 3-5): per-frame allocation in spotter, race-facts and HUD tyres; output unchanged. */
+/* #6752 (#6506 rows 3 and 4 (row 5 is held)): per-frame allocation in spotter, race-facts and HUD tyres; output unchanged. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -27,23 +27,35 @@ test("spotter: update() builds no closures on the quiet path, state resets as be
   assert.equal(sp.side(), 0 | sp.side());
 });
 
-test("race-facts: ranking is the stable order sort() gave, with no sort call", () => {
-  const ctx = load("js/race/race-facts.js", "RaceFacts");
-  let sorts = 0;
-  const A = vm.runInContext("Array", ctx), orig = A.prototype.sort;
-  A.prototype.sort = function (...a) { sorts++; return orig.apply(this, a); };
-  const rf = ctx.M.create();
-  let seed = 7; const rnd = () => (seed = (seed * 48271) % 2147483647) / 2147483647;
-  const cars = Array.from({ length: 20 }, (_, i) => ({ id: i + 1, prog: 0, lap: 1, s: 0, x: 0, speed: 50 }));
-  const G = { player: cars[5], cars, track: { total: 4000 }, raceT: 0 };
-  for (let f = 0; f < 200; f++) {
-    cars.forEach((c, i) => { c.prog = 4000 * (20 - i) / 20 + (f % 3 ? 0 : rnd() * 3) + (i % 7 === 0 ? 0.4 : 0); });
-    G.raceT += 0.1;
-    const out = rf.observe(G, 0.1);
-    if (!out.f) continue;
-    const want = [...cars].sort((a, b) => { const d = b.prog - a.prog; return Math.abs(d) > 1 ? d : d; });
-    const pos = want.indexOf(G.player) + 1;
-    assert.equal(out.f.rawPos, pos, "frame " + f);
+test("race-facts: with nobody flagged, rank() gives exactly Array.prototype.sort(byRace)'s order (ties, within-1 m progs, retired cars)", () => {
+  // The REAL distOf / clockOf / byRace / rank source, cut out of race-facts.js and run over fuzzed fields.
+  const src = fs.readFileSync(new URL("../../js/race/race-facts.js", import.meta.url), "utf8");
+  const a = src.indexOf("    const distOf = "), b = src.indexOf("      return order;\n    }", src.indexOf("function rank(list)"));
+  assert.ok(a > 0 && b > a);
+  const body = src.slice(a, b) + "return order; }";
+  const mk = new Function("st", "order", "orderedStates", body + "\n;return {byRace, rank};");
+  let seed = 11; const rnd = () => (seed = (seed * 48271) % 2147483647) / 2147483647;
+  const pick = (n) => Math.floor(rnd() * n);
+  let diffs = 0, trials = 0;
+  for (let t = 0; t < 3000; t++) {
+    const st = new Map(), n = 2 + pick(22), cars = [];
+    for (let i = 0; i < n; i++) {
+      const finished = false, base = pick(4) * 1000 + pick(4) * 0.5;   // equal and within-1 m progs
+      const c = { id: i, prog: base + (rnd() < 0.5 ? 0 : rnd()), lap: 1 + pick(2), finished, retired: rnd() < 0.1,
+        finishT: finished && rnd() < 0.5 ? 100 + pick(5) : 0, penalty: rnd() < 0.2 ? pick(3) : 0 };
+      st.set(c, { finT: finished ? 100 + pick(5) : 0, finProg: finished && rnd() < 0.5 ? base + pick(2) : null });
+      cars.push(c);
+    }
+    const { byRace, rank } = mk(st, [], []);
+    const want = cars.filter((c) => !c.retired).sort(byRace);
+    const got = rank(cars).slice();
+    trials++;
+    if (got.length !== want.length || got.some((c, i) => c !== want[i])) diffs++;
   }
-  assert.equal(sorts, 0);
+  assert.equal(diffs, 0, diffs + " of " + trials + " fuzzed fields ordered differently");
+});
+
+test("race-facts: once a car has finished, rank() still calls the built-in sort", () => {
+  const src = fs.readFileSync(new URL("../../js/race/race-facts.js", import.meta.url), "utf8");
+  assert.match(src, /if \(anyFin\) order\.sort\(byRace\);/);
 });
