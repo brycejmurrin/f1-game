@@ -193,6 +193,9 @@ const TitleMenu = (function () {
     let loading = false;
     const titleReady = () => G.state === "menu" && UiLayers.top()?.id === "overlay";
     door.addEventListener("click", async () => {
+      // A deep link's lesson rides on this one tap only: an early return must not leave it for the next LEARN tap.
+      const lesson = door.dataset.openLesson;
+      delete door.dataset.openLesson;
       if (loading || !titleReady()) return;
       if (G.soundOn) GameAudio.uiSelect();
       if (typeof LearnDoor === "undefined") {
@@ -212,6 +215,7 @@ const TitleMenu = (function () {
         if (!titleReady() || typeof ThumbTrainer === "undefined") { onClose(); return; }
         ThumbTrainer.open(G, { preview: previewControls, onClose });
       };
+      if (lesson) door.dataset.openLesson = lesson;
       LearnDoor.open(door, openDataHub, launchAeroDrill, openTrainer);
     });
   }

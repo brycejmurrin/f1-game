@@ -550,9 +550,13 @@ const ThumbTrainer = (function () {
       window.removeEventListener("resize", queue);
       cue.hidden = false; nodes["tt-explore"].hidden = true; nodes["tt-drill"].hidden = false; nodes["tt-view"].textContent = "PEDALS";
       observer?.disconnect();
+      cancelAnimationFrame(pending);
       root.hidden = true;
       document.body.removeAttribute("data-thumb-trainer");
       preview?.(false);
+      // A thumb still down on a button that just hid may never send its lift (WebKit): release every hold here,
+      // as a blur does, so nothing pressed in the drill is held into the next race.
+      if (typeof Input !== "undefined" && Input.reset) Input.reset();
       if (hud) hud.hidden = was.hud;
       if (overlay) overlay.hidden = was.overlay;
       session = null;
