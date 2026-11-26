@@ -675,7 +675,9 @@ const RaceControl = (function () {
     }
     // May a car EARN Overtake at the Detection Line now? Not under the Safety
     // Car or red flag (a bunched queue would all earn it for the restart lap),
-    // nor in low grip. The lap-1 / after-SC line hold is otEnabled's, at use.
+    // nor in low grip. The lap-1 / after-SC line hold is otEnabled's, at use;
+    // an allowance GRANTED while otEnabled is false is held by OvertakeMode
+    // (lines/arm, _otHold) until it is true again (#6546 P9).
     function otDetectOpen() { return caution.level < 3 && !lowGrip(); }
     function otEnabled() {
       if (caution.level >= 3 || lowGrip()) return false;

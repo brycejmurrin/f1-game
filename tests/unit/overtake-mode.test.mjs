@@ -140,6 +140,69 @@ test("opening-lap grant survives the gate-closed Activation so it is usable on l
   assert.equal(c.otE, 0, "lapses after the held lap");
 });
 
+test("a grant made under the Safety Car is held until Overtake is enabled again (#6546 P9)", () => {
+  // Earn at Detection on green, the SC comes out before the timing line: the
+  // grant lands while otEnabled is false. It must survive every gate-shut
+  // Activation and be usable on the first lap with the gate back on.
+  const { OM } = load();
+  const t = track(), c = car({ s: 4400, lap: 4 });
+  OM.reset(c);
+  OM.lines(c, t, 0.5, true); OM.arm(c, true, true);
+  c.s = 4520; OM.lines(c, t, 0.5, true); OM.arm(c, true, true);
+  assert.equal(c.otEarned, true, "earned on green");
+  OM.arm(c, false, true);                                    // SC deployed
+  c.s = 10; c.lap = 5; OM.lines(c, t, 0.5, false); OM.arm(c, false, true);
+  assert.equal(c.otE, 0.125, "granted at the line under the SC");
+  for (const lap of [6, 7]) {                                // SC laps, then its one-lap hold
+    c.s = 4400; OM.lines(c, t, 0.5, false); OM.arm(c, false, true);
+    c.s = 4520; OM.lines(c, t, 0.5, false); OM.arm(c, false, true);
+    c.s = 10; c.lap = lap; OM.lines(c, t, 0.5, false); OM.arm(c, false, true);
+    assert.equal(c.otE, 0.125, "held through gate-shut Activation " + lap);
+  }
+  c.s = 4400; OM.lines(c, t, 5, true); OM.arm(c, true, true);   // SC ended: the leader re-opened the gate mid-lap
+  c.s = 4520; OM.lines(c, t, 5, true); OM.arm(c, true, true);
+  c.s = 10; c.lap = 8; OM.lines(c, t, 5, true);
+  assert.ok(c.otE > 0, "allowance > 0 on the first lap with Overtake back on");
+  assert.equal(OM.arm(c, true, true), true, "and it can be deployed");
+  c.s = 4400; OM.lines(c, t, 5, true); OM.arm(c, true, true);
+  c.s = 4520; OM.lines(c, t, 5, true); OM.arm(c, true, true);
+  c.s = 10; c.lap = 9; OM.lines(c, t, 5, true);
+  assert.equal(c.otE, 0, "one unused lap with the gate open still lapses");
+});
+
+test("the leader's own crossing that re-opens the gate starts the held lap (no extra lap)", () => {
+  const { OM } = load();
+  const t = track(), c = car({ s: 4400, lap: 4 });
+  OM.reset(c);
+  OM.lines(c, t, 0.5, true); OM.arm(c, true, true);
+  c.s = 4520; OM.lines(c, t, 0.5, true); OM.arm(c, false, true);
+  c.s = 10; c.lap = 5; OM.lines(c, t, 0.5, false); OM.arm(c, false, true);
+  c.s = 4400; OM.lines(c, t, 5, false); OM.arm(c, false, true);
+  c.s = 4520; OM.lines(c, t, 5, false); OM.arm(c, false, true);
+  c.s = 10; c.lap = 6; OM.lines(c, t, 5, false);
+  assert.equal(c.otE, 0.125, "kept: the gate was shut before this crossing");
+  assert.equal(OM.arm(c, true, true), true, "the same tick's otEnabled opens it");
+  c.s = 4400; OM.lines(c, t, 5, true); OM.arm(c, true, true);
+  c.s = 4520; OM.lines(c, t, 5, true); OM.arm(c, true, true);
+  c.s = 10; c.lap = 7; OM.lines(c, t, 5, true);
+  assert.equal(c.otE, 0, "lapses after the one open lap");
+});
+
+test("a grant with the gate open still lapses after one unused lap", () => {
+  const { OM } = load();
+  const t = track(), c = car({ s: 4400, lap: 4 });
+  OM.reset(c);
+  OM.lines(c, t, 0.5, true); OM.arm(c, true, true);
+  c.s = 4520; OM.lines(c, t, 0.5, true); OM.arm(c, true, true);
+  c.s = 10; c.lap = 5; OM.lines(c, t, 0.5, true); OM.arm(c, true, true);
+  assert.equal(c.otE, 0.125);
+  assert.equal(c._otHold, false, "no hold on a green grant");
+  c.s = 4400; OM.lines(c, t, 5, true); OM.arm(c, true, true);
+  c.s = 4520; OM.lines(c, t, 5, true); OM.arm(c, true, true);
+  c.s = 10; c.lap = 6; OM.lines(c, t, 5, true);
+  assert.equal(c.otE, 0);
+});
+
 test("1.0 s is not 'less than one second', and a closed detection (SC, low grip) earns nothing", () => {
   const { OM } = load();
   const t = track();

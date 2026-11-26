@@ -1314,7 +1314,7 @@ body:not(.photo-mode):has(> #flyby:not([hidden]) > #flyby-inner[data-density="co
 }
 .sp-now-txt { min-width: 0; }              /* lets the ellipsis below actually engage */
 .sp-title, .sp-artist, .sp-on { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sp-title { font-size: 14px; font-weight: 700; }
+.sp-title { font-size: var(--fs-micro); font-weight: 700; }
 .sp-artist { font-size: var(--fs-micro); opacity: 0.75; }
 .sp-on { font-size: var(--fs-micro); opacity: 0.5; letter-spacing: var(--ls-2); margin-top: calc(var(--gap) / 6); }
 .sp-bar { height: 3px; border-radius: var(--r-xs); background: var(--card-line); overflow: hidden; margin: calc(var(--gap) / 6) 0 calc(var(--gap) * 2 / 3); }
@@ -1548,9 +1548,10 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
 /* Keep the heading's intrinsic width so Preview wraps instead of covering it
    when the flying dock narrows to 300px. */
 .editor-workspace .ew-title { font: inherit; font-weight: 800; margin: 0; flex: 1 0 auto; min-width: min-content; }
-/* 12 PAINTED px FLOOR (#6512): the title (font: inherit), Preview and the tools summary inherit 16 px, 11.2 painted at
-   UI SIZE 70. max() changes nothing at UI SIZE 75 % and up; --fs-floor is 12 / --ui-scale. */
-.editor-workspace :is(.ew-toolbar, .ew-tools > summary) { font-size: max(1em, var(--fs-floor)); }
+/* 12 PAINTED px FLOOR (#6512, #6599): the title (font: inherit), Preview, the tools drawer (COPY VALUES, RESET) and a
+   row's lone button (RESET CARD) inherit 16 px, 11.2 painted at UI SIZE 70. max() changes nothing at UI SIZE 75 % and
+   up; --fs-floor is 12 / --ui-scale. */
+.editor-workspace :is(.ew-toolbar, .ew-tools, .adv-item > button) { font-size: max(1em, var(--fs-floor)); }
 .editor-workspace .ew-toolbar button, .editor-workspace .ew-tools > summary {
   min-height: var(--ew-tap); min-width: var(--ew-tap); touch-action: manipulation;
 }

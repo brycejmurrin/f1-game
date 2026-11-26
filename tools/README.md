@@ -317,7 +317,6 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/apex-eval.mjs** | Boot the game headless, evaluate one `__apex` expression, print JSON: `apex-eval.mjs monza '__apex.corners()'`. | playwright-probe |
 | **shot/backend-compare.mjs** | Same deterministic scene on GLX/TLX/WGX + numeric pixel diff (MAD, %px changed) and per-backend console errors. | playwright-probe |
 | **shot/baked-scenery.mjs** | Curated free-cam gallery of `bakedModel` sites (Monza/Spa/Silverstone/Monaco/Vegas); PNGs + `manifest.json`. | playwright-probe / scenery-dress |
-| **shot/build-gallery.cjs** | Survey gallery entries stay distinct when shot names collide, including the image each card points at. | survey-track |
 | **shot/cam-corners.mjs** | Straight-vs-corner camera swing on Monaco, Spa, Suzuka, Monza, and Zandvoort. | — |
 | **shot/cam-motion.mjs** | Chase/far/heli speed-open and per-mode corner pose, from the rig not a second dolly. | — |
 | **shot/capture-benchmark.mjs** | Sequential cold-scene benchmark across GPU/browser/profile combinations; records unsupported cells. | playwright-probe |
@@ -356,6 +355,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/repro-shot.mjs** | Render a player's exact frame from an `__apex.repro()` blob. Its COCKPIT output is WRONG — read the header. | playwright-probe |
 | **shot/run-capture-request.mjs** | Validate bounded CI requests and run native captures plus portable gallery export without shell interpolation. | — |
 | **shot/scenery-source-hash.cjs** | Fingerprint all scenery geometry/build inputs used by the named screenshot catalog. | — |
+| **shot/shot-gallery.cjs** | Survey gallery entries stay distinct when shot names collide, including the image each card points at. | survey-track |
 | **shot/shot-jobs.mjs** | Pure helpers for shot.mjs: CLI/batch job parse, output format, track grouping. | — |
 | **shot/shot-survey.mjs** | Multi-track shot survey CLI (job backend): track-session boots, resume, progress/findings JSON. | survey-track |
 | **shot/shot.mjs** | One Chromium session for one or many framed shots (`--batch`); JPEG/raster modes for cheaper sweeps. | playwright-probe |
@@ -464,7 +464,7 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | **track/startline-probe.cjs** | Checks that can FAIL a `startFrac`: \|k\| at s=0 (120 m mean, ±40 m max), the 24-slot grid span, first apex hand. | agent-view |
 | **track/startline-snap.cjs** | Derives `startFrac` from a real start/finish coordinate: projects into the def's `path`, snaps to the nearest segment. | new-track |
 | **track/stitch-osm-ring.mjs** | Stitches OpenStreetMap `highway=raceway` ways into ONE closed ring for import-circuit-path.mjs. | new-track |
-| **track/survey-gallery-lib.cjs** | Shared helpers for build-gallery / pr-survey-panel: survey branch list, raw GitHub URLs, git blobs. | — |
+| **track/survey-gallery-lib.cjs** | Shared helpers for build-gallery / survey-gallery-page: survey branch list, raw GitHub URLs, git blobs. | — |
 | **track/survey-gallery-page.cjs** | Offline circuit gallery: pre-rendered captures, native circuit navigation and recipe downloads. | — |
 | **track/survey-track.mjs** | One-command circuit survey: aerial/orbit/driver-eye shots per spot plus a flagged ground-profile probe; `--oblique`. | survey-track |
 | **track/surveyor-scope.mjs** | Hand-back scope check: lists files a track-surveyor branch changed outside its circuit pair (exit 1 if any). | survey-track |

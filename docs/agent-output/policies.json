@@ -2321,7 +2321,7 @@
       "presentation": "native",
       "preserve": "@c2"
     },
-    "tools/shot/build-gallery.cjs": {
+    "tools/shot/shot-gallery.cjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c2"

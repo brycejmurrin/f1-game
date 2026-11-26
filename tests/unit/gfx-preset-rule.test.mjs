@@ -88,3 +88,11 @@ test("the Graphics panel's shed note (#6486 F3): empty at 0, else the count and 
   assert.equal(t(["ssgi"]), "1 effect reduced to hold frame rate: Screen-space indirect lighting.");
   assert.equal(t(["ssgi", "superSample"]), "2 effects reduced to hold frame rate: Screen-space indirect lighting, 1.5× supersampling.");
 });
+
+test("the Use-preset label follows the viewport width, not the UA (#6461 row 7)", () => {
+  const t = eval(UI + ";DesktopGraphics").presetLabel;
+  assert.equal(t("Off", true, 852), "Preset");                 // a UA-detected phone
+  assert.equal(t("Off", false, 852), "Preset · Off");          // iPhone 15 landscape, UA not a phone: short, true value
+  assert.equal(t("On", false, 393), "Preset · On");
+  assert.equal(t("Off", false, 1728), "Use preset · Off");     // 16-inch MacBook
+});
