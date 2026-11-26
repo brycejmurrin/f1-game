@@ -32,7 +32,7 @@ var DamageHandling = (function () {
   // One pooled result: PlayerForces reads it synchronously inside step() and keeps nothing.
   const out = { aeroF: 1, aeroR: 1, grip: 1, axF: 1, axR: 1 };
 
-  const clamp01 = (v) => (v > 0 ? (v < 1 ? v : 1) : 0);
+  const clamp01 = M4.clamp01;
 
   /** Pure: the handling factors for a damage record (Damage.get / Damage.state shape). */
   function factors(r, o) {

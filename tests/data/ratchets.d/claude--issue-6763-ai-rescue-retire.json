@@ -6,6 +6,7 @@
     }
   },
   "tree": {
-    "eagerCodeBytes": 522
+    "eagerCodeBytes": 194,
+    "rawGameReads": -1
   }
 }

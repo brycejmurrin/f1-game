@@ -59,12 +59,21 @@ test("tap floors: 44 painted px on touch (row 6)", () => {
   assert.ok(rulesFor(rules("css/tuner.css"), /\[data-density="compact"\] \.lt-preview-row \.opt-btn$/).some((r) =>
     r.decls.get("min-width") === "max(34px, var(--tap-min), var(--tap-floor44))"),
   "compact tuner chips: lighting TIME/WEATHER 34.8 px, camera PRESET 32.6 px");
-  has("css/settings.css", "#pm-panel-credits a", "padding-block", "max(0em, calc((var(--tap-floor44) - 1em) / 2))",
+  has("css/settings.css", "#pm-panel-credits a", "padding-block", "max(0em, calc((max(var(--tap-floor44), var(--tap-min)) - 1em) / 2))",
     "credits links 19 px tall: inline padding grows the hit box, not the line");
   has("css/settings.css", "#pm-panel-credits a", "margin-inline", "calc(var(--tap-floor44) * -0.12)",
     "the inline pad is cancelled by an equal negative margin, so the text does not move");
   has("css/settings.css", "#pm-panel-credits li", "min-height", "var(--tap-floor44)",
     "a one-line item is a whole hit box tall, so the next link's padding does not cover this one");
+});
+
+test("credits links keep a 24 painted px hit floor with a mouse (#6461 row 8)", () => {
+  const d = rulesFor(rules("css/settings.css"), /^#pm-panel-credits a$/).map((r) => r.decls.get("padding-block")).find(Boolean);
+  assert.ok((d || "").includes("var(--tap-min)"), "fine-pointer arm exists (--tap-min = max(24px, 24px / ui-scale))");
+  // CSS arithmetic at the MacBook's UI SIZE 115: --tap-floor44 is 0 with a mouse; micro font ~ 11 own px.
+  const scale = 1.15, font = 11, floor = Math.max(24, 24 / scale);
+  const hit = (font + 2 * Math.max(0, (floor - font) / 2)) * scale;
+  assert.ok(hit >= 24 - 1e-9, `hit ${hit} px >= 24`);
 });
 
 test("the dh-pill floor comes after the shared chip rule that also sets min-width", () => {

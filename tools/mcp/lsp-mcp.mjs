@@ -118,7 +118,8 @@ const FN_KINDS = new Set([5, 6, 9, 12]);   // class, method, constructor, functi
 const DIAG_CODES = new Set([2304, 2551, 2552, 2554, 2555, 2588, 2349, 2451]);
 // Modules receive the game façade as an untyped `G` parameter; its contract is
 // `interface GameCtx` in types/game-ctx.d.ts (AGENTS.md §Layout), so G.x answers from there.
-const FACADES = { G: { iface: "GameCtx", file: "types/game-ctx.d.ts" } };
+// `impl` is the object literal that implements it: lsp_definition adds that member's row after the contract row (#6760).
+const FACADES = { G: { iface: "GameCtx", file: "types/game-ctx.d.ts", impl: { file: "js/game.js", literal: "G" } } };
 // A circuit's scenery(api) callback destructures TrackGeom's emitters from its `api` argument (`const { addBox } = api`):
 // in these dirs an `api` destructure is an alias of TrackGeom's member (#6492; the contract is test-frozen).
 const SCENERY_API = { head: "TrackGeom", local: "api", dirs: ["circuits/scenery/", "track/scenery/"] };   // under src   // query positions tried per symbol before the text fallback
@@ -174,6 +175,8 @@ const TAG_RANK = { def: 0, export: 1, alias: 2, use: 3 };
 export function classify(line, col, next = "") {
   const before = line.slice(0, col), after = line.slice(col).replace(/^[\w$]+/, "");
   if (/\b(function\*?|class|interface|type|enum)\s+$/.test(before) || /\breadonly\s+$/.test(before)) return "def";
+  // `window.Head = …` at a statement start is where a window global is declared (#6760): a def, not a use.
+  if (/^\s*window\.$/.test(before) && /^\s*=(?![=>])/.test(after)) return "def";
   // `const { a } = Head` / `const K = Head;`: the head itself is being aliased.
   if (/^\s*([;,)]|$)/.test(after) && (/\}\s*=\s*(window\.)?$/.test(before) || /\b(const|let|var)\s+[\w$]+\s*=\s*(window\.)?$/.test(before))) return "alias";
   if (/\b(const|let|var)\s*[{[][^}\]]*$/.test(before)) return "alias";
@@ -875,7 +878,10 @@ export class Lsp {
       if (r.name === "<function>") {
         // An anonymous top-level IIFE (game.js): nothing is exported; list its functions.
         const fns = members.filter(m => FN_KINDS.has(m.kind));
-        out.push(`(anonymous IIFE)  :${r.range.start.line + 1}  ${members.length} members, ${fns.length} functions${all ? "" : " (functions listed; all: true lists every member)"}`);
+        // Name the head from the `window.X = …` it assigns at its own top level (tsl-fx.js: window.TLXShaders), #6760.
+        const body = iife(this.astOf(f)?.body.find(st => iife(st.expression) && st.expression.callee.range[0] <= starts[r.range.start.line] + r.range.start.character && starts[r.range.start.line] + r.range.start.character <= st.range[1])?.expression)?.body?.body || [];
+        const heads = [...new Set(body.map(st => st.expression?.type === "AssignmentExpression" ? objectName(st.expression.left) : "").filter(n => /^window\.[\w$]+$/.test(n)))];
+        out.push(`(anonymous IIFE${heads.length ? ` → ${heads.join(", ")}` : ""})  :${r.range.start.line + 1}  ${members.length} members, ${fns.length} functions${all ? "" : " (functions listed; all: true lists every member)"}`);
         for (const m of all ? members : fns) out.push(row(m, ""));
         continue;
       }
@@ -1401,6 +1407,17 @@ export class Lsp {
     const facade = FACADES[h];
     return facade && fs.existsSync(path.join(this.root, facade.file)) ? facade : null;
   }
+  // The member's row inside `const <literal> = {` (two-space indent, to the closing `};`): a location, or null.
+  facadeImpl(impl, member) {
+    if (!impl || !fs.existsSync(path.join(this.root, impl.file))) return null;
+    const lines = this.textLines(impl.file), open = lines.findIndex(l => l.startsWith(`const ${impl.literal} = {`));
+    const row = new RegExp(`^  (?:async\\s+)?(${member.replace(/[$]/g, "\\$")})\\s*[:(]`);
+    for (let i = open + 1; open >= 0 && i < lines.length && !/^\};?/.test(lines[i]); i++) {
+      const m = row.exec(lines[i]);
+      if (m) return { uri: this.uriOf(impl.file), range: { start: { line: i, character: m.index + m[0].indexOf(member) } } };
+    }
+    return null;
+  }
   async facade([h, member], method, extra) {
     // tsgo's workspace/symbol skips .d.ts files: read the interface block, then let the checker type the row.
     const { iface, file } = FACADES[h], lines = this.textLines(file);
@@ -1414,7 +1431,10 @@ export class Lsp {
     if (!p) throw Error(`${iface} (the ${h} façade, ${file}) has no member ${member}; a local (e.g. a js/game.js IIFE function) answers to the bare name: try lsp_symbols ${member} or lsp_definition ${member}`);
     const def = { uri: this.uriOf(file), range: { start: { line: p.line0, character: p.col0 } } }, note = `${h} is the ${iface} façade; contract row in ${file}`;
     if (method === "textDocument/references") return { p, result: await this.textRefs([h, member], def, extra.context?.includeDeclaration !== false), note: `${note}; uses are text matches of ${h}.${member}` };
-    if (method === "textDocument/definition") return { p, result: [def], note };
+    if (method === "textDocument/definition") {
+      const impl = this.facadeImpl(FACADES[h].impl, member);
+      return { p, result: impl ? [def, impl] : [def], note: impl ? `${note}; implementing row in ${FACADES[h].impl.file}` : note };
+    }
     this.ensureOpen(p.file);
     return { p, result: await this.request(method, { textDocument: { uri: def.uri }, position: def.range.start, ...extra }), note };
   }

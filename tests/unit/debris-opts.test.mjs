@@ -147,6 +147,7 @@ test("a Rapier build that throws degrades debris off instead of rejecting race e
     requestIdleCallback() {}, Log: { warn: (...a) => warns.push(a), info() {} }, setTimeout, clearTimeout,
     __importRapier: () => Promise.resolve(rapier),
   });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8") + "; this.M4 = M4;", ctx, { filename: absSrc("js/core/mat4.js") });   // M4.rng32 binds at eval
   vm.runInContext(src, ctx);
   const M = vm.runInContext("DebrisWorld", ctx);
   M.create(G);

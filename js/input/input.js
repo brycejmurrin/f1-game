@@ -2919,6 +2919,8 @@ const Input = (function () {
     braking,
     throttleLevel,
     brakeLevel,
+    // Raw on-screen button levels, ungated by menus: the LEARN thumb trainer reads the race buttons over its own layer.
+    touchLevels: () => ({ brake: btnBrake ? btnBrakeVal : 0, gas: touchThrottleLevel(), left: btnSteerLeft ? btnSteerLeftVal : 0, right: btnSteerRight ? btnSteerRightVal : 0 }),
     consumeBoostToggle,
     consumeOvertake,
     consumeAeroToggle,
