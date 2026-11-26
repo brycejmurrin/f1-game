@@ -6635,6 +6635,7 @@ function retireCar(c, reason) {
   c.xVis = c.x;
   const w = worldFromTrack(c.s, c.x, smp);
   c.px = w.x; c.pz = w.z;
+  c.inPitLane = Tracks.inPitLane(track, c.s, c.x);   // the park pose moved it: a stale lane flag hid a car parked on the road from stopped-cars (#6763 K8)
   c.head = Math.atan2(smp.t[0], smp.t[2]);
   // Seed the render-interpolation anchors too, or the first frame after this
   // smears the car across the track from wherever it was a step ago.

@@ -56,3 +56,23 @@ test("K2: the AI rescue lands clear of a parked car and keeps its speed beside i
   assert.ok(c.speed < 14 * pace * 0.9, `speed restored beside a blocker: ${c.speed}`);
   assert.equal(c.rescueT, 0, "the rescue fired");
 });
+
+// K8: retireCar re-derives inPitLane from the park pose — a DNF in the lane leaves the road car flagged "in the lane" otherwise.
+test("K8: retireCar recomputes inPitLane after the park pose (a DNF on the lane entry)", () => {
+  const span = vm.runInContext("Tracks.pitLaneSpan(__t)", (g.ctx.__t = G.track, g.ctx), { filename: "ai-rescue-retire-vm:span" });
+  assert.ok(span, "monza has a pit lane");
+  const idx = G.cars.indexOf(ai());
+  const c = G.cars[idx];
+  const expectAfter = () => vm.runInContext("Tracks.inPitLane(__t, " + c.s + ", " + c.x + ")", g.ctx, { filename: "ai-rescue-retire-vm:in" });
+  // On the lane entry, in the lane, flagged; then retired: the flag must follow where the car was parked.
+  A.aiPlace(idx, (span.sIn + 5) / G.track.total, 0, span.side * 12);
+  c.inPitLane = true;
+  G.retireCar(c, "mechanical");
+  assert.equal(c.inPitLane, expectAfter(), "inPitLane after the park pose (lane entry)");
+  // Mid-lap, off the lane: a stale `true` must be cleared.
+  const d = G.cars[G.cars.findIndex((o, i) => i !== idx && !o.human && !o.retired && !o.finished)];
+  A.aiPlace(G.cars.indexOf(d), 0.3, 0, 0);
+  d.inPitLane = true;
+  G.retireCar(d, "mechanical");
+  assert.equal(d.inPitLane, false, "a stale lane flag survived the retirement");
+});
