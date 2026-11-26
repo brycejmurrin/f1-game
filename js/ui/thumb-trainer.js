@@ -170,8 +170,9 @@ const ThumbTrainer = (function () {
     if (text != null) node.textContent = text;
     return node;
   }
-  function button(id, text, label) {
-    const b = el("button", { id, type: "button" }, text);
+  // The house controls (css/components.css, css/select.css): BACK is the alt plate, START the red primary, the rest chips.
+  function button(id, text, label, cls = "sel-chip") {
+    const b = el("button", { id, type: "button", class: cls }, text);
     if (label) b.setAttribute("aria-label", label);
     return b;
   }
@@ -183,8 +184,8 @@ const ThumbTrainer = (function () {
     const bar = el("div", { id: "tt-bar", role: "toolbar", "aria-label": "Drill" });
     const pick = el("select", { id: "tt-turn", "aria-label": "Vegas corner" });
     for (const c of CORNERS) pick.appendChild(el("option", { value: c.name }, `S${c.sec} ${c.name} ${c.dir < 0 ? "◀" : "▶"} ${SHAPES[c.shape].label}`));
-    bar.append(button("tt-back", "BACK"), button("tt-prev", "◀", "Previous corner"), pick, button("tt-next", "▶", "Next corner"),
-      button("tt-speed", "½×"), button("tt-go", "START"), button("tt-view", "PEDALS", "Pedal explorer"));
+    bar.append(button("tt-back", "BACK", null, "bigbtn alt"), button("tt-prev", "◀", "Previous corner"), pick, button("tt-next", "▶", "Next corner"),
+      button("tt-speed", "½×"), button("tt-go", "START", null, "bigbtn"), button("tt-view", "PEDALS", "Pedal explorer"));
     const cue = el("p", { id: "tt-cue", "aria-live": "polite" });
     const drill = el("div", { id: "tt-drill" });
     drill.append(el("canvas", { id: "tt-sketch", "aria-label": "Top-down sketch of the corner: brake point, turn-in, apex, gas on and arrow off" }),
@@ -227,8 +228,9 @@ const ThumbTrainer = (function () {
     }
     paintSpeed();
 
+    // Canvas labels follow TEXT SIZE: the score line is --fs-2 (15 px at the default rung, css/tokens.css).
     function readColors() {
-      colors = { bg: css("--surf-1") || css("--bg"), text: css("--text"), dim: css("--dim"), line: css("--card-line"), target: css("--surf-3"),
+      colors = { fs: Math.max(0.8, (parseFloat(getComputedStyle(scoreEl).fontSize) || 15) / 15), bg: css("--surf-1") || css("--bg"), text: css("--text"), dim: css("--dim"), line: css("--card-line"), target: css("--surf-3"),
         brake: css("--red"), gas: css("--faster"), right: css("--zone"), left: css("--spark"), font: css("--font-ui") || "system-ui" };
     }
     // The drill reads the buttons the race reads. Keys are the desktop fallback (← → steer, ↓ brake, ↑ gas).
@@ -313,7 +315,7 @@ const ThumbTrainer = (function () {
       };
       return { dAt, pt, total: dist };
     }
-    function font(px, weight = 700) { return weight + " " + px + "px " + colors.font; }
+    function font(px, weight = 700) { return weight + " " + Math.round(px * (colors.fs || 1)) + "px " + colors.font; }
     function drawSketch(tNow) {
       const C = script(name), g = geometry(C), W = sketch.clientWidth, H = sketch.clientHeight;
       if (!W || !H) return;
@@ -368,7 +370,7 @@ const ThumbTrainer = (function () {
     function drawTime() {
       const C = script(name), W = time.clientWidth, H = time.clientHeight;
       if (!W || !H) return;
-      const L = 52, R = W - 6, strip = 13, lane = (H - strip - 16) / 3;
+      const L = Math.round(52 * (colors.fs || 1)), R = W - 6, strip = Math.round(13 * (colors.fs || 1)), lane = (H - strip - 16) / 3;
       const lanes = [["BRAKE", strip + 2], ["ARROWS", strip + 2 + lane], ["GAS", strip + 2 + 2 * lane]];
       const x = t => L + (R - L) * t / C.dur, inner = lane - 6;
       tx.clearRect(0, 0, W, H);
@@ -479,7 +481,10 @@ const ThumbTrainer = (function () {
     // PEDAL EXPLORER: the selected preset's curves beside the saved profile, from PedalTravel itself.
     function drawChart() {
       const host = nodes["tt-chart"], note = nodes["tt-note"], PT = typeof PedalTravel !== "undefined" ? PedalTravel : null;
-      for (const b of document.querySelectorAll("#tt-presets button")) b.setAttribute("aria-pressed", String(b.dataset.preset === preset));
+      for (const b of document.querySelectorAll("#tt-presets button")) {
+        b.setAttribute("aria-pressed", String(b.dataset.preset === preset));
+        b.classList.toggle("active", b.dataset.preset === preset);
+      }
       if (!PT) { host.textContent = ""; note.textContent = "The pedal code did not load."; return; }
       const mine = { brake: PT.buttonProfile("brake"), gas: PT.buttonProfile("gas") };
       const chosen = preset === "yours" ? mine : { brake: PRESETS[preset].brake, gas: PRESETS[preset].gas || mine.gas };

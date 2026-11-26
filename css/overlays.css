@@ -44,29 +44,41 @@ body[data-thumb-trainer] #hud::before { display: none; }   /* the race vignette 
   position: absolute; pointer-events: auto; box-sizing: border-box;
   display: flex; flex-direction: column; gap: calc(var(--gap) / 2);
 }
-#tt-bar { display: flex; flex-wrap: wrap; gap: calc(var(--gap) / 2); align-items: center; }
-#tt-bar :is(button, select), #tt-presets button {
-  min-height: var(--tap); min-width: 44px; padding-inline: var(--pad);   /* 44: the tap floor (#6924) */
-  border: 1px solid var(--plate-line); border-radius: var(--r-sm);
-  color: var(--text); background: var(--plate); font: inherit; font-size: var(--fs-2);
+#tt-bar { display: flex; flex-wrap: wrap; gap: calc(var(--gap) / 2); align-items: center; padding-inline: calc(var(--tap) * 0.06); }   /* the -6deg skew of .bigbtn overhangs ~tan 6° × h / 2 */
+/* The house controls (#6924 follow-up): BACK is .bigbtn.alt and START the red .bigbtn, as on every sheet; the steps,
+   speed, view and presets are .sel-chip. Here they share one row height, --tap, so the bar keeps 44 px taps and the
+   POPUPS BUTTON HEIGHT look below scales them all. */
+#tt-bar > .bigbtn { width: auto; margin: 0; min-width: 44px; padding-block: 0; padding-inline: var(--pad); font-size: var(--fs-3); }
+#tt-bar > .sel-chip, #tt-presets .sel-chip { min-height: var(--tap); min-width: 44px; font-size: var(--fs-2); }
+#tt-bar select {   /* the .set-row select (css/settings-controls.css) on the --tap row */
+  flex: 1 1 8em; min-width: 44px; width: auto; height: var(--tap); min-height: var(--tap); box-sizing: border-box; margin: 0;
+  padding: 0 calc(var(--gap) * 0.5); text-overflow: ellipsis;
+  border: 1px solid var(--plate-line); border-radius: var(--r-sm); background: var(--plate); color: var(--text);
+  font: inherit; font-size: var(--fs-2); font-weight: 600; letter-spacing: var(--ls-1);
 }
-#tt-bar select { flex: 1 1 8em; min-width: 0; width: auto; height: var(--tap); padding-block: 0; padding-inline: calc(var(--pad) / 2); text-overflow: ellipsis; }
-#tt-go { background: var(--red-fill); }
-#tt-presets button[aria-pressed="true"] { background: var(--plate-on-strong); }
+/* POPUPS looks (js/ui/screen-looks.js): BUTTON HEIGHT and CORNERS, the knobs a full-screen drill can show. */
+:root[data-look-popups-btn] #thumb-trainer { --tap: calc(var(--tap-0) * var(--look-popups-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-popups-btn, 1)); }
+@media (pointer: coarse) {
+  :root[data-look-popups-btn] #thumb-trainer { --tap: max(calc(var(--tap-0) * var(--look-popups-btn, 1)), calc(44.2px / var(--ui-scale))); --chip-h: max(calc(var(--chip-h-0) * var(--look-popups-btn, 1)), calc(44.2px / var(--ui-scale))); }
+}
+:root[data-look-popups-corners="sharp"] #thumb-trainer { --r-xs: 0px; --r-sm: 0px; --r-md: 0px; --r-lg: 0px; }
+:root[data-look-popups-corners="pill"] #thumb-trainer { --r-sm: var(--r-pill); --r-md: var(--r-pill); }
 #tt-cue, #tt-score, #tt-note { margin: 0; font-size: var(--fs-2); }
 /* After a run the tips and score can outgrow a narrow column: they scroll, the timeline keeps its lanes (#6924). */
 #tt-cue, #tt-score { flex: 0 1 auto; min-height: 1.4em; overflow-y: auto; overscroll-behavior: contain; }
+#tt-score:empty { min-height: 0; }   /* no run yet: the line takes no room from the cue */
 #tt-cue { font-family: var(--font-hud); font-size: var(--fs-3); }
 #tt-score, #tt-note { color: var(--dim); }
 #tt-drill, #tt-explore { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: calc(var(--gap) / 2); }
 #tt-drill[hidden], #tt-explore[hidden] { display: none; }
 /* The drill never gets less than the timeline and a line of score: the sketch gives way first, then the text. */
 #tt-drill { flex: 1 1 calc(5.5rem + 1.6em + var(--gap)); min-height: calc(5.5rem + 1.6em + var(--gap)); }
+#tt-drill:has(> #tt-score:empty) { flex-basis: 5.5rem; min-height: 5.5rem; }
 #tt-sketch { flex: 1 4 55%; min-height: 0; width: 100%; border-radius: var(--r-md); }
 #tt-time { flex: 0 0 auto; height: clamp(5.5rem, 34%, 15rem); width: 100%; border-radius: var(--r-md); }
 #thumb-trainer[data-fit~="side-sketch"] #tt-time { flex: 1 1 0; height: auto; min-height: 5.5rem; }
 #tt-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: calc(var(--gap) / 2); }
-#tt-presets button { padding-inline: calc(var(--pad) / 3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#tt-presets .sel-chip { padding-inline: calc(var(--pad) / 3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #tt-chart { flex: 1 1 0; min-height: 3.5rem; }
 #tt-chart svg { display: block; }
 #tt-note { flex: 0 1 auto; min-height: 1.4em; max-height: 4.2em; overflow-y: auto; overscroll-behavior: contain; font-size: var(--fs-1); }   /* scrolls in a short column (#6924) */

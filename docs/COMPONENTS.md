@@ -296,7 +296,7 @@ missing class, a file that left, or a file that joined.
 - `.res-pos` / `.res-name` / `.res-pts` — `career` + `overlays`. The championship table deliberately reuses the results-screen row so standings do not look like a different game depending on where you are; compact Career history / qualifying / standings / results wrap the shared points cell instead of ellipsizing it. **This is the one that bit us**: it is invisible from either file alone.
 - `.q-time` — `career` + `overlays`. Shared timing text; race result gaps sit on a second line inside the driver name so they remain readable on phones.
 - `.sel-label` — `career` + `carsetup` + `overlays` + `select`. The skewed red section heading.
-- `.sel-chip` — `career` + `career-experience` + `carsetup` + `components` + `editor` + `race-setup` + `select` + `tokens` + `track-detail`
+- `.sel-chip` — `career` + `career-experience` + `carsetup` + `components` + `editor` + `overlays` + `race-setup` + `select` + `tokens` + `track-detail`
 - `.sel-edit` — `carsetup` + `components` + `editor` + `select`
 - `.team-tile` — `components` + `select`
 - `.track-row` / `.season-upcoming-row` — `components` + `race-setup` + `select`

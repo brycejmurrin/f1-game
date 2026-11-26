@@ -495,8 +495,9 @@ const ReplayBroadcast = (function () {
       // The director is already on the event's car: the inset takes the other one
       // (the car being passed).
       if (evCar && evCar === follow && ev.h.over != null) evCar = st.carOf(ev.h.over);
+      if (evCar && !running.some((r) => r.key === evCar)) evCar = null;   // in a data gap: parked, not a shot
       const pick = pipPick(battles(running), follow, evCar, ev && ev.h.kind, running);
-      if (pip && (pip.key === follow || pip.key.retired)) { setPip(null); }   // the viewer followed it, or it stopped
+      if (pip && (pip.key === follow || pip.key.retired || !running.some((r) => r.key === pip.key))) { setPip(null); }   // the viewer followed it, it stopped, or its data has a gap
       if (!pick) { if (pip && wall - pip.seen > PIP_DROP_S) setPip(null); return; }
       const label = (PIP_LABEL[pick.kind] || "") + ((st.codeOf && st.codeOf(pick.key)) || pick.key.code || "");
       if (pip && pip.key === pick.key) {

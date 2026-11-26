@@ -368,3 +368,13 @@ test("a lazy owner registering after a session-scoped click keeps the pause note
   h.result("next pit-stop tyre");
   assert.equal(status.textContent, h.ctx.Search.find("next pit-stop tyre").length + " matching settings");
 });
+test("blocked search results reach LiveRegion, not only the status note (#6883 row 6)", () => {
+  const h = boot(), said = [];
+  h.ctx.LiveRegion = { say: (t, k) => said.push([t, k]) };
+  h.ctx.window.UiLayers = { inRace: () => false };
+  const result = h.result("pit stop tyres"); assert.ok(result);
+  result.onclick();
+  assert.equal(said.length, 1);
+  assert.match(said[0][0], /^Pause during a session to open /);
+  assert.equal(said[0][1], "hud");
+});
