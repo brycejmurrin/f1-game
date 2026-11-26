@@ -81,3 +81,48 @@ test("overflow axis is cached per region until refresh()", () => {
   r.win.ScrollFade.paintAll();
   assert.ok(r.cs() > n, "refresh()/resize re-resolves the style");
 });
+
+test("a mutation batch over two layers paints both; a layerless record widens to the document", () => {
+  const timers = [], cbs = [], reads = [];
+  const mk = (id) => {
+    const el = { id, scrollHeight: 300, scrollWidth: 100, scrollTop: 0, scrollLeft: 0, clientWidth: 100, isConnected: true,
+      closest: () => null, matches: () => true, classList: { toggle() {} }, style: { setProperty() {}, removeProperty() {} } };
+    Object.defineProperty(el, "clientHeight", { get() { reads.push(id); return 100; } });
+    return el;
+  };
+  const a = mk("a"), b = mk("b"), c = mk("c");
+  const layer = (el) => ({ isConnected: true, querySelectorAll: () => [el], matches: () => false });
+  const la = layer(a), lb = layer(b);
+  const tgt = (l) => ({ closest: () => l });
+  const ctx = {
+    Log: { info() {} }, addEventListener() {}, ResizeObserver: class { observe() {} unobserve() {} },
+    MutationObserver: class { constructor(cb) { cbs.push(cb); } observe() {} disconnect() {} },
+    document: { readyState: "complete", addEventListener() {}, getElementById: () => null, querySelectorAll: () => [a, b, c] },
+    getComputedStyle: () => ({ overflowY: "auto", overflowX: "visible", paddingRight: "0" }),
+    setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout() {},
+  };
+  ctx.globalThis = ctx; ctx.window = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(src, ctx, { filename: absSrc("js/ui/scroll-fade.js") });
+  const drain = () => { while (timers.length) timers.shift()(); };
+  drain();
+  const contentCb = cbs[0];   // contentMo is created first
+  reads.length = 0;
+  contentCb([{ target: tgt(la) }, { target: tgt(lb) }]);
+  drain();
+  assert.deepEqual([...new Set(reads)].sort(), ["a", "b"], "both layers painted, not just the first record's");
+  reads.length = 0;
+  contentCb([{ target: tgt(la) }, { target: tgt(null) }]);
+  drain();
+  assert.deepEqual([...new Set(reads)].sort(), ["a", "b", "c"], "a layerless record paints the whole document");
+});
+
+test("a content-driven paint re-resolves a pane's overflow after a class flip", () => {
+  const r = rig();
+  r.win.ScrollFade.paintAll();
+  r.classes.clear();
+  // overflow flips (cache would keep the old axis); a full refresh() re-resolves it
+  r.win.ScrollFade.refresh();
+  r.win.ScrollFade.paintAll();
+  assert.equal(r.classes.get("a.sf-scroll"), true);
+});

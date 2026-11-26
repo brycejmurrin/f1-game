@@ -137,7 +137,8 @@ const TitleLayout = (function () {
     for (const e of entries || []) {
       const id = e.target && e.target.id, r = e.contentRect;
       if (id === "overlay") {
-        const sig = r ? r.width + "x" + r.height : "";
+        // A hidden overlay reports 0x0: not a box, so coming back at the same size is an unchanged key.
+        const sig = r && r.width > 0 && r.height > 0 ? r.width + "x" + r.height : ovSig;
         if (sig !== ovSig) { ovSig = sig; bump = true; }
       } else if (!settling) bump = true;
     }

@@ -226,6 +226,8 @@ window.ScrollFade = (function () {
     pendingRoots.add(root);
   }
   function flush() {
+    // A content mutation may flip a pane's overflow or padding through a class: re-resolve the cached style.
+    styleGen++;
     const roots = pendingRoots, full = pendingFull;
     if (full || !roots || !roots.size) return paintAll();
     timer = 0; pendingRoots = null;
@@ -235,6 +237,12 @@ window.ScrollFade = (function () {
     queue(root);
     if (timer) return;
     timer = setTimeout(flush, SCHEDULE_MS);
+  }
+  // Every record of a batch counts: each distinct layer is queued, and one record with no layer widens the batch.
+  function scheduleRecs(recs) {
+    if (!recs || !recs.length) { schedule(null); return; }
+    for (const rec of recs) { const l = layerOf(rec); if (!l) { schedule(null); return; } }
+    for (const rec of recs) schedule(layerOf(rec));
   }
   // The screen layer a mutation/flip record belongs to, or null (= paint all).
   function layerOf(rec) {
@@ -298,7 +306,7 @@ window.ScrollFade = (function () {
   const ro = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleViewport) : null;
   // Deliberately NOT one observer over document.body: the HUD rewrites classes
   // every frame during a race, and every callback would force a layout read.
-  const contentMo = typeof MutationObserver === "function" ? new MutationObserver((recs) => schedule(recs && recs[0] ? layerOf(recs[0]) : null)) : null;
+  const contentMo = typeof MutationObserver === "function" ? new MutationObserver((recs) => scheduleRecs(recs)) : null;
   const screenMo = typeof MutationObserver === "function" ? new MutationObserver((recs) => settle(false, recs && recs.length === 1 ? layerOf(recs[0]) : null)) : null;
 
   function watch(el) {
