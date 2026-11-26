@@ -1,8 +1,13 @@
 {
-  "why": "Shrink-only baseline of corner-frame offenders (tests/unit/corner-frames.test.mjs): stable key -> measured offset m. Delete a row when it is fixed; never add one. Regenerate: node tools/track/corner-frames.cjs --baseline",
+  "why": "Shrink-only baseline of corner-frame offenders (tests/unit/corner-frames.test.mjs): stable key -> measured offset m. Delete a row when it is fixed; never add one. Every row is also ALLOW-LISTED with a reason below (Bryce, #5652, 2026-11-26: \"Allow-list all 3\"); the allow map is hand-kept, regenerate rows with: node tools/track/corner-frames.cjs --baseline (the tool carries allow through).",
   "rows": {
     "bahrain|T6": 28,
     "bahrain|T7": 32,
     "imola|T7": 19
+  },
+  "allow": {
+    "bahrain|T6": "Re-seating turn 6 breaks tests/specs/foundation/bahrain.js; the foundation spec pins the current frame (#5652).",
+    "bahrain|T7": "Re-seating turn 7 breaks tests/specs/foundation/bahrain.js; the foundation spec pins the current frame (#5652).",
+    "imola|T7": "Tosa half-heading point is pinned by FIA S1 = 115 m; moving it breaks the sector split (#5652)."
   }
 }
