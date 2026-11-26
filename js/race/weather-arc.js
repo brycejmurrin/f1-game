@@ -23,6 +23,8 @@ const WeatherArc = (function () {
   const STORM_AT = 1.25;
 
   const TAU_WET = 8, TAU_DRY = 36;   // seconds to wet and dry the road
+  // frame.wetnessSegs length: the RainCells grid (24), fixed so a renderer can size a uniform array to it.
+  const WET_SEGS = 24;
   const hasTM = () => typeof TyreModel !== "undefined" && !!TyreModel && !!TyreModel.treadFor;
   const wetOf = (w) => hasTM() ? TyreModel.wetness(asRain(w), null)
     : asRain(w) === "rain" ? 1 : w === "wet" ? 0.5 : 0;
@@ -595,6 +597,7 @@ const WeatherArc = (function () {
     function syncWetness(dt, snap) {
       const frame = G.frame;
       if (!frame) return;
+      syncSegs(frame, dt);
       const knobs = (typeof LightKnobs !== "undefined" && LightKnobs) ? LightKnobs.LT : null;
       if (knobs && typeof knobs.wetness === "number" && knobs.wetness >= 0) {
         frame.wetness = knobs.wetness;
@@ -610,14 +613,50 @@ const WeatherArc = (function () {
       frame.wetness = cur + (wetTarget - cur) * (snap ? 1 : dt > 0 ? Math.min(1, dt * 0.8) : 0);
     }
 
+    // ── Per-segment road wetness (#6909 phase 1: data only) ─────────────────
+    // frame.wetness is ONE value, the view car's road, so a soaked sector ahead
+    // reads dry until the camera drives in. frame.wetnessSegs carries the road
+    // along the whole lap beside it: WET_SEGS equal arc segments, segment i
+    // centred on lap fraction (i + 0.5) / WET_SEGS (RainCells.segFrac), each the
+    // along-lap wetness there — no drying line (that is lateral, per car). Fixed
+    // length, so a renderer can bind it as a uniform array; lap-wide weather
+    // fills every slot with the lap value. No renderer reads it yet (phase 2).
+    const _segT = new Float64Array(WET_SEGS);
+    /** frame.wetnessSegs, from syncWetness: the tuner pin fills every slot; else
+     *  the same 0.8/s ramp as frame.wetness (dt null or <= 0 snaps), so a settle
+     *  or a chip cut eases per segment exactly as the global value does. */
+    function syncSegs(frame, dt) {
+      let out = frame.wetnessSegs;
+      if (!(out instanceof Float32Array) || out.length !== WET_SEGS) out = frame.wetnessSegs = new Float32Array(WET_SEGS);
+      const lt = typeof LightKnobs !== "undefined" && LightKnobs ? LightKnobs.LT : null;
+      if (lt && typeof lt.wetness === "number" && lt.wetness >= 0) { out.fill(lt.wetness); return; }
+      const step = dt > 0 ? Math.min(1, dt * 0.8) : 1, tgt = sectorWetness(_segT);
+      for (let i = 0; i < WET_SEGS; i++) out[i] += (tgt[i] - out[i]) * step;
+    }
+    /** Target wetness per arc segment into `out` (length WET_SEGS), unlagged.
+     *  A local shower resamples the rain-cell grid; otherwise the lap value. */
+    function sectorWetness(out) {
+      out = out || new Float64Array(WET_SEGS);
+      const a = arc;
+      if (local(a) && hasRC()) {
+        if (typeof a.w0 !== "number") adopt(a);
+        const g = segs(a);
+        for (let i = 0; i < WET_SEGS; i++) out[i] = g.length === WET_SEGS ? g[i] : RainCells.sample(g, (i + 0.5) / WET_SEGS);
+      } else {
+        const w = G.trackWetness ? G.trackWetness() : wetness();
+        for (let i = 0; i < WET_SEGS; i++) out[i] = w;
+      }
+      return out;
+    }
+
     return {
       setWeatherLive, setTimeOfDay, weather,
-      startArc, tick, syncWetness, wetness, wetnessAt, dryLine, viewWetness, rainfallAt, viewRainfall, sheltered, rainSectors, planFor, previewPlan, previewArc, startChangeable, endChangeable, restoreBase, endSession,
+      startArc, tick, syncWetness, wetness, wetnessAt, sectorWetness, dryLine, viewWetness, rainfallAt, viewRainfall, sheltered, rainSectors, planFor, previewPlan, previewArc, startChangeable, endChangeable, restoreBase, endSession,
       get arc() { return arc; }, set arc(v) { arc = v; grooveEnd = null; if (!arc) setWeatherLive(G.raceWeather); },
       get changeable() { return changeable; }, set changeable(v) { changeable = v; },
       get plan() { return plan; }, set plan(v) { plan = v; },
     };
   }
-  return { create, arcSeq, showerStopPays, LADDER, VALID, TARGETS };
+  return { create, arcSeq, showerStopPays, LADDER, VALID, TARGETS, WET_SEGS };
 })();
 Object.freeze(WeatherArc);
