@@ -32,6 +32,7 @@ const src = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 globalThis.M4 = eval(src("js/core/mat4.js") + ";M4");
 globalThis.NetInterp = eval(src("js/net/interp.js") + ";NetInterp");
 globalThis.NetSnapshot = eval(src("js/net/snapshot.js") + ";NetSnapshot");
+globalThis.NetWire = eval(src("js/net/wire-schema.js") + ";NetWire");   // NetSession / QualiWire / NetPlay read the wire table
 globalThis.NetSession = eval(src("js/net/session.js") + ";NetSession");
 globalThis.QualiWire = eval(src("js/net/quali-wire.js") + ";QualiWire");
 globalThis.StrategyWire = eval(src("js/net/strategy-wire.js") + ";StrategyWire");

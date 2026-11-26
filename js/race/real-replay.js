@@ -399,18 +399,30 @@ const RealReplay = (function () {
       return true;
     }
 
-    // A seek can skip every frame before a retirement. Rank the traces at the
+    // A seek can skip every frame before a retirement. Order the traces at the
     // last instant the subject was running, using the same stable progress order.
-    function retirementRank(subject) {
+    function retirementOrder(subject) {
       const tr = run.cars.get(subject)?.tr;
-      if (!tr) return -1;
+      if (!tr) return [];
       const t = tr.end + ENDED_S, order = [];
       for (const [car, f] of run.cars) {
         if (!f.tr) continue;
         const point = sampleAt(f.tr, t, at);
         if (!point.ended) order.push({ car, prog: point.prog });
       }
-      return order.sort((a, b) => b.prog - a.prog).findIndex((entry) => entry.car === subject);
+      return order.sort((a, b) => b.prog - a.prog).map((entry) => entry.car);
+    }
+    // The nearest car still running in direction d from the retired subject's slot in the order at its retirement.
+    // Cars that retired since drop out of that order instead of shifting a rank into `running`.
+    function retiredNeighbour(subject, d, running) {
+      const order = retirementOrder(subject), i = order.indexOf(subject), n = order.length;
+      if (i < 0 || !d) return null;
+      const step = d > 0 ? 1 : -1;
+      for (let k = 1, left = Math.abs(d); k <= n; k++) {
+        const car = order[((i + k * step) % n + n) % n];
+        if (running.includes(car) && --left === 0) return car;
+      }
+      return null;
     }
 
     function setFollow(c, snap = true) {
@@ -430,10 +442,8 @@ const RealReplay = (function () {
       if (typeof want === "string") c = running.find((x) => run.cars.get(x).d && run.cars.get(x).d.code === want) || null;
       else {
         const i = running.indexOf(run.follow), d = want | 0;
-        // A retired follow car left `running`: the car behind it moved up into its slot, so +1 is that slot and -1 the one ahead.
-        const rank = i >= 0 ? i : retirementRank(run.follow);
-        const at = rank < 0 ? 0 : rank + d - (i < 0 && d > 0 ? 1 : 0);
-        c = running[(at % running.length + running.length) % running.length];
+        if (i >= 0) c = running[((i + d) % running.length + running.length) % running.length];
+        else c = retiredNeighbour(run.follow, d, running) || running[0];
       }
       if (c) setFollow(c);
       return c ? c.code : null;

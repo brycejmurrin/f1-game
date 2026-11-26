@@ -143,7 +143,6 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `gfx-escalation.js` | `GfxEscalation` | tag | GfxEscalation: when a backend exhausts its ctx-lost reload budget, decide between the terminal Graphics unavailable panel and an in-tab title-menu recovery… |
-| `thermal-drift.js` | `ThermalDrift` | tag | ThermalDrift: a pure, clock-free helper for a phone that throttles over a long session (#2652). |
 | `governor.js` | `PerfGov` | tag | adaptive-performance governor + mobile crash sentinel for js/game.js. |
 | `menu-teardown.js` | `MenuTeardown` | tag | MenuTeardown: software-GL readback cover, sync-task probes, and UI-yield helpers for quit-to-menu and garage-close teardown. |
 | `menu-quit-tail.js` | `MenuQuitTail` | tag | deferred quit-to-menu tail (js/game.js quitToMenu after #overlay is up). |
@@ -157,6 +156,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `metrics-overlay.js` | `GameMetrics` | tag | GameMetrics: toggleable in-game FPS / car / log overlay. |
 | `three-inspector.js` | `ThreeInspector` | LAZY_AGENT | ThreeInspector: OPT-IN dev panel, the official three.js Inspector (Performance / Memory / Timeline / Viewer / Parameters / Console) on the TLX renderer. |
 | `gfx-debug-overlay.js` | `GfxDebug` | LAZY_DEV | GfxDebug: ON-SCREEN GFX DIAGNOSTIC (?gfxdebug=1 / apex26.gfxDebug="1"). |
+| `thermal-drift.js` | `ThermalDrift` | LAZY_PERF | ThermalDrift: a pure, clock-free helper for a phone that throttles over a long session (#2652). |
 | `soak-run.js` | `SoakRun` | LAZY_PERF | SoakRun: the hands-free half of PhoneRecorder (AUTO SOAK). |
 | `gpu-test-run.js` | `GpuTestRun` | LAZY_PERF | GpuTestRun: the one-tap GPU TEST on a real phone (SETTINGS > METRICS > PHONE TEST > GPU TEST). |
 | `phone-recorder.js` | `PhoneRecorder` | LAZY_PERF | PhoneRecorder: a phone-only soak recorder (issue #1633). |
@@ -180,7 +180,6 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `legends.js` | `Legends` | tag | LEGENDS: twelve historic drivers, their record, a tribute livery and the period car each of them raced. |
 | `settings-defaults.js` | `SettingsDefaults` | tag | Global factory preferences. |
 | `garage-defaults.js` | `GarageDefaults` | tag | GarageDefaults: the SHIPPED DEFAULT garage (parts, liveries, setups, team/driver) in one file, as data. |
-| `circuit-lore.js` | `CircuitLore` | tag | CIRCUIT LORE: the thing about each circuit a broadcast would say. |
 | `garage-entrance-motion.js` | `GarageEntranceMotionData` | LAZY_RACE | Blender evaluated entrance curves. |
 | `garage-departure-motion.js` | `GarageDepartureMotion` | LAZY_RACE_SESSION | Blender-authored departure transforms. |
 | `tab-utils.js` | `DataTabUtils` | LAZY_DATA | shared Data Hub driver colors, lane identity counts and the OpenF1 live-window test. |
@@ -203,6 +202,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `real-race-fetch.js` | `DataRealRaceFetch` | LAZY_DATA | real-race session cache and position traces. |
 | `real-race-tab.js` | `DataRealRace` | LAZY_DATA | DATA HUB RACE IT tab. |
 | `hub.js` | `DataHub` | LAZY_DATA | DataHub: F1 data overlay (#datahub). |
+| `circuit-lore.js` | `CircuitLore` | LAZY_AUDIO | CIRCUIT LORE: the thing about each circuit a broadcast would say. |
 
 **`js/career/`**
 
@@ -777,6 +777,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `lobby-settings.js` | `LobbySettings` | LAZY_NET | LobbySettings: VS FRIEND race-settings normalise + custom-circuit wire payload. |
 | `interp.js` | `NetInterp` | LAZY_NET | NetInterp — draw a rival smoothly from late, reordered or missing poses. |
 | `snapshot.js` | `NetSnapshot` | LAZY_NET | NetSnapshot — what actually goes on the wire, and how a rival is drawn smoothly from packets that arrive late, out of order, or not at all. |
+| `wire-schema.js` | `NetWire` | LAZY_NET | NetWire — the ONE declaration of every reliable VS FRIEND event (#6859 phase 1). |
 | `session.js` | `NetSession` | LAZY_NET | NetSession — the layer between a transport and the game. |
 | `quali-wire.js` | `QualiWire` | LAZY_NET | QualiWire — one validation site for a peer's qualifying time. |
 | `strategy-wire.js` | `StrategyWire` | LAZY_NET | StrategyWire — the versioned tyre and pit payload on the reliable channel. |

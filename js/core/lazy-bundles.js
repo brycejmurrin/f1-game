@@ -913,6 +913,7 @@ function ensurePerfRig() {
   if (!files.length) return Promise.resolve(false);
   _perfLoad = loadBackendScripts(files, ApexRoster.LAZY_PERF_EDGES || [], { strict: true, loaded: perfLoaded }).then((ok) => {
     bindPerfRig();
+    try { if (typeof PerfGov !== "undefined" && PerfGov.resyncDrift) PerfGov.resyncDrift(); } catch (_) { /* governor absent */ }
     if (ok === false) _perfLoad = null;   // #5555: a dropped fetch is retried by the next ask, not latched
     return ok !== false;
   }).catch((e) => {

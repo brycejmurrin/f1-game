@@ -3615,3 +3615,74 @@ test("closing the designer cancels candidate and thumbnail work before the next 
   flushFrames();
   assert.equal(b.D.state().candidates.length, 0);
 });
+
+// #6872 R4: UNDO / REDO / load reset the elevation strip like the map, so a
+// drag or live height from the previous design never survives into the next.
+test("UNDO, REDO and load reset the elevation strip (#6872 R4)", () => {
+  const b = bootScreen();
+  let resets = 0;
+  const real = b.ctx.DesignerProfile;
+  b.ctx.DesignerProfile = Object.assign({}, real, { create(c, hooks) {
+    const api = real.create(c, hooks), orig = api.reset;
+    api.reset = () => { resets++; return orig(); };
+    return api;
+  } });
+  openGreen(b);
+  b.D.randomise(9);           // a second edit: something to undo
+  let n = resets;
+  assert.equal(b.D.undo(), true);
+  assert.ok(resets > n, "undo resets the profile");
+  n = resets;
+  assert.equal(b.D.redo(), true);
+  assert.ok(resets > n, "redo resets the profile");
+  n = resets;
+  b.D.load(plain(b.D.state().design), "load");
+  assert.ok(resets > n, "load resets the profile");
+});
+
+// #6872 R5 (bridge panel EDIT index)
+function bridgeFakeEl(tag) {
+  const e = { tag, children: [], dataset: {}, value: "", hidden: false, disabled: false, textContent: "", attrs: {}, fn: null,
+    appendChild(c) { this.children.push(c); return c; }, append(...cs) { this.children.push(...cs); },
+    removeChild(c) { this.children.splice(this.children.indexOf(c), 1); },
+    get firstChild() { return this.children[0] || null; },
+    setAttribute(k, v) { this.attrs[k] = v; }, focus() {}, trim() { return this; } };
+  return e;
+}
+
+function bootBridgePanel() {
+  const { ctx } = bootEditor();
+  ctx.document = { createElement: bridgeFakeEl };
+  vm.runInContext(read("js/editor/props.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/editor/props.js") });
+  vm.runInContext(read("js/editor/bridge-panel.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/editor/bridge-panel.js") });
+  const el = (tag, cls, text) => { const e = bridgeFakeEl(tag); e.textContent = text || ""; return e; };
+  const btn = (label, cls, fn) => { const e = bridgeFakeEl("button"); e.textContent = label; e.fn = fn; return e; };
+  const group = () => bridgeFakeEl("div");
+  const changes = [];
+  const panel = ctx.DesignerBridges.create({ el, btn, group, onChange: (d, msg) => changes.push({ d, msg }) });
+  const find = (n, pred) => { const out = []; (function w(x) { if (pred(x)) out.push(x); x.children.forEach(w); })(n); return out; };
+  return { panel, ctx, changes, find };
+}
+
+test("bridge panel: removing another bridge drops the EDIT index so apply cannot write to a different bridge (R5)", () => {
+  const { panel, find, changes } = bootBridgePanel();
+  const d = Object.assign(design(), { bridges: [{ s: 0.1, halfM: 160, rise: 8 }, { s: 0.4, halfM: 160, rise: 8 }, { s: 0.7, halfM: 160, rise: 8 }] });
+  panel.refresh({ design: d, sel: 3 });
+  const list = find(panel.root, (x) => x.dataset && x.dataset.role === "bridge-list")[0];
+  const rows = () => list.children;
+  const edit2 = rows()[2].children.find((c) => c.textContent === "EDIT");
+  edit2.fn();                                              // editing bridge 3 (index 2)
+  const apply = find(panel.root, (x) => x.dataset && x.dataset.role === "apply-bridge")[0];
+  assert.equal(apply.hidden, false, "editing is armed");
+  // The list shrinks behind the panel (REMOVE of bridge 1, or an UNDO): index 2 no longer exists… and index 1 would be the wrong bridge.
+  const shrunk = Object.assign({}, d, { bridges: [d.bridges[1], d.bridges[2]] });
+  panel.refresh({ design: shrunk, sel: 3 });
+  assert.equal(apply.hidden, true, "a list change leaves edit mode");
+  apply.fn();
+  assert.equal(changes.length, 0, "apply with no bridge being edited writes nothing");
+  // Same length, different content (reorder / undo) also drops it.
+  rows()[0].children.find((c) => c.textContent === "EDIT").fn();
+  assert.equal(apply.hidden, false);
+  panel.refresh({ design: Object.assign({}, shrunk, { bridges: [shrunk.bridges[1], shrunk.bridges[0]] }), sel: 3 });
+  assert.equal(apply.hidden, true, "a reorder leaves edit mode");
+});

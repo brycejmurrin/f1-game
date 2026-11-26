@@ -174,7 +174,7 @@ const PhoneRecorder = (function () {
           api: t && t.api || null, path: t && t.path || null, pin: t && t.pin != null ? String(t.pin) : null }; }, null),
       // Per-subsystem JS ms/frame over the span ring's last ~8.5 s (PerfSpans is ON only while recording).
       spans: safe(() => { const st = L.PerfSpans.stats(); const o = {};
-        for (const k of Object.keys(st)) o[k] = { p50: st[k].p50, p95: st[k].p95 }; return o; }, null),
+        for (const k of Object.keys(st)) o[k] = { p50: st[k].p50, p95: st[k].p95, p99: st[k].p99 }; return o; }, null),
       visibility: safe(() => document.visibilityState, null),
       // The backend's GPU frame timer (three's timestamp feature: WebGPU timestamp-query or
       // EXT_disjoint_timer_query_webgl2). Read only; GPU TEST turns it on. ms -1 = no result.

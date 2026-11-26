@@ -199,15 +199,30 @@ const NetSession = (function () {
       }
     }
 
+    // THE ONE INGRESS (#6859). Every reliable frame goes through its NetWire
+    // row — size, parse, declared type, decode, sender role — before any
+    // handler runs, and a handler is handed only the decoded value. A refused
+    // frame is dropped and counted (wireDrops), never thrown, and never counts
+    // as "heard": a peer flooding junk must not keep a dead link alive.
+    const wireRole = typeof opts.role === "string" ? opts.role : null;
+    const drops = Object.create(null);
     function onEventJson(data) {
-      let msg;
-      try { msg = JSON.parse(typeof data === "string" ? data : new TextDecoder().decode(NetSnapshot.toView(data))); }
-      catch (e) { return false; }            // malformed event: drop, never throw
-      if (!msg || typeof msg.t !== "string") return false;
-      const list = eventHandlers.get(msg.t);
+      let raw, bytes;
+      try {
+        if (typeof data === "string") { raw = data; bytes = data.length; }
+        else {
+          const view = NetSnapshot.toView(data);
+          bytes = view.byteLength;
+          // Never decode a frame no row could hold.
+          raw = bytes <= NetWire.MAX_FRAME_BYTES ? new TextDecoder().decode(view) : "";
+        }
+      } catch (e) { drops.malformed = (drops.malformed || 0) + 1; return false; }
+      const got = NetWire.accept(raw, bytes, wireRole);
+      if (got.drop) { drops[got.drop] = (drops[got.drop] || 0) + 1; return false; }
+      const list = eventHandlers.get(got.t);
       if (!list) return false;
       for (const fn of list) {
-        try { fn(msg.d, msg.t); } catch (e) { /* as above */ }
+        try { fn(got.d, got.t); } catch (e) { /* as above */ }
       }
       return true;
     }
@@ -314,6 +329,9 @@ const NetSession = (function () {
       },
       onState(fn) { stateHandlers.push(fn); return this; },
       onSnapshot(fn) { snapshotHandlers.push(fn); return this; },
+      // Handlers registered here receive NetWire-decoded values (NetWire.on reads this).
+      wireDecoded: true,
+      wireDrops: () => Object.assign({}, drops),
       onEvent(type, fn) {
         if (!eventHandlers.has(type)) eventHandlers.set(type, []);
         eventHandlers.get(type).push(fn);

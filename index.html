@@ -1795,7 +1795,7 @@
     <h3 class="pm-group-h" id="pm-pace-h">OVERALL SPEED <b id="pm-pace-v">84%</b></h3>
     <label class="tune-row" for="pm-pace">
       <input id="pm-pace" type="range" min="1" max="19" step="1" value="11" aria-label="Overall speed" aria-valuetext="84%" aria-describedby="pm-pace-help"></label>
-    <p id="pm-pace-help" class="adv-help">How fast the whole field runs, you and the AI alike, as a share of real F1 speed. Lower gives more time to react; it does not change who is quicker.</p>
+    <p id="pm-pace-help" class="adv-help">How fast the whole field runs, you and the AI alike, as a share of real F1 speed. Lower gives more time to react; it does not change who is quicker. It scales speed but not grip, braking or coast drag, so braking zones get longer as it rises.</p>
 
 
 
@@ -1901,7 +1901,7 @@
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">WEIGHT <b id="pm-weight-v">5</b></span>
         <input id="pm-weight" type="range" min="1" max="10" step="1" value="5" aria-label="Weight"></label>
-      <p class="adv-help">How heavy the car feels as it rotates. Higher = more planted and settled, and it takes longer to swing into a corner; lower = lighter and snappier. 5 is the standard car.</p>
+      <p class="adv-help">How heavy the car feels as it rotates. Higher = more planted and settled, and it takes longer to swing into a corner; lower = lighter and snappier. 5 is the standard car; a touch screen starts at 10 until you move the slider.</p>
     </div>
 
     <h3 class="adv-sec">DRIVER AID</h3>
@@ -3921,7 +3921,6 @@
 <script defer crossorigin="anonymous" src="js/input/controller-profiles.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/input.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/stub.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/data/circuit-lore.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/parts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/liveries.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/custom-liveries.js?v=dev"></script>
@@ -4055,7 +4054,6 @@
 <script defer crossorigin="anonymous" src="js/camera/cam-tuner-boot.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/brake-cue.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/steer-tuning.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/thermal-drift.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/governor.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/menu-teardown.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/menu-quit-tail.js?v=dev"></script>

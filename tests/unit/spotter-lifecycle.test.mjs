@@ -21,6 +21,8 @@ function fixture() {
   const rival = { s: 100, x: -2 };
   const G = { state: "race", soundOn: true, player, cars: [player, rival], track: { total: 1000 },
     store: { get: () => true }, vTop: () => 100, radio: { pack, volume: () => 1 } };
+  const captions = [];
+  ctx.Captions = { onSpotter: (text, key, heard) => captions.push({ text, key, heard }) };
   const spotter = ctx.Spotter.create(G);
   const tick = (count = 10) => { for (let i = 0; i < count; i++) spotter.update(0.1); };
   const finish = (audible = false) => {
@@ -28,7 +30,7 @@ function fixture() {
     if (audible) assert.equal(old.options.valid(), true);
     live = null; old.options.onEnd?.(); return old;
   };
-  return { G, rival, tick, finish, requests, pack };
+  return { G, rival, tick, finish, requests, pack, captions };
 }
 
 test("a warning lost during decoding is retried while the car remains alongside", () => {
@@ -150,4 +152,14 @@ test("real VoicePack drops stale still-there audio but retains the heard warning
   decoders.shift()({ duration: 0.5 }); await drain();
   assert.equal(starts.length, 2, "clear reaches audio after the heard initial warning");
   pack.stop("spotter");
+});
+
+test("CAPTIONS ON still captions a spotter call with SOUND off or voice volume 0 (#6883 row 1)", () => {
+  for (const mute of [g => { g.soundOn = false; }, g => { g.radio.volume = () => 0; }]) {
+    const f = fixture(); mute(f.G); f.tick();
+    assert.equal(f.requests.length, 0, "nothing is voiced");
+    assert.deepEqual(f.captions.map(c => [c.text, c.heard]), [["Car left.", false]]);
+    f.rival.s += 30; f.tick();
+    assert.deepEqual(f.captions.map(c => c.text), ["Car left.", "Clear."]);
+  }
 });

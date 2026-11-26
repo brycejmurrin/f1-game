@@ -218,6 +218,7 @@
     "js/perf/gfx-debug-overlay.js"
   ],
     LAZY_PERF: [
+    "js/perf/thermal-drift.js",
     "js/perf/soak-run.js",
     "js/perf/gpu-test-run.js",
     "js/perf/phone-recorder.js",
@@ -346,6 +347,7 @@
     "js/audio/voice-pack.js",
     "js/audio/battle-earcon.js",
     "js/audio/radio-voice.js",
+    "js/data/circuit-lore.js",
     "js/audio/announcer-recorded.js",
     "js/audio/announcer.js",
     "js/audio/panel.js",
@@ -600,6 +602,7 @@
     "js/net/lobby-settings.js",
     "js/net/interp.js",
     "js/net/snapshot.js",
+    "js/net/wire-schema.js",
     "js/net/session.js",
     "js/net/quali-wire.js",
     "js/net/strategy-wire.js",
@@ -628,6 +631,10 @@
     [
       "js/net/quali-wire.js",
       "js/net/netplay.js"
+    ],
+    [
+      "js/net/wire-schema.js",
+      "js/net/quali-wire.js"
     ],
     [
       "js/net/strategy-wire.js",

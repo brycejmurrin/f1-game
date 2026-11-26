@@ -29,22 +29,10 @@ const NetPlay = (function () {
     canPublish: (role) => role !== "spectator",
   });
 
-  const EV = {
-    MODEL: "model", STRATEGY: "strategy", // versioned reliable compatibility + tyre/pit state
-    HELLO: "hello",                       // profile exchange — re-sent on every change
-    SETTINGS: "settings",                 // host -> guest race setup (live, in the room)
-    READY: "ready",                       // either way: I am done choosing
-    GO: "go",                             // host -> guest: leave the room, build the race
-    START: "start",                       // host -> guest lights-out tick
-    ARMED: "armed",                       // guest -> host: my circuit is built, name the moment
-    QUALI: "quali",                       // a driven qualifying lap: {driverId, t}
-    QLIVE: "qlive",
-    LAP: "lap",                           // completed lap / sector
-    RESULT: "result",                     // final classification
-    CAUTION: "caution",                   // host -> guest race control (flags)
-    BYE: "bye",                           // clean leave
-    LEFT: "left",                         // host -> guests: this wire id went back to AI
-  };
+  // The event names and every row's size, decode, sender role and rate are
+  // NetWire's (js/net/wire-schema.js, #6859): one table, loaded first.
+  const EV = NetWire.EV;
+
 
   // WIRE CLAMPS AND THE QUALI SEAM — module-level, shared with the lobby.
   //
@@ -134,19 +122,9 @@ const NetPlay = (function () {
     return Number.isFinite(n) && n >= 1 ? Math.min(top, Math.floor(n)) : top;
   }
   let G_lapsTarget = () => 0;   // bound to the façade in create()
-  // Host ingress caps per guest connection, per EVENT_WINDOW_MS (bindSession).
-  const LAP_RATE = 4, STRATEGY_RATE = 8, MODEL_RATE = 4;   // MODEL: a start + its ack each count
-  // A peer's LAP keeps only these scalar fields: the debug log must not pin a
-  // hostile peer's extra payload for the rest of the race (#6624).
-  const LAP_KEYS = ["lap", "time", "best", "code", "driverId", "fin", "retired", "invalid", "epoch"];
-  function lapRecord(d) {
-    const out = {};
-    for (const k of LAP_KEYS) {
-      const v = d[k];
-      if (typeof v === "number" || typeof v === "boolean" || v === null || (typeof v === "string" && v.length <= 64)) out[k] = v;
-    }
-    return out;
-  }
+  // Host ingress caps per guest connection, per EVENT_WINDOW_MS (bindSession):
+  // NetWire.RATES, the table's rate column. MODEL: a start + its ack each count.
+  const LAP_RATE = NetWire.RATES.lap.host, STRATEGY_RATE = NetWire.RATES.strategy.host, MODEL_RATE = NetWire.RATES.model.host;
   function lapTimeOk(t, total) {
     return Number.isFinite(t) && t > (total > 0 ? total / SPEED_LIMIT : 0) && t < QUALI_MAX_S;
   }
@@ -155,7 +133,7 @@ const NetPlay = (function () {
   // evaluates, so the manifest edge loads it first. The names stay here: the
   // lobby calls NetPlay.bindQuali / qualiReporters, and lapTimeOk reads QUALI_MAX_S.
   const {
-    validQuali, validQualiLive, rateGate, bindQuali, qualiReporters,
+    validQuali, validQualiLive, bindQuali, qualiReporters,
     QUALI_MIN_S, QUALI_MAX_S, QUALI_RATE, QUALI_GUEST_RATE, EVENT_WINDOW_MS,
   } = QualiWire.create(EV);
   function validClassification(rows, cars) {
@@ -292,7 +270,7 @@ const NetPlay = (function () {
     }
     let lastSlotFallback = null;
     // Lap/sector times rivals reported. A DEBUG CHANNEL, not gameplay: the only
-    // reader is __apex.netPeerLaps(). Entries are lapRecord() copies of what reportLap's
+    // reader is __apex.netPeerLaps(). Entries are NetWire.lapRecord() copies (the LAP row) of what reportLap's
     // caller passed — today `{lap, time, best, code, fin?}` from js/game.js, so `code` and
     // not `driverId` is what tells two reporters apart. Give this a driverId
     // before anything gameplay-facing starts reading it.
@@ -523,16 +501,22 @@ const NetPlay = (function () {
     }
 
     function bindSession(id, s) {
-      const hostGate = rateGate(QUALI_RATE), guestGate = rateGate(QUALI_GUEST_RATE);
-      const qualiGate = () => (role === "host" ? hostGate : guestGate)();
+      const hostGate = NetWire.gate("quali", "host"), guestGate = NetWire.gate("quali", "guest");
+      const qualiGate = () => (role === "host" ? hostGate : guestGate).take();
       // The host relays a guest's LAP and STRATEGY to every other guest, and a
       // receiver closes its link at EVENT_INBOX_CAP queued events (transport.js):
       // ungated, one guest's burst got the others disconnected. Per connection,
       // like QUALI; a real client sends one LAP a lap and STRATEGY at ~1 Hz plus
       // a few phase changes in a pit stop.
-      const lapGate = rateGate(LAP_RATE), strategyGate = rateGate(STRATEGY_RATE);
       // MODEL can reset lastStrategy, i.e. a full AI strategy rebroadcast to every guest (#6623).
-      const modelGate = rateGate(MODEL_RATE);
+      // ONE bucket per row with a host rate (lap, strategy, model), from NetWire's table.
+      const hostBuckets = new Map();
+      const underHostRate = (name) => {
+        const key = NetWire.row(name).rate;
+        if (!key || !NetWire.RATES[key].host || key === "quali") return true;   // quali: bindQuali's shared bucket
+        if (!hostBuckets.has(key)) hostBuckets.set(key, NetWire.gate(key, "host"));
+        return hostBuckets.get(key).take();
+      };
       function sendersOwnDriver(d, legacyLap = false) {
         if (sessionKinds.get(id) === SpectatePolicy.SPECTATOR) return false;
         if (role !== "host") return true;
@@ -604,15 +588,16 @@ const NetPlay = (function () {
       });
       for (const type of Object.keys(EV)) {
         const name = EV[type];
-        s.onEvent(name, (d) => {
+        // d is NetWire-decoded (its row's normalised value), never the raw payload.
+        NetWire.on(s, name, (d) => {
           eventLog.push({ type: name, from: id });   // never the peer's payload: unvalidated here (#6624)
           if (eventLog.length > 32) eventLog.shift();
           // A spectator may negotiate protocol compatibility, but never owns a
           // car, race control or a result. Ignore every gameplay declaration.
           if (role === "host" && sessionKinds.get(id) === SpectatePolicy.SPECTATOR && name !== EV.MODEL) return;
-          if (role === "host" && ((name === EV.LAP && !lapGate()) || (name === EV.STRATEGY && !strategyGate()) || (name === EV.MODEL && !modelGate()))) return;
+          if (role === "host" && (name === EV.LAP || name === EV.STRATEGY || name === EV.MODEL) && !underHostRate(name)) return;
           if (name === EV.MODEL) {
-            if (!d || d.physics !== modelRevision() || d.strategy !== STRATEGY_VERSION) {
+            if (d.physics !== modelRevision() || d.strategy !== STRATEGY_VERSION) {
               // ONE INCOMPATIBLE PEER IS ONE RIVAL, NOT THE SESSION — the rule
               // onClose and BYE below already follow. A bare stop() here ended
               // the whole race for everybody because ONE joiner arrived on an
@@ -630,7 +615,7 @@ const NetPlay = (function () {
               }
               return;
             }
-            if (typeof d.epoch === "string" && d.epoch.length <= 64) {
+            if (d.epoch !== undefined) {   // the row keeps only a string of <= 64
               // Only a NEW epoch re-sends every strategy; a repeat must not (#6623).
               if (peerEpochs.get(id)?.value !== d.epoch) { peerEpochs.set(id, { value: d.epoch, json: JSON.stringify(d.epoch) }); lastStrategy = -Infinity; }
               if (!d.ack) s.sendEvent(EV.MODEL, { physics: modelRevision(), strategy: STRATEGY_VERSION, epoch, ack: true });
@@ -638,7 +623,7 @@ const NetPlay = (function () {
           }
           // Each receiver names a fresh race epoch. A queued pit event from a
           // previous race on the same circuit cannot change this race's tyres.
-          if (name === EV.STRATEGY && d && d.epoch === epoch && G.track && G.track.def && d.track === G.track.def.id) {
+          if (name === EV.STRATEGY && d.epoch === epoch && G.track && G.track.def && d.track === G.track.def.id) {
             // Only the connected host may speak for AI (or relay humans).
             // Guests sending to a host remain restricted to their seated car.
             const fromHost = (role === "guest" || role === SpectatePolicy.SPECTATOR) && s === session;
@@ -664,19 +649,13 @@ const NetPlay = (function () {
               lastReason = "bye";
             } else stop("bye");
           }
-          // CLAMP THE WIRE VALUE. `hold` is peer-supplied and reaches countT
-          // as `(COUNTDOWN_S + hold) - …`: a missing or non-numeric hold makes
-          // countT NaN, every comparison against it false, and the guest sits
-          // on the grid forever with no lamps and no way out. The __apex twin
-          // (js/agent/apex.js netStartArm) already defaults it; the wire needs
-          // the same, plus a range — a hostile 1e9 hold is the same hang.
-          // ONE START per race: once the countdown has consumed it (startSeen,
+          // THE WIRE VALUE IS CLAMPED by START's row: `hold` reaches countT as
+          // `(COUNTDOWN_S + hold) - …`, and a missing, non-numeric or 1e9 hold
+          // sat the guest on the grid forever (the __apex twin, apex.js
+          // netStartArm, defaults it the same way). ONE START per race: once the countdown has consumed it (startSeen,
           // netStart null) a duplicate — the host answers every late ARMED with
           // the named moment — must not re-arm a past instant.
-          if (name === EV.START && d && d.at != null && !ownsRaceControl() && !(startSeen && !G.netStart)) {
-            const h = Number(d.hold);
-            armStart(d.at, Number.isFinite(h) ? Math.min(2, Math.max(0, h)) : 0.5);
-          }
+          if (name === EV.START && !ownsRaceControl() && !(startSeen && !G.netStart)) armStart(d.at, d.hold);
           if (name === EV.ARMED && role === "host") {
             // Only a peer that actually HOLDS a car may arm the start:
             // armedPeers counts session ids while allArmed() compares against
@@ -703,8 +682,8 @@ const NetPlay = (function () {
           // with the lobby phase. (QLIVE never reaches the classification, but
           // it is keyed by the same driverId — unbound, the same spoof paints a
           // lap-in-progress over another driver's name on the host's screen.)
-          if (name === EV.LAP && d && sendersOwnDriver(d, true)) {
-            peerLaps.push(lapRecord(d));
+          if (name === EV.LAP && sendersOwnDriver(d, true)) {
+            peerLaps.push(d);   // the row's frozen scalar record (#6624)
             if (peerLaps.length > PEER_LAPS_CAP) peerLaps.splice(0, peerLaps.length - PEER_LAPS_CAP);
             // The finishing crossing carries the OWNER's finishT (`fin`, stamped
             // at its physics crossing, raceT being shared through netStart).
@@ -773,7 +752,7 @@ const NetPlay = (function () {
           if (name === EV.RESULT && !ownsClassification() && validClassification(d, G.cars)) peerResult = d;
           // Only the host speaks for the roster; a guest naming a wire id
           // could otherwise park any rival it liked.
-          if (name === EV.LEFT && role === "guest" && d && Number.isFinite(d.wire) && remotes.has(d.wire)) {
+          if (name === EV.LEFT && role === "guest" && d.wire !== undefined && remotes.has(d.wire)) {
             if (aiReplicated) {
               // The HOST's AI drives that car now and publishes it with the
               // rest of the field: pose it from the wire, never re-simulate it.
@@ -786,7 +765,7 @@ const NetPlay = (function () {
               if (G.announce) G.announce("RIVAL DISCONNECTED", 2);
             } else handBackToAI(d.why || "peer_closed", d.wire);
           }
-          if (name === EV.CAUTION && d && !ownsRaceControl() && G.applyCaution) G.applyCaution(d);
+          if (name === EV.CAUTION && !ownsRaceControl() && G.applyCaution) G.applyCaution(d);
         });
       }
       // A guest trusts the host to speak for the field, but only for a driver
@@ -849,7 +828,7 @@ const NetPlay = (function () {
       epoch = Date.now().toString(36) + "-" + (++epochSerial);
       const incoming = opts.sessions
         || (opts.session ? [{ id: PEER_ONE, session: opts.session }] : null)
-        || [{ id: PEER_ONE, session: NetSession.create({ transport: opts.transport }) }];
+        || [{ id: PEER_ONE, session: NetSession.create({ transport: opts.transport, role }) }];
       localCar = role === SpectatePolicy.SPECTATOR ? null
         : (G.cars || []).find((c) => c.local) || G.player || null;
       remotes.clear();
@@ -1443,7 +1422,7 @@ const NetPlay = (function () {
   }
 
   // PUBLISH_HZ / INTERP_DELAY_MS / STRATEGY_VERSION / validQualiLive / QUALI_MIN_S /
-  // QUALI_MAX_S / rateGate stay module-local (QualiWire / StrategyWire still own them).
+  // QUALI_MAX_S stay module-local (NetWire / QualiWire / StrategyWire own them).
   return { create, EV, strategyState, applyStrategy,
     clampWire, validQuali, bindQuali, qualiReporters,
     QUALI_RATE, QUALI_GUEST_RATE, EVENT_WINDOW_MS, LAP_RATE, STRATEGY_RATE, MODEL_RATE };
