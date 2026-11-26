@@ -2323,7 +2323,7 @@ test("ensureScenery awaits THIS circuit's models (Assets.modelsReady with the cl
         SCENERY_DIR: "js/circuits/scenery" },
       Tracks: { LIST: [def], circuitPayloadResident: () => true },
       TrackScenery: mode === "resident" ? { monza: scenery } : {},
-      TrackBuildProps: { build() {} }, TrackModels: {}, TrackHiddenFaces: {},
+      TrackBuildProps: { build() {} }, TrackModels: {}, TrackHiddenFaces: {}, TrackGraph: {},
       Assets: { modelsReady(cap, source) {
         calls.push({ cap, source }); enterModelWait(); return modelBarrier;
       } },

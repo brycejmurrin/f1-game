@@ -15,6 +15,7 @@ const src = (f) => readFileSync(join(ROOT, f), "utf8");
 
 const TRACK_BUILD = [
   "js/render/shared/mesh-detail.js",
+  "js/track/scenery/graph.js",
   "js/track/scenery/models.js",
   "js/track/scenery/themes.js",
   "js/track/scenery/landmark-kit.js",
@@ -81,6 +82,7 @@ test("ensureTrackBuild injects LAZY_TRACK_BUILD and marks TrackBuildProps reside
     TrackBuildProps: undefined,
     TrackModels: undefined,
     TrackHiddenFaces: undefined,
+    TrackGraph: undefined,
     Tracks: {
       LIST: [{ id: "monza", custom: true, scenery: () => {} }],
       circuitPayloadResident: () => true,
@@ -100,6 +102,7 @@ test("ensureTrackBuild injects LAZY_TRACK_BUILD and marks TrackBuildProps reside
         ctx.TrackBuildProps = { build() {} };
         ctx.TrackModels = { create() {} };
         ctx.TrackHiddenFaces = { strip() {} };
+        ctx.TrackGraph = { create() {} };
         queueMicrotask(() => node.onload());
       } },
     },

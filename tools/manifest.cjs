@@ -188,10 +188,9 @@ const FULL = [
   "js/track/scenery/data.js",
   "js/track/core/space.js",
   "js/track/core/surface.js",
-  // models / themes / kits / nature / structures / city / identity / pits /
-  // venue / hidden-faces / build-props → LAZY_TRACK_BUILD (ensureScenery before
-  // the first Tracks.build). TRACK_VM still loads them for verify-track.
-  "js/track/scenery/graph.js",
+  // models / themes / graph / kits / nature / structures / city / identity /
+  // pits / venue / hidden-faces / build-props → LAZY_TRACK_BUILD (ensureScenery
+  // before the first Tracks.build). TRACK_VM still loads them for verify-track.
   "js/track/core/spline.js",
   "js/track/core/line.js",
   "js/track/core/mesh.js",
@@ -1442,6 +1441,7 @@ const LAZY_GFX_HI_EDGES = [];
 // real-replay and the coach body went lazy in their own groups (#4978, #4748).
 const LAZY_TRACK_BUILD = [
   "js/render/shared/mesh-detail.js", // MeshDetail: subdivide / bevel / normals / simplify kit for the detail tiers above ULTRA (call-time only)
+  "js/track/scenery/graph.js", // TrackGraph: read at call time by build-props / nature / city; evals against Math and Number only, so no EDGES pair
   "js/track/scenery/models.js",
   "js/track/scenery/themes.js",
   "js/track/scenery/landmark-kit.js",
@@ -2028,7 +2028,6 @@ const FULL_TIERS = {
     "js/track/scenery/data.js": "boot",
     "js/track/core/space.js": "boot",
     "js/track/core/surface.js": "boot",
-    "js/track/scenery/graph.js": "boot",
     "js/track/core/spline.js": "boot",
     "js/track/core/line.js": "boot",
     "js/track/core/mesh.js": "boot",
