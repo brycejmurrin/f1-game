@@ -628,12 +628,9 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `offsets.js` | `CamTune` | tag | PER-CAMERA-MODE framing offsets (the CAMERA TUNER's data layer): the knob registry (CAM_TUNE_DEFS), the per-mode override store (localStorage apex26.camTune),… |
-| `extra-rigs.js` | `ExtraRigs` | tag | EXTRA player camera rigs (RIVAL LOCK, PIT WALL, DRONE FOLLOW): append-only CAM_MODES solvers kept out of vantage.js for file-size headroom. |
 | `flyby-sight.js` | `FlybySight` | tag | FLYBY SIGHTLINES: what a flyby eye can actually SEE. |
 | `flyby-clear.js` | `FlybyClear` | tag | flyby eye clearance: which props are solid, the lift over a roof, and the ground floor under a crane shot. |
 | `flyby-seq.js` | `FlybySeq` | tag | FLYBY SHOT SEQUENCER: the pre-race loading screen's camera. |
-| `cam-avoid.js` | `CamAvoid` | tag | broadcast-camera wall / building avoidance for open circuits. |
-| `trackside.js` | `TracksideCams` | tag | TRACKSIDE fixed cameras: one eye per measured corner, outside the fence, auto-switching as the subject car passes. |
 | `flyby-panel.js` | `FlybyPanel` | tag | the FLYBY SHOT EDITOR pause-menu panel: pick a shot from the pre-race sequence (js/camera/flyby-seq.js), scrub the whole run, edit every pose field live… |
 | `director.js` | `Director` | tag | LIVE TV DIRECTOR (Director.create(G)): a broadcast-style camera brain for the race the player is driving. |
 | `photo-looks.js` | `PhotoLooks` | tag | photo-mode look presets: a transient grade applied while the free camera is open, restored when the visit ends. |
@@ -655,6 +652,9 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `vantage.js` | `GameCams` | tag | the camera-vantage solver for js/game.js: all per-mode framing (cockpit/hood/tcam/rear, chase/far/drift, heli/side/cinematic/low/overhead/reverse, plus… |
 | `cam-picker.js` | `CamPicker` | tag | CAM button picker: hold or right-click opens the view grid, arrow keys move it, AUTO appears only while a WATCH runs. |
 | `mode-switch.js` | `CamModes` | tag | CamModes — the PLAYER camera-mode switch UI: the CAM button (tap to cycle, hold/right-click for the picker grid) and the C-key cycle. |
+| `extra-rigs.js` | `ExtraRigs` | LAZY_RACE_SESSION | EXTRA player camera rigs (RIVAL LOCK, PIT WALL, DRONE FOLLOW): append-only CAM_MODES solvers kept out of vantage.js for file-size headroom. |
+| `trackside.js` | `TracksideCams` | LAZY_RACE_SESSION | TRACKSIDE fixed cameras: one eye per measured corner, outside the fence, auto-switching as the subject car passes. |
+| `cam-avoid.js` | `CamAvoid` | LAZY_RACE_SESSION | broadcast-camera wall / building avoidance for open circuits. |
 | `tuner-panel.js` | `CamTunerEditor` | LAZY_CAM_EDITOR | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), comfort knobs, a global baseline scope, presets,… |
 | `flyby-editor.js` | `FlybyEditor` | LAZY_CAM_EDITOR | FLYBY SHOT EDITOR DOM panel (LAZY_CAM_EDITOR). |
 

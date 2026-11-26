@@ -2401,7 +2401,7 @@
     {
       "path": "js/camera/cam-avoid.js",
       "global": "CamAvoid",
-      "roster": "tag"
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/camera/cam-comfort.js",
@@ -2446,7 +2446,7 @@
     {
       "path": "js/camera/extra-rigs.js",
       "global": "ExtraRigs",
-      "roster": "tag"
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/camera/feel.js",
@@ -2531,7 +2531,7 @@
     {
       "path": "js/camera/trackside.js",
       "global": "TracksideCams",
-      "roster": "tag"
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/camera/tuner-panel.js",
