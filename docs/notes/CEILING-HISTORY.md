@@ -4113,6 +4113,17 @@ of what `label()` reads and skips the label rebuild while it is unchanged, so th
 2026-11-26 04:35Z (comments 7182675899, 7182732066): "Raise ~+400 B, ship it" and "Raise ~140 B"; the raise stays far under the +400 B he allowed.
 Fragment: `ratchets.d/claude--hud-tyres-aria-memo-6752.json`. Human step: `ratchet-raise` (Bryce's own click).
 
+## 2026-11-26 — claude/scopes-race-6949: Scopes lifecycle scope bus, race scope migrated (#6949, #6920 U2.1)
+
+`(tree) eagerScripts` 298 → **299** (+1; the base moved 299 → 297 → 298 while this PR waited): `js/core/scopes.js` is a new boot-tier file. game.js calls
+`Scopes.register` at eval, so it cannot be lazy, and global-registry rule 1 (one file, one global) keeps it out of
+log.js / dev-flags.js. This cuts against D-052 D4(b) (eager shell down to 2.8 MB) by one small file; there is no
+smaller seam.
+`(tree) eagerCodeBytes` 4060755 → **4065441** (+4686): the bus (~3.3 KB stripped), its `scopes` Log namespace, plus the race-scope registration
+block in game.js, net of the nine hand-written reset lines it replaces.
+`js/game.js lines` 9675 → **9688** (+13) and `codeLines` 5535 → **5543** (+8): the registration block (four
+registrants with their `on` filters and snapshots) replaces nine reset lines at seven sites.
+Fragment: `ratchets.d/claude--scopes-race-6949.json`. Human step: `ratchet-raise` (Bryce's or the orchestrator's click).
 ## 2026-11-26 — claude/u42-ai-start: AiStart split from eager AiDrive (#6920 U4.2, #6960)
 
 `(tree) eagerScripts` 297 → **298** (+1) and `eagerCodeBytes` +320 (the IIFE wrapper, the freeze list and the destructure in
