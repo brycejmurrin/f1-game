@@ -453,9 +453,10 @@ if (require.main === module) {
   if (flags.has("--baseline")) {
     const out = {};
     for (const r of rows.filter((x) => x.bad).sort((a, b) => a.stable < b.stable ? -1 : 1)) out[r.stable] = r.offsetM;
-    console.log(JSON.stringify({
-      why: "Shrink-only baseline of corner-frame offenders (tests/unit/corner-frames.test.mjs): stable key -> measured offset m. Delete a row when it is fixed; never add one. Regenerate: node tools/track/corner-frames.cjs --baseline",
-      rows: out }, null, 2));
+    const prev = JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "../../tests/data/corner-frames-baseline.json"), "utf8"));
+    const allow = {};
+    for (const k of Object.keys(out)) if (prev.allow && prev.allow[k]) allow[k] = prev.allow[k];
+    console.log(JSON.stringify({ why: prev.why, rows: out, allow }, null, 2));
   } else if (flags.has("--json")) {
     console.log(JSON.stringify(show, null, 2));
   } else if (flags.has("--md")) {

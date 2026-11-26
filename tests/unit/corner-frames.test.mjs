@@ -137,3 +137,15 @@ test("broad turn-anchored banks measure their own peak beside taller neighbours"
     assert.ok(row && row.offsetM <= 2, `T${turn}: ${row?.detail}`);
   }
 });
+
+// #5652 close-out (Bryce: "Allow-list all 3"): every baselined offender carries a reason, and the
+// allow map names exactly the baseline rows. With corner-frames-roster.test.mjs (offenders ⊆ rows)
+// that means zero non-allow-listed offenders on the roster.
+test("corner-frames: every baselined offender is allow-listed with a reason", async () => {
+  const { readFileSync } = await import("node:fs");
+  const BASE = JSON.parse(readFileSync(new URL("../data/corner-frames-baseline.json", import.meta.url), "utf8"));
+  assert.deepEqual(Object.keys(BASE.allow || {}).sort(), Object.keys(BASE.rows).sort());
+  for (const [k, why] of Object.entries(BASE.allow)) assert.ok(typeof why === "string" && why.length > 20, `${k} needs a reason`);
+  const off = CF.audit(["bahrain", "imola"]).filter((r) => r.bad && !(r.stable in BASE.allow));
+  assert.deepEqual(off.map((r) => r.stable), []);
+});
