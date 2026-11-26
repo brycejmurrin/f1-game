@@ -72,6 +72,30 @@ function guardBack($) {
   window.addEventListener("keydown", () => { if (!synthEsc) pushSentinel(); }, true);   // our own Escape is no re-arm
   window.addEventListener("click", onSectionLink);
 }
+/* TT CHALLENGE LINK (#6884 A3): a #ghost= link from any Time Trial lap stages its circuit, in its conditions, as a
+   time trial against its ghost (lap time = target). Stage only, never startRace. The guest is installed first
+   (GhostShare.consumeHash in title-flow, or openChallenge). hooks: today, restoreFreePlay(), open(). */
+function stageChallenge(G, d, h) {
+  const idx = d && d.ok ? Tracks.LIST.findIndex((e) => e && e.id === d.track) : -1;
+  if (idx < 0) return null;
+  G.flow = "gp"; G.session = "tt";
+  const daily = !!d.day && d.day === h.today;
+  if (daily) G.daily.select(d.day);   // today's Daily keeps its own plan
+  else {
+    G.daily.stop(); h.restoreFreePlay();
+    G.trackIdx = idx;
+    // RACE SETTINGS re-stages the TT draft from the guest's cond (race-settings.js stageDraft).
+    if (d.cond) { G.raceWeather = d.cond.weather; G.raceTimeOfDay = d.cond.tod; }
+    if (G.resetRaceDraft) G.resetRaceDraft();
+  }
+  h.open();
+  return { ok: true, track: d.track, daily, cond: daily ? null : d.cond, target: d.ghost.time };
+}
+// One tap on a pasted or opened link: decode, install the guest rival, stage. GhostShare.decode never throws.
+async function openChallenge(value, G, h) {
+  const d = await GhostShare.decode(value);
+  return d.ok && GhostShare.installGuest(d) && stageChallenge(G, d, h) || (d.ok ? { ok: false, reason: "corrupt" } : d);
+}
 function create(G) {
   const { $, els } = G;
   const go = parse(location.search);
@@ -107,6 +131,6 @@ function create(G) {
   setTimeout(() => fire(0), 0);
   return { go };
 }
-return { create, parse, DOORS, onSectionLink, MARK, BASE };
+return { create, parse, DOORS, onSectionLink, MARK, BASE, stageChallenge, openChallenge };
 })();
 Object.freeze(DeepLink);

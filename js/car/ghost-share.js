@@ -57,6 +57,13 @@ const GhostShare = (function () {
     }
     return Object.keys(out).length ? out : null;
   }
+  // CONDITIONS (#6884 A3): a challenge link restages its lap's weather and time of day. Unknown values
+  // drop to null (the picker's defaults), never a refusal: an older build's link stays a ghost.
+  const WEATHER = ["dry", "wet", "rain", "overcast", "fog", "storm"], TOD = ["default", "dawn", "day", "dusk", "night"];
+  function cleanCond(c) {
+    if (!c || typeof c !== "object" || Array.isArray(c) || !WEATHER.includes(c.weather)) return null;
+    return { weather: c.weather, tod: TOD.includes(c.tod) ? c.tod : "default" };
+  }
   // FNV-1a (32-bit) over [track?, time, t, s, x]; legacy omits track. Hash32 is eager.
   function traceHash(g, track) {
     return Hash32.fnv1a(JSON.stringify(track ? [track, g.time, g.t, g.s, g.x] : [g.time, g.t, g.s, g.x])).toString(36);
@@ -72,6 +79,7 @@ const GhostShare = (function () {
       track,
       context: typeof o.context === "string" && o.context ? o.context : null,
       day: typeof o.day === "string" && o.day ? o.day : null,
+      cond: cleanCond(o.cond),
       time: ghost.time,
       meta: cleanMeta(ghost.meta),
       t: ghost.t,
@@ -233,6 +241,8 @@ const GhostShare = (function () {
       track: body.track,
       context: typeof body.context === "string" ? body.context : null,
       day: typeof body.day === "string" ? body.day : null,
+      cond: cleanCond(body.cond),
+      target: body.time,   // the lap to beat
       meta,
     };
   }
@@ -245,6 +255,7 @@ const GhostShare = (function () {
       track: decoded.track,
       context: typeof decoded.context === "string" ? decoded.context : null,
       day: typeof decoded.day === "string" ? decoded.day : null,
+      cond: cleanCond(decoded.cond),
       meta: cleanMeta(decoded.meta),
     };
     return true;
@@ -355,7 +366,10 @@ const GhostShare = (function () {
     } catch (_) { return null; }
   }
   function messageFor(result) {
-    if (result && result.ok) return "Rival ghost loaded — " + result.track.toUpperCase() + ".";
+    if (result && result.ok) {
+      const ms = Math.round(result.ghost.time * 1000), m = Math.floor(ms / 60000);
+      return "Rival ghost loaded — " + result.track.toUpperCase() + " · BEAT " + m + ":" + ((ms % 60000) / 1000).toFixed(3).padStart(6, "0") + ".";
+    }
     if (result && result.reason === "unknown-track") return "That ghost uses a circuit this version does not know.";
     return "That ghost code is incomplete or corrupt.";
   }
