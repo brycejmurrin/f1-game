@@ -18,6 +18,11 @@ body.photo-studio-open { background: var(--bg); }
 }
 #ps-panel[aria-busy="true"] .sheet-foot .bigbtn { opacity: 0.55; }
 #ps-panel .sheet-head { flex-wrap: nowrap; }
+/* DOCK / HIDE (#7017): portrait-phone sheet placement only; the side dock has no use for them. */
+#ps-sheet-tools { display: none; gap: calc(var(--gap) * .5); flex: none; }
+#ps-panel #ps-sheet-tools > button { min-width: var(--tap); }
+@media (pointer: coarse) { #ps-panel #ps-sheet-tools > button { min-width: var(--tap-paint); } }
+#ps-panel #ps-dock[aria-pressed="true"] { background: var(--plate-on); border-color: var(--red); }
 #ps-body { display: flex; flex-direction: column; gap: var(--gap); overscroll-behavior: contain; }
 /* Scroll-thumb lane (components.css .sheet-body.sf-scroll::before) at -6px, not 6px - var(--pad): the thumb sits in the padding without pushing scrollWidth 10px past the clipped x-axis (#3338). */
 #ps-body.sf-scroll::before { margin-right: calc(var(--gap) / -2); }
@@ -148,6 +153,23 @@ body.photo-mode.photo-studio-open .pc-look-wrap { left: auto; right: calc((var(-
        were clipped to the panel. Body still scrolls; foot stays pinned. */
     overflow: visible;
   }
+  /* Head may wrap to two rows: title, MOVE CAMERA, DOCK and HIDE do not fit 360-393 px on one. */
+  #ps-panel .sheet-head { flex-wrap: wrap; row-gap: calc(var(--gap) * .5); }
+  #ps-sheet-tools { display: flex; margin-inline-start: auto; }
+  /* Docked top (#7017): the sheet sits under safe-t and the preview band is
+     everything below it, so a 4:5 subject's lower half stays clear. The export
+     guide stays centred on the full canvas (the crop does not move). */
+  #photo-studio[data-dock="top"] {
+    padding-top: 0;
+    padding-bottom: calc(100svh - 42svh - var(--safe-t));
+  }
+  #photo-studio[data-dock="top"] #ps-panel {
+    top: calc(var(--safe-t) / var(--sheet-scale, var(--ui-scale)));
+    bottom: auto;
+  }
+  /* Collapsed: head + CAPTURE/DONE foot only; the whole frame shows. */
+  #photo-studio[data-sheet="collapsed"] #ps-panel { height: auto; }
+  #photo-studio[data-sheet="collapsed"] #ps-body { display: none; }
   #ps-body {
     /* Last setting rows (Garage look chips) sat under CAPTURE / DONE. */
     padding-bottom: calc(var(--gap) * 1.5);
@@ -163,6 +185,8 @@ body.photo-mode.photo-studio-open .pc-look-wrap { left: auto; right: calc((var(-
   /* Put the full touch row above the bottom sheet, with room for both thumbs.
      Cap touch chrome at 100% so the row also fits a larger menu preference. */
   body.photo-mode.photo-studio-open :is(.pc-stickwrap, .pc-altcol) { zoom: var(--ps-touch-z); bottom: calc((42svh + var(--safe-b) + var(--gap)) / var(--ps-touch-z)); }
+  /* Docked top: the touch row drops to the bottom edge, below the sheet. */
+  body.photo-mode.photo-studio-open[data-ps-dock="top"] :is(.pc-stickwrap, .pc-altcol) { bottom: calc((var(--safe-b) + var(--gap)) / var(--ps-touch-z)); }
   body.photo-mode.photo-studio-open .pc-move-wrap { left: calc(var(--safe-l) / var(--ps-touch-z)); }
   body.photo-mode.photo-studio-open .pc-look-wrap { left: auto; right: calc(var(--safe-r) / var(--ps-touch-z)); }
   body.photo-mode.photo-studio-open .pc-altcol { left: calc((var(--safe-l) + var(--safe-w) / 2) / var(--ps-touch-z) - max(56px, var(--tap-min)) / 2); right: auto; flex-direction: column; }

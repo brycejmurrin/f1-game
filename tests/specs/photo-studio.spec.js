@@ -322,6 +322,70 @@ test("Paused race photo at the owner's export on a notched phone keeps the LOOK 
   expect(pageErrors).toEqual([]);
 });
 
+test("Portrait photo: DOCK top keeps a 4:5 subject's lower half clear with the sticks below; HIDE folds the sheet (#7017)", async ({ page, pageErrors }, info) => {
+  // One race boot and three portrait windows, each waiting for the sheet fit under software GL.
+  test.setTimeout(210000);
+  await boot(page);
+  await page.evaluate(async () => {
+    __apex.headless(true);
+    await __apex.race("bahrain", "day", "dry");
+    __apex.go(); __apex.park(0.1);
+  });
+  await clickLive(page, "pausebtn");
+  await clickLive(page, "pm-photo");
+  await expect(page.locator("#photo-studio")).toBeVisible();
+  await page.evaluate(() => { __apex.headless(false);
+    const s = document.getElementById("ps-aspect"); s.value = "portrait"; s.dispatchEvent(new Event("change", { bubbles: true })); });
+  const geom = () => page.evaluate(() => {
+    const r = (s) => { const el = document.querySelector(s); return el ? CssZoom.viewportRect(el) : null; };
+    const panel = r("#ps-panel"), guide = r("#ps-guide");
+    return { vh: innerHeight, panelTop: panel.y, panelBottom: panel.y + panel.height, panelH: panel.height,
+      guideMid: guide.y + guide.height / 2, guideBottom: guide.y + guide.height,
+      sticks: [".pc-move-wrap", ".pc-look-wrap"].map(r).filter(Boolean).map((b) => ({ top: b.y, bottom: b.y + b.height })) };
+  });
+  const { top, bottom } = BRYCE_WINDOWS.portrait.insets;
+  await page.addStyleTag({ content: `:root{--sal:0px!important;--sar:0px!important;--sat:${top}px!important;--sab:${bottom}px!important}` });
+  let docked = false;
+  for (const [name, viewport] of [["portrait-393", PORTRAIT], ["portrait-390", { width: 390, height: 844 }], ["portrait-360", { width: 360, height: 780 }]]) {
+    await page.setViewportSize(viewport);
+    await present(page);
+    await expect(page.locator("#ps-panel")).toHaveAttribute("data-fit", "on", { timeout: 30000 });
+    if (!docked) {
+      const bottomSheet = await geom();
+      expect(bottomSheet.panelTop, "bottom sheet: the reported overlap of the subject's lower half").toBeLessThan(bottomSheet.guideBottom);
+      await nativeClick(page, "ps-dock"); docked = true;
+      await expect(page.locator("#photo-studio")).toHaveAttribute("data-dock", "top");
+      expect(await page.evaluate(() => localStorage.getItem("apex26.photoDock"))).toBe("top");
+    }
+    await expect.poll(async () => { const g = await geom(); return g.panelBottom <= g.guideMid + 0.5; }, { timeout: 30000 }).toBe(true);
+    const g = await geom();
+    expect(g.panelTop, `${name}: sheet under the top inset`).toBeGreaterThanOrEqual(top - 1);
+    expect(g.sticks.length, `${name}: both sticks present`).toBe(2);
+    for (const st of g.sticks) {
+      expect(st.top, `${name}: stick clears the top sheet`).toBeGreaterThanOrEqual(g.panelBottom - 0.5);
+      expect(st.bottom, `${name}: stick above the home indicator`).toBeLessThanOrEqual(g.vh - bottom + 1);
+    }
+    await controls(page, ["ps-dock", "ps-collapse", "ps-capture", "ps-close", "pc-move", "pc-look"]);
+    await evidence(page, info, name + "-top");
+  }
+  const open = await geom();
+  await nativeClick(page, "ps-collapse");
+  await expect(page.locator("#photo-studio")).toHaveAttribute("data-sheet", "collapsed");
+  await expect(page.locator("#ps-collapse")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("#ps-body")).toBeHidden();
+  const folded = await geom();
+  expect(folded.panelH, "collapsed: head and CAPTURE bar only").toBeLessThan(open.panelH * 0.7);
+  await controls(page, ["ps-dock", "ps-collapse", "ps-capture", "ps-close"]);
+  await evidence(page, info, "portrait-collapsed");
+  await nativeClick(page, "ps-collapse");
+  await expect(page.locator("#ps-body")).toBeVisible();
+  await nativeClick(page, "ps-dock");
+  await expect(page.locator("#photo-studio")).toHaveAttribute("data-dock", "bottom");
+  await nativeClick(page, "ps-close");
+  await expect(page.locator("#photo-studio")).toBeHidden();
+  expect(pageErrors).toEqual([]);
+});
+
 test("Accent lists receive real keyboard events through menu navigation", async ({ page, pageErrors }) => {
   await boot(page);
   await page.evaluate(() => __apex.headless(true));

@@ -277,6 +277,24 @@ function create(G, deps) {
     mk("label", { className: "tune-row" }, [mk("span", { className: "tune-label", textContent: "Focal length (35 mm eq.)" }), focalInput, focalValue]),
     depthRow, mk("div", { className: "balanced-row" }, [resetLens, autoFocus]), focusHint,
   ]);
+  // Portrait sheet placement (#7017): the bottom sheet hid a 4:5 subject. DOCK moves it to the top
+  // (persisted), HIDE folds it to its header and footer for this visit. Landscape and desktop CSS ignore both.
+  const DOCK_KEY = "apex26.photoDock";
+  st.dock = (() => { try { return localStorage.getItem(DOCK_KEY) === "top" ? "top" : "bottom"; } catch (_) { return "bottom"; } })();
+  st.collapsed = false;
+  const dockButton = button("▲ TOP", () => { st.dock = st.dock === "top" ? "bottom" : "top"; try { localStorage.setItem(DOCK_KEY, st.dock); } catch (_) { /* private mode: session only */ } paintSheet(); }, "ps-dock");
+  const collapseButton = button("HIDE", () => { st.collapsed = !st.collapsed; paintSheet(); }, "ps-collapse");
+  dockButton.setAttribute("aria-label", "Dock panel at top");
+  collapseButton.setAttribute("aria-controls", "ps-body");
+  const sheetTools = mk("div", { id: "ps-sheet-tools", attrs: { role: "group", "aria-label": "Panel position" } }, [dockButton, collapseButton]);
+  function paintSheet() {
+    root.dataset.dock = st.dock; root.dataset.sheet = st.collapsed ? "collapsed" : "open";
+    dockButton.setAttribute("aria-pressed", st.dock === "top" ? "true" : "false");
+    collapseButton.setAttribute("aria-expanded", st.collapsed ? "false" : "true");
+    collapseButton.textContent = st.collapsed ? "SHOW" : "HIDE";
+    collapseButton.setAttribute("aria-label", st.collapsed ? "Show photo settings" : "Hide photo settings");
+    if (st.open) document.body.setAttribute("data-ps-dock", st.dock);
+  }
   const captureButton = button("CAPTURE", capture, "ps-capture"), done = button("DONE", () => close(true), "ps-close");
   const focusCamera = button("MOVE CAMERA", (e) => {
     if (typeof Photomode !== "undefined") Photomode.focusScene(e.currentTarget);
@@ -585,7 +603,7 @@ function create(G, deps) {
     mk("p", { className: "adv-help", textContent: "The HELMET view only: the visor frame and its light go into the photo when you capture. Driving settings stay unchanged." }),
   ]);
   const panel = mk("section", { id: "ps-panel", className: "sheet", attrs: { "aria-label": "Photo Studio" } }, [
-    mk("header", { className: "sheet-head" }, [mk("h2", { textContent: "PHOTO STUDIO" }), focusCamera]),
+    mk("header", { className: "sheet-head" }, [mk("h2", { textContent: "PHOTO STUDIO" }), focusCamera, sheetTools]),
     mk("div", { id: "ps-body", className: "sheet-body pane" }, [
       mk("p", { id: "ps-context", className: "adv-help" }),
       subjectGroup,
@@ -777,6 +795,7 @@ function create(G, deps) {
     subjectGroup.hidden = !st.subject;
     if (st.subject) SettingRow.paint(subjectRow, subjectValue());
     document.body.classList.add("photo-studio-open");
+    paintSheet();
     E["ps-context"].textContent = text(st.metadata.title || (isGarage() ? "Your garage" : G.track && (G.track.name || G.track.id)) || "Race photo");
     E["ps-help"].textContent = isGarage() ? "Choose a shot or drag the scene to orbit. Guides stay out of the exported photo." : "WASD move · drag to look · R/F height · Shift boost. Guides and HUD stay out of the photo.";
     shots.replaceChildren();
@@ -841,7 +860,7 @@ function create(G, deps) {
     last = null; raw = null; capturedOptions = null; E["ps-preview"].removeAttribute("src"); E["ps-preview"].hidden = true;
     // ...and the library rows: each held a thumbnail data URL and a DOWNLOAD closure over its photo blob. open() repaints them.
     if (E["ps-library"]) E["ps-library"].replaceChildren();
-    root.hidden = true; document.body.classList.remove("photo-studio-open");
+    root.hidden = true; document.body.classList.remove("photo-studio-open"); document.body.removeAttribute("data-ps-dock");
     busy(false);
     if (back && returnTo) returnTo();
     // A look picked here repaints the Team tab the studio was opened over (it reads the scene modules on build).
@@ -1180,7 +1199,7 @@ function create(G, deps) {
     } catch (e) { if (gen === st.generation) say("This photo could not be opened: " + text(e.message)); }
     finally { if (gen === st.generation) { busy(false); importFile.value = ""; } }
   }
-  function state() { return { open: st.open, generation: st.generation, source: st.source, subject: !!st.subject, aspect: st.aspect, samples: G.netPlay?.active?.() ? 1 : st.samples, grid: st.grid, postcard: st.postcard, busy: st.busy, captured: !!last, width: last ? last.width : 0, height: last ? last.height : 0, background: !!background() }; }
+  function state() { return { open: st.open, generation: st.generation, source: st.source, subject: !!st.subject, aspect: st.aspect, samples: G.netPlay?.active?.() ? 1 : st.samples, grid: st.grid, postcard: st.postcard, dock: st.dock, collapsed: st.collapsed, busy: st.busy, captured: !!last, width: last ? last.width : 0, height: last ? last.height : 0, background: !!background() }; }
   async function album() {
     let photos;
     try { photos = await library("list", null, session); } catch (e) { if (!session.length) throw e; photos = []; }
@@ -1213,7 +1232,7 @@ function create(G, deps) {
     offLens.mm = lens.mm; return offLens;
   }
   const api = { open, close, capture, state, contactSheet, album, background, setBackground, exportPhoto, savePhoto, hasCar, lens: activeLens };
-  live = api; busy(false); return api;
+  live = api; busy(false); paintSheet(); return api;
 }
 // ASPECTS / LIMIT stay module-private (crop + library only); no external callers.
 return Object.freeze({ get sampling() { return samplePass; }, create, stepPosition, holdMetres, positionLabel, POV_SHOTS, visorOptions, shareCancelled, background, setBackground, crop, filename, album: () => live ? live.album() : Promise.reject(new Error("Photo library unavailable")), contactSheet: (times, seek, cancelled) => live ? live.contactSheet(times, seek, cancelled) : Promise.reject(new Error("Photo capture unavailable")), state: () => live ? live.state() : { open: false } });
