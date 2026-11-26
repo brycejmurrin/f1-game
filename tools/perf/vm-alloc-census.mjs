@@ -208,7 +208,8 @@ export function measureLedger(sc = LEDGER_SCENARIO) {
   const objectsOffKb = meanOf(vOff, "objectsKb"), objectsOnKb = meanOf(vOn, "objectsKb");
   return {
     boxedSize, off, on, spans, p99, marksOff, marksOn,
-    marksDeltaKb: +(marksOn.objectsKb - marksOff.objectsKb).toFixed(3),   // GATED: the recorder's own objects KB/frame validOff: vOff.length, validOn: vOn.length,
+    marksDeltaKb: +(marksOn.objectsKb - marksOff.objectsKb).toFixed(3),   // GATED: the recorder's own objects KB/frame
+    validOff: vOff.length, validOn: vOn.length,
     objectsOffKb, objectsOnKb, deltaObjectsKb: objectsOffKb == null || objectsOnKb == null ? null : +(objectsOnKb - objectsOffKb).toFixed(2),
     boxedOffKb: meanOf(vOff, "boxedKb"), boxedOnKb: meanOf(vOn, "boxedKb"),   // reported, not gated
   };
