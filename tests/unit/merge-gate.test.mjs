@@ -3286,10 +3286,17 @@ test("land.yml arm (#6711): a train whose arm fails is handed to retry, and the 
   assert.deepEqual(failed.summary.split("\n").filter(Boolean), ["::warning::arm of train #7 failed (exit 17); re-gating within the existing retry budget"]);
   const needs = { resolve: { result: "success" }, post: { outputs: { retry: "" } }, arm: { result: "failure", outputs: failed.out } };
   assert.equal(ghExpr(LAND.jobs.retry.if, { needs }), true, "retry runs after the failed arm");
-  // The re-gated pass (the dispatched retry) finds the same green, unarmed train and arms it.
-  const next = go();
+  // #6797 row 3: the re-arm PATH, not a fresh arm. The failed arm's own `retry` output feeds the retry job; its
+  // dispatch inputs (pr, head, attempt) are the state the re-gated pass starts from, and that pass arms the train.
+  const dispatched = runStep(LAND.jobs.retry.steps[0].run, { ATTEMPT: "0", POST_RETRY: "", ARM_RETRY: failed.out.retry });
+  assert.equal(dispatched.status, 0, dispatched.stderr);
+  const posts = dispatched.calls.filter((c) => c.includes("--method POST"));
+  assert.deepEqual(posts, [`gh api --method POST repos/o/r/actions/workflows/land.yml/dispatches -f ref=${DEPLOY_BRANCH} -f inputs[pr]=7 -f inputs[head]=${HEAD7} -f inputs[attempt]=1`],
+    "one re-gate of the failed train, at attempt 1");
+  const inputs = Object.fromEntries([...posts[0].matchAll(/inputs\[(\w+)\]=(\S+)/g)].map((m) => [m[1], m[2]]));
+  const next = go({ ARM: JSON.stringify({ number: Number(inputs.pr), head: inputs.head, tip: TIP_A }), ATTEMPT: inputs.attempt });
   assert.equal(next.status, 0, next.stderr);
-  assert.ok(armed(next), "the next pass arms the train");
+  assert.ok(armed(next), "the re-gated pass arms the train");
   assert.equal(next.out.retry, undefined);
   // A train read that fails on 404 also hands it over; the rate limit still only defers (backoff, no retry).
   const nf = go({ GH_5XX_ON: "/branches/", GH_5XX_N: "1", GH_5XX_MSG: "gh: Not Found (HTTP 404)" });
