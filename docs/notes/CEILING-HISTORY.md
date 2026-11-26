@@ -4084,6 +4084,15 @@ Fragment: `ratchets.d/claude--issue-5496-damage-reland.json`.
 `js/net/lobby.js lines` +1 (the deps helper) is inside the commit hook's absorb.
 Fragment: `ratchets.d/claude--issue-6496-net-relays.json`.
 
+## 2026-11-26 — claude/livery-colours-6875: livery colour fixes (#6875)
+
+`(tree) eagerCodeBytes` 4045854 → **4046469** (+615) and `js/car/car3d.js lines` +1. The bytes are the SWAP COLOURS
+fix in `js/garage/livery-design-editor.js` (hex↔rgb helpers plus the `designPair` seed, ~470 B), the `designPair`
+export (~12 B), helmet `alt` (~9 B) and the `_ckAcc` colour guard (~110 B incl. the +1 line). They buy: a swapped
+lightning / twoTone / keylineSplit design no longer vanishes into the body colour (H1), a shifted helmet keeps its
+accent (H2), and a string colour slot no longer gives NaN cockpit colours (H4); #6864. The editor cannot reuse
+`livDraftTo`/`hexToArr` (they live in setup-sheet.js, a global the editor never reaches, and its VM test loads it
+alone), so the small parse/format helpers stay local. Fragment: `ratchets.d/claude--livery-colours-6875.json`.
 ## 2026-11-26 — claude/hud-tyres-aria-memo-6752: HUD tyres aria-label memo (#6752 row 5, #6506 row 5)
 
 `(tree) eagerCodeBytes` 4045914 → **4046097** (+183, exactly the measured overage: the entry is slack 0; the first cut was +147, and the pr-reviewer's two accepted findings, a null-laps key collision and a missing locale in the key, added 36 B): `HudTyres.paint` builds a joined key
