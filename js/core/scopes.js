@@ -43,7 +43,7 @@
 "use strict";
 const Scopes = (function () {
   const SCOPES = ["circuit", "race", "session", "camera-mode", "audio-context"];
-  const WHYS = ["start", "restart-red", "restart-declined", "finish", "quit", "episode"];
+  const WHYS = ["start", "restart-red", "restart-declined", "finish", "quit", "episode", "cut"];
   const regs = {};   // scope → [{ id, exit, enter, snapshot, after, touches, on, enterOn, phase, seq }]
   for (const s of SCOPES) regs[s] = [];
   const warned = new Set();

@@ -155,12 +155,9 @@ window.CamModes = (function () {
         G.camCutT = (CAM_MODES[G.camMode] || CAM_MODES[0]).cut ?? 0.35;   // cut: 0 is an instant cut, not missing
         const from = (prev >= 0 && CAM_MODES[prev]) ? CAM_MODES[prev].id : "?";
         Log.info("game", `CamModes.setCamMode ${from} -> ${CAM_MODES[G.camMode].id}`);
-        if (typeof ExtraRigs !== "undefined") ExtraRigs.reset(CAM_MODES[G.camMode].id);
-        // A cut: the new rig's eased bend sides start from its own target,
-        // not from wherever that rig was the last time it was on air.
-        if (typeof CamFeel !== "undefined") CamFeel.resetFollow();
-        // ...and so are the held bend sides (heli/side/cinematic hang), or the first bend after a cut inherits the old rig's side.
-        if (typeof GameCams !== "undefined") GameCams.resetSmoothing();
+        // A cut: the new rig's eased follows and held bend sides start from its own target, not from wherever
+        // that rig was last on air (extra-rigs, cam-feel, game-cams register this on the camera-mode scope).
+        if (typeof Scopes !== "undefined") Scopes.exit("camera-mode", { why: "cut", mode: CAM_MODES[G.camMode].id });
       }
       if (typeof GameAudio !== "undefined") GameAudio.setCameraMix(CAM_MODES[G.camMode].id);   // onboard / chase / TV mix
       refreshCamBtn();   // the CAM button label is the only mode indicator (no big announce)
