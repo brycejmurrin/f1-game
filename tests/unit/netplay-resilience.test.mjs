@@ -20,6 +20,7 @@ globalThis.NetInterp = eval(src("js/net/interp.js") + ";NetInterp");
 globalThis.NetSnapshot = eval(src("js/net/snapshot.js") + ";NetSnapshot");
 globalThis.NetIce = eval(src("js/net/ice.js") + ";NetIce");
 globalThis.NetTransport = eval(src("js/net/transport.js") + ";NetTransport");
+globalThis.NetWire = eval(src("js/net/wire-schema.js") + ";NetWire");   // NetSession / QualiWire / NetPlay read the wire table
 globalThis.NetSession = eval(src("js/net/session.js") + ";NetSession");
 const spectatePath = path.join(ROOT, "js/net/spectate.js");
 globalThis.NetSpectate = fs.existsSync(spectatePath)

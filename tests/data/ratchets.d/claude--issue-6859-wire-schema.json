@@ -1,0 +1,11 @@
+{
+  "files": {
+    "js/net/lobby.js": {
+      "lines": -4
+    }
+  },
+  "tree": {
+    "assertPinsAll": 6,
+    "eagerCodeBytes": 78
+  }
+}

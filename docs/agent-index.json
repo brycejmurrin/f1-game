@@ -1427,6 +1427,7 @@
         "tests/unit/net-stub-surface.test.mjs",
         "tests/unit/net-transport.test.mjs",
         "tests/unit/net-trystero-api.test.mjs",
+        "tests/unit/net-wire-schema.test.mjs",
         "tests/unit/netplay-lap-clock.test.mjs",
         "tests/unit/netplay-resilience.test.mjs",
         "tests/unit/rendezvous-worker.test.mjs",
@@ -3968,6 +3969,11 @@
     {
       "path": "js/net/transport.js",
       "global": "NetTransport",
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/wire-schema.js",
+      "global": "NetWire",
       "roster": "LAZY_NET"
     },
     {
