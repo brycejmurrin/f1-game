@@ -193,7 +193,9 @@ const SportingRegs = (function () {
     /** The open give-back window, for the HUD's flag chip: places owed, the
      *  seconds left, and the code of the first car to let by (null if none). */
     function info() { return { owed: owed.length, t: +Math.max(0, t).toFixed(2), code: owed.length ? owed[0].code || null : null }; }
-    return { tick, reset, info };
+    /** Places owed, allocation-free (the race step's blue gate, #6630). */
+    function owedN() { return owed.length; }
+    return { tick, reset, info, owedN };
   }
 
   // ── 3. CHAMPIONSHIP-ORDER GRID ─────────────────────────────────────────
@@ -222,6 +224,13 @@ const SportingRegs = (function () {
   const BLUE_WARN_S = 4;
   const BLUE_HOLD_S = 8;
   const BLUE_PEN_S = 5;
+  const BLUE_KEEP_S = 1.6;   // a held lapper's flag stays out to this (HudReadouts BLUE_HOLD_S)
+
+  /** No blue flag shows under any caution (yellow included) or a give-back
+   *  owed: the gate hud.js speakHud and the watch share (#6630). */
+  function blueSuppressed(level, owed) {
+    return (level | 0) > 0 || (owed | 0) > 0;
+  }
 
   // ── 5. FALSE START (standing start, at lights-out) ───────────────────────
   // The grid holds cars until green; detection is throttle-at-green or a launch
@@ -271,7 +280,8 @@ const SportingRegs = (function () {
    *  {type:"penalty", sec, code} once past BLUE_HOLD_S. Hold time is per
    *  lapping car (a new lapper restarts the clock, #2163); the penalty latches
    *  for the whole unbroken blue spell, so a train of lappers charges one.
-   *  `ctx`: {total, vRef, caution, race}. Exemptions: caution (SC/VSC/red),
+   *  `ctx`: {total, vRef, caution, owed, race}. Exemptions: blueSuppressed
+   *  (any caution, a local yellow included, or a give-back owed; #6630),
    *  pit lane / finished / retired (on either car), quali/TT (`race` false),
    *  and a player the caller's `troubled` predicate names (stuck / stricken). */
   function createBlueFlagWatch(troubled) {
@@ -280,11 +290,11 @@ const SportingRegs = (function () {
     function reset() { hold = 0; warned = false; pen = false; code = null; who = null; }
     function tick(p, field, ctx, dt) {
       if (!p || !ctx || !ctx.race || p.finished || p.retired || inPit(p)
-          || (ctx.caution | 0) >= CAUTION_MIN || bad(p)) {
+          || blueSuppressed(ctx.caution, ctx.owed) || bad(p)) {
         reset();
         return null;
       }
-      const lapper = blueFlagCar(p, field, ctx);
+      const lapper = blueFlagCar(p, field, ctx, who, BLUE_KEEP_S);
       if (!lapper) { reset(); return null; }
       if (who !== lapper) { hold = 0; warned = false; who = lapper; }
       code = lapper.code || null;
@@ -311,7 +321,7 @@ const SportingRegs = (function () {
   return Object.freeze({
     compoundShort, applyCompoundRule,
     exempt, createPassWatch, champOrder,
-    createBlueFlagWatch, blueFlagCar,
+    createBlueFlagWatch, blueFlagCar, blueSuppressed, BLUE_KEEP_S,
     jumpStartEarlyThrottle, jumpStartFastLaunch,
     JUMP_START_THROTTLE, JUMP_START_REACT_S, JUMP_START_SPEED_VREF,
     JUMP_START_PEN_S, JUMP_START_WHY,
