@@ -2195,16 +2195,38 @@ gap is recorded in §Parity snapshot above and in the defect inventory
 crash and validation fixes (D-049): never port a look or knob into it, and a GLX
 or TLX fix is not "unfinished" for lacking a WGX twin.
 
+#### Backend gap table
+
+TLX ships; GLX and WGX gaps live here and only here (D-058). Source: the
+object-literal scan in `tests/unit/backend-surface-parity.test.mjs` on 2026-11-26
+(GLX 84 names = BACKEND_SURFACE, TLX 137, WGX 100); a gap is not a bug.
+
+| feature (names) | TLX | GLX | WGX |
+|---|---|---|---|
+| WebXR (`presentXR`, `xrCapable`, `xrInfo`, `setFoveation`, `detachXrSession`, …) | yes | gap | gap |
+| Shader/pipeline warm-up (`warm`, `warming`, `warmSettled`, `warmQueued`, `warmDraws`, `primeChunkMerge`) | yes | gap | gap |
+| Frame capture (`renderCaptureFrame`, `capturePixels`) | yes | gap | `capturePixels`, `cancelCapture` |
+| Static/car lamp-shadow split (`lampStaticBegin/End`, `lampCarsBegin`, `lampGridState`) | yes | gap | gap |
+| Texture pool and ownership (`flushTexPool`, `freeTexture`, `refillTexture`, `uploadTexture`, `pinMesh`, `flushChunkedOwnership`) | yes | `flushTexPool` only | `flushTexPool`, `freeTexture` |
+| Track wear, env readback, decal runs (`setTrackWear`, `readEnvCube`, `decalRuns`, `trackPrepareConfig`) | yes | gap | gap |
+| HDR output, post retry, inspector (`hdrOutputActive`, `retryPost`, `inspectorHost`, `photoFocusAvailable`) | yes | gap | gap |
+| Soft-present hold, road LUT, pipeline stats (`holdSoftPresent`, `roadLutReady`, `litPipelineStats`) | gap | gap | yes (WGX-only) |
+
+Adding or closing a row is a docs edit; closing a GLX gap needs a correctness or
+phone-safety reason (`.claude/rules/render-glx.md`).
+
+
 **GLX's job — safe mode.** GLX is the renderer every backend failure lands on
 (`Gfx.create()` → null), the no-adapter device path, the explicit `webgl2` pick,
 and the name of the seam (`GLX` facade). Its job is to boot and race correctly on
 any WebGL2 device, holding the features it ships today as its floor look. It
 takes crash, correctness and phone-safety fixes; it does not chase TLX looks.
-The floor-look list, a `render-glx.md` rule, a named backend-interface list and a
-fallback-correctness spec are the later phases of #6861 (not yet landed).
+The floor look is `.claude/rules/render-glx.md`; the interface is the frozen
+BACKEND_SURFACE list (`docs/backend-surface.txt`, D-058, `docs/GFX-CONTRACT.md`
+§Backend roles). A fallback-correctness spec is the next phase of #6861 (#7045).
 
 1. `node --test tests/unit/backend-surface-parity.test.mjs` first — the
-   façade must carry the same member names on all three backends (a missing
+   façade must carry every BACKEND_SURFACE name on all three backends (a missing
    name leaves GLX's dead closure behind after descriptor-copy; see §Mental
    model).
 2. Grep the knob across ALL of `js/render/`: GLSL in `shaders/`, WGSL in
