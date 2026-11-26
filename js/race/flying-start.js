@@ -24,9 +24,12 @@ var FlyingStart = (function () {
     return total > 0 ? Math.min(want, total * MAX_RUN_FRAC) : want;
   }
 
-  /** deps.realRace(): true while a Data Hub real race owns the session (it has its own start). */
+  /** deps.realRace(): true while a Data Hub real race owns the session (it has its own start).
+   *  deps.setPaused: handed to this start's RETRY LAP (js/race/lap-retry.js, #6965), created here so
+   *  game.js (eager, at its byte budget) carries none of it; LapRetry lands later in this same bundle. */
   function create(G, deps) {
     const realRace = (deps && deps.realRace) || (() => false);
+    let retry = null;
     let lastState = null;  // a countdown ENTERED this frame is a new start (RESTART / RACE AGAIN re-enter it)
     let handover = null;   // { c, t, said } while the AI holds the wheel
     let goHold = 0;
@@ -68,11 +71,24 @@ var FlyingStart = (function () {
       G.setCarRole(c, false, true);   // the AI drives the run-up; the camera, HUD and audio stay on it
       const run = place(c);
       if (!G.goRolling()) { G.setCarRole(c, true, true); return; }
-      handover = { c, t: HANDOVER_S, said: HANDOVER_S };
+      runUp(c, run, "arm");
+      if (retry) retry.capture();   // the drop-in: after goRolling, count flipped to race in this same frame
+    }
+    function runUp(c, run, why) {
+      handover = { c, t: HANDOVER_S, said: HANDOVER_S }; goHold = 0;
       count(HANDOVER_S);
       if (G.snapGameCam) G.snapGameCam();
       if (G.announce) G.announce(G.session === "quali" ? "QUALIFYING · FLYING LAP" : "TIME TRIAL · FLYING LAP", 2, "info");
-      Log.info("game", "FlyingStart.arm run=" + run.toFixed(0) + "m speed=" + (c.speed || 0).toFixed(1));
+      Log.info("game", "FlyingStart." + why + " run=" + run.toFixed(0) + "m speed=" + (c.speed || 0).toFixed(1));
+    }
+    /** LAP RETRY (js/race/lap-retry.js): the world is back at the drop-in; place the
+     *  car again and run the same HANDOVER_S run-up, the AI driving — no countdown. */
+    function rearm() {
+      const c = G.player;
+      if (!c || !G.setCarRole || !G.track || !(G.track.total > 0)) return false;
+      G.setCarRole(c, false, true);
+      runUp(c, place(c), "rearm");
+      return true;
     }
 
     function tick(dt) {
@@ -111,7 +127,10 @@ var FlyingStart = (function () {
       if (st === "race") tick(dt);
     }
 
-    return { update, stop, owns: (c) => !!(handover && handover.c === c), active: () => !!handover };
+    const api = { update, stop, rearm, owns: (c) => !!(handover && handover.c === c), active: () => !!handover };
+    if (typeof LapRetry !== "undefined") retry = LapRetry.create(G, { flyingStart: api, setPaused: deps && deps.setPaused });
+    api.retry = retry;
+    return api;
   }
 
   // runUpMetres + hand-over scalars stay module-local: create() owns placement;
