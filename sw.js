@@ -330,10 +330,14 @@ async function bustFallback(url) {
 // keeps:
 //   - only when the CURRENT generation finished its install (never strand a
 //     client on an incomplete cache — the test holds activate to that too), and
-//   - only generations OLDER than the current one (and never the single prior
-//     SETTLED generation while a window client remains — #2194 lazy ?v= keys):
-//     a worker whose memoised name is stale must never delete the newer cache
-//     the next worker is installing into.
+//   - generations OLDER than the current one (never the single prior SETTLED
+//     generation while a window client remains — #2194 lazy ?v= keys), and
+//   - NEWER generations only when nothing can still own them (#6633 L6): a
+//     partial cache a killed install left, or a rolled-back deploy's. Those
+//     stayed forever, ranked, and shellAtLeast could serve them. A worker whose
+//     memoised name is stale must never delete the newer cache the next worker
+//     is installing into, so newerSweepable() requires this worker to BE the
+//     current build's, active, with no worker installing or waiting.
 // A sweep that had to KEEP that predecessor (a window was still open) does not
 // latch done. Asset fetches stay quiet; the next navigation rechecks. Once
 // matchAll is empty the predecessor goes. Latching done on the first sweep
@@ -341,6 +345,16 @@ async function bustFallback(url) {
 // the common case: the first fetch happens while the tab that installed it
 // is still open.
 let _sweepDone = false, _sweepBusy = false, _sweepHeld = false;
+// Read after caches.keys(): a newer cache in that list was created by an install
+// that is still `installing`, then `waiting`, then `active`, so a registration
+// that shows none of those for anyone but this worker proves it is orphaned.
+// An unknown registration (none exposed) keeps everything.
+function newerSweepable(build) {
+  if (ownBuild() !== build) return false;
+  const reg = self.registration;
+  if (!reg || reg.installing || reg.waiting) return false;
+  return !reg.active || reg.active.scriptURL === self.location.href;
+}
 async function sweepStaleCaches() {
   const name = _cacheNameKnown;
   const build = cacheBuild(name);
@@ -371,8 +385,10 @@ async function sweepStaleCaches() {
       retainPrev = list.length > 0;
     } else retainPrev = true;
   }
+  const sweepNewer = keys.some((k) => cacheBuild(k) > build) && newerSweepable(build);
   const stale = keys.filter((k) => {
     const b = cacheBuild(k);
+    if (b > build) return sweepNewer;
     if (!(b > 0 && b < build)) return false;
     if (retainPrev && k === prevName) return false;
     return true;
@@ -1075,6 +1091,9 @@ async function cacheOptionalAsset(cache, url, verifyGeneration = false) {
       if (verifyGeneration && /^js\//.test(url) && !/\?v=([0-9a-f]{12})$/.test(url)) return false;
       const checked = await Promise.race([verifyHashedResponse(url, res).then(() => true), expired]);
       if (!checked) return false;
+      // Verified: the deadline is spent. Clear it before the put, or an abort
+      // mid-write kills a good body and the asset counts as missing (#6633 L5).
+      clearTimeout(timeout); timeout = null;
       await cache.put(url, res); return true;
     }
     return false;   // 4xx/5xx or timed out: counted by install, one aggregated log line
@@ -1403,9 +1422,11 @@ function packNetworkFirst(event, req, fixedCache, staleFirst) {
   // Register synchronously; the late write survives even if cached content won.
   event.waitUntil(network.then(() => cacheWrite, () => undefined));
   event.respondWith((async () => {
-    const cached = fixedCache
+    // A CacheStorage read that rejects (an iOS storage error) is a miss, never a
+    // rejected respondWith: the awaits below sit outside any try (#6633 L4).
+    const cached = (fixedCache
       ? caches.match(req, { cacheName: fixedCache }).then((hit) => hit || matchPreferCurrent(req))
-      : matchPreferCurrent(req);
+      : matchPreferCurrent(req)).catch(() => undefined);
     if (staleFirst) { const early = await cached; if (early) return early; }
     const timeout = new Promise((resolve) => setTimeout(() => resolve(null), NAV_RACE_MS));
     try {
@@ -1656,7 +1677,10 @@ self.addEventListener("fetch", (event) => {
           }
         } else res = await Promise.race([network, timeout]);
         if (res && res.ok) return res;
-        if (res == null && failFast) return Response.error();
+        // A NON-OK version.json while online (a 503 or 404 mid-deploy) is passed
+        // through as-is: the cached copy below would hand the guard a stale build
+        // number, which is exactly what failing fast exists to prevent (#6633 L3).
+        if (failFast) return res || Response.error();
       } catch (_) {
         if (failFast) return Response.error();
       }

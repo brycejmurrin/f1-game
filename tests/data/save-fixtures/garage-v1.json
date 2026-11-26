@@ -1,0 +1,39 @@
+{
+ "format": "apex26-garage-v1",
+ "exportedAt": "2026-11-25T00:00:00.000Z",
+ "build": "golden",
+ "excluded": "career and season saves, lap records, ghosts, settings, tuners, control bindings, accounts",
+ "count": 7,
+ "garage": {
+  "parts.haas": {
+   "engine": "spec-b",
+   "aero": "low"
+  },
+  "setup.t3": {
+   "wingF": 5,
+   "wingR": 6
+  },
+  "careerSetup.haas": {
+   "wingF": 4
+  },
+  "livery.custom.haas": [
+   {
+    "id": "golden-1",
+    "name": "GOLDEN",
+    "c1": [
+     1,
+     0.8,
+     0
+    ],
+    "c2": [
+     0.1,
+     0.1,
+     0.1
+    ]
+   }
+  ],
+  "livery.haas": "golden-1",
+  "team": 3,
+  "driver": 1
+ }
+}

@@ -4,11 +4,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { apply, loadMoves, validate, sweep, splitSegmentMentions } from "../../tools/gen/move-tree.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 // Fixture comment markers are built at runtime so the docs-integrity comment
 // scan does not read the scratch tree's example paths as citations.
@@ -20,7 +20,7 @@ import { apply, loadMoves, validate, sweep, splitSegmentMentions } from "../../t
 // that way (2026-09-03). A name no move map can ever contain is immune.
 const SL = "/" + "/";
 function scratch() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "apex-move-tree-"));
+  const root = mkTmpDir("apex-move-tree-");
   const w = (rel, text) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); };
   w("js/zzfix/alpha.js", `"use strict";\n${SL} see js/zzfix/alpha.js and js/zzfix/alphabet.js\n`);
   w("js/zzfix/alphabet.js", '"use strict";\n');

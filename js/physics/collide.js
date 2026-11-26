@@ -300,11 +300,12 @@ const Collide = (() => {
     let motion = new WeakMap(), motionTrack = null, motionTime = -1;
     let sweepGeneration = 0;
     const _fxPairs = new WeakMap();   // car → WeakMap(other car → last notified generation), retained weakly across steps
-    function firstPairFx(a, b) {
-      let peers = _fxPairs.get(a);
-      const reverse = _fxPairs.get(b);
+    const _hookPairs = new WeakMap();   // the same, spent only by an impulse pass (orientedResponse's debris/incident hooks)
+    function firstPairFx(a, b, map = _fxPairs) {
+      let peers = map.get(a);
+      const reverse = map.get(b);
       if ((peers && peers.get(b) === sweepGeneration) || (reverse && reverse.get(a) === sweepGeneration)) return false;
-      if (!peers) { peers = new WeakMap(); _fxPairs.set(a, peers); }
+      if (!peers) { peers = new WeakMap(); map.set(a, peers); }
       peers.set(b, sweepGeneration);
       return true;
     }
@@ -378,7 +379,9 @@ const Collide = (() => {
         if (firstPairFx(a, b)) collideFx(a, b, clamp(sevV(j.closing) * 0.03, 0.15, 1));
         // The first impulse carries severity; later relaxation passes have
         // already removed closing velocity. Both worlds retain their own gates.
-        if (j.magnitude > CORR_EPS && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired) {
+        // Once per pair per step (#6546 P8), spent by the first IMPULSE pass only: a
+        // depenetration-only pass 0 must not use up the slot a later shunt needs.
+        if (j.magnitude > CORR_EPS && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired && firstPairFx(a, b, _hookPairs)) {
           if (DebrisWorld.active()) DebrisWorld.carImpact(a, b, j.closing);
           incidentSim.notifyCar(a, b, j.closing);
         }
@@ -651,7 +654,11 @@ const Collide = (() => {
           if (a.human || b.human) a.contactT = b.contactT = 0.22;
           // The next corner (kTurn, AI-only) owns a level pair only between AI cars: a curvature read must not decide a PLAYER's scrub.
           // ONE k for the pair (the sharper of the two, as cornerK): taking a's k first let bucket order pick the yielder (audit4 F10).
-          if (AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : AiDrive.cornerK(a.kTurn, b.kTurn))) { if (last) a.speed = scrub(a.speed, rubScrub); a.contactT = 0.22; }
+          // A STATIC yielder (invMass 0: a parked retirement or a net-owned rival) cannot yield: the moving
+          // car pays the scrub and takes the flag, as the rear branch's if (iA)/if (iB) (#6546 P5).
+          let yA = AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : AiDrive.cornerK(a.kTurn, b.kTurn));
+          if (yA ? !iA && iB : !iB && iA) yA = !yA;
+          if (yA) { if (last) a.speed = scrub(a.speed, rubScrub); a.contactT = 0.22; }
           else { if (last) b.speed = scrub(b.speed, rubScrub); b.contactT = 0.22; }
           // INSIDE the guard, like everything else in this branch. It was the
           // one statement outside it, so a settled side-by-side rub — two cars

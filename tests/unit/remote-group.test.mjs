@@ -9,10 +9,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import os from "node:os";
 import YAML from "yaml";
 import { browserGroups, planMatrix, parseWorkers, resolveWorkers, pickRun, failLines, groupVerdict, SHARD_CHOICES, WORKFLOW, USAGE,
   groupFiles, expectedSec, shardPlan, runShardArgs, liveRun, MAX_PIECES, SPEC_RE, fetchOrigin, ownerWriteGate, OWNER_OPT_IN, GROUP_LANES, withLanes, groupLanes, MAX_GROUP_LANES } from "../../tools/ci/remote-group.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SCRIPTS = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
@@ -262,7 +262,7 @@ test("optional queue admission runs before shared shards and a refused run canno
 
 test("--ref still refreshes origin/<branch>: the sha, the green lookup and the workflow check read it", () => {
   // A stale local origin/<branch> names a tip that has newer, untested commits; with --ref the fetch used to be skipped.
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "rg-fetch-"));
+  const tmp = mkTmpDir("rg-fetch-");
   const g = (cwd, ...a) => spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...a], { cwd, encoding: "utf8" });
   try {
     const bare = path.join(tmp, "o.git"), a = path.join(tmp, "a"), b = path.join(tmp, "b");

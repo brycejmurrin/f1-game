@@ -525,7 +525,7 @@ test("UpdateCheck is wired: #update-chip in the shell, the visibility hook, the 
   assert.match(read("index.html"), /<button id="update-chip" type="button" hidden>/);
   const ps = read("js/ui/platform-session.js");
   assert.match(ps, /UpdateCheck\.create\(\{/);
-  assert.match(ps, /updates\.onVisible\(\)/);
+  assert.match(ps, /UpdateCheck\.listen\(updates, window, document\)/);   // visibilitychange, pageshow, focus (#6633)
   assert.match(ps, /controllerchange/);
   assert.match(read("js/core/script-loader.js"), /UpdateCheck\.blocksLazyLoad\(\)/);
 });

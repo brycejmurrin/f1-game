@@ -97,6 +97,22 @@ export function api(pathQs, opts = {}) {
   return sharedApi(pathQs, { ...opts, etags: opts.etags === undefined ? ETAGS : opts.etags });
 }
 
+/** Every run on `sha` (up to 5 pages of 50) as a `{json:{workflow_runs}}` | `{error}`; page 1 keeps the
+ *  historical URL. A later page's failure is ignored: page 1 already answers most heads. */
+export function runsForSha(request, sha) {
+  const url = (page) => `actions/runs?head_sha=${sha}&per_page=50${page > 1 ? `&page=${page}` : ""}`;
+  const first = request(url(1));
+  const all = first?.json?.workflow_runs;
+  if (first?.error || !Array.isArray(all)) return first;
+  const runs = [...all];
+  for (let page = 2; page <= 5 && runs.length < (first.json.total_count || 0); page++) {
+    const r = request(url(page));
+    if (r?.error || !Array.isArray(r?.json?.workflow_runs) || !r.json.workflow_runs.length) break;
+    runs.push(...r.json.workflow_runs);
+  }
+  return { json: { ...first.json, workflow_runs: runs } };
+}
+
 /** One run per workflow: the NEWEST by creation. A push run the PR run on the
  *  same head_sha cancelled seconds in (AGENTS.md rule 8's designed dedupe) is
  *  superseded, not a red. `created_at` has one-second resolution and the two
@@ -105,8 +121,10 @@ export function api(pathQs, opts = {}) {
 export function latestPerWorkflow(runs) {
   const by = new Map();
   for (const r of runs) {
-    const cur = by.get(r.name), t = Date.parse(r.created_at), ct = cur ? Date.parse(cur.created_at) : -Infinity;
-    if (!cur || t > ct || (t === ct && (r.conclusion === "cancelled") === (cur.conclusion === "cancelled") && r.id > cur.id) || (t === ct && cur.conclusion === "cancelled" && r.conclusion !== "cancelled")) by.set(r.name, r);
+    // Key on the workflow, not r.name: a dynamic run-name ("Land retry pr=…") is one workflow with many names.
+    const key = r.workflow_id ?? r.path ?? r.name;
+    const cur = by.get(key), t = Date.parse(r.created_at), ct = cur ? Date.parse(cur.created_at) : -Infinity;
+    if (!cur || t > ct || (t === ct && (r.conclusion === "cancelled") === (cur.conclusion === "cancelled") && r.id > cur.id) || (t === ct && cur.conclusion === "cancelled" && r.conclusion !== "cancelled")) by.set(key, r);
   }
   return [...by.values()];
 }
@@ -227,7 +245,7 @@ export function fileState(file, fsm) {
 
 /** `--jobs`: one line per job still waiting for a runner or a lane, with its wait age. */
 export function waitingJobs(sha, { since = null, request = api, now = Date.now, report = say } = {}) {
-  const r = request(`actions/runs?head_sha=${sha}&per_page=50`);
+  const r = runsForSha(request, sha);
   if (r?.error || !Array.isArray(r?.json?.workflow_runs)) { report(`= ci unknown — API: ${r?.error || "workflow runs lookup returned no run array"}`); return 3; }
   const listed = r.json.workflow_runs;
   const runs = latestPerWorkflow(since == null ? listed : listed.filter((x) => Date.parse(x.created_at) >= since)).filter((x) => x.status !== "completed");
@@ -397,7 +415,7 @@ export async function watchSha(sha, { interval, deadline, once, since = null, gr
   const via = (rs) => rs.length ? ` run=${rs.map((x) => `#${x.id} ${x.event}`).join(", ")}${tier ? ` ${tier}` : ""}` : "";
   const unknown = (message) => { report(`= ci unknown — API: ${message}`); return 3; };
   for (;;) {
-    const r = request(`actions/runs?head_sha=${sha}&per_page=50`);
+    const r = runsForSha(request, sha);
     if (r?.error || !Array.isArray(r?.json?.workflow_runs)) return unknown(r?.error || "workflow runs lookup returned no run array");
     const listed = r.json.workflow_runs;
     // #2259: a run from before the trigger floor does not cover it.
