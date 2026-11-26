@@ -231,7 +231,7 @@ test("apex_frame_report: tree tool, validated track / u / frames / shots, never 
     assert.match(b.message, msg, JSON.stringify(args));
   }
   const gone = callCli("apex_frame_report", { dryRun: true, track: "monza", target: "deploy" });
-  assert.equal(body(gone).error, "tree_only");
+  assert.equal(body(gone).error, "bad_args"); // target is not in the tree-tool schema
 
   // A shots file under scratch/ is passed through (absolute); a symlink out of
   // scratch/ is refused once resolved.

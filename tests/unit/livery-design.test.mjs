@@ -640,3 +640,17 @@ test("a colour drag step writes nothing the editor already shows", async () => {
   }
   assert.deepEqual(writes, [], "no DOM write on a colour-only drag step");
 });
+
+test("SWAP COLOURS on an unset-tint floor design keeps the design off the body colour (#6864 H1)", () => {
+  for (const kind of ["lightning", "twoTone", "keylineSplit"]) {
+    const { draft, click, D, editor } = editorFixture();
+    draft.spineLogo = kind; editor.changed();
+    const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+    const liv = () => ({ c1: rgb(draft.c1), c2: rgb(draft.c2), patternTint: draft.patternTint ? rgb(draft.patternTint) : null, patternSecond: draft.patternSecond ? rgb(draft.patternSecond) : null });
+    const before = D.designPair(liv(), kind);
+    click("SWAP COLOURS");
+    const after = D.designPair(liv(), kind);
+    assert.deepEqual(plain(after.primary), plain(before.secondary), kind + " primary is the old secondary");
+    assert.deepEqual(plain(after.secondary), plain(before.primary), kind + " secondary is the old primary");
+  }
+});

@@ -1690,7 +1690,7 @@ function redFlagRestart() {
     // Energy, tyreClass and phaseRoll are NOT cleared — same race, and the
     // strategy and the ERS state legitimately carry through a red flag.
     c.contactT = 0; c.wrongWay = false; c.wrongT = 0; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false;
-    c.offT = 0; c.wallT = 0; c.wasOnWall = false; OvertakeMode.reset(c);
+    c.offT = 0; c.offCut = false; c.wallT = 0; c.wasOnWall = false; OvertakeMode.reset(c); WheelState.resetThermal(c);   // #6877 P6
     c.kerbGripSm = 1; c.kerbCueT = 0; c.brakeStab = null; c.axEstSm = 0;   // stationary: no brake-stability or longitudinal-accel history (flatSpot stays: same tyres)
     // A STOP IN FLIGHT IS SCRATCH, not strategy: the grid boxes sit INSIDE the
     // pit window on most circuits, so a car holding the lane when the flag flew
@@ -6588,14 +6588,14 @@ function rescuePlayer(c) {
   Tracks.sample(track, c.s, smp);
   c.x = Collide.rescueX(c, cars, track.total, smp.hw); c.xVis = c.x;   // centre, unless a car is there (#5775 R5)
   c.head = Math.atan2(smp.t[0], smp.t[2]);   // aligned with the track ahead
-  c.vLat = 0; c.yawRateCur = 0;
+  c.vLat = 0; c.yawRateCur = 0; c.yawVis = c.steerVis = c.skidIntensity = c.wheelLock = c.towing = 0;   // #6877 P4
   // The pace-scaled recovery speed, never the car's own (#5876); never above vTop().
   c.speed = Math.min(vTop(), 16 * Math.max(driveTune.PACE, 0.05));
   const rw = worldFromTrack(c.s, c.x, smp); c.px = rw.x; c.pz = rw.z;   // x = 0: the centre line exactly
   c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevHead = c.head;   // re-seed the render anchors (as retireCar does) or the car smears from the wall for a frame
   c.boostOn = false; c.deploying = false;
   c.xOn = false; c.aeroX = 0; c.xArmed = false;   // rescue drops back to Z-mode
-  c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.wallT = 0; c.wasOnWall = false; c.rescueT = 0;
+  c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.offCut = false; c.wallT = 0; c.wasOnWall = false; c.rescueT = 0;
   c.rescueLastT = raceT;
   // Cues are for the driver at THIS screen (not a rival recovered elsewhere). NO BANNER: the player
   // watched it happen, and the banner QUEUE (ANN_PRI) would let it delay one that matters. The sound marks it.

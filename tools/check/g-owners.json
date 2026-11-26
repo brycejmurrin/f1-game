@@ -1,0 +1,5 @@
+{
+  "_doc": "Owner file per G member for the gWrites counter (tools/check/tree-counts.mjs). Every member lives in the default owner's closure; a write by any scanned module counts unless the member is listed here with that module as owner. List only members a module truly owns, one line of reason in the PR. No per-file baseline: the ceiling is a tree ratchet (U0.R). Do not rename: U2.4 reads it.",
+  "default": "js/game.js",
+  "owners": {}
+}

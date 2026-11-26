@@ -373,5 +373,5 @@ const LiveryDesign = (function () {
       original: () => clone(original),
     };
   }
-  return Object.freeze({ PATTERNS, SECOND_COLOR, LINE_PATTERNS, NO_REPEAT, KEY_PATTERNS, KEY_SLOTS, LABELS, RANGES, PALETTES, value, drawAtlas, history });
+  return Object.freeze({ PATTERNS, SECOND_COLOR, LINE_PATTERNS, NO_REPEAT, KEY_PATTERNS, KEY_SLOTS, LABELS, RANGES, PALETTES, value, drawAtlas, history, designPair });
 })();

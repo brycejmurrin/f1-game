@@ -14,6 +14,7 @@
  *   they slice module source and rebuild it. vm.runIn*Context loads are NOT counted: tree.vmSrcLoads owns those.
  * typeofGuards: sites in js/ (not circuits/) of `typeof G ==|!= "undefined"|"function"|"object"` where G is a global a
  *   manifest module declares; platform checks (OffscreenCanvas, window, ...) are legitimate and do not count.
+ * gWrites (U0.2 of #6920): G.<member> writes through the façade, by file; measured only.
  */
 import cp from "node:child_process";
 import fs from "node:fs";
@@ -406,6 +407,38 @@ export const typeofGuards = () => typeofGuardsReport().reduce((n, r) => n + r.co
 /** typeofGuards at a git ref. Not in AT_REF yet: U0.R wires AT_REF.typeofGuards with its TREE_METRICS row (#6944). */
 export const typeofGuardsAt = (ref) => typeofGuardsReport(jsFilesAt(ref)).reduce((n, r) => n + r.count, 0);
 
+/** Owner map for gWrites: {default, owners:{member: ownerFile}}. Only members a module truly owns are listed. */
+const loadOwners = () => JSON.parse(fs.readFileSync(path.join(ROOT, "tools/check/g-owners.json"), "utf8"));
+
+/**
+ * gWrites — `G.<member> = ...` writes a create(ctx) module makes through the façade
+ * (state with no declared owner). Scope-resolved by check-gctx's collectUsage, so a
+ * local `G` that is not the create() parameter is not counted. `+=` and `++` are
+ * writes (collectUsage's 'write'); `delete G.x` is not. Members whose owner is the
+ * writing file itself are dropped; every other write counts (game.js, the default
+ * owner, is not scanned). One {file, member, line} row per written name.
+ */
+export async function gWriteSites(rel, source = null, owners = loadOwners().owners) {
+  const { collectUsage } = await import("./check-gctx.mjs");
+  const rows = [];
+  for (const h of collectUsage(rel, source))
+    if (h.kind === "write")
+      for (const member of h.names) if ((owners || {})[member] !== rel) rows.push({ file: rel, member, line: h.line });
+  return rows;
+}
+
+let gWriteMemo = null;
+/** Every write row over check-gctx's usage files. Memoised per process (about 2 s). */
+export async function gWriteReport() {
+  if (gWriteMemo) return gWriteMemo;
+  const { usageFiles } = await import("./check-gctx.mjs");
+  const owners = loadOwners().owners;
+  const rows = [];
+  for (const rel of usageFiles()) rows.push(...await gWriteSites(rel, null, owners));
+  return (gWriteMemo = rows);
+}
+export const gWrites = async () => (await gWriteReport()).length;
+
 /** file -> count, for a failure message that says WHERE. */
 export const byFile = (rows) => rows.reduce((m, r) => (m[r.file] = (m[r.file] || 0) + 1, m), {});
 
@@ -424,6 +457,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       sourceSliceTests: Object.fromEntries(sourceSliceTestsReport().map((r) => [r.file, r.count])),
       typeofGuards: Object.fromEntries(typeofGuardsReport().map((r) => [r.file, r.count])),
       zeroRefModules: zeroRefModulesReport().map((r) => `${r.file} (${r.global || "no global"})`),
+      gWrites: byFile(await gWriteReport()),
     }, null, 2));
     process.exit(0);
   }
@@ -440,5 +474,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     zeroRefModules: zeroRefModules(),
     sourceSliceTests: sourceSliceTests(),
     typeofGuards: typeofGuards(),
+
+    gWrites: await gWrites(),
   }, null, 2));
 }

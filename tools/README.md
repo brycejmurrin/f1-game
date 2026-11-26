@@ -784,6 +784,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | File | Read by |
 |---|---|
 | **assets/procedural-room.example.json** | `tests/unit/free-design-tools.test.mjs` |
+| **check/g-owners.json** | `check/tree-counts.mjs`, `tests/unit/g-writes.test.mjs` |
 | **ci/worker-prompt.md** | — |
 | **gen/voice-corpus.json** | `gen/voice-corpus.mjs`, `gen/voicepack.mjs`, `tests/unit/voice-pack.test.mjs` |
 | **lighting/look-survey-n10.json** | `lighting/look-survey-n10.mjs`, `tests/unit/cdmcp-measure.test.mjs` |
