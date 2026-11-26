@@ -72,7 +72,6 @@ test("lamp chunks: a rebuilt, content-equal chunk set reuses the bake; an edited
   let bakes = 0;
   const head = "function buildTable(lights, chunks, knob, capMax) {";
   const src = readFileSync(path.join(ROOT, SRC), "utf8");
-  assert.ok(src.includes(head), "buildTable's signature moved: update this probe, do not delete it");
   const L = new Function("onBake", DEPS + "\n" + src.replace(head, head + " onBake();") + "; return LampChunks;")(() => bakes++);
   const lampSet = (recs) => { const a = new Float32Array(recs.length * 15); recs.forEach(([x, y, z, r], i) => { a.set([x, y, z], i * 15); a[i * 15 + 6] = r; }); return a; };
   const world = (dx) => ({
@@ -81,7 +80,7 @@ test("lamp chunks: a rebuilt, content-equal chunk set reuses the bake; an edited
   });
   const A1 = world(0), B = world(500), A2 = world(0);
   const t1 = L.resolve(A1.lights, A1.chunks, 1);
-  assert.equal(bakes, 1);
+  assert.equal(bakes, 1, "the bake counter is wired (buildTable's signature moved? update the probe, do not delete it)");
   L.resolve(B.lights, B.chunks, 1);
   assert.equal(bakes, 2, "another circuit bakes");
   const t2 = L.resolve(A2.lights, A2.chunks, 1);
