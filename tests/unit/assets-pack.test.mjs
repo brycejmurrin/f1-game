@@ -22,6 +22,7 @@ import cp from "node:child_process";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -1323,8 +1324,8 @@ test("bake-synthetic produces a dual-tier Apex26-Procedural pack with no network
   // The no-download rebuild path. Must write BOTH tiers, stamp every layer
   // Apex26-Procedural, and leave models/env alone — otherwise a synthetic
   // rebake would orphan committed Kenney bins and HDRI ambients.
-  const os = require("node:os"), cp = require("node:child_process");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-synth-"));
+  const cp = require("node:child_process");
+  const dir = mkTmpDir("apex-synth-");
   try {
     // Seed a fake prior pack so we can prove models/env survive the rewrite.
     fs.mkdirSync(path.join(dir, "models"), { recursive: true });
@@ -1364,8 +1365,7 @@ test("bake-synthetic --hd writes a hashed, separately budgeted hd tier that veri
   // The default bake adds hd at HD_SIZE (512); baked here at 32 + 64 so the test stays fast.
   assert.match(TOOL_SRC, /const HD_SIZE = 512;/);
   assert.match(TOOL_SRC, /intArg\(args, "--hd", only \? 0 : HD_SIZE\)/, "the default bake (no --size) includes hd");
-  const os = require("node:os");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-synth-hd-"));
+  const dir = mkTmpDir("apex-synth-hd-");
   try {
     fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ version: 1, materials: null, models: {}, env: {}, credits: [] }));
     const tool = path.join(ROOT, "tools", "gen", "assets.mjs"), env = { ...process.env, APEX_PACK_DIR: dir };
@@ -1488,8 +1488,8 @@ test("the two budgets match the bake tool", () => {
 });
 
 test("bake-synthetic-models drops retired procedural bins and keeps CC0 imports", () => {
-  const os = require("node:os"), cp = require("node:child_process");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-synth-mdl-"));
+  const cp = require("node:child_process");
+  const dir = mkTmpDir("apex-synth-mdl-");
   try {
     fs.mkdirSync(path.join(dir, "models"), { recursive: true });
     // Retired procedural recipe (no longer in CATALOG) must be removed.
@@ -1881,8 +1881,8 @@ test("webbake writes a ZIP that real unzip accepts", () => {
   // a bad central-directory offset produces a file that *looks* fine and fails
   // only when someone tries to open it — so this checks it against the system
   // unzip rather than against my own reader.
-  const os = require("node:os"), cp = require("node:child_process"), vm = require("node:vm");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-zip-"));
+  const cp = require("node:child_process"), vm = require("node:vm");
+  const dir = mkTmpDir("apex-zip-");
   try {
     const sandbox = {
       Math, Array, Object, JSON, Uint8Array, Uint16Array, Uint32Array, Int32Array,
@@ -2394,14 +2394,13 @@ test("assets.mjs --help prints usage and exits 0", () => {
 // array's last layer shipped silently. Each case below is one defect in an
 // otherwise-good pack; the good model alone must pass.
 test("verify refuses model files outside the pack, unhashed, or with out-of-range indices/layers", async () => {
-  const os = require("node:os");
   const crypto = require("node:crypto");
   const { writeAX26 } = await import("../../tools/gen/assets.mjs");
   const tri = { pos: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), idx: new Uint32Array([0, 1, 2]) };
   const md5 = (b) => crypto.createHash("md5").update(b).digest("hex");
   const meta = { licence: "CC0", author: "t", source: "t", mat: "CONCRETE" };
   const run = (models, files) => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-verify-"));
+    const dir = mkTmpDir("apex-verify-");
     try {
       fs.mkdirSync(path.join(dir, "models"), { recursive: true });
       for (const [f, b] of Object.entries(files)) fs.writeFileSync(path.join(dir, f), b);
