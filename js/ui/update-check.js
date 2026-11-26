@@ -126,6 +126,22 @@ const UpdateCheck = (function () {
       return true;
     }
 
+    // Install the new worker now, not after the chip reload (#6633 L1); once per build.
+    let nudged = 0;
+    const registration = o.registration || (() => {
+      const sw = typeof navigator !== "undefined" && navigator.serviceWorker;
+      return sw && typeof sw.getRegistration === "function" ? sw.getRegistration() : null;
+    });
+    function nudgeWorker(build) {
+      if (!(build > nudged)) return;
+      nudged = build;
+      try {
+        Promise.resolve(registration())
+          .then((r) => (r && typeof r.update === "function" ? r.update() : null))
+          .catch(() => {});
+      } catch (e) { /* never blocks the chip */ }
+    }
+
     function since() {
       if (bootSeed && guardOk()) { bootSeed = false; lastCheck = bootAt; }
       return lastCheck;
@@ -149,7 +165,7 @@ const UpdateCheck = (function () {
         .then(() => doFetch("version.json?_=" + t, { cache: "no-store", ...(abort ? { signal: abort.signal } : {}) }))
         .then((r) => { if (!(r && r.ok)) throw new Error("version.json " + (r && r.status)); return r.json(); });
       inflight = Promise.race([read, deadline])
-        .then((v) => markReady(v && v.build))
+        .then((v) => { const b = Number(v && v.build); if (booted && b > booted) nudgeWorker(b); return markReady(b); })
         .catch(() => { lastCheck = now() - THROTTLE_MS + FAIL_BACKOFF_MS; return false; })   // offline / deploy window: ask again soon
         .finally(() => { clearTimeout(timer); inflight = null; });
       return inflight;
@@ -302,6 +318,16 @@ const UpdateCheck = (function () {
     return !b;
   }
 
-  return { create, blocksLazyLoad, prepareLazyLoad, bootedBuild, controllerBuild, THROTTLE_MS };
+  // Foreground polls (#6633 L2): also a bfcache restore and focus; check() coalesces a double fire.
+  function listen(api, win, doc) {
+    const poll = () => api.onVisible();
+    if (doc && doc.addEventListener) doc.addEventListener("visibilitychange", poll);
+    if (win && win.addEventListener) {
+      win.addEventListener("pageshow", (e) => { if (e && e.persisted) poll(); });
+      win.addEventListener("focus", poll);
+    }
+  }
+
+  return { create, listen, blocksLazyLoad, prepareLazyLoad, bootedBuild, controllerBuild, THROTTLE_MS };
 })();
 Object.freeze(UpdateCheck);

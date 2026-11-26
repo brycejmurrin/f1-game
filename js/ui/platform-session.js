@@ -285,7 +285,7 @@ function wirePhone() {
 }
 
 function wireLifecycle() {
-// UPDATE READY: re-read version.json when the tab comes back (≤ 1 per 10 min)
+// UPDATE READY: re-read version.json when the app comes back (≤ 1 per 10 min)
 // and when a newer worker takes control; the chip shows in the menus only and
 // reloads once the store and ghosts are flushed.
 const updates = UpdateCheck.create({
@@ -298,7 +298,7 @@ const updates = UpdateCheck.create({
 const chip = $("update-chip");
 if (chip) chip.addEventListener("click", () => { updates.apply(); });
 if (navigator.serviceWorker) navigator.serviceWorker.addEventListener("controllerchange", () => updates.newerActive());
-document.addEventListener("visibilitychange", () => updates.onVisible());
+UpdateCheck.listen(updates, window, document);   // visibilitychange, pageshow (bfcache), focus (#6633 L2)
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) disarmProbeOnLeave();
   if (document.hidden && cancelMirrorPrep) cancelMirrorPrep();   // rAF stops; optional warm must not hold entry
