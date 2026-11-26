@@ -892,6 +892,12 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
 #vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot::before {
   display: none;
 }
+/* The foot's buttons (CLOSE, step BACK) fill that locked band: a bare .bigbtn paints 57 in the 52 head at UI SIZE 109 (#6814 CI). */
+#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot > .bigbtn {
+  min-width: var(--tap); height: var(--tap-paint); min-height: 0; max-height: var(--tap-paint);
+  margin: 0; padding: 0 var(--gap); box-sizing: border-box;
+  font-size: var(--fs-micro); line-height: 1;
+}
 #vsfriend-inner[data-density="compact"] #vs-pick {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap);
 }
@@ -1488,8 +1494,9 @@ body[data-dock-edit] [data-dock-selected] { outline: 2px solid var(--hud-ink-lig
 
 /* LONE BACK / CLOSE IN THE HEAD for the three sheets that carry a contents strip (#6753, #6570 row 1). Their own
    compact rules (career.css, above) pin head / nav / body / foot to a four-row stack with ID selectors, which beats the
-   generic components.css rule. Same placement here: head left, foot right on row 1, strip and body full width below. */
-:is(#career-guide .sheet, #career-history .sheet, #howtoplay-inner)[data-density="compact"]:has(> .sheet-foot > :is(button, a):only-child) {
+   generic components.css rule. Same placement here, on a non-tall sheet only (on a tall one, a portrait 320x568 at 200%,
+   the head squeezed to a 33 px column): head left, foot right on row 1, strip and body full width below. */
+:is(#career-guide .sheet, #career-history .sheet, #howtoplay-inner)[data-density="compact"]:not([data-shape="tall"]):has(> .sheet-foot > :is(button, a):only-child) {
   grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto minmax(0, 1fr);
   & > .sheet-head { grid-column: 1; grid-row: 1; }
   & > :is(#cg-contents, #ch-contents, #htp-contents) { grid-column: 1 / -1; grid-row: 2; }
