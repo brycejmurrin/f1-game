@@ -131,6 +131,11 @@ const ALLOWED = [
     why: "sign test — the negative half of the same wall-scrub branch",
   },
   {
+    file: "js/physics/wall-clamp.js", expr: "c.speed < 0",
+    code: "const travelIn = noseIn || c.speed < 0;",
+    why: "sign test — reversing means the tail leads into the wall (#6546 P6)",
+  },
+  {
     file: "js/game.js", expr: "c.speed > 0.5", code: "if (c.speed > 0.5 && c.speed < 12)",
     why: "sign test with a noise floor — 'the car is actually moving' before the launch window",
   },
