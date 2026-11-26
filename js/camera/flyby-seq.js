@@ -1827,9 +1827,9 @@ const FlybySeq = (function () {
     // THE FRAMING (see NEAR_SUBJ above): the plan as it will play, judged; an
     // alternative eye is planned at the same squeeze (down the ladder while it
     // is still too fast) and judged the same way.
-    // The scene the judged frames read, built in slices on a cold track (a pure memo: when it is built changes nothing).
-    if (typeof FlybySight !== "undefined" && FlybySight.sceneSteps) yield* FlybySight.sceneSteps(track);
     const subj = typeof FlybySight !== "undefined" ? subjectOf(track, shot) : null;
+    // The scene the judged frames read, built in slices on a cold track (a pure memo: when it is built changes nothing).
+    if (subj && FlybySight.sceneSteps) yield* FlybySight.sceneSteps(track);
     const tried = [];
     let picked = null, lapRef = null;
     if (subj) {

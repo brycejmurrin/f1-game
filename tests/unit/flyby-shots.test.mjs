@@ -1048,10 +1048,21 @@ test("planSteps slices inside a shot and plans exactly what planShot plans whole
     delete track._fbPlan; delete track._fsScene;
     const step = F.planSteps(track, shots);
     let n = 1; while (!step()) n++;
-    assert.ok(n > list.length * 10, `a shot is many steps, not one (${n} steps for ${list.length} shots)`);
+    assert.ok(n > list.length * 3, `a shot is many steps, not one (${n} steps for ${list.length} shots)`);
     const sliced = ser();
     delete track._fbPlan; delete track._fsScene;
     assert.equal(ser(), sliced, "the sliced plans are byte-for-byte the whole ones");
+    // The duration moves mid-plan (a sliced shot is open across it): that shot is
+    // re-planned whole for the new duration, never cached half one, half the other.
+    delete track._fbPlan; delete track._fsScene;
+    const step2 = F.planSteps(track, shots);
+    for (let k = 0; k < 40; k++) step2();
+    F.setDuration(10000);
+    while (!step2());
+    const moved = ser();
+    delete track._fbPlan; delete track._fsScene;
+    assert.equal(ser(), moved, "a duration set mid-slice leaves the plans a whole plan at that duration makes");
+    F.setDuration(20000);
     return null;
   }, { fresh: true });
 });
