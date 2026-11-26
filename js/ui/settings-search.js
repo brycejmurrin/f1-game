@@ -204,7 +204,8 @@ const SettingsSearch = (function () {
     // held: the query whose result feedback the note shows; a re-paint (a lazy
     // owner registering after the click) keeps it until the query changes.
     let last = null, fromSearch = false, destinationNote = null, held = null;
-    const say = t => { held = input.value; note.textContent = t; };
+    const speak = t => { if (typeof LiveRegion !== "undefined") LiveRegion.say(t, "hud"); };
+    const say = t => { held = input.value; note.textContent = t; speak(t); };
     const clearFeedback = () => { held = null; if (destinationNote) destinationNote.remove(); destinationNote = null; };
     if (o.onLeave) o.onLeave(clearFeedback);
     function unavailable(row) {
@@ -219,8 +220,7 @@ const SettingsSearch = (function () {
         panel.insertBefore(destinationNote, panel.firstChild);
       }
       const why = row.unavailableReason || message;
-      if (!panel) say(why);
-      if (typeof LiveRegion !== "undefined") LiveRegion.say(why, "hud");
+      if (!panel) say(why); else speak(why);
     }
     const slots = new Map();
     function slotFor(row) {

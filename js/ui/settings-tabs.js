@@ -357,6 +357,8 @@ const SettingsNav = (function () {
       if (body) body.scrollTop = 0;
       // A callback may disable/reflow controls (KeyBinds and audio do this),
       // so run it before resolving the page's focus target.
+      // Focus moves into the page: say which page BEFORE after(), so a note it speaks wins (the title is not a live region).
+      if (focus && id !== "home" && typeof LiveRegion !== "undefined") LiveRegion.say(breadcrumb(id), "hud");
       const placed = typeof after === "function" && after() === true;
       if (focus && !placed) focusPage(id);
       scheduleScrollFade();
