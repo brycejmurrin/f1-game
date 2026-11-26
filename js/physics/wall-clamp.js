@@ -113,10 +113,14 @@ const WallClamp = (function () {
         // self-aligns" failing alongside it. The wall is a hard constraint; slip
         // against it is not something the car gets to keep.
         if (c.vLat) c.vLat = 0;
+        // Travel into the wall: nose-in, or tail-first in reverse (#6546 P6).
+        const travelIn = noseIn || c.speed < 0;
+        // first-frame impact: lose only the normal component — a graze is nearly
+        // free, a head-on hit bites hard.
+        const strike = travelIn && !c.wasOnWall;
+        if (strike) c.speed *= 1 - incidence * AiDrive.wallHitLoss(!!track.street);
+        if (strike && c.isPlayer && incidence > 0.12) c.wallHits = (c.wallHits | 0) + 1;
         if (noseIn) {
-          // first-frame impact: lose only the normal component — a graze is nearly
-          // free, a head-on hit bites hard.
-          if (!c.wasOnWall) c.speed *= 1 - incidence * AiDrive.wallHitLoss(!!track.street);
           // straighten the nose toward the wall tangent so the car slides along it
           // Exponential, not a raw rate*dt: Math.min(1, ...) SNAPPED the heading
           // exactly onto the tangent in a single step at any dt >= 0.083 s (a 12 fps
@@ -127,7 +131,6 @@ const WallClamp = (function () {
           const wallAlign = (1 - Math.exp(-(4 + incidence * 8) * dt))
                           * clamp(Math.abs(c.speed) * kStd / 8, 0, 1);
           c.head -= rel * wallAlign;
-          if (c.isPlayer && !c.wasOnWall && incidence > 0.12) c.wallHits = (c.wallHits | 0) + 1;
         }
         // THIS screen's car only: a VS FRIEND is c.human too (setCarRole), so
         // shake / collision SFX / vibrate / rumble must gate on isPlayer —
@@ -138,7 +141,7 @@ const WallClamp = (function () {
         const WALL_SCRAPE_SPEED = 2;   // m/s — stopped against the barrier stays quiet
         // SOUND OFF mutes the SFX only, never the feel
         if (c.isPlayer && c.collideT <= 0) {
-          const firstStrike = !c.wasOnWall && noseIn && incidence > 0.12;
+          const firstStrike = strike && incidence > 0.12;
           const grindScrape = c.wasOnWall && Math.abs(c.speed) >= WALL_SCRAPE_SPEED;
           if (firstStrike || grindScrape) {
             const fxInc = firstStrike ? incidence : Math.max(incidence, 0.2);

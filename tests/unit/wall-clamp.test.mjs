@@ -481,3 +481,24 @@ test("wall-align: the nose walks onto the tangent at the same rate for the same 
   assert.ok(ref !== -0.4, "the nose moved");
   for (const pace of [0.84, 1.338]) assert.ok(Math.abs(head(pace) - ref) < 1e-12, `PACE ${pace}: head ${head(pace)} vs ${ref}`);
 });
+
+// #6546 P6: the first-hit speed loss, wallHits++ and the first-strike sound key
+// on the direction of TRAVEL, not the nose. Reversing tail-first into the +x
+// wall (head +0.4 = nose away from it, speed < 0) got none of the three.
+test("reverse tail-first into a wall: wallHits +1, speed loss, first-strike SFX", () => {
+  let audioHits = 0;
+  const { WallClamp } = load({ onCollision: () => { audioHits++; } });
+  const c = noseInCar({ head: 0.4, speed: -5 });
+  WallClamp.apply(c, baseCtx({ soundOn: true }));
+  assert.equal(c.x, 5, "pinned to wallR");
+  assert.equal(c.wallHits, 1, "tail-first strike counts as a wall hit");
+  const loss = Math.abs(Math.sin(0.4)) * 0.14;
+  assert.ok(Math.abs(c.speed - -5 * (1 - loss)) < 1e-9, `reverse speed scrubbed by incidence (${c.speed})`);
+  assert.ok(c.speed < 0, "still reversing — the hit scrubs, never flips direction");
+  assert.equal(audioHits, 1, "first-strike collision SFX plays");
+  // Moving forward with the nose out (peeling off) stays free: no hit, no loss.
+  const off = noseInCar({ head: 0.4, speed: 20 });
+  WallClamp.apply(off, baseCtx());
+  assert.equal(off.wallHits, 0);
+  assert.equal(off.speed, 20);
+});
