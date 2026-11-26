@@ -2766,17 +2766,14 @@ test("touch --chip-h and every BUTTON-look arm paint 44.2 px at UI SIZE 50 and 7
   }
 });
 
-test("a contents <nav> is not a region: lone-button-in-head gate ignores it; #vs-close has no bespoke rule (#6753 row 1)", () => {
+test("contents-strip sheets and the nav gate: lone BACK/CLOSE rides in the head (#6753 row 1)", () => {
   const comp = readCssSource("css/components.css");
-  assert.ok(comp.includes(":not(:has(> :nth-child(4 of :not(nav))))"), "gate skips a contents nav");
-  assert.ok(!/:not\(:has\(> :nth-child\(4\)\)\)/.test(comp), "no ungated fourth-child check left");
-  for (const f of ["css/overlays.css", "css/dialogs.css"]) assert.ok(!/#vs-close\s*\{/.test(readCssSource(f)), `${f}: no #vs-close rule`);
-});
-
-test("contents-strip sheets park a lone BACK/CLOSE in the head on a short landscape window (#6753 row 1)", () => {
   const raw = readCssSource("css/overlays.css");
-  for (const [sheet, foot] of [['#career-guide .sheet', 'cg'], ['#career-history .sheet', 'ch'], ['#howtoplay-inner', 'htp']]) {
-    const head = `${sheet}[data-density="compact"]:has(> .sheet-foot > :is(button, a):only-child) > .sheet-foot`;
-    assert.ok(raw.includes(head), `${foot}: foot rule`);
-  }
+  const got = {
+    navGate: comp.includes(":not(:has(> :nth-child(4 of :not(nav))))"),
+    vsCloseRules: ["css/overlays.css", "css/dialogs.css"].filter((f) => /#vs-close\s*\{/.test(readCssSource(f))),
+    stripFeet: [["#career-guide .sheet"], ["#career-history .sheet"], ["#howtoplay-inner"]]
+      .filter(([sh]) => raw.includes(`${sh}[data-density="compact"]:has(> .sheet-foot > :is(button, a):only-child) > .sheet-foot`)).length,
+  };
+  assert.deepEqual(got, { navGate: true, vsCloseRules: [], stripFeet: 3 });
 });
