@@ -6560,9 +6560,10 @@ function updateCarAdvance(c, dt, ranked, S) {
         c.x = pits.laneX(c, smp.hw, c.x);
         c.speed = Math.min(pits.limit(), Math.max(c.speed, 8 * Math.max(driveTune.PACE, 0.05)));
       } else {
-        c.x = clamp(c.x, -(smp.hw - 1.5), smp.hw - 1.5);   // back onto the track
-        // Pace-scaled restore floor (same shape as coast()); never above vTop().
-        c.speed = Math.min(vT, Math.max(c.speed, 14 * Math.max(driveTune.PACE, 0.05)));
+        c.x = Collide.rescueX(c, cars, track.total, smp.hw);   // back onto the track, clear of every car (#6763 K2; the player's rescue does the same)
+        // Pace-scaled restore floor (same shape as coast()); never above vTop(); not with a car within 8 m (fired into it).
+        const near = cars.some(o => o !== c && !o.finished && Math.hypot(wrapS(o.s - c.s + track.total / 2) - track.total / 2, (o.x || 0) - c.x) < 8);
+        if (!near) c.speed = Math.min(vT, Math.max(c.speed, 14 * Math.max(driveTune.PACE, 0.05)));
       }
       c.rescueT = 0; c.offT = 0; c.stuckT = 0; c.contactT = 0; c.digEscHeld = false;
     }
