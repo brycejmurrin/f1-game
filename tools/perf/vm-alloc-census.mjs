@@ -41,6 +41,11 @@ import { fileURLToPath } from "node:url";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const BASELINE_PATH = path.join(HERE, "baselines", "vm-alloc.json");
 export const SCENARIO = Object.freeze({ track: "monza", warm: 3000, windows: 6, frames: 60 });
+// The ledger row (#6941): rendered frames through pumpFrame, PerfSpans on minus off. Record-only budget:
+// the recorder's own objects KB/frame (marksDeltaKb) must stay under LEDGER_MAX_DELTA_KB; whole-frame on/off windows are
+// reported only (the game's own garbage swings 15-35 KB/frame between windows). CI gating is U0.3b. The step-based SCENARIO above is untouched.
+export const LEDGER_SCENARIO = Object.freeze({ track: "monza", warm: 3000, windows: 4, frames: 60 });
+export const LEDGER_MAX_DELTA_KB = 0.05;
 export const SAMPLE_INTERVAL = 8;     // HeapProfiler sampling interval, bytes: fine enough that a sample reads its raw size (see the header)
 // The bound is a RATIO of the baseline MEAN (single windows follow the race: who is near whom). The
 // mean's measured spread is 1 % idle or loaded; JIT tier-up timing is what moves it (optimised code
@@ -124,6 +129,91 @@ async function childMain(sc) {
   process.stdout.write("\n" + JSON.stringify({ boxedSize, windows }) + "\n");
 }
 
+/** Child body, ledger scenario (#6941): real rendered frames (g.pumpFrame drives tickBody, which g.step never runs) with
+ *  PerfSpans OFF then ON in alternating windows after the warm. Prints one JSON line with both window sets and the
+ *  per-phase stats read at the end. Boxed doubles are reported, never gated. */
+const CAR_STAGES = ["car.brake", "car.long", "car.lat", "car.bike", "car.adv"];
+async function ledgerMain(sc) {
+  const require = createRequire(import.meta.url);
+  const v8 = require("node:v8");
+  const { Session } = require("node:inspector");
+  const { PerformanceObserver } = require("node:perf_hooks");
+  const { createGame } = require("../lib/game-vm.cjs");
+  const session = new Session(); session.connect();
+  const post = poster(session);
+  const boxedSize = await calibrateBoxedSize(post);
+  const gcs = [];
+  const obs = new PerformanceObserver((l) => { for (const e of l.getEntries()) gcs.push(e.startTime); });
+  obs.observe({ entryTypes: ["gc"] });
+  const used = () => v8.getHeapStatistics().used_heap_size;
+  const turn = () => new Promise((r) => setImmediate(r));
+  const g = await createGame({ track: sc.track, carMeshes: false });
+  await g.race(sc.track);
+  const A = g.apex, P = g.sandbox.PerfSpans;
+  A.go(); A.setInput({ throttle: true, steer: 0.02 });
+  let clock = g.sandbox.performance.now();
+  const pump = (n) => { for (let i = 0; i < n; i++) { clock += 16.7; g.pumpFrame(clock); } };
+  P.on(true); pump(sc.warm); P.on(false);   // warm both code paths: the ON path is the one being measured
+  const kb = (b) => +(b / sc.frames / 1024).toFixed(1);
+  const win = async (spansOn) => {
+    P.on(spansOn);
+    global.gc(); global.gc(); await turn();
+    const n0 = gcs.length;
+    let t0 = 0, t1 = 0, b0 = 0, b1 = 0;
+    const samples = await sampleAllocations(post, () => { t0 = performance.now(); b0 = used(); pump(sc.frames); b1 = used(); t1 = performance.now(); });
+    await turn();
+    P.on(false);
+    const { objects, boxed } = splitSamples(samples, boxedSize);
+    return { kbPerFrame: kb(b1 - b0), objectsKb: kb(objects), boxedKb: kb(boxed), gcInside: gcs.slice(n0).some((t) => t >= t0 && t <= t1) };
+  };
+  const off = [], on = [];
+  P.reset();
+  for (let w = 0; w < sc.windows; w++) { off.push(await win(false)); on.push(await win(true)); }
+  const spans = P.stats();
+  // The recorder's OWN garbage, isolated from the game's (whole-frame windows swing 15-35 KB/frame on their own, far above
+  // the 0.05 KB limit): replay one frame's marks (16 phases, 2 steps x 22 cars x 5 car.* stages) against the live PerfSpans
+  // with the real clock, spans off then on. This is the gated number.
+  const marks = async (spansOn) => {
+    P.on(spansOn);
+    const one = () => {
+      P.begin("frame"); P.begin("input"); P.end("input"); P.begin("physics");
+      for (let s = 0; s < 2; s++) {
+        P.begin("update"); P.begin("ai");
+        for (let c = 0; c < 22; c++) for (const n of CAR_STAGES) { P.begin(n); P.end(n); }
+        P.end("ai"); P.begin("collide"); P.end("collide"); P.begin("audio"); P.end("audio"); P.end("update");
+      }
+      P.end("physics"); P.begin("camera"); P.end("camera"); P.begin("render"); P.begin("present"); P.end("present"); P.end("render"); P.begin("hud"); P.end("hud"); P.end("frame");
+    };
+    for (let i = 0; i < 2000; i++) one();
+    global.gc(); global.gc(); await turn();
+    const samples = await sampleAllocations(post, () => { for (let i = 0; i < sc.frames * 20; i++) one(); });
+    P.on(false);
+    const { objects, boxed } = splitSamples(samples, boxedSize);
+    return { objectsKb: +(objects / (sc.frames * 20) / 1024).toFixed(3), boxedKb: +(boxed / (sc.frames * 20) / 1024).toFixed(3) };
+  };
+  const marksOff = await marks(false), marksOn = await marks(true);
+  g.close(); obs.disconnect(); session.disconnect();
+  process.stdout.write("\n" + JSON.stringify({ boxedSize, off, on, spans, marksOff, marksOn }) + "\n");
+}
+
+/** Run the ledger scenario in a child. Returns { off, on, spans, p99, objectsOffKb, objectsOnKb, deltaObjectsKb, boxedOffKb, boxedOnKb }. */
+export function measureLedger(sc = LEDGER_SCENARIO) {
+  const r = spawnSync(process.execPath, ["--expose-gc", "--max-semi-space-size=128", fileURLToPath(import.meta.url), "--ledger-child", JSON.stringify(sc)],
+    { encoding: "utf8", maxBuffer: 64 << 20, timeout: 900000 });
+  const line = String(r.stdout || "").trim().split("\n").reverse().find((l) => l.startsWith("{\"boxedSize\""));
+  if (r.status !== 0 || !line) throw new Error(`vm-alloc-census ledger child failed (status ${r.status}):\n${String(r.stderr || "").slice(-2000)}`);
+  const { boxedSize, off, on, spans, marksOff, marksOn } = JSON.parse(line);
+  const vOff = off.filter((w) => !w.gcInside), vOn = on.filter((w) => !w.gcInside);
+  const p99 = {}; for (const k of Object.keys(spans)) p99[k] = spans[k].p99;
+  const objectsOffKb = meanOf(vOff, "objectsKb"), objectsOnKb = meanOf(vOn, "objectsKb");
+  return {
+    boxedSize, off, on, spans, p99, marksOff, marksOn,
+    marksDeltaKb: +(marksOn.objectsKb - marksOff.objectsKb).toFixed(3),   // GATED: the recorder's own objects KB/frame validOff: vOff.length, validOn: vOn.length,
+    objectsOffKb, objectsOnKb, deltaObjectsKb: objectsOffKb == null || objectsOnKb == null ? null : +(objectsOnKb - objectsOffKb).toFixed(2),
+    boxedOffKb: meanOf(vOff, "boxedKb"), boxedOnKb: meanOf(vOn, "boxedKb"),   // reported, not gated
+  };
+}
+
 /** Mean of one window field over the GC-free windows (null when none). */
 function meanOf(valid, k) {
   return valid.length ? +(valid.reduce((s, w) => s + w[k], 0) / valid.length).toFixed(1) : null;
@@ -167,12 +257,15 @@ export function compare(m, base, maxRatio = MAX_RATIO) {
 async function main(argv) {
   const ci = argv.indexOf("--child");
   if (ci >= 0) return childMain(JSON.parse(argv[ci + 1]));
+  const li = argv.indexOf("--ledger-child");
+  if (li >= 0) return ledgerMain(JSON.parse(argv[li + 1]));
   let json = null; const update = argv.includes("--update");
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--json") json = argv[++i];
     else if (argv[i] !== "--update") throw new Error("unknown flag: " + argv[i]);
   }
   const m = measure();
+  const lg = update ? null : measureLedger();
   if (update) {
     const base = {
       ...SCENARIO, sampleInterval: SAMPLE_INTERVAL, boxedSize: m.boxedSize,
@@ -186,8 +279,9 @@ async function main(argv) {
     return;
   }
   const v = compare(m, loadBaseline());
-  if (json) { mkdirSync(path.dirname(json), { recursive: true }); writeFileSync(json, JSON.stringify({ scenario: SCENARIO, ...m, verdict: v }, null, 1)); }
+  if (json) { mkdirSync(path.dirname(json), { recursive: true }); writeFileSync(json, JSON.stringify({ scenario: SCENARIO, ...m, verdict: v, ledger: { scenario: LEDGER_SCENARIO, maxDeltaKb: LEDGER_MAX_DELTA_KB, ...lg } }, null, 1)); }
   console.log(`= vm-alloc-census ${v.ok ? "ok" : "OVER"} objects=${m.objectsKbPerFrame} boxed=${m.boxedKbPerFrame} heap=${m.meanKbPerFrame} KB/frame windows=${m.windows.map((w) => w.objectsKb + "/" + w.boxedKb + (w.gcInside ? "(gc)" : "")).join(",")} ${v.note}`);
+  console.log(`= vm-alloc-census ledger objects off=${lg.objectsOffKb} on=${lg.objectsOnKb} delta=${lg.deltaObjectsKb} KB/frame (whole frames: reported, noisy) marks delta=${lg.marksDeltaKb} KB/frame (gated, limit ${LEDGER_MAX_DELTA_KB}) boxed off=${lg.boxedOffKb} on=${lg.boxedOnKb} p99(ms) ${Object.keys(lg.p99).map((k) => k + "=" + lg.p99[k]).join(" ")}`);
   if (!v.ok) process.exitCode = 1;
 }
 

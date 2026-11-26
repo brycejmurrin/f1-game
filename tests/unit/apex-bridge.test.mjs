@@ -1113,6 +1113,7 @@ test("#6582 the READ class: listed commands, drive stop/status, and only allow-s
   const R = (cmd, args) => api.isRead({ cmd, args });
   for (const c of ["ping", "facts", "display", "geom", "frames", "screen", "snap"]) assert.equal(R(c), true, c);
   for (const c of ["tap", "nav", "set", "key", "scroll", "drive", "reload", "path", "bench", "gpuTest", "recorder", "batch", "wait", "when", "plan", "nope"]) assert.equal(R(c, {}), false, c);
+  assert.equal(R("ledger", {}), true); assert.equal(R("ledger", { on: true }), false); assert.equal(R("ledger", { reset: true }), false);
   assert.equal(R("drive", { stop: true }), true);
   assert.equal(R("drive", { status: true }), true);
   assert.equal(R("call", { method: "perf" }), true);

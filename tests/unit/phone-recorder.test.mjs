@@ -288,7 +288,7 @@ test("each live sample carries the renderer path and per-subsystem span ms", () 
   const PerfSpans = { stats: () => ({ render: { p50: 4.1, p95: 9.2, p99: 12, n: 5 }, ai: { p50: 0.6, p95: 1.1 } }) };
   const GLX = { __tlx: { backendState: () => ({ api: "webgl2", path: "webgl", pin: null }) } };
   const s = load({ PerfSpans, GLX, RendererPicker: { liveBackend: () => "three" } }).liveEnv().sample();
-  assert.deepEqual(JSON.parse(JSON.stringify(s.spans)), { render: { p50: 4.1, p95: 9.2 }, ai: { p50: 0.6, p95: 1.1 } });
+  assert.deepEqual(JSON.parse(JSON.stringify(s.spans)), { render: { p50: 4.1, p95: 9.2, p99: 12 }, ai: { p50: 0.6, p95: 1.1 } });
   assert.deepEqual(JSON.parse(JSON.stringify(s.path)), { pick: "three", api: "webgl2", path: "webgl", pin: null });
   const bare = load().liveEnv().sample();
   assert.equal(bare.spans, null);
