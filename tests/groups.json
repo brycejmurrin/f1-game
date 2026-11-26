@@ -756,6 +756,8 @@
     "// VM-executed js/perf/loop-health.js (seedLog), controllable clock, ~0.1 s.",
     "tests/unit/loop-health.test.mjs",
     "tests/unit/manifest-screenshots.test.mjs",
+    "// tools/manifest.cjs TIERS (#6920 U0.4): every FULL path and LAZY_* group is tagged with a tier and where; mutation clones. < 1 s.",
+    "tests/unit/manifest-tiers.test.mjs",
     "// The marshal posts' light panels show race control: a waved yellow in the",
     "// sector, steady yellow under VSC/SC, red, a green after the clear. VM, ~0.1 s.",
     "tests/unit/marshal-panels.test.mjs",
