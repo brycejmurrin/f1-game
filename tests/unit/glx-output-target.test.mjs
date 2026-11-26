@@ -332,3 +332,58 @@ test("R12: mirror end DontCares the mirror depth before the mip rebuild", () => 
   assert.equal(h.calls.filter((c) => c[0] === "invalidateFramebuffer").length, 0, "no open pass: no call");
 });
 
+
+// #6577 row 8 (batch #6756): GLX per-frame churn. drawDrivingLine re-sent its 7 uniforms every call (uStr a constant
+// 1.6); drawParticles allocated a fresh {data, epoch, count} resident record on every upload. Uniforms persist per
+// program, so an identical second call issues no uniform1f/uniform3fv; a palette refilled IN PLACE (driving-line.js
+// reuses one Float32Array) must still reach the shader.
+const named = (name) => (a) => a[0] && a[0].name === name;
+
+test("two identical drawDrivingLine calls set the line uniforms once; an in-place palette refill re-sends the colours", () => {
+  const h = bootGlx();
+  h.GLX.begin(h.frame());
+  const verts = new Float32Array(7 * 4), cols = new Float32Array([0.1, 0.95, 0.35, 1, 0.72, 0.1, 1, 0.12, 0.1]);
+  const opts = { speed: 40, cornersOnly: false, cols, opacity: 1 };
+  h.reset();
+  assert.equal(h.GLX.drawDrivingLine(verts, 4, true, opts), true);
+  assert.equal(h.count("uniform1f"), 4, "first call: speed, cornersOnly, opacity, strength");
+  assert.equal(h.count("uniform3fv"), 3, "first call: the three colours");
+  h.reset();
+  h.GLX.drawDrivingLine(verts, 4, false, opts);
+  assert.equal(h.count("uniform1f"), 0, "an identical second call re-sends no scalar");
+  assert.equal(h.count("uniform3fv"), 0, "an identical second call re-sends no colour");
+  assert.equal(h.count("uniformMatrix4fv"), 1, "the view-projection still goes every call");
+  h.reset();
+  opts.speed = 55; cols[0] = 0.39;   // setPalette refills the same array
+  h.GLX.drawDrivingLine(verts, 4, false, opts);
+  assert.equal(h.count("uniform1f"), 1, "only the changed speed");
+  assert.equal(h.count("uniform1f", named("uPlayerSpeed")), 1);
+  assert.equal(h.count("uniform3fv"), 3, "an in-place palette change reaches the shader");
+  h.reset();
+  h.GLX.drawDrivingLine(verts, 4, false, { speed: 55, cols: null, opacity: 1 });
+  assert.equal(h.count("uniform3fv"), 3, "the F1 GREEN fallback replaces the custom palette");
+  h.reset();
+  h.GLX.drawDrivingLine(verts, 4, false, { speed: 55, opacity: 1 });
+  assert.equal(h.count("uniform3fv"), 0, "the fallback compares by value too");
+});
+
+test("repeated particle uploads reuse the resident record and still upload changed data", () => {
+  const h = bootGlx();
+  h.GLX.begin(h.frame());
+  const a = new Float32Array(60).fill(1);
+  h.reset();
+  h.GLX.drawParticles(a, 60, false, true);
+  assert.equal(h.count("bufferSubData"), 1, "first upload");
+  h.reset();
+  h.GLX.drawParticles(a, 60, false, false);
+  assert.equal(h.count("bufferSubData"), 0, "resident and clean: no upload");
+  h.reset();
+  h.GLX.drawParticles(a, 60, false, true);
+  assert.equal(h.count("bufferSubData"), 1, "dirty: a new epoch uploads");
+  h.reset();
+  h.GLX.drawParticles(a, 30, false, false);
+  assert.equal(h.count("bufferSubData"), 1, "a count change uploads");
+  // The record itself is closure-private: pin the in-place write (no object literal per upload).
+  const src = fs.readFileSync(new URL("../../js/render/glx/glx.js", import.meta.url), "utf8");
+  assert.doesNotMatch(src, /_partResident\[addBit\]\s*=\s*\{\s*data/, "no new resident record per upload");
+});
