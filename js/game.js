@@ -6678,11 +6678,11 @@ function onTTLap(lapTime) { return records.finish(lapTime, lapRec.ttLaps, quali.
 // (kinematic in s/x like coast; classification, finishT and lap untouched). Throttle/brake slew the speed, steer moves x.
 function cooldownDrive(c, dt) {
   const inp = inputOf(c), thr = inp ? !!inp.throttle : Input.throttle(), brk = inp ? !!inp.brake : Input.brakeLevel() > 0;
-  const steer = inp ? clamp(+inp.steer || 0, -1, 1) : Input.steer(dt), vMax = vTop() * 0.55;
-  c.speed = clamp(c.speed + (thr ? 18 : brk ? -40 : -6) * dt, 0, vMax); c._coastHeld = false;
+  const steer = inp ? clamp(+inp.steer || 0, -1, 1) : Input.steer(dt), vMax = vTop() * 0.55, pk = vTop() / VMAX;   // pk = PACE: std-scale accels and the 20 m/s steer ref ride it
+  c.speed = clamp(c.speed + (thr ? 18 : brk ? -40 : -6) * pk * dt, 0, vMax); c._coastHeld = false;
   c.s = wrapS(c.s + c.speed * dt); c.prog += c.speed * dt;
   Tracks.sample(track, c.s, smp);
-  c.x = clamp(c.x + steer * Math.min(c.speed, 20) * 0.25 * dt, -smp.hw * 0.9, smp.hw * 0.9);
+  c.x = clamp(c.x + steer * Math.min(vStd(c.speed), 20) * pk * 0.25 * dt, -smp.hw * 0.9, smp.hw * 0.9);
   const w = worldFromTrack(c.s, c.x, smp);
   c.px = w.x; c.pz = w.z; c.head = Math.atan2(smp.t[0], smp.t[2]);
 }
