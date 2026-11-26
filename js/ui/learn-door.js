@@ -20,6 +20,8 @@ const LearnDoor = (function () {
       ["telemetry", "Telemetry Detective", "Compare braking, speed & throttle at the same distance"],
       // Not a framed lab: the drill opens over the real race buttons (js/ui/thumb-trainer.js).
       ["thumbs", "Vegas Thumb Trainer", "Time both thumbs through each Las Vegas corner on your own race buttons"],
+      // On track: a Las Vegas Time Trial with the trainer's cues and live scores (js/learn-drills/thumb-drill.js).
+      ["thumbs-drive", "Vegas Thumb Drill", "Drive a Las Vegas lap with the trainer's cues, every corner scored live"],
       ["rain", "Wet Weather Lines", "Explore rubber, standing water and tyre choice"],
     ]],
     ["strategy", "Race strategy", [
@@ -75,10 +77,10 @@ const LearnDoor = (function () {
           button.autofocus = id === "aero";
           button.appendChild(Dom.el("small", "", description));
           button.addEventListener("click", () => {
-            if (id === "thumbs") {
+            if (id === "thumbs" || id === "thumbs-drive") {
               if (!openTrainer) return;
               dialog.hidden = true;
-              queueMicrotask(() => openTrainer(() => { open(door, openDataHub, launchAeroDrill, openTrainer); button.focus(); }));
+              queueMicrotask(() => openTrainer(() => { open(door, openDataHub, launchAeroDrill, openTrainer); button.focus(); }, id === "thumbs-drive"));
               return;
             }
             activeLesson = button;

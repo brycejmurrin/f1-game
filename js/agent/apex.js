@@ -146,7 +146,7 @@ const LAZY_READ_ONLY = new Set(["menuPrep", "info", "probe", "texCensus", "agent
 function lazyTrackEnsure(o) {
   for (const k of Object.keys(o)) {
     const fn = o[k];
-    if (typeof fn !== "function" || LAZY_READ_ONLY.has(k)) continue;   // tiltSim (namespace)
+    if (typeof fn !== "function" || LAZY_READ_ONLY.has(k) || (typeof ApexPlay !== "undefined" && ApexPlay.isReadOnly(k))) continue;   // tiltSim (namespace)
     // Never under the loading screen, nor over a stepped or worker build in flight:
     // RACE!'s intro owns the build and `track` is null by design until it lands; race()/tt() build their OWN circuit (a cold title-pick build here doubled race entry, CI 38604708051).
     // Title boots LAZY_CIRCUIT meta stubs (_metaOnly, no path): a sync loadTrack
@@ -1816,6 +1816,7 @@ const api = {
     ...ApexCam.hooks(G, { smp, smp2, camVantage, setCamMode, snapGameCam }), // peeled: G.camRoll G.cameraDampingState
   ...ApexTrack.hooks(G, { smp, wrapS }),
   ...ApexLobby.hooks(G, { raceOrder }), // peeled: G.ttLaps
+  ...(typeof ApexPlay !== "undefined" ? ApexPlay.hooks(G) : {}), // ApexPlay: hand-loading tests may omit it; def() registry (js/agent/apex-play.js); empty until a U4.x unit defs a hook
   ...ApexNet.hooks(G, { resetStartLights }),
 
   // turnProbe() — is a relay actually there?
@@ -2125,7 +2126,9 @@ const api = {
 
   rollout(opts) { return agentView.rollout(opts); },
 
-  agentHelp() { return agentView.agentHelp(); },
+  // play: the def() registry rows (js/agent/apex-play.js), merged at call time because gen-agent-index evaluates
+  // agentview.js's agentHelp() literal statically and cannot fold a call.
+  agentHelp() { return Object.assign(agentView.agentHelp(), { play: typeof ApexPlay !== "undefined" ? ApexPlay.rows() : [] }); },
 
   scene(opts) { return agentView.scene(opts); },
 

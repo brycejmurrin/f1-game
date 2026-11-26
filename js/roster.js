@@ -173,6 +173,7 @@
     "js/agent/apex-cam.js",
     "js/agent/apex-track.js",
     "js/agent/apex-lobby.js",
+    "js/agent/apex-play.js",
     "js/agent/apex-gpu-capture.js",
     "js/agent/apex-lifecycle.js",
     "js/perf/three-inspector.js",
@@ -199,6 +200,10 @@
     ],
     [
       "js/agent/apex-lobby.js",
+      "js/agent/apex.js"
+    ],
+    [
+      "js/agent/apex-play.js",
       "js/agent/apex.js"
     ],
     [
@@ -259,7 +264,8 @@
   ],
     LAZY_LEARN: [
     "js/ui/learn-door.js",
-    "js/ui/thumb-trainer.js"
+    "js/ui/thumb-trainer.js",
+    "js/learn-drills/thumb-drill.js"
   ],
     LAZY_RACE: [
     "js/data/garage-entrance-motion.js",
