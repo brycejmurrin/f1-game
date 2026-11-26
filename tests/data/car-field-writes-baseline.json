@@ -1,0 +1,23 @@
+{
+  "_why": "Shrink-only list of car fields written as c.<name> in js/game.js, js/physics/*.js, js/race/*.js that js/race/car-fields.js does not declare (#6920 U1.4). Declare a name there (GROUPS + a RESET_GROUPS row) and delete its entry here in the same PR; tests/unit/car-field-writes.test.mjs fails on a stale entry.",
+  "baseline": {
+    "_xSndWant": { "sites": ["js/game.js :: updateCar"], "note": "per-frame engine-sound target scratch; written every frame so it never leaks, but has no RESETS row" },
+    "wrongCueT": { "sites": ["js/game.js :: updateCarAdvance"], "note": "wrong-way cue countdown (`(c.wrongCueT || 0) - dt`); a stale value only delays the next cue" },
+    "parkedOnRoad": { "sites": ["js/game.js :: retireCar"], "note": "retired car's on-road flag, set once at retirement" },
+    "gripSteerCapSm": { "sites": ["js/physics/grip-steer.js :: forPlayer"], "note": "smoothed GRIP STEER cap, player only; carries across a rescue or episode" },
+    "duelRival": { "sites": ["js/race/duel.js :: bump", "js/race/duel.js :: asLegend"], "note": "marks the duel rival car; set at duel start, never cleared by a reset" },
+    "legendId": { "sites": ["js/race/duel.js :: asLegend"], "note": "legend driver id on a duel rival" },
+    "dsq": { "sites": ["js/race/real-race.js :: arm", "js/race/real-replay.js :: finish", "js/race/sporting-regs.js :: applyCompoundRule"], "note": "disqualification marker; three writers, none reset by the table" },
+    "replayRate": { "sites": ["js/race/real-replay.js :: pose"], "note": "replay playback speed multiplier on a puppet car (game.js revs it from c.speed x c.replayRate)" },
+    "braking": { "sites": ["js/race/real-replay.js :: pose"], "note": "replay puppet brake flag, written every pose" }
+  },
+  "skip": {
+    "js/game.js": ["saveTeamParts"],
+    "js/race/race-radio.js": ["offer", "refreshLastLap"]
+  },
+  "skipWhy": {
+    "js/game.js :: saveTeamParts": "c is the career fitted-parts record (careerFitted), not a car",
+    "js/race/race-radio.js :: offer": "c is a radio message object (still, cdKey, born, exp), not a car",
+    "js/race/race-radio.js :: refreshLastLap": "c is a radio message object (vars, key), not a car"
+  }
+}

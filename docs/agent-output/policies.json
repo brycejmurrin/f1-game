@@ -286,6 +286,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/check/car-field-writes.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c1"
+    },
     "tools/check/check-gctx.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",

@@ -1,0 +1,1 @@
+Fixed: FREE CAMERA's DoF FOCUS and DoF BLUR sliders now drive the real photo depth of field on the three.js renderer when Photo Studio's Depth focus is On (#6908); before, they only moved a soft CSS overlay. On WebGL2 (GLX), WGX, or with Depth focus Off they keep that overlay, now labelled PREVIEW.

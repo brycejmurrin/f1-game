@@ -135,7 +135,7 @@ const { $, photoCam } = G;
 // editor's FREE CAMERA button, enterFrom below). DONE then returns to that tool
 // rather than to the pause menu, and the tool's pose actions show in #fc-shot.
 const st = { open: false, speed: SPD_DEF, roll: 0, lens: "race", corner: 0, anchor: "—", poseErr: null, statusT: 0,
-  back: null, actions: null, overlays: true, grid: "off", dofFocus: 0.4, dofBlur: 0, pov: null, povAt: null };
+  back: null, actions: null, overlays: true, grid: "off", dofFocus: 0.4, dofBlur: 0, depthOn: false, dofReal: false, pov: null, povAt: null };
 const rk = { q: false, e: false };
 // Composition grid + soft DoF overlays (js/camera/photo-kit.js) — viewport, not panel.
 const kitOverlays = (typeof PhotoKit !== "undefined" && typeof document !== "undefined")
@@ -211,8 +211,9 @@ function paint() {
   set("fc-speed", sliderFromSpeed(st.speed), Math.round(st.speed) + " m/s");
   set("fc-roll", Math.round(st.roll), Math.round(st.roll) + "°");
   set("fc-fov", Math.round(photoCam.fov), Math.round(photoCam.fov) + "°");
-  set("fc-dof-focus", Math.round(st.dofFocus * 100), Math.round(st.dofFocus * 100) + "%");
-  set("fc-dof-blur", Math.round(st.dofBlur * 100), Math.round(st.dofBlur * 100) + "%");
+  const pv = st.dofReal ? "%" : "% PREVIEW";   // GLX / WGX / Depth focus Off: the CSS overlay only (#6908)
+  set("fc-dof-focus", Math.round(st.dofFocus * 100), Math.round(st.dofFocus * 100) + pv);
+  set("fc-dof-blur", Math.round(st.dofBlur * 100), Math.round(st.dofBlur * 100) + pv);
   for (const [id, on] of [["fc-lens-race", st.lens === "race"], ["fc-lens-flyby", st.lens === "flyby"]]) {
     const b = E[id]; if (!b) continue;
     b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false");
@@ -295,6 +296,15 @@ const stepCorner = (d) => snapCorner((st.corner || (d > 0 ? 0 : 1)) + d);
 
 /** Speed for this frame, m/s. */
 function speed(boost) { return st.speed * (boost ? BOOST : 1); }
+/** DoF sliders -> PhotoKit. With Depth focus On and TLX's photo focus available, cam.dof drives TLX's real
+ *  depth of field (game.js po.photoDof -> tlx-post cinemaPost, #6908) and the CSS overlay stands down so the
+ *  blur is not doubled. Otherwise no cam.dof is written (no DoF pass, #6445) and the overlay previews it. */
+function applyKitDof(cam) {
+  const g = G.gfx, real = st.depthOn && !!(g && g.photoFocusAvailable && g.photoFocusAvailable());
+  PhotoKit.applyDof(real ? cam : null, st.dofFocus, st.dofBlur, real ? null : kitOverlays.dof);
+  if (real) PhotoKit.showOverlays(false, null, kitOverlays.dof);
+  if (real !== st.dofReal) { st.dofReal = real; paint(); }
+}
 function decorate(cam, dt) {
   if (!st.open || !cam) return;
   if (st.pov && !povMoved(st.povAt, photoCam)) cam.onboard = st.pov;
@@ -309,7 +319,7 @@ function decorate(cam, dt) {
     cam.cine = true; cam.far = FlybySeq.FAR; cam.fog = FlybySeq.FOG;
   }
   if (st.overlays && typeof PhotoKit !== "undefined") {
-    PhotoKit.applyDof(cam, st.dofFocus, st.dofBlur, kitOverlays.dof);
+    applyKitDof(cam);
     PhotoKit.setGrid(kitOverlays.grid, st.grid);
   }
   st.statusT -= dt;
@@ -337,7 +347,7 @@ function setOverlaysVisible(on) {
   st.overlays = !!on;
   if (typeof PhotoKit === "undefined") return;
   if (!on || !st.open) PhotoKit.showOverlays(false, kitOverlays.grid, kitOverlays.dof);
-  else { PhotoKit.setGrid(kitOverlays.grid, st.grid); PhotoKit.applyDof(null, st.dofFocus, st.dofBlur, kitOverlays.dof); }
+  else { st.depthOn = PhotoKit.depthFocusOn(); PhotoKit.setGrid(kitOverlays.grid, st.grid); applyKitDof(null); }
 }
 
 function isOpen() { return st.open; }
@@ -353,8 +363,9 @@ function open() {
   say("");
   document.body.classList.add("lt-open");   // same dock as the three tuners: race HUD and touch controls stand down
   if (typeof PhotoKit !== "undefined") {
+    st.depthOn = PhotoKit.depthFocusOn();   // read on open, not per frame; Photo Studio's row may have changed it
     PhotoKit.setGrid(kitOverlays.grid, st.grid);
-    PhotoKit.applyDof(null, st.dofFocus, st.dofBlur, kitOverlays.dof);
+    applyKitDof(null);
   }
   const ps = $("pmsettings"); if (ps) ps.hidden = true;
   // Nested under DISPLAY -> ADVANCED VISUALS: hide that page too, or its own

@@ -613,6 +613,20 @@
     let photoGi = null, photoFocusFailed = false, lastTap = null;
     const photoFocusAvailable = () => !viz && hdr && !phys && !!P?.makePhotoFocus && !photoFocusFailed;
     const _prevVP = new Float32Array(16);
+    // Free Camera's DoF FOCUS / BLUR sliders (o.photoDof = dbgCam.dof, 0..1 each; #6908). free-cam.js writes it only
+    // with Depth focus On (#6445). Focus maps log-evenly onto 1 m .. FOCUS_MAX; blur scales the shipped aperture
+    // (0.5 = the CINEMA look, 1 = twice it). Under 2% blur, as the CSS preview, there is no pass. A Photo Studio
+    // focus (photoFocus defined) wins. One reused object: this is read every frame.
+    const _slider = { focusM: 0, aperture: 0 }, SLIDER_NEAR = 1;
+    function sliderOptics(o) {
+      const d = o && o.photoFocus === undefined ? o.photoDof : null;
+      if (!d || !GIM) return null;
+      const f = +d.focus, b = +d.blur;
+      if (!(f >= 0 && f <= 1) || !(b >= 0.02 && b <= 1)) return null;
+      _slider.focusM = SLIDER_NEAR * Math.pow(GIM.FOCUS_MAX / SLIDER_NEAR, f);
+      _slider.aperture = GIM.DOF.aperture * 2 * b;
+      return _slider;
+    }
     function releaseCine() {
       const G = P.gi;
       if (G && G.motionBlur) unbind(G.motionBlur.src, blackTex);
@@ -651,7 +665,8 @@
     function cinemaPost(src, F, o) {
       const HV = _hiLive, G = P.gi;
       _last.dof = false; _last.mblur = false;
-      const photo = o?.photoFocus !== undefined && photoFocusAvailable();
+      const slider = sliderOptics(o);
+      const photo = (o?.photoFocus !== undefined || !!slider) && photoFocusAvailable();
       if (photo && !G?.dof && !photoGi) {
         try { photoGi = P.makePhotoFocus(); }
         catch (e) { photoFocusFailed = true; Log.warn("gfx", "photo focus could not be prepared", e); }
@@ -674,17 +689,18 @@
         const FU = optics.focus.U, D = optics.dof;
         setPersp(FU, F.invProj, F.proj);
         const now = typeof performance !== "undefined" ? performance.now() : 0;
-        const tap = photo ? o.photoFocus : null;
+        const tap = photo ? (o.photoFocus ?? null) : null;
         FU.focusUV.value.set(tap?.x ?? 0.5, tap?.y ?? 0.45);
         FU.tapMode.value = !tap ? 0 : _focusOk && tap === lastTap ? 2 : 1;
         FU.blend.value = GIM.focusBlend((now - _focusT) / 1000, !_focusOk || !!lastTap);
         lastTap = tap;
         _focusT = now; _focusOk = true;
-        FU.fixed.value = !photo && o && o.focusDist > 0 ? o.focusDist : 0;
+        FU.fixed.value = photo && slider ? slider.focusM : !photo && o && o.focusDist > 0 ? o.focusDist : 0;
         optics.focus.prevTex.value = focusRT[_fi ^ 1].texture;
         runPass(optics.focus.mat, focusRT[_fi]);
         setPersp(D.U, F.invProj, F.proj);
         D.U.minFocus.value = tap ? 0.05 : GIM.FOCUS_MIN;
+        D.U.aperture.value = photo && slider ? slider.aperture : GIM.DOF.aperture;
         D.U.texel.value.set(1 / pW, 1 / pH);
         D.U.maxPx.value = GIM.DOF.maxPx1080 * pH / 1080;
         D.focusTex.value = focusRT[_fi].texture;
@@ -1663,7 +1679,7 @@
     function needsDepth(opts, F) {
       const o = opts || {};
       if (viz) return true;
-      if (o.photoFocus !== undefined && photoFocusAvailable()) return true;
+      if ((o.photoFocus !== undefined || sliderOptics(o)) && photoFocusAvailable()) return true;   // + Free Camera DoF (#6908)
       if (_hiLive && (_hiLive.ssgi || _hiLive.dof || _hiLive.motionBlur)) return true;   // desktop tiers read scene depth
       if (taaLive() && F.invVP && F.viewProj) return true;   // TRAA reprojects from the scene depth
       if (((o.ssao !== undefined ? o.ssao : 0) > 0 || (o.contact !== undefined ? o.contact : 0) > 0) && F.invProj) return true;   // SSAO, contact, AO upsample
