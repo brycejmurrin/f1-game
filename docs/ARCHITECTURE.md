@@ -84,7 +84,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_Module index over 33 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_Module index over 34 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -795,6 +795,12 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `share-card-layout.js` | `ShareCardLayout` | LAZY_RESULTS_SHEET | pure card layout: model + spec + text metric -> paint ops. |
 | `share-card.js` | `ShareCard` | LAZY_RESULTS_SHEET | canvas painter, PNG encoder and Web Share/download delivery. |
 | `share-card-chips.js` | `ShareCardChips` | LAZY_RESULTS_SHEET | the SHARE CARD chip and its preview sheet: one shape for every result screen. |
+
+**`js/learn-drills/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `thumb-drill.js` | `ThumbDrill` | LAZY_LEARN | THUMB DRILL, LEARN's on-track sequel to the Vegas Thumb Trainer (#6927). |
 <!-- /@gen-arch:modules -->
 
 ---

@@ -1878,6 +1878,7 @@
         "tests/specs/real-profile-dock.spec.js",
         "tests/specs/rotation-recovery.spec.js",
         "tests/specs/settings-stepper-paint.spec.js",
+        "tests/specs/thumb-drill.spec.js",
         "tests/specs/title-fit.spec.js",
         "tests/specs/title-menu-rotation.spec.js",
         "tests/specs/ui-button-touch.spec.js",
@@ -3832,6 +3833,11 @@
       "path": "js/input/touch-button-actions.js",
       "global": "TouchButtonActions",
       "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/learn-drills/thumb-drill.js",
+      "global": "ThumbDrill",
+      "roster": "LAZY_LEARN"
     },
     {
       "path": "js/lighting/atmosphere.js",
