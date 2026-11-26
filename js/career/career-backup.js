@@ -226,7 +226,13 @@ const CareerBackup = (function () {
     return { ok: true, name: name };
   }
 
+  // A synchronous throw (storage read, serialize) becomes a rejection: the
+  // EXPORT button chains .then/.finally and must always re-enable (#6544 r3).
   function exportAll() {
+    try { return exportAllNow(); } catch (e) { return Promise.reject(e); }
+  }
+
+  function exportAllNow() {
     const skipped = [];
     const envelope = build(skipped);
     // Preserve raw future careers for recovery, but never download extras that

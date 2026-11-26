@@ -2371,3 +2371,12 @@ test("#6605 r5: backup pointer is not written for a skipped (empty) row", () => 
   assert.equal(result.ok, true);
   assert.equal(h.disk.get("apex26.careerSlot"), before, "pointer stays on the live slot");
 });
+
+test("#6544 r3: exportAll turns a synchronous throw into a rejection", async () => {
+  const h = loadHarness();
+  fillSix(h);
+  h.ctx.Blob = function () { throw new Error("blob"); };
+  let p;
+  assert.doesNotThrow(() => { p = h.CareerBackup.exportAll(); });
+  await assert.rejects(p);
+});

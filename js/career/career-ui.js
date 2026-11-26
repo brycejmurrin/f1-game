@@ -325,7 +325,10 @@ function create(G) {
       if (G.soundOn) GameAudio.uiTick();
       armedDelete = "";
       exp.disabled = true;
-      CareerBackup.exportAll().then((r) => {
+      // A synchronous throw from exportAll must still reach .finally (re-enable).
+      let run;
+      try { run = CareerBackup.exportAll(); } catch (e) { run = Promise.reject(e); }
+      run.then((r) => {
         const left = r && r.skipped && r.skipped.length;
         announce(r && r.ok === false ? "EXPORT FAILED" : "CAREER BACKUP SAVED" + (left ? ` — ${left} DAMAGED SLOT${left > 1 ? "S" : ""} LEFT OUT` : ""));
       }).catch((e) => announce(typeof NativeDownload !== "undefined" && NativeDownload.isCancelled(e) ? "EXPORT CANCELLED" : "EXPORT FAILED"))
