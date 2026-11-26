@@ -732,6 +732,11 @@ const Input = (function () {
     btnSteerVal = 0; btnSteerT = 0;
     clearCanvasSteering();
   }
+  function releaseKeyLatches() {
+    if (keyThrottleToggle) keyThrottle = false;
+    if (keyLookBackToggle) keyLookBack = false;
+    keyThrottleToggle = keyLookBackToggle = false;
+  }
   function setLocalControlDevice(device, availabilityChanged = false) {
     if (!availabilityChanged && device !== "controller") drivingPadKey = null;
     const before = controlDevice();
@@ -744,11 +749,7 @@ const Input = (function () {
       if (padLookBackToggle) padLookBack = false;
       padThrottleToggle = padLookBackToggle = false;
     }
-    if (before === "keyboard" && after !== "keyboard") {
-      if (keyThrottleToggle) keyThrottle = false;
-      if (keyLookBackToggle) keyLookBack = false;
-      keyThrottleToggle = keyLookBackToggle = false;
-    }
+    if (before === "keyboard" && after !== "keyboard") releaseKeyLatches();
     onControlDeviceChange?.();
   }
   function setPhysicalPadAvailable(available) {
@@ -2482,6 +2483,7 @@ const Input = (function () {
             // The pointer-kind subscribers may hide the dock while a thumb is
             // still down. Retire its input before they update visibility.
             if (physicalPadAvailable && touchDrivingControls()) releaseTouchDrivingControls(true);
+            if (controlDevice() === "keyboard") releaseKeyLatches();   // #6447
             localControlDevice = physicalPadAvailable ? "controller" : null;
           }
           for (const cb of _coarseCbs) { try { cb(touch); } catch (_) { /* one bad subscriber must not stop the rest */ } }

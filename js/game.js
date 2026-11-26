@@ -2709,7 +2709,7 @@ const _customTrackStarts = new WeakSet();
 // LAZY_AUDIO only from the RACE tap: #1135 keeps its eval off the title, which the menu prep also serves.
 function kickRaceBundles(audio) { if (typeof setupCam !== "undefined" && setupCam.prewarmExterior) setupCam.prewarmExterior(); for (const p of [ensureRaceSession(), ensureLightPresets(), ensureGarageData(), lazyBundles.ensureResultsSheet(), audio && ensureAudio()]) if (p && p.catch) p.catch(() => false); }
 function startRace() {
-  pendingFinishQuit = false; titleVisit++;
+  pendingFinishQuit = false; titleVisit++; ttGarageDoor(false);
   if (setupTrialSession && !setupTrialSession.pending()) { setupTrialSession.cancel(); SetupTrials.invalidate("Session restarted"); }
   // TopModal mirrors hidden→close via MutationObserver (next task). Sync-close
   // so #loading is not trapped under :modal for the rest of this long task.
@@ -4371,7 +4371,7 @@ function quitToMenu() {
   }
   pendingFinishQuit = false;
   clearRaceEntrySoften();
-  Ghost.flush();
+  Ghost.flush(); ttGarageDoor(false);
   cancelIntro(); const then = qThen; qThen = null;
   if (typeof MenuTeardown !== "undefined") MenuTeardown.beginQuit();
   els.pausemenu.hidden = true;
