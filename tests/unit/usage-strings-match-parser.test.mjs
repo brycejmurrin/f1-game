@@ -17,11 +17,11 @@ for (const [rel, flags] of [
   test(`${rel} --help names ${flags.join(" ")}`, () => {
     const r = help(rel);
     assert.equal(r.status, 0, r.stderr);
-    for (const f of flags) assert.ok(r.stdout.includes(f), `${rel} usage omits ${f}`);
+    assert.deepEqual(flags.filter((f) => !r.stdout.includes(f)), [], `${rel} usage omits flags`);
   });
 }
 
 test("ensure-built --help does not advertise --check, and --check is still refused", () => {
-  assert.ok(!help("tools/gen/ensure-built.mjs").stdout.includes("--check"));
+  assert.equal(help("tools/gen/ensure-built.mjs").stdout.includes("--check"), false);
   assert.equal(spawnSync(process.execPath, ["tools/gen/ensure-built.mjs", "--check"], { cwd: ROOT, encoding: "utf8" }).status, 2);
 });
