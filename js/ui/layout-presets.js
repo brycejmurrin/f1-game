@@ -232,7 +232,7 @@ const LayoutPresets = (function () {
   // Colours, text, units, the home scene and titleLayout ({v:2, wide, tall}
   // itself) stay device-wide. SHARED again keeps the current values for both.
   const SHAPES_KEY = "appearanceShapes";
-  const SHAPE_KEYS = Object.freeze(["uiScale", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudMetricsLayout", "hudMapVis", "hudGapsVis",
+  const SHAPE_KEYS = Object.freeze(["uiScale", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudLayout",
     "pauseLayout", "pauseSide", "pauseDim", "lookPause", "lookDatahub", "lookSelect", "lookRace", "lookCareer", "lookGarage", "lookPopups", "lookDesigner"]);
   const studio = () => (typeof AppearanceStudio !== "undefined" && AppearanceStudio) || null;
   const isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
@@ -251,6 +251,8 @@ const LayoutPresets = (function () {
     if (!a || !s || !st.separate || (now !== "wide" && now !== "tall") || st.live === now) return false;
     const cur = a.snapshot(), out = pick(cur), park = st.park;
     s.set(SHAPES_KEY, { v: 2, mode: "separate", live: now, park: out });
+    // A HUD layout is offsets of one screen shape (#6598): the first rotation parks it and the other shape starts shipped, not on top-bar offsets.
+    if (!park && out.hudLayout) { undoSnap = null; a.applySnapshot(Object.assign(cur, { hudLayout: null }), { history: false }); paint(); return true; }
     if (!park || JSON.stringify(park) === JSON.stringify(out)) return false;
     if (undoSnap) undoSnap = null;   // its snapshot is the other orientation's
     a.applySnapshot(Object.assign(cur, park), { history: false });

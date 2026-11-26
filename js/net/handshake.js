@@ -109,6 +109,12 @@ const NetHandshake = (function () {
     if (mode !== "s" && mode !== "z" && mode !== "p") return CORRUPT;
     return { ok: true, mode, body };
   }
+  // Every mode must hand callers a plain object with a string kind: an array
+  // or a bare scalar in a z/p body is not a code.
+  function goodPayload(payload) {
+    return !!payload && typeof payload === "object" && !Array.isArray(payload) &&
+      typeof payload.k === "string";
+  }
   async function decodeCode(code) {
     const peek = peekCode(code);
     if (!peek.ok) return peek;
@@ -121,15 +127,14 @@ const NetHandshake = (function () {
         const sdp = NetSdp.unpack(raw.slice(2, 2 + n));
         if (!sdp) return CORRUPT;
         const payload = JSON.parse(dec().decode(raw.slice(2 + n)));
-        if (!payload || typeof payload !== "object" || Array.isArray(payload) ||
-            typeof payload.k !== "string") return CORRUPT;
+        if (!goodPayload(payload)) return CORRUPT;
         payload.s = sdp;
         return { ok: true, payload };
       }
       if (mode === "p" && bytes.byteLength > MAX_DECODED_BYTES) return CORRUPT;
       const json = mode === "z" ? await inflate(bytes) : dec().decode(bytes);
       const payload = JSON.parse(json);
-      if (!payload || typeof payload !== "object") return CORRUPT;
+      if (!goodPayload(payload)) return CORRUPT;   // same shape rule as mode s
       return { ok: true, payload };
     } catch (e) {
       return CORRUPT;   // decode, inflate and parse all mean the same to a player
@@ -208,15 +213,23 @@ const NetHandshake = (function () {
 
   // Peers must agree on the build. Everything physics-relevant — the spline,
   // the barrier positions, the tuning constants — ships inside it.
+  // A build is a number, or the decimal string of one. Anything else is
+  // unknown, not "older" or "newer" (string comparison read "abc" > 1695).
+  function normBuild(b) {
+    if (typeof b === "string" && /^\s*\d+\s*$/.test(b)) b = Number(b);
+    return typeof b === "number" && Number.isFinite(b) ? b : null;
+  }
   function checkBuild(mine, theirs) {
+    const rawMine = mine, rawTheirs = theirs;
+    mine = normBuild(mine); theirs = normBuild(theirs);
     if (mine == null || theirs == null) {
       return {
         ok: false,
         error: "build_unknown",
         message: "Could not confirm you are both on the same version. " +
                  "Check your connection and try again.",
-        mine: mine == null ? null : mine,
-        theirs: theirs == null ? null : theirs,
+        mine: rawMine == null ? null : rawMine,
+        theirs: rawTheirs == null ? null : rawTheirs,
       };
     }
     if (mine === theirs) return { ok: true };
@@ -316,11 +329,12 @@ const NetHandshake = (function () {
     if (!pc) return hsLog("answer", NO_TRANSPORT);
     // Offer identity BEFORE the state check: an answer to a different offer is
     // wrong whatever this one's state, and saying so beats "already used".
+    // An answer that names no offer is refused: skipping the check let any
+    // answer through to a newer pending invite.
     const wants = parsed.payload.o;
-    if (wants != null) {
-      const mine = offerId(pc.localDescription && pc.localDescription.sdp);
-      if (mine && String(wants) !== mine) return hsLog("answer", WRONG_OFFER);
-    }
+    if (wants == null) return hsLog("answer", WRONG_OFFER);
+    const mine = offerId(pc.localDescription && pc.localDescription.sdp);
+    if (mine && String(wants) !== mine) return hsLog("answer", WRONG_OFFER);
     if (pc.signalingState !== "have-local-offer") {
       return hsLog("answer", { ok: false, error: "already_answered",
                message: "That answer was already used, or arrived too late." });
@@ -340,7 +354,9 @@ const NetHandshake = (function () {
   }
   function inviteFromUrl(href) {
     try {
-      const h = (href != null ? String(href) : location.hash) || "";
+      const text = (href != null ? String(href) : location.hash) || "";
+      const at = text.indexOf("#");   // the code rides in the fragment only; "?vs=" is not a link
+      const h = at < 0 ? "" : text.slice(at);
       const m = h.match(/[#&]vs=([^&\s]+)/);   // a link ends at whitespace: "…#vs=CODE\nSent from my iPhone"
       // A code ends in a base64url character, never in the "." or ")" a
       // sentence puts after the link — "Race me: …#vs=CODE." read as four

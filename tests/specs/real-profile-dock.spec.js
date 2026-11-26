@@ -61,7 +61,8 @@ function trainerFitInPage() {
   const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
   const safe = { l: n("--sal"), t: n("--sat"), r: vw - n("--sar"), b: vh - n("--sab") };
   const box = (el) => { const r = el.getBoundingClientRect(); return { id: el.id, l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; };
-  const ids = ["tt-back", "tt-prev", "tt-turn", "tt-next", "tt-speed", "tt-go", "tt-view", "tt-cue", "tt-sketch", "tt-time", "tt-score"];
+  const ids = ["tt-back", "tt-prev", "tt-turn", "tt-next", "tt-speed", "tt-go", "tt-view", "tt-cue", "tt-sketch", "tt-time", "tt-score",
+    "tt-p-yours", "tt-p-rec", "tt-p-catch", "tt-p-edge", "tt-chart", "tt-note"];
   const boxes = ids.map((id) => document.getElementById(id)).filter((el) => el && el.checkVisibility()).map(box);
   const dock = Array.from(document.querySelectorAll("#hud-dock .touchbtn")).filter((el) => el.checkVisibility()).map(box).filter((r) => r.w > 0);
   const panel = document.getElementById("tt-panel");
@@ -79,8 +80,9 @@ for (const [win, geo] of [["standalone", GEO], ["portrait", PORTRAIT]]) for (con
       await boot(page, geo, profile === "live" ? liveStore() : { json: {}, raw: {} }, "/?go=thumbs");
       await expect(page.locator("#thumb-trainer")).toBeVisible({ timeout: BOOT_MS });
       await page.waitForFunction(() => document.getElementById("thumb-trainer").dataset.fit, null, { polling: 100, timeout: BOOT_MS });
-      for (const phase of ["idle", "after a run"]) {
-        if (phase !== "idle") await page.evaluate(() => {   // the longest text a finished run writes: two tips and the score
+      for (const phase of ["idle", "after a run", "pedal explorer"]) {
+        if (phase === "pedal explorer") await page.locator("#tt-view").click();
+        if (phase === "after a run") await page.evaluate(() => {   // the longest text a finished run writes: two tips and the score
           document.getElementById("tt-cue").textContent = "Arrow late by 230 ms. Start it while you're still braking. Brake and arrow together for 0.21 s, target 0.62 s. Keep a little brake on as the arrow winds on.";
           document.getElementById("tt-score").textContent = "Match 64% · arrow 71% · brake 58% · gas 63% · best 82%";
         });
@@ -89,16 +91,22 @@ for (const [win, geo] of [["standalone", GEO], ["portrait", PORTRAIT]]) for (con
         const tag = `${win} ${profile} ${phase} (fit ${g.fit}):`;
         expect(g.vignette, `${tag} the race vignette is off over the drill`).toBe("none");
         expect(g.panelOverflow, `${tag} the panel does not overflow`).toBeLessThanOrEqual(1);
+        expect([g.safe.l, g.safe.t, g.vw - g.safe.r, g.vh - g.safe.b], `${tag} the emulated insets reached the page`).toEqual([geo.insets.left, geo.insets.top, geo.insets.right, geo.insets.bottom]);
+        for (const d of g.dock) expect(overlap(g.panel, d), `${tag} the panel clears race button #${d.id}`).toBe(false);
+        if (phase === "after a run") for (const id of ["tt-cue", "tt-score"]) expect(g.boxes.find((b) => b.id === id)?.h, `${tag} #${id} shows its text`).toBeGreaterThan(10);
         for (const b of g.boxes) {
           const where = `${tag} #${b.id} ${b.l.toFixed(0)},${b.t.toFixed(0)}-${b.r.toFixed(0)},${b.b.toFixed(0)}`;
           expect(b.l >= g.safe.l - 1 && b.t >= g.safe.t - 1 && b.r <= g.safe.r + 1 && b.b <= g.safe.b + 1, `${where} inside the safe area ${JSON.stringify(g.safe)}`).toBe(true);
           if (b.id !== "tt-sketch") expect(b.l >= g.panel.l - 1 && b.t >= g.panel.t - 1 && b.r <= g.panel.r + 1 && b.b <= g.panel.b + 1, `${where} inside the panel`).toBe(true);
-          if (/^tt-(back|prev|turn|next|speed|go|view)$/.test(b.id)) expect(Math.min(b.w, b.h), `${where} is a 44 px tap`).toBeGreaterThanOrEqual(44);
+          if (/^tt-(back|prev|turn|next|speed|go|view|p-.*)$/.test(b.id)) expect(Math.min(b.w, b.h), `${where} is a 44 px tap`).toBeGreaterThanOrEqual(44);
           for (const d of g.dock) expect(overlap(b, d), `${where} clears race button #${d.id}`).toBe(false);
           for (const o of g.boxes) if (o !== b && b.w > 0 && b.h > 0 && o.w > 0 && o.h > 0) expect(overlap(b, o), `${where} clears #${o.id}`).toBe(false);
         }
-        expect(g.boxes.find((b) => b.id === "tt-time").h, `${tag} the timeline keeps its three lanes`).toBeGreaterThanOrEqual(80);
+        if (phase !== "pedal explorer") expect(g.boxes.find((b) => b.id === "tt-time").h, `${tag} the timeline keeps its three lanes`).toBeGreaterThanOrEqual(80);
       }
+      await page.locator("#tt-back").click();   // close: the race vignette comes back with the HUD
+      await expect(page.locator("#thumb-trainer")).toBeHidden();
+      expect(await page.evaluate(() => getComputedStyle(document.getElementById("hud"), "::before").display), "the vignette is back after BACK").not.toBe("none");
     });
   });
 }

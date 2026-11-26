@@ -401,3 +401,81 @@ test("the ICE-restart listener holds one socket set for a race, not a re-dial ev
   assert.equal(after, relays, "one WebSocket (one TLS handshake) per relay for the whole fake 120 s");
   assert.ok(before >= 2 * relays, `control: the JOIN-window listener re-dialled (${before} sockets)`);
 });
+
+// #6836 (#6632 S2): created_at must be a sane number, not just "not stale".
+for (const [label, mk] of [
+  ["far-future created_at", (now) => now + 3600],
+  ["missing created_at", () => undefined],
+  ["non-numeric created_at", () => "9999999999"],
+]) {
+  test(`an offer with ${label} is dropped undecrypted; the socket stays open`, async () => {
+    const h = boot();
+    let answered = 0;
+    const token = { cancelled: false };
+    const p = h.NetNostr.directExchange({ code: "ABCDEF", token, reply: async () => { answered++; return "ANSWER"; } });
+    await h.untilSockets(1);
+    const w = h.sockets[0];
+    w.open();
+    await h.tick();
+    const now = Math.floor(Date.now() / 1000);
+    const sealed = await h.NetRendezvous.seal("ABCDEF", "BAD-CLOCK-OFFER", "offer");
+    w.onmessage({ data: JSON.stringify(["EVENT", "s1", { content: h.NetBytes.bytesToB64(sealed), created_at: mk(now) }]) });
+    await new Promise((r) => setTimeout(r, 120));
+    assert.equal(answered, 0, label + " must not be answered");
+    assert.notEqual(w.readyState, 3, "dropped, not poisoned");
+    const ok = await h.NetRendezvous.seal("ABCDEF", "GOOD-OFFER", "offer");
+    w.onmessage({ data: JSON.stringify(["EVENT", "s1", { content: h.NetBytes.bytesToB64(ok), created_at: now }]) });
+    await new Promise((r) => setTimeout(r, 120));
+    assert.equal(answered, 1, "a normal offer is still answered");
+    token.cancelled = true;
+    await p;
+  });
+}
+
+// #6836 (#6632 S3): a junk flood from one relay must not starve another relay's offer.
+test("a flood of junk events from one relay neither starves another relay's offer nor stays connected", async () => {
+  const h = boot();
+  let answered = 0;
+  const token = { cancelled: false };
+  const p = h.NetNostr.directExchange({ code: "ABCDEF", token, reply: async () => { answered++; return "ANSWER"; } });
+  await h.untilSockets(2);
+  const [a, b] = h.sockets;
+  a.open(); b.open();
+  await h.tick();
+  const now = Math.floor(Date.now() / 1000);
+  const junk = (i) => h.NetBytes.bytesToB64(new Uint8Array(64).map((_, j) => (i * 7 + j * 13) & 255));
+  for (let i = 0; i < 300; i++) {
+    a.onmessage({ data: JSON.stringify(["EVENT", "s1", { content: junk(i), created_at: now }]) });
+  }
+  const sealed = await h.NetRendezvous.seal("ABCDEF", "REAL-OFFER", "offer");
+  b.onmessage({ data: JSON.stringify(["EVENT", "s1", { content: h.NetBytes.bytesToB64(sealed), created_at: now }]) });
+  await new Promise((r) => setTimeout(r, 200));
+  assert.equal(answered, 1, "the real offer on the quiet relay was answered");
+  assert.equal(a.readyState, 3, "the flooding relay was closed");
+  token.cancelled = true;
+  await p;
+});
+
+test("a burst of 39 valid events from one relay keeps it connected and the offer is answered", async () => {
+  const h = boot();
+  let answered = 0;
+  const token = { cancelled: false };
+  const p = h.NetNostr.directExchange({ code: "ABCDEF", token, reply: async () => { answered++; return "ANSWER"; } });
+  await h.untilSockets(1);
+  const w = h.sockets[0];
+  w.open();
+  await h.tick();
+  const now = Math.floor(Date.now() / 1000);
+  for (let i = 0; i < 39; i++) {
+    const c = h.NetBytes.bytesToB64(new Uint8Array(64).map((_, j) => (i * 5 + j * 11) & 255));
+    w.onmessage({ data: JSON.stringify(["EVENT", "s1", { content: c, created_at: now }]) });
+  }
+  await new Promise((r) => setTimeout(r, 150));
+  const sealed = await h.NetRendezvous.seal("ABCDEF", "REAL-OFFER", "offer");
+  w.onmessage({ data: JSON.stringify(["EVENT", "s1", { content: h.NetBytes.bytesToB64(sealed), created_at: now }]) });
+  await new Promise((r) => setTimeout(r, 150));
+  assert.notEqual(w.readyState, 3, "under budget: not closed");
+  assert.equal(answered, 1);
+  token.cancelled = true;
+  await p;
+});

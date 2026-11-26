@@ -377,7 +377,7 @@
      --ui-scale so a 150% sheet does not paint a 48px track. Buttons still
      use --tap-min; only <input type=range> reads this. */
   --slider: calc(32px / var(--ui-scale));
-  --label: 14px;    /* section label type size — clears 12px visual at 90% zoom */
+  --label: 14px;    /* section label type size; the floored :root below (#6751) re-points it at --fs-micro */
   /* THE TYPE FLOOR. No menu text may be smaller than this.
      A sweep across nine viewports found twenty-four hard-coded sizes below it —
      8px NIGHT/STREET badges on the circuit list, 9px UNIVERSAL and ▲ACCEL tags
@@ -719,8 +719,6 @@ body:not(.desktop) {
   --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--ui-scale)));
   --tap-0: var(--tap);         /* the touch values, frozen here too (see :root) */
   --chip-h-0: var(--chip-h);
-  /* Same ≥14 CSS floor as :root — 13px under .sheet zoom 0.9 paints 11.7. */
-  --label: 14px;
 }
 
 /* Why: docs/notes/TOKENS-RATIONALE.md §R6. */
@@ -893,6 +891,7 @@ body:not(.desktop) {
   --fs-floor: calc(12px / var(--ui-scale, 1));
   --fs-micro: max(14px, var(--fs-floor)); --fs-2: max(15px, var(--fs-floor)); --fs-3: max(16px, var(--fs-floor));
   --fs-4: max(17px, var(--fs-floor)); --fs-5: max(18px, var(--fs-floor)); --fs-6: max(20px, var(--fs-floor));
+  --label: var(--fs-micro); /* #6751 floor+TEXT SIZE via --fs-micro */
 }
 :root[data-text-size="large"] {
   --fs-micro: max(16px, var(--fs-floor)); --fs-2: max(17px, var(--fs-floor)); --fs-3: max(18px, var(--fs-floor));
