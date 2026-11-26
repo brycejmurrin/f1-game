@@ -357,12 +357,15 @@ const TrackCodec = (function () {
   function fileEnvelope(design, code) {
     return { format: FILE_FORMAT, v: 1, build: (typeof window !== "undefined" && window.__APEX_BUILD) || null, exportedAt: new Date().toISOString(), code: code || null, design };
   }
-  /** A parsed file → the code or the design it carries ({ code } | { design } | null). */
+  /** A parsed file → what it carries ({ design?, code? } | null). An exported
+   *  file holds BOTH: the design is the richer record (fields the share code
+   *  does not carry), so a reader prefers it and falls back to the code (#6871). */
   function fromFile(obj) {
     if (!obj || typeof obj !== "object" || obj.format !== FILE_FORMAT) return null;
-    if (typeof obj.code === "string") return { code: obj.code };
-    if (obj.design && typeof obj.design === "object") return { design: obj.design };
-    return null;
+    const out = {};
+    if (obj.design && typeof obj.design === "object" && !Array.isArray(obj.design)) out.design = obj.design;
+    if (typeof obj.code === "string") out.code = obj.code;
+    return out.design || out.code ? out : null;
   }
 
   return { MAGIC, FLAG, ZONE_CAPS, surfaceByte, encodeBytes, decodeBytes, encode, decode, inflate, b64url, fnv16, shareUrl, fromHash, withoutTrack, fileEnvelope, fromFile, FILE_FORMAT };
