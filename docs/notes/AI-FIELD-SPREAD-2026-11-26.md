@@ -4,7 +4,7 @@ Summary: midfield cars lost 1-3.5 % a lap in the race against their own solo pac
 
 Kind: measurement · Re-measure-by: 2027-02-26
 
-Follows [`AI-FIELD-SPREAD-2026-11-25.md`](AI-FIELD-SPREAD-2026-11-25.md). Change: `js/game.js` lane-clear gate (`chaserGap >= 0.25 * c.speed` instead of `!chaser`; `chaserGap` is Infinity with no chaser), comment at `AiDrive.laneClear`. The eager-bytes ratchet paid for it by dropping `ai-band.js`'s second `Object.freeze(AiBand)` (the IIFE already returns a frozen object). AI-only: the line weight steers AI cars; the player's car never reads it.
+Follows [`AI-FIELD-SPREAD-2026-11-25.md`](AI-FIELD-SPREAD-2026-11-25.md). Change: `js/game.js` lane-clear gate (`chaserGap >= c.speed / 4` instead of `!chaser`; `chaserGap` is Infinity with no chaser), comment at `AiDrive.laneClear`. The eager-bytes ratchet paid for it with `const { clamp, lerp } = M4` in `ai-start.js` (the trailing `Object.freeze(AiBand)` looked redundant but `frozen-globals.test.mjs` pins it). AI-only: the line weight steers AI cars; the player's car never reads it.
 
 ## Before and after
 
