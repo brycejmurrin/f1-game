@@ -230,10 +230,11 @@ const TouchButtonSettings = (() => {
       gestureAmount.textContent = label;
       gestureTime.setAttribute("aria-valuetext", label);
     }
-    const FULL_ONLY = { start: 100, end: 100, press: "instant", buildMs: 0, adaptive: 1 };
-    const EASE = { start: null, end: null, press: "instant", buildMs: 0, adaptive: "inherit" };
+    const FULL_ONLY = { start: 100, end: 100, press: "instant", buildMs: 0, adaptive: 1, fullEdge: "fixed" };
+    const EASE = { start: null, end: null, press: "instant", buildMs: 0, adaptive: "inherit", fullEdge: "fixed" };
     function presetOf(id) {
       const o = PedalTravel.buttonOverrides(id);
+      if (o.fullEdge) return "custom";   // a touch-position start overrides STARTING INPUT
       if (o.start == null && o.end == null && !o.press && !o.buildMs && o.adaptive == null) return "ease";
       return o.start === 100 && o.end === 100 && !o.press && !o.buildMs && o.adaptive === 1 ? "full" : "custom";
     }
@@ -286,9 +287,9 @@ const TouchButtonSettings = (() => {
       if (arrow) {
         preset.value = presetOf(id);
         const split = ids.includes("left") && ids.includes("right") && presetOf("left") !== presetOf("right");
-        presetHelp.textContent = "Slide to Ease eases steering as you slide toward the other arrow. Full Only gives full input for the whole press: it sets Starting Input and Slide End Input to 100, First Touch to Instant, Hold Build Time off and Adaptive Buttons to 1. Editing any of those shows Custom." +
+        presetHelp.textContent = "Slide to Ease eases steering as you slide toward the other arrow. Full Only gives full input for the whole press: it sets Starting Input and Slide End Input to 100, First Touch to Instant, Hold Build Time off and Adaptive Buttons to 1. Editing any of those, or Start From Touch Position, shows Custom. Slide to Ease is the default: those fields are unchanged." +
           (split ? " The left and right arrows use different responses, so this applies to " + id.toUpperCase() + " only." : "") +
-          (arrowsDiffer() ? " Left and right arrows differ: slide distance is " + PedalTravel.buttonProfile("left").travel + " px left and " +
+          (arrowsDiffer() && !(presetOf("left") === "full" && presetOf("right") === "full") ? " Left and right arrows differ: slide distance is " + PedalTravel.buttonProfile("left").travel + " px left and " +
             PedalTravel.buttonProfile("right").travel + " px right." : "");
       }
       press.value = profile.press; travel.value = String(profile.travel); distance(profile.travel);

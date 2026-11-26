@@ -663,8 +663,13 @@ test("RESPONSE preset: FULL ONLY holds full input, edits show CUSTOM, split arro
   assert.equal(model.buttonOverrides("right").start, undefined);
   assert.equal(model.buttonOverrides("left").end, 80, "split arrows: only the selected arrow changes");
   assert.ok(dom.byId(field("preset").getAttribute("aria-describedby")).textContent.includes("RIGHT only"));
-  // export round trip keeps the preset
+  choose("button", "left"); choose("fullEdge", "left");
+  assert.equal(field("preset").value, "custom");
   choose("preset", "full");
+  assert.equal(model.buttonOverrides("left").fullEdge, undefined);
+  assert.equal(field("preset").value, "full");
+  // export round trip keeps the preset
+  choose("button", "right"); choose("preset", "full");
   const saved = JSON.parse(JSON.stringify(model.normalizeProfiles({ v: 1, buttons: { right: model.buttonOverrides("right") } })));
   assert.equal(saved.buttons.right.start, 100);
   assert.equal(saved.buttons.right.adaptive, 1);
