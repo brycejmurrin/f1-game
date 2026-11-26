@@ -771,3 +771,43 @@ test("an AI in its box before the fit re-picks THIS stop's planned class when th
   assert.equal(c.pitNext && c.pitNext.code, "H", "the plan's second set (seq[1]), not seq[2]'s fallback");
   c.pitState = "none"; c.pitStops = 0; c.pitNext = null;
 });
+
+// ---- batch #6764 (#6611 RW3 + RW8 + RW10): pit-lane arm, loss and reset state
+async function withMonza(fn) {
+  const g = await createGame({ track: "monza" });
+  try { g.apex.tyres({ level: "real" }); g.step(60 * 3); await fn(g, g.G.cars.find((x) => !x.human)); } finally { g.close(); }
+}
+
+test("RW10: reset() clears pitWorked", async () => {
+  await withMonza((g, c) => {
+    c.pitWorked = 15;
+    g.G.pits.reset(c);
+    assert.equal(c.pitWorked, 0);
+  });
+});
+
+test("RW3: a car in the box that leaves the window un-counts the unfitted stop", async () => {
+  await withMonza((g, c) => {
+    const G = g.G;
+    // Park the car far from the pit window, in the box state with the stop counted but not fitted.
+    c.s = (G.track.pit ? (G.track.pit.sEnd || 0) : 0) + G.track.total * 0.5;
+    c.pitState = "box"; c.pitFitted = false; c.pitStops = 1; c.pitT = 1;
+    G.pits.update(c, 1 / 60);
+    assert.equal(c.pitState, "none", "left the window");
+    assert.equal(c.pitStops, 0, "the stop that never finished is not counted");
+  });
+});
+
+test("RW8: lossAt prices the brake-down at the limiter's BRAKE*0.5 rate", async () => {
+  await withMonza((g) => {
+    const G = g.G, pits = G.pits;
+    const before = pits.lossS();
+    G.BRAKE = G.BRAKE * 0.5;                 // halving BRAKE and pricing at full rate == pricing at the limiter rate
+    const half = pits.lossS();
+    G.BRAKE = G.BRAKE * 2;
+    // At the limiter rate the brake-down term is twice the full-BRAKE price: a quarter-BRAKE world must cost more.
+    assert.ok(half > before);
+    // Exact pin on Monza (was 22.54 when the down-leg was priced at full BRAKE).
+    assert.equal(+before.toFixed(2), 23.01);
+  });
+});

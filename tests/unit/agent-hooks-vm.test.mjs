@@ -658,7 +658,7 @@ test("world full carries feel; pit() carries the lane loss", async () => {
   assert.equal(feel.hitStop, 0);
   const pit = g.apex.pit();
   // Monza's lane at racing speed (the real figure is ~22-24 s).
-  assert.equal(pit.lossS, 22.54);
+  assert.equal(pit.lossS, 23.01);   // 22.54 before the down-leg was priced at the limiter rate (#6764 RW8)
 });
 
 test("race() leaves a career in the saved free-play seat on the requested circuit", async () => {
