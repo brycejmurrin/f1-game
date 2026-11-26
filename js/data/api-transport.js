@@ -445,10 +445,10 @@ const F1Transport = (function () {
       const job = attempt(0)
         .then(function (json) {
           if (myGen !== netGen) throw cancelledError(url);
-          // An empty array is OpenF1's "no results yet" (HTTP 404). Keep it for at
+          // An empty session-scoped array is OpenF1's "no results yet" (HTTP 404). Keep it for at
           // most EMPTY_TTL_MS: backdate the stamp so a long (frozen-session) TTL
           // cannot serve [] for a week, while a short TTL still holds it.
-          const empty = json && typeof json === "object" && json.length === 0;
+          const empty = json && typeof json === "object" && json.length === 0 && /[?&]session_key=/.test(url);   // session-scoped only: a meeting's empty list stays frozen
           if (cache) writeCache(url, json, cachePolicy === "memory", empty && ttl > EMPTY_TTL_MS ? effects.now() - (ttl - EMPTY_TTL_MS) : null);
           if (!quiet) effects.info("fetch " + name + " ok");
           return json;
