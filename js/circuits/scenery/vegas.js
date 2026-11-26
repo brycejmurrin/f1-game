@@ -441,7 +441,8 @@
       cityFront(0.12, 0.20,  1, 52, { minH: 6, maxH: 12, depth: 16, step: 32,
         palette: [[0.18, 0.18, 0.20], [0.17, 0.18, 0.21]], lit: true, windowCol: BOH_WIN });
       // Mid-sector service massing — re-keyed through sl(); pushed back off the barrier.
-      building(K(sl(0.26)), 1, 62, 30, 40, 28, { kind: "tiered", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
+      // 0.264 (was 0.26): at 0.26 a ground-floor detail sank 1.2 m into the dip behind T5-T6 once the pit row was back (#6922).
+      building(K(sl(0.264)), 1, 62, 30, 40, 28, { kind: "tiered", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
 
       // Wynn / Encore — copper twin towers on Sands Ave approach just before
       // Venetian Strip entry (racing ~0.445, LEFT). Closed solid cores —

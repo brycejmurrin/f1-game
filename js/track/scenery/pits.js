@@ -558,14 +558,15 @@ const SceneryPits = (function () {
         // unsupported — the platform is a `sweep()` strip the prop support
         // BFS cannot see, so the post + head + aspects read as 0.38-2.5 m
         // gaps (suzuka 4, mexico 4 — 2026-10-07). Both posts now rise from
-        // y=0 through the platform; the head stays at HEAD_Y.
-        const HEAD_Y = 2.55;                       // above the lane floor, the same on both
+        // y=0 through the platform, plus FOOT below it for terrain just under
+        // the grade (vegas #6922); the head stays at HEAD_Y.
+        const HEAD_Y = 2.55, FOOT = 0.4;           // above / below the lane floor
         const posts = [{ lat: v0 + 0.55, toLane: 1 },        // the platform wall's nose, track side
                        { lat: o.workOut - 0.45, toLane: -1 }];  // the outer wall opposite
         for (const q of posts) {
           const c = at(kGate, sd * (hw[kGate] + q.lat), 0), bs = basisAt(kGate);
           const rise = HEAD_Y;
-          rawBox(out, [c[0], c[1] + rise / 2, c[2]], [0.14, rise, 0.14], POST, bs);
+          rawBox(out, [c[0], c[1] + (rise - FOOT) / 2, c[2]], [0.14, rise + FOOT, 0.14], POST, bs);
           rawBox(out, [c[0], c[1] + rise, c[2]], [0.5, 0.9, 0.34], DARK, bs);
           const red = night ? [1.45, 0.22, 0.16] : [0.95, 0.14, 0.10];
           const face = [c[0] - bs[2][0] * 0.2, c[1] + rise - bs[2][1] * 0.2, c[2] - bs[2][2] * 0.2];

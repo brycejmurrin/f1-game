@@ -131,3 +131,16 @@ bacinger outline ~4.8 m RMS off the real line, with T5/T7/T17 far too tight).
   are re-derived from the old physical start and scenery origin (both within 3 m). The same goes for hwZones (the
   narrowed cores) and turns/sectors. bankZones are now `{ turn }` anchors on T1/T5/T8/T11/T12, where the old frac rows landed.
 - **Time trial:** `revision` 3, and n/total changed, so the layout key re-keys: Vegas boards start a new class.
+- **Pit complex (garage bays):** the averaged laps left a ±0.01 /m S-wiggle on the pit straight (0 to +110 m),
+  which the pole lap does not have. It shrank the derived pit window to 190 m, under the 201 m the twelve-bay row
+  needs, so Vegas silently lost its garages (`pit-lane` "keeps its garage bays"). Fixes:
+  - Vertices 753..6 are faired by bi-Laplacian relaxation, ends held: max 6.1 m, pole-lap RMS 1.81 → 1.74 m on the
+    ICP fit in `scratch/`.
+  - The real T17 (R ~190 m) runs to ~10 m before the line, and the row is pinned to the window's end. So the
+    def authors `pit.exitM: 145` (new opt-in key, `TrackPit.window` in `js/track/core/pit.js`). That slides the
+    row onto the straight; at the derived 110 m, the first two bays interpenetrated 3.45 m on T17's inside.
+  - The restored row re-dresses the generated city. That needed three narrow city exclusions, and the Sands-side
+    service block moved 0.26 → 0.264 (a ground-floor detail sank 1.2 m into a dip).
+- **Pit-entry gate:** the entry signal's outer post (frac 0.9755) stands off any lane floor, on sand 0.19 m under
+  the road grade (ground-audit unsupported 4). The engine fix is generic: the entry posts in
+  `js/track/scenery/pits.js` now run 0.4 m below the floor, so they reach terrain that sits just under it.
