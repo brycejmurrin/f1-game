@@ -48,6 +48,8 @@ test("the 17 marks are the Vegas apexes in CORNERS order, inside the lap", () =>
     assert.ok(m.s > 0 && m.s < total);
     if (i) assert.ok(m.s > marks[i - 1].s, m.name + " after " + marks[i - 1].name);
   });
+  // The spec jumps to lap fraction 0.978 to drive T17 into the line: T17's apex must lie ahead of it.
+  assert.ok(def.turns[16] > 0.978 + 1.2 * 45 / total, "T17 apex " + def.turns[16]);
 });
 
 for (const [name, label, inputs] of [
@@ -94,6 +96,13 @@ test("a rewind drops the open window and the corners after the car's new place",
   assert.equal(fwdJump.jumped, true);
   assert.equal(fwdJump.scored.length, 0);
   assert.equal(scorer.pending().length, 0);
+  // Rolling back a few metres (a spin, a reverse) is driving, not a teleport: the open window survives.
+  const roll = TD.createScorer(TT, marks, total);
+  let rt = 5, rs = t1.s - 100;
+  while (rs < t1.s + 5) { roll.step({ t: rt, s: rs, a: -1, b: 0, g: 1 }); rt += 1 / 60; rs += 40 / 60; }
+  assert.equal(roll.pending().length, 1, "T1's window is open");
+  assert.equal(roll.step({ t: rt, s: rs - 0.5, a: 0, b: 0, g: 0 }).jumped, false);
+  assert.equal(roll.pending().length, 1, "a 0.5 m roll-back keeps it");
   // A paused clock is not a jump.
   const p = scorer.step({ t: t - 9, s: marks[10].s + 20, a: 0, b: 0, g: 1 });
   assert.equal(p.jumped, false);

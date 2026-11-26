@@ -48,6 +48,7 @@ const ThumbDrill = (function () {
       }
       if (prev) {
         const d = fwd(prev.s, x.s, total);
+        if (d > total - JUMP_M) { prev = x; buf.push(x); return out; }   // rolled back a little (a spin, a reverse): no crossings
         if (d > JUMP_M) {   // a teleport forward (a debug jump, a reset to the road): no corner was driven through
           out.jumped = true;
           buf = []; pending = []; closing = null;
@@ -119,7 +120,8 @@ const ThumbDrill = (function () {
 
   /** Stage a Las Vegas Time Trial and drive it with the cues. onFail runs when it cannot start (it reopens LEARN). */
   function launch(G, { onFail } = {}) {
-    if (live || G.state !== "menu" || G.netPlay?.active?.() || typeof ThumbTrainer === "undefined") { onFail?.(); return false; }
+    if (live) return false;   // already driving: onFail would reopen LEARN over it
+    if (G.state !== "menu" || G.netPlay?.active?.() || typeof ThumbTrainer === "undefined") { onFail?.(); return false; }
     const vegas = Tracks.LIST.findIndex(d => d.id === "vegas");
     if (vegas < 0) { onFail?.(); return false; }
     const previous = { flow: G.flow, session: G.session, track: G.trackIdx, goal: G.coach.practiceGoal() };
@@ -136,7 +138,12 @@ const ThumbDrill = (function () {
       if (typeof MenuQuitTail !== "undefined") MenuQuitTail.keepFlow(quitFlow.flow, quitFlow.session);
     });
     Log.info("ui", "ThumbDrill launch vegas");
-    G.startRace();
+    try { G.startRace(); } catch (e) {
+      Log.warn("ui", "ThumbDrill could not start: " + e);
+      live?.stop();
+      onFail?.();
+      return false;
+    }
     return true;
   }
 
@@ -148,7 +155,7 @@ const ThumbDrill = (function () {
     const keys = { left: false, right: false };
     let scorer = null, marks = null, total = 0, raf = 0, left = false, raced = false, marked = false, armedLap = false;
     let flash = null, cardUntil = 0;
-    const startedAt = performance.now();
+    let loadSeen = performance.now();
     const root = document.createElement("div");
     root.id = "thumb-drill";
     root.hidden = true;
@@ -207,7 +214,11 @@ const ThumbDrill = (function () {
     function tick() {
       raf = requestAnimationFrame(tick);
       if (G.state === "menu") {
-        if (raced || performance.now() - startedAt > 30000) stop();
+        // The race loads with the state still "menu" behind #loading (minutes on a slow box): wait while it is up. Back
+        // at the menu after a race, or 5 s after a load that never became one (a refused or failed start), restore.
+        const loading = document.getElementById("loading");
+        if (!raced && loading && !loading.hidden) loadSeen = performance.now();
+        if (raced || performance.now() - loadSeen > 5000) stop();
         return;
       }
       raced = true;
