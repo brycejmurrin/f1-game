@@ -1,0 +1,50 @@
+{
+ "format": "apex26-recovery-v1",
+ "exportedAt": "2026-11-25T00:00:00.000Z",
+ "build": "golden",
+ "career": {
+  "v": 1,
+  "flavour": "driver",
+  "year": 2026,
+  "money": 120,
+  "rep": 31,
+  "seat": 0,
+  "driver": {
+   "name": "Golden driver 1",
+   "code": "GLD",
+   "num": 41
+  },
+  "seed": 120,
+  "team": "haas",
+  "season": {
+   "round": 2,
+   "pts": {},
+   "teamPts": {},
+   "driverCodes": {}
+  },
+  "owned": [],
+  "fitted": {},
+  "results": [],
+  "history": [],
+  "dev": {},
+  "tdev": {},
+  "seats": {},
+  "offers": [],
+  "obj": null,
+  "budgetLvl": 0,
+  "facility": 0,
+  "moves": [],
+  "paidSponsors": [],
+  "deal": {
+   "salary": 0,
+   "bonusPt": 0,
+   "left": 1,
+   "years": 1
+  }
+ },
+ "season": null,
+ "persistence": {
+  "durable": false,
+  "reason": "quota"
+ }
+}

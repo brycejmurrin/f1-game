@@ -350,6 +350,8 @@ var RaceEngineer = (function () {
       // (the THREAT), and on the lap before our stop the first car we would
       // rejoin behind — every car inside a stop's worth of progress behind us.
       const v = Math.max(1, c.speed || 1), lap = c.lap || 0;
+      // the gap's divisor: the HUD's floor (0.26 x vTop), so a car at a standstill reads the same gap
+      const vg = Math.max(c.speed || 0, (G.vTop?.() ?? 80) * .26);
       const lapsToStop = !noStop && nextAt != null ? nextAt - lap : null;
       const lossM = pit && pit.lossS != null ? pit.lossS * (lapS > 0 && G.track ? G.track.total / lapS : v) : 0;
       let ahead = null, aheadGap = Infinity, threat = null, threatGap = Infinity, rejoin = lapsToStop === 1 && lossM > 0 ? "" : null, rejoinProg = Infinity;
@@ -357,7 +359,7 @@ var RaceEngineer = (function () {
       for (const o of (cars || [])) {
         if (o === c) continue;
         if (!o.retired && !o.finished && !(o.pitState && o.pitState !== "none")) {
-          const gap = ((c.prog || 0) - (o.prog || 0)) / v;
+          const gap = ((c.prog || 0) - (o.prog || 0)) / vg;
           if (gap < 0 && -gap < PUSH_GAP_S && -gap < aheadGap) { ahead = o.code || "THE CAR"; aheadGap = -gap; }
           if (threatOn && gap > 0 && gap < pit.lossS + 2 && gap < threatGap && pits && pits.windowOf) {
             const w = pits.windowOf(o);
@@ -373,7 +375,7 @@ var RaceEngineer = (function () {
           // `o.speed` is ~0, the clamp made the divisor 1, and the "gap in
           // seconds" was a gap in METRES compared against pit.lossS. The number
           // that matters is how long WE take to cover the gap to them.
-          const gap = (c.prog - o.prog) / Math.max(1, c.speed || 1);
+          const gap = (c.prog - o.prog) / vg;
           // LATCHED for a lap: the rise is one tick, and a call that lost that
           // tick to the quiet gap or a full card queue was never said at all.
           if (gap > 0 && gap < pit.lossS + 2) b.undercut = { code: o.code || "RIVAL", left: lapS || 90 };
