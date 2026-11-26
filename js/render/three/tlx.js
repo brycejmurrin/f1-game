@@ -4780,6 +4780,7 @@ const TLX = (function () {
             _geoSeen.add(g);
           }
           _geoReg.push(new WeakRef(g));
+          g.__tlxScope = g.__tlxScope || (typeof TLXShaders !== "undefined" && TLXShaders.memScope ? TLXShaders.memScope.current() : "boot");   // lifetime scope for tlxMem
         } catch (_) { /* no WeakRef: census degrades, nothing leaks */ }
         return g;
       }
@@ -5546,6 +5547,7 @@ const TLX = (function () {
           let t = takePooledTexture(src);
           if (t) { t.image = src; _texStat.reused++; }
           else { t = new THREE.Texture(src); _texStat.made++; }
+          t.__tlxScope = (typeof TLXShaders !== "undefined" && TLXShaders.memScope ? TLXShaders.memScope.current() : "boot");   // a pooled texture takes the NEW scope
           // Borrow sources by default. A caller-created bitmap must stay open
           // for three's flipY checks/reuploads, then close when its texture dies
           // (or is retired to the pool: retireTexture calls the same release).
@@ -5639,7 +5641,12 @@ const TLX = (function () {
           if (t && t.isTexture) t.dispose();          // a material array (createTextureArray)
         },
         flushTexPool,
-        texCensus: function () { return TLXShaders.memCensus(this.__tlx); },
+        texCensus: function () { return TLXShaders.memCensus(this.__tlx, 0, typeof _geoReg !== "undefined" ? { geoReg: _geoReg } : undefined); },
+        // tlxMem scope: memScope() reads, memScope(name) sets, memScope(name, "push") / (name, "pop") nest (tlx-mem.js)
+        memScope: function (name, op) {
+          const m = TLXShaders.memScope;
+          return op === "push" ? m.push(name) : op === "pop" ? m.pop(name) : name === undefined ? m.current() : m.set(name);
+        },
 
         // Baked material arrays — the GLX.createTextureArray counterpart
         // `images` is sparse, indexed by MAT id. three needs RAW pixels for a
@@ -5685,7 +5692,7 @@ const TLX = (function () {
               }) : null;
             if (!job) filled = readbackTextureLayers(size, images, n, data);
             if (!job && !filled) return null;
-            const t = new THREE.DataArrayTexture(data, size, size, n);
+            const t = new THREE.DataArrayTexture(data, size, size, n); t.__tlxScope = (typeof TLXShaders !== "undefined" && TLXShaders.memScope ? TLXShaders.memScope.current() : "boot");
             t.format = THREE.RGBAFormat; t.type = THREE.UnsignedByteType;
             t.colorSpace = THREE.NoColorSpace;
             t.wrapS = t.wrapT = THREE.RepeatWrapping;   // these tile across a circuit

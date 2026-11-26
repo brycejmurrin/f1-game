@@ -1969,6 +1969,7 @@ async function raceTrackStepped(idx, stale) {
   throw new Error("track build superseded twice");
 }
 function loadTrack(idx) {
+  globalThis.TLXShaders?.memScope?.set("circuit");   // tlxMem scope (#6958)
   // Every loader releases selector ownership before replacing the world.
   _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0;
   const def = Tracks.LIST[idx];
@@ -2169,6 +2170,7 @@ const _carWarm = { busy: false };   // the stepped race car warm (startRaceBody)
 const _warmed = new Set();
 const warmPrograms = (tag = "") => { try { if (gfx.warm) { const k = menuKey(trackIdx); _warmKey = k; let fresh = false; if (!_warmed.has(k + tag)) { _warmed.add(k + tag); gfx.warm(); fresh = true; } carDraw.warmCockpitTelemetry(); return fresh; } } catch (_) { /* optimisation only */ } return false; };   // telemetry every call (_rigDone dedupes; A·W56 / #3766 DAILY)
 async function menuFinish(current, key) {
+  globalThis.TLXShaders?.memScope?.set("home");
   await prepareMenuCarAssets(current);
   if (!current()) return;
   if (await menuIdle(current)) { warmPrograms(); FlybySeq.reset(); _menuGate.warm = 2; }   // reset: a new world's shot 0 snaps, never glides in from the last one
@@ -4170,6 +4172,7 @@ const incidentSim = IncidentSim.create(G, c => { if (c.human && c.isPlayer && is
 // pass-watch clear is gridUp's (U1.1 territory); the debris prime of a start stays after makeCars.
 // #6860 phase 2 (decision B): 'episode' becomes ONE registrant calling SimState.clear(G) — WHAT is SimState's.
 // results-cam stays FIRST (a montage / ceremony is restored before the field is replaced). Left explicit: director.reset (its setCamMode needs startRaceBody's state), resultsCam.reset in startRaceFromSheet / quitToMenu / garageBack (not whys, or ordered among menu teardown).
+Scopes.register("race", { id: "tlx-mem-scope", on: ["start", "finish", "quit"], exit: (c) => globalThis.TLXShaders?.memScope?.set(c.why === "start" ? "race" : "home") });   // tlxMem scope rides the bus (#6958)
 Scopes.register("race", { id: "results-cam", on: ["start"], exit: () => { resultsCam.reset(); RaceCeremony.resetLive(); } });
 Scopes.register("race", { id: "incident-sim", on: ["start", "restart-red", "restart-declined", "episode"], touches: ["takeovers"],
   exit: () => IncidentSim.reset(), snapshot: () => { const s = IncidentSim.status(); return { owned: s.owned, count: s.count }; } });
@@ -9145,7 +9148,7 @@ function openGarage(from) {
   loadingScreen.stop(); garagePre.markOpen(from); ensureGarageData();   // stale busy/prep plate (and the arrival's Blender tables) (z 36) must not cover #carsetup
   if (from === "menu" && soundOn) ensureAudio().then(() => GameAudio.init());
   else if (soundOn) GameAudio.uiSelect();
-  garageReturn = from;
+  garageReturn = from; globalThis.TLXShaders?.memScope?.push("garage");
   $("cs-done").textContent = from === "select" ? "RACE SETUP" :
     from === "pit" ? (isTimeTrial() ? "RETURN TO TIME TRIAL" : "RETURN TO RACE") : from === "career" ? "RETURN TO CAREER" :
     from === "vsfriend" ? "RETURN TO LOBBY" : "CLOSE GARAGE";
@@ -9218,6 +9221,7 @@ function closePitWork() {
 // Leaving the GARAGE, shared by DONE and BACK: the screen's own teardown plus
 // the part maths, which both exits owe the rest of the game.
 function leaveGarage() {
+  globalThis.TLXShaders?.memScope?.pop("garage");
   setupCam.cancelArrival();
   if (typeof MenuTeardown !== "undefined") MenuTeardown.beginGarageClose();
   if (garageReturn !== "pit" && !loadingScreen.phase()) loadingScreen.busy("Returning");

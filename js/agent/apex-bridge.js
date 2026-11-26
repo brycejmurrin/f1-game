@@ -1081,7 +1081,7 @@ const ApexBridge = (function () {
   const none = (xs) => xs.length === 0, any = () => true;
   const CALL_READ = {
     perf: none, info: none, timing: none, lapHistory: none, classification: none, audio: none, lifecycle: none, flags: none,
-    inputState: none, cameraState: none, raceEntryProfile: none, raceEntryStages: none, texCensus: none, assets: none, probe: none,
+    inputState: none, cameraState: none, raceEntryProfile: none, raceEntryStages: none, texCensus: none, tlxMem: none, assets: none, probe: none,
     physState: any, world: any, field: any, logs: any, scene: any,   // option bags that only filter or shape the read
     renderScale: (xs) => xs.length === 0 || (xs.length === 1 && isObj(xs[0]) && xs[0].lite === true && Object.keys(xs[0]).length === 1),
     diag: (xs) => xs.length === 1 && isObj(xs[0]) && xs[0].download === false,

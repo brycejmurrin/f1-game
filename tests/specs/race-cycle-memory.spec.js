@@ -141,6 +141,8 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
   const menuByCycle = new Map();
   /** Per-cycle WebGPU wrapper counts + DOM counters at the final menu (#4778). */
   const wrapperSeries = [];
+  /** Per-cycle TLX byScope readings at the final menu (#6958, annotation only). */
+  const scopeSeries = [];
   const log = (row) => { readings.push(row); mkdirSync("artifacts/logs", { recursive: true }); writeFileSync("artifacts/logs/race-cycle-memory.json", JSON.stringify(readings, null, 1)); };
   let lastCycle = CYCLES;
   for (let cycle = 1; cycle <= lastCycle; cycle++) {
@@ -166,6 +168,10 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
         const ctx = await contextScopeCount(cdp);
         wrapperSeries.push({ cycle, wrappers: await gpuWrapperCounts(cdp), contexts: ctx.count, contextsBlind: ctx.blind, contextNames: ctx.names, dom: await domLeakCounters(cdp) });
         log({ cycle, at: "wrappers", ...wrapperSeries[wrapperSeries.length - 1] });
+        // #6958 per-scope TLX census: a reading, never a gate (D-052 D1(b): no measured tolerance yet).
+        const mem = await page.evaluate(() => { try { return window.__apex.tlxMem(); } catch (e) { return { supported: false, error: String(e) }; } });
+        scopeSeries.push({ cycle, supported: !!mem.supported, scope: mem.scope || null, byScope: mem.byScope || null });
+        log({ cycle, at: "tlxMem", ...scopeSeries[scopeSeries.length - 1] });
         // A first pair over the hard bound may be one odd reading (dip or step): race CONFIRM_CYCLES more and let
         // the robust slope decide below. A clean pair costs nothing extra.
         if (cycle === CYCLES && lastCycle === CYCLES && postWarmSlope(menuByCycle, CYCLES).heapHardFail) lastCycle = CYCLES + CONFIRM_CYCLES;
@@ -206,6 +212,18 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
       (robust ? `; confirmed over ${robust.points} readings, median slope ${robust.slope} MiB/cycle` : "") +
       ` (hard ≤${HEAP_SLOPE_HARD_MB}; H12 leak was ~12 MiB/cycle; series=${JSON.stringify(slope.series)})`,
     ).toBeLessThanOrEqual(HEAP_SLOPE_HARD_MB);
+  }
+  // #6958: post-warm (cycle WARM+1 vs WARM) climb per lifetime scope, ANNOTATED only. TLX caches warm over ~five cycles, so
+  // the first cycles are never compared; WeakRef drift of a few KB is noise, hence the 64 KiB floor on what is named.
+  {
+    const at = (c) => (scopeSeries.find((r) => r.cycle === c) || {}).byScope;
+    const e = at(WARM_CYCLES), l = at(WARM_CYCLES + 1), climb = {};
+    if (e && l) for (const k of Object.keys(l)) {
+      const d = ((l[k].bytes || 0) + (l[k].geoBytes || 0)) - (((e[k] || {}).bytes || 0) + ((e[k] || {}).geoBytes || 0));
+      if (d > 65536) climb[k] = d;
+    }
+    test.info().annotations.push({ type: "tlx-scope-series", description: JSON.stringify(scopeSeries) });
+    if (Object.keys(climb).length) test.info().annotations.push({ type: "tlx-scope-climb", description: JSON.stringify({ later: WARM_CYCLES + 1, earlier: WARM_CYCLES, climb }) });
   }
   const softMsgs = [];
   // Wrapper objects (#4778): post-warm pair must be flat per class. Soft unless STRICT, like the heap slope.
