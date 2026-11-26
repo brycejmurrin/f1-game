@@ -136,9 +136,10 @@ const CareerPlanning = (function () {
       }
       const team = Teams.LIST.find((t) => t.id === c().team) || { tier: 2 };
       return [kind, api().SPONSOR_KINDS[(api().SPONSOR_KINDS.indexOf(kind) + 1) % api().SPONSOR_KINDS.length]].map((k, i) => {
-        const value = k.type === "clean" ? sp.window : Math.max(1, Math.ceil(k.value(team) * sp.window / k.window));
+        const part = Math.min(1, sp.window / k.window);   // cap at catalog, as career.js sponsorAt
+        const value = k.type === "clean" ? sp.window : Math.max(1, Math.ceil(k.value(team) * part));
         return { i, chosen: i === chosen, type: k.type, value, window: sp.window,
-          pay: Math.round(k.pay * sp.window / k.window), label: api().sponsorLabel({ type: k.type, value, window: sp.window }) };
+          pay: Math.round(k.pay * part), label: api().sponsorLabel({ type: k.type, value, window: sp.window }) };
       });
     }
     function chooseSponsor(i) {

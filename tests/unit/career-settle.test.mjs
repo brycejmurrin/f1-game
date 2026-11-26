@@ -1658,3 +1658,32 @@ test("factory savings uses rounded quotes, owned-all zero and cash forecast owne
   data.owned = ["one", "two"]; assert.equal(p.factory().savings, 0);
   data.flavour = "driver"; assert.equal(p.cash(50).wages, 0);
 });
+
+test("an alternate sponsor never pays above its catalog figure (points 5 rounds -> finishes 4 rounds); a cut final window stays pro rata", () => {
+  // #6605 row 12 ("Cap at catalog"): the slot window came from the ORIGINAL kind (5), the alternate's
+  // catalog window is 4, so 450 * 5/4 paid 563. The ratio is capped at 1 in model and UI alike.
+  let seen = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const Career = load(24);
+    Career.start({ flavour: "myteam", teamId: "custom", seed }); Career.engage(true);
+    const kinds = Career.SPONSOR_KINDS, p = Career.planning();
+    const offers = p.sponsorOffers();
+    for (const o of offers) {
+      const cat = kinds.find((k) => k.type === o.type);
+      assert.ok(o.pay <= cat.pay, `seed ${seed}: offer ${o.type} pays ${o.pay} > catalog ${cat.pay}`);
+    }
+    assert.equal(p.chooseSponsor(1), true);
+    const sp = Career.sponsor();
+    assert.equal(sp.pay, offers[1].pay, "model and UI agree");
+    if (offers[0].type === "points" && offers[1].type === "finishes") { seen++; assert.ok(sp.pay <= 450); }
+  }
+  assert.ok(seen > 0, "the points -> finishes case was exercised");
+  // A cut final window still pays below catalog, pro rata.
+  const Career = load(22);
+  Career.start({ flavour: "myteam", teamId: "custom", seed: 1 }); Career.engage(true);
+  for (let r = 0; r < 22; r++) {
+    const sp = Career.sponsorAt(r), cat = Career.SPONSOR_KINDS.find((k) => k.type === sp.type);
+    assert.ok(sp.pay <= cat.pay);
+    if (sp.window < cat.window) assert.equal(sp.pay, Math.round(cat.pay * sp.window / cat.window));
+  }
+});

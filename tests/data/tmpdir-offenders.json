@@ -4,15 +4,6 @@
     "A RATCHET that only shrinks: migrate a file to mkTmpDir() (tests/helpers/tmp-dir.mjs), then delete its row and lower ceiling.",
     "Enforced by tests/unit/tmpdir-ratchet.test.mjs."
   ],
-  "ceiling": 8,
-  "offenders": [
-    "agent-experiment.test.mjs",
-    "apex-memory.test.mjs",
-    "apex-tools-mcp-surface.test.mjs",
-    "assets-pack.test.mjs",
-    "assets-verify-material-md5.test.mjs",
-    "audit-summary.test.mjs",
-    "base-green.test.mjs",
-    "boost-press-census.test.mjs"
-  ]
+  "ceiling": 0,
+  "offenders": []
 }

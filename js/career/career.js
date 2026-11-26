@@ -1070,8 +1070,10 @@ function sponsorAt(round) {
   const selected = career.sponsorPicks && career.sponsorPicks[career.year + ":" + idx];
   if (selected === 1) kind = SPONSOR_KINDS[(SPONSOR_KINDS.indexOf(kind) + 1) % SPONSOR_KINDS.length];
   const target = kind.value(team);
-  const selectedValue = selected === 1 ? (kind.type === "clean" ? window : Math.max(1, Math.ceil(target * window / kind.window))) : value;
-  const selectedPay = selected === 1 ? Math.round(kind.pay * window / kind.window) : pay;
+  // An alternate may have a shorter catalog window than the slot: cap the ratio at 1 so it never pays above catalog.
+  const altPart = Math.min(1, window / kind.window);
+  const selectedValue = selected === 1 ? (kind.type === "clean" ? window : Math.max(1, Math.ceil(target * altPart))) : value;
+  const selectedPay = selected === 1 ? Math.round(kind.pay * altPart) : pay;
   const rows = (career.results || []).filter((r) => r.r >= start && r.r < start + window);
   let done = 0;
   for (const r of rows) {

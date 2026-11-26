@@ -87,9 +87,10 @@ async function boot({ desktop = false } = {}) {
   const G = { gfx: { isMobile: !desktop }, soundOn: false };
   // download() is private to the LAZY_SAVES_DATA body: evaluate its real source against the façade's caps.
   const body = read("js/ui/settings-export-body.js");
-  const at = body.indexOf("async function download(");
-  const download = vm.runInContext("(function () { const { FORMAT, SETTINGS_MAX_BYTES } = SettingsExport._core; return "
-    + body.slice(at, body.indexOf("\n}\n", at) + 2) + "; })()", ctx, { filename: absSrc("js/ui/settings-export-body.js") });
+  const at = body.indexOf("const RESTORE_LIMIT_MSG"), end = body.indexOf("async function download(");
+  const download = vm.runInContext("(function () { const { FORMAT, SETTINGS_MAX_BYTES, GARAGE_FORMAT, GARAGE_MAX_BYTES, CAREER_FORMAT }"
+    + " = SettingsExport._core; " + body.slice(at, body.indexOf("\n}\n", end) + 2) + "; return download; })()",
+    ctx, { filename: absSrc("js/ui/settings-export-body.js") });
   const slot = (f, i) => { const s = disk.get("apex26.career." + f + "." + i); return s == null ? null : JSON.parse(s); };
   return {
     disk, saved, SE, CB, store, G, slot, download,
@@ -365,14 +366,16 @@ test("export side: a primitive stored career slot is left out and reported by bo
   assert.equal(Object.keys(file.careers).length, 6);
 });
 
-test("save-side caps: only the settings file and the career backup check size on SAVE (#6478-8)", async () => {
+// #6602 phase 2 flipped this row: garage and career files now refuse on SAVE what LOAD would refuse.
+test("save-side caps: every file format checks its load cap on SAVE (#6478-8)", async () => {
   const h = await boot();
   const SETTINGS_MAX = h.core.SETTINGS_MAX_BYTES, GARAGE_MAX = h.core.GARAGE_MAX_BYTES;
   assert.deepEqual([SETTINGS_MAX, GARAGE_MAX, h.CB.MAX_BYTES], [8 * 1024 * 1024, 1024 * 1024, 5 * 1024 * 1024], "load caps (#6602 §2)");
   await assert.rejects(h.download({ format: "apex26-settings-v1", padding: OVERSIZE(SETTINGS_MAX) }, "s.json"), RangeError);
-  await h.download({ format: "apex26-garage-v1", garage: {}, padding: OVERSIZE(GARAGE_MAX) }, "g.json");
-  await h.download({ format: "apex26-career-v1", careers: {}, padding: OVERSIZE(h.CB.MAX_BYTES) }, "c.json");
-  assert.deepEqual(h.saved.map((s) => s.name), ["g.json", "c.json"], "garage and career files over their load cap still save");
+  await assert.rejects(h.download({ format: "apex26-garage-v1", garage: {}, padding: OVERSIZE(GARAGE_MAX) }, "g.json"), RangeError);
+  await assert.rejects(h.download({ format: "apex26-career-v1", careers: {}, padding: OVERSIZE(h.CB.MAX_BYTES) }, "c.json"), RangeError);
+  await h.download({ format: "apex26-garage-v1", garage: {} }, "small.json");
+  assert.deepEqual(h.saved.map((s) => s.name), ["small.json"], "only the file that fits its load cap saves");
   h.store.set("badges", { pad: OVERSIZE(h.CB.MAX_BYTES) });
   const r = plain(await h.CB.exportAll());
   assert.equal(r.ok, false, "CareerBackup.exportAll refuses a backup over its own load cap");

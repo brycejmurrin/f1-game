@@ -5,15 +5,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const TOOL = path.join(ROOT, "tools/env/apex-memory.mjs");
 
 function fixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "apex-mem-"));
+  const root = mkTmpDir("apex-mem-");
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const mem = path.join(root, ".claude/memory");
   const tool = path.join(root, "tools/env/apex-memory.mjs");

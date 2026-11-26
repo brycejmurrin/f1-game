@@ -339,7 +339,7 @@ test("ghost download reflects the awaited native result and re-enables its butto
 
 test("SettingsExport.download awaits the real native helper and surfaces write/share failures", async () => {
   const src = readFileSync(join(ROOT, "js/ui/settings-export-body.js"), "utf8");   // the LAZY_SAVES_DATA body (#4748)
-  const download = src.slice(src.indexOf("async function download("), src.indexOf("function stamp()"));
+  const download = src.slice(src.indexOf("const RESTORE_LIMIT_MSG"), src.indexOf("function stamp()"));
   for (const stage of ["write", "share"]) {
     const { sandbox } = loadNative({ capacitor: true });
     const error = new Error(stage + " failed");
@@ -350,7 +350,7 @@ test("SettingsExport.download awaits the real native helper and surfaces write/s
     const ctx = vm.createContext(sandbox);
     const config = "js/ui/settings-export.js";
     vm.runInContext(readFileSync(join(ROOT, config), "utf8"), ctx, { filename: absSrc(config) });
-    vm.runInContext("const { FORMAT, SETTINGS_MAX_BYTES } = SettingsExport._core;\n" + download, ctx, { filename: absSrc("js/ui/settings-export-body.js") });
+    vm.runInContext("const { FORMAT, SETTINGS_MAX_BYTES, GARAGE_FORMAT, GARAGE_MAX_BYTES, CAREER_FORMAT } = SettingsExport._core;\n" + download, ctx, { filename: absSrc("js/ui/settings-export-body.js") });
     let settled = false;
     const result = sandbox.download({ format: "apex26-settings-v1", settings: {} }, "settings.json");
     const rejected = assert.rejects(result, (err) => err === error);
