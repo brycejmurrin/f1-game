@@ -3487,7 +3487,7 @@ var jumpStartPenalty = JumpStartPenalty.create(G, {
 });   // LAZY_RACE_SESSION — recreated in onRaceSessionReady
 titleMenu = TitleMenu.create(G, openDataHub, () => { // returning-player, Daily and Learn (js/ui/title-menu.js)
   if (!learnAeroDrill) LearnDoor.launchAeroDrill(G, drill => { learnAeroDrill = drill; }, level => { raceDirtyAir = level; });
-});
+}, show => showTouchControls(show, false, show));   // the race dock previewed under LEARN's thumb trainer
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing(), lazyBundles.ensureReplayBroadcast),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring

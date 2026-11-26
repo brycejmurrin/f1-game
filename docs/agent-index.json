@@ -5315,6 +5315,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/thumb-trainer.js",
+      "global": "ThumbTrainer",
+      "roster": "LAZY_LEARN"
+    },
+    {
       "path": "js/ui/title-flow.js",
       "global": "TitleFlow",
       "roster": "tag"

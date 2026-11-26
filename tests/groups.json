@@ -1246,6 +1246,7 @@
     "tests/unit/three-inspector.test.mjs",
     "// Round 7: actual vendor binding/index updates and generated post/lamp shader contracts.",
     "tests/unit/three-shared-binding-update.test.mjs",
+    "tests/unit/thumb-trainer.test.mjs",
     "// The node half of the real-GPU tier test: FEATURES/SHED_ORDER consistency and GfxDebug.tiers() per detail level, in a vm; < 1 s.",
     "tests/unit/tier-record.test.mjs",
     "// tip-gate: the deploy tip's own budget tests when no completed Pages run covers its sha (merge-gate base row). ~1 s.",

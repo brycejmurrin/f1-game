@@ -121,6 +121,19 @@
           "type": "image/png"
         }
       ]
+    },
+    {
+      "name": "Thumb trainer",
+      "short_name": "Thumbs",
+      "description": "LEARN: time both thumbs through the Las Vegas corners on your own race buttons",
+      "url": "./?go=thumbs",
+      "icons": [
+        {
+          "src": "icons/shortcut-96.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }
