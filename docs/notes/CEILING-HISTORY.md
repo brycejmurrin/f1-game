@@ -4112,3 +4112,12 @@ of what `label()` reads and skips the label rebuild while it is unchanged, so th
 `I18n.t` four times a frame. `js/ui/hud-tyres.js` is eager, so the key code is boot bytes. Bryce's answers on #6752,
 2026-11-26 04:35Z (comments 7182675899, 7182732066): "Raise ~+400 B, ship it" and "Raise ~140 B"; the raise stays far under the +400 B he allowed.
 Fragment: `ratchets.d/claude--hud-tyres-aria-memo-6752.json`. Human step: `ratchet-raise` (Bryce's own click).
+
+## 2026-11-26 — claude/u42-ai-start: AiStart split from eager AiDrive (#6920 U4.2, #6960)
+
+`(tree) eagerScripts` 297 → **298** (+1) and `eagerCodeBytes` +320 (the IIFE wrapper, the freeze list and the destructure in
+`ai-drive.js`). `js/physics/ai-start.js` holds the AI launch plan and lap-1 calm policy, moved byte for byte out of the
+1,789-line `ai-drive.js` so the #6884 B1 lap-1 headway tuning edits a ~50-line file. It must be eager, not lazy:
+`AiDrive` is eager and binds `AiStart` at eval time, so a lazy file would throw a ReferenceError at boot. The same-length
+wrapper through call-time reads would still need the file loaded. Verified move-only: `ai-spread` (bahrain, 10 laps, 3 seeds)
+byte-identical before and after. Fragment: `ratchets.d/claude--u42-ai-start.json`. Human step: `ratchet-raise`.
