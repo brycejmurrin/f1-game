@@ -395,3 +395,12 @@ test("runSpawn never blocks, and a cancel or timeout kills the child's process g
   assert.deepEqual(fine.out, { a: 1 });
   assert.equal(fine.stdout, "note");
 });
+
+test("tree-tool schemas do not advertise target or url; browser tools keep them", () => {
+  const tools = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }])[0].result.tools;
+  const by = (n) => tools.find((t) => t.name === n).inputSchema.properties;
+  for (const n of ["apex_pick_tests", "apex_select_specs", "apex_verify_change_fast"]) {
+    assert.ok(!("target" in by(n)) && !("url" in by(n)), n);
+  }
+  assert.ok("target" in by("apex_shot"));
+});

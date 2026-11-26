@@ -10,6 +10,7 @@
 //
 //   node tools/perf/garage-census.mjs [--root DIR] [--label NAME] [--backend three|webgl2]
 //        [--team mercedes] [--frames 90] [--size 844x390] [--json PATH]
+//        [--finishes gloss,satin,…] [--finish-frames 10]
 //
 // Prints one `= garage-census {…}` JSON line; --json also writes it.
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -23,6 +24,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
 exitIfHelp(argv, `usage: node tools/perf/garage-census.mjs [--root DIR] [--label NAME] [--backend three|webgl2]
                     [--team mercedes] [--frames 90] [--size 844x390] [--json PATH]
+//        [--finishes gloss,satin,…] [--finish-frames 10]
   Opens the GARAGE and reports: rAF callback ms (median/p90), GarageScene.draw ms, draw calls,
   triangles and programs per frame (TLX renderer.info / GLX draw wrap), JS heap, DOM nodes,
   the setup sheet's button count, and Car3D.build ms + tris for the team body and every
