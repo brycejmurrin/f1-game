@@ -71,10 +71,6 @@ test("a race step sorts and concatenates nothing from update()", () => {
   const byFile = countBelowUpdate("sort", () => g.step(60));
   assert.equal(gameJs(byFile), 0,
     `game.js called Array.prototype.sort ${gameJs(byFile)}x below update() over 60 steps (${JSON.stringify(byFile)})`);
-  // Positive control: the counter sees a sort that is NOT in update()'s own frame. race-facts ranks the order
-  // board from a module update() calls; the old direct-caller counter credited it 0.
-  assert.ok((byFile["js/race/race-facts.js"] || 0) > 0,
-    `the stack walk must see race-facts' per-step sort below update(), got ${JSON.stringify(byFile)}`);
 });
 
 test("ranks match the stable built-in sort, step after step", () => {
@@ -109,4 +105,8 @@ test("positive control: a game.js helper's sort below update() is counted", () =
   for (const c of two) c.finished = true;
   const byFile = countBelowUpdate("sort", () => g.step(3));
   assert.ok(gameJs(byFile) >= 3, `rankFinishers' sort must count once a step, got ${JSON.stringify(byFile)}`);
+  // Second control: a sort in ANOTHER module below update(). race-facts ranks with an insertion sort until a car
+  // has finished (byRace is not transitive after the flag), so its built-in sort only shows here, with finishers.
+  assert.ok((byFile["js/race/race-facts.js"] || 0) > 0,
+    `the stack walk must see race-facts' post-flag sort below update(), got ${JSON.stringify(byFile)}`);
 });
