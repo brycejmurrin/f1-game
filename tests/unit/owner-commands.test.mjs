@@ -10,11 +10,10 @@ const OWNED = ["state", "frozen", "paused", "skyViewOverride"];
 
 test("the four owned members are readonly in the d.ts and getter-only in the G literal", () => {
   const dts = scanDts().members, lit = scanGameCtx();
-  const g = lit.members || lit;
+  const g = lit.members;
   for (const k of OWNED) {
     assert.equal(dts.get(k).writable, false, `${k} must be readonly in types/game-ctx.d.ts`);
-    const kinds = g.get(k).kinds;
-    assert.ok(kinds.has("get") && !kinds.has("set"), `${k} must be getter-only in the G literal`);
+    assert.ok(g.has(k) && g.get(k).writable === false, `${k} must be getter-only in the G literal`);
   }
   for (const k of ["cmd", "agentCtl"]) {
     assert.ok(dts.has(k) && !dts.get(k).writable, `${k} is a readonly member of GameCtx`);

@@ -4132,3 +4132,10 @@ Fragment: `ratchets.d/claude--scopes-race-6949.json`. Human step: `ratchet-raise
 `AiDrive` is eager and binds `AiStart` at eval time, so a lazy file would throw a ReferenceError at boot. The same-length
 wrapper through call-time reads would still need the file loaded. Verified move-only: `ai-spread` (bahrain, 10 laps, 3 seeds)
 byte-identical before and after. Fragment: `ratchets.d/claude--u42-ai-start.json`. Human step: `ratchet-raise`.
+
+## 2026-11-26 — claude/issue-6953-owner-commands: owner commands for core G state (#6953, #6920 U2.4)
+
+`js/game.js gMembers` 274 → **276** (+2): `G.cmd` and `G.agentCtl` are the new owner-command objects; `state`, `frozen`, `paused`
+and `skyViewOverride` become getter-only (a write is a TypeError / TS2540), so game.js owns the four writes. `js/game.js lines`
++8 and `codeLines` +7 (the two command objects, net of the four dropped setters); `js/agent/apex.js` lines -2 (park is one line).
+`(tree) eagerCodeBytes` +33, inside its absorb. Fragment: `ratchets.d/claude--issue-6953-owner-commands.json`.

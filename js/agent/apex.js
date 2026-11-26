@@ -240,14 +240,13 @@ const api = {
   },
   park(frac, lateral) {
     if (!G.player || !G.track) return false;
-    G.skyViewOverride = null;   // clear any sky override so normal chase cam resumes
-    G.state = "race"; G.raceT = Math.max(G.raceT, 1);
+    G.agentCtl.park(1);   // clears any sky override so the normal chase cam resumes, enters race, raceT >= 1
     if (G.loadingScreen && G.loadingScreen.lowerWaitPlate) G.loadingScreen.lowerWaitPlate();
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     parkOthers((c) => c.isPlayer, 600, true);
     const r = this.jump(frac, 0, lateral !== undefined ? lateral : 0);
-    G.frozen = true;   // hold the scene still for a deterministic screenshot
+    G.agentCtl.freeze(true);   // hold the scene still for a deterministic screenshot
     return r;
   },
   sky(frac, lateral) {
@@ -261,7 +260,7 @@ const api = {
       smp.p[1] + 34,            // ~58° up over 20 m → horizon low, sky dominant
       smp.p[2] + smp.t[2] * 20,
     ];
-    G.skyViewOverride = { eye: e, tgt: t, fov: 78 };
+    G.agentCtl.setSkyOverride({ eye: e, tgt: t, fov: 78 });
     // snap immediately so the very first rendered frame is correct
     G.camEye[0] = e[0]; G.camEye[1] = e[1]; G.camEye[2] = e[2];
     G.camTgt[0] = t[0]; G.camTgt[1] = t[1]; G.camTgt[2] = t[2];
@@ -335,7 +334,7 @@ const api = {
     // same path park() uses rather than trusting stale px/pz.
     const me = (o.cars || []).find((r) => r.me);
     if (me && G.track.total) this.jump(me.s / G.track.total, me.speed, me.x, { keepLap: true });   // a re-anchor, not a teleport
-    if (G.player) { G.frozen = true; snapGameCam(); }
+    if (G.player) { G.agentCtl.freeze(true); snapGameCam(); }
     return { restored: true, cars: placed, skipped, cam: o.cam && o.cam.mode,
              teamMatches: (() => { const p = G.cars && G.cars.find((c) => c.isPlayer);
                return !o.teamId || (p && p.team && p.team.id === o.teamId); })() };
@@ -805,7 +804,7 @@ const api = {
   // Lets a harness measure pure side-by-side jitter without pack chaos.
   pair(frac, speed) {
     if (!G.track) return false;
-    G.state = "race"; G.raceT = Math.max(G.raceT, 1);
+    G.cmd.setState("race", "agent-go"); G.raceT = Math.max(G.raceT, 1);
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     const f = frac == null ? 0.3 : frac, v = speed == null ? 55 : speed;
@@ -823,7 +822,7 @@ const api = {
   },
   jam(n) {
     if (!G.track) return false;
-    G.state = "race"; G.raceT = Math.max(G.raceT, 1);
+    G.cmd.setState("race", "agent-go"); G.raceT = Math.max(G.raceT, 1);
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     const ai = G.cars.filter((c) => !c.isPlayer), m = Math.min(n || 5, ai.length);
@@ -870,7 +869,7 @@ const api = {
   go() {
     if (G.flyingStart) G.flyingStart.stop();   // a rolling start's run-up (js/race/flying-start.js): the wheel is the caller's now
     if (!G.player || !G.cars.length) return false;   // no race() built a grid: "race" with zero cars is a dead tick loop (#2532)
-    G.state = "race"; G.raceT = Math.max(G.raceT, 0.5);
+    G.cmd.setState("race", "agent-jam"); G.raceT = Math.max(G.raceT, 0.5);
     if (G.loadingScreen && G.loadingScreen.lowerWaitPlate) G.loadingScreen.lowerWaitPlate();
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
@@ -1250,8 +1249,7 @@ const api = {
 
   freeze(v) {
     if (v === undefined) return G.frozen;
-    G.frozen = !!v;
-    return G.frozen;
+    return G.agentCtl.freeze(v);
   },
 
   // Get or set HUD visibility. Returns current visible state.
@@ -1803,7 +1801,7 @@ const api = {
     if (G.flyingStart && G.flyingStart.active()) G.flyingStart.stop();
     // auto-enter race state so physics advances even if called during countdown
     if (G.state === "count") {
-      G.state = "race"; G.raceT = 0;
+      G.cmd.setState("race", "agent-act"); G.raceT = 0;
       resetStartLights(true);
       G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     }
@@ -2042,7 +2040,7 @@ const api = {
     // still parked in episode 2, and a planned failure recurs deterministically.
     if (G.session === "race") G.armReliability(G.cars);
     if (G.flyingStart) G.flyingStart.stop();   // an armed TT / quali run-up must not outlive the episode reset
-    G.state = "race"; G.raceT = 0;
+    G.cmd.setState("race", "agent-reset"); G.raceT = 0;
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     G.player.prog  = fracToProg(frac);   // keep s and prog coupled

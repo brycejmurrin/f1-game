@@ -1667,7 +1667,7 @@ const AgentView = (function () {
       if (G.flyingStart && G.flyingStart.active()) G.flyingStart.stop();
       // Promote out of the countdown, exactly as act() does, so physics advances.
       if (G.state === "count") {
-        G.state = "race"; G.raceT = 0;
+        G.cmd.setState("race", "agent-rollout"); G.raceT = 0;
         G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
         if (els && els.lights) {
           els.lights.hidden = true;

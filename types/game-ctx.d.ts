@@ -406,7 +406,7 @@ interface GameCtx {
   readonly cssCol: (c: Vec3) => string;
 
   // ── Session identity: what is on screen and which mode it is ───────────────
-  state: GameState;
+  readonly state: GameState;
   readonly track: TrackModel | null;
   readonly cars: CarState[];
   readonly player: CarState | null;
@@ -548,10 +548,10 @@ interface GameCtx {
   // ── Per-frame render + race clocks ────────────────────────────────────────
   frame: FrameState;
   frameSky: FrameState;
-  frozen: boolean;
+  readonly frozen: boolean;
   headlessMode: boolean;
   hideMeshes: Record<string, boolean>;
-  paused: boolean;
+  readonly paused: boolean;
   raceLaps: number;
   raceT: number;
   /** Pending results delay; practice restores clear it for the restored field. */
@@ -580,7 +580,11 @@ interface GameCtx {
   readonly fieldSectorBests: [number, number, number];
   sectorIdx: number;
   sectorStartT: number;
-  skyViewOverride: SkyViewOverride | null;
+  readonly skyViewOverride: SkyViewOverride | null;
+  /** Owner commands (#6920 U2.4): the only writers of state / paused; `why` lands in the State log line. */
+  readonly cmd: { setState(next: GameState, why?: string): void; pause(v: boolean, why?: string): void };
+  /** Agent control: the only writers of frozen / skyViewOverride, plus park and a camera snap. */
+  readonly agentCtl: { freeze(v: boolean): boolean; park(minRaceT: number): void; setSkyOverride(o: SkyViewOverride | null): void; snapCam(paint?: boolean): void };
   trackIdx: number;
   ttLaps: number[];
   weatherArc: WeatherArc | null;

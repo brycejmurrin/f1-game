@@ -9,7 +9,7 @@ test("red-flag replay preserves burned fuel and burns the repeated lap", async (
   const g = await createGame({ track: "monza", storage: { tyreWear: "real" } });
   try {
     const { G } = g, c = G.player, L = G.track.total;
-    c.lap = 2; c.fuelLap = 2; c.s = L * 0.4; c.prog = L + c.s; G.state = "race";
+    c.lap = 2; c.fuelLap = 2; c.s = L * 0.4; c.prog = L + c.s; G.cmd.setState("race", "test");
     const beforeA = G.tyres.fuelAccelMul(c), beforeV = G.tyres.fuelVmaxMul(c);
     assert.equal(G.redFlagRestart(), true);
     assert.equal(c.lap, 1, "classification replays its interrupted lap");

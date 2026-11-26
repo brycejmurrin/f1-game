@@ -3029,7 +3029,7 @@ const G = {
   // deliberately keep reporting raw m/s; see vTop/vStd.
   dashKph: (v) => dashKph(v),
   ttBoard, teamById: (id) => teamById(id), cssCol: (c) => cssCol(c),
-  get state() { return state; }, set state(v) { setState(v, "api"); },
+  get state() { return state; },
   get track() { return track; },
   get cars() { return cars; },
   get player() { return player; },
@@ -3182,10 +3182,10 @@ const G = {
   get dbgCam() { return dbgCam; }, set dbgCam(v) { dbgCam = v; },
   get frame() { return frame; }, set frame(v) { frame = v; },
   get frameSky() { return frameSky; }, set frameSky(v) { frameSky = v; },
-  get frozen() { return frozen; }, set frozen(v) { frozen = v; },
+  get frozen() { return frozen; },
   get headlessMode() { return headlessMode; }, set headlessMode(v) { headlessMode = v; },
   get hideMeshes() { return hideMeshes; }, set hideMeshes(v) { hideMeshes = v; },
-  get paused() { return paused; }, set paused(v) { paused = v; },
+  get paused() { return paused; },
   get raceLaps() { return raceLaps; }, set raceLaps(v) { raceLaps = v; wxArc && wxArc.plan === wxArc._derived && (wxArc.plan = null); },
   get raceT() { return raceT; }, set raceT(v) { raceT = v; },
   get resultT() { return resultT; }, set resultT(v) { resultT = v; },
@@ -3209,7 +3209,7 @@ const G = {
   get fieldSectorBests() { return lapRec.fieldSectorBests; },
   get sectorIdx() { return lapRec.sectorIdx; }, set sectorIdx(v) { lapRec.sectorIdx = v; },
   get sectorStartT() { return lapRec.sectorStartT; }, set sectorStartT(v) { lapRec.sectorStartT = v; },
-  get skyViewOverride() { return skyViewOverride; }, set skyViewOverride(v) { skyViewOverride = v; },
+  get skyViewOverride() { return skyViewOverride; },
   get trackIdx() { return trackIdx; }, set trackIdx(v) { trackIdx = v; wxArc && wxArc.plan === wxArc._derived && (wxArc.plan = null); },
   get ttLaps() { return lapRec.ttLaps; }, set ttLaps(v) { lapRec.ttLaps = v; },
   get weatherArc() { return wxArc.arc; }, set weatherArc(v) { wxArc.arc = v; },
@@ -3423,6 +3423,14 @@ const G = {
   endWeatherSession: () => wxArc.endSession(true),   // the agent's race()/tt(): a start follows, so a plan set for it stays (race-settings-vm)
   startRace, update, wrapS, quitToMenu: (t) => (qThen = t, quitToMenu()),
   raceIntro,   // the pre-race screen, for a launch that is not RACE! (js/race/real-race.js: the Data Hub's JUMP IN)
+  // OWNER COMMANDS (#6920 U2.4): game.js owns the writes to state / frozen / paused / skyViewOverride; every other module goes through these.
+  cmd: { setState: (next, why) => setState(next, why || "cmd"), pause: (v, why) => setPaused(v, why) },
+  agentCtl: {
+    freeze: (v) => { frozen = !!v; return frozen; },
+    setSkyOverride: (o) => { skyViewOverride = o || null; },
+    snapCam: (paint) => snapGameCam(paint),
+    park: (minRaceT) => { skyViewOverride = null; setState("race", "agent-park"); raceT = Math.max(raceT, minRaceT); },   // sky override off, race on, raceT floored
+  },
 }; Object.preventExtensions(G);
 
 // Lighting profile resolution + persistence (js/lighting/profiles.js). FIRST of
