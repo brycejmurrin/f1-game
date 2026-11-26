@@ -2634,6 +2634,7 @@
         "tests/unit/session-records-assists.test.mjs",
         "tests/unit/session-records-medal-keep.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
+        "tests/unit/share-card-chips.test.mjs",
         "tests/unit/share-card-data.test.mjs",
         "tests/unit/share-card-layout.test.mjs",
         "tests/unit/share-card.test.mjs",
