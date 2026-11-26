@@ -509,14 +509,6 @@ were dropped on 2026-09-10 — nothing invoked them; pass the flag to `npm test 
 instead. Four node groups whose every file already ran in `tooling-fast` went
 the same day: `data-unit`, `parts-unit`, `webgpu-lifecycle`, `generated-docs`.
 
-### Where the old names went (2026-09-01)
-
-`physics`/`collision`/`behaviour`/`debris` → `driving`, split again on 2026-09-09 into `physics-core`/`collisions`/`aero` (below); `api`/`hooks`/`agent`/`map`/`paths`
-→ `hooks`; `circuit`/`foundation`/`scenery` → `circuits`; `parts` → `car`;
-`steering`/`camera` → `input`; `audio` → `ui`; `webgl`/`ab`/`tlx` → `gfx`;
-`fast` (a curated cross-group subset that double-ran nine specs) is gone —
-`pick-tests` names the group, `select-specs` names the spec.
-
 ---
 
 ## 3. Infrastructure
