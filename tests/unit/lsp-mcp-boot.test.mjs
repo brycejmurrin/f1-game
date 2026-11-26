@@ -8,7 +8,6 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import test from "node:test";
@@ -173,10 +172,16 @@ test("CLI --install-cloud-cwd-shim writes under this VM's /agent when layout mat
 // #6867: session-start `npm ci` rewrites node_modules while the client starts the server.
 // `serve` must answer initialize and tools/list with espree / eslint-scope absent.
 test("serve answers initialize + tools/list while node_modules/espree is absent", async () => {
-  // Outside the checkout: a dir under <repo>/artifacts would resolve the repo's own node_modules.
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "apex-lsp-nomods-"));
+  const repo = tmpDir("apex-lsp-nomods-");
   fs.cpSync(path.join(ROOT, "tools/mcp"), path.join(repo, "tools/mcp"), { recursive: true });
-  assert.ok(!fs.existsSync(path.join(repo, "node_modules")));
+  // The temp dir sits under the checkout, so the repo's node_modules would resolve; shadow both
+  // packages with stubs that throw on load, which is what a half-rewritten node_modules does.
+  for (const pkg of ["espree", "eslint-scope"]) {
+    const d = path.join(repo, "node_modules", pkg);
+    fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(path.join(d, "package.json"), JSON.stringify({ name: pkg, main: "index.js" }));
+    fs.writeFileSync(path.join(d, "index.js"), `throw new Error("${pkg} absent");`);
+  }
   const child = spawn(process.execPath, [path.join(repo, "tools/mcp/lsp-mcp.mjs"), "serve"], { cwd: repo, stdio: ["pipe", "pipe", "pipe"] });
   const rl = createInterface({ input: child.stdout });
   const replies = new Map();
@@ -187,7 +192,7 @@ test("serve answers initialize + tools/list while node_modules/espree is absent"
     assert.ok((await wait(1))?.result, "initialize answered");
     child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" }) + "\n");
     assert.ok((await wait(2))?.result?.tools?.length > 0, "tools/list answered");
-  } finally { child.kill(); fs.rmSync(repo, { recursive: true, force: true }); }
+  } finally { child.kill(); }
 });
 
 test("lsp-mcp.sh sources the shared preflight like the other launchers", () => {
