@@ -673,7 +673,7 @@ test('practice pathway and energy review use fixed settings blueprints without c
 });
 
 test('retry and rewind stay silent when startDrill refuses (it already announced why)', () => {
-  const { coach, G, c, ins, announcements } = fixture();
+  const { coach, G, c, ins, announcements, enable, tick } = fixture();
   Object.assign(c, { isPlayer: true, finished: false, retired: false, lap: 2, s: 800, prog: 1800 });
   G.cars = [c]; G.raceT = 100;
   assert.equal(coach.mark(), true);
@@ -684,6 +684,13 @@ test('retry and rewind stay silent when startDrill refuses (it already announced
   ins.startDrill = () => true;
   assert.equal(coach.retry(), true);
   assert.equal(announcements.some(a => /TRY AGAIN/.test(a[0])), true, 'control: an accepted drill still announces');
+  enable(); tick(2);
+  for (const [accept, expected] of [[false, false], [true, true]]) {
+    announcements.length = 0; ins.startDrill = () => accept;
+    assert.equal(coach.rewind(), true);
+    assert.equal(announcements.some(a => /REWIND/.test(a[0])), expected, 'rewind announces only after an accepted drill');
+    tick(2);
+  }
 });
 
 test('saved bests print positive in each drill\'s own unit (start, slipstream and defend are stored negated)', () => {
