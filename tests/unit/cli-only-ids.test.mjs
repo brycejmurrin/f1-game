@@ -1,4 +1,4 @@
-// An id filter that selects nothing must fail loudly. `menu-fit --only=title`
+// An id filter that selects nothing must fail loudly. an old `fit-audit --only=title`
 // matched no screen (the id is `menu`), ran zero cells, printed nothing and
 // exited 0, so a clipped screen looked clean (#3305).
 import test from "node:test";
@@ -37,7 +37,7 @@ test("pickScreens / pickViewports: a pattern matching nothing throws, valid ones
   assert.ok(pickViewports(VIEWPORTS, "ios-*").length > 1);
 });
 
-for (const [tool, flag, good] of [["menu-fit.mjs", "--only", "menu"], ["fit-audit.mjs", "--only", "menu"],
+for (const [tool, flag, good] of [["fit-audit.mjs", "--only", "menu"],
   ["layout-audit.mjs", "--screens", "title"]]) {
   test(`${tool} ${flag}=<unknown> exits non-zero with the valid ids, before any browser`, () => {
     const r = run(tool, `${flag}=nonexistent-screen`, ...(tool === "layout-audit.mjs" ? ["--list"] : []));
@@ -46,3 +46,12 @@ for (const [tool, flag, good] of [["menu-fit.mjs", "--only", "menu"], ["fit-audi
     assert.ok(r.stderr.includes(`valid ids: `) && r.stderr.includes(good), "valid ids must be listed");
   });
 }
+
+test("layout-audit --safe= takes exactly L,T,R,B and fails loudly otherwise, before any browser", () => {
+  for (const bad of ["59,0,59", "a,b,c,d", "-1,0,0,0"]) {
+    const r = run("layout-audit.mjs", `--safe=${bad}`, "--list");
+    assert.deepEqual([r.status !== 0, r.stderr.startsWith("--safe= needs L,T,R,B")], [true, true], `--safe=${bad}: ${r.stderr}`);
+  }
+  const ok = run("layout-audit.mjs", "--safe=59,0,59,21", "--list");
+  assert.equal(ok.status, 0, ok.stderr);
+});

@@ -53,20 +53,16 @@ return a short summary with citations (URLs + live vs local build numbers).
    Verdict: **OK** when the first and third outputs are equal;
    **STALE-IN-TRAIN** when `LIVE` is an older ancestor of TIP and the train
    is still carrying TIP — the tip's `pages.yml` run is queued or in progress,
-   or TIP's commit is younger than the release-train window (the measured
-   figure under **Latency** below); **STALE** when `LIVE` is an
+   or TIP's commit is younger than the 45 min window under **Latency** below; **STALE** when `LIVE` is an
    older ancestor and the window has passed with no live `pages.yml` run for
    TIP (`curl -sS "https://api.github.com/repos/brycejmurrin/f1-game/actions/workflows/pages.yml/runs?head_sha=<TIP>&per_page=1"`); **UNKNOWN** when `LIVE` is empty (site unreadable, meta
    missing) or not in this clone's history (`git cat-file -e <live sha>` fails on a
    shallow clone; `git fetch --depth=200 origin claude/f1-game-project-26h3ng`
-   once, then say UNKNOWN if still absent). Never guess STALE from an empty read. Pages is a RELEASE TRAIN (started by the push itself since 2026-10-16,
-   one running + one pending; the hourly cron is only a backstop and GitHub
-   runs it hours late on this repo), so a tip inside the window above not
-   being live yet is STALE-IN-TRAIN, not a miss; past it, read `pages.yml`'s
-   latest run. A behind
+   once, then say UNKNOWN if still absent). Never guess STALE from an empty read. A behind
    WORKING TREE is not a Pages miss — compare to the tip, not to disk.
 
-   **Latency (measured 2026-10-26, system audit 4, live-site L1/L2):**
+   **Latency (STALE-IN-TRAIN; measured 2026-10-26, system audit 4, live-site L1/L2):** Pages is a RELEASE TRAIN (started
+   by the push itself, one running + one pending; the hourly cron is only a backstop, hours late).
    push→live was 10–38 min over six trains, median ~24; it doubles when the
    train queues behind another. So TIP pushed under 45 min ago with its `pages.yml` run queued
    or running is STALE-IN-TRAIN; past 45 min with no live run, STALE. Pages

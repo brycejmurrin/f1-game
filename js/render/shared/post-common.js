@@ -182,6 +182,15 @@ const PostCommon = (function () {
     return d;
   }
 
+  // Sun-shadow strength, the one home (GLX, WGX, TLX): SHADOW DARKNESS x a smoothstep fade over key luminance
+  // 0.28..0.42, floored by MOON SHADOWS x frame.moonGate. TLX gates it on its own S.enabled.
+  function sunShadowStrength(f, T) {
+    const c = f.sunColor;
+    let h = ((c ? Math.max(c[0], c[1], c[2]) : 1) - 0.28) / 0.14;
+    h = h < 0 ? 0 : h > 1 ? 1 : h * h * (3 - 2 * h);
+    return knob(T, "shadowStr") * Math.max(h, knob(T, "moonShadow") * (f.moonGate || 0));
+  }
+
   // User LOW retains wet-road mirrors. Optional caller-owned state softens
   // measured cuts, then reaches exact zero so every backend can skip SSR.
   // Crash safety and explicit off/dry policy remain immediate. No allocation.
@@ -278,6 +287,6 @@ const PostCommon = (function () {
     return worst > 0 ? Math.log2(worst) : -Infinity;
   }
 
-  return { makeDirtCanvas, keepNearest, hdrGradeOn, sunScreen, flareTapsDepth, knob, roadReflection, softwareGlowScale, softwareRaceShed, mipFootprintLod };
+  return { makeDirtCanvas, keepNearest, hdrGradeOn, sunScreen, flareTapsDepth, knob, sunShadowStrength, roadReflection, softwareGlowScale, softwareRaceShed, mipFootprintLod };
 })();
 Object.freeze(PostCommon);

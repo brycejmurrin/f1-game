@@ -188,10 +188,9 @@ const FULL = [
   "js/track/scenery/data.js",
   "js/track/core/space.js",
   "js/track/core/surface.js",
-  // models / themes / kits / nature / structures / city / identity / pits /
-  // venue / hidden-faces / build-props → LAZY_TRACK_BUILD (ensureScenery before
-  // the first Tracks.build). TRACK_VM still loads them for verify-track.
-  "js/track/scenery/graph.js",
+  // models / themes / graph / kits / nature / structures / city / identity /
+  // pits / venue / hidden-faces / build-props → LAZY_TRACK_BUILD (ensureScenery
+  // before the first Tracks.build). TRACK_VM still loads them for verify-track.
   "js/track/core/spline.js",
   "js/track/core/line.js",
   "js/track/core/mesh.js",
@@ -1013,6 +1012,7 @@ const DEFERRED = {
     "js/render/three/tlx-post.js",
     "js/render/three/tlx-mem.js",
     "js/render/three/tlx-util.js",
+    "js/render/three/tlx-texpool.js",
     "js/render/three/tlx.js",
   ],
 };
@@ -1166,6 +1166,7 @@ const LAZY_RACE_SESSION = [
   "js/race/start-lights.js",
   "js/race/marshal-panels.js",
   "js/race/flying-start.js",
+  "js/race/lap-retry.js",      // LapRetry: RETRY LAP back to the flying-start drop-in through SimState (#6965)
   "js/race/jump-start-penalty.js",
   "js/ui/podium-beat.js",   // PodiumBeat: ceremony podium overlay (#4070 slice 4); ResultsStory is FULL
   "js/race/podium-beat.js", // RacePodium: podium beat + results handoff (#4070)
@@ -1442,6 +1443,7 @@ const LAZY_GFX_HI_EDGES = [];
 // real-replay and the coach body went lazy in their own groups (#4978, #4748).
 const LAZY_TRACK_BUILD = [
   "js/render/shared/mesh-detail.js", // MeshDetail: subdivide / bevel / normals / simplify kit for the detail tiers above ULTRA (call-time only)
+  "js/track/scenery/graph.js", // TrackGraph: read at call time by build-props / nature / city; evals against Math and Number only, so no EDGES pair
   "js/track/scenery/models.js",
   "js/track/scenery/themes.js",
   "js/track/scenery/landmark-kit.js",
@@ -1635,6 +1637,7 @@ const DEFERRED_EDGES = [
   ["js/render/three/tsl-post.js", "js/render/three/tlx-post.js"], // postChain invokes TLXShaders.post
   ["js/render/three/tlx-post.js", "js/render/three/tlx.js"],     // TLX.create invokes TLXShaders.postChain
   ["js/render/three/tlx-util.js", "js/render/three/tlx.js"],     // tlx.js destructures TLXUtil at eval
+  ["js/render/three/tlx-texpool.js", "js/render/three/tlx.js"],  // tlx.js calls TLXTexPool.create at TLX.create
 ];
 
 // Named paths for direct single-file consumers (tests/tools that load one
@@ -1757,7 +1760,6 @@ const MOVED = {
   "tools/career-economy.mjs": "tools/car/career-economy.mjs",
   "tools/layout-audit.mjs": "tools/ui/layout-audit.mjs",
   "tools/menu-capture.mjs": "tools/ui/menu-capture.mjs",
-  "tools/menu-fit.mjs": "tools/ui/menu-fit.mjs",
   "tools/menu-screens.mjs": "tools/ui/menu-screens.mjs",
   "tools/ui-scale-axis.mjs": "tools/ui/ui-scale-axis.mjs",
   "tools/circuit-axis.mjs": "tools/ui/circuit-axis.mjs",
@@ -1928,7 +1930,7 @@ const LAZY_LEARN = ["js/learn-drills/registry.js", "js/ui/learn-door.js", "js/ui
 const SW_LEARN = [
   "learn/appearance.js", "learn/replay.js", "learn/replay.css", "learn/sandbox.js", "learn/sandbox.css",
   ...["chassis", "suspension", "deployment", "hybrid", "brake-blend", "tyre-heat",
-    "racing-line", "rain", "pit-duel", "stint"].flatMap(id => ["learn/" + id + "/index.html", "learn/" + id + "/lab.js"]),
+    "racing-line", "rain", "pit-duel", "stint", "buttons"].flatMap(id => ["learn/" + id + "/index.html", "learn/" + id + "/lab.js"]),
   "learn/braking/index.html", "learn/braking/style.css", "learn/braking/lab.js",
   "learn/aero/index.html", "learn/aero/style.css", "learn/aero/lab.js",
   "learn/vsc/index.html", "learn/vsc/style.css", "learn/vsc/model.js", "learn/vsc/lab.js",
@@ -2028,7 +2030,6 @@ const FULL_TIERS = {
     "js/track/scenery/data.js": "boot",
     "js/track/core/space.js": "boot",
     "js/track/core/surface.js": "boot",
-    "js/track/scenery/graph.js": "boot",
     "js/track/core/spline.js": "boot",
     "js/track/core/line.js": "boot",
     "js/track/core/mesh.js": "boot",

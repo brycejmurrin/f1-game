@@ -493,6 +493,7 @@ async function precacheAssetLists() {
     "js/render/three/tlx-post.js",
     "js/render/three/tlx-mem.js",
     "js/render/three/tlx-util.js",
+    "js/render/three/tlx-texpool.js",
     "js/render/three/tlx.js",
     // LAZY_RACE — race payload every race needs
     "js/data/garage-entrance-motion.js",
@@ -523,6 +524,7 @@ async function precacheAssetLists() {
     "js/race/start-lights.js",
     "js/race/marshal-panels.js",
     "js/race/flying-start.js",
+    "js/race/lap-retry.js",
     "js/race/jump-start-penalty.js",
     "js/ui/podium-beat.js",
     "js/race/podium-beat.js",
@@ -535,6 +537,7 @@ async function precacheAssetLists() {
     "js/ui/hud-inputs.js",
     // LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build
     "js/render/shared/mesh-detail.js",
+    "js/track/scenery/graph.js",
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",
     "js/track/scenery/landmark-kit.js",
@@ -843,6 +846,8 @@ async function precacheAssetLists() {
     "learn/pit-duel/lab.js",
     "learn/stint/index.html",
     "learn/stint/lab.js",
+    "learn/buttons/index.html",
+    "learn/buttons/lab.js",
     "learn/braking/index.html",
     "learn/braking/style.css",
     "learn/braking/lab.js",

@@ -85,7 +85,6 @@ export function auditFindingSelectors(result) {
 const nativeKinds = {
   'fit-audit': ['tap', 'spacing', 'type', 'overflow', 'marker'],
   'layout-audit': ['clipped', 'offscreen', 'tinyTaps', 'smallTaps', 'truncated', 'underHardware', 'starved', 'deepScroll', 'maps', 'errors'],
-  'menu-fit': ['hOverflow', 'clipped', 'vLost', 'tiny', 'unsafe'],
 };
 const infoKinds = new Set(['smallTaps', 'truncated', 'deepScroll', 'maps']);
 const isRecord = v => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -195,7 +194,7 @@ export function joinAuditFindings(inspection, audits) {
       for (const [viewport, screens] of Object.entries(report).slice(0, AUDIT_LIMITS.cells)) {
         if (!/^\d+x\d+(?:@[\d.]+)?$/.test(viewport) || !isRecord(screens)) continue;
         if (Object.keys(screens).length > AUDIT_LIMITS.cells) cellsTruncated = true;
-        for (const [screen, row] of Object.entries(screens).slice(0, AUDIT_LIMITS.cells)) { add(row, producer || 'menu-fit', screen, viewport); seen = true; }
+        for (const [screen, row] of Object.entries(screens).slice(0, AUDIT_LIMITS.cells)) { add(row, producer || 'layout-audit', screen, viewport); seen = true; }
       }
       if (!seen && cells.length >= AUDIT_LIMITS.cells) cellsTruncated = true;
       else if (!seen) cells.push({ id: cells.length, producer: producer || 'unknown', status: 'incomparable', reasons: ['unsupported native audit artifact'], findingCount: 0 });

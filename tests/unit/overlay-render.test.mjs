@@ -247,3 +247,24 @@ test("a feed that goes silent for three full-frame intervals clears to the waiti
   assert.equal(caption.querySelector("span").textContent, "Waiting for a broadcast feed");
   assert.equal(feed.check(), false, "expires once, not every tick");
 });
+
+test("after a stale timeout a patch frame is withheld and a hello is sent; a full frame still paints", () => {
+  const dom = makeDom();
+  const { Render, Feed } = load({ document: dom.document, setTimeout() { return 0; }, clearTimeout() {} });
+  const { root } = overlayRoot(dom);
+  const painter = Render.create(root, {});
+  let t = 0, hellos = 0;
+  const feed = Render.watch(painter, { now: () => t, setInterval() {}, hello: () => { hellos++; } });
+  const full = Feed.frame({ seq: 1, state: "race", ranked: [{ code: "LEC", pos: 1 }, { code: "VER", pos: 2, intervalS: 0.4 }] });
+  feed.frame(full);
+  t = Render.STALE_MS + 1;
+  assert.equal(feed.check(), true);
+  assert.equal(hellos, 1, "going stale asks the game for a full frame");
+  assert.equal(painter.rows[0].el.hidden, true);
+  assert.equal(feed.frame({ v: 1, seq: 2, t: 1 }), false, "a patch onto the empty waiting rows is withheld");
+  assert.equal(hellos, 2);
+  assert.equal(painter.rows[0].el.hidden, true, "the waiting card stays, not a blank tower");
+  assert.equal(feed.frame({ ...full, seq: 3, full: true }), true);
+  assert.equal(painter.rows[0].el.hidden, false, "a full frame after the timeout paints the tower");
+  assert.equal(feed.frame({ v: 1, seq: 4, t: 2 }) !== false, true, "patches flow again once a full frame landed");
+});

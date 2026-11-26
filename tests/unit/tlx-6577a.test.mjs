@@ -27,8 +27,8 @@ globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {
 if (!globalThis.localStorage) globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
 const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.webgpu.min.js")).href);
 const TSL = THREE.TSL;
-for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/three/tsl-chunks.js",
-  "js/render/three/tsl-lit.js"])
+for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js", "js/render/shared/assets.js",
+  "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"])
   vm.runInThisContext(read(f), { filename: absSrc(f) });
 
 // ---- row 2 ------------------------------------------------------------------------------------------------------

@@ -417,6 +417,10 @@ test("F-17: the LIMITS chip's drop is ONE token, read by the CSS sites and the f
   const tops = rules.map((r) => r.decls.get("top") || "");
   assert.equal(tops.filter((t) => t.includes("+ var(--limits-drop)")).length, 5, "LIMITS, its broadcast lift, DAMAGE, REL and the v4 chip");
   assert.equal(tops.filter((t) => t.includes("4.8em) + 15px") || t.includes("4.8em + 15px")).length, 0, "no literal drop is left");
+  // The portrait-touch CHASE-row override restates the LIMITS top: it reads the same token (css/track-detail.css).
+  const td = readCssSource("css/track-detail.css");
+  assert.doesNotMatch(td, /4\.8em\)? \+ 15px/, "track-detail.css has no literal LIMITS drop");
+  assert.match(td, /#hud-limits \{ top: [^}]*4\.8em \+ var\(--limits-drop\)\)/, "track-detail.css reads --limits-drop");
   // The fit reads it with the other computed root vars (VM: a stylesheet that says 21px is what CHIP_DROP gets).
   const hud = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8"), at = hud.indexOf("function syncComputedRootVars()");
   const fn = hud.slice(at, hud.indexOf("\n}\n", at) + 3);

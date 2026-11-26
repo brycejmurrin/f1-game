@@ -247,7 +247,7 @@ body[data-density="compact"] #td-inner[data-shape="wide"] #track-detail-legend {
   #hud-sectors { top: calc((8px + 2 * var(--tap-hud) + 8px + var(--sat)) / var(--hud-z)); }
   /* …and the LIMITS chip with it. Without this it kept the LANDSCAPE anchor
      while the sectors box dropped ~56px, so the chip started INSIDE it. */
-  #hud-limits { top: calc((8px + 2 * var(--tap-hud) + 8px + var(--sat)) / var(--hud-z) + 4.8em + 15px); }
+  #hud-limits { top: calc((8px + 2 * var(--tap-hud) + 8px + var(--sat)) / var(--hud-z) + 4.8em + var(--limits-drop)); }
 }
 
 /* Cockpit cam: gear + speed live on the steering-wheel LCD — hide the floating

@@ -24,16 +24,18 @@ const OverlayBridge = (function () {
     if (!ch) return null;
     const timers = opts.timers || { setInterval: (fn, ms) => setInterval(fn, ms), clearInterval: (id) => clearInterval(id) };
     const id = opts.id || "ov-" + Math.random().toString(36).slice(2, 10);
-    const hello = () => { try { ch.postMessage({ type: "hello", id }); } catch (_) { /* closed */ } };
+    const hello = (resume) => { try { ch.postMessage(resume === true ? { type: "hello", id, resume: true } : { type: "hello", id }); } catch (_) { /* closed */ } };
     ch.onmessage = (event) => {
       const msg = event && event.data;
       if (msg && msg.type === "frame" && msg.frame && typeof onFrame === "function") onFrame(msg.frame);
     };
     hello();
-    const timer = timers.setInterval(hello, HELLO_MS);
+    const timer = timers.setInterval(() => hello(), HELLO_MS);
     let open = true;
     return {
       id,
+      // Resume: ask the host for a full frame now (a patch cannot paint after a stale clear).
+      hello: () => hello(true),
       close() {
         if (!open) return;
         open = false;
@@ -66,7 +68,7 @@ const OverlayBridge = (function () {
       const msg = event && event.data;
       if (!msg || typeof msg.id !== "string") return;
       if (msg.type === "hello") {
-        if (!peers.has(msg.id)) fresh = true;
+        if (!peers.has(msg.id) || msg.resume === true) fresh = true;
         peers.set(msg.id, now());
       } else if (msg.type === "bye") peers.delete(msg.id);
       report();
