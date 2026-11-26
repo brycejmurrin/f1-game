@@ -589,7 +589,7 @@ function reset() {
 // ── game-side hooks (called from game.js, both guarded by active()) ─────────
 
 function wallImpact(c, side, xOver) {
-  const sev = paceSev((xOver || 0) * 60 + Math.abs(c.speed || 0) * 0.15);   // both terms are speeds (m/s)
+  const sev = paceSev((xOver || 0) * 60 + Math.abs(c.speed || 0) * 0.15);   // both terms grow with ground speed (xOver is this step's overrun)
   if (sev < WALL_SEV_MIN) return;
   const mi = G.cars ? G.cars.indexOf(c) : -1;
   _queue.push({ kind: "wall", s: c.s, x: c.x, side, sev,

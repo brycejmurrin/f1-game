@@ -71,7 +71,22 @@ test("P8: a yawed (oriented) strike in a squeeze queues debris and an incident c
   const worst = (m) => Math.max(0, ...Object.values(m));
   assert.ok(worst(calls.carImpact) <= 1, `DebrisWorld.carImpact per pair in one step: ${JSON.stringify(calls.carImpact)}`);
   assert.ok(worst(calls.notifyCar) <= 1, `incidentSim.notifyCar per pair in one step: ${JSON.stringify(calls.notifyCar)}`);
-  assert.ok(worst(calls.carImpact) === 1, "the strike must still queue its debris once");
+  assert.equal(calls.carImpact.pq, 1, "the p-q strike must still queue its debris once");
+  assert.equal(calls.notifyCar.pq, 1, "the p-q strike must still queue its incident candidate once");
+});
+
+test("P8: a pass that only depenetrates does not spend the hooks' slot: a later impulse pass still queues them once", () => {
+  const { s, calls } = solver();
+  // Found by sweep (pr-reviewer finding 1): q starts a metre ahead, so the p-q contact's first
+  // pass is correction only and the impulse arrives on a later pass (the base queued it 3 times).
+  const cars = [
+    { id: "p", human: true, isPlayer: true, yawVis: 0.9, prog: 100, s: 100, x: 0, speed: 50, vLat: -30, yawRateCur: 0, kTurn: 0 },
+    { id: "o", human: false, yawVis: 0, prog: 100.3, s: 100.3, x: 1.2, speed: 20, vLat: 0, kTurn: 0 },
+    { id: "q", human: false, yawVis: 0, prog: 101, s: 101, x: -1.2, speed: 40, vLat: 0, kTurn: 0 },
+  ];
+  s.resolveCollisions(cars, DT);
+  assert.equal(calls.notifyCar.pq, 1, `incidentSim.notifyCar for p-q: ${JSON.stringify(calls.notifyCar)}`);
+  assert.equal(calls.carImpact.pq, 1, `DebrisWorld.carImpact for p-q: ${JSON.stringify(calls.carImpact)}`);
 });
 
 // ── P7 ──────────────────────────────────────────────────────────────────────

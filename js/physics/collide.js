@@ -300,11 +300,12 @@ const Collide = (() => {
     let motion = new WeakMap(), motionTrack = null, motionTime = -1;
     let sweepGeneration = 0;
     const _fxPairs = new WeakMap();   // car → WeakMap(other car → last notified generation), retained weakly across steps
-    function firstPairFx(a, b) {
-      let peers = _fxPairs.get(a);
-      const reverse = _fxPairs.get(b);
+    const _hookPairs = new WeakMap();   // the same, spent only by an impulse pass (orientedResponse's debris/incident hooks)
+    function firstPairFx(a, b, map = _fxPairs) {
+      let peers = map.get(a);
+      const reverse = map.get(b);
       if ((peers && peers.get(b) === sweepGeneration) || (reverse && reverse.get(a) === sweepGeneration)) return false;
-      if (!peers) { peers = new WeakMap(); _fxPairs.set(a, peers); }
+      if (!peers) { peers = new WeakMap(); map.set(a, peers); }
       peers.set(b, sweepGeneration);
       return true;
     }
@@ -375,12 +376,12 @@ const Collide = (() => {
         if (!netPlay.owns(a)) a.contactT = 0.22;
         if (!netPlay.owns(b)) b.contactT = 0.22;
         // First pass per pair carries the severity (the last had none, or was skipped by the early break)
-        const fx = firstPairFx(a, b);
-        if (fx) collideFx(a, b, clamp(sevV(j.closing) * 0.03, 0.15, 1));
+        if (firstPairFx(a, b)) collideFx(a, b, clamp(sevV(j.closing) * 0.03, 0.15, 1));
         // The first impulse carries severity; later relaxation passes have
-        // already removed closing velocity. Both worlds retain their own gates,
-        // and take the same once-per-pair-per-step gate as the unoriented path (#6546 P8).
-        if (fx && j.magnitude > CORR_EPS && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired) {
+        // already removed closing velocity. Both worlds retain their own gates.
+        // Once per pair per step (#6546 P8), spent by the first IMPULSE pass only: a
+        // depenetration-only pass 0 must not use up the slot a later shunt needs.
+        if (j.magnitude > CORR_EPS && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired && firstPairFx(a, b, _hookPairs)) {
           if (DebrisWorld.active()) DebrisWorld.carImpact(a, b, j.closing);
           incidentSim.notifyCar(a, b, j.closing);
         }
