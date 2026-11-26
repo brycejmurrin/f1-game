@@ -6,9 +6,9 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync, spawn } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { ROOT, MCP, mkOutsideTemp, rpc, callCli, callTools, extrasCtx, jid } from "../helpers/apex-tools-mcp.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 // 2026-10-10: "does the running server need a restart?" was a guess all session. apex_status now says: the server's start time, and
 // which of the files it loaded (tools/mcp/*.mjs and the tools/lib modules they import) changed after it.
@@ -379,7 +379,7 @@ test('UI inspector schema bounds sizes, selectors, flags and local target', () =
 
 test('UI inspector delegates locking to the canonical CLI and summarizes unknown bindings', async () => {
   const { createUITools } = await import('../../tools/mcp/ui-tools.mjs');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apex-ui-contract-'));
+  const dir = mkTmpDir('apex-ui-contract-');
   const report = { viewport: { width: 844, height: 390 }, controls: [
     { selector: '#a', binding: { status: 'matches' } },
     { selector: '#b', binding: { status: 'unavailable' } },
@@ -413,7 +413,7 @@ test('UI inspector delegates locking to the canonical CLI and summarizes unknown
 
 test('saved UI diffs are browser free, reject incompatible or oversized evidence, and bound findings', async () => {
   const { createUITools } = await import('../../tools/mcp/ui-tools.mjs');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apex-ui-diff-'));
+  const dir = mkTmpDir('apex-ui-diff-');
   const result = body => ({ content: [{ type: 'text', text: JSON.stringify(body) }] });
   const ctx = { ROOT: dir, assertSafeOut: p => path.resolve(dir, p), mockMode: () => false,
     toolResult: result, refuse: (error, message) => result({ ok: false, error, message }),

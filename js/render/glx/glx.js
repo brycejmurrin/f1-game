@@ -127,7 +127,7 @@ const GLXBackend = (function () {
   let markBatchProg = null, markBatchU = null, markBatchVAO = null, markBatchVBO = null, markBatchCap = 0;
   let blobBatchProg = null;   // F5: linked here; draw/flush via GLXShadow.attachBlobBatch → BLOB
   let glowProg = null, glowU = null, glowVAO = null, glowVBO = null, glowCap = 0;
-  let lineProg = null, lineU = null, lineVAO = null, lineVBO = null, lineCap = 0;   // DRIVING LINE ribbon
+  let lineProg = null, lineU = null, lineK = null, lineVAO = null, lineVBO = null, lineCap = 0;   // DRIVING LINE ribbon
   let glowData = null;   // CPU-side dynamic vertex buffer for light-glow billboards
   let glowUpVBO = null;  // the glowVBO glowData was last uploaded to (#6577 row 6: a restored context re-uploads)
   let particleProg = null, particleU = null, particleVAO = [], particleVBO = [], particleCap = [0, 0];
@@ -935,7 +935,7 @@ const GLXBackend = (function () {
       });
     } else { BLOB = null; }
     if (lineProg) {
-      lineU = locs(lineProg, ["uViewProj", "uPlayerSpeed", "uCornersOnly", "uOnPace", "uLift", "uBrake", "uOpacity", "uStr"]);
+      lineU = locs(lineProg, ["uViewProj", "uPlayerSpeed", "uCornersOnly", "uOnPace", "uLift", "uBrake", "uOpacity", "uStr"]); lineK = { cols: new Float32Array(9).fill(NaN) };
       // Static interleaved strip: [x, y, z, across, speed, zone, along] per
       // vertex (DrivingLine.STRIDE = 7), uploaded once per circuit.
       lineVAO = gl.createVertexArray();
@@ -2573,7 +2573,11 @@ const GLXBackend = (function () {
   // like the skid batch — depth-tested, no depth write, biased onto the road — but emissive, so bloom lifts it into
   // the glow every racing game's line has. `opts.speed` is the player's speed for the dynamic colour, `opts.cols` its
   // LINE COLOUR (9 floats, F1 GREEN when absent); `opts.cornersOnly` fades the straights. false = pass unavailable.
-  const LINE_COLS_F1 = [0.10, 0.95, 0.35, 1.00, 0.72, 0.10, 1.00, 0.12, 0.10];
+  // Uniforms persist per program, so unchanged sets are skipped (lineK, reset with lineU; #6577 row 8). Colours compare
+  // by VALUE: driving-line.js refills its one Float32Array in place on a palette change.
+  const LINE_COLS_F1 = new Float32Array([0.10, 0.95, 0.35, 1.00, 0.72, 0.10, 1.00, 0.12, 0.10]);
+  function lineSet(n, v) { if (lineK[n] !== v) gl.uniform1f(lineU[n], lineK[n] = v); }
+  function lineCols(lc, kc) { for (let i = 0; i < 9; i++) if (lc[i] !== kc[i]) { kc.set(lc); return true; } return false; }
   function drawDrivingLine(verts, vertCount, dirty, opts) {
     if (ctxGone()) return true;
     frontCCW();
@@ -2581,12 +2585,10 @@ const GLXBackend = (function () {
     if (!(vertCount > 0)) return true;
     useProg(lineProg);
     gl.uniformMatrix4fv(lineU.uViewProj, false, frameViewProj);
-    gl.uniform1f(lineU.uPlayerSpeed, (opts && opts.speed) || 0);
-    gl.uniform1f(lineU.uCornersOnly, opts && opts.cornersOnly ? 1 : 0);
-    const lc = (opts && opts.cols) || LINE_COLS_F1;   // LINE COLOUR: onPace, lift, brake (DrivingLine.PALETTES)
-    gl.uniform3fv(lineU.uOnPace, lc, 0, 3); gl.uniform3fv(lineU.uLift, lc, 3, 3); gl.uniform3fv(lineU.uBrake, lc, 6, 3);
-    gl.uniform1f(lineU.uOpacity, (opts && opts.opacity) || 1);
-    gl.uniform1f(lineU.uStr, 1.6);          // emissive strength: a constant, no producer sends one
+    lineSet("uPlayerSpeed", (opts && opts.speed) || 0); lineSet("uCornersOnly", opts && opts.cornersOnly ? 1 : 0);
+    lineSet("uOpacity", (opts && opts.opacity) || 1); lineSet("uStr", 1.6);   // emissive strength: a constant
+    const lc = (opts && opts.cols) || LINE_COLS_F1, kc = lineK.cols;   // LINE COLOUR: onPace, lift, brake (DrivingLine.PALETTES)
+    if (lineCols(lc, kc)) { gl.uniform3fv(lineU.uOnPace, kc, 0, 3); gl.uniform3fv(lineU.uLift, kc, 3, 3); gl.uniform3fv(lineU.uBrake, kc, 6, 3); }
     setBlend(true);
     setDepthMask(false);
     setPolyOffset(ROAD_BIAS);
@@ -2720,18 +2722,16 @@ const GLXBackend = (function () {
     if (!data) return;
     let epoch = _partEpochs.get(data);
     if (!epoch || dirty !== false) { epoch = ++_partEpoch; _partEpochs.set(data, epoch); }
-    const resident = _partResident[addBit];
+    const resident = _partResident[addBit] || (_partResident[addBit] = {});   // mutated in place below
     bindVAO(particleVAO[addBit]);
     gl.bindBuffer(gl.ARRAY_BUFFER, particleVBO[addBit]);
-    const needUpload = !resident || resident.data !== data || resident.epoch !== epoch || resident.count !== floatCount;
-    if (needUpload) {
-      if (!data) return;
+    if (resident.data !== data || resident.epoch !== epoch || resident.count !== floatCount) {
       if (floatCount > particleCap[addBit]) {
         particleCap[addBit] = floatCount;
         gl.bufferData(gl.ARRAY_BUFFER, particleCap[addBit] * 4, gl.DYNAMIC_DRAW);
       }
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, data, 0, floatCount);
-      _partResident[addBit] = { data, epoch, count: floatCount };
+      resident.data = data; resident.epoch = epoch; resident.count = floatCount;
     }
     setBlend(true);
     if (additive) gl.blendFunc(gl.ONE, gl.ONE);

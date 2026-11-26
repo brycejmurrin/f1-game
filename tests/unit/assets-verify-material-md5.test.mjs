@@ -6,11 +6,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { encodePNG } from "../../tools/gen/assets.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const MAT_LAYERS = 17;
@@ -24,7 +24,7 @@ function runVerify(dir) {
 }
 
 function materialFixture({ albedoMd5, normalMd5, albedoBytes, normalBytes } = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-mat-md5-"));
+  const dir = mkTmpDir("apex-mat-md5-");
   const size = 2;
   const png = encodePNG(size, size * MAT_LAYERS, Buffer.alloc(size * size * MAT_LAYERS * 4));
   const alb = albedoBytes || png;

@@ -8,10 +8,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SCRIPT = path.join(ROOT, "tools/ci/base-green.sh");
@@ -19,7 +19,7 @@ const SHA = "0123456789abcdef0123456789abcdef01234567";
 
 /** Run the script with a fake `gh` that prints `body` (or exits 1 when null). */
 function run(body, sha = SHA, extraEnv = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-base-green-"));
+  const dir = mkTmpDir("apex-base-green-");
   try {
     const gh = path.join(dir, "gh");
     fs.writeFileSync(gh, body === null ? "#!/usr/bin/env bash\nexit 1\n" : `#!/usr/bin/env bash\ncat <<'EOF'\n${body}\nEOF\n`);

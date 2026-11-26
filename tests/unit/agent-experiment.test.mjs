@@ -1,14 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, existsSync, symlinkSync, statSync, rmSync } from 'node:fs';
+import { mkdirSync, readFileSync, existsSync, symlinkSync, statSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const recorder = fileURLToPath(new URL('../helpers/agent-experiment.py', import.meta.url));
 function fixture(t) {
-  const root = mkdtempSync(path.join(tmpdir(), 'agent-experiment-'));
+  const root = mkTmpDir('agent-experiment-');
   t.after(() => rmSync(root, { recursive: true, force: true }));
   for (const args of [['init', '-q'], ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '--allow-empty', '-qm', 'fixture']]) {
     assert.equal(spawnSync('git', args, { cwd: root }).status, 0);

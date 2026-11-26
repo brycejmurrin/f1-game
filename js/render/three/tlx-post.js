@@ -1286,8 +1286,8 @@
         }
       }
 
-      // 0c) SSGI (EXTREME, tsl-gi.js): half-res one-bounce diffuse, then a depth-aware bilateral H+V. Spatial only:
-      // no history target exists in this chain, so there is no temporal accumulation.
+      // 0c) SSGI (EXTREME, tsl-gi.js): half-res one-bounce diffuse, then a depth-aware bilateral H+V; 0d) below then
+      // accumulates it temporally (giAcc, ping-pong giHist) on native WebGPU, where that pass is built.
       const GIP = P.gi;
       const haveGI = !!(HV && HV.ssgi && GIP && GIP.ssgi && P.composite.matHi && F.invProj && F.proj && !viz) && ensureGI();
       let giOut = giRT;
