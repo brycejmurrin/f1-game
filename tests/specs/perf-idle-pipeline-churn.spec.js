@@ -21,7 +21,7 @@ test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
 
 test("TLX WebGPU: steady driving builds no render pipelines after warm-up", async ({ page }, testInfo) => {
   test.setTimeout(900000);
-  const { hook, warm, gpuDevice, replay, gov, soft, windows, spread } = await measureIdleWindows(page, { forceGL: false, bootMs: BOOT_MS * 2,
+  const { hook, warm, gpuDevice, replay, gov, soft, windows, spread, late } = await measureIdleWindows(page, { forceGL: false, bootMs: BOOT_MS * 2,
     gas: (on) => (on ? page.keyboard.down("ArrowUp") : page.keyboard.up("ArrowUp")) });
   expect(hook, "three's backend must be reachable to count pipelines").toMatch(/^ok /);
   testInfo.annotations.push({ type: "backend", description: hook });
@@ -29,6 +29,9 @@ test("TLX WebGPU: steady driving builds no render pipelines after warm-up", asyn
   // The counted windows must stay on the stretch the warm pass drew, or new scenery enters and a first draw reads
   // as churn (#5387): the census says how far each pass went.
   testInfo.annotations.push({ type: "replay", description: JSON.stringify(replay) });
+  // Which geometries were bound for the FIRST time after the green flag (#6665), by phase: a mesh primeRace never drew.
+  // Diagnostic only, on green runs too; the spread leg's assertion below is the contract.
+  testInfo.annotations.push({ type: "late-first-binds", description: (late || []).map((r) => `${r.phase}@${r.at} #${r.geo} ${r.d}`).join(" | ").slice(0, 6000) || "none" });
   expect(replay.countedStart, "both passes must start at the same race progress").toBe(replay.warmStart);
   expect(replay.countedM, `the counted windows drove past the warmed stretch (${JSON.stringify(replay)})`).toBeLessThanOrEqual(replay.warmM);
   // The governor was held for both passes (#5387): a scale step or a tier shed inside them would be a resize or a
