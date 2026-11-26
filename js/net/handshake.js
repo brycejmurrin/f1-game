@@ -213,15 +213,23 @@ const NetHandshake = (function () {
 
   // Peers must agree on the build. Everything physics-relevant — the spline,
   // the barrier positions, the tuning constants — ships inside it.
+  // A build is a number, or the decimal string of one. Anything else is
+  // unknown, not "older" or "newer" (string comparison read "abc" > 1695).
+  function normBuild(b) {
+    if (typeof b === "string" && /^\s*\d+\s*$/.test(b)) b = Number(b);
+    return typeof b === "number" && Number.isFinite(b) ? b : null;
+  }
   function checkBuild(mine, theirs) {
+    const rawMine = mine, rawTheirs = theirs;
+    mine = normBuild(mine); theirs = normBuild(theirs);
     if (mine == null || theirs == null) {
       return {
         ok: false,
         error: "build_unknown",
         message: "Could not confirm you are both on the same version. " +
                  "Check your connection and try again.",
-        mine: mine == null ? null : mine,
-        theirs: theirs == null ? null : theirs,
+        mine: rawMine == null ? null : rawMine,
+        theirs: rawTheirs == null ? null : rawTheirs,
       };
     }
     if (mine === theirs) return { ok: true };

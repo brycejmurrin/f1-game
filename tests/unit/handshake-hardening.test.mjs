@@ -39,3 +39,25 @@ test("S5/r11: decodeCode refuses an array, a scalar or a kind-less object in mod
   assert.equal(ok.ok, true);
 });
 
+test("S4: a non-numeric build is build_unknown; a numeric string equals the number", () => {
+  assert.equal(H.checkBuild(1695, "1695").ok, true);
+  assert.equal(H.checkBuild(1695, 1695).ok, true);
+  for (const bad of ["abc", NaN, {}, [], "", "12x"]) {
+    const r = H.checkBuild(1695, bad);
+    assert.equal(r.error, "build_unknown", String(bad));
+  }
+  assert.equal(H.checkBuild(1695, 1700).message.includes("newer"), true);
+  assert.equal(H.checkBuild(1695, 1600).message.includes("older"), true);
+});
+
+function answerFor(o) {
+  const payload = { k: "answer", b: 1, s: "v=0\r\na=ice-ufrag:abcd\r\n" };
+  if (o !== undefined) payload.o = o;
+  return H.encodeCode(payload);
+}
+function fakeTransport(calls) {
+  return { pc: { signalingState: "have-local-offer",
+    localDescription: { sdp: "v=0\r\na=ice-ufrag:abcd\r\n" },
+    setRemoteDescription: async (d) => { calls.push(d); } } };
+}
+
