@@ -8,6 +8,8 @@ const ElevPresets = (function () {
   const UNIT = 4; // 0.25 m lattice
   const q = (v) => Math.round(v * UNIT) / UNIT;
   const lim = () => (typeof CustomTracks !== "undefined" && CustomTracks.LIMITS) || { rise: 60 };
+  /** Steepest node-to-node grade a preset may emit (validator red is 15 %; the spline adds margin). */
+  const GRADE_MAX = 0.12;
   const NAMES = Object.freeze(["flat", "rolling", "hilly"]);
 
   /** Clamp one height onto the lattice inside ±rise. */
@@ -70,6 +72,19 @@ const ElevPresets = (function () {
     // both past the validator's 15 % wall.
     const base = out[0];
     for (let i = 0; i < n; i++) out[i] = clampH(out[i] - base);
+    // Overlapping bumps each stay under ~8 %, but their SUM can pass the
+    // validator's 15 % red wall (seed 12 measured 16 %). Rescale the whole
+    // profile so the steepest chord (seam included) stays under GRADE_MAX.
+    let worst = 0;
+    for (let i = 0; i < n; i++) {
+      const a = pts[i], b = pts[(i + 1) % n];
+      const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (d > 0) worst = Math.max(worst, Math.abs(out[(i + 1) % n] - out[i]) / d);
+    }
+    if (worst > GRADE_MAX) {
+      const k = GRADE_MAX / worst;
+      for (let i = 0; i < n; i++) out[i] = clampH(out[i] * k);
+    }
     return out;
   }
 
