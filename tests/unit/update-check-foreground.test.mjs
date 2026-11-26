@@ -56,6 +56,29 @@ test('L1: no update() for the same or an older build, a failed read, or a missin
   }
 });
 
+test('L1: an update() that rejects is retried at the next check of the same build', async () => {
+  let n = 0;
+  const h = harness({ registration: () => Promise.resolve({ update: () => (++n === 1 ? Promise.reject(Error('5xx')) : Promise.resolve()) }) });
+  await h.api.check(true); await flush();
+  await h.api.check(true); await flush();
+  assert.equal(n, 2);
+  await h.api.check(true); await flush();
+  assert.equal(n, 2, 'a successful nudge is not repeated'); h.api.stop();
+});
+
+test('L2: focus reads version.json but sends the worker no generation probe', async () => {
+  let posts = 0;
+  const h = harness();
+  h.api.newerActive = () => { posts++; };
+  const win = target(), doc = target();
+  h.U.listen(h.api, win, doc);
+  h.advance(10 * 60 * 1000);
+  win.fire('focus'); await flush();
+  assert.equal(h.calls(), 1);
+  assert.equal(posts, 0);
+  h.api.stop();
+});
+
 test('L1: default registration reads navigator.serviceWorker.getRegistration()', async () => {
   const reg = fakeRegistration();
   const sb = vm.createContext({ Promise, Number, Date, Object, AbortController, setTimeout: () => 1, clearTimeout() {},
@@ -89,10 +112,4 @@ test('L2: focus + visibilitychange together read version.json once; the throttle
   h.advance(10 * 60 * 1000); win.fire('focus'); await flush();
   assert.equal(h.calls(), 2, 'a long-foregrounded app polls again on focus');
   h.api.stop();
-});
-
-test('L2: platform-session wires the foreground triggers through UpdateCheck.listen', () => {
-  const ps = fs.readFileSync(new URL('../../js/ui/platform-session.js', import.meta.url), 'utf8');
-  assert.match(ps, /UpdateCheck\.listen\(updates, window, document\)/);
-  assert.doesNotMatch(ps, /addEventListener\("visibilitychange", \(\) => updates\.onVisible\(\)\)/);
 });

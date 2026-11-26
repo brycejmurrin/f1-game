@@ -138,7 +138,7 @@ const UpdateCheck = (function () {
       try {
         Promise.resolve(registration())
           .then((r) => (r && typeof r.update === "function" ? r.update() : null))
-          .catch(() => {});
+          .catch(() => { if (nudged === build) nudged = 0; });   // a failed update() is retried at the next check
       } catch (e) { /* never blocks the chip */ }
     }
 
@@ -324,7 +324,7 @@ const UpdateCheck = (function () {
     if (doc && doc.addEventListener) doc.addEventListener("visibilitychange", poll);
     if (win && win.addEventListener) {
       win.addEventListener("pageshow", (e) => { if (e && e.persisted) poll(); });
-      win.addEventListener("focus", poll);
+      win.addEventListener("focus", () => { api.check(false); api.render(); });   // throttled read only: no worker round trip per click-in
     }
   }
 
