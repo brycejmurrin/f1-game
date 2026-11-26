@@ -2563,6 +2563,7 @@
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-regulations.test.mjs",
+        "tests/unit/career-save-integrity-6744.test.mjs",
         "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",

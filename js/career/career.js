@@ -119,6 +119,8 @@ function blocked() { return careerConflict || !!calendarProtection || !writerSta
 const liveSlotKey = () => slotKey(slotFlavour, slotIdx);
 const currentRevision = () => store.keyRevision ? store.keyRevision(liveSlotKey()) : null;
 function armRevision() { careerRevision = currentRevision(); careerConflict = false; }
+// Another tab wrote the live slot since this one last read or wrote it.
+const stale = () => careerRevision != null && currentRevision() !== careerRevision;
 
 const identityListeners = new Set();
 let identityRevision = 0;
@@ -136,7 +138,7 @@ function identityValue(key, fallback) {
   return id[key] != null || key === "customLogo" ? id[key] : fallback;
 }
 function setIdentityValues(values) {
-  if (!inCareer() || career.flavour !== "myteam" || blocked() || (careerRevision != null && currentRevision() !== careerRevision) || typeof CareerTeamIdentity === "undefined") return false;
+  if (!inCareer() || career.flavour !== "myteam" || blocked() || stale() || typeof CareerTeamIdentity === "undefined") return false;
   const cleaned = {};
   for (const [key, value] of Object.entries(values)) {
     const field = CareerTeamIdentity.value(key, value);
@@ -394,7 +396,14 @@ function useSlot(flavour, i) {
     lastSave = { ok: false, durable: false, reason: blockedReason(f, n) };
     return null;
   }
-  if (career && (f !== slotFlavour || n !== slotIdx)) save();
+  if (career && (f !== slotFlavour || n !== slotIdx)) {
+    save();
+    // A refused departing write must not drop the live career silently (#6478
+    // row 6). A read-only career (revision conflict, calendar protection,
+    // newer-build slot) holds nothing newer than disk, so it may leave with a
+    // warning; any other refusal (the writer lock) keeps the switch from happening.
+    if (!lastSave.ok && !careerConflict && !calendarProtection && !unsupportedSlot(slotFlavour, slotIdx)) return null;
+  }
   slotFlavour = f;
   slotIdx = n;
   setLive();
@@ -416,7 +425,7 @@ function deleteSlot(flavour, i, expectedRevision, options) {
   // The slot card can outlive a foreign write. Its observed revision must
   // still be current when the second DELETE tap commits.
   if ((f === slotFlavour && n === slotIdx && (careerConflict ||
-       (careerRevision != null && currentRevision() !== careerRevision))) ||
+       stale())) ||
       (expectedRevision != null && expectedRevision !== store.keyRevision(key))) {
     lastSave = { ok: false, durable: false, reason: "conflict" };
     if (f === slotFlavour && n === slotIdx) careerConflict = true;
@@ -979,7 +988,11 @@ function budgetUpgradeCost() {
 
 const GRANT = 5000;
 function freeMoney(on) {
-  if (on !== undefined) store.set("career.freeMoney", !!on);
+  if (on !== undefined) {
+    // A career key: refused without the writer lock, before the cache (#6478 row 10).
+    const r = writeResult("career.freeMoney", !!on);
+    if (!r.ok) lastSave = r;
+  }
   return !!store.get("career.freeMoney", false);
 }
 // Hand yourself credits. Returns the new balance, or null with no career loaded.
@@ -1330,7 +1343,7 @@ function settleRound(order, player, table = Teams.POINTS) {   // table: a shorte
 // so a foreign write cannot leave phantom points or prize money in this tab.
 function scoreRound(order, player, fastestId, run) {   // run: RaceControl.shortRun
   if (!inCareer() || !player || blocked() ||
-      (careerRevision != null && currentRevision() !== careerRevision)) {
+      stale()) {
     careerConflict = true;
     lastSave = { ok: false, durable: false, reason: "conflict" };
     return null;
@@ -1343,7 +1356,7 @@ function scoreRound(order, player, fastestId, run) {   // run: RaceControl.short
   const seasonRef = career.season;
   const staged = JSON.parse(JSON.stringify(seasonRef));
   if (SeasonCal.award(staged, order, fastestId, run) !== "race") return null;
-  if (careerConflict || (careerRevision != null && currentRevision() !== careerRevision)) {
+  if (careerConflict || stale()) {
     careerConflict = true;
     lastSave = { ok: false, durable: false, reason: "conflict" };
     return null;
@@ -1358,7 +1371,7 @@ function scoreRound(order, player, fastestId, run) {   // run: RaceControl.short
   replace(career, original);
   replace(seasonRef, original.season);
   career.season = seasonRef;
-  if (careerRevision != null && currentRevision() !== careerRevision) careerConflict = true;
+  if (stale()) careerConflict = true;
   return null;
 }
 
@@ -1640,7 +1653,7 @@ function offerPreview(i) {
     revision: careerRevision, signature: JSON.stringify([career.year, career.team, career.seat, career.rep, career.amb, career.offers, career.fitted, career.owned, career.dev, career.seats, career.money, career.facility, career.budgetLvl, Parts.legalityKey ? Parts.legalityKey() : ""]) };
 }
 function acceptOffer(i, reviewed) {
-  if (!career || blocked() || (careerRevision != null && currentRevision() !== careerRevision)) return null;
+  if (!career || blocked() || stale()) return null;
   const preview = offerPreview(i);
   if (!preview || (reviewed && (reviewed.signature !== preview.signature || reviewed.revision !== preview.revision))) return null;
   const o = career.offers ? career.offers[i | 0] : null;
@@ -1699,8 +1712,8 @@ function tallyOf(c) {
 
 // Guarded like scoreRound: a refused save restores in place (season alias kept) (#4825).
 function rollover() {
-  if (!career || blocked() || (careerRevision != null && currentRevision() !== careerRevision)) {
-    if (career && careerRevision != null && currentRevision() !== careerRevision) {
+  if (!career || blocked() || stale()) {
+    if (career && stale()) {
       careerConflict = true;
       lastSave = { ok: false, durable: false, reason: "conflict" };
     }
@@ -1719,8 +1732,12 @@ function rollover() {
   replace(career, original);
   career.season = seasonRef;
   replace(seasonRef, restoredSeason);
-  careerConflict = true;
+  // Only a revision conflict poisons later saves; a full store or a lost lock
+  // keeps its own reason so the next save can retry (#6744). The year went back,
+  // so the era's legality does too, before anything reads Parts (#6478 row 5).
+  if (reason === "conflict") careerConflict = true;
   lastSave = { ok: false, durable: false, reason };
+  applyRegs();
   return null;
 }
 
