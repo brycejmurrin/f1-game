@@ -1,0 +1,1 @@
+Fixed: A race that starts in rain now shows a wet road from the first frame, instead of a dry-looking grid that soaked in over 3-4 s while the tyres already had wet grip (#6892). Opening photo mode while rain arrives or dries no longer makes the puddles jump.

@@ -211,7 +211,7 @@ const WeatherArc = (function () {
     }
     function plannedArc(from, p, len) {
       const a = { from, to: p.to, dur: Math.max(1, p.dur || 60), t: 0, w0: wetOf(from) };
-      if (typeof RainCells !== "undefined" && len > 0) a.cell = RainCells.forPlan(from, a.to, a.dur, len, wetOf);
+      if (hasRC() && len > 0) a.cell = RainCells.forPlan(from, a.to, a.dur, len, wetOf);
       a.wetIn = wetInOf(a);
       return a;
     }
@@ -537,10 +537,11 @@ const WeatherArc = (function () {
       if (w0s) arc.w0s = w0s;
       if (r0s) arc.r0s = r0s;
       arc.wetIn = wetInOf(arc);
-      // A bare arc (the agent's weatherArc, real-race's rain call) has no chip
-      // pick recorded: keep the weather it replaced, so endSession() puts it
-      // back instead of leaving the next race at a mid-arc stage (#6881 R11).
-      if (!live) { base ??= G.raceWeather; if (G.raceWeather !== from) setWeatherLive(from); }
+      // A bare arc IN A RACE (the agent's weatherArc, real-race's rain call) has
+      // no chip pick recorded: keep the weather it replaced, so endSession() puts
+      // it back instead of leaving the next race at a mid-arc stage (#6881 R11).
+      // Not in the menu: a chip pick made after it would lose to restoreBase().
+      if (!live) { if (G.state === "race") base ??= G.raceWeather; if (G.raceWeather !== from) setWeatherLive(from); }
       return arc;
     }
     function tick(dt) {

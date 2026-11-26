@@ -64,6 +64,13 @@ test("R2: startChangeable snaps a stale (dry) frame to the session's road", () =
   assert.equal(G.frame.wetness, 1);
 });
 
+test("R2: a changeable (MIXED) start snaps to the start weather's road before the arc arms", () => {
+  const { G, wa } = bootArc({ weather: "rain", wet: 0 });
+  wa.changeable = true; wa.plan = { to: "dry", dur: 600 };
+  assert.ok(wa.startChangeable(0), "the arc armed");
+  assert.equal(G.frame.wetness, 1, "the grid shows the rain road, not a fade from dry");
+});
+
 // ── R6: a paused render holds ──────────────────────────────────────────────
 test("R6: syncWetness(0) mid-ramp leaves frame.wetness unchanged; a snap jumps", () => {
   const { G, wa } = bootArc({ weather: "rain", wet: 0 });
@@ -81,6 +88,7 @@ test("R6: syncWetness(0) mid-ramp leaves frame.wetness unchanged; a snap jumps",
 // ── R11: a bare arc does not leak ──────────────────────────────────────────
 test("R11: startArc then endSession restores the chip's weather", () => {
   const { G, wa } = bootArc({ weather: "dry" });
+  G.state = "race";
   assert.ok(wa.startArc("dry", "rain", 60), "a bare arc armed (no startChangeable)");
   for (let i = 0; i < 60 * 30; i++) wa.tick(1 / 60);
   assert.notEqual(G.raceWeather, "dry", "the arc walked off the chip's pick");
@@ -91,8 +99,17 @@ test("R11: startArc then endSession restores the chip's weather", () => {
 
 test("R11: an arc from a different start weather is also put back", () => {
   const { G, wa } = bootArc({ weather: "wet" });
+  G.state = "race";
   wa.startArc("dry", "rain", 60);
   assert.equal(G.raceWeather, "dry", "the arc applied its from");
   wa.endSession();
+  assert.equal(G.raceWeather, "wet");
+});
+
+test("R11: a menu arc does not record a base, so a later chip pick survives the race start", () => {
+  const { G, wa } = bootArc({ weather: "dry" });
+  wa.startArc("dry", "rain", 60);   // state "menu"
+  G.raceWeather = "wet";            // the player's chip pick afterwards
+  wa.restoreBase();                 // startRace's re-arm
   assert.equal(G.raceWeather, "wet");
 });
