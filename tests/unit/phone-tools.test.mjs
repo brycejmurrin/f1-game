@@ -24,7 +24,7 @@ test("the preset is his standalone window: 852x393, DPR 3, env() insets 59/0/59/
   assert.match(p.contextOptions.userAgent, /iPhone/);
   assert.equal(p.profile.file, OWNER_EXPORT);
   assert.equal(OWNER_EXPORT, newestLiveExport(), "his CURRENT export is the newest dated one (#6602 D5(a))");
-  assert.equal(OWNER_EXPORT, "tests/data/settings-live-export-2026-11-25.json", "today the 2026-11-25 export (#6590)");
+  assert.equal(OWNER_EXPORT, "tests/data/settings-live-export-2026-11-26.json", "today the 2026-11-26 export (22:09 Pacific 11-25, build 29936)");
   assert.equal("apex26.uiScale" in p.localStorage, false, "his UI SIZE is unset = shipped");
   assert.equal(p.uiScale, null);
   assert.equal(p.localStorage["apex26.hudBtnScale"], "130", "his BUTTON SIZE is 130 %");
