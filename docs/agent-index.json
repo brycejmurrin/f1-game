@@ -1642,6 +1642,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-hub-spend.test.mjs",
+        "tests/unit/career-lazy.test.mjs",
         "tests/unit/career-legends.test.mjs",
         "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-planning-ui-download.test.mjs",
@@ -2681,7 +2682,7 @@
     {
       "path": "js/career/ai-dev.js",
       "global": "CareerAiDev",
-      "roster": "tag"
+      "roster": "LAZY_CAREER"
     },
     {
       "path": "js/career/badges.js",
@@ -2726,12 +2727,12 @@
     {
       "path": "js/career/experience.js",
       "global": "CareerExperience",
-      "roster": "tag"
+      "roster": "LAZY_CAREER"
     },
     {
       "path": "js/career/regulations.js",
       "global": "Regulations",
-      "roster": "tag"
+      "roster": "LAZY_CAREER"
     },
     {
       "path": "js/career/restore-points.js",

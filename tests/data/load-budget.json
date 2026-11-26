@@ -160,6 +160,7 @@
     "LAZY_XR": "door: ENTER VR",
     "LAZY_CAM_EDITOR": "door: pause-menu camera tuner / flyby editor",
     "LAZY_CAREER_UI": "door: career screen (SW required pool)",
+    "LAZY_CAREER": "door: career save in play, career screen, career garage, career race (SW required pool)",
     "LAZY_UI_PRESETS": "door: first APPEARANCE enter",
     "LAZY_SAVES_DATA": "P1: idle, garage door, career screen",
     "LAZY_RESULTS_SHEET": "door: results sheet / share card"

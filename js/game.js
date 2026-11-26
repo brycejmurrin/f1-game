@@ -102,7 +102,7 @@ const lazyBundles = LazyBundles.create({
     });
   },
 });
-const { ensureGarageExterior, SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, adoptAudio, audioHandle, ensureRaceSession, ensureLightPresets, ensureGarageData, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const { ensureGarageExterior, SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, adoptAudio, audioHandle, ensureRaceSession, ensureCareerBody, ensureLightPresets, ensureGarageData, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
 // Stub AudioPanel (js/audio/stub.js) pulls the real LAZY_AUDIO bundle via this hook.
 if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
@@ -2453,7 +2453,7 @@ async function startRaceBody() {
   rlap("scenery");
   let sessionOk = await ensureRaceSession(); while (!sessionOk && !stale() && await LoadingScreen.failed() === "retry") sessionOk = await ensureRaceSession(); if (stale()) return false;   // #2625 RETRY re-runs the load, BACK falls through; LAZY_RACE_SESSION — pit/radio/reliability before grid/pits + AudioPanel
   if (!sessionOk) { loadingScreen.stop(); quitToMenu(); announce("RACE MODULES FAILED TO LOAD — RETRY", 3, "info"); return false; }   // the stubs have no retirements or pit stops, and TT data would be lost silently
-  await Promise.all([ensureAudio(), lazyBundles.ensureResultsSheet()]); if (stale()) return false;   // LAZY_AUDIO + LAZY_RESULTS_SHEET before startEngine / sync buildResults at the flag
+  await Promise.all([ensureAudio(), lazyBundles.ensureResultsSheet(), Career.inCareer() && ensureCareerBody()]); if (stale()) return false;   // LAZY_AUDIO + LAZY_RESULTS_SHEET before startEngine / sync buildResults at the flag
   if (!window.LightPresets) { await ensureLightPresets(); if (stale()) return false; }   // LAZY_RACE presets before the first applyRaceSettings: a late landing re-lit the race mid-session (false = default lighting; logged)
   radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
   // Completed seasons are readable, never raceable (also guarded by award()).
@@ -9141,7 +9141,7 @@ let garageReturn = "select";
 // The one way in. Everything that opens the garage goes through here so the
 // return path can never be left stale — including js/career/career-ui.js, via G.openGarage.
 function openGarage(from) {
-  loadingScreen.stop(); garagePre.markOpen(from); ensureGarageData();   // stale busy/prep plate (and the arrival's Blender tables) (z 36) must not cover #carsetup
+  loadingScreen.stop(); garagePre.markOpen(from); ensureGarageData(); if (Career.inCareer()) ensureCareerBody();   // stale busy/prep plate (and the arrival's Blender tables) (z 36) must not cover #carsetup
   if (from === "menu" && soundOn) ensureAudio().then(() => GameAudio.init());
   else if (soundOn) GameAudio.uiSelect();
   garageReturn = from;

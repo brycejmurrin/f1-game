@@ -16,8 +16,10 @@ function ensureScreen() {
   }
   // The CAREER FILE row (SettingsExport.careerRow) is built synchronously by the screen: its body comes too (#4748).
   const saves = typeof SettingsExport !== "undefined" && SettingsExport.ready ? SettingsExport.ready() : null;
-  _load = Promise.all([ScriptLoader.create().load(files, edges, { strict: true }), saves]).then(([ok]) => {
-    if (!ok || typeof CareerScreen === "undefined") {
+  // Regulations / CareerExperience (LAZY_CAREER) are read by the screen's cards: they land before it mounts.
+  const body = typeof LazyBundles !== "undefined" && LazyBundles.live && LazyBundles.live() ? LazyBundles.live().ensureCareerBody() : null;
+  _load = Promise.all([ScriptLoader.create().load(files, edges, { strict: true }), saves, body]).then(([ok, , bodyOk]) => {
+    if (!ok || bodyOk === false || typeof CareerScreen === "undefined") {
       _load = null;
       Log.warn("ui", "the career UI bundle did not load");
       return false;
