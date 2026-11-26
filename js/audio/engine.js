@@ -1543,6 +1543,7 @@ var GameAudio = (function () {
     if (harvGain) harvGain.gain.setTargetAtTime(0, t0, 0.06);
     if (typeof ErsLayer !== "undefined" && ErsLayer.silence) ErsLayer.silence(t0);
     if (typeof RivalAudio !== "undefined" && RivalAudio.silence) RivalAudio.silence(t0);   // pass-by whoosh (#2187)
+    if (typeof CrowdAudio !== "undefined" && CrowdAudio.silence) CrowdAudio.silence(t0);   // crowd bed clicked on stop (#6544)
     if (windGain) windGain.gain.setTargetAtTime(0, t0, 0.06);
     if (skidGain) skidGain.gain.setTargetAtTime(0, t0, 0.04);
     if (scrubGain) scrubGain.gain.setTargetAtTime(0, t0, 0.04);
@@ -1882,26 +1883,6 @@ var GameAudio = (function () {
     const engBase = (lvl - limDepth) * mult - pitDepth;
     aimGain(engGain, engBase, t, 0.03);
 
-    // GRAVEL (see startEngine). Rate is the CRANK rate: the recording's
-    // fundamental is its firing rate, and a V6 fires three times a turn, so
-    // f0/3 is once per revolution — 45 Hz at the stock idle, sliding up with
-    // the note. Clamped into 18-140 Hz: below that it is a flutter, above it
-    // a second tone rather than roughness. Depth is a share of the engine's own
-    // level that dies as the square of rev (a quarter left at half revs,
-    // nothing at redline), then CAPPED so the trough of the swing can never
-    // take engGain negative — the same inversion the limiter's cap prevents,
-    // and both swings share the one param: base - limDepth is what is left.
-    if (gravOsc && gravGain) {
-      const gravF = Math.max(18, Math.min(140, f0 / 3));
-      if (layerMoving(gravGain, layers.gravel, t, 0.05) && Math.abs((gravOsc.frequency._apexHz ?? -1) - gravF) > 0.5) {
-        gravOsc.frequency.setTargetAtTime(gravF, t, 0.05);
-        gravOsc.frequency._apexHz = gravF;
-      }
-      const lump = (1 - rev) * (1 - rev);
-      const want = layers.gravel ? engBase * 0.55 * lump * tune.gravel : 0;
-      aimGain(gravGain, Math.min(want, Math.max(0, engBase - limSwing - pitDepth)), t, 0.05);
-    }
-
     // Turbo / MGU-K whine: low gears keep supercharger character; deploy and
     // speed lift the 2026 electric layer so BOOST reads as half the power unit.
     const deploy01 = clamp01(ph.deploy != null ? ph.deploy : b);
@@ -2038,6 +2019,27 @@ var GameAudio = (function () {
     if (cylCutGain && cylCutGain._apexCylTgt !== cylDepth) {
       cylCutGain.gain.setTargetAtTime(cylDepth, t, 0.04);
       cylCutGain._apexCylTgt = cylDepth;
+    }
+
+    // GRAVEL (see startEngine). Rate is the CRANK rate: the recording's
+    // fundamental is its firing rate, and a V6 fires three times a turn, so
+    // f0/3 is once per revolution — 45 Hz at the stock idle, sliding up with
+    // the note. Clamped into 18-140 Hz: below that it is a flutter, above it
+    // a second tone rather than roughness. Depth is a share of the engine's own
+    // level that dies as the square of rev (a quarter left at half revs,
+    // nothing at redline), then CAPPED so the trough of the swing can never
+    // take engGain negative — the same inversion the limiter's cap prevents,
+    // and all the swings share the one param: base - limDepth - cylDepth is what
+    // is left. (Placed after cylDepth, which the cap subtracts.)
+    if (gravOsc && gravGain) {
+      const gravF = Math.max(18, Math.min(140, f0 / 3));
+      if (layerMoving(gravGain, layers.gravel, t, 0.05) && Math.abs((gravOsc.frequency._apexHz ?? -1) - gravF) > 0.5) {
+        gravOsc.frequency.setTargetAtTime(gravF, t, 0.05);
+        gravOsc.frequency._apexHz = gravF;
+      }
+      const lump = (1 - rev) * (1 - rev);
+      const want = layers.gravel ? engBase * 0.55 * lump * tune.gravel : 0;
+      aimGain(gravGain, Math.min(want, Math.max(0, engBase - limSwing - pitDepth - cylDepth)), t, 0.05);
     }
 
     // AIRFLOW. Quadratic in *opened* speed (windFromSpeed): silent at the
