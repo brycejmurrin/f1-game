@@ -4150,6 +4150,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/physics/ai-start.js",
+      "global": "AiStart",
+      "roster": "tag"
+    },
+    {
       "path": "js/physics/ai-strategy.js",
       "global": "AiStrategy",
       "roster": "tag"

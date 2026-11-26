@@ -48,6 +48,7 @@
     "// dial census. No VM. Failing-first pin: craft-cluster |r| is still >0.85.",
     "tests/unit/ai-ratings-math.test.mjs",
     "tests/unit/ai-solo.test.mjs",
+    "tests/unit/ai-start.test.mjs",
     "// ...and the field's strategy: the plan scales with the distance, a 20-car",
     "// grid does not converge on one plan, strategies mix, and the reactive",
     "// rules (free stop, weather, spent set) fire in the right order. ~0.1 s.",

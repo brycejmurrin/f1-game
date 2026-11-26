@@ -18,7 +18,7 @@ const GOLD = JSON.parse(readFileSync(join(ROOT, "tests/data/brake-target-golden.
 function load() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, isFinite, Float64Array });
   seedLog(ctx);
-  for (const f of ["js/core/mat4.js", "js/physics/ai-strategy.js", "js/physics/ai-drive.js"]) {
+  for (const f of ["js/core/mat4.js", "js/physics/ai-strategy.js", "js/physics/ai-start.js", "js/physics/ai-drive.js"]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
   return vm.runInContext("AiDrive", ctx);

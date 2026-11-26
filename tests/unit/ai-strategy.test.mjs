@@ -39,7 +39,7 @@ function load() {
   seedLog(ctx);
   ctx.window = ctx;
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js",
-                   "js/car/parts.js", "js/physics/tyre-model.js", "js/physics/ai-strategy.js", "js/physics/ai-drive.js"]) {
+                   "js/car/parts.js", "js/physics/tyre-model.js", "js/physics/ai-strategy.js", "js/physics/ai-start.js", "js/physics/ai-drive.js"]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
   return { A: vm.runInContext("AiDrive", ctx), T: vm.runInContext("TyreModel", ctx) };
