@@ -56,7 +56,7 @@ function boot(options = {}) {
   const scene = { value: options.homeScene || "photo" };
   const ltWrites = [], latchWrites = [];
   const windowEvents = new Map();
-  const ctx = vm.createContext({ document: dom.document, window: { dispatchEvent: () => {},
+  const ctx = vm.createContext({ document: dom.document, window: { dispatchEvent: () => {}, matchMedia: options.matchMedia,
     addEventListener: (type, fn) => windowEvents.set(type, fn),
     removeEventListener: (type, fn) => { if (windowEvents.get(type) === fn) windowEvents.delete(type); } },
     localStorage: { getItem: (k) => storage.get(k), setItem: (k, v) => { if (options.storageFull) throw new Error("Quota"); storage.set(k, v); }, removeItem: (k) => storage.delete(k) },
@@ -1852,10 +1852,12 @@ test("#7017: DOCK and HIDE toggle the sheet attributes with accessible state; th
   assert.equal(b.api.state().dock, "top");
   hide.click();
   assert.equal(studio.dataset.sheet, "collapsed"); assert.equal(hide.getAttribute("aria-expanded"), "false");
+  assert.equal(body.getAttribute("data-ps-sheet"), "collapsed", "the sticks read the fold from body");
   assert.equal(hide.textContent, "SHOW"); assert.equal(b.api.state().collapsed, true);
   assert.equal(b.storage.has("apex26.photoCollapsed"), false, "collapse is visit state, not stored");
   b.api.close(false);
   assert.equal(body.getAttribute("data-ps-dock") ?? null, null, "closing drops the body side");
+  assert.equal(body.getAttribute("data-ps-sheet") ?? null, null);
   b.api.open();
   assert.equal(studio.dataset.sheet, "collapsed", "the collapse survives a reopen in the same session");
   hide.click(); assert.equal(studio.dataset.sheet, "open"); assert.equal(hide.textContent, "HIDE");
@@ -1865,6 +1867,10 @@ test("#7017: DOCK and HIDE toggle the sheet attributes with accessible state; th
   assert.equal(again.dom.byId("ps-dock").getAttribute("aria-pressed"), "true");
   const junk = boot({ storage: [["apex26.photoDock", "left"]] }); junk.api.open();
   assert.equal(junk.dom.byId("photo-studio").dataset.dock, "bottom", "an unknown stored side falls back to bottom");
+  assert.equal(b.dom.byId("ps-help").textContent.startsWith("WASD move"), true, "a mouse and keyboard keep the key hints");
+  const touch = boot({ matchMedia: (q) => ({ matches: q === "(pointer: coarse)" }) }); touch.api.open();
+  assert.equal(touch.dom.byId("ps-help").textContent.startsWith("Left stick moves"), true, "a touch phone gets the stick wording");
+  assert.equal(touch.dom.byId("ps-help").textContent.includes("WASD"), false);
   const full = boot({ storageFull: true }); full.api.open(); full.dom.byId("ps-dock").click();
   assert.equal(full.dom.byId("photo-studio").dataset.dock, "top", "a failed write still moves the sheet for this visit");
 });

@@ -185,6 +185,9 @@ body.photo-mode.photo-studio-open .pc-look-wrap { left: auto; right: calc((var(-
   /* Put the full touch row above the bottom sheet, with room for both thumbs.
      Cap touch chrome at 100% so the row also fits a larger menu preference. */
   body.photo-mode.photo-studio-open :is(.pc-stickwrap, .pc-altcol) { zoom: var(--ps-touch-z); bottom: calc((42svh + var(--safe-b) + var(--gap)) / var(--ps-touch-z)); }
+  /* Collapsed bottom sheet: the touch row rides just above the folded bar
+     (--ps-sheet-px, measured by photo-studio-ui.js), not across mid-frame. */
+  body.photo-mode.photo-studio-open[data-ps-sheet="collapsed"]:not([data-ps-dock="top"]) :is(.pc-stickwrap, .pc-altcol) { bottom: calc((var(--ps-sheet-px, 42svh) + var(--safe-b) + var(--gap)) / var(--ps-touch-z)); }
   /* Docked top: the touch row drops to the bottom edge, below the sheet. */
   body.photo-mode.photo-studio-open[data-ps-dock="top"] :is(.pc-stickwrap, .pc-altcol) { bottom: calc((var(--safe-b) + var(--gap)) / var(--ps-touch-z)); }
   body.photo-mode.photo-studio-open .pc-move-wrap { left: calc(var(--safe-l) / var(--ps-touch-z)); }

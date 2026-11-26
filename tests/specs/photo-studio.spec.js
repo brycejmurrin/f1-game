@@ -377,10 +377,14 @@ test("Portrait photo: DOCK top keeps a 4:5 subject's lower half clear with the s
   expect(folded.panelH, "collapsed: head and CAPTURE bar only").toBeLessThan(open.panelH * 0.7);
   await controls(page, ["ps-dock", "ps-collapse", "ps-capture", "ps-close"]);
   await evidence(page, info, "portrait-collapsed");
-  await nativeClick(page, "ps-collapse");
-  await expect(page.locator("#ps-body")).toBeVisible();
+  // Bottom dock, still folded: the sticks ride just above the folded bar, not mid-frame (Bryce's screenshot).
   await nativeClick(page, "ps-dock");
   await expect(page.locator("#photo-studio")).toHaveAttribute("data-dock", "bottom");
+  await expect.poll(async () => { const g = await geom(); return g.sticks.every((st) => st.bottom <= g.panelTop + 0.5 && st.top >= g.guideMid); }, { timeout: 30000 }).toBe(true);
+  await controls(page, ["ps-collapse", "ps-capture", "pc-move", "pc-look"]);
+  await evidence(page, info, "portrait-collapsed-bottom");
+  await nativeClick(page, "ps-collapse");
+  await expect(page.locator("#ps-body")).toBeVisible();
   await nativeClick(page, "ps-close");
   await expect(page.locator("#photo-studio")).toBeHidden();
   expect(pageErrors).toEqual([]);

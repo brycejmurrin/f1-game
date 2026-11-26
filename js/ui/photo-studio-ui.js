@@ -293,7 +293,18 @@ function create(G, deps) {
     collapseButton.setAttribute("aria-expanded", st.collapsed ? "false" : "true");
     collapseButton.textContent = st.collapsed ? "SHOW" : "HIDE";
     collapseButton.setAttribute("aria-label", st.collapsed ? "Show photo settings" : "Hide photo settings");
-    if (st.open) document.body.setAttribute("data-ps-dock", st.dock);
+    if (st.open) {
+      document.body.setAttribute("data-ps-dock", st.dock);
+      document.body.setAttribute("data-ps-sheet", st.collapsed ? "collapsed" : "open");
+      measureSheet();   // a layout read right after the attribute flip; ResizeObserver keeps it on rotate / UI SIZE
+    }
+  }
+  // A collapsed bottom sheet's painted height, so the photo sticks sit just above it, not mid-frame.
+  function measureSheet() {
+    const css = document.body.style;
+    if (!st.open || !st.collapsed) { css?.removeProperty?.("--ps-sheet-px"); return; }
+    const r = typeof CssZoom !== "undefined" && CssZoom.viewportRect ? CssZoom.viewportRect(panel) : panel.getBoundingClientRect?.();
+    if (r && r.height > 0) css?.setProperty?.("--ps-sheet-px", Math.ceil(r.height) + "px");
   }
   const captureButton = button("CAPTURE", capture, "ps-capture"), done = button("DONE", () => close(true), "ps-close");
   const focusCamera = button("MOVE CAMERA", (e) => {
@@ -643,6 +654,7 @@ function create(G, deps) {
     mk("footer", { className: "sheet-foot" }, [captureButton, done]),
   ]);
   root.appendChild(guide); root.appendChild(reticle); root.appendChild(panel);
+  if (typeof ResizeObserver === "function") new ResizeObserver(measureSheet).observe(panel);
   root.setAttribute("aria-label", "Photo Studio");
   root.setAttribute("data-esc-close", "ps-close");
   const say = (s) => { E["ps-message"].textContent = s; };
@@ -665,6 +677,8 @@ function create(G, deps) {
     focalInput.disabled = resetLens.disabled = value || closing;
     paintFocus();
   }
+  // A phone has the photo sticks, not WASD: the keyboard hint read wrong (and clipped) in portrait (#7017).
+  function coarse() { try { return !!(typeof window !== "undefined" && window.matchMedia && window.matchMedia("(pointer: coarse)").matches); } catch (_) { return false; } }
   function guides() { root.dataset.aspect = st.aspect; root.dataset.grid = st.grid; }
   function camera() { return deps.freeCam || (typeof FreeCam !== "undefined" ? FreeCam : null); }
   function isGarage() { return st.source === "home" || st.source === "garage"; }
@@ -797,7 +811,7 @@ function create(G, deps) {
     document.body.classList.add("photo-studio-open");
     paintSheet();
     E["ps-context"].textContent = text(st.metadata.title || (isGarage() ? "Your garage" : G.track && (G.track.name || G.track.id)) || "Race photo");
-    E["ps-help"].textContent = isGarage() ? "Choose a shot or drag the scene to orbit. Guides stay out of the exported photo." : "WASD move · drag to look · R/F height · Shift boost. Guides and HUD stay out of the photo.";
+    E["ps-help"].textContent = isGarage() ? "Choose a shot or drag the scene to orbit. Guides stay out of the exported photo." : (coarse() ? "Left stick moves · right stick looks · ▲ ▼ set height. Guides and HUD stay out of the photo." : "WASD move · drag to look · R/F height · Shift boost. Guides and HUD stay out of the photo.");
     shots.replaceChildren();
     const list = isGarage() ? [["hero", "HERO"], ["front", "FRONT"], ["side", "SIDE"], ["rear", "REAR"], ["top", "TOP"]] : [["car", "CHASE"], ["wide", "WIDE"], ["detail", "DETAIL"], ["corner", "CORNER"], ["helmet", "HELMET"], ["cockpit", "COCKPIT"]];
     for (const [id, label] of list) shots.appendChild(button(label, () => setShot(id)));
@@ -860,7 +874,7 @@ function create(G, deps) {
     last = null; raw = null; capturedOptions = null; E["ps-preview"].removeAttribute("src"); E["ps-preview"].hidden = true;
     // ...and the library rows: each held a thumbnail data URL and a DOWNLOAD closure over its photo blob. open() repaints them.
     if (E["ps-library"]) E["ps-library"].replaceChildren();
-    root.hidden = true; document.body.classList.remove("photo-studio-open"); document.body.removeAttribute("data-ps-dock");
+    root.hidden = true; document.body.classList.remove("photo-studio-open"); document.body.removeAttribute("data-ps-dock"); document.body.removeAttribute("data-ps-sheet"); document.body.style?.removeProperty?.("--ps-sheet-px");
     busy(false);
     if (back && returnTo) returnTo();
     // A look picked here repaints the Team tab the studio was opened over (it reads the scene modules on build).
