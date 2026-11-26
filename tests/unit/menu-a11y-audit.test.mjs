@@ -1231,9 +1231,9 @@ function footOf(id) {
 test("a lone dismiss over a visible screen reads CLOSE: Duel picker and Team picker (#6570 row 8)", () => {
   for (const [id, btn] of [["duel-picker", "duel-close"], ["teampicker", "tp-close"]]) {
     const foot = footOf(id);
-    assert.match(foot, new RegExp(`id="${btn}"[^>]*>CLOSE<`), `#${id} dismiss reads CLOSE`);
+    assert.ok(new RegExp(`id="${btn}"[^>]*>CLOSE<`).test(foot), `#${id} dismiss reads CLOSE`);
   }
-  assert.match(read("js/ui/screen-regions.js"), /part\("#duel-close", "Close"\)/);
+  assert.ok(read("js/ui/screen-regions.js").includes('part("#duel-close", "Close")'));
 });
 
 /* #6753 / #6570 row 7 — a commit sheet focuses its primary unless that is destructive */
@@ -1255,5 +1255,5 @@ test("every <dialog> has one [autofocus], on the non-alt .bigbtn when there is o
     }
   }
   assert.ok(checked >= 2, "checked the Season Setup and Customize commit sheets at least");
-  assert.match(footOf("duel-picker"), /autofocus/, "Duel picker has an autofocus (its dismiss)");
+  assert.ok(footOf("duel-picker").includes("autofocus"), "Duel picker has an autofocus (its dismiss)");
 });

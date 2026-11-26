@@ -953,7 +953,7 @@ test("#5215: on a short landscape window a lone foot button takes the head's row
   assert.match(block, /> \.sheet-head \{ grid-column: 1; grid-row: 1; \}/);
   assert.match(block, /> \.sheet-body \{ grid-column: 1 \/ -1; grid-row: 2; \}/);
   assert.match(block, /> \.sheet-foot \{\s*grid-column: 2; grid-row: 1;/);
-  assert.match(block, /:not\(:has\(> :nth-child\(4\)\)\)/, "only a plain head / body / foot sheet");
+  assert.match(block, /:not\(:has\(> :nth-child\(4 of :not\(nav\)\)\)\)/, "only a plain head / body / foot sheet");
 });
 
 test("#5215: a short editor workspace drops the auto-save note so the slider rows keep two rows", () => {
