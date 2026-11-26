@@ -16,6 +16,8 @@
  *   3. On a live car resetFor adds no key (Object.keys order identical) and the car stays in fast mode.
  *   4. Every 'keep' and every 'caller' row has a why note; no row names an op other than newRace or rescue yet
  *      (U1.2 adds redFlag and episode with their call sites).
+ *   5. declareNewRace (the named-store ADDs for the fields a spawned car lacks) matches the table and a real spawn,
+ *      so no newRace row is silently skipped by resetFor's keyed loop over existing fields.
  *
  * Run: node --test tests/unit/car-fields-lifetimes-vm.test.mjs
  */
@@ -23,10 +25,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import v8 from "node:v8";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
+
+const SRC = readFileSync(new URL("../../js/race/car-fields.js", import.meta.url), "utf8");
+const CF = new Function(SRC.replace(/^const CarFields\b/m, "var CarFields") + "\nreturn CarFields;")();
 
 // Captured on the pre-migration tip 16237b50 (node --test this file with APEX_PRINT_DIGEST=1). NEVER regenerate in
 // a refactor: a change here means the migration changed a car field.
@@ -99,5 +106,139 @@ test("gridUp and rescuePlayer leave every car field byte-identical (digest pinne
     if (process.env.APEX_PRINT_DIGEST) console.log(JSON.stringify({ grid, rescue }));
     assert.equal(grid, DIGEST_GRID, "a car field after gridUp changed");
     assert.equal(rescue, DIGEST_RESCUE, "a car field after rescuePlayer changed");
+  } finally { g.close(); }
+});
+
+// ── the table ─────────────────────────────────────────────────────────────────────────────────────────────────────
+
+test("table: one row per key, a known lifetime, a why on every row, only the ops newRace and rescue (U1.2 adds more)", () => {
+  assert.ok(CF.RESETS.length >= 60, "gridUp and rescuePlayer reset ~65 fields");
+  const keys = CF.RESETS.map((r) => r.key);
+  assert.equal(new Set(keys).size, keys.length, "a key listed twice");
+  assert.deepEqual([...CF.OPS], ["newRace", "rescue"]);
+  for (const r of CF.RESETS) {
+    assert.ok(CF.LIVES.includes(r.life), `${r.key}: unknown lifetime ${r.life}`);
+    const ops = Object.keys(r.ops);
+    assert.ok(ops.length > 0, `${r.key}: a row no op resets`);
+    for (const op of ops) assert.ok(CF.OPS.includes(op), `${r.key}: op ${op} has no call site yet`);
+    // Every row says why, so every 'keep' and every CALLER row does.
+    assert.ok(typeof r.why === "string" && r.why.length > 10, `${r.key}: no why`);
+  }
+  assert.throws(() => CF.resetFor({}, "redFlag"), /unknown op/, "an op the table does not define is an error, not a no-op");
+});
+
+/** The JS literal the declare body writes for a table value. */
+const lit = (v) => (v === undefined ? "undefined" : Object.is(v, Infinity) ? "Infinity" : JSON.stringify(v));
+
+/** declareNewRace's named stores as [key, literal] pairs, in source order. */
+function declared() {
+  return [...CF.declareNewRace.toString().matchAll(/if \(!\("(\w+)" in c\)\) c\.(\w+) = ([^;]+);/g)].map((m) => {
+    assert.equal(m[1], m[2], "a guard names one key and stores another");
+    return [m[1], m[3]];
+  });
+}
+const newRaceRows = () => CF.RESETS.filter((r) => Object.hasOwn(r.ops, "newRace") && r.ops.newRace !== CF.CALLER);
+
+test("declareNewRace's named stores carry the table's newRace values, in table order", () => {
+  const d = declared();
+  assert.ok(d.length > 0);
+  const want = new Map(newRaceRows().map((r) => [r.key, lit(r.ops.newRace)]));
+  for (const [k, v] of d) assert.equal(v, want.get(k), `${k}: declareNewRace stores ${v}, the table says ${want.get(k)}`);
+  const order = newRaceRows().map((r) => r.key).filter((k) => d.some(([dk]) => dk === k));
+  assert.deepEqual(d.map(([k]) => k), order, "declareNewRace is out of table order");
+});
+
+test("declareNewRace declares exactly the newRace fields a freshly spawned car lacks (none silently skipped)", async () => {
+  const spawned = [];
+  const g = await createGame({});
+  try {
+    const CFl = g.ctx.CarFields, pre = CFl.predeclare;
+    CFl.predeclare = (c) => { pre(c); spawned.push(new Set(Object.keys(c))); return c; };
+    await g.race("monza");
+    const fresh = spawned.slice(-g.G.cars.length);
+    assert.ok(fresh.length >= 20, "makeCars spawned the field through predeclare");
+    const lacking = newRaceRows().map((r) => r.key).filter((k) => fresh.some((keys) => !keys.has(k)));
+    assert.deepEqual(declared().map(([k]) => k), lacking,
+      "a newRace row a spawned car lacks must be in declareNewRace (resetFor's keyed loop only writes fields a car has), " +
+      "and one it always has must not be (regenerate declareNewRace)");
+  } finally { g.close(); }
+});
+
+/** A plain object with every table key stamped with a sentinel no row writes. */
+function stamped() {
+  const o = {};
+  for (const r of CF.RESETS) o[r.key] = { sentinel: r.key };
+  return o;
+}
+
+for (const op of ["newRace", "rescue"]) {
+  test(`resetFor(${op}) resets exactly its rows to their declared values and leaves every other row alone`, () => {
+    const o = stamped();
+    assert.equal(CF.resetFor(o, op), o);
+    for (const r of CF.RESETS) {
+      const named = Object.hasOwn(r.ops, op) && r.ops[op] !== CF.CALLER;
+      if (named) assert.ok(Object.is(o[r.key], r.ops[op]), `${r.key}: ${op} should write ${lit(r.ops[op])}, got ${lit(o[r.key])}`);
+      else assert.deepEqual(o[r.key], { sentinel: r.key }, `${r.key}: ${op} does not name it (or it is a CALLER row), yet it changed`);
+    }
+    assert.deepEqual(Object.keys(o), CF.RESETS.map((r) => r.key), "resetFor added a key to an object that had them all");
+  });
+}
+
+test("resetFor on a bare object: rescue adds nothing, newRace adds its rows through named stores", () => {
+  const bare = CF.resetFor({}, "rescue");
+  assert.deepEqual(Object.keys(bare), [], "rescue only writes fields a car already has");
+  const fresh = CF.resetFor({}, "newRace");
+  assert.deepEqual(Object.keys(fresh), declared().map(([k]) => k), "newRace adds a missing field only through declareNewRace");
+});
+
+/** %HasFastProperties, compiled with natives syntax switched on for that one compile (car-fields-vm's helper). */
+function nativeFast() {
+  v8.setFlagsFromString("--allow-natives-syntax");
+  let f = null;
+  try { f = new Function("o", "return %HasFastProperties(o)"); } catch { f = null; }
+  v8.setFlagsFromString("--no-allow-natives-syntax");
+  assert.ok(f, "V8 natives syntax is unavailable on this Node: the fast-mode check would be vacuous");
+  return f;
+}
+
+test("on a live car after the grid, resetFor adds no key and the car stays in fast mode (its own VM: it writes values)", async () => {
+  const fast = nativeFast();
+  const g = await bootRace();
+  try {
+    const CFl = g.ctx.CarFields;
+    for (const c of g.G.cars) {
+      const before = Object.keys(c).join();
+      for (const op of ["newRace", "rescue"]) {
+        CFl.resetFor(c, op);
+        assert.equal(Object.keys(c).join(), before, `${c.code}: resetFor(${op}) changed the car's keys`);
+      }
+      assert.equal(fast(c), true, `${c.code} fell into dictionary mode`);
+    }
+  } finally { g.close(); }
+});
+
+test("gridUp and rescuePlayer each call resetFor once and no longer write the migrated fields inline", () => {
+  const grid = symbolSource("function gridUp(");
+  const rescue = symbolSource("function rescuePlayer(");
+  assert.equal((grid.match(/CarFields\.resetFor\(c, "newRace"\)/g) || []).length, 1);
+  assert.equal((rescue.match(/CarFields\.resetFor\(c, "rescue"\)/g) || []).length, 1);
+  for (const [src, op, name] of [[grid, "newRace", "gridUp"], [rescue, "rescue", "rescuePlayer"]]) {
+    for (const r of CF.RESETS) {
+      if (!Object.hasOwn(r.ops, op) || r.ops[op] === CF.CALLER) continue;
+      assert.doesNotMatch(src, new RegExp("\\bc\\." + r.key + " = "), `${name} still writes ${r.key} inline: it is a RESETS row`);
+    }
+  }
+});
+
+test("SimState reads its car-state lists from CarFields.SNAPSHOT, not a second copy", async () => {
+  const g = await bootRace();
+  try {
+    const SS = g.ctx.SimState, S = g.ctx.CarFields.SNAPSHOT;
+    assert.ok(SS, "SimState is loaded once a race is built");
+    assert.equal(SS.DEEP, S.DEEP);
+    assert.equal(SS.STATE, S.STATE);
+    assert.equal(SS.KEEP_FORWARD, S.KEEP_FORWARD);
+    assert.deepEqual([...SS.STATIC], [...S.STATIC]);
+    assert.deepEqual([...SS.RUNTIME], [...S.RUNTIME]);
   } finally { g.close(); }
 });

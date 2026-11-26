@@ -47,6 +47,7 @@ function fixture({ realInsights = false } = {}) {
   if (realInsights) vm.runInContext(readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), ctx);
   // Shell order (#4748): the FULL façade, then the LAZY_RACE_SESSION body it creates.
   // LAZY_RACE_SESSION loads the SimState registry (js/core/sim-state.js, #6860) before the body that captures through it.
+  vm.runInContext(readFileSync(new URL('../../js/race/car-fields.js', import.meta.url), 'utf8'), ctx, { filename: absSrc('js/race/car-fields.js') });   // FULL: SimState reads CarFields.SNAPSHOT
   vm.runInContext(readFileSync(new URL('../../js/core/sim-state.js', import.meta.url), 'utf8'), ctx, { filename: absSrc('js/core/sim-state.js') });
   for (const f of ['driving-coach-boot.js', 'driving-coach.js'])
     vm.runInContext(readFileSync(new URL('../../js/race/' + f, import.meta.url), 'utf8'), ctx);

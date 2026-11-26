@@ -34,6 +34,7 @@ function fixture() {
   });
   vm.runInContext(read("js/race/driving-coach-boot.js"), ctx, { filename: absSrc("js/race/driving-coach-boot.js") });
   const coach = vm.runInContext("DrivingCoach", ctx).create(G);
+  vm.runInContext(read("js/race/car-fields.js"), ctx, { filename: absSrc("js/race/car-fields.js") });   // FULL: SimState reads CarFields.SNAPSHOT
   vm.runInContext(read("js/core/sim-state.js"), ctx, { filename: absSrc("js/core/sim-state.js") });   // LAZY_RACE_SESSION order: the registry (#6860) lands before the body
   const evalBody = () => vm.runInContext(read("js/race/driving-coach.js"), ctx, { filename: absSrc("js/race/driving-coach.js") });
   return { ctx, G, coach, nodes, saved, wired, painted, evalBody, ensures: () => ensures, land: (ok) => land(ok) };

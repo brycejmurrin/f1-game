@@ -67,13 +67,14 @@ var SimState = (function () {
   // js/agent/apex.js, which had to be built by measurement rather than
   // inspection for exactly that reason. Never a career or a remote car.
   const PRIM = (v) => v == null || ["number", "boolean", "string"].includes(typeof v);
-  const DEEP = ["tyre", "tyreLog", "pitNext", "pitPlan"];   // pitPlan: pit-lane replan() rewrites it in place, so a retry/rewind must put the saved copy back
-  // RUNTIME OWNERSHIP IS NOT CAR STATE. `_incidentOwned` is IncidentSim's
-  // takeover flag: a sample taken mid-takeover would set it again after the
-  // incident part reset the takeover list, and owns() — which reads only the
-  // flag — would freeze the car for the rest of the session (#6862 P1).
-  // Neither captured nor deleted on restore; the owning module's part decides.
-  const RUNTIME = new Set(["_incidentOwned"]);
+  // WHICH car fields are which kind is car-state definition, declared once in
+  // js/race/car-fields.js (CarFields.SNAPSHOT, beside the per-car reset table;
+  // #6945 U1.1): DEEP, STATE, STATIC, RUNTIME (never captured nor deleted) and
+  // KEEP_FORWARD, each with its why. CarFields is FULL, this file is LAZY, so
+  // it is always there when this IIFE runs.
+  const CAR = CarFields.SNAPSHOT;
+  const DEEP = CAR.DEEP;
+  const RUNTIME = new Set(CAR.RUNTIME);
   // A DEEP COPY WITHOUT THE STRING IN THE MIDDLE. The round trip through
   // JSON.stringify/parse built and reparsed a text representation of three
   // objects per car — 20 cars at 2 Hz is 120 serialisations a minute whose
@@ -112,19 +113,12 @@ var SimState = (function () {
     }
     return out;
   }
-  // EVERY OBJECT A CAR HOLDS IS ONE OF FOUR KINDS, and the guard test
-  // (tests/unit/sim-state-vm.test.mjs) fails on an object field that is none:
-  //   DEEP   — race data, JSON-faithful copy (above).
-  //   STATE  — per-car controller state the next step reads: body-attitude
-  //            springs, the AI look-ahead cache, the pass plan. Copied by
-  //            cloneState (typed arrays sliced, a car or the track kept by
-  //            identity). Without them a rewound AI steers off a future
-  //            plan and the field diverges on the first step (#6860).
-  //   a CAR  — another car (passOf, _qOf, _trOf ...): the same object for the
-  //            whole race, so restored by identity.
-  //   STATIC — shared configuration that never changes in a race.
-  const STATE = ["_ba", "_lk", "passPlan"];
-  const STATIC = new Set(["team", "color", "houseStats", "fuelVisual", "launch", "mods", "tyreBaseMods", "tyreOpt"]);
+  // EVERY OBJECT A CAR HOLDS IS ONE OF FOUR KINDS (CarFields.SNAPSHOT says
+  // which): DEEP is copied by jsonClone above; STATE by cloneState below
+  // (typed arrays sliced, a car or the track kept by identity); a CAR (passOf,
+  // _qOf, _trOf ...) is restored by identity; STATIC is never copied.
+  const STATE = CAR.STATE;
+  const STATIC = new Set(CAR.STATIC);
   const KEEP_BY_IDENTITY = new Set(["track"]);   // _lk.track: the circuit the cache was built on
   function cloneState(v, cars) {
     if (v == null || typeof v !== "object" || cars.includes(v)) return v;
@@ -147,18 +141,9 @@ var SimState = (function () {
     for (const k of STATE) state[k] = cloneState(c[k], cars);
     return { fields, objects, refs, state };
   }
-  // PENALTIES AND CUTS DO NOT REWIND FOR THE PLAYER (`opts.keepForward`, the
-  // practice rewind's policy). They are ordinary primitives, so the generic
-  // sweep captures them and a naive restore hands them back — undoing a time
-  // penalty or resetting the track-limits ladder by pressing a button. The
-  // session is unscored so no result is at risk, but a practice tool that
-  // quietly erases the consequence of running wide is teaching the wrong lap.
-  // ONLY the player: an AI car is part of the world being rewound, and there
-  // is no lesson to protect there. Nor do the player's ROLE flags: a sample
-  // taken during the flying-start hand-over (js/race/flying-start.js,
-  // human=false for ~3 s) would otherwise hand the wheel to the AI for the
-  // rest of the session after it ended.
-  const KEEP_FORWARD = ["penalty", "cuts", "cutWarn", "hits", "wallHits", "hitSev", "human", "local", "isPlayer"];
+  // PENALTIES, CUTS AND ROLE FLAGS DO NOT REWIND FOR THE PLAYER
+  // (`opts.keepForward`, the practice rewind's policy; why: CarFields.SNAPSHOT).
+  const KEEP_FORWARD = CAR.KEEP_FORWARD;
   function applyCar(c, snap, keepForward, cars) {
     const keep = {};
     if (keepForward) for (const k of KEEP_FORWARD) if (Object.hasOwn(c, k)) keep[k] = c[k];
