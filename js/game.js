@@ -4633,7 +4633,7 @@ function update(dt) {
     scPassCall(scWatch.tick(player, ranked, raceCtl.level, 0));
     // Race only (TT/quali already gated): blue-flag compliance for the player.
     if (session === "race" && track) {
-      _blueCtx.total = track.total; _blueCtx.vRef = vTop(); _blueCtx.caution = raceCtl.level; _blueCtx.owed = scWatch.info().owed;   // the HUD's blue gate reads both (#6630)
+      _blueCtx.total = track.total; _blueCtx.vRef = vTop(); _blueCtx.caution = raceCtl.level; _blueCtx.owed = scWatch.owedN();   // the HUD's blue gate reads both (#6630)
       blueFlagCall(blueWatch.tick(player, ranked, _blueCtx, dt));
     }
   }

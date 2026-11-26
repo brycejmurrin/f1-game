@@ -193,7 +193,9 @@ const SportingRegs = (function () {
     /** The open give-back window, for the HUD's flag chip: places owed, the
      *  seconds left, and the code of the first car to let by (null if none). */
     function info() { return { owed: owed.length, t: +Math.max(0, t).toFixed(2), code: owed.length ? owed[0].code || null : null }; }
-    return { tick, reset, info };
+    /** Places owed, allocation-free (the race step's blue gate, #6630). */
+    function owedN() { return owed.length; }
+    return { tick, reset, info, owedN };
   }
 
   // ── 3. CHAMPIONSHIP-ORDER GRID ─────────────────────────────────────────
