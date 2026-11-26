@@ -292,3 +292,17 @@ test("deploy and onset use soft sine waves and a nonresonant lowpass", () => {
   const lowpass = [...live].find(n => n.kind === "biquad" && n.type === "lowpass");
   assert.ok(lowpass && lowpass.frequency.value <= 1800 && lowpass.Q.value <= 0.5);
 });
+
+test("a pause/resume with deploy still held does not re-fire the boost cue (#6886 row 6)", () => {
+  const { ErsLayer: E, ctx } = layer();
+  const frame = () => E.update({ t: ctx.currentTime, deploy: 1, energy: 1, layerOn: true, speed: 0.75 });
+  frame();
+  assert.equal(E.cueCount(), 1, "precondition: the first activation chirps once");
+  E.silence(ctx.currentTime);   // pause: stopEngine
+  ctx.currentTime += 30;        // far longer than CUE_REARM
+  frame();                      // resume, deploy still held
+  assert.equal(E.cueCount(), 1, "no second chirp on resume");
+  E.update({ t: ctx.currentTime += 0.5, deploy: 0, energy: 1, layerOn: true, speed: 0.75 });
+  E.update({ t: ctx.currentTime += 0.5, deploy: 1, energy: 1, layerOn: true, speed: 0.75 });
+  assert.equal(E.cueCount(), 2, "a genuine new activation after release still chirps");
+});
