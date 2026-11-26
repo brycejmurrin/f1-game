@@ -1073,6 +1073,7 @@
     "// Cursor hook doors, Cursor's payload and answer shapes included. Real git, ~15 s.",
     "tests/unit/save-migrate.test.mjs",
     "tests/unit/save-schema-registry.test.mjs",
+    "tests/unit/save-sections-6602.test.mjs",
     "tests/unit/scale-defaults.test.mjs",
     "// The garage LIVE atlas on a LAZY_CIRCUIT stub: paintLive skips the map instead of",
     "// throwing, and ctxKey re-keys on hydration. VM, ~0.3 s.",
