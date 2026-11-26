@@ -218,6 +218,7 @@
     "js/perf/gfx-debug-overlay.js"
   ],
     LAZY_PERF: [
+    "js/perf/thermal-drift.js",
     "js/perf/soak-run.js",
     "js/perf/gpu-test-run.js",
     "js/perf/phone-recorder.js",
@@ -340,6 +341,7 @@
     "js/audio/voice-pack.js",
     "js/audio/battle-earcon.js",
     "js/audio/radio-voice.js",
+    "js/data/circuit-lore.js",
     "js/audio/announcer-recorded.js",
     "js/audio/announcer.js",
     "js/audio/panel.js",

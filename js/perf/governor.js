@@ -630,10 +630,13 @@ function tick(dtMs, drawn) {
 }
 
 // Why: docs/GOVERNOR-RATIONALE.md §gov-33.
-let _drift = null;
+let _drift = null, _driftWant = false;
 function setThermalDrift(on) {
+  _driftWant = !!on;
   _drift = on && typeof ThermalDrift !== "undefined" ? ThermalDrift.drift() : null;
 }
+/** LAZY_PERF landed: arm a drift gate asked for before ThermalDrift existed. */
+function resyncDrift() { if (_driftWant && !_drift) setThermalDrift(true); }
 // Why: docs/GOVERNOR-RATIONALE.md §gov-34.
 function driftRenderRate() {
   if (typeof RenderRate === "undefined") return false;
@@ -678,7 +681,7 @@ function clearStrikes() {
 }
 
 return {
-  init, tick, ticks: () => _ticks, setThermalDrift, thermalDrift: () => _drift && _drift.state(), frameStats, recordSimulation, resetFrameStats, sentinelArm, sentinelResume, cleanRace, clearStrikes,
+  init, tick, ticks: () => _ticks, setThermalDrift, resyncDrift, thermalDrift: () => _drift && _drift.state(), frameStats, recordSimulation, resetFrameStats, sentinelArm, sentinelResume, cleanRace, clearStrikes,
   tier: () => Math.max(_perfTierFloor, _userTier, _perfTier),
   // Why: docs/GOVERNOR-RATIONALE.md §gov-35.
   autoTier: () => Math.max(_perfTierFloor, _perfTier),
