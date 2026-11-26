@@ -1022,7 +1022,12 @@ const CareerBackup = (function () {
     // The legacy all-careers file also restores its selected slot. Preflight
     // that revision above, before any slot writes; keep selection on failure.
     let selectionWritten = false;
-    if (selected != null && s && !failed) {
+    // Never repoint the device at a slot whose own row was skipped (empty, other
+    // flavour) or rejected (bad row, migrate-failed). A slot absent from the file
+    // still takes the pointer: the legacy all-careers file restores its selection.
+    const selectedSkipped = selected != null && (skipped.indexOf(selected) !== -1
+      || rejected.some((r) => r && r.slot === selected));
+    if (selected != null && s && !failed && !selectedSkipped) {
       const result = recordWrite("careerSlot", typeof s.write === "function" ? s.write("careerSlot", selected)
         : { ok: true, durable: s.set("careerSlot", selected) !== false });
       selectionWritten = !!result && result.ok !== false;
