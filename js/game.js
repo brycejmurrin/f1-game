@@ -77,14 +77,14 @@ const lazyBundles = LazyBundles.create({
   applyLightTuneIfReady: () => { if (ltStore) applyLightTune(); },
   createNetwork: () => { netPlay = NetPlay.create(G, { qualiNet }); netLobby = NetLobby.create(G, { raceSettings, qualiNet }); return netLobby; },
   bindAgent: () => { if (typeof ApexApi !== "undefined") { window.__apex = ApexApi.create(G, restoreFreePlaySelection); window.__apex.visorScene = () => typeof VisorOptics !== "undefined" ? VisorOptics.sceneFromG(G) : null; } },
-  // Recreate audio instances after LAZY_AUDIO reinjects the real `var` globals; `once` latches each part (a retry re-runs only the one that threw).
+  // Adopt the real audio instances onto the boot handles once LAZY_AUDIO reinjects the `var` globals (#6952); `once` latches each part (a retry re-runs only the one that threw).
   onAudioReady: (once = (k, f) => f()) => {
-    once("radio", () => { radioVoice = RadioVoice.create(G); });
-    once("announcer", () => { announcer = Announcer.create(G); });
-    once("rivals", () => { rivalAudio = RivalAudio.create(G); });
-    once("carSfx", () => { carSfx = CarSfx.create(G); });
-    once("panel", () => { audioPanel = AudioPanel.create(G); });
-    once("panelInit", () => { if (audioPanel && audioPanel.init) audioPanel.init(); });
+    once("radio", () => { adoptAudio(radioVoice, RadioVoice.create(G)); });
+    once("announcer", () => { adoptAudio(announcer, Announcer.create(G)); });
+    once("rivals", () => { adoptAudio(rivalAudio, RivalAudio.create(G)); });
+    once("carSfx", () => { adoptAudio(carSfx, CarSfx.create(G)); });
+    once("panel", () => { adoptAudio(audioPanel, AudioPanel.create(G)); });
+    once("panelInit", () => { audioPanel.init(); });
     once("cues", () => { if (typeof DrivingCues !== "undefined" && DrivingCues.create) DrivingCues.create(G); });
   },
   // Recreate race-session instances after LAZY_RACE_SESSION reinjects real `var`s.
@@ -104,7 +104,7 @@ const lazyBundles = LazyBundles.create({
     });
   },
 });
-const { ensureGarageExterior, SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const { ensureGarageExterior, SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, adoptAudio, audioHandle, ensureRaceSession, ensureLightPresets, ensureGarageData, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
 // Stub AudioPanel (js/audio/stub.js) pulls the real LAZY_AUDIO bundle via this hook.
 if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
@@ -996,9 +996,9 @@ const banner = AnnounceBanner.create({
   camMode: () => camMode, camModes: () => CAM_MODES, radioVoice: () => radioVoice,
   history: () => raceMessageHistory,
 });
-let radioVoice = RadioVoice.inert();   // the real instance lands at the module wires; inert() means no call site needs a guard
+const radioVoice = audioHandle(RadioVoice.inert());   // a handle (#6952): the real instance is adopted onto it; inert() means no call site needs a guard
 function announce(msg, dur, kind, still, quiet) { return banner.announce(msg, dur, kind, still, quiet); }
-let announcer = Announcer.inert();   // js/audio/announcer.js — the pre-race welcome; same inert() deal
+const announcer = audioHandle(Announcer.inert());   // js/audio/announcer.js — the pre-race welcome; same handle deal
 let /** @type {ReturnType<typeof SkidMarks.create> | null} */ skids = null;   // SkidMarks.create(), assigned once G exists (below)
 // Tyre marks (the 120-entry ring buffer, its batched vertex build and the
 // per-mark fallback draw) live in js/fx/skidmarks.js — SkidMarks.create(),
@@ -1643,7 +1643,7 @@ function gridOrderFor(base) {
 // for the new startHold. Deliberate — the lights are a real second start.
 function redFlagRestart() {
   if (state !== "race" || !track || cars.some((c) => c.finished)) return false;
-  IncidentSim.reset(); DebrisWorld.reset(); DebrisWorld.prime();
+  Scopes.enter("race", { why: "restart-red" });   // IncidentSim, DebrisWorld (+ prime); never raceCtl
   const L = track.total;
   const rk = (c) => (redOrder.has(c) ? redOrder.get(c) : Infinity), order = cars.filter((c) => !c.retired).sort((a, b) => (rk(a) - rk(b)) || (b.prog - a.prog)); redOrder.clear();   // passes made braking for the red do not stand
   // THE REWIND IS THE LEADER'S. Stepping each car back its OWN lap would put a
@@ -1718,7 +1718,7 @@ function redFlagRestart() {
   // (the 2.2 s all-done arm, or the 0.1 s cap) would classify the restart a second after the lights. postFinish.since
   // is the moment the human was done: raceT keeps running under the flag, and the 75 s cap would already be expired.
   resultT = 0; postFinish.since = -1;
-  scWatch.reset(); blueWatch.reset();   // teleported grid: a give-back or blue-flag clock from before the flag must not run on
+  Scopes.exit("race", { why: "restart-red", phase: "grid" });   // pass watches: teleported grid — a give-back or blue-flag clock from before the flag must not run on
   feel.camRoll = 0; camSlipSm = 0; feel.shake = 0; feel.hitStop = 0; stormFx._thunderT = -1;
   setState("count", "red-flag-restart"); countT = 0; lightsLit = 0; feel.startHold = 0;
   els.lights.hidden = false;
@@ -2497,19 +2497,16 @@ async function startRaceBody() {
   resultsCam.reset(); RaceCeremony.resetLive();   // restore a montage / ceremony before replacing the previous field
   _roadReflectionTransition.value = NaN;   // a new race starts from its current reflection policy
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
-  IncidentSim.reset();
-  raceCtl.reset();   // and the caution machine — no stale flag/capHoldT into this race
+  // …and the caution machine (no stale flag/capHoldT into this race) and the debris side-world: prime()
+  // below only REBUILDS when the track or car count changed, so a same-circuit restart kept last race's
+  // shards, marbles and knocked-over cones, and RaceControl could fly a caution for debris nobody produced.
+  Scopes.enter("race", { why: "start" });   // IncidentSim, raceCtl, DebrisWorld
   // Restore the CHIP's pick before re-arming — pm-restart re-enters startRace
   // from inside a running race, so a half-walked arc would otherwise become
   // the new race's starting weather AND get written back as the player's
   // standing choice. NOT endChangeable(): that also drops wxArcPlan, and a
   // host's plan for THIS race is set before startRace runs.
   wxArc.restoreBase();   // a leaked arc must not become this race's weather (startChangeable re-arms below)
-  // …and the debris side-world. prime() below only REBUILDS when the track or
-  // car count changed, so a restart on the same circuit kept last race's
-  // shards, marbles and knocked-over cones — visible on the grid, and
-  // RaceControl can fly a caution for debris nobody produced this race.
-  DebrisWorld.reset();
   // …and the broadcast layer: queued cards ("RETIREMENT", "BOX BOX") and the
   // results commentary were cleared only by quitToMenu, so RESTART and NEXT
   // RACE played the last race's over this one's countdown.
@@ -2912,7 +2909,7 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   // Judged on the weather AT THE FLAG: endSession() below puts the starting weather back, and a MIXED race that
   // turned wet then disqualified every car on one slick for "one dry compound" (B6.3.6 is off in a wet race).
   const cmpApplies = pits.twoCompoundApplies();
-  raceCtl.reset(); wxArc.endSession();   // an arc that outlives the race would override the next race's weather
+  Scopes.exit("race", { why: "finish" }); wxArc.endSession();   // raceCtl ONLY (debris and takeovers stand at the flag); an arc that outlives the race would override the next race's weather
   // Close every car's open stint so the results strip has an end lap. Done here
   // rather than in the sheet: a retired car stopped laps ago and its last stint
   // must end where the CAR did, not where the leader is when the flag falls.
@@ -3421,7 +3418,7 @@ const G = {
   redFlagRestart,
   get daily() { return daily; },
   holdCaution: (level, cause) => raceCtl.hold(level, cause),   // a scripted flag (js/race/real-race.js); 0 releases it
-  resetEpisodeOwners() { IncidentSim.reset(); raceCtl.reset(); DebrisWorld.reset(); paceRef().fill(0); },
+  resetEpisodeOwners() { Scopes.exit("race", { why: "episode" }); paceRef().fill(0); },
   paceRef: () => paceRef(),   // SimState "pace" (#6860)
   cameraDampingState() {
     return { eye: camEye.slice(), target: camTgt.slice(), fov: camFov,
@@ -3469,11 +3466,11 @@ engineer = RaceEngineer.create(G);
 // The radio's VOICE (js/audio/radio-voice.js) — speechSynthesis over the banner
 // the engineer, the coach and race control already write. Off by default, and
 // inert wherever the API, a voice or the setting is missing.
-radioVoice = RadioVoice.create(G);
+adoptAudio(radioVoice, RadioVoice.create(G));   // the stub's create() is inert(); a resident real module lands here
 // The PRE-RACE ANNOUNCER (js/audio/announcer.js) — "Welcome to Apex 26…" over
 // the loading screen's flyby. After the radio: it borrows that module's
 // speakable() and per-channel tune, and nothing else.
-announcer = Announcer.create(G);
+adoptAudio(announcer, Announcer.create(G));
 let records = SessionRecords.create(G);   // LAZY_RACE_SESSION
 const coach = DrivingCoach.create(G);     // FULL — UiExperience captures this instance
 setupTrialSession = SetupTrialSession.create(G);
@@ -4155,8 +4152,8 @@ function drivingLineApi(trk) {
   }
   return _dlApi;
 }
-let rivalAudio = RivalAudio.create(G);   // the field around you, for GameAudio.setRivals (recreated after ensureAudio)
-let carSfx = CarSfx.create(G);           // tyre scrub, lock-up, surface, pit limiter (recreated after ensureAudio)
+const rivalAudio = audioHandle(RivalAudio.create(G));   // the field around you, for GameAudio.setRivals (a handle: adopted after ensureAudio)
+const carSfx = audioHandle(CarSfx.create(G));           // tyre scrub, lock-up, surface, pit limiter (a handle: adopted after ensureAudio)
 // Photo mode (js/camera/photo-cam.js) and lighting tuner (js/lighting/tuner-panel.js).
 const photomode = Photomode.create(G), { updatePhotoCam, exitPhotoMode } = photomode, { refreshLightTunePanel, closeLightTuner } = LightingTunerDoor.create(G);
 // CAMERA TUNER panel UI (js/camera/tuner-panel.js) — per-camera-mode framing offsets.
@@ -4177,6 +4174,22 @@ DebrisWorld.create(G);
 // exceptions). Inert (owns() is a Set read) unless a flag is on AND the debris
 // side-world is live. DEFAULT ON per feature (apex26.r2Airborne/r3Contact/c1Pileup).
 const incidentSim = IncidentSim.create(G, c => { if (c.human && c.isPlayer && isQuali() && c.lap >= 1) quali.markDeletedLap(c, qualiNet.hasArmed()); });
+// THE RACE SCOPE (js/core/scopes.js, #6949): which transition clears what. The subsets differ ON PURPOSE —
+// a restart never resets raceCtl (redFlagRestart continues the flag machine through raceCtl.rewound()),
+// endRace clears raceCtl only, and quitToMenu's mid-quali IncidentSim hand-back stays a direct call before
+// the field swap. Look modules up at call time: tests stub DebrisWorld.reset on the sandbox. A start's
+// pass-watch clear is gridUp's (U1.1 territory); the debris prime of a start stays after makeCars.
+// #6860 phase 2 (decision B): 'episode' becomes ONE registrant calling SimState.clear(G) — WHAT is SimState's.
+Scopes.register("race", { id: "incident-sim", on: ["start", "restart-red", "restart-declined", "episode"], touches: ["takeovers"],
+  exit: () => IncidentSim.reset(), snapshot: () => { const s = IncidentSim.status(); return { owned: s.owned, count: s.count }; } });
+Scopes.register("race", { id: "raceCtl", on: ["start", "finish", "episode", "quit"], touches: ["caution"],
+  exit: () => raceCtl.reset(), snapshot: () => { const i = raceCtl.info(); return { level: i.level, phase: i.phase, cause: i.cause }; } });
+Scopes.register("race", { id: "debris", after: ["incident-sim"], on: ["start", "restart-red", "restart-declined", "episode"],
+  enterOn: ["restart-red", "restart-declined"], touches: ["takeovers"],
+  exit: () => DebrisWorld.reset(), enter: () => DebrisWorld.prime(),
+  snapshot: () => { const s = DebrisWorld.status(); return { live: s.live, queued: s.queued, marbles: s.marbles }; } });
+Scopes.register("race", { id: "pass-watch", on: ["restart-red"], phase: "grid", touches: ["passes"],
+  exit: () => { scWatch.reset(); blueWatch.reset(); }, snapshot: () => ({ sc: scWatch.info(), blue: blueWatch.info() }) });
 // Car-to-car contact (js/physics/collide.js). collideFx stays here (shake /
 // hit-stop are camera state) and rides in as the second argument, not a G member.
 const collide = Collide.create(G, collideFx, (c) => realRace.owns(c));
@@ -4223,7 +4236,7 @@ RaceEntryProfile.bindGame({ state: () => G.state, loadPhase: () => loadingScreen
 // MUSIC & SOUND panel (js/audio/panel.js) — the mixer screen, the ♪
 // master button and the audio-settings persistence. create() wires the DOM;
 // init() runs at the boot-restore position near the end of this file.
-let audioPanel = AudioPanel.create(G);   // stub at boot; real panel after ensureAudio
+const audioPanel = audioHandle(AudioPanel.create(G));   // stub at boot; the real panel is adopted onto it after ensureAudio
 
 function teamById(id) { return Teams.LIST.find((t) => t.id === id); }
 function cssCol(c) { return "rgb(" + (c[0] * 255 | 0) + "," + (c[1] * 255 | 0) + "," + (c[2] * 255 | 0) + ")"; }
@@ -4401,7 +4414,7 @@ function quitToMenu() {
   // menuBlank and the per-car draw break both gate on !active(). Idempotent.
   loadingScreen.stop();
   if (skipToResults()) { resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.release(); announcer.stop && announcer.stop(); }   // a finished player's result is settled before the session is dropped
-  setState("menu", "quit"); paused = false; releaseFieldScratch(true); raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  setState("menu", "quit"); paused = false; releaseFieldScratch(true); Scopes.exit("race", { why: "quit" }); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   drills?.end("quit");
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
@@ -4608,7 +4621,7 @@ function update(dt) {
   if (raceCtl.takeRestart()) {
     raceCtl.clearHold();            // both branches below clear the surface this tick
     if (redFlagRestart()) return;   // re-gridded, lights re-armed
-    IncidentSim.reset(); DebrisWorld.reset(); DebrisWorld.prime();
+    Scopes.enter("race", { why: "restart-declined" });   // IncidentSim, DebrisWorld (+ prime); raceCtl runs on
   }
   wxArc.tick(dt);   // dynamic weather progression (no-op unless an arc is armed)
   _atmo.tick(dt);   // the lighting cross-fade a weather-arc step started (no-op otherwise)

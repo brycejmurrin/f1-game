@@ -172,7 +172,7 @@ export const RULES = [
   // alone, never to the group whose subject they are — collisions-deep.spec.js
   // drives AiDrive, and car/wall contact is what `collisions` asserts. Its
   // specs are VM-twinned, so `game-vm` names where they actually run on CI.
-  [/^js\/physics\/(collide|contact-geometry|wall-clamp|ai-drive|ai-band|ai-corridor)\.js/, ["collisions", "game-vm"],
+  [/^js\/physics\/(collide|contact-geometry|wall-clamp|ai-drive|ai-start|ai-band|ai-corridor)\.js/, ["collisions", "game-vm"],
    "car/wall contact and the AI driver: collisions-deep.spec.js and the collision VM twins"],
   [/^js\/physics\//, ["physics-core"], "the driving model and what feeds it"],
   [/^js\/race\/race-control\.js/, ["physics-core"], "race-control.spec.js rides in test:physics-core"],

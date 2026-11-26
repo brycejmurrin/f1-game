@@ -92,6 +92,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `log.js` | `Log` | tag | levelled namespaced logging (global Log). |
 | `dev-flags.js` | `DevFlags` | tag | DevFlags: one registry for boot-time URL / localStorage toggles. |
+| `scopes.js` | `Scopes` | tag | Scopes: WHEN a lifecycle transition clears what (#6920 U2.1, #6949). |
 | `mat4.js` | `M4` | tag | column-major 4x4 matrix + vec3 helpers, plus the SCALAR helpers modules share (M4.clamp / lerp / wrapDelta / clamp01 / smoothstep, and the seeded PRNG… |
 | `hash32.js` | `Hash32` | tag | stateless FNV-1a + murmur-style mix for career, daily challenge, and driver ratings. |
 | `clipboard.js` | `ApexClipboard` | tag | one clipboard write/read home. navigator.clipboard + textarea execCommand fallback for plain http / older WebKit. |
@@ -1397,6 +1398,16 @@ engine graph. `GameAudioToneModel` owns manufacturer/tune/profile definitions;
 radio and spotter duck holds, the SFX-bus dip and the selective focus bus.
 Factories receive live context/bus/service callbacks; context-bound state
 resets with the engine.
+
+**Audio handles (#6952).** The title boots `js/audio/stub.js`; five instances
+game.js holds (RadioVoice, Announcer, RivalAudio, CarSfx, AudioPanel) are
+HANDLES, not rebound `let`s. When LAZY_AUDIO lands, `onAudioReady` builds each
+real instance once (the `audioReadyOnce` latch) and `adoptAudio`
+(`js/core/lazy-bundles.js`) copies its property descriptors onto the same object
+and drops stub-only keys: no Proxy, no forwarders, so `G.radio`, `G.announcer`
+and every captured reference stay live. Stub keys equal the real keys
+(`tests/unit/audio-stub-parity.test.mjs`; AudioPanel `_stub` and the RivalAudio
+module's `attach`/`setMix`, which drive the `_pendingAttach` hand-off, are exempt).
 
 Engine = a looping recorded drone pitched by revs (assets/sfx/f1_engine.mp3),
 with two detuned saws plus a sub-octave square ~95–795 Hz as the fallback when decode fails.

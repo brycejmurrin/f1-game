@@ -558,6 +558,8 @@
         "tests/unit/audio-panel-boot.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-sample-upgrade.test.mjs",
+        "tests/unit/audio-scope-once-vm.test.mjs",
+        "tests/unit/audio-stub-parity.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/battle-earcon.test.mjs",
         "tests/unit/blip-voice-pool.test.mjs",
@@ -866,6 +868,7 @@
         "tests/unit/repair-stop-vm.test.mjs",
         "tests/unit/rescue-occupancy-vm.test.mjs",
         "tests/unit/retired-car-obstacle-vm.test.mjs",
+        "tests/unit/scopes-vm.test.mjs",
         "tests/unit/season-seat-move-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
@@ -994,6 +997,7 @@
         "tests/unit/repair-stop-vm.test.mjs",
         "tests/unit/rescue-occupancy-vm.test.mjs",
         "tests/unit/retired-car-obstacle-vm.test.mjs",
+        "tests/unit/scopes-vm.test.mjs",
         "tests/unit/season-seat-move-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
@@ -1124,6 +1128,7 @@
         "tests/unit/repair-stop-vm.test.mjs",
         "tests/unit/rescue-occupancy-vm.test.mjs",
         "tests/unit/retired-car-obstacle-vm.test.mjs",
+        "tests/unit/scopes-vm.test.mjs",
         "tests/unit/season-seat-move-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
@@ -3322,6 +3327,11 @@
     {
       "path": "js/core/save-schema-registry.js",
       "global": "SaveSchemaRegistry",
+      "roster": "tag"
+    },
+    {
+      "path": "js/core/scopes.js",
+      "global": "Scopes",
       "roster": "tag"
     },
     {
