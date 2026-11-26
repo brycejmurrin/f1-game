@@ -641,3 +641,49 @@ test("applying a Gamepad preset leaves the legacy pad key alone while a device p
       profiled ? "an active profile keeps the legacy key an unmigrated wheel reads" : "no profile: the shared key is the store");
   }
 });
+
+test("RESPONSE preset: FULL ONLY holds full input, edits show CUSTOM, split arrows apply per arrow (#6794)", () => {
+  const { host, dom, editor, model } = boot();
+  editor.mount(host);
+  const field = key => dom.byId("touch-test-" + key);
+  const choose = (key, value) => { field(key).value = value; field(key).onchange(); };
+  assert.equal(field("preset").value, "ease");
+  choose("preset", "full");
+  for (const id of ["left", "right"]) {
+    const p = model.buttonProfile(id);
+    for (const advance of [0, 20, 60, 400]) for (const hold of [0, 0.5, 1]) assert.equal(model.level(p, advance, hold), 1);
+    assert.deepEqual([p.start, p.end, p.press, p.buildMs, model.buttonOverrides(id).adaptive], [100, 100, "instant", undefined, 1]);
+  }
+  assert.equal(field("preset").value, "full");
+  choose("end", "80");
+  assert.equal(field("preset").value, "custom");
+  choose("button", "right");
+  assert.equal(field("preset").value, "full");
+  choose("preset", "ease");
+  assert.equal(model.buttonOverrides("right").start, undefined);
+  assert.equal(model.buttonOverrides("left").end, 80, "split arrows: only the selected arrow changes");
+  assert.ok(dom.byId(field("preset").getAttribute("aria-describedby")).textContent.includes("RIGHT only"));
+  choose("button", "left"); choose("fullEdge", "left");
+  assert.equal(field("preset").value, "custom");
+  choose("preset", "full");
+  assert.equal(model.buttonOverrides("left").fullEdge, undefined);
+  assert.equal(field("preset").value, "full");
+  // export round trip keeps the preset
+  choose("button", "right"); choose("preset", "full");
+  const saved = JSON.parse(JSON.stringify(model.normalizeProfiles({ v: 1, buttons: { right: model.buttonOverrides("right") } })));
+  assert.equal(saved.buttons.right.start, 100);
+  assert.equal(saved.buttons.right.adaptive, 1);
+});
+
+test("RESPONSE preset reads Bryce's live export unchanged (#6794)", () => {
+  const live = JSON.parse(fs.readFileSync(absSrc("tests/data/settings-live-export-2026-11-25.json"), "utf8"));
+  const profiles = live.settings.driving.touchButtonProfiles;
+  const storage = new Map([["touchButtonProfiles", profiles]]);
+  const store = { get: (k, f) => storage.has(k) ? storage.get(k) : f, getStored: k => storage.get(k), subscribe: () => () => {},
+    set(k, v) { storage.set(k, v); return true; } };
+  const { host, dom, editor } = boot({ GameStore: { store } });
+  editor.mount(host);
+  assert.equal(dom.byId("touch-test-preset").value, "ease");
+  assert.deepEqual(storage.get("touchButtonProfiles"), profiles);
+  assert.ok(dom.byId("touch-test-preset-help").textContent.includes("differ: slide distance is 51 px left and 90 px right"));
+});

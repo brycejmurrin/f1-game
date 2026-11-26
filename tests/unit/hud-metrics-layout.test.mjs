@@ -489,3 +489,16 @@ test("F-13 slice 7: the #hud stack reads earlier siblings with ~, not body:has()
     assert.deepEqual(specificity(now), specificity(was), now);
   }
 });
+
+// #6615: the ERS label's line box fits the bar. At `line-height: normal` each flex item of .hud-energy-label (the
+// "ERS" text and #hud-energy-n) was 21px tall in a 16px label, spilling 2.5px a side (MacBook 1728x1117, UI SIZE 115:
+// n 959.2-980.5 vs label 961.7-978.0, scrollHeight 19 vs 16). Emulated rects on the 11-25 export after the fix, all
+// five readouts on (CSS px, x y → r b): portrait 393x852 ERS 170 523 → 223 529 below OT 180 493 → 213 508;
+// landscape 852x393 ERS 405 290 → 537 305 below OT 319 250 → 405 286 and AERO 464 250 → 567 286; 0 overlaps in both.
+test("the ERS label's line box fits its bar (#6615)", () => {
+  const rules = parseCss(readCssSource("css/hud.css"));
+  assert.equal(decl(rules, ".hud-energy-label", "line-height"), "1", "NORMAL text size: one em line box");
+  assert.equal(decl(rules, '#hud-energy', "overflow"), "hidden", "the bar clips, so a taller line box is cut text");
+  // TEXT LARGE / LARGER keep their own taller line on a min-height bar, and out-rank the base rule.
+  assert.equal(decl(rules, ':root:is([data-text-size="large"], [data-text-size="larger"]) .hud-energy-label', "line-height"), "1.15");
+});

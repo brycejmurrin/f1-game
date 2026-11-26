@@ -17,6 +17,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadGroups, nodeFlags } from "../gen/gen-test-groups.mjs";
 import { ALL_SKIP_OK } from "./tooling-fast.mjs";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const REPORTER = pathToFileURL(path.join(ROOT, "tools/ci/file-verdict-reporter.mjs")).href;
@@ -115,7 +116,12 @@ export async function runNodeGroup(name, extraArgs = [], { doc = loadGroups(), s
   }
 }
 
+export const USAGE = `usage: node tools/ci/run-node-group.mjs <group> <file>... -- [node --test args]
+Runs one generated Node test group (isolated benchmarks first, then the pool). The group and its files must match the
+generated roster (npm run gen).`;
+
 async function main() {
+  exitIfHelp(process.argv.slice(2), USAGE);
   const [name, ...args] = process.argv.slice(2), boundary = args.indexOf("--");
   const doc = loadGroups(), files = doc.groups[name]?.files;
   if (boundary < 0 || !files || JSON.stringify(args.slice(0, boundary)) !== JSON.stringify(files)) {

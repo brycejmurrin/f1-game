@@ -3,7 +3,7 @@
 // @skill survey-track
 import fs from "node:fs";
 import path from "node:path";
-import { buildSurveyGallery } from "../build-gallery.cjs";
+import { buildSurveyGallery } from "../shot-gallery.cjs";
 import {
   buildSurveyPlans,
   estimateSurveyMs,

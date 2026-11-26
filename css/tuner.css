@@ -925,14 +925,13 @@ body:not(.photo-mode):has(> #flyby:not([hidden]) > #flyby-inner[data-density="co
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-rows, #ct-rows) {
     min-height: 0;
   }
-  /* The corner previews are three jump buttons, not a second menu: at UI SIZE
-     150% on a 734x343 phone the balanced row wrapped them into two ~70px lines
-     and #ct-rows was left 15px — every slider hidden behind MONZA / SPA /
-     MONACO (survey-ui-matrix, 2026-09-24). One equal row at the tap floor. */
-  #camtune-inner[data-density="compact"] #ct-previews { --balance-basis: 0px; --balance-min: 0px; flex-wrap: nowrap; }
+  /* The corner previews are three jump buttons. Compact rail-off places them
+     in an explicit grid row (#6755 / #6461 row 9), so they may wrap with full
+     MONZA / SPA / MONACO labels instead of ellipsizing into unreadable chips. */
+  #camtune-inner[data-density="compact"] #ct-previews { --balance-basis: 0px; --balance-min: 0px; flex-wrap: wrap; }
   #camtune-inner[data-density="compact"] #ct-previews > button {
     min-width: 0; min-height: var(--tap-min); padding: 0 calc(var(--gap) * 0.25);
-    font-size: var(--fs-micro); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: var(--fs-micro);
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-head,
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-head { margin-bottom: 2px; }
@@ -1015,8 +1014,14 @@ body:not(.photo-mode):has(> #flyby:not([hidden]) > #flyby-inner[data-density="co
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] > .sheet-foot {
     grid-column: 1 / -1; grid-row: 4;
   }
+  /* Shared tap-paint floor for both tuners (#6755 / #6570 row 5). A --tap-min
+     + padding:0 here used to override the compact floor above; camera and
+     lighting then needed separate carves. Keep flex:1 so DONE/RESET/COPY share
+     the row without a sheet-specific #ct-close / #lt-close carve. */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] > .sheet-foot button {
-    min-width: 0; width: 100%; min-height: var(--tap-min); padding: 0;
+    min-width: 0; width: auto; max-width: 100%; flex: 1 1 0;
+    min-height: var(--tap-paint);
+    padding: calc(var(--gap) / 2) calc(var(--gap) * 2 / 3);
     font-size: var(--fs-micro); white-space: nowrap;
   }
   /* #lt-spread is NOT in this hide list: hiding it here removed the panel's
@@ -1123,13 +1128,11 @@ body:not(.photo-mode):has(> #flyby:not([hidden]) > #flyby-inner[data-density="co
   }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] > .sheet-foot button {
     margin: 0; min-width: 0;
-    /* --tap-min, NOT 0. `min-height: 0` here was cancelling the floor the block
-       above sets, and this rule wins on both order and the child combinator — so
-       on a landscape phone (852 wide, so the rail applies) at UI SIZE 80% RESET,
-       COPY VALUES and DONE measured 21-23 ACTUAL px, under WCAG 2.5.8's 24. The
-       intent of the 0 was to let the buttons shrink in the rail, and they still
-       do: --tap-min only floors the axis a thumb needs. */
-    padding: 5px 6px; font-size: var(--fs-micro); min-height: var(--tap-min);
+    /* Shared --tap-paint floor (#6755 / #6570 row 5). --tap-min used to win over
+       the compact floor above on order + the child combinator; camera and
+       lighting carves re-raised it. Floor here so both tuners match. */
+    padding: calc(var(--gap) / 2) calc(var(--gap) * 2 / 3);
+    font-size: var(--fs-micro); min-height: var(--tap-paint);
     white-space: normal; line-height: 1.1;
   }
   /* chips wrap as a block in the rail rather than the short-panel scroll strip */
@@ -1314,7 +1317,7 @@ body:not(.photo-mode):has(> #flyby:not([hidden]) > #flyby-inner[data-density="co
 }
 .sp-now-txt { min-width: 0; }              /* lets the ellipsis below actually engage */
 .sp-title, .sp-artist, .sp-on { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sp-title { font-size: 14px; font-weight: 700; }
+.sp-title { font-size: var(--fs-micro); font-weight: 700; }
 .sp-artist { font-size: var(--fs-micro); opacity: 0.75; }
 .sp-on { font-size: var(--fs-micro); opacity: 0.5; letter-spacing: var(--ls-2); margin-top: calc(var(--gap) / 6); }
 .sp-bar { height: 3px; border-radius: var(--r-xs); background: var(--card-line); overflow: hidden; margin: calc(var(--gap) / 6) 0 calc(var(--gap) * 2 / 3); }
@@ -1347,17 +1350,9 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
 #ga-head { margin: 0 0 calc(var(--gap) * 0.5); }
 
 /* ---------- UI Fit r5: camera tuner compact tap floor (#camtune only) ----------
-   Survey (artifacts/ui-fit-r5): on short landscape docks the shared rail-off /
-   rail-on foot rules floor buttons at --tap-min (24) with padding:0, which
-   overrides the compact --tap-paint floor set earlier in this file. Measured
-   ios-iphone-landscape-safari: #ct-close 67×27, preview chips truncated under
-   house --tap (52), #ct-copy-from select 108×26. Lighting keeps the shared
-   rules; these selectors are camera-only so a lighting pass is untouched. */
-#camtune-inner[data-density="compact"][data-rail="off"] > .sheet-foot button,
-#camtune-inner[data-density="compact"][data-rail="on"] > .sheet-foot button {
-  min-height: var(--tap-paint);
-  padding: calc(var(--gap) / 2) calc(var(--gap) * 2 / 3);
-}
+   Foot tap-paint floors folded into the shared :is(#lighting-inner, #camtune-inner)
+   rail-off / rail-on rules (#6755 / #6570 row 5). Preview chips, copy-from, and
+   mode chips stay camera-only. */
 #camtune-inner[data-density="compact"] #ct-previews > button {
   min-height: var(--tap-paint);
 }
@@ -1370,15 +1365,10 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
 }
 
 /* ---------- UI Fit r7: camera tuner rail-off portrait (#camtune only) ----------
-   Survey (ui-fit-r5 REPORT): ios-iphone-portrait (390x844 / 360x740) clips the
-   static rail-off foot (#ct-close) and #ct-prev-* (MONACO). Compact
-   rail-off is a 2-col grid (`auto minmax(0,1fr)`) that never PLACES
-   #ct-previews. The unplaced item lands in the AUTO column, sizes that column
-   to the nowrap preview min-content, and overflow-x:hidden clips the sheet —
-   measured ios-iphone-portrait: #ct-close +20, #ct-prev-monaco +32,
-   #ct-modes +47. Lighting keeps the shared 2-col grid; camera already spans
-   tabs 1 / -1, so one minmax(0,1fr) column plus an explicit preview row
-   keeps #ct-* inside. House --tap / --tap-paint floors stay (no soft taps). */
+   Compact rail-off is a 2-col grid that never PLACES #ct-previews; the unplaced
+   item lands in the AUTO column and clips the sheet. One minmax(0,1fr) column
+   plus an explicit preview row keeps #ct-* inside. Preview chips wrap with full
+   labels (#6461 row 9); foot tap-paint lives on the shared :is() rules. */
 #camtune-inner[data-density="compact"][data-rail="off"] {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -1388,35 +1378,13 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
   min-width: 0;
   --balance-basis: 0px;
   --balance-min: 0px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 #camtune-inner[data-rail="off"] #ct-previews > button {
   min-width: 0;
   min-height: var(--tap-paint);
   padding: 0 calc(var(--gap) * 0.25);
   font-size: var(--fs-micro);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-#camtune-inner[data-density="compact"][data-rail="off"] > .sheet-foot button {
-  min-width: 0;
-  width: auto;
-  max-width: 100%;
-  flex: 1 1 0;
-  min-height: var(--tap-paint);
-}
-#camtune-inner[data-rail="off"] > .sheet-foot button {
-  min-width: 0;
-  width: auto;
-  max-width: 100%;
-  min-height: var(--tap-paint);
-}
-#camtune-inner[data-rail="off"] > .sheet-foot #ct-close {
-  width: auto;
-  max-width: 100%;
-  min-width: 0;
-  min-height: var(--tap-paint);
 }
 #camtune-inner[data-rail="off"] #ct-modes,
 #camtune-inner[data-rail="off"] #ct-rows {
@@ -1432,17 +1400,9 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
 } /* @layer components */
 
 /* ---------- UI Fit r6: lighting tuner compact tap floor (#lighting only) ----------
-   Same root as r5/camera (#1530): shared rail-off / rail-on foot rules floor
-   buttons at --tap-min with padding:0, overriding the compact --tap-paint
-   floor. Survey r5 rank 2: 16 soft taps/cell = FX tab 42×52 + 12 --slider
-   ranges + RESET/COPY/DONE ~27–29 tall. Lighting-only so the r5 camera carve
-   stays untouched. */
+   Foot tap-paint floors folded into the shared :is(#lighting-inner, #camtune-inner)
+   rail-off / rail-on rules (#6755 / #6570 row 5). Category chips stay lighting-only. */
 @layer components {
-#lighting-inner[data-density="compact"][data-rail="off"] > .sheet-foot button,
-#lighting-inner[data-density="compact"][data-rail="on"] > .sheet-foot button {
-  min-height: var(--tap-paint);
-  padding: calc(var(--gap) / 2) calc(var(--gap) * 2 / 3);
-}
 #lighting-inner #lt-tabs .lt-tab {
   min-width: var(--tap-paint);
 }
@@ -1548,9 +1508,10 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
 /* Keep the heading's intrinsic width so Preview wraps instead of covering it
    when the flying dock narrows to 300px. */
 .editor-workspace .ew-title { font: inherit; font-weight: 800; margin: 0; flex: 1 0 auto; min-width: min-content; }
-/* 12 PAINTED px FLOOR (#6512): the title (font: inherit), Preview and the tools summary inherit 16 px, 11.2 painted at
-   UI SIZE 70. max() changes nothing at UI SIZE 75 % and up; --fs-floor is 12 / --ui-scale. */
-.editor-workspace :is(.ew-toolbar, .ew-tools > summary) { font-size: max(1em, var(--fs-floor)); }
+/* 12 PAINTED px FLOOR (#6512, #6599): the title (font: inherit), Preview, the tools drawer (COPY VALUES, RESET) and a
+   row's lone button (RESET CARD) inherit 16 px, 11.2 painted at UI SIZE 70. max() changes nothing at UI SIZE 75 % and
+   up; --fs-floor is 12 / --ui-scale. */
+.editor-workspace :is(.ew-toolbar, .ew-tools, .adv-item > button) { font-size: max(1em, var(--fs-floor)); }
 .editor-workspace .ew-toolbar button, .editor-workspace .ew-tools > summary {
   min-height: var(--ew-tap); min-width: var(--ew-tap); touch-action: manipulation;
 }

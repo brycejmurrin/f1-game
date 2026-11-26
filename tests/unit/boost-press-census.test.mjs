@@ -7,9 +7,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { frames, measureBoostPresses, PRESSES, DEPLOY_FRAMES, SPACING } from "../../tools/perf/boost-press-census.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 /** A fake game: `heldFrames` animation frames run before physics does (the warm hold), then every frame is live. */
 function fakeGame({ heldFrames }) {
@@ -70,7 +70,7 @@ test("frames(n) waits for n live ticks: frames inside a hold do not count", asyn
 test("a press made during a hold is read after physics has seen it, and every window is the same live length", async () => {
   // 63 held frames is the failing run's shape: the control window (60) plus the 3-frame deploy read.
   const world = fakeGame({ heldFrames: SPACING + DEPLOY_FRAMES + SPACING + 3 });
-  const cwd = process.cwd(), tmp = fs.mkdtempSync(path.join(os.tmpdir(), "boost-census-"));
+  const cwd = process.cwd(), tmp = mkTmpDir("boost-census-");
   process.chdir(tmp);
   try {
     await withGlobals(world, async () => {
@@ -94,7 +94,7 @@ function pinnableGame() {
   return { world, calls };
 }
 async function inTmp(run) {
-  const cwd = process.cwd(), tmp = fs.mkdtempSync(path.join(os.tmpdir(), "boost-census-"));
+  const cwd = process.cwd(), tmp = mkTmpDir("boost-census-");
   process.chdir(tmp);
   try { await run(); } finally { process.chdir(cwd); fs.rmSync(tmp, { recursive: true, force: true }); }
 }

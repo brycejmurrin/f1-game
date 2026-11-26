@@ -796,7 +796,8 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   border: 1px solid var(--plate-line); border-radius: var(--r-xs);
   background: color-mix(in srgb, var(--look-hud-bg) 55%, transparent);
 }
-.hud-energy-label { position: absolute; inset: 0; font-size: var(--fs-micro); letter-spacing: 0.06em; font-weight: 800; display: flex; align-items: center; justify-content: center; color: var(--text); text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
+/* line-height 1: at `normal` each flex item's line box (21px at 14px) spilled the 16px bar by 2.5px a side (#6615). */
+.hud-energy-label { position: absolute; inset: 0; font-size: var(--fs-micro); line-height: 1; letter-spacing: 0.06em; font-weight: 800; display: flex; align-items: center; justify-content: center; color: var(--text); text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
 /* TEXT LARGER GROWS THE BAR. The label rides --fs-micro (16/18px at LARGE /
    LARGER) inside a bar whose height every layout pins in px (14-18), so the
    ERS label was cut in half: scroll 22 vs client 16 at 1280x720, 20 vs 13 on

@@ -1,5 +1,5 @@
 "use strict";
-// build-gallery.cjs — survey HTML where two cells that share a name stay two entries.
+// shot-gallery.cjs — survey HTML where two cells that share a name stay two entries.
 // @doc Survey gallery entries stay distinct when shot names collide, including the image each card points at.
 // @skill survey-track
 const fs = require("node:fs");

@@ -821,3 +821,14 @@ test("setTimeoutMs raises the silence that ends the session", () => {
   for (let i = 201; i <= 300; i++) p.a.pump(t + i * 100);  // 30 s
   assert.equal(p.a.alive(), false, "past it");
 });
+
+test("a confirmed clock step fires onClockStep (#6544 row 5)", () => {
+  const p = pair({ latency: 50, skew: 5000 });
+  let steps = 0;
+  p.a.onClockStep(() => { steps++; });
+  p.advance(3000);
+  assert.equal(steps, 0, "no step during steady sync");
+  p.setSkew(2000);
+  p.advance(3000);
+  assert.ok(steps >= 1, "the step reached the handler");
+});

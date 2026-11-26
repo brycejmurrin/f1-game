@@ -1422,6 +1422,7 @@
         "tests/unit/net-stub-surface.test.mjs",
         "tests/unit/net-transport.test.mjs",
         "tests/unit/net-trystero-api.test.mjs",
+        "tests/unit/netplay-lap-clock.test.mjs",
         "tests/unit/netplay-resilience.test.mjs",
         "tests/unit/rendezvous-worker.test.mjs",
         "tests/unit/track-codec.test.mjs"
@@ -1664,6 +1665,7 @@
         "tests/unit/real-race.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/save-file-golden.test.mjs",
+        "tests/unit/save-integrity-phase2.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/season-calendar-default.test.mjs",

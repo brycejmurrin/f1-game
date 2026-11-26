@@ -123,7 +123,7 @@ test("garage and race lens controls keep POV independent and pass the same focus
   assert.equal(depth.value, "off");
   assert.match(status.textContent, /Depth focus is off/);
   send("pointerdown", 245, 130); send("pointerup", 245, 130);
-  assert.equal(b.PS.lens().focus, null);
+  assert.equal(b.PS.lens().focus, undefined, "Depth focus off: no focus at all, not autofocus (#6445)");
   assert.equal(reticle.hidden, true);
   depth.value = "on"; b.dom.dispatch(depth, { type: "change" });
   assert.equal(b.storage.get("apex26.photoDepthFocus"), "1");
@@ -1807,4 +1807,29 @@ test("creating a cold Photo facade and closing an unopened studio leave editor s
   assert.deepEqual(loads, []);
   assert.equal(await studio.ensureLoaded(), false);
   assert.deepEqual(loads, ["js/ui/photo-studio-ui.js"]);
+});
+
+// #6445 (batch #6756): with Depth focus Off the presented opts must carry photoFocus === undefined (no DOF pass);
+// null is tlx-post's autofocus-on-the-car contract and belongs to Depth focus On with no tap. Both producers
+// (game.js race present, garage setup-camera) pass photoLens.focus straight through.
+test("Depth focus off presents photoFocus undefined; on with no tap presents null (autofocus)", () => {
+  const b = boot();
+  b.G.gfx.photoFocusAvailable = () => true;
+  const sites = [GAME_JS, fs.readFileSync(new URL("../../js/garage/setup-camera.js", import.meta.url), "utf8")];
+  const exprs = sites.map((src) => src.match(/photoFocus\s*=\s*(photoLens && gfx\.photoFocusAvailable\?\.\(\) \? photoLens\.focus : undefined)/)[1]);
+  const present = (expr) => vm.runInNewContext(expr, { photoLens: b.PS.lens(), gfx: b.G.gfx }, { filename: "vm-page:photo-focus" });
+  assert.equal(b.api.open({ source: "race" }), true);
+  assert.equal(b.dom.byId("ps-depth-focus").value, "off");
+  for (const expr of exprs) assert.equal(present(expr), undefined, "Depth focus off: no DOF / autofocus pass");
+  assert.equal(b.PS.lens().mm, null);
+  const slider = b.dom.byId("ps-focal-length");
+  slider.value = "80"; b.dom.dispatch(slider, { type: "input" });
+  assert.equal(b.PS.lens().mm, 80, "the focal length still reaches the camera with focus off");
+  const depth = b.dom.byId("ps-depth-focus");
+  depth.value = "on"; b.dom.dispatch(depth, { type: "change" });
+  for (const expr of exprs) assert.equal(present(expr), null, "Depth focus on, no tap: autofocus (null)");
+  assert.equal(b.PS.lens().mm, 80);
+  depth.value = "off"; b.dom.dispatch(depth, { type: "change" });
+  for (const expr of exprs) assert.equal(present(expr), undefined, "turning it off again drops the pass");
+  b.api.close(false);
 });

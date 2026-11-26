@@ -72,6 +72,15 @@ const DesktopGraphics = (() => {
     const rows = Object.assign({}, ...Object.values(groups));
     return `${names.length} effect${names.length > 1 ? "s" : ""} reduced to hold frame rate: ${names.map(n => (rows[n] || [n])[0]).join(", ")}.`;
   }
+  // The first option's label of a Graphics-details stepper. A phone (GLX.isMobile) shows "Preset" (every phone row is off
+  // by preset). Any other narrow viewport (a touch device whose UA GLX does not call a phone, #6461 row 7) cannot fit
+  // "Use preset · Off" in the stepper cell, so it gets the short "Preset · Off", which still names the preset's value.
+  // Chosen by width, never by UA; NARROW_PX sits above the 852 px iPhone 15 landscape and below a laptop window.
+  const NARROW_PX = 900;
+  function presetLabel(value, mobile, width) {
+    if (mobile) return "Preset";
+    return (width < NARROW_PX ? "Preset · " : "Use preset · ") + value;
+  }
   let expand;
   function mount() {
     const panel = document.getElementById("pm-panel-graphics");
@@ -79,7 +88,7 @@ const DesktopGraphics = (() => {
     // "Use preset" names what the CURRENT preset gives (GfxQuality.presetDefault), so the rules live in one place. A phone's
     // 90 px stepper cell fits "Preset" (every phone row is off by preset); the option's aria-label keeps the full value.
     const presetOn = effect => GfxQuality.presetDefault(effect, GfxQuality.current()) ? "On" : "Off";
-    const values = effect => [["", GLX.isMobile ? "Preset" : "Use preset · " + presetOn(effect)], ["on", "On"], ["off", "Off"]];
+    const values = effect => [["", presetLabel(presetOn(effect), GLX.isMobile, window.innerWidth)], ["on", "On"], ["off", "Off"]];
     const nameOption = (sel, effect) => sel.options[0]?.setAttribute("aria-label", `Use preset (${presetOn(effect)})`);
     const RULES = { high: "on from HIGH", ultra: "on from ULTRA", extreme: "EXTREME only", cinema: "EXTREME only, in garage, photo and replay" };
     const ruleText = effect => "Preset: " + (GLX.isMobile ? "off unless you turn it on." : (RULES[GfxQuality.presetRule(effect)] || "off at every preset") + ".");
@@ -240,5 +249,5 @@ const DesktopGraphics = (() => {
     SettingsSearch.register("graphics-details", options);
     indexed = true;
   }
-  return Object.freeze({ mount, indexSearch, shedText });
+  return Object.freeze({ mount, indexSearch, shedText, presetLabel });
 })();

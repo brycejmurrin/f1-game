@@ -28,10 +28,12 @@ const OvertakeMode = (function () {
   // otEarned (under 1 s at this lap's detection line), otArmed (may press now),
   // otT (seconds of push left while deploying, else 0 — what deployTaper, the
   // AI and the HUD already read), and the crossing trackers _otS/_otLap.
+  const CUT = "cut gate-closed";
   const DETECT_FRAC = 0.9;   // default Detection Line: 90 % of the lap from the timing line
 
   function consts() { return (typeof PhysicsConsts !== "undefined" && PhysicsConsts) || {}; }
   function energy() { const P = consts(); return (P.OT_MJ || 0.5) / (P.ES_MJ || 4); }
+  function rate(pushS) { return energy() / Math.max(0.5, pushS || 4); }   // allowance per second of push
   function mj(c) { return c && c.otE > 0 ? c.otE * (consts().ES_MJ || 4) : 0; }
 
   // The Detection Line as a RACING-frame lap fraction (0 = the timing line).
@@ -41,8 +43,7 @@ const OvertakeMode = (function () {
   // measured from the line.
   function detectFrac(def) {
     const f = def && def.otDetectFrac;
-    if (Number.isFinite(f) && typeof TrackSpace !== "undefined") return TrackSpace.sceneryFrac(def, f);
-    return DETECT_FRAC;
+    return Number.isFinite(f) && typeof TrackSpace !== "undefined" ? TrackSpace.sceneryFrac(def, f) : DETECT_FRAC;
   }
   const _detectBy = new WeakMap();   // per track object, weakly: never pins a dropped world
   function detectS(track) {
@@ -69,9 +70,11 @@ const OvertakeMode = (function () {
   }
 
   function reset(c) {
-    c.otE = 0; c.otOn = false; c.otEarned = false; c.otArmed = false; c.otT = 0;
-    c._otS = null; c._otLap = null;   // re-seeded from the car on its next tick
-    c._otHold = false;               // grace: keep a fresh grant across one Activation
+    c.otE = c.otT = 0; c.otOn = c.otEarned = c.otArmed = false;
+    // _otHold: a grant made while the gate was shut, kept until it reopens.
+    // _otShut: the gate shut as arm() last saw it (null = not yet); _otAct: an
+    // Activation this tick. _otS/_otLap are re-seeded from the car next tick.
+    c._otHold = false; c._otS = c._otLap = c._otShut = c._otAct = null;
   }
 
   function detectionCrossed(c, track) {
@@ -82,7 +85,7 @@ const OvertakeMode = (function () {
   // to the car ahead on the road; `open` is RaceControl.otDetectOpen() — no
   // earning under the Safety Car or in low grip.
   function lines(c, track, gapAhead, open, detected = detectionCrossed(c, track)) {
-    if (c._otLap == null || c._otS == null) { c._otLap = c.lap | 0; c._otS = c.s; }
+    if (c._otLap == null) c._otLap = c.lap | 0;   // seed; _otS is set below (detection reads false while unseeded)
     if (detected) {
       // Number.isFinite: `null < 1` is true in JS (null → 0), so a missing gap
       // would earn Overtake with nobody ahead. game.js passes Infinity; keep the
@@ -97,35 +100,34 @@ const OvertakeMode = (function () {
     // and re-crossing (RaceControl.lineTransition's recross) is not re-granted
     // — nor stripped of what it was given the first time.
     //
-    // RaceControl.otEnabled stays false until the LEADER starts lap 2, so a
-    // detection on lap 0 that grants at the first S/F (lap → 1) would otherwise
-    // expire unused at the next Activation — the moment the gate opens. Hold
-    // ONLY that opening-lap grant across one Activation; later grants still
-    // lapse after one unused lap (B7.2.3(c)).
-    if ((c.lap | 0) > c._otLap) {
+    // A grant made while the race-wide gate (RaceControl.otEnabled, as arm()
+    // last saw it: _otShut) is shut — lap 1 before the leader starts lap 2, a Safety
+    // Car or red flag and its one-lap hold after, low grip — would otherwise
+    // lapse at the next Activation with no chance to use it (#6546 P9). HOLD
+    // it: it survives every Activation while the gate stays shut, and its one
+    // usable lap starts at the first Activation with the gate open (the
+    // crossing that opens it, for the leader: arm() releases it there). Later
+    // grants with the gate open still lapse after one unused lap (B7.2.3(c)).
+    if (c._otAct = (c.lap | 0) > c._otLap) {
       c._otLap = c.lap | 0;
       const left = c.otE;
-      if (c.otEarned) {
-        c.otE = energy();
-        c._otHold = (c.lap | 0) === 1;
-      } else if (c._otHold && left > 0) {
-        c._otHold = false;   // kept through the gate-closed Activation
-      } else {
-        c.otE = 0;
-        c._otHold = false;
-      }
-      if (c.otE > 0 && c.otEarned) note(c, "granted mj=" + mj(c).toFixed(2));
-      else if (left > 0 && !(c.otE > 0)) note(c, "lapsed unused=" + (left * (consts().ES_MJ || 4)).toFixed(2) + "MJ");
-      c.otEarned = false; c.otOn = false;
+      if (c.otEarned) { c.otE = energy(); c._otHold = c._otLap === 1 || c._otShut; }
+      else if (!c._otHold || !(left > 0)) { c.otE = 0; c._otHold = false; }
+      else if (!c._otShut) c._otHold = false;   // held, gate open (or never armed): this lap is its lap
+      if (c.otEarned) note(c, "granted mj=" + mj(c).toFixed(2));
+      else if (left > 0 && !(c.otE > 0)) note(c, "lapsed unused=" + mj({ otE: left }).toFixed(2) + "MJ");
+      c.otEarned = c.otOn = false;
     }
   }
 
   // `gate`: the race-wide switch (otEnabled) and the car's own (not finished,
   // not held by the pit limiter). `speedOK`: above OT_MIN_SPEED.
+  // It also records the gate for lines()' hold: the crossing that opens it
+  // (the leader's, this very tick) starts a held allowance's usable lap.
   function arm(c, gate, speedOK) {
-    if (!gate) { if (c.otOn) note(c, "cut gate-closed"); c.otOn = false; }
-    c.otArmed = !!gate && !!speedOK && c.otE > 0 && !c.otOn;
-    return c.otArmed;
+    if (!(c._otShut = !gate) && c._otAct) c._otHold = false;
+    if (!gate) { if (c.otOn) note(c, CUT); c.otOn = false; }
+    return c.otArmed = !!gate && !!speedOK && c.otE > 0 && !c.otOn;
   }
 
   // After the fire decision. A HUMAN's press toggles (the button is an edge,
@@ -135,19 +137,18 @@ const OvertakeMode = (function () {
   function prepare(c, fire, gate, speedOK, pushS) {
     let started = false;
     const wasOn = c.otOn;
-    if (!gate || !(c.otE > 0)) c.otOn = false;
-    else if (fire && c.otOn && c.human) c.otOn = false;
-    else if (fire && c.otArmed) { c.otOn = true; started = true; }
+    if (!gate || !(c.otE > 0) || fire && c.otOn && c.human) c.otOn = false;
+    else if (fire && c.otArmed) c.otOn = started = true;
     if (started) note(c, "on mj=" + mj(c).toFixed(2));
-    else if (wasOn && !c.otOn) note(c, gate ? "off" : "cut gate-closed");
-    c.otT = c.otOn && speedOK ? c.otE / (energy() / Math.max(0.5, pushS || 4)) : 0;
+    else if (wasOn && !c.otOn) note(c, gate ? "off" : CUT);
+    c.otT = c.otOn && speedOK ? c.otE / rate(pushS) : 0;
     return started;
   }
   // Only actual current-tick thrust pays the allowance. The returned fraction
   // caps a final partial tick's thrust to the energy it can fund.
   function consume(c, dt, thrust, pushS) {
     if (!(thrust && c.otOn && c.otT > 0 && dt > 0)) { c.otT = 0; return 0; }
-    const cost = energy() / Math.max(0.5, pushS || 4) * dt;
+    const cost = rate(pushS) * dt;
     const fraction = Math.min(1, c.otE / cost);
     c.otE = Math.max(0, c.otE - cost);
     if (c.otE <= 0) { c.otOn = false; note(c, "spent"); }

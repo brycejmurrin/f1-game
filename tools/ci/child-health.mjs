@@ -148,8 +148,11 @@ function openPrs() {
   return { prs };
 }
 
+const USAGE = `usage: node tools/ci/child-health.mjs --sessions <saved list_sessions page> [--results <id>=<file> ...] [--prs <saved pulls JSON>] [--json]
+Which open PRs name a child session that died as owner. Exit: 0 none dead, 1 some dead, 2 bad args, 3 no token / API error.`;
+
 function main(argv) {
-  exitIfHelp(argv, import.meta.url);
+  exitIfHelp(argv, USAGE);
   const known = ["--sessions", "--results", "--prs", "--json"];
   let f;
   try { f = makeFlags(argv, known); } catch (e) { console.error(e.message); return 2; }

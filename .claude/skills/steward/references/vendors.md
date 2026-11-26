@@ -8,17 +8,28 @@ The whole of SKILL.md. `subscribe_pr_activity` on the PR while CI runs on your h
 
 ## Cursor cloud agent (`lane:cursor`, self-contained issues only)
 
-`hosts.cursor.enabled` is false today, so Bryce or the Grok launcher starts it. **Drafter** — after opening the draft
-PR, subscribe once with `subscribe_github_ci` (its branch) and `subscribe_github_pr` (the PR). A CI notification is not
-a new task. A red on its own head: fix it, at most 2 fix pushes. When CI is green or the cap is spent: refresh the
-Plan and Hand-off block, unsubscribe, stop. **Steward** (drives one existing PR to merge): subscribe at start, fix reds
-on its head, run `node tools/ci/ready-gate.mjs --pr <n>` when the Plan is done, and stay subscribed until the PR merges
-or closes (a passing ready-gate is not the end). Never sleep-poll, use timers or shell loops, and never comment on its
-own PR (it echoes back as a wake). The Cursor token does not add labels, claim, post issue comments, or open issues:
-put `lane:cursor` and `land` in the block's `next:` line; Bryce or a later Claude lane applies them. Symbols go through
-apex-lsp (`lsp_outline`, `lsp_definition`, `lsp_callers`, then `lsp_diagnostics` once after the edit); grep is for
-comments, docs, and CSS. Do not spawn task_v2 scouts. Gate order: edit, `npm run gen`, `tooling-fast --changed` once,
-commit, push. One more gate only when GitHub says CONFLICTING. Cursor's entry is `.cursor/rules/apex-shared.mdc`.
+`hosts.cursor.enabled` is false today, so Bryce or the Grok launcher starts it.
+
+**PR tools (direct, built-in):** `CreatePullRequest`, `ManagePullRequest` (draft flip, close) and
+`EditPullRequestLabels` — they work (used on #6114, #6127, #6130). Call them directly; never search
+`get_mcp_tools` for them. **Issues:** Cursor has no issue-write tool (cannot comment on, create or label
+issues). Put issue claims in the Hand-off `next:` line; DAD or a Claude lane posts them. Never use `gh api`,
+a token read, or a browser to write issues.
+
+**Drafter** — after opening the draft PR, subscribe once with `subscribe_github_ci` (its branch) and
+`subscribe_github_pr` (the PR). A CI notification is not a new task. A red on its own head: fix it, at most
+2 fix pushes. When draft CI is green: run `node tools/ci/closing-refs.mjs --pr <n>` and
+`node tools/ci/ship-pr.mjs --pr <n>` (exit 0), then ManagePullRequest `draft:false`, then
+EditPullRequestLabels add `land`. On an already-ready PR use `node tools/ci/ready-gate.mjs --pr <n>` instead.
+Many PRs carry `land` at once; the train batches up to 12; never push to `train/**` or `train-next/**`. Cap
+spent: refresh Plan and Hand-off, unsubscribe, stop. Never sleep-poll, use timers or shell loops, and never
+comment on its own PR (it echoes back as a wake). Fence owner line:
+`owner: cursor:<agent id> until <ISO UTC, at most 4 h ahead>`.
+
+Symbols go through apex-lsp (`lsp_outline`, `lsp_definition`, `lsp_callers`, then `lsp_diagnostics` once after
+the edit); grep is for comments, docs, and CSS. Do not spawn task_v2 scouts (including CI-triage). Gate order:
+edit, `npm run gen`, `tooling-fast --changed` once, commit, push. One more gate only when GitHub says
+CONFLICTING. Cursor's entry is `.cursor/rules/apex-shared.mdc`.
 
 Cursor loads `.claude/skills/` and `.claude/agents/` natively. It enforces a card's read-only status only through its
 own `readonly:` key, which our cards do not carry, so tell a reviewer subagent in its prompt not to edit. In a cloud

@@ -238,3 +238,12 @@ test("pollLiveShell cache-busts every fetch with a query unique per attempt and 
   assert.equal(new Set(busts.filter((_, i) => i % 2 === 0)).size, 3, "each attempt busts differently");
   assert.equal(busts[0], busts[1], "the pair within one attempt shares its bust");
 });
+
+test("#6757: --help prints usage on stdout and exits 0; bad args still exit 2", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const run = (...a) => spawnSync(process.execPath, ["tools/ci/poll-live-shell.mjs", ...a], { encoding: "utf8" });
+  const h = run("--help");
+  assert.equal(h.status, 0);
+  assert.equal(h.stdout.split(" ").slice(0, 3).join(" "), "usage: node tools/ci/poll-live-shell.mjs");
+  assert.equal(run().status, 2);
+});

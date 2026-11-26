@@ -1,6 +1,6 @@
 "use strict";
 // survey-gallery-lib.cjs — list survey branches and read committed track shots from git.
-// @doc Shared helpers for build-gallery / pr-survey-panel: survey branch list, raw GitHub URLs, git blobs.
+// @doc Shared helpers for build-gallery / survey-gallery-page: survey branch list, raw GitHub URLs, git blobs.
 
 const { execFileSync } = require("child_process");
 const path = require("path");

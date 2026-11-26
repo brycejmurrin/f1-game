@@ -3,7 +3,7 @@
 // @doc #2572 render matrix: rebuild A/B, context loss, quality tiers, visibility/resize, night/mirror per backend.
 // @skill renderer-debug
 //
-//   node tools/perf/live-render-matrix.mjs --backend three|webgl2 [--gl-fallback 1|0]
+//   node tools/perf/live-render-matrix.mjs --backend three|webgl2 | --leg glx|tlx-gl|tlx-native [--gl-fallback 1|0] [--cap-scale N] [--min-frames N]
 //        [--leg glx|tlx-gl|tlx-native] [--cap-scale N] [--min-frames N]
 //        [--tracks bahrain,monaco] [--cycles 3] [--rows 1,2,3,4,5] [--json PATH]
 //
@@ -42,7 +42,7 @@ function parseArgs(argv) {
     else if (a === "--cycles") o.cycles = Math.max(2, +next() | 0);
     else if (a === "--rows") o.rows = next().split(",").map(Number).filter(Boolean);
     else if (a === "--json") o.json = next();
-    else if (a === "-h" || a === "--help") { console.log("usage: node tools/perf/live-render-matrix.mjs --backend three|webgl2 [--gl-fallback 1|0] [--tracks a,b] [--cycles N] [--rows 1,2,3,4,5] [--json PATH]"); process.exit(0); }
+    else if (a === "-h" || a === "--help") { console.log("usage: node tools/perf/live-render-matrix.mjs --backend three|webgl2 | --leg glx|tlx-gl|tlx-native [--gl-fallback 1|0] [--cap-scale N] [--min-frames N] [--tracks a,b] [--cycles N] [--rows 1,2,3,4,5] [--json PATH]"); process.exit(0); }
     else throw new Error("unknown argument " + a);
   }
   if (o.leg) {

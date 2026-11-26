@@ -49,5 +49,31 @@ test("cards size through livSwatchPx from a measured box, not a literal", () => 
   const calls = lines.filter((l) => l.startsWith("const c = LiveryTex.swatchCanvas("));
   assert.deepEqual(calls, ["const c = LiveryTex.swatchCanvas(team.id, livs.find((l) => l.id === id), px.w, px.h, livBuild);"]);
   assert.equal(lines.filter((l) => l === "fitLivSwatches(container, team);").length, 1, "the build measures the laid-out box");
-  assert.equal(lines.filter((l) => l === "if (e && e.clientWidth) livBox[s] = [e.clientWidth * z, e.clientHeight * z];").length, 1);
+  assert.equal(lines.filter((l) => l === "if (e && e.clientWidth) livBox[s] = holdLivBox(livBox[s], e.clientWidth * z, e.clientHeight * z, same);").length, 1);
+});
+
+/* #6742: garage-pick-cost read cardReused 0 at pick 2 (113 paints, 113 blits). LiveryTex keys both card caches
+ * on team|WxH|look, and W×H is this measured box (clientWidth × zoom of a 1fr grid column, integer-snapped): a
+ * sub-pixel move of the options pane flipped it for every card at once, so every key was new to both caches.
+ * holdLivBox keeps the painted box through that jitter; a real move (past 8%) or a resize (csViewGen) adopts. */
+function holdLivBox() {
+  const near = src.match(/const near = \(a, b\) => [^\n]+/), hold = src.match(/const holdLivBox = [^\n]+/);
+  assert.ok(near && hold, "setup-sheet.js defines near and holdLivBox");
+  return vm.runInNewContext(near[0] + "\n" + hold[0] + "\nholdLivBox", {}, { filename: absSrc("js/garage/setup-sheet.js") });
+}
+
+test("a 1 px layout jitter keeps every card's cache key (the #6742 full miss)", () => {
+  const hold = holdLivBox(), px = livSwatchPx(), key = (b, d) => { const p = px(b[0], b[1], d); return p.w + "x" + p.h; };
+  for (const dpr of [1, 3]) for (const prev of [[144, 69], [38, 24], [96, 44]]) {
+    assert.equal(key(hold(prev, prev[0] + 1, prev[1], true), dpr), key(prev, dpr), `box ${prev} +1px at DPR ${dpr}`);
+    assert.equal(key(hold(prev, prev[0] - 1, prev[1] - 1, true), dpr), key(prev, dpr), `box ${prev} -1px at DPR ${dpr}`);
+  }
+  assert.notEqual(key([145, 69], 1), key([144, 69], 1), "unheld, the 1 px moves the key: the miss the spec caught");
+});
+
+test("a real box change or a resize adopts the measurement", () => {
+  const hold = holdLivBox();
+  assert.deepEqual([...hold([144, 69], 200, 69, true)], [200, 69], "a wider pane repaints at its size");
+  assert.deepEqual([...hold([144, 69], 144, 90, true)], [144, 90], "a taller card adopts too");
+  assert.deepEqual([...hold([144, 69], 145, 69, false)], [145, 69], "csViewGen moved: re-fit exactly");
 });

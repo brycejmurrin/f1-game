@@ -59,6 +59,7 @@ const NetSession = (function () {
     const stateHandlers = [];          // fn(bytes, fromPeerTimeMs)
     const snapshotHandlers = [];       // fn(decodedSnapshot, arrivalMs), validated once here
     const closeHandlers = [];
+    const stepHandlers = [];
 
     let pingId = 0;
     let lastPingAt = -Infinity;
@@ -115,6 +116,9 @@ const NetSession = (function () {
           samples = [];
           stepRun.forEach((x) => samples.push(x));
           stepRun = [];
+          // Packets already buffered carry t from the OLD offset: tell netplay
+          // so it can drop them instead of splicing them into the new timeline.
+          fire(stepHandlers);
         }
         // Hold the outlier OUT of `samples` until the run confirms a step.
         // Otherwise a single lower-RTT disagreeing PONG becomes `best` at once
@@ -316,7 +320,9 @@ const NetSession = (function () {
         return this;
       },
       onClose(fn) { closeHandlers.push(fn); return this; },
+      onClockStep(fn) { stepHandlers.push(fn); return this; },
       clearHandlers() {
+        stepHandlers.length = 0;
         stateHandlers.length = 0;
         snapshotHandlers.length = 0;
         closeHandlers.length = 0;

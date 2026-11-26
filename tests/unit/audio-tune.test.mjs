@@ -2871,3 +2871,29 @@ test("two slowly closing rivals settle: gain within 3 %, rate within 0.004 (#505
   A.setRivals([]);
   assert.deepEqual(A.rivalState().map((v) => v.gain), A.rivalState().map(() => 0), "a hard 0 still mutes exactly");
 });
+
+// #6768 (#6544 row 7): stopEngineGraph silenced ErsLayer and RivalAudio but not the crowd bed, which clicked.
+test("stopEngine silences the crowd bed with the rest of the engine graph", () => {
+  const { GameAudio: A, vctx } = boot();
+  const calls = [];
+  vm.runInContext("var CrowdAudio = { silence(t) { __crowdCalls.push(t); } };", Object.assign(vctx, { __crowdCalls: calls }));
+  A.init();
+  A.startEngine();
+  assert.equal(calls.length, 0, "precondition: starting the engine does not silence the crowd");
+  A.stopEngine();
+  assert.equal(calls.length, 1, "stopEngine must call CrowdAudio.silence once");
+  assert.equal(typeof calls[0], "number", "it must pass the stop time so the fade is scheduled, not a hard cut");
+});
+
+// #6768 (#6544 row 8): the gravel cap ignored the ignition-cut depth, so gravel + cut could pull engGain below 0.
+test("GRAVEL at full strength under a cylinder cut never takes the engine gain below zero", async () => {
+  const A = await sampleEngine();
+  A.setTune(TUNE_IDENTITY);
+  A.setTune({ gravel: 3 });
+  // Part throttle off the deploy: the ignition-cut texture is on (thr 0.1..0.72, deploy < 0.05).
+  A.setEngine(0, 0, false, 0.5, 5, { throttle: 0.4, deploy: 0, energy: 1 });
+  assert.ok(A.cylCutDepth() > 0, "precondition: the cylinder cut is active");
+  assert.ok(A.gravelDepth() > 0, "precondition: gravel is audible");
+  assert.ok(A.gravelDepth() + A.cylCutDepth() <= A.engineLevel() + 1e-9,
+    `gravel ${A.gravelDepth()} + cut ${A.cylCutDepth()} exceeds the engine level ${A.engineLevel()} — engGain goes negative`);
+});

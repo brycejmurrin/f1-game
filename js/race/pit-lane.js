@@ -942,7 +942,11 @@ var PitLane = (function () {
         // read it, and the commit/abort state machine never advances.
         // tests/unit/pit-lane-vm.test.mjs ("a commitment is made on the ENTRY
         // ROAD…") catches it in one assertion.
-        if (st !== "none") { c.pitState = "none"; c.pitT = 0; if (c.local) { arm(c, false); c.pitCommitted = false; } }
+        if (st !== "none") {
+          // A stop counted at the box latch but never fitted did not happen (clearArm's rule): un-count it.
+          if (st === "box" && !c.pitFitted) c.pitStops = Math.max(0, (c.pitStops | 0) - 1);
+          c.pitState = "none"; c.pitT = 0; if (c.local) { arm(c, false); c.pitCommitted = false; }
+        }
         // THE ENTRY ROAD, before the entry line: where a LOCAL car commits —
         // holding the lane's tarmac arms the stop, and the limiter waits for
         // the line — and where it can still change its mind, by holding the
@@ -1311,6 +1315,8 @@ var PitLane = (function () {
     /** The lane's net cost in seconds at racing speed — the number that makes
      *  a 2-stop at Monaco read as the mistake it is. `estimate` refines it
      *  under a caution; this is the plain figure the STRATEGY row shows. */
+    // The limiter bleeds speed at BRAKE * 0.5 (game.js CAUTION_BRAKE), not full BRAKE: price the brake-down at that rate.
+    const LIMITER_BRAKE = 0.5;
     function lossS() { return lossAt(STRAIGHT_V); }
     /** …at a given fraction of the envelope for the road outside the lane, so
      *  the caution estimate is the SAME formula at a slower road rather than a
@@ -1331,7 +1337,7 @@ var PitLane = (function () {
       // …and the stop also costs the brake down to the limit and the drive back
       // up, which happen OUTSIDE the span. Lost time for a speed change is
       // (v1-v2)^2 / (2*v1) per unit of accel, both ways.
-      const aUp = G.aTop ? Math.max(1, G.aTop()) : 12, aDn = G.BRAKE ? Math.max(1, G.BRAKE) : 35;
+      const aUp = G.aTop ? Math.max(1, G.aTop()) : 12, aDn = G.BRAKE ? Math.max(1, G.BRAKE * LIMITER_BRAKE) : 35;
       const dv = Math.max(0, straight - Math.max(1, limit()));
       const swing = (dv * dv) / (2 * straight) * (1 / aUp + 1 / aDn);
       return Math.max(zz.boxS, slowM / Math.max(1, limit()) + zz.boxS - slowM / straight + swing);
@@ -1760,7 +1766,7 @@ var PitLane = (function () {
       if (!c) return;
       c.pitArmed = false; c.pitState = "none"; c.pitT = 0; c.pitNext = null; c.pitStops = 0; c.pitWhy = "";
       c.pitCommitT = 0; c.pitAbortT = 0; c.pitCommitted = false; c.pitOutT = 0; c.pitPos0 = 0;
-      c.pitFitted = false; c.pitReplans = 0; c._recutLap = null; c._planLap = null; c._rivalStop = false; c._stuckFrom = null;
+      c.pitFitted = false; c.pitWorked = 0; c.pitReplans = 0; c._recutLap = null; c._planLap = null; c._rivalStop = false; c._stuckFrom = null;
       // The teach is per SESSION, not per page load — and over for good once
       // a stop has been completed (release).
       if (c.local) { for (const k in _said) delete _said[k]; _lastCue = null; }

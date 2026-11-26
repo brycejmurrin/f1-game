@@ -268,7 +268,7 @@ test("TLX decal runs: A6's live-record guard, one material per run, and the norm
 
 test("blueWatch.tick gets the pooled _blueCtx, never a per-step literal (issue #1649)", () => {
   const g = gameSource();
-  assert.match(g, /const _blueCtx = \{ total: 0, vRef: 0, caution: 0, race: true \}/);
+  assert.match(g, /const _blueCtx = \{ total: 0, vRef: 0, caution: 0, owed: 0, race: true \}/);
   assert.match(g, /blueWatch\.tick\(player, ranked, _blueCtx, dt\)/);
   assert.equal(/blueWatch\.tick\([^)]*\{/.test(g), false, "a literal is back in the race step");
 });
