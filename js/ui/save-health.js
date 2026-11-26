@@ -3,14 +3,12 @@ const SaveHealth = (function () {
   "use strict";
   const CACHE_PREFIXES = ["apex26.api.", "apex26.realrace."];
   const mounted = new WeakMap();
+  // The row's save family names the group (SaveSchemaRegistry SECTIONS, #6602 phase 3); a
+  // key no registry row knows is a cache when it has a cache prefix, else "Other".
   function category(key) {
-    if (CACHE_PREFIXES.some((p) => key.startsWith(p))) return "Downloaded response caches";
-    if (/^apex26\.career/.test(key)) return "Career saves";
-    if (/^apex26\.season/.test(key)) return "Season saves";
-    if (/^apex26\.(customTeam|customLogo|parts\.|setup\.|setupPresets\.|livery\.)/.test(key)) return "Garage work";
-    if (/^apex26\.(ghost|inputGhost|ttlb\.)/.test(key)) return "Laps and ghosts";
-    if (/^apex26\.(customTracks|customTrackDraft(?:Prev)?|trackDesigner|tracks\.)/.test(key)) return "Authored circuits";
-    return "Other settings and data";
+    const f = typeof SaveSchemaRegistry !== "undefined" && SaveSchemaRegistry.family ? SaveSchemaRegistry.family(key) : null;
+    if (f) return f.health;
+    return CACHE_PREFIXES.some((p) => key.startsWith(p)) ? "Downloaded response caches" : "Other settings and data";
   }
   function dependencies(opts) {
     opts = opts || {};

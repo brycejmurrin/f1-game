@@ -19,8 +19,8 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../.
 const src = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 const run = (ctx, f, tail = "") => vm.runInContext(src(f) + tail, ctx, { filename: absSrc(f) });
 
-// The pre-#6602 rules, copied verbatim from save-health.js:6-14 and store.js:340/441/448
-// at ccac4113. They are the oracle; nothing in js/ may read them from here.
+// The pre-#6602 rules, copied verbatim at ccac4113 from SaveHealth's category() and store.js's
+// careerKey, MIRROR_KEY and AUTHORED_KEY. They are the oracle; nothing in js/ may read them from here.
 const OLD = {
   health(key) {
     if (["apex26.api.", "apex26.realrace."].some((p) => key.startsWith(p))) return "Downloaded response caches";
@@ -142,8 +142,29 @@ test("the store mirror set and career writer lock equal the pre-#6602 regexes", 
     for (const k of keys) {
       const o = oracle(k), tag = `${k} (${withRegistry ? "registry" : "bare VM"})`;
       assert.equal(store.mirrorPolicy.includes(k), o.mirror !== null, `mirror ${tag}`);
-      if (store.mirrorPolicy.authored) assert.equal(store.mirrorPolicy.authored(k), o.mirror === "authored", `authored ${tag}`);
-      if (store.mirrorPolicy.writerLocked) assert.equal(store.mirrorPolicy.writerLocked(k), o.writerLock, `lock ${tag}`);
+      assert.equal(store.mirrorPolicy.authored(k), o.mirror === "authored", `authored ${tag}`);
+      assert.equal(store.mirrorPolicy.writerLocked(k), o.writerLock, `lock ${tag}`);
     }
   }
+});
+
+test("callers follow family(): a key the registry places is grouped, mirrored and locked by it", async () => {
+  const fam = { section: "progress", health: "Probe group", mirror: "authored", writerLock: true };
+  const ctx = vm.createContext({ console, Math, JSON, Object, Array, Number, String, Map, Set, isFinite,
+    Teams: { LIST: [] }, Log: { warn() {}, info() {} },
+    SaveSchemaRegistry: { family: (k) => (String(k).replace(/^apex26\./, "") === "probeKey" ? fam : null), noteWrite() {} } });
+  seedSaveMigrate(ctx);
+  Object.assign(ctx, { setTimeout, clearTimeout, Promise, window: { addEventListener() {} },
+    localStorage: { length: 0, key: () => null, getItem: () => null, setItem() {}, removeItem() {} } });
+  run(ctx, "js/core/store.js", ";globalThis.store=GameStore.store");
+  run(ctx, "js/ui/save-health.js", ";globalThis.Health=SaveHealth");
+  assert.equal(ctx.store.mirrorPolicy.includes("probeKey"), true);
+  assert.equal(ctx.store.mirrorPolicy.authored("probeKey"), true);
+  assert.equal(ctx.store.mirrorPolicy.writerLocked("probeKey"), true);
+  const disk = { length: 1, key: () => "apex26.probeKey", getItem: () => "1" };
+  const r = await ctx.Health.inspect({ localStorage: disk, storage: {}, restorePoints: {} });
+  assert.equal(r.categories[0].name, "Probe group");
+  // A key no row knows keeps the legacy prefix rule in the store (another build's career key).
+  assert.equal(ctx.store.mirrorPolicy.includes("career.driver.9"), true);
+  assert.equal(ctx.store.mirrorPolicy.writerLocked("career.driver.9"), true);
 });
