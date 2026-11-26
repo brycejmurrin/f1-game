@@ -1398,26 +1398,28 @@ const TrackDesigner = (function () {
   async function loadFrom(text, generation = ++replacementGeneration) {
     const s = String(text || "").trim();
     if (!s) { message("Paste a share code or link first", true); return false; }
-    let code = null, raw = null;
+    let code = null, fromDesign = null;
     if (s[0] === "{") {
       let obj = null; try { obj = JSON.parse(s); } catch (_) { obj = null; }
       if (obj && obj.format === custom.COLLECTION_FORMAT) return loadCollection(obj);
       const f = TrackCodec.fromFile(obj);
       if (!f) { message("Not an Apex 26 circuit file", true); return false; }
-      if (f.code) code = f.code; else raw = f.design;
+      // The file's design is the richer record; its code is the fallback (#6871).
+      if (f.design) { try { fromDesign = custom.sanitize(f.design); } catch (_) { fromDesign = null; } }
+      if (!fromDesign) code = f.code || null;
     } else if (/[#&]track=/.test(s)) {
       try { code = TrackCodec.fromHash(s.slice(Math.max(0, s.indexOf("#")))); } catch (_) { code = null; }
       if (!code) { message("That link carries no readable share code", true); return false; }
     } else code = s;
-    let it = null;
-    if (code) {
+    let it = fromDesign;
+    if (!it && code) {
       let r = null;
       try { r = await TrackCodec.decode(code); } catch (_) { r = null; }
       if (generation !== replacementGeneration) return false;
       if (!r) { message("That share code could not be read", true); return false; }
       if (!r.ok) { message("That share code was refused (" + r.reason + ")", true); return false; }
       it = r.design;
-    } else it = custom.sanitize(raw);
+    }
     if (!it) { message("That design could not be loaded", true); return false; }
     const kept = load(it, "import");
     showPane("design");
