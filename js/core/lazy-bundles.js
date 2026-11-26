@@ -724,6 +724,19 @@ armAudioGesture();   // at create: game.js's pointerdown/keydown kicks are the o
 // after a throw re-runs only the part that threw. Re-running RadioVoice.create /
 // Announcer.create stacked their page-lifetime observers (audit4 F1 / UB3).
 const audioReadyDone = new Set();
+// The five stub-then-recreate instances (radio, announcer, rivals, carSfx, panel)
+// are HANDLES (#6952): one object for the page's life. adoptAudio copies the real
+// instance's property descriptors onto it in place (no Proxy, no forwarders, so a
+// data member such as RadioVoice `pack` reads as the real one) and drops stub-only
+// keys. audioHandle makes a writable handle of a frozen source (a real inert()).
+function adoptAudio(handle, real) {
+  if (!real || real === handle) return handle;
+  const d = Object.getOwnPropertyDescriptors(real);
+  for (const k of Object.keys(handle)) if (!(k in d)) delete handle[k];
+  for (const k in d) { d[k].configurable = true; if ("value" in d[k]) d[k].writable = true; }
+  return Object.defineProperties(handle, d);
+}
+const audioHandle = (obj) => (obj && Object.isExtensible(obj) ? obj : adoptAudio({}, obj));
 function audioReadyOnce(key, fn) {
   if (audioReadyDone.has(key)) return;
   fn();
@@ -1148,7 +1161,7 @@ watchRouteCss();
 // After every const above (loadBackendScripts reads AUDIO_FILES): a flag-gated inject, never awaited.
 bootDevPanels();
 mountBridgeLinkDoor();
-return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureReplayBroadcast, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, ensureRouteCss, ensureSavesData, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
+return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureReplayBroadcast, ensureNet, ensureAudio, adoptAudio, audioHandle, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, ensureRouteCss, ensureSavesData, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
   // The instance game.js made, for modules that load outside it (#5555): the global is only this factory.
   let live = null;
