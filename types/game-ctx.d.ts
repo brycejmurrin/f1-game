@@ -168,6 +168,15 @@ interface StoreApi {
   [key: string]: unknown;
 }
 
+/** The narrow port a LEARN drill's begin() gets from its host (js/learn-drills/registry.js, #6920 U4.1), never all
+    of G and no new G member. startRace/goRolling/announce/store are GameCtx's; retry is the coach's RETRY LAP, which
+    game.js hands the host (G.coach's type has no retry); physState is __apex's, null while LAZY_AGENT is absent. */
+interface DrillPort extends Pick<GameCtx, "startRace" | "goRolling" | "store"> {
+  retry(): boolean;
+  physState(): Opaque | null;
+  announce(msg: string, dur?: number, kind?: string): boolean;
+}
+
 /** One time-trial leaderboard row — GameStore.ttBoard(trackId). */
 type TTBoardRow = Opaque;
 
@@ -860,6 +869,8 @@ interface GameModuleFactory<TApi = Record<string, unknown>> {
 declare const AeroZones: GameModuleFactory;
 // js/editor/custom-tracks.js — create(G, { load, door? }): the TRACK DESIGNER door + its lazy bundle.
 declare const CustomTracks: GameModuleFactory;
+// js/learn-drills/registry.js (LAZY_LEARN) — create(G, { retry, setDirtyAir }): LEARN's drill host; begin() gets a DrillPort.
+declare const DrillRegistry: GameModuleFactory;
 declare const Collide: GameModuleFactory;
 declare const CarDraw: GameModuleFactory;
 declare const ShadowPass: GameModuleFactory;

@@ -846,7 +846,7 @@ const isQuali = () => session === "quali";
 // and `penalty`/`cuts` are ordinary fields on that car.
 // A Time Trial is always practisable, which is what the feature shipped as.
 // Cleared by startRace() so it can never leak from one session into the next.
-let practiceMode = false, learnAeroDrill = null;
+let practiceMode = false, drills = null;   // drills: LEARN's DrillRegistry host (js/learn-drills/registry.js), made on the first drill launch
 const isPractice = () => practiceMode || isTimeTrial();
 // A DUEL is a practice race against ONE bumped rival. Same trim that Time Trial
 // and Quali already do to `cars` after makeCars(); the rival's stats come from
@@ -2519,8 +2519,7 @@ async function startRaceBody() {
   // Learn drill starts unscored, and isPractice() handles Time Trial itself.
   // duelMode is NOT cleared: it is a race SETTING like difficulty or tyre wear,
   // chosen on the settings sheet and meant to stick until the player changes it.
-  const aeroDrill = learnAeroDrill;
-  practiceMode = !!aeroDrill;
+  const aeroDrill = drills?.active(); practiceMode = !!aeroDrill;
   releaseFieldScratch(); makeCars(); rlap("makeCars");
   coach.reset(); PerfGov.resetFrameStats();
   if (aeroDrill) {
@@ -2722,7 +2721,7 @@ function startRace() {
     rs.hidden = true;
     try { if (rs.open && typeof rs.close === "function") rs.close(); } catch (_) { /* already closed */ }
   }
-  practiceMode = !!learnAeroDrill;   // before loadingInfo() reads it
+  practiceMode = !!drills?.active();   // before loadingInfo() reads it
   if (!loadingScreen.phase()) { loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race"); }
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   // Software GL defers pack retry until after grid (#3584); hardware keeps idle prefetch here.
@@ -3466,8 +3465,8 @@ let flyingStart = FlyingStart.create(G, { realRace: () => realRace.isActive() ||
 var jumpStartPenalty = JumpStartPenalty.create(G, {
   autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,
 });   // LAZY_RACE_SESSION — recreated in onRaceSessionReady
-titleMenu = TitleMenu.create(G, openDataHub, () => { // returning-player, Daily and Learn (js/ui/title-menu.js)
-  if (!learnAeroDrill) LearnDoor.launchAeroDrill(G, drill => { learnAeroDrill = drill; }, level => { raceDirtyAir = level; });
+titleMenu = TitleMenu.create(G, openDataHub, id => { // returning-player, Daily and Learn (js/ui/title-menu.js); a LEARN drill (js/learn-drills/registry.js)
+  (drills ??= DrillRegistry.create(G, { retry: coach.retry, setDirtyAir: v => { raceDirtyAir = v; } })).launch(id || "aero");
 }, show => showTouchControls(show, false, show));   // the race dock previewed under LEARN's thumb trainer
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing(), lazyBundles.ensureReplayBroadcast),
@@ -4095,7 +4094,7 @@ function raceIntro(go) {
 function loadingInfo() {
   const real = realRace.intro();
   const out = {
-    track: Tracks.LIST[trackIdx], laps: learnAeroDrill ? 1 : raceLaps,
+    track: Tracks.LIST[trackIdx], laps: drills?.active() ? 1 : raceLaps,
     gp: real ? real.title : SeasonCal.gpName ? SeasonCal.gpName(Tracks.LIST[trackIdx]) : undefined,   // the 2026 REAL calendar renames two rounds (season-cal.js); a real race is its own event
     real,   // the Data Hub's real race (RealRace.intro): the event, whose car, from which lap — the announcer reads it
     weather: raceWeather, tod: raceTimeOfDay,
@@ -4400,7 +4399,7 @@ function quitToMenu() {
   loadingScreen.stop();
   if (skipToResults()) { resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.release(); announcer.stop && announcer.stop(); }   // a finished player's result is settled before the session is dropped
   setState("menu", "quit"); paused = false; releaseFieldScratch(true); Scopes.exit("race", { why: "quit" }); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
-  if (learnAeroDrill) { learnAeroDrill.restore(); learnAeroDrill = null; }
+  drills?.end("quit");
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -4503,7 +4502,7 @@ function update(dt) {
     Log.info("game", "manual recover");
   }
   if (state === "count") {
-    if (learnAeroDrill?.staging) return; // hold until the rolling start is ready
+    if (drills?.active()?.staging) return; // hold until the rolling start is ready
     // In a session the countdown is driven by the SHARED clock rather than by
     // accumulated dt, and the random hold is dictated by the host. Both matter
     // for fairness: accumulating dt independently lets the two grids drift
@@ -4662,7 +4661,7 @@ function update(dt) {
   if (aiLod) aiLod.step(cars, state === "race" && session === "race" && !isPractice() && !netPlay.active(), raceCtl.level, raceT, player, track ? track.total : 0);
   PerfSpans.begin("ai"); for (let i = 0; i < cars.length; i++) updateCar(cars[i], dt, ranked); PerfSpans.end("ai");   // per-car step: AI + player
   pits.stepEnd();
-  if (!learnAeroDrill && jumpStartPenalty.reactWindowOpen()) { // this drill starts with both cars at speed
+  if (!drills?.active() && jumpStartPenalty.reactWindowOpen()) { // this drill starts with both cars at speed
     for (const c of cars) jumpStartPenalty.tickReaction(c);
   }
   RaceControl.settleLineStep();   // finishers cannot be promoted to a new incident
@@ -7844,7 +7843,7 @@ function render(dt) {
   // depth write). Drawn against the PLAYER's speed for the dynamic colour.
   // Never in a flyby frame (`cine`: the editor preview, flybyCam, free-cam's flyby lens).
   const driverGuide = racing && !ceremonyView && player && !player.finished && !player.retired && !realRace.isWatch();
-  const drillMarkings = learnAeroDrill?.guide.draw(gfx, track && drivingLineApi(track), renderAlpha,
+  const drillMarkings = drills?.guide()?.draw(gfx, track && drivingLineApi(track), renderAlpha,
     driverGuide && state === "race" && !photoMode && !cine && !paused && !replayBuf.isScrubbing());
   if (!drillMarkings && state !== "menu" && !cine && track && player && (photoMode || driverGuide)) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
@@ -8254,7 +8253,7 @@ function render(dt) {
   // The lesson guide uses the existing transparent ghost draw and never joins the field.
   if ((isTimeTrial() || drillMarkings) && player && (state === "race" || state === "count")) {
     const replayGhost = GhostShare.hasGuest() ? GhostShare : Ghost;
-    const g = drillMarkings ? learnAeroDrill.guide.car() : (player.lap | 0) >= 1 ? replayGhost.at(player.lapTime) : null;
+    const g = drillMarkings ? drills.guide().car() : (player.lap | 0) >= 1 ? replayGhost.at(player.lapTime) : null;
     // Skip the ghost while it overlaps the player — at the lap start it sits on
     // your exact grid position, and in the cockpit/onboard cams its bodywork
     // fills the camera as a black box until you pull away ("starts dark, clears
@@ -9351,7 +9350,7 @@ function setPaused(p, why) {
   if (paused !== !!p) Log.info("game", "Race " + (p ? "paused" : "resumed") + " why=" + (why || "button") + " state=" + state + " raceT=" + raceT.toFixed(1));
   if (paused !== !!p && typeof TouchButtonActions !== "undefined") TouchButtonActions.cancelAll();
   paused = p; GameAudio.resetReplayScrub(); replayBuf.onPause(!!p); // REPLAY overlay while paused
-  if (p) learnAeroDrill?.guide.hide();
+  if (p) drills?.guide()?.hide();
   if (!netPlay.active()) { if (p) dropRaceWake(); else holdRaceWake(); UiExperience.resumeArm(G, !p && why !== "restart" && state === "race" && !realRace.isWatch()); }   // a paused screen may sleep; a networked race runs on under the card, and never holds for a resume countdown
   if (!p) {
     closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();

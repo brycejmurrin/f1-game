@@ -407,6 +407,7 @@
     "tests/unit/docs-integrity.test.mjs",
     "// Every DOM id literal in js/** exists (index.html, its own page, or a derived runtime creator), and shell-ids RUNTIME_IDS cannot go stale. ~1.5 s.",
     "tests/unit/dom-id-literals.test.mjs",
+    "tests/unit/drill-registry.test.mjs",
     "// Decorrelated DriverRatings.BASE + skill()/overall personality pins.",
     "tests/unit/driver-ratings-personality.test.mjs",
     "tests/unit/driving-coach.test.mjs",
