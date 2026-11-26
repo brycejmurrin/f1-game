@@ -448,3 +448,25 @@ test("follow(±1) from a retired car steps from where it retired, not where it w
     assert.equal(RR.replay().follow(-1), "RUS", "previous: the car directly ahead at retirement");
   } finally { g.close(); }
 });
+
+// #6889 C4: the retirement slot was used as an index into `running` NOW; a car ahead that retired later shifted it.
+test("follow(-1) from a retired car skips cars ahead of it that retired since (#6889 C4)", async () => {
+  const g = await createGame({ track: "baku", storage: { tyreWear: "real" } });
+  try {
+    const { G } = g;
+    const RR = vm.runInContext("RealRace", g.ctx);
+    const { script } = scriptIn(g);
+    // Order at STR's retirement (t=60): RUS(63), LEC(16), STR(18), VER(3). RUS's data ends later (t=100): running is [LEC, VER].
+    const traces = { frame: "track", cars: { 63: line(-14, 58, 0, -5, 100), 16: line(-22, 50, 1, -5, 200), 18: line(-30, 45, -1, -5, 60), 3: line(-40, 40, 2, -5, 200) } };
+    RR.launch(script, { seat: "LEC", watch: true, camera: "heli", traces, startLap: 1 });
+    await g.settle(() => G.track && G.track.def && G.track.def.id === "baku" && (G.state === "count" || G.state === "race"), 8000);
+    g.step(2);
+    g.apex.go();
+    assert.equal(RR.replay().follow("STR"), "STR");
+    RR.replay().setSpeed(8);
+    g.step(60 * 16);
+    const by = (code) => G.cars.find((c) => c.code === code);
+    assert.equal(by("STR").retired, true); assert.equal(by("RUS").retired, true); assert.equal(by("LEC").retired, false);
+    assert.equal(RR.replay().follow(-1), "LEC", "the car ahead at retirement that still runs, not the car at its old rank");
+  } finally { g.close(); }
+});
