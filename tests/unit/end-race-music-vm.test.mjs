@@ -90,3 +90,16 @@ test("source: endRace stops music; buildChampion does not re-finish", () => {
   assert.doesNotMatch(sheet, /function buildChampion\(\)[\s\S]*GameAudio\.finish\(\)/,
     "champion sheet must not stack a second fanfare");
 });
+
+test("results → qualifying sheet restarts menu music (#6886 row 1)", async () => {
+  const { g, sb, log } = await bootRaceAudio();
+  try {
+    g.G.endRace();
+    assert.ok(log.some((e) => e.fn === "stopMusic"), "endRace stopped the race loop");
+    const before = log.length;
+    await g.made.QualiNet.openQualiForNet(() => {});
+    assert.equal(g.G.state, "menu");
+    assert.ok(log.slice(before).some((e) => e.fn === "startMusic" && e.args[0] === -1),
+      "the quali sheet opened from a results sheet must not sit in silence");
+  } finally { g.close(); }
+});

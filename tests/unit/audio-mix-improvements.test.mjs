@@ -54,7 +54,7 @@ function auditionMusicHarness() {
   const S = vm.runInContext('GameAudioSoundtrack.create(host)', ctx), A = vm.runInContext('RaceMixAudition', ctx);
   S.addTracks([{ id: 'user:1', name: 'one', url: 'blob:one' }, { id: 'user:2', name: 'two', url: 'blob:two' }]); S.setMusicSource('user');
   const audio = { enabled: () => true, init() {}, debug: () => ({ engineOn: false }), currentTrackId: S.currentTrackId, musicBackend: S.musicBackend, startMusic: S.startMusic, stopMusic: S.stopMusic, musicPlaybackGeneration: S.musicPlaybackGeneration, stopMusicIfGeneration: S.stopMusicIfGeneration };
-  const start = () => A.start({ audio, store: { get: (key, d) => key === 'sfx' ? false : d } });
+  const start = () => A.start({ audio, store: { get: (key, d) => key === 'sfx' ? false : key === 'music' ? true : d } });
   return { A, S, media, timers, start };
 }
 test('audition Stop leaves a later manual track action playing, even when selecting the same track id', () => {
@@ -102,4 +102,23 @@ test('MY TRACKS asks for persistent storage once, after the first saved track, a
   const N = musicLibHarness(undefined); await N.init();
   assert.equal((await N.add([song('four')])).added, 1, 'no StorageManager: the upload still lands');
   assert.doesNotMatch(read('js/audio/music-lib.js').slice(0, 600), /forever/, 'the header no longer promises forever');
+});
+
+test('audition: music setting unset defaults to OFF, matching game.js (#6886 row 12)', () => {
+  const { A, S } = auditionMusicHarness();
+  A.start({ audio: { enabled: () => true, init() {}, debug: () => ({ engineOn: false }), currentTrackId: S.currentTrackId, musicBackend: S.musicBackend, startMusic: S.startMusic, stopMusic: S.stopMusic, musicPlaybackGeneration: S.musicPlaybackGeneration, stopMusicIfGeneration: S.stopMusicIfGeneration }, store: { get: (key, d) => key === 'sfx' ? false : d } });
+  assert.equal(S.currentTrackId(), null, 'an empty store must not start music');
+  A.stop();
+});
+test('soundtrack: SOUND OFF refuses playTrackId (#6886 row 7)', () => {
+  const { S } = auditionMusicHarness();
+  let on = true; const ctx = vm.createContext({ Log: { info() {}, warn() {} }, document: { hidden: false }, Audio: function () { return { play: () => Promise.resolve(), pause() {}, load() {}, removeAttribute() {} }; }, setTimeout, clearTimeout });
+  vm.runInContext(read('js/audio/soundtrack.js'), ctx, { filename: absSrc('js/audio/soundtrack.js') });
+  ctx.host = { context: () => ({ state: 'running', createGain: () => ({ gain: { value: 1, setTargetAtTime() {} }, connect() {} }), createMediaElementSource: () => ({ connect() {} }) }), master: () => ({}), clamp01: (v) => v, now: () => 0, enabled: () => on, engineRunning: () => false, sfxOk: () => true };
+  const T = vm.runInContext('GameAudioSoundtrack.create(host)', ctx);
+  T.addTracks([{ id: 'user:1', name: 'one', url: 'blob:one' }]); T.setMusicSource('user'); T.setMusicEnabled(true); T.stopMusic();
+  on = false;
+  assert.equal(T.playTrackId('user:1'), false); assert.equal(T.currentTrackId(), null);
+  on = true; assert.equal(T.playTrackId('user:1'), true);
+  void S;
 });

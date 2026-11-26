@@ -733,7 +733,7 @@ function auditionOn(h) {
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/race-mix-audition.js"), "utf8"), ctx, { filename: absSrc("js/audio/race-mix-audition.js") });
   const audition = vm.runInContext("RaceMixAudition", ctx);
   const start = () => audition.start({ audio: h.A, soundOn: () => true,
-    store: { get: (key, fallback) => key === "radioVoice" ? false : fallback } });
+    store: { get: (key, fallback) => key === "radioVoice" ? false : key === "music" ? true : fallback } });
   const deadline = () => [...timers.values()].find((t) => t.ms === 6000).fn();
   return { audition, timers, start, deadline };
 }
