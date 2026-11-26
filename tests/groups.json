@@ -902,6 +902,7 @@
     "// it must fail where the baseline is edited, not on a nightly.",
     "tests/unit/physics-baseline-provenance.test.mjs",
     "tests/unit/physics-characterization-vm.test.mjs",
+    "tests/unit/physics-correctness-6878.test.mjs",
     "tests/unit/physics-tune-sweep.test.mjs",
     "// pick-tests: a spec a selected group runs is not listed as unnamed (#5674).",
     "tests/unit/pick-tests-named-specs.test.mjs",
