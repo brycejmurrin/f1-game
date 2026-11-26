@@ -2770,3 +2770,63 @@ test("a newer generation is kept while a worker installs or waits, or this worke
     assert.deepEqual(h.deleted, ["apex26-320"], JSON.stringify(registration ?? "no registration"));
   }
 });
+
+// #6823 17d: OPTIONAL_ASSET_MS is an idle timeout, not a wall clock. A fake clock
+// owns every 4 s timer; the body stream advances it between chunks.
+function idleClock() {
+  let now = 0;
+  const timers = new Map();
+  const advance = (ms) => {
+    now += ms;
+    for (const [id, t] of [...timers]) if (t.due <= now) { timers.delete(id); t.callback(...t.args); }
+  };
+  const globals = {
+    setTimeout(callback, ms, ...args) {
+      if (ms !== 4000) return setTimeout(callback, ms, ...args);
+      const id = {}; timers.set(id, { due: now + ms, callback, args }); return id;
+    },
+    clearTimeout(id) { if (!timers.delete(id)) clearTimeout(id); },
+  };
+  return { advance, globals };
+}
+function trickleBody(text, { gapMs, stallAfter = Infinity }, clock) {
+  const bytes = Buffer.from(text), chunks = [];
+  for (let i = 0; i < bytes.length; i += 8) chunks.push(bytes.subarray(i, i + 8));
+  let sent = 0;
+  return new ReadableStream({
+    pull(ctrl) {
+      if (sent >= stallAfter) { queueMicrotask(() => clock.advance(4001)); return new Promise(() => {}); }
+      if (sent > 0) clock.advance(gapMs);
+      if (sent >= chunks.length) { ctrl.close(); return; }
+      ctrl.enqueue(new Uint8Array(chunks[sent++]));
+    },
+  });
+}
+function trickleHarness(opts) {
+  const clock = idleClock();
+  const body = "body of js/circuits/monza.js — a large lazy module on a slow phone link";
+  const hash = hash12(body), url = `${ORIGIN}/js/circuits/monza.js?v=${hash}`;
+  const ordinary = lazyShellFetch({ "js/circuits/monza.js": hash });
+  const h = createHarness({
+    globals: clock.globals,
+    fetchImpl: (request, init) => requestKey(request) === url
+      ? Promise.resolve(new Response(trickleBody(body, opts, clock), { status: 200 }))
+      : ordinary(request, init),
+  });
+  return { h, url };
+}
+
+test("a slow optional body that keeps arriving is cached past the 4 s mark (#6823 17d)", async () => {
+  // 10 chunks, 3 s apart: ~27 s in all, never 4 s without progress.
+  const { h, url } = trickleHarness({ gapMs: 3000 });
+  await h.lifecycleEvent("install").done();
+  assert.equal(h.stores.get("apex26-322").has(url), true, "an idle timer, not a wall clock");
+  assert.equal(h.skipped, 1);
+});
+
+test("an optional body that stalls past the idle window is still abandoned (#6823 17d)", async () => {
+  const { h, url } = trickleHarness({ gapMs: 1000, stallAfter: 3 });
+  await h.lifecycleEvent("install").done();
+  assert.equal(h.stores.get("apex26-322").has(url), false, "no chunk for 4 s gives up on the asset");
+  assert.equal(h.skipped, 1, "a stalled optional body never blocks the install");
+});
