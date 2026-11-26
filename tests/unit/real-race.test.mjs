@@ -49,6 +49,7 @@ function load({ realTyres = false } = {}) {
   // The drop-in speed is the AI's read of the road: the real corner model and the real constants.
   vm.runInContext("var window = globalThis;", ctx);   // consts.js publishes on window
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/consts.js"), "utf8"), ctx, { filename: absSrc("js/physics/consts.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/ai-start.js"), "utf8"), ctx, { filename: absSrc("js/physics/ai-start.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/ai-drive.js"), "utf8"), ctx, { filename: absSrc("js/physics/ai-drive.js") });
   evalRealRace(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race-pace.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race-pace.js") });

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 const ctx = vm.createContext({});
-for (const file of ['core/mat4', 'physics/ai-drive', 'physics/ai-corridor'])
+for (const file of ['core/mat4', 'physics/ai-start', 'physics/ai-drive', 'physics/ai-corridor'])
   vm.runInContext(readFileSync(new URL('../../js/'+file+'.js', import.meta.url),'utf8'), ctx);
 const A = vm.runInContext('AiCorridor',ctx);
 function scenario(extra = [], overrides = {}) {

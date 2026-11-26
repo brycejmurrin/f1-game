@@ -234,6 +234,7 @@
     "TrackGeom",
     "NetTransport",
     "AiDrive",
+    "AiStart",
     "Car3D",
     "F1API",
     "GLTF",

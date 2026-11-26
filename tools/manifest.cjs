@@ -298,6 +298,7 @@ const FULL = [
   "js/physics/vehicle.js", // tick scratch bags; loads before player-forces.js
   "js/physics/player-forces.js", // human combined-slip / Fy / yaw integrate (carve-headroom A); uses GripSteer after muF
   "js/physics/ai-strategy.js", // tyre-wear pace + stint planner; AiDrive re-exports the names
+  "js/physics/ai-start.js",   // AiStart: launch plan + lap-1 calm policy (AiDrive re-exports)
   "js/physics/ai-drive.js",
   "js/physics/ai-band.js",   // gap catch-up vs scripted fixed pace (carve-headroom D)
   "js/physics/ai-corridor.js",
@@ -921,6 +922,8 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/physics/ai-strategy.js"],     // AiStrategy binds M4.clamp at eval
   ["js/physics/ai-strategy.js", "js/physics/ai-drive.js"], // wrappers call AiStrategy.* (call time; bindTraits on first use)
   ["js/core/mat4.js", "js/physics/ai-drive.js"],         // AiDrive binds M4.clamp/lerp at eval
+  ["js/core/mat4.js", "js/physics/ai-start.js"],         // AiStart binds M4.clamp/lerp at eval
+  ["js/physics/ai-start.js", "js/physics/ai-drive.js"],  // AiDrive destructures AiStart at eval
   ["js/core/mat4.js", "js/physics/tyre-model.js"],       // TyreModel binds M4.clamp at eval
   ["js/physics/consts.js", "js/physics/tyre-model.js"],  // …and reads PhysicsConsts.BB_REF at eval
   ["js/physics/tyre-model.js", "js/game.js"],            // game.js validates the stored TYRE WEAR level at eval

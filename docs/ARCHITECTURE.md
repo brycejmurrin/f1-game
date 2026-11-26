@@ -545,6 +545,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `vehicle.js` | `Vehicle` | tag | VEHICLE tick scratch. |
 | `player-forces.js` | `PlayerForces` | tag | PLAYER FORCES: combined-slip budget, axle grip circle, soft tyre forces and the human rigid-body yaw/lateral integrate. |
 | `ai-strategy.js` | `AiStrategy` | tag | AI STRATEGY: tyre-wear pace and the stint planner. |
+| `ai-start.js` | `AiStart` | tag | AI START: the lights-out getaway plan and the lap-1 calm/headway policy, split from ai-drive.js (#6920 U4.2). |
 | `ai-drive.js` | `AiDrive` | tag | AI DRIVE: situation-aware decisions for the kinematic AI field. |
 | `ai-band.js` | `AiBand` | tag | AI PACE BAND: gap-to-player catch-up vs race-scripted fixed pace. |
 | `ai-corridor.js` | `AiCorridor` | tag | AI-only reachable passing lanes. |

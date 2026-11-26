@@ -17,6 +17,7 @@ const BRAKE = 22, LCAR = 4.8;
 const ctx = vm.createContext({ Math, console, Object, Array, Number, isFinite });
 vm.runInContext("var Log={dbg(){},info(){},warn(){},err(){},error(){},ok(){}};", ctx);
 vm.runInContext(readFileSync(new URL("../../js/core/mat4.js", import.meta.url), "utf8"), ctx);
+vm.runInContext(readFileSync(new URL("../../js/physics/ai-start.js", import.meta.url), "utf8"), ctx);
 vm.runInContext(readFileSync(new URL("../../js/physics/ai-drive.js", import.meta.url), "utf8"), ctx);
 const A = vm.runInContext("AiDrive", ctx);
 
