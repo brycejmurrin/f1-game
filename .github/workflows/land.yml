@@ -1047,6 +1047,17 @@ jobs:
             echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
             exit 0
           }
+          # recheck_fail <rc>: the merge-pause re-read after a merge refusal (#6797 row 2), through read_5xx as the first
+          # reads are: a 5xx or empty answer that outlasts the re-read hands the PR to `retry` (nothing merged, exit 0);
+          # the rate limit defers; any other failure keeps the merge's own exit (a read failure: retryable for a train).
+          recheck_fail() {
+            local rc=$1
+            defer_if_limited
+            [ "$rc" = 75 ] || { retryable=true; exit "$merge_rc"; }
+            echo "::notice::not merging #$n: GitHub answered 5xx or an empty body twice on a re-read after the merge refusal; re-gating within the existing retry budget" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
           defer_if_limited() {
             cat "$read_error" >&2
             if grep -Eiq 'HTTP 429|rate[ -]limit.*HTTP 403|HTTP 403.*rate[ -]limit' "$read_error"; then
@@ -1204,7 +1215,7 @@ jobs:
             *"is in clean status (enablePullRequestAutoMerge)"*)
               now=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/branches/$DEPLOY_BRANCH" --jq .commit.sha) || { retryable=true; exit "$merge_rc"; }
               pr=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/pulls/$n") || { retryable=true; exit "$merge_rc"; }
-              paused=$(GH_TOKEN="$GITHUB_TOKEN" merge_paused) || { retryable=true; exit "$merge_rc"; }
+              paused=$(GH_TOKEN="$GITHUB_TOKEN" read_5xx merge_paused) || recheck_fail "$?"
               [ "$paused" = false ] || { echo "::notice::not merging #$n: dispatch:merge-pause is set" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; }
               jq -e --arg head "$head" --arg base "$DEPLOY_BRANCH" '.state == "open" and .draft == false and .head.sha == $head and .base.ref == $base
                 and ([.labels[].name] | index("land") != null and index("hold") == null)' <<<"$pr" >/dev/null \
@@ -1233,7 +1244,7 @@ jobs:
           esac
           now=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/branches/$DEPLOY_BRANCH" --jq .commit.sha) || { retryable=true; exit "$merge_rc"; }
           pr=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/pulls/$n") || { retryable=true; exit "$merge_rc"; }
-          paused=$(GH_TOKEN="$GITHUB_TOKEN" merge_paused) || { retryable=true; exit "$merge_rc"; }
+          paused=$(GH_TOKEN="$GITHUB_TOKEN" read_5xx merge_paused) || recheck_fail "$?"
           [ "$paused" = false ] || exit "$merge_rc"
           jq -e --arg head "$head" --arg base "$DEPLOY_BRANCH" '.state == "open" and .draft == false and .head.sha == $head and .base.ref == $base
             and ([.labels[].name] | index("land") != null and index("hold") == null)' <<<"$pr" >/dev/null || exit "$merge_rc"
