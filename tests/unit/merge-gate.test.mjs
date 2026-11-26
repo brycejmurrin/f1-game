@@ -1163,6 +1163,9 @@ function runStep(script, env, files = {}) {
     `  if [[ "$*" == *"repos/$GITHUB_REPOSITORY/pulls "* && -n "\${GH_ARM_LIST_ERROR:-}" ]]; then echo "$GH_ARM_LIST_ERROR" >&2; return 1; fi;`,
     // GH_5XX_ON <substring>: the first GH_5XX_N (default 1) calls whose argv holds it fail with GH_5XX_MSG (a 503).
     `  if [ -n "\${GH_5XX_ON:-}" ] && [[ "$*" == *"$GH_5XX_ON"* ]] && [ "$(grep -cF -- "$GH_5XX_ON" "$GH_LOG")" -le "\${GH_5XX_N:-1}" ]; then echo "\${GH_5XX_MSG:-non-200 OK status code: 503 Service Unavailable body: \"no healthy upstream\"}" >&2; return 1; fi;`,
+    // GH_EMPTY_ON <substring> (#6711): the first GH_EMPTY_N (default 1) calls whose argv holds it get a 2xx with an EMPTY
+    // body: with --jq real gh fails "unexpected end of JSON input" (train #6702's arm), without it prints nothing.
+    `  if [ -n "\${GH_EMPTY_ON:-}" ] && [[ "$*" == *"$GH_EMPTY_ON"* ]] && [ "$(grep -cF -- "$GH_EMPTY_ON" "$GH_LOG")" -le "\${GH_EMPTY_N:-1}" ]; then [[ " $* " != *" --jq "* ]] || { echo "unexpected end of JSON input" >&2; return 1; }; return 0; fi;`,
     `  if [ "\${GH_STALL:-}" = true ]; then read -r -t 60 _ <&9; fi;`,
     `  while [ $# -gt 0 ]; do a=$1; shift; case "$a" in --jq) q=$1; shift ;; esac; done;`,
     `  case " \${args[*]} " in`,
@@ -3226,7 +3229,7 @@ test("land.yml arm (T2, #6382 job 138837647849): a GitHub 5xx on a first read is
     assert.deepEqual(JSON.parse(r.out.retry), { number: 7, head: HEAD7 }, `${on}: handed to retry`);
     assert.equal(r.out.backoff, undefined);
     assert.ok(!armed(r), `${on}: never arms on an unread state`);
-    assert.deepEqual(r.summary.split("\n").filter(Boolean), ["::notice::not arming #7: GitHub answered 5xx twice on the arm's first reads; re-gating within the existing retry budget"]);
+    assert.deepEqual(r.summary.split("\n").filter(Boolean), ["::notice::not arming #7: GitHub answered 5xx or an empty body twice on the arm's first reads; re-gating within the existing retry budget"]);
     assert.equal(r.calls.filter((c) => c.includes(on)).length, 2, `${on}: exactly one re-read`);
     r = go({ GH_5XX_ON: on, GH_5XX_N: "2", GH_5XX_MSG: "gh: Bad Gateway (HTTP 502)" });
     assert.deepEqual(JSON.parse(r.out.retry), { number: 7, head: HEAD7 }, `${on}: gh's own HTTP 502 form too`);
@@ -3237,6 +3240,58 @@ test("land.yml arm (T2, #6382 job 138837647849): a GitHub 5xx on a first read is
     assert.notEqual(r.status, 0, `${on}: the rate limit defers as before`);
     assert.equal(r.out.backoff, "true");
   }
+});
+
+test("land.yml arm (#6711, train #6702): an empty 2xx body on a first read is re-read once, then handed to retry, never exit 1", () => {
+  const run = LAND.jobs.arm.steps.find((s) => s.id === "arm").run;
+  const go = (extra = {}) => runStep(run, { ARM: JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A }), FAKE_PR: pr7(), NOW_TIP: TIP_A, LAND_TOKEN: "lt", GITHUB_TOKEN: "t", FAKE_STATUSES: OWN_GATE, ...extra });
+  const armed = (r) => r.calls.some((c) => c.includes(`pr merge 7 --repo o/r --auto --merge --match-head-commit ${HEAD7}`));
+  // The two merge-pause reads (the Dispatch issue list, then its events: PAUSED true makes the second one run), the PR
+  // read (no --jq: an empty stdout) and the tip read.
+  for (const [on, extra] of [["/issues -f", {}], ["/events", { PAUSED: "true", FAKE_PAUSE_EVENTS: "[]" }], ["repos/o/r/pulls/7", {}], ["/branches/", {}]]) {
+    let r = go({ ...extra, GH_EMPTY_ON: on, GH_EMPTY_N: "1" });
+    assert.equal(r.status, 0, `${on}: ${r.stderr}`);
+    assert.ok(armed(r), `${on}: one empty body, then the re-read answers: arms as before`);
+    assert.equal(r.out.retry, undefined);
+    r = go({ ...extra, GH_EMPTY_ON: on, GH_EMPTY_N: "2" });
+    assert.equal(r.status, 0, `${on}: an empty body twice is not a failed job (${r.stderr})`);
+    assert.deepEqual(JSON.parse(r.out.retry), { number: 7, head: HEAD7 }, `${on}: handed to retry`);
+    assert.equal(r.out.backoff, undefined);
+    assert.ok(!armed(r), `${on}: never arms on an unread state`);
+    assert.deepEqual(r.summary.split("\n").filter(Boolean), ["::notice::not arming #7: GitHub answered 5xx or an empty body twice on the arm's first reads; re-gating within the existing retry budget"]);
+    assert.equal(r.calls.filter((c) => c.includes(on)).length, 2, `${on}: exactly one re-read`);
+    const needs = { resolve: { result: "success" }, post: { outputs: { retry: "" } }, arm: { result: "success", outputs: r.out } };
+    assert.equal(ghExpr(LAND.jobs.retry.if, { needs }), true, `${on}: the retry job dispatches the re-gate`);
+  }
+});
+
+test("land.yml arm (#6711): a train whose arm fails is handed to retry, and the re-gated pass arms it; a non-train failure is not", () => {
+  const run = LAND.jobs.arm.steps.find((s) => s.id === "arm").run;
+  const train = pr7({ head: { sha: HEAD7, ref: "train/20261125T2140-6690-6695" }, labels: [{ name: "land" }, { name: "train" }] });
+  const go = (extra = {}) => runStep(run, { ARM: JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A }), FAKE_PR: train, NOW_TIP: TIP_A, LAND_TOKEN: "lt", GITHUB_TOKEN: "t", FAKE_STATUSES: OWN_GATE, ...extra });
+  const armed = (r) => r.calls.some((c) => c.includes(`pr merge 7 --repo o/r --auto --merge --match-head-commit ${HEAD7}`));
+  const failed = go({ GH_MERGE_RC: "17", GH_MERGE_STDERR: "unknown merge failure" });
+  assert.equal(failed.status, 17, "the failure stays visible");
+  assert.deepEqual(JSON.parse(failed.out.retry), { number: 7, head: HEAD7 }, "the passing train is not stranded unarmed");
+  assert.match(failed.summary, /arm of train #7 failed \(exit 17\); re-gating within the existing retry budget/);
+  const needs = { resolve: { result: "success" }, post: { outputs: { retry: "" } }, arm: { result: "failure", outputs: failed.out } };
+  assert.equal(ghExpr(LAND.jobs.retry.if, { needs }), true, "retry runs after the failed arm");
+  // The re-gated pass (the dispatched retry) finds the same green, unarmed train and arms it.
+  const next = go();
+  assert.equal(next.status, 0, next.stderr);
+  assert.ok(armed(next), "the next pass arms the train");
+  assert.equal(next.out.retry, undefined);
+  // A train read that fails on 404 also hands it over; the rate limit still only defers (backoff, no retry).
+  const nf = go({ GH_5XX_ON: "/branches/", GH_5XX_N: "1", GH_5XX_MSG: "gh: Not Found (HTTP 404)" });
+  assert.notEqual(nf.status, 0);
+  assert.deepEqual(JSON.parse(nf.out.retry), { number: 7, head: HEAD7 });
+  const limited = go({ GH_5XX_ON: "/branches/", GH_5XX_N: "1", GH_5XX_MSG: "gh: API rate limit exceeded for installation (HTTP 403)" });
+  assert.equal(limited.out.backoff, "true");
+  assert.equal(limited.out.retry, undefined);
+  // A non-train PR's failure stays a plain failure (no budget spent on it).
+  const plain = go({ FAKE_PR: pr7(), GH_MERGE_RC: "17", GH_MERGE_STDERR: "unknown merge failure" });
+  assert.equal(plain.status, 17);
+  assert.equal(plain.out.retry, undefined);
 });
 
 test("land.yml arm (#6045): a stale status read is re-read; a mismatch that outlasts the re-reads is re-gated, any other skip is not", () => {
