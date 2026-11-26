@@ -397,3 +397,18 @@ test("the pit canopy luminaires throw at the working lane, not at the racing roa
     }
   }
 });
+
+test("R10: a lamp beside an upper deck resolves to the upper deck's node, not the lower", () => {
+  const api = loadLightTune();
+  const n = 200, px = new Float64Array(n), py = new Float64Array(n), pz = new Float64Array(n);
+  const rx = new Float64Array(n), rz = new Float64Array(n), hw = new Float64Array(n);
+  for (let k = 0; k < n; k++) {      // out along the lower deck, back along a deck 10 m above
+    px[k] = k < 100 ? k : 199 - k; py[k] = k < 100 ? 0 : 10; pz[k] = 0; rx[k] = 0; rz[k] = 1; hw[k] = 7;
+  }
+  api.LT.lampGapFill = 0; api.LT.lampDensity = 1;
+  const post = { k: 150, side: 1, kind: "halide", x: 49, y: 23, z: 13 };   // upper deck, lens 13 m up
+  const L = api.buildTrackLights({ n, total: n, px, py, pz, rx, rz, hw, def: { theme: "green", id: "t" }, lampPosts: [post] });
+  const ay = L[8], len = Math.hypot(L[7], L[8], L[9]);
+  const want = -13 / Math.hypot(3.5 - 13, 13);   // aim at the upper deck, 13 m below the lens
+  assert.ok(Math.abs(ay / len - want) < 1e-6, `aim ay ${ay / len} should point at the upper deck (${want})`);
+});
