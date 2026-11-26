@@ -83,7 +83,7 @@
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.2899,  0.6219],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.3, 0.62])
-    turns: [0.0525, 0.0696, 0.0918, 0.0968, 0.1123, 0.2588, 0.299, 0.3321, 0.341, 0.3636, 0.4405, 0.4924, 0.5238, 0.8376, 0.8433, 0.8555, 0.9885],
+    turns: [0.0525, 0.0696, 0.0918, 0.0968, 0.1123, 0.2588, 0.299, 0.3321, 0.341, 0.3636, 0.4405, 0.4924, 0.5238, 0.8376, 0.848, 0.8555, 0.9885],
     barrier: { a: [0.97, 0.84, 0.12], b: [0.10, 0.10, 0.12], c: [0.85, 0.12, 0.48], night: [0.28, 0.10, 0.32], tyre: [0.97, 0.84, 0.12] },  // casino gold/black + neon magenta
     furniture: { tree: "none",  fol: [0.22, 0.42, 0.18], lamp: "arm",   lc: [1.0, 0.86, 0.55] },
     kit: { marshal: "hut",       rail: "armco",       fence: "chainlink", tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "scaffold",  hoarding: "led" },
