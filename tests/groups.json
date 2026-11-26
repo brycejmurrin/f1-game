@@ -618,6 +618,8 @@
     "tests/unit/grid-default-vm.test.mjs",
     "tests/unit/group-junit-per-process.test.mjs",
     "tests/unit/harness-display.test.mjs",
+    "// #6795 rows 4 and 6: OVERALL SPEED and CAR WEIGHT help lines in index.html. ~0.05 s.",
+    "tests/unit/help-copy-6795.test.mjs",
     "// #5223: the circuit picker hero ships a 1600 px still beside the 800 px one and asks for it by srcset.",
     "tests/unit/hero-still-density.test.mjs",
     "tests/unit/home-world.test.mjs",
