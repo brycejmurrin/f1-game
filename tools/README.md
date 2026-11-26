@@ -42,7 +42,7 @@ Root — the load-order truth and the car studio page; every consumer hardcodes 
 | **agent-run.mjs** | Runs commands with selectable output levels and saved stdout/stderr; --read retrieves without rerunning. | check-changes |
 | **carview.html** | Standalone isolated car photo studio (no track, no game.js): Car3D + LiveryTex via GLX; headless API `window.CARVIEW`. | playwright-probe |
 | **garage-angles-fetch.mjs** | Download garage-before-<sha> for a SHA (default merge-base with ship); nearest ancestor + compare staleness. | garage-parts-livery |
-| **manifest.cjs** | Load-order truth: `FULL`, `DEFERRED`, `LAZY_AGENT`, `HARD_EDGES`, `TRACK_VM`; index.html must match. | check-changes |
+| **manifest.cjs** | Load-order truth: `FULL`, `DEFERRED`, `LAZY_AGENT`, `HARD_EDGES`, `TRACK_VM`, `TIERS`; index.html must match. | check-changes |
 | **serve.mjs** | Local static server for the working tree on 127.0.0.1:3456 (replaces `npx serve`): no-store, no fd leak, pinned in-repo. | check-changes |
 
 ### `tools/agent/`
