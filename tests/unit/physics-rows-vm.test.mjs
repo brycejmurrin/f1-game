@@ -22,6 +22,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
+const { neutralMods, withMods } = require("./neutral-mods-vm.cjs");
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -540,11 +541,9 @@ test("past the peak the tyre lets go: a full-lock slide settles under the limit 
   a.jump(0.1, 70);
   // The NEUTRAL ×1 car (statMult only), the one this tyre-curve recipe was measured on: since #6705 the works
   // car keeps a grip reserve and full lock at 70 m/s no longer takes its rear past the peak.
-  const p = g.G.player, mods0 = p.mods, S = g.sandbox, st = S.Career.teamStats(p.team) || p.team.stats;
-  p.mods = { speed: S.Parts.statMult(st.speed), accel: S.Parts.statMult(st.accel),
-    cornering: S.Parts.statMult(st.cornering), braking: S.Parts.statMult(st.braking) };
-  a.act({ steer: 1, throttle: true }, 1 / 60, 55);
-  p.mods = mods0;
+  // withMods restores the shared car's mods in finally (#6731).
+  const p = g.G.player;
+  withMods(p, neutralMods(g), () => a.act({ steer: 1, throttle: true }, 1 / 60, 55));
   const xR = PC.CS_REAR * Math.abs(p.slipRear) / p.gripRear;   // normalised slip, DRIFT 0 so csR = CS_REAR
   const util = Math.abs(p.forceRear) / p.gripRear;             // |F| / mu (rearUtil itself is x / peak, monotonic)
   a.headless(false);
