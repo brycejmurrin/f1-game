@@ -17,6 +17,13 @@ const SaveHealth = (function () {
     for (const [re, name] of LEGACY_GROUPS) if (re.test(key)) return name;
     return "Other settings and data";
   }
+  // Dates follow the GAME's language (I18n), never the browser's default locale (#6900).
+  const STAMP_FORMAT = { year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" };
+  function stamp(at) {
+    const d = new Date(at);
+    if (typeof I18n !== "undefined" && I18n.date) { try { return I18n.date(d, STAMP_FORMAT); } catch (_) { /* fall through */ } }
+    return d.toLocaleString("en");
+  }
   function dependencies(opts) {
     opts = opts || {};
     // Accessing the browser's storage properties can itself throw (denied
@@ -106,7 +113,7 @@ const SaveHealth = (function () {
         for (const point of report.history) measurements.appendChild(node(doc, "p",
           (point.flavour === "myteam" ? "MY TEAM" : "DRIVER") + " SLOT " + (point.slot + 1) + " history: " +
           (point.state === "saved" ? "last restore point saved" : point.state === "saving" ? "capturing restore point" : "restore point unavailable (" + point.reason + ")") +
-          " · " + new Date(point.at).toLocaleString() + ". Primary save status is separate."));
+          " · " + stamp(point.at) + ". Primary save status is separate."));
         status.textContent = "Cleanup removes only downloaded response caches. Career saves, garage work, ghosts and authored circuits are kept.";
       } catch (_) {
         if (revision === reportRevision) status.textContent = "Storage report is unavailable. Try refreshing again.";
@@ -140,7 +147,7 @@ const SaveHealth = (function () {
       list.replaceChildren();
       if (!result.ok || !result.items.length) { list.appendChild(node(doc, "p", result.ok ? "No restore points for this slot yet." : "Restore history could not be read.")); return; }
       for (const item of result.items) {
-        const b = node(doc, "button", new Date(item.at).toLocaleString() + " · " + item.reason + " · " + item.summary.year + " round " + (item.summary.round + 1)); b.type = "button"; b.className = "sel-chip";
+        const b = node(doc, "button", stamp(item.at) + " · " + item.reason + " · " + item.summary.year + " round " + (item.summary.round + 1)); b.type = "button"; b.className = "sel-chip";
         b.onclick = async () => {
           const token = await api.preview(f, i, item.id); if (revision !== historyRevision || !list.contains(b)) return;
           if (!token.ok) { status.textContent = "Cannot preview restore: " + token.reason + "."; return; }
@@ -165,6 +172,6 @@ const SaveHealth = (function () {
     const handle = { root, refresh: update }; mounted.set(host, handle); return handle;
   }
   // category stays module-local (inspect grouping).
-  return { inspect, cleanup, mount };
+  return { inspect, cleanup, mount, stamp };
 })();
 Object.freeze(SaveHealth);
