@@ -110,3 +110,48 @@ for (const [win, geo] of [["standalone", GEO], ["portrait", PORTRAIT]]) for (con
     });
   });
 }
+
+/** In-page (#6924 follow-up): flip one theme switch on <html>, wait a frame, read the trainer's computed styles, put it back. */
+async function trainerStyleUnder(attrs, vars = {}) {
+  const de = document.documentElement, old = {}, oldVars = {};
+  for (const k of Object.keys(attrs)) { old[k] = de.getAttribute(k); if (attrs[k] === null) de.removeAttribute(k); else de.setAttribute(k, attrs[k]); }
+  for (const k of Object.keys(vars)) { oldVars[k] = de.style.getPropertyValue(k); de.style.setProperty(k, vars[k]); }
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const turn = getComputedStyle(document.getElementById("tt-turn")), go = document.getElementById("tt-go").getBoundingClientRect();
+  const out = { border: turn.borderTopColor, radius: turn.borderTopLeftRadius, cue: parseFloat(getComputedStyle(document.getElementById("tt-cue")).fontSize), go: go.height };
+  for (const k of Object.keys(old)) { if (old[k] === null) de.removeAttribute(k); else de.setAttribute(k, old[k]); }
+  for (const k of Object.keys(vars)) { if (oldVars[k]) de.style.setProperty(k, oldVars[k]); else de.style.removeProperty(k); }
+  return out;
+}
+
+test.describe(`thumb trainer follows the house UI ${GEO.width}x${GEO.height}-standalone (#6924)`, () => {
+  test.use({ viewport: { width: GEO.width, height: GEO.height }, hasTouch: true, isMobile: true });
+
+  test("house controls, and contrast / text size / POPUPS looks reach the trainer", async ({ page }) => {
+    test.setTimeout(240_000);
+    await boot(page, GEO, { json: {}, raw: {} }, "/?go=thumbs");
+    await expect(page.locator("#thumb-trainer")).toBeVisible({ timeout: BOOT_MS });
+    const cls = await page.evaluate(() => Object.fromEntries(["tt-back", "tt-go", "tt-prev", "tt-next", "tt-speed", "tt-view"].map((id) => [id, document.getElementById(id).className])));
+    expect(cls["tt-back"], "BACK is the sheets' alt plate").toBe("bigbtn alt");
+    expect(cls["tt-go"], "START is the red primary").toBe("bigbtn");
+    for (const id of ["tt-prev", "tt-next", "tt-speed", "tt-view"]) expect(cls[id], `${id} is a house chip`).toBe("sel-chip");
+    const base = await page.evaluate(trainerStyleUnder, { "data-ui-contrast": null });
+    const high = await page.evaluate(trainerStyleUnder, { "data-ui-contrast": "high" });
+    expect(high.border, "UI CONTRAST high redraws the select's plate line").not.toBe(base.border);
+    const larger = await page.evaluate(trainerStyleUnder, { "data-text-size": "larger" });
+    expect(larger.cue, "TEXT SIZE larger grows the cue").toBeGreaterThan(base.cue);
+    const sharp = await page.evaluate(trainerStyleUnder, { "data-look-popups-corners": "sharp" });
+    expect(sharp.radius, "POPUPS CORNERS sharp squares the trainer's controls").toBe("0px");
+    // Through the real setter, not a raw attribute: ScreenLooks.apply() deletes a hand-stamped data-look-* at its default,
+    // which raced this measurement on a slow runner (#6929 selected-3). set() stamps the attribute and the token together.
+    const tall = await page.evaluate(async () => {
+      const go = () => document.getElementById("tt-go").getBoundingClientRect().height, frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      ScreenLooks.set("popups", "btn", 120);
+      await frames();
+      const h = go();
+      ScreenLooks.set("popups", "btn", 100);
+      return h;
+    });
+    expect(tall, "POPUPS BUTTON HEIGHT 120 grows START").toBeGreaterThan(base.go + 4);
+  });
+});
