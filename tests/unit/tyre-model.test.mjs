@@ -1372,6 +1372,26 @@ test("lapsLeft measures the wear rate over the laps AND the part-lap driven on t
   assert.ok(Math.abs(s.lapsLeft(c) - (2 / 0.54) * 0.46) < 1e-9);
 });
 
+// #6611 RW7: fit() rounds the part lap before the line into tyreLapAdj (0 or 1), so a set fitted at 0.3 of
+// a lap had 2 whole laps on it after 1.7 driven; one fitted at 0.45 read 1.8x its life at the first line.
+test("lapsLeft counts the exact distance from the fit point, not the rounded part lap (#6611 RW7)", () => {
+  const len = 1000;
+  for (const [fitAt, drive] of [[0.3, 1.7], [0.45, 0.55], [0.7, 1.7], [0.6, 2.25]]) {
+    const G = { lapsTarget: 10, track: { total: len, def: {} }, LAT_MAX: 22, raceTyreWear: "real" };
+    const s = T.create(G); s.setLevel("real");
+    const c = { human: false, lap: 5, s: fitAt * len, prog: (4 + fitAt) * len, _progGift: 0, tread: null };
+    s.fit(c, T.classRecord("medium"));
+    c.prog = (4 + fitAt + drive) * len; c.lap = 5 + Math.floor(fitAt + drive); c.s = c.prog % len; c.tyreWear = 0.4;
+    assert.ok(s.lapsOn(c) >= 1, `fit at ${fitAt}: a lap is on the set, so the measured rate is used`);
+    const left = s.lapsLeft(c);
+    assert.ok(Math.abs(left - (drive / 0.4) * 0.6) < 1e-9, `fit at ${fitAt}, ${drive} laps driven: ${left} vs ${(drive / 0.4) * 0.6}`);
+    // A drop-in that re-ages the set by hand (real-race.js sets tyreLap0 without a fit): the stale fit point is
+    // not used; the whole-lap read plus this lap's part, as before.
+    c.tyreLap0 -= 3; const n = s.lapsOn(c), part = (c.prog / len) % 1;
+    assert.ok(Math.abs(s.lapsLeft(c) - ((n + part) / 0.4) * 0.6) < 1e-9, `fit at ${fitAt}: a hand-set age falls back: n ${n}, left ${s.lapsLeft(c)}`);
+  }
+});
+
 test("tyre care (#1566): an AI's style scales its tyre load symmetrically; the human load ignores it", () => {
   const base = { consistency: 0.75, accSm: 2 };
   const mid = T.aiLoad(base, 7), kind = T.aiLoad({ ...base, tyreCare: 1 }, 7), hard = T.aiLoad({ ...base, tyreCare: -1 }, 7);
