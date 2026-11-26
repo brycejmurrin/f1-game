@@ -1,0 +1,1 @@
+Fixed: In the garage, a part whose fit is refused after you research it now shows as ready to fit instead of a stale RESEARCH row, and leaving the SETUP tab no longer lets a late tune slider update repaint the old stats.

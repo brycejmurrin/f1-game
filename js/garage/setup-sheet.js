@@ -377,6 +377,8 @@ function activateCsCat(id, focus) {
   if (csActiveCat !== id) {
     const from = csActiveCat;
     csActiveCat = id;
+    // a pending tune's refresh closure must not outlive its pane (#6864)
+    if (from === "tune") tuneExperiments.flush();
     // Browse section previews this category, then restores the original tab.
     // A preview must not persist a tab choice or move the player's camera.
     const preview = $("screen-arranger")?.open;
@@ -923,7 +925,11 @@ function buildSetup() {
         return;
       }
       p[activeCat.id] = opt.id;
-      if (saveTeamParts(team.id, p) === false) { reject(); return; }   // a conflicted career save refuses the fit: no blip, nothing shown as fitted (#5044)
+      if (saveTeamParts(team.id, p) === false) {
+        if (locked) buildSetup();   // research charged: redraw as FIT (#6864)
+        reject();
+        return;
+      }   // a conflicted career save refuses the fit: no blip, nothing shown as fitted (#5044)
       if (G.soundOn && !_blipped) GameAudio.uiSelect();
       buildSetup();
       if (CAT_VIEW[activeCat.id]) framePreset(CAT_VIEW[activeCat.id]);   // show the part
