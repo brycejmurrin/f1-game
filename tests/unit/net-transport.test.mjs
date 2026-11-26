@@ -1679,7 +1679,7 @@ test("a late answer from an old TURN endpoint cannot replace the new relay", asy
   }
 });
 
-test("acceptAnswer refuses an answer built for an older offer, and still takes an id-less one", async () => {
+test("acceptAnswer refuses an answer built for an older offer, and refuses an id-less one", async () => {
   const fp = (n) => Array.from({ length: 32 }, (_, i) => ((i * n + 1) & 255).toString(16).padStart(2, "0").toUpperCase()).join(":");
   const sdp = (ufrag, f, setup) => ["v=0", "m=application 9 UDP/DTLS/SCTP webrtc-datachannel",
     "a=candidate:1 1 udp 2113937151 192.168.1.10 54321 typ host", "a=ice-ufrag:" + ufrag,
@@ -1717,9 +1717,9 @@ test("acceptAnswer refuses an answer built for an older offer, and still takes a
     // A repost of the same answer against the same, now-answered offer is "already used", not "older invite".
     assert.equal((await hs.acceptAnswer({ pc: pcA }, answer.code)).error, "already_answered");
 
-    // The OLD format (no `o`) still decodes and is judged as before.
+    // The OLD format (no `o`) still decodes but is refused (#6840 S6).
     const legacy = await hs.encodeCode({ b: 817, k: "answer", p: null, s: sdp("gggg", fp(7), "active") });
-    assert.equal((await hs.acceptAnswer({ pc: hostPc(offerB) }, legacy)).ok, true, "an id-less answer is accepted");
+    assert.equal((await hs.acceptAnswer({ pc: hostPc(offerB) }, legacy)).error, "wrong_offer", "an id-less answer is refused");
   } finally {
     delete global.document;
     globalThis.NetSdp = priorSdp; globalThis.Hash32 = priorHash;

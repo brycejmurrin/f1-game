@@ -1407,6 +1407,7 @@
       "kind": "node",
       "files": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
+        "tests/unit/handshake-hardening.test.mjs",
         "tests/unit/lobby-answer-flight.test.mjs",
         "tests/unit/lobby-codes.test.mjs",
         "tests/unit/lobby-settings.test.mjs",
