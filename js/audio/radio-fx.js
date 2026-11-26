@@ -448,7 +448,8 @@ var GameAudioRadioFx = (function () {
       radioLeadS(channel) {
         const ch = RADIO_CH[channel];
         if (channel === "radio" && !RADIO_PRESETS[radioPreset].cue) return 0;
-        if (!ch || radioFx <= 0 || !Array.isArray(ch.tune)) return 0;
+        // No sting without SOUND EFFECTS: radioSting returns false there, so no lead-in is budgeted (#6903 row 5).
+        if (!ch || radioFx <= 0 || !host.sfxOk() || !Array.isArray(ch.tune)) return 0;
         return 0.03 + ch.tune.reduce((a, n) => a + (n && n[1] > 0 ? n[1] : 0), 0);
       },
       radioFxMax: () => RADIO_FX_MAX,

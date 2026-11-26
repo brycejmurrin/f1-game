@@ -393,6 +393,9 @@ var RadioVoice = (function () {
         : t.name != null || t.pitch != null || t.rate != null ? "system" : "";
       return !!(pack && (source === "recorded" || !source && packOn));
     };
+    // Which pack gate a speaker answers to: the commentator its OWN source, every engineer channel the radio's
+    // `packOn` (#6903 row 2: the announcer used to follow the engineer toggle in a race).
+    const packFor = (sp) => (sp === "announcer" ? announcerPackOn() : !!(pack && packOn));
     // `current` is the utterance THIS instance is speaking, and it exists because
     // every utterance shares one handler over module state (`deadline`, the music
     // duck). speechSynthesis fires a cancelled line's end/error ASYNCHRONOUSLY —
@@ -757,7 +760,7 @@ var RadioVoice = (function () {
       if (recordedOk() && speakPack(p)) return true;
       // RECORDED: the card carries a line its pack cannot say (or is still
       // fetching) — never speech synthesis in a race (PACK_VOICE above).
-      if (recordedOk() && pack && packOn && PACK_VOICE[p.speaker]) {
+      if (recordedOk() && pack && packFor(p.speaker) && PACK_VOICE[p.speaker]) {
         activeKind = "";
         last.reason = pack.ready && !pack.ready(recordedPack(p.speaker)) ? "pack-loading" : "not-recorded";
         if (last.reason === "not-recorded") noteUnrecorded(p.speaker + "|" + p.text);
@@ -782,7 +785,7 @@ var RadioVoice = (function () {
      * cover every word — leaves recorded-mode calls on the card. */
     function speakPack(p, audition) {
       const id = recordedPack(p.speaker);
-      if (!pack || (!packOn && !audition) || !id) return false;
+      if (!pack || (!packFor(p.speaker) && !audition) || !id) return false;
       pack.ensure(id);
       const tok = { pack: true };
       const ok = pack.speak(id, p.text, {
@@ -976,7 +979,7 @@ var RadioVoice = (function () {
       // Preview the actual engineer source. Its tuning rows select SYSTEM;
       // with RECORDED selected, TEST must not promise a different voice.
       activeKind = sp === "coach" ? "coach" : sp === "control" ? "warning" : "info";
-      if (pack && (sp === "announcer" ? announcerPackOn() : packOn)) {
+      if (packFor(sp)) {
         const id = recordedPack(sp), gen = previewGen;
         const play = () => gen === previewGen && G.soundOn && speakPack({ speaker: sp, text: words, leadMs: 0, budgetMs: 15000 }, true);
         if (pack.load && !pack.ready(id)) { pack.load(id).then((ready) => { if (ready) play(); }); return true; }
