@@ -7,10 +7,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { readAX26, ax26Version } from "../helpers/ax26.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const require = createRequire(import.meta.url);
 const { writeAX26v3, parseModel, SWAY_FRAC } = require("../../tools/lib/pack-assets.cjs");
@@ -44,7 +44,7 @@ test("TrackGeom SWAY_FRAC matches the pack-assets / reader constant", () => {
 
 test("v3 round-trip restores procedural crown sway weights", async () => {
   const mesh = crownMesh();
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-sway-"));
+  const dir = mkTmpDir("apex-sway-");
   try {
     const p = path.join(dir, "crown.bin");
     const buf = writeAX26v3(mesh);

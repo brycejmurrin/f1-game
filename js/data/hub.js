@@ -464,7 +464,7 @@ const DataHub = (function () {
     const staleApi = typeof F1API !== "undefined" && F1API.staleSince ? F1API : null;   // absent in hand-made test stubs
     const staleMark = staleApi ? staleApi.staleMark() : 0;
 
-    tabDef(id).load().then(function (node) {
+    function onOk(node) {
       if (gen[id] !== myGen) {
         if (node && typeof node.dispose === "function") node.dispose();
         return;
@@ -488,7 +488,8 @@ const DataHub = (function () {
         ...(node && node.tabOutcome || {})
       };
       if (openFlag && active === id) showTab(id);
-    }, function (err) {
+    }
+    function onErr(err) {
       if (gen[id] !== myGen) return;
       Log.warn("data", "tab " + id + " fail");
       // KEEP the stale node. Dropping it (state[id] = null) leaves a tab that
@@ -512,7 +513,12 @@ const DataHub = (function () {
       // Keep the failed state even without a stale node. Switching away and
       // back must not relabel a failed request as an empty successful tab;
       // RETRY is the explicit next attempt.
-    });
+    }
+    // A throw while painting the loaded node routes to the failure arm too:
+    // the second `then` argument never sees its own sibling's throw.
+    tabDef(id).load().then(function (node) {
+      try { onOk(node); } catch (err) { onErr(err); }
+    }, onErr);
   }
 
   // role=status: the load / error state is announced to a screen reader
@@ -725,7 +731,7 @@ const DataHub = (function () {
   // Clearing an explicit pick synchronously retires the previous body (including
   // TELEMETRY's COMPARE requests) before asking for replacement metadata.
   // onChange is the cancellation fallback if that body is already detached.
-  function buildPicker(onPick, onChange) {
+  function buildPicker(onPick, onChange, onFail) {
     let pickerGen = 0;
     const initialSessionKey = sel.sessionKey;
     const box = el("div", "dh-picker");
@@ -859,6 +865,7 @@ const DataHub = (function () {
         if (myGen !== pickerGen || mySelection !== selectionGen) return;
         if (detached(userChanged)) return;
         ph(gpSel, "error");
+        if (onFail && sel.sessionKey === null) onFail();   // no session body to keep: say the load failed, not "no classification"
         retryPicker("Grand Prix", function () { loadGPs(userChanged); });
       });
     }

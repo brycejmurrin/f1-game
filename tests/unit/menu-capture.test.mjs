@@ -4,8 +4,8 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import { fileURLToPath } from "node:url";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const {
@@ -34,7 +34,7 @@ test("cellRecorded requires both png and dom", () => {
 });
 
 test("resuming a native phone gallery replaces an older low-density capture", (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "menu-capture-"));
+  const dir = mkTmpDir("menu-capture-");
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const paths = cellPaths(dir, "title", "bryce-portrait");
   fs.mkdirSync(path.dirname(paths.png));

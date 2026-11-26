@@ -474,7 +474,8 @@ test("rollover clears the weekend-started stamp: next season's same round is not
   assert.equal(Career.objectiveLocked(), false);
 });
 
-test("rollover restores the season when durable storage refuses the winter write", () => {
+for (const [refusal, expectConflict] of [["QuotaExceededError", false], ["conflict", true]]) {
+test(`rollover restores the season when durable storage refuses the winter write (${refusal})`, () => {
   // requireDurable: a quota-refused session-only year++ would vanish on reload
   // while the hub already showed the new season. Mirror adoption's gate.
   const stored = new Map();
@@ -487,7 +488,7 @@ test("rollover restores the season when durable storage refuses the winter write
         get: (k, d) => (stored.has(k) ? stored.get(k) : d),
         set: (k, v) => stored.set(k, v),
         write(k, v, options) {
-          if (options && options.requireDurable) return { ok: false, durable: false, reason: "QuotaExceededError" };
+          if (options && options.requireDurable) return { ok: false, durable: false, reason: refusal };
           stored.set(k, v);
           return { ok: true, durable: true, reason: null };
         },
@@ -529,8 +530,10 @@ test("rollover restores the season when durable storage refuses the winter write
   assert.equal(Career.rollover(), null, "refused winter must not report success");
   assert.equal(career.year, year, "year must not advance when the write was not durable");
   assert.equal(career.money, money);
-  assert.equal(Career.conflicted(), true);
+  // #6478 row 5: only a revision conflict poisons the career; a full store retries.
+  assert.equal(Career.conflicted(), expectConflict);
 });
+}
 
 test("a multi-year contract suppresses the winter market until it expires", () => {
   // deal.left 3 -> 2 after the decrement: still under contract, so no seats are

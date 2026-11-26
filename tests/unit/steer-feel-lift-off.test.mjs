@@ -15,6 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
+const { neutralMods } = require("./neutral-mods-vm.cjs");
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const DT = 1 / 60;
@@ -27,9 +28,7 @@ before(async () => {
   await g.race("monza", "day", "dry");
   // The NEUTRAL ×1 car (statMult only) this recipe was calibrated on: since #6705 the works car keeps a grip
   // reserve, and 45 m/s at lock 0.8 no longer reaches its limit.
-  const S = g.sandbox, P = g.G.player, st = S.Career.teamStats(P.team) || P.team.stats;
-  P.mods = { speed: S.Parts.statMult(st.speed), accel: S.Parts.statMult(st.accel),
-    cornering: S.Parts.statMult(st.cornering), braking: S.Parts.statMult(st.braking) };
+  g.G.player.mods = neutralMods(g);
 });
 after(() => { if (g) g.close(); });
 

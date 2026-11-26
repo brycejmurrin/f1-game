@@ -5,7 +5,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -14,6 +13,7 @@ import {
   MUTANTS, needleReport, parseTap, verdictFor, planFidelity, runFidelity,
   withMutant, makeShadowTree, sweepStaleShadows,
 } from "../../tools/check/twin-fidelity.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const MATRIX = JSON.parse(fs.readFileSync(new URL("../data/mutants.json", import.meta.url), "utf8"));
 
@@ -173,7 +173,7 @@ test("withMutant refuses to run without a shadow, or to write through a linked d
 });
 
 test("a shadow left by a killed run is swept by the next one", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "twin-fidelity-"));
+  const root = mkTmpDir("twin-fidelity-");
   try {
     fs.mkdirSync(path.join(root, "js"));
     fs.writeFileSync(path.join(root, "js", "a.js"), "const A = 1;\n");

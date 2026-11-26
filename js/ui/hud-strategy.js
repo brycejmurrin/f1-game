@@ -164,7 +164,7 @@ const HudStrategy = (function () {
     }
     ctx.myWear = spent;
     ctx.lossS = lossS;
-    ctx.stopLeft = !pl || pl.next != null;
+    ctx.stopLeft = pl?.next != null;
     const uc = undercut(ctx);
     if (uc !== last.uc || (uc && a !== last.ucWho)) {
       last.uc = uc; last.ucWho = uc ? a : null; dirty = true;

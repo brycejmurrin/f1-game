@@ -7,11 +7,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import YAML from "yaml";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CI = YAML.parse(fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8"));
@@ -58,7 +58,7 @@ const wf = (f) => YAML.parse(fs.readFileSync(path.join(ROOT, ".github/workflows"
 // Run a step's shell with a fake `gh` on PATH that records its argv, refuses `pr create` when told to,
 // and answers `issue list` with ISSUE_ROW: the step's BEHAVIOUR, not its text.
 function runWithFakeGh(script, { refusePr, env = {} }) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fake-gh-"));
+  const dir = mkTmpDir("fake-gh-");
   try {
     const log = path.join(dir, "gh.log");
     // One log line per call: a multi-line --body (#5520's template) is logged with its newlines escaped.

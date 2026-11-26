@@ -579,6 +579,7 @@
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
         "tests/unit/pu-harvest-audio.test.mjs",
+        "tests/unit/race-frame-alloc-6752.test.mjs",
         "tests/unit/radio-duration.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
@@ -1304,7 +1305,8 @@
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/audio-panel-settings-ui.test.mjs",
         "tests/unit/followup-update-check.test.mjs",
-        "tests/unit/tlx-chunked-lifecycle.test.mjs"
+        "tests/unit/tlx-chunked-lifecycle.test.mjs",
+        "tests/unit/update-check-foreground.test.mjs"
       ],
       "twinned": false
     },
@@ -1611,6 +1613,7 @@
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-regulations.test.mjs",
+        "tests/unit/career-save-integrity-6744.test.mjs",
         "tests/unit/career-save-kept.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
@@ -1659,6 +1662,7 @@
         "tests/unit/real-race-tab-no-race.test.mjs",
         "tests/unit/real-race.test.mjs",
         "tests/unit/save-durability.test.mjs",
+        "tests/unit/save-file-golden.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/season-calendar-default.test.mjs",

@@ -244,3 +244,23 @@ test("VSC lesson computes pit loss, rejoin and finish projections for every repl
   assert.equal(evaluate({ ...fixtures.traffic, gapBehind: 22000 }).traffic, 0);
   assert.equal(evaluate({ ...fixtures.traffic, gapBehind: 21500 }).traffic, 3000);
 });
+
+test("a null plan is no stop left: UNDERCUT and COVER stay dark (#6611 RW4)", () => {
+  const { root, doc } = fakeDom();
+  const S = load({ document: doc, HudElements: { isOn: () => true } });
+  const p = { rank: 2, prog: 1000, speed: 50, tyre: { code: "M" }, tyreWear: 0.4, lap: 12 };
+  const a = { rank: 1, prog: 1300, speed: 50, code: "VER", pitState: "none", tyreWear: 0.7 };
+  const b = { rank: 3, prog: 700, speed: 50, code: "NOR", pitState: "none", tyreWear: 0.25, lap: 12 };
+  let plan = { next: 14, code: "H", stops: 1, lapsToStop: 2 };
+  const G = {
+    state: "race", session: "race", cars: [a, p, b], ranked: [a, p, b], track: { total: 5000 }, vTop: () => 90,
+    tyres: { on: () => true, spent: (c) => c.tyreWear, lapsLeft: () => 9.6 },
+    pits: { estimate: () => ({ lossS: 21 }), planInfo: () => plan, windowOf: (c) => (c === b ? "P13" : "") },
+  };
+  const row = (k) => root.children.find((r) => r.attrs["data-k"] === k);
+  S.tick(G, p);
+  assert.equal(row("uc").hidden, false, "control: a stop to make lights the undercut");
+  plan = null; S.tick(G, p);
+  assert.equal(row("uc").hidden, true, "null plan: no undercut");
+  assert.equal(row("cov").hidden, true, "null plan: no cover");
+});

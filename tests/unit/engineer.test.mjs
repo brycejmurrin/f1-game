@@ -765,3 +765,17 @@ test("laps to the flag on the grid side of the line count the race, not one more
     assert.equal(eng.senseOf(c).stintLeft, 5, "lap " + lap + " of a 5-lap race");
   }
 });
+
+test("the threat gap floors our speed at 0.26 x vTop, not 1 m/s (#6611 RW5)", () => {
+  const { eng, tyres, G } = sessionFor();
+  G.vTop = () => 100;
+  const c = carOn(tyres, { wear: 0.6, prog: 100000, speed: 0, lastLap: 90 });
+  c.lap = 5;
+  c.pitPlan = { stops: 1, seq: ["medium", "hard"], lapsAt: [7], stints: [7, 18] };
+  const behind = { code: "LEC", prog: 100000 - 52, lap: 5, pitState: "none" };   // 52 m back
+  G.cars = [c, behind];
+  G.track = { total: 5386 };
+  G.pits = { estimate: () => ({ lossS: 20, marginS: 0 }), windowOf: (o) => (o === behind ? "P6" : "") };
+  // 52 m / max(0, 26) = 2 s, inside lossS + 2. The raw divisor of 1 read 52 s and dropped the threat.
+  assert.equal(eng.senseOf(c).threat, "LEC");
+});
