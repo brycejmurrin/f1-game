@@ -429,6 +429,24 @@ function radio({ covers = true, packOn, spotterLeft = 0, loading = null, voiceTu
   return { v, spoken, packCalls, ensures, kept, ducks, saved, reload: () => sb.RadioVoice.create(G), end: () => onEnd && onEnd() };
 }
 
+// #6903 row 2: the in-race commentator answers to ITS OWN source, not the engineer's radioPack toggle.
+test("an announcer set to SYSTEM never touches the pack mid-race, even with the engineer pack on", () => {
+  const r = radio({ packOn: true, voiceTune: { announcer: { source: "system", name: "Samantha" } }, announcer: { enabled: () => true } });
+  r.ensures.length = 0;
+  assert.equal(r.v.say("SAFETY CAR DEPLOYED", 6, "comm"), true);
+  assert.ok(!r.ensures.includes("fable"), "no ~6 MB announcer fetch mid-race");
+  assert.equal(r.packCalls.filter((c) => c.id).length, 0, "the pack is not asked to speak");
+});
+
+test("a RECORDED announcer speaks from its pack although the engineer pack is off", () => {
+  const r = radio({ packOn: false, voiceTune: { announcer: { source: "recorded" } }, announcer: { enabled: () => true } });
+  assert.equal(r.v.say("SAFETY CAR DEPLOYED", 6, "comm"), true);
+  const call = r.packCalls.find((c) => c.id);
+  assert.ok(call, "pack.speak was called for the commentary");
+  assert.equal(call.fx, "announcer");
+  assert.deepEqual(r.spoken, [], "not the robot voice");
+});
+
 test("a line the pack covers is played from it, after the courtesy figure, and synthesis stays quiet", () => {
   const r = radio();
   assert.equal(r.v.say("BOX BOX BOX", 3, "info", 0.5), true);
