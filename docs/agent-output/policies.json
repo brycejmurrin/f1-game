@@ -2956,11 +2956,6 @@
       "presentation": "native",
       "preserve": "@c2"
     },
-    "tools/ui/menu-fit.mjs": {
-      "action": "targeted-summary",
-      "presentation": "shared-levels",
-      "preserve": "@c2"
-    },
     "tools/ui/menu-mock.mjs": {
       "action": "keep-native",
       "presentation": "native",

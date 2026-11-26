@@ -2,9 +2,10 @@
 // what the output-level gateway adds to every tools/list entry
 // (docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md). Inline fixture server, ~1 s.
 import test from "node:test";
+import { spawnSync } from "node:child_process";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import { sizeListing, estTokens, listServer } from "../../tools/mcp/mcp-listing-cost.mjs";
+import { sizeListing, estTokens, listServer, usageText } from "../../tools/mcp/mcp-listing-cost.mjs";
 import { SERVER_PREFACES, GATEWAY_INSTRUCTIONS } from "../../tools/mcp/output-level-mcp.mjs";
 
 const GATEWAY = fileURLToPath(new URL("../../tools/mcp/output-level-mcp.mjs", import.meta.url));
@@ -70,4 +71,11 @@ test("a server with no instructions of its own gets its preface, then the gatewa
     assert.ok(SERVER_PREFACES[server].length <= 300, `${server}: preface stays one short sentence pair`);
   }
   assert.equal((await as("unlisted")).instructions, GATEWAY_INSTRUCTIONS, "no preface invented for an unlisted server");
+});
+
+test("--help prints a usage block: no shebang, no @doc/@skill lines", () => {
+  const r = spawnSync(process.execPath, [fileURLToPath(new URL("../../tools/mcp/mcp-listing-cost.mjs", import.meta.url)), "--help"], { encoding: "utf8" });
+  const junk = r.stdout.split("\n").filter((l) => /^#!|@doc|@skill|\/\*/.test(l));
+  assert.deepEqual([r.status, r.stdout.split("\n")[0], junk, r.stdout.includes("--preflight")], [0, "usage:", [], true]);
+  assert.equal(usageText("#!x\n/* name\n *\n *   cmd --a\n */\ncode"), "usage:\nname\n\n  cmd --a\n");
 });

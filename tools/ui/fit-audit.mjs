@@ -7,7 +7,7 @@
 // Touch-only: every viewport uses touch input and its shipped defaults, including
 // desktop-sized windows. Use layout-audit's viewport catalog for desktop comparisons.
 //
-// menu-fit answers "is this screen clipped at one viewport" and takes pictures.
+// layout-audit answers "is this screen clipped at one viewport" and takes pictures.
 // This answers the questions that only show up across a MATRIX of sizes and
 // orientations, and it answers them in numbers:
 //

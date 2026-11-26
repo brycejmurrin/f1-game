@@ -1,7 +1,7 @@
-// ui-scale-axis — the SCALE axis shared by the three fit tools (layout-audit,
-// @doc The `--scale=` axis (40–200 % interface size) shared by layout-audit, menu-fit and fit-audit.
+// ui-scale-axis — the SCALE axis shared by the fit tools (layout-audit,
+// @doc The `--scale=` axis (40–200 % interface size) shared by layout-audit and fit-audit.
 // @skill survey-ui-matrix
-// menu-fit, fit-audit).
+// fit-audit).
 //
 // WHY. Those tools measure a matrix of screen x viewport, and that matrix
 // answered the right question right up until the player got a size slider.

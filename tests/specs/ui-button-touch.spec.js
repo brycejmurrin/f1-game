@@ -1724,7 +1724,7 @@ test.describe("Settings Appearance — touch targets", () => {
 
 test.describe("Settings Appearance — preset names at phone landscape", () => {
   // 932x430 is the iPhone Pro Max landscape: wider than the old 900px phone guard, so five 67px tiles clipped
-  // BROADCAST to "BROADCAS" at UI SIZE 150 (menu-fit, 2026-10-17). UI contract 2026-11-06 gap 4: the gallery
+  // BROADCAST to "BROADCAS" at UI SIZE 150 (layout-audit, 2026-10-17). UI contract 2026-11-06 gap 4: the gallery
   // auto-fits tiles of at least three taps across the one-column studio (four at UI 100, three at 109-150), so
   // the property that matters is asserted directly — every tile ≥ 3 × --tap wide and no name clipped — not a
   // column count (the old three-up pin read 4 on this cell once the tablet split went).
