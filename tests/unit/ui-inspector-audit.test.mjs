@@ -33,9 +33,9 @@ test('native layout rows preserve context, informational standing and boolean do
   assert.equal('thresholds' in result.findings[0], false);
 });
 
-test('native menu-fit and explicit native envelopes join without guessing missing thresholds', () => {
+test('native layout-audit-envelope and explicit native envelopes join without guessing missing thresholds', () => {
   const native = { '852x393@130': { select: { environment: environment(), hOverflow: [], clipped: [{ parent: '#list', child: '#go', by: -3 }], vLost: [], tiny: [], unsafe: [] } } };
-  for (const artifact of [native, { producer: 'menu-fit', report: native }]) {
+  for (const artifact of [native, { producer: 'layout-audit', report: native }]) {
     const result = joinAuditFindings(inspection(), artifact);
     assert.equal(result.findings[0].kind, 'clipped'); assert.equal(result.findings[0].mapping.selector, '#go');
     assert.equal(result.findings[0].measurements.by, -3); assert.equal('thresholds' in result.findings[0], false);

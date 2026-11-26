@@ -412,6 +412,7 @@ const DrivingCoachBody = (function () {
     function captureWorld() { return SimState.capture(G); }
     function restoreWorld(w) {
       SimState.restore(w, G, { keepForward: true });
+      if (typeof LapRetry !== "undefined") LapRetry.invalidate();   // the RETRY LAP drop-in is from a world this rewind replaced
       if (G.player) G.player.incidentInvalidLap = true;
       G.records.invalidate(); trace = []; quiet = 2; clearCandidate();
     }

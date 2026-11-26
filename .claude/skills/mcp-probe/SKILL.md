@@ -10,7 +10,7 @@ One MCP server sits alongside the Playwright suite for live poking:
 from `tools/lib/webgpu-chrome-args.cjs`). Tool names differ by client: Claude
 Code attaches them as `mcp__chrome-devtools__<tool>` (e.g.
 `mcp__chrome-devtools__evaluate_script`); the probe-mcp.py CLI and the apex
-docs call the same tools `chrome_<tool>`. `tools/mcp/probe-mcp.py` is a CLI (not
+docs call the same tools `chrome_<tool>` (`chrome_click` = `click`). `tools/mcp/probe-mcp.py` is a CLI (not
 MCP-attached since 2026-09) whose `chrome-start` daemon keeps ONE Chromium alive across `call`s.
 Page-scoped calls take a `pageId` (chrome.md §pageId and frame hooks); the deployed site is **deploy-research**.
 
@@ -56,15 +56,6 @@ exists: awaited `race()` + `go()`, then `jump()` (+ `snapCam()`) or `step()`. `n
 initialised, not broken.
 Heap/CPU while a **js-debugger** session is attached to that page → its `debugger_profile` (one owner per page).
 
-**Census tools** (measured before/after for phone memory, heap growth, CPU-side
-copies and GPU budgets): `tools/perf/vm-leak-census.mjs`, `tools/gfx/mem-census.mjs`
-(track-switch heap compare; CDP counters via the `tools/perf/runtime-memory.mjs` library),
-`tools/perf/mesh-census.mjs`, `tools/perf/garage-census.mjs` (flags: `--help` or file
-header); `tools/perf/profile.mjs` / `query.mjs` for game-loop CPU; frame stutter: chrome.md §pageId and frame hooks. Record
-track and backend (`__apex.diag().env.backend`) with every number, cite MB
-deltas in the PR, and dispatch `gpu-census.yml` on `macos-latest` for a real
-GPU — SwiftShader here is not player evidence.
-
 If this session's host catalog is empty, use `./tools/mcp/apex-tools-mcp.sh call` or the
 daemon above (MCP config files: `docs/AGENT-SURFACE.md`).
 
@@ -100,7 +91,7 @@ beside an active Playwright run. UI matrix → `tools/ui/layout-audit.mjs` (not 
   [traps-camera.md](references/traps-camera.md) (`snapCam` / free-cam),
   [traps-scene.md](references/traps-scene.md) (soft-present / lights / `scene()`).
 - HUD/DOM stops updating (pit stop, lap change) → [`references/hud-freeze.md`](references/hud-freeze.md).
-- Chrome setup, A/B ports, heap/perf → [`references/chrome.md`](references/chrome.md).
+- Chrome setup, A/B ports, heap/perf, census tools, private chat tunnel → [`references/chrome.md`](references/chrome.md).
 - Public-web research → [`references/research.md`](references/research.md).
 - Real-device reports → [`references/device-report.md`](references/device-report.md).
 - Offline capability checks → [`references/offline.md`](references/offline.md).
@@ -108,12 +99,3 @@ beside an active Playwright run. UI matrix → `tools/ui/layout-audit.mjs` (not 
 - Boot evidence (a backend unit test is not proof it runs) → `docs/ARCHITECTURE.md` §Boot evidence.
 - Renderer probe flags (`--backend`, secure context, `gfxBound`) →
   [`references/renderer.md`](references/renderer.md).
-
-Chrome DevTools naming: `chrome_click` (CLI) and `mcp__chrome-devtools__click` (attached) are the same underlying `click` action.
-
-## Private chat attachment (recovering the private chat MCP tunnel or gateway)
-
-For existing-tunnel startup/recovery, namespaced gateway contracts and environment
-checks, follow [free design tooling](../../../docs/DESIGN-TOOLS.md). Local readiness
-and live native chat verification are separate. Keep existing app identities,
-credential references, and the configured upstream catalog.

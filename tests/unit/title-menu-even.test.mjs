@@ -341,7 +341,7 @@ test("title doors: the label and its sub-line are separated by a space, never ab
 
 test("title explore: #mb-watch is WATCH with BROADCAST / REAL RACES in .mb-sub", () => {
   // Compact-wide 844×390: "WATCH REAL RACES" overflowed the 2×2 cell
-  // (menu-fit scrollWidth 196 > clientWidth 169) while .mb-sub was 0×0
+  // (layout-audit scrollWidth 196 > clientWidth 169) while .mb-sub was 0×0
   // under density=compact. Short main label fits; sub carries the rest
   // when density allows (same pattern as RACE / ONE GRAND PRIX).
   const html = read("index.html");

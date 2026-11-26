@@ -17,14 +17,14 @@ No hook matches these CLIs by name. A subagent runs only `--help`/`--list`/`--pl
 # NO BROWSER (exits before any launch; still parent-only): --help, --list, --report, --diff
 node tools/ui/layout-audit.mjs --help
 node tools/ui/layout-audit.mjs --list            # the whole screens × viewports catalog (no counts; ignores --screens/--viewports)
-# BROWSER (Chromium, as do fit-audit/menu-fit below unless --help; /proc/loadavg < 3, no Playwright run live;
+# BROWSER (Chromium, as does fit-audit below unless --help; /proc/loadavg < 3, no Playwright run live;
 #   at >= 3 reap your own Chrome (AGENTS.md rule 7), wait once, else report the cells unmeasured):
 node tools/ui/layout-audit.mjs --survey          # title-path screens + shots (npm run ui:survey): NOT Bryce's cell, NOT every screen
 node tools/ui/layout-audit.mjs --gallery         # fast PNG+DOM all menus (npm run ui:gallery)
 node tools/ui/layout-audit.mjs --screen=settings # one cell
 node tools/ui/layout-audit.mjs                   # full geometry matrix (npm run ui:audit)
 # Numbers companion (type/spacing floors): node tools/ui/fit-audit.mjs
-# Notch insets only: node tools/ui/menu-fit.mjs 852x393 --safe=59,0,59,20
+# Notch insets: node tools/ui/layout-audit.mjs --viewports=ios-iphone-landscape --safe=59,0,59,20
 ```
 
 `apex_ui_mission_plan` is NOT a matrix planner: it takes a named player mission (first-race,
@@ -56,8 +56,8 @@ Viewports are catalog names only (`--list`). For a free-form size such as 568x32
 - full catalog of screens: add a `VIEWPORTS` row in `tools/ui/menu-screens.mjs`, then
   `node tools/ui/layout-audit.mjs --viewports=<new-name> --scale=125`;
 - type/spacing floors only: `node tools/ui/fit-audit.mjs --sizes=568x320 --scale=125` (its own screen subset);
-- `menu-fit.mjs` is DEPRECATED (its header): use it ONLY for `--safe=` notch-inset simulation, which
-  layout-audit does not yet own (headless Chromium reports every `env(safe-area-inset-*)` as 0).
+- Notch insets: `layout-audit.mjs --safe=L,T,R,B` overrides every cell's insets (headless Chromium reports
+  every `env(safe-area-inset-*)` as 0).
 
 ## Pseudo-locale stress
 
@@ -72,7 +72,6 @@ truncation and tap targets on longer labels before translating real locales.
 | `menu-mock.mjs` | look fast, not a number of record |
 | `layout-audit.mjs` | numbers of record: geometry matrix, gallery, diff |
 | `fit-audit.mjs` | type/spacing floors (`--sizes=`, `--scale=`; no exit code) |
-| `menu-fit.mjs` | `--safe=` notch insets only (deprecated otherwise) |
 | `reach-score.mjs` | offline (no browser): two-thumb reach zone of each screen's primary, tap share per zone, dead space, from `--dom` dumps or an inspection (`--in DIR --svg`) |
 | `test:baseline` | CI group `baseline` (`menu-baseline.spec.js` PNGs, identity); the nightly `baseline-trial` job runs it, no PR run does; a whole-group dispatch is Bryce's opt-in |
 | `flows.mjs` | interaction FLOWS, not layout: door/Escape, double-tap bleed, focus, Back, persistence, search, rotation, D-pad; `--diff=<old flows.json>` exits 1 on a pass → fail |

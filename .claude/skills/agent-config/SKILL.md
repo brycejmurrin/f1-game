@@ -1,6 +1,6 @@
 ---
 name: agent-config
-description: "Use when adding or editing a skill (SKILL.md, fat body, description, paths), AGENTS.md/CLAUDE.md, .claude/hooks, rules, subagents, the phone.json routing prompts, or a description budget fails. Not for: bloat → slim-bloat."
+description: "Use when adding or editing a skill (SKILL.md, fat body, description, paths), AGENTS.md/CLAUDE.md, .claude/hooks, rules, subagents, the phone.json routing prompts, or a description budget fails. Not bloat → slim-bloat."
 ---
 
 # Edit the agent surface — instructions, skills, subagents, hooks

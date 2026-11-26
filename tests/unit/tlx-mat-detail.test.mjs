@@ -13,7 +13,7 @@ import * as THREE from "../../vendor/three-0.187.0/three.webgpu.min.js";
 const read = (rel) => fs.readFileSync(new URL("../../" + rel, import.meta.url), "utf8");
 installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
-for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-surface.js"])
+for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js", "js/render/shared/assets.js", "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-surface.js"])
   vm.runInThisContext(read(f), { filename: absSrc(f) });
 const M = globalThis.TLXShaders.matDetailMath;
 const TLX = read("js/render/three/tlx.js");

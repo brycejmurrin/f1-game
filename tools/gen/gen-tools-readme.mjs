@@ -258,9 +258,8 @@ const CONVENTIONS = `## Conventions
   \`car/carshot.mjs\` the ~5 KB studio probe, \`shot/shot.mjs\` one framed track
   shot, \`track/survey-track.mjs <id>\` the one-stop circuit pass (\`--oblique\`
   adds topdown + N/E/S/W). Redundant one-offs were deleted; recover from git
-  history if a need returns. \`ui/menu-fit.mjs\` survives \`ui/layout-audit.mjs\`
-  only for \`--safe=\` (arbitrary notch insets — headless Chromium reports every
-  \`env(safe-area-inset-*)\` as 0).
+  history if a need returns. \`ui/layout-audit.mjs --safe=L,T,R,B\` simulates arbitrary notch insets
+  (headless Chromium reports every \`env(safe-area-inset-*)\` as 0).
 - **Chromium:** \`CHROME\` / \`PW_CHROMIUM\`, then \`/opt/pw-browsers/...\`, else
   Playwright's bundled browser. Servers bind a free port (or \`:3456\`).
 - **Two Playwright packages on purpose:** specs run on \`@playwright/test\`;
