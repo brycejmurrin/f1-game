@@ -172,5 +172,29 @@ var Damage = (function () {
     return { fwL: r.fwL, fwR: r.fwR, rw: r.rw, floor: r.floor, knock: r.knock, hits: r.hits, worst: worst(r), shown: worst(r) > SHOW };
   }
 
-  return Object.freeze({ contact, observe, reset, get, state, worst, zoneOf, apply, blank, SHOW, ZONE_FRONT, ZONE_REAR, ZONE_SIDE });
+  /** The whole record as plain data, or null for a car never seen: what a
+   *  practice rewind or retry must put back (#6862 P2). The record lives in
+   *  this module's WeakMap, not on the car, so the car sweep cannot see it. */
+  function snapshot(c) {
+    const r = c ? recs.get(c) : null;
+    return r ? Object.assign({}, r) : null;
+  }
+  /** Put a snapshot() back; null restores the car to undamaged. */
+  function restore(c, s) {
+    if (!c) return;
+    const r = rec(c);
+    Object.assign(r, blank(), s || {});
+  }
+  // Registered with the SimState registry (js/core/sim-state.js, #6860), which
+  // loads before this file in LAZY_RACE_SESSION. Index-keyed like the car part,
+  // and ordered after it. A restore is not a game read: nothing in physics
+  // gains a reference to this module.
+  if (typeof SimState !== "undefined") SimState.register("damage", {
+    order: 10,
+    capture: (G) => (G.cars || []).map(snapshot),
+    restore: (d, G) => { const cars = G.cars || []; for (let i = 0; i < cars.length && i < d.length; i++) restore(cars[i], d[i]); },
+    clear: (G) => { for (const c of G.cars || []) if (recs.has(c)) restore(c, null); },
+  });
+
+  return Object.freeze({ contact, observe, reset, get, state, worst, zoneOf, apply, blank, snapshot, restore, SHOW, ZONE_FRONT, ZONE_REAR, ZONE_SIDE });
 })();

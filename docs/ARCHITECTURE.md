@@ -106,6 +106,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `i18n-pseudo.js` | `I18nPseudo` | tag | pseudo-locale expansion for layout stress (en-XA). |
 | `i18n.js` | `I18n` | tag | gettext-style I18n: English defaults at the call site, optional locale JSON. |
 | `dom-apply.js` | `I18nDom` | tag | apply data-i18n / data-i18n-attr when the active language is not plain English. |
+| `sim-state.js` | `SimState` | LAZY_RACE_SESSION | SimState: ONE definition of "the simulation state" (#6860 phase 1, decision B). |
 
 **`js/`**
 
