@@ -387,6 +387,6 @@ const TrackDetail = (function () {
   }
 
   return { NAMES, NONE, normalize, page, resolve, config, attach, crowdFigure, crowdMat, TREE_MODELS, modelHint, CROWD_NEAR_M, POSES, SKIN,
-           farTerrain, sampleXZ, batchXZ, FAR, kerbRibbon, withKerbs, KERB_LAT, KERB_H };
+           farTerrain, FAR, kerbRibbon, KERB_H };
 })();
 Object.freeze(TrackDetail);

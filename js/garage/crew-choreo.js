@@ -16,7 +16,6 @@ const GarageCrewChoreo = (function () {
   const acc = GarageCrewDraw.acc;
   const place = GarageCrewDraw.place;
   const mul = GarageCrewDraw.mul;
-  const CHANNELS = ["x", "z", "yaw", "walk", "crouch", "lean", "handY", "reach", "wave", "hold"];
   const IDS = { in: [], out: [], pit: [] };
   for (const id of Object.keys(CLIPS)) IDS[CLIPS[id].dir].push(id);
   // THE PER-VISIT ROTATION ("mix"): the shipped crews and the Blender variants,
