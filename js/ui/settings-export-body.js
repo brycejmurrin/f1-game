@@ -533,8 +533,15 @@ function applyGarage(file) {
       ? prepared[customKey] : GameStore.store.get(customKey, []);
     prepared[k] = CustomLiveries.coherentImportedSelection(teamId, customs, prepared[k]);
   }
+  // One unit, like writePreferences: a refused write puts every prepared key back (#6478 row 3).
+  const store = GameStore.store;
+  const before = Object.keys(prepared).map((k) => [k, store.getStored ? store.getStored(k) : store.get(k, undefined)]);
   for (const k of Object.keys(prepared)) {
-    try { if (GameStore.store.set(k, prepared[k]) !== false) applied++; else failed++; } catch (_) { failed++; }
+    try { if (store.set(k, prepared[k]) !== false) applied++; else failed++; } catch (_) { failed++; }
+  }
+  if (failed) {
+    restoreKeys(before);
+    applied = 0;
   }
   const res = { ok: true, applied, skipped, failed, reason: null };
   if (droppedLiveries) { res.droppedLiveries = droppedLiveries; Log.warn("ui", "garage file: livery rows failed the shape check", { droppedLiveries }); }
@@ -547,6 +554,12 @@ function applyGarage(file) {
 // so extras the shipped file does not name (an invented team, a one-off
 // setup.*) cannot linger, then apply GarageDefaults.file() through the same
 // loader a hand-picked export uses. Career / season / settings stay out.
+// Put [key, storedValue] pairs back (undefined removes); a refusing store keeps what it can.
+function restoreKeys(pairs) {
+  for (const [k, prev] of pairs) {
+    try { GameStore.store.set(k, prev); } catch (_) { /* storage is refusing */ }
+  }
+}
 async function resetGarage() {
   if (typeof GarageDefaults === "undefined" || !GarageDefaults.file) {
     return { ok: false, reason: "no shipped garage defaults", applied: 0, skipped: 0 };
@@ -556,11 +569,14 @@ async function resetGarage() {
   catch (_) { return { ok: false, reason: "garage storage is unavailable", applied: 0, skipped: 0 }; }
   if (store.mirror && !store.mirror.inventoryKnown) return { ok: false, reason: "garage recovery is unavailable — reload and retry", applied: 0, skipped: 0 };
   const doomed = store.knownKeys().filter(isGarageKey);
+  // A refused default write must not cost the player the team, liveries and setups it cleared (#6478 row 1).
+  const snapshot = doomed.map((k) => [k, store.getStored ? store.getStored(k) : store.get(k, undefined)]);
   let failed = 0;
   for (const k of doomed) {
     try { if (GameStore.store.set(k, undefined) === false) failed++; } catch (_) { failed++; }
   }
   const result = applyGarage(GarageDefaults.file());
+  if (result.failed) { restoreKeys(snapshot); result.restored = true; }
   result.failed = (result.failed || 0) + failed;
   // A reload must not restore a quota-refused garage row from its old mirror.
   if (store.mirror && (store.mirror.pending || store.mirror.inFlight)) {
@@ -599,7 +615,8 @@ function poisonedCareerMoney(raw, flavour) {
 }
 // Clean-room fix 70: the season save, licence badges and daily history travel in the career
 // file too, under CareerBackup's envelope names, so a player with no career still backs them up.
-const CAREER_EXTRA_KEYS = Object.freeze({ season: "season", badges: "badges", daily: "daily.v1" });
+// `records` is CareerBackup's pass-through extra (#6478 row 11).
+const CAREER_EXTRA_KEYS = Object.freeze({ season: "season", badges: "badges", daily: "daily.v1", records: "records" });
 function collectCareer() {
   const out = {};
   let n = 0;
@@ -705,9 +722,18 @@ async function applyCareer(file, revisions) {
   return { ok: true, applied, skipped: skipped + (Array.isArray(r.rejected) ? r.rejected.length : 0), failed, reason: null };
 }
 
+const RESTORE_LIMIT_MSG = "File exceeds the restore limit";
+const CAREER_FILE_MAX_BYTES = 5 * 1024 * 1024;   // CareerBackup.MAX_BYTES before that lazy module lands
+function saveCap(format) {
+  if (format === FORMAT) return SETTINGS_MAX_BYTES;
+  if (format === GARAGE_FORMAT) return GARAGE_MAX_BYTES;
+  if (format === CAREER_FORMAT) return typeof CareerBackup !== "undefined" ? CareerBackup.MAX_BYTES : CAREER_FILE_MAX_BYTES;
+  return Infinity;
+}
 async function download(obj, name) {
   const blob = new Blob([JSON.stringify(obj, null, obj.format === FORMAT ? undefined : 1)], { type: "application/json" });
-  if (obj.format === FORMAT && blob.size > SETTINGS_MAX_BYTES) throw new RangeError("Settings file exceeds the restore limit");
+  // Each format's LOAD cap, so a file that cannot be loaded back is never saved (#6478 row 8).
+  if (blob.size > saveCap(obj.format)) throw new RangeError(RESTORE_LIMIT_MSG);
   if (typeof NativeDownload !== "undefined" && NativeDownload.viable()) {
     await NativeDownload.saveBlob(blob, name);
     return;
@@ -844,7 +870,7 @@ function create(G) {
         flash(b, label, `SAVED (${n})`);
         Log.info("ui", "file saved", { id, n });
       } catch (e) {
-        flash(b, label, e instanceof RangeError && e.message === "Settings file exceeds the restore limit" ? "TOO LARGE TO RESTORE"
+        flash(b, label, e instanceof RangeError && e.message === RESTORE_LIMIT_MSG ? "TOO LARGE TO RESTORE"
           : typeof NativeDownload !== "undefined" && NativeDownload.isCancelled(e) ? "CANCELLED" : "FAILED");
         Log.warn("ui", "file save failed", e && e.message);
       } finally {
@@ -1104,7 +1130,7 @@ function create(G) {
       groupHead("CAREER FILE"),
       loadBtn("pm-career-load", "LOAD CAREER FILE", "Replace career slots only, with protection against changes made after confirmation.",
         loadCareer, "CAREER SAVES", careerRevisions,
-        typeof CareerBackup !== "undefined" ? CareerBackup.MAX_BYTES : 5 * 1024 * 1024));
+        saveCap(CAREER_FORMAT)));
     sections[2].append(shareNote, shareIn, shareBtn, shareStatus);
     const scope = document.createElement("details");
     scope.id = "pm-files-included";
@@ -1189,7 +1215,7 @@ function create(G) {
       loadBtn("cr-career-load", "LOAD CAREER FILE",
         "Read an apex26-career file back in. Only career slots are written; settings and the garage are never touched.",
         applyCareer, "CAREER SAVES", careerRevisions,
-        typeof CareerBackup !== "undefined" ? CareerBackup.MAX_BYTES : 5 * 1024 * 1024));
+        saveCap(CAREER_FORMAT)));
     const protection = document.createElement("button");
     protection.type = "button";
     protection.textContent = "PROTECT LOCAL SAVES";
