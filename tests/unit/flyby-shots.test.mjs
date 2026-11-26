@@ -1020,7 +1020,7 @@ test("the menu plans the flyby; the loading screen reuses every plan (no plannin
     F.setPlayerSlot(11, 22);
     const list = F.vary(F.DEFAULT, 9, false), step = F.planSteps(track, list);
     let n = 0; while (!step()) n++;
-    assert.ok(n >= list.length - 2, "planSteps plans one shot per call");
+    assert.ok(n >= list.length - 2, "planSteps plans at most one shot per call (a slice of one, #6489)");
     assert.equal(F.withoutSlot(list), list, "nothing filtered: the same array, so the bound shots and plans are reused");
     const b1 = F.bindCorners(track, list), b2 = F.bindCorners(track, list.slice());
     assert.ok(b1.every((s, i) => s === b2[i]), "a re-made list binds to the SAME shot objects");
@@ -1030,6 +1030,41 @@ test("the menu plans the flyby; the loading screen reuses every plan (no plannin
     assert.ok(worst < 25, `every shot was planned in the menu (worst solve ${worst.toFixed(1)} ms)`);
     return null;
   });
+});
+
+test("planSteps slices inside a shot and plans exactly what planShot plans whole (#6489)", async () => {
+  // One whole shot per step was a 104-200 ms main-thread task at the picker:
+  // menuFinish checks its 3 ms budget only between steps. planShot is a
+  // generator underneath (planShotG) that yields after each judged frame and
+  // each planned eye, and the cold scene build (FlybySight.sceneSteps) yields
+  // too. Sliced or drained, the plans must be the same bytes.
+  await withTrack("monaco", (track, g) => {
+    const F = g.sandbox.FlybySeq;
+    F.setPlayerSlot(11, 22); F.setDuration(20000);
+    const shots = F.vary(F.DEFAULT, 12345, false), list = F.bindCorners(track, shots);
+    let total = 0; for (const s of list) total += s.dur || 0;
+    const ser = () => JSON.stringify(list.map((s) => { const sh = F.landmarkFallback(track, s); return F.planShot(track, sh, (sh.dur || 1) / total); }),
+      (k, v) => (v instanceof Float32Array ? Array.from(v) : v));
+    delete track._fbPlan; delete track._fsScene;
+    const step = F.planSteps(track, shots);
+    let n = 1; while (!step()) n++;
+    assert.ok(n > list.length * 3, `a shot is many steps, not one (${n} steps for ${list.length} shots)`);
+    const sliced = ser();
+    delete track._fbPlan; delete track._fsScene;
+    assert.equal(ser(), sliced, "the sliced plans are byte-for-byte the whole ones");
+    // The duration moves mid-plan (a sliced shot is open across it): that shot is
+    // re-planned whole for the new duration, never cached half one, half the other.
+    delete track._fbPlan; delete track._fsScene;
+    const step2 = F.planSteps(track, shots);
+    for (let k = 0; k < 40; k++) step2();
+    F.setDuration(10000);
+    while (!step2());
+    const moved = ser();
+    delete track._fbPlan; delete track._fsScene;
+    assert.equal(ser(), moved, "a duration set mid-slice leaves the plans a whole plan at that duration makes");
+    F.setDuration(20000);
+    return null;
+  }, { fresh: true });
 });
 
 test("plans are reused when they still hold, and re-planned when they do not", async () => {
