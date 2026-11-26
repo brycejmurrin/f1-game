@@ -354,7 +354,9 @@ const NetHandshake = (function () {
   }
   function inviteFromUrl(href) {
     try {
-      const h = (href != null ? String(href) : location.hash) || "";
+      const text = (href != null ? String(href) : location.hash) || "";
+      const at = text.indexOf("#");   // the code rides in the fragment only; "?vs=" is not a link
+      const h = at < 0 ? "" : text.slice(at);
       const m = h.match(/[#&]vs=([^&\s]+)/);   // a link ends at whitespace: "…#vs=CODE\nSent from my iPhone"
       // A code ends in a base64url character, never in the "." or ")" a
       // sentence puts after the link — "Race me: …#vs=CODE." read as four

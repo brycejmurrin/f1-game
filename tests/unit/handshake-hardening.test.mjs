@@ -77,3 +77,11 @@ test("S6: an answer with no offer id is wrong_offer; a matching one pairs", asyn
   assert.equal(calls.length, 1);
 });
 
+test("S10: inviteFromUrl reads the fragment only", () => {
+  assert.equal(H.inviteFromUrl("https://x.test/p#vs=ABC_-1"), "ABC_-1");
+  assert.equal(H.inviteFromUrl("https://x.test/p?vs=ABC"), null);
+  assert.equal(H.inviteFromUrl("https://x.test/p?vs=ABC#other=1"), null);
+  assert.equal(H.inviteFromUrl("https://x.test/p?a=1&vs=ABC"), null);
+  assert.equal(H.inviteFromUrl("https://x.test/p?a=1#x=2&vs=ABC."), "ABC");
+  assert.equal(H.inviteFromUrl("Race me: https://x.test/#vs=CODE\nSent from my iPhone"), "CODE");
+});
