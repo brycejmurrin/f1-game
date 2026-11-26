@@ -14,6 +14,7 @@ import {
   loadBatchFile,
   SHOT_USAGE,
 } from "../../tools/shot/shot-jobs.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TMP = path.join(ROOT, "artifacts", "tmp", "shot-jobs-test");
@@ -169,7 +170,6 @@ test("--weather parses, validates, and splits batch groups", () => {
 
 // A/B imports must preserve existing pairs and refuse misleading image geometry.
 import sharp from 'sharp';
-import os from 'node:os';
 import {addPair, recipePairs, selectionFields} from '../../tools/shot/ab-gallery.mjs';
 test('A/B gallery validates capture recipes before launching a browser',()=>{
  const pair={id:'test',scene:{weather:'storm'},b:{visor:'clear',visorRefraction:'strong'}};
@@ -178,7 +178,7 @@ test('A/B gallery validates capture recipes before launching a browser',()=>{
  assert.throws(()=>recipePairs({pairs:[pair,pair]}),/duplicate/);
 });
 test('A/B append, replace and failed imports preserve valid comparisons',async()=>{
- const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'apex-ab-'));
+ const tmp=mkTmpDir('apex-ab-');
  try{
   const gallery=path.join(tmp,'gallery'),a=path.join(tmp,'a.png'),b=path.join(tmp,'b.png'),wrong=path.join(tmp,'wrong.png');
   await sharp({create:{width:32,height:18,channels:3,background:'#123456'}}).png().toFile(a);

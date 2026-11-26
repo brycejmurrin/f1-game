@@ -24,12 +24,8 @@ let g = null, m = null;
 // AI-equivalent car). Since #6705 (Bryce's pick B) the pin seat's works McLaren keeps a grip reserve
 // (cornering ×1.66, braking ×1.39), and the fixed bench speeds and locks no longer reach its limit; the
 // bench drives the ×1 car instead, as the wheel-state storm row below already did. The reserve car's own
-// numbers are pinned in player-dynamics-shipped-vm and trail-brake-turnin.
-function neutralMods(w) {
-  const S = w.sandbox, team = w.G.player.team, st = S.Career.teamStats(team) || team.stats;
-  return { speed: S.Parts.statMult(st.speed), accel: S.Parts.statMult(st.accel),
-    cornering: S.Parts.statMult(st.cornering), braking: S.Parts.statMult(st.braking) };
-}
+// numbers are pinned in player-dynamics-shipped-vm and trail-brake-turnin. One home: neutral-mods-vm.cjs (#6731).
+const { neutralMods, withMods } = require("./neutral-mods-vm.cjs");
 before(async () => {
   // Keep the bench at its measured ground-speed scale.
   g = await createGame({ track: "monza", storage: { difficulty: "normal", autoThrottle: false, pace: 11 } });
@@ -550,24 +546,26 @@ test("wheel state ON: full throttle on grass spins the rear and pulls slower", (
 // Repeated heavy stops heat the discs; past the fade onset the pads deliver less, so the stop gets
 // LONGER. OFF is byte-identical (no temperature is ever written).
 test("brake thermal (#1577): repeated heavy stops heat the discs and lengthen the stop; OFF changes nothing", () => {
-  const w = dry.w, P = w.G.player, mods0 = P.mods;
-  P.mods = neutralMods(w);   // the ×1 car (see neutralMods): the reserve brake has fade headroom at this stop's heat
-  const set = (ws, bt) => { w.apex.setPhysics({ wheelState: ws, brakeThermal: bt }); };
-  const run = (bt) => {
-    set(true, bt); P.brakeTF = P.brakeTR = undefined;
-    const rows = [];
-    for (let i = 0; i < 6; i++) { const s = stopFrom(w, 83, null); rows.push({ d: s.d, tF: P.brakeTF }); }
-    return rows;
-  };
-  const off = run(false), on = run(true);
-  set(false, false);
-  assert.equal(off[0].tF, undefined, "OFF never writes a temperature");
-  assert.ok(Math.abs(off[5].d - off[0].d) < 0.5, "OFF: stops do not drift " + JSON.stringify(off));
-  assert.ok(Math.abs(on[0].d - off[0].d) < 1, "ON, cold: the first stop matches OFF");
-  assert.ok(on[5].tF > on[0].tF + 100, "discs heat across stops " + JSON.stringify(on));
-  assert.ok(on[5].d > on[0].d + 3, "hot stop is longer than the cold one " + JSON.stringify(on));
-  assert.equal(w.apex.setPhysics({ brakeThermal: true }).brakeThermal, true);
-  assert.equal(w.apex.setPhysics({ brakeThermal: false }).brakeThermal, false);
-  assert.ok("brakeTemp" in w.apex.physState());
-  P.mods = mods0;
+  const w = dry.w, P = w.G.player;
+  // the ×1 car (see neutralMods): the reserve brake has fade headroom at this stop's heat. withMods restores the
+  // shared car's mods in finally, so a failed assert cannot leave the later tests on the neutral car (#6731).
+  withMods(P, neutralMods(w), () => {
+    const set = (ws, bt) => { w.apex.setPhysics({ wheelState: ws, brakeThermal: bt }); };
+    const run = (bt) => {
+      set(true, bt); P.brakeTF = P.brakeTR = undefined;
+      const rows = [];
+      for (let i = 0; i < 6; i++) { const s = stopFrom(w, 83, null); rows.push({ d: s.d, tF: P.brakeTF }); }
+      return rows;
+    };
+    const off = run(false), on = run(true);
+    set(false, false);
+    assert.equal(off[0].tF, undefined, "OFF never writes a temperature");
+    assert.ok(Math.abs(off[5].d - off[0].d) < 0.5, "OFF: stops do not drift " + JSON.stringify(off));
+    assert.ok(Math.abs(on[0].d - off[0].d) < 1, "ON, cold: the first stop matches OFF");
+    assert.ok(on[5].tF > on[0].tF + 100, "discs heat across stops " + JSON.stringify(on));
+    assert.ok(on[5].d > on[0].d + 3, "hot stop is longer than the cold one " + JSON.stringify(on));
+    assert.equal(w.apex.setPhysics({ brakeThermal: true }).brakeThermal, true);
+    assert.equal(w.apex.setPhysics({ brakeThermal: false }).brakeThermal, false);
+    assert.ok("brakeTemp" in w.apex.physState());
+  });
 });
