@@ -1372,6 +1372,22 @@ test("lapsLeft measures the wear rate over the laps AND the part-lap driven on t
   assert.ok(Math.abs(s.lapsLeft(c) - (2 / 0.54) * 0.46) < 1e-9);
 });
 
+// #6611 RW7: fit() rounds the part lap before the line into tyreLapAdj (0 or 1), so a set fitted at 0.3 of
+// a lap had 2 whole laps on it after 1.7 driven; one fitted at 0.45 read 1.8x its life at the first line.
+test("lapsLeft counts the exact distance from the fit point, not the rounded part lap (#6611 RW7)", () => {
+  const len = 1000;
+  for (const [fitAt, drive] of [[0.3, 1.7], [0.45, 0.55], [0.7, 1.7], [0.6, 2.25]]) {
+    const G = { lapsTarget: 10, track: { total: len, def: {} }, LAT_MAX: 22, raceTyreWear: "real" };
+    const s = T.create(G); s.setLevel("real");
+    const c = { human: false, lap: 1, s: fitAt * len, prog: fitAt * len, _progGift: 0, tread: null };
+    s.fit(c, T.classRecord("medium"));
+    c.prog = (fitAt + drive) * len; c.lap = 1 + Math.floor(fitAt + drive); c.s = c.prog % len; c.tyreWear = 0.4;
+    if (s.lapsOn(c) < 1) continue;
+    const left = s.lapsLeft(c);
+    assert.ok(Math.abs(left - (drive / 0.4) * 0.6) < 1e-9, `fit at ${fitAt}, ${drive} laps driven: ${left} vs ${(drive / 0.4) * 0.6}`);
+  }
+});
+
 test("tyre care (#1566): an AI's style scales its tyre load symmetrically; the human load ignores it", () => {
   const base = { consistency: 0.75, accSm: 2 };
   const mid = T.aiLoad(base, 7), kind = T.aiLoad({ ...base, tyreCare: 1 }, 7), hard = T.aiLoad({ ...base, tyreCare: -1 }, 7);

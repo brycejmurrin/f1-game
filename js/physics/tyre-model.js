@@ -808,6 +808,7 @@ const TyreModel = (function () {
       // set, so lapsOn would run a lap ahead (replan's loadK, wetLapsToStop, the HUD's laps left).
       const len = G.track && G.track.total, at = physical == null ? c.s : c.prog - (c._progGift || 0);   // prog when the physical clock has it: a stale s on the grid says nothing
       c.tyreLapAdj = (c.lap || 0) >= 1 && len > 0 && (physical == null ? (at || 0) : at - physical * len) > len * 0.5 ? 1 : 0;
+      c.tyreFitProg = physical == null ? null : at; c.tyreFitLap0 = c.tyreLap0;   // the exact fit point: lapsLeft's driven distance (#6611 RW7)
       c.tyreStints = (c.tyreStints || 0) + 1;
       // THE STINT LOG, which is what the results sheet draws. Recorded HERE
       // because fit() is the only place a set is ever changed, so the log and
@@ -1032,8 +1033,14 @@ const TyreModel = (function () {
       // of nearly n + 1, so the rate read up to (n + 1) / n high — 2.0 laps left on a set that had
       // 2.6 (measured, monaco rain, 5 laps: the whole AI field boxed wet-for-wet on it, and the
       // HUD's laps-left sawtoothed down through every lap). Count the part of this lap driven.
+      // The fit's part lap is rounded into lapsOn (tyreLapAdj 0 or 1): a set fitted at 0.45 of a lap read
+      // a whole lap at the next line, 1.8x its life (#6611 RW7). Measure from the exact fit point when it
+      // is known for THIS set (a drop-in that sets tyreLap0 by hand keeps the old read). The exact count sits
+      // in (n - 1, n + 2): the rounded part lap is under a lap either way, the lap in progress under one more.
       const len = G.track && G.track.total, at = len > 0 && Number.isFinite(c.prog) ? Math.max(0, c.prog - (c._progGift || 0)) / len : 0;
-      const life = n >= 1 && w > 0.02 ? (n + (at - Math.floor(at))) / w : planLaps(c.tyre.life, G.lapsTarget);
+      const exact = len > 0 && Number.isFinite(c.prog) && Number.isFinite(c.tyreFitProg) && c.tyreFitLap0 === c.tyreLap0 ? at - c.tyreFitProg / len : NaN;
+      const driven = exact >= 0 && exact > n - 1 && exact < n + 2 ? exact : n + (at - Math.floor(at));
+      const life = n >= 1 && w > 0.02 ? driven / w : planLaps(c.tyre.life, G.lapsTarget);
       return Math.max(0, life * (1 - Math.min(1, w)));
     }
 
