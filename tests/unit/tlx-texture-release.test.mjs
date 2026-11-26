@@ -33,8 +33,10 @@ function slice(src, startMarker, endMarker, what) {
   return src.slice(a, b);
 }
 
+const UTIL_STAND = slice(fs.readFileSync(path.join(ROOT, "js/render/three/tlx-util.js"), "utf8"), "let _texStandIn = null;", "// Capture the unpreserved", "texStandIn");
+
 function liftRelease(fakeDocument, Bitmap = class ImageBitmap {}) {
-  const body = slice(TLX, "let _texStandIn = null;", "/** create(canvas, opts)", "releaseTexSource");
+  const body = UTIL_STAND + slice(TLX, "function releaseTexSource(t) {", "/** create(canvas, opts)", "releaseTexSource");
   // eslint-disable-next-line no-new-func
   return new Function("document", "ImageBitmap", `"use strict";${body};return { releaseTexSource, texStandIn };`)(
     fakeDocument, Bitmap);
@@ -223,7 +225,7 @@ test("every released texture shares one stand-in, and a second release is a no-o
 
 test("ImageBitmap sources are kept (three's flipY uniform tests instanceof ImageBitmap)", () => {
   const Bitmap = class ImageBitmap {};
-  const body = slice(TLX, "let _texStandIn = null;", "/** create(canvas, opts)", "releaseTexSource");
+  const body = UTIL_STAND + slice(TLX, "function releaseTexSource(t) {", "/** create(canvas, opts)", "releaseTexSource");
   // eslint-disable-next-line no-new-func
   const { releaseTexSource } = new Function("document", "ImageBitmap",
     `"use strict";${body};return { releaseTexSource };`)(fakeDoc(), Bitmap);

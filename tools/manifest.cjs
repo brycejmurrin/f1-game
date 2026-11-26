@@ -1012,6 +1012,7 @@ const DEFERRED = {
     "js/render/three/tlx-chunked.js",
     "js/render/three/tlx-post.js",
     "js/render/three/tlx-mem.js",
+    "js/render/three/tlx-util.js",
     "js/render/three/tlx.js",
   ],
 };
@@ -1633,6 +1634,7 @@ const DEFERRED_EDGES = [
   ["js/render/three/tlx-chunked.js", "js/render/three/tlx.js"],  // TLX.create invokes TLXShaders.chunked
   ["js/render/three/tsl-post.js", "js/render/three/tlx-post.js"], // postChain invokes TLXShaders.post
   ["js/render/three/tlx-post.js", "js/render/three/tlx.js"],     // TLX.create invokes TLXShaders.postChain
+  ["js/render/three/tlx-util.js", "js/render/three/tlx.js"],     // tlx.js destructures TLXUtil at eval
 ];
 
 // Named paths for direct single-file consumers (tests/tools that load one

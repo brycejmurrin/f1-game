@@ -174,6 +174,7 @@ test("TLX-02: a dead sun pass zeroes the lit shadow strength every frame", () =>
 test("TLX-03: the DPR cap follows mobileTier (1.5 phone, 2 desktop); only RESOLUTION MAX lifts it (#5222)", () => {
   // The B8 lab (?lab=tlxLite) takes its own cap first; the full table is in render-effective-res.test.mjs.
   const ctx = vm.createContext({ location: { search: "" }, URLSearchParams, WeakSet, WeakMap, Math, Object, Number, String });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/three/tlx-util.js"), "utf8"), ctx, { filename: absSrc("js/render/three/tlx-util.js") });
   vm.runInContext(TLX.replace(/^const TLX = /m, "var TLX = "), ctx, { filename: absSrc("js/render/three/tlx.js") });
   const f = ctx.TLX.dprCapFor;
   assert.deepEqual([f(null, true, 0, 0), f(null, false, 0, 0), f(null, true, 3, 0), f({ dprCap: 1.25 }, true, 0, 0)], [1.5, 2, 3, 1.25]);
