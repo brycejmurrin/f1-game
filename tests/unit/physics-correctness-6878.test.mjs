@@ -60,5 +60,5 @@ test("P7: cooldownDrive throttle accel and steer rate scale with PACE", () => {
   const a = cooldownAt(1), b = cooldownAt(0.5);
   assert.ok(Math.abs(a.speed - 1.8) < 1e-9);
   assert.ok(Math.abs(b.speed - 0.9) < 1e-9, "accel halves at pace 0.5");
-  assert.ok(Math.abs(b.x / a.x - 0.5) < 1e-9 || b.x < a.x, "steer slew scales down");
+  assert.ok(Math.abs(b.x / a.x - 0.5) < 1e-9, "steer slew halves at pace 0.5");
 });
