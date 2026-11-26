@@ -304,8 +304,17 @@ test("pre-push refuses a push over another author's fresh commits; own, old, fir
 });
 
 test("pre-commit only honours the explicit guards-maintenance bypass", () => {
-  const r=spawnSync("bash",[path.join(ROOT,".githooks/pre-commit")],{cwd:ROOT,encoding:"utf8",env:{...HOOK_ENV,CLAUDECODE:"1",APEX_SKIP_GUARDS:"1"}});
-  assert.equal(r.status,0,r.stderr);
+  // Run the real hook in a throwaway repo: against ROOT, a dirty or staged checkout changes the verdict (#6792).
+  const dir = mkTmpDir("precommit-bypass-");
+  const env = { ...HOOK_ENV, CLAUDECODE: "1", APEX_SKIP_GUARDS: "1" };
+  for (const name of execFileSync("git", ["rev-parse", "--local-env-vars"], { cwd: ROOT, encoding: "utf8" }).trim().split(/\s+/)) delete env[name];
+  try {
+    execFileSync("git", ["init", "-q"], { cwd: dir, env });
+    fs.mkdirSync(path.join(dir, ".githooks"));
+    fs.copyFileSync(path.join(ROOT, ".githooks/pre-commit"), path.join(dir, ".githooks/pre-commit"));
+    const r=spawnSync("bash",[path.join(dir,".githooks/pre-commit")],{cwd:dir,encoding:"utf8",env});
+    assert.equal(r.status,0,r.stderr);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   const src=fs.readFileSync(path.join(ROOT,".githooks/pre-commit"),"utf8");
   assert.doesNotMatch(src,/\[ -n "\$\{CLAUDECODE:-\}" \] && exit 0/);
 });
