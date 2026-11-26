@@ -136,7 +136,7 @@ export function wearArg(argv, dflt = "off") {
  *  token must select at least one id (`match: "substring"` or exact, a trailing
  *  `*` meaning prefix), else throw a CliArgError naming the valid ids.
  *
- *  WHY. `menu-fit --only=title` matched no screen (the id is `menu`), ran zero
+ *  WHY. an old fit-audit `--only=title` matched no screen (the id is `menu`), ran zero
  *  cells, printed nothing and exited 0, so a clipped screen looked clean
  *  (#3305). A filter that selects nothing is the caller's typo, never a pass. */
 export function pickIds(raw, ids, { flag = "--only", match = "substring" } = {}) {

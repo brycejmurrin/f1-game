@@ -83,6 +83,7 @@ function printHelp() {
   --scale=100,130 / --circuits=  UI-scale and map-circuit axes
   --theme=dark,light             theme axis (default dark): context colorScheme AND
                                  the game's own uiTheme setting; rows carry \`theme\`
+  --safe=L,T,R,B                 override every cell's notch insets (CSS px; e.g. 59,0,59,21 = landscape iPhone Pro)
   --lang=TAG                     I18n query (?lang=); en-XA = pseudo-locale stress
   --json                         print this run's rows as one JSON object on stdout
   --jobs=N                       parallel viewports (default 3 geometry / 2 gallery)
@@ -96,6 +97,14 @@ function printHelp() {
 
 Legacy: --capture-only is an alias for --gallery.
 `);
+}
+
+/** `--safe=L,T,R,B` → {l,t,r,b} CSS px, or null. Four finite non-negative numbers, else a CliArgError. */
+export function parseSafe(v) {
+  if (v == null) return null;
+  const n = v.split(",").map(Number);
+  if (n.length !== 4 || n.some((x) => !Number.isFinite(x) || x < 0)) throw new CliArgError(`--safe= needs L,T,R,B (four CSS px values >= 0), got "${v}"`);
+  return { l: n[0], t: n[1], r: n[2], b: n[3] };
 }
 
 function parseArgv(argv) {
@@ -136,6 +145,7 @@ function parseArgv(argv) {
     circuits: parseCircuits(argv),
     themes: parseThemes(argv),
     lang: arg("--lang=") || null,
+    safe: parseSafe(arg("--safe=")),
     outDir: arg("--out=")
       ? path.resolve(ROOT, arg("--out="))
       : (gallery || screen || has("--report") ? GALLERY_OUT : GEOM_OUT),
@@ -711,7 +721,9 @@ for (const vp of viewports) for (const sc of SCALES) for (const th of THEMES_AXI
 await Promise.all(Array.from({ length: Math.min(JOBS, queue.length) }, () => worker()));
 async function worker() { while (queue.length) { const job = queue.shift(); if (job) await sweepViewport(job[0], job[1], job[2]); } }
 
-async function sweepViewport(vpEntry, scale, theme) {
+async function sweepViewport(vpEntry0, scale, theme) {
+  // --safe= replaces the catalog's notch insets for every cell.
+  const vpEntry = opts.safe ? [vpEntry0[0], vpEntry0[1], vpEntry0[2], opts.safe, vpEntry0[4]] : vpEntry0;
   const [baseName, vpOpts, why, insets] = vpEntry;
   const vpName = baseName + scaleTag(scale);
   // Log lines and file names carry the theme; the row keeps `viewport` clean
