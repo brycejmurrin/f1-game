@@ -179,7 +179,8 @@ const NetWire = (function () {
     for (const e of d) {
       if (!isObj(e)) return null;
       const row = {};
-      for (const k of RESULT_KEYS) { const v = scalar(e[k], 128); if (v !== undefined) row[k] = v; }
+      // A long reason ("DSQ — " + c.dsq) is truncated, not dropped: the guest keeps the label.
+      for (const k of RESULT_KEYS) { const v = typeof e[k] === "string" ? e[k].slice(0, 128) : scalar(e[k]); if (v !== undefined) row[k] = v; }
       rows.push(row);
     }
     return rows;
@@ -190,7 +191,8 @@ const NetWire = (function () {
   const ROWS = {
     [EV.MODEL]: { from: "any", maxBytes: 512, rate: "model", decode: (d) => !isObj(d) ? null : frozen({
       physics: scalar(d.physics), strategy: scalar(d.strategy), epoch: str(d.epoch, 64), ack: d.ack === true ? true : undefined }) },
-    [EV.STRATEGY]: { from: "any", maxBytes: 32768, rate: "strategy", decode: plainObject },
+    // A full state carries up to STINT_MAX (256) stints at ~130 B each with 64-char ids: ~33 KB.
+    [EV.STRATEGY]: { from: "any", maxBytes: 65536, rate: "strategy", decode: plainObject },
     [EV.HELLO]: { from: "any", maxBytes: 16384, rate: "roster", decode: plainObject },
     [EV.SETTINGS]: { from: "host", maxBytes: 32768, rate: "roster", decode: plainObject },
     [EV.READY]: { from: "any", maxBytes: 256, rate: "roster", decode(d) {

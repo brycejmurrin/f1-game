@@ -206,6 +206,13 @@ test("hostile numbers: Infinity, NaN-making and huge values are refused or clamp
   assert.equal(frame("result", '[{"d":"a:0","t":1},"junk"]').length, 0, "a RESULT row that is not an object refuses the sheet");
   assert.equal(frame("result", JSON.stringify(Array.from({ length: 65 }, () => ({ d: "x" })))).length, 0, "RESULT bounded to 64 rows");
   assert.equal(frame("model", '"rev"').length, 0, "MODEL must be an object");
+  const longR = frame("result", JSON.stringify([{ d: "a:0", r: "DSQ — " + "x".repeat(200) }]))[0].d;
+  assert.equal(longR[0].r.length, 128, "a long RESULT reason is truncated, never dropped (review #6972)");
+  // The largest real STRATEGY: 256 stints with 64-char ids and float colours (strategy-wire STINT_MAX).
+  const stint = { code: "S", id: "x".repeat(64), colour: [0.123456789, 0.987654321, 0.555555555], lap0: 999.5, lap1: 1000 };
+  const fullState = { ...SAMPLES.strategy, tyreLog: Array.from({ length: 256 }, () => stint) };
+  assert.ok(JSON.stringify({ t: "strategy", d: fullState }).length > 32768, "fixture is past the old cap");
+  assert.equal(io.send("strategy", fullState).length, 1, "a 256-stint STRATEGY fits its row");
   const deep = "[".repeat(20) + "]".repeat(20);
   assert.equal(frame("caution", `{"a":${deep}}`).length, 0, "a structural row refuses depth past its bound");
 });
