@@ -477,6 +477,7 @@ const AppearanceOpts = (function () {
     if ("appIcon" in v) appIcon = oneOf(v.appIcon, ICON_SETS, "default");
     units = oneOf(v.speedUnits, UNITS, "kmh");
     help = oneOf(v.menuHelp, HELPS, "on");
+    if (typeof A11yOpts != "undefined") A11yOpts.applyCb();
     applyAll();
     for (const [id, value] of [["pm-uitheme", theme], ["pm-menuaccent", menuAccent], ["pm-hudaccent", hudAccent],
       ["pm-textsize", textSize], ["pm-contrast", contrast], ["pm-cvd", cvdMode], ["pm-appicon", appIcon], ["pm-units", units], ["pm-helptext", help]]) paintRow(id, value);
