@@ -1224,3 +1224,38 @@ test("TopModal: a dialog wraps Tab at its last control instead of parking on <bo
   assert.equal(tab(true).defaultPrevented, true);
   assert.equal(h.focused(), "htp-close", "Shift+Tab from the first wraps to the last");
 });
+
+/* ── sheet dismiss consistency (#6753 / #6570 row 8) ─────────────────────── */
+function footOf(id) {
+  const m = HTML.match(new RegExp(`<dialog id="${id}"[\\s\\S]*?</dialog>`));
+  assert.ok(m, `#${id} dialog exists`);
+  return m[0].match(/<div class="sheet-foot">([\s\S]*?)<\/div>/)[1];
+}
+test("a lone dismiss over a visible screen reads CLOSE: Duel picker and Team picker (#6570 row 8)", () => {
+  for (const [id, btn] of [["duel-picker", "duel-close"], ["teampicker", "tp-close"]]) {
+    const foot = footOf(id);
+    assert.equal(new RegExp(`id="${btn}"[^>]*>CLOSE<`).test(foot), true, `#${id} dismiss reads CLOSE`);
+  }
+});
+
+/* #6753 / #6570 row 7 — a commit sheet focuses its primary unless that is destructive */
+test("every <dialog> has one [autofocus], on the non-alt .bigbtn when there is one (#6570 row 7)", () => {
+  const dialogs = HTML.match(/<dialog\b[\s\S]*?<\/dialog>/g) || [];
+  const exempt = new Set(["results"]); // allow-list: id → reason. results: out of #6753 scope (NEXT has no autofocus today; follow-up)
+  let checked = 0;
+  for (const d of dialogs) {
+    const id = (d.match(/<dialog id="([^"]+)"/) || [])[1];
+    if (!id || exempt.has(id) || !/class="sheet-foot"/.test(d)) continue;
+    const foot = d.match(/<div class="sheet-foot">([\s\S]*?)<\/div>\s*<\/div>/);
+    if (!foot) continue;
+    const btns = foot[1].match(/<button\b[^>]*>/g) || [];
+    const primary = btns.filter((b) => /bigbtn/.test(b) && !/\balt\b/.test(b));
+    if (primary.length) {
+      assert.equal(/\bautofocus\b/.test(primary[0]), true, `#${id}: autofocus belongs on the primary ${primary[0]}`);
+      assert.equal(btns.filter((b) => /\bautofocus\b/.test(b)).length, 1, `#${id}: exactly one autofocus in the foot`);
+      checked++;
+    }
+  }
+  assert.ok(checked >= 2, "checked the Season Setup and Customize commit sheets at least");
+  assert.equal(footOf("duel-picker").includes("autofocus"), true, "Duel picker has an autofocus (its dismiss)");
+});
