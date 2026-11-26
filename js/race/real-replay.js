@@ -246,7 +246,7 @@ const RealReplay = (function () {
     while (lo < hi) { const mid = (lo + hi) >> 1; if (list[mid].t < T - CAPTION_S) lo = mid + 1; else hi = mid; }
     return lo;
   }
-  function fmtLap(t) { if (!(t > 0)) return "—"; const ms = Math.round(t * 1000), m = Math.floor(ms / 60000), s = (ms - m * 60000) / 1000; return m + ":" + (s < 10 ? "0" : "") + s.toFixed(3); }   // round first: never "1:60.000"
+  function fmtLap(t) { if (!(t > 0) || !isFinite(t)) return "—"; const ms = Math.round(t * 1000), m = Math.floor(ms / 60000), s = (ms - m * 60000) / 1000; return m + ":" + (s < 10 ? "0" : "") + s.toFixed(3); }   // round first: never "1:60.000"
 
   // ── Traces for a whole field ──────────────────────────────────────────────
   /** Build every car's track trace (pure with Tracks and Log): one frame fit on the reference lap, then a projection per sample. */
