@@ -258,3 +258,93 @@ test("fixture: declaration freshness, owner boundaries, lexical aliases, depende
   } finally { lsp.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+
+// ── apex-lsp accuracy batch #6716: scenery `api` destructures, renamed destructures and G["x"] writes (#6492), the
+// PARTIAL label outside the configured project (#6491), the APX member baseline of a dependency edit (#6490). ──
+const tool = lsp => async (name, args) => { const r = await callTool(lsp, name, args); return { err: r.isError, t: r.content[0].text }; };
+// Parsed answers: rows keyed `file:line[:col]` with the tag / code, a callers row's ×count and via; files: true counts.
+const rowsOf = t => t.split("\n").slice(1).map(l => /^(\S+?:\d+(?::\d+)?)\s+(?:\[(\w+)\]|(APX\d|TS\d+))?.*?(?:\(via ([\w$]+)\))?\s*(?:×(\d+))?(?:\s+\(lines? [^)]*\))?$/.exec(l))
+  .filter(Boolean).map(([, at, tag, code, via, n]) => ({ at, tag: tag || code, via, n: n && Number(n) }));
+const tagAt = t => new Map(rowsOf(t).map(r => [r.at.split(":").slice(0, 2).join(":"), r.tag]));
+const filesOf = t => new Map(t.split("\n").slice(1).map(l => l.split(" ")).filter(x => x.length === 2).map(([f, n]) => [f, Number(n)]));
+const head = t => t.split("\n")[0];
+
+// #6490: the HEAD baseline's member index came from the working tree, so a dropped export
+// counted its own APX1 row as pre-existing and diag reported 0 new.
+test("#6490: a dependency that drops an export makes the caller's APX1 row new", { timeout: 60000 }, async () => {
+  const { dir, w, git } = lspFixture("lsp-6490-");
+  w("jsconfig.json", jsconfig());
+  w("src/a.js", `"use strict";\nconst Alpha = (function () {\n  function ping(x) { return x; }\n  function forTeam(t) { return t; }\n  return { ping, forTeam };\n})();\n`);
+  w("src/b.js", `"use strict";\nconst v = Alpha.forTeam(1);\n`);
+  git("init", "-q"); git("add", "-A"); git("commit", "-qm", "base");
+  const lsp = new Lsp({ root: dir, src: "src", anchor: "src/a.js", idleMs: 0 });
+  const q = tool(lsp);
+  try {
+    assert.equal(head((await q("lsp_diagnostics", { file: "src/b.js" })).t).split(" in ")[0], "0 new since HEAD");
+    w("src/a.js", `"use strict";\nconst Alpha = (function () {\n  function ping(x) { return x; }\n  function forTeam(t) { return t; }\n  return { ping };\n})();\n`);
+    const r = await q("lsp_diagnostics", { file: "src/b.js" });
+    assert.match(head(r.t), /^1 new since HEAD in src\/b\.js .*baseline with 1 other edited file at HEAD \(src\/a\.js\)/, r.t);
+    assert.deepEqual(rowsOf(r.t).map(x => [x.at.split(":").slice(0, 2).join(":"), x.tag]), [["src/b.js:2", "APX1"]], r.t);
+    // Put back: nothing new, and the cached working-tree index is not poisoned by the baseline.
+    git("checkout", "--", "src/a.js");
+    assert.equal(head((await q("lsp_diagnostics", { file: "src/b.js", all: true })).t).split(" ").slice(0, 2).join(" "), "0 high-signal");
+  } finally { lsp.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// #6492: refs TrackGeom.addBox listed 7 of the 56 consumer files: scenery callbacks destructure from `api`.
+test("#6492: scenery api destructures, renamed destructures and G[\"x\"] writes are references", { timeout: 60000 }, async () => {
+  const { dir, w } = lspFixture("lsp-6492-");
+  w("jsconfig.json", jsconfig());
+  w("src/core/geom.js", `"use strict";\nconst TrackGeom = (function () {\n  function addBox(o) { return o; }\n  return { addBox };\n})();\nconst Lut = (function () {\n  const table = [1];\n  return { table };\n})();\n`);
+  w("src/core/use.js", `"use strict";\nconst one = TrackGeom.addBox(1);\nconst { table: lutTable } = Lut;\nconst first = lutTable[0];\n`);
+  w("src/circuits/scenery/zz.js", `"use strict";\nwindow.TrackScenery = {};\nwindow.TrackScenery.zz = function (api) {\n  const { addBox, vadd } = api;\n  addBox(1);\n  addBox(2);\n};\n`);
+  w("src/elsewhere.js", `"use strict";\nfunction notScenery(api) { const { addBox } = api; return addBox(3); }\nfunction bagged(bag) { const { addBox } = bag; return addBox(4); }\n`);
+  w("src/race.js", `"use strict";\nconst Race = { create(G) {\n  const orig = G.endRace;\n  G["endRace"] = function () { return orig(); };\n} };\n`);
+  w("types/game-ctx.d.ts", "interface GameCtx {\n  endRace(): void;\n}\n");
+  const lsp = new Lsp({ root: dir, src: "src", anchor: "src/core/geom.js", idleMs: 0 });
+  const q = tool(lsp);
+  try {
+    let r = await q("lsp_references", { symbol: "TrackGeom.addBox", files: true });
+    const files = filesOf(r.t);
+    assert.equal(files.get("src/circuits/scenery/zz.js"), 3, `the api key and its two calls\n${r.t}`);
+    assert.equal(files.has("src/elsewhere.js"), false, "an `api` outside the scenery dirs is not TrackGeom");
+    assert.match(head(r.t), /PARTIAL: 2 destructures of addBox from another object not followed .*src\/elsewhere\.js:2 \(= api\), src\/elsewhere\.js:3 \(= bag\)/, r.t);
+    r = await q("lsp_callers", { symbol: "TrackGeom.addBox" });
+    const row = rowsOf(r.t).find(x => x.at === "src/circuits/scenery/zz.js:5");
+    assert.deepEqual(row && [row.via, row.n], ["addBox", 2], r.t);
+    r = await q("lsp_references", { symbol: "Lut.table" });
+    assert.equal(tagAt(r.t).get("src/core/use.js:3"), "alias", r.t);
+    assert.equal(tagAt(r.t).get("src/core/use.js:4"), "use", `the renamed local's use\n${r.t}`);
+    r = await q("lsp_references", { symbol: "G.endRace" });
+    assert.equal(tagAt(r.t).has("src/race.js:4"), true, `the string-keyed façade write\n${r.t}`);
+  } finally { lsp.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// #6491: a file outside jsconfig (tools/, tests/) opens into an inferred project: "1 reference" read as dead, and the answer changed once
+// another such file had been opened. Now: the query file's own rows, the PARTIAL label, the same text cold and warm.
+test("#6491: a query outside jsconfig is labelled PARTIAL and answers the same cold and warm", { timeout: 60000 }, async () => {
+  const { dir, w, git } = lspFixture("lsp-6491-");
+  w("jsconfig.json", jsconfig());
+  w("src/a.js", `"use strict";\nconst Alpha = { ping() { return 1; } };\n`);
+  w("scripts/lib/flags.mjs", `export function parseFlags(argv) {\n  return argv;\n}\n`);
+  w("scripts/run.mjs", `import { parseFlags } from "./lib/flags.mjs";\nexport function runTipGate() { return parseFlags([]); }\n`);
+  w("spec/run.test.mjs", `import { parseFlags } from "../scripts/lib/flags.mjs";\nparseFlags([1]);\n`);
+  git("init", "-q"); git("add", "-A"); git("commit", "-qm", "base");
+  const query = { file: "scripts/lib/flags.mjs", line: 1, column: 17 };
+  const cold = new Lsp({ root: dir, src: "src", anchor: "src/a.js", idleMs: 0 });
+  const warm = new Lsp({ root: dir, src: "src", anchor: "src/a.js", idleMs: 0 });
+  try {
+    const c = await tool(cold)("lsp_references", query);
+    assert.match(head(c.t), /^1 reference in 1 file .*PARTIAL: scripts\/lib\/flags\.mjs is outside jsconfig \(src\/ only\).*git grep -lw parseFlags: 2 other files: scripts\/run\.mjs, spec\/run\.test\.mjs/, c.t);
+    // Warm: an unrelated tools file was opened first (its callers query loads the importer into tsc).
+    await tool(warm)("lsp_callers", { file: "scripts/run.mjs", line: 2, column: 40 });
+    assert.equal((await tool(warm)("lsp_references", query)).t, c.t, "the same answer cold and warm");
+    const callers = await tool(warm)("lsp_callers", query);
+    assert.match(head(callers.t), /PARTIAL: scripts\/lib\/flags\.mjs is outside jsconfig/, callers.t);
+    assert.deepEqual(rowsOf(callers.t).filter(x => !x.at.startsWith("scripts/lib/flags.mjs:")), [], callers.t);
+    // A by-name query never answers from a file only an earlier call happened to open.
+    const d = await tool(warm)("lsp_definition", { symbol: "runTipGate" });
+    assert.equal(d.err, true, d.t);
+    assert.match(d.t, /symbol not found: runTipGate.*appears outside src\/ in scripts\/run\.mjs/, d.t);
+  } finally { cold.stop(); warm.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
+});

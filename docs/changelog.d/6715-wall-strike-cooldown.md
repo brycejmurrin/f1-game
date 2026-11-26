@@ -1,0 +1,1 @@
+Fixed: A barrier strike that lands just after a car-to-car contact, or a harder bounce back into the wall, now shows on the damage readout: it books the part harder than the hit before it (#6715), as a shunt after a rub already did; before, it booked nothing.

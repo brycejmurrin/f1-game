@@ -221,4 +221,12 @@
   body[data-shape="tall"]:not([data-density="compact"]) #overlay #menu-brand :is(#soundbtn, #disclaimer) {
     font-size: max(var(--fs-micro), var(--brand-fs-floor));
   }
+  /* 44 PAINTED px SOUND on the tall title (#6600). css/menus.css floors it at --tap-paint, which divides by
+     --ui-scale only; the brand also zooms by TITLE SIZE x fit (css/responsive.css), so at TITLE SIZE 80 x UI SIZE 70
+     (0.56) its 74 own px painted 41.6. Here, not in menus.css: the blocking census has no bytes to spare. */
+  @media (max-width: 699px) {
+    body[data-shape="tall"] #overlay #soundbtn {
+      min-height: max(calc(var(--tap) * 0.8), var(--tap-paint), calc(44.2px / var(--ui-scale) / var(--tl-title-size, 1) / var(--tf, 1)));
+    }
+  }
 }

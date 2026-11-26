@@ -1633,6 +1633,10 @@ const TLX = (function () {
       let mirRT = null, mirCam = null, _mirActive = false, _mirDead = false, _mirFails = 0, _mirErr = null;
       let _mirReleaseWait = null, _mirReady = false;
       let _mirFreeze = false;
+      // #6577 row 5: the frame whose shared lighting uniforms mirrorBegin wrote (lit.updateFrame runs both halves).
+      // The main begin() of that frame runs lit.updateView only; begin clears it, so a frame without a mirror pass
+      // (every:2 rungs, a dead or warming mirror) runs the whole update.
+      let _litSharedFor = null;
       let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0, _mirFog = null, _mirFlip = true;   // flip false: the broadcast PiP
       let _mirGlass = 0, _glassProbeGeo = null;   // drawMirrorGlass records; the warm's stand-in glass quad
       // Latched by the first mirrorBegin. The mirror target is a render context
@@ -3100,6 +3104,18 @@ const TLX = (function () {
         a[o + 4] = nx; a[o + 5] = ny; a[o + 6] = nz; a[o + 7] = 0;
         b.visible++; setRange0(im, b.visible * 16); im.needsUpdate = true;
         return true;
+      }
+      // #6577 row 2 — A SECOND render() OF THE SAME PASS RE-ARMS THE RUNS. The blob / decal runs are Dynamic
+      // (A-H1), so three uploads them on every render() that draws them, and the first one empties updateRanges:
+      // with no range the next upload is the whole capacity (fake-GL rig: 128 B armed vs 16448 B at the 257 cap;
+      // 1025 x 64 B on WebGPU). Every pass that appends (main, mirror) re-arms in _blobAppend / _decalAppend and the
+      // env faces skip instanced runs; the XR eye loop is the one pass drawn twice, so it re-arms before each eye.
+      function _rearmRuns() {
+        if (_blob && _blob.imesh.visible && _blob.visible > 0) setRange0(_blob.imesh.instanceMatrix, _blob.visible * 16);
+        _decalRuns.forEach(_rearmRun);
+      }
+      function _rearmRun(b) {
+        if (b.imesh.visible && b.visible > 0) setRange0(b.imesh.instanceMatrix, b.visible * 16);
       }
       // A freed decal source must release its hidden instance buffer/render object
       // too. Geometry.dispose alone leaves the run in both strong registries.
@@ -5378,6 +5394,7 @@ const TLX = (function () {
               gl.viewport(vp.x, vp.y, vp.width, vp.height);
             }
             _gpuLastOperation = "render-xr-" + ei;
+            if (ei > 0) _rearmRuns();   // #6577 row 2: the eye before consumed the runs' ranges
             _renderTimed(scene, camera);
           }
           try { renderer.setViewport(0, 0, W, H); } catch (_) { /* */ }
@@ -6214,6 +6231,7 @@ const TLX = (function () {
           _mirFreeze = !!frame.mirrorFreezeInstanced;
           _mirActive = true;
           _mirUsed = true;
+          _litSharedFor = frame;   // last, so a throw above leaves begin() on the whole update
           return true;
         },
         mirrorEnd() {
@@ -6649,8 +6667,11 @@ const TLX = (function () {
             if (j) { TLXAA.applyJitter(camera.projectionMatrix.elements, j[0], j[1]); camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert(); }
           }
           if (frame && frame.eye) camera.position.set(frame.eye[0], frame.eye[1], frame.eye[2]);
+          // No return above; a throw leaves the mark for at most the next begin(), which clears it.
+          const litShared = _litSharedFor === frame && !!(lit && lit.updateView);
+          _litSharedFor = null;
           if (lit && frame) {
-            lit.updateFrame(frame);
+            if (litShared) lit.updateView(frame, false); else lit.updateFrame(frame);
             if (lit.setEnvStr) {
               const _T = frame.tune;
               const _envOn = envRT && envReady && !_envBlank && !frame.noEnv && !_envActive;
@@ -6798,8 +6819,12 @@ const TLX = (function () {
         drawGlow(lights, str) {
           if (!fx || !lights || !lights.length || !(str > 0)) return;
           const nL = (lights.length / 15) | 0;
-          ensureGlowStream(nL);
-          const out = glowStream.ib.array;
+          // #6577 row 6: a slot is rewritten only when one of its 7 packed floats moved (Math.fround: the stream is
+          // Float32), and the stream uploads only then. frame.lights is a fresh copy every frame (frame-lights.js), so
+          // no identity or generation key can prove the halos unchanged; the packed values can. Every write lands at
+          // a slot below p and every dirty frame uploads [0, p), so the CPU array always equals the GPU buffer.
+          let dirty = ensureGlowStream(nL);   // a fresh stream: every slot writes
+          const out = glowStream.ib.array, fr = Math.fround;
           let p = 0, nDraw = 0;
           const ex = frameEye ? frameEye[0] : 0, ey = frameEye ? frameEye[1] : 0, ez = frameEye ? frameEye[2] : 0;
           for (let i = 0; i < nL; i++) {
@@ -6817,15 +6842,20 @@ const TLX = (function () {
             const csc = Math.min(1, 3.2 / cm) * (0.5 + 0.5 * Math.min(1, cm / 40)) * fade * glareW;
             r *= csc; g *= csc; b *= csc;
             const brad = Math.min(2.2, rad * 0.10) * (0.7 + 0.6 * Math.min(glareW, 2));
-            out[p++] = cx; out[p++] = cy; out[p++] = cz;
-            out[p++] = r; out[p++] = g; out[p++] = b;
-            out[p++] = brad;
+            if (dirty || out[p] !== fr(cx) || out[p + 1] !== fr(cy) || out[p + 2] !== fr(cz) || out[p + 3] !== fr(r)
+              || out[p + 4] !== fr(g) || out[p + 5] !== fr(b) || out[p + 6] !== fr(brad)) {
+              out[p] = cx; out[p + 1] = cy; out[p + 2] = cz;
+              out[p + 3] = r; out[p + 4] = g; out[p + 5] = b;
+              out[p + 6] = brad;
+              dirty = true;
+            }
+            p += 7;
             nDraw++;
           }
           glowStream.geo.instanceCount = nDraw;
           if (!nDraw) return;
           fx.glowStr.value = str;
-          uploadStream(glowStream, p);
+          if (dirty) uploadStream(glowStream, p);
           glowStream.geo.setDrawRange(0, 6);
           pushRec(glowStream.geo, null, fx.glowMat, undefined, undefined, 0, null, null);
           _fxFrame.glow = nDraw;

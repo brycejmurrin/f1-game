@@ -967,10 +967,17 @@ const Parts = (function () {
     return resolveSetup(setup, team, tune).mods;
   }
 
-  // A human car's stats over its works build: factory = x1.0 (docs/PHYSICS.md §Parts parity).
+  // Player stats over the works build (PHYSICS.md §Parts parity): speed/accel x1.0, cornering/braking keep a
+  // RESERVE log share of the works bonus (#6705). worksMods(team) = the works car's multiplier.
+  const RESERVE = Object.freeze({ speed: 0, accel: 0, cornering: 0.5, braking: 0.5 });
+  function worksMods(team) {
+    const w = factoryResolved(team).mods, m = {};
+    for (const k of STAT_ORDER) m[k] = Math.pow(Math.max(1, w[k]), RESERVE[k]);
+    return m;
+  }
   function playerMods(setup, team, tune) {
-    const m = getMods(setup, team, tune), w = factoryResolved(team).mods;
-    for (const k of STAT_ORDER) m[k] /= w[k];
+    const m = getMods(setup, team, tune), w = factoryResolved(team).mods, r = worksMods(team);
+    for (const k of STAT_ORDER) m[k] *= r[k] / w[k];
     return m;
   }
 
@@ -1065,7 +1072,7 @@ const Parts = (function () {
     CATALOG, DEFAULTS, FACTORY_PRESETS, VISUAL_FIELD_REGISTRY, BUDGET,
     resolveSetup, isOptionAvailable, ownId, ownIdOf,
     getFactorySetup, factoryKey,
-    getMods, playerMods, freeBudget, getCost, getVisualTiers, statMult, displayStat, STAT_KEYS, aeroLoad, ersProfile, tread, RH_GAIN,
+    getMods, playerMods, worksMods, RESERVE, freeBudget, getCost, getVisualTiers, statMult, displayStat, STAT_KEYS, aeroLoad, ersProfile, tread, RH_GAIN,
     setLegality, legalityKey, legality,
   };
 })();

@@ -1106,14 +1106,19 @@ test("land.yml write_gate (WP-L3b): AT is whole seconds and a same-second older 
   const start = postRun.indexOf("land_run() {");
   const fn = postRun.slice(start, postRun.indexOf("\n}\n", postRun.indexOf("write_gate() {")) + 3);
   const atS = postRun.split("\n").find((l) => l.startsWith("AT_S="));
-  const stub = `gh() { local q="" a; case "$*" in *actions/runs/*) echo "$FAKE_RUN"; return 0 ;; esac; while [ $# -gt 0 ]; do a=$1; shift; case "$a" in --method) echo POSTED; return 0 ;; --jq) q=$1; shift ;; esac; done; jq -r "$q" <<<"$FAKE"; }`;
+  const stub = `gh() { local q="" a; case "$*" in *actions/runs/*) echo "$FAKE_RUN"; return 0 ;; esac; while [ $# -gt 0 ]; do a=$1; shift; case "$a" in --method) echo POSTED >> "$POSTS"; return 0 ;; --jq) q=$1; shift ;; esac; done; jq -r "$q" <<<"$FAKE"; }`;
   const LAND_RUN = JSON.stringify({ path: ".github/workflows/land.yml", event: "pull_request_target", head_branch: "cursor/x", run_started_at: "2026-10-27T10:00:06Z" });
   const runGate = (created, url, creator = "github-actions[bot]", run = LAND_RUN) => {
     const fake = JSON.stringify(created ? [{ context: "gate", created_at: created, target_url: url, creator: { login: creator } }, { context: "CI", created_at: "2030-01-01T00:00:00Z" }] : []);
     const script = ["set -uo pipefail", `gate_errors=/dev/null; R=o/r; GITHUB_SERVER_URL=https://x; GITHUB_RUN_ID=1; GITHUB_STEP_SUMMARY=/dev/null; DEPLOY_BRANCH=${DEPLOY_BRANCH}`, stub, atS, fn, "write_gate abc123 completed success title summary"].join("\n");
-    const r = spawnSync("bash", ["-c", script], { encoding: "utf8", env: { ...process.env, AT: "2026-10-27T10:00:05Z", FAKE: fake, FAKE_RUN: run } });
+    // write_gate discards the POST's stdout (#6700), so the stub records each POST in a file.
+    const posts = path.join(fs.mkdtempSync(path.join(ROOT, "artifacts", "write-gate-")), "posts");
+    fs.writeFileSync(posts, "");
+    const r = spawnSync("bash", ["-c", script], { encoding: "utf8", env: { ...process.env, AT: "2026-10-27T10:00:05Z", FAKE: fake, FAKE_RUN: run, POSTS: posts } });
     assert.equal(r.status, 0, r.stderr);
-    return r.stdout.trim().split("\n").at(-1);
+    const posted = fs.readFileSync(posts, "utf8").includes("POSTED");
+    fs.rmSync(path.dirname(posts), { recursive: true, force: true });
+    return posted ? "POSTED" : r.stdout.trim().split("\n").at(-1);
   };
   assert.equal(runGate(null), "POSTED", "no gate status yet");
   assert.equal(runGate("2026-10-27T10:00:04Z"), "POSTED", "an older status is replaced");
@@ -1148,8 +1153,8 @@ test("land.yml write_gate (WP-L3b): AT is whole seconds and a same-second older 
  * Runs one land.yml step script under bash with `gh` stubbed. GH_LOG records each call, a POSTed body as `body <json>`
  * and the token a PUT ran with as `token=<GH_TOKEN>`. Answers: FAKE_PR (or FAKE_PRS by number) for pulls/<n>,
  * FAKE_STATUSES (an array, or an object by sha) for commits/<sha>/statuses, FAKE_RUNS for …/runs?…, FAKE_CHECKS for
- * check-runs, FAKE_LANDS for `gh pr list`, PAUSED for the Dispatch issue, NOW_TIP for the deploy branch; GH_POST_RC
- * fails a POST and GH_PUT_FAIL (PR numbers) fails an update-branch with a 422. `files` are written under the cwd.
+ * check-runs, FAKE_LANDS for `gh pr list`, PAUSED for the Dispatch issue, NOW_TIP for the deploy branch; FAKE_POST_BODY
+ * is a successful POST's body (its --jq runs on it, as gh's does); GH_POST_RC fails a POST and GH_PUT_FAIL (PR numbers) fails an update-branch with a 422. `files` are written under the cwd.
  */
 function runStep(script, env, files = {}) {
   const stub = [
@@ -1161,7 +1166,11 @@ function runStep(script, env, files = {}) {
     `  if [ "\${GH_STALL:-}" = true ]; then read -r -t 60 _ <&9; fi;`,
     `  while [ $# -gt 0 ]; do a=$1; shift; case "$a" in --jq) q=$1; shift ;; esac; done;`,
     `  case " \${args[*]} " in`,
-    `    *" --method POST "*) case " \${args[*]} " in *" --input "*) echo "body $(jq -c .)" >> "$GH_LOG" ;; esac; [ -z "\${GH_POST_ERR:-}" ] || echo "$GH_POST_ERR" >&2; return "\${GH_POST_RC:-0}" ;;`,
+    `    *" --method POST "*) case " \${args[*]} " in *" --input "*) echo "body $(jq -c .)" >> "$GH_LOG" ;; esac; [ -z "\${GH_POST_ERR:-}" ] || echo "$GH_POST_ERR" >&2;`,
+    // FAKE_POST_BODY is the 2xx response body (default a status object); "" is the empty body GitHub sent on Land
+    // 45695967080 (#6700), which real gh's --jq rejects with "unexpected end of JSON input".
+    `      [ "\${GH_POST_RC:-0}" = 0 ] || return "$GH_POST_RC"; pb=\${FAKE_POST_BODY-'{"url":"https://api.github.com/x"}'};`,
+    `      if [ -n "$q" ]; then [ -n "$pb" ] || { echo "unexpected end of JSON input" >&2; return 1; }; jq -r "$q" <<<"$pb"; fi; return 0 ;;`,
     `    *" --method PUT "*) echo "token=\${GH_TOKEN:-}" >> "$GH_LOG"`,
     `      case " \${GH_PUT_FAIL:-} " in *" $(sed -n 's#.*/pulls/\\([0-9]*\\)/update-branch.*#\\1#p' <<<"\${args[*]}") "*) echo "gh: merge conflict (HTTP 422)" >&2; return 1 ;; esac`,
     `      echo '{"message":"Updating pull request branch."}'; return 0 ;;`,
@@ -1458,6 +1467,18 @@ test("land.yml combined steps: failed post or rejected status write cannot arm",
   assert.equal(r.post.out.arm, "");
   assert.equal(r.result, "failure", "an unpublished required gate fails the post job");
   assert.deepEqual(JSON.parse(r.retry), [{ number: 7, head: HEAD7 }], "a transient write error gets a bounded retry");
+});
+
+test("land.yml post (#6700): a 2xx status POST with an empty body is written; a non-2xx still fails", () => {
+  const { env, files } = postFixture();
+  const r = postThenArm({ ...env, FAKE_POST_BODY: "" }, {}, files);
+  assert.equal(r.post.status, 0, r.post.stderr);
+  assert.ok(r.post.out.arm, "the empty-body write counts as WROTE: the pass is handed to arm");
+  assert.deepEqual(JSON.parse(r.retry || "[]"), [], "no write-failure retry");
+  assert.equal(r.result, "success");
+  const failed = postThenArm({ ...env, FAKE_POST_BODY: "", GH_POST_RC: "1", GH_POST_ERR: "gh: Validation Failed (HTTP 422)" }, {}, files);
+  assert.equal(failed.result, "failure", "a rejected POST is still a write failure");
+  assert.equal(failed.arm, null);
 });
 
 test("land.yml post backs off installation quota and HTTP 429 without dispatching a pre-existing retry", () => {

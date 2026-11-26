@@ -48,6 +48,13 @@ let gPin = null, gShip = null, gKit = null, mPin = null, mShip = null, mKit = nu
 before(async () => {
   gPin = await createGame({ track: "monza", seat: "pin", storage: { difficulty: "normal", autoThrottle: false, pace: 11 } });
   await gPin.race("monza", "day", "dry");
+  {
+    // The pin is the NEUTRAL ×1 car (statMult only) — the works McLaren before #6705's grip reserve, so every
+    // pin anchor below is the car it was measured on. The reserve itself is the shipped seat's.
+    const S = gPin.sandbox, team = gPin.G.player.team, st = S.Career.teamStats(team) || team.stats;
+    gPin.G.player.mods = { speed: S.Parts.statMult(st.speed), accel: S.Parts.statMult(st.accel),
+      cornering: S.Parts.statMult(st.cornering), braking: S.Parts.statMult(st.braking) };
+  }
   mPin = measure(gPin, 0);
   gShip = await createGame({ track: "monza", seat: "shipped", storage: { difficulty: "normal", autoThrottle: false, pace: 11 } });
   await gShip.race("monza", "day", "dry");
@@ -129,6 +136,7 @@ test("step-steer and skidpad magnitudes barely move on any seat", () => {
   // since #5977 moved the shipped default to 17 (the ground-speed scale, not the driving model).
   // #6572 (factory parts at ×1.0, Bryce's decision A) moved the SHIPPED car on purpose: skidpad 5.35 → 3.35 g,
   // step-steer 0.447 → 0.433. The big-brake kit carries the old shipped magnitudes (0.447, 5.29 g).
+  // #6705 (Bryce's pick B, a half grip reserve on the works car) moved it back up: shipped skidpad 3.35 → 4.60 g.
   assert.ok(Math.abs(mPin.stepSteer.final - 0.435) < 0.02, `pin stepSteer ${mPin.stepSteer.final}`);
   assert.ok(Math.abs(mShip.stepSteer.final - 0.433) < 0.02, `shipped stepSteer ${mShip.stepSteer.final}`);
   assert.ok(Math.abs(mKit.stepSteer.final - 0.447) < 0.02, `big-brake kit stepSteer ${mKit.stepSteer.final}`);
@@ -136,6 +144,6 @@ test("step-steer and skidpad magnitudes barely move on any seat", () => {
   const skShip = mShip.skidpad.find((r) => r.v === 60 && r.steer === 0.8);
   assert.ok(Math.abs(skPin.ay_g - 3.46) < 0.08, `pin skidpad ${skPin.ay_g}`);
   const skKit = mKit.skidpad.find((r) => r.v === 60 && r.steer === 0.8);
-  assert.ok(Math.abs(skShip.ay_g - 3.35) < 0.08, `shipped skidpad ${skShip.ay_g}`);
+  assert.ok(Math.abs(skShip.ay_g - 4.60) < 0.08, `shipped skidpad ${skShip.ay_g}`);
   assert.ok(Math.abs(skKit.ay_g - 5.29) < 0.08, `big-brake kit skidpad ${skKit.ay_g}`);
 });

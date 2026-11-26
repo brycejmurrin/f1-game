@@ -1,14 +1,16 @@
-/* factory-parts-parity — the works car races at ×1.0 (Bryce's decision of 2026-11-25).
+/* factory-parts-parity — the works car races at ×1.0 speed/accel plus a half grip reserve (Bryce, 2026-11-25).
  *
  * The catalog multiplies twelve categories, so a team's FACTORY_PRESETS build read 1.1–2.8× per stat
  * (McLaren cornering 2.76) while the AI field (tierV × skill) never reads mods: a factory-kit player
  * lapped Monza at 101.7–104.8 s against 114.0 s on neutral parts. Parts.playerMods reads the player's
  * build RELATIVE to the team's works build, so:
- *   - every team's works build is exactly ×1.0 per stat (the neutral car the field is tuned against);
+ *   - every team's works build is exactly ×1.0 in speed and accel (the neutral car the field is tuned
+ *     against); cornering and braking keep a GRIP RESERVE of max(1, raw)^0.5 (Parts.worksMods). Bryce
+ *     picked that (B, #6705) after "braking and grip got worse": ×1.0 had halved the works car's grip;
  *   - the build's character survives where it never touched the stat multipliers: the fitted wing's
  *     aeroLoad and the ERS unit's ersProfile still differ team to team;
  *   - a part above the works one multiplies in exactly as it does in raw getMods (upgrades stack);
- *   - the custom team (no preset) is unchanged, and the stat bars read the team's own stats.
+ *   - the custom team (no preset) is unchanged, and the stat bars read the team's own stats × the reserve.
  *
  * Run: node --test tests/unit/factory-parts-parity.test.mjs
  */
@@ -21,11 +23,17 @@ const K = ["speed", "accel", "cornering", "braking"];
 const REAL = Teams.LIST.filter((t) => Parts.FACTORY_PRESETS[t.id]);
 const team = (id) => Teams.LIST.find((t) => t.id === id);
 
-test("every works build races at exactly ×1.0 per stat", () => {
+test("every works build races at ×1.0 speed/accel and the half grip reserve in cornering/braking", () => {
   assert.equal(REAL.length, 11);
+  assert.deepEqual({ ...Parts.RESERVE }, { speed: 0, accel: 0, cornering: 0.5, braking: 0.5 });
   for (const t of REAL) {
-    const m = Parts.playerMods(Parts.getFactorySetup(t), t);
-    for (const k of K) assert.ok(Math.abs(m[k] - 1) < 1e-12, `${t.id} ${k} ${m[k]}`);
+    const m = Parts.playerMods(Parts.getFactorySetup(t), t), w = Parts.worksMods(t);
+    const raw0 = Parts.getMods(Parts.getFactorySetup(t), t);
+    for (const k of K) {
+      const want = k === "cornering" || k === "braking" ? Math.sqrt(Math.max(1, raw0[k])) : 1;
+      assert.ok(Math.abs(w[k] - want) < 1e-12, `${t.id} ${k} worksMods ${w[k]} want ${want}`);
+      assert.ok(Math.abs(m[k] - want) < 1e-12, `${t.id} ${k} ${m[k]} want ${want}`);
+    }
     // The raw build it replaced was far off 1: the normalisation is doing the work.
     const raw = Parts.getMods(Parts.getFactorySetup(t), t);
     assert.ok(K.some((k) => Math.abs(raw[k] - 1) > 0.15), `${t.id} raw build is not already ×1`);
@@ -72,8 +80,11 @@ test("the custom team (no preset) is untouched: playerMods is getMods", () => {
 
 test("garage stat bars: the works car reads its team's own stats; an upgrade reads above them", () => {
   for (const t of REAL) {
-    const m = Parts.playerMods(Parts.getFactorySetup(t), t);
-    for (const k of K) assert.equal(Math.round(Parts.displayStat(t.stats[k] * m[k])), t.stats[k], `${t.id} ${k}`);
+    // The bars read the car the player drives: the team's own stats times the works reserve (×1.0 in
+    // speed/accel, so those two bars ARE the team's stats).
+    const m = Parts.playerMods(Parts.getFactorySetup(t), t), w = Parts.worksMods(t);
+    for (const k of K) assert.equal(Math.round(Parts.displayStat(t.stats[k] * m[k])), Math.round(Parts.displayStat(t.stats[k] * w[k])), `${t.id} ${k}`);
+    for (const k of ["speed", "accel"]) assert.equal(Math.round(Parts.displayStat(t.stats[k] * m[k])), t.stats[k], `${t.id} ${k}`);
   }
   const t = team("williams"), works = Parts.getFactorySetup(t);
   const brakes = Parts.CATALOG.find((c) => c.id === "brakes");
@@ -81,7 +92,7 @@ test("garage stat bars: the works car reads its team's own stats; an upgrade rea
   const up = brakes.options.filter((o) => Parts.isOptionAvailable(o, t) && (o.braking || 1) > (cur.braking || 1) * 1.05)[0];
   assert.ok(up, "a stronger brake exists for williams");
   const m = Parts.playerMods(Object.assign({}, works, { brakes: up.id }), t);
-  assert.ok(Math.round(Parts.displayStat(t.stats.braking * m.braking)) > t.stats.braking, "the bar moves up");
+  assert.ok(Math.round(Parts.displayStat(t.stats.braking * m.braking)) > Math.round(Parts.displayStat(t.stats.braking * Parts.worksMods(t).braking)), "the bar moves up");
 });
 
 test("a career regulation keys the norm: a banned works part costs the player nothing extra", () => {
@@ -89,8 +100,8 @@ test("a career regulation keys the norm: a banned works part costs the player no
   const banned = works.engine;
   try {
     Parts.setLegality((o) => o.id !== banned, "test-ban");
-    const m = Parts.playerMods(Parts.getFactorySetup(t), t);
-    for (const k of K) assert.ok(Math.abs(m[k] - 1) < 1e-12, `${k} ${m[k]}`);
+    const m = Parts.playerMods(Parts.getFactorySetup(t), t), w = Parts.worksMods(t);
+    for (const k of K) assert.ok(Math.abs(m[k] - w[k]) < 1e-12, `${k} ${m[k]} vs the legal works car ${w[k]}`);
   } finally { Parts.setLegality(null, ""); }
 });
 
