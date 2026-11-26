@@ -10,6 +10,8 @@
 
 - Chrome DevTools MCP — live 3D / __apex debugging
 - pageId and frame hooks
+- Census tools
+- Private chat attachment (recovering the private chat MCP tunnel or gateway)
 
 ## Chrome DevTools MCP — live 3D / __apex debugging
 
@@ -203,3 +205,21 @@ or `list_pages` first and pass it on every call.
 Frame stutter, before a trace: `__apex.perf({on:true,reset:true})`, play, then `__apex.perf()` (per-subsystem
 p50/p95/p99 spans and LoAF), `__apex.frametimeBench("reset"|"snapshot")` and `__apex.renderScale().frameTimes`
 (`docs/DEBUG-HOOKS.md`). `world()` holds no frame-time data.
+
+## Census tools
+
+Tools measured before/after for phone memory, heap growth, CPU-side
+copies and GPU budgets: `tools/perf/vm-leak-census.mjs`, `tools/gfx/mem-census.mjs`
+(track-switch heap compare; CDP counters via the `tools/perf/runtime-memory.mjs` library),
+`tools/perf/mesh-census.mjs`, `tools/perf/garage-census.mjs` (flags: `--help` or file
+header); `tools/perf/profile.mjs` / `query.mjs` for game-loop CPU; frame stutter: §pageId and frame hooks above. Record
+track and backend (`__apex.diag().env.backend`) with every number, cite MB
+deltas in the PR, and dispatch `gpu-census.yml` on `macos-latest` for a real
+GPU — SwiftShader here is not player evidence.
+
+## Private chat attachment (recovering the private chat MCP tunnel or gateway)
+
+For existing-tunnel startup/recovery, namespaced gateway contracts and environment
+checks, follow [free design tooling](../../../../docs/DESIGN-TOOLS.md). Local readiness
+and live native chat verification are separate. Keep existing app identities,
+credential references, and the configured upstream catalog.
