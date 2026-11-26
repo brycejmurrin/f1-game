@@ -132,5 +132,5 @@ test("#6757: --help prints a real usage line (not the file URL) and exits 0", ()
   const r = spawnSync(process.execPath, ["tools/ci/child-health.mjs", "--help"], { encoding: "utf8" });
   assert.equal(r.status, 0);
   assert.equal(r.stdout.split(" ").slice(0, 3).join(" "), "usage: node tools/ci/child-health.mjs");
-  assert.doesNotMatch(r.stdout, /file:\/\//);
+  assert.equal(r.stdout.split("file://").length, 1);
 });
