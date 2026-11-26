@@ -39,8 +39,14 @@
       { kinds: ["city", "foliage"], s0: 0.377, s1: 0.497 },
       // Leave the paddock compound, Sands storefront and Harmon hotel frontage clear.
       { kind: "city", s0: 0.176, s1: 0.185, side: -1 },
+      // Start straight, paddock side (racing ~0.000-0.008): the #6922 centreline moved the
+      // generated block into the paddock kit (clip-audit 6 m at frac 0.004).
+      { kind: "city", s0: 0.155, s1: 0.166, side: -1 },
       { kind: "city", s0: 0.549, s1: 0.558, side: -1 },
-      { kind: "city", s0: 0.084, s1: 0.091, side: 1 },
+      { kind: "city", s0: 0.0, s1: 0.008, side: 1 },
+      // Final-straight run-in, right (racing ~0.842-0.850): a generated block landed 0.8 m under grade
+      // on the #6922 centreline (ground-audit buried).
+      { kind: "city", s0: 0.0, s1: 0.008, side: 1 },
       { kind: "lamps", s0: 0.27, s1: 0.36, side: -1 },
       { kind: "lamps", s0: 0.65, s1: 0.71, side: 1 },
     ],

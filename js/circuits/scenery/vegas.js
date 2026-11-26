@@ -623,7 +623,7 @@
           size: [48, 78, 120],
           basis: b,
         }, (stage) => {
-          seat.box(stage, a.c, [40, 14, 108], BEL, b);
+          seat.box(stage, a.c, [40, 14.4, 108], BEL, b);   // 14.4: the base top stays off the lake plane (#6922 grade)
           seat.box(stage, vadd(a.c, a.u, 14), [36, 52, 100], BEL_D, b);
           stage._mat = MAT.GLASS;
           addBox(stage, vadd(a.c, a.u, 38), [37.2, 42, 101], BEL_WIN, b);
@@ -769,12 +769,14 @@
             const h1 = hash(idx * 5 + (side > 0 ? 13 : 71));
             const neon = NEON[(idx + (side > 0 ? 4 : 1)) % NEON.length];
             const fh = 80 + h1 * 100;
-            backdrop(k, side, 185, [50, fh, 30], backdropCols[idx % 3], { followGrade: true });
+            // 46 / 48 m long, not 50 / 52: on the #6922 centreline the inside of the Strip curve
+            // packs the 0.009 steps closer, and full-length boxes met end to end (flat-coplanar feet).
+            backdrop(k, side, 185, [46, fh, 30], backdropCols[idx % 3], { followGrade: true });
             // Bright neon band at street level — backdrop() always stands on
             // the ground, so the "crown" never reached the top. Now a 3 m
             // strip against the tower's front face (170 m) instead of a slab
             // round its foot sharing its underside (63 flat-coplanar pairs).
-            backdrop(k, side, 168.5, [52, 7.0, 3], neon);
+            backdrop(k, side, 168.5, [48, 7.0, 3], neon);
           }
         }
 

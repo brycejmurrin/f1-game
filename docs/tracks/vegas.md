@@ -98,3 +98,36 @@ Caesars strips, the Bellagio apron) had been written `[along-road length, h, dep
 (`dist=18 sz[0]=95` needed dist > 49). They are now `[depth, h, length]` and all four emit (0/1 -> 1/0 each, counted per
 source line in the headless build). The Bellagio apron sits at dist 9 / 10 m deep (lateral 4-14, between kerb and the
 lake-edge posts) rather than over the lake, and the second Caesars strip's foot is sunk 0.3 m so the pair is not coplanar.
+
+## Re-survey 2026-11 (#6922)
+
+Re-surveyed by the OpenF1 driven line (Bryce's driving lab, round 4, found the old
+bacinger outline ~4.8 m RMS off the real line, with T5/T7/T17 far too tight).
+
+- **Source:** `api.openf1.org/v1/location`, 2024 qualifying, session 9640, the 12 fastest laps
+  (pole: #63 lap 24, 92.312 s). The laps agree with each other to ~0.8 m RMS. They were
+  similarity-fitted onto the old plan (scale 1.0016, so the dressed world stays put),
+  kernel-averaged (6 m) and resampled at ~8 m (777 vertices, was 99).
+- **Driven line vs road:** OpenF1 is the line cars drive, not the road centre. With the road on that line,
+  TrackLine cuts every corner again (slow corners got 1.5-2.9× the real radius). So in each corner the
+  road is pulled back toward the centre by the game's own baked line offset (a fixed point, so TrackLine
+  re-derives the real line). The weighting is full at T5/T7/T8/T10/T14/T15/T17, half at T6/T16 and 0.3 elsewhere.
+  A full pull everywhere would put the line on the real line (0.99 m RMS) but the road 3.6 m RMS
+  off the pole lap; #6922 asks for ≤ 2 m.
+- **Result** (verify-track green; scripts are scratch-only and the numbers can be regenerated from the OpenF1 queries above):
+
+| | old | new |
+|---|---|---|
+| Centreline vs 2024 pole lap, best fit | 4.78 m (3.31 m inside the road; 82 % inside) | 1.95 m (100 % inside) |
+| T5 driven-line radius (real ~107 m) | ~68 m | ~106 m |
+| T7 (real ~147 m) | ~98 m | ~171 m |
+| T17 (real ~169 m) | ~108 m | ~172 m |
+| Headless AI lap, PACE 1 (`corner-speeds.mjs`) | 116.3 s | 115.5 s |
+
+  Slow corners stay within ~10 % of the real minimum speeds (T6 1.01, T9 0.94, T13 1.05, T14-15 1.08).
+  The exception is T10, whose apex runs 1.31 (it was 1.25). Fast-corner speeds stay ~0.6-0.75 of real
+  in every layout. That ceiling comes from the grip/downforce model (#6563), not the geometry.
+- **Carried across:** the DEM height profile moves by arc position. startFrac and sceneryStartFrac
+  are re-derived from the old physical start and scenery origin (both within 3 m). The same goes for hwZones (the
+  narrowed cores) and turns/sectors. bankZones are now `{ turn }` anchors on T1/T5/T8/T11/T12, where the old frac rows landed.
+- **Time trial:** `revision` 3, and n/total changed, so the layout key re-keys: Vegas boards start a new class.
