@@ -171,7 +171,7 @@ function create(G, deps) {
     }
   }
   const st = { open: false, source: "race", aspect: "wide", highRes: false, samples: 1, grid: "thirds", postcard: false, busy: false, closing: false, metadata: {}, back: null, snapshot: null, borrowed: null, generation: 0, subject: null };
-  const lens = { mm: null, focus: null };
+  const lens = { mm: null, focus: null }, offLens = { mm: null, focus: undefined };
   let sceneTap = null, reticleTimer = null, lastFocusAvailable = false;
   // Depth focus is opt-in (default off) until it is verified on real GPUs.
   const DEPTH_KEY = "apex26.photoDepthFocus";
@@ -1208,7 +1208,9 @@ function create(G, deps) {
     if (!st.open) return null;
     const available = focusAvailable();
     if (available !== lastFocusAvailable) paintFocus(available);
-    return lens;
+    if (depthFocus) return lens;
+    // Depth focus Off: focus undefined, not null (#6445). null is tlx-post's autofocus-on-the-car, which bakes blur in.
+    offLens.mm = lens.mm; return offLens;
   }
   const api = { open, close, capture, state, contactSheet, album, background, setBackground, exportPhoto, savePhoto, hasCar, lens: activeLens };
   live = api; busy(false); return api;
