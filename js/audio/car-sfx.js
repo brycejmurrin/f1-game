@@ -49,7 +49,7 @@ var CarSfx = (() => {
       const ms = wall();
       if (mask !== lastOnMask || ms - lastSendMs >= SEND_GAP_MS || c !== lastCar) {
         lastOnMask = mask; lastSendMs = ms;
-        SFX.wet = !!(G.isWetRoad && G.isWetRoad());
+        SFX.wet = !!(G.isWetAt ? G.isWetAt(c) : G.isWetRoad && G.isWetRoad());
         GameAudio.setCarSfx(SFX);
       }
       // The wheel guns fire on the stop's edges: loosen as the car drops into

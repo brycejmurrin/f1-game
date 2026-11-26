@@ -4,7 +4,7 @@ import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a gi
 import test from "node:test";
 import { load as loadRatchets } from "../../tools/check/ratchets.mjs";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -266,11 +266,12 @@ test("a source file's own unit test is in a group that editing it selects", () =
 // T10 (test audit 2026-10-05): the contact and AI physics modules route to the
 // group whose subject they are, and a spec edit names the group that runs it.
 test("contact/AI physics modules select collisions, not only physics-core", () => {
-  for (const f of ["collide", "contact-geometry", "wall-clamp", "ai-drive", "ai-band", "ai-corridor"]) {
+  for (const f of ["collide", "contact-geometry", "wall-clamp", "ai-drive", "ai-start", "ai-band", "ai-corridor"]) {
     const src = `js/physics/${f}.js`;
     assert.ok(fs.existsSync(path.join(ROOT, src)), `${src} moved — re-point the rule`);
     const sel = [...pick([src]).keys()];
     assert.ok(sel.includes("collisions") && sel.includes("physics-core"), `${src} selects [${sel.join(", ")}]`);
+    if (!sel.includes("game-vm")) assert.fail(`${src} must also select game-vm`);
   }
   assert.ok(!pick(["js/physics/tyre-model.js"]).has("collisions"), "the rule must stay narrow");
 });
@@ -315,4 +316,23 @@ test("an index.html edit selects the service-worker group (the precached shell a
   assert.ok(groups.includes("service-worker"), `index.html must pick service-worker, got ${groups}`);
   assert.ok(groups.includes("baseline") && groups.includes("ui"), "the existing routes stay");
   assert.ok(!json("css/hud.css").groups.some((g) => g.group === "service-worker"), "a stylesheet edit does not drag it in");
+});
+
+test("an explicit path that does not exist draws a stderr warning", () => {
+  const gone = ["js/ui/", "no-such-file-xyz.js"].join("");
+  const r = spawnSync("node", ["tools/ci/pick-tests.mjs", "--json", gone, "js/ui/hud.js"], { cwd: ROOT, encoding: "utf8" });
+  assert.ok(r.stderr.includes(`warning: ${gone} does not exist`), r.stderr);
+  assert.equal(r.stderr.trim().split("\n").length, 1, r.stderr); // only the missing path warns
+  assert.deepEqual(JSON.parse(r.stdout).files, [gone, "js/ui/hud.js"]);
+});
+
+test("garage-census usage lists every flag it parses; assets-api.spec cites only npm scripts that exist (#6829)", () => {
+  const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
+  const src = read("tools/perf/garage-census.mjs");
+  const usage = src.split("\n").filter((l) => l.startsWith("//")).join("\n");
+  for (const f of new Set([...src.matchAll(/flag\("(--[a-z-]+)"/g)].map((m) => m[1]))) assert.ok(usage.includes(f), `${f} missing from usage`);
+  const help = spawnSync("node", ["tools/perf/garage-census.mjs", "--help"], { cwd: ROOT, encoding: "utf8" }).stdout;
+  assert.equal(help.split("\n").filter((l) => l.startsWith("//")).length, 0, help);
+  const scripts = JSON.parse(read("package.json")).scripts;
+  for (const [, name] of read("tests/specs/assets-api.spec.js").matchAll(/npm run ([\w:-]+)/g)) assert.ok(scripts[name], `npm run ${name} is not in package.json`);
 });

@@ -266,18 +266,13 @@ const bindCtxLostNoticeOnMenuExit = () => {
       },
     });
   }
-  const stateDesc = Object.getOwnPropertyDescriptor(G, "state");
-  if (stateDesc && stateDesc.get && stateDesc.set) {
-    Object.defineProperty(G, "state", {
-      configurable: true,
-      enumerable: stateDesc.enumerable,
-      get() { return stateDesc.get.call(G); },
-      set(v) {
-        const wasMenu = stateDesc.get.call(G) === "menu";
-        stateDesc.set.call(G, v);
-        if (wasMenu && v !== "menu") hideCtxLostNotice();
-      },
-    });
+  if (G.cmd && G.cmd.setState) {   // every state write outside game.js goes through cmd.setState (#6920 U2.4)
+    const setState = G.cmd.setState;
+    G.cmd.setState = (next, why) => {
+      const wasMenu = G.state === "menu";
+      setState(next, why);
+      if (wasMenu && next !== "menu") hideCtxLostNotice();
+    };
   }
 };
 bindCtxLostNoticeOnMenuExit();

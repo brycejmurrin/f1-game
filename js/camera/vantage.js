@@ -886,3 +886,5 @@ function getListenerBasis() { return _listener.valid ? _listener : null; }
 return { init, vantage, resetSmoothing, cockpitViewmodelAxes, eyeInsideCar, seatFwd, seatUp, headState, COCKPIT_EYE_FWD, COCKPIT_EYE_UP,
   HELMET_EYE_FWD, HEAD_MAX, CHASE_CORNER_LEAD_DEFAULT, publishListenerBasis, rigMode, applyFreeCam, getListenerBasis, playerFrameRivalPan };
 })();
+// A cut (registration order = manifest order, so after cam-feel; `after` would throw in a rig that loads a module subset): the held bend sides and hang smoothing restart (#6890), after the CamFeel follows they pair with.
+if (typeof Scopes !== "undefined") Scopes.register("camera-mode", { id: "game-cams", on: ["cut"], touches: ["bend"], exit: () => GameCams.resetSmoothing() });

@@ -32,39 +32,87 @@ body:not(.desktop) { --tap-floor44: calc(44.2px / var(--ui-scale)); }
 #learn-aero-guide strong, #learn-aero-guide span { display: block; }
 #learn-aero-guide strong { font-size: var(--fs-3); }
 #learn-aero-guide span { font-size: var(--fs-2); color: var(--dim); }
+/* LEARN's THUMB DRILL (js/learn-drills/thumb-drill.js): the corner's script cue in the aero card's place, and a lap
+   card that takes taps (RETRY LAP, DRIVE ON) while the cue card leaves every touch to the dock. Over #hud (z 10), not
+   under it: the helmet cam's visor mask is #hud::before and greys out anything beneath it. */
+#thumb-drill, #thumb-drill-lap {
+  position: fixed; z-index: 11; left: 50%; transform: translateX(-50%);
+  top: max(calc(var(--sat) + 3.25rem), 17%);
+  width: max-content; max-width: min(52vw, 30rem);
+  padding: var(--pad) calc(var(--pad) * 1.5);
+  border: 1px solid var(--plate-line); border-radius: var(--r-md);
+  color: var(--text); background: var(--plate); font-family: var(--font-hud); text-align: center;
+}
+#thumb-drill { pointer-events: none; }
+#thumb-drill strong, #thumb-drill span { display: block; }
+#thumb-drill strong { font-size: var(--fs-3); }
+#thumb-drill span { font-size: var(--fs-2); color: var(--dim); }
+#thumb-drill-lap { z-index: 12; display: grid; gap: var(--gap); }
+#thumb-drill-lap[hidden] { display: none; }
+#thumb-drill-lap > strong { font-size: var(--fs-3); }
+#td-corners { display: flex; flex-wrap: wrap; justify-content: center; gap: .25rem .5rem; font-size: var(--fs-2); }
+#td-corners [data-grade="good"] { color: var(--faster); }
+#td-corners [data-grade="low"] { color: var(--red); }
+#td-actions { display: flex; justify-content: center; gap: var(--gap); }
+#thumb-drill-lap button { min-height: var(--tap); min-width: var(--tap); padding: 0 var(--pad); font: inherit; font-weight: 700; }
+@media (max-height: 500px) {
+  #thumb-drill, #thumb-drill-lap { top: max(calc(var(--sat) + 2rem), 13%); padding: .25rem .45rem; }
+}
+/* Portrait: under the HELMET and pause pair that share the top band (852 tall: they end near 184 px). */
+@media (orientation: portrait) {
+  #thumb-drill, #thumb-drill-lap { top: max(calc(var(--sat) + 9rem), 24%); max-width: min(80vw, 30rem); }
+}
 /* LEARN's THUMB TRAINER (js/ui/thumb-trainer.js): the real race dock in its preview, and the drill sized by JS into the
    free screen between the buttons. Only the dock's drive buttons stay live; everything else on the HUD goes. */
 body[data-thumb-trainer] #hud > :not(#hud-dock),
 body[data-thumb-trainer] :is(#hud-dock > :not(#dock-left, #dock-right), #announce, #lights, #campicker) { display: none !important; }
 body[data-thumb-trainer] #hud-dock .touchbtn:not(#btn-brake, #btn-throttle, #btn-steer-left, #btn-steer-right) { opacity: .35; pointer-events: none; }
+body[data-thumb-trainer] #hud::before { display: none; }   /* the race vignette sits above the drill (z 10 over 9) and dimmed its edges (#6924) */
 #thumb-trainer { position: fixed; inset: 0; z-index: 9; pointer-events: none; background: var(--bg); color: var(--text); font-family: var(--font-ui); }
 #thumb-trainer[hidden] { display: none; }
 #tt-panel {
   position: absolute; pointer-events: auto; box-sizing: border-box;
   display: flex; flex-direction: column; gap: calc(var(--gap) / 2);
 }
-#tt-bar { display: flex; flex-wrap: wrap; gap: calc(var(--gap) / 2); align-items: center; }
-#tt-bar :is(button, select), #tt-presets button {
-  min-height: var(--tap); padding-inline: var(--pad);
-  border: 1px solid var(--plate-line); border-radius: var(--r-sm);
-  color: var(--text); background: var(--plate); font: inherit; font-size: var(--fs-2);
+#tt-bar { display: flex; flex-wrap: wrap; gap: calc(var(--gap) / 2); align-items: center; padding-inline: calc(var(--tap) * 0.06); }   /* the -6deg skew of .bigbtn overhangs ~tan 6° × h / 2 */
+/* The house controls (#6924 follow-up): BACK is .bigbtn.alt and START the red .bigbtn, as on every sheet; the steps,
+   speed, view and presets are .sel-chip. Here they share one row height, --tap, so the bar keeps 44 px taps and the
+   POPUPS BUTTON HEIGHT look below scales them all. */
+#tt-bar > .bigbtn { width: auto; margin: 0; min-width: 44px; padding-block: 0; padding-inline: var(--pad); font-size: var(--fs-3); }
+#tt-bar > .sel-chip, #tt-presets .sel-chip { min-height: var(--tap); min-width: 44px; font-size: var(--fs-2); }
+#tt-bar select {   /* the .set-row select (css/settings-controls.css) on the --tap row */
+  flex: 1 1 4.5em;   /* the corner picker yields row width so 🏁 fits with it on the first row (#6927; 852x393 live profile overflowed 27 px at 8em) */
+  min-width: 44px; width: auto; height: var(--tap); min-height: var(--tap); box-sizing: border-box; margin: 0;
+  padding: 0 calc(var(--gap) * 0.5); text-overflow: ellipsis;
+  border: 1px solid var(--plate-line); border-radius: var(--r-sm); background: var(--plate); color: var(--text);
+  font: inherit; font-size: var(--fs-2); font-weight: 600; letter-spacing: var(--ls-1);
 }
-#tt-bar select { flex: 1 1 8em; min-width: 0; width: auto; height: var(--tap); padding-block: 0; }
-#tt-go { background: var(--red-fill); }
-#tt-presets button[aria-pressed="true"] { background: var(--plate-on-strong); }
+/* POPUPS looks (js/ui/screen-looks.js): BUTTON HEIGHT and CORNERS, the knobs a full-screen drill can show. */
+:root[data-look-popups-btn] #thumb-trainer { --tap: calc(var(--tap-0) * var(--look-popups-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-popups-btn, 1)); }
+@media (pointer: coarse) {
+  :root[data-look-popups-btn] #thumb-trainer { --tap: max(calc(var(--tap-0) * var(--look-popups-btn, 1)), calc(44.2px / var(--ui-scale))); --chip-h: max(calc(var(--chip-h-0) * var(--look-popups-btn, 1)), calc(44.2px / var(--ui-scale))); }
+}
+:root[data-look-popups-corners="sharp"] #thumb-trainer { --r-xs: 0px; --r-sm: 0px; --r-md: 0px; --r-lg: 0px; }
+:root[data-look-popups-corners="pill"] #thumb-trainer { --r-sm: var(--r-pill); --r-md: var(--r-pill); }
 #tt-cue, #tt-score, #tt-note { margin: 0; font-size: var(--fs-2); }
+/* After a run the tips and score can outgrow a narrow column: they scroll, the timeline keeps its lanes (#6924). */
+#tt-cue, #tt-score { flex: 0 1 auto; min-height: 1.4em; overflow-y: auto; overscroll-behavior: contain; }
+#tt-score:empty { min-height: 0; }   /* no run yet: the line takes no room from the cue */
 #tt-cue { font-family: var(--font-hud); font-size: var(--fs-3); }
 #tt-score, #tt-note { color: var(--dim); }
 #tt-drill, #tt-explore { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: calc(var(--gap) / 2); }
 #tt-drill[hidden], #tt-explore[hidden] { display: none; }
-#tt-sketch { flex: 1 1 55%; min-height: 0; width: 100%; border-radius: var(--r-md); }
+/* The drill never gets less than the timeline and a line of score: the sketch gives way first, then the text. */
+#tt-drill { flex: 1 1 calc(5.5rem + 1.6em + var(--gap)); min-height: calc(5.5rem + 1.6em + var(--gap)); }
+#tt-drill:has(> #tt-score:empty) { flex-basis: 5.5rem; min-height: 5.5rem; }
+#tt-sketch { flex: 1 4 55%; min-height: 0; width: 100%; border-radius: var(--r-md); }
 #tt-time { flex: 0 0 auto; height: clamp(5.5rem, 34%, 15rem); width: 100%; border-radius: var(--r-md); }
-#thumb-trainer[data-fit~="side-sketch"] #tt-time { flex: 1 1 0; height: auto; min-height: 0; }
+#thumb-trainer[data-fit~="side-sketch"] #tt-time { flex: 1 1 0; height: auto; min-height: 5.5rem; }
 #tt-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: calc(var(--gap) / 2); }
-#tt-presets button { padding-inline: calc(var(--pad) / 3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#tt-chart { flex: 1 1 0; min-height: 6rem; }
+#tt-presets .sel-chip { padding-inline: calc(var(--pad) / 3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#tt-chart { flex: 1 1 0; min-height: 3.5rem; }
 #tt-chart svg { display: block; }
-#tt-note { flex: none; max-height: 4.2em; overflow: hidden; font-size: var(--fs-1); }
+#tt-note { flex: 0 1 auto; min-height: 1.4em; max-height: 4.2em; overflow-y: auto; overscroll-behavior: contain; font-size: var(--fs-1); }   /* scrolls in a short column (#6924) */
 
 
 /* Apex 26 — overlays styles. Load order: tools/manifest.cjs CSS. */

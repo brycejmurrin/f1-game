@@ -114,6 +114,8 @@ var CrowdAudio = (function () {
     bedSrc = bedFilt = bedGain = null;
     cheers = null;
     cheerPool = 0;
+    // Clock stamps from the old context: left, cheers are refused and a swell stays pinned on the new clock (#6886 row 4).
+    lastCheerT = -1e9; swellUntil = 0; swellAmt = 0;
     actx = bus = null;
     idled = false;
   }

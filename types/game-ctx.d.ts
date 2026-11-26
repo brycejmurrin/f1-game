@@ -168,6 +168,15 @@ interface StoreApi {
   [key: string]: unknown;
 }
 
+/** The narrow port a LEARN drill's begin() gets from its host (js/learn-drills/registry.js, #6920 U4.1), never all
+    of G and no new G member. startRace/goRolling/announce/store are GameCtx's; retry is the coach's RETRY LAP, which
+    game.js hands the host (G.coach's type has no retry); physState is __apex's, null while LAZY_AGENT is absent. */
+interface DrillPort extends Pick<GameCtx, "startRace" | "goRolling" | "store"> {
+  retry(): boolean;
+  physState(): Opaque | null;
+  announce(msg: string, dur?: number, kind?: string): boolean;
+}
+
 /** One time-trial leaderboard row — GameStore.ttBoard(trackId). */
 type TTBoardRow = Opaque;
 
@@ -406,7 +415,7 @@ interface GameCtx {
   readonly cssCol: (c: Vec3) => string;
 
   // ── Session identity: what is on screen and which mode it is ───────────────
-  state: GameState;
+  readonly state: GameState;
   readonly track: TrackModel | null;
   readonly cars: CarState[];
   readonly player: CarState | null;
@@ -548,10 +557,10 @@ interface GameCtx {
   // ── Per-frame render + race clocks ────────────────────────────────────────
   frame: FrameState;
   frameSky: FrameState;
-  frozen: boolean;
+  readonly frozen: boolean;
   headlessMode: boolean;
   hideMeshes: Record<string, boolean>;
-  paused: boolean;
+  readonly paused: boolean;
   raceLaps: number;
   raceT: number;
   /** Pending results delay; practice restores clear it for the restored field. */
@@ -580,7 +589,11 @@ interface GameCtx {
   readonly fieldSectorBests: [number, number, number];
   sectorIdx: number;
   sectorStartT: number;
-  skyViewOverride: SkyViewOverride | null;
+  readonly skyViewOverride: SkyViewOverride | null;
+  /** Owner commands (#6920 U2.4): the only writers of state / paused; `why` lands in the State log line. */
+  readonly cmd: { setState(next: GameState, why?: string): void; pause(v: boolean, why?: string): void };
+  /** Agent control: the only writers of frozen / skyViewOverride, plus park and a camera snap. */
+  readonly agentCtl: { freeze(v: boolean): boolean; park(minRaceT: number): void; setSkyOverride(o: SkyViewOverride | null): void; snapCam(paint?: boolean): void };
   trackIdx: number;
   ttLaps: number[];
   weatherArc: WeatherArc | null;
@@ -682,6 +695,7 @@ interface GameCtx {
   /** Falling rain at the followed car, independent of road wetness (0..1.5). */
   readonly viewRainfall: () => number;
   readonly isWetRoad: () => boolean;
+  readonly isWetAt: (c?: { s: number; x: number } | null) => boolean;
   readonly initRainDrops: () => void;
   readonly isFloodActiveSession: () => boolean;
   readonly _nightAmbientBand: () => number;
@@ -809,6 +823,8 @@ interface GameCtx {
   readonly holdCaution: (level: number, cause?: string) => number;
   /** Clear race-control, incident and debris ownership before a deterministic episode restart. */
   readonly resetEpisodeOwners: () => void;
+  /** The live per-node AI pace profile (js/race/pace-math.js paceRef); js/core/sim-state.js captures and restores it. */
+  readonly paceRef: () => Float32Array;
   /** Read-only rendered camera damping anchors and independent simulation/render clocks; `warming`/`liveTicks` are tickBody's holds (__apex.info()). */
   readonly cameraDampingState: () => { eye: number[]; target: number[]; fov: number; previousAnchor: (number | null)[]; nextAnchor: (number | null)[]; renderFrame: number; simulationTime: number; renderTime: number; warming: boolean; liveTicks: number; };
   /** TT_LAPS — the time-trial distance a daily session stages (ttLaps is the lap LIST). */
@@ -857,6 +873,8 @@ interface GameModuleFactory<TApi = Record<string, unknown>> {
 declare const AeroZones: GameModuleFactory;
 // js/editor/custom-tracks.js — create(G, { load, door? }): the TRACK DESIGNER door + its lazy bundle.
 declare const CustomTracks: GameModuleFactory;
+// js/learn-drills/registry.js (LAZY_LEARN) — create(G, { retry, setDirtyAir }): LEARN's drill host; begin() gets a DrillPort.
+declare const DrillRegistry: GameModuleFactory;
 declare const Collide: GameModuleFactory;
 declare const CarDraw: GameModuleFactory;
 declare const ShadowPass: GameModuleFactory;

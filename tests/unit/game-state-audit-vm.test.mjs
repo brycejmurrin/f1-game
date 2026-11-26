@@ -194,12 +194,12 @@ test("W26: a parked player is retired after 60 s under green and under VSC / SC 
   assert.ok(p.retired && p.dnf === "stationary", `control: parked under green should retire within 300 s (max stallT ${hiGreen}, dnf ${p.dnf})`);
 
   p = await drive(); A.step(1, 1);
-  G.paused = true;
+  G.cmd.pause(true, "test");
   try {
     const t0 = G.raceT, hi = watch(p, 120);
     assert.ok(G.raceT - t0 > 100, "the race clock ran under the pause (the case discriminates)");
     assert.ok(!p.retired && hi === 0, `paused: max stallT ${hi}, retired ${p.retired}`);
-  } finally { G.paused = false; }
+  } finally { G.cmd.pause(false, "test"); }
 
   // #5892: the caution a stopped car raises itself lasts 60 s; pausing the clock under it gave
   // the car ~60 s more of green on the racing line. Only a red (the field held on purpose) stops it.

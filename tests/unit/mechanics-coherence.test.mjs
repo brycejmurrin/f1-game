@@ -16,7 +16,7 @@ function load(files, extra = {}) {
 }
 
 test("the actual collision candidate accepts two rotated humans across the lap seam", () => {
-  const { get } = load(["js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"], {
+  const { get } = load(["js/physics/ai-start.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"], {
     IncidentSim: { owns: () => false }, Tracks: { wallAt: () => 20 },
   });
   const C = get("Collide").create({ track: { total: 1000 }, player: null, netPlay: { owns: () => false }, PACE: 1, wrapS: s => s }, () => {});
@@ -31,7 +31,7 @@ test("the actual collision candidate accepts two rotated humans across the lap s
 });
 
 test("AI corner planning solves the same speed-dependent envelope as steering", () => {
-  const A = load(["js/physics/ai-drive.js"]).get("AiDrive");
+  const A = load(["js/physics/ai-start.js", "js/physics/ai-drive.js"]).get("AiDrive");
   for (const pace of [.4,.84,1,1.4]) for (const grip of [.4,.8,1]) for (const k of [.001,.006,.03,.1]) {
     const load=.8, lat=22*A.aeroGrip(load)*grip;
     const v=A.cornerSpeed(k,lat,pace,72);
@@ -73,7 +73,7 @@ test("ghost classes isolate records, retain legacy laps and survive immediate sw
 });
 
 test("network strategic state clamps telemetry and never changes car pose", () => {
-  const N=load(["js/net/quali-wire.js", "js/net/strategy-wire.js", "js/net/netplay.js"]).get("NetPlay");
+  const N=load(["js/net/wire-schema.js", "js/net/quali-wire.js", "js/net/strategy-wire.js", "js/net/netplay.js"]).get("NetPlay");
   const c={px:3,pz:5,speed:40,tyre:{id:"soft",code:"S",life:.67,tread:0,colour:[1,0,0]},tyreWear:.7,pitState:"box",pitT:2,tyreStints:2};
   const d=N.strategyState(c,7,"monza"), remote={px:10,speed:30};
   d.fields.tyreWear=1e8; d.fields.speed=1000;

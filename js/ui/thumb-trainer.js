@@ -170,8 +170,9 @@ const ThumbTrainer = (function () {
     if (text != null) node.textContent = text;
     return node;
   }
-  function button(id, text, label) {
-    const b = el("button", { id, type: "button" }, text);
+  // The house controls (css/components.css, css/select.css): BACK is the alt plate, START the red primary, the rest chips.
+  function button(id, text, label, cls = "sel-chip") {
+    const b = el("button", { id, type: "button", class: cls }, text);
     if (label) b.setAttribute("aria-label", label);
     return b;
   }
@@ -183,8 +184,11 @@ const ThumbTrainer = (function () {
     const bar = el("div", { id: "tt-bar", role: "toolbar", "aria-label": "Drill" });
     const pick = el("select", { id: "tt-turn", "aria-label": "Vegas corner" });
     for (const c of CORNERS) pick.appendChild(el("option", { value: c.name }, `S${c.sec} ${c.name} ${c.dir < 0 ? "◀" : "▶"} ${SHAPES[c.shape].label}`));
-    bar.append(button("tt-back", "BACK"), button("tt-prev", "◀", "Previous corner"), pick, button("tt-next", "▶", "Next corner"),
-      button("tt-speed", "½×"), button("tt-go", "START"), button("tt-view", "PEDALS", "Pedal explorer"));
+    // 🏁 rides beside BACK: in the 254 px column (852x393, shipped profile) a ninth item at the end wrapped the bar to a
+    // fourth row and the panel overflowed by 61 px; the first row has room for it (#6927, real-profile-dock.spec.js).
+    bar.append(button("tt-back", "BACK", null, "bigbtn alt"), button("tt-track", "🏁", "Try it on track: drive Las Vegas with these cues"),
+      button("tt-prev", "◀", "Previous corner"), pick, button("tt-next", "▶", "Next corner"),
+      button("tt-speed", "½×"), button("tt-go", "START", null, "bigbtn"), button("tt-view", "PEDALS", "Pedal explorer"));
     const cue = el("p", { id: "tt-cue", "aria-live": "polite" });
     const drill = el("div", { id: "tt-drill" });
     drill.append(el("canvas", { id: "tt-sketch", "aria-label": "Top-down sketch of the corner: brake point, turn-in, apex, gas on and arrow off" }),
@@ -205,8 +209,10 @@ const ThumbTrainer = (function () {
     if (typeof TopModal !== "undefined" && TopModal.wireLayer) TopModal.wireLayer(root);
   }
 
-  /** Open the drill over the player's real touch dock. preview(on) shows/hides the race buttons (game.js). */
-  function open(G, { preview, onClose, corner } = {}) {
+  /** Open the drill over the player's real touch dock. preview(on) shows/hides the race buttons (game.js).
+   *  drive: start the on-track drill instead (js/learn-drills/thumb-drill.js); a refused start runs onClose. */
+  function open(G, { preview, onClose, corner, drive } = {}) {
+    if (drive) { ThumbDrill.launch(G, { onFail: onClose }); return null; }
     if (session) return session;
     if (!root) build();
     const overlay = document.getElementById("overlay"), hud = document.getElementById("hud");
@@ -227,8 +233,9 @@ const ThumbTrainer = (function () {
     }
     paintSpeed();
 
+    // Canvas labels follow TEXT SIZE: the score line is --fs-2 (15 px at the default rung, css/tokens.css).
     function readColors() {
-      colors = { bg: css("--surf-1") || css("--bg"), text: css("--text"), dim: css("--dim"), line: css("--card-line"), target: css("--surf-3"),
+      colors = { fs: Math.max(0.8, (parseFloat(getComputedStyle(scoreEl).fontSize) || 15) / 15), bg: css("--surf-1") || css("--bg"), text: css("--text"), dim: css("--dim"), line: css("--card-line"), target: css("--surf-3"),
         brake: css("--red"), gas: css("--faster"), right: css("--zone"), left: css("--spark"), font: css("--font-ui") || "system-ui" };
     }
     // The drill reads the buttons the race reads. Keys are the desktop fallback (← → steer, ↓ brake, ↑ gas).
@@ -252,7 +259,14 @@ const ThumbTrainer = (function () {
       const top = sat + gap, bottom = vh - sab - gap, dockTop = Math.min(bottom + gap, ...boxes.map(r => r.top));
       const column = { x: x0, y: top, w: x1 - x0, h: bottom - top };
       const band = { x: sal + gap, y: top, w: vw - sal - sar - 2 * gap, h: dockTop - 2 * gap - top };
-      const use = column.w >= 300 || column.w * column.h >= band.w * band.h ? column : band;
+      // A dock stacked up one edge (portrait, buttons in a column) leaves a tall block beside it, above the other dock.
+      const lowTop = side => Math.min(bottom + gap, ...side.map(r => r.top)) - gap;
+      const leftOf = { x: sal + gap, y: top, w: Math.min(vw - sar, ...rights.map(r => r.left)) - gap - sal - gap, h: lowTop(lefts) - top };
+      const rightOf = { x: x0, y: top, w: vw - sar - gap - x0, h: lowTop(rights) - top };
+      // Usable: the bar wraps to at most three rows and the timeline keeps its lanes (#6924).
+      const fits = r => r.w >= 240 && r.h >= 260;
+      const roomy = [band, leftOf, rightOf].filter(fits).sort((a, b) => b.w * b.h - a.w * a.h)[0];
+      const use = column.w >= 300 || fits(column) ? column : roomy || (column.w * column.h >= band.w * band.h ? column : band);
       Object.assign(panel.style, { left: use.x + "px", top: use.y + "px", width: Math.max(160, use.w) + "px", height: Math.max(160, use.h) + "px" });
       // The sketch takes the bigger free corner above a dock when one is roomy (above the arrows on a phone), so the
       // drill column keeps its height for the bar, cue and timeline. Otherwise it stays in the column.
@@ -267,7 +281,7 @@ const ThumbTrainer = (function () {
         if (sketch.parentElement !== nodes["tt-drill"]) nodes["tt-drill"].prepend(sketch);
         for (const k of ["position", "left", "top", "width", "height"]) sketch.style.removeProperty(k);
       }
-      root.dataset.fit = (use === column ? "column" : "band") + (side ? " side-sketch" : "");
+      root.dataset.fit = (use === column ? "column" : use === band ? "band" : "beside") + (side ? " side-sketch" : "");
       for (const c of [sketch, time]) {
         const r = c.getBoundingClientRect(), d = devicePixelRatio || 1;
         c.width = Math.max(1, Math.round(r.width * d));
@@ -306,7 +320,7 @@ const ThumbTrainer = (function () {
       };
       return { dAt, pt, total: dist };
     }
-    function font(px, weight = 700) { return weight + " " + px + "px " + colors.font; }
+    function font(px, weight = 700) { return weight + " " + Math.round(px * (colors.fs || 1)) + "px " + colors.font; }
     function drawSketch(tNow) {
       const C = script(name), g = geometry(C), W = sketch.clientWidth, H = sketch.clientHeight;
       if (!W || !H) return;
@@ -361,7 +375,7 @@ const ThumbTrainer = (function () {
     function drawTime() {
       const C = script(name), W = time.clientWidth, H = time.clientHeight;
       if (!W || !H) return;
-      const L = 52, R = W - 6, strip = 13, lane = (H - strip - 16) / 3;
+      const L = Math.round(52 * (colors.fs || 1)), R = W - 6, strip = Math.round(13 * (colors.fs || 1)), lane = (H - strip - 16) / 3;
       const lanes = [["BRAKE", strip + 2], ["ARROWS", strip + 2 + lane], ["GAS", strip + 2 + 2 * lane]];
       const x = t => L + (R - L) * t / C.dur, inner = lane - 6;
       tx.clearRect(0, 0, W, H);
@@ -472,7 +486,10 @@ const ThumbTrainer = (function () {
     // PEDAL EXPLORER: the selected preset's curves beside the saved profile, from PedalTravel itself.
     function drawChart() {
       const host = nodes["tt-chart"], note = nodes["tt-note"], PT = typeof PedalTravel !== "undefined" ? PedalTravel : null;
-      for (const b of document.querySelectorAll("#tt-presets button")) b.setAttribute("aria-pressed", String(b.dataset.preset === preset));
+      for (const b of document.querySelectorAll("#tt-presets button")) {
+        b.setAttribute("aria-pressed", String(b.dataset.preset === preset));
+        b.classList.toggle("active", b.dataset.preset === preset);
+      }
       if (!PT) { host.textContent = ""; note.textContent = "The pedal code did not load."; return; }
       const mine = { brake: PT.buttonProfile("brake"), gas: PT.buttonProfile("gas") };
       const chosen = preset === "yours" ? mine : { brake: PRESETS[preset].brake, gas: PRESETS[preset].gas || mine.gas };
@@ -539,6 +556,8 @@ const ThumbTrainer = (function () {
         if (exploring) requestAnimationFrame(drawChart); else { idle(); place(); }
       }],
     ];
+    // TRY IT ON TRACK: close without reopening LEARN, then start the drill; a refused start reopens it after all.
+    handlers.push(["tt-track", () => { const back = onClose; onClose = null; close(); queueMicrotask(() => ThumbDrill.launch(G, { onFail: back })); }]);
     for (const [id, fn] of handlers) nodes[id].onclick = fn;
     pick.onchange = () => choose(pick.value);
     for (const b of document.querySelectorAll("#tt-presets button")) b.onclick = () => { preset = b.dataset.preset; drawChart(); };
@@ -586,6 +605,6 @@ const ThumbTrainer = (function () {
     return session;
   }
 
-  return Object.freeze({ open, close: () => session?.close(), SHAPES, CORNERS, PRESETS, script, score, curve });
+  return Object.freeze({ open, close: () => session?.close(), SHAPES, CORNERS, PRESETS, script, score, curve, readBest, writeBest });
 })();
 Object.freeze(ThumbTrainer);

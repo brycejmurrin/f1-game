@@ -1,6 +1,9 @@
 /* Apex 26 — audio stub for the title script wall.
    Real modules are LAZY_AUDIO (tools/manifest.cjs); ensureAudio() loads them
    and reassigns these bindings via top-level `var`. Menus must not throw.
+   RadioVoice, Announcer, RivalAudio, CarSfx and AudioPanel instances are the
+   handles game.js keeps (adoptAudio, js/core/lazy-bundles.js; #6952): their keys
+   equal the real ones (tests/unit/audio-stub-parity.test.mjs).
    One file, many globals on purpose — MULTI_GLOBAL + SHARED_GLOBALS (cap 2)
    in tests/unit/global-registry.test.mjs document the reinjection pair. */
 "use strict";
@@ -63,7 +66,7 @@ var GameAudioSignal = { create: () => ({}), resetContext: function () {} };
 var GameAudioSoundtrack = { create: () => ({}) };
 var GameAudioRadioFx = { create: () => ({}), resetContext: function () {} };
 var GameAudioToneModel = { patchTune: function () {}, nameForTune: function () { return ""; } };
-var CarSfx = { create: () => ({ update: function () {}, levels: () => ({}), pitGuns: function () {} }) };
+var CarSfx = { create: () => ({ update: function () {}, levels: () => ({}) }) };
 var ErsLayer = {
   attach: function () {}, detach: function () {}, silence: function () {},
   update: function () {}, cueBoost: function () {}, inspect: function () { return {}; },
@@ -77,8 +80,8 @@ var RivalAudio = {
     attach: function () {}, detach: function () {}, silence: function () {},
     passByState: () => [], passByVoices: () => [],
   }),
-  silence: function () {},
-  sprayAhead: () => 0,
+  silence: function () {}, detach: function () {}, idle: function () {},
+  sprayAhead: () => 0, passByVoices: () => [],
 };
 var VoicePack = { create: () => null };
 var RecordedAnnouncer = { create: () => ({ play: () => false, stop: function () {} }) };
@@ -88,12 +91,15 @@ var DrivingCues = {
 };
 var RadioVoice = (function () {
   function inert() {
+    const no = () => false, nil = () => null, none = () => [];
     return {
-      stop: function () {}, speak: () => false, say: function () {}, sayPreRace: () => false, halt: function () {}, flushDecoded: function () {},
-      previewGeneration: () => 0, stopPreviewIfGeneration: () => false,
-      prepare: function () {}, unlock: function () {}, enabled: () => false, setEnabled: function () {},
-      setVolume: function () {}, volume: () => 0, pack: null, packOn: () => false,
-      announcerPackOn: () => false, current: function () {}, tick: function () {},
+      say: no, stop: nil, halt: nil, flushDecoded: nil, unlock: nil, preview: no,
+      previewGeneration: () => 0, stopPreviewIfGeneration: no, sayPreRace: no,
+      voiceList: none, recordedVoice: nil, recordedPack: nil, recordedVoices: none,
+      announcerPackOn: no, setRecordedVoice: no, tuneFor: nil, setTune: no,
+      setEnabled: nil, pack: null, volume: () => 0, setPackOn: nil, prepare: nil, soundOn: nil,
+      releaseRaceLoadGate: nil, packOn: no, busy: no, yieldToSpotter: no,
+      setVolume: (v) => v, available: no, debug: () => ({ available: false, enabled: false }),
     };
   }
   return {
@@ -105,9 +111,9 @@ var RadioVoice = (function () {
 var Announcer = (function () {
   function inert() {
     return {
-      play: () => false, stop: function () {}, enabled: () => false,
-      setEnabled: function () {}, setVoice: function () {}, prepare: function () {},
-      wrapUp: function () {}, readMs: () => 0,
+      play: () => false, preview: () => false, sample: () => false, scriptFor: () => [],
+      readMs: () => 0, wrapUp: () => false, stop: function () {}, enabled: () => false,
+      speaking: () => false, setEnabled: function () {}, available: () => false,
     };
   }
   return {
@@ -151,6 +157,6 @@ var AudioPanel = {
       els.soundbtn.textContent = G.soundOn ? "SOUND ON" : "SOUND OFF";
       els.soundbtn.setAttribute("aria-pressed", G.soundOn ? "true" : "false");
     }
-    return { init: function () {}, _stub: true, setSound };
+    return { init: function () {}, _stub: true };
   },
 };

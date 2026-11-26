@@ -2897,3 +2897,18 @@ test("GRAVEL at full strength under a cylinder cut never takes the engine gain b
   assert.ok(A.gravelDepth() + A.cylCutDepth() <= A.engineLevel() + 1e-9,
     `gravel ${A.gravelDepth()} + cut ${A.cylCutDepth()} exceeds the engine level ${A.engineLevel()} — engGain goes negative`);
 });
+
+test("a pause at the redline does not carry the limiter hold clock across the resume (#6886 row 9)", async () => {
+  const { GameAudio: A, release, ctxTime } = boot();
+  A.init(); await release(); A.startEngine();
+  const at = () => A.setEngine(0.99, 0, false, 0.95, 8, {});
+  at();
+  ctxTime(0.3); at();
+  assert.ok(A.limiterHeld() > 0, "precondition: the top-gear cut is being held");
+  A.stopEngine();
+  ctxTime(30);                 // a long pause on the same ctx clock
+  A.startEngine();
+  at();
+  assert.ok(A.limiterDepth() > 0, "resuming at the redline gets the limiter chop again");
+  assert.equal(A.limiterHeld(), 0, "the hold clock restarts at resume");
+});

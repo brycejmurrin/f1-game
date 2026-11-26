@@ -1114,7 +1114,7 @@ and slip ratio (`kappaF`/`kappaR`). It is **opt-in and default OFF by decision**
 (`WheelState.setEnabled(true)` or `apex26.wheelState = "1"`; a session-only dev
 toggle is `__apex.setPhysics({wheelState})`, read back by `tuning().wheelState`):
 OFF never enters the branch, so `physics-characterization` stays bit-identical to
-its baseline. The rim fields are `EPISODE_TRANSIENTS` and CarFields-registered, so
+its baseline. The rim fields are episode rows of the CarFields `RESETS` table (`js/race/car-fields.js`), so
 `__apex.reset()` clears them and `WheelState.ensure` re-seeds them from `c.speed`.
 
 ON, PlayerForces bills each axle's brake or drive demand against its tyre's

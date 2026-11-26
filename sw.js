@@ -506,10 +506,12 @@ async function precacheAssetLists() {
     "js/data/garage-departure-motion.js",
     "js/garage/departure-wheels.js",
     "js/race/reliability.js",
+    "js/core/sim-state.js",
     "js/race/damage.js",
     "js/race/damage-handling.js",
     "js/race/duel.js",
     "js/race/session-records.js",
+    "js/race/medal-ledger.js",
     "js/race/pit-geom.js",
     "js/race/pit-lane.js",
     "js/race/engineer.js",
@@ -571,6 +573,7 @@ async function precacheAssetLists() {
     "js/audio/voice-pack.js",
     "js/audio/battle-earcon.js",
     "js/audio/radio-voice.js",
+    "js/data/circuit-lore.js",
     "js/audio/announcer-recorded.js",
     "js/audio/announcer.js",
     "js/audio/panel.js",
@@ -719,6 +722,7 @@ async function precacheAssetLists() {
     "js/net/lobby-settings.js",
     "js/net/interp.js",
     "js/net/snapshot.js",
+    "js/net/wire-schema.js",
     "js/net/session.js",
     "js/net/quali-wire.js",
     "js/net/strategy-wire.js",
@@ -794,6 +798,7 @@ async function precacheAssetLists() {
     "js/car/car-hero.js",
     "js/render/three/tsl-surface.js",
     // LAZY_PERF — BENCHMARK / PHONE TEST rig, idle-loaded after boot
+    "js/perf/thermal-drift.js",
     "js/perf/soak-run.js",
     "js/perf/gpu-test-run.js",
     "js/perf/phone-recorder.js",
@@ -808,8 +813,10 @@ async function precacheAssetLists() {
     "js/race/real-race-pace.js",
     "js/race/real-race.js",
     // LEARN — the Learn modal and bare lesson assets
+    "js/learn-drills/registry.js",
     "js/ui/learn-door.js",
     "js/ui/thumb-trainer.js",
+    "js/learn-drills/thumb-drill.js",
     "learn/appearance.js",
     "learn/replay.js",
     "learn/replay.css",
@@ -887,7 +894,7 @@ async function precacheAssetLists() {
   // suspenders if a tag is re-added. Do NOT add them to optional: that is
   // still an install-time put. Fetch-miss still cache.put on first use.
   // @gen-shell:sw-lazy-agent
-  const LAZY_AGENT = ["js/render/shared/puddles.js","js/agent/agentview-raster.js","js/agent/agentview-corners.js","js/agent/agentview.js","js/agent/apex-net.js","js/agent/apex-cam.js","js/agent/apex-track.js","js/agent/apex-lobby.js","js/agent/apex-gpu-capture.js","js/agent/apex-lifecycle.js","js/perf/three-inspector.js","js/agent/apex.js","js/agent/apex-bridge.js","js/agent/bridge-link.js"];
+  const LAZY_AGENT = ["js/render/shared/puddles.js","js/agent/agentview-raster.js","js/agent/agentview-corners.js","js/agent/agentview.js","js/agent/apex-net.js","js/agent/apex-cam.js","js/agent/apex-track.js","js/agent/apex-lobby.js","js/agent/apex-play.js","js/agent/apex-gpu-capture.js","js/agent/apex-lifecycle.js","js/perf/three-inspector.js","js/agent/apex.js","js/agent/apex-bridge.js","js/agent/bridge-link.js"];
   // /@gen-shell:sw-lazy-agent
   for (const u of [...essential]) {
     if (LAZY_AGENT.some((p) => u.includes(p))) essential.delete(u);
@@ -1213,7 +1220,7 @@ async function precacheGeneration(onName) {
   // manifest or relying on the first online boot loses the pack after an update.
   const packManifest = PACK_MANIFEST_KEY_PREFIX + build;
   const stamped = urls.optional.map((u) =>
-    /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/fx\/visor-optics\.js$|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/(?:phone-pad(?:-codec|-page)?|touch-button-actions)\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|touch-button-settings|appearance-(?:studio-ui|arrangement-picker)|companion-return|photo-studio-ui|results-sheet|quali-sheet|watch-transport|progress-backup|save-health|settings-export-body|learn-door|thumb-trainer|circuit-details-panel|hud-inputs|screen-(regions|placement|arranger)|hud-arrange|hud-layout-editor|desktop-graphics|dock-toolbar)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/(presets|tuner-panel)\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+    /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/core\/sim-state\.js$|^js\/audio\/|^js\/race\/|^js\/fx\/visor-optics\.js$|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(thermal-drift|soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/(?:phone-pad(?:-codec|-page)?|touch-button-actions)\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|touch-button-settings|appearance-(?:studio-ui|arrangement-picker)|companion-return|photo-studio-ui|results-sheet|quali-sheet|watch-transport|progress-backup|save-health|settings-export-body|learn-door|thumb-trainer|circuit-details-panel|hud-inputs|screen-(regions|placement|arranger)|hud-arrange|hud-layout-editor|desktop-graphics|dock-toolbar)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/(presets|tuner-panel)\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\/|^js\/learn-drills\//.test(u)
       ? stampKey(u) : u).filter((u) => {
         const bare = u.replace(/\?v=.*$/, "");
         // GLX and career UI went in `required`; runtime-only doors are skipped.

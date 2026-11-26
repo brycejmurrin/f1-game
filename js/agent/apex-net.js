@@ -257,7 +257,7 @@ const ApexNet = (function () {
         G.netStart = atMs == null
           ? null
           : { at: atMs, hold: hold != null ? hold : 0.5, now: () => G.netNow };
-        G.state = "count";
+        G.cmd.setState("count", "agent-net-start");
         G.countT = 0;
         G.lightsLit = 0;
         resetStartLights(false);

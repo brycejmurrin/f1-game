@@ -125,6 +125,7 @@ const FULL = [
   // Log must be first: every module below may log at evaluation time.
   "js/core/log.js",
   "js/core/dev-flags.js",
+  "js/core/scopes.js",      // Scopes: lifecycle scope bus — WHEN a transition clears what (#6949); game.js registers at eval
   "js/core/mat4.js",
   "js/core/hash32.js",
   "js/core/clipboard.js",   // ApexClipboard: write/read + textarea fallback (call-time; early so panels/lobby can use it)
@@ -236,9 +237,7 @@ const FULL = [
   // first gesture or race start). The stub keeps menus from throwing and is
   // reassigned via top-level `var` when the real bundle lands.
   "js/audio/stub.js",
-  // The announcer's authored half. Data only, read at CALL time and guarded on
-  // the global, so the order is for tidiness rather than correctness.
-  "js/data/circuit-lore.js",
+  // circuit-lore.js (the announcer's authored half) is LAZY_AUDIO, before announcer.js.
   "js/car/parts.js",
   "js/car/liveries.js",
   "js/car/custom-liveries.js",   // persist/resolve/live-draft (CustomLiveries.create({ store })), peeled from game.js
@@ -300,6 +299,7 @@ const FULL = [
   "js/physics/vehicle.js", // tick scratch bags; loads before player-forces.js
   "js/physics/player-forces.js", // human combined-slip / Fy / yaw integrate (carve-headroom A); uses GripSteer after muF
   "js/physics/ai-strategy.js", // tyre-wear pace + stint planner; AiDrive re-exports the names
+  "js/physics/ai-start.js",   // AiStart: launch plan + lap-1 calm policy (AiDrive re-exports)
   "js/physics/ai-drive.js",
   "js/physics/ai-band.js",   // gap catch-up vs scripted fixed pace (carve-headroom D)
   "js/physics/ai-corridor.js",
@@ -378,7 +378,7 @@ const FULL = [
   "js/physics/brake-cue.js",
   // driving-cues.js is LAZY_AUDIO (SteerTuning and game.js already typeof-guard it).
   "js/input/steer-tuning.js",
-  "js/perf/thermal-drift.js",    // ThermalDrift: pure slow-drift detector + opt-in 45/30 render gate (#2652); before governor
+  // thermal-drift.js (ThermalDrift, #2652) is LAZY_PERF; PerfGov.resyncDrift() arms it when the rig lands.
   "js/perf/governor.js",
   "js/perf/menu-teardown.js",
   "js/perf/menu-quit-tail.js",
@@ -668,6 +668,7 @@ const HARD_EDGES = [
   ["js/core/store.js", "js/career/restore-points.js"],
   ["js/career/save-migrate.js", "js/career/restore-points.js"],
   ["js/ui/loading-card.js", "js/ui/loading-screen.js"], // LoadingScreen destructures LoadingCard at eval
+  ["js/core/scopes.js", "js/game.js"],   // game.js calls Scopes.register at eval time
   ["js/core/script-loader.js", "js/game.js"],
   ["js/core/menu-sheet-gate.js", "js/game.js"],
   ["js/core/menu-sheet-gate.js", "js/garage/prebuild.js"],
@@ -923,6 +924,8 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/physics/ai-strategy.js"],     // AiStrategy binds M4.clamp at eval
   ["js/physics/ai-strategy.js", "js/physics/ai-drive.js"], // wrappers call AiStrategy.* (call time; bindTraits on first use)
   ["js/core/mat4.js", "js/physics/ai-drive.js"],         // AiDrive binds M4.clamp/lerp at eval
+  ["js/core/mat4.js", "js/physics/ai-start.js"],         // AiStart binds M4.clamp/lerp at eval
+  ["js/physics/ai-start.js", "js/physics/ai-drive.js"],  // AiDrive destructures AiStart at eval
   ["js/core/mat4.js", "js/physics/tyre-model.js"],       // TyreModel binds M4.clamp at eval
   ["js/physics/consts.js", "js/physics/tyre-model.js"],  // …and reads PhysicsConsts.BB_REF at eval
   ["js/physics/tyre-model.js", "js/game.js"],            // game.js validates the stored TYRE WEAR level at eval
@@ -1033,6 +1036,7 @@ const LAZY_AGENT = [
   "js/agent/apex-cam.js",
   "js/agent/apex-track.js",
   "js/agent/apex-lobby.js",
+  "js/agent/apex-play.js",
   "js/agent/apex-gpu-capture.js",
   "js/agent/apex-lifecycle.js",
   "js/perf/three-inspector.js", // ThreeInspector: opt-in (?inspector=1) dev panel; apex.js boots it at eval (#4978 row 4)
@@ -1046,6 +1050,7 @@ const LAZY_EDGES = [
   ["js/agent/apex-cam.js", "js/agent/apex.js"],
   ["js/agent/apex-track.js", "js/agent/apex.js"],
   ["js/agent/apex-lobby.js", "js/agent/apex.js"],
+  ["js/agent/apex-play.js", "js/agent/apex.js"],   // def() registry: ApexApi spreads ApexPlay.hooks(G)
   ["js/agent/apex-gpu-capture.js", "js/agent/apex.js"], // __apex.gpuCapture one-line registration
   ["js/perf/three-inspector.js", "js/agent/apex.js"],   // apex.js calls ThreeInspector.boot(gfx) at eval
   ["js/agent/agentview-corners.js", "js/agent/agentview.js"],
@@ -1068,6 +1073,7 @@ const LAZY_DEV = [
 // (apex26.benchRun) is waiting to resume, and binds SoakRun / BenchRun to G.
 // Order is the old FULL order (soak before the runners that drive it).
 const LAZY_PERF = [
+  "js/perf/thermal-drift.js",  // ThermalDrift: slow-drift detector + opt-in 45/30 render gate (#2652); PerfGov.resyncDrift() on landing
   "js/perf/soak-run.js",       // SoakRun: AUTO SOAK, the hands-free soak (drives the player INPUT only; soak-gated)
   "js/perf/gpu-test-run.js",   // GpuTestRun: PHONE TEST > GPU TEST, one-tap phase run over SoakRun
   "js/perf/phone-recorder.js", // PhoneRecorder: SETTINGS > METRICS > PHONE TEST (RECORD / SHARE soak JSON, #1633)
@@ -1143,10 +1149,12 @@ const LAZY_RACE_SESSION = [
   "js/data/garage-departure-motion.js",
   "js/garage/departure-wheels.js",
   "js/race/reliability.js",
+  "js/core/sim-state.js",     // SimState: the one capture/restore registry (#6860); damage.js registers at eval, the coach captures through it
   "js/race/damage.js",
   "js/race/damage-handling.js",   // DamageHandling: the opt-in DAMAGE → HANDLING read (#1578; OFF = no effect)
   "js/race/duel.js",
   "js/race/session-records.js",
+  "js/race/medal-ledger.js",   // MedalLedger: pure tierFor over Quali.medalFor (#6961); unreferenced by eager code
   "js/race/pit-geom.js",
   "js/race/pit-lane.js",
   "js/race/engineer.js",
@@ -1174,6 +1182,7 @@ const LAZY_RACE_SESSION_EDGES = [
   ["js/race/radio-lines.js", "js/race/race-radio.js"],
   ["js/race/race-facts.js", "js/race/race-radio.js"],
   ["js/race/spotter.js", "js/race/race-radio.js"],
+  ["js/core/sim-state.js", "js/race/damage.js"], // Damage registers its part with SimState at eval (#6860)
 ];
 
 // AUDIO ENGINE + PANEL (~449 KB). Title/menus only need the stub in FULL;
@@ -1197,6 +1206,7 @@ const LAZY_AUDIO = [
   "js/audio/voice-pack.js",
   "js/audio/battle-earcon.js", // finite opt-in motifs; panel and voice cancellation share the helper
   "js/audio/radio-voice.js",
+  "js/data/circuit-lore.js",   // CircuitLore: the announcer's authored half (and flyby-seq's corner lines); typeof-guarded readers
   "js/audio/announcer-recorded.js",
   "js/audio/announcer.js",
   "js/audio/panel.js",
@@ -1498,6 +1508,7 @@ const LAZY_NET = [
   "js/net/lobby-settings.js", // LobbySettings: SETTINGS normalise + custom-circuit wire (#1587/#1655)
   "js/net/interp.js",       // NetInterp: rival smoothing; NetSnapshot.createInterp forwards
   "js/net/snapshot.js",
+  "js/net/wire-schema.js",  // NetWire: every reliable event's size/decode/role/rate row (#6859); before its readers
   "js/net/session.js",
   "js/net/quali-wire.js",   // QualiWire: QUALI/QLIVE validation; NetPlay calls create(EV) at eval
   "js/net/strategy-wire.js", // StrategyWire: tyre/pit codec; NetPlay calls create() at eval
@@ -1578,6 +1589,7 @@ const LAZY_NET_EDGES = [
   ["js/net/interp.js", "js/net/snapshot.js"], // createInterp forwards at call time; keep the codec's dependency ordered
   ["js/net/snapshot.js", "js/net/session.js"],
   ["js/net/quali-wire.js", "js/net/netplay.js"], // NetPlay calls QualiWire.create(EV) while evaluating
+  ["js/net/wire-schema.js", "js/net/quali-wire.js"], // QualiWire.create reads NetWire as NetPlay evaluates (so netplay and lobby follow it too)
   ["js/net/strategy-wire.js", "js/net/netplay.js"], // NetPlay calls StrategyWire.create() while evaluating
   ["js/net/spectate.js", "js/net/netplay.js"],
   ["js/net/sdp.js", "js/net/handshake.js"],
@@ -1910,7 +1922,7 @@ const MOVED = {
 
 // Learn's modal loads only after the title door is used. The iframe requests
 // its standalone page and lesson assets without a ScriptLoader version query.
-const LAZY_LEARN = ["js/ui/learn-door.js", "js/ui/thumb-trainer.js"];
+const LAZY_LEARN = ["js/learn-drills/registry.js", "js/ui/learn-door.js", "js/ui/thumb-trainer.js", "js/learn-drills/thumb-drill.js"];
 const SW_LEARN = [
   "learn/appearance.js", "learn/replay.js", "learn/replay.css", "learn/sandbox.js", "learn/sandbox.css",
   ...["chassis", "suspension", "deployment", "hybrid", "brake-blend", "tyre-heat",

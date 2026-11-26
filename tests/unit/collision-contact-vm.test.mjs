@@ -433,7 +433,7 @@ function replayContactFixture(count = 2) {
       sample: (_track, s, out) => { out.p = [0, 0, s]; out.t = [0, 0, 1]; out.r = [1, 0, 0]; out.hw = 3; return out; },
     },
   });
-  for (const file of ["js/core/mat4.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js", "js/race/real-replay.js"]) {
+  for (const file of ["js/core/mat4.js", "js/physics/ai-start.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js", "js/race/real-replay.js"]) {
     vm.runInContext(readFileSync(join(ROOT_C, file), "utf8"), ctx, { filename: absSrc(file) });
   }
   const cars = Array.from({ length: count }, (_, i) => ({ code: "C" + i, human: false }));
@@ -676,7 +676,7 @@ test("a three-car pileup notifies every distinct unordered pair once per solver 
       Log: { info() {}, enabled: () => false }, Tracks: { wallAt: () => 100 },
       IncidentSim: { owns: () => false, notifyCar: (a, b, v) => incident.push([a.id, b.id, v]) },
       DebrisWorld: { active: () => true, carImpact: (a, b, v) => debris.push([a.id, b.id, v]) } });
-    for (const file of ["js/core/mat4.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"])
+    for (const file of ["js/core/mat4.js", "js/physics/ai-start.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"])
       vm.runInContext(readFileSync(join(ROOT_C, file), "utf8"), ctx, { filename: absSrc(file) });
     const cars = cluster().slice(0, n).concat(Array.from({ length: Math.max(0, n - 3) }, (_, i) => car("other" + i, 200 + i * 200, 40)));
     const G = { track: { total: 6000 }, player: null, netPlay: { owns: () => false }, PACE: 1, raceT: 0,
@@ -735,7 +735,7 @@ test("an AI striker into a parked player: the AI pays the whole share, the playe
 test("an AI rear-end punts the player no further than the cap over all four passes", () => {
   const ctx = vm.createContext({ Math, Number, Object, WeakMap, Log: { info() {}, enabled: () => false },
     Tracks: { wallAt: () => 100 }, IncidentSim: { owns: () => false, notifyCar() {} }, DebrisWorld: { active: () => false } });
-  for (const file of ["js/core/mat4.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"])
+  for (const file of ["js/core/mat4.js", "js/physics/ai-start.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"])
     vm.runInContext(readFileSync(join(ROOT_C, file), "utf8"), ctx, { filename: absSrc(file) });
   const p = { id: "p", prog: 104.6, s: 104.6, speed: 20, x: 0, human: true, yawVis: 0 };
   const ai = { id: "ai", prog: 100, s: 100, speed: 50, x: 0, human: false };
@@ -762,7 +762,7 @@ test("an AI rear-end punts the player no further than the cap over all four pass
 function miniSolver(G, cg) {
   const ctx = vm.createContext({ Math, Number, Object, WeakMap, Log: { info() {}, enabled: () => false },
     Tracks: { wallAt: () => 100, postLimits() {} }, IncidentSim: { owns: () => false, notifyCar() {} }, DebrisWorld: { active: () => false } });
-  for (const file of ["js/core/mat4.js", "js/physics/ai-drive.js"].concat(cg ? [] : ["js/physics/contact-geometry.js"]))
+  for (const file of ["js/core/mat4.js", "js/physics/ai-start.js", "js/physics/ai-drive.js"].concat(cg ? [] : ["js/physics/contact-geometry.js"]))
     vm.runInContext(readFileSync(join(ROOT_C, file), "utf8"), ctx, { filename: absSrc(file) });
   if (cg) ctx.ContactGeometry = cg(ctx);
   vm.runInContext(readFileSync(join(ROOT_C, "js/physics/collide.js"), "utf8"), ctx, { filename: absSrc("js/physics/collide.js") });

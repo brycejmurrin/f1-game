@@ -84,7 +84,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_Module index over 33 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_Module index over 34 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -92,6 +92,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `log.js` | `Log` | tag | levelled namespaced logging (global Log). |
 | `dev-flags.js` | `DevFlags` | tag | DevFlags: one registry for boot-time URL / localStorage toggles. |
+| `scopes.js` | `Scopes` | tag | Scopes: WHEN a lifecycle transition clears what (#6920 U2.1, #6949). |
 | `mat4.js` | `M4` | tag | column-major 4x4 matrix + vec3 helpers, plus the SCALAR helpers modules share (M4.clamp / lerp / wrapDelta / clamp01 / smoothstep, and the seeded PRNG… |
 | `hash32.js` | `Hash32` | tag | stateless FNV-1a + murmur-style mix for career, daily challenge, and driver ratings. |
 | `clipboard.js` | `ApexClipboard` | tag | one clipboard write/read home. navigator.clipboard + textarea execCommand fallback for plain http / older WebKit. |
@@ -106,6 +107,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `i18n-pseudo.js` | `I18nPseudo` | tag | pseudo-locale expansion for layout stress (en-XA). |
 | `i18n.js` | `I18n` | tag | gettext-style I18n: English defaults at the call site, optional locale JSON. |
 | `dom-apply.js` | `I18nDom` | tag | apply data-i18n / data-i18n-attr when the active language is not plain English. |
+| `sim-state.js` | `SimState` | LAZY_RACE_SESSION | SimState: ONE definition of "the simulation state" (#6860 phase 1, decision B). |
 
 **`js/`**
 
@@ -142,7 +144,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `gfx-escalation.js` | `GfxEscalation` | tag | GfxEscalation: when a backend exhausts its ctx-lost reload budget, decide between the terminal Graphics unavailable panel and an in-tab title-menu recovery… |
-| `thermal-drift.js` | `ThermalDrift` | tag | ThermalDrift: a pure, clock-free helper for a phone that throttles over a long session (#2652). |
 | `governor.js` | `PerfGov` | tag | adaptive-performance governor + mobile crash sentinel for js/game.js. |
 | `menu-teardown.js` | `MenuTeardown` | tag | MenuTeardown: software-GL readback cover, sync-task probes, and UI-yield helpers for quit-to-menu and garage-close teardown. |
 | `menu-quit-tail.js` | `MenuQuitTail` | tag | deferred quit-to-menu tail (js/game.js quitToMenu after #overlay is up). |
@@ -156,6 +157,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `metrics-overlay.js` | `GameMetrics` | tag | GameMetrics: toggleable in-game FPS / car / log overlay. |
 | `three-inspector.js` | `ThreeInspector` | LAZY_AGENT | ThreeInspector: OPT-IN dev panel, the official three.js Inspector (Performance / Memory / Timeline / Viewer / Parameters / Console) on the TLX renderer. |
 | `gfx-debug-overlay.js` | `GfxDebug` | LAZY_DEV | GfxDebug: ON-SCREEN GFX DIAGNOSTIC (?gfxdebug=1 / apex26.gfxDebug="1"). |
+| `thermal-drift.js` | `ThermalDrift` | LAZY_PERF | ThermalDrift: a pure, clock-free helper for a phone that throttles over a long session (#2652). |
 | `soak-run.js` | `SoakRun` | LAZY_PERF | SoakRun: the hands-free half of PhoneRecorder (AUTO SOAK). |
 | `gpu-test-run.js` | `GpuTestRun` | LAZY_PERF | GpuTestRun: the one-tap GPU TEST on a real phone (SETTINGS > METRICS > PHONE TEST > GPU TEST). |
 | `phone-recorder.js` | `PhoneRecorder` | LAZY_PERF | PhoneRecorder: a phone-only soak recorder (issue #1633). |
@@ -179,7 +181,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `legends.js` | `Legends` | tag | LEGENDS: twelve historic drivers, their record, a tribute livery and the period car each of them raced. |
 | `settings-defaults.js` | `SettingsDefaults` | tag | Global factory preferences. |
 | `garage-defaults.js` | `GarageDefaults` | tag | GarageDefaults: the SHIPPED DEFAULT garage (parts, liveries, setups, team/driver) in one file, as data. |
-| `circuit-lore.js` | `CircuitLore` | tag | CIRCUIT LORE: the thing about each circuit a broadcast would say. |
 | `garage-entrance-motion.js` | `GarageEntranceMotionData` | LAZY_RACE | Blender evaluated entrance curves. |
 | `garage-departure-motion.js` | `GarageDepartureMotion` | LAZY_RACE_SESSION | Blender-authored departure transforms. |
 | `tab-utils.js` | `DataTabUtils` | LAZY_DATA | shared Data Hub driver colors, lane identity counts and the OpenF1 live-window test. |
@@ -202,6 +203,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `real-race-fetch.js` | `DataRealRaceFetch` | LAZY_DATA | real-race session cache and position traces. |
 | `real-race-tab.js` | `DataRealRace` | LAZY_DATA | DATA HUB RACE IT tab. |
 | `hub.js` | `DataHub` | LAZY_DATA | DataHub: F1 data overlay (#datahub). |
+| `circuit-lore.js` | `CircuitLore` | LAZY_AUDIO | CIRCUIT LORE: the thing about each circuit a broadcast would say. |
 
 **`js/career/`**
 
@@ -400,6 +402,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `damage-handling.js` | `DamageHandling` | LAZY_RACE_SESSION | DAMAGE → HANDLING (#1578): the ONE setting-gated read of the Damage readout (js/race/damage.js) that reaches the driving model. |
 | `duel.js` | `Duel` | LAZY_RACE_SESSION | DUEL: a practice race against ONE rival with his rating lifted. |
 | `session-records.js` | `SessionRecords` | LAZY_RACE_SESSION | Comparable time-trial classes and lap configuration continuity. |
+| `medal-ledger.js` | `MedalLedger` | LAZY_RACE_SESSION | MedalLedger — one pure answer to "which tier is this result" (#6961, U4.3 of #6920). |
 | `pit-geom.js` | `PitGeom` | LAZY_RACE_SESSION | PIT GEOMETRY (PitGeom): the lane window, box row and widths the state machine reads, including the surface curvature channel entryRunM. |
 | `pit-lane.js` | `PitLane` | LAZY_RACE_SESSION | PIT LANE: the other half of the sentence js/physics/tyre-model.js opened. |
 | `engineer.js` | `RaceEngineer` | LAZY_RACE_SESSION | RACE ENGINEER: the voice that makes the tyre model legible. |
@@ -543,6 +546,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `vehicle.js` | `Vehicle` | tag | VEHICLE tick scratch. |
 | `player-forces.js` | `PlayerForces` | tag | PLAYER FORCES: combined-slip budget, axle grip circle, soft tyre forces and the human rigid-body yaw/lateral integrate. |
 | `ai-strategy.js` | `AiStrategy` | tag | AI STRATEGY: tyre-wear pace and the stint planner. |
+| `ai-start.js` | `AiStart` | tag | AI START: the lights-out getaway plan and the lap-1 calm/headway policy, split from ai-drive.js (#6920 U4.2). |
 | `ai-drive.js` | `AiDrive` | tag | AI DRIVE: situation-aware decisions for the kinematic AI field. |
 | `ai-band.js` | `AiBand` | tag | AI PACE BAND: gap-to-player catch-up vs race-scripted fixed pace. |
 | `ai-corridor.js` | `AiCorridor` | tag | AI-only reachable passing lanes. |
@@ -740,6 +744,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `apex-cam.js` | `ApexCam` | LAZY_AGENT | ApexCam: camera hooks of window.__apex (camera, flyby, free-cam, orbit). |
 | `apex-track.js` | `ApexTrack` | LAZY_AGENT | ApexTrack: track-geometry hooks of window.__apex. |
 | `apex-lobby.js` | `ApexLobby` | LAZY_AGENT | ApexLobby: session and field hooks of window.__apex. |
+| `apex-play.js` | `ApexPlay` | LAZY_AGENT | ApexPlay: the def() registry for NEW __apex hooks (#6962, #6920 U4.4). |
 | `apex-gpu-capture.js` | `ApexGpuCapture` | LAZY_AGENT | ApexGpuCapture (#2964): dev-only __apex.gpuCapture toggle that injects vendored Spector.js (captureCanvas) or webgl-lint into the page for GLX / TLX WebGL… |
 | `apex-lifecycle.js` | `ApexLifecycle` | LAZY_AGENT | ApexLifecycle: __apex.lifecycle(), the page/render lifecycle hook (#2572). |
 | `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~220 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |
@@ -776,6 +781,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `lobby-settings.js` | `LobbySettings` | LAZY_NET | LobbySettings: VS FRIEND race-settings normalise + custom-circuit wire payload. |
 | `interp.js` | `NetInterp` | LAZY_NET | NetInterp — draw a rival smoothly from late, reordered or missing poses. |
 | `snapshot.js` | `NetSnapshot` | LAZY_NET | NetSnapshot — what actually goes on the wire, and how a rival is drawn smoothly from packets that arrive late, out of order, or not at all. |
+| `wire-schema.js` | `NetWire` | LAZY_NET | NetWire — the ONE declaration of every reliable VS FRIEND event (#6859 phase 1). |
 | `session.js` | `NetSession` | LAZY_NET | NetSession — the layer between a transport and the game. |
 | `quali-wire.js` | `QualiWire` | LAZY_NET | QualiWire — one validation site for a peer's qualifying time. |
 | `strategy-wire.js` | `StrategyWire` | LAZY_NET | StrategyWire — the versioned tyre and pit payload on the reliable channel. |
@@ -792,6 +798,13 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `share-card-layout.js` | `ShareCardLayout` | LAZY_RESULTS_SHEET | pure card layout: model + spec + text metric -> paint ops. |
 | `share-card.js` | `ShareCard` | LAZY_RESULTS_SHEET | canvas painter, PNG encoder and Web Share/download delivery. |
 | `share-card-chips.js` | `ShareCardChips` | LAZY_RESULTS_SHEET | the SHARE CARD chip and its preview sheet: one shape for every result screen. |
+
+**`js/learn-drills/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `registry.js` | `DrillRegistry` | LAZY_LEARN | DrillRegistry: the one host for LEARN's on-track scenario drills (#6920 U4.1, #6559 step 0). |
+| `thumb-drill.js` | `ThumbDrill` | LAZY_LEARN | THUMB DRILL, LEARN's on-track sequel to the Vegas Thumb Trainer (#6927). |
 <!-- /@gen-arch:modules -->
 
 ---
@@ -1385,6 +1398,16 @@ engine graph. `GameAudioToneModel` owns manufacturer/tune/profile definitions;
 radio and spotter duck holds, the SFX-bus dip and the selective focus bus.
 Factories receive live context/bus/service callbacks; context-bound state
 resets with the engine.
+
+**Audio handles (#6952).** The title boots `js/audio/stub.js`; five instances
+game.js holds (RadioVoice, Announcer, RivalAudio, CarSfx, AudioPanel) are
+HANDLES, not rebound `let`s. When LAZY_AUDIO lands, `onAudioReady` builds each
+real instance once (the `audioReadyOnce` latch) and `adoptAudio`
+(`js/core/lazy-bundles.js`) copies its property descriptors onto the same object
+and drops stub-only keys: no Proxy, no forwarders, so `G.radio`, `G.announcer`
+and every captured reference stay live. Stub keys equal the real keys
+(`tests/unit/audio-stub-parity.test.mjs`; AudioPanel `_stub` and the RivalAudio
+module's `attach`/`setMix`, which drive the `_pendingAttach` hand-off, are exempt).
 
 Engine = a looping recorded drone pitched by revs (assets/sfx/f1_engine.mp3),
 with two detuned saws plus a sub-octave square ~95–795 Hz as the fallback when decode fails.

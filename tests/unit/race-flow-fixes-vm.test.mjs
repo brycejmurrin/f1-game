@@ -940,7 +940,7 @@ test("QUIT over the pit-stop garage closes it: no turntable, no stale RETURN TO 
   try {
     const doc = withScreens(g), $ = (id) => doc.getElementById(id), G = g.G;
     g.step(30);
-    G.paused = true; G.openGarage("pit"); g.flushTimers();   // openPitWork()'s two writes (it is gated on a car stopped in its box)
+    G.cmd.pause(true, "test"); G.openGarage("pit"); g.flushTimers();   // openPitWork()'s two writes (it is gated on a car stopped in its box)
     assert.equal($("cs-done").textContent, "RETURN TO RACE");
     assert.equal(G.setupPreviewOn, true);
     $("pm-quit").click(); g.flushTimers();   // the pause card a hidden tab stacks over the garage

@@ -17,7 +17,7 @@ function session() {
   ctx.window = ctx;
   for (const path of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js",
     "js/car/parts.js", "js/physics/tyre-model.js", "js/physics/ai-strategy.js",
-    "js/physics/ai-drive.js", "js/race/sporting-regs.js", "js/race/pit-geom.js", "js/race/pit-lane.js"]) {
+    "js/physics/ai-start.js", "js/physics/ai-drive.js", "js/race/sporting-regs.js", "js/race/pit-geom.js", "js/race/pit-lane.js"]) {
     vm.runInContext(readFileSync(new URL("../../" + path, import.meta.url), "utf8"), ctx,
       { filename: absSrc(path) });
   }

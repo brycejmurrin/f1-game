@@ -43,3 +43,23 @@ test("menuPrep()/info() after a picker tap never build synchronously; the steppe
     assert.equal(builds, 1, "still no synchronous build");
   } finally { g.close(); }
 });
+
+// #6962: a def() hook (js/agent/apex-play.js) with readOnly:true is exempt from lazyTrackEnsure's build, any other is not.
+test("a readOnly ApexPlay def builds no track; a non-readOnly def at the title builds once", async () => {
+  const g = await createGame({ carMeshes: false });
+  try {
+    const S = g.sandbox, G = g.G;
+    S.ApexPlay.def("playRo", { readOnly: true, doc: "fixture", args: "()", fn: (gg) => ({ ok: true, track: !!gg.track }) });
+    S.ApexPlay.def("playRw", { doc: "fixture", args: "()", fn: (gg) => ({ ok: true, track: !!gg.track }) });
+    const A = S.ApexApi.create(G);
+    let builds = 0;
+    const build = S.Tracks.build;
+    S.Tracks.build = function () { builds++; return build.apply(this, arguments); };
+    assert.equal(G.track, null, "title: no track yet");
+    assert.equal(A.playRo().track, false);
+    assert.equal(builds, 0, "the readOnly def forced no build");
+    assert.equal(G.track, null);
+    assert.equal(A.playRw().track, true, "a non-readOnly def gets the lazy boot build");
+    assert.equal(builds, 1);
+  } finally { g.close(); }
+});

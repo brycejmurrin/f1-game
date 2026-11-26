@@ -109,3 +109,19 @@ test("the garage lists the HELMET pill row, both colour rows and an editor secti
   assert.ok(ed.includes('section("HELMET"') && ed.includes('"helmetStyle", "helmetBase", "helmetAccent"'));
   assert.deepEqual(Array.from(H.STYLES), ["team", "solid", "cap", "band", "stripe", "chevron", "flash", "split", "doodle"]);
 });
+
+test("a shifted design keeps its accent under a helmet style (#6864 H2)", () => {
+  const plain = H.designFor(3, null);
+  assert.ok(plain.alt, "VER has an alt");
+  const shifted = H.designFor(3, plain.base);
+  assert.equal(shifted.shifted, true);
+  const accent = (des) => H.styled(des, "cap", null, null).zones[0].c;
+  assert.deepEqual(Array.from(accent(shifted)), Array.from(accent(plain)));
+});
+
+test("string colour slots never give NaN cockpit vertex colours (#6864 H4)", () => {
+  const b = M.Car3D.build(team.color, team.color2, {
+    livery: Object.assign({}, team.livery, { nose: "red", accent: "red", wing: "123", cover: "ab" }),
+    teamId: team.id, num: 16, parts, noWheels: true, measure: true, cockpit: true });
+  for (let i = 0; i < b.col.length; i++) assert.ok(Number.isFinite(b.col[i]), "col[" + i + "]");
+});

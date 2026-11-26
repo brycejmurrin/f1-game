@@ -1,6 +1,16 @@
 # Test and CI health — plan (2026-09-30)
 
-Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — tools/check/wait-polling-lint.mjs and tools/ci/twinned-specs.mjs exist; per-slice state not re-audited.
+Status: **SHIPPED, except slice 2b** (re-audited 2026-11-26) — archived; the plan below is history, not a to-do list.
+
+| slice | state on 2026-11-26 | evidence |
+|---|---|---|
+| 1a, 1b | shipped | no `steering` row in `tests/data/flaky-quarantine.json` |
+| 1c | shipped | `tests/specs/steering.spec.js:118` declares `170_000` |
+| 2a | shipped | `tests/specs/props-over-road.spec.js` is one test per circuit (header comment) |
+| 2b | not re-audited | nightly findings for monza / mosport / zandvoort; `docs/TESTING.md` no longer calls them RED |
+| 3.* | shipped | `twinDebt` ceiling 0 in `tests/data/ratchets.json`; `twinDebt()` returns 0 |
+| 4a, 4b | shipped | `ui-audit`, `menu-traversal`, `menu-keyboard` are not in `tree-counts --offenders` `waitForTimeout` (21 remain elsewhere) |
+| 4c | shipped | `topicalTfOverlap` / `skipTfFiles` in `tools/ci/node-plan.mjs` |
 
 Status when written: **PLAN** — docs-only PR first; each numbered slice lands as its own
 small draft PR against `claude/f1-game-project-26h3ng`. Do not merge; Bryce's

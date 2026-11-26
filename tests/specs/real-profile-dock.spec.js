@@ -25,7 +25,7 @@ function liveStore() {
   return ownerStore({ file: OWNER_EXPORT }).store;
 }
 
-async function boot(page, geo, store) {
+async function boot(page, geo, store, path = "/") {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: geo.insets });
   await page.addInitScript(({ json, raw }) => {
@@ -34,7 +34,7 @@ async function boot(page, geo, store) {
       for (const [k, v] of Object.entries(raw)) localStorage.setItem("apex26." + k, v);
     } catch (_) { /* storage off */ }
   }, store);
-  await page.goto("/");
+  await page.goto(path);
   await page.waitForFunction(() => window.__apex && window.__apex.race && document.documentElement.hasAttribute("data-booted"), null, { polling: 100, timeout: BOOT_MS });
 }
 
@@ -52,5 +52,106 @@ test.describe(`owner's live profile ${GEO.width}x${GEO.height}-standalone, the g
     expect(g["cs-stack"].w, `the bar is ${g["cs-stack"].w.toFixed(0)} px wide (395 without the cap)`).toBeLessThanOrEqual(289);
     for (const id of ["cs-cam", "cs-photo", "cs-aero"]) expect(Math.abs(g[id].h - 44), `${id} is the fixed 44 px chrome (#5202)`).toBeLessThanOrEqual(0.5);
     expect(g["cs-stack"].l, "the bar clears the left inset").toBeGreaterThanOrEqual(GEO.insets.left - 1);
+  });
+});
+
+/** In-page (#6924): the THUMB TRAINER's boxes against the viewport's safe area, the panel and the live race dock. */
+function trainerFitInPage() {
+  const cs = getComputedStyle(document.documentElement), n = (k) => parseFloat(cs.getPropertyValue(k)) || 0;
+  const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+  const safe = { l: n("--sal"), t: n("--sat"), r: vw - n("--sar"), b: vh - n("--sab") };
+  const box = (el) => { const r = el.getBoundingClientRect(); return { id: el.id, l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; };
+  const ids = ["tt-back", "tt-prev", "tt-turn", "tt-next", "tt-speed", "tt-go", "tt-view", "tt-cue", "tt-sketch", "tt-time", "tt-score",
+    "tt-p-yours", "tt-p-rec", "tt-p-catch", "tt-p-edge", "tt-chart", "tt-note"];
+  const boxes = ids.map((id) => document.getElementById(id)).filter((el) => el && el.checkVisibility()).map(box);
+  const dock = Array.from(document.querySelectorAll("#hud-dock .touchbtn")).filter((el) => el.checkVisibility()).map(box).filter((r) => r.w > 0);
+  const panel = document.getElementById("tt-panel");
+  return { safe, vw, vh, boxes, dock, panel: box(panel), panelOverflow: panel.scrollHeight - panel.clientHeight,
+    fit: document.getElementById("thumb-trainer").dataset.fit, vignette: getComputedStyle(document.getElementById("hud"), "::before").display };
+}
+const overlap = (a, b) => Math.min(a.r, b.r) - Math.max(a.l, b.l) > 1 && Math.min(a.b, b.b) - Math.max(a.t, b.t) > 1;
+const PORTRAIT = BRYCE_WINDOWS.portrait;
+for (const [win, geo] of [["standalone", GEO], ["portrait", PORTRAIT]]) for (const profile of ["live", "shipped"]) {
+  test.describe(`thumb trainer fits ${geo.width}x${geo.height}-${win}, ${profile} profile (#6924)`, () => {
+    test.use({ viewport: { width: geo.width, height: geo.height }, hasTouch: true, isMobile: true });
+
+    test("every trainer box sits in the safe area, inside its panel, clear of the race buttons, taps >= 44 px", async ({ page }) => {
+      test.setTimeout(240_000);
+      await boot(page, geo, profile === "live" ? liveStore() : { json: {}, raw: {} }, "/?go=thumbs");
+      await expect(page.locator("#thumb-trainer")).toBeVisible({ timeout: BOOT_MS });
+      await page.waitForFunction(() => document.getElementById("thumb-trainer").dataset.fit, null, { polling: 100, timeout: BOOT_MS });
+      for (const phase of ["idle", "after a run", "pedal explorer"]) {
+        if (phase === "pedal explorer") await page.locator("#tt-view").click();
+        if (phase === "after a run") await page.evaluate(() => {   // the longest text a finished run writes: two tips and the score
+          document.getElementById("tt-cue").textContent = "Arrow late by 230 ms. Start it while you're still braking. Brake and arrow together for 0.21 s, target 0.62 s. Keep a little brake on as the arrow winds on.";
+          document.getElementById("tt-score").textContent = "Match 64% · arrow 71% · brake 58% · gas 63% · best 82%";
+        });
+        await page.waitForTimeout(250);
+        const g = await page.evaluate(trainerFitInPage);
+        const tag = `${win} ${profile} ${phase} (fit ${g.fit}):`;
+        expect(g.vignette, `${tag} the race vignette is off over the drill`).toBe("none");
+        expect(g.panelOverflow, `${tag} the panel does not overflow`).toBeLessThanOrEqual(1);
+        expect([g.safe.l, g.safe.t, g.vw - g.safe.r, g.vh - g.safe.b], `${tag} the emulated insets reached the page`).toEqual([geo.insets.left, geo.insets.top, geo.insets.right, geo.insets.bottom]);
+        for (const d of g.dock) expect(overlap(g.panel, d), `${tag} the panel clears race button #${d.id}`).toBe(false);
+        if (phase === "after a run") for (const id of ["tt-cue", "tt-score"]) expect(g.boxes.find((b) => b.id === id)?.h, `${tag} #${id} shows its text`).toBeGreaterThan(10);
+        for (const b of g.boxes) {
+          const where = `${tag} #${b.id} ${b.l.toFixed(0)},${b.t.toFixed(0)}-${b.r.toFixed(0)},${b.b.toFixed(0)}`;
+          expect(b.l >= g.safe.l - 1 && b.t >= g.safe.t - 1 && b.r <= g.safe.r + 1 && b.b <= g.safe.b + 1, `${where} inside the safe area ${JSON.stringify(g.safe)}`).toBe(true);
+          if (b.id !== "tt-sketch") expect(b.l >= g.panel.l - 1 && b.t >= g.panel.t - 1 && b.r <= g.panel.r + 1 && b.b <= g.panel.b + 1, `${where} inside the panel`).toBe(true);
+          if (/^tt-(back|prev|turn|next|speed|go|view|p-.*)$/.test(b.id)) expect(Math.min(b.w, b.h), `${where} is a 44 px tap`).toBeGreaterThanOrEqual(44);
+          for (const d of g.dock) expect(overlap(b, d), `${where} clears race button #${d.id}`).toBe(false);
+          for (const o of g.boxes) if (o !== b && b.w > 0 && b.h > 0 && o.w > 0 && o.h > 0) expect(overlap(b, o), `${where} clears #${o.id}`).toBe(false);
+        }
+        if (phase !== "pedal explorer") expect(g.boxes.find((b) => b.id === "tt-time").h, `${tag} the timeline keeps its three lanes`).toBeGreaterThanOrEqual(80);
+      }
+      await page.locator("#tt-back").click();   // close: the race vignette comes back with the HUD
+      await expect(page.locator("#thumb-trainer")).toBeHidden();
+      expect(await page.evaluate(() => getComputedStyle(document.getElementById("hud"), "::before").display), "the vignette is back after BACK").not.toBe("none");
+    });
+  });
+}
+
+/** In-page (#6924 follow-up): flip one theme switch on <html>, wait a frame, read the trainer's computed styles, put it back. */
+async function trainerStyleUnder(attrs, vars = {}) {
+  const de = document.documentElement, old = {}, oldVars = {};
+  for (const k of Object.keys(attrs)) { old[k] = de.getAttribute(k); if (attrs[k] === null) de.removeAttribute(k); else de.setAttribute(k, attrs[k]); }
+  for (const k of Object.keys(vars)) { oldVars[k] = de.style.getPropertyValue(k); de.style.setProperty(k, vars[k]); }
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const turn = getComputedStyle(document.getElementById("tt-turn")), go = document.getElementById("tt-go").getBoundingClientRect();
+  const out = { border: turn.borderTopColor, radius: turn.borderTopLeftRadius, cue: parseFloat(getComputedStyle(document.getElementById("tt-cue")).fontSize), go: go.height };
+  for (const k of Object.keys(old)) { if (old[k] === null) de.removeAttribute(k); else de.setAttribute(k, old[k]); }
+  for (const k of Object.keys(vars)) { if (oldVars[k]) de.style.setProperty(k, oldVars[k]); else de.style.removeProperty(k); }
+  return out;
+}
+
+test.describe(`thumb trainer follows the house UI ${GEO.width}x${GEO.height}-standalone (#6924)`, () => {
+  test.use({ viewport: { width: GEO.width, height: GEO.height }, hasTouch: true, isMobile: true });
+
+  test("house controls, and contrast / text size / POPUPS looks reach the trainer", async ({ page }) => {
+    test.setTimeout(240_000);
+    await boot(page, GEO, { json: {}, raw: {} }, "/?go=thumbs");
+    await expect(page.locator("#thumb-trainer")).toBeVisible({ timeout: BOOT_MS });
+    const cls = await page.evaluate(() => Object.fromEntries(["tt-back", "tt-go", "tt-prev", "tt-next", "tt-speed", "tt-view"].map((id) => [id, document.getElementById(id).className])));
+    expect(cls["tt-back"], "BACK is the sheets' alt plate").toBe("bigbtn alt");
+    expect(cls["tt-go"], "START is the red primary").toBe("bigbtn");
+    for (const id of ["tt-prev", "tt-next", "tt-speed", "tt-view"]) expect(cls[id], `${id} is a house chip`).toBe("sel-chip");
+    const base = await page.evaluate(trainerStyleUnder, { "data-ui-contrast": null });
+    const high = await page.evaluate(trainerStyleUnder, { "data-ui-contrast": "high" });
+    expect(high.border, "UI CONTRAST high redraws the select's plate line").not.toBe(base.border);
+    const larger = await page.evaluate(trainerStyleUnder, { "data-text-size": "larger" });
+    expect(larger.cue, "TEXT SIZE larger grows the cue").toBeGreaterThan(base.cue);
+    const sharp = await page.evaluate(trainerStyleUnder, { "data-look-popups-corners": "sharp" });
+    expect(sharp.radius, "POPUPS CORNERS sharp squares the trainer's controls").toBe("0px");
+    // Through the real setter, not a raw attribute: ScreenLooks.apply() deletes a hand-stamped data-look-* at its default,
+    // which raced this measurement on a slow runner (#6929 selected-3). set() stamps the attribute and the token together.
+    const tall = await page.evaluate(async () => {
+      const go = () => document.getElementById("tt-go").getBoundingClientRect().height, frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      ScreenLooks.set("popups", "btn", 120);
+      await frames();
+      const h = go();
+      ScreenLooks.set("popups", "btn", 100);
+      return h;
+    });
+    expect(tall, "POPUPS BUTTON HEIGHT 120 grows START").toBeGreaterThan(base.go + 4);
   });
 });
