@@ -236,9 +236,7 @@ const FULL = [
   // first gesture or race start). The stub keeps menus from throwing and is
   // reassigned via top-level `var` when the real bundle lands.
   "js/audio/stub.js",
-  // The announcer's authored half. Data only, read at CALL time and guarded on
-  // the global, so the order is for tidiness rather than correctness.
-  "js/data/circuit-lore.js",
+  // circuit-lore.js (the announcer's authored half) is LAZY_AUDIO, before announcer.js.
   "js/car/parts.js",
   "js/car/liveries.js",
   "js/car/custom-liveries.js",   // persist/resolve/live-draft (CustomLiveries.create({ store })), peeled from game.js
@@ -378,7 +376,7 @@ const FULL = [
   "js/physics/brake-cue.js",
   // driving-cues.js is LAZY_AUDIO (SteerTuning and game.js already typeof-guard it).
   "js/input/steer-tuning.js",
-  "js/perf/thermal-drift.js",    // ThermalDrift: pure slow-drift detector + opt-in 45/30 render gate (#2652); before governor
+  // thermal-drift.js (ThermalDrift, #2652) is LAZY_PERF; PerfGov.resyncDrift() arms it when the rig lands.
   "js/perf/governor.js",
   "js/perf/menu-teardown.js",
   "js/perf/menu-quit-tail.js",
@@ -1068,6 +1066,7 @@ const LAZY_DEV = [
 // (apex26.benchRun) is waiting to resume, and binds SoakRun / BenchRun to G.
 // Order is the old FULL order (soak before the runners that drive it).
 const LAZY_PERF = [
+  "js/perf/thermal-drift.js",  // ThermalDrift: slow-drift detector + opt-in 45/30 render gate (#2652); PerfGov.resyncDrift() on landing
   "js/perf/soak-run.js",       // SoakRun: AUTO SOAK, the hands-free soak (drives the player INPUT only; soak-gated)
   "js/perf/gpu-test-run.js",   // GpuTestRun: PHONE TEST > GPU TEST, one-tap phase run over SoakRun
   "js/perf/phone-recorder.js", // PhoneRecorder: SETTINGS > METRICS > PHONE TEST (RECORD / SHARE soak JSON, #1633)
@@ -1199,6 +1198,7 @@ const LAZY_AUDIO = [
   "js/audio/voice-pack.js",
   "js/audio/battle-earcon.js", // finite opt-in motifs; panel and voice cancellation share the helper
   "js/audio/radio-voice.js",
+  "js/data/circuit-lore.js",   // CircuitLore: the announcer's authored half (and flyby-seq's corner lines); typeof-guarded readers
   "js/audio/announcer-recorded.js",
   "js/audio/announcer.js",
   "js/audio/panel.js",
