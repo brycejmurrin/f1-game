@@ -312,26 +312,22 @@ test("apex_pick_tests argv never contains --bg; includes --json", () => {
   assert.ok(!body.argv.includes("--bg"), body.argv);
 });
 
-test("target=deploy on a tree tool → tree_only", () => {
+test("target=deploy on a tree tool is refused at the schema (the tree schemas no longer advertise target)", () => {
   const r = callCli("apex_pick_tests", { target: "deploy" });
   assert.equal(r.status, 1, r.stderr); // structured refuse → CLI exit 1
   const body = JSON.parse(r.stdout);
   assert.equal(body.ok, false);
-  assert.equal(body.error, "tree_only");
-  assert.match(body.fix || "", /deploy-research/i);
-  assert.doesNotMatch(body.fix || "", /tinyfish/i, "tree_only must not route to TinyFish");
+  assert.equal(body.error, "bad_args");
 });
 
-test("url with github.io → github_io_blocked (no fetch)", () => {
+test("url with github.io on a tree tool is refused at the schema (no fetch)", () => {
   const r = callCli("apex_pick_tests", {
     url: "https://brycejmurrin.github.io/f1-game/",
   });
   assert.equal(r.status, 1, r.stderr);
   const body = JSON.parse(r.stdout);
   assert.equal(body.ok, false);
-  assert.equal(body.error, "github_io_blocked");
-  assert.match(body.fix || "", /deploy-research/i);
-  assert.doesNotMatch(body.fix || "", /tinyfish-mcp\.sh/, "the in-repo tinyfish wrapper is not the route any more");
+  assert.equal(body.error, "bad_args");
 });
 
 test("tools/call preserves isError on tool failure (not JSON-RPC error)", () => {
@@ -361,7 +357,7 @@ test("tools/call preserves isError on tool failure (not JSON-RPC error)", () => 
   assert.equal(failed.result.isError, true);
   const text = JSON.parse(failed.result.content[0].text);
   assert.equal(text.ok, false);
-  assert.equal(text.error, "tree_only");
+  assert.equal(text.error, "bad_args");
 });
 
 test("serve stdout is JSON-RPC only (no log lines)", () => {
