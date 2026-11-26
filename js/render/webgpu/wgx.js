@@ -3237,17 +3237,7 @@ const WGX = (function () {
       // key crossed the game.js cast gate instead of fading through dusk in
       // lockstep with it. Packed into params2.y; wgsl-chunks early-outs all
       // PCF/blocker taps when this fades to <= 0 (GLX uShadowStr parity).
-      const _kl = f.sunColor ? Math.max(f.sunColor[0], f.sunColor[1], f.sunColor[2]) : 1;
-      let _hf = (_kl - 0.28) / 0.14;
-      _hf = _hf < 0 ? 0 : _hf > 1 ? 1 : _hf;
-      _hf = _hf * _hf * (3 - 2 * _hf);
-      // Clear-night moon shadows (GLX parity): floor the key-dim fade with the
-      // MOON SHADOWS knob scaled by the clear-night factor (game.js
-      // frame.moonGate — clear-night moonK, or above 0.5 the knob itself
-      // forcing the floor open regardless of weather).
-      const _mSh = (T && T.moonShadow != null ? T.moonShadow : 0.25) * (f.moonGate || 0);
-      if (_mSh > _hf) _hf = _mSh;
-      d[73] = ((T && T.shadowStr != null) ? T.shadowStr : 1.15) * _hf;
+      d[73] = PostCommon.sunShadowStrength(f, T);   // key-luminance fade + MOON SHADOWS floor (post-common.js)
       d[74] = 1 / SHD.SHADOW_SIZE;    // texel size for PCF — same source as the depth map
       d[75] = (T && T.shadowBias != null) ? T.shadowBias : 0.001;   // SHADOW BIAS knob (same 0.001 fallback as GLX)
       // params3 (floats 76..79): live tuner knobs the LIT material blocks consume.
@@ -4917,7 +4907,7 @@ const WGX = (function () {
       const n = layers || MAT_TEX_LAYERS;
       let tex = null;
       try {
-        const mips = Math.floor(Math.log2(size)) + 1;
+        const mips = Assets.mipCount(size);
         tex = device.createTexture({
           size: [size, size, n], format: "rgba8unorm", mipLevelCount: mips,
           usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
@@ -5049,7 +5039,7 @@ const WGX = (function () {
         _matOwnedNormal = maps.normal;
       }
       const sc = maps.scales;
-      if (sc) for (let i = 0; i < MAT_TEX_LAYERS; i++) _matScales[i] = +sc[i] > 0 ? +sc[i] : 0;
+      if (sc) for (let i = 0; i < MAT_TEX_LAYERS; i++) _matScales[i] = Assets.matScale(sc[i]);
       if (!_matAlbedoOn) _matScales.fill(0);
       matScaleData.set(_matScales);
       if (matScaleUBO) device.queue.writeBuffer(matScaleUBO, 0, matScaleData);

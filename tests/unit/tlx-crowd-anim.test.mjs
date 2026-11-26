@@ -14,7 +14,7 @@ import * as THREE from "../../vendor/three-0.187.0/three.webgpu.min.js";
 const read = (rel) => fs.readFileSync(new URL("../../" + rel, import.meta.url), "utf8");
 installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
-for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"])
+for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js", "js/render/shared/assets.js", "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"])
   vm.runInThisContext(read(f), { filename: absSrc(f) });
 
 // The lit factory's TSL with each Fn's direct attribute reads and If gates recorded (an If body is built after its

@@ -1103,12 +1103,15 @@ const Assets = (function () {
     };
   }
 
+  // One home for the pack rules every backend repeats (pin: scale [0,-1,"3",NaN] -> [0,0,3,0]).
+  const matScale = (v) => (+v > 0 ? +v : 0), mipCount = (n) => Math.floor(Math.log2(n)) + 1;
+
   function credits() {
     return (_manifest && _manifest.credits) ? _manifest.credits.slice() : [];
   }
 
   return { init, supported, manifest, load, retry, followQuality, unload, adopt, state, readLayerBytes, readLayerBytesAsync,
-           model, modelSync, models, modelIds, loadModels, loadModelsFor, modelsReady, env, credits, MAT_LAYERS };
+           model, modelSync, models, modelIds, loadModels, loadModelsFor, modelsReady, env, credits, MAT_LAYERS, matScale, mipCount };
 })();
 
 // No-build global export.
