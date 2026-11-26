@@ -434,7 +434,7 @@ const DrivingCoachBody = (function () {
       if (!checkpoint || !canPractice()) return false;
       restoreWorld(checkpoint.world);
       drillMode = checkpoint.mode;
-      insights.startDrill(drillMode);
+      if (!insights.startDrill(drillMode)) return true;
       G.announce("TRY AGAIN: " + goal(), 2, "practice");
       return true;
     }
@@ -464,7 +464,7 @@ const DrivingCoachBody = (function () {
       // silently marked dirty, with a reason that describes the mechanism
       // rather than anything the driver did. startDrill() resets its `previous`
       // sample so the next tick is not read as a teleport.
-      insights.startDrill(drillMode);
+      if (!insights.startDrill(drillMode)) return true;
       G.announce("REWIND " + Math.round(clock - e.t) + "s" + (n > 1 ? " — FULL GRID" : ""), 2, "practice");
       return true;
     }
@@ -573,11 +573,10 @@ const DrivingCoachBody = (function () {
           overtake: "Save behind a similarly paced car, then pass it and hold clear without contact or leaving the track.",
           defend: "Save with a rival close behind, then hold your place under pressure without contact or leaving the track.",
           backmarkers: "Save before slower traffic, then clear three slower cars without contact or leaving the track." };
-        // `start` is stored NEGATED so mastery's Math.min ranks more places
-        // higher (js/race/race-insights.js). The sign is undone here, once, at
-        // the only place a human reads the number.
+        // start / slipstream / defend are stored NEGATED (mastery keeps the MINIMUM): undo the sign here, once, in each drill's own unit.
         const fmt = (mode, s) => mode === "braking" ? s.toFixed(0) + " m from " + insights.brakingRef() : mode === "lap" ? G.fmtTime(s) : mode === "launch" ? s.toFixed(2) + "s"
-          : mode === "start" ? (-s >= 0 ? "+" : "") + (-s) + (Math.abs(s) === 1 ? " place" : " places") : s.toFixed(1) + "s";
+          : mode === "start" ? (-s >= 0 ? "+" : "") + (-s) + (Math.abs(s) === 1 ? " place" : " places")
+          : mode === "slipstream" ? Math.max(0, -s).toFixed(0) + " m closed" : mode === "defend" ? Math.max(0, -s).toFixed(1) + "s held" : s.toFixed(1) + "s";
         const last = summary.lastDrill, tries = insights.attempts(drillMode), clean = tries.filter(a => a.clean), saved = insights.mastery(drillMode);
         drillInfo.textContent = guide[drillMode]
           + (last && last.mode === drillMode ? " Last attempt: " + (last.clean ? "completed · " + last.text : "retry suggested · " + last.reason) + "." : "")
