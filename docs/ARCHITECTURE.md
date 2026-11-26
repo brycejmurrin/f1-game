@@ -314,6 +314,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `quali-sheet.js` | `QualiSheet` | LAZY_RESULTS_SHEET | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
 | `watch-transport.js` | `WatchTransport` | LAZY_REAL_RACE | Visible controls for the real-race replay. |
 | `learn-door.js` | `LearnDoor` | LAZY_LEARN | Learn title door and the lesson modal. |
+| `thumb-trainer.js` | `ThumbTrainer` | LAZY_LEARN | THUMB TRAINER, a LEARN lesson: time both thumbs through every Las Vegas corner on the player's own race buttons. |
 
 **`js/track/core/`**
 

@@ -1371,12 +1371,12 @@ test("Telemetry Detective keeps the comparison cursor when returning from Data H
   await expect(lesson).toBeFocused();
 });
 
-test("Learn curriculum groups fourteen lessons and lets a player solve the chassis inspection", async ({ page }) => {
+test("Learn curriculum groups fifteen lessons and lets a player solve the chassis inspection", async ({ page }) => {
   await waitReady(page);
   await page.locator("#mb-learn").click();
   const index = page.getByRole("navigation", { name: "Lessons" });
   await expect(index.getByRole("heading")).toHaveCount(4);
-  await expect(index.getByRole("button")).toHaveCount(14);
+  await expect(index.getByRole("button")).toHaveCount(15);
   const lesson = page.locator("#learn-open-chassis");
   await lesson.click();
   const lab = page.frameLocator("#learn-lab");
