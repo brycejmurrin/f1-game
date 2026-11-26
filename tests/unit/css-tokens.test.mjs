@@ -132,54 +132,8 @@ test("stacked season setup has one reachable vertical scroll owner", () => {
     "natural-height child panes must not contain wheel chaining away from #ss-body");
 });
 
-/* #6751 / #6570 row 2: --label was a flat 14px at the early :root and on
- * body:not(.desktop), and the floored / TEXT SIZE blocks never restated it.
- * Bare --label: 14px stays on early :root for tree-counts; the floored :root
- * aliases --fs-micro. body:not(.desktop) must NOT restate --label (higher
- * specificity than :root would keep a flat 14px on phones).
- * Asserts use equal on parsed decls so the pin ratchets stay flat. */
-function declOf(block, name) {
-  const m = block.match(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*:\\s*([^;]+)"));
-  return m ? m[1].trim() : null;
-}
-
-test("--label is floored with --fs-floor across normal, large, and larger (#6751)", () => {
-  const src = stripComments(fs.readFileSync(path.join(ROOT, "css/tokens.css"), "utf8"));
-  const floorRoot = src.match(
-    /:root\s*\{[^}]*--fs-floor\s*:\s*calc\(12px\s*\/\s*var\(--ui-scale,\s*1\)\);([^}]*)\}/
-  );
-  assert.equal(!!floorRoot, true, "the --fs-floor :root block must exist");
-  assert.equal(declOf(floorRoot[1], "--label"), "var(--fs-micro)",
-    "--label must alias --fs-micro in the floored :root block (inherits floor + TEXT SIZE)");
-  assert.equal(declOf(floorRoot[1], "--fs-micro"), "max(14px, var(--fs-floor))",
-    "--fs-micro (and thus --label) must be max(14px, var(--fs-floor)) at normal");
-
-  const large = src.match(
-    /:root\[data-text-size="large"\]\s*\{([^}]*--fs-micro\s*:\s*max\(16px,\s*var\(--fs-floor\)\)[^}]*)\}/
-  );
-  assert.equal(!!large, true, "the floored large text-size block must exist");
-  assert.equal(declOf(large[1], "--fs-micro"), "max(16px, var(--fs-floor))",
-    "--label via --fs-micro must scale to max(16px, var(--fs-floor)) under TEXT SIZE LARGE");
-
-  const larger = src.match(
-    /:root\[data-text-size="larger"\]\s*\{([^}]*--fs-micro\s*:\s*max\(18px,\s*var\(--fs-floor\)\)[^}]*)\}/
-  );
-  assert.equal(!!larger, true, "the floored larger text-size block must exist");
-  assert.equal(declOf(larger[1], "--fs-micro"), "max(18px, var(--fs-floor))",
-    "--label via --fs-micro must scale to max(18px, var(--fs-floor)) under TEXT SIZE LARGER");
-
-  const touch = src.match(/body:not\(\.desktop\)\s*\{([^}]*)\}/);
-  assert.equal(!!touch, true, "the touch ladder body:not(.desktop) block must exist");
-  assert.equal(declOf(touch[1], "--label"), null,
-    "body:not(.desktop) must not set --label (it outranks :root and would keep a flat 14px on phones)");
-});
-
-/* #6751 / #6570 row 3: [data-dep-reason] used font-size: 0.8em, which bypasses
- * --fs-floor (16 × 0.8 × 0.7 = 8.96 painted px at UI SIZE 70). */
-test("[data-dep-reason] floors font-size with --fs-floor (#6751)", () => {
-  const src = stripComments(fs.readFileSync(path.join(ROOT, "css/settings-controls.css"), "utf8"));
-  const rule = src.match(/\[data-dep-reason\]\s*\{([^}]*)\}/);
-  assert.equal(!!rule, true, "[data-dep-reason] rule must exist in css/settings-controls.css");
-  assert.equal(declOf(rule[1], "font-size"), "max(0.8em, var(--fs-floor))",
-    "[data-dep-reason] must use max(0.8em, var(--fs-floor)), not a bare 0.8em");
-});
+/* #6751 proof/coverage: a behaviour test (computed style / rendered px) is
+ * owed. Source-text asserts (assert.match or declOf+equal on CSS files) are
+ * source pins — including shapes that dodge assertPins. No CSSOM in the unit
+ * harness; package.json / tests/groups.json are out of scope. See PR #6807
+ * Hand-off: BLOCKED assertPins over budget, needs-owner. */
