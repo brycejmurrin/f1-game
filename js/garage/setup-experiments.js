@@ -195,7 +195,7 @@ const SetupExperiments = (function () {
       refresh();
     }
 
-    return { capture, visit, close, build };
+    return { capture, visit, close, build, flush: flushTune };
   }
   return { create };
 })();

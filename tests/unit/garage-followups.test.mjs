@@ -368,6 +368,34 @@ test('research-only purchase keeps fitted part and explains the exact cap shortf
   assert.equal(dom.byId('cs-options').children[0].textContent, 'Unlocked, not fitted — 30 cr over the fitted cap.');
   allowResearch = false; row.onclick(); assert.equal(money, 70); assert.equal(fitted, 'old');
 });
+test('a refused fit after a charged research redraws the row (#6864 H3)', () => {
+  const dom = makeDom(), row = dom.document.createElement('button'), main = dom.document.createElement('div');
+  let rebuilds = 0, rejects = 0;
+  const c = vm.createContext({ document: dom.document, row, main, opt: { id: 'new', cost: 10 }, active: false, locked: true,
+    team: { id: 'haas' }, activeCat: { id: 'aero' }, unlimited: false, cap: 100,
+    G: { soundOn: false }, $: id => dom.byId(id), reject: () => { rejects++; },
+    getTeamParts: () => ({ aero: 'old' }), resolveOpt: () => ({ cost: 20 }), Parts: { getCost: () => 70 },
+    Career: { research: () => true }, buildSetup: () => { rebuilds++; }, saveTeamParts: () => false,
+  });
+  const click = sheet.indexOf('    row.onclick = () => {\n      if (active) return;');
+  vm.runInContext(sheet.slice(click, sheet.indexOf('\n    optsEl.appendChild(row);', click)), c, { filename: absSrc('js/garage/setup-sheet.js') });
+  row.onclick();
+  assert.equal(rebuilds, 1, 'research charged, fit refused: the row is rebuilt (shows FIT)');
+  assert.equal(rejects, 1);
+  c.locked = false; row.onclick();
+  assert.equal(rebuilds, 1, 'an unlocked row has nothing stale to redraw');
+});
+test('leaving the SETUP tab flushes a pending tune so its refresh cannot hit the old build (#6864 H5)', () => {
+  const f = tuneFixture(); f.build();
+  const exp = f.context.experiments;
+  assert.equal(typeof exp.flush, 'function');
+  const inp = f.input('rideR'); inp.value = 55; inp.oninput();
+  assert.equal(f.timers.size, 1, 'a tune write is pending');
+  exp.flush();
+  assert.equal(f.S.get(f.team.id).rideR, 55, 'the pending value lands at once');
+  assert.equal(f.timers.size, 0);
+  assert.ok(sheet.includes('if (from === "tune") tuneExperiments.flush();'), 'activateCsCat flushes on leaving tune');
+});
 test('research cash advisory uses actual research price and active career, without purchase side effects', () => {
   const dom = makeDom(), main = dom.document.createElement('div');
   let active = true, askedPrice = null, planCalls = 0;
