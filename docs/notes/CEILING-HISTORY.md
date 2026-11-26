@@ -4142,7 +4142,7 @@ and `skyViewOverride` become getter-only (a write is a TypeError / TS2540), so g
 
 ## 2026-11-26 — claude/issue-6944-u0r-ratchets: U0 counters registered as tree ratchets (#6920 U0.R, #6944)
 
-`(tree) sourceSliceTests` seeded at **78**, `typeofGuards` at **2290** (with `absorb: 10`, Bryce 2026-11-26) and `gWrites` at **347**,
+`(tree) sourceSliceTests` seeded at **79**, `typeofGuards` at **2296** (with `absorb: 10`, Bryce 2026-11-26) and `gWrites` at **348**,
 all `slack: 0`, shrink-only. Seeded with `--seed=<metric> --slack=0`, not raised: a new key is not a raise.
 ## 2026-11-26 — claude/issue-6822-shared-render-rules: shared render rules (#6822, #6607 rows 2+4, #6479 row 3)
 

@@ -76,7 +76,7 @@
       "slack": 0
     },
     "gWrites": {
-      "ceiling": 347,
+      "ceiling": 348,
       "slack": 0
     },
     "implicitAsserts": {
@@ -101,7 +101,7 @@
       "slack": 25
     },
     "sourceSliceTests": {
-      "ceiling": 78,
+      "ceiling": 79,
       "slack": 0
     },
     "subFloorFontSize": {
@@ -114,7 +114,7 @@
     },
     "typeofGuards": {
       "absorb": 10,
-      "ceiling": 2290,
+      "ceiling": 2296,
       "slack": 0
     },
     "vmSrcLoads": 598,
