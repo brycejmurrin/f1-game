@@ -1,5 +1,6 @@
 /* ui-fit round 5 — camera tuner compact foot / preview / copy-select tap floors.
-   Pins #camtune-inner-only overrides in css/tuner.css (lighting untouched).
+   Foot tap-paint floors live on the shared :is(#lighting-inner, #camtune-inner)
+   rules (folded with lighting in #6755); preview/copy/mode chips stay camera-only.
    Read as RULES (tests/helpers/css-rules.mjs), not as text: a regex over the raw
    file also matched a rule that had been commented out, and a lazy `[\s\S]*?`
    ran on into the next rule's padding. */
@@ -14,13 +15,18 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const css = fs.readFileSync(path.join(ROOT, "css/tuner.css"), "utf8");
 const rules = cssRules(css);
 const D = '[data-density="compact"]';
+const SHARED_OFF = `:is(#lighting-inner, #camtune-inner)${D}[data-rail="off"] > .sheet-foot button`;
+const SHARED_ON = `:is(#lighting-inner, #camtune-inner)${D}[data-rail="on"] > .sheet-foot button`;
 
-test("camera tuner compact foot buttons floor at --tap-paint (rail off and on)", () => {
-  const FOOT = `#camtune-inner${D}[data-rail="off"] > .sheet-foot button, #camtune-inner${D}[data-rail="on"] > .sheet-foot button`;
-  assert.equal(decl(rules, FOOT, "min-height"), "var(--tap-paint)",
+test("shared compact foot buttons floor at --tap-paint (rail off and on)", () => {
+  assert.equal(decl(rules, SHARED_OFF, "min-height"), "var(--tap-paint)",
     "compact foot DONE/RESET/COPY must paint at --tap-paint, not --tap-min");
-  assert.equal(decl(rules, FOOT, "padding"), "calc(var(--gap) / 2) calc(var(--gap) * 2 / 3)",
+  assert.equal(decl(rules, SHARED_OFF, "padding"), "calc(var(--gap) / 2) calc(var(--gap) * 2 / 3)",
     "foot padding restored via --gap tokens so tap-paint height is reachable");
+  assert.equal(decl(rules, SHARED_ON, "min-height"), "var(--tap-paint)",
+    "rail-on compact foot must also floor at --tap-paint");
+  assert.equal(decl(rules, SHARED_ON, "padding"), "calc(var(--gap) / 2) calc(var(--gap) * 2 / 3)",
+    "rail-on foot padding matches the shared tap-paint floor");
 });
 
 test("compact rail-on tuner actions use a readable two-column foot", () => {
@@ -58,8 +64,12 @@ test("camera mode chips keep a --tap-paint min-width (short labels like TV)", ()
     "TV and other short mode chips are at least --tap-paint wide");
 });
 
-test("r5 overrides stay camera-only (no lighting-inner retarget in the block)", () => {
-  const m = css.match(/UI Fit r5: camera tuner compact tap floor[\s\S]*?\}\s*\/\* @layer components \*\//);
-  assert.ok(m, "r5 block present before @layer components close");
-  assert.doesNotMatch(m[0], /#lighting-inner/, "must not retarget lighting in the r5 carve");
+test("foot tap-paint lives on the shared :is() rules (no camera-only foot carve)", () => {
+  const camOnly = `#camtune-inner${D}[data-rail="off"] > .sheet-foot button, #camtune-inner${D}[data-rail="on"] > .sheet-foot button`;
+  assert.ok(!rules.some((r) => r.selector === camOnly),
+    "camera-only combined foot carve is gone — shared :is() owns the floor");
+  assert.equal(decl(rules, SHARED_OFF, "flex"), "1 1 0",
+    "shared rail-off foot buttons flex to fill without a #ct-close carve");
+  assert.equal(decl(rules, SHARED_OFF, "width"), "auto");
+  assert.equal(decl(rules, SHARED_OFF, "max-width"), "100%");
 });
