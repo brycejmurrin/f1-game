@@ -390,3 +390,31 @@ test("detach forgets the old clock: cheers and swells work on a fresh context (#
   assert.equal(CrowdAudio.inspect().swell, 0, "no swell pinned from the old clock");
   assert.equal(CrowdAudio.fireCheer(0.05, 0.5), true, "a cheer is not refused by the old lastCheerT");
 });
+
+test("a rewind into a better place is not a pass: no swell (#6886 row 8)", () => {
+  const { CrowdAudio, G, ctx } = boot({ player: { s: 100, pos: 5, finished: false } });
+  G.raceT = 100;
+  ctx.currentTime += 0.05;
+  CrowdAudio.update();                 // seeds lastPos=5, lastRaceT=100
+  G.raceT = 90; G.player.pos = 2;      // flashback to a moment the player was P2
+  ctx.currentTime += 0.05;
+  CrowdAudio.update();
+  assert.equal(CrowdAudio.inspect().swell, 0, "the rewind is not an overtake");
+  G.raceT = 91; G.player.pos = 1;      // a real pass afterwards still roars
+  ctx.currentTime += 0.05;
+  CrowdAudio.update();
+  assert.ok(CrowdAudio.inspect().swell > 0, "a genuine climb after the rewind swells");
+});
+
+test("finish() adds no second flag cheer: the flag's cheer comes from checkEvents (#6886 row 11)", () => {
+  const { CrowdAudio, GameAudio, G, ctx, nodes } = boot({ player: { s: 100, pos: 5, finished: false } });
+  CrowdAudio.update();
+  G.player.finished = true;
+  ctx.currentTime += 0.1;
+  CrowdAudio.update();                 // the flag's cheer + swell
+  ctx.currentTime += 1;                // past the spacing gap, still in the race
+  for (const n of nodes) if (n.gain) n.gain.ramps = [];
+  GameAudio.finish();
+  const extra = nodes.filter((n) => n.kind === "gain" && n.gain.ramps && n.gain.ramps.length);
+  assert.equal(extra.length, 0, "finish() is a no-op for the crowd");
+});
