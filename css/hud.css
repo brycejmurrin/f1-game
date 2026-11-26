@@ -482,7 +482,7 @@ body.hud-prof-broadcast .hud-gaps {
   top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 0px) + 8px);
 }
 /* Cinematic/broadcast cam + broadcast HUD: clean frame — tower carries timing. */
-body.hud-prof-broadcast.hud-bcam .hud-bottom { display: none !important; }
+body.hud-prof-broadcast.hud-bcam .hud-bottom { display: none; }
 
 /* THE CHIP CROSSES TO THE LEFT COLUMN when the right one has no room below the
    sector box — see js/ui/hud.js. --hud-left-h is that column's measured
@@ -2110,7 +2110,7 @@ body.pc-uihidden #announce,
 body.pc-uihidden #campicker,
 body.pc-uihidden #btn-cam,
 body.pc-uihidden #pausebtn,
-body.pc-uihidden .touchbtn { display: none !important; }
+body.pc-uihidden .touchbtn { display: none; }
 #pc-restore {
   position: fixed;
   zoom: var(--ui-scale);
@@ -2162,7 +2162,7 @@ body.lt-open #announce,
 body.lt-open #campicker,
 body.lt-open #btn-cam,
 body.lt-open #pausebtn,
-body.lt-open .touchbtn { display: none !important; }
+body.lt-open .touchbtn { display: none; }
 /* HIGH CONTRAST (Settings › Appearance): the see-through boxes go solid and
    take a real outline, so the readouts hold against a sunlit track. Two
    selectors, not :is(): :is() took #announce's id weight onto .hud-box and
