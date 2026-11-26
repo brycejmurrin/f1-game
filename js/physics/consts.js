@@ -224,7 +224,7 @@ window.PhysicsConsts = {
   // planner over an aero-less actuator outran the car and cost 0.60 m of apex
   // depth at a short monza corner (docs/notes/AI-FIELD-RESEARCH.md).
   // game.js's BAND_CEIL caps a rubber-banded AI at this table's top scale,
-  // or easy's 0.851 x 1.18 = 1.004 would beat hard's own 0.980.
+  // or a fully banded easy (0.95 x 1.18) would out-run the player's own scale.
   // `corner` is the SECOND dimension of difficulty. As one number, every level
   // braked, defended, deployed and erred identically and differed only in top
   // speed, the one lever players can catch a same-spec car using. `corner`
@@ -250,9 +250,15 @@ window.PhysicsConsts = {
   // table) — 2.5x left EASY's median mistake count at n=15 exactly where
   // NORMAL's unscaled baseline sat, so EASY's multiplier compensates for that
   // lower base, not just for the same 1.4x gap NORMAL:HARD implies.
+  // RE-CENTRED 2026-11-25 (#6565 AI1) on the player-envelope reference lap (the AI controller on the player's
+  // grip and top speed; tests/unit/ai-difficulty-pace-vm). Fastest car, best of 2 solo laps, Monza / Red Bull
+  // Ring / Suzuka: NORMAL +3.2 / +3.5 / +4.0 % (target +3 to +4; was +9.1-10.1), EASY +7.7 / +7.7 / +8.6 %
+  // (target +7 to +9; was +13.7-15.2), HARD +1.0 %. NORMAL drives the AI's own grip envelope (corner 1.0, the
+  // policy ceiling above) just under HARD's straight-line ceiling (ai 1.025 < 1.030, see there); HARD alone
+  // corners past 1, at the player's grip. Mistakes (`err`) stay the third axis.
   DIFF: {
-    easy:   { ai: 0.851, band: 0.18, corner: 0.93, err: 3.5 },
-    normal: { ai: 0.911, band: 0.08, corner: 0.97, err: 1.8 },
+    easy:   { ai: 0.95, band: 0.18, corner: 0.96, err: 3.5 },   // was ai 0.851, corner 0.93
+    normal: { ai: 1.025, band: 0.08, corner: 1.0, err: 1.8 },   // was ai 0.911, corner 0.97
     // 1.030 is a ceiling, not a taste: the fastest team's TIER_V is 0.9695 and
     // the best driver's skill clamps at 1.0, so 0.9695 x 1.030 = 0.9986 keeps
     // even the quickest AI just under the player's own top-speed scale. A
