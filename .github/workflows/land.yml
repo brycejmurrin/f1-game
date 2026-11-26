@@ -992,27 +992,53 @@ jobs:
           }
           n=$(jq -r .number <<<"$ARM"); head=$(jq -r .head <<<"$ARM"); tip=$(jq -r .tip <<<"$ARM")
           read_error=$(mktemp)
-          trap 'rm -f "$read_error"' EXIT
+          # #6711 (train #6702, Land 45706492098, 2026-11-25): arm failed after a passing gate and nothing re-gated the
+          # train until a person dispatched it. A train whose arm step fails without handing itself to `retry` (or
+          # deferring on the rate limit) is handed to `retry` on the way out (RETRY_MAX per head); the job still fails.
+          train_pr=false
+          arm_exit() {
+            local rc=$?
+            rm -f "$read_error"
+            if [ "$rc" != 0 ] && [ "$train_pr" = true ] && ! grep -Eq '^(retry|backoff)=' "$GITHUB_OUTPUT"; then
+              echo "::warning::arm of train #$n failed (exit $rc); re-gating within the existing retry budget" | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
+            fi
+            return "$rc"
+          }
+          trap arm_exit EXIT
           # T2 (train #6382, job 138837647849, 2026-11-24): one of the three reads below got `503 Service Unavailable
           # "no healthy upstream"` and the step exited 1, so `retry` had no outputs and the green head was stranded.
           # read_5xx <cmd…>: run a read; on a GitHub 5xx re-read it once after GATE_REREAD_S. Returns 75 when the 5xx
           # outlasts the re-read, else the read's own status. on_read_fail: the rate limit defers as before (exit 1,
           # backoff); a 5xx hands the PR to `retry` (RETRY_MAX per head) and exits 0; any other failure stays a failure.
+          # #6711 (train #6702): a 2xx with an EMPTY body (gh --jq: "unexpected end of JSON input", printed twice by the
+          # merge-pause reads) is as unreadable as a 5xx: read_once marks an empty answer, or a failure that printed
+          # nothing, and read_5xx re-reads it and hands it to `retry` the same way. Every read here prints something.
+          unreadable() {
+            grep -Eiq 'HTTP 5[0-9][0-9]|status code: 5[0-9][0-9]|unexpected end of JSON input|^empty body' "$read_error"
+          }
+          read_once() {
+            local out rc=0
+            out=$("$@" 2>"$read_error") || rc=$?
+            if [ -z "$out" ] && { [ "$rc" = 0 ] || [ ! -s "$read_error" ]; }; then echo "empty body (exit $rc)" >>"$read_error"; return 1; fi
+            [ "$rc" = 0 ] || return "$rc"
+            printf '%s\n' "$out"
+          }
           read_5xx() {
             local rc
-            "$@" 2>"$read_error" && return 0 || rc=$?
-            grep -Eiq 'HTTP 5[0-9][0-9]|status code: 5[0-9][0-9]' "$read_error" || return "$rc"
+            read_once "$@" && return 0 || rc=$?
+            unreadable || return "$rc"
             cat "$read_error" >&2
             sleep "${GATE_REREAD_S:-5}"
-            "$@" 2>"$read_error" && return 0 || rc=$?
-            if grep -Eiq 'HTTP 5[0-9][0-9]|status code: 5[0-9][0-9]' "$read_error"; then return 75; fi
+            read_once "$@" && return 0 || rc=$?
+            if unreadable; then return 75; fi
             return "$rc"
           }
           on_read_fail() {
             local rc=$1
             defer_if_limited
             [ "$rc" = 75 ] || { cat "$read_error" >&2; exit "$rc"; }
-            echo "::notice::not arming #$n: GitHub answered 5xx twice on the arm's first reads; re-gating within the existing retry budget" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "::notice::not arming #$n: GitHub answered 5xx or an empty body twice on the arm's first reads; re-gating within the existing retry budget" | tee -a "$GITHUB_STEP_SUMMARY"
             echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
             exit 0
           }
@@ -1026,6 +1052,7 @@ jobs:
           }
           paused=$(read_5xx merge_paused) || on_read_fail "$?"
           pr=$(read_5xx gh api "repos/$GITHUB_REPOSITORY/pulls/$n") || on_read_fail "$?"
+          if jq -e '([.labels[]?.name] | index("train") != null) and (.head.ref // "" | startswith("train/"))' <<<"$pr" >/dev/null 2>&1; then train_pr=true; fi
           now=$(read_5xx gh api "repos/$GITHUB_REPOSITORY/branches/$DEPLOY_BRANCH" --jq .commit.sha) || on_read_fail "$?"
           skip=""
           [ "$paused" = true ] && skip="dispatch:merge-pause is set"

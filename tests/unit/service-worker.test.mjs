@@ -2685,3 +2685,88 @@ test("a failed repair backs off instead of re-downloading on every launch; a cor
   for (let i = 0; i < 400 && !healthy.stores.get("apex26-321").has(`${ORIGIN}/js/game.js?v=321`); i++) await new Promise((r) => setTimeout(r, 2));
   assert.equal((await askOffline(healthy)).coreReady, true, "the required file is back");
 });
+
+// #6633 low rows L3–L6: each test fails on the base it fixes.
+test("an online non-ok version.json is passed through, never a stale cached build (#6633 L3)", async () => {
+  for (const status of [503, 404]) {
+    const h = createHarness({
+      navigator: { onLine: true },
+      fetchImpl: async () => new Response("mid-deploy", { status }),
+    });
+    h.stores.set("apex26-320", new Map([[`${ORIGIN}/version.json`, new Response('{"build":320}', { status: 200 })]]));
+    const ev = h.fetchEvent(new Request(`${ORIGIN}/version.json?_=1`));
+    const res = await ev.responsePromise;
+    assert.equal(res.status, status, `a ${status} reaches the guard as-is`);
+    assert.equal(await res.text(), "mid-deploy", "no cached JSON is served while online");
+  }
+});
+
+test("a rejecting CacheStorage read is a miss in packNetworkFirst, not a rejected respondWith (#6633 L4)", async () => {
+  const broken = () => Promise.reject(new Error("storage error"));
+  const caches = { match: broken, keys: broken, open: broken, delete: broken };
+  const h = createHarness({ fetchImpl: async () => new Response("unavailable", { status: 503 }), globals: { caches } });
+  for (const path of ["/assets/voice/george.json", "/assets/pack/manifest.json"]) {
+    const ev = h.fetchEvent(new Request(`${ORIGIN}${path}`));
+    const res = await ev.responsePromise;
+    assert.equal(res.status, 503, `${path}: the network answer stands in for the unreadable cache`);
+    await Promise.allSettled(ev.lifetimes);
+  }
+});
+
+test("an optional asset's deadline is cleared once verified, so it cannot abort the cache write (#6633 L5)", async () => {
+  const pending = new Map();
+  let signal = null;
+  const ordinary = installFetch();
+  const h = createHarness({
+    fetchImpl: (request, init = {}) => {
+      if (requestKey(request).endsWith("/assets/icon.png")) signal = init.signal;
+      return ordinary(request, init);
+    },
+    putImpl: async (_name, request) => {
+      // The 4 s deadline expires while the verified body is being written.
+      if (requestKey(request).endsWith("/assets/icon.png")) for (const expire of [...pending.values()]) expire();
+    },
+    globals: {
+      setTimeout(callback, ms, ...args) {
+        if (ms !== 4000) return setTimeout(callback, ms, ...args);
+        const id = {}; pending.set(id, () => { pending.delete(id); callback(...args); }); return id;
+      },
+      clearTimeout(id) { if (!pending.delete(id)) clearTimeout(id); },
+    },
+  });
+  await h.lifecycleEvent("install").done();
+  assert.ok(signal, "the icon went through cacheOptionalAsset with an abort signal");
+  assert.equal(signal.aborted, false, "a verified body is never aborted mid-put");
+  assert.equal(h.stores.get("apex26-321").has(`${ORIGIN}/assets/icon.png`), true);
+});
+
+function orphanSweepHarness(registration) {
+  const h = createHarness({ fetchImpl: generationFetch({ offline: false }), clientWindows: 0, registration });
+  const settled = () => [`${ORIGIN}/__apex_install_settled__`, new Response("settled")];
+  h.stores.set("apex26-320", new Map([settled()]));
+  h.stores.set("apex26-321", new Map([settled()]));                      // current
+  h.stores.set("apex26-322", new Map([["a", new Response("partial")]]));   // a killed install's leftover
+  h.stores.set("apex26-323", new Map([settled()]));                      // a rolled-back deploy's
+  return h;
+}
+
+test("the sweep drops newer unsettled and rolled-back generations no worker owns (#6633 L6)", async () => {
+  const h = orphanSweepHarness({ installing: null, waiting: null, active: { scriptURL: `${ORIGIN}/sw.js?v=321` } });
+  await twoFetches(h);
+  assert.deepEqual(h.deleted.slice().sort(), ["apex26-320", "apex26-322", "apex26-323"]);
+  assert.ok(h.stores.has("apex26-321"), "the current settled generation stays");
+});
+
+test("a newer generation is kept while a worker installs or waits, or this worker is not the current build's (#6633 L6)", async () => {
+  const active = { scriptURL: `${ORIGIN}/sw.js?v=321` };
+  for (const registration of [
+    { installing: {}, waiting: null, active },
+    { installing: null, waiting: {}, active },
+    { installing: null, waiting: null, active: { scriptURL: `${ORIGIN}/sw.js?v=322` } },
+    undefined,
+  ]) {
+    const h = orphanSweepHarness(registration);
+    await twoFetches(h);
+    assert.deepEqual(h.deleted, ["apex26-320"], JSON.stringify(registration ?? "no registration"));
+  }
+});

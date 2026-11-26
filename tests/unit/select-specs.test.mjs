@@ -27,10 +27,10 @@ import { MEASURED, capacity, declaredTests, declaredTestsIn, honoursCircuitScope
 import { loadDb, TIMINGS_FILE } from "../../tools/ci/spec-timings.mjs";
 import { FAT_UI_SPEC, specTitles, unlistable, fatShardPlan, titleCosts, lptPieces, countSplitPieces, fatShardArgs, listFile, PW_ROOT_DIR } from "../../tools/ci/fat-shard.mjs";
 import fs from "node:fs";
-import os from "node:os";
 import { spawnSync, execFileSync, spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -1896,7 +1896,7 @@ test("maxDeclaredTimeout folds `BOOT_MS + 480_000` and bills an unresolvable arg
 });
 
 test("helper imports and reexports propagate transitively with cycles", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "select-import-"));
+  const dir = mkTmpDir("select-import-");
   const changed = ["tests", "helpers", "changed.js"].join("/");
   const middle = ["tests", "helpers", "middle.js"].join("/");
   const transitive = ["tests", "specs", "transitive.spec.js"].join("/");
@@ -1993,7 +1993,7 @@ test("the CI select step leaves the tree it diffs untouched (a chmod there made 
   // the diff select-specs reads, so reason was "infra" on every PR and "unmatched" (the fail-closed branch) could
   // never fire. Run the real step in a throwaway repo that commits both scripts at their committed modes; the
   // selector itself is absent there, so the step fails after base resolution, which is all this needs.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "select-step-"));
+  const dir = mkTmpDir("select-step-");
   try {
     const git = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8" }).trim();
     git("init", "-q"); git("config", "user.email", "t@example.invalid"); git("config", "user.name", "t");
@@ -2022,7 +2022,7 @@ test("the CI select step leaves the tree it diffs untouched (a chmod there made 
 });
 
 test("ready PR selection certifies both parents of the checked-out merge", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-select-base-"));
+  const dir = mkTmpDir("ready-select-base-");
   const git = (...args) => execFileSync("git", args, { cwd: dir, encoding: "utf8" }).trim();
   try {
     git("init", "-q", "-b", "base"); git("config", "user.email", "t@example.invalid"); git("config", "user.name", "t");
@@ -2119,7 +2119,7 @@ test("spec-less js dirs route to a module-specific spec, and a dir with no cover
     "js/share/share-card.js", "js/xr/xr-plan.js", "js/roster.js"];
   assert.deepEqual(jsCoverageGaps(six), [], "every dir ci-7d named now has browser or node coverage");
   // The rule itself, on a fixture tree: boot-only routing and no unit test is a gap; a generated file never is.
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "cov-gap-"));
+  const root = mkTmpDir("cov-gap-");
   try {
     fs.mkdirSync(path.join(root, "js/lonely"), { recursive: true });
     fs.mkdirSync(path.join(root, "js/tested"), { recursive: true });
@@ -2331,7 +2331,7 @@ test("fat-shard: the n rewritten legs select every test exactly once, even one t
   const listed = ["v › one", "v › two", "v › three", "solo", "w › four", "w › five", "w › six"];
   const real = [...listed, "w › added later"];   // a test the stub could not see
   const db = { specs: { [f]: { t: Object.fromEntries(listed.map((t, i) => [t, [["d", "llvmpipe", 10 + 7 * i]]])) } } };
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "fat-shard-"));
+  const outDir = mkTmpDir("fat-shard-");
   const n = 3;
   const hits = new Map(real.map((t) => [t, 0]));
   for (let i = 1; i <= n; i++) {
@@ -2395,7 +2395,7 @@ const pwList = (args) => new Promise((resolve, reject) => {
 });
 
 test("#4812 fat-shard: real Playwright runs every fat-spec test on exactly one leg, piece n within 1.5x its share", { skip: !fs.existsSync(PW_CLI) && "no @playwright/test" }, async () => {
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "fat-shard-pw-"));
+  const outDir = mkTmpDir("fat-shard-pw-");
   try {
     const db = loadDb(path.join(ROOT, TIMINGS_FILE));
     await Promise.all(FAT_SPECS.map(async (f) => {

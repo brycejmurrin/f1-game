@@ -39,11 +39,40 @@ export function hookPipelines() {
   // Bindings.getForRender(renderObject) is the frame that mints a render object's bindings, so while it runs
   // P.ro names that object (type:name, material, parent chain, geometry, render target) for the gpuLog rows.
   P.ro = null;
+  // WHICH MESH (#6665): a pool wrapper's geometry is anonymous (BufferGeometry, no name), so `geo` alone named no
+  // culprit. P.geoSeen holds every geometry id bound so far (from the hook on, warm-up included); a gpuLog row then
+  // carries the geometry's shape (vertex / index count, attribute names, TLX kind, bounding radius, userData keys) and
+  // whether it was bound before this frame ("new" = first ever bind: primeRace and warm-up never drew it).
+  P.geoSeen = new Set(); P.late = []; P.phase = "";
+  const geoDesc = (g) => {
+    const a = g.attributes || {}, pos = a.position, bs = g.boundingSphere;
+    const ud = g.userData ? Object.keys(g.userData).slice(0, 4).join("/") : "";
+    return " v" + (pos ? pos.count : 0) + " i" + (g.index ? g.index.count : 0) + " [" + Object.keys(a).sort().join(",") + "]" +
+      " kind " + (g.__tlxKind || "?") + (bs ? " r" + bs.radius.toFixed(2) : "") + (ud ? " ud " + ud : "") +
+      " batch " + (g.__tlxDrawnBatch === undefined ? "-" : g.__tlxDrawnBatch) + (P.geoSeen.has(g.id) ? " seen" : " new") +
+      (g.__censusFrom ? " built " + g.__censusFrom : "");
+  };
+  // WHO BUILT IT (#6665): the bind happens inside three's render, so its stack names no game code. Every mesh made
+  // from the hook on (gfx.createMesh; game.js's G.gfx is this object) carries the stack that built it into the rows.
+  const stackOf = () => (new Error().stack || "").split("\n").slice(3, 9).map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, "")).join(" < ").slice(0, 500);
+  for (const name of ["createMesh", "createTexMesh"]) {
+    const om = typeof GLX[name] === "function" ? GLX[name] : null;
+    if (!om) continue;
+    try {
+      GLX[name] = function () {
+        const r = om.apply(this, arguments);
+        try { if (r && r.geo) r.geo.__censusFrom = stackOf(); } catch (_) { /* naming is best-effort */ }
+        return r;
+      };
+    } catch (_) { /* a frozen facade: no creation stacks */ }
+  }
   const bnd = T.renderer._bindings;
   if (bnd && typeof bnd.getForRender === "function") {
     const og = bnd.getForRender;
     bnd.getForRender = function (ro) {
       const prev = P.ro;
+      let gid = -1;
+      try { const g0 = (ro && ro.geometry) || (ro && ro.object && ro.object.geometry); if (g0) gid = g0.id; } catch (_) { /* best-effort */ }
       if (P.gpuLogOn) {
         try {
           const ob = (ro && ro.object) || {}, m = (ro && ro.material) || {}, g = (ro && ro.geometry) || ob.geometry || {}, c = (ro && ro.context) || {};
@@ -51,10 +80,23 @@ export function hookPipelines() {
           const rt = c.renderTarget ? (c.renderTarget.texture && c.renderTarget.texture.name || c.renderTarget.name || "rt") + ":" + c.width + "x" + c.height : "canvas";
           const ud = ob.userData || {};
           P.ro = (ob.type || "") + ":" + (ob.name || "") + " mat " + (m.type || "") + ":" + (m.name || "") + " geo " + (g.type || "") + ":" + (g.name || "") + "#" + (g.id | 0) +
-            " in " + (chain.join("<") || "-") + " rt " + rt + (ob.__tlxIdent ? " pool" : "") + (ud.tlxLgRoad ? " road" : "");
+            " in " + (chain.join("<") || "-") + " rt " + rt + (ob.__tlxIdent ? " pool" : "") + (ud.tlxLgRoad ? " road" : "") + geoDesc(g);
         } catch (_) { P.ro = "(unnamed)"; }
       }
-      try { return og.apply(this, arguments); } finally { P.ro = prev; }
+      try { return og.apply(this, arguments); } finally {
+        P.ro = prev;
+        if (gid >= 0 && !P.geoSeen.has(gid)) {
+          // LATE FIRST BINDS (#6665): a geometry bound for the first time after the green flag is one primeRace and the
+          // grid frames never drew. Recorded on green runs too: the spread leg goes red only when such a mesh's first
+          // draw happens to land in its window.
+          if (P.phase && P.late.length < 300) {
+            try { const ob = (ro && ro.object) || {}, g = (ro && ro.geometry) || ob.geometry || {}, c = (ro && ro.context) || {};
+              P.late.push({ at: P.frames, phase: P.phase, geo: gid, d: (ob.type || "") + ":" + (ob.name || "") + (ob.__tlxIdent ? " pool" : "") + (c.renderTarget ? " rt" : " canvas") + geoDesc(g) });
+            } catch (_) { /* naming is best-effort */ }
+          }
+          P.geoSeen.add(gid);
+        }
+      }
     };
   }
   const dev = be.device;
@@ -64,7 +106,7 @@ export function hookPipelines() {
       const orig = dev[name];
       dev[name] = function (desc) {
         P[key]++;
-        try { if (P.gpuLogOn && P.gpuLog.length < 200) P.gpuLog.push({ at: P.frames, kind: name, label: String((desc && desc.label) || "(none)").slice(0, 80), size: desc && desc.size, usage: desc && desc.usage, ro: P.ro ? String(P.ro).slice(0, 240) : undefined,
+        try { if (P.gpuLogOn && P.gpuLog.length < 200) P.gpuLog.push({ at: P.frames, kind: name, label: String((desc && desc.label) || "(none)").slice(0, 80), size: desc && desc.size, usage: desc && desc.usage, ro: P.ro ? String(P.ro).slice(0, 900) : undefined,
           from: (new Error().stack || "").split("\n").slice(2, 9).map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, "")).join(" < ").slice(0, 600) }); } catch (_) { /* naming is best-effort */ }
         return orig.apply(this, arguments);
       };
@@ -109,6 +151,8 @@ export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
   await page.evaluate(() => window.__apex.go());
   await page.waitForFunction(raceGate, null, { polling: 500, timeout: 300000 });
   await gas(true);
+  const phase = (name) => page.evaluate((n) => { window.__bpp.phase = n; }, name);
+  await phase("warm");
   await frames(page, WARM_FRAMES);
   // THE GOVERNOR IS HELD FOR BOTH PASSES (#5387). PerfGov steps the render scale when frames run slow (a busy runner,
   // a CPU burn), and each step re-creates the post targets: three rebinds the ~10 fullscreen passes that sample them
@@ -136,9 +180,11 @@ export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
     return window.__apex.physState().prog;
   }, start);
   const progress = () => page.evaluate(() => window.__apex.physState().prog);
+  await phase("replay");
   const warmStart = await restart();
   await frames(page, Math.ceil(WINDOWS * WINDOW_FRAMES * REPLAY_MARGIN));
   const warmM = (await progress()) - warmStart;
+  await phase("windows");
   const prog0 = await restart();
   const warm = await page.evaluate(() => { window.__bpp.gpuLogOn = true; return window.__bpp.count; });
   const windows = [];
@@ -157,6 +203,7 @@ export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
   // count CarDraw.primeRace did not reach shows up as bind groups in this window.
   const spread = await (async () => {
     await restart();   // back onto the warmed stretch: only the field's placement is new in this window
+    await phase("spread");
     const placed = await page.evaluate(() => {
       const A = window.__apex, n = Math.max(0, (A.fieldState() || []).length - 1), list = [];
       for (let i = 0; i < n; i++) {
@@ -181,7 +228,8 @@ export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
   // Whether this run took TLX's soft-blit path (software adapter or headless): the spec exempts that path's readback
   // buffers and asserts the path was on whenever it does (#5387).
   const soft = await page.evaluate(() => { try { const b = GLX.__tlx.backendState(); return { softAdapter: !!b.softAdapter, headless: !!b.headless, softBlit: !!b.softBlit, reads: b.softRead ? b.softRead.gen | 0 : 0 }; } catch (_) { return null; } });
-  const out = { hook, forceGL, warm, gpuDevice, replay, gov, soft, windows, spread };
+  const late = await page.evaluate(() => window.__bpp.late);
+  const out = { hook, forceGL, warm, gpuDevice, replay, gov, soft, windows, spread, late };
   mkdirSync("artifacts/perf", { recursive: true });
   writeFileSync(`artifacts/perf/idle-pipeline-churn-${forceGL ? "gl" : "gpu"}.json`, JSON.stringify(out, null, 1));
   return out;

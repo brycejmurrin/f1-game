@@ -103,7 +103,7 @@ test("applyVmax is a no-op at factor 0", () => {
 });
 
 test("applyVmax caps a banded easy car at BAND_CEIL", () => {
-  const paceScale = 0.851 * 0.97;
+  const paceScale = 0.95 * 0.96;   // the easy row's ai x corner (#6565 AI1; was 0.851 x 0.97)
   const r = AiBand.applyVmax(70, 0.18, paceScale, 1);
   assert.ok(r.vmax <= 70 * (1 / paceScale) + 1e-9);
   assert.equal(r.bandNow, 0.18);
