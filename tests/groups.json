@@ -2078,6 +2078,7 @@
         "tests/unit/input-ghost-replay-vm.test.mjs",
         "tests/unit/jump-start-vm.test.mjs",
         "tests/unit/kerb-drive-from-rest-vm.test.mjs",
+        "tests/unit/local-storm-gates-vm.test.mjs",
         "tests/unit/new-hooks-vm.test.mjs",
         "tests/unit/offtrack-edges-vm.test.mjs",
         "tests/unit/offtrack-vm.test.mjs",
