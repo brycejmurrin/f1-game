@@ -1,7 +1,7 @@
 /* Apex 26 — TLXDebug: the __tlx debug surface carved out of tlx.js (#6821, #6479 row 9). create(S) returns the object
  * tlx.js exposes as api.__tlx. Bodies are verbatim except that every read of a TLX.create closure variable goes
  * through S (a bag of live getters built in tlx.js, plus setters for the two session toggles): S.lit is the current
- * `lit`, never a snapshot. Loads before tlx.js (DEFERRED.three + DEFERRED_EDGES). */
+ * `lit`, never a snapshot (the one eager read is `viz`, which was a creation-time value before the carve too). Loads before tlx.js (DEFERRED.three + DEFERRED_EDGES). */
 "use strict";
 
 const TLXDebug = (function () {
