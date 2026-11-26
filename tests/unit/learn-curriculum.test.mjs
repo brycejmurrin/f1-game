@@ -17,6 +17,7 @@ const setups = {
   rain: {line: "textured", tyre: "inter"},
   "pit-duel": {traffic: 0},
   stint: {finish: "hard", stopLap: 25, savingLaps: 4},
+  buttons: {deadPx: "6"},
 };
 function cursor(x, y) {
   assert.ok(Number.isFinite(x) && Number.isFinite(y));
@@ -283,4 +284,43 @@ test("Aero Lab drill restore() puts flow and session back", () => {
   assert.equal(G.raceWeather, "wet");
   assert.equal(G.duel, true);
   assert.equal(dirtyAir, "modern");
+});
+
+function loadButtons(storage) {
+  const path = new URL("../../learn/buttons/lab.js", import.meta.url);
+  let lesson;
+  const ctx = {LearnSandbox: {cursor, mount(value) { lesson = value; }}};
+  if (storage) ctx.localStorage = {getItem: key => storage[key] ?? null};
+  vm.runInNewContext(readFileSync(path, "utf8"), ctx, {filename: fileURLToPath(path)});
+  return lesson;
+}
+
+test("Button Trainer's pedal curve is the game's PedalTravel.level, dead zone included", () => {
+  const ctx = {performance: {now: () => 0}, requestAnimationFrame() {}};
+  const pedalPath = new URL("../../js/input/pedal-travel.js", import.meta.url);
+  vm.runInNewContext(readFileSync(pedalPath, "utf8") + ";this.PT = PedalTravel;", ctx, {filename: fileURLToPath(pedalPath)});
+  const {level} = loadButtons().model;
+  for (const curve of ["linear", "fine", "quick", "smooth"]) for (const deadPx of [0, 6, 12, 20]) {
+    for (const [start, end, travel] of [[100, 20, 74], [100, 10, 50], [80, 40, 120]]) {
+      const game = {press: "instant", travel, start, end, ...(curve === "linear" ? {} : {slideCurve: curve}), ...(deadPx ? {deadPx} : {})};
+      for (let px = 0; px <= travel + deadPx + 30; px += 3) {
+        assert.ok(Math.abs(level({start, end, travel, curve, deadPx}, px) - ctx.PT.level(game, px)) < 1e-12,
+          `${curve} ${start}->${end} over ${travel} px, dead ${deadPx}, at ${px} px`);
+      }
+    }
+  }
+});
+
+test("Button Trainer's arrow challenge is reachable and its saved-BRAKE preset reads the game's store", () => {
+  const lesson = loadButtons({"apex26.touchButtonProfiles": JSON.stringify({v: 1, buttons: {brake: {start: 100, end: 20, travel: 74, slideCurve: "quick", direction: "down", deadPx: 6}}})});
+  const initial = Object.fromEntries(lesson.controls.map(control => [control.id, control.value]));
+  const arrows = {...initial, scenario: "arrows"};
+  assert.equal(lesson.evaluate(arrows).success, false, "the shipped STANDARD arrows turn too much at 200 km/h");
+  const tuned = lesson.evaluate({...arrows, speedSteer: 2, adaptive: 5, rate: 8});
+  assert.equal(tuned.success, true, tuned.feedback);
+  const [name, saved] = lesson.presets[0];
+  assert.equal(name, "Your saved BRAKE");
+  assert.equal(JSON.stringify(saved), JSON.stringify({scenario: "pedals", start: 100, end: 20, travel: 74, curve: "quick", deadPx: "6"}));
+  assert.equal(lesson.evaluate({...initial, ...saved}).success, true);
+  assert.equal(loadButtons().presets[0][0] === "Your saved BRAKE", false, "no store, no personal preset");
 });

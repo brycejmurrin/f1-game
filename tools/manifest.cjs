@@ -1914,7 +1914,7 @@ const LAZY_LEARN = ["js/ui/learn-door.js"];
 const SW_LEARN = [
   "learn/appearance.js", "learn/replay.js", "learn/replay.css", "learn/sandbox.js", "learn/sandbox.css",
   ...["chassis", "suspension", "deployment", "hybrid", "brake-blend", "tyre-heat",
-    "racing-line", "rain", "pit-duel", "stint"].flatMap(id => ["learn/" + id + "/index.html", "learn/" + id + "/lab.js"]),
+    "racing-line", "rain", "pit-duel", "stint", "buttons"].flatMap(id => ["learn/" + id + "/index.html", "learn/" + id + "/lab.js"]),
   "learn/braking/index.html", "learn/braking/style.css", "learn/braking/lab.js",
   "learn/aero/index.html", "learn/aero/style.css", "learn/aero/lab.js",
   "learn/vsc/index.html", "learn/vsc/style.css", "learn/vsc/model.js", "learn/vsc/lab.js",

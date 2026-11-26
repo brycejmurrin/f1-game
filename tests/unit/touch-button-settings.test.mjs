@@ -710,6 +710,8 @@ test("SLIDE DEAD ZONE ignores the first pixels of an explicit slide and is OFF u
   assert.equal(model.level(brake, 6 + 74), 0.2, "and still reaches the slide end");
   choose("deadPx", "0");
   assert.equal(model.buttonOverrides("brake").deadPx, undefined);
+  choose("deadPx", "12"); choose("end", "default");
+  assert.equal(model.buttonOverrides("brake").deadPx, undefined, "clearing the slide end clears its dead zone");
   assert.equal(JSON.stringify(model.normalizeProfiles({ v: 1, buttons: { brake: { end: 20, deadPx: 7 } } }).buttons.brake), JSON.stringify({ end: 20 }),
     "only the offered sizes survive an import");
   assert.equal(model.normalizeProfiles({ v: 1, buttons: { gas: { end: 50, deadPx: 12 } } }).buttons.gas.deadPx, 12);

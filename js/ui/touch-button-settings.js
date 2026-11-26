@@ -367,7 +367,9 @@ const TouchButtonSettings = (() => {
     indicator.onchange = () => change({ indicator: indicator.value });
     fillDirection.onchange = () => change({ fillDirection: fillDirection.value });
     for (const control of [start, end, holdEnd, sliderStart, sliderEnd]) {
-      control.onchange = () => change({ [control.dataset.field]: control.value === "default" ? null : Number(control.value) });
+      control.onchange = () => change({ [control.dataset.field]: control.value === "default" ? null : Number(control.value),
+        // A dead zone only acts on a slide end: clearing the end clears it, so it cannot revive unseen later.
+        ...(control === end && control.value === "default" ? { deadPx: 0 } : {}) });
     }
     curve.onchange = () => change({ buildPower: Number(curve.value) });
     build.onchange = () => change({ buildMs: Number(build.value) });
