@@ -968,13 +968,17 @@ test("a rebuild resets the BRAKE CUE and driving-cue clocks to the new context (
   contexts[0].currentTime = 600;
   A.brakeCue(1); A.driveBrakeTone(1);
   assert.ok(A.brakeCueState().nextAt > 600, "precondition: the cue is stamped on the old clock");
+  assert.ok(A.driveCueState().nextAt > 600, "precondition: the driving cue is stamped on the old clock");
   fireDeviceChange(); await wait(DEVICE_REBUILD_DEBOUNCE_MS + 60); await flush();
   assert.equal(contexts.length, 2, "precondition: rebuilt");
   assert.ok(A.brakeCueState().nextAt < 1, "cueT is not a stamp of the closed clock");
-  assert.ok(A.brakeCueState().nextAt < 1 && A.driveCueState().nextAt < 1, "driveCueT is not either");
+  assert.ok(A.driveCueState().nextAt < 1, "driveCueT is not either");
   const before = A.brakeCueState().fired;
   A.brakeCue(1);
   assert.equal(A.brakeCueState().fired, before + 1, "BRAKE CUE fires on the new clock");
+  const dBefore = A.driveCueState().brakeFired;
+  A.driveBrakeTone(1);
+  assert.equal(A.driveCueState().brakeFired, dBefore + 1, "the driving cue fires on the new clock");
 });
 
 test("a rain teardown that straddles a rebuild leaves the new context's rain state alone (#6886 row 10)", async () => {
@@ -989,6 +993,7 @@ test("a rain teardown that straddles a rebuild leaves the new context's rain sta
   fireDeviceChange(); await wait(DEVICE_REBUILD_DEBOUNCE_MS + 60); await flush();
   assert.equal(contexts.length, 2, "precondition: rebuilt");
   const rainStarts = () => started.filter((n) => n.kind === "src" && n.loop).length;
+  assert.ok(started.some((n) => n.kind === "src" && n.loop), "precondition: rain restarted on the new context");
   A.stopRain(true);                   // the new context's own teardown is now in flight
   A.startRain(0.3);                   // queued behind it
   const before = rainStarts();
