@@ -40,6 +40,7 @@ function boot(values, shape = "wide", { lazy = true } = {}) {
     addEventListener: (t, fn) => { (docListeners[t] = docListeners[t] || []).push(fn); } };
   const context = vm.createContext({
     GameStore: { store }, Log: { info() {}, warn() {} },
+    HudLayout: { migrate: (v) => { const { v: _v, ...rest } = v; return rest; } },
     setTimeout: (fn, ms) => { timers.set(++seq, { fn, at: now + (ms || 0) }); return seq; },
     clearTimeout: (id) => timers.delete(id),
     AppearanceOpts: { restore() {} }, ScreenLooks: { normalize: (_id, v) => ({ ...v }), apply() {}, refresh() {} },
@@ -112,7 +113,7 @@ test("SEPARATE: portrait and landscape keep their own sizes and looks; device-wi
   assert.equal(t.values.uiScale, 85); assert.equal(t.values.hudBtnScale, 120);
   assert.deepEqual(plain(t.values.lookGarage), { btn: 80, pw: 70, ph: 60, stats: "hide" });
   const wide = bryceStore();
-  for (const k of ["menuAccent", "textSize", "uiContrast", "homeScene", "titleLayout", "hudLayout"]) assert.deepEqual(plain(t.values[k]), wide[k], k);
+  for (const k of ["menuAccent", "textSize", "uiContrast", "homeScene", "titleLayout"]) assert.deepEqual(plain(t.values[k]), wide[k], k);
 });
 
 test("never on a stale boot shape: a boot that reads the other shape and then reclassifies inside the settle swaps nothing", async () => {
@@ -184,4 +185,16 @@ test("normalizeShapes: junk reads SHARED; a park is clamped like the live keys a
   assert.equal("menuAccent" in n.park, false);
   assert.deepEqual(plain(lp().SHAPE_KEYS.filter((k) => k.startsWith("look"))),
     ["lookPause", "lookDatahub", "lookSelect", "lookRace", "lookCareer", "lookGarage", "lookPopups", "lookDesigner"]);
+});
+
+test("#6598 SEPARATE parks hudLayout per orientation: his landscape HELMET offsets never reach portrait", async () => {
+  const live = JSON.parse(read("tests/data/settings-live-export-2026-11-25.json")).settings.hud.hudLayout;
+  assert.ok(live && live.standard.helmet.map, "his export carries the landscape map drag");
+  const t = boot({ ...bryceStore(), hudLayout: structuredClone(live), appearanceShapes: { v: 2, mode: "separate", live: "wide", park: null } });
+  assert.ok(t.lp().SHAPE_KEYS.includes("hudLayout"));
+  await t.rotate("tall");
+  assert.equal(t.values.hudLayout ?? null, null, "portrait starts on the shipped layout");
+  assert.deepEqual(plain(t.lp().shapes().park.hudLayout.standard.helmet.map), plain(live.standard.helmet.map));
+  await t.rotate("wide");
+  assert.deepEqual(plain(t.values.hudLayout), plain(live), "landscape comes back byte for byte");
 });

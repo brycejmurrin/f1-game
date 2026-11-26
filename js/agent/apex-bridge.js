@@ -272,6 +272,17 @@ const ApexBridge = (function () {
     return api[m].apply(api, Array.isArray(args.args) ? args.args : []);
   }
 
+  // Frame-phase ledger (#6941): PerfSpans p50/p95/p99 per phase. {on, reset} change the recorder (an ACTION);
+  // no args only reads it (isRead).
+  function ledger(a) {
+    const P = typeof PerfSpans !== "undefined" ? PerfSpans : null;
+    if (!P) throw new Error("PerfSpans unavailable");
+    if (a && a.reset) P.reset();
+    if (a && a.on !== undefined) P.on(!!a.on);
+    const r = P.report();
+    return { on: r.on, ring: r.ring, phases: P.phases, spans: r.spans };
+  }
+
   function perfModule(name, mod, ops, args) {
     const op = args && args.op;
     if (!mod || !ops.includes(op) || typeof mod[op] !== "function") throw new Error(name + "." + op + " unavailable");
@@ -938,6 +949,7 @@ const ApexBridge = (function () {
     call,
     gpuTest: (a) => perfModule("GpuTestRun", typeof GpuTestRun !== "undefined" ? GpuTestRun : null, ["start", "stop", "status", "active"], a),
     recorder: (a) => perfModule("PhoneRecorder", typeof PhoneRecorder !== "undefined" ? PhoneRecorder : null, ["start", "stop", "isOn", "json"], a),
+    ledger,
     reload: () => { later(() => location.reload()); return { reloading: true }; },
     wait: (a) => new Promise((res) => { const ms = Math.max(0, Math.min(30000, Number(a && a.ms) || 0)); setTimeout(() => res({ waited: ms }), ms); }),
     path,
@@ -1077,6 +1089,7 @@ const ApexBridge = (function () {
   };
   function isRead(msg) {
     const c = msg && msg.cmd, a = (msg && isObj(msg.args) && msg.args) || {};
+    if (c === "ledger") return Object.keys(a).length === 0;
     if (READ_CMDS.has(c)) return true;
     if (c === "drive") return !!(a.stop || a.status);
     if (c !== "call" || !own(CALL_READ, a.method) || !callAllowed(a.method)) return false;

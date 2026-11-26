@@ -90,7 +90,8 @@ const DataIcs = (function () {
       lines.push("END:VEVENT");
       ev.push(lines);
     }
-    if (!sessions.length && /^\d{4}-\d{2}-\d{2}$/.test(r.date || "")) {
+    // Timed practice with a TBC race time: test for the race session, not any session.
+    if (!sessions.some((s) => s.key === "r") && /^\d{4}-\d{2}-\d{2}$/.test(r.date || "")) {
       const lines = [
         "BEGIN:VEVENT",
         "UID:" + text(base + "-r@apex26"),

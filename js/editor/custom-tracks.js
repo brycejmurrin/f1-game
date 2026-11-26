@@ -243,35 +243,51 @@ const CustomTracks = (function () {
     return it;
   }
 
-  function load() {
-    const v = store.get(KEY, null);
-    const items = [];
+  /** Stored records split into the designs today's sanitize accepts (`items`)
+   *  and the raw records it refuses or that overflow the cap (`held`). A held
+   *  record was accepted by some earlier validation; every writer carries it
+   *  through byte for byte (write), so a stricter sanitize hides a circuit but
+   *  never erases it, and a later fix can load it again (#6871). */
+  function scan(v) {
+    const items = [], held = [];
     const seen = new Set();
     if (v && typeof v === "object" && Array.isArray(v.items)) {
-      let dropped = 0;
-      for (const raw of v.items.slice(0, LIMITS.items)) {
+      for (const raw of v.items.slice(0, LIMITS.items * 2)) {
         let it = null;
-        try { it = sanitize(raw); } catch (e) { Log.warn("track", "customTracks: unreadable design skipped: " + (e && e.message || e)); }
-        if (!it) { dropped++; continue; }
+        try { it = sanitize(raw); } catch (e) { Log.warn("track", "customTracks: unreadable design held: " + (e && e.message || e)); }
+        if (!it || (!seen.has(it.id) && items.length >= LIMITS.items)) {
+          // Only a record shape is worth keeping: a bare number or string was never a design.
+          if (raw && typeof raw === "object" && !Array.isArray(raw) && held.length < LIMITS.items) held.push(raw);
+          continue;
+        }
         // Two records with one content id: the newer edit wins.
         if (seen.has(it.id)) { const i = items.findIndex((x) => x.id === it.id); if (items[i].updated < it.updated) items[i] = it; continue; }
         seen.add(it.id); items.push(it);
       }
-      if (dropped) Log.warn("track", "customTracks: dropped " + dropped + " unreadable design(s)");
     }
+    return { items, held };
+  }
+  function load() {
+    const { items, held } = scan(store.get(KEY, null));
+    if (held.length) Log.warn("track", "customTracks: " + held.length + " stored design(s) need repair; kept in storage, hidden from the list");
     return { v: V, items };
   }
   // Circuits whose board and ghosts wait on a durable write (#2192): a refused
   // write (quota) leaves the old design on disk, so its runs must outlive it.
   const pendingDrops = new Set();
+  /** Persist `items` (sanitized designs) AFTER the held raw records read fresh
+   *  from storage: no writer can drop a record it could not read. */
   function write(items) {
-    const r = store.write(KEY, { v: V, items });
+    const held = scan(store.get(KEY, null)).held;
+    const r = store.write(KEY, { v: V, items: held.length ? items.concat(held) : items });
     if (r && r.durable && pendingDrops.size) {
       for (const id of pendingDrops) if (!items.some((x) => x.id === id)) dropRuns(id);
       pendingDrops.clear();
     }
     return r;
   }
+  /** How many stored records are held for repair (hidden, never dropped). */
+  function heldCount() { return scan(store.get(KEY, null)).held.length; }
   function dropRunsOnceDurable(r, id) { if (r && r.durable) dropRuns(id); else pendingDrops.add(id); }
 
   /** A lap fraction measured along the CONTROL POLYGON's arc → the control
@@ -712,6 +728,6 @@ const CustomTracks = (function () {
 
   sync();   // at EVAL: before game.js resolves the stored trackId
 
-  return { COLLECTION_FORMAT, exportCollection, importCollection, preflightCollection, commitCollectionPreflight, cancelCollectionPreflight, LIMITS, KERB_STYLES, stale, badge, judgeStored, tellStale, sanitize, sanitizeName, sanitizeCountry, sanitizeHeights, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn, afterStart };
+  return { COLLECTION_FORMAT, exportCollection, importCollection, preflightCollection, commitCollectionPreflight, cancelCollectionPreflight, LIMITS, KERB_STYLES, stale, badge, judgeStored, tellStale, sanitize, heldCount, sanitizeName, sanitizeCountry, sanitizeHeights, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn, afterStart };
 })();
 Object.freeze(CustomTracks);

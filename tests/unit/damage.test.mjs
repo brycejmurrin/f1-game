@@ -276,9 +276,11 @@ test("#hud-damage joins the top-band --hud-z zoom group with #hud-limits", () =>
 
 // ── DAMAGE → HANDLING (#1578): opt-in, default OFF ─────────────────────────────
 const DH_SRC = read("js/race/damage-handling.js");
+const M4_SRC = read("js/core/mat4.js") + "\n; this.M4 = M4;";   // M4.clamp01 binds at eval
 function loadDH() {
   const ctx = {};
   vm.createContext(ctx);
+  vm.runInContext(M4_SRC, ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(SRC + "; this.Damage = Damage;", ctx, { filename: absSrc("js/race/damage.js") });
   vm.runInContext(DH_SRC + "; this.DamageHandling = DamageHandling;", ctx, { filename: absSrc("js/race/damage-handling.js") });
   return ctx;
@@ -415,6 +417,7 @@ test("DamageHandling lives in the lazy race session: the stub holds the stored c
   assert.equal(stub._stub, true);
   assert.equal(stub.forCar({ local: true }), null, "no handling effect from the stub");
   assert.equal(stub.fromStore({ get: (_k, d) => (_k === "damageHandling" ? true : d) }), true);
+  vm.runInContext(M4_SRC, ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(DH_SRC, ctx, { filename: absSrc("js/race/damage-handling.js") });
   assert.equal(vm.runInContext("DamageHandling._stub", ctx), undefined);
   assert.equal(vm.runInContext("DamageHandling.isEnabled()", ctx), true, "the pre-hydration choice survives the swap");

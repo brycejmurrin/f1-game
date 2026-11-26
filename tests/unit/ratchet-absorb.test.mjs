@@ -4,7 +4,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { absorbOf, autoRaiseBlockReason, diffRatchets, compareToBase, ownGrowth, retiredFor, RETIRED_TREE, TREE_METRICS, load } from "../../tools/check/ratchets.mjs";
+import { absorbOf, autoRaiseBlockReason, applyFragments, bookPins, diffRatchets, compareToBase, mergeFragment, ownGrowth, pinJudge, retiredFor, RETIRED_TREE, TREE_METRICS, load } from "../../tools/check/ratchets.mjs";
 import { treeRaises } from "../../tools/ci/merge-gate.mjs";
 import { AT_REF } from "../../tools/check/tree-counts.mjs";
 
@@ -101,4 +101,46 @@ test("D-037: the tip's own growth does not count, only the branch's since its me
     const line = past.find((l) => l.includes(`RAISE  (tree) ${m}:`));
     assert.ok(line && !line.includes("inside its"), past.join("\n"));
   }
+});
+
+// BOOK-OWN (#6819): an absorb pin row judges the change's growth against its own booked raise, not the base's headroom.
+test("BOOK-OWN #6819: growth into the base's headroom is red at once, on the PR's own run, whatever the headroom", () => {
+  const j = (o) => pinJudge({ slackMax: 200, absorb: 5, ...o });
+  // #6808 at its base: count 8225 under ceiling 8226, +1 pin, nothing booked. The old rule passed it here and the
+  // gate failed it once a sibling used the same pin of headroom (8227 > 8226 on tip 321f16c4).
+  const unbooked = j({ value: 8226, ceiling: 8226, baseCeiling: 8226, growth: 1 });
+  assert.equal(unbooked.ok, false);
+  assert.equal(unbooked.unbooked, 1);
+  assert.equal(j({ value: 8226, ceiling: 8236, baseCeiling: 8236, growth: 1 }).ok, false, "ten pins of headroom change nothing");
+  // Booked: the fragment raises the ceiling by the growth; green at any headroom, over or not.
+  for (const head of [0, 1, 10]) assert.equal(j({ value: 8227, ceiling: 8227 + head, baseCeiling: 8226 + head, growth: 1 }).ok, true, `headroom ${head}`);
+  // A cut needs no booking; an inherited tip overage stays inherited.
+  assert.equal(j({ value: 8220, ceiling: 8226, baseCeiling: 8226, growth: -6 }).ok, true);
+  const inh = j({ value: 8230, ceiling: 8227, baseCeiling: 8226, growth: 1 });
+  assert.deepEqual([inh.ok, inh.inherited, inh.unbooked], [true, true, 0]);
+  // An entry without an absorb (rawGameReads, vmSrcLoads) keeps the old rule.
+  assert.equal(pinJudge({ value: 600, ceiling: 601, slackMax: 200, baseCeiling: 601, growth: 1 }).ok, true);
+});
+
+test("BOOK-OWN #6819: booked fragments compose under any merge order, so a tip move alone never turns a PR red", () => {
+  // The tip: 8225 pins at ceiling 8226 (one of headroom). Two PRs each add one pin and book it.
+  const tip = { files: {}, tree: { assertPins: { ceiling: 8226, slack: 200, absorb: 5 } } };
+  const row = (value) => ({ tree: true, metric: "assertPins", value, ceiling: 8226, absorb: 5 });
+  const frag = (value) => mergeFragment({}, bookPins([row(value)], [{ metric: "assertPins", unbooked: 1 }]));
+  const a = frag(8226), b = frag(8226);
+  assert.deepEqual(a, { tree: { assertPins: 1 } }, "the hook books the +1 although the base had headroom");
+  const ceilA = applyFragments(tip, [{ name: "a", data: a }]).tree.assertPins.ceiling;
+  const both = applyFragments(tip, [{ name: "a", data: a }, { name: "b", data: b }]).tree.assertPins.ceiling;
+  // B judged on the tip after A merged (8226 pins, ceiling 8227): its merge result is 8227 at 8228, booked 1.
+  assert.equal(pinJudge({ value: 8227, ceiling: both, slackMax: 200, baseCeiling: ceilA, growth: 1, absorb: 5 }).ok, true);
+  assert.equal(both - 8227, 1, "the tip's one pin of headroom is still there, untouched by either PR");
+});
+
+test("BOOK-OWN #6819: bookPins writes only the unbooked growth, never an inherited overage", () => {
+  const pin = { tree: true, metric: "assertPinsAll", ceiling: 100, absorb: 5 };
+  assert.deepEqual(bookPins([{ ...pin, value: 104 }], [{ metric: "assertPinsAll", unbooked: 1 }]).map((r) => r.value), [101]);
+  assert.deepEqual(bookPins([{ ...pin, value: 104 }], []), [], "over only by what the tip carried: not this branch's");
+  assert.deepEqual(bookPins([{ ...pin, value: 97 }], []).map((r) => r.value), [97], "an own cut still reaches attributeTree's path");
+  const other = { tree: true, metric: "rawColor", value: 9, ceiling: 8 };
+  assert.deepEqual(bookPins([other], [{ metric: "rawColor", unbooked: 1 }]), [other]);
 });

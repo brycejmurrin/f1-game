@@ -410,7 +410,7 @@ const DataRealRaceScript = (function () {
   }
 
   function fmtLap(t) {
-    if (!(t > 0)) return "—";
+    if (!(t > 0) || !isFinite(t)) return "—";
     const ms = Math.round(t * 1000), m = Math.floor(ms / 60000), sec = (ms - m * 60000) / 1000;   // round first: never "1:60.000"
     return m + ":" + (sec < 10 ? "0" : "") + sec.toFixed(3);
   }

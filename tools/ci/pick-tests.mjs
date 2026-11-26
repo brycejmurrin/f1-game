@@ -113,6 +113,7 @@ export const RULES = [
   // remembers to extend a regex. The blanket-route count in
   // tests/data/ratchets.json is what catches a file no rule names.
   [/^learn\//, ["ui", "service-worker"], "the Learn lesson UI and offline asset loading"],
+  [/^js\/learn-drills\//, ["ui"], "LEARN's on-track drills (thumb-drill.js): tests/unit/thumb-drill.test.mjs and the learn specs"],
   [/^js\/overlay\//, ["state-unit"], "stream overlay frame schema and transform-only DOM painter"],
   [/^tools\/lib\/game-vm\.cjs/, ["game-vm"], "the Node VM game harness and its parity test"],
   [/^tools\/lib\/vm-debug-preload\.cjs/, ["tooling-fast"], "opt-in vm filename rewrite; vm-debug-preload.test.mjs"],
@@ -171,7 +172,7 @@ export const RULES = [
   // alone, never to the group whose subject they are — collisions-deep.spec.js
   // drives AiDrive, and car/wall contact is what `collisions` asserts. Its
   // specs are VM-twinned, so `game-vm` names where they actually run on CI.
-  [/^js\/physics\/(collide|contact-geometry|wall-clamp|ai-drive|ai-band|ai-corridor)\.js/, ["collisions", "game-vm"],
+  [/^js\/physics\/(collide|contact-geometry|wall-clamp|ai-drive|ai-start|ai-band|ai-corridor)\.js/, ["collisions", "game-vm"],
    "car/wall contact and the AI driver: collisions-deep.spec.js and the collision VM twins"],
   [/^js\/physics\//, ["physics-core"], "the driving model and what feeds it"],
   [/^js\/race\/race-control\.js/, ["physics-core"], "race-control.spec.js rides in test:physics-core"],
@@ -615,7 +616,11 @@ function changedFiles(argv) {
   // (one path lost ALL of them and fell through to the git-diff default, which
   // answers a different question and looks like a real answer).
   const explicit = argv.filter((a, n) => !a.startsWith("--") && !(since >= 0 && n === since + 1));
-  if (explicit.length) return explicit;
+  if (explicit.length) {
+    // An explicit path that is not on disk matches no rule and is dropped silently; say so (a deleted file is legitimate, so warn only).
+    for (const f of explicit) if (!fs.existsSync(path.join(ROOT, f))) console.error(`warning: ${f} does not exist — a typo selects nothing (a deleted file is fine)`);
+    return explicit;
+  }
   // Rename sources too (ledger M36): --name-only lists only the destination.
   if (argv.includes("--staged")) return changedPaths(["--cached"], { cwd: ROOT });
   if (since >= 0 && argv[since + 1]) return changedPaths([argv[since + 1]], { cwd: ROOT });

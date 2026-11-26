@@ -76,7 +76,7 @@ test("aiPlace() anchors the car it moves", async () => {
 
 test("act() from the countdown puts the lit-lights counter out too", async () => {
   await g.race("monza");
-  g.G.state = "count"; g.G.lightsLit = 5;   // mid-sequence, as the countdown leaves it
+  g.G.cmd.setState("count", "test"); g.G.lightsLit = 5;   // mid-sequence, as the countdown leaves it
   g.apex.act({ throttle: true }, 1 / 60, 1);
   assert.equal(g.G.state, "race");
   assert.equal(g.G.lightsLit, 0,
@@ -87,7 +87,7 @@ test("act() from the countdown puts the lit-lights counter out too", async () =>
 test("rollout() from the countdown puts the lit-lights counter out too", async () => {
   await g.race("monza");
   g.apex.jump(0.2, 40, 0);
-  g.G.state = "count"; g.G.lightsLit = 5;
+  g.G.cmd.setState("count", "test"); g.G.lightsLit = 5;
   g.apex.rollout({ dt: 1 / 10, seconds: 0.05, input: { throttle: true } });
   assert.equal(g.G.state, "race");
   assert.equal(g.G.lightsLit, 0, "the DOM lights went out but the counter stayed at 5");

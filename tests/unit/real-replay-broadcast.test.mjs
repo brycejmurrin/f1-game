@@ -671,3 +671,24 @@ test("WATCH AUTO rejects an authored angle that the fitted race lens crops", () 
   assert.ok(Math.abs(projectedY("chase", true)) <= 0.55);
   bc.stop();
 });
+
+// #6889 C5: a car in a data gap is parked, not retired; the PiP must leave it and never pick it.
+test("BROADCAST PiP leaves a car that falls into a data gap (#6889 C5)", () => {
+  const ctx = vm.createContext({ Log: { info() {}, debug() {} },
+    CamModes: { CAM_MODES: ["side", "heli", "chase", "tcam", "cinematic", "low"].map((id) => ({ id })) } });
+  const B = loadReplayBroadcast(ctx), pips = [];
+  const cars = [{ code: "AAA" }, { code: "BBB" }, { code: "CCC" }];
+  const G = { camMode: 0, setCamMode: (m) => { G.camMode = m; }, setPip: (k) => pips.push(k && k.code) };
+  const bc = B.create(G, { setFollow() {} });
+  let live = cars.slice();
+  const st = { script: { drivers: [] }, T: 0, speed: 1, reel: false, follow: cars[0], list: [],
+    isOut: () => false, carOf: (n) => cars[n - 1],
+    running: () => live.map((c, i) => ({ key: c, prog: 3000 - i * 400, speed: 60 })) };
+  bc.start({ auto: true, tower: false });
+  bc.tick(0.3, st);
+  assert.equal(pips.at(-1), "BBB", "the car behind is in the inset");
+  live = [cars[0], cars[2]];   // BBB's data has a gap: cameraReady false, still not retired
+  bc.tick(0.3, st);
+  assert.notEqual(pips.at(-1), "BBB", "the inset left the gap car");
+  bc.stop();
+});

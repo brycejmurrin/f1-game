@@ -38,6 +38,7 @@ const src = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 globalThis.M4 = eval(src("js/core/mat4.js") + ";M4");
 globalThis.NetInterp = eval(src("js/net/interp.js") + ";NetInterp");
 const NetSnapshot = eval(src("js/net/snapshot.js") + ";NetSnapshot");
+globalThis.NetWire = eval(src("js/net/wire-schema.js") + ";NetWire");   // NetSession / QualiWire / NetPlay read the wire table
 const NetSession = eval(src("js/net/session.js") + ";NetSession");
 globalThis.NetSnapshot = NetSnapshot;
 globalThis.NetSession = NetSession;
@@ -617,13 +618,14 @@ test("retireCar clears the car's skid intensity so a parked car does not screech
   const car = { x: 1, s: 100, lap: 1, code: "YOU", speed: 55, skidIntensity: 0.8, local: false, human: false };
   vm.runInNewContext(symbolSource("function retireCar(c, reason)") + ";retireCar(car, 'engine');", {
     car, netPlay: { active: () => false, ownsRaceControl: () => false }, incidentSim: { release() {} }, track: { total: 5000 },
-    smp: { hw: 8, t: [0, 0, 1] }, Tracks: { sample() {}, wallAt: () => 10 }, Collide: { WCAR: 2 },
+    smp: { hw: 8, t: [0, 0, 1] }, Tracks: { sample() {}, wallAt: () => 10, inPitLane: () => true }, Collide: { WCAR: 2 },
     clamp: M4.clamp, worldFromTrack: (s, x) => ({ x, z: s }), IDLE_RPM: 4000,
     OvertakeMode: { reset() {} }, announce() {}, soundOn: false, pits: { clearArm() {} },   // retireCar clears a stale pit arm (bug-hunt 7.3)
   });
   assert.equal(car.retired, true);
   assert.equal(car.speed, 0);
   assert.equal(car.skidIntensity, 0, "a retired car is not slipping");
+  assert.equal(car.inPitLane, true, "the park pose recomputes the lane flag (#6763 K8)");
 });
 
 // ── waiting-room host remove (lobby-phase LEFT + fresh room code) ───────────

@@ -42,7 +42,9 @@ const SHELL_RACE_MS = 1000;
 // A `?b=` bust with NO cached shell at or above b has nothing to fall back to, so
 // a 3 s fail-fast only dropped a slow-but-alive fetch (#4924); it waits this long.
 const BUST_WAIT_MS = 15000;
-// An OPTIONAL precache asset is abandoned (and aborted) after this long.
+// An OPTIONAL precache asset is abandoned (and aborted) after this long WITHOUT
+// PROGRESS: no headers yet, or no body chunk since the last one (#6823 17d). A
+// slow link that keeps delivering is never cut off; a stalled one still is.
 const OPTIONAL_ASSET_MS = 4000;
 // A dev host serves the committed shell, whose asset tags all read `?v=dev`
 // (see the fetch handler). Playwright pages run on 127.0.0.1, so the suite
@@ -504,10 +506,12 @@ async function precacheAssetLists() {
     "js/data/garage-departure-motion.js",
     "js/garage/departure-wheels.js",
     "js/race/reliability.js",
+    "js/core/sim-state.js",
     "js/race/damage.js",
     "js/race/damage-handling.js",
     "js/race/duel.js",
     "js/race/session-records.js",
+    "js/race/medal-ledger.js",
     "js/race/pit-geom.js",
     "js/race/pit-lane.js",
     "js/race/engineer.js",
@@ -569,6 +573,7 @@ async function precacheAssetLists() {
     "js/audio/voice-pack.js",
     "js/audio/battle-earcon.js",
     "js/audio/radio-voice.js",
+    "js/data/circuit-lore.js",
     "js/audio/announcer-recorded.js",
     "js/audio/announcer.js",
     "js/audio/panel.js",
@@ -717,6 +722,7 @@ async function precacheAssetLists() {
     "js/net/lobby-settings.js",
     "js/net/interp.js",
     "js/net/snapshot.js",
+    "js/net/wire-schema.js",
     "js/net/session.js",
     "js/net/quali-wire.js",
     "js/net/strategy-wire.js",
@@ -792,6 +798,7 @@ async function precacheAssetLists() {
     "js/car/car-hero.js",
     "js/render/three/tsl-surface.js",
     // LAZY_PERF — BENCHMARK / PHONE TEST rig, idle-loaded after boot
+    "js/perf/thermal-drift.js",
     "js/perf/soak-run.js",
     "js/perf/gpu-test-run.js",
     "js/perf/phone-recorder.js",
@@ -806,7 +813,10 @@ async function precacheAssetLists() {
     "js/race/real-race-pace.js",
     "js/race/real-race.js",
     // LEARN — the Learn modal and bare lesson assets
+    "js/learn-drills/registry.js",
     "js/ui/learn-door.js",
+    "js/ui/thumb-trainer.js",
+    "js/learn-drills/thumb-drill.js",
     "learn/appearance.js",
     "learn/replay.js",
     "learn/replay.css",
@@ -886,7 +896,7 @@ async function precacheAssetLists() {
   // suspenders if a tag is re-added. Do NOT add them to optional: that is
   // still an install-time put. Fetch-miss still cache.put on first use.
   // @gen-shell:sw-lazy-agent
-  const LAZY_AGENT = ["js/render/shared/puddles.js","js/agent/agentview-raster.js","js/agent/agentview-corners.js","js/agent/agentview.js","js/agent/apex-net.js","js/agent/apex-cam.js","js/agent/apex-track.js","js/agent/apex-lobby.js","js/agent/apex-gpu-capture.js","js/agent/apex-lifecycle.js","js/perf/three-inspector.js","js/agent/apex.js","js/agent/apex-bridge.js","js/agent/bridge-link.js"];
+  const LAZY_AGENT = ["js/render/shared/puddles.js","js/agent/agentview-raster.js","js/agent/agentview-corners.js","js/agent/agentview.js","js/agent/apex-net.js","js/agent/apex-cam.js","js/agent/apex-track.js","js/agent/apex-lobby.js","js/agent/apex-play.js","js/agent/apex-gpu-capture.js","js/agent/apex-lifecycle.js","js/perf/three-inspector.js","js/agent/apex.js","js/agent/apex-bridge.js","js/agent/bridge-link.js"];
   // /@gen-shell:sw-lazy-agent
   for (const u of [...essential]) {
     if (LAZY_AGENT.some((p) => u.includes(p))) essential.delete(u);
@@ -1005,24 +1015,26 @@ async function carryEntry(cache, req, old) {
   const headers = {};
   if (etag) headers["If-None-Match"] = etag;
   if (modified) headers["If-Modified-Since"] = modified;
-  let timeout = null;
-  const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+  const idle = idleDeadline();
   try {
-    const expired = new Promise((resolve) => {
-      timeout = setTimeout(() => { if (ctrl) ctrl.abort(); resolve(null); }, OPTIONAL_ASSET_MS);
-    });
     const init = { cache: "no-store", headers, priority: "low" };
-    if (ctrl) init.signal = ctrl.signal;
+    if (idle.signal) init.signal = idle.signal;
     let res = null;
-    try { res = await Promise.race([fetch(url.href, init), expired]); } catch (_) { res = null; }
-    if (!res) { await cache.put(req, old); return; }               // no answer: keep
+    try { res = await Promise.race([fetch(url.href, init), idle.expired]); } catch (_) { res = null; }
+    if (!res) { idle.clear(); await cache.put(req, old); return; } // no answer: keep
     // Unchanged: a 304, or a 200 carrying the same validator (an engine that
     // answered the conditional from its own HTTP cache instead of passing the
-    // 304 through still reports the stored ETag / Last-Modified).
+    // 304 through still reports the stored ETag / Last-Modified). Decided from
+    // the headers, so an unchanged body is never read.
     const same = res.status === 304 || (res.ok && (etag ? res.headers.get("ETag") === etag : res.headers.get("Last-Modified") === modified));
-    if (same) { await cache.put(req, old); return; }
-    if (res.ok && !url.search) await cache.put(req, res);          // changed: the new file
-  } finally { if (timeout !== null) clearTimeout(timeout); }
+    if (same) { idle.clear(); await cache.put(req, old); return; }
+    if (!res.ok || url.search) return;                             // removed, or a keyed file that changed: drop
+    // Changed: the new body, idle-bounded per chunk; a stall keeps the old copy.
+    let fresh = null;
+    try { fresh = await readIdle(res, idle); } catch (_) { fresh = null; }
+    idle.clear();
+    await cache.put(req, fresh || old);
+  } finally { idle.clear(); }
 }
 async function carryRuntime(cache, name) {
   const build = cacheBuild(name);
@@ -1070,37 +1082,77 @@ async function carryRuntime(cache, name) {
   });
 }
 
-async function cacheOptionalAsset(cache, url, verifyGeneration = false) {
-  let timeout = null;
+// THE OPTIONAL DEADLINE IS AN IDLE TIMER (#6823 17d): arm() restarts it, so it
+// fires only after OPTIONAL_ASSET_MS with no progress, then aborts the fetch and
+// resolves `expired` with null. A 4 s wall clock dropped a large module that was
+// still arriving on a slow phone link, and its retry started from byte zero.
+function idleDeadline() {
   const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+  let timer = null, fire = null;
+  const expired = new Promise((resolve) => { fire = resolve; });
+  const clear = () => { if (timer !== null) { clearTimeout(timer); timer = null; } };
+  const arm = () => {
+    clear();
+    timer = setTimeout(() => { timer = null; if (ctrl) ctrl.abort(); fire(null); }, OPTIONAL_ASSET_MS);
+  };
+  arm();
+  return { signal: ctrl ? ctrl.signal : undefined, expired, arm, clear };
+}
+// Reads an ok response's body chunk by chunk, re-arming `idle` on each one, and
+// returns an in-memory copy (null on a stall). Buffered, the later digest and
+// cache.put never touch the network, so no deadline can abort them mid-write.
+async function readIdle(res, idle) {
+  const reader = res.body && typeof res.body.getReader === "function" ? res.body.getReader() : null;
+  let body;
+  if (!reader) {
+    idle.arm();   // one fresh idle window for an engine without a readable body stream
+    body = await Promise.race([res.arrayBuffer(), idle.expired]);
+    if (!body) return null;
+  } else {
+    const parts = [];
+    let size = 0;
+    for (;;) {
+      idle.arm();
+      const step = await Promise.race([reader.read(), idle.expired]);
+      if (!step) { reader.cancel().catch(() => {}); return null; }
+      if (step.done) break;
+      parts.push(step.value); size += step.value.byteLength;
+    }
+    body = new Uint8Array(size);
+    let at = 0;
+    for (const part of parts) { body.set(part, at); at += part.byteLength; }
+  }
+  return new Response(body, { status: res.status, statusText: res.statusText, headers: res.headers });
+}
+
+async function cacheOptionalAsset(cache, url, verifyGeneration = false) {
+  const idle = idleDeadline();
   try {
-    const expired = new Promise((resolve) => {
-      timeout = setTimeout(() => {
-        if (ctrl) ctrl.abort();
-        resolve(null);
-      }, OPTIONAL_ASSET_MS);
-    });
     // priority:"low" — a background precache must not compete with the page's own
     // loads; an engine without Fetch Priority ignores the unknown member
     // (https://developer.mozilla.org/en-US/docs/Web/API/RequestInit#priority).
     const init = { priority: "low" };
     if (url.startsWith(PACK_MANIFEST_KEY_PREFIX)) init.cache = "no-store";
-    if (ctrl) init.signal = ctrl.signal;
-    const res = await Promise.race([fetch(url, init), expired]);
+    if (idle.signal) init.signal = idle.signal;
+    let res = await Promise.race([fetch(url, init), idle.expired]);
     if (res && res.ok) {
       // Retried scripts need a stamped generation; every stamped response is
       // verified, including initial optional installs. Bound body/hash work too.
       if (verifyGeneration && /^js\//.test(url) && !/\?v=([0-9a-f]{12})$/.test(url)) return false;
-      const checked = await Promise.race([verifyHashedResponse(url, res).then(() => true), expired]);
+      res = await readIdle(res, idle);
+      if (!res) return false;
+      // The digest runs on the buffered body under one more idle window.
+      idle.arm();
+      const checked = await Promise.race([verifyHashedResponse(url, res).then(() => true), idle.expired]);
       if (!checked) return false;
       // Verified: the deadline is spent. Clear it before the put, or an abort
       // mid-write kills a good body and the asset counts as missing (#6633 L5).
-      clearTimeout(timeout); timeout = null;
+      idle.clear();
       await cache.put(url, res); return true;
     }
     return false;   // 4xx/5xx or timed out: counted by install, one aggregated log line
   } catch (_) { /* optional assets must not invalidate an otherwise healthy install */ }
-  finally { if (timeout !== null) clearTimeout(timeout); }
+  finally { idle.clear(); }
   return false;
 }
 
@@ -1170,7 +1222,7 @@ async function precacheGeneration(onName) {
   // manifest or relying on the first online boot loses the pack after an update.
   const packManifest = PACK_MANIFEST_KEY_PREFIX + build;
   const stamped = urls.optional.map((u) =>
-    /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/fx\/visor-optics\.js$|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/(?:phone-pad(?:-codec|-page)?|touch-button-actions)\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|touch-button-settings|appearance-(?:studio-ui|arrangement-picker)|companion-return|photo-studio-ui|results-sheet|quali-sheet|watch-transport|progress-backup|save-health|settings-export-body|learn-door|circuit-details-panel|hud-inputs|screen-(regions|placement|arranger)|hud-arrange|hud-layout-editor|desktop-graphics|dock-toolbar)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/(presets|tuner-panel)\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+    /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/core\/sim-state\.js$|^js\/audio\/|^js\/race\/|^js\/fx\/visor-optics\.js$|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(thermal-drift|soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/(?:phone-pad(?:-codec|-page)?|touch-button-actions)\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|touch-button-settings|appearance-(?:studio-ui|arrangement-picker)|companion-return|photo-studio-ui|results-sheet|quali-sheet|watch-transport|progress-backup|save-health|settings-export-body|learn-door|thumb-trainer|circuit-details-panel|hud-inputs|screen-(regions|placement|arranger)|hud-arrange|hud-layout-editor|desktop-graphics|dock-toolbar)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/(presets|tuner-panel)\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\/|^js\/learn-drills\//.test(u)
       ? stampKey(u) : u).filter((u) => {
         const bare = u.replace(/\?v=.*$/, "");
         // GLX and career UI went in `required`; runtime-only doors are skipped.

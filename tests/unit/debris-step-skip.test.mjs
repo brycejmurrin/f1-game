@@ -67,6 +67,7 @@ function lateRapier({ enabled = true } = {}) {
       __build(); world = { timestep: FIXED_DT, step() { __solve(); } }; _worldTrack = track;
       _mirrors = cars.map(() => ({ setNextKinematicTranslation() {}, setNextKinematicRotation() {} }));
     }`);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8") + "; this.M4 = M4;", ctx, { filename: absSrc("js/core/mat4.js") });   // M4.rng32 binds at eval
   vm.runInContext(src, ctx);
   const M = vm.runInContext("DebrisWorld", ctx);
   M.create(G);
@@ -187,7 +188,7 @@ test("idle Rapier mirrors start incidents at the current human and AI pose", asy
       return out;
     }, wallAt: () => 7 },
   });
-  for (const file of ["js/core/mat4.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js",
+  for (const file of ["js/core/mat4.js", "js/physics/ai-start.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js",
     "js/race/race-control.js", "js/physics/incident-sim.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx);
   // Only substitute module loading; promotion, stepping and handback use the

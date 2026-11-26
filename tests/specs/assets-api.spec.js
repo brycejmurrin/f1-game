@@ -9,7 +9,7 @@
 // look. Most of what follows is that failure-mode coverage, because all three
 // are states real users boot into.
 //
-// Run: npx playwright test tests/specs/assets-api.spec.js   (npm run test:assets)
+// Run: npx playwright test tests/specs/assets-api.spec.js
 //
 // ONE BOOT PER WORKER (sharedTest). Ten goto("/") waits against BOOT_MS (45 s)
 // were the selected-2 red on PR #1103 run 37438784776: the fifth test

@@ -14,6 +14,8 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { fnSource } from "../helpers/fn-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { seedDom } from "../helpers/seed-dom.mjs";
+import { evalRealRace } from "../helpers/eval-real-race.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -87,4 +89,40 @@ test("the Daily history prints laps as m:ss.mmm", () => {
   const rows = vm.runInContext("dailyHistory(daily)", ctx);
   assert.equal(rows[0].text, "Saved class 1: 1:23.163");
   assert.equal(rows[1].text, "Day best (legacy / mixed classes): 2:00.000");
+});
+
+// #6614 gardener carve 8: Dom.fmtLap is home; real-race-script and real-replay copies stay (m: prefix under a minute, numeric strings).
+const FMT_LAP_EDGE = [
+  -1, -0, 0, 0.0005, 0.9995, 58.402, 59.9996, 60, 3599.9996, NaN, Infinity, null, undefined, "58.4",
+];
+const edgeLabel = (v) => (Object.is(v, -0) ? "-0" : typeof v === "string" ? JSON.stringify(v) : String(v));
+const edgeRun = (f) => FMT_LAP_EDGE.map((v) => { try { return f(v); } catch { return "THROWS"; } });
+function edgeTable(name, f, want) {
+  const got = edgeRun(f);
+  FMT_LAP_EDGE.forEach((v, i) => assert.equal(got[i], want[i], `${name}(${edgeLabel(v)})`));
+}
+
+test("#6614 Dom.fmtLap golden edge values (home)", () => {
+  const { Dom } = seedDom(vm.createContext({ Math, isFinite }));
+  edgeTable("Dom.fmtLap", (v) => Dom.fmtLap(v),
+    [null, null, null, "0.001", "1.000", "58.402", "1:00.000", "1:00.000", "60:00.000",
+      null, null, null, null, null]);
+});
+
+test("#6614 real-race-script fmtLap golden edge values (copy; Infinity guard)", () => {
+  const ctx = vm.createContext({ Math, Number, String, Array, Object, isFinite, Date, SeasonCal: { REAL_2026: [] } });
+  evalRealRace(ctx);
+  const fmtLap = (v) => { ctx.__v = v; return vm.runInContext("DataRealRaceScript.fmtLap(__v)", ctx); };
+  edgeTable("DataRealRaceScript.fmtLap", fmtLap,
+    ["—", "—", "—", "0:00.001", "0:01.000", "0:58.402", "1:00.000", "1:00.000", "60:00.000",
+      "—", "—", "—", "—", "0:58.400"]);
+});
+
+test("#6614 real-replay fmtLap golden edge values (copy; Infinity guard)", () => {
+  const line = read("js/race/real-replay.js").match(/^ *(function fmtLap\(t\) \{.*?\})(?: *\/\/.*)?$/m);
+  assert.ok(line, "real-replay.js still declares fmtLap on one line");
+  const fmtLap = evalFn(line[1]);
+  edgeTable("RealReplay.fmtLap", fmtLap,
+    ["—", "—", "—", "0:00.001", "0:01.000", "0:58.402", "1:00.000", "1:00.000", "60:00.000",
+      "—", "—", "—", "—", "0:58.400"]);
 });

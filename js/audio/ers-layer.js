@@ -88,7 +88,7 @@ var ErsLayer = (function () {
   let harvestOsc = null, harvestBp = null, harvestG = null;
   let sustainOsc = null, sustainG = null;
   let cueOsc = null, cueG = null;
-  let wasBoost = false, cueFired = 0, lastCueT = -1e9, built = 0;
+  let wasBoost = false, reseed = false, cueFired = 0, lastCueT = -1e9, built = 0;
 
   function stopNode(n) {
     try { if (n && n.stop) n.stop(); } catch (e) { /* already stopped */ }
@@ -171,7 +171,11 @@ var ErsLayer = (function () {
     built++;
   }
 
-  function silence(t) {
+  // External silence (a pause: stopEngine) re-seeds the boost edge on the next
+  // update, so a resume with deploy still held does not chirp a second cue.
+  function silence(t) { silenceGraph(t); reseed = true; }
+
+  function silenceGraph(t) {
     if (!ctx) return;
     const at = t != null ? t : ctx.currentTime;
     aim(deployG && deployG.gain, 0, at, 0.06);
@@ -214,8 +218,9 @@ var ErsLayer = (function () {
     const dGain = on ? deployGain(deploy, energy, s) : 0;
     const hGain = on ? harvestGain(brake, energy, deploy, s) : 0;
     const boostActive = on && s.boostTune !== 0 && !!(s.boost || s.otOn || deploy > DEPLOY_GATE);
+    if (reseed) { reseed = false; wasBoost = boostActive; }
     if (boostActive && !wasBoost) fireCue(t, s.boostTune);
-    if ((!on || s.boostTune === 0) && wasBoost) silence(t);
+    if ((!on || s.boostTune === 0) && wasBoost) silenceGraph(t);
     wasBoost = boostActive;
     const sGain = sustainGain(boostActive, energy, s);
     if (moving(deployG, on, t, 0.10) && deployOsc) aim(deployOsc.frequency, deployHz(deploy, energy), t, 0.06, 1e-4);

@@ -27,7 +27,7 @@ function impacts(pace, cars) {
     Log: { info() {}, enabled: () => false }, Tracks: { wallAt: () => 100 },
     IncidentSim: { owns: () => false, notifyCar() {} },
     DebrisWorld: { active: () => false, carImpact() {} } });
-  for (const file of ["js/core/mat4.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"])
+  for (const file of ["js/core/mat4.js", "js/physics/ai-start.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"])
     vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
   const G = { track: { total: 6000 }, player: null, netPlay: { owns: () => false }, PACE: pace, raceT: 0,
     wrapS: (s) => (s % 6000 + 6000) % 6000, worldFromTrack: (s, x) => ({ x, z: s }) };

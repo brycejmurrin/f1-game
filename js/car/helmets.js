@@ -372,7 +372,7 @@ const Helmets = (function () {
     const d = (key != null && generated(keyNum(String(key)), String(key))) ||
               (num != null && DESIGNS[num]) || generated(num == null ? 0 : num);
     if (!teamC || !d.alt || !near(d.base, teamC)) return d;
-    return { name: d.name, base: d.alt, visor: d.visor, zones: d.zones, generated: d.generated, shifted: true };
+    return { name: d.name, base: d.alt, alt: d.alt, visor: d.visor, zones: d.zones, generated: d.generated, shifted: true };
   }
 
   /* THE PLAYER'S OWN LID. livery.helmetStyle repaints the helmet from two livery

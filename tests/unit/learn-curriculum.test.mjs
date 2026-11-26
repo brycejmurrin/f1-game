@@ -248,9 +248,13 @@ function loadLearnDoor() {
     UiExperience: { leavePracticePick() {} },
     Float32Array,
   };
+  const registry = new URL("../../js/learn-drills/registry.js", import.meta.url);
+  vm.runInNewContext(readFileSync(registry, "utf8") + "\nthis.DrillRegistry = DrillRegistry;", context,
+    { filename: fileURLToPath(registry) });
   vm.runInNewContext(readFileSync(path, "utf8") + "\nthis.LearnDoor = LearnDoor;", context,
     { filename: fileURLToPath(path) });
-  return context.LearnDoor;
+  context.LearnDoor.defineDrills();   // the lazy definer LearnDoor.open() runs
+  return context;
 }
 
 function makeG() {
@@ -268,15 +272,17 @@ function makeG() {
 }
 
 test("Aero Lab drill restore() puts flow and session back", () => {
-  const LearnDoor = loadLearnDoor();
+  const { DrillRegistry } = loadLearnDoor();
   const { G, engaged } = makeG();
-  let drill, dirtyAir = G.raceDirtyAir;
-  LearnDoor.launchAeroDrill(G, d => { drill = d; }, level => { dirtyAir = level; });
+  let dirtyAir = G.raceDirtyAir;
+  const drills = DrillRegistry.create(G, { setDirtyAir: level => { dirtyAir = level; } });
+  drills.launch("aero");
+  const drill = drills.active();
 
   assert.deepEqual(G.started, { flow: "gp", session: "race", trackIdx: 1 }, "the drill races a Monza GP");
   assert.ok(drill, "the drill is activated");
 
-  drill.restore();
+  drills.end("quit");
   assert.equal(G.flow, "career");
   assert.equal(G.session, "quali");
   assert.equal(engaged.at(-1), "career", "flow is restored through the setter (Career/SeasonCal re-engage)");

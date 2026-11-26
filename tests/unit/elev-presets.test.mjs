@@ -131,3 +131,23 @@ test("every planned bump respects the ~8 % grade cap (|rise| <= halfM / 19.6) fo
     }
   }
 });
+
+test("preset chord grade stays under the validator's red 15 % over 50 seeds on tight loops (R2 #6872)", async () => {
+  const { bootEditor, ellipse } = await import("../helpers/editor-vm.mjs");
+  const { ctx, V } = bootEditor();
+  vm.runInContext(readFileSync(join(root, "js/editor/elev-presets.js"), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/editor/elev-presets.js") });
+  const E = ctx.ElevPresets, red = V.LIMITS.gradeRed;
+  // Small loops overlap their 2-6 bumps; base summed to 15-17 % chords here.
+  for (const [n, a, b] of [[24, 300, 200], [48, 200, 150], [100, 250, 200]]) {
+    const pts = ellipse(n, a, b);
+    for (let seed = 1; seed <= 50; seed++) {
+      const h = E.apply("hilly", pts, { seed }).heights;
+      let worst = 0;
+      for (let i = 0; i < n; i++) {
+        const A = pts[i], B = pts[(i + 1) % n];
+        worst = Math.max(worst, Math.abs(h[(i + 1) % n] - h[i]) / Math.hypot(B[0] - A[0], B[1] - A[1]));
+      }
+      assert.ok(worst <= red, "n=" + n + " seed " + seed + ": " + (worst * 100).toFixed(1) + " %");
+    }
+  }
+});

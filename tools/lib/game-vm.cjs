@@ -832,6 +832,9 @@ async function createGame(opts) {
         ctx[name] = Object.freeze(Object.assign({}, mod, { create() { return (made[name] = orig.apply(this, arguments)); } }));
       }
       const r = runFile(ctx, f, record);
+      // opts.onEval(rel, ctx): after each boot-tier file evaluates, before the next — a test can rebind a
+      // module global before game.js captures its factory (tests/unit/scopes-vm.test.mjs spies the resets).
+      if (typeof opts.onEval === "function") opts.onEval(f, ctx);
       if (f === MANIFEST.PATHS.GAME) bootPromise = r;
     }
     // LAZY_TRACK_BUILD: title boots without the scenery toolkit; VM tests (and

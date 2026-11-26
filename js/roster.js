@@ -173,6 +173,7 @@
     "js/agent/apex-cam.js",
     "js/agent/apex-track.js",
     "js/agent/apex-lobby.js",
+    "js/agent/apex-play.js",
     "js/agent/apex-gpu-capture.js",
     "js/agent/apex-lifecycle.js",
     "js/perf/three-inspector.js",
@@ -202,6 +203,10 @@
       "js/agent/apex.js"
     ],
     [
+      "js/agent/apex-play.js",
+      "js/agent/apex.js"
+    ],
+    [
       "js/agent/apex-gpu-capture.js",
       "js/agent/apex.js"
     ],
@@ -218,6 +223,7 @@
     "js/perf/gfx-debug-overlay.js"
   ],
     LAZY_PERF: [
+    "js/perf/thermal-drift.js",
     "js/perf/soak-run.js",
     "js/perf/gpu-test-run.js",
     "js/perf/phone-recorder.js",
@@ -257,7 +263,10 @@
     ]
   ],
     LAZY_LEARN: [
-    "js/ui/learn-door.js"
+    "js/learn-drills/registry.js",
+    "js/ui/learn-door.js",
+    "js/ui/thumb-trainer.js",
+    "js/learn-drills/thumb-drill.js"
   ],
     LAZY_RACE: [
     "js/data/garage-entrance-motion.js",
@@ -273,10 +282,12 @@
     "js/data/garage-departure-motion.js",
     "js/garage/departure-wheels.js",
     "js/race/reliability.js",
+    "js/core/sim-state.js",
     "js/race/damage.js",
     "js/race/damage-handling.js",
     "js/race/duel.js",
     "js/race/session-records.js",
+    "js/race/medal-ledger.js",
     "js/race/pit-geom.js",
     "js/race/pit-lane.js",
     "js/race/engineer.js",
@@ -318,6 +329,10 @@
     [
       "js/race/spotter.js",
       "js/race/race-radio.js"
+    ],
+    [
+      "js/core/sim-state.js",
+      "js/race/damage.js"
     ]
   ],
     CIRCUITS_DIR: "js/circuits",
@@ -339,6 +354,7 @@
     "js/audio/voice-pack.js",
     "js/audio/battle-earcon.js",
     "js/audio/radio-voice.js",
+    "js/data/circuit-lore.js",
     "js/audio/announcer-recorded.js",
     "js/audio/announcer.js",
     "js/audio/panel.js",
@@ -593,6 +609,7 @@
     "js/net/lobby-settings.js",
     "js/net/interp.js",
     "js/net/snapshot.js",
+    "js/net/wire-schema.js",
     "js/net/session.js",
     "js/net/quali-wire.js",
     "js/net/strategy-wire.js",
@@ -621,6 +638,10 @@
     [
       "js/net/quali-wire.js",
       "js/net/netplay.js"
+    ],
+    [
+      "js/net/wire-schema.js",
+      "js/net/quali-wire.js"
     ],
     [
       "js/net/strategy-wire.js",

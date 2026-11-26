@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { absSrc } from '../helpers/abs-src.mjs';
 
 function fixture({ realInsights = false } = {}) {
   const nodes = new Map(['pm-coach-status', 'pm-coach-tip', 'pm-coach-summary', 'pm-drill-status', 'pm-lap-report', 'pm-practice-state', 'pm-driving-trace'].map(id => [id, { textContent: '' }]));
@@ -31,11 +32,11 @@ function fixture({ realInsights = false } = {}) {
     pits: { ownedTyres: () => [], choices: () => [], estimate: () => null }, heard: true,
     announce: (...args) => { announcements.push(args); return G.heard; } };
   const ins = { update() {}, reset() {}, summary: () => ({}), journal: () => [], forecast: () => null, network: () => null,
-    startDrill: () => true, attempts: () => [], mastery: () => null };
+    startDrill: () => true, attempts: () => [], mastery: () => null, brakingRef: () => '100 km/h' };
   const ctx = vm.createContext({
     RaceInsights: { create: () => ins, DRILLS: { free: 'Free practice', sector: 'Finish this sector cleanly',
       corner: 'Drive through the next corner', braking: 'Brake to a controlled stop', trail: 'Release the brake into a turn',
-      slalom: 'Six clean direction changes' } },
+      slalom: 'Six clean direction changes', start: 'Start', slipstream: 'Slipstream', defend: 'Defend' } },
     // A reference lap of 60 s that reaches each apex at an even 20 s: the
     // arithmetic below is then readable by eye.
     SettingRow: { paint() {}, disable() {}, wire() {} },
@@ -45,6 +46,9 @@ function fixture({ realInsights = false } = {}) {
   });
   if (realInsights) vm.runInContext(readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), ctx);
   // Shell order (#4748): the FULL façade, then the LAZY_RACE_SESSION body it creates.
+  // LAZY_RACE_SESSION loads the SimState registry (js/core/sim-state.js, #6860) before the body that captures through it.
+  vm.runInContext(readFileSync(new URL('../../js/race/car-fields.js', import.meta.url), 'utf8'), ctx, { filename: absSrc('js/race/car-fields.js') });   // FULL: SimState reads CarFields.SNAPSHOT
+  vm.runInContext(readFileSync(new URL('../../js/core/sim-state.js', import.meta.url), 'utf8'), ctx, { filename: absSrc('js/core/sim-state.js') });
   for (const f of ['driving-coach-boot.js', 'driving-coach.js'])
     vm.runInContext(readFileSync(new URL('../../js/race/' + f, import.meta.url), 'utf8'), ctx);
   const coach = vm.runInContext('DrivingCoach', ctx).create(G);
@@ -670,4 +674,35 @@ test('practice pathway and energy review use fixed settings blueprints without c
   assert.equal(card.querySelector('p').textContent,
     'Lap 2: 7.0 percentage points used. Sector 1: 10.0 percentage points used · Sector 2: 5.0 percentage points recovered · Sector 3: 2.0 percentage points used. Measured net battery change, including recovery; this does not identify why energy changed.');
   h.coach.paint(); assert.equal(review.querySelectorAll('#pm-last-lap-energy').length, 1);
+});
+
+test('retry and rewind stay silent when startDrill refuses (it already announced why)', () => {
+  const { coach, G, c, ins, announcements, enable, tick } = fixture();
+  Object.assign(c, { isPlayer: true, finished: false, retired: false, lap: 2, s: 800, prog: 1800 });
+  G.cars = [c]; G.raceT = 100;
+  assert.equal(coach.mark(), true);
+  announcements.length = 0;
+  ins.startDrill = () => false;
+  assert.equal(coach.retry(), true);
+  assert.equal(announcements.some(a => /TRY AGAIN/.test(a[0])), false, 'no TRY AGAIN after a refused drill');
+  ins.startDrill = () => true;
+  assert.equal(coach.retry(), true);
+  assert.equal(announcements.some(a => /TRY AGAIN/.test(a[0])), true, 'control: an accepted drill still announces');
+  enable(); tick(2);
+  for (const [accept, expected] of [[false, false], [true, true]]) {
+    announcements.length = 0; ins.startDrill = () => accept;
+    assert.equal(coach.rewind(), true);
+    assert.equal(announcements.some(a => /REWIND/.test(a[0])), expected, 'rewind announces only after an accepted drill');
+    tick(2);
+  }
+});
+
+test('saved bests print positive in each drill\'s own unit (start, slipstream and defend are stored negated)', () => {
+  const { coach, ins, nodes } = fixture();
+  const shown = [['start', -2], ['slipstream', -12], ['defend', -12.04]].map(([mode, best]) => {
+    ins.mastery = () => ({ best, completed: 1 });
+    assert.equal(coach.setPracticeGoal(mode), true);
+    return nodes.get('pm-drill-status').textContent.match(/Saved best: (.*) over/)[1];
+  });
+  assert.deepEqual(shown, ['+2 places', '12 m closed', '12.0s held']);
 });

@@ -146,7 +146,16 @@ const PhonePadPage = (function () {
     let session = null, glanceTimer = null;
     // This page's peer id, sent in every hello: the game lets a re-dial from the
     // phone it ALLOWed straight back in, and asks again for any other.
-    const peerId = opts.peerId || PhonePadCodec.makePeerId();
+    // Kept in sessionStorage so a reload or a discarded tab is still the same
+    // phone to the host (samePeer), not a stranger that raises ALLOW mid-session.
+    const peerId = opts.peerId || (() => {
+      let id = null;
+      try { id = sessionStorage.getItem("apex26.padPeerId"); } catch (e) { /* storage blocked */ }
+      if (id) return id;
+      id = PhonePadCodec.makePeerId();
+      try { sessionStorage.setItem("apex26.padPeerId", id); } catch (e) { /* storage blocked */ }
+      return id;
+    })();
     let sensorOn = false;
     let lastHud = null;
     const src = { roll: () => roll, thr: () => thr, brk: () => brk, held: () => held | (glanceTimer !== null ? HELD.lookBack : 0),

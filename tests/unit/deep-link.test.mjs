@@ -105,6 +105,16 @@ test("NEXT GP opens the hub on the schedule tab through the door, with no tab po
   assert.deepEqual(plain.clicks, ["mb-race"], "other doors carry no tab");
 });
 
+// LEARN's thumb trainer (#thumb-trainer): the Learn door carries the lesson, and the param stays so an iPhone's
+// Add to Home Screen, which saves the page URL, makes an icon that reopens the drill.
+test("THUMBS presses the Learn door carrying the trainer lesson and keeps its param", () => {
+  const r = boot({ search: "?go=thumbs" });
+  r.timers.shift()();
+  assert.deepEqual(r.clicks, ["mb-learn"]);
+  assert.equal(r.G.$("mb-learn").dataset.openLesson, "thumbs");
+  assert.deepEqual(r.replaced, [], "the Home Screen URL keeps ?go=thumbs");
+});
+
 test("every manifest shortcut is in scope, has an icon on disk, and ?go= urls are exactly the consumer's allow-list", () => {
   const goUrls = [];
   assert.ok(MANIFEST.shortcuts.length >= 4);

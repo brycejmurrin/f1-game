@@ -178,7 +178,8 @@ test("Bryce's real phone export loads on a phone with nothing skipped, failed or
   assert.equal(back.display.hudBtnScale, 143.25);
   // The imported values round-trip. CHANGED is relative to the current factory profile.
   const nowDefault = ["appearance.homeScene", "appearance.uiContrast", "audio.sound"];
-  const newlyDifferent = ["appearance.textSize", "audio.music", "audio.volMusic", "audio.volSfx",
+  const newlyDifferent = ["a11y.cbCues",   // #6907: his saved OFF is an explicit choice; the default is AUTO now
+    "appearance.textSize", "audio.music", "audio.volMusic", "audio.volSfx",
     "camera.cockpitSeat", "camera.helmetVisorColor", "camera.helmetVisorIntensity",
     "steering.adaptiveButtons",    // pace: notch 11 is the default again (#6025 holds the notch-17 move)
     "driving.raceGrid"];           // #6564: the default grid is QUALIFYING now; his saved RANDOM loads unchanged (checked above)

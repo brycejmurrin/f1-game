@@ -82,3 +82,18 @@ test("#3409 role-colour compounds keep official white/yellow/red/green/blue word
   assert.doesNotMatch(sprint.desc, /blue band/i);
   assert.ok(/Full Wet/i.test(sprint.desc), sprint.desc);
 });
+
+// #6516: tyre options use fictional maker names; stored part ids stay stable.
+const TYRE_REAL = /pirelli|cinturato|p zero|bridgestone|michelin|goodyear|dunlop/i;
+test("old saves: legacy tyre part ids still resolve", () => {
+  const ids = cat("tyres").options.map((o) => o.id);
+  for (const id of ["intermediate", "hard", "medium", "slick_track", "compound_c3", "compound_c4",
+    "soft", "compound_c5", "supersoft", "p_zero_red", "qualigum", "hypersoft", "sprint_soft", "wet_full"]) {
+    assert.ok(ids.includes(id), `tyre id ${id} must still exist`);
+  }
+});
+
+test("no player-facing tyre label or description names a real brand", () => {
+  const bad = cat("tyres").options.filter((o) => TYRE_REAL.test(o.label) || TYRE_REAL.test(o.desc || "")).map((o) => o.id);
+  assert.equal(bad.length, 0, bad.join(","));
+});

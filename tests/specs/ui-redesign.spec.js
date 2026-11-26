@@ -1106,7 +1106,8 @@ test("shared sheets reflow long labels and retain keyboard exits at narrow width
         const foot = sheet.querySelector(".sheet-foot").getBoundingClientRect();
         const b = body.getBoundingClientRect(), s = sheet.getBoundingClientRect();
         return s.left >= 0 && s.right <= innerWidth + 1 && s.top >= 0 && s.bottom <= innerHeight + 1
-          && b.height >= 44 && b.top >= head.bottom - 1 && b.bottom <= foot.top + 1
+          // A lone exit parks in the head on a short landscape sheet (#6753): the foot then sits above the body.
+          && b.height >= 44 && b.top >= head.bottom - 1 && (b.bottom <= foot.top + 1 || b.top >= foot.bottom - 1)
           && sheet.scrollWidth <= sheet.clientWidth + 1;
       })).toBe(true);
       const body = page.locator("#howtoplay-inner .sheet-body");
@@ -1371,12 +1372,12 @@ test("Telemetry Detective keeps the comparison cursor when returning from Data H
   await expect(lesson).toBeFocused();
 });
 
-test("Learn curriculum groups fourteen lessons and lets a player solve the chassis inspection", async ({ page }) => {
+test("Learn curriculum groups sixteen lessons and lets a player solve the chassis inspection", async ({ page }) => {
   await waitReady(page);
   await page.locator("#mb-learn").click();
   const index = page.getByRole("navigation", { name: "Lessons" });
   await expect(index.getByRole("heading")).toHaveCount(4);
-  await expect(index.getByRole("button")).toHaveCount(14);
+  await expect(index.getByRole("button")).toHaveCount(16);   // 16: LEARN's Vegas Thumb Drill (#6927)
   const lesson = page.locator("#learn-open-chassis");
   await lesson.click();
   const lab = page.frameLocator("#learn-lab");
