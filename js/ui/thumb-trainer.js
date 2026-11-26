@@ -185,7 +185,7 @@ const ThumbTrainer = (function () {
     for (const c of CORNERS) pick.appendChild(el("option", { value: c.name }, `S${c.sec} ${c.name} ${c.dir < 0 ? "◀" : "▶"} ${SHAPES[c.shape].label}`));
     bar.append(button("tt-back", "BACK"), button("tt-prev", "◀", "Previous corner"), pick, button("tt-next", "▶", "Next corner"),
       button("tt-speed", "½×"), button("tt-go", "START"), button("tt-view", "PEDALS", "Pedal explorer"),
-      button("tt-track", "ON TRACK", "Try it on track: drive Las Vegas with these cues"));
+      button("tt-track", "🏁", "Try it on track: drive Las Vegas with these cues"));
     const cue = el("p", { id: "tt-cue", "aria-live": "polite" });
     const drill = el("div", { id: "tt-drill" });
     drill.append(el("canvas", { id: "tt-sketch", "aria-label": "Top-down sketch of the corner: brake point, turn-in, apex, gas on and arrow off" }),

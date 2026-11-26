@@ -232,7 +232,7 @@ const ThumbDrill = (function () {
         // RETRY LAP returns to the start of the lap just driven: move the checkpoint to this line once.
         if (!armedLap && G.coach.mark()) armedLap = true;
       }
-      root.hidden = false;
+      root.hidden = !card.hidden;   // the lap card takes the cue card's place while it is up
       if (flash && x.t <= flash.until) {
         const s = flash.s;
         cue.textContent = `${s.name} ${pct(s.all)} · arrow ${pct(s.arrow)} · brake ${pct(s.brake)} · gas ${pct(s.gas)}`;

@@ -26,12 +26,13 @@ test("Vegas Thumb Drill: start from LEARN, cue, lap summary, RETRY LAP, and the 
   await expect(cue.locator("strong")).toHaveText(/\S/);
   await page.waitForFunction(() => ThumbDrill.state() && ThumbDrill.state().marked, null, { polling: 100, timeout: 20000 });
 
-  // Through T17 and over the line: hold GAS and the LEFT arrow, the corner's own script (flat, ◀).
-  await page.evaluate(() => window.__apex.jump(0.975, 45, 0));
+  // Through T17 and over the line: hold GAS and the LEFT arrow, the corner's own script (flat, ◀). Render off: on a
+  // software-GL box the rendered race runs near a tenth of real time (measured 2026-11-26, ~4 m of arc a second).
+  await page.evaluate(() => { window.__apex.headless(true); window.__apex.jump(0.978, 45, 0); });
   await page.keyboard.down("ArrowUp");
   await page.keyboard.down("ArrowLeft");
   const card = page.locator("#thumb-drill-lap");
-  await expect(card).toBeVisible({ timeout: 30000 });
+  await expect(card).toBeVisible({ timeout: 60000 });
   await page.keyboard.up("ArrowLeft");
   await page.keyboard.up("ArrowUp");
   await expect(card.locator("strong")).toHaveText(/^LAP THUMBS \d+% · \d+\/17 corners · best \d+%/);
