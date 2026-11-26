@@ -437,7 +437,8 @@
 
 .cr-form { display: flex; flex-direction: column; gap: 8px; }
 .cr-field { display: flex; align-items: center; gap: var(--gap); }
-.cr-field-lbl { font-size: var(--label); letter-spacing: var(--ls-4); color: var(--dim); width: 78px; flex: 0 0 auto; }
+/* 5.6em, not 78px (#6751): --label now grows with the 12 px floor and TEXT SIZE; a fixed 78 px clipped NUMBER at 18 px. */
+.cr-field-lbl { font-size: var(--label); letter-spacing: var(--ls-4); color: var(--dim); width: 5.6em; flex: 0 0 auto; }
 .cr-input {
   flex: 1 1 auto; min-width: 0; min-height: var(--chip-h);
   background: var(--surf-1); border: 1px solid var(--card-line); border-radius: var(--r-sm);

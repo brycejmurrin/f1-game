@@ -377,7 +377,7 @@
      --ui-scale so a 150% sheet does not paint a 48px track. Buttons still
      use --tap-min; only <input type=range> reads this. */
   --slider: calc(32px / var(--ui-scale));
-  --label: 14px;    /* section label type size — clears 12px visual at 90% zoom */
+  --label: 14px;    /* section label type size; the floored :root below (#6751) re-points it at --fs-micro */
   /* THE TYPE FLOOR. No menu text may be smaller than this.
      A sweep across nine viewports found twenty-four hard-coded sizes below it —
      8px NIGHT/STREET badges on the circuit list, 9px UNIVERSAL and ▲ACCEL tags
