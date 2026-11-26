@@ -1437,6 +1437,7 @@
     "// tools/transcripts/cli.mjs: stream search/export/digest over Grok JSONL dumps.",
     "tests/unit/transcripts-cli.test.mjs",
     "tests/unit/tree-counts-catch.test.mjs",
+    "tests/unit/tree-counts-slice.test.mjs",
     "tests/unit/trim-comments.test.mjs",
     "// TLX desktop tiers (tsl-gi.js): tier plan vs GfxQuality, GTAO/DoF/motion-blur maths, every extra built on three r187 over fake WebGL2.",
     "tests/unit/tsl-gi.test.mjs",
