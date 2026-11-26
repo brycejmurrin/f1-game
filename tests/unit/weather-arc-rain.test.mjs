@@ -454,7 +454,7 @@ test("drying line: on a drying road the groove is drier than off-line; soaked an
   assert.ok(Math.abs(off - w) < 0.01, "far off-line reads the unmodified wetness");
   G.player = { s, x: best };
   assert.equal(wa.viewWetness(), on, "the view and grip read the same field at (s, x)");
-  wa.syncWetness(0);
+  wa.syncWetness(0, true);   // the explicit snap: syncWetness(0) holds (#6892 R6)
   assert.equal(G.frame.wetness, on, "frame.wetness agrees with wetnessAt at the player's (s, x)");
   const stat = raced("wet"); stat.G.track = { total: 5800 };
   assert.equal(stat.wa.wetnessAt(s, best), stat.wa.wetness(), "no arc (static weather): no line");

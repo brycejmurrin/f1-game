@@ -220,6 +220,7 @@ const WeatherArc = (function () {
       return plannedArc(o.from != null ? o.from : planInputs().from, previewPlan(o), o.len != null ? o.len : G.track && G.track.total);
     }
     function startChangeable(origin) {
+      syncWetness(0, 1);   // snap, at every race start (changeable or not): the grid shows the road grip already has
       if (!changeable || isTimeTrial() || isQuali()) return null;
       const p = plan || planFor();
       base = G.raceWeather;
@@ -536,7 +537,10 @@ const WeatherArc = (function () {
       if (w0s) arc.w0s = w0s;
       if (r0s) arc.r0s = r0s;
       arc.wetIn = wetInOf(arc);
-      if (!live && G.raceWeather !== from) setWeatherLive(from);
+      // A bare arc (the agent's weatherArc, real-race's rain call) has no chip
+      // pick recorded: keep the weather it replaced, so endSession() puts it
+      // back instead of leaving the next race at a mid-arc stage (#6881 R11).
+      if (!live) { base ??= G.raceWeather; if (G.raceWeather !== from) setWeatherLive(from); }
       return arc;
     }
     function tick(dt) {
@@ -545,7 +549,7 @@ const WeatherArc = (function () {
       // runs (headless look=drive), else the lag integrated twice per frame and
       // ramped at ~2x the 0.8/s that frame.rain uses.
       if (dt > 0) ownT += dt;
-      if (G.headlessMode) syncWetness(dt);
+      if (G.headlessMode) syncWetness(dt, !dt);   // headless step(0) is the agent's explicit settle
       if (!arc) return;
       if (typeof arc.w0 !== "number") adopt(arc);
       // Progress is READ off the shared clock, never summed. A written arc.t
@@ -568,8 +572,6 @@ const WeatherArc = (function () {
       if (wet !== arc.wet) {
         if (wet) reseedRain(vw);
         Particles.rainShow(wet);
-      }
-      if (wet !== arc.wet) {
         if (G.soundOn) { if (wet) GameAudio.startRain(); else GameAudio.stopRain(); }
       }
       arc.wet = wet; arc.raining = raining;
@@ -589,20 +591,22 @@ const WeatherArc = (function () {
     // Continuous track wetness → frame.wetness for every renderer. LightKnobs.LT
     // wetness ≥ 0 is the LIVE tuner / localStorage diagnostic pin only — shipped
     // LightPresets must leave the knob at AUTO (−0.05) so dry cannot look wet.
-    function syncWetness(dt) {
+    function syncWetness(dt, snap) {
       const frame = G.frame;
       if (!frame) return;
       const knobs = (typeof LightKnobs !== "undefined" && LightKnobs) ? LightKnobs.LT : null;
-      const pin = knobs && typeof knobs.wetness === "number" ? knobs.wetness : -0.05;
-      if (pin >= 0) {
-        frame.wetness = pin;
+      if (knobs && typeof knobs.wetness === "number" && knobs.wetness >= 0) {
+        frame.wetness = knobs.wetness;
         return;
       }
       // The VIEW's road: the lap mean (trackWetness) unless a local shower makes it position-dependent.
       const wetTarget = (local(arc) || (G.player && Number.isFinite(G.player.x))) && hasRC() ? viewWetness() : (G.trackWetness ? G.trackWetness() : 0);
       const cur = frame.wetness || 0;
-      const step = (dt == null || !(dt > 0)) ? 1 : Math.min(1, dt * 0.8);
-      frame.wetness = cur + (wetTarget - cur) * step;
+      // dt 0 (the photo studio's render(0) pump) HOLDS: a paused frame must not
+      // jump the puddles (#6881 R6). Only `snap` (the race start, an agent's
+      // headless step(0)) jumps, so a rain race's first frame is wet instead of
+      // fading in over ~3-4 s under full-wet grip (#6881 R2).
+      frame.wetness = cur + (wetTarget - cur) * (snap ? 1 : dt > 0 ? Math.min(1, dt * 0.8) : 0);
     }
 
     return {
