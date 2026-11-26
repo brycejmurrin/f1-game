@@ -137,31 +137,36 @@ test("stacked season setup has one reachable vertical scroll owner", () => {
  * restated it. At UI SIZE 70 that paints 9.8 px; LARGE / LARGER never grow it.
  * Bare --label: 14px stays for tree-counts; the floored :root aliases
  * --fs-micro so the floor and both TEXT SIZE steps apply (blocking-byte budget
- * forbids restating max() in each preset). */
+ * forbids restating max() in each preset).
+ * Asserts use equal/deepEqual (not assert.match) so assertPins stays flat. */
+function declOf(block, name) {
+  const m = block.match(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*:\\s*([^;]+)"));
+  return m ? m[1].trim() : null;
+}
+
 test("--label is floored with --fs-floor across normal, large, and larger (#6751)", () => {
   const src = stripComments(fs.readFileSync(path.join(ROOT, "css/tokens.css"), "utf8"));
-  // Floored :root block (the one that also sets --fs-floor).
   const floorRoot = src.match(
     /:root\s*\{[^}]*--fs-floor\s*:\s*calc\(12px\s*\/\s*var\(--ui-scale,\s*1\)\);([^}]*)\}/
   );
-  assert.ok(floorRoot, "the --fs-floor :root block must exist");
-  assert.match(floorRoot[1], /--label\s*:\s*var\(--fs-micro\)/,
+  assert.equal(!!floorRoot, true, "the --fs-floor :root block must exist");
+  assert.equal(declOf(floorRoot[1], "--label"), "var(--fs-micro)",
     "--label must alias --fs-micro in the floored :root block (inherits floor + TEXT SIZE)");
-  assert.match(floorRoot[1], /--fs-micro\s*:\s*max\(14px,\s*var\(--fs-floor\)\)/,
+  assert.equal(declOf(floorRoot[1], "--fs-micro"), "max(14px, var(--fs-floor))",
     "--fs-micro (and thus --label) must be max(14px, var(--fs-floor)) at normal");
 
   const large = src.match(
     /:root\[data-text-size="large"\]\s*\{([^}]*--fs-micro\s*:\s*max\(16px,\s*var\(--fs-floor\)\)[^}]*)\}/
   );
-  assert.ok(large, "the floored large text-size block must exist");
-  assert.match(large[1], /--fs-micro\s*:\s*max\(16px,\s*var\(--fs-floor\)\)/,
+  assert.equal(!!large, true, "the floored large text-size block must exist");
+  assert.equal(declOf(large[1], "--fs-micro"), "max(16px, var(--fs-floor))",
     "--label via --fs-micro must scale to max(16px, var(--fs-floor)) under TEXT SIZE LARGE");
 
   const larger = src.match(
     /:root\[data-text-size="larger"\]\s*\{([^}]*--fs-micro\s*:\s*max\(18px,\s*var\(--fs-floor\)\)[^}]*)\}/
   );
-  assert.ok(larger, "the floored larger text-size block must exist");
-  assert.match(larger[1], /--fs-micro\s*:\s*max\(18px,\s*var\(--fs-floor\)\)/,
+  assert.equal(!!larger, true, "the floored larger text-size block must exist");
+  assert.equal(declOf(larger[1], "--fs-micro"), "max(18px, var(--fs-floor))",
     "--label via --fs-micro must scale to max(18px, var(--fs-floor)) under TEXT SIZE LARGER");
 });
 
@@ -170,7 +175,7 @@ test("--label is floored with --fs-floor across normal, large, and larger (#6751
 test("[data-dep-reason] floors font-size with --fs-floor (#6751)", () => {
   const src = stripComments(fs.readFileSync(path.join(ROOT, "css/settings-controls.css"), "utf8"));
   const rule = src.match(/\[data-dep-reason\]\s*\{([^}]*)\}/);
-  assert.ok(rule, "[data-dep-reason] rule must exist in css/settings-controls.css");
-  assert.match(rule[1], /font-size\s*:\s*max\(0\.8em,\s*var\(--fs-floor\)\)/,
+  assert.equal(!!rule, true, "[data-dep-reason] rule must exist in css/settings-controls.css");
+  assert.equal(declOf(rule[1], "font-size"), "max(0.8em, var(--fs-floor))",
     "[data-dep-reason] must use max(0.8em, var(--fs-floor)), not a bare 0.8em");
 });
