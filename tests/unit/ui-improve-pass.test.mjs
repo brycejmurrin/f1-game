@@ -2772,3 +2772,11 @@ test("a contents <nav> is not a region: lone-button-in-head gate ignores it; #vs
   assert.ok(!/:not\(:has\(> :nth-child\(4\)\)\)/.test(comp), "no ungated fourth-child check left");
   for (const f of ["css/overlays.css", "css/dialogs.css"]) assert.ok(!/#vs-close\s*\{/.test(readCssSource(f)), `${f}: no #vs-close rule`);
 });
+
+test("contents-strip sheets park a lone BACK/CLOSE in the head on a short landscape window (#6753 row 1)", () => {
+  const raw = readCssSource("css/overlays.css");
+  for (const [sheet, foot] of [['#career-guide .sheet', 'cg'], ['#career-history .sheet', 'ch'], ['#howtoplay-inner', 'htp']]) {
+    const head = `${sheet}[data-density="compact"]:has(> .sheet-foot > :is(button, a):only-child) > .sheet-foot`;
+    assert.ok(raw.includes(head), `${foot}: foot rule`);
+  }
+});
