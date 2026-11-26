@@ -190,18 +190,22 @@ const SettingsSearch = (function () {
     return x;
   }
   function create(o) {
+    const mk = (t) => document.createElement(t);
     const host = o.host;
     if (!host || host.querySelector("[data-settings-search]")) return null;
-    const box = document.createElement("section"); box.setAttribute("data-settings-search", ""); box.className = "settings-find";
-    const label = document.createElement("label"); label.textContent = "FIND A SETTING";
-    const input = document.createElement("input"); input.type = "search"; input.placeholder = "Try gears, braking beep, HUD size…";
+    const box = mk("section"); box.setAttribute("data-settings-search", ""); box.className = "settings-find";
+    const label = mk("label"); label.textContent = "FIND A SETTING";
+    const input = mk("input"); input.type = "search"; input.placeholder = "Try gears, braking beep, HUD size…";
     input.setAttribute("aria-label", "Find a setting"); input.autocomplete = "off";
     label.appendChild(input);
-    const list = document.createElement("ul"); list.className = "settings-find-results"; list.setAttribute("aria-label", "Matching settings");
-    const note = document.createElement("p"); note.className = "adv-help"; note.setAttribute("role", "status");
+    const list = mk("ul"); list.className = "settings-find-results"; list.setAttribute("aria-label", "Matching settings");
+    const note = mk("p"); note.className = "adv-help"; note.setAttribute("role", "status");
     box.append(label, note, list); host.insertBefore(box, host.firstChild);
-    let last = null, fromSearch = false, destinationNote = null;
-    const clearFeedback = () => { if (destinationNote) destinationNote.remove(); destinationNote = null; };
+    // held: the query whose result feedback the note shows; a re-paint (a lazy
+    // owner registering after the click) keeps it until the query changes.
+    let last = null, fromSearch = false, destinationNote = null, held = null;
+    const say = t => { held = input.value; note.textContent = t; };
+    const clearFeedback = () => { held = null; if (destinationNote) destinationNote.remove(); destinationNote = null; };
     if (o.onLeave) o.onLeave(clearFeedback);
     function unavailable(row) {
       clearFeedback();
@@ -210,18 +214,19 @@ const SettingsSearch = (function () {
         ? SettingsNav.panel(row.page)
         : document.querySelector("#" + (row.page === "advanced" ? "advanced" : row.page === "audio" ? "audioset" : "pm-panel-" + row.page));
       if (panel) {
-        destinationNote = document.createElement("p"); destinationNote.className = "adv-help";
+        destinationNote = mk("p"); destinationNote.className = "adv-help";
         destinationNote.setAttribute("role", "status"); destinationNote.textContent = message;
         panel.insertBefore(destinationNote, panel.firstChild);
       }
-      if (!panel) note.textContent = row.unavailableReason || message;
-      if (typeof LiveRegion !== "undefined") LiveRegion.say(row.unavailableReason || message, "hud");
+      const why = row.unavailableReason || message;
+      if (!panel) say(why);
+      if (typeof LiveRegion !== "undefined") LiveRegion.say(why, "hud");
     }
     const slots = new Map();
     function slotFor(row) {
       let slot = slots.get(row.id);
       if (slot) return slot;
-      const li = document.createElement("li"), button = document.createElement("button");
+      const li = mk("li"), button = mk("button");
       button.type = "button"; button.className = "sel-chip";
       button.dataset.settingResult = row.id;
       li.appendChild(button);
@@ -238,7 +243,7 @@ const SettingsSearch = (function () {
       slot.button.onclick = () => {
         clearFeedback();
         if (route?.scope === "session" && !window.UiLayers?.inRace()) {
-          note.textContent = "Pause during a session to open " + row.label + ".";
+          say("Pause during a session to open " + row.label + ".");
           return;
         }
         // Own navigation only once the lazy race is won.
@@ -248,7 +253,7 @@ const SettingsSearch = (function () {
           const el = document.querySelector("#" + row.target);
           if (el && el.getAttribute("role") === "tab" && el.getAttribute("aria-selected") === "false") el.click();
           const placed = reveal(el), why = !placed && depBlock(el);
-          if (why) { clearFeedback(); note.textContent = row.label + " is off: " + why; return true; }
+          if (why) { clearFeedback(); say(row.label + " is off: " + why); return true; }
           if (!placed) unavailable(row);
           return placed;
         };
@@ -259,7 +264,7 @@ const SettingsSearch = (function () {
     function paint() {
       const matches = find(input.value);
       const caption = input.value.trim() ? matches.length + " matching settings" : "Search names or everyday terms. Your settings stay as they are.";
-      if (note.textContent !== caption) note.textContent = caption;
+      if (held !== input.value) { held = null; if (note.textContent !== caption) note.textContent = caption; }
       // Reuse row nodes (no per-keystroke realloc).
       const keep = [];
       for (const row of matches) {
