@@ -3683,3 +3683,55 @@ test("#6459 row 9: a re-dial that times out backs off at 5 s then 15 s then 30 s
   assert.equal(h.timeouts.slice(before).some((t) => t.ms === 5000 || t.ms === 15000 || t.ms === 30000), false, "tries exhausted: no further retry");
   assert.equal(h.ctl.state().linked, false);
 });
+
+// ---------------------------------------------------------------------------
+// #6449 rows 2 and 3 (hunt 2026-11-25).
+// ---------------------------------------------------------------------------
+
+test("#6449 row 2: pad() keeps its peer id in sessionStorage, so a reloaded page is the same phone; blocked storage still works", async () => {
+  const hello = async () => {
+    const made = [];
+    const fake = () => {
+      const t = { status: "connecting", sent: [], handlers: {},
+        onMessage(f) { t.handlers.message = f; }, onClose(f) { t.handlers.close = f; }, onOpen(f) { t.handlers.open = f; },
+        close() { t.status = "closed"; }, send(ch, d) { t.sent.push(d); return true; }, pump() { return 0; },
+        stats: () => ({ connection: "new" }) };
+      made.push(t); return t;
+    };
+    const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), buttons: {}, hud: lcd() };
+    const ctl = PhonePad.pad(dom, { deps: {
+      rtc: fake, prefetchIce: async () => null, normalise: (c) => String(c).toUpperCase(), valid: (c) => c.length === 6,
+      swap: async () => ({ ok: true }), acceptInvite: async () => ({ ok: true, code: "ANS" }),
+    } });
+    try {
+      await ctl.connect("abc234");
+      made[0].status = "open"; made[0].handlers.open();
+      return JSON.parse(made[0].sent[0]).id;
+    } finally { ctl.cancel(); }
+  };
+  const had = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  try {
+    const store = new Map();
+    Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value: {
+      getItem: (k) => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)) } });
+    const first = await hello();
+    assert.match(first, /^[0-9a-f]{32}$/);
+    assert.equal(store.get("apex26.padPeerId"), first, "stored under apex26.padPeerId");
+    assert.equal(await hello(), first, "a reloaded page says the same id");
+    Object.defineProperty(globalThis, "sessionStorage", { configurable: true, get() { throw new Error("blocked"); } });
+    assert.match(await hello(), /^[0-9a-f]{32}$/, "blocked storage falls back to a fresh id");
+  } finally {
+    if (had) Object.defineProperty(globalThis, "sessionStorage", had); else delete globalThis.sessionStorage;
+  }
+});
+
+test("#6449 row 3: host() stays silent on a stale answer (wrong_offer / already_answered) and keeps waiting", async () => {
+  for (const error of ["wrong_offer", "already_answered"]) {
+    const h = hostHarness({ acceptAnswer: async () => ({ ok: false, error, message: "That invite is older than the current one." }) });
+    await settle();
+    await h.room.onJoiner(null, "STALE"); await settle();
+    assert.equal(h.ctl.state().phase, "waiting", error + ": still waiting for the real answer");
+    assert.ok(!h.ui.said.some((t) => t.startsWith("!")), error + ": no red error");
+    h.ctl.cancel();
+  }
+});

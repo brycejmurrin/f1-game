@@ -2246,14 +2246,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   // Soft-tap polish (UI Fit): compact CLOSE painted 62×26 and HOST/JOIN 285×44
   // on ios-iphone-landscape (layout-audit 2026-10-05). --tap-paint holds 52
   // painted on touch; --tap-min was the 26px soft floor.
-  assert.equal(
-    decl(css("css/overlays.css"),
-      '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) #vs-close',
-      "min-height"),
-    "var(--tap-paint)",
-    "compact VS Friend CLOSE floors at --tap-paint");
-  assert.equal(decl(css("css/overlays.css"), '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) #vs-close', "height"), "var(--tap-paint)",
-    "compact CLOSE height locked to --tap-paint (closeInHead settle)");
+  // #vs-close has no bespoke rules: the generic lone-button-in-head rule sizes it (#6753).
   assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] #vs-pick > .bigbtn', "min-height"), "var(--tap-paint)",
     "compact HOST / JOIN floor at --tap-paint");
   // Title band must clear the absolute CLOSE (ui-redesign closeInHead).
@@ -2771,4 +2764,15 @@ test("touch --chip-h and every BUTTON-look arm paint 44.2 px at UI SIZE 50 and 7
     assert.deepEqual(painted(0.8), Object.keys(looks).map(() => [44.2, 44.2]), `BUTTON 80 % holds the floor at UI SIZE ${s * 100}`);
     assert.deepEqual(painted(1.5), Object.keys(looks).map(() => [r2(tap0 * 1.5), r2(chip0 * 1.5)]), `a bigger look still scales at UI SIZE ${s * 100}`);
   }
+});
+
+test("contents-strip sheets and the nav gate: lone BACK/CLOSE rides in the head (#6753 row 1)", () => {
+  const comp = readCssSource("css/components.css");
+  const raw = readCssSource("css/overlays.css");
+  const got = {
+    navGate: comp.includes(":not(:has(> :nth-child(4 of :not(nav))))"),
+    vsCloseRules: ["css/overlays.css", "css/dialogs.css"].filter((f) => /#vs-close\s*\{/.test(readCssSource(f))),
+    stripFeet: raw.includes('#howtoplay-inner)[data-density="compact"]:not([data-shape="tall"]):has(> .sheet-foot > :is(button, a):only-child) {') ? 3 : 0,
+  };
+  assert.deepEqual(got, { navGate: true, vsCloseRules: [], stripFeet: 3 });
 });

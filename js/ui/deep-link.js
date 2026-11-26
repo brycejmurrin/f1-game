@@ -2,7 +2,7 @@
    player could have tapped; this clicks it once the title is live, then drops the param so a reload does not replay it. */
 const DeepLink = (function () {
 "use strict";
-const DOORS = Object.freeze({ race: "mb-race", daily: "mb-daily", nextgp: "mb-data", garage: "mb-garage" });
+const DOORS = Object.freeze({ race: "mb-race", daily: "mb-daily", nextgp: "mb-data", garage: "mb-garage", thumbs: "mb-learn" });
 const RETRY_MS = 250, MAX_TRIES = 40;   // boot / loading plate / first-run layers can sit over the title for a few seconds
 function parse(search) {
   let go = null;
@@ -76,7 +76,8 @@ function create(G) {
   const { $, els } = G;
   const go = parse(location.search);
   if (!go) { guardBack($); return { go: null }; }
-  try {
+  // THUMBS keeps its param: the page URL is what an iPhone's Add to Home Screen saves, so the icon reopens the drill.
+  if (go !== "thumbs") try {
     const q = new URLSearchParams(location.search); q.delete("go");
     const rest = q.toString();
     history.replaceState(history.state, "", location.pathname + (rest ? "?" + rest : "") + location.hash);
@@ -94,10 +95,11 @@ function create(G) {
       else Log.info("game", "deep link dropped: title never became live (" + go + ")");
       return;
     }
-    const btn = go === "race" ? $("mb-race") : go === "daily" ? $("mb-daily") : go === "nextgp" ? $("mb-data") : $("mb-garage");   // literal ids: the dynamic-id ratchet is shrink-only
+    const btn = go === "race" ? $("mb-race") : go === "daily" ? $("mb-daily") : go === "nextgp" ? $("mb-data") : go === "thumbs" ? $("mb-learn") : $("mb-garage");   // literal ids: the dynamic-id ratchet is shrink-only
     if (!btn || btn.hidden || btn.disabled) { Log.info("game", "deep link dropped: door unavailable (" + go + ")"); return; }
     // NEXT GP means the schedule: the door opens the hub ON it (a 10 s tab poll missed slow loads).
     if (go === "nextgp") btn.dataset.openTab = "schedule";
+    if (go === "thumbs") btn.dataset.openLesson = "thumbs";   // LearnDoor.open presses the lesson door
     btn.click();
   }
   // TitleFlow installs this consumer before TitleMenu/game.js bind DAILY,

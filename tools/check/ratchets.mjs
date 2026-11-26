@@ -134,7 +134,8 @@ export const TREE_METRICS = {
  * change touched (only those blobs are read at the base, so a blob:none clone
  * fetches a handful, not a thousand). An inherited overage warns and stays green.
  * assertPins and assertPinsAll carry `absorb: 5` (D-037, eagerCodeBytes' mechanism): the commit hook writes a
- * branch's own growth of up to 5 since its merge base (pinDelta) as its fragment; past 5 it is `ratchet-raise`. */
+ * branch's own growth of up to 5 since its merge base (pinDelta) as its fragment; past 5 it is `ratchet-raise`.
+ * Every added pin is booked, headroom or not (BOOK-OWN, #6819, at pinVerdict). */
 const RAW_GAME = /game\.js(?:"|'(?!s\b))/g;
 // `assert.ok(x.includes(` is the same source pin as `assert.match(x, /…/)`: counting
 // both keeps "includes() instead of assert.match" from lowering the number.
@@ -330,12 +331,45 @@ export async function pinVerdict(name, { env = process.env, data = load() } = {}
   if (mode.mode === "absolute") return { ...row, ok: row.over === 0, looseOk: row.slack <= slackMax };
   let baseCeiling = ceiling;
   try { const b = loadAt(mode.base).tree?.[name]; if (b !== undefined) baseCeiling = entry(b, `tree ${name} at base`).ceiling; } catch { /* base predates the entry */ }
-  const baseValue = value - await pinDelta(name, mode.base);
-  const baseOver = Math.max(0, baseValue - baseCeiling);
-  const baseLoose = baseCeiling - baseValue > slackMax;
-  return { ...row, base: { ref: mode.base, value: baseValue, ceiling: baseCeiling, over: baseOver },
-    inherited: row.over > 0 && row.over <= baseOver,
-    ok: row.over <= baseOver, looseOk: row.slack <= slackMax || baseLoose };
+  const judged = pinJudge({ value, ceiling, slackMax, baseCeiling, growth: await pinDelta(name, mode.base), absorb: absorbOf(raw) });
+  return { ...row, ...judged, base: { ref: mode.base, ...judged.base } };
+}
+
+/** The relative verdict of one pin row, PURE: `growth` is the change's pin delta since the base, `baseCeiling` the
+ *  ceiling there. Without an absorb the old rule (no overage beyond the base's); with one, BOOK-OWN (below). */
+export function pinJudge({ value, ceiling, slackMax, baseCeiling, growth, absorb = 0 }) {
+  const baseValue = value - growth;
+  const over = Math.max(0, value - ceiling), baseOver = Math.max(0, baseValue - baseCeiling);
+  const out = { base: { value: baseValue, ceiling: baseCeiling, over: baseOver },
+    inherited: over > 0 && over <= baseOver, ok: over <= baseOver,
+    looseOk: ceiling - value <= slackMax || baseCeiling - baseValue > slackMax };
+  if (!(absorb > 0)) return out;
+  // BOOK-OWN (#6819): growth is judged against what the change BOOKED (its own fragment's raise, ceiling minus base
+  // ceiling), never against headroom the base happened to have.
+  const booked = ceiling - baseCeiling, unbooked = Math.max(0, growth - booked);
+  return { ...out, growth, booked, unbooked, ok: unbooked === 0, inherited: over > 0 && unbooked === 0 };
+}
+
+/* BOOK-OWN (#6819, 2026-11-26). The pin ceilings sat at the tip's exact count, so a PR that added one pin while its
+ * base still had a pin of headroom booked nothing and passed; a sibling then used the same headroom, the tip reached
+ * the ceiling, and the first PR's merge result was over (gate ratchets=FAIL: #6779 01:55Z; #6790 #6784 #6774 #6783
+ * 03:15Z; #6808 #6790 04:30Z). Headroom shared between open PRs is a race. So for an entry with an `absorb`
+ * (assertPins, assertPinsAll) a change must book every pin it adds in its own fragment: `unbooked` = its growth since
+ * the base minus the ceiling raise it carries. Unbooked growth is red at once, on the PR's own run, whatever headroom
+ * the base had; booked growth composes under any merge order (ceiling and count rise by the same N), so a tip move
+ * alone never turns a green PR red. The commit hook books up to `absorb` (unchanged, D-037); past it is
+ * `ratchet-raise` as before. Headroom already on the tip is only the deploy branch's to lower (`--lower-only`). */
+/** Rows to write as this branch's fragment: an absorb pin row with unbooked growth (relativize) adds exactly that,
+ *  and an absorb pin row over only by an inherited overage books nothing. Other rows pass through. PURE. */
+export function bookPins(rows, judged = []) {
+  const unbooked = new Map(judged.filter((j) => j.unbooked > 0).map((j) => [j.metric, j.unbooked]));
+  const out = [];
+  for (const r of rows) {
+    if (!(r.tree && Object.hasOwn(PIN_METRICS, r.metric) && r.absorb > 0)) { out.push(r); continue; }
+    if (unbooked.has(r.metric)) out.push({ ...r, value: r.ceiling + unbooked.get(r.metric) });
+    else if (r.value <= r.ceiling) out.push(r);   // the own-cut and give-back paths (attributeTree's ownMin/ownFrag)
+  }
+  return out;
 }
 
 /** Tree metrics retired for a successor: deleting one is the planned switch, not a guard removed (compareToBase's
@@ -670,7 +704,8 @@ export async function relativize(rows, { env = process.env, data = load() } = {}
     if (!r.tree || !Object.hasOwn(PIN_METRICS, r.metric)) { out.push(r); continue; }
     const v = await pinVerdict(r.metric, { env, data });
     const row = { ...r, mode: v.mode, base: v.base };
-    if (v.ok && r.over > 0) Object.assign(row, { over: 0, inherited: `over by ${r.over}, as the base ${v.base.ref.slice(0, 8)} already was (${v.base.over})` });
+    if (v.unbooked > 0) Object.assign(row, { over: v.unbooked, unbooked: v.unbooked, grew: `+${v.growth} pins since the base ${v.base.ref.slice(0, 8)} but the change books ${v.booked} (BOOK-OWN, #6819): commit through the hook, which books up to the ${r.absorb} absorb, or convert the pins` });
+    else if (v.ok && r.over > 0) Object.assign(row, { over: 0, inherited: `over by ${r.over}, as the base ${v.base.ref.slice(0, 8)} already was (${v.base.over})` });
     else if (!v.ok && v.base) row.grew = `+${r.over - v.base.over} past the base ${v.base.ref.slice(0, 8)} (${v.base.value} at ceiling ${v.base.ceiling})`;
     if (v.looseOk && r.slack > r.slackMax) Object.assign(row, { slack: r.slackMax, inherited: row.inherited || `loose (slack ${r.slack}), as the base already was` });
     out.push(row);
@@ -728,7 +763,7 @@ export async function updateCli({ dryRun = false, lowerOnly = false, absolute = 
 export async function updateFragment(data = load(), { branch } = {}) {
   const name = fragmentName(branch === undefined ? currentBranch() : branch);
   if (!name) throw new Error("--fragment needs a topic branch (not the deploy branch or a detached HEAD)");
-  const rows = await attributeTree(await measure(data), { name });
+  const rows = bookPins(await attributeTree(await measure(data), { name }), await relativize(await measure(data), { data }));
   await writeFragment(name, scopeToBranch(updateReceipt(rows).changes));
   return rows;
 }
@@ -812,7 +847,7 @@ export async function autoRaise({ maxRaise = 40, dryRun = false, data = load(), 
   }
   let rows;
   if (name) {
-    rows = await attributeTree(await measure(data), { name });
+    rows = bookPins(await attributeTree(await measure(data), { name }), v.over);
     await writeFragment(name, scopeToBranch(updateReceipt(rows).changes));
   } else rows = await update(data);
   const key = (r) => `${r.file} ${r.metric}`;
@@ -1149,7 +1184,7 @@ async function main() {
   const where = (r) => (!r.tree ? "" : Object.hasOwn(PIN_METRICS, r.metric)
     ? ` — breakdown: node --test ${{ assertPins: "tests/unit/assert-match-ratchet.test.mjs", assertPinsAll: "tests/unit/assert-match-ratchet.test.mjs (per file: node tools/check/ratchets.mjs --pin-sites=assertPinsAll)", rawGameReads: "tests/unit/source-pin-hygiene.test.mjs", vmSrcLoads: "tests/unit/vm-filename-lint.test.mjs" }[r.metric]}`
     : " — breakdown: node tools/check/tree-counts.mjs --offenders");
-  for (const r of v.over) console.log(`OVER   ${r.file} ${r.metric}: ${r.value} > ceiling ${r.ceiling} (+${r.over}${r.grew ? `, ${r.grew}` : ""}) — extract, or raise it deliberately and say why in the commit${where(r)}`);
+  for (const r of v.over) console.log(`${r.unbooked ? "UNBOOKED" : "OVER  "} ${r.file} ${r.metric}: ${r.value}${r.unbooked ? ` vs ceiling ${r.ceiling}` : ` > ceiling ${r.ceiling}`} (+${r.over}${r.grew ? `, ${r.grew}` : ""}) — extract, or raise it deliberately and say why in the commit${where(r)}`);
   for (const r of v.rows.filter((x) => x.inherited)) {
     const msg = `INHERITED ${r.file} ${r.metric}: ${r.value} vs ceiling ${r.ceiling} — ${r.inherited}; not this change's (APEX_RATCHET_ABSOLUTE=1 judges the tree alone)`;
     console.log(process.env.GITHUB_ACTIONS === "true" ? `::warning file=tests/data/ratchets.json,title=ratchet inherited::${msg}` : msg);
