@@ -1873,7 +1873,7 @@ const api = {
     ...ApexCam.hooks(G, { smp, smp2, camVantage, setCamMode, snapGameCam }), // peeled: G.camRoll G.cameraDampingState
   ...ApexTrack.hooks(G, { smp, wrapS }),
   ...ApexLobby.hooks(G, { raceOrder }), // peeled: G.ttLaps
-  ...ApexPlay.hooks(G), // def() registry (js/agent/apex-play.js); empty until a U4.x unit defs a hook
+  ...(typeof ApexPlay !== "undefined" ? ApexPlay.hooks(G) : {}), // ApexPlay: hand-loading tests may omit it; def() registry (js/agent/apex-play.js); empty until a U4.x unit defs a hook
   ...ApexNet.hooks(G, { resetStartLights }),
 
   // turnProbe() — is a relay actually there?
@@ -2220,7 +2220,7 @@ const api = {
 
   // play: the def() registry rows (js/agent/apex-play.js), merged at call time because gen-agent-index evaluates
   // agentview.js's agentHelp() literal statically and cannot fold a call.
-  agentHelp() { return Object.assign(agentView.agentHelp(), { play: ApexPlay.rows() }); },
+  agentHelp() { return Object.assign(agentView.agentHelp(), { play: typeof ApexPlay !== "undefined" ? ApexPlay.rows() : [] }); },
 
   scene(opts) { return agentView.scene(opts); },
 

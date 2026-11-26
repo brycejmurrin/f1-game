@@ -199,8 +199,9 @@ export function sourceHooks() {
   const hooks = [];
   for (const p of decl.init.properties) {
     // def() hooks come from the registry (renderPlayBlock), not from a parse: the spread contributes no source rows.
-    if (p.type === "SpreadElement" && p.argument.type === "CallExpression" && p.argument.callee.type === "MemberExpression"
-        && p.argument.callee.object.type === "Identifier" && p.argument.callee.object.name === "ApexPlay") continue;
+    const sa = p.type === "SpreadElement" && (p.argument.type === "ConditionalExpression" ? p.argument.consequent : p.argument);
+    if (sa && sa.type === "CallExpression" && sa.callee.type === "MemberExpression"
+        && sa.callee.object.type === "Identifier" && sa.callee.object.name === "ApexPlay") continue;
     const peeled = p.type === "SpreadElement" && peeledHooks(p);
     if (peeled) { hooks.push(...peeled); continue; }
     if (p.type !== "Property") throw new Error(`${APEX}:${p.loc.start.line}: unexpected ${p.type} in api — spreads hide hooks from the index`);
