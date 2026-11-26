@@ -1,7 +1,8 @@
 /* input-coarse-switch-vm.test.mjs — #6447: the (pointer: coarse) change listener
- * goes through setLocalControlDevice, so a latched keyboard throttle toggle is
- * released when the device flips to touch (it used to assign localControlDevice
- * directly and keep the throttle on).
+ * releases a latched keyboard throttle / look-back toggle (releaseKeyLatches) when
+ * the device flips to touch; it used to assign localControlDevice directly and keep
+ * the throttle on. It does not go through setLocalControlDevice: that path also
+ * releases a mouse contact and notifies, which throttle-latch.test.mjs pins off.
  *
  * Run: node --test tests/unit/input-coarse-switch-vm.test.mjs
  */
@@ -53,14 +54,17 @@ function boot() {
 test("a (pointer: coarse) switch to touch releases the latched keyboard throttle toggle", () => {
   const { Input, key, mql } = boot();
   Input.reset();
-  Input.setHoldMode({ throttle: "toggle", lookBack: "held" });
+  Input.setHoldMode({ throttle: "toggle", lookBack: "toggle" });
   key("ArrowUp", true); key("ArrowUp", false);
+  key("KeyB", true); key("KeyB", false);
+  assert.equal(Input.lookingBack(), true, "precondition: the toggle latched look-back on");
   assert.equal(Input.throttle(), true, "precondition: the toggle latched the throttle on");
   mql.matches = true;
   Input.onPointerKindChange(() => {});     // ensures the MQL listener exists
   assert.equal(mql.cbs.length, 1, "the change listener is registered");
   mql.cbs[0]();
   assert.equal(Input.throttle(), false, "touch switch must release the keyboard throttle latch");
+  assert.equal(Input.lookingBack(), false, "and the look-back latch");
   key("ArrowLeft", true); key("ArrowLeft", false);
   assert.equal(Input.throttle(), false, "the toggle itself is cleared, not just the mirror");
 });
