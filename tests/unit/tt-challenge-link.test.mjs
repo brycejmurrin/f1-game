@@ -83,19 +83,27 @@ test("a challenge from today's Daily stays on the Daily's own plan", async () =>
   assert.equal(p.G.raceWeather, "dry", "the Daily pins its own weather");
 });
 
-test("RACE SETTINGS stages a TT draft in the guest's conditions, else the defaults", () => {
-  for (const [guest, want] of [[{ track: "monza", cond: COND }, ["fog", "dusk"]], [null, ["dry", "default"]], [{ track: "spa", cond: COND }, ["dry", "default"]]]) {
-    const ctx = vm.createContext({ Log: { info() {}, warn() {} },
-      GhostShare: { hasGuest: (id) => !!guest && guest.track === id, guest: () => guest } });
-    vm.runInContext(read("js/race/race-settings.js").replace(/^const RaceSettings\b/m, "var RaceSettings"), ctx, { filename: absSrc("js/race/race-settings.js") });
+test("RACE SETTINGS stages a TT draft in the link's conditions once, else the defaults", async () => {
+  const shared = await profile().GhostShare.encode(lap, { track: "monza", cond: COND });
+  for (const [guestTrack, want] of [["monza", ["fog", "dusk"]], [null, ["dry", "default"]], ["spa", ["dry", "default"]]]) {
+    const p = profile();   // the real GhostShare guest slot
+    if (guestTrack) {
+      const d = await p.GhostShare.decode(shared.code);
+      assert.equal(p.GhostShare.installGuest({ ...d, track: guestTrack }), true);
+    }
+    vm.runInContext(read("js/race/race-settings.js").replace(/^const RaceSettings\b/m, "var RaceSettings"), p.ctx, { filename: absSrc("js/race/race-settings.js") });
     const G = { flow: "gp", session: "tt", trackIdx: 1, season: null, daily: null, netLobby: { roomChanged() {} },
       raceLaps: 4, raceWeather: "rain", raceTimeOfDay: "night", raceChangeable: false, store: { get: (_k, d) => d, set() { return true; } },
       $: () => null, GAME_LAPS: 3, TT_LAPS: 4, scheduleFlybyTrack() {}, buildSelect() {}, els: {} };
-    const rs = ctx.RaceSettings.create(G, { Tracks: { LIST: [{ id: "spa", gpLaps: 44 }, { id: "monza", gpLaps: 53 }] },
+    const rs = p.ctx.RaceSettings.create(G, { Tracks: { LIST: [{ id: "spa", gpLaps: 44 }, { id: "monza", gpLaps: 53 }] },
       SettingRow: { paint() {}, disable() {}, wire() {} }, SeasonCal: { formatLaps: (n) => n } });
-    rs.resetDraft();
-    try { rs.openRaceSettings("select"); } catch (_) { /* the inert sheet has no DOM; stageDraft ran first */ }
-    assert.deepEqual([G.raceWeather, G.raceTimeOfDay], want, JSON.stringify(guest));
+    const stage = () => { rs.resetDraft(); try { rs.openRaceSettings("select"); } catch (_) { /* inert sheet: stageDraft ran first */ } };
+    stage();
+    assert.deepEqual([G.raceWeather, G.raceTimeOfDay], want, String(guestTrack));
+    // The guest stays the rival, but a later draft on that circuit is the player's own again (review F1).
+    stage();
+    assert.deepEqual([G.raceWeather, G.raceTimeOfDay], ["dry", "default"], String(guestTrack) + ": one-shot");
+    if (guestTrack) assert.equal(p.GhostShare.hasGuest(guestTrack), true);
   }
 });
 
@@ -127,5 +135,15 @@ test("a malformed or oversize challenge link is refused with no throw and stages
     const res = await p.DeepLink.openChallenge(json({ ...env, cond }), p.G, p.hooks);
     assert.equal(res.ok, true, JSON.stringify(cond));
     assert.deepEqual(res.cond ? { ...res.cond } : null, cond && cond.weather === "rain" ? { weather: "rain", tod: "default" } : null);
+  }
+  // A hook that throws, or a circuit decode knows but staging cannot find, is refused with no guest left behind (review F2).
+  for (const [name, mutate, reason] of [["throwing hook", (p) => { p.hooks.open = () => { throw new Error("boom"); }; }, "corrupt"],
+    ["circuit gone", (p) => { p.ctx.Tracks.LIST.find = () => ({ id: "monza" }); p.ctx.Tracks.LIST.findIndex = () => -1; p.ctx.Tracks.LIST.some = () => false; }, "unknown-track"]]) {
+    const p = profile({ plain: true });
+    mutate(p);
+    let res;
+    await assert.doesNotReject(async () => { res = await p.DeepLink.openChallenge(good.code, p.G, p.hooks); }, name);
+    assert.deepEqual([res.ok, res.reason], [false, reason], name);
+    assert.equal(p.GhostShare.guest(), null, name + ": guest cleared");
   }
 });

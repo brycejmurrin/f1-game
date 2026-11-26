@@ -261,6 +261,13 @@ const GhostShare = (function () {
     return true;
   }
   function clearGuest() { guestSlot = null; }
+  // One-shot: RACE SETTINGS stages the link's conditions once, so a guest left over from an earlier
+  // link never pins them onto later drafts on that circuit (#7063 review F1).
+  function takeCond(trackId) {
+    const c = hasGuest(trackId) ? guestSlot.cond : null;
+    if (c) guestSlot.cond = null;
+    return c;
+  }
   function guest() { return guestSlot; }
   function hasGuest(trackId) {
     if (!guestSlot) return false;
@@ -367,7 +374,7 @@ const GhostShare = (function () {
   }
   function messageFor(result) {
     if (result && result.ok) {
-      const ms = Math.round(result.ghost.time * 1000), m = Math.floor(ms / 60000);
+      const ms = Math.round((result.ghost ? result.ghost.time : 0) * 1000), m = Math.floor(ms / 60000);
       return "Rival ghost loaded — " + result.track.toUpperCase() + " · BEAT " + m + ":" + ((ms % 60000) / 1000).toFixed(3).padStart(6, "0") + ".";
     }
     if (result && result.reason === "unknown-track") return "That ghost uses a circuit this version does not know.";
@@ -397,7 +404,7 @@ const GhostShare = (function () {
 
   return {
     encode, decode, fileExport, installGuest, clearGuest, guest, hasGuest,
-    bestTime, at, timeAt, consumeHash, contextNotice,
+    bestTime, at, timeAt, consumeHash, contextNotice, takeCond,
   };
 })();
 Object.freeze(GhostShare);

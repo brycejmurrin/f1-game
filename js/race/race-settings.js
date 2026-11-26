@@ -706,7 +706,7 @@ const RaceSettings = (function () {
           draftKey = key;
           G.raceLaps = isTimeTrial() ? TT_LAPS : SeasonCal.formatLaps(GAME_LAPS);
           // A TT challenge link's guest carries its lap's conditions (#6884 A3, js/ui/deep-link.js).
-          const t = isTimeTrial() && typeof GhostShare !== "undefined" && Tracks.LIST[G.trackIdx], c = daily || t && GhostShare.hasGuest(t.id) && GhostShare.guest().cond;
+          const t = isTimeTrial() && typeof GhostShare !== "undefined" && Tracks.LIST[G.trackIdx], c = daily || t && GhostShare.takeCond(t.id);
           G.raceWeather = c ? c.weather : "dry";
           G.raceTimeOfDay = c ? c.tod : "default";
           const d = soloGp() ? draftFor(store.get("raceDraft", DEFAULT_DRAFT), fullLaps()) : null;

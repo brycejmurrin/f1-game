@@ -780,7 +780,7 @@ function buildTTResults() {
       track: track.def.id,
       context: Ghost.context(),
       day: activeDaily && activeDaily.day ? activeDaily.day : null,
-      cond: { weather: G.raceWeather, tod: G.raceTimeOfDay },   // the challenge link restages them (#6884 A3)
+      cond: { weather: G.weatherArc ? G.weatherArc.from : G.raceWeather, tod: G.raceTimeOfDay },   // the lap's start, restaged by the link (#6884 A3)
     };
     const trackId = track.def.id, trackName = track.def.name;   // strings: the chip must not hold G.track
     if (typeof ShareCardChips !== "undefined") ShareCardChips.append(els.resultsTable, "res-ghost-card", () => {

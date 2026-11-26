@@ -94,7 +94,10 @@ function stageChallenge(G, d, h) {
 // One tap on a pasted or opened link: decode, install the guest rival, stage. GhostShare.decode never throws.
 async function openChallenge(value, G, h) {
   const d = await GhostShare.decode(value);
-  return d.ok && GhostShare.installGuest(d) && stageChallenge(G, d, h) || (d.ok ? { ok: false, reason: "corrupt" } : d);
+  if (!d.ok) return d;
+  try { if (GhostShare.installGuest(d)) { const staged = stageChallenge(G, d, h); if (staged) return staged; } } catch (_) { /* a broken hook: refuse, below */ }
+  GhostShare.clearGuest();
+  return { ok: false, reason: Tracks.LIST.some((e) => e && e.id === d.track) ? "corrupt" : "unknown-track" };
 }
 function create(G) {
   const { $, els } = G;
