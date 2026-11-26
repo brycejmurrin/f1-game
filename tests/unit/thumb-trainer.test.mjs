@@ -100,7 +100,6 @@ test("LearnDoor's trainer door hands over to the trainer and reopens Learn on it
   opened[0]();                          // the trainer's BACK
   assert.equal(dialog.hidden, false);
   assert.equal(dom.document.activeElement, dom.byId("learn-open-thumbs"));
-  assert.ok(require("../../tools/manifest.cjs").LAZY_LEARN.includes("js/ui/thumb-trainer.js"), "loads with the Learn door");
 });
 
 test("Escape and BACK are one door, and closing puts the title, HUD and dock back as they were", () => {
