@@ -127,19 +127,13 @@ const CareerPlanning = (function () {
       // Derive both from original seed selection. Never temporarily mutate a live pick.
       const picks = c().sponsorPicks || {};
       const chosen = picks[key(sp.idx)] === 1 ? 1 : 0;
-      let start = 0, idx = 0, kind;
-      while (start <= c().season.round) {
-        kind = api().SPONSOR_KINDS[Math.min(api().SPONSOR_KINDS.length - 1,
-          Math.floor(api().rnd(c().year, "spon", idx) * api().SPONSOR_KINDS.length))];
-        if (start + kind.window > c().season.round) break;
-        start += kind.window; idx++;
-      }
+      const kind = api().sponsorSlot(c().season.round).kind, kinds = api().SPONSOR_KINDS;
       const team = Teams.LIST.find((t) => t.id === c().team) || { tier: 2 };
-      return [kind, api().SPONSOR_KINDS[(api().SPONSOR_KINDS.indexOf(kind) + 1) % api().SPONSOR_KINDS.length]].map((k, i) => {
-        const part = Math.min(1, sp.window / k.window);   // cap at catalog, as career.js sponsorAt
-        const value = k.type === "clean" ? sp.window : Math.max(1, Math.ceil(k.value(team) * part));
+      return [kind, kinds[(kinds.indexOf(kind) + 1) % kinds.length]].map((k, i) => {
+        const part = Math.min(1, sp.window / k.window);
+        const value = k.type === "clean" ? Math.min(sp.window, k.window) : Math.max(1, Math.ceil(k.value(team) * part));
         return { i, chosen: i === chosen, type: k.type, value, window: sp.window,
-          pay: Math.round(k.pay * part), label: api().sponsorLabel({ type: k.type, value, window: sp.window }) };
+          pay: Math.round(k.pay * part), label: api().sponsorLabel({ type: k.type, value, window: k.type === "clean" ? value : sp.window }) };
       });
     }
     function chooseSponsor(i) {
