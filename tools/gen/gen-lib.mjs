@@ -58,8 +58,8 @@ export function replaceBlock(doc, name, body) {
  * gen-shell did until 2026-10-05. Returns null to continue, or the exit code
  * (0 for --help, 2 for an unknown argument) after printing why.
  */
-export function argGate(argv, { allowed = ["--check"], tool = process.argv[1] ? path.relative(ROOT, process.argv[1]) : "the generator" } = {}) {
-  const usage = `usage: node ${tool} [${allowed.join("] [")}]\n  Regenerates its target from source; --check only reports drift.`;
+export function argGate(argv, { allowed = ["--check"], tool = process.argv[1] ? path.relative(ROOT, process.argv[1]) : "the generator", usage: usageText = "" } = {}) {
+  const usage = usageText || `usage: node ${tool} [${allowed.join("] [")}]\n  Regenerates its target from source; --check only reports drift.`;
   if (argv.includes("--help") || argv.includes("-h")) { process.stdout.write(usage + "\n"); return 0; }
   const unknown = argv.filter((a) => !allowed.includes(a));
   if (unknown.length) { process.stderr.write(`${tool}: unknown argument ${unknown.join(" ")}\n${usage}\n`); return 2; }
