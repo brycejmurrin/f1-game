@@ -59,11 +59,12 @@ var LapRetry = (function () {
       const fs = deps.flyingStart;
       if (!fs || typeof fs.rearm !== "function") return false;
       const p = G.player;
-      // The session's bests are kept forward: the drop-in held none yet.
-      const keep = { best: p.best, sectorBests: G.sectorBests && G.sectorBests.slice(),
-        fieldSectorBests: G.fieldSectorBests && G.fieldSectorBests.slice() };
+      // The session's bests and last lap/splits are kept forward (the HUD's LAST): the drop-in held none yet.
+      const keep = { best: p.best, lastLap: p.lastLap, sectorBests: G.sectorBests && G.sectorBests.slice(),
+        fieldSectorBests: G.fieldSectorBests && G.fieldSectorBests.slice(), sectorLast: Array.isArray(G.sectorLast) ? G.sectorLast.slice() : null };
       SimState.restore(snap.world, G);
-      p.best = keep.best;
+      p.best = keep.best; p.lastLap = keep.lastLap;
+      if (keep.sectorLast) { G.sectorLast.length = 0; G.sectorLast.push(...keep.sectorLast); }   // no setter: in place, as SimState's clock part does
       if (keep.sectorBests) G.sectorBests = keep.sectorBests;
       if (keep.fieldSectorBests && G.fieldSectorBests) G.fieldSectorBests.splice(0, G.fieldSectorBests.length, ...keep.fieldSectorBests);
       fs.rearm();

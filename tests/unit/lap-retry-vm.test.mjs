@@ -105,10 +105,14 @@ test("RETRY LAP restores the drop-in byte for byte, replays the same 10 s, and n
 test("the TT session survives: lap list and best are kept; outside a TT the button is off", async () => {
   await freshTT(42);
   g.G.player.best = 81.234;   // a lap already set this session
+  g.G.player.lastLap = 82.5;
+  g.G.sectorLast.splice(0, 3, 27.1, 28.2, 27.2);
   const laps = g.G.ttLaps;
   drive();
   assert.ok(LR().retry());
   assert.equal(g.G.player.best, 81.234, "the session best is kept forward");
+  assert.equal(g.G.player.lastLap, 82.5, "the HUD LAST lap is kept forward");
+  assert.deepEqual([...g.G.sectorLast], [27.1, 28.2, 27.2], "…and the last splits");
   assert.equal(g.G.ttLaps, laps, "lapRec.ttLaps is not reset");
   assert.ok(LR().hasSnapshot(), "and can be retried again");
   LR().invalidate();
