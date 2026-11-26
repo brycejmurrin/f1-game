@@ -644,8 +644,10 @@ function teamFinishes(season, team) {
   const row = [];
   const fin = (season && season.finishes) || {};
   for (const id of Object.keys(fin)) {
-    const k = id.lastIndexOf(":");
-    if ((k > 0 ? id.slice(0, k) : id) !== team) continue;
+    // Parked seat ids are "team:seat:parked" (#5877): drop the suffix first.
+    const seat = id.endsWith(PARK) ? id.slice(0, -PARK.length) : id;
+    const k = seat.lastIndexOf(":");
+    if ((k > 0 ? seat.slice(0, k) : seat) !== team) continue;
     const f = fin[id] || [];
     for (let i = 0; i < f.length; i++) if (f[i]) row[i] = (row[i] || 0) + f[i];
   }

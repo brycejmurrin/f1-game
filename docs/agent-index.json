@@ -866,6 +866,7 @@
         "tests/unit/season-seat-move-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
+        "tests/unit/sim-state-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/spoken-lang-offer-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
@@ -991,6 +992,7 @@
         "tests/unit/season-seat-move-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
+        "tests/unit/sim-state-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/spoken-lang-offer-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
@@ -1118,6 +1120,7 @@
         "tests/unit/season-seat-move-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
+        "tests/unit/sim-state-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/spoken-lang-offer-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
@@ -1407,6 +1410,7 @@
       "kind": "node",
       "files": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
+        "tests/unit/handshake-hardening.test.mjs",
         "tests/unit/lobby-answer-flight.test.mjs",
         "tests/unit/lobby-codes.test.mjs",
         "tests/unit/lobby-settings.test.mjs",
@@ -1712,6 +1716,7 @@
         "tests/unit/key-binds-pad-menu.test.mjs",
         "tests/unit/key-binds-ui.test.mjs",
         "tests/unit/key-binds.test.mjs",
+        "tests/unit/liv-swatch-box-cache.test.mjs",
         "tests/unit/low-speed-lock.test.mjs",
         "tests/unit/onboard.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
@@ -1723,6 +1728,7 @@
         "tests/unit/phone-press-mode.test.mjs",
         "tests/unit/player-tools-backup.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
+        "tests/unit/scroll-fade-scoped.test.mjs",
         "tests/unit/setting-deps.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/settings-export-lazy.test.mjs",
@@ -3307,6 +3313,11 @@
       "path": "js/core/script-loader.js",
       "global": "ScriptLoader",
       "roster": "tag"
+    },
+    {
+      "path": "js/core/sim-state.js",
+      "global": "SimState",
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/core/store.js",

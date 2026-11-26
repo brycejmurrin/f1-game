@@ -106,6 +106,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `i18n-pseudo.js` | `I18nPseudo` | tag | pseudo-locale expansion for layout stress (en-XA). |
 | `i18n.js` | `I18n` | tag | gettext-style I18n: English defaults at the call site, optional locale JSON. |
 | `dom-apply.js` | `I18nDom` | tag | apply data-i18n / data-i18n-attr when the active language is not plain English. |
+| `sim-state.js` | `SimState` | LAZY_RACE_SESSION | SimState: ONE definition of "the simulation state" (#6860 phase 1, decision B). |
 
 **`js/`**
 
@@ -2167,9 +2168,21 @@ look / knob / feature already differs between the three backends, or when
 auditing drift after a lighting or rendering change. Night-looks-wrong is a
 `lighting-tuner` question first; a WGX validation defect is `renderer-debug`.
 
-**The rule: a GLX fix is not done until it is mirrored in WGX and TLX — or
-recorded as a gap** in §Parity snapshot above and in the defect inventory
-[../docs/research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md).
+**The rule (D-049, #6861 option B): TLX ships; GLX is the safe-mode fallback;
+WGX is frozen.** A new look or knob ships on TLX first. A GLX port happens only
+on a correctness or phone-safety need, or on a recorded decision; otherwise the
+gap is recorded in §Parity snapshot above and in the defect inventory
+[../docs/research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md). WGX takes only
+crash and validation fixes (D-049): never port a look or knob into it, and a GLX
+or TLX fix is not "unfinished" for lacking a WGX twin.
+
+**GLX's job — safe mode.** GLX is the renderer every backend failure lands on
+(`Gfx.create()` → null), the no-adapter device path, the explicit `webgl2` pick,
+and the name of the seam (`GLX` facade). Its job is to boot and race correctly on
+any WebGL2 device, holding the features it ships today as its floor look. It
+takes crash, correctness and phone-safety fixes; it does not chase TLX looks.
+The floor-look list, a `render-glx.md` rule, a named backend-interface list and a
+fallback-correctness spec are the later phases of #6861 (not yet landed).
 
 1. `node --test tests/unit/backend-surface-parity.test.mjs` first — the
    façade must carry the same member names on all three backends (a missing

@@ -1009,14 +1009,22 @@ function livSwatchPx(boxW, boxH, dpr) {
 const near = (a, b) => Math.abs(a - b) <= 0.08 * Math.max(a, b);   // LIV_BOX_HYST
 const holdLivBox = (p, w, h, same) => same && near(p[0], w) && near(p[1], h) ? p : [w, h];
 let livBoxGen = -1;
+// #6754: the box only moves with the viewport (csViewGen) or UI SIZE, so a shape already measured under this key
+// skips CssZoom.of + clientWidth/Height (forced style + layout on freshly built cards). Inline style: no layout.
+let livBoxKey = "", livBoxDone = {};
+const livUiKey = () => { try { return document.documentElement.style.getPropertyValue("--ui-scale"); } catch (_) { return ""; } };
 function fitLivSwatches(container, team) {
   if (typeof LiveryTex === "undefined") return;
   const sws = [...container.querySelectorAll(".cs-liv-row .cs-liv-swatch")], livs = getLiveries(team);
   const shape = (sw) => sw.closest(".cs-liv-factory") ? "small" : "big";
   const same = livBoxGen === csViewGen; livBoxGen = csViewGen;
+  const key = csViewGen + "|" + livUiKey() + "|" + globalThis.devicePixelRatio;
+  if (key !== livBoxKey) { livBoxKey = key; livBoxDone = {}; }
   for (const s in livBox) {   // measure before writes; box x CssZoom
+    if (livBoxDone[s]) continue;
     const e = sws.find((sw) => shape(sw) === s), z = e && window.CssZoom ? CssZoom.of(e) : 1;
     if (e && e.clientWidth) livBox[s] = holdLivBox(livBox[s], e.clientWidth * z, e.clientHeight * z, same);
+    if (e && e.clientWidth) livBoxDone[s] = true;
   }
   for (const sw of sws) {
     const b = livBox[shape(sw)], px = livSwatchPx(b[0], b[1], globalThis.devicePixelRatio), id = sw.closest("[data-cs-livery]").dataset.csLivery;

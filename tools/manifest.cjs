@@ -1143,6 +1143,7 @@ const LAZY_RACE_SESSION = [
   "js/data/garage-departure-motion.js",
   "js/garage/departure-wheels.js",
   "js/race/reliability.js",
+  "js/core/sim-state.js",     // SimState: the one capture/restore registry (#6860); damage.js registers at eval, the coach captures through it
   "js/race/damage.js",
   "js/race/damage-handling.js",   // DamageHandling: the opt-in DAMAGE → HANDLING read (#1578; OFF = no effect)
   "js/race/duel.js",
@@ -1174,6 +1175,7 @@ const LAZY_RACE_SESSION_EDGES = [
   ["js/race/radio-lines.js", "js/race/race-radio.js"],
   ["js/race/race-facts.js", "js/race/race-radio.js"],
   ["js/race/spotter.js", "js/race/race-radio.js"],
+  ["js/core/sim-state.js", "js/race/damage.js"], // Damage registers its part with SimState at eval (#6860)
 ];
 
 // AUDIO ENGINE + PANEL (~449 KB). Title/menus only need the stub in FULL;

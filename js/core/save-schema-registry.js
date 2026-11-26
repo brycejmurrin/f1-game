@@ -37,23 +37,40 @@ const SaveSchemaRegistry = (function () {
     return e;
   }
 
+  // Save sections (#6602 §3 P1): the family a key belongs to, as data. Every row has a
+  // `section`; its descriptor gives the defaults that SaveHealth's category (health), the
+  // IndexedDB mirror class (mirror) and the one-writer career lock (writerLock) read through
+  // family(). A row overrides a default only where today's behaviour differs (`fam` below);
+  // tests/unit/save-sections-6602.test.mjs pins every outcome to the pre-#6602 regexes.
+  const OTHER = "Other settings and data";
+  const SECTIONS = Object.freeze({
+    settings: Object.freeze({ v: 1, health: OTHER }),   // SettingsExport.SPEC rows
+    garage: Object.freeze({ v: 1, health: "Garage work", mirror: "authored" }),
+    career: Object.freeze({ v: 2, health: "Career saves", mirror: "career", writerLock: true }),   // v = SaveMigrate.CAREER_V
+    progress: Object.freeze({ v: 1, health: "Laps and ghosts" }),
+    cache: Object.freeze({ v: 1, health: "Downloaded response caches", disposable: true }),
+    device: Object.freeze({ v: 1, health: OTHER, exported: false }),   // dev flags, renderer latches, device-local prefs, tokens
+  });
+  const NO_MIRROR = { mirror: null }, CAREER_META = { health: OTHER, mirror: null, writerLock: false };
+  const AUTHORED_ID = "[A-Za-z0-9_-]{1,64}$";   // an authored garage row the mirror keeps: a bounded id
+
   const PREFIX = [
-    { re: /^parts\./, owner: "js/garage/setup-sheet.js", lane: "json", v: 1, validate: validators.json },
-    { re: /^livery\./, owner: "js/car/custom-liveries.js", lane: "json", v: 1, validate: validators.json },
-    { re: /^setup\./, owner: "js/garage/setup-tune.js", lane: "json", v: 1, validate: validators.json },
+    { re: /^parts\./, section: "garage", mirrorRe: new RegExp("^parts\\." + AUTHORED_ID), owner: "js/garage/setup-sheet.js", lane: "json", v: 1, validate: validators.json },
+    { re: /^livery\./, section: "garage", mirrorRe: new RegExp("^livery\\.(?:custom\\.)?" + AUTHORED_ID), owner: "js/car/custom-liveries.js", lane: "json", v: 1, validate: validators.json },
+    { re: /^setup\./, section: "garage", mirrorRe: new RegExp("^setup\\." + AUTHORED_ID), owner: "js/garage/setup-tune.js", lane: "json", v: 1, validate: validators.json },
     // A career's own sheet (#5036): careerSetup.<flavour>.<slot>.<team>, the tune plus the career seed.
-    { re: /^careerSetup\.(driver|myteam)\.[0-2]\.[A-Za-z0-9_-]{1,64}$/, owner: "js/garage/setup-tune.js", lane: "json", v: 1, validate: validators.json },
+    { re: /^careerSetup\.(driver|myteam)\.[0-2]\.[A-Za-z0-9_-]{1,64}$/, section: "garage", fam: { health: "Career saves", mirror: "career", writerLock: true }, owner: "js/garage/setup-tune.js", lane: "json", v: 1, validate: validators.json },
     // Named garage sheets (js/garage/setup-presets.js). Must precede any looser
     // setup.* consumer; the write-site scan used to skip *presets.js entirely.
-    { re: /^setupPresets\./, owner: "js/garage/setup-presets.js", lane: "json", v: 1, validate: validators.json },
-    { re: /^ttlb\./, owner: "js/core/store.js", lane: "json", v: 2, validate: validators.ttlb },
-    { re: /^career\.(driver|myteam)\.[0-2]$/, owner: "js/career/career.js", lane: "json", v: 1, validate: validators.career },
-    { re: /^api\./, owner: "js/data/api-transport.js", lane: "json", v: 1, validate: validators.disposable },
-    { re: /^realrace\./, owner: "js/data/real-race-fetch.js", lane: "json", v: 1, validate: validators.disposable },
-    { re: /^ghost\./, owner: "js/car/ghost.js", lane: "json", v: 1, validate: validators.json },
-    { re: /^pitPlan\./, owner: "js/race/pit-lane.js", lane: "json", v: 1, validate: validators.json },
-    { re: /^spotify\./, owner: "js/audio/spotify.js", lane: "raw", v: 1, validate: validators.rawScalar },
-    { re: /^cockpit(?:Wheel|Body|Halo)Finish$/, owner: "js/camera/cockpit-finishes.js", lane: "raw", v: 1, validate: validators.rawScalar },
+    { re: /^setupPresets\./, section: "garage", mirrorRe: new RegExp("^setupPresets\\." + AUTHORED_ID), owner: "js/garage/setup-presets.js", lane: "json", v: 1, validate: validators.json },
+    { re: /^ttlb\./, section: "progress", owner: "js/core/store.js", lane: "json", v: 2, validate: validators.ttlb },
+    { re: /^career\.(driver|myteam)\.[0-2]$/, section: "career", owner: "js/career/career.js", lane: "json", v: 1, validate: validators.career },
+    { re: /^api\./, section: "cache", owner: "js/data/api-transport.js", lane: "json", v: 1, validate: validators.disposable },
+    { re: /^realrace\./, section: "cache", owner: "js/data/real-race-fetch.js", lane: "json", v: 1, validate: validators.disposable },
+    { re: /^ghost\./, section: "progress", owner: "js/car/ghost.js", lane: "json", v: 1, validate: validators.json },
+    { re: /^pitPlan\./, section: "device", owner: "js/race/pit-lane.js", lane: "json", v: 1, validate: validators.json },
+    { re: /^spotify\./, section: "device", owner: "js/audio/spotify.js", lane: "raw", v: 1, validate: validators.rawScalar },
+    { re: /^cockpit(?:Wheel|Body|Halo)Finish$/, section: "device", owner: "js/camera/cockpit-finishes.js", lane: "raw", v: 1, validate: validators.rawScalar },
   ];
 
   const EXACT = {
@@ -229,18 +246,54 @@ const SaveSchemaRegistry = (function () {
     xrPrevBackend: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),
   };
 
+  // EXACT rows by section; every row not named here is `device`. `fam` lists where a row's
+  // today-behaviour differs from its section default (pinned, see SECTIONS).
+  const EXACT_SECTIONS = {
+    garage: ["customTeam", "customLogo", "team", "driver"],
+    career: ["career", "career.freeMoney", "careerSlot", "season", "badges", "daily.v1", "records"],
+    progress: ["inputGhost.v1", "circuitMastery", "onboarded", "onboardRaces", "pitTaught", "seasonCfg", "customTracks"],
+  };
+  const EXACT_FAM = {
+    team: { health: OTHER, mirror: null }, driver: { health: OTHER, mirror: null },
+    season: { health: "Season saves", writerLock: false },
+    badges: CAREER_META, "daily.v1": CAREER_META, records: CAREER_META,
+    circuitMastery: { health: OTHER }, onboarded: { health: OTHER }, onboardRaces: { health: OTHER }, pitTaught: { health: OTHER },
+    seasonCfg: { health: "Season saves", mirror: "career" },
+    customTracks: { health: "Authored circuits" },
+    customTrackDraft: { health: "Authored circuits" }, customTrackDraftPrev: { health: "Authored circuits" },
+  };
+  for (const k of Object.keys(EXACT)) EXACT[k].section = "device";
+  for (const sec of Object.keys(EXACT_SECTIONS)) for (const k of EXACT_SECTIONS[sec]) EXACT[k].section = sec;
+  for (const k of Object.keys(EXACT_FAM)) EXACT[k].fam = EXACT_FAM[k];
+
+  function makeFamily(section, fam) {
+    const d = SECTIONS[section], o = fam || {};
+    const pick = (f) => (Object.prototype.hasOwnProperty.call(o, f) ? o[f] : d[f]);
+    return Object.freeze({ section, health: pick("health"), mirror: pick("mirror") || null, writerLock: !!pick("writerLock") });
+  }
+  // One frozen family per row, built once; an authored row whose key fails its bounded-id
+  // shape (mirrorRe) answers the same family without a mirror class.
+  function familyOf(e) {
+    if (!e._family) {
+      Object.defineProperty(e, "_family", { value: makeFamily(e.section, e.fam) });
+      if (e.mirrorRe) Object.defineProperty(e, "_familyUnmirrored", { value: makeFamily(e.section, Object.assign({}, e.fam, NO_MIRROR)) });
+    }
+    return e._family;
+  }
+
   let _settings = null;
   let _settingsMap = null;
 
   function ingestSettingsSpec(spec) {
     _settings = spec;
+    _familyMemo.clear();
     _settingsMap = new Map();
     if (!spec) return;
     for (const row of spec) {
       if (!row || !row.k) continue;
       const owner = String(row.src || "js/ui/settings-export.js").split(" ")[0];
       const validate = row.lane === "raw" ? validators.rawScalar : validators.json;
-      _settingsMap.set(row.k, { owner, lane: row.lane || "json", v: 1, validate, group: row.group });
+      _settingsMap.set(row.k, { owner, lane: row.lane || "json", v: 1, validate, group: row.group, section: "settings" });
     }
   }
 
@@ -258,6 +311,19 @@ const SaveSchemaRegistry = (function () {
     try { return e.validate(value); } catch (_) { return false; }
   }
 
+  // The key's save family ({ section, health, mirror, writerLock }), or null for a key no row
+  // knows (another build's key): callers keep their own answer for those.
+  // Memoised per key: the store asks on every write. ingestSettingsSpec clears it.
+  const _familyMemo = new Map();
+  function family(k) {
+    k = shortKey(k);
+    if (_familyMemo.has(k)) return _familyMemo.get(k);
+    const e = resolve(k);
+    const f = !e ? null : (familyOf(e), e.mirrorRe && !e.mirrorRe.test(k) ? e._familyUnmirrored : e._family);
+    if (_familyMemo.size < 4096) _familyMemo.set(k, f);
+    return f;
+  }
+
   // A credential: never copied or restored by a key snapshot (#6638).
   function deviceOnly(k) { const e = resolve(k); return !!(e && e.deviceOnly); }
 
@@ -271,10 +337,13 @@ const SaveSchemaRegistry = (function () {
     return null;
   }
 
-  // PREFIX / EXACT / validators stay module-private: resolve/validateKey/
-  // ingestSettingsSpec are the only external seams (save-schema-registry tests).
+  // PREFIX / EXACT / validators stay module-private: resolve/validateKey/family/
+  // ingestSettingsSpec are the external seams; exactKeys/prefixSources list the rows
+  // for the section pin (save-sections-6602.test.mjs).
   return {
-    resolve, validateKey, noteWrite, ingestSettingsSpec, deviceOnly,
+    resolve, validateKey, noteWrite, ingestSettingsSpec, deviceOnly, family, SECTIONS,
+    exactKeys: () => Object.keys(EXACT),
+    prefixSources: () => PREFIX.map((p) => p.re.source),
     get strict() { return strict; },
     set strict(v) { strict = !!v; },
     get settingsSpec() { return _settings; },

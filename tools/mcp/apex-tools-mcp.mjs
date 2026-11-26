@@ -1228,6 +1228,8 @@ for (const key of ['tracks', 'visits', 'backend', 'mode', 'cycles', 'settle', 'w
 const bound = (name, key, extra) => Object.assign(schemaFor(name).properties[key], extra);
 schemaFor("apex_graph_parity").required = ["base"];
 schemaFor("apex_frame_report").required = ["track"];
+// Tree tools read the working tree only (gateTreeArgs refuses deploy / url), so their schemas do not advertise either.
+for (const t of CATALOG) if (toolKind(t) === "tree") for (const k of ["target", "url"]) delete t.inputSchema?.properties?.[k];
 bound("apex_graph_parity", "id", { enum: knownCircuits() });
 bound("apex_pick_tests", "files", { items: { type: "string", minLength: 1, maxLength: 4096 } });
 bound("apex_select_specs", "budgetMin", { exclusiveMinimum: 0, maximum: 120 });

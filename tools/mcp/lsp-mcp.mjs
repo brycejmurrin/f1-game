@@ -27,12 +27,16 @@
 import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import { createRequire } from "node:module";
-import { parse } from "espree";
-import { analyze } from "eslint-scope";
 import { buildIndex, checkFile } from "./member-check.mjs";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
+// espree / eslint-scope load on first use, not at module load: `npm ci` in session-start.sh rewrites
+// node_modules while the client starts this server, and `initialize` / `tools/list` need neither (#6867).
+const lazyRequire = createRequire(import.meta.url);
+const parse = (...a) => lazyRequire("espree").parse(...a);
+const analyze = (...a) => lazyRequire("eslint-scope").analyze(...a);
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 

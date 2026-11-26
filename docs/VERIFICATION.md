@@ -48,7 +48,6 @@ For owner-facing phone screenshots, use the standard iPhone 15 capture preset at
 ## 2. The local edit loop
 
 ```sh
-node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # the diff-aware node check
 node tools/ci/verify-change.mjs --plan --json               # the same selection, with its budget
 node tools/ci/verify-change.mjs --fast --json
 ```
@@ -59,8 +58,7 @@ serve `js/` and `css/` from the working tree.
 
 ## 3. The pre-push floor
 
-`tooling-fast --changed --jobs=3 --quiet`; `node tools/track/verify-track.cjs <id>`
-for a circuit; the docs-only fast path for prose. No agent runs a browser spec
+AGENTS.md rule 3 (the command and the circuit case); the docs-only fast path for prose. No agent runs a browser spec
 locally (AGENTS.md rule 5): the specs `pick-tests` / `select-specs` name are proven
 by the ready PR's `selected` legs, and a whole group runs on the pushed branch with
 `node tools/ci/remote-group.mjs <group>` when Bryce opts in (the group names are the ones
@@ -207,6 +205,19 @@ push/dirty/live-run state, inventory counts, and up to three failed or unresolve
 log examples (`--json` for full data, `--pr <n>` for live PR/CI evidence). The
 local log counts describe historical files, not verification of the current
 commit; unknown states stay unknown and the ready gate is not evaluated by it.
+
+### Software-rendering timing rules
+
+Browser tests run on CI (llvmpipe runners; per-spec timings are measured into
+`tests/data/spec-timings.json`, which `tools/ci/select-budget.mjs` sizes shards
+from), so a timeout there is read against that record, not against this box. Two
+rules:
+
+- A boot or a click under software rendering costs seconds: drive a sequence
+  inside the page (`page.evaluate`) and count `goto`/`reload` calls before
+  touching a per-test bound.
+- A bound changes only to fit a measurement recorded at the line, never to make
+  a run green (AGENTS.md rule 9).
 
 ## Related readers
 

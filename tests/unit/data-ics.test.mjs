@@ -129,3 +129,11 @@ test("the UID is keyed on year + circuitId, so a renumbered calendar keeps each 
   const odd = { circuitId: "a,b;c", name: "X", date: "2026-06-07" };
   assert.equal(uid(odd)[0], "UID:2026-c-a\\,b\\;c-r@apex26", "UID text is escaped per RFC 5545 §3.3.11");
 });
+
+// #6835 (#6544 r6): timed practice with an untimed race used to drop the race event entirely.
+test("#6835 timed practice with a TBC race time still emits the all-day Race (time TBC) event", () => {
+  const row = { date: "2026-03-15", name: "X", sessions: { fp1: { date: "2026-03-13", time: "01:30:00Z" } } };
+  const out = unfold(I.build([row], { now: NOW }));
+  assert.deepEqual(props(out, "SUMMARY").sort(), ["SUMMARY:X · Practice 1", "SUMMARY:X · Race (time TBC)"]);
+  assert.deepEqual(props(out, "DTSTART").sort(), ["DTSTART:20260313T013000Z", "DTSTART;VALUE=DATE:20260315"]);
+});

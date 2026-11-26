@@ -68,7 +68,7 @@ test("DrivingCoach.update runs once per G._s8Stamp", () => {
     IncidentSim: { reset() {} }, DebrisWorld: { reset() {} },
     PhysicsConsts: { BRAKE: 22, REVISION: "test" },
   });
-  for (const f of ["js/race/driving-coach-boot.js", "js/race/driving-coach.js"])   // the FULL façade, then its lazy body (#4748)
+  for (const f of ["js/core/sim-state.js", "js/race/driving-coach-boot.js", "js/race/driving-coach.js"])   // the registry (#6860), the FULL façade, then its lazy body (#4748)
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   const coach = vm.runInContext("DrivingCoach", ctx).create(G);
   // insights.update fires when elapsed crosses 0.1 s — one 0.12 s tick trips it once.
