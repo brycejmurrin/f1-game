@@ -176,6 +176,10 @@ function create(G) {
       armed = { id, slot, btn };
       btn.dataset.armed = "1";
       btn.textContent = dev.keys ? "PRESS A KEY" : "PRESS A BUTTON";
+      // The aria-label overrides the text, so it must say the slot is waiting; render() restores it.
+      const armedRow = dev.list().find((x) => x.id === id);
+      btn.setAttribute("aria-label", `${armedRow ? armedRow.label : id}${slot ? " second" : ""} ${dev.noun}: waiting for ${dev.keys ? "a key" : "a button"}, Esc cancels`);
+      btn.setAttribute("aria-pressed", "true");
       setNote(dev.armedNote);
       window.addEventListener("keydown", onKey, true);
       window.addEventListener("blur", disarmOnBlur);
