@@ -1,0 +1,1 @@
+New: TOUCH BUTTON RESPONSE has a SLIDE DEAD ZONE (OFF, 6, 12 or 20 px) for buttons with a SLIDE END INPUT, so a small thumb roll no longer eases the brake or gas. OFF is the default and keeps every saved profile as it was.
