@@ -31,6 +31,7 @@ const G = {
     const g = await text("lsp_definition", { symbol: "G.openCareer" });
     assert.match(g, /types\/game-ctx\.d\.ts:2:\d+ {2}\[def\][\s\S]*js\/game\.js:4:3 {2}\[def\] openCareer:/);
     assert.match(await text("lsp_definition", { symbol: "LightPresets" }), /js\/presets\.js:1:8 {2}\[def\] window\.LightPresets/);
-    assert.match(await text("lsp_outline", { file: at("fx") }), /\(anonymous IIFE → window\.TLXShaders\)/);
+    const outline = (await text("lsp_outline", { file: at("fx") })).split("\n");
+    assert.equal(outline.filter((l) => l.includes("(anonymous IIFE → window.TLXShaders)")).length, 1, outline.join("\n"));
   } finally { lsp.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
