@@ -123,7 +123,12 @@ var RaceFacts = (function () {
     function rank(list) {
       order.length = 0;
       for (let i = 0; i < list.length; i++) if (!list[i].retired) order.push(list[i]);   // indexed: no iterator per step
-      order.sort(byRace);
+      // Stable insertion sort: the order is nearly sorted frame to frame, and sort() allocates its scratch.
+      for (let i = 1; i < order.length; i++) {
+        const c = order[i]; let j = i - 1;
+        while (j >= 0 && byRace(order[j], c) > 0) { order[j + 1] = order[j]; j--; }
+        order[j + 1] = c;
+      }
       // Pairs and gaps all read the same timing records until the next ranking.
       orderedStates.length = order.length;
       for (let i = 0; i < order.length; i++) orderedStates[i] = st.get(order[i]);
