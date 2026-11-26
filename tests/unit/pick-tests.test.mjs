@@ -266,11 +266,12 @@ test("a source file's own unit test is in a group that editing it selects", () =
 // T10 (test audit 2026-10-05): the contact and AI physics modules route to the
 // group whose subject they are, and a spec edit names the group that runs it.
 test("contact/AI physics modules select collisions, not only physics-core", () => {
-  for (const f of ["collide", "contact-geometry", "wall-clamp", "ai-drive", "ai-band", "ai-corridor"]) {
+  for (const f of ["collide", "contact-geometry", "wall-clamp", "ai-drive", "ai-start", "ai-band", "ai-corridor"]) {
     const src = `js/physics/${f}.js`;
     assert.ok(fs.existsSync(path.join(ROOT, src)), `${src} moved — re-point the rule`);
     const sel = [...pick([src]).keys()];
     assert.ok(sel.includes("collisions") && sel.includes("physics-core"), `${src} selects [${sel.join(", ")}]`);
+    if (!sel.includes("game-vm")) assert.fail(`${src} must also select game-vm`);
   }
   assert.ok(!pick(["js/physics/tyre-model.js"]).has("collisions"), "the rule must stay narrow");
 });
