@@ -121,16 +121,15 @@ function resolvePostNodes(track, posts) {
   for (let i = 0; i < posts.length; i++) {
     const p = posts[i];
     if (!p || !Number.isFinite(p.x)) continue;
+    const dd = (k) => (p.x - px[k]) ** 2 + (p.z - pz[k]) ** 2 + (p.y - (track.py ? track.py[k] : p.y)) ** 2
     let best = Infinity, bk = 0;
     for (let k = 0; k < n; k += 8) {
-      const dx = p.x - px[k], dz = p.z - pz[k];
-      const d = dx * dx + dz * dz;
+      const d = dd(k);
       if (d < best) { best = d; bk = k; }
     }
     for (let j = bk - 8; j <= bk + 8; j++) {
       const k = ((j % n) + n) % n;
-      const dx = p.x - px[k], dz = p.z - pz[k];
-      const d = dx * dx + dz * dz;
+      const d = dd(k);
       if (d < best) { best = d; bk = k; }
     }
     if (bk === p.k) continue;
@@ -163,11 +162,8 @@ function applyLampDensity(posts, track, height, onlyAlways, targetGap) {
   if (dens < 1) {
     const out = [];
     let lastK = null;
-    for (const p of sorted) {
-      if (lastK == null) { out.push(p); lastK = p.k; continue; }
-      const span = (p.k - lastK + n) % n;
-      if (span >= targetGap) { out.push(p); lastK = p.k; }
-    }
+    for (const p of sorted) if (lastK == null || p.custom || (p.k - lastK + n) % n >= targetGap) { out.push(p); lastK = p.k; }
+    while (out.length > 1 && (out[0].k - out[out.length - 1].k + n) % n < targetGap && !out[out.length - 1].custom) out.pop();
     return out.length ? out : posts;
   }
   const fill = [];
