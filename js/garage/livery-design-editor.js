@@ -122,7 +122,12 @@ const GarageLiveryDesignEditor = (function () {
     });
     const actionRow = row("DESIGN"), actions = document.createElement("span"); actions.className = "cs-liv-ed-finish"; actionRow.appendChild(actions); insert(actionRow);
     const swap = button("SWAP COLOURS", () => {
-      [draft.patternTint, draft.patternSecond] = [draft.patternSecond || draft.c1, draft.patternTint || draft.c2];
+      // Unset tints resolve through designPair (its DESIGN_FLOOR pick), not c1/c2: the body colour would hide the design.
+      const rgb = (h) => { const m = /^#?([0-9a-f]{6})$/i.exec(h || ""); return m ? [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255) : null; };
+      const hex = (c) => { const m = /^rgb\((\d+),(\d+),(\d+)\)$/.exec(c); return m ? "#" + m.slice(1).map((v) => (+v).toString(16).padStart(2, "0")).join("") : c; };
+      const liv = { c1: rgb(draft.c1), c2: rgb(draft.c2), accent: rgb(draft.accent), cover: rgb(draft.cover), patternTint: rgb(draft.patternTint), patternSecond: rgb(draft.patternSecond) };
+      const pair = LiveryDesign.designPair(liv, draft.spineLogo);
+      [draft.patternTint, draft.patternSecond] = [draft.patternSecond || hex(pair.secondary), draft.patternTint || hex(pair.primary)];
       api.changed(); status.textContent = "Design colours swapped. Body colours are unchanged.";
     }, actions);
     const reset = button("RESET SETTINGS", () => {
