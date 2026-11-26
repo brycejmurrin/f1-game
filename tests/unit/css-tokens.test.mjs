@@ -132,12 +132,11 @@ test("stacked season setup has one reachable vertical scroll owner", () => {
     "natural-height child panes must not contain wheel chaining away from #ss-body");
 });
 
-/* #6751 / #6570 row 2: --label was a flat 14px at the early :root and coarse
- * blocks, and the floored / TEXT SIZE blocks that wrap every --fs-* rung never
- * restated it. At UI SIZE 70 that paints 9.8 px; LARGE / LARGER never grow it.
- * Bare --label: 14px stays for tree-counts; the floored :root aliases
- * --fs-micro so the floor and both TEXT SIZE steps apply (blocking-byte budget
- * forbids restating max() in each preset).
+/* #6751 / #6570 row 2: --label was a flat 14px at the early :root and on
+ * body:not(.desktop), and the floored / TEXT SIZE blocks never restated it.
+ * Bare --label: 14px stays on early :root for tree-counts; the floored :root
+ * aliases --fs-micro. body:not(.desktop) must NOT restate --label (higher
+ * specificity than :root would keep a flat 14px on phones).
  * Asserts use equal on parsed decls so the pin ratchets stay flat. */
 function declOf(block, name) {
   const m = block.match(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*:\\s*([^;]+)"));
@@ -168,6 +167,11 @@ test("--label is floored with --fs-floor across normal, large, and larger (#6751
   assert.equal(!!larger, true, "the floored larger text-size block must exist");
   assert.equal(declOf(larger[1], "--fs-micro"), "max(18px, var(--fs-floor))",
     "--label via --fs-micro must scale to max(18px, var(--fs-floor)) under TEXT SIZE LARGER");
+
+  const touch = src.match(/body:not\(\.desktop\)\s*\{([^}]*)\}/);
+  assert.equal(!!touch, true, "the touch ladder body:not(.desktop) block must exist");
+  assert.equal(declOf(touch[1], "--label"), null,
+    "body:not(.desktop) must not set --label (it outranks :root and would keep a flat 14px on phones)");
 });
 
 /* #6751 / #6570 row 3: [data-dep-reason] used font-size: 0.8em, which bypasses

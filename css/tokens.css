@@ -719,8 +719,6 @@ body:not(.desktop) {
   --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--ui-scale)));
   --tap-0: var(--tap);         /* the touch values, frozen here too (see :root) */
   --chip-h-0: var(--chip-h);
-  /* Same ≥14 CSS floor as :root — 13px under .sheet zoom 0.9 paints 11.7. */
-  --label: 14px;
 }
 
 /* Why: docs/notes/TOKENS-RATIONALE.md §R6. */
