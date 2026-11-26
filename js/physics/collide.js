@@ -927,20 +927,36 @@ const Collide = (() => {
   // x = 0 blind: onto a car stopped on the line (Monza: shoved 1.76 m in the same step) or, at
   // Monaco, nose to tail with it four times in 21 s. Centre, else a car's width and a metre to
   // the side the car came off, else the other: the first clear of every car within a length and
-  // a half of arc. All three taken: centre, as before. `hw` is the half-width at s. No allocation.
+  // a half of arc. All three taken (#6480 K3): the point across the usable road furthest from every
+  // such car, swept in 0.25 m steps from the edge in (ties keep the side it came off) — clear
+  // road where any gap is wide enough, else the least-crowded spot, never the centre blind (that
+  // was R5's drop onto a car). `hw` is the half-width at s. No allocation.
+  function rescueGap(c, cars, L, x) {
+    let g = Infinity;
+    for (let i = 0; i < cars.length; i++) {
+      const o = cars[i], d = ((o.s - c.s + L / 2) % L + L) % L - L / 2;
+      if (o === c || o.finished || d * d >= 2.25 * LCAR * LCAR) continue;
+      const a = Math.abs((o.x || 0) - x);
+      if (a < g) g = a;
+    }
+    return g;
+  }
   function rescueX(c, cars, L, hw) {
     const off = Math.min(WCAR + 1, hw - WCAR / 2 - 0.3), sd = c.x < 0 ? -1 : 1;
     for (let k = 0; k < 3; k++) {
       const x = k ? (k === 1 ? sd : -sd) * off : 0;
-      let i = 0;
-      for (; i < cars.length; i++) {
-        const o = cars[i], d = ((o.s - c.s + L / 2) % L + L) % L - L / 2;
-        if (o !== c && !o.finished && d * d < 2.25 * LCAR * LCAR && Math.abs((o.x || 0) - x) < WCAR + 0.4) break;
-      }
-      if (i === cars.length) return x;
-      if (!(off > 0)) break;
+      if (rescueGap(c, cars, L, x) >= WCAR + 0.4) return x;
+      if (!(off > 0)) return 0;
     }
-    return 0;
+    const lim = hw - WCAR / 2 - 0.3, n = Math.floor(lim / 0.25);
+    let best = 0, bestG = rescueGap(c, cars, L, 0);
+    for (let j = n; j >= 1; j--) {
+      for (let side = 0; side < 2; side++) {
+        const x = (side ? -sd : sd) * j * 0.25, g = rescueGap(c, cars, L, x);
+        if (g > bestG + 1e-9) { best = x; bestG = g; }
+      }
+    }
+    return best;
   }
 
   return { create, LCAR, WCAR, rescueX, fillArcBuckets, releaseArcBuckets, forArcNear, arcBackSpan, scanTraffic, scanOtAhead, scanTow, parkedAhead };
