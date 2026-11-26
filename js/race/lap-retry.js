@@ -81,8 +81,10 @@ var LapRetry = (function () {
     // beside RESTART: the phone card is a grid of named areas, and a full-width row
     // outside them gets an auto row of its own: 89 px of scroll at 852x283
     // (ui-resize.spec.js pause cells). HIDDEN outside a time trial, so a race's
-    // card is exactly what it was; disabled (setting-deps says why) in a TT
-    // with no drop-in to go back to.
+    // card is exactly what it was; disabled in a TT with no drop-in to go back
+    // to (only after a coach rewind: setting-deps' why-practice row links the
+    // coach's practice line, never a reason line of its own, which would be a
+    // tile in the tray).
     // NOT in pause-opts GUARDED: a retry is cheap and loses at most one lap.
     let btn = null;
     if (typeof document !== "undefined" && document.getElementById) {
@@ -96,7 +98,10 @@ var LapRetry = (function () {
       // "restart": setPaused's no-3-2-1 resume (the run-up is the countdown)
       if (btn) btn.onclick = () => { if (retry()) call(deps.setPaused, false, "restart"); };
     }
-    function sync() { if (btn) { btn.hidden = !G.timeTrial; btn.disabled = !canRetry(); } }
+    // Disabled ONLY inside a TT: setting-deps explains a disabled control whether or
+    // not it is hidden, and a hidden-but-disabled tile would grow a reason line in a
+    // race's tray (ui-resize 852x283: a door outgrew RESUME).
+    function sync() { if (btn) { btn.hidden = !G.timeTrial; btn.disabled = !!G.timeTrial && !canRetry(); } }
 
     live = { canRetry, capture, retry, invalidate, sync, hasSnapshot: () => !!snap };
     watchPause();

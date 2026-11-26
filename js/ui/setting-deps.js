@@ -161,9 +161,8 @@ const SettingDeps = (function () {
     { key: "why-rec-quick", ids: ["pm-phonerec-quick"], why: "Already recording" },
     { key: "why-trace", ids: ["pm-driving-trace"], why: "Drive with COACH on first" },
     // PAUSE: the practice state line already says why (driving-coach.js).
-    { key: "why-practice", ids: ["pm-practice-set", "pm-practice-retry", "pm-practice-rewind", "pm-drill"], why: null, link: "pm-practice-state" },
+    { key: "why-practice", ids: ["pm-practice-set", "pm-practice-retry", "pm-practice-rewind", "pm-drill", "pm-retry-lap"], why: null, link: "pm-practice-state" },
     { key: "why-restart", ids: ["pm-restart"], why: "Off in online sessions" },
-    { key: "why-retry-lap", ids: ["pm-retry-lap"], why: "Rewind used" },
     // MUSIC & SOUND
     { key: "why-battle", ids: ["as-battle-ahead-closing", "as-battle-ahead-opening", "as-battle-behind-closing", "as-battle-behind-opening"],
       why: (s) => (soundOff(s) ? "Turn SOUND on" : "Turn BATTLE TONES on"), link: "as-battle-status" },
