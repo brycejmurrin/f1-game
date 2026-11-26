@@ -91,6 +91,67 @@ const FlybySeq = (function () {
   // a metre of a crane, and 0.9:6000 is the better ratio of the two.
   const NEAR = 0.9;
 
+  /* A RE-PICKED CIRCUIT KEEPS ITS PLANS. The memo caches below live on the
+     track object, and a re-pick (A -> B -> A) builds a NEW one, so every plan,
+     binding and fallback missed and menuFinish re-planned in full (#6493 row 4:
+     the second monaco pick cost at least the first). The caches whose keys are
+     module-stable objects (shots, shot lists) are therefore filed per BUILD —
+     circuit id + a fingerprint of the def, the centreline, the night flag and the props —
+     and a new track of the same build adopts them on its first FlybySeq call. A
+     geometry or scenery edit changes the fingerprint, so it misses: no stale
+     plan. Not carried: caches keyed by (or closing over) prop RECORDS, which
+     are new objects per build (_fbLandmarks, _fbLm*, _fbTrees, _fbSubj's
+     `skip`), and the cheap value caches (_fbCorners, _fbBounds), recomputed.
+     Bound: the last STORE_MAX builds (LRU), a few KB of plans each. */
+  const CARRY = ["_fbPlan", "_fbBind", "_fbBoundShot", "_fbFallback"], STORE_MAX = 4;
+  const _store = new Map(), _stamp = new WeakMap();
+  const mix = (h, v) => Math.imul(h ^ v, 16777619);
+  function mixArr(h, a) {
+    if (!a) return h;
+    const u = a.buffer && a.byteLength % 4 === 0 ? new Uint32Array(a.buffer, a.byteOffset, a.byteLength >> 2) : null;
+    const n = u ? u.length : a.length;
+    for (let i = 0; i < n; i++) h = mix(h, u ? u[i] : Math.round(a[i] * 1024) | 0);
+    return h;
+  }
+  const mixStr = (h, s) => { for (let j = 0; j < s.length; j++) h = mix(h, s.charCodeAt(j)); return h; };
+  // The def (street, pit, elevation, terrain and scenery inputs), the centreline, and EVERY numeric
+  // field and kind of every prop: what the plans read. A def that cannot be serialised is not carried.
+  function buildKey(track) {
+    const def = track.def, id = def && def.id;
+    if (!id || !track.px) return null;
+    let h = 0x811c9dc5;
+    try { h = mixStr(h, JSON.stringify(def)); } catch (_) { return null; }
+    h = mixArr(mixArr(mixArr(mixArr(h, track.px), track.py), track.pz), track.hw);
+    const list = (track.props && track.props.list) || [];
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      for (const k in r) {
+        const v = r[k];
+        if (typeof v === "number") h = mix(mixStr(h, k), Math.round(v * 1024) | 0);
+        else if (typeof v === "string") h = mixStr(mixStr(h, k), v);
+      }
+    }
+    return [id, track.n, (+track.total || 0).toFixed(3), track._night ? 1 : 0, list.length, (h >>> 0).toString(36)].join("|");
+  }
+  // Re-keyed when the props or the night flag change after the first call (a build still filling
+  // in): the track moves to that build's bag, so nothing planned later is filed under the early key.
+  function adopt(track) {
+    if (!track || typeof track !== "object") return;
+    const list = track.props && track.props.list, st = _stamp.get(track);
+    if (st && st.list === list && st.n === (list ? list.length : 0) && st.night === !!track._night) return;
+    _stamp.set(track, { list, n: list ? list.length : 0, night: !!track._night });
+    const key = buildKey(track);
+    if (!key) { if (st) for (const f of CARRY) track[f] = null; return; }
+    let bag = _store.get(key);
+    if (bag) _store.delete(key);
+    else bag = { _fbPlan: new WeakMap(), _fbBind: new WeakMap(), _fbBoundShot: new WeakMap(), _fbFallback: new WeakMap() };
+    _store.set(key, bag);   // most recent last
+    while (_store.size > STORE_MAX) _store.delete(_store.keys().next().value);
+    for (const f of CARRY) if (!track[f] || st) track[f] = bag[f];
+  }
+  // Export wrapper: every public entry that takes the track adopts it first.
+  const viaStore = (fn) => function (track, a, b, c, d) { adopt(track); return fn(track, a, b, c, d); };
+
   /* SOLID PROPS, THE LIFT, AND THE GROUND FLOOR live in FlybyClear.
      Thin wrappers keep the planner's bare names and the exported FlybySeq
      surface that other modules and tests still call. boxGrid / nearBoxes /
@@ -2016,11 +2077,12 @@ const FlybySeq = (function () {
   function reset() { _lastIdx = -1; _airCorner = 0; }
 
   return {
-    solve, shotAt, warmProgress, airCorner, reset, clearEye, floorEye, insideProp, blockers, isSolid, onRoadPose,
-    landmarks, bounds, lmBase, landmarkFallback, planShot,
+    solve: viaStore(solve), shotAt, warmProgress, airCorner, reset, clearEye, floorEye, insideProp, blockers, isSolid, onRoadPose,
+    landmarks, bounds, lmBase, landmarkFallback: viaStore(landmarkFallback), planShot: viaStore(planShot),
     anchorS, posePoint, cornerS, cornerSide, cornerTurn,
-    poseFromWorld, shotFromView, select, whenMatch, isNight, isWet, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, withoutGrid, bindCorners, warm, cancelWarm, setDuration, planSteps,
-    boundaries, presentation, swayAt, setHeroCars, driveHero, rollHero, gridProgress,
+    poseFromWorld, shotFromView, select, whenMatch, isNight, isWet, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, withoutGrid,
+    bindCorners: viaStore(bindCorners), warm: viaStore(warm), cancelWarm, setDuration, planSteps: viaStore(planSteps),
+    boundaries, presentation, swayAt, setHeroCars, driveHero: viaStore(driveHero), rollHero: viaStore(rollHero), gridProgress,
     DEFAULT, GRID_SHOTS,
     FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX, PARA_MAX,
   };

@@ -207,7 +207,7 @@ window.ScreenRegions = (function () {
   screen("quali", "Qualifying", { heading, content, actions, ...parts("q-", { table: "Qualifying order", back: "Back", drive: "Drive my lap", sim: "Simulate", go: "To the grid" }) });
   screen("standings", "Standings", { heading, content, actions, ...rankings });
   Object.assign(screens.teampicker.regions, { close: part("#tp-close", "Close") });
-  Object.assign(screens["duel-picker"].regions, { rivals: part("#duel-list", "Rivals"), close: part("#duel-close", "Back") });
+  Object.assign(screens["duel-picker"].regions, { rivals: part("#duel-list", "Rivals"), close: part("#duel-close", "Close") });
   Object.assign(screens.quali.regions, parts("q-", { table: "Qualifying order", back: "Back", drive: "Drive my lap", sim: "Simulate", go: "To the grid" }));
   Object.assign(screens.vsfriend.regions, parts("vs-", {
     pick: "Connection options", host: "Host a race", join: "Join a friend", "code-entry": "Room code options", code: "Room code",

@@ -355,3 +355,16 @@ test("cold Storage health search waits for Files and focuses the actual disclosu
   h.nav.back();
   assert.equal(h.dom.document.activeElement, result);
 });
+test("a lazy owner registering after a session-scoped click keeps the pause note until the query changes", () => {
+  const h = boot();
+  h.ctx.window.UiLayers = { inRace: () => false };
+  h.el("section", "pm-panel-strategy", h.body); h.el("select", "pm-pit-choice-sel", h.dom.document.querySelector("#pm-panel-strategy"));
+  const status = h.index.querySelector('[role="status"]'), pause = "Pause during a session to open Next pit-stop tyres.";
+  h.result("next pit-stop tyres").onclick();
+  assert.equal(status.textContent, pause);
+  // The graphics index resolves after the click (time-trial zoom matrix, Pages run 45756091560).
+  h.ctx.Search.register("late-owner", [{ id: "late-row", label: "Late row", page: "display", target: "late", aliases: "pit" }]);
+  assert.equal(status.textContent, pause);
+  h.result("next pit-stop tyre");
+  assert.equal(status.textContent, h.ctx.Search.find("next pit-stop tyre").length + " matching settings");
+});
