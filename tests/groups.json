@@ -1654,6 +1654,7 @@
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
         "tests/unit/pu-harvest-audio.test.mjs",
+        "tests/unit/race-frame-alloc-6752.test.mjs",
         "tests/unit/radio-duration.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
