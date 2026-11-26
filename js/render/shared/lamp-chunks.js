@@ -173,15 +173,44 @@ const LampChunks = (function () {
     }
     return false;
   }
+  // A RE-PICKED CIRCUIT REUSES ITS BAKE. A rebuild (A -> B -> A) hands in NEW
+  // chunk and light arrays, so the identity key above missed and the 25-37 ms
+  // bake ran again (#6493 row 4). On that miss the bake is looked up by CONTENT:
+  // every chunk's AABB and grid cell plus the lamp lanes, compared exactly, so
+  // a geometry or lamp edit misses. Bound: the last CONTENT_MAX bakes.
+  const CONTENT_MAX = 4, _content = [];
+  function _boxes(chunks) {
+    const s = new Float64Array(chunks.length * 8);
+    for (let c = 0, k = 0; c < chunks.length; c++, k += 8) {
+      const ch = chunks[c], mn = ch.min || [], mx = ch.max || [];
+      s[k] = mn[0]; s[k + 1] = mn[1]; s[k + 2] = mn[2]; s[k + 3] = mx[0]; s[k + 4] = mx[1]; s[k + 5] = mx[2];
+      s[k + 6] = ch.gx; s[k + 7] = ch.gz;
+    }
+    return s;
+  }
+  const _same = (a, b) => {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i] && (a[i] === a[i] || b[i] === b[i])) return false;   // NaN-safe
+    return true;
+  };
+  function _byContent(box, snap, fullCap) {
+    for (let i = _content.length - 1; i >= 0; i--) {
+      const e = _content[i];
+      if (e.fullCap === fullCap && _same(e.box, box) && _same(e.snap, snap)) { _content.splice(i, 1); _content.push(e); return e; }   // most recent last
+    }
+    return null;
+  }
   // capMax: see capFor (TLX's lightsHi bake). It is part of the key; the knob, through the cap, is not.
   function resolve(lights, chunks, knob, capMax) {
     const fullCap = capFor(1, capMax), cap = capFor(knob, capMax);
     let e = _cache.get(chunks);
     if (!e || e.src !== lights || e.fullCap !== fullCap || _moved(e.snap, lights)) {
+      const snap = _snap(lights), box = _boxes(chunks), hit = _byContent(box, snap, fullCap);
       // Bake at the FULL cap once; every narrower cap is a prefix of it.
-      const full = buildTable(lights, chunks, 1, fullCap);
-      e = { src: lights, snap: _snap(lights), full, fullCap, cap: fullCap, table: full };
+      const full = hit ? hit.full : buildTable(lights, chunks, 1, fullCap);
+      e = { src: lights, snap, box, full, fullCap, cap: fullCap, table: full };
       _cache.set(chunks, e);
+      if (!hit) { _content.push(e); if (_content.length > CONTENT_MAX) _content.shift(); }
     }
     if (e.cap !== cap) { e.table = cap === fullCap ? e.full : _reCap(e.full, cap); e.cap = cap; }
     return e.table;
