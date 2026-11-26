@@ -285,8 +285,10 @@ function parseArgs(argv) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = parseArgs(process.argv.slice(2));
-  if (args.help || !args.pageUrl || !Number.isInteger(args.build) || !args.sha) {
-    console.error("usage: node tools/ci/poll-live-shell.mjs --url <page-url> --build <n> --sha <40-hex> [--attempts N]");
+  const USAGE = "usage: node tools/ci/poll-live-shell.mjs --url <page-url> --build <n> --sha <40-hex> [--attempts N] [--run-id <id>]";
+  if (args.help) { console.log(USAGE); process.exit(0); }
+  if (!args.pageUrl || !Number.isInteger(args.build) || !args.sha) {
+    console.error(USAGE);
     process.exit(2);
   }
   const result = await pollLiveShell({
