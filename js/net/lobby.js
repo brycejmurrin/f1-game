@@ -565,7 +565,7 @@ const NetLobby = (function () {
       if (transport === t) { transport = null; pendingId = null; }
       // A code join keeps hearing offers until it connects (swap reanswer): stop it.
       if (role === "guest" && codeWait) { codeWait.cancelled = true; codeWait = null; }
-      const made = NetSession.create({ transport: t });
+      const made = NetSession.create({ transport: t, role });   // role: NetWire gates each row's sender
       sessions.set(id, made);
       if (typeof NetRendezvous !== "undefined" && NetRendezvous.verifyFor) NetRendezvous.verifyFor(t.pc).then((v) => {
         if (!v || transports.get(id) !== t) return;
@@ -582,35 +582,31 @@ const NetLobby = (function () {
         for (const s of allSessions()) s.pump(now);
       }, 25);
 
-      // Keep separate rolling windows for expensive room updates.
-      // Guests coalesce relay traffic, while the host caps each sender.
-      const helloTimes = [], readyTimes = [], qualiTimes = [], settingsTimes = [], qabortTimes = [];
+      // Separate buckets for expensive room updates, sized by NetWire.RATES
+      // (the wire table's rate column; one token-bucket primitive for every
+      // gate). Guests coalesce relay traffic, while the host caps each sender.
+      const rosterGate = () => NetWire.gate("roster", role);
+      const helloGate = rosterGate(), readyGate = rosterGate(), settingsGate = rosterGate();
+      const qualiGate = NetWire.gate("quali", role), qabortGate = NetWire.gate("qabort", "host");
       const rosterWindows = new Map(), pendingRoster = new Map();
-      const underRate = (times, limit = HELLO_RATE) => {
-        const now = performance.now();
-        while (times.length && now - times[0] > EVENT_WINDOW_MS) times.shift();
-        if (times.length >= limit) return false;
-        times.push(now);
-        return true;
-      };
       // Guest links carry several attributed peers. Preserve each peer's latest
       // state after a burst; host ingress still uses its strict connection cap.
-      function rosterEvent(type, data, apply, times) {
+      function rosterEvent(type, data, apply, gate) {
         if (type === "hello") {
           const team = TEAM_OF(data), driver = data && data.driver != null ? data.driver : 0;
           if (!team || !Number.isInteger(driver) || driver < 0 || !team.drivers || !team.drivers[driver]) return;
         } else if (!data || typeof data.ready !== "boolean") return;
         const who = data && data.from != null ? data.from : id;
-        if (role === "host") { if (underRate(times)) apply(data); return; }
+        if (role === "host") { if (gate.take()) apply(data); return; }
         const key = type + ":" + who;
         if (!rosterWindows.has(key)) {
           if (rosterWindows.size >= 2 * (MAX_GUESTS + 1)) return;
-          rosterWindows.set(key, []);
+          rosterWindows.set(key, rosterGate());
         }
         applyLatest(key, rosterWindows.get(key), data, apply);
       }
-      function applyLatest(key, window, data, apply) {
-        if (underRate(window)) {
+      function applyLatest(key, gate, data, apply) {
+        if (gate.take()) {
           if (pendingRoster.delete(key)) { clearTimeout(rosterTimers.get(key)); rosterTimers.delete(key); }
           apply(data); return;
         }
@@ -620,13 +616,14 @@ const NetLobby = (function () {
           rosterTimers.delete(key);
           if (sessions.get(id) !== made || !pendingRoster.has(key)) return;
           const latest = pendingRoster.get(key); pendingRoster.delete(key);
-          applyLatest(key, window, latest, apply);
-        }, Math.max(1, EVENT_WINDOW_MS - (performance.now() - window[0]) + 1));
+          applyLatest(key, gate, latest, apply);
+        }, Math.max(1, gate.waitMs() + 1));
         rosterTimers.set(key, timer);
       }
       // Refresh the profile when a driver changes seat or livery. The host
       // keys it by connection so a guest cannot claim another driver's ID.
-      made.onEvent(NetPlay.EV.HELLO, (p) => rosterEvent("hello", p, (p) => {
+      // Every handler below receives NetWire's decoded value for its row, never the raw payload.
+      NetWire.on(made, NetPlay.EV.HELLO, (p) => rosterEvent("hello", p, (p) => {
         p = LobbyRoster.cleanHello(p);
         if (!p) { renderRoom(); return; }
         // WHOSE profile this is. On the host, always the connection it came in
@@ -663,7 +660,7 @@ const NetLobby = (function () {
         // Learning what they picked is the moment a clash becomes knowable.
         resolveSeatClash();
         renderRoom();
-      }, helloTimes));
+      }, helloGate));
       // The host sends complete snapshots. After a burst, the final revision
       // must reach the guest or its READY can never match the host's grid.
       /** @type {(() => void) | null} */
@@ -673,19 +670,19 @@ const NetLobby = (function () {
         const start = pendingStart; pendingStart = null;
         if (start) start();
       }
-      made.onEvent(NetPlay.EV.SETTINGS, (d) => {
-        if (role === "guest") applyLatest("settings", settingsTimes, d, receiveSettings);
+      NetWire.on(made, NetPlay.EV.SETTINGS, (d) => {
+        if (role === "guest") applyLatest("settings", settingsGate, d, receiveSettings);
       });
       // A GO follows its SETTINGS on the ordered channel. Preserve that
       // order across throttling, even when the snapshot repeats approved rules.
       function onGuestStart(type, start) {
-        made.onEvent(type, (d) => {
+        NetWire.on(made, type, (d) => {
           if (role !== "guest") return;
           if (pendingRoster.has("settings")) pendingStart = () => start(d);
           else start(d);
         });
       }
-      made.onEvent(NetPlay.EV.READY, (d) => rosterEvent("ready", d, (d) => {
+      NetWire.on(made, NetPlay.EV.READY, (d) => rosterEvent("ready", d, (d) => {
         // Mirror HELLO: guests have no peer link, so the host must relay READY
         // with `from`. Key by who the ready belongs to, not the connection id
         // (on a guest that is always the host peer — docs/BUGS.md B3).
@@ -704,7 +701,7 @@ const NetLobby = (function () {
           }
         }
         renderRoom();
-      }, readyTimes));
+      }, readyGate));
       onGuestStart(NetPlay.EV.GO, (d) => {
         if (!settingsCurrent() || settingsNeedsReady || (d && d.revision != null && (d.revision !== settingsRevision || !selfReady))) {
           say("Review the host’s race settings and press READY before starting.", true); return;
@@ -721,8 +718,8 @@ const NetLobby = (function () {
       // Lobby-phase LEFT (the race phase's carries `wire`, handled by NetPlay):
       // the host saying another guest's connection closed. Only the host may
       // say it, and only about a relayed profile — never this connection's own.
-      made.onEvent(NetPlay.EV.LEFT, (d) => {
-        if (role !== "guest" || !d) return;
+      NetWire.on(made, NetPlay.EV.LEFT, (d) => {
+        if (role !== "guest") return;
         if (d.evicted) {
           hostRemovedMe = true;
           if (t) {
@@ -762,7 +759,7 @@ const NetLobby = (function () {
         if (me && d.driverId === me.id + ":" + (G.driverIdx || 0)) return false;
         // Per-connection QUALI+QLIVE cap; a guest's one link relays the room, and
         // only a driver some HELLO seated is accepted (#5012).
-        if (!underRate(qualiTimes, role === "host" ? QUALI_RATE : NetPlay.QUALI_GUEST_RATE)) return false;
+        if (!qualiGate.take()) return false;
         if (role !== "host") return [..._peers.values()].some((p) => p && typeof p.team === "string" && d.driverId === p.team + ":" + (p.driver || 0));
         const seat = heldSeat(id);
         return !!(seat && d.driverId != null && d.driverId === seat);
@@ -782,9 +779,9 @@ const NetLobby = (function () {
       });
       // Guest abortQuali → host grades that HELLO's driver no-time (relayed QUALI).
       // Rate-gated per connection like QUALI: each one is relayed to every other guest.
-      made.onEvent(QABORT, () => {
+      NetWire.on(made, QABORT, () => {
         if (role !== "host" || !friendQualifying) return;
-        if (!underRate(qabortTimes, QABORT_RATE)) return;
+        if (!qabortGate.take()) return;
         const seat = heldSeat(id);
         if (!seat) return;
         const q = { driverId: seat, t: Infinity, noTime: true };
@@ -811,11 +808,10 @@ const NetLobby = (function () {
     // peerId -> profile, and peerId -> ready. A guest's one peer is the host,
     // filed under PEER_ONE; a host files each guest under its minted "gN" id.
     const PEER_ONE = "peer";
-    const HELLO_RATE = 5, EVENT_WINDOW_MS = NetPlay.EVENT_WINDOW_MS;   // per connection, per event
-    const QUALI_RATE = NetPlay.QUALI_RATE;          // QUALI + QLIVE together, per connection
-    const QABORT = "qabort";   // guest→host "left quali sheet" (lobby-local until netplay owns it)
-    const QABORT_RATE = 2;     // per connection, per window: a guest leaves the sheet once
-    const QGO = "qgo";         // host→guest "quali is over, I am starting the race" (additive: old clients ignore the type)
+    // Rates (per connection, per window) are NetWire.RATES: roster 5, QUALI + QLIVE
+    // together 12 (a guest's relay link 48), qabort 2 — a guest leaves the sheet once.
+    const QABORT = NetWire.LOBBY_EV.QABORT;   // guest→host "left quali sheet" (lobby-local, declared in wire-schema.js)
+    const QGO = NetWire.LOBBY_EV.QGO;         // host→guest "quali is over, I am starting the race"
     let qualiAborted = false;  // this guest backed out of friend quali and is waiting in the room for the host
     const _peers = new Map();
     const _ready = new Map();

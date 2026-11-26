@@ -777,6 +777,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `lobby-settings.js` | `LobbySettings` | LAZY_NET | LobbySettings: VS FRIEND race-settings normalise + custom-circuit wire payload. |
 | `interp.js` | `NetInterp` | LAZY_NET | NetInterp — draw a rival smoothly from late, reordered or missing poses. |
 | `snapshot.js` | `NetSnapshot` | LAZY_NET | NetSnapshot — what actually goes on the wire, and how a rival is drawn smoothly from packets that arrive late, out of order, or not at all. |
+| `wire-schema.js` | `NetWire` | LAZY_NET | NetWire — the ONE declaration of every reliable VS FRIEND event (#6859 phase 1). |
 | `session.js` | `NetSession` | LAZY_NET | NetSession — the layer between a transport and the game. |
 | `quali-wire.js` | `QualiWire` | LAZY_NET | QualiWire — one validation site for a peer's qualifying time. |
 | `strategy-wire.js` | `StrategyWire` | LAZY_NET | StrategyWire — the versioned tyre and pit payload on the reliable channel. |

@@ -48,6 +48,7 @@ const src = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 globalThis.M4 = eval(src("js/core/mat4.js") + ";M4");   // shared math island — snapshot.js binds M4 at eval
 globalThis.NetInterp = eval(src("js/net/interp.js") + ";NetInterp");
 const NetSnapshot = eval(src("js/net/snapshot.js") + ";NetSnapshot");
+globalThis.NetWire = eval(src("js/net/wire-schema.js") + ";NetWire");   // NetSession / QualiWire / NetPlay read the wire table
 const NetSession = eval(src("js/net/session.js") + ";NetSession");
 globalThis.NetSnapshot = NetSnapshot;
 globalThis.NetSession = NetSession;
@@ -1816,6 +1817,18 @@ test("an oversized LAP is accepted but peerLaps keeps only its whitelisted field
   s.deliver("lap", { lap: 3, time: 92, code: "D1", epoch: junk });   // an over-long string field is not kept
   assert.equal(net.peerLaps().length, 2);
   assert.equal("epoch" in net.peerLaps()[1], false);
+  net.stop();
+});
+
+test("bindSession hands its race handler NetWire's decoded LAP, even from a non-NetSession double (#6859)", () => {
+  const { net, s } = started("host");
+  s.deliver("lap", { lap: 2, time: 91.2, code: "D1", nested: { x: 1 } });
+  const lap = net.peerLaps()[0];
+  assert.deepEqual(lap, NetWire.lapRecord({ lap: 2, time: 91.2, code: "D1" }));
+  assert.equal(Object.isFrozen(lap), true, "the stored record is the LAP row's frozen value, not a copy of the raw payload");
+  s.deliver("lap", "junk");
+  s.deliver("lap", [1, 2]);
+  assert.equal(net.peerLaps().length, 1, "a non-object LAP never reaches the handler");
   net.stop();
 });
 

@@ -1500,6 +1500,7 @@ const LAZY_NET = [
   "js/net/lobby-settings.js", // LobbySettings: SETTINGS normalise + custom-circuit wire (#1587/#1655)
   "js/net/interp.js",       // NetInterp: rival smoothing; NetSnapshot.createInterp forwards
   "js/net/snapshot.js",
+  "js/net/wire-schema.js",  // NetWire: every reliable event's size/decode/role/rate row (#6859); before its readers
   "js/net/session.js",
   "js/net/quali-wire.js",   // QualiWire: QUALI/QLIVE validation; NetPlay calls create(EV) at eval
   "js/net/strategy-wire.js", // StrategyWire: tyre/pit codec; NetPlay calls create() at eval
@@ -1580,6 +1581,7 @@ const LAZY_NET_EDGES = [
   ["js/net/interp.js", "js/net/snapshot.js"], // createInterp forwards at call time; keep the codec's dependency ordered
   ["js/net/snapshot.js", "js/net/session.js"],
   ["js/net/quali-wire.js", "js/net/netplay.js"], // NetPlay calls QualiWire.create(EV) while evaluating
+  ["js/net/wire-schema.js", "js/net/quali-wire.js"], // QualiWire.create reads NetWire as NetPlay evaluates (so netplay and lobby follow it too)
   ["js/net/strategy-wire.js", "js/net/netplay.js"], // NetPlay calls StrategyWire.create() while evaluating
   ["js/net/spectate.js", "js/net/netplay.js"],
   ["js/net/sdp.js", "js/net/handshake.js"],

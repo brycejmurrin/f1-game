@@ -720,6 +720,7 @@ async function precacheAssetLists() {
     "js/net/lobby-settings.js",
     "js/net/interp.js",
     "js/net/snapshot.js",
+    "js/net/wire-schema.js",
     "js/net/session.js",
     "js/net/quali-wire.js",
     "js/net/strategy-wire.js",
