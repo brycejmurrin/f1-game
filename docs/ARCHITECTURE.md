@@ -84,7 +84,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_Module index over 33 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_Module index over 34 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -546,6 +546,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `vehicle.js` | `Vehicle` | tag | VEHICLE tick scratch. |
 | `player-forces.js` | `PlayerForces` | tag | PLAYER FORCES: combined-slip budget, axle grip circle, soft tyre forces and the human rigid-body yaw/lateral integrate. |
 | `ai-strategy.js` | `AiStrategy` | tag | AI STRATEGY: tyre-wear pace and the stint planner. |
+| `ai-start.js` | `AiStart` | tag | AI START: the lights-out getaway plan and the lap-1 calm/headway policy, split from ai-drive.js (#6920 U4.2). |
 | `ai-drive.js` | `AiDrive` | tag | AI DRIVE: situation-aware decisions for the kinematic AI field. |
 | `ai-band.js` | `AiBand` | tag | AI PACE BAND: gap-to-player catch-up vs race-scripted fixed pace. |
 | `ai-corridor.js` | `AiCorridor` | tag | AI-only reachable passing lanes. |
@@ -743,6 +744,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `apex-cam.js` | `ApexCam` | LAZY_AGENT | ApexCam: camera hooks of window.__apex (camera, flyby, free-cam, orbit). |
 | `apex-track.js` | `ApexTrack` | LAZY_AGENT | ApexTrack: track-geometry hooks of window.__apex. |
 | `apex-lobby.js` | `ApexLobby` | LAZY_AGENT | ApexLobby: session and field hooks of window.__apex. |
+| `apex-play.js` | `ApexPlay` | LAZY_AGENT | ApexPlay: the def() registry for NEW __apex hooks (#6962, #6920 U4.4). |
 | `apex-gpu-capture.js` | `ApexGpuCapture` | LAZY_AGENT | ApexGpuCapture (#2964): dev-only __apex.gpuCapture toggle that injects vendored Spector.js (captureCanvas) or webgl-lint into the page for GLX / TLX WebGL… |
 | `apex-lifecycle.js` | `ApexLifecycle` | LAZY_AGENT | ApexLifecycle: __apex.lifecycle(), the page/render lifecycle hook (#2572). |
 | `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~220 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |
@@ -796,6 +798,12 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `share-card-layout.js` | `ShareCardLayout` | LAZY_RESULTS_SHEET | pure card layout: model + spec + text metric -> paint ops. |
 | `share-card.js` | `ShareCard` | LAZY_RESULTS_SHEET | canvas painter, PNG encoder and Web Share/download delivery. |
 | `share-card-chips.js` | `ShareCardChips` | LAZY_RESULTS_SHEET | the SHARE CARD chip and its preview sheet: one shape for every result screen. |
+
+**`js/learn-drills/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `thumb-drill.js` | `ThumbDrill` | LAZY_LEARN | THUMB DRILL, LEARN's on-track sequel to the Vegas Thumb Trainer (#6927). |
 <!-- /@gen-arch:modules -->
 
 ---

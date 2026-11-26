@@ -9,7 +9,7 @@ function setup(options = {}) {
     Log:{info(){},enabled(){return false;}},
     IncidentSim:{owns:c=>!!c.owned,notifyCar:options.onIncident || (()=>{})},
     DebrisWorld:{active:()=>false}, Tracks:{wallAt:()=>100}});
-  for(const path of ["js/core/mat4.js","js/physics/ai-drive.js","js/physics/contact-geometry.js","js/physics/collide.js"])
+  for(const path of ["js/core/mat4.js","js/physics/ai-start.js", "js/physics/ai-drive.js","js/physics/contact-geometry.js","js/physics/collide.js"])
     vm.runInContext(readFileSync(new URL(path,root),"utf8"),ctx);
   const geometry=vm.runInContext("ContactGeometry",ctx);
   const ai=vm.runInContext("AiDrive",ctx);

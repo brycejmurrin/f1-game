@@ -1881,6 +1881,7 @@
         "tests/specs/real-profile-dock.spec.js",
         "tests/specs/rotation-recovery.spec.js",
         "tests/specs/settings-stepper-paint.spec.js",
+        "tests/specs/thumb-drill.spec.js",
         "tests/specs/title-fit.spec.js",
         "tests/specs/title-menu-rotation.spec.js",
         "tests/specs/ui-button-touch.spec.js",
@@ -2254,6 +2255,11 @@
     {
       "path": "js/agent/apex-net.js",
       "global": "ApexNet",
+      "roster": "LAZY_AGENT"
+    },
+    {
+      "path": "js/agent/apex-play.js",
+      "global": "ApexPlay",
       "roster": "LAZY_AGENT"
     },
     {
@@ -3842,6 +3848,11 @@
       "roster": "LAZY_RACE_SESSION"
     },
     {
+      "path": "js/learn-drills/thumb-drill.js",
+      "global": "ThumbDrill",
+      "roster": "LAZY_LEARN"
+    },
+    {
       "path": "js/lighting/atmosphere.js",
       "global": "Atmosphere",
       "roster": "tag"
@@ -4144,6 +4155,11 @@
     {
       "path": "js/physics/ai-drive.js",
       "global": "AiDrive",
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/ai-start.js",
+      "global": "AiStart",
       "roster": "tag"
     },
     {

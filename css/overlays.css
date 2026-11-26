@@ -32,6 +32,36 @@ body:not(.desktop) { --tap-floor44: calc(44.2px / var(--ui-scale)); }
 #learn-aero-guide strong, #learn-aero-guide span { display: block; }
 #learn-aero-guide strong { font-size: var(--fs-3); }
 #learn-aero-guide span { font-size: var(--fs-2); color: var(--dim); }
+/* LEARN's THUMB DRILL (js/learn-drills/thumb-drill.js): the corner's script cue in the aero card's place, and a lap
+   card that takes taps (RETRY LAP, DRIVE ON) while the cue card leaves every touch to the dock. Over #hud (z 10), not
+   under it: the helmet cam's visor mask is #hud::before and greys out anything beneath it. */
+#thumb-drill, #thumb-drill-lap {
+  position: fixed; z-index: 11; left: 50%; transform: translateX(-50%);
+  top: max(calc(var(--sat) + 3.25rem), 17%);
+  width: max-content; max-width: min(52vw, 30rem);
+  padding: var(--pad) calc(var(--pad) * 1.5);
+  border: 1px solid var(--plate-line); border-radius: var(--r-md);
+  color: var(--text); background: var(--plate); font-family: var(--font-hud); text-align: center;
+}
+#thumb-drill { pointer-events: none; }
+#thumb-drill strong, #thumb-drill span { display: block; }
+#thumb-drill strong { font-size: var(--fs-3); }
+#thumb-drill span { font-size: var(--fs-2); color: var(--dim); }
+#thumb-drill-lap { z-index: 12; display: grid; gap: var(--gap); }
+#thumb-drill-lap[hidden] { display: none; }
+#thumb-drill-lap > strong { font-size: var(--fs-3); }
+#td-corners { display: flex; flex-wrap: wrap; justify-content: center; gap: .25rem .5rem; font-size: var(--fs-2); }
+#td-corners [data-grade="good"] { color: var(--faster); }
+#td-corners [data-grade="low"] { color: var(--red); }
+#td-actions { display: flex; justify-content: center; gap: var(--gap); }
+#thumb-drill-lap button { min-height: var(--tap); min-width: var(--tap); padding: 0 var(--pad); font: inherit; font-weight: 700; }
+@media (max-height: 500px) {
+  #thumb-drill, #thumb-drill-lap { top: max(calc(var(--sat) + 2rem), 13%); padding: .25rem .45rem; }
+}
+/* Portrait: under the HELMET and pause pair that share the top band (852 tall: they end near 184 px). */
+@media (orientation: portrait) {
+  #thumb-drill, #thumb-drill-lap { top: max(calc(var(--sat) + 9rem), 24%); max-width: min(80vw, 30rem); }
+}
 /* LEARN's THUMB TRAINER (js/ui/thumb-trainer.js): the real race dock in its preview, and the drill sized by JS into the
    free screen between the buttons. Only the dock's drive buttons stay live; everything else on the HUD goes. */
 body[data-thumb-trainer] #hud > :not(#hud-dock),
@@ -51,7 +81,8 @@ body[data-thumb-trainer] #hud::before { display: none; }   /* the race vignette 
 #tt-bar > .bigbtn { width: auto; margin: 0; min-width: 44px; padding-block: 0; padding-inline: var(--pad); font-size: var(--fs-3); }
 #tt-bar > .sel-chip, #tt-presets .sel-chip { min-height: var(--tap); min-width: 44px; font-size: var(--fs-2); }
 #tt-bar select {   /* the .set-row select (css/settings-controls.css) on the --tap row */
-  flex: 1 1 8em; min-width: 44px; width: auto; height: var(--tap); min-height: var(--tap); box-sizing: border-box; margin: 0;
+  flex: 1 1 4.5em;   /* the corner picker yields row width so 🏁 fits with it on the first row (#6927; 852x393 live profile overflowed 27 px at 8em) */
+  min-width: 44px; width: auto; height: var(--tap); min-height: var(--tap); box-sizing: border-box; margin: 0;
   padding: 0 calc(var(--gap) * 0.5); text-overflow: ellipsis;
   border: 1px solid var(--plate-line); border-radius: var(--r-sm); background: var(--plate); color: var(--text);
   font: inherit; font-size: var(--fs-2); font-weight: 600; letter-spacing: var(--ls-1);

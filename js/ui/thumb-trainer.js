@@ -184,7 +184,10 @@ const ThumbTrainer = (function () {
     const bar = el("div", { id: "tt-bar", role: "toolbar", "aria-label": "Drill" });
     const pick = el("select", { id: "tt-turn", "aria-label": "Vegas corner" });
     for (const c of CORNERS) pick.appendChild(el("option", { value: c.name }, `S${c.sec} ${c.name} ${c.dir < 0 ? "◀" : "▶"} ${SHAPES[c.shape].label}`));
-    bar.append(button("tt-back", "BACK", null, "bigbtn alt"), button("tt-prev", "◀", "Previous corner"), pick, button("tt-next", "▶", "Next corner"),
+    // 🏁 rides beside BACK: in the 254 px column (852x393, shipped profile) a ninth item at the end wrapped the bar to a
+    // fourth row and the panel overflowed by 61 px; the first row has room for it (#6927, real-profile-dock.spec.js).
+    bar.append(button("tt-back", "BACK", null, "bigbtn alt"), button("tt-track", "🏁", "Try it on track: drive Las Vegas with these cues"),
+      button("tt-prev", "◀", "Previous corner"), pick, button("tt-next", "▶", "Next corner"),
       button("tt-speed", "½×"), button("tt-go", "START", null, "bigbtn"), button("tt-view", "PEDALS", "Pedal explorer"));
     const cue = el("p", { id: "tt-cue", "aria-live": "polite" });
     const drill = el("div", { id: "tt-drill" });
@@ -206,8 +209,10 @@ const ThumbTrainer = (function () {
     if (typeof TopModal !== "undefined" && TopModal.wireLayer) TopModal.wireLayer(root);
   }
 
-  /** Open the drill over the player's real touch dock. preview(on) shows/hides the race buttons (game.js). */
-  function open(G, { preview, onClose, corner } = {}) {
+  /** Open the drill over the player's real touch dock. preview(on) shows/hides the race buttons (game.js).
+   *  drive: start the on-track drill instead (js/learn-drills/thumb-drill.js); a refused start runs onClose. */
+  function open(G, { preview, onClose, corner, drive } = {}) {
+    if (drive) { ThumbDrill.launch(G, { onFail: onClose }); return null; }
     if (session) return session;
     if (!root) build();
     const overlay = document.getElementById("overlay"), hud = document.getElementById("hud");
@@ -551,6 +556,8 @@ const ThumbTrainer = (function () {
         if (exploring) requestAnimationFrame(drawChart); else { idle(); place(); }
       }],
     ];
+    // TRY IT ON TRACK: close without reopening LEARN, then start the drill; a refused start reopens it after all.
+    handlers.push(["tt-track", () => { const back = onClose; onClose = null; close(); queueMicrotask(() => ThumbDrill.launch(G, { onFail: back })); }]);
     for (const [id, fn] of handlers) nodes[id].onclick = fn;
     pick.onchange = () => choose(pick.value);
     for (const b of document.querySelectorAll("#tt-presets button")) b.onclick = () => { preset = b.dataset.preset; drawChart(); };
@@ -598,6 +605,6 @@ const ThumbTrainer = (function () {
     return session;
   }
 
-  return Object.freeze({ open, close: () => session?.close(), SHAPES, CORNERS, PRESETS, script, score, curve });
+  return Object.freeze({ open, close: () => session?.close(), SHAPES, CORNERS, PRESETS, script, score, curve, readBest, writeBest });
 })();
 Object.freeze(ThumbTrainer);

@@ -299,6 +299,7 @@ const FULL = [
   "js/physics/vehicle.js", // tick scratch bags; loads before player-forces.js
   "js/physics/player-forces.js", // human combined-slip / Fy / yaw integrate (carve-headroom A); uses GripSteer after muF
   "js/physics/ai-strategy.js", // tyre-wear pace + stint planner; AiDrive re-exports the names
+  "js/physics/ai-start.js",   // AiStart: launch plan + lap-1 calm policy (AiDrive re-exports)
   "js/physics/ai-drive.js",
   "js/physics/ai-band.js",   // gap catch-up vs scripted fixed pace (carve-headroom D)
   "js/physics/ai-corridor.js",
@@ -923,6 +924,8 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/physics/ai-strategy.js"],     // AiStrategy binds M4.clamp at eval
   ["js/physics/ai-strategy.js", "js/physics/ai-drive.js"], // wrappers call AiStrategy.* (call time; bindTraits on first use)
   ["js/core/mat4.js", "js/physics/ai-drive.js"],         // AiDrive binds M4.clamp/lerp at eval
+  ["js/core/mat4.js", "js/physics/ai-start.js"],         // AiStart binds M4.clamp/lerp at eval
+  ["js/physics/ai-start.js", "js/physics/ai-drive.js"],  // AiDrive destructures AiStart at eval
   ["js/core/mat4.js", "js/physics/tyre-model.js"],       // TyreModel binds M4.clamp at eval
   ["js/physics/consts.js", "js/physics/tyre-model.js"],  // …and reads PhysicsConsts.BB_REF at eval
   ["js/physics/tyre-model.js", "js/game.js"],            // game.js validates the stored TYRE WEAR level at eval
@@ -1033,6 +1036,7 @@ const LAZY_AGENT = [
   "js/agent/apex-cam.js",
   "js/agent/apex-track.js",
   "js/agent/apex-lobby.js",
+  "js/agent/apex-play.js",
   "js/agent/apex-gpu-capture.js",
   "js/agent/apex-lifecycle.js",
   "js/perf/three-inspector.js", // ThreeInspector: opt-in (?inspector=1) dev panel; apex.js boots it at eval (#4978 row 4)
@@ -1046,6 +1050,7 @@ const LAZY_EDGES = [
   ["js/agent/apex-cam.js", "js/agent/apex.js"],
   ["js/agent/apex-track.js", "js/agent/apex.js"],
   ["js/agent/apex-lobby.js", "js/agent/apex.js"],
+  ["js/agent/apex-play.js", "js/agent/apex.js"],   // def() registry: ApexApi spreads ApexPlay.hooks(G)
   ["js/agent/apex-gpu-capture.js", "js/agent/apex.js"], // __apex.gpuCapture one-line registration
   ["js/perf/three-inspector.js", "js/agent/apex.js"],   // apex.js calls ThreeInspector.boot(gfx) at eval
   ["js/agent/agentview-corners.js", "js/agent/agentview.js"],
@@ -1917,7 +1922,7 @@ const MOVED = {
 
 // Learn's modal loads only after the title door is used. The iframe requests
 // its standalone page and lesson assets without a ScriptLoader version query.
-const LAZY_LEARN = ["js/ui/learn-door.js", "js/ui/thumb-trainer.js"];
+const LAZY_LEARN = ["js/ui/learn-door.js", "js/ui/thumb-trainer.js", "js/learn-drills/thumb-drill.js"];
 const SW_LEARN = [
   "learn/appearance.js", "learn/replay.js", "learn/replay.css", "learn/sandbox.js", "learn/sandbox.css",
   ...["chassis", "suspension", "deployment", "hybrid", "brake-blend", "tyre-heat",

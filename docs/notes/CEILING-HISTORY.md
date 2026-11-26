@@ -4124,3 +4124,11 @@ block in game.js, net of the nine hand-written reset lines it replaces.
 `js/game.js lines` 9675 → **9688** (+13) and `codeLines` 5535 → **5543** (+8): the registration block (four
 registrants with their `on` filters and snapshots) replaces nine reset lines at seven sites.
 Fragment: `ratchets.d/claude--scopes-race-6949.json`. Human step: `ratchet-raise` (Bryce's or the orchestrator's click).
+## 2026-11-26 — claude/u42-ai-start: AiStart split from eager AiDrive (#6920 U4.2, #6960)
+
+`(tree) eagerScripts` 297 → **298** (+1) and `eagerCodeBytes` +320 (the IIFE wrapper, the freeze list and the destructure in
+`ai-drive.js`). `js/physics/ai-start.js` holds the AI launch plan and lap-1 calm policy, moved byte for byte out of the
+1,789-line `ai-drive.js` so the #6884 B1 lap-1 headway tuning edits a ~50-line file. It must be eager, not lazy:
+`AiDrive` is eager and binds `AiStart` at eval time, so a lazy file would throw a ReferenceError at boot. The same-length
+wrapper through call-time reads would still need the file loaded. Verified move-only: `ai-spread` (bahrain, 10 laps, 3 seeds)
+byte-identical before and after. Fragment: `ratchets.d/claude--u42-ai-start.json`. Human step: `ratchet-raise`.

@@ -28,7 +28,7 @@ function loadCollide() {
   });
   for (const path of [
     "js/core/mat4.js",
-    "js/physics/ai-drive.js",
+    "js/physics/ai-start.js", "js/physics/ai-drive.js",
     "js/physics/contact-geometry.js",
     "js/physics/collide.js",
   ]) {
