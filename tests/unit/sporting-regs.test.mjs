@@ -592,7 +592,7 @@ test("#6630 a local yellow or an owed give-back: no blue warning, no penalty", (
 
 test("#6630 parity: the watch and the HUD flag chip read one blue gate (levels 0-4, owed 0/1)", () => {
   const hud = readFileSync(join(ROOT, "js/ui/hud.js"), "utf8");
-  assert.match(hud, /const caution = !!\(cn && \(cn\.level > 0 \|\| cn\.owed > 0\)\);\n(.*\n){5}  const blueCar = _blueHeld = !caution && /,
+  assert.match(hud, /const caution = !!\(cn && \(cn\.level > 0 \|\| cn\.owed > 0\)\);[\s\S]{0,600}?const blueCar = _blueHeld = !caution && /,
     "hud.js speakHud's blue gate moved: re-pin it to SportingRegs.blueSuppressed");
   for (let level = 0; level <= 4; level++) {
     for (const owed of [0, 1]) {
@@ -651,6 +651,8 @@ test("a player who retires with a place owed takes no give-back penalty (HUNT-20
   w.tick(f.p, f.all, 3, DT);
   f.p.prog = 115;
   assert.equal(w.tick(f.p, f.all, 3, DT).type, "warn");
+  assert.equal(w.owedN(), w.info().owed, "owedN (the race step's blue gate, #6630) is info().owed");
+  assert.equal(w.owedN(), 1);
   f.p.retired = true;
   assert.deepEqual(run(w, f, 3, 10), [], "no penalty event for a retired car");
   assert.equal(w.info().owed, 0);
