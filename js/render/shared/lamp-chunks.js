@@ -196,7 +196,7 @@ const LampChunks = (function () {
   function _byContent(box, snap, fullCap) {
     for (let i = _content.length - 1; i >= 0; i--) {
       const e = _content[i];
-      if (e.fullCap === fullCap && _same(e.box, box) && _same(e.snap, snap)) return e;
+      if (e.fullCap === fullCap && _same(e.box, box) && _same(e.snap, snap)) { _content.splice(i, 1); _content.push(e); return e; }   // most recent last
     }
     return null;
   }

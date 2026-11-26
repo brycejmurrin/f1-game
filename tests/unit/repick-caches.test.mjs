@@ -51,6 +51,18 @@ test("flyby: A -> B -> A reuses A's plans; a geometry edit misses", async () => 
   if (Array.isArray(pt)) pt[0] += 3; else pt.x += 3;
   const q2 = planAll(T.buildCenterline(edited));
   assert.ok(q2.every((p, i) => p !== q1[i]), "a moved point must re-plan, never serve the old plan");
+  // A def field the plans read but the centreline does not show (street: the plan's road clamp) misses too.
+  const q3 = planAll(T.buildCenterline(Object.assign({}, a2.def, { street: !a2.def.street })));
+  assert.ok(q3.every((p, i) => p !== q1[i]), "a changed def field must re-plan");
+  // Props that arrive AFTER the first call re-key the track: what it plans next is not filed under
+  // the props-less key, so a later props-less build still gets the props-less plans only.
+  const late = T.buildCenterline(a2.def);
+  assert.equal(planAll(late)[0], q1[0], "props-less: the props-less build's plans");
+  late.props = { list: [{ kind: "tower", x: 0, y: 0, z: 0, w: 4, h: 40, d: 4 }] };
+  const r1 = planAll(late);
+  assert.ok(r1.every((p, i) => p !== q1[i]), "props set after the first call must re-plan");
+  const fresh = planAll(T.buildCenterline(a2.def));
+  fresh.forEach((p, i) => assert.equal(p, q1[i], "the props-less key still holds only props-less plans"));
 });
 
 test("lamp chunks: a rebuilt, content-equal chunk set reuses the bake; an edited one re-bakes", () => {
@@ -58,8 +70,10 @@ test("lamp chunks: a rebuilt, content-equal chunk set reuses the bake; an edited
   const SRC = (MAN.PATHS && MAN.PATHS.LAMP_CHUNKS) || "js/render/shared/lamp-chunks.js";
   const DEPS = ["js/render/shared/light-budget.js", "js/render/shared/frustum.js"].map((f) => readFileSync(path.join(ROOT, f), "utf8")).join("\n");
   let bakes = 0;
-  const L = new Function("onBake", DEPS + "\n" + readFileSync(path.join(ROOT, SRC), "utf8")
-    .replace("function buildTable(lights, chunks, knob, capMax) {", "function buildTable(lights, chunks, knob, capMax) { onBake();") + "; return LampChunks;")(() => bakes++);
+  const head = "function buildTable(lights, chunks, knob, capMax) {";
+  const src = readFileSync(path.join(ROOT, SRC), "utf8");
+  assert.ok(src.includes(head), "buildTable's signature moved: update this probe, do not delete it");
+  const L = new Function("onBake", DEPS + "\n" + src.replace(head, head + " onBake();") + "; return LampChunks;")(() => bakes++);
   const lampSet = (recs) => { const a = new Float32Array(recs.length * 15); recs.forEach(([x, y, z, r], i) => { a.set([x, y, z], i * 15); a[i * 15 + 6] = r; }); return a; };
   const world = (dx) => ({
     lights: lampSet([[0, 0, 0, 50], [100 + dx, 0, 0, 50]]),
@@ -77,6 +91,11 @@ test("lamp chunks: a rebuilt, content-equal chunk set reuses the bake; an edited
   const te = L.resolve(E.lights, E.chunks, 1);
   assert.equal(bakes, 3, "an edited chunk set re-bakes");
   assert.notEqual(te, t1);
+  // A hit refreshes its place: since A2 hit, E and two more circuits baked (three newer), A again — no re-bake.
+  for (let k = 1; k <= 2; k++) { const w = world(100 * k + 7); L.resolve(w.lights, w.chunks, 1); }
+  const mid = bakes, A4 = world(0);
+  assert.equal(L.resolve(A4.lights, A4.chunks, 1), t1, "a recently re-picked bake survives three others");
+  assert.equal(bakes, mid);
   // Bounded: after more than CONTENT_MAX other bakes, the first is gone and re-bakes.
   for (let k = 1; k <= 5; k++) { const w = world(1000 * k); L.resolve(w.lights, w.chunks, 1); }
   const before = bakes, A3 = world(0);
