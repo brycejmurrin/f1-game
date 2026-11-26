@@ -65,8 +65,12 @@ const NetIce = (function () {
       let url = null;
       try { url = localStorage.getItem("apex26.turnApi"); } catch (e) { /* storage blocked (private mode): stay STUN-only */ }
       url = url || TURN_API;
-      // Credentials ride this request: https only (a stored http:// or junk URL is ignored).
-      try { if (url && new URL(url).protocol !== "https:") return null; } catch (e) { return null; }
+      // Credentials ride this request: https only (a stored http:// or junk URL is
+      // ignored), except a loopback endpoint a developer runs locally.
+      try {
+        const u = url && new URL(url);
+        if (u && u.protocol !== "https:" && !(u.protocol === "http:" && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(u.hostname))) return null;
+      } catch (e) { return null; }
       return url;
     }
     function syncTurnApi() {

@@ -455,3 +455,27 @@ test("a flood of junk events from one relay neither starves another relay's offe
   token.cancelled = true;
   await p;
 });
+
+test("a burst of 39 valid events from one relay keeps it connected and the offer is answered", async () => {
+  const h = boot();
+  let answered = 0;
+  const token = { cancelled: false };
+  const p = h.NetNostr.directExchange({ code: "ABCDEF", token, reply: async () => { answered++; return "ANSWER"; } });
+  await h.untilSockets(1);
+  const w = h.sockets[0];
+  w.open();
+  await h.tick();
+  const now = Math.floor(Date.now() / 1000);
+  for (let i = 0; i < 39; i++) {
+    const c = h.NetBytes.bytesToB64(new Uint8Array(64).map((_, j) => (i * 5 + j * 11) & 255));
+    w.onmessage({ data: JSON.stringify(["EVENT", "s1", { content: c, created_at: now }]) });
+  }
+  await new Promise((r) => setTimeout(r, 150));
+  const sealed = await h.NetRendezvous.seal("ABCDEF", "REAL-OFFER", "offer");
+  w.onmessage({ data: JSON.stringify(["EVENT", "s1", { content: h.NetBytes.bytesToB64(sealed), created_at: now }]) });
+  await new Promise((r) => setTimeout(r, 150));
+  assert.notEqual(w.readyState, 3, "under budget: not closed");
+  assert.equal(answered, 1);
+  token.cancelled = true;
+  await p;
+});

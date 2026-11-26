@@ -474,7 +474,7 @@ test("no HARDCODED-PASSWORD relay ships, and a credentials URL becomes iceServer
   // endpoint answering the documented {iceServers: [...]} shape.
   const turnServer = { urls: ["turn:relay.example:443?transport=tcp"], username: "u", credential: "c" };
   global.localStorage = { getItem: (k) => (k === "apex26.turnApi" ? "https://app.example/api/turn?apiKey=x" : null) };
-  global.fetch = async () => ({ json: async () => ({ iceServers: [turnServer] }) });
+  global.fetch = async () => ({ ok: true, json: async () => ({ iceServers: [turnServer] }) });
   try {
     await NetTransport.prefetchIce();
     const list = NetTransport.iceServers({});
@@ -529,7 +529,7 @@ test("no credential endpoint ships by default, and yours overrides it", async ()
   const fresh = load("js/net/transport.js", "NetTransport");
   const seen = [];
   const turnServer = { urls: ["turn:relay.metered.example:443"], username: "u", credential: "c" };
-  global.fetch = async (u) => { seen.push(u); return { json: async () => ({ iceServers: [turnServer] }) }; };
+  global.fetch = async (u) => { seen.push(u); return { ok: true, json: async () => ({ iceServers: [turnServer] }) }; };
   try {
     // No apex26.turnApi configured: no credential endpoint is fetched.
     global.localStorage = { getItem: () => null };
@@ -1429,7 +1429,7 @@ test("a fetched ICE entry that makes the constructor throw is dropped and rtc() 
   }
   global.RTCPeerConnection = FakePC;
   global.localStorage = { getItem: (k) => (k === "apex26.turnApi" ? "https://relay.example/creds" : null) };
-  global.fetch = async () => ({ json: async () => ({ iceServers: [{ urls: "garbage" }] }) });
+  global.fetch = async () => ({ ok: true, json: async () => ({ iceServers: [{ urls: "garbage" }] }) });
   try {
     const fresh = load("js/net/transport.js", "NetTransport");
     await fresh.prefetchIce();
@@ -1474,7 +1474,7 @@ test("stats().turn follows the PC's iceServers, not a later hasRelay() flip", as
     assert.equal(ep.stats().turn, false, "STUN-only PC reports turn:false");
 
     const turnServer = { urls: ["turn:relay.example:443"], username: "u", credential: "c" };
-    global.fetch = async () => ({ json: async () => ({ iceServers: [turnServer] }) });
+    global.fetch = async () => ({ ok: true, json: async () => ({ iceServers: [turnServer] }) });
     await fresh.prefetchIce();
     assert.equal(fresh.hasRelay(), true, "module list now has TURN");
     assert.equal(ep.stats().turn, false,
@@ -1599,7 +1599,7 @@ test("prefetchIce retains last-good TURN while a TTL refresh is in flight", asyn
   global.fetch = () => {
     fetchN++;
     if (fetchN === 1) {
-      return Promise.resolve({ json: async () => ({ iceServers: [turn1] }) });
+      return Promise.resolve({ ok: true, json: async () => ({ iceServers: [turn1] }) });
     }
     return new Promise((r) => { resolveSecond = r; });
   };
@@ -1612,7 +1612,7 @@ test("prefetchIce retains last-good TURN while a TTL refresh is in flight", asyn
     assert.ok(fresh.iceServers({}).some((e) => e.username === "u1"),
       "mid-refresh must still offer last-good TURN, not STUN-only");
     assert.equal(fresh.hasRelay(), true, "hasRelay stays true while refresh hangs");
-    resolveSecond({ json: async () => ({ iceServers: [turn2] }) });
+    resolveSecond({ ok: true, json: async () => ({ iceServers: [turn2] }) });
     await refresh;
     assert.ok(fresh.iceServers({}).some((e) => e.username === "u2"), "replacement lands");
   } finally {
@@ -1629,7 +1629,7 @@ test("prefetchIce follows TURN endpoint changes and removal", async () => {
   global.localStorage = { getItem: (k) => (k === "apex26.turnApi" ? turnUrl : null) };
   global.fetch = async (url) => {
     requested.push(url);
-    return { json: async () => ({ iceServers: [{
+    return { ok: true, json: async () => ({ iceServers: [{
       urls: "turn:" + new URL(url).host + ":443", username: url, credential: "c",
     }] }) };
   };
@@ -1662,14 +1662,14 @@ test("a late answer from an old TURN endpoint cannot replace the new relay", asy
   global.localStorage = { getItem: (k) => (k === "apex26.turnApi" ? turnUrl : null) };
   global.fetch = (url) => {
     if (url.includes("relay-a")) return new Promise((resolve) => { resolveA = resolve; });
-    return Promise.resolve({ json: async () => ({ iceServers: [{ urls: "turn:relay-b.example", username: "b" }] }) });
+    return Promise.resolve({ ok: true, json: async () => ({ iceServers: [{ urls: "turn:relay-b.example", username: "b" }] }) });
   };
   try {
     const first = fresh.prefetchIce();
     turnUrl = "https://relay-b.example/creds";
     await fresh.prefetchIce();
     assert.ok(fresh.iceServers({}).some((e) => e.username === "b"));
-    resolveA({ json: async () => ({ iceServers: [{ urls: "turn:relay-a.example", username: "a" }] }) });
+    resolveA({ ok: true, json: async () => ({ iceServers: [{ urls: "turn:relay-a.example", username: "a" }] }) });
     await first;
     assert.ok(fresh.iceServers({}).some((e) => e.username === "b"));
     assert.ok(!fresh.iceServers({}).some((e) => e.username === "a"));
