@@ -6538,7 +6538,7 @@ function updateCarAdvance(c, dt, ranked, S) {
     const digEsc = c.digEscHeld;
     const laneQueueOk = !(queued && pits.inLane(c)) || digEsc;
     const aiStuck = c.pitState !== "box" && (beachedAt(c) ||
-      (c.speed < 5 && raceT > 2 && (!unstuckActive || digEsc) && laneQueueOk));
+      (vStd(c.speed) < 5 && raceT > 2 && (!unstuckActive || digEsc) && laneQueueOk));
     // RED FLAG: the field is held under that low-speed gate on purpose — only a
     // car genuinely beached in the run-off still counts as stuck (as the player's).
     const aiRedHeld = raceCtl.level >= 4 && !beachedAt(c);
