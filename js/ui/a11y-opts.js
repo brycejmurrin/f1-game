@@ -5,7 +5,7 @@
        this module builds the row and wires it).
      * KEYBOARD FOCUS — Standard / High (html[data-focus]); High thickens the
        :focus-visible ring on menus and settings.
-     * COLOURBLIND CUES — Off / On (html[data-cb-cues]); adds S/M/H/I/W letters
+     * COLOURBLIND CUES — Auto / Off / On (AUTO follows COLOUR VISION; html[data-cb-cues]); adds S/M/H/I/W letters
        on Data Hub compound chips, ISO country codes beside circuit flags in
        menus, and matching letter/shape cues on the race HUD (tyres, flags,
        sector splits).
@@ -18,11 +18,12 @@ const A11yOpts = (function () {
   "use strict";
 
   const K_FOCUS = "focusRing";     // apex26.focusRing — "standard" | "high"
-  const K_CB = "cbCues";           // apex26.cbCues — "off" | "on"
+  const K_CB = "cbCues";           // apex26.cbCues — "auto" | "off" | "on"
   const K_HOLD = "holdMode";       // apex26.holdMode — { throttle, lookBack } each "hold" | "toggle"
 
   const FOCUS = [["standard", "STANDARD"], ["high", "HIGH"]];
-  const CB = [["off", "OFF"], ["on", "ON"]];
+  const CB = [["auto", "AUTO"], ["off", "OFF"], ["on", "ON"]];
+  const K_CVD = "cvdMode";
   const HOLD = [["hold", "HOLD"], ["toggle", "TOGGLE"]];
   // REDUCE MOTION labels (values are TitleFx's stored tokens).
   const MOTION = [["auto", "AUTO"], ["reduce", "ON"], ["off", "OFF"]];
@@ -37,7 +38,7 @@ const A11yOpts = (function () {
   }
 
   let focusRing = oneOf(store.get(K_FOCUS, "high"), FOCUS, "high");
-  let cbCues = oneOf(store.get(K_CB, "off"), CB, "off");
+  let cbCues = oneOf(store.get(K_CB, "auto"), CB, "auto");
   let holdMode = (typeof InputBindings !== "undefined" && InputBindings.parseHoldMode)
     ? InputBindings.parseHoldMode(store.get(K_HOLD, null))
     : { throttle: "hold", lookBack: "hold" };
@@ -55,7 +56,7 @@ const A11yOpts = (function () {
   function applyCb() {
     const el = root();
     if (!el || !el.dataset) return;
-    if (cbCues === "on") el.dataset.cbCues = "on";
+    if (cuesOn()) el.dataset.cbCues = "on";
     else delete el.dataset.cbCues;
   }
   function apply() { applyFocus(); applyCb(); applyHoldMode(); }
@@ -79,7 +80,7 @@ const A11yOpts = (function () {
     return focusRing;
   }
   function setCb(v) {
-    cbCues = oneOf(v, CB, "off");
+    cbCues = oneOf(v, CB, "auto");
     store.set(K_CB, cbCues);
     applyCb();
     if (typeof SettingRow !== "undefined" && SettingRow.paint) SettingRow.paint("pm-cbcues", cbCues);
@@ -97,7 +98,9 @@ const A11yOpts = (function () {
     return n ? n.charAt(0) : "";
   }
 
+  /** Effective cues: explicit ON/OFF wins; AUTO is on while COLOUR VISION is not off. */
   function cuesOn() {
+    if (cbCues === "auto") return store.get(K_CVD, "off") !== "off";
     return cbCues === "on";
   }
 
@@ -124,35 +127,35 @@ const A11yOpts = (function () {
     if (motionSel) motionSel.setAttribute("aria-describedby", "pm-motion-help");
     panel.appendChild(motion.row);
     panel.appendChild(help("pm-motion-help",
-      "AUTO follows your system preference. ON always reduces menu motion, camera shake and the pre-race flyby. OFF keeps motion even when the system asks to reduce it."));
+      "AUTO follows your system. ON always reduces menu motion, camera shake and the flyby. OFF always keeps motion."));
 
     const focus = SettingRow.build("pm-focus", "KEYBOARD FOCUS", FOCUS);
     const focusSel = focus.row.querySelector("select");
     if (focusSel) focusSel.setAttribute("aria-describedby", "pm-focus-help");
     panel.appendChild(focus.row);
     panel.appendChild(help("pm-focus-help",
-      "HIGH draws a thicker focus ring on every menu and settings control so Tab and arrow keys stay easy to see."));
+      "HIGH draws a thicker focus ring on menu and settings controls."));
 
     const cb = SettingRow.build("pm-cbcues", "COLOURBLIND CUES", CB);
     const cbSel = cb.row.querySelector("select");
     if (cbSel) cbSel.setAttribute("aria-describedby", "pm-cbcues-help");
     panel.appendChild(cb.row);
     panel.appendChild(help("pm-cbcues-help",
-      "ON adds S/M/H/I/W letters on Data Hub tyre chips, country codes beside circuit flags, and the same compound letters plus flag and sector shape cues on the race HUD."));
+      "AUTO follows COLOUR VISION; ON or OFF overrides. Adds S/M/H/I/W tyre letters, country codes by circuit flags and race HUD shapes."));
 
     const gas = SettingRow.build("pm-hold-throttle", "GAS (KEYBOARD / PAD)", HOLD);
     const gasSel = gas.row.querySelector("select");
     if (gasSel) gasSel.setAttribute("aria-describedby", "pm-hold-throttle-help");
     panel.appendChild(gas.row);
     panel.appendChild(help("pm-hold-throttle-help",
-      "HOLD keeps gas while the key or trigger is down. TOGGLE flips gas on each press (clears on pause, race end and rebinding). On-screen pedals use CONTROLS › THROTTLE."));
+      "HOLD keeps gas while held. TOGGLE flips gas on each press (clears on pause, race end, rebinding). On-screen pedals: CONTROLS › THROTTLE."));
 
     const lb = SettingRow.build("pm-hold-lookback", "LOOK BACK (KEYBOARD / PAD)", HOLD);
     const lbSel = lb.row.querySelector("select");
     if (lbSel) lbSel.setAttribute("aria-describedby", "pm-hold-lookback-help");
     panel.appendChild(lb.row);
     panel.appendChild(help("pm-hold-lookback-help",
-      "HOLD shows the mirror while the key or button is down. TOGGLE flips look-back on each press (clears on pause, race end and rebinding)."));
+      "HOLD shows the mirror while held. TOGGLE flips look-back on each press (clears on pause, race end, rebinding)."));
   }
 
   function wireRows() {

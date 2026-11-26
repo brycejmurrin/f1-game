@@ -141,13 +141,14 @@ test("colourblind help mentions race HUD cues", () => {
   A.mountPanel();
   const help = panel.children.find((n) => n.id === "pm-cbcues-help");
   assert.ok(help);
-  assert.match(help.textContent, /race HUD/i);
+  assert.ok(/race HUD/i.test(help.textContent));
+  assert.equal(help.textContent.includes("COLOUR VISION"), true, "#6907 names the other setting");
   assert.doesNotMatch(help.textContent, /follow-up|still under APPEARANCE/i);
 });
 
-test("colourblind cues off by default; on stamps data-cb-cues", () => {
+test("colourblind cues default to auto; on stamps data-cb-cues", () => {
   const { html, A } = load({ readyState: "loading" });
-  assert.equal(A.cbCues(), "off");
+  assert.equal(A.cbCues(), "auto");
   assert.equal(html.dataset.cbCues, undefined);
   A.setCb("on");
   assert.equal(html.dataset.cbCues, "on");
@@ -224,4 +225,20 @@ test("a HOLD/TOGGLE choice reaches Input and survives a reload (B·H11 settings 
 
 test("HIGH focus CSS keys off data-focus", () => {
   assert.match(TOKENS, /:root\[data-focus="high"\] :focus-visible/);
+});
+
+test("#6907 AUTO cues follow COLOUR VISION; explicit ON/OFF wins", () => {
+  const auto = load({ stored: { cvdMode: "deutan" }, readyState: "loading" });
+  assert.equal(auto.A.cbCues(), "auto");
+  assert.equal(auto.A.cuesOn(), true, "CVD mode + auto → on");
+  assert.equal(auto.html.dataset.cbCues, "on");
+  auto.stored.cvdMode = "off";
+  auto.A.applyCb();
+  assert.equal(auto.A.cuesOn(), false, "CVD off + auto → off");
+  assert.equal(auto.html.dataset.cbCues, undefined);
+  const off = load({ stored: { cvdMode: "tritan", cbCues: "off" }, readyState: "loading" });
+  assert.equal(off.A.cuesOn(), false, "explicit OFF beats CVD on");
+  assert.equal(off.html.dataset.cbCues, undefined);
+  const on = load({ stored: { cvdMode: "off", cbCues: "on" }, readyState: "loading" });
+  assert.equal(on.A.cuesOn(), true, "explicit ON with CVD off");
 });
