@@ -489,6 +489,7 @@
     "// poolModelMat, GLX shadow colour skip + uf4 pit/uTime cache, countdown",
     "// setGridIdle opts pool. Source pins, no browser, ~0.1 s.",
     "tests/unit/frame-hotpath-alloc.test.mjs",
+    "tests/unit/frame-ledger.test.mjs",
     "// Ranked-set cache distance/time budget: at 60 m/s the heap is not rebuilt",
     "// every frame, the mirror viewLights shares that budget, standstill does not",
     "// churn on the clock, and the rear window stays flash-free. ~0.2 s.",

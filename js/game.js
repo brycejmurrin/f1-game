@@ -5187,7 +5187,7 @@ function updateCar(c, dt, ranked) {
 
   // --- braking / target speed ---
   let braking; let brakeLvl; let throttleLvl; S.tyreGrip = tyreGrip; S.hw = hw; S.dd = dd; S.vT = vT; S.trMul = trMul; S.gmC = gmC; S.gm0 = gm0; S.inp = inp; S.vmax = vmax; S.pitV = pitV; S.roomL = roomL; S.roomR = roomR; S.blocker = blocker; S.blockerGap = blockerGap; S.unstuckActive = unstuckActive; S.letPass = letPass; S.aiFreeSpeed = aiFreeSpeed; S.squeezed = squeezed; S.roadL = roadL; S.roadR = roadR; S.queued = queued; S.alongO = alongO; S.alongDx = alongDx; S.alongDprog = alongDprog; S.towCar = towCar; S.towGap = towGap; S.aiT = aiT;
-  updateCarBrakePlan(c, dt, ranked, S); vmax = S.vmax, aiFreeSpeed = S.aiFreeSpeed, squeezed = S.squeezed, queued = S.queued, braking = S.braking, brakeLvl = S.brakeLvl, throttleLvl = S.throttleLvl;
+  PerfSpans.begin("car.brake"); updateCarBrakePlan(c, dt, ranked, S); PerfSpans.end("car.brake"); vmax = S.vmax, aiFreeSpeed = S.aiFreeSpeed, squeezed = S.squeezed, queued = S.queued, braking = S.braking, brakeLvl = S.brakeLvl, throttleLvl = S.throttleLvl;
 
   // --- active aero (X-mode / Z-mode) ---
   // Runs AFTER `braking` is known (touching the brake shuts the flaps) and
@@ -5281,12 +5281,12 @@ function updateCar(c, dt, ranked) {
   // Classify the visible surface BEFORE applying longitudinal forces. Kerbs
   // and the separate pit ribbon remain road, even outside the main half-width.
   let surfaceMu; let brakeDecel; let onThrottle; S.hw = hw; S.slopeSin = slopeSin; S.slopeNose = slopeNose; S.mods = mods; S.trMul = trMul; S.gmC = gmC; S.gm0 = gm0; S.perfMul = perfMul; S.inp = inp; S.vmax = vmax; S.pitV = pitV; S.cautionV = cautionV; S.deploy = deploy; S.otFree = otFree; S.braking = braking; S.brakeLvl = brakeLvl; S.throttleLvl = throttleLvl; S.gearMult = gearMult; S.accelCeil = accelCeil;
-  updateCarLongitudinal(c, dt, ranked, S); deploy = S.deploy, surfaceMu = S.surfaceMu, brakeDecel = S.brakeDecel, onThrottle = S.onThrottle;
+  PerfSpans.begin("car.long"); updateCarLongitudinal(c, dt, ranked, S); PerfSpans.end("car.long"); deploy = S.deploy, surfaceMu = S.surfaceMu, brakeDecel = S.brakeDecel, onThrottle = S.onThrottle;
   const ri = S.recordInput; if (ri) { ri.throttle = onThrottle; ri.brake = !!braking; ri.throttleLevel = throttleLvl; ri.brakeLevel = brakeLvl; ri.aero = !!c.xOn; }
 
   // --- lateral ---
   let steer, gripScale; let latFac; let kerbGrip; S.hw = hw; S.k = k; S.dd = dd; S.vT = vT; S.inp = inp; S.vmax = vmax; S.roomL = roomL; S.roomR = roomR; S.blocker = blocker; S.blockerGap = blockerGap; S.unstuckActive = unstuckActive; S.letPass = letPass; S.aiFreeSpeed = aiFreeSpeed; S.squeezed = squeezed; S.roadL = roadL; S.roadR = roadR; S.alongO = alongO; S.alongDx = alongDx; S.alongDprog = alongDprog; S.chaser = chaser; S.chaserGap = chaserGap; S.nearbyN = nearbyN; S.sep = sep; S.aiT = aiT; S.braking = braking;
-  updateCarLateral(c, dt, ranked, S); steer = S.steer, gripScale = S.gripScale, latFac = S.latFac, kerbGrip = S.kerbGrip;
+  PerfSpans.begin("car.lat"); updateCarLateral(c, dt, ranked, S); PerfSpans.end("car.lat"); steer = S.steer, gripScale = S.gripScale, latFac = S.latFac, kerbGrip = S.kerbGrip;
   // Track-frame dynamic bicycle model for the player. c.head = real world
   // heading (rad); c.yawRateCur/c.vLat = yaw rate and body lateral velocity.
   // Per-axle tyre forces (from slip angles, grip-capped) drive yaw and lateral
@@ -5299,7 +5299,7 @@ function updateCar(c, dt, ranked) {
   // a hairpin and (s, x) can't desync from a world position. c.px/c.pz are kept
   // only as a derived mirror for debug/telemetry. See the constants block.
   // Inputs persist in S; the preceding helpers already wrote their output fields.
-  updateCarBicycle(c, dt, ranked, S); steer = S.steer;
+  PerfSpans.begin("car.bike"); updateCarBicycle(c, dt, ranked, S); PerfSpans.end("car.bike"); steer = S.steer;
   // WallClamp (js/physics/wall-clamp.js): barrier / pit / gantry hard clamp +
   // human slide-along scrub + conditional road→world writeback when xPinned.
   // Collide keeps the post-contact soft clamp; peers editing walls own this file.
@@ -5362,7 +5362,7 @@ function updateCar(c, dt, ranked) {
   // --- advance along track ---
   // Player s was advanced by velocity·tangent above; AI advances by speed*dt in Frenet.
   if (S.recordInput) records.sampleInput(c, S.recordInput);
-  updateCarAdvance(c, dt, ranked, S);
+  PerfSpans.begin("car.adv"); updateCarAdvance(c, dt, ranked, S); PerfSpans.end("car.adv");
 }
 // updateCar's parts, in the order it calls them: its statements moved VERBATIM (same float ops, same order),
 // each a TurboFan unit of its own instead of one 43 KB function that deopted and recompiled whole (PERF-HUNT-2 S1).
@@ -8518,9 +8518,9 @@ function render(dt) {
   po.haze = haze ? haze.at(_mVP) : null;
   po.readVisorLens = !photoMode && !_xrEyes && typeof VisorOptics !== "undefined" ? VisorOptics.frameLens : null;
   po.visorFolded = false;
-  armBackendProbe();
+  PerfSpans.begin("present"); armBackendProbe();
   if (!XrBoot.present(gfx, _xrEyes, po)) gfx.present(po);
-  if (typeof VisorOptics !== "undefined") VisorOptics.folded(po.visorFolded);
+  PerfSpans.end("present"); if (typeof VisorOptics !== "undefined") VisorOptics.folded(po.visorFolded);
   if (homeTrack && !(gfx.warming && gfx.warming())) uiExperience.didRenderTrack();
   RaceEntryProfile.afterPresent(loadingScreen, gfx, mirrorPass.preparing());
   if (ceremonyView === "parcFerme" && !(gfx.warming && gfx.warming())) ceremony.worldPresented();
@@ -8679,7 +8679,7 @@ function tickBody(now) {
         c.rPrevHead = c.head;                 // world heading interpolates like position too
       }
       _audioParamStep = physAcc - PHYS_DT < PHYS_DT || steps === 4;   // this frame's last step
-      update(PHYS_DT);
+      PerfSpans.begin("update"); update(PHYS_DT); PerfSpans.end("update");
       physAcc -= PHYS_DT; steps++;
     }
     PerfSpans.end("physics");

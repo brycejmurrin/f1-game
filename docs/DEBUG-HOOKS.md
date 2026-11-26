@@ -1183,6 +1183,8 @@ Frames ring, `supported:null/false` where Chrome < 123) and `gpu` (= `gpuTimer()
 `measure:true` also emits `performance.measure("apex:<span>")` for Perfetto traces, each tagged
 `detail.devtools` (track-entry, group "Apex 26", one named track per phase) so the Chrome
 Performance panel shows them without a pause (`profile.mjs --mode trace` counts the tracks).
+Frame-phase ledger (#6941): the spans also carry `update`, `car.brake|long|lat|bike|adv` (accumulated per frame, not per call) and `present`;
+phone bridge verb `ledger` ({} reads a READ; `{on, reset}` is an ACTION) returns `{on, ring, phases, spans}`; an absent phase never ran.
 `physics` contains `ai` (the per-car `updateCar` loop, AI and player) and `collide`.
 Spans run on rendered frames (`tickBody`); `step()` only fills `ai`/`collide`. SwiftShader:
 CPU numbers are real, `render`/GPU are not. CLI: `node tools/perf/profile.mjs <track> --mode spans

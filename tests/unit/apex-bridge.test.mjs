@@ -1113,6 +1113,7 @@ test("#6582 the READ class: listed commands, drive stop/status, and only allow-s
   const R = (cmd, args) => api.isRead({ cmd, args });
   for (const c of ["ping", "facts", "display", "geom", "frames", "screen", "snap"]) assert.equal(R(c), true, c);
   for (const c of ["tap", "nav", "set", "key", "scroll", "drive", "reload", "path", "bench", "gpuTest", "recorder", "batch", "wait", "when", "plan", "nope"]) assert.equal(R(c, {}), false, c);
+  assert.equal(R("ledger", {}), true); assert.equal(R("ledger", { on: true }), false); assert.equal(R("ledger", { reset: true }), false);
   assert.equal(R("drive", { stop: true }), true);
   assert.equal(R("drive", { status: true }), true);
   assert.equal(R("call", { method: "perf" }), true);
@@ -1512,4 +1513,22 @@ test("#6637: call finishRace is refused while a DRIVER CAREER round is live (or 
     assert.equal(r.ok, true, f + ": " + r.error);
   }
   assert.deepEqual(hit, ["gp", "season"]);
+});
+
+test("#6941 ledger verb: reads PerfSpans phases; on/reset change the recorder", async () => {
+  const calls = [];
+  let on = false;
+  const PerfSpans = {
+    phases: ["frame", "update"],
+    on: (v) => { on = !!v; calls.push("on:" + on); return on; },
+    reset: () => { calls.push("reset"); },
+    report: () => ({ on, ring: 512, spans: { update: { n: 3, p50: 1, p95: 2, p99: 3, max: 4 } } }),
+  };
+  const { api } = load({ search: "", extra: { PerfSpans } });
+  const r = await api.handle({ cmd: "ledger", args: {} });
+  assert.equal(r.ok, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.value)), { on: false, ring: 512, phases: ["frame", "update"], spans: { update: { n: 3, p50: 1, p95: 2, p99: 3, max: 4 } } });
+  const r2 = await api.handle({ cmd: "ledger", args: { on: true, reset: true } });
+  assert.equal(r2.value.on, true);
+  assert.deepEqual(calls, ["reset", "on:true"]);
 });
