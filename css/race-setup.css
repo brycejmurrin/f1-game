@@ -507,7 +507,7 @@
   border-radius: var(--r-md);
 }
 .duel-option.active { background: var(--plate-on); border-color: var(--red); }
-.duel-option-name { font-weight: 800; letter-spacing: var(--ls-3); }
+.duel-option-name { font-size: var(--fs-3); font-weight: 800; letter-spacing: var(--ls-3); }
 .duel-option-meta { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-4); }
 /* Two rows need their control clusters plus labels and the sheet gutters. */
 /* At narrow effective widths the value is the complete control: a tap cycles

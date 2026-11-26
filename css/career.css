@@ -558,7 +558,7 @@
 }
 .co-offer:focus-visible, .cr-record:focus-visible { border-color: var(--red); background: var(--plate-on); }
 .co-offer-sw { grid-row: 1 / 3; width: 10px; height: 34px; border-radius: 2px; border: 2px solid transparent; }
-.co-offer-team { font-size: 14px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.co-offer-team { font-size: var(--fs-micro); font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .co-offer-terms { grid-column: 2 / 4; font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-2); }
 /* MOVE is the red one: leaving is the decision with consequences (a new works car,
    a garage reseeded), staying is the safe default and reads as such. */

@@ -1,0 +1,1 @@
+Fixed: At a small UI SIZE on a phone, the duel picker's rival names, the portrait title's SOUND and disclaimer, the settings search and Appearance labels, the Controls and Graphics door blurbs, the Spotify track line, the career offer team and round facts, and the lighting and flyby editors' RESET / COPY VALUES buttons now paint at least 12 px (#6599).
