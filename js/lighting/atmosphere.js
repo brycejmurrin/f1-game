@@ -491,7 +491,7 @@ function _applyRaceBody() {
     // wet NIGHT must stay dark (lifting it to 1.10 greys out the night and kills
     // the lamp-pool contrast), so dark sessions only get a whisker of lift.
     G.frame.exposure = isNightSession
-      ? Math.max(G.frame.exposure != null ? G.frame.exposure : 0.90, 0.95)
+      ? (G.frame.exposure != null ? G.frame.exposure : 0.90)   // keep the night base, never lift it
       : Math.max(G.frame.exposure != null ? G.frame.exposure : 1.0, _storm ? 1.03 : 1.00);
     // STORM: night keeps the near-black deck and visibility cost; day stays
     // overcast daylight (grey deck, readable exposure) — never a night sky.
@@ -550,7 +550,7 @@ function _applyRaceBody() {
     // A night session must stay dark under overcast too — same guard the wet/fog
     // branches use. Without it the 0.86/0.90 night exposure was forced up to 1.0,
     // greying out the night and killing lamp-pool contrast.
-    const _ovcFloor = isNightSession ? 0.95 : 1.0;
+    const _ovcFloor = isNightSession ? 0.86 : 1.0;   // 0.86 = lowest night base: never lifts it
     if (G.frame.exposure == null || G.frame.exposure < _ovcFloor) G.frame.exposure = _ovcFloor;
     // Daytime overcast: grey the ZENITH too. Only the horizon was flattened above (and
     // only for "default"), so an explicit day kept the clear-sky blue overhead -- the
@@ -613,7 +613,7 @@ function _applyRaceBody() {
     // the lamp-glow-in-fog mood. Dark sessions get a smaller floor.
     // Twilight keeps its own exposure (dusk 1.03, dawn 1.08): the 1.08 day floor
     // lifted a dusk fog brighter than a clear dusk.
-    const _fogFloor = isNightSession ? 0.95 : _twl ? 1.03 : 1.08;
+    const _fogFloor = isNightSession ? 0.86 : _twl ? 1.03 : 1.08;
     if (G.frame.exposure == null || G.frame.exposure < _fogFloor) G.frame.exposure = _fogFloor;
     // Daytime fog: same -- the zenith stayed clear-sky blue above a grey wall of fog.
     if (!isNightSession && !_twl) {
