@@ -77,14 +77,14 @@ const lazyBundles = LazyBundles.create({
   applyLightTuneIfReady: () => { if (ltStore) applyLightTune(); },
   createNetwork: () => { netPlay = NetPlay.create(G, { qualiNet }); netLobby = NetLobby.create(G, { raceSettings, qualiNet }); return netLobby; },
   bindAgent: () => { if (typeof ApexApi !== "undefined") { window.__apex = ApexApi.create(G, restoreFreePlaySelection); window.__apex.visorScene = () => typeof VisorOptics !== "undefined" ? VisorOptics.sceneFromG(G) : null; } },
-  // Recreate audio instances after LAZY_AUDIO reinjects the real `var` globals; `once` latches each part (a retry re-runs only the one that threw).
+  // Adopt the real audio instances onto the boot handles once LAZY_AUDIO reinjects the `var` globals (#6952); `once` latches each part (a retry re-runs only the one that threw).
   onAudioReady: (once = (k, f) => f()) => {
-    once("radio", () => { radioVoice = RadioVoice.create(G); });
-    once("announcer", () => { announcer = Announcer.create(G); });
-    once("rivals", () => { rivalAudio = RivalAudio.create(G); });
-    once("carSfx", () => { carSfx = CarSfx.create(G); });
-    once("panel", () => { audioPanel = AudioPanel.create(G); });
-    once("panelInit", () => { if (audioPanel && audioPanel.init) audioPanel.init(); });
+    once("radio", () => { adoptAudio(radioVoice, RadioVoice.create(G)); });
+    once("announcer", () => { adoptAudio(announcer, Announcer.create(G)); });
+    once("rivals", () => { adoptAudio(rivalAudio, RivalAudio.create(G)); });
+    once("carSfx", () => { adoptAudio(carSfx, CarSfx.create(G)); });
+    once("panel", () => { adoptAudio(audioPanel, AudioPanel.create(G)); });
+    once("panelInit", () => { audioPanel.init(); });
     once("cues", () => { if (typeof DrivingCues !== "undefined" && DrivingCues.create) DrivingCues.create(G); });
   },
   // Recreate race-session instances after LAZY_RACE_SESSION reinjects real `var`s.
@@ -104,7 +104,7 @@ const lazyBundles = LazyBundles.create({
     });
   },
 });
-const { ensureGarageExterior, SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const { ensureGarageExterior, SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, adoptAudio, audioHandle, ensureRaceSession, ensureLightPresets, ensureGarageData, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
 // Stub AudioPanel (js/audio/stub.js) pulls the real LAZY_AUDIO bundle via this hook.
 if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
@@ -996,9 +996,9 @@ const banner = AnnounceBanner.create({
   camMode: () => camMode, camModes: () => CAM_MODES, radioVoice: () => radioVoice,
   history: () => raceMessageHistory,
 });
-let radioVoice = RadioVoice.inert();   // the real instance lands at the module wires; inert() means no call site needs a guard
+const radioVoice = audioHandle(RadioVoice.inert());   // a handle (#6952): the real instance is adopted onto it; inert() means no call site needs a guard
 function announce(msg, dur, kind, still, quiet) { return banner.announce(msg, dur, kind, still, quiet); }
-let announcer = Announcer.inert();   // js/audio/announcer.js — the pre-race welcome; same inert() deal
+const announcer = audioHandle(Announcer.inert());   // js/audio/announcer.js — the pre-race welcome; same handle deal
 let /** @type {ReturnType<typeof SkidMarks.create> | null} */ skids = null;   // SkidMarks.create(), assigned once G exists (below)
 // Tyre marks (the 120-entry ring buffer, its batched vertex build and the
 // per-mark fallback draw) live in js/fx/skidmarks.js — SkidMarks.create(),
@@ -3470,11 +3470,11 @@ engineer = RaceEngineer.create(G);
 // The radio's VOICE (js/audio/radio-voice.js) — speechSynthesis over the banner
 // the engineer, the coach and race control already write. Off by default, and
 // inert wherever the API, a voice or the setting is missing.
-radioVoice = RadioVoice.create(G);
+adoptAudio(radioVoice, RadioVoice.create(G));   // the stub's create() is inert(); a resident real module lands here
 // The PRE-RACE ANNOUNCER (js/audio/announcer.js) — "Welcome to Apex 26…" over
 // the loading screen's flyby. After the radio: it borrows that module's
 // speakable() and per-channel tune, and nothing else.
-announcer = Announcer.create(G);
+adoptAudio(announcer, Announcer.create(G));
 let records = SessionRecords.create(G);   // LAZY_RACE_SESSION
 const coach = DrivingCoach.create(G);     // FULL — UiExperience captures this instance
 setupTrialSession = SetupTrialSession.create(G);
@@ -4156,8 +4156,8 @@ function drivingLineApi(trk) {
   }
   return _dlApi;
 }
-let rivalAudio = RivalAudio.create(G);   // the field around you, for GameAudio.setRivals (recreated after ensureAudio)
-let carSfx = CarSfx.create(G);           // tyre scrub, lock-up, surface, pit limiter (recreated after ensureAudio)
+const rivalAudio = audioHandle(RivalAudio.create(G));   // the field around you, for GameAudio.setRivals (a handle: adopted after ensureAudio)
+const carSfx = audioHandle(CarSfx.create(G));           // tyre scrub, lock-up, surface, pit limiter (a handle: adopted after ensureAudio)
 // Photo mode (js/camera/photo-cam.js) and lighting tuner (js/lighting/tuner-panel.js).
 const photomode = Photomode.create(G), { updatePhotoCam, exitPhotoMode } = photomode, { refreshLightTunePanel, closeLightTuner } = LightingTunerDoor.create(G);
 // CAMERA TUNER panel UI (js/camera/tuner-panel.js) — per-camera-mode framing offsets.
@@ -4224,7 +4224,7 @@ RaceEntryProfile.bindGame({ state: () => G.state, loadPhase: () => loadingScreen
 // MUSIC & SOUND panel (js/audio/panel.js) — the mixer screen, the ♪
 // master button and the audio-settings persistence. create() wires the DOM;
 // init() runs at the boot-restore position near the end of this file.
-let audioPanel = AudioPanel.create(G);   // stub at boot; real panel after ensureAudio
+const audioPanel = audioHandle(AudioPanel.create(G));   // stub at boot; the real panel is adopted onto it after ensureAudio
 
 function teamById(id) { return Teams.LIST.find((t) => t.id === id); }
 function cssCol(c) { return "rgb(" + (c[0] * 255 | 0) + "," + (c[1] * 255 | 0) + "," + (c[2] * 255 | 0) + ")"; }

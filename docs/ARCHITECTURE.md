@@ -1397,6 +1397,16 @@ radio and spotter duck holds, the SFX-bus dip and the selective focus bus.
 Factories receive live context/bus/service callbacks; context-bound state
 resets with the engine.
 
+**Audio handles (#6952).** The title boots `js/audio/stub.js`; five instances
+game.js holds (RadioVoice, Announcer, RivalAudio, CarSfx, AudioPanel) are
+HANDLES, not rebound `let`s. When LAZY_AUDIO lands, `onAudioReady` builds each
+real instance once (the `audioReadyOnce` latch) and `adoptAudio`
+(`js/core/lazy-bundles.js`) copies its property descriptors onto the same object
+and drops stub-only keys: no Proxy, no forwarders, so `G.radio`, `G.announcer`
+and every captured reference stay live. Stub keys equal the real keys
+(`tests/unit/audio-stub-parity.test.mjs`; AudioPanel `_stub` and the RivalAudio
+module's `attach`/`setMix`, which drive the `_pendingAttach` hand-off, are exempt).
+
 Engine = a looping recorded drone pitched by revs (assets/sfx/f1_engine.mp3),
 with two detuned saws plus a sub-octave square ~95–795 Hz as the fallback when decode fails.
 Continuous layers use two buses: engine, whine, harvest, rivals and reverb use

@@ -1651,6 +1651,8 @@
         "tests/unit/audio-panel-boot.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-sample-upgrade.test.mjs",
+        "tests/unit/audio-scope-once-vm.test.mjs",
+        "tests/unit/audio-stub-parity.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/battle-earcon.test.mjs",
         "tests/unit/blip-voice-pool.test.mjs",
