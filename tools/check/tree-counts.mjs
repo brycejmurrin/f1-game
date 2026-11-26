@@ -9,6 +9,7 @@
  * The measurement is the reusable part, so it moved here; the number moved to
  * ratchets.json; the ceiling history moved to docs/notes/CEILING-HISTORY.md.
  * Behaviour is unchanged — each function is the original scan, moved verbatim.
+ * gWrites (U0.2 of #6920): G.<member> writes through the façade, by file; measured only.
  */
 import cp from "node:child_process";
 import fs from "node:fs";
@@ -330,6 +331,38 @@ export function zeroRefModulesReport(corpus) {
 }
 export const zeroRefModules = () => zeroRefModulesReport().length;
 
+/** Owner map for gWrites: {default, owners:{member: ownerFile}}. Only members a module truly owns are listed. */
+const loadOwners = () => JSON.parse(fs.readFileSync(path.join(ROOT, "tools/check/g-owners.json"), "utf8"));
+
+/**
+ * gWrites — `G.<member> = ...` writes a create(ctx) module makes through the façade
+ * (state with no declared owner). Scope-resolved by check-gctx's collectUsage, so a
+ * local `G` that is not the create() parameter is not counted. `+=` and `++` are
+ * writes (collectUsage's 'write'); `delete G.x` is not. Members whose owner is the
+ * writing file itself are dropped; every other write counts (game.js, the default
+ * owner, is not scanned). One {file, member, line} row per written name.
+ */
+export async function gWriteSites(rel, source = null, owners = loadOwners().owners) {
+  const { collectUsage } = await import("./check-gctx.mjs");
+  const rows = [];
+  for (const h of collectUsage(rel, source))
+    if (h.kind === "write")
+      for (const member of h.names) if ((owners || {})[member] !== rel) rows.push({ file: rel, member, line: h.line });
+  return rows;
+}
+
+let gWriteMemo = null;
+/** Every write row over check-gctx's usage files. Memoised per process (about 2 s). */
+export async function gWriteReport() {
+  if (gWriteMemo) return gWriteMemo;
+  const { usageFiles } = await import("./check-gctx.mjs");
+  const owners = loadOwners().owners;
+  const rows = [];
+  for (const rel of usageFiles()) rows.push(...await gWriteSites(rel, null, owners));
+  return (gWriteMemo = rows);
+}
+export const gWrites = async () => (await gWriteReport()).length;
+
 /** file -> count, for a failure message that says WHERE. */
 export const byFile = (rows) => rows.reduce((m, r) => (m[r.file] = (m[r.file] || 0) + 1, m), {});
 
@@ -346,6 +379,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       colourForks: forks.slice(0, 12).map(([n, s]) => `${n} <- ${[...s].join(" | ")}`),
       zeroSpacingSheets: zeroSpacingSheets(),
       zeroRefModules: zeroRefModulesReport().map((r) => `${r.file} (${r.global || "no global"})`),
+      gWrites: byFile(await gWriteReport()),
     }, null, 2));
     process.exit(0);
   }
@@ -360,5 +394,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     rawColor: rawColor(),
     rawColorDistinct: rawColorDistinct(),
     zeroRefModules: zeroRefModules(),
+    gWrites: await gWrites(),
   }, null, 2));
 }
