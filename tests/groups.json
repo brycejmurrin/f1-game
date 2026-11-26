@@ -1332,6 +1332,8 @@
     "// failure mode is a STALE key, which returns the wrong material and shows",
     "// up only on screen. Fuzzes the real lifted source over every field.",
     "tests/unit/tlx-mat-key-memo.test.mjs",
+    "// TLXShaders.memScope ledger and memCensus byScope (#6958): per-lifetime-scope bytes, read-only.",
+    "tests/unit/tlx-mem-scope.test.mjs",
     "// TLXShaders.memCensus: texture / render-target / buffer bytes on the three path (the GLX.texCensus twin); arithmetic and shape, no GPU.",
     "tests/unit/tlx-mem.test.mjs",
     "tests/unit/tlx-mirror-inset.test.mjs",

@@ -142,7 +142,7 @@ function simCareerRound() {
 // not quote that text (quoting it moves the slice and invents a hook called
 // `for`).
 // READ-ONLY hooks never force it (#6488: menuPrep pollers in a picker tap's settle froze 0.5-1 s, replacing the stepped build).
-const LAZY_READ_ONLY = new Set(["menuPrep", "info", "probe", "texCensus", "agentHelp", "garagePrebuild", "garageCam"]);
+const LAZY_READ_ONLY = new Set(["menuPrep", "info", "probe", "texCensus", "tlxMem", "agentHelp", "garagePrebuild", "garageCam"]);
 function lazyTrackEnsure(o) {
   for (const k of Object.keys(o)) {
     const fn = o[k];
@@ -1167,6 +1167,12 @@ const api = {
     ? gfx.texCensus()
     : { supported: false, bytes: null, count: null,
         error: "the active backend has no texture census" }),
+  // TLX texture and geometry census by lifetime scope (boot/home/circuit/race/garage/car); read-only.
+  tlxMem: () => {
+    if (!(gfx && gfx.memScope && gfx.texCensus)) return { supported: false, error: "not the TLX backend" };
+    const { targets, biggest, ...c } = gfx.texCensus();   // no targets/biggest: the bridge reply stays small
+    return { ...c, scope: gfx.memScope() };
+  },
   matTex(v) {
     if (v !== undefined) {
       setLightTune("matTexMix", Math.max(0, Math.min(1, +v || 0)));
