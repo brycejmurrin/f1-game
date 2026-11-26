@@ -366,7 +366,7 @@ test("an AI car spun round but still sliding forwards is handed back driving for
   ctx.globalThis = ctx;
   ctx.Log = { info() {}, debug() {}, warn() {} };
   ctx.localStorage = { getItem() { return null; } };
-  ctx.M4 = { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) };
+  ctx.M4 = { clamp: (v, a, b) => Math.min(b, Math.max(a, v)), rng32: (seed) => { let a = seed | 0; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; } };
   ctx.Tracks = { sample(track, s, o) { o.t = [0, 0, 1]; o.p = [0, 0, s]; o.hw = 7; return o; }, wallAt() { return 20; } };
   ctx.RaceControl = { lineTransition() { return null; } };
   ctx.DebrisWorld = { active: () => true, rapierReady: () => true, worldGen: () => 1,

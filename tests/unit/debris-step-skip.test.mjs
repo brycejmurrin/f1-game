@@ -67,6 +67,7 @@ function lateRapier({ enabled = true } = {}) {
       __build(); world = { timestep: FIXED_DT, step() { __solve(); } }; _worldTrack = track;
       _mirrors = cars.map(() => ({ setNextKinematicTranslation() {}, setNextKinematicRotation() {} }));
     }`);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8") + "; this.M4 = M4;", ctx, { filename: absSrc("js/core/mat4.js") });   // M4.rng32 binds at eval
   vm.runInContext(src, ctx);
   const M = vm.runInContext("DebrisWorld", ctx);
   M.create(G);

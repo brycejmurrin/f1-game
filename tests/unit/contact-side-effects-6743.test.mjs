@@ -96,6 +96,7 @@ function debris(PACE) {
     GameStore: { store: { raw: () => "0" } }, localStorage: { getItem: () => null }, requestIdleCallback() {},
     setTimeout: () => 0, clearTimeout() {}, Log: { warn() {}, info() {} },
   });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8") + "; this.M4 = M4;", ctx, { filename: absSrc("js/core/mat4.js") });   // M4.rng32 binds at eval
   vm.runInContext(readFileSync(join(ROOT, "js/physics/debris-world.js"), "utf8"), ctx, { filename: absSrc("js/physics/debris-world.js") });
   const M = vm.runInContext("DebrisWorld", ctx);
   const G = { cars: [], PACE };
