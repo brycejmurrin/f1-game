@@ -226,13 +226,8 @@ const CareerBackup = (function () {
     return { ok: true, name: name };
   }
 
-  // A synchronous throw (storage read, serialize) becomes a rejection: the
-  // EXPORT button chains .then/.finally and must always re-enable (#6544 r3).
-  function exportAll() {
-    try { return exportAllNow(); } catch (e) { return Promise.reject(e); }
-  }
-
-  function exportAllNow() {
+  // async: a sync throw becomes a rejection, so EXPORT's .finally re-enables (#6544 r3).
+  async function exportAll() {
     const skipped = [];
     const envelope = build(skipped);
     // Preserve raw future careers for recovery, but never download extras that
@@ -1028,9 +1023,7 @@ const CareerBackup = (function () {
     // The legacy all-careers file also restores its selected slot. Preflight
     // that revision above, before any slot writes; keep selection on failure.
     let selectionWritten = false;
-    // Never repoint the device at a slot whose own row was skipped (empty, other
-    // flavour) or rejected (bad row, migrate-failed). A slot absent from the file
-    // still takes the pointer: the legacy all-careers file restores its selection.
+    // No pointer for a slot whose own row was skipped/rejected; one absent from the file still gets it.
     const selectedSkipped = selected != null && (skipped.indexOf(selected) !== -1
       || rejected.some((r) => r && r.slot === selected));
     if (selected != null && s && !failed && !selectedSkipped) {

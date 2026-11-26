@@ -561,17 +561,3 @@ test("Android FileProvider exposes only the cache folder NativeDownload shares f
   assert.deepEqual(roots, [{ tag: "cache-path", path: exportDir + "/" }],
     "one cache-path root at EXPORT_DIR; no external-path / '.' roots");
 });
-
-test("#6544 r3: a synchronous exportAll throw re-enables the EXPORT button", async () => {
-  const source = readFileSync(join(ROOT, "js/career/career-ui.js"), "utf8");
-  const factory = source.slice(source.indexOf("function exportAllButton()"), source.indexOf("function appendImport("));
-  const { sandbox } = loadNative({ capacitor: true });
-  const notices = [], button = { disabled: false, setAttribute() {} };
-  Object.assign(sandbox, { el: () => button, G: { soundOn: false }, announce: (msg) => notices.push(msg),
-    CareerBackup: { exportAll: () => { throw new Error("storage read"); } } });
-  vm.runInContext("let armedDelete = '';\n" + factory + "\nexportAllButton();", vm.createContext(sandbox), { filename: absSrc("js/career/career-ui.js") });
-  button.onclick({ stopPropagation() {} });
-  await new Promise(setImmediate);
-  assert.equal(button.disabled, false, "EXPORT is usable again");
-  assert.deepEqual(notices, ["EXPORT FAILED"]);
-});

@@ -644,8 +644,7 @@ function teamFinishes(season, team) {
   const row = [];
   const fin = (season && season.finishes) || {};
   for (const id of Object.keys(fin)) {
-    // A parked AI seat is "team:seat:parked" (#5877): drop the suffix first, or the
-    // seat id reads as the team id and its finishes count for nobody.
+    // Parked seat ids are "team:seat:parked" (#5877): drop the suffix first.
     const seat = id.endsWith(PARK) ? id.slice(0, -PARK.length) : id;
     const k = seat.lastIndexOf(":");
     if ((k > 0 ? seat.slice(0, k) : seat) !== team) continue;
