@@ -115,6 +115,16 @@ test("installCircuit reuses one slot for a host that varies the seed (no unbound
   assert.equal(guest.Tracks.LIST.length, before + 1);
 });
 
+test("releaseEphemeral removes the pushed circuit and a later install pushes fresh (#6632 L6)", () => {
+  const { host, guest } = peers({});
+  const before = guest.Tracks.LIST.length;
+  guest.S.installCircuit(host.C.sanitize(design({ seed: 1 })));
+  assert.equal(guest.Tracks.LIST.length, before + 1);
+  assert.equal(guest.S.releaseEphemeral(), true);
+  assert.equal(guest.Tracks.LIST.length, before, "the slot does not survive leaving the lobby");
+  assert.equal(guest.S.releaseEphemeral(), false, "idempotent");
+});
+
 test("normaliseSettings refuses an oversized or hostile circuit body", () => {
   const { host } = peers({});
   const S = host.S;

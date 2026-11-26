@@ -117,7 +117,7 @@ const CarFields = (function () {
       "_planLap", "_recutLap", "_stuckFrom", "vertLoad", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_aeroGrip", "slipFactor",
       "lateralAccel", "slipFront", "slipRear", "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
       "frontUtil", "rearUtil", "uslipDwell", "brakeStab", "oslipHapT", "lastLap", "uslipHapT", "lockHapT",
-      "_cueConditionGrip", "_cueCornering", "_cueBraking", "vwF", "vwR", "kappaF", "kappaR", "_wsV", "stallT", "_hzSide"]],
+      "_cueConditionGrip", "_cueCornering", "_cueBraking", "vwF", "vwR", "kappaF", "kappaR", "_wsV", "stallT", "_hzSide", "tyreFitProg"]],
   ];
   const WARM = [];
   for (const g of WARM_GROUPS) for (const k of g[1]) WARM.push(k);

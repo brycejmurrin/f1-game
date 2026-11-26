@@ -1,0 +1,1 @@
+Fixed: Importing a career backup no longer moves the selected-slot pointer to a slot whose row was skipped, a failed EXPORT ALL CAREER SAVES no longer leaves the button disabled, and a parked AI seat's finishes now count for its own team in the constructors' tiebreak (#6834).
