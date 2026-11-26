@@ -33,7 +33,7 @@ in `js/agent/apex-bridge.js`), not this table.
 | `display` | — | the CSS→device pixel ledger (#5166): `{dpr, inner, screen, client, visualViewport, standalone, vars:{root,hud} (--ui-scale, --vwz, --hud-scale…), game/soft:{css, rect, buffer, engine, chain}, hud:{chain:{steps, zoomProduct}, time, pos}, overlay, renderScale, build:{sha, build, swCaches, sw}}`; HUD painted px = fontSize × zoomProduct × visualViewport.scale × dpr; canvas backing = css × dpr × renderScale.scale |
 | `geom` | — | the geometry ledger (docs/notes/GEOMETRY-TRUTH-HUNT-2026-11-09.md): `{inner, client, visualViewport, screen, orientation, dpr, standalone, units:{vh,svh,dvh,lvh,vw,svw}, insets:{left,top,right,bottom}, zoom:{currentCSSZoom, rectOf100At2, vwInZoom2, envInZoom2}, media, tiers, wish:{ui,hud,btn}, paint:{hudTop,hudBot,dock,dockLeft,sheet,kb,…}}`; `rectOf100At2` 200 = standardized zoom, 100 = legacy; `wish` ≠ `paint` = a slider past its fit cap |
 | `frames` | `seconds` | `{frames, fps, meanMs, p50, p95, p99, maxMs, over33, longTasks, hidden}` (rAF intervals; `hidden: true` = void, `hidden: false` proves nothing: §Cannot measure) |
-| `call` | `method`, `args[]` | any `__apex` method but the deny-list (`CALL_DENY`, `CALL_DENY_PREFIX` in `js/agent/apex-bridge.js`: saves and files, career, lobby / net, `garageParts`, `loadCarModel`) |
+| `call` | `method`, `args[]` | any `__apex` method but the deny-list (`CALL_DENY`, `CALL_DENY_PREFIX` in `js/agent/apex-bridge.js`: saves and files, career, lobby / net, `garageParts`, `loadCarModel`); `finishRace` is refused while a DRIVER CAREER round is live, since it would score the round (#6637) |
 | `path` | `to` webgpu / webgl2 / auto, `reload` | `{was, pinned, reloading}` (may be lost to the reload); no `to` = the `render` state alone |
 | `bench` | `op` tests / start (+`test`) / stop / status / result / leg (+`i`) | BenchRun (SETTINGS > GRAPHICS > BENCHMARK); `start` reloads before it replies |
 | `snap` | `w`, `q` start quality | `{w, h, q, from, chars, jpeg: "data:image/jpeg;base64,…"}` |
@@ -156,7 +156,8 @@ assist: it starts only from this command and lets go on `stop`, a pause, a quit,
   big STOP that does, and a pause or a real key still ends the drive. It is refused when the STOP cannot be shown, and
   capped at 300 s. The default stays any-touch-takes-over.
 - Ending the link (TAP TO END on the badge) stops the drive AND the rest of a running batch: the next step answers
-  `the link ended` and no later `drive` takes the car (#6636).
+  `the link ended` and no later `drive` takes the car (#6636). A `nav` or a waiting `tap` already in flight presses
+  nothing more either.
 
 END TIME TRIAL, no human (Bryce on the title screen; one comment, ~2-3 min to the reply):
 
