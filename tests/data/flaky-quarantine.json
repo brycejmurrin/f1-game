@@ -40,6 +40,17 @@
       "expires": "2026-12-02",
       "review": "Fix worker in flight (speed-up of the frame-count waits). Exit: after the fix, three cold CI passes of this spec without retry, then remove this row; any extension needs fresh failed-run evidence and a new deadline.",
       "why": "Timed out at 903.7 s on #6669 47e16525 (job 139374730606) and 905.5 s on Pages 3834d98d (job 139242485717); passed in 652 s on 1a7caffa (job 139271463724). llvmpipe: slow steps are ~137 s frame-count waits (Wait for function); not caused by the cars."
+    },
+    {
+      "spec": "tests/specs/track-switch-memory.spec.js",
+      "title": "loading circuits one after another keeps one world in memory and does not grow",
+      "signature": "^monaco: heap ",
+      "owner": "brycejmurrin",
+      "since": "2026-11-26",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/45881964604/job/140123810793",
+      "expires": "2026-12-10",
+      "review": "PR #7007. Metal real-GPU job only: monaco heap 131.7 → 133.4 → 151.3 → 134.7 → 152.1 MB (median growth 17.489 > 10), a GC sawtooth, passed on retry 1 (110.5 s). #7007's diff (night/fog exposure floors, WGX-only mieDamp) allocates nothing. Metal ~17 MB per pick is documented in docs/notes/TRACK-SWITCH-METAL-2026-10-17.md. By 2026-12-10 the owner fixes the sawtooth or re-bounds the Metal check and removes this row; an extension needs a fresh failed run and a new deadline.",
+      "why": "One red on #7007 20197e3f (job 140123810793): median 17.489 MB, series 17.8/-16.6/17.5 (GC sawtooth); passed on retry; APEX_FAIL_ON_FLAKY=1 turned the retry into exit 1. No same-tier base run found for comparison."
     }
   ]
 }

@@ -613,7 +613,7 @@ function _applyRaceBody() {
     // the lamp-glow-in-fog mood. Dark sessions get a smaller floor.
     // Twilight keeps its own exposure (dusk 1.03, dawn 1.08): the 1.08 day floor
     // lifted a dusk fog brighter than a clear dusk.
-    const _fogFloor = isNightSession ? 0.86 : _twl ? 1.03 : 1.08;
+    const _fogFloor = isNightSession ? 0.95 : _twl ? 1.03 : 1.08;
     if (G.frame.exposure == null || G.frame.exposure < _fogFloor) G.frame.exposure = _fogFloor;
     // Daytime fog: same -- the zenith stayed clear-sky blue above a grey wall of fog.
     if (!isNightSession && !_twl) {

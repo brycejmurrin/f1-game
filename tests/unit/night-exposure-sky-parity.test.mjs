@@ -41,11 +41,12 @@ async function exposure(weather, theme) {
   return G.frame.exposure;
 }
 
-test("night exposure: rain/fog/overcast never exceed dry night (street_night 0.86, other 0.90)", async () => {
+test("night exposure: rain/overcast never exceed dry night (street_night 0.86, other 0.90)", async () => {
   for (const [theme, base] of [["street_night", 0.86], ["default", 0.90]]) {
     const dry = await exposure("dry", theme);
     assert.equal(dry, base, theme + " dry night base");
-    for (const w of ["rain", "fog", "overcast"]) {
+    // fog is excluded: its night floor 0.95 is pinned by tests/specs/lighting-ab.spec.js (>= 0.94).
+    for (const w of ["rain", "overcast"]) {
       const e = await exposure(w, theme);
       assert.ok(e <= dry + 1e-9, `${theme} ${w} exposure ${e} brighter than dry ${dry}`);
     }
