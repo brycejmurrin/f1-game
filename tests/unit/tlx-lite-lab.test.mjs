@@ -32,6 +32,7 @@ function boot(search) {
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
   });
   ctx.window = ctx;
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/three/tlx-util.js"), "utf8"), ctx, { filename: absSrc("js/render/three/tlx-util.js") });
   vm.runInContext(TLX_SRC, ctx, { filename: absSrc("js/render/three/tlx.js") });
   vm.runInContext(SH_SRC, ctx, { filename: absSrc("js/render/three/tlx-shadow.js") });
   return ctx;
@@ -96,6 +97,7 @@ test("a location that throws reads as no labs", () => {
   const ctx = vm.createContext({ URLSearchParams, WeakSet, WeakMap, Math, Object });
   Object.defineProperty(ctx, "location", { get() { throw new Error("blocked"); } });
   ctx.window = ctx;
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/three/tlx-util.js"), "utf8"), ctx, { filename: absSrc("js/render/three/tlx-util.js") });
   vm.runInContext(TLX_SRC, ctx, { filename: absSrc("js/render/three/tlx.js") });
   assert.equal(ctx.TLX.liteTier(true, true), null);
 });
