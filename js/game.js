@@ -8462,6 +8462,7 @@ function render(dt) {
   const _spd = Math.max(LT.speedBlur, typeof CamComfort !== "undefined" ? CamComfort.blurAmount() : 0) * clamp((((player && player.speed) || 0) / vTop() - 0.4) / 0.5, 0, 1);
   const po = _presentOpts;
   po.photoFocus = photoLens && gfx.photoFocusAvailable?.() ? photoLens.focus : undefined;
+  po.photoDof = (dbgCam && dbgCam.dof) || null;   // Free Camera DoF sliders -> TLX photo DoF (free-cam applyKitDof, #6908)
   // Bloom joins the last MEASURED shed (lookPostShed / autoTier fallback): bloomAmt
   // 0 skips the ~9-pass bright+mip chain — the biggest post-chain saving left
   // after env/SSR/shadows. GRAPHICS: LOW sheds look post via lookPostShed (not autoTier alone).

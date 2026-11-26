@@ -18,6 +18,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const plain = (v) => JSON.parse(JSON.stringify(v));   // VM-realm arrays fail deepStrictEqual on prototype
@@ -321,6 +322,37 @@ test("suspended PhotoKit effects stay hidden across frame updates and restore th
   assert.equal(grid.hidden, true); assert.equal(dof.hidden, true);
   api.setOverlaysVisible(true); assert.equal(grid.hidden, false); assert.equal(dof.hidden, false);
   assert.equal(api.state().grid, "thirds"); assert.equal(api.state().dofBlur, 0.5);
+});
+
+// #6908: with Depth focus On and TLX's photo focus available, the sliders write dbgCam.dof, which game.js presents as
+// po.photoDof (TLX's photo DoF pass), and the CSS overlay stands down. Depth focus Off (#6445) or a renderer without
+// it (GLX / WGX): no dbgCam.dof, so no DoF pass, and the overlay stays as the labelled PREVIEW.
+test("DoF sliders reach TLX through dbgCam.dof only with Depth focus On; otherwise the CSS PREVIEW", () => {
+  const expr = gameSource().match(/po\.photoDof = ([^;]+);/)[1];
+  const presented = (G) => vm.runInNewContext(expr, { dbgCam: G.dbgCam }, { filename: "vm-page:photo-dof" });
+  const run = (depth, gfx) => {
+    const b = boot();
+    b.sb.localStorage = { getItem: (k) => (k === "apex26.photoDepthFocus" ? depth : null), setItem() {}, removeItem() {} };
+    b.G.gfx = gfx;
+    b.api.open();
+    const blur = b.dom.byId("fc-dof-blur"), focus = b.dom.byId("fc-dof-focus");
+    blur.value = "60"; b.dom.dispatch(blur, { type: "input", target: blur });
+    focus.value = "25"; b.dom.dispatch(focus, { type: "input", target: focus });
+    return b;
+  };
+  const tlx = { photoFocusAvailable: () => true };
+  const on = run("1", tlx);
+  assert.deepEqual({ ...on.G.dbgCam.dof }, { focus: 0.25, blur: 0.6 }, "the slider values ride the published camera");
+  assert.deepEqual({ ...presented(on.G) }, { focus: 0.25, blur: 0.6 }, "and the frame's present opts");
+  assert.equal(on.dom.byId("fc-dof").hidden, true, "the CSS overlay stands down: no doubled blur");
+  assert.equal(on.dom.byId("fc-dof-blur-val").textContent, "60%");
+  for (const [depth, gfx, why] of [["0", tlx, "Depth focus Off"], [null, tlx, "Depth focus never set"], ["1", {}, "GLX / WGX (no photo focus)"]]) {
+    const b = run(depth, gfx);
+    assert.equal(b.G.dbgCam.dof, undefined, why + ": no dbgCam.dof");
+    assert.equal(presented(b.G), null, why + ": no photoDof, so no DoF pass");
+    assert.equal(b.dom.byId("fc-dof").hidden, false, why + ": the CSS overlay previews");
+    assert.equal(b.dom.byId("fc-dof-blur-val").textContent, "60% PREVIEW", why + ": labelled PREVIEW");
+  }
 });
 
 // ---- one corner snap through the REAL planner on a BUILT circuit (R1-12) ----
