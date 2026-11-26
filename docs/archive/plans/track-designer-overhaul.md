@@ -1,5 +1,11 @@
 # Track Designer overhaul — UX audit and slices
 
+Status: **SHIPPED** (audited against `docs/TRACK-DESIGNER.md` 2026-11-26) — the plan below is history; the player-facing
+reference is [`docs/TRACK-DESIGNER.md`](../../TRACK-DESIGNER.md). Slices 0 and A–C (mode tabs, per-node heights, elevation
+presets and strip), D/H (theme browser, trackside props), E+F+G (**BANKING & KERBS**: FLAT / SAUSAGE / RUMBLE kerbs, BANK °,
+BERMS ON/OFF), I (themes now 30, past the 25 this plan names) and J (**TEST HERE** drive from a selected point) all appear in
+that reference. UX-1…UX-9 below are the audit as written on 2026-10-05, not open defects.
+
 Date: 2026-10-05. Base: `claude/f1-game-project-26h3ng`. Live survey: build 14034 / PR [#1042](https://github.com/brycejmurrin/f1-game/pull/1042). Chrome fixes in flight: PR [#1039](https://github.com/brycejmurrin/f1-game/pull/1039) (rail `2 CORNERS`, flat elev labels) — **this work builds on that branch**.
 
 Bryce pain: designer hard to understand/use; elevation hard on mobile; wants themes/scenery options + berms/kerbs/banked corners.
