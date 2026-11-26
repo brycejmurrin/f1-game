@@ -1221,3 +1221,17 @@ test("TopModal: a dialog wraps Tab at its last control instead of parking on <bo
   assert.equal(tab(true).defaultPrevented, true);
   assert.equal(h.focused(), "htp-close", "Shift+Tab from the first wraps to the last");
 });
+
+/* ── sheet dismiss consistency (#6753 / #6570 row 8) ─────────────────────── */
+function footOf(id) {
+  const m = HTML.match(new RegExp(`<dialog id="${id}"[\\s\\S]*?</dialog>`));
+  assert.ok(m, `#${id} dialog exists`);
+  return m[0].match(/<div class="sheet-foot">([\s\S]*?)<\/div>/)[1];
+}
+test("a lone dismiss over a visible screen reads CLOSE: Duel picker and Team picker (#6570 row 8)", () => {
+  for (const [id, btn] of [["duel-picker", "duel-close"], ["teampicker", "tp-close"]]) {
+    const foot = footOf(id);
+    assert.match(foot, new RegExp(`id="${btn}"[^>]*>CLOSE<`), `#${id} dismiss reads CLOSE`);
+  }
+  assert.match(read("js/ui/screen-regions.js"), /part\("#duel-close", "Close"\)/);
+});
