@@ -1038,6 +1038,8 @@
     "tests/unit/renderer-soft-lifecycle.test.mjs",
     "tests/unit/rendergeom-graph.test.mjs",
     "tests/unit/rendergeom-staging.test.mjs",
+    "// Re-pick reuse (#6493 row 4): flyby plans per build key, lamp bake per content. ~6 s (3 VM races).",
+    "tests/unit/repick-caches.test.mjs",
     "// Instant-replay ring (js/camera/replay-buf.js): budget, wrap, restore, solo/net scrub gates. ~0.05 s.",
     "tests/unit/replay-buf.test.mjs",
     "tests/unit/report-server.test.mjs",
