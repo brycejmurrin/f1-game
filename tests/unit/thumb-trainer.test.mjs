@@ -103,7 +103,30 @@ test("LearnDoor's trainer door hands over to the trainer and reopens Learn on it
   assert.ok(require("../../tools/manifest.cjs").LAZY_LEARN.includes("js/ui/thumb-trainer.js"), "loads with the Learn door");
 });
 
-test("Escape and BACK are one door: the trainer layer names its own BACK button", () => {
-  const body = src("js/ui/thumb-trainer.js");
-  assert.match(body, /el\("div", \{ id: "thumb-trainer", role: "region", "aria-label": "Thumb trainer", "data-esc-close": "tt-back" \}\)[\s\S]*button\("tt-back", "BACK"\)/);
+test("Escape and BACK are one door, and closing puts the title, HUD and dock back as they were", () => {
+  const dom = makeDom(), calls = [];
+  for (const id of ["overlay", "hud"]) { const el = dom.document.createElement("div"); el.id = id; dom.document.body.appendChild(el); }
+  dom.byId("hud").hidden = true;
+  const proto = Object.getPrototypeOf(dom.document.createElement("canvas"));
+  const sb = { Math, Object, Array, Map, Set, JSON, Promise, String, Number, document: dom.document, devicePixelRatio: 1, innerWidth: 852, innerHeight: 393,
+    Log: { info() {}, warn() {} }, localStorage: { getItem: () => null, setItem() {} }, addEventListener() {}, removeEventListener() {},
+    requestAnimationFrame: () => 0, cancelAnimationFrame() {}, setTimeout: () => 0, clearTimeout() {},
+    getComputedStyle: () => ({ getPropertyValue: () => "" }), Input: { reset: () => calls.push("reset"), touchLevels: () => ({ brake: 0, gas: 0, left: 0, right: 0 }) } };
+  sb.window = sb;
+  vm.runInNewContext(src("js/ui/thumb-trainer.js"), sb, { filename: absSrc("js/ui/thumb-trainer.js") });
+  const TT = vm.runInNewContext("ThumbTrainer", sb);
+  if (!proto.getContext) proto.getContext = () => null;
+  TT.open({ getSteerMode: () => "buttons" }, { preview: on => calls.push("preview " + on), onClose: () => calls.push("closed") });
+  const root = dom.byId("thumb-trainer");
+  assert.equal(root.hidden, false);
+  assert.equal(dom.byId("overlay").hidden, true);
+  assert.equal(dom.byId("hud").hidden, false, "the race dock's layer is shown");
+  const door = dom.byId(root.getAttribute("data-esc-close"));
+  assert.equal(door.textContent, "BACK", "Escape presses the trainer's own BACK");
+  door.click();
+  assert.equal(root.hidden, true);
+  assert.equal(dom.byId("overlay").hidden, false);
+  assert.equal(dom.byId("hud").hidden, true);
+  assert.equal(dom.document.body.hasAttribute("data-thumb-trainer"), false);
+  assert.deepEqual(calls, ["preview true", "preview false", "reset", "closed"], "the dock hides and every hold is released before Learn returns");
 });

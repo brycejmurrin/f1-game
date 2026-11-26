@@ -109,7 +109,6 @@ test("NEXT GP opens the hub on the schedule tab through the door, with no tab po
 // Add to Home Screen, which saves the page URL, makes an icon that reopens the drill.
 test("THUMBS presses the Learn door carrying the trainer lesson and keeps its param", () => {
   const r = boot({ search: "?go=thumbs" });
-  assert.equal(r.DeepLink.DOORS.thumbs, "mb-learn");
   r.timers.shift()();
   assert.deepEqual(r.clicks, ["mb-learn"]);
   assert.equal(r.G.$("mb-learn").dataset.openLesson, "thumbs");
