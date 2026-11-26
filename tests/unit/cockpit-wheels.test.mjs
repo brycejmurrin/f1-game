@@ -979,6 +979,9 @@ test("primeRace: the race's first rendered frame draws every warm-built mesh onc
   const { ctx, G } = v;
   ctx.CockpitOpts = Object.assign({}, loadOpts({}).opts, { haloSize: () => 2, body: () => "standard", wheel: () => "f1", interior: () => "carbon" });
   const extras = [], retro = [], flaps = [], calls = {};
+  // The harness's Car3D has no anchors table; the real one (car-body-geom.js) is what game.js and the prime both read.
+  if (!ctx.Car3D.mirrorLightAnchors) ctx.Car3D.mirrorLightAnchors = () => [];
+  if (!ctx.Car3D.bodyStyleKey) ctx.Car3D.bodyStyleKey = () => "standard";
   ctx.CarMesh = new Proxy({}, { get: (_o, k) => k === "WHEEL_ROLL_LAMBDA" ? 12 : k === "cockpitWheelRoll" ? (x) => x
     : k === "primeWheelExtras" ? (m) => extras.push(Array.from(m)) : k === "primeRetroDigits" ? (m) => retro.push(Array.from(m))
     : (a) => { calls[k] = (calls[k] || 0) + 1; return { carMesh: String(k), arg: a }; } });
@@ -1049,6 +1052,7 @@ test("primeRace: the race's first rendered frame draws every warm-built mesh onc
   // #6665: the rear-light set is one mesh drawn once per lit car; unprimed, the first frame with more cars lit than
   // ever before minted a pool wrapper and bind group mid-race (geometry #494). Every car, the player included.
   assert.equal(calls.drawRearLights, G.cars.length, "the rear-light set once per car");
+  assert.equal(calls.drawMirrorLights, G.cars.length, "the mirror lamps once per car (geometry #495/#496)");
   assert.deepEqual([...new Set(flaps.map((f) => `${f.b}:${f.still}`))].sort(), ["0.5:false", "0:true", "1:true"]);
   assert.equal(flaps.every((f) => f.zero && f.paint === paint), true, "with the frame's paint, at the zero matrix");
   assert.equal(prime(), 0, "the next frame: nothing (no warm held the primed one)");
