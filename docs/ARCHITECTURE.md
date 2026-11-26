@@ -92,7 +92,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `log.js` | `Log` | tag | levelled namespaced logging (global Log). |
 | `dev-flags.js` | `DevFlags` | tag | DevFlags: one registry for boot-time URL / localStorage toggles. |
-| `mat4.js` | `M4` | tag | column-major 4x4 matrix + vec3 helpers, plus the three SCALAR helpers modules share (M4.clamp / M4.lerp / M4.wrapDelta). ident() allocates; every *To variant… |
+| `mat4.js` | `M4` | tag | column-major 4x4 matrix + vec3 helpers, plus the SCALAR helpers modules share (M4.clamp / lerp / wrapDelta / clamp01 / smoothstep, and the seeded PRNG… |
 | `hash32.js` | `Hash32` | tag | stateless FNV-1a + murmur-style mix for career, daily challenge, and driver ratings. |
 | `clipboard.js` | `ApexClipboard` | tag | one clipboard write/read home. navigator.clipboard + textarea execCommand fallback for plain http / older WebKit. |
 | `native.js` | `Native` | tag | native-shell detect (Electron preload + Capacitor). |
@@ -314,6 +314,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `quali-sheet.js` | `QualiSheet` | LAZY_RESULTS_SHEET | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
 | `watch-transport.js` | `WatchTransport` | LAZY_REAL_RACE | Visible controls for the real-race replay. |
 | `learn-door.js` | `LearnDoor` | LAZY_LEARN | Learn title door and the lesson modal. |
+| `thumb-trainer.js` | `ThumbTrainer` | LAZY_LEARN | THUMB TRAINER, a LEARN lesson: time both thumbs through every Las Vegas corner on the player's own race buttons. |
 
 **`js/track/core/`**
 
@@ -2160,9 +2161,21 @@ look / knob / feature already differs between the three backends, or when
 auditing drift after a lighting or rendering change. Night-looks-wrong is a
 `lighting-tuner` question first; a WGX validation defect is `renderer-debug`.
 
-**The rule: a GLX fix is not done until it is mirrored in WGX and TLX — or
-recorded as a gap** in §Parity snapshot above and in the defect inventory
-[../docs/research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md).
+**The rule (D-049, #6861 option B): TLX ships; GLX is the safe-mode fallback;
+WGX is frozen.** A new look or knob ships on TLX first. A GLX port happens only
+on a correctness or phone-safety need, or on a recorded decision; otherwise the
+gap is recorded in §Parity snapshot above and in the defect inventory
+[../docs/research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md). WGX takes only
+crash and validation fixes (D-049): never port a look or knob into it, and a GLX
+or TLX fix is not "unfinished" for lacking a WGX twin.
+
+**GLX's job — safe mode.** GLX is the renderer every backend failure lands on
+(`Gfx.create()` → null), the no-adapter device path, the explicit `webgl2` pick,
+and the name of the seam (`GLX` facade). Its job is to boot and race correctly on
+any WebGL2 device, holding the features it ships today as its floor look. It
+takes crash, correctness and phone-safety fixes; it does not chase TLX looks.
+The floor-look list, a `render-glx.md` rule, a named backend-interface list and a
+fallback-correctness spec are the later phases of #6861 (not yet landed).
 
 1. `node --test tests/unit/backend-surface-parity.test.mjs` first — the
    façade must carry the same member names on all three backends (a missing

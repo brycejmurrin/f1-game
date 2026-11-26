@@ -1690,7 +1690,7 @@ function redFlagRestart() {
     // Energy, tyreClass and phaseRoll are NOT cleared — same race, and the
     // strategy and the ERS state legitimately carry through a red flag.
     c.contactT = 0; c.wrongWay = false; c.wrongT = 0; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false;
-    c.offT = 0; c.wallT = 0; c.wasOnWall = false; OvertakeMode.reset(c);
+    c.offT = 0; c.offCut = false; c.wallT = 0; c.wasOnWall = false; OvertakeMode.reset(c); WheelState.resetThermal(c);   // #6877 P6
     c.kerbGripSm = 1; c.kerbCueT = 0; c.brakeStab = null; c.axEstSm = 0;   // stationary: no brake-stability or longitudinal-accel history (flatSpot stays: same tyres)
     // A STOP IN FLIGHT IS SCRATCH, not strategy: the grid boxes sit INSIDE the
     // pit window on most circuits, so a car holding the lane when the flag flew
@@ -3487,7 +3487,7 @@ var jumpStartPenalty = JumpStartPenalty.create(G, {
 });   // LAZY_RACE_SESSION — recreated in onRaceSessionReady
 titleMenu = TitleMenu.create(G, openDataHub, () => { // returning-player, Daily and Learn (js/ui/title-menu.js)
   if (!learnAeroDrill) LearnDoor.launchAeroDrill(G, drill => { learnAeroDrill = drill; }, level => { raceDirtyAir = level; });
-});
+}, show => showTouchControls(show, false, show));   // the race dock previewed under LEARN's thumb trainer
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing(), lazyBundles.ensureReplayBroadcast),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
@@ -6538,7 +6538,7 @@ function updateCarAdvance(c, dt, ranked, S) {
     const digEsc = c.digEscHeld;
     const laneQueueOk = !(queued && pits.inLane(c)) || digEsc;
     const aiStuck = c.pitState !== "box" && (beachedAt(c) ||
-      (c.speed < 5 && raceT > 2 && (!unstuckActive || digEsc) && laneQueueOk));
+      (vStd(c.speed) < 5 && raceT > 2 && (!unstuckActive || digEsc) && laneQueueOk));
     // RED FLAG: the field is held under that low-speed gate on purpose — only a
     // car genuinely beached in the run-off still counts as stuck (as the player's).
     const aiRedHeld = raceCtl.level >= 4 && !beachedAt(c);
@@ -6560,9 +6560,10 @@ function updateCarAdvance(c, dt, ranked, S) {
         c.x = pits.laneX(c, smp.hw, c.x);
         c.speed = Math.min(pits.limit(), Math.max(c.speed, 8 * Math.max(driveTune.PACE, 0.05)));
       } else {
-        c.x = clamp(c.x, -(smp.hw - 1.5), smp.hw - 1.5);   // back onto the track
-        // Pace-scaled restore floor (same shape as coast()); never above vTop().
-        c.speed = Math.min(vT, Math.max(c.speed, 14 * Math.max(driveTune.PACE, 0.05)));
+        c.x = Collide.rescueX(c, cars, track.total, smp.hw);   // back onto the track, clear of every car (#6763 K2; the player's rescue does the same)
+        // Pace-scaled restore floor (same shape as coast()); never above vTop(); not with a car within 8 m (fired into it).
+        const near = cars.some(o => o !== c && !o.finished && Math.hypot(wrapS(o._snapProg - c.prog + track.total / 2) - track.total / 2, o._snapX - c.x) < 8);
+        if (!near) c.speed = Math.min(vT, Math.max(c.speed, 14 * Math.max(driveTune.PACE, 0.05)));
       }
       c.rescueT = 0; c.offT = 0; c.stuckT = 0; c.contactT = 0; c.digEscHeld = false;
     }
@@ -6587,14 +6588,14 @@ function rescuePlayer(c) {
   Tracks.sample(track, c.s, smp);
   c.x = Collide.rescueX(c, cars, track.total, smp.hw); c.xVis = c.x;   // centre, unless a car is there (#5775 R5)
   c.head = Math.atan2(smp.t[0], smp.t[2]);   // aligned with the track ahead
-  c.vLat = 0; c.yawRateCur = 0;
+  c.vLat = 0; c.yawRateCur = 0; c.yawVis = c.steerVis = c.skidIntensity = c.wheelLock = c.towing = 0;   // #6877 P4
   // The pace-scaled recovery speed, never the car's own (#5876); never above vTop().
   c.speed = Math.min(vTop(), 16 * Math.max(driveTune.PACE, 0.05));
   const rw = worldFromTrack(c.s, c.x, smp); c.px = rw.x; c.pz = rw.z;   // x = 0: the centre line exactly
   c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevHead = c.head;   // re-seed the render anchors (as retireCar does) or the car smears from the wall for a frame
   c.boostOn = false; c.deploying = false;
   c.xOn = false; c.aeroX = 0; c.xArmed = false;   // rescue drops back to Z-mode
-  c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.wallT = 0; c.wasOnWall = false; c.rescueT = 0;
+  c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.offCut = false; c.wallT = 0; c.wasOnWall = false; c.rescueT = 0;
   c.rescueLastT = raceT;
   // Cues are for the driver at THIS screen (not a rival recovered elsewhere). NO BANNER: the player
   // watched it happen, and the banner QUEUE (ANN_PRI) would let it delay one that matters. The sound marks it.
@@ -6634,6 +6635,7 @@ function retireCar(c, reason) {
   c.xVis = c.x;
   const w = worldFromTrack(c.s, c.x, smp);
   c.px = w.x; c.pz = w.z;
+  c.inPitLane = Tracks.inPitLane(track, c.s, c.x);   // the park pose moved it: a stale lane flag hid a car parked on the road from stopped-cars (#6763 K8)
   c.head = Math.atan2(smp.t[0], smp.t[2]);
   // Seed the render-interpolation anchors too, or the first frame after this
   // smears the car across the track from wherever it was a step ago.

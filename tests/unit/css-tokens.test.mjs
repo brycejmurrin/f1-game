@@ -24,6 +24,7 @@
  * Run: node --test tests/unit/css-tokens.test.mjs   (npm run test:tooling-fast)
  */
 import { readCssSource } from "../helpers/css-source.mjs";
+import { cssRules } from "../helpers/css-rules.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -130,4 +131,106 @@ test("stacked season setup has one reachable vertical scroll owner", () => {
   assert.ok(panes, "stacked season panes need a local overflow override");
   assert.match(panes[1], /overflow\s*:\s*visible\b/,
     "natural-height child panes must not contain wheel chaining away from #ss-body");
+});
+
+/* #6751: the type-scale roots --label and [data-dep-reason] paint >= 12 px at every UI SIZE, and --label follows TEXT
+ * SIZE. A BEHAVIOUR test: it runs the cascade of css/tokens.css (specificity, then source order; html, then body
+ * inheriting from it), substitutes var() and computes max()/calc() to the PAINTED px (own px x --ui-scale, the menu
+ * zoom), as getComputedStyle would. A reworded rule that still paints the same passes; one that paints under the floor
+ * fails. The bug it caught: a touch body re-declared a flat 14px --label (9.8 painted at UI SIZE 70). */
+const tokenRules = cssRules(fs.readFileSync(path.join(ROOT, "css/tokens.css"), "utf8"))
+  .map((r, order) => ({ ...r, order })).filter((r) => r.context.every((c) => c.slice(0, 6) !== "@media"));
+const specificity = (sel) => (sel.split("[").length - 1) + (sel.split(".").length - 1) + (sel.split(":root").length - 1);
+function cascade(selectors, inherited, inline = []) {
+  const vars = new Map(inherited);
+  tokenRules.filter((r) => selectors.has(r.selector))
+    .sort((a, b) => specificity(a.selector) - specificity(b.selector) || a.order - b.order)
+    .forEach((r) => { for (const [k, v] of r.decls) if (k.slice(0, 2) === "--") vars.set(k, v); });
+  for (const [k, v] of inline) vars.set(k, v);   // an inline style beats every rule
+  // A custom property's computed value has its var() references substituted on the element that declares it.
+  for (const [k, v] of vars) vars.set(k, substitute(v, vars, 0));
+  return vars;
+}
+function substitute(v, vars, depth) {
+  assert.ok(depth < 20, `var() cycle at ${v}`);
+  const at = v.lastIndexOf("var(");
+  if (at < 0) return v;
+  let d = 0, end = at + 3;
+  for (; end < v.length; end++) { if (v[end] === "(") d++; else if (v[end] === ")" && --d === 0) break; }
+  const inner = v.slice(at + 4, end), comma = inner.indexOf(",");
+  const name = (comma < 0 ? inner : inner.slice(0, comma)).trim();
+  const own = vars.get(name);
+  const val = own !== undefined ? substitute(own, vars, depth + 1) : comma < 0 ? "" : inner.slice(comma + 1).trim();
+  return substitute(v.slice(0, at) + val + v.slice(end + 1), vars, depth + 1);
+}
+/** Evaluate a resolved length (px, em, bare numbers, calc/max/min, + - * /) to px. */
+function px(expr, emPx) {
+  const toks = expr.replace(/\s+/g, " ").match(/-?\d*\.?\d+(?:px|em)?|[a-z]+\(|[()+\-*\/,]/g);
+  let i = 0;
+  const peek = () => toks[i], next = () => toks[i++];
+  function primary() {
+    const t = next();
+    if (t === "(" || t === "calc(") { const v = sum(); next(); return v; }
+    if (t === "max(" || t === "min(") {
+      const args = [sum()];
+      while (peek() === ",") { next(); args.push(sum()); }
+      next();
+      return t === "max(" ? Math.max(...args) : Math.min(...args);
+    }
+    const n = parseFloat(t);
+    return t.slice(-2) === "em" ? n * emPx : n;
+  }
+  function product() {
+    let v = primary();
+    while (peek() === "*" || peek() === "/") v = next() === "*" ? v * primary() : v / primary();
+    return v;
+  }
+  function sum() {
+    let v = product();
+    while (peek() === "+" || peek() === "-") v = next() === "+" ? v + product() : v - product();
+    return v;
+  }
+  const v = sum();
+  assert.equal(i, toks.length, `unparsed tail in ${expr}`);
+  return v;
+}
+/** The custom properties a menu element under <body> inherits, at a UI SIZE, TEXT SIZE and input mode. */
+function menuVars({ scale, text, touch }) {
+  // js/ui/scale.js writes --ui-scale inline on <html>.
+  const html = cascade(new Set([":root", `:root[data-text-size="${text}"]`]), [], [["--ui-scale", String(scale)]]);
+  return cascade(new Set(["body", touch ? "body:not(.desktop)" : "body.desktop"]), html);
+}
+const SCALES = [0.5, 0.6, 0.7, 0.85, 1, 1.15, 1.5];
+
+test("--label paints at least 12 px at every UI SIZE, touch and mouse, every TEXT SIZE (#6751)", () => {
+  for (const touch of [true, false]) for (const text of ["normal", "large", "larger"]) for (const scale of SCALES) {
+    const painted = px(menuVars({ scale, text, touch }).get("--label"), 16) * scale;
+    assert.ok(painted >= 11.995, `${touch ? "touch" : "mouse"} UI SIZE ${scale * 100}% TEXT ${text}: --label paints ${painted.toFixed(2)} px`);
+  }
+});
+
+test("--label grows with TEXT SIZE and is the same for touch and mouse (#6751)", () => {
+  for (const touch of [true, false]) {
+    const at = (text) => px(menuVars({ scale: 1, text, touch }).get("--label"), 16);
+    assert.ok(at("large") > at("normal") && at("larger") > at("large"),
+      `${touch ? "touch" : "mouse"}: normal ${at("normal")} < large ${at("large")} < larger ${at("larger")}`);
+  }
+  for (const scale of SCALES) {
+    const a = px(menuVars({ scale, text: "normal", touch: true }).get("--label"), 16);
+    const b = px(menuVars({ scale, text: "normal", touch: false }).get("--label"), 16);
+    assert.equal(a, b, `UI SIZE ${scale * 100}%: a touch body must not shadow the floored --label`);
+  }
+});
+
+test("a [data-dep-reason] line paints at least 12 px and keeps its 0.8em where that already clears (#6751)", () => {
+  const rule = cssRules(fs.readFileSync(path.join(ROOT, "css/settings-controls.css"), "utf8"))
+    .filter((r) => r.selector === "[data-dep-reason]" && r.decls.has("font-size")).pop();
+  assert.ok(rule, "[data-dep-reason] declares a font-size");
+  for (const touch of [true, false]) for (const scale of SCALES) {
+    const vars = menuVars({ scale, text: "normal", touch });
+    // The row it sits in: 16 px own type (the 8.96 px measurement at UI SIZE 70 was 0.8 x 16 x 0.7).
+    const own = px(substitute(rule.decls.get("font-size"), vars, 0), 16);
+    assert.ok(own * scale >= 11.995, `UI SIZE ${scale * 100}%: paints ${(own * scale).toFixed(2)} px`);
+    if (0.8 * 16 * scale >= 12) assert.equal(own, 0.8 * 16, `UI SIZE ${scale * 100}%: the floor must not enlarge a line that already clears 12 px`);
+  }
 });

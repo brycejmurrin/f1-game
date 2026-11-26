@@ -2,6 +2,15 @@
 "use strict";
 
 var GameAudio = (function () {
+  // #6448: this IIFE runs before `var GameAudio` is reassigned, so the binding
+  // is still the title stub when a gesture already resumed a primer on it.
+  let gesturePrimer = null;
+  try {
+    if (typeof GameAudio !== "undefined" && GameAudio && GameAudio._stub && typeof GameAudio.context === "function") {
+      const primed = GameAudio.context();
+      if (primed && primed.state !== "closed") gesturePrimer = primed;
+    }
+  } catch (e) { gesturePrimer = null; }
   let ctx = null;
   let master = null;
   let sfxBus = null;
@@ -482,9 +491,12 @@ var GameAudio = (function () {
     // Hardware / policy refusals (Safari private mode, exhausted contexts) throw
     // from the constructor — an uncaught throw on the gesture that unlocks sound
     // paints the boot overlay and leaves G.soundOn true over silence.
-    try {
-      ctx = new AC();
-    } catch (e) {
+      try {
+        if (gesturePrimer && gesturePrimer.state !== "closed") {
+          ctx = gesturePrimer;
+          gesturePrimer = null;
+        } else ctx = new AC();
+      } catch (e) {
       ctx = null;
       Log.warn("audio", "AudioContext unavailable: " + ((e && e.message) || e));
       return false;

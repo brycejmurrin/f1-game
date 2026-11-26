@@ -116,7 +116,8 @@ test("URL fragment and file envelope helpers", () => {
   assert.equal(CD.withoutTrack("#ghost=zzz&track=APXT1.p.AAA"), "#ghost=zzz");
   const env = CD.fileEnvelope({ pts: [] }, "APXT1.p.AAA");
   assert.equal(env.format, "apex26.track"); assert.equal(env.v, 1); assert.equal(env.code, "APXT1.p.AAA");
-  assert.deepEqual(plain(CD.fromFile(env)), { code: "APXT1.p.AAA" });
+  assert.deepEqual(plain(CD.fromFile(env)), { design: { pts: [] }, code: "APXT1.p.AAA" }, "an exported file hands back both; the reader prefers the design (#6871 R6)");
+  assert.deepEqual(plain(CD.fromFile({ format: "apex26.track", code: "APXT1.p.AAA", design: null })), { code: "APXT1.p.AAA" });
   assert.deepEqual(plain(CD.fromFile({ format: "apex26.track", design: { pts: [] } })), { design: { pts: [] } });
   assert.equal(CD.fromFile({ format: "apex26-career-backup-v1" }), null);
   assert.equal(CD.fromFile(null), null);

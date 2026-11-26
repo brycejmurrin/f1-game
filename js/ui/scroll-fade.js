@@ -69,6 +69,8 @@ window.ScrollFade = (function () {
   let timer = 0;
 
   const MIN_THUMB = 24;        // px: a 2px sliver would be unreadable as a position
+  const styleCache = new WeakMap(); // el -> {gen, yOk, xOk, pr}, see measure()
+  let styleGen = 0;
   const last = new WeakMap();  // last thumb written per element — see write()
 
   // READ ONLY. Never touch the DOM from here: measure() runs over every region
@@ -94,9 +96,20 @@ window.ScrollFade = (function () {
         maxX: 0, xScrollable: false, left: 0,
       };
     }
-    const cs = getComputedStyle(el);
-    const yOk = axisOk(cs.overflowY);
-    const xOk = axisOk(cs.overflowX);
+    // The overflow axes and padding come from CSS, not from content: cache them
+    // from the first getComputedStyle and re-resolve only after a resize, an
+    // orientation change, an explicit refresh() or a screen flip (styleGen).
+    let st = styleCache.get(el);
+    if (!st || st.gen !== styleGen) {
+      const cs = getComputedStyle(el);
+      st = {
+        gen: styleGen, yOk: axisOk(cs.overflowY), xOk: axisOk(cs.overflowX),
+        pr: Math.max(0, Math.floor(parseFloat(cs.paddingRight) || 0)),
+      };
+      styleCache.set(el, st);
+    }
+    const yOk = st.yOk;
+    const xOk = st.xOk;
     const scrollH = el.scrollHeight;
     const scrollW = el.scrollWidth;
     const max = yOk ? scrollH - track : 0;
@@ -111,7 +124,7 @@ window.ScrollFade = (function () {
       // The right padding the thumb may live in (css/components.css .sf-scroll):
       // whole px, and only what fits the 6px thumb + 2px inset, so it never
       // lands past the scrollport.
-      pr: Math.max(0, Math.floor(parseFloat(cs.paddingRight) || 0)),
+      pr: st.pr,
       maxX, xScrollable, left: el.scrollLeft,
     };
   }
@@ -164,8 +177,11 @@ window.ScrollFade = (function () {
     return id === "overlay" || id === "menu-buttons" || !!(el.closest && el.closest("#overlay"));
   }
 
-  function paintAll() {
-    timer = 0;
+  // paintAll(root): measure only the regions under `root` (the screen layer that
+  // changed). No root = the whole document (resize, init, refresh()).
+  function paintAll(root) {
+    if (!root) { timer = 0; pendingRoots = null; pendingFull = false; }
+    else if (pendingRoots) pendingRoots.delete(root);
     // A tab or picker rebuild detaches its old subtree with no resize or
     // screen flip, so settle() never runs; without this the observers keep
     // every replaced pane alive for as long as the screen stays open (#2325).
@@ -173,7 +189,13 @@ window.ScrollFade = (function () {
     // Measure everything, THEN write everything: one layout for the whole batch
     // instead of one per region. Skip regions whose screen layer is [hidden] —
     // a mid-race resize would force layout over every menu pane still in the DOM.
-    const els = document.querySelectorAll(SEL);
+    let els;
+    if (root && root.querySelectorAll) {
+      els = Array.from(root.querySelectorAll(SEL));
+      if (root.matches && root.matches(SEL)) els.unshift(root);
+    } else {
+      els = document.querySelectorAll(SEL);
+    }
     const measured = [];
     els.forEach((el) => {
       if (el.closest && el.closest("[hidden]")) return;
@@ -194,9 +216,38 @@ window.ScrollFade = (function () {
   // disabled attrs / audio panel nodes; a 0-delay paintAll per storm stacked
   // ForcedReflow with LAZY_AUDIO eval on phones (D·IP2).
   const SCHEDULE_MS = 48;
-  function schedule() {
+  // Roots queued by scoped schedules; a schedule with no root (or one whose root
+  // is unknown) widens the next paint to the whole document.
+  let pendingRoots = null;
+  let pendingFull = false;
+  function queue(root) {
+    if (!root) { pendingFull = true; return; }
+    if (!pendingRoots) pendingRoots = new Set();
+    pendingRoots.add(root);
+  }
+  function flush() {
+    // A content mutation may flip a pane's overflow or padding through a class: re-resolve the cached style.
+    styleGen++;
+    const roots = pendingRoots, full = pendingFull;
+    if (full || !roots || !roots.size) return paintAll();
+    timer = 0; pendingRoots = null;
+    for (const r of roots) if (r.isConnected !== false) paintAll(r);
+  }
+  function schedule(root) {
+    queue(root);
     if (timer) return;
-    timer = setTimeout(paintAll, SCHEDULE_MS);
+    timer = setTimeout(flush, SCHEDULE_MS);
+  }
+  // Every record of a batch counts: each distinct layer is queued, and one record with no layer widens the batch.
+  function scheduleRecs(recs) {
+    if (!recs || !recs.length) { schedule(null); return; }
+    for (const rec of recs) { const l = layerOf(rec); if (!l) { schedule(null); return; } }
+    for (const rec of recs) schedule(layerOf(rec));
+  }
+  // The screen layer a mutation/flip record belongs to, or null (= paint all).
+  function layerOf(rec) {
+    const t = rec && rec.target;
+    return t && t.closest ? t.closest(SCREENS) : null;
   }
   // Resize-driven repaints share the viewport budget (ui-scale zoom + sf mask).
   // rAF coalesces RO storms; a timer is still used for mutation coalescing (D·IP2).
@@ -209,6 +260,7 @@ window.ScrollFade = (function () {
     viewportRaf = scheduleFrame(() => {
       viewportRaf = 0;
       if (timer) { clearTimeout(timer); timer = 0; }
+      styleGen++;
       paintAll();
     });
   }
@@ -236,25 +288,26 @@ window.ScrollFade = (function () {
   // the fade never describes the pre-scale column (ui-scale.spec counts zoom
   // within six frames; the sf-* mask transitions are paint-only, #3606). Screen
   // [hidden] flips and mutation storms keep SCHEDULE_MS coalescing (D·IP2).
-  function settle(immediate) {
+  function settle(immediate, root) {
     pruneWatched();
+    styleGen++;
     if (immediate) {
-      if (timer) { clearTimeout(timer); timer = 0; }
-      paintAll();
+      if (timer && !root) { clearTimeout(timer); timer = 0; }
+      paintAll(root);
     } else {
-      schedule();
+      schedule(root);
     }
     if (settleSoon) clearTimeout(settleSoon);
     if (settleLate) clearTimeout(settleLate);
-    settleSoon = setTimeout(() => { settleSoon = 0; paintAll(); }, 120);
-    settleLate = setTimeout(() => { settleLate = 0; paintAll(); }, 400);
+    settleSoon = setTimeout(() => { settleSoon = 0; paintAll(root); }, 120);
+    settleLate = setTimeout(() => { settleLate = 0; paintAll(root); }, 400);
   }
 
   const ro = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleViewport) : null;
   // Deliberately NOT one observer over document.body: the HUD rewrites classes
   // every frame during a race, and every callback would force a layout read.
-  const contentMo = typeof MutationObserver === "function" ? new MutationObserver(schedule) : null;
-  const screenMo = typeof MutationObserver === "function" ? new MutationObserver(() => settle(false)) : null;
+  const contentMo = typeof MutationObserver === "function" ? new MutationObserver((recs) => scheduleRecs(recs)) : null;
+  const screenMo = typeof MutationObserver === "function" ? new MutationObserver((recs) => settle(false, recs && recs.length === 1 ? layerOf(recs[0]) : null)) : null;
 
   function watch(el) {
     if (watched.has(el)) return;
@@ -278,7 +331,7 @@ window.ScrollFade = (function () {
     // bubble — capture catches every fold with one listener.
     document.addEventListener("toggle", (e) => {
       const t = e.target;
-      if (t && t.tagName === "DETAILS") schedule();
+      if (t && t.tagName === "DETAILS") schedule(layerOf({ target: t }));
     }, true);
     window.addEventListener("resize", () => settle(true), { passive: true });
     window.addEventListener("orientationchange", () => settle(true), { passive: true });
@@ -293,5 +346,5 @@ window.ScrollFade = (function () {
   if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 
-  return { refresh: () => settle(true), paint };
+  return { refresh: () => settle(true), paint, paintAll };
 })();

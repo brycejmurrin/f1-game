@@ -1689,8 +1689,8 @@ test("land.yml arm: only a proven base-modified race re-gates after a failed sin
     { FAKE_PR_AFTER: pr7({ state: "closed" }) }, { FAKE_PR_AFTER: pr7({ base: { ref: "other" } }) },
     { FAKE_PR_AFTER: pr7({ labels: [] }) },
     { FAKE_PR_AFTER: pr7({ labels: [{ name: "land" }, { name: "hold" }] }) },
-    { FAKE_PR_AFTER: "malformed" }, { PAUSED_AFTER: "true" }, { PAUSED_AFTER: "" },
-    ...["tip", "pr", "pause"].map((GH_ARM_RECHECK_FAIL) => ({ GH_ARM_RECHECK_FAIL })),
+    { FAKE_PR_AFTER: "malformed" }, { PAUSED_AFTER: "true" },
+    ...["tip", "pr"].map((GH_ARM_RECHECK_FAIL) => ({ GH_ARM_RECHECK_FAIL })),
   ];
   for (const extra of refusals) {
     r = go(extra);
@@ -1700,6 +1700,15 @@ test("land.yml arm: only a proven base-modified race re-gates after a failed sin
     assert.equal(r.stderr.split("\n")[0], extra.GH_MERGE_STDERR || error, "original merge error is preserved verbatim");
     singleArm(r);
     if (extra.GH_MERGE_STDERR) assert.equal(r.calls.filter((c) => c.includes("/branches/")).length, 1, "unrelated errors never enter recovery");
+  }
+  // #6797 row 2: an unreadable merge-pause re-read (an empty answer, or a failure that printed nothing) is re-read
+  // through read_5xx and, twice unreadable, re-gated: never merged, never a pass on an unread pause.
+  for (const extra of [{ PAUSED_AFTER: "" }, { GH_ARM_RECHECK_FAIL: "pause" }]) {
+    r = go(extra);
+    assert.equal(r.status, 0, JSON.stringify(extra) + r.stderr);
+    assert.deepEqual(JSON.parse(r.out.retry || "null"), { number: 7, head: HEAD7 }, JSON.stringify(extra));
+    assert.equal(r.calls.filter((c) => c.includes("/issues -f")).length, 3, "the first read, the re-read and its one retry");
+    singleArm(r);
   }
   r = go({ GH_MERGE_RC: "0", GH_MERGE_STDERR: "" });
   assert.equal(r.status, 0, r.stderr);
@@ -3270,16 +3279,24 @@ test("land.yml arm (#6711): a train whose arm fails is handed to retry, and the 
   const train = pr7({ head: { sha: HEAD7, ref: "train/20261125T2140-6690-6695" }, labels: [{ name: "land" }, { name: "train" }] });
   const go = (extra = {}) => runStep(run, { ARM: JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A }), FAKE_PR: train, NOW_TIP: TIP_A, LAND_TOKEN: "lt", GITHUB_TOKEN: "t", FAKE_STATUSES: OWN_GATE, ...extra });
   const armed = (r) => r.calls.some((c) => c.includes(`pr merge 7 --repo o/r --auto --merge --match-head-commit ${HEAD7}`));
-  const failed = go({ GH_MERGE_RC: "17", GH_MERGE_STDERR: "unknown merge failure" });
+  // #6797 row 1: an infra failure (a 5xx merge answer); a deterministic refusal is final (the row-1 test).
+  const failed = go({ GH_MERGE_RC: "17", GH_MERGE_STDERR: "GraphQL: Something went wrong (HTTP 502)" });
   assert.equal(failed.status, 17, "the failure stays visible");
   assert.deepEqual(JSON.parse(failed.out.retry), { number: 7, head: HEAD7 }, "the passing train is not stranded unarmed");
   assert.deepEqual(failed.summary.split("\n").filter(Boolean), ["::warning::arm of train #7 failed (exit 17); re-gating within the existing retry budget"]);
   const needs = { resolve: { result: "success" }, post: { outputs: { retry: "" } }, arm: { result: "failure", outputs: failed.out } };
   assert.equal(ghExpr(LAND.jobs.retry.if, { needs }), true, "retry runs after the failed arm");
-  // The re-gated pass (the dispatched retry) finds the same green, unarmed train and arms it.
-  const next = go();
+  // #6797 row 3: the re-arm PATH, not a fresh arm. The failed arm's own `retry` output feeds the retry job; its
+  // dispatch inputs (pr, head, attempt) are the state the re-gated pass starts from, and that pass arms the train.
+  const dispatched = runStep(LAND.jobs.retry.steps[0].run, { ATTEMPT: "0", POST_RETRY: "", ARM_RETRY: failed.out.retry });
+  assert.equal(dispatched.status, 0, dispatched.stderr);
+  const posts = dispatched.calls.filter((c) => c.includes("--method POST"));
+  assert.deepEqual(posts, [`gh api --method POST repos/o/r/actions/workflows/land.yml/dispatches -f ref=${DEPLOY_BRANCH} -f inputs[pr]=7 -f inputs[head]=${HEAD7} -f inputs[attempt]=1`],
+    "one re-gate of the failed train, at attempt 1");
+  const inputs = Object.fromEntries([...posts[0].matchAll(/inputs\[(\w+)\]=(\S+)/g)].map((m) => [m[1], m[2]]));
+  const next = go({ ARM: JSON.stringify({ number: Number(inputs.pr), head: inputs.head, tip: TIP_A }), ATTEMPT: inputs.attempt });
   assert.equal(next.status, 0, next.stderr);
-  assert.ok(armed(next), "the next pass arms the train");
+  assert.ok(armed(next), "the re-gated pass arms the train");
   assert.equal(next.out.retry, undefined);
   // A train read that fails on 404 also hands it over; the rate limit still only defers (backoff, no retry).
   const nf = go({ GH_5XX_ON: "/branches/", GH_5XX_N: "1", GH_5XX_MSG: "gh: Not Found (HTTP 404)" });
@@ -3292,6 +3309,72 @@ test("land.yml arm (#6711): a train whose arm fails is handed to retry, and the 
   const plain = go({ FAKE_PR: pr7(), GH_MERGE_RC: "17", GH_MERGE_STDERR: "unknown merge failure" });
   assert.equal(plain.status, 17);
   assert.equal(plain.out.retry, undefined);
+});
+
+test("land.yml arm (#6797 row 1): a train's failed arm is re-gated only on a read or infra failure; a refusal or a pause is final", () => {
+  const run = LAND.jobs.arm.steps.find((s) => s.id === "arm").run;
+  const train = pr7({ head: { sha: HEAD7, ref: "train/20261125T2140-6690-6695" }, labels: [{ name: "land" }, { name: "train" }] });
+  const baseModified = "GraphQL: Base branch was modified. Review and try the merge again. (mergePullRequest)";
+  const go = (extra = {}) => runStep(run, { ARM: JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A }), FAKE_PR: train, NOW_TIP: TIP_A,
+    LAND_TOKEN: "lt", GITHUB_TOKEN: "t", FAKE_STATUSES: OWN_GATE, ATTEMPT: "0", GH_MERGE_RC: "17", ...extra });
+  const merges = (r) => r.calls.filter((c) => c.includes(" pr merge ")).length;
+  // Final: the merge-pause set after the refusal (the owner's own pause), a deterministic merge refusal, a veto that
+  // changed under the refusal, and an unproven base-modified race already re-gated once on this head.
+  for (const [extra, why] of [
+    [{ GH_MERGE_STDERR: baseModified, NOW_TIP_AFTER: TIP_B, PAUSED_AFTER: "true" }, "paused after a base-modified refusal"],
+    [{ GH_MERGE_STDERR: "GraphQL: Resource not accessible by integration (enablePullRequestAutoMerge)" }, "a deterministic merge refusal"],
+    [{ GH_MERGE_STDERR: "unknown merge failure" }, "an unrecognised merge refusal"],
+    [{ GH_MERGE_STDERR: baseModified, NOW_TIP_AFTER: TIP_A, FAKE_PR_AFTER: pr7({ labels: [{ name: "land" }, { name: "hold" }] }) }, "`hold` set under the refusal"],
+    [{ GH_MERGE_STDERR: baseModified, NOW_TIP_AFTER: TIP_A, ATTEMPT: "1" }, "an unproven base-modified race on a re-gated pass"],
+  ]) {
+    const r = go(extra);
+    assert.equal(r.status, 17, `${why}: the failure stays visible (${r.stderr})`);
+    assert.equal(r.out.retry, undefined, `${why}: no re-gate spent`);
+    assert.equal(merges(r), 1, `${why}: never repeats the merge`);
+    assert.doesNotMatch(r.summary, /re-gating/, why);
+  }
+  // Re-gated: an unproven base-modified race on the head's first pass (once), a 5xx merge answer, and a failed re-read.
+  for (const [extra, why] of [
+    [{ GH_MERGE_STDERR: baseModified, NOW_TIP_AFTER: TIP_A }, "an unproven base-modified race, first pass"],
+    [{ GH_MERGE_STDERR: "non-200 OK status code: 502 Bad Gateway body: \"\"" }, "a 5xx merge answer"],
+    [{ GH_MERGE_STDERR: "GraphQL: Something went wrong (HTTP 502)" }, "gh's own HTTP 502 form"],
+    [{ GH_MERGE_STDERR: baseModified, GH_ARM_RECHECK_FAIL: "tip" }, "the tip re-read failed"],
+  ]) {
+    const r = go(extra);
+    assert.equal(r.status, 17, `${why}: the failure stays visible (${r.stderr})`);
+    assert.deepEqual(JSON.parse(r.out.retry || "null"), { number: 7, head: HEAD7 }, `${why}: handed to retry`);
+    assert.equal(merges(r), 1, `${why}: never repeats the merge`);
+    assert.deepEqual(r.summary.split("\n").filter(Boolean), ["::warning::arm of train #7 failed (exit 17); re-gating within the existing retry budget"], why);
+  }
+  const step = LAND.jobs.arm.steps.find((s) => s.id === "arm");
+  assert.equal(step.env.ATTEMPT, "${{ needs.resolve.outputs.attempt }}", "the once-per-head bound reads resolve's attempt");
+});
+
+test("land.yml arm (#6797 row 2): the merge-pause re-read after a merge refusal goes through read_5xx; an empty events body twice is re-gated", () => {
+  const run = LAND.jobs.arm.steps.find((s) => s.id === "arm").run;
+  const base = { ARM: JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A }), FAKE_PR: pr7(), NOW_TIP: TIP_A, LAND_TOKEN: "lt", GITHUB_TOKEN: "t",
+    FAKE_STATUSES: OWN_GATE, ATTEMPT: "0", PAUSED_AFTER: "true" };
+  // The first read sees no pause; the re-read lists the Dispatch issue, so its events read runs (and is the empty one).
+  const clean = { GH_MERGE_RC: "1", GH_MERGE_STDERR: "GraphQL: Pull request Pull request is in clean status (enablePullRequestAutoMerge)",
+    GH_MERGE_RC2: "0", GH_MERGE_STDERR2: "", GH_CLEAN_PATH: "true" };
+  const modified = { GH_MERGE_RC: "17", GH_MERGE_STDERR: "GraphQL: Base branch was modified. Review and try the merge again. (mergePullRequest)", NOW_TIP_AFTER: TIP_B };
+  const merges = (r) => r.calls.filter((c) => c.includes(" pr merge ")).length;
+  const events = (r) => r.calls.filter((c) => c.includes("/events")).length;
+  for (const [path, extra, finalRc] of [["clean status", clean, 0], ["base modified", modified, 17]]) {
+    let r = runStep(run, { ...base, ...extra, GH_EMPTY_ON: "/events", GH_EMPTY_N: "2" });
+    assert.equal(r.status, 0, `${path}: an empty body twice is not a failed job (${r.stderr})`);
+    assert.deepEqual(JSON.parse(r.out.retry || "null"), { number: 7, head: HEAD7 }, `${path}: handed to retry`);
+    assert.equal(r.out.backoff, undefined);
+    assert.equal(merges(r), 1, `${path}: no second merge on an unread pause`);
+    assert.equal(events(r), 2, `${path}: exactly one re-read`);
+    assert.match(r.summary, /not merging #7: GitHub answered 5xx or an empty body twice on a re-read after the merge refusal; re-gating/);
+    // One empty body, then the re-read answers: the owner's pause is honoured (final, no merge, no retry).
+    r = runStep(run, { ...base, ...extra, GH_EMPTY_ON: "/events", GH_EMPTY_N: "1" });
+    assert.equal(r.status, finalRc, `${path}: ${r.stderr}`);
+    assert.equal(r.out.retry, undefined, `${path}: the pause read back is final`);
+    assert.equal(merges(r), 1, `${path}: paused: no second merge`);
+    assert.equal(events(r), 2, path);
+  }
 });
 
 test("land.yml arm (#6045): a stale status read is re-read; a mismatch that outlasts the re-reads is re-gated, any other skip is not", () => {

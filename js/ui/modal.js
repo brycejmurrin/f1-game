@@ -219,6 +219,7 @@ window.TopModal = (function () {
     // The dock editor restores its own opener. Its editable buttons sit outside
     // the toolbar and must stay reachable by Tab for keyboard nudging.
     "dock-edit-bar": 1,
+    "thumb-trainer": 1,   // its drill is pressed on the race buttons outside the panel
   };
   function firstFocusable(layer, skipTexty) {
     for (const el of layer.querySelectorAll(focusableSel())) {

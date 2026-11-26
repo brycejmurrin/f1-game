@@ -1,0 +1,1 @@
+Fixed: Rival cars stuck in traffic are rescued onto a clear spot of the track instead of back into a parked car, are no longer pushed up to speed beside a blocker, and a car that retires in the pit lane entry is no longer treated as still in the lane (#6763).

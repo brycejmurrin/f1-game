@@ -276,6 +276,16 @@ test("share out / in: a code, a link and an exported file all load back as the s
     assert.deepEqual(plain(b.D.state().design.pts), pts);
     assert.equal(b.C.sanitize(b.D.state().design).id, id, "the content id survives the round trip");
   }
+  // A file carrying BOTH loads its design, not its (possibly older or poorer) code (#6871 R6).
+  b.D.randomise(41); b.D.preview();
+  const other = plain(b.D.state().design);
+  assert.notDeepEqual(other.pts, pts);
+  assert.equal(await b.D.loadFrom(JSON.stringify(Object.assign({}, env, { design: other }))), true);
+  assert.deepEqual(plain(b.D.state().design.pts), other.pts, "the design wins over the code");
+  // An unusable design falls back to the code.
+  b.D.randomise(99); b.D.preview();
+  assert.equal(await b.D.loadFrom(JSON.stringify(Object.assign({}, env, { design: { pts: [] } }))), true);
+  assert.deepEqual(plain(b.D.state().design.pts), pts, "a design sanitize refuses falls back to the code");
   assert.equal(await b.D.loadFrom("APXT1.p.not-a-code"), false, "a bad code is refused, not thrown");
   assert.equal(await b.D.loadFrom("{\"format\":\"other\"}"), false, "a foreign file is refused");
   assert.equal(await b.D.loadFrom(""), false);

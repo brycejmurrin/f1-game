@@ -12,4 +12,7 @@ while [ -L "$SOURCE" ]; do
   esac
 done
 ROOT="$(cd "$(dirname "$SOURCE")/../.." && pwd)"
+# Bounded wait for the SessionStart `npm ci` (stderr only), like the other launchers.
+. "$ROOT/tools/mcp/mcp-preflight.sh"
+mcp_preflight
 exec node "$ROOT/tools/mcp/lsp-mcp.mjs" "$@"

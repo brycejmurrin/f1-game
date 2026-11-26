@@ -625,7 +625,7 @@ for (const failed of ["meeting", "year"]) test(`a detached failed ${failed} pres
 
 for (const via of ["manual", "auto"]) test(`LIVE ${via} refresh ages phase and time copy across session boundaries`, async () => {
   const timers = new Map(); let nextTimer = 0;
-  const clock = { now: Date.parse("2026-10-04T11:59:59Z"),
+  const clock = { now: Date.parse("2026-10-04T11:29:59Z"),
     setTimeout(fn, ms) { const id = ++nextTimer; timers.set(id, { fn, ms }); return id; },
     clearTimeout(id) { timers.delete(id); } };
   const h = harness({ clock });
@@ -645,7 +645,7 @@ for (const via of ["manual", "auto"]) test(`LIVE ${via} refresh ages phase and t
     }
     await h.drain();
   };
-  clock.now += 2000; await run();
+  clock.now += 32 * 60e3; await run();   // past the start (the badge opened 30 min earlier, #6835)
   assert.equal(badge().getAttribute("data-state"), "live");
   assert.equal(badge().textContent, "LIVE");
   assert.match(h.content().textContent, /Started /);
