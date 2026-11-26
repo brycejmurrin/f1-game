@@ -893,6 +893,7 @@ body:not(.desktop) {
   --fs-floor: calc(12px / var(--ui-scale, 1));
   --fs-micro: max(14px, var(--fs-floor)); --fs-2: max(15px, var(--fs-floor)); --fs-3: max(16px, var(--fs-floor));
   --fs-4: max(17px, var(--fs-floor)); --fs-5: max(18px, var(--fs-floor)); --fs-6: max(20px, var(--fs-floor));
+  --label: var(--fs-micro); /* #6751 floor+TEXT SIZE via --fs-micro */
 }
 :root[data-text-size="large"] {
   --fs-micro: max(16px, var(--fs-floor)); --fs-2: max(17px, var(--fs-floor)); --fs-3: max(18px, var(--fs-floor));
