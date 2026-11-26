@@ -547,6 +547,7 @@ test("#4257: AT_REF counts css/ at a git ref the same way the live scan counts t
   const reads = (metric) => (metric.startsWith("eager") ? wallPaths : ["css/"]);
   let compared = 0;
   for (const [metric, fn] of Object.entries(AT_REF)) {
+    if (!TREE_METRICS[metric]) continue;   // an AT_REF counter whose TREE_METRICS row lands separately (typeofGuards: #6920 U0.R)
     if (dirty(reads(metric))) continue;
     assert.equal(fn("HEAD"), await TREE_METRICS[metric](), metric);
     compared++;

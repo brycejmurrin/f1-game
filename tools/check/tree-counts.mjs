@@ -9,6 +9,11 @@
  * The measurement is the reusable part, so it moved here; the number moved to
  * ratchets.json; the ceiling history moved to docs/notes/CEILING-HISTORY.md.
  * Behaviour is unchanged — each function is the original scan, moved verbatim.
+ *
+ * sourceSliceTests: test files under tests/ (not tests/data/ or fixtures) holding `new Function(` AND a js/ read —
+ *   they slice module source and rebuild it. vm.runIn*Context loads are NOT counted: tree.vmSrcLoads owns those.
+ * typeofGuards: sites in js/ (not circuits/) of `typeof G ==|!= "undefined"|"function"|"object"` where G is a global a
+ *   manifest module declares; platform checks (OffscreenCanvas, window, ...) are legitimate and do not count.
  */
 import cp from "node:child_process";
 import fs from "node:fs";
@@ -17,6 +22,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { CSS_SOURCES } from "../lib/css-source.mjs";
 import { wallAt } from "./boot-wall.mjs";
+import { stripJs } from "../lib/js-strip.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -260,6 +266,7 @@ export const AT_REF = {
   eagerScripts: (ref) => wallAt(ref).scripts,
   eagerBytes: (ref) => wallAt(ref).bytes,
   eagerCodeBytes: (ref) => wallAt(ref).codeBytes,
+  typeofGuards: (ref) => typeofGuardsReport(jsFilesAt(ref)).reduce((n, r) => n + r.count, 0),
 };
 
 /** Sheets that space themselves entirely in raw px and read neither --pad nor
@@ -330,6 +337,74 @@ export function zeroRefModulesReport(corpus) {
 }
 export const zeroRefModules = () => zeroRefModulesReport().length;
 
+/* ---- source-slice tests and module-presence typeof guards (#6920 U0.1) ---- */
+const rel = (p) => path.relative(ROOT, p).split(path.sep).join("/");
+
+/** Every .js/.mjs/.cjs under tests/ except tests/data/ and fixtures. */
+function testFiles() {
+  const out = [];
+  (function walk(dir) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) { if (e.name !== "data" && !/fixtures?$/.test(e.name)) walk(p); }
+      else if (/\.(m?js|cjs)$/.test(e.name)) out.push(p);
+    }
+  })(path.join(ROOT, "tests"));
+  return out.sort().map((p) => ({ file: rel(p), text: fs.readFileSync(p, "utf8") }));
+}
+
+/** Test files that slice js/ source and rebuild it with `new Function(`. Rows {file, count of calls}. */
+export function sourceSliceTestsReport(files = testFiles()) {
+  const rows = [];
+  for (const { file, text } of files) {
+    const n = (text.match(/new\s+Function\(/g) || []).length;
+    if (n && /["'`/]js\//.test(text)) rows.push({ file, count: n });
+  }
+  return rows.sort((a, b) => b.count - a.count || a.file.localeCompare(b.file));
+}
+export const sourceSliceTests = () => sourceSliceTestsReport().length;
+
+const jsFiles = () => walkJs(path.join(ROOT, "js")).sort()
+  .map((p) => ({ file: rel(p), text: fs.readFileSync(p, "utf8") }));
+function jsFilesAt(ref) {
+  const git = (...a) => cp.execFileSync("git", a, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 256 << 20 });
+  return git("ls-tree", "-r", "--name-only", ref, "js/").split("\n").filter((f) => f.endsWith(".js")).sort()
+    .map((file) => ({ file, text: git("show", `${ref}:${file}`) }));
+}
+
+/** The globals manifest modules declare: the first column-0 const/var/let, else a `window.X =` (as zeroRefModulesReport). */
+export function moduleGlobals(files = jsFiles()) {
+  const mods = new Set(manifestModules().filter((f) => f.startsWith("js/") && !f.startsWith("js/circuits/")));
+  const out = new Set();
+  for (const { file, text } of files) {
+    if (!mods.has(file)) continue;
+    const g = (text.match(/^(?:const|var|let)\s+([A-Za-z_$][\w$]*)\s*=/m) || [])[1]
+           || (text.match(/window\.([A-Za-z_$][\w$]*)\s*=/) || [])[1];
+    if (g) out.add(g);
+  }
+  return out;
+}
+
+/** Comments stripped, string contents blanked except the three typeof comparands. */
+function codeOnly(text) {
+  return stripJs(text).replace(/(["'`])(?:\\.|(?!\1)[^\\\n])*\1/g,
+    (m, q) => (/^.(?:undefined|function|object).$/.test(m) ? m : q + q));
+}
+
+/** Module-presence guards: `typeof <module global> ==|!= "undefined"|"function"|"object"`. Rows {file, count}. */
+export function typeofGuardsReport(files = jsFiles(), globals = moduleGlobals(files)) {
+  const re = /\btypeof\s+([A-Za-z_$][\w$]*)\s*(?:===|!==|==|!=)\s*["'](?:undefined|function|object)["']/g;
+  const rows = [];
+  for (const { file, text } of files) {
+    if (file.startsWith("js/circuits/")) continue;
+    let n = 0;
+    for (const m of codeOnly(text).matchAll(re)) if (globals.has(m[1])) n++;
+    if (n) rows.push({ file, count: n });
+  }
+  return rows.sort((a, b) => b.count - a.count || a.file.localeCompare(b.file));
+}
+export const typeofGuards = () => typeofGuardsReport().reduce((n, r) => n + r.count, 0);
+
 /** file -> count, for a failure message that says WHERE. */
 export const byFile = (rows) => rows.reduce((m, r) => (m[r.file] = (m[r.file] || 0) + 1, m), {});
 
@@ -345,6 +420,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       rawColor: byFile(colorLiterals()),
       colourForks: forks.slice(0, 12).map(([n, s]) => `${n} <- ${[...s].join(" | ")}`),
       zeroSpacingSheets: zeroSpacingSheets(),
+      sourceSliceTests: Object.fromEntries(sourceSliceTestsReport().map((r) => [r.file, r.count])),
+      typeofGuards: Object.fromEntries(typeofGuardsReport().map((r) => [r.file, r.count])),
       zeroRefModules: zeroRefModulesReport().map((r) => `${r.file} (${r.global || "no global"})`),
     }, null, 2));
     process.exit(0);
@@ -360,5 +437,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     rawColor: rawColor(),
     rawColorDistinct: rawColorDistinct(),
     zeroRefModules: zeroRefModules(),
+    sourceSliceTests: sourceSliceTests(),
+    typeofGuards: typeofGuards(),
   }, null, 2));
 }
