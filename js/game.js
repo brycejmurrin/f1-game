@@ -6538,7 +6538,7 @@ function updateCarAdvance(c, dt, ranked, S) {
     const digEsc = c.digEscHeld;
     const laneQueueOk = !(queued && pits.inLane(c)) || digEsc;
     const aiStuck = c.pitState !== "box" && (beachedAt(c) ||
-      (c.speed < 5 && raceT > 2 && (!unstuckActive || digEsc) && laneQueueOk));
+      (vStd(c.speed) < 5 && raceT > 2 && (!unstuckActive || digEsc) && laneQueueOk));
     // RED FLAG: the field is held under that low-speed gate on purpose — only a
     // car genuinely beached in the run-off still counts as stuck (as the player's).
     const aiRedHeld = raceCtl.level >= 4 && !beachedAt(c);
@@ -6560,9 +6560,10 @@ function updateCarAdvance(c, dt, ranked, S) {
         c.x = pits.laneX(c, smp.hw, c.x);
         c.speed = Math.min(pits.limit(), Math.max(c.speed, 8 * Math.max(driveTune.PACE, 0.05)));
       } else {
-        c.x = clamp(c.x, -(smp.hw - 1.5), smp.hw - 1.5);   // back onto the track
-        // Pace-scaled restore floor (same shape as coast()); never above vTop().
-        c.speed = Math.min(vT, Math.max(c.speed, 14 * Math.max(driveTune.PACE, 0.05)));
+        c.x = Collide.rescueX(c, cars, track.total, smp.hw);   // back onto the track, clear of every car (#6763 K2; the player's rescue does the same)
+        // Pace-scaled restore floor (same shape as coast()); never above vTop(); not with a car within 8 m (fired into it).
+        const near = cars.some(o => o !== c && !o.finished && Math.hypot(wrapS(o._snapProg - c.prog + track.total / 2) - track.total / 2, o._snapX - c.x) < 8);
+        if (!near) c.speed = Math.min(vT, Math.max(c.speed, 14 * Math.max(driveTune.PACE, 0.05)));
       }
       c.rescueT = 0; c.offT = 0; c.stuckT = 0; c.contactT = 0; c.digEscHeld = false;
     }
@@ -6634,6 +6635,7 @@ function retireCar(c, reason) {
   c.xVis = c.x;
   const w = worldFromTrack(c.s, c.x, smp);
   c.px = w.x; c.pz = w.z;
+  c.inPitLane = Tracks.inPitLane(track, c.s, c.x);   // the park pose moved it: a stale lane flag hid a car parked on the road from stopped-cars (#6763 K8)
   c.head = Math.atan2(smp.t[0], smp.t[2]);
   // Seed the render-interpolation anchors too, or the first frame after this
   // smears the car across the track from wherever it was a step ago.
