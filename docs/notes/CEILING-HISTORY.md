@@ -1,5 +1,11 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-26 — #6911 (claude/boot-lazy-lore-drift-6911) — circuit-lore and thermal-drift leave the boot
+
+`(tree) eagerCodeBytes` −13294, `eagerScripts` −2 (lowers, no `ratchet-raise`). `circuit-lore.js` moves to LAZY_AUDIO (before the
+announcer, its reader; flyby-seq is typeof-guarded) and `thermal-drift.js` to LAZY_PERF; `PerfGov.resyncDrift()` arms a saved
+opt-in once the rig lands. Fragment: `ratchets.d/claude--boot-lazy-lore-drift-6911.json`.
+
 ## 2026-11-23 — PR #6246 (cursor/photo-panel-focus-b27e) — camera focus and pedal calibration boot code
 
 `(tree) eagerCodeBytes` 3987306 → **3994771** (+7465) on merge train #6306.

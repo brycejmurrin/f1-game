@@ -1652,6 +1652,7 @@
         "tests/unit/keyboard-first-audio-vm.test.mjs",
         "tests/unit/lazy-audio-firstbind-vm.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
+        "tests/unit/lazy-lore-drift-vm.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
         "tests/unit/net-audio-revs-vm.test.mjs",
         "tests/unit/pause-silence.test.mjs",
