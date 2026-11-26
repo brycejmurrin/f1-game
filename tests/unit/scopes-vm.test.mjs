@@ -173,19 +173,20 @@ test("the race scope: registrants, filters and order", async () => {
   const g = await createGame({});
   games.push(g);
   const S = g.sandbox.Scopes;
-  assert.deepEqual(plain(S.ids("race")), ["incident-sim", "raceCtl", "debris", "pass-watch"]);
+  assert.deepEqual(plain(S.ids("race")), ["results-cam", "incident-sim", "raceCtl", "debris", "quit-cams", "pass-watch"]);
   const byWhy = {};
   for (const why of S.WHYS) byWhy[why] = S.describe("race").filter((r) => r.on.includes(why) && !r.phase).map((r) => r.id);
   const phased = S.describe("race").filter((r) => r.phase).map((r) => [r.id, r.phase, [...r.on]]);
   assert.deepEqual(plain(phased), [["pass-watch", "grid", ["restart-red"]]], "the pass watches clear after the re-grid, not before");
-  assert.deepEqual(plain(S.describe("race")[2].enterOn), ["restart-red", "restart-declined"], "a start primes debris later, after makeCars");
+  assert.deepEqual(plain(S.describe("race").find((r) => r.id === "debris").enterOn), ["restart-red", "restart-declined"], "a start primes debris later, after makeCars");
   assert.deepEqual(plain(byWhy), {
-    start: ["incident-sim", "raceCtl", "debris"],
+    start: ["results-cam", "incident-sim", "raceCtl", "debris"],
     "restart-red": ["incident-sim", "debris"],
     "restart-declined": ["incident-sim", "debris"],
     finish: ["raceCtl"],
-    quit: ["raceCtl"],
+    quit: ["raceCtl", "quit-cams"],
     episode: ["incident-sim", "raceCtl", "debris"],
+    cut: [],
   });
 });
 

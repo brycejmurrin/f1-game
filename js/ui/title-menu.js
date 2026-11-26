@@ -180,7 +180,7 @@ const TitleMenu = (function () {
     }, 0);
   }
 
-  function wireLearn(G, openDataHub, launchAeroDrill, previewControls) {
+  function wireLearn(G, openDataHub, launchDrill, previewControls) {
     const menu = G.$("menu-buttons");
     if (!menu) return;
     const door = document.createElement("button");
@@ -216,14 +216,14 @@ const TitleMenu = (function () {
         ThumbTrainer.open(G, { preview: previewControls, onClose, drive });
       };
       if (lesson) door.dataset.openLesson = lesson;
-      LearnDoor.open(door, openDataHub, launchAeroDrill, openTrainer);
+      LearnDoor.open(door, openDataHub, launchDrill, openTrainer);
     });
   }
 
-  function create(G, openDataHub, launchAeroDrill, previewControls) {
+  function create(G, openDataHub, launchDrill, previewControls) {
     Log.info("game", "TitleMenu.create");
     const { $ } = G;
-    wireLearn(G, openDataHub, launchAeroDrill, previewControls);
+    wireLearn(G, openDataHub, launchDrill, previewControls);
     organize(typeof document !== "undefined" ? document : null);
     // The doors paint from the shell seconds before game.js wires them (Slow 4G:
     // ~2.5 s vs ~15 s). html[data-booted] is css/title.css's cue that a tap now

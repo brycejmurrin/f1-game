@@ -1128,3 +1128,34 @@ test("CALM and WIDE FOV keep per-camera offsets and the global baseline, and sav
     assert.match(saved, /-1\.5/, id + " persisted the per-camera offsets");
   }
 });
+
+// #6890: a camera mode switch clears the held bend side (heli/side/cinematic), like a cut does.
+const bendSideSmp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+
+test("setCamMode away and back clears the held bend side: heli, side, cinematic read the right bend at once", () => {
+  const left = makeTrack([[300, 0], [400, 1 / 60], [300, 0]]);
+  const right = makeTrack([[300, 0], [400, -1 / 60], [300, 0]]);
+  for (const mode of ["heli", "side", "cinematic"]) {
+    const dom = makeDom();
+    const rig = loadRig({ document: dom.document, CamTunerPanel: { refresh() {} } });
+    const ctx = rig.ctx; ctx.window = ctx; ctx.addEventListener = () => {};
+    Object.assign(ctx, { setTimeout() { return 1; }, clearTimeout() {}, MutationObserver: class { observe() {} } });
+    for (const f of ["js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/camera/cam-picker.js", "js/camera/mode-switch.js"])
+      vm.runInContext(fs.readFileSync(path.join(root, f), "utf8"), ctx, { filename: absSrc(f) });
+    const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "menu" };
+    const cams = vm.runInContext("CamModes", ctx).create(G);
+    const idx = vm.runInContext("CamModes.CAM_MODES", ctx).findIndex(m => m.id === mode);
+    assert.ok(idx >= 0, mode);
+    const lat = (tr, s, snap) => {
+      rig.ctx.Tracks.sample(tr, s, bendSideSmp);
+      const v = rig.cams.vantage(tr, mode, s, 0, 40, 0, { att: {}, carPos: [bendSideSmp.p[0], bendSideSmp.p[2]], carHead: Math.atan2(bendSideSmp.t[0], bendSideSmp.t[2]), dt: 1 / 60, snap });
+      return (v.eye[0] - bendSideSmp.p[0]) * bendSideSmp.r[0] + (v.eye[2] - bendSideSmp.p[2]) * bendSideSmp.r[2];
+    };
+    cams.setCamMode(idx);
+    for (let s = 400; s < 600; s += 40 / 60) lat(right, s, s < 401);   // settle on the right side
+    for (let i = 0; i < 3; i++) lat(left, 500 + i, false);              // flip to left: the 0.7 s dwell is now live
+    cams.setCamMode(0); cams.setCamMode(idx);
+    // first frame in the right bend: a stale dwell would still hold the left side
+    assert.ok(lat(right, 504, false) < 0, `${mode}: first right-bend frame reads right after a mode switch`);
+  }
+});

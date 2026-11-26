@@ -502,3 +502,6 @@ const CamFeel = (function () {
   };
 })();
 Object.freeze(CamFeel);
+// A cut: eased follows (every namespace, the director's "tv:" too) restart from their target; snapGameCam's full cut also drops glance and look-back.
+if (typeof Scopes !== "undefined") Scopes.register("camera-mode", { id: "cam-feel", on: ["cut"], touches: ["follow"],
+  exit: (c) => { CamFeel.resetFollow(); if (c.snap) { CamFeel.resetFreeLook(); CamFeel.resetLatch(); } } });

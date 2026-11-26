@@ -452,7 +452,8 @@ a networked race never goes red (RaceControl holds a safety car instead).
 ### `park(frac, lateral?) → {s, total} | false`
 Enter **race** state, hide the lights, shove the AI pack 600 m away, and park the
 **stationary** player at lap-fraction `frac` (optional `lateral` m from centre).
-Freezes the scene (`frozen`) for a deterministic screenshot.
+Freezes the scene (`frozen`) for a deterministic screenshot. State, sky override and freeze go
+through `G.agentCtl` / `G.cmd` (game.js owns the writes; the State log line reads `why=agent-park`).
 
 ### `jump(frac, speed?, lateral?, opts?) → {s, total} | false`
 Teleport the player to lap-fraction `frac`, optionally setting `speed` (m/s) and
@@ -470,7 +471,7 @@ wrong-way / spin / rescue tests. Position and progress are unchanged.
 ### `sky(frac, lateral?) → {s, total} | false`
 Like `park()`, but tilts the camera toward the horizon so sky/clouds are clearly
 visible. Eye 3.5 m up, target 20 m ahead and 34 m higher (~58° up) so the horizon
-drops to the lower third and the frame fills with sky.
+drops to the lower third and the frame fills with sky. The override is set through `G.agentCtl.setSkyOverride`; `snapCam` wraps `G.agentCtl.snapCam`.
 
 ### `snapCam(paint?) → void`  — **call this after `jump()`/`park()`, before the screenshot**
 Instantly snap the **player camera mode** (chase, cockpit, …) to its vantage (no
@@ -2341,7 +2342,7 @@ server: `APEX_PORT=<port> APEX_REUSE_SERVER=1`, read by `playwright.config.js`).
 Get or set the `frozen` flag. `park()` sets `frozen` automatically; this exposes
 it so tests can unfreeze after a `park()` call without reloading the track. Called
 with no argument it returns the current state; called with a boolean it sets the
-flag and returns the new value.
+flag and returns the new value (through `G.agentCtl.freeze`).
 
 ### `hud(show?) → boolean`
 Get or set HUD visibility. Called with no argument returns whether the HUD is

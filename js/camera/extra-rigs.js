@@ -398,4 +398,6 @@ const ExtraRigs = (function () {
     BATTLE_S, FALLBACK_S, DRONE_BACK, DRONE_UP,
   };
 })();
+// A camera cut (mode switch or snapGameCam): the drone forgets its pose. First in the camera-mode order; ctx.mode is the NEW mode.
+if (typeof Scopes !== "undefined") Scopes.register("camera-mode", { id: "extra-rigs", on: ["cut"], touches: ["rig"], exit: (c) => ExtraRigs.reset(c.mode) });
 Object.freeze(ExtraRigs);

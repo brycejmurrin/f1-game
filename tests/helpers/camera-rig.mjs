@@ -80,7 +80,7 @@ export function loadRig(extraCtx, files) {
   const state = { hang: null, lead: null, fovAdd: 0 };
   const ctx = vm.createContext(Object.assign({ console, Math, Object, Array, Number, JSON, Float64Array,
     CamTune: camTune(state), Log: { info() {}, warn() {}, debug() {} } }, extraCtx || {}));
-  runFiles(ctx, ["js/core/mat4.js"].concat(files || CAM_FILES));
+  runFiles(ctx, ["js/core/mat4.js", "js/core/scopes.js"].concat(files || CAM_FILES));
   ctx.Tracks = synthTracks();
   // `files` may leave CamFeel out (a vantage-only solve has no easing and no lens shaping).
   const cams = vm.runInContext("GameCams", ctx), feel = vm.runInContext("typeof CamFeel === 'undefined' ? null : CamFeel", ctx);

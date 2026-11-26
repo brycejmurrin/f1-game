@@ -163,3 +163,5 @@ const TracksideCams = (function () {
 
   return Object.freeze({ build, pick, pose, reset, status, FENCE, HEIGHT, HYST_M, FOV });
 })();
+// Only snapGameCam's full cut (ctx.snap) drops the held fixed cam; a mode switch leaves it to its own hysteresis.
+if (typeof Scopes !== "undefined") Scopes.register("camera-mode", { id: "trackside", on: ["cut"], touches: ["trackside"], exit: (c) => { if (c.snap) TracksideCams.reset(c.track); } });

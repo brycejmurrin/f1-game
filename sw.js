@@ -813,6 +813,7 @@ async function precacheAssetLists() {
     "js/race/real-race-pace.js",
     "js/race/real-race.js",
     // LEARN — the Learn modal and bare lesson assets
+    "js/learn-drills/registry.js",
     "js/ui/learn-door.js",
     "js/ui/thumb-trainer.js",
     "js/learn-drills/thumb-drill.js",

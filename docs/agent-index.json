@@ -791,6 +791,7 @@
         "tests/unit/apex-surface-pin-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
+        "tests/unit/camera-mode-scope.test.mjs",
         "tests/unit/car-field-writes.test.mjs",
         "tests/unit/car-fields-lifetimes-vm.test.mjs",
         "tests/unit/car-fields-vm.test.mjs",
@@ -922,6 +923,7 @@
         "tests/unit/apex-surface-pin-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
+        "tests/unit/camera-mode-scope.test.mjs",
         "tests/unit/car-field-writes.test.mjs",
         "tests/unit/car-fields-lifetimes-vm.test.mjs",
         "tests/unit/car-fields-vm.test.mjs",
@@ -1091,6 +1093,7 @@
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/ai-wing-spread-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
+        "tests/unit/camera-mode-scope.test.mjs",
         "tests/unit/car-field-writes.test.mjs",
         "tests/unit/car-fields-lifetimes-vm.test.mjs",
         "tests/unit/car-fields-vm.test.mjs",
@@ -3851,6 +3854,11 @@
       "path": "js/input/touch-button-actions.js",
       "global": "TouchButtonActions",
       "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/learn-drills/registry.js",
+      "global": "DrillRegistry",
+      "roster": "LAZY_LEARN"
     },
     {
       "path": "js/learn-drills/thumb-drill.js",

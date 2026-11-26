@@ -846,7 +846,7 @@ const isQuali = () => session === "quali";
 // and `penalty`/`cuts` are ordinary fields on that car.
 // A Time Trial is always practisable, which is what the feature shipped as.
 // Cleared by startRace() so it can never leak from one session into the next.
-let practiceMode = false, learnAeroDrill = null;
+let practiceMode = false, drills = null;   // drills: LEARN's DrillRegistry host (js/learn-drills/registry.js), made on the first drill launch
 const isPractice = () => practiceMode || isTimeTrial();
 // A DUEL is a practice race against ONE bumped rival. Same trim that Time Trial
 // and Quali already do to `cars` after makeCars(); the rival's stats come from
@@ -2333,9 +2333,7 @@ function snapGameCam(paint) {
   if (!player || !track) return;
   const bankCam = Tracks.banking(track, player.s, player.x, _bankScratch, true);  // smooth lift: match render()
   const mode = CAM_MODES[camMode].id;
-  if (typeof ExtraRigs !== "undefined") ExtraRigs.reset(mode);
-  // A snap is a CUT: no chase hang, speed-FOV kick, glance or latched look-back carries over.
-  if (typeof CamFeel !== "undefined") { CamFeel.resetFollow(); CamFeel.resetFreeLook(); CamFeel.resetLatch(); } GameCams.resetSmoothing(); if (typeof TracksideCams !== "undefined") TracksideCams.reset(track);
+  if (typeof Scopes !== "undefined") Scopes.exit("camera-mode", { why: "cut", mode, snap: true, track });   // a snap is a CUT: no hang, speed-FOV kick, glance or latched look-back carries over
   const v = camVantage(mode, player.s, player.x, player.speed || 0, 0, {
     bankDy: bankCam ? bankCam.dy : 0, deploy: player.deploying, slipLat: player.vLat || 0, att: player,
     // Same car pose the live rig uses. Without it snapCam() silently fell back to
@@ -2478,7 +2476,6 @@ async function startRaceBody() {
     quitToMenu();   // a bare setState("menu") left the HUD, in-race class, lights and engine up (RESTART from the pause card)
     return false;
   }
-  resultsCam.reset(); RaceCeremony.resetLive();   // restore a montage / ceremony before replacing the previous field
   _roadReflectionTransition.value = NaN;   // a new race starts from its current reflection policy
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
   // …and the caution machine (no stale flag/capHoldT into this race) and the debris side-world: prime()
@@ -2519,8 +2516,7 @@ async function startRaceBody() {
   // Learn drill starts unscored, and isPractice() handles Time Trial itself.
   // duelMode is NOT cleared: it is a race SETTING like difficulty or tyre wear,
   // chosen on the settings sheet and meant to stick until the player changes it.
-  const aeroDrill = learnAeroDrill;
-  practiceMode = !!aeroDrill;
+  const aeroDrill = drills?.active(); practiceMode = !!aeroDrill;
   releaseFieldScratch(); makeCars(); rlap("makeCars");
   coach.reset(); PerfGov.resetFrameStats();
   if (aeroDrill) {
@@ -2660,7 +2656,7 @@ async function startRaceBody() {
   for (const l of els.lights.children) l.classList.remove("on");
   els.lights.classList.remove("count");   // a jump-in's hand-over count (handoverCount) never outlives its race
   showTouchControls(true); updateHud(true);   // fit AFTER the dock exists: before it, no --hud-z-dock and raw-BUTTON-SIZE pedals until the next tick (tests/unit/start-race-dock-fit)
-  dbgCam = null; director.reset(); replayBuf.onRaceStart(cars); if (typeof CamFeel !== "undefined") { CamFeel.resetLatch(); CamFeel.resetFreeLook(); } // fresh race — drop free-cam, TV director, look-back latch; arm solo replay ring
+  dbgCam = null; director.reset(); replayBuf.onRaceStart(cars); // fresh race — drop free-cam and the TV director (free-look and the look-back latch: snapGameCam below); arm solo replay ring
   snapGameCam();              // frame the grid correctly on the very first render
   Input.calibrate();
   // RESUME's latch bug (see Input.clearEdges) at the menu→race seam: edges
@@ -2722,7 +2718,7 @@ function startRace() {
     rs.hidden = true;
     try { if (rs.open && typeof rs.close === "function") rs.close(); } catch (_) { /* already closed */ }
   }
-  practiceMode = !!learnAeroDrill;   // before loadingInfo() reads it
+  practiceMode = !!drills?.active();   // before loadingInfo() reads it
   if (!loadingScreen.phase()) { loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race"); }
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   // Software GL defers pack retry until after grid (#3584); hardware keeps idle prefetch here.
@@ -3029,7 +3025,7 @@ const G = {
   // deliberately keep reporting raw m/s; see vTop/vStd.
   dashKph: (v) => dashKph(v),
   ttBoard, teamById: (id) => teamById(id), cssCol: (c) => cssCol(c),
-  get state() { return state; }, set state(v) { setState(v, "api"); },
+  get state() { return state; },
   get track() { return track; },
   get cars() { return cars; },
   get player() { return player; },
@@ -3182,10 +3178,10 @@ const G = {
   get dbgCam() { return dbgCam; }, set dbgCam(v) { dbgCam = v; },
   get frame() { return frame; }, set frame(v) { frame = v; },
   get frameSky() { return frameSky; }, set frameSky(v) { frameSky = v; },
-  get frozen() { return frozen; }, set frozen(v) { frozen = v; },
+  get frozen() { return frozen; },
   get headlessMode() { return headlessMode; }, set headlessMode(v) { headlessMode = v; },
   get hideMeshes() { return hideMeshes; }, set hideMeshes(v) { hideMeshes = v; },
-  get paused() { return paused; }, set paused(v) { paused = v; },
+  get paused() { return paused; },
   get raceLaps() { return raceLaps; }, set raceLaps(v) { raceLaps = v; wxArc && wxArc.plan === wxArc._derived && (wxArc.plan = null); },
   get raceT() { return raceT; }, set raceT(v) { raceT = v; },
   get resultT() { return resultT; }, set resultT(v) { resultT = v; },
@@ -3209,7 +3205,7 @@ const G = {
   get fieldSectorBests() { return lapRec.fieldSectorBests; },
   get sectorIdx() { return lapRec.sectorIdx; }, set sectorIdx(v) { lapRec.sectorIdx = v; },
   get sectorStartT() { return lapRec.sectorStartT; }, set sectorStartT(v) { lapRec.sectorStartT = v; },
-  get skyViewOverride() { return skyViewOverride; }, set skyViewOverride(v) { skyViewOverride = v; },
+  get skyViewOverride() { return skyViewOverride; },
   get trackIdx() { return trackIdx; }, set trackIdx(v) { trackIdx = v; wxArc && wxArc.plan === wxArc._derived && (wxArc.plan = null); },
   get ttLaps() { return lapRec.ttLaps; }, set ttLaps(v) { lapRec.ttLaps = v; },
   get weatherArc() { return wxArc.arc; }, set weatherArc(v) { wxArc.arc = v; },
@@ -3423,6 +3419,14 @@ const G = {
   endWeatherSession: () => wxArc.endSession(true),   // the agent's race()/tt(): a start follows, so a plan set for it stays (race-settings-vm)
   startRace, update, wrapS, quitToMenu: (t) => (qThen = t, quitToMenu()),
   raceIntro,   // the pre-race screen, for a launch that is not RACE! (js/race/real-race.js: the Data Hub's JUMP IN)
+  // OWNER COMMANDS (#6920 U2.4): game.js owns the writes to state / frozen / paused / skyViewOverride; every other module goes through these.
+  cmd: { setState: (next, why) => setState(next, why || "cmd"), pause: (v, why) => setPaused(v, why) },
+  agentCtl: {
+    freeze: (v) => { frozen = !!v; return frozen; },
+    setSkyOverride: (o) => { skyViewOverride = o || null; },
+    snapCam: (paint) => snapGameCam(paint),
+    park: (minRaceT) => { skyViewOverride = null; G.cmd.setState("race", "agent-park"); raceT = Math.max(raceT, minRaceT); },   // sky override off, race on, raceT floored
+  },
 }; Object.preventExtensions(G);
 
 // Lighting profile resolution + persistence (js/lighting/profiles.js). FIRST of
@@ -3466,8 +3470,8 @@ let flyingStart = FlyingStart.create(G, { realRace: () => realRace.isActive() ||
 var jumpStartPenalty = JumpStartPenalty.create(G, {
   autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,
 });   // LAZY_RACE_SESSION — recreated in onRaceSessionReady
-titleMenu = TitleMenu.create(G, openDataHub, () => { // returning-player, Daily and Learn (js/ui/title-menu.js)
-  if (!learnAeroDrill) LearnDoor.launchAeroDrill(G, drill => { learnAeroDrill = drill; }, level => { raceDirtyAir = level; });
+titleMenu = TitleMenu.create(G, openDataHub, id => { // returning-player, Daily and Learn (js/ui/title-menu.js); a LEARN drill (js/learn-drills/registry.js)
+  (drills ??= DrillRegistry.create(G, { retry: coach.retry, setDirtyAir: v => { raceDirtyAir = v; } })).launch(id || "aero");
 }, show => showTouchControls(show, false, show));   // the race dock previewed under LEARN's thumb trainer
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing(), lazyBundles.ensureReplayBroadcast),
@@ -4095,7 +4099,7 @@ function raceIntro(go) {
 function loadingInfo() {
   const real = realRace.intro();
   const out = {
-    track: Tracks.LIST[trackIdx], laps: learnAeroDrill ? 1 : raceLaps,
+    track: Tracks.LIST[trackIdx], laps: drills?.active() ? 1 : raceLaps,
     gp: real ? real.title : SeasonCal.gpName ? SeasonCal.gpName(Tracks.LIST[trackIdx]) : undefined,   // the 2026 REAL calendar renames two rounds (season-cal.js); a real race is its own event
     real,   // the Data Hub's real race (RealRace.intro): the event, whose car, from which lap — the announcer reads it
     weather: raceWeather, tod: raceTimeOfDay,
@@ -4165,6 +4169,8 @@ const incidentSim = IncidentSim.create(G, c => { if (c.human && c.isPlayer && is
 // the field swap. Look modules up at call time: tests stub DebrisWorld.reset on the sandbox. A start's
 // pass-watch clear is gridUp's (U1.1 territory); the debris prime of a start stays after makeCars.
 // #6860 phase 2 (decision B): 'episode' becomes ONE registrant calling SimState.clear(G) — WHAT is SimState's.
+// results-cam stays FIRST (a montage / ceremony is restored before the field is replaced). Left explicit: director.reset (its setCamMode needs startRaceBody's state), resultsCam.reset in startRaceFromSheet / quitToMenu / garageBack (not whys, or ordered among menu teardown).
+Scopes.register("race", { id: "results-cam", on: ["start"], exit: () => { resultsCam.reset(); RaceCeremony.resetLive(); } });
 Scopes.register("race", { id: "incident-sim", on: ["start", "restart-red", "restart-declined", "episode"], touches: ["takeovers"],
   exit: () => IncidentSim.reset(), snapshot: () => { const s = IncidentSim.status(); return { owned: s.owned, count: s.count }; } });
 Scopes.register("race", { id: "raceCtl", on: ["start", "finish", "episode", "quit"], touches: ["caution"],
@@ -4173,6 +4179,7 @@ Scopes.register("race", { id: "debris", after: ["incident-sim"], on: ["start", "
   enterOn: ["restart-red", "restart-declined"], touches: ["takeovers"],
   exit: () => DebrisWorld.reset(), enter: () => DebrisWorld.prime(),
   snapshot: () => { const s = DebrisWorld.status(); return { live: s.live, queued: s.queued, marbles: s.marbles }; } });
+Scopes.register("race", { id: "quit-cams", on: ["quit"], exit: () => { if (typeof ExtraRigs !== "undefined" && ExtraRigs.resetAuto) ExtraRigs.resetAuto(); realRace.stop(); } });   // the auto-cut state is the race's, not the menu's; a WATCH ends with the race
 Scopes.register("race", { id: "pass-watch", on: ["restart-red"], phase: "grid", touches: ["passes"],
   exit: () => { scWatch.reset(); blueWatch.reset(); }, snapshot: () => ({ sc: scWatch.info(), blue: blueWatch.info() }) });
 // Car-to-car contact (js/physics/collide.js). collideFx stays here (shake /
@@ -4382,7 +4389,6 @@ function quitToMenu() {
   if (setupTrialSession) setupTrialSession.cancel();
   if (typeof SetupTrials !== "undefined") SetupTrials.invalidate("Session ended before attempt completed");
   if (garageReturn === "pit") { setupCam.cancelArrival(); $("carsetup").hidden = true; setupPreviewOn = false; pitWorkSpec = null; garageReturn = "select"; }   // the pit garage goes down with the race (comment above)
-  if (typeof ExtraRigs !== "undefined" && ExtraRigs.resetAuto) ExtraRigs.resetAuto();   // the auto-cut state is the race's, not the menu's
   // A mid-quali quit: the 1-car trim is not the menu's field. A takeover is keyed by the TRIM's index, so it is
   // handed back before the swap; after it, index 0 named the full field's first car (perf-debug-e5b2).
   if (qualiField) { try { IncidentSim.reset(); } catch (_) { /* module absent */ } cars = qualiField; qualiField = null; }
@@ -4399,8 +4405,8 @@ function quitToMenu() {
   // menuBlank and the per-car draw break both gate on !active(). Idempotent.
   loadingScreen.stop();
   if (skipToResults()) { resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.release(); announcer.stop && announcer.stop(); }   // a finished player's result is settled before the session is dropped
-  setState("menu", "quit"); paused = false; releaseFieldScratch(true); Scopes.exit("race", { why: "quit" }); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
-  if (learnAeroDrill) { learnAeroDrill.restore(); learnAeroDrill = null; }
+  setState("menu", "quit"); paused = false; releaseFieldScratch(true); Scopes.exit("race", { why: "quit" }); wxArc.endSession(); daily.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  drills?.end("quit");
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -4503,7 +4509,7 @@ function update(dt) {
     Log.info("game", "manual recover");
   }
   if (state === "count") {
-    if (learnAeroDrill?.staging) return; // hold until the rolling start is ready
+    if (drills?.active()?.staging) return; // hold until the rolling start is ready
     // In a session the countdown is driven by the SHARED clock rather than by
     // accumulated dt, and the random hold is dictated by the host. Both matter
     // for fairness: accumulating dt independently lets the two grids drift
@@ -4662,7 +4668,7 @@ function update(dt) {
   if (aiLod) aiLod.step(cars, state === "race" && session === "race" && !isPractice() && !netPlay.active(), raceCtl.level, raceT, player, track ? track.total : 0);
   PerfSpans.begin("ai"); for (let i = 0; i < cars.length; i++) updateCar(cars[i], dt, ranked); PerfSpans.end("ai");   // per-car step: AI + player
   pits.stepEnd();
-  if (!learnAeroDrill && jumpStartPenalty.reactWindowOpen()) { // this drill starts with both cars at speed
+  if (!drills?.active() && jumpStartPenalty.reactWindowOpen()) { // this drill starts with both cars at speed
     for (const c of cars) jumpStartPenalty.tickReaction(c);
   }
   RaceControl.settleLineStep();   // finishers cannot be promoted to a new incident
@@ -7844,7 +7850,7 @@ function render(dt) {
   // depth write). Drawn against the PLAYER's speed for the dynamic colour.
   // Never in a flyby frame (`cine`: the editor preview, flybyCam, free-cam's flyby lens).
   const driverGuide = racing && !ceremonyView && player && !player.finished && !player.retired && !realRace.isWatch();
-  const drillMarkings = learnAeroDrill?.guide.draw(gfx, track && drivingLineApi(track), renderAlpha,
+  const drillMarkings = drills?.guide()?.draw(gfx, track && drivingLineApi(track), renderAlpha,
     driverGuide && state === "race" && !photoMode && !cine && !paused && !replayBuf.isScrubbing());
   if (!drillMarkings && state !== "menu" && !cine && track && player && (photoMode || driverGuide)) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
@@ -8254,7 +8260,7 @@ function render(dt) {
   // The lesson guide uses the existing transparent ghost draw and never joins the field.
   if ((isTimeTrial() || drillMarkings) && player && (state === "race" || state === "count")) {
     const replayGhost = GhostShare.hasGuest() ? GhostShare : Ghost;
-    const g = drillMarkings ? learnAeroDrill.guide.car() : (player.lap | 0) >= 1 ? replayGhost.at(player.lapTime) : null;
+    const g = drillMarkings ? drills.guide().car() : (player.lap | 0) >= 1 ? replayGhost.at(player.lapTime) : null;
     // Skip the ghost while it overlaps the player — at the lap start it sits on
     // your exact grid position, and in the cockpit/onboard cams its bodywork
     // fills the camera as a black box until you pull away ("starts dark, clears
@@ -9351,7 +9357,7 @@ function setPaused(p, why) {
   if (paused !== !!p) Log.info("game", "Race " + (p ? "paused" : "resumed") + " why=" + (why || "button") + " state=" + state + " raceT=" + raceT.toFixed(1));
   if (paused !== !!p && typeof TouchButtonActions !== "undefined") TouchButtonActions.cancelAll();
   paused = p; GameAudio.resetReplayScrub(); replayBuf.onPause(!!p); // REPLAY overlay while paused
-  if (p) learnAeroDrill?.guide.hide();
+  if (p) drills?.guide()?.hide();
   if (!netPlay.active()) { if (p) dropRaceWake(); else holdRaceWake(); UiExperience.resumeArm(G, !p && why !== "restart" && state === "race" && !realRace.isWatch()); }   // a paused screen may sleep; a networked race runs on under the card, and never holds for a resume countdown
   if (!p) {
     closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
