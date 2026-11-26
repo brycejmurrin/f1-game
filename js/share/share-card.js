@@ -28,7 +28,9 @@ const ShareCard = (function () {
     const qr = NetQr.encode(op.text);
     if (!qr) throw new Error("Share link cannot fit in a QR code");
     const quiet = NetQr.QUIET || 4, total = qr.size + quiet * 2;
-    const scale = Math.max(1, Math.floor(Math.min(op.width, op.height) / total));
+    const tile = Math.min(op.width, op.height);
+    // Whole-pixel modules when they fit; otherwise shrink to the tile rather than overflow it.
+    const scale = tile >= total ? Math.floor(tile / total) : tile / total;
     const size = total * scale, ox = op.x + (op.width - size) / 2, oy = op.y + (op.height - size) / 2;
     ctx.fillStyle = op.background || "#fff"; ctx.fillRect(ox, oy, size, size);
     ctx.fillStyle = op.color || "#000";
