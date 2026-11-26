@@ -3988,7 +3988,7 @@ function startRaceFromSheet() {
   if (headlessMode || document.hidden || netPlay.active() || qualiNet.hasArmed()) return startRaceCovered();
   try {
     resultsCam.reset(); RaceCeremony.resetLive(); els.results.hidden = true; clearTimeout(flybyBuildTimer); _menuGate.generation++;
-    setState("menu", "sheet-start");
+    setState("menu", "sheet-start"); if (soundOn) GameAudio.startMusic(-1);
     const def = Tracks.LIST[trackIdx];
     if (track && def && builtWorldFits(def)) { _menuGate.track = track; _menuGate.ready = menuKey(trackIdx); }
     raceIntro(startRace);
@@ -9035,7 +9035,7 @@ function openQualiBody(fresh, netDone) {
   // Reached from race settings this is already "menu"; reached from the results
   // screen it would still say "results". No race is running while the sheet is
   // up, so both paths say the same thing.
-  setState("menu", "quali-sheet");
+  setState("menu", "quali-sheet"); if (soundOn) GameAudio.startMusic(-1);
   closeRaceSheets(); els.hud.hidden = true; els.lights.hidden = true;   // from results / finished race: sheets+HUD+lights down so q-back can walk to the title
   quali.clear();
   qualiNet.arm(netDone);   // armed from the ARG: a caller's write lands before this line

@@ -6,6 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { gameSource } from "../helpers/game-source.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -89,4 +90,22 @@ test("source: endRace stops music; buildChampion does not re-finish", () => {
     "endRace still owns the single finish fanfare");
   assert.doesNotMatch(sheet, /function buildChampion\(\)[\s\S]*GameAudio\.finish\(\)/,
     "champion sheet must not stack a second fanfare");
+});
+
+test("results → qualifying sheet restarts menu music (#6886 row 1)", async () => {
+  const { g, sb, log } = await bootRaceAudio();
+  try {
+    g.G.endRace();
+    assert.ok(log.some((e) => e.fn === "stopMusic"), "endRace stopped the race loop");
+    const before = log.length;
+    await g.made.QualiNet.openQualiForNet(() => {});
+    assert.equal(g.G.state, "menu");
+    assert.ok(log.slice(before).some((e) => e.fn === "startMusic" && e.args[0] === -1),
+      "the quali sheet opened from a results sheet must not sit in silence");
+  } finally { g.close(); }
+});
+
+test("source: the pre-race flyby route restarts menu music after endRace stopped it (#6886 row 1)", () => {
+  assert.match(gameSource(), /setState\("menu", "sheet-start"\); if \(soundOn\) GameAudio\.startMusic\(-1\);/,
+    "startRaceFromSheet must restart menu music (the VM has no flyby path: headless starts straight away)");
 });
