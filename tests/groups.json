@@ -997,6 +997,7 @@
     "tests/unit/rain-cells.test.mjs",
     "// ratchet-absorb + js-strip: the B+D boot-wall ratchet (eagerCodeBytes, absorb; D-036). ~4 s.",
     "tests/unit/ratchet-absorb.test.mjs",
+    "tests/unit/ratchet-book-own-e2e.test.mjs",
     "// Two PRs auto-raising one module's ceiling merge clean (ratchets.d fragments, #2291).",
     "tests/unit/ratchet-merge-hotspot.test.mjs",
     "tests/unit/ratchets-fold-schedule.test.mjs",

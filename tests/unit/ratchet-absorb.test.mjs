@@ -144,3 +144,12 @@ test("BOOK-OWN #6819: bookPins writes only the unbooked growth, never an inherit
   const other = { tree: true, metric: "rawColor", value: 9, ceiling: 8 };
   assert.deepEqual(bookPins([other], [{ metric: "rawColor", unbooked: 1 }]), [other]);
 });
+
+test("BOOK-OWN #6850: booked never goes negative; the absorb check judges the unbooked growth, not the total", () => {
+  // A --lower-only tip with a stale local origin: the local ceiling sits BELOW the base's.
+  assert.equal(pinJudge({ value: 8226, ceiling: 8220, slackMax: 200, baseCeiling: 8226, growth: 1, absorb: 5 }).booked, 0);
+  // 8 pins grown, 4 already booked in the fragment: 4 unbooked is inside the 5 absorb; the total 8 is not.
+  const row = { tree: true, metric: "assertPins", value: 108, over: 4, slackMax: 200, absorb: 5, ownGrowth: 8, unbooked: 4 };
+  assert.equal(autoRaiseBlockReason(row), null);
+  assert.equal(/^the branch grows it by 6, past its 5 absorb/.test(autoRaiseBlockReason({ ...row, unbooked: 6 })), true);
+});
