@@ -109,6 +109,12 @@ const NetHandshake = (function () {
     if (mode !== "s" && mode !== "z" && mode !== "p") return CORRUPT;
     return { ok: true, mode, body };
   }
+  // Every mode must hand callers a plain object with a string kind: an array
+  // or a bare scalar in a z/p body is not a code.
+  function goodPayload(payload) {
+    return !!payload && typeof payload === "object" && !Array.isArray(payload) &&
+      typeof payload.k === "string";
+  }
   async function decodeCode(code) {
     const peek = peekCode(code);
     if (!peek.ok) return peek;
@@ -121,15 +127,14 @@ const NetHandshake = (function () {
         const sdp = NetSdp.unpack(raw.slice(2, 2 + n));
         if (!sdp) return CORRUPT;
         const payload = JSON.parse(dec().decode(raw.slice(2 + n)));
-        if (!payload || typeof payload !== "object" || Array.isArray(payload) ||
-            typeof payload.k !== "string") return CORRUPT;
+        if (!goodPayload(payload)) return CORRUPT;
         payload.s = sdp;
         return { ok: true, payload };
       }
       if (mode === "p" && bytes.byteLength > MAX_DECODED_BYTES) return CORRUPT;
       const json = mode === "z" ? await inflate(bytes) : dec().decode(bytes);
       const payload = JSON.parse(json);
-      if (!payload || typeof payload !== "object") return CORRUPT;
+      if (!goodPayload(payload)) return CORRUPT;   // same shape rule as mode s
       return { ok: true, payload };
     } catch (e) {
       return CORRUPT;   // decode, inflate and parse all mean the same to a player
