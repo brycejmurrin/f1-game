@@ -1966,6 +1966,22 @@ async function raceTrackStepped(idx, stale) {
   }
   throw new Error("track build superseded twice");
 }
+// The tuner's TIME chips (#6896): a day<->dark crossing mid-race was a sync Tracks.build per tap and on close. Now one
+// stepped build on the next task, coalesced (a tap back first builds nothing); physics skips the null world (K1).
+const _wr = { p: null }, inSession = () => state === "race" || state === "count";
+function rebuildWorldDeferred() {
+  if (!inSession()) { loadTrack(trackIdx); return null; }
+  return _wr.p || (_wr.p = (async () => {
+    try {
+      await new Promise((res) => setTimeout(res, 0));
+      for (let i = 0; i < 3 && inSession() && !builtWorldFits(Tracks.LIST[trackIdx]); i++) {
+        const dark = sessionDarkFor(Tracks.LIST[trackIdx]);
+        if (await loadTrackStepped(trackIdx, () => inSession() && sessionDarkFor(Tracks.LIST[trackIdx]) === dark && !gfxContextLost())) applyRaceSettings();
+      }
+      if (!track && state !== "menu" && !gfxContextLost()) { loadTrack(trackIdx); applyRaceSettings(); }   // abandoned (the race ended): heal
+    } finally { _wr.p = null; }
+  })());
+}
 function loadTrack(idx) {
   // Every loader releases selector ownership before replacing the world.
   _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0;
@@ -3353,14 +3369,15 @@ const G = {
   get lightsLit() { return lightsLit; }, set lightsLit(v) { lightsLit = v; },
   get netLobby() { return netLobby; },
   loadCarModel: (url) => carDraw.loadCarModel(url),   // const from CarDraw.create(G) below — defer
-  loadTrack, persistLightTune, copyLightTune, restoreLightTune,
+  loadTrack: (idx, defer) => (defer ? rebuildWorldDeferred() : loadTrack(idx)),   // defer: weather-arc's setTimeOfDay(tod, { defer }) (#6896)
+  persistLightTune, copyLightTune, restoreLightTune,
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   setCamMode: (...a) => setCamMode(...a),   // const from CamModes.create(G) below — defer
   rescuePlayer, setLightTune, snapGameCam,
   onIncidentLineCross,
   // Live weather + time of day (js/race/weather-arc.js) — deferred, wxArc is created below.
   setWeatherLive: (w) => wxArc.setWeatherLive(w),
-  setTimeOfDay: (tod) => wxArc.setTimeOfDay(tod),
+  setTimeOfDay: (tod, opt) => wxArc.setTimeOfDay(tod, opt),
   weather: (w) => wxArc.weather(w),
   loadingInfo,                          // what the loading card describes — the flyby editor previews it
   menuPrep,                             // the menu's race prep, read-only (__apex.menuPrep)

@@ -715,6 +715,7 @@
     "tests/unit/lighting-sun-scratch.test.mjs",
     "tests/unit/lighting-tuner-reset-weather.test.mjs",
     "tests/unit/lighting-tuner-sweep.test.mjs",
+    "tests/unit/lighting-tuner-time-rebuild-vm.test.mjs",
     "// tools/perf/lit-wgsl-census.mjs: WGSL normalise/classify/hash/diff core for the lit-WGSL re-key census (#3672). < 1 s, no browser.",
     "tests/unit/lit-wgsl-census.test.mjs",
     "// #6583: bryce-phone `live` = the newest dated settings export; that file is landscape on top, portrait parked. Pure, < 0.1 s.",

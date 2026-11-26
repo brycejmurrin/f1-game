@@ -96,7 +96,7 @@ function buildLtPreview() {
     host.appendChild(row);
   };
   mkGroup("TIME", LT_TODS, ["DAWN", "DAY", "DUSK", "NIGHT", "TRACK"],
-    (t) => setTimeOfDay(t), "lt-tod-");
+    (t) => setTimeOfDay(t, { defer: true }), "lt-tod-");   // a day<->dark world: one stepped build, never this frame (#6896)
   mkGroup("WEATHER", LT_WX, ["DRY", "WET", "RAIN", "FOG", "CLOUD"],
     (w) => weather(w), "lt-wx-");
 }
@@ -469,7 +469,7 @@ function closeLightTuner(showPauseMenu) {
   if (G.photoMode) exitPhotoMode();
   _ltUndo = null; ltDisarm();   // the copy's one-step revert does not outlive the panel
   // Restore the race's real time & weather (preview was transient).
-  if (_ltPrevTOD != null && setTimeOfDay() !== _ltPrevTOD) setTimeOfDay(_ltPrevTOD);
+  if (_ltPrevTOD != null && setTimeOfDay() !== _ltPrevTOD) setTimeOfDay(_ltPrevTOD, { defer: true });   // a tap back before the build ran builds nothing
   if (_ltPrevWx != null && weather() !== _ltPrevWx) weather(_ltPrevWx);
   if (_ltArcSaved) { G.weatherArc = _ltPrevArc; _ltArcSaved = false; _ltPrevArc = undefined; }
   _ltPrevTOD = null; _ltPrevWx = null;
