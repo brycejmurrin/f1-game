@@ -239,3 +239,14 @@ test("publisher tick holds the tower when field() returns ok:false (no empty wip
   );
   pub.stop();
 });
+
+test("bridge: a resume hello from a known overlay forces a full frame", () => {
+  const { FakeChannel } = bus();
+  const { Bridge } = load();
+  const host = Bridge.host({ BroadcastChannel: FakeChannel, now: () => 0 });
+  const sub = Bridge.subscribe(() => {}, { BroadcastChannel: FakeChannel, timers: timers(), id: "ov-r" });
+  assert.equal(host.takeFresh(), true, "new overlay");
+  assert.equal(host.takeFresh(), false);
+  sub.hello();
+  assert.equal(host.takeFresh(), true, "resume hello re-arms a full frame for a known peer");
+});

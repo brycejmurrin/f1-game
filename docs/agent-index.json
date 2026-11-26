@@ -4724,6 +4724,11 @@
       "roster": "DEFERRED:three"
     },
     {
+      "path": "js/render/three/tlx-texpool.js",
+      "global": "TLXTexPool",
+      "roster": "DEFERRED:three"
+    },
+    {
       "path": "js/render/three/tlx-util.js",
       "global": "TLXUtil",
       "roster": "DEFERRED:three"
@@ -4951,7 +4956,7 @@
     {
       "path": "js/track/scenery/graph.js",
       "global": "TrackGraph",
-      "roster": "tag"
+      "roster": "LAZY_TRACK_BUILD"
     },
     {
       "path": "js/track/scenery/guards.js",

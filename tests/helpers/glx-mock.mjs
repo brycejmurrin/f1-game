@@ -33,6 +33,7 @@ const MANIFEST = createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.
 const GLX_FILE = "js/render/glx/glx.js";
 // Shared dependencies and the deferred GLX group in production order.
 const FILES = [...MANIFEST.FULL.slice(0, MANIFEST.FULL.indexOf("js/render/gfx.js")),
+  "js/render/shared/assets.js",   // glx.js reads Assets.matScale / mipCount (#6822); eager in production
   ...MANIFEST.DEFERRED.webgl2];
 // GLSL `const int …` lines inside shader strings stay const (glx-light-fit reads the rewritten loop bound).
 const KNOBS_FILE = "js/lighting/knobs.js";

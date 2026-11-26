@@ -44,6 +44,7 @@
       "js/render/three/tlx-post.js",
       "js/render/three/tlx-mem.js",
       "js/render/three/tlx-util.js",
+      "js/render/three/tlx-texpool.js",
       "js/render/three/tlx.js"
     ]
   },
@@ -166,6 +167,10 @@
     ],
     [
       "js/render/three/tlx-util.js",
+      "js/render/three/tlx.js"
+    ],
+    [
+      "js/render/three/tlx-texpool.js",
       "js/render/three/tlx.js"
     ]
   ],
@@ -956,6 +961,7 @@
     LAZY_GFX_HI_EDGES: [],
     LAZY_TRACK_BUILD: [
     "js/render/shared/mesh-detail.js",
+    "js/track/scenery/graph.js",
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",
     "js/track/scenery/landmark-kit.js",

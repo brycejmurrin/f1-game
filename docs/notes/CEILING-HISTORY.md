@@ -4139,3 +4139,11 @@ byte-identical before and after. Fragment: `ratchets.d/claude--u42-ai-start.json
 and `skyViewOverride` become getter-only (a write is a TypeError / TS2540), so game.js owns the four writes. `js/game.js lines`
 +8 and `codeLines` +7 (the two command objects, net of the four dropped setters); `js/agent/apex.js` lines -2 (park is one line).
 `(tree) eagerCodeBytes` +33, inside its absorb. Fragment: `ratchets.d/claude--issue-6953-owner-commands.json`.
+
+## 2026-11-26 — claude/issue-6822-shared-render-rules: shared render rules (#6822, #6607 rows 2+4, #6479 row 3)
+
+`(tree) eagerCodeBytes` 4061221 → **4061540** (+319): `Assets.matScale` / `Assets.mipCount` and `PostCommon.sunShadowStrength` become the
+one home in the EAGER shell (assets.js, post-common.js); the pasted copies they replace live in the deferred glx.js, wgx.js and
+tsl-lit.js bundles, so the eager total can only grow. `(tree) assertPins` +2 and `assertPinsAll` +5: the new
+`render-shared-rules.test.mjs` pins. glx.js lines 2937 → 2926. Fragment: `ratchets.d/claude--issue-6822-shared-render-rules.json`.
+Human step: `ratchet-raise`.

@@ -337,7 +337,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `data.js` | `TrackSceneryData` | tag | the GENERIC scenery data tables for js/track/tracks.js buildProps(): named colour packs, theme fallbacks, crowd/window tints, sign segments and stand liveries. |
-| `graph.js` | `TrackGraph` | tag | TrackGraph: the scenery MODEL LIBRARY + NODE GRAPH. |
+| `graph.js` | `TrackGraph` | LAZY_TRACK_BUILD | TrackGraph: the scenery MODEL LIBRARY + NODE GRAPH. |
 | `models.js` | `TrackModels` | LAZY_TRACK_BUILD | atomic and intentional scenery model helpers. |
 | `themes.js` | `SceneryThemes` | LAZY_TRACK_BUILD | deterministic scenery theme registry. |
 | `landmark-kit.js` | `LandmarkKit` | LAZY_TRACK_BUILD | bounded architectural forms for staged scenery geometry. |
@@ -732,6 +732,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `tlx-post.js` | `TLXShaders` | DEFERRED:three | TLXShaders.postChain: the post-processing ORCHESTRATION for the TLX backend (M8). |
 | `tlx-mem.js` | `TLXShaders` | DEFERRED:three | TLXShaders.memCensus: the texture / render-target / buffer byte census for the TLX backend, the three-path answer to GLX.texCensus() (glx.js). |
 | `tlx-util.js` | `TLXUtil` | DEFERRED:three | TLXUtil: module-level helpers carved out of tlx.js (#6821, #6607 row 8): pumpAnimation (three's rAF pump), texStandIn (the 1x1 canvas a released texture… |
+| `tlx-texpool.js` | `TLXTexPool` | DEFERRED:three | TLXTexPool: the retired-texture pool carved out of tlx.js (#6821, #6479 row 10). |
 | `tlx.js` | `TLX` | DEFERRED:three | TLX: default three.js/TSL renderer behind js/render/gfx.js. |
 | `tsl-surface.js` | `TLXSurface` | LAZY_GFX_HI | TLXSurface: close-up road surfaces for the TLX lit program (#6509 items 1 + 2; GfxQuality features `closeLayers` and `wearMask`, FEATURES level 2: desktop… |
 

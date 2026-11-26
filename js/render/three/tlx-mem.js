@@ -76,12 +76,49 @@
     const bytes = chainBytes(w, h, layers, bpt, mips, volume) * primarySamples + w * h * extraBpt * extraSampleLayers;
     const kind = tex.isDepthTexture ? "rtDepth" : (rt || tex.isRenderTargetTexture ? "renderTarget"
       : (tex.isCubeTexture ? "cube" : volume ? "volume" : (layers > 1 ? "materialArray" : (tex.isDataTexture ? "data" : "content2D"))));
-    return { kind, name: tex.name || (rt && rt.texture && rt.texture.name) || "", w, h, layers, mips, samples, bpt, bytes };
+    return { kind, scope: coerce(tex.__tlxScope), name: tex.name || (rt && rt.texture && rt.texture.name) || "", w, h, layers, mips, samples, bpt, bytes };
   }
 
-  /** The census of a live TLX backend. `t` is GLX.__tlx (tlx.js): { renderer, THREE, ctxLost? }. */
-  function memCensus(t, top) {
-    const out = { supported: true, backend: "tlx", bytes: 0, count: 0, mb: 0, byKind: {}, biggest: null, targets: [],
+  /** Lifetime scope ledger (#6958): textures and geometries are stamped with the ambient scope when created
+   * (tlx.js creation sites), so a leak reads as ONE scope that does not return after a race cycle. Pure: no GPU. */
+  const VALID = ["boot", "home", "circuit", "race", "garage", "car"];
+  let cur = "boot";
+  const stack = [];
+  const coerce = (n) => (VALID.indexOf(n) >= 0 ? n : "boot");
+  const memScope = {
+    VALID,
+    set(n) { cur = coerce(n); return cur; },
+    push(n) { n = coerce(n); if (n === cur) return cur; stack.push(cur); cur = n; return cur; },
+    pop(n) { if (n !== undefined && coerce(n) !== cur) return cur; cur = stack.length ? stack.pop() : "boot"; return cur; },
+    current() { return cur; },
+  };
+
+  /** Per-scope geometry bytes from the facade's WeakRef registry; one ArrayBuffer counts once (first scope seen). */
+  function geoByScope(geoReg, byScope) {
+    const seenBuf = new Set(), arrs = (g) => {
+      const l = [];
+      for (const k in g.attributes || {}) { const a = g.attributes[k], v = a && (a.array || (a.data && a.data.array)); if (v) l.push(v); }
+      if (g.index && g.index.array) l.push(g.index.array);
+      return l;
+    };
+    for (let i = 0; i < geoReg.length; i++) {
+      const g = geoReg[i] && (typeof geoReg[i].deref === "function" ? geoReg[i].deref() : geoReg[i]);
+      if (!g) continue;
+      const sc = coerce(g.__tlxScope), e = byScope[sc] || (byScope[sc] = { bytes: 0, count: 0 });
+      e.geoCount = (e.geoCount || 0) + 1;
+      for (const v of arrs(g)) {
+        const b = v.buffer || v;
+        if (seenBuf.has(b)) continue;
+        seenBuf.add(b);
+        e.geoBytes = (e.geoBytes || 0) + (b.byteLength || v.byteLength || 0);
+      }
+    }
+  }
+
+  /** The census of a live TLX backend. `t` is GLX.__tlx (tlx.js): { renderer, THREE, ctxLost? }.
+   * `extra.geoReg` (optional) is tlx.js's WeakRef geometry registry, for per-scope geometry bytes. */
+  function memCensus(t, top, extra) {
+    const out = { supported: true, backend: "tlx", bytes: 0, count: 0, mb: 0, byKind: {}, biggest: null, targets: [], byScope: {},
       buffers: { attrBytes: 0, indexBytes: 0, uniformBytes: 0, source: "three" }, swapchainEst: null, three: null,
       estimated: ["swapchainEst (one drawing buffer; the browser keeps more)", "rtDepth (16-bit or estimated 32-bit depth, extra stencil storage not counted)", "buffers (three's own byte counts)", "WebGL multisample renderbuffers (requested sample count)"],
       excludes: EXCLUDES };
@@ -114,7 +151,10 @@
       out.bytes += x.bytes; out.count++;
       out.byKind[x.kind] = (out.byKind[x.kind] || 0) + x.bytes;
       if (!out.biggest || x.bytes > out.biggest.bytes) out.biggest = x;
+      const sc = x.scope, e = out.byScope[sc] || (out.byScope[sc] = { bytes: 0, count: 0 });
+      e.bytes += x.bytes; e.count++;
     }
+    if (extra && extra.geoReg) { try { geoByScope(extra.geoReg, out.byScope); } catch (_) { /* a probe, never a throw */ } }
     rows.sort((a, b) => b.bytes - a.bytes);
     out.targets = rows.filter((x) => x.kind === "renderTarget" || x.kind === "rtDepth").slice(0, top > 0 ? top : 16);
     const m = r.info && r.info.memory;
@@ -132,5 +172,5 @@
     return out;
   }
 
-  window.TLXShaders = Object.assign(window.TLXShaders || {}, { memCensus });
+  window.TLXShaders = Object.assign(window.TLXShaders || {}, { memCensus, memScope });
 })();

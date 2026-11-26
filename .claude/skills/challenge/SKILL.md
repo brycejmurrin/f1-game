@@ -1,6 +1,6 @@
 ---
 name: challenge
-description: "Use when the user types /challenge <PR number>: adversarially review ONE pull request. Reads its claims (ticked Plan items, verdict lines, not-run list) and tries to refute each against the tree, then posts a COMMENT review. Read-only but for that review and at most the needs-decision label; never edits, approves or lands. Not for: driving a PR to green → steward; status → check."
+description: "Use when the user types /challenge <PR number>: adversarially review ONE pull request. Reads its claims (ticked Plan items, verdict lines, not-run list) and tries to refute each against the tree, then posts a COMMENT review. Read-only but for that review and at most the needs-decision label. Not for: driving a PR to green → steward; status → check."
 disable-model-invocation: true
 context: fork
 agent: general-purpose

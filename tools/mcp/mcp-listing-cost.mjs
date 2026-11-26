@@ -146,6 +146,13 @@ export function formatPreflightLine(r) {
   return `${r.ok ? "PASS" : "FAIL"} ${r.server}: ${r.reason}`;
 }
 
+/** The `/* ... *\/` header as a usage block: no shebang, no @doc/@skill lines, no comment markers. */
+export function usageText(src) {
+  const m = /\/\*([\s\S]*?)\*\//.exec(src);
+  const body = (m ? m[1] : "").split("\n").map((l) => l.replace(/^ \* ?/, "").replace(/^ ?\*$/, "")).join("\n");
+  return `usage:\n${body.trim()}\n`;
+}
+
 function parseArgs(argv) {
   const out = { json: false, only: null, entries: [], preflight: false, config: null, timeoutMs: null, selfTest: false };
   for (let i = 0; i < argv.length; i++) {
@@ -162,7 +169,7 @@ function parseArgs(argv) {
       if (eq < 1) throw new Error("--entry needs NAME=command args...");
       out.entries.push({ name: spec.slice(0, eq), cmd: spec.slice(eq + 1).trim().split(/\s+/) });
     }
-    else if (a === "--help" || a === "-h") { process.stdout.write(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("*/")[0]); process.exit(0); }
+    else if (a === "--help" || a === "-h") { process.stdout.write(usageText(fs.readFileSync(fileURLToPath(import.meta.url), "utf8"))); process.exit(0); }
     else throw new Error(`unknown arg ${a}`);
   }
   return out;
