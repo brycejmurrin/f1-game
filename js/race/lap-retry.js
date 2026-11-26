@@ -76,22 +76,27 @@ var LapRetry = (function () {
       return true;
     }
 
-    // RETRY LAP is built here, beside RESTART, the way REPLAY and RECOVER CAR are
-    // built in JS (a static shell button would raise the shellNodes ratchet).
+    // RETRY LAP is a RACE TOOLS tile, built in JS like REPLAY and RECOVER CAR (a
+    // static shell button would raise the shellNodes ratchet). A TILE, not a door
+    // beside RESTART: the phone card is a grid of named areas, and a full-width row
+    // outside them gets an auto row of its own: 89 px of scroll at 852x283
+    // (ui-resize.spec.js pause cells). HIDDEN outside a time trial, so a race's
+    // card is exactly what it was; disabled (setting-deps says why) in a TT
+    // with no drop-in to go back to.
     // NOT in pause-opts GUARDED: a retry is cheap and loses at most one lap.
     let btn = null;
     if (typeof document !== "undefined" && document.getElementById) {
       btn = document.getElementById("pm-retry-lap");
-      const restart = document.getElementById("pm-restart");
-      if (!btn && restart && restart.parentNode) {
+      const tray = document.getElementById("pm-quick-doors");
+      if (!btn && tray) {
         btn = document.createElement("button");
-        btn.id = "pm-retry-lap"; btn.type = "button"; btn.textContent = "RETRY LAP";
-        restart.parentNode.insertBefore(btn, restart.nextSibling);
+        btn.id = "pm-retry-lap"; btn.type = "button"; btn.textContent = "RETRY LAP"; btn.hidden = true;
+        tray.insertBefore(btn, tray.firstChild);
       }
       // "restart": setPaused's no-3-2-1 resume (the run-up is the countdown)
       if (btn) btn.onclick = () => { if (retry()) call(deps.setPaused, false, "restart"); };
     }
-    function sync() { if (btn) btn.disabled = !canRetry(); }
+    function sync() { if (btn) { btn.hidden = !G.timeTrial; btn.disabled = !canRetry(); } }
 
     live = { canRetry, capture, retry, invalidate, sync, hasSnapshot: () => !!snap };
     watchPause();
