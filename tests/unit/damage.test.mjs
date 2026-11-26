@@ -138,6 +138,48 @@ test("wall: the pin's rising edge books one strike on the wall side; a kiss book
   assert.equal(D.state(k).hits, 0);
 });
 
+test("wall (#6715): a strike inside a car-contact cool-down books its excess over the last booked severity", () => {
+  const { Damage: D } = load();
+  const strike = (c) => { D.observe(c, 1 / 60, 90); c.wasOnWall = true; D.observe(c, 1 / 60, 90); };
+  const alone = car({ x: 5, speed: 60, yawVis: 0.6 });
+  strike(alone);
+  const sev = Math.min(1, 60 / 90 * (0.25 + 0.75 * Math.sin(0.6)) * 1.6);
+  const a = car({ x: 5, speed: 60, yawVis: 0.6 }), b = car({ prog: 104 });
+  D.contact(a, b, 0.2);   // a rub arms the cool-down
+  const rub = D.state(a).fwR;
+  strike(a);              // +2 frames: well inside COOL_S
+  const s = D.state(a);
+  const want = D.state(alone).fwR * (sev - 0.2) / sev;   // the strike's excess on the wall corner
+  assert.ok(Math.abs(s.fwR - rub - want) < 1e-9, `strike booked ${s.fwR - rub}, excess wants ${want}`);
+  assert.equal(s.hits, 2, "the harder strike is a new hit");
+  assert.equal(s.knock, 1, "knock reads the whole strike, not its excess");
+  // A softer strike inside the cool-down stays dropped.
+  const c = car({ x: 5, speed: 20, yawVis: 0.6 }), d = car({ prog: 104 });
+  D.contact(c, d, 0.9);
+  const before = D.state(c).worst;
+  strike(c);
+  assert.equal(D.state(c).hits, 1);
+  assert.equal(D.state(c).worst, before);
+});
+
+test("wall (#6715): a harder re-strike inside a wall cool-down books its excess; a softer one leaves the cool alone", () => {
+  const { Damage: D } = load();
+  const c = car({ x: 5, speed: 30, yawVis: 0.6 });
+  D.observe(c, 1 / 60, 90); c.wasOnWall = true; D.observe(c, 1 / 60, 90);
+  assert.equal(D.state(c).hits, 1);
+  c.wasOnWall = false; D.observe(c, 1 / 60, 90);
+  c.speed = 60; c.wasOnWall = true; D.observe(c, 1 / 60, 90);   // the bounce, harder
+  assert.equal(D.state(c).hits, 2, "the harder re-strike is a new hit");
+  // A softer re-strike books nothing and does not re-arm: once the first
+  // cool runs out, the same strike books whole again.
+  c.wasOnWall = false; D.observe(c, 0.2, 90);
+  c.speed = 10; c.wasOnWall = true; D.observe(c, 1 / 60, 90);   // soft touch inside the cool
+  assert.equal(D.state(c).hits, 2);
+  c.wasOnWall = false; D.observe(c, 0.2, 90);                   // first cool has run out
+  c.speed = 30; c.wasOnWall = true; D.observe(c, 1 / 60, 90);
+  assert.equal(D.state(c).hits, 3, "the soft touch did not extend the cool");
+});
+
 test("wall: severity uses this frame's speed — accel-into-wall books, decel-to-kiss does not", () => {
   const { Damage: D } = load();
   // Prior frame was parked; this frame hits the wall at race speed.

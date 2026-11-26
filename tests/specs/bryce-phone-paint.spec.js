@@ -3,9 +3,9 @@
 //
 // Every other fit check in the suite measures an element's OWN px: `tap-floor.mjs` divides rects by the CSS zoom and
 // `fit-audit.mjs` reads the computed font size. At the UI SIZE he stored on 2026-11-09 (61 %) a "14 px" label painted
-// 8.5 px and a "48 px" button 29 px, and nothing said so. It seeds the 2026-11-10 export (UI SIZE 70,
-// BUTTON SIZE 143.25; tools/lib/bryce-phone.mjs `nov10`, PAINT_PROFILE in tools/ui/bryce-paint.mjs): the ceilings were
-// measured on it, and on `live` (2026-11-25) the counts rise until #6681 is fixed (Bryce, #6646 A). This spec boots the game the way his phone does — his window
+// 8.5 px and a "48 px" button 29 px, and nothing said so. It seeds his live export (tools/lib/bryce-phone.mjs `live`, the
+// newest dated file: 2026-11-25, UI SIZE shipped, BUTTON SIZE 130; PAINT_PROFILE in tools/ui/bryce-paint.mjs; #6681).
+// This spec boots the game the way his phone does — his window
 // (Home Screen app 852x393 with env() insets 59/20/59, the Safari tab 852x368 measured on the device, and the 844x390
 // cell older reports used), his live settings export — and judges the PAINTED result on title, select, garage,
 // settings, the race HUD, pause and results, at UI SIZE 50 (the phone floor since #5452), 70 (his stored value) and
