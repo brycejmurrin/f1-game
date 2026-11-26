@@ -21,6 +21,7 @@ function tlxCtx(search = "") {
   const ctx = vm.createContext({ location: { search }, URLSearchParams, WeakSet, WeakMap, Math, Object, Number, String,
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} } });
   ctx.window = ctx;
+  vm.runInContext(read("js/render/three/tlx-util.js"), ctx, { filename: absSrc("js/render/three/tlx-util.js") });
   vm.runInContext(read("js/render/three/tlx.js"), ctx, { filename: absSrc("js/render/three/tlx.js") });
   return ctx;
 }

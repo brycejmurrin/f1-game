@@ -223,7 +223,8 @@
     "XrUi",
     "StoppedCars",
     "RetiredCard",
-    "TLXCarSurf"
+    "TLXCarSurf",
+    "TLXUtil"
   ],
   "mutable": [
     "GLX",

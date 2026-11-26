@@ -15,11 +15,12 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
+const UTIL = fs.readFileSync(path.join(ROOT, "js/render/three/tlx-util.js"), "utf8");
 
 // The helper exactly as shipped, evaluated on its own.
 function loadPump() {
-  const m = /\n  function pumpAnimation\(r\) \{[\s\S]*?\n    return pump;\n  \}\n/.exec(SRC);
-  assert.ok(m, "pumpAnimation is defined in tlx.js");
+  const m = /\n  function pumpAnimation\(r\) \{[\s\S]*?\n    return pump;\n  \}\n/.exec(UTIL);
+  assert.ok(m, "pumpAnimation is defined in tlx-util.js");
   return vm.runInNewContext(m[0] + "; pumpAnimation;");
 }
 
@@ -79,6 +80,5 @@ test("every backend installs the pump (no backend gate); begin() drains it when 
   assert.doesNotMatch(SRC, /isWebGLBackend\) renderer\.__apexPump/, "no WebGL-only gate on the install");
   assert.match(SRC, /begin\(frame\) \{[\s\S]{0,400}?if \(renderer\.__apexPump\) renderer\.__apexPump\.drain\(\);/,
     "begin() drains the parked tick before the frame is drawn");
-  const iife = SRC.indexOf("const TLX = (function () {"), fn = SRC.indexOf("function pumpAnimation(");
-  assert.ok(iife >= 0 && fn > iife, "pumpAnimation lives inside the TLX IIFE, not on the global scope");
+  assert.match(SRC, /const \{[^}]*\bpumpAnimation\b[^}]*\} = TLXUtil;/, "tlx.js takes pumpAnimation from TLXUtil, not the global scope");
 });
