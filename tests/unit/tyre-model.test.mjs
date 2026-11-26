@@ -1379,12 +1379,16 @@ test("lapsLeft counts the exact distance from the fit point, not the rounded par
   for (const [fitAt, drive] of [[0.3, 1.7], [0.45, 0.55], [0.7, 1.7], [0.6, 2.25]]) {
     const G = { lapsTarget: 10, track: { total: len, def: {} }, LAT_MAX: 22, raceTyreWear: "real" };
     const s = T.create(G); s.setLevel("real");
-    const c = { human: false, lap: 1, s: fitAt * len, prog: fitAt * len, _progGift: 0, tread: null };
+    const c = { human: false, lap: 5, s: fitAt * len, prog: (4 + fitAt) * len, _progGift: 0, tread: null };
     s.fit(c, T.classRecord("medium"));
-    c.prog = (fitAt + drive) * len; c.lap = 1 + Math.floor(fitAt + drive); c.s = c.prog % len; c.tyreWear = 0.4;
-    if (s.lapsOn(c) < 1) continue;
+    c.prog = (4 + fitAt + drive) * len; c.lap = 5 + Math.floor(fitAt + drive); c.s = c.prog % len; c.tyreWear = 0.4;
+    assert.ok(s.lapsOn(c) >= 1, `fit at ${fitAt}: a lap is on the set, so the measured rate is used`);
     const left = s.lapsLeft(c);
     assert.ok(Math.abs(left - (drive / 0.4) * 0.6) < 1e-9, `fit at ${fitAt}, ${drive} laps driven: ${left} vs ${(drive / 0.4) * 0.6}`);
+    // A drop-in that re-ages the set by hand (real-race.js sets tyreLap0 without a fit): the stale fit point is
+    // not used; the whole-lap read plus this lap's part, as before.
+    c.tyreLap0 -= 3; const n = s.lapsOn(c), part = (c.prog / len) % 1;
+    assert.ok(Math.abs(s.lapsLeft(c) - ((n + part) / 0.4) * 0.6) < 1e-9, `fit at ${fitAt}: a hand-set age falls back: n ${n}, left ${s.lapsLeft(c)}`);
   }
 });
 

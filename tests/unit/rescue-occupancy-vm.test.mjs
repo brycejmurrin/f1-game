@@ -53,6 +53,8 @@ test("Collide.rescueX: all three slots taken, clear road at the edge is used, ne
   const gap = (xx) => Math.min(...row2.slice(1).map((o) => Math.abs(xx - o.x)));
   assert.ok(gap(x2) > 1, "the clearest point, well off every car: gap " + gap(x2) + " at x " + x2);
   assert.ok(Math.abs(x2) + W / 2 <= narrow, "still on the road: " + x2);
+  // No room to move across at all (half-width under a car and a margin): the centre, as on base.
+  assert.equal(C.rescueX(me, row2, L, 1.2), 0, "a road too narrow for a side slot keeps the centre");
 });
 
 test("rescuePlayer beside a car stopped on the line puts the player clear of it, world position matching", async () => {
