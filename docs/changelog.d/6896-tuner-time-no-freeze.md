@@ -1,0 +1,1 @@
+Fixed: In a race, the LIGHTING TUNER's TIME chips no longer freeze the frame when they switch between day and night (#6896). The track rebuilds in steps on the next frame instead of all at once, and a quick tap back, or DONE before that build starts, rebuilds nothing.
