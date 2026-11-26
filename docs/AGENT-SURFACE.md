@@ -81,7 +81,7 @@ does not discover, install or validate hosted tools.
 
 **One-time Dashboard (not inventable from git):**
 
-1. Link this repo to environment **Apex 26** ([819b740b-ac05-11f1-b532-320a589b8025](https://cursor.com/dashboard/cloud-agents/environments/e/819b740b-ac05-11f1-b532-320a589b8025)). **Save** from `.cursor/environment.json` on the ship branch, then **Build** until the newest row is green. Committed `environment.json` wins over personal dashboard JSON; recurring / config-change builds are what new agents boot from (not one-off draft builds from agents).
+1. Link this repo to environment **Apex 26** ([1e48729d-ccb7-11f1-bec7-b2318963e0b6](https://cursor.com/dashboard/cloud-agents/environments/e/1e48729d-ccb7-11f1-bec7-b2318963e0b6)) — the active Apex 26 environment DAD launches with. **Save** from `.cursor/environment.json` on the ship branch, then **Build** until the newest row is green. Committed `environment.json` wins over personal dashboard JSON; recurring / config-change builds are what new agents boot from (not one-off draft builds from agents).
 2. When starting a Cloud Agent, pick that environment — not a generic default. After boot, `cursor-cloud environment-info` should show `source: "Repository"`, `build.resolution: "resolved"`, and a `buildId`; run `npm run test:guards` without `npm install` first.
 3. **MCP (required for `apex_*` / `browser_*` / `chrome_*` / `debugger_*` in Cloud):** the host
    does **not** attach project `.mcp.json` by itself ([capabilities](https://cursor.com/docs/cloud-agent/capabilities)).
