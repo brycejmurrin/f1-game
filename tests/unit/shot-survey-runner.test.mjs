@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { buildSurveyGallery, galleryEntries } from "../../tools/shot/build-gallery.cjs";
+import { buildSurveyGallery, galleryEntries } from "../../tools/shot/shot-gallery.cjs";
 import {
   canonicalSurveyOutput,
   normalizeSurveyRequest,
