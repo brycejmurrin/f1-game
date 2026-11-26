@@ -95,6 +95,7 @@ const F1Transport = (function () {
     const MAX_ACTIVE = 2;                 // bound response bodies independently of start-rate pacing
 
     const MINUTE = 60 * 1000;
+    const EMPTY_TTL_MS = 10 * MINUTE;      // an empty OpenF1 answer is never trusted longer than a live window
     const CACHE_SWEEP_MS = 5 * MINUTE;     // a response batch must not rescan localStorage per item
 
     // OpenF1's minute budget must not block an unrelated Jolpica request.
@@ -200,24 +201,24 @@ const F1Transport = (function () {
       return null;
     }
 
-    function writeMemory(url, data) {
+    function writeMemory(url, data, at) {
       memCache.delete(url);
-      memCache.set(url, { t: effects.now(), data });
+      memCache.set(url, { t: at == null ? effects.now() : at, data });
       while (memCache.size > MEM_MAX) memCache.delete(memCache.keys().next().value);
       try { effects.remove(CACHE_PREFIX + url); } catch (e) { /* no storage */ }
     }
 
-    function writeCache(url, data, memoryOnly) {
+    function writeCache(url, data, memoryOnly, at) {
       // Known bulk histories never need a temporary full JSON string merely to
       // discover that they exceed the disk budget. Keep normal cache semantics.
-      if (memoryOnly) { writeMemory(url, data); return; }
+      if (memoryOnly) { writeMemory(url, data, at); return; }
       const key = CACHE_PREFIX + url;
-      const payload = JSON.stringify({ t: effects.now(), data });
+      const payload = JSON.stringify({ t: at == null ? effects.now() : at, data });
       // A multi-MB body (/position, car_data) would take the origin's whole
       // localStorage quota from the game's own saves: keep it in memory only,
       // and drop an older small disk copy so it cannot stand in as the stale fallback.
       if (payload.length > CACHE_MAX_CHARS) {
-        writeMemory(url, data);
+        writeMemory(url, data, at);
         return;
       }
       memCache.delete(url);
@@ -444,9 +445,11 @@ const F1Transport = (function () {
       const job = attempt(0)
         .then(function (json) {
           if (myGen !== netGen) throw cancelledError(url);
-          // An empty array is OpenF1's "no results yet" (HTTP 404): never store it,
-          // or a frozen session serves [] for the whole week-long TTL.
-          if (cache && !(json && typeof json === "object" && json.length === 0)) writeCache(url, json, cachePolicy === "memory");
+          // An empty array is OpenF1's "no results yet" (HTTP 404). Keep it for at
+          // most EMPTY_TTL_MS: backdate the stamp so a long (frozen-session) TTL
+          // cannot serve [] for a week, while a short TTL still holds it.
+          const empty = json && typeof json === "object" && json.length === 0;
+          if (cache) writeCache(url, json, cachePolicy === "memory", empty && ttl > EMPTY_TTL_MS ? effects.now() - (ttl - EMPTY_TTL_MS) : null);
           if (!quiet) effects.info("fetch " + name + " ok");
           return json;
         })
