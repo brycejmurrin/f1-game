@@ -285,6 +285,7 @@ const SaveSchemaRegistry = (function () {
 
   function ingestSettingsSpec(spec) {
     _settings = spec;
+    _familyMemo.clear();
     _settingsMap = new Map();
     if (!spec) return;
     for (const row of spec) {
@@ -311,12 +312,15 @@ const SaveSchemaRegistry = (function () {
 
   // The key's save family ({ section, health, mirror, writerLock }), or null for a key no row
   // knows (another build's key): callers keep their own answer for those.
+  // Memoised per key: the store asks on every write. ingestSettingsSpec clears it.
+  const _familyMemo = new Map();
   function family(k) {
     k = shortKey(k);
+    if (_familyMemo.has(k)) return _familyMemo.get(k);
     const e = resolve(k);
-    if (!e) return null;
-    const f = familyOf(e);
-    return e.mirrorRe && !e.mirrorRe.test(k) ? e._familyUnmirrored : f;
+    const f = !e ? null : (familyOf(e), e.mirrorRe && !e.mirrorRe.test(k) ? e._familyUnmirrored : e._family);
+    if (_familyMemo.size < 4096) _familyMemo.set(k, f);
+    return f;
   }
 
   // A credential: never copied or restored by a key snapshot (#6638).

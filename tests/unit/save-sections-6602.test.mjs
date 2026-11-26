@@ -50,6 +50,10 @@ const PREFIX_EXAMPLES = [
   "pitPlan.monza", "spotify.token", "cockpitWheelFinish", "cockpitBodyFinish", "cockpitHaloFinish",
 ];
 
+// Keys no registry row knows (another build's, or retired): each caller keeps the legacy answer.
+const UNKNOWN = ["trackDesigner", "tracks.cota", "careerArchive", "career.driver.9", "seasonOld", "careerSetup.driver.0.bad id",
+  "ghost2", "inputGhostOld", "customTrackDraftX", "zzUnknown", "api", "realraceX"];
+
 function registryCtx() {
   const ctx = vm.createContext({ console, Math, JSON, Object, Array, Number, String, Map, Set, isFinite, RegExp,
     Teams: { LIST: [] }, Log: { warn() {}, info() {} } });
@@ -112,12 +116,11 @@ test("registry families deep-equal the pre-#6602 regexes on every registry and f
   }
 });
 
-test("SaveHealth categories equal the pre-#6602 regexes on every registry key", async () => {
+test("SaveHealth categories equal the pre-#6602 regexes on every registry key and unknown keys", async () => {
   const ctx = registryCtx();
   run(ctx, "js/ui/save-health.js", ";globalThis.Health=SaveHealth");
   const R = vm.runInContext("SaveSchemaRegistry", ctx);
-  for (const k of allKeys(R)) {
-    if (!R.resolve(k)) continue;
+  for (const k of [...allKeys(R), ...UNKNOWN]) {
     const full = "apex26." + k, disk = { length: 1, key: () => full, getItem: () => "1" };
     const r = await ctx.Health.inspect({ localStorage: disk, storage: {}, restorePoints: {} });
     assert.equal(r.categories.length, 1, k);
@@ -136,7 +139,9 @@ function storeCtx(withRegistry) {
 }
 
 test("the store mirror set and career writer lock equal the pre-#6602 regexes", () => {
-  const keys = allKeys(vm.runInContext("SaveSchemaRegistry", registryCtx()));
+  const R = vm.runInContext("SaveSchemaRegistry", registryCtx());
+  for (const k of UNKNOWN) assert.equal(R.family(k), null, `${k} is unknown to the registry`);
+  const keys = [...allKeys(R), ...UNKNOWN];
   for (const withRegistry of [true, false]) {
     const { store } = storeCtx(withRegistry);
     for (const k of keys) {

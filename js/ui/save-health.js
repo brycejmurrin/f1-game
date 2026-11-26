@@ -3,12 +3,19 @@ const SaveHealth = (function () {
   "use strict";
   const CACHE_PREFIXES = ["apex26.api.", "apex26.realrace."];
   const mounted = new WeakMap();
-  // The row's save family names the group (SaveSchemaRegistry SECTIONS, #6602 phase 3); a
-  // key no registry row knows is a cache when it has a cache prefix, else "Other".
+  // The row's save family names the group (SaveSchemaRegistry SECTIONS, #6602 phase 3). The
+  // LEGACY_GROUPS prefix rules answer only for a key no registry row knows (another build's key,
+  // a load without the registry); equal on every registry key (save-sections-6602.test.mjs).
+  const LEGACY_GROUPS = [[/^apex26\.career/, "Career saves"], [/^apex26\.season/, "Season saves"],
+    [/^apex26\.(customTeam|customLogo|parts\.|setup\.|setupPresets\.|livery\.)/, "Garage work"],
+    [/^apex26\.(ghost|inputGhost|ttlb\.)/, "Laps and ghosts"],
+    [/^apex26\.(customTracks|customTrackDraft(?:Prev)?|trackDesigner|tracks\.)/, "Authored circuits"]];
   function category(key) {
     const f = typeof SaveSchemaRegistry !== "undefined" && SaveSchemaRegistry.family ? SaveSchemaRegistry.family(key) : null;
     if (f) return f.health;
-    return CACHE_PREFIXES.some((p) => key.startsWith(p)) ? "Downloaded response caches" : "Other settings and data";
+    if (CACHE_PREFIXES.some((p) => key.startsWith(p))) return "Downloaded response caches";
+    for (const [re, name] of LEGACY_GROUPS) if (re.test(key)) return name;
+    return "Other settings and data";
   }
   function dependencies(opts) {
     opts = opts || {};
