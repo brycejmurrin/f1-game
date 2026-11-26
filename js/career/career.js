@@ -1043,13 +1043,9 @@ function sponsorLabel(sp) {
   return f ? f(sp.value, sp.window) : "";
 }
 
-function sponsorAt(round) {
-  if (!career || career.flavour !== "myteam") return null;
-  const team = teamOf(career.team) || { tier: 2 };
-  // Which window that round falls in. Windows tile the season from round 0.
-  let start = 0;
-  let idx = 0;
-  let kind = null;
+// Which window a round falls in (they tile the season from round 0) and its original kind.
+function sponsorSlot(round) {
+  let start = 0, idx = 0, kind = null;
   while (start <= round) {
     const i = Math.floor(rnd(career.year, "spon", idx) * SPONSOR_KINDS.length);
     kind = SPONSOR_KINDS[Math.min(i, SPONSOR_KINDS.length - 1)];
@@ -1057,10 +1053,14 @@ function sponsorAt(round) {
     start += kind.window;
     idx++;
   }
+  return { start, idx, kind };
+}
+function sponsorAt(round) {
+  if (!career || career.flavour !== "myteam") return null;
+  const team = teamOf(career.team) || { tier: 2 };
+  let { start, idx, kind } = sponsorSlot(round);
   if (!kind) return null;
-  // The LAST window of a season is cut at the finale (rollover clears the
-  // books): uncut it runs past it in ~78 % of seasons and can never pay.
-  // A cut window asks — and pays — pro rata to the rounds it actually has.
+  // The LAST window is cut at the finale (rollover clears the books); a cut window asks and pays pro rata.
   const rounds = calendarOf(career).length;   // 0: no calendar known, leave the window whole
   const window = rounds > 0 ? Math.max(1, Math.min(kind.window, rounds - start)) : kind.window;
   const part = window / kind.window;
@@ -1070,9 +1070,8 @@ function sponsorAt(round) {
   const selected = career.sponsorPicks && career.sponsorPicks[career.year + ":" + idx];
   if (selected === 1) kind = SPONSOR_KINDS[(SPONSOR_KINDS.indexOf(kind) + 1) % SPONSOR_KINDS.length];
   const target = kind.value(team);
-  // An alternate may have a shorter catalog window than the slot: cap the ratio at 1 so it never pays above catalog.
-  const altPart = Math.min(1, window / kind.window);
-  const selectedValue = selected === 1 ? (kind.type === "clean" ? window : Math.max(1, Math.ceil(target * altPart))) : value;
+  const altPart = Math.min(1, window / kind.window), cw = selected === 1 ? Math.min(window, kind.window) : window;
+  const selectedValue = selected === 1 ? (kind.type === "clean" ? cw : Math.max(1, Math.ceil(target * altPart))) : value;
   const selectedPay = selected === 1 ? Math.round(kind.pay * altPart) : pay;
   const rows = (career.results || []).filter((r) => r.r >= start && r.r < start + window);
   let done = 0;
@@ -1082,14 +1081,14 @@ function sponsorAt(round) {
     else if (kind.type === "double") done += r.double ? 1 : 0;
     else if (kind.type === "clean") done += (!r.dnf && r.clean) ? 1 : 0;
   }
-  const need = kind.type === "clean" ? window : selectedValue;
+  const need = kind.type === "clean" ? cw : selectedValue;
   return {
     type: kind.type, value: selectedValue, window, pay: selectedPay,
     start, end: start + window - 1, idx,
     done, need, met: done >= need,
     possible: kind.type === "points" || done + Math.max(0, window - rows.length) >= need,
     roundsLeft: Math.max(0, start + window - 1 - round),
-    label: sponsorLabel({ type: kind.type, value: selectedValue, window }),
+    label: sponsorLabel({ type: kind.type, value: selectedValue, window: kind.type === "clean" ? cw : window }),
   };
 }
 function sponsor() { return career && !seasonDone() ? sponsorAt(career.season.round) : null; }   // none past the finale: its last window is settled
@@ -2059,7 +2058,7 @@ return {
   SLOTS, FLAVOURS, slot, slots, useSlot, deleteSlot, slotRevision, armedRevision, firstFree,
   data, active, inCareer, conflicted, engage, load, save, saveStatus, clear, start, state, rnd, hash, seasonSeed,
   GRANT, freeMoney, grant,
-  sponsor, sponsorAt, sponsorLabel, settleSponsor,
+  sponsor, sponsorAt, sponsorSlot, sponsorLabel, settleSponsor,
   FACILITY_MAX, FACILITY_DISCOUNT_MAX, facility, facilityCost, facilityDiscount,
   upgradeFacility, SPONSOR_KINDS,
   renewHire, hireDriver, hirePending, HIRE_MIN,
