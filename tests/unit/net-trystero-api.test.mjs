@@ -205,13 +205,17 @@ test("direct relay dedupe and decrypt work stay hard bounded", async () => {
   const NetNostr = eval(fs.readFileSync(path.join(ROOT, "js/net/nostr.js"), "utf8") + ";NetNostr");
   const releases = [];
   const inbox = NetNostr.createBoundedInbox(() => new Promise((resolve) => releases.push(resolve)));
+  // accept(content, created_at, src): a fresh created_at, and one source per call so the
+  // per-relay caps (nostr-sockets tests) do not mask the global dedupe / decrypt bounds.
+  const ts = () => Math.floor(Date.now() / 1000);
+  const acc = (box, c) => box.accept(c, ts(), {});
 
-  for (let i = 0; i < NetNostr.MAX_HEARD_ACTIVE; i++) assert.equal(inbox.accept("msg-" + i), true);
-  assert.equal(inbox.accept("msg-0"), true, "a duplicate consumes no second decrypt slot");
-  assert.equal(inbox.accept("overflow"), "busy",
+  for (let i = 0; i < NetNostr.MAX_HEARD_ACTIVE; i++) assert.equal(acc(inbox, "msg-" + i), true);
+  assert.equal(acc(inbox, "msg-0"), true, "a duplicate consumes no second decrypt slot");
+  assert.equal(acc(inbox, "overflow"), "busy",
     "beyond the concurrency cap the message drops but the relay socket survives");
   assert.equal(inbox.stats().active, NetNostr.MAX_HEARD_ACTIVE);
-  assert.equal(inbox.accept("x".repeat(NetNostr.MAX_CONTENT_CHARS + 1)), false);
+  assert.equal(acc(inbox, "x".repeat(NetNostr.MAX_CONTENT_CHARS + 1)), false);
 
   await new Promise((resolve) => setImmediate(resolve));
   for (const release of releases) release();
@@ -222,7 +226,7 @@ test("direct relay dedupe and decrypt work stay hard bounded", async () => {
   // rather than the concurrency rejection above.
   const quick = NetNostr.createBoundedInbox(async () => {});
   for (let i = 0; i < NetNostr.MAX_SEEN + 20; i++) {
-    assert.equal(quick.accept("unique-" + i), true);
+    assert.equal(acc(quick, "unique-" + i), true);
     await new Promise((resolve) => setImmediate(resolve));
   }
   assert.ok(quick.stats().seen <= NetNostr.MAX_SEEN);
@@ -230,7 +234,7 @@ test("direct relay dedupe and decrypt work stay hard bounded", async () => {
   assert.equal(quick.stats().active, 0);
 
   for (let i = 0; i < 4; i++) {
-    assert.equal(quick.accept(String(i) + "z".repeat(NetNostr.MAX_CONTENT_CHARS - 1)), true);
+    assert.equal(acc(quick, String(i) + "z".repeat(NetNostr.MAX_CONTENT_CHARS - 1)), true);
     await new Promise((resolve) => setImmediate(resolve));
   }
   assert.ok(quick.stats().seenChars <= NetNostr.MAX_SEEN_CHARS,
@@ -251,11 +255,11 @@ test("finish() reclaims every timer the exchange armed, the reply re-publish inc
 
 test("an offer signed by a host clock 45 s behind this device is still heard", async () => {
   const NetNostr = eval(fs.readFileSync(path.join(ROOT, "js/net/nostr.js"), "utf8") + ";NetNostr");
-  const now = 1_800_000_000;
+  const now = Math.floor(Date.now() / 1000);
   const heard = [];
   const inbox = NetNostr.createBoundedInbox(async (c) => { heard.push(c); }, now - NetNostr.OFFER_CREATED_SLACK_S);
-  assert.equal(inbox.accept("skewed-offer", now - 45), true);
-  assert.equal(inbox.accept("replayed-old-session", now - 3600), true);
+  assert.equal(inbox.accept("skewed-offer", now - 45, {}), true);
+  assert.equal(inbox.accept("replayed-old-session", now - 3600, {}), true);
   await new Promise((r) => setTimeout(r, 0));
   assert.deepEqual(heard, ["skewed-offer"], "skew is heard; an hour-old replay is still dropped");
 });

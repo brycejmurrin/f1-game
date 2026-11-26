@@ -64,7 +64,14 @@ const NetIce = (function () {
     function configuredTurnApi() {
       let url = null;
       try { url = localStorage.getItem("apex26.turnApi"); } catch (e) { /* storage blocked (private mode): stay STUN-only */ }
-      return url || TURN_API;
+      url = url || TURN_API;
+      // Credentials ride this request: https only (a stored http:// or junk URL is
+      // ignored), except a loopback endpoint a developer runs locally.
+      try {
+        const u = url && new URL(url);
+        if (u && u.protocol !== "https:" && !(u.protocol === "http:" && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(u.hostname))) return null;
+      } catch (e) { return null; }
+      return url;
     }
     function syncTurnApi() {
       const url = configuredTurnApi();
@@ -101,7 +108,11 @@ const NetIce = (function () {
         // lingers.
         const ctl = (typeof AbortController !== "undefined") ? new AbortController() : null;
         const bail = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) { /* already settled */ } }, FETCH_TIMEOUT_MS);
-        fetchingIce = fetch(url, ctl ? { signal: ctl.signal } : undefined).then((r) => r.json()).then((body) => {
+        fetchingIce = fetch(url, ctl ? { signal: ctl.signal } : undefined).then((r) => {
+          // A 4xx/5xx body is not a credential list; the third-party API is https-only.
+          if (!r || !r.ok) throw new Error("TURN credential fetch HTTP " + (r && r.status));
+          return r.json();
+        }).then((body) => {
           const raw = Array.isArray(body) ? body : (body && (body.iceServers || body.ice_servers)) || null;
           // PER-ENTRY validation, not just "is an array". This list is
           // third-party and is spread straight into `new PC(cfg)`: one entry
