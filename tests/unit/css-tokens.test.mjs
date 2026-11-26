@@ -138,7 +138,7 @@ test("stacked season setup has one reachable vertical scroll owner", () => {
  * Bare --label: 14px stays for tree-counts; the floored :root aliases
  * --fs-micro so the floor and both TEXT SIZE steps apply (blocking-byte budget
  * forbids restating max() in each preset).
- * Asserts use equal/deepEqual (not assert.match) so assertPins stays flat. */
+ * Asserts use equal on parsed decls so the pin ratchets stay flat. */
 function declOf(block, name) {
   const m = block.match(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*:\\s*([^;]+)"));
   return m ? m[1].trim() : null;
