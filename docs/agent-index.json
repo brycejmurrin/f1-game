@@ -4716,6 +4716,11 @@
       "roster": "DEFERRED:three"
     },
     {
+      "path": "js/render/three/tlx-texpool.js",
+      "global": "TLXTexPool",
+      "roster": "DEFERRED:three"
+    },
+    {
       "path": "js/render/three/tlx-util.js",
       "global": "TLXUtil",
       "roster": "DEFERRED:three"

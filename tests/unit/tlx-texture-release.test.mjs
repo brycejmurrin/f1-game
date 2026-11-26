@@ -21,6 +21,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const TEXPOOL_SRC = fs.readFileSync(path.join(ROOT, "js/render/three/tlx-texpool.js"), "utf8");
 const TLX = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
 const FX = fs.readFileSync(path.join(ROOT, "js/render/three/tsl-fx.js"), "utf8");
 const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.core.min.js")).href);
@@ -52,13 +53,17 @@ function liftTextures({ mobileTier = false, isMobile = false, initTexture = () =
   const create = slice(TLX, "        createTexture(", "        // Upload a createTexture() handle NOW", "createTexture");
   const refill = slice(TLX, "        refillTexture(h, src) {", "        freeMesh(m)", "refillTexture");
   const free = slice(TLX, "        freeTexture(t) {", "        texCensus:", "freeTexture");
-  const pool = slice(TLX, "      const _texPool = [];", "      let envCubeCam = null;", "texture pool");
   const { releaseTexSource, texStandIn } = liftRelease(fakeDoc(), Bitmap);
   // The real backend methods and retired-texture pool, real vendored Texture/dispose dispatcher;
   // only GPU upload is stubbed. `pool`/`stat`/`age` expose the pool for the reuse tests below.
+  // The pool is TLXTexPool (tlx-texpool.js, carved out of tlx.js in #6821), created exactly as TLX.create does.
+  const texPool = new Function("ImageBitmap", `${TEXPOOL_SRC}; return TLXTexPool;`)(Bitmap);
+  const poolM = texPool.create({ fx: () => fx, texStandIn });
   return new Function("THREE", "releaseTexSource", "texStandIn", "mobileTier", "isMobile", "renderer", "fx", "ImageBitmap",
-    `${pool}return ({${create}${refill}${free} pool: _texPool, stat: _texStat, age: ageTexPool, flush: flushTexPool });`)(
-    THREE, releaseTexSource, texStandIn, mobileTier, isMobile, { initTexture }, fx, Bitmap);
+    "retireTexture", "takePooledTexture", "_texStat", "_isBitmap", "flushTexPool", "ageTexPool", "POOLM",
+    `return ({${create}${refill}${free} pool: POOLM.entries(), stat: POOLM.stat, age: POOLM.age, flush: POOLM.flush });`)(
+    THREE, releaseTexSource, texStandIn, mobileTier, isMobile, { initTexture }, fx, Bitmap,
+    poolM.retire, poolM.take, poolM.stat, poolM.isBitmap, poolM.flush, poolM.age, poolM);
 }
 
 test("phone AI atlases snapshot before scratch reuse on STANDARD and HIGH, including pooled textures", () => {
@@ -261,8 +266,7 @@ test("createTexture wires the release hook, and uploads at creation on every pho
 test("freeTexture retires the decal materials bound to the texture when it is disposed", () => {
   const free = slice(TLX, "        freeTexture(t) {", "        texCensus:", "freeTexture");
   assert.match(free, /retireTexture\(t\.tex,/);
-  const pool = slice(TLX, "      const _texPool = [];", "      let envCubeCam = null;", "texture pool");
-  const disposeBody = slice(pool, "function disposePooled(t) {", "function retireTexture(", "disposePooled");
+  const disposeBody = slice(TEXPOOL_SRC, "function disposePooled(t) {", "function retireTexture(", "disposePooled");
   assert.ok(disposeBody.indexOf("fx.releaseTexture(t)") >= 0 && disposeBody.indexOf("fx.releaseTexture(t)") < disposeBody.indexOf("t.dispose()"));
 
   const body = slice(FX, "    function releaseTexture(tex) {", "    function decalMaterialFor(tex, glow) {", "releaseTexture");

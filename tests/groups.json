@@ -1356,6 +1356,7 @@
     "// #4556 shader trims: vertex sway branch keeps the normalLocal anchor first (built WGSL), carFinish-gated hammered derivatives, CPU dither/vignette uniforms.",
     "tests/unit/tlx-shader-trims.test.mjs",
     "tests/unit/tlx-smith-root.test.mjs",
+    "tests/unit/tlx-texpool.test.mjs",
     "tests/unit/tlx-texture-release.test.mjs",
     "tests/unit/tlx-util.test.mjs",
     "// Fixed render targets (#2655): the viewport helper + the raw-screenUV canary. VM + source scan, ~0.1 s.",
