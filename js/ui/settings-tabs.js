@@ -359,6 +359,8 @@ const SettingsNav = (function () {
       // so run it before resolving the page's focus target.
       const placed = typeof after === "function" && after() === true;
       if (focus && !placed) focusPage(id);
+      // Focus moves into the page: say which page (the title is not a live region).
+      if (focus && id !== "home" && typeof LiveRegion !== "undefined") LiveRegion.say(breadcrumb(id), "hud");
       scheduleScrollFade();
       mark("apex:settings:shown");
     }
