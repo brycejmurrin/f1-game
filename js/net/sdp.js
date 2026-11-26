@@ -256,6 +256,10 @@ const NetSdp = (function () {
       if (len == null || bytes.length < o + len + 2) return null;
       const addr = bytes.slice(o, o + len); o += len;
       const port = (bytes[o] << 8) | bytes[o + 1]; o += 2;
+      // The same filter pack() applies: a hostile or buggy peer's code must not
+      // inject loopback / link-local / port-0 candidates that pack() would drop.
+      if (port < 1) continue;
+      if (IS_V6[kind] ? unreachableV6(addr) : (kind !== C_MDNS && addr[0] === 127)) continue;
       cands.push({ kind, addr, port });
     }
     if (!cands.length) return null;
