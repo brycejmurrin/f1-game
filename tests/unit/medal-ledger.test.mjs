@@ -33,12 +33,11 @@ test("drill is reserved", () => assert.equal(ML.tierFor("drill", 50, { pole: 100
 test("better keeps the held medal on ties and when it ranks higher", () => {
   const R = Quali.MEDAL_RANK;
   const old = (held, fresh) => ((R[held] || 0) > (R[fresh] || 0) ? held : fresh);   // session-records.js finish()
-  const all = [null, undefined, "bronze", "silver", "gold", ML.TIERS[ML.TIERS.length - 1]];
-  for (const h of ["bronze", "silver", "gold", null]) for (const f of ["bronze", "silver", "gold", null])
-    assert.equal(ML.better(h, f), old(h, f), `${h}/${f}`);
+  const all = [null, undefined, "bronze", "silver", "gold"];
+  for (const h of all) for (const f of all) assert.equal(ML.better(h, f), old(h, f), `${h}/${f}`);
   assert.equal(ML.better("gold", "apex"), "apex");
   assert.equal(ML.better("apex", "gold"), "apex");
-  assert.ok(ML.rank("apex") > ML.rank("gold") && ML.rank(null) === 0 && all.length);
+  assert.ok(ML.rank("apex") > ML.rank("gold") && ML.rank(null) === 0 && ML.rank(undefined) === 0);
 });
 
 test("fourth tier: only with target, unassisted, target <= pole", () => {
