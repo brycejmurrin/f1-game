@@ -168,3 +168,33 @@ test("CLI --install-cloud-cwd-shim writes under this VM's /agent when layout mat
     assert.notEqual(execAt, -1);
   }
 });
+
+// #6867: session-start `npm ci` rewrites node_modules while the client starts the server.
+// `serve` must answer initialize and tools/list with espree / eslint-scope absent.
+test("serve answers initialize + tools/list while node_modules/espree is absent", async () => {
+  const repo = tmpDir("apex-lsp-nomods-");
+  fs.cpSync(path.join(ROOT, "tools/mcp"), path.join(repo, "tools/mcp"), { recursive: true });
+  // The temp dir sits under the checkout, so the repo's node_modules would resolve; shadow both
+  // packages with stubs that throw on load, which is what a half-rewritten node_modules does.
+  for (const pkg of ["espree", "eslint-scope"]) {
+    const d = path.join(repo, "node_modules", pkg);
+    fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(path.join(d, "package.json"), JSON.stringify({ name: pkg, main: "index.js" }));
+    fs.writeFileSync(path.join(d, "index.js"), `throw new Error("${pkg} absent");`);
+  }
+  const child = spawn(process.execPath, [path.join(repo, "tools/mcp/lsp-mcp.mjs"), "serve"], { cwd: repo, stdio: ["pipe", "pipe", "pipe"] });
+  const rl = createInterface({ input: child.stdout });
+  const replies = new Map();
+  rl.on("line", l => { try { const m = JSON.parse(l); replies.set(m.id, m); } catch { /* not rpc */ } });
+  const wait = async id => { for (let i = 0; i < 100 && !replies.has(id); i++) await new Promise(r => setTimeout(r, 50)); return replies.get(id); };
+  try {
+    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "0" } } }) + "\n");
+    assert.ok((await wait(1))?.result, "initialize answered");
+    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" }) + "\n");
+    assert.ok((await wait(2))?.result?.tools?.length > 0, "tools/list answered");
+  } finally { child.kill(); }
+});
+
+test("lsp-mcp.sh sources the shared preflight like the other launchers", () => {
+  assert.match(fs.readFileSync(path.join(ROOT, "tools/mcp/lsp-mcp.sh"), "utf8"), /mcp-preflight\.sh[\s\S]*mcp_preflight[\s\S]*exec node/);
+});
