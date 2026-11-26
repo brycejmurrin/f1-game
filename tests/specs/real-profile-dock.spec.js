@@ -25,7 +25,7 @@ function liveStore() {
   return ownerStore({ file: OWNER_EXPORT }).store;
 }
 
-async function boot(page, geo, store) {
+async function boot(page, geo, store, path = "/") {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: geo.insets });
   await page.addInitScript(({ json, raw }) => {
@@ -34,7 +34,7 @@ async function boot(page, geo, store) {
       for (const [k, v] of Object.entries(raw)) localStorage.setItem("apex26." + k, v);
     } catch (_) { /* storage off */ }
   }, store);
-  await page.goto("/");
+  await page.goto(path);
   await page.waitForFunction(() => window.__apex && window.__apex.race && document.documentElement.hasAttribute("data-booted"), null, { polling: 100, timeout: BOOT_MS });
 }
 
@@ -54,3 +54,51 @@ test.describe(`owner's live profile ${GEO.width}x${GEO.height}-standalone, the g
     expect(g["cs-stack"].l, "the bar clears the left inset").toBeGreaterThanOrEqual(GEO.insets.left - 1);
   });
 });
+
+/** In-page (#6924): the THUMB TRAINER's boxes against the viewport's safe area, the panel and the live race dock. */
+function trainerFitInPage() {
+  const cs = getComputedStyle(document.documentElement), n = (k) => parseFloat(cs.getPropertyValue(k)) || 0;
+  const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+  const safe = { l: n("--sal"), t: n("--sat"), r: vw - n("--sar"), b: vh - n("--sab") };
+  const box = (el) => { const r = el.getBoundingClientRect(); return { id: el.id, l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; };
+  const ids = ["tt-back", "tt-prev", "tt-turn", "tt-next", "tt-speed", "tt-go", "tt-view", "tt-cue", "tt-sketch", "tt-time", "tt-score"];
+  const boxes = ids.map((id) => document.getElementById(id)).filter((el) => el && el.checkVisibility()).map(box);
+  const dock = Array.from(document.querySelectorAll("#hud-dock .touchbtn")).filter((el) => el.checkVisibility()).map(box).filter((r) => r.w > 0);
+  const panel = document.getElementById("tt-panel");
+  return { safe, vw, vh, boxes, dock, panel: box(panel), panelOverflow: panel.scrollHeight - panel.clientHeight,
+    fit: document.getElementById("thumb-trainer").dataset.fit, vignette: getComputedStyle(document.getElementById("hud"), "::before").display };
+}
+const overlap = (a, b) => Math.min(a.r, b.r) - Math.max(a.l, b.l) > 1 && Math.min(a.b, b.b) - Math.max(a.t, b.t) > 1;
+const PORTRAIT = BRYCE_WINDOWS.portrait;
+for (const [win, geo] of [["standalone", GEO], ["portrait", PORTRAIT]]) for (const profile of ["live", "shipped"]) {
+  test.describe(`thumb trainer fits ${geo.width}x${geo.height}-${win}, ${profile} profile (#6924)`, () => {
+    test.use({ viewport: { width: geo.width, height: geo.height }, hasTouch: true, isMobile: true });
+
+    test("every trainer box sits in the safe area, inside its panel, clear of the race buttons, taps >= 44 px", async ({ page }) => {
+      test.setTimeout(240_000);
+      await boot(page, geo, profile === "live" ? liveStore() : { json: {}, raw: {} }, "/?go=thumbs");
+      await expect(page.locator("#thumb-trainer")).toBeVisible({ timeout: BOOT_MS });
+      await page.waitForFunction(() => document.getElementById("thumb-trainer").dataset.fit, null, { polling: 100, timeout: BOOT_MS });
+      for (const phase of ["idle", "after a run"]) {
+        if (phase !== "idle") await page.evaluate(() => {   // the longest text a finished run writes: two tips and the score
+          document.getElementById("tt-cue").textContent = "Arrow late by 230 ms. Start it while you're still braking. Brake and arrow together for 0.21 s, target 0.62 s. Keep a little brake on as the arrow winds on.";
+          document.getElementById("tt-score").textContent = "Match 64% · arrow 71% · brake 58% · gas 63% · best 82%";
+        });
+        await page.waitForTimeout(250);
+        const g = await page.evaluate(trainerFitInPage);
+        const tag = `${win} ${profile} ${phase} (fit ${g.fit}):`;
+        expect(g.vignette, `${tag} the race vignette is off over the drill`).toBe("none");
+        expect(g.panelOverflow, `${tag} the panel does not overflow`).toBeLessThanOrEqual(1);
+        for (const b of g.boxes) {
+          const where = `${tag} #${b.id} ${b.l.toFixed(0)},${b.t.toFixed(0)}-${b.r.toFixed(0)},${b.b.toFixed(0)}`;
+          expect(b.l >= g.safe.l - 1 && b.t >= g.safe.t - 1 && b.r <= g.safe.r + 1 && b.b <= g.safe.b + 1, `${where} inside the safe area ${JSON.stringify(g.safe)}`).toBe(true);
+          if (b.id !== "tt-sketch") expect(b.l >= g.panel.l - 1 && b.t >= g.panel.t - 1 && b.r <= g.panel.r + 1 && b.b <= g.panel.b + 1, `${where} inside the panel`).toBe(true);
+          if (/^tt-(back|prev|turn|next|speed|go|view)$/.test(b.id)) expect(Math.min(b.w, b.h), `${where} is a 44 px tap`).toBeGreaterThanOrEqual(44);
+          for (const d of g.dock) expect(overlap(b, d), `${where} clears race button #${d.id}`).toBe(false);
+          for (const o of g.boxes) if (o !== b && b.w > 0 && b.h > 0 && o.w > 0 && o.h > 0) expect(overlap(b, o), `${where} clears #${o.id}`).toBe(false);
+        }
+        expect(g.boxes.find((b) => b.id === "tt-time").h, `${tag} the timeline keeps its three lanes`).toBeGreaterThanOrEqual(80);
+      }
+    });
+  });
+}

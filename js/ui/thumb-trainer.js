@@ -252,7 +252,14 @@ const ThumbTrainer = (function () {
       const top = sat + gap, bottom = vh - sab - gap, dockTop = Math.min(bottom + gap, ...boxes.map(r => r.top));
       const column = { x: x0, y: top, w: x1 - x0, h: bottom - top };
       const band = { x: sal + gap, y: top, w: vw - sal - sar - 2 * gap, h: dockTop - 2 * gap - top };
-      const use = column.w >= 300 || column.w * column.h >= band.w * band.h ? column : band;
+      // A dock stacked up one edge (portrait, buttons in a column) leaves a tall block beside it, above the other dock.
+      const lowTop = side => Math.min(bottom + gap, ...side.map(r => r.top)) - gap;
+      const leftOf = { x: sal + gap, y: top, w: Math.min(vw - sar, ...rights.map(r => r.left)) - gap - sal - gap, h: lowTop(lefts) - top };
+      const rightOf = { x: x0, y: top, w: vw - sar - gap - x0, h: lowTop(rights) - top };
+      // Usable: the bar wraps to at most three rows and the timeline keeps its lanes (#6924).
+      const fits = r => r.w >= 240 && r.h >= 260;
+      const roomy = [band, leftOf, rightOf].filter(fits).sort((a, b) => b.w * b.h - a.w * a.h)[0];
+      const use = column.w >= 300 || fits(column) ? column : roomy || (column.w * column.h >= band.w * band.h ? column : band);
       Object.assign(panel.style, { left: use.x + "px", top: use.y + "px", width: Math.max(160, use.w) + "px", height: Math.max(160, use.h) + "px" });
       // The sketch takes the bigger free corner above a dock when one is roomy (above the arrows on a phone), so the
       // drill column keeps its height for the bar, cue and timeline. Otherwise it stays in the column.
@@ -267,7 +274,7 @@ const ThumbTrainer = (function () {
         if (sketch.parentElement !== nodes["tt-drill"]) nodes["tt-drill"].prepend(sketch);
         for (const k of ["position", "left", "top", "width", "height"]) sketch.style.removeProperty(k);
       }
-      root.dataset.fit = (use === column ? "column" : "band") + (side ? " side-sketch" : "");
+      root.dataset.fit = (use === column ? "column" : use === band ? "band" : "beside") + (side ? " side-sketch" : "");
       for (const c of [sketch, time]) {
         const r = c.getBoundingClientRect(), d = devicePixelRatio || 1;
         c.width = Math.max(1, Math.round(r.width * d));
