@@ -425,8 +425,11 @@ function _applyRaceBody() {
     if (_env) {
       const _exact = _env !== Assets.env("*", _tod);
       const _pal = (_tod === "default" && !_exact && G.track.def.palette) || {};
-      if (_env.ambientSky && !_pal.ambientSky)       G.frame.ambientSky = _env.ambientSky.slice();
-      if (_env.ambientGround && !_pal.ambientGround) G.frame.ambientGround = _env.ambientGround.slice();
+      // Bryce, 2026-11-26 (#6910, "keep warm dusk/dawn"): a WILDCARD env never
+      // replaces the warm formula ambient of an explicit dusk/dawn; only an exact key does.
+      const _warm = !_exact && (_tod === "dusk" || _tod === "dawn");
+      if (_env.ambientSky && !_pal.ambientSky && !_warm)       G.frame.ambientSky = _env.ambientSky.slice();
+      if (_env.ambientGround && !_pal.ambientGround && !_warm) G.frame.ambientGround = _env.ambientGround.slice();
       if (_env.skyZenith && !_pal.zenith)   { G.frameSky.zenith  = _env.skyZenith.slice();  G.frame.skyZenith  = G.frameSky.zenith; }
       if (_env.skyHorizon && !_pal.horizon) { G.frameSky.horizon = _env.skyHorizon.slice(); G.frame.skyHorizon = G.frameSky.horizon; }
     }
