@@ -403,7 +403,7 @@ const IncidentSim = (function () {
 
   function yawOf(pose) {
     const x = pose.qx, y = pose.qy, z = pose.qz, w = pose.qw;
-    return Math.atan2(2 * (w * y + x * z), 1 - 2 * (y * y + z * z));
+    return Math.atan2(2 * (w * y + x * z), 1 - 2 * (x * x + y * y));   // +z forward: world-z of the rotated body-z axis
   }
   function upYOf(pose) {
     const x = pose.qx, z = pose.qz;
@@ -533,6 +533,6 @@ const IncidentSim = (function () {
   }
 
   return { create, owns, active, notifyWall, notifyCar, preStep, postStep, status,
-           setFlags, reset, forceLaunch, release };
+           setFlags, reset, forceLaunch, release, yawOf };
 })();
 Object.freeze(IncidentSim);
