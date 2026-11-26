@@ -98,6 +98,10 @@ export const TREE_METRICS = {
   // browser spec that could run in the VM adapter but still spends
   // SwiftShader minutes. All three are shrink-only.
   zeroRefModules: async () => (await import("./tree-counts.mjs")).zeroRefModules(),
+  // U0 counters (#6920, #6944): shrink-only, slack 0. Dynamic imports so gateClosure does not grow.
+  sourceSliceTests: async () => (await import("./tree-counts.mjs")).sourceSliceTests(),
+  typeofGuards: async () => (await import("./tree-counts.mjs")).typeofGuards(),
+  gWrites: async () => (await import("./tree-counts.mjs")).gWrites(),
   // The boot wall (tools/check/boot-wall.mjs; tests/unit/boot-load-budget.test.mjs asserts it): every visit parses
   // these before the title. They left that test's hand-written MAX_EAGER_* constants (2026-11-19,
   // docs/notes/BUDGET-RATCHETS-2026-11-19.md): each PR re-measured them on its own old tip, so two fixers'

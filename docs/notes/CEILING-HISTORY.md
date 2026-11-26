@@ -4139,3 +4139,8 @@ byte-identical before and after. Fragment: `ratchets.d/claude--u42-ai-start.json
 and `skyViewOverride` become getter-only (a write is a TypeError / TS2540), so game.js owns the four writes. `js/game.js lines`
 +8 and `codeLines` +7 (the two command objects, net of the four dropped setters); `js/agent/apex.js` lines -2 (park is one line).
 `(tree) eagerCodeBytes` +33, inside its absorb. Fragment: `ratchets.d/claude--issue-6953-owner-commands.json`.
+
+## 2026-11-26 — claude/issue-6944-u0r-ratchets: U0 counters registered as tree ratchets (#6920 U0.R, #6944)
+
+`(tree) sourceSliceTests` seeded at **77**, `typeofGuards` at **2289** (with `absorb: 10`, Bryce 2026-11-26) and `gWrites` at **347**,
+all `slack: 0`, shrink-only. Seeded with `--seed=<metric> --slack=0`, not raised: a new key is not a raise.
