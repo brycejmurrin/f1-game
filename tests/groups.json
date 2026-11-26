@@ -834,6 +834,7 @@
     "tests/unit/mugello-arrabbiata-orbit.test.mjs",
     "// needs-sync: the sync predicate (conflict | stale-red | no) that sync-pr and pr-board run first.",
     "tests/unit/needs-sync.test.mjs",
+    "tests/unit/night-exposure-sky-parity.test.mjs",
     "tests/unit/night-washout-presets.test.mjs",
     "tests/unit/nightly-group.test.mjs",
     "tests/unit/no-bare-console.test.mjs",
