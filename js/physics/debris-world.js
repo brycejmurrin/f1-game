@@ -103,7 +103,15 @@ let _panelsBroken = 0;   // cumulative panels that broke free (status/tests)
 // ── tuning ──────────────────────────────────────────────────────────────────
 const CAP_DESKTOP = 48, CAP_MOBILE = 16;
 const WALL_SEV_MIN = 3;      // severity gate for wall scrapes (see wallImpact)
-const CAR_SEV_MIN = 3;       // closing speed (m/s) gate for car-car contacts
+const CAR_SEV_MIN = 3;       // closing speed (m/s, pace-normalised: paceSev) gate for car-car contacts
+// Both gates read on the pace scale, anchored at the shipped slider default (notch 11, as
+// collide.js sevV): a default-pace hit scores what it always did, and the same shunt scores
+// the same at any OVERALL SPEED (#6546 P7). A bare VM with no G.PACE reads the anchor (identity).
+const SEV_PACE_REF = Math.pow(1.06, -3);
+function paceSev(v) {
+  const p = G && Number.isFinite(G.PACE) ? G.PACE : SEV_PACE_REF;
+  return v * SEV_PACE_REF / Math.max(p, 0.05);
+}
 const REST_DESPAWN_S = 4;    // seconds asleep before a shard returns to the pool
 const FAR_DESPAWN_M = 250;   // despawn beyond this distance from the player
 const MIRROR_HX = 0.75, MIRROR_HY = 0.4, MIRROR_HZ = 2.0;  // car half-extents (spike shape)
@@ -581,7 +589,7 @@ function reset() {
 // ── game-side hooks (called from game.js, both guarded by active()) ─────────
 
 function wallImpact(c, side, xOver) {
-  const sev = (xOver || 0) * 60 + Math.abs(c.speed || 0) * 0.15;
+  const sev = paceSev((xOver || 0) * 60 + Math.abs(c.speed || 0) * 0.15);   // both terms are speeds (m/s)
   if (sev < WALL_SEV_MIN) return;
   const mi = G.cars ? G.cars.indexOf(c) : -1;
   _queue.push({ kind: "wall", s: c.s, x: c.x, side, sev,
@@ -589,8 +597,9 @@ function wallImpact(c, side, xOver) {
                 sourceCars: mi >= 0 ? [mi] : null });
 }
 
-function carImpact(a, b, relV) {
-  if (relV < CAR_SEV_MIN) return;
+function carImpact(a, b, closing) {
+  const relV = paceSev(closing);
+  if (!(relV >= CAR_SEV_MIN)) return;
   const ai = G.cars ? G.cars.indexOf(a) : -1;
   const bi = G.cars ? G.cars.indexOf(b) : -1;
   const sourceCars = [];

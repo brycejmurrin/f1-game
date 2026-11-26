@@ -375,10 +375,12 @@ const Collide = (() => {
         if (!netPlay.owns(a)) a.contactT = 0.22;
         if (!netPlay.owns(b)) b.contactT = 0.22;
         // First pass per pair carries the severity (the last had none, or was skipped by the early break)
-        if (firstPairFx(a, b)) collideFx(a, b, clamp(sevV(j.closing) * 0.03, 0.15, 1));
+        const fx = firstPairFx(a, b);
+        if (fx) collideFx(a, b, clamp(sevV(j.closing) * 0.03, 0.15, 1));
         // The first impulse carries severity; later relaxation passes have
-        // already removed closing velocity. Both worlds retain their own gates.
-        if (j.magnitude > CORR_EPS && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired) {
+        // already removed closing velocity. Both worlds retain their own gates,
+        // and take the same once-per-pair-per-step gate as the unoriented path (#6546 P8).
+        if (fx && j.magnitude > CORR_EPS && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired) {
           if (DebrisWorld.active()) DebrisWorld.carImpact(a, b, j.closing);
           incidentSim.notifyCar(a, b, j.closing);
         }
@@ -651,7 +653,11 @@ const Collide = (() => {
           if (a.human || b.human) a.contactT = b.contactT = 0.22;
           // The next corner (kTurn, AI-only) owns a level pair only between AI cars: a curvature read must not decide a PLAYER's scrub.
           // ONE k for the pair (the sharper of the two, as cornerK): taking a's k first let bucket order pick the yielder (audit4 F10).
-          if (AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : AiDrive.cornerK(a.kTurn, b.kTurn))) { if (last) a.speed = scrub(a.speed, rubScrub); a.contactT = 0.22; }
+          // A STATIC yielder (invMass 0: a parked retirement or a net-owned rival) cannot yield: the moving
+          // car pays the scrub and takes the flag, as the rear branch's if (iA)/if (iB) (#6546 P5).
+          let yA = AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : AiDrive.cornerK(a.kTurn, b.kTurn));
+          if (yA ? !iA && iB : !iB && iA) yA = !yA;
+          if (yA) { if (last) a.speed = scrub(a.speed, rubScrub); a.contactT = 0.22; }
           else { if (last) b.speed = scrub(b.speed, rubScrub); b.contactT = 0.22; }
           // INSIDE the guard, like everything else in this branch. It was the
           // one statement outside it, so a settled side-by-side rub — two cars

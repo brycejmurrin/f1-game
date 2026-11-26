@@ -282,6 +282,7 @@
     "tests/unit/component-inventory.test.mjs",
     "tests/unit/conflict-cure.test.mjs",
     "tests/unit/contact-geometry.test.mjs",
+    "tests/unit/contact-side-effects-6743.test.mjs",
     "// context-cap.py hook: STOP AT / env caps, advisory once per level, hard-cap spawn deny with the hand-off exit.",
     "tests/unit/context-cap-hook.test.mjs",
     "// #5242: the pure verdict of the named-control judge (exists, rendered, size, window/safe box, centre hit). ~0.1 s.",
