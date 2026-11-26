@@ -268,6 +268,7 @@ const Car3D = (function () {
     // cameras always get the full-strength livery.
     const _ckAcc = (c) => {
       if (!(opts && opts.cockpit) || !c) return c;
+      if (!Array.isArray(c) || c.length < 3 || !c.every(Number.isFinite)) return undefined;
       const mn = Math.min(c[0], c[1], c[2]);
       if (mn < 0.45) return c;
       const k = 0.42 / mn;
