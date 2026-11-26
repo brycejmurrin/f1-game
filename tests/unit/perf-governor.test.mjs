@@ -648,6 +648,7 @@ test("TLX capDpr only ever lowers the cap and re-sizes; RESOLUTION MAX's boost c
   const slice = (from, to) => { const a = tlx.indexOf(from); return tlx.slice(a, tlx.indexOf(to, a) + to.length); };
   const ctx = vm.createContext({ Math, Object, Number, String, URLSearchParams, WeakSet, WeakMap, location: { search: "" },
     mobileTier: true, _lite: null, resized: 0 });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/three/tlx-util.js"), "utf8"), ctx, { filename: absSrc("js/render/three/tlx-util.js") });
   vm.runInContext(tlx.replace(/^const TLX = /m, "var TLX = "), ctx, { filename: absSrc("js/render/three/tlx.js") });
   ctx.dprCapFor = ctx.TLX.dprCapFor;
   vm.runInContext("function resizeNow() { resized++; }\n" + slice("let _dprBoost = 0, _dprCeil = 0, _dprPreset = 0;", "\n") +

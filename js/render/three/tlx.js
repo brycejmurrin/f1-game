@@ -2,22 +2,7 @@
 "use strict";
 
 const TLX = (function () {
-  // three r186 Renderer.init() starts its own window rAF loop (Animation: info.reset, nodeFrame.update ->
-  // frameId, inspector) that ticks every vsync beside the game loop: 2.04 rAF callbacks per drawn frame on
-  // TLX vs 1.04 on GLX (gpu-census 39071040057), 0.12 ms each on the phone-shaped VM probe. TLX never sets
-  // an animation loop, so its context becomes a pump that begin() drains: frameId still advances once per
-  // DRAWN frame (FRAME-type nodes such as post passes key on it), an idle canvas runs no three callback,
-  // and XRManager's session swap still restores it (it saves getContext() and puts it back on end).
-  function pumpAnimation(r) {
-    const anim = r && r._animation;
-    if (!anim || typeof anim.setContext !== "function" || typeof anim.stop !== "function" || typeof anim.start !== "function") return null;
-    const pump = { cb: null };
-    pump.requestAnimationFrame = (cb) => { pump.cb = cb; return 1; };
-    pump.cancelAnimationFrame = () => { pump.cb = null; };
-    pump.drain = () => { const cb = pump.cb; if (cb) { pump.cb = null; cb(typeof performance !== "undefined" ? performance.now() : 0); } };
-    anim.stop(); anim.setContext(pump); anim.start();   // start() ticks once now and parks the next tick in the pump
-    return pump;
-  }
+  const { pumpAnimation, texStandIn, readGlCapture } = TLXUtil;
   // drawDrivingLine's `opts.cols` fallback (F1 GREEN: onPace, lift, brake; DrivingLine.PALETTES).
   const LINE_COLS_F1 = [0.10, 0.95, 0.35, 1.00, 0.72, 0.10, 1.00, 0.12, 0.10];
   let _lastFailure = null, _presentWarned = false;
@@ -43,26 +28,6 @@ const TLX = (function () {
     try { Log.error("gfx", "Caught @ " + where + ":", msg); } catch (_) { /* Log absent in harness */ }
   }
 
-  // RELEASE A createTexture() SOURCE AFTER UPLOAD. three keeps texture.image
-  // for the texture's life and Texture.dispose() frees only the GPU copy
-  // (https://threejs.org/docs/#api/en/textures/Texture.dispose,
-  // mrdoob/three.js#23953), so every cached livery atlas pinned its 1024x1280
-  // canvas — ~5 MB each, 48 cached plus the decal-material cache: 130-250 MB.
-  // three r186 re-reads .image only when .version moves (Textures.updateTexture
-  // returns early on initialized && same version), so after the upload the
-  // image can be swapped for a 1x1 stand-in: a stray re-upload (e.g. a texture
-  // drawn after its dispose) then yields a blank decal, not a TypeError from a
-  // detached source. The image setter does not bump the version. ImageBitmap
-  // sources are left alone: three's flipY uniform tests `image instanceof
-  // ImageBitmap`, so swapping one would flip the texture.
-  let _texStandIn = null;
-  function texStandIn() {
-    if (!_texStandIn && typeof document !== "undefined" && document.createElement) {
-      _texStandIn = document.createElement("canvas");
-      _texStandIn.width = _texStandIn.height = 1;
-    }
-    return _texStandIn;
-  }
   function releaseTexSource(t) {
     if (!t) return false;
     t.onUpdate = null;
@@ -73,75 +38,6 @@ const TLX = (function () {
     if (!stand || img === stand) return false;
     t.image = stand;
     return true;
-  }
-
-  // Capture the unpreserved backbuffer NOW, but wait asynchronously for its bytes.
-  // A timer around client-memory readPixels still blocked Photo for 100 s on
-  // software GL. PBO + fence polling moves GPU waiting out of that call;
-  // the final client copy can still pay driver/command-stream overhead.
-  // https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices#use_non-blocking_async_data_readback
-  const _captureReads = new WeakSet();
-  async function readGlCapture(gl, w, h) {
-    if (!(w > 0 && h > 0)) throw new Error("no frame size");
-    if (_captureReads.has(gl)) throw new Error("capture already in progress");
-    _captureReads.add(gl);
-    let pbo = null, sync = null;
-    try {
-      const bytes = w * h * 4;
-      pbo = gl.createBuffer();
-      if (!pbo) throw new Error("capture buffer unavailable");
-      const binding = gl.getParameter(gl.PIXEL_PACK_BUFFER_BINDING);
-      const names = [gl.PACK_ALIGNMENT, gl.PACK_ROW_LENGTH, gl.PACK_SKIP_PIXELS, gl.PACK_SKIP_ROWS];
-      const pack = names.map((n) => gl.getParameter(n));
-      try {
-        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
-        gl.bufferData(gl.PIXEL_PACK_BUFFER, bytes, gl.STREAM_READ);
-        if (gl.getBufferParameter(gl.PIXEL_PACK_BUFFER, gl.BUFFER_SIZE) !== bytes)
-          throw new Error("capture buffer allocation failed");
-        for (let i = 0; i < names.length; i++) gl.pixelStorei(names[i], i === 0 ? 4 : 0);
-        gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, 0);
-        sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
-        if (!sync) throw new Error("capture fence unavailable");
-        gl.flush();
-      } finally {
-        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, binding);
-        for (let i = 0; i < names.length; i++) gl.pixelStorei(names[i], pack[i]);
-      }
-      await new Promise((resolve, reject) => {
-        // A valid full-resolution software frame exceeded 20 s; keep waiting
-        // asynchronously instead of forcing Photo's synchronous canvas fallback.
-        const deadline = performance.now() + 120000;
-        const poll = () => {
-          try {
-            if (gl.isContextLost()) throw new Error("capture context lost");
-            const status = gl.clientWaitSync(sync, 0, 0);
-            if (status === gl.ALREADY_SIGNALED || status === gl.CONDITION_SATISFIED) { resolve(); return; }
-            if (status === gl.WAIT_FAILED) throw new Error("capture fence failed");
-            if (performance.now() >= deadline) throw new Error("capture timed out");
-            setTimeout(poll, 10);
-          } catch (e) { reject(e); }
-        };
-        setTimeout(poll, 0);
-      });
-      const data = new Uint8ClampedArray(bytes);
-      // Rendering may have changed this binding while the fence was pending.
-      const bindingNow = gl.getParameter(gl.PIXEL_PACK_BUFFER_BINDING);
-      try {
-        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
-        gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, data);
-        if (gl.isContextLost()) throw new Error("capture context lost");
-      } finally { gl.bindBuffer(gl.PIXEL_PACK_BUFFER, bindingNow); }
-      const stride = w * 4, row = new Uint8ClampedArray(stride);
-      for (let y = 0; y < Math.floor(h / 2); y++) {
-        const a = y * stride, b = (h - 1 - y) * stride;
-        row.set(data.subarray(a, a + stride)); data.copyWithin(a, b, b + stride); data.set(row, b);
-      }
-      return { width: w, height: h, data };
-    } finally {
-      try { if (sync) gl.deleteSync(sync); } catch (_) { /* context lost */ }
-      try { if (pbo) gl.deleteBuffer(pbo); } catch (_) { /* context lost */ }
-      _captureReads.delete(gl);
-    }
   }
 
   // addUpdateRange() mints a {start,count} per call (60-120 a frame across the instanced batches). three reads the
@@ -3398,62 +3294,8 @@ const TLX = (function () {
       // counters prove the track build ran on THIS backend (never a real GLX
       // WebGL2 context, which is never init'd when TLX is active).
       const _meshMade = { mesh: 0, chunked: 0, tex: 0 };
-      // RETIRED TEXTURES ARE REUSED, NOT DESTROYED. A garage livery edit frees
-      // and re-creates the same-sized atlases (the car's decal atlas and its
-      // deferred hi-res swap, the bay's dress and live screens) on every change.
-      // Destroy + create is a fresh GPU allocation per edit (~27 MB for the
-      // desktop hi-res atlas), a fresh bind group per material, and on Safari's
-      // WebGPU a destroyed GPUTexture's memory stays held while any bind group
-      // that referenced it waits for GC (https://github.com/WebKit/WebKit/pull/76225),
-      // so a long editing session stacks freed atlases. three r186 re-uploads a
-      // texture whose .version moved INTO its existing GPU texture
-      // (Textures.updateTexture creates only while isDefaultTexture; there is no
-      // size check), so a retired texture of the SAME size and source kind takes
-      // the next source in place. Same size is what makes that safe; same kind
-      // keeps three's ImageBitmap flipY path what it was. Bounded by count and
-      // aged out after TEX_POOL_MS idle, so a race never carries the garage's.
-      const _texPool = [];   // { t, w, h, bmp, at } — oldest first
-      // 10 s, not a frame or two: car-draw's hi-res swap re-fills its 2048 texture from an idle callback,
-      // seconds after the edit on a slow device, and an aged-out entry is a fresh ~27 MB allocation again.
-      const TEX_POOL_MAX = 4, TEX_POOL_MS = 10000;
-      const _texStat = { made: 0, reused: 0, retired: 0, disposed: 0 };
-      const _isBitmap = (img) => typeof ImageBitmap !== "undefined" && img instanceof ImageBitmap;
-      function takePooledTexture(src) {
-        if (!src || !(src.width > 0 && src.height > 0)) return null;
-        const bmp = _isBitmap(src);
-        for (let i = 0; i < _texPool.length; i++) {
-          const e = _texPool[i];
-          if (e.w === src.width && e.h === src.height && e.bmp === bmp) { _texPool.splice(i, 1); return e.t; }
-        }
-        return null;
-      }
-      // The decal material cache keys on the texture: a pooled one keeps its
-      // material (the next fill reuses both, no node build), a disposed one
-      // drops it — kept, it pinned the freed texture until LRU pressure.
-      function disposePooled(t) {
-        _texStat.disposed++;
-        if (fx && fx.releaseTexture) { try { fx.releaseTexture(t); } catch (_) { /* cache bookkeeping only */ } }
-        try { t.dispose(); } catch (_) { /* device already dying */ }
-      }
-      function retireTexture(t, now) {
-        if (!t.__tlxPoolW) { disposePooled(t); return; }
-        _texStat.retired++;
-        // An owned source closes now, as its dispose would have; a canvas is
-        // swapped for the stand-in so a never-uploaded one is not pinned here.
-        if (t.__tlxRelease) t.__tlxRelease();
-        else if (t.image && !_isBitmap(t.image)) { const stand = texStandIn(); if (stand) t.image = stand; }
-        t.onUpdate = null;
-        _texPool.push({ t, w: t.__tlxPoolW, h: t.__tlxPoolH, bmp: !!t.__tlxPoolBmp, at: now });
-        while (_texPool.length > TEX_POOL_MAX) disposePooled(_texPool.shift().t);
-      }
-      function ageTexPool(now) {
-        while (_texPool.length && now - _texPool[0].at > TEX_POOL_MS) disposePooled(_texPool.shift().t);
-      }
-      // A dropped track world: its retired atlases go now, not after TEX_POOL_MS, so the next circuit's build
-      // does not run beside them (iPhone tab budget ~300 MB).
-      function flushTexPool() {
-        while (_texPool.length) disposePooled(_texPool.shift().t);
-      }
+      const _texPoolM = TLXTexPool.create({ fx: () => fx, texStandIn });
+      const { take: takePooledTexture, retire: retireTexture, age: ageTexPool, flush: flushTexPool, stat: _texStat, isBitmap: _isBitmap } = _texPoolM;
       let envCubeCam = null;
       let envFacesMask = 0, envReady = false, _envActive = false;
       // Software / soft-GPU faces clear black and skip the world. envReady
@@ -7265,7 +7107,7 @@ const TLX = (function () {
           _matDispose.length = 0;
           if (_dropLater.length) flushDropLater(false);   // after paint: their successors hold the pipelines now
           if (fx && fx.flushEvicted) fx.flushEvicted();
-          if (_texPool.length) ageTexPool(_now);
+          if (_texPoolM.size()) ageTexPool(_now);
           _fxLast.shadows = _fxFrame.shadows; _fxLast.marks = _fxFrame.marks;
           _fxLast.skidVerts = _fxFrame.skidVerts; _fxLast.glow = _fxFrame.glow;
           _fxLast.particles = _fxFrame.particles; _fxLast.decals = _fxFrame.decals;
@@ -7387,7 +7229,7 @@ const TLX = (function () {
             return { mesh: _meshMade.mesh, chunked: _meshMade.chunked, tex: _meshMade.tex,
                      // createTexture: new GPU textures vs retired ones re-filled in place (_texPool)
                      texMade: _texStat.made, texReused: _texStat.reused, texRetired: _texStat.retired,
-                     texDisposed: _texStat.disposed, texPooled: _texPool.length };
+                     texDisposed: _texStat.disposed, texPooled: _texPoolM.size() };
           },
           // R1: live?, runs held, and lifetime run records / instances / per-record fallbacks.
           coState() {

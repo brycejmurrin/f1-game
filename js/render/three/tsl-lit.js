@@ -380,7 +380,7 @@
     // (and again for the mirror pass), and two fresh closures per call are
     // pure GC churn on the phone path (#3115 F8). _tuneT is the call's tune.
     let _tuneT = null;
-    const _tk = (id, def) => (_tuneT && _tuneT[id] != null ? _tuneT[id] : def);
+    const _tk = (id) => PostCommon.knob(_tuneT, id);   // TUNE_DEFS supplies the default (post-common.js)
     const _s3m = (u, a, m) => { if (a) u.value.set(a[0] * (m ?? 1), a[1] * (m ?? 1), a[2] * (m ?? 1)); };
     // #6577 row 5: SPLIT IN TWO. updateFrameShared writes what every view of a frame shares (sun, sky, fog colour,
     // the tuner knobs); updateView what one view owns: the fog density (game.js thins it around begin() only), the
@@ -398,7 +398,7 @@
       s3(U.sunDir, frame.sunDir);
       s3(U.sunColor, frame.sunColor);
       setLampBake(frame.lampBake, frame.lampBakeScale);
-      const ambM = k("ambientMul", 1);
+      const ambM = k("ambientMul");
       s3(U.ambSky, frame.ambientSky || [0.3, 0.32, 0.36], ambM);
       s3(U.ambGround, frame.ambientGround || [0.2, 0.19, 0.18], ambM);
       s3(U.skyZenith, frame.skyZenith || [0.18, 0.40, 0.78]);
@@ -406,7 +406,7 @@
       s3(U.fogColor, frame.fogColor || [0.04, 0.04, 0.06]);
       uf1(U.fogHeight, T && T.fogHeight != null ? T.fogHeight
         : (frame.fogHeight != null ? frame.fogHeight : 0.0));
-      U.groundMist.value = (frame.groundMist != null ? frame.groundMist : 0) * k("mistDensity", 1);
+      U.groundMist.value = (frame.groundMist != null ? frame.groundMist : 0) * k("mistDensity");
       {
         const pl = frame.pitLane;
         U.pitLane.value.set(pl ? pl[0] : 0, pl ? pl[1] : 0, pl ? pl[2] : 1, pl ? pl[3] : 1);
@@ -420,61 +420,54 @@
       U.time.value = frame.time != null ? frame.time : 0;
       if (_crowd && frame.crowdExcite != null) setCrowdExcite(frame.crowdExcite);   // CROWD LIFE (only once a crowd material exists)
       {
-        const wd = k("windDir", 35) * (Math.PI / 180);
-        U.wind.value.set(Math.cos(wd), Math.sin(wd), k("windSpeed", 1.0));
+        const wd = k("windDir") * (Math.PI / 180);
+        U.wind.value.set(Math.cos(wd), Math.sin(wd), k("windSpeed"));
       }
       U.cloudCover.value = frame.cloud != null ? frame.cloud : 0;
       U.cloudSpeed.value = frame.cloudSpeed != null ? frame.cloudSpeed : 1;
-      uf1(U.bounceK, k("bounceK", 0.04));
-      uf1(U.specKnee, k("specKnee", 4.0));
-      uf1(U.mistShare, k("mistShare", 1.5));
-      uf1(U.lampFogClip, k("fogClip", 0.7));
-      uf1(U.glowAmp, k("glowAmp", 2.3));
-      uf1(U.bloomBoost, k("neonBoost", 0.6));
-      uf1(U.keyMul, k("keyMul", 1.0));
-      uf1(U.fogTint, k("fogTint", 0.0));
-      uf1(U.mistHeight, k("mistHeight", 0.30));
-      uf1(U.shadowTintAmt, k("shadowTintAmt", 0.0));
-      uf1(U.wetDark, k("wetDark", 1.0));
-      uf1(U.puddles, k("puddles", 1.0));
-      uf1(U.matTexMix, k("matTexMix", 1.0));   // TUNE_DEFS def (was 0.0 — see the declaration)
-      uf1(U.cloudShadowDim, k("cloudShadowDim", 0.80));
-      uf1(U.fogSunCore, k("fogSunCore", 0.6));
-      uf1(U.lampNearClamp, k("lampNearClamp", 4.0));
-      uf1(U.skyRimGlow, k("skyRimGlow", 1.0));
-      uf1(U.ambContactDark, k("ambContactDark", 1.0));
-      uf1(U.lampWallSpill, k("lampWallSpill", 1.0));
+      uf1(U.bounceK, k("bounceK"));
+      uf1(U.specKnee, k("specKnee"));
+      uf1(U.mistShare, k("mistShare"));
+      uf1(U.lampFogClip, k("fogClip"));
+      uf1(U.glowAmp, k("glowAmp"));
+      uf1(U.bloomBoost, k("neonBoost"));
+      uf1(U.keyMul, k("keyMul"));
+      uf1(U.fogTint, k("fogTint"));
+      uf1(U.mistHeight, k("mistHeight"));
+      uf1(U.shadowTintAmt, k("shadowTintAmt"));
+      uf1(U.wetDark, k("wetDark"));
+      uf1(U.puddles, k("puddles"));
+      uf1(U.matTexMix, k("matTexMix"));   // TUNE_DEFS def (was 0.0 — see the declaration)
+      uf1(U.cloudShadowDim, k("cloudShadowDim"));
+      uf1(U.fogSunCore, k("fogSunCore"));
+      uf1(U.lampNearClamp, k("lampNearClamp"));
+      uf1(U.skyRimGlow, k("skyRimGlow"));
+      uf1(U.ambContactDark, k("ambContactDark"));
+      uf1(U.lampWallSpill, k("lampWallSpill"));
       U.envStr.value = 0;   // M9: overwritten by lit.setEnvStr() in tlx.js begin() from the probe-ready state
     }
     function updateView(frame, mirror) {
       const T = (frame && frame.tune) || null;
       _tuneT = T;
       const k = _tk;
-      U.fogDensity.value = (frame.fogDensity || 0) * k("fogDensityMul", 1);
-      uf1(U.carSunGlint, k("carSunGlint", 12.0));
-      uf1(U.carSparkle, k("carSparkle", 1.6));
-      uf1(U.windowSunFlash, k("windowSunFlash", 1.0));
+      U.fogDensity.value = (frame.fogDensity || 0) * k("fogDensityMul");
+      uf1(U.carSunGlint, k("carSunGlint"));
+      uf1(U.carSparkle, k("carSparkle"));
+      uf1(U.windowSunFlash, k("windowSunFlash"));
       // M4 shadow upload (1:1 with the litU.uShadow* block in glx.js)
       if (shadowOn) {
-        uf1(U.shadowBias, k("shadowBias", 0.001));
-        uf1(U.pcssPen, k("pcssPen", 80.0));
+        uf1(U.shadowBias, k("shadowBias"));
+        uf1(U.pcssPen, k("pcssPen"));
         U.pcssOn.value = SHD.S.pcssEnabled ? 1 : 0;
         // Key-luminance fade: cast shadows dissolve as the key dims toward
         // moonlight, floored by MOON SHADOWS × the clear-night factor
         // (frame.moonGate — clear-night moonK, or above 0.5 the knob itself
         // forcing the floor open regardless of weather) so bright clear moons
         // keep soft shadows.
-        const _kl = frame.sunColor
-          ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
-        let _hf = (_kl - 0.28) / 0.14;
-        _hf = _hf < 0 ? 0 : _hf > 1 ? 1 : _hf;
-        _hf = _hf * _hf * (3 - 2 * _hf);
-        const _mSh = k("moonShadow", 0.25) * (frame.moonGate || 0);
-        if (_mSh > _hf) _hf = _mSh;
         // A failed sun pass clears S.enabled and freezes the map + lightVP: read it every frame, or the lit shader
         // keeps sampling the last good map (ghost shadows). tlx-post's god-ray sun term already gates on S.enabled.
-        U.shadowStr.value = SHD.S.enabled ? k("shadowStr", 1.15) * _hf : 0;
-        uf1(U.shadowRange, k("shadowRange", 80.0));
+        U.shadowStr.value = SHD.S.enabled ? PostCommon.sunShadowStrength(frame, _tuneT) : 0;
+        uf1(U.shadowRange, k("shadowRange"));
         U.shadowTexel.value = 1 / (SHD.sunSize || 2048);
         const _sc = frame.shadowCtr || frame.eye;
         if (_sc) U.shadowCtr.value.set(_sc[0], _sc[1], _sc[2]);
@@ -3433,7 +3426,7 @@
       const store = U.matTexScale.array || U.matTexScale.value;
       if (store) {
         for (let i = 0; i < 17; i++)
-          store[i] = maps && maps.scales && maps.scales[i] > 0 ? maps.scales[i] : 0;
+          store[i] = Assets.matScale(maps && maps.scales && maps.scales[i]);
       }
       if (U.matTexScale.needsUpdate !== undefined) U.matTexScale.needsUpdate = true;
     }

@@ -235,7 +235,7 @@ test("the PUDDLES knob reaches every backend", () => {
   assert.match(glx, /uf1\(litU\.uPuddles,\s*_litUf,\s*"puddles",\s*PostCommon\.knob\(T, "puddles"\)\)/, "GLX uploads uPuddles (TUNE_DEFS def 1, #6499)");
   assert.match(read("js/render/glx/shaders/glsl-lit.js"), /uniform float uPuddles;/);
   const tlx = read("js/render/three/tsl-lit.js");
-  assert.match(tlx, /puddles:\s+uniform\(1\.0\)/); assert.match(tlx, /uf1\(U\.puddles, k\("puddles", 1\.0\)\)/, "TLX updates U.puddles");
+  assert.match(tlx, /puddles:\s+uniform\(1\.0\)/); assert.match(tlx, /uf1\(U\.puddles, k\("puddles"\)\)/, "TLX updates U.puddles");
   assert.match(read("js/render/webgpu/wgx.js"), /d\[141\] = \(T && T\.puddles != null\) \? T\.puddles : 1\.0;/, "WGX packs params10.y");
   assert.match(read("js/render/webgpu/wgsl-chunks.js"), /params10\s*:\s*vec4<f32>,.*\n.*y PUDDLES knob/, "FrameU documents params10.y");
 });

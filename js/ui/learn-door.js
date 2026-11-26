@@ -16,6 +16,7 @@ const LearnDoor = (function () {
     ["driving", "Tyres & driving dynamics", [
       ["tyre-heat", "Tyre Thermal Lab", "Follow surface and core temperatures through a run"],
       ["braking", "Grip & Braking", "Share tyre grip between braking and turning"],
+      ["buttons", "Button Trainer", "Tune your touch pedals and steer arrows"],
       ["racing-line", "Racing Lines", "Move the apex and measure the exit-speed trade-off"],
       ["telemetry", "Telemetry Detective", "Compare braking, speed & throttle at the same distance"],
       // Not a framed lab: the drill opens over the real race buttons (js/ui/thumb-trainer.js).

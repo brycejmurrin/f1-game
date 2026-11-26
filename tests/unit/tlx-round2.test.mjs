@@ -168,12 +168,13 @@ test("TLX-01: begin() retries a dead post chain on a 2 s timer, 3-strike cap and
 });
 
 test("TLX-02: a dead sun pass zeroes the lit shadow strength every frame", () => {
-  assert.match(read("js/render/three/tsl-lit.js"), /U\.shadowStr\.value = SHD\.S\.enabled \? k\("shadowStr", 1\.15\) \* _hf : 0;/);
+  assert.match(read("js/render/three/tsl-lit.js"), /U\.shadowStr\.value = SHD\.S\.enabled \? PostCommon\.sunShadowStrength\(frame, _tuneT\) : 0;/);
 });
 
 test("TLX-03: the DPR cap follows mobileTier (1.5 phone, 2 desktop); only RESOLUTION MAX lifts it (#5222)", () => {
   // The B8 lab (?lab=tlxLite) takes its own cap first; the full table is in render-effective-res.test.mjs.
   const ctx = vm.createContext({ location: { search: "" }, URLSearchParams, WeakSet, WeakMap, Math, Object, Number, String });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/three/tlx-util.js"), "utf8"), ctx, { filename: absSrc("js/render/three/tlx-util.js") });
   vm.runInContext(TLX.replace(/^const TLX = /m, "var TLX = "), ctx, { filename: absSrc("js/render/three/tlx.js") });
   const f = ctx.TLX.dprCapFor;
   assert.deepEqual([f(null, true, 0, 0), f(null, false, 0, 0), f(null, true, 3, 0), f({ dprCap: 1.25 }, true, 0, 0)], [1.5, 2, 3, 1.25]);
@@ -202,6 +203,7 @@ test("TLX-10: window.scene/camera/renderer/THREE only behind ?three-devtools=1",
 // { value } holders so updateFrame's uploads can be read back. The shadow subsystem is a lamp-armed stub.
 function bootLit({ lampIdx = 2, extras = false } = {}) {
   const ctx = vm.createContext({ window: {}, Log: { warn() {} }, Float32Array, Math, Array, Object, Number });
+  for (const f of ["js/lighting/knobs.js", "js/render/shared/post-common.js", "js/render/shared/assets.js"]) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   vm.runInContext(read("js/render/three/tsl-lit.js"), ctx, { filename: absSrc("js/render/three/tsl-lit.js") });
   const holder = (value) => ({ value, setGroup() { return this; } });
   const TSL = new Proxy({}, { get: (t, k) => (k === "uniform" || k === "uniformArray" ? holder : mk()) });

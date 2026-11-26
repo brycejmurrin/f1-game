@@ -42,7 +42,7 @@ Root — the load-order truth and the car studio page; every consumer hardcodes 
 | **agent-run.mjs** | Runs commands with selectable output levels and saved stdout/stderr; --read retrieves without rerunning. | check-changes |
 | **carview.html** | Standalone isolated car photo studio (no track, no game.js): Car3D + LiveryTex via GLX; headless API `window.CARVIEW`. | playwright-probe |
 | **garage-angles-fetch.mjs** | Download garage-before-<sha> for a SHA (default merge-base with ship); nearest ancestor + compare staleness. | garage-parts-livery |
-| **manifest.cjs** | Load-order truth: `FULL`, `DEFERRED`, `LAZY_AGENT`, `HARD_EDGES`, `TRACK_VM`; index.html must match. | check-changes |
+| **manifest.cjs** | Load-order truth: `FULL`, `DEFERRED`, `LAZY_AGENT`, `HARD_EDGES`, `TRACK_VM`, `TIERS`; index.html must match. | check-changes |
 | **serve.mjs** | Local static server for the working tree on 127.0.0.1:3456 (replaces `npx serve`): no-store, no fd leak, pinned in-repo. | check-changes |
 
 ### `tools/agent/`
@@ -548,7 +548,6 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 | **ui/look-diff.mjs** | Pixel-diff each ScreenLooks/PauseOpts/TitleLayout knob value vs the default: DEAD/SUBTLE/VISIBLE + contact sheet. | css-play |
 | **ui/look-diff/core.mjs** | Library for look-diff: knob catalog read in a vm, args, pixel/geometry diff, DEAD/SUBTLE/VISIBLE classes. | css-play |
 | **ui/menu-capture.mjs** | Library (not a CLI): `runMenuShot` / `runMenuGallery` behind `layout-audit --gallery` / `--screen=`. | survey-ui-matrix |
-| **ui/menu-fit.mjs** | DEPRECATED except `--safe=` (arbitrary notch insets); use `ui/layout-audit.mjs` for menu fit at a viewport. | survey-ui-matrix |
 | **ui/menu-mock.mjs** | Menu layout shots (SCREENS x VIEWPORTS), 3D off: boxes, tap/overflow/text numbers, cell cache. | survey-ui-matrix |
 | **ui/menu-readiness.mjs** | Serializable menu readiness predicate, used with bounded Playwright polling. | — |
 | **ui/menu-screens.mjs** | Canonical `SCREENS` + `VIEWPORTS` + `OVERLAY_IDS` (library) for the layout tools. | survey-ui-matrix |
@@ -560,7 +559,7 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 | **ui/tap-floor.mjs** | Shared tap floors (WCAG 24 + body `--tap`) and in-page measure (label union, ÷ zoom) for the layout tools. | survey-ui-matrix |
 | **ui/theme-axis.mjs** | The `--theme=` axis (dark / light) for layout-audit: sets the context colorScheme AND the game's own uiTheme setting. | survey-ui-matrix |
 | **ui/ui-reset.mjs** | Shared door-first overlay reset (resetOverlays, titleUsable): hidden=true only as a logged fallback. | survey-ui-matrix |
-| **ui/ui-scale-axis.mjs** | The `--scale=` axis (40–200 % interface size) shared by layout-audit, menu-fit and fit-audit. | survey-ui-matrix |
+| **ui/ui-scale-axis.mjs** | The `--scale=` axis (40–200 % interface size) shared by layout-audit and fit-audit. | survey-ui-matrix |
 
 ### `tools/lighting/`
 
@@ -818,9 +817,8 @@ No header comment in JSON, so the "read by" column is derived from which tools a
   `car/carshot.mjs` the ~5 KB studio probe, `shot/shot.mjs` one framed track
   shot, `track/survey-track.mjs <id>` the one-stop circuit pass (`--oblique`
   adds topdown + N/E/S/W). Redundant one-offs were deleted; recover from git
-  history if a need returns. `ui/menu-fit.mjs` survives `ui/layout-audit.mjs`
-  only for `--safe=` (arbitrary notch insets — headless Chromium reports every
-  `env(safe-area-inset-*)` as 0).
+  history if a need returns. `ui/layout-audit.mjs --safe=L,T,R,B` simulates arbitrary notch insets
+  (headless Chromium reports every `env(safe-area-inset-*)` as 0).
 - **Chromium:** `CHROME` / `PW_CHROMIUM`, then `/opt/pw-browsers/...`, else
   Playwright's bundled browser. Servers bind a free port (or `:3456`).
 - **Two Playwright packages on purpose:** specs run on `@playwright/test`;

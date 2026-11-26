@@ -53,12 +53,17 @@ function glxTable() {
   };
   for (const m of GLX.matchAll(LIT_RE)) put(m[1], Number(m[2]));
   for (const m of GLX.matchAll(/PostCommon\.knob\(T, "(\w+)"\)/g)) put(m[1], DEFS[m[1]]);
+  // #6822: the shadow fade reads shadowStr + moonShadow through PostCommon.sunShadowStrength (knob() inside).
+  if (/PostCommon\.sunShadowStrength\(/.test(GLX)) for (const id of ["shadowStr", "moonShadow"]) put(id, DEFS[id]);
   return out;
 }
 
 function tlxTable() {
   const out = Object.create(null);
-  for (const m of TSL.matchAll(/\bk\("(\w+)", (-?[\d.]+)\)/g)) out[m[1]] = Number(m[2]);
+  // #6822: `k(id)` reads PostCommon.knob (TUNE_DEFS def), no literal left to compare.
+  for (const m of TSL.matchAll(/\bk\("(\w+)"\)/g)) out[m[1]] = DEFS[m[1]];
+  if (/PostCommon\.sunShadowStrength\(/.test(TSL)) for (const id of ["shadowStr", "moonShadow"]) out[id] = DEFS[id];
+  assert.doesNotMatch(TSL, /\bk\("\w+", /, "tsl-lit.js restates a knob literal: k(id) reads TUNE_DEFS");
   return out;
 }
 

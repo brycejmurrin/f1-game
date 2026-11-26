@@ -822,6 +822,7 @@
         "tests/unit/input-ghost-replay-vm.test.mjs",
         "tests/unit/jump-start-vm.test.mjs",
         "tests/unit/kerb-drive-from-rest-vm.test.mjs",
+        "tests/unit/lap-retry-vm.test.mjs",
         "tests/unit/local-storm-gates-vm.test.mjs",
         "tests/unit/lockup-bench-vm.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",
@@ -954,6 +955,7 @@
         "tests/unit/input-ghost-replay-vm.test.mjs",
         "tests/unit/jump-start-vm.test.mjs",
         "tests/unit/kerb-drive-from-rest-vm.test.mjs",
+        "tests/unit/lap-retry-vm.test.mjs",
         "tests/unit/local-storm-gates-vm.test.mjs",
         "tests/unit/lockup-bench-vm.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",
@@ -1108,6 +1110,7 @@
         "tests/unit/drift-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
+        "tests/unit/lap-retry-vm.test.mjs",
         "tests/unit/lockup-bench-vm.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",
         "tests/unit/longitudinal-vm.test.mjs",
@@ -4351,6 +4354,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/race/lap-retry.js",
+      "global": "LapRetry",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
       "path": "js/race/light-tune-edit.js",
       "global": "LightTuneEdit",
       "roster": "tag"
@@ -4716,6 +4724,16 @@
       "roster": "DEFERRED:three"
     },
     {
+      "path": "js/render/three/tlx-texpool.js",
+      "global": "TLXTexPool",
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tlx-util.js",
+      "global": "TLXUtil",
+      "roster": "DEFERRED:three"
+    },
+    {
       "path": "js/render/three/tlx.js",
       "global": "TLX",
       "roster": "DEFERRED:three"
@@ -4938,7 +4956,7 @@
     {
       "path": "js/track/scenery/graph.js",
       "global": "TrackGraph",
-      "roster": "tag"
+      "roster": "LAZY_TRACK_BUILD"
     },
     {
       "path": "js/track/scenery/guards.js",

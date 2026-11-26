@@ -3,14 +3,15 @@
  *
  * Filtered looping noise + sparse pooled cheers. Gain rises near the pit
  * straight (and grandstand props when a world list is cached). Short swells
- * on a climb into P1–P3 and on the chequered flag. Strictly silent on the
+ * on a climb into P1–P3 and on the chequered flag (both from checkEvents; endRace sets
+ * state "results" before GameAudio.finish(), so a finish() wrapper never fired: #6886 row 11). Strictly silent on the
  * countdown, pause (incl. photo / free cam), results / podium, and with SFX
  * off. Respects the mobile tier (quieter bed, fewer cheer voices). Zero
  * nodes allocated on the hot path — attach() builds the graph once.
  *
  * Hookup (OWNED surfaces only): GameAudioSignal.create stashes the host;
  * lazy-bundles bind(G) after ensureAudio; this file wraps GameAudio
- * setEngine / stopEngine / setGridIdle / finish / setSfxEnabled. Never
+ * setEngine / stopEngine / setGridIdle / setSfxEnabled. Never
  * touches engine.js or game.js.
  */
 var CrowdAudio = (function () {
@@ -65,7 +66,7 @@ var CrowdAudio = (function () {
   let cheerPool = 0;
   let lastCheerT = -1e9;
   let swellUntil = 0, swellAmt = 0;
-  let lastPos = 0, sawFinish = false;
+  let lastPos = 0, sawFinish = false, lastRaceT = NaN;
   let sfxOn = true;
   let standX = null, standZ = null, standN = 0;   // fixed arrays, filled on track change
   let standTrack = null;
@@ -343,6 +344,11 @@ var CrowdAudio = (function () {
   function checkEvents(player) {
     if (!player) return;
     const pos = player.pos | 0;
+    // A rewind / flashback restores an older raceT and, with it, a better place: re-seed lastPos
+    // so the jump is not a pass (#6886 row 8; the same edge CarSfx.update uses).
+    const rt = G ? G.raceT : NaN;
+    if (Number.isFinite(rt) && Number.isFinite(lastRaceT) && rt + 0.02 < lastRaceT) lastPos = 0;
+    if (Number.isFinite(rt)) lastRaceT = rt;
     if (lastPos > 0 && pos > 0 && pos < lastPos && pos <= 3) {
       swell(0.055 + 0.015 * (4 - pos), 1.1);
     }
@@ -405,7 +411,6 @@ var CrowdAudio = (function () {
       stopEngine: GameAudio.stopEngine,
       setGridIdle: GameAudio.setGridIdle,
       setSfxEnabled: GameAudio.setSfxEnabled,
-      finish: GameAudio.finish,
       startEngine: GameAudio.startEngine,
     };
     GameAudio.setEngine = function () {
@@ -420,20 +425,13 @@ var CrowdAudio = (function () {
     };
     GameAudio.setGridIdle = function () {
       const r = _orig.setGridIdle.apply(this, arguments);
-      try { silence(); lastPos = 0; sawFinish = false; } catch (e) { /* */ }
+      try { silence(); lastPos = 0; sawFinish = false; lastRaceT = NaN; } catch (e) { /* */ }
       return r;
     };
     GameAudio.setSfxEnabled = function (b) {
       sfxOn = !!b;
       const r = _orig.setSfxEnabled.apply(this, arguments);
       if (!sfxOn) try { silence(); } catch (e) { /* */ }
-      return r;
-    };
-    GameAudio.finish = function () {
-      const r = _orig.finish.apply(this, arguments);
-      try {
-        if (sfxOk() && G && G.state === "race" && !G.paused) swell(0.09, 2.2);
-      } catch (e) { /* */ }
       return r;
     };
     GameAudio.startEngine = function () {
@@ -472,13 +470,13 @@ var CrowdAudio = (function () {
     return t < swellUntil ? swellAmt : 0;
   }
 
-  // swell stays module-local: checkEvents / finish wrap call it; no outside
+  // swell stays module-local: checkEvents calls it; no outside
   // CrowdAudio.swell site exists (inspect().swell exposes the live amount).
   return {
     bindHost, bind, attach, detach, silence, update, fireCheer,
     inspect, liveOk, idle,
     // test hooks (inspect().bedGain already exposes the GainNode)
-    _resetEvents() { lastPos = 0; sawFinish = false; swellUntil = 0; swellAmt = 0; lastCheerT = -1e9; },
+    _resetEvents() { lastPos = 0; lastRaceT = NaN; sawFinish = false; swellUntil = 0; swellAmt = 0; lastCheerT = -1e9; },
     _setPos(p) { lastPos = p | 0; },
     _cheerPool() { return cheers ? cheers.length : 0; },
   };

@@ -218,18 +218,28 @@ const OverlayRender = (function () {
   function watch(painter, deps) {
     const now = deps.now;
     const clearInt = deps.clearInterval || ((id) => clearInterval(id));
-    let lastAt = null, timer = 0, open = true;
+    let lastAt = null, timer = 0, open = true, waiting = false;
+    const hello = () => { if (typeof deps.hello === "function") deps.hello(); };
     function check() {
       if (!open) return false;
       if (lastAt == null || now() - lastAt < STALE_MS) return false;
       lastAt = null;
+      waiting = true;
       painter.clear();
       painter.paint(waitingFrame());
+      hello();
       return true;
     }
     timer = deps.setInterval(check, 1000);
     return {
-      frame(f) { if (!open) return false; lastAt = now(); return painter.paint(f); },
+      frame(f) {
+        if (!open) return false;
+        // After the waiting card a patch would merge onto empty rows: withhold it and ask for a full frame.
+        if (waiting && f && !f.full) { hello(); return false; }
+        waiting = false;
+        lastAt = now();
+        return painter.paint(f);
+      },
       check,
       stop() {
         if (!open) return;
@@ -264,6 +274,7 @@ const OverlayRender = (function () {
           now: () => performance.now(),
           setInterval: (fn, ms) => window.setInterval(fn, ms),
           clearInterval: (id) => window.clearInterval(id),
+          hello: () => { if (sub) sub.hello(); },
         });
         const sub = OverlayBridge.subscribe((frame) => feed.frame(frame));
         if (typeof window !== "undefined" && window.addEventListener) {
