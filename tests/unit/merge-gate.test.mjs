@@ -3273,7 +3273,7 @@ test("land.yml arm (#6711): a train whose arm fails is handed to retry, and the 
   const failed = go({ GH_MERGE_RC: "17", GH_MERGE_STDERR: "unknown merge failure" });
   assert.equal(failed.status, 17, "the failure stays visible");
   assert.deepEqual(JSON.parse(failed.out.retry), { number: 7, head: HEAD7 }, "the passing train is not stranded unarmed");
-  assert.match(failed.summary, /arm of train #7 failed \(exit 17\); re-gating within the existing retry budget/);
+  assert.deepEqual(failed.summary.split("\n").filter(Boolean), ["::warning::arm of train #7 failed (exit 17); re-gating within the existing retry budget"]);
   const needs = { resolve: { result: "success" }, post: { outputs: { retry: "" } }, arm: { result: "failure", outputs: failed.out } };
   assert.equal(ghExpr(LAND.jobs.retry.if, { needs }), true, "retry runs after the failed arm");
   // The re-gated pass (the dispatched retry) finds the same green, unarmed train and arms it.
