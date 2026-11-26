@@ -1758,7 +1758,6 @@ const MOVED = {
   "tools/career-economy.mjs": "tools/car/career-economy.mjs",
   "tools/layout-audit.mjs": "tools/ui/layout-audit.mjs",
   "tools/menu-capture.mjs": "tools/ui/menu-capture.mjs",
-  "tools/menu-fit.mjs": "tools/ui/menu-fit.mjs",
   "tools/menu-screens.mjs": "tools/ui/menu-screens.mjs",
   "tools/ui-scale-axis.mjs": "tools/ui/ui-scale-axis.mjs",
   "tools/circuit-axis.mjs": "tools/ui/circuit-axis.mjs",

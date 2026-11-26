@@ -438,7 +438,8 @@ function makeGpuHarness(opts = {}) {
     // opts.textureUsage: a browser's own flag set (Chrome 146 adds TRANSIENT_ATTACHMENT: 32) — P6 feature-detects it.
     GPUTextureUsage: opts.textureUsage || { RENDER_ATTACHMENT: 1, TEXTURE_BINDING: 2, COPY_DST: 4, COPY_SRC: 8 },
     // opts.assets: a stand-in for the shared Assets loader (P4's readLayerBytesAsync seam); absent = no WebGL2 readback.
-    ...(opts.assets ? { Assets: opts.assets } : {}),
+    // The shared pure rules (#6822) stay the real ones; a stand-in only adds the readback seam.
+    Assets: { matScale: (v) => (+v > 0 ? +v : 0), mipCount: (n) => Math.floor(Math.log2(n)) + 1, ...(opts.assets || {}) },
     GPUBufferUsage: { UNIFORM: 1, COPY_DST: 2, STORAGE: 4, VERTEX: 8, INDEX: 16, QUERY_RESOLVE: 32, MAP_READ: 64, COPY_SRC: 128 },
     GPUShaderStage: { VERTEX: 1, FRAGMENT: 2 },
     GPUColorWrite: { RED: 1, GREEN: 2, BLUE: 4, ALL: 15 },
