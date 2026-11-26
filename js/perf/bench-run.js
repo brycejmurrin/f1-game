@@ -371,7 +371,9 @@ const BenchRun = (function () {
   // Every apex26.* key but the plan (run() takes it, finishPlan puts it back) and the data hub's disposable caches
   // (store.js DISPOSABLE_PREFIXES): copying those could double the origin's use, and restore leaves them alone (#5006).
   const DISPOSABLE = ["apex26.api.", "apex26.realrace."];
-  const kept = (k) => !!k && k.indexOf("apex26.") === 0 && k !== KEY && !DISPOSABLE.some((p) => k.indexOf(p) === 0);
+  // Nor a device-only key (the bridge token): never copied, never put back (#6638).
+  const deviceOnly = (k) => typeof SaveSchemaRegistry !== "undefined" && SaveSchemaRegistry.deviceOnly(k);
+  const kept = (k) => !!k && k.indexOf("apex26.") === 0 && k !== KEY && !DISPOSABLE.some((p) => k.indexOf(p) === 0) && !deviceOnly(k);
   function snapshot() {
     const o = {};
     try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (kept(k)) o[k] = localStorage.getItem(k); } } catch (_) { /* blocked storage */ }
@@ -389,7 +391,7 @@ const BenchRun = (function () {
         if (S) S.write(short(k), undefined); else localStorage.removeItem(k);
       }
       for (const k of Object.keys(snap)) {
-        if (localStorage.getItem(k) === snap[k]) continue;
+        if (!kept(k) || localStorage.getItem(k) === snap[k]) continue;   // an old plan may hold the token
         let v, json = false; try { v = JSON.parse(snap[k]); json = JSON.stringify(v) === snap[k]; } catch (_) { json = false; }
         if (S && json) S.write(short(k), v); else localStorage.setItem(k, snap[k]);
       }
@@ -535,7 +537,8 @@ const BenchRun = (function () {
       // A page that saved the garage on its way out could have written the run's picks back: check once, after the reload.
       if (plan.restoreAfter) {
         const snap = plan.restoreAfter; delete plan.restoreAfter; save(plan);
-        if (JSON.stringify(snapshot()) !== JSON.stringify(snap)) { await restore(snap); reload(); return; }
+        const want = {}; for (const k of Object.keys(snap)) if (kept(k)) want[k] = snap[k];
+        if (JSON.stringify(snapshot()) !== JSON.stringify(want)) { await restore(want); reload(); return; }
       }
       if (plan.show) { plan.show = false; save(plan); if (await waitReady()) open(); }
       return;

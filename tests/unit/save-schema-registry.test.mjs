@@ -345,3 +345,9 @@ test("a raw-text write site is never registered on the json lane (#5023)", () =>
   }
   assert.deepEqual(bad, [], `lane mismatch(es):\n${bad.join("\n")}`);
 });
+
+test("deviceOnly marks the phone bridge token, and only credentials (#6638)", () => {
+  const R = loadRegistry();
+  assert.deepEqual([R.deviceOnly("apex26.bridgeToken"), R.deviceOnly("bridgeToken")], [true, true]);
+  for (const k of ["bridgeStatus", "gfxBackend", "benchRun", "livery.x", "nope.unregistered"]) assert.equal(R.deviceOnly(k), false, k);
+});

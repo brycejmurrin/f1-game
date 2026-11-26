@@ -1953,7 +1953,7 @@ body.lt-open:not(.pc-nopanel) .pc-look-wrap {
   /* The pair as a ROW has to fit the strip at UI SIZE 150% too: two --steer
      pads (84px) came to 267px there against a 204px strip. 56px is 84 on
      screen at 150%, still well over the tap floor. */
-  body.lt-open:not(.pc-nopanel) .pc-altcol .pc-btn { width: 56px; height: 56px; }
+  body.lt-open:not(.pc-nopanel) .pc-altcol .pc-btn { width: max(56px, var(--tap-paint)); height: max(56px, var(--tap-paint)); } /* 56 painted 39.2 at UI SIZE 70 (#6600) */
 }
 .pc-lbl { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.14em; color: rgba(255,255,255,0.72); text-shadow: 0 1px 3px #000; }
 .pc-stick {
@@ -2047,7 +2047,7 @@ body.lt-open:not(.pc-nopanel) #pc-line {
   .pc-fovlab input[type="range"] { min-height: var(--tap-paint); }
   .pc-fovlab input[type="range"] { height: var(--tap-paint); }
 }
-#pc-exit { background: var(--red); color: #fff; border: 1px solid var(--red); }
+#pc-exit { background: var(--red); color: #fff; border: 1px solid var(--red); min-width: var(--tap-paint); } /* 42.1 wide before (#6600) */
 #pc-panel, #pc-hud, #pc-focus-camera, #pc-line { background: var(--plate-hover); color: var(--text); border: 1px solid var(--plate-line); }
 #pc-scene {
   position: fixed;
@@ -2074,10 +2074,9 @@ body:not(.pc-uihidden) #pc-scene:focus-visible { opacity: 1; outline: 2px solid 
 }
 /* Compact flyby: house --tap painted floor. Lives in @layer hud because this
    file loads after @layer components and would otherwise keep --tap-min. */
-#flyby-inner[data-density="compact"] #fb-freecam {
-  min-height: var(--tap-paint);
-  padding: calc(var(--gap) / 2) calc(var(--gap) * 5 / 6);
-}
+#flyby-inner[data-density="compact"] #fb-freecam { min-height: var(--tap-paint); padding: calc(var(--gap) / 2) calc(var(--gap) * 5 / 6); }
+/* Portrait: 48 own px painted 33.6 at UI SIZE 70 (#6600); --tap-paint divides by the zoom. */
+@media (orientation: portrait) { #pc-toggle, #fb-freecam { min-height: var(--tap-paint); } }
 /* Tuner panel tucked away (body.pc-nopanel) → the right half of the screen is
    free, so switch to a classic dual-stick layout: LOOK stick under the right
    thumb in the bottom-right corner, up/down column just inboard of it. */

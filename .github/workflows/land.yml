@@ -702,7 +702,9 @@ jobs:
             case "$st/$c" in completed/success) state=success ;; completed/*) state=failure ;; *) state=pending ;; esac
             body=$(jq -n --arg st "$state" --arg t "$title" --arg u "$GITHUB_SERVER_URL/$R/actions/runs/$GITHUB_RUN_ID" \
               '{state: $st, context: "gate", description: ($t | .[0:140]), target_url: $u}')
-            gh api --method POST "repos/$R/statuses/$head" --input - --jq '.url' 2>"$gate_errors" <<<"$body" || return 1
+            # gh's exit status is the verdict: a 2xx is written even with an empty body (Land 45695967080, #6700), so
+            # no --jq parses it; nothing reads the response.
+            gh api --method POST "repos/$R/statuses/$head" --input - >/dev/null 2>"$gate_errors" <<<"$body" || return 1
             # shellcheck disable=SC2016 # the backticks are Markdown for the step summary, not a command substitution
             printf '### gate %s → %s\n\n%s\n\n```\n%s\n```\n' "${head:0:12}" "$state" "$title" "$summary" >> "$GITHUB_STEP_SUMMARY"
             WROTE=$state
