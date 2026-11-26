@@ -1664,6 +1664,7 @@
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/legends-team.test.mjs",
+        "tests/unit/medal-ledger.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/overlay-render.test.mjs",
@@ -4312,6 +4313,11 @@
     {
       "path": "js/race/marshal-panels.js",
       "global": "MarshalPanels",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/medal-ledger.js",
+      "global": "MedalLedger",
       "roster": "LAZY_RACE_SESSION"
     },
     {

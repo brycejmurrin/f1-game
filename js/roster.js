@@ -280,6 +280,7 @@
     "js/race/damage-handling.js",
     "js/race/duel.js",
     "js/race/session-records.js",
+    "js/race/medal-ledger.js",
     "js/race/pit-geom.js",
     "js/race/pit-lane.js",
     "js/race/engineer.js",

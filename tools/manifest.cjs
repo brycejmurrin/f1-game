@@ -1147,6 +1147,7 @@ const LAZY_RACE_SESSION = [
   "js/race/damage-handling.js",   // DamageHandling: the opt-in DAMAGE → HANDLING read (#1578; OFF = no effect)
   "js/race/duel.js",
   "js/race/session-records.js",
+  "js/race/medal-ledger.js",   // MedalLedger: pure tierFor over Quali.medalFor (#6961); unreferenced by eager code
   "js/race/pit-geom.js",
   "js/race/pit-lane.js",
   "js/race/engineer.js",
