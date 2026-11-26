@@ -44,63 +44,6 @@ function settled(promise, out) {
 // The four audio hooks share one precondition. `null` when GameAudio is there,
 // so each hook reads `return noAudio() || <the real answer>` rather than
 // repeating a three-line guard four times.
-// Per-car fields a running episode CREATES, which therefore outlive reset()
-// unless it removes them. Module scope, not an __apex member: it is an
-// implementation detail of reset(), not a hook anyone calls. Not a hand-written
-// wish list either — it is every key that differed between consecutive
-// post-reset snapshots at the same seed, and tests/specs/agent-determinism.spec.js
-// is the guard that keeps it honest.
-const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "onKerb",
-  "wheelLock", "brakeTF", "brakeTR", "brakeFade", "_absF", "_tcR", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0", "_secValid",
-  "_lapTimeAtLine", "_recross", "incidentInvalidLap", "passSide", "passBest", "offroad", "queueT", "_qOf", "trailT", "_trOf", "_trYT", "_trYS",
-  "towing", "wake", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_coachAssisted", "brakeStab", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
-  "kerbSndT", "kerbHapT", "_cueConditionGrip", "_cueCornering", "_cueBraking", "stallT",
-  // #1628 wheel state: rim speeds and slip ratios re-seed from c.speed (WheelState.ensure) on the next step.
-  "vwF", "vwR", "kappaF", "kappaR", "_wsV",
-  // The AI brake look-ahead cache (perf hunt 2 S6): one object per car, keyed on
-  // the node window; refilled lazily by updateCarBrakePlan, so a cold car is
-  // simply without it (CarFields predeclares it undefined).
-  "_lk",
-  // Racecraft: the next corner's signed curvature (side-by-side ownership) and
-  // the car alongside last frame (the swap-back lockout) — a stale _alPrev
-  // would arm a lockout on the first frame of the next episode.
-  "kTurn", "_alPrev", "_alPrevDp",
-  // The last three appear only on a STREET circuit with real contact — sweep
-  // tracks, not just monza.
-  "_preColS", "_preColX", "collideT", "uslipHapT", "oslipHapT", "lockHapT", "fxSparkI",
-  // The tyre-force model (js/physics/tyre-model.js) and the smoothed
-  // control-demand fields (game.js "--- lateral ---"), every one read with a
-  // `|| 0` / Number.isFinite fallback for the cold-car case (tyre-model.js's
-  // telemetry getter, collide.js's pre-collision speed read, and this file's
-  // own tyres() hook), so undefined is a tolerated input.
-  "_preColSpd", "_tyreLoad", "brakeDemand", "throttleDemand", "steerCommand",
-  // Collide's per-step punt budget (#5894) and the stopped-car hazard (clean-room 39/40).
-  "_puntGot", "stillT", "_hzOf", "_hzSide",
-  "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
-  "frontUtil", "rearUtil", "slipFront", "slipRear", "lateralAccel", "inPitLane",
-  // `errCount` counts AI mistakes within ONE race, so a cold car has none (a
-  // short rollout rarely trips a mistake, so a leak goes unnoticed). `aiHeadV`, the speed the AI heading was
-  // last written at (game.js AI_HEAD_JUMP, #5338): undefined on a cold car, which its `!= null` read takes as no jump.
-  "errCount", "pitWorked", "aiHeadV",
-  // The lazy `c.passPlan || (c.passPlan = {})` cache in game.js's
-  // overtake-attempt block survives reset() untouched, and
-  // `!c.passPlan || c.passPlan.side` (same file) reads `.side` straight off it
-  // without AiCorridor.choose() having run yet this tick whenever the attempt
-  // gate above it is closed. A cold car has no passPlan, so that read is
-  // always true; a warm one carries last episode's `.side`, which can be 0 (a
-  // previous "no lane" verdict) and flip the same read to false — an AI
-  // overtake decision that depends on which episode number it is
-  // (tools/check/episode-diff.mjs finds these).
-  "passPlan",
-  // The race-END state. `_coastHeld` (coast() after the flag) and `lastLap`
-  // (the lap-line write) are absent on a cold car; a car classified in one
-  // episode would start the next with both. finPos/retired/dnf* are DECLARED
-  // by makeCars, so gridUp() restores their declared values instead.
-  "_coastHeld", "lastLap",
-  // Field-step pose snapshots (game.js update()): written every tick before
-  // updateCar so traffic scans read last step's poses. Absent on a cold car;
-  // a warm one would hand the next episode a stale sibling pose on frame 0.
-  "_snapProg", "_snapX", "_snapSpeed"];
 // openf1()/jolpica() — F1API.request: the Data Hub's queued, 15 s-timed, retried GET with caching
 // off, so a console probe cannot bypass the rate-limit queue. api.js is LAZY_DATA — hence the refusal.
 function apiHook(base, path, fix) {
@@ -935,7 +878,7 @@ const api = {
   },
   // EVERY numeric/boolean field on every car, raw and unrounded — the whole
   // per-car state, not the curated slice cars() returns. Its reason for
-  // existing is EPISODE_TRANSIENTS above: reset() must leave the cars in the
+  // existing is the episode op of js/race/car-fields.js RESETS: reset() must leave the cars in the
   // state a fresh page load leaves them in, and the only honest way to check
   // that is to diff the actual objects across two resets. Strings, objects and
   // functions are skipped (team records, driver names, the launch plan) — they
@@ -2113,56 +2056,20 @@ const api = {
     Tracks.sample(G.track, G.player.s, smp);
     placeFromTrack(G.player, smp);
     AgentView.syncRenderAnchors(G.cars);   // sync render anchors (see jump); gridUp() moved every car
-    // Per-episode DRIVETRAIN + smoothing state. gridUp() clears the race-level
-    // fields (energy, cuts, penalty, wallT, vLat…) but not these, so without
-    // this block the engine and smoothed inputs leak across episodes: the first
-    // reset after load starts in gear 1 at idle, every later one inherits
-    // whatever gear/rpm/steering the previous run ended in. Measured as ~1 m of
-    // divergence over a 4 s rollout at identical seed and inputs — small, but it
-    // is exactly the uncontrolled variable seeding is meant to remove.
+    // EVERY per-car episode reset, with its value and why, is ONE table: js/race/car-fields.js RESETS (op episode).
+    // gridUp() clears the race-level fields; the episode op adds the drivetrain and smoothed inputs (left alone,
+    // every later reset inherits the last run's gear and steering) and puts back to undefined every field a running
+    // episode CREATES, which a freshly loaded page does not have: "the same seed replays an episode exactly" asks
+    // for the cold state, and 0 where a first run had undefined is a different input (never `delete`: car-fields.js).
+    // KEEP THE TABLE IN STEP BY MEASURING — `node tools/check/episode-diff.mjs` names what leaked across consecutive
+    // post-reset snapshots; add the field's row to the table, never a list here.
     for (const c of G.cars) {
-      c.gear = 1; c.rpm = PhysicsConsts.IDLE_RPM; c.shiftT = 0;
-      c.steerSm = 0; c.brakeHeat = 0; c.axEstSm = 0; c.corridorAccel = 0; c.slipDeg = 0;
-      // The heading-state controller's own per-episode state (game.js
-      // "--- lateral ---"). Left alone it breaks replay determinism outright
-      // rather than by a metre: `aiBias` SNAPS to its target when null and
-      // slews when it is a number, so the first episode ends with a number and
-      // every later one starts from it (agent-determinism catches it).
-      c.aiHead = 0; c.aiBias = null; c.aiFam = 0;
-      c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null; c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1; c.deploying = false; c.boostOn = false; OvertakeMode.reset(c);
-      c.xOn = false; c.aeroX = 0; c.xArmed = false;
-      c.wasOnThrottle = false;
-      if ("vertLoad" in c) c.vertLoad = undefined;   // a CarFields key: a delete would make the car a dictionary
-      // EVERY per-episode transient is DELETED, not zeroed, from ONE list —
-      // EPISODE_TRANSIENTS at the top of this file. Deleting is the point:
-      // these fields are absent on a cold car, so removing them is what makes
-      // episode N start in the state a freshly loaded page is in, which is what
-      // "the same seed replays an episode exactly" actually asks for. Zeroing
-      // leaves 0 where a first run had undefined, and those are different
-      // inputs — the same reason vertLoad above is deleted rather than set.
-      // It matters because several are read CROSS-CAR one tick stale: `_vmaxNow`
-      // is the blocker's pace AiDrive.otWant decides passes on, `accSm` its
-      // acceleration, `towing` its slipstream, `rank` its position. On the first
-      // frame a fresh session sees undefined and falls back where a replayed one
-      // sees last episode's value; that moves finishing order between replays of
-      // one seed while the player's own trace stays byte-identical, which is
-      // what agent-determinism catches. kCur, _aeroGrip, slipFactor, offroad,
-      // onKerb, contactT and _pushD feed the next tick's physics the same way,
-      // and five (accSm, kCur, _vmaxNow, passBest, kerbHapT) drift on EVERY
-      // episode, not just the first, so no amount of warm-up settles it.
-      // `lane` is the odd one out: not absent before the first episode but
-      // ALREADY ADAPTED, so it re-seeds from lanePref (the grid home line
-      // makeCars stored) rather than being deleted.
-      // KEEP THE LIST IN STEP BY MEASURING, NOT BY GUESSWORK —
-      // `node tools/check/episode-diff.mjs` dumps every primitive on all 22 cars
-      // across consecutive post-reset snapshots and names what leaked. This
-      // loop runs last, so a second list or a zeroing block ahead of it is
-      // dead code. Add to EPISODE_TRANSIENTS; never a second list.
-      c.lane = c.lanePref != null ? c.lanePref : 0; c.laneClr = 0;
+      CarFields.resetFor(c, "episode");
+      OvertakeMode.reset(c);
+      // lane is not absent before the first episode but ALREADY ADAPTED: it re-seeds from lanePref (the grid home
+      // line makeCars stored). Both are the table's CALLER rows.
+      c.lane = c.lanePref != null ? c.lanePref : 0;
       c._prevS = c.s;
-      // Reset to `undefined`, never `delete`: a delete (of a non-last key) drops all 22 cars to V8 dictionary
-      // mode (undoes PERF-HUNT-2 #1), and an absent key reads the same as an undefined one (car-fields.js header).
-      for (const k of EPISODE_TRANSIENTS) if (k in c) c[k] = undefined;
     }
     BodyAttitude.reset();   // settle the C2 visual-suspension springs (render-only, no transient)
     agentView.beginEpisode();

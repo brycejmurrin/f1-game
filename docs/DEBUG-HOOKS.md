@@ -1805,7 +1805,8 @@ __apex.reset(0.02, 55, 0, 42); const b = __apex.carState();
 ```
 
 `tests/specs/agent-determinism.spec.js` runs exactly that as a guard, so the
-`EPISODE_TRANSIENTS` list in apex.js cannot silently fall behind the code.
+episode rows of the `RESETS` table in `js/race/car-fields.js` (which `reset()` applies)
+cannot silently fall behind the code.
 
 ### `carAt(idx?) → {id, driverId, isPlayer, team, x, speed, prog, s, lap, finished, finishT, contactT, wrongWay, rescueT, otArmed, otEnabled, xArmed, …} | null`
 Detailed telemetry for one car by index (from the `cars()` list). Called with no

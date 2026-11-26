@@ -1,7 +1,8 @@
 /* car-fields-lifetimes-vm.test.mjs — the per-car reset table (js/race/car-fields.js RESETS, #6945 U1.1 of #6920).
  *
- * gridUp (a new race) and rescuePlayer (RECOVER, the auto-rescue, an incident handback) used to reset car fields with
- * hand-kept inline runs. The fields they reset now live in ONE table, each row a key, a lifetime tag, the ops that
+ * gridUp (a new race), rescuePlayer (RECOVER, the auto-rescue, an incident handback), redFlagRestart (a standing
+ * re-grid) and __apex.reset() (an agent episode, #6946 U1.2) used to reset car fields with hand-kept inline runs
+ * (and, for the episode, apex.js's EPISODE_TRANSIENTS list). The fields they reset now live in ONE table, each row a key, a lifetime tag, the ops that
  * reset it with a value per op, and a why note; CarFields.resetFor(c, op) applies it.
  *
  * What is pinned:
@@ -14,8 +15,8 @@
  *      declared values, and leaves every other row alone (a plain object: sentinel stamps on a live car would widen
  *      its shared V8 field representations for the rest of the VM).
  *   3. On a live car resetFor adds no key (Object.keys order identical) and the car stays in fast mode.
- *   4. Every 'keep' and every 'caller' row has a why note; no row names an op other than newRace or rescue yet
- *      (U1.2 adds redFlag and episode with their call sites).
+ *   4. Every 'keep' and every 'caller' row has a why note; the ops are exactly newRace, rescue, redFlag and episode,
+ *      each applied by its one call site, which writes none of its rows inline; EPISODE_TRANSIENTS is gone.
  *   5. declareNewRace (the named-store ADDs for the fields a spawned car lacks) matches the table and a real spawn,
  *      so no newRace row is silently skipped by resetFor's keyed loop over existing fields.
  *
@@ -28,6 +29,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import v8 from "node:v8";
 import { symbolSource } from "../helpers/game-source.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -109,13 +111,77 @@ test("gridUp and rescuePlayer leave every car field byte-identical (digest pinne
   } finally { g.close(); }
 });
 
+// ── redFlag and episode (#6946 U1.2) ──────────────────────────────────────────────────────────────────────────────
+
+// Captured on the pre-migration tip 059e6cff (U1.1 merged; APEX_PRINT_DIGEST=1). NEVER regenerate in a refactor.
+const DIGEST_REDFLAG = "6c8cad3719833a101fa92bfc7e5005a8510b9be2d20058cb39a4468dc606deb5";
+const DIGEST_EPISODE = "bbb8d11adc2cf50b200a73fa881c0e5200a2e48fb9dc14c4bed1ee32d5efb2e7";
+
+// Stamp a sentinel into every listed field a car HAS (a number 0.37, a boolean true, a car reference the next car),
+// so the digest sees each reset and each survivor, not a coincidental match. Only existing keys: never add one.
+function stamp(G, keys, which) {
+  const cars = G.cars;
+  for (const i of which) {
+    const c = cars[i];
+    for (const k of keys) {
+      if (!(k in c)) continue;
+      const v = c[k];
+      if (typeof v === "boolean") c[k] = !v;
+      else if (typeof v === "number" || v === undefined || v === null) c[k] = k === "passOf" || k === "passFailOf" || k === "_qOf" || k === "_trOf" || k === "_alPrev" ? cars[(i + 1) % cars.length] : 0.37;
+    }
+  }
+}
+// What redFlagRestart and clearRacingScratch write with a plain value, and what a red flag must leave alone.
+const REDFLAG_STAMP = ["speed", "accSm", "corridorAccel", "vLat", "yawRateCur", "steerVis", "aiHead", "aiBias", "aiFam",
+  "hYieldT", "laneClr", "gear", "rpm", "xOn", "aeroX", "xArmed", "towing", "wake", "wheelLock", "contactT", "wrongWay",
+  "wrongT", "rescueT", "rescueLastT", "digEscHeld", "offT", "offCut", "wallT", "wasOnWall", "kerbGripSm", "kerbCueT",
+  "brakeStab", "axEstSm", "stuckT", "letPassT", "passOf", "passT", "passCool", "holdOff", "defendSide", "passFailOf",
+  "passFailT", "errT", "pressT", "zoneKey", "queueT", "_qOf", "trailT", "_trOf", "_trYT", "_trYS", "calmUntil", "calm",
+  "sbsT", "atkOn", "atkWant", "runT", "_alPrev", "paceF", "yawVis", "rPrevYawVis",
+  // survivors: same race
+  "energy", "phaseRoll", "flatSpot", "errCount", "cutWarn", "cuts", "penalty", "hits", "wallHits", "brakeTF", "brakeTR",
+  "skidIntensity", "boostOn", "deploying", "shiftT", "steerSm", "brakeHeat", "slipDeg"];
+// What apex reset()'s per-car block and its old transient list wrote, plus fields neither touches.
+const EPISODE_STAMP = ["gear", "rpm", "shiftT", "steerSm", "brakeHeat", "axEstSm", "corridorAccel", "slipDeg", "aiHead",
+  "aiBias", "aiFam", "stuckT", "letPassT", "passOf", "passT", "passCool", "holdOff", "defendSide", "passFailOf",
+  "passFailT", "errT", "pressT", "zoneKey", "deploying", "boostOn", "xOn", "aeroX", "xArmed", "wasOnThrottle",
+  "vertLoad", "laneClr", "rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "onKerb", "wheelLock", "brakeTF", "brakeTR",
+  "brakeFade", "contactT", "_pushD", "offroad", "queueT", "_qOf", "trailT", "_trOf", "towing", "wake", "brakeStab",
+  "flatSpot", "skidIntensity", "errCount", "collideT", "_alPrev", "kTurn", "stillT", "_coastHeld", "lastLap",
+  "calm", "calmUntil", "sbsT", "runT", "paceF", "kerbGripSm", "hYieldT", "wrongT", "offT", "energy"];
+
+test("redFlagRestart and __apex.reset() leave every car field byte-identical (digests pinned on the pre-migration tip)", async () => {
+  const g = await bootRace();
+  let redFlag, episode;
+  try {
+    const G = g.G, a = g.apex;
+    g.step(60 * 90);   // a lap in: the field is racing
+    assert.equal(G.state, "race");
+    stamp(G, REDFLAG_STAMP, [1, 5, 9, 14]);
+    assert.equal(a.redFlag().state, "count");
+    redFlag = digest(G);
+  } finally { g.close(); }
+  const g2 = await bootRace();
+  try {
+    const a = g2.apex;
+    a.reset(0, 0, 0, 42);
+    g2.step(240);   // a 4 s episode
+    stamp(g2.G, EPISODE_STAMP, [0, 3, 8, 15]);
+    a.reset(0, 0, 0, 42);
+    episode = digest(g2.G);
+  } finally { g2.close(); }
+  if (process.env.APEX_PRINT_DIGEST) console.log(JSON.stringify({ redFlag, episode }));
+  assert.equal(redFlag, DIGEST_REDFLAG, "a car field after redFlagRestart changed");
+  assert.equal(episode, DIGEST_EPISODE, "a car field after __apex.reset() changed");
+});
+
 // ── the table ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
-test("table: one row per key, a known lifetime, a why on every row, only the ops newRace and rescue (U1.2 adds more)", () => {
-  assert.ok(CF.RESETS.length >= 60, "gridUp and rescuePlayer reset ~65 fields");
+test("table: one row per key, a known lifetime, a why on every row, the ops newRace, rescue, redFlag and episode", () => {
+  assert.ok(CF.RESETS.length >= 150, "gridUp, rescuePlayer, redFlagRestart and reset() reset ~165 fields");
   const keys = CF.RESETS.map((r) => r.key);
   assert.equal(new Set(keys).size, keys.length, "a key listed twice");
-  assert.deepEqual([...CF.OPS], ["newRace", "rescue"]);
+  assert.deepEqual([...CF.OPS], ["newRace", "rescue", "redFlag", "episode"]);
   for (const r of CF.RESETS) {
     assert.ok(CF.LIVES.includes(r.life), `${r.key}: unknown lifetime ${r.life}`);
     const ops = Object.keys(r.ops);
@@ -124,7 +190,7 @@ test("table: one row per key, a known lifetime, a why on every row, only the ops
     // Every row says why, so every 'keep' and every CALLER row does.
     assert.ok(typeof r.why === "string" && r.why.length > 10, `${r.key}: no why`);
   }
-  assert.throws(() => CF.resetFor({}, "redFlag"), /unknown op/, "an op the table does not define is an error, not a no-op");
+  assert.throws(() => CF.resetFor({}, "restart"), /unknown op/, "an op the table does not define is an error, not a no-op");
 });
 
 /** The JS literal the declare body writes for a table value. */
@@ -171,7 +237,7 @@ function stamped() {
   return o;
 }
 
-for (const op of ["newRace", "rescue"]) {
+for (const op of ["newRace", "rescue", "redFlag", "episode"]) {
   test(`resetFor(${op}) resets exactly its rows to their declared values and leaves every other row alone`, () => {
     const o = stamped();
     assert.equal(CF.resetFor(o, op), o);
@@ -184,9 +250,9 @@ for (const op of ["newRace", "rescue"]) {
   });
 }
 
-test("resetFor on a bare object: rescue adds nothing, newRace adds its rows through named stores", () => {
-  const bare = CF.resetFor({}, "rescue");
-  assert.deepEqual(Object.keys(bare), [], "rescue only writes fields a car already has");
+test("resetFor on a bare object: rescue, redFlag and episode add nothing, newRace adds its rows through named stores", () => {
+  for (const op of ["rescue", "redFlag", "episode"])
+    assert.deepEqual(Object.keys(CF.resetFor({}, op)), [], `${op} only writes fields a car already has`);
   const fresh = CF.resetFor({}, "newRace");
   assert.deepEqual(Object.keys(fresh), declared().map(([k]) => k), "newRace adds a missing field only through declareNewRace");
 });
@@ -208,7 +274,7 @@ test("on a live car after the grid, resetFor adds no key and the car stays in fa
     const CFl = g.ctx.CarFields;
     for (const c of g.G.cars) {
       const before = Object.keys(c).join();
-      for (const op of ["newRace", "rescue"]) {
+      for (const op of ["newRace", "rescue", "redFlag", "episode"]) {
         CFl.resetFor(c, op);
         assert.equal(Object.keys(c).join(), before, `${c.code}: resetFor(${op}) changed the car's keys`);
       }
@@ -228,6 +294,34 @@ test("gridUp and rescuePlayer each call resetFor once and no longer write the mi
       assert.doesNotMatch(src, new RegExp("\\bc\\." + r.key + " = "), `${name} still writes ${r.key} inline: it is a RESETS row`);
     }
   }
+});
+
+test("redFlagRestart and __apex.reset() each call resetFor once per car and write none of their rows inline", () => {
+  const red = symbolSource("function redFlagRestart(");
+  const APEX = readFileSync(new URL("../../js/agent/apex.js", import.meta.url), "utf8");
+  const reset = fnSource(APEX, "  reset(frac, speed, x, seed) {");
+  assert.equal((red.match(/CarFields\.resetFor\(c, "redFlag"\)/g) || []).length, 1);
+  assert.equal((reset.match(/CarFields\.resetFor\(c, "episode"\)/g) || []).length, 1);
+  for (const [src, op, name] of [[red, "redFlag", "redFlagRestart"], [reset, "episode", "__apex.reset"]]) {
+    for (const r of CF.RESETS) {
+      if (!Object.hasOwn(r.ops, op) || r.ops[op] === CF.CALLER) continue;
+      assert.doesNotMatch(src, new RegExp("\\bc\\." + r.key + " = "), `${name} still writes ${r.key} inline: it is a RESETS row`);
+    }
+  }
+  assert.doesNotMatch(symbolSource("function gridUp("), /clearRacingScratch/, "clearRacingScratch's fields are newRace rows");
+});
+
+test("js/agent/apex.js no longer declares EPISODE_TRANSIENTS (the episode op is the one list)", () => {
+  const APEX = readFileSync(new URL("../../js/agent/apex.js", import.meta.url), "utf8");
+  assert.doesNotMatch(APEX, /\bEPISODE_TRANSIENTS\b/);
+});
+
+test("the table's IDLE_RPM is PhysicsConsts.IDLE_RPM", async () => {
+  const g = await createGame({});
+  try {
+    const want = g.ctx.PhysicsConsts.IDLE_RPM;
+    for (const op of ["redFlag", "episode"]) assert.equal(CF.RESETS.find((r) => r.key === "rpm").ops[op], want, op);
+  } finally { g.close(); }
 });
 
 test("SimState reads its car-state lists from CarFields.SNAPSHOT, not a second copy", async () => {
