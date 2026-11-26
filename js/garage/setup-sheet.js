@@ -979,6 +979,7 @@ function statDeltaChips(opt) {
   return any ? wrap : null;
 }
 
+const mk = (t, c) => { const e = document.createElement(t); e.className = c; return e; };
 let livBuild = 0;   // one per buildLiveryOptions: swatchCanvas never hands one canvas to two cards of a build
 let csLivQuery = "";           // #3339: filter string sticky across rebuilds
 // #3339: factory <details> open state. null = platform default (desktop open so
@@ -1001,13 +1002,21 @@ function livSwatchPx(boxW, boxH, dpr) {
   const k = Math.max(16 / m, Math.min(d, 384 / m));
   return { w: Math.round(w * k), h: Math.round(h * k) };
 }
+// #6742: the box is part of LiveryTex's card-cache key (team|WxH|look), and both shapes sit in one 1fr grid,
+// so a sub-pixel move of the options pane snaps clientWidth by 1 px for EVERY card: all 113 keys new to both
+// caches, 113 repaints and 0 adopted on a pick that changed nothing. The canvas is CSS-scaled to its box, so
+// a few % of drift is invisible: hold the painted box unless it moves past 8% (LIV_BOX_HYST) or a resize (csViewGen).
+const near = (a, b) => Math.abs(a - b) <= 0.08 * Math.max(a, b);   // LIV_BOX_HYST
+const holdLivBox = (p, w, h, same) => same && near(p[0], w) && near(p[1], h) ? p : [w, h];
+let livBoxGen = -1;
 function fitLivSwatches(container, team) {
   if (typeof LiveryTex === "undefined") return;
   const sws = [...container.querySelectorAll(".cs-liv-row .cs-liv-swatch")], livs = getLiveries(team);
   const shape = (sw) => sw.closest(".cs-liv-factory") ? "small" : "big";
+  const same = livBoxGen === csViewGen; livBoxGen = csViewGen;
   for (const s in livBox) {   // measure before writes; box x CssZoom
     const e = sws.find((sw) => shape(sw) === s), z = e && window.CssZoom ? CssZoom.of(e) : 1;
-    if (e && e.clientWidth) livBox[s] = [e.clientWidth * z, e.clientHeight * z];
+    if (e && e.clientWidth) livBox[s] = holdLivBox(livBox[s], e.clientWidth * z, e.clientHeight * z, same);
   }
   for (const sw of sws) {
     const b = livBox[shape(sw)], px = livSwatchPx(b[0], b[1], globalThis.devicePixelRatio), id = sw.closest("[data-cs-livery]").dataset.csLivery;
@@ -1016,11 +1025,11 @@ function fitLivSwatches(container, team) {
   }
 }
 function livSwatch(team, liv, tags) {
-  const sw = document.createElement("span"); sw.className = "cs-liv-swatch";
+  const sw = mk("span", "cs-liv-swatch");
   if (typeof LiveryTex === "undefined") {
     sw.style.background = "linear-gradient(120deg, " + cssCol(liv.c1) + " 0 56%, " + cssCol(liv.c2) + " 56% 100%)";
     if (liv.stripe) {
-      const st = document.createElement("span"); st.className = "cs-liv-stripe";
+      const st = mk("span", "cs-liv-stripe");
       st.style.background = cssCol(liv.stripe);
       sw.appendChild(st);
     }
@@ -1041,7 +1050,7 @@ function livSwatch(team, liv, tags) {
 function buildTuneOptions(container, team) { tuneExperiments.build(container, team); }
 
 function paintStatus(text) {
-  const note = document.createElement("p"); note.className = "cs-opt-desc";
+  const note = mk("p", "cs-opt-desc");
   note.setAttribute("role", "status"); note.textContent = text;
   const list = $("cs-options"); list.insertBefore(note, list.firstChild);
 }
@@ -1058,14 +1067,14 @@ function makeLiveryRow(team, liv, cur, isCustom) {
   rowWrap.className = "cs-liv-row";
   rowWrap.appendChild(row);
 
-  const dot = document.createElement("span"); dot.className = "cs-opt-dot"; row.appendChild(dot);
+  const dot = mk("span", "cs-opt-dot"); row.appendChild(dot);
   const tags = [];
   if (isCustom) tags.push("MINE");
   if (liv.finish && liv.finish !== "gloss") tags.push(liv.finish.toUpperCase());
   row.appendChild(livSwatch(team, liv, tags));
 
-  const main = document.createElement("div"); main.className = "cs-opt-main";
-  const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name";
+  const main = mk("div", "cs-opt-main");
+  const nameRow = mk("div", "cs-opt-name");
   nameRow.textContent = liv.name;
   main.appendChild(nameRow);
   row.appendChild(main);
@@ -1171,13 +1180,13 @@ function buildLiveryOptions(container, team) {
   {
     const row = document.createElement("button");
     row.className = "cs-opt cs-liv cs-liv-create";
-    const dot = document.createElement("span"); dot.className = "cs-opt-dot"; row.appendChild(dot);
-    const sw = document.createElement("span"); sw.className = "cs-liv-swatch cs-liv-plus"; sw.textContent = "＋"; row.appendChild(sw);
-    const main = document.createElement("div"); main.className = "cs-opt-main";
-    const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name"; nameRow.textContent = "Create livery";
+    const dot = mk("span", "cs-opt-dot"); row.appendChild(dot);
+    const sw = mk("span", "cs-liv-swatch cs-liv-plus"); sw.textContent = "＋"; row.appendChild(sw);
+    const main = mk("div", "cs-opt-main");
+    const nameRow = mk("div", "cs-opt-name"); nameRow.textContent = "Create livery";
     main.appendChild(nameRow);
     row.appendChild(main);
-    const tag = document.createElement("span"); tag.className = "cs-opt-cost free"; tag.textContent = "NEW"; row.appendChild(tag);
+    const tag = mk("span", "cs-opt-cost free"); tag.textContent = "NEW"; row.appendChild(tag);
     row.onclick = () => {
       // A blank canvas is blank PAINT, not a different car. Every pill defaults
       // to the plain 2020s shape — a standard shark fin on a standard spine —
@@ -1236,11 +1245,11 @@ function buildLiveryCreator(container, team) {
   const wrap = document.createElement("div");
   wrap.className = "cs-liv-editor";
 
-  const head = document.createElement("div"); head.className = "cs-liv-ed-head"; head.textContent = csLivEditId ? "EDIT PAINT JOB" : "NEW PAINT JOB";
+  const head = mk("div", "cs-liv-ed-head"); head.textContent = csLivEditId ? "EDIT PAINT JOB" : "NEW PAINT JOB";
   wrap.appendChild(head);
 
   // Live swatch preview of the current draft (built from hex strings directly).
-  const prev = document.createElement("span"); prev.className = "cs-liv-swatch cs-liv-ed-prev";
+  const prev = mk("span", "cs-liv-swatch cs-liv-ed-prev");
   let prevStripe = null;
   wrap.appendChild(prev);
 
