@@ -73,4 +73,3 @@ const AiBand = (function () {
     isMode, normalize, mode, setMode, factor, applyVmax,
   });
 })();
-Object.freeze(AiBand);
