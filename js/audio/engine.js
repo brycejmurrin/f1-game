@@ -2,6 +2,15 @@
 "use strict";
 
 var GameAudio = (function () {
+  // #6448: this IIFE runs before `var GameAudio` is reassigned, so the binding
+  // is still the title stub when a gesture already resumed a primer on it.
+  let gesturePrimer = null;
+  try {
+    if (typeof GameAudio !== "undefined" && GameAudio && GameAudio._stub && typeof GameAudio.context === "function") {
+      const primed = GameAudio.context();
+      if (primed && primed.state !== "closed") gesturePrimer = primed;
+    }
+  } catch (e) { gesturePrimer = null; }
   let ctx = null;
   let master = null;
   let sfxBus = null;
@@ -482,9 +491,12 @@ var GameAudio = (function () {
     // Hardware / policy refusals (Safari private mode, exhausted contexts) throw
     // from the constructor — an uncaught throw on the gesture that unlocks sound
     // paints the boot overlay and leaves G.soundOn true over silence.
-    try {
-      ctx = new AC();
-    } catch (e) {
+      try {
+        if (gesturePrimer && gesturePrimer.state !== "closed") {
+          ctx = gesturePrimer;
+          gesturePrimer = null;
+        } else ctx = new AC();
+      } catch (e) {
       ctx = null;
       Log.warn("audio", "AudioContext unavailable: " + ((e && e.message) || e));
       return false;
@@ -882,6 +894,10 @@ var GameAudio = (function () {
     // Timestamps from the closed context's clock: revFlare's decay would read a
     // dt against the new (near-0) clock, and limSince would hold the cut open.
     revFlare = 0; revFlareT = 0; limSince = null;
+    // The braking-cue gates hold `now()` stamps from the closed clock too: left in
+    // place, the new near-0 clock stays under them and BRAKE CUE is mute for
+    // as long as the old context had run (#6886 row 3).
+    cueT = 0; driveCueT = 0;
     signal.resetContext();
     dbgAnalyser = null;    // ctx-bound; stopEngine() nulls it but this path inlines its own
                             // teardown, so without this a stale analyser on the closed ctx would
@@ -2262,13 +2278,16 @@ var GameAudio = (function () {
     if (!rainSrc) { if (!keepWant) rainPending = null; return; }
     rainPending = null;   // a newer stop cancels a queued restart, wet or dry
     rainStopping = true;
-    const s = rainSrc, g = rainGain, h = rainHp, l = rainLp;
+    const s = rainSrc, g = rainGain, h = rainHp, l = rainLp, gen = ctxGen;
     rainSrc = null; rainGain = null; rainHp = null; rainLp = null;
     try {
       g.gain.setTargetAtTime(0, now(), 0.4);
       setTimeout(() => {
         try { s.stop(); } catch (e) { /* already stopped */ }
         try { s.disconnect(); g.disconnect(); h.disconnect(); l.disconnect(); } catch (e) { /* already disconnected */ }
+        // A rebuild since this teardown began already reset rainStopping/rainPending
+        // for the new context: leave them (#6886 row 10).
+        if (gen !== ctxGen) return;
         rainStopping = false;
         if (rainPending != null) { const pg = rainPending; rainPending = null; startRain(pg); }
       }, 1200);

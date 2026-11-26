@@ -11,6 +11,11 @@ import { parse as parseYAML } from "yaml";
 import { ciWorkflow, evalTemplate } from "../helpers/ci-workflow.mjs";
 import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
+// Hermetic step env (#6977): the real workflow steps run with ONLY PATH, HOME and what a test sets, so no
+// CI-runner variable a step reads (PATHS_FILE, IS_PR, PR_FROM, PR_CHANGED, HIT, API, DEPLOYMENTS_FILE,
+// STATUSES_URL, LIVE, CHANGED, GITHUB_API_URL...) can leak into a fixture through `...process.env`.
+const stepEnv = (extra) => ({ PATH: process.env.PATH, HOME: process.env.HOME, ...extra });
+
 test("ship-filter: a ready PR skips smoke only when neither its own diff nor its base ships anything new (C2a)", () => {
   const step = parseYAML(ciWorkflow).jobs.select.steps.find((st) => st.id === "shipfilter");
   assert.ok(step && step.run, "the ship filter step is gone");
@@ -53,8 +58,8 @@ test("ship-filter: a ready PR skips smoke only when neither its own diff nor its
       fs.rmSync(calls, { force: true });
       const out = path.join(dir, `out-${Math.random().toString(36).slice(2)}`);
       const r = cp.spawnSync("bash", ["--noprofile", "--norc", "-eo", "pipefail", scriptFile], { cwd: dir, encoding: "utf8",
-        env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_OUTPUT: out, GITHUB_SHA: sha, GITHUB_REPOSITORY: "o/r",
-          RUNNER_TEMP: dir, GH_TOKEN: "t", CALLED: "false", FAKE_LIVE: LIVE, PR_BASE: "", ...env } });
+        env: stepEnv({ PATH: `${bin}:${process.env.PATH}`, GITHUB_OUTPUT: out, GITHUB_SHA: sha, GITHUB_REPOSITORY: "o/r",
+          RUNNER_TEMP: dir, GH_TOKEN: "t", CALLED: "false", FAKE_LIVE: LIVE, PR_BASE: "", ...env }) });
       assert.equal(r.status, 0, r.stderr + r.stdout);
       const ships = /ships=(true|false)/.exec(fs.existsSync(out) ? fs.readFileSync(out, "utf8") : "")?.[1];
       return { ships, log: r.stdout, api: fs.existsSync(calls) ? fs.readFileSync(calls, "utf8").trim().split("\n").filter(Boolean).length : 0 };
@@ -207,9 +212,9 @@ test("geometry planning avoids empty fanout without guessing an unknown diff is 
       fs.writeFileSync(output, "");
       const result = cp.spawnSync("bash", ["-e", "-c", filter.run], {
         cwd: new URL("../..", import.meta.url), encoding: "utf8",
-        env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, FIXTURE_CHANGED: changed,
+        env: stepEnv({ PATH: `${dir}:${process.env.PATH}`, FIXTURE_CHANGED: changed,
           BEFORE: before, GITHUB_SHA: "head", EVENT: event, CALLED: called,
-          RUNNER_TEMP: dir, GITHUB_OUTPUT: output }
+          RUNNER_TEMP: dir, GITHUB_OUTPUT: output })
       });
       assert.equal(result.status, 0, result.stderr || result.stdout);
       return Object.fromEntries(fs.readFileSync(output, "utf8").trim().split("\n").filter(Boolean).map((l) => {
@@ -237,8 +242,8 @@ test("geometry rollup accepts only successful shards or a proven empty plan", ()
     ["skipped", "false", "tests/unit/car-front-wing-width.test.mjs", false],
     ["failure", "false", "", false], ["cancelled", "false", "", false]
   ]) {
-    const r = cp.spawnSync("bash", ["-e", "-c", run], { env: { ...process.env,
-      SWEEPS_RESULT: result, GEOMETRY: geometry, TARGETED: targeted } });
+    const r = cp.spawnSync("bash", ["-e", "-c", run], { env: stepEnv({
+      SWEEPS_RESULT: result, GEOMETRY: geometry, TARGETED: targeted }) });
     assert.equal(r.status === 0, ok, `${result}/${geometry}/${targeted}`);
   }
   assert.match(job.if, /needs\.select\.result == 'success'/, "a broken planner must not bless skipped shards");

@@ -23,15 +23,16 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const SRC = fs.readFileSync(path.join(ROOT, "js/race/driving-coach.js"), "utf8");
+// jsonClone moved with the car part to the SimState registry (#6860).
+const SRC = fs.readFileSync(path.join(ROOT, "js/core/sim-state.js"), "utf8");
 
 /** Lift jsonClone out of the factory IIFE it lives in. It closes over nothing,
  *  which is what makes this the real function rather than a copy of it. */
 function liftClone() {
-  const start = SRC.indexOf("    function jsonClone(v) {");
+  const start = SRC.indexOf("  function jsonClone(v) {");
   assert.notEqual(start, -1, "jsonClone moved — update this test, do not delete it");
-  const end = SRC.indexOf("\n    function captureCar(c) {", start);
-  assert.notEqual(end, -1, "captureCar no longer follows jsonClone — update this test");
+  const end = SRC.indexOf("\n  // EVERY OBJECT A CAR HOLDS", start);
+  assert.notEqual(end, -1, "the car-object comment no longer follows jsonClone — update this test");
   // eslint-disable-next-line no-new-func
   return new Function(`"use strict";${SRC.slice(start, end)};return jsonClone;`)();
 }

@@ -18,11 +18,14 @@ function load() {
   seedLog(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-strategy.js"), "utf8"), ctx, { filename: absSrc("js/physics/ai-strategy.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-start.js"), "utf8"), ctx, { filename: absSrc("js/physics/ai-start.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-drive.js"), "utf8"), ctx,
     { filename: absSrc("js/physics/ai-drive.js") });
+  S = vm.runInContext("AiStart", ctx);
   return vm.runInContext("AiDrive", ctx);
 }
 
+let S;
 const A = load();
 
 const mid = { craft: 0.75, awareness: 0.75, experience: 0.75, skill: 0.97 };
@@ -926,41 +929,9 @@ test("updateCar does not allocate AiDrive ctx literals", () => {
   }
 });
 
-test("launchPlan: awareness reads the lights, hands manage the getaway, the roll is the day", () => {
-  const sharp = { craft: 0.9, awareness: 0.95, experience: 0.8, skill: 0.99, consistency: 0.8 };
-  const green = { craft: 0.4, awareness: 0.3, experience: 0.3, skill: 0.92, consistency: 0.5 };
-  const a = A.launchPlan(sharp, 0.5), b = A.launchPlan(green, 0.5);
-  assert.ok(a.react < b.react, `awareness must shorten the reaction: ${a.react} vs ${b.react}`);
-  assert.ok(a.grip > b.grip, `craft+skill must improve the getaway: ${a.grip} vs ${b.grip}`);
-  // Bounded whatever the roll — a reaction is never instant and never a nap.
-  for (const r of [0, 0.13, 0.5, 0.87, 0.999]) for (const t of [sharp, green]) {
-    const p = A.launchPlan(t, r);
-    assert.ok(p.react >= 0.05 && p.react <= 0.78, `react out of range: ${p.react}`);
-    assert.ok(p.grip >= 0.69 && p.grip <= 1.08, `grip out of range: ${p.grip}`);
-  }
-  // Two different rolls are two different launches (the per-race hash matters).
-  assert.notEqual(A.launchPlan(sharp, 0.2).react, A.launchPlan(sharp, 0.8).react);
-  const reactEarly = A.launchPlan(sharp, 0.05).react;
-  const reactLate = A.launchPlan(sharp, 0.95).react;
-  assert.ok(reactLate - reactEarly > 0.2, `launch reaction spread must string the grid: ${reactLate - reactEarly}`);
-  // Returned by value: the next plan does not rewrite the last car's.
-  const p1 = A.launchPlan(sharp, 0.2); A.launchPlan(green, 0.9);
-  assert.equal(p1.react, A.launchPlan(sharp, 0.2).react);
-});
-
-test("launchMul: nothing before the reaction, the getaway at it, ordinary after three seconds", () => {
-  const plan = { react: 0.3, grip: 0.85 };
-  assert.equal(A.launchMul(0, plan), 0);
-  assert.equal(A.launchMul(0.29, plan), 0);
-  assert.equal(A.launchMul(0.3, plan), 0.85);
-  const mid = A.launchMul(1.8, plan);
-  assert.ok(mid > 0.85 && mid < 1, `fade must be monotone: ${mid}`);
-  assert.equal(A.launchMul(3.5, plan), 1);
-  assert.equal(A.launchMul(10, plan), 1);
-  assert.equal(A.launchMul(0, null), 1, "no plan (a human, or before gridUp) is no effect");
-  assert.equal(A.launchDone(3.49, plan), false);
-  assert.equal(A.launchDone(3.51, plan), true);
-  assert.equal(A.launchDone(0, null), true);
+test("AiDrive re-exports the AiStart launch and start-calm policy by identity (#6920 U4.2)", () => {
+  for (const n of ["launchPlan", "launchMul", "launchDone", "startCalm", "startCalmS", "startGapT"])
+    assert.equal(A[n], S[n], n + " is AiStart's own function");
 });
 
 test("pacePhase is a zero-mean drift whose amplitude falls with consistency", () => {
@@ -1659,7 +1630,7 @@ test("the overtake car-ahead pre-reject is result-identical to the full wrap sca
     DebrisWorld: { active: () => false },
     Tracks: { wallAt: () => 100 },
   });
-  for (const path of ["js/core/mat4.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"]) {
+  for (const path of ["js/core/mat4.js", "js/physics/ai-start.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"]) {
     vm.runInContext(readFileSync(join(ROOT, path), "utf8"), ctx, { filename: absSrc(path) });
   }
   const Collide = vm.runInContext("Collide", ctx);

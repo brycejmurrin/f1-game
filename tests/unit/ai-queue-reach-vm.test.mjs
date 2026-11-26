@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -17,6 +18,7 @@ const BRAKE = 22, LCAR = 4.8;
 const ctx = vm.createContext({ Math, console, Object, Array, Number, isFinite });
 vm.runInContext("var Log={dbg(){},info(){},warn(){},err(){},error(){},ok(){}};", ctx);
 vm.runInContext(readFileSync(new URL("../../js/core/mat4.js", import.meta.url), "utf8"), ctx);
+vm.runInContext(readFileSync(new URL("../../js/physics/ai-start.js", import.meta.url), "utf8"), ctx, { filename: absSrc("js/physics/ai-start.js") });
 vm.runInContext(readFileSync(new URL("../../js/physics/ai-drive.js", import.meta.url), "utf8"), ctx);
 const A = vm.runInContext("AiDrive", ctx);
 

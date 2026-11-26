@@ -1341,3 +1341,13 @@ test("hunt #5694 B1: sprintIds is a set over the calendar — order, stale ids a
   S.save(off);
   assert.equal(S.matchesConfig(off, { ...base, sprint: false, sprintIds: [a] }), true, "a stale id with sprints off is a no-op");
 });
+
+test("#6605 r4: a parked AI seat's finishes count for its own team, not a phantom id", () => {
+  const { S } = load();
+  // "haas:1:parked" is a parked AI seat (#5877); its win belongs to haas.
+  const season = {
+    teamPts: { haas: 10, ferrari: 10 },
+    finishes: { "haas:1:parked": [1], "ferrari:0": [0, 1] },
+  };
+  assert.ok(S.rankTeams(season, "haas", "ferrari") < 0, "haas's parked win beats ferrari's second");
+});

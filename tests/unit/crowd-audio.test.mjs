@@ -376,3 +376,17 @@ test("a clean chequered flag layers the swell's cheer and the flag's own", () =>
   CrowdAudio.update();
   assert.equal(ramps.filter((x) => x > 0.01).length, 2, `two cheer voices at the flag (ramps: ${ramps.join(", ")})`);
 });
+
+test("detach forgets the old clock: cheers and swells work on a fresh context (#6886 row 4)", () => {
+  const { CrowdAudio, G, ctx, bus } = boot({ player: { s: 100, pos: 5, finished: false } });
+  ctx.currentTime = 500;
+  CrowdAudio._setPos(5);
+  G.player.pos = 3;
+  CrowdAudio.update();
+  assert.ok(CrowdAudio.inspect().swell > 0, "precondition: swell stamped at t=500");
+  CrowdAudio.detach();
+  ctx.currentTime = 0;
+  CrowdAudio.attach(ctx, bus);
+  assert.equal(CrowdAudio.inspect().swell, 0, "no swell pinned from the old clock");
+  assert.equal(CrowdAudio.fireCheer(0.05, 0.5), true, "a cheer is not refused by the old lastCheerT");
+});

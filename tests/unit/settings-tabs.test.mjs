@@ -73,7 +73,8 @@ test("MUSIC & SOUND: a bundle that fails to load is asked once per click and the
 // uihunt4-flows-1030 #2: a role=status note filled in the same step it is inserted is
 // not announced, so the note is spoken through LiveRegion (the open modal's twin) once per showing.
 test("MUSIC & SOUND: the offline note is spoken once when it appears, not on every repeat", async () => {
-  const { nav, dom, said } = boot({ ensure: () => Promise.resolve(false) });
+  const { nav, dom, said: all } = boot({ ensure: () => Promise.resolve(false) });
+  const said = { get length() { return all.filter(([t]) => /AUDIO ENGINE/.test(t)).length; }, get 0() { return all.find(([t]) => /AUDIO ENGINE/.test(t)); } };
   dom.byId("pm-audio").onclick();
   await tick(); await tick(); await tick();
   assert.equal(said.length, 1);
@@ -524,4 +525,22 @@ test("#6263: a reset prompt that resolves after focus moved on does not steal it
   assert.equal(calls[0][1].focus, false, "focus stays on the control the player moved to");
   reset.focus(); reset.click(); resolve(true); await tick();
   assert.equal(calls[1][1].focus, true, "pressed and waited: the confirmation takes focus");
+});
+
+test("a page opened with focus is announced through LiveRegion; home and silent shows are not (#6883 row 5)", () => {
+  const { nav, said } = boot({ ensure: () => Promise.resolve(true), stub: false });
+  nav.show("home", true);
+  assert.equal(said.length, 0, "home is not announced");
+  nav.show("audio", false);
+  assert.equal(said.length, 0, "a show without focus stays quiet");
+  nav.show("audio", true);
+  assert.match(said.at(-1)[0], /MUSIC|AUDIO|SOUND/i);
+  assert.equal(said.at(-1)[1], "hud");
+});
+
+test("the page announce precedes an after() note, so the specific message is the newest (#6883 row 5)", () => {
+  const { nav, said } = boot({ ensure: () => Promise.resolve(true), stub: false });
+  nav.show("audio", true, () => { said.push(["note from after()", "hud"]); return false; });
+  assert.equal(said.length, 2);
+  assert.equal(said[1][0], "note from after()");
 });

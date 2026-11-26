@@ -49,7 +49,7 @@ const DataLive = (function () {
       if (at < start - LIVE_PAD_MS) return "UPCOMING";
       return at <= end + LIVE_PAD_MS ? "LIVE" : "COMPLETED";
     }
-    if (start > at) return "UPCOMING";
+    if (start - LIVE_PAD_MS > at) return "UPCOMING";
     const type = String((meta && meta.type) || "").toLowerCase();
     end = start + (type === "race" ? 4 : 2) * 60 * 60 * 1000;
     return at <= end ? "LIVE" : "COMPLETED";

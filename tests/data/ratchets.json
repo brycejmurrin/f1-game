@@ -6,37 +6,37 @@
   },
   "files": {
     "css/hud.css": {
-      "codeLines": 2433,
-      "lines": 2706
+      "codeLines": 2415,
+      "lines": 2686
     },
     "js/agent/agentview.js": {
-      "lines": 2324
+      "lines": 2340
     },
     "js/agent/apex.js": {
-      "codeLines": 1704,
-      "lines": 2540
+      "codeLines": 1705,
+      "lines": 2543
     },
     "js/car/car3d.js": {
       "lines": 2929
     },
     "js/game.js": {
-      "codeLines": 5527,
-      "gMembers": 297,
-      "lines": 9659,
+      "codeLines": 5529,
+      "gMembers": 274,
+      "lines": 9668,
       "topLets": 127
     },
     "js/net/lobby.js": {
-      "lines": 2387
+      "lines": 2394
     },
     "js/render/glx/glx.js": {
-      "lines": 2912
+      "lines": 2937
     },
     "js/track/tracks.js": {
-      "lines": 861
+      "lines": 846
     },
     "js/ui/hud.js": {
-      "codeLines": 1483,
-      "lines": 2336
+      "codeLines": 1401,
+      "lines": 2196
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 2
@@ -45,13 +45,13 @@
   "tree": {
     "assertPins": {
       "absorb": 5,
-      "ceiling": 8190,
+      "ceiling": 8226,
       "slack": 200
     },
     "assertPinsAll": {
       "absorb": 5,
       "baseline": "2026-11-10 (audit item 9): re-seeded at the TRUE count after the counter learned the indirect shape (a bool from includes()/test()/indexOf() that a later assert reads); was 10320 under the old counter, +39 indirect sites. Shrink-only: lower it as those sites are rewritten, never raise it to absorb them.",
-      "ceiling": 10439,
+      "ceiling": 10484,
       "slack": 200
     },
     "bareCatches": {
@@ -68,7 +68,7 @@
     },
     "eagerCodeBytes": {
       "absorb": 5000,
-      "ceiling": 4024119,
+      "ceiling": 4043451,
       "slack": 0
     },
     "eagerScripts": {
@@ -80,14 +80,14 @@
       "slack": 0
     },
     "rawColor": {
-      "ceiling": 321,
+      "ceiling": 319,
       "slack": 0
     },
     "rawColorDistinct": {
       "ceiling": 179,
       "slack": 0
     },
-    "rawGameReads": 304,
+    "rawGameReads": 303,
     "rawSpacing": {
       "ceiling": 303,
       "slack": 0

@@ -337,7 +337,15 @@ const GameStore = (function () {
   // this lock once also covers synchronous gameplay callers without claiming
   // an asynchronous transaction has already committed. No automatic takeover:
   // a losing tab must reload, never promote its previously loaded career.
-  const careerKey = (k) => /^apex26\.career/.test(fullKey(k));
+  // Key families come from SaveSchemaRegistry (loaded just before this file; #6602 phase 3).
+  // The LEGACY_* prefix rules answer only for a key no registry row knows: another build's key
+  // (a foreign write, an older mirror row) or a VM load without the registry. Equal on every
+  // registry key: tests/unit/save-sections-6602.test.mjs.
+  function keyFamily(k) {
+    return typeof SaveSchemaRegistry !== "undefined" && SaveSchemaRegistry.family ? SaveSchemaRegistry.family(k) : null;
+  }
+  const LEGACY_LOCK = /^apex26\.career/;
+  const careerKey = (k) => { const f = keyFamily(fullKey(k)); return f ? f.writerLock : LEGACY_LOCK.test(fullKey(k)); };
   const careerWriter = { state: typeof navigator === "undefined" ? "owned" : "pending", ready: null };
   function careerWriteStatus(k) {
     const ok = (k != null && !careerKey(k)) || careerWriter.state === "owned";
@@ -438,14 +446,14 @@ const GameStore = (function () {
   // flagged `restored`, then once more as a `restoredBatch` naming every key —
   // career.js reloads its slot and pointer together on that, and the title menu
   // repaints — and every later boot is whole.
-  const MIRROR_KEY = /^apex26\.(career|season)/;
+  const LEGACY_MIRROR = /^apex26\.(career|season)/;
   const MIRROR_DB = "apex26-store";
   const MIRROR_STORE = "kv";
   const MIRROR_VERSION = 1;
   const MIRROR_OPEN_MS = 4000;      // a blocked/never-settling open() degrades to "no mirror"
   const MIRROR_FLUSH_MS = 500;      // settleRound() writes the slot and the season back to back
   const MIRROR_RETRY_MS = 2000;     // one automatic retry; a later write/pagehide retries retained failures again
-  const AUTHORED_KEY = /^apex26\.(?:customTeam|customLogo|(?:parts|setup|setupPresets)\.[A-Za-z0-9_-]{1,64}|livery\.(?:custom\.)?[A-Za-z0-9_-]{1,64})$/;
+  const LEGACY_AUTHORED = /^apex26\.(?:customTeam|customLogo|(?:parts|setup|setupPresets)\.[A-Za-z0-9_-]{1,64}|livery\.(?:custom\.)?[A-Za-z0-9_-]{1,64})$/;
   const AUTHORED_ROW_BYTES = 512 * 1024, AUTHORED_TOTAL_BYTES = 2 * 1024 * 1024, AUTHORED_KEYS = 96;
   const mirror = { supported: false, restored: 0, flushed: 0, failed: 0, pending: 0, inFlight: 0, settled: false, inventoryKnown: false, skipped: 0, authoredBytes: 0, authoredKeys: 0, limitReason: null, ready: null };
   let _mirrorHandle = null;
@@ -458,7 +466,8 @@ const GameStore = (function () {
   let _mirrorFlight = null;         // serialize bursts so an older transaction cannot finish last
   let _restoreDone = false;         // flush waits for mirrorRestore: a boot re-save must not overwrite the row it restores
 
-  function mirrorKey(key) { return MIRROR_KEY.test(key) || AUTHORED_KEY.test(key); }
+  function mirrorKey(key) { const f = keyFamily(key); return f ? f.mirror !== null : LEGACY_MIRROR.test(key) || LEGACY_AUTHORED.test(key); }
+  function authoredKey(key) { const f = keyFamily(key); return f ? f.mirror === "authored" : LEGACY_AUTHORED.test(key); }
   function authoredBytes(k, v, baseline) { return (k.length + (v === null ? 0 : typeof v === "string" ? v.length : AUTHORED_ROW_BYTES) + (typeof baseline === "string" ? baseline.length : 0)) * 2; }
   // Foreign winners supersede retries AND queued mirror work. An already open
   // transaction is followed by this winner in the next serialized flush.
@@ -564,7 +573,7 @@ const GameStore = (function () {
   // True when this burst itself must know every authored row (the cap is a
   // total). A career/season-only burst does not: it reads just its own keys.
   function mirrorBatchAuthored(batch) {
-    for (const k of batch.keys()) if (AUTHORED_KEY.test(k)) return true;
+    for (const k of batch.keys()) if (authoredKey(k)) return true;
     return false;
   }
 
@@ -607,7 +616,7 @@ const GameStore = (function () {
         let bytes = scan ? scan.bytes : 0, keys = scan ? scan.keys : 0;
         for (const [k, e] of batch) {
           if (!careerWriteStatus(k).ok || e.epoch !== mirrorEpoch(k)) continue;
-          const prev = rows.get(k), authored = AUTHORED_KEY.test(k);
+          const prev = rows.get(k), authored = authoredKey(k);
           const value = e.v === null ? "null" : e.v;
           if (!e.foreign && prev && prev.lsOk === false && e.lsOk === true && value !== prev.v && _mirrorSeen.get(k) !== prev.v) {
             // A known stale tab may already have written these primary bytes.
@@ -648,7 +657,7 @@ const GameStore = (function () {
         all.onsuccess = () => {
           const rows = new Map((all.result || []).map((r) => [r.k, r]));
           let bytes = 0, keys = 0;
-          for (const [k, row] of rows) if (AUTHORED_KEY.test(k)) { bytes += authoredBytes(k, row.v, row.baseline); keys++; }
+          for (const [k, row] of rows) if (authoredKey(k)) { bytes += authoredBytes(k, row.v, row.baseline); keys++; }
           applyBatch(rows, { bytes, keys });
         };
       } else {
@@ -721,7 +730,7 @@ const GameStore = (function () {
         if (epoch !== _foreignEpoch) { if (!_mirrorPending.has(row.k)) mirrorQueue(row.k, null, true); continue; }
         if ((foreignKeys.get(row.k) || 0) !== (_foreignKeys.get(row.k) || 0)) continue;
         _mirrorKnown.add(row.k);
-        const authored = AUTHORED_KEY.test(row.k), tombstone = authored && row.v === null;
+        const authored = authoredKey(row.k), tombstone = authored && row.v === null;
         if (!tombstone && typeof row.v !== "string") continue;
         if (authored) {
           const size = authoredBytes(row.k, row.v, row.baseline);
@@ -805,7 +814,7 @@ const GameStore = (function () {
     ? mirrorRestore() : careerWriter.ready.then(() => mirrorRestore());
   store.mirror = mirror;           // pending = queued keys; inFlight = uncommitted batch keys; flushed = committed operations — __apex.persistState()
   store.mirrorPolicy = Object.freeze({ authoredRowBytes: AUTHORED_ROW_BYTES, authoredTotalBytes: AUTHORED_TOTAL_BYTES, authoredKeys: AUTHORED_KEYS,
-    includes: (key) => mirrorKey(fullKey(key)) });
+    includes: (key) => mirrorKey(fullKey(key)), authored: (key) => authoredKey(fullKey(key)), writerLocked: (key) => careerKey(key) });
   store.mirrorFlush = mirrorFlush; // flush the debounced batch now (tests; pagehide)
   // Inventory includes refused session writes and rows that could not restore to disk.
   // Call after mirror.ready when a destructive operation needs the complete boot inventory.

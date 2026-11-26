@@ -96,6 +96,10 @@ const WheelState = (function () {
     return clamp(t + (HEAT_K * w - (COOL_0 + COOL_V * Math.max(v, 0)) * (t - T_AMB)) * dt, T_AMB, 1200);
   }
 
+  function resetThermal(c) {   // re-grid: discs back to ambient (#6877 P6)
+    if (c.brakeTF != null) { c.brakeTF = c.brakeTR = T_AMB; c.brakeFade = 1; }
+  }
+
   function resolveEnabled() {
     if (_resolved) return _enabled;
     _resolved = true;
@@ -338,6 +342,6 @@ const WheelState = (function () {
   // stepPlayer internals — tests drive axleStep / stepPlayer / enabled only.
   return Object.freeze({
     enabled, setEnabled, axleStep, stepPlayer, assistLevel, setAssistLevel, mode, setMode,
-    thermalEnabled, setThermal, fadeOf, discStep,
+    thermalEnabled, setThermal, fadeOf, discStep, resetThermal,
   });
 })();

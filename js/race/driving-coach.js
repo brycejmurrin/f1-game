@@ -393,91 +393,12 @@ const DrivingCoachBody = (function () {
     const onTrack = () => G.state === "race" || G.state === "count";
     function canPractice() { return !!(G.practice && !G.daily.isActive() && !G.netPlay.active() && G.player && onTrack()); }
     // mark() (a checkpoint the player places), rewind() (the rolling buffer)
-    // and retry() all move the SAME state, so they share these rather than
-    // each growing their own field list that drifts out of step.
-    const PRIM = (v) => v == null || ["number", "boolean", "string"].includes(typeof v);
-    const DEEP = ["tyre", "tyreLog", "pitNext", "pitPlan"];   // pitPlan: pit-lane replan() rewrites it in place, so a retry/rewind must put the saved copy back
-    // The generic sweep is deliberate: a car carries ~60 live primitives and an
-    // explicit list would rot silently — see EPISODE_TRANSIENTS in
-    // js/agent/apex.js, which had to be built by measurement rather than
-    // inspection for exactly that reason. Never a career or a remote car.
-    // A DEEP COPY WITHOUT THE STRING IN THE MIDDLE. The round trip through
-    // JSON.stringify/parse built and reparsed a text representation of three
-    // objects per car — 20 cars at 2 Hz is 120 serialisations a minute whose
-    // only product is a copy. This walks the value directly.
-    //
-    // JSON-FAITHFUL ON PURPOSE, because restore() reads what capture() wrote
-    // and a semantic change here is a silently wrong rewind: a non-finite
-    // number becomes null (JSON.stringify writes `null` for NaN and Infinity),
-    // an undefined property is dropped from an object but becomes null in an
-    // array, and functions go the same way. tests/unit/coach-clone.test.mjs
-    // pins every one of those against the round trip it replaces.
-    function jsonClone(v) {
-      if (v === null) return null;
-      const t = typeof v;
-      // -0 is the subtle one: JSON.stringify writes "0", so the round trip
-      // this replaces returns +0 and a walk that passes -0 through would be a
-      // value the original never round-tripped to. `v === 0` is true for both
-      // zeroes, so this normalises exactly the one case.
-      if (t === "number") return Number.isFinite(v) ? (v === 0 ? 0 : v) : null;
-      if (t !== "object") return t === "function" || t === "undefined" ? undefined : v;
-      if (Array.isArray(v)) {
-        const out = new Array(v.length);
-        for (let i = 0; i < v.length; i++) {
-          const x = jsonClone(v[i]);
-          out[i] = x === undefined ? null : x;   // JSON writes null for a hole
-        }
-        return out;
-      }
-      // toJSON is what makes a Date serialise as a string; honour it rather
-      // than copying the object's own (empty) enumerable properties.
-      if (typeof v.toJSON === "function") return jsonClone(v.toJSON());
-      const out = {};
-      for (const k of Object.keys(v)) {
-        const x = jsonClone(v[k]);
-        if (x !== undefined) out[k] = x;
-      }
-      return out;
-    }
-    function captureCar(c) {
-      const fields = {};
-      for (const k of Object.keys(c)) if (PRIM(c[k])) fields[k] = c[k];
-      const objects = {};
-      for (const k of DEEP) objects[k] = c[k] == null ? c[k] : jsonClone(c[k]);
-      return { fields, objects };
-    }
-    // PENALTIES AND CUTS DO NOT REWIND. They are ordinary primitives on the car,
-    // so the generic sweep captures them and a naive restore hands them back —
-    // which in a scored session is a way to undo a time penalty or reset the
-    // track-limits ladder by pressing RECOVER. Practice sessions are unscored,
-    // so it would not corrupt a result, but a practice tool that quietly erases
-    // the consequence of running wide is teaching the wrong lap. Carried
-    // forward across every restore instead.
-    // PENALTIES AND CUTS DO NOT REWIND FOR THE PLAYER. They are ordinary
-    // primitives, so the generic sweep captures them and a naive restore hands
-    // them back — undoing a time penalty or resetting the track-limits ladder
-    // by pressing a button. The session is unscored so no result is at risk,
-    // but a practice tool that quietly erases the consequence of running wide
-    // is teaching the wrong lap.
-    // ONLY the player: an AI car is part of the world being rewound, and there
-    // is no lesson to protect there — so a rival's penalty rewinds with
-    // everything else, which is what "the race is back where it was" means.
-    // Nor do the player's ROLE flags: a sample taken during the flying-start
-    // hand-over (js/race/flying-start.js, human=false for ~3 s) would otherwise
-    // hand the wheel to the AI for the rest of the session after it ended.
-    const KEEP_FORWARD = ["penalty", "cuts", "cutWarn", "hits", "wallHits", "hitSev", "human", "local", "isPlayer"];
-    function applyCar(c, snap, keepForward) {
-      const keep = {};
-      if (keepForward) for (const k of KEEP_FORWARD) if (Object.hasOwn(c, k)) keep[k] = c[k];
-      for (const k of Object.keys(c)) if (PRIM(c[k]) && !Object.hasOwn(snap.fields, k)) delete c[k];
-      Object.assign(c, snap.fields, keep);
-      for (const [k, v] of Object.entries(snap.objects)) c[k] = v == null ? v : jsonClone(v);
-      // The interpolator must not tween the car across the gap it just jumped —
-      // it would draw a streak from where the car was to where it now is.
-      c._prevS = c.s;
-      c.rPrevPx = c.px; c.rPrevPz = c.pz;
-      c.rPrevHead = c.head; c.rPrevS = c.s; c.rPrevX = c.x;
-    }
+    // and retry() all move the SAME state, and so will every other consumer:
+    // what "the sim state" is lives in ONE registry, js/core/sim-state.js
+    // (#6860). The car sweep, the clock, the sim RNG stream, the reset-only
+    // side worlds and every module that registers (Damage, #6862 P2) come
+    // back together; PENALTIES AND CUTS stay with the player (keepForward,
+    // SimState.KEEP_FORWARD says why).
     // A rewind that moved one car through a field that kept running is not a
     // rewind, it is a teleport: you rejoin having lost the ground everyone else
     // covered, the order scrambles, and you can land inside a rival who is now
@@ -485,41 +406,12 @@ const DrivingCoachBody = (function () {
     // rewinds ALL of them, the race clock, and the sector state with them.
     //
     // WHAT CANNOT BE RESTORED, said plainly: the debris field and any live
-    // incident. DebrisWorld is a Rapier (WASM) rigid-body side-world with
-    // reset()/prime() and no snapshot, and IncidentSim's takeovers are keyed to
-    // ticks that no longer exist. Both are RESET rather than restored, so a
-    // rewind clears marbles and broken panels instead of putting them back.
-    // That is a visible difference from a true time machine and the honest one
-    // to take — the alternative is cars rewound into debris that was never
-    // there when they were last at that point on the road.
-    function captureWorld() {
-      const cars = (G.cars || []).map((c) => captureCar(c));
-      return { cars, raceT: G.raceT, sectorIdx: G.sectorIdx, sectorStartT: G.sectorStartT,
-        fieldSectorBests: G.fieldSectorBests?.slice(),
-        sectorBests: Array.isArray(G.sectorBests) ? G.sectorBests.slice() : null,
-        sectorLast: Array.isArray(G.sectorLast) ? G.sectorLast.slice() : null };
-    }
+    // incident — SimState's "incidents" and "debris" parts RESET them, first,
+    // so a rewind clears marbles and broken panels instead of putting them
+    // back. The alternative is cars rewound into debris that was never there.
+    function captureWorld() { return SimState.capture(G); }
     function restoreWorld(w) {
-      IncidentSim.reset(); DebrisWorld.reset();
-      const cars = G.cars || [];
-      // Index-keyed: `cars` is built once by makeCars() and its ORDER never
-      // changes (standings are derived from prog, not by sorting this array),
-      // so index i is the same car across the window. Length-guarded anyway.
-      for (let i = 0; i < cars.length && i < w.cars.length; i++)
-        applyCar(cars[i], w.cars[i], cars[i].isPlayer);
-      // THE CLOCK COMES BACK TOO. Without it the cars are 10 s younger and the
-      // race is not, so every gap, delta and lap projection reads wrong.
-      if (Number.isFinite(w.raceT)) G.raceT = w.raceT;
-      G.resultT = 0; // Recompute finish eligibility from the restored field next tick.
-      if (Number.isFinite(w.sectorIdx)) G.sectorIdx = w.sectorIdx;
-      if (Number.isFinite(w.sectorStartT)) G.sectorStartT = w.sectorStartT;
-      if (w.sectorBests) G.sectorBests = w.sectorBests.slice();
-      if (w.fieldSectorBests) G.fieldSectorBests.splice(0, G.fieldSectorBests.length, ...w.fieldSectorBests);
-      // sectorLast has no setter — mutate the live array in place.
-      if (w.sectorLast && Array.isArray(G.sectorLast)) {
-        G.sectorLast.length = 0;
-        for (const v of w.sectorLast) G.sectorLast.push(v);
-      }
+      SimState.restore(w, G, { keepForward: true });
       if (G.player) G.player.incidentInvalidLap = true;
       G.records.invalidate(); trace = []; quiet = 2; clearCandidate();
     }
@@ -542,7 +434,7 @@ const DrivingCoachBody = (function () {
       if (!checkpoint || !canPractice()) return false;
       restoreWorld(checkpoint.world);
       drillMode = checkpoint.mode;
-      insights.startDrill(drillMode);
+      if (!insights.startDrill(drillMode)) return true;
       G.announce("TRY AGAIN: " + goal(), 2, "practice");
       return true;
     }
@@ -572,7 +464,7 @@ const DrivingCoachBody = (function () {
       // silently marked dirty, with a reason that describes the mechanism
       // rather than anything the driver did. startDrill() resets its `previous`
       // sample so the next tick is not read as a teleport.
-      insights.startDrill(drillMode);
+      if (!insights.startDrill(drillMode)) return true;
       G.announce("REWIND " + Math.round(clock - e.t) + "s" + (n > 1 ? " — FULL GRID" : ""), 2, "practice");
       return true;
     }
@@ -681,11 +573,10 @@ const DrivingCoachBody = (function () {
           overtake: "Save behind a similarly paced car, then pass it and hold clear without contact or leaving the track.",
           defend: "Save with a rival close behind, then hold your place under pressure without contact or leaving the track.",
           backmarkers: "Save before slower traffic, then clear three slower cars without contact or leaving the track." };
-        // `start` is stored NEGATED so mastery's Math.min ranks more places
-        // higher (js/race/race-insights.js). The sign is undone here, once, at
-        // the only place a human reads the number.
+        // start / slipstream / defend are stored NEGATED (mastery keeps the MINIMUM): undo the sign here, once, in each drill's own unit.
         const fmt = (mode, s) => mode === "braking" ? s.toFixed(0) + " m from " + insights.brakingRef() : mode === "lap" ? G.fmtTime(s) : mode === "launch" ? s.toFixed(2) + "s"
-          : mode === "start" ? (-s >= 0 ? "+" : "") + (-s) + (Math.abs(s) === 1 ? " place" : " places") : s.toFixed(1) + "s";
+          : mode === "start" ? (-s >= 0 ? "+" : "") + (-s) + (Math.abs(s) === 1 ? " place" : " places")
+          : mode === "slipstream" ? Math.max(0, -s).toFixed(0) + " m closed" : mode === "defend" ? Math.max(0, -s).toFixed(1) + "s held" : s.toFixed(1) + "s";
         const last = summary.lastDrill, tries = insights.attempts(drillMode), clean = tries.filter(a => a.clean), saved = insights.mastery(drillMode);
         drillInfo.textContent = guide[drillMode]
           + (last && last.mode === drillMode ? " Last attempt: " + (last.clean ? "completed · " + last.text : "retry suggested · " + last.reason) + "." : "")

@@ -558,6 +558,8 @@
         "tests/unit/audio-panel-boot.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-sample-upgrade.test.mjs",
+        "tests/unit/audio-scope-once-vm.test.mjs",
+        "tests/unit/audio-stub-parity.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/battle-earcon.test.mjs",
         "tests/unit/blip-voice-pool.test.mjs",
@@ -573,6 +575,7 @@
         "tests/unit/keyboard-first-audio-vm.test.mjs",
         "tests/unit/lazy-audio-firstbind-vm.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
+        "tests/unit/lazy-lore-drift-vm.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
         "tests/unit/net-audio-revs-vm.test.mjs",
         "tests/unit/pause-silence.test.mjs",
@@ -780,6 +783,7 @@
         "tests/unit/ai-pass-defend-vm.test.mjs",
         "tests/unit/ai-queue-reach-vm.test.mjs",
         "tests/unit/ai-racecraft-vm.test.mjs",
+        "tests/unit/ai-rescue-retire-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-trail-yield-vm.test.mjs",
         "tests/unit/ai-wing-spread-vm.test.mjs",
@@ -787,6 +791,7 @@
         "tests/unit/apex-surface-pin-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
+        "tests/unit/car-fields-lifetimes-vm.test.mjs",
         "tests/unit/car-fields-vm.test.mjs",
         "tests/unit/classification-vm.test.mjs",
         "tests/unit/collide-wall-limits.test.mjs",
@@ -815,6 +820,7 @@
         "tests/unit/input-ghost-replay-vm.test.mjs",
         "tests/unit/jump-start-vm.test.mjs",
         "tests/unit/kerb-drive-from-rest-vm.test.mjs",
+        "tests/unit/local-storm-gates-vm.test.mjs",
         "tests/unit/lockup-bench-vm.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",
         "tests/unit/longitudinal-vm.test.mjs",
@@ -862,9 +868,11 @@
         "tests/unit/repair-stop-vm.test.mjs",
         "tests/unit/rescue-occupancy-vm.test.mjs",
         "tests/unit/retired-car-obstacle-vm.test.mjs",
+        "tests/unit/scopes-vm.test.mjs",
         "tests/unit/season-seat-move-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
+        "tests/unit/sim-state-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/spoken-lang-offer-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
@@ -905,6 +913,7 @@
         "tests/unit/ai-pass-defend-vm.test.mjs",
         "tests/unit/ai-queue-reach-vm.test.mjs",
         "tests/unit/ai-racecraft-vm.test.mjs",
+        "tests/unit/ai-rescue-retire-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-trail-yield-vm.test.mjs",
         "tests/unit/ai-wing-spread-vm.test.mjs",
@@ -912,6 +921,7 @@
         "tests/unit/apex-surface-pin-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
+        "tests/unit/car-fields-lifetimes-vm.test.mjs",
         "tests/unit/car-fields-vm.test.mjs",
         "tests/unit/classification-vm.test.mjs",
         "tests/unit/collide-wall-limits.test.mjs",
@@ -939,6 +949,7 @@
         "tests/unit/input-ghost-replay-vm.test.mjs",
         "tests/unit/jump-start-vm.test.mjs",
         "tests/unit/kerb-drive-from-rest-vm.test.mjs",
+        "tests/unit/local-storm-gates-vm.test.mjs",
         "tests/unit/lockup-bench-vm.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",
         "tests/unit/longitudinal-vm.test.mjs",
@@ -986,9 +997,11 @@
         "tests/unit/repair-stop-vm.test.mjs",
         "tests/unit/rescue-occupancy-vm.test.mjs",
         "tests/unit/retired-car-obstacle-vm.test.mjs",
+        "tests/unit/scopes-vm.test.mjs",
         "tests/unit/season-seat-move-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
+        "tests/unit/sim-state-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/spoken-lang-offer-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
@@ -1012,6 +1025,7 @@
         "tests/unit/agent-hooks-vm.test.mjs",
         "tests/unit/ai-pack-stuck-vm.test.mjs",
         "tests/unit/ai-pass-defend-vm.test.mjs",
+        "tests/unit/ai-rescue-retire-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-trail-yield-vm.test.mjs",
         "tests/unit/apex-car-placement-pin-vm.test.mjs",
@@ -1034,6 +1048,7 @@
         "tests/unit/input-ghost-replay-vm.test.mjs",
         "tests/unit/jump-start-vm.test.mjs",
         "tests/unit/kerb-drive-from-rest-vm.test.mjs",
+        "tests/unit/local-storm-gates-vm.test.mjs",
         "tests/unit/new-hooks-vm.test.mjs",
         "tests/unit/offtrack-edges-vm.test.mjs",
         "tests/unit/offtrack-vm.test.mjs",
@@ -1074,6 +1089,7 @@
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/ai-wing-spread-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
+        "tests/unit/car-fields-lifetimes-vm.test.mjs",
         "tests/unit/car-fields-vm.test.mjs",
         "tests/unit/classification-vm.test.mjs",
         "tests/unit/collide-wall-limits.test.mjs",
@@ -1112,9 +1128,11 @@
         "tests/unit/repair-stop-vm.test.mjs",
         "tests/unit/rescue-occupancy-vm.test.mjs",
         "tests/unit/retired-car-obstacle-vm.test.mjs",
+        "tests/unit/scopes-vm.test.mjs",
         "tests/unit/season-seat-move-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/settings-reload-vm.test.mjs",
+        "tests/unit/sim-state-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/spoken-lang-offer-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
@@ -1330,6 +1348,7 @@
         "tests/unit/lsp-caller-fixes.test.mjs",
         "tests/unit/lsp-config-freshness.test.mjs",
         "tests/unit/lsp-factory-member.test.mjs",
+        "tests/unit/lsp-g-literal-window-head.test.mjs",
         "tests/unit/lsp-mcp-boot.test.mjs",
         "tests/unit/lsp-mcp-fixture.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
@@ -1403,11 +1422,13 @@
       "kind": "node",
       "files": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
+        "tests/unit/handshake-hardening.test.mjs",
         "tests/unit/lobby-answer-flight.test.mjs",
         "tests/unit/lobby-codes.test.mjs",
         "tests/unit/lobby-settings.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
+        "tests/unit/net-ice-fetch-checks.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-nostr-sockets.test.mjs",
@@ -1421,6 +1442,7 @@
         "tests/unit/net-stub-surface.test.mjs",
         "tests/unit/net-transport.test.mjs",
         "tests/unit/net-trystero-api.test.mjs",
+        "tests/unit/net-wire-schema.test.mjs",
         "tests/unit/netplay-lap-clock.test.mjs",
         "tests/unit/netplay-resilience.test.mjs",
         "tests/unit/rendezvous-worker.test.mjs",
@@ -1650,6 +1672,7 @@
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/legends-team.test.mjs",
+        "tests/unit/medal-ledger.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/overlay-render.test.mjs",
@@ -1671,6 +1694,7 @@
         "tests/unit/session-records-assists.test.mjs",
         "tests/unit/session-records-medal-keep.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
+        "tests/unit/share-card-chips.test.mjs",
         "tests/unit/share-card-data.test.mjs",
         "tests/unit/share-card-layout.test.mjs",
         "tests/unit/share-card.test.mjs",
@@ -1707,6 +1731,7 @@
         "tests/unit/key-binds-pad-menu.test.mjs",
         "tests/unit/key-binds-ui.test.mjs",
         "tests/unit/key-binds.test.mjs",
+        "tests/unit/liv-swatch-box-cache.test.mjs",
         "tests/unit/low-speed-lock.test.mjs",
         "tests/unit/onboard.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
@@ -1718,6 +1743,7 @@
         "tests/unit/phone-press-mode.test.mjs",
         "tests/unit/player-tools-backup.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
+        "tests/unit/scroll-fade-scoped.test.mjs",
         "tests/unit/setting-deps.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/settings-export-lazy.test.mjs",
@@ -1857,6 +1883,7 @@
         "tests/specs/real-profile-dock.spec.js",
         "tests/specs/rotation-recovery.spec.js",
         "tests/specs/settings-stepper-paint.spec.js",
+        "tests/specs/thumb-drill.spec.js",
         "tests/specs/title-fit.spec.js",
         "tests/specs/title-menu-rotation.spec.js",
         "tests/specs/ui-button-touch.spec.js",
@@ -2230,6 +2257,11 @@
     {
       "path": "js/agent/apex-net.js",
       "global": "ApexNet",
+      "roster": "LAZY_AGENT"
+    },
+    {
+      "path": "js/agent/apex-play.js",
+      "global": "ApexPlay",
       "roster": "LAZY_AGENT"
     },
     {
@@ -3298,9 +3330,19 @@
       "roster": "tag"
     },
     {
+      "path": "js/core/scopes.js",
+      "global": "Scopes",
+      "roster": "tag"
+    },
+    {
       "path": "js/core/script-loader.js",
       "global": "ScriptLoader",
       "roster": "tag"
+    },
+    {
+      "path": "js/core/sim-state.js",
+      "global": "SimState",
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/core/store.js",
@@ -3325,7 +3367,7 @@
     {
       "path": "js/data/circuit-lore.js",
       "global": "CircuitLore",
-      "roster": "tag"
+      "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/data/driver-ratings.js",
@@ -3808,6 +3850,11 @@
       "roster": "LAZY_RACE_SESSION"
     },
     {
+      "path": "js/learn-drills/thumb-drill.js",
+      "global": "ThumbDrill",
+      "roster": "LAZY_LEARN"
+    },
+    {
       "path": "js/lighting/atmosphere.js",
       "global": "Atmosphere",
       "roster": "tag"
@@ -3963,6 +4010,11 @@
       "roster": "LAZY_NET"
     },
     {
+      "path": "js/net/wire-schema.js",
+      "global": "NetWire",
+      "roster": "LAZY_NET"
+    },
+    {
       "path": "js/overlay/bridge.js",
       "global": "OverlayBridge",
       "roster": "tag"
@@ -4075,7 +4127,7 @@
     {
       "path": "js/perf/thermal-drift.js",
       "global": "ThermalDrift",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/three-inspector.js",
@@ -4105,6 +4157,11 @@
     {
       "path": "js/physics/ai-drive.js",
       "global": "AiDrive",
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/ai-start.js",
+      "global": "AiStart",
       "roster": "tag"
     },
     {
@@ -4285,6 +4342,11 @@
     {
       "path": "js/race/marshal-panels.js",
       "global": "MarshalPanels",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/medal-ledger.js",
+      "global": "MedalLedger",
       "roster": "LAZY_RACE_SESSION"
     },
     {
@@ -5316,6 +5378,11 @@
       "path": "js/ui/survey-hud.js",
       "global": "SurveyHud",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/thumb-trainer.js",
+      "global": "ThumbTrainer",
+      "roster": "LAZY_LEARN"
     },
     {
       "path": "js/ui/title-flow.js",

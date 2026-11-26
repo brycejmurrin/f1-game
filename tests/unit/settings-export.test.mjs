@@ -2951,3 +2951,12 @@ test("#6263: resetRow with focus:false shows the confirmation without moving foc
   b.SettingsExport.resetRow("controls", launcher);
   assert.equal(b.dom.document.activeElement?.textContent, "CONFIRM RESET & RELOAD", "the default still focuses the confirmation");
 });
+
+for (const v of ["auto", "off", "on"]) test(`#6907 cbCues ${v} round-trips through an all-keys settings file`, () => {
+  const source = boot({ realStore: true, disk: v === "auto" ? {} : { "apex26.cbCues": JSON.stringify(v) } });
+  const file = source.collect("all");
+  assert.equal(file.settings.a11y?.cbCues, v);
+  const target = boot({ realStore: true, disk: { "apex26.cbCues": JSON.stringify(v === "on" ? "off" : "on") } });
+  assert.equal(target.loadSettings(file).ok, true);
+  assert.equal(target.collect("all").settings.a11y?.cbCues, v);
+});

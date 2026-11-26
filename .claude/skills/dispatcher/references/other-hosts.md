@@ -11,8 +11,8 @@ issue comment, the state is the PR's Plan and Hand-off block, and the signals ar
 
 | Claude orchestrator | Codex or Cursor orchestrator |
 |---|---|
-| `create_session` launches a worker | **Bryce launches.** No agent starts another agent through his login (`docs/AGENT-SURFACE.md` §Per vendor). Post the brief as an issue comment, and he opens a Codex cloud task, a Cursor agent or a Claude session on it. |
-| `send_message` steers a running worker | Codex: a PR comment that starts `orchestrator:` and names the change; the worker reads it when it wakes or at its next checkpoint. Cursor's token posts no comments or labels ([`vendors.md`](../../steward/references/vendors.md)), so a Cursor orchestrator writes the change into its own PR's `next:` line and Bryce relays it. |
+| `create_session` launches a worker | **Bryce launches.** No agent starts another agent through his login (`docs/AGENT-SURFACE.md` §Per vendor). Post the brief as an issue comment (a Cursor orchestrator cannot: it hands the text to Bryce, DAD or a Claude lane to post), and he opens a Codex cloud task, a Cursor agent or a Claude session on it. |
+| `send_message` steers a running worker | Codex: a PR comment that starts `orchestrator:` and names the change; the worker reads it when it wakes or at its next checkpoint. Cursor's PR tools work (`CreatePullRequest`, `ManagePullRequest`, `EditPullRequestLabels`), so it can label PRs (e.g. `land`), but it has no issue-write tool and cannot comment on, create or label issues ([`vendors.md`](../../steward/references/vendors.md)). A Cursor orchestrator writes the change for a worker into its own PR's `next:` line or a PR label; issue claims go through Bryce, DAD or a Claude lane. |
 | `list_sessions` / `child-health.mjs` | `node tools/ci/pr-board.mjs --brief`: the LEASE column (`live`, `parked`, `lapsed`) and `churn:` replace the session list. A lapsed lease means the worker is gone: put the PR in the step 3 list for Bryce, who starts a `CONTINUE PR <n>` session (steward §Lane 3). |
 | `subscribe_pr_activity` | steward [`references/host-watch.md`](../../steward/references/host-watch.md) §Codex and Cursor. |
 | Subagent reviewers (`.claude/agents/`) | Per host: steward [`references/vendors.md`](../../steward/references/vendors.md) (Codex: built-ins only, point them at the card; Cursor loads the cards). No hook enforces the subagent rules there, so the prompt states them. |
@@ -32,6 +32,7 @@ EVIDENCE: <the repro or measurement and its command; JS symbols as apex-lsp call
 STATE: deploy tip <sha> at <time>; open PRs on the same paths (shared, not a blocker: D-033): <list>; decisions already made: <comment URLs>
 DONE WHEN: <the check that proves it, e.g. a named unit test or `verify-track <id>`>
 BRANCH: Claude `claude/<topic>`; Cursor and Codex `cursor/<topic>-<hash>`; draft PR with `Closes #<n>` and `lane:<host>`
+MODEL: Cursor launch: routine = `composer-2.5`, hard = Grok 7 (confirm its exact Cursor slug at launch), never `default` or Auto.
 REPORT: only through the PR: Plan ticks, the Hand-off block (`owner:`, `next:`), `needs-decision` plus ONE comment
   (a Cursor worker writes both into `next:`).
 STOP AT: start+<N>k (the form `context-cap.py` reads); at the cap push, refresh the Hand-off block with `owner: none` and stop.

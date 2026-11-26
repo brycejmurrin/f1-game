@@ -1535,7 +1535,7 @@ html[data-caption-pos="mirror"] #captions.cap-strip {
 body.hud-prof-broadcast #captions.cap-strip {
   --cap-mir-top: calc(var(--sat, 0px) + 8px * var(--cap-mz));
 }
-html[data-captions="off"] #captions.cap-strip { display: none !important; }
+html[data-captions="off"] #captions.cap-strip { display: none; }
 /* ON TOUCH THE CARD STAYS IN THE DOCK LANE. --announce-lane-x / -shift / -w
    (js/ui/hud.js announceLane) are the gap the dock groups leave under the
    tower, already inset by --sal/--sar, in SCREEN px. --hud-z lives on this
@@ -2091,9 +2091,9 @@ body.pc-nopanel .pc-altcol   { left: auto; right: calc(34px + var(--pc-look-spac
    size rule below is about. */
 body.pc-uihidden #photo-controls > :not(#pc-restore, #pc-scene) { display: none !important; }
 body.pc-uihidden :is(#lighting-inner, #freecam-inner) { display: none !important; }
-body.pc-uihidden #game-metrics { display: none !important; }
+body.pc-uihidden #game-metrics { display: none; }
 body.pc-uihidden #fc-comp-grid,
-body.pc-uihidden #fc-dof { display: none !important; }
+body.pc-uihidden #fc-dof { display: none; }
 /* THE PANEL IS HUD CHROME AND FOLLOWS THE HUD. It is created at runtime with no
    index.html node, so it inherited none of the rules that clear the screen for a
    menu: it painted over the title screen, the garage and every sheet, and the
@@ -2103,7 +2103,7 @@ body.pc-uihidden #fc-dof { display: none !important; }
    go stale the next time one is added. The .screen.dim arm is the same idiom
    #photo-controls and #campicker use for a sheet opened OVER a live race. */
 body:has(> #hud[hidden]) #game-metrics,
-body:has(> .screen.dim:not([hidden])) #game-metrics { display: none !important; }
+body:has(> .screen.dim:not([hidden])) #game-metrics { display: none; }
 body.pc-uihidden #hud,
 body.pc-uihidden #lights,
 body.pc-uihidden #announce,
@@ -2422,7 +2422,7 @@ body[data-hud-hide~="damage"] #hud-damage { display: none; }
 #hud-rel[data-col-compact] > div:not([data-col-row]),
 #hud-strat[data-col-compact] > div:not([data-k="next"]) { display: none; }
 body:not([data-hud-arrange]) :is(#hud-rel, #hud-strat, #hud-inputs)[data-col-drop]:is(:not([data-hl-user]), [data-hl-seed]),
-body:not([data-hud-arrange]) #hud-rel[data-fit-drop]:not([data-hl-user]) { display: none !important; }
+body:not([data-hud-arrange]) #hud-rel[data-fit-drop]:not([data-hl-user]) { display: none; }
 #hud-rel [data-k="gap"] { text-align: right; }
 #hud-rel [data-k="code"] { font-weight: 800; letter-spacing: 0.04em; }
 #hud-rel [data-k="lap"] { font-weight: 800; }

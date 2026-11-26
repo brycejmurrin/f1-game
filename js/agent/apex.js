@@ -203,7 +203,7 @@ const LAZY_READ_ONLY = new Set(["menuPrep", "info", "probe", "texCensus", "agent
 function lazyTrackEnsure(o) {
   for (const k of Object.keys(o)) {
     const fn = o[k];
-    if (typeof fn !== "function" || LAZY_READ_ONLY.has(k)) continue;   // tiltSim (namespace)
+    if (typeof fn !== "function" || LAZY_READ_ONLY.has(k) || (typeof ApexPlay !== "undefined" && ApexPlay.isReadOnly(k))) continue;   // tiltSim (namespace)
     // Never under the loading screen, nor over a stepped or worker build in flight:
     // RACE!'s intro owns the build and `track` is null by design until it lands; race()/tt() build their OWN circuit (a cold title-pick build here doubled race entry, CI 38604708051).
     // Title boots LAZY_CIRCUIT meta stubs (_metaOnly, no path): a sync loadTrack
@@ -702,10 +702,9 @@ const api = {
   tyres(arg) {
     if (!G.tyres) return null;
     const o = arg && typeof arg === "object" ? arg : {};
-    // `level` sets the TYRE WEAR setting AND the live model together, so a spec
-    // can turn wear on without the settings sheet and have it survive the next
-    // gridUp (which re-reads the setting, not the model).
-    if (o.level != null && TyreModel.isLevel(o.level)) { G.raceTyreWear = o.level; G.tyres.setLevel(o.level); }
+    // `level` sets the TYRE WEAR setting AND the live model together (survives the next gridUp), and plans cars gridUp left bare (#6611).
+    if (o.level != null && TyreModel.isLevel(o.level)) { G.raceTyreWear = o.level; G.tyres.setLevel(o.level);
+      if (G.tyres.on()) (G.cars || []).forEach((c) => { if (!c.pitPlan && G.pits) c.pitPlan = G.pits.planFor(c.human ? 0.5 : DriverRatings.hash32("apex:" + (c.driverId || c.code)) / 4294967296, !!c.human, 0, c); }); }
     // `fit` ("soft"/"medium"/"hard") changes the set exactly as a pit stop does
     // (TyreModel.fit, which writes the stint log), so a spec that ends a race
     // with finishRace() can meet the two-compound rule (js/race/sporting-regs.js).
@@ -1874,6 +1873,7 @@ const api = {
     ...ApexCam.hooks(G, { smp, smp2, camVantage, setCamMode, snapGameCam }), // peeled: G.camRoll G.cameraDampingState
   ...ApexTrack.hooks(G, { smp, wrapS }),
   ...ApexLobby.hooks(G, { raceOrder }), // peeled: G.ttLaps
+  ...(typeof ApexPlay !== "undefined" ? ApexPlay.hooks(G) : {}), // ApexPlay: hand-loading tests may omit it; def() registry (js/agent/apex-play.js); empty until a U4.x unit defs a hook
   ...ApexNet.hooks(G, { resetStartLights }),
 
   // turnProbe() — is a relay actually there?
@@ -2218,7 +2218,9 @@ const api = {
 
   rollout(opts) { return agentView.rollout(opts); },
 
-  agentHelp() { return agentView.agentHelp(); },
+  // play: the def() registry rows (js/agent/apex-play.js), merged at call time because gen-agent-index evaluates
+  // agentview.js's agentHelp() literal statically and cannot fold a call.
+  agentHelp() { return Object.assign(agentView.agentHelp(), { play: typeof ApexPlay !== "undefined" ? ApexPlay.rows() : [] }); },
 
   scene(opts) { return agentView.scene(opts); },
 

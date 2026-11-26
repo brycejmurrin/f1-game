@@ -733,7 +733,7 @@ function auditionOn(h) {
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/race-mix-audition.js"), "utf8"), ctx, { filename: absSrc("js/audio/race-mix-audition.js") });
   const audition = vm.runInContext("RaceMixAudition", ctx);
   const start = () => audition.start({ audio: h.A, soundOn: () => true,
-    store: { get: (key, fallback) => key === "radioVoice" ? false : fallback } });
+    store: { get: (key, fallback) => key === "radioVoice" ? false : key === "music" ? true : fallback } });
   const deadline = () => [...timers.values()].find((t) => t.ms === 6000).fn();
   return { audition, timers, start, deadline };
 }
@@ -960,4 +960,43 @@ test("a touch pointerdown resumes but never rebuilds; the same tap's touchend re
   clock += 1000;
   listeners.pointerdown({ type: "pointerdown", pointerType: "mouse", isTrusted: true }); await flush();
   assert.equal(A.ctxGen(), gen0 + 2, "a mouse press still rebuilds a stalled context");
+});
+
+test("a rebuild resets the BRAKE CUE and driving-cue clocks to the new context (#6886 row 3)", async () => {
+  const { A, contexts, fireDeviceChange } = boot({ userActivation: sticky });
+  A.init(); await flush(); A.startEngine();
+  contexts[0].currentTime = 600;
+  A.brakeCue(1); A.driveBrakeTone(1);
+  assert.ok(A.brakeCueState().nextAt > 600, "precondition: the cue is stamped on the old clock");
+  assert.ok(A.driveCueState().nextAt > 600, "precondition: the driving cue is stamped on the old clock");
+  fireDeviceChange(); await wait(DEVICE_REBUILD_DEBOUNCE_MS + 60); await flush();
+  assert.equal(contexts.length, 2, "precondition: rebuilt");
+  assert.ok(A.brakeCueState().nextAt < 1, "cueT is not a stamp of the closed clock");
+  assert.ok(A.driveCueState().nextAt < 1, "driveCueT is not either");
+  const before = A.brakeCueState().fired;
+  A.brakeCue(1);
+  assert.equal(A.brakeCueState().fired, before + 1, "BRAKE CUE fires on the new clock");
+  const dBefore = A.driveCueState().brakeFired;
+  A.driveBrakeTone(1);
+  assert.equal(A.driveCueState().brakeFired, dBefore + 1, "the driving cue fires on the new clock");
+});
+
+test("a rain teardown that straddles a rebuild leaves the new context's rain state alone (#6886 row 10)", async () => {
+  const timers = [];
+  const { A, contexts, fireDeviceChange, started } = boot({ userActivation: sticky,
+    setTimeout: (fn, ms) => { if (ms === 1200) { timers.push(fn); return 0; } return setTimeout(fn, ms || 0); } });
+  A.init(); await flush(); A.startEngine();
+  A.startRain(0.1);
+  A.stopRain();                       // teardown timer armed on context 0
+  assert.equal(timers.length, 1);
+  A.startRain(0.2);                   // queued behind the teardown
+  fireDeviceChange(); await wait(DEVICE_REBUILD_DEBOUNCE_MS + 60); await flush();
+  assert.equal(contexts.length, 2, "precondition: rebuilt");
+  const rainStarts = () => started.filter((n) => n.kind === "src" && n.loop).length;
+  assert.ok(started.some((n) => n.kind === "src" && n.loop), "precondition: rain restarted on the new context");
+  A.stopRain(true);                   // the new context's own teardown is now in flight
+  A.startRain(0.3);                   // queued behind it
+  const before = rainStarts();
+  timers[0]();                        // the old teardown lands late
+  assert.equal(rainStarts(), before, "the stale timer must not clear the new teardown's guard and start a second graph");
 });

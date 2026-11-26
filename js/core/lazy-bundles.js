@@ -33,6 +33,7 @@ const RACE_SESSION_READY = {
   "js/data/garage-departure-motion.js": () => typeof GarageDepartureMotion !== "undefined",
   "js/garage/departure-wheels.js": () => typeof GarageDepartureWheels !== "undefined",
   "js/race/reliability.js": () => typeof Reliability !== "undefined" && !!Reliability && !Reliability._stub,
+  "js/core/sim-state.js": () => typeof SimState !== "undefined" && !!SimState,
   "js/race/damage.js": () => typeof Damage !== "undefined" && !!Damage && !Damage._stub,
   "js/race/damage-handling.js": () => typeof DamageHandling !== "undefined" && !!DamageHandling && !DamageHandling._stub,
   "js/race/duel.js": () => typeof Duel !== "undefined" && !!Duel && !Duel._stub,
@@ -512,22 +513,22 @@ const audioScriptsLoaded = new Set();
 let audioHooked = false;
 let audioStubVals = null;
 const AUDIO_GLOBAL = {
-  "js/audio/signal.js": () => typeof GameAudioSignal !== "undefined" ? GameAudioSignal : undefined,
-  "js/audio/soundtrack.js": () => typeof GameAudioSoundtrack !== "undefined" ? GameAudioSoundtrack : undefined,
-  "js/audio/radio-fx.js": () => typeof GameAudioRadioFx !== "undefined" ? GameAudioRadioFx : undefined,
-  "js/audio/tone-model.js": () => typeof GameAudioToneModel !== "undefined" ? GameAudioToneModel : undefined,
-  "js/audio/engine.js": () => typeof GameAudio !== "undefined" ? GameAudio : undefined,
+  "js/audio/signal.js": () => globalThis.GameAudioSignal,
+  "js/audio/soundtrack.js": () => globalThis.GameAudioSoundtrack,
+  "js/audio/radio-fx.js": () => globalThis.GameAudioRadioFx,
+  "js/audio/tone-model.js": () => globalThis.GameAudioToneModel,
+  "js/audio/engine.js": () => globalThis.GameAudio,
   "js/audio/music-lib.js": () => window.MusicLib,
   "js/audio/spotify.js": () => window.SpotifyMusic,
-  "js/audio/rivals.js": () => typeof RivalAudio !== "undefined" ? RivalAudio : undefined,
-  "js/audio/crowd.js": () => typeof CrowdAudio !== "undefined" ? CrowdAudio : undefined,
-  "js/audio/car-sfx.js": () => typeof CarSfx !== "undefined" ? CarSfx : undefined,
-  "js/audio/voice-pack.js": () => typeof VoicePack !== "undefined" ? VoicePack : undefined,
-  "js/audio/radio-voice.js": () => typeof RadioVoice !== "undefined" ? RadioVoice : undefined,
-  "js/audio/announcer-recorded.js": () => typeof RecordedAnnouncer !== "undefined" ? RecordedAnnouncer : undefined,
-  "js/audio/announcer.js": () => typeof Announcer !== "undefined" ? Announcer : undefined,
-  "js/audio/panel.js": () => typeof AudioPanel !== "undefined" ? AudioPanel : undefined,
-  "js/audio/driving-cues.js": () => typeof DrivingCues !== "undefined" ? DrivingCues : undefined,
+  "js/audio/rivals.js": () => globalThis.RivalAudio,
+  "js/audio/crowd.js": () => globalThis.CrowdAudio,
+  "js/audio/car-sfx.js": () => globalThis.CarSfx,
+  "js/audio/voice-pack.js": () => globalThis.VoicePack,
+  "js/audio/radio-voice.js": () => globalThis.RadioVoice,
+  "js/audio/announcer-recorded.js": () => globalThis.RecordedAnnouncer,
+  "js/audio/announcer.js": () => globalThis.Announcer,
+  "js/audio/panel.js": () => globalThis.AudioPanel,
+  "js/audio/driving-cues.js": () => globalThis.DrivingCues,
 };
 function audioFileLanded(src) {
   const read = AUDIO_GLOBAL[src];
@@ -697,7 +698,12 @@ let audioGestureArmed = false;
 function audioGestureUnlock(e) {
   if (e && (e.isTrusted === false || (e.type === "keydown" && e.key === "Escape"))) return;
   if (!audioHooked) ensureAudio();   // memoised; after a failed load or ready hook this is the retry
-  if (typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) return;
+  // The bundle evaluates off this turn. WebKit only resumes a context created
+  // inside the gesture, so prime one on the stub before returning (#6448).
+  if (typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) {
+    try { GameAudio.init(); } catch (e) { /* undefined GameAudio, or no AudioContext on this page */ }
+    return;
+  }
   const G = ctxOrNull();
   if (!G || !G.soundOn) return;
   const ctx = GameAudio.context ? GameAudio.context() : null;
@@ -718,6 +724,19 @@ armAudioGesture();   // at create: game.js's pointerdown/keydown kicks are the o
 // after a throw re-runs only the part that threw. Re-running RadioVoice.create /
 // Announcer.create stacked their page-lifetime observers (audit4 F1 / UB3).
 const audioReadyDone = new Set();
+// The five stub-then-recreate instances (radio, announcer, rivals, carSfx, panel)
+// are HANDLES (#6952): one object for the page's life. adoptAudio copies the real
+// instance's property descriptors onto it in place (no Proxy, no forwarders, so a
+// data member such as RadioVoice `pack` reads as the real one) and drops stub-only
+// keys. audioHandle makes a writable handle of a frozen source (a real inert()).
+function adoptAudio(handle, real) {
+  if (!real || real === handle) return handle;
+  const d = Object.getOwnPropertyDescriptors(real);
+  for (const k of Object.keys(handle)) if (!(k in d)) delete handle[k];
+  for (const k in d) { d[k].configurable = true; if ("value" in d[k]) d[k].writable = true; }
+  return Object.defineProperties(handle, d);
+}
+const audioHandle = (obj) => (obj && Object.isExtensible(obj) ? obj : adoptAudio({}, obj));
 function audioReadyOnce(key, fn) {
   if (audioReadyDone.has(key)) return;
   fn();
@@ -907,6 +926,7 @@ function ensurePerfRig() {
   if (!files.length) return Promise.resolve(false);
   _perfLoad = loadBackendScripts(files, ApexRoster.LAZY_PERF_EDGES || [], { strict: true, loaded: perfLoaded }).then((ok) => {
     bindPerfRig();
+    try { if (typeof PerfGov !== "undefined" && PerfGov.resyncDrift) PerfGov.resyncDrift(); } catch (_) { /* governor absent */ }
     if (ok === false) _perfLoad = null;   // #5555: a dropped fetch is retried by the next ask, not latched
     return ok !== false;
   }).catch((e) => {
@@ -1141,7 +1161,7 @@ watchRouteCss();
 // After every const above (loadBackendScripts reads AUDIO_FILES): a flag-gated inject, never awaited.
 bootDevPanels();
 mountBridgeLinkDoor();
-return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureReplayBroadcast, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, ensureRouteCss, ensureSavesData, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
+return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureReplayBroadcast, ensureNet, ensureAudio, adoptAudio, audioHandle, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, ensureRouteCss, ensureSavesData, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
   // The instance game.js made, for modules that load outside it (#5555): the global is only this factory.
   let live = null;

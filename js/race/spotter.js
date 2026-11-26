@@ -114,9 +114,18 @@ var Spotter = (() => {
       // engineer's routine lines in traffic.
       occupied = occupancy(p, G.cars, G.track.total, occupied);
       // Awareness also gates the coach and routine radio with speech muted.
-      if (!pack || !on() || !G.soundOn || (G.radio.volume && G.radio.volume() <= 0)) {
+      if (!pack || !on()) {
         if (dirty()) reset(pack);
         return "";
+      }
+      // SOUND off or VOICE VOLUME 0: nothing is voiced, but CAPTIONS ON is the fallback such a player relies
+      // on, so the call is still stepped and captioned (heard=false: CAPTIONS SPOKEN ONLY stays silent).
+      if (!G.soundOn || (G.radio.volume && G.radio.volume() <= 0)) {
+        if (spoke) reset(pack);
+        return step(st, occupied, dt, (key) => {
+          if (typeof Captions !== "undefined" && Captions.onSpotter) Captions.onSpotter(KEYS[key], key, false);
+          return true;
+        });
       }
       // The engineer's chosen voice, from its radio pack (where the spotter's calls are).
       const voice = G.radio.recordedPack ? G.radio.recordedPack("radio") : G.radio.recordedVoice ? G.radio.recordedVoice("radio") : "george";

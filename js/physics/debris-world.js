@@ -156,16 +156,8 @@ const MARBLE_GRIP_R = 2.6;     // m — radius around the player that counts set
 const MARBLE_GRIP_PER = 0.010; // grip loss per settled marble in range (1%)
 const MARBLE_GRIP_MIN = 0.93;  // floor: never more than a 7% cornering-grip cut
 
-// Deterministic PRNG (mulberry32) — every stream is seeded from game state.
-function rng32(seed) {
-  let a = seed | 0;
-  return function () {
-    a = (a + 0x6D2B79F5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+// Deterministic PRNG (mulberry32) — every stream is seeded from game state (js/core/mat4.js).
+const rng32 = M4.rng32;
 
 const _smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };  // sample scratch
 const _bankScratch = { dy: 0, roll: 0 };  // marble-grip road height at the car's lateral offset

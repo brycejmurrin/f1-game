@@ -1743,7 +1743,7 @@ var PitLane = (function () {
     // lifts the body. One shared record, no per-frame allocation.
     const _anim = { lift: 0, off: 0, u: -1 };
     _anim.lift = _anim.off = _anim.u = 0.5; _anim.lift = _anim.off = 0; _anim.u = -1;   // born Double, like _pitCtx
-    const ease = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+    const ease = M4.smoothstep;
     function stopAnim(c) {
       const zz = z();
       _anim.lift = 0; _anim.off = 0; _anim.u = -1;

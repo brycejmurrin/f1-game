@@ -32,6 +32,7 @@ const NetTransport = load("js/net/transport.js", "NetTransport");
 // never syncs its clock — a failure mode with no error message at all.
 const NetInterp = load("js/net/interp.js", "NetInterp");
 const NetSnapshot = load("js/net/snapshot.js", "NetSnapshot");
+globalThis.NetWire = load("js/net/wire-schema.js", "NetWire");   // the ingress table NetSession runs
 const NetSession = load("js/net/session.js", "NetSession");
 // netplay.js calls both create() while it evaluates. The delivery test below
 // builds NetPlay with new Function, which resolves these names on the global.
@@ -258,13 +259,16 @@ test("events are typed, and only their own handler sees them", () => {
   p.b.onEvent("lap", (d) => laps.push(d));
   p.b.onEvent("settings", (d) => settings.push(d));
 
-  p.a.sendEvent("lap", { driver: 4, time: 81.23 });
+  // A handler gets its NetWire row's DECODED value: LAP keeps only its
+  // declared scalars, and a type no row declares is dropped and counted (#6859).
+  p.a.sendEvent("lap", { lap: 4, time: 81.23, driver: 4 });
   p.a.sendEvent("settings", { track: "monza", laps: 5 });
   p.a.sendEvent("unhandled", { ignored: true });
   p.advance(200);
 
-  assert.deepEqual(laps, [{ driver: 4, time: 81.23 }]);
+  assert.deepEqual(laps, [{ lap: 4, time: 81.23 }]);
   assert.deepEqual(settings, [{ track: "monza", laps: 5 }]);
+  assert.equal(p.b.wireDrops().undeclared, 1, "the undeclared type is counted, not delivered");
 });
 
 test("events survive a lossy link because they ride the reliable channel", () => {
@@ -272,8 +276,8 @@ test("events survive a lossy link because they ride the reliable channel", () =>
   // channel must not touch them.
   const p = pair({ latency: 30, loss: 0.6, seed: 11 });
   const got = [];
-  p.b.onEvent("x", (d) => got.push(d));
-  for (let i = 0; i < 25; i++) p.a.sendEvent("x", i);
+  p.b.onEvent("lap", (d) => got.push(d.lap));
+  for (let i = 0; i < 25; i++) p.a.sendEvent("lap", { lap: i });
   p.advance(500);
   assert.equal(got.length, 25, "every event must arrive");
   assert.deepEqual(got, Array.from({ length: 25 }, (_, i) => i));
@@ -533,12 +537,12 @@ test("a second NetSession.create on one endpoint replaces the prior session hand
   const first = NetSession.create({ transport: ta, pingEveryMs: 100 });
   const second = NetSession.create({ transport: ta, pingEveryMs: 100 });
   const firstEvents = [], secondEvents = [];
-  first.onEvent("ping-test", (d) => firstEvents.push(d));
-  second.onEvent("ping-test", (d) => secondEvents.push(d));
+  first.onEvent("bye", (d) => firstEvents.push(d));
+  second.onEvent("bye", (d) => secondEvents.push(d));
   const sessionHandlers = ta._handlers.message.filter((fn) => fn && fn._netSessionMsg);
   assert.equal(sessionHandlers.length, 1, "exactly one session message binder");
   // Deliver an EVENT through the wire-shaped path the binder owns.
-  const payload = JSON.stringify({ t: "ping-test", d: { n: 1 } });
+  const payload = JSON.stringify({ t: "bye", d: { n: 1 } });
   for (const fn of ta._handlers.message) {
     if (fn && fn._netSessionMsg) fn(NetTransport.EVENT, payload, 0);
   }

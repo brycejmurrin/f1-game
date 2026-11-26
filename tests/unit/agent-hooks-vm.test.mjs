@@ -683,3 +683,12 @@ test("race() leaves a career in the saved free-play seat on the requested circui
     assert.equal(apex.career().seat, 1);
   } finally { game.close(); }
 });
+
+test("tyres({level}) after gridUp plans every car, so a finisher is not DSQ'd (#6611 RW2)", async () => {
+  await load();
+  g.apex.tyres({ level: "off" });
+  g.G.cars.forEach((c) => { c.pitPlan = null; });   // a grid built while wear was off
+  g.apex.tyres({ level: "real" });
+  const bare = g.G.cars.filter((c) => !c.pitPlan);
+  assert.equal(bare.length, 0, `${bare.length} car(s) have no pit plan after tyres({level})`);
+});

@@ -166,6 +166,25 @@ test("a token GitHub rejects never links, and is forgotten so the box asks again
   assert.equal(b.store.has("apex26.bridgeToken"), false);
 });
 
+test("a def()'d read-only hook is callable and needsTrack answers no_track", async () => {
+  // js/agent/apex-play.js with test-only fixtures; a def hook runs as an ACTION (CALL_READ pins names to source).
+  const play = vm.createContext({ Object });
+  vm.runInContext(fs.readFileSync(new URL("../../js/agent/apex-play.js", import.meta.url), "utf8") + "\n;globalThis.ApexPlay = ApexPlay;", play, { filename: absSrc("js/agent/apex-play.js") });
+  play.ApexPlay.def("playFixture", { readOnly: true, doc: "fixture", args: "{x}", fn: (G, o) => ({ ok: true, x: o && o.x }) });
+  play.ApexPlay.def("playFixtureTrack", { needsTrack: true, doc: "fixture", args: "()", fn: () => ({ ok: true }) });
+  const G = { track: null };
+  const apex = Object.assign({}, play.ApexPlay.hooks(G));
+  const { api } = load({ search: "", apex });
+  const r = await api.handle({ cmd: "call", args: { method: "playFixture", args: [{ x: 7 }] } });
+  assert.equal(r.ok, true);
+  assert.equal(JSON.stringify(r.value), JSON.stringify({ ok: true, x: 7 }));
+  const n = await api.handle({ cmd: "call", args: { method: "playFixtureTrack" } });
+  assert.equal(JSON.stringify(n.value), JSON.stringify({ ok: false, error: "no_track" }));
+  G.track = {};
+  const y = await api.handle({ cmd: "call", args: { method: "playFixtureTrack" } });
+  assert.equal(y.value.ok, true);
+});
+
 test("saves, career and net hooks are not callable", async () => {
   const hit = [];
   const apex = {};
@@ -1113,6 +1132,7 @@ test("#6582 the READ class: listed commands, drive stop/status, and only allow-s
   const R = (cmd, args) => api.isRead({ cmd, args });
   for (const c of ["ping", "facts", "display", "geom", "frames", "screen", "snap"]) assert.equal(R(c), true, c);
   for (const c of ["tap", "nav", "set", "key", "scroll", "drive", "reload", "path", "bench", "gpuTest", "recorder", "batch", "wait", "when", "plan", "nope"]) assert.equal(R(c, {}), false, c);
+  assert.equal(R("ledger", {}), true); assert.equal(R("ledger", { on: true }), false); assert.equal(R("ledger", { reset: true }), false);
   assert.equal(R("drive", { stop: true }), true);
   assert.equal(R("drive", { status: true }), true);
   assert.equal(R("call", { method: "perf" }), true);
@@ -1512,4 +1532,22 @@ test("#6637: call finishRace is refused while a DRIVER CAREER round is live (or 
     assert.equal(r.ok, true, f + ": " + r.error);
   }
   assert.deepEqual(hit, ["gp", "season"]);
+});
+
+test("#6941 ledger verb: reads PerfSpans phases; on/reset change the recorder", async () => {
+  const calls = [];
+  let on = false;
+  const PerfSpans = {
+    phases: ["frame", "update"],
+    on: (v) => { on = !!v; calls.push("on:" + on); return on; },
+    reset: () => { calls.push("reset"); },
+    report: () => ({ on, ring: 512, spans: { update: { n: 3, p50: 1, p95: 2, p99: 3, max: 4 } } }),
+  };
+  const { api } = load({ search: "", extra: { PerfSpans } });
+  const r = await api.handle({ cmd: "ledger", args: {} });
+  assert.equal(r.ok, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.value)), { on: false, ring: 512, phases: ["frame", "update"], spans: { update: { n: 3, p50: 1, p95: 2, p99: 3, max: 4 } } });
+  const r2 = await api.handle({ cmd: "ledger", args: { on: true, reset: true } });
+  assert.equal(r2.value.on, true);
+  assert.deepEqual(calls, ["reset", "on:true"]);
 });

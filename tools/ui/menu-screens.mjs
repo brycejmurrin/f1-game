@@ -621,6 +621,7 @@ export const OVERLAY_IDS = [
   // #ios-install / #install-chip tips (not layers; ui-reset TIP_IDS).
   // tests/unit/ui-reset-tap-floor.test.mjs pins this against DEFS.
   "freecam", "garrival", "ceremony-podium", "tl-editor", "hud-arrange-bar", "dock-edit-bar", "screen-arranger",
+  "thumb-trainer",
 ];
 
 export function listScreenIds() {

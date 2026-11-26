@@ -489,7 +489,7 @@ var GameAudioSoundtrack = (function () {
     }
     function playTrackId(id) {
       const i = indexOfId(id);
-      if (i < 0 || backend || !musicEnabled) return false;
+      if (i < 0 || backend || !musicEnabled || !host.enabled()) return false;
       ++actionGeneration;
       playIndex(i);
       return musicOn;

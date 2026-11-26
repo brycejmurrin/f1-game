@@ -25,6 +25,13 @@ const NetNostr = (function () {
   const MAX_SEEN = 64;
   const MAX_SEEN_CHARS = MAX_CONTENT_CHARS * 2;
   const MAX_HEARD_ACTIVE = 4;
+  // One relay socket may not hold the whole decrypt budget: a flood of unique
+  // junk from one relay must not starve the offer another relay delivers.
+  const MAX_ACTIVE_PER_SOURCE = 2;
+  const SOURCE_BUDGET = 40;          // events one socket may deliver per window
+  const SOURCE_WINDOW_MS = 10000;    // a real exchange sends a handful; over budget = flooding
+  // created_at is signed by the sender's clock; far-future is never legitimate.
+  const CREATED_FUTURE_SLACK_S = 300;
   // REQ strips `since` (device clock skew). Without a local floor a relay that
   // replays an earlier host session's offer would be answered. The sender signs
   // created_at with ITS clock and the floor is this device's, so the slack must
@@ -197,18 +204,33 @@ const NetNostr = (function () {
     // replaying history in a burst must not cost us every connection
     // mid-handshake), false = poison (non-string / empty / oversize) — the
     // caller closes that relay.
-    const accept = (content, createdAt) => {
+    const sources = new Map();
+    const accept = (content, createdAt, src) => {
       if (typeof content !== "string" || !content || content.length > MAX_CONTENT_CHARS) return false;
-      // Stale: older than hostStartedAt − slack. Keep the socket; do not decrypt.
-      if (minCreatedAt != null && typeof createdAt === "number" && createdAt < minCreatedAt) return true;
+      // created_at must be a finite number, not from the future, and not older
+      // than hostStartedAt − slack. Missing/garbage/future: drop without decrypt
+      // (keep the socket); stale likewise.
+      if (typeof createdAt !== "number" || !Number.isFinite(createdAt)) return true;
+      if (createdAt > Date.now() / 1000 + CREATED_FUTURE_SLACK_S) return true;
+      if (minCreatedAt != null && createdAt < minCreatedAt) return true;
+      // Per-source flood budget: past it, the relay is poison — the caller closes it.
+      const now = Date.now();
+      let st = sources.get(src);
+      if (!st) {
+        if (sources.size >= 32) for (const [k, v] of sources) if (!v.active) sources.delete(k);
+        st = { active: 0, n: 0, t0: now };
+        sources.set(src, st);
+      }
+      if (now - st.t0 > SOURCE_WINDOW_MS) { st.t0 = now; st.n = 0; }
+      if (++st.n > SOURCE_BUDGET) return false;
       if (seen.has(content)) return true;
-      if (active >= MAX_HEARD_ACTIVE) return "busy";
+      if (active >= MAX_HEARD_ACTIVE || st.active >= MAX_ACTIVE_PER_SOURCE) return "busy";
       remember(content);
-      active++;
+      active++; st.active++;
       Promise.resolve().then(() => consume(content, createdAt)).catch((e) => {
         // First failure per inbox only: a relay replaying history can repeat it per message.
         if (failed++ === 0) Log.warn("net", "nostr relay message handler failed:", e && e.message);
-      }).finally(() => { active--; });
+      }).finally(() => { active--; st.active--; });
       return true;
     };
     return { accept, stats: () => ({ seen: seen.size, seenChars, active }) };
@@ -514,7 +536,7 @@ const NetNostr = (function () {
             return;
           }
           if (m[0] === "EVENT" && m[2] && typeof m[2].content === "string" &&
-              inbox.accept(m[2].content, m[2].created_at) === false) {
+              inbox.accept(m[2].content, m[2].created_at, w) === false) {
             try { w.close(); } catch (e) { /* already closing */ }
           }
         };

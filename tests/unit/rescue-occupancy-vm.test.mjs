@@ -36,6 +36,27 @@ test("Collide.rescueX: centre when clear, else a car's width aside, never onto a
   assert.equal(C.rescueX(me, [me, { s: 101, x: 0, finished: true }], L, hw), 0, "a finished car has left the race");
 });
 
+// #6480 K3: with the centre and both side slots taken the rescue returned the centre, onto the
+// middle car (the blind drop R5 removed). Now it takes the clearest point across the usable road.
+test("Collide.rescueX: all three slots taken, clear road at the edge is used, never a car (#6480 K3)", () => {
+  const C = g.sandbox.Collide, L = 5000, W = C.WCAR, hw = 7.5;
+  const me = { s: 100, x: 3 }, off = Math.min(W + 1, hw - W / 2 - 0.3);
+  const row = [me, { s: 101, x: 0 }, { s: 99, x: off }, { s: 100.5, x: -off }];
+  const x = C.rescueX(me, row, L, hw);
+  for (const o of row.slice(1)) assert.ok(Math.abs(x - o.x) >= W, `landed within a car width of the car at x ${o.x}: x ${x}`);
+  assert.ok(Math.abs(x) + W / 2 <= hw, "still on the road: " + x);
+  assert.ok(x > 0, "the side the car came off wins a tie: " + x);
+  // A road with no clear gap: the least-crowded spot, not the centre car.
+  const narrow = 5, o2 = Math.min(W + 1, narrow - W / 2 - 0.3);
+  const row2 = [me, { s: 101, x: 0 }, { s: 99, x: o2 }, { s: 100.5, x: -o2 }];
+  const x2 = C.rescueX(me, row2, L, narrow);
+  const gap = (xx) => Math.min(...row2.slice(1).map((o) => Math.abs(xx - o.x)));
+  assert.ok(gap(x2) > 1, "the clearest point, well off every car: gap " + gap(x2) + " at x " + x2);
+  assert.ok(Math.abs(x2) + W / 2 <= narrow, "still on the road: " + x2);
+  // No room to move across at all (half-width under a car and a margin): the centre, as on base.
+  assert.equal(C.rescueX(me, row2, L, 1.2), 0, "a road too narrow for a side slot keeps the centre");
+});
+
 test("rescuePlayer beside a car stopped on the line puts the player clear of it, world position matching", async () => {
   const A = g.apex, G = g.G;
   await g.race("monza");
@@ -84,4 +105,28 @@ test("a car pulling away on the grass is not rescued while it gains speed; one h
     for (let i = 0; i < 360 && p.rescueLastT == null; i++) { p.x = 12; p.speed = floor; g.step(1); }
     assert.ok(p.rescueLastT != null, "a car stuck at the grass floor is still rescued");
   } finally { G.PACE = pace0; }
+});
+
+// #6877 P4/P5/P6: reset leaks — RECOVER and the red-flag re-grid reuse the car object.
+test("rescuePlayer clears the spin's visual/slip state and the off-track strike latch (#6877 P4)", async () => {
+  const A = g.apex, G = g.G;
+  await g.race("monza"); A.reset(0.3, 30, 0); A.headless(true); A.go();
+  const p = G.player;
+  p.yawVis = 0.7; p.steerVis = 0.5; p.skidIntensity = 0.9; p.wheelLock = 0.6; p.towing = 0.4; p.offCut = true;
+  G.rescuePlayer(p);
+  for (const k of ["yawVis", "steerVis", "skidIntensity", "wheelLock", "towing"]) assert.equal(p[k], 0, k);
+  assert.equal(p.offCut, false, "offCut");
+});
+
+test("red-flag re-grid clears offCut and cools the brake discs (#6877 P5, P6)", async () => {
+  const A = g.apex, G = g.G;
+  await g.race("monza"); A.reset(0.3, 30, 0); A.headless(true); A.go();
+  const p = G.player, T = g.sandbox.WheelState;
+  p.offCut = true; p.offT = -2; p.brakeTF = 900; p.brakeTR = 880; p.brakeFade = 0.7;
+  assert.ok(A.redFlag(), "re-grid ran");
+  const c = G.player;
+  assert.equal(c.offCut, false, "offCut");
+  assert.ok(c.brakeTF <= 100.001 && c.brakeTR <= 100.001, `discs ambient: ${c.brakeTF}/${c.brakeTR}`);
+  assert.equal(c.brakeFade, 1);
+  assert.equal(typeof T.resetThermal, "function");
 });

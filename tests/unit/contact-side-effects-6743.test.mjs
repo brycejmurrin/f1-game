@@ -28,7 +28,7 @@ function solver() {
     Log: { info() {}, enabled: () => false }, Tracks: { wallAt: () => 100 },
     IncidentSim: { owns: () => false, notifyCar(a, b) { bump(calls.notifyCar, a, b); } },
     DebrisWorld: { active: () => true, carImpact(a, b) { bump(calls.carImpact, a, b); } } });
-  for (const file of ["js/core/mat4.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"])
+  for (const file of ["js/core/mat4.js", "js/physics/ai-start.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"])
     vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
   const G = { track: { total: 6000 }, player: null, netPlay: { owns: () => false }, PACE: 1, raceT: 0,
     wrapS: (s) => (s % 6000 + 6000) % 6000, worldFromTrack: (s, x) => ({ x, z: s }) };
@@ -96,6 +96,7 @@ function debris(PACE) {
     GameStore: { store: { raw: () => "0" } }, localStorage: { getItem: () => null }, requestIdleCallback() {},
     setTimeout: () => 0, clearTimeout() {}, Log: { warn() {}, info() {} },
   });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8") + "; this.M4 = M4;", ctx, { filename: absSrc("js/core/mat4.js") });   // M4.rng32 binds at eval
   vm.runInContext(readFileSync(join(ROOT, "js/physics/debris-world.js"), "utf8"), ctx, { filename: absSrc("js/physics/debris-world.js") });
   const M = vm.runInContext("DebrisWorld", ctx);
   const G = { cars: [], PACE };

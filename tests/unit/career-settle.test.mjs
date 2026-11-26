@@ -1687,3 +1687,26 @@ test("an alternate sponsor never pays above its catalog figure (points 5 rounds 
     if (sp.window < cat.window) assert.equal(sp.pay, Math.round(cat.pay * sp.window / cat.window));
   }
 });
+
+test("an alternate sponsor's ASK scales to its own catalog window (double 6 rounds -> clean asks at most 4)", () => {
+  // #6605 row 12 follow-up: the clean alternate asked the slot's 6 rounds against a catalog of 4.
+  let seen = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const Career = load(24);
+    Career.start({ flavour: "myteam", teamId: "custom", seed }); Career.engage(true);
+    const p = Career.planning(), offers = p.sponsorOffers();
+    for (const o of offers) {
+      const cat = Career.SPONSOR_KINDS.find((k) => k.type === o.type);
+      if (o.type === "clean") assert.ok(o.value <= cat.window, `seed ${seed}: clean offer asks ${o.value} > catalog ${cat.window}`);
+    }
+    assert.equal(p.chooseSponsor(1), true);
+    const sp = Career.sponsor();
+    if (offers[0].type === "double" && offers[1].type === "clean") {
+      seen++;
+      assert.ok(sp.need <= 4, `model asks ${sp.need}`);
+      assert.equal(sp.need, offers[1].value, "model and UI agree");
+      assert.equal(sp.label, offers[1].label);
+    }
+  }
+  assert.ok(seen > 0, "the double -> clean case was exercised");
+});

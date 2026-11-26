@@ -42,7 +42,7 @@ generated readers and executable changes follow the code gates below.
 4. **Structural guards (local edit loop)** — workers run the change-aware slice,
    not the full suite in the foreground:
    ```sh
-   node tools/ci/tooling-fast.mjs --changed --jobs=3
+   # the command: AGENTS.md rule 3
    ```
    Run it in the background with `--jobs=3` (AGENTS.md rule 4). It is the
    local floor (AGENTS.md rule 3); the PR's CI tiers run the full ladder.
