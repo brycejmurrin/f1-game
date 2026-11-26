@@ -81,7 +81,8 @@ body[data-thumb-trainer] #hud::before { display: none; }   /* the race vignette 
 #tt-bar > .bigbtn { width: auto; margin: 0; min-width: 44px; padding-block: 0; padding-inline: var(--pad); font-size: var(--fs-3); }
 #tt-bar > .sel-chip, #tt-presets .sel-chip { min-height: var(--tap); min-width: 44px; font-size: var(--fs-2); }
 #tt-bar select {   /* the .set-row select (css/settings-controls.css) on the --tap row */
-  flex: 1 1 8em; min-width: 44px; width: auto; height: var(--tap); min-height: var(--tap); box-sizing: border-box; margin: 0;
+  flex: 1 1 4.5em;   /* the corner picker yields row width so 🏁 fits with it on the first row (#6927; 852x393 live profile overflowed 27 px at 8em) */
+  min-width: 44px; width: auto; height: var(--tap); min-height: var(--tap); box-sizing: border-box; margin: 0;
   padding: 0 calc(var(--gap) * 0.5); text-overflow: ellipsis;
   border: 1px solid var(--plate-line); border-radius: var(--r-sm); background: var(--plate); color: var(--text);
   font: inherit; font-size: var(--fs-2); font-weight: 600; letter-spacing: var(--ls-1);
