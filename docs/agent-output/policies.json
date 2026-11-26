@@ -361,6 +361,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/check/g-owners.json": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c1"
+    },
     "tools/check/html-sink-lint.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",

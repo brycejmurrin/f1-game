@@ -505,6 +505,8 @@
     "// Every freezable module surface stays frozen (pure file read; < 1 s).",
     "tests/unit/frozen-globals.test.mjs",
     "tests/unit/frustum-buckets.test.mjs",
+    "// gWrites counter (tree-counts.mjs): scope-resolved G.<member> writes, fixtures + live-tree sum (~3 s).",
+    "tests/unit/g-writes.test.mjs",
     "tests/unit/gallery-capture-draws.test.mjs",
     "tests/unit/game-ctx-closed.test.mjs",
     "tests/unit/game-ctx-surface.test.mjs",
