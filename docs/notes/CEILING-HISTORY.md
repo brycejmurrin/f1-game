@@ -1,5 +1,10 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-26 — #6911 (claude/boot-lazy-lore-drift-6911) — circuit-lore and thermal-drift leave the boot
+
+`(tree) eagerCodeBytes` −13294, `eagerScripts` −2 (lowers, no `ratchet-raise`). `circuit-lore.js` moves to LAZY_AUDIO (before the
+announcer, its reader; flyby-seq is typeof-guarded) and `thermal-drift.js` to LAZY_PERF; `PerfGov.resyncDrift()` arms a saved
+opt-in once the rig lands. Fragment: `ratchets.d/claude--boot-lazy-lore-drift-6911.json`.
 ## 2026-11-26 — claude/simstate-registry-6860: the SimState registry captures the AI pace profile (#6860 phase 1)
 
 `js/game.js gMembers` 274 → **275** (+1). Deliberate raise, which needs a `ratchet-raise` label (D-042). The new member is `G.paceRef`, a one-line getter for the per-node AI pace profile (`js/race/pace-math.js` `paceRef`, the #6560 leak). The profile lives inside the `PaceMath` instance, and no existing G member reaches it.

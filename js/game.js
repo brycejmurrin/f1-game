@@ -1770,16 +1770,11 @@ function gridUp(preOrder) {
       c.rPrevPx = c.px; c.rPrevPz = c.pz;
       c.rPrevS = c.s; c.rPrevX = c.x;
     }
-    c.head = 0; c.yawVis = 0;   // straight ahead on the grid (heading model)
-    c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.prog = -(14 + i * 8); c.lap = 0; c.fuelLap = 0; c.fuelRestartLaps = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
-    OvertakeMode.reset(c); c.lapTime = 0; c.best = Infinity; c.totalT = 0;
-    c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
-    c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; c._coastHeld = undefined;   // last race's classification: makeCars' values (CarFields declares _coastHeld; a delete would make the car a dictionary); a race re-arms via armReliability
-    c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.penaltyWhy = null; c.jumpStartFined = false; c.offT = 0; c.offCut = false; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0; Damage.reset(c);   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
-    c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false; c.wallT = 0; c.wasOnWall = false;
-    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref; c.laneClr = 0;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
-    c.rPrevHead = 0;
-    c.kerbGripSm = 1; c.kerbCueT = 0; c.towing = 0; c.wake = 0; c.flatSpot = 0; c.brakeStab = null; c.axEstSm = 0;   // flatSpot: last race's tyre (car-draw wobble); brakeStab null = brakeBeta's cold seed, as apex.js reset() leaves it
+    c.head = 0;   // straight ahead on the grid (heading model); yawVis is a RESETS row
+    // A NEW RACE's plain-value resets, each with its value and why: js/race/car-fields.js RESETS (op newRace).
+    if (typeof CarFields !== "undefined") CarFields.resetFor(c, "newRace");
+    c.prog = -(14 + i * 8); c.lane = c.lanePref;   // the table's CALLER rows: the grid slot's head start, the car's own lane
+    OvertakeMode.reset(c); Damage.reset(c);
     clearRacingScratch(c);
     // The launch plan and the pace phase (AiDrive): one hash per car per race,
     // never a simRnd() draw — the stream's draw count is a contract. Season /
@@ -6606,14 +6601,10 @@ function rescuePlayer(c) {
   Tracks.sample(track, c.s, smp);
   c.x = Collide.rescueX(c, cars, track.total, smp.hw); c.xVis = c.x;   // centre, unless a car is there (#5775 R5)
   c.head = Math.atan2(smp.t[0], smp.t[2]);   // aligned with the track ahead
-  c.vLat = 0; c.yawRateCur = 0; c.yawVis = c.steerVis = c.skidIntensity = c.wheelLock = c.towing = 0;   // #6877 P4
-  // The pace-scaled recovery speed, never the car's own (#5876); never above vTop().
-  c.speed = Math.min(vTop(), 16 * Math.max(driveTune.PACE, 0.05));
+  if (typeof CarFields !== "undefined") CarFields.resetFor(c, "rescue");   // slip, aero mode, boost, incident timers: js/race/car-fields.js RESETS (op rescue)
+  c.speed = Math.min(vTop(), 16 * Math.max(driveTune.PACE, 0.05));   // CALLER row: pace-scaled, never the car's own (#5876)
   const rw = worldFromTrack(c.s, c.x, smp); c.px = rw.x; c.pz = rw.z;   // x = 0: the centre line exactly
   c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevHead = c.head;   // re-seed the render anchors (as retireCar does) or the car smears from the wall for a frame
-  c.boostOn = false; c.deploying = false;
-  c.xOn = false; c.aeroX = 0; c.xArmed = false;   // rescue drops back to Z-mode
-  c.wrongT = 0; c.wrongWay = false; c.offT = 0; c.offCut = false; c.wallT = 0; c.wasOnWall = false; c.rescueT = 0;
   c.rescueLastT = raceT;
   // Cues are for the driver at THIS screen (not a rival recovered elsewhere). NO BANNER: the player
   // watched it happen, and the banner QUEUE (ANN_PRI) would let it delay one that matters. The sound marks it.

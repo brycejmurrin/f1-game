@@ -9,8 +9,10 @@ import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const SRC = fs.readFileSync(new URL("../../js/core/sim-state.js", import.meta.url), "utf8");
+const CF_SRC = fs.readFileSync(new URL("../../js/race/car-fields.js", import.meta.url), "utf8");
 function load() {
   const ctx = vm.createContext({});
+  vm.runInContext(CF_SRC, ctx, { filename: absSrc("js/race/car-fields.js") });   // FULL before LAZY: SimState reads CarFields.SNAPSHOT at eval
   vm.runInContext(SRC, ctx, { filename: absSrc("js/core/sim-state.js") });   // `var SimState` lands on the context
   return ctx.SimState;
 }

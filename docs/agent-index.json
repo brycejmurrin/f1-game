@@ -573,6 +573,7 @@
         "tests/unit/keyboard-first-audio-vm.test.mjs",
         "tests/unit/lazy-audio-firstbind-vm.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
+        "tests/unit/lazy-lore-drift-vm.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
         "tests/unit/net-audio-revs-vm.test.mjs",
         "tests/unit/pause-silence.test.mjs",
@@ -788,6 +789,7 @@
         "tests/unit/apex-surface-pin-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
+        "tests/unit/car-fields-lifetimes-vm.test.mjs",
         "tests/unit/car-fields-vm.test.mjs",
         "tests/unit/classification-vm.test.mjs",
         "tests/unit/collide-wall-limits.test.mjs",
@@ -917,6 +919,7 @@
         "tests/unit/apex-surface-pin-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
+        "tests/unit/car-fields-lifetimes-vm.test.mjs",
         "tests/unit/car-fields-vm.test.mjs",
         "tests/unit/classification-vm.test.mjs",
         "tests/unit/collide-wall-limits.test.mjs",
@@ -1084,6 +1087,7 @@
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/ai-wing-spread-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
+        "tests/unit/car-fields-lifetimes-vm.test.mjs",
         "tests/unit/car-fields-vm.test.mjs",
         "tests/unit/classification-vm.test.mjs",
         "tests/unit/collide-wall-limits.test.mjs",
@@ -1666,6 +1670,7 @@
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/legends-team.test.mjs",
+        "tests/unit/medal-ledger.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/overlay-render.test.mjs",
@@ -3354,7 +3359,7 @@
     {
       "path": "js/data/circuit-lore.js",
       "global": "CircuitLore",
-      "roster": "tag"
+      "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/data/driver-ratings.js",
@@ -4109,7 +4114,7 @@
     {
       "path": "js/perf/thermal-drift.js",
       "global": "ThermalDrift",
-      "roster": "tag"
+      "roster": "LAZY_PERF"
     },
     {
       "path": "js/perf/three-inspector.js",
@@ -4319,6 +4324,11 @@
     {
       "path": "js/race/marshal-panels.js",
       "global": "MarshalPanels",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/medal-ledger.js",
+      "global": "MedalLedger",
       "roster": "LAZY_RACE_SESSION"
     },
     {
