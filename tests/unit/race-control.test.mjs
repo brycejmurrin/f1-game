@@ -1007,6 +1007,16 @@ test("classify(): a retirement earns no future crossing ahead of the winner", ()
   assert.equal(retired.classified, true, "retiring after ten laps still meets the distance cutoff");
 });
 
+test("classify(): on equal laps a flag-taker ranks above a retiree (RW9)", () => {
+  const RC = load(null);
+  const mk = (id, lap, o = {}) => Object.assign({ id, lap, prog: lap * 1000 }, o);
+  const A = mk("A", 11, { finished: true }), D = mk("D", 10, { finished: true });
+  const B = mk("B", 10, { finished: true, prog: 9000 });
+  const R = mk("R", 11, { retired: true }), C = mk("C", 10, { retired: true, prog: 9500 });
+  const order = RC.classify([A, R, D, C, B], [A, D, B], [], [R, C]);
+  assert.deepEqual(Array.from(order, (c) => c.id), ["A", "R", "D", "B", "C"], "B (flag-taker) now ahead of retiree C on the same laps");
+});
+
 test("all-DNF classification uses the retired leader's completed distance, excluding DSQ references", () => {
   const RC = load(null);
   const make = (id, lap, extra = {}) => ({ id, lap, prog: (lap - 1) * 1000 + 100, retired: true, ...extra });
