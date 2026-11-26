@@ -109,6 +109,70 @@ test("gridUp and rescuePlayer leave every car field byte-identical (digest pinne
   } finally { g.close(); }
 });
 
+// ── redFlag and episode (#6946 U1.2) ──────────────────────────────────────────────────────────────────────────────
+
+// Captured on the pre-migration tip 059e6cff (U1.1 merged; APEX_PRINT_DIGEST=1). NEVER regenerate in a refactor.
+const DIGEST_REDFLAG = "6c8cad3719833a101fa92bfc7e5005a8510b9be2d20058cb39a4468dc606deb5";
+const DIGEST_EPISODE = "bbb8d11adc2cf50b200a73fa881c0e5200a2e48fb9dc14c4bed1ee32d5efb2e7";
+
+// Stamp a sentinel into every listed field a car HAS (a number 0.37, a boolean true, a car reference the next car),
+// so the digest sees each reset and each survivor, not a coincidental match. Only existing keys: never add one.
+function stamp(G, keys, which) {
+  const cars = G.cars;
+  for (const i of which) {
+    const c = cars[i];
+    for (const k of keys) {
+      if (!(k in c)) continue;
+      const v = c[k];
+      if (typeof v === "boolean") c[k] = !v;
+      else if (typeof v === "number" || v === undefined || v === null) c[k] = k === "passOf" || k === "passFailOf" || k === "_qOf" || k === "_trOf" || k === "_alPrev" ? cars[(i + 1) % cars.length] : 0.37;
+    }
+  }
+}
+// What redFlagRestart and clearRacingScratch write with a plain value, and what a red flag must leave alone.
+const REDFLAG_STAMP = ["speed", "accSm", "corridorAccel", "vLat", "yawRateCur", "steerVis", "aiHead", "aiBias", "aiFam",
+  "hYieldT", "laneClr", "gear", "rpm", "xOn", "aeroX", "xArmed", "towing", "wake", "wheelLock", "contactT", "wrongWay",
+  "wrongT", "rescueT", "rescueLastT", "digEscHeld", "offT", "offCut", "wallT", "wasOnWall", "kerbGripSm", "kerbCueT",
+  "brakeStab", "axEstSm", "stuckT", "letPassT", "passOf", "passT", "passCool", "holdOff", "defendSide", "passFailOf",
+  "passFailT", "errT", "pressT", "zoneKey", "queueT", "_qOf", "trailT", "_trOf", "_trYT", "_trYS", "calmUntil", "calm",
+  "sbsT", "atkOn", "atkWant", "runT", "_alPrev", "paceF", "yawVis", "rPrevYawVis",
+  // survivors: same race
+  "energy", "phaseRoll", "flatSpot", "errCount", "cutWarn", "cuts", "penalty", "hits", "wallHits", "brakeTF", "brakeTR",
+  "skidIntensity", "boostOn", "deploying", "shiftT", "steerSm", "brakeHeat", "slipDeg"];
+// What apex reset()'s per-car block and its old transient list wrote, plus fields neither touches.
+const EPISODE_STAMP = ["gear", "rpm", "shiftT", "steerSm", "brakeHeat", "axEstSm", "corridorAccel", "slipDeg", "aiHead",
+  "aiBias", "aiFam", "stuckT", "letPassT", "passOf", "passT", "passCool", "holdOff", "defendSide", "passFailOf",
+  "passFailT", "errT", "pressT", "zoneKey", "deploying", "boostOn", "xOn", "aeroX", "xArmed", "wasOnThrottle",
+  "vertLoad", "laneClr", "rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "onKerb", "wheelLock", "brakeTF", "brakeTR",
+  "brakeFade", "contactT", "_pushD", "offroad", "queueT", "_qOf", "trailT", "_trOf", "towing", "wake", "brakeStab",
+  "flatSpot", "skidIntensity", "errCount", "collideT", "_alPrev", "kTurn", "stillT", "_coastHeld", "lastLap",
+  "calm", "calmUntil", "sbsT", "runT", "paceF", "kerbGripSm", "hYieldT", "wrongT", "offT", "energy"];
+
+test("redFlagRestart and __apex.reset() leave every car field byte-identical (digests pinned on the pre-migration tip)", async () => {
+  const g = await bootRace();
+  let redFlag, episode;
+  try {
+    const G = g.G, a = g.apex;
+    g.step(60 * 90);   // a lap in: the field is racing
+    assert.equal(G.state, "race");
+    stamp(G, REDFLAG_STAMP, [1, 5, 9, 14]);
+    assert.equal(a.redFlag().state, "count");
+    redFlag = digest(G);
+  } finally { g.close(); }
+  const g2 = await bootRace();
+  try {
+    const a = g2.apex;
+    a.reset(0, 0, 0, 42);
+    g2.step(240);   // a 4 s episode
+    stamp(g2.G, EPISODE_STAMP, [0, 3, 8, 15]);
+    a.reset(0, 0, 0, 42);
+    episode = digest(g2.G);
+  } finally { g2.close(); }
+  if (process.env.APEX_PRINT_DIGEST) console.log(JSON.stringify({ redFlag, episode }));
+  assert.equal(redFlag, DIGEST_REDFLAG, "a car field after redFlagRestart changed");
+  assert.equal(episode, DIGEST_EPISODE, "a car field after __apex.reset() changed");
+});
+
 // ── the table ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 test("table: one row per key, a known lifetime, a why on every row, only the ops newRace and rescue (U1.2 adds more)", () => {
