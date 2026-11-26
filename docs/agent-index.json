@@ -2255,6 +2255,11 @@
       "roster": "LAZY_AGENT"
     },
     {
+      "path": "js/agent/apex-play.js",
+      "global": "ApexPlay",
+      "roster": "LAZY_AGENT"
+    },
+    {
       "path": "js/agent/apex-track.js",
       "global": "ApexTrack",
       "roster": "LAZY_AGENT"

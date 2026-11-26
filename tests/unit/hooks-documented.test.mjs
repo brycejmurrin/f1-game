@@ -26,10 +26,12 @@ import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { liveHookNames, sourceHooks, collectHooks } from "../../tools/gen/gen-hooks-table.mjs";
+import { liveSurface, sourceHooks, collectHooks, renderPlayBlock } from "../../tools/gen/gen-hooks-table.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const require = createRequire(import.meta.url);
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
 // Known-undocumented as of the 2026-08 cleanup pass. SHRINK THIS LIST.
@@ -44,8 +46,8 @@ const UNDOCUMENTED = new Set([
  *  over js/agent/apex.js saw only the `api` literal: the 17 ApexCam hooks
  *  spread into it from js/agent/apex-cam.js and `visorScene` (set by js/game.js
  *  bindAgent) were invisible to this ratchet (W25 row 12, 2026-11). */
-let LIVE = null;
-before(async () => { LIVE = await liveHookNames(); });
+let LIVE = null, PLAY = [];
+before(async () => { ({ live: LIVE, play: PLAY } = await liveSurface()); });
 function hookNames() {
   assert.ok(LIVE && LIVE.length > 200, `live __apex key list missing or short (${LIVE && LIVE.length})`);
   return new Set(LIVE);
@@ -70,14 +72,23 @@ function documented(doc, name) {
 // hook. tests/unit/generated-docs.test.mjs guards the index separately.
 function handSections() {
   const doc = read("docs/DEBUG-HOOKS.md");
-  const a = doc.indexOf("<!-- GENERATED: hooks-table -->");
+  return stripBlock(stripBlock(doc, "hooks-table"), "play-hooks");
+}
+function stripBlock(doc, name) {
+  const a = doc.indexOf(`<!-- GENERATED: ${name} -->`);
   const b = doc.indexOf("<!-- /GENERATED -->", a);
   return a >= 0 && b > a ? doc.slice(0, a) + doc.slice(b) : doc;
+}
+// A def() hook (js/agent/apex-play.js) is documented by its registry doc: the generated play-hooks block is
+// stripped above, so only a NON-EMPTY doc string exempts it from a hand section.
+function documentedOrDef(doc, name, play = PLAY) {
+  const d = play.find((r) => r.name === name);
+  return documented(doc, name) || !!(d && typeof d.doc === "string" && d.doc.trim());
 }
 
 test("no NEW __apex hook ships undocumented", () => {
   const doc = handSections();
-  const missing = [...hookNames()].filter((n) => !documented(doc, n) && !UNDOCUMENTED.has(n)).sort();
+  const missing = [...hookNames()].filter((n) => !documentedOrDef(doc, n) && !UNDOCUMENTED.has(n)).sort();
   assert.deepEqual(missing, [],
     "a live __apex hook has no section in docs/DEBUG-HOOKS.md. Write one — " +
     "the file calls itself the full reference, and a hook nobody can find is a hook nobody uses");
@@ -166,4 +177,57 @@ test("the committed index in docs/DEBUG-HOOKS.md has exactly the live hooks", ()
   assert.ok(a >= 0 && b > a, "hooks-table block not found");
   const rows = [...doc.slice(a, b).matchAll(/^\| `(?:async )?([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]);
   assert.deepEqual(rows, LIVE, "regenerate with: node tools/gen/gen-hooks-table.mjs");
+});
+
+// ---- the def() registry (js/agent/apex-play.js, #6962) ------------------------------------------
+// Nothing ships a def yet, so the fixture is registered INSIDE the test: ApexPlay.def, then a second
+// ApexApi.create(G) on the booted VM (the same call game.js makes once, after every LAZY_AGENT script).
+async function bootWithFixture() {
+  const { createGame } = require("../../tools/lib/game-vm.cjs");
+  const g = await createGame({ carMeshes: false });
+  g.ctx.ApexPlay.def("playFixture", { readOnly: true, doc: "Test-only fixture.", args: "{x}", fn: (G, o) => ({ ok: true, x: o && o.x }) });
+  g.ctx.ApexPlay.def("playFixtureTrack", { needsTrack: true, doc: "Test-only needsTrack fixture.", args: "()", fn: () => ({ ok: true }) });
+  return { g, api: g.ctx.ApexApi.create(g.G) };
+}
+
+test("the def() registry: every ApexPlay hook has doc, args, a unique name and is live", async () => {
+  const { g, api } = await bootWithFixture();
+  try {
+    const rows = g.ctx.ApexPlay.rows();
+    assert.deepEqual(Array.from(rows, (r) => r.name), ["playFixture", "playFixtureTrack"]);
+    for (const r of [...rows, ...PLAY]) {
+      assert.ok(r.doc.trim(), r.name + " doc");
+      assert.equal(typeof r.args, "string", r.name + " args");
+      assert.match(r.name, /^[a-z][A-Za-z0-9]{0,40}$/);
+    }
+    for (const r of PLAY) assert.ok(LIVE.includes(r.name), r.name + " is not a live __apex key");
+    assert.equal(new Set(PLAY.map((r) => r.name)).size, PLAY.length, "duplicate names");
+    for (const r of rows) assert.equal(typeof api[r.name], "function", r.name + " not spread into api");
+    assert.deepEqual(Array.from(g.apex.agentHelp().play, (r) => r.name), ["playFixture", "playFixtureTrack"], "agentHelp().play lists the registry rows");
+    assert.throws(() => g.ctx.ApexPlay.def("playFixture", { doc: "d", fn() {} }), /duplicate/);
+    assert.throws(() => g.ctx.ApexPlay.def("no.dots", { doc: "d", fn() {} }), /bad hook name/);
+    assert.throws(() => g.ctx.ApexPlay.def("playNoDoc", { doc: " ", fn() {} }), /doc is required/);
+    assert.throws(() => g.ctx.ApexPlay.def("playNoFn", { doc: "d" }), /fn must be a function/);
+    assert.throws(() => g.ctx.ApexPlay.def("playNs", { doc: "d", fn: { a() {} } }), /fn must be a function/);
+  } finally { g.close(); }
+});
+
+test("the generated play-hooks block lists exactly the registry names", () => {
+  const doc = read("docs/DEBUG-HOOKS.md");
+  const a = doc.indexOf("<!-- GENERATED: play-hooks -->");
+  const b = doc.indexOf("<!-- /GENERATED -->", a);
+  assert.ok(a >= 0 && b > a, "play-hooks block not found");
+  const rows = [...doc.slice(a, b).matchAll(/^\| `([a-z][A-Za-z0-9]*)`/gm)].map((m) => m[1]);
+  assert.deepEqual(rows, PLAY.map((r) => r.name), "regenerate with: npm run gen");
+  const fx = [{ name: "playFixture", args: "{x}", doc: "d", readOnly: true, needsTrack: false }];
+  assert.match(renderPlayBlock([...LIVE, "playFixture"], fx), /^\| `playFixture` \| `\{x\}` \| yes \| no \| d \|$/m);
+  assert.throws(() => renderPlayBlock(LIVE, fx), /not live __apex hooks[\s\S]*playFixture/);
+});
+
+test("a def hook is exempt from the hand-section rule only through a non-empty registry doc", () => {
+  const doc = handSections();
+  assert.equal(documentedOrDef(doc, "zzNoSuchHook", [{ name: "zzNoSuchHook", doc: "" }]), false, "an empty doc must fail");
+  assert.equal(documentedOrDef(doc, "zzNoSuchHook", [{ name: "zzNoSuchHook", doc: "  " }]), false);
+  assert.equal(documentedOrDef(doc, "zzNoSuchHook", [{ name: "zzNoSuchHook", doc: "says what it does" }]), true);
+  assert.equal(documentedOrDef(doc, "zzNoSuchHook", []), false);
 });
