@@ -413,6 +413,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `start-lights.js` | `StartLights` | LAZY_RACE_SESSION | the start gantry's lights. |
 | `marshal-panels.js` | `MarshalPanels` | LAZY_RACE_SESSION | marshal light panels. |
 | `flying-start.js` | `FlyingStart` | LAZY_RACE_SESSION | FLYING START: qualifying and time trial begin at speed, the way a Data Hub JUMP IN does (js/race/real-race.js). |
+| `lap-retry.js` | `LapRetry` | LAZY_RACE_SESSION | LAP RETRY: a solo Time Trial (the Daily included) goes back to the flying-start drop-in AT ONCE (#6965, #6920 U4.5, #6884 A1). |
 | `jump-start-penalty.js` | `JumpStartPenalty` | LAZY_RACE_SESSION | FALSE START (FIA 2026 SR B5.11.1; js/race/sporting-regs.js): throttle at green or a launch faster than the minimum reaction window. |
 | `podium-beat.js` | `RacePodium` | LAZY_RACE_SESSION | RacePodium: ceremony podium beat + results handoff (#4070 slice 4). |
 | `parc-ferme.js` | `ParcFerme` | LAZY_RACE_SESSION | PARC FERMÉ beat (ceremony plan slice 3 / #4069). |

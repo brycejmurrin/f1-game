@@ -297,6 +297,7 @@
     "js/race/start-lights.js",
     "js/race/marshal-panels.js",
     "js/race/flying-start.js",
+    "js/race/lap-retry.js",
     "js/race/jump-start-penalty.js",
     "js/ui/podium-beat.js",
     "js/race/podium-beat.js",
