@@ -50,6 +50,7 @@ function bootNoticeHarness({ storageDenied = false } = {}) {
     announce() {},
     get state() { return state; },
     set state(v) { state = v; },
+    cmd: { setState(v) { state = v; } },
     startRace() { raceStarts.push(1); return Promise.resolve(); },
   };
   const menus = sb.Menus.create(G);
@@ -65,10 +66,10 @@ test("context-loss notice hides when startRace leaves the menu", () => {
   assert.equal(h.raceStarts.length, 1);
 });
 
-test("context-loss notice hides when state leaves menu without startRace", () => {
+test("notice hides when cmd.setState leaves menu", () => {
   const h = bootNoticeHarness();
   assert.equal(h.notice.hidden, false);
-  h.G.state = "count";
+  h.G.cmd.setState("count", "agent-test");
   assert.equal(h.notice.hidden, true);
 });
 
