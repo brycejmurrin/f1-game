@@ -89,6 +89,7 @@ test("go() refuses when no race() built a player and grid (#2532)", () => {
 
 test("go() still starts a built race", () => {
   const G = { player: { px: 0 }, cars: [{}], track: {}, state: "countdown", raceT: 0, lightsLit: 5, flyingStart: null, els: { lights: { hidden: false, children: [] } } };
+  G.cmd = { setState: (s) => { G.state = s; } };   // U2.4: state is owned by game.js; the stub supplies the command
   const api = loadApex(G);
   assert.equal(api.go(), "race");
   assert.equal(G.raceT, 0.5);
