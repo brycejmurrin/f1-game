@@ -32,11 +32,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { lintSource, count } from "../../tools/check/reject-lint.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const TOOL = fileURLToPath(new URL("../../tools/check/reject-lint.mjs", import.meta.url));
 
@@ -113,7 +113,7 @@ test("modern syntax parses — the parser is not pinned to an old ecmaVersion", 
 });
 
 test("an unparseable js/ file fails the run (non-zero exit), it is not counted clean", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "reject-lint-"));
+  const root = mkTmpDir("reject-lint-");
   try {
     fs.mkdirSync(path.join(root, "js"));
     fs.writeFileSync(path.join(root, "js", "bad.js"), "function f( {\n  try { ctx.close(); } catch (e) {}\n");

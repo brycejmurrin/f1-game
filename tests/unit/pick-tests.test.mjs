@@ -6,12 +6,12 @@ import { load as loadRatchets } from "../../tools/check/ratchets.mjs";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, RULES, SPEC_OWNER_REASON, blanketOnly, pick, specOwners, stripSpecOwner } from "../../tools/ci/pick-tests.mjs";
 import { changedPaths } from "../../tools/lib/changed-files.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const require = createRequire(import.meta.url);
 const MANIFEST = require("../../tools/manifest.cjs");
@@ -70,7 +70,7 @@ test("a file no rule claims reports 'unmatched', not an empty success", () => {
 });
 
 test("a rename lists its source so directory rules still fire", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-pick-rename-"));
+  const dir = mkTmpDir("apex-pick-rename-");
   const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
   try {
     g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t");

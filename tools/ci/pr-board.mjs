@@ -56,7 +56,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEPLOY } from "./github-api.mjs";
-import { createSnapshot, runsByHead } from "../lib/pr-snapshot.mjs";
+import { createSnapshot, runsByHead, paths } from "../lib/pr-snapshot.mjs";
 import { guardsVerdict, planVerdict } from "./ready-gate.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { needsSync, verdictLine } from "./needs-sync.mjs";
@@ -325,6 +325,14 @@ export function measure(opts = {}) {
   // read skips it: one per-head call is cheaper than a 100-run page.
   const recent = opts.only == null && nums.length > 1 ? snap.recentCiRuns() : { json: null };
   const byHead = runsByHead(recent.error ? [] : recent.json?.workflow_runs);
+  // Two parallel rounds instead of 3N sequential GETs (#6501 row 11): every PR, then every
+  // head's check-runs and (when the recent page missed it) ci.yml runs. A failure is not
+  // memoised, so the serial reads below ask again with their own error handling.
+  snap.prefetch(nums.map(paths.pr));
+  snap.prefetch(nums.flatMap((n) => {
+    const sha = snap.pr(n).json?.head?.sha;
+    return !sha ? [] : byHead.get(sha) ? [paths.checkRuns(sha)] : [paths.checkRuns(sha), paths.ciRuns(sha)];
+  }));
   const items = [];
   for (const n of nums) {
     const one = snap.pr(n);

@@ -6,10 +6,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import { cachedPlan, returnTo, verifyStages, runStages, runStage, VERIFY_MODES } from "../../tools/ci/sync-pr.mjs";
 import { alive as processAlive } from "../../tools/lib/process-tree.mjs";
 import { cli, fixture } from "../helpers/validation-cli.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 test("sync plan only reads cached refs, and does not invent conflict evidence", () => {
   const calls = [];
@@ -108,7 +108,7 @@ test("#2186: runStages stops at the first failure or timeout, names the stage, a
 test("a stage timeout stops the stage with SIGTERM, so a runner that leads its own process groups can terminate them", () => {
   // The stage stands in for tooling-fast: it starts a detached grandchild and kills that group on SIGTERM.
   // SIGKILL (the old killSignal) never reaches the handler and leaves the grandchild running.
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "sync-stage-"));
+  const tmp = mkTmpDir("sync-stage-");
   const pidFile = path.join(tmp, "grandchild.pid");
   const stage = path.join(tmp, "stage.cjs");
   fs.writeFileSync(stage, `const { spawn } = require("node:child_process"), fs = require("node:fs");

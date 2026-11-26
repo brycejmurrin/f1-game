@@ -8,9 +8,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const MCP_JSON = path.join(ROOT, ".mcp.json");
@@ -68,7 +68,7 @@ test("Playwright MCP network fallback is pinned to the audited release", () => {
 });
 
 test("browser MCP launches prefer cached exact pins while retaining cold-cache downloads and Chrome runtime gate", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-browser-launch-"));
+  const dir = mkTmpDir("apex-browser-launch-");
   try {
     const mcp = path.join(dir, "tools/mcp"), bin = path.join(dir, "bin");
     const packageBin = path.join(dir, "cached/build/src/bin/chrome-devtools-mcp.js");
@@ -159,7 +159,7 @@ test("gfx-probe --tlx-webgpu unpins TLX ForceGL and --lavapipe uses the Lavapipe
 });
 
 test("mcp-cli exits non-zero when an MCP tool returns isError", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-mcp-cli-"));
+  const dir = mkTmpDir("apex-mcp-cli-");
   const wrapper = path.join(dir, "mock-mcp.mjs");
   fs.writeFileSync(wrapper, `#!/usr/bin/env node
 process.stdin.setEncoding("utf8");
@@ -278,7 +278,7 @@ print("ok")
 // input-validation error, so `probe` failed right after a good new_page. The
 // fake server REQUIRES the id; the batch must carry the one new_page reported (#5712).
 test("mcp-cli probe fills pageId from new_page for page-routed tools", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-page-"));
+  const dir = mkTmpDir("mcp-page-");
   const log = path.join(dir, "calls.jsonl");
   const r = spawnSync("node", [MCP_CLI, "probe", "--backend", "webgl2", "--wait", "0", "--console"], {
     encoding: "utf8", timeout: 20000,

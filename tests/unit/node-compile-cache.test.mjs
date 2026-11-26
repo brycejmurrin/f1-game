@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const require = createRequire(import.meta.url);
 const { augmentNodeCompileCache } = require("../../tools/lib/node-compile-cache.cjs");
@@ -18,13 +19,12 @@ test("NODE_COMPILE_CACHE points at artifacts/.node-compile-cache by default", ()
 // Multiple VM test processes share artifacts/.vmcache. Readers must never see
 // half-written cachedData: V8 deserialization can abort the process, not throw.
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 const vm = require("node:vm");
 const { runScriptCached, cacheDir } = require("../../tools/lib/vm-script-cache.cjs");
 
 function withVmCache(run) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "apex-vm-cache-test-"));
+  const root = mkTmpDir("apex-vm-cache-test-");
   const previous = process.env.APEX_VM_COMPILE_CACHE;
   process.env.APEX_VM_COMPILE_CACHE = path.join(root, "cache");
   try { run(root); }

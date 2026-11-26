@@ -2,15 +2,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { parseArgs, check, waitFor, capForeground, UsageError, FOREGROUND_CAP_SEC, DEFAULT_TIMEOUT_MIN, resolveCondPaths, mergedOnDeploy } from "../../tools/ci/wait-for.mjs";
 import { readStatus, waitStatus, stamp } from "../../tools/lib/deploy-status.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "wf-"));
+const tmp = () => mkTmpDir("wf-");
 const fakeClock = () => { let t = 0; return { now: () => t, sleep: async (ms) => { t += ms; } }; };
 
 test("resolveCondPaths anchors relative file/log paths to a root; absolute stay", () => {

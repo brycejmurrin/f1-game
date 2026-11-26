@@ -25,11 +25,11 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import os from "node:os";
 import crypto from "node:crypto";
 import { readAX26, ax26Version } from "../helpers/ax26.mjs";
 import { writeAX26 } from "../../tools/gen/assets.mjs";
 import { createRequire } from "node:module";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const require = createRequire(import.meta.url);
 const { writeAX26v3, SWAY_FRAC } = require("../../tools/lib/pack-assets.cjs");
@@ -56,7 +56,7 @@ function tidyMesh(n = 4) {
 }
 
 async function roundTrip(mesh, matName) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-ax26-"));
+  const dir = mkTmpDir("apex-ax26-");
   try {
     const p = path.join(dir, "m.bin");
     fs.writeFileSync(p, writeAX26(mesh, matName === undefined ? "CONCRETE" : matName));
@@ -202,7 +202,7 @@ test("the reader admits AX26 v3 (v2 body + u8 sway) and v2 files stay unchanged"
   // Put a FOLIAGE-style fractional weight on half the verts — v2 would fall
   // back to v1; v3 keeps the packed body and a sway stream.
   for (let i = 0; i < 6; i++) mesh.mat[i] = 6 + (i / 5) * 0.45;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-ax26v3-"));
+  const dir = mkTmpDir("apex-ax26v3-");
   try {
     const p = path.join(dir, "v3.bin");
     fs.writeFileSync(p, writeAX26v3(mesh));
