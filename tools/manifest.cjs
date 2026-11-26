@@ -1166,6 +1166,7 @@ const LAZY_RACE_SESSION = [
   "js/race/start-lights.js",
   "js/race/marshal-panels.js",
   "js/race/flying-start.js",
+  "js/race/lap-retry.js",      // LapRetry: RETRY LAP back to the flying-start drop-in through SimState (#6965)
   "js/race/jump-start-penalty.js",
   "js/ui/podium-beat.js",   // PodiumBeat: ceremony podium overlay (#4070 slice 4); ResultsStory is FULL
   "js/race/podium-beat.js", // RacePodium: podium beat + results handoff (#4070)
@@ -1757,7 +1758,6 @@ const MOVED = {
   "tools/career-economy.mjs": "tools/car/career-economy.mjs",
   "tools/layout-audit.mjs": "tools/ui/layout-audit.mjs",
   "tools/menu-capture.mjs": "tools/ui/menu-capture.mjs",
-  "tools/menu-fit.mjs": "tools/ui/menu-fit.mjs",
   "tools/menu-screens.mjs": "tools/ui/menu-screens.mjs",
   "tools/ui-scale-axis.mjs": "tools/ui/ui-scale-axis.mjs",
   "tools/circuit-axis.mjs": "tools/ui/circuit-axis.mjs",

@@ -1331,7 +1331,7 @@ const GLXBackend = (function () {
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
     // texStorage3D allocates the whole mip chain immutably up front — required for layers
     // arriving one at a time; a layer never filled is well-defined zero, not garbage.
-    const mips = Math.floor(Math.log2(size)) + 1; drainGlErrors("pre-materialArray");   // GL errors come via getError(), not throws: isolate ours
+    const mips = Assets.mipCount(size); drainGlErrors("pre-materialArray");   // GL errors come via getError(), not throws: isolate ours
     gl.texStorage3D(gl.TEXTURE_2D_ARRAY, mips, gl.RGBA8, size, size, n);
     if (gl.getError()) { gl.deleteTexture(tex); gl.bindTexture(gl.TEXTURE_2D_ARRAY, null); return null; }   // e.g. OOM
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
@@ -1374,7 +1374,7 @@ const GLXBackend = (function () {
     matTexScales.fill(0);
     if (!maps) return;
     const sc = maps.scales;
-    if (sc) for (let i = 0; i < MAT_TEX_LAYERS; i++) matTexScales[i] = +sc[i] > 0 ? +sc[i] : 0;
+    if (sc) for (let i = 0; i < MAT_TEX_LAYERS; i++) matTexScales[i] = Assets.matScale(sc[i]);
     // No albedo array means no baked material at all: zero every scale so the
     // shader's per-layer `scale <= 0` test short-circuits before it samples.
     if (!matAlbedoTex) matTexScales.fill(0);
@@ -1896,18 +1896,7 @@ const GLXBackend = (function () {
       // two in lock-step: as the key dims the terrain/road shadows fade out exactly
       // as the props stop casting, so nothing POPs when the SUN ELEVATION slider or
       // a time-of-day flip crosses into night.
-      const _kl = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
-      let _hf = (_kl - 0.28) / 0.14;
-      _hf = _hf < 0 ? 0 : _hf > 1 ? 1 : _hf;
-      _hf = _hf * _hf * (3 - 2 * _hf);
-      // Clear-night moon shadows: floor the key-dim fade with the MOON SHADOWS
-      // knob scaled by the clear-night factor (game.js frame.moonGate — bright
-      // moon, low cloud, dry road, no fog; or, above 0.5, the knob itself
-      // forcing the gate open regardless of weather). 0 = old fade-to-nothing
-      // night.
-      const _mSh = PostCommon.knob(T, "moonShadow") * (frame.moonGate || 0);
-      if (_mSh > _hf) _hf = _mSh;
-      _decalSh[0] = PostCommon.knob(T, "shadowStr") * _hf;
+      _decalSh[0] = PostCommon.sunShadowStrength(frame, T);   // key-luminance fade + MOON SHADOWS floor (post-common.js)
       uf1(litU.uShadowStr, _litUf, "shadowStr", _decalSh[0]);
       // SHADOW DISTANCE knob: box half-size, drives the receiver-distance fade.
       uf1(litU.uShadowRange, _litUf, "shadowRange", PostCommon.knob(T, "shadowRange"));

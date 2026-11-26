@@ -240,7 +240,7 @@ test("dark and light rows of one cell keep distinct merge/diff keys; pre-axis ro
 });
 
 test("the reset/tap-floor callers parse, and menu-mock still exports its page functions", async () => {
-  for (const f of ["layout-audit", "menu-mock", "menu-fit", "fit-audit", "menu-capture"]) {
+  for (const f of ["layout-audit", "menu-mock", "fit-audit", "menu-capture"]) {
     const r = spawnSync(process.execPath, ["--check", path.join(ROOT, "tools/ui", f + ".mjs")], { encoding: "utf8" });
     assert.equal(r.status, 0, f + ": " + r.stderr);
   }

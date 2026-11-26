@@ -1,0 +1,1 @@
+New: RETRY LAP in the pause menu of a Time Trial (the Daily included) puts you straight back at the flying-start drop-in, with no loading and no countdown, then the usual 3-second run-up and YOU HAVE CONTROL; your session's laps and best are kept and the new lap is timed (#6965).

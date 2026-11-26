@@ -43,7 +43,7 @@ test("the MCP-facing entry points answer without touching a browser or a network
     { cmd: process.execPath, args: [tool("motion-capture.mjs"), "--help"], want: /motion-capture|flicker/ },
     { cmd: process.execPath, args: [tool("frame-report.mjs"), "--help"], want: /frame-report|--fleet/ },
     { cmd: process.execPath, args: [tool("fit-audit.mjs"), "--help"], want: /fit-audit|--only/ },
-    { cmd: process.execPath, args: [tool("menu-fit.mjs"), "--help"], want: /--safe/ },
+    { cmd: process.execPath, args: [tool("layout-audit.mjs"), "--help"], want: /--safe/ },
     // Prefer an explicit path so the assertion is independent of a clean vs
     // dirty checkout. `--help` also answers without git (see pick-tests.mjs);
     // either shape is fine — the path form also exercises RULES → test:gfx.

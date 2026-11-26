@@ -96,9 +96,7 @@ const lazyBundles = LazyBundles.create({
     records = SessionRecords.create(G);
     if (G.daily.isActive() && G.daily.current().class === "standard") records.prepareDaily();   // a STANDARD daily picked before this bundle landed was prepared by the stub (a no-op): every lap would be refused
     raceRadio = RaceRadio.create(G); RaceCeremony.create(G, { duelOn, isWatch: () => realRace.isWatch(), resultsCam: () => resultsCam, cooldownControls: show => showTouchControls(show, true), snapCooldown: () => { camSnapNext = true; } });
-    flyingStart = FlyingStart.create(G, {
-      realRace: () => !!(typeof realRace !== "undefined" && realRace && realRace.isActive()) || !!(setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())),
-    });
+    flyingStart = FlyingStart.create(G, flyingStartDeps());
     jumpStartPenalty = JumpStartPenalty.create(G, {
       autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,
     });
@@ -3468,7 +3466,8 @@ setupTrialSession = SetupTrialSession.create(G);
 let raceRadio = RaceRadio.create(G);   // LAZY_RACE_SESSION — radio
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script: the FULL stub (js/race/real-race-boot.js) until LAZY_REAL_RACE lands
-let flyingStart = FlyingStart.create(G, { realRace: () => realRace.isActive() || !!(setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())) });   // LAZY_RACE_SESSION
+function flyingStartDeps() { return { realRace: () => realRace.isActive() || setupTrialSession?.pending() || setupTrialSession?.active(), setPaused }; }   // setPaused: its RETRY LAP (js/race/lap-retry.js, #6965)
+let flyingStart = FlyingStart.create(G, flyingStartDeps());   // LAZY_RACE_SESSION; re-created in onRaceSessionReady
 var jumpStartPenalty = JumpStartPenalty.create(G, {
   autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,
 });   // LAZY_RACE_SESSION — recreated in onRaceSessionReady
