@@ -329,11 +329,12 @@ const NetHandshake = (function () {
     if (!pc) return hsLog("answer", NO_TRANSPORT);
     // Offer identity BEFORE the state check: an answer to a different offer is
     // wrong whatever this one's state, and saying so beats "already used".
+    // An answer that names no offer is refused: skipping the check let any
+    // answer through to a newer pending invite.
     const wants = parsed.payload.o;
-    if (wants != null) {
-      const mine = offerId(pc.localDescription && pc.localDescription.sdp);
-      if (mine && String(wants) !== mine) return hsLog("answer", WRONG_OFFER);
-    }
+    if (wants == null) return hsLog("answer", WRONG_OFFER);
+    const mine = offerId(pc.localDescription && pc.localDescription.sdp);
+    if (mine && String(wants) !== mine) return hsLog("answer", WRONG_OFFER);
     if (pc.signalingState !== "have-local-offer") {
       return hsLog("answer", { ok: false, error: "already_answered",
                message: "That answer was already used, or arrived too late." });

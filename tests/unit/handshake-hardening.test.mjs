@@ -61,3 +61,19 @@ function fakeTransport(calls) {
     setRemoteDescription: async (d) => { calls.push(d); } } };
 }
 
+test("S6: an answer with no offer id is wrong_offer; a matching one pairs", async () => {
+  const calls = [];
+  const t = fakeTransport(calls);
+  const b = await H.localBuild();
+  assert.equal(b, 1700);
+  const mk = (o) => H.encodeCode({ k: "answer", b, s: "v=0\r\na=ice-ufrag:abcd\r\n", ...(o === undefined ? {} : { o }) });
+  const none = await H.acceptAnswer(t, await mk());
+  assert.equal(none.error, "wrong_offer");
+  assert.equal(calls.length, 0);
+  const id = H.offerId(t.pc.localDescription.sdp);
+  assert.ok(id);
+  const good = await H.acceptAnswer(t, await mk(id));
+  assert.equal(good.ok, true);
+  assert.equal(calls.length, 1);
+});
+
