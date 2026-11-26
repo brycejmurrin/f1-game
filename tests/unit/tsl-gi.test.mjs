@@ -316,6 +316,47 @@ test("ordinary TLX photo frames probe scene depth once, keep it on zoom, and use
   assert.equal(dof.src.value, dof.focusTex.value, "leaving the studio releases unneeded colour and focus targets");
 });
 
+// #6908: Free Camera's DoF sliders reach TLX's photo DoF. game.js presents dbgCam.dof as o.photoDof; free-cam.js writes
+// it only with Depth focus On (#6445), so a frame without it runs no DoF. A Photo Studio focus wins over the sliders.
+test("Free Camera DoF sliders drive the TLX photo DoF pass and its capture; no photoDof, no DoF", async (t) => {
+  const h = await rig(t, []);
+  const quiet = { flareMul: 0, carReflect: 0, bloom: 0 };
+  const GIM = globalThis.TLXShaders.gi;
+  h.present(quiet);
+  assert.equal(h.photo(), null, "no slider DoF, no Photo Studio focus: the photo optics are never built");
+  assert.equal(h.post.needsDepth({ ...quiet, photoDof: { focus: 0.4, blur: 0.01 } }, h.frame), false, "under 2% blur is no pass");
+  const slid = { ...quiet, photoDof: { focus: 0.4, blur: 0.5 } };
+  assert.equal(h.post.needsDepth(slid, h.frame), true, "the slider DoF reads scene depth");
+  h.present(slid);
+  const { focus, dof } = h.photo();
+  assert.equal(h.P.fxaa.tex.value === dof.src.value, false, "the slider frame runs the DoF pass: AA reads its output");
+  const metres = Math.pow(GIM.FOCUS_MAX, 0.4);
+  assert.ok(Math.abs(focus.U.fixed.value - metres) < 1e-3, "DoF FOCUS 40% is the fixed focus distance " + metres.toFixed(2) + " m");
+  assert.ok(Math.abs(dof.U.aperture.value - GIM.DOF.aperture) < 1e-6, "DoF BLUR 50% is the shipped aperture");
+  assert.equal(focus.U.tapMode.value, 0, "no tap: the fixed distance decides");
+  h.present({ ...quiet, photoDof: { focus: 1, blur: 1 } });
+  assert.ok(Math.abs(focus.U.fixed.value - GIM.FOCUS_MAX) < 1e-3, "FOCUS 100% is the far limit");
+  assert.ok(Math.abs(dof.U.aperture.value - 2 * GIM.DOF.aperture) < 1e-6, "BLUR 100% doubles the aperture");
+  // Capture path: renderCaptureFrame re-presents through the same opts at the capture size; the capture target replays
+  // the AA resolve that reads the DoF output, so the slider look is in the saved image.
+  h.post.resize(640, 360);
+  h.present(slid);
+  assert.ok(Math.abs(focus.U.fixed.value - metres) < 1e-3, "the capture-size frame keeps the slider focus");
+  assert.ok(Math.abs(dof.U.aperture.value - GIM.DOF.aperture) < 1e-6, "and the slider blur");
+  assert.ok(Math.abs(dof.U.maxPx.value - GIM.DOF.maxPx1080 * 360 / 1080) < 1e-6, "blur radius scales with the capture height");
+  assert.notEqual(h.P.fxaa.tex.value, dof.src.value, "AA (and so the capture) reads the DoF output");
+  assert.ok(h.post.captureTarget(), "the capture replays that resolve");
+  h.present({ ...slid, photoFocus: { x: 0.2, y: 0.7 } });
+  assert.equal(focus.U.fixed.value, 0, "a Photo Studio tap wins over the sliders");
+  assert.ok(Math.abs(dof.U.aperture.value - GIM.DOF.aperture) < 1e-6, "and keeps the shipped aperture");
+  focus.U.fixed.value = -1; dof.U.aperture.value = -1;   // sentinels: a DoF pass would overwrite both
+  for (const off of [{ ...quiet, photoDof: null }, quiet, { ...quiet, photoDof: { focus: 0.4, blur: 0 } }]) {
+    h.present(off);
+    assert.equal(focus.U.fixed.value, -1, "Depth focus Off (no photoDof) or 0% blur: no DoF runs");
+    assert.equal(dof.U.aperture.value, -1);
+  }
+});
+
 // A numeric reading of a built TSL node (three r187 node types) for the few node kinds the budget graphs use;
 // `leaf(node)` answers the graph's inputs. The budget test asserts what the built post graph computes.
 const OPS = { "+": (a, b) => a + b, "-": (a, b) => a - b, "*": (a, b) => a * b, ">": (a, b) => +(a > b) };

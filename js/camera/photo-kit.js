@@ -1,8 +1,9 @@
 /* Apex 26 — photo-mode kit extras: composition grids, depth-of-field hint, and
  * per-circuit camera bookmarks (apex26.freecamMarks). Pure helpers + a thin DOM
- * binder FreeCam.create calls so free-cam.js stays the panel owner. DoF is a
- * CSS soft-focus overlay (no GLX/TLX/WGX optical DoF yet — flyby plan rejected
- * backend DoF); bookmarks are world eye/target/fov (+ optional roll). */
+ * binder FreeCam.create calls so free-cam.js stays the panel owner. DoF: TLX
+ * renders the sliders as its photo depth of field (cam.dof, #6908) when Depth
+ * focus is On; GLX / WGX, or Depth focus Off, keep the CSS soft-focus PREVIEW
+ * overlay. Bookmarks are world eye/target/fov (+ optional roll). */
 const PhotoKit = (function () {
   "use strict";
 
@@ -10,6 +11,7 @@ const PhotoKit = (function () {
   const GRID_IDS = ["off", "thirds", "golden"];
   const DOF_BLUR_MAX = 6;      // CSS px at full strength
   const MAX_MARKS = 12;        // per track
+  const DEPTH_KEY = "apex26.photoDepthFocus";   // Photo Studio's Depth focus row: opt-in, default Off (#6445)
 
   const fin = (v) => typeof v === "number" && isFinite(v);
   const clamp = M4.clamp;   // js/core/mat4.js — the shared one
@@ -71,6 +73,14 @@ const PhotoKit = (function () {
   function nextGrid(cur) {
     const i = GRID_IDS.indexOf(cur);
     return GRID_IDS[((i < 0 ? 0 : i) + 1) % GRID_IDS.length];
+  }
+
+  /** Photo Studio's Depth focus preference. Off (the default) means no rendered DoF anywhere (#6445). */
+  function depthFocusOn(ls) {
+    try {
+      const s = ls !== undefined ? ls : (typeof localStorage !== "undefined" ? localStorage : null);
+      return !!s && s.getItem(DEPTH_KEY) === "1";
+    } catch (_) { return false; }
   }
 
   /** Attach DoF fields onto a dbgCam and drive the CSS overlay variables. */
@@ -143,6 +153,6 @@ const PhotoKit = (function () {
     marksFor, saveMark, deleteMark, nextGrid,
     createLookSession(get, set) { return PhotoLooks.createLookSession(get, set); },
     mountLookControls(parent, session, doc) { return PhotoLooks.mountLookControls(parent, session, doc); },
-    applyDof, setGrid, mountOverlays, showOverlays,
+    applyDof, depthFocusOn, setGrid, mountOverlays, showOverlays,
   });
 })();
