@@ -687,3 +687,30 @@ test("RESPONSE preset reads Bryce's live export unchanged (#6794)", () => {
   assert.deepEqual(storage.get("touchButtonProfiles"), profiles);
   assert.ok(dom.byId("touch-test-preset-help").textContent.includes("differ: slide distance is 51 px left and 90 px right"));
 });
+
+test("SLIDE DEAD ZONE ignores the first pixels of an explicit slide and is OFF until chosen", () => {
+  const { host, dom, editor, model } = boot();
+  editor.mount(host);
+  const field = key => dom.byId("touch-test-" + key);
+  const choose = (key, value) => { field(key).value = value; field(key).onchange(); };
+  choose("button", "brake");
+  assert.equal(field("deadPx").disabled, true, "inert without a slide end, so it is greyed out");
+  choose("direction", "down"); choose("start", "100"); choose("end", "20"); choose("slideCurve", "quick");
+  model.setButtonProfile("brake", { travel: 74 }); field("button").onchange();
+  let brake = model.buttonProfile("brake");
+  assert.equal(field("deadPx").disabled, false);
+  assert.equal(field("deadPx").value, "0");
+  assert.equal(brake.deadPx, undefined, "OFF stores nothing: the shipped no-slop slide");
+  assert.ok(Math.abs(model.level(brake, 6) - (1 - 0.8 * (6 / 74) * (2 - 6 / 74))) < 1e-12, "a 6 px roll already eases the brake");
+  choose("deadPx", "6");
+  brake = model.buttonProfile("brake");
+  assert.equal(brake.deadPx, 6);
+  assert.equal(model.level(brake, 6), 1, "the roll inside the dead zone keeps full input");
+  assert.ok(Math.abs(model.level(brake, 6 + 37) - 0.4) < 1e-12, "the slide starts counting after it");
+  assert.equal(model.level(brake, 6 + 74), 0.2, "and still reaches the slide end");
+  choose("deadPx", "0");
+  assert.equal(model.buttonOverrides("brake").deadPx, undefined);
+  assert.equal(JSON.stringify(model.normalizeProfiles({ v: 1, buttons: { brake: { end: 20, deadPx: 7 } } }).buttons.brake), JSON.stringify({ end: 20 }),
+    "only the offered sizes survive an import");
+  assert.equal(model.normalizeProfiles({ v: 1, buttons: { gas: { end: 50, deadPx: 12 } } }).buttons.gas.deadPx, 12);
+});

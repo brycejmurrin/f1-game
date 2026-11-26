@@ -185,6 +185,10 @@ const TouchButtonSettings = (() => {
     const slideCurveHelp = node("p", "Linear changes pressure evenly as you slide. Fine Start makes small slides gentler. Quick Start makes them stronger. S-Curve gives fine control near each end and changes pressure fastest in the middle.");
     slideCurveHelp.className = "adv-help"; slideCurveHelp.id = host.id + "-slide-curve-help";
     slideCurve.setAttribute("aria-describedby", slideCurveHelp.id); section.appendChild(slideCurveHelp);
+    const deadZone = choice("deadPx", "SLIDE DEAD ZONE", [["0", "OFF"], ...PedalTravel.DEAD_ZONES.map(px => [String(px), px + " PX"])]);
+    const deadZoneHelp = node("p", "With a Slide End Input set, the slide counts from your first pixel of movement. A dead zone ignores that much thumb wobble first.");
+    deadZoneHelp.className = "adv-help"; deadZoneHelp.id = host.id + "-dead-zone-help";
+    deadZone.setAttribute("aria-describedby", deadZoneHelp.id); section.appendChild(deadZoneHelp);
     const edge = choice("fullEdge", "START FROM TOUCH POSITION", [["fixed", "OFF · FIXED START"], ...["top", "bottom", "left", "right"].map(k => [k, "FULL AT " + k.toUpperCase()])]);
     const withDefault = [["default", "MODE DEFAULT"], ...percentages];
     const start = choice("start", "STARTING INPUT", withDefault);
@@ -304,6 +308,7 @@ const TouchButtonSettings = (() => {
       adaptive.value = String(overrides.adaptive || "inherit");
       feedback.value = profile.feedback ? "on" : "off";
       slideCurve.value = profile.slideCurve || "linear";
+      deadZone.value = String(profile.deadPx || 0); deadZone.disabled = profile.end == null;
       direction.value = profile.direction || "default";
       start.value = String(profile.start ?? "default");
       end.value = String(profile.end ?? "default");
@@ -355,6 +360,7 @@ const TouchButtonSettings = (() => {
     travel.oninput = () => distance(travel.value);
     travel.onchange = () => change({ travel: Number(travel.value) });
     slideCurve.onchange = () => change({ slideCurve: slideCurve.value });
+    deadZone.onchange = () => change({ deadPx: Number(deadZone.value) });
     sliderCurve.onchange = () => change({ sliderCurve: sliderCurve.value });
     direction.onchange = () => change({ direction: direction.value });
     edge.onchange = () => change({ fullEdge: edge.value });
