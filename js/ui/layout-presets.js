@@ -252,7 +252,7 @@ const LayoutPresets = (function () {
     const cur = a.snapshot(), out = pick(cur), park = st.park;
     s.set(SHAPES_KEY, { v: 2, mode: "separate", live: now, park: out });
     // A HUD layout is offsets of one screen shape (#6598): the first rotation parks it and the other shape starts shipped, not on top-bar offsets.
-    if (!park && out.hudLayout) { a.applySnapshot(Object.assign(cur, { hudLayout: null }), { history: false }); paint(); return true; }
+    if (!park && out.hudLayout) { undoSnap = null; a.applySnapshot(Object.assign(cur, { hudLayout: null }), { history: false }); paint(); return true; }
     if (!park || JSON.stringify(park) === JSON.stringify(out)) return false;
     if (undoSnap) undoSnap = null;   // its snapshot is the other orientation's
     a.applySnapshot(Object.assign(cur, park), { history: false });
