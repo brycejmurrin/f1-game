@@ -1068,3 +1068,39 @@ test("the standings header ends with Close", async () => {
   assert.equal(close.parentNode.lastChild, close);
   assert.equal(h.root.find(el => el.id === "dh-tab-standings").getAttribute("aria-selected"), "true");
 });
+
+// #6767: load-failure paths of the hub.
+test("a throw while painting a loaded tab shows the error block, not LOADING forever", async () => {
+  const bad = { querySelector() { throw new Error("render boom"); } };
+  const h = harness({ globals: { DataExport: { create: () => ({ loadExport: () => Promise.resolve(bad) }) } } });
+  h.DataHub.open("export"); await h.flush(); await h.flush();
+  assert.equal(/LOADING/.test(h.content().textContent), false);
+  assert.ok(h.content().querySelector(".dh-error"), "the failure arm paints errorBlock");
+  h.DataHub.close();
+});
+
+test("RESULTS with the meetings load failing says so instead of 'no classification yet'", async () => {
+  const h = harness({ latest: null });
+  h.DataHub.open("results"); await h.flush(); await h.settle("latestSession");
+  const i = h.pending.findIndex((p) => p.name === "meetings");
+  assert.ok(i >= 0, "the picker asked for meetings");
+  h.pending.splice(i, 1)[0].reject(new Error("offline")); await h.flush(); await h.flush();
+  assert.equal(/No classification/i.test(h.content().textContent), false);
+  assert.equal(/Couldn't load results/.test(h.content().textContent), true);
+  h.DataHub.close();
+});
+
+test("an OpenF1 404 'No results found' is not cached: the next call asks again", async () => {
+  const writes = []; let calls = 0;
+  const ctx = vm.createContext({ Date, AbortController, setTimeout, clearTimeout, Log: { info() {}, warn() {} },
+    fetch: async () => { calls++; const body = JSON.stringify({ detail: "No results found." });
+      return { ok: false, status: 404, headers: { get: () => null }, text: async () => body, json: async () => JSON.parse(body) }; },
+    localStorage: { length: 0, key: () => null, getItem: () => null, setItem: (k, v) => writes.push(k), removeItem() {} } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/api-transport.js"), "utf8"), ctx, { filename: absSrc("js/data/api-transport.js") });
+  const t = vm.runInContext("F1Transport", ctx).create("https://api.openf1.org/v1", 7 * 86400000);
+  const url = "https://api.openf1.org/v1/session_result?session_key=9";
+  assert.equal((await t.request(url, 7 * 86400000)).length, 0);
+  assert.equal((await t.request(url, 7 * 86400000)).length, 0);
+  assert.equal(calls, 2, "the empty answer was not served from cache");
+  assert.equal(writes.length, 0, "nothing stored on disk");
+});

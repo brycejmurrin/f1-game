@@ -444,7 +444,9 @@ const F1Transport = (function () {
       const job = attempt(0)
         .then(function (json) {
           if (myGen !== netGen) throw cancelledError(url);
-          if (cache) writeCache(url, json, cachePolicy === "memory");
+          // An empty array is OpenF1's "no results yet" (HTTP 404): never store it,
+          // or a frozen session serves [] for the whole week-long TTL.
+          if (cache && !(json && typeof json === "object" && json.length === 0)) writeCache(url, json, cachePolicy === "memory");
           if (!quiet) effects.info("fetch " + name + " ok");
           return json;
         })

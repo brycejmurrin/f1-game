@@ -86,6 +86,9 @@ const DataResults = (function () {
         wrap.appendChild(buildPicker(function (meta) {
           renderBody(meta, body, wrap);
           invalidateOther("results");
+        }, null, function () {
+          clear(body);
+          body.appendChild(emptyMsg("Couldn't load results. Check your connection and retry."));
         }));
         wrap.appendChild(body);
         if (sel.sessionKey === null) {
