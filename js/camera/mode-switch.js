@@ -159,6 +159,8 @@ window.CamModes = (function () {
         // A cut: the new rig's eased bend sides start from its own target,
         // not from wherever that rig was the last time it was on air.
         if (typeof CamFeel !== "undefined") CamFeel.resetFollow();
+        // ...and so are the held bend sides (heli/side/cinematic hang), or the first bend after a cut inherits the old rig's side.
+        if (typeof GameCams !== "undefined") GameCams.resetSmoothing();
       }
       if (typeof GameAudio !== "undefined") GameAudio.setCameraMix(CAM_MODES[G.camMode].id);   // onboard / chase / TV mix
       refreshCamBtn();   // the CAM button label is the only mode indicator (no big announce)
