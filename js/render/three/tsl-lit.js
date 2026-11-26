@@ -69,6 +69,8 @@
     // is built: the Loop bounds and the CPU-side arrays must agree, and both
     // read this one binding.
     const MAX_LIGHTS = (ctx && ctx.maxLights > 0) ? (ctx.maxLights | 0) : LightBudget.MAX;
+    // frame.wetnessSegs length (WeatherArc.WET_SEGS; tests/unit/tlx-sector-wetness.test.mjs pins the match).
+    const WET_SEGS = 24;
     const {
       Fn, If, Loop, Break, uniform, uniformArray, renderGroup, attribute, varying, texture, cubeTexture,
       textureLoad, ivec2,
@@ -328,6 +330,20 @@
     U.lampDir = uniformArray(lampDir);
     U.lampGeo = uniformArray(lampGeo);
     if (ctx.circuitSurfaces) U.silverstoneSurface = uniform(0.0);
+    // PER-SECTOR ROAD WETNESS (#6909 phase 2): frame.wetnessSegs (WeatherArc.WET_SEGS
+    // = 24 slots along the lap, segment i centred on lap fraction (i + 0.5) / 24)
+    // and the lap length they span. The road samples them by its trk.s, so a
+    // soaked sector ahead looks wet before the view car reaches it. wetLap 0 =
+    // no array: every fragment reads the one global U.wetness, as before.
+    // wetMax (max of U.wetness and every slot) is the UNIFORM gate of the wet
+    // block and its hoisted derivatives, so a dry car facing a wet sector still
+    // runs it and a dry lap still skips it.
+    // PACKED vec4[6], not float[24]: a uniform array is vertical on WebGL2
+    // (one 224-row floor, the lamp-budget note at the top), so 6 rows, not 24.
+    const wetSegs4 = Array.from({ length: WET_SEGS / 4 }, () => new THREE.Vector4());
+    U.wetSegs = uniformArray(wetSegs4);
+    U.wetLap = uniform(0.0);
+    U.wetMax = uniform(0.0);
     if (ctx.brakeSpill) U.brakeSpillCount = uniform(0.0);
     if (envCubeNode && ctx.garageProbeRequested) {
       U.garageBoxOn = uniform(0.0);
@@ -387,6 +403,20 @@
     // mirror's MIRROR_TUNE overrides (mirror-pass.js: carSunGlint, carSparkle, windowSunFlash, shadowStr), the shadow
     // block (shadowCtr falls back to the eye; the lamp slots are off in the mirror) and the lamp arrays. tlx.js
     // mirrorBegin runs both before the main begin() of the same frame, which then runs updateView only.
+    /** frame.wetnessSegs / wetnessLap → U.wetSegs / wetLap / wetMax (see the U block). */
+    function syncWetSegs(frame) {
+      const segs = frame.wetnessSegs, lap = frame.wetnessLap;
+      let mx = U.wetness.value;
+      if (segs && segs.length === WET_SEGS && lap > 0) {
+        for (let i = 0; i < WET_SEGS; i++) {
+          const w = segs[i] > 0 ? segs[i] : 0;
+          if (w > mx) mx = w;
+          wetSegs4[i >> 2].setComponent(i & 3, w);
+        }
+        U.wetLap.value = lap;
+      } else U.wetLap.value = 0;
+      U.wetMax.value = mx;
+    }
     function updateFrame(frame, mirror) {
       updateFrameShared(frame);
       updateView(frame, mirror);
@@ -416,6 +446,7 @@
       U.lampFog.value = frame.lampFog != null ? frame.lampFog : 0;
       if (U.silverstoneSurface) U.silverstoneSurface.value = frame.trackId === "silverstone" ? 1 : 0;
       U.wetness.value = frame.wetness != null ? frame.wetness : 0;
+      syncWetSegs(frame);
       U.rain.value = frame.rain != null ? frame.rain : 0;
       U.time.value = frame.time != null ? frame.time : 0;
       if (_crowd && frame.crowdExcite != null) setCrowdExcite(frame.crowdExcite);   // CROWD LIFE (only once a crowd material exists)
@@ -1661,6 +1692,30 @@
     // array reads a constant (0,0,0), which a node material cannot express.
     // Cost: one extra program. INVARIANT: a chunked mesh must only ever be
     // drawn through drawChunked/castShadowChunked (it is — js/game.js,4810).
+    /** One packed slot of U.wetSegs (vec4[6]): slot i = row i/4, lane i%4. */
+    const wetSlot = (i) => {
+      const row = i.div(4), r = U.wetSegs.element(row), c = i.sub(row.mul(4));   // int ops: GLSL mod() is float-only
+      return select(c.equal(0), r.x, select(c.equal(1), r.y, select(c.equal(2), r.z, r.w)));
+    };
+    /** The road's wetness at this fragment (#6909 phase 2): on a mesh with track
+     *  coords (trk = s, x, hw; road, kerbs and verges) the per-sector slots,
+     *  interpolated between segment centres (i + 0.5) / WET_SEGS and wrapping at
+     *  the line; anywhere else, or with no array (wetLap 0), the global value.
+     *  Fn-body statements only (STANDING RULE); dry laps skip the taps. */
+    function roadWetness(trkA) {
+      const wL = float(U.wetness).toVar();
+      if (!trkA) return wL;
+      const hasTrk = trkA.z.greaterThan(0.5).or(abs(trkA.y).greaterThan(0.0)).or(trkA.x.greaterThan(0.0));
+      If(U.wetMax.greaterThan(0.001).and(U.wetLap.greaterThan(0.0)).and(hasTrk), () => {
+        const f = fract(trkA.x.div(U.wetLap)).mul(float(WET_SEGS)).sub(0.5);
+        const fl = floor(f), t = f.sub(fl);
+        const i0 = int(mod(fl.add(float(WET_SEGS)), float(WET_SEGS)));
+        const i1 = int(mod(fl.add(float(WET_SEGS + 1)), float(WET_SEGS)));
+        wL.assign(mix(wetSlot(i0), wetSlot(i1), t));
+      });
+      return wL;
+    }
+
     function buildFragment(matU, chunked, instanced, fx) {
       return Fn(() => {
         // STANDING-RULE ANCHORS: unconditional Fn-body .toVar() on every
@@ -1705,7 +1760,7 @@
         // (the WebGPU path compiles this graph to WGSL, which requires it) — an If
         // on the UNIFORM wetness is still uniform, and dry frames skip them.
         const trkRightXZ = trkA ? vec2(0.0).toVar() : null;
-        if (trkA) If(U.wetness.greaterThan(0.001), () => {
+        if (trkA) If(U.wetMax.greaterThan(0.001), () => {
           trkRightXZ.assign(dFdx(wp.xz).mul(dFdx(trkA.y)).add(dFdy(wp.xz).mul(dFdy(trkA.y))));
         });
         const V = normalize(cameraPosition.sub(wp)).toVar();
@@ -2159,16 +2214,19 @@
           float(1.0), float(0.0));
         // NOT on a car: the block is world-keyed (noise puddles, ripple cells,
         // the tarmac absorb) and slid across the moving body — glsl-lit.js.
-        If(U.wetness.greaterThan(0.001).and(classifiedCar.not()), () => {
+        // wL: THIS fragment's road wetness — the per-sector slot at its trk.s on
+        // a mesh with track coords (road, kerbs, verges), else the global value.
+        const wL = roadWetness(trkA);
+        If(U.wetMax.greaterThan(0.001).and(classifiedCar.not()), () => {
           const upFace = smoothstep(0.50, 0.90, N.y);
-          wet.assign(U.wetness.mul(upFace));
+          wet.assign(wL.mul(upFace));
           // STANDING-WATER PUDDLES (2026-10-14) — js/render/shared/puddles.js is the
           // reference; GLX glsl-lit.js constant for constant: two octaves of
           // world-space surface noise (~7.7 m, ~3.4 m), fixed real locations.
           // Exact-zero gate (as GLX): puddle = ...*pg*upFace*(1-porous), so the noise, pool and
           // smoothsteps are skipped where the weight is 0 (wetness < 0.6, PUDDLES 0, walls, porous). pg is
-          // uniform-only; the body has no derivatives (they are hoisted above).
-          const pg = clamp(smoothstep(0.6, 1.0, U.wetness).mul(U.puddles), 0.0, 1.0);
+          // per-fragment (wL); the body has no derivatives (they are hoisted above), so the If may diverge.
+          const pg = clamp(smoothstep(0.6, 1.0, wL).mul(U.puddles), 0.0, 1.0);
           If(pg.greaterThan(0.0).and(upFace.greaterThan(0.0)).and(porous.lessThan(0.5)), () => {
             const pn = vnoise(wp.xz.mul(0.13).add(4.7)).mul(0.70).add(vnoise(wp.xz.mul(0.29).add(11.3)).mul(0.30));
             // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: the

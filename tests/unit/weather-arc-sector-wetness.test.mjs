@@ -4,7 +4,7 @@
 // soaked sector ahead read dry until the camera drove in. js/race/weather-arc.js
 // now writes frame.wetnessSegs beside it: WeatherArc.WET_SEGS slots along the
 // lap, each the along-lap wetness of that segment, lagged at the same 0.8/s as
-// frame.wetness. No renderer reads it yet (phase 2: TLX road material).
+// frame.wetness. TLX's road reads it (phase 2: tests/unit/tlx-sector-wetness.test.mjs).
 //
 // The real weather-arc, rain-cells and tyre-model modules in a VM. No browser.
 //
@@ -50,8 +50,8 @@ function armLocal(G, wa) {
   assert.ok(wa.arc && wa.arc.cell, "fixture: a MIXED plan that draws a local shower");
 }
 
-/** Advance the shared race clock to `t`, one physics tick, then the render-side sync with dt = null (snap). */
-function at(G, wa, t) { G.raceT = t; wa.tick(0); wa.syncWetness(null); return G.frame.wetnessSegs; }
+/** Advance the shared race clock to `t`, one physics tick, then the render-side sync, snapped (dt 0 alone holds, #7011). */
+function at(G, wa, t) { G.raceT = t; wa.tick(0); wa.syncWetness(0, true); return G.frame.wetnessSegs; }
 
 test("fixed length: WET_SEGS slots, a Float32Array reused frame to frame", () => {
   const { ctx, G, wa } = boot();
@@ -99,7 +99,7 @@ test("local shower: a segment ahead reads its own weather, not the view car's (#
 
 test("the segments ramp at the same 0.8/s as frame.wetness", () => {
   const { G, wa } = boot();
-  wa.syncWetness(null);   // dry, snapped
+  wa.syncWetness(0, true);   // dry, snapped
   G.raceWeather = "rain";
   wa.syncWetness(0.5);    // step = 0.4
   const segs = G.frame.wetnessSegs;
