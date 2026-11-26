@@ -113,7 +113,7 @@ export function builtLine(rows) {
 if (isMain(import.meta.url)) {
   const argv = process.argv.slice(2);
   const withPaths = argv.flatMap((a, i) => (a === "--with" ? [argv[i + 1]] : a.startsWith("--with=") ? [a.slice(7)] : []));
-  const gated = argGate(argv.filter((a, i) => !(a === "--with" || argv[i - 1] === "--with" || a.startsWith("--with="))), { allowed: ["--quiet", "--list", "--all"] });
+  const gated = argGate(argv.filter((a, i) => !(a === "--with" || argv[i - 1] === "--with" || a.startsWith("--with="))), { allowed: ["--quiet", "--list", "--all"], usage: "usage: node tools/gen/ensure-built.mjs [--quiet] [--list] [--all] [--with <path>]\n  Builds every missing or stale BUILT_PATHS file; --list prints them, --all/--with add on-demand outputs." });
   if (gated !== null) process.exit(gated);
   if (argv.includes("--list")) {
     for (const p of BUILT_PATHS) console.log(p);

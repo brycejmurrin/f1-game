@@ -108,7 +108,7 @@ test("rtc-e2e-3p.mjs --help prints its usage line and exits 0 without booting Ch
   const r = runFast("tools/net/rtc-e2e-3p.mjs", "--help");
   assert.equal(r.error, undefined, `--help did not return within ${FAST_MS} ms`);
   assert.equal(r.status, 0, r.stderr || r.stdout);
-  assert.equal(r.stdout.split("\n")[0], "usage: node tools/net/rtc-e2e-3p.mjs");
+  assert.equal(r.stdout.split("\n")[0], "usage: node tools/net/rtc-e2e-3p.mjs [--relay] [--turn=turn:host:port,user,pass]");
 });
 
 test("gen-shell.mjs refuses an unknown flag instead of writing", () => {

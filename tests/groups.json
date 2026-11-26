@@ -1498,6 +1498,7 @@
     "tests/unit/ui-reset-tap-floor.test.mjs",
     "tests/unit/ui-sheets-audit.test.mjs",
     "tests/unit/uilayers-modal-order.test.mjs",
+    "tests/unit/usage-strings-match-parser.test.mjs",
     "tests/unit/validation-cli-assets.test.mjs",
     "tests/unit/validation-cli-check.test.mjs",
     "tests/unit/validation-cli-episode.test.mjs",
