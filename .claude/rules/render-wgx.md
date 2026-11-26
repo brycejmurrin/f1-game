@@ -5,6 +5,11 @@ paths:
 
 # WGX (WebGPU) — loads with js/render/webgpu/
 
+- **FROZEN (D-049, 2026-11-25).** WGX stays opt-in and takes only crash and
+  validation fixes. No parity ports from TLX or GLX, no new looks or knobs; the
+  same holds for #3115 and #5651. GLX's own role is "safe mode" (boot and race
+  correctly on any WebGL2 device; `docs/ARCHITECTURE.md` §Cross-backend parity,
+  #6861). Re-assess WGX only on new evidence (e.g. a three.js WebGPU blocker).
 - Opt-in via `apex26.gfxBackend=webgpu`. TLX (three.js) is the DEFAULT when the
   key is unset; GLX is the explicit `webgl2` pick and the fallback every
   backend failure lands on. Software / headless adapters (Dawn, SwiftShader,
