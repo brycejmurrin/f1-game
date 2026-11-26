@@ -255,7 +255,9 @@ if (plan.fast.toolingFast) {
 const live = await liveCiRuns({ userAgent: "apex26-verify-change" });
 
 const finish = (verdict, extra = {}) => {
-  const out = { verdict, phases, batches, notRun: extra.notRun || [], ...extra };
+  // `selection` rides on the RUN verdict too (it was only in the plan), so a
+  // consumer can tell "nothing needs testing" from "nothing was selected".
+  const out = { verdict, selection: selReason, files: files.length, phases, batches, notRun: extra.notRun || [], ...extra };
   if (live?.runs.length) out.liveCi = live;
   if (JSON_OUT) console.log(JSON.stringify(out, null, 2));
   else {
@@ -287,8 +289,11 @@ if (receipt.unclaimed.length) {
   });
 }
 if (flag("--fast") || !batches.length) {
-  finish(fastOk ? (batches.length ? "partial" : "pass") : "fail",
-    { notRun: batches.flat() });
+  // An empty diff selected nothing and ran nothing: "pass" would be vacuous
+  // (#6501 row 6), so it gets its own verdict (exit 2, not a green).
+  const empty = !files.length;
+  finish(!fastOk ? "fail" : empty ? "nothing-ran" : batches.length ? "partial" : "pass",
+    { notRun: batches.flat(), ...(empty ? { why: "no changed files: nothing was selected and nothing ran" } : {}) });
 }
 
 // ── phase 2: the groups run on the PR, not here (2026-11-03) ────────────────

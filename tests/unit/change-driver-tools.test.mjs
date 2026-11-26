@@ -400,3 +400,17 @@ test("test-honesty: the shipped baseline is not stale (it only shrinks)", () => 
   const v = JSON.parse(run(["tools/ci/test-honesty.mjs", "--json"]).out);
   assert.deepEqual(v.stale, [], "delete stale rows from tests/data/test-honesty-baseline.json");
 });
+
+// ── #6501 row 6: an empty diff is not a pass ─────────────────────────────────
+test("verify-change --fast on an empty diff is nothing-ran (exit 2), and the run verdict carries the selection", (t) => {
+  const env = driverEnv(t, { stubFastGate: true });
+  // An empty staged diff: a git that succeeds and prints nothing.
+  fs.writeFileSync(path.join(env.PATH.split(path.delimiter)[0], "git"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  const r = run(["tools/ci/verify-change.mjs", "--fast", "--json", "--staged"], { env });
+  const out = JSON.parse(r.out);
+  assert.equal(out.verdict, "nothing-ran", r.out);
+  assert.equal(out.files, 0);
+  assert.equal(typeof out.selection, "string");
+  assert.deepEqual(out.batches, []);
+  assert.equal(r.status, 2);
+});

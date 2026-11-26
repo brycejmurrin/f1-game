@@ -10,7 +10,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { inheritedNotes, baseRunFor, latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict, openPrFor, watchSha, api, supersededBy, resolveSha, cancelledExternal, supersededByPr, fileState, waitingJobs, USAGE } from "../../tools/ci/ci-watch.mjs";
+import { runsForSha, inheritedNotes, baseRunFor, latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict, openPrFor, watchSha, api, supersededBy, resolveSha, cancelledExternal, supersededByPr, fileState, waitingJobs, USAGE } from "../../tools/ci/ci-watch.mjs";
 import { githubToken, NO_TOKEN_HINT } from "../../tools/ci/github-token.mjs";
 import * as ciWatch from "../../tools/ci/ci-watch.mjs";
 import fs from "node:fs";
@@ -610,4 +610,25 @@ test("baseRunFor reads the deploy branch's newest completed run once per workflo
   assert.match(calls[0], /branch=claude%2Ff1-game-project-26h3ng&status=completed&per_page=1/);
   baseRunFor(424242, request); assert.equal(calls.length, 2, "cached");
   assert.deepEqual(baseRunFor(424243, () => { throw new Error("rate limit"); }), { baseRun: null, baseJobs: null });
+});
+
+test("latestPerWorkflow keys on the workflow, not the run-name (#6501 row 10)", () => {
+  const w = (id, name, wf, created) => ({ ...run(id, name, "completed", "success", created), workflow_id: wf });
+  const runs = latestPerWorkflow([
+    w(1, "Land retry pr=1", 7, "2026-09-24T00:00:00Z"),
+    w(2, "Land retry pr=2", 7, "2026-09-24T00:00:09Z"),
+    w(3, "CI", 8, "2026-09-24T00:00:01Z"),
+  ]);
+  assert.deepEqual(runs.map((r) => r.id).sort(), [2, 3], "one run per workflow_id, whatever its dynamic name");
+});
+
+test("runsForSha pages the head_sha list past one page of 50", () => {
+  const page = (n) => Array.from({ length: n === 3 ? 10 : 50 }, (_, i) => ({ id: n * 100 + i }));
+  const urls = [];
+  const request = (u) => { urls.push(u); const p = Number(/&page=(\d+)/.exec(u)?.[1] || 1); return { json: { total_count: 110, workflow_runs: page(p) } }; };
+  const r = runsForSha(request, "abc");
+  assert.equal(r.json.workflow_runs.length, 110);
+  assert.equal(urls[0], "actions/runs?head_sha=abc&per_page=50", "page 1 keeps the historical URL");
+  assert.equal(urls.length, 3);
+  assert.deepEqual(runsForSha(() => ({ error: "HTTP 500" }), "abc"), { error: "HTTP 500" });
 });

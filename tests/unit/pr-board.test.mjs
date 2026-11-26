@@ -284,15 +284,27 @@ test("measure without a token reports the hint (no request leaves the box)", () 
 test("only GET requests are ever issued: every curl the default transport spawns is a bare GET", () => {
   const prs = [prObj(1), prObj(2, { draft: true })];
   const spawned = [];
+  const answer = (url) => {
+    const qs = url.split("/repos/brycejmurrin/f1-game/")[1];
+    return fakeApi({ prs, checksBySha: { [SHA(1)]: guard(), [SHA(2)]: guard() } }).request(qs);
+  };
   const run = (cmd, args, opts) => {
     spawned.push({ cmd, args, opts });
+    if (args.includes("--parallel")) {
+      // The prefetch round: ONE curl --parallel fed a GET-only config on stdin (answers go to the `output` files).
+      const urls = [...opts.input.matchAll(/^url = "(.*)"$/gm)].map((m) => m[1]);
+      const outs = [...opts.input.matchAll(/^output = (".*")$/gm)].map((m) => JSON.parse(m[1]));
+      assert.ok(!/^(request|data|form|upload-file|json)\b/m.test(opts.input), "the batch config is GET-only");
+      let stdout = "";
+      urls.forEach((u, i) => { const f = answer(u); fs.writeFileSync(outs[i], JSON.stringify(f.json)); stdout += `=${i} ${f.error ? 500 : 200} \n`; });
+      return { status: 0, stdout, stderr: "" };
+    }
     const url = args.find((a) => a.startsWith("https://api.github.com/repos/"));
-    const qs = url.split("/repos/brycejmurrin/f1-game/")[1];
-    const f = fakeApi({ prs, checksBySha: { [SHA(1)]: guard(), [SHA(2)]: guard() } }).request(qs);
+    const f = answer(url);
     return { status: 0, stdout: `${JSON.stringify(f.json)}\n${f.error ? 500 : 200}`, stderr: "" };
   };
   const v = measure({ run, env: { GH_TOKEN: "t0k3n" } });
-  assert.equal(v.ok, true);
+  assert.equal(v.ok, true, v.error);
   assert.ok(spawned.length > 4);
   for (const { cmd, args, opts } of spawned) {
     assert.equal(cmd, "curl");
@@ -300,7 +312,7 @@ test("only GET requests are ever issued: every curl the default transport spawns
       assert.ok(!args.includes(bad), `curl got ${bad}`);
     }
     assert.ok(args.every((a) => !/^(POST|PUT|PATCH|DELETE)$/i.test(a)));
-    assert.ok(args.some((a) => /^https:\/\/api\.github\.com\/repos\/brycejmurrin\/f1-game\//.test(a)));
+    if (!args.includes("--parallel")) assert.ok(args.some((a) => /^https:\/\/api\.github\.com\/repos\/brycejmurrin\/f1-game\//.test(a)));
     assert.ok(!args.join(" ").includes("t0k3n"), "the token never appears in argv");
     assert.match(opts.input, /Authorization: Bearer t0k3n/);
   }
@@ -500,4 +512,23 @@ test("measure reads every comment page, so adoptions older than the newest 100 c
   const v = measure({ request, only: 1 });
   assert.equal(v.ok, true, v.error);
   assert.deepEqual([v.rows[0].adopted, v.rows[0].churn], [3, true]);
+});
+
+test("measure prefetches the per-PR reads in parallel rounds, not 3N sequential GETs (#6501 row 11)", () => {
+  const prs = [1, 2, 3, 4].map((n) => prObj(n));
+  const { request, calls } = fakeApi({ prs, checksBySha: Object.fromEntries(prs.map((p) => [p.head.sha, guard()])) });
+  const rounds = [];
+  const batch = (urls) => {
+    rounds.push(urls);
+    return new Map(urls.map((u) => [u, request(u.slice(u.indexOf("/repos/") + 7).replace(/^[^/]+\/[^/]+\//, ""))]));
+  };
+  const snapshot = createSnapshot({ request, batch, cacheFile: null });
+  const v = measure({ snapshot });
+  assert.equal(v.ok, true);
+  assert.equal(rounds.length, 2, "one round for the PRs, one for their heads");
+  assert.equal(rounds[0].filter((u) => /pulls\/\d+$/.test(u)).length, 4);
+  assert.equal(rounds[1].filter((u) => /check-runs/.test(u)).length, 4);
+  // each per-PR path is fetched once: the loop reuses the prefetched memo
+  assert.equal(calls.filter((c) => /^pulls\/\d+$/.test(c)).length, 4);
+  assert.equal(calls.filter((c) => /check-runs/.test(c)).length, 4);
 });
