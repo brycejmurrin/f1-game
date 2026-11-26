@@ -81,7 +81,7 @@ test("car-placement hooks: every car's placement and the return value match the 
     const got = {};
     for (const [name, run] of Object.entries(SCENARIOS)) {
       A.reset(0.1, 0, 0, 42); A.step(30);   // a moving field, the same for every scenario
-      G.frozen = false;
+      G.agentCtl.freeze(false);
       const ret = run(A);
       const cars = G.cars.map((c) => FIELDS.map((f) => c[f]));
       got[name] = createHash("sha256").update(JSON.stringify(round({ ret, cars }))).digest("hex").slice(0, 16);

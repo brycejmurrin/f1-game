@@ -99,11 +99,11 @@ test("quitting releases practice worlds and leaves the trace available for revie
   // Reopen just the eligibility gate. A race start would reset the coach and
   // mask any checkpoint or rewind samples the menu still held.
   try {
-    G.state = "race"; G.practice = true;
+    G.cmd.setState("race", "test"); G.practice = true;
     assert.equal(coach.canPractice(), true);
     assert.equal(coach.rewindReady(), false);
     assert.equal(coach.retry(), false);
-  } finally { G.practice = false; G.state = "menu"; }
+  } finally { G.practice = false; G.cmd.setState("menu", "test"); }
 });
 
 test("the START drill can be set where it says to: on the grid, before the lights",async()=>{

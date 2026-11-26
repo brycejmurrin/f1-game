@@ -468,9 +468,9 @@ test("handoff(): the card stays up, disarmed, until render() lowers it with the 
     "headless lowers busy/build/handoff — present never runs");
   assert.match(render, /if \(state === "race" && !raceRestarting\) loadingScreen\.lowerWaitPlate\(\);/,
     "lights-out drops the wait plate before gfx.warming() can stall it over the HUD");
-  assert.match(read("js/agent/apex.js"), /G\.state = "race"; G\.raceT = Math\.max\(G\.raceT, 0\.5\);\s*if \(G\.loadingScreen && G\.loadingScreen\.lowerWaitPlate\) G\.loadingScreen\.lowerWaitPlate\(\);/,
+  assert.match(read("js/agent/apex.js"), /G\.cmd\.setState\("race", "agent-go"\); G\.raceT = Math\.max\(G\.raceT, 0\.5\);\s*if \(G\.loadingScreen && G\.loadingScreen\.lowerWaitPlate\) G\.loadingScreen\.lowerWaitPlate\(\);/,
     "__apex.go() drops the plate before jump() refreshHud");
-  assert.match(read("js/agent/apex.js"), /G\.state = "race"; G\.raceT = Math\.max\(G\.raceT, 1\);\s*if \(G\.loadingScreen && G\.loadingScreen\.lowerWaitPlate\) G\.loadingScreen\.lowerWaitPlate\(\);/,
+  assert.match(read("js/agent/apex.js"), /G\.agentCtl\.park\(1\);[^\n]*\n\s*if \(G\.loadingScreen && G\.loadingScreen\.lowerWaitPlate\) G\.loadingScreen\.lowerWaitPlate\(\);/,
     "__apex.park() drops the plate for hud-audit");
   assert.match(render, /gfx\.present\(po\);[\s\S]{0,200}?RaceEntryProfile\.afterPresent\(loadingScreen, gfx, mirrorPass\.preparing\(\)\);/,
     "render() lowers it via afterPresent after a present that painted");

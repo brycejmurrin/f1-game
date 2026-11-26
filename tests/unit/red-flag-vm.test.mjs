@@ -134,7 +134,7 @@ test("a car just behind a leader that has crossed is NOT a lap down after the re
   for (const c of live) { c.lap = 1; c.s = 10; c.prog = 10; }            // the rest of the field, far back
   a.lap = 6; a.s = 100; a.prog = 5 * L + 100;                            // leader, just crossed
   b.lap = 5; b.s = L - 50; b.prog = 4 * L + (L - 50);                    // 150 m behind, not lapped
-  G.state = "race";
+  G.cmd.setState("race", "test");
   assert.equal(G.redFlagRestart(), true);
   assert.equal(a.lap, 5, "the leader re-runs its lap");
   assert.equal(b.lap, 5, "the car behind is on the leader's lap, not one down");
@@ -222,7 +222,7 @@ test("the restart grid is the order when the red flag flew, not after the field 
     const [x, y] = [ai[1], ai[2]];
     for (const k of ["s", "prog", "lap", "x"]) { const t = x[k]; x[k] = y[k]; y[k] = t; }   // y now leads x on the road
     assert.ok(rank().indexOf(y) < rank().indexOf(x), "the precondition: the swap is a pass by prog");
-    G.state = "race";
+    G.cmd.setState("race", "test");
     assert.equal(G.redFlagRestart(), true);
     const ix = (list) => list.map((c) => G.cars.indexOf(c));
     assert.deepEqual(ix(rank()), ix(atFlag), "grid boxes in the order at the flag");
