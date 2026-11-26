@@ -719,14 +719,4 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
   #vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot::before {
     display: none;
   }
-  #vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) #vs-close {
-    min-width: var(--tap);
-    min-height: var(--tap-paint);
-    margin: 0;
-    padding: 0 var(--gap);
-    font-size: var(--fs-micro);
-    line-height: 1;
-    box-sizing: border-box;
-    align-self: stretch;
-  }
 } /* @layer overlays */

@@ -223,6 +223,7 @@ const SaveSchemaRegistry = (function () {
     seasonCfg: entry("js/career/season-cal.js", "json", 1, "season"),
     setupTrialRecover: entry("js/garage/setup-trials.js", "json", 1, "json"),
     shareUndo: entry("js/ui/share-code.js", "json", 1, "json"),
+    "thumbTrainer.best": entry("js/ui/thumb-trainer.js", "raw", 1, "string"),   // LEARN thumb trainer: best match per corner (JSON text)
     xrCaps: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),
     xrEnterPending: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),
     xrPrevBackend: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),

@@ -184,9 +184,10 @@ body:not(.desktop) #pmsettings-inner:not([data-shape="tall"]) { --compact-at: 62
 #pm-panel-credits li > a:first-child { font-weight: 700; }
 #pm-panel-credits a { color: inherit; text-decoration: underline; }
 /* 44 PAINTED px HIT on touch (#6434 row 6): the source links were 19 px tall at UI SIZE 70. Inline padding grows the
-   hit box, not the line box: nothing reflows and nothing paints (no background). 0 with a mouse (--tap-floor44). */
+   hit box, not the line box: nothing reflows and nothing paints (no background). A mouse keeps the --tap-min (>= 24 painted px)
+   WCAG 2.5.8 floor (#6461 row 8: 21 px at UI SIZE 115); touch wins with --tap-floor44. */
 #pm-panel-credits a {
-  padding-block: max(0em, calc((var(--tap-floor44) - 1em) / 2));
+  padding-block: max(0em, calc((max(var(--tap-floor44), var(--tap-min)) - 1em) / 2));
   /* "OpenF1" is 57 own px wide (40 painted): a cancelling pad + negative margin widens the hit box, not the line. */
   padding-inline: calc(var(--tap-floor44) * 0.12); margin-inline: calc(var(--tap-floor44) * -0.12);
 }
