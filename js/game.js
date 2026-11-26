@@ -1978,7 +1978,9 @@ function rebuildWorldDeferred() {
         const dark = sessionDarkFor(Tracks.LIST[trackIdx]);
         if (await loadTrackStepped(trackIdx, () => inSession() && sessionDarkFor(Tracks.LIST[trackIdx]) === dark && !gfxContextLost())) applyRaceSettings();
       }
-      if (!track && state !== "menu" && !gfxContextLost()) { loadTrack(trackIdx); applyRaceSettings(); }   // abandoned (the race ended): heal
+    } catch (e) { Log.warn("track", "deferred rebuild failed (" + (e && e.message) + "); building sync"); }
+    try {   // abandoned, failed or the race ended under it: never leave a session on no world
+      if (!track && (inSession() || state === "results") && !gfxContextLost()) { loadTrack(trackIdx); applyRaceSettings(); }
     } finally { _wr.p = null; }
   })());
 }

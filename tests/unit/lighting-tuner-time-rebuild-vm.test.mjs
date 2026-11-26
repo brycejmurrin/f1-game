@@ -93,3 +93,27 @@ test("a crossing while the race runs: no sync build, frames pump clean, one step
     assert.ok(G.track && G.raceT > t1, "the race runs on the night world");
   } finally { g.close(); }
 });
+
+test("a flip back while the stepped build is in flight: the stale build is dropped, the right world lands, no sync build", async () => {
+  const g = await createGame({ carMeshes: false });
+  try {
+    await g.race("monza", "day", "dry");
+    const S = g.sandbox, G = g.G, n = { sync: 0, paced: 0 }, build = S.Tracks.build, gates = [];
+    S.Tracks.build = function () { n.sync++; return build.apply(this, arguments); };
+    S.Tracks.buildPaced = function (def, opts) {
+      n.paced++;
+      return new Promise((res) => gates.push(() => res(build.call(S.Tracks, def, opts))));
+    };
+    if (S.TrackBuildClient) S.TrackBuildClient.build = async () => null;
+    G.setTimeOfDay("night", { defer: true });
+    for (let i = 0; i < 10 && !gates.length; i++) { g.flushTimers(); await new Promise((r) => setImmediate(r)); }
+    assert.equal(gates.length, 1, "the night build is in flight");
+    G.setTimeOfDay("day", { defer: true });   // coalesced into the running loop
+    gates.shift()();   // the night build finishes, superseded
+    for (let i = 0; i < 20; i++) { if (gates.length) gates.shift()(); g.flushTimers(); await new Promise((r) => setImmediate(r)); }
+    assert.equal(n.sync, 0, "no synchronous Tracks.build");
+    assert.equal(n.paced, 2, "night (dropped) then day");
+    assert.ok(G.track, "a world landed");
+    assert.equal(G.raceTimeOfDay, "day");
+  } finally { g.close(); }
+});
