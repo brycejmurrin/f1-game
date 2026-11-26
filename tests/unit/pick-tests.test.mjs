@@ -330,6 +330,8 @@ test("garage-census usage lists every flag it parses; assets-api.spec cites only
   const src = read("tools/perf/garage-census.mjs");
   const usage = src.split("\n").filter((l) => l.startsWith("//")).join("\n");
   for (const f of new Set([...src.matchAll(/flag\("(--[a-z-]+)"/g)].map((m) => m[1]))) assert.ok(usage.includes(f), `${f} missing from usage`);
+  const help = spawnSync("node", ["tools/perf/garage-census.mjs", "--help"], { cwd: ROOT, encoding: "utf8" }).stdout;
+  assert.equal(help.split("\n").filter((l) => l.startsWith("//")).length, 0, help);
   const scripts = JSON.parse(read("package.json")).scripts;
   for (const [, name] of read("tests/specs/assets-api.spec.js").matchAll(/npm run ([\w:-]+)/g)) assert.ok(scripts[name], `npm run ${name} is not in package.json`);
 });
