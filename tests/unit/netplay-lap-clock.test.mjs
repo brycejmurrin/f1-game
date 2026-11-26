@@ -75,7 +75,6 @@ function hostWith2() {
 
 test("W5: a relayed LAP clamps the owner's lap to lapsTarget+1", () => {
   const { G, net, a, b } = hostWith2();
-  const rem = net.status().remotes.find((x) => x.id === "a" || true);
   const wireA = net.status().remotes[0].wire;
   a.feed(1000, wireA, pose(100), 1000);
   net.tick(1000);
@@ -83,6 +82,8 @@ test("W5: a relayed LAP clamps the owner's lap to lapsTarget+1", () => {
   const out = b.sent.filter((m) => m.type === "lap");
   assert.ok(out.length, "host relays the LAP to the other guest");
   assert.ok(out[0].data.lap <= G.lapsTarget + 1, "relayed lap " + out[0].data.lap + " is clamped");
+  a.deliver("lap", { lap: -5, time: 90, code: G.cars[wireA].code, driverId: G.cars[wireA].driverId });
+  assert.equal(b.sent.filter((m) => m.type === "lap").pop().data.lap, 0, "a negative lap clamps to 0");
 });
 
 test("#6544 row 5: a clock step clears the rivals' interpolation buffers", () => {
@@ -115,4 +116,30 @@ test("W4: a host that was silent across two crossings resyncs the lap on goWire"
   a.feed(3300, w, pose(200, 3), 3300);
   for (let t = 3350; t <= 3600; t += 50) net.tick(t);
   assert.equal(car.lap, 3, "lap resynced to the wire's, not prev+1");
+});
+
+function silentThen(packets, spoof) {
+  const { G, net, a } = hostWith2();
+  const w = net.status().remotes[0].wire, car = G.cars[w];
+  G.raceT = 10;
+  a.feed(1000, w, pose(4900, 1), 1000);
+  net.tick(1000); net.tick(1100);
+  net.tick(3300);
+  G.raceT = 400;
+  for (const [at, p] of packets) a.feed(at, w, p, at);
+  for (let t = 3350; t <= 3600; t += 50) net.tick(t);
+  return { G, net, a, w, car, spoof };
+}
+
+test("W4: two packets before the tick keep the first gap (resync still happens)", () => {
+  const { car } = silentThen([[3300, pose(200, 3)], [3310, pose(205, 3)]]);
+  assert.equal(car.lap, 3);
+});
+
+test("W4: the resync allowance expires: a later lap jump with no crossing is refused", () => {
+  const { G, net, a, w, car } = silentThen([[3300, pose(200, 1)]]);
+  assert.equal(car.lap, 1);
+  G.raceT = 420;   // past the 2 s window
+  for (let t = 3650, i = 0; i < 6; i++, t += 50) { a.feed(t, w, pose(210 + i, 4), t); net.tick(t); }
+  assert.ok(car.lap <= 2, "no multi-lap jump without a crossing, got " + car.lap);
 });

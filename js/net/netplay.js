@@ -95,6 +95,7 @@ const NetPlay = (function () {
   // three packets a lap (5 laps in 1.5 s of wire). A rise also needs a whole
   // lap at the wire's speed ceiling of race clock since the last one.
   const MID_LO = 0.25, MID_HI = 0.75;
+  const GAP_WINDOW_S = 2;   // a resync allowance lives this long after goWire, then it is gone
   function gateLap(c, st, total, now) {
     const prev = Math.max(0, Math.floor(Number(c.lap) || 0));
     let lap = prev;
@@ -102,7 +103,7 @@ const NetPlay = (function () {
     else if (st.lap === prev) lap = prev;
     // After a silence the crossings it hid cannot be seen (no mid-lap packet), so
     // take the wire lap once, bounded by the laps the silence could hold at SPEED_LIMIT.
-    else if (st.lap > prev && c._nGapLaps > 0) {
+    else if (st.lap > prev && c._nGapLaps > 0 && now <= c._nGapUntil) {
       lap = Math.min(st.lap, prev + c._nGapLaps); c._nGapLaps = 0; c._nMid = false; c._nRiseT = now;
     }
     // A fall re-arms the next rise, so it nets zero: needed when an
@@ -255,7 +256,7 @@ const NetPlay = (function () {
     // Keep owner lap evidence apart from speculative motion: fallback crossings
     // cannot finish a connected human, validate a LAP event, or seed gateLap.
     function goLocal(r) {
-      r.stale = true;
+      r.stale = true; r._gapRaceS = null;
       if (!r.hostAi) { r.car._nOwnerLap = r.car.lap; r.car._nOwnerS = r.car.s; r.car._nFallback = true; }
       if (!r.hostAi) G.setCarRole(r.car, false, false);
       r.car.netInput = null;
@@ -264,7 +265,10 @@ const NetPlay = (function () {
     function goWire(r) {
       r.stale = false;
       const gap = r._gapRaceS, tot = (G.track && G.track.total) || 0;
-      if (role === "host" && !r.hostAi && gap > 0 && tot > 0) r.car._nGapLaps = Math.floor(gap * SPEED_LIMIT / tot);
+      if (role === "host" && !r.hostAi && gap > 0 && tot > 0 && Number.isFinite(raceTime())) {
+        r.car._nGapLaps = Math.floor(gap * SPEED_LIMIT / tot); r.car._nGapUntil = raceTime() + GAP_WINDOW_S;
+      }
+      r._gapRaceS = null;
       if (!r.hostAi) {
         r.car.lap = r.car._nOwnerLap; r.car.s = r.car._nOwnerS;
         r.car._nFallback = false;
@@ -510,7 +514,8 @@ const NetPlay = (function () {
         // on the wire, or reclaim a car already handed to the local AI.
         if (r && r.interp.adopt(t - (entry.age || 0), entry, arrival) && r.interp.newest() === entry) {
           // race clock across a silence: goWire's bound on the laps it may have hidden
-          r._gapRaceS = r.stale ? raceTime() - r._heardRaceT : 0; r._heardRaceT = raceTime();
+          if (!r.stale) r._gapRaceS = 0; else if (r._gapRaceS == null) r._gapRaceS = raceTime() - r._heardRaceT;   // first packet's gap wins
+          r._heardRaceT = raceTime();
           r.heardAt = Number.isFinite(arrival) ? arrival : (G.netNow != null ? G.netNow : r.heardAt);
           r.everHeard = true;
         }
