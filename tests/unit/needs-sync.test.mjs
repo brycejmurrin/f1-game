@@ -4,9 +4,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { decideSync, needsSync, exitCode, verdictLine, VERDICTS, gateRetestRefusal, gateMergeRefusal, unionTextConflicts, mergeCrossing } from "../../tools/ci/needs-sync.mjs";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const T0 = "2026-10-16T08:00:00Z", T1 = "2026-10-16T09:00:00Z";
 
@@ -47,7 +47,7 @@ test("exit codes and verdict line", () => {
 
 // A real repo: deploy tip D, branch B behind it.
 function repo(tipEdit, branchEdit) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "needs-sync-"));
+  const dir = mkTmpDir("needs-sync-");
   const g = (...a) => { const r = spawnSync("git", a, { cwd: dir, encoding: "utf8" }); assert.equal(r.status, 0, r.stderr); return r.stdout.trim(); };
   g("init", "-q", "-b", "deploy"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
   fs.writeFileSync(path.join(dir, "f.txt"), "base\n"); g("add", "."); g("commit", "-qm", "base");
@@ -352,7 +352,7 @@ test("needsSync: a green head the gate refused on gen / ratchets = gate-refused,
 // #5922: a merge=union path both sides appended to. git's union driver merges it (merge-tree clean); GitHub merges
 // it as text, reports the PR dirty and never merges it, so needs-sync must name it.
 function unionRepo(tipLog, prLog, { attr = "LOG.md merge=union\n", prOther = null } = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "needs-sync-union-"));
+  const dir = mkTmpDir("needs-sync-union-");
   const g = (...a) => { const r = spawnSync("git", a, { cwd: dir, encoding: "utf8" }); assert.equal(r.status, 0, r.stderr); return r.stdout.trim(); };
   const w = (f, t) => fs.writeFileSync(path.join(dir, f), t);
   g("init", "-q", "-b", "deploy"); g("config", "user.email", "t@t"); g("config", "user.name", "t");

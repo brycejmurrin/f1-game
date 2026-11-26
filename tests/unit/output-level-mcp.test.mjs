@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const gateway = fileURLToPath(new URL('../../tools/mcp/output-level-mcp.mjs', import.meta.url));
 const { withoutDefaultHints } = await import(new URL('../../tools/mcp/output-level-mcp.mjs', import.meta.url));
@@ -36,7 +36,7 @@ createInterface({input:process.stdin}).on('line',line=>{
 process.stderr.write('PRIVATE RAW OUTPUT SHOULD NEVER BE LOGGED');
 `;
 function harness(t, code = fixture) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'output-gateway-'));
+  const root = mkTmpDir('output-gateway-');
   const child = spawn(process.execPath, [gateway, '--server', 'fixture', '--', process.execPath, '-e', code], { cwd: root, stdio: ['pipe', 'pipe', 'pipe'] });
   const messages = [], waiters = []; let stderr = '';
   child.stderr.on('data', b => { stderr += b; });
