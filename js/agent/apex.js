@@ -2060,8 +2060,7 @@ const api = {
     // gridUp() clears the race-level fields; the episode op adds the drivetrain and smoothed inputs (left alone,
     // every later reset inherits the last run's gear and steering) and puts back to undefined every field a running
     // episode CREATES, which a freshly loaded page does not have: "the same seed replays an episode exactly" asks
-    // for the cold state, and 0 where a first run had undefined is a different input. Undefined, never `delete`:
-    // a delete (of a non-last key) drops all 22 cars to V8 dictionary mode (car-fields.js header).
+    // for the cold state, and 0 where a first run had undefined is a different input (never `delete`: car-fields.js).
     // KEEP THE TABLE IN STEP BY MEASURING — `node tools/check/episode-diff.mjs` names what leaked across consecutive
     // post-reset snapshots; add the field's row to the table, never a list here.
     for (const c of G.cars) {
