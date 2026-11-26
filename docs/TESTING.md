@@ -966,24 +966,6 @@ instead of cancelling, each game-check leg
 is capped at 6 min, and its Verdict is `tools/gfx/census-verdict.mjs`.
 `tests/unit/ci-coverage.test.mjs` pins all of the above.
 
-### Local browser timing lore (retired 2026-11-03)
-
-This file used to carry ~200 lines of measurements from running browser groups
-on the 4-core container: the ~1.9× second-worker cost, 80–113 s Playwright
-clicks while the game rendered under SwiftShader, 45 s boots, "re-run a timeout
-alone before you touch a number", "count the navigations first". Browser tests
-run on CI now — `selected` on ready PRs with browser changes, a whole group on Bryce's opt-in, the
-nightly — on llvmpipe runners whose per-spec timings are measured into
-`tests/data/spec-timings.json` (`spec-timings.yml`), and
-`tools/ci/select-budget.mjs` sizes every shard from that record. A timeout
-there is read against that record, not against this box. The two rules that
-outlived the lore: a boot or a click under software rendering costs seconds,
-so drive a sequence inside the page (`page.evaluate`) and count `goto`/`reload`
-calls before touching a per-test bound; and a bound changes only to fit a
-measurement recorded at the line, never to make a run green.
-
----
-
 ### Release train (2026-09-10; on push since 2026-10-16)
 
 `pages.yml` runs on every code push to the deploy branch (prose paths

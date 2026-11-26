@@ -208,6 +208,19 @@ log examples (`--json` for full data, `--pr <n>` for live PR/CI evidence). The
 local log counts describe historical files, not verification of the current
 commit; unknown states stay unknown and the ready gate is not evaluated by it.
 
+### Software-rendering timing rules
+
+Browser tests run on CI (llvmpipe runners; per-spec timings are measured into
+`tests/data/spec-timings.json`, which `tools/ci/select-budget.mjs` sizes shards
+from), so a timeout there is read against that record, not against this box. Two
+rules:
+
+- A boot or a click under software rendering costs seconds: drive a sequence
+  inside the page (`page.evaluate`) and count `goto`/`reload` calls before
+  touching a per-test bound.
+- A bound changes only to fit a measurement recorded at the line, never to make
+  a run green (AGENTS.md rule 9).
+
 ## Related readers
 
 - [AGENTS.md](../AGENTS.md) — the binding rules, one line each.
