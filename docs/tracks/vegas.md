@@ -114,6 +114,9 @@ bacinger outline ~4.8 m RMS off the real line, with T5/T7/T17 far too tight).
   re-derives the real line). The weighting is full at T5/T7/T8/T10/T14/T15/T17, half at T6/T16 and 0.3 elsewhere.
   A full pull everywhere would put the line on the real line (0.99 m RMS) but the road 3.6 m RMS
   off the pole lap; #6922 asks for ≤ 2 m.
+- **Turn apexes:** re-derived from physical positions, then T14 (left, 0.840) and T15 (right, 0.848) re-seated
+  by hand onto the built centreline's curvature peaks, ~50 m apart, so LEARN's thumb trainer reads the right
+  arrow and its T14 → T15 flick.
 - **Result** (verify-track green; scripts are scratch-only and the numbers can be regenerated from the OpenF1 queries above):
 
 | | old | new |
