@@ -10,6 +10,18 @@ var GameAudio = (function () {
   // wireLifecycle — on THIS stub. Held here so ensureAudio can hand it to the
   // real engine (js/core/lazy-bundles.js restoreOnEngine).
   let interrupted = null;
+  // Primer resumed inside the activation gesture (#6448). engine.js adopts it
+  // while this stub is still the GameAudio binding; no extra global.
+  let primer = null;
+  function prime(c) { try { const p = c.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* a rejected resume still keeps the context */ } return c; }
+  function gestureCtx() {
+    try {
+      if (primer && primer.state !== "closed") return prime(primer);
+      const AC = window.AudioContext || window["webkitAudioContext"];
+      if (!AC) return null;
+      return prime(primer = new AC());
+    } catch (e) { primer = primer && primer.state !== "closed" ? primer : null; return primer; }
+  }
   function noop() { return undefined; }
   function noop0() { return 0; }
   function noopStr() { return ""; }
@@ -18,8 +30,8 @@ var GameAudio = (function () {
     _stub: true,
     onInterrupted: (fn) => { interrupted = typeof fn === "function" ? fn : null; },
     _interruptHook: () => interrupted,
-    context: () => null, sfxBus: () => null,
-    init: noop, setEnabled: noop, setSfxEnabled: noop, setUiEnabled: noop,
+    context: () => primer, sfxBus: () => null,
+    init: gestureCtx, setEnabled: noop, setSfxEnabled: noop, setUiEnabled: noop,
     setMusicEnabled: noop, setMusicVolume: noop0, setSfxVolume: noop0,
     setMusicSource: noopStr, musicSource: noopStr, setMusicBackend: noop,
     musicBackend: noop, setSessionType: noop, profile: () => "team",
@@ -118,6 +130,9 @@ var AudioPanel = {
       const stubClick = () => {
         // Nothing has been audible yet, so this press asks to hear the game: keep (or turn) sound on.
         const next = true;
+        // Resume inside this click. ensure().then runs after the gesture, and WebKit
+        // leaves a context created there suspended (#6448).
+        try { GameAudio.init(); } catch (e) { /* no AudioContext: the click still loads the bundle */ }
         // game.js sets AudioPanel._ensure = ensureAudio while the stub is resident.
         const ensure = AudioPanel._ensure;
         if (typeof ensure === "function") {

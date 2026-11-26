@@ -10,6 +10,8 @@ The whole of SKILL.md. `subscribe_pr_activity` on the PR while CI runs on your h
 
 `hosts.cursor.enabled` is false today, so Bryce or the Grok launcher starts it.
 
+**Model (every launch, DAD included):** pass it explicitly: routine = `composer-2.5`, hard = Grok 7 (confirm its exact Cursor slug at launch, never invent one); never `default` or Auto (`.cursor/rules/apex-shared.mdc`).
+
 **PR tools (direct, built-in):** `CreatePullRequest`, `ManagePullRequest` (draft flip, close) and
 `EditPullRequestLabels` — they work (used on #6114, #6127, #6130). Call them directly; never search
 `get_mcp_tools` for them. **Issues:** Cursor has no issue-write tool (cannot comment on, create or label

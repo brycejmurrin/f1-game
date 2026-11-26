@@ -493,6 +493,31 @@ test("a record's lengthM is kept only when it is near the polygon's; otherwise d
   assert.equal(C.sanitize(design({ lengthM: 1 })).id, honest.id, "and it was never part of the content id");
 });
 
+test("a stored record today's sanitize rejects is held byte for byte through every writer (#6871 R1)", () => {
+  // Accepted by some past validation, refused now (a polygon under the 1 km floor).
+  const rejected = { name: "Old Short", seed: 3, theme: "parkland", baseHW: 7, pts: ellipse(36, 60, 40), created: 1, updated: 2, futureField: { keep: [1, "two"] } };
+  const good = design({ name: "Kept" });
+  const { C, data } = boot({ customTracks: { v: 1, items: [good, rejected] } });
+  assert.equal(C.sanitize(rejected), null, "precondition: today's sanitize refuses it");
+  const before = JSON.stringify(rejected);
+  assert.equal(C.list().length, 1, "hidden from the list");
+  assert.equal(C.heldCount(), 1, "but counted as held for repair");
+  const heldBytes = () => plain(data.customTracks.items.filter((x) => x.name === "Old Short").map((x) => JSON.stringify(x)));
+  const r = C.upsert(design({ name: "Another", seed: 11, pts: ellipse(36, 900, 420) }));
+  assert.equal(r.ok, true);
+  assert.deepEqual(heldBytes(), [before], "upsert of another circuit keeps the rejected record, byte for byte");
+  C.remove(C.list().find((x) => x.name === "KEPT").id);
+  assert.deepEqual(heldBytes(), [before], "remove keeps it");
+  const imp = C.importCollection({ format: C.COLLECTION_FORMAT, v: 1, items: [design({ name: "Imported", seed: 21, pts: ellipse(36, 820, 500) })] });
+  assert.equal(imp.ok, true);
+  assert.deepEqual(heldBytes(), [before], "a collection import keeps it");
+  assert.deepEqual(plain(C.list().map((x) => x.name)), ["ANOTHER", "IMPORTED"], "valid circuits are written ahead of the held one");
+  // Bare junk was never a design: not held.
+  const j = boot({ customTracks: { v: 1, items: [null, 42, "x", good] } });
+  j.C.upsert(design({ name: "Two", seed: 12, pts: ellipse(36, 900, 420) }));
+  assert.equal(j.data.customTracks.items.length, 2);
+});
+
 test("one throwing stored record is skipped, not fatal, at eval and on sync (6.6a)", () => {
   // A stub props sanitiser that throws on one record's props: load() isolates it.
   const bad = design({ name: "Bad", seed: 99, props: "boom" });

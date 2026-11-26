@@ -2360,3 +2360,23 @@ test("#6587: a rejected other-mode row asks no confirm and is reported by its ow
   assert.deepEqual(Array.from(h.CareerBackup.preview(envelope, { flavours: ["myteam"] }).rejected, (r) => r.slot), ["myteam:1"]);
   assert.equal(JSON.parse(h.disk.get("apex26.career.driver.0")).money, 444);
 });
+
+test("#6605 r5: backup pointer is not written for a skipped (empty) row", () => {
+  const h = loadHarness();
+  fillSix(h);
+  const envelope = h.CareerBackup.build();
+  envelope.slots.find(r => r.flavour === "myteam" && r.i === 2).data = null;
+  const before = h.disk.get("apex26.careerSlot");
+  const result = h.CareerBackup.apply(envelope, { liveSlot: "myteam:2" });
+  assert.equal(result.ok, true);
+  assert.equal(h.disk.get("apex26.careerSlot"), before, "pointer stays on the live slot");
+});
+
+test("#6544 r3: exportAll turns a synchronous throw into a rejection", async () => {
+  const h = loadHarness();
+  fillSix(h);
+  h.ctx.Blob = function () { throw new Error("blob"); };
+  let p;
+  assert.doesNotThrow(() => { p = h.CareerBackup.exportAll(); });
+  await assert.rejects(p);
+});

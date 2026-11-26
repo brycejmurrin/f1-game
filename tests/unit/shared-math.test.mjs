@@ -322,3 +322,46 @@ test("V3.norm returns a unit vector and refuses to divide by zero", () => {
   assert.deepEqual(Array.from(V3.norm([0, 0, 0])), [0, 0, 0],
     "a zero vector must not produce NaN");
 });
+
+// ---------------------------------------------------------------------------
+// 1b. rng32 / smoothstep / clamp01: bit-equal to the private copies they replaced (incident-sim, debris-world,
+// pit-lane ease, rain-cells smooth stays local — its module boundary forbids M4 — weather-arc groove, damage-handling).
+
+function oldRng(seed) {
+  let a = seed | 0;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const oldPit = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+const oldRain = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+const oldClamp01 = (v) => (v > 0 ? (v < 1 ? v : 1) : 0);
+const TS = [-0.5, 0, 1e-9, 0.25, 0.5, 0.999, 1, 1.5];
+
+test("rng32 golden: first 8 draws for seeds 0, 1, 12345", () => {
+  const golden = {};
+  for (const s of [0, 1, 12345]) { const r = M4.rng32(s); golden[s] = Array.from({ length: 8 }, r); }
+  assert.deepEqual(golden, GOLDEN);
+  for (const s of [0, 1, 12345, -7, 2 ** 31 + 5]) {
+    const a = M4.rng32(s), b = oldRng(s);
+    for (let i = 0; i < 64; i++) assert.ok(Object.is(a(), b()));
+  }
+});
+
+test("smoothstep matches the pit ease and the rain-cells smooth", () => {
+  for (const t of TS) {
+    assert.ok(Object.is(M4.smoothstep(t), oldPit(t)), "pit " + t);
+    assert.ok(Object.is(M4.smoothstep(t), oldRain(t)), "rain " + t);
+  }
+  for (let u = 0; u < 1; u += 1 / 97) assert.ok(Object.is(M4.smoothstep(u), u * u * (3 - 2 * u)), "groove " + u);
+  assert.ok(Number.isNaN(M4.smoothstep(NaN)));
+});
+
+test("clamp01 matches the damage-handling copy", () => {
+  for (const t of [...TS, NaN]) assert.ok(Object.is(M4.clamp01(t), oldClamp01(t)), "t " + t);
+});
+
+const GOLDEN = {"0":[0.26642920868471265,0.0003297457005828619,0.2232720274478197,0.1462021479383111,0.46732782293111086,0.5450490827206522,0.6152513844426721,0.6489853798411787],"1":[0.6270739405881613,0.002735721180215478,0.5274470399599522,0.9810509674716741,0.9683778982143849,0.281103502959013,0.6128388606011868,0.7207431411370635],"12345":[0.9797282677609473,0.3067522644996643,0.484205421525985,0.817934412509203,0.5094283693470061,0.34747186047025025,0.07375754183158278,0.7663964673411101]};

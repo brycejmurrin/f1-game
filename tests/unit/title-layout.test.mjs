@@ -980,3 +980,44 @@ test("photo joystick Diameter measures the real disc and preserves its label and
   assert.deepEqual(preview, saved);
   control("Cancel").click();
 });
+
+// #6754 row 3: fit() is memoised on inputs that need no layout read, and solves the scale from one measure.
+function fitRig() {
+  const { dom, M, ctx, mutated } = boot({}, { editor: true, viewport: { ResizeObserver: class { observe() {} } } });
+  const ov = dom.byId("overlay"), mb = dom.byId("menu-buttons"), brand = dom.byId("menu-brand");
+  const rect = (l, t, w, h) => ({ left: l, top: t, right: l + w, bottom: t + h, width: w, height: h, x: l, y: t });
+  const reads = { ov: 0, mb: 0, brand: 0 };
+  ov.getBoundingClientRect = () => { reads.ov++; return rect(0, 0, 852, 393); };
+  // A box 400 tall at --tf 1 that scales linearly with --tf, like the zoomed cluster.
+  const linear = (name, h0) => (el) => { el.getBoundingClientRect = () => { reads[name]++; const tf = parseFloat(el.style.getPropertyValue("--tf")) || 1; return rect(100, 10, 300, h0 * tf); }; };
+  linear("mb", 400)(mb); linear("brand", 100)(brand);
+  for (const el of [mb, brand]) { for (const k of ["scrollHeight", "clientHeight", "scrollWidth", "clientWidth"]) Object.defineProperty(el, k, { value: 10, configurable: true }); el.querySelectorAll = () => []; Object.defineProperty(el, "offsetHeight", { value: 100, configurable: true }); }
+  ctx.getComputedStyle = () => ({ paddingLeft: "59px", paddingRight: "59px", paddingTop: "8px", paddingBottom: "21px", getPropertyValue: () => "" });
+  return { M, mb, brand, reads, mutated, ov };
+}
+
+test("fit() solves --tf from one measure: 2 rect reads per piece, same value as the old pass loop (#6754)", () => {
+  const { M, mb, brand, reads } = fitRig();
+  M.fit();
+  assert.ok(reads.mb <= 2 && reads.brand <= 2, `rect reads per piece <= 2 (mb ${reads.mb}, brand ${reads.brand})`);
+  const availH = 393 - 8 - 21;
+  assert.equal(mb.style.getPropertyValue("--tf"), (availH / 400 * 0.995).toFixed(3), "the old first-pass solve");
+  assert.equal(brand.style.getPropertyValue("--tf"), "", "a piece that fits is untouched");
+});
+
+test("a second fit() with an unchanged key does 0 layout reads; a request or door toggle re-fits (#6754)", () => {
+  const { M, mb, reads, mutated } = fitRig();
+  M.fit();
+  const tf = mb.style.getPropertyValue("--tf");
+  const n = reads.ov + reads.mb + reads.brand;
+  M.fit(); M.fit();
+  assert.equal(reads.ov + reads.mb + reads.brand, n, "unchanged key: no rect read at all");
+  assert.equal(mb.style.getPropertyValue("--tf"), tf, "and the fitted value stays");
+  mutated(mb);   // a door [hidden] toggle
+  M.fit();
+  assert.ok(reads.ov + reads.mb + reads.brand > n, "a door toggle re-measures");
+  const n2 = reads.ov + reads.mb + reads.brand;
+  M.set({ btns: { size: 90 } });
+  M.fit();
+  assert.ok(reads.ov + reads.mb + reads.brand > n2, "a new layout request re-measures");
+});

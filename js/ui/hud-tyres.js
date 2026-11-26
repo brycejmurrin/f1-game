@@ -69,7 +69,7 @@ const HudTyres = (function () {
     return raw ? raw.charAt(0) : "-";
   }
 
-  let _chipOf = null, _chip = null;   // paint()'s #hud-tyre-code, cached per widget
+  let _chipOf = null, _chip = null, _key = "";   // paint()'s #hud-tyre-code, cached per widget; _key = last label inputs
   /** Write data-temp on #hud-tyre; the compound letter takes the colour and
    *  the glyph. With `extra` ({code, lapsLeft, spent, plan}) also writes the
    *  aria-label (#hud-tyre is role="img", so the label is all a reader gets). */
@@ -78,7 +78,7 @@ const HudTyres = (function () {
     const s = state(info);
     if (tyreEl.dataset.temp !== s) tyreEl.dataset.temp = s;
     // The chip is queried once per widget, not per 10 Hz paint: re-query only when it left the tree.
-    if (tyreEl !== _chipOf || !_chip || !_chip.isConnected) { _chipOf = tyreEl; _chip = tyreEl.querySelector ? tyreEl.querySelector("#hud-tyre-code") : null; }
+    if (tyreEl !== _chipOf || !_chip || !_chip.isConnected) { if (tyreEl !== _chipOf) _key = ""; _chipOf = tyreEl; _chip = tyreEl.querySelector ? tyreEl.querySelector("#hud-tyre-code") : null; }
     const chip = _chip;
     if (chip) {
       if (cbCuesOn() && extra && extra.code) {
@@ -88,8 +88,13 @@ const HudTyres = (function () {
       } else if (chip.dataset && chip.dataset.compound != null) delete chip.dataset.compound;
     }
     if (extra && typeof tyreEl.setAttribute === "function") {
-      const l = label(extra.code, s, extra.lapsLeft, extra.spent) + (extra.plan ? ", " + extra.plan : "");
-      if (tyreEl.getAttribute("aria-label") !== l) tyreEl.setAttribute("aria-label", l);
+      // label() reads only these: laps round to what it speaks, so a 10 Hz paint with the same words skips it.
+      const k = [I18n.lang(), extra.code, s, extra.lapsLeft == null ? "" : Math.round(extra.lapsLeft), extra.spent >= 1, extra.plan].join("|");
+      if (k !== _key) {
+        _key = k;
+        const l = label(extra.code, s, extra.lapsLeft, extra.spent) + (extra.plan ? ", " + extra.plan : "");
+        if (tyreEl.getAttribute("aria-label") !== l) tyreEl.setAttribute("aria-label", l);
+      }
     }
     return true;
   }

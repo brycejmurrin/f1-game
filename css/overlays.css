@@ -32,6 +32,39 @@ body:not(.desktop) { --tap-floor44: calc(44.2px / var(--ui-scale)); }
 #learn-aero-guide strong, #learn-aero-guide span { display: block; }
 #learn-aero-guide strong { font-size: var(--fs-3); }
 #learn-aero-guide span { font-size: var(--fs-2); color: var(--dim); }
+/* LEARN's THUMB TRAINER (js/ui/thumb-trainer.js): the real race dock in its preview, and the drill sized by JS into the
+   free screen between the buttons. Only the dock's drive buttons stay live; everything else on the HUD goes. */
+body[data-thumb-trainer] #hud > :not(#hud-dock),
+body[data-thumb-trainer] :is(#hud-dock > :not(#dock-left, #dock-right), #announce, #lights, #campicker) { display: none !important; }
+body[data-thumb-trainer] #hud-dock .touchbtn:not(#btn-brake, #btn-throttle, #btn-steer-left, #btn-steer-right) { opacity: .35; pointer-events: none; }
+#thumb-trainer { position: fixed; inset: 0; z-index: 9; pointer-events: none; background: var(--bg); color: var(--text); font-family: var(--font-ui); }
+#thumb-trainer[hidden] { display: none; }
+#tt-panel {
+  position: absolute; pointer-events: auto; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: calc(var(--gap) / 2);
+}
+#tt-bar { display: flex; flex-wrap: wrap; gap: calc(var(--gap) / 2); align-items: center; }
+#tt-bar :is(button, select), #tt-presets button {
+  min-height: var(--tap); padding-inline: var(--pad);
+  border: 1px solid var(--plate-line); border-radius: var(--r-sm);
+  color: var(--text); background: var(--plate); font: inherit; font-size: var(--fs-2);
+}
+#tt-bar select { flex: 1 1 8em; min-width: 0; width: auto; height: var(--tap); padding-block: 0; }
+#tt-go { background: var(--red-fill); }
+#tt-presets button[aria-pressed="true"] { background: var(--plate-on-strong); }
+#tt-cue, #tt-score, #tt-note { margin: 0; font-size: var(--fs-2); }
+#tt-cue { font-family: var(--font-hud); font-size: var(--fs-3); }
+#tt-score, #tt-note { color: var(--dim); }
+#tt-drill, #tt-explore { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: calc(var(--gap) / 2); }
+#tt-drill[hidden], #tt-explore[hidden] { display: none; }
+#tt-sketch { flex: 1 1 55%; min-height: 0; width: 100%; border-radius: var(--r-md); }
+#tt-time { flex: 0 0 auto; height: clamp(5.5rem, 34%, 15rem); width: 100%; border-radius: var(--r-md); }
+#thumb-trainer[data-fit~="side-sketch"] #tt-time { flex: 1 1 0; height: auto; min-height: 0; }
+#tt-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: calc(var(--gap) / 2); }
+#tt-presets button { padding-inline: calc(var(--pad) / 3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#tt-chart { flex: 1 1 0; min-height: 6rem; }
+#tt-chart svg { display: block; }
+#tt-note { flex: none; max-height: 4.2em; overflow: hidden; font-size: var(--fs-1); }
 
 
 /* Apex 26 — overlays styles. Load order: tools/manifest.cjs CSS. */
@@ -892,17 +925,11 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
 #vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot::before {
   display: none;
 }
-/* --tap-paint, not --tap-min: layout-audit 2026-10-05 ios-iphone-landscape
-   734×343 measured #vs-close at 62×26 (soft under the 52 touch floor) and
-   HOST / JOIN at 285×44. Compact cannot afford --tap's local 52 (paints
-   56.7–104); --tap-paint holds 52 painted on touch and stays --tap-min
-   with a mouse (css/tokens.css). */
-#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) #vs-close {
-  min-width: var(--tap); min-height: var(--tap-paint); height: var(--tap-paint);
-  max-height: var(--tap-paint); margin: 0; padding: 0 var(--gap);
+/* The foot's buttons (CLOSE, step BACK) fill that locked band: a bare .bigbtn paints 57 in the 52 head at UI SIZE 109 (#6814 CI). */
+#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot > .bigbtn {
+  min-width: var(--tap); height: var(--tap-paint); min-height: 0; max-height: var(--tap-paint);
+  margin: 0; padding: 0 var(--gap); box-sizing: border-box;
   font-size: var(--fs-micro); line-height: 1;
-  box-sizing: border-box;
-  align-self: stretch;
 }
 #vsfriend-inner[data-density="compact"] #vs-pick {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap);
@@ -1498,6 +1525,22 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
 #dock-edit-bar [data-k="size"] { padding-inline: calc(var(--gap) / 3); font-variant-numeric: tabular-nums; }
 body[data-dock-edit] [data-dock-selected] { outline: 2px solid var(--hud-ink-light); outline-offset: -2px; }
 
+/* LONE BACK / CLOSE IN THE HEAD for the three sheets that carry a contents strip (#6753, #6570 row 1). Their own
+   compact rules (career.css, above) pin head / nav / body / foot to a four-row stack with ID selectors, which beats the
+   generic components.css rule. Same placement here, on a non-tall sheet only (on a tall one, a portrait 320x568 at 200%,
+   the head squeezed to a 33 px column): head left, foot right on row 1, strip and body full width below. */
+:is(#career-guide .sheet, #career-history .sheet, #howtoplay-inner)[data-density="compact"]:not([data-shape="tall"]):has(> .sheet-foot > :is(button, a):only-child) {
+  grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto minmax(0, 1fr);
+  & > .sheet-head { grid-column: 1; grid-row: 1; }
+  & > :is(#cg-contents, #ch-contents, #htp-contents) { grid-column: 1 / -1; grid-row: 2; }
+  & > .sheet-body { grid-column: 1 / -1; grid-row: 3; }
+  & > .sheet-foot {
+    grid-column: 2; grid-row: 1; align-self: stretch;
+    padding: calc(var(--pad) * 0.3) var(--pad) calc(var(--pad) * 0.3) 0;
+    background: none; box-shadow: none;
+    &::before { content: none; }
+  }
+}
 } /* @layer overlays */
 
 @layer components {

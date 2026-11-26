@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "path";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { fileURLToPath } from "node:url";
 
@@ -128,4 +129,34 @@ test("label and painted accessibility name translate compound names while chip c
   H.paint(el, { tempS: 60, tempOpt: 90, tempWindow: 15 }, { code: "M", lapsLeft: 5, spent: .2 });
   assert.equal(attrs["aria-label"], "Mittel-Reifen, kalt, noch 5 Runden");
   assert.equal(el.dataset.temp, "cold", "CSS state tokens remain invariant");
+});
+
+test("paint memoizes the aria-label: same words skip label(), a change rebuilds it (#6752 row 5)", () => {
+  const ctx = { console };
+  vm.createContext(ctx); withI18n(ctx);
+  let calls = 0;
+  ctx.spy = () => { calls++; };
+  vm.runInContext(SRC.replace("function label(", "function label(...a) { spy(); return label0(...a); }\n  function label0(") + "; this.HudTyres = HudTyres;", ctx, { filename: absSrc("js/ui/hud-tyres.js") });
+  const H = ctx.HudTyres;
+  const attrs = {};
+  const el = { dataset: {}, setAttribute: (k, v) => { attrs[k] = v; }, getAttribute: (k) => attrs[k] };
+  const info = { tempS: 90, tempOpt: 90, tempWindow: 15 };
+  H.paint(el, info, { code: "M", lapsLeft: 5.1, spent: 0.2 });
+  const first = calls;
+  assert.ok(first > 0);
+  H.paint(el, info, { code: "M", lapsLeft: 4.9, spent: 0.25 });   // same spoken words
+  assert.equal(calls, first, "unchanged words: label() not rebuilt");
+  H.paint(el, info, { code: "M", lapsLeft: 2.2, spent: 0.5 });
+  assert.equal(attrs["aria-label"], "Medium tyres, about 2 laps left");
+  H.paint(el, { tempS: 60, tempOpt: 90, tempWindow: 15 }, { code: "M", lapsLeft: 2.2, spent: 0.5, plan: "BOX L12" });
+  assert.equal(attrs["aria-label"], "Medium tyres, cold, about 2 laps left, BOX L12");
+  // null laps is silent; a small value after it is "under a lap left" (not the same key)
+  H.paint(el, info, { code: "S", lapsLeft: null, spent: 0 });
+  assert.equal(attrs["aria-label"], "Soft tyres");
+  H.paint(el, info, { code: "S", lapsLeft: 0.3, spent: 0 });
+  assert.equal(attrs["aria-label"], "Soft tyres, under a lap left");
+  // a language switch rebuilds the label for the same inputs
+  ctx.I18n._installCatalog("de", { "hud.tyre.name.soft": "Weich", "hud.tyre.label": "{name}-Reifen" });
+  H.paint(el, info, { code: "S", lapsLeft: 0.3, spent: 0 });
+  assert.match(attrs["aria-label"], /^Weich-Reifen/);
 });

@@ -469,6 +469,8 @@ const PhonePad = (function () {
             const acc = await deps.acceptAnswer(transport, answer);
             if (phase !== "connecting") return;
             if (!acc.ok) {
+              // A re-link's stale answer is not the player's error (as in lobby.js).
+              if (acc.error === "wrong_offer" || acc.error === "already_answered") { accepted = false; phase = "waiting"; return; }
               const msg = acc.message || "That answer could not be read.";
               if (deps.usingPrivateRelay()) failed(msg);
               else { accepted = false; phase = "waiting"; say(msg, true); }

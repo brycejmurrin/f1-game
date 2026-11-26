@@ -257,7 +257,8 @@
     ]
   ],
     LAZY_LEARN: [
-    "js/ui/learn-door.js"
+    "js/ui/learn-door.js",
+    "js/ui/thumb-trainer.js"
   ],
     LAZY_RACE: [
     "js/data/garage-entrance-motion.js",

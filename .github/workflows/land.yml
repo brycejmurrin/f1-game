@@ -974,6 +974,7 @@ jobs:
           LAND_TOKEN: ${{ secrets.LAND_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
           ARM: ${{ needs.post.outputs.arm }}
+          ATTEMPT: ${{ needs.resolve.outputs.attempt }}
         run: |
           set -euo pipefail
           export GH_TOKEN="$GITHUB_TOKEN"
@@ -995,11 +996,14 @@ jobs:
           # #6711 (train #6702, Land 45706492098, 2026-11-25): arm failed after a passing gate and nothing re-gated the
           # train until a person dispatched it. A train whose arm step fails without handing itself to `retry` (or
           # deferring on the rate limit) is handed to `retry` on the way out (RETRY_MAX per head); the job still fails.
+          # #6797 row 1: only a READ or INFRA failure (`retryable=true`, set where one fails) is handed over; a
+          # deterministic merge refusal, the owner's merge-pause or a veto that changed stays final, as every skip does.
           train_pr=false
+          retryable=false
           arm_exit() {
             local rc=$?
             rm -f "$read_error"
-            if [ "$rc" != 0 ] && [ "$train_pr" = true ] && ! grep -Eq '^(retry|backoff)=' "$GITHUB_OUTPUT"; then
+            if [ "$rc" != 0 ] && [ "$train_pr" = true ] && [ "$retryable" = true ] && ! grep -Eq '^(retry|backoff)=' "$GITHUB_OUTPUT"; then
               echo "::warning::arm of train #$n failed (exit $rc); re-gating within the existing retry budget" | tee -a "$GITHUB_STEP_SUMMARY"
               echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
             fi
@@ -1014,8 +1018,9 @@ jobs:
           # #6711 (train #6702): a 2xx with an EMPTY body (gh --jq: "unexpected end of JSON input", printed twice by the
           # merge-pause reads) is as unreadable as a 5xx: read_once marks an empty answer, or a failure that printed
           # nothing, and read_5xx re-reads it and hands it to `retry` the same way. Every read here prints something.
+          infra_re='HTTP 5[0-9][0-9]|status code: 5[0-9][0-9]|unexpected end of JSON input|^empty body'
           unreadable() {
-            grep -Eiq 'HTTP 5[0-9][0-9]|status code: 5[0-9][0-9]|unexpected end of JSON input|^empty body' "$read_error"
+            grep -Eiq "$infra_re" "$read_error"
           }
           read_once() {
             local out rc=0
@@ -1037,8 +1042,19 @@ jobs:
           on_read_fail() {
             local rc=$1
             defer_if_limited
-            [ "$rc" = 75 ] || { cat "$read_error" >&2; exit "$rc"; }
+            [ "$rc" = 75 ] || { cat "$read_error" >&2; retryable=true; exit "$rc"; }
             echo "::notice::not arming #$n: GitHub answered 5xx or an empty body twice on the arm's first reads; re-gating within the existing retry budget" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+          # recheck_fail <rc>: the merge-pause re-read after a merge refusal (#6797 row 2), through read_5xx as the first
+          # reads are: a 5xx or empty answer that outlasts the re-read hands the PR to `retry` (nothing merged, exit 0);
+          # the rate limit defers; any other failure keeps the merge's own exit (a read failure: retryable for a train).
+          recheck_fail() {
+            local rc=$1
+            defer_if_limited
+            [ "$rc" = 75 ] || { retryable=true; exit "$merge_rc"; }
+            echo "::notice::not merging #$n: GitHub answered 5xx or an empty body twice on a re-read after the merge refusal; re-gating within the existing retry budget" | tee -a "$GITHUB_STEP_SUMMARY"
             echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
             exit 0
           }
@@ -1197,9 +1213,9 @@ jobs:
           # veto and tip re-read. Any failure (incl. "Base branch was modified") falls through to the handling below.
           case "$merge_out" in
             *"is in clean status (enablePullRequestAutoMerge)"*)
-              now=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/branches/$DEPLOY_BRANCH" --jq .commit.sha) || exit "$merge_rc"
-              pr=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/pulls/$n") || exit "$merge_rc"
-              paused=$(GH_TOKEN="$GITHUB_TOKEN" merge_paused) || exit "$merge_rc"
+              now=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/branches/$DEPLOY_BRANCH" --jq .commit.sha) || { retryable=true; exit "$merge_rc"; }
+              pr=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/pulls/$n") || { retryable=true; exit "$merge_rc"; }
+              paused=$(GH_TOKEN="$GITHUB_TOKEN" read_5xx merge_paused) || recheck_fail "$?"
               [ "$paused" = false ] || { echo "::notice::not merging #$n: dispatch:merge-pause is set" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; }
               jq -e --arg head "$head" --arg base "$DEPLOY_BRANCH" '.state == "open" and .draft == false and .head.sha == $head and .base.ref == $base
                 and ([.labels[].name] | index("land") != null and index("hold") == null)' <<<"$pr" >/dev/null \
@@ -1221,17 +1237,23 @@ jobs:
           esac
           # The tip can move after the read above but before GitHub accepts the arm. Only this known race may
           # use the existing bounded re-gate: never repeat the merge command or reuse the stale gate result.
+          # Any other refusal is final for a train too, unless GitHub's own answer was a 5xx or empty (#6797 row 1).
           case "$merge_out" in
             *"GraphQL: Base branch was modified. Review and try the merge again. (mergePullRequest)"*) ;;
-            *) exit "$merge_rc" ;;
+            *) if grep -Eiq "$infra_re" <<<"$merge_out"; then retryable=true; fi; exit "$merge_rc" ;;
           esac
-          now=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/branches/$DEPLOY_BRANCH" --jq .commit.sha) || exit "$merge_rc"
-          pr=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/pulls/$n") || exit "$merge_rc"
-          paused=$(GH_TOKEN="$GITHUB_TOKEN" merge_paused) || exit "$merge_rc"
+          now=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/branches/$DEPLOY_BRANCH" --jq .commit.sha) || { retryable=true; exit "$merge_rc"; }
+          pr=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/pulls/$n") || { retryable=true; exit "$merge_rc"; }
+          paused=$(GH_TOKEN="$GITHUB_TOKEN" read_5xx merge_paused) || recheck_fail "$?"
           [ "$paused" = false ] || exit "$merge_rc"
-          [[ "$now" =~ ^[0-9a-f]{40}$ ]] && [ "$now" != "$tip" ] || exit "$merge_rc"
           jq -e --arg head "$head" --arg base "$DEPLOY_BRANCH" '.state == "open" and .draft == false and .head.sha == $head and .base.ref == $base
             and ([.labels[].name] | index("land") != null and index("hold") == null)' <<<"$pr" >/dev/null || exit "$merge_rc"
+          # Base modified but the tip read back unmoved: a race not proven here. A train gets ONE re-gate for it, on the
+          # head's first pass (ATTEMPT 0); on a re-gated pass the refusal is final (#6797 row 1).
+          if ! [[ "$now" =~ ^[0-9a-f]{40}$ ]] || [ "$now" = "$tip" ]; then
+            [ "${ATTEMPT:-0}" != 0 ] || retryable=true
+            exit "$merge_rc"
+          fi
           echo "::notice::not armed #$n: deploy tip moved during arm ${tip:0:12} -> ${now:0:12}; re-gating within the existing retry budget" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
 

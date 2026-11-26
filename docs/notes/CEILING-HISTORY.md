@@ -4093,3 +4093,10 @@ lightning / twoTone / keylineSplit design no longer vanishes into the body colou
 accent (H2), and a string colour slot no longer gives NaN cockpit colours (H4); #6864. The editor cannot reuse
 `livDraftTo`/`hexToArr` (they live in setup-sheet.js, a global the editor never reaches, and its VM test loads it
 alone), so the small parse/format helpers stay local. Fragment: `ratchets.d/claude--livery-colours-6875.json`.
+## 2026-11-26 — claude/hud-tyres-aria-memo-6752: HUD tyres aria-label memo (#6752 row 5, #6506 row 5)
+
+`(tree) eagerCodeBytes` 4045914 → **4046097** (+183, exactly the measured overage: the entry is slack 0; the first cut was +147, and the pr-reviewer's two accepted findings, a null-laps key collision and a missing locale in the key, added 36 B): `HudTyres.paint` builds a joined key
+of what `label()` reads and skips the label rebuild while it is unchanged, so the 10 Hz HUD paint stops running
+`I18n.t` four times a frame. `js/ui/hud-tyres.js` is eager, so the key code is boot bytes. Bryce's answers on #6752,
+2026-11-26 04:35Z (comments 7182675899, 7182732066): "Raise ~+400 B, ship it" and "Raise ~140 B"; the raise stays far under the +400 B he allowed.
+Fragment: `ratchets.d/claude--hud-tyres-aria-memo-6752.json`. Human step: `ratchet-raise` (Bryce's own click).

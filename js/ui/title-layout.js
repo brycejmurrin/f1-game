@@ -109,7 +109,7 @@ const TitleLayout = (function () {
       if (l.layout !== "grid") root.dataset.titleBtns = l.layout;
       if (l.btns.width) root.dataset.titleBtnw = "on";
     }
-    scheduleFit();   // a request landed; the box decides what fits (#5150)
+    bumpFit();   // a request landed; the box decides what fits (#5150)
   }
 
   // Landscape fit starts from unfitted pieces and shrinks monotonically. The
@@ -120,6 +120,34 @@ const TitleLayout = (function () {
   const FIT_PASSES = 6;
   const FIT_TOKENS = ["--tf", "--tf-dx", "--tf-dy"];
   let fitRaf = 0;
+  // The fit's memo (#6754): fit() is a pure function of the inputs in fitKey(), none of which needs a
+  // layout read, so an unchanged key skips the whole solve. The observers bump a generation for what
+  // they saw: a request (apply), a door toggle (MutationObserver), a font landing, the OVERLAY's box.
+  // A piece's own resize is the fit's consequence, so one that lands right after a fit does not count.
+  let fitKeyLast = null, gen = 0, ovSig = "", settling = false;
+  const hasRaf = typeof requestAnimationFrame === "function";
+  function fitKey(ov) {
+    let sc = 1;
+    try { sc = getComputedStyle(root).getPropertyValue("--ui-scale"); } catch (_) { /* keep 1 */ }
+    const w = typeof window !== "undefined" ? window : {};
+    return [shape(), !!ov.hidden, w.innerWidth, w.innerHeight, w.devicePixelRatio, sc, touchHome(), ovSig, gen].join("|");
+  }
+  function onResize(entries) {
+    let bump = false;
+    for (const e of entries || []) {
+      const id = e.target && e.target.id, r = e.contentRect;
+      if (id === "overlay") {
+        // A hidden overlay reports 0x0: not a box, so coming back at the same size is an unchanged key.
+        const sig = r && r.width > 0 && r.height > 0 ? r.width + "x" + r.height : ovSig;
+        if (sig !== ovSig) { ovSig = sig; bump = true; }
+      } else if (!settling) bump = true;
+    }
+    if (!entries) bump = true;
+    settling = false;
+    if (bump) gen++;
+    scheduleFit();
+  }
+  const bumpFit = () => { gen++; scheduleFit(); };
   function fitClear(el) { for (const k of FIT_TOKENS) el.style.removeProperty(k); }
   // THE TOUCH PAINT FLOOR (#5213; css/menu-destinations.css): under a finger a door is never under
   // 44 px, so a cluster too tall RE-FLOWS (8 rows, 7, 6) before it shrinks; the fit wins last.
@@ -131,10 +159,14 @@ const TitleLayout = (function () {
     el.removeAttribute("data-home-rows"); el.removeAttribute("data-home-floor");
     if (!touchHome()) return;
     const tier = (t) => { if (t) el.setAttribute("data-home-rows", t); else el.removeAttribute("data-home-rows"); };
+    let slack = 1;   // availW/H over the need, from the last fits() measure (>= 1 when it fit)
     const fits = (tf) => {
       el.style.setProperty("--tf", tf.toFixed(3));
       const r = el.getBoundingClientRect();
-      if (r.height * Math.max(1, el.scrollHeight / (el.clientHeight || 1)) > availH || r.width * Math.max(1, el.scrollWidth / (el.clientWidth || 1)) > availW) return false;
+      const needH = r.height * Math.max(1, el.scrollHeight / (el.clientHeight || 1));
+      const needW = r.width * Math.max(1, el.scrollWidth / (el.clientWidth || 1));
+      slack = Math.min(availH / (needH || 1), availW / (needW || 1));
+      if (needH > availH || needW > availW) return false;
       // A clipped label span rejects the tier, the .mb-sub ellipsis excepted (#5378: Safari 852×283).
       for (const b of el.querySelectorAll(".bigbtn")) {
         if (b.hidden || b.closest("[hidden]")) continue;
@@ -161,8 +193,13 @@ const TitleLayout = (function () {
     if (floor < 1) for (const t of tiers) {
       tier(t);
       if (!fits(floor)) continue;
+      // One measure solves the scale (it is near-linear): the box at `floor` has `slack` to spare, so
+      // floor * slack is where it would just fit. Confirm that one candidate; only a miss bisects, and
+      // only up to the candidate, instead of five reads from 1.
       let lo = floor, hi = 1;
-      for (let i = 0; i < 5; i++) { const m = (lo + hi) / 2; if (fits(m)) lo = m; else hi = m; }
+      const cand = Math.min(1, floor * slack * 0.995);
+      if (cand > floor + 0.002) { if (fits(cand)) lo = cand; else hi = cand; }
+      if (hi > lo) for (let i = 0; i < (lo > floor ? 0 : 5); i++) { const m = (lo + hi) / 2; if (fits(m)) lo = m; else hi = m; }
       if (lo > best) { best = lo; bestT = t; }
     }
     tier(bestT);
@@ -185,7 +222,11 @@ const TitleLayout = (function () {
     const ov = doc.getElementById("overlay");
     if (!ov || !ov.getBoundingClientRect) return;
     const pieces = FIT_IDS.map((id) => doc.getElementById(id)).filter((el) => el && el.style);
-    if (ov.hidden || shape() !== "wide") { pieces.forEach(fitClear); return; }
+    // A hidden overlay (a race, a screen over the title) keeps its fitted tokens: the key below decides on return.
+    if (ov.hidden) return;
+    if (shape() !== "wide") { pieces.forEach(fitClear); fitKeyLast = null; return; }
+    const key = fitKey(ov);
+    if (key === fitKeyLast) return;
     const o = ov.getBoundingClientRect();
     if (!(o.height > 0)) return;
     const cs = getComputedStyle(ov), px = (v) => parseFloat(v) || 0;
@@ -227,6 +268,8 @@ const TitleLayout = (function () {
       if (Math.abs(dx) >= 0.5) el.style.setProperty("--tf-dx", (dx / z).toFixed(1) + "px");
       if (Math.abs(dy) >= 0.5) el.style.setProperty("--tf-dy", (dy / z).toFixed(1) + "px");
     }
+    fitKeyLast = key;
+    if (hasRaf) { settling = true; requestAnimationFrame(() => requestAnimationFrame(() => { settling = false; })); }
   }
   /** One fit per frame, however many requests land in it. */
   function scheduleFit() {
@@ -238,14 +281,14 @@ const TitleLayout = (function () {
     // The overlay's box (viewport, insets, zoom) and each piece's own (its
     // doors wrap, hide, re-flow). A door toggled [hidden] inside a full-height
     // cluster changes no border box, so the cluster's subtree is watched too.
-    const ro = new ResizeObserver(scheduleFit);
+    const ro = new ResizeObserver(onResize);
     for (const id of ["overlay", ...FIT_IDS]) { const el = doc.getElementById(id); if (el) ro.observe(el); }
     const mb = doc.getElementById("menu-buttons");
     if (mb && typeof MutationObserver !== "undefined") {
-      new MutationObserver(scheduleFit).observe(mb, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden"] });
+      new MutationObserver(bumpFit).observe(mb, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden"] });
     }
     // The row tier reads label widths (floorTier): a web font landing changes them without resizing any box (#5358).
-    try { doc.fonts.addEventListener("loadingdone", scheduleFit); } catch (_) { /* no FontFaceSet */ }
+    try { doc.fonts.addEventListener("loadingdone", bumpFit); } catch (_) { /* no FontFaceSet */ }
   }
   /** Store `v` as one shape's layout (default: the current shape). `live`:
    *  paint it now and keep it out of the store until commit(). */

@@ -702,10 +702,9 @@ const api = {
   tyres(arg) {
     if (!G.tyres) return null;
     const o = arg && typeof arg === "object" ? arg : {};
-    // `level` sets the TYRE WEAR setting AND the live model together, so a spec
-    // can turn wear on without the settings sheet and have it survive the next
-    // gridUp (which re-reads the setting, not the model).
-    if (o.level != null && TyreModel.isLevel(o.level)) { G.raceTyreWear = o.level; G.tyres.setLevel(o.level); }
+    // `level` sets the TYRE WEAR setting AND the live model together (survives the next gridUp), and plans cars gridUp left bare (#6611).
+    if (o.level != null && TyreModel.isLevel(o.level)) { G.raceTyreWear = o.level; G.tyres.setLevel(o.level);
+      if (G.tyres.on()) (G.cars || []).forEach((c) => { if (!c.pitPlan && G.pits) c.pitPlan = G.pits.planFor(c.human ? 0.5 : DriverRatings.hash32("apex:" + (c.driverId || c.code)) / 4294967296, !!c.human, 0, c); }); }
     // `fit` ("soft"/"medium"/"hard") changes the set exactly as a pit stop does
     // (TyreModel.fit, which writes the stint log), so a spec that ends a race
     // with finishRace() can meet the two-compound rule (js/race/sporting-regs.js).

@@ -66,6 +66,17 @@ const LobbySettings = (function () {
     return idx;
   }
 
+  /** Drop the circuit installCircuit pushed (leaving the lobby). Returns true when a slot was removed. */
+  function releaseEphemeral() {
+    const id = ephemeralId;
+    ephemeralId = null;
+    if (id == null || !Tracks.LIST) return false;
+    const i = Tracks.LIST.findIndex((t) => t && t.id === id);
+    if (i < 0) return false;
+    Tracks.LIST.splice(i, 1);
+    return true;
+  }
+
   function raceRuleRows(G) {
     const track = (Tracks.LIST && Tracks.LIST[G.trackIdx]) || null;
     const WX_LABEL = { dry: "Dry", wet: "Wet", rain: "Rain", overcast: "Cloudy", fog: "Fog", storm: "Storm" };
@@ -202,7 +213,7 @@ const LobbySettings = (function () {
   // WEATHER / TIME_OF_DAY / DIFFICULTY / GRID stay module-local (normaliseSettings).
   return {
     GRID_LABEL, RULES, MAX_CIRCUIT_JSON, raceRuleRows, roomOnly,
-    own, customPicked, circuitPayload, installCircuit, normaliseSettings,
+    own, customPicked, circuitPayload, installCircuit, releaseEphemeral, normaliseSettings,
   };
 })();
 Object.freeze(LobbySettings);
