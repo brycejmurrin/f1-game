@@ -22,9 +22,9 @@ A session with no brief (one Bryce opened) has no cap and gets nothing; a worker
                                    https://code.claude.com/docs/en/hooks §PreToolUse decision control); the
                                    way out is to push and hand off (skill handoff). settings.json runs this mode as
                                    `context-cap.py --guard`, which FAILS CLOSED: an unreadable payload, an internal
-                                   error, or a session WITH a cap whose live count cannot be read (no transcript, a
-                                   zero-usage newest entry, no assistant entry in the tail) is a deny. A session with
-                                   no cap passes. Without --guard (the advisory events, where exit 2 would erase a
+                                   error, or a session WITH a cap and NO transcript is a deny; a transcript with no
+                                   counted assistant entry yet (first turn, #6868) is allowed with an advisory.
+                                   A session with no cap passes. Without --guard (the advisory events, where exit 2 would erase a
                                    user's prompt) any error → no output.
 APEX_CTX_CAP=off silences every mode; so does the `.claude/allow-context-cap` hatch.
 """
@@ -153,11 +153,18 @@ def decide(data, root, env):
     if n is None:
         if not guard:
             return ""
+        if have and os.path.getsize(path) <= TAIL:
+            # #6868: a transcript that exists but holds no counted assistant entry is a session on its first turn (the
+            # entry is flushed after the turn), not an overshoot: advise, do not refuse. Only when the whole file was read (a
+            # larger one with no count in its 4 MB tail is anomalous). A MISSING transcript fails closed below; a KNOWN count over
+            # the hard cap is denied by the PreToolUse branch further down.
+            return json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext":
+                "context-cap: this session has a cap (%dk, %s) but no assistant entry with a token count is in the transcript "
+                "yet (first turn), so the spawn is allowed. Keep to the cap; push and hand off (skill handoff) before it." % (cap[0], cap[2])}})
         return json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
             "permissionDecisionReason": ("context-cap: this session has a cap (%dk, %s) but its live context could not be "
-                "read (%s), so a new spawn is refused (fail closed). Push and hand off, or `touch .claude/allow-context-cap` "
-                "if the user told this session to continue past its cap." % (cap[0], cap[2], "no transcript" if not have
-                else "no assistant entry with a token count in the transcript tail"))}})
+                "read (no transcript), so a new spawn is refused (fail closed). Push and hand off, or `touch .claude/allow-context-cap` "
+                "if the user told this session to continue past its cap." % (cap[0], cap[2]))}})
     soft, hard, src = cap
     k = round(n / 1000)
     line = "context %dk / cap %dk" % (k, soft)
