@@ -149,6 +149,118 @@ const CarFields = (function () {
   for (const g of MUTABLE_GROUPS) for (const k of g[1]) MUTABLE.push(k);
   Object.freeze(MUTABLE);
 
+  // ── RESETS: the per-car reset table (#6945 U1.1 of #6920) ────────────────────────────────────────────────────────
+  // Every field a reset path writes with a plain value is declared HERE, once: its lifetime, the ops that reset it,
+  // the value each op writes, and why. CarFields.resetFor(c, op) applies it, so a new field cannot be missed by a
+  // hand-kept inline list. game.js gridUp() is op "newRace"; rescuePlayer() (RECOVER, the auto-rescue, an incident
+  // handback) is op "rescue". U1.2 adds "redFlag" and "episode" with their call sites.
+  //
+  // MEMBERSHIP IS EXPLICIT PER OP, never derived from the lifetime tag: the paths do not nest (rescuePlayer clears
+  // boostOn and deploying, which gridUp leaves to makeCars; the red-flag re-grid writes gear and rpm, which gridUp
+  // never does), and one field takes a different value per op. The tag is documentation:
+  //   car — the car's identity; race — this race's counters and classification; stint — tyre/tow/brake state;
+  //   lap — lap timing; incident — off-track, wall and rescue state; episode — motion the next step reads;
+  //   render-anchor — what the renderer draws or interpolates from; keep — a field an op deliberately does NOT reset.
+  // CALLER marks a field the op owns but whose value only the call site knows (a grid slot's head start, a rescue's
+  // pace-scaled speed, raceT): resetFor skips it and the caller writes it, at the same point as before.
+  // The table covers the fields these paths write (~60 of a car's ~270 keys), not the whole car: a whole-car
+  // coverage guard is U1.4. SimState (js/core/sim-state.js) reads the car-state lists below (SNAPSHOT) from here.
+  // tests/unit/car-fields-lifetimes-vm.test.mjs pins it, and pins every car field after gridUp and rescuePlayer
+  // against a digest captured on the pre-migration code.
+  const CALLER = Object.freeze({ caller: true });
+  const NO = Object.freeze({ no: true });   // in a row: this op does not reset the field
+  const OPS = ["newRace", "rescue"];
+  const LIVES = ["car", "race", "stint", "lap", "incident", "episode", "render-anchor", "keep"];
+  // [why, life, [[key, newRace value, rescue value] ...]] — a value column per OP, NO where that op leaves the field
+  // alone. Rows in gridUp's write order (the order declareNewRace adds a fresh car's missing ones in).
+  const RESET_GROUPS = [
+    // apex.js reset() has the full list and why; prog is -(14 + i * 8), the grid slot's head start; a rescue keeps
+    // progress and sets its own pace-scaled speed (16 m/s x PACE, never above vTop(); never the car's own, #5876).
+    ["a car on the grid is pulling nothing; prog and a rescue's speed are the caller's", "episode", [
+      ["speed", 0, CALLER], ["accSm", 0, NO], ["corridorAccel", 0, NO], ["prog", CALLER, NO]]],
+    ["this race's lap, fuel and battery counters", "race", [
+      ["lap", 0, NO], ["fuelLap", 0, NO], ["fuelRestartLaps", 0, NO], ["energy", 1, NO], ["_progGift", 0, NO]]],
+    ["a new race starts an untimed lap 0 with no best", "lap", [
+      ["lapTime", 0, NO], ["best", Infinity, NO], ["totalT", 0, NO]]],
+    ["flaps shut on the grid; a rescue drops back to Z-mode", "incident", [
+      ["xOn", false, false], ["aeroX", 0, 0], ["xArmed", false, false]]],
+    // makeCars' values; a race re-arms via armReliability. CarFields declares _coastHeld: a delete would make the car
+    // a dictionary, so it is reset to undefined.
+    ["last race's classification: makeCars' values", "race", [
+      ["finPos", 0, NO], ["retired", false, NO], ["dnf", null, NO], ["dnfAt", null, NO], ["dnfWhy", null, NO],
+      ["_coastHeld", undefined, NO], ["finished", false, NO], ["finishT", 0, NO]]],
+    // The instrument's denominator. A red-flag re-grid is the same race and keeps them (clearRacingScratch).
+    ["mistakes THIS race: cleared only by a new race; a rescue clears the off-track timer", "race", [
+      ["cuts", 0, NO], ["cutWarn", 0, NO], ["qualiCut", false, NO], ["penalty", 0, NO],
+      ["penaltyWhy", null, NO], ["jumpStartFined", false, NO], ["offT", 0, 0], ["offCut", false, false],
+      ["hits", 0, NO], ["hitSev", 0, NO], ["wallHits", 0, NO], ["errCount", 0, NO]]],
+    // rescueLastT = raceT is the auto-rescue cooldown stamp, which only rescuePlayer knows.
+    ["wrong-way, rescue, dig-out and wall timers; a rescue stamps rescueLastT itself", "incident", [
+      ["wrongT", 0, 0], ["wrongWay", false, false], ["rescueT", 0, 0], ["rescueLastT", null, CALLER],
+      ["digEscHeld", false, NO], ["wallT", 0, 0], ["wasOnWall", false, false]]],
+    ["slip and yaw settled on the grid and after a rescue (#6877 P4)", "episode", [
+      ["vLat", 0, 0], ["yawRateCur", 0, 0]]],
+    ["steering and yaw drawn straight", "render-anchor", [
+      ["steerVis", 0, 0], ["yawVis", 0, 0], ["rPrevYawVis", 0, NO]]],
+    ["no AI heading target, bias, family or yield timer carried into a new race", "race", [
+      ["aiHead", 0, NO], ["aiBias", null, NO], ["aiFam", 0, NO], ["hYieldT", 0, NO]]],
+    // BOTH sides of a real conflict: contactT DECAYS, and unlike the towing/wheelLock beside it a re-grid is the only
+    // thing that clears it; lane is damped state, not a constant, so gridUp sets it from the car's own lanePref.
+    ["contactT decays and only a re-grid clears it; lane is the caller's (the car's lanePref)", "race", [
+      ["contactT", 0, NO], ["lane", CALLER, NO], ["laneClr", 0, NO]]],
+    // seedPlayerPose re-seeds the player's from the road tangent right after.
+    ["heading render anchor: zero on the grid, a rescue copies its new heading", "render-anchor", [
+      ["rPrevHead", 0, CALLER]]],
+    // flatSpot: last race's tyre (car-draw wobble); brakeStab null is brakeBeta's cold seed,
+    // as apex.js reset() leaves it.
+    ["kerb, tow and brake state; a rescue drops the tow (#6877 P4)", "stint", [
+      ["kerbGripSm", 1, NO], ["kerbCueT", 0, NO], ["towing", 0, 0], ["wake", 0, NO], ["flatSpot", 0, NO],
+      ["brakeStab", null, NO], ["axEstSm", 0, NO]]],
+    // gridUp leaves these to makeCars' spawn values.
+    ["a rescue alone clears the skid and lock cues (#6877 P4) and the boost and deploy flags", "incident", [
+      ["skidIntensity", NO, 0], ["wheelLock", NO, 0], ["boostOn", NO, false], ["deploying", NO, false]]],
+  ];
+  const RESETS = [];
+  for (const [why, life, rows] of RESET_GROUPS) {
+    for (const row of rows) {
+      const ops = {};
+      OPS.forEach((op, i) => { if (row[i + 1] !== NO) ops[op] = row[i + 1]; });
+      RESETS.push(Object.freeze({ key: row[0], life, ops: Object.freeze(ops), why }));
+    }
+  }
+  Object.freeze(RESETS);
+  // Per op, the keys and values resetFor stores, CALLER rows left out: built once at load, so resetFor allocates nothing.
+  const PLAN = {};
+  for (const op of OPS) {
+    const keys = [], vals = [];
+    for (const r of RESETS) if (Object.hasOwn(r.ops, op) && r.ops[op] !== CALLER) { keys.push(r.key); vals.push(r.ops[op]); }
+    PLAN[op] = { keys: Object.freeze(keys), vals: Object.freeze(vals) };
+  }
+
+  // ── SNAPSHOT: how SimState captures and restores a car (moved from js/core/sim-state.js, #6921 / #6860 B) ───────
+  // EVERY OBJECT A CAR HOLDS IS ONE OF FOUR KINDS (tests/unit/sim-state-vm.test.mjs fails on an object field that is
+  // none): DEEP (race data, JSON-faithful copy), STATE (per-car controller state the next step reads, cloned by
+  // SimState's cloneState), a CAR (restored by identity) or STATIC (shared configuration that never changes in a race).
+  const SNAPSHOT = Object.freeze({
+    // pitPlan: pit-lane replan() rewrites it in place, so a retry/rewind must put the saved copy back.
+    DEEP: Object.freeze(["tyre", "tyreLog", "pitNext", "pitPlan"]),
+    // Body-attitude springs, the AI look-ahead cache, the pass plan: without them a rewound AI steers off a future
+    // plan and the field diverges on the first step (#6860).
+    STATE: Object.freeze(["_ba", "_lk", "passPlan"]),
+    STATIC: Object.freeze(["team", "color", "houseStats", "fuelVisual", "launch", "mods", "tyreBaseMods", "tyreOpt"]),
+    // RUNTIME OWNERSHIP IS NOT CAR STATE. `_incidentOwned` is IncidentSim's takeover flag: a sample taken
+    // mid-takeover would set it again after the incident part reset the takeover list, and owns() — which reads only
+    // the flag — would freeze the car for the rest of the session (#6862 P1). Neither captured nor deleted on
+    // restore; the owning module's part decides.
+    RUNTIME: Object.freeze(["_incidentOwned"]),
+    // PENALTIES AND CUTS DO NOT REWIND FOR THE PLAYER (the practice rewind's keepForward policy). They are ordinary
+    // primitives, so the generic sweep captures them and a naive restore hands them back — undoing a time penalty or
+    // resetting the track-limits ladder by pressing a button. ONLY the player: an AI car is part of the world being
+    // rewound. Nor do the player's ROLE flags: a sample taken during the flying-start hand-over
+    // (js/race/flying-start.js, human=false for ~3 s) would otherwise hand the wheel to the AI for the session.
+    KEEP_FORWARD: Object.freeze(["penalty", "cuts", "cutWarn", "hits", "wallHits", "hitSev", "human", "local", "isPlayer"]),
+  });
+
   /** Give car `c` every late-added field as `undefined` (a no-op for one it already has). Returns `c`.
    *
    * NAMED stores, one per key, in KEYS order — never a loop of keyed stores `c[KEYS[i]] = undefined`.
@@ -292,5 +404,69 @@ const CarFields = (function () {
     return o;
   }
 
-  return { predeclare, warmShape, warmDoubles, KEYS, GROUPS, WARM, WARM_GROUPS, MUTABLE, MUTABLE_GROUPS };
+
+  /** Apply op `op` ("newRace" | "rescue") of the RESETS table to car `c`: every row that names the op gets its
+   * value, CALLER rows excepted (the call site writes those). Returns `c`.
+   *
+   * A KEYED store only to a field `c` already HAS: that is a plain map update (warmShape does the same). A keyed ADD
+   * is what normalized the cars (PERF-HUNT-2 S2), so "newRace" then adds the fields a fresh car lacks through
+   * declareNewRace's NAMED stores. Each field is written exactly ONCE: a second write at the grid would flip the
+   * field's V8 constness to mutable (see MUTABLE above), and past 128 mutable fields a car turns dictionary. */
+  function resetFor(c, op) {
+    const p = PLAN[op];
+    if (!p) throw new Error("CarFields.resetFor: unknown op " + op);
+    const keys = p.keys, vals = p.vals;
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      if (k in c) c[k] = vals[i];
+    }
+    if (op === "newRace") declareNewRace(c);
+    return c;
+  }
+
+  /** The "newRace" rows a freshly spawned car (makeCars + predeclare) does not have, ADDED by named stores with their
+   * newRace value; a no-op for a field the car already has (resetFor stored those). Written out because the shipped
+   * page has no eval; car-fields-lifetimes-vm pins this list to the table's values and to a real spawn's missing keys. */
+  function declareNewRace(c) {
+    if (!("accSm" in c)) c.accSm = 0;
+    if (!("corridorAccel" in c)) c.corridorAccel = 0;
+    if (!("fuelLap" in c)) c.fuelLap = 0;
+    if (!("fuelRestartLaps" in c)) c.fuelRestartLaps = 0;
+    if (!("_progGift" in c)) c._progGift = 0;
+    if (!("cutWarn" in c)) c.cutWarn = 0;
+    if (!("qualiCut" in c)) c.qualiCut = false;
+    if (!("penaltyWhy" in c)) c.penaltyWhy = null;
+    if (!("jumpStartFined" in c)) c.jumpStartFined = false;
+    if (!("hits" in c)) c.hits = 0;
+    if (!("hitSev" in c)) c.hitSev = 0;
+    if (!("wallHits" in c)) c.wallHits = 0;
+    if (!("errCount" in c)) c.errCount = 0;
+    if (!("wrongT" in c)) c.wrongT = 0;
+    if (!("wrongWay" in c)) c.wrongWay = false;
+    if (!("rescueT" in c)) c.rescueT = 0;
+    if (!("rescueLastT" in c)) c.rescueLastT = null;
+    if (!("digEscHeld" in c)) c.digEscHeld = false;
+    if (!("wallT" in c)) c.wallT = 0;
+    if (!("wasOnWall" in c)) c.wasOnWall = false;
+    if (!("vLat" in c)) c.vLat = 0;
+    if (!("yawRateCur" in c)) c.yawRateCur = 0;
+    if (!("rPrevYawVis" in c)) c.rPrevYawVis = 0;
+    if (!("aiHead" in c)) c.aiHead = 0;
+    if (!("aiBias" in c)) c.aiBias = null;
+    if (!("aiFam" in c)) c.aiFam = 0;
+    if (!("hYieldT" in c)) c.hYieldT = 0;
+    if (!("contactT" in c)) c.contactT = 0;
+    if (!("rPrevHead" in c)) c.rPrevHead = 0;
+    if (!("kerbGripSm" in c)) c.kerbGripSm = 1;
+    if (!("kerbCueT" in c)) c.kerbCueT = 0;
+    if (!("towing" in c)) c.towing = 0;
+    if (!("wake" in c)) c.wake = 0;
+    if (!("flatSpot" in c)) c.flatSpot = 0;
+    if (!("brakeStab" in c)) c.brakeStab = null;
+    if (!("axEstSm" in c)) c.axEstSm = 0;
+    return c;
+  }
+
+  return { predeclare, warmShape, warmDoubles, KEYS, GROUPS, WARM, WARM_GROUPS, MUTABLE, MUTABLE_GROUPS,
+    resetFor, declareNewRace, RESETS, RESET_GROUPS, OPS, LIVES, CALLER, SNAPSHOT };
 })();

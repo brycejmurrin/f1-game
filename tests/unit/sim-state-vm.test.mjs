@@ -146,7 +146,7 @@ test("guard: every object a car holds is classified, and the STATIC ones never c
         assert.equal(JSON.stringify(c[k]), statics[i][k].json, `${c.code}.${k} changed in a race: it is not STATIC`);
       }
     });
-    assert.deepEqual([...unknown], [], "a car holds an object field SimState does not classify (DEEP, STATE, STATIC or a car): add it in js/core/sim-state.js");
+    assert.deepEqual([...unknown], [], "a car holds an object field SimState does not classify (DEEP, STATE, STATIC or a car): add it to CarFields.SNAPSHOT in js/race/car-fields.js");
   });
 });
 

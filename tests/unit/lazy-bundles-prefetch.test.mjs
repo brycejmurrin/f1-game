@@ -107,6 +107,7 @@ test("ensureRaceSession: a partial failure is repaired by the next call, and the
   vm.runInContext(read("js/race/session-stub.js"), w.ctx, { filename: absSrc("js/race/session-stub.js") });
   // FULL before the group, as in the shell: the coach body reads its façade's GOALS at eval (#4748).
   vm.runInContext(read("js/race/driving-coach-boot.js"), w.ctx, { filename: absSrc("js/race/driving-coach-boot.js") });
+  vm.runInContext(read("js/race/car-fields.js"), w.ctx, { filename: absSrc("js/race/car-fields.js") });   // FULL: sim-state.js reads CarFields.SNAPSHOT at eval
   const stub = (g) => vm.runInContext(`${g}._stub`, w.ctx);
   assert.equal(await w.lb.ensureRaceSession(), false, "engineer.js failed once");
   assert.equal(hooks, 0, "no hook on an incomplete group");
