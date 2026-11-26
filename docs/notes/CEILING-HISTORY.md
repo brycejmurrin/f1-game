@@ -1,5 +1,12 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-26 — claude/simstate-registry-6860: the SimState registry captures the AI pace profile (#6860 phase 1)
+
+`js/game.js gMembers` 274 → **275** (+1). Deliberate raise, which needs a `ratchet-raise` label (D-042). The new member is `G.paceRef`, a one-line getter for the per-node AI pace profile (`js/race/pace-math.js` `paceRef`, the #6560 leak). The profile lives inside the `PaceMath` instance, and no existing G member reaches it.
+The SimState "pace" part (`js/core/sim-state.js`) needs it to restore the profile. Without it, a race restored at t=20 s diverges on the first step: the player's `paceF` is judged against a profile from the future. `tests/unit/sim-state-vm.test.mjs` proves both sides: the restore digest matches, and dropping the part changes it.
+`js/game.js` lines/codeLines +1, `(tree) eagerCodeBytes` +166, `assertPins` +1 and `assertPinsAll` +3 are each within their absorb.
+Fragment: `ratchets.d/claude--simstate-registry-6860.json`.
+
 ## 2026-11-23 — PR #6246 (cursor/photo-panel-focus-b27e) — camera focus and pedal calibration boot code
 
 `(tree) eagerCodeBytes` 3987306 → **3994771** (+7465) on merge train #6306.
