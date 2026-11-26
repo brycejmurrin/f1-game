@@ -1106,3 +1106,25 @@ test("phone ownership does not replace the remembered Chase preset", () => {
   h.cams.setCamMode(0, {owner:"phone", release:true});
   assert.equal(saved.get("camChasePreset"), "far");
 });
+
+// #6888 (hunt #6880 C1): CALM and WIDE FOV only own comfort/global; they used to carry
+// `modes: null` (and CALM `global: null`), wiping every camera's own framing and saving that.
+test("CALM and WIDE FOV keep per-camera offsets and the global baseline, and save them", () => {
+  for (const id of ["calm", "wide"]) {
+    const disk = new Map();
+    const CamTune = loadCamTune(disk);
+    CamTune.set("chase", "dist", -1.5);
+    CamTune.set("hood", "height", 0.2);
+    CamTune.setGlobal("height", 0.3);
+    assert.equal(CamTune.applyPreset(id), true);
+    CamTune.persist();   // the tuner panel persists right after applying a preset
+    assert.equal(CamTune.getModeOnly("chase", "dist"), -1.5, id + " keeps chase dist");
+    assert.equal(CamTune.getModeOnly("hood", "height"), 0.2, id + " keeps hood height");
+    if (id === "calm") assert.equal(CamTune.exportPack().global.height, 0.3, "calm keeps the global baseline");
+    const pack = CamTune.exportPack();
+    assert.equal(pack.modes.chase.dist, -1.5, id + " pack still carries the offsets");
+    assert.equal(pack.modes.hood.height, 0.2);
+    const saved = JSON.stringify([...disk.values()]);
+    assert.match(saved, /-1\.5/, id + " persisted the per-camera offsets");
+  }
+});
