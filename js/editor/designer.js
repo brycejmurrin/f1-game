@@ -478,8 +478,8 @@ const TrackDesigner = (function () {
   }
   // A drag in flight holds its own copy of the points: drop it first, or the
   // release would commit that stale copy over the restored design (and wipe redo).
-  function doUndo() { if (!undo.length) return false; if (cv) cv.reset(); redo.push(snapshot()); restore(undo.pop()); afterChange("undo"); return true; }
-  function doRedo() { if (!redo.length) return false; if (cv) cv.reset(); undo.push(snapshot()); restore(redo.pop()); afterChange("redo"); return true; }
+  function doUndo() { if (!undo.length) return false; if (cv) cv.reset(); if (prof) prof.reset(); redo.push(snapshot()); restore(undo.pop()); afterChange("undo"); return true; }
+  function doRedo() { if (!redo.length) return false; if (cv) cv.reset(); if (prof) prof.reset(); undo.push(snapshot()); restore(redo.pop()); afterChange("redo"); return true; }
   function setTheme(id) {
     if (!TrackThemes.has(id) || id === design.theme) return false;
     commit(Object.assign({}, design, { theme: id }), "theme");
@@ -647,6 +647,7 @@ const TrackDesigner = (function () {
     ensureHeights(design);   // old saves without heights → flat zeros
     if (origin) design.originId = origin; else delete design.originId;
     sel = -1; span = -1; nudge = null;
+    if (prof) prof.reset();   // drop the previous circuit's drag / live height
     afterChange(label || "load");
     // Imports and shares are unsaved documents even before their first edit.
     // A restored draft may retain its library origin while containing edits:
