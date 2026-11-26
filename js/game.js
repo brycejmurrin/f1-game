@@ -2333,9 +2333,7 @@ function snapGameCam(paint) {
   if (!player || !track) return;
   const bankCam = Tracks.banking(track, player.s, player.x, _bankScratch, true);  // smooth lift: match render()
   const mode = CAM_MODES[camMode].id;
-  if (typeof ExtraRigs !== "undefined") ExtraRigs.reset(mode);
-  // A snap is a CUT: no chase hang, speed-FOV kick, glance or latched look-back carries over.
-  if (typeof CamFeel !== "undefined") { CamFeel.resetFollow(); CamFeel.resetFreeLook(); CamFeel.resetLatch(); } GameCams.resetSmoothing(); if (typeof TracksideCams !== "undefined") TracksideCams.reset(track);
+  if (typeof Scopes !== "undefined") Scopes.exit("camera-mode", { why: "cut", mode, snap: true, track });   // a snap is a CUT: no hang, speed-FOV kick, glance or latched look-back carries over
   const v = camVantage(mode, player.s, player.x, player.speed || 0, 0, {
     bankDy: bankCam ? bankCam.dy : 0, deploy: player.deploying, slipLat: player.vLat || 0, att: player,
     // Same car pose the live rig uses. Without it snapCam() silently fell back to
@@ -2478,7 +2476,6 @@ async function startRaceBody() {
     quitToMenu();   // a bare setState("menu") left the HUD, in-race class, lights and engine up (RESTART from the pause card)
     return false;
   }
-  resultsCam.reset(); RaceCeremony.resetLive();   // restore a montage / ceremony before replacing the previous field
   _roadReflectionTransition.value = NaN;   // a new race starts from its current reflection policy
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
   // …and the caution machine (no stale flag/capHoldT into this race) and the debris side-world: prime()
@@ -2659,7 +2656,7 @@ async function startRaceBody() {
   for (const l of els.lights.children) l.classList.remove("on");
   els.lights.classList.remove("count");   // a jump-in's hand-over count (handoverCount) never outlives its race
   showTouchControls(true); updateHud(true);   // fit AFTER the dock exists: before it, no --hud-z-dock and raw-BUTTON-SIZE pedals until the next tick (tests/unit/start-race-dock-fit)
-  dbgCam = null; director.reset(); replayBuf.onRaceStart(cars); if (typeof CamFeel !== "undefined") { CamFeel.resetLatch(); CamFeel.resetFreeLook(); } // fresh race — drop free-cam, TV director, look-back latch; arm solo replay ring
+  dbgCam = null; director.reset(); replayBuf.onRaceStart(cars); // fresh race — drop free-cam and the TV director (free-look and the look-back latch: snapGameCam below); arm solo replay ring
   snapGameCam();              // frame the grid correctly on the very first render
   Input.calibrate();
   // RESUME's latch bug (see Input.clearEdges) at the menu→race seam: edges
@@ -4164,6 +4161,8 @@ const incidentSim = IncidentSim.create(G, c => { if (c.human && c.isPlayer && is
 // the field swap. Look modules up at call time: tests stub DebrisWorld.reset on the sandbox. A start's
 // pass-watch clear is gridUp's (U1.1 territory); the debris prime of a start stays after makeCars.
 // #6860 phase 2 (decision B): 'episode' becomes ONE registrant calling SimState.clear(G) — WHAT is SimState's.
+// results-cam stays FIRST (a montage / ceremony is restored before the field is replaced). Left explicit: director.reset (its setCamMode needs startRaceBody's state), resultsCam.reset in startRaceFromSheet / quitToMenu / garageBack (not whys, or ordered among menu teardown).
+Scopes.register("race", { id: "results-cam", on: ["start"], exit: () => { resultsCam.reset(); RaceCeremony.resetLive(); } });
 Scopes.register("race", { id: "incident-sim", on: ["start", "restart-red", "restart-declined", "episode"], touches: ["takeovers"],
   exit: () => IncidentSim.reset(), snapshot: () => { const s = IncidentSim.status(); return { owned: s.owned, count: s.count }; } });
 Scopes.register("race", { id: "raceCtl", on: ["start", "finish", "episode", "quit"], touches: ["caution"],
@@ -4172,6 +4171,7 @@ Scopes.register("race", { id: "debris", after: ["incident-sim"], on: ["start", "
   enterOn: ["restart-red", "restart-declined"], touches: ["takeovers"],
   exit: () => DebrisWorld.reset(), enter: () => DebrisWorld.prime(),
   snapshot: () => { const s = DebrisWorld.status(); return { live: s.live, queued: s.queued, marbles: s.marbles }; } });
+Scopes.register("race", { id: "quit-cams", on: ["quit"], exit: () => { if (typeof ExtraRigs !== "undefined" && ExtraRigs.resetAuto) ExtraRigs.resetAuto(); realRace.stop(); } });   // the auto-cut state is the race's, not the menu's; a WATCH ends with the race
 Scopes.register("race", { id: "pass-watch", on: ["restart-red"], phase: "grid", touches: ["passes"],
   exit: () => { scWatch.reset(); blueWatch.reset(); }, snapshot: () => ({ sc: scWatch.info(), blue: blueWatch.info() }) });
 // Car-to-car contact (js/physics/collide.js). collideFx stays here (shake /
@@ -4381,7 +4381,6 @@ function quitToMenu() {
   if (setupTrialSession) setupTrialSession.cancel();
   if (typeof SetupTrials !== "undefined") SetupTrials.invalidate("Session ended before attempt completed");
   if (garageReturn === "pit") { setupCam.cancelArrival(); $("carsetup").hidden = true; setupPreviewOn = false; pitWorkSpec = null; garageReturn = "select"; }   // the pit garage goes down with the race (comment above)
-  if (typeof ExtraRigs !== "undefined" && ExtraRigs.resetAuto) ExtraRigs.resetAuto();   // the auto-cut state is the race's, not the menu's
   // A mid-quali quit: the 1-car trim is not the menu's field. A takeover is keyed by the TRIM's index, so it is
   // handed back before the swap; after it, index 0 named the full field's first car (perf-debug-e5b2).
   if (qualiField) { try { IncidentSim.reset(); } catch (_) { /* module absent */ } cars = qualiField; qualiField = null; }
@@ -4398,7 +4397,7 @@ function quitToMenu() {
   // menuBlank and the per-car draw break both gate on !active(). Idempotent.
   loadingScreen.stop();
   if (skipToResults()) { resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.release(); announcer.stop && announcer.stop(); }   // a finished player's result is settled before the session is dropped
-  setState("menu", "quit"); paused = false; releaseFieldScratch(true); Scopes.exit("race", { why: "quit" }); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  setState("menu", "quit"); paused = false; releaseFieldScratch(true); Scopes.exit("race", { why: "quit" }); wxArc.endSession(); daily.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   drills?.end("quit");
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
