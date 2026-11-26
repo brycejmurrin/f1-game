@@ -259,7 +259,31 @@ const NetPlay = (function () {
     function goWire(r) {
       r.stale = false;
       if (!r.hostAi) {
-        r.car.lap = r.car._nOwnerLap; r.car.s = r.car._nOwnerS;
+        // Restoring the pre-silence owner lap alone left gateLap one crossing
+        // behind when the wire jumped two or more laps during the quiet gap
+        // (#6766 W4 / #6632 W4). Resync to the newest wire sample when the
+        // race clock since the last rise covers that many laps at the wire
+        // speed ceiling — the same bound gateLap uses (unbounded when no rise
+        // has been stamped yet, matching gateLap's first-crossing path).
+        let lap = r.car._nOwnerLap, s = r.car._nOwnerS;
+        const newest = r.interp && r.interp.newest && r.interp.newest();
+        if (newest && Number.isFinite(newest.lap)) {
+          const total = (G.track && G.track.total) || 0;
+          const wireLap = Math.min((G.lapsTarget || 0) + 1, Math.max(0, Math.floor(Number(newest.lap) || 0)));
+          const prev = Math.max(0, Math.floor(Number(lap) || 0));
+          if (wireLap > prev && total > 0) {
+            const now = raceTime();
+            const since = Number.isFinite(r.car._nRiseT) ? now - r.car._nRiseT : Infinity;
+            const need = (wireLap - prev) * total / SPEED_LIMIT;
+            if (!(Number.isFinite(since) && since < need)) {
+              lap = wireLap;
+              if (Number.isFinite(newest.s)) s = newest.s;
+              r.car._nMid = true;
+              r.car._nRiseT = Number.isFinite(now) ? now : r.car._nRiseT;
+            }
+          }
+        }
+        r.car.lap = lap; r.car.s = s;
         r.car._nFallback = false;
       }
       if (!r.hostAi) G.setCarRole(r.car, true, false);
@@ -534,6 +558,15 @@ const NetPlay = (function () {
       // sessions retain the old callback contract and decode at this boundary.
       if (typeof s.onSnapshot === "function") s.onSnapshot((pkt, at) => onState(pkt, s, id, at));
       else s.onState((bytes, at) => onState(NetSnapshot.decodeSnapshot(bytes), s, id, at));
+      // A confirmed clock step rewrites peerToLocal; pre-step samples then sit
+      // ahead of every new packet's t, so adopt splices without renewing
+      // heardAt and STALE_MS hands the rival to local AI (#6766 / #6544 row 5).
+      if (typeof s.onStep === "function") {
+        s.onStep(() => {
+          for (const r of remotes.values()) r.interp.clear();
+          for (const r of aiRemotes.values()) r.interp.clear();
+        });
+      }
       s.onClose((why) => {
         // We close a BYE/incompatible peer ourselves, so close() reports "local"; the
         // LEFT other guests are told and the hand-back must keep the real reason.
@@ -741,8 +774,13 @@ const NetPlay = (function () {
             // guest B finishLap() on a stale number and mark the rival done
             // a lap early (or park fin under the wrong _nFinLap).
             if (role === "host" && fr) {
+              // Same 0..lapsTarget+1 bound clampWire applies to poses: a
+              // floor-only relay forwarded a hostile 999 and every other guest
+              // treated it as the owner's crossing (#6766 W5 / #6632 W5).
               const ownerLap = Number(d.lap);
-              const lapOut = Number.isFinite(ownerLap) ? Math.floor(ownerLap) : fr.car.lap;
+              const lapOut = Number.isFinite(ownerLap)
+                ? Math.min(Math.max(Math.floor(ownerLap), 0), (G.lapsTarget || 0) + 1)
+                : fr.car.lap;
               const out = { lap: lapOut, time: ltOk ? lt : null, best: bestOk ? best : null,
                 code: fr.car.code, driverId: fr.car.driverId, fin: finOk && finishAllowed(finLap) ? fin : undefined, invalid: !!d.invalid,
                 retired: ret || undefined };

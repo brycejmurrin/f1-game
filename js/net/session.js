@@ -59,6 +59,7 @@ const NetSession = (function () {
     const stateHandlers = [];          // fn(bytes, fromPeerTimeMs)
     const snapshotHandlers = [];       // fn(decodedSnapshot, arrivalMs), validated once here
     const closeHandlers = [];
+    const stepHandlers = [];           // fn({ offset, rtt }) — confirmed clock step (#6766 row 5)
 
     let pingId = 0;
     let lastPingAt = -Infinity;
@@ -108,6 +109,7 @@ const NetSession = (function () {
       const sample = { rtt, offset, at: now };
       // An offset error is bounded by half of each exchange's round trip, so a
       // disagreement past both RTTs (+ slack) cannot be queuing noise.
+      let stepped = false;
       if (best && Math.abs(offset - best.offset) > rtt + best.rtt + 50) {
         if (stepRun.length && Math.abs(offset - stepRun[0].offset) > rtt + stepRun[0].rtt + 50) stepRun = [];
         stepRun.push(sample);
@@ -115,6 +117,7 @@ const NetSession = (function () {
           samples = [];
           stepRun.forEach((x) => samples.push(x));
           stepRun = [];
+          stepped = true;
         }
         // Hold the outlier OUT of `samples` until the run confirms a step.
         // Otherwise a single lower-RTT disagreeing PONG becomes `best` at once
@@ -127,6 +130,10 @@ const NetSession = (function () {
       if (Number.isFinite(now)) samples = samples.filter((x) => !(now - x.at > cfg.clockMaxAgeMs));
       // Lowest RTT wins: it is the exchange least distorted by queuing.
       best = samples.reduce((a, b) => (a && a.rtt <= b.rtt ? a : b), null);
+      // Emit AFTER best flips so netplay can clear interp against the new
+      // offset (#6766 / #6544 row 5): old-t packets otherwise splice under the
+      // pre-step newest and never renew heardAt past STALE_MS.
+      if (stepped) fire(stepHandlers, { offset: best ? best.offset : 0, rtt: best ? best.rtt : 0 });
     }
     const offset = () => (best ? best.offset : 0);
     const rtt = () => (best ? best.rtt : 0);
@@ -316,10 +323,12 @@ const NetSession = (function () {
         return this;
       },
       onClose(fn) { closeHandlers.push(fn); return this; },
+      onStep(fn) { stepHandlers.push(fn); return this; },
       clearHandlers() {
         stateHandlers.length = 0;
         snapshotHandlers.length = 0;
         closeHandlers.length = 0;
+        stepHandlers.length = 0;
         eventHandlers.clear();
         return this;
       },

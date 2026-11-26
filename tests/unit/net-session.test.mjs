@@ -682,6 +682,52 @@ test("a single low-RTT outlier PONG cannot steal the offset before a step run co
     `three agreeing outliers confirm the step, got ${session.offset()}`);
 });
 
+// ---- #6766 / #6544 row 5: a confirmed clock step must emit so netplay can clear interp ----
+// Tip 94c9f19bf5: session swaps samples on clockStepRun but emits nothing; netplay
+// adopt then keeps old-t packets and fails to renew heardAt past STALE_MS.
+test("a confirmed clock step emits onStep for netplay to clear interp (#6766 row 5)", () => {
+  const { near, far, T0 } = bareFarEnd();
+  const session = NetSession.create({
+    transport: near, pingEveryMs: 1, syncPingEveryMs: 1, clockStepRun: 3,
+  });
+  assert.equal(typeof session.onStep, "function", "session must expose onStep (tip: create returned no step API)");
+  const steps = [];
+  session.onStep((info) => steps.push(info));
+  const pong = (id, t0, t1, t2) => {
+    const dv = new DataView(new ArrayBuffer(29));
+    dv.setUint8(0, NetSession.PONG); dv.setUint32(1, id >>> 0);
+    dv.setFloat64(5, t0); dv.setFloat64(13, t1); dv.setFloat64(21, t2);
+    return new Uint8Array(dv.buffer);
+  };
+  let lastPing = null;
+  const realSend = near.send.bind(near);
+  near.send = (channel, data) => {
+    const ok = realSend(channel, data);
+    if (channel === NetTransport.STATE && data && data.byteLength >= 13) {
+      const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+      if (dv.getUint8(0) === NetSession.PING) lastPing = { id: dv.getUint32(1), t0: dv.getFloat64(5) };
+    }
+    return ok;
+  };
+  const exchange = (tPing, skew, rtt) => {
+    lastPing = null;
+    session.pump(tPing);
+    far.pump(tPing);
+    assert.ok(lastPing, "pump must emit a PING");
+    const { id, t0 } = lastPing;
+    far.send(NetTransport.STATE, pong(id, t0, t0 + skew + rtt / 2, t0 + skew + rtt / 2));
+    session.pump(tPing + rtt);
+  };
+  for (let i = 0; i < 3; i++) exchange(T0 + i * 200, 0, 100);
+  assert.equal(steps.length, 0, "precondition: steady samples are not a step");
+  exchange(T0 + 800, 5000, 2);
+  exchange(T0 + 1000, 5000, 2);
+  assert.equal(steps.length, 0, "precondition: step run incomplete");
+  exchange(T0 + 1200, 5000, 2);
+  assert.equal(steps.length, 1, "clockStepRun agreeing outliers must emit exactly one onStep");
+  assert.ok(Math.abs(session.offset() - 5000) < 5, `offset follows the step, got ${session.offset()}`);
+});
+
 test("a reply held by the peer for a frame does not bias the clock offset", () => {
   // The PONG used to carry only t1 (the PING's arrival); the reply left at
   // the peer's next pump, and that hold was counted as path and split
