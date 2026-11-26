@@ -115,7 +115,7 @@ test("flagged finishers need 90 percent distance, rounded down, before scoring",
       if (minimum > 1) {
         assert.equal(short.finished, true, "the under-distance car really took the flag");
         assert.equal(short.classified, false, `${distance} laps: below the floor is not classified`);
-        assert.ok(retired.finPos < boundary.finPos, "same-distance retiree crossed the control line before the flagged car");
+        assert.ok(boundary.finPos < retired.finPos, "RW9: on equal laps the flag-taker ranks ahead of the same-distance retiree");
       }
       if (distance === 10) {
         assert.ok(dsq.dsq, "the real compound rule disqualifies the one-compound finisher");
