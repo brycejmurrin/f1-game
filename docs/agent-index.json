@@ -4956,7 +4956,7 @@
     {
       "path": "js/track/scenery/graph.js",
       "global": "TrackGraph",
-      "roster": "tag"
+      "roster": "LAZY_TRACK_BUILD"
     },
     {
       "path": "js/track/scenery/guards.js",

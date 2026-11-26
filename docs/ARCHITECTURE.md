@@ -337,7 +337,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `data.js` | `TrackSceneryData` | tag | the GENERIC scenery data tables for js/track/tracks.js buildProps(): named colour packs, theme fallbacks, crowd/window tints, sign segments and stand liveries. |
-| `graph.js` | `TrackGraph` | tag | TrackGraph: the scenery MODEL LIBRARY + NODE GRAPH. |
+| `graph.js` | `TrackGraph` | LAZY_TRACK_BUILD | TrackGraph: the scenery MODEL LIBRARY + NODE GRAPH. |
 | `models.js` | `TrackModels` | LAZY_TRACK_BUILD | atomic and intentional scenery model helpers. |
 | `themes.js` | `SceneryThemes` | LAZY_TRACK_BUILD | deterministic scenery theme registry. |
 | `landmark-kit.js` | `LandmarkKit` | LAZY_TRACK_BUILD | bounded architectural forms for staged scenery geometry. |

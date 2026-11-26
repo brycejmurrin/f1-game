@@ -537,6 +537,7 @@ async function precacheAssetLists() {
     "js/ui/hud-inputs.js",
     // LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build
     "js/render/shared/mesh-detail.js",
+    "js/track/scenery/graph.js",
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",
     "js/track/scenery/landmark-kit.js",
