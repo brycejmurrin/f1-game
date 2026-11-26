@@ -18,7 +18,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Session } from "node:inspector";
-import { measure, compare, loadBaseline, SCENARIO, MAX_RATIO, poster, sampleAllocations, calibrateBoxedSize, splitSamples } from "../../tools/perf/vm-alloc-census.mjs";
+import { measure, measureLedger, LEDGER_SCENARIO, LEDGER_MAX_DELTA_KB, compare, loadBaseline, SCENARIO, MAX_RATIO, poster, sampleAllocations, calibrateBoxedSize, splitSamples } from "../../tools/perf/vm-alloc-census.mjs";
 
 test("the baseline describes the scenario the census runs", () => {
   const base = loadBaseline();
@@ -63,4 +63,13 @@ test("monza race loop: object bytes per frame stay within the baseline ratio", (
   assert.ok(m.valid >= SCENARIO.windows - 1, `GCs landed inside ${SCENARIO.windows - m.valid} windows: ${JSON.stringify(m.windows)}`);
   const v = compare(m, loadBaseline());
   assert.ok(v.ok, `${v.note}; windows ${JSON.stringify(m.windows)}`);
+});
+
+test("#6941 ledger row: recording the frame phases adds no objects per frame, and every phase reports a p99", () => {
+  assert.ok(LEDGER_SCENARIO.warm >= 3000, "warm >= 3,000 like the step census");
+  const m = measureLedger({ ...LEDGER_SCENARIO, windows: 2 });
+  assert.ok(m.marksDeltaKb < LEDGER_MAX_DELTA_KB, `spans-on minus spans-off objects ${m.marksDeltaKb} KB/frame is under ${LEDGER_MAX_DELTA_KB} (whole frames ${m.deltaObjectsKb}, boxed on ${m.marksOn.boxedKb}: reported)`);
+  for (const k of ["input", "physics", "update", "ai", "car.brake", "car.long", "car.lat", "car.bike", "car.adv", "collide", "camera", "audio", "render", "present", "hud"]) {
+    assert.ok(Number.isFinite(m.p99[k]), `phase ${k} has a p99 in the artifact`);
+  }
 });

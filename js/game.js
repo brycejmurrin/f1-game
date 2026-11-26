@@ -602,6 +602,9 @@ const TT_LAPS = 4;          // time trial: four flying laps (a rolling start: js
 // TyreModel.treadFor). Atmosphere profiles keep reading raceWeather enum.
 function isWetRoad() { return trackWetness() >= 0.25; }
 function isRaining() { return trackWetness() >= 0.72; }
+// The view's own sky / surface (a local storm cell, js/race/rain-cells.js), not the lap mean: lightning, thunder and wet-car SFX follow what the player is under.
+function isRainingView() { return wxArc ? wxArc.viewRainfall() >= 0.72 : isRaining(); }
+function isWetAt(c) { return (c && wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness()) >= 0.25; }
 // Road grip by weather AND fitted tyre (table WET_GRIP) — see docs/PHYSICS.md
 // "Weather and tyres". No car => the slick column.
 function trackWetness() { return wxArc ? wxArc.wetness() : TyreModel.wetness(raceWeather, null); } function roadWetness() { return trackWetness(); }   // the arc's lagged road state (js/race/weather-arc.js); roadWetness = alias for grip / pits / engineer
@@ -3328,6 +3331,7 @@ const G = {
   satAdjust: (rgb, amt) => satAdjust(rgb, amt),
   viewRainfall: () => wxArc ? wxArc.viewRainfall() : 0,
   isWetRoad: () => isWetRoad(),
+  isWetAt: (c) => isWetAt(c),
   initRainDrops: () => initRainDrops(),
   isFloodActiveSession: () => isFloodActiveSession(),
   _nightAmbientBand: () => _nightAmbientBand(),
@@ -3985,7 +3989,7 @@ function startRaceFromSheet() {
   if (headlessMode || document.hidden || netPlay.active() || qualiNet.hasArmed()) return startRaceCovered();
   try {
     resultsCam.reset(); RaceCeremony.resetLive(); els.results.hidden = true; clearTimeout(flybyBuildTimer); _menuGate.generation++;
-    setState("menu", "sheet-start");
+    setState("menu", "sheet-start"); if (soundOn) GameAudio.startMusic(-1);
     const def = Tracks.LIST[trackIdx];
     if (track && def && builtWorldFits(def)) { _menuGate.track = track; _menuGate.ready = menuKey(trackIdx); }
     raceIntro(startRace);
@@ -5184,7 +5188,7 @@ function updateCar(c, dt, ranked) {
 
   // --- braking / target speed ---
   let braking; let brakeLvl; let throttleLvl; S.tyreGrip = tyreGrip; S.hw = hw; S.dd = dd; S.vT = vT; S.trMul = trMul; S.gmC = gmC; S.gm0 = gm0; S.inp = inp; S.vmax = vmax; S.pitV = pitV; S.roomL = roomL; S.roomR = roomR; S.blocker = blocker; S.blockerGap = blockerGap; S.unstuckActive = unstuckActive; S.letPass = letPass; S.aiFreeSpeed = aiFreeSpeed; S.squeezed = squeezed; S.roadL = roadL; S.roadR = roadR; S.queued = queued; S.alongO = alongO; S.alongDx = alongDx; S.alongDprog = alongDprog; S.towCar = towCar; S.towGap = towGap; S.aiT = aiT;
-  updateCarBrakePlan(c, dt, ranked, S); vmax = S.vmax, aiFreeSpeed = S.aiFreeSpeed, squeezed = S.squeezed, queued = S.queued, braking = S.braking, brakeLvl = S.brakeLvl, throttleLvl = S.throttleLvl;
+  PerfSpans.begin("car.brake"); updateCarBrakePlan(c, dt, ranked, S); PerfSpans.end("car.brake"); vmax = S.vmax, aiFreeSpeed = S.aiFreeSpeed, squeezed = S.squeezed, queued = S.queued, braking = S.braking, brakeLvl = S.brakeLvl, throttleLvl = S.throttleLvl;
 
   // --- active aero (X-mode / Z-mode) ---
   // Runs AFTER `braking` is known (touching the brake shuts the flaps) and
@@ -5278,12 +5282,12 @@ function updateCar(c, dt, ranked) {
   // Classify the visible surface BEFORE applying longitudinal forces. Kerbs
   // and the separate pit ribbon remain road, even outside the main half-width.
   let surfaceMu; let brakeDecel; let onThrottle; S.hw = hw; S.slopeSin = slopeSin; S.slopeNose = slopeNose; S.mods = mods; S.trMul = trMul; S.gmC = gmC; S.gm0 = gm0; S.perfMul = perfMul; S.inp = inp; S.vmax = vmax; S.pitV = pitV; S.cautionV = cautionV; S.deploy = deploy; S.otFree = otFree; S.braking = braking; S.brakeLvl = brakeLvl; S.throttleLvl = throttleLvl; S.gearMult = gearMult; S.accelCeil = accelCeil;
-  updateCarLongitudinal(c, dt, ranked, S); deploy = S.deploy, surfaceMu = S.surfaceMu, brakeDecel = S.brakeDecel, onThrottle = S.onThrottle;
+  PerfSpans.begin("car.long"); updateCarLongitudinal(c, dt, ranked, S); PerfSpans.end("car.long"); deploy = S.deploy, surfaceMu = S.surfaceMu, brakeDecel = S.brakeDecel, onThrottle = S.onThrottle;
   const ri = S.recordInput; if (ri) { ri.throttle = onThrottle; ri.brake = !!braking; ri.throttleLevel = throttleLvl; ri.brakeLevel = brakeLvl; ri.aero = !!c.xOn; }
 
   // --- lateral ---
   let steer, gripScale; let latFac; let kerbGrip; S.hw = hw; S.k = k; S.dd = dd; S.vT = vT; S.inp = inp; S.vmax = vmax; S.roomL = roomL; S.roomR = roomR; S.blocker = blocker; S.blockerGap = blockerGap; S.unstuckActive = unstuckActive; S.letPass = letPass; S.aiFreeSpeed = aiFreeSpeed; S.squeezed = squeezed; S.roadL = roadL; S.roadR = roadR; S.alongO = alongO; S.alongDx = alongDx; S.alongDprog = alongDprog; S.chaser = chaser; S.chaserGap = chaserGap; S.nearbyN = nearbyN; S.sep = sep; S.aiT = aiT; S.braking = braking;
-  updateCarLateral(c, dt, ranked, S); steer = S.steer, gripScale = S.gripScale, latFac = S.latFac, kerbGrip = S.kerbGrip;
+  PerfSpans.begin("car.lat"); updateCarLateral(c, dt, ranked, S); PerfSpans.end("car.lat"); steer = S.steer, gripScale = S.gripScale, latFac = S.latFac, kerbGrip = S.kerbGrip;
   // Track-frame dynamic bicycle model for the player. c.head = real world
   // heading (rad); c.yawRateCur/c.vLat = yaw rate and body lateral velocity.
   // Per-axle tyre forces (from slip angles, grip-capped) drive yaw and lateral
@@ -5296,7 +5300,7 @@ function updateCar(c, dt, ranked) {
   // a hairpin and (s, x) can't desync from a world position. c.px/c.pz are kept
   // only as a derived mirror for debug/telemetry. See the constants block.
   // Inputs persist in S; the preceding helpers already wrote their output fields.
-  updateCarBicycle(c, dt, ranked, S); steer = S.steer;
+  PerfSpans.begin("car.bike"); updateCarBicycle(c, dt, ranked, S); PerfSpans.end("car.bike"); steer = S.steer;
   // WallClamp (js/physics/wall-clamp.js): barrier / pit / gantry hard clamp +
   // human slide-along scrub + conditional road→world writeback when xPinned.
   // Collide keeps the post-contact soft clamp; peers editing walls own this file.
@@ -5359,7 +5363,7 @@ function updateCar(c, dt, ranked) {
   // --- advance along track ---
   // Player s was advanced by velocity·tangent above; AI advances by speed*dt in Frenet.
   if (S.recordInput) records.sampleInput(c, S.recordInput);
-  updateCarAdvance(c, dt, ranked, S);
+  PerfSpans.begin("car.adv"); updateCarAdvance(c, dt, ranked, S); PerfSpans.end("car.adv");
 }
 // updateCar's parts, in the order it calls them: its statements moved VERBATIM (same float ops, same order),
 // each a TurboFan unit of its own instead of one 43 KB function that deopted and recompiled whole (PERF-HUNT-2 S1).
@@ -6675,11 +6679,11 @@ function onTTLap(lapTime) { return records.finish(lapTime, lapRec.ttLaps, quali.
 // (kinematic in s/x like coast; classification, finishT and lap untouched). Throttle/brake slew the speed, steer moves x.
 function cooldownDrive(c, dt) {
   const inp = inputOf(c), thr = inp ? !!inp.throttle : Input.throttle(), brk = inp ? !!inp.brake : Input.brakeLevel() > 0;
-  const steer = inp ? clamp(+inp.steer || 0, -1, 1) : Input.steer(dt), vMax = vTop() * 0.55;
-  c.speed = clamp(c.speed + (thr ? 18 : brk ? -40 : -6) * dt, 0, vMax); c._coastHeld = false;
+  const steer = inp ? clamp(+inp.steer || 0, -1, 1) : Input.steer(dt), vMax = vTop() * 0.55, pk = vTop() / VMAX;   // pk = PACE: std-scale accels and the 20 m/s steer ref ride it
+  c.speed = clamp(c.speed + (thr ? 18 : brk ? -40 : -6) * pk * dt, 0, vMax); c._coastHeld = false;
   c.s = wrapS(c.s + c.speed * dt); c.prog += c.speed * dt;
   Tracks.sample(track, c.s, smp);
-  c.x = clamp(c.x + steer * Math.min(c.speed, 20) * 0.25 * dt, -smp.hw * 0.9, smp.hw * 0.9);
+  c.x = clamp(c.x + steer * Math.min(vStd(c.speed), 20) * pk * 0.25 * dt, -smp.hw * 0.9, smp.hw * 0.9);
   const w = worldFromTrack(c.s, c.x, smp);
   c.px = w.x; c.pz = w.z; c.head = Math.atan2(smp.t[0], smp.t[2]);
 }
@@ -7087,7 +7091,7 @@ function renderLightingPrep(dt, hasLivePlayerShadow) {
   }
   // ── Lightning (active rain only) ─────────────────────────────────────────
   const wet = isWetRoad();      // wet-road material applies to "wet" AND "rain"
-  const raining = isRaining();  // falling rain, lightning + thunder only in "rain"
+  const raining = isRainingView();  // falling rain AT THE VIEW: lightning + thunder only in "rain"
   stormFx.step(dt, {
     raining, state, raceT, skyT: _skyT, seed: simSeed(), weather: raceWeather,
     reduced: motionReduced(), frame, LT, clamp,
@@ -8515,9 +8519,9 @@ function render(dt) {
   po.haze = haze ? haze.at(_mVP) : null;
   po.readVisorLens = !photoMode && !_xrEyes && typeof VisorOptics !== "undefined" ? VisorOptics.frameLens : null;
   po.visorFolded = false;
-  armBackendProbe();
+  PerfSpans.begin("present"); armBackendProbe();
   if (!XrBoot.present(gfx, _xrEyes, po)) gfx.present(po);
-  if (typeof VisorOptics !== "undefined") VisorOptics.folded(po.visorFolded);
+  PerfSpans.end("present"); if (typeof VisorOptics !== "undefined") VisorOptics.folded(po.visorFolded);
   if (homeTrack && !(gfx.warming && gfx.warming())) uiExperience.didRenderTrack();
   RaceEntryProfile.afterPresent(loadingScreen, gfx, mirrorPass.preparing());
   if (ceremonyView === "parcFerme" && !(gfx.warming && gfx.warming())) ceremony.worldPresented();
@@ -8676,7 +8680,7 @@ function tickBody(now) {
         c.rPrevHead = c.head;                 // world heading interpolates like position too
       }
       _audioParamStep = physAcc - PHYS_DT < PHYS_DT || steps === 4;   // this frame's last step
-      update(PHYS_DT);
+      PerfSpans.begin("update"); update(PHYS_DT); PerfSpans.end("update");
       physAcc -= PHYS_DT; steps++;
     }
     PerfSpans.end("physics");
@@ -9032,7 +9036,7 @@ function openQualiBody(fresh, netDone) {
   // Reached from race settings this is already "menu"; reached from the results
   // screen it would still say "results". No race is running while the sheet is
   // up, so both paths say the same thing.
-  setState("menu", "quali-sheet");
+  setState("menu", "quali-sheet"); if (soundOn) GameAudio.startMusic(-1);
   closeRaceSheets(); els.hud.hidden = true; els.lights.hidden = true;   // from results / finished race: sheets+HUD+lights down so q-back can walk to the title
   quali.clear();
   qualiNet.arm(netDone);   // armed from the ARG: a caller's write lands before this line

@@ -418,6 +418,7 @@ const AppearanceOpts = (function () {
     cvdMode = oneOf(v, CVD_MODES, "off");
     store.set(K_CVD, cvdMode);
     if (typeof CvdPalette !== "undefined" && CvdPalette.set) CvdPalette.set(cvdMode);
+    if (typeof A11yOpts != "undefined") A11yOpts.applyCb();
     applyAll();
     paintRow("pm-cvd", cvdMode);
     return cvdMode;
@@ -476,6 +477,7 @@ const AppearanceOpts = (function () {
     if ("appIcon" in v) appIcon = oneOf(v.appIcon, ICON_SETS, "default");
     units = oneOf(v.speedUnits, UNITS, "kmh");
     help = oneOf(v.menuHelp, HELPS, "on");
+    if (typeof A11yOpts != "undefined") A11yOpts.applyCb();
     applyAll();
     for (const [id, value] of [["pm-uitheme", theme], ["pm-menuaccent", menuAccent], ["pm-hudaccent", hudAccent],
       ["pm-textsize", textSize], ["pm-contrast", contrast], ["pm-cvd", cvdMode], ["pm-appicon", appIcon], ["pm-units", units], ["pm-helptext", help]]) paintRow(id, value);
@@ -501,7 +503,7 @@ const AppearanceOpts = (function () {
         const help = document.createElement("p");
         help.className = "adv-help";
         help.id = "pm-cvd-help";
-        hudLink(help, "Remaps green/red HUD and menu ink. Choose the driving line palette separately.", "pm-linecolor-sel", "Driving line colour");
+        hudLink(help, "Remaps green/red ink; COLOURBLIND CUES follows it on AUTO. Line palette is separate.", "pm-linecolor-sel", "Driving line colour");
         const after = contrastRow.nextElementSibling;
         // Skip the contrast help <p> so CVD sits under it.
         const insertBefore = after && after.tagName === "P" && after.id === "pm-contrast-help"

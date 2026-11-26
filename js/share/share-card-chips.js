@@ -134,6 +134,7 @@ const ShareCardChips = (function () {
       }
       shareBtn.onclick = async () => {
         if (!blob) return;
+        const mine = ++drawing;
         busy(true);
         try {
           const result = await ShareCard.deliver(blob, fileName(),
@@ -144,13 +145,20 @@ const ShareCardChips = (function () {
         } catch (error) {
           Log.warn("ui", "share card share failed: " + (error && error.message));
           status.textContent = "Sharing failed — use SAVE IMAGE instead.";
-        } finally { busy(false); }
+        } finally { if (mine === drawing && dlg.isConnected) busy(false); }
       };
       saveBtn.onclick = async () => {
-        if (!blob) return;
-        await ShareCard.download(blob, fileName());
-        outcome = "saved";
-        status.textContent = "Saved " + fileName() + ".";
+        if (!blob || saveBtn.disabled) return;
+        const mine = ++drawing;
+        busy(true);
+        try {
+          await ShareCard.download(blob, fileName());
+          outcome = "saved";
+          status.textContent = "Saved " + fileName() + ".";
+        } catch (error) {
+          Log.warn("ui", "share card save failed: " + (error && error.message));
+          status.textContent = "Saving failed on this device.";
+        } finally { if (mine === drawing && dlg.isConnected) busy(false); }
       };
       closeBtn.onclick = close;
       dlg.addEventListener("cancel", (event) => { event.preventDefault(); close(); });

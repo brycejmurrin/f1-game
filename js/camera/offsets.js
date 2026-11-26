@@ -81,6 +81,7 @@ for (const d of COMFORT_DEFS) COMFORT_BY_ID[d.id] = d;
 
 // Built-in framing packs. Modes keyed like camTune; `global` is the baseline
 // layered under every mode; `comfort` is optional. STOCK restores the unscoped baseline.
+// A key that is OMITTED leaves that layer as the player has it; only `null` clears it.
 const PRESETS = Object.freeze({
   stock: Object.freeze({
     label: "STOCK",
@@ -101,7 +102,6 @@ const PRESETS = Object.freeze({
   wide: Object.freeze({
     label: "WIDE FOV",
     help: "A global FOV bias so every camera opens up without rewriting each mode.",
-    modes: null,
     global: { fov: 8 },
     comfort: { fovBias: 2, speedFov: 0.85 },
   }),
@@ -114,7 +114,6 @@ const PRESETS = Object.freeze({
   calm: Object.freeze({
     label: "CALM",
     help: "Dial back speed-FOV, head bob and roll lean without enabling MOTION: REDUCED.",
-    modes: null, global: null,
     comfort: { speedFov: 0.35, bob: 0.2, rollLean: 0.25, fovBias: 0 },
   }),
 });

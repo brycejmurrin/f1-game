@@ -1,0 +1,1 @@
+Fixed: After a results sheet, the qualifying sheet and the pre-race flyby play menu music again instead of silence, and pressing play on a MY TRACKS upload with SOUND off no longer marks it as playing (#6904).
