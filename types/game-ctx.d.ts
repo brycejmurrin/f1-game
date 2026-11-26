@@ -682,6 +682,7 @@ interface GameCtx {
   /** Falling rain at the followed car, independent of road wetness (0..1.5). */
   readonly viewRainfall: () => number;
   readonly isWetRoad: () => boolean;
+  readonly isWetAt: (c?: { s: number; x: number } | null) => boolean;
   readonly initRainDrops: () => void;
   readonly isFloodActiveSession: () => boolean;
   readonly _nightAmbientBand: () => number;
