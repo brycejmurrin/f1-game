@@ -32,12 +32,10 @@ fallback is `bash tools/env/cloud-agent-install.sh`.
 
 ## The minimum before a push (one floor)
 
-The floor is AGENTS.md rule 3 (its one home): `tooling-fast --changed --jobs=3 --quiet`, or `verify-track.cjs <id>`
-for a circuit. In practice:
+The floor is AGENTS.md rule 3 (its one home; the command and the circuit case live there). In practice:
 
 ```sh
 node tools/ci/verify-change.mjs --fast --json      # the fast phase: tooling-fast --changed, verify-track, graph-parity, bump-cache; no browsers
-node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # the same floor, plain; a red run ends with `failing files:` and `log:` lines
 ```
 
 The PR's tiers run the rest of the ladder (drafts get the fast tier and ready PRs get browser checks when their diff needs them); name

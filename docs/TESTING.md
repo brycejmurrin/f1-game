@@ -39,9 +39,7 @@ when every changed path qualifies under `readyBrowserExempt` in `tools/ci/change
 Eligible changes include Markdown in `docs/`, the listed root Markdown files, and four Node
 reporting tools (`ci-watch`, `pr-board`, `queue-depth` and `session-status`) with their matching unit tests.
 Merge-train PRs, Pages and nightly runs retain their existing coverage.
-The local loop is Node-only, AGENTS.md §The loop:
-`node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet` (and
-`verify-track.cjs <id>` for a circuit). The one exception is Bryce's: a session
+The local loop is Node-only, AGENTS.md §The loop and rule 3. The one exception is Bryce's: a session
 he attends may run ONE spec by his explicit grant, detached, under the one-run
 lock and loadavg gate in `tools/ci/test-bg.mjs`. Never an agent's own route:
 
@@ -179,7 +177,7 @@ serializes the agent behind SwiftShader several times over.
 
 | When | Run |
 |---|---|
-| in the edit loop | `node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet` (or `node tools/ci/verify-change.mjs --fast`, which wraps it) selects only the structural files owned by the diff and reports an estimated critical path; it is the local floor before a push (AGENTS.md rule 3). The full `npm run test:tooling-fast` is optional locally (a green run writes the stamp `ready-gate` accepts); in CI the same full suite is **Structural guards**: the parallel tooling-fast shards `Structural guards (tooling A)` … `(tooling D)` (jobs `guards-a` … `guards-d`, each `tooling-fast.mjs --jobs=4 --shard=<i>/<n> --bail`: a shard stops STARTING files after its first failure, the files in flight finish, and the log says how many it skipped; the local full command has no `--bail`). The ratchet, `test:audit`, `ci-coverage` and `behind-ship` steps run at the end of tooling B; the aggregator job `guards`, still named `Structural guards`, only joins the shards (#1075). `ready-gate.mjs` reads that aggregator name (`GUARDS_JOB`) |
+| in the edit loop | the local floor (AGENTS.md rule 3; `node tools/ci/verify-change.mjs --fast` wraps it) selects only the structural files owned by the diff and reports an estimated critical path; it is the local floor before a push (AGENTS.md rule 3). The full `npm run test:tooling-fast` is optional locally (a green run writes the stamp `ready-gate` accepts); in CI the same full suite is **Structural guards**: the parallel tooling-fast shards `Structural guards (tooling A)` … `(tooling D)` (jobs `guards-a` … `guards-d`, each `tooling-fast.mjs --jobs=4 --shard=<i>/<n> --bail`: a shard stops STARTING files after its first failure, the files in flight finish, and the log says how many it skipped; the local full command has no `--bail`). The ratchet, `test:audit`, `ci-coverage` and `behind-ship` steps run at the end of tooling B; the aggregator job `guards`, still named `Structural guards`, only joins the shards (#1075). `ready-gate.mjs` reads that aggregator name (`GUARDS_JOB`) |
 | generated files in the diff | `--changed` does not widen on generator output (`index.html`/`sw.js` `@gen-shell` blocks, `js/roster.js`, `impact-map.json`, `ratchets.json`, `agent-index.json`, `version.json`, …): it runs `npm run gen:check` plus the tests that pin the file. A HEAD that is a pure deploy-tip merge selects `gen:check` plus docs-integrity. `--quiet` ends a red run with `failing files:` and `log:` lines |
 | before the ready flip | `node tools/ci/preflip-probe.mjs --pr <n>` merges the current deploy tip into the PR head in a temp worktree and runs the ratchets, `fixture-consumer-audit`, the assert-pin ratchet and the diff's unit files: the reds GitHub's merge ref shows and the branch alone cannot (#4108, #4190). `ready-gate --pr` prints its receipt as an `advisory:` line, never a block |
 | track/scenery edit | `node tools/track/verify-track.cjs <id>` (2 s, headless) FIRST |

@@ -48,7 +48,6 @@ For owner-facing phone screenshots, use the standard iPhone 15 capture preset at
 ## 2. The local edit loop
 
 ```sh
-node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # the diff-aware node check
 node tools/ci/verify-change.mjs --plan --json               # the same selection, with its budget
 node tools/ci/verify-change.mjs --fast --json
 ```
@@ -59,8 +58,7 @@ serve `js/` and `css/` from the working tree.
 
 ## 3. The pre-push floor
 
-`tooling-fast --changed --jobs=3 --quiet`; `node tools/track/verify-track.cjs <id>`
-for a circuit; the docs-only fast path for prose. No agent runs a browser spec
+AGENTS.md rule 3 (the command and the circuit case); the docs-only fast path for prose. No agent runs a browser spec
 locally (AGENTS.md rule 5): the specs `pick-tests` / `select-specs` name are proven
 by the ready PR's `selected` legs, and a whole group runs on the pushed branch with
 `node tools/ci/remote-group.mjs <group>` when Bryce opts in (the group names are the ones
