@@ -106,3 +106,27 @@ test("a car pulling away on the grass is not rescued while it gains speed; one h
     assert.ok(p.rescueLastT != null, "a car stuck at the grass floor is still rescued");
   } finally { G.PACE = pace0; }
 });
+
+// #6877 P4/P5/P6: reset leaks — RECOVER and the red-flag re-grid reuse the car object.
+test("rescuePlayer clears the spin's visual/slip state and the off-track strike latch (#6877 P4)", async () => {
+  const A = g.apex, G = g.G;
+  await g.race("monza"); A.reset(0.3, 30, 0); A.headless(true); A.go();
+  const p = G.player;
+  p.yawVis = 0.7; p.steerVis = 0.5; p.skidIntensity = 0.9; p.wheelLock = 0.6; p.towing = 0.4; p.offCut = true;
+  G.rescuePlayer(p);
+  for (const k of ["yawVis", "steerVis", "skidIntensity", "wheelLock", "towing"]) assert.equal(p[k], 0, k);
+  assert.equal(p.offCut, false, "offCut");
+});
+
+test("red-flag re-grid clears offCut and cools the brake discs (#6877 P5, P6)", async () => {
+  const A = g.apex, G = g.G;
+  await g.race("monza"); A.reset(0.3, 30, 0); A.headless(true); A.go();
+  const p = G.player, T = g.sandbox.WheelState;
+  p.offCut = true; p.offT = -2; p.brakeTF = 900; p.brakeTR = 880; p.brakeFade = 0.7;
+  assert.ok(A.redFlag(), "re-grid ran");
+  const c = G.player;
+  assert.equal(c.offCut, false, "offCut");
+  assert.ok(c.brakeTF <= 100.001 && c.brakeTR <= 100.001, `discs ambient: ${c.brakeTF}/${c.brakeTR}`);
+  assert.equal(c.brakeFade, 1);
+  assert.equal(typeof T.resetThermal, "function");
+});
