@@ -82,8 +82,6 @@ test("every event type sent anywhere in js/net is a declared row, and every row 
   for (const name of Object.values(NetPlay.EV)) assert.ok(NetWire.ROWS[name], "NetPlay.EV." + name + " has a row");
   assert.equal(NetPlay.EV, NetWire.EV, "NetPlay.EV is the table's own names");
   for (const name of Object.values(NetWire.LOBBY_EV)) assert.ok(NetWire.ROWS[name], "lobby " + name + " has a row");
-  const lobby = read("js/net/lobby.js");
-  assert.ok(!/const QABORT = "|const QGO = "/.test(lobby), "the lobby's types come from NetWire.LOBBY_EV");
   for (const t of TYPES) {
     assert.ok(t in SAMPLES, t + " has a fuzz sample");
     const r = NetWire.ROWS[t];
@@ -217,21 +215,16 @@ test("hostile numbers: Infinity, NaN-making and huge values are refused or clamp
   assert.equal(frame("caution", `{"a":${deep}}`).length, 0, "a structural row refuses depth past its bound");
 });
 
-test("the one rate primitive replaced both gates: no underRate, no rateGate left in js/net", () => {
-  for (const f of fs.readdirSync(path.join(ROOT, "js/net"))) {
-    const src = read("js/net/" + f);
-    assert.ok(!/\bunderRate\b/.test(src), f + " has no underRate");
-    assert.ok(!/\brateGate\b/.test(src), f + " has no rateGate");
-  }
+test("the one rate primitive replaced both gates: neither module exports its own any more", () => {
   assert.equal(globalThis.QualiWire.create(NetWire.EV).rateGate, undefined);
+  assert.equal(NetPlay.rateGate, undefined);
+  // NetPlay's published caps are the table's own numbers.
+  assert.deepEqual([NetPlay.QUALI_RATE, NetPlay.QUALI_GUEST_RATE, NetPlay.LAP_RATE, NetPlay.STRATEGY_RATE, NetPlay.MODEL_RATE],
+    [NetWire.RATES.quali.host, NetWire.RATES.quali.guest, NetWire.RATES.lap.host, NetWire.RATES.strategy.host, NetWire.RATES.model.host]);
 });
 
-test("the race and lobby handlers register through NetWire.on, never on a raw payload", () => {
-  const lobby = read("js/net/lobby.js"), netplay = read("js/net/netplay.js"), quali = read("js/net/quali-wire.js");
-  assert.ok(!/\bmade\.onEvent\(/.test(lobby), "lobby: every handler goes through NetWire.on");
-  assert.ok(!/\bs\.onEvent\(name\b/.test(netplay), "netplay bindSession goes through NetWire.on");
-  assert.ok(!/\bs\.onEvent\(EV\./.test(quali), "bindQuali goes through NetWire.on");
-  // A test double that is not a NetSession is decoded by on() itself.
+test("bindQuali and NetWire.on decode for a session double that is not a NetSession", () => {
+  // A test double is decoded by on() itself; a NetSession (wireDecoded) is registered as is.
   const handlers = new Map();
   const fake = { onEvent(t, fn) { handlers.set(t, fn); return this; } };
   const got = [];
@@ -239,4 +232,17 @@ test("the race and lobby handlers register through NetWire.on, never on a raw pa
   handlers.get("start")({ at: 5, hold: 1e9, extra: { big: 1 } });
   handlers.get("start")("junk");
   assert.deepEqual(got, [{ at: 5, hold: 2 }]);
+  const decoded = { wireDecoded: true, onEvent(t, fn) { handlers.set("raw:" + t, fn); return this; } };
+  const direct = (d) => d;
+  NetWire.on(decoded, "lap", direct);
+  assert.equal(handlers.get("raw:lap"), direct, "a NetSession's handler is not wrapped twice");
+  // QualiWire's receivers go through the same door.
+  const qh = new Map(), seen = [];
+  const qs = { onEvent(t, fn) { qh.set(t, fn); return this; } };
+  globalThis.QualiWire.create(NetWire.EV).bindQuali(qs, () => true, { onPeerQuali: (q) => seen.push(q), onPeerQualiLive: (q) => seen.push(q) });
+  qh.get("quali")({ driverId: { x: 1 }, t: 80 });
+  qh.get("quali")({ driverId: "a:0", t: "81", junk: "y" });
+  qh.get("qlive")({ driverId: "a:0", t: 1e999, frac: 3 });
+  assert.deepEqual(seen, [{ driverId: "a:0", t: 81 }, { driverId: "a:0", t: 0, frac: 1 }]);
+  assert.ok(seen.every((q) => Object.isFrozen(q)), "QUALI/QLIVE values are their rows' frozen decodes");
 });

@@ -1820,6 +1820,18 @@ test("an oversized LAP is accepted but peerLaps keeps only its whitelisted field
   net.stop();
 });
 
+test("bindSession hands its race handler NetWire's decoded LAP, even from a non-NetSession double (#6859)", () => {
+  const { net, s } = started("host");
+  s.deliver("lap", { lap: 2, time: 91.2, code: "D1", nested: { x: 1 } });
+  const lap = net.peerLaps()[0];
+  assert.deepEqual(lap, NetWire.lapRecord({ lap: 2, time: 91.2, code: "D1" }));
+  assert.equal(Object.isFrozen(lap), true, "the stored record is the LAP row's frozen value, not a copy of the raw payload");
+  s.deliver("lap", "junk");
+  s.deliver("lap", [1, 2]);
+  assert.equal(net.peerLaps().length, 1, "a non-object LAP never reaches the handler");
+  net.stop();
+});
+
 // ---- #4270 §3: retired AI must leave the aged AI relay (stale-handoff proof) ----
 // Tip proof (deploy 0d6e65b783): withAi still relayPush()'s every non-human car,
 // including c.retired. Guests keep posing a parked DNF at 10 Hz. Stopping that
