@@ -138,7 +138,7 @@ test("resolve bakes once per lights identity, and re-caps rather than re-baking"
   assert.notEqual(b, a, "a knob move that changes the CAP must hand back a re-capped table");
   const relit = lampSet([[0, 0, 0, 50]]);   // equal content, NEW identity
   const c = LampChunks.resolve(relit, chunks, 0.5);
-  assert.notEqual(c, b, "a rebuilt lights array must re-bake (rebuild knobs null track._lights)");
+  assert.notEqual(c, b, "a rebuilt lights array gets its own entry (a content-equal bake is reused, re-capped: #6493 row 4)");
 });
 
 // L5: js/lighting/frame-lights.js refills ONE buffer in place (`_allLightsBuf`), so

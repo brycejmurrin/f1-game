@@ -444,7 +444,7 @@ test("saved TYRES and ERS keep their base width across responsive layers", () =>
 test("F-13 slice 7 ratchet: css/hud.css gains no !important line and no :has( site (#4448)", () => {
   // Lower these as the remaining rules fold into plain cascade wins; never raise them.
   const lines = fs.readFileSync(path.join(root, "css/hud.css"), "utf8").split("\n");
-  assert.ok(lines.filter((l) => l.includes("!important")).length <= 56, "!important lines (56 after the slice-7 hide fold)");
+  assert.ok(lines.filter((l) => l.includes("!important")).length <= 51, "!important lines (51 after the slice-7 overlay/captions/REL hide fold)");
   // :has( counted in PARSED selectors (comments excluded; 6 of the file's 31 raw hits are prose).
   const hasSites = parseCss(readCssSource("css/hud.css")).reduce((n, r) => n + r.selector.split(":has(").length - 1, 0);
   assert.ok(hasSites <= 19, ":has( selector sites (19 after the slice-7 sibling fold)");
@@ -453,7 +453,7 @@ test("F-13 slice 7 ratchet: css/hud.css gains no !important line and no :has( si
 test("F-13 slice 7: the per-element, profile, camera and metrics hides need no !important", () => {
   // Every display these ids get is a (1,0,0)/(1,1,0) show in @layer hud or a hide; nothing in a later layer shows them.
   for (const id of ["hud-ot", "hud-limits", "hud-sectors", "hud-box-pos", "hud-box-lap", "hud-box-time", "hud-box-best",
-    "hud-speed", "hud-gearbox", "hud-energy", "hud-damage"]) {
+    "hud-speed", "hud-gearbox", "hud-energy", "hud-damage", "game-metrics", "fc-dof", "fc-comp-grid", "captions", "hud-rel"]) {
     const { hides } = assertPlainHidesWin(id);
     for (const h of hides.filter((r) => r.file === "hud.css"))
       assert.doesNotMatch(h.body, /!important/, `${h.sel} needs no !important`);

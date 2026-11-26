@@ -92,7 +92,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `log.js` | `Log` | tag | levelled namespaced logging (global Log). |
 | `dev-flags.js` | `DevFlags` | tag | DevFlags: one registry for boot-time URL / localStorage toggles. |
-| `mat4.js` | `M4` | tag | column-major 4x4 matrix + vec3 helpers, plus the three SCALAR helpers modules share (M4.clamp / M4.lerp / M4.wrapDelta). ident() allocates; every *To variant… |
+| `mat4.js` | `M4` | tag | column-major 4x4 matrix + vec3 helpers, plus the SCALAR helpers modules share (M4.clamp / lerp / wrapDelta / clamp01 / smoothstep, and the seeded PRNG… |
 | `hash32.js` | `Hash32` | tag | stateless FNV-1a + murmur-style mix for career, daily challenge, and driver ratings. |
 | `clipboard.js` | `ApexClipboard` | tag | one clipboard write/read home. navigator.clipboard + textarea execCommand fallback for plain http / older WebKit. |
 | `native.js` | `Native` | tag | native-shell detect (Electron preload + Capacitor). |
@@ -315,6 +315,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `quali-sheet.js` | `QualiSheet` | LAZY_RESULTS_SHEET | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
 | `watch-transport.js` | `WatchTransport` | LAZY_REAL_RACE | Visible controls for the real-race replay. |
 | `learn-door.js` | `LearnDoor` | LAZY_LEARN | Learn title door and the lesson modal. |
+| `thumb-trainer.js` | `ThumbTrainer` | LAZY_LEARN | THUMB TRAINER, a LEARN lesson: time both thumbs through every Las Vegas corner on the player's own race buttons. |
 
 **`js/track/core/`**
 

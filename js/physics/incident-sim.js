@@ -62,16 +62,8 @@ const IncidentSim = (function () {
   const REVERSE_MAX = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.REVERSE_MAX) || -5;
   const INVERT_UP_Y = 0.40;
 
-  // Deterministic PRNG (mulberry32), seeded purely from game state.
-  function rng32(seed) {
-    let a = seed | 0;
-    return function () {
-      a = (a + 0x6D2B79F5) | 0;
-      let t = Math.imul(a ^ (a >>> 15), 1 | a);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  }
+  // Deterministic PRNG (mulberry32), seeded purely from game state (js/core/mat4.js).
+  const rng32 = M4.rng32;
   function fin(v) { return typeof v === "number" && Number.isFinite(v); }
   const clamp = M4.clamp;                     // shared scalar helper (js/core/mat4.js)
 

@@ -780,6 +780,7 @@
         "tests/unit/ai-pass-defend-vm.test.mjs",
         "tests/unit/ai-queue-reach-vm.test.mjs",
         "tests/unit/ai-racecraft-vm.test.mjs",
+        "tests/unit/ai-rescue-retire-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-trail-yield-vm.test.mjs",
         "tests/unit/ai-wing-spread-vm.test.mjs",
@@ -906,6 +907,7 @@
         "tests/unit/ai-pass-defend-vm.test.mjs",
         "tests/unit/ai-queue-reach-vm.test.mjs",
         "tests/unit/ai-racecraft-vm.test.mjs",
+        "tests/unit/ai-rescue-retire-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-trail-yield-vm.test.mjs",
         "tests/unit/ai-wing-spread-vm.test.mjs",
@@ -1014,6 +1016,7 @@
         "tests/unit/agent-hooks-vm.test.mjs",
         "tests/unit/ai-pack-stuck-vm.test.mjs",
         "tests/unit/ai-pass-defend-vm.test.mjs",
+        "tests/unit/ai-rescue-retire-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-trail-yield-vm.test.mjs",
         "tests/unit/apex-car-placement-pin-vm.test.mjs",
@@ -1333,6 +1336,7 @@
         "tests/unit/lsp-caller-fixes.test.mjs",
         "tests/unit/lsp-config-freshness.test.mjs",
         "tests/unit/lsp-factory-member.test.mjs",
+        "tests/unit/lsp-g-literal-window-head.test.mjs",
         "tests/unit/lsp-mcp-boot.test.mjs",
         "tests/unit/lsp-mcp-fixture.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
@@ -1411,6 +1415,7 @@
         "tests/unit/lobby-settings.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
+        "tests/unit/net-ice-fetch-checks.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-nostr-sockets.test.mjs",
@@ -5324,6 +5329,11 @@
       "path": "js/ui/survey-hud.js",
       "global": "SurveyHud",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/thumb-trainer.js",
+      "global": "ThumbTrainer",
+      "roster": "LAZY_LEARN"
     },
     {
       "path": "js/ui/title-flow.js",

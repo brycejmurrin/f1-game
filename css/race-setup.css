@@ -142,7 +142,7 @@
    circuit shelf is tap-floored rows (2264 own, 11.7 screens) that no padding
    trim can shorten. Title left, bar right, one row as tall as a button: both
    panes get ~222 (+14%). DOM order is untouched, so Tab still reaches the
-   bar after the panes; #ss-back keeps autofocus. */
+   bar after the panes; #ss-apply takes autofocus (a commit sheet focuses its primary, #6570 row 7). */
 #ss-inner[data-pair="on"][data-density="compact"] { grid-template-rows: auto minmax(0, 1fr); }
 #ss-inner[data-pair="on"][data-density="compact"] > .sheet-head { grid-column: 1; grid-row: 1; }
 #ss-inner[data-pair="on"][data-density="compact"] > .sheet-foot { grid-column: 2; grid-row: 1; background: none; }

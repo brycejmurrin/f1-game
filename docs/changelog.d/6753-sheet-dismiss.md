@@ -1,0 +1,1 @@
+Fixed: Career Guide, Career History and How to Play keep their lone BACK/CLOSE in the header on a phone; Season Setup and Customize focus APPLY / SAVE; the Duel picker reads CLOSE and takes focus (#6753).

@@ -513,22 +513,22 @@ const audioScriptsLoaded = new Set();
 let audioHooked = false;
 let audioStubVals = null;
 const AUDIO_GLOBAL = {
-  "js/audio/signal.js": () => typeof GameAudioSignal !== "undefined" ? GameAudioSignal : undefined,
-  "js/audio/soundtrack.js": () => typeof GameAudioSoundtrack !== "undefined" ? GameAudioSoundtrack : undefined,
-  "js/audio/radio-fx.js": () => typeof GameAudioRadioFx !== "undefined" ? GameAudioRadioFx : undefined,
-  "js/audio/tone-model.js": () => typeof GameAudioToneModel !== "undefined" ? GameAudioToneModel : undefined,
-  "js/audio/engine.js": () => typeof GameAudio !== "undefined" ? GameAudio : undefined,
+  "js/audio/signal.js": () => globalThis.GameAudioSignal,
+  "js/audio/soundtrack.js": () => globalThis.GameAudioSoundtrack,
+  "js/audio/radio-fx.js": () => globalThis.GameAudioRadioFx,
+  "js/audio/tone-model.js": () => globalThis.GameAudioToneModel,
+  "js/audio/engine.js": () => globalThis.GameAudio,
   "js/audio/music-lib.js": () => window.MusicLib,
   "js/audio/spotify.js": () => window.SpotifyMusic,
-  "js/audio/rivals.js": () => typeof RivalAudio !== "undefined" ? RivalAudio : undefined,
-  "js/audio/crowd.js": () => typeof CrowdAudio !== "undefined" ? CrowdAudio : undefined,
-  "js/audio/car-sfx.js": () => typeof CarSfx !== "undefined" ? CarSfx : undefined,
-  "js/audio/voice-pack.js": () => typeof VoicePack !== "undefined" ? VoicePack : undefined,
-  "js/audio/radio-voice.js": () => typeof RadioVoice !== "undefined" ? RadioVoice : undefined,
-  "js/audio/announcer-recorded.js": () => typeof RecordedAnnouncer !== "undefined" ? RecordedAnnouncer : undefined,
-  "js/audio/announcer.js": () => typeof Announcer !== "undefined" ? Announcer : undefined,
-  "js/audio/panel.js": () => typeof AudioPanel !== "undefined" ? AudioPanel : undefined,
-  "js/audio/driving-cues.js": () => typeof DrivingCues !== "undefined" ? DrivingCues : undefined,
+  "js/audio/rivals.js": () => globalThis.RivalAudio,
+  "js/audio/crowd.js": () => globalThis.CrowdAudio,
+  "js/audio/car-sfx.js": () => globalThis.CarSfx,
+  "js/audio/voice-pack.js": () => globalThis.VoicePack,
+  "js/audio/radio-voice.js": () => globalThis.RadioVoice,
+  "js/audio/announcer-recorded.js": () => globalThis.RecordedAnnouncer,
+  "js/audio/announcer.js": () => globalThis.Announcer,
+  "js/audio/panel.js": () => globalThis.AudioPanel,
+  "js/audio/driving-cues.js": () => globalThis.DrivingCues,
 };
 function audioFileLanded(src) {
   const read = AUDIO_GLOBAL[src];
@@ -698,7 +698,12 @@ let audioGestureArmed = false;
 function audioGestureUnlock(e) {
   if (e && (e.isTrusted === false || (e.type === "keydown" && e.key === "Escape"))) return;
   if (!audioHooked) ensureAudio();   // memoised; after a failed load or ready hook this is the retry
-  if (typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) return;
+  // The bundle evaluates off this turn. WebKit only resumes a context created
+  // inside the gesture, so prime one on the stub before returning (#6448).
+  if (typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) {
+    try { GameAudio.init(); } catch (e) { /* undefined GameAudio, or no AudioContext on this page */ }
+    return;
+  }
   const G = ctxOrNull();
   if (!G || !G.soundOn) return;
   const ctx = GameAudio.context ? GameAudio.context() : null;

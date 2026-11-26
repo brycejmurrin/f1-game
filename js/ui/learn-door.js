@@ -18,6 +18,8 @@ const LearnDoor = (function () {
       ["braking", "Grip & Braking", "Share tyre grip between braking and turning"],
       ["racing-line", "Racing Lines", "Move the apex and measure the exit-speed trade-off"],
       ["telemetry", "Telemetry Detective", "Compare braking, speed & throttle at the same distance"],
+      // Not a framed lab: the drill opens over the real race buttons (js/ui/thumb-trainer.js).
+      ["thumbs", "Vegas Thumb Trainer", "Time both thumbs through each Las Vegas corner on your own race buttons"],
       ["rain", "Wet Weather Lines", "Explore rubber, standing water and tyre choice"],
     ]],
     ["strategy", "Race strategy", [
@@ -29,10 +31,15 @@ const LearnDoor = (function () {
 
   let dialog;
   let frame;
+  const lessonDoors = new Map();
 
-  function open(door, openDataHub, launchAeroDrill) {
+  function open(door, openDataHub, launchAeroDrill, openTrainer) {
     if (!dialog) build();
     dialog.hidden = false;
+    // A deep link (js/ui/deep-link.js) names the lesson on the door it clicks.
+    const lesson = door.dataset.openLesson;
+    delete door.dataset.openLesson;
+    if (lesson) lessonDoors.get(lesson)?.click();
 
     function build() {
       dialog = Dom.el("dialog", "screen dim");
@@ -68,6 +75,12 @@ const LearnDoor = (function () {
           button.autofocus = id === "aero";
           button.appendChild(Dom.el("small", "", description));
           button.addEventListener("click", () => {
+            if (id === "thumbs") {
+              if (!openTrainer) return;
+              dialog.hidden = true;
+              queueMicrotask(() => openTrainer(() => { open(door, openDataHub, launchAeroDrill, openTrainer); button.focus(); }));
+              return;
+            }
             activeLesson = button;
             visit++;
             heading.textContent = "LEARN / " + title.toUpperCase();
@@ -79,6 +92,7 @@ const LearnDoor = (function () {
             heading.focus();
           });
           doors.appendChild(button);
+          lessonDoors.set(id, button);
         }
       }
       frame = document.createElement("iframe");

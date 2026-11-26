@@ -438,7 +438,7 @@ const WeatherArc = (function () {
     // per car per step during an arc (perf hunt 7; same values, tests/unit/weather-arc grooveX).
     let _grooveH = null;
     function grooveX(frac) {
-      const n = 12, f = (frac - Math.floor(frac)) * n, i = Math.floor(f), u = f - i, k = u * u * (3 - 2 * u);
+      const n = 12, f = (frac - Math.floor(frac)) * n, i = Math.floor(f), u = f - i, k = M4.smoothstep(u);
       if (!_grooveH) { _grooveH = new Float64Array(n); for (let j = 0; j < n; j++) _grooveH[j] = RainCells.h01("groove|" + j) * 2 - 1; }
       const a = _grooveH[((i % n) + n) % n], b = _grooveH[(((i + 1) % n) + n) % n];
       return DRYLINE_AMP * (a + (b - a) * k);
