@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // @doc Static guard: a `c.<name> =` write in game.js, physics/ or race/ to an undeclared car field fails a test (#6920 U1.4).
 // @skill check-changes
 //
