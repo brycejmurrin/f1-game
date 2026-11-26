@@ -4,7 +4,7 @@
 // Run: node --test tests/unit/tree-counts-slice.test.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AT_REF, sourceSliceTestsReport, sourceSliceTests, typeofGuardsReport, typeofGuards } from "../../tools/check/tree-counts.mjs";
+import { typeofGuardsAt, sourceSliceTestsReport, sourceSliceTests, typeofGuardsReport, typeofGuards } from "../../tools/check/tree-counts.mjs";
 
 const JS = "js" + "/a.js";
 const NF = "new " + "Function(";
@@ -47,8 +47,7 @@ test("live tree: reducers equal the sum of their rows", () => {
   assert.equal(typeofGuards(), t.reduce((n, r) => n + r.count, 0));
 });
 
-test("AT_REF.typeofGuards reads a ref", () => {
-  assert.equal(typeof AT_REF.typeofGuards, "function");
-  const n = AT_REF.typeofGuards("HEAD");
+test("typeofGuardsAt reads a ref", () => {
+  const n = typeofGuardsAt("HEAD");
   assert.ok(Number.isFinite(n) && n > 0);
 });

@@ -266,7 +266,6 @@ export const AT_REF = {
   eagerScripts: (ref) => wallAt(ref).scripts,
   eagerBytes: (ref) => wallAt(ref).bytes,
   eagerCodeBytes: (ref) => wallAt(ref).codeBytes,
-  typeofGuards: (ref) => typeofGuardsReport(jsFilesAt(ref)).reduce((n, r) => n + r.count, 0),
 };
 
 /** Sheets that space themselves entirely in raw px and read neither --pad nor
@@ -404,6 +403,8 @@ export function typeofGuardsReport(files = jsFiles(), globals = moduleGlobals(fi
   return rows.sort((a, b) => b.count - a.count || a.file.localeCompare(b.file));
 }
 export const typeofGuards = () => typeofGuardsReport().reduce((n, r) => n + r.count, 0);
+/** typeofGuards at a git ref. Not in AT_REF yet: U0.R wires AT_REF.typeofGuards with its TREE_METRICS row (#6944). */
+export const typeofGuardsAt = (ref) => typeofGuardsReport(jsFilesAt(ref)).reduce((n, r) => n + r.count, 0);
 
 /** file -> count, for a failure message that says WHERE. */
 export const byFile = (rows) => rows.reduce((m, r) => (m[r.file] = (m[r.file] || 0) + 1, m), {});
