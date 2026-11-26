@@ -733,6 +733,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `tlx-mem.js` | `TLXShaders` | DEFERRED:three | TLXShaders.memCensus: the texture / render-target / buffer byte census for the TLX backend, the three-path answer to GLX.texCensus() (glx.js). |
 | `tlx-util.js` | `TLXUtil` | DEFERRED:three | TLXUtil: module-level helpers carved out of tlx.js (#6821, #6607 row 8): pumpAnimation (three's rAF pump), texStandIn (the 1x1 canvas a released texture… |
 | `tlx-texpool.js` | `TLXTexPool` | DEFERRED:three | TLXTexPool: the retired-texture pool carved out of tlx.js (#6821, #6479 row 10). |
+| `tlx-debug.js` | `TLXDebug` | DEFERRED:three | TLXDebug: the __tlx debug surface carved out of tlx.js (#6821, #6479 row 9). create(S) returns the object tlx.js exposes as api.__tlx. |
 | `tlx.js` | `TLX` | DEFERRED:three | TLX: default three.js/TSL renderer behind js/render/gfx.js. |
 | `tsl-surface.js` | `TLXSurface` | LAZY_GFX_HI | TLXSurface: close-up road surfaces for the TLX lit program (#6509 items 1 + 2; GfxQuality features `closeLayers` and `wearMask`, FEATURES level 2: desktop… |
 
