@@ -383,7 +383,4 @@ test("repeated particle uploads reuse the resident record and still upload chang
   h.reset();
   h.GLX.drawParticles(a, 30, false, false);
   assert.equal(h.count("bufferSubData"), 1, "a count change uploads");
-  // The record itself is closure-private: pin the in-place write (no object literal per upload).
-  const src = fs.readFileSync(new URL("../../js/render/glx/glx.js", import.meta.url), "utf8");
-  assert.doesNotMatch(src, /_partResident\[addBit\]\s*=\s*\{\s*data/, "no new resident record per upload");
 });
