@@ -843,6 +843,8 @@ async function precacheAssetLists() {
     "learn/pit-duel/lab.js",
     "learn/stint/index.html",
     "learn/stint/lab.js",
+    "learn/buttons/index.html",
+    "learn/buttons/lab.js",
     "learn/braking/index.html",
     "learn/braking/style.css",
     "learn/braking/lab.js",

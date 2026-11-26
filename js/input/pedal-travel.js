@@ -30,6 +30,7 @@ const PedalTravel = (function () {
   const edges = ["top", "bottom", "left", "right"];
   const directions = Object.freeze(["up", "down", "left", "right", "up-left", "up-right", "down-left", "down-right", "any"]);
   const curves = ["fine", "quick", "smooth"];
+  const DEAD_ZONES = [6, 12, 20];   // SLIDE DEAD ZONE px; absent = OFF (the shipped no-slop slide)
   const raceButtons = Object.freeze({ left: "btn-steer-left", right: "btn-steer-right", gas: "btn-throttle", brake: "btn-brake",
     boost: "btn-boost", overtake: "btn-ot", aero: "btn-aero", shiftUp: "shift-up", shiftDown: "shift-down",
     camera: "btn-cam", pause: "pausebtn", showHud: "hud-restore" });
@@ -87,7 +88,9 @@ const PedalTravel = (function () {
     const holdEnd = (profile.holdEnd ?? 100) / 100;
     const resting = start + (holdEnd - start) * (holdFraction ** (profile.buildPower || 1));
     if (profile.end != null) {
-      const fraction = Math.min(1, slideFraction(Math.max(0, advancePx), profile));
+      // SLIDE DEAD ZONE (opt-in, Bryce's Vegas lab 2026-11-26): an explicit slide end has no slop, so a
+      // 6 px thumb roll on a QUICK START brake read 88 %. deadPx ignores that much travel first.
+      const fraction = Math.min(1, slideFraction(Math.max(0, advancePx - (profile.deadPx || 0)), profile));
       return resting * (1 - fraction) + profile.end / 100 * fraction;
     }
     if (profile.press === "progressive") {
@@ -138,6 +141,7 @@ const PedalTravel = (function () {
     }
     if (value.press === "progressive") out.press = value.press;
     if (curves.includes(value.slideCurve)) out.slideCurve = value.slideCurve;
+    if (DEAD_ZONES.includes(value.deadPx)) out.deadPx = value.deadPx;
     if (Number.isFinite(value.travel)) {
       const travel = Math.max(40, Math.min(160, Math.round(value.travel)));
       if (travel !== TRAVEL_PX) out.travel = travel;
@@ -275,7 +279,7 @@ const PedalTravel = (function () {
     return buttonProfile(id);
   }
 
-  return { raceButtons, phoneButtons, colors, directions, DEAD_PX, TRAVEL_PX, MIN, RAMP_PX, ease, arrive, level, advance, startPercent, buildOnHold, normalizeProfiles, buttonOverrides, buttonProfile, contactProfile, sliderLevel, sliderEntry,
+  return { raceButtons, phoneButtons, colors, directions, DEAD_PX, DEAD_ZONES, TRAVEL_PX, MIN, RAMP_PX, ease, arrive, level, advance, startPercent, buildOnHold, normalizeProfiles, buttonOverrides, buttonProfile, contactProfile, sliderLevel, sliderEntry,
     watchButtonProfile, setButtonProfile, resetButtonProfile: id => setButtonProfile(id, null) };
 })();
 Object.freeze(PedalTravel);
