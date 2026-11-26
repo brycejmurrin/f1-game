@@ -372,8 +372,9 @@ const InputPadMenu = (function () {
       if (pad.mapping == null || pad.mapping === "standard") {
         // Triggers page long panes; LB/RB step left/right. A wheel's mapping ""
         // puts paddles/pedals on vendor indices — those already navigate above.
-        if (!dpadOnly && btnEdge(pad, 6)) padDispatchKey("PageUp", true);
-        if (!dpadOnly && btnEdge(pad, 7)) padDispatchKey("PageDown", true);
+        // A paging press under a menu layer is consumed like OK/BACK (a held trigger is not gas after close);
+        // a bare popup (the in-race camera picker) pages nothing, so a held trigger keeps driving there.
+        for (const b of [6, 7]) if (!dpadOnly && btnEdge(pad, b)) { if (window.MenuNav?.activeLayer()) consumeButton(b); padDispatchKey(b < 7 ? "PageUp" : "PageDown", true); }
         if (btnEdge(pad, 4)) padNavKey("left", true);
         if (btnEdge(pad, 5)) padNavKey("right", true);
       }

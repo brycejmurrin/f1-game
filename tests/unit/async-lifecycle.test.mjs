@@ -837,3 +837,12 @@ test("a LIVE (running) session never reads the cached snapshot", async () => {
   assert.deepEqual(h.sets, [], "delta reads stay uncached");
   assert.equal(h.calls.length, 2);
 });
+
+// #6835 (#6544 r10): without date_end the LIVE badge missed OpenF1's 30 min pre-start window.
+test("#6835 sessionStatus without date_end opens LIVE 30 min before the start", () => {
+  const live = liveMergeHelpers();
+  const start = Date.parse("2026-11-08T14:00:00Z");
+  const meta = { type: "Practice", dateStart: new Date(start).toISOString() };
+  assert.equal(live._sessionStatus(meta, start - 10 * 60e3), "LIVE");
+  assert.equal(live._sessionStatus(meta, start - 31 * 60e3), "UPCOMING");
+});
