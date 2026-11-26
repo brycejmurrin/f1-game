@@ -2313,7 +2313,8 @@
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/audio-panel-settings-ui.test.mjs",
         "tests/unit/followup-update-check.test.mjs",
-        "tests/unit/tlx-chunked-lifecycle.test.mjs"
+        "tests/unit/tlx-chunked-lifecycle.test.mjs",
+        "tests/unit/update-check-foreground.test.mjs"
       ],
       "kind": "node"
     },
