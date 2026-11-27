@@ -163,4 +163,10 @@ test("a picker change cancels the abandoned session's queued OpenF1 requests (#7
   await settle();
   pick({ sessionKey: 7317, name: "Race", type: "Race" });
   assert.equal(cancels, 2, "the abandoned body fetch is cancelled");
+  // 3. A meeting with no session paints NO_RACE with nothing in flight: the
+  //    next pick must not cancel another tab's queued requests.
+  pick({ sessionKey: null });
+  assert.equal(cancels, 3, "the in-flight body fetch of 7317 is cancelled");
+  pick({ sessionKey: 7318, name: "Race", type: "Race" });
+  assert.equal(cancels, 3, "an idle picker change cancels nothing");
 });
