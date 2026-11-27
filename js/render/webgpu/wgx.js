@@ -1183,6 +1183,7 @@ const WGX = (function () {
         WGX_LITE, IS_MOBILE, MOBILE_TIER,
         SHADOW_SLOTS,
         mul4: _mul4,
+        onBlockerFallback() { _rebuildFrameBG(); },   // async blocker refusal: rebind binding 7
         get setVB0() { return _setVB0; },
         get setVB1() { return _setVB1; },
         get drawGeom() { return _drawGeom; },
