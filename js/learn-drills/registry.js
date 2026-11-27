@@ -185,13 +185,13 @@ const DrillRegistry = (function () {
      *  A run is the goal's RaceInsights drill, finished once after this host saw it live: RETRY, the RECOVER key and
      *  REWIND restart it, and a backward jump in progress starts a new accumulator. */
     function tick() {
-      try { return tickBody(); } catch (e) {
+      try { return drillTickBody(); } catch (e) {
         Log.warn("ui", "drill tick failed: " + (e && e.message || e));
         if (current) current.run = null;   // drop the run: the next tick starts a fresh accumulator
         return null;
       }
     }
-    function tickBody() {
+    function drillTickBody() {
       const a = current;
       if (!a || !a.d.goal || G.state !== "race" || !hooks.insights) return null;
       const insights = hooks.insights(), p = G.player;
