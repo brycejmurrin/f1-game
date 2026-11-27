@@ -17,7 +17,7 @@ const PODIUM = ["", " p1", " p2", " p3"];   // indexed by 1-based position; 4th 
 //   name, pts the caller's own nodes (the results row decorates both after the fact)
 //   podium    1-based position that earns p1..p3 (0 / omitted: none)
 //   cls       extra classes, each with its leading space (" you q-real")
-//   swatchHidden  aria-hidden on the swatch: the results rows say it, the quali rows do not (recorded gap)
+//   swatchHidden  aria-hidden on the swatch: the results rows and the quali rows both pass it (#7198)
 // Returns the row; the caller appends whatever sits between name and pts (the stint strip).
 function buildRow({ pos, color, name, pts, cls = "", podium = 0, swatchHidden = false }) {
   const el = document.createElement("div");

@@ -409,3 +409,60 @@ which is one of the two screens outside `.sheet` and therefore carries no
 phone. The two overlap harmlessly: where both apply they set the same three
 numbers. Bringing #overlay under the attribute is the next step in that doc's
 migration order, not this one.
+
+## R14. Constant ink and the z-index ladder (#7054, #6548 items 10 and 12; added 2026-11-27)
+CONSTANT INK. `--ink-on-accent: #fff` and `--ink-black: #000` are white on red and black shadows/bars in
+EVERY theme: no theme, accent or contrast block redefines them (`tests/unit/css-ladder-ink.test.mjs` pins
+it). Ink that should follow the theme is `--text` / `--accent-ink`, not these. Bryce chose constant
+tokens (#6548 item 12). Do NOT swap the white-alpha literals for `--card-line`/`--plate-line`: that was
+refuted as not value-neutral (#6548 item 9).
+
+THE Z-INDEX LADDER. Every z-index >= 24 in css/ reads a `--z-*` rung, so the stacking order across
+sheets reads in one place, bottom to top. Below 24 the values are local to one stacking context and stay
+literal (#hud's 10 is pinned by `camera-feel.test.mjs`). A modal `<dialog>` sits in the top layer, above
+every rung. One rung per value; who sits on each:
+
+| rung | value | holders |
+|---|---|---|
+| `--z-transport` | 24 | `.watch-transport` bar, `#campicker` |
+| `--z-screen` | 25 | `#select`, `#career`, `#bc-viewer` |
+| `--z-screen-over` | 26 | `#season-setup`, over `#select` |
+| `--z-peek` | 30 | appearance peeks, `#retired-card` |
+| `--z-ga-bars` | 34 | garage-arrival letterbox bars |
+| `--z-carsetup` | 35 | `#carsetup` |
+| `--z-loading` | 36 | `#loading`, above every menu screen (`css-layers.test.mjs`) |
+| `--z-podium` | 38 | `#ceremony-podium` |
+| `--z-dock` | 40 | `#pm-replay-dock`, `#ios-install` |
+| `--z-tuner-grid` | 41 | free-cam composition grid / DOF |
+| `--z-tuner` | 42 | docked tuner panels |
+| `--z-tuner-stack` | 43 | the lighting panel while the flyby panel is open |
+| `--z-photo-controls` | 44 | `#photo-controls` (above the docked tuner so the sticks stay tappable), `#tl-editor` |
+| `--z-photo-studio` | 45 | `#photo-studio` |
+| `--z-hub` | 50 | `.dh-overlay` |
+| `--z-popup` | 60 | `.dh-tpopup`, `#xr-enter` |
+| `--z-nogl` | 99 | `#nogl` recovery |
+| `--z-nogl-hub` | 100 | the modal Data Hub over `#nogl` |
+| `--z-save-warning` | 8500 | `#save-warning` |
+| `--z-system` | 9000 | `#rotate-device`, `#install-chip`, `#update-chip` |
+| `--z-dock-edit` | 9999 | `#dock-edit-bar` |
+| `--z-arranger` | 2147483646 | `#arrange-prepare`, over everything |
+
+Inline z-index values written by js/ (`#tvg` 24, the ceremony/parc-fermé bars 40, debug panels 9999+)
+are outside css/ and not on the ladder yet.
+
+## R15. ---- CORNER RADIUS — four steps, plus a pill ----
+These tokens existed and had three users. Everything else hard-coded its
+own: fourteen distinct radii across the stylesheets (1, 2, 3, 4, 5, 6, 7,
+8, 9, 10, 12, 14, 20 and 999), which is why a chip, the input beside it and
+the button under it could each round differently. The steps below are set
+to whichever value was already the most common in each band, so adopting
+them moves most corners by a pixel or none at all.
+```
+  --r-xs  hairline bars, meters, tiny swatches      (was 1/2/3)
+  --r-sm  chips, colour wells, small controls       (was 4/5/6/7)
+  --r-md  buttons, rows, cards                      (was 8/9/10)
+  --r-lg  sheets, panels, the data-hub card         (was 12/14/20)
+  --r-pill  fully round ends — tabs, badges         (999px)
+```
+`border-radius: 50%` is NOT on this scale: a circle is a shape, not a
+corner, and the touch pads have to stay circular at any size.

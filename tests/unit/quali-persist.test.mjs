@@ -892,7 +892,7 @@ test("a one-off GP's simulated grid is the same whichever career is on the devic
 
 // #7052: the row skeleton of the QUALIFYING sheet, recorded before the shared row builder
 // (GameResultsSheet.row) took over the assembly. The a11y gap against the results rows (the
-// swatch carries no aria-hidden here) is a behaviour change and stays recorded, not fixed.
+// swatch now carries aria-hidden, as the results rows do: #7198).
 test("quali rows keep their DOM skeleton (pin for the shared row builder)", () => {
   const { sheet, els } = loadSheet();
   const skel = (e) => `${e.tag}.${e.className}${e.attrs ? JSON.stringify(e.attrs) : ""}${e.style && e.style.background ? "{bg=" + e.style.background + "}" : ""}` +
@@ -904,9 +904,9 @@ test("quali rows keep their DOM skeleton (pin for the shared row builder)", () =
     { pos: 4, code: "RUS", name: "George", team: "zz", noTime: true, t: 0, gap: 0 },
   ]);
   assert.deepEqual(els.get("q-table").children.map(skel), [
-    'div.res-row p1 you{"role":"listitem","aria-current":"true"}(span.res-pos"1",span.res-swatch{bg=rgb(0,0,1)}"",span.res-name(span.q-real-tag" YOU"),span.res-pts q-time"T60")',
-    'div.res-row p2 q-real{"role":"listitem"}(span.res-pos"2",span.res-swatch{bg=rgb(1,0,0)}"",span.res-name(span.q-real-tag" DRIVEN"),span.res-pts q-time"+1.000")',
-    'div.res-row p3{"role":"listitem"}(span.res-pos"3",span.res-swatch{bg=rgb(1,0,0)}"",span.res-name"PIA  Oscar",span.res-pts q-time"+2.000")',
-    'div.res-row{"role":"listitem"}(span.res-pos"4",span.res-swatch{bg=rgb(0.5,0.5,0.5)}"",span.res-name"RUS  George",span.res-pts q-time"NO TIME")',
+    'div.res-row p1 you{"role":"listitem","aria-current":"true"}(span.res-pos"1",span.res-swatch{"aria-hidden":"true"}{bg=rgb(0,0,1)}"",span.res-name(span.q-real-tag" YOU"),span.res-pts q-time"T60")',
+    'div.res-row p2 q-real{"role":"listitem"}(span.res-pos"2",span.res-swatch{"aria-hidden":"true"}{bg=rgb(1,0,0)}"",span.res-name(span.q-real-tag" DRIVEN"),span.res-pts q-time"+1.000")',
+    'div.res-row p3{"role":"listitem"}(span.res-pos"3",span.res-swatch{"aria-hidden":"true"}{bg=rgb(1,0,0)}"",span.res-name"PIA  Oscar",span.res-pts q-time"+2.000")',
+    'div.res-row{"role":"listitem"}(span.res-pos"4",span.res-swatch{"aria-hidden":"true"}{bg=rgb(0.5,0.5,0.5)}"",span.res-name"RUS  George",span.res-pts q-time"NO TIME")',
   ]);
 });

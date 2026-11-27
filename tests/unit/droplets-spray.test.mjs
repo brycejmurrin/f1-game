@@ -466,7 +466,8 @@ test("spray: shuffled Float32 distances preserve the capped nearest-N threshold 
 test("game.js wires the nearest-N gate, sprayStr/sprayRate and the Droplets tick", () => {
   const g = gameSource();
   assert.match(g, /Particles\.sprayAdmit\(_sdx \* _sdx \+ _sdz \* _sdz\)/);
-  assert.match(g, /Particles\.sprayStr\(vStd\(c\.speed\), Storm\.sprayK\(raceWeather\), frame\.wetness\)/);
+  // #7198: spray strength and the engine-audio wet flag both read the surface under the car, not the view / lap mean.
+  assert.ok(/Particles\.sprayStr\(vStd\(c\.speed\), Storm\.sprayK\(raceWeather\), carWet\(c\)\)/.test(g) && /_engArg\.wet = isWetAt\(player\)/.test(g));
   assert.match(g, /Droplets\.tick\(paused \? 0 : dt, onboard && !photoMode, underCover \? 0 : frame\.rain \|\| 0, Storm\.is\(raceWeather\)/);
 });
 

@@ -4688,7 +4688,7 @@ function update(dt) {
   }
   _windStep.st = null;   // updateCar's Wind.sync, once per step (#3109 row 9)
   if (aiLod) aiLod.step(cars, state === "race" && session === "race" && !isPractice() && !netPlay.active(), raceCtl.level, raceT, player, track ? track.total : 0);
-  PerfSpans.begin("ai"); for (let i = 0; i < cars.length; i++) updateCar(cars[i], dt, ranked); PerfSpans.end("ai");   // per-car step: AI + player
+  PerfSpans.begin("ai"); raceCtl.stepGrip(true); try { for (let i = 0; i < cars.length; i++) updateCar(cars[i], dt, ranked); } finally { raceCtl.stepGrip(false); } PerfSpans.end("ai");   // per-car step: AI + player
   pits.stepEnd();
   if (!drills?.active() && jumpStartPenalty.reactWindowOpen()) { // this drill starts with both cars at speed
     for (const c of cars) jumpStartPenalty.tickReaction(c);
@@ -4775,7 +4775,7 @@ function update(dt) {
   PerfSpans.begin("audio"); if (soundOn && player && _audioParamStep) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
     _engArg.slip = player.slipFactor ?? 1; _engArg.ax = player.axEstSm ?? 0; _engArg.axStd = aStd(_engArg.ax);   // braking stays absolute; the pull rides driveTune.PACE
-    _engArg.onKerb = !!player.onKerb; _engArg.wet = isWetRoad(); _engArg.tow = player.towing || 0;
+    _engArg.onKerb = !!player.onKerb; _engArg.wet = isWetAt(player); _engArg.tow = player.towing || 0;
     // ERS state for the deploy whine: continuous, charge-scaled, part-flavoured.
     _engArg.deploy = player.deploying ? 1 : 0; _engArg.energy = player.energy ?? 1;
     _engArg.ersDeploy = player.ersDeploy ?? 0.5;
@@ -6677,8 +6677,9 @@ function retireCar(c, reason) {
 // blast and a 25-lap race lose their cars at the same points of the story.
 // A drawn failure is a fraction of the RACE, so it is tested against the leader's distance: a backmarker (0.93 pace) never covers the full distance itself (#6634 F8).
 const dnfDue = (c) => cars.reduce((m, o) => Math.max(m, o.prog - (o._progGift || 0)), 0) / (lapsTarget * track.total) >= c.dnfAt;
+const stallRetire = (c) => retireCar(c, "stationary");   // ONE function, not a fresh arrow per step (#7070, #6506 row 6)
 function checkRetirements(dt) {
-  AiDrive.stallSweep(cars, dt, state === "race" && !paused && raceCtl.level < 4 && raceT > 0 && !isPractice() && !isQuali(), c => retireCar(c, "stationary"));   // a parked player is retired after 60 s, under its own caution too (#5892); a red or a pause stops the clock; practice (a drill, TT) never retires (#6631)
+  AiDrive.stallSweep(cars, dt, state === "race" && !paused && raceCtl.level < 4 && raceT > 0 && !isPractice() && !isQuali(), stallRetire);   // a parked player is retired after 60 s, under its own caution too (#5892); a red or a pause stops the clock; practice (a drill, TT) never retires (#6631)
   for (const c of cars) {
     if (c.dnfAt == null || c.retired || c.finished) continue;
     // The remote human's slot was still an AI when armReliability drew its
@@ -8141,7 +8142,7 @@ function render(dt) {
         // particle VELOCITY stays real m/s (A16).
         const _sdx = tmpMat[12] - camEye[0], _sdz = tmpMat[14] - camEye[2];
         if (isWetAt(c) && vStd(c.speed) > 15 && Particles.sprayAdmit(_sdx * _sdx + _sdz * _sdz)) {
-          const str = Particles.sprayStr(vStd(c.speed), Storm.sprayK(raceWeather), frame.wetness);   // storm 1.35 / rain 1 / wet 0.6
+          const str = Particles.sprayStr(vStd(c.speed), Storm.sprayK(raceWeather), carWet(c));   // storm 1.35 / rain 1 / wet 0.6
           const sxo = (((Math.random() * 3) | 0) - 1) * 0.6;   // either rear tyre or the diffuser (centre)
           Particles.spray(
             tmpMat[12] + tmpMat[0] * sxo - tmpF[0] * 2.1,

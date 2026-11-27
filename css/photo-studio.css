@@ -1,5 +1,5 @@
 @layer overlays {
-#photo-studio { position: fixed; inset: 0; z-index: 45; background: transparent; pointer-events: none; padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l); }
+#photo-studio { position: fixed; inset: 0; z-index: var(--z-photo-studio); background: transparent; pointer-events: none; padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l); }
 /* Soft-renderer / letterbox gaps around #game would otherwise flash the page's
    light background through the transparent studio overlay (white strip at the
    top of 393×852). Keep the scene visible; fill only the page chrome. */

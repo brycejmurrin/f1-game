@@ -148,9 +148,9 @@ body[data-thumb-trainer] #hud::before { display: none; }   /* the race vignette 
    Uses a CSS media query so it works on iOS Safari where JS lock APIs fail. */
 #rotate-device {
   display: none;
-  position: fixed; inset: 0; z-index: 9000;
-  background: #000;
-  color: #fff;
+  position: fixed; inset: 0; z-index: var(--z-system);
+  background: var(--ink-black);
+  color: var(--ink-on-accent);
   align-items: center;
   justify-content: center;
   flex-direction: column;
@@ -185,7 +185,7 @@ body[data-thumb-trainer] #hud::before { display: none; }   /* the race vignette 
      --tap here is body:not(.desktop)'s 52px as written. */
   min-height: var(--tap); padding: 0 1rem;
   border: 1px solid rgba(255,255,255,0.32); border-radius: var(--r-pill);
-  background: rgba(255,255,255,0.1); color: #fff;
+  background: rgba(255,255,255,0.1); color: var(--ink-on-accent);
   font: inherit; font-weight: 800; letter-spacing: var(--ls-2);
 }
 /* outline-offset takes a <length> only — the old `medium` here made the whole
@@ -385,7 +385,7 @@ html:has(> body > :is(#pausemenu, #results):is(:not([hidden]), [open])) #ios-ins
 :root[data-look-popups-rows="roomy"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) .res-row { min-height: var(--tap); }
 
 #save-warning {
-  position: fixed; z-index: 8500;
+  position: fixed; z-index: var(--z-save-warning);
   /* var(--sat), not raw env(): the last raw inset read outside tokens.css —
      the notch simulation overrides --sa* and could never reach this banner
      (same fix data.css documents twice). */
@@ -424,7 +424,7 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
    24 px WCAG minimum: these are the only way to keep a session's progress. */
 #save-warning button {
   min-height: var(--tap); padding: 0 var(--gap); border: 1px solid var(--plate-line);
-  border-radius: var(--r-pill); background: var(--plate-hover); color: #fff;
+  border-radius: var(--r-pill); background: var(--plate-hover); color: var(--ink-on-accent);
   font: inherit; font-weight: 800;
   grid-row: 1 / span 2;
 }
@@ -590,7 +590,7 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
 }
 .key {
   display: inline-block;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255,255,255,0.4);
   border-radius: var(--r-sm);
   padding: 0 5px;
   font-size: var(--fs-micro);
@@ -602,7 +602,7 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
    painting unconditionally. */
 #nogl[hidden] { display: none; }
 #nogl {
-  position: fixed; inset: 0; z-index: 99;
+  position: fixed; inset: 0; z-index: var(--z-nogl);
   display: flex; align-items: center; justify-content: center;
   background: var(--bg);
 }
@@ -674,7 +674,7 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
   padding: 8px 10px;
   border-radius: var(--r-md);
   border: 1px solid var(--plate-line);
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(0,0,0,0.35);
   color: inherit;
 }
 #vsfriend .vs-code:focus-visible {
@@ -742,7 +742,7 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
   height: auto;
   image-rendering: pixelated;   /* never blur module edges; that is what breaks a scan */
   border-radius: var(--r-sm);
-  background: #fff;
+  background: var(--ink-on-accent);
 }
 /* ---- the two-step layout ----------------------------------------------
    Both flows are "do this, then do that", and the game is played in
@@ -1033,7 +1033,7 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
   height: min(240px, calc(46 * var(--svhz)));
   object-fit: cover;
   border-radius: var(--r-md);
-  background: #000;
+  background: var(--ink-black);
   transform: scaleX(-1);        /* a mirrored preview is what people expect */
 }
 #vsfriend .vs-scan > .bigbtn { width: auto; margin: 0; }
@@ -1070,7 +1070,7 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
 /* INSTALL APP (js/ui/platform-session.js installChip): the browser's install
    offer, on the title screen only; bottom-left, clear of the safe area. */
 #install-chip {
-  position: fixed; z-index: 9000;
+  position: fixed; z-index: var(--z-system);
   left: calc(var(--sal) + var(--gap)); bottom: calc(var(--sab) + var(--gap));
   min-height: var(--tap); padding: 0 var(--gap);
   border-radius: var(--r-md);
@@ -1131,7 +1131,7 @@ body[data-shape="wide"]:not([data-density="compact"]) #overlay[data-home-scene]:
    it there). The HUD chip's plate, not the team accent (nontext-contrast:
    --accent is decoration only). */
 #update-chip {
-  position: fixed; z-index: 9000;
+  position: fixed; z-index: var(--z-system);
   right: calc(var(--sar) + var(--gap)); bottom: calc(var(--sab) + var(--gap));
   min-height: var(--tap); padding: 0 var(--gap);
   border-radius: var(--r-md);
@@ -1395,9 +1395,9 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
    (this layer) is beaten only by an important rule of higher specificity. */
 :root[data-appearance-peek="pause"] #pausemenu:not([open]),
 :root[data-appearance-peek="race"] #race-settings:not([open]),
-:root[data-appearance-peek="popups"] #standings:not([open]) { display: grid !important; z-index: 30; }
-:root[data-appearance-peek="designer"] #trackdesigner:not([open]) { display: grid !important; z-index: 30; }
-:root[data-appearance-peek="datahub"] #datahub:not([open]) { display: flex !important; z-index: 30; }
+:root[data-appearance-peek="popups"] #standings:not([open]) { display: grid !important; z-index: var(--z-peek); }
+:root[data-appearance-peek="designer"] #trackdesigner:not([open]) { display: grid !important; z-index: var(--z-peek); }
+:root[data-appearance-peek="datahub"] #datahub:not([open]) { display: flex !important; z-index: var(--z-peek); }
 :root[data-appearance-peek="select"] #select[hidden],
 :root[data-appearance-peek="career"] #career[hidden],
 :root[data-appearance-peek="garage"] #carsetup[hidden] { display: grid !important; }
@@ -1589,7 +1589,7 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
 /* Off the driving surface until expanded. The editor can scroll on a short
    landscape viewport without swallowing the controls that the player moves. */
 #dock-edit-bar:not([hidden]) {
-  position: fixed; z-index: 9999; top: var(--safe-t); left: var(--safe-l); right: var(--safe-r);
+  position: fixed; z-index: var(--z-dock-edit); top: var(--safe-t); left: var(--safe-l); right: var(--safe-r);
   margin-inline: auto; width: max-content; max-width: var(--safe-w); max-height: max(52px, 35svh);
   display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: calc(var(--gap) / 3);
   padding: calc(var(--gap) / 3); overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain;
@@ -1742,7 +1742,7 @@ body[data-dock-edit] [data-dock-selected] { outline: 2px solid var(--hud-ink-lig
   display: flex; gap: 10px; padding: 8px 6px;
   align-items: center; border-radius: var(--r-sm);
 }
-.res-row:nth-child(even) { background: rgba(255, 255, 255, 0.03); }
+.res-row:nth-child(even) { background: rgba(255,255,255,0.03); }
 /* PODIUM ROWS come BEFORE the player's row on purpose: the two are the same
    specificity, so source order decides, and with the metals last a player who
    finished P1-P3 lost the lime ink AND the opaque sticky ground below — the
@@ -1974,7 +1974,7 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
    Host is created at runtime (keeps shellNodes flat). CONTINUE reuses .bigbtn
    and --tap (844×390 touch). */
 #ceremony-podium {
-  position: fixed; inset: 0; z-index: 38;
+  position: fixed; inset: 0; z-index: var(--z-podium);
   display: flex; flex-direction: column; justify-content: flex-end;
   /* Unzoomed and full-bleed, so the safe insets apply raw on all FOUR sides —
      the notch sits at the side in landscape (UI contract 2026-11-06 §7 gap 23,
