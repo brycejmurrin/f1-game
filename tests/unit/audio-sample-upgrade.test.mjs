@@ -220,7 +220,7 @@ function fakeAudio() {
   return { Audio, els };
 }
 
-test("music stream switch: phones stream through one <audio> element, desktop decodes, apex26.musicStream overrides (M-4)", async () => {
+test("music stream switch: every platform streams through one <audio> element, apex26.musicStream overrides (M-4)", async () => {
   const run = async (isMobile, override) => {
     const f = heldFetch(), A = fakeAudio();
     const { GameAudio, counts } = boot({ fetch: f.fetch, Audio: A.Audio, localStorage: store(override), ...(isMobile ? { GLX: { isMobile: true } } : {}) });
@@ -237,8 +237,9 @@ test("music stream switch: phones stream through one <audio> element, desktop de
   assert.match(phone.els[0].src, /song2\.mp3$/);
   assert.equal(phone.els[0].plays, 2);
   const desk = await run(false, null);
-  assert.equal(desk.fetches, 2, "desktop default: the decode path, unchanged");
-  assert.equal(desk.els.length, 0);
+  assert.equal(desk.fetches, 0, "desktop default streams too (decision 7073 C)");
+  assert.equal(desk.els.length, 1);
+  assert.equal((await run(false, "0")).fetches, 2, "apex26.musicStream=0 puts desktop on the decode path");
   assert.equal((await run(true, "0")).fetches, 2, "apex26.musicStream=0 puts a phone on the decode path");
   assert.equal((await run(false, "1")).els.length, 1, "apex26.musicStream=1 streams on desktop");
 });

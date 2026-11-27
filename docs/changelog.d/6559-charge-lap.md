@@ -1,0 +1,1 @@
+New: LEARN → Hybrid has an on-track drill, Charge-Sustaining Lap (#6559 step 13): set DEPLOY, SAVE or MANUAL for each Monza sector, then drive one lap that must end with at least the 2.0 Apex MJ it started with; a live chart draws the store against the plan's forecast with a per-sector energy ledger, and medals from VM runs of all 27 plans go only to laps that did not borrow.

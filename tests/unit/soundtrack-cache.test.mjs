@@ -76,7 +76,8 @@ test("switching from a streamed upload to a decoded track releases the previous 
     removeAttribute() { this.src = ""; }
     load() {}
   }
-  const { A, mediaEls } = boot({ Audio, mediaSource: true });
+  const { A, mediaEls, sandbox } = boot({ Audio, mediaSource: true });
+  sandbox.localStorage = { getItem: (k) => (k === "apex26.musicStream" ? "0" : null) };
   A.init(); await flush();
   A.addTracks([{ id: "user:stream", name: "stream", url: "blob:stream" }]);
   assert.ok(A.playTrackId("user:stream"));
@@ -251,4 +252,92 @@ test("audition samples and cleanup cannot alter a later race engine claim, inclu
   [...timers.values()].find((t) => t.ms === 1200).fn(); assert.equal(A.skidLevel(), skid, "later audition samples do not overwrite race skid");
   audition.stop(); assert.equal(A.debug().engineOn, true); assert.equal(A.skidLevel(), skid, "cleanup cannot zero the race skid");
   assert.equal(timers.size, 0); A.stopEngine();
+});
+
+class StreamAudio {
+  constructor() { StreamAudio.all.push(this); this.srcSets = []; this.paused = true; this.duration = 0; this.currentTime = 0; }
+  set src(v) { this._src = v; this.srcSets.push(v); }
+  get src() { return this._src; }
+  pause() { this.paused = true; }
+  play() { this.paused = false; return Promise.resolve(); }
+  removeAttribute() { this._src = ""; }
+  load() {}
+}
+StreamAudio.all = [];
+
+test("desktop streams the bundled tracks instead of decoding them", async () => {
+  StreamAudio.all = [];
+  const { A, decoded, mediaEls } = boot({ Audio: StreamAudio, mediaSource: true });
+  A.init(); await flush();
+  assert.ok(A.playTrackId("builtin:song2"));
+  await flush();
+  assert.equal(mediaEls[0].src, "assets/music/song2.mp3");
+  assert.deepEqual(decoded.filter((u) => u.startsWith("assets/music/")), [], "no decodeAudioData for a bundled track");
+});
+
+test("the next track is requested before onended and swapped in on end", async () => {
+  StreamAudio.all = [];
+  const { A, fetched, mediaEls, decoded } = boot({ Audio: StreamAudio, mediaSource: true });
+  A.init(); await flush();
+  A.setMusicSource("builtin");
+  assert.ok(A.playTrackId("builtin:song2"));
+  await flush();
+  const cur = mediaEls[0];
+  cur.duration = 200; cur.currentTime = 100;
+  cur.ontimeupdate();
+  assert.equal(mediaEls.length, 1, "no preload far from the end");
+  cur.currentTime = 190;
+  cur.ontimeupdate();
+  assert.equal(mediaEls.length, 2, "a second element exists before the track ends");
+  const pre = mediaEls[1];
+  assert.equal(pre.src, "assets/music/song3.mp3", "next track requested before onended");
+  assert.equal(pre.paused, true);
+  cur.onended();
+  await flush();
+  assert.equal(A.currentTrackId(), "builtin:song3");
+  assert.equal(pre.paused, false, "the preloaded element plays on end");
+  assert.deepEqual(pre.srcSets, ["assets/music/song3.mp3"], "its src was not reloaded at the swap");
+  assert.deepEqual(decoded.filter((u) => u.startsWith("assets/music/")), []);
+  assert.deepEqual(fetched.filter((u) => u.startsWith("assets/music/")), []);
+});
+
+test("an upload still decodes when streaming is unavailable", async () => {
+  const { A, decoded } = boot({});
+  A.init(); await flush();
+  A.addTracks([{ id: "user:d", name: "d", url: "blob:d" }]);
+  A.playTrackId("user:d");
+  await flush();
+  assert.deepEqual(decoded.filter((u) => u.startsWith("blob:")), ["blob:d"]);
+});
+
+test("a failing preload is not re-requested on every timeupdate, and stop releases the spare", async () => {
+  StreamAudio.all = [];
+  const { A, mediaEls } = boot({ Audio: StreamAudio, mediaSource: true });
+  A.init(); await flush();
+  A.setMusicSource("builtin");
+  A.playTrackId("builtin:song2"); await flush();
+  const cur = mediaEls[0];
+  cur.duration = 200; cur.currentTime = 190;
+  cur.ontimeupdate();
+  const pre = mediaEls[1];
+  pre.onerror();
+  cur.ontimeupdate(); cur.ontimeupdate();
+  assert.deepEqual(pre.srcSets, ["assets/music/song3.mp3"], "one request for the failed url");
+  A.stopMusic();
+  assert.equal(pre.src, "", "the spare drops its src when music stops");
+});
+
+test("a swapped-in preload applies a pending resume offset", async () => {
+  StreamAudio.all = [];
+  const { A, mediaEls } = boot({ Audio: StreamAudio, mediaSource: true });
+  A.init(); await flush();
+  A.setMusicSource("builtin");
+  A.playTrackId("builtin:song2"); await flush();
+  const cur = mediaEls[0];
+  cur.duration = 200; cur.currentTime = 190; cur.ontimeupdate();
+  const pre = mediaEls[1];
+  pre.currentTime = 0;
+  cur.onended(); await flush();
+  assert.equal(pre.paused, false);
+  assert.equal(pre.currentTime, 0, "a fresh track starts at the top");
 });
