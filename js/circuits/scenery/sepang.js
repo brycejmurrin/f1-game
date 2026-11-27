@@ -470,8 +470,9 @@
         });
       }
       for (const [id, s, side, gap] of [
-        // 48 / 30 m: cleared of the new K1 shell at gap 44; T15 unchanged.
-        ["t1", 0.080, 1, 52],
+        // 46 / 30 m: clear of the K1 shell at gap 44; at 52 its footprint
+        // was rejected every build and it never landed (#7292). T15 unchanged.
+        ["t1", 0.080, 1, 46],
         ["t15", 0.900, -1, 30],
       ]) {
         const a = anchor(K(s), side, gap);

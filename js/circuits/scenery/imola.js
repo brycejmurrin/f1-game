@@ -703,7 +703,9 @@
           stage._mat = MAT.METAL;
           addBox(stage, vadd(base, a.u, 2.5),  [1.8, 0.6, 1.4], bronze, b);
           addBox(stage, vadd(base, a.u, 3.3),  [1.2, 1.4, 1.0], bronze, b);
-          addCyl(stage, vadd(base, a.u, 4.4),  0.42, 0.7, bronze, 7, b);
+          // addCyl is BASE-anchored: the torso top is 3.3 + 0.7 = 4.0; at 4.4
+          // the head hung 0.4 m clear of it (ground-audit unsupported, #7292).
+          addCyl(stage, vadd(base, a.u, 4.0),  0.42, 0.7, bronze, 7, b);
           // Three flag poles — Brazilian tricolour (green / yellow / blue).
           const flagCols = [[0.10, 0.55, 0.24], [0.94, 0.82, 0.16], [0.14, 0.30, 0.62]];
           for (let i = 0; i < 3; i++) {
