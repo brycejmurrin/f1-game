@@ -1127,16 +1127,24 @@ async function reusePinned(cache, url) {
 // launch missed it. Only a key that names its bytes moves: a `?v=<12 hex>` whose digest
 // matches, or a PATH_PINNED path. Build-keyed and bare keys belong to their generation
 // (bare runtime entries are revalidated forward by carryRuntime at the next install).
+// Scoped to what install cannot already copy forward: a runtime-only door's `?v=<12 hex>` and a
+// path-pinned file (the opt-in vendors). An old-shell tab's ordinary `?v=` scripts, answered from
+// the predecessor it booted from, stay there. Only into a SETTLED current generation (until then
+// install's reuseHashed is still copying), and each key at most once per worker, so a digest
+// that misses is not re-hashed on every later hit.
+const _promoteTried = new Set();
 async function promoteHit(key, hit, from) {
   const current = _cacheNameKnown || await currentCacheName().catch(() => null);
   if (!current || !(cacheBuild(from) < cacheBuild(current))) return;
   const href = typeof key === "string" ? key : key.url;
   const url = new URL(href);
   const rel = (url.origin + url.pathname).slice(new URL("./", self.location.href).href.length);
-  const hashed = /^\?v=[0-9a-f]{12}$/.test(url.search);
+  const hashed = /^\?v=[0-9a-f]{12}$/.test(url.search) && isRuntimeOnlyOptional(rel);
   if (!hashed && (url.search || !PATH_PINNED.test(rel))) return;
-  // Never CREATE the current generation here: an evicted one is repairGeneration's job.
-  if (!(await caches.keys()).includes(current)) return;
+  if (_promoteTried.has(href)) return;
+  // A missing or unsettled current generation is install's or repairGeneration's (never created here).
+  if (!(await caches.match(INSTALL_SETTLED_URL, { cacheName: current }))) return;
+  _promoteTried.add(href);
   if (hashed) await verifyHashedResponse(href, hit);
   const cache = await openCache(current);
   if (await cache.match(key)) return;

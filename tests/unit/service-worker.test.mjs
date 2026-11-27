@@ -2873,6 +2873,7 @@ test("a cache-first hit from an older generation is promoted into the current on
   const forged = `${ORIGIN}/js/editor/editor.js?v=${hash12("other-body")}`;   // bytes the key does not name
   const buildKeyed = `${ORIGIN}/js/xr/xr.js?v=320`;                            // a build-keyed key stays with its build
   const pinned = `${ORIGIN}/vendor/rapier-0.19.3/rapier.mjs`;                 // path-pinned: names its bytes too
+  const oldShellScript = `${ORIGIN}/js/ui/hud.js?v=${hash12("hud-old")}`;     // an old tab's ordinary script: install's, not promoted
   const state = { offline: false };
   const harness = createHarness({ fetchImpl: generationFetch(state), clientWindows: 1 });
   harness.stores.set("apex26-320", new Map([
@@ -2881,9 +2882,10 @@ test("a cache-first hit from an older generation is promoted into the current on
     [forged, new Response("tampered")],
     [buildKeyed, new Response("xr-320")],
     [pinned, new Response("rapier")],
+    [oldShellScript, new Response("hud-old")],
   ]));
   harness.stores.set("apex26-321", new Map([[`${ORIGIN}/__apex_install_settled__`, new Response("settled")]]));
-  for (const u of [wgx, forged, buildKeyed, pinned]) {
+  for (const u of [wgx, forged, buildKeyed, pinned, oldShellScript]) {
     const ev = harness.fetchEvent(new Request(u));
     await ev.responsePromise; await Promise.all(ev.lifetimes);
   }
@@ -2892,6 +2894,7 @@ test("a cache-first hit from an older generation is promoted into the current on
   assert.equal(await now.get(pinned)?.clone().text(), "rapier", "a path-pinned hit is promoted");
   assert.equal(now.has(forged), false, "bytes that miss their digest stay where they were");
   assert.equal(now.has(buildKeyed), false, "a build-keyed entry is not promoted");
+  assert.equal(now.has(oldShellScript), false, "an old shell's ordinary ?v= script is not promoted");
   assert.ok(harness.stores.has("apex26-320"), "the predecessor is kept while a window is open");
   harness.setClientWindows(0);
   const nav = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
@@ -3009,4 +3012,28 @@ test("install carries a still by its digest with no network, a bare pre-#7076 co
   assert.equal(now.has(`${still}?v=${hash12("still-old")}`), false, "a stale hash is dropped");
   assert.equal(now.has(still), false, "the bare key is not carried");
   assert.deepEqual(asked, [], "no network for any of them");
+});
+
+test("promotion waits for a settled current generation and hashes a mismatching key once (#7076 17c)", async () => {
+  const wgx = `${ORIGIN}/js/render/webgpu/wgx.js?v=${hash12("wgx-body")}`;
+  const forged = `${ORIGIN}/js/editor/editor.js?v=${hash12("other-body")}`;
+  let digests = 0;
+  const subtle = webcrypto.subtle;
+  const crypto = { subtle: { digest: (...a) => { digests += 1; return subtle.digest(...a); } } };
+  const harness = createHarness({ fetchImpl: generationFetch({ offline: false }), globals: { crypto } });
+  harness.stores.set("apex26-320", new Map([
+    [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
+    [wgx, new Response("wgx-body")],
+    [forged, new Response("tampered")],
+  ]));
+  harness.stores.set("apex26-321", new Map());   // installing: no SETTLED marker yet
+  const hit = async (u) => { const ev = harness.fetchEvent(new Request(u)); await ev.responsePromise; await Promise.all(ev.lifetimes); };
+  await hit(wgx);
+  assert.equal(harness.stores.get("apex26-321").has(wgx), false, "nothing is promoted into an unsettled generation");
+  harness.stores.get("apex26-321").set(`${ORIGIN}/__apex_install_settled__`, new Response("settled"));
+  await hit(wgx);
+  assert.equal(harness.stores.get("apex26-321").has(wgx), true, "promoted once the generation settles");
+  digests = 0;
+  for (let i = 0; i < 3; i++) await hit(forged);
+  assert.equal(digests, 1, "a key whose digest misses is hashed once per worker, not on every hit");
 });
