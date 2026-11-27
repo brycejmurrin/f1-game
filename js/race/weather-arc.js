@@ -78,6 +78,30 @@ const WeatherArc = (function () {
     return [from, to];
   }
 
+  // ── Drying line (#1627) — a lateral field on top of the along-lap wetness ──
+  // SURFACE channel (docs/PHYSICS.md): the groove is where traffic has worn the rubber in, a fixed smooth
+  // wander about the centreline hashed from the lap fraction alone — no curvature, no racing-line read — and only a live arc has one (static weather, the characterization pins, is one even wetness) —
+  // so every car at the same (s, x) and every peer sees the same water. Only a live arc has a line: a static
+  // weather (the characterization pins) is one even wetness. It dries first (up to DRYLINE_K of
+  // the wetness) when the road is part-dry; a soaked (1) or bone-dry (0) road has no line.
+  const DRYLINE_K = 0.6, DRYLINE_W = 2.2, DRYLINE_AMP = 2.5;   // max share dried; groove half-width m; wander m
+  // The 12 knots are a pure string hash: built once instead of 4 string builds + FNV passes
+  // per car per step during an arc (perf hunt 7; same values, tests/unit/weather-arc grooveX).
+  let _grooveH = null;
+  function grooveX(frac) {
+    const n = 12, f = (frac - Math.floor(frac)) * n, i = Math.floor(f), u = f - i, k = M4.smoothstep(u);
+    if (!_grooveH) { _grooveH = new Float64Array(n); for (let j = 0; j < n; j++) _grooveH[j] = RainCells.h01("groove|" + j) * 2 - 1; }
+    const a = _grooveH[((i % n) + n) % n], b = _grooveH[(((i + 1) % n) + n) % n];
+    return DRYLINE_AMP * (a + (b - a) * k);
+  }
+  /** 0..1 — how much of the groove lies under lateral offset `x` (m, + right) at lap fraction `frac`. Exported
+   *  statically (read-only) for LEARN's Wet Weather Lines drill (js/learn-drills/rain-groove.js), which points at it. */
+  const hasRC = () => typeof RainCells !== "undefined" && !!RainCells;
+  function dryLine(frac, x) {
+    if (!hasRC()) return 0;
+    const d = (x - grooveX(frac)) / DRYLINE_W;
+    return Math.exp(-d * d);
+  }
   /** @param {*} G the js/game.js ctx façade.
    *  @param {*} deps the two SESSION-FORMAT predicates that stay in game.js —
    *  taken here rather than added to G, which already carries 265 members. */
@@ -397,7 +421,6 @@ const WeatherArc = (function () {
     // segments, each with WeatherArc's exact closed-form lag; otherwise every
     // position reads the one scalar above, exactly as before.
     const local = (a) => !!a && (!!a.cell || !!a.w0s);
-    const hasRC = () => typeof RainCells !== "undefined" && !!RainCells;
     /** The segment grid at the arc's own clock, cached per arc.t.
      *  Without the memo, wetnessAt rebuilt SEGS per car; netplay shares raceT +
      *  plan only, never `_sg` (#4270). */
@@ -432,28 +455,7 @@ const WeatherArc = (function () {
       if (!(e >= 0) || e >= DRYLINE_FADE_S) { grooveEnd = null; return 0; }
       return 1 - e / DRYLINE_FADE_S;
     }
-    // ── Drying line (#1627) — a lateral field on top of the along-lap wetness ──
-    // SURFACE channel (docs/PHYSICS.md): the groove is where traffic has worn the rubber in, a fixed smooth
-    // wander about the centreline hashed from the lap fraction alone — no curvature, no racing-line read — and only a live arc has one (static weather, the characterization pins, is one even wetness) —
-    // so every car at the same (s, x) and every peer sees the same water. Only a live arc has a line: a static
-    // weather (the characterization pins) is one even wetness. It dries first (up to DRYLINE_K of
-    // the wetness) when the road is part-dry; a soaked (1) or bone-dry (0) road has no line.
-    const DRYLINE_K = 0.6, DRYLINE_W = 2.2, DRYLINE_AMP = 2.5;   // max share dried; groove half-width m; wander m
-    // The 12 knots are a pure string hash: built once instead of 4 string builds + FNV passes
-    // per car per step during an arc (perf hunt 7; same values, tests/unit/weather-arc grooveX).
-    let _grooveH = null;
-    function grooveX(frac) {
-      const n = 12, f = (frac - Math.floor(frac)) * n, i = Math.floor(f), u = f - i, k = M4.smoothstep(u);
-      if (!_grooveH) { _grooveH = new Float64Array(n); for (let j = 0; j < n; j++) _grooveH[j] = RainCells.h01("groove|" + j) * 2 - 1; }
-      const a = _grooveH[((i % n) + n) % n], b = _grooveH[(((i + 1) % n) + n) % n];
-      return DRYLINE_AMP * (a + (b - a) * k);
-    }
-    /** 0..1 — how much of the groove lies under lateral offset `x` (m, + right) at lap fraction `frac`. */
-    function dryLine(frac, x) {
-      if (!hasRC()) return 0;
-      const d = (x - grooveX(frac)) / DRYLINE_W;
-      return Math.exp(-d * d);
-    }
+    // The drying line (grooveX, dryLine, DRYLINE_K) is module-level and pure: see above create().
     /** What the VIEW stands on: the followed car's (camera's) position, so the
      *  rain starts and stops as you drive into and out of a shower. */
     function viewWetness() {
@@ -665,6 +667,6 @@ const WeatherArc = (function () {
       get plan() { return plan; }, set plan(v) { plan = v; },
     };
   }
-  return { create, arcSeq, showerStopPays, LADDER, VALID, TARGETS, WET_SEGS };
+  return { create, arcSeq, showerStopPays, grooveX, dryLine, LADDER, VALID, TARGETS, WET_SEGS };
 })();
 Object.freeze(WeatherArc);

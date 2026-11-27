@@ -578,6 +578,7 @@ const DrivingCoachBody = (function () {
           taper: "Save on a straight, then stay flat out for 400 m. Press BOOST once and see where the push lands: it is strongest at low speed.",
           torque: "Save on a straight, then stay flat out from a slow exit. Press BOOST as you pick up the throttle: the timer stops where the taper begins.",
           cooling: "Tyre wear must be enabled. Save, then complete one clean lap from the line on the same set in stable weather. Shows measured grain and grip changes, without a recovery promise.",
+          groove: "Drive the sector on the drier groove: on a part-wet road the rubbered-in line grips best. Stay on the track.",
           charge: "LEARN's Charge-Sustaining Lap: set a DEPLOY, SAVE or MANUAL plan per sector, then drive one lap that ends with at least the store it started with.",
           thermal: "LEARN's Tyre Thermal Lab: drive to the line keeping the tyre surface inside its working window. Load and speed heat it; a slide on a cold tyre grains it.",
           slalom: "Make six direction changes while moving: the car must change direction, not just the stick. Stay on the track and avoid contact.",
