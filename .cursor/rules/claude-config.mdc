@@ -54,8 +54,8 @@ mentions a rule never trips it; a command they cannot tokenise is refused.
   with no skip (AGENTS.md §The loop step 5); `.githooks/pre-push` refuses force pushes, branch deletes and deploy-branch
   pushes.
 - `context-cap.py` (Agent) advises on live context against the brief's first `STOP AT` (`<N>k`, or `start+<N>k`
-  above the first turn's context) and refuses spawns over the hard cap, or when a capped session's count cannot be
-  read; `subagent-contract.py` flags a reporter agent's malformed report.
+  above the first turn's context) and refuses spawns over the hard cap, or when a capped session has no transcript (a
+  transcript with no counted entry yet, a first turn, gets an advisory); `subagent-contract.py` flags a reporter agent's malformed report.
 - Advisory: `post-edit.sh` (a `js/` edit that does not parse or staled a generated file), `lsp-hint.py` (the
   apex-lsp call after a bare-symbol code search in any segment of a command, not a grep filtering a pipe; a subagent
   gets the exact `mcp__apex-lsp__lsp_references` call).
