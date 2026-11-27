@@ -244,6 +244,24 @@ whole field 4-6 s wide from wing alone; #5791, Bryce's `decision: b`).
 `physState()` reports `aeroLoad`, `xVmaxGain`, `xDfLoss`, `vmaxNow`, `aeroGrip`
 and `aeroDf`, so none of this has to be read out of `updateCar` again.
 
+### AI aero grip: two rules on purpose
+
+The player and the AI read a wing's grip through DIFFERENT rules, and that is a decision
+(Bryce's `decision: 7248-P2c A` on #7148; review #7248 §P2c), not drift to merge away:
+
+- **Player** (`js/physics/player-forces.js`, `aeroGrip`): speed-dependent,
+  `1 + DOWNFORCE·aeroDfMult·min(1, (v/vTop)²)` × the wake's `dirtyMul`, feeding the slip
+  model's `muBase`. The wing's load moves the downforce itself.
+- **AI** (`AiDrive.aeroGrip(load)`, `js/physics/ai-drive.js`): setup-only,
+  `1 + (aeroLoad − 0.5)·AI_WING_GRIP` (±2.75 % at the catalog ends), a calibrated
+  competence term of the kinematic AI model. Its speed term is separate (`AI_DF` in
+  `AiDrive.lateralScale`), so the planner (`brakeTarget`, `cornerSpeed`) and the lateral
+  step read one envelope. `aeroGrip()` is the rule's one home; `lateralScale`,
+  `lateralScales` and `brakeTarget` call it (#7258).
+
+Folding the player's rule into the AI (or back) changes every AI lap time and the field
+spread calibration (#5791); either change is its own decision.
+
 **DAMAGE → HANDLING (#1578, opt-in, Race Settings › DAMAGE: HANDLING; ships
 DISPLAY).** `js/race/damage-handling.js` is the one setting-gated read of the
 Damage readout. ON, the local car's broken front wing scales the FRONT axle's

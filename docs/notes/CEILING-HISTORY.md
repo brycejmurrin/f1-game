@@ -1,5 +1,14 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-27 — PR #7278 (claude/ai-pace-stage-7258): AiPace, the AI-only vmax stages of updateCar (#7258)
+
+`(tree) eagerScripts` 292 → **293** (+1) and `eagerCodeBytes` +638: `js/physics/ai-pace.js` is a new pure module (Bryce's
+`decision: 7244-1 B` on #7148) that `updateCar` calls synchronously every step. `updateCar` typeof-guards the race-session
+globals, so it is written to run before `ensureRaceSession`; a lazy AiPace would need a session-stub copy of its four
+stages, the duplicate the module exists to remove. `js/game.js` lines −10 / codeLines −7 in the same fragment; the
+per-stage trace pin (`tests/unit/ai-vmax-stage-trace-vm.test.mjs`) is byte-identical. Option A picked by the orchestrator
+under D-042. Fragment: `ratchets.d/claude--ai-pace-stage-7258.json`. Label: `ratchet-raise`.
+
 ## 2026-11-27 — PR #7206 (claude/hot-path-memo-7070): lowGrip once per step, a stable stallSweep callback (#7070 rows 2 + 6)
 
 `(tree) eagerCodeBytes` 4026701 → **4026952** (+251, measured on the synced tip): `RaceControl.lowGrip` gains a per-step memo (`stepGrip(on)`, the

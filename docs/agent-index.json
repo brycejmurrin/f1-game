@@ -787,6 +787,7 @@
         "tests/unit/ai-rescue-retire-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-trail-yield-vm.test.mjs",
+        "tests/unit/ai-vmax-stage-trace-vm.test.mjs",
         "tests/unit/ai-wing-spread-vm.test.mjs",
         "tests/unit/apex-car-placement-pin-vm.test.mjs",
         "tests/unit/apex-surface-pin-vm.test.mjs",
@@ -815,6 +816,7 @@
         "tests/unit/drill-grip-vm.test.mjs",
         "tests/unit/drill-harvest-vm.test.mjs",
         "tests/unit/drill-lines-vm.test.mjs",
+        "tests/unit/drill-rain-vm.test.mjs",
         "tests/unit/drill-taper-vm.test.mjs",
         "tests/unit/drill-telemetry-vm.test.mjs",
         "tests/unit/drill-torque-vm.test.mjs",
@@ -940,6 +942,7 @@
         "tests/unit/ai-rescue-retire-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-trail-yield-vm.test.mjs",
+        "tests/unit/ai-vmax-stage-trace-vm.test.mjs",
         "tests/unit/ai-wing-spread-vm.test.mjs",
         "tests/unit/apex-car-placement-pin-vm.test.mjs",
         "tests/unit/apex-surface-pin-vm.test.mjs",
@@ -969,6 +972,7 @@
         "tests/unit/drill-grip-vm.test.mjs",
         "tests/unit/drill-harvest-vm.test.mjs",
         "tests/unit/drill-lines-vm.test.mjs",
+        "tests/unit/drill-rain-vm.test.mjs",
         "tests/unit/drill-taper-vm.test.mjs",
         "tests/unit/drill-telemetry-vm.test.mjs",
         "tests/unit/drill-torque-vm.test.mjs",
@@ -1076,6 +1080,7 @@
         "tests/unit/ai-rescue-retire-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-trail-yield-vm.test.mjs",
+        "tests/unit/ai-vmax-stage-trace-vm.test.mjs",
         "tests/unit/apex-car-placement-pin-vm.test.mjs",
         "tests/unit/apex-surface-pin-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
@@ -1160,6 +1165,7 @@
         "tests/unit/drill-grip-vm.test.mjs",
         "tests/unit/drill-harvest-vm.test.mjs",
         "tests/unit/drill-lines-vm.test.mjs",
+        "tests/unit/drill-rain-vm.test.mjs",
         "tests/unit/drill-taper-vm.test.mjs",
         "tests/unit/drill-telemetry-vm.test.mjs",
         "tests/unit/drill-torque-vm.test.mjs",
@@ -3973,6 +3979,11 @@
       "roster": "LAZY_LEARN"
     },
     {
+      "path": "js/learn-drills/rain-groove.js",
+      "global": "RainDrill",
+      "roster": "LAZY_LEARN"
+    },
+    {
       "path": "js/learn-drills/registry.js",
       "global": "DrillRegistry",
       "roster": "LAZY_LEARN"
@@ -4310,6 +4321,11 @@
     {
       "path": "js/physics/ai-drive.js",
       "global": "AiDrive",
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/ai-pace.js",
+      "global": "AiPace",
       "roster": "tag"
     },
     {

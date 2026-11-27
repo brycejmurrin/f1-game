@@ -243,11 +243,9 @@ function loadBackendScripts(files, edges, opts) {
     W.clearTimeout(t);
     stranded.delete(src);
   };
-  // Strict bundles with a `loaded` set (ensureDataHub / ensureNet / …) keep one inject
-  // per file per load attempt so a miss leaves siblings resident and the next ensure*
-  // call retries only what is missing. `transientRetry: false` opts out (idle
-  // lighting prefetch re-asks at race start). Otherwise inject retries 503s in place
-  // (grip-steer, results-sheet, …).
+  // Strict bundles with a `loaded` set keep one inject per file per attempt: a miss leaves siblings
+  // resident and the next ensure* retries only what is missing. `transientRetry: false` is ONLY for
+  // the idle lighting prefetch (it re-asks at race start); blocking loads keep the 503 retry in place.
   const deferInjectRetry = (strict && (loaded || files.length > 1)) || (opts && opts.transientRetry === false);
   const injectFile = async (src) => {
     if (typeof UpdateCheck !== "undefined" && UpdateCheck.prepareLazyLoad && !(await UpdateCheck.prepareLazyLoad(generationScope))) return false;

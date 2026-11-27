@@ -576,6 +576,99 @@
       "goldClean": true
     }
   },
+  "rain": {
+    "how": "WRITE_REFS=1 node --test tests/unit/drill-rain-vm.test.mjs: 10 runs of the Monza sector-3 Wet Weather Lines drill (road held at 0.18, slicks), one boot, RETRY between runs, a pure-pursuit driver at 34-37 m/s aimed at the groove offset by 0, ±1..±4 m, and one at the centreline",
+    "metric": "% of the sector's frames with WeatherArc.dryLine >= 0.5 under the car (js/learn-drills/rain-groove.js score)",
+    "rule": "bronze = the centreline driver's share; gold = the on-groove driver's share - 5; silver = halfway; whole %, floored; gold needs a clean run",
+    "runs": [
+      {
+        "mode": "groove",
+        "off": 0,
+        "share": 89.24,
+        "seconds": 70.52,
+        "clean": true,
+        "medal": "gold"
+      },
+      {
+        "mode": "centre",
+        "off": 0,
+        "share": 65.38,
+        "seconds": 70.6,
+        "clean": true,
+        "medal": "bronze"
+      },
+      {
+        "mode": "groove",
+        "off": 1,
+        "share": 90.31,
+        "seconds": 70.4,
+        "clean": true,
+        "medal": "gold"
+      },
+      {
+        "mode": "groove",
+        "off": -1,
+        "share": 85.62,
+        "seconds": 70.5,
+        "clean": true,
+        "medal": "gold"
+      },
+      {
+        "mode": "groove",
+        "off": 2,
+        "share": 71.94,
+        "seconds": 70.4,
+        "clean": true,
+        "medal": "bronze"
+      },
+      {
+        "mode": "groove",
+        "off": -2,
+        "share": 78.09,
+        "seconds": 70.6,
+        "clean": true,
+        "medal": "silver"
+      },
+      {
+        "mode": "groove",
+        "off": 3,
+        "share": 54.65,
+        "seconds": 70.4,
+        "clean": true,
+        "medal": null
+      },
+      {
+        "mode": "groove",
+        "off": -3,
+        "share": 61.04,
+        "seconds": 70.6,
+        "clean": true,
+        "medal": null
+      },
+      {
+        "mode": "groove",
+        "off": 4,
+        "share": 39.77,
+        "seconds": 70.3,
+        "clean": true,
+        "medal": null
+      },
+      {
+        "mode": "groove",
+        "off": -4,
+        "share": 49.78,
+        "seconds": 70.6,
+        "clean": true,
+        "medal": null
+      }
+    ],
+    "tiers": {
+      "bronze": 65,
+      "silver": 74,
+      "gold": 84,
+      "goldClean": true
+    }
+  },
   "telemetry": {
     "how": "node tests/unit/drill-telemetry-vm.test.mjs --write: one boot of the Monza Telemetry drill (solo TT, sector 2 from 40 m past the S1 line); steering is SoakRun's control() law, pedals SoakRun's own except the fault: REF, EARLY (whole brake 25 m before REF's first braking point), the pick at that window's middle with the found cause, FIX IT (REF's pedals), LATE (8 m off the throttle past REF's first throttle point after its first braking zone)",
     "metric": "seconds located (the peak-loss 100 m window's loss, once picked) or won back (a FIX IT run, in the solved window) — js/learn-drills/telemetry.js analyze/pick/score",

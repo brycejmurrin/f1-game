@@ -515,6 +515,9 @@ const AiDrive = (function () {
   // `aero` scales the wing term. The YAW budget (yawScale) gets no wings: it is a lane-change smoothness
   // budget, and wings took ai-racecraft-vm's solo lateral jerk from 5.9 to 8.1 m/s² (cap 7.5).
   const AERO_GRIP_K = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.AI_WING_GRIP) || 0.055;   // the literal: unit VMs (as AI_DF)
+  // THE AI aero-grip rule, one home (#7258; decision 7248-P2c A): setup-only (the wing's aeroLoad), no speed term —
+  // the AI's speed term is AI_DF in lateralScale. The player's rule is speed-dependent (player-forces.js); the two
+  // differ on purpose (docs/PHYSICS.md §AI aero grip). Bit-identical to the inline copies it replaced for a numeric load.
   function aeroGrip(load) { return 1 + ((load != null ? load : 0.5) - 0.5) * AERO_GRIP_K; }
   // AI ERS IS BOUNDED (#5330): deploy/regen cost nothing (PaceMath) and works kits
   // don't trade them (Aston 0.91/0.79, Haas 0.00/0.43); deploy 0->1 was 1.2-1.9 % of
@@ -537,7 +540,7 @@ const AiDrive = (function () {
   }
   function lateralScale(speed, load = 0.5, grip = 1, pace = 1, vmax = 72, aero = 1) {
     const q = Math.min(1, Math.abs(speed) / (Math.max(0.05, pace) * Math.max(1, vmax)));
-    return (1 + (load - 0.5) * AERO_GRIP_K) * Math.max(0.01, grip) * (1 + AI_DF * aero * q * q);
+    return aeroGrip(load) * Math.max(0.01, grip) * (1 + AI_DF * aero * q * q);
   }
   // The yaw budget keeps the OLD high-speed taper (1 - 0.28 at the top speed,
   // here as its quadratic twin) so the heading controller is exactly as calm
@@ -548,7 +551,7 @@ const AiDrive = (function () {
   const _lsOut = { yaw: 1, lat: 1 };   // pooled
   function lateralScales(speed, load, grip, pace, vmax, aero, out = _lsOut) {
     const q = Math.min(1, Math.abs(speed) / (Math.max(0.05, pace) * Math.max(1, vmax)));
-    const pre = (1 + (load - 0.5) * AERO_GRIP_K) * Math.max(0.01, grip);
+    const pre = aeroGrip(load) * Math.max(0.01, grip);
     out.yaw = pre * (1 + AI_DF * YAW_AERO * q * q);
     out.lat = pre * (1 + AI_DF * aero * q * q);
     return out;
@@ -579,7 +582,7 @@ const AiDrive = (function () {
     const sampleN = window ? window.n : samples.length;
     const windowD = window ? window.d : 0;
     const load = ctx.aeroLoad != null ? ctx.aeroLoad : 0.5;
-    const latMax = (ctx.latMax || 22) * (1 + (load - 0.5) * AERO_GRIP_K);
+    const latMax = (ctx.latMax || 22) * aeroGrip(load);
     const gravity = ctx.gravity ?? 9;   // live caller supplies PhysicsConsts.GRAVITY_SLOPE
     const brake = ctx.brake || 22;
     const grip = ctx.grip || 1;

@@ -299,6 +299,7 @@ const FULL = [
   "js/physics/ai-start.js",   // AiStart: launch plan + lap-1 calm policy (AiDrive re-exports)
   "js/physics/ai-drive.js",
   "js/physics/ai-band.js",   // gap catch-up vs scripted fixed pace (carve-headroom D)
+  "js/physics/ai-pace.js",   // AiPace: the AI-only vmax stages of updateCar (#7258)
   "js/physics/ai-corridor.js",
   "js/camera/offsets.js",
   "js/camera/flyby-sight.js",   // FlybySight: the flyby planner's (and frame-report's) sightline/occluder model
@@ -941,6 +942,7 @@ const HARD_EDGES = [
   ["js/physics/wall-clamp.js", "js/game.js"],            // updateCar calls WallClamp.apply(…)
   ["js/physics/ai-drive.js", "js/game.js"],         // updateCar calls AiDrive for AI racecraft
   ["js/physics/ai-band.js", "js/game.js"],          // updateCar calls AiBand for pace catch-up
+  ["js/physics/ai-pace.js", "js/game.js"],          // updateCar calls AiPace for the AI-only vmax stages
 ];
 
 // ---------------------------------------------------------------------------
@@ -1933,7 +1935,7 @@ const MOVED = {
 
 // Learn's modal loads only after the title door is used. The iframe requests
 // its standalone page and lesson assets without a ScriptLoader version query.
-const LAZY_LEARN = ["js/learn-drills/registry.js", "js/learn-drills/drill-card.js", "js/learn-drills/aero.js", "js/ui/learn-door.js", "js/ui/thumb-trainer.js", "js/learn-drills/thumb-drill.js", "js/learn-drills/lines.js", "js/learn-drills/tyre-heat.js", "js/learn-drills/taper.js", "js/learn-drills/grip.js", "js/learn-drills/torque.js", "js/learn-drills/wake.js", "js/learn-drills/telemetry.js", "js/learn-drills/harvest.js", "js/learn-drills/charge.js"];
+const LAZY_LEARN = ["js/learn-drills/registry.js", "js/learn-drills/drill-card.js", "js/learn-drills/aero.js", "js/ui/learn-door.js", "js/ui/thumb-trainer.js", "js/learn-drills/thumb-drill.js", "js/learn-drills/lines.js", "js/learn-drills/tyre-heat.js", "js/learn-drills/taper.js", "js/learn-drills/grip.js", "js/learn-drills/torque.js", "js/learn-drills/wake.js", "js/learn-drills/telemetry.js", "js/learn-drills/harvest.js", "js/learn-drills/charge.js", "js/learn-drills/rain-groove.js"];
 // DrillFork (#6559 B2): the strategy drills' what-if service, its own bundle, loaded only by a kind:"sim" drill.
 // The drill host (LAZY_LEARN, itself lazy) loads it with ScriptLoader as title-menu.js loads LAZY_LEARN, after
 // LazyBundles.ensureRaceSession(): no loader in the eager shell, whose bytes are at budget. It reads the coach and
@@ -2135,6 +2137,7 @@ const FULL_TIERS = {
     "js/physics/ai-start.js": "race",
     "js/physics/ai-drive.js": "race",
     "js/physics/ai-band.js": "race",
+    "js/physics/ai-pace.js": "race",
     "js/physics/ai-corridor.js": "race",
     "js/camera/offsets.js": "race",
     "js/camera/flyby-sight.js": "race",

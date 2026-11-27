@@ -610,3 +610,30 @@ test("ensureCircuit: a rejected payload load rejects, is not memoised, and the n
   assert.equal(calls, 2, "the second ask fetched again");
   assert.equal(resident, true);
 });
+
+// #7233 (#7230 row 1): blocking payload loads keep the cache-busted transient retry; only the idle lighting prefetch opts out.
+test("ensureCircuit resolves on the retry after one transient script error", async () => {
+  let resident = false;
+  const w = world({
+    failTimes: { "js/circuits/monza.js": 1 },
+    globals: {
+      Tracks: { LIST: [{ id: "monza" }], circuitPayloadResident: () => resident, hydrate: () => { resident = true; return true; } },
+      TrackDefs: [],
+    },
+    body: () => "TrackDefs.push({ id: 'monza', path: { pts: [[0, 0]] } });",
+  });
+  await w.lb.ensureCircuit(0);
+  assert.equal(resident, true);
+  assert.equal(w.injected.get("js/circuits/monza.js"), 2, "one failure, one retry");
+});
+
+test("the idle lighting prefetch still makes a single attempt (pinned)", async () => {
+  const w = world({
+    roster: { LAZY_RACE: ["fixture-light.js"] },
+    failTimes: { "fixture-light.js": 1 },
+    globals: { Tracks: { LIST: [] } },
+    body: () => "",
+  });
+  await w.lb.ensureLightPresets?.();
+  assert.equal(w.injected.get("fixture-light.js"), 1, "no cache-busted retry for the idle prefetch");
+});
