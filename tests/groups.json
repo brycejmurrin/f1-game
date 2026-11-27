@@ -2717,6 +2717,7 @@
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/dock-layout.test.mjs",
         "tests/unit/driving-cues.test.mjs",
+        "tests/unit/dualsense-polish.test.mjs",
         "tests/unit/editor-workspace.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/grip-steer.test.mjs",
