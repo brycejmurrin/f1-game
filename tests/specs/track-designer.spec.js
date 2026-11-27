@@ -342,7 +342,7 @@ test.describe("Track designer", () => {
     await page.mouse.move(at.x, at.y); await page.mouse.down();
     await page.mouse.move(at.x + 30, at.y - 15, { steps: 4 });
     release();
-    await expect.poll(() => page.evaluate(() => window.__tdPendingResult)).toBe(false);
+    await expect.poll(() => page.evaluate(() => window.__tdPendingResult), { message: "pending START FROM: __tdPendingResult stayed true" }).toBe(false);
     const live = await page.evaluate(() => TrackDesigner.state());
     expect(live.design).toEqual(before.design); expect(live.undo).toBe(before.undo);
     await page.mouse.up();
