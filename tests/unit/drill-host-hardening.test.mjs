@@ -80,13 +80,16 @@ test("DrillCard: Escape/R are inert under the pause menu and in inputs; NaN keep
   ctx.document.addEventListener = (t, f) => { if (t === "keydown") handler = f; };
   const C = ctx.DrillCard;
   let backs = 0;
-  C.show({ title: "x", value: 1, unit: "u" }, { retry() {}, back: () => backs++ });
+  let paused = true;
+  C.show({ title: "x", value: 1, unit: "u" }, { retry() {}, back: () => backs++, paused: () => paused });
   const key = (e) => handler({ key: "Escape", preventDefault() {}, stopPropagation() {}, ...e });
   byId.pausemenu = { hidden: false };
   key({}); assert.equal(backs, 0, "pause menu open");
   byId.pausemenu = { hidden: true };
   key({ target: { tagName: "INPUT" } }); assert.equal(backs, 0, "typing in an input");
-  key({}); // the card's own back button is a stub whose click runs its listener
+  key({}); assert.equal(backs, 0, "G.paused with the pause menu hidden (settings, photo mode)");
+  paused = false;
+  key({}); assert.equal(backs, 1, "Escape reaches BACK once nothing blocks it");
   const store = { d: {}, get: (k, f) => store.d[k] ?? f, set: (k, v) => { store.d[k] = v; } };
   C.record(store, "a|b", { value: 5, medal: null });
   C.record(store, "a|b", { value: NaN, medal: null });

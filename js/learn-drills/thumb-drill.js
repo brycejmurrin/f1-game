@@ -263,7 +263,7 @@ const ThumbDrill = (function () {
     }
     /** The start never became a race: restore, then reopen LEARN (once; a stop() that already ran owns the exit). */
     function fail() {
-      if (left) return;
+      if (left || raced) return;   // a rejection that lands after the race began is the game's own quit, not a failed start
       stop();
       onFail?.();
     }

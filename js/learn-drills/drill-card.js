@@ -122,7 +122,7 @@ const DrillCard = (function () {
       const t = e.target;
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ""))) return;   // typing, not the card
       const pm = document.getElementById?.("pausemenu");
-      if (pm && !pm.hidden) return;   // the pause menu owns Escape and R
+      if ((pm && !pm.hidden) || (actions.paused && actions.paused())) return;   // the pause menu owns Escape and R
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); back.click(); }
       else if ((e.key === "r" || e.key === "R") && !e.repeat) { e.preventDefault(); e.stopPropagation(); retry.click(); }
     };

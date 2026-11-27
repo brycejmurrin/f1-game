@@ -177,7 +177,7 @@ const DrillRegistry = (function () {
       Log.info("ui", "drill " + d.id + " " + Number(r.value).toFixed(1) + " " + r.unit + " " + (r.medal || "no medal"));
       const vs = d.variants || [], k = vs.findIndex(v => v.id === a.variant), nv = vs.length > 1 ? vs[(k + 1) % vs.length] : null;
       const next = nv ? { label: nv.cta || "TRY " + nv.label.toUpperCase(), run: () => rerun(nv.id) } : null;
-      DrillCard.show(r, { retry, back: () => G.quitToMenu(), next });
+      DrillCard.show(r, { retry, back: () => G.quitToMenu(), next, paused: () => !!G.paused });
       return r;
     }
 
