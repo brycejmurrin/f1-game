@@ -38,7 +38,7 @@ test("the survey's tables lockstep the game's: CamModes, HudLayout, HudElements,
   const cams = [...registry[1].matchAll(/\{ id: "([a-z]+)",\s+label:/g)].map((m) => m[1]);
   assert.deepEqual([...M.CAMS].sort(), [...new Set(cams)].sort(), "CAMS = CamModes.CAM_MODES ids");
   const hl = read("js/ui/hud-layout.js");
-  const els = [...hl.slice(hl.indexOf("const ELEMENTS"), hl.indexOf("const IDS")).matchAll(/\["([a-z]+)", "/g)].map((m) => m[1]);
+  const els = [...hl.slice(hl.indexOf("const WIDGETS"), hl.indexOf("const ELEMENTS")).matchAll(/\["([a-z]+)", "/g)].map((m) => m[1]);
   assert.deepEqual([...M.LAYOUT_IDS], els, "LAYOUT_IDS = HudLayout.ELEMENTS");
   const presets = hl.slice(hl.indexOf("const PRESETS"), hl.indexOf("const store"));
   for (const [id, placed] of Object.entries(M.PRESETS)) {
