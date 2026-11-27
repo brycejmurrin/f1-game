@@ -33,6 +33,12 @@ async function settledLight(page) {
   }
   return last;
 }
+// The day preset: sun high, world built by day. Polled, so a frame that still shows the previous scene fails
+// loudly here (with that scene) instead of becoming a wrong baseline.
+const waitDay = (page, what) => expect.poll(() => page.evaluate(() => {
+  const l = __apex.lightState();
+  return { tod: __apex.setTimeOfDay(), night: l.builtNight, high: l.sunY > 0.5 };
+}), { message: what, timeout: 30000 }).toEqual({ tod: "day", night: false, high: true });
 const phys = (page) => page.evaluate(() => {
   const p = __apex.physState();
   return { s: p.s, x: p.x, px: p.px, pz: p.pz, speed: p.speed, head: p.head, lap: __apex.cars().length };
@@ -94,7 +100,7 @@ test("Paused race photo changes time of day and weather live, resets, and leaves
   await page.locator("#ps-tod").selectOption("day");
 
   // Every weather: the hook follows the row; the lighting differs from dry for each lateral/wet state.
-  await settledLight(page);
+  await waitDay(page, "day scene before the weather loop");
   const dry = await settledLight(page);
   for (const wx of WXS.slice(1)) {
     await page.locator("#ps-weather").selectOption(wx);
@@ -110,6 +116,7 @@ test("Paused race photo changes time of day and weather live, resets, and leaves
   await expect(page.locator("#ps-tod")).toHaveValue("day");
   await expect(page.locator("#ps-weather")).toHaveValue("dry");
   await expect(page.locator("#ps-cond-reset")).toBeDisabled();
+  await waitDay(page, "RESET returns the day scene");
   expect(await settledLight(page)).toBe(dry);
 
   // A change left in place is still put back by DONE.
