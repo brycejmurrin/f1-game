@@ -2968,6 +2968,7 @@ test("SettingsExportBody._data exposes the data internals, frozen, without creat
   const { Body, G } = boot();
   const d = Body._data;
   assert.ok(Object.isFrozen(d), "_data is frozen");
+  assert.ok(Object.isFrozen(d.RESET_INFO), "_data.RESET_INFO is frozen too");
   for (const k of ["same", "objDiff", "mergeChangedFields", "typeOk", "thisDesktop", "saveCap", "settingsScope", "restoreSummary"])
     assert.equal(typeof d[k], "function", k);
   assert.equal(d.same({ a: [1, 2] }, { a: [1, 2] }), true);

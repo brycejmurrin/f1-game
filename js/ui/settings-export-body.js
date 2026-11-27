@@ -276,7 +276,7 @@ function buttonProfileDesktop() {
 }
 // Backup groups predate the settings navigation. Reset scopes follow the visible
 // pages instead: Controls must include the input keys historically filed as driving.
-const RESET_INFO = {
+const RESET_INFO = Object.freeze({
   controls: "Steering input and feel, touch pedals and button layout, keyboard bindings, and all controller mappings and calibration.",
   advanced: "Steering response, curves, smoothing, dead zones, sensitivity, handling, overall speed and feedback.",
   driving: "Driving assistance, gears, throttle and active aero. Race rules and circuit setup stay saved.",
@@ -286,7 +286,7 @@ const RESET_INFO = {
   audio: "Music, sound, radio, volumes and audio tuning. Connected music accounts stay connected.",
   graphics: "Graphics quality, renderer, resolution and feature overrides. Defaults adapt to this device.",
   files: "All game preferences, control bindings and controller profiles. Saves, best laps, garage builds, photos, favourite circuits and saved appearance profiles stay saved.",
-};
+});
 const RESET_INPUT = new Set("autoThrottle steerMode mirrorControls dockLayout tiltCurve touchSteeringGuide touchCurve padCurve touchRange touchDragSpeed dragSmooth digitalRate analogSpeedSteer haptics triggerHaptics padDeadzone padGasDeadzone padBrakeDeadzone padSaturation padLabels padAxes padProfiles padRest throttleLatch pedalSlide touchButtonProfiles holdMode lookBackLatch hudBtnScale hudBotKeep hudBtnOpacity hudBtnShape".split(" "));
 const RESET_AIDS = new Set("manual autoThrottle aeroMode drivingCoach conditionCues brakeCue lineBrakeCue adaptiveButtons gripSteer audioCues drivingHelp raceLine".split(" "));
 const RESET_ACCESS = new Set("textSize uiContrast cvdMode captions captionSize captionPos captionBg captionSpeakerInk".split(" "));
