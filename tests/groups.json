@@ -307,6 +307,7 @@
     "tests/unit/css-faces.test.mjs",
     "tests/unit/css-gardener-dedupe.test.mjs",
     "tests/unit/css-has-scope.test.mjs",
+    "tests/unit/css-ladder-ink.test.mjs",
     "tests/unit/css-layers.test.mjs",
     "tests/unit/css-media-disjoint.test.mjs",
     "tests/unit/css-play.test.mjs",
@@ -1985,6 +1986,7 @@
         "tests/unit/tt-pit-lane-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
+        "tests/unit/wet-audio-spray-strength-vm.test.mjs",
         "tests/unit/wet-sector-spray-skid-vm.test.mjs",
         "tests/unit/wind-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
@@ -2120,6 +2122,7 @@
         "tests/unit/tt-pit-lane-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
+        "tests/unit/wet-audio-spray-strength-vm.test.mjs",
         "tests/unit/wet-sector-spray-skid-vm.test.mjs",
         "tests/unit/wind-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
@@ -2177,6 +2180,7 @@
         "tests/unit/redbull-orbit-clear.test.mjs",
         "tests/unit/track-from-projection-vm.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
+        "tests/unit/wet-audio-spray-strength-vm.test.mjs",
         "tests/unit/wet-sector-spray-skid-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
       ],

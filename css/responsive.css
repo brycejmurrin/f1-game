@@ -339,7 +339,7 @@ body:not(.hud-hidden) #hud-restore { display: none; }
 :root[data-tl-edit] :is(#menu-buttons, #menu-brand) * { pointer-events: none; }
 :root[data-tl-edit] #tl-art { position: absolute; z-index: -1; zoom: normal; pointer-events: auto; }
 :root[data-tl-edit] #tl-editor {
-  position: fixed; z-index: 44;
+  position: fixed; z-index: var(--z-photo-controls);
   left: var(--safe-l); right: var(--safe-r); bottom: var(--safe-b); margin-inline: auto;
   width: max-content; max-width: min(var(--safe-w), calc(100vw - 16px));
   max-height: 45dvh; overflow-y: auto; overscroll-behavior: contain;

@@ -66,7 +66,7 @@
   --text: var(--hud-ink-light); --dim: #9a9aa8;
   color: var(--text);
   background: rgba(20, 20, 30, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255,255,255,0.25);
   border-radius: 50%;
   --control-base: var(--btn); width: var(--btn); height: var(--btn);
   font-size: max(var(--fs-micro), var(--touch-label-floor));
@@ -227,7 +227,7 @@
    olive/sage arithmetic above AND dropped the dark labels toward 2:1. */
 #btn-ot    { right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab));
              background: rgba(251, 241, 186, 0.82); border-color: rgba(255, 251, 220, 0.75); color: #3a3208; }
-#btn-ot.armed { background: rgba(255, 210, 26, 1); color: #2b2400; border-color: #ffe98a;
+#btn-ot.armed { background: #ffd21a; color: #2b2400; border-color: #ffe98a;
                 box-shadow: 0 0 20px rgba(250, 195, 20, 0.85); animation: pulse 0.8s infinite;
                 opacity: 1; }
 #btn-ot.on { background: rgba(122, 88, 0, 0.96); color: #ffeeae; border-color: #f0c419;
@@ -260,9 +260,9 @@
    An outside ring costs no layout (box-shadow draws outside the border box and
    does not reflow the dock) and reads at a glance in peripheral vision, which
    is all a driver has to spare. */
-.touchbtn[data-touch-feedback="on"]:not([aria-pressed]), .touchbtn[data-slid="on"], .touchbtn:active { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.55), 0 0 14px 4px rgba(255, 255, 255, 0.25); }
+.touchbtn[data-touch-feedback="on"]:not([aria-pressed]), .touchbtn[data-slid="on"], .touchbtn:active { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.55), 0 0 14px 4px rgba(255,255,255,0.25); }
 @media (prefers-reduced-transparency: reduce) {
-  .touchbtn[data-touch-feedback="on"]:not([aria-pressed]), .touchbtn[data-slid="on"], .touchbtn:active { box-shadow: 0 0 0 3px #fff; }
+  .touchbtn[data-touch-feedback="on"]:not([aria-pressed]), .touchbtn[data-slid="on"], .touchbtn:active { box-shadow: 0 0 0 3px var(--ink-on-accent); }
 }
 
 /* WHERE THE FINGER LANDED, in TOUCH mode. Drag-to-steer is an invisible
@@ -285,7 +285,7 @@
 /* The iOS install nudge. A banner, not a modal: it must never stand between a
    player and the RACE button, and it is gone for good once dismissed. */
 #ios-install {
-  position: fixed; z-index: 40; left: var(--safe-l); right: var(--safe-r);
+  position: fixed; z-index: var(--z-dock); left: var(--safe-l); right: var(--safe-r);
   bottom: var(--safe-b); margin: 0 auto; max-width: 30rem;
   display: flex; align-items: center; gap: var(--gap);
   padding: var(--gap); border-radius: 10px;
@@ -1069,7 +1069,7 @@ body.hud-hidden #hud-restore::after {
      picker overlapped #pausebtn by 8px on touch. */
   top: calc(8px + var(--tap-hud) + var(--sat));
   right: calc(10px + var(--hud-chrome-h) + var(--hud-chrome-gap) + var(--sar));
-  z-index: 24;
+  z-index: var(--z-transport);
   display: flex; flex-wrap: wrap;
   --balance-basis: 84px; --balance-min: 84px;
   width: min(360px, calc(100vw - var(--sal) - var(--sar) - 20px));
@@ -1139,7 +1139,7 @@ body[data-density="compact"] #campicker {
    card is ~150 px tall, so it fits 844x390 landscape. */
 body[data-retired-wait] .dock-grp, body[data-retired-wait] .touchbtn { display: none !important; }
 #retired-card {
-  position: fixed; z-index: 30; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  position: fixed; z-index: var(--z-peek); left: 50%; top: 50%; transform: translate(-50%, -50%);
   box-sizing: border-box; max-width: calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right));
   display: flex; flex-direction: column; align-items: center; gap: var(--gap);
   padding: var(--gap) calc(var(--gap) * 2); border-radius: 12px; background: var(--panel); color: var(--text);
