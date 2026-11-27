@@ -846,6 +846,20 @@ interface GameCtx {
   /** Arc position wrapped into [0, track.total). */
   readonly wrapS: (s: number) => number;
   readonly quitToMenu: (then?: () => void) => void;
+  /** LEARN's drill host (js/learn-drills/registry.js create), made on first call; LAZY_LEARN must be loaded.
+   *  __apex.drill* (js/agent/apex-drill.js) and the LEARN door's launch both go through it. */
+  readonly drills: () => DrillHost;
+}
+
+/** What DrillRegistry.create returns: one drill at a time, launched from the menu. */
+interface DrillHost {
+  launch(id: string): boolean;
+  begin(): boolean;
+  end(reason?: string): boolean;
+  retry(): boolean;
+  active(): { id: string; staging: boolean } | null;
+  guide(): Opaque | null;
+  state(): { id: string; staging: boolean } | null;
 }
 
 // ── Module.create(G) ─────────────────────────────────────────────────────────

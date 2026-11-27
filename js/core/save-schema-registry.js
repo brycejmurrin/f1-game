@@ -236,7 +236,8 @@ const SaveSchemaRegistry = (function () {
     "inputGhost.v1": entry("js/car/input-ghost.js", "json", 1, "json"),
     lastSession: entry("js/ui/share-code.js", "json", 1, "json"),
     logLevel: entry("js/core/log.js", "raw", 1, "rawScalar"),
-    photoBackground: entry("js/ui/photo-studio.js", "raw", 1, "string"),
+    photoBackground: entry("js/ui/photo-studio.js", "raw", 1, "string"),   // landscape slot (the original key)
+    photoBackgroundPortrait: entry("js/ui/photo-studio.js", "raw", 1, "string"),
     photoDepthFocus: entry("js/ui/photo-studio-ui.js", "raw", 1, "rawScalar"),   // Photo Studio opt-in depth focus ("1" on)
     photoDock: entry("js/ui/photo-studio-ui.js", "raw", 1, "rawScalar"),   // #7017 "top" | "bottom"
     rendezvous: entry("js/net/rendezvous.js", "raw", 1, "rawScalar"),

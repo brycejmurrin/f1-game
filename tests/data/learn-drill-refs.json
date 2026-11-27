@@ -1,5 +1,5 @@
 {
-  "_doc": "LEARN drill medal references (#6559 §1e rule 4): one block per drill, from VM rollouts, then re-tuned from Bryce's phone runs. Each block names its generator; tests/unit/drill-aero-vm.test.mjs pins the Aero block.",
+  "_doc": "LEARN drill medal references (#6559 §1e rule 4): one block per drill, from VM rollouts, then re-tuned from Bryce's phone runs. Each block names its generator; tests/unit/drill-aero-medals-vm.test.mjs pins the Aero block.",
   "aero": {
     "how": "node tests/helpers/learn-drill-vm.mjs --write: 20 runs of the Monza Aero drill (24 m start, Classic dirty air), one boot, RETRY between runs, throttle duty 1.00 down to 0.05, no steering",
     "metric": "metres closed = start gap - nearest gap reached (js/ui/learn-door.js scoreAero)",

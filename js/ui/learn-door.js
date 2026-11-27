@@ -225,7 +225,7 @@ const LearnDoor = (function () {
   }
 
   // The Aero Lab's medal tiers, in metres closed on the rival (the best approach from the 24 m start). Derived from
-  // 20 VM runs (tests/data/learn-drill-refs.json, pinned by tests/unit/drill-aero-vm.test.mjs): bronze is their median,
+  // 20 VM runs (tests/data/learn-drill-refs.json, pinned by tests/unit/drill-aero-medals-vm.test.mjs): bronze is their median,
   // silver the furthest a run got before it dropped out of the wake, gold the shortest clean finish in the wake.
   const AERO_MEDALS = Object.freeze({ bronze: 7.1, silver: 9.2, gold: 15.8, goldClean: true });
 

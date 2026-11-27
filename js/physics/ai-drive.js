@@ -733,6 +733,7 @@ const AiDrive = (function () {
   // CLEAR ROAD TAKES THE LINE (#5330): the grid home lane (up to 0.78 half-width) cost
   // a lone car up to ~2 % (rho 0.79 with lanes, 0.99 without). laneClear damps 0..1
   // toward 1 when clear, 0 in traffic; game.js lifts the line weight by it.
+  // A chaser is traffic only inside 0.25 s (game.js, #6575): any chaser in 34 m held a train on home lanes, P10 +3.1 %.
   const LANE_CLEAR_IN = 0.5, LANE_CLEAR_OUT = 2.5;   // 1/s: ~2 s to settle on the line, ~0.4 s back to the lane
   function laneClear(w, clear, dt) {
     const c = w > 0 ? w : 0;

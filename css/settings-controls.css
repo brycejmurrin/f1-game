@@ -169,6 +169,7 @@
   letter-spacing: var(--ls-2);
   white-space: nowrap;
 }
+#pmsettings-inner :is(#pm-keys, #pm-pad) .set-row > div > button[hidden] { display: none; }
 #pmsettings-inner :is(#pm-keys, #pm-pad) .set-row > div > button[data-armed] {
   border-color: var(--red);
   background: var(--plate-on);

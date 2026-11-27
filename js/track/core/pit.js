@@ -232,6 +232,10 @@ const TrackPit = (function () {
     // anchor never binds), so closing the tail by X moves the row back by X and
     // the room to do it is `lenM - ROW_END - span - grow - 20`. Cap the pullback
     // there and no circuit can lose a bay to it, by construction.
+    // An authored `def.pit.exitM` wins (vegas #6922: T17 runs to the line, so
+    // the end-pinned row started in the bend; a longer exit slides it out).
+    const aE = ((track.def || {}).pit || {}).exitM;
+    if (aE > 0) return { entryM, exitM: Math.min(aE, cap * 0.3) };
     const fwd = straightRun(track, curvature, 0, 1, EXIT_M + ROAD_MIN);
     let exitM = Math.min(EXIT_M, cap * 0.3, Math.max(EXIT_MIN, fwd - ROAD_MIN));
     // What the exit road and the merge look like for a candidate exit line.

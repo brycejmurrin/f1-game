@@ -8,7 +8,7 @@
       "name": "atmosphere",
       "group": "perceive",
       "signature": "atmosphere()",
-      "summary": "WHAT IS THE LIGHT DOING — day/night, sun or moon, floodlights, fog visibility, wet road. Raw values kept for measurement"
+      "summary": "WHAT IS THE LIGHT DOING — day/night, sun/moon, floodlights, fog, wet road"
     },
     {
       "name": "awaitPresent",
@@ -62,13 +62,13 @@
       "name": "perf",
       "group": "know",
       "signature": "perf()",
-      "summary": "GOVERNOR SNAPSHOT — scale/fps/tier/autoTier/autoShed/userTier/strikes (alias of renderScale report)"
+      "summary": "GOVERNOR SNAPSHOT — scale/fps/tier/strikes (renderScale report alias)"
     },
     {
       "name": "spatialUpscale",
       "group": "know",
       "signature": "spatialUpscale(0|1)",
-      "summary": "GLX/WGX/TLX SGSR1 (flag OFF by default). active only when on AND renderScale<~1; see UPSCALING-2026-09 §6–7"
+      "summary": "SGSR1 upscale (OFF by default); active only when on AND renderScale<~1"
     },
     {
       "name": "survey",
@@ -80,7 +80,7 @@
       "name": "trackInfo",
       "group": "know",
       "signature": "trackInfo({what})",
-      "summary": "STATIC substrate — corners|sectors|profile|all. Fetch ONCE. Corners carry radius, apexSpeedKph, straightAfterM/exitsOntoStraight (no line), plus bankingDeg/camber,…"
+      "summary": "STATIC substrate — corners|sectors|profile|all. Fetch ONCE. Corners carry radius, apexSpeedKph, exitsOntoStraight, banking, gradient, kerbs"
     },
     {
       "name": "ersPlan",
@@ -92,7 +92,7 @@
       "name": "objective",
       "group": "act",
       "signature": "objective()",
-      "summary": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints; read once"
+      "summary": "WHAT AM I TRYING TO DO — win condition, trade-offs, hard constraints; read once"
     },
     {
       "name": "rollout",
@@ -110,7 +110,7 @@
       "name": "ego.clearLeftM/RightM",
       "group": "fields",
       "signature": "ego.clearLeftM/RightM",
-      "summary": "metres to the barrier each side; small = no room to defend"
+      "summary": "metres to the barrier each side"
     },
     {
       "name": "ego.headingErrDeg",
@@ -128,19 +128,19 @@
       "name": "ego.onTrack",
       "group": "fields",
       "signature": "ego.onTrack",
-      "summary": "false means you are on grass — grip is gone, straighten first"
+      "summary": "false = on grass, grip gone"
     },
     {
       "name": "episodeId",
       "group": "fields",
       "signature": "episodeId",
-      "summary": "view-local episode counter; reset increments it and clears the delta baseline"
+      "summary": "episode counter; reset increments it, clears the delta baseline"
     },
     {
       "name": "nextCorner.apexSpeedKph",
       "group": "fields",
       "signature": "nextCorner.apexSpeedKph",
-      "summary": "roughly the fastest you can be at the apex and still hold it"
+      "summary": "about the fastest you can hold at the apex"
     },
     {
       "name": "nextCorner.exitsOntoStraight",
@@ -158,19 +158,19 @@
       "name": "pacenotes",
       "group": "fields",
       "signature": "pacenotes",
-      "summary": "the road ahead as a co-driver call: dir + severity 1-6 @ distance"
+      "summary": "co-driver call: dir + severity 1-6 @ distance"
     },
     {
       "name": "rivals[].closingMps",
       "group": "fields",
       "signature": "rivals[].closingMps",
-      "summary": "+ = the gap is shrinking, whichever side they are on"
+      "summary": "+ = the gap is shrinking"
     },
     {
       "name": "rivals[].pace",
       "group": "fields",
       "signature": "rivals[].pace",
-      "summary": "AI skill ~0.92-1.02; a slower car will not hold the position"
+      "summary": "AI skill ~0.92-1.02"
     },
     {
       "name": "session.seed",
@@ -182,7 +182,7 @@
       "name": "terminal.reason",
       "group": "fields",
       "signature": "terminal.reason",
-      "summary": "why the episode ended — retired vs finished vs wrong_way vs rescued"
+      "summary": "why the episode ended"
     },
     {
       "name": "camState",
@@ -494,7 +494,7 @@
       "name": "lean default, pull detail",
       "group": "model",
       "signature": "lean default, pull detail",
-      "summary": "the world is stored in FULL but never dumped; pull with describe(id)/query() where a decision needs it"
+      "summary": "the world is stored FULL, never dumped; pull with describe(id)/query() as needed"
     },
     {
       "name": "per tick",
@@ -805,6 +805,7 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drill-aero-medals-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
@@ -849,6 +850,7 @@
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/player-dynamics-shipped-vm.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
+        "tests/unit/pocket-weekend.test.mjs",
         "tests/unit/quali-absolute-parity-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/quali-pace-parity-vm.test.mjs",
@@ -940,6 +942,7 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drill-aero-medals-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
@@ -983,6 +986,7 @@
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/player-dynamics-shipped-vm.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
+        "tests/unit/pocket-weekend.test.mjs",
         "tests/unit/quali-absolute-parity-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/quali-pace-parity-vm.test.mjs",
@@ -1044,7 +1048,6 @@
         "tests/unit/collisions-deep-vm.test.mjs",
         "tests/unit/collisions-vm.test.mjs",
         "tests/unit/curvature-contract-vm.test.mjs",
-        "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/episode-transients.test.mjs",
         "tests/unit/factory-parts-pace-vm.test.mjs",
         "tests/unit/game-flow-5100-vm.test.mjs",
@@ -1111,6 +1114,8 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drill-aero-medals-vm.test.mjs",
+        "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/lap-retry-vm.test.mjs",
@@ -1131,6 +1136,7 @@
         "tests/unit/physics-oracle.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
+        "tests/unit/pocket-weekend.test.mjs",
         "tests/unit/quali-absolute-parity-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/race-flow-vm.test.mjs",
@@ -1743,6 +1749,7 @@
         "tests/unit/input-coarse-switch-vm.test.mjs",
         "tests/unit/input-hud-properties.test.mjs",
         "tests/unit/key-binds-calibration.test.mjs",
+        "tests/unit/key-binds-clear-slot.test.mjs",
         "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/key-binds-ownership.test.mjs",
         "tests/unit/key-binds-pad-menu.test.mjs",
@@ -2257,6 +2264,11 @@
       "roster": "LAZY_AGENT"
     },
     {
+      "path": "js/agent/apex-drill.js",
+      "global": "ApexDrill",
+      "roster": "LAZY_AGENT"
+    },
+    {
       "path": "js/agent/apex-gpu-capture.js",
       "global": "ApexGpuCapture",
       "roster": "LAZY_AGENT"
@@ -2404,7 +2416,7 @@
     {
       "path": "js/camera/cam-avoid.js",
       "global": "CamAvoid",
-      "roster": "tag"
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/camera/cam-comfort.js",
@@ -2449,7 +2461,7 @@
     {
       "path": "js/camera/extra-rigs.js",
       "global": "ExtraRigs",
-      "roster": "tag"
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/camera/feel.js",
@@ -2534,7 +2546,7 @@
     {
       "path": "js/camera/trackside.js",
       "global": "TracksideCams",
-      "roster": "tag"
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/camera/tuner-panel.js",

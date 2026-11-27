@@ -26,6 +26,20 @@ test("manifest keeps session-stub on FULL and pit-lane in LAZY_RACE_SESSION", ()
     "the coach façade stays FULL; its body and helmet optics load once with the race session");
 });
 
+test("camera rig modules ride the race session, not the shell", () => {
+  const m = require("../../tools/manifest.cjs");
+  const lb = src("js/core/lazy-bundles.js");
+  const rigs = { "js/camera/extra-rigs.js": "ExtraRigs", "js/camera/trackside.js": "TracksideCams", "js/camera/cam-avoid.js": "CamAvoid" };
+  const files = Object.keys(rigs);
+  const row = (f) => lb.includes('"' + f + '": () => typeof ' + rigs[f] + ' !== "undefined"');
+  const state = {
+    inFull: files.filter((f) => m.FULL.includes(f)),
+    inSession: files.filter((f) => m.LAZY_RACE_SESSION.includes(f)),
+    readyRows: files.filter(row),
+  };
+  assert.deepEqual(state, { inFull: [], inSession: files, readyRows: files });
+});
+
 test("session stub installs PitLane/Reliability and create() is inert", () => {
   const sb = {
     console,
