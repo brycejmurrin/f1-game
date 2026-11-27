@@ -326,7 +326,7 @@ const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
         WT_LONG, DOWNFORCE, X_OPEN_RATE, X_CLOSE_RATE,
         X_MIN_SPEED, OT_MIN_SPEED, OFF_GRIP, ASSIST_KUS, LINE_PURSUIT,
         LONG_GRIP, GRASS_V, KERB_SHAKE, KERB_CUE_HOLD,
-        DEPLOY_A, TAPER_LO, TAPER_HI, TAPER_FLOOR, REGEN_FULL_V,
+        DEPLOY_A,
         OT_GAP, GEARS, GEAR_TOP, IDLE_RPM, MAX_RPM, DIFF, BAND_CEIL,
         TOW_RANGE, TOW_FADE, TOW_HALF_W } = PhysicsConsts;
 // X_VMAX_GAIN_*/X_DF_LOSS_*/X_COAST_CUT_*/DRAIN_*/REGEN_LO|HI/OT_TIME_* now
@@ -353,7 +353,7 @@ const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
 const driveTune = DriveTune.create(SteerTuning.defaultPace);
 const {
   vTop, vStd, aStd, xVmaxGain, paceRef, xCoastCut, xDfLoss,
-  isErsDeploying, drainFor, regenFor, otTimeFor, aeroDfMult, gearHi, rpmFor,
+  isErsDeploying, drainFor, regenFor, otTimeFor, deployTaper, regenSpeedK, aeroDfMult, gearHi, rpmFor,
 } = PaceMath.create({
   getPACE: () => driveTune.PACE,
   getVMAX: () => VMAX,
@@ -497,23 +497,7 @@ function frenetH(s, x) {
   if (!(cLen > 1e-4)) return 1;
   return clamp(Math.hypot(ox, oz) / cLen, 0.45, 1.8);
 }
-// Deploy strength 0..1 for a car holding BOOST (or running OVERTAKE). The taper
-// makes deploy strongest out of slow corners, but it is FLOORED: it used to
-// reach exactly 0 above TAPER_HI, which is only 191 km/h, so on any straight
-// BOOST produced no thrust — and because the drain was gated on `deploy > 0`,
-// it also cost nothing. Holding BOOST at speed did literally nothing, while
-// OVERTAKE (which bypasses the taper) worked and drained. Real ERS deploys all
-// the way down the straight; so does this now, at reduced strength.
-function deployTaper(c) {
-  if (c.otT > 0) return 1;
-  const t = clamp(1 - (vStd(c.speed) - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
-  return TAPER_FLOOR + (1 - TAPER_FLOOR) * t;
-}
-// isErsDeploying / drainFor / regenFor / otTimeFor: js/race/pace-math.js
-// Recovery is kinetic: it needs the car moving. Full rate from REGEN_FULL_V (a
-// standard-pace speed, so driveTune.PACE does not move it) down to nothing at a stop, so
-// braking or coasting in the pit box cannot refill the battery (it took ~10 s).
-function regenSpeedK(c) { return clamp(vStd(c.speed) / REGEN_FULL_V, 0, 1); }   // reversing (the brake-held crawl) recovers nothing either
+// isErsDeploying / drainFor / regenFor / otTimeFor / deployTaper / regenSpeedK: js/race/pace-math.js
 
 let /** @type {ReturnType<typeof AeroZones.create> | null} */ aeroZ = null;   // AeroZones.create(G), assigned once G exists (below)
 // -- ACTIVE AERO: ACTIVATION ZONES -------------------------------------------
