@@ -39,6 +39,23 @@ const DrillRegistry = (function () {
   /** The named variant, else the drill's first; a drill with none runs as "classic". */
   const variantOf = (d, id) => (d.variants || []).find(v => v.id === id) || (d.variants || [])[0] || { id: "classic" };
 
+  /** The drills' read of the player's car: the __apex.physState() fields a drill uses (js/agent/apex.js), with its
+   *  rounding, built from G alone so a scored drill runs on a build without the agent surface (#7342). axFrac is
+   *  AgentView.slipBudget's (player-forces' stored share, the axEstSm estimate before the first tick). Pinned equal to
+   *  __apex.physState() by tests/unit/drill-grip-vm.test.mjs. Read-only; no curvature, no racing line. */
+  function physOf(G) {
+    const p = G.player;
+    if (!p || p.px == null) return null;
+    if (!G.track) return { error: "no track" };
+    const axFrac = p.axFrac ?? Math.min(1, Math.abs(p.axEstSm ?? 0) / (G.LONG_GRIP * G.gripMult()));
+    return {
+      prog: p.prog, speed: p.speed, yawRate: p.yawRateCur || 0,
+      slipDeg: Math.atan2(p.vLat || 0, Math.max(1, p.speed)) * 180 / Math.PI, wrongWay: !!p.wrongWay,
+      axEstSm: +(p.axEstSm ?? 0).toFixed(2), axFrac: +axFrac.toFixed(3),
+      frontUtil: p.frontUtil || 0, rearUtil: p.rearUtil || 0, wheelLock: p.wheelLock || 0, brakeStab: p.brakeStab ?? 1, brakeDemand: p.brakeDemand || 0,
+    };
+  }
+
   /** hooks: { retry() (the coach's RETRY LAP), setDirtyAir(level) (raceDirtyAir is a game.js let), insights() (the
    *  coach's RaceInsights), reopenLesson?(lesson, result) (default LearnDoor.reopen) }. The host builds the DrillPort
    *  (types/game-ctx.d.ts) a drill's begin() and guide() get: G's own members plus the host's retry, never all of G. */
@@ -49,7 +66,8 @@ const DrillRegistry = (function () {
       goRolling: () => G.goRolling(),
       retry: () => retry(),
       rerun: (variant) => rerun(variant),   // a variant chip: that variant's run from the checkpoint
-      physState: () => (typeof window !== "undefined" && window.__apex ? window.__apex.physState() : null),   // null while LAZY_AGENT is absent
+      physState: () => physOf(G),   // the player's car, read here: __apex is LAZY_AGENT, absent on a player's Pages build (#7342)
+      variant: () => (current ? current.variant : null),   // the variant being run and scored (rerun() moves it, the card's NEXT included)
       announce: (msg, dur, kind) => G.announce(msg, dur, kind),
       store: G.store,
     });
@@ -215,6 +233,6 @@ const DrillRegistry = (function () {
     };
   }
 
-  return { define, get, ids, forLesson, create };
+  return { define, get, ids, forLesson, create, physOf };
 })();
 Object.freeze(DrillRegistry);
