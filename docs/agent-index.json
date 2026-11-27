@@ -810,6 +810,7 @@
         "tests/unit/drill-aero-medals-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drill-fork-vm.test.mjs",
+        "tests/unit/drill-harvest-vm.test.mjs",
         "tests/unit/drill-lines-vm.test.mjs",
         "tests/unit/drill-taper-vm.test.mjs",
         "tests/unit/drill-tyre-heat-vm.test.mjs",
@@ -957,6 +958,7 @@
         "tests/unit/drill-aero-medals-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drill-fork-vm.test.mjs",
+        "tests/unit/drill-harvest-vm.test.mjs",
         "tests/unit/drill-lines-vm.test.mjs",
         "tests/unit/drill-taper-vm.test.mjs",
         "tests/unit/drill-tyre-heat-vm.test.mjs",
@@ -1141,6 +1143,7 @@
         "tests/unit/drill-aero-medals-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drill-fork-vm.test.mjs",
+        "tests/unit/drill-harvest-vm.test.mjs",
         "tests/unit/drill-lines-vm.test.mjs",
         "tests/unit/drill-taper-vm.test.mjs",
         "tests/unit/drill-tyre-heat-vm.test.mjs",
@@ -3929,6 +3932,11 @@
     {
       "path": "js/learn-drills/drill-card.js",
       "global": "DrillCard",
+      "roster": "LAZY_LEARN"
+    },
+    {
+      "path": "js/learn-drills/harvest.js",
+      "global": "HarvestDrill",
       "roster": "LAZY_LEARN"
     },
     {

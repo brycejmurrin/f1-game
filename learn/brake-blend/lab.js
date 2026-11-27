@@ -124,4 +124,28 @@
       };
     }
   });
+  // TRY IT IN THE CAR: the Harvest Stop drill (js/learn-drills/harvest.js), only inside the game's LEARN frame. BACK TO
+  // LESSON posts the last run here (js/ui/learn-door.js reopen()).
+  if (typeof window !== "undefined" && window.frameElement?.id === "learn-lab") {
+    const lab = document.getElementById("lab");
+    const launch = document.createElement("button");
+    launch.type = "button";
+    launch.id = "launch-harvest-drill";
+    launch.textContent = "Try it in the car: Harvest Stop";
+    launch.addEventListener("click", () => window.parent.postMessage({type: "apex-learn-scenario", id: "harvest"}, window.location.origin));
+    const result = document.createElement("p");
+    result.id = "harvest-drill-result";
+    result.setAttribute("role", "status");
+    result.hidden = true;
+    lab.append(launch, result);
+    window.addEventListener("message", event => {
+      const data = event.data;
+      if (event.origin !== window.location.origin || event.source !== window.parent || data?.type !== "apex-learn-result" ||
+          data.id !== "harvest" || !data.result) return;
+      const r = data.result, medal = r.medal ? r.medal.toUpperCase() : "No medal";
+      result.textContent = "Your last drill: " + medal + " · stop accuracy " + Number(r.value).toFixed(1) + " %"
+        + (Number.isFinite(r.best) ? " (best " + r.best.toFixed(1) + ")" : "") + ". " + (r.verdict || "");
+      result.hidden = false;
+    });
+  }
 })();
