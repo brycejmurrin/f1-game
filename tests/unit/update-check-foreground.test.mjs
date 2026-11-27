@@ -10,13 +10,14 @@ const source = fs.readFileSync(new URL('../../js/ui/update-check.js', import.met
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 function harness({ build = 105, registration, fail = false } = {}) {
   let clock = 1e6, calls = 0;
+  const timers = [];
   const sb = vm.createContext({ Promise, Number, Date, Object, AbortController,
-    setTimeout: () => 1, clearTimeout() {}, setInterval: () => 1, clearInterval() {}, navigator: {} });
+    setTimeout: (f) => { timers.push(f); return 1; }, clearTimeout() {}, setInterval: () => 1, clearInterval() {}, navigator: {} });
   vm.runInContext(source + ';globalThis.U = UpdateCheck;', sb, { filename: absSrc('js/ui/update-check.js') });
   const chip = { hidden: true, setAttribute() {}, textContent: '' };
   const api = sb.U.create({ booted: 100, now: () => clock, guardOk: () => true, chip: () => chip, registration,
     fetch: () => { calls++; return fail ? Promise.reject(Error('offline')) : Promise.resolve({ ok: true, json: async () => ({ build }) }); } });
-  return { U: sb.U, api, chip, calls: () => calls, advance(ms) { clock += ms; } };
+  return { U: sb.U, api, chip, timers, calls: () => calls, advance(ms) { clock += ms; } };
 }
 function fakeRegistration() {
   const reg = { updates: 0, chipAtUpdate: null, update() { this.updates++; return Promise.resolve(); } };
@@ -112,4 +113,24 @@ test('L2: focus + visibilitychange together read version.json once; the throttle
   h.advance(10 * 60 * 1000); win.fire('focus'); await flush();
   assert.equal(h.calls(), 2, 'a long-foregrounded app polls again on focus');
   h.api.stop();
+});
+
+// #7075 17a: an uncontrolled first visit reads version.json at idle, so a lazy load finds it settled.
+test('17a: listen() forces a deferred read when the last one is stale and no worker controls the tab', async () => {
+  const h = harness();
+  h.U.listen(h.api, target(), target());
+  assert.equal(h.calls(), 0, 'deferred, not run at boot');
+  h.advance(61000);
+  h.timers[0]();
+  await flush();
+  assert.equal(h.calls(), 1);
+});
+
+test('17a: the build-mixing guard stays: a newer build seen at idle still blocks lazy loads', async () => {
+  const h = harness({ build: 106 });
+  h.U.listen(h.api, target(), target());
+  h.advance(61000);
+  h.timers[0]();
+  await flush();
+  assert.equal(h.U.blocksLazyLoad(), true);
 });
