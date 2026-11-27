@@ -326,7 +326,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   /* plate fill + line come from the button base; the pill radius is ours */
   border-radius: var(--r-pill);
   color: var(--text);
-  transition: background 0.12s, color 0.12s;
+  transition: background var(--dur-1), color var(--dur-1);
   /* wraps rather than truncates: at rail width a column is ~100px and the
      longest label needs two lines. Grid rows stretch, so both cells match. */
   white-space: normal; text-align: center; line-height: 1.15;
