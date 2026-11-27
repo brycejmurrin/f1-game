@@ -128,33 +128,27 @@ const NetRendezvous = (function () {
   async function call(path, opts) {
     const base = baseUrl();
     if (!base) return NO_URL();
-    const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timer = setTimeout(() => { if (ctrl) ctrl.abort(); }, FETCH_TIMEOUT_MS);
     try {
-      const res = await fetch(base + path, Object.assign({
-        cache: "no-store",
-        signal: ctrl ? ctrl.signal : undefined,
-      }, opts));
-      const protocol = res.headers && res.headers.get("x-apex-rendezvous");
-      if (res.status === 426 || (res.status === 404 && protocol !== PRIVATE_PROTOCOL)) return protocolError();
-      if (res.status === 404) return ERR("not_found", "Nobody is waiting on that code.");
-      if (res.status === 409) return ERR("taken", "That code is already in use — make a new one.");
-      if (res.status === 429) return ERR("rate_limited", "The room service is busy. Wait a minute or use the invite link.");
-      if (!res.ok) return ERR("relay", "The room service is not answering. Use the invite link instead.");
-      const text = await res.text();
-      let body = null;
-      // A captive portal or proxy answers 200 with HTML: that is not "offline"
-      // (which spends the poll's retries on it) — this network is intercepting.
-      try { body = text ? JSON.parse(text) : null; }
-      catch (e) { return ERR("relay", "The room service answered with something unexpected — this network may be intercepting it. Use the invite link instead."); }
-      if (protocol !== PRIVATE_PROTOCOL) return protocolError();
-      return { ok: true, body };
+      return await NetBytes.fetchBounded(base + path, Object.assign({ cache: "no-store" }, opts), FETCH_TIMEOUT_MS, async (res) => {
+        const protocol = res.headers && res.headers.get("x-apex-rendezvous");
+        if (res.status === 426 || (res.status === 404 && protocol !== PRIVATE_PROTOCOL)) return protocolError();
+        if (res.status === 404) return ERR("not_found", "Nobody is waiting on that code.");
+        if (res.status === 409) return ERR("taken", "That code is already in use — make a new one.");
+        if (res.status === 429) return ERR("rate_limited", "The room service is busy. Wait a minute or use the invite link.");
+        if (!res.ok) return ERR("relay", "The room service is not answering. Use the invite link instead.");
+        const text = await res.text();
+        let body = null;
+        // A captive portal or proxy answers 200 with HTML: that is not "offline"
+        // (which spends the poll's retries on it) — this network is intercepting.
+        try { body = text ? JSON.parse(text) : null; }
+        catch (e) { return ERR("relay", "The room service answered with something unexpected — this network may be intercepting it. Use the invite link instead."); }
+        if (protocol !== PRIVATE_PROTOCOL) return protocolError();
+        return { ok: true, body };
+      });
     } catch (e) {
       const aborted = e && e.name === "AbortError";
       return ERR(aborted ? "timeout" : "offline",
         aborted ? "The room service timed out." : "Could not reach the room service.");
-    } finally {
-      clearTimeout(timer);
     }
   }
 
@@ -223,7 +217,7 @@ const NetRendezvous = (function () {
       { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0),
         info: enc().encode("apex26-rendezvous-v" + PROTOCOL + "/topic|" + String(slot || "")) },
       await keyFor(code), TOPIC_BYTES * 8);
-    return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    return NetBytes.bytesToHexLower(new Uint8Array(bits));
   }
 
   // Routing and encryption share only a high-entropy secret held by the peers.
@@ -234,7 +228,7 @@ const NetRendezvous = (function () {
     const bits = await crypto.subtle.deriveBits(
       { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0),
         info: enc().encode("apex26-rendezvous-private-v3/room") }, await keyFor(code), 256);
-    return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    return NetBytes.bytesToHexLower(new Uint8Array(bits));
   }
 
   const aad = (slot) => enc().encode(String(slot || ""));
