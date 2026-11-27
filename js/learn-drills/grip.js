@@ -73,8 +73,8 @@ const GripDrill = (function () {
   function score(G, last, acc, variant) {
     const rim = acc.zoneS > 0 ? acc.rimS / acc.zoneS : 0, value = +(100 * rim).toFixed(1);
     const clean = !!last.clean && !acc.fail, reason = acc.fail || last.reason || "";
-    const AO = typeof AppearanceOpts !== "undefined" ? AppearanceOpts : null;   // RaceInsights' own speed display
-    const kmh = v => { const k = G.dashKph ? G.dashKph(Math.abs(v)) : Math.abs(v) * 3.6; return (AO ? AO.speed(k) : Math.round(k)) + (AO && AO.units() === "mph" ? " mph" : " km/h"); };
+    // AppearanceOpts and PhysicsConsts are eager; a score runs only inside a booted race, so neither is guarded.
+    const kmh = v => { const k = G.dashKph ? G.dashKph(Math.abs(v)) : Math.abs(v) * 3.6; return AppearanceOpts.speed(k) + (AppearanceOpts.units() === "mph" ? " mph" : " km/h"); };
     // v^2/2a at the hardest deceleration the car produced: what the stop to the slowest point WOULD have taken.
     const used = acc.vMinAt != null ? acc.vMinAt - acc.brakeAt : 0;
     const ideal = acc.peak > 1 && acc.brakeV > acc.vMin ? (acc.brakeV ** 2 - acc.vMin ** 2) / (2 * acc.peak) : used;
@@ -88,7 +88,7 @@ const GripDrill = (function () {
       value, unit: "%", better: "high", clean, reason, gateS: +(last.seconds || 0).toFixed(2),
       metrics: [
         [name + " rim use", value.toFixed(0), "%"],
-        ["Peak decel", acc.peak.toFixed(0) + " of " + (typeof PhysicsConsts !== "undefined" ? PhysicsConsts.LONG_GRIP : 34), "m/s²"],
+        ["Peak decel", acc.peak.toFixed(0) + " of " + PhysicsConsts.LONG_GRIP, "m/s²"],
         ["Braking slack", slack.toFixed(0), "m"],
         ["Gate time", (last.seconds || 0).toFixed(2), "s"],
         ["Exit", kmh(acc.vGate || 0), ""],

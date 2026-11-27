@@ -6,6 +6,7 @@
     }
   },
   "tree": {
-    "eagerCodeBytes": 690
+    "eagerCodeBytes": 690,
+    "typeofGuards": 2
   }
 }
