@@ -1,5 +1,12 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-27 — PR #7284 (claude/ui-shape-7259): one UiShape module for the phone / screen-shape predicates (#7259)
+
+`(tree) eagerScripts` +1 and `(tree) eagerCodeBytes` +195. Deliberate raise, which needs a `ratchet-raise` label (D-042);
+`eagerScripts` has no absorb. `js/ui/ui-shape.js` is eager by design (the issue, decision 7234-P3 B): scale.js,
+hud-layout.js, screen-placement.js and sheet-shape.js read it on the first frame, so there is no lazy home. It replaces the
+per-file copies of the touch / ≤500 px rule; no behaviour change. Fragment: `ratchets.d/claude--ui-shape-7259.json`.
+Human step: `ratchet-raise`.
 ## 2026-11-27 — PR #7278 (claude/ai-pace-stage-7258): AiPace, the AI-only vmax stages of updateCar (#7258)
 
 `(tree) eagerScripts` 292 → **293** (+1) and `eagerCodeBytes` +638: `js/physics/ai-pace.js` is a new pure module (Bryce's

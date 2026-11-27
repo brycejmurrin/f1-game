@@ -435,7 +435,7 @@ test("a cold menu restores saved placement separately and loads the picker only 
     const context = vm.createContext({
       window: {}, document: dom.document, location: { search: "" }, URLSearchParams,
       queueMicrotask, requestAnimationFrame: fn => fn(), MutationObserver: class { observe() {} },
-      Log: { info() {}, warn() {} }, LayoutPresets: {},
+      Log: { info() {}, warn() {} }, LayoutPresets: {}, UiShape: { orientation: () => "landscape", orientationMedia: null },
       GameStore: { store: { get: () => customized ? { v: 1, screens: {} } : null, subscribe() {} } },
       ApexRoster: { LAZY_UI_PRESETS: modules, LAZY_UI_PRESETS_EDGES: [[placement[0], picker]] }
     });

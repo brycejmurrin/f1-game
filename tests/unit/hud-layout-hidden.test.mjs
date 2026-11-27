@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { loadDom } from "../helpers/dom-vm.mjs";
+import { loadUiShape } from "../helpers/ui-shape-load.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CAMG = fs.readFileSync(path.join(ROOT, "js/camera/cam-groups.js"), "utf8");
@@ -57,6 +58,7 @@ function loadHidden({ stored = {}, classes = [], live = false } = {}) {
   loadDom(ctx);
   vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   loadDom(ctx);
+  loadUiShape(ctx);
   vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx, { filename: absSrc("js/ui/hud-layout.js") });
   return { H: ctx.HudLayout, written, els, cls, hud };
 }
@@ -91,6 +93,7 @@ function foldEditor(stored = {}) {
   ctx.window = ctx;
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/setting-row.js"), "utf8"), ctx, { filename: absSrc("js/ui/setting-row.js") });
+  loadUiShape(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/hud-elements.js"), "utf8") + "; this.HudElements = HudElements;", ctx, { filename: absSrc("js/ui/hud-elements.js") });
   loadDom(ctx);
   vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });

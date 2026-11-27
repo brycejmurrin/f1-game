@@ -483,8 +483,7 @@ window.SheetShape = (function () {
     const ratio = hOwn / wOwn;
     const wasShape = b.dataset.shape;
     const onB = tallOn(), offB = onB - TALL_HYST;
-    const nowShape = wasShape === "tall" ? (ratio <= offB ? "wide" : "tall")
-      : (ratio >= onB ? "tall" : "wide");
+    const nowShape = UiShape.sheetShape(wasShape, ratio, onB, offB);
     if (nowShape !== wasShape) {
       b.dataset.shape = nowShape;
       /* TITLE SCROLLERS SWAP ROLES across the flip. Tall phones scroll

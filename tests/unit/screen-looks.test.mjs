@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { cssRules } from "../helpers/css-rules.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadUiShape } from "../helpers/ui-shape-load.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -82,6 +83,7 @@ function boot({ stored = {}, settingsOpen = true, withPause = false, win = null,
   // js/ui/look-avail.js is lazy (LAZY_UI_PRESETS, the first APPEARANCE enter); it repaints the built folds on eval.
   const files = ["js/ui/setting-row.js", ...(withPause ? ["js/ui/pause-opts.js"] : []), "js/ui/screen-looks.js",
     ...(avail ? ["js/ui/look-avail.js"] : [])];
+  loadUiShape(ctx);
   for (const f of files) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   const M = vm.runInContext("ScreenLooks", ctx);
   const P = withPause ? vm.runInContext("PauseOpts", ctx) : null;
@@ -664,7 +666,8 @@ function bootPlacement(durable = true, regions) {
     },
   };
   sb.window = sb;
-  vm.runInNewContext(read("js/ui/screen-placement.js"), sb, { filename: absSrc("js/ui/screen-placement.js") });
+  loadUiShape(sb);
+  loadUiShape(sb); vm.runInNewContext(read("js/ui/screen-placement.js"), sb, { filename: absSrc("js/ui/screen-placement.js") });
   return { model: sb.ScreenPlacement, sheets, media, store };
 }
 
@@ -726,7 +729,7 @@ test("safe-area clamp: an applied region measures, shifts through its own node a
     },
   };
   sb.window = sb;
-  vm.runInNewContext(read("js/ui/screen-placement.js"), sb, { filename: absSrc("js/ui/screen-placement.js") });
+  loadUiShape(sb); vm.runInNewContext(read("js/ui/screen-placement.js"), sb, { filename: absSrc("js/ui/screen-placement.js") });
   const saved = { camera: { x: 3.275, y: 2.326 } };
   sb.ScreenPlacement.save("garage", "landscape", saved);
   const r = node.getBoundingClientRect();

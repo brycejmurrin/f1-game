@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { loadDom } from "../helpers/dom-vm.mjs";
 import { withI18n } from "../helpers/i18n-ctx.mjs";
+import { loadUiShape } from "../helpers/ui-shape-load.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -179,6 +180,7 @@ function layout({ W = 844, H = 390, ins = { "--sal": 47, "--sar": 47, "--sat": 0
   vm.createContext(ctx);
   vm.runInContext(read("js/camera/cam-groups.js"), ctx, { filename: absSrc("js/camera/cam-groups.js") });
   loadDom(ctx);
+  loadUiShape(ctx);
   vm.runInContext(read("js/ui/hud-layout.js").replace(/^const HudLayout\b/m, "var HudLayout"), ctx, { filename: absSrc("js/ui/hud-layout.js") });
   sectors.setAttribute("data-hl-user", ""); sectors.setAttribute("data-hl", "");   // as apply() paints a saved piece
   return { H: vm.runInContext("HudLayout", ctx), sectors, vals };
