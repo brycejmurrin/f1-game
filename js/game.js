@@ -2473,7 +2473,8 @@ async function startRaceBody() {
   rlap("scenery");
   let sessionOk = await ensureRaceSession(); while (!sessionOk && !stale() && await LoadingScreen.failed() === "retry") sessionOk = await ensureRaceSession(); if (stale()) return false;   // #2625 RETRY re-runs the load, BACK falls through; LAZY_RACE_SESSION — pit/radio/reliability before grid/pits + AudioPanel
   if (!sessionOk) { loadingScreen.stop(); quitToMenu(); announce("RACE MODULES FAILED TO LOAD — RETRY", 3, "info"); return false; }   // the stubs have no retirements or pit stops, and TT data would be lost silently
-  await Promise.all([ensureAudio(), lazyBundles.ensureResultsSheet(), Career.inCareer() && ensureCareerBody()]); if (stale()) return false;   // LAZY_AUDIO + LAZY_RESULTS_SHEET before startEngine / sync buildResults at the flag
+  await Promise.all([ensureAudio(), lazyBundles.ensureResultsSheet()]); if (stale()) return false;   // LAZY_AUDIO + LAZY_RESULTS_SHEET before startEngine / sync buildResults at the flag
+  if (Career.inCareer() && !(await ensureCareerBody())) { if (stale()) return false; loadingScreen.stop(); quitToMenu(); announce("CAREER MODULES FAILED TO LOAD — RETRY", 3, "info"); return false; }   // LAZY_CAREER: era legality, AI setups and winter development; a silent skip would race the wrong rules
   if (!window.LightPresets) { await ensureLightPresets(); if (stale()) return false; }   // LAZY_RACE presets before the first applyRaceSettings: a late landing re-lit the race mid-session (false = default lighting; logged)
   radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
   // Completed seasons are readable, never raceable (also guarded by award()).

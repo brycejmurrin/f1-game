@@ -5,8 +5,13 @@ const CareerUI = (function () {
 
 let _load = null;
 
+function ensureBody() {
+  const lb = typeof LazyBundles !== "undefined" && LazyBundles.live && LazyBundles.live();
+  return lb ? lb.ensureCareerBody() : null;
+}
+
 function ensureScreen() {
-  if (typeof CareerScreen !== "undefined") return Promise.resolve(true);
+  if (typeof CareerScreen !== "undefined") { const b = ensureBody(); return b ? b.then((ok) => ok !== false) : Promise.resolve(true); }   // resident screen, body may still be pending or have failed
   if (_load) return _load;
   const files = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_CAREER_UI) || [];
   const edges = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_CAREER_UI_EDGES) || [];
@@ -17,7 +22,7 @@ function ensureScreen() {
   // The CAREER FILE row (SettingsExport.careerRow) is built synchronously by the screen: its body comes too (#4748).
   const saves = typeof SettingsExport !== "undefined" && SettingsExport.ready ? SettingsExport.ready() : null;
   // Regulations / CareerExperience (LAZY_CAREER) are read by the screen's cards: they land before it mounts.
-  const body = typeof LazyBundles !== "undefined" && LazyBundles.live && LazyBundles.live() ? LazyBundles.live().ensureCareerBody() : null;
+  const body = ensureBody();
   _load = Promise.all([ScriptLoader.create().load(files, edges, { strict: true }), saves, body]).then(([ok, , bodyOk]) => {
     if (!ok || bodyOk === false || typeof CareerScreen === "undefined") {
       _load = null;
