@@ -11,7 +11,7 @@ for (const f of ["js/lighting/knobs.js", "js/render/shared/post-common.js"])
   vm.runInContext(read(f) + "\n;", ctx, { filename: absSrc(f) });
 const P = vm.runInContext("PostCommon", ctx);
 
-test("software-renderer classifier: the union verdict over the six named renderers", () => {
+test("software-renderer classifier: the union verdict over the named software renderers", () => {
   const soft = ["ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)", "llvmpipe (LLVM 15.0.7, 256 bits)",
     "Mesa lavapipe", "Google SwiftShader Subzero", "Microsoft Basic Render Driver", "GDI Generic", "softpipe", "Software Rasterizer"];
   for (const n of soft) assert.equal(P.isSoftwareRenderer(n), true, n);
@@ -30,10 +30,19 @@ test("frame defaults: fogColor is the TLX value; a present field, even 0, wins",
   assert.deepEqual([...P.frameDefault({ fogColor: [1, 0, 0] }, "fogColor")], [1, 0, 0]);
 });
 
-test("every defaulted frame field is produced by the game.js frame builder or atmosphere.js", () => {
-  const src = read("js/game.js") + read("js/lighting/atmosphere.js");
-  for (const k of Object.keys(P.FRAME_DEFAULTS))
-    assert.match(src, new RegExp("\\b" + k + "\\s*[:=]"), k + " has a producer");
+test("every frame field the backends default is produced by game.js's frame builder or atmosphere.js", () => {
+  const game = read("js/game.js");
+  const a = game.indexOf("  frame = {\n    trackId: def.id");
+  assert.ok(a > 0, "the game.js frame builder moved");
+  const literal = game.slice(a, game.indexOf("\n  };", a));
+  const atmo = read("js/lighting/atmosphere.js");
+  const read3 = ["js/render/glx/glx.js", "js/render/three/tlx.js", "js/render/three/tsl-lit.js"].map(read).join("\n");
+  for (const k of Object.keys(P.FRAME_DEFAULTS)) {
+    assert.match(read3, new RegExp("frameDefault\\((?:frame|f), \"" + k + "\""), k + " is read through frameDefault");
+    const made = new RegExp("\\b" + k + "\\s*:").test(literal) || new RegExp("frame\\." + k + "\\s*=[^=]").test(game + atmo);
+    assert.ok(made, k + " has a producer in the frame builder");
+  }
+  for (const v of Object.values(P.FRAME_DEFAULTS)) if (typeof v === "object") assert.ok(Object.isFrozen(v), "shared default arrays are frozen");
 });
 
 test("GLX, TLX and TSL read PostCommon, not their own copies; WGX stays frozen with its own fogColor", () => {

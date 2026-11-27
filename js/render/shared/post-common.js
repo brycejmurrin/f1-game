@@ -201,18 +201,13 @@ const PostCommon = (function () {
     return str * (PerfGov.lookPostShed && PerfGov.lookPostShed() ? 0.22 : 0.55);
   }
 
-  // Software-rasterizer race present. A full-res three/WebGL2 frame at 844×390
-  // measured ~12.7 s of rAF on SwiftShader (2026-10-29, worst 28.7 s); the same
-  // view at render scale 0.5 and the lowest look rung measured a render span
-  // max of ~6.2 s. Tier 4 at full res did not move the 12 s gap. Off under
-  // webdriver and the node game VM so pixel specs stay full-res. Knob
-  // "1" / "0" is apex26.swRaceShed (force on / force off).
   // #7141 (#6479 rows 2+4). ONE table of what a backend uses when game.js's frame builder / atmosphere.js left a
   // field off (a garage or probe frame): fogColor is the TLX value (Bryce's D1, 2026-11-25). WGX is frozen (D-049)
   // and keeps its own [0.5,0.6,0.7]; tests/unit/render-frame-defaults.test.mjs pins the difference.
+  const _v3 = (a, b, c) => Object.freeze([a, b, c]);   // shared by reference: a caller must never write into one
   const FRAME_DEFAULTS = Object.freeze({
-    fogColor: [0.04, 0.04, 0.06], ambientSky: [0.3, 0.32, 0.36], ambientGround: [0.2, 0.19, 0.18],
-    skyZenith: [0.18, 0.40, 0.78], skyHorizon: [0.62, 0.74, 0.88], cloud: 0, cloudSpeed: 1, fogDensity: 0,
+    fogColor: _v3(0.04, 0.04, 0.06), ambientSky: _v3(0.3, 0.32, 0.36), ambientGround: _v3(0.2, 0.19, 0.18),
+    skyZenith: _v3(0.18, 0.40, 0.78), skyHorizon: _v3(0.62, 0.74, 0.88), cloud: 0, cloudSpeed: 1,
   });
   function frameDefault(frame, key) {
     const v = frame && frame[key];
@@ -221,6 +216,12 @@ const PostCommon = (function () {
   // The union of every backend's old sniff (Bryce's D2). A bare `soft` is NOT in it: "Microsoft" matches that.
   const SOFTWARE_RENDERER_RE = /swiftshader|llvmpipe|lavapipe|softpipe|subzero|microsoft basic render|gdi generic|software/i;
   function isSoftwareRenderer(name) { return SOFTWARE_RENDERER_RE.test(String(name || "")); }
+  // Software-rasterizer race present. A full-res three/WebGL2 frame at 844×390
+  // measured ~12.7 s of rAF on SwiftShader (2026-10-29, worst 28.7 s); the same
+  // view at render scale 0.5 and the lowest look rung measured a render span
+  // max of ~6.2 s. Tier 4 at full res did not move the 12 s gap. Off under
+  // webdriver and the node game VM so pixel specs stay full-res. Knob
+  // "1" / "0" is apex26.swRaceShed (force on / force off).
   function softwareRaceShed(softwareGL, nav, knob) {
     if (!softwareGL) return false;
     if (knob === "0") return false;
