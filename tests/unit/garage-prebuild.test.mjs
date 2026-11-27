@@ -777,6 +777,7 @@ function exteriorHarness({ load, geometry, upload, surfaceHeight } = {}) {
       const geo = () => ({pos:[0,0,7,1,0,7,0,1,7], nrm:[0,1,0,0,1,0,0,1,0],col:[1,1,1,1,1,1,1,1,1],idx:[0,1,2]});
       return {ground:geo(),road:geo(),props:geo(),stats:{trackId:def.id},anchor:{s:0}};
     } } });
+  vm.runInContext(read('js/garage/experience.js'), context, {filename:absSrc('js/garage/experience.js')});
   vm.runInContext(read('js/garage/exterior.js'), context, {filename:absSrc('js/garage/exterior.js')});
   const API = vm.runInContext('GarageExterior', context);
   const freedSet = new Set();
@@ -1154,6 +1155,7 @@ function exteriorSection({ steps = 3, supported = true, hang = false } = {}) {
   c.garageCtx = () => c.ctx;
   c.gfx = { createMesh: (d) => ({ d }), freeMesh() {}, draw() {} };
   c.deps = { prepareExterior: (id) => hang ? new Promise(() => {}) : Promise.resolve(tracks.find((t) => t.id === id) || null) };
+  vm.runInContext(read("js/garage/experience.js"), c, { filename: absSrc("js/garage/experience.js") });
   vm.runInContext(read("js/garage/exterior.js"), c, { filename: absSrc("js/garage/exterior.js") });
   const cam = read("js/garage/setup-camera.js");
   const a = cam.indexOf("// Optional, detached circuit slice"), b = cam.indexOf("function releaseExterior(");

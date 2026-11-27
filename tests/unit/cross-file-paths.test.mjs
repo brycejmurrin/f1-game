@@ -6,8 +6,8 @@
 // that guard, landed BEFORE the move rather than after it, because a check that
 // arrives after the commit it was meant to protect has protected nothing.
 //
-// The silent class, concretely: `tools/ui/fit-audit.mjs` and `tools/ui/menu-fit.mjs`
-// import `../tests/helpers/f1-api-mock.js` inside `try { … } catch { /* degrades */ }`.
+// The silent class, concretely: `tools/ui/fit-audit.mjs`
+// imports `../tests/helpers/f1-api-mock.js` inside `try { … } catch { /* degrades */ }`.
 // That catch is right at runtime and fatal to a move — afterwards the import
 // fails forever, both tools quietly audit an empty data hub, and nothing goes
 // red anywhere.

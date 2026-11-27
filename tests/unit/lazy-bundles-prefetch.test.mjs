@@ -51,7 +51,7 @@ function world({ roster = {}, failOnce = [], failTimes = {}, body, globals = {},
     Log: { warn() {}, info() {}, error(_ns, m) { logged.push(m); } },
     els: {},
     // Empty LAZY_TRACK_BUILD: stubs keep ensureScenery from failing the toolkit gate.
-    TrackBuildProps: { build() {} }, TrackModels: {}, TrackHiddenFaces: {},
+    TrackBuildProps: { build() {} }, TrackModels: {}, TrackHiddenFaces: {}, TrackGraph: {},
     ...globals,
   });
   ctx.window = ctx;
@@ -372,7 +372,7 @@ test("ensureScenery asks for baked models while the track-build toolkit is still
   const w = world({
     roster: { LAZY_TRACK_BUILD: ["js/track/scenery/build-props.js"], LAZY_TRACK_BUILD_EDGES: [] },
     globals: {
-      TrackBuildProps: undefined, TrackModels: undefined, TrackHiddenFaces: undefined,
+      TrackBuildProps: undefined, TrackModels: undefined, TrackHiddenFaces: undefined, TrackGraph: undefined,
       Tracks: { LIST: [{ id: "monza" }], circuitPayloadResident: () => true, hydrate: () => true },
       TrackScenery: { monza() {} },
       Assets: { modelsReady: () => { calls.push("models"); return Promise.resolve(1); } },
@@ -385,6 +385,7 @@ test("ensureScenery asks for baked models while the track-build toolkit is still
           w.ctx.TrackBuildProps = { build() {} };
           w.ctx.TrackModels = {};
           w.ctx.TrackHiddenFaces = {};
+          w.ctx.TrackGraph = {};
           return true;
         });
         return Promise.resolve(true);
@@ -420,7 +421,7 @@ function boot({ agent = false, lazyV = null, audio = ["js/audio/engine.js"] } = 
       TRACK_VM: ["js/track/core/geom.js"], TRACK_WORKER_EXTRA: [],
     },
     window: { __APEX_BUILD: 4100, LightPresets: {}, __TEST_MODE: agent },
-    TrackBuildProps: { build() {} }, TrackModels: {}, TrackHiddenFaces: {},
+    TrackBuildProps: { build() {} }, TrackModels: {}, TrackHiddenFaces: {}, TrackGraph: {},
     PitLane: { _stub: true },
     Tracks: { LIST: [{ id: "monza", custom: true, scenery: () => {} }], circuitPayloadResident: () => true },
     Assets: { modelsReady: () => Promise.resolve(0) },

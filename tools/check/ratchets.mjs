@@ -346,7 +346,7 @@ export function pinJudge({ value, ceiling, slackMax, baseCeiling, growth, absorb
   if (!(absorb > 0)) return out;
   // BOOK-OWN (#6819): growth is judged against what the change BOOKED (its own fragment's raise, ceiling minus base
   // ceiling), never against headroom the base happened to have.
-  const booked = ceiling - baseCeiling, unbooked = Math.max(0, growth - booked);
+  const booked = Math.max(0, ceiling - baseCeiling), unbooked = Math.max(0, growth - booked);
   return { ...out, growth, booked, unbooked, ok: unbooked === 0, inherited: over > 0 && unbooked === 0 };
 }
 
@@ -750,7 +750,9 @@ export async function update(data = load(), { dryRun = false, lowerOnly = false 
 export async function updateCli({ dryRun = false, lowerOnly = false, absolute = false, branch } = {}) {
   const name = absolute ? null : fragmentName(branch === undefined ? currentBranch() : branch);
   if (!name || dryRun) return { rows: await update(load(), { dryRun, lowerOnly }), fragment: null };
-  const rows = await attributeTree(await measure(load()), { name });
+  const attributed = await attributeTree(await measure(load()), { name });
+  // BOOK-OWN (#6819): a plain --update books the branch's pins like the hook does; --lower-only never raises.
+  const rows = lowerOnly ? attributed : bookPins(attributed, await relativize(await measure(load()), { data: load() }));
   const scoped = scopeToBranch(updateReceipt(rows, { lowerOnly }).changes);
   await writeFragment(name, scoped);
   return { rows, fragment: `${FRAG_REL}/${name}`, scoped };
@@ -803,8 +805,10 @@ export function autoRaiseBlockReason(r, maxRaise = 40) {
   // Giving back part of this branch's own tree lowering is not a raise (attributeTree).
   if (r.tree && r.ownFrag < 0 && r.over <= -r.ownFrag) return null;
   // The entry's absorb (eagerCodeBytes, B+D; assertPins/assertPinsAll, D-037): the branch's own growth from its merge base, not the tip's, up to it.
-  if (r.tree && r.absorb > 0 && Number.isFinite(r.ownGrowth) && r.ownGrowth <= r.absorb) return null;
-  if (r.tree && r.absorb > 0 && Number.isFinite(r.ownGrowth)) return `the branch grows it by ${r.ownGrowth}, past its ${r.absorb} absorb — ${Object.hasOwn(PIN_METRICS, r.metric) ? "convert a source pin to a behaviour assertion" : "lazy-load it"}, or raise it as a fragment under Bryce's ratchet-raise`;
+  // A pin row judged by relativize carries `unbooked`: the growth its fragment has not already booked (BOOK-OWN, #6819).
+  const grown = Number.isFinite(r.unbooked) ? r.unbooked : r.ownGrowth;
+  if (r.tree && r.absorb > 0 && Number.isFinite(grown) && grown <= r.absorb) return null;
+  if (r.tree && r.absorb > 0 && Number.isFinite(grown)) return `the branch grows it by ${grown}, past its ${r.absorb} absorb — ${Object.hasOwn(PIN_METRICS, r.metric) ? "convert a source pin to a behaviour assertion" : "lazy-load it"}, or raise it as a fragment under Bryce's ratchet-raise`;
   if (r.tree) return "a tree-wide metric is shrink-only — never auto-raised";
   if (!AUTO_RAISE_METRICS.has(r.metric)) return `${r.metric} is not a line count — never auto-raised`;
   if (r.slackMax === 0) return "its entry carries slack 0 (exact) — never auto-raised";

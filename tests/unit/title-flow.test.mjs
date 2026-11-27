@@ -7,6 +7,7 @@ import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const source = fs.readFileSync(new URL("../../js/ui/title-flow.js", import.meta.url), "utf8").replace(/^const TitleFlow/m, "var TitleFlow");
+const deepLinkSource = fs.readFileSync(new URL("../../js/ui/deep-link.js", import.meta.url), "utf8");
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
 function boot({ ensureNet = () => Promise.resolve(true), top = () => null, racing = false, link = false, queuedVt = false } = {}) {
@@ -23,12 +24,13 @@ function boot({ ensureNet = () => Promise.resolve(true), top = () => null, racin
     $: (id) => btns[id] || (btns[id] = { id, addEventListener() {} }),
   };
   const ctx = vm.createContext({
-    Log: { info() {}, warn() {} }, Promise, GameAudio: { uiSelect() {} }, DeepLink: { create() {} },
+    Log: { info() {}, warn() {} }, Promise, GameAudio: { uiSelect() {} }, 
     UiLayers: { inRace: () => racing, top: () => top() },
     GhostShare: { consumeHash: async () => { if (!hash.on) return null; log.consumed++; return { ok: true, track: "monza" }; } },
     DailyChallenge: { dayKey: () => "2026-10-10" }, Tracks: { LIST: [{ id: "monza" }] },
     window: { addEventListener: (n, f) => { listeners[n] = f; } }, location: { hash: "" },
   });
+  vm.runInContext(deepLinkSource, ctx, { filename: absSrc("js/ui/deep-link.js") });   // the real stageChallenge stages a ghost link (#6884 A3)
   vm.runInContext(source, ctx);
   const api = ctx.TitleFlow.create(G, { vt: (f) => { log.vt++; if (queuedVt) transitions.push(f); else f(); }, restoreFreePlaySelection: () => { log.restore++; },
     careerUi: { openSlots() {} }, refreshTitle() {}, ensureNet });

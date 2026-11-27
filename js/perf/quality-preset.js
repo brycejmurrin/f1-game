@@ -375,7 +375,7 @@ if (typeof document !== "undefined") {
 // PRESETS / label stay module-local (UI + current() use them).
 // cycle / PHONE_MAX_ID stay exported — unit seams (quality-preset-phone).
 return {
-  init, set, cycle, syncPack, current: () => current().id, defaultId,
+  init, set, cycle, current: () => current().id, defaultId,
   maxId, capId, isIPhone, isWeakPhone, PHONE_MAX_ID, PHONE_ULTRA_NOTE, EXTREME_NOTE,
   hasShedExtras: () => detail() > 0 || (!phoneDetail() && SHED_ORDER.some(name => overrides()[name] === true)),
   shedFeature: name => SHED_ORDER.includes(name) && feature(name, false, true) && !feature(name),

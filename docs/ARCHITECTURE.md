@@ -337,7 +337,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `data.js` | `TrackSceneryData` | tag | the GENERIC scenery data tables for js/track/tracks.js buildProps(): named colour packs, theme fallbacks, crowd/window tints, sign segments and stand liveries. |
-| `graph.js` | `TrackGraph` | tag | TrackGraph: the scenery MODEL LIBRARY + NODE GRAPH. |
+| `graph.js` | `TrackGraph` | LAZY_TRACK_BUILD | TrackGraph: the scenery MODEL LIBRARY + NODE GRAPH. |
 | `models.js` | `TrackModels` | LAZY_TRACK_BUILD | atomic and intentional scenery model helpers. |
 | `themes.js` | `SceneryThemes` | LAZY_TRACK_BUILD | deterministic scenery theme registry. |
 | `landmark-kit.js` | `LandmarkKit` | LAZY_TRACK_BUILD | bounded architectural forms for staged scenery geometry. |
@@ -732,6 +732,8 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `tlx-post.js` | `TLXShaders` | DEFERRED:three | TLXShaders.postChain: the post-processing ORCHESTRATION for the TLX backend (M8). |
 | `tlx-mem.js` | `TLXShaders` | DEFERRED:three | TLXShaders.memCensus: the texture / render-target / buffer byte census for the TLX backend, the three-path answer to GLX.texCensus() (glx.js). |
 | `tlx-util.js` | `TLXUtil` | DEFERRED:three | TLXUtil: module-level helpers carved out of tlx.js (#6821, #6607 row 8): pumpAnimation (three's rAF pump), texStandIn (the 1x1 canvas a released texture… |
+| `tlx-texpool.js` | `TLXTexPool` | DEFERRED:three | TLXTexPool: the retired-texture pool carved out of tlx.js (#6821, #6479 row 10). |
+| `tlx-debug.js` | `TLXDebug` | DEFERRED:three | TLXDebug: the __tlx debug surface carved out of tlx.js (#6821, #6479 row 9). create(S) returns the object tlx.js exposes as api.__tlx. |
 | `tlx.js` | `TLX` | DEFERRED:three | TLX: default three.js/TSL renderer behind js/render/gfx.js. |
 | `tsl-surface.js` | `TLXSurface` | LAZY_GFX_HI | TLXSurface: close-up road surfaces for the TLX lit program (#6509 items 1 + 2; GfxQuality features `closeLayers` and `wearMask`, FEATURES level 2: desktop… |
 
@@ -2194,16 +2196,38 @@ gap is recorded in §Parity snapshot above and in the defect inventory
 crash and validation fixes (D-049): never port a look or knob into it, and a GLX
 or TLX fix is not "unfinished" for lacking a WGX twin.
 
+#### Backend gap table
+
+TLX ships; GLX and WGX gaps live here and only here (D-058). Source: the
+object-literal scan in `tests/unit/backend-surface-parity.test.mjs` on 2026-11-26
+(GLX 84 names = BACKEND_SURFACE, TLX 137, WGX 100); a gap is not a bug.
+
+| feature (names) | TLX | GLX | WGX |
+|---|---|---|---|
+| WebXR (`presentXR`, `xrCapable`, `xrInfo`, `setFoveation`, `detachXrSession`, …) | yes | gap | gap |
+| Shader/pipeline warm-up (`warm`, `warming`, `warmSettled`, `warmQueued`, `warmDraws`, `primeChunkMerge`) | yes | gap | gap |
+| Frame capture (`renderCaptureFrame`, `capturePixels`) | yes | gap | `capturePixels`, `cancelCapture` |
+| Static/car lamp-shadow split (`lampStaticBegin/End`, `lampCarsBegin`, `lampGridState`) | yes | gap | gap |
+| Texture pool and ownership (`flushTexPool`, `freeTexture`, `refillTexture`, `uploadTexture`, `pinMesh`, `flushChunkedOwnership`) | yes | `flushTexPool` only | `flushTexPool`, `freeTexture` |
+| Track wear, env readback, decal runs (`setTrackWear`, `readEnvCube`, `decalRuns`, `trackPrepareConfig`) | yes | gap | gap |
+| HDR output, post retry, inspector (`hdrOutputActive`, `retryPost`, `inspectorHost`, `photoFocusAvailable`) | yes | gap | gap |
+| Soft-present hold, road LUT, pipeline stats (`holdSoftPresent`, `roadLutReady`, `litPipelineStats`) | gap | gap | yes (WGX-only) |
+
+Adding or closing a row is a docs edit; closing a GLX gap needs a correctness or
+phone-safety reason (`.claude/rules/render-glx.md`).
+
+
 **GLX's job — safe mode.** GLX is the renderer every backend failure lands on
 (`Gfx.create()` → null), the no-adapter device path, the explicit `webgl2` pick,
 and the name of the seam (`GLX` facade). Its job is to boot and race correctly on
 any WebGL2 device, holding the features it ships today as its floor look. It
 takes crash, correctness and phone-safety fixes; it does not chase TLX looks.
-The floor-look list, a `render-glx.md` rule, a named backend-interface list and a
-fallback-correctness spec are the later phases of #6861 (not yet landed).
+The floor look is `.claude/rules/render-glx.md`; the interface is the frozen
+BACKEND_SURFACE list (`docs/backend-surface.txt`, D-058, `docs/GFX-CONTRACT.md`
+§Backend roles). A fallback-correctness spec is the next phase of #6861 (#7045).
 
 1. `node --test tests/unit/backend-surface-parity.test.mjs` first — the
-   façade must carry the same member names on all three backends (a missing
+   façade must carry every BACKEND_SURFACE name on all three backends (a missing
    name leaves GLX's dead closure behind after descriptor-copy; see §Mental
    model).
 2. Grep the knob across ALL of `js/render/`: GLSL in `shaders/`, WGSL in

@@ -1,0 +1,1 @@
+New: Photo Studio on a portrait phone has a ▲ TOP button that moves the settings panel to the top of the screen (remembered for your next visit) so a 4:5 portrait subject stays visible, and HIDE / SHOW folds the panel down to its title and CAPTURE bar (#7017).

@@ -28,21 +28,10 @@ as the cross-file **surface-reviewer**; earlier folds: `worktree-regression-chec
 | **gardener** | Structure survey of ONE `js/` slice for skill `gardener` (copied helpers, coupling through `G`, a file doing many jobs), one per slice in parallel. Its `tools:` list leads with the apex-lsp tools and every JS-symbol number in its ≤ 12 `FINDING` rows cites the LSP query behind it; Grep only for text shapes; ends `tools used: lsp <n> · grep <m> · read <k>`. Read-only (`readonly-bash.sh`), sonnet; never a bug or perf hunt. |
 | **worker** | ONE scoped change handed off by the parent, in its own worktree (`isolation: worktree`), node-only verification, commits on its branch, coordinates mid-task with `SendMessage` (§Parent and child). The spawn prompt names goal, OWNED, FORBIDDEN, verify command, peers, and whether it pushes. No browser servers on its list; never merges, arms, readies or cancels. Ends with the fixed `WORKER <name>:` report. |
 
-**Token routing:** prefer these over attaching fat skills. Codebase search →
-`Explore` (Haiku), not a general-purpose agent. Deploy/version →
-`deploy-research`. Pre-push verify → `verify-agent`; same-red on tip →
-`verify-agent --base <ref>`. One circuit → `track-surveyor`. Stale prose →
-the `total-audit` workflow. Curvature / PACE semantics →
-`physics-contract-auditor`. A code PR before the ready flip →
-`pr-reviewer` (advisory). Structure debt in `js/` → `gardener` (parent: skill **gardener**). Fat skill / extract / dead code → `code-hunter`
-with `focus: dead-code` (parent applies via **slim-bloat**). A red Actions or
-Pages run → `ci-red-triage`. A hunt → `prior-art-scout`, then one
-`code-hunter` per slice, then `finding-verifier` on the rows before anyone
-fixes; the parent reports the verified rows as one `tracking` issue, never a
-docs PR (skill steward `references/labels.md` §Hunt and survey output). A skill / agent / hook / rule / AGENTS.md edit → `surface-reviewer`
-over the set of units it touches. A scoped implementation to hand off and talk
-to while it runs → `worker` (one per disjoint path set, named so peers can
-message it). The parent keeps the PR.
+**Token routing:** pick the card from the table above, not a fat skill or a general-purpose agent. The parent keeps
+the PR. A hunt is a chain: `prior-art-scout`, then one `code-hunter` per slice, then `finding-verifier` on the rows
+before anyone fixes; the parent reports the verified rows as one `tracking` issue, never a docs PR (skill steward
+`references/labels.md` §Hunt and survey output).
 
 ## LSP-first — the evidence rule
 
