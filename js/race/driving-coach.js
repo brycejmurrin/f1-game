@@ -582,7 +582,8 @@ const DrivingCoachBody = (function () {
           slipstream: "Save behind the car ahead, then close the gap in its wake without contact or leaving the track.",
           overtake: "Save behind a similarly paced car, then pass it and hold clear without contact or leaving the track.",
           defend: "Save with a rival close behind, then hold your place under pressure without contact or leaving the track.",
-          backmarkers: "Save before slower traffic, then clear three slower cars without contact or leaving the track." };
+          backmarkers: "Save before slower traffic, then clear three slower cars without contact or leaving the track.",
+          apex: "Save on the straight before a turn, then drive it and carry on down the straight. The result shows your time, minimum speed and exit speed." };
         // start / slipstream / defend are stored NEGATED (mastery keeps the MINIMUM): undo the sign here, once, in each drill's own unit.
         const fmt = (mode, s) => mode === "braking" ? s.toFixed(0) + " m from " + insights.brakingRef() : mode === "lap" ? G.fmtTime(s) : mode === "launch" ? s.toFixed(2) + "s"
           : mode === "start" ? (-s >= 0 ? "+" : "") + (-s) + (Math.abs(s) === 1 ? " place" : " places")

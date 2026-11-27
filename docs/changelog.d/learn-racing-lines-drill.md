@@ -1,0 +1,1 @@
+New: LEARN's Racing Lines lesson has an on-track drill: drive the Monza Parabolica at an EARLY, GEOMETRIC or LATE apex cone, compare minimum speed, exit speed and time to a gate down the straight, then say which apex won (bronze, silver, gold).

@@ -338,7 +338,7 @@ test("Button Trainer's arrow challenge is reachable and its saved-BRAKE preset r
 // (the test fails while a drilled lesson keeps one). TRAINERS are lessons that are already a hands-on trainer outside
 // DrillRegistry (the Button Trainer lab, the Vegas thumb trainer and its on-track drill, js/learn-drills/thumb-drill.js).
 const PENDING = Object.freeze([
-  "chassis", "suspension", "deployment", "hybrid", "brake-blend", "braking", "racing-line", "telemetry",
+  "chassis", "suspension", "deployment", "hybrid", "brake-blend", "braking", "telemetry",
   "rain", "vsc", "pit-duel", "stint",
 ]);
 const PENDING_SEED = 13;
