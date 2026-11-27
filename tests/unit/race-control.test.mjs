@@ -1422,6 +1422,8 @@ test("#7088 F2: a stop matching a debris yellow takes ownership, so the yellow d
   run(rc, 2);
   assert.equal(rc.level, 1, "the stopped car keeps the yellow");
   pic = null;                                                     // stop off
-  run(rc, 6);   // MIN_HOLD (6 s) since the yellow was raised has long passed
+  run(rc, 1);
+  assert.equal(rc.level, 1, "inside MIN_HOLD the yellow still holds");
+  run(rc, 5);   // MIN_HOLD (6 s) since the yellow was raised has long passed
   assert.equal(rc.level, 0, "nothing on the road: the yellow drops, not frozen by the quiet early return");
 });

@@ -462,4 +462,10 @@ test("#7088 F10: 200 tyreMarble calls at one fixed slip, no step(), shed at leas
   const tyreMarble = vm.runInContext("tyreMarble", ctx);
   for (let i = 0; i < 200; i++) tyreMarble(car, { lock: 0, slip, speed: 40 });
   assert.ok(ctx.spawned >= 1, "slip " + slip.toFixed(3) + ": 200 hot calls spawned " + ctx.spawned);
+  assert.ok(ctx.spawned < 200, "the 25% rate limit still holds (" + ctx.spawned + "/200)");
+  // Still seeded, never Math.random: the same call sequence from a reset sheds the same marbles.
+  const again = harness();
+  const tm2 = vm.runInContext("tyreMarble", again);
+  for (let i = 0; i < 200; i++) tm2(car, { lock: 0, slip, speed: 40 });
+  assert.equal(again.spawned, ctx.spawned, "an identical sequence replays identically");
 });
