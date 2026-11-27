@@ -307,6 +307,7 @@
     "tests/unit/css-faces.test.mjs",
     "tests/unit/css-gardener-dedupe.test.mjs",
     "tests/unit/css-has-scope.test.mjs",
+    "tests/unit/css-ladder-ink.test.mjs",
     "tests/unit/css-layers.test.mjs",
     "tests/unit/css-media-disjoint.test.mjs",
     "tests/unit/css-play.test.mjs",

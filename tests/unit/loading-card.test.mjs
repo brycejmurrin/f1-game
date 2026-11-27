@@ -1108,8 +1108,8 @@ test("launch unification: every session the player starts reaches raceIntro; the
 test("the card over the scene: black bars and a light hint in every theme, an undistorted map, a real fade, no bars under MENU ANIMATIONS: REDUCED", () => {
   const css = readCssSource("css/overlays.css");
   const bars = css.match(/#loading::before,\s*#loading::after\s*\{([^}]*)\}/)[1];
-  assert.match(bars, /background:\s*#000/, "cinema bars — the LIGHT theme's --bg made them white");
-  assert.match(css, /#loading\[data-phase="run"\] #ld-card::after[\s\S]*?color:\s*#fff/, "the hint sits on the 3D scene, not a themed plate");
+  assert.match(bars, /background:\s*var\(--ink-black\)/, "cinema bars — the LIGHT theme's --bg made them white");
+  assert.match(css, /#loading\[data-phase="run"\] #ld-card::after[\s\S]*?color:\s*var\(--ink-on-accent\)/, "the hint sits on the 3D scene, not a themed plate");
   assert.match(read("css/a11y-loading.css"), /background:\s*rgba\(0,\s*0,\s*0/, "a dark plate holds contrast over bright flyby sky");
   assert.equal(ruleDecls(css, "#ld-map").get("object-fit"), "contain", "fitCanvas pins px width AND height; the 45% cap squashed the outline");
   assert.match(css, /@starting-style\s*\{\s*#loading\[data-phase\] #ld-card\s*\{[^}]*opacity:\s*0/, "a transition cannot start from display: none");

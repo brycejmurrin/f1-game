@@ -136,8 +136,12 @@ test("navOpen: no querySelectorAll when nothing is open (it runs every frame for
 test("Photo Studio owns focus and Escape above its borrowed fly-camera controls", () => {
   const html = read("index.html");
   const layerZ = (file, id) => {
-    const match = read(file).match(new RegExp(`#${id}\\s*\\{[^}]*z-index:\\s*(\\d+)`));
-    assert.ok(match, id + " has a stacking level"); return Number(match[1]);
+    const match = read(file).match(new RegExp(`#${id}\\s*\\{[^}]*z-index:\\s*(?:(\\d+)|var\\((--z-[a-z-]+)\\))`));
+    assert.ok(match, id + " has a stacking level");
+    if (match[1]) return Number(match[1]);
+    // A tokens.css --z-* rung (#7054) resolves to its number.
+    const rung = read("css/tokens.css").match(new RegExp(`${match[2]}:\\s*(\\d+);`));
+    assert.ok(rung, match[2] + " is a rung of the --z-* ladder"); return Number(rung[1]);
   };
   const layers = [{ id: "photo-studio", z: layerZ("css/photo-studio.css", "photo-studio") },
     { id: "photo-controls", z: layerZ("css/hud.css", "photo-controls") }];
