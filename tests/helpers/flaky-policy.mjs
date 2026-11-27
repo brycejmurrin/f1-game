@@ -44,6 +44,26 @@ export function signatureOk(row) {
   try { new RegExp(row.signature); return true; } catch { return false; }
 }
 
+/** A signature that fits a bare `expect(received).<matcher>(expected)` line is
+ *  not a signature: it exempts every assertion of that matcher in the test.
+ *  Give the assertion a custom `message` and anchor on it. */
+export function bareMatcherSignature(row) {
+  if (typeof row.signature !== "string" || !signatureOk(row)) return false;
+  const re = new RegExp(row.signature);
+  return ["toBe", "toEqual", "toStrictEqual", "toBeTruthy", "toBeFalsy", "toContain", "toMatch", "toBeGreaterThan", "toBeLessThan", "toHaveLength"]
+    .some((m) => re.test(`expect(received).${m}(expected)`));
+}
+
+export const MAX_ROW_DAYS = 14;
+/** Why a row's since/expires window is out of bounds, or "" when it is fine. */
+export function windowProblem(row) {
+  const s = Date.parse(row.since + "T00:00:00Z"), e = Date.parse(row.expires + "T00:00:00Z");
+  if (!Number.isFinite(s) || !Number.isFinite(e)) return "since/expires must be ISO dates";
+  if (e < s) return "expires is before since";
+  const days = (e - s) / 864e5;
+  return days > MAX_ROW_DAYS ? `window is ${days} days, the cap is ${MAX_ROW_DAYS}` : "";
+}
+
 /** The first non-empty line of an error message, ANSI colour codes and a
  *  leading `Error: ` removed — the text a quarantine signature is matched on. */
 export function errorLine(message = "") {

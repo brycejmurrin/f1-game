@@ -367,7 +367,7 @@ test.describe("Menu traversal — keyboard and controller", () => {
     await page.waitForFunction(() => {
       const hud = document.getElementById("hud");
       return !!(hud && !hud.hidden);
-    }, null, { polling: 100, timeout: 8_000 }).catch(() => {});
+    }, null, { polling: 100, timeout: 8_000 });
     const closeAll = async () => {
       for (let i = 0; i < 6; i++) {
         if (!(await page.evaluate(() => window.__aud.top()))) return;

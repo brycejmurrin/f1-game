@@ -9,7 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
-import { loadQuarantine, flakyVerdict, armed, QUARANTINE, signatureOk, errorLine } from "../helpers/flaky-policy.mjs";
+import { loadQuarantine, flakyVerdict, armed, QUARANTINE, signatureOk, errorLine, bareMatcherSignature, windowProblem } from "../helpers/flaky-policy.mjs";
 import { shards, fit } from "../../tools/ci/select-specs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -33,6 +33,8 @@ test("every quarantine row names a spec that exists and carries since/owner/why"
     seen.add(id);
     // Rows since 2026-10-26 (audit4 D1) must name the failure, not only the test.
     if (row.since >= "2026-10-26") assert.ok(typeof row.signature === "string", `${id}: a new row carries a signature`);
+    assert.equal(windowProblem(row), "", `${id}: since..expires`);
+    assert.ok(!bareMatcherSignature(row), `${id}: signature fits a bare expect(received).<matcher>(expected) line; give the assertion a custom message and anchor on it`);
     if (row.signature !== undefined) assert.ok(signatureOk(row), `${id}: signature must be a regex source anchored with ^ that compiles`);
   }
 });
@@ -343,4 +345,13 @@ test("the reporter hands the first failed attempt's error to the verdict", async
   t.results.push({});
   r.onTestEnd(t, { status: "passed", duration: 5 });
   assert.deepEqual(r.flakyTests, [{ spec: ["tests", "specs", "x.spec.js"].join("/"), title: "S › wobbles", error: "Error: first try\nstack" }]);
+});
+
+test("a bare-matcher signature and an over-long window are both refused", () => {
+  assert.ok(bareMatcherSignature({ signature: "^expect\\(received\\)\\.toBe\\(expected\\)" }));
+  assert.ok(bareMatcherSignature({ signature: "^expect\\(received\\)" }));
+  assert.ok(!bareMatcherSignature({ signature: "^pending START FROM: __tdPendingResult stayed true" }));
+  assert.equal(windowProblem({ since: "2026-11-01", expires: "2027-01-30" }), "window is 90 days, the cap is 14");
+  assert.equal(windowProblem({ since: "2026-11-10", expires: "2026-11-01" }), "expires is before since");
+  assert.equal(windowProblem({ since: "2026-11-20", expires: "2026-12-04" }), "");
 });
