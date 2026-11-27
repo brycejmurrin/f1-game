@@ -373,7 +373,7 @@ const TLX = (function () {
             // description on hardware (WGX's sniff guards the same way); here
             // a false positive costs the whole instanced prop set, not just a
             // presentation blit.
-            const named = /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft(ware|pipe)/.test(infoBlob);
+            const named = PostCommon.isSoftwareRenderer(infoBlob);
             // A PHONE HAS NO SOFTWARE ADAPTER. WebKit trims adapter.info and
             // reports conservative limits, which is exactly the (!infoBlob &&
             // smallLimits) tie-break — and a "software" verdict on a handset
@@ -1008,7 +1008,7 @@ const TLX = (function () {
           const ext = gl.getExtension("WEBGL_debug_renderer_info");
           const name = ((ext && gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) || "")
             + " " + (gl.getParameter(gl.RENDERER) || "");
-          return /swiftshader|llvmpipe|lavapipe|softpipe|microsoft basic render|gdi generic|subzero/i.test(name);
+          return PostCommon.isSoftwareRenderer(name);
         } catch (_) { return false; }
       }
       // Adapter sniff alone misses AUTO→WebGL2 when requestAdapter() is null or
@@ -6510,7 +6510,7 @@ const TLX = (function () {
           _instStamp++;
           const z = frame && frame.skyZenith;
           const f = (z && z.length >= 3) ? z
-            : ((frame && frame.fogColor) || [0.04, 0.04, 0.06]);
+            : PostCommon.frameDefault(frame, "fogColor");
           scene.background.setRGB(f[0], f[1], f[2]);
           const garageProbe = backend.garageProbeEnabled && frame && frame.garageProbe;
           if (garageProbe) captureGarageFace(garageProbe, frame);

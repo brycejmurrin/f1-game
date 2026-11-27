@@ -61,7 +61,7 @@ const GLXBackend = (function () {
       const ext = gl.getExtension("WEBGL_debug_renderer_info");
       if (!ext) return false;
       const ren = String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || "").toLowerCase();
-      return /swiftshader|llvmpipe|lavapipe|software|subzero|softpipe/.test(ren);
+      return PostCommon.isSoftwareRenderer(ren);
     } catch (_) { return false; }
   }
   const GL_ERR_NAMES = { 1280: "INVALID_ENUM", 1281: "INVALID_VALUE", 1282: "INVALID_OPERATION",
@@ -296,10 +296,8 @@ const GLXBackend = (function () {
   // a frame that omitted the field allocated a fresh three-element array on
   // every begin() — and begin() runs up to eight times a game frame.
   const ZERO3 = [0, 0, 0];
-  const SKY_ZENITH_DEF = [0.18, 0.40, 0.78], SKY_HORIZON_DEF = [0.62, 0.74, 0.88];
   // begin() fallbacks (hoisted so begin() does not allocate).
   const REFL_SKY_HORIZON_DEF = [0.05, 0.06, 0.09], REFL_SKY_ZENITH_DEF = [0.02, 0.025, 0.05];
-  const AMB_SKY_DEF = [0.3, 0.32, 0.36], AMB_GROUND_DEF = [0.2, 0.19, 0.18];
 
   function _clearUf(o) { for (const k in o) delete o[k]; }
   function _halfTex(w, h, data, nearest) {
@@ -1728,11 +1726,11 @@ const GLXBackend = (function () {
     frameUpVS = frame.upViewDir || null;
     frameSkyHorizon = frame.skyHorizon || REFL_SKY_HORIZON_DEF;
     frameSkyZenith = frame.skyZenith || REFL_SKY_ZENITH_DEF;
-    frameAmbSky = frame.ambientSky || AMB_SKY_DEF;
-    frameAmbGround = frame.ambientGround || AMB_GROUND_DEF;
+    frameAmbSky = PostCommon.frameDefault(frame, "ambientSky");
+    frameAmbGround = PostCommon.frameDefault(frame, "ambientGround");
     frameTime = frame.time != null ? frame.time : 0;
-    frameCloud = frame.cloud != null ? frame.cloud : 0;
-    frameCloudSpeed = frame.cloudSpeed != null ? frame.cloudSpeed : 1;
+    frameCloud = PostCommon.frameDefault(frame, "cloud");
+    frameCloudSpeed = PostCommon.frameDefault(frame, "cloudSpeed");
     frameLights = frame.lights || null;
     frameAllLights = frame.allLights || null;
     // 0..1 AMOUNT, not a flag: > 0 enables per-chunk lamp sets and sets how
@@ -1779,7 +1777,7 @@ const GLXBackend = (function () {
     // runs unconditionally, so the cached and uncached paths start each frame
     // from identical GL state.
     resetDrawState();
-    const fc = frame.fogColor;
+    const fc = PostCommon.frameDefault(frame, "fogColor");
     gl.clearColor(fc[0], fc[1], fc[2], 1);
     // Direct path + outVP: scissor the clear so a shared XR layer FB keeps the sibling eye.
     const clipClear = !!(outVP && !_envActive && !PST.mirror.active() && !PST.enabled());
@@ -1853,7 +1851,7 @@ const GLXBackend = (function () {
     // pack still renders procedural — bindMaterialMaps forces uMatTexMix to 0
     // whenever no albedo array is loaded, whatever the slider says.
     bindMaterialMaps(PostCommon.knob(T, "matTexMix"));
-    uf3(litU.uFogColor, _litUf, "fogColor", frame.fogColor);
+    uf3(litU.uFogColor, _litUf, "fogColor", PostCommon.frameDefault(frame, "fogColor"));
     // FOG DENSITY knob: scale the per-condition haze depth (multiplier, def 1).
     // Default a missing fogDensity to 0 (fog off), like every sibling scalar here
     // and both other backends — an omitted field is documented-valid and must not
@@ -1951,8 +1949,8 @@ const GLXBackend = (function () {
       uf1(litU.uCarShadowOn, _litUf, "carShadowOn", 0.0);
       uf1(litU.uLampShadowOn, _litUf, "lampShadowOn", 0.0);
     }
-    uf3(litU.uSkyZenith,  _litUf, "skyZenith",  frame.skyZenith  || SKY_ZENITH_DEF);
-    uf3(litU.uSkyHorizon, _litUf, "skyHorizon", frame.skyHorizon || SKY_HORIZON_DEF);
+    uf3(litU.uSkyZenith,  _litUf, "skyZenith",  PostCommon.frameDefault(frame, "skyZenith"));
+    uf3(litU.uSkyHorizon, _litUf, "skyHorizon", PostCommon.frameDefault(frame, "skyHorizon"));
     // FOG HEIGHT FALLOFF knob (absolute; def 0.018 matches the shipped palette).
     uf1(litU.uFogHeight, _litUf, "fogHeight", T && T.fogHeight != null ? T.fogHeight : (frame.fogHeight != null ? frame.fogHeight : 0.0));
     // GROUND MIST knob: scale the per-condition mist amount (multiplier, def 1).
@@ -1970,8 +1968,8 @@ const GLXBackend = (function () {
     // uTime is frame-global: begin() re-enters for each env face with the same
     // value, so uf1 collapses the redundant uploads inside one game frame.
     uf1(litU.uTime, _litUf, "time", frame.time != null ? frame.time : 0.0);
-    uf1(litU.uCloudCover, _litUf, "cloudCover", frame.cloud != null ? frame.cloud : 0.0);
-    uf1(litU.uCloudSpeed, _litUf, "cloudSpeed", frame.cloudSpeed != null ? frame.cloudSpeed : 1.0);
+    uf1(litU.uCloudCover, _litUf, "cloudCover", PostCommon.frameDefault(frame, "cloud"));
+    uf1(litU.uCloudSpeed, _litUf, "cloudSpeed", PostCommon.frameDefault(frame, "cloudSpeed"));
     uf1(litU.uCloudShadowDim, _litUf, "cloudShadowDim", PostCommon.knob(T, "cloudShadowDim"));
     // CAR SUN GLINT / CAR SPARKLE / FOG SUN CORE knobs (defaults = shipped look).
     uf1(litU.uCarSunGlint, _litUf, "carSunGlint", PostCommon.knob(T, "carSunGlint"));

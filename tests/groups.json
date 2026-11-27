@@ -1056,6 +1056,8 @@
     "tests/unit/render-effective-res.test.mjs",
     "// Renderer ownership, post health, material detail and particle residency; isolated VM.",
     "tests/unit/render-final-contracts.test.mjs",
+    "// #7141: one frame-defaults table + one software-renderer classifier on GLX/TLX/TSL (VM + source pins), < 0.1 s.",
+    "tests/unit/render-frame-defaults.test.mjs",
     "// RenderRate (#2652): a phone halves the draw rate on a 100 Hz+ rAF; desktop and XR never; no time lost. VM, ~0.1 s.",
     "tests/unit/render-rate.test.mjs",
     "// #6822: Assets.matScale/mipCount + PostCommon.sunShadowStrength are the one home (pins + source scan), < 0.1 s.",
