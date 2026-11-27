@@ -150,57 +150,10 @@ const TrackBuildProps = (function () {
     // (walls, fences, trees) sit on the ACTUAL carved/clipped terrain ribbon
     // rather than the closed-form groundYAt approximation, so they never float
     // or sink where the ribbon is lowered (corner-inside verges, the channel cut
-    // through an elevation mound — Miami s≈0.11). Triangles are binned into a
-    // coarse XZ grid so each lookup is ~O(1); huge distant triangles are skipped
-    // (props are never that far out — those fall back to groundYAt).
-    const _tg = track.terrainGeo;
-    // A flat CSR (start/list) over the cell bbox, filled in triangle order: a Map
-    // of ~40k arrays cost a Map.get per lookup and the GC that followed.
-    const _CELL = 6;
-    let _grid = null;
-    const _buildGrid = () => {
-      const pos = _tg.pos, idx = _tg.idx, rng = new Int32Array(idx.length / 3 * 4);   // per triangle cx0 cx1 cz0 cz1; cx1 < cx0 = skipped
-      let cx0 = Infinity, cz0 = Infinity, cx1 = -Infinity, cz1 = -Infinity;
-      for (let t = 0, r = 0; t < idx.length; t += 3, r += 4) {
-        const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
-        const mnx = __M.min(pos[a], pos[b], pos[c]), mxx = __M.max(pos[a], pos[b], pos[c]);
-        const mnz = __M.min(pos[a + 2], pos[b + 2], pos[c + 2]), mxz = __M.max(pos[a + 2], pos[b + 2], pos[c + 2]);
-        if (mxx - mnx > 30 || mxz - mnz > 30) { rng[r] = 1; rng[r + 1] = 0; continue; }
-        const i0 = rng[r] = __M.floor(mnx / _CELL), i1 = rng[r + 1] = __M.floor(mxx / _CELL);
-        const j0 = rng[r + 2] = __M.floor(mnz / _CELL), j1 = rng[r + 3] = __M.floor(mxz / _CELL);
-        if (i0 < cx0) cx0 = i0; if (i1 > cx1) cx1 = i1; if (j0 < cz0) cz0 = j0; if (j1 > cz1) cz1 = j1;
-      }
-      const nx = cx1 >= cx0 ? cx1 - cx0 + 1 : 0, nz = cz1 >= cz0 ? cz1 - cz0 + 1 : 0, nc = nx * nz;
-      const start = new Int32Array(nc + 1);
-      for (let r = 0; r < rng.length; r += 4)
-        for (let i = rng[r]; i <= rng[r + 1]; i++) for (let j = rng[r + 2]; j <= rng[r + 3]; j++) start[(i - cx0) * nz + (j - cz0) + 1]++;
-      for (let k = 0; k < nc; k++) start[k + 1] += start[k];
-      const list = new Uint32Array(start[nc]), fill = start.slice(0, nc);
-      for (let r = 0; r < rng.length; r += 4)
-        for (let i = rng[r]; i <= rng[r + 1]; i++) for (let j = rng[r + 2]; j <= rng[r + 3]; j++) list[fill[(i - cx0) * nz + (j - cz0)]++] = r / 4 * 3;
-      _grid = { cx0, cz0, nx, nz, start, list };
-    };
-    const terrainYAt = (x, z) => {
-      if (!_tg || !_tg.idx) return null;
-      if (!_grid) _buildGrid();
-      const i = __M.floor(x / _CELL) - _grid.cx0, j = __M.floor(z / _CELL) - _grid.cz0;
-      if (!(i >= 0 && i < _grid.nx && j >= 0 && j < _grid.nz)) return null;
-      const k = i * _grid.nz + j, list = _grid.list, e = _grid.start[k + 1];
-      const pos = _tg.pos; let best = null;
-      for (let n = _grid.start[k]; n < e; n++) {
-        const t = list[n];
-        const ia = _tg.idx[t] * 3, ib = _tg.idx[t + 1] * 3, ic = _tg.idx[t + 2] * 3;
-        const ax = pos[ia], az = pos[ia + 2], bx = pos[ib], bz = pos[ib + 2], cx = pos[ic], cz = pos[ic + 2];
-        const v0x = cx - ax, v0z = cz - az, v1x = bx - ax, v1z = bz - az, v2x = x - ax, v2z = z - az;
-        const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z, d11 = v1x * v1x + v1z * v1z, d20 = v2x * v0x + v2z * v0z, d21 = v2x * v1x + v2z * v1z;
-        const den = d00 * d11 - d01 * d01; if (__M.abs(den) < 1e-9) continue;
-        const u = (d11 * d20 - d01 * d21) / den, vv = (d00 * d21 - d01 * d20) / den;
-        if (u < -0.01 || vv < -0.01 || u + vv > 1.01) continue;
-        const y = pos[ia + 1] + u * (pos[ic + 1] - pos[ia + 1]) + vv * (pos[ib + 1] - pos[ia + 1]);
-        if (best === null || y > best) best = y;
-      }
-      return best;
-    };
+    // through an elevation mound — Miami s≈0.11). Tracks.terrainY is the one
+    // terrain sampler (#7132, Bryce's D5 b): every triangle, a 1 cm metric edge
+    // slack, null off the ribbon. The scenery api's terrainYAt is that sampler.
+    const terrainYAt = (x, z) => Tracks.terrainY(track, x, z);
 
     // Hard guarantee: NO scenery primitive may sit on the racing surface.
     // Every shape — the helpers below AND the raw emitters handed to each
@@ -562,7 +515,7 @@ const TrackBuildProps = (function () {
       out, water: waterBuf, diagnostics, n, track, px, pz, hw,
       note,   // the registry, for a start/finish overheadSpan's "gantry" record (models.js)
       rails: surface.rails, upOf, emitFace: emit,
-      terrainY: (x, z) => Tracks.terrainY(track, x, z),
+      terrainY: terrainYAt,
       // true = clear; false = on the road; "pit" = inside the pit complex, which
       // modelGroup records as superseded rather than as a required failure.
       preflight: (bounds) => (!rejBox(bounds.center, bounds.size, bounds.basis) ? true : (guards.pitRejected() ? "pit" : false)),
@@ -718,8 +671,7 @@ const TrackBuildProps = (function () {
       for (const sx of [-0.5, 0, 0.5]) for (const sf of [-0.5, 0, 0.5]) {
         const x = c[0] + r[0] * sx * size[0] + f[0] * sf * size[1];
         const z = c[2] + r[2] * sx * size[0] + f[2] * sf * size[1];
-        let y = terrainYAt(x, z);
-        if (y == null) y = Tracks.terrainY(track, x, z);
+        const y = terrainYAt(x, z);
         if (y != null && y < lo) lo = y;
       }
       if (!Number.isFinite(lo)) lo = Number.isFinite(spec.ground) ? spec.ground : NaN;
@@ -1006,9 +958,9 @@ const TrackBuildProps = (function () {
     // One XZ spatial hash for the mass and barrier indexes (#6484 row 7): an id
     // is bucketed in every `cell`-metre cell its rect touches; forRect visits a
     // query rect's cells in x-then-z order and each bucket in insertion order,
-    // and stops at the first id `hit` returns true for. GRID_CELL (24 m, more
-    // than any canopy) is shared with the tree cell in nature.js by comment.
-    const GRID_CELL = 24;
+    // and stops at the first id `hit` returns true for. Both cells are 24 m
+    // (more than any canopy), as nature.js's TREE_CELL, tied by this comment.
+    const MASS_CELL = 24, BAR_CELL = 24;
     const cellMap = (cell) => {
       const m = new Map(), key = (cx, cz) => cx * 100003 + cz;
       return {
@@ -1043,7 +995,7 @@ const TrackBuildProps = (function () {
       massGrid.insertRect(m.c[0] - r, m.c[2] - r, m.c[0] + r, m.c[2] + r, i);
     };
     const buildMassGrid = () => {
-      massGrid = cellMap(GRID_CELL);
+      massGrid = cellMap(MASS_CELL);
       for (let i = 0; i < masses.length; i++) massGridInsert(i);
     };
     const massBlocked = (c, w, d, b, shrink) => {
@@ -1127,7 +1079,7 @@ const TrackBuildProps = (function () {
       barGrid.insertRect(Math.min(x0, x1) - w, Math.min(z0, z1) - w, Math.max(x0, x1) + w, Math.max(z0, z1) + w, i);
     };
     const buildBarGrid = () => {
-      barGrid = cellMap(GRID_CELL);
+      barGrid = cellMap(BAR_CELL);
       for (let i = 0; i < barSegs.length; i += SEG) barGridInsert(i);
     };
     // Distance² from (x,z) to segment i of barSegs.
