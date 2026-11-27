@@ -14,6 +14,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadDom } from "../helpers/dom-vm.mjs";
 import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
 
@@ -46,6 +47,7 @@ function boot({ portrait = false, extra = {} } = {}) {
   Object.assign(sb, extra);
   sb.window = sb;
   for (const f of ["js/ui/live-region.js", "js/ui/hud-minimap.js", "js/ui/hud-radio-lane.js", "js/ui/hud-readouts.js", "js/ui/hud.js", "js/race/overtake-mode.js"]) {
+    loadDom(sb);
     vm.runInNewContext(src(f), sb, { filename: absSrc(f) });
   }
   const $ = (id) => dom.byId(id);
@@ -193,6 +195,7 @@ function fitKeyFor(set, desktop = false) {
   const ids = HUD.slice(HUD.indexOf("const _HL_CSS_HID"), HUD.indexOf("\n", HUD.indexOf("const _HL_CSS_HID")) + 1);
   const body = { dataset: { hlSet: set }, classList: { contains: (c) => c === "desktop" && desktop } };
   const ctx = vm.createContext({ document: { body }, Set });
+  loadDom(ctx);
   vm.runInContext(ids + "let _hlEls = [];\n" + fnSource(HUD, "function hlKey()") + "\nthis.k = (els) => { _hlEls = els; return hlKey(); };", ctx, { filename: absSrc("js/ui/hud.js") });
   return ctx.k;
 }

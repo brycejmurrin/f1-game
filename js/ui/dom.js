@@ -1,5 +1,5 @@
 /* Apex 26 — Dom: the DOM/format helpers every DOM-built screen shares
-   (el / paintFold / fmtLap / fmtRaceClock / fmtGap). Pure functions over `document` — no game state,
+   (el / paintFold / fmtLap / fmtRaceClock / fmtGap / isDesktop). Pure functions over `document` — no game state,
    no G. Loads before its first consumer (js/audio/panel.js in tools/manifest.cjs);
    career-ui and season-ui destructure it at eval. */
 const Dom = (function () {
@@ -62,6 +62,15 @@ const Dom = (function () {
   // leader ("—"), a non-number null. HUD form: HudReadouts.fmtGap.
   const fmtGap = (v) => typeof v === "string" ? v : typeof v !== "number" || !isFinite(v) ? null : v > 0 ? "+" + v.toFixed(3) : "—";
 
-  return { el, paintFold, fmtLap, fmtRaceClock, fmtGap };
+  // The desktop tier: body.desktop, the one class every HUD and settings branch keys on.
+  // `d` defaults to the page document (a module that was handed its own document passes it).
+  // Null-guarded: no document, no body or no classList reads as not desktop.
+  function isDesktop(d) {
+    const doc = d || (typeof document !== "undefined" ? document : null);
+    const b = doc && doc.body;
+    return !!(b && b.classList && b.classList.contains("desktop"));
+  }
+
+  return { el, paintFold, fmtLap, fmtRaceClock, fmtGap, isDesktop };
 })();
 Object.freeze(Dom);

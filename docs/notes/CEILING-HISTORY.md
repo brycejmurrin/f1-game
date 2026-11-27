@@ -4167,6 +4167,10 @@ Human step: `ratchet-raise`.
 2335 → **2337** (+2): the `#rs-pocket` button and its `<small>`. Fragment: `ratchets.d/claude--pocket-weekend-7042.json`.
 Human step: `ratchet-raise`.
 
+`(tree) eagerCodeBytes` 4039481 → **4039508** (+27): `js/roster.js` is eager and lists every lazy file, so the new LAZY_LEARN file
+`js/learn-drills/aero.js` (the Aero drill moved out of the lazy learn-door.js, #6997 U4.1b) costs one roster line; no eager script is added
+and `eagerScripts` is unchanged. Fragment: `ratchets.d/claude--aero-drill-move-6997.json`.
+Human step: `ratchet-raise`.
 ## 2026-11-27 — claude/frame-defaults-classifier-7141: frame defaults + one software-renderer classifier (#7141, #6479 rows 2+4)
 
 `(tree) eagerCodeBytes` 4026247 → **4026864** (+617): `PostCommon.FRAME_DEFAULTS` / `frameDefault` / `isSoftwareRenderer` become the one home in
