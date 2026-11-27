@@ -5,7 +5,6 @@
     "tools/ui/flows.mjs",
     "tools/ui/menu-capture.mjs",
     "tools/ui/menu-screens.mjs",
-    "tools/ui/probe-sheets-contract.mjs",
     "tools/ui/profile-survey.mjs"
   ]
 }

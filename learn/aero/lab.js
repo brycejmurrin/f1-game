@@ -367,6 +367,17 @@
     launch.addEventListener("click", () => {
       window.parent.postMessage({type: "apex-learn-scenario", id: "aero"}, window.location.origin);
     });
+    // BACK TO LESSON: the game posts the drill's last run beside its diagram (js/ui/learn-door.js reopen()).
+    const result = get("aero-drill-result");
+    window.addEventListener("message", event => {
+      const data = event.data;
+      if (event.origin !== window.location.origin || event.source !== window.parent || data?.type !== "apex-learn-result" ||
+          data.id !== "aero" || !data.result) return;
+      const r = data.result, medal = r.medal ? r.medal.toUpperCase() : "No medal";
+      result.textContent = "Your last drill: " + medal + " · closed " + Number(r.value).toFixed(1) + " m"
+        + (Number.isFinite(r.best) ? " (best " + r.best.toFixed(1) + " m)" : "") + ". " + (r.verdict || "");
+      result.hidden = false;
+    });
   }
   LearnAppearance.mount(syncAppearance);
   new ResizeObserver(draw).observe(canvas);

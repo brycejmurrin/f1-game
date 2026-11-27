@@ -308,7 +308,7 @@ test("mixer: strength and trigger changes remix live pulses without extending th
   assert.equal(calls[1].params.duration, 104);
   Input.setTriggerHaptics(true); clock.t = 32; Input.poll();
   assert.equal(calls[2].type, "trigger-rumble");
-  assert.equal(calls[2].params.leftTrigger, .4);
+  assert.equal(calls[2].params.leftTrigger, .52, "0.4 through the trigger feel floor (0.2 + 0.8 m)");
   assert.equal(calls[2].params.duration, 88);
   clock.t = 95; Input.poll();
   assert.equal(calls[3].type, "dual-rumble", "expired trigger pulse cannot be revived");

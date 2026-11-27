@@ -362,7 +362,6 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/shot.mjs** | One Chromium session for one or many framed shots (`--batch`); JPEG/raster modes for cheaper sweeps. | playwright-probe |
 | **shot/track-session.mjs** | Persistent track session (`--serve`): boot once, then JSON-line shot/eval/track/sheet/diff ops in seconds each. | survey-track |
 | **shot/visor-lab-export.mjs** | Copy the committed Visor Lab authoring files and the game's visor runtime into an existing Site checkout. | — |
-| **shot/webgpu-urban-gallery.mjs** | Produce a verified 4K urban WebGPU screenshot gallery through shot.mjs. | — |
 | **shot/wx-grid.mjs** | Weather×time 24-cell grid + luminance.json (6 weathers incl. storm × 4 TOD). One Chrome boot; --track --turn. | playwright-probe |
 
 ### `tools/perf/`
@@ -421,13 +420,10 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/mem-cycles-lib.mjs** | gpu-game-check --mem-cycles helpers: an in-page live GPUBuffer/GPUTexture counter and the per-cycle plateau verdict. | mcp-probe |
 | **gfx/pass-census-lib.mjs** | Pure helpers for pass-census --park: the exact cell, its key, the baseline compare and --collect. | renderer-debug |
 | **gfx/pass-census.mjs** | Draw calls and triangles per render pass (main, mirror, sun/lamp shadow, post) per frame: the exact count behind #2657. | renderer-debug / playwright-probe |
-| **gfx/readback-garage-oracle.mjs** | Measures readPixels during menu→garage→close; optional race-entry path. | — |
-| **gfx/readback-quit-menu-oracle.mjs** | Garage close → UI Start Race (Bahrain) → grid + ~20s throttle → pause → 2-tap quit. | — |
 | **gfx/res-scale-census.mjs** | Counts TLX post-target reallocations, live textures and the step's own cost over a setRenderScale sweep. | renderer-debug |
 | **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | renderer-debug |
 | **gfx/sharpness-ab.mjs** | Headless A/B of the phone-sharpness arms on TLX WebGPU: captures, 400% crop sheets, edge metrics. | — |
 | **gfx/ssr-probe.mjs** | Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR lighting probe. | renderer-debug |
-| **gfx/stall-reload-sw-oracle.mjs** | Matched deploy-tip vs fix-head stall watchdog stress (SwiftShader, three+GL). | — |
 | **gfx/tlx-pack-check.cjs** | Decodes packed TLX attributes and asserts no shader DECISION changed (material layer, flag branch, MAT id). No browser. | — |
 | **gfx/wgx-capture.mjs** | Thin alias → `gfx-probe.mjs --backend webgpu` (WGX soft-present + optional readback). | renderer-debug |
 | **gfx/wgx-lavapipe-probe.mjs** | Thin alias → `gfx-probe.mjs --backend three --tlx-webgpu --lavapipe`. | renderer-debug / mcp-probe |
@@ -500,7 +496,6 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 | **car/parts-sweep.mjs** | How much does each catalog option change the car? Builds all options offline via `node:vm` against the right baseline. | garage-parts-livery |
 | **car/render-car.mjs** | Headless batch renderer for `carview.html` — orbit presets, `--team=all` walks the grid, contact sheet; needs :3456. | playwright-probe |
 | **car/spine-station.mjs** | Measures + rasterises where every spine design lands on the cover flank, and the crown's own mark — offline, no browser. | garage-parts-livery |
-| **car/trace-car.mjs** | Trace the ISOLATED car into SVG: carview beauty + empty-stage plate -> exact matte -> contours + interior edges. | garage-parts-livery |
 | **car/trace-logo.mjs** | Author-time: regenerates `js/car/crest-paths.js` from a team logo bitmap in git history (k-means inks, contour walk). | playwright-probe |
 | **car/tri-census.mjs** | Car mesh census: tris/verts per body style × aero × draw tier (player, field, caster, far); --root = another checkout. | garage-parts-livery |
 
@@ -552,7 +547,6 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 | **ui/menu-readiness.mjs** | Serializable menu readiness predicate, used with bounded Playwright polling. | — |
 | **ui/menu-screens.mjs** | Canonical `SCREENS` + `VIEWPORTS` + `OVERLAY_IDS` (library) for the layout tools. | survey-ui-matrix |
 | **ui/phone-shot-diff.mjs** | Compare a phone screenshot with the live page on the Bryce-phone preset: which elements are a different SIZE. | — |
-| **ui/probe-sheets-contract.mjs** | UI contract PR D (#5153) measurement probe: the five sheets (select, race settings, career hub, pause, results) in the | — |
 | **ui/profile-survey.mjs** | Owner-profile screen survey: all menu screens at contract windows A/C/D/As, seeded from the settings export. | — |
 | **ui/reach-score.mjs** | Offline two-thumb reach + dead-space score per menu screen from layout-audit DOM dumps or explorer inspections. | survey-ui-matrix |
 | **ui/review-captures.mjs** | Build a portable offline screenshot review from a bounded local evidence manifest. | css-play |

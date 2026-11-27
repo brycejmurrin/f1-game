@@ -223,7 +223,7 @@
           addBox(out, vadd(a.c, a.u, 20), [4.5, 0.5, 1.2], [0.95, 0.92, 0.78], [a.r, a.u, a.t]);
           addBox(out, vadd(vadd(a.c, a.t, 0.8), a.u, 19.6), [4.5, 0.5, 1.2], [0.95, 0.92, 0.78], [a.r, a.u, a.t]);
           const lens = vadd(a.c, a.u, 19.5);
-          const kk = ((Math.round(k) % n) + n) % n;
+          const kk = M4.wrapIndex(k, n);
           const throwR = Math.hypot(lens[0] - px[kk], lens[1] - py[kk], lens[2] - pz[kk]);
           api.lampPost({ pos: lens, k, side, kind: "halogen",
             radius: Math.min(110, throwR * 1.5) });

@@ -38,6 +38,9 @@ const WallClamp = (function () {
     const incidentSim = ctx.incidentSim;
     const addShake = ctx.addShake;
     const kStd = ctx.vStd ? ctx.vStd(1) : 1;   // vStd is linear in v
+    // The scrubs below are m/s^2 at the STANDARD scale; ground speed scales by PACE, so the
+    // same fraction of vStd per second is PACE x the rate (1/kStd; exactly 1 at notch 14).
+    const paceK = 1 / kStd;
 
     // Same candidate-position boundary as contact separation and incident takeover.
     const lim = ContactGeometry.wallLimits(track, c.s, c.x, _lim, postLim);
@@ -149,6 +152,7 @@ const WallClamp = (function () {
             c.collideT = WALL_SFX_REARM;
             if (firstStrike && track.street) {
               if (addShake) addShake(0.1 + incidence * 0.3);
+              if (typeof CamFx !== "undefined") CamFx.impact(incidence);   // render-only hold + flash (#7095)
               Input.vibrate(15 + incidence * 35);
               Input.rumble(0.35 + incidence * 0.5, 100, "handles");
             }
@@ -188,7 +192,7 @@ const WallClamp = (function () {
         // driver input (sign = turn direction); `into` is ±1 for the wall side.
         const pushIn = Math.max(0, into * steer);
         if (pushIn > 0.02) {
-          const scrub = pushIn * AiDrive.wallSteerScrub(!!track.street) * dt;
+          const scrub = pushIn * AiDrive.wallSteerScrub(!!track.street) * paceK * dt;
           if (c.speed > 0) c.speed = Math.max(0, c.speed - scrub);
           else if (c.speed < 0) c.speed = Math.min(0, c.speed + scrub);
           c.wallT = 0.35;     // brief auto-throttle suppress
@@ -197,7 +201,7 @@ const WallClamp = (function () {
         // the player just drives off the barrier — no sticky pin, no auto-rescue.
       } else {
         // AI has no world-space heading to slide; clamp + gentle scrub.
-        c.speed = Math.max(0, c.speed - AiDrive.wallAiScrub() * dt);
+        c.speed = Math.max(0, c.speed - AiDrive.wallAiScrub() * paceK * dt);
         // Offline AI wall SFX (#2212). The VS FRIEND path above needs c.human
         // (heading incidence); offline AI is human:false and never reached it.
         // Incidence proxy: |vLat|/speed, steer-into-wall, and a first-pin

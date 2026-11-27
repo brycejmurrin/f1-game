@@ -166,6 +166,8 @@ function bootMenus(disk = {}, o = {}) {
     SeasonCal: { canRace: () => true, rounds: () => 0 },
     TrackMaps: {
       corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [],
+      drsZoneWraps: (z) => !!(z.wrap || z.b > 1 || z.b < z.a), drsZoneLapMetre: (f, len) => Math.round(f * len),
+      drawElevProfile: (cv, t, el) => { (el || cv).hidden = true; return false; },   // no profile: the real one hides the target (#7052)
       sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"], classColor: () => "", aspect: () => 1.5, elevProfile: () => null,
       aeroColor: () => "blue", cornerSpeed: () => 122, cornerSpeedColors: () => ["red", "amber", "cyan"],
     },
@@ -890,9 +892,10 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
   assert.ok(ruleFor(td, /^#td-inner$/), "the sheet inner is #td-inner");
   assert.equal(decl(td, "#track-detail-legend", "font-size"), "var(--fs-2)");
   const menus = code("js/ui/select-screen.js");
-  assert.match(menus, /function drsZoneRangeHtml/, "DRS wrap labels are one helper for detail + tests");
-  assert.match(menus, /crossing start\/finish/, "a zone past the line names S/F on the wrap");
-  assert.match(menus, /z\.wrap \|\| z\.b > 1 \|\| z\.b < z\.a/,
+  const tmSrc = code("js/ui/track-maps.js");
+  assert.match(tmSrc, /function drsZoneRangeHtml/, "DRS wrap labels are one helper for detail + tests (TrackMaps, #7052)");
+  assert.match(tmSrc, /crossing start\/finish/, "a zone past the line names S/F on the wrap");
+  assert.match(tmSrc, /z\.wrap \|\| z\.b > 1 \|\| z\.b < z\.a/,
     "wrap is the AeroZones flag, end past 1 lap, or a folded b < a");
   assert.match(menus, /snapTrackToFilter\(id\);\s*\n\s*updateTrackPreview\(\)/,
     "filter snap refreshes the hero before the deferred chip rebuild");
@@ -943,7 +946,7 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
     "season data-tip :hover is gated; :active is the touch twin");
   assert.match(menus, /function snapTrackToFilter/, "CLASSICS (and the other chips) snap the hero onto a visible tile");
   assert.match(menus, /function trackInFilter/, "filter membership is one helper for the strip and the snap");
-  assert.match(menus, /fmtElev/, "sparkline labels keep the minus on a trough");
+  assert.match(tmSrc, /fmtElev/, "sparkline labels keep the minus on a trough");
   assert.match(menus, /clientWidth <= 520/,
     "narrow (~500) CIRCUIT LENGTH drops the mile half so TURNS is not 1..");
   assert.equal(decl(td, "#track-detail-header", "padding-inline"), "var(--pad)");

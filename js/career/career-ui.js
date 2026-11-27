@@ -1517,6 +1517,7 @@ function create(G) {
         + "seats open sooner, miss it and they close."));
       body.appendChild(ambitionPicker(Career.ambition(), (i) => {
         Career.setAmbition(i);   // re-stamps every offer's target, then we redraw
+        saveRefused();           // a refused write put the old rung back; say so
         buildOffers();
       }));
     }
@@ -1627,7 +1628,7 @@ function create(G) {
     const t = {
       // The year in progress counts: you are living a season, not waiting for one.
       seasons: tally.seasons + 1,
-      starts: tally.seasons * Career.roundsTotal() + live.length,
+      starts: (tally.starts ?? tally.seasons * Career.roundsTotal()) + live.length,
       wins: tally.wins + live.filter((r) => r.p === 1).length,
       podiums: tally.podiums + live.filter((r) => r.p <= 3).length,
       points: tally.pts + ((c && c.season.pts[me]) || 0),

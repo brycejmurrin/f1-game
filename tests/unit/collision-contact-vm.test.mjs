@@ -818,3 +818,27 @@ test("clean-room 39: parkedAhead never reports a car as its own hazard", () => {
   assert.equal(C.parkedAhead(me, [me], 6000, 200), null, "a stopped AI is on the list it reads");
   assert.equal(C.parkedAhead(me, [me, other], 6000, 200), other);
 });
+
+// #7147: the side-rub scrub is a deceleration at the STANDARD scale, so the ground rate rides PACE.
+// The same rub at two paces must cost the same fraction of vStd; at PACE 1 it is exactly rubDecel x dt.
+test("side-rub scrub bleeds the same fraction of vStd at any PACE", () => {
+  const rub = (pace) => {
+    const ctx = vm.createContext({ Math, Number, Object, WeakMap, Log: { info() {}, enabled: () => false },
+      Tracks: { wallAt: () => 100, postLimits() {} }, IncidentSim: { owns: () => false, notifyCar() {} }, DebrisWorld: { active: () => false } });
+    for (const file of ["js/core/mat4.js", "js/physics/ai-start.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"])
+      vm.runInContext(readFileSync(join(ROOT_C, file), "utf8"), ctx, { filename: absSrc(file) });
+    const v0 = 40 * pace;
+    const a = { id: "a", prog: 100, s: 100, speed: v0, x: 0, human: false };
+    const b = { id: "b", prog: 100, s: 100, speed: v0, x: 1.2, human: false };
+    const G = { track: { total: 6000 }, player: null, netPlay: { owns: () => false }, PACE: pace, raceT: 0,
+      wrapS: s => (s % 6000 + 6000) % 6000, worldFromTrack: (s, x) => ({ x, z: s }) };
+    const solver = vm.runInContext("Collide", ctx).create(G, () => {});
+    solver.resolveCollisions([a, b], DT);
+    const CG = vm.runInContext("ContactGeometry", ctx);
+    return { frac: (v0 - Math.min(a.speed, b.speed)) / v0, drop: v0 - Math.min(a.speed, b.speed), expect: CG.rubDecel(false) * DT };
+  };
+  const r1 = rub(1), r6 = rub(0.6);
+  assert.ok(r1.drop > 0, "the rub scrubbed someone — wrong scenario");
+  assert.ok(Math.abs(r1.drop - r1.expect) < 1e-12, "PACE 1 is rubDecel x dt");   // drop = v0 - v1 carries float noise
+  assert.ok(Math.abs(r6.frac - r1.frac) < 1e-12, `notch 8 ${r6.frac} vs notch 14 ${r1.frac}`);
+});

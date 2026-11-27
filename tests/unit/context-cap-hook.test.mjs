@@ -85,14 +85,16 @@ test("guard mode refuses malformed input while advisory mode stays silent", () =
   }
 });
 
-test("--guard fails closed when the cap is known and the count is not; the FIRST STOP AT is the cap", () => {
+test("--guard fails closed on a missing transcript, advises on a first turn with no count, denies over the cap; the FIRST STOP AT is the cap", () => {
   const dir = mkTmpDir("ctxcap-");
   try {
     const g = (payload, env = {}) => {
       const r = spawnSync("python3", [HOOK, "--guard"], { input: JSON.stringify(payload), encoding: "utf8",
         env: { ...process.env, CLAUDE_PROJECT_DIR: dir, APEX_CTX_CAP: "", APEX_CTX_SOFT: "", APEX_CTX_HARD: "", ...env } });
       assert.equal(r.status, 0, r.stderr);
-      return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : "none";
+      if (!r.stdout.trim()) return "none";
+      const o = JSON.parse(r.stdout).hookSpecificOutput;
+      return o.permissionDecision || (o.additionalContext ? "advise" : "none");
     };
     const ev = (t) => ({ hook_event_name: "PreToolUse", tool_name: "Agent", transcript_path: t, session_id: "g", tool_input: { prompt: "x" } });
     assert.equal(g(ev(path.join(dir, "missing.jsonl")), { APEX_CTX_SOFT: "100" }), "deny", "env cap, no transcript");
@@ -100,10 +102,13 @@ test("--guard fails closed when the cap is known and the count is not; the FIRST
     const zero = path.join(dir, "zero.jsonl");
     fs.writeFileSync(zero, [{ type: "user", message: { content: "STOP AT: 100k" } }, { type: "assistant", message: { usage: { input_tokens: 0 } } }]
       .map((r) => JSON.stringify(r)).join("\n") + "\n");
-    assert.equal(g(ev(zero)), "deny", "a zero-usage newest entry is not a count");
+    assert.equal(g(ev(zero)), "advise", "a zero-usage newest entry is not a count: first turn, advisory (#6868)");
     const noAsst = path.join(dir, "noasst.jsonl");
     fs.writeFileSync(noAsst, JSON.stringify({ type: "user", message: { content: "STOP AT: 100k" } }) + "\n");
-    assert.equal(g(ev(noAsst)), "deny", "no assistant entry");
+    assert.equal(g(ev(noAsst)), "advise", "STOP AT present, no assistant entry yet (first turn): allowed with an advisory (#6868)");
+    const big = path.join(dir, "big.jsonl");
+    fs.writeFileSync(big, JSON.stringify({ type: "user", message: { content: "STOP AT: 100k" } }) + "\n" + (JSON.stringify({ type: "user", message: { content: "x".repeat(1000) } }) + "\n").repeat(4300));
+    assert.equal(g(ev(big)), "deny", "a transcript over the 4 MB tail with no count is not a first turn");
     const older = path.join(dir, "older.jsonl");
     fs.writeFileSync(older, [{ type: "user", message: { content: "STOP AT: 100k" } },
       { type: "assistant", message: { usage: { input_tokens: 10000 } } }, { type: "assistant", message: { usage: { input_tokens: 0 } } }]
