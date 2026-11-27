@@ -75,8 +75,8 @@ const AeroDrill = (function () {
     }
 
     // A local top view stays readable behind the helmet halo. The wake
-    // footprint uses the drill's Classic falloff, as does the car physics.
-    let footprint, lastX, lastY;
+    // footprint uses the drill's live falloff, as does the car physics.
+    let footprint, footLevel, lastX, lastY;   // footLevel: the dirty-air level it was drawn for (RE-RUN IN CFD AIR redraws it)
     function drawScope(gap, offset) {
       if (!ctx) return;
       const x = 140, y = 24, scaleX = 13, scaleY = 2.9;
@@ -85,13 +85,14 @@ const AeroDrill = (function () {
       if (px === lastX && py === lastY) return;
       lastX = px;
       lastY = py;
-      if (!footprint) {
+      if (!footprint || footLevel !== G.raceDirtyAir) {
+        footLevel = G.raceDirtyAir;
         footprint = document.createElement("canvas");
         footprint.width = scope.width;
         footprint.height = scope.height;
         const field = footprint.getContext("2d");
         for (let d = 1; d < 34; d++) {
-          const strength = PhysicsConsts.DirtyAir.wakeOf(d, 0, "classic");
+          const strength = PhysicsConsts.DirtyAir.wakeOf(d, 0, G.raceDirtyAir || "classic");
           const w = 4 * scaleX;
           const band = field.createLinearGradient(x - w, 0, x + w, 0);
           band.addColorStop(0, "transparent");
@@ -159,7 +160,7 @@ const AeroDrill = (function () {
           const distance = Math.max(0, air.rear - along);
           center += air.cross * distance / air.speed;
           if (air.wake) {
-            const strength = PhysicsConsts.DirtyAir.wakeOf(distance, lane - air.lane, "classic");
+            const strength = PhysicsConsts.DirtyAir.wakeOf(distance, lane - air.lane, G.raceDirtyAir || "classic");
             // Paired counter-rotating vortices open from the rear wheels.
             // The elevated central plume leaves the rival visible between them.
             const direction = Math.sign(lane - air.lane);
@@ -226,7 +227,8 @@ const AeroDrill = (function () {
       const angle = Math.atan2(wind.wx, wind.wz) - player.head;
       // The road's right vector is the negative angular direction from heading.
       const arrow = windArrows[(Math.round(-angle * 4 / Math.PI) % 8 + 8) % 8];
-      const status = [player.towing > 0.08 ? "Tow active" : "Clear of tow", wing,
+      const loss = gripLossPct(player);   // A5: the wake's corner cost, beside the tow it buys
+      const status = [player.towing > 0.08 ? "Tow active" : "Clear of tow", loss > 0 ? "grip −" + loss + " %" : "", wing,
         wind.on ? "Wind " + arrow + " " + AppearanceOpts.speed(wind.kmh) + " " + AppearanceOpts.unitLabel() : ""].filter(Boolean).join(" · ");
       if (readout.textContent !== status) readout.textContent = status;
       count = 0;
@@ -269,6 +271,9 @@ const AeroDrill = (function () {
   // silver the furthest a run got before it dropped out of the wake, gold the shortest clean finish in the wake.
   const AERO_MEDALS = Object.freeze({ bronze: 7.1, silver: 9.2, gold: 15.7, goldClean: true });
 
+  /** A5 (#6555): the grip the wake costs this car now, in whole %: 1 − the multiplier player-forces applied. */
+  const gripLossPct = c => (Number.isFinite(c._dirtyAirMul) ? Math.max(0, Math.round(100 * (1 - c._dirtyAirMul))) : 0);
+
   // Read-only on the cars (#6559 §1e rule 1): the gap to the rival, its nearest point and the tow actually felt.
   function sampleAero(G, acc) {
     const p = G.player, rival = G.cars.find(c => c !== p);
@@ -277,6 +282,7 @@ const AeroDrill = (function () {
     if (acc.gap0 == null) { acc.gap0 = gap; acc.gapMin = gap; acc.towS = 0; acc.t = G.raceT; }
     acc.gapMin = Math.min(acc.gapMin, gap);
     acc.towS += Math.max(0, G.raceT - acc.t) * (p.towing || 0);
+    acc.gripLoss = Math.max(acc.gripLoss || 0, gripLossPct(p));
     acc.t = G.raceT;
   }
 
@@ -295,6 +301,7 @@ const AeroDrill = (function () {
         ["Closed", value.toFixed(1), "m"],
         ["Nearest gap", Math.max(0, nearest).toFixed(1), "m"],
         ["Tow felt", (acc.towS || 0).toFixed(1), "s"],
+        ["Grip lost (peak)", String(acc.gripLoss || 0), "%"],
         ["Run time", (last.seconds || 0).toFixed(1), "s"],
         ["Run", last.clean ? "clean" : last.reason, ""],
       ],
@@ -307,12 +314,14 @@ const AeroDrill = (function () {
     setup: { flow: "gp", session: "race", track: "monza", weather: "dry", changeable: false, grid: "tier", duel: false, dirtyAir: "classic", wind: "real" },
     begin: beginAeroDrill,
     guide: createAeroGuide,
+    // A6: the card's RE-RUN IN CFD AIR (registry rerun): the same start in the CFD wake (DirtyAir.LOSS.cfd, λ 12 m).
+    variants: [{ id: "classic", label: "Classic air", dirtyAir: "classic" }, { id: "cfd", label: "CFD air", cta: "RE-RUN IN CFD AIR", dirtyAir: "cfd" }],
     goal: "slipstream",
     sample: sampleAero,
     score: scoreAero,
     medals: AERO_MEDALS,
   });
 
-  return { descriptor, begin: beginAeroDrill, guide: createAeroGuide };
+  return { descriptor, begin: beginAeroDrill, guide: createAeroGuide, gripLossPct };
 })();
 Object.freeze(AeroDrill);

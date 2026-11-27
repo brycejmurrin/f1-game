@@ -817,6 +817,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `lines.js` | `LinesDrill` | LAZY_LEARN | RACING LINES: the apex-choice drill (#6559 step 10, #6551 §3). |
 | `tyre-heat.js` | `TyreHeatDrill` | LAZY_LEARN | TYRE THERMAL LAB: LEARN's tyre-heat lesson on track (#6559 step 8, #6551 §1). |
 | `taper.js` | `TaperDrill` | LAZY_LEARN | TAPER HUNT: LEARN's deployment drill on track (#6559 step 6, #6550 D1). |
+| `grip.js` | `GripDrill` | LAZY_LEARN | GRIP & BRAKING: the friction-circle drill (#6559 step 4, #6551 §2, #7040). |
 | `harvest.js` | `HarvestDrill` | LAZY_LEARN | HARVEST STOP: LEARN's brake-blend drill on track (#6559 step 11, #6550 D3a). |
 <!-- /@gen-arch:modules -->
 

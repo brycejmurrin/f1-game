@@ -229,6 +229,7 @@ const LearnDoor = (function () {
   // before this file, so it is defined wherever DrillRegistry is (one guard: the typeofGuards ratchet).
   function defineDrills() {
     if (typeof DrillRegistry === "undefined") return;
+    if (typeof GripDrill !== "undefined") GripDrill.define();   // js/learn-drills/grip.js, when it evaluated first
     if (typeof TaperDrill !== "undefined") TaperDrill.define();   // js/learn-drills/taper.js, when it evaluated first
     if (typeof HarvestDrill !== "undefined") HarvestDrill.define();   // js/learn-drills/harvest.js, when it evaluated first
     if (typeof TyreHeatDrill !== "undefined") TyreHeatDrill.define();   // js/learn-drills/tyre-heat.js, when it evaluated first
