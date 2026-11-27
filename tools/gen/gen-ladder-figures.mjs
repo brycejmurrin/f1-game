@@ -17,6 +17,8 @@
 //   node tools/gen/gen-ladder-figures.mjs            # one line: guards / fast / gate / disk
 //   node tools/gen/gen-ladder-figures.mjs --table    # the markdown table the ladder note used to hold
 //   node tools/gen/gen-ladder-figures.mjs --json
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/gen-ladder-figures.mjs") ? process.argv.slice(2) : [], "Usage: node tools/gen/gen-ladder-figures.mjs [options]\nPrints the gate-ladder sizes (unit files per rung) from tests/groups.json; --json / --table. Writes nothing.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { ROOT, isMain } from "./gen-lib.mjs";

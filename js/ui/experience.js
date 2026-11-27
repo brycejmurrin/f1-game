@@ -231,12 +231,8 @@ const UiExperience = (function () {
       braking: "BRAKING", trail: "TRAIL BRAKING", slalom: "SLALOM", launch: "LAUNCH",
     });
     function goalValues() {
-      const out = [];
-      for (const [id, label] of Object.entries(RaceInsights.DRILLS)) {
-        if (RaceInsights.needsRivals(id)) continue;
-        out.push([id, SOLO_GOAL[id] || String(label).toUpperCase()]);
-      }
-      return out;
+      return Object.entries(RaceInsights.DRILLS).filter(([id]) => !RaceInsights.needsRivals(id) && id !== "groove")
+        .map(([id, label]) => [id, SOLO_GOAL[id] || String(label).toUpperCase()]);
     }
     function wire(id, fn) { const b = $(id); if (b) b.onclick = fn; }
     wire("mb-watch", deps.openWatch);

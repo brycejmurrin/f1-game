@@ -71,7 +71,7 @@ Commands that produced the table:
 ```sh
 node docs/archive/tools/gfx/wgpu-flag-test.mjs                    # swiftshader / lavapipe / lavapipe_xvfb
 node tools/gfx/gfx-probe.mjs --backend webgpu --lite montreal
-node tools/gfx/wgx-lavapipe-probe.mjs montreal --lite
+node tools/gfx/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe --lite montreal
 APEX_CHROME_ARGS="…lavapipe flags…" VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json \
   node tools/mcp/mcp-cli.mjs probe --backend webgpu --lite --wait 12000 --eval '…'
 ```
@@ -317,13 +317,13 @@ agent loses Lavapipe again.
 |------|---------|
 | WGX visible `#game` | `node tools/gfx/gfx-probe.mjs --backend webgpu --lite montreal` |
 | WGX readback oracle | `node tools/gfx/wgx-capture.mjs montreal --lite` → `frame.png` (optional; can flake on SwiftShader) |
-| WGX on Lavapipe | `node tools/gfx/wgx-lavapipe-probe.mjs montreal --lite` |
+| WGX on Lavapipe | `node tools/gfx/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe --lite montreal` |
 | TLX pixels (ForceGL / SwiftShader WebGL2) | `node tools/gfx/gfx-probe.mjs --backend three --lite montreal` |
 | TLX WebGPU pixels (Lavapipe soft-present) | `node tools/gfx/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe --lite montreal` |
 | Prove ICD | `test -f /usr/share/vulkan/icd.d/lvp_icd.json && vulkaninfo --summary \| head` |
 
 Agent index: `AGENTS.md` §Seeing the game / §Cursor Cloud. Tool rows:
-`tools/README.md` (`wgx-capture`, `wgx-lavapipe-probe`, `gfx-probe`).
+`tools/README.md` (`wgx-capture`, `gfx-probe --lavapipe`).
 
 **The stability argument is stronger than the speed one.** The cited report is
 explicit that slow canvas init was the *cause* of its flakiness — timeouts,
@@ -608,7 +608,7 @@ non-blank visible blit.
 |---------|----------------|--------|
 | **WGX visible canvas** | `node tools/gfx/gfx-probe.mjs --backend webgpu [--lite] <track>` | `#game` screenshot + `getImageData` (primary gate) |
 | **WGX readback** | `node tools/gfx/wgx-capture.mjs <track>` → `frame.png` | `GLX.capturePixels()` — optional; can flake after soft-present on SwiftShader |
-| **WGX A/B** | `node tools/gfx/wgx-lavapipe-probe.mjs <track> [--lite]` | `mesa-vulkan-drivers` + `VK_ICD_FILENAMES=…/lvp_icd.json` |
+| **WGX A/B** | `node tools/gfx/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe [--lite] <track>` | `mesa-vulkan-drivers` + `VK_ICD_FILENAMES=…/lvp_icd.json` |
 | **TLX / three** | `node tools/gfx/gfx-probe.mjs --backend three [--lite] <track>` | CI pin WebGL2 (`tlxForceGL=1`). AUTO is WebGPU (lite stack). `mappedAtCreation` → `queue.writeBuffer`. |
 | **TLX WebGPU** | `node tools/gfx/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe [--lite] <track>` | Soft-present 2D blit (Lavapipe). Never `getCurrentTexture()` on software. |
 

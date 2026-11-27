@@ -6,11 +6,16 @@ const RaceInsights = (function () {
     apex: "Drive the next turn and on down the straight",   // js/learn-drills/lines.js
     cooling: "Measure a cooling lap on this tyre set", braking: "Brake to a controlled stop", trail: "Release the brake into a turn",
     taper: "Flat out down the straight to the gate",   // LEARN's Taper Hunt (js/learn-drills/taper.js) scores it
+    harvest: "Brake to a stop on the marker",   // LEARN's Harvest Stop (js/learn-drills/harvest.js) scores it
     torque: "Flat out until the taper begins",   // LEARN's Torque Fill Exit (js/learn-drills/torque.js) scores it
     thermal: "Drive to the line with the tyres in their window",   // LEARN's Tyre Thermal Lab (js/learn-drills/tyre-heat.js) scores it
+    charge: "One flying lap that ends with the store it started with",   // LEARN's Charge-Sustaining Lap (js/learn-drills/charge.js)
     grip: "Brake into the next turn and drive 150 m past it",   // LEARN's friction-circle drill (js/learn-drills/grip.js) scores it
     slalom: "Six clean direction changes", launch: "Standing start to racing speed",
     start: "Gain a place off the line",
+    // LEARN's Wet Weather Lines (js/learn-drills/rain-groove.js): timed as `sector`, its own mastery key so a run on a
+    // held wet road never sets a dry sector best.
+    groove: "Wet sector in the groove",
     // THE RIVAL DRILLS. Every drill above judges the car against the road; these
     // three judge it against another car, which is a different and harder thing
     // to measure honestly — see PARITY and the notes on each branch below.
@@ -64,7 +69,9 @@ const RaceInsights = (function () {
   const HOLD_CAP = 30;         // seconds of pressure that count as a full defence
   const GRIP_GATE = 150;       // m past the turn: the grip drill's finish gate (#6551 §2)
   const THERMAL_LINE = 150;    // m before the line: the Tyre Thermal Lab's finish gate (a 1-lap drill race ends at it)
+  const CHARGE_LINE = 30;      // m before the line: the Charge-Sustaining Lap's gate (#6550 D2)
   const TAPER_RUN = 400;       // m: the Taper Hunt's straight, from its start to the gate (#6550 D1)
+  const HARVEST_RUN = 430;     // m: the Harvest Stop's overrun gate, 100 m past its marker (#6550 D3a)
   const BRAKE_REF = 50;        // m/s: a braking score is the stop scaled to this entry speed (v², #5888)
   const SLOW = 0.06, TRAFFIC_N = 3;   // a "backmarker" is 6% down on your own _vmaxNow; three of them is a stint through traffic
   const CLEAR_S = 1.5;         // held clear before a pass is a pass
@@ -107,6 +114,8 @@ const RaceInsights = (function () {
     }
     let runId = null, runs = 0;   // one id per session: settle() replaces its row rather than appending
     function reset() { lapEnergy = lastLapEnergy = null; runId = null; previous = sector = tyreStart = drill = lastDrill = null; events = []; sequence = distance = 0; lapClean = false; weather = null; laps = []; energy = [[], [], []]; attempts = {}; }
+    // A drill that cannot start says why on screen, then refuses.
+    const refuse = (msg) => (G.announce(msg, 2, "practice"), false);
     function startDrill(mode) {
       if (!Object.hasOwn(DRILLS, mode)) mode = "free";
       const c = G.player;
@@ -115,49 +124,49 @@ const RaceInsights = (function () {
         G.announce("COOLING LAP NEEDS UNSCORED PRACTICE AND TYRE WEAR", 3, "practice"); return false;
       }
       if (["braking", "trail", "grip"].includes(mode) && Math.abs(c.speed) < G.vTop() * .3) {
-        G.announce("BUILD SPEED BEFORE SETTING THIS DRILL", 2, "practice"); return false;
+        return refuse("BUILD SPEED BEFORE SETTING THIS DRILL");
       }
       // ONE stopped-car test for both standing-start goals, so the absolute
       // speed literal is written once and carries one approval in
       // tests/unit/vstd-invariant.test.mjs rather than one per drill.
       if (["launch", "start"].includes(mode) && Math.abs(c.speed) > 1) { G.announce(mode === "start" ? "SET THIS ON THE GRID, BEFORE THE LIGHTS" : "STOP THE CAR BEFORE SETTING THIS DRILL", 2, "practice"); return false; }
       // …and a start drill also needs somebody to gain a place on.
-      if (mode === "start" && placeOf(c) === 0) { G.announce("A START DRILL NEEDS OTHER CARS ON THE GRID", 2, "practice"); return false; }
+      if (mode === "start" && placeOf(c) === 0) { return refuse("A START DRILL NEEDS OTHER CARS ON THE GRID"); }
       // ── the rival drills refuse loudly, because every refusal names the thing
       // the driver has to go and do before the drill means anything ───────────
       let rival = null;
       if (mode !== "start" && needsRivals(mode)) {
-        if (placeOf(c) === 0) { G.announce("THIS DRILL NEEDS OTHER CARS ON TRACK", 2, "practice"); return false; }
+        if (placeOf(c) === 0) { return refuse("THIS DRILL NEEDS OTHER CARS ON TRACK"); }
         // A caution neutralises the whole field to a delta pace, so nothing
         // rival-relative measured under one means anything.
-        if (G.cautionInfo && G.cautionInfo().level > 0) { G.announce("NO RACING UNDER A CAUTION", 2, "practice"); return false; }
+        if (G.cautionInfo && G.cautionInfo().level > 0) { return refuse("NO RACING UNDER A CAUTION"); }
         if (mode === "backmarkers") {
           // Any slower car up the road, not just the one in our lane — traffic
           // is traffic wherever it sits.
           const slower = (G.cars || []).filter(o => o !== c && !o.retired && !o.finished
             && (gapTo(o, c) || 0) > 0 && isBackmarker(o, c));
-          if (!slower.length) { G.announce("NO SLOWER TRAFFIC AHEAD TO PASS", 2, "practice"); return false; }
+          if (!slower.length) { return refuse("NO SLOWER TRAFFIC AHEAD TO PASS"); }
           rival = slower[0];
         } else rival = mode === "defend" ? nearestBehind(c) : nearestAhead(c);
         const gap = rival ? Math.abs(gapTo(rival, c)) : Infinity;
         if (mode === "backmarkers") { /* the target list is the precondition; no gap test */ }
         else if (mode === "defend") {
-          if (!rival || gap > ATTACK_M) { G.announce("NOBODY IS ATTACKING YOU YET", 2, "practice"); return false; }
+          if (!rival || gap > ATTACK_M) { return refuse("NOBODY IS ATTACKING YOU YET"); }
           // "Could actually pass" as a fraction of top speed — the AiDrive.otWant
           // shape. NOT a c.speed-against-a-literal compare, which would be a
           // PACE-rule violation (tests/unit/vstd-invariant.test.mjs) and wrong.
           if (!((rival._vmaxNow || 0) >= (c._vmaxNow || 0) + THREAT * G.vTop())) {
-            G.announce("HE IS NOT QUICK ENOUGH TO DEFEND FROM", 2, "practice"); return false;
+            return refuse("HE IS NOT QUICK ENOUGH TO DEFEND FROM");
           }
         } else {
-          if (placeOf(c) === 1) { G.announce("YOU ARE LEADING — THERE IS NOBODY TO PASS", 2, "practice"); return false; }
-          if (!rival || gap > TOW_RANGE) { G.announce(mode === "overtake" ? "CLOSE ON THE CAR AHEAD FIRST" : "GET INTO THE WAKE OF THE CAR AHEAD", 2, "practice"); return false; }
+          if (placeOf(c) === 1) { return refuse("YOU ARE LEADING — THERE IS NOBODY TO PASS"); }
+          if (!rival || gap > TOW_RANGE) { return refuse(mode === "overtake" ? "CLOSE ON THE CAR AHEAD FIRST" : "GET INTO THE WAKE OF THE CAR AHEAD"); }
         }
-        if (mode === "slipstream" && gap < WAKE_DONE_M) { G.announce("ALREADY THERE — DROP BACK FIRST", 2, "practice"); return false; }
+        if (mode === "slipstream" && gap < WAKE_DONE_M) { return refuse("ALREADY THERE — DROP BACK FIRST"); }
         if (mode === "overtake") {
           const par = paceParity();
-          if (par == null) { G.announce("HOLD THIS GAP A MOMENT LONGER", 2, "practice"); return false; }
-          if (Math.abs(par - 1) > PARITY) { G.announce("NOT ON YOUR PACE — NOT A FAIR FIGHT", 2, "practice"); return false; }
+          if (par == null) { return refuse("HOLD THIS GAP A MOMENT LONGER"); }
+          if (Math.abs(par - 1) > PARITY) { return refuse("NOT ON YOUR PACE — NOT A FAIR FIGHT"); }
         }
       }
       previous = sector = tyreStart = null; laps = []; energy = [[], [], []]; lapClean = false;
@@ -190,8 +199,9 @@ const RaceInsights = (function () {
         drill.endProg = c.prog + ahead + APEX_RUNOUT;
       }
       // THERMAL: one run to a gate THERMAL_LINE m before the timing line, in the car's own cumulative arc.
-      if (mode === "thermal") { const L = G.track && G.track.total; drill.gateProg = c.prog + (L > 0 ? ((L - c.s) % L + L) % L : 0) - THERMAL_LINE; }
+      if (mode === "thermal" || mode === "charge") { const L = G.track && G.track.total; drill.gateProg = c.prog + (L > 0 ? ((L - c.s) % L + L) % L : 0) - (mode === "charge" ? CHARGE_LINE : THERMAL_LINE); }
       if (mode === "taper") drill.gateProg = c.prog + TAPER_RUN;
+      if (mode === "harvest") drill.gateProg = c.prog + HARVEST_RUN;
       if (mode === "cooling") drill.cooling = { car: c, track: G.track, tyre: c.tyre,
         stint: c.tyreStints || 0, compound: c.tyre && c.tyre.id, wet: G.trackWetness ? G.trackWetness() : 0, start: null };
       event("practice", DRILLS[mode] + " — unscored");
@@ -386,7 +396,7 @@ const RaceInsights = (function () {
         if (drill.lapStart != null) drill.lapDone = true;
         else { drill.lapStart = now; if (drill.mode === "lap") { event("practice", "Lap timing started at the line"); G.announce("LAP TIMING STARTED", 1.5, "practice"); } }
       } else if (current.lap < drill.lap) { drill.lap = current.lap; failDrill("crossed the line backwards"); }
-      if (drill.mode === "sector") {
+      if (drill.mode === "sector" || drill.mode === "groove") {
         if (current.sector !== drill.sector && current.prog - drill.startProg > 10) finishDrill(current, c);
       } else if (drill.mode === "corner") {
         if (drill.phase === 2 && moving) finishDrill(current, c);
@@ -427,10 +437,13 @@ const RaceInsights = (function () {
       } else if (drill.mode === "taper") {
         if (current.prog >= drill.gateProg) finishDrill(current, c);
         else if (v < 1) { failDrill("stopped before the gate"); finishDrill(current, c); }
+      } else if (drill.mode === "harvest") {
+        if (v < 1) { if (!drill.brakeSeen) failDrill("stopped without firm braking"); finishDrill(current, c); }
+        else if (current.prog >= drill.gateProg) { failDrill("ran 100 m past the marker"); finishDrill(current, c); }
       } else if (drill.mode === "torque") {
         if (v * PhysicsConsts.VMAX >= PhysicsConsts.TAPER_LO * G.vTop()) finishDrill(current, c);   // vStd reached the taper's start
         else if (v < 1) { failDrill("stopped before the taper"); finishDrill(current, c); }
-      } else if (drill.mode === "thermal") {
+      } else if (drill.mode === "thermal" || drill.mode === "charge") {
         if (current.prog >= drill.gateProg) finishDrill(current, c);
         else if (v < 1 && now - drill.time > 3) { failDrill("the car stopped"); finishDrill(current, c); }
       } else if (drill.mode === "slalom" && drill.changes >= 6) finishDrill(current, c);

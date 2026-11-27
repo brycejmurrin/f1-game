@@ -267,7 +267,7 @@ test("pages-publishable.sh: forward-only, and a CDN hiccup cannot wedge deploys"
   const script = new URL("../../tools/ci/pages-publishable.sh", import.meta.url).pathname;
   const verdict = (sha, live) => cp.execFileSync("bash", [script, sha, "https://example.test/site/"], {
     cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
-    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_LIVE_SHA: live },
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_LIVE_SHA: live, PAGES_READ_DELAY: "0" },
   }).trim();
   assert.equal(verdict(C, B), "true", "live is an ancestor: publishing moves the site forward");
   assert.equal(verdict(B, B), "false", "already live");
@@ -276,6 +276,64 @@ test("pages-publishable.sh: forward-only, and a CDN hiccup cannot wedge deploys"
   assert.equal(verdict(C, "fail"), "true", "the live site unreadable: publish (warned), the lock recheck runs again");
   assert.equal(verdict(C, ""), "true", "no apex-sha in the live shell yet: publish");
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("pages-publishable.sh retries the live-sha read 3 times before an unreadable verdict (#7261)", (t) => {
+  // Decision 7249-10 A: under --strict (the call under the Pages lock) an empty
+  // read refuses the deploy and pages.yml exits 1, so ONE github.io blip turned
+  // the tip red. The stub curl fails FAKE_FAILS times (a transport error, then
+  // a 200 with no apex-sha: both are "empty"), then serves FAKE_LIVE_SHA, and
+  // counts every call in a file so the test pins the number of reads: 3 is
+  // the script's DEFAULT (PAGES_READ_TRIES is never set here); only the 2 s
+  // wait is zeroed, to keep the file fast.
+  const dir = mkTmpDir("pages-pub-retry-");
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const git = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  git("init", "-q"); git("config", "user.email", "t@t"); git("config", "user.name", "t");
+  const shas = [];
+  for (const n of ["A", "B"]) {
+    fs.writeFileSync(path.join(dir, "f.txt"), n);
+    git("add", "f.txt"); git("commit", "-q", "-m", n); shas.push(git("rev-parse", "HEAD"));
+  }
+  const [A, B] = shas;
+  const bin = path.join(dir, "bin"); fs.mkdirSync(bin);
+  const calls = path.join(dir, "calls");
+  fs.writeFileSync(path.join(bin, "curl"), [
+    "#!/usr/bin/env bash",
+    'n=$(( $(cat "$FAKE_CALLS" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$FAKE_CALLS"',
+    'if [ "$n" -le "$FAKE_FAILS" ]; then',
+    '  if [ "$n" = 1 ]; then exit 28; fi',   // a timeout: curl -f prints nothing
+    '  echo "<html><head></head></html>"; exit 0',   // a 200 shell with no apex-sha
+    "fi",
+    'echo "<meta name=\\"apex-sha\\" content=\\"${FAKE_LIVE_SHA}\\">"',
+    "",
+  ].join("\n"));
+  fs.chmodSync(path.join(bin, "curl"), 0o755);
+  const script = new URL("../../tools/ci/pages-publishable.sh", import.meta.url).pathname;
+  const run = (fails, ...flags) => {
+    fs.rmSync(calls, { force: true });
+    const r = cp.spawnSync("bash", [script, B, "https://example.test/site/", ...flags], {
+      cwd: dir, encoding: "utf8",
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_LIVE_SHA: A, FAKE_FAILS: String(fails),
+        FAKE_CALLS: calls, PAGES_READ_DELAY: "0" },
+    });
+    assert.equal(r.status, 0, r.stderr);
+    return { verdict: r.stdout.trim(), reads: Number(fs.readFileSync(calls, "utf8")), stderr: r.stderr };
+  };
+  assert.deepEqual((({ verdict, reads }) => ({ verdict, reads }))(run(0, "--strict")), { verdict: "true", reads: 1 },
+    "a good first read is one read");
+  const twice = run(2, "--strict");
+  assert.deepEqual({ verdict: twice.verdict, reads: twice.reads }, { verdict: "true", reads: 3 },
+    "two empty reads, then the live sha: publishable under the lock, on the third read");
+  const retryLines = (e) => e.split("\n").filter((l) => l.startsWith("live apex-sha read ")).length;
+  assert.equal(retryLines(twice.stderr), 2, "each empty read before the last says so in the job log");
+  const never = run(99, "--strict");
+  assert.deepEqual({ verdict: never.verdict, reads: never.reads }, { verdict: "false", reads: 3 },
+    "three empty reads under the lock: still a refusal, and exactly three reads");
+  assert.equal(retryLines(never.stderr), 2, "three reads, two waits between them");
+  const open = run(99);
+  assert.deepEqual({ verdict: open.verdict, reads: open.reads }, { verdict: "true", reads: 3 },
+    "the unlocked first call stays fail-open after the same three reads");
 });
 
 test("a Pages run reuses a gate that already passed on the SAME tree, and only then", () => {

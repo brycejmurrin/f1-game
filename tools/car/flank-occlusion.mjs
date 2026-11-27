@@ -29,6 +29,8 @@
 // [0, 0.45, 0.245]) so a verdict here is about the shot you would have taken.
 // A DIFFERENT camera is a different answer — this reports one viewpoint, not a
 // claim about every angle.
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/flank-occlusion.mjs") ? process.argv.slice(2) : [], "Usage: node tools/car/flank-occlusion.mjs [options]\nRay-tests cover-flank stations against the real car mesh + wheels from a garage camera; reports what is hidden.\n--help prints this and exits 0.");
 import { loadParts } from "./parts-sweep.mjs";
 import { makeFlags, runCli } from "../lib/cli-args.mjs";
 

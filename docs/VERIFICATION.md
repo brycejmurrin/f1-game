@@ -149,6 +149,33 @@ or named in `SWEEPS_ONLY` with the job that runs it; it caught itself on its
 first run). `test-coverage-audit` asks a different question ("is this file in
 some topical group?") — a file can pass it while nothing runs it before a push.
 
+### Porting a logic spec to the VM
+
+A browser spec whose every assertion reads an `__apex` JSON hook (no locator, no
+screenshot, no DOM) spends SwiftShader minutes on physics the Node VM
+(`tools/lib/game-vm.cjs`) runs in seconds. One spec per PR, in this order
+(#7261, decision 7253-P4 A; the first port: `longitudinal`):
+
+1. **Eligible?** `node tools/check/vm-portable.mjs` (the lint) and a read of the
+   spec: any DOM, locator, screenshot or render-only read stays in the browser.
+2. **Twin first.** `tests/unit/<spec>-vm.test.mjs`: the SAME titles, launch
+   constants, seat and seed (the VM boots the factory seat the spec pins with
+   `pinFactorySeat`), step counts and thresholds, ported verbatim. List it in
+   `TWINNED` (`tools/ci/twinned-specs.mjs`) and its gated node group in
+   `tests/groups.json`; land it while the browser copy still runs, so CI shows
+   both sides green on one head. A twin that needs a looser bound than the spec
+   is not a twin: find why the VM differs.
+3. **Then cut the spec** to one smoke the VM cannot see (the feature driven
+   with the renderer up). Every remaining spec title must be a twin title; add
+   the spec to `TWIN_SUBSET` with the reason; `node tools/ci/twinned-specs.mjs`
+   must print `0 portable spec(s) still on the browser gate` with no problem.
+4. **Evidence in the PR:** the twin's pass line, the spec's per-test seconds
+   from `tests/data/spec-timings.json` before and after, and the cases moved.
+
+Next, one per PR: `active-aero`, `aero-zones`, `parts-physics`, `new-hooks`,
+`collisions-deep`, `collision-ai-fixes`, `debris`. Whether a twin exists
+already: `TWINNED`; where one does, the port is step 3 alone.
+
 ## 5. Flaky tests
 
 Playwright retries default to **1 under `CI`** when unset (`playwright.config.js`);

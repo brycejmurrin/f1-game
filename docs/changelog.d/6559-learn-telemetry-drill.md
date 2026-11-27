@@ -1,0 +1,1 @@
+New: LEARN's Telemetry Detective lesson has an on-track drill on Monza's Lesmo sector. Set a reference run, then drive it again; the card lays both runs over each other at the same distance. Scrub to the corner where the gap grew, name the cause (EARLY BRAKE, LOW MIN SPEED or LATE THROTTLE) and tap THIS CORNER for a medal. A FIX IT run that wins the time back earns gold (#6559).

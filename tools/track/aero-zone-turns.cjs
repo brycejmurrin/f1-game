@@ -16,6 +16,10 @@
  *   node tools/track/aero-zone-turns.cjs --all
  */
 "use strict";
+if (require.main === module && process.argv.slice(2).some((a) => a === "--help" || a === "-h" || a === "help")) {
+  console.log("Usage: node tools/track/aero-zone-turns.cjs [options]\nPairs each geometry-detected straight with the `def.turns[]` indices bounding it, so an aero-zone claim can be checked.\n--help prints this and exits 0.");
+  process.exit(0);
+}
 const path = require("path");
 const { buildContext } = require("./verify-track.cjs");
 

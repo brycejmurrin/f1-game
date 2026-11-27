@@ -25,7 +25,7 @@ test('Home solo practice stays in sync with the coach and does not offer goals r
   const goal = dom.byId('practice-goal'), button = dom.byId('mb-practice');
   const offered = Array.from(goal.children, option => option.value);
   assert.ok(offered.includes('lap') && offered.includes('launch'));
-  for (const id of ['start', 'slipstream', 'overtake', 'defend', 'backmarkers']) assert.ok(!offered.includes(id), id);
+  for (const id of ['start', 'slipstream', 'overtake', 'defend', 'backmarkers', 'groove']) assert.ok(!offered.includes(id), id);
   button.onclick(); assert.equal(goal.value, 'lap'); assert.equal(opens, 1);
   assert.equal(local.api.isPracticePick(), true);
   goal.value = 'corner'; goal.onchange(); assert.equal(selected, 'corner');

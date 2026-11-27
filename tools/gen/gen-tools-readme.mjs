@@ -30,6 +30,8 @@
  *   node tools/gen/gen-tools-readme.mjs            # write
  *   node tools/gen/gen-tools-readme.mjs --check    # exit 1 when committed ≠ generated
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/gen-tools-readme.mjs") ? process.argv.slice(2) : [], "Usage: node tools/gen/gen-tools-readme.mjs [options]\nGenerates `tools/README.md` from each tool's `@doc` / `@skill` / `@section` header tags; `--check` fails on drift.\n--help prints this and exits 0.");
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";

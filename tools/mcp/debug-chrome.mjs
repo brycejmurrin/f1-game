@@ -124,7 +124,12 @@ async function pageSocket(port) {
   await new Promise((res, rej) => { ws.onopen = res; ws.onerror = () => rej(Error("CDP socket error")); });
   let id = 0; const pending = new Map();
   ws.onmessage = e => { const m = JSON.parse(e.data); const p = pending.get(m.id); if (p) { pending.delete(m.id); m.error ? p.rej(Error(m.error.message)) : p.res(m.result); } };
-  const send = (method, params = {}) => new Promise((res, rej) => { const i = ++id; pending.set(i, { res, rej }); ws.send(JSON.stringify({ id: i, method, params })); setTimeout(() => rej(Error(method + " timed out")), 8000); });
+  const send = (method, params = {}) => new Promise((res, rej) => {
+    const i = ++id;
+    const t = setTimeout(() => { pending.delete(i); rej(Error(method + " timed out")); }, 8000);
+    pending.set(i, { res: v => { clearTimeout(t); res(v); }, rej: e => { clearTimeout(t); rej(e); } });
+    ws.send(JSON.stringify({ id: i, method, params }));
+  });
   return { send, ws };
 }
 async function viewport(port) {

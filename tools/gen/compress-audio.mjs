@@ -18,6 +18,8 @@
  *   node tools/gen/compress-audio.mjs --check    # every frame of every listed track at the cap
  *   node tools/gen/compress-audio.mjs --apply [--ffmpeg /usr/bin/ffmpeg]
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/compress-audio.mjs") ? process.argv.slice(2) : [], "Usage: node tools/gen/compress-audio.mjs [options]\nCap soundtrack bitrate: re-encode listed assets/music tracks to 128 kbps from their git originals; --check scans frames.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";

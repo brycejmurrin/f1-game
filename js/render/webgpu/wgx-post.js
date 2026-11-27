@@ -14,6 +14,13 @@ const WGXPost = (function () {
       if (!core.Post) return;
       const buffers = {};
       const makeBuffer = (name, size) => { buffers[name] = core.device.createBuffer({ size, usage: core.UCD }); };
+      // Pipeline/module creation never throws on a WGSL or validation error, so
+      // the catch below cannot see one: scope the build and fail closed (null
+      // pComposite keeps the safe tonemap blit) on a non-null pop. A device
+      // without error scopes (the unit-test mock) keeps the sync-only path.
+      const dev = core.device;
+      const scoped = typeof dev.pushErrorScope === "function" && typeof dev.popErrorScope === "function";
+      if (scoped) dev.pushErrorScope("validation");
       try {
         core.pointSampler = core.device.createSampler({ addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
         // Bloom mips are core.POST_HDR_FORMAT textures (ensureTargets) — the
@@ -133,6 +140,16 @@ const WGXPost = (function () {
           postFailureLogged = true;
           Log.warn("gfx", "WGX post construction failed: " + ((e && e.message) || e));
         }
+      }
+      if (scoped) {
+        dev.popErrorScope().then((err) => {
+          if (!err || core.device !== dev) return;
+          core.pComposite = null;   // fail closed: ensureTargets stays inert
+          if (!postFailureLogged) {
+            postFailureLogged = true;
+            Log.warn("gfx", "WGX post validation failed: " + (err.message || err));
+          }
+        }, () => { /* device lost: nothing to close */ });
       }
     }
     function _retireSpatial(buffer) {

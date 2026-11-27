@@ -43,6 +43,7 @@ function fixture(t) {
   const run = (op, arg = "") => JSON.parse(cp.execFileSync("node", ["run.mjs", op, arg], { cwd: dir, encoding: "utf8", env: { ...process.env, APEX_RATCHET_BASE_REF: "base", APEX_RATCHET_ABSOLUTE: "" } }));
   git("init", "-q", "-b", "main");
   for (const f of ["ratchets.mjs", "merge-hygiene.mjs"]) put(`tools/check/${f}`, fs.readFileSync(path.join(ROOT, "tools/check", f), "utf8"));
+  put("tools/lib/cli-args.mjs", fs.readFileSync(path.join(ROOT, "tools/lib/cli-args.mjs"), "utf8"));
   put("run.mjs", RUNNER);
   // The tip has ONE pin of headroom: two pins counted, ceiling 3.
   put("tests/data/ratchets.json", JSON.stringify({ files: {}, tree: { assertPins: { ceiling: 3, slack: 20, absorb: 5 } } }, null, 1));

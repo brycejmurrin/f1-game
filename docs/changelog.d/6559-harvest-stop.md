@@ -1,0 +1,1 @@
+New: LEARN → Brake blending has an on-track drill, Harvest Stop (#6559 step 11): stop a Monza run on a marker from 85 % charge; a live bar splits the braking into motor and discs, the card shows the harvest and how long it was clipped at a full store, and scores the stop accuracy, with medals from VM runs.

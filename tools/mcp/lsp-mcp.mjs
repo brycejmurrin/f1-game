@@ -1904,7 +1904,7 @@ export async function callTool(lsp, name, a = {}) {
       text = all.slice(offset, offset + lim).join("\n")
         + (all.length > offset + lim ? `\n… ${all.length - offset - lim} more (offset: ${offset + lim}; an exact name lists first)` : "")
         + (aliases.length ? `\n+ ${aliases.length} alias${aliases.length === 1 ? "" : "es"} (const x = Y.x / destructuring)${aliases.some(r => r.s.name === a.query) ? ` — ${aliases.filter(r => r.s.name === a.query).length} of ${a.query}` : ""}, e.g. ${aliases.slice(0, 3).map(r => r.loc).join(", ")}` : "")
-        || `no symbol matches ${a.query}`;
+        || (all.length && offset >= all.length ? `offset ${offset} is past the last of ${all.length} row${all.length === 1 ? "" : "s"} for ${a.query}` : `no symbol matches ${a.query}`);
     } else if (name === "lsp_diagnostics") {
       text = await lsp.diagnose(a.file, a.all);
     } else if (name === "lsp_outline") {

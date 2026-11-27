@@ -81,11 +81,6 @@
       "presentation": "native",
       "preserve": "One stdout line per new OWNER hello / apex-result as it arrives (a Monitor stream: never buffer or summarise), backoff notes on stderr, exit reason; the token appears nowhere."
     },
-    "tools/car/audit-aero.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Inherited child streams and parent render-car flags."
-    },
     "tools/car/audit-parts.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
@@ -971,11 +966,6 @@
       "presentation": "shared-levels",
       "preserve": "Local gitignored logs only; parse errors; absence locally not global absence"
     },
-    "tools/ci/test-solo.mjs": {
-      "action": "artifact-first",
-      "presentation": "shared-levels",
-      "preserve": "Inherited stdout; forced busy-run caveat; exits/signals and infrastructure failure"
-    },
     "tools/ci/tip-alarm.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1485,11 +1475,6 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Parent output flags, unsupported-option warnings and child exit."
-    },
-    "tools/gfx/wgx-lavapipe-probe.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Exact software stack qualifier and inherited parent exit; no second summarizer."
     },
     "tools/gfx/wgx-shot.mjs": {
       "action": "artifact-first",

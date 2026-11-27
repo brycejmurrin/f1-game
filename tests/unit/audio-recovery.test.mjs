@@ -427,7 +427,7 @@ test("stopping or replacing a blocked stream cancels its gesture retry, includin
     else h.A.setMusicBackend({ setVolume() {}, start() {}, stop() {} });
     reject(Object.assign(new Error("blocked"), { name: "NotAllowedError" })); await flush();
     h.listeners.touchend({ isTrusted: true }); await flush();
-    assert.equal(plays, 1, action + " revoked the old request");
+    assert.equal(plays, action === "replace" ? 3 : 1, action + " revoked the old request (a replacement builtin now streams: its own blocked play retries once; the old track's never does)");
   }
 });
 
@@ -482,12 +482,13 @@ test("a streamed track keeps its position when a stalled AudioContext is rebuilt
   assert.equal(Audio.made[1].currentTime, 0, "an explicit stop still starts from the top");
 });
 
-test("the shipped tracks still decode on desktop next to a streamed upload", async () => {
-  const { A, decoded } = boot({ Audio: fakeAudio(200), mediaSource: true });
+test("the shipped tracks decode on desktop only when apex26.musicStream is 0, next to a streamed upload", async () => {
+  const { A, decoded, sandbox } = boot({ Audio: fakeAudio(200), mediaSource: true });
+  sandbox.localStorage = { getItem: (k) => (k === "apex26.musicStream" ? "0" : null) };
   A.init(); await flush();
   A.addTracks([UPLOAD]);
   A.playTrackId("builtin:song3"); await flush();
-  assert.ok(decoded.some((u) => /song3/.test(u)), "the A/B default for builtins is unchanged on desktop");
+  assert.ok(decoded.some((u) => /song3/.test(u)), "the A/B switch still pins the decode path");
 });
 
 test("without streaming, an upload longer than the cap is refused before it decodes", async () => {

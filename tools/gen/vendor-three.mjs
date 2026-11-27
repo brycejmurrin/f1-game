@@ -26,6 +26,8 @@
  * sha256 per written file. `--check` recomputes the file hashes; it needs no network
  * and is what the guard suite runs.
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/vendor-three.mjs") ? process.argv.slice(2) : [], "Usage: node tools/gen/vendor-three.mjs [options]\nVendors three.js (patch, terser-minify, write vendor/three-<ver>/ + MANIFEST.json); `--check` verifies hashes.\n--help prints this and exits 0.");
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
