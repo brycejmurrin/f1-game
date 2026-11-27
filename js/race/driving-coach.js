@@ -410,13 +410,17 @@ const DrivingCoachBody = (function () {
     // so a rewind clears marbles and broken panels instead of putting them
     // back. The alternative is cars rewound into debris that was never there.
     function captureWorld() { return SimState.capture(G); }
-    // `exact` (DrillFork, #6559 B2): a what-if branch is a REPLAY, so the player's penalties go back too and the
-    // lap is not marked; a practice rewind (the default) keeps both forward.
+    // `exact` (DrillFork, #6559 B2): a what-if branch is a REPLAY that ends where it began, so the player's penalties
+    // go back too and what the live lap owns is not spent (the RETRY LAP drop-in, the invalid-lap mark); a practice
+    // rewind (the default) keeps penalties forward and spends both. Either way a practice session's records are
+    // spoiled (laps were driven that the board must not see) and the coach's trace restarts.
     function restoreWorld(w, o) {
       const exact = !!(o && o.exact);
       if (!SimState.restore(w, G, { keepForward: !exact })) return false;
-      if (typeof LapRetry !== "undefined") LapRetry.invalidate();   // the RETRY LAP drop-in is from a world this rewind replaced
-      if (G.player && !exact) G.player.incidentInvalidLap = true;
+      if (!exact) {
+        if (typeof LapRetry !== "undefined") LapRetry.invalidate();   // the RETRY LAP drop-in is from a world this rewind replaced
+        if (G.player) G.player.incidentInvalidLap = true;
+      }
       G.records.invalidate(); trace = []; quiet = 2; clearCandidate();
       return true;
     }

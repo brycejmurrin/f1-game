@@ -28,6 +28,9 @@
  * branch start, identically in every branch of a fork that names the same cars: fewer cars to step on the phone. "Cannot reach" is measured
  * on the road: further than (pit loss + margin) seconds of track at the field's mean speed, either way round.
  *
+ * THE HOST RUNS A SIM DRILL AS PRACTICE (as Aero Lab does): a branch drives real laps through the live lap code, and
+ * only a practice session's records are spoiled by the restore (SessionRecords.invalidate), so a branch's laps never
+ * reach the board. Announcements raised inside a branch are the host's to mute while it fast-forwards.
  * NOT HERE (step 16): freezing fuel or wear for a counterfactual. Nothing here reads or writes the tyre model.
  * LAZY: its own bundle (LAZY_DRILL_FORK; the drill host loads it with ScriptLoader), only for a kind:"sim" drill. Never read
  * by the physics step, and it adds no G member: the arc never reaches the driver (AGENTS.md §Physics).
@@ -65,7 +68,7 @@ var DrillFork = (function () {
     function cullSet(F, cull, until, decided) {
       if (!cull) return null;
       const o = cull === true ? {} : cull;
-      const keep = new Set([...(o.keep || []), ...(decided || []), G.cars.indexOf(G.player)].filter((i) => i >= 0));
+      const keep = new Set([...(o.keep || []), ...(decided || []), G.cars.indexOf(G.player)].filter((i) => Number.isInteger(i) && i >= 0 && i < G.cars.length));
       const windowS = (Number.isFinite(o.pitLossS) ? o.pitLossS : CULL_PIT_LOSS_S) + (Number.isFinite(o.marginS) ? o.marginS : CULL_MARGIN_S);
       const key = [...keep].sort((a, b) => a - b).join(",") + "|" + windowS + "|" + JSON.stringify(until);
       const had = culls.get(F);
@@ -113,6 +116,16 @@ var DrillFork = (function () {
 
     function begin(job) {
       job.live = capture();   // the live world, put back when the job ends (it may have moved on since the fork)
+      const savedInput = G._testInput, savedHeadless = G.headlessMode;
+      try { setUp(job, savedInput, savedHeadless); }
+      catch (e) {   // a throw before the first tick (a caller's drive factory, a bad snapshot): the live world comes back
+        G._testInput = savedInput; G.headlessMode = savedHeadless;
+        const live = job.live; job.live = null;
+        restore(live);
+        throw e;
+      }
+    }
+    function setUp(job, savedInput, savedHeadless) {
       const set = cullSet(job.F, job.cull, job.until, job.decisions.map((d) => d.car));
       restore(job.F.world);
       if (job.seed != null) G.simSeed(job.seed);   // noise(): a neighbouring stream from the same world
@@ -121,7 +134,8 @@ var DrillFork = (function () {
       const cars = G.cars;
       job.run = { t0: G.raceT, lap0: cars.map((c) => c.lap || 0), lapAt: cars.map(() => [G.raceT]), done: new Set(),
         stops: cars.map(() => 0), pit: cars.map((c) => c.pitState || "none"),
-        culled: set ? [...set] : [], prog0: G.player ? G.player.prog || 0 : 0, savedInput: G._testInput, savedHeadless: G.headlessMode, state0: G.state };
+        culled: set ? [...set] : [], prog0: G.player ? G.player.prog || 0 : 0, savedInput, savedHeadless,
+        applied: job.decisions.map(() => null) };
       G.headlessMode = true;
       job.state = "running";
     }
@@ -130,13 +144,14 @@ var DrillFork = (function () {
       job.decisions.forEach((d, k) => {
         if (r.done.has(k)) return;
         const c = G.cars[d.car];
-        if (!c) { r.done.add(k); return; }
+        if (!c) { r.done.add(k); r.applied[k] = { at: 0, armed: false, compound: null, error: "no-car" }; return; }
         const lapNow = (c.lap || 0) - r.lap0[d.car];
         const due = Number.isFinite(d.lap) ? lapNow >= d.lap : (lapNow > 0 || (c.s || 0) >= d.s);
         if (!due) return;
         r.done.add(k);
-        if (d.compound && G.pits && typeof G.pits.selectNext === "function") G.pits.selectNext(c, d.compound);
-        if (G.pits && typeof G.pits.arm === "function") G.pits.arm(c, d.action === "box");
+        // What the pit API said, per decision: a compound it refused or a closed lane is the card's to show.
+        const comp = d.compound ? !!G.pits.selectNext(c, d.compound) : null;
+        r.applied[k] = { at: G.raceT - r.t0, armed: !!G.pits.arm(c, d.action === "box"), compound: comp };
       });
     }
     function finished(job) {
@@ -166,18 +181,21 @@ var DrillFork = (function () {
     }
     function readout(job, reason) {
       const r = job.run, cars = G.cars;
-      const order = cars.map((c, i) => i).sort((a, b) => (cars[a].retired - cars[b].retired) || (cars[b].prog - cars[a].prog));
+      // A CULLED car is not a retirement: it stands at its fork distance and ranks there, so the player's position
+      // in a culled branch is not lifted by cars the cull parked ahead of it.
+      const culled = new Set(r.culled), out = (i) => (cars[i].retired && !culled.has(i) ? 1 : 0);
+      const order = cars.map((c, i) => i).sort((a, b) => (out(a) - out(b)) || (cars[b].prog - cars[a].prog));
       const pos = new Array(cars.length);
       order.forEach((i, k) => { pos[i] = k + 1; });
       const prims = (o) => { const out = {}; if (o && typeof o === "object") for (const k of Object.keys(o)) { const v = o[k]; if (typeof v === "number" || typeof v === "string" || typeof v === "boolean") out[k] = v; } return out; };
       const fuelOf = (c) => { const out = {}; for (const k of Object.keys(c)) if (/^fuel/.test(k) && typeof c[k] === "number") out[k] = c[k]; return out; };
       return {
-        reason, ticks: job.ticks, seconds: G.raceT - r.t0, culled: r.culled.slice(),
+        reason, ticks: job.ticks, seconds: G.raceT - r.t0, culled: r.culled.slice(), decisions: r.applied.slice(),
         player: G.player ? { timeS: G.raceT - r.t0, distM: (G.player.prog || 0) - r.prog0 } : null,
         cars: cars.map((c, i) => ({
           i, code: c.code, isPlayer: !!c.isPlayer, pos: pos[i], lap: c.lap || 0, prog: c.prog, s: c.s, speed: c.speed,
           lapTimes: r.lapAt[i].slice(1).map((t, k) => t - r.lapAt[i][k]),
-          pitState: c.pitState || "none", stops: r.stops[i], retired: !!c.retired, finished: !!c.finished,
+          pitState: c.pitState || "none", stops: r.stops[i], culled: culled.has(i), retired: !!c.retired && !culled.has(i), finished: !!c.finished,
           tyre: prims(c.tyre), fuel: fuelOf(c),
         })),
       };
@@ -188,10 +206,11 @@ var DrillFork = (function () {
       finally {
         G._testInput = r.savedInput;
         G.headlessMode = r.savedHeadless;
-        restore(job.live);   // the live world: every car, the clock, the stream position
+        const live = job.live;
         job.live = null;
+        job.state = reason ? "done" : "cancelled";
+        restore(live);   // the live world: every car, the clock, the stream position
       }
-      job.state = reason ? "done" : "cancelled";
     }
 
     /** Run the job for about `budgetMs` of wall time (at least one tick). true once it is done (or failed). */

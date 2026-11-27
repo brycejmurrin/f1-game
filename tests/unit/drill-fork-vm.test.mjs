@@ -150,3 +150,41 @@ test("a culled field differs from the full field by less than noise()", () => {
   const d = Math.abs(culled.result.player.timeS - full.result.player.timeS);
   assert.ok(d < n, `culled vs full: ${d.toFixed(3)} s, noise ${n.toFixed(3)} s`);
 });
+
+test("a branch that throws, at its start or mid-run, and a cancelled one, all hand the live world back", () => {
+  const F = forkAt40();
+  const before = fullSnap(false), input = g.G._testInput, headless = g.G.headlessMode;
+  const back = (label) => {
+    assert.equal(firstDiff(before, fullSnap(false)), null, label + ": the live world was not restored");
+    assert.equal(g.G._testInput, input, label + ": the input seam");
+    assert.equal(g.G.headlessMode, headless, label + ": headless mode");
+  };
+  const atStart = DF.branch(F, [], { seconds: 2 }, { drive: () => { throw new Error("factory"); } });
+  assert.equal(DF.step(atStart, 5), true);
+  assert.equal(atStart.state, "failed");
+  assert.equal(atStart.error, "factory", "the factory's own error is reported");
+  back("a throw before the first tick");
+  let n = 0;
+  const midRun = DF.branch(F, [], { seconds: 2 }, { drive: () => ({ step: () => { if (++n > 30) throw new Error("policy"); return null; } }) });
+  DF.run(midRun);
+  assert.equal(midRun.state, "failed");
+  assert.ok(midRun.ticks >= 30, "it ran before it threw");
+  back("a throw mid-run");
+  const cut = DF.branch(F, [], { seconds: 5 }, { cull: { keep: [99], pitLossS: 0, marginS: 4 } });   // 99: not a car, ignored
+  for (let i = 0; i < 20; i++) DF.step(cut, 0);
+  assert.equal(cut.state, "running");
+  assert.ok(DF.cancel(cut));
+  assert.equal(cut.state, "cancelled");
+  back("cancel()");
+});
+
+test("a culled car is marked culled, not retired, and the decision outcome is reported", () => {
+  const F = forkAt40();
+  const ai = g.G.cars.findIndex((c) => !c.isPlayer && !c.retired);
+  const job = DF.run(DF.branch(F, [{ car: ai, lap: 0, action: "box" }], { seconds: 5 }, opts(TIGHT)));
+  assert.equal(job.state, "done", job.error);
+  const culled = job.result.cars.filter((c) => c.culled);
+  assert.ok(culled.length > 0, "the cull removed cars");
+  assert.ok(culled.every((c) => !c.retired), "a culled car is not reported as a retirement");
+  assert.deepEqual(job.result.decisions.map((d) => d && d.armed), [true], "the pit API armed the stop");
+});
