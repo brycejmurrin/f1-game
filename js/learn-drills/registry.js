@@ -11,7 +11,10 @@
    tiers); `stage(G)` (optional) sets a drill-scoped knob `setup` does not name and returns its undo, run by end().
    tick() turns each finished run into a result, persists it (DrillCard.record, apex26.learnMedals.v1) and
    shows the card: RETRY is retry() (the coach's checkpoint), BACK TO LESSON quits the race, and end() then reopens
-   the lesson with {type:"apex-learn-result"} posted into it (#6559 step 2, #7039).
+   the lesson with {type:"apex-learn-result"} posted into it (#6559 step 2, #7039). `variants` ([{id, label, cta?,
+   dirtyAir?}], the first is the default) are runs of one drill scored and saved apart: the card's NEXT button is
+   rerun(next id), which applies the variant's dirtyAir and retries in place (#6559 step 5, A6). `medals` is a tier
+   object or a pure (r, history) function, history this launch's earlier results (#6559 §1a).
    THE ARC NEVER REACHES THE DRIVER: nothing in js/learn-drills/ reads curvature or the racing line
    (tests/unit/drill-registry.test.mjs). Not RaceInsights.DRILLS (practice goals): a separate namespace.
    LAZY_LEARN; js/ui/learn-door.js defines the Aero drill lazily (its open()), never at eval: the bundle loads with no
@@ -33,6 +36,8 @@ const DrillRegistry = (function () {
   const get = id => defs.get(id) || null;
   const ids = () => [...defs.keys()];
   const forLesson = lesson => [...defs.values()].filter(d => d.lesson === lesson);
+  /** The named variant, else the drill's first; a drill with none runs as "classic". */
+  const variantOf = (d, id) => (d.variants || []).find(v => v.id === id) || (d.variants || [])[0] || { id: "classic" };
 
   /** hooks: { retry() (the coach's RETRY LAP), setDirtyAir(level) (raceDirtyAir is a game.js let), insights() (the
    *  coach's RaceInsights), reopenLesson?(lesson, result) (default LearnDoor.reopen) }. The host builds the DrillPort
@@ -43,6 +48,7 @@ const DrillRegistry = (function () {
       startRace: () => G.startRace(),
       goRolling: () => G.goRolling(),
       retry: () => retry(),
+      rerun: (variant) => rerun(variant),   // a variant chip: that variant's run from the checkpoint
       physState: () => (typeof window !== "undefined" && window.__apex ? window.__apex.physState() : null),   // null while LAZY_AGENT is absent
       announce: (msg, dur, kind) => G.announce(msg, dur, kind),
       store: G.store,
@@ -52,7 +58,7 @@ const DrillRegistry = (function () {
 
     // Use the production race, wind, aero and checkpoint code. These settings
     // belong to the drill and are restored when its race ends or cannot start.
-    function launch(id) {
+    function launch(id, variant) {
       const d = defs.get(id);
       if (!d || current || G.state !== "menu" || G.netPlay.active()) return false;
       const s = d.setup;
@@ -77,6 +83,8 @@ const DrillRegistry = (function () {
         result: null,    // the last finished run's result, while its card is up
         attempt: 0,
         failed: false,
+        variant: variantOf(d, variant).id,
+        history: [],     // this launch's finished results, oldest first (a medal function's second argument)
         begin() {
           this.staging = false;
           if (guide) guide.hide();
@@ -108,7 +116,7 @@ const DrillRegistry = (function () {
       G.raceChangeable = s.changeable;
       G.raceGrid = s.grid;
       G.duel = s.duel;
-      setDirtyAir(s.dirtyAir);
+      setDirtyAir(variantOf(d, variant).dirtyAir || s.dirtyAir);
       Wind.setLevel(s.wind);
       if (typeof d.stage === "function") undo = d.stage(G) || null;
       port.startRace();
@@ -140,19 +148,32 @@ const DrillRegistry = (function () {
       return !!hooks.retry();
     }
 
+    /** NEXT VARIANT (the card): the variant's dirty-air level, then a fresh run from the begin() checkpoint. */
+    function rerun(variant) {
+      if (!current || !current.d.variants) return false;
+      const v = variantOf(current.d, variant);
+      if (v.id !== variant) return false;
+      current.variant = v.id;
+      setDirtyAir(v.dirtyAir || current.d.setup.dirtyAir);
+      return retry();
+    }
+
     /** One finished run: score, medal, save, card. */
     function finish(last) {
       const a = current, d = a.d;
-      const scored = d.score(G, last, a.run.acc);
-      const r = { id: d.id, variant: "classic", title: d.title || d.id, attempt: ++a.attempt, ...scored };
-      r.medal = DrillCard.medalOf(r, d.medals);
+      const scored = d.score(G, last, a.run.acc, a.variant);
+      const r = { id: d.id, variant: a.variant, title: d.title || d.id, attempt: ++a.attempt, ...scored };
+      r.medal = typeof d.medals === "function" ? d.medals(r, a.history.slice()) : DrillCard.medalOf(r, d.medals);
+      a.history.push(r);
       const saved = DrillCard.record(G.store, d.id + "|" + r.variant, r);
       r.best = saved.row.best;
       r.improved = saved.improved;
       a.result = lastResult = r;
       a.run = null;
       Log.info("ui", "drill " + d.id + " " + r.value.toFixed(1) + " " + r.unit + " " + (r.medal || "no medal"));
-      DrillCard.show(r, { retry, back: () => G.quitToMenu() });
+      const vs = d.variants || [], k = vs.findIndex(v => v.id === a.variant), nv = vs.length > 1 ? vs[(k + 1) % vs.length] : null;
+      const next = nv ? { label: nv.cta || "TRY " + nv.label.toUpperCase(), run: () => rerun(nv.id) } : null;
+      DrillCard.show(r, { retry, back: () => G.quitToMenu(), next });
       return r;
     }
 
@@ -172,7 +193,7 @@ const DrillRegistry = (function () {
           a.run = { acc: {}, prog: p.prog };
         }
         a.run.prog = p.prog;
-        if (a.d.sample) a.d.sample(G, a.run.acc);
+        if (a.d.sample) a.d.sample(G, a.run.acc, port);
         return null;
       }
       if (!a.run || !s.lastDrill) return null;
@@ -185,10 +206,11 @@ const DrillRegistry = (function () {
       end,
       tick,
       retry,
+      rerun,
       lastResult: () => lastResult,
       active: () => current,
       guide: () => (current ? current.guide : null),
-      state: () => (current ? { id: current.id, staging: current.staging, attempt: current.attempt, live: !!current.run,
+      state: () => (current ? { id: current.id, variant: current.variant, staging: current.staging, attempt: current.attempt, live: !!current.run,
         result: current.result ? { value: current.result.value, medal: current.result.medal } : null } : null),
     };
   }

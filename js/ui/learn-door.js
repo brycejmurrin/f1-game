@@ -230,6 +230,7 @@ const LearnDoor = (function () {
   function defineDrills() {
     if (typeof DrillRegistry === "undefined") return;
     if (typeof TorqueDrill !== "undefined") TorqueDrill.define();   // js/learn-drills/torque.js, when it evaluated first
+    if (typeof GripDrill !== "undefined") GripDrill.define();   // js/learn-drills/grip.js, when it evaluated first
     if (typeof TaperDrill !== "undefined") TaperDrill.define();   // js/learn-drills/taper.js, when it evaluated first
     if (typeof TyreHeatDrill !== "undefined") TyreHeatDrill.define();   // js/learn-drills/tyre-heat.js, when it evaluated first
     DrillRegistry.define(AeroDrill.descriptor());

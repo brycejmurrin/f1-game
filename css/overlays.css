@@ -5,8 +5,8 @@
    is a deferred sheet. */
 :root { --tap-floor44: 0px; }
 body:not(.desktop) { --tap-floor44: calc(44.2px / var(--ui-scale)); }
-/* The lesson's instruction card leaves all driving input with the HUD. */
-#learn-aero-guide, #learn-taper-guide, #learn-torque-guide {
+/* The lesson's instruction card leaves all driving input with the HUD (the Aero Lab's; the Grip drill's, js/learn-drills/grip.js; the Taper Hunt's). */
+#learn-aero-guide, #learn-grip-guide, #learn-taper-guide, #learn-torque-guide {
   position: fixed;
   z-index: 8;
   pointer-events: none;
@@ -21,8 +21,8 @@ body:not(.desktop) { --tap-floor44: calc(44.2px / var(--ui-scale)); }
   font-family: var(--font-hud);
   text-align: center;
 }
-#learn-aero-guide:not([hidden]), #learn-taper-guide:not([hidden]), #learn-torque-guide:not([hidden]) { display: flex; align-items: center; gap: .65rem; text-align: left; }
-#learn-aero-guide canvas {
+#learn-aero-guide:not([hidden]), #learn-grip-guide:not([hidden]), #learn-taper-guide:not([hidden]), #learn-torque-guide:not([hidden]) { display: flex; align-items: center; gap: .65rem; text-align: left; }
+#learn-aero-guide canvas, #learn-grip-guide canvas {
   width: clamp(5.5rem, 10vw, 8.75rem); height: auto; flex: none;
   background: var(--hud-ink-dark); border-radius: var(--r-md);
 }
@@ -32,13 +32,14 @@ body:not(.desktop) { --tap-floor44: calc(44.2px / var(--ui-scale)); }
   background: var(--hud-ink-dark); border-radius: var(--r-md);
 }
 @media (max-height: 500px) {
-  #learn-aero-guide, #learn-taper-guide, #learn-torque-guide { top: max(calc(var(--sat) + 2rem), 13%); padding: .25rem .45rem; }
+  #learn-aero-guide, #learn-grip-guide, #learn-taper-guide, #learn-torque-guide { top: max(calc(var(--sat) + 2rem), 13%); padding: .25rem .45rem; }
 }
-#learn-aero-guide strong, #learn-aero-guide span, #learn-taper-guide strong, #learn-taper-guide span { display: block; }
-#learn-aero-guide strong, #learn-taper-guide strong, #learn-torque-guide strong { font-size: var(--fs-3); }
-#learn-aero-guide span, #learn-taper-guide span, #learn-torque-guide span { font-size: var(--fs-2); color: var(--dim); }
+#learn-aero-guide strong, #learn-aero-guide span, #learn-grip-guide strong, #learn-grip-guide span, #learn-taper-guide strong, #learn-taper-guide span, #learn-torque-guide strong, #learn-torque-guide span { display: block; }
+#learn-aero-guide strong, #learn-grip-guide strong, #learn-taper-guide strong, #learn-torque-guide strong { font-size: var(--fs-3); }
+#learn-aero-guide span, #learn-grip-guide span, #learn-taper-guide span, #learn-torque-guide span { font-size: var(--fs-2); color: var(--dim); }
 /* The guide card's RETRY chip (#6555 A4) is its one tap target; the rest of the card still leaves input to the HUD. */
 #learn-aero-retry { pointer-events: auto; flex: none; min-height: var(--tap); min-width: var(--tap); padding: 0 var(--pad); font: inherit; font-weight: 700; }
+#learn-grip-guide button { pointer-events: auto; min-height: var(--tap); min-width: var(--tap); padding: 0 var(--pad); font: inherit; font-weight: 700; }
 #learn-taper-retry, #learn-torque-retry { pointer-events: auto; flex: none; min-height: var(--tap); min-width: var(--tap); padding: 0 var(--pad); font: inherit; font-weight: 700; }
 /* The Tyre Thermal Lab's strip chart card (js/learn-drills/tyre-heat.js): the Aero card's place and type. */
 #learn-tyre-heat-guide {
@@ -78,6 +79,7 @@ body:not(.desktop) { --tap-floor44: calc(44.2px / var(--ui-scale)); }
 #learn-index [data-medal] { display: block; font-size: var(--fs-1); font-weight: 700; color: var(--gold); }
 @media (max-height: 500px) {
   #drill-card { top: max(calc(var(--sat) + 1rem), 6%); padding: .25rem .45rem; gap: .25rem; }
+  #drill-card-actions { grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }   /* RETRY · NEXT · BACK in one row on a phone */
 }
 /* LEARN's THUMB DRILL (js/learn-drills/thumb-drill.js): the corner's script cue in the aero card's place, and a lap
    card that takes taps (RETRY LAP, DRIVE ON) while the cue card leaves every touch to the dock. Over #hud (z 10), not

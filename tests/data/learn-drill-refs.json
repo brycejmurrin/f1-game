@@ -133,6 +133,129 @@
       "goldClean": true
     }
   },
+  "grip": {
+    "how": "node tests/helpers/drill-drive-vm.mjs --write-grip: GRIP_RUNS in one boot of the Monza Grip drill (solo TT, 650 m before the Parabolica), rerun(variant) between runs; steering is SoakRun's control() law, the pedals are GRIP_SCRIPTS",
+    "metric": "rim use % = time-weighted mean of the friction-circle radius from the first firm brake to the apex (js/learn-drills/grip.js sample/score)",
+    "rule": "bronze = any clean run; silver = median rim use of the clean runs; gold = the best clean run (and a gate time within 0.15 s of your best TRAIL run); whole %, floored",
+    "runs": [
+      {
+        "variant": "vline",
+        "script": "vline",
+        "args": [],
+        "value": 42.9,
+        "clean": true,
+        "reason": "",
+        "gateS": 17.82
+      },
+      {
+        "variant": "trail",
+        "script": "trail",
+        "args": [],
+        "value": 52.4,
+        "clean": true,
+        "reason": "",
+        "gateS": 17.6
+      },
+      {
+        "variant": "free",
+        "script": "free",
+        "args": [],
+        "value": 42.9,
+        "clean": true,
+        "reason": "",
+        "gateS": 17.8
+      },
+      {
+        "variant": "vline",
+        "script": "vline",
+        "args": [
+          27
+        ],
+        "value": 44.2,
+        "clean": true,
+        "reason": "",
+        "gateS": 17.9
+      },
+      {
+        "variant": "vline",
+        "script": "vline",
+        "args": [
+          31
+        ],
+        "value": 41.6,
+        "clean": true,
+        "reason": "",
+        "gateS": 17.8
+      },
+      {
+        "variant": "vline",
+        "script": "vline",
+        "args": [
+          33
+        ],
+        "value": 40.6,
+        "clean": true,
+        "reason": "",
+        "gateS": 17.7
+      },
+      {
+        "variant": "trail",
+        "script": "trail",
+        "args": [
+          29,
+          8,
+          128
+        ],
+        "value": 48.5,
+        "clean": true,
+        "reason": "",
+        "gateS": 17.5
+      },
+      {
+        "variant": "trail",
+        "script": "trail",
+        "args": [
+          29,
+          16,
+          128
+        ],
+        "value": 50.1,
+        "clean": true,
+        "reason": "",
+        "gateS": 17.6
+      },
+      {
+        "variant": "trail",
+        "script": "trail",
+        "args": [
+          33,
+          8,
+          128
+        ],
+        "value": 49,
+        "clean": true,
+        "reason": "",
+        "gateS": 17.5
+      },
+      {
+        "variant": "trail",
+        "script": "trail",
+        "args": [
+          33,
+          16,
+          128
+        ],
+        "value": 47.3,
+        "clean": true,
+        "reason": "",
+        "gateS": 17.5
+      }
+    ],
+    "tiers": {
+      "silver": 45,
+      "gold": 52
+    }
+  },
   "tyre-heat": {
     "how": "node tests/helpers/tyre-heat-drill-vm.mjs --write: 12 runs of the Monza Tyre Thermal Lab (fresh medium, real wear), one boot, RETRY between runs, test pursuit driver at pace 1.15 down to 0.60 x vTop",
     "metric": "% of the run with the surface in optTemp +- T_WINDOW (js/learn-drills/tyre-heat.js score)",
