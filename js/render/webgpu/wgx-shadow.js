@@ -183,11 +183,16 @@ const WGXShadow = (function () {
         dev.popErrorScope().then((err) => {
           if (!err || core.device !== dev) return;
           blockerPipeline = null; blockerBG = null;   // PCSS downsample off
+          const bad = blockerTex;
           try {
             blockerTex = dev.createTexture({ size: [1, 1], format: core.SCENE_FORMAT,
               usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT });
             blockerView = blockerTex.createView();
-          } catch (_) { /* keep the old view */ }
+          } catch (_) { return; /* keep the old view */ }
+          // The frame bind group was built (binding 7) before this pop resolved:
+          // rebuild it on the placeholder, then retire the refused texture.
+          if (core.onBlockerFallback && !core.lost) core.onBlockerFallback();
+          try { if (bad) bad.destroy(); } catch (_) { /* already lost */ }
         }, () => { /* device lost */ });
       }
     }

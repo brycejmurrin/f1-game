@@ -4411,9 +4411,12 @@ for (const err of [null, { message: "invalid pipeline" }]) test(`shadow blocker 
   const ctx = vm.createContext({ GPUTextureUsage: {}, GPUBufferUsage: {}, GPUShaderStage: {} });
   seedLog(ctx);
   vm.runInContext(`var WGSLChunks = { SHADOW_LVP_BYTES: 64, SHADOW_MODEL_BYTES: 64, SHADOW: "s", BLOCKER: "b" };\n${WGX_SHADOW_SOURCE}\nglobalThis.SF = WGXShadow;`, ctx, { filename: absSrc(P.WGX_SHADOW) });
-  const core = new Proxy({ device: scopedDevice(err), SHADOW_SLOTS: 4, DEPTH_FORMAT: "depth32float", SCENE_FORMAT: "rgba16float", IDENT: new Float32Array(16) },
+  let rebinds = 0, viewAtRebind = null; let shd = null;
+  const core = new Proxy({ onBlockerFallback: () => { rebinds++; viewAtRebind = shd.blockerView; }, device: scopedDevice(err), SHADOW_SLOTS: 4, DEPTH_FORMAT: "depth32float", SCENE_FORMAT: "rgba16float", IDENT: new Float32Array(16) },
     { get: (t, k) => (k in t ? t[k] : undefined) });
-  const shd = ctx.SF.init(core); await flush();
+  shd = ctx.SF.init(core); const before = shd.blockerView; await flush();
   assert.ok(shd.blockerView);
+  assert.equal(rebinds, err ? 1 : 0);
+  if (err) { assert.notEqual(viewAtRebind, before); assert.equal(viewAtRebind, shd.blockerView); } else assert.equal(shd.blockerView, before);
   if (err) assert.equal(shd.blockerPipeline, null); else assert.ok(shd.blockerPipeline);
 });
