@@ -13,6 +13,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadDom } from "../helpers/dom-vm.mjs";
 import { cssRules, decl } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -26,6 +27,7 @@ function load(extra = {}) {
   vm.createContext(ctx);
   // The page loads js/race/sporting-regs.js first (FULL order); blueFlag shares its predicate.
   vm.runInContext(src("js/race/sporting-regs.js"), ctx, { filename: absSrc("js/race/sporting-regs.js") });
+  loadDom(ctx);
   vm.runInContext(SRC + "; this.HudReadouts = HudReadouts;", ctx);
   return { R: ctx.HudReadouts, timers };
 }
@@ -240,9 +242,12 @@ function boot(opts = {}) {
   sb.window = sb;
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: absSrc("js/ui/live-region.js") });
   vm.runInNewContext(src("js/race/sporting-regs.js"), sb, { filename: absSrc("js/race/sporting-regs.js") });   // blueFlag's one predicate (FULL loads it first)
+  loadDom(sb);
   vm.runInNewContext(src("js/ui/hud-readouts.js"), sb, { filename: absSrc("js/ui/hud-readouts.js") });
   vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
+  loadDom(sb);
   vm.runInNewContext(src("js/ui/hud-radio-lane.js"), sb, { filename: absSrc("js/ui/hud-radio-lane.js") });   // …and its HudRadioLane (#3261)
+  loadDom(sb);
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: absSrc("js/ui/hud.js") });
   vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: absSrc("js/race/overtake-mode.js") });
   const $ = (id) => dom.byId(id);
@@ -564,6 +569,7 @@ test("hud.js: resetRace clears the chips' carried state — team bar, tow, pit w
 test("R2-07: the chip behind a car a lap DOWN says -1L, REL's own spelling for it", () => {
   const { els, rival, player, G, tick } = boot();
   const rel = { Math, Number, Object, Array, Infinity, isFinite };
+  loadDom(rel);
   vm.runInNewContext(src("js/ui/hud-relative.js") + "; this.HudRelative = HudRelative;", rel, { filename: absSrc("js/ui/hud-relative.js") });
   const back = { ...player, code: "BEA", rank: 3, prog: player.prog - 1300, s: 0 };
   G.cars = [rival, player, back]; G.ranked = [rival, player, back];

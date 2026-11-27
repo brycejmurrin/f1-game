@@ -24,6 +24,7 @@ import { gameSource } from "../helpers/game-source.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 import { fleetFindings, variedAudit } from "../helpers/flyby-audit-rules.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { withM4 } from "../helpers/mat4-vm.mjs";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require(path.join(ROOT, "tools/lib/game-vm.cjs"));
@@ -142,7 +143,7 @@ test("select honours when:{night,wet} and prefers the most specific match", asyn
       "night+wet prefers the two-key variant");
     assert.deepEqual(defNight.find((s) => s.id === "wide").when, { night: true },
       "default tod on a night circuit counts as night");
-    assert.ok(F.isNight({ tod: "night" }) && F.isWet({ weather: "rain" }));
+    assert.ok(F.whenMatch({ night: true, wet: true }, { tod: "night", weather: "rain" }));
     assert.ok(F.whenMatch({ night: true }, { tod: "night", weather: "dry" }));
     assert.ok(!F.whenMatch({ wet: true }, { tod: "night", weather: "dry" }));
     // An authored signature (non-stock, no when) outranks a generic session variant for the same id.
@@ -185,6 +186,7 @@ function loadFlybyRuntime(extra = {}) {
     Float32Array, Uint32Array, isFinite, setTimeout: () => 0,
   }, extra);
   vm.createContext(sb);
+  withM4(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/flyby-clear.js"), "utf8"), sb, { filename: absSrc("js/camera/flyby-clear.js") });
   return vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/flyby-seq.js"), "utf8") + ";FlybySeq", sb, { filename: absSrc("js/camera/flyby-seq.js") });
 }

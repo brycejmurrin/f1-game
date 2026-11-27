@@ -346,7 +346,6 @@ function create(G) {
     return api;
   }
 
-  const desktop = () => document.body.classList.contains("desktop");
   // Help follows Accessibility's HOLD / TOGGLE rows (#6289).
   const toggled = (id) => !!(Input.getHoldMode && Input.getHoldMode()[id] === "toggle");
   const gasTail = () => (toggled("throttle") ? "tap to toggle" : "");
@@ -361,7 +360,7 @@ function create(G) {
     if (!hint) return;
     const keysOff = keys ? keys.hidden() : true;
     const padOff = pad ? pad.hidden() : true;
-    hint.hidden = desktop() || !(keysOff && padOff);
+    hint.hidden = Dom.isDesktop() || !(keysOff && padOff);
   }
   keys = section({
     keys: true, noun: "key", key: "keys",
@@ -371,7 +370,7 @@ function create(G) {
     // A desktop always shows it; a touch device once a physical key has been
     // pressed (a tablet with a Bluetooth keyboard), or when the map is already
     // customised — pointer: coarse says nothing about whether a keyboard exists.
-    show: () => desktop() || Input.keyboardSeen() || !Input.keysAreDefault(),
+    show: () => Dom.isDesktop() || Input.keyboardSeen() || !Input.keysAreDefault(),
     idle: "Tap a key slot, then press the key you want. Esc cancels, CLEAR or Backspace empties the slot. A key already used by another action moves here.",
     armedNote: "Press a key… (Esc cancels, CLEAR or Backspace clears)", resetNote: "Keys reset to the defaults.",
     groups: [
@@ -411,7 +410,7 @@ function create(G) {
     // A desktop always shows it (a pad may be plugged in later); a phone only
     // once a pad has been seen, or when the map is already customised (buttons,
     // wheel axes, or a stick rest offset — any of those is a live controller).
-    show: () => Input.padPresent() || desktop() || !controllerIsDefault(),
+    show: () => Input.padPresent() || Dom.isDesktop() || !controllerIsDefault(),
     idle: "Tap a slot, then press a button on the controller. Esc cancels, CLEAR empties the slot. The stick and D‑pad steer.",
     clearNote: "CLEAR is selected — A empties the slot, B cancels.", armedNote: "Press a controller button… (D‑pad ◀ ▶ selects CLEAR, B cancels)", resetNote: "Controller reset to the defaults.",
     groups: [

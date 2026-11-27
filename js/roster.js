@@ -289,9 +289,13 @@
     LAZY_LEARN: [
     "js/learn-drills/registry.js",
     "js/learn-drills/drill-card.js",
+    "js/learn-drills/aero.js",
     "js/ui/learn-door.js",
     "js/ui/thumb-trainer.js",
     "js/learn-drills/thumb-drill.js",
+    "js/learn-drills/lines.js",
+    "js/learn-drills/tyre-heat.js",
+    "js/learn-drills/taper.js",
     "js/learn-drills/wake.js"
   ],
     LAZY_DRILL_FORK: [

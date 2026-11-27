@@ -175,7 +175,7 @@ window.PhysicsConsts = {
                                        //   (a vStd() band — pace-normalised, so the
                                        //   taper sits at the same place on the dial)
 
-  TAPER_FLOOR: 0.35,   // deploy never tapers below this — see deployTaper() in game.js
+  TAPER_FLOOR: 0.35,   // deploy never tapers below this — see PaceMath.taperAt (js/race/pace-math.js)
 
   DRAIN_LO: 0.14, DRAIN_HI: 0.26,    // energy/s while boosting: best -> worst deploy. Real seconds, no PACE
                                      //   term (game.js: c.energy -= drainFor(c)·dt), so a full battery lasts

@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadDom } from "../helpers/dom-vm.mjs";
 
 const SRC = fs.readFileSync(new URL("../../js/agent/apex-bridge.js", import.meta.url), "utf8");
 const plain = (v) => JSON.parse(JSON.stringify(v));
@@ -48,6 +49,7 @@ function load({ search = "?apex=1&bridge=42", tok = "", apex = {}, gh = fakeGitH
     Object, Array, JSON, Math, Number, String, Set, Promise, Error, Date, encodeURIComponent,
     ...extra,
   });
+  loadDom(ctx);
   vm.runInContext(SRC, ctx, { filename: absSrc("js/agent/apex-bridge.js") });
   return { api: vm.runInContext("ApexBridge", ctx), gh, store, ctx };
 }

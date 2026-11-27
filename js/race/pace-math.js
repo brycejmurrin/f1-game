@@ -1,5 +1,5 @@
 /* Apex 26 — PACE / ERS math: vTop/vStd/aStd, X-mode aero gains, paceRef buffer,
- * ERS drain/regen/overtake duration, aeroDfMult, and gearHi/rpmFor. Extracted from
+ * ERS drain/regen/overtake duration, the deploy taper and regen fade (taperAt/regenSpeedAt), aeroDfMult, and gearHi/rpmFor. Extracted from
  * js/game.js so the first game.js breakup slice is a pure move (no tuning).
  *
  * PaceMath.create(deps) — deps supply live PACE / VMAX / cars / track / raceCtl
@@ -12,6 +12,23 @@ const PaceMath = (function () {
   const clamp = M4.clamp;
   const lerp = M4.lerp;
   const PC = typeof PhysicsConsts !== "undefined" ? PhysicsConsts : {};
+  const TAPER_LO = PC.TAPER_LO, TAPER_HI = PC.TAPER_HI, TAPER_FLOOR = PC.TAPER_FLOOR, REGEN_FULL_V = PC.REGEN_FULL_V;
+
+  // ERS-PURE (#6550 addition 1, #6559 step 6): the deploy taper and the regen speed fade, on a STANDARD-pace speed
+  // (vStd), so a LEARN drill, the HUD or a test reads the very curve the physics uses. Pure: no car, no PACE.
+  // Deploy strength 0..1 holding BOOST (or running OVERTAKE, which bypasses it). The taper makes deploy strongest
+  // out of slow corners, but it is FLOORED: it used to reach exactly 0 above TAPER_HI, which is only 191 km/h, so on
+  // any straight BOOST produced no thrust, and because the drain was gated on `deploy > 0`, it also cost nothing.
+  // Real ERS deploys all the way down the straight; so does this, at reduced strength.
+  function taperAt(vs, otOn) {
+    if (otOn) return 1;
+    const t = clamp(1 - (vs - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
+    return TAPER_FLOOR + (1 - TAPER_FLOOR) * t;
+  }
+  // Recovery is kinetic: it needs the car moving. Full rate from REGEN_FULL_V (a standard-pace speed, so PACE does
+  // not move it) down to nothing at a stop, so braking or coasting in the pit box cannot refill the battery (it took
+  // ~10 s). Reversing (the brake-held crawl) recovers nothing either.
+  function regenSpeedAt(vs) { return clamp(vs / REGEN_FULL_V, 0, 1); }
 
   // create(deps):
   //   getPACE()     live OVERALL SPEED scale (game.js `let PACE`)
@@ -85,6 +102,9 @@ const PaceMath = (function () {
     function drainFor(c) { return lerp(DRAIN_HI, DRAIN_LO, ersDeployOf(c)); }
     function regenFor(c) { return lerp(REGEN_LO, REGEN_HI, ersRegenOf(c)); }
     function otTimeFor(c) { return lerp(OT_TIME_LO, OT_TIME_HI, ersDeployOf(c)); }
+    // The car's own taper and regen fade (game.js's physics calls these): the pure curves at its vStd speed.
+    function deployTaper(c) { return taperAt(vStd(c.speed), c.otT > 0); }
+    function regenSpeedK(c) { return regenSpeedAt(vStd(c.speed)); }
 
     // Live downforce multiplier on the DOWNFORCE (aero-load) term. 1 in Z-mode,
     // 1 - X_DF_LOSS with the flaps fully open.
@@ -103,11 +123,11 @@ const PaceMath = (function () {
     return {
       vTop, vStd, aStd,
       xVmaxGain, paceRef, xCoastCut, xDfLoss,
-      isErsDeploying, drainFor, regenFor, otTimeFor,
+      isErsDeploying, drainFor, regenFor, otTimeFor, deployTaper, regenSpeedK,
       aeroDfMult, gearHi, rpmFor,
     };
   }
 
-  return { create };
+  return { create, taperAt, regenSpeedAt };
 })();
 Object.freeze(PaceMath);
