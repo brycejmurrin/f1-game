@@ -19,6 +19,7 @@ import vm from "node:vm";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { withM4 } from "../helpers/mat4-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -27,6 +28,7 @@ const SCENE = ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene
 function load() {
   const ctx = vm.createContext({ console, Math, Object, Array, Number, String, JSON, Float32Array, Uint16Array,
     Uint32Array, isFinite, parseFloat, parseInt, Date, Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false } });
+  withM4(ctx);
   for (const f of SCENE) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Scene = vm.runInContext("GarageScene", ctx, { filename: "garage-light-cues:get" });
   Scene.init({ createMesh: () => ({}), createTexMesh: () => ({}), freeMesh() {}, freeTexture() {},
