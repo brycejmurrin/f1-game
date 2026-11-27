@@ -436,6 +436,8 @@ const RaceControl = (function () {
         lowGripNoted = port.announce("LOW GRIP — OVERTAKE OFF", 3, "warning") !== false;
         if (lowGripNoted) Log.info("race", "Overtake disabled why=low-grip raceT=" + (+port.raceT || 0).toFixed(1));
       }
+      // Aged on a guest too (#7077 K6): apply() lands only on a change.
+      if (caution.level !== 0) { caution.sinceT += dt; flagAgeT += dt; }
       if (!port.ownsRaceControl()) return;
       // CAUTIONS off means no flag the local sim raises, the storm's included
       // (Bryce 2026-10-23: a storm SC flew with the row OFF). setEnabled(false)
@@ -452,7 +454,11 @@ const RaceControl = (function () {
         flag(prev, held);
         publish();
       }
-      if (caution.level !== 0) { caution.sinceT += dt; flagAgeT += dt; }
+      // The re-arm hold ages every tick (#7077 K5): the quiet returns below froze it.
+      if (capHoldT > 0) {
+        capHoldT = Math.max(0, capHoldT - dt);
+        if (capHoldT === 0) capHoldLevel = 0;
+      }
       // A RED FLAG RUNS ITS PROCEDURE WHATEVER THE SWITCH SAYS: apply() can land
       // one with CAUTIONS off, and a red that never ages never restarts.
       if (caution.level === 4) {
@@ -519,10 +525,6 @@ const RaceControl = (function () {
       const lifted = held > 0 && desired < held;
       if (lifted) { desired = held; dsector = -1; dfrac = 0; dcause = heldCause; }
       if (!(held && caution.level <= held) && capDropIfExpired()) return;
-      if (capHoldT > 0) {
-        capHoldT = Math.max(0, capHoldT - QUERY_EVERY);
-        if (capHoldT === 0) capHoldLevel = 0;
-      }
 
       if (desired > caution.level) {
         // The hold suppresses a re-raise from the SAME stale picture, but must
