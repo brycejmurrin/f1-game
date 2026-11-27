@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs"; import path from "node:path"; import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
-const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/audio/engine.js"].map((file) =>
+const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/ui/platform-session.js", "js/audio/engine.js"].map((file) =>
   fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n").replace(/^const\b/gm, "var");
 const param = (v) => ({ value: v, setTargetAtTime() {}, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, cancelScheduledValues() {} });
 function boot(opts = {}) {
@@ -287,7 +287,7 @@ test("a key press (bar Escape) unlocks audio once; a finger's pointerdown does n
         init: () => calls.push("init"), startMusic: (i) => calls.push("startMusic:" + i) },
       G: { soundOn: true, musicEnabled: true, radio: { unlock: () => calls.push("radio") } },
     };
-    vm.runInNewContext(ps.slice(a, b) + "\nwireFirstGesture();", ctx, { filename: absSrc("js/ui/platform-session.js") });
+    vm.runInNewContext(ps.slice(ps.indexOf("function isActivation("), ps.indexOf("function create(G, deps) {")) + ps.slice(a, b) + "\nwireFirstGesture();", ctx, { filename: absSrc("js/ui/platform-session.js") });
     const fire = (e) => { const fn = listeners.get(e.type); if (fn) fn(e); };
     return { calls, listeners, fire };
   };
@@ -313,8 +313,7 @@ test("game.js wiring source pins: gesture events, hidden-tab start pause, pause/
   // The one-shot fires only on an ACTIVATION-triggering event (same spec link): a
   // finger's pointerdown is not one, and spending the gesture on it left WebKit's
   // speech engine unprimed — every phone flyby / radio / race-control line silent.
-  const src = g.slice(g.indexOf("function isActivation(e) {"), g.indexOf("function onFirstGesture(e) {"));
-  const isActivation = new Function(src + "; return isActivation;")();
+  const isActivation = new Function(fs.readFileSync(path.join(ROOT, "js/ui/platform-session.js"), "utf8") + "; return PlatformSession.isActivation;")();
   const cases = [
     [{ type: "pointerdown", pointerType: "touch" }, false, "a finger's pointerdown is NOT activation"],
     [{ type: "pointerdown", pointerType: "pen" }, false, "nor a pen's"],
@@ -402,15 +401,15 @@ test("a refused stream retries on the next visible gesture even with an already-
   h.A.init(); h.A.addTracks([UPLOAD]); h.A.playTrackId(UPLOAD.id); await flush();
   assert.equal(plays, 1); assert.equal(h.contexts[0].state, "running");
   const el = h.mediaEls[0]; el.currentTime = 17;
-  h.listeners.pointerdown({ isTrusted: false });
+  h.listeners.pointerdown({ type: "pointerdown", pointerType: "mouse", isTrusted: false });
   assert.equal(plays, 1, "synthetic events do not consume the pending retry");
-  h.document.hidden = true; h.listeners.touchend({ isTrusted: true });
+  h.document.hidden = true; h.listeners.touchend({ type: "touchend", isTrusted: true });
   assert.equal(plays, 1, "late hidden gestures do not resume playback");
-  h.document.hidden = false; h.listeners.touchend({ isTrusted: true }); await flush();
+  h.document.hidden = false; h.listeners.touchend({ type: "touchend", isTrusted: true }); await flush();
   assert.equal(plays, 2); assert.equal(el.src, UPLOAD.url, "retry keeps the selected media source");
   assert.equal(el.currentTime, 17, "retry does not rewind the song");
   assert.equal(h.A.currentTrackId(), UPLOAD.id);
-  for (const type of ["pointerdown", "keydown", "touchend"]) h.listeners[type]({ isTrusted: true });
+  for (const type of ["pointerdown", "keydown", "touchend"]) h.listeners[type]({ type, pointerType: "mouse", key: "a", isTrusted: true });
   assert.equal(plays, 2, "healthy playback is not restarted by later controls");
 });
 
@@ -426,7 +425,7 @@ test("stopping or replacing a blocked stream cancels its gesture retry, includin
     else if (action === "replace") h.A.playTrackId("builtin:song3");
     else h.A.setMusicBackend({ setVolume() {}, start() {}, stop() {} });
     reject(Object.assign(new Error("blocked"), { name: "NotAllowedError" })); await flush();
-    h.listeners.touchend({ isTrusted: true }); await flush();
+    h.listeners.touchend({ type: "touchend", isTrusted: true }); await flush();
     assert.equal(plays, action === "replace" ? 3 : 1, action + " revoked the old request (a replacement builtin now streams: its own blocked play retries once; the old track's never does)");
   }
 });

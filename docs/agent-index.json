@@ -552,11 +552,13 @@
       "script": "test:audio-unit",
       "kind": "node",
       "files": [
+        "tests/unit/activation-gesture-table.test.mjs",
         "tests/unit/announcer.test.mjs",
         "tests/unit/asset-credits.test.mjs",
         "tests/unit/audio-low-tier.test.mjs",
         "tests/unit/audio-mix-improvements.test.mjs",
         "tests/unit/audio-panel-boot.test.mjs",
+        "tests/unit/audio-rebuild-contract.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-sample-upgrade.test.mjs",
         "tests/unit/audio-scope-once-vm.test.mjs",

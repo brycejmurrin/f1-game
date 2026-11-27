@@ -902,8 +902,7 @@ var RadioVoice = (function () {
     if (api && !primed && typeof document !== "undefined" && document.addEventListener) {
       const EVTS = ["pointerdown", "pointerup", "touchend", "keydown", "click"];
       const prime = (e) => {
-        if (e && (e.type === "keydown" ? e.key === "Escape" : e.type === "pointerdown" ? e.pointerType !== "mouse"
-          : e.type === "pointerup" ? e.pointerType === "mouse" : false)) return;
+        if (!PlatformSession.isActivation(e)) return;
         for (const t of EVTS) document.removeEventListener(t, prime, true);
         if (!primed) unlock();
       };
