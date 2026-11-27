@@ -18,6 +18,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { withM4 } from "../helpers/mat4-vm.mjs";
 import { trisOf, surfaceY } from "../helpers/mesh-surface.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
 
@@ -38,6 +39,7 @@ function harness() {
     Uint32Array, isFinite, parseFloat, parseInt, Date,
     Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
   });
+  withM4(ctx);
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
                    "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
@@ -114,7 +116,6 @@ test("selected home shots stay composed under reduced motion and restore the ori
 
 test("first home framing fits the real car silhouette into the current visible pane", () => {
   const { ctx, GarageScene } = harness(), Experience = vm.runInContext("GarageExperience", ctx);
-  vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
   const M4 = vm.runInContext("M4", ctx), M = loadParts(), team = M.Teams.LIST[0];
   const liv = { c1: [0.9, 0.1, 0.1], c2: [1, 1, 1] };
   const mesh = M.Car3D.build(liv.c1, liv.c2, { livery: liv, teamId: team.id, num: 1,
@@ -303,6 +304,7 @@ function liveAtlasHarness(isMobile = true) {
     document: { createElement: () => ({ width: 0, height: 0, getContext: () => c2d }) },
     Log: { info() {}, warn: (_t, m) => warns.push(m), error() {}, debug() {}, enabled: () => false },
   });
+  withM4(ctx);
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
                    "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
@@ -408,6 +410,7 @@ test("a failed trace upload preserves its decal and retries after recovery", () 
     LiveryTex: {},
     Log: { info() {}, warn: (_t, m) => warns.push(m), error() {}, debug() {}, enabled: () => false },
   });
+  withM4(ctx);
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
                    "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
@@ -458,6 +461,7 @@ test("the trace tick re-fills the live atlas in place: no texture created after 
     LiveryTex: {},
     Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
   });
+  withM4(ctx);
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
                    "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
@@ -501,6 +505,7 @@ test("a paint edit re-fills the bay dress and live atlases in place: no texture 
     LiveryTex: {},
     Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
   });
+  withM4(ctx);
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
                    "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
@@ -539,6 +544,7 @@ test("garage dress upload retries after a transient failure, and a new team clea
     LiveryTex: {},
     Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
   });
+  withM4(ctx);
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
                    "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });

@@ -3,7 +3,6 @@ const GarageExterior = (function () {
   "use strict";
   const IDENTITY = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
   const MESHES = ["ground", "terrain", "road", "props", "laneBays", "bayFixtures", "scenery", "sceneryLights", "glass", "water"];
-  const wetWeather = weather => /^(wet|rain|storm)$/.test(weather || "");
   const vector = (v, fallback) => v && v.length >= 3 && Array.from(v).slice(0, 3).every(Number.isFinite) ? Array.from(v).slice(0, 3) : fallback.slice();
   // Owned values only. No live profiles, atmosphere, frame or palette writes.
   function lighting(selection) {
@@ -14,8 +13,8 @@ const GarageExterior = (function () {
     const p = tod === "day" && s.def && s.def.night ? Object.assign({}, authored, {
       sunDir: [.46,.58,.42], sunColor: [1.13,.95,.72], ambientSky: [.26,.33,.50], ambientGround: [.24,.19,.12],
       zenith: [.09,.26,.95], horizon: [.54,.68,.90], fogColor: [.66,.74,.88], fogDensity: .0008 }) : authored;
-    const night = tod === "night" || (tod === "default" && !!(s.night || s.def && s.def.night));
-    const twilight = tod === "dawn" || tod === "dusk", wet = wetWeather(weather), storm = weather === "storm";
+    const night = M4.isNight(tod, s.night ? s : s.def);
+    const twilight = tod === "dawn" || tod === "dusk", wet = M4.isWet(weather), storm = weather === "storm";
     const overcast = storm || wet || weather === "overcast" || weather === "fog";
     const sunDir = vector(p.sunDir, [.2,.8,.4]);
     if (night) { sunDir[0] = -.25; sunDir[1] = .8; sunDir[2] = .3; }
@@ -156,7 +155,7 @@ const GarageExterior = (function () {
     function free(set) { if (set) for (const name of MESHES) if (set[name]) gfx.freeMesh(set[name]); }
     function appearance() {
       if (!/^(rain|storm)$/.test(selected.weather)) freeWeather();
-      const wet = wetWeather(selected.weather);
+      const wet = M4.isWet(selected.weather);
       Object.assign(material.ground, { roughness: wet ? .65 : .94, metalness: 0 });
       Object.assign(material.road, { roughness: wet ? .24 : .85, metalness: wet ? .06 : 0, specular: wet ? .65 : .25 });
       Object.assign(material.props, { roughness: wet ? .48 : .78, metalness: .04, emissive: 0 });

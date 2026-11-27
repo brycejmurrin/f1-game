@@ -295,7 +295,29 @@ function swOptionalBlock() {
 /** The strict lazy group install must cache whole (CAREER screen files): derived from LAZY_CAREER_UI so a feature PR
  *  that adds a career file no longer hand-edits a regex line in sw.js (it re-conflicted on every sync). */
 function swRequiredLazyBlock() {
-  return `const REQUIRED_LAZY = ${JSON.stringify([...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_CAREER || [])])};\n`;
+  // The stills/sfx content table rides in this top-level block (#7076): both are install-time constants of sw.js.
+  return `const REQUIRED_LAZY = ${JSON.stringify([...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_CAREER || [])])};\n` + swAssetHashBlock();
+}
+
+/** Stills and sfx are fetched under bare paths (js/ui/select-screen.js, js/audio/engine.js), so sw.js files each one
+ *  under `<path>?v=<12-hex digest>` from this table (#7076 17e): a re-rendered still or re-cut sound is a new key,
+ *  an unchanged one is carried across deploys without a network round trip. */
+export const SW_ASSET_HASH_DIRS = Object.freeze(["assets/sfx", "assets/stills"]);
+const SW_ASSET_HASH_EXT = /\.(?:webp|png|jpe?g|avif|mp3|ogg|m4a|wav)$/;
+export function swAssetHashes() {
+  const out = {};
+  for (const dir of SW_ASSET_HASH_DIRS) {
+    const abs = path.join(ROOT, dir);
+    if (!fs.existsSync(abs)) continue;
+    for (const name of fs.readdirSync(abs).sort()) {
+      if (SW_ASSET_HASH_EXT.test(name)) out[`${dir}/${name}`] = digest(`${dir}/${name}`);
+    }
+  }
+  return out;
+}
+function swAssetHashBlock() {
+  const rows = Object.entries(swAssetHashes()).map(([k, v]) => `  "${k}": "${v}",`);
+  return `const ASSET_HASH = {\n${rows.join("\n")}\n};\n`;
 }
 
 function swLazyAgentBlock() {

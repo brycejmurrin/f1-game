@@ -19,7 +19,7 @@ const { clamp, satAdjust, isFloodActiveSession,
         _nightAmbientBand, applyLightTune } = G;
 // STORM (js/race/storm.js) is rain and then some: every rain branch applies,
 // then the storm block in the wet branch darkens and thickens it.
-const wxWet = () => G.raceWeather === "wet" || G.raceWeather === "rain" || G.raceWeather === "storm";
+const wxWet = () => M4.isWet(G.raceWeather);
 const wxRain = () => G.raceWeather === "rain" || G.raceWeather === "storm";
 const wxStorm = () => G.raceWeather === "storm";
 const { LT, buildTrackLights } = LightTune;
@@ -184,8 +184,7 @@ function _applyRaceBody() {
   if (typeof applyLightTune === "function") applyLightTune(true, _hold ? { holdRebuild: true } : undefined);
   // The storm's heavier rain, for whichever caller reseeds the streaks next (startRace, a knob reinit).
   if (typeof Particles !== "undefined" && Particles.rainIntensity && typeof Storm !== "undefined") Particles.rainIntensity(Storm.rainK(G.raceWeather));
-  const isNightSession = G.raceTimeOfDay === "night" ||
-    (G.raceTimeOfDay === "default" && G.track && G.track.def && G.track.def.night);
+  const isNightSession = M4.isNight(G.raceTimeOfDay, G.track && G.track.def);
   // City light-pollution SKYGLOW: at night the lit circuit domes the horizon —
   // strong + tinted over neon cities, a faint warm haze over flood-lit open
   // circuits. Cleared here so day/dusk skies never inherit it.
@@ -729,7 +728,7 @@ function _applyRaceBody() {
 // The twilight factor peaks at 0.05 + 0.58 = 0.63, so its 0.70 cap never binds.
 function floodEmit(sunY) {
   const tod = G.raceTimeOfDay;
-  const night = tod === "night" || (tod === "default" && !!(G.track && G.track.def && G.track.def.night));
+  const night = M4.isNight(tod, G.track && G.track.def);
   if (sunY == null) sunY = night ? -1 : 1;
   return Math.min(1, LT.floodEmitMul * (night ? 0.78
     : (tod === "dusk" || tod === "dawn") ? Math.min(0.70, 0.05 + 0.58 * Math.max(LT.twilightFloor ?? 0.30, clamp(1 - sunY * (LT.twilightRamp ?? 6), 0, 1)))

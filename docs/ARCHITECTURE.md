@@ -93,7 +93,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `log.js` | `Log` | tag | levelled namespaced logging (global Log). |
 | `dev-flags.js` | `DevFlags` | tag | DevFlags: one registry for boot-time URL / localStorage toggles. |
 | `scopes.js` | `Scopes` | tag | Scopes: WHEN a lifecycle transition clears what (#6920 U2.1, #6949). |
-| `mat4.js` | `M4` | tag | column-major 4x4 matrix + vec3 helpers, plus the SCALAR helpers modules share (M4.clamp / lerp / wrapDelta / wrapIndex / clamp01 / smoothstep, and the seeded… |
+| `mat4.js` | `M4` | tag | column-major 4x4 matrix + vec3 helpers, plus the SCALAR helpers modules share (M4.clamp / lerp / wrapDelta / wrapIndex / clamp01 / smoothstep / smoothEdge,… |
 | `hash32.js` | `Hash32` | tag | stateless FNV-1a + murmur-style mix for career, daily challenge, and driver ratings. |
 | `clipboard.js` | `ApexClipboard` | tag | one clipboard write/read home. navigator.clipboard + textarea execCommand fallback for plain http / older WebKit. |
 | `native.js` | `Native` | tag | native-shell detect (Electron preload + Capacitor). |
@@ -814,6 +814,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `drill-card.js` | `DrillCard` | LAZY_LEARN | DrillCard: a LEARN drill's result card and its one medal store (#6559 §1b, step 2; #7039). medalOf(r, tiers) is pure. tiers = {bronze, silver, gold,… |
 | `aero.js` | `AeroDrill` | LAZY_LEARN | AeroDrill: LEARN's Aero Lab Scenario, moved out of js/ui/learn-door.js (#6920 U4.1b, move-only). |
 | `thumb-drill.js` | `ThumbDrill` | LAZY_LEARN | THUMB DRILL, LEARN's on-track sequel to the Vegas Thumb Trainer (#6927). |
+| `tyre-heat.js` | `TyreHeatDrill` | LAZY_LEARN | TYRE THERMAL LAB: LEARN's tyre-heat lesson on track (#6559 step 8, #6551 §1). |
 <!-- /@gen-arch:modules -->
 
 ---
