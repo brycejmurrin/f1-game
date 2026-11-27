@@ -112,7 +112,7 @@ const GOLDEN = {
   start: ["IncidentSim.reset", "raceCtl.reset", "DebrisWorld.reset", "scWatch.reset", "blueWatch.reset", "DebrisWorld.prime"],
   "restart-red": ["IncidentSim.reset", "DebrisWorld.reset", "DebrisWorld.prime", "scWatch.reset", "blueWatch.reset"],
   "restart-declined": ["IncidentSim.reset", "DebrisWorld.reset", "DebrisWorld.prime"],
-  finish: ["raceCtl.reset"],
+  finish: ["IncidentSim.reset", "raceCtl.reset"],   // #7077 K7: takeovers hand back at the flag
   episode: ["IncidentSim.reset", "raceCtl.reset", "DebrisWorld.reset"],
   quit: ["IncidentSim.reset", "raceCtl.reset", "IncidentSim.reset", "DebrisWorld.reset"],
 };
@@ -183,7 +183,7 @@ test("the race scope: registrants, filters and order", async () => {
     start: ["tlx-mem-scope", "results-cam", "incident-sim", "raceCtl", "debris"],
     "restart-red": ["incident-sim", "debris"],
     "restart-declined": ["incident-sim", "debris"],
-    finish: ["tlx-mem-scope", "raceCtl"],
+    finish: ["tlx-mem-scope", "incident-sim", "raceCtl"],
     quit: ["tlx-mem-scope", "raceCtl", "quit-cams"],
     episode: ["incident-sim", "raceCtl", "debris"],
     cut: [],
@@ -222,4 +222,24 @@ test("source pin: game.js resets debris and race control only inside the race-sc
   assert.ok(block > 0, "the registration block exists");
   const outside = hits.filter(([i]) => i < block || i > block + 12).map(([i, l]) => (i + 1) + ": " + l.trim());
   assert.deepEqual(outside, []);
+});
+
+// #7077 K7: the finish exit cleared raceCtl only, so a car the IncidentSim owned at the flag stayed frozen on the results.
+test("endRace hands an incident takeover back: no car stays IncidentSim-owned on the results", async () => {
+  const g = await createGame({ track: "monza" });
+  games.push(g);
+  await g.G.startRace();
+  assert.equal((await g.stepUntil(() => g.apex.info().state === "race", { maxSteps: 2000 })).ok, true);
+  g.step(30);
+  const ev = (s) => vm.runInContext(s, Object.assign(g.ctx, { __G: g.G }), { filename: "scopes-vm:k7" });
+  // A live Rapier side-world is the takeover's precondition; the VM has none, so stand one in.
+  ev(`DebrisWorld.active = () => true; DebrisWorld.rapierReady = () => true; DebrisWorld.worldGen = () => 1;
+    DebrisWorld.promoteCarDynamic = () => true; DebrisWorld.demoteCarKinematic = () => {}; DebrisWorld.carBodyPose = () => null;
+    IncidentSim.setFlags({ r2Airborne: true, r3Contact: false, c1Pileup: false });
+    IncidentSim.notifyCar(__G.cars[0], __G.cars[1], 30); IncidentSim.preStep(1 / 60);`);
+  assert.equal(ev("IncidentSim.owns(__G.cars[0])"), true, "the takeover started");
+  g.G.endRace();
+  assert.equal(g.G.state, "results");
+  assert.equal(ev("IncidentSim.owns(__G.cars[0]) || IncidentSim.owns(__G.cars[1])"), false, "the flag handed both cars back");
+  assert.equal(g.G.cars[0]._incidentOwned, false, "and cleared the car's own takeover mark");
 });

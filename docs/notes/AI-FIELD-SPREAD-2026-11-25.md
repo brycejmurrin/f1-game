@@ -31,3 +31,19 @@ Solo laps vary by 0.03 %, so pacePhase does not cause the lap-to-lap noise; traf
 ## Open
 
 Lap 1 runs about twice the real gaps. Part of that is lap length: our laps are 100-122 s against real 90-96 s. The rest is the calm start's headway, and that trades against turn-1 contact (skill `ai-racecraft` §Lap-1 / Turn-1 melee). P10 race pace is still about 1 % over real; it is traffic cost in the midfield, not the pace ladder. Bands: [`tests/unit/ai-field-spread-vm.test.mjs`](../../tests/unit/ai-field-spread-vm.test.mjs).
+
+## Full distance (#7094, 2026-11-27)
+
+Kind: measurement · Re-measure-by: 2027-02-27
+
+Real-length races, AI-only, HARD, wear off, shipped grid (`--set raceGrid=null`), tip fc8646e2: bahrain 57 laps and monza 53 laps, seeds 1-2 (about 2.7 min each).
+
+| race | P10 pace | P20 pace | teammates | lap CV | lapped at the flag | P10 gap at the flag |
+|---|---:|---:|---:|---:|---:|---:|
+| bahrain 1 | +1.89 % | +3.37 % | 0.34 % | 1.00 % | 13 | 138 s |
+| bahrain 2 | +2.08 % | +3.24 % | 0.25 % | 0.83 % | 14 | 147 s |
+| monza 1 | +2.19 % | +3.73 % | 0.33 % | 0.85 % | 13 | 145 s |
+| monza 2 | +2.20 % | +3.42 % | 0.30 % | 0.95 % | 13 | 141 s |
+| real F1 | +1.89 % | +4.16 % | 0.39 % | 0.95 % | about 7 | |
+
+The post-normalisation HARD pace ladder sits on the real one (P10 1.89-2.20 %, P20 below real). The lapped count does not: 13-14 of 21 against about 7 (band 4-10). The ladder alone puts P10 about a lap down over 57 laps, so the excess is traffic loss in the midfield, not pace. The P10 pace pin is in the test; the lapped-car assertion waits on a decision (tune traffic loss, or accept and record).

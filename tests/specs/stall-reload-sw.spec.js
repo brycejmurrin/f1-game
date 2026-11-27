@@ -1,7 +1,5 @@
 // @ts-check
 /** Software-GL stall watchdog — stressed on fix head (CI).
- *
- * Matched deploy-tip vs fix-head: `node tools/gfx/stall-reload-sw-oracle.mjs`
  */
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import fs from "node:fs";
