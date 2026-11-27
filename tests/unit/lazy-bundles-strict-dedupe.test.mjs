@@ -70,16 +70,26 @@ test("openBridgeLink during an in-flight loadAgentSurface injects bridge-link.js
 });
 
 test("a retried agent load runs bindAgent once", async () => {
-  let binds = 0;
+  let binds = 0, c2;
   // Fail the first pass through the agent file set, succeed on the retry.
   let first = true;
-  const { ctx: c2 } = boot({
-    bindAgent() { binds++; },
+  c2 = boot({
+    bindAgent() { binds++; c2.window.__apex = {}; },
     mode: (f) => (f === "js/agent/apex.js" && first ? (first = false, "fail") : "ok"),
-  });
+  }).ctx;
   await c2.LB.loadAgentSurface();
   await c2.LB.loadAgentSurface();
   assert.equal(binds, 1, "bindAgent ran once across the failed pass and its retry");
+});
+
+test("bindAgent that no-ops (ApexApi absent) does not latch: the next ask binds", async () => {
+  let binds = 0, c;
+  const t = boot({ bindAgent() { binds++; if (binds > 1) c.window.__apex = {}; } });
+  c = t.ctx;
+  await c.LB.loadAgentSurface();   // pass 1: no __apex built; the bind is retried below
+  await c.LB.loadAgentSurface();
+  await c.LB.loadAgentSurface();
+  assert.equal(binds, 2, "bound on the second pass, then latched");
 });
 
 test("serial audio path passes strict (retry never re-injects an evaluated file)", () => {

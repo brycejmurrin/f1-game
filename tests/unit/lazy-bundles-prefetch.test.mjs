@@ -203,7 +203,7 @@ test("loadAgentSurface: a refused file that makes bindAgent throw fails soft and
     body: () => "",
     globals: { NetPlay: {}, NetLobby: {} },
     deps: {
-      bindAgent() { binds++; if (refuse) throw new ReferenceError("AgentRaster is not defined"); },
+      bindAgent() { binds++; if (refuse) throw new ReferenceError("AgentRaster is not defined"); w.ctx.window.__apex = {}; },
       createNetwork: () => ({ wire() {} }),
     },
   });

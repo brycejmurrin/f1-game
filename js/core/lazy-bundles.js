@@ -874,7 +874,7 @@ let _agentLoad = null;
 // Files that evaluated, kept across a failed attempt so a retry never re-injects a
 // script-level const (the dataScriptsLoaded idiom).
 const agentScriptsLoaded = new Set();
-// bindAgent ran once: a retry after a failed pass must not rebuild ApexApi and overwrite window.__apex.
+// bindAgent latches once __apex exists (it no-ops while ApexApi is absent): a retry after a failed pass must not rebuild ApexApi and overwrite window.__apex.
 let agentBound = false;
 function loadAgentSurface() {
   if (!_agentLoad) _agentLoad = (async () => {
@@ -896,8 +896,9 @@ function loadAgentSurface() {
     // session, aborted game.js's boot tail after `await bootAgentSurface()` and
     // painted the red overlay. __apex stays null; the next ask retries.
     let bound = true;
-    try { if (!agentBound) { deps.bindAgent(); agentBound = true; } }
+    try { if (!agentBound) { deps.bindAgent(); agentBound = !!window.__apex; } }
     catch (e) { bound = false; Log.warn("game", "agent surface bind failed: " + (e && e.message)); }
+    if (!agentBound) bound = false;
     // Memoised on the promise, but a FAILED load must not latch for the session:
     // METRICS / the flyby panel ask again on their next open.
     if (netOk === false || realOk === false || !agentOk || !bound) {
