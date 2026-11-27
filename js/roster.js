@@ -329,6 +329,7 @@
     "js/camera/extra-rigs.js",
     "js/camera/trackside.js",
     "js/camera/cam-avoid.js",
+    "js/camera/feel-fx.js",
     "js/ui/podium-beat.js",
     "js/race/podium-beat.js",
     "js/race/parc-ferme.js",

@@ -93,7 +93,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `log.js` | `Log` | tag | levelled namespaced logging (global Log). |
 | `dev-flags.js` | `DevFlags` | tag | DevFlags: one registry for boot-time URL / localStorage toggles. |
 | `scopes.js` | `Scopes` | tag | Scopes: WHEN a lifecycle transition clears what (#6920 U2.1, #6949). |
-| `mat4.js` | `M4` | tag | column-major 4x4 matrix + vec3 helpers, plus the SCALAR helpers modules share (M4.clamp / lerp / wrapDelta / clamp01 / smoothstep, and the seeded PRNG… |
+| `mat4.js` | `M4` | tag | column-major 4x4 matrix + vec3 helpers, plus the SCALAR helpers modules share (M4.clamp / lerp / wrapDelta / wrapIndex / clamp01 / smoothstep, and the seeded… |
 | `hash32.js` | `Hash32` | tag | stateless FNV-1a + murmur-style mix for career, daily challenge, and driver ratings. |
 | `clipboard.js` | `ApexClipboard` | tag | one clipboard write/read home. navigator.clipboard + textarea execCommand fallback for plain http / older WebKit. |
 | `native.js` | `Native` | tag | native-shell detect (Electron preload + Capacitor). |
@@ -655,6 +655,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `extra-rigs.js` | `ExtraRigs` | LAZY_RACE_SESSION | EXTRA player camera rigs (RIVAL LOCK, PIT WALL, DRONE FOLLOW): append-only CAM_MODES solvers kept out of vantage.js for file-size headroom. |
 | `trackside.js` | `TracksideCams` | LAZY_RACE_SESSION | TRACKSIDE fixed cameras: one eye per measured corner, outside the fence, auto-switching as the subject car passes. |
 | `cam-avoid.js` | `CamAvoid` | LAZY_RACE_SESSION | broadcast-camera wall / building avoidance for open circuits. |
+| `feel-fx.js` | `CamFx` | LAZY_RACE_SESSION | CamFx: the chase-cam ACCELERATION SURGE and the render-only IMPACT HOLD + FLASH (#7095, #6543 I1 + I3, D-053). |
 | `tuner-panel.js` | `CamTunerEditor` | LAZY_CAM_EDITOR | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), comfort knobs, a global baseline scope, presets,… |
 | `flyby-editor.js` | `FlybyEditor` | LAZY_CAM_EDITOR | FLYBY SHOT EDITOR DOM panel (LAZY_CAM_EDITOR). |
 

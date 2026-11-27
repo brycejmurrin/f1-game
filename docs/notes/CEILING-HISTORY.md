@@ -4159,3 +4159,7 @@ Human step: `ratchet-raise`.
 `js/learn-drills/aero.js` (the Aero drill moved out of the lazy learn-door.js, #6997 U4.1b) costs one roster line; no eager script is added
 and `eagerScripts` is unchanged. Fragment: `ratchets.d/claude--aero-drill-move-6997.json`.
 Human step: `ratchet-raise`.
+## 2026-11-27 — PR #7193 (claude/career-refused-calendar-7069): #7069: career tally.starts keeps Race starts under each season's own calendar (+176 eager code bytes, career.js/save-migrate.js)
+
+`(tree) eagerCodeBytes` 4026247 → **4026423** (+176). Deliberate raise past the absorb: `rolloverApply` stamps `tally.starts` and `cleanTally` keeps it, so "Race starts" no longer re-reads today's calendar; the eager shell had ~0 bytes of headroom.
+Fragment: `ratchets.d/claude--career-refused-calendar-7069.json`.

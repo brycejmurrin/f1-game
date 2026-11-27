@@ -24,6 +24,9 @@ function load(file, name, globals = {}) {
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
+  for (const pre of ["js/core/mat4.js", "js/track/scenery/guards.js"]) {   // the shared helpers nature/structures call
+    vm.runInContext(fs.readFileSync(path.join(ROOT, pre), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: absSrc(pre) });
+  }
   const src = fs.readFileSync(path.join(ROOT, file), "utf8").replace(/^const\b/gm, "var");
   vm.runInContext(src, ctx, { filename: absSrc(file) });
   return ctx[name];

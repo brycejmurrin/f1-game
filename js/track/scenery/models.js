@@ -511,7 +511,7 @@ const TrackModels = (function () {
         return true;
       }
       const n = ctx.n || track.n || px.length;
-      const k = ((Math.round(spec.k || 0) % n) + n) % n;
+      const k = M4.wrapIndex(spec.k || 0, n);
       const side = spec.side || 1, gap = spec.gap || 0, sz = spec.size;
       const col = spec.color || [0.5, 0.5, 0.5];
       const pieces = Math.max(2, Math.round(spec.samples || 4));

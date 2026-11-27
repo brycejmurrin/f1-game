@@ -120,7 +120,7 @@ test("pin: the DELTA chip reads pending, ahead, behind and a rounded zero", () =
 
 test("pin: the GameHud module and instance surfaces", () => {
   const { sb, hud } = boot();
-  assert.deepEqual(Object.keys(sb.GameHud), ["create", "secFlash", "invalidateFit", "syncPhoneFit", "vp", "vpKey"]);
+  assert.deepEqual(Object.keys(sb.GameHud), ["create", "secFlash", "shiftLeds", "invalidateFit", "syncPhoneFit", "vp", "vpKey"]);
   assert.deepEqual(Object.keys(hud), ["updateHud", "invalidateMap", "flashSector", "resetRace", "invalidateFit", "syncPhoneFit",
     "laneRectMisses", "resetLaneRectMisses", "secFlash"]);
 });
