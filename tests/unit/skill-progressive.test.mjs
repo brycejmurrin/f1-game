@@ -261,7 +261,7 @@ test("skills only name real test-bg groups", () => {
   const groups = new Set(
     Object.keys(pkg.scripts).filter((k) => k.startsWith("test:")).map((k) => k.slice(5)),
   );
-  const flags = new Set(["--status", "--stop", "--wait", "--timeout", "--force", "--json", "--sweep"]);
+  const flags = new Set(["--status", "--stop", "--wait", "--timeout", "--force", "--foreground", "--json", "--sweep"]);
   const bad = [];
   const walk = (dir) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -363,7 +363,7 @@ test("review-pass contracts: no stale commands or steal phrases", () => {
   assert.doesNotMatch(triage, /ONE browser group per batch \(`tools\/test-bg\.mjs`/);
   assert.doesNotMatch(triage, /test-bg\.mjs[\s\S]{0,40}enforces the cap/);
   assert.match(triage, /verify-change/);
-  assert.match(triage, /test-solo\.mjs/);
+  assert.match(triage, /test-bg\.mjs --foreground/);
 
   const walkMd = (dir, fn) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
