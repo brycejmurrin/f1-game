@@ -251,6 +251,8 @@ function loadLearnDoor() {
   const registry = new URL("../../js/learn-drills/registry.js", import.meta.url);
   vm.runInNewContext(readFileSync(registry, "utf8") + "\nthis.DrillRegistry = DrillRegistry;", context,
     { filename: fileURLToPath(registry) });
+  const aero = new URL("../../js/learn-drills/aero.js", import.meta.url);
+  vm.runInNewContext(readFileSync(aero, "utf8") + "\nthis.AeroDrill = AeroDrill;", context, { filename: fileURLToPath(aero) });
   vm.runInNewContext(readFileSync(path, "utf8") + "\nthis.LearnDoor = LearnDoor;", context,
     { filename: fileURLToPath(path) });
   context.LearnDoor.defineDrills();   // the lazy definer LearnDoor.open() runs
@@ -336,18 +338,18 @@ test("Button Trainer's arrow challenge is reachable and its saved-BRAKE preset r
 // (the test fails while a drilled lesson keeps one). TRAINERS are lessons that are already a hands-on trainer outside
 // DrillRegistry (the Button Trainer lab, the Vegas thumb trainer and its on-track drill, js/learn-drills/thumb-drill.js).
 const PENDING = Object.freeze([
-  "chassis", "suspension", "deployment", "hybrid", "brake-blend", "tyre-heat", "racing-line",
+  "chassis", "suspension", "hybrid", "brake-blend",
   "rain", "vsc", "pit-duel", "stint",
 ]);
 const PENDING_SEED = 13;
 const TRAINERS = Object.freeze(["buttons", "thumbs", "thumbs-drive"]);
 
-/** The curriculum ids and the lessons with a registered drill: registry.js, learn-door.js's definer and every
- *  js/learn-drills/<id>.js (one DrillRegistry.define per file, #6559 §1a) in one context. */
+/** The curriculum ids and the lessons with a registered drill: registry.js, aero.js, learn-door.js's definer and every
+ *  other js/learn-drills/<id>.js (one DrillRegistry.define per file, #6559 §1a) in one context. */
 function coverage() {
   const context = loadLearnDoor();
   const dir = new URL("../../js/learn-drills/", import.meta.url);
-  for (const f of readdirSync(dir).filter(f => f.endsWith(".js") && f !== "registry.js").sort()) {
+  for (const f of readdirSync(dir).filter(f => f.endsWith(".js") && f !== "registry.js" && f !== "aero.js").sort()) {
     vm.runInNewContext(readFileSync(new URL(f, dir), "utf8"), context, { filename: fileURLToPath(new URL(f, dir)) });
   }
   const drilled = new Set(vm.runInNewContext("DrillRegistry.ids().map(id => DrillRegistry.get(id).lesson)", context));

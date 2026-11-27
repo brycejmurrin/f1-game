@@ -249,7 +249,7 @@ const ApexBridge = (function () {
       };
     } catch (err) { out.error = String(err && err.message); }
     try { p.remove(); } catch (_) { /* detached already */ }
-    out.tiers = { density: body.getAttribute("data-density"), shape: body.getAttribute("data-shape"), desktop: !!(body.classList && body.classList.contains("desktop")),
+    out.tiers = { density: body.getAttribute("data-density"), shape: body.getAttribute("data-shape"), desktop: Dom.isDesktop(d),
       html: root.dataset ? Object.assign({}, root.dataset) : null };
     out.wish = { ui: v("--ui-scale"), hud: v("--hud-scale"), btn: v("--hud-btn-scale"), textBoost: v("--hud-text-boost") };
     out.paint = { hudTop: v("--hud-z-top"), hudBot: v("--hud-z-bot"), dock: v("--hud-z-dock"), dockLeft: v("--hud-z-dock-l"), sheet: v("--sheet-scale"), kb: v("--kb"),

@@ -93,7 +93,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `log.js` | `Log` | tag | levelled namespaced logging (global Log). |
 | `dev-flags.js` | `DevFlags` | tag | DevFlags: one registry for boot-time URL / localStorage toggles. |
 | `scopes.js` | `Scopes` | tag | Scopes: WHEN a lifecycle transition clears what (#6920 U2.1, #6949). |
-| `mat4.js` | `M4` | tag | column-major 4x4 matrix + vec3 helpers, plus the SCALAR helpers modules share (M4.clamp / lerp / wrapDelta / wrapIndex / clamp01 / smoothstep, and the seeded… |
+| `mat4.js` | `M4` | tag | column-major 4x4 matrix + vec3 helpers, plus the SCALAR helpers modules share (M4.clamp / lerp / wrapDelta / wrapIndex / clamp01 / smoothstep / smoothEdge,… |
 | `hash32.js` | `Hash32` | tag | stateless FNV-1a + murmur-style mix for career, daily challenge, and driver ratings. |
 | `clipboard.js` | `ApexClipboard` | tag | one clipboard write/read home. navigator.clipboard + textarea execCommand fallback for plain http / older WebKit. |
 | `native.js` | `Native` | tag | native-shell detect (Electron preload + Capacitor). |
@@ -230,7 +230,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
-| `dom.js` | `Dom` | tag | Dom: the DOM/format helpers every DOM-built screen shares (el / paintFold / fmtLap / fmtRaceClock / fmtGap). |
+| `dom.js` | `Dom` | tag | Dom: the DOM/format helpers every DOM-built screen shares (el / paintFold / fmtLap / fmtRaceClock / fmtGap / isDesktop). |
 | `title-fx.js` | `TitleFx` | tag | TitleFx: title-screen motion, wash and the background drawing. |
 | `track-maps.js` | `TrackMaps` | tag | TrackMaps: offline 2D circuit outlines for the track picker. |
 | `flags.js` | `Flags` | tag | national flags as inline SVG, for the circuit picker's flag strip and the hero caption beside a circuit's name. |
@@ -385,7 +385,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `storm-flash.js` | `StormFlash` | tag | StormFlash: the in-frame lightning flash (strike, thunder, ambient spike). |
 | `announce-banner.js` | `AnnounceBanner` | tag | AnnounceBanner: the race-radio card, its floor and its queue. |
 | `light-tune-edit.js` | `LightTuneEdit` | tag | LightTuneEdit: the lighting-tuner write path (latch clear + store). |
-| `pace-math.js` | `PaceMath` | tag | PACE / ERS math: vTop/vStd/aStd, X-mode aero gains, paceRef buffer, ERS drain/regen/overtake duration, aeroDfMult, and gearHi/rpmFor. |
+| `pace-math.js` | `PaceMath` | tag | PACE / ERS math: vTop/vStd/aStd, X-mode aero gains, paceRef buffer, ERS drain/regen/overtake duration, the deploy taper and regen fade (taperAt/regenSpeedAt),… |
 | `sporting-regs.js` | `SportingRegs` | tag | SPORTING REGULATIONS the player is held to, as pure rules. |
 | `broadcast.js` | `Broadcast` | tag | Broadcast camera policy shared by the live director, Rival Lock, the stream overlay and the Data Hub replay. |
 | `real-race-boot.js` | `RealRace` | tag | REAL RACE boot stub (FULL, #4978 row 6). game.js still makes `RealRace.create(G)` at eval and reads update/owns/isWatch/status/raceT0 every frame; until a… |
@@ -812,7 +812,11 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `registry.js` | `DrillRegistry` | LAZY_LEARN | DrillRegistry: the one host for LEARN's on-track scenario drills (#6920 U4.1, #6559 step 0). |
 | `drill-card.js` | `DrillCard` | LAZY_LEARN | DrillCard: a LEARN drill's result card and its one medal store (#6559 §1b, step 2; #7039). medalOf(r, tiers) is pure. tiers = {bronze, silver, gold,… |
+| `aero.js` | `AeroDrill` | LAZY_LEARN | AeroDrill: LEARN's Aero Lab Scenario, moved out of js/ui/learn-door.js (#6920 U4.1b, move-only). |
 | `thumb-drill.js` | `ThumbDrill` | LAZY_LEARN | THUMB DRILL, LEARN's on-track sequel to the Vegas Thumb Trainer (#6927). |
+| `lines.js` | `LinesDrill` | LAZY_LEARN | RACING LINES: the apex-choice drill (#6559 step 10, #6551 §3). |
+| `tyre-heat.js` | `TyreHeatDrill` | LAZY_LEARN | TYRE THERMAL LAB: LEARN's tyre-heat lesson on track (#6559 step 8, #6551 §1). |
+| `taper.js` | `TaperDrill` | LAZY_LEARN | TAPER HUNT: LEARN's deployment drill on track (#6559 step 6, #6550 D1). |
 | `grip.js` | `GripDrill` | LAZY_LEARN | GRIP & BRAKING: the friction-circle drill (#6559 step 4, #6551 §2, #7040). |
 | `telemetry.js` | `TelemetryDrill` | LAZY_LEARN | TELEMETRY DETECTIVE: compare two runs at the SAME DISTANCE (#6559 step 14, #6551 §4). |
 <!-- /@gen-arch:modules -->

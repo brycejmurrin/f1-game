@@ -16,6 +16,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadDom } from "../helpers/dom-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -89,8 +90,11 @@ function bootFlipHarness(o = {}) {
   sb.window = sb;
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: absSrc("js/ui/live-region.js") });
   vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
+  loadDom(sb);
   vm.runInNewContext(src("js/ui/hud-radio-lane.js"), sb, { filename: absSrc("js/ui/hud-radio-lane.js") });   // …and its HudRadioLane (#3261)
+  loadDom(sb);
   vm.runInNewContext(src("js/ui/hud-readouts.js"), sb, { filename: absSrc("js/ui/hud-readouts.js") });   // GameHud builds its sector painter from it (#6500)
+  loadDom(sb);
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: absSrc("js/ui/hud.js") });
   vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: absSrc("js/race/overtake-mode.js") });
 
@@ -581,8 +585,11 @@ function bootOrderHarness({ events = true } = {}) {
   sb.window = sb;
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: absSrc("js/ui/live-region.js") });
   vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
+  loadDom(sb);
   vm.runInNewContext(src("js/ui/hud-radio-lane.js"), sb, { filename: absSrc("js/ui/hud-radio-lane.js") });   // …and its HudRadioLane (#3261)
+  loadDom(sb);
   vm.runInNewContext(src("js/ui/hud-readouts.js"), sb, { filename: absSrc("js/ui/hud-readouts.js") });   // GameHud builds its sector painter from it (#6500)
+  loadDom(sb);
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: absSrc("js/ui/hud.js") });
   vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: absSrc("js/race/overtake-mode.js") });
   const $ = (id) => dom.document.getElementById(id);
@@ -700,6 +707,7 @@ test("publishing a changed top-control zoom requests one subsequent full fit", (
       root: { style: { getPropertyValue: () => painted } },
       set(prop, value, base) { painted = value >= base ? "" : String(Math.max(.4, Math.round(value * 1000) / 1000)); },
     });
+    loadDom(ctx);
     vm.runInContext(publish, ctx);
     assert.equal(ctx._fitKey, expected ? "" : "settled", `published top zoom ${before} → ${painted || requested}`);
     assert.equal(ctx._fitWait, expected ? 0 : 30, "unchanged clamped zoom keeps steady-state backoff");

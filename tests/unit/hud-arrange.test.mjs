@@ -11,6 +11,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadDom } from "../helpers/dom-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-arrange.js"), "utf8");
@@ -25,7 +26,9 @@ function visibilityPolicy(elements, stored = {}, rows = {}, environment = {}) {
     Event: class { constructor(type) { this.type = type; } },
     GameStore: { store: { get: (k, d) => k in stored ? stored[k] : d, set: (k, v) => { stored[k] = v; } } }, ...environment };
   vm.createContext(ctx);
+  loadDom(ctx);
   vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
+  loadDom(ctx);
   vm.runInContext(POLICY.replace(/^const\b/gm, 'var'), ctx);
   return ctx.HudLayout;
 }
@@ -34,6 +37,7 @@ function load() {
   const ctx = { HudLayout: visibilityPolicy(), Log: { info() {}, warn() {}, debug() {}, enabled() { return false; } },
     M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) } };   // the shared clamp the module aliases
   vm.createContext(ctx);
+  loadDom(ctx);
   vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx);
   return ctx.HudArrange;
 }
@@ -215,6 +219,7 @@ function editor(pieceId = "piece", options = {}) {
     requestAnimationFrame: fn => { frames.set(++frame, fn); return frame; }, cancelAnimationFrame: n => frames.delete(n),
     MutationObserver: class { constructor(fn) { observers.push(fn); } observe() {} } };
   vm.createContext(ctx); vm.runInContext(ROW, ctx); ctx.SettingRow = ctx.window.SettingRow;
+  loadDom(ctx);
   vm.runInContext(SRC.replace(/^const\b/gm, 'var'), ctx);
   const api = ctx.HudArrange.create({ $: id => ids.get(id) });
   const fire = (name, args = {}) => { const e = { target: ids.get(pieceId), pointerId: 1, clientX: 100, clientY: 100, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {}, ...args }; for (const fn of listeners[name] || []) fn(e); };

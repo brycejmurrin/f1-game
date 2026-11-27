@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { withM4 } from "../helpers/mat4-vm.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
 const source = fs.readFileSync(new URL("../../js/ui/photo-studio.js", import.meta.url), "utf8").replace(/^const PhotoStudio/m, "var PhotoStudio");
@@ -1702,6 +1703,7 @@ test("closing the studio drops the library rows; reopening repaints them", async
 test("all shipped garage styles and lighting remain shared by Team and both garage photo entry points", () => {
   const ctx = vm.createContext({ Math, Object, Array, Number, String, JSON, Float32Array, Uint16Array, Uint32Array,
     Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false } });
+  withM4(ctx);
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
     "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(fs.readFileSync(new URL("../../" + f, import.meta.url), "utf8"), ctx, { filename: absSrc(f) });

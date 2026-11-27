@@ -200,7 +200,7 @@ var Announcer = (function () {
     // raced with TIME set to DAY (or a real race that ran in daylight, which
     // carries its own time) is lit by day, and "under the lights" was wrong.
     const tod = info.tod || "default";
-    const night = tod === "night" || (tod === "default" && !!t.night);
+    const night = M4.isNight(tod, t);
     const lore = loreFor(t.id);
     const out = [];
     const add = (text, prio) => { if (text) out.push({ text: text, prio: prio }); };

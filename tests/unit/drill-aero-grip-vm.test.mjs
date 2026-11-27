@@ -1,5 +1,5 @@
 /* drill-aero-grip-vm.test.mjs — the Aero Lab's "grip −N %" readout is the measured wake loss (#7040, #6559 step 5 A5).
- * Each tick of a flat-out Aero drill run in the real game VM, LearnDoor.gripLossPct(player) (the readout and the card's
+ * Each tick of a flat-out Aero drill run in the real game VM, AeroDrill.gripLossPct(player) (the readout and the card's
  * peak) is within 1 % of 100·(1 − DirtyAir.mul(wake, speed, level, DOWNFORCE, vTop)), the multiplier game.js hands
  * player-forces; in Classic air and again after the card's RE-RUN IN CFD AIR (host.rerun("cfd"), A6).
  * The driver: tests/helpers/drill-drive-vm.mjs (the game's own host; no steering, as the Aero refs drive).
@@ -16,14 +16,14 @@ after(() => run?.close());
 /** One flat-out run: the per-tick worst readout error, how many ticks the wake cost grip, and the result. */
 function measure() {
   const { G, ev } = run;
-  const DirtyAir = ev("PhysicsConsts.DirtyAir"), DOWNFORCE = ev("PhysicsConsts.DOWNFORCE"), LearnDoor = ev("LearnDoor");
+  const DirtyAir = ev("PhysicsConsts.DirtyAir"), DOWNFORCE = ev("PhysicsConsts.DOWNFORCE"), AeroDrill = ev("AeroDrill");
   let worst = 0, lossy = 0, peak = 0, ticks = 0;
   const r = run.drive(() => ({ throttle: true, brake: false, steer: 0 }), {
     maxS: 50,
     onTick: () => {
       const p = G.player;
       if (G.state !== "race" || !Number.isFinite(p._dirtyAirMul)) return;
-      const shown = LearnDoor.gripLossPct(p);
+      const shown = AeroDrill.gripLossPct(p);
       const measured = 100 * (1 - DirtyAir.mul(p.wake || 0, p.speed, G.raceDirtyAir, DOWNFORCE, G.vTop()));
       worst = Math.max(worst, Math.abs(shown - measured));
       if (measured >= 1) lossy++;
