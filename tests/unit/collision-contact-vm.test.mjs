@@ -438,7 +438,7 @@ function replayContactFixture(count = 2) {
   }
   const cars = Array.from({ length: count }, (_, i) => ({ code: "C" + i, human: false }));
   const G = {
-    track: { total: 1000 }, cars, player: cars[0], raceT: 0, state: "race", PACE: 1,
+    track: { total: 1000 }, cars, player: cars[0], raceT: 0, state: "race", PACE: 1, pace: { k: Math.max(1, 0.05) },
     netPlay: { owns: () => false }, wrapS: (s) => ((s % 1000) + 1000) % 1000,
     worldFromTrack: (s, x) => { writebacks++; return { x, z: s }; },
   };
@@ -679,7 +679,7 @@ test("a three-car pileup notifies every distinct unordered pair once per solver 
     for (const file of ["js/core/mat4.js", "js/physics/ai-start.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"])
       vm.runInContext(readFileSync(join(ROOT_C, file), "utf8"), ctx, { filename: absSrc(file) });
     const cars = cluster().slice(0, n).concat(Array.from({ length: Math.max(0, n - 3) }, (_, i) => car("other" + i, 200 + i * 200, 40)));
-    const G = { track: { total: 6000 }, player: null, netPlay: { owns: () => false }, PACE: 1, raceT: 0,
+    const G = { track: { total: 6000 }, player: null, netPlay: { owns: () => false }, PACE: 1, pace: { k: Math.max(1, 0.05) }, raceT: 0,
       wrapS: s => (s % 6000 + 6000) % 6000, worldFromTrack: (s, x) => ({ x, z: s }) };
     const solver = vm.runInContext("Collide", ctx).create(G, (a, b, v) => fx.push([a.id, b.id, v]));
     solver.resolveCollisions(cars, DT);
@@ -739,7 +739,7 @@ test("an AI rear-end punts the player no further than the cap over all four pass
     vm.runInContext(readFileSync(join(ROOT_C, file), "utf8"), ctx, { filename: absSrc(file) });
   const p = { id: "p", prog: 104.6, s: 104.6, speed: 20, x: 0, human: true, yawVis: 0 };
   const ai = { id: "ai", prog: 100, s: 100, speed: 50, x: 0, human: false };
-  const G = { track: { total: 6000 }, player: p, netPlay: { owns: () => false }, PACE: 1, raceT: 0,
+  const G = { track: { total: 6000 }, player: p, netPlay: { owns: () => false }, PACE: 1, pace: { k: Math.max(1, 0.05) }, raceT: 0,
     wrapS: s => (s % 6000 + 6000) % 6000, worldFromTrack: (s, x) => ({ x, z: s }) };
   const solver = vm.runInContext("Collide", ctx).create(G, () => {});
   solver.resolveCollisions([], DT);   // binds track / netPlay for pairContact
@@ -768,7 +768,7 @@ function miniSolver(G, cg) {
   vm.runInContext(readFileSync(join(ROOT_C, "js/physics/collide.js"), "utf8"), ctx, { filename: absSrc("js/physics/collide.js") });
   return { ctx, solver: vm.runInContext("Collide", ctx).create(G, () => {}) };
 }
-const miniG = (p) => ({ track: { total: 6000 }, player: p, netPlay: { owns: () => false }, PACE: 1, raceT: 0,
+const miniG = (p) => ({ track: { total: 6000 }, player: p, netPlay: { owns: () => false }, PACE: 1, pace: { k: Math.max(1, 0.05) }, raceT: 0,
   wrapS: s => (s % 6000 + 6000) % 6000, worldFromTrack: (s, x) => ({ x, z: s }) });
 
 test("clean-room 34: a YAWED player rear-ended by an AI is punted no further than the cap", () => {
@@ -830,7 +830,7 @@ test("side-rub scrub bleeds the same fraction of vStd at any PACE", () => {
     const v0 = 40 * pace;
     const a = { id: "a", prog: 100, s: 100, speed: v0, x: 0, human: false };
     const b = { id: "b", prog: 100, s: 100, speed: v0, x: 1.2, human: false };
-    const G = { track: { total: 6000 }, player: null, netPlay: { owns: () => false }, PACE: pace, raceT: 0,
+    const G = { track: { total: 6000 }, player: null, netPlay: { owns: () => false }, PACE: pace, pace: { k: Math.max(pace, 0.05) }, raceT: 0,
       wrapS: s => (s % 6000 + 6000) % 6000, worldFromTrack: (s, x) => ({ x, z: s }) };
     const solver = vm.runInContext("Collide", ctx).create(G, () => {});
     solver.resolveCollisions([a, b], DT);

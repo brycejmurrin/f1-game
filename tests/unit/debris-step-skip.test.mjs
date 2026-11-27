@@ -174,7 +174,7 @@ test("idle Rapier mirrors start incidents at the current human and AI pose", asy
   const car = { s: 2000, x: 2, px: 2000, pz: -2, head: 1.1, speed: 50,
     vLat: 0, human: true, isPlayer: true, prog: 2000, lap: 1 };
   const G = { track: { total: 5000, n: 1000, height: 4, def: { id: "straight" } },
-    cars: [car], player: car, gfx: { mobileTier: true }, PACE: 1,
+    cars: [car], player: car, gfx: { mobileTier: true }, PACE: 1, pace: { k: Math.max(1, 0.05) },
     vTop: () => 72, smp: {}, store: { rev: 0 }, rescuePlayer() {},
     trackFrom: (px, pz) => ({ s: px, x: -pz }),
     worldFromTrack: (s, x) => ({ x: s, z: -x }) };
