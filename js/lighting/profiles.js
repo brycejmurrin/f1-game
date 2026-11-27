@@ -17,22 +17,8 @@ const LightStore = (() => {
     const APPLY_RACE_IDS = new Set(["sunTemp", "sunElev", "sunAzim", "cloudCover",
       "moonBright", "cityGlowMul", "cityGlowTint", "ambTemp", "ambBalance",
       "skyColorSat", "fogColorSat",
-      // These five belong here for the same reason as the eleven above — their
-      // ONLY consumer is inside applyRaceSettings() (or _nightAmbientBand(),
-      // which only applyRaceSettings calls) — and they were missing, so
-      // dragging them did nothing at all. The value stored, the panel updated,
-      // the scene never changed, until something else happened to re-run
-      // applyRaceSettings: a TIME or WEATHER chip, a track load, or moving one
-      // of the eleven. A slider that is dead until you touch a different
-      // slider is indistinguishable from a broken one, and this is what the
-      // "some lighting sliders don't work" reports were.
-      //   nightAmbLift    game.js:_nightAmbientBand
-      //   cityGlowWarm    atmosphere.js
-      //   weatherSunMute  atmosphere.js
-      //   overcastFogMul  atmosphere.js
-      //   fogWxMul        atmosphere.js
-      // If you add a knob whose consumer lives in applyRaceSettings, add it
-      // here too — there is no mechanism that notices for you.
+      // These five's ONLY consumer is inside applyRaceSettings() (game.js _nightAmbientBand, atmosphere.js): left out,
+      // dragging them stored a value and changed nothing until another slider re-ran it. A knob consumed there goes here too.
       "nightAmbLift", "cityGlowWarm", "weatherSunMute", "overcastFogMul", "fogWxMul"]);
 
     let profiles = {};
@@ -328,8 +314,16 @@ const LightStore = (() => {
     // had no local profile at all, so the key goes away rather than to {}.
     // Re-applies, because a snapshot is allowed to name the live condition even
     // though the copy that produced it never does.
+    // #7092: undo may come from __apex.lightCopy(obj); validate it whole before any write.
+    const validUndo = (u) => !Array.isArray(u) && Object.keys(u).every((k) => {
+      const p = u[k];
+      return k !== "__proto__" && (p === null || (typeof p === "object" && !Array.isArray(p) && Object.entries(p).every(([id, v]) => {
+        const d = TUNE_DEFS.find((t) => t.id === id);
+        return d && Number.isFinite(v) && v >= d.min && v <= d.max;
+      })));
+    });
     function restore(undo) {
-      if (!undo || typeof undo !== "object") return false;
+      if (!undo || typeof undo !== "object" || !validUndo(undo)) return false;
       for (const k of Object.keys(undo)) {
         const prev = undo[k];
         if (prev && typeof prev === "object" && Object.keys(prev).length) profiles[k] = Object.assign({}, prev);
