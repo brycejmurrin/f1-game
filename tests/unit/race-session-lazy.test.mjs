@@ -26,6 +26,20 @@ test("manifest keeps session-stub on FULL and pit-lane in LAZY_RACE_SESSION", ()
     "the coach façade stays FULL; its body and helmet optics load once with the race session");
 });
 
+test("camera rig modules ride the race session, not the shell", () => {
+  const m = require("../../tools/manifest.cjs");
+  const lb = src("js/core/lazy-bundles.js");
+  const rigs = { "js/camera/extra-rigs.js": "ExtraRigs", "js/camera/trackside.js": "TracksideCams", "js/camera/cam-avoid.js": "CamAvoid" };
+  const files = Object.keys(rigs);
+  const row = (f) => lb.includes('"' + f + '": () => typeof ' + rigs[f] + ' !== "undefined"');
+  const state = {
+    inFull: files.filter((f) => m.FULL.includes(f)),
+    inSession: files.filter((f) => m.LAZY_RACE_SESSION.includes(f)),
+    readyRows: files.filter(row),
+  };
+  assert.deepEqual(state, { inFull: [], inSession: files, readyRows: files });
+});
+
 test("session stub installs PitLane/Reliability and create() is inert", () => {
   const sb = {
     console,
@@ -209,8 +223,8 @@ function runStartRaceBody({ sessionOk = true, conflict = false, ctxLost = false,
     navigator: { userAgent: "Mozilla/5.0 apex-game-vm" }, window: { LightPresets: {} },
     RaceEntryProfile: obj, LoadingScreen: { failed: async () => { n.asked++; return picks && picks.length ? picks.shift() : "back"; } }, loadingScreen: obj,
     isCareer: () => true,
-    Career: { conflicted: () => conflict, markWeekendStarted() { if (!conflict) season.startedRound = season.round; } },
-    ensureRaceSession: async () => { n.loads++; return seq ? !!seq.shift() : sessionOk; }, ensureAudio: async () => true, lazyBundles: { ensureResultsSheet: async () => true }, ensureLightPresets: async () => true,
+    Career: { inCareer: () => false, conflicted: () => conflict, markWeekendStarted() { if (!conflict) season.startedRound = season.round; } },
+    ensureCareerBody: async () => true, ensureRaceSession: async () => { n.loads++; return seq ? !!seq.shift() : sessionOk; }, ensureAudio: async () => true, lazyBundles: { ensureResultsSheet: async () => true }, ensureLightPresets: async () => true,
     quitToMenu: () => log.push("quitToMenu"), quitToMenuAfterCtxLost: () => log.push("ctxLost"), announce: fn,
     radioVoice: obj, flow: "race", season, SeasonCal: { conflicted: () => false, canRace: () => true },
     resultsCam: obj, RaceCeremony: { resetLive: fn }, _roadReflectionTransition: {}, IncidentSim: obj, raceCtl: obj, wxArc: obj, DebrisWorld: obj, Scopes: obj,

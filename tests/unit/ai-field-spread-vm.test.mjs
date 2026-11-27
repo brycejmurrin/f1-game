@@ -21,6 +21,10 @@
  * P10 pace 2.11-3.71 %, P20 5.58-7.03 %, teammates 0.67-1.49 %, lap CV
  * 0.49-0.97 %, moved 15-18 of 21. On the old RANDOM grid the same instrument read
  * teammates 1.43 % and lap CV 1.57 % (16-race medians), outside these bands.
+ * #6575 (a chaser past 0.25 s no longer puts a car on its home lane) tightened
+ * them: the same four races read lap1 P10 10.65-13.1 s, flag last 38.5-44.1 s,
+ * P10 pace 2.18-2.93 %, P20 3.95-6.09 %, teammates 0.53-1.07 %, lap CV
+ * 0.24-0.59 %, moved 14-17 (docs/notes/AI-FIELD-SPREAD-2026-11-26.md).
  * Deterministic per seed (sim time, fixed step).
  *
  * Run: node --test tests/unit/ai-field-spread-vm.test.mjs
@@ -37,14 +41,14 @@ for (const [track, seed] of CASES) {
     const s = summarize(await raceSpread({ track, laps: 5, seed, diff: "hard", wear: "off", storage: { raceGrid: null } }));
     const tag = JSON.stringify(s);
     assert.equal(s.laps, 5, tag);
-    assert.ok(s.lap1.p10 >= 8 && s.lap1.p10 <= 15, `lap-1 P10 gap ${s.lap1.p10} s outside [8, 15] — ${tag}`);
+    assert.ok(s.lap1.p10 >= 8 && s.lap1.p10 <= 14.5, `lap-1 P10 gap ${s.lap1.p10} s outside [8, 14.5] — ${tag}`);
     const f = s.flag;
     assert.ok(f.p2 <= f.p5 && f.p5 <= f.p10 && f.p10 <= f.last, `flag gaps grow with position — ${tag}`);
-    assert.ok(f.last >= 25 && f.last <= 70, `P1 to last ${f.last} s outside [25, 70] — ${tag}`);
-    assert.ok(s.racePacePct.p10 >= 1.0 && s.racePacePct.p10 <= 4.5, `race pace P10 ${s.racePacePct.p10} % outside [1.0, 4.5] — ${tag}`);
-    assert.ok(s.racePacePct.p20 >= 3.0 && s.racePacePct.p20 <= 8.5, `race pace P20 ${s.racePacePct.p20} % outside [3.0, 8.5] — ${tag}`);
-    assert.ok(s.mateGapPct.mean <= 1.6, `teammate gap ${s.mateGapPct.mean} % over 1.6 — ${tag}`);
+    assert.ok(f.last >= 25 && f.last <= 60, `P1 to last ${f.last} s outside [25, 60] — ${tag}`);
+    assert.ok(s.racePacePct.p10 >= 1.0 && s.racePacePct.p10 <= 3.8, `race pace P10 ${s.racePacePct.p10} % outside [1.0, 3.8] — ${tag}`);
+    assert.ok(s.racePacePct.p20 >= 3.0 && s.racePacePct.p20 <= 7.5, `race pace P20 ${s.racePacePct.p20} % outside [3.0, 7.5] — ${tag}`);
+    assert.ok(s.mateGapPct.mean <= 1.4, `teammate gap ${s.mateGapPct.mean} % over 1.4 — ${tag}`);
     assert.ok(s.lapCvMedPct >= 0.2 && s.lapCvMedPct <= 1.2, `lap-time CV ${s.lapCvMedPct} % outside [0.2, 1.2] (a metronome is as wrong as a lottery) — ${tag}`);
-    assert.ok(s.moved >= 8, `only ${s.moved} cars finished off their grid slot: processional — ${tag}`);
+    assert.ok(s.moved >= 10, `only ${s.moved} cars finished off their grid slot: processional — ${tag}`);
   });
 }

@@ -1,7 +1,7 @@
 {
-  "_doc": "tests/unit/props-hi-detail.test.mjs pins. d0 = the pre-propsHi bytes (HEAD dce9a300, harness build, uncompacted, night off): must never move with this feature; it follows the deploy tip only (monaco props re-based 2026-11-20 to the tip after #6006 moved its pit-straight crowd and marshal huts, build-props.js; the tip itself builds 965b8ac729f0c7af, same tris and glass). d2 = props triangles with track._detailFeatures.propsHi (EXTREME). November surface survey: regenerated after changing the Monza and Monaco road profiles and supported scenery. Re-pin d2 in a commit that says why.",
+  "_doc": "tests/unit/props-hi-detail.test.mjs pins. d0 = the pre-propsHi bytes (HEAD dce9a300, harness build, uncompacted, night off): must never move with this feature; it follows the deploy tip only (monaco props re-based 2026-11-20 to the tip after #6006 moved its pit-straight crowd and marshal huts, build-props.js; the tip itself builds 965b8ac729f0c7af, same tris and glass). 2026-11-26 #6922: monza and monaco props re-pinned (fe4a997a70d692d7 / 876ed89b63d889ec; tris and glass unchanged) because js/track/scenery/pits.js now runs both pit-entry gate posts 0.4 m below the lane floor (FOOT); reverting that hunk alone reproduces the old bytes. d2 = props triangles with track._detailFeatures.propsHi (EXTREME). November surface survey: regenerated after changing the Monza and Monaco road profiles and supported scenery. Re-pin d2 in a commit that says why.",
   "circuits": {
-    "monza": { "d0": { "tris": 284701, "props": "24f56a8fb2265560", "glass": "0a2d3283e6c107f4" }, "d2": { "tris": 510505 } },
-    "monaco": { "d0": { "tris": 255754, "props": "e127439343a96706", "glass": "aee133d59f23fc02" }, "d2": { "tris": 392765 } }
+    "monza": { "d0": { "tris": 284701, "props": "fe4a997a70d692d7", "glass": "0a2d3283e6c107f4" }, "d2": { "tris": 510505 } },
+    "monaco": { "d0": { "tris": 255754, "props": "876ed89b63d889ec", "glass": "aee133d59f23fc02" }, "d2": { "tris": 392765 } }
   }
 }

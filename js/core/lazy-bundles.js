@@ -49,6 +49,9 @@ const RACE_SESSION_READY = {
   "js/race/marshal-panels.js": () => typeof MarshalPanels !== "undefined" && !!MarshalPanels && !MarshalPanels._stub,
   "js/race/flying-start.js": () => typeof FlyingStart !== "undefined" && !!FlyingStart && !FlyingStart._stub,
   "js/race/jump-start-penalty.js": () => typeof JumpStartPenalty !== "undefined" && !!JumpStartPenalty && !JumpStartPenalty._stub,
+  "js/camera/extra-rigs.js": () => typeof ExtraRigs !== "undefined",
+  "js/camera/trackside.js": () => typeof TracksideCams !== "undefined",
+  "js/camera/cam-avoid.js": () => typeof CamAvoid !== "undefined",
   "js/race/driving-coach.js": () => typeof DrivingCoachBody !== "undefined",   // the DrivingCoach façade creates it on its next call
 };
 // Files that evaluated for real, kept across a failed attempt (the dataScriptsLoaded
