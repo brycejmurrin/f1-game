@@ -471,6 +471,56 @@
       "goldClean": true
     }
   },
+  "torque": {
+    "how": "node tests/helpers/torque-drill-vm.mjs --write: the Monza Torque Fill Exit (20 m past the line at 18 m/s standard pace, 2 Apex MJ store), one boot, a warm-up run, then RETRY before each run, full throttle, no steering; one run without BOOST, then BOOST pressed once at 0.0 to 2.5 s",
+    "metric": "seconds gained = base - the exit time to vStd 41 (RaceInsights' torque goal), base = the run without BOOST",
+    "rule": "gold / silver / bronze = 90 / 70 / 40 % of the best gain over the clean runs, floored to 0.01 s",
+    "base": 5.9,
+    "runs": [
+      {
+        "pressAt": 0,
+        "seconds": 3.7,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pressAt": 0.5,
+        "seconds": 3.5,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pressAt": 1,
+        "seconds": 3.7,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pressAt": 1.5,
+        "seconds": 3.9,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pressAt": 2,
+        "seconds": 4.1,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pressAt": 2.5,
+        "seconds": 4.4,
+        "clean": true,
+        "reason": ""
+      }
+    ],
+    "tiers": {
+      "bronze": 0.96,
+      "silver": 1.68,
+      "gold": 2.16,
+      "goldClean": true
+    }
+  },
   "telemetry": {
     "how": "node tests/unit/drill-telemetry-vm.test.mjs --write: one boot of the Monza Telemetry drill (solo TT, sector 2 from 40 m past the S1 line); steering is SoakRun's control() law, pedals SoakRun's own except the fault: REF, EARLY (whole brake 25 m before REF's first braking point), the pick at that window's middle with the found cause, FIX IT (REF's pedals), LATE (8 m off the throttle past REF's first throttle point after its first braking zone)",
     "metric": "seconds located (the peak-loss 100 m window's loss, once picked) or won back (a FIX IT run, in the solved window) — js/learn-drills/telemetry.js analyze/pick/score",
