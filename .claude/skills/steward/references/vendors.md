@@ -26,7 +26,8 @@ EditPullRequestLabels add `land`. On an already-ready PR use `node tools/ci/read
 Many PRs carry `land` at once; the train batches up to 12; never push to `train/**` or `train-next/**`. Cap
 spent: refresh Plan and Hand-off, unsubscribe, stop. Never sleep-poll, use timers or shell loops, and never
 comment on its own PR (it echoes back as a wake). Fence owner line:
-`owner: cursor:<agent id> until <ISO UTC, at most 4 h ahead>`.
+`owner: cursor:<agent id> until <ISO UTC, at most 4 h ahead>`; at `land` it reads `owner: landing cursor:<agent id>`,
+and a hand-back reads `owner: released cursor:<agent id>` beside a `releases PR #<n>` comment.
 
 Symbols go through apex-lsp (`lsp_outline`, `lsp_definition`, `lsp_callers`, then `lsp_diagnostics` once after
 the edit); grep is for comments, docs, and CSS. Do not spawn task_v2 scouts (including CI-triage). Gate order:

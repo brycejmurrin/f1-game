@@ -1,0 +1,17 @@
+{
+  "$comment": "Fleet roles -> cloud environments (#6887 phase 2, #7049). Skills, briefs and docs name a ROLE; only this file holds an environment id. Read it through tools/ci/lib/roles.mjs (resolveRole); `node tools/ci/brief.mjs role <role>` prints the id to pass to create_session. A renamed or rebuilt environment is a one-line edit here.",
+  "roles": {
+    "worker": {
+      "name": "I",
+      "id": "env_01T3kL7W7688bnn8RpTx8GsY",
+      "permissionMode": "auto",
+      "purpose": "every launched worker session (ISSUE, CONTINUE PR, DEPLOY-RED, Gardener); never holds APEX_ROLE"
+    },
+    "orchestrator": {
+      "name": "f1-game orchestrator",
+      "id": "env_019j6UuJTdHnhCNbThaF5CRy",
+      "permissionMode": "auto",
+      "purpose": "the orchestrator session and its successor at rotation (skill handoff, Orchestrator ending); holds APEX_ROLE=orchestrator, never hosts workers"
+    }
+  }
+}

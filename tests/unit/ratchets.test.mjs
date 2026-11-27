@@ -567,3 +567,14 @@ test("historyEntry: the CEILING-HISTORY.md entry --update --fragment prints and 
   assert.equal(EXACT_CURE, "exact ceiling (slack 0): measure against the TIP (sync-pr when behind), not the merge base; "
     + "a count that fell: node tools/check/ratchets.mjs --update --lower-only --absolute");
 });
+
+// #6944: the three U0 counters are registered tree ratchets (measure() throws on an unknown tree key).
+for (const m of ["sourceSliceTests", "typeofGuards", "gWrites"]) {
+  test(`#6944: ${m} is a measurable tree ratchet`, async () => {
+    const { measure } = await import("../../tools/check/ratchets.mjs");
+    const rows = await measure({ files: {}, tree: { [m]: { ceiling: 0, slack: 0 } } });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].metric, m);
+    assert.ok(rows[0].over > 0, `${m} measured ${rows[0].value}`);
+  });
+}

@@ -419,3 +419,53 @@ test("AI marble drops read the AI car's own state, never curvature (arc rule)", 
   // player-forces and the apex.js dev hook (constant args, the player's car). A fourth needs an arc-rule review.
   assert.equal(game.split("DebrisWorld.tyreMarble(").length - 1, 3, "a new tyreMarble caller needs an arc-rule review");
 });
+
+// ── #7088 F10: tyreMarble's rate-limit roll must move between calls ─────────
+// Its seed read _tick alone, which advances only on a STEPPED tick, so a fixed
+// slip re-rolled the same number forever. The REAL tyreMarble and rng32 run in
+// a VM over a stub world; step() never runs.
+const MAT4 = fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8");
+const constOf = (name) => {
+  const m = SRC.match(new RegExp("^const " + name + " = ([^;]+);", "m"));
+  assert.ok(m, name + " not found in js/physics/debris-world.js");
+  return "const " + name + " = " + m[1] + ";";
+};
+// Every counter the seed may read, declared so base and fix both evaluate.
+const COUNTERS = [...SRC.matchAll(/^let (_\w+) = 0;/gm)].map((m) => "let " + m[1] + " = 0;").join("\n");
+
+function harness() {
+  const ctx = vm.createContext({ Math, spawned: 0 });
+  vm.runInContext([
+    extractFn(MAT4, "rng32"),
+    constOf("MARBLE_MIN_SPEED"), constOf("MARBLE_LOCK_GATE"), constOf("MARBLE_SLIP_GATE"),
+    COUNTERS,
+    "const world = {}; const _marbles = [{}]; const G = { cars: [] };",
+    "function spawnMarble() { spawned++; }",
+    extractFn(SRC, "tyreMarble"),
+  ].join("\n"), ctx, { filename: absSrc("js/physics/debris-world.js") });
+  return ctx;
+}
+
+test("#7088 F10: 200 tyreMarble calls at one fixed slip, no step(), shed at least one marble", () => {
+  // Scan slips until one whose frozen-tick roll loses on the first draw: on
+  // base that slip never spawns, however often it is called.
+  const car = { s: 0, x: 0 };
+  let slip = null;
+  for (let i = 0; i < 400 && slip === null; i++) {
+    const s = 0.1 + i * 0.002;
+    const h = harness();
+    vm.runInContext("tyreMarble", h)(car, { lock: 0, slip: s, speed: 40 });
+    if (h.spawned === 0) slip = s;
+  }
+  assert.ok(slip !== null, "some slip loses its first 25% roll");
+  const ctx = harness();
+  const tyreMarble = vm.runInContext("tyreMarble", ctx);
+  for (let i = 0; i < 200; i++) tyreMarble(car, { lock: 0, slip, speed: 40 });
+  assert.ok(ctx.spawned >= 1, "slip " + slip.toFixed(3) + ": 200 hot calls spawned " + ctx.spawned);
+  assert.ok(ctx.spawned < 200, "the 25% rate limit still holds (" + ctx.spawned + "/200)");
+  // Still seeded, never Math.random: the same call sequence from a reset sheds the same marbles.
+  const again = harness();
+  const tm2 = vm.runInContext("tyreMarble", again);
+  for (let i = 0; i < 200; i++) tm2(car, { lock: 0, slip, speed: 40 });
+  assert.equal(again.spawned, ctx.spawned, "an identical sequence replays identically");
+});
