@@ -1981,6 +1981,7 @@ function rebuildWorldDeferred() {
     } catch (e) { Log.warn("track", "deferred rebuild failed (" + (e && e.message) + "); building sync"); }
     try {   // abandoned, failed or the race ended under it: never leave a session on no world
       if (!track && (inSession() || state === "results") && !gfxContextLost()) { loadTrack(trackIdx); applyRaceSettings(); }
+      else if (track && inSession()) applyRaceSettings();   // the build's own palette reset wins otherwise: always leave the frame lit for the CURRENT time of day (#7059)
     } finally { _wr.p = null; }
   })());
 }
