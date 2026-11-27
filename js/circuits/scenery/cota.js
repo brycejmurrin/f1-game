@@ -340,29 +340,27 @@
         [0.798, 48, 26, 4.5, 56],
       ]) {
         const aa = anchor(K(sf), 1, dist);
-        let lift = rise * 0.35;
-        // The 0.735 mound's base sat 1.09 m above the terrain under it (float
-        // gap under the 1.2 m gate, so it was not a hard fail). Seat that one
-        // mound on the rendered ribbon. Leave 0.758 and 0.798, which already
-        // pass, and don't bury the base more than 0.4 m under the high sample.
-        if (sf === 0.735 && terrainYAt) {
-          const hx = width / 2, hl = len / 2;
-          const samples = [];
-          for (const sx of [-hx, hx]) for (const sz of [-hl, hl]) {
-            const ty = terrainYAt(
-              aa.c[0] + aa.t[0] * sx + aa.r[0] * sz,
-              aa.c[2] + aa.t[2] * sx + aa.r[2] * sz);
-            if (ty != null) samples.push(ty);
-          }
-          if (samples.length) {
-            const lo = Math.min(...samples), hi = Math.max(...samples);
-            const target = Math.max(lo + 0.15, hi - 0.4);
-            const uy = aa.u[1] || 1;
-            lift = (target - aa.c[1]) / uy;
-          }
+        // These banks run OUTWARD (ridge along r) down the hillside: the ground
+        // falls ~17 m across the 0.735 one's 54 m (5 m at 12 m out, -12.8 m at
+        // 60 m, #7292). One level prism seated on any sample either floated
+        // (6.8-7.2 m on float-audit) or buried itself. Lay each bank as three
+        // short prisms, each TILTED along its own inner→outer ground line
+        // (terrainYAt, falling back to the anchor height off the ribbon) and
+        // sunk 0.4 m so its downhill toe stays in the grass.
+        const ground = (x, z, fb) => { const g = terrainYAt(x, z); return g == null ? fb : g; };
+        const seg = len / 3;
+        for (let j = -1; j <= 1; j++) {
+          const m = vadd(aa.c, aa.r, j * seg);
+          const yIn = ground(m[0] - aa.r[0] * seg / 2, m[2] - aa.r[2] * seg / 2, aa.c[1]);
+          const yOut = ground(m[0] + aa.r[0] * seg / 2, m[2] + aa.r[2] * seg / 2, aa.c[1]);
+          const rl = Math.hypot(aa.r[0] * seg, yOut - yIn, aa.r[2] * seg);
+          const fr = [aa.r[0] * seg / rl, (yOut - yIn) / rl, aa.r[2] * seg / rl];
+          // up = fr × t, flipped to point skyward.
+          let up = [fr[1] * aa.t[2] - fr[2] * aa.t[1], fr[2] * aa.t[0] - fr[0] * aa.t[2], fr[0] * aa.t[1] - fr[1] * aa.t[0]];
+          if (up[1] < 0) up = [-up[0], -up[1], -up[2]];
+          const base = [m[0], Math.min(yIn, yOut) + Math.abs(yOut - yIn) / 2 - 0.4, m[2]];
+          addPrism(out, base, [width, rise, seg + 1], dryGrass, [aa.t, up, fr]);
         }
-        addPrism(out, vadd(aa.c, aa.u, lift),
-                 [width, rise, len], dryGrass, [aa.t, aa.u, aa.r]);
       }
 
       bleacher(...span(0.112, 54), 1, 48,

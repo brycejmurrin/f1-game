@@ -24,10 +24,8 @@
     "zandvoort": 2
   },
   "unsupported": {
-    "imola": 1,
     "jeddah": 1,
-    "miami": 2,
-    "qatar": 1
+    "miami": 2
   },
   "flatCoplanar": {
     "anderstorp": 1,
