@@ -374,7 +374,8 @@ test("every team's --accent-ink is READABLE on that team's --accent, and is the 
  * plate is weaker in EVERY theme; that is the dark design's own budget, and
  * the DARK row below holds it to the same bar as the light ones.
  */
-const hud = cssRules(read("css/hud.css"));
+// fonts-hud.css holds the #game-metrics panel block (#7051); it loads right after hud.css in @layer hud.
+const hud = cssRules(read("css/hud.css") + "\n" + read("css/fonts-hud.css"));
 const ROOT_SEL = {
   light: ':root[data-ui-theme="light"]', system: ':root[data-ui-theme="system"]',
   high: ':root[data-ui-contrast="high"]',

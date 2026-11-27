@@ -26,8 +26,10 @@
  * human is watching); the brief prints its needs_action so the orchestrator answers it or relaunches the PR
  * (retro 2026-11-25).
  *
+ * The owner lease (lib/lease.mjs) reads both new words: `owner: released …` is no owner (skipped: the session handed
+ * it back), `owner: landing …` or a `land` label is the NONE row.
  * ACT per PR whose owner is dead, first match wins:
- *   NONE       the PR carries `land` (steward §After land: a land PR is never re-owned)
+ *   NONE       the lease is `landing` (steward §After land: a land PR is never re-owned)
  *   RELAUNCH   it already carries `needs-owner` → launch `CONTINUE PR <n>` (quota: on another model, or after the reset)
  *   PARK       otherwise → add `needs-owner`, then RELAUNCH
  *
@@ -39,7 +41,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { api, DEPLOY } from "./github-api.mjs";
 import { extractPage } from "./session-transcript.mjs";
-import { handoffOwner } from "./pr-board.mjs";
+import { handoffLease, leaseState } from "./lib/lease.mjs";
 import { exitIfHelp, makeFlags } from "../lib/cli-args.mjs";
 
 /** A usage or rate limit in an error text: the API 429 body, the CLI's banner, the overage wording. */
@@ -112,17 +114,20 @@ export function deadOwnedPrs(children, prs) {
   const byId = new Map(children.map((c) => [c.id, c]));
   const out = [];
   for (const pr of prs) {
-    const owner = handoffOwner(pr.body);
+    const lease = handoffLease(pr.body);
+    const owner = lease.owner;
     const sid = ownerSession(owner);
     const child = sid && byId.get(sid);
     if (!child || !child.dead) continue;
     const labels = labelNames(pr);
+    const state = leaseState({ ...lease, labels });
+    if (state === "released") continue; // handed back (`owner: released …`): the session no longer owns it
     const relaunch = `launch CONTINUE PR ${pr.number}${child.cause === "quota" ? ` on another model${child.resets ? ` (or after ${child.resets})` : ""}` : ""}`;
     let act, next;
-    if (labels.includes("land")) { act = "NONE"; next = "land PR: never re-owned (steward §After land)"; }
+    if (state === "landing") { act = "NONE"; next = "land PR: never re-owned (steward §After land)"; }
     else if (labels.includes("needs-owner")) { act = "RELAUNCH"; next = relaunch; }
     else { act = "PARK"; next = `add needs-owner, then ${relaunch}`; }
-    out.push({ pr: pr.number, title: oneLine(pr.title), owner, session: sid, cause: child.cause, resets: child.resets, act, next, labels });
+    out.push({ pr: pr.number, title: oneLine(pr.title), owner, lease: state, session: sid, cause: child.cause, resets: child.resets, act, next, labels });
   }
   return out.sort((a, b) => a.pr - b.pr);
 }

@@ -40,9 +40,12 @@
  * LANE is the PR's `lane:<host>` label and OWNER the `owner:` line of the body's ```handoff block (skill `steward` §Open).
  * LEASE reads that line's `until <ISO>` (skill `steward` §Lane 3, the owner lease, #5847): `live` until then, `lapsed`
  * after, `parked` while the PR carries `needs-decision` or `blocked` (up to PARK_GRACE_HOURS past the until-time),
- * `none` with no owner or `owner: none`, `open` for an owner line with no until-time. ADOPTED counts the distinct
+ * `none` with no owner or `owner: none`, `open` for an owner line with no until-time, `landing` for `owner: landing …`
+ * or a `land` PR, `released` for `owner: released …` or a `releases PR #<n>` comment newer than every adoption
+ * (lib/lease.mjs, #7050). ADOPTED counts the distinct
  * sessions in the PR's `adopts PR #<n> — <host>:<session>` comments (lib/gh-rows.mjs ADOPT_RE); CHURN_ADOPTIONS or more
- * flags the row `churn` (#5303, #5296, #5491: PRs that change owners do not land).
+ * flags the row `churn` (#5303, #5296, #5491: PRs that change owners do not land), and `unleased` when the newest
+ * adoption's session is not on the owner line yet (adopted-unleased, #6887 phase 4: ship-pr refuses its push).
  *
  *   node tools/ci/pr-board.mjs              # the table
  *   node tools/ci/pr-board.mjs --json       # rows, for the skill
@@ -61,6 +64,7 @@ import { guardsVerdict, planVerdict } from "./ready-gate.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { needsSync, verdictLine } from "./needs-sync.mjs";
 import { ADOPT_RE } from "./lib/gh-rows.mjs";
+import { handoffLease, leaseState, adoptedUnleased } from "./lib/lease.mjs";
 
 export { DEPLOY };
 /** The one merge method allowed (AGENTS.md MERGE-COMMIT-ONLY). */
@@ -77,34 +81,13 @@ export function laneOf(pr) {
   const l = (pr.labels || []).map((x) => (typeof x === "string" ? x : x.name)).find((n) => /^lane:/.test(n || ""));
   return l ? l.slice(5) : "-";
 }
-/** The `owner:` line of the body's ```handoff block (skill `steward` §Open) split into the owner and the lease's
- *  `until <ISO>` (skill `steward` §Lane 3): { owner: "-" | text, until: ISO | null }. Pure. */
-export function handoffLease(body) {
-  const m = /```handoff\n([\s\S]*?)```/.exec(String(body || ""));
-  const line = m && /^owner:\s*(.+)$/m.exec(m[1]);
-  if (!line) return { owner: "-", until: null };
-  const u = /\s+until\s+(\S+)\s*$/.exec(line[1]);
-  const until = u && Number.isFinite(Date.parse(u[1])) ? u[1] : null;
-  return { owner: (u ? line[1].slice(0, u.index) : line[1]).trim() || "-", until };
-}
+/** The owner lease lives in lib/lease.mjs (shared with child-health and ship-pr); re-exported for old readers. */
+export { handoffLease, leaseState, adoptedUnleased, PARK_GRACE_HOURS, PARK_LABELS } from "./lib/lease.mjs";
 /** The owner alone, else "-". Pure. */
 export const handoffOwner = (body) => handoffLease(body).owner;
 
-/** Hours a PARKED lease outlives its until-time (skill `steward` §Lane 3). */
-export const PARK_GRACE_HOURS = 24;
 /** Distinct adopting sessions at which a row is flagged `churn` (#5847). */
 export const CHURN_ADOPTIONS = 3;
-/** Labels that park a PR: it waits on Bryce or on another PR. */
-export const PARK_LABELS = ["needs-decision", "blocked"];
-
-/** none | open | live | parked | lapsed for an owner, its until-time and the PR's labels. Pure. */
-export function leaseState({ owner, until, labels = [] }, now = Date.now()) {
-  if (!owner || owner === "-" || /^none\b/i.test(owner)) return "none";
-  if (!until) return "open";
-  const end = Date.parse(until);
-  if (labels.some((l) => PARK_LABELS.includes(l))) return now < end + PARK_GRACE_HOURS * 3600e3 ? "parked" : "lapsed";
-  return now < end ? "live" : "lapsed";
-}
 
 /** The distinct sessions that posted `adopts PR #<number>` comments, oldest first. Pure. */
 export function adopters(comments, number) {
@@ -236,8 +219,9 @@ export function evaluate(items, { now = Date.now() } = {}) {
       land: labelNames(pr).includes("land"),
       owner: handoffOwner(pr.body),
       leaseUntil: handoffLease(pr.body).until,
-      lease: leaseState({ ...handoffLease(pr.body), labels: labelNames(pr) }, now),
+      lease: leaseState({ ...handoffLease(pr.body), labels: labelNames(pr), comments: it.comments, number: pr.number }, now),
       adopted: adopters(it.comments, pr.number).length,
+      adoptedUnleased: adoptedUnleased(pr.body, it.comments, pr.number)?.session || null,
       url: pr.html_url || "",
     };
     row.churn = row.adopted >= CHURN_ADOPTIONS;
@@ -251,7 +235,7 @@ const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 /** `live 1h`, `parked`, `lapsed 3h`, `open`, `-`: the lease state, with the time left or past its until-time. */
 export function leaseLabel(r, now = Date.now()) {
   if (!r.lease || r.lease === "none") return "-";
-  if (!r.leaseUntil || r.lease === "open" || r.lease === "parked") return r.lease;
+  if (!r.leaseUntil || ["open", "parked", "landing", "released"].includes(r.lease)) return r.lease;
   const ms = Math.abs(Date.parse(r.leaseUntil) - now); // time left (live) or past the until-time (lapsed)
   return `${r.lease} ${ageLabel(new Date(now - ms).toISOString(), now)}`;
 }
@@ -262,7 +246,7 @@ export function render(result, { now = Date.now() } = {}) {
   const head = ["PR", "LANE", "OWNER", "LEASE", "ADOPTED", "TITLE", "STATE", "HEAD", "MERGEABLE", "AUTO-MERGE", "CI", "FAILING JOBS", "GATE", "PLAN", "SUGGEST"];
   const plan = (p) => (!p || p.state === "none" ? "-" : `${p.items - p.open.length}/${p.items}`);
   const body = rows.map((r) => [
-    `#${r.number}`, r.lane || "-", clip(r.owner || "-", 18), leaseLabel(r, now), `${r.adopted ?? 0}${r.churn ? " churn" : ""}`, clip(r.title, 40), `${r.draft ? "draft" : "ready"}${r.land ? "+land" : ""}`, r.sha || "-",
+    `#${r.number}`, r.lane || "-", clip(r.owner || "-", 18), leaseLabel(r, now), `${r.adopted ?? 0}${r.churn ? " churn" : ""}${r.adoptedUnleased ? " unleased" : ""}`, clip(r.title, 40), `${r.draft ? "draft" : "ready"}${r.land ? "+land" : ""}`, r.sha || "-",
     r.mergeableState || "-", r.armed ? (r.mergeMethod || "armed") : "-", r.ci,
     clip(r.failing.join(", "), 36) || "-", r.gate, plan(r.plan),
     `${r.suggest}${r.hold ? " (HOLD)" : ""}${r.mergeHold ? " (MERGE-HOLD: legacy)" : ""}`,
@@ -287,7 +271,7 @@ export function brief(result, { sync = {}, now = Date.now() } = {}) {
     const sv = sync[r.number];
     const flags = [r.hold && "HOLD", r.mergeHold && "MERGE-HOLD", r.armed && "armed", r.mergeableState === "dirty" && "conflict", r.failing?.length && `red: ${clip(r.failing.join(", "), 60)}`,
       sv && (sv.ok ? `sync ${sv.verdict}` : "sync unknown"), r.lease && r.lease !== "none" && `lease ${leaseLabel(r, now)}`,
-      r.churn && `churn: adopted ${r.adopted}x`].filter(Boolean);
+      r.churn && `churn: adopted ${r.adopted}x`, r.adoptedUnleased && `adopted-unleased: ${r.adoptedUnleased}`].filter(Boolean);
     return [`#${r.number} ${r.draft ? "draft" : "ready"}${r.land ? "+land" : ""} ci=${r.ci} gate=${r.gate} → ${r.suggest}`,
       (r.sha || "").slice(0, 7) || "-", `plan ${plan}`, clip(String(r.owner || "-").replace(/^claude:/, ""), 44), clip(String(r.title || ""), 48),
       ...(flags.length ? [flags.join("; ")] : []), ...(r.why ? [clip(String(r.why), 80)] : []),
@@ -423,7 +407,7 @@ and a \`= pr-board: <n> open (<tally>)\` line: what an orchestrator acts on, ~1 
 Read-only board of every open PR into ${DEPLOY}: draft/ready, mergeable_state,
 auto-merge (method), ci.yml state on the head, failing jobs, ready-gate verdict,
 the legacy fleet-status report on pre-2026-10-27 PRs, the lane:<host> label (LANE)
-and the Hand-off block's owner (OWNER), its lease (LEASE: live|parked|lapsed|open, from \`owner: <id> until <ISO>\`),
+and the Hand-off block's owner (OWNER), its lease (LEASE: live|parked|lapsed|open|landing|released, from \`owner: <id> until <ISO>\`),
 the distinct adopting sessions (ADOPTED; \`churn\` at ${CHURN_ADOPTIONS}+), and a SUGGESTION (LAND READY SYNC FIX FOREIGN-ARM WAIT NONE); STATE shows +land, SUGGEST (HOLD) for the hold label.
 Each SYNC/FIX row also prints needs-sync.mjs's verdict (= sync needed: conflict|union-conflict|stale-red|retest-refused|gate-refused|tip-crossed|tip-red|no; git fetch, no writes; no local merge, so tip-crossed needs needs-sync.mjs itself).
 --alarm prints only the stall alarm: PRs ready > ${ALARM_HOURS} h, green, no hold label, no push

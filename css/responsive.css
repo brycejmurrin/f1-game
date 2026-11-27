@@ -324,7 +324,7 @@ body:not(.hud-hidden) #hud-restore { display: none; }
 :root[data-appearance-peek="title"] #overlay { opacity: 1; }
 :root[data-appearance-peek] #pmsettings { background: transparent; }
 :root[data-appearance-peek] #pmsettings::backdrop { background: transparent; }
-:root[data-appearance-peek] #pmsettings > * { opacity: 0.14; transition: opacity 0.12s; }
+:root[data-appearance-peek] #pmsettings > * { opacity: 0.14; transition: opacity var(--dur-1); }
 :root[data-appearance-peek][data-motion="reduce"] #pmsettings > * { transition: none; }
 :root[data-appearance-peek] #pmsettings :focus-visible { outline-color: transparent; }   /* a ring would read through the ghost; it returns with the page */
 /* Title edit: groups drag; #tl-editor stays unzoomed (its handle tracks a corner). */

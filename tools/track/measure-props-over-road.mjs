@@ -9,7 +9,10 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertSafePathToken } from "../lib/output-paths.mjs";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
+const USAGE = "Usage: TRACK=<id> [PORT=n] node tools/track/measure-props-over-road.mjs [--shots]\nMeasures prop geometry over the racing line; --shots writes PNGs to artifacts/tmp/.";
+exitIfHelp(process.argv.slice(2), USAGE);
 const TRACK = process.env.TRACK;
 const PORT = process.env.PORT ? +process.env.PORT : 0;
 const SHOTS = process.argv.includes("--shots");

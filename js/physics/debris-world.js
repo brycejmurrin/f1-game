@@ -64,6 +64,7 @@ let _lastForce = 0;      // max real force magnitude seen last tick (status)
 let _marbles = [];       // fixed pool: { body, live, restT, spawnTick, scale }
 let _marbleCap = 0;
 let _marbleSeq = 0;      // deterministic marble spawn sequence
+let _marbleRoll = 0;     // hot tyreMarble calls (the roll seed)
 
 // ── A3: clippable near-apex cones (dynamic, punted one-way by kinematic mirrors) ─
 let _furnList = null;    // per-track placement list [{s,x}] (survives reset())
@@ -573,7 +574,7 @@ function reset() {
   // load that genuinely failed (_loadState -1) stays down.
   _active = _enabled && _loadState === 2;
   _tick = 0; _stepSkips = 0; _seq = 0; _spawnedTotal = 0; _lastImpact = null;
-  _marbleSeq = 0; _furnBuilt = false; _lastForce = 0;
+  _marbleSeq = 0; _marbleRoll = 0; _furnBuilt = false; _lastForce = 0;
   _panelSeq = 0; _panelsBroken = 0;   // B2 counters (bodies torn down in destroyWorld)
   return status();
 }
@@ -677,7 +678,9 @@ function tyreMarble(c, m) {
   const hot = (m.lock || 0) >= MARBLE_LOCK_GATE || (m.slip || 0) >= MARBLE_SLIP_GATE;
   if (!hot) return;
   const ci = G.cars ? G.cars.indexOf(c) : 0;
+  // _tick stalls between stepped ticks; _marbleRoll moves every call (#7088 F10).
   const seed = (Math.imul(_tick + 1, 0x9E3779B1) ^ Math.imul(ci + 1, 0x85EBCA6B)
+              ^ Math.imul(++_marbleRoll, 0xC2B2AE35)
               ^ (Math.floor((m.slip || 0) * 997) | 0)) | 0;
   const r = rng32(seed);
   if (r() > 0.25) return;                 // rate-limit

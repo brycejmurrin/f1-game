@@ -86,6 +86,8 @@ const DrivingCoach = (function () {
       beginSetupTrial: call("beginSetupTrial", false),
       mark: call("mark", false), retry: call("retry", false), rewind: call("rewind", false),
       releasePracticeWorlds: () => { if (mine) mine.releasePracticeWorlds(); },
+      // The world snapshot the rewind uses, for DrillFork's what-if branches (#6559 B2): one list, never a second.
+      captureWorld: call("captureWorld", null), restoreWorld: call("restoreWorld", false),
       reset: () => { if (body()) mine.reset(); },
       toggle, paint,
       armPractice: call("armPractice", false), canArm: call("canArm", false),
