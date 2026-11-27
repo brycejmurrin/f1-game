@@ -2909,7 +2909,7 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   // Judged on the weather AT THE FLAG: endSession() below puts the starting weather back, and a MIXED race that
   // turned wet then disqualified every car on one slick for "one dry compound" (B6.3.6 is off in a wet race).
   const cmpApplies = pits.twoCompoundApplies();
-  Scopes.exit("race", { why: "finish" }); wxArc.endSession();   // raceCtl ONLY (debris and takeovers stand at the flag); an arc that outlives the race would override the next race's weather
+  Scopes.exit("race", { why: "finish" }); wxArc.endSession();   // raceCtl + takeovers (#7077 K7); debris stands at the flag; an arc that outlives the race would override the next race's weather
   // Close every car's open stint so the results strip has an end lap. Done here
   // rather than in the sheet: a retired car stopped laps ago and its last stint
   // must end where the CAR did, not where the leader is when the flag falls.
@@ -4186,14 +4186,14 @@ DebrisWorld.create(G);
 const incidentSim = IncidentSim.create(G, c => { if (c.human && c.isPlayer && isQuali() && c.lap >= 1) quali.markDeletedLap(c, qualiNet.hasArmed()); });
 // THE RACE SCOPE (js/core/scopes.js, #6949): which transition clears what. The subsets differ ON PURPOSE —
 // a restart never resets raceCtl (redFlagRestart continues the flag machine through raceCtl.rewound()),
-// endRace clears raceCtl only, and quitToMenu's mid-quali IncidentSim hand-back stays a direct call before
+// endRace clears raceCtl and hands takeovers back (#7077 K7), and quitToMenu's mid-quali IncidentSim hand-back stays a direct call before
 // the field swap. Look modules up at call time: tests stub DebrisWorld.reset on the sandbox. A start's
 // pass-watch clear is gridUp's (U1.1 territory); the debris prime of a start stays after makeCars.
 // #6860 phase 2 (decision B): 'episode' becomes ONE registrant calling SimState.clear(G) — WHAT is SimState's.
 // results-cam stays FIRST (a montage / ceremony is restored before the field is replaced). Left explicit: director.reset (its setCamMode needs startRaceBody's state), resultsCam.reset in startRaceFromSheet / quitToMenu / garageBack (not whys, or ordered among menu teardown).
 Scopes.register("race", { id: "tlx-mem-scope", on: ["start", "finish", "quit"], exit: (c) => globalThis.TLXShaders?.memScope?.set(c.why === "start" ? "race" : "home") });   // tlxMem scope rides the bus (#6958)
 Scopes.register("race", { id: "results-cam", on: ["start"], exit: () => { resultsCam.reset(); RaceCeremony.resetLive(); } });
-Scopes.register("race", { id: "incident-sim", on: ["start", "restart-red", "restart-declined", "episode"], touches: ["takeovers"],
+Scopes.register("race", { id: "incident-sim", on: ["start", "restart-red", "restart-declined", "finish", "episode"], touches: ["takeovers"],
   exit: () => IncidentSim.reset(), snapshot: () => { const s = IncidentSim.status(); return { owned: s.owned, count: s.count }; } });
 Scopes.register("race", { id: "raceCtl", on: ["start", "finish", "episode", "quit"], touches: ["caution"],
   exit: () => raceCtl.reset(), snapshot: () => { const i = raceCtl.info(); return { level: i.level, phase: i.phase, cause: i.cause }; } });

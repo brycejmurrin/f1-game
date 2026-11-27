@@ -1381,3 +1381,31 @@ test("W34: every race frame hands the RETIRED card a view of the player, and lea
   G.state = "results"; rc.update(1 / 60);
   assert.equal(seen[1].state, "results", "the not-racing path still ticks, so the card hides");
 });
+
+// ── #7077 K5 / K6: the re-arm hold and the guest's flag clock age in real time ─
+test("#7077 K5: a minute of quiet green after a capped SC lets a stopped car raise a yellow", () => {
+  const parked = runner(7, 1500);
+  const { rc } = stopRace([runner(1, 100), parked, runner(3, 2900)]);
+  rc.apply({ level: 3, cause: "SAFETY CAR", sinceT: 0 });   // an SC with nothing on the road to clear it
+  run(rc, 91);                                             // > SC_MAX (90 s): the cap drops it
+  assert.equal(rc.level, 0, "the hard cap dropped the SC");
+  run(rc, 60);   // debris off, no stopped car: every tick takes the quiet early return
+  parked.speed = 0; parked.retired = true; parked.x = 1.2;   // then a car stops on the road
+  run(rc, 5);
+  assert.equal(rc.level, 1, "60 s > CAP_REARM_HOLD (45 s): the hold has expired and the yellow flies");
+});
+
+test("#7077 K6: a guest ages the host's flag, so taking race control over caps it from the host's clock", () => {
+  let owns = false;
+  const rc = load({ active: () => false, hazards: () => hazards(0, 0) }).create(makeCtx({
+    netPlay: { active: () => !owns, ownsRaceControl: () => owns, reportCaution() {} },
+  }));
+  rc.apply({ level: 3, cause: "SAFETY CAR", sinceT: 0 });   // apply() lands on a change: sinceT never refreshes
+  run(rc, 80);
+  assert.equal(rc.info().level, 3, "a guest never caps the host's flag itself");
+  owns = true;   // the host drops: the guest owns race control
+  let t = 0;
+  while (rc.info().level !== 0 && t < 30 * 60) { rc.update(1 / 60); t++; }
+  // 80 s aged + 10 s owned = SC_MAX (90 s); a frame of float slack on the 1/60 sum.
+  assert.ok(t <= 10 * 60 + 1, "the cap fires within 10 s of the takeover (took " + (t / 60).toFixed(2) + " s)");
+});
