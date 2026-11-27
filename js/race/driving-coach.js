@@ -577,6 +577,7 @@ const DrivingCoachBody = (function () {
           grip: "Build speed before saving. Brake firmly for the next turn and turn in while you bleed the brake off; the run ends 150 m past the turn.",
           taper: "Save on a straight, then stay flat out for 400 m. Press BOOST once and see where the push lands: it is strongest at low speed.",
           harvest: "Brake firmly to a stop on the marker. The motor harvests until the store is full; then the discs do it all.",
+          torque: "Save on a straight, then stay flat out from a slow exit. Press BOOST as you pick up the throttle: the timer stops where the taper begins.",
           cooling: "Tyre wear must be enabled. Save, then complete one clean lap from the line on the same set in stable weather. Shows measured grain and grip changes, without a recovery promise.",
           thermal: "LEARN's Tyre Thermal Lab: drive to the line keeping the tyre surface inside its working window. Load and speed heat it; a slide on a cold tyre grains it.",
           slalom: "Make six direction changes while moving: the car must change direction, not just the stick. Stay on the track and avoid contact.",

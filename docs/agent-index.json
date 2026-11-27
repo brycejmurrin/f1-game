@@ -815,6 +815,7 @@
         "tests/unit/drill-harvest-vm.test.mjs",
         "tests/unit/drill-lines-vm.test.mjs",
         "tests/unit/drill-taper-vm.test.mjs",
+        "tests/unit/drill-torque-vm.test.mjs",
         "tests/unit/drill-tyre-heat-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
@@ -965,6 +966,7 @@
         "tests/unit/drill-harvest-vm.test.mjs",
         "tests/unit/drill-lines-vm.test.mjs",
         "tests/unit/drill-taper-vm.test.mjs",
+        "tests/unit/drill-torque-vm.test.mjs",
         "tests/unit/drill-tyre-heat-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
@@ -1152,6 +1154,7 @@
         "tests/unit/drill-harvest-vm.test.mjs",
         "tests/unit/drill-lines-vm.test.mjs",
         "tests/unit/drill-taper-vm.test.mjs",
+        "tests/unit/drill-torque-vm.test.mjs",
         "tests/unit/drill-tyre-heat-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
@@ -3968,6 +3971,11 @@
     {
       "path": "js/learn-drills/thumb-drill.js",
       "global": "ThumbDrill",
+      "roster": "LAZY_LEARN"
+    },
+    {
+      "path": "js/learn-drills/torque.js",
+      "global": "TorqueDrill",
       "roster": "LAZY_LEARN"
     },
     {
