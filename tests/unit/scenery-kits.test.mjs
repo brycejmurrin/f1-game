@@ -22,7 +22,7 @@ function load(file, name, globals = {}) {
     fs.readFileSync(path.join(ROOT, "js/core/log.js"), "utf8").replace(/^const\b/gm, "var"),
     ctx, { filename: absSrc("js/core/log.js") },
   );
-  for (const pre of PRELOAD[file] || []) {
+  for (const pre of ["js/core/mat4.js", "js/track/scenery/guards.js", ...(PRELOAD[file] || [])]) {
     vm.runInContext(
       fs.readFileSync(path.join(ROOT, pre), "utf8").replace(/^const\b/gm, "var"),
       ctx, { filename: absSrc(pre) },

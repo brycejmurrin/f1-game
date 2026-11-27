@@ -931,6 +931,7 @@
         "tests/unit/apex-surface-pin-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
+        "tests/unit/cam-surge-hold.test.mjs",
         "tests/unit/camera-mode-scope.test.mjs",
         "tests/unit/car-field-writes.test.mjs",
         "tests/unit/car-fields-lifetimes-vm.test.mjs",
@@ -1109,6 +1110,7 @@
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/ai-wing-spread-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
+        "tests/unit/cam-surge-hold.test.mjs",
         "tests/unit/camera-mode-scope.test.mjs",
         "tests/unit/car-field-writes.test.mjs",
         "tests/unit/car-fields-lifetimes-vm.test.mjs",
@@ -1667,6 +1669,7 @@
         "tests/unit/career-planning-ui-download.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
+        "tests/unit/career-refused-calendar-7069.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-save-integrity-6744.test.mjs",
         "tests/unit/career-save-kept.test.mjs",
@@ -2474,6 +2477,11 @@
     {
       "path": "js/camera/extra-rigs.js",
       "global": "ExtraRigs",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/camera/feel-fx.js",
+      "global": "CamFx",
       "roster": "LAZY_RACE_SESSION"
     },
     {

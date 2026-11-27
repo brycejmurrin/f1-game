@@ -340,8 +340,10 @@ function clear() {
     lastSave = { ok: false, durable: false, reason: "conflict" };
     return lastSave;
   }
-  career = null;
+  // Write first: a refused delete leaves the career in memory (still on disk), not a ghost-cleared one.
   lastSave = writeResult(liveSlotKey(), null);
+  if (!lastSave.ok) return lastSave;
+  career = null;
   armRevision();
   applyRegs();      // no career, no regulations
   identityChanged();
@@ -1769,6 +1771,8 @@ function rolloverApply() {
   // The cumulative record is taken BEFORE the archive is trimmed: HISTORY_MAX
   // keeps the last ten seasons for the screen, the tally keeps all of them.
   const tally = career.tally = tallyOf(career);
+  // Races started, each season under its own calendar; a save from before it takes today's once.
+  tally.starts = (tally.starts ?? tally.seasons * roundsTotal()) + career.results.length;
   tally.seasons++;
   tally.wins += entry.wins;
   tally.podiums += entry.podiums;
