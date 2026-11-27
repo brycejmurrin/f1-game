@@ -11,6 +11,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { withM4 } from "../helpers/mat4-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -20,6 +21,7 @@ const expected = (tod, def) => tod === "night" || tod === "dusk" || tod === "daw
 
 function context() {
   const ctx = vm.createContext({ Math, Object, Array, Number, String, JSON, Promise, setTimeout, Date, performance: { now: () => 0 } });
+  withM4(ctx);
   for (const f of ["js/garage/experience.js", "js/garage/exterior.js"]) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   return ctx;
 }

@@ -1,4 +1,4 @@
-/* Apex 26 — column-major 4x4 matrix + vec3 helpers, plus the SCALAR helpers modules share (M4.clamp / lerp / wrapDelta / clamp01 / smoothstep, and the seeded PRNG M4.rng32). ident() allocates; every *To variant writes into the caller's `out` and returns it. */
+/* Apex 26 — column-major 4x4 matrix + vec3 helpers, plus the SCALAR helpers modules share (M4.clamp / lerp / wrapDelta / clamp01 / smoothstep / smoothEdge, the seeded PRNG M4.rng32, and the session predicates M4.isNight / isWet). ident() allocates; every *To variant writes into the caller's `out` and returns it. */
 "use strict";
 
 const M4 = (function () {
@@ -6,6 +6,20 @@ const M4 = (function () {
   function clamp01(v) { return v > 0 ? (v < 1 ? v : 1) : 0; }   // NaN -> 0
   // Hermite ease on the clamped t (NaN stays NaN, as every old copy did).
   function smoothstep(t) { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); }
+  // GLSL's 3-arg smoothstep(e0, e1, x). A ZERO-WIDTH edge (e0 == e1, which GLSL
+  // leaves undefined) is a hard step AT e1: 0 below, 1 from e1 up, never NaN.
+  // (grip-steer.js keeps its own 1e-9-guarded copy until #6608 item 5.)
+  function smoothEdge(e0, e1, x) {
+    const d = e1 - e0;
+    return smoothstep(d !== 0 ? (x - e0) / d : (x >= e1 ? 1 : 0));
+  }
+  // THE night / wet session predicates (#6858 item 1). Night is the session as
+  // LIT: TIME NIGHT, or TIME DEFAULT on a night-authored circuit (`track` is the
+  // circuit def or any record carrying its `night`). Dusk and dawn are not night
+  // here (GarageExperience.isNight is the garage's broad twilight-inclusive one).
+  // Wet is the wet family: wet, rain and STORM (a storm is rain and then some).
+  function isNight(tod, track) { return tod === "night" || (tod === "default" && !!(track && track.night)); }
+  function isWet(weather) { return weather === "wet" || weather === "rain" || weather === "storm"; }
   // Deterministic PRNG (mulberry32): same seed, same stream, every platform.
   function rng32(seed) {
     let a = seed | 0;
@@ -122,7 +136,7 @@ const M4 = (function () {
     return out;
   }
   return { ident, mulTo, perspectiveTo, lookAtTo, orthoTo, invertTo,
-           clamp, lerp, wrapDelta, roadFrameAxes, clamp01, smoothstep, rng32 };
+           clamp, lerp, wrapDelta, roadFrameAxes, clamp01, smoothstep, smoothEdge, rng32, isNight, isWet };
 })();
 
 const V3 = (function () {

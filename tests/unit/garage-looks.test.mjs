@@ -10,6 +10,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { withM4 } from "../helpers/mat4-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -27,6 +28,7 @@ function harness() {
     Uint32Array, isFinite, parseFloat, parseInt, Date,
     Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
   });
+  withM4(ctx);
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
                    "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
@@ -262,6 +264,7 @@ test("pickers: the crew and mood picks are saved by their scene modules", () => 
     Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
     localStorage: { getItem: (k) => (saved.has(k) ? saved.get(k) : null), setItem: (k, v) => saved.set(k, String(v)) },
   });
+  withM4(ctx);
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
                    "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/scene-crew.js", "js/garage/experience.js",
                    "js/garage/scene.js"])
