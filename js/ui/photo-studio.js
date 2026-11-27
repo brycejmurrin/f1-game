@@ -24,6 +24,8 @@ const PhotoStudio = (function () {
   const KEYS = { landscape: "apex26.photoBackground", portrait: "apex26.photoBackgroundPortrait" };
   const orient = () => { try { return window.innerHeight > window.innerWidth ? "portrait" : "landscape"; } catch (_) { return "landscape"; } };
   const readSlot = (slot) => { try { const v = localStorage.getItem(KEYS[slot]); return v && /^data:image\/(jpeg|png);base64,/.test(v) && v.length < 1.5e6 ? v : ""; } catch (_) { return ""; } };
+  // 4:5 or taller goes to the portrait slot, a wide photo to landscape; unknown or square follows the device orientation.
+  const slotFor = (aspect) => (aspect && aspect <= 0.8 ? "portrait" : aspect >= 1.25 ? "landscape" : orient());
   // No slot: the current orientation's image, else the other one. A named slot reads strictly.
   function background(slot) {
     if (KEYS[slot]) return readSlot(slot);
@@ -103,14 +105,14 @@ const PhotoStudio = (function () {
       open: wait("open"), close: (...args) => mine && mine.close(...args), capture: wait("capture"),
       state: () => { const r = mine || body(); return r && typeof r.state === "function" ? r.state() : { open: false, generation: 0, source: null, subject: false, aspect: "scene", grid: false, postcard: false, busy: false, captured: false, width: 0, height: 0, background: !!background() }; },
       contactSheet: wait("contactSheet"), album: wait("album"),
-      background, setBackground, exportPhoto: wait("exportPhoto"), savePhoto: wait("savePhoto"),
+      background, setBackground, slotFor, exportPhoto: wait("exportPhoto"), savePhoto: wait("savePhoto"),
       hasCar: () => !!mine && mine.hasCar(),
     };
   }
 
   // No eager ensureBody(): bare specs load this stub without Log/ScriptLoader (#4978).
   return Object.freeze({
-    create, shareCancelled, background, setBackground, crop, filename, focalFov, focalMm,
+    create, shareCancelled, background, setBackground, slotFor, crop, filename, focalFov, focalMm,
     lens: () => live?.lens(),
     album: () => { const r = live; return r && r.album ? r.album() : ensureBody().then(() => { const impl = newest && newest(); return impl && impl.album ? impl.album() : Promise.reject(new Error("Photo library unavailable")); }); },
     contactSheet: (times, seek, cancelled) => { const r = live; return r && r.contactSheet ? r.contactSheet(times, seek, cancelled) : ensureBody().then(() => { const impl = newest && newest(); return impl && impl.contactSheet ? impl.contactSheet(times, seek, cancelled) : Promise.reject(new Error("Photo capture unavailable")); }); },

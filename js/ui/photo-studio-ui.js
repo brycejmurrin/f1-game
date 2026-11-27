@@ -55,6 +55,8 @@ function crop(width, height, aspect) {
 const KEYS = { landscape: "apex26.photoBackground", portrait: "apex26.photoBackgroundPortrait" };
 const orient = () => { try { return window.innerHeight > window.innerWidth ? "portrait" : "landscape"; } catch (_) { return "landscape"; } };
 const readSlot = (slot) => { try { const v = localStorage.getItem(KEYS[slot]); return v && /^data:image\/(jpeg|png);base64,/.test(v) && v.length < 1.5e6 ? v : ""; } catch (_) { return ""; } };
+// 4:5 or taller goes to the portrait slot, a wide photo to landscape; unknown or square follows the device orientation.
+const slotFor = (aspect) => (aspect && aspect <= 0.8 ? "portrait" : aspect >= 1.25 ? "landscape" : orient());
 // No slot: the current orientation's image, else the other one. A named slot reads strictly.
 function background(slot) {
   if (KEYS[slot]) return readSlot(slot);
@@ -1154,8 +1156,6 @@ function create(G, deps) {
     } catch (e) { if (gen === st.generation) say("Save failed: " + text(e.message)); }
     finally { if (gen === st.generation) busy(false); }
   }
-  // 4:5 or taller goes to the portrait slot, a wide photo to landscape; unknown or square follows the device orientation.
-  function slotFor(aspect) { return aspect && aspect <= 0.8 ? "portrait" : aspect >= 1.25 ? "landscape" : orient(); }
   function chooseBackground(image, aspect) {
     const slot = slotFor(aspect), name = slot === "portrait" ? "Portrait" : "Landscape";
     if (!setBackground(image, slot)) { say(name + " background could not be saved. Device storage may be full" + (background(slot) ? "; the previous one is kept." : ".")); return; }
@@ -1259,6 +1259,6 @@ function create(G, deps) {
   live = api; busy(false); paintSheet(); return api;
 }
 // ASPECTS / LIMIT stay module-private (crop + library only); no external callers.
-return Object.freeze({ get sampling() { return samplePass; }, create, stepPosition, holdMetres, positionLabel, POV_SHOTS, visorOptions, shareCancelled, background, setBackground, crop, filename, album: () => live ? live.album() : Promise.reject(new Error("Photo library unavailable")), contactSheet: (times, seek, cancelled) => live ? live.contactSheet(times, seek, cancelled) : Promise.reject(new Error("Photo capture unavailable")), state: () => live ? live.state() : { open: false } });
+return Object.freeze({ get sampling() { return samplePass; }, create, stepPosition, holdMetres, positionLabel, POV_SHOTS, visorOptions, shareCancelled, background, setBackground, slotFor, crop, filename, album: () => live ? live.album() : Promise.reject(new Error("Photo library unavailable")), contactSheet: (times, seek, cancelled) => live ? live.contactSheet(times, seek, cancelled) : Promise.reject(new Error("Photo capture unavailable")), state: () => live ? live.state() : { open: false } });
 })();
 Object.freeze(PhotoStudioBody);
