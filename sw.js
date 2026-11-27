@@ -66,8 +66,130 @@ const offlineRetries = new Map();
 // install — explicit opt-in; fetch handler runtime-caches on use.
 // @gen-shell:sw-required-lazy
 const REQUIRED_LAZY = ["js/career/career-backup.js","js/career/career-planning-ui.js","js/career/career-ui.js","js/career/regulations.js","js/career/ai-dev.js","js/career/experience.js"];
+const ASSET_HASH = {
+  "assets/sfx/f1_engine.mp3": "8ac47d82f673",
+  "assets/stills/abudhabi-1600.webp": "c016ac9fe64b",
+  "assets/stills/abudhabi.webp": "13309b06f3d3",
+  "assets/stills/albert_park-1600.webp": "ec551cda1511",
+  "assets/stills/albert_park.webp": "589c2e18fe19",
+  "assets/stills/anderstorp-1600.webp": "894e6a6fbf7e",
+  "assets/stills/anderstorp.webp": "ae939498b8a5",
+  "assets/stills/bahrain-1600.webp": "4207f497d0f6",
+  "assets/stills/bahrain.webp": "6399ca5d0e1b",
+  "assets/stills/baku-1600.webp": "7d6f17c38197",
+  "assets/stills/baku.webp": "b286aaf727bc",
+  "assets/stills/brands_hatch-1600.webp": "cb1e35db8ea9",
+  "assets/stills/brands_hatch.webp": "ec44276c8038",
+  "assets/stills/buddh-1600.webp": "c311bf85f935",
+  "assets/stills/buddh.webp": "6139b4e2a082",
+  "assets/stills/buenos_aires-1600.webp": "426052da7417",
+  "assets/stills/buenos_aires.webp": "87bb30bacd6a",
+  "assets/stills/catalunya-1600.webp": "dfce9398c0d7",
+  "assets/stills/catalunya.webp": "cb89e3d1574a",
+  "assets/stills/cota-1600.webp": "59ab471e85d6",
+  "assets/stills/cota.webp": "70452bc52cbb",
+  "assets/stills/dijon-1600.webp": "5dfefbd4b37e",
+  "assets/stills/dijon.webp": "47b00cef5629",
+  "assets/stills/donington-1600.webp": "7f5dcecfb8f8",
+  "assets/stills/donington.webp": "6c48bd96cb27",
+  "assets/stills/estoril-1600.webp": "d32ea414cb53",
+  "assets/stills/estoril.webp": "4ffec63c2546",
+  "assets/stills/fuji-1600.webp": "1c04d046db0b",
+  "assets/stills/fuji.webp": "8c739fbf6b6c",
+  "assets/stills/hockenheim-1600.webp": "dd8981c62e9b",
+  "assets/stills/hockenheim.webp": "5b8b5e5edd79",
+  "assets/stills/hungaroring-1600.webp": "f686fce6b8c1",
+  "assets/stills/hungaroring.webp": "9eacc6da1deb",
+  "assets/stills/imola-1600.webp": "42a2ab2cbe77",
+  "assets/stills/imola.webp": "b4479fa7b791",
+  "assets/stills/indianapolis-1600.webp": "b6d1d8fa3ba6",
+  "assets/stills/indianapolis.webp": "c83e0d832b38",
+  "assets/stills/interlagos-1600.webp": "5eb4569787df",
+  "assets/stills/interlagos.webp": "2b2985d9b420",
+  "assets/stills/istanbul-1600.webp": "b02cba2729e0",
+  "assets/stills/istanbul.webp": "cb45410e6ba5",
+  "assets/stills/jacarepagua-1600.webp": "dea5fc0b5ece",
+  "assets/stills/jacarepagua.webp": "a82bb8f690da",
+  "assets/stills/jeddah-1600.webp": "77abea99a894",
+  "assets/stills/jeddah.webp": "dfcd6da44e7c",
+  "assets/stills/jerez-1600.webp": "5dc566682d20",
+  "assets/stills/jerez.webp": "1705aa37d18c",
+  "assets/stills/korea-1600.webp": "4c04c0185ebe",
+  "assets/stills/korea.webp": "a143d6c3d221",
+  "assets/stills/kyalami-1600.webp": "2c16ddc58737",
+  "assets/stills/kyalami.webp": "7d98f0931e1c",
+  "assets/stills/madrid-1600.webp": "08ad3bde7bbb",
+  "assets/stills/madrid.webp": "8da5c0654c2f",
+  "assets/stills/magny_cours-1600.webp": "84ba638789c8",
+  "assets/stills/magny_cours.webp": "5159ed274f0e",
+  "assets/stills/mexico-1600.webp": "6b8fcd710951",
+  "assets/stills/mexico.webp": "88a99a660736",
+  "assets/stills/miami-1600.webp": "8c3e69ef7b8e",
+  "assets/stills/miami.webp": "ef9dc4676e34",
+  "assets/stills/monaco-1600.webp": "619cbc55de35",
+  "assets/stills/monaco.webp": "6bddfba05ca0",
+  "assets/stills/mont_tremblant-1600.webp": "61496e427f23",
+  "assets/stills/mont_tremblant.webp": "ee58d041c558",
+  "assets/stills/montreal-1600.webp": "6196ee412fbc",
+  "assets/stills/montreal.webp": "f474b5ee3037",
+  "assets/stills/monza-1600.webp": "84b48ff61c69",
+  "assets/stills/monza.webp": "4580932aa382",
+  "assets/stills/mosport-1600.webp": "8ed2743558b3",
+  "assets/stills/mosport.webp": "a6460b0092d0",
+  "assets/stills/mugello-1600.webp": "4b622fb08b1a",
+  "assets/stills/mugello.webp": "653bfe6ebb3d",
+  "assets/stills/nurburgring-1600.webp": "e0d57f1329b6",
+  "assets/stills/nurburgring.webp": "168c16675507",
+  "assets/stills/okayama-1600.webp": "619661a6ed06",
+  "assets/stills/okayama.webp": "0a4911189800",
+  "assets/stills/paul_ricard-1600.webp": "1ed8e726f43b",
+  "assets/stills/paul_ricard.webp": "87c4c062b209",
+  "assets/stills/portimao-1600.webp": "21d978d15d8e",
+  "assets/stills/portimao.webp": "09d2eb7791e0",
+  "assets/stills/qatar-1600.webp": "b6f5f40db6e8",
+  "assets/stills/qatar.webp": "ad7842968e2c",
+  "assets/stills/redbull-1600.webp": "f9d70b287640",
+  "assets/stills/redbull.webp": "84d16017ac74",
+  "assets/stills/sepang-1600.webp": "35ddb352e957",
+  "assets/stills/sepang.webp": "1d9965f4c6b1",
+  "assets/stills/shanghai-1600.webp": "16fb2e963ae7",
+  "assets/stills/shanghai.webp": "0c0bb1df02fa",
+  "assets/stills/silverstone-1600.webp": "063dd3a2988a",
+  "assets/stills/silverstone.webp": "5c229dc17d62",
+  "assets/stills/singapore-1600.webp": "9912e0ba6979",
+  "assets/stills/singapore.webp": "507f15912590",
+  "assets/stills/sochi-1600.webp": "752c4c438f19",
+  "assets/stills/sochi.webp": "9e282a2af319",
+  "assets/stills/spa-1600.webp": "25e490b8b26b",
+  "assets/stills/spa.webp": "b23a736cac23",
+  "assets/stills/suzuka-1600.webp": "0db018ee5fa0",
+  "assets/stills/suzuka.webp": "6ea335dec25b",
+  "assets/stills/vegas-1600.webp": "11ab84944d7a",
+  "assets/stills/vegas.webp": "64ddc917b665",
+  "assets/stills/watkins_glen-1600.webp": "8cc1f2d976e2",
+  "assets/stills/watkins_glen.webp": "f7aa76a1300e",
+  "assets/stills/zandvoort-1600.webp": "3989e516ab5f",
+  "assets/stills/zandvoort.webp": "64cf55d10ace",
+  "assets/stills/zolder-1600.webp": "bbde84767701",
+  "assets/stills/zolder.webp": "07169b5ef700",
+};
 // /@gen-shell:sw-required-lazy
 const PACK_MANIFEST_KEY_PREFIX = "assets/pack/manifest.json?b=";
+// STILLS AND SFX ARE CONTENT-KEYED (#7076 17e). The page asks for them under bare paths
+// (assets/stills/<id>.webp, assets/sfx/*.mp3), and a bare cache-first key kept the first
+// bytes it saw for a whole generation; every deploy then re-asked each one with a
+// conditional request (carryEntry). ASSET_HASH above (gen-shell, from the files themselves)
+// files each under `<path>?v=<12 hex>` instead: a changed file is a new key, fetched once,
+// and an unchanged one is carried across deploys by its digest, with no network.
+const ASSET_HASHED_PATH = /^assets\/(?:stills|sfx)\/[^/?]+$/;
+// The content key a stills or sfx URL is filed under (its query ignored), or null.
+function assetHashKey(url) {
+  const base = new URL("./", self.location.href).href;
+  if (url.origin !== self.location.origin) return null;
+  const rel = (url.origin + url.pathname).slice(base.length);
+  if (!ASSET_HASHED_PATH.test(rel) || !Object.prototype.hasOwnProperty.call(ASSET_HASH, rel)) return null;
+  return base + rel + "?v=" + ASSET_HASH[rel];
+}
 function isInstallCriticalOptional(u) {
   return /^js\/render\/three\//.test(u) || /^vendor\/three-/.test(u) || u.startsWith(PACK_MANIFEST_KEY_PREFIX);
 }
@@ -262,12 +384,16 @@ async function openCache(name) {
   if (!known || !known.includes(name)) invalidateCacheOrder();
   return caches.open(name);
 }
-async function matchPreferCurrent(req, accept) {
+// `found`, when given, learns the name of the ordered cache that answered (promoteHit).
+async function matchPreferCurrent(req, accept, found) {
   let ordered;
   try { ordered = await cacheOrder(); } catch (_) { ordered = []; }
   for (const name of ordered) {
     const hit = await caches.match(req, { cacheName: name });
-    if (hit && (!accept || await accept(hit))) return hit;
+    if (hit && (!accept || await accept(hit))) {
+      if (found) found.name = name;
+      return hit;
+    }
   }
   try {
     // A different worker may have created a new generation since the order was
@@ -993,6 +1119,38 @@ async function reusePinned(cache, url) {
   } catch (_) { return false; }   // the network path still runs
 }
 
+// A CACHE-FIRST HIT FROM AN OLDER GENERATION IS PROMOTED (#7076 17c). Install copies
+// forward what an older cache holds at that moment (reuseHashed), but a runtime-only
+// door (WGX, designer, XR, camera editors) first opened after that, on the old shell
+// or answered from the retained predecessor (#2194), stayed only there: the sweep that
+// drops the predecessor once its windows close took the only copy, and the next offline
+// launch missed it. Only a key that names its bytes moves: a `?v=<12 hex>` whose digest
+// matches, or a PATH_PINNED path. Build-keyed and bare keys belong to their generation
+// (bare runtime entries are revalidated forward by carryRuntime at the next install).
+// Scoped to what install cannot already copy forward: a runtime-only door's `?v=<12 hex>` and a
+// path-pinned file (the opt-in vendors). An old-shell tab's ordinary `?v=` scripts, answered from
+// the predecessor it booted from, stay there. Only into a SETTLED current generation (until then
+// install's reuseHashed is still copying), and each key at most once per worker, so a digest
+// that misses is not re-hashed on every later hit.
+const _promoteTried = new Set();
+async function promoteHit(key, hit, from) {
+  const current = _cacheNameKnown || await currentCacheName().catch(() => null);
+  if (!current || !(cacheBuild(from) < cacheBuild(current))) return;
+  const href = typeof key === "string" ? key : key.url;
+  const url = new URL(href);
+  const rel = (url.origin + url.pathname).slice(new URL("./", self.location.href).href.length);
+  const hashed = /^\?v=[0-9a-f]{12}$/.test(url.search) && isRuntimeOnlyOptional(rel);
+  if (!hashed && (url.search || !PATH_PINNED.test(rel))) return;
+  if (_promoteTried.has(href)) return;
+  // A missing or unsettled current generation is install's or repairGeneration's (never created here).
+  if (!(await caches.match(INSTALL_SETTLED_URL, { cacheName: current }))) return;
+  _promoteTried.add(href);
+  if (hashed) await verifyHashedResponse(href, hit);
+  const cache = await openCache(current);
+  if (await cache.match(key)) return;
+  await cache.put(key, hit);
+}
+
 // RUNTIME ENTRIES OUTLIVE A DEPLOY (#5007). Sfx, the baked pack (`?h=<md5>`),
 // streamed music and opt-in vendors (Rapier, jsQR, trystero) are cached on
 // first use, never by install, so each new generation started without them and
@@ -1060,11 +1218,23 @@ async function carryRuntime(cache, name) {
   // Keep one job per URL. For a hashed key, keep older candidates in order:
   // a legacy worker could have cached a rebaked file under the original hash.
   const jobs = new Map();
+  // Stills and sfx the table names: one job per CONTENT key, fed by any older entry for
+  // that path (a bare one from before #7076 included); a stale hash is dropped. A path the
+  // table does not name keeps the revalidated carry below.
+  const assets = new Map();
   for (const k of sources) {
     const src = await caches.open(k);
     for (const req of await src.keys()) {
       const url = new URL(req.url);
       if (!isCarriedRuntime(url)) continue;
+      const key = assetHashKey(url);
+      if (key) {
+        if (!url.search || req.url === key) {
+          if (!assets.has(key)) assets.set(key, []);
+          assets.get(key).push({ src, req });
+        }
+        continue;
+      }
       const job = jobs.get(req.url);
       if (!job) jobs.set(req.url, { req, hash: isHashedPackRequest(url) ? url.search.slice(3) : null, older: [src] });
       else if (job.hash) job.older.push(src);
@@ -1092,6 +1262,19 @@ async function carryRuntime(cache, name) {
         }
         // The newest valid candidate owns the HTTP validator decision, even a deletion.
         await carryEntry(cache, req, old);
+        return;
+      }
+    } catch (_) { /* one entry never fails the install */ }
+  });
+  // The key names the bytes: the newest older copy whose digest matches is this deploy's file.
+  await pooled([...assets], CARRY_POOL, async ([key, olds]) => {
+    try {
+      if (await cache.match(key)) return;
+      for (const { src, req } of olds) {
+        const old = await src.match(req).catch(() => undefined);
+        if (!old || !old.ok) continue;
+        try { await verifyHashedResponse(key, old); } catch (_) { continue; }
+        await cache.put(key, old);
         return;
       }
     } catch (_) { /* one entry never fails the install */ }
@@ -1825,8 +2008,8 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Cache-first for everything else. Every DEPLOYED ?v= URL carries a content
-  // hash (pages.yml stamps it while staging), and audio/sfx never change
-  // post-release, so a cache hit is always correct — no revalidation needed.
+  // hash (pages.yml stamps it while staging), and stills/sfx are filed under
+  // their content hash (ASSET_HASH), so a cache hit is always correct — no revalidation needed.
   //
   // EXCEPT on a dev host. The committed shell reads `?v=dev` for every asset
   // (tools/gen/gen-shell.mjs; hashes exist only in the deploy's staged copy), so a
@@ -1835,12 +2018,16 @@ self.addEventListener("fetch", (event) => {
   // fallback — tools/check/offline-precache-check.cjs still passes because the
   // fallback is the precache.
   let cacheWrite = Promise.resolve();
+  // A still or sfx is read and written under its content key (ASSET_HASH, #7076 17e).
+  // A bare request only: an explicit query is the caller's own key.
+  const assetKey = !DEV_HOST && !url.search ? assetHashKey(url) : null;
+  const key = assetKey || req;
   const remember = (res, verified = false) => {
     const copy = res.clone();
     cacheWrite = (async () => {
-      if (!verified) await verifyHashedResponse(req, copy);
+      if (!verified) await verifyHashedResponse(key, copy);
       const cache = await openCache(await currentCacheName());
-      await cache.put(req, copy);
+      await cache.put(key, copy);
     })().catch(noteCacheWriteFail);
   };
   const response = (async () => {
@@ -1853,16 +2040,25 @@ self.addEventListener("fetch", (event) => {
         }
       } catch (_) { /* offline: fall through to the cache */ }
     }
-    const cached = await matchLearnScript(url) || await matchPreferCurrent(req);
-    if (cached) return cached;
+    const found = {};
+    const cached = await matchLearnScript(url) || await matchPreferCurrent(key, undefined, found);
+    if (cached) {
+      if (found.name) { const copy = cached.clone(); cacheWrite = promoteHit(key, copy, found.name).catch(noteCacheWriteFail); }
+      return cached;
+    }
     // On a miss there is nothing to fall back to, so a timeout race could only
     // FAIL a slow-but-alive request (and drop its late response uncached) — a
     // no-SW page would have loaded it. Ride the network; error only on reject.
     try {
       const res = await fetch(req);
       if (res && res.ok) {
-        await verifyHashedResponse(req, res);
-        remember(res, true);
+        // A still or sfx is shown whatever its digest (a CDN edge can lag the deploy's
+        // sw.js); remember() verifies it and files only the bytes the key names.
+        if (assetKey) remember(res);
+        else {
+          await verifyHashedResponse(req, res);
+          remember(res, true);
+        }
       }
       return res;
     } catch (_) { /* network rejected or content hash mismatched */ }
