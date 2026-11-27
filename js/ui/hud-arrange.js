@@ -24,7 +24,7 @@ const HudArrange = (() => {
   // tower remains a group, while race messages and flags are event-driven.
   /** Pure: s (%) stepped by `dir` (±1) on the toolbar's step. */
   const stepSize = (s, dir) => {
-    const next = dir < 0 && s <= STEP ? Math.max(MIN_SIZE, s / 2) : s + dir * STEP;
+    const next = dir < 0 ? Math.max(Math.min(s, MIN_SIZE), s <= STEP ? s / 2 : s - STEP) : s + dir * STEP;
     return Number.isFinite(next) && next > 0 ? next : s;
   };
   /** Pure: the painted size (%) of a widget stored at `s` under CSS zoom `z` (#5256): `--hl-s` is a `scale`, the band

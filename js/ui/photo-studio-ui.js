@@ -100,7 +100,7 @@ async function library(action, value, session) {
   const db = await openDb();
   try {
     return await new Promise((resolve, reject) => {
-      const tx = db.transaction("photos", action === "list" ? "readonly" : "readwrite"), store = tx.objectStore("photos");
+      const tx = db.transaction("photos", action === "list" || action === "get" ? "readonly" : "readwrite"), store = tx.objectStore("photos");
       let result = null, failure = null;
       // A cursor projects each row WITHOUT its blob (up to 3 MB a photo); only DOWNLOAD ("get") reads one.
       const rows = [];

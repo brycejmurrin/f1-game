@@ -72,7 +72,8 @@ test("stepSize: toolbar grows beyond 200 and steps down to the floor and stays t
   assert.equal(A.stepSize(55, -1), 45);
   assert.equal(A.stepSize(200, 1), 210);
   assert.equal(A.stepSize(10, -1), 5);
-  assert.equal(A.stepSize(.1, -1), 5, "below the floor a step lands ON the floor (#7240)");
+  assert.equal(A.stepSize(.1, -1), .1, "an already tiny size is never pushed lower (#7240)");
+  assert.equal(A.stepSize(12, -1), 5, "a step never crosses the floor");
   assert.equal(A.stepSize(Number.MAX_VALUE, 1), Number.MAX_VALUE);
 });
 
@@ -877,6 +878,7 @@ test("#7240: stepSize floors at 5 and never reaches a vanishing size", () => {
   let s = 100;
   for (let i = 0; i < 60; i++) s = A.stepSize(s, -1);
   assert.ok(s >= 5, "repeated − stays at or above the floor, got " + s);
+  for (const v of [12, 14, 3, 100]) assert.ok(A.stepSize(v, -1) >= Math.min(v, 5), "− from " + v + " stays at or above the floor: " + A.stepSize(v, -1));
   assert.equal("placedOrig" in A, false, "the unused export is gone");
 });
 test("#7240: every arrange-bar button's accessible name contains its visible text; step has aria-pressed at build", () => {
