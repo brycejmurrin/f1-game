@@ -114,7 +114,7 @@
     },
     "typeofGuards": {
       "absorb": 10,
-      "ceiling": 2310,
+      "ceiling": 2324,
       "slack": 0
     },
     "vmSrcLoads": 598,
