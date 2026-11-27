@@ -101,3 +101,20 @@ test("trigger motors get a feel floor; trigger haptics off forces dual-rumble gr
   t.Input.poll(); t.Input.rumble(0.6, 90, "brake");
   assert.equal(calls[1].type, "dual-rumble");
 });
+
+test("DualSense Edge and Firefox-format ids also read as DualSense", () => {
+  for (const id of ["DualSense Edge Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0df2)", "054c-0ce6-Wireless Controller"]) {
+    const t = boot();
+    attach(t.sb, t.fire, id);
+    assert.equal(t.Input.padLabel(8), "CREATE", id);
+  }
+});
+
+test("trigger feel floor edges: 0 stays silent, 1 stays at 1", () => {
+  const t = boot();
+  const calls = attach(t.sb, t.fire, "DualSense Wireless Controller");
+  t.Input.setHaptics(1);
+  t.Input.poll(); t.Input.rumble(1, 90, "brake");
+  assert.equal(calls[0].params.leftTrigger, 1);
+  assert.equal(calls[0].params.rightTrigger, 0);
+});
