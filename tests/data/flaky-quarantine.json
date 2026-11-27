@@ -11,7 +11,7 @@
     {
       "spec": "tests/specs/track-designer.spec.js",
       "title": "Track designer › pending START FROM preserves a real map drag before pointer release",
-      "signature": "^expect\\(received\\)\\.toBe\\(expected\\)",
+      "signature": "^pending START FROM: __tdPendingResult stayed true",
       "owner": "brycejmurrin",
       "since": "2026-11-20",
       "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/44806709337/job/136536638507",

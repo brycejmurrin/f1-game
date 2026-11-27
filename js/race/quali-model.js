@@ -241,9 +241,9 @@ const Quali = (function () {
       return t;
     }
 
-    // max(PACE, 0.05), read through vTop() (= VMAX · that) like every pace read.
-    // A stub without VMAX (unit VMs) reads as PACE 1: today's model.
-    function paceNow() { const vm = PhysicsConsts.VMAX; return vm > 0 ? G.vTop() / vm : 1; }
+    // max(PACE, 0.05) as vTop()/VMAX, through G.pace (#7129) like every pace read.
+    // A stub without G.pace (unit VMs) reads as PACE 1: today's model.
+    function paceNow() { return G.pace ? G.pace.vScale : 1; }
 
     // The difficulty row the driven AI reads (game.js falls back to normal the same way).
     function diffRow() { return PhysicsConsts.DIFF[G.difficulty] || PhysicsConsts.DIFF.normal; }

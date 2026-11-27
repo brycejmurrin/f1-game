@@ -105,7 +105,7 @@ const CarFx = (function () {
     const P = (deps && deps.Particles) || (typeof Particles !== "undefined" ? Particles : null);
     const timers = new WeakMap();   // car → { t } stamp cadence (SkidMarks.stampFor)
     const stats = { sparks: 0, marks: 0 };
-    const vStd = (v) => v * PhysicsConsts.VMAX / G.vTop();
+    const vStd = G.pace.vStd;   // PaceMath's v · VMAX / vTop(), through the façade (#7129)
     const haze = heatHaze(vStd);   // game.js: pick() before the car loop, mark() per car, at() before present
 
     // Embers from the plank: `g` is the car's grounded basis (column-major:

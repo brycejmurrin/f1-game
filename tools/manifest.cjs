@@ -591,8 +591,9 @@ const CARVIEW = [
 ];
 
 // verify-track.cjs / track-foundation Node-VM subset, in order.
-// "@circuits" expands to every file in CIRCUITS_DIR (readdir, sorted — VM
-// verification is per-id, so LIST order does not matter there).
+// "@circuits" expands to CIRCUITS in page order (gen-shell.mjs), NOT readdir
+// order: build-worker.js matches Tracks.LIST[idx] and throws "worker track list
+// differs" on a mismatch, so the order is load-bearing (pinned by a unit test).
 const TRACK_VM = [
   "js/core/log.js",
   "js/core/dev-flags.js",
