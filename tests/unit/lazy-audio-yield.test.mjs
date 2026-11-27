@@ -447,3 +447,29 @@ test("no primer is created when AudioContext is unavailable (#6448)", () => {
   assert.equal(fire("keydown", true), 1);
   assert.equal(contexts.length, 0);
 });
+
+// OFFLINE RENDER GATE. GameAudio leaves the stub when engine.js lands, but
+// LAZY_AUDIO keeps evaluating and onAudioReady runs its parts in later yielded
+// tasks; tests/specs/engine-audio-offline.spec.js, gated on !_stub, had them land
+// on its OfflineAudioContext mid-render on a slow runner (Pages 45917673481 on
+// f0584547: rev=0.25 f0=243 vs scheduled 272.48). The render is a pure function
+// of the schedule only once apex:audio:ready, marked after the last bundle step
+// with no yield after it, has fired; every offline spec waits for it.
+test("offline render specs wait for apex:audio:ready, marked after the last audio bundle step", async () => {
+  const bundles = src("js/core/lazy-bundles.js");
+  const at = bundles.indexOf('audioMark("apex:audio:ready")');
+  const before = bundles.slice(bundles.indexOf("function ensureAudio()"), at);
+  const after = bundles.slice(at, bundles.indexOf("return audioLoad;", at));
+  const steps = ["loadBackendScripts(AUDIO_FILES", "deps.onAudioReady(", "audioReadyOnce(key, fn)", "CrowdAudio.bind(", "audioHooked = true"];
+  assert.deepEqual({ at: at > 0, missing: steps.filter((s) => !before.includes(s)), yieldAfter: /await\b/.test(after) },
+    { at: true, missing: [], yieldAfter: false }, "apex:audio:ready follows every bundle step and nothing yields after it");
+  const { readdirSync } = await import("fs");
+  const specs = readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith(".js"))
+    .map((f) => [f, src("tests/specs/" + f)]).filter(([, s]) => s.includes("GameAudio.initOffline("));
+  const bad = specs.filter(([, s]) => {
+    const gate = s.indexOf('getEntriesByName("apex:audio:ready")');
+    return !(gate > 0 && gate < s.indexOf("GameAudio.initOffline("));
+  }).map(([f]) => f);
+  assert.deepEqual({ found: specs.some(([f]) => f === "engine-audio-offline.spec.js"), bad },
+    { found: true, bad: [] }, "every spec that builds an offline graph first waits for apex:audio:ready (not merely !GameAudio._stub)");
+});
