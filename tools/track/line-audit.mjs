@@ -46,6 +46,8 @@
  *
  * Run: node tools/track/line-audit.mjs [id …]      (default: a spread of five)
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/line-audit.mjs") ? process.argv.slice(2) : [], "Usage: node tools/track/line-audit.mjs [options]\nAudits the baked racing line on real circuits: slope, clamp time, corner-time / lap-time gains, tighter corners.\n--help prints this and exits 0.");
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

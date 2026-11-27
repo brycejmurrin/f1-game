@@ -11,6 +11,8 @@
  * only files that carry `// @ts-check`. Nothing is emitted and nothing here ships.
  * How to opt a file in: docs/notes/CHECKJS-ROLLOUT-2026-10-18.md.
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/check-js-types.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/check-js-types.mjs [options]\nType-checks the JS files that opt in with `// @ts-check` (JSDoc + the repo's local tsc, noEmit).\n--help prints this and exits 0.");
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";

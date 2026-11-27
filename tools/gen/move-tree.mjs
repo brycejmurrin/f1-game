@@ -21,6 +21,8 @@
 // other file — a FULL / LAZY / PATHS entry is a path string — and then gets
 // the move appended to its MOVED map, which deploy.mjs reads to name the new
 // path when another session's edit to the old one conflicts.
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/move-tree.mjs") ? process.argv.slice(2) : [], "Usage: node tools/gen/move-tree.mjs [options]\nTree mover: renames from a JSON old→new map, sweeps every citing path, records MOVED, regenerates the shell; `--plan`.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";

@@ -18,6 +18,8 @@
  * js/data/garage-defaults.js. GameStore.get consults GarageDefaults on a miss
  * for those keys; a value the player already stored still wins.
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/garage-defaults.mjs") ? process.argv.slice(2) : [], "Usage: node tools/gen/garage-defaults.mjs [options]\nApply an exported GARAGE file to the shipped defaults in `js/data/garage-defaults.js`; `--check` reports drift.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

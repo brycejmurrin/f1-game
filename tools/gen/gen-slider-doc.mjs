@@ -30,6 +30,8 @@
  *   node tools/gen/gen-slider-doc.mjs            # write
  *   node tools/gen/gen-slider-doc.mjs --check    # exit 1 when committed ≠ generated
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/gen-slider-doc.mjs") ? process.argv.slice(2) : [], "Usage: node tools/gen/gen-slider-doc.mjs [options]\nRegenerates the slider tables in `docs/LIGHTING-TUNER-SLIDERS.md` from `TUNE_DEFS`; `--check` fails on drift.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";

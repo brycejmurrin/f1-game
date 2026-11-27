@@ -12,6 +12,8 @@
 //
 //   node tools/gen/targets.mjs          # docs/ARCHITECTURE.md … one per line
 //   node tools/gen/targets.mjs --json
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/targets.mjs") ? process.argv.slice(2) : [], "Usage: node tools/gen/targets.mjs [options]\nPrints the GENERATED doc paths (`TARGET` of every gen-*.mjs), one per line; the hooks derive their block list from it.\n--help prints this and exits 0.");
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 

@@ -42,6 +42,8 @@
  * The block it rewrites is delimited by @gen-settings-defaults in
  * js/data/settings-defaults.js. Every edit is printed as `key: was -> now`.
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/settings-defaults.mjs") ? process.argv.slice(2) : [], "Usage: node tools/gen/settings-defaults.mjs [options]\nApply an exported SETTINGS file to the shipped defaults in `js/data/settings-defaults.js`; `--check` reports drift.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

@@ -17,6 +17,8 @@
 // `norm` (sha256 after renaming TSL's build-order identifiers by first appearance). raw is what Safari keys on, so
 // it is the verdict; norm only explains a raw change ("names only" = a re-key with no semantic change).
 // Exit 0 always for `diff` (advisory); `capture` exits 1 when no module was recorded (no WebGPU) so a skip is loud.
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/lit-wgsl-census.mjs") ? process.argv.slice(2) : [], "Usage: node tools/perf/lit-wgsl-census.mjs [options]\nHash the WGSL a TLX WebGPU race compiles (lavapipe) and diff two trees: does a change re-key Safari's pipeline cache?\n--help prints this and exits 0.");
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";

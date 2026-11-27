@@ -10,6 +10,8 @@
 // TREE_METRICS eagerScripts / eagerBytes (the ceilings in tests/data/ratchets.json `tree`, raised only by a
 // ratchets.d fragment under Bryce's `ratchet-raise`) and tools/check/tree-counts.mjs AT_REF (a branch's own lowering
 // is measured at its merge-base, #4257). docs/notes/BUDGET-RATCHETS-2026-11-19.md says why the number left the test.
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/boot-wall.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/boot-wall.mjs [options]\nBoot wall size (eager <script> count, raw and code bytes), live or at a git ref: the eager* tree ratchets.\n--help prints this and exits 0.");
 import cp from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";

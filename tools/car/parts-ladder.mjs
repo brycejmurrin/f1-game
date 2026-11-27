@@ -52,6 +52,8 @@
 //
 // Exits non-zero when a PAID option is strictly dominated by a cheaper one —
 // that is a trap a player can only fall into, and it is never intended.
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/parts-ladder.mjs") ? process.argv.slice(2) : [], "Usage: node tools/car/parts-ladder.mjs [options]\nWould anyone ever PICK this catalog option? Proves no paid option is dominated by a cheaper one (offline, no browser).\n--help prints this and exits 0.");
 import { loadParts } from "./parts-sweep.mjs";
 
 export const LADDER = Object.freeze({

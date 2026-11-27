@@ -27,6 +27,8 @@
  * To move the camera, change these and re-run. Nudging a coordinate by hand
  * lands the part somewhere the rest of the car does not agree with.
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/title-art.mjs") ? process.argv.slice(2) : [], "Usage: node tools/gen/title-art.mjs [options]\nDraws index.html's #title-car from js/car/car3d.js through the garage camera; --check fails on drift.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

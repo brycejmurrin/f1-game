@@ -6,6 +6,8 @@
 // @doc Summarise a .cpuprofile: self ms by file, top-N self and inclusive ms by function url:line.
 //
 //   node tools/perf/cpuprofile-summary.mjs <file.cpuprofile> [top=40]
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/cpuprofile-summary.mjs") ? process.argv.slice(2) : [], "Usage: node tools/perf/cpuprofile-summary.mjs [options]\nSummarise a .cpuprofile: self ms by file, top-N self and inclusive ms by function url:line.\n--help prints this and exits 0.");
 import { readFileSync } from "node:fs";
 const file = process.argv[2];
 if (!file) { console.error("usage: node tools/perf/cpuprofile-summary.mjs <file.cpuprofile> [top=40]"); process.exit(2); }

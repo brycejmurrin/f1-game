@@ -33,6 +33,8 @@
 //        the same comparison against a saved run
 //
 // Exit 1 on any FAIL (OPEN is WARN), or with --base/--baseline on any NEW/WORSE row.
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/car-fit-audit.mjs") ? process.argv.slice(2) : [], "Usage: node tools/car/car-fit-audit.mjs [options]\nDo Car3D parts connect? Per-joint GAP/PENETRATION/ZFIGHT/OPEN audit of the 11 cars; --base = no new failures.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";

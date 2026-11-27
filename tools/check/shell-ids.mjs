@@ -32,6 +32,8 @@
  * (`dynamicIdReads` in tests/data/ratchets.json) so the unknowable set can
  * shrink but not grow.
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/shell-ids.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/shell-ids.mjs [options]\nEvery element id the JS looks up must exist: shell, runtime-created, or reported as dynamic. `--json`.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
