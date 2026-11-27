@@ -10,7 +10,9 @@
 // directly. The gardener verifier REFUTED a naive swap: they differ at triangle edges and on huge
 // triangles. This file is step (a), the pin: it samples both on one grid for three circuits, explains
 // every disagreement, and writes the record to tests/data/terrain-sampler-pin.json. Step (b), choosing a
-// canonical sampler, is Bryce's; nothing here prefers one.
+// canonical sampler, was Bryce's: his D5 (b) made Tracks.terrainY the one sampler (#7132), so terrainYAt is
+// now Tracks.terrainY and every circuit records 0 disagreements. A non-zero count again means a second
+// sampler crept back in.
 //
 // What is asserted is the EXPLANATION, not the counts: every point where A and B disagree has a named
 // cause (B's answer came from a triangle A skips as huge, or one sampler's slack accepted a point the
@@ -149,6 +151,9 @@ for (const id of CIRCUITS) {
   test(`${id}: every point where terrainYAt and Tracks.terrainY disagree has a named cause`, (t) => {
     const r = results[id] = measure(id);
     assert.ok(r.agree > 0 && r.samples > 1000, `${id}: the grid sampled no terrain (${r.samples} samples)`);
+    // #7132: one canonical sampler, so the scenery api's terrainYAt and Tracks.terrainY never disagree.
+    assert.equal(r.aNullBNum + r.aNumBNull + r.bothNumDiffer, 0,
+      `${id}: terrainYAt and Tracks.terrainY disagree at ${r.aNullBNum + r.aNumBNull + r.bothNumDiffer} points; worst ${JSON.stringify(r.worst)}`);
     assert.ok(r.causes.unexplained === 0,
       `${id}: ${r.causes.unexplained} disagreements have no cause; first: ${JSON.stringify(r.unexplained)}`);
     // A slack-only disagreement sits just outside a triangle edge: within A's 0.01 barycentric slack of a

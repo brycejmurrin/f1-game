@@ -123,6 +123,49 @@ function ensureRaceSession() {
   });
   return raceSessionLoad;
 }
+// LAZY_CAREER — ai-dev / regulations / experience. No boot stub: every consumer is typeof-guarded or reached
+// through Career.era(), so absence is a quiet "no era". The bundle is kicked at idle and at the career door, and
+// awaited at a career race entry; when it lands, Career.applyRegs() runs again because engage() may have run first.
+const CAREER_FILES = ApexRoster.LAZY_CAREER || [];
+const CAREER_EDGES = ApexRoster.LAZY_CAREER_EDGES || [];
+const careerBodyLoaded = new Set();
+let careerBodyLoad = null;
+const CAREER_READY = {
+  "js/career/regulations.js": () => typeof Regulations !== "undefined",
+  "js/career/ai-dev.js": () => typeof CareerAiDev !== "undefined",
+  "js/career/experience.js": () => typeof CareerExperience !== "undefined",
+};
+const careerBodyResident = () => CAREER_FILES.every((f) => !CAREER_READY[f] || CAREER_READY[f]());
+function reapplyCareerRegs() {
+  if (typeof Career === "undefined" || !Career.inCareer || !Career.inCareer() || !Career.applyRegs) return;
+  if (Career.applyRegs() && Career.save) Career.save({ migration: true });   // mirrors career.js engage()
+}
+function ensureCareerBody() {
+  if (!CAREER_FILES.length) return Promise.resolve(true);
+  if (careerBodyLoad) return careerBodyLoad;
+  // Already resident before this loader ran anything (eager shell / game-vm): nothing to fetch, nothing to re-apply.
+  if (!careerBodyLoaded.size && careerBodyResident()) {
+    careerBodyLoad = Promise.resolve(true);
+    return careerBodyLoad;
+  }
+  careerBodyLoad = loadBackendScripts(CAREER_FILES, CAREER_EDGES, {
+    strict: true, loaded: careerBodyLoaded,
+    ready: (src) => !CAREER_READY[src] || CAREER_READY[src](),
+  }).then((ok) => {
+    if (!ok || !careerBodyResident()) {
+      Log.warn("game", "the career bundle did not load");
+      careerBodyLoad = null;
+      return false;
+    }
+    try { reapplyCareerRegs(); } catch (e) { Log.error("game", "re-applying the regulations threw: " + (e && e.message)); }
+    return true;
+  }).catch((e) => {
+    Log.warn("game", "the career bundle did not load: " + (e && e.message || e));
+    careerBodyLoad = null;
+    return false;
+  });
+  return careerBodyLoad;
+}
 // Optional garage exterior; its absence never blocks race-session preparation.
 let garageExteriorLoad = null;
 function ensureGarageExterior() {
@@ -393,9 +436,8 @@ function ensureRealRace() {
 
 // Memoised on the PROMISE: a second DATA tap awaits the first load, never a 2nd inject or an early open().
 let dataHubLoad = null;
-const DATA_HUB_RETRY_MS = [400, 1200];
 function dataHubRetryDelay(attempt) {
-  const ms = DATA_HUB_RETRY_MS[attempt - 1];
+  const ms = ScriptLoader.retryMs[attempt - 1];
   if (!ms) return Promise.resolve();
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -407,7 +449,7 @@ function ensureDataHub(opts) {
   dataHubSlow = cb ? [cb] : [];
   const markSlow = () => { const cbs = dataHubSlow; if (cbs !== true) { dataHubSlow = true; cbs.forEach((f) => f()); } };
   dataHubLoad = (async () => {
-    const maxAttempts = DATA_HUB_RETRY_MS.length + 1;
+    const maxAttempts = ScriptLoader.retryMs.length + 1;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (attempt > 0) await dataHubRetryDelay(attempt);
       // WATCH & DRIVE launches RealRace: its engine lands with the hub, never after a tap.
@@ -1106,7 +1148,7 @@ function raceAssets() {
   // awaits ensureLightPresets, ensureRaceSession and ensureAudio.
   if (!lowDataLink()) {
     scheduleIdle(() => { ensureLightPresets(); }, 8000);
-    scheduleIdle(() => { ensureRaceSession(); }, 9000);
+    scheduleIdle(() => { ensureRaceSession(); ensureCareerBody(); }, 9000);   // LAZY_CAREER rides the race-session slot
     scheduleIdle(() => { ensureResultsSheet(); }, 9500);
     scheduleIdle(() => { prefetchAudio(); }, 12000);
     if (GARAGE_FILES.length) scheduleIdle(() => { ensureGarageData(); }, 6000);   // WORK ON CAR can be the first tap
@@ -1166,7 +1208,7 @@ watchRouteCss();
 // After every const above (loadBackendScripts reads AUDIO_FILES): a flag-gated inject, never awaited.
 bootDevPanels();
 mountBridgeLinkDoor();
-return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureReplayBroadcast, ensureNet, ensureAudio, adoptAudio, audioHandle, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, ensureRouteCss, ensureSavesData, wantAgentSurface, loadAgentSurface, bootAgentSurface, awaitPackSettled };
+return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureReplayBroadcast, ensureNet, ensureAudio, adoptAudio, audioHandle, ensureRaceSession, ensureCareerBody, ensureLightPresets, ensureGarageData, ensureResultsSheet, ensureRouteCss, ensureSavesData, wantAgentSurface, loadAgentSurface, bootAgentSurface, awaitPackSettled };
 }
   // The instance game.js made, for modules that load outside it (#5555): the global is only this factory.
   let live = null;

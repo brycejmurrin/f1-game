@@ -73,7 +73,6 @@
     "ui:gallery": "node tools/ui/layout-audit.mjs --gallery",
     "ui:audit": "node tools/ui/layout-audit.mjs",
     "wgx:gallery": "node tools/gfx/wgx-shot.mjs --gallery --lite",
-    "wgx:capture": "node tools/gfx/gfx-probe.mjs --backend webgpu",
     "prepare": "git config core.hooksPath .githooks || true && node tools/gen/ensure-built.mjs",
     "test:perf-race-entry": "node tools/ci/run-playwright.mjs --group test:perf-race-entry",
     "test:perf-session": "node tools/ci/run-playwright.mjs --group test:perf-session",

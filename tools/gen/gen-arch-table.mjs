@@ -128,6 +128,7 @@ export function rosterOf() {
   add(MANIFEST.LAZY_XR || [], "LAZY_XR");
   add(MANIFEST.LAZY_CAM_EDITOR || [], "LAZY_CAM_EDITOR");
   add(MANIFEST.LAZY_CAREER_UI || [], "LAZY_CAREER_UI");
+  add(MANIFEST.LAZY_CAREER || [], "LAZY_CAREER");
   add(MANIFEST.LAZY_UI_PRESETS || [], "LAZY_UI_PRESETS");
   add(MANIFEST.LAZY_SAVES_DATA || [], "LAZY_SAVES_DATA");
   add(MANIFEST.LAZY_RESULTS_SHEET || [], "LAZY_RESULTS_SHEET");
@@ -135,6 +136,7 @@ export function rosterOf() {
   add(MANIFEST.LAZY_PERF || [], "LAZY_PERF");
   add(MANIFEST.LAZY_REAL_RACE || [], "LAZY_REAL_RACE");
   add(MANIFEST.LAZY_LEARN || [], "LAZY_LEARN");
+  add(MANIFEST.LAZY_DRILL_FORK || [], "LAZY_DRILL_FORK");
   return out;
 }
 

@@ -8,6 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -51,7 +52,6 @@ const CASES = [
   [".claude/skills/lighting-tuner/scripts/bake.mjs", /FULL REPLACE|LightPresets/],
   [".claude/skills/survey-track/ground-profile.mjs", /Usage:.*ground-profile/],
   ["tools/car/carshot.mjs", /Usage:.*carshot/],
-  ["tools/car/trace-car.mjs", /Usage:.*trace-car/],
   ["tools/gfx/ssr-probe.mjs", /Usage:.*ssr-probe/],
 ];
 
@@ -154,4 +154,20 @@ test("check-physics: a printed FAIL is exit 1 (every probe exited 0)", async () 
   assert.equal(P.exitCodeFor(P.steerVerdict({ noSteer: 0.4 })), 1, "on rails");
   assert.equal(P.exitCodeFor(P.steerVerdict({ noSteer: 3 })), 0);
   assert.equal(P.exitCodeFor(undefined), 1, "a probe that returned nothing is not a pass");
+});
+
+// #7082: orphan tools retired; guard against return or a dangling reference.
+const GONE = [["car", "trace-car"], ["gfx", "readback-garage-oracle"], ["gfx", "readback-quit-menu-oracle"],
+  ["gfx", "stall-reload-sw-oracle"], ["shot", "webgpu-urban-gallery"], ["ui", "probe-sheets-contract"]]
+  .map(([d, n]) => `tools/${d}/${n}.mjs`);
+
+test("retired orphan tools stay deleted and unreferenced", () => {
+  for (const p of GONE) assert.ok(!fs.existsSync(p), `${p} should be deleted`);
+  const refs = ["tools/README.md", "docs/agent-output/policies.json",
+    "tests/data/tools-help-offenders.d/ui.json"].map((f) => [f, fs.readFileSync(f, "utf8")]);
+  for (const [f, s] of refs) for (const p of GONE) assert.ok(!s.includes(p), `${f} still names ${p}`);
+});
+
+test("wgx:capture npm script is gone", () => {
+  assert.equal(JSON.parse(fs.readFileSync("package.json", "utf8")).scripts["wgx:capture"], undefined);
 });

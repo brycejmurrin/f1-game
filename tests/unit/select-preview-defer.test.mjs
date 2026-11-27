@@ -69,6 +69,9 @@ function boot(o = {}) {
     TrackBuildClient: o.worker || { enabled: () => false },
   };
   sb.window = sb;
+  // drawElevProfile lives in TrackMaps (#7052) and reads elevProfile/elevRange off the stub above.
+  vm.runInNewContext(src("js/ui/track-maps.js").match(/function drawElevProfile\([\s\S]*?\n  }\n/)[0] + "\nthis.drawElevProfile = drawElevProfile;", sb, { filename: absSrc("js/ui/track-maps.js") });
+  sb.TrackMaps.drawElevProfile = sb.drawElevProfile;
   vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: absSrc("js/ui/select-screen.js") });
   const $ = (id) => dom.byId(id);
   // Ensure preview DOM the create() path reads.

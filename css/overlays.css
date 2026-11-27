@@ -32,6 +32,32 @@ body:not(.desktop) { --tap-floor44: calc(44.2px / var(--ui-scale)); }
 #learn-aero-guide strong, #learn-aero-guide span { display: block; }
 #learn-aero-guide strong { font-size: var(--fs-3); }
 #learn-aero-guide span { font-size: var(--fs-2); color: var(--dim); }
+/* The guide card's RETRY chip (#6555 A4) is its one tap target; the rest of the card still leaves input to the HUD. */
+#learn-aero-retry { pointer-events: auto; flex: none; min-height: var(--tap); min-width: var(--tap); padding: 0 var(--pad); font: inherit; font-weight: 700; }
+/* A LEARN drill's result card (js/learn-drills/drill-card.js): ONE column, at most 6 metric rows, RETRY and BACK TO
+   LESSON at the --tap floor (44 px or more on a phone, 852x393). Over #hud (z 10), as the thumb drill's lap card. */
+#drill-card {
+  position: fixed; z-index: 12; left: 50%; transform: translateX(-50%);
+  top: max(calc(var(--sat) + 3.25rem), 17%);
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gap);
+  width: max-content; max-width: min(52vw, 26rem);
+  padding: var(--pad) calc(var(--pad) * 1.5);
+  border: 1px solid var(--plate-line); border-radius: var(--r-md);
+  color: var(--text); background: var(--plate); font-family: var(--font-hud); text-align: center;
+}
+#drill-card > strong { font-size: var(--fs-3); }
+#drill-card p { margin: 0; font-size: var(--fs-2); }
+#drill-card-medal { font-weight: 700; }
+#drill-card-medal[data-medal="gold"] { color: var(--gold); }
+#drill-card-metrics { display: grid; grid-template-columns: auto auto; justify-content: center; gap: 0 var(--gap); margin: 0; font-size: var(--fs-2); }
+#drill-card-metrics dt { color: var(--dim); text-align: right; }
+#drill-card-metrics dd { margin: 0; text-align: left; }
+#drill-card-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(var(--gap) / 2); }
+#drill-card button { min-height: var(--tap); min-width: var(--tap); padding: 0 var(--pad); font: inherit; font-weight: 700; }
+#learn-index [data-medal] { display: block; font-size: var(--fs-1); font-weight: 700; color: var(--gold); }
+@media (max-height: 500px) {
+  #drill-card { top: max(calc(var(--sat) + 1rem), 6%); padding: .25rem .45rem; gap: .25rem; }
+}
 /* LEARN's THUMB DRILL (js/learn-drills/thumb-drill.js): the corner's script cue in the aero card's place, and a lap
    card that takes taps (RETRY LAP, DRIVE ON) while the cue card leaves every touch to the dock. Over #hud (z 10), not
    under it: the helmet cam's visor mask is #hud::before and greys out anything beneath it. */

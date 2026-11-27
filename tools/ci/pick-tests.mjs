@@ -75,7 +75,8 @@ export const RULES = [
   [/^js\/render\/webgpu\//, ["gfx"], "WGX is feature-detected; GLX must still boot"],
   [/^js\/render\/three\//, ["gfx"], "the three.js backend has its own probe spec"],
   [/^js\/render\/shared\//, ["hooks", "gfx"], "the baked-pack loader, glTF and the lamp chunks every backend shares"],
-  [/^js\/render\/renderer-boot\.js$/, ["tiny", "hooks"], "backend selection, canary and fallback orchestration"],
+  // gfx: glx-fallback.spec.js is the chooser's own browser proof (no adapter, a TLX create() that fails: GLX laps, #7045).
+  [/^js\/render\/renderer-boot\.js$/, ["tiny", "hooks", "gfx"], "backend selection, canary and fallback orchestration"],
 
   // ── track engine + circuit data ─────────────────────────────────────────
   [/^js\/track\/scenery/, ["circuits", "sweeps"], "prop placement and the full-fleet clip audits"],
@@ -370,10 +371,10 @@ export function blanketOnly(manifest = createRequire(import.meta.url)("../manife
     ...manifest.FULL, ...Object.values(manifest.DEFERRED).flat(), ...manifest.LAZY_AGENT,
     ...manifest.LAZY_RACE, ...manifest.LAZY_SCENERY, ...manifest.LAZY_DATA, ...manifest.LAZY_NET,
     ...(manifest.LAZY_EDITOR || []), ...(manifest.LAZY_XR || []), ...(manifest.LAZY_CAM_EDITOR || []),
-    ...(manifest.LAZY_CAREER_UI || []), ...(manifest.LAZY_UI_PRESETS || []), ...(manifest.LAZY_SAVES_DATA || []), ...(manifest.LAZY_RESULTS_SHEET || []), ...(manifest.LAZY_GFX_HI || []),
+    ...(manifest.LAZY_CAREER_UI || []), ...(manifest.LAZY_CAREER || []), ...(manifest.LAZY_UI_PRESETS || []), ...(manifest.LAZY_SAVES_DATA || []), ...(manifest.LAZY_RESULTS_SHEET || []), ...(manifest.LAZY_GFX_HI || []),
     ...(manifest.LAZY_PERF || []),
     ...(manifest.LAZY_REAL_RACE || []),
-    ...(manifest.LAZY_LEARN || []),
+    ...(manifest.LAZY_LEARN || []), ...(manifest.LAZY_DRILL_FORK || []),
   ];
   return files.filter((f) => !specific.some(([re]) => re.test(f)));
 }

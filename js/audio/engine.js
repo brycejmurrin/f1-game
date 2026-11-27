@@ -126,10 +126,7 @@ var GameAudio = (function () {
    * phone set to HIGH — the setting people reach for when fps is already
    * bad. Audio follows the device; the renderer keeps its own HIGH path. */
   function lowPower() {
-    try {
-      if (typeof GLX === "undefined" || !GLX) return false;
-      return !!(GLX.isMobile || GLX.mobileTier);
-    } catch (_) { return false; }
+    return typeof GameAudioSignal !== "undefined" && GameAudioSignal && GameAudioSignal.lowTier ? GameAudioSignal.lowTier() : false;
   }
   // Two voices still give a LEFT and a RIGHT — the pan is what carries "someone
   // is alongside", and the nearest two are the ones a driver reacts to. Four

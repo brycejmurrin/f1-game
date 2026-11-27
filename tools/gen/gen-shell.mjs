@@ -239,9 +239,9 @@ export function swOptionalFiles() {
     ...MANIFEST.LAZY_CIRCUIT, ...MANIFEST.LAZY_SCENERY, ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
     ...(MANIFEST.LAZY_AUDIO || []),
     ...MANIFEST.LAZY_WORKER, ...MANIFEST.LAZY_EDITOR, ...(MANIFEST.LAZY_XR || []),
-    ...(MANIFEST.LAZY_CAM_EDITOR || []), ...(MANIFEST.LAZY_CAREER_UI || []),
+    ...(MANIFEST.LAZY_CAM_EDITOR || []), ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_CAREER || []),
     ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []),
-    ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || []), ...(MANIFEST.LAZY_LEARN || []),
+    ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || []), ...(MANIFEST.LAZY_LEARN || []), ...(MANIFEST.LAZY_DRILL_FORK || []),
     ...(MANIFEST.LAZY_GFX_HI || []),
   ];
 }
@@ -273,6 +273,7 @@ function swOptionalBlock() {
     ["LAZY_XR — WebXR session behind navigator.xr / ENTER VR", MANIFEST.LAZY_XR || []],
     ["LAZY_CAM_EDITOR — camera tuner + flyby shot editor panels", MANIFEST.LAZY_CAM_EDITOR || []],
     ["LAZY_CAREER_UI — CAREER screen behind the title CAREER door", MANIFEST.LAZY_CAREER_UI || []],
+    ["LAZY_CAREER — ai-dev, regulations, experience behind ensureCareerBody", MANIFEST.LAZY_CAREER || []],
     ["LAZY_UI_PRESETS — APPEARANCE LAYOUT PRESET row behind the first APPEARANCE enter", MANIFEST.LAZY_UI_PRESETS || []],
     ["LAZY_SAVES_DATA — SAVES & DATA body (collect / apply / files UI) behind the SettingsExport façade", MANIFEST.LAZY_SAVES_DATA || []],
     ["LAZY_RESULTS_SHEET — results / TT / standings DOM behind startRace", MANIFEST.LAZY_RESULTS_SHEET || []],
@@ -280,6 +281,7 @@ function swOptionalBlock() {
     ["LAZY_PERF — BENCHMARK / PHONE TEST rig, idle-loaded after boot", MANIFEST.LAZY_PERF || []],
     ["LAZY_REAL_RACE — the Data Hub real-race engine (JUMP IN / WATCH / HIGHLIGHTS)", MANIFEST.LAZY_REAL_RACE || []],
     ["LEARN — the Learn modal and bare lesson assets", [...MANIFEST.LAZY_LEARN, ...MANIFEST.SW_LEARN]],
+    ["LAZY_DRILL_FORK — the strategy drills' what-if service behind a kind:sim drill", MANIFEST.LAZY_DRILL_FORK || []],
     ["LOCALES — manifest only until a non-English language ships", MANIFEST.SW_LOCALES || []],
   ];
   const out = [];
@@ -294,7 +296,7 @@ function swOptionalBlock() {
  *  that adds a career file no longer hand-edits a regex line in sw.js (it re-conflicted on every sync). */
 function swRequiredLazyBlock() {
   // The stills/sfx content table rides in this top-level block (#7076): both are install-time constants of sw.js.
-  return `const REQUIRED_LAZY = ${JSON.stringify(MANIFEST.LAZY_CAREER_UI || [])};\n` + swAssetHashBlock();
+  return `const REQUIRED_LAZY = ${JSON.stringify([...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_CAREER || [])])};\n` + swAssetHashBlock();
 }
 
 /** Stills and sfx are fetched under bare paths (js/ui/select-screen.js, js/audio/engine.js), so sw.js files each one
@@ -330,7 +332,7 @@ function rosterSource() {
     ["LAZY_DEV", MANIFEST.LAZY_DEV],
     ["LAZY_PERF", MANIFEST.LAZY_PERF], ["LAZY_PERF_EDGES", MANIFEST.LAZY_PERF_EDGES],
     ["LAZY_REAL_RACE", MANIFEST.LAZY_REAL_RACE], ["LAZY_REAL_RACE_EDGES", MANIFEST.LAZY_REAL_RACE_EDGES],
-    ["LAZY_LEARN", MANIFEST.LAZY_LEARN],
+    ["LAZY_LEARN", MANIFEST.LAZY_LEARN], ["LAZY_DRILL_FORK", MANIFEST.LAZY_DRILL_FORK],
     ["LAZY_RACE", MANIFEST.LAZY_RACE],
     ["LAZY_RACE_SESSION", MANIFEST.LAZY_RACE_SESSION],
     ["LAZY_RACE_SESSION_EDGES", MANIFEST.LAZY_RACE_SESSION_EDGES],
@@ -343,6 +345,7 @@ function rosterSource() {
     ["LAZY_XR", MANIFEST.LAZY_XR], ["LAZY_XR_EDGES", MANIFEST.LAZY_XR_EDGES],
     ["LAZY_CAM_EDITOR", MANIFEST.LAZY_CAM_EDITOR], ["LAZY_CAM_EDITOR_EDGES", MANIFEST.LAZY_CAM_EDITOR_EDGES],
     ["LAZY_CAREER_UI", MANIFEST.LAZY_CAREER_UI], ["LAZY_CAREER_UI_EDGES", MANIFEST.LAZY_CAREER_UI_EDGES],
+    ["LAZY_CAREER", MANIFEST.LAZY_CAREER], ["LAZY_CAREER_EDGES", MANIFEST.LAZY_CAREER_EDGES],
     ["LAZY_UI_PRESETS", MANIFEST.LAZY_UI_PRESETS], ["LAZY_UI_PRESETS_EDGES", MANIFEST.LAZY_UI_PRESETS_EDGES],
     ["LAZY_SAVES_DATA", MANIFEST.LAZY_SAVES_DATA], ["LAZY_SAVES_DATA_EDGES", MANIFEST.LAZY_SAVES_DATA_EDGES],
     ["LAZY_RESULTS_SHEET", MANIFEST.LAZY_RESULTS_SHEET], ["LAZY_RESULTS_SHEET_EDGES", MANIFEST.LAZY_RESULTS_SHEET_EDGES],
