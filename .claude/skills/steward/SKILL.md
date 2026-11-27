@@ -27,12 +27,13 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    wins (stand down if a newer one appears), the opposite of issue claims. **Ownership is a lease:** the Hand-off line
    reads `owner: <host>:<session> until <ISO UTC>`, at most 4 h ahead, renewed at every push and Hand-off refresh.
    Adopt only when the lease has lapsed AND `get_session` on the owner does not read `working`, or the owner handed
-   back (`owner: none`, comment `releases PR #<n>`); a split is a release, then an adopt. A PR with no until-time is
+   back (`owner: released <host>:<session>`, comment `releases PR #<n>`); a split is a release, then an adopt. A PR with no until-time is
    judged as before: a commit or comment under 2 h old means the owner is alive. Name the head sha you adopt in the
-   comment, set your own lease, and re-read the head before every push: if someone else moved it, stand down.
+   comment, write your own lease before any push (`ship-pr` refuses an adoption the `owner:` line does not name yet;
+   `pr-board` flags it `adopted-unleased`), and re-read the head before every push: if someone else moved it, stand down.
    **Park:** a PR waiting on Bryce (`needs-decision`) or on another PR (`blocked`) is parked; the owner refreshes the
    Hand-off (`next:` names the wait) and may end its turn, subscribed to both PRs (§Push): the lease holds while the label stays, up to 24 h past its
-   until-time (`pr-board.mjs` LEASE reads `live | parked | lapsed`). Sync a PR only as its live owner, as the last
+   until-time (`pr-board.mjs` LEASE reads `live | parked | lapsed | landing | released`). Sync a PR only as its live owner, as the last
    step before `land`; sweeps skip parked PRs.
 4. **Already fixed** on the deploy tip: comment the evidence (sha and the repro you ran), close the issue as completed.
    No PR, no question.
@@ -129,7 +130,7 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    only needs the label). On a pass it prints the two calls and flips nothing itself:
 3. GitHub MCP `update_pull_request` with `draft: false`, then add `land` (the one-label recipe in
    [`references/labels.md`](references/labels.md)).
-4. Refresh the Hand-off block, `unsubscribe_pr_activity`, and end: no re-subscribe (wake turns were 19% of worker
+4. Refresh the Hand-off block (`owner: landing <host>:<session>`), `unsubscribe_pr_activity`, and end: no re-subscribe (wake turns were 19% of worker
    cost, retro 2026-11-25). A later red or conflict is the orchestrator's `CONTINUE PR #<n>` (§After land).
    What `land.yml`'s `gate` status does next: [`references/land.md`](references/land.md). "Skip the gate" from the
    user: do it and record it under **Not run** with the user's words and the time; never silently, and never by
@@ -139,7 +140,8 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 
 Before `land`, the subscribed owner fixes a red on its own head (§Red); after it, the owner is gone (§Land 4). The
 orchestrator session (skill `dispatcher`; the dispatch Action retired 2026-11-25, #6536) re-owns only a silent owner:
-a PR idle past its window gets `needs-owner` and one `CONTINUE PR #<n>` launch; a `land` PR with no red check, no failed `gate` and no conflict is never re-owned. "Live" is an ancestry test against the live `apex-sha`
+a PR idle past its window gets `needs-owner` and one `CONTINUE PR #<n>` launch; a green `released` PR that needs only
+the ready flip gets one orchestrator act (`ship-pr`, flip, `land`), not a new session; a `land` PR with no red check, no failed `gate` and no conflict is never re-owned. "Live" is an ancestry test against the live `apex-sha`
 (agent `deploy-research`; skill `check`), never a green PR.
 
 ## CI — the orchestrator only
