@@ -522,6 +522,7 @@ function bootSheetShape(opts = {}) {
   vars.set(dom.body, { "--tall-at": "1.05", "--wide-at": "620px", ...(opts.body || {}) });
   vars.set(dom.documentElement, { "--ui-scale": String(opts.uiScale || 1) });
   const sb = uiSandbox(dom, { getComputedStyle: style, innerWidth: opts.innerWidth || 1000, innerHeight: opts.innerHeight || 600 });
+  vm.runInNewContext(src("js/ui/ui-shape.js").replace("window.UiShape = ", "var UiShape = "), sb, { filename: absSrc("js/ui/ui-shape.js") });
   vm.runInNewContext(src("js/ui/sheet-shape.js"), sb, { filename: absSrc("js/ui/sheet-shape.js") });
   const sheet = (id, o = {}) => {
     const host = dom.makeElement("div"); host._client = o.hostHeight || 0;

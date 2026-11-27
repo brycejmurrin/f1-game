@@ -83,7 +83,7 @@ const HudLayout = (function () {
     ot: { x: 0, y: -35.8, s: 100 }, aero: { x: 0, y: -41, s: 100 } };
   const PHONE_PORTRAIT = { helmet: PHONE_STANDARD.helmet, other: Object.assign({}, PHONE_STANDARD.other, PORTRAIT_OTHER) };
   // A portrait PHONE (css/hud.css's (orientation: portrait) and (max-width: 500px)); a portrait tablet keeps the landscape seed.
-  const portraitPhone = () => typeof window !== "undefined" && window.innerHeight > window.innerWidth && window.innerWidth <= 500;
+  const portraitPhone = () => UiShape.portraitNarrow();
   const phoneStandard = () => typeof HudElements !== "undefined" && HudElements.phone?.() ? (portraitPhone() ? PHONE_PORTRAIT : PHONE_STANDARD) : null;
   // Every factory seed a stored "other" entry may still hold: it was never moved, so it takes the one for this screen.
   const KNOWN_SEEDS = [RETIRED_SEED.other, PHONE_STANDARD.other, PORTRAIT_OTHER];
