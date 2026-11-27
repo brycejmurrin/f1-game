@@ -354,8 +354,8 @@ const LearnDoor = (function () {
     }
 
     // A local top view stays readable behind the helmet halo. The wake
-    // footprint uses the drill's Classic falloff, as does the car physics.
-    let footprint, lastX, lastY;
+    // footprint uses the drill's live falloff, as does the car physics.
+    let footprint, footLevel, lastX, lastY;   // footLevel: the dirty-air level it was drawn for (RE-RUN IN CFD AIR redraws it)
     function drawScope(gap, offset) {
       if (!ctx) return;
       const x = 140, y = 24, scaleX = 13, scaleY = 2.9;
@@ -364,7 +364,8 @@ const LearnDoor = (function () {
       if (px === lastX && py === lastY) return;
       lastX = px;
       lastY = py;
-      if (!footprint) {
+      if (!footprint || footLevel !== G.raceDirtyAir) {
+        footLevel = G.raceDirtyAir;
         footprint = document.createElement("canvas");
         footprint.width = scope.width;
         footprint.height = scope.height;
