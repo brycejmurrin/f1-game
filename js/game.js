@@ -4688,7 +4688,7 @@ function update(dt) {
   }
   _windStep.st = null;   // updateCar's Wind.sync, once per step (#3109 row 9)
   if (aiLod) aiLod.step(cars, state === "race" && session === "race" && !isPractice() && !netPlay.active(), raceCtl.level, raceT, player, track ? track.total : 0);
-  PerfSpans.begin("ai"); for (let i = 0; i < cars.length; i++) updateCar(cars[i], dt, ranked); PerfSpans.end("ai");   // per-car step: AI + player
+  PerfSpans.begin("ai"); raceCtl.stepGrip(true); try { for (let i = 0; i < cars.length; i++) updateCar(cars[i], dt, ranked); } finally { raceCtl.stepGrip(false); } PerfSpans.end("ai");   // per-car step: AI + player
   pits.stepEnd();
   if (!drills?.active() && jumpStartPenalty.reactWindowOpen()) { // this drill starts with both cars at speed
     for (const c of cars) jumpStartPenalty.tickReaction(c);
@@ -6677,8 +6677,9 @@ function retireCar(c, reason) {
 // blast and a 25-lap race lose their cars at the same points of the story.
 // A drawn failure is a fraction of the RACE, so it is tested against the leader's distance: a backmarker (0.93 pace) never covers the full distance itself (#6634 F8).
 const dnfDue = (c) => cars.reduce((m, o) => Math.max(m, o.prog - (o._progGift || 0)), 0) / (lapsTarget * track.total) >= c.dnfAt;
+const stallRetire = (c) => retireCar(c, "stationary");   // ONE function, not a fresh arrow per step (#7070, #6506 row 6)
 function checkRetirements(dt) {
-  AiDrive.stallSweep(cars, dt, state === "race" && !paused && raceCtl.level < 4 && raceT > 0 && !isPractice() && !isQuali(), c => retireCar(c, "stationary"));   // a parked player is retired after 60 s, under its own caution too (#5892); a red or a pause stops the clock; practice (a drill, TT) never retires (#6631)
+  AiDrive.stallSweep(cars, dt, state === "race" && !paused && raceCtl.level < 4 && raceT > 0 && !isPractice() && !isQuali(), stallRetire);   // a parked player is retired after 60 s, under its own caution too (#5892); a red or a pause stops the clock; practice (a drill, TT) never retires (#6631)
   for (const c of cars) {
     if (c.dnfAt == null || c.retired || c.finished) continue;
     // The remote human's slot was still an AI when armReliability drew its
