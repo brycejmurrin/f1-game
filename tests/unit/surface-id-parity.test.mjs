@@ -175,7 +175,7 @@ test("puddles follow the road shape on every backend — crown drains, the low s
   assert.match(tlx, /mix\(float\(0\.75\), float\(1\.25\), smoothstep\(0\.35, 0\.95, abs\(lat\)\)\)\.mul\(clamp\(float\(1\.0\)\.add\(downhill\.mul\(lat\)\.mul\(4\.0\)\), 0\.5, 1\.5\)\)/);
   // B8 (TLX-PERF-HUNT 2026-10-11): the slope derivatives sit under the uniform wetness gate
   // (dry fragments pay nothing); the expression itself is unchanged.
-  assert.match(read("js/render/three/tsl-lit.js"), /If\(U\.wetness\.greaterThan\(0\.001\), \(\) => \{\s*trkRightXZ\.assign\(dFdx\(wp\.xz\)\.mul\(dFdx\(trkA\.y\)\)\.add\(dFdy\(wp\.xz\)\.mul\(dFdy\(trkA\.y\)\)\)\)/);
+  assert.match(read("js/render/three/tsl-lit.js"), /If\(U\.wetMax\.greaterThan\(0\.001\), \(\) => \{\s*trkRightXZ\.assign\(dFdx\(wp\.xz\)\.mul\(dFdx\(trkA\.y\)\)\.add\(dFdy\(wp\.xz\)\.mul\(dFdy\(trkA\.y\)\)\)\)/);
   assert.match(tlx, /dot\(trkRightXZ\.div\(rl\), Ngeo\.xz\)\.negate\(\)/);
   assert.match(tlx, /smoothstep\(plo, plo\.add\(0\.20\), pn\.mul\(pool\)\)\.mul\(pg\)\.mul\(upFace\)/);
   const wgx = wet("js/render/webgpu/wgsl-chunks.js", "let pn = svnoise(in.wpos.xz", "RAIN RIPPLES");
@@ -277,7 +277,7 @@ test("car materials: wet look, ground AO, metal env, sidewall and carbon agree o
     // The road's world-keyed wet block (noise puddles, ripple cells) must not
     // reach a car: in rain they slid across the moving body.
     roadWetSkipsCars: { GLX: /if \(uWetness > 0\.001 && !classifiedCar\)/,
-                        TLX: /If\(U\.wetness\.greaterThan\(0\.001\)\.and\(classifiedCar\.not\(\)\)/,
+                        TLX: /If\(U\.wetMax\.greaterThan\(0\.001\)\.and\(classifiedCar\.not\(\)\)/,   // wetMax: the global or any sector slot (#6909)
                         WGX: /if \(wetness > 0\.001 && !classifiedCar\)/ },
     carWetDarken: { GLX: /albedo \*= 1\.0 - 0\.20 \* uWetness;/,
                     TLX: /albedo\.mulAssign\(U\.wetness\.mul\(0\.20\)\.oneMinus\(\)\)/,
