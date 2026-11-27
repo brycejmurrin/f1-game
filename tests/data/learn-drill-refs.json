@@ -576,6 +576,81 @@
       "goldClean": true
     }
   },
+  "telemetry": {
+    "how": "node tests/unit/drill-telemetry-vm.test.mjs --write: one boot of the Monza Telemetry drill (solo TT, sector 2 from 40 m past the S1 line); steering is SoakRun's control() law, pedals SoakRun's own except the fault: REF, EARLY (whole brake 25 m before REF's first braking point), the pick at that window's middle with the found cause, FIX IT (REF's pedals), LATE (8 m off the throttle past REF's first throttle point after its first braking zone)",
+    "metric": "seconds located (the peak-loss 100 m window's loss, once picked) or won back (a FIX IT run, in the solved window) — js/learn-drills/telemetry.js analyze/pick/score",
+    "rule": "bronze = a pick within 60 m of the peak-loss window; silver = and the cause the trace names; gold = a clean FIX IT run that wins back 60 % of a silver window and is faster overall than the solved run (#6551 §4: geometric tiers, not score thresholds; the refs pin that the scripted fault is found)",
+    "runs": {
+      "mark": {
+        "on": 131,
+        "thr": 187
+      },
+      "ref": {
+        "value": 0,
+        "clean": true,
+        "reason": "",
+        "medal": null,
+        "total": null,
+        "window": null,
+        "cause": null,
+        "fix": null
+      },
+      "early": {
+        "value": 0.194,
+        "clean": true,
+        "reason": "",
+        "medal": "silver",
+        "total": 0.21,
+        "window": {
+          "from": 90,
+          "to": 190,
+          "loss": 0.194
+        },
+        "cause": "brake",
+        "fix": null
+      },
+      "picked": {
+        "medal": "silver",
+        "value": 0.194
+      },
+      "fix": {
+        "value": 0.194,
+        "clean": true,
+        "reason": "",
+        "medal": "gold",
+        "total": 0,
+        "window": {
+          "from": 0,
+          "to": 100,
+          "loss": 0
+        },
+        "cause": null,
+        "fix": {
+          "won": 0.194,
+          "frac": 1,
+          "faster": true
+        }
+      },
+      "late": {
+        "value": 0,
+        "clean": true,
+        "reason": "",
+        "medal": null,
+        "total": 0.36,
+        "window": {
+          "from": 130,
+          "to": 230,
+          "loss": 0.367
+        },
+        "cause": "throttle",
+        "fix": {
+          "won": 0.184,
+          "frac": 0.948,
+          "faster": false
+        }
+      }
+    }
+  },
   "harvest": {
     "how": "node tests/helpers/harvest-drill-vm.mjs --write: the Monza Harvest Stop (20 m past the line at 0.8 vTop, store 0.85, marker 330 m on), one boot, a warm-up run, then RETRY before each run, full throttle, no steering, then the brake held to the stop from one frame; a frame-by-frame sweep finds the stop nearest the marker",
     "metric": "stop accuracy = 100 x (1 - |metres off the marker| / 50), floored at 0 (js/learn-drills/harvest.js score); harvest shown, not scored",

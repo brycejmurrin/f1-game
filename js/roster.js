@@ -297,9 +297,10 @@
     "js/learn-drills/tyre-heat.js",
     "js/learn-drills/taper.js",
     "js/learn-drills/grip.js",
-    "js/learn-drills/harvest.js",
     "js/learn-drills/torque.js",
-    "js/learn-drills/wake.js"
+    "js/learn-drills/wake.js",
+    "js/learn-drills/telemetry.js",
+    "js/learn-drills/harvest.js"
   ],
     LAZY_DRILL_FORK: [
     "js/race/drill-fork.js"
