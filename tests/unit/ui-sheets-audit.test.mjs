@@ -1462,3 +1462,25 @@ test("each driver's tyre-stint disclosure is named for that driver", () => {
   walk(h.els.resultsTable);
   assert.deepEqual(names, ["TYRE STINTS — VER", "TYRE STINTS — B", "TYRE STINTS — C"]);
 });
+
+// #7052: the classification row skeleton, recorded before GameResultsSheet.row built it.
+test("results classification rows keep their DOM skeleton (pin for the shared row builder)", () => {
+  const { cars } = tiedSeason();
+  const h = bootResults({ season: null, cars, seasonMode: false });
+  h.api.buildResults(cars.slice());
+  const skel = (e) => e.tagName.toLowerCase() + "." + e.className + (e.getAttribute("role") ? "[role=" + e.getAttribute("role") + "]" : "") +
+    (e.getAttribute("aria-hidden") ? "[hidden]" : "") + (e.children.length ? "(" + e.children.map(skel).join(",") + ")" : "");
+  const rows = rowsOf(h.els.resultsTable);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map((r) => r.className), ["res-row p1 you", "res-row p2"]);
+  for (const r of rows) {
+    assert.deepEqual(r.children.map((c) => c.className.split(" ")[0]).filter((c, i, a) => a.indexOf(c) === i && c.startsWith("res-")),
+      ["res-pos", "res-swatch", "res-name", "res-pts"]);
+    assert.equal(r.getAttribute("role"), "listitem");
+    assert.equal(r.children[1].getAttribute("aria-hidden"), "true", "results swatch is aria-hidden");
+    assert.equal(r.children[0].tagName.toLowerCase(), "span");
+    assert.equal(r.children.find((c) => c.classList.contains("res-name")).tagName.toLowerCase(), "div");
+    assert.equal(r.children.at(-1).className, "res-pts", "points are the last child");
+  }
+  assert.ok(skel(rows[0]).startsWith("div.res-row p1 you[role=listitem](span.res-pos,span.res-swatch[hidden],div.res-name"));
+});

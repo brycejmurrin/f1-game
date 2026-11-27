@@ -689,7 +689,7 @@ const row = (name) => () => { const b = made(); if (b) return b[name](); ready()
 const _core = Object.freeze({
   FORMAT, SPEC, isObj, GARAGE_FORMAT, GARAGE_EXCLUDED, isGarageKey, GARAGE_MAX_BYTES, SETTINGS_MAX_BYTES,
   CAREER_BAG_KEYS_MAX, garageValue, CAREER_FORMAT, CAREER_FLAVOURS, CAREER_SLOT_N, CAREER_EXCLUDED,
-  CAREER_SLOT_RE, isCareerKey,
+  CAREER_SLOT_RE, isCareerKey, cleanLivery,
 });
 
 return { FORMAT, GARAGE_FORMAT, CAREER_FORMAT, SPEC, ...api, isGarageKey, isCareerKey, garageValue, create,

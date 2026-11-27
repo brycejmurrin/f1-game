@@ -65,27 +65,8 @@ const ShareCode = (function () {
     const ms = Math.round(sec * 1000), m = Math.floor(ms / 60000);
     return m + ":" + ((ms % 60000) / 1000).toFixed(3).padStart(6, "0");
   }
-  function rgb3(a) {
-    return Array.isArray(a) && a.length >= 3 &&
-      a.slice(0, 3).every((n) => typeof n === "number" && isFinite(n));
-  }
-  function clamp01(a) { return a.slice(0, 3).map((n) => Math.min(1, Math.max(0, n))); }
-  function cleanLivery(l) {
-    if (!l || typeof l !== "object" || Array.isArray(l)) return null;
-    if (typeof l.id !== "string" || l.id.length > 64 || !rgb3(l.c1) || !rgb3(l.c2)) return null;
-    const out = { id: l.id.slice(0, 64), c1: clamp01(l.c1), c2: clamp01(l.c2) };
-    if (typeof l.name === "string") out.name = l.name.slice(0, 64);
-    let n = 0;
-    // Match garage-file imports as the optional paint schema grows.
-    const max = (typeof Liveries !== "undefined" && Liveries.FIELDS ? Liveries.FIELDS.length : 64) + 32;
-    for (const k of Object.keys(l)) {
-      if (k === "id" || k === "c1" || k === "c2" || k === "name" || k === "__proto__") continue;
-      if (n >= max) break;
-      if (rgb3(l[k])) { out[k] = clamp01(l[k]); n++; }
-      else if (typeof l[k] === "string" && l[k].length <= 64 && !(l[k] in Object.prototype)) { out[k] = l[k]; n++; }
-    }
-    return out;
-  }
+  // One sanitiser for a livery from outside: the garage-file import's (strict enum, #7052).
+  function cleanLivery(l) { return SettingsExport._core.cleanLivery(l); }
   function cleanSetup(tune) {
     if (!tune || typeof tune !== "object" || Array.isArray(tune)) return null;
     const fields = ["arbF", "arbR", "rideF", "rideR", "brakeBias"];

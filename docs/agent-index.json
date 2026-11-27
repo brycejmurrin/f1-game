@@ -1754,6 +1754,7 @@
         "tests/unit/key-binds-ui.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/liv-swatch-box-cache.test.mjs",
+        "tests/unit/livery-sanitiser-pin.test.mjs",
         "tests/unit/low-speed-lock.test.mjs",
         "tests/unit/onboard.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
