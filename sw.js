@@ -1510,6 +1510,14 @@ function packNetworkFirst(event, req, fixedCache, staleFirst) {
   })());
 }
 
+// A cached voice .bin answers at once; a miss takes the network-first path (which files it).
+function voiceBinCacheFirst(event, req) {
+  event.respondWith(caches.match(req, { cacheName: VOICE_CACHE }).catch(() => undefined).then((hit) => {
+    if (hit) return hit;
+    return new Promise((resolve) => packNetworkFirst({ waitUntil: (p) => event.waitUntil(p), respondWith: (p) => resolve(p) }, req, VOICE_CACHE));
+  }));
+}
+
 // Content-addressed pack files: assets.js asks for `assets/pack/<file>?h=<md5>`
 // with the md5 the manifest records. The URL names the content, so
 // a cached copy is always right and no revalidation round trip is owed; a
@@ -1808,8 +1816,11 @@ self.addEventListener("fetch", (event) => {
   // as pack, but filed in the fixed VOICE_CACHE (not each generation). Each response
   // races independently; voice-pack.js verifies the manifest's binary digest
   // before accepting a pair (including old bare keys).
+  // The .bin is CACHE-FIRST (#7075): the fresh .json's binary.sha256 is the revalidation, and
+  // voice-pack.js re-asks with cache:"reload" (network-first below) when a cached .bin misses it.
   if (url.pathname.includes("/assets/voice/") && !DEV_HOST) {
-    packNetworkFirst(event, req, VOICE_CACHE);
+    if (url.pathname.endsWith(".bin") && req.cache !== "reload" && req.cache !== "no-store") voiceBinCacheFirst(event, req);
+    else packNetworkFirst(event, req, VOICE_CACHE);
     return;
   }
 

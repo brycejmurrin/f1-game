@@ -1522,7 +1522,7 @@ function voiceHarness({ net, immediateTimeoutMs } = {}) {
   return h;
 }
 
-test("voice json and bin are network-first: fetch runs before a stale cache can be the only answer", async () => {
+test("voice json is network-first: fetch runs before a stale cache can be the only answer", async () => {
   const order = [];
   const h = voiceHarness({
     net: async (url) => {
@@ -1530,7 +1530,7 @@ test("voice json and bin are network-first: fetch runs before a stale cache can 
       return new Response(url.pathname.endsWith(".json") ? '{"newIndex":true}' : "new-bytes", { status: 200 });
     },
   });
-  for (const path of ["/assets/voice/george.json", "/assets/voice/george.bin"]) {
+  for (const path of ["/assets/voice/george.json"]) {
     order.length = 0;
     const ev = h.fetchEvent(new Request(`${ORIGIN}${path}`));
     const body = await (await ev.responsePromise).text();
@@ -1542,6 +1542,37 @@ test("voice json and bin are network-first: fetch runs before a stale cache can 
     assert.equal(h.stores.get("apex26-321")?.get(`${ORIGIN}${path}`), undefined,
       `${path} is not copied into the generation (audit4 B8)`);
   }
+});
+
+test("a cached voice .bin is cache-first (no fetch); cache:reload and a miss go to the network (#7075 17b)", async () => {
+  const order = [];
+  const h = voiceHarness({ net: async (url) => { order.push(url.pathname); return new Response("new-bytes", { status: 200 }); } });
+  h.stores.set("apex26-voice", new Map([[`${ORIGIN}/assets/voice/george.bin`, new Response("old-bytes")]]));
+  const hit = h.fetchEvent(new Request(`${ORIGIN}/assets/voice/george.bin`));
+  assert.equal(await (await hit.responsePromise).text(), "old-bytes");
+  await Promise.all(hit.lifetimes);
+  assert.deepEqual(order, [], "a cached .bin costs no network round trip");
+  const fresh = h.fetchEvent(new Request(`${ORIGIN}/assets/voice/george.bin`, { cache: "reload" }));
+  assert.equal(await (await fresh.responsePromise).text(), "new-bytes", "a digest-mismatch retry (cache:reload) reaches the network");
+  await Promise.all(fresh.lifetimes);
+  assert.equal(await h.stores.get("apex26-voice").get(`${ORIGIN}/assets/voice/george.bin`).text(), "new-bytes");
+  const miss = h.fetchEvent(new Request(`${ORIGIN}/assets/voice/other.bin`));
+  assert.equal(await (await miss.responsePromise).text(), "new-bytes", "a miss falls back to network-first");
+  await Promise.all(miss.lifetimes);
+});
+
+test("voice-pack re-asks past a cached .bin whose digest misses the fresh .json (#7075 17b)", async () => {
+  const good = "GOOD!", bad = "STALE";
+  const man = JSON.stringify({ clips: { a: [0, 5, 1] }, binary: { bytes: 5, sha256: createHash("sha256").update(good).digest("hex") } });
+  const calls = [];
+  const ctx = vm.createContext({ crypto: webcrypto, setTimeout, clearTimeout, setInterval: () => 1, clearInterval() {}, Log: { info() {} },
+    fetch: async (url, init) => {
+      calls.push(`${url.split("/").pop()}:${init && init.cache || ""}`);
+      return new Response(url.endsWith(".json") ? man : (init && init.cache === "reload" ? good : bad));
+    } });
+  vm.runInContext(await readFile(new URL("../../js/audio/voice-pack.js", import.meta.url), "utf8"), ctx, { filename: absSrc("js/audio/voice-pack.js") });
+  assert.equal(await ctx.VoicePack.create({}).load("george"), true);
+  assert.deepEqual(calls.filter((c) => c.endsWith(".bin:reload")), ["george.bin:reload"]);
 });
 
 test("offline, voice json and bin fall back to the cached pair", async () => {
@@ -1559,6 +1590,7 @@ test("a voice rebake during an active worker lifetime cannot play a mixed cached
   } });
   let deployed = 321, binaryFault = true, offline = false;
   const brokenBin = deferred();
+  const faults = []; brokenBin.promise.catch((e) => faults.push(e));   // the cached .bin answers first; the reload retry consumes it later
   const ordinary = installFetch();
   const h = createHarness({ fetchImpl: async (request) => {
     if (offline) throw new TypeError("offline");
@@ -1579,8 +1611,8 @@ test("a voice rebake during an active worker lifetime cannot play a mixed cached
   deployed = 322;  // old worker remains active while the replacement installs
   const ctx = vm.createContext({ crypto: webcrypto, setTimeout, clearTimeout,
     setInterval: () => 1, clearInterval() {}, Log: { info() {} },
-    fetch: async (url) => {
-      const event = h.fetchEvent(new Request(new URL(url, ORIGIN)));
+    fetch: async (url, init) => {
+      const event = h.fetchEvent(new Request(new URL(url, ORIGIN), init));
       const response = await event.responsePromise;
       if (url.endsWith(".json")) {
         // JSON arrived from the new deployment; the sibling binary fails.
