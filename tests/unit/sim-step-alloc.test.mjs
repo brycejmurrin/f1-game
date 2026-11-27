@@ -10,6 +10,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { allocPerCall } from "../helpers/alloc-per-call.mjs";
@@ -50,9 +51,11 @@ test("AiBand catch-up: factor(ctx) + applyVmax(…, out) on a reused ctx allocat
   })()`, { prelude: [BAND] });
   assert.equal(r.gcInside, false, "a GC landed inside the window: the measurement is void");
   assert.equal(r.bytesPerCall, 0, `catch-up band allocates ${r.bytes} B over 20000 calls`);
-  // The per-step caller must take the out path: no ctx literal, the shared out object.
-  const src = gameSource();
-  const site = src.slice(src.indexOf("if (!c.human && _leadHuman)"), src.indexOf("} else c._bandNow = 0;"));
-  assert.ok(site.includes("AiBand.factor(_bandCtx") || site.includes("AiBand.factor(bc)"), "game.js must pass the reused _bandCtx to AiBand.factor");
-  assert.ok(site.includes("BAND_CEIL, _bandOut)"), "game.js must pass the reused _bandOut to AiBand.applyVmax");
+  // The per-step caller must take the out path: no ctx literal, the shared out object. The band stage moved from
+  // game.js updateCar into AiPace.pre (#7258), which owns the reused ctx (_bc) and out (_out).
+  const src = readFileSync(join(ROOT, "js/physics/ai-pace.js"), "utf8");
+  const site = src.slice(src.indexOf("if (P.lead)"), src.indexOf("} else c._bandNow = 0;"));
+  assert.ok(site.includes("const bc = _bc;") && site.includes("AiBand.factor(bc)"), "AiPace.pre must pass the reused _bc to AiBand.factor");
+  assert.ok(site.includes("P.ceil, _out)"), "AiPace.pre must pass the reused _out to AiBand.applyVmax");
+  assert.ok(gameSource().includes("vmax = AiPace.pre(c, vmax, P)"), "game.js updateCar must call AiPace.pre for the band");
 });

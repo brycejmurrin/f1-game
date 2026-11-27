@@ -1222,8 +1222,8 @@ test("tyres: sprints start on softs, long races mix; a soft is up and fades, a h
 // verify-physics #14: tyrePace takes laps DONE, and c.lap counts line
 // crossings (1 on the opening lap — TyreModel's lapsDone fixed the same
 // off-by-one). Fed c.lap, the wear-off AI carried one lap of deg from the start.
-test("game.js feeds tyrePace laps done (c.lap - 1), not the crossing count", () => {
-  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
+test("AiPace.post (moved from game.js, #7258) feeds tyrePace laps done (c.lap - 1), not the crossing count", () => {
+  const game = readFileSync(join(ROOT, "js/physics/ai-pace.js"), "utf8");
   assert.match(game, /AiDrive\.tyrePace\(c\.tyreClass, Math\.max\(0, c\.lap - 1\)\)/);
   assert.doesNotMatch(game, /AiDrive\.tyrePace\(c\.tyreClass, c\.lap\)/);
 });

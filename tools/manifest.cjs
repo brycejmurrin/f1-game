@@ -299,6 +299,7 @@ const FULL = [
   "js/physics/ai-start.js",   // AiStart: launch plan + lap-1 calm policy (AiDrive re-exports)
   "js/physics/ai-drive.js",
   "js/physics/ai-band.js",   // gap catch-up vs scripted fixed pace (carve-headroom D)
+  "js/physics/ai-pace.js",   // AiPace: the AI-only vmax stages of updateCar (#7258)
   "js/physics/ai-corridor.js",
   "js/camera/offsets.js",
   "js/camera/flyby-sight.js",   // FlybySight: the flyby planner's (and frame-report's) sightline/occluder model
@@ -941,6 +942,7 @@ const HARD_EDGES = [
   ["js/physics/wall-clamp.js", "js/game.js"],            // updateCar calls WallClamp.apply(…)
   ["js/physics/ai-drive.js", "js/game.js"],         // updateCar calls AiDrive for AI racecraft
   ["js/physics/ai-band.js", "js/game.js"],          // updateCar calls AiBand for pace catch-up
+  ["js/physics/ai-pace.js", "js/game.js"],          // updateCar calls AiPace for the AI-only vmax stages
 ];
 
 // ---------------------------------------------------------------------------
@@ -2138,6 +2140,7 @@ const FULL_TIERS = {
     "js/physics/ai-start.js": "race",
     "js/physics/ai-drive.js": "race",
     "js/physics/ai-band.js": "race",
+    "js/physics/ai-pace.js": "race",
     "js/physics/ai-corridor.js": "race",
     "js/camera/offsets.js": "race",
     "js/camera/flyby-sight.js": "race",

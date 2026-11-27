@@ -4292,6 +4292,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/physics/ai-pace.js",
+      "global": "AiPace",
+      "roster": "tag"
+    },
+    {
       "path": "js/physics/ai-start.js",
       "global": "AiStart",
       "roster": "tag"
