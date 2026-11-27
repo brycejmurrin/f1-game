@@ -26,6 +26,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { withM4 } from "../helpers/mat4-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -61,6 +62,7 @@ function harness() {
     Uint32Array, isFinite, parseFloat, parseInt, Date,
     Log: { info() {}, warn: (...a) => warnings.push(a.join(" ")), error: (...a) => warnings.push(a.join(" ")), debug() {}, enabled: () => false },
   });
+  withM4(ctx);
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
                    "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });

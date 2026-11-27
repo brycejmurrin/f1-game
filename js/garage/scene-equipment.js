@@ -379,7 +379,10 @@ function buildEquipment(g, liv, ctx) {
   rearJack(g.mid, 2.85, -4.55, c1);   // outside the REAR sight line
   wheelGunStations(g, c1);
   starterCart(g.mid, -1.95, -4.75, c1);
-  const wet = ctx && (ctx.weather === "wet" || ctx.weather === "rain");
+  // Wet family minus STORM: a storm garage still racks slicks. That exclusion is
+  // the one recorded disagreement with M4.isWet (#6858 item 1), pinned by
+  // tests/unit/session-predicates.test.mjs until Bryce calls it (#7148).
+  const wet = !!ctx && M4.isWet(ctx.weather) && ctx.weather !== "storm";
   tyreTrolley(g.back, 3.65, -4.85, wet ? [3, 3, 4, 4] : [0, 0, 1, 1], c1);
   tyreTrolley(g.back, -3.65, -4.85, wet ? [3, 4, 1, 1] : [1, 2, 2, 0], c1);
   floorMarkings(g);

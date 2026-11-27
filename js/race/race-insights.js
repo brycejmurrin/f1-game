@@ -5,6 +5,7 @@ const RaceInsights = (function () {
     lap: "One full lap from the line",
     apex: "Drive the next turn and on down the straight",   // js/learn-drills/lines.js
     cooling: "Measure a cooling lap on this tyre set", braking: "Brake to a controlled stop", trail: "Release the brake into a turn",
+    thermal: "Drive to the line with the tyres in their window",   // LEARN's Tyre Thermal Lab (js/learn-drills/tyre-heat.js) scores it
     slalom: "Six clean direction changes", launch: "Standing start to racing speed",
     start: "Gain a place off the line",
     // THE RIVAL DRILLS. Every drill above judges the car against the road; these
@@ -58,6 +59,7 @@ const RaceInsights = (function () {
   const THREAT = 0.02;
   const APEX_RUNOUT = 670;     // m past the turn: the apex drill ends just past lines.js's gate
   const HOLD_CAP = 30;         // seconds of pressure that count as a full defence
+  const THERMAL_LINE = 150;    // m before the line: the Tyre Thermal Lab's finish gate (a 1-lap drill race ends at it)
   const BRAKE_REF = 50;        // m/s: a braking score is the stop scaled to this entry speed (v², #5888)
   const SLOW = 0.06, TRAFFIC_N = 3;   // a "backmarker" is 6% down on your own _vmaxNow; three of them is a stint through traffic
   const CLEAR_S = 1.5;         // held clear before a pass is a pass
@@ -174,6 +176,8 @@ const RaceInsights = (function () {
         if (!Number.isFinite(ahead)) { drill = null; return false; }
         drill.endProg = c.prog + ahead + APEX_RUNOUT;
       }
+      // THERMAL: one run to a gate THERMAL_LINE m before the timing line, in the car's own cumulative arc.
+      if (mode === "thermal") { const L = G.track && G.track.total; drill.gateProg = c.prog + (L > 0 ? ((L - c.s) % L + L) % L : 0) - THERMAL_LINE; }
       if (mode === "cooling") drill.cooling = { car: c, track: G.track, tyre: c.tyre,
         stint: c.tyreStints || 0, compound: c.tyre && c.tyre.id, wet: G.trackWetness ? G.trackWetness() : 0, start: null };
       event("practice", DRILLS[mode] + " — unscored");
@@ -403,6 +407,9 @@ const RaceInsights = (function () {
       } else if (drill.mode === "apex") {
         if (current.prog >= drill.endProg) finishDrill(current, c);
         else if (v < 1) { failDrill("stopped before the gate"); finishDrill(current, c); }
+      } else if (drill.mode === "thermal") {
+        if (current.prog >= drill.gateProg) finishDrill(current, c);
+        else if (v < 1 && now - drill.time > 3) { failDrill("the car stopped"); finishDrill(current, c); }
       } else if (drill.mode === "slalom" && drill.changes >= 6) finishDrill(current, c);
       else if (drill.rival) observeRival(c, current, v, moving, now);
     }
