@@ -239,7 +239,7 @@ function commitSession({ hw = 7, vTop = 60, total = 5386, weather = "dry", real 
     { id: "medium", cost: 0 }, { id: "soft", cost: 0 }, { id: "wet", cost: 0 },
   ] }] };
   // The AI's planner, for think(): the plan fires on its lap and not before.
-  ctx.AiDrive = { pitNow: (x) => (x.wrongTread ? "weather" : x.wear >= 1 ? "worn" : x.lapsToStop <= 0 && x.stopsLeft > 0 ? "plan" : ""),
+  ctx.AiStrategy = { pitNow: (x) => (x.wrongTread ? "weather" : x.wear >= 1 ? "worn" : x.lapsToStop <= 0 && x.stopsLeft > 0 ? "plan" : ""),
                   compoundFor: () => "medium", STRAT: { CAUTION_REACH: 6, FUEL_WEAR: 0.22 }, wornPays: realWornPays };
   // The garage row order. Real Teams.LIST is 12 entries; the count is what sets
   // how wide the row is, so the stub carries the same number rather than a
@@ -1268,7 +1268,7 @@ test("planInfo paints a cheaper estimated stop, never FREE STOP", () => {
 test("the two-compound rule binds a dry Race, never a Sprint (B6.3.6)", () => {
   const { pits, G, ctx } = commitSession();
   const asked = [];
-  ctx.AiDrive.stintPlan = (o) => { asked.push(o.twoCompound); return { stops: 1, seq: ["medium", "hard"], stints: [12, 13], lapsAt: [12] }; };
+  ctx.AiStrategy.stintPlan = (o) => { asked.push(o.twoCompound); return { stops: 1, seq: ["medium", "hard"], stints: [12, 13], lapsAt: [12] }; };
   let stage = "sprint";
   ctx.SeasonCal = { stage: () => stage };
   pits.planFor(0.5, false, 25);                     // not a championship: a plain race
@@ -1305,7 +1305,7 @@ function realWornPays(q) {
   }
   return realWornPays.fn(q);
 }
-// A session with the REAL planner (AiDrive.stintPlan) and the REAL rule
+// A session with the REAL planner (AiStrategy.stintPlan) and the REAL rule
 // (SportingRegs), because every bug below lived in the seam between them and
 // this module — a stubbed planner would agree with anything.
 function strategySession(laps) {
@@ -1535,12 +1535,12 @@ test("in a wet race an AI's planned stop fits the wet tread, not the plan's slic
   assert.equal(c.pitNext && c.pitNext.tread, 2, `…onto wets: ${JSON.stringify(c.pitNext)}`);
 });
 
-// wetLapsToStop, pinned by its numbers: think() hands its answer to AiDrive.pitNow as q.lapsToStop / q.stopsLeft.
+// wetLapsToStop, pinned by its numbers: think() hands its answer to AiStrategy.pitNow as q.lapsToStop / q.stopsLeft.
 // Fixture: 25 laps, car on lap 8 (18 to the flag), wet life 0.72 → a fresh wet runs planLaps = 18 laps.
 test("wetLapsToStop: the wet stint is cut midway between a fresh set reaching the flag and this one gone", () => {
   const s = commitSession({ weather: "rain" });
   const seen = [];
-  s.ctx.AiDrive.pitNow = (q) => { seen.push([q.lapsToStop, q.stopsLeft]); return ""; };
+  s.ctx.AiStrategy.pitNow = (q) => { seen.push([q.lapsToStop, q.stopsLeft]); return ""; };
   const c = s.car(0);
   c.human = false; c.local = false; c.lap = 8; c.pitStops = 0; c.tyreWear = 0.4;
   c.s = 0;   // AT THE LINE: the numbers below are whole laps (the part of a lap already driven comes off `left`)
@@ -1571,7 +1571,7 @@ test("wetLapsToStop counts what is LEFT of the lap the car is on, not the whole 
   // a set that would have reached the flag at ~0.95. Late in lap 2 of 5: 3.05 laps to run, 3.13 on the set.
   const s = commitSession({ weather: "rain" });
   const seen = [];
-  s.ctx.AiDrive.pitNow = (q) => { seen.push([q.lapsToStop, q.stopsLeft]); return ""; };
+  s.ctx.AiStrategy.pitNow = (q) => { seen.push([q.lapsToStop, q.stopsLeft]); return ""; };
   const c = s.car(0);
   s.G.lapsTarget = 5;
   c.human = false; c.local = false; c.lap = 2; c.pitStops = 0; c.tyreWear = 0.384;
@@ -1592,7 +1592,7 @@ test("wetLapsToStop de-fuels the measured rate: a set that reaches the flag on a
   // out reached the flag at wear 0.92-0.95, because wear runs (1 + 0.22·fuel) and the tank empties.
   const s = commitSession({ weather: "rain" });
   const seen = [];
-  s.ctx.AiDrive.pitNow = (q) => { seen.push([q.lapsToStop, q.stopsLeft]); return ""; };
+  s.ctx.AiStrategy.pitNow = (q) => { seen.push([q.lapsToStop, q.stopsLeft]); return ""; };
   const c = s.car(0);
   c.human = false; c.local = false; c.lap = 3; c.pitStops = 0; c.tyreWear = 0.431;
   c.tyre = { code: "W", tread: 2 };
@@ -1612,7 +1612,7 @@ test("wetLapsToStop: a wet set a little short of the flag with two laps left run
   // with two laps left and lost 12-20 s; the car that stayed out won at wear 0.88 with no cliff.
   const s = commitSession({ weather: "rain" });
   const seen = [];
-  s.ctx.AiDrive.pitNow = (q) => { seen.push([q.lapsToStop, q.stopsLeft]); return ""; };
+  s.ctx.AiStrategy.pitNow = (q) => { seen.push([q.lapsToStop, q.stopsLeft]); return ""; };
   const c = s.car(0);
   c.human = false; c.local = false; c.pitStops = 1; c.tyreWear = 0.6; c.s = 0;
   c.tyre = { code: "W", tread: 2 };
@@ -1707,7 +1707,7 @@ test("held is the lane's own states, and never a position on the road", () => {
 });
 
 test("stuck is the nearest car ahead, not any car inside the window", () => {
-  // think() runs the real rivalsOf (the real AiDrive.STRAT: STUCK_GAP_S 1.0 s)
+  // think() runs the real rivalsOf (the real AiStrategy.STRAT: STUCK_GAP_S 1.0 s)
   // and latches c._stuckFrom on the progress where it first read STUCK.
   const { pits, G } = strategySession(20);
   const ai = (prog, pitStops) => ({ human: false, local: false, speed: 40, lap: 8, prog, pitStops,

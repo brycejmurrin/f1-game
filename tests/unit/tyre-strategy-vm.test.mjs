@@ -106,7 +106,7 @@ test("an AI set wearing at the planned, fuel-adjusted rate is not re-cut", async
   await g.race("bahrain", "day", "dry", { laps: 50 });
   const { G } = g;
   const T = vm.runInContext("TyreModel", g.ctx);
-  const A = vm.runInContext("AiDrive", g.ctx);
+  const A = vm.runInContext("AiStrategy", g.ctx);
   const c = G.cars.find((o) => !o.human && o.pitPlan && o.pitPlan.stops >= 1);
   const before = c.pitPlan.lapsAt.slice();
   const nominal = G.tyres.planLaps(c.tyre.life, 50);
@@ -186,7 +186,7 @@ test("a wet race puts the AI field on the tread the weather wants, and nobody pi
 // (#403) planned Austria's mediums for 7.4 laps against a real 3.8.
 async function auditPlans(g, ids, LAPS) {
   const T = vm.runInContext("TyreModel", g.ctx);
-  const A = vm.runInContext("AiDrive", g.ctx);
+  const A = vm.runInContext("AiStrategy", g.ctx);
   for (const id of ids) {
     await g.race(id, "day", "dry", { laps: LAPS });
     const { G } = g;
@@ -241,7 +241,7 @@ test("an early safety car does not pull a stop onto a set that cannot reach the 
   await g.race("bahrain", "day", "dry", { laps: 12 });
   const { G } = g;
   const T = vm.runInContext("TyreModel", g.ctx);
-  const A = vm.runInContext("AiDrive", g.ctx);
+  const A = vm.runInContext("AiStrategy", g.ctx);
   const life = (cls, p) => G.tyres.planLaps(T.AI_CLASS[cls].life, 12) / (p.loadK || 1);
   const c = G.cars.find((o) => !o.human && o.pitPlan && o.pitPlan.stops === 1
     && o.pitPlan.lapsAt[0] - 2 <= A.STRAT.CAUTION_REACH && 12 - 2 > life(o.pitPlan.seq[1], o.pitPlan) * 1.1);
@@ -384,7 +384,7 @@ test("future player wet stints include the fuel they will carry", async () => {
   G.pits.replan(c);
   const replacement = G.pits.nextFor(c);
   const budget = G.tyres.planLaps(replacement.life, G.lapsTarget) / c.pitPlan.loadK;
-  const fuelWear = vm.runInContext("AiDrive.STRAT.FUEL_WEAR", g.ctx);
+  const fuelWear = vm.runInContext("AiStrategy.STRAT.FUEL_WEAR", g.ctx);
   const stops = c.pitPlan.lapsAt;
   assert.ok(stops.length >= 2, "enough wear to require replacement stints");
   for (let i = 0; i < stops.length; i++) {
