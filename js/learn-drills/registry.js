@@ -8,7 +8,8 @@
    plain field on the active drill, so game.js holds the countdown until begin() runs.
    A scored drill also names `goal` (the RaceInsights practice goal whose finish ends one run), `sample(G, acc)` (a
    read-only accumulator, run by tick() while the run is live), `score(G, last, acc)` and `medals` (DrillCard.medalOf
-   tiers). tick() turns each finished run into a result, persists it (DrillCard.record, apex26.learnMedals.v1) and
+   tiers); `stage(G)` (optional) sets a drill-scoped knob `setup` does not name and returns its undo, run by end().
+   tick() turns each finished run into a result, persists it (DrillCard.record, apex26.learnMedals.v1) and
    shows the card: RETRY is retry() (the coach's checkpoint), BACK TO LESSON quits the race, and end() then reopens
    the lesson with {type:"apex-learn-result"} posted into it (#6559 step 2, #7039).
    THE ARC NEVER REACHES THE DRIVER: nothing in js/learn-drills/ reads curvature or the racing line
@@ -64,6 +65,8 @@ const DrillRegistry = (function () {
       // The quit tail runs after restore(): it gets the player's flow (#6713).
       const quitFlow = { flow: G.flow, session: G.session };
       const guide = d.guide ? d.guide(G, port) : null;
+      /** @type {null | (() => void)} */
+      let undo = null;   // stage(G)'s own undo: a drill-scoped knob outside `setup` (the Thermal Lab's tyre wear)
       lastResult = null;
       current = {
         id,
@@ -93,6 +96,7 @@ const DrillRegistry = (function () {
           setDirtyAir(previous.dirtyAir);
           Wind.setLevel(previous.wind);
           G.coach.setPracticeGoal(previous.goal);
+          if (undo) undo();
           if (typeof MenuQuitTail !== "undefined") MenuQuitTail.keepFlow(quitFlow.flow, quitFlow.session);
         },
       };
@@ -106,6 +110,7 @@ const DrillRegistry = (function () {
       G.duel = s.duel;
       setDirtyAir(s.dirtyAir);
       Wind.setLevel(s.wind);
+      if (typeof d.stage === "function") undo = d.stage(G) || null;
       port.startRace();
       return true;
     }
