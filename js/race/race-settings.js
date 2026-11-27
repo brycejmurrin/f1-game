@@ -755,11 +755,13 @@ const RaceSettings = (function () {
           G.raceWeather = c ? c.weather : "dry";
           G.raceTimeOfDay = c ? c.tod : "default";
           const d = soloGp() ? draftFor(store.get("raceDraft", DEFAULT_DRAFT), fullLaps()) : null;
+          // MIXED resets with the weather (#7319 R4, Bryce: "reset per round"): a one-off GP's
+          // changeable pick never carries into a season round; only the solo-GP draft restores it.
+          G.raceChangeable = !!(d && d.mixed); G.wxArcPlan = null;
           if (d) {
             if (d.laps != null) G.raceLaps = d.laps;
             if (d.weather) G.raceWeather = d.weather;
             if (d.tod) G.raceTimeOfDay = d.tod;
-            if (d.mixed != null) { G.raceChangeable = d.mixed; G.wxArcPlan = null; }
           }
         }
       }
