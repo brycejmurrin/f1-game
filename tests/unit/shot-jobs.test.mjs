@@ -15,7 +15,6 @@ import {
   SHOT_USAGE,
 } from "../../tools/shot/shot-jobs.mjs";
 import { spawnSync } from "node:child_process";
-import os from "node:os";
 import { parseCaptureOptions, assertCaptureFlagsSupported, splitTrackAndDir } from "../../tools/shot/capture-options.mjs";
 import { evalVerdict } from "../../tools/shot/apex-eval.mjs";
 import { mkTmpDir } from "../helpers/tmp-dir.mjs";
@@ -275,7 +274,7 @@ test("shot-survey: --help ignores a bad --designs; bad --count/--fracs throw; --
   assert.match(help.stderr, /usage/);
   assert.notEqual(run("shot-survey.mjs", ["--tracks", "monza", "--count", "abc", "--dry-run"]).status, 0);
   assert.notEqual(run("shot-survey.mjs", ["--tracks", "monza", "--fracs", "a,b", "--dry-run"]).status, 0);
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "shot-argv-"));
+  const tmp = mkTmpDir("shot-argv-");
   try {
     const plan = path.join(tmp, "plan.json");
     const r = run("shot-survey.mjs", ["--tracks=monza,spa", "--preset=quick", `--save-plan=${plan}`, "--dry-run"]);
