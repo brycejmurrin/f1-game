@@ -1,0 +1,11 @@
+{
+  "files": {
+    "js/game.js": {
+      "gMembers": 1
+    }
+  },
+  "tree": {
+    "eagerCodeBytes": -31,
+    "typeofGuards": -3
+  }
+}
