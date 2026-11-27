@@ -805,6 +805,7 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drill-aero-golden-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
@@ -941,6 +942,7 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drill-aero-golden-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
@@ -1112,6 +1114,7 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drill-aero-golden-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
@@ -3874,6 +3877,11 @@
       "path": "js/input/touch-button-actions.js",
       "global": "TouchButtonActions",
       "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/learn-drills/aero.js",
+      "global": "AeroDrill",
+      "roster": "LAZY_LEARN"
     },
     {
       "path": "js/learn-drills/registry.js",

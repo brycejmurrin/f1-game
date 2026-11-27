@@ -251,6 +251,8 @@ function loadLearnDoor() {
   const registry = new URL("../../js/learn-drills/registry.js", import.meta.url);
   vm.runInNewContext(readFileSync(registry, "utf8") + "\nthis.DrillRegistry = DrillRegistry;", context,
     { filename: fileURLToPath(registry) });
+  const aero = new URL("../../js/learn-drills/aero.js", import.meta.url);
+  vm.runInNewContext(readFileSync(aero, "utf8") + "\nthis.AeroDrill = AeroDrill;", context, { filename: fileURLToPath(aero) });
   vm.runInNewContext(readFileSync(path, "utf8") + "\nthis.LearnDoor = LearnDoor;", context,
     { filename: fileURLToPath(path) });
   context.LearnDoor.defineDrills();   // the lazy definer LearnDoor.open() runs

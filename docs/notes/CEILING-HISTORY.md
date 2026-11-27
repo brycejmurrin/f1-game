@@ -4154,3 +4154,8 @@ Human step: `ratchet-raise`.
 (`togglePocket`, `paintPocket`) live in the eager race-settings.js; the sheet is built at boot, so there is no lazy home. `(tree) shellNodes`
 2335 → **2337** (+2): the `#rs-pocket` button and its `<small>`. Fragment: `ratchets.d/claude--pocket-weekend-7042.json`.
 Human step: `ratchet-raise`.
+
+`(tree) eagerCodeBytes` 4039481 → **4039508** (+27): `js/roster.js` is eager and lists every lazy file, so the new LAZY_LEARN file
+`js/learn-drills/aero.js` (the Aero drill moved out of the lazy learn-door.js, #6997 U4.1b) costs one roster line; no eager script is added
+and `eagerScripts` is unchanged. Fragment: `ratchets.d/claude--aero-drill-move-6997.json`.
+Human step: `ratchet-raise`.

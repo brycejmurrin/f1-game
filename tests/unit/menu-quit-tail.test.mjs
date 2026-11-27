@@ -142,6 +142,7 @@ test("Aero Lab drill: quitting returns the player to the flow and session they c
   };
   const DrillRegistry = vm.runInNewContext(readFileSync(join(ROOT, "js/learn-drills/registry.js"), "utf8") + "\n;DrillRegistry", ctx, { filename: absSrc("js/learn-drills/registry.js") });
   ctx.DrillRegistry = DrillRegistry;
+  ctx.AeroDrill = vm.runInNewContext(readFileSync(join(ROOT, "js/learn-drills/aero.js"), "utf8") + "\n;AeroDrill", ctx, { filename: absSrc("js/learn-drills/aero.js") });
   vm.runInNewContext(readFileSync(path, "utf8") + "\n;LearnDoor", ctx, { filename: absSrc("js/ui/learn-door.js") }).defineDrills();
   let goal = "none";
   const G = {

@@ -809,6 +809,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `registry.js` | `DrillRegistry` | LAZY_LEARN | DrillRegistry: the one host for LEARN's on-track scenario drills (#6920 U4.1, #6559 step 0). |
+| `aero.js` | `AeroDrill` | LAZY_LEARN | AeroDrill: LEARN's Aero Lab Scenario, moved out of js/ui/learn-door.js (#6920 U4.1b, move-only). |
 | `thumb-drill.js` | `ThumbDrill` | LAZY_LEARN | THUMB DRILL, LEARN's on-track sequel to the Vegas Thumb Trainer (#6927). |
 <!-- /@gen-arch:modules -->
 
