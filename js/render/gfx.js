@@ -85,14 +85,14 @@ const Gfx = (function () {
         return null;   // TLX.create returns null on any failure
       }
 
-      // Anything else follows the original WebGPU/WGX rules verbatim:
-      if (typeof navigator === "undefined" || !navigator.gpu) return null;
-
-      // User / test opt-out: force the WebGL2 path.
+      // Anything else follows the original WebGPU/WGX rules verbatim.
+      // User / test opt-out: force the WebGL2 path (logged even with no navigator.gpu).
       if (pref === "webgl2") {
         Log.info("gfx", "Gfx.bind backend=webgl2");
         return null;
       }
+
+      if (typeof navigator === "undefined" || !navigator.gpu) return null;
 
       // WGX must be loaded (script order). If not, fall back silently.
       if (typeof WGX === "undefined" || !WGX || typeof WGX.create !== "function") return null;

@@ -80,6 +80,13 @@ const WGXShadow = (function () {
       // in core WebGPU, not filterable — LIT textureLoads it (binding 7 is
       // unfilterable-float). Isolated: a refusal leaves a 1×1 placeholder so
       // the frame group stays valid.
+      // Creation never throws on a validation failure (invalid objects come back
+      // and the GPUError goes to the scope), so the build is error-scoped and
+      // committed only on a null pop; otherwise the 1x1 placeholder stands in
+      // and the pipeline is nulled. No error scopes (unit mock): sync path.
+      const dev = core.device;
+      const scoped = typeof dev.pushErrorScope === "function" && typeof dev.popErrorScope === "function";
+      if (scoped) dev.pushErrorScope("validation");
       try {
         blockerTex = core.device.createTexture({
           size: [512, 512], format: "r32float",
@@ -172,6 +179,22 @@ const WGXShadow = (function () {
           ]
         });
       } catch (_) { blockerPipeline = null; blockerBG = null; /* PCSS downsample optional; LIT still binds the placeholder */ }
+      if (scoped) {
+        dev.popErrorScope().then((err) => {
+          if (!err || core.device !== dev) return;
+          blockerPipeline = null; blockerBG = null;   // PCSS downsample off
+          const bad = blockerTex;
+          try {
+            blockerTex = dev.createTexture({ size: [1, 1], format: core.SCENE_FORMAT,
+              usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT });
+            blockerView = blockerTex.createView();
+          } catch (_) { return; /* keep the old view */ }
+          // The frame bind group was built (binding 7) before this pop resolved:
+          // rebuild it on the placeholder, then retire the refused texture.
+          if (core.onBlockerFallback && !core.lost) core.onBlockerFallback();
+          try { if (bad) bad.destroy(); } catch (_) { /* already lost */ }
+        }, () => { /* device lost */ });
+      }
     }
 
     function _shadowModelSrc(model) {
@@ -519,6 +542,7 @@ const WGXShadow = (function () {
       get shadowSampler() { return shadowSampler; },
       get carShadowView() { return carShadowView; },
       get lampShadowView() { return lampShadowView; },
+      get blockerPipeline() { return blockerPipeline; },
       get blockerView() { return blockerView; },
       get blockerSampler() { return blockerSampler; },
       get shadowLVPData() { return shadowLVPData; },
