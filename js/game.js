@@ -602,11 +602,11 @@ function isWetRoad() { return trackWetness() >= 0.25; }
 function isRaining() { return trackWetness() >= 0.72; }
 // The view's own sky / surface (a local storm cell, js/race/rain-cells.js), not the lap mean: lightning, thunder and wet-car SFX follow what the player is under.
 function isRainingView() { return wxArc ? wxArc.viewRainfall() >= 0.72 : isRaining(); }
-function isWetAt(c) { return (c && wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness()) >= 0.25; }
+function carWet(c) { return c && wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness(); } function isWetAt(c) { return carWet(c) >= 0.25; }   // the surface under car c (lap mean without an arc)
 // Road grip by weather AND fitted tyre (table WET_GRIP) — see docs/PHYSICS.md
 // "Weather and tyres". No car => the slick column.
 function trackWetness() { return wxArc ? wxArc.wetness() : TyreModel.wetness(raceWeather, null); } function roadWetness() { return trackWetness(); }   // the arc's lagged road state (js/race/weather-arc.js); roadWetness = alias for grip / pits / engineer
-function gripMult(c) { return TyreModel.carGrip(c, raceWeather, trackWetness(), c && wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness()); }   // grip: the SURFACE under the car (a local shower, js/race/rain-cells.js; docs/PHYSICS.md); tread: the lap mean
+function gripMult(c) { return TyreModel.carGrip(c, raceWeather, trackWetness(), carWet(c)); }   // grip: the SURFACE under the car (a local shower, js/race/rain-cells.js; docs/PHYSICS.md); tread: the lap mean
 
 // Pose Ghost + InputGhost start together on every TT lap arm so an incident /
 // reverse-crossing / spoiled class cannot leave the input stream attached to a
@@ -2910,7 +2910,7 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   // Judged on the weather AT THE FLAG: endSession() below puts the starting weather back, and a MIXED race that
   // turned wet then disqualified every car on one slick for "one dry compound" (B6.3.6 is off in a wet race).
   const cmpApplies = pits.twoCompoundApplies();
-  Scopes.exit("race", { why: "finish" }); wxArc.endSession();   // raceCtl ONLY (debris and takeovers stand at the flag); an arc that outlives the race would override the next race's weather
+  Scopes.exit("race", { why: "finish" }); wxArc.endSession();   // raceCtl + takeovers (#7077 K7); debris stands at the flag; an arc that outlives the race would override the next race's weather
   // Close every car's open stint so the results strip has an end lap. Done here
   // rather than in the sheet: a retired car stopped laps ago and its last stint
   // must end where the CAR did, not where the leader is when the flag falls.
@@ -2963,9 +2963,8 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   // PASSED (checkRetirements' own test) retires now; one that never reached its
   // dnfAt stays a runner. Solo only: a networked field is the host's classification.
   if (!netPlay.active() && !cars.some((c) => c.human && c.finished)) {
-    const dist = Math.max(1, lapsTarget * track.total);
     for (const c of cars) {
-      if (c.human || c.finished || c.retired || c.dnfAt == null || (c.prog - (c._progGift || 0)) / dist < c.dnfAt) continue;
+      if (c.human || c.finished || c.retired || c.dnfAt == null || !dnfDue(c)) continue;
       c.retired = true; c.dnf = c.dnfWhy || "mechanical"; c.dnfAt = null;
     }
   }
@@ -3439,7 +3438,7 @@ const G = {
   startWeatherArc: (from, to, dur) => wxArc.startArc(from, to, dur),
   endWeatherSession: () => wxArc.endSession(true),   // the agent's race()/tt(): a start follows, so a plan set for it stays (race-settings-vm)
   startRace, update, wrapS, quitToMenu: (t) => (qThen = t, quitToMenu()),
-  drills: () => (drills ??= DrillRegistry.create(G, { retry: coach.retry, setDirtyAir: v => { raceDirtyAir = v; } })),   // LEARN's drill host (js/learn-drills/registry.js), made on first use (LAZY_LEARN loaded); the LEARN door and __apex.drill* (js/agent/apex-drill.js)
+  drills: () => (drills ??= DrillRegistry.create(G, { retry: coach.retry, setDirtyAir: v => { raceDirtyAir = v; }, insights: () => coach.insights })),   // LEARN's drill host (js/learn-drills/registry.js), made on first use (LAZY_LEARN loaded); the LEARN door and __apex.drill* (js/agent/apex-drill.js)
   raceIntro,   // the pre-race screen, for a launch that is not RACE! (js/race/real-race.js: the Data Hub's JUMP IN)
   // OWNER COMMANDS (#6920 U2.4): game.js owns the writes to state / frozen / paused / skyViewOverride; every other module goes through these.
   cmd: { setState: (next, why) => setState(next, why || "cmd"), pause: (v, why) => setPaused(v, why) },
@@ -4187,14 +4186,14 @@ DebrisWorld.create(G);
 const incidentSim = IncidentSim.create(G, c => { if (c.human && c.isPlayer && isQuali() && c.lap >= 1) quali.markDeletedLap(c, qualiNet.hasArmed()); });
 // THE RACE SCOPE (js/core/scopes.js, #6949): which transition clears what. The subsets differ ON PURPOSE —
 // a restart never resets raceCtl (redFlagRestart continues the flag machine through raceCtl.rewound()),
-// endRace clears raceCtl only, and quitToMenu's mid-quali IncidentSim hand-back stays a direct call before
+// endRace clears raceCtl and hands takeovers back (#7077 K7), and quitToMenu's mid-quali IncidentSim hand-back stays a direct call before
 // the field swap. Look modules up at call time: tests stub DebrisWorld.reset on the sandbox. A start's
 // pass-watch clear is gridUp's (U1.1 territory); the debris prime of a start stays after makeCars.
 // #6860 phase 2 (decision B): 'episode' becomes ONE registrant calling SimState.clear(G) — WHAT is SimState's.
 // results-cam stays FIRST (a montage / ceremony is restored before the field is replaced). Left explicit: director.reset (its setCamMode needs startRaceBody's state), resultsCam.reset in startRaceFromSheet / quitToMenu / garageBack (not whys, or ordered among menu teardown).
 Scopes.register("race", { id: "tlx-mem-scope", on: ["start", "finish", "quit"], exit: (c) => globalThis.TLXShaders?.memScope?.set(c.why === "start" ? "race" : "home") });   // tlxMem scope rides the bus (#6958)
 Scopes.register("race", { id: "results-cam", on: ["start"], exit: () => { resultsCam.reset(); RaceCeremony.resetLive(); } });
-Scopes.register("race", { id: "incident-sim", on: ["start", "restart-red", "restart-declined", "episode"], touches: ["takeovers"],
+Scopes.register("race", { id: "incident-sim", on: ["start", "restart-red", "restart-declined", "finish", "episode"], touches: ["takeovers"],
   exit: () => IncidentSim.reset(), snapshot: () => { const s = IncidentSim.status(); return { owned: s.owned, count: s.count }; } });
 Scopes.register("race", { id: "raceCtl", on: ["start", "finish", "episode", "quit"], touches: ["caution"],
   exit: () => raceCtl.reset(), snapshot: () => { const i = raceCtl.info(); return { level: i.level, phase: i.phase, cause: i.cause }; } });
@@ -4729,7 +4728,7 @@ function update(dt) {
   if (_audioParamStep) {
     _s8Stamp = (_s8Stamp == null ? 0 : _s8Stamp) + 1;
     updateCaution(_s8Pres.dt); coach.update(_s8Pres.dt); raceRadio.update(_s8Pres.dt);
-    _s8Pres.dt = 0;
+    _s8Pres.dt = 0; drills?.tick();
   }
 
   // Race-control owns the finish policy as well as neutralisation rules. In a
@@ -4788,7 +4787,7 @@ function update(dt) {
     // use, never the road's curvature (|k| * speed): that squeals every corner
     // whether or not the car is sliding and leaves a genuine slide down a
     // straight silent — the most audible arc-coupling in the game.
-    GameAudio.setSkid(player.skidIntensity || 0, isWetRoad());
+    GameAudio.setSkid(player.skidIntensity || 0, isWetAt(player));
     // THE BRAKING CUE. Driven from the sim tick and not the draw, because it is
     // the one part of the driving line that has to work with the line OFF — a
     // player who cannot read the ribbon is exactly who it is for. DrivingLine
@@ -4865,7 +4864,7 @@ function collideFx(a, b, impact) {
   }
   feel.shake = Math.min(1, feel.shake + impact * 0.45);
   feel.hitStop = Math.max(feel.hitStop, impact * 0.015);   // barely any freeze, so contact doesn't feel like a stop
-  pc.collideT = 0.35;
+  pc.collideT = 0.35; if (typeof CamFx !== "undefined") CamFx.impact(impact);   // CamFx: render-only hold + flash (#7095)
   // Career reads these at settlement. Counted HERE because this hook is already
   // player-only and already debounced at 0.35 s, so one shunt is one count
   // rather than one per relaxation pass. Nothing in physics reads them back.
@@ -4968,9 +4967,9 @@ function updateCar(c, dt, ranked) {
   // pits.update refits a set, the tread and the weather cannot change inside a car's step, and driveTune.PACE cannot
   // either — so these were the same numbers at every one of their 4-17 call sites. Same operands, same order.
   // AQUAPLANING (TyreModel.aquaplane): standing water above the tread's onset speed; exactly 1 below rain-depth water.
-  const meanWet = trackWetness(), surfaceWet = wxArc ? wxArc.wetnessAt(c.s, c.x) : meanWet;
+  const meanWet = trackWetness(), surfaceWet = carWet(c);
   const speedStd = vStd(Math.abs(c.speed));
-  const aq = TyreModel.aquaInto(c, speedStd, raceWeather, surfaceWet);
+  const aq = TyreModel.aquaInto(c, speedStd, raceWeather, surfaceWet, meanWet);
   const vT = vTop(), tyreGrip = tyres.gripMul(c), trMul = 1 - (1 - tyreGrip) * TyreModel.LONG_SHARE;
   const gmC = TyreModel.carGrip(c, raceWeather, meanWet, surfaceWet) * aq.mul, gm0 = TyreModel.weatherGrip(0, meanWet);
   const perfMul = trMul * tyres.fuelAccelMul(c);
@@ -5764,7 +5763,7 @@ function updateCarLongitudinal(c, dt, ranked, S) {
     feel.shake = Math.max(feel.shake, KERB_SHAKE);     // continuous light rumble via shake
     c.kerbSndT = (c.kerbSndT || 0) - dt;
     if (soundOn && c.kerbSndT <= 0) { GameAudio.rumble(); c.kerbSndT = 0.07; }
-    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { Input.vibrate(15); Input.rumble(0.25, 90, "handles"); c.kerbHapT = 0.12; }
+    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { Input.vibrate(15); Input.rumble(0.25, 90, "kerb"); c.kerbHapT = 0.12; }
   }
 
   // Signed observed acceleration, including braking/grass, for AI lane
@@ -6668,24 +6667,25 @@ function retireCar(c, reason) {
   c.boostOn = false; c.deploying = false; OvertakeMode.reset(c); pits.clearArm(c);   // PitLane.update skips a retirement, so a car dead in the lane / box kept its crew, jacks and lifted body until the flag
   // The broadcast call. Every retirement is announced, not only the player's:
   // losing a rival is race information, and it is the only way a DNF that
-  // happened half a lap away is visible at all.
-  announce("RETIREMENT — " + c.code, 2, "info");
+  // happened half a lap away is visible at all. A stall says WHY in this ONE banner (#6634 F7).
+  announce(...(reason === "stationary" ? ["RETIRED — CAR STATIONARY FOR 60 s", 3, "penalty-hit"] : ["RETIREMENT — " + c.code, 2, "info"]));
   if (c.local && soundOn) GameAudio.offtrack();
 }
 
 // Retirements arrive by race DISTANCE, not by clock: the moment was drawn as a
 // fraction of the full race at the green light (see armReliability), so a 3-lap
 // blast and a 25-lap race lose their cars at the same points of the story.
+// A drawn failure is a fraction of the RACE, so it is tested against the leader's distance: a backmarker (0.93 pace) never covers the full distance itself (#6634 F8).
+const dnfDue = (c) => cars.reduce((m, o) => Math.max(m, o.prog - (o._progGift || 0)), 0) / (lapsTarget * track.total) >= c.dnfAt;
 function checkRetirements(dt) {
-  const dist = Math.max(1, lapsTarget * track.total);
-  AiDrive.stallSweep(cars, dt, state === "race" && !paused && raceCtl.level < 4 && raceT > 0 && !isPractice() && !isQuali(), c => { retireCar(c, "stationary"); announce("RETIRED — CAR STATIONARY FOR 60 s", 3, "penalty-hit"); });   // a parked player is retired after 60 s, under its own caution too (#5892); a red or a pause stops the clock; practice (a drill, TT) never retires (#6631)
+  AiDrive.stallSweep(cars, dt, state === "race" && !paused && raceCtl.level < 4 && raceT > 0 && !isPractice() && !isQuali(), c => retireCar(c, "stationary"));   // a parked player is retired after 60 s, under its own caution too (#5892); a red or a pause stops the clock; practice (a drill, TT) never retires (#6631)
   for (const c of cars) {
     if (c.dnfAt == null || c.retired || c.finished) continue;
     // The remote human's slot was still an AI when armReliability drew its
     // dnfAt (netPlay.start() re-roles it afterwards) — never park a car
     // another person is driving.
     if (netPlay.owns(c) || realRace.owns(c)) continue;
-    if ((c.prog - (c._progGift || 0)) / dist >= c.dnfAt) retireCar(c, c.dnfWhy);
+    if (dnfDue(c)) retireCar(c, c.dnfWhy);
   }
 }
 
@@ -8137,10 +8137,10 @@ function render(dt) {
         // tail and hanging mist (Particles.spray) — lighter on "wet" (drying
         // line) than under "rain". Strength/rate: Particles.sprayStr (vStd, so
         // the OVERALL SPEED slider cannot pin or cap it) × road wetness; only
-        // the nearest sprayCars() cars to the camera emit (sprayAdmit). The
+        // the nearest sprayCars() cars to the camera on a wet sector (isWetAt) emit. The
         // particle VELOCITY stays real m/s (A16).
         const _sdx = tmpMat[12] - camEye[0], _sdz = tmpMat[14] - camEye[2];
-        if (wet && vStd(c.speed) > 15 && Particles.sprayAdmit(_sdx * _sdx + _sdz * _sdz)) {
+        if (isWetAt(c) && vStd(c.speed) > 15 && Particles.sprayAdmit(_sdx * _sdx + _sdz * _sdz)) {
           const str = Particles.sprayStr(vStd(c.speed), Storm.sprayK(raceWeather), frame.wetness);   // storm 1.35 / rain 1 / wet 0.6
           const sxo = (((Math.random() * 3) | 0) - 1) * 0.6;   // either rear tyre or the diffuser (centre)
           Particles.spray(

@@ -24,6 +24,7 @@ var GameAudioSoundtrack = (function () {
     // the largest single item in a phone's heap, and on a rotating playlist it
     // is hit once per full rotation. GLX loads before this file (manifest order);
     // the typeof guard is the standalone harness.
+    // isMobile only, on purpose: see GameAudioSignal.lowTier.
     const IS_MOBILE = !!(typeof GLX !== "undefined" && GLX && GLX.isMobile);
     const MUSIC_CACHE = IS_MOBILE ? 1 : 2;
     // STREAMED MUSIC ON PHONES (perf-memory plan, M-4). A

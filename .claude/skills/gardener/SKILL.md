@@ -40,7 +40,7 @@ read-only Bash are agent `gardener` §apex-lsp is the method (its one home); cal
    each), Pin first, Frees (ratchet lines, `gMembers`, `topLets`), Risk, Collides (the open PRs on the same files);
    each number cites its LSP query. The body ends with `Re-measure-by: <date>` and one line
    `Tools used: lsp N · grep M · read K` (parent and agents together). A detail note too long for the body may sit on an
-   unmerged branch, linked from the issue. No PR, no commit to the deploy branch. About monthly.
+   unmerged branch, linked from the issue. The plan issue is a staging issue: it closes when every row is handed off, not when built (D-059). No PR, no commit to the deploy branch. About monthly.
 
 ## CARVE — a worker's PR, only for an item Bryce picked
 

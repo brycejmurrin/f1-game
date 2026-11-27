@@ -523,3 +523,27 @@ test("#5942: a retirement expires on a new build with one strike left; the same 
   assert.equal(next.ls.has("apex26.gfxRetired"), false);
   assert.equal(next.ls.get("apex26.gfxProbeStrikes"), "three:1", "one strike left: a backend that still dies re-retires on its first kill");
 });
+
+// #7045 (#6861 phase 4, D-058): GLX is the landing spot of every backend failure. With the adapter stubbed to null
+// and TLX's create() THROWING (not answering null), an explicit THREE pick still binds GLX and records why; the
+// unset default with no adapter binds GLX without fetching three. The browser twin: tests/specs/glx-fallback.spec.js.
+test("#7045: no adapter + a TLX create() that throws picks GLX and records gfxFallbackWhy", async () => {
+  // The shipped seam (gfx.js) around a TLX whose create() throws, so the throw is caught where production catches it.
+  const gfxSrc = readFileSync(new URL("../../js/render/gfx.js", import.meta.url), "utf8");
+  const realGfx = vm.runInNewContext(gfxSrc + ";Gfx", {
+    TLX: { create: async () => { throw new Error("forced TLX failure"); } },
+    Log: { info() {}, warn() {} }, localStorage: { getItem: () => null },
+  }, { filename: absSrc("js/render/gfx.js") });
+  const h = boot({ stored: "three", requestAdapter: async () => null, gfxCreate: (c, o) => realGfx.create(c, o) });
+  const r = await h.rb.start();
+  assert.equal(r.bound, false, "no deferred backend bound");
+  assert.deepEqual(h.calls, ["tlx.js", "GLX.init"], "TLX was fetched and refused, then GLX took the canvas");
+  assert.equal(h.ss.get("apex26.gfxBound"), "webgl2", "the bind is published as WebGL2");
+  assert.equal(h.ss.get(WHY), "three create() refused without a reason", "gfxFallbackWhy names the refused pick");
+  assert.equal(h.warns.filter((m) => m.includes("WebGL2 instead of three")).length, 1, "one warning names the pick");
+  const none = boot({ stored: null, requestAdapter: async () => null, gfxCreate: async () => { throw new Error("must not run"); } });
+  const r2 = await none.rb.start();
+  assert.equal(r2.bound, false);
+  assert.deepEqual(none.calls, ["GLX.init"], "no adapter: GLX, three never fetched");
+  assert.equal(none.ss.get("apex26.gfxAdapterWhy"), "requestAdapter() returned null");
+});

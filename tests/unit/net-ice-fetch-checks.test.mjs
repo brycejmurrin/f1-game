@@ -14,14 +14,16 @@ function boot(turnApi, respond) {
   const fetched = [];
   const sb = {
     console, Object, Array, String, Number, Promise, JSON, Math, Date, Map, Set, Error, URL,
-    setTimeout, clearTimeout, AbortController,
+    setTimeout, clearTimeout, AbortController, Uint8Array, btoa, atob,
     localStorage: { getItem: (k) => (k === "apex26.turnApi" ? turnApi : null) },
     Log: { info() {}, warn() {}, error() {} },
     fetch: (url) => { fetched.push(url); return Promise.resolve(respond()); },
   };
   const ctx = vm.createContext(sb);
-  const src = fs.readFileSync(path.join(ROOT, "js/net/ice.js"), "utf8").replace(/^const\b/gm, "var");
-  vm.runInContext(src, ctx, { filename: absSrc("js/net/ice.js") });
+  for (const f of ["js/net/bytes.js", "js/net/ice.js"]) {   // ice binds NetBytes.fetchBounded at call time
+    const code = fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var");
+    vm.runInContext(code, ctx, { filename: absSrc(f) });
+  }
   return { ice: vm.runInContext("NetIce.create()", ctx), fetched };
 }
 const list = [{ urls: "turn:relay.example:3478", username: "u", credential: "c" }];

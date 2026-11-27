@@ -35,10 +35,7 @@ var CrowdAudio = (function () {
   }
 
   function lowPower() {
-    try {
-      if (typeof GLX === "undefined" || !GLX) return false;
-      return !!(GLX.isMobile || GLX.mobileTier);
-    } catch (e) { return false; }
+    return typeof GameAudioSignal !== "undefined" && GameAudioSignal && GameAudioSignal.lowTier ? GameAudioSignal.lowTier() : false;
   }
 
   function aim(param, target, t, tau) {

@@ -68,6 +68,9 @@ function harness(opts = {}) {
   if (opts.SetupTune) sandbox.SetupTune = opts.SetupTune;
   const ctx = vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/custom-liveries.js"), "utf8"), ctx, { filename: absSrc("js/car/custom-liveries.js") });
+  // ShareCode's livery sanitiser is SettingsExport._core.cleanLivery (#7052): load the real one.
+  sandbox.Log = { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false };
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/settings-export.js"), "utf8"), ctx, { filename: absSrc("js/ui/settings-export.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, SRC), "utf8"), ctx, { filename: absSrc(SRC) });
   const ShareCode = sandbox.module.exports || vm.runInContext("ShareCode", ctx);
   return { ShareCode, store, bag, location, writes, sandbox };

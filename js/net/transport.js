@@ -473,7 +473,7 @@ const NetTransport = (function () {
       if (!pwd(offer) || !pwd(answer)) return null;
       const digest = await crypto.subtle.digest("SHA-256",
         new TextEncoder().encode("apex26-ice-restart|" + pwd(offer) + "|" + pwd(answer)));
-      return { code: [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join(""),
+      return { code: NetBytes.bytesToHexLower(new Uint8Array(digest)),
         offerer: local.type === "offer" };
     }
     function gathered() {

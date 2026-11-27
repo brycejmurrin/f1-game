@@ -11,7 +11,7 @@ function makeFixture(options = {}) {
     Log: { info() {}, warn() {} }, TrackSceneryData: { CROWD_DAY: [] } };
   vm.createContext(sandbox);
   for (const [file, name] of [
-    ['js/track/core/geom.js', 'TrackGeom'], ['js/track/scenery/graph.js', 'TrackGraph'],
+    ['js/core/mat4.js', 'M4'], ['js/track/scenery/guards.js', 'SceneryGuards'], ['js/track/core/geom.js', 'TrackGeom'], ['js/track/scenery/graph.js', 'TrackGraph'],
     ['js/track/scenery/landforms.js', 'SceneryLandforms'],
     ['js/track/scenery/nature.js', 'SceneryNature'], ['js/track/scenery/models.js', 'TrackModels'],
     ['js/track/scenery/circuit-kit.js', 'CircuitKit'],

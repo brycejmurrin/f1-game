@@ -885,6 +885,13 @@ export class Lsp {
         // Name the head from the `window.X = …` it assigns at its own top level (tsl-fx.js: window.TLXShaders), #6760.
         const body = iife(this.astOf(f)?.body.find(st => iife(st.expression) && st.expression.callee.range[0] <= starts[r.range.start.line] + r.range.start.character && starts[r.range.start.line] + r.range.start.character <= st.range[1])?.expression)?.body?.body || [];
         const heads = [...new Set(body.map(st => st.expression?.type === "AssignmentExpression" ? objectName(st.expression.left) : "").filter(n => /^window\.[\w$]+$/.test(n)))];
+        // A circuit file: `(window.TrackDefs = window.TrackDefs || []).push({ id: "monza", … })`; name the head and the id (#7071).
+        for (const st of body) {
+          const call = st.expression, tgt = call?.type === "CallExpression" && call.callee?.object;
+          if (tgt?.type !== "AssignmentExpression" || !/^window\.[\w$]+$/.test(objectName(tgt.left))) continue;
+          const id = call.arguments.map(x => x.properties?.find(pr => pr.key?.name === "id")?.value?.value).find(v => typeof v === "string");
+          heads.push(`${objectName(tgt.left)}${id ? ` id=${id}` : ""}`);
+        }
         out.push(`(anonymous IIFE${heads.length ? ` → ${heads.join(", ")}` : ""})  :${r.range.start.line + 1}  ${members.length} members, ${fns.length} functions${all ? "" : " (functions listed; all: true lists every member)"}`);
         for (const m of all ? members : fns) out.push(row(m, ""));
         continue;
@@ -1252,6 +1259,36 @@ export class Lsp {
       if (m) { const { line0, col0 } = this.posOf(f, m.index + m[0].lastIndexOf(name)); return { file: f, line0, col0 }; }
     }
     return null;
+  }
+  // `let x = null` (or a function returning it) hovers as `null`: with noImplicitAny off the checker keeps the
+  // initialiser's literal type. Say what the variable is assigned instead (#7071, #6501 row 18).
+  nullAssignments(file, line0, col0) {
+    const ast = this.astOf(file), fnTypes = new Set(["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"]);
+    if (!ast) return "";
+    const at = n => n?.loc && n.loc.start.line - 1 === line0 && n.loc.start.column === col0;
+    const summary = e => e.type === "ObjectExpression" ? `{ ${e.properties.map(pr => pr.key?.name ?? pr.key?.value ?? "…").join(", ")} }`
+      : e.type === "ArrayExpression" ? "array" : e.type === "Literal" ? (e.value === null ? "null" : typeof e.value) : this.textOf(file).text.slice(e.range[0], Math.min(e.range[1], e.range[0] + 48));
+    const assigned = (scope, name, afterRange) => {
+      const seen = new Set();
+      visit(scope, n => { if (n.type === "AssignmentExpression" && n.operator === "=" && n.left.type === "Identifier" && n.left.name === name && n.range[0] >= afterRange) seen.add(summary(n.right)); });
+      seen.delete("null");
+      return [...seen].slice(0, 4);
+    };
+    let out = "";
+    visitParents(ast, (n, parents) => {
+      if (out) return;
+      if (n.type === "VariableDeclarator" && at(n.id) && n.init?.type === "Literal" && n.init.value === null) {
+        const scope = [...parents].reverse().find(x => fnTypes.has(x.type)) || ast, a = assigned(scope, n.id.name, n.range[1]);
+        if (a.length) out = `${n.id.name} is initialised to null and later assigned: ${a.join(" | ")}`;
+      } else if (n.type === "FunctionDeclaration" && at(n.id)) {
+        const names = new Set();
+        visit(n.body, r => { if (r.type === "ReturnStatement" && r.argument?.type === "Identifier") names.add(r.argument.name); });
+        const parts = [];
+        visit(n.body, d => { if (d.type === "VariableDeclarator" && d.id.type === "Identifier" && names.has(d.id.name) && d.init?.type === "Literal" && d.init.value === null) { const a = assigned(n.body, d.id.name, d.range[1]); if (a.length) parts.push(`${d.id.name} (null) later assigned: ${a.join(" | ")}`); } });
+        out = parts.join("; ");
+      }
+    });
+    return out;
   }
   windowDecl(h, all = false) {
     const esc = h.replace(/[$.]/g, "\\$&"), declarations = [];
@@ -1895,6 +1932,10 @@ export async function callTool(lsp, name, a = {}) {
         const comments = lsp.lineComments(declAt.file, declAt.line0);
         if (comments) { body = `${body ? `${body}\n` : ""}${comments}`; note = [note, `// comments at ${declAt.file}:${declAt.line0 + 1}`].filter(Boolean).join("; "); }
       }
+      if (p && /:\s*null\s*(?:```|$)|\blet \w+: null\b|\bvar \w+: null\b/m.test(body || "")) {
+        const widened = lsp.nullAssignments(p.file, p.line0, p.col0);
+        if (widened) note = [note, `the checker shows the initial null; ${widened}`].filter(Boolean).join("; ");
+      }
       text = `${body || "(no type information)"}${p ? `\nat ${lsp.row(p.file, p.line0, p.col0)}` : ""}${note && !body?.includes(note) ? `\n(${note})` : ""}`;
     } else {
       const isDef = name === "lsp_definition", callers = name === "lsp_callers";
@@ -1906,7 +1947,9 @@ export async function callTool(lsp, name, a = {}) {
       // list every declaration for a definition; references follow the first and say so.
       const many = at.top && at.top.length > 1;
       // `create`, `init`: one name, a hundred unrelated declarations. Following one of them is a guess.
-      if (many && !isDef && at.top.length > AMBIGUOUS) throw Error(`${a.symbol} has ${at.top.length} separate top-level declarations (e.g. ${at.top.slice(0, 4).map(pos).join(", ")}): pass Head.member (e.g. Liveries.create) or file+line`);
+      // A window.X head (TrackDefs: one push per circuit file) is one global, not a hundred same-named declarations (#7071).
+      const windowHead = /text match: window\./.test(at.note || "");
+      if (many && !isDef && !windowHead && at.top.length > AMBIGUOUS) throw Error(`${a.symbol} has ${at.top.length} separate top-level declarations (e.g. ${at.top.slice(0, 4).map(pos).join(", ")}): pass Head.member (e.g. Liveries.create) or file+line`);
       let result = many && isDef ? at.top.map(l => ({ uri: lsp.uriOf(l.file), range: { start: { line: l.line0, character: l.col0 } } })) : at.result;
       // References at an implementation declaration stop at the IIFE export
       // shorthand. Re-anchor callers on that public Head.member while keeping
@@ -1924,7 +1967,7 @@ export async function callTool(lsp, name, a = {}) {
       if (Array.isArray(result) && (isDef || (!callers && a.includeDeclaration !== false)) && !at.note) await lsp.followExports(result);
       const notes = [at.note,
         many && isDef && `${at.top.length} separate top-level declarations named ${a.symbol}`,
-        many && !isDef && `${at.top.length} declarations named ${a.symbol}; these are the one at ${pos(p)} (others: ${at.top.filter(l => pos(l) !== pos(p)).slice(0, 5).map(pos).join(", ")}; pass file+line)`].filter(Boolean);
+        many && !isDef && !windowHead && `${at.top.length} declarations named ${a.symbol}; these are the one at ${pos(p)} (others: ${at.top.filter(l => pos(l) !== pos(p)).slice(0, 5).map(pos).join(", ")}; pass file+line)`].filter(Boolean);
       const head = { replace: (_, self) => `(${self}${notes.length ? "; " + notes.join("; ") : ""})` };   // built last: notes still grow below
       if (callers) {
         // Group the uses by enclosing function: who would an edit to this symbol touch?

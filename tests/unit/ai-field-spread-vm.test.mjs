@@ -47,8 +47,27 @@ for (const [track, seed] of CASES) {
     assert.ok(f.last >= 25 && f.last <= 60, `P1 to last ${f.last} s outside [25, 60] — ${tag}`);
     assert.ok(s.racePacePct.p10 >= 1.0 && s.racePacePct.p10 <= 3.8, `race pace P10 ${s.racePacePct.p10} % outside [1.0, 3.8] — ${tag}`);
     assert.ok(s.racePacePct.p20 >= 3.0 && s.racePacePct.p20 <= 7.5, `race pace P20 ${s.racePacePct.p20} % outside [3.0, 7.5] — ${tag}`);
-    assert.ok(s.mateGapPct.mean <= 1.4, `teammate gap ${s.mateGapPct.mean} % over 1.4 — ${tag}`);
+    // 1.5 (was 1.4): Bryce, `decision: A` on #7155 (comment 7210067221, 2026-11-27): the PACE-scaled wall/side-rub scrubs put monza seed 1 at 1.47 %.
+    assert.ok(s.mateGapPct.mean <= 1.5, `teammate gap ${s.mateGapPct.mean} % over 1.5 — ${tag}`);
     assert.ok(s.lapCvMedPct >= 0.2 && s.lapCvMedPct <= 1.2, `lap-time CV ${s.lapCvMedPct} % outside [0.2, 1.2] (a metronome is as wrong as a lottery) — ${tag}`);
     assert.ok(s.moved >= 10, `only ${s.moved} cars finished off their grid slot: processional — ${tag}`);
   });
 }
+
+/* Full distance (#7094): the 5-lap cases above never reach the lapped-car count or the
+ * settled pace ladder. One real-length race (bahrain, 57 laps, seed 1, HARD, wear off,
+ * ~2.7 min) pins P10 race pace to the real +1.89 % (measured 1.89-2.20 % over bahrain/monza
+ * seeds 1-2, docs/notes/AI-FIELD-SPREAD-2026-11-25.md §Full distance). The lapped-car count
+ * (real about 7, band 4-10) is pinned to the measured 11-16 instead (#7178, option B on #7148):
+ * it is pace arithmetic, not traffic. P10's gap grows at its pace deficit (1.88 vs 1.89 %/lap),
+ * and on the lead lap a car must be under ~1.62 %/lap off over 57 laps; real P10 pace is 1.89 %.
+ * Real F1 stays near 7 through SC/VSC neutralisation, and this VM race has none (no Rapier,
+ * no incidents). The note's §Where the lapped count comes from has the numbers. */
+test("bahrain seed 1 full distance: P10 race pace stays on the real ladder and the lapped count on the measured band", { timeout: 600_000 }, async () => {
+  const s = summarize(await raceSpread({ track: "bahrain", laps: 57, seed: 1, diff: "hard", wear: "off", storage: { raceGrid: null } }));
+  const tag = JSON.stringify(s);
+  assert.equal(s.laps, 57, tag);
+  assert.ok(s.racePacePct.p10 >= 1.2 && s.racePacePct.p10 <= 2.6, `full-distance race pace P10 ${s.racePacePct.p10} % outside [1.2, 2.6] (real 1.89) — ${tag}`);
+  assert.ok(s.racePacePct.p20 >= 2.5 && s.racePacePct.p20 <= 5.0, `full-distance race pace P20 ${s.racePacePct.p20} % outside [2.5, 5.0] (real 4.16) — ${tag}`);
+  assert.ok(s.lapped >= 11 && s.lapped <= 16, `full-distance lapped ${s.lapped} of ${s.cars} outside [11, 16] (no SC/VSC in the VM race; #7178) — ${tag}`);
+});
