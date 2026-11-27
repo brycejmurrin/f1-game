@@ -10,6 +10,7 @@ import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { loadDom } from "../helpers/dom-vm.mjs";
 import { cssRules, decl } from "../helpers/css-rules.mjs";
+import { loadUiShape } from "../helpers/ui-shape-load.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CAMG = fs.readFileSync(path.join(ROOT, "js/camera/cam-groups.js"), "utf8");
@@ -125,7 +126,8 @@ function load(stored = {}, opts = {}) {
   vm.createContext(ctx);
   loadDom(ctx);
   if (extra.editor) vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
-  vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
+  loadUiShape(ctx);
+  loadUiShape(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   return { H: ctx.HudLayout, written, els, ctx };
 }
 
@@ -593,7 +595,7 @@ test("apply() paints body[data-hl-set] with the camera set on screen", () => {
   const ctx = { console, document: doc, GameStore: { store: { get: (k, d) => d, set() {} } } };
   vm.createContext(ctx);
   loadDom(ctx);
-  vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
+  loadUiShape(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   ctx.HudLayout.setCam("cockpit");
   assert.equal(attrs["data-hl-set"], "cockpit");
   ctx.HudLayout.setCam("helmet");
@@ -623,7 +625,7 @@ test("fit retains a moved piece beyond the screen at its stored offset", () => {
     GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } },
   };
   vm.createContext(ctx);
-  vm.runInContext(src + "; this.HudLayout = HudLayout;", ctx);
+  loadUiShape(ctx); vm.runInContext(src + "; this.HudLayout = HudLayout;", ctx);
   ctx.HudLayout.fit();
   const r = el.getBoundingClientRect();
   assert.equal(r.right, 1060, "the player can leave the right edge outside the screen");
@@ -646,7 +648,7 @@ test("fit preserves manual geometry across safe-area and visual-viewport changes
     document: {readyState:'loading',documentElement:root,addEventListener(){},getElementById:()=>null,
       querySelector: sel => sel === '#minimap' ? map : null, querySelectorAll:()=>[]},
     GameStore:{store:{get:(k,d)=>k==='hudLayout'?saved:d,set(){throw new Error('fit must not persist');}}} };
-  vm.createContext(ctx);loadDom(ctx);vm.runInContext(SRC+';this.HudLayout=HudLayout;',ctx);
+  vm.createContext(ctx);loadDom(ctx);loadUiShape(ctx); vm.runInContext(SRC+';this.HudLayout=HudLayout;',ctx);
   ctx.HudLayout.apply();
   const initial = map.getBoundingClientRect();
   for (const vv of [viewport.visualViewport, {width:250,height:200,offsetLeft:50,offsetTop:40}, null]) {
@@ -681,7 +683,7 @@ test("fit preserves independently edited pieces sharing an offset", () => {
   };
   vm.createContext(ctx);
   loadDom(ctx);
-  vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
+  loadUiShape(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   ctx.HudLayout.setCam("cockpit");
   assert.ok(ot.hasAttribute("data-hl-user") && aero.hasAttribute("data-hl-user"), "stored STANDARD cockpit edits own both widgets");
   ctx.HudLayout.fit();
@@ -716,7 +718,7 @@ test("fit never brings an edited block on screen or pushes its edited neighbour"
     };
     vm.createContext(ctx);
     loadDom(ctx);
-    vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
+    loadUiShape(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
     ctx.HudLayout.setCam("cockpit");
     assert.ok([tyre, energy, bb].every((el) => el.hasAttribute("data-hl-user")), "stored STANDARD cockpit edits own all three widgets");
     ctx.HudLayout.fit();
@@ -760,7 +762,7 @@ test("fit leaves size-only edited pieces at their requested positions", () => {
   };
   vm.createContext(ctx);
   loadDom(ctx);
-  vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
+  loadUiShape(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   ctx.HudLayout.fit();
   const t = tower.getBoundingClientRect(), m = map.getBoundingClientRect();
   assert.equal(t.left, 432);
@@ -795,7 +797,7 @@ test("clearControls preserves manual placement and discards stale automatic clea
   };
   vm.createContext(ctx);
   loadDom(ctx);
-  vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
+  loadUiShape(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   ctx.HudLayout.fit();
   const r = rel.getBoundingClientRect();
   // Wholly off the screen is a parked piece: #5678's race-time keep leaves it where the player put it.
@@ -870,7 +872,7 @@ function load3({ stored = {}, classes = [], live = true, hide = "", rootAttrs = 
   loadDom(ctx);
   vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   loadDom(ctx);
-  vm.runInContext(SRC + "; this.HudLayout = HudLayout; this.CamGroups = CamGroups;", ctx);
+  loadUiShape(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout; this.CamGroups = CamGroups;", ctx);
   return { H: ctx.HudLayout, CG: ctx.CamGroups, written, els, cls, hud, rootAttrs, bodyAttrs, byId };
 }
 
@@ -1212,7 +1214,7 @@ test("every edited widget retains geometry through clearance and high-scale pack
     GameStore: { store: { get: (k, d) => k === "hudLayout" ? saved : k === "hudScale" ? 200 : d,
       set() { throw new Error("automatic passes must not persist"); } } } };
   loadDom(ctx);
-  vm.createContext(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
+  vm.createContext(ctx); loadUiShape(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   for (const [i, [id, , sel]] of Array.from(ctx.HudLayout.ELEMENTS).entries()) {
     const el = fakeEl(); el.id = sel.replace(/^#/, "");
     el.style.getPropertyValue = k => el.props[k] || "";
@@ -1288,7 +1290,7 @@ test("measured clearance protects instruments and controls without changing save
       } },
     GameStore: { store: { get: (k,d) => k === "hudLayout" ? stored : d, set() {} } } };
   loadDom(ctx);
-  vm.createContext(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
+  vm.createContext(ctx); loadUiShape(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   const overlap = (a,b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
   assert.ok(rel.hasAttribute("data-hl-user"), "saved Relative offset owns its placement");
   const manualRelative = rel.getBoundingClientRect();
@@ -1364,7 +1366,7 @@ test("optional strategy compacts, explains a drop, and restores when space retur
       querySelectorAll: (sel) => sel.includes("#pausebtn") ? [control] : [] },
     GameStore: {store: {get: (k,d) => d,set(){throw new Error("fit must not save");}}} };
   loadDom(ctx);
-  vm.createContext(ctx);vm.runInContext(SRC + "; this.HudLayout = HudLayout;",ctx);
+  vm.createContext(ctx);loadUiShape(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;",ctx);
   ctx.HudLayout.clearReadouts();
   assert.ok(strat.hasAttribute("data-col-compact"), "one NEXT row fits the remaining strip");
   assert.ok(!strat.hasAttribute("data-col-drop"));
@@ -1392,7 +1394,7 @@ test("clearance keeps an unobstructed readout inside hardware safe areas", () =>
       body:{classList:{contains:()=>false},setAttribute(){}},querySelector:(sel)=>sel==="#hud-damage"?damage:null,querySelectorAll:()=>[]},
     GameStore:{store:{get:(k,d)=>d,set(){throw new Error("must not save");}}}};
   loadDom(ctx);
-  vm.createContext(ctx);vm.runInContext(SRC+";this.HudLayout=HudLayout;",ctx);
+  vm.createContext(ctx);loadUiShape(ctx); vm.runInContext(SRC+";this.HudLayout=HudLayout;",ctx);
   ctx.HudLayout.clearReadouts();
   const r=damage.getBoundingClientRect();
   assert.equal(r.left,34);assert.equal(r.top,19);
@@ -1410,7 +1412,7 @@ test("damage wraps into a narrow slot without dropping diagnostic text or saving
     body:{classList:{contains:()=>false},setAttribute(){}},querySelector:(sel)=>sel==="#hud-damage"?damage:null,
     querySelectorAll:(sel)=>sel.includes("#pausebtn")?[instrument]:[]},GameStore:{store:{get:(k,d)=>d,set(){throw new Error("must not save");}}}};
   loadDom(ctx);
-  vm.createContext(ctx);vm.runInContext(SRC+";this.HudLayout=HudLayout;",ctx);ctx.HudLayout.clearReadouts();
+  vm.createContext(ctx);loadUiShape(ctx); vm.runInContext(SRC+";this.HudLayout=HudLayout;",ctx);ctx.HudLayout.clearReadouts();
   assert.ok(damage.hasAttribute("data-col-compact"));assert.ok(!damage.hasAttribute("data-col-drop"));
   assert.equal(damage.textContent,"FW R 100% SUSP");
   const r=damage.getBoundingClientRect();assert.equal(r.left,200);assert.ok(r.right<=296);
@@ -1428,7 +1430,7 @@ test("a collapsed radio lane reopens for measured placement without changing set
     body:{classList:{contains:()=>false},setAttribute(){}},querySelector:(sel)=>sel==="#announce"?radio:null,
     querySelectorAll:(sel)=>sel.includes("#pausebtn")?[control]:[]},GameStore:{store:{get:(k,d)=>d,set(){throw new Error("must not save");}}}};
   loadDom(ctx);
-  vm.createContext(ctx);vm.runInContext(SRC+";this.HudLayout=HudLayout;",ctx);ctx.HudLayout.clearReadouts();
+  vm.createContext(ctx);loadUiShape(ctx); vm.runInContext(SRC+";this.HudLayout=HudLayout;",ctx);ctx.HudLayout.clearReadouts();
   assert.ok(!radio.hasAttribute("data-lane-collapsed")&&!radio.hasAttribute("data-col-drop"));
   assert.equal(p["--announce-lane-w"],"292px");
   const r=radio.getBoundingClientRect();assert.ok(r.left>=154||r.top>=104);
@@ -1475,7 +1477,7 @@ test("optional input trace yields to occupied space and restores without saving"
     querySelectorAll: sel => sel.includes("#pausebtn") ? [control] : [] },
     GameStore: {store: {get: (k,d) => d,set(){throw new Error("fit must not save");}}} };
   loadDom(ctx);
-  vm.createContext(ctx);vm.runInContext(SRC + "; this.HudLayout = HudLayout;",ctx);
+  vm.createContext(ctx);loadUiShape(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;",ctx);
   ctx.HudLayout.clearReadouts();
   assert.ok(inputs.hasAttribute("data-col-drop"));
   loadDom(ctx);
@@ -1510,7 +1512,7 @@ test("only the unplaced touch broadcast map clears pedals without resizing or sa
     querySelector:sel=>elements[sel]||null,querySelectorAll:sel=>sel.includes("#pausebtn")?[map,brake,tower,tyre]:sel===".touchbtn, .steerbtn, .shiftbtn"?[brake]:[]};
   const ctx = {window:viewport,document:doc,GameStore:{store:{get:(k,d)=>d,set(){throw Error("placement must not save");}}}};
   loadDom(ctx);
-  vm.createContext(ctx);vm.runInContext(SRC+";this.HudLayout=HudLayout;",ctx);
+  vm.createContext(ctx);loadUiShape(ctx); vm.runInContext(SRC+";this.HudLayout=HudLayout;",ctx);
   const fit = () => {ctx.HudLayout.clearReadouts();return map.getBoundingClientRect();};
   const hit = (a,b) => a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;
   const placed = fit();
@@ -1556,7 +1558,7 @@ function visibilityEditor(phone = false) {
   loadDom(ctx);
   vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   loadDom(ctx);
-  vm.runInContext(SRC + '; this.HudLayout = HudLayout;', ctx);
+  loadUiShape(ctx); vm.runInContext(SRC + '; this.HudLayout = HudLayout;', ctx);
   ctx.HudLayout.build();
   const choose = (id, value) => { const el = document.getElementById(id); assert.ok(el, id); el.value = value; dom.dispatch(el, { type: 'change', bubbles: true }); };
   return { H: ctx.HudLayout, E: ctx.HudElements, document, choose, owners, stored, changes, ctx, dom,
@@ -1751,7 +1753,7 @@ test("clearance reuses an unchanged slot as an obstacle without writing zero cor
       querySelector: (sel) => elements[sel] || null, querySelectorAll: () => [] },
     GameStore: { store: { get: (k, d) => d, set() { throw new Error("clearance must not save"); } } } };
   loadDom(ctx);
-  vm.createContext(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx, { filename: absSrc("js/ui/hud-layout.js") });
+  vm.createContext(ctx); loadUiShape(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx, { filename: absSrc("js/ui/hud-layout.js") });
   const resetCounts = () => { for (const count of Object.values(counters)) count.reads = count.writes = 0; };
   resetCounts();
   ctx.HudLayout.clearReadouts();
@@ -2028,7 +2030,7 @@ test("the portrait chase seed keeps SPEED, ERS, OT and AERO off each other, the 
 
 test("a rotation re-paints the chase chips with the new screen's seed", () => {
   const handlers = [];
-  const ctx = { window: { innerWidth: 852, innerHeight: 393, addEventListener: (type, fn) => { if (type === "resize") handlers.push(fn); } } };
+  const ctx = { window: { innerWidth: 852, innerHeight: 393, addEventListener: (type, fn, opts) => { if (type === "resize" && !(opts && opts.capture)) handlers.push(fn); } } };
   const { els } = load({}, { phone: true, ctx });
   const x = () => els["#hud-speed"].props["--hl-x"];
   assert.equal(x(), "10.04");
