@@ -3439,7 +3439,7 @@ const G = {
   startWeatherArc: (from, to, dur) => wxArc.startArc(from, to, dur),
   endWeatherSession: () => wxArc.endSession(true),   // the agent's race()/tt(): a start follows, so a plan set for it stays (race-settings-vm)
   startRace, update, wrapS, quitToMenu: (t) => (qThen = t, quitToMenu()),
-  drills: () => (drills ??= DrillRegistry.create(G, { retry: coach.retry, setDirtyAir: v => { raceDirtyAir = v; } })),   // LEARN's drill host (js/learn-drills/registry.js), made on first use (LAZY_LEARN loaded); the LEARN door and __apex.drill* (js/agent/apex-drill.js)
+  drills: () => (drills ??= DrillRegistry.create(G, { retry: coach.retry, setDirtyAir: v => { raceDirtyAir = v; }, insights: () => coach.insights })),   // LEARN's drill host (js/learn-drills/registry.js), made on first use (LAZY_LEARN loaded); the LEARN door and __apex.drill* (js/agent/apex-drill.js)
   raceIntro,   // the pre-race screen, for a launch that is not RACE! (js/race/real-race.js: the Data Hub's JUMP IN)
   // OWNER COMMANDS (#6920 U2.4): game.js owns the writes to state / frozen / paused / skyViewOverride; every other module goes through these.
   cmd: { setState: (next, why) => setState(next, why || "cmd"), pause: (v, why) => setPaused(v, why) },
@@ -4729,7 +4729,7 @@ function update(dt) {
   if (_audioParamStep) {
     _s8Stamp = (_s8Stamp == null ? 0 : _s8Stamp) + 1;
     updateCaution(_s8Pres.dt); coach.update(_s8Pres.dt); raceRadio.update(_s8Pres.dt);
-    _s8Pres.dt = 0;
+    _s8Pres.dt = 0; drills?.tick();
   }
 
   // Race-control owns the finish policy as well as neutralisation rules. In a

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
@@ -231,7 +231,7 @@ test("Telemetry axis switching uses the other trace past the reference's last sa
 function element() {
   return {
     hidden: false, width: 0, height: 0,
-    setAttribute() {}, append() {}, remove() { this.removed = true; },
+    setAttribute() {}, append() {}, addEventListener() {}, remove() { this.removed = true; },
     getContext: () => null,
   };
 }
@@ -275,7 +275,7 @@ test("Aero Lab drill restore() puts flow and session back", () => {
   const { DrillRegistry } = loadLearnDoor();
   const { G, engaged } = makeG();
   let dirtyAir = G.raceDirtyAir;
-  const drills = DrillRegistry.create(G, { setDirtyAir: level => { dirtyAir = level; } });
+  const drills = DrillRegistry.create(G, { setDirtyAir: level => { dirtyAir = level; }, reopenLesson() {} });
   drills.launch("aero");
   const drill = drills.active();
 
@@ -329,4 +329,48 @@ test("Button Trainer's arrow challenge is reachable and its saved-BRAKE preset r
   assert.equal(JSON.stringify(saved), JSON.stringify({scenario: "pedals", start: 100, end: 20, travel: 74, curve: "quick", deadPx: "6"}));
   assert.equal(lesson.evaluate({...initial, ...saved}).success, true);
   assert.equal(loadButtons().presets[0][0] === "Your saved BRAKE", false, "no store, no personal preset");
+});
+
+// LESSON COVERAGE (#6559 step 3, #7039). Every curriculum lesson has a registered LEARN drill, or a row here. PENDING is
+// SHRINK-ONLY: it was seeded with the 13 lessons #6559 §2 plans a drill for, and each drill PR deletes its lesson's row
+// (the test fails while a drilled lesson keeps one). TRAINERS are lessons that are already a hands-on trainer outside
+// DrillRegistry (the Button Trainer lab, the Vegas thumb trainer and its on-track drill, js/learn-drills/thumb-drill.js).
+const PENDING = Object.freeze([
+  "chassis", "suspension", "deployment", "hybrid", "brake-blend", "tyre-heat", "braking", "racing-line", "telemetry",
+  "rain", "vsc", "pit-duel", "stint",
+]);
+const PENDING_SEED = 13;
+const TRAINERS = Object.freeze(["buttons", "thumbs", "thumbs-drive"]);
+
+/** The curriculum ids and the lessons with a registered drill: registry.js, learn-door.js's definer and every
+ *  js/learn-drills/<id>.js (one DrillRegistry.define per file, #6559 §1a) in one context. */
+function coverage() {
+  const context = loadLearnDoor();
+  const dir = new URL("../../js/learn-drills/", import.meta.url);
+  for (const f of readdirSync(dir).filter(f => f.endsWith(".js") && f !== "registry.js").sort()) {
+    vm.runInNewContext(readFileSync(new URL(f, dir), "utf8"), context, { filename: fileURLToPath(new URL(f, dir)) });
+  }
+  const drilled = new Set(vm.runInNewContext("DrillRegistry.ids().map(id => DrillRegistry.get(id).lesson)", context));
+  return { ids: [...context.LearnDoor.lessonIds()], drilled };
+}
+
+test("lesson coverage: every curriculum lesson has a registered drill, a PENDING row or a TRAINERS row", () => {
+  const { ids, drilled } = coverage();
+  assert.ok(ids.length >= 14 && ids.includes("aero"), "LearnDoor.lessonIds() reads the curriculum");
+  assert.ok(drilled.has("aero"), "the Aero Lab drill is registered");
+  const missing = ids.filter(id => !drilled.has(id) && !PENDING.includes(id) && !TRAINERS.includes(id));
+  assert.deepEqual(missing, [], "a lesson with no drill: register one, or (a new lesson only) add a PENDING row");
+  const stale = PENDING.filter(id => drilled.has(id));
+  assert.deepEqual(stale, [], "a drilled lesson keeps its PENDING row: delete it in the drill's PR");
+  assert.deepEqual(PENDING.filter(id => !ids.includes(id)), [], "a PENDING row names a lesson that is gone");
+  assert.deepEqual(TRAINERS.filter(id => !ids.includes(id) || drilled.has(id)), [], "a TRAINERS row is gone or now drilled");
+  assert.ok(PENDING.length <= PENDING_SEED, "PENDING only shrinks: a new lesson ships with its drill");
+  assert.equal(new Set(PENDING).size, PENDING.length);
+});
+
+test("lesson coverage fails on an undrilled lesson with no row (positive control)", () => {
+  const { ids, drilled } = coverage();
+  const pending = PENDING.filter(id => id !== "stint");
+  const missing = ids.filter(id => !drilled.has(id) && !pending.includes(id) && !TRAINERS.includes(id));
+  assert.deepEqual(missing, ["stint"]);
 });
