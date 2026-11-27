@@ -40,8 +40,20 @@ test("OfflineAudioContext engine pitch tracks rev; screech layer crossfade is au
   await page.evaluate(() => {
     window.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
   });
+  // WAIT FOR THE WHOLE BUNDLE, NOT engine.js. GameAudio stops being the stub
+  // when engine.js lands, but LAZY_AUDIO keeps evaluating (music-lib … panel,
+  // driving-cues) and onAudioReady then runs each part in its own yielded task
+  // (AudioPanel.init's setSound, music, crowd bind). Those land on whatever
+  // context GameAudio holds — on a loaded runner, the OfflineAudioContext this
+  // test is rendering — so the render's level depended on runner speed. Pages
+  // run 45917673481 on f0584547 (5.8 s Navigate): rev=0.25 f0=243 vs
+  // scheduled 272.48, the search window's low edge (the near-silent
+  // signature above). apex:audio:ready is marked after every file and every
+  // ready part; nothing from the bundle is queued after it (audio-smoke's gate).
   await page.waitForFunction(
-    () => typeof GameAudio !== "undefined" && !GameAudio._stub && typeof GameAudio.initOffline === "function",
+    () => typeof GameAudio !== "undefined" && !GameAudio._stub && typeof GameAudio.initOffline === "function"
+      && typeof performance !== "undefined" && performance.getEntriesByName
+      && performance.getEntriesByName("apex:audio:ready").length > 0,
     null, { polling: 100, timeout: BOOT_MS }
   );
 
