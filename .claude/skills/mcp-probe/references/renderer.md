@@ -72,7 +72,7 @@ bind groups match, buffers upload. It is not a visual one. For **pixels**:
 ```sh
 node tools/gfx/gfx-probe.mjs --backend webgpu --lite montreal  # visible #game (primary)
 node tools/gfx/wgx-capture.mjs montreal --lite                 # readback oracle → frame.png
-node tools/gfx/wgx-lavapipe-probe.mjs montreal --lite   # second Vulkan stack (Lavapipe)
+node tools/gfx/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe --lite montreal   # second Vulkan stack (Lavapipe)
 node tools/gfx/gfx-probe.mjs --backend three --lite montreal   # TLX via WebGL2
 ```
 

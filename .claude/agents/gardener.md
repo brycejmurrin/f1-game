@@ -59,5 +59,5 @@ tools used: lsp <n> · grep <m> · read <k>
 spec, a save or the bridge reads (skill `gardener` §Never). Keep the run well under 10 minutes and
 re-emit every row in your final message; before your last two turns, deliver what you have, gaps on `not covered:`.
 
-Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); what a card may write is its `tools:` list, not a hook.
+Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/chrome-start, no --wait); what a card may write is its `tools:` list, not a hook.
 If a Bash call is denied, mark only that item UNREAD and continue with the LSP tools, Read, Grep and Glob; if every route is denied, return your contract block marked UNREAD. Never route around a denial.

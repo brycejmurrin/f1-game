@@ -97,6 +97,6 @@ your output marked partial (it can resume you), and that output is only what
 your last message said: a stop mid-tool-call hands back almost nothing.
 Budget the hand-back, not the work.
 
-Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); what a card may write is its `tools:` list, not a hook.
+Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/chrome-start, no --wait); what a card may write is its `tools:` list, not a hook.
 On the first permission denial (a denied Bash call, tool or path), stop and return your contract block marked UNREAD; never route around a denial.
 Report a needed fix; the parent session decides.
