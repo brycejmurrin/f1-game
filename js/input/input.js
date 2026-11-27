@@ -752,6 +752,10 @@ const Input = (function () {
     if (before === "keyboard" && after !== "keyboard") releaseKeyLatches();
     onControlDeviceChange?.();
   }
+  // "Press any button" hint: visible until a pad has connected (browsers only expose a pad after a press).
+  function syncPadConnectHint() {
+    try { const h = document.getElementById("pm-pad-connect-hint"); if (h) h.hidden = padPresent(); } catch (_) { /* no DOM */ }
+  }
   function setPhysicalPadAvailable(available) {
     if (physicalPadAvailable === available) return;
     physicalPadAvailable = available;
@@ -2703,8 +2707,10 @@ const Input = (function () {
       window.addEventListener("orientationchange", onScreenRotate);
     }
 
+    syncPadConnectHint();
     window.addEventListener("gamepadconnected", function (e) {
       padConnected = true;
+      syncPadConnectHint();
       _padLostAt = 0;
       _padNextProbeMs = 0;
       if (e.gamepad) padPedalSeenByDevice.delete(padKey(e.gamepad, e.gamepad.index));
@@ -2720,6 +2726,7 @@ const Input = (function () {
       try { const gps = navigator.getGamepads ? navigator.getGamepads() : []; for (let i = 0; i < gps.length; i++) if (gps[i] && gps[i].connected && gps[i].index !== (e.gamepad && e.gamepad.index)) still = true; } catch (_) { /* no API */ }
       if (!still) { _padLostAt = nowMs(); _padNextProbeMs = 0; } else { _padLostAt = 0; _padNextProbeMs = 0; }
       padConnected = still;
+      syncPadConnectHint();
       const lostActive = e.gamepad && padPrevByIndex.get(e.gamepad.index) === padPrevButtons;
       const lostDrivingPad = drivingPadKey !== null &&
         (e.gamepad ? drivingPadKey === padKey(e.gamepad, e.gamepad.index) : !still);

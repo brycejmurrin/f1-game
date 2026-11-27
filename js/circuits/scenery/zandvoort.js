@@ -69,7 +69,7 @@
         for (let i = 0; i <= 9 && !seen; i++) {
           const ang = i / 9 * 6.2832, rr = i === 9 ? 0 : w * 0.42;
           // Use the rendered terrain footprint: the outer ribbon ends within some rings.
-          const g = Tracks.terrainY(track, x + Math.cos(ang) * rr, z + Math.sin(ang) * rr);
+          const g = terrainYAt(x + Math.cos(ang) * rr, z + Math.sin(ang) * rr);
           if (g == null) continue;          // off the ribbon: no ground to judge by
           judged++;
           seen = g - top <= 0.02;

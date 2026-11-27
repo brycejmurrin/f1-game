@@ -2,7 +2,7 @@
 const CircuitDetailsPanel = (function () {
 "use strict";
 
-function create({ G, whenCircuit, favList, toggleFav, drawElevProfile, drsZoneLapMetre, drsZoneWraps, vt }) {
+function create({ G, whenCircuit, favList, toggleFav, vt }) {
 // The track-detail map's size observer (openTrackDetail). Module-scoped so a
 // re-open disconnects the previous one instead of stacking a fresh observer —
 // and a stale closure over the PREVIOUS circuit — on every visit.
@@ -146,7 +146,7 @@ function openTrackDetail() {
   // Elevation sparkline — same painter as the preview chart above; here the
   // canvas has a WRAPPER that carries the hidden state (the preview canvas
   // hides itself), which was the only real difference between the two blocks.
-  drawElevProfile(document.getElementById("track-detail-elev"), t,
+  TrackMaps.drawElevProfile(document.getElementById("track-detail-elev"), t,
                   document.getElementById("track-detail-elev-wrap"));
 
   // Active-aero (straight-mode) zones with metre positions — the 2026 rules have no DRS
@@ -162,10 +162,10 @@ function openTrackDetail() {
       drsList.replaceChildren(...dz.map((zone, index) => {
         const row = document.createElement("div");
         row.className = "tdd-zone";
-        const start = drsZoneLapMetre(zone.a, trackLen);
-        const end = drsZoneLapMetre(zone.b, trackLen) + " m";
+        const start = TrackMaps.drsZoneLapMetre(zone.a, trackLen);
+        const end = TrackMaps.drsZoneLapMetre(zone.b, trackLen) + " m";
         row.textContent = "Zone " + (index + 1) + ": " + start + " m";
-        if (drsZoneWraps(zone)) {
+        if (TrackMaps.drsZoneWraps(zone)) {
           const marker = document.createElement("span");
           marker.setAttribute("aria-label", "crossing start/finish");
           marker.textContent = " → S/F → ";
@@ -225,7 +225,7 @@ function openTrackDetail() {
     // measure and redraw a hidden modal, and never retain its circuit closure.
     if (modal.hidden) return;
     // The strip was drawn while the modal was display:none (a zero box, so deferred).
-    drawElevProfile(document.getElementById("track-detail-elev"), t, document.getElementById("track-detail-elev-wrap"));
+    TrackMaps.drawElevProfile(document.getElementById("track-detail-elev"), t, document.getElementById("track-detail-elev-wrap"));
     // Fit the canvas to the wrap in local (pre-zoom) CSS pixels. clientWidth
     // is correct inside `zoom: var(--ui-scale)` sheets; gBCR would mix visual
     // pixels and re-introduce stretch at UI SIZE ≠ 100%.

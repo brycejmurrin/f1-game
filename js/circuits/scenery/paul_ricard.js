@@ -592,7 +592,7 @@
       cameraTower(K(0.910), -1, 70, { h: 17 });
 
       {
-        const fieldGround = (x, z) => Tracks.terrainY(api.track, x, z) ?? groundUnder(x, z);
+        const fieldGround = (x, z) => terrainYAt(x, z) ?? groundUnder(x, z);
         // Follow the grade between the two ends of each planting strip.
         const plantRow = (a, offset, length, width, height, color) => {
           const ends = [-0.5, 0.5].map((sign) => {

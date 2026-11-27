@@ -1,0 +1,1 @@
+Improved: DualSense controllers now label CREATE and TOUCHPAD (the DualShock 4 keeps SHARE), Controls shows a "press any button" hint until a pad connects, kerbs rumble with an alternating heavy/light texture, and trigger rumble is easier to feel at low intensity (#7043).
