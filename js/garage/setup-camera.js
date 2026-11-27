@@ -893,7 +893,7 @@ function exteriorPick(ctx, session) {
   const arriving = !driveOut && !!(arrival.state && arrival.state.active), seq = !!driveOut || arriving, pin = arriving && homeScene;
   const t = pin ? pin.track : (session || seq) && Tracks.LIST[G.trackIdx] || ctx.track, team = Teams.LIST[G.teamIdx];
   const tod = pin ? pin.tod : home.active && home.mode === "night" ? "night" : G.raceTimeOfDay || "default", weather = pin ? pin.weather : G.raceWeather || "dry";
-  const night = tod === "night" || tod === "dusk" || tod === "dawn" || (tod === "default" && !!(t && t.night));
+  const night = GarageExperience.isNight(tod, t);
   const p = exteriorSelection;
   if (!p || p.trackId !== (t && t.id) || p.teamId !== (team && team.id) || p.weather !== weather || p.tod !== tod || p.night !== night)
     exteriorSelection = { trackId: t && t.id, teamId: team && team.id, def: t, weather, tod, night };
