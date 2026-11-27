@@ -47,3 +47,15 @@ Real-length races, AI-only, HARD, wear off, shipped grid (`--set raceGrid=null`)
 | real F1 | +1.89 % | +4.16 % | 0.39 % | 0.95 % | about 7 | |
 
 The post-normalisation HARD pace ladder sits on the real one (P10 1.89-2.20 %, P20 below real). The lapped count does not: 13-14 of 21 against about 7 (band 4-10). The ladder alone puts P10 about a lap down over 57 laps, so the excess is traffic loss in the midfield, not pace. The P10 pace pin is in the test; the lapped-car assertion waits on a decision (tune traffic loss, or accept and record).
+
+### Where the lapped count comes from (#7178, 2026-11-27)
+
+The extra lapped cars are not traffic loss. Bahrain 57 laps, HARD, shipped grid, tip 2bf756de + PR #7174:
+
+- P10's gap grows by exactly its pace deficit: `ratePct.p10` 1.88 % against race pace P10 1.89 % (seed 1), 1.98 % against 2.08 % (seed 2). If traffic cost the midfield time, the gap would grow faster than the median lap deficit.
+- Mean lap minus median lap, summed over the race (per car, seed 1, a throwaway per-car lap logger over the same VM race): the leader RUS 10 s, P2-P6 17-28 s, the lapped midfield 8-27 s. Traffic costs the front and the midfield about the same.
+- Tyre wear on (`--wear real`) does not change it: 13 and 14 lapped, P10 pace 1.99 % and 1.93 %.
+- The arithmetic: a car is on the lead lap only if lap-1 gap + 56 × deficit < 1 lap. With a 121 s lap and an 11 s lap-1 gap, the deficit must stay under 1.62 %. Real P10 pace (+1.89 %) is over that, so the 11th car is lapped at real pace alone, in a race with no neutralisation.
+- The VM race has none: without Rapier there is no debris, yellow, VSC or safety car (`tools/lib/game-vm.cjs`, the incidents note). Real races bunch the field under SC/VSC, and since 2021 lapped cars unlap themselves behind the safety car. That is where the real count of about 7 comes from.
+
+So the 4-10 band cannot be met with the pace pin (P10 1.2-2.6 %) at the real P10 pace without either a flatter midfield ladder or neutralisations in the measured race. The choice is on #7148 (#7178 row).
