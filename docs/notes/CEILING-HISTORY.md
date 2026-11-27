@@ -1,5 +1,13 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-27 — PR #7284 (claude/ui-shape-7259): one UiShape module for the phone / screen-shape predicates (#7259)
+
+`(tree) eagerScripts` +1 and `(tree) eagerCodeBytes` +195. Deliberate raise, which needs a `ratchet-raise` label (D-042);
+`eagerScripts` has no absorb. `js/ui/ui-shape.js` is eager by design (the issue, decision 7234-P3 B): scale.js,
+hud-layout.js, screen-placement.js and sheet-shape.js read it on the first frame, so there is no lazy home. It replaces the
+per-file copies of the touch / ≤500 px rule; no behaviour change. Fragment: `ratchets.d/claude--ui-shape-7259.json`.
+Human step: `ratchet-raise`.
+
 ## 2026-11-27 — PR #7206 (claude/hot-path-memo-7070): lowGrip once per step, a stable stallSweep callback (#7070 rows 2 + 6)
 
 `(tree) eagerCodeBytes` 4026701 → **4026952** (+251, measured on the synced tip): `RaceControl.lowGrip` gains a per-step memo (`stepGrip(on)`, the
