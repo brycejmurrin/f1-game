@@ -31,16 +31,24 @@ var GameAudioSoundtrack = (function () {
     // decoded track is ~75-90 MB of PCM that a JS-heap census never sees; an
     // <audio> element routed through createMediaElementSource -> musicGain plays
     // the same file from a few hundred KB of media buffer. ONE switch:
-    // localStorage apex26.musicStream "1"/"0" overrides the isMobile default (A/B).
+    // DESKTOP STREAMS TOO (decision 7073 C, #7260): the bundled tracks stream on every
+    // platform; decoding two ~90 MB buffers was ~150-170 MB of heap for 19 MB of mp3.
+    // localStorage apex26.musicStream "0" forces the decode path (A/B, and the fallback
+    // when no media element is available); anything else streams.
     function streamMusic() {
       let o = null;
-      try { o = localStorage.getItem("apex26.musicStream"); } catch (e) { /* storage blocked: platform default */ }
-      return o === "1" ? true : o === "0" ? false : IS_MOBILE;
+      try { o = localStorage.getItem("apex26.musicStream"); } catch (e) { /* storage blocked: default */ }
+      return o !== "0";
     }
     // ONE element per AudioContext: createMediaElementSource binds an element to
     // one context for life, and iOS lets an element that a gesture has played
     // play its next src without another gesture (a fresh element per track would not).
     let musicEl = null, musicElNode = null, musicElUrl = null, musicStreaming = false;
+    // NEXT-TRACK PRELOAD: a second element (own source node into musicGain, never played)
+    // loads the next url near the end of the current track; streamTrack swaps it in so a
+    // track change needs no fetch. Dropped on stop/context reset.
+    const PRELOAD_LEAD_S = 20;
+    let preEl = null, preNode = null, preUrl = null, preFailed = false, preBadUrl = null;
     let streamUnlockPending = null; // only a refused play owned by the current track may retry on a gesture
     // UPLOADS STREAM ON EVERY PLATFORM. music-lib.js caps an upload at 25 MB of
     // BYTES, which is not a bound on PCM: 25 MB of 64 kbps Opus is ~55 min, or
@@ -138,6 +146,31 @@ var GameAudioSoundtrack = (function () {
       try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); musicSrc.disconnect(); } } catch (e) { /* stop-before-start is a documented throw; the source is being replaced regardless */ }
       stopStream(false);
     }
+    function releaseEl(el) {
+      if (!el) return;
+      el.onended = el.onerror = el.onloadedmetadata = el.onplaying = el.onpause = el.ontimeupdate = null;
+      try { el.pause(); } catch (e) { /* nothing playing */ }
+      try { el.removeAttribute("src"); el.load(); } catch (e) { /* nothing loaded */ }
+    }
+    function dropPreload() { preUrl = null; releaseEl(preEl); }
+    function maybePreloadNext(el, token) {
+      if (preFailed || token !== musicToken || el !== musicEl || !musicOn || backend) return;
+      const d = +el.duration, t = +el.currentTime || 0;
+      if (!(d > 0) || !Number.isFinite(d) || d - t > PRELOAD_LEAD_S) return;
+      const i = seekEligible(musicIndex, 1), e = i >= 0 ? PLAYLIST[i] : null;
+      if (!e || i === musicIndex || e.url === musicElUrl || preUrl === e.url || preBadUrl === e.url || (e.builtin && !streamMusic())) return;
+      if (!preEl) {
+        try {
+          preEl = new Audio(); preEl.preload = "auto";
+          preNode = host.context().createMediaElementSource(preEl);
+          preNode.connect(musicGain);
+        } catch (err) { preEl = preNode = null; preFailed = true; return; }
+      }
+      const pe = preEl;
+      pe.onerror = () => { if (pe === preEl) { preBadUrl = preUrl; dropPreload(); } };   // a failed url is not re-requested on every timeupdate
+      preUrl = e.url;
+      pe.src = e.url;
+    }
     function captureStreamPos() {
       if (musicStreaming && musicEl) { musicResumeBuf = musicElUrl; musicResumeAt = NaN; musicResumeOff = +musicEl.currentTime || 0; }
     }
@@ -148,9 +181,10 @@ var GameAudioSoundtrack = (function () {
       if (!musicEl) return;
       captureStreamPos();
       const el = musicEl;
-      el.onended = el.onerror = el.onloadedmetadata = el.onplaying = el.onpause = null;
+      el.onended = el.onerror = el.onloadedmetadata = el.onplaying = el.onpause = el.ontimeupdate = null;
       try { el.pause(); } catch (e) { /* an element mid-teardown is silent either way */ }
       if (release) {
+        dropPreload();
         try { el.removeAttribute("src"); el.load(); } catch (e) { /* nothing loaded */ }
         musicElUrl = null;
       }
@@ -179,6 +213,13 @@ var GameAudioSoundtrack = (function () {
         for (const k in musicBuffers) delete musicBuffers[k];
         _bufKeys.length = 0;
       }
+      // The preloaded element already holds this url: swap it in, the old one becomes the spare.
+      let preloaded = false;
+      if (preEl && preUrl === url) {
+        [musicEl, preEl] = [preEl, musicEl]; [musicElNode, preNode] = [preNode, musicElNode];
+        preUrl = null; releaseEl(preEl);
+        preloaded = true;
+      } else if (preUrl) dropPreload();
       const el = musicEl;
       const off = (musicResumeBuf === url && Number.isFinite(musicResumeOff)) ? musicResumeOff : 0;
       musicResumeBuf = url; musicResumeAt = NaN; musicResumeOff = off;
@@ -195,6 +236,7 @@ var GameAudioSoundtrack = (function () {
         streamUnlockPending = { token, url };
       };
       el.onended = () => { if (token === musicToken && musicOn) nextTrack(1); };
+      el.ontimeupdate = () => maybePreloadNext(el, token);
       el.onerror = () => {
         if (token !== musicToken) return;
         Log.warn("audio", "music stream failed for " + url + ": media error " + ((el.error && el.error.code) || "?"));
@@ -202,7 +244,8 @@ var GameAudioSoundtrack = (function () {
         musicLoadFailed(token, "This audio format could not be played, or the file is unavailable.");
       };
       musicElUrl = url; musicStreaming = true;
-      el.src = url;
+      if (!preloaded) el.src = url;
+      else if (off > 0) { try { el.currentTime = off; } catch (e) { /* unseekable: from the top */ } }
       playStream(el, url, token);
       return true;
     }
@@ -628,6 +671,9 @@ var GameAudioSoundtrack = (function () {
       _decodeTail = Promise.resolve();
       stopStream(true);
       try { if (musicElNode) musicElNode.disconnect(); } catch (e) { /* the old context is closing */ }
+      dropPreload();
+      try { if (preNode) preNode.disconnect(); } catch (e) { /* the old context is closing */ }
+      preEl = preNode = preUrl = preBadUrl = null; preFailed = false;
       musicEl = musicElNode = musicElUrl = null;   // bound to the dead context
       musicGain = null;
       for (const k in musicBuffers) delete musicBuffers[k];
