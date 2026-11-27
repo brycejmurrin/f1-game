@@ -1003,25 +1003,47 @@ const TrackBuildProps = (function () {
     // check on the two rectangles' own axes (exact for the rectangle-vs-
     // rectangle case, unlike an AABB, which on a diagonal street over-reports
     // by metres and would delete half the skyline).
+    // One XZ spatial hash for the mass and barrier indexes (#6484 row 7): an id
+    // is bucketed in every `cell`-metre cell its rect touches; forRect visits a
+    // query rect's cells in x-then-z order and each bucket in insertion order,
+    // and stops at the first id `hit` returns true for. GRID_CELL (24 m, more
+    // than any canopy) is shared with the tree cell in nature.js by comment.
+    const GRID_CELL = 24;
+    const cellMap = (cell) => {
+      const m = new Map(), key = (cx, cz) => cx * 100003 + cz;
+      return {
+        get size() { return m.size; },
+        insertRect(x0, z0, x1, z1, id) {
+          const cx0 = Math.floor(x0 / cell), cx1 = Math.floor(x1 / cell);
+          const cz0 = Math.floor(z0 / cell), cz1 = Math.floor(z1 / cell);
+          for (let cx = cx0; cx <= cx1; cx++) for (let cz = cz0; cz <= cz1; cz++) {
+            const k = key(cx, cz);
+            let b = m.get(k); if (!b) m.set(k, b = []);
+            b.push(id);
+          }
+        },
+        forRect(x0, z0, x1, z1, hit) {
+          const cx0 = Math.floor(x0 / cell), cx1 = Math.floor(x1 / cell);
+          const cz0 = Math.floor(z0 / cell), cz1 = Math.floor(z1 / cell);
+          for (let cx = cx0; cx <= cx1; cx++) for (let cz = cz0; cz <= cz1; cz++) {
+            const b = m.get(key(cx, cz)); if (!b) continue;
+            for (let j = 0; j < b.length; j++) if (hit(b[j])) return true;
+          }
+          return false;
+        },
+      };
+    };
     // Spatial mass index (world XZ) — same CELL pattern as barSegs below.
     // PERF-FINDINGS: flat masses made massBlocked O(buildings²); SAT stays exact,
     // only candidate gathering is culled by the grid.
     const masses = [];
-    const MASS_CELL = 24;
     let massGrid = null;
-    const massCellKey = (cx, cz) => cx * 100003 + cz;
     const massGridInsert = (i) => {
       const m = masses[i], r = m.r;
-      const cx0 = Math.floor((m.c[0] - r) / MASS_CELL), cx1 = Math.floor((m.c[0] + r) / MASS_CELL);
-      const cz0 = Math.floor((m.c[2] - r) / MASS_CELL), cz1 = Math.floor((m.c[2] + r) / MASS_CELL);
-      for (let cx = cx0; cx <= cx1; cx++) for (let cz = cz0; cz <= cz1; cz++) {
-        const key = massCellKey(cx, cz);
-        let b = massGrid.get(key); if (!b) massGrid.set(key, b = []);
-        b.push(i);
-      }
+      massGrid.insertRect(m.c[0] - r, m.c[2] - r, m.c[0] + r, m.c[2] + r, i);
     };
     const buildMassGrid = () => {
-      massGrid = new Map();
+      massGrid = cellMap(GRID_CELL);
       for (let i = 0; i < masses.length; i++) massGridInsert(i);
     };
     const massBlocked = (c, w, d, b, shrink) => {
@@ -1030,26 +1052,19 @@ const TrackBuildProps = (function () {
       if (!massGrid) buildMassGrid();
       if (!massGrid.size) return false;
       const reach = hw1 + hd1;
-      const cx0 = Math.floor((c[0] - reach) / MASS_CELL), cx1 = Math.floor((c[0] + reach) / MASS_CELL);
-      const cz0 = Math.floor((c[2] - reach) / MASS_CELL), cz1 = Math.floor((c[2] + reach) / MASS_CELL);
-      for (let cx = cx0; cx <= cx1; cx++) for (let cz = cz0; cz <= cz1; cz++) {
-        const bucket = massGrid.get(massCellKey(cx, cz)); if (!bucket) continue;
-        for (let j = 0; j < bucket.length; j++) {
-          const m = masses[bucket[j]];
-          const dx = c[0] - m.c[0], dz = c[2] - m.c[2];
-          if (dx * dx + dz * dz > (hw1 + hd1 + m.r) * (hw1 + hd1 + m.r)) continue;
-          let sep = false;
-          for (const A of [[ax[0], ax[2]], [az[0], az[2]], [m.ax[0], m.ax[2]], [m.az[0], m.az[2]]]) {
-            const L = Math.hypot(A[0], A[1]) || 1;
-            const ux = A[0] / L, uz = A[1] / L;
-            const p1 = hw1 * Math.abs(ax[0] * ux + ax[2] * uz) + hd1 * Math.abs(az[0] * ux + az[2] * uz);
-            const p2 = m.hw * Math.abs(m.ax[0] * ux + m.ax[2] * uz) + m.hd * Math.abs(m.az[0] * ux + m.az[2] * uz);
-            if (Math.abs(dx * ux + dz * uz) > p1 + p2) { sep = true; break; }
-          }
-          if (!sep) return true;
+      return massGrid.forRect(c[0] - reach, c[2] - reach, c[0] + reach, c[2] + reach, (mi) => {
+        const m = masses[mi];
+        const dx = c[0] - m.c[0], dz = c[2] - m.c[2];
+        if (dx * dx + dz * dz > (hw1 + hd1 + m.r) * (hw1 + hd1 + m.r)) return false;
+        for (const A of [[ax[0], ax[2]], [az[0], az[2]], [m.ax[0], m.ax[2]], [m.az[0], m.az[2]]]) {
+          const L = Math.hypot(A[0], A[1]) || 1;
+          const ux = A[0] / L, uz = A[1] / L;
+          const p1 = hw1 * Math.abs(ax[0] * ux + ax[2] * uz) + hd1 * Math.abs(az[0] * ux + az[2] * uz);
+          const p2 = m.hw * Math.abs(m.ax[0] * ux + m.ax[2] * uz) + m.hd * Math.abs(m.az[0] * ux + m.az[2] * uz);
+          if (Math.abs(dx * ux + dz * uz) > p1 + p2) return false;
         }
-      }
-      return false;
+        return true;
+      });
     };
     const massAdd = (c, w, d, b) => {
       const i = masses.length;
@@ -1097,30 +1112,22 @@ const TrackBuildProps = (function () {
     // question asked in the wrong space. Here the barrier's actual face is
     // stored as world-space SEGMENTS, so the query is a plain point-to-segment
     // distance that neither knows nor cares which node a wall came from.
-    const BAR_CELL = 24;                // grid cell (m) — comfortably > any canopy
     // Built lazily on the first query, then kept CURRENT by pushSeg — which is
     // the only writer of barSegs, so the grid can never fall behind it.
     // forestEdge() queries mid-scenery, while barriers are still being
     // registered around it; a grid merely cached once would go stale and
     // silently under-report for everything planted afterwards.
     let barGrid = null;
-    const barCellKey = (cx, cz) => cx * 100003 + cz;
     const barGridInsert = (i) => {
       const x0 = barSegs[i], z0 = barSegs[i + 1], x1 = barSegs[i + 2], z1 = barSegs[i + 3];
       // Bucket by the INFLATED bounds: a wide record (a grandstand, a
       // building) reaches into cells its centre line never enters, and a
       // query in one of those cells must still find it.
       const w = barSegs[i + 4];
-      const cx0 = Math.floor((Math.min(x0, x1) - w) / BAR_CELL), cx1 = Math.floor((Math.max(x0, x1) + w) / BAR_CELL);
-      const cz0 = Math.floor((Math.min(z0, z1) - w) / BAR_CELL), cz1 = Math.floor((Math.max(z0, z1) + w) / BAR_CELL);
-      for (let cx = cx0; cx <= cx1; cx++) for (let cz = cz0; cz <= cz1; cz++) {
-        const key = barCellKey(cx, cz);
-        let b = barGrid.get(key); if (!b) barGrid.set(key, b = []);
-        b.push(i);
-      }
+      barGrid.insertRect(Math.min(x0, x1) - w, Math.min(z0, z1) - w, Math.max(x0, x1) + w, Math.max(z0, z1) + w, i);
     };
     const buildBarGrid = () => {
-      barGrid = new Map();
+      barGrid = cellMap(GRID_CELL);
       for (let i = 0; i < barSegs.length; i += SEG) barGridInsert(i);
     };
     // Distance² from (x,z) to segment i of barSegs.
@@ -1137,17 +1144,10 @@ const TrackBuildProps = (function () {
     const barrierClear = (x, z, r) => {
       if (!barGrid) buildBarGrid();
       if (!barGrid.size) return true;
-      const reach = r;
-      const cx0 = Math.floor((x - reach) / BAR_CELL), cx1 = Math.floor((x + reach) / BAR_CELL);
-      const cz0 = Math.floor((z - reach) / BAR_CELL), cz1 = Math.floor((z + reach) / BAR_CELL);
-      for (let cx = cx0; cx <= cx1; cx++) for (let cz = cz0; cz <= cz1; cz++) {
-        const b = barGrid.get(barCellKey(cx, cz)); if (!b) continue;
-        for (let j = 0; j < b.length; j++) {
-          const i = b[j], rr = r + barSegs[i + 4];
-          if (segDist2(i, x, z) < rr * rr) return false;
-        }
-      }
-      return true;
+      return !barGrid.forRect(x - r, z - r, x + r, z + r, (i) => {
+        const rr = r + barSegs[i + 4];
+        return segDist2(i, x, z) < rr * rr;
+      });
     };
     // Walk a candidate tree OUTWARD (never inward — inward is the road) until
     // its crown clears every recorded barrier face. Returns the adjusted trunk
