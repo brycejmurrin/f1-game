@@ -81,3 +81,25 @@ test("registered on the telemetry lesson as a solo Monza TT on the sector goal",
   assert.deepEqual({ ...d.setup }, { flow: "gp", session: "tt", track: "monza", weather: "dry", changeable: false, grid: "tier", duel: false, dirtyAir: "classic", wind: "off" });
   assert.equal(vm.runInContext("TelemetryDrill.define() === DrillRegistry.get('telemetry')", ctx), true, "define is idempotent");
 });
+
+test("score: a crashed FIX IT run wins nothing back (review F1)", () => {
+  const ctx = load(), T = vm.runInContext("TelemetryDrill", ctx);
+  const ref = trace(), G = { player: null, raceT: 0 };
+  // Run 1: the reference (score() keeps a clean first run).
+  T.score(G, { clean: true, seconds: 20 }, { ...ref });
+  const early = trace({ brakeAt: 580 }), r2 = T.score(G, { clean: true, seconds: 20.3 }, { ...early });
+  assert.equal(r2.analysis.cause, "brake");
+  // Solve it through pick()'s host path: a host whose lastResult is r2.
+  const host = { lastResult: () => r2 };
+  vm.runInContext("globalThis.DrillCard = { record() {} }", ctx);
+  const w = r2.analysis.window;
+  assert.equal(T.pick({ drills: () => host, store: null }, (w.from + w.to) / 2, "brake"), null, "a result with no drill id is refused");
+  r2.id = "telemetry"; r2.clean = true;
+  assert.equal(T.pick({ drills: () => host, store: null }, (w.from + w.to) / 2, "brake").medal, "silver");
+  // A FIX IT run that crashed 200 m in: no fix, no score.
+  const short = { t: ref.t.slice(0, 40), v: ref.v.slice(0, 40), b: ref.b.slice(0, 40), th: ref.th.slice(0, 40) };
+  const r3 = T.score(G, { clean: false, reason: "left the track", seconds: 5 }, short);
+  assert.equal(r3.fix, null);
+  assert.equal(r3.value, 0);
+  assert.equal(T.medals({ ...r3, clean: false }), null);
+});

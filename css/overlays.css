@@ -64,6 +64,8 @@ body:not(.desktop) { --tap-floor44: calc(44.2px / var(--ui-scale)); }
 #learn-telemetry-scrub button { flex: 1 1 auto; min-height: max(var(--tap), var(--tap-floor44)); padding: 0 var(--pad); font: inherit; font-weight: 700; }
 #learn-telemetry-scrub button[aria-pressed="true"] { outline: 2px solid var(--gold); }
 #learn-telemetry-pick { flex-basis: 100%; }
+/* A phone (852x393): a shorter chart, so RETRY and BACK TO LESSON stay in reach with less scrolling. */
+@media (max-height: 500px) { #learn-telemetry-scrub canvas { height: 4.5rem; } #learn-telemetry-pick { flex-basis: auto; } }
 #drill-card-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(var(--gap) / 2); }
 #drill-card button { min-height: var(--tap); min-width: var(--tap); padding: 0 var(--pad); font: inherit; font-weight: 700; }
 #learn-index [data-medal] { display: block; font-size: var(--fs-1); font-weight: 700; color: var(--gold); }

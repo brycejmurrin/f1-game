@@ -34,7 +34,10 @@ const TelemetryDrill = (function () {
   function sample(G, acc) {
     const p = G.player;
     if (!p) return;
-    if (acc.t == null) Object.assign(acc, { p0: p.prog, t0: G.raceT, t: [], v: [], b: [], th: [], lastD: 0, lastT: 0 });
+    if (acc.t == null) {   // a new run: a panel the last card never showed is stale
+      Object.assign(acc, { p0: p.prog, t0: G.raceT, t: [], v: [], b: [], th: [], lastD: 0, lastT: 0 });
+      S.pending = null;
+    }
     const d = p.prog - acc.p0, t = G.raceT - acc.t0;
     while (acc.t.length * STEP <= d) {
       const at = acc.t.length * STEP, k = d > acc.lastD ? (at - acc.lastD) / (d - acc.lastD) : 1;
@@ -99,7 +102,8 @@ const TelemetryDrill = (function () {
       };
     }
     const a = run ? analyze(S.ref, run) : null;
-    const fix = S.solved && run ? (() => {
+    // A FIX IT run counts only when it is clean: a crash short of the solved window would read as all of it won back.
+    const fix = S.solved && run && clean ? (() => {
       const now = lossIn(S.ref, run, S.solved.window);
       const won = +(S.solved.window.loss - now).toFixed(3);
       // ...and the whole run beats the solved one: a window won back while losing more elsewhere is no fix.
@@ -116,7 +120,7 @@ const TelemetryDrill = (function () {
     metrics.push(["Run", clean ? "clean" : reason, ""]);
     const verdict = !clean ? "The run ended: " + reason + ". RETRY to compare a full sector."
       : fix && fix.frac >= FIX && fix.silver && fix.faster ? "Case closed: you won back " + Math.round(100 * fix.frac) + " % of the time at " + S.solved.window.from + " m."
-      : a.window.loss < 0.02 ? "No time lost anywhere against the reference: the traces overlap. Try a different line, then compare."
+      : !a || a.window.loss < 0.02 ? "No time lost anywhere against the reference: the traces overlap. Try a different line, then compare."
       : "You lost " + secs(a.total) + " s. Scrub the chart to the corner where the gap grows fastest, name the cause, tap THIS CORNER.";
     S.pending = a && clean ? { a } : null;
     return { value, unit: "s", better: "high", clean, reason, metrics: metrics.slice(0, 6), verdict, analysis: a, fix };
@@ -261,7 +265,7 @@ const TelemetryDrill = (function () {
       readout.textContent = i >= 0 && i < S.ref.t.length ? i * STEP + " m · Δ " + secs(acc.t[i] - S.ref.t[i]) + " s · ref " + S.ref.v[i].toFixed(0) + " m/s, you " + p.speed.toFixed(0) : "";
       return false;
     }
-    return { draw, car: () => null, hide() { root.hidden = true; }, remove() { root.remove(); if (S.panel) S.panel.remove(); } };
+    return { draw, car: () => null, hide() { root.hidden = true; }, remove() { root.remove(); if (S.panel) S.panel.remove(); S.pending = null; } };
   }
 
   function define() {
