@@ -9,6 +9,8 @@
  * Sweeps launch speeds, pedal level (scripted brakeLevel), and setup brake bias.
  * Weather: dry and rain. Pin seat (McLaren, empty sheet) on a pinned straight.
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/lockup-bench.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/lockup-bench.mjs [options]\nStraight-line brake sweep: peak axFracF / afF, wheelLock, flat-spot growth.\n--help prints this and exits 0.");
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);

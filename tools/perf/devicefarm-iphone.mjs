@@ -32,6 +32,8 @@
 // the aws CLI (APEX_AWS_CLI, else `aws` on PATH). Nothing here prints them. WebDriver goes through curl so the
 // container's HTTPS proxy applies. Device minutes are metered: the session is always stopped in `finally`, and the
 // endpoint URL (it grants control of the device) is never printed.
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/devicefarm-iphone.mjs") ? process.argv.slice(2) : [], "Usage: node tools/perf/devicefarm-iphone.mjs [options]\nAWS Device Farm: Safari on a real iPhone (remote access + Appium); renderer probe, BENCHMARK WEBGPU vs WEBGL2.\n--help prints this and exits 0.");
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";

@@ -44,6 +44,10 @@
  */
 "use strict";
 
+if (require.main === module && process.argv.slice(2).some((a) => a === "--help" || a === "-h" || a === "help")) {
+  console.log("Usage: node tools/track/startline-snap.cjs [options]\nDerives `startFrac` from a real start/finish coordinate: projects into the def's `path`, snaps to the nearest segment.\n--help prints this and exits 0.");
+  process.exit(0);
+}
 const fs = require("fs");
 const path = require("path");
 

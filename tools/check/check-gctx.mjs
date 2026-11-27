@@ -49,6 +49,8 @@
  *
  * Exit codes: 0 clean; 1 drift, a parse failure, or a tsc diagnostic.
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/check-gctx.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/check-gctx.mjs [options]\nHolds `types/game-ctx.d.ts` to the real `G` façade and every module's use of `G` to the `.d.ts` (espree, optional tsc).\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";

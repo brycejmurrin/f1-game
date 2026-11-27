@@ -20,6 +20,7 @@
  *   node tools/ci/test-bg.mjs --stop                # SIGTERM, then SIGKILL, the run's process group
  *   --grep <re>     Playwright --grep: run only matching test titles
  *   --workers <n>   Playwright workers (default: env WORKERS, else 1 on <= 4 cores, 2 above)
+ *   --foreground    run the spec in the FOREGROUND at workers=1 (inherited stdio, no registry or log; the former test-solo)
  *   --force         start despite loadavg >= 3 or a live MCP Chrome daemon (never beside another run)
  *   An unknown flag prints this usage and exits 2 (tools/lib/cli-args.mjs strictFlags).
  *
@@ -212,7 +213,7 @@ function waitDeadlineFromMin(waitTimeoutMin) {
   return waitTimeoutMin > 0 ? Date.now() + waitTimeoutMin * 60_000 : Infinity;
 }
 
-export const KNOWN_FLAGS = ["--timeout", "--workers", "--spec", "--force", "--grep", "--status", "--stop", "--tail", "--wait", "--help"];
+export const KNOWN_FLAGS = ["--timeout", "--workers", "--spec", "--force", "--foreground", "--grep", "--status", "--stop", "--tail", "--wait", "--help"];
 /** The spec's run name, `spec-<basename>`: the registry key, the log name and the `--tail` argument. */
 export const specGroupName = (file) => "spec-" + path.basename(String(file)).replace(/\.spec\.[cm]?js$/, "").replace(/[^a-z0-9._-]/gi, "_");
 /** Parse the CLI. `--timeout` is minutes (AGENTS.md). Strict: an unknown `--flag`
@@ -256,7 +257,7 @@ export function parseTestBgArgv(argv) {
     throw new Error(`group mode is gone (2026-11-03): "${a}" is not a flag. Run ONE spec with --spec tests/specs/<file>.spec.js;`
       + ` a whole group runs on the PR (node tools/ci/remote-group.mjs <group>)`);
   }
-  return { waitTimeoutMin, workers, grep, specs, tail, force: argv.includes("--force") };
+  return { waitTimeoutMin, workers, grep, specs, tail, force: argv.includes("--force"), foreground: argv.includes("--foreground") };
 }
 
 export async function waitForRunning({ deadline, waitTimeoutMin = 0 } = {},
@@ -363,6 +364,18 @@ function spawnSpec(spec) {
   return { group, spec, pid: child.pid, starttime: procStart(child.pid), bootId: BOOT_ID, log, started, browser: true };
 }
 
+function runForeground(spec) {
+  const started = Date.now();
+  const forward = [spec, "--workers=1", ...(GREP ? [`--grep=${GREP}`] : [])];
+  const child = spawn("npm", ["test", "--silent", "--", ...forward], { cwd: ROOT, stdio: "inherit", env: { ...process.env, APEX_WORKERS: "1" } });
+  child.on("exit", (code, signal) => {
+    say(`foreground finished in ${((Date.now() - started) / 1000).toFixed(1)}s ${loadavgLine()} - ${code === 0 ? "PASSED" : "FAILED"} (a pass does not explain an earlier failure: keep it and measure the slow step)`);
+    if (signal) { process.kill(process.pid, signal); return; }
+    process.exit(code == null ? 1 : code);
+  });
+  return child;
+}
+
 /** The live `probe-mcp.py chrome-start` daemons on this BOX (any checkout):
  *  its tmux sessions are named `probe-chrome-<sha256(root)[:16]>`. A Chrome
  *  rendering beside a Playwright run starves it (skill mcp-probe, hard rule 1),
@@ -384,7 +397,7 @@ const LOAD_LIMIT = 3;   // start()'s refusal threshold (1-min loadavg)
 
 // Inject only process/filesystem edges so start's ordering and registry
 // mutations can be exercised without launching or signalling any browser run.
-export function start(spec, { force = false } = {}, deps = {}) {
+export function start(spec, { force = false, foreground = false } = {}, deps = {}) {
   const io = {
     probeChromeSessions, readState, alive, spawnSpec, updateState, say,
     load1: () => os.loadavg()[0],
@@ -418,6 +431,12 @@ export function start(spec, { force = false } = {}, deps = {}) {
     io.exit(3);
   }
 
+  if (foreground) {
+    // The former test-solo: one spec, decisively, at workers=1, stdio inherited. No registry entry, no log
+    // (background it with a log of your own when it takes minutes, AGENTS.md rule 4). Exit code is the run's.
+    io.say(`foreground: ONE spec at workers=1 ${loadavgLine()}`);
+    return (deps.runForeground || runForeground)(spec);
+  }
   io.mkdirLogs();
   io.say(`spawning ONE spec ${loadavgLine()}`);
   const run = io.spawnSpec(spec);
@@ -432,7 +451,7 @@ export function start(spec, { force = false } = {}, deps = {}) {
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 const argv = isMain ? process.argv.slice(2) : [];
-export const USAGE = `usage: node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js [--grep <re>] [--workers <n>] [--force]   # one spec, detached
+export const USAGE = `usage: node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js [--grep <re>] [--workers <n>] [--force] [--foreground]   # one spec, detached (or foreground, workers=1)
        node tools/ci/test-bg.mjs --wait [--timeout <min>]   # exit 1 red, 124 still running
        node tools/ci/test-bg.mjs --status | --stop | --tail <name>
 (agents do not run browser tests locally, AGENTS.md rule 5: a whole group runs on the PR via tools/ci/remote-group.mjs)`;
@@ -462,4 +481,4 @@ else if (parsed.tail) {
 } else if (!parsed.specs.length) {
   console.error(USAGE);
   process.exit(2);
-} else start(parsed.specs[0], { force: parsed.force });
+} else start(parsed.specs[0], { force: parsed.force, foreground: parsed.foreground });

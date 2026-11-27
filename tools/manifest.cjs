@@ -1714,7 +1714,6 @@ const MOVED = {
   "tools/gpu-game-check.mjs": "tools/gfx/gpu-game-check.mjs",
   "tools/wgpu-flag-test.mjs": "docs/archive/tools/gfx/wgpu-flag-test.mjs",
   "tools/wgx-capture.mjs": "tools/gfx/wgx-capture.mjs",
-  "tools/wgx-lavapipe-probe.mjs": "tools/gfx/wgx-lavapipe-probe.mjs",
   "tools/wgx-shot.mjs": "tools/gfx/wgx-shot.mjs",
   "tools/wgx-validate.mjs": "tools/gfx/wgx-validate.mjs",
   "tools/wgx-vid-repro.mjs": "docs/archive/tools/gfx/wgx-vid-repro.mjs",
@@ -1759,7 +1758,6 @@ const MOVED = {
   "tools/import-circuit-path.mjs": "tools/track/import-circuit-path.mjs",
   "tools/refresh-f1-circuit-reference.mjs": "tools/track/refresh-f1-circuit-reference.mjs",
   "tools/track-accuracy-validator.mjs": "tools/track/track-accuracy-validator.mjs",
-  "tools/audit-aero.mjs": "tools/car/audit-aero.mjs",
   "tools/audit-parts.mjs": "tools/car/audit-parts.mjs",
   "tools/parts-sweep.mjs": "tools/car/parts-sweep.mjs",
   "tools/parts-ladder.mjs": "tools/car/parts-ladder.mjs",
@@ -1798,7 +1796,6 @@ const MOVED = {
   "tools/bake-elevation.mjs": "tools/gen/bake-elevation.mjs",
   "tools/run-playwright.mjs": "tools/ci/run-playwright.mjs",
   "tools/test-bg.mjs": "tools/ci/test-bg.mjs",
-  "tools/test-solo.mjs": "tools/ci/test-solo.mjs",
   "tools/tooling-fast.mjs": "tools/ci/tooling-fast.mjs",
   "tools/verify-change.mjs": "tools/ci/verify-change.mjs",
   "tools/pick-tests.mjs": "tools/ci/pick-tests.mjs",
@@ -1936,7 +1933,7 @@ const MOVED = {
 
 // Learn's modal loads only after the title door is used. The iframe requests
 // its standalone page and lesson assets without a ScriptLoader version query.
-const LAZY_LEARN = ["js/learn-drills/registry.js", "js/learn-drills/drill-card.js", "js/learn-drills/aero.js", "js/ui/learn-door.js", "js/ui/thumb-trainer.js", "js/learn-drills/thumb-drill.js", "js/learn-drills/lines.js", "js/learn-drills/tyre-heat.js", "js/learn-drills/taper.js", "js/learn-drills/grip.js", "js/learn-drills/torque.js", "js/learn-drills/wake.js", "js/learn-drills/charge.js"];
+const LAZY_LEARN = ["js/learn-drills/registry.js", "js/learn-drills/drill-card.js", "js/learn-drills/aero.js", "js/ui/learn-door.js", "js/ui/thumb-trainer.js", "js/learn-drills/thumb-drill.js", "js/learn-drills/lines.js", "js/learn-drills/tyre-heat.js", "js/learn-drills/taper.js", "js/learn-drills/grip.js", "js/learn-drills/torque.js", "js/learn-drills/wake.js", "js/learn-drills/telemetry.js", "js/learn-drills/charge.js"];
 // DrillFork (#6559 B2): the strategy drills' what-if service, its own bundle, loaded only by a kind:"sim" drill.
 // The drill host (LAZY_LEARN, itself lazy) loads it with ScriptLoader as title-menu.js loads LAZY_LEARN, after
 // LazyBundles.ensureRaceSession(): no loader in the eager shell, whose bytes are at budget. It reads the coach and

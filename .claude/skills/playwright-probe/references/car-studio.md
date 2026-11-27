@@ -29,7 +29,7 @@ node tools/shot/garage-angles.mjs --fast --preset=quick --team=redbull --spineLo
 many angles. Garage multi-angle: `tools/shot/garage-angles.mjs` (soft-present
 `#game-soft` capture; `--preset=wall|fin|flank|mark`, `--plan`, `--fast`).
 See **garage-parts-livery** `references/garage-angles.md`. Batch audits: `tools/car/audit-parts.mjs` →
-`scratch/renders/parts/<category>/`; `tools/car/audit-aero.mjs` →
+`scratch/renders/parts/<category>/`; `tools/car/render-car.mjs --preset=wing` →
 `scratch/renders/aero/`.
 
 `--refl` is a **studio dial** on all shine — not in-game chrome

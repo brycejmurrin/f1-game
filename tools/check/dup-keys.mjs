@@ -25,6 +25,8 @@
 // their value is not knowable here — and spread is not a key at all.
 //
 //   node tools/check/dup-keys.mjs            # scan, exit 1 on any hit
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/dup-keys.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/dup-keys.mjs [options]\nScans js/ for a DUPLICATE key in one object literal — the merge hazard where two sessions add a field and later wins.\n--help prints this and exits 0.");
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";

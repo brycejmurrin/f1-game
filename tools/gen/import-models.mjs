@@ -28,6 +28,8 @@
  * and updates the manifest. --height normalises each model to that many metres
  * tall, because pack authors use wildly different unit scales.
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/import-models.mjs") ? process.argv.slice(2) : [], "Usage: node tools/gen/import-models.mjs [options]\nBatch glTF → AX26 model importer for real CC0 model PACKS (directories of .gltf + .bin + textures).\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";

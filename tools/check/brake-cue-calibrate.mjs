@@ -24,6 +24,8 @@
  * lap: the cue sees the speed it would have arriving flat out, its worst case.
  * Results: docs/notes/BRAKE-CUE-CALIBRATION-2026-10-27.md.
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/brake-cue-calibrate.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/brake-cue-calibrate.mjs [options]\nBrake-cue calibration (VM): cue call point vs AiDrive.brakeTarget, dry/rain on slicks, conditionCues off/on.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";

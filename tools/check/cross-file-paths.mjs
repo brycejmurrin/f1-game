@@ -28,6 +28,8 @@
 // tests/unit/test-observed.test.mjs both build fixtures out of them), and a regex
 // cannot tell a real import from a quoted one. A guard with false positives is
 // a guard that gets switched off.
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/cross-file-paths.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/cross-file-paths.mjs [options]\nEvery relative reference between files resolves to a file that exists (espree extraction; built for the tests/ split).\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

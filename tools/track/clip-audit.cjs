@@ -35,6 +35,10 @@
 
 "use strict";
 
+if (require.main === module && process.argv.slice(2).some((a) => a === "--help" || a === "-h" || a === "help")) {
+  console.log("Usage: node tools/track/clip-audit.cjs [options]\nPROP-VS-PROP interpenetration detector (emission-order adjacency); `--gate` ratchets against `clip-baseline.json`.\n--help prints this and exits 0.");
+  process.exit(0);
+}
 const { buildContext, shipped, siteOf, primKey } = require("../lib/track-build-vm.cjs");
 
 // ---------------------------------------------------------------------------

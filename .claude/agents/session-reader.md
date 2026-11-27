@@ -61,5 +61,5 @@ not read: <what you skipped and why, or none>
 One `SESSION` row per session asked about; `METHODS` rows only for a `methods`
 ask, one per thread (`main` and each subagent type), copied from `--tally agents`.
 
-Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); what a card may write is its `tools:` list, not a hook.
+Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/chrome-start, no --wait); what a card may write is its `tools:` list, not a hook.
 Run one simple command per Bash call (no `&&`, `|`, `;`, `$()`) so an allowlist can approve it. If a call is denied, mark only that session UNREAD and continue; if every route is denied, return your contract block marked UNREAD. Never route around a denial.
