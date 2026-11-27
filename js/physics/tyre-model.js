@@ -407,7 +407,7 @@ const TyreModel = (function () {
   // at all. At 1.5 a flat-out lap equilibrated at 144 C against a 100 C
   // optimum — measured, and the reason both this and HEAT_K came down.
   const HEAT_K = 7.8, HEAT_ROLL = 1.0, HEAT_SLIP = 0.55;
-  const COOL_K = 0.06, COOL_V = 0.8;
+  const COOL_V = 0.8;
   // Fraction of the thermal sink that is the asphalt (rest is air). oxiphysics
   // cools toward one ambient; we blend air + track so a hot dry surface holds
   // heat and a wet/cold one pulls it down, without a second coefficient that
@@ -1135,11 +1135,11 @@ const TyreModel = (function () {
     gripFor, humanLoad, aiLoad, fuelFrac,
     optTemp, warmRate, stepTemp, tempGrip, stepGrain, stepBlister,
     axleShare, AXLE_LONG, AXLE_REST, BB_REF, brakeBeta, brakeFront,
-    T_AMBIENT, T_TRACK_DELTA, T_BLANKET, T_OPT_MID, T_OPT_SPAN, T_WINDOW, TEMP_FLOOR,
+    T_AMBIENT, T_TRACK_DELTA, T_BLANKET, T_OPT_MID, T_WINDOW,
     HEAT_K, HEAT_ROLL, HEAT_SLIP, SINK_TRACK, SEVERITY_DEFAULT: 1.0,
     GRAIN_GRIP, BLIST_GRIP, BLIST_OVER,
-    classRecord, optionRecord, applyCompound, startRecord, AI_CLASS, codeForLife, treadFor, treadOf, bestTread, carGrip, classForTread, wetness, weatherGrip,
-    aquaplane, aquaplaneSafeV, aquaInto, AQUA_WET, AQUA_ONSET, AQUA_RAMP, AQUA_LOSS, asRain,
+    classRecord, optionRecord, applyCompound, startRecord, AI_CLASS, codeForLife, treadFor, treadOf, carGrip, classForTread, wetness, weatherGrip,
+    aquaplane, aquaplaneSafeV, aquaInto, AQUA_WET, AQUA_ONSET, AQUA_RAMP, asRain,
     DROP_LIN, DROP_CLIFF, GRIP_FLOOR, LONG_SHARE, LIFE_MIN, LIFE_MAX, FUEL_LOAD,
     create,
   };

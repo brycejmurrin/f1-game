@@ -1,0 +1,30 @@
+---
+paths:
+  - "js/render/glx/**"
+---
+
+# GLX (WebGL2) — loads with js/render/glx/
+
+- **SAFE MODE (D-058, #6861 option B).** GLX boots and races correctly on any
+  WebGL2 device. It is the explicit `apex26.gfxBackend=webgl2` pick, the
+  no-adapter path and the landing spot of every backend failure
+  (`Gfx.create()` → null, then `RendererBoot`). TLX ships the looks (D-013); WGX
+  is frozen (D-049). GLX takes crash, correctness and phone-safety fixes only.
+- **The floor look.** What GLX ships today stays: PBR GGX lit pass with the
+  sun, hemisphere ambient and 48 point lights; PCSS-lite and car/lamp shadow
+  maps; the baked asset-pack MAT arrays; the procedural sky; wet road and
+  puddles; the bloom / SSAO / volumetric-sun post chain; TrackGraph instancing;
+  mirror and env-probe passes; the soft-present blit. Do not remove or
+  degrade one without a recorded decision; do not add a TLX look.
+- **Gaps are recorded, not ported.** A feature TLX has and GLX lacks goes in
+  `docs/ARCHITECTURE.md` §Backend gap table (one table; WGX rows too).
+- **The interface is a list.** `docs/backend-surface.txt` (BACKEND_SURFACE) is
+  frozen; `tests/unit/backend-surface-parity.test.mjs` checks GLX, TLX and WGX
+  against it and fails if GLX publishes a name outside it. A new name goes in
+  the list and in all three backends (`name: undefined,` is a real fix:
+  `docs/GFX-CONTRACT.md` §Backend roles).
+- Gate: `node --test tests/unit/backend-surface-parity.test.mjs`, then
+  `node tools/gfx/gfx-probe.mjs --backend webgl2 montreal` with `gpuErrors` 0
+  (parent session only). A unit test is not boot evidence: `docs/ARCHITECTURE.md`
+  §Boot evidence.
+- Skill: `renderer-debug`.

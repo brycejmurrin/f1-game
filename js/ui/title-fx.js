@@ -284,10 +284,10 @@ const TitleFx = (function () {
   }
 
   return {
-    KEY, KEY_INTRO, KEY_WASH, KEY_ART, MOTION, INTROS, WASHES, ARTS, INTRO_MS,
+    KEY, MOTION,
     choice, mode, introMode, washMode, artMode, introHoldMs,
     set, setChoice, setIntro, setWash, setArt, buttonStyle, setButtonStyle, onChange,
-    apply, applyMotion, applyIntro, applyWash, applyArt, replay, initUI, wireRows,
+    apply, replay, initUI, wireRows,
   };
 })();
 Object.freeze(TitleFx);

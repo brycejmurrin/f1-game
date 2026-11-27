@@ -20,8 +20,6 @@ var ParcFerme = (function () {
   const FRAME_DT = 1 / 30;
   const CAPTION = "PARC FERMÉ";
   const SKIP_LABEL = "SKIP";
-  const HOST_ID = "ceremony-parc";
-  const SKIP_ID = "ceremony-parc-skip";
 
   /** Pure: mobile or high PerfGov → timers + SKIP only, no live orbit redraw. */
   function frozenPath(G) {
@@ -252,7 +250,7 @@ var ParcFerme = (function () {
 
   return {
     create, PARC_S, ORBIT_PERIOD_S, ORBIT_RADIUS, ORBIT_HEIGHT, FRAME_DT,
-    CAPTION, SKIP_LABEL, HOST_ID, SKIP_ID,
+    CAPTION, SKIP_LABEL,
     frozenPath, pitSubject, parkAnchor, parkPose,
   };
 })();
