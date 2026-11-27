@@ -233,6 +233,7 @@ const LearnDoor = (function () {
   // Defined lazily, never at eval: LAZY_LEARN loads with no edges, so the registry may evaluate after this file.
   function defineDrills() {
     if (typeof DrillRegistry === "undefined") return;
+    if (typeof TyreHeatDrill !== "undefined") TyreHeatDrill.define();   // js/learn-drills/tyre-heat.js, when it evaluated first
     DrillRegistry.define({
       id: "aero", lesson: "aero", title: "Monza Aero Drill",
       setup: { flow: "gp", session: "race", track: "monza", weather: "dry", changeable: false, grid: "tier", duel: false, dirtyAir: "classic", wind: "real" },
