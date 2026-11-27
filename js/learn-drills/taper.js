@@ -22,12 +22,11 @@ const TaperDrill = (function () {
   const LIFT_S = 0.3;        // throttle under 90 % this long is a lift
   // Speed-bought tiers (km/h) from 10 VM runs (tests/data/learn-drill-refs.json "taper", the rule in its "rule" field).
   const MEDALS = Object.freeze({ bronze: 14.8, silver: 19.5, gold: 22.4, goldClean: true });
-  const PC = typeof PhysicsConsts !== "undefined" ? PhysicsConsts : { VMAX: 72, DEPLOY_A: 3, ES_MJ: 4, TAPER_LO: 41, TAPER_HI: 53 };
-  const MJ = v => (v * (PC.ES_MJ || 4)).toFixed(2);
+  const MJ = v => (v * (PhysicsConsts.ES_MJ || 4)).toFixed(2);
 
   /** The car's standard-pace speed (vStd) and its taper right now: what game.js's deployTaper(c) returns. */
   function taperOf(G, c) {
-    const vs = Math.abs(c.speed) * PC.VMAX / Math.max(1e-6, G.vTop());
+    const vs = Math.abs(c.speed) * PhysicsConsts.VMAX / Math.max(1e-6, G.vTop());
     return { vs, taper: PaceMath.taperAt(vs, c.otT > 0) };
   }
 
@@ -42,7 +41,7 @@ const TaperDrill = (function () {
     if (c.deploying) {
       acc.depS += dt;
       acc.taperS += taper * dt;
-      acc.pushS += PC.DEPLOY_A * taper * dt;   // std m/s the store bought (aStd of DEPLOY_A·PACE·taper)
+      acc.pushS += PhysicsConsts.DEPLOY_A * taper * dt;   // std m/s the store bought (aStd of DEPLOY_A·PACE·taper)
       acc.spent += Math.max(0, acc.e - c.energy);
       if (acc.vOn == null) acc.vOn = c.speed;
       acc.vOff = c.speed;
@@ -63,9 +62,9 @@ const TaperDrill = (function () {
     const taper = acc.depS > 0 ? 100 * acc.taperS / acc.depS : 0;
     const reason = acc.fail || last.reason || (acc.emptied ? "" : "store not spent");
     const clean = !!last.clean && !acc.fail && !!acc.emptied;
-    const AO = typeof AppearanceOpts !== "undefined" ? AppearanceOpts : null;
+    const AO = AppearanceOpts;
     const kmh = v => { const k = G.dashKph ? G.dashKph(Math.abs(v)) : Math.abs(v) * 3.6; return (AO ? AO.speed(k) : Math.round(k)) + (AO && AO.units() === "mph" ? " mph" : " km/h"); };
-    const fade = kmh(PC.TAPER_LO * G.vTop() / PC.VMAX);
+    const fade = kmh(PhysicsConsts.TAPER_LO * G.vTop() / PhysicsConsts.VMAX);
     const verdict = acc.depS === 0 ? "No BOOST: the store went unspent. Press BOOST once on the straight and watch where the push lands."
       : !clean ? "The run ended: " + reason + ". Stay flat out to the gate and let BOOST run the store empty."
       : value >= MEDALS.gold ? "BOOST bought " + value.toFixed(1) + " km/h: the store had topped up and the push was still strong (" + taper.toFixed(0) + " % taper)."
@@ -135,7 +134,7 @@ const TaperDrill = (function () {
       ctx.strokeStyle = "rgba(255,255,255,.35)";
       ctx.lineWidth = 1;
       ctx.beginPath();
-      for (const v of [PC.TAPER_LO, PC.TAPER_HI]) { ctx.moveTo(xOf(v), PAD); ctx.lineTo(xOf(v), H - PAD); }
+      for (const v of [PhysicsConsts.TAPER_LO, PhysicsConsts.TAPER_HI]) { ctx.moveTo(xOf(v), PAD); ctx.lineTo(xOf(v), H - PAD); }
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.strokeStyle = "rgba(255,255,255,.8)";
@@ -150,7 +149,7 @@ const TaperDrill = (function () {
     }
     function draw() {
       if (G.state !== "race") { root.hidden = true; return false; }
-      const now = typeof performance !== "undefined" ? performance.now() : 0;
+      const now = performance.now();
       if (now < next) return false;
       next = now + 66;   // 15 Hz is enough for a gauge
       const c = G.player;
@@ -161,7 +160,7 @@ const TaperDrill = (function () {
       paint(vs, taper, !!c.deploying);
       root.hidden = false;
       task.textContent = c.energy > 1e-3 ? "Flat out. Press BOOST once: where does the push land?" : "Store spent. Stay flat to the gate.";
-      const status = "Taper " + Math.round(100 * taper) + " % · +" + (PC.DEPLOY_A * taper).toFixed(1) + " m/s² · " + MJ(c.energy) + " MJ left";
+      const status = "Taper " + Math.round(100 * taper) + " % · +" + (PhysicsConsts.DEPLOY_A * taper).toFixed(1) + " m/s² · " + MJ(c.energy) + " MJ left";
       if (readout.textContent !== status) readout.textContent = status;
       return false;   // no road markings
     }
@@ -169,7 +168,7 @@ const TaperDrill = (function () {
   }
 
   function define() {
-    if (typeof DrillRegistry === "undefined") return null;
+    if (typeof DrillRegistry === "undefined") return null;   // LAZY_LEARN has no edges: js/ui/learn-door.js defines it again once the registry is up
     return DrillRegistry.define({
       id: "taper", lesson: "deployment", title: "Monza Taper Hunt",
       setup: { flow: "gp", session: "tt", track: "monza", weather: "dry", changeable: false, grid: "tier", duel: false, dirtyAir: "classic", wind: "off" },
