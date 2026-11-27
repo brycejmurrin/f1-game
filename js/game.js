@@ -2962,9 +2962,8 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   // PASSED (checkRetirements' own test) retires now; one that never reached its
   // dnfAt stays a runner. Solo only: a networked field is the host's classification.
   if (!netPlay.active() && !cars.some((c) => c.human && c.finished)) {
-    const dist = Math.max(1, lapsTarget * track.total);
     for (const c of cars) {
-      if (c.human || c.finished || c.retired || c.dnfAt == null || (c.prog - (c._progGift || 0)) / dist < c.dnfAt) continue;
+      if (c.human || c.finished || c.retired || c.dnfAt == null || !dnfDue(c)) continue;
       c.retired = true; c.dnf = c.dnfWhy || "mechanical"; c.dnfAt = null;
     }
   }
@@ -6667,24 +6666,25 @@ function retireCar(c, reason) {
   c.boostOn = false; c.deploying = false; OvertakeMode.reset(c); pits.clearArm(c);   // PitLane.update skips a retirement, so a car dead in the lane / box kept its crew, jacks and lifted body until the flag
   // The broadcast call. Every retirement is announced, not only the player's:
   // losing a rival is race information, and it is the only way a DNF that
-  // happened half a lap away is visible at all.
-  announce("RETIREMENT — " + c.code, 2, "info");
+  // happened half a lap away is visible at all. A stall says WHY in this ONE banner (#6634 F7).
+  announce(...(reason === "stationary" ? ["RETIRED — CAR STATIONARY FOR 60 s", 3, "penalty-hit"] : ["RETIREMENT — " + c.code, 2, "info"]));
   if (c.local && soundOn) GameAudio.offtrack();
 }
 
 // Retirements arrive by race DISTANCE, not by clock: the moment was drawn as a
 // fraction of the full race at the green light (see armReliability), so a 3-lap
 // blast and a 25-lap race lose their cars at the same points of the story.
+// A drawn failure is a fraction of the RACE, so it is tested against the leader's distance: a backmarker (0.93 pace) never covers the full distance itself (#6634 F8).
+const dnfDue = (c) => cars.reduce((m, o) => Math.max(m, o.prog - (o._progGift || 0)), 0) / (lapsTarget * track.total) >= c.dnfAt;
 function checkRetirements(dt) {
-  const dist = Math.max(1, lapsTarget * track.total);
-  AiDrive.stallSweep(cars, dt, state === "race" && !paused && raceCtl.level < 4 && raceT > 0 && !isPractice() && !isQuali(), c => { retireCar(c, "stationary"); announce("RETIRED — CAR STATIONARY FOR 60 s", 3, "penalty-hit"); });   // a parked player is retired after 60 s, under its own caution too (#5892); a red or a pause stops the clock; practice (a drill, TT) never retires (#6631)
+  AiDrive.stallSweep(cars, dt, state === "race" && !paused && raceCtl.level < 4 && raceT > 0 && !isPractice() && !isQuali(), c => retireCar(c, "stationary"));   // a parked player is retired after 60 s, under its own caution too (#5892); a red or a pause stops the clock; practice (a drill, TT) never retires (#6631)
   for (const c of cars) {
     if (c.dnfAt == null || c.retired || c.finished) continue;
     // The remote human's slot was still an AI when armReliability drew its
     // dnfAt (netPlay.start() re-roles it afterwards) — never park a car
     // another person is driving.
     if (netPlay.owns(c) || realRace.owns(c)) continue;
-    if ((c.prog - (c._progGift || 0)) / dist >= c.dnfAt) retireCar(c, c.dnfWhy);
+    if (dnfDue(c)) retireCar(c, c.dnfWhy);
   }
 }
 
