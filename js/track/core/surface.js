@@ -174,10 +174,6 @@ const TrackSurface = (function () {
     return p;
   }
 
-  function heightAt(surface, k, lateralDistance) {
-    return surface.heightAt(k, lateralDistance);
-  }
-
-  return { profile, heightAt };
+  return { profile };
 })();
 Object.freeze(TrackSurface);

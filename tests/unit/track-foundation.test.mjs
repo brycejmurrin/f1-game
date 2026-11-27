@@ -199,8 +199,7 @@ test("TrackSurface creates monotonic rails and one terrain/grounding height cont
   assert.ok(p.rails.every((v, i, a) => i === 0 || v > a[i - 1]));
   assert.equal(p.rails.at(-1), 9);
   for (const dist of [0, 2.2, 5, 9, 20]) {
-    assert.equal(p.heightAt(0, dist), TrackSurface.heightAt(p, 0, dist));
-    assert.ok(Number.isFinite(p.heightAt(0, dist)));
+        assert.ok(Number.isFinite(p.heightAt(0, dist)));
   }
   assert.equal(p.heightAt(0, 20), p.floorY);
 });
@@ -548,4 +547,40 @@ test("gravel debris contact follows the modelled gravel verge and excludes paved
   const pit = Surface.profile({}, track);
   assert.equal(pit.gravelAt(0, 11), false);
   assert.equal(pit.gravelAt(0, -11), true);
+});
+
+const mk = (total) => ({
+  n: 4, total, hw: [7, 7, 7, 7], barR: [10, 11, 12, 13], barL: [10, 11, 12, 13],
+  curv: [0.1, 0.2, 0.3, 0.4],
+});
+
+test("wallAt returns a finite limit for NaN s and an empty track", () => {
+  const S = loadGlobal(P.TRACK_SPLINE || "js/track/core/spline.js", "TrackSpline");
+  for (const side of [1, -1]) {
+    assert.ok(Number.isFinite(S.wallAt(mk(100), NaN, side)));
+    assert.ok(Number.isFinite(S.wallAt(mk(100), Infinity, side)));
+    assert.ok(Number.isFinite(S.wallAt(mk(0), 5, side)));
+  }
+  assert.equal(S.wallAt(mk(100), 0, 1), 10); // normal path unchanged
+});
+
+test("curvature guards NaN s and total 0 before the raw fallback", () => {
+  const S = loadGlobal(P.TRACK_SPLINE || "js/track/core/spline.js", "TrackSpline");
+  assert.equal(S.curvature(mk(100), NaN), 0);
+  assert.equal(S.curvature(mk(0), 5), 0);
+  const noLut = mk(100); delete noLut.curv;
+  assert.equal(S.curvature(noLut, NaN), 0);
+});
+
+test("@circuits expands in MANIFEST.CIRCUITS order = roster = circuit-meta order", () => {
+  const ids = MANIFEST.CIRCUITS;
+  const roster = fs.readFileSync(path.join(ROOT, "js/roster.js"), "utf8");
+  const tv = roster.slice(roster.indexOf("TRACK_VM:"));
+  const rosterIds = [...tv.matchAll(/"js\/circuits\/([a-z0-9_-]+)\.js"/g)].map((m) => m[1]);
+  assert.deepEqual(rosterIds.slice(0, ids.length), ids);
+  const meta = fs.readFileSync(path.join(ROOT, "js/track/circuit-meta.js"), "utf8");
+  const metaIds = [...meta.matchAll(/D\.push\(\{"id":"([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(metaIds, ids);
+  const swapped = ids.slice(); [swapped[0], swapped[1]] = [swapped[1], swapped[0]];
+  assert.notDeepEqual(swapped, metaIds);
 });
