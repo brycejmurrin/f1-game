@@ -83,7 +83,9 @@ const GRID_K_BAR = 0.004;
 const GRID_CURVE_ALLOW = {
   magny_cours: { gridK: 0.0627, why: "slots 5-14 sit in the Lycee chicane (T16/T17, 71-97 m behind the line, R≈19 m) and slots 17-23 run into T15 (203 m behind)" },
   silverstone: { gridK: 0.0248, why: "slots 10-17 sit in Club (T18, 116 m behind the line; R≈40 m at slot 12) and slots 20-23 reach back toward T17 (288 m behind)" },
-  vegas: { gridK: 0.0137, why: "slots 4-11 sit on T17 (63 m behind the line), R≈73 m" },
+  // #6922 OpenF1 re-survey: the real T17 (R≈190 m) runs to ~10 m before the timing line, which is seated
+  // within 3 m of the real one, so the line's ±40 m window and the grid both reach into it.
+  vegas: { gridK: 0.0137, lineK: 0.0104, why: "the real T17 runs to ~10 m before the line (OpenF1 #6922): |k| 0.0103 30 m behind it, and the grid's slots 0-5 and 9-23 sit on T17 (worst R≈74 m, 196 m behind)" },
   mexico: { gridK: 0.0083, why: "slots 22-23 only, past the default 22-car field: the tail reaches T17's exit (216 m behind the line)" },
   monaco: { gridK: 0.0059, why: "slot 23 only, past the default 22-car field: the gently curving harbour straight toward Anthony Noghes (T19, 308 m behind), R≈168 m" },
   suzuka: { gridK: 0.0056, why: "slots 10-23 on the R≈180-220 m bend of the main straight out of the last corner (T18, 283 m behind the line)" },

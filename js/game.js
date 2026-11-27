@@ -3437,6 +3437,7 @@ const G = {
   startWeatherArc: (from, to, dur) => wxArc.startArc(from, to, dur),
   endWeatherSession: () => wxArc.endSession(true),   // the agent's race()/tt(): a start follows, so a plan set for it stays (race-settings-vm)
   startRace, update, wrapS, quitToMenu: (t) => (qThen = t, quitToMenu()),
+  drills: () => (drills ??= DrillRegistry.create(G, { retry: coach.retry, setDirtyAir: v => { raceDirtyAir = v; } })),   // LEARN's drill host (js/learn-drills/registry.js), made on first use (LAZY_LEARN loaded); the LEARN door and __apex.drill* (js/agent/apex-drill.js)
   raceIntro,   // the pre-race screen, for a launch that is not RACE! (js/race/real-race.js: the Data Hub's JUMP IN)
   // OWNER COMMANDS (#6920 U2.4): game.js owns the writes to state / frozen / paused / skyViewOverride; every other module goes through these.
   cmd: { setState: (next, why) => setState(next, why || "cmd"), pause: (v, why) => setPaused(v, why) },
@@ -3490,9 +3491,8 @@ let flyingStart = FlyingStart.create(G, flyingStartDeps());   // LAZY_RACE_SESSI
 var jumpStartPenalty = JumpStartPenalty.create(G, {
   autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,
 });   // LAZY_RACE_SESSION — recreated in onRaceSessionReady
-titleMenu = TitleMenu.create(G, openDataHub, id => { // returning-player, Daily and Learn (js/ui/title-menu.js); a LEARN drill (js/learn-drills/registry.js)
-  (drills ??= DrillRegistry.create(G, { retry: coach.retry, setDirtyAir: v => { raceDirtyAir = v; } })).launch(id || "aero");
-}, show => showTouchControls(show, false, show));   // the race dock previewed under LEARN's thumb trainer
+titleMenu = TitleMenu.create(G, openDataHub, null,   // returning-player, Daily and Learn (js/ui/title-menu.js); its LEARN drill launches through G.drills()
+  show => showTouchControls(show, false, show));   // the race dock previewed under LEARN's thumb trainer
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing(), lazyBundles.ensureReplayBroadcast),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
@@ -5784,7 +5784,7 @@ function updateCarLateral(c, dt, ranked, S) {
     _aiLane.traits = aiT; _aiLane.nearby = nearbyN; _aiLane.roomL = roomL; _aiLane.roomR = roomR;
     _aiLane.street = !!track.street; _aiLane.baseLane = c.lanePref != null ? c.lanePref : c.lane;
     _aiLane.queueT = c.queueT || 0;
-    c.lane = AiDrive.adaptLane(c.lane, _aiLane, dt); c.laneClr = AiDrive.laneClear(c.laneClr, !c.launchOn && raceT >= (c.calmUntil || 0) && !blocker && !chaser && !S.towCar && !(_stopped.length && Collide.parkedAhead(c, _stopped, track.total, AiDrive.hazardReach(c.speed))), dt);   // #5330 (not in launch/calm: lanes to T1)
+    c.lane = AiDrive.adaptLane(c.lane, _aiLane, dt); c.laneClr = AiDrive.laneClear(c.laneClr, !c.launchOn && raceT >= (c.calmUntil || 0) && !blocker && chaserGap >= c.speed / 4 && !S.towCar && !(_stopped.length && Collide.parkedAhead(c, _stopped, track.total, AiDrive.hazardReach(c.speed))), dt);   // #5330 (not in launch/calm: lanes to T1); chaser: 0.25 s (#6575)
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
     // THE LINE (TrackLine, baked at build): outside-inside-outside through every
     // corner, read a short way ahead so the lateral step's lag does not turn in

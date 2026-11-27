@@ -1,0 +1,1 @@
+New: POCKET WEEKEND on the season race-settings sheet turns on a one-lap qualifying shootout, a sprint at a third of the laps and a short Grand Prix in one tap, using the existing quali and sprint settings; tap it again to restore your previous rules (#7042).

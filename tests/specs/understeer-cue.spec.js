@@ -63,7 +63,8 @@ const MAX_GAP_TICKS = 10;
  */
 async function loadRig(page, id = "monza") {
   // Factory McLaren empty sheet: the shipped Mercedes/Downwash kit moves the
-  // grip envelope (CI selected-5: half-pace pulses 1 vs ≥3).
+  // grip envelope. (The half-pace "1 pulse vs ≥3" red was NOT the kit: see the
+  // pace test's note on scaling PLAYER_GRIP by pace².)
   await pinFactorySeat(page);
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
@@ -378,19 +379,30 @@ test.describe("understeer cue — front-axle saturation haptic", () => {
    * What must not move is the cue's RESPONSE once the front IS at a given point
    * in the grip envelope — `sat` is built from a slip angle and an m/s² grip
    * limit, with no speed term anywhere in it. So the state is constructed by
-   * saturation depth rather than by speed: PLAYER_GRIP is cut to 0.5 and full
-   * lock applied at the same fraction of each car's OWN top speed, which puts
-   * the demanded lateral acceleration well past the (halved) limit at both pace
-   * settings. Both cars are therefore pinned at the deep end of the envelope,
-   * and the pulse rate must match.
+   * saturation depth rather than by speed: full lock at the same fraction of
+   * each car's OWN top speed, with PLAYER_GRIP = 0.5 · pace².
+   *
+   * WHY pace². At a fixed fraction of vTop the ground speed scales with pace,
+   * so the lateral acceleration a given lock demands (v²·δ/L) scales with
+   * pace², while the grip it is measured against does not: LAT_MAX is
+   * absolute and the aero term is normalised by vTop (player-forces.js
+   * `aeroGrip`). A FLAT 0.5 therefore left the half-pace car UNDER its limit —
+   * measured in the VM (tools/lib/game-vm.cjs, this exact drive): front
+   * utilisation ~0.8 of peak, below the 1.15 trigger, so the only pulse was
+   * the tick-one placement transient (CI: half 1 pulse vs full 11, every time
+   * the spec was selected). The product was right and the test was wrong.
+   * Scaling grip by pace² keeps the demand-to-grip ratio fixed, and both cars
+   * then sit past the bite = 1 end of the cue (sat ≥ 2), where the repeat
+   * interval is the fixed 0.10 s — so the pulse rate must match.
    */
   test("at the same depth in the grip envelope, pace does not change the cue", async ({ page }) => {
     await loadRig(page);
     const frac = await longStraight(page);
 
-    const deep = { frac, steer: 1, xInside: 1.2, speedFrac: 0.7, speed: 40, playerGrip: 0.5, ticks: 150 };
-    const full = await drive(page, { ...deep, pace: 1.0 });
-    const half = await drive(page, { ...deep, pace: 0.5 });
+    const deep = { frac, steer: 1, xInside: 1.2, speedFrac: 0.7, speed: 40, ticks: 150 };
+    const at = (pace) => drive(page, { ...deep, pace, playerGrip: 0.5 * pace * pace });
+    const full = await at(1.0);
+    const half = await at(0.5);
     const dump = JSON.stringify({ full, half });
 
     // Pace scaled the car's ground speed, and only that.

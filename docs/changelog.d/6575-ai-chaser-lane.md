@@ -1,0 +1,1 @@
+Improved: AI cars in a midfield train now keep the racing line when the car behind is more than a quarter of a second back (#6575), so the field spreads more like a real race (P10 race pace +2.65 % of the fastest car, was +3.13 %; real F1 about +1.9 %) with less AI-AI contact.

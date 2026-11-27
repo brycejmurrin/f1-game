@@ -303,12 +303,9 @@ const FULL = [
   "js/physics/ai-band.js",   // gap catch-up vs scripted fixed pace (carve-headroom D)
   "js/physics/ai-corridor.js",
   "js/camera/offsets.js",
-  "js/camera/extra-rigs.js",   // RIVAL LOCK / PIT WALL / DRONE solvers (before vantage)
   "js/camera/flyby-sight.js",   // FlybySight: the flyby planner's (and frame-report's) sightline/occluder model
   "js/camera/flyby-clear.js",   // FlybyClear: solid props, roof lift, ground floor (before flyby-seq)
   "js/camera/flyby-seq.js",
-  "js/camera/cam-avoid.js",   // open-circuit wall/building step-in + clearEye for broadcast cams
-  "js/camera/trackside.js",   // TRACKSIDE fixed corner cams (CAM_MODES append)
   "js/camera/flyby-panel.js",
   "js/garage/setup-tune.js",
   "js/garage/setup-trials.js", // bounded unscored setup comparison receipts (call-time consumers)
@@ -1039,6 +1036,7 @@ const LAZY_AGENT = [
   "js/agent/apex-track.js",
   "js/agent/apex-lobby.js",
   "js/agent/apex-play.js",
+  "js/agent/apex-drill.js", // ApexDrill: __apex.drill* flat hooks, def()'d at eval (#7067)
   "js/agent/apex-gpu-capture.js",
   "js/agent/apex-lifecycle.js",
   "js/perf/three-inspector.js", // ThreeInspector: opt-in (?inspector=1) dev panel; apex.js boots it at eval (#4978 row 4)
@@ -1053,6 +1051,8 @@ const LAZY_EDGES = [
   ["js/agent/apex-track.js", "js/agent/apex.js"],
   ["js/agent/apex-lobby.js", "js/agent/apex.js"],
   ["js/agent/apex-play.js", "js/agent/apex.js"],   // def() registry: ApexApi spreads ApexPlay.hooks(G)
+  ["js/agent/apex-play.js", "js/agent/apex-drill.js"],   // ApexDrill calls ApexPlay.def at eval
+  ["js/agent/apex-drill.js", "js/agent/apex.js"],   // its defs exist before ApexApi.create spreads them
   ["js/agent/apex-gpu-capture.js", "js/agent/apex.js"], // __apex.gpuCapture one-line registration
   ["js/perf/three-inspector.js", "js/agent/apex.js"],   // apex.js calls ThreeInspector.boot(gfx) at eval
   ["js/agent/agentview-corners.js", "js/agent/agentview.js"],
@@ -1169,6 +1169,9 @@ const LAZY_RACE_SESSION = [
   "js/race/flying-start.js",
   "js/race/lap-retry.js",      // LapRetry: RETRY LAP back to the flying-start drop-in through SimState (#6965)
   "js/race/jump-start-penalty.js",
+  "js/camera/extra-rigs.js",    // ExtraRigs: RIVAL LOCK / PIT WALL / DRONE solvers; vantage.js typeof-guards it (chase fallback), binds M4 at eval
+  "js/camera/trackside.js",    // TracksideCams: fixed corner cams; vantage.js typeof-guards it
+  "js/camera/cam-avoid.js",    // CamAvoid: open-circuit wall/building step-in; vantage.js typeof-guards it
   "js/ui/podium-beat.js",   // PodiumBeat: ceremony podium overlay (#4070 slice 4); ResultsStory is FULL
   "js/race/podium-beat.js", // RacePodium: podium beat + results handoff (#4070)
   "js/race/parc-ferme.js", // ParcFerme.create(G): ceremony parc fermé beat (#4069); reads ResultsCam at call time
@@ -2127,12 +2130,9 @@ const FULL_TIERS = {
     "js/physics/ai-band.js": "race",
     "js/physics/ai-corridor.js": "race",
     "js/camera/offsets.js": "race",
-    "js/camera/extra-rigs.js": "race",
     "js/camera/flyby-sight.js": "race",
     "js/camera/flyby-clear.js": "race",
     "js/camera/flyby-seq.js": "race",
-    "js/camera/cam-avoid.js": "race",
-    "js/camera/trackside.js": "race",
     "js/camera/flyby-panel.js": "race",
     "js/garage/setup-tune.js": "garage",
     "js/garage/setup-trials.js": "garage",

@@ -686,7 +686,7 @@ function photoPickerHarness(album, setBackground = () => true) {
   panel.prepend = node => panel.insertBefore(node, panel.firstChild);
   const observers = [];
   const result = load({ homeScene: "photo" }, true, false, dom.document, {
-    PhotoStudio: { album, setBackground },
+    PhotoStudio: { album, setBackground, slotFor: (a) => (a && a <= 0.8 ? "portrait" : "landscape") },
     ScreenLooks: { endPeek() {}, normalize: (_id, value) => value, apply() {}, refresh() {} },
     MutationObserver: class { constructor(cb) { observers.push(cb); } observe() {} },
   });
@@ -712,6 +712,13 @@ test("saved photo picker previews only on selection and persists only on explici
   assert.equal(h.note.textContent, "Photo 2 chosen as your menu background.");
   assert.ok(h.panel.querySelectorAll("button").some(button => button.textContent === "PHOTO STUDIO & MY BACKGROUND"), "import door retained");
   assert.ok(h.panel.querySelectorAll("button").some(button => button.textContent === "RESET SCOPE"), "reset retained");
+});
+
+test("the picker files a portrait-aspect photo in the portrait slot whatever the orientation (#7157)", async () => {
+  const calls = [], rows = [{ id: "0", title: "Tall", thumb: "data:image/jpeg;base64,AAAA", aspect: 0.8 }];
+  const h = photoPickerHarness(async () => rows, (img, slot) => { calls.push(slot); return true; });
+  await photoTick(); h.select.value = "0"; h.dom.dispatch(h.select, { type: "change" }); h.choose.click();
+  assert.deepEqual(calls, ["portrait"]);
 });
 
 test("saved photo empty, failed load and failed background writes are recoverable", async () => {

@@ -175,7 +175,8 @@ test("parity: the mask's field, road weight and growth carry the reference const
   assert.ok(TLX.includes(`mix(float(${K.POOL_C}), float(${K.POOL_E}), smoothstep(${K.EDGE_LO}, ${K.EDGE_HI}, abs(lat))).mul(clamp(float(1.0).add(downhill.mul(lat).mul(${f(K.CAMBER)})), ${K.CAMBER_LO}, ${K.CAMBER_HI}))`), "TLX road weight");
   assert.ok(GLX.includes(`clamp(smoothstep(${K.WET_ON}, ${f(K.WET_FULL)}, uWetness) * uPuddles, 0.0, 1.0)`), "GLX growth");
   assert.ok(WGX.includes(`clamp(smoothstep(${K.WET_ON}, ${f(K.WET_FULL)}, wetness) * F.params10.y, 0.0, 1.0)`), "WGX growth");
-  assert.ok(TLX.includes(`clamp(smoothstep(${K.WET_ON}, ${f(K.WET_FULL)}, U.wetness).mul(U.puddles), 0.0, 1.0)`), "TLX growth");
+  // TLX grows on wL, the per-sector road wetness at the fragment (#6909 phase 2); GLX/WGX keep the global value.
+  assert.ok(TLX.includes(`clamp(smoothstep(${K.WET_ON}, ${f(K.WET_FULL)}, wL).mul(U.puddles), 0.0, 1.0)`), "TLX growth");
   assert.ok(GLX.includes(`float plo = ${f(K.THR)} - ${K.THR_GROW} * pg;`), "GLX threshold");
   assert.ok(WGX.includes(`let plo = ${f(K.THR)} - ${K.THR_GROW} * pg;`), "WGX threshold");
   assert.equal(K.THR, 1, "TLX writes the threshold as pg.mul(THR_GROW).oneMinus(), which assumes THR = 1");
@@ -214,7 +215,8 @@ test("parity: inside a puddle — near-zero roughness, darker albedo, a stronger
   // dry frames pay nothing: the whole mask sits under the wetness gate
   assert.ok(glx.indexOf("if (uWetness > 0.001 && !classifiedCar)") < glx.indexOf("STANDING-WATER PUDDLES (2026-10-14)"));
   assert.ok(wgx.indexOf("if (wetness > 0.001 && !classifiedCar)") < wgx.indexOf("STANDING-WATER PUDDLES (2026-10-14)"));
-  assert.ok(tlx.indexOf("If(U.wetness.greaterThan(0.001).and(classifiedCar.not())") < tlx.indexOf("STANDING-WATER PUDDLES (2026-10-14)"));
+  // TLX gates on wetMax (the global and every sector slot, #6909 phase 2): still uniform, still 0 on a dry lap.
+  assert.ok(tlx.indexOf("If(U.wetMax.greaterThan(0.001).and(classifiedCar.not())") < tlx.indexOf("STANDING-WATER PUDDLES (2026-10-14)"));
 });
 
 test("parity: the reference hash is the surface hash the three shaders sample", () => {

@@ -181,6 +181,9 @@ const TitleMenu = (function () {
   }
 
   function wireLearn(G, openDataHub, launchDrill, previewControls) {
+    // A LEARN drill launches through G.drills() (js/learn-drills/registry.js), the host __apex.drill* drives too;
+    // launchDrill is a test seam (tests/unit/menu-a11y-audit.test.mjs), null from game.js.
+    launchDrill ??= id => G.drills().launch(id);
     const menu = G.$("menu-buttons");
     if (!menu) return;
     const door = document.createElement("button");
@@ -223,16 +226,16 @@ const TitleMenu = (function () {
   function create(G, openDataHub, launchDrill, previewControls) {
     Log.info("game", "TitleMenu.create");
     const { $ } = G;
+    const doc = typeof document !== "undefined" ? document : null;
     wireLearn(G, openDataHub, launchDrill, previewControls);
-    organize(typeof document !== "undefined" ? document : null);
+    organize(doc);
     // The doors paint from the shell seconds before game.js wires them (Slow 4G:
     // ~2.5 s vs ~15 s). html[data-booted] is css/title.css's cue that a tap now
     // does something; game.js wires the handlers in this same task.
-    if (typeof document !== "undefined") document.documentElement.dataset.booted = "";
-    replayBootTap($, typeof document !== "undefined" ? document : null);
+    if (doc) doc.documentElement.dataset.booted = "";
+    replayBootTap($, doc);
 
     const history = $("daily-history"), historyList = $("daily-history-list");
-    const doc = typeof document !== "undefined" ? document : null;
     if (history && history.addEventListener) history.addEventListener("toggle", () => { if (history.open) paintHistory(); });
     function paintHistory() {
       if (!historyList || !doc) return;
@@ -314,7 +317,6 @@ const TitleMenu = (function () {
       // string so live() fails and afterGarageOut titleIfBare() returns to the
       // menu — DAILY garage-out-before-card timed out that way (CI tip 2f81ef993).
       if (seasonBack && !G.seasonMode && !(Career.inCareer && Career.inCareer())) {
-        const doc = typeof document !== "undefined" ? document : null;
         const rs = doc && doc.getElementById("race-settings");
         const sel = doc && doc.getElementById("select");
         const L = doc && doc.getElementById("loading");

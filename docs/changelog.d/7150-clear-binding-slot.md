@@ -1,0 +1,1 @@
+Fixed: CONTROLS bindings can now be emptied without a keyboard (#7150): arming a slot shows a CLEAR button in the other slot's place, and on a controller a D-pad press selects it (A clears, B cancels). Backspace and Delete still work.
