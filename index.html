@@ -563,7 +563,7 @@
      and every later one; this is only the FIRST one, hoisted to a point with no
      network dependency.
      WHY INLINE, measured: an external <script> races the first paint and does
-     not reliably win. With sheetshape.js at script #4 of 146 on a quiet box, two
+     not reliably win. With sheet-shape.js loading early on a quiet box, two
      consecutive cold loads gave CLS 0.0824 and 0.5929 — same build, same box,
      the only difference being who won the race. Baseline was 0.5241; inline it
      is 0.0602/0.0824 ("good" is under 0.1).

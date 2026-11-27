@@ -649,7 +649,7 @@ async function loadAudioSerial(skipLeadingYield) {
     const ready = [...pending].filter((f) => preds.get(f).every((p) => audioScriptsLoaded.has(p)));
     if (!ready.length) {
       // Cycle or missing edge: fall back to the bulk loader for what remains.
-      return loadScripts([...pending], AUDIO_EDGES, { loaded: audioScriptsLoaded, ready: readyFn });
+      return loadScripts([...pending], AUDIO_EDGES, { strict: true, loaded: audioScriptsLoaded, ready: readyFn });
     }
     // ensureAudio already paint-yielded; only yield between later chunks (Settings hub).
     if (!skipLeadingYield) await audioYieldToMain(hot() ? "paint" : "task");
@@ -657,7 +657,7 @@ async function loadAudioSerial(skipLeadingYield) {
     audioMark("apex:audio:chunk");
     const src = ready[0];
     pending.delete(src);
-    const ok = await loadScripts([src], [], { loaded: audioScriptsLoaded, ready: readyFn });
+    const ok = await loadScripts([src], [], { strict: true, loaded: audioScriptsLoaded, ready: readyFn });
     if (!ok) return false;
   }
   return true;
@@ -874,6 +874,8 @@ let _agentLoad = null;
 // Files that evaluated, kept across a failed attempt so a retry never re-injects a
 // script-level const (the dataScriptsLoaded idiom).
 const agentScriptsLoaded = new Set();
+// bindAgent ran once: a retry after a failed pass must not rebuild ApexApi and overwrite window.__apex.
+let agentBound = false;
 function loadAgentSurface() {
   if (!_agentLoad) _agentLoad = (async () => {
     // js/net comes WITH the agent surface. apex.js reads NetTransport /
@@ -887,14 +889,14 @@ function loadAgentSurface() {
     const realOk = await ensureRealRace();
     // __apex.settingsFile / garageFile and the specs' SettingsExport.applySettings answer synchronously.
     await ensureSavesData();
-    const agentOk = await loadBackendScripts(AGENT_FILES, AGENT_EDGES, { loaded: agentScriptsLoaded });
+    const agentOk = await loadBackendScripts(AGENT_FILES, AGENT_EDGES, { strict: true, loaded: agentScriptsLoaded });
     // FAIL SOFT. A refused file (SRI: a stale shell's ?v= key answered with a newer
     // deploy's bytes, 2026-11-02) still lets later files evaluate, so ApexApi.create
     // throws "AgentRaster is not defined". Unguarded, that rejected this memo for the
     // session, aborted game.js's boot tail after `await bootAgentSurface()` and
     // painted the red overlay. __apex stays null; the next ask retries.
     let bound = true;
-    try { deps.bindAgent(); }
+    try { if (!agentBound) { deps.bindAgent(); agentBound = true; } }
     catch (e) { bound = false; Log.warn("game", "agent surface bind failed: " + (e && e.message)); }
     // Memoised on the promise, but a FAILED load must not latch for the session:
     // METRICS / the flyby panel ask again on their next open.
@@ -911,7 +913,7 @@ function loadAgentSurface() {
 let _bridgeLinkLoad = null;
 function openBridgeLink() {
   if (!_bridgeLinkLoad) {
-    _bridgeLinkLoad = Promise.resolve(loadBackendScripts(AGENT_FILES.filter((f) => /\/bridge-link\.js$/.test(f)), [], { loaded: agentScriptsLoaded }))
+    _bridgeLinkLoad = Promise.resolve(loadBackendScripts(AGENT_FILES.filter((f) => /\/bridge-link\.js$/.test(f)), [], { strict: true, loaded: agentScriptsLoaded }))
       .then(() => typeof BridgeLink !== "undefined", () => false)
       .then((ok) => { if (!ok) _bridgeLinkLoad = null; return ok; });
   }

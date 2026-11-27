@@ -215,7 +215,7 @@ test("loadAgentSurface: a refused file that makes bindAgent throw fails soft and
       "a bind that throws must not reject the loader (game.js awaits it at boot)");
     refuse = false;
     await w.lb.loadAgentSurface();   // METRICS / a later ask: not latched on the failure
-    assert.equal(w.injected.get("fixture-agent-raster.js"), 4, "three refused attempts, then a later ask fetches it again");
+    assert.equal(w.injected.get("fixture-agent-raster.js"), 2, "strict: one refused attempt (no in-place re-inject of a maybe-evaluated file), then a later ask fetches it again");
     assert.equal(w.injected.get("fixture-agent-api.js"), 1, "a landed file is not re-injected");
     assert.equal(binds, 2);
     await w.lb.loadAgentSurface();
