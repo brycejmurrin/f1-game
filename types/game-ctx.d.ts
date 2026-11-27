@@ -481,7 +481,8 @@ interface GameCtx {
   readonly setupTrialCancel: () => void;
   readonly realRace: { status(): { active: boolean; watch?: boolean }; isWatch(): boolean; isActive(): boolean; owns(car: CarState): boolean };
   readonly records: { key(): string | null; current(): string; config(): Record<string, unknown>; invalidate(): void; prepareDaily(): void; restoreDaily(): void; board(id: string): TTBoardRow[] };
-  readonly coach: { status(): Record<string, unknown> | null; feedback(): Record<string, unknown>; practiceGoal(): string; setPracticeGoal(id: string): boolean };
+  /** captureWorld / restoreWorld: the rewind's SimState world, for DrillFork (#6559 B2); `exact` is a branch replay. */
+  readonly coach: { status(): Record<string, unknown> | null; feedback(): Record<string, unknown>; practiceGoal(): string; setPracticeGoal(id: string): boolean; captureWorld(): { v: number; parts: Record<string, unknown> } | null; restoreWorld(w: { v: number; parts: Record<string, unknown> }, o?: { exact?: boolean }): boolean };
   readonly openCoachDetails: () => void;
   /**
    * The radio's VOICE — js/audio/radio-voice.js. Always an object: create()

@@ -530,6 +530,7 @@ async function precacheAssetLists() {
     "js/camera/extra-rigs.js",
     "js/camera/trackside.js",
     "js/camera/cam-avoid.js",
+    "js/camera/feel-fx.js",
     "js/ui/podium-beat.js",
     "js/race/podium-beat.js",
     "js/race/parc-ferme.js",
@@ -872,6 +873,8 @@ async function precacheAssetLists() {
     "learn/telemetry/style.css",
     "learn/telemetry/model.js",
     "learn/telemetry/lab.js",
+    // LAZY_DRILL_FORK — the strategy drills' what-if service behind a kind:sim drill
+    "js/race/drill-fork.js",
     // LOCALES — manifest only until a non-English language ships
     "locales/manifest.json",
     // /@gen-shell:sw-optional
@@ -1236,7 +1239,7 @@ async function precacheGeneration(onName) {
   // manifest or relying on the first online boot loses the pack after an update.
   const packManifest = PACK_MANIFEST_KEY_PREFIX + build;
   const stamped = urls.optional.map((u) =>
-    /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/core\/sim-state\.js$|^js\/audio\/|^js\/race\/|^js\/fx\/visor-optics\.js$|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor|extra-rigs|trackside|cam-avoid)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/career\/(regulations|ai-dev|experience)\.js$|^js\/perf\/(thermal-drift|soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/(?:phone-pad(?:-codec|-page)?|touch-button-actions)\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|touch-button-settings|appearance-(?:studio-ui|arrangement-picker)|companion-return|photo-studio-ui|results-sheet|quali-sheet|watch-transport|progress-backup|save-health|settings-export-body|learn-door|thumb-trainer|circuit-details-panel|hud-inputs|screen-(regions|placement|arranger)|hud-arrange|hud-layout-editor|desktop-graphics|dock-toolbar)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/(presets|tuner-panel)\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\/|^js\/learn-drills\//.test(u)
+    /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/core\/sim-state\.js$|^js\/audio\/|^js\/race\/|^js\/fx\/visor-optics\.js$|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor|extra-rigs|trackside|cam-avoid|feel-fx)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/career\/(regulations|ai-dev|experience)\.js$|^js\/perf\/(thermal-drift|soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/(?:phone-pad(?:-codec|-page)?|touch-button-actions)\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|touch-button-settings|appearance-(?:studio-ui|arrangement-picker)|companion-return|photo-studio-ui|results-sheet|quali-sheet|watch-transport|progress-backup|save-health|settings-export-body|learn-door|thumb-trainer|circuit-details-panel|hud-inputs|screen-(regions|placement|arranger)|hud-arrange|hud-layout-editor|desktop-graphics|dock-toolbar)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/(presets|tuner-panel)\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\/|^js\/learn-drills\//.test(u)
       ? stampKey(u) : u).filter((u) => {
         const bare = u.replace(/\?v=.*$/, "");
         // GLX and career UI went in `required`; runtime-only doors are skipped.
@@ -1506,6 +1509,14 @@ function packNetworkFirst(event, req, fixedCache, staleFirst) {
     // No cached copy: a slow network is still the only answer there is.
     try { return await network; } catch (_) { return Response.error(); }
   })());
+}
+
+// A cached voice .bin answers at once; a miss takes the network-first path (which files it).
+function voiceBinCacheFirst(event, req) {
+  event.respondWith(caches.match(req, { cacheName: VOICE_CACHE }).catch(() => undefined).then((hit) => {
+    if (hit) return hit;
+    return new Promise((resolve) => packNetworkFirst({ waitUntil: (p) => event.waitUntil(p), respondWith: (p) => resolve(p) }, req, VOICE_CACHE));
+  }));
 }
 
 // Content-addressed pack files: assets.js asks for `assets/pack/<file>?h=<md5>`
@@ -1806,8 +1817,11 @@ self.addEventListener("fetch", (event) => {
   // as pack, but filed in the fixed VOICE_CACHE (not each generation). Each response
   // races independently; voice-pack.js verifies the manifest's binary digest
   // before accepting a pair (including old bare keys).
+  // The .bin is CACHE-FIRST (#7075): the fresh .json's binary.sha256 is the revalidation, and
+  // voice-pack.js re-asks with cache:"reload" (network-first below) when a cached .bin misses it.
   if (url.pathname.includes("/assets/voice/") && !DEV_HOST) {
-    packNetworkFirst(event, req, VOICE_CACHE);
+    if (url.pathname.endsWith(".bin") && req.cache !== "reload" && req.cache !== "no-store") voiceBinCacheFirst(event, req);
+    else packNetworkFirst(event, req, VOICE_CACHE);
     return;
   }
 

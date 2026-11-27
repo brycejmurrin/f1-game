@@ -1469,7 +1469,7 @@ test("a later keep, ensure, or staged request can reselect a queued voice", asyn
 // plays the MP3 .bin exactly as before.
 const digestOf = (u8) => ({ sha256: createHash("sha256").update(u8).digest("hex"), bytes: u8.byteLength });
 function opusSandbox({ decodes, opusBytes, opusMeta, man }) {
-  const urls = [];
+  const urls = [], inits = [];
   const mp3 = new Uint8Array(8);   // integrity(8) is the digest of eight zero bytes
   const body = { "george.bin": mp3.buffer, "george.opus.bin": opusBytes.buffer };
   class FakeOAC {
@@ -1485,10 +1485,10 @@ function opusSandbox({ decodes, opusBytes, opusMeta, man }) {
   const sb = sandbox(["js/audio/voice-pack.js"], {
     OfflineAudioContext: FakeOAC, atob: (s) => Buffer.from(s, "base64").toString("binary"), queueMicrotask,
     GameAudio: { now: () => 0, ctxGen: () => 1, decodeClip: () => Promise.resolve({ duration: 0.5 }) },
-    fetch: (u) => { urls.push(u); const f = u.split("/").pop();
+    fetch: (u, init) => { urls.push(u); inits.push(init); const f = u.split("/").pop();
       return Promise.resolve({ ok: true, json: () => Promise.resolve(pack), arrayBuffer: () => Promise.resolve(body[f].slice(0)) }); },
   });
-  return { sb, urls };
+  return { sb, urls, inits };
 }
 
 test("the Opus probe clips are real Ogg, WebM and CAF Opus files", () => {
@@ -1525,12 +1525,15 @@ test("a browser that cannot decode Opus keeps today's parallel MP3 fetch", async
 
 test("an Opus twin that fails its digest or lacks one falls back to the MP3, not to silence", async () => {
   for (const meta of [{ sha256: "0".repeat(64), bytes: 4 }, null]) {
-    const { sb, urls } = opusSandbox({ decodes: ["ogg"], opusBytes: new Uint8Array([79, 103, 103, 83]), opusMeta: meta });
+    const { sb, urls, inits } = opusSandbox({ decodes: ["ogg"], opusBytes: new Uint8Array([79, 103, 103, 83]), opusMeta: meta });
     await sb.VoicePack.codecs();
     const P = sb.VoicePack.create({});
     assert.equal(await P.load("george"), true);
     assert.equal(P.debug().formats.george.fmt, "mp3");
-    assert.deepEqual(urls.map((u) => u.split("/").pop()), ["george.json", "george.opus.bin", "george.bin"]);
+    // A digest miss re-asks the twin once past the worker's cache (#7075); a twin with no digest is not re-asked.
+    const twin = meta ? ["george.opus.bin", "george.opus.bin"] : ["george.opus.bin"];
+    assert.deepEqual(urls.map((u) => u.split("/").pop()), ["george.json", ...twin, "george.bin"]);
+    if (meta) assert.equal(inits[2] && inits[2].cache, "reload", "the re-ask bypasses the cache");
     assert.equal(J(P.plan("george", "hello")).secs.toFixed(2), "0.50", "MP3 offsets, not the twin's");
   }
 });

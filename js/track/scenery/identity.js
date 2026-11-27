@@ -23,7 +23,7 @@ const SceneryIdentity = (function () {
 
     const underpassPortal = (s, opts) => {
       opts = opts || {};
-      const k = ((Math.round(s * n) % n) + n) % n;
+      const k = M4.wrapIndex(s * n, n);
       const clearH = opts.h != null ? opts.h : 5.5;
       const thick = opts.thick != null ? opts.thick : 1.4;
       const col = opts.col || [0.10, 0.10, 0.12];
@@ -110,7 +110,7 @@ const SceneryIdentity = (function () {
         // short mast still gets the tuned theme radius — and the hand-placed
         // luminaires that legitimately want a SMALL radius (Monaco's tunnel
         // soffits at 21-27 m) come through lampPost, a different list, untouched.
-        const kk = ((Math.round(k) % n) + n) % n;
+        const kk = M4.wrapIndex(k, n);
         const throwR = Math.hypot(lensPos[0] - px[kk], lensPos[1] - py[kk], lensPos[2] - pz[kk]);
         register({
           pos: [lensPos[0], lensPos[1], lensPos[2]],

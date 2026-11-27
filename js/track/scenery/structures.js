@@ -100,7 +100,7 @@ const SceneryStructures = (function () {
     // still emits, because there the second panel is not a duplicate.
     const walked = new Map();
     const along = (s0, s1, stepM, fn, tag) => {
-      const k0 = ((Math.round(s0 * n) % n) + n) % n, k1 = ((Math.round(s1 * n) % n) + n) % n;
+      const k0 = M4.wrapIndex(s0 * n, n), k1 = M4.wrapIndex(s1 * n, n);
       const wrapped = ((k1 - k0) + n) % n;
       // Full lap = endpoints ~a whole lap apart that round to one node. Walk
       // n-1, not n: i===n lands back on k0 and emits a second byte-identical
@@ -145,8 +145,7 @@ const SceneryStructures = (function () {
       let n = 0;
       along(s0, s1, 6, (k, spacing) => {
         const p = anchor(k, side, gap);
-        if (onTrack(p.c[0], p.c[2], a / 2)) {
-          ctx.noteSuppressed("wall", `wall SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+        if (SceneryGuards.refuseOnRoad(ctx, "wall", p.c[0], p.c[2], a / 2, () => `wall SUPPRESSED at k=${k} side=${side}: gap=${gap}`)) {
           return;
         }
         const wallCol = col || [0.78, 0.78, 0.80];
@@ -200,8 +199,7 @@ const SceneryStructures = (function () {
       const crankKey = `fence-crank|${h}|${st}|${postCol.join(",")}|${side}`;
       along(s0, s1, 5, (k, spacing) => {
         const p = anchor(k, side, gap);
-        if (onTrack(p.c[0], p.c[2], 0.5)) {
-          ctx.noteSuppressed("fence", `fence SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+        if (SceneryGuards.refuseOnRoad(ctx, "fence", p.c[0], p.c[2], 0.5, () => `fence SUPPRESSED at k=${k} side=${side}: gap=${gap}`)) {
           return;
         }
         const place = { o: p.c, r: p.r, u: p.u, t: p.t };
@@ -288,8 +286,7 @@ const SceneryStructures = (function () {
       const railMargin = Math.min(0.5, gap * 0.5);
       along(s0, s1, 4, (k, spacing) => {
         const p = anchor(k, side, gap);
-        if (onTrack(p.c[0], p.c[2], railMargin)) {
-          ctx.noteSuppressed("guardrail", `guardrail SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+        if (SceneryGuards.refuseOnRoad(ctx, "guardrail", p.c[0], p.c[2], railMargin, () => `guardrail SUPPRESSED at k=${k} side=${side}: gap=${gap}`)) {
           return;
         }
         const place = { o: p.c, r: p.r, u: p.u, t: p.t };
@@ -386,8 +383,7 @@ const SceneryStructures = (function () {
       };
       along(s0, s1, 3.4, (k, spacing) => {
         const p = anchor(k, side, gap);
-        if (onTrack(p.c[0], p.c[2], 1.0)) {
-          ctx.noteSuppressed("tyreWall", `tyreWall SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+        if (SceneryGuards.refuseOnRoad(ctx, "tyreWall", p.c[0], p.c[2], 1.0, () => `tyreWall SUPPRESSED at k=${k} side=${side}: gap=${gap}`)) {
           return;
         }
         // Same split as guardrail: fixed tyre stack, length-scaled conveyor cap.
@@ -446,7 +442,7 @@ const SceneryStructures = (function () {
     };
     const gantry = (s, h, col, opts) => {
       const st = (opts && opts.style) || kitOf("gantry", "box");
-      const k = ((Math.round(s * n) % n) + n) % n, c = col || [0.16, 0.16, 0.19];
+      const k = M4.wrapIndex(s * n, n), c = col || [0.16, 0.16, 0.19];
       const aL = anchor(k, -1, 1.5), aR = anchor(k, 1, 1.5), u = aL.u;
       const beam = [px[k] + u[0] * h, py[k] + u[1] * h, pz[k] + u[2] * h];
       const housing = vadd(beam, u, -0.62);   // the lamp housing's centre (below)
@@ -568,8 +564,7 @@ const SceneryStructures = (function () {
     const marshalPost = (k, side, gap, opts) => {
       const st = (opts && opts.style) || kitOf("marshal", "hut");
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
-      if (onTrack(p.c[0], p.c[2], 3)) {
-        ctx.noteSuppressed("marshalPost", `marshalPost SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+      if (SceneryGuards.refuseOnRoad(ctx, "marshalPost", p.c[0], p.c[2], 3, () => `marshalPost SUPPRESSED at k=${k} side=${side}: gap=${gap}`)) {
         return;
       }
       // The post's signal panel hangs off the pole at the back of the hut: an
@@ -827,8 +822,7 @@ const SceneryStructures = (function () {
     };
     const signBoard = (k, side, gap, kind, value) => {
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
-      if (onTrack(p.c[0], p.c[2], 1.5)) {
-        ctx.noteSuppressed("signBoard", `signBoard SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
+      if (SceneryGuards.refuseOnRoad(ctx, "signBoard", p.c[0], p.c[2], 1.5, () => `signBoard SUPPRESSED at k=${k} side=${side}: gap=${gap}`)) {
         return;
       }
       ctx.note("signBoard", [p.c[0], p.c[1] + 1, p.c[2]], [2.5, 2, 0.3], { k, side, board: kind, value });

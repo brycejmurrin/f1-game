@@ -102,7 +102,7 @@ function warm(hrefs) {
 const SLOW_MS = 10000, DEADLINE_MS = 25000;
 // Transient github.io 5xx on a lazy <script>: retry the SAME file with a fresh
 // query key before the bundle gives up (Data Hub, grip-steer, results-sheet, …).
-const TRANSIENT_RETRY_MS = [400, 1200];
+const RETRY_MS = Object.freeze([400, 1200]);   // ONE table: lazy-bundles reads it as ScriptLoader.retryMs
 // PAGE-LEVEL: classic scripts that have already evaluated in this tab (#3295).
 // A fresh ScriptLoader (career UI retry clears its memo and calls create()
 // again) has an empty opts.loaded; re-appending a const IIFE redeclares and the
@@ -260,10 +260,10 @@ function loadBackendScripts(files, edges, opts) {
       return r.ok;
     }
     const W = typeof window !== "undefined" ? window : null;
-    const maxAttempts = TRANSIENT_RETRY_MS.length + 1;
+    const maxAttempts = RETRY_MS.length + 1;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (attempt > 0 && W && typeof W.setTimeout === "function") {
-        await new Promise((r) => W.setTimeout(r, TRANSIENT_RETRY_MS[attempt - 1]));
+        await new Promise((r) => W.setTimeout(r, RETRY_MS[attempt - 1]));
       }
       const bust = attempt > 0 ? attempt : (optBust || 0);
       const r = await injectOnce(src, bust);
@@ -293,6 +293,6 @@ function loadBackendScripts(files, edges, opts) {
 
 return { load: loadBackendScripts };
 }
-  return { create, url, preload, warm };
+  return { create, url, preload, warm, retryMs: RETRY_MS };
 })();
 Object.freeze(ScriptLoader);

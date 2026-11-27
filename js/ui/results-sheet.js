@@ -10,7 +10,26 @@ const trN = (x) => typeof I18n !== "undefined" ? I18n.n(x) : x.toLocaleString();
 
 const medalName = (medal) => tr("results.medal." + medal, null, medal.toUpperCase());
 
-const PODIUM = [" p1", " p2", " p3"];   // indexed 0-based; 4th place on has none
+const PODIUM = ["", " p1", " p2", " p3"];   // indexed by 1-based position; 4th place on has none
+
+// ONE classification row for the race results and the qualifying sheet (#7052).
+//   pos       text of the .res-pos span          color     CSS colour of the team swatch
+//   name, pts the caller's own nodes (the results row decorates both after the fact)
+//   podium    1-based position that earns p1..p3 (0 / omitted: none)
+//   cls       extra classes, each with its leading space (" you q-real")
+//   swatchHidden  aria-hidden on the swatch: the results rows say it, the quali rows do not (recorded gap)
+// Returns the row; the caller appends whatever sits between name and pts (the stint strip).
+function buildRow({ pos, color, name, pts, cls = "", podium = 0, swatchHidden = false }) {
+  const el = document.createElement("div");
+  el.className = `res-row${PODIUM[podium] || ""}${cls}`;
+  el.setAttribute("role", "listitem");
+  const p = document.createElement("span"); p.className = "res-pos"; p.textContent = pos;
+  const sw = document.createElement("span"); sw.className = "res-swatch";
+  if (swatchHidden) sw.setAttribute("aria-hidden", "true");
+  sw.style.background = color;
+  el.append(p, sw, name, pts);
+  return el;
+}
 
 // Race classification timing is deliberately derived from the same fields as
 // RaceControl.finishOrder (game.js): completed laps, then finishT + penalty.
@@ -468,16 +487,12 @@ function buildResults(order, race) {
   order.forEach((c, i) => {
     const dnf = dnfOf(c);
     const nc = c.classified === false && !dnf && !hostRow.has(c.driverId);   // a guest reads the host verdict
-    const row = document.createElement("div");
-    const podium = nc ? "" : PODIUM[i] || "";
-    const other = c.human && !c.local ? " q-real" : "";
-    row.className = `res-row${podium}${c.isPlayer ? " you" : ""}${other}`;
-    row.setAttribute("role", "listitem");
-    row.style.setProperty("--i", i);   // settle stagger, css/components.css
-    const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = nc ? "NC" : i + 1;
-    const sw = document.createElement("span"); sw.className = "res-swatch"; sw.setAttribute("aria-hidden", "true");
-    sw.style.background = G.cssCol(c.team.color);
     const nm = document.createElement("div"); nm.className = "res-name";
+    const pt = document.createElement("span"); pt.className = "res-pts";
+    const other = c.human && !c.local ? " q-real" : "";
+    const row = buildRow({ pos: nc ? "NC" : i + 1, color: G.cssCol(c.team.color), name: nm, pts: pt, podium: nc ? 0 : i + 1,
+      cls: `${c.isPlayer ? " you" : ""}${other}`, swatchHidden: true });
+    row.style.setProperty("--i", i);   // settle stagger, css/components.css
     // A retirement says WHY in the place a penalty would say how much: the two
     // never co-occur (a car that stopped was not given time back).
     // Set textContent FIRST — it replaces ALL children, so the PLAYER tag must
@@ -502,7 +517,6 @@ function buildResults(order, race) {
       tag.className = "q-real-tag"; tag.textContent = " " + tr("results.player", null, "PLAYER");
       nm.appendChild(tag);
     }
-    const pt = document.createElement("span"); pt.className = "res-pts";
     // "+FL": this round's fastest-lap point (SeasonCal.award sets lastFl only
     // when the format pays it, and only to a top-ten finisher).
     const fl = !sprint && G.seasonMode && season && season.lastFl === c.driverId && !dnf ? 1 : 0;
@@ -513,7 +527,6 @@ function buildResults(order, race) {
     const paid = c.classified !== false && ((!dnf && !nc) || (c.classified && !c.dsq));
     pt.textContent = G.practice && !watched ? tr("results.unscored", null, "Unscored")
       : paid ? tr("results.points", { points: trN((table[i] || 0) + fl) }, "{points} pts") + (fl ? " +FL" : "") : nc ? tr("results.points", { points: trN(0) }, "{points} pts") : outLabel(dnf);
-    row.append(pos, sw, nm);
     if (timing && !dnf && c !== timing.winner && typeof carData.lap === "number" &&
         isFinite(carData.lap) && carData.lap === timing.winnerLap) {
       const official = correctedFinish(carData);
@@ -527,8 +540,7 @@ function buildResults(order, race) {
       }
     }
     const strip = stintStrip(c);
-    if (strip) { row.appendChild(strip.strip); nm.appendChild(strip.details); }
-    row.appendChild(pt);
+    if (strip) { row.insertBefore(strip.strip, pt); nm.appendChild(strip.details); }
     classification.appendChild(row);
   });
   // THE ROUND'S EARNINGS. Career only, and only for a round that just settled.
@@ -996,6 +1008,6 @@ function buildChampion() {
 return { buildResults, buildTTResults, buildStandings, buildChampion };
 }
 
-return { create };
+return { create, row: buildRow };
 })();
 Object.freeze(GameResultsSheet);
