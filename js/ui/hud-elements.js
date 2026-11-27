@@ -40,10 +40,8 @@ const HudElements = (function () {
   const PROFS = { standard: 1, minimal: 1, broadcast: 1 };
 
   const PHONE_DEFAULTS = Object.freeze({ speed: "off", gear: "off", energy: "off", ot: "off", aero: "off", rel: "on" });
-  // UiScale.phone() holds the viewport read (#6487); the inline test is for a sandbox without scale.js.
-  const phone = () => typeof UiScale !== "undefined" ? UiScale.phone()
-    : typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches
-    && Math.min(window.innerWidth, window.innerHeight) <= 500;
+  // UiShape.phone() (js/ui/ui-shape.js) is the one phone test and holds the viewport read (#6487).
+  const phone = () => typeof UiShape !== "undefined" && UiShape.phone();
   const defaults = () => phone() ? PHONE_DEFAULTS : {};
 
   const store = typeof GameStore !== "undefined" ? GameStore.store : null;
