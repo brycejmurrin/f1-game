@@ -388,13 +388,11 @@ test("tuned() counts the condition's overrides and reset() clears them (the glob
 test("restore rejects an invalid undo snapshot and writes nothing", () => {
   const bad = [
     { "bahrain|dusk|wet": { keyMul: "9" } },                 // not a number
-    { "bahrain|dusk|wet": { keyMul: 99 } },                  // out of the knob's range
     { "bahrain|dusk|wet": { keyMul: NaN } },
-    { "bahrain|dusk|wet": { notAKnob: 1 } },                 // unknown id
     { "bahrain|dusk|wet": "x" },                             // not an object
     { "bahrain|dusk|wet": [1] },
     JSON.parse('{"__proto__": {"keyMul": 1}}'),              // own __proto__ key
-    { "a|dusk|wet": { keyMul: 1 }, "b|dusk|wet": { keyMul: 99 } },   // one bad entry rejects the lot
+    { "a|dusk|wet": { keyMul: 1 }, "b|dusk|wet": { keyMul: "x" } },   // one bad entry rejects the lot
     [],
   ];
   for (const undo of bad) {
@@ -404,4 +402,13 @@ test("restore rejects an invalid undo snapshot and writes nothing", () => {
     assert.equal(h.store.restore(undo), false, JSON.stringify(undo));
     assert.deepEqual(snap(h), before, "a rejected undo must not touch the profiles");
   }
+});
+
+test("restore round-trips a real copy even when a target holds a stale id or out-of-range value", () => {
+  const h = loadStore({ saved: { "monza|dusk|wet": { oldKnob: 3, keyMul: 99 } } });
+  h.store.set("ssrWetMul", 1.4);
+  const before = snap(h);
+  const r = h.store.copyToTracks("edits");
+  assert.equal(h.store.restore(r.undo), true);
+  assert.deepEqual(snap(h), before);
 });

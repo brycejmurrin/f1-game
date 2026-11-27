@@ -162,7 +162,7 @@ function ltSpread(id, btn) {
 }
 function ltUndoSpread() {
   if (!_ltUndo) return;
-  G.restoreLightTune(_ltUndo);
+  if (!G.restoreLightTune(_ltUndo)) { Log.warn("ui", "light undo rejected"); return; }
   _ltUndo = null;
   persistLightTune();
   ltDisarm();

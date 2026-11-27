@@ -317,10 +317,7 @@ const LightStore = (() => {
     // #7092: undo may come from __apex.lightCopy(obj); validate it whole before any write.
     const validUndo = (u) => !Array.isArray(u) && Object.keys(u).every((k) => {
       const p = u[k];
-      return k !== "__proto__" && (p === null || (typeof p === "object" && !Array.isArray(p) && Object.entries(p).every(([id, v]) => {
-        const d = TUNE_DEFS.find((t) => t.id === id);
-        return d && Number.isFinite(v) && v >= d.min && v <= d.max;
-      })));
+      return k !== "__proto__" && (p === null || (typeof p === "object" && !Array.isArray(p) && Object.values(p).every(Number.isFinite)));
     });
     function restore(undo) {
       if (!undo || typeof undo !== "object" || !validUndo(undo)) return false;
