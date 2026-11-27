@@ -541,7 +541,7 @@
     // keeps FXAA: AA stays null and nothing below changes.
     if (ctx.traa && webgpu && window.TLXAA && TLXAA.taa) {
       try {
-        const aaCtx = { waterUV: P.fxaa.waterUV, runPass: (m, t) => runPass(m, t), ownRT, trackMaterial, ldrTex: ldrRT.texture, depthTex: sceneDepthTex };
+        const aaCtx = { waterUV: P.fxaa.waterUV, runPass: (m, t) => runPass(m, t), ownRT, rtSetSize, trackMaterial, ldrTex: ldrRT.texture, depthTex: sceneDepthTex };
         // Per-object velocity first; a throw keeps the camera-only TRAA, a second throw FXAA.
         if (velTex) { try { AA = TLXAA.taa(THREE, TSL, Object.assign({ velTex }, aaCtx)); } catch (_) { AA = null; } }
         if (!AA) AA = TLXAA.taa(THREE, TSL, aaCtx);
@@ -674,14 +674,13 @@
       const optics = G?.dof ? G : photoGi;
       if (viz || !F || !(photo && optics || HV?.dof || HV?.motionBlur)) { _focusOk = false; lastTap = null; return src; }
       let cur = src;
-      const next = () => (cur === cineA ? cineB : cineA);
       if (!F.noEnv && HV?.motionBlur && G?.motionBlur && F.invVP && F.viewProj) {
         ensureCine();
         const M = G.motionBlur;
         M.U.invVP.value.fromArray(F.invVP);
         M.U.prevVP.value.fromArray(_prevOk ? _prevVP : F.viewProj);
         M.src.value = cur.texture;
-        const out = next();
+        const out = cur === cineA ? cineB : cineA;
         runPass(M.mat, out); cur = out; _last.mblur = true;
       }
       if ((photo || HV?.dof) && optics?.dof && F.invProj && F.proj) {
@@ -706,7 +705,7 @@
         D.focusTex.value = focusRT[_fi].texture;
         _fi ^= 1;
         D.src.value = cur.texture;
-        const out = next();
+        const out = cur === cineA ? cineB : cineA;
         runPass(D.mat, out); cur = out; _last.dof = true;
       } else { _focusOk = false; lastTap = null; }
       return cur;
@@ -978,9 +977,10 @@
 
     // hdrOut: a capture (screenshot, soft present) unpacks RGBA8 rows, so a half-float source is first copied
     // through the debug blit (which clamps to 0..1: the SDR view of the HDR frame) into an 8-bit target.
-    let cap8RT = null;
+    let cap8RT = null, cap8Idle = 0, fxaaCapIdle = 0;   // idle: presents since the last capture request (shed at SHED_FRAMES)
     function cap8(rt) {
       if (!rt || !rt.texture || rt.texture.type === THREE.UnsignedByteType || !P.blit) return rt;
+      cap8Idle = 0;
       try {
         if (!cap8RT) { cap8RT = makeRT(rt.width, rt.height, THREE.UnsignedByteType); cap8RT.texture.name = "TLXPostCap8"; }
         rtSetSize(cap8RT, rt.width, rt.height);
@@ -1057,6 +1057,7 @@
       const direct = _lastPresentRT && _lastPresentRT === (_last.sgsr ? aaRT : ldrRT);
       if (!direct || !(_last.fxaa || _last.taa)) return cap8(_lastPresentRT || ldrRT);
       const w = renderer.domElement.width, h = renderer.domElement.height;
+      fxaaCapIdle = 0;
       if (!fxaaCaptureRT) {
         fxaaCaptureRT = makeRT(w, h, THREE.UnsignedByteType);
         fxaaCaptureRT.texture.name = "TLXPostFXAACapture";
@@ -1610,6 +1611,10 @@
         bloomIdle = shedIdle(!!(haveBloom && useLv > 0), bloomIdle, releaseBloom);
         if (HI) giIdle = shedIdle(!!haveGI, giIdle, releaseGI);
         if (HI || photoGi) cineIdle = shedIdle(!!(_last.dof || _last.mblur), cineIdle, releaseCine);
+        // Capture RTs: a one-off screenshot must not pin a full-size RGBA8 target. The soft present asks
+        // every frame (cap8 resets the count), so it keeps cap8RT.
+        if (cap8RT) cap8Idle = shedIdle(false, cap8Idle, () => { dropRT(cap8RT); cap8RT = null; });
+        if (fxaaCaptureRT) fxaaCapIdle = shedIdle(false, fxaaCapIdle, () => { dropRT(fxaaCaptureRT); fxaaCaptureRT = null; });
       }
       } finally {
         try { holdFlush(false); } catch (_) { /* a throw mid-chain: tlx.js's catch owns the fallback */ }
