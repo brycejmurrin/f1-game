@@ -169,7 +169,7 @@ test("#6330: a drive sample in flight across Resume stays neutral until a post-R
   assert.equal(Input.throttle(), false);
   // The packet the phone sends just before the host resumes: it has seen only
   // menu dashes, and it is still on the 30 ms wire when Resume runs.
-  phone.thr = 0.49; phone.brk = 0.25; phone.held = PhonePad.HELD.lookBack; phone.roll = 25;
+  phone.thr = 0.49; phone.brk = 0.25; phone.held = PhonePadPage.HELD.lookBack; phone.roll = 25;
   session.sample(true);
   resume();
   for (let i = 0; i < 2; i++) frame(false);
@@ -196,7 +196,7 @@ test("#6330 × #6319: fenced samples under Pause keep the phone's tilt for the m
   const before = tiltChanges.n;
 
   pause();
-  phone.thr = 0.7; phone.brk = 0.4; phone.held = PhonePad.HELD.lookBack; phone.roll = 20;
+  phone.thr = 0.7; phone.brk = 0.4; phone.held = PhonePadPage.HELD.lookBack; phone.roll = 20;
   for (let i = 0; i < 30; i++) frame();
   assert.ok(h.link.stats().fenced > 0, "the samples under the pause card are fenced");
   assert.equal(Input.phoneTiltAvailable(), true, "the settings tilt rows and CALIBRATE still see the phone's tilt under Pause");

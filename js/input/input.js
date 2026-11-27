@@ -388,7 +388,7 @@ const Input = (function () {
   // settings and capture tools own the controls. Menu edges remain available.
   function remoteDrivingBlocked() {
     // An open camera picker is a menu for the pad and the phone: they steer its focus, not the car.
-    return !!axisCaptureCb || !!padCaptureCb || !!(window.UiLayers && window.UiLayers.navOpen()) || camPickerOpen();
+    return axisCaptureHeld() || !!padCaptureCb || !!(window.UiLayers && window.UiLayers.navOpen()) || camPickerOpen();
   }
   function photoLayerOpen() {
     const id = window.UiLayers?.top()?.id;
@@ -788,6 +788,15 @@ const Input = (function () {
   const PEDAL_CAPTURE_MS = 8000;
   let pedalCapture = null;
   let pedalCaptureStatus = null;
+  /* THE WIZARD'S STEP GAP IS STILL THE WIZARD'S. A completed step disarms the
+     capture and key-binds.js re-arms the next one 600 ms later (its stepTimer):
+     in between, wheelFirst() fell false (pickPad could pick another pad) and a
+     Start on the wheel paused the race behind the sheet. The hold fences that
+     gap; any beginAxisCapture (re-arm, finish, cancel) ends it, and it lapses
+     on its own past the gap if the wizard never comes back (#7322 A5). */
+  const AXIS_HOLD_MS = 1000;
+  let axisHoldUntil = 0;
+  function axisCaptureHeld() { return !!axisCaptureCb || nowMs() < axisHoldUntil; }
   function snapshotRests(pads, into) {
     for (let i = 0; pads && i < pads.length; i++) {
       const p = pads[i];
@@ -801,6 +810,7 @@ const Input = (function () {
      from that snapshot and would win as the THROTTLE. */
   function beginAxisCapture(cb, opts) {
     axisCaptureCb = typeof cb === "function" ? cb : null;
+    axisHoldUntil = 0;
     axisCaptureRest = null;
     axisCaptureSkip = new Set((opts && opts.exclude) || []);
     axisCaptureOwner = opts && opts.ownerKey || null;
@@ -812,18 +822,14 @@ const Input = (function () {
   function completeAxisCapture(info) {
     const cb = axisCaptureCb;
     beginAxisCapture(null);
+    axisHoldUntil = nowMs() + AXIS_HOLD_MS;
     cb(info.axis, Math.sign(info.far - info.rest) || 1, info);
   }
   function pollPedalCapture(pads) {
     const capture = pedalCapture;
     const pad = Array.prototype.find.call(pads, (p, i) => p?.connected && padKey(p, i) === capture.key);
     const value = pad?.axes?.[capture.axis], now = nowMs();
-    if (!Number.isFinite(value) || now >= capture.deadline) {
-      const notify = pedalCaptureStatus;
-      beginAxisCapture(null);
-      notify("retry");
-      return;
-    }
+    if (!Number.isFinite(value) || now >= capture.deadline) { abortPedalCapture(); return; }
     const { initial, direction } = capture;
     const offset = direction * (value - initial);
     capture.outward = Math.max(capture.outward, offset);
@@ -845,6 +851,18 @@ const Input = (function () {
     if (now - capture.releasedAt >= PEDAL_RELEASE_MS && Math.abs(far - value) >= AXIS_CAPTURE_MOVE) {
       completeAxisCapture({ key: capture.key, axis: capture.axis, rest: value, far });
     }
+  }
+  function abortPedalCapture() {
+    const notify = pedalCaptureStatus;
+    beginAxisCapture(null);
+    notify("retry");
+  }
+  /* A pedal step's deadline runs while the pad is gone too. pollGamepad returns
+     early with no pad, so pollPedalCapture never saw the clock: a wheel that came
+     back after the deadline aborted the wizard on its first frame, and one that
+     never came back left the sheet on "Press all the way…" (#7322 A4). */
+  function expirePedalCapture() {
+    if (axisCaptureCb && pedalCapture && nowMs() >= pedalCapture.deadline) abortPedalCapture();
   }
   function pollAxisCapture(pads) {
     if (!axisCaptureCb || !pads) return;
@@ -1642,7 +1660,7 @@ const Input = (function () {
   function activePad() { return pickPad(readPads(), null, wheelFirst()); }
   // A set-up wheel (a saved non-default axis map) or its wizard capturing:
   // between never-used pads the non-standard one ranks first (below).
-  function wheelFirst() { return !!axisCaptureCb || !padAxesAreDefault(); }
+  function wheelFirst() { return axisCaptureHeld() || !padAxesAreDefault(); }
   /* WHICH PAD DRIVES: THE ONE BEING USED. getGamepads() lists pads in
      connection-slot order, so first-connected-wins let a wheel base, a flight
      stick or an idle second controller in slot 0 ignore the pad in the
@@ -1801,6 +1819,7 @@ const Input = (function () {
   function pollGamepad() {
     const camera = photoCamera?.isActive() ? photoCamera : null;
     haptics.flush();   // opens the frame for the rumble mixer: one effect per frame (js/input/haptics.js)
+    expirePedalCapture();   // before the no-pad early returns below
     // A PHONE CONTROLLER GOING QUIET is the same interruption as an unplugged
     // pad (a call, an app switch, a flat battery): its pedals already zero at
     // REMOTE_STALE_MS, but the race ran on with the car coasting into a wall.
@@ -1895,7 +1914,7 @@ const Input = (function () {
     }
     const axes = pad.axes || [];
     const cameraPad = !!camera && padStd(pad) && photoLayerOpen() &&
-      !axisCaptureCb && !padCaptureCb && !document.hidden;
+      !axisCaptureHeld() && !padCaptureCb && !document.hidden;
     let padCameraHeld = cameraHeldPads.has(key);
     if (cameraPad || padCameraHeld) {
       const moveX = photoAxis(axes, 0), moveY = photoAxis(axes, 1);
@@ -1936,7 +1955,7 @@ const Input = (function () {
     padSteer = padSteerAnalog ? stick : dpad;
     // Capture/menu presses still enter padPrevButtons below, but cannot arm a
     // driving toggle — even if their callback closes that owner this poll.
-    const padOwnsDrive = !cameraPad && !padCameraHeld && !axisCaptureCb && !padCaptureCb && !window.UiLayers?.navOpen();
+    const padOwnsDrive = !cameraPad && !padCameraHeld && !axisCaptureHeld() && !padCaptureCb && !window.UiLayers?.navOpen();
     // pedals: analog triggers, a wheel's pedal AXES, or the A/B face buttons.
     const throttleInput = pedalLevel(Math.max(padActVal(pad, "throttle", consumed), padPedalAxis(axes, "throttle")), padPedalDeadzone.throttle);
     if (throttleIsToggle()) {
@@ -1967,12 +1986,13 @@ const Input = (function () {
         setLocalControlDevice("controller");
       }
     }
-    if (axisCaptureCb) {
+    if (axisCaptureHeld()) {
       // The wheel wizard owns the frame: turning the wheel to answer "which
       // axis steers?" must not also steer the car sitting behind the sheet.
+      // Its step gap too (axisHoldUntil): no pause, menu or drive edge.
       padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0; padSteer = 0;
       padSteerAnalog = false; padLookBack = false; padDpadTarget = padDpadVal = 0; padMenu.releaseDirection();
-      pollAxisCapture(pads);
+      if (axisCaptureCb) pollAxisCapture(pads);
     } else if (padCaptureCb) {
       // A CONTROLS slot is waiting for a button: the first rising edge is its
       // answer and the frame ends here — the press must not also walk the
@@ -2388,7 +2408,7 @@ const Input = (function () {
     if (typeof v === "number" && isFinite(v)) touchSpeedMix = clamp(v, 0, 1);
   }
   function setAnalogTrim(src, t) {
-    if (!(src in analogTrim)) return;
+    if (!Object.hasOwn(analogTrim, src)) return;   // own keys only: "toString" is not a trim (#7322 A3)
     if (typeof t === "number" && isFinite(t)) analogTrim[src] = clamp(t, 0.4, 2.2);
   }
   function setAnalogSpeedMix(v) {
@@ -2994,8 +3014,6 @@ const Input = (function () {
     primeHaptics,
     setPadLabelMode, padLabelMode: padLabelModeOf,
     controllerProfile: () => deviceProfiles ? deviceProfiles.current() : null,
-    getControllerProfiles: () => ensureDeviceProfiles() ? deviceProfiles.data() : { v: 1, devices: [] },
-    setControllerProfiles: (raw) => ensureDeviceProfiles() ? deviceProfiles.replace(raw) : null,
     resetControllerProfile,
     setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padCalibrationOwner, parkedPadPreview, padRest, setPadRest, padRestStore,
     getPadDeadzone,

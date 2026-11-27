@@ -171,5 +171,5 @@ test("touchSpeedFromSlider: notch 1 is off, notch 10 is full, monotonic", () => 
   assert.ok(Math.abs(f(5) - 4 / 9) < 1e-12);
   for (let v = 1; v < 10; v++) assert.ok(f(v + 1) > f(v), `not increasing at notch ${v}`);
   assert.match(src, /(?:store|numStore)\.get\("touchDragSpeed", 1\)/, "OPT-IN: an absent key is notch 1, the fixed range");
-  assert.match(src, /wireTune\("pm-touchdragspeed", "touchDragSpeed", 1,/);
+  assert.match(src, /wireTune\("pm-touchdragspeed", "touchDragSpeed", SLIDER_MIN,/);
 });

@@ -23,7 +23,7 @@ function boot() {
   const ctx = vm.createContext({ console, JSON, Math, Object, Array, Number, Map, Set, Date, String, isFinite,
     GameStore: { store }, GameAudio: { tuneDefaults: () => ({}), layerDefaults: () => ({}) },
     Log: { info() {}, warn() {}, enabled: () => false },
-    Input: { keysAreDefault: () => true, padsAreDefault: () => true, setControllerProfiles() { throw Error('no immediate reapply: UI reload contract'); } },
+    Input: { keysAreDefault: () => true, padsAreDefault: () => true },
     navigator: { userAgent: 'player-tools-backup-vm' }, GfxQuality: { defaultId: () => 'high' },
     localStorage: { get length() { return disk.size; }, key: (i) => Array.from(disk.keys())[i], getItem: (k) => disk.get(k) ?? null },
   });
@@ -147,5 +147,5 @@ test('named preset context survives garage backups while malformed metadata cann
 
 test('import UI retains its existing durable-success reload path', () => {
   assert.match(bodySource, /if \(!r\.applied\)[\s\S]*?reloading = true; b\.disabled = true;[\s\S]*?location\.reload\(\)/);
-  assert.ok(!(source + bodySource).includes('Input.setControllerProfiles('), 'no extra live reapply added to a reload-based importer');
+  assert.doesNotMatch(source + bodySource, /\bInput\.(?:set\w*Profiles?|setPadAxisMap|setPadMap)\(/, 'no extra live reapply added to a reload-based importer');
 });
