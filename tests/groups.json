@@ -841,6 +841,7 @@
     "tests/unit/mobile-sync-web.test.mjs",
     "tests/unit/model-pack-format.test.mjs",
     "tests/unit/model-sway-parity.test.mjs",
+    "tests/unit/models-required-diagnostics.test.mjs",
     "// #3368: Monaco mid-lap dual_lite/night_pass/scenery orbit sightline clears Fairmont-cliff plane crowns (game-vm, ~5 s).",
     "tests/unit/monaco-fairmont-orbit.test.mjs",
     "tests/unit/monza-coplanar-clip.test.mjs",
