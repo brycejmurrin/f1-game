@@ -602,11 +602,11 @@ function isWetRoad() { return trackWetness() >= 0.25; }
 function isRaining() { return trackWetness() >= 0.72; }
 // The view's own sky / surface (a local storm cell, js/race/rain-cells.js), not the lap mean: lightning, thunder and wet-car SFX follow what the player is under.
 function isRainingView() { return wxArc ? wxArc.viewRainfall() >= 0.72 : isRaining(); }
-function isWetAt(c) { return (c && wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness()) >= 0.25; }
+function carWet(c) { return c && wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness(); } function isWetAt(c) { return carWet(c) >= 0.25; }   // the surface under car c (lap mean without an arc)
 // Road grip by weather AND fitted tyre (table WET_GRIP) — see docs/PHYSICS.md
 // "Weather and tyres". No car => the slick column.
 function trackWetness() { return wxArc ? wxArc.wetness() : TyreModel.wetness(raceWeather, null); } function roadWetness() { return trackWetness(); }   // the arc's lagged road state (js/race/weather-arc.js); roadWetness = alias for grip / pits / engineer
-function gripMult(c) { return TyreModel.carGrip(c, raceWeather, trackWetness(), c && wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness()); }   // grip: the SURFACE under the car (a local shower, js/race/rain-cells.js; docs/PHYSICS.md); tread: the lap mean
+function gripMult(c) { return TyreModel.carGrip(c, raceWeather, trackWetness(), carWet(c)); }   // grip: the SURFACE under the car (a local shower, js/race/rain-cells.js; docs/PHYSICS.md); tread: the lap mean
 
 // Pose Ghost + InputGhost start together on every TT lap arm so an incident /
 // reverse-crossing / spoiled class cannot leave the input stream attached to a
@@ -4788,7 +4788,7 @@ function update(dt) {
     // use, never the road's curvature (|k| * speed): that squeals every corner
     // whether or not the car is sliding and leaves a genuine slide down a
     // straight silent — the most audible arc-coupling in the game.
-    GameAudio.setSkid(player.skidIntensity || 0, isWetRoad());
+    GameAudio.setSkid(player.skidIntensity || 0, isWetAt(player));
     // THE BRAKING CUE. Driven from the sim tick and not the draw, because it is
     // the one part of the driving line that has to work with the line OFF — a
     // player who cannot read the ribbon is exactly who it is for. DrivingLine
@@ -4968,9 +4968,9 @@ function updateCar(c, dt, ranked) {
   // pits.update refits a set, the tread and the weather cannot change inside a car's step, and driveTune.PACE cannot
   // either — so these were the same numbers at every one of their 4-17 call sites. Same operands, same order.
   // AQUAPLANING (TyreModel.aquaplane): standing water above the tread's onset speed; exactly 1 below rain-depth water.
-  const meanWet = trackWetness(), surfaceWet = wxArc ? wxArc.wetnessAt(c.s, c.x) : meanWet;
+  const meanWet = trackWetness(), surfaceWet = carWet(c);
   const speedStd = vStd(Math.abs(c.speed));
-  const aq = TyreModel.aquaInto(c, speedStd, raceWeather, surfaceWet);
+  const aq = TyreModel.aquaInto(c, speedStd, raceWeather, surfaceWet, meanWet);
   const vT = vTop(), tyreGrip = tyres.gripMul(c), trMul = 1 - (1 - tyreGrip) * TyreModel.LONG_SHARE;
   const gmC = TyreModel.carGrip(c, raceWeather, meanWet, surfaceWet) * aq.mul, gm0 = TyreModel.weatherGrip(0, meanWet);
   const perfMul = trMul * tyres.fuelAccelMul(c);
@@ -8137,10 +8137,10 @@ function render(dt) {
         // tail and hanging mist (Particles.spray) — lighter on "wet" (drying
         // line) than under "rain". Strength/rate: Particles.sprayStr (vStd, so
         // the OVERALL SPEED slider cannot pin or cap it) × road wetness; only
-        // the nearest sprayCars() cars to the camera emit (sprayAdmit). The
+        // the nearest sprayCars() cars to the camera on a wet sector (isWetAt) emit. The
         // particle VELOCITY stays real m/s (A16).
         const _sdx = tmpMat[12] - camEye[0], _sdz = tmpMat[14] - camEye[2];
-        if (wet && vStd(c.speed) > 15 && Particles.sprayAdmit(_sdx * _sdx + _sdz * _sdz)) {
+        if (isWetAt(c) && vStd(c.speed) > 15 && Particles.sprayAdmit(_sdx * _sdx + _sdz * _sdz)) {
           const str = Particles.sprayStr(vStd(c.speed), Storm.sprayK(raceWeather), frame.wetness);   // storm 1.35 / rain 1 / wet 0.6
           const sxo = (((Math.random() * 3) | 0) - 1) * 0.6;   // either rear tyre or the diffuser (centre)
           Particles.spray(
