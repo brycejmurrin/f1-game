@@ -708,7 +708,8 @@ const CareerBackup = (function () {
     // the backup has one, a different/missing local seed means another season.
     if (incoming.seed != null && incoming.seed !== mine.seed) return false;
     if (local.seed != null && local.seed !== mine.seed) return false;
-    for (const key of ["qualiOrder", "qualiTrack", "qualiMode", "qualiSeat", "seed"]) {
+    // `you` is the seat, not progress: an older backup has none (#7309).
+    for (const key of ["qualiOrder", "qualiTrack", "qualiMode", "qualiSeat", "seed", "you"]) {
       delete mine[key]; delete theirs[key];
     }
     return sameSeasonValue(mine, theirs);
@@ -747,7 +748,7 @@ const CareerBackup = (function () {
       delete mine[key]; delete theirs[key];
     }
     for (const id of Object.keys(theirs.driverCodes)) if (mine.driverCodes[id] !== theirs.driverCodes[id]) return false;
-    for (const key of ["stage", "seed", "driverCodes", "qualiOrder", "qualiTrack", "qualiMode", "qualiSeat"]) {
+    for (const key of ["stage", "seed", "driverCodes", "qualiOrder", "qualiTrack", "qualiMode", "qualiSeat", "you"]) {
       delete mine[key]; delete theirs[key];
     }
     return sameSeasonValue(mine, theirs);

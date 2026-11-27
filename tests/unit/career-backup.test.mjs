@@ -2428,8 +2428,16 @@ test("#7309 season config laps/drop follow SeasonCal's option lists", () => {
     const b = loadHarness();
     assert.equal(b.CareerBackup.apply({ format: b.CareerBackup.FORMAT, slots: [], season }).ok, true);
     const stored = b.store.get("season").config;
-    assert.equal(stored.laps, config.laps ? 3 : stored.laps);
+    assert.equal(stored.laps, b.SeasonCal.DEFAULT_LAPS);
     assert.equal(stored.drop, 0);
+  }
+  // Every value SeasonCal offers survives both paths, so a new option cannot drift from the mirror.
+  for (const [key, opts] of [["laps", h.SeasonCal.LAP_OPTS], ["drop", h.SeasonCal.DROP_OPTS]]) for (const value of opts) {
+    const season = { round: 1, pts: {}, teamPts: {}, driverCodes: {}, config: { trackIds: ["t0", "t1"], [key]: value } };
+    const r = loadHarness();
+    assert.equal(r.CareerBackup.recoveryEnvelope({ format: "apex26-recovery-v1", season }, { flavour: "driver", i: 0 }).ok, true, key + value);
+    assert.equal(r.CareerBackup.apply({ format: r.CareerBackup.FORMAT, slots: [], season }).ok, true);
+    assert.equal(r.store.get("season").config[key], value, key);
   }
   // In-range values pass both paths unchanged.
   const ok = loadHarness();
@@ -2437,4 +2445,21 @@ test("#7309 season config laps/drop follow SeasonCal's option lists", () => {
   assert.equal(ok.CareerBackup.apply({ format: ok.CareerBackup.FORMAT, slots: [], season }).ok, true);
   assert.equal(ok.store.get("season").config.laps, 25);
   assert.equal(ok.store.get("season").config.drop, 2);
+});
+
+test("#7309 a seat-less older backup still yields to local qualifying or a finished sprint", () => {
+  const h = loadHarness(), weekend = qualifyingWeekend();
+  h.store.set("season", beforeQualifying(weekend));
+  const envelope = JSON.parse(h.CareerBackup.serialize(h.CareerBackup.build()));
+  h.store.set("season", { ...weekend, you: "haas:0" });
+  const result = h.CareerBackup.apply(envelope);
+  assert.equal(result.applied.includes("season"), false);
+  assert.equal(h.store.get("season").qualiOrder.length, 2);
+  for (const sprint of [true, "rounds"]) {
+    const w = scoredWeekend({ sprint });
+    w.h.store.set("season", { ...w.h.store.get("season"), you: "haas:0" });
+    const revision = w.h.store.keyRevision("season");
+    assert.equal(w.h.CareerBackup.apply(w.envelope).applied.includes("season"), false);
+    assert.equal(w.h.store.keyRevision("season"), revision);
+  }
 });
