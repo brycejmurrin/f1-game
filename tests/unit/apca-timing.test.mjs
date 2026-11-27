@@ -237,12 +237,15 @@ test("--slower-ink, red as TEXT, clears Lc 60 and sits inside the timing family 
   const [r, g, b] = ink;
   assert.ok(r > g && r > b && r - Math.max(g, b) >= 80, `--slower-ink rgb(${ink}) must still read red`);
   // Every colour-vision remap of --slower gets the same treatment.
+  let remaps = 0;
   for (const [, mode, body] of tokens.matchAll(/:root\[data-cvd="(\w+)"\][^{]*\{([^}]*)\}/g)) {
     const s = body.match(/--slower:\s*(#[0-9a-fA-F]{6})/);
     if (!s) continue;
+    remaps++;
     const v = Math.abs(apca(slowerInk(hex(s[1]), text), bg));
     assert.ok(v >= 60, `[data-cvd="${mode}"] --slower-ink is Lc ${v.toFixed(1)} on --bg`);
   }
+  assert.ok(remaps >= 2, `only ${remaps} [data-cvd] --slower remaps matched; the colour-vision check ran (almost) zero times`);
   // LIGHT: the same mix toward the light theme's dark --text, on its --bg.
   const light = tokens.match(/:root\[data-ui-theme="light"\] \{([^}]*)\}/)[1];
   const lt = (n) => hex(light.match(new RegExp(n + ":\\s*(#[0-9a-fA-F]{6})"))[1]);
