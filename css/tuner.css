@@ -166,7 +166,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 
 /* Docked to the RIGHT edge with no backdrop: the game keeps rendering while the
    panel is open, so the left of the screen is the live preview. */
-#lighting, #camtune, #flyby, #freecam, #garrival { position: fixed; top: 0; right: 0; bottom: 0; z-index: 42; pointer-events: none; }
+#lighting, #camtune, #flyby, #freecam, #garrival { position: fixed; top: 0; right: 0; bottom: 0; z-index: var(--z-tuner); pointer-events: none; }
 /* Playback lowers the editor sheet; its touch exit must stay outside it. */
 #ga-preview-stop {
   position: fixed;
@@ -236,7 +236,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   transform: none;
   width: var(--dock-w);
   max-height: none;
-  z-index: 42;
+  z-index: var(--z-tuner);
   background: rgba(12, 14, 20, 0.86);
   /* Inline pad is ONE number with .lt-tabs' bleed below: the strip's
      negative margin and re-padding must cancel this exactly. */
@@ -326,7 +326,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   /* plate fill + line come from the button base; the pill radius is ours */
   border-radius: var(--r-pill);
   color: var(--text);
-  transition: background 0.12s, color 0.12s;
+  transition: background var(--dur-1), color var(--dur-1);
   /* wraps rather than truncates: at rail width a column is ~100px and the
      longest label needs two lines. Grid rows stretch, so both cells match. */
   white-space: normal; text-align: center; line-height: 1.15;
@@ -441,7 +441,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 /* Photo-kit viewport overlays (JS-built in free-cam / photo-kit). Id-only so
    the cssClasses ratchet does not grow. Hidden unless free camera is open. */
 #fc-comp-grid, #fc-dof {
-  position: fixed; inset: 0; z-index: 41; pointer-events: none;
+  position: fixed; inset: 0; z-index: var(--z-tuner-grid); pointer-events: none;
 }
 #fc-comp-grid[data-grid="thirds"] {
   background:
@@ -625,7 +625,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   display: flex; align-items: center; gap: var(--gap);
   margin-top: calc(var(--gap) * 0.6); padding: calc(var(--gap) * 0.7);
   border: 1px solid var(--card-line); border-radius: var(--r-md);
-  background: rgba(255,255,255,0.04);
+  background: rgba(255, 255, 255, 0.04);
 }
 .as-now-meta { display: flex; flex-direction: column; gap: calc(var(--gap) / 6); min-width: 0; flex: 1 1 auto; }
 .as-now-cap { font-size: var(--fs-micro); letter-spacing: var(--ls-5); color: var(--dim); text-transform: uppercase; }
@@ -660,7 +660,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 }
 /* Gated per the tokens.css policy: a tap sticks :hover on iOS. */
 @media (hover: hover) and (pointer: fine) {
-  .as-tbtn:hover:not(:disabled) { background: rgba(255,255,255,0.18); }
+  .as-tbtn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.18); }
 }
 .as-tbtn:disabled { opacity: 0.35; cursor: default; }
 .as-note { font-size: var(--fs-micro); color: var(--dim); margin: calc(var(--gap) * 0.4) 0 0; line-height: 1.35; }
@@ -1253,7 +1253,7 @@ body:not(.photo-mode):has(> #flyby:not([hidden]) > #flyby-inner[data-density="co
 @media (hover: hover) and (pointer: fine) {
   .adv-more-btn:hover { background: var(--plate-press); }
 }
-.adv-more-btn:active { background: rgba(255, 255, 255, 0.2); }
+.adv-more-btn:active { background: rgba(255,255,255,0.2); }
 #adv-details[open] > .adv-more-btn::after { content: "\25B4"; }
 #adv-extra { margin-top: calc(var(--gap) / 3); }
 
@@ -1450,7 +1450,7 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
    when BOTH #lighting and #flyby are open. Flyby tap floors (#1774) stay. */
 @layer components {
   body:has(> #lighting:not([hidden])):has(> #flyby:not([hidden])) #lighting-inner {
-    z-index: 43;
+    z-index: var(--z-tuner-stack);
   }
   body:has(> #lighting:not([hidden])):has(> #flyby:not([hidden])) #lighting-inner[data-density="compact"] #lt-spread {
     display: none;

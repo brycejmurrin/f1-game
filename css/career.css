@@ -24,7 +24,7 @@
    like a different game depending on which screen it is on. */
 
 #career {
-  z-index: 25;
+  z-index: var(--z-screen);
   background:
     radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
     var(--scrim);
@@ -566,7 +566,7 @@
 .co-offer-tag {
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5);
   padding: 2px 6px; border-radius: var(--r-pill);
-  background: var(--red); color: #fff;
+  background: var(--red); color: var(--ink-on-accent);
 }
 .co-offer.staying .co-offer-tag { background: rgba(255, 255, 255, 0.14); color: var(--dim); }
 
@@ -727,7 +727,7 @@
 [data-cr-act]:focus-visible { color: var(--red); border-color: var(--red); }
 .cr-slot-del.armed,
 [data-cr-act].armed {
-  color: #fff; border-color: var(--red); background: var(--armed-fill);
+  color: var(--ink-on-accent); border-color: var(--red); background: var(--armed-fill);
 }
 
 /* ---------- how it works (#career-guide) ---------- */
@@ -797,9 +797,9 @@
 .res-settle-row.total {
   margin-top: 7px; padding-top: 7px;
   border-top: 1px solid var(--card-line);
-  font-size: var(--fs-2); color: #fff; font-weight: 800;
+  font-size: var(--fs-2); color: var(--ink-on-accent); font-weight: 800;
 }
-.res-settle-row.total .res-settle-v { color: #fff; }
+.res-settle-row.total .res-settle-v { color: var(--ink-on-accent); }
 .res-settle-row.rep { font-size: var(--fs-micro); }
 /* The round debrief under the race-craft line: what cost it, and which laps. It
    is evidence for the number above, not another figure in the column, so it is
@@ -834,7 +834,7 @@
   font-weight: 800; letter-spacing: var(--ls-4); align-self: center;
 }
 /* A tier you clear is a seat that will talk to you at the end of the year. */
-.cr-ladder.open .cr-ladder-k { color: #fff; }
+.cr-ladder.open .cr-ladder-k { color: var(--ink-on-accent); }
 .cr-ladder.open .cr-ladder-v { color: var(--red); }
 
 /* ---------- extra funds ---------- */

@@ -15,7 +15,6 @@
     "tools/gen/settings-defaults.mjs",
     "tools/gen/targets.mjs",
     "tools/gen/title-art.mjs",
-    "tools/gen/track-stills.mjs",
     "tools/gen/trees/bake-trees.mjs",
     "tools/gen/vendor-three.mjs",
     "tools/gen/voicepack.mjs"

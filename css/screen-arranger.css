@@ -18,7 +18,7 @@ body.arranging #companion-appearance-return { visibility: hidden; }
 #arrange-prepare {
   position: fixed;
   pointer-events: auto;
-  z-index: 2147483646;
+  z-index: var(--z-arranger);
   inset: max(.25rem, env(safe-area-inset-top)) max(.25rem, env(safe-area-inset-right)) auto auto;
   display: flex;
   flex-wrap: wrap;

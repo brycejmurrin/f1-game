@@ -24,7 +24,10 @@
 // Exit 0 = every peer reached the waiting room by room code alone.
 import { fileURLToPath } from "node:url";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
+const USAGE = "Usage: node tools/net/rtc-e2e-room.mjs [--peers=N] [--relay=ws://..|--relays=a,b] [--delay=SECONDS]\nRoom-code path end to end against tools/net/nostr-local.cjs; launches Chromium.";
+exitIfHelp(process.argv.slice(2), USAGE);
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
 
 const PORT = 4474;

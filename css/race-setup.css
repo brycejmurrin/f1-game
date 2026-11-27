@@ -11,7 +11,7 @@
 /* Native overlay scrollbars follow color-scheme. Without this the calendar
    and preset panes keep OS-light white thumbs on the dark sheet (measured
    1280x800). Light UI theme flips the scheme with the tokens. */
-#season-setup { z-index: 26; color-scheme: dark; }   /* over #select, which is 25 */
+#season-setup { z-index: var(--z-screen-over); color-scheme: dark; }   /* over #select, which is 25 */
 :root[data-ui-theme="light"] #season-setup { color-scheme: light; }
 /* --pair-at IS WHAT MAKES THE PANES SCROLL, and leaving it out is why they did
    not. js/ui/sheet-shape.js reads this property to decide `data-pair`, and
@@ -705,7 +705,7 @@
 .cz-liv-none.active {
   background: var(--surf-3);
   color: var(--text);
-  border-color: rgba(255, 255, 255, 0.42);
+  border-color: rgba(255,255,255,0.42);
 }
 /* FINISH is a MATERIAL, not a colour, so its row carries a 3-way choice made of
    the same pill buttons instead of a colour well + NONE. Exactly one is active. */

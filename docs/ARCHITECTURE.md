@@ -427,6 +427,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `real-replay.js` | `RealReplay` | LAZY_REAL_RACE | REAL REPLAY (RealReplay.create(G)) Recreates a real Grand Prix from OpenF1's car positions: every car posed each frame where it really was (x/y traces fitted… |
 | `real-race-pace.js` | `RealRacePace` | LAZY_REAL_RACE | REAL RACE PACE (RealRacePace): pure timing-script helpers for lap maps, pace tables, the scripted pit plan and the closed-loop multiplier. |
 | `real-race.js` | `RealRaceBody` | LAZY_REAL_RACE | REAL RACE body (RealRaceBody.create(G), LAZY_REAL_RACE; game.js holds the RealRace boot stub, js/race/real-race-boot.js, which creates this once it lands)… |
+| `drill-fork.js` | `DrillFork` | LAZY_DRILL_FORK | DrillFork: the what-if service for the strategy drills (#6559 step B2, §1d; design #6554 §0b). |
 
 **`js/workers/`**
 
