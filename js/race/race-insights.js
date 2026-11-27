@@ -6,6 +6,7 @@ const RaceInsights = (function () {
     apex: "Drive the next turn and on down the straight",   // js/learn-drills/lines.js
     cooling: "Measure a cooling lap on this tyre set", braking: "Brake to a controlled stop", trail: "Release the brake into a turn",
     taper: "Flat out down the straight to the gate",   // LEARN's Taper Hunt (js/learn-drills/taper.js) scores it
+    torque: "Flat out until the taper begins",   // LEARN's Torque Fill Exit (js/learn-drills/torque.js) scores it
     thermal: "Drive to the line with the tyres in their window",   // LEARN's Tyre Thermal Lab (js/learn-drills/tyre-heat.js) scores it
     slalom: "Six clean direction changes", launch: "Standing start to racing speed",
     start: "Gain a place off the line",
@@ -413,6 +414,9 @@ const RaceInsights = (function () {
       } else if (drill.mode === "taper") {
         if (current.prog >= drill.gateProg) finishDrill(current, c);
         else if (v < 1) { failDrill("stopped before the gate"); finishDrill(current, c); }
+      } else if (drill.mode === "torque") {
+        if (v * PhysicsConsts.VMAX >= PhysicsConsts.TAPER_LO * G.vTop()) finishDrill(current, c);   // vStd reached the taper's start
+        else if (v < 1) { failDrill("stopped before the taper"); finishDrill(current, c); }
       } else if (drill.mode === "thermal") {
         if (current.prog >= drill.gateProg) finishDrill(current, c);
         else if (v < 1 && now - drill.time > 3) { failDrill("the car stopped"); finishDrill(current, c); }
