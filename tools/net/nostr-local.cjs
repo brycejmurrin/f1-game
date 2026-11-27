@@ -29,6 +29,10 @@
 // NOT a dependency: `ws` is installed on demand with --no-save, same as the
 // TURN fixture next door. This is test scaffolding, not something every
 // checkout should carry.
+if (process.argv.slice(2).some((a) => a === "--help" || a === "-h" || a === "help")) {
+  console.log("Usage: node tools/net/nostr-local.cjs [port] [--debug] [--reject] [--reject-after=N]\nLocal Nostr relay on 127.0.0.1 (default 7448); needs `npm i --no-save ws`.");
+  process.exit(0);
+}
 let WebSocketServer;
 try { ({ WebSocketServer } = require("ws")); }
 catch (e) {

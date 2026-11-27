@@ -169,11 +169,11 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   color: var(--text);
   white-space: nowrap;
   text-align: center;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  transition: background var(--dur-1), color var(--dur-1), border-color var(--dur-1);
 }
 /* Press travel (css/components.css, no-preference) needs transform in the list; this layer outranks it. */
 @media (prefers-reduced-motion: no-preference) {
-  .dh-tab { transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.08s ease; }
+  .dh-tab { transition: background var(--dur-1), color var(--dur-1), border-color var(--dur-1), transform 0.08s ease; }
 }
 @media (hover: hover) and (pointer: fine) {
   .dh-tab:hover { color: var(--text); }
@@ -759,7 +759,9 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
   border-left-width: 3px;
   color: var(--text);
 }
-.dh-dchip.active { background: var(--plate-on); border-color: var(--red); color: var(--text); }
+/* SELECTED CHIP, one rule for the six Data Hub chips (#7051). Placed at the first of them, so the
+   later .dh-onboard.dh-tplaying blue still wins on the onboard PLAY button: same (0,2,0), later. */
+:is(.dh-dchip.active, .dh-tplay.dh-tplaying, .dh-ratebtn.active, .dh-livebtn.active, .dh-sortbtn.active, .dh-pill.active) { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 /* A phone: 22 "HUL · Hulkenberg" chips were nine rows, most of a screen
    between the session pickers and the lap they select. The three-letter code
    alone, in an even grid (the surname stays in each chip's aria-label). */
@@ -816,7 +818,7 @@ body[data-density="compact"] .dh-canvas.dh-map { max-width: 220px; }
   display: inline-flex; align-items: center; gap: 5px;
   background: transparent; border: none; border-radius: var(--r-sm);
   padding: calc(var(--gap) * 0.25) calc(var(--gap) * 0.5); margin: 0; color: inherit; font: inherit;
-  letter-spacing: var(--ls-2); cursor: pointer; transition: opacity 0.12s;
+  letter-spacing: var(--ls-2); cursor: pointer; transition: opacity var(--dur-1);
 }
 @media (hover: hover) and (pointer: fine) {
   button.dh-legend-item:hover { background: var(--plate); }
@@ -851,7 +853,6 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   color: var(--text);
 }
 .dh-trestart { padding: 7px var(--gap); }
-.dh-tplay.dh-tplaying { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 .dh-trates { display: flex; gap: calc(var(--gap) / 3); }
 .dh-ratebtn {
   font-size: var(--fs-2); font-weight: 800;
@@ -860,7 +861,6 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   border: 1px solid var(--plate-line);
   color: var(--text);
 }
-.dh-ratebtn.active { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 .dh-thint { font-size: var(--fs-2); color: var(--steel); font-style: italic; margin-left: auto; }
 /* On very narrow portrait, hide the scrub hint to keep transport on one row */
 body[data-width="narrow"] .dh-thint { display: none; }
@@ -907,7 +907,6 @@ body[data-width="narrow"] .dh-thint { display: none; }
   border: 1px solid var(--plate-line);
   color: var(--text);
 }
-.dh-livebtn.active { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 /* full-width action under a lane tray / detail (LOAD LAP, CLEAR LANES, BACK) —
    was three inline style writes in js/data/telemetry.js. A data attribute, not
    a class: the cssClasses ratchet is at its ceiling and this is a layout
@@ -959,7 +958,6 @@ body[data-width="narrow"] .dh-thint { display: none; }
   border: 1px solid var(--plate-line);
   color: var(--text);
 }
-.dh-sortbtn.active { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 
 /* ---------- session picker (LIVE + TELEMETRY) ---------- */
 .dh-picker {
@@ -996,7 +994,6 @@ body[data-width="narrow"] .dh-thint { display: none; }
   color: var(--text);
   flex: 0 0 auto;
 }
-.dh-pill.active { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 .dh-pill:disabled { opacity: 0.4; cursor: default; }
 
 /* ---------- TAP TARGETS ----------

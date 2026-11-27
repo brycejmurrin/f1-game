@@ -13,7 +13,10 @@ import { chromiumArgs } from "../shot/hud-survey.mjs";
 import { ensureTapFloor } from "./tap-floor.mjs";
 import { probeMenu, leaveToMenu } from "./menu-mock.mjs";
 import { brycePhone, readProfile } from "../lib/bryce-phone.mjs";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
+const USAGE = "Usage: node tools/ui/profile-survey.mjs [A,C,D,As] [screenA,screenB|*]\nenv SURVEY_ROOT, SURVEY_OUT, SURVEY_SCALE, SURVEY_PROFILE=live|legacy. Launches Chromium; --help does not.";
+exitIfHelp(process.argv.slice(2), USAGE);
 const ROOT = path.resolve(import.meta.dirname, "../..");
 // SURVEY_PROFILE=live|legacy (default legacy, the file the report notes were measured on); live = his phone today.
 const EXPORT = readProfile(process.env.SURVEY_PROFILE || "legacy");
