@@ -706,6 +706,11 @@
       "presentation": "native",
       "preserve": "Library: byOwner / isDecisionComment / ownerSet verdicts and the paginated event and comment readers; no CLI output"
     },
+    "tools/ci/lib/roles.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Library: resolveRole / findEnvLiterals / parseOrchestratorBlocks problems / reapActs disable lines for brief.mjs role and reap; no CLI output"
+    },
     "tools/ci/lib/tip-gate.mjs": {
       "action": "keep-native",
       "presentation": "native",
