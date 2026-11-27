@@ -7,6 +7,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "./abs-src.mjs";
+import { loadDom } from "./dom-vm.mjs";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -134,6 +135,7 @@ export function bootUi(desktop, helpSlots = {}, disk = null, pre = null, opts = 
     sb.setTimeout = (f) => { f(); return 0; };   // the reveal defers past the dispatch; here it just runs
     sb.clearTimeout = () => {};
   }
+  loadDom(sb.__ctx || (sb.__ctx = vm.createContext(sb)));   // key-binds reads Dom.isDesktop() (#7053)
   vm.runInContext(read("js/ui/key-binds.js"), sb.__ctx || (sb.__ctx = vm.createContext(sb)), { filename: absSrc("js/ui/key-binds.js") });
   const KeyBinds = vm.runInContext("KeyBinds", sb.__ctx);
   const store = disk

@@ -381,7 +381,7 @@ const FIT_CLASH_TRIES = 5;
 const _HL_CSS_HID = new Set(["hud-energy", "hud-tyre", "hud-ot", "hud-aero", "hud-bb"]);
 let _blueHeld = null;
 function hlKey() {
-  const strip = typeof document !== "undefined" && document.body?.dataset?.hlSet === "cockpit" && !document.body.classList?.contains("desktop");
+  const strip = typeof document !== "undefined" && document.body?.dataset?.hlSet === "cockpit" && !Dom.isDesktop();
   let k = "";
   for (let i = 0; i < _hlEls.length; i++) {
     const el = _hlEls[i];
@@ -542,7 +542,7 @@ function _boostOnRightHalf() {
 let _hudGaps = null;
 /** True when the gap plate is painted beside the map and still rects onto the tower. */
 function towerGapsPaintedClash() {
-  if (document.body.classList.contains("desktop")) return false;
+  if (Dom.isDesktop()) return false;
   if (document.documentElement.dataset.gapDrop) return false;
   const tower = _hudTop || (typeof document !== "undefined" ? document.querySelector(".hud-top") : null);
   if (!_hudGaps || !_hudGaps.isConnected) _hudGaps = document.querySelector(".hud-gaps");
@@ -570,7 +570,7 @@ function gapPaintedDrop() {
 }
 /** Gap strip painted over the rear-view mirror frame (#3271: portrait cockpit, the dropped strip sits in the mirror's row). */
 function gapsMirrorPaintedClash() {
-  if (document.body.classList.contains("desktop") || !_mirEl || _mirEl.hidden || !document.body.classList.contains("hud-mirror-on")) return false;
+  if (Dom.isDesktop() || !_mirEl || _mirEl.hidden || !document.body.classList.contains("hud-mirror-on")) return false;
   const gaps = document.querySelector(".hud-gaps");
   if (!gaps || gaps.hidden || manualHud(gaps) || manualHud(_mirEl) || document.body.classList.contains("hud-hide-gaps")) return false;
   return _hudRectsHit(gaps.getBoundingClientRect(), _mirEl.getBoundingClientRect());
@@ -601,7 +601,7 @@ function nudgeAero(z) {
 }
 /** Painted phone readout-on-control clashes the spec measures (not budget math). */
 function phonePaintedClash(boostIn) {
-  if (document.body.classList.contains("desktop")) return false;
+  if (Dom.isDesktop()) return false;
   if (towerGapsPaintedClash() || gapsMirrorPaintedClash()) return true;
   const sectors = els.hudSectors;
   const boost = boostIn !== undefined ? boostIn : _boostOnRightHalf();   // a caller that already measured it this tick passes it
@@ -624,7 +624,7 @@ function phonePaintedClash(boostIn) {
 }
 /** Phone-only: after REL/sectors/announce land, re-fit rows and publish stamp. */
 function phoneFitStampSync(scale, force) {
-  if (document.body.classList.contains("desktop")) return;
+  if (Dom.isDesktop()) return;
   const root = document.documentElement;
   const DOCK_AIR = 12;
   if (!_hudTop) {
@@ -769,7 +769,7 @@ function fitHud() {
     // still crawls BOOST left under load (CI oversize APEX_WORKERS=2:
     // #hud-sectors+btn-boost after the wait already saw clearance).
     let clash = false, boost;
-    if (!placedSectors && !document.body.classList.contains("desktop") && els.hudSectors && !els.hudSectors.hidden) {
+    if (!placedSectors && !Dom.isDesktop() && els.hudSectors && !els.hudSectors.hidden) {
       const s = els.hudSectors.getBoundingClientRect();
       boost = _boostOnRightHalf();
       const b = boost ? boost.getBoundingClientRect() : null;
@@ -957,7 +957,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // (HUD Desk 2026-10-14). Landscape / tablet portrait keep the side-by-side
   // model. Broadcast already stacks; this is the same idea for the default
   // centred tower.
-  const portraitPhone = !document.body.classList.contains("desktop")
+  const portraitPhone = !Dom.isDesktop()
     && typeof window !== "undefined" && window.matchMedia
     && window.matchMedia("(orientation: portrait) and (max-width: 500px)").matches;
   const capFor = (l) => (bcast
@@ -998,7 +998,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     // #5179 shrank the pair to a fixed 44 px; the band keeps the footprint the old --tap-hud pair (44 x BUTTON
     // SIZE <= 150 %) reserved, so freeing it never grows the rest of the HUD into the lifted sector plate.
     // Landscape touch: the real 44 px pair; the plate is pinned (css/hud.css, #5256), capRow clears it.
-    const bz = vpW() > vpH() && !document.body.classList.contains("desktop") ? 1 : Math.min(1.5, Math.max(1, Math.min(+root.style.getPropertyValue("--hud-z-dock") || 99, btnScale)));
+    const bz = vpW() > vpH() && !Dom.isDesktop() ? 1 : Math.min(1.5, Math.max(1, Math.min(+root.style.getPropertyValue("--hud-z-dock") || 99, btnScale)));
     const pR = els.pausebtn && !els.pausebtn.hidden ? els.pausebtn.getBoundingClientRect() : null, pauseL = pR && pR.width ? pR.right - 44 * bz : Infinity;
     for (const el of [els.btnCam, els.pausebtn]) {
       const r = el && !el.hidden ? layoutRect(el) : null;
@@ -1018,7 +1018,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // (the tower's unzoomed top offset and height, the plate's screen top).
   // A placed plate has left this row; budgeting its old anchor made the whole band hunt.
   let capRow = Infinity;
-  if (!placedSectors && !bcast && top && scR && scR.width && !document.body.classList.contains("desktop")) {
+  if (!placedSectors && !bcast && top && scR && scR.width && !Dom.isDesktop()) {
     const tR = layoutRect(_hudTop), zd = zoomDiv(_hudTop, zTopPub);
     const y0 = (tR.top - satPx) / zd, hInt = tR.height / zd;
     // Only a plate that STARTS BELOW the tower's top is a row to clear; one level with it shares the
@@ -1058,7 +1058,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // and a var that is only sometimes present is a var that is sometimes 0.
   // Same published divisor as wide() — do not re-read currentCSSZoom here.
   const topHPub = tall(_hudTop, zTopPub);
-  const phone = !document.body.classList.contains("desktop");
+  const phone = !Dom.isDesktop();
   const gapsEl = els.gapA ? els.gapA.parentNode : null;
   // THE CAP PASS PUBLISHES ONLY ITS CAPS (#2797): the paint pass rewrites all of this at the painted zoom,
   // so a zoom-1 copy was an A->B swap of root vars (a whole-document restyle) on every full fit.
@@ -1227,7 +1227,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     // Widths are divided back out of the zoom painted now, so the answer does
     // not chase itself. Hidden TYRES (TIMING, COMPACT, cockpit) leave the cap.
     // The unit harness has no visible #hud-tyre, so this stays a no-op there.
-    if (!document.body.classList.contains("desktop") && _hudBottom && _hudBottom.children) {
+    if (!Dom.isDesktop() && _hudBottom && _hudBottom.children) {
       const zNow = zoomDiv(_hudBottom, zBotPub);
       let lo = Infinity, hi = -Infinity;
       const kids = _hudBottom.children;
@@ -1299,14 +1299,14 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // above; a desktop body keeps the backoff, since its docks stay empty
   // forever and re-measuring them every tick is the cost the backoff exists
   // to avoid.
-  if (!dockH && !document.body.classList.contains("desktop")) retry = true;
+  if (!dockH && !Dom.isDesktop()) retry = true;
   // PORTRAIT height cap, OUTSIDE the dock block: the ladder buttons are
   // position:fixed, so dockH is 0 and the block above never runs. The tyre
   // rides one box above the column and the column's bottom:112px is zoomed,
   // so HUD 200% put the tyre through CAM and ERS through AERO (393×852).
   // It reads the TOP band's painted bottoms, so the paint pass re-applies it at the painted zoom.
   let capPortrait = Infinity;
-  if (!document.body.classList.contains("desktop") && _hudBottom
+  if (!Dom.isDesktop() && _hudBottom
       && window.matchMedia && window.matchMedia("(orientation: portrait)").matches) {
     const zNowP = zoomDiv(_hudBottom, zBotPub) || 1;
     const stackR = _hudBottom.getBoundingClientRect();
@@ -1466,7 +1466,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   setDockRW(root, dockRW);
   if (els.hudSectors) void els.hudSectors.offsetHeight;
   if (_dockR) void _dockR.offsetHeight;
-  if (!placedSectors && !document.body.classList.contains("desktop") && els.hudSectors && !els.hudSectors.hidden) {
+  if (!placedSectors && !Dom.isDesktop() && els.hudSectors && !els.hudSectors.hidden) {
     const secR = els.hudSectors.getBoundingClientRect();
     const brLeft = boostRightLeft();
     const left = Number.isFinite(brLeft) ? brLeft : dockLeftOf();
@@ -1486,7 +1486,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   if (typeof HudLayout !== "undefined") HudLayout.fit();
   // fit() can undo the dock inset; shrink the sector plate before any extra
   // inset widen (widening slides the plate left into #minimap).
-  if (!document.body.classList.contains("desktop") && els.hudSectors && _dockR && !placedSectors) {
+  if (!Dom.isDesktop() && els.hudSectors && _dockR && !placedSectors) {
     const margin = DOCK_AIR;
     const mapR = els.minimap && !els.minimap.hidden ? els.minimap.getBoundingClientRect() : null;
     const mapClear = mapR && mapR.width ? mapR.right + margin : 0;
@@ -1802,7 +1802,7 @@ function updateHud(force, dtMs) {
     if (_sec) _sec.decay(dtMs);
     if (tick) {
       const spoken = speakHud(player, cars, timeTrial);
-      if (!hudLayerHidden() && !document.body.classList.contains("desktop")) {
+      if (!hudLayerHidden() && !Dom.isDesktop()) {
         syncDriveControls(player, timeTrial || G.tyres?.on(), timeTrial, false, spoken);
       }
       if (_sec) _sec.holdBests();
