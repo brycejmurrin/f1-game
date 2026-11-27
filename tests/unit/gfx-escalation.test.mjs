@@ -170,7 +170,7 @@ test("noteCleanMenuBoot clears budget when the shell build changed on reload", (
 for (const backend of ["three", "glx"]) {
   test(`${backend} visible losses after boot stop reloading across denied-storage documents`, () => {
     const src = read(backend === "three" ? "js/render/three/tlx.js" : "js/render/glx/glx.js");
-    const from = backend === "three" ? "renderer.onDeviceLost = function (info) {" : 'canvas.addEventListener("webglcontextlost", function (e) {';
+    const from = backend === "three" ? "renderer.onDeviceLost = function (info) {" : '_listen(canvas, "webglcontextlost", function (e) {';
     const until = backend === "three" ? "\n      try {\n        let onRestored" : "\n    // Restore obeys";
     const a = src.indexOf(from), b = src.indexOf(until, a);
     assert.ok(a > 0 && b > a);
@@ -182,7 +182,7 @@ for (const backend of ["three", "glx"]) {
       const timers = [], events = {};
       Object.assign(h.ctx, {
         renderer: {}, canvas: { addEventListener(type, fn) { events[type] = fn; } },
-        initOwner: { active: true }, _threeOnLost: null, _deviceLost: false, _ctxLost: false,
+        initOwner: { active: true }, _listen: (t, ev, fn) => t.addEventListener(ev, fn), _threeOnLost: null, _deviceLost: false, _ctxLost: false,
         _warmRequested: true, _warmPending: {}, _warmDone: false, _lossCounted: false,
         _nowMs: () => 6000, _shownAt: -1e9, _bgLoss: () => false,
         _glPin: "0", forceWebGL: false, _autoStayGL: false,
