@@ -24,7 +24,7 @@ test("learn-drill-refs.json: all 27 plans, and the tiers follow from them by the
   assert.deepEqual(refs.runs.map(r => r.plan), PLANS.map(p => p.join("/")));
   assert.deepEqual(refs.tiers, deriveChargeTiers(refs.runs));
   assert.ok(refs.tiers.bronze < refs.tiers.silver && refs.tiers.silver < refs.tiers.gold);
-  assert.deepEqual({ ...vm.runInContext("DrillRegistry.get('charge').medals", run.g.ctx) }, refs.tiers, "the shipped medals are the VM tiers");
+  assert.deepEqual({ ...vm.runInContext("ChargeDrill.MEDALS", run.g.ctx) }, refs.tiers, "the shipped medals are the VM tiers");
 });
 
 test("the lesson the stopwatch settles: spending the surplus is quicker, borrowing is quicker still and earns nothing", () => {

@@ -7,7 +7,7 @@
    "charge" goal and ends at a gate CHARGE_LINE m before the line.
    SCORE: the lap's mean speed in dash km/h (standard pace, so the same at every PACE; higher is better: the gate is a
    fixed distance, so it orders laps as the lap time does). It counts only if the lap is CHARGE-SUSTAINING (the store
-   at the gate >= the store at the start): a lap that borrowed gets no medal (tiers.cleanRequired) and the card says by
+   at the gate >= the store at the start): a lap that borrowed gets no medal (medals()) and the card says by
    how much. Medal tiers come from VM rollouts of every plan (tests/data/learn-drill-refs.json "charge",
    tests/unit/drill-charge-vm.test.mjs).
    THE LEDGER (#6550 addition 2, display-only): each sample takes the change in the player's energy and attributes it
@@ -31,6 +31,12 @@ const ChargeDrill = (function () {
   // Mean-speed tiers (km/h) from the VM rollouts of every plan (tests/data/learn-drill-refs.json "charge"; the rule in
   // its "rule" field). cleanRequired: a lap that ends with less store than it started earns no medal.
   const MEDALS = Object.freeze({ bronze: 202.1, silver: 202.4, gold: 202.8, goldClean: true, cleanRequired: true });
+  /** The medal rule (#6559 §1a: a function, so a lap that borrowed earns nothing however quick; was drill-card's cleanRequired). */
+  function medals(r) {
+    if (!r || !r.clean || !Number.isFinite(r.value)) return null;
+    if (r.value >= MEDALS.gold) return "gold";
+    return r.value >= MEDALS.silver ? "silver" : r.value >= MEDALS.bronze ? "bronze" : null;
+  }
   const ES = () => PhysicsConsts.ES_MJ || 4;
   const mj = (v, sign) => (sign && v >= 0 ? "+" : "") + (v * ES()).toFixed(2);
 
@@ -234,10 +240,10 @@ const ChargeDrill = (function () {
       id: "charge", lesson: "hybrid", title: "Charge-Sustaining Lap",
       setup: { flow: "gp", session: "race", track: "monza", weather: "dry", changeable: false, grid: "tier", duel: false, dirtyAir: "classic", wind: "off" },
       stage, begin, guide, goal: "charge", sample, score,
-      medals: MEDALS,
+      medals,
     });
   }
   define();
 
-  return Object.freeze({ define, sample, score, begin, stage, ledger, ledgerAdd, classOf, strip, sectorNet, MEDALS, STORE, START_K, START_M });
+  return Object.freeze({ define, sample, score, begin, stage, ledger, ledgerAdd, classOf, strip, sectorNet, MEDALS, medals, STORE, START_K, START_M });
 })();
