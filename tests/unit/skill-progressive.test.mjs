@@ -363,7 +363,7 @@ test("review-pass contracts: no stale commands or steal phrases", () => {
   assert.doesNotMatch(triage, /ONE browser group per batch \(`tools\/test-bg\.mjs`/);
   assert.doesNotMatch(triage, /test-bg\.mjs[\s\S]{0,40}enforces the cap/);
   assert.match(triage, /verify-change/);
-  assert.match(triage, /test-bg\.mjs --foreground/);
+  assert.match(triage, /test-bg\.mjs --spec \S+ --foreground/);
 
   const walkMd = (dir, fn) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
