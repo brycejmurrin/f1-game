@@ -544,8 +544,7 @@ test("#4257: AT_REF counts css/ at a git ref the same way the live scan counts t
   // index.html plus HEAD's eager scripts for the boot wall (a staged eager-js edit made the pre-commit run red).
   const wallPaths = ["index.html", ...new Set(wallAt("HEAD").files)];
   const dirty = (paths) => cp.execFileSync("git", ["status", "--porcelain", "--", ...paths], { encoding: "utf8" }).trim();
-  // typeofGuards scans js/ (#6944): a staged js/ guard edit made the pre-commit run red (#7209).
-  const reads = (metric) => (metric.startsWith("eager") ? wallPaths : metric === "typeofGuards" ? ["js/"] : ["css/"]);
+  const reads = (metric) => (metric.startsWith("eager") ? wallPaths : metric === "typeofGuards" ? ["js/"] : ["css/"]);   // typeofGuards scans js/, not css/ (a staged js edit made the pre-commit run red)
   let compared = 0;
   for (const [metric, fn] of Object.entries(AT_REF)) {
     if (dirty(reads(metric))) continue;

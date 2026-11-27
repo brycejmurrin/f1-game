@@ -385,7 +385,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `storm-flash.js` | `StormFlash` | tag | StormFlash: the in-frame lightning flash (strike, thunder, ambient spike). |
 | `announce-banner.js` | `AnnounceBanner` | tag | AnnounceBanner: the race-radio card, its floor and its queue. |
 | `light-tune-edit.js` | `LightTuneEdit` | tag | LightTuneEdit: the lighting-tuner write path (latch clear + store). |
-| `pace-math.js` | `PaceMath` | tag | PACE / ERS math: vTop/vStd/aStd, X-mode aero gains, paceRef buffer, ERS drain/regen/overtake duration, aeroDfMult, and gearHi/rpmFor. |
+| `pace-math.js` | `PaceMath` | tag | PACE / ERS math: vTop/vStd/aStd, X-mode aero gains, paceRef buffer, ERS drain/regen/overtake duration, the deploy taper and regen fade (taperAt/regenSpeedAt),… |
 | `sporting-regs.js` | `SportingRegs` | tag | SPORTING REGULATIONS the player is held to, as pure rules. |
 | `broadcast.js` | `Broadcast` | tag | Broadcast camera policy shared by the live director, Rival Lock, the stream overlay and the Data Hub replay. |
 | `real-race-boot.js` | `RealRace` | tag | REAL RACE boot stub (FULL, #4978 row 6). game.js still makes `RealRace.create(G)` at eval and reads update/owns/isWatch/status/raceT0 every frame; until a… |
@@ -816,6 +816,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `thumb-drill.js` | `ThumbDrill` | LAZY_LEARN | THUMB DRILL, LEARN's on-track sequel to the Vegas Thumb Trainer (#6927). |
 | `lines.js` | `LinesDrill` | LAZY_LEARN | RACING LINES: the apex-choice drill (#6559 step 10, #6551 §3). |
 | `tyre-heat.js` | `TyreHeatDrill` | LAZY_LEARN | TYRE THERMAL LAB: LEARN's tyre-heat lesson on track (#6559 step 8, #6551 §1). |
+| `taper.js` | `TaperDrill` | LAZY_LEARN | TAPER HUNT: LEARN's deployment drill on track (#6559 step 6, #6550 D1). |
 | `grip.js` | `GripDrill` | LAZY_LEARN | GRIP & BRAKING: the friction-circle drill (#6559 step 4, #6551 §2, #7040). |
 <!-- /@gen-arch:modules -->
 
