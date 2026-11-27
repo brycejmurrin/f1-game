@@ -64,7 +64,7 @@ test("GameAudio initialises without console errors", async ({ page, pageErrors, 
 test("persisted SOUND OFF and out-of-range volumes apply on first load", async ({ page }) => {
   // Measured 115.5s solo on an idle 4-core (2026-09-04): cold reload, WebGL
   // boot, settings, enable gesture. The 120s default is the hang backstop,
-  // not this boot — raise the one test, do not shrug (test-solo warning).
+  // not this boot — raise the one test, do not shrug (test-bg --foreground warning).
   test.setTimeout(180_000);
   const engineRequests = [];
   page.on("request", (request) => {

@@ -34,7 +34,6 @@ const CASES = [
   ["tools/check/vstd-lint.mjs", /vstd-lint/],
   ["tools/ci/ci-watch.mjs", /ci-watch/],
   ["tools/ci/bump-cache.mjs", /bump-cache/],
-  ["tools/ci/test-solo.mjs", /test-solo/],
   ["tools/track/verify-track.cjs", /verify-track/],
   ["tools/track/float-audit.cjs", /float-audit/],
   // Round 2 (same day): shot.mjs, livery-contrast, rtc-e2e and glx-call-census
@@ -59,10 +58,8 @@ const CASES = [
 // `grep -L 'cli-args\|help'` check named them) plus two tools/track probes.
 // Six of these launch Chromium or a full 40-circuit build when run, so --help
 // must print a usage line and exit 0 fast, and a typo'd flag must be REFUSED
-// through tools/lib/cli-args.mjs (audit-aero forwards to render-car, whose
-// own flag set refuses it) — never ignored on the way to a full run.
+// through tools/lib/cli-args.mjs — never ignored on the way to a full run.
 const PARSED = [
-  "tools/car/audit-aero.mjs",
   "tools/car/audit-parts.mjs",
   "tools/car/cockpit-pale-sweep.mjs",
   "tools/car/crest-sweep.mjs",

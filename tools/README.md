@@ -427,7 +427,6 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/ssr-probe.mjs** | Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR lighting probe. | renderer-debug |
 | **gfx/tlx-pack-check.cjs** | Decodes packed TLX attributes and asserts no shader DECISION changed (material layer, flag branch, MAT id). No browser. | — |
 | **gfx/wgx-capture.mjs** | Thin alias → `gfx-probe.mjs --backend webgpu` (WGX soft-present + optional readback). | renderer-debug |
-| **gfx/wgx-lavapipe-probe.mjs** | Thin alias → `gfx-probe.mjs --backend three --tlx-webgpu --lavapipe`. | renderer-debug / mcp-probe |
 | **gfx/wgx-shot.mjs** | WebGPU screenshots, one track or `--gallery`: `canvas.png`, HUD, `view.txt`; polls until pixels are non-black. | renderer-debug |
 | **gfx/wgx-validate.mjs** | REAL Dawn validation of the WGX renderer in-container (~5 s): full Chromium, races a track, fails on any GPU error. | renderer-debug |
 
@@ -477,7 +476,6 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 
 | Tool | Does | Suggested skill |
 |---|---|---|
-| **car/audit-aero.mjs** | Thin alias → `render-car.mjs --preset=wing` (three wing views). Prefer the parent. | garage-parts-livery |
 | **car/audit-parts.mjs** | Capture every catalog part, body style and finish with validated selection and resumable evidence. | garage-parts-livery |
 | **car/car-fit-audit.mjs** | Do Car3D parts connect? Per-joint GAP/PENETRATION/ZFIGHT/OPEN audit of the 11 cars; --base = no new failures. | garage-parts-livery |
 | **car/career-economy.mjs** | Sims a career season per starting team through the real `Career.settleRound()`; reports what a year's income affords. | career-mode |
@@ -767,7 +765,6 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/test-coverage-audit.mjs** | Coverage guard (`npm run test:audit`): every spec / unit file must be reachable from a topical `test:<group>` script. |
 | **ci/test-honesty.mjs** | Finds tests that pass by not testing: unexplained skip/fixme/todo, empty bodies, an early bare return before any assert. |
 | **ci/test-observed.mjs** | Which tests have I never seen run? Declared spec titles (espree) vs every title any `artifacts/logs/` run reported. |
-| **ci/test-solo.mjs** | Re-runs ONE spec (or `-g` grep) alone at `APEX_WORKERS=1`; refuses (exit 3) while busy (`--max-load`). Foreground. |
 | **ci/tooling-fast.mjs** | Full structural floor or `--changed` diff-aware edit-loop runner; timing, buffered output, `--jobs=N`; exports the list. |
 | **ci/tooling-timings.mjs** | Refresh tests/data/tooling-fast-timings.json from CI: median per-file durations out of green guards-shard logs. |
 | **ci/verify-change.mjs** | ONE diff-aware `--fast` gate; `tooling-fast --changed` is the local floor, CI runs the tiers; plan JSON has the budget. |
