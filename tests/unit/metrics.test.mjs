@@ -200,7 +200,7 @@ test("overlay sits below the zoomed sector stack, not on the minimap", () => {
   // step bounded by a vw cap) and the floor that makes it correct: S must hold
   // the narrow layout, L must be able to hold the wide one.
   const step = (sel) => {
-    const at = sel ? hud.indexOf(sel) : hud.indexOf("#game-metrics {");
+    const at = sel ? hud.indexOf(sel) : hud.indexOf("\n#game-metrics {");   // line start: hud.css also holds `body.pc-uihidden #game-metrics {`
     assert.ok(at >= 0, `no rule for ${sel || "#game-metrics"}`);
     // To the rule's own closing brace, not a fixed window: these blocks carry
     // long measurement notes and a fixed slice silently stopped reaching the

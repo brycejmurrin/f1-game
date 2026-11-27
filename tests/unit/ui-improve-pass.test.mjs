@@ -2423,8 +2423,9 @@ test("neutral buttons share the settings tab-header plate", () => {
   // and later: a `min-width: 0` here silently cancelled that WCAG 2.5.8 floor.
   assert.equal(decl(carsetup, ".cs-tab", "min-width"), "var(--tap-min)", "the garage tabs keep the 24px width floor");
   assert.equal(decl(carsetup, ".cs-tab.active", "background"), "var(--plate-on)");
-  assert.equal(decl(data, ".dh-pill.active", "background"), "var(--plate-on)");
-  assert.equal(decl(data, ".dh-livebtn.active", "background"), "var(--plate-on)");
+  // The six hub chips share one :is() selected-chip rule (#7051).
+  assert.equal(decl(data, /^:is\([^)]*\.dh-pill\.active\b/, "background"), "var(--plate-on)");
+  assert.equal(decl(data, /^:is\([^)]*\.dh-livebtn\.active\b/, "background"), "var(--plate-on)");
   assert.equal(decl(data, ".dh-tab", "color"), "var(--text)", "idle hub tabs are ink, not dim-as-disabled");
   assert.equal(decl(data, ".dh-sortbtn", "color"), "var(--text)");
   assert.equal(decl(css("css/overlays.css"), ".sel-label", "color"), "var(--steel)", "section chrome, not leftover dim");
