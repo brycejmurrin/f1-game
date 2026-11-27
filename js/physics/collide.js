@@ -645,7 +645,7 @@ const Collide = (() => {
         // their original meaning: the human's gates their stuck rescue (a car
         // rubbing another is shuffling, not wedged), the AI's makes it compliant so
         // a player leaning on it can move it. The yielder still pays the scrub.
-        // `rubScrub` is this STEP's speed loss (ContactGeometry.rubDecel x dt) and this runs
+        // `rubScrub` is this STEP's speed loss (ContactGeometry.rubDecel x PACE x dt) and this runs
         // once per relaxation pass — four times a frame — so it is taken on the last
         // pass only. The old form was a 0.995 factor applied on every pass: 2 % a
         // frame, 48 m/s^2 at 40 m/s, and a player rubbing wheels lost 18 m/s in a
@@ -804,7 +804,7 @@ const Collide = (() => {
       // depended on solver order. The impulse keeps the live relV (momentum); a net car's is its prediction.
       for (let i = 0; i < ranked.length; i++) { const c = ranked[i]; if (!ownsPose(c)) c._preColSpd = c._nOk ? c._nSpd : c.speed; }
       for (let i = 0; i < ranked.length; i++) { const c = ranked[i]; if (c.human && !ownsPose(c)) c._puntGot = 0; }
-      // Side-rub speed loss for this step, in m/s: a deceleration (ContactGeometry.rubDecel)
+      // Side-rub speed loss for this step, in m/s: a deceleration (ContactGeometry.rubDecel, standard scale x PACE)
       // times the step, so the headless harness's arbitrary dt scrubs per second.
       const rubScrub = CG.rubDecel(!!track.street) * Math.max(G.PACE, 0.05) * (dt || FIXED_DT);   // standard-scale decel x PACE = ground m/s^2
       // Tiny fields: all-pairs is fine and avoids bucket rebuild cost. Larger
