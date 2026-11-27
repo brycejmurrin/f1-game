@@ -1368,6 +1368,7 @@
     "tests/unit/tlx-post-orient-cover-webgpu.test.mjs",
     "// TLX phone post at half scene resolution (D·IP3 / BrowserStack GPU-bound fill).",
     "tests/unit/tlx-post-phone-res.test.mjs",
+    "tests/unit/tlx-post-rt-lifetimes.test.mjs",
     "// TLX's mesh-pool prune keeps a gfx.pinMesh geometry's wrappers (the deploy-only ERS bar,",
     "// OT lamp and ERS strip): an idle unpinned wrapper still goes. Lifts the real prunePool (#3677).",
     "tests/unit/tlx-prune-pin.test.mjs",
