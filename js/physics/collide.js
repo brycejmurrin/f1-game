@@ -806,7 +806,7 @@ const Collide = (() => {
       for (let i = 0; i < ranked.length; i++) { const c = ranked[i]; if (c.human && !ownsPose(c)) c._puntGot = 0; }
       // Side-rub speed loss for this step, in m/s: a deceleration (ContactGeometry.rubDecel)
       // times the step, so the headless harness's arbitrary dt scrubs per second.
-      const rubScrub = CG.rubDecel(!!track.street) * (dt || FIXED_DT);
+      const rubScrub = CG.rubDecel(!!track.street) * Math.max(G.PACE, 0.05) * (dt || FIXED_DT);   // standard-scale decel x PACE = ground m/s^2
       // Tiny fields: all-pairs is fine and avoids bucket rebuild cost. Larger
       // fields (MP / expanded AI) use arc buckets so pairContact stays O(n·k).
       const useBuckets = ranked.length > 12;
