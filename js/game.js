@@ -352,7 +352,7 @@ const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
 // stay owned here; VMAX is the destructured PhysicsConsts binding.
 const driveTune = DriveTune.create(SteerTuning.defaultPace);
 const {
-  vTop, vStd, aStd, xVmaxGain, paceRef, xCoastCut, xDfLoss,
+  vTop, vStd, aStd, pace, xVmaxGain, paceRef, xCoastCut, xDfLoss,
   isErsDeploying, drainFor, regenFor, otTimeFor, deployTaper, regenSpeedK, aeroDfMult, gearHi, rpmFor,
 } = PaceMath.create({
   getPACE: () => driveTune.PACE,
@@ -366,7 +366,7 @@ const {
 // counter, which resets to -2 every 1.2 s, so its rescue could never fire).
 const _ersHeld = new WeakSet();   // cars inside a BOOST hold (lane limiter, box, caution) as of their last step (#6546 P4)
 const _beachGain = new WeakMap();   // car -> { v: last vStd, a: ~1 s EMA of its gain rate }: the player rescue's "not gaining" test (#6546 P3)
-function beachedAt(c) { return c.offroad && c.speed < GRASS_V * 0.6 * Math.max(driveTune.PACE, 0.05) + 1.5 * Math.max(driveTune.PACE, 0.05); }
+function beachedAt(c) { return c.offroad && c.speed < GRASS_V * 0.6 * pace.k + 1.5 * pace.k; }
 function dashKph(v) { return vStd(v) * 3.6; }
 // And the other direction: what the car ACTUALLY pulls on the ground right now,
 // as vTop() is what it actually tops out at. Anything modelling the car from
@@ -375,7 +375,7 @@ function dashKph(v) { return vStd(v) * 3.6; }
 // a pace-scaled vTop() ceiling, which is exactly the mismatch the G façade's own
 // comment promises does not exist ("off the SAME numbers the driving model
 // uses"). Floored like vTop().
-function aTop()  { return ACCEL * Math.max(driveTune.PACE, 0.05); }
+function aTop()  { return ACCEL * pace.k; }
 // Player steering inputs into the dynamic model below. driveTune.WHEELBASE is the real
 // axle spacing — a SHORTER wheelbase has a smaller yaw inertia so it turns in
 // harder/faster (the RESPONSE slider). driveTune.STEER_EXPO shapes the input: >1 = gentle
@@ -3330,7 +3330,7 @@ const G = {
   // they pass through as constants; acceleration goes through aTop().
   LAT_MAX, BRAKE,   // ACCEL is deliberately NOT here — reading it was the bug aTop() fixed
   vTop: () => vTop(),
-  aTop: () => aTop(),
+  aTop: () => aTop(), pace,   // pace: PaceMath's vStd/aStd/vScale/k (#7129): read these, never re-derive vTop()/VMAX
   applyRaceSettings: (blendS) => applyRaceSettings(blendS),   // const initialised below — defer; blendS: see Atmosphere
   announce, applyCaution, camVantage, camPoseOf, endRace, gridUp, gripMult, trackWetness, isErsDeploying, cautionInfo, cautionLevel,
   aeroDfMult, xVmaxGain, xDfLoss, drainFor, regenFor, otTimeFor,

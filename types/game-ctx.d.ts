@@ -726,6 +726,9 @@ interface GameCtx {
   readonly BRAKE: number;
   readonly vTop: () => number;
   readonly aTop: () => number;
+  /** The PACE conversions, bound to game.js's PaceMath instance (#7129): vStd/aStd re-express a real
+   *  speed / acceleration on the standard scale; vScale is vTop()/VMAX; k is max(PACE, 0.05). */
+  readonly pace: { readonly vStd: (v: number) => number; readonly aStd: (a: number) => number; readonly vScale: number; readonly k: number };
   readonly applyRaceSettings: () => void;
 
   // ── Race flow + the shared physics/energy formulas ────────────────────────
