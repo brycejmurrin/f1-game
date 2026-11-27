@@ -102,7 +102,7 @@ function boot(options = {}) {
   const PS = ctx.PhotoStudio, api = PS.create(G, { freeCam, garage, renderFrame: () => { order.push("draw"); options.renderSample?.(ctx.PhotoStudioBody.sampling); },
     ltStore: GAME_DEPS.has("ltStore") ? ltStore : undefined, ltSet: GAME_DEPS.has("ltSet") ? ltStore.set : undefined,
     borrowCar: options.borrowCar ? () => options.borrowCar(G) : undefined });
-  return { api, PS, Body: ctx.PhotoStudioBody, dom, order, downloads, canvasOps, G, storage, scene, LT, ltProfiles, ltWrites, latchWrites, windowEvents,
+  return { api, PS, win: ctx.window, Body: ctx.PhotoStudioBody, dom, order, downloads, canvasOps, G, storage, scene, LT, ltProfiles, ltWrites, latchWrites, windowEvents,
     closed: () => closed, restored: () => restored, overlays: () => overlays };
 }
 
@@ -956,6 +956,49 @@ test("the menu background goes through GameStore's raw lane and reads back the s
   assert.equal(b.PS.background(), img);
   assert.equal(b.PS.setBackground(""), true);
   assert.equal(b.storage.has("apex26.photoBackground"), false);
+});
+
+test("menu background has separate landscape and portrait slots (#7157)", () => {
+  const b = boot(), L = "data:image/jpeg;base64,TEFORA==", P = "data:image/jpeg;base64,UE9SVA==";
+  for (const PS of [b.PS, b.Body]) {
+    b.storage.clear();
+    b.PS.setBackground(L, "landscape"); PS.setBackground(P, "portrait");
+    assert.equal(PS.background("landscape"), L); assert.equal(PS.background("portrait"), P);
+    assert.equal(b.storage.get("apex26.photoBackground"), L, "the old key stays the landscape slot");
+    assert.equal(b.storage.get("apex26.photoBackgroundPortrait"), P);
+    PS.setBackground("", "portrait");
+    assert.equal(PS.background("landscape"), L, "clearing portrait leaves landscape");
+    assert.equal(PS.background("portrait"), "");
+    b.storage.clear(); b.storage.set("apex26.photoBackground", L);
+    assert.equal(PS.background("landscape"), L, "a pre-slot save reads as landscape");
+  }
+  b.storage.clear(); b.PS.setBackground(L, "landscape"); b.PS.setBackground(P, "portrait");
+  b.api.state(); // no-arg read follows orientation, falling back to the other slot
+  assert.equal(b.PS.background(), L);   // no innerHeight in the VM: landscape
+  b.PS.setBackground("", "landscape");
+  assert.equal(b.PS.background(), P, "empty landscape falls back to portrait");
+});
+
+test("portrait orientation: no-arg read, slot choice, CLEAR and a failed write (#7157)", async () => {
+  const L = "data:image/jpeg;base64,TEFORA==", P = "data:image/jpeg;base64,UE9SVA==";
+  const b = boot(); b.win.innerWidth = 393; b.win.innerHeight = 852;
+  b.PS.setBackground(L, "landscape");
+  assert.equal(b.PS.background(), L, "portrait falls back to landscape while its own slot is empty");
+  b.PS.setBackground(P);   // no slot: the current (portrait) orientation
+  assert.equal(b.storage.get("apex26.photoBackgroundPortrait"), P);
+  assert.equal(b.PS.background(), P); assert.equal(b.storage.get("apex26.photoBackground"), L);
+  assert.equal(b.PS.slotFor(0.8), "portrait"); assert.equal(b.PS.slotFor(16 / 9), "landscape"); assert.equal(b.PS.slotFor(1), "portrait", "square follows orientation");
+  b.PS.setBackground("");   // clears only the portrait slot
+  assert.equal(b.PS.background("portrait"), ""); assert.equal(b.PS.background("landscape"), L);
+  // a failed write (quota) keeps the other slot and reports plainly
+  const full = boot({ storageFull: true }); full.storage.set("apex26.photoBackground", L);
+  assert.equal(full.PS.setBackground(P, "portrait"), false);
+  assert.equal(full.storage.get("apex26.photoBackground"), L);
+  // CLEAR BACKGROUND in the Studio names and clears the current slot
+  const c = boot(); c.win.innerWidth = 393; c.win.innerHeight = 852; c.storage.set("apex26.photoBackground", L); c.storage.set("apex26.photoBackgroundPortrait", P);
+  c.api.open({ source: "garage" }); c.dom.byId("ps-background").parentNode.children[1].click();
+  assert.equal(c.dom.byId("ps-message").textContent, "Portrait menu background cleared.");
+  assert.equal(c.storage.has("apex26.photoBackgroundPortrait"), false); assert.equal(c.storage.get("apex26.photoBackground"), L);
 });
 
 test("a captured or saved photo selects its own Home scene after the image is stored", async () => {
