@@ -65,7 +65,6 @@ const LinesDrill = (function () {
     return true;
   }
 
-  const lerp = M4.lerp;        // the shared scalar helper (js/core/mat4.js; aliased at eval, tests/unit/shared-math.test.mjs)
   /** Read-only accumulator, one call per host tick: the marks of this run, then each one as the car crosses it. */
   function sample(G, acc) {
     const p = G.player, tr = G.track;
@@ -85,13 +84,13 @@ const LinesDrill = (function () {
     if (!q || now.prog <= q.prog) return;
     const cross = m => (q.prog < m && now.prog >= m ? (m - q.prog) / (now.prog - q.prog) : -1);
     let f = cross(acc.cone);
-    if (f >= 0) acc.miss = Math.abs(lerp(q.x, now.x, f) - acc.coneX);
-    if ((f = cross(acc.turn + EXIT_M)) >= 0) acc.vExit = lerp(q.v, now.v, f);
-    if ((f = cross(acc.turn + GATE_M)) >= 0) acc.gateS = lerp(q.t, now.t, f) - acc.t0;
+    if (f >= 0) acc.miss = Math.abs(M4.lerp(q.x, now.x, f) - acc.coneX);
+    if ((f = cross(acc.turn + EXIT_M)) >= 0) acc.vExit = M4.lerp(q.v, now.v, f);
+    if ((f = cross(acc.turn + GATE_M)) >= 0) acc.gateS = M4.lerp(q.t, now.t, f) - acc.t0;
     if (Math.abs(now.prog - acc.turn) <= MIN_SPAN) acc.vMin = Math.min(acc.vMin, now.v);
     while (acc.next <= now.prog && acc.next <= acc.turn + GATE_M) {
       const g = cross(acc.next);
-      acc.trace.push(+(g >= 0 ? lerp(q.v, now.v, g) : now.v).toFixed(2));
+      acc.trace.push(+(g >= 0 ? M4.lerp(q.v, now.v, g) : now.v).toFixed(2));
       acc.next += TRACE_DX;
     }
   }
