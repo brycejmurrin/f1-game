@@ -571,7 +571,9 @@
         modelGroup("glen-rv-camp", {
           center: vadd(a.c, [0, 1, 0], 2), size: [40, 16, 74], basis: b,
         }, (stage) => {
-          // Lowest grass under the rig's footprint (3x3 samples, as foundation).
+          // Lowest grass under the rig's footprint: foundation's 3x3 samples. The
+          // hand-rolled sampler read only the two long edges (2x3); the centre
+          // column can only seat a rig lower, never float it (parity exact, #7333).
           const lowest = (p, hw2, hl) => groundAt(p[0], p[2], { size: [2 * hw2, 2 * hl], basis: b, pick: "lo" });
           for (let i = 0; i < RIGS.length; i++) {
             const [dr, dt, len] = RIGS[i], h = hash(i * 29 + 7);

@@ -180,7 +180,9 @@ const TrackBuildProps = (function () {
       emitted: [], suppressed: [], invalid: [], unsafe: [],
       suppressedCounts: _suppressed,   // per-kind guard drops (tests/unit/scenery-guards)
       supersededByPit: _superseded,    // per-kind drops the pit complex caused (js/track/core/pit.js)
-      groundFallback: 0,               // groundAt() calls whose every sample fell off the ribbon (#7333)
+      // groundAt() calls whose every sample fell off the ribbon (#7333): a foot
+      // that took its fallback, OR a caller that skips on null (its test missed).
+      groundFallback: 0,
     };
 
     // Everything buildProps places goes straight into vertex buffers and is then
@@ -657,7 +659,7 @@ const TrackBuildProps = (function () {
 
     // groundAt(): THE height a foot stands at (#7333). One sample at (x, z) by
     // default; with `size` [w, d] (+ `basis`, as foundation) the 3x3 footprint
-    // corners, edge midpoints and centre, reduced by `pick`: "lo" (lowest, for
+    // corners, edge midpoints and centre, reduced by `pick` (read only with `size`): "lo" (lowest, for
     // a fill that must reach the ground), "hi" (highest, for a lift that must
     // clear it) or "mid" (the centre sample; the mean of the finite samples when
     // the centre is off the ribbon). When EVERY sample is off the rendered

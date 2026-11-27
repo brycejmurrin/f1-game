@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const DIR = path.join(ROOT, "js/circuits/scenery");
 const BASELINE = path.join(ROOT, "tests/data/scenery-terrainyat-baseline.json");
-const RAW = /\bterrainYAt\(/g;
+const RAW = /\bterrainYAt\s*(?:\?\.)?\(/g;   // also `terrainYAt (x)` and `terrainYAt?.(`
 
 export function countRaw(dir = DIR) {
   const out = {};
@@ -50,8 +50,9 @@ if (process.argv.includes("--update")) {
   test("the ratchet sees an added call (a fixture dir with one extra)", () => {
     const tmp = fs.mkdtempSync(path.join(ROOT, "scratch", "terrainyat-ratchet-"));
     try {
-      fs.writeFileSync(path.join(tmp, "new_circuit.js"), "const y = terrainYAt(x, z); // terrainYAt is text\n");
-      assert.deepEqual(countRaw(tmp), { "new_circuit.js": 1 });
+      fs.writeFileSync(path.join(tmp, "new_circuit.js"),
+        "const y = terrainYAt(x, z); // terrainYAt is text\nconst a = terrainYAt (x, z), b = terrainYAt?.(x, z);\n");
+      assert.deepEqual(countRaw(tmp), { "new_circuit.js": 3 });
     } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
   });
 
