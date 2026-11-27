@@ -1,0 +1,15 @@
+{
+  "files": {
+    "css/hud.css": {
+      "codeLines": 12,
+      "lines": 16
+    },
+    "js/ui/hud.js": {
+      "codeLines": 15,
+      "lines": 16
+    }
+  },
+  "tree": {
+    "eagerCodeBytes": 885
+  }
+}

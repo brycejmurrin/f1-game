@@ -389,6 +389,21 @@ body[data-hl-set="helmet"] #hud-gearbox {
    --hud-pulse: redline is the most urgent cue on the cluster and was 0.4s before
    the unification — do not fold it into the shared token. */
 #hud-tach.redline #hud-rpm-fill { background: var(--red); animation: pulse 0.4s infinite; }
+/* SHIFT LIGHTS (#7096; hud.js shiftLeds, the <b> strip it builds): 10 LEDs atop the tach, dark to 80 % RPM, all flashing at the shift
+   point (the redline latch). max(4px, 45%) keeps each readable on the 13 px phone tach. */
+#hud-tach > b { position: absolute; inset: 1px 1px auto; z-index: 2; height: max(4px, 45%); display: flex; }
+#hud-tach > b > i { flex: 1 1 0; border-right: 1px solid transparent; background: var(--scrim) padding-box; }
+#hud-tach > b > i.on { background-color: var(--faster); }
+#hud-tach > b > i.on:nth-child(n+4) { background-color: var(--red); }
+#hud-tach > b > i.on:nth-child(n+8), #hud-tach > b[data-flash] > i { background-color: var(--sec-best); }
+#hud-tach > b[data-flash] > i { animation: pulse 0.16s steps(1) infinite; }
+/* GEAR POP: data-pop alternates a/b so each shift restarts it with no reflow; never set under Reduce Motion. */
+@media (prefers-reduced-motion: no-preference) {
+  #hud-gear[data-pop="a"] { animation: gear-pop-a 0.18s ease-out; }
+  #hud-gear[data-pop="b"] { animation: gear-pop-b 0.18s ease-out; }
+}
+@keyframes gear-pop-a { from { scale: 1.22; } }
+@keyframes gear-pop-b { from { scale: 1.22; } }
 
 /* Camera + HUD profile integration (js/ui/hud.js syncHudCamClasses). */
 /* MINIMAL MEANS FEWER THINGS, NOT SMALLER ONES. It used to hide the sector box
@@ -1132,6 +1147,7 @@ body.hud-prof-broadcast:has(> :where(#hud) > #hud-mirror-chip:not([hidden])) :is
   #hud-flag.flag-vsc { animation: none; }
   #hud-energy[data-ers="deploy"] #hud-energy-fill,
   #hud-tach.redline #hud-rpm-fill,
+  #hud-tach > b[data-flash] > i,
   #hud-ot.ot-armed { animation: none; }
   .sec-row.sec-flash { animation: none; }
 }
