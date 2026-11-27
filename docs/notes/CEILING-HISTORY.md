@@ -4185,3 +4185,13 @@ Fragment: `ratchets.d/claude--career-refused-calendar-7069.json`.
 ## 2026-11-27 — PR #7262 (claude/racing-lines-drill-6559): Racing Lines apex-choice drill (#6559 step 10)
 
 `(tree) typeofGuards` 2324 → **2327** (+3): `LinesDrill` is LAZY_LEARN and loads in bare VMs (learn-curriculum, drill-lines-vm), so its `AppearanceOpts`, `performance` and `DrillRegistry` reads are guarded; `learn-door.js` guards its `LinesDrill.define()` call (bundle order is not evaluation order). `(tree) eagerCodeBytes` +551: the `apex` mode lives in the eager `race-insights.js`. Within the absorbs (10 guards, 5000 B), so no label. Fragment: `ratchets.d/claude--racing-lines-drill-6559.json`.
+
+## 2026-11-27 — PR #7279 (claude/tlx-post-rt-lifetimes-7229): TLX post render-target lifetimes (#7229, #7219 R5/R6/R7)
+
+`(tree) assertPins` +8 / `assertPinsAll` +11, past the absorb of 5: the new `tests/unit/tlx-post-rt-lifetimes.test.mjs`. The pins are
+the only node-side canaries for three live behaviours the CI gfx-probe (`--tlx-webgpu --lavapipe`, gpuErrors 0) cannot isolate:
+R6 `cinemaPost` allocates no closure on its live path (no arrow, no `next(`, the two `cineA/cineB` swaps); R5 the capture RTs
+(`cap8RT`, `fxaaCaptureRT`) shed only after `SHED_FRAMES` presents AND `CAP_HOLD_MS` (30000) since the last request, with the idle
+reset ahead of the 8-bit early return and both `dropRT` sites; R7 the TAA history resize goes through `ctx.rtSetSize` so `rtResizes`
+counts it. Trimming to the absorb would drop one of the three. Fragment: `ratchets.d/claude--tlx-post-rt-lifetimes-7229.json`.
+Human step: `ratchet-raise`.
