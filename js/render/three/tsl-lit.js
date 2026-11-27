@@ -1205,9 +1205,12 @@
       const uv = matTexUV(mid, nGeo, wp).toVar();
       const fp = max(fwidth(uv.x), fwidth(uv.y)).toVar();
       const aa = clamp(fp.sub(0.02).div(0.30).oneMinus(), 0.0, 1.0).toVar();
-      // Un-var'd, so r186 EMITS this tap at its first use, inside both gates (no
-      // .toVar(): that would tap every fragment). Layer clamped: car ids 20-27.
-      const nt = matNormalNode.sample(uv).depth(int(matTexLayer(mid)));
+      // Un-var'd, so r187 EMITS this tap at its first use, inside both gates (no
+      // .toVar(): that would tap every fragment). Explicit gradients taken above the
+      // gates, so the tap has no implicit derivative in non-uniform control flow.
+      // Layer clamped: car ids 20-27.
+      const uvDx = dFdx(uv).toVar(), uvDy = dFdy(uv).toVar();
+      const nt = matNormalNode.sample(uv).grad(uvDx, uvDy).depth(int(matTexLayer(mid)));
       If(live.and(fade.greaterThan(0.005)), () => {
         If(aa.greaterThan(0.005), () => {
           const dxy = nt.xy.sub(0.5).mul(2.0).toVar();
@@ -1241,7 +1244,8 @@
         .and(matTexScaleOf(mid).greaterThan(0.0));
       // UV before the gate; the un-var'd tap is emitted inside it (first use).
       const uv = matTexUV(mid, normalize(vec3(nrmIn)), wp).toVar();
-      const t = matAlbedoNode.sample(uv).depth(int(matTexLayer(mid)));
+      const uvDx = dFdx(uv).toVar(), uvDy = dFdy(uv).toVar();   // before the gate: explicit gradients
+      const t = matAlbedoNode.sample(uv).grad(uvDx, uvDy).depth(int(matTexLayer(mid)));
       If(live.and(far.greaterThan(0.001)), () => {
         // Multiplicative, exactly as GLX: the per-track tarmac tint, the
         // racing-line rubber wear and the per-vertex grain all have to survive.
@@ -1722,7 +1726,7 @@
         // STANDING-RULE ANCHORS: unconditional Fn-body .toVar() on every
         // shared varying-derived node BEFORE any conditional use.
         const wp = vec3(positionWorld).toVar();               // vWorldPos
-        // vNrm (raw varying). normalWorldGeometry, NOT normalWorld: r186's
+        // vNrm (raw varying). normalWorldGeometry, NOT normalWorld: r187's
         // normalWorld is MeshBasicNodeMaterial.setupNormal() = normalViewGeometry
         // x (frontFacing*2-1) on DoubleSide, rotated by the inverse view per
         // fragment, so the flip below cancelled it and back faces lit with the
@@ -2411,7 +2415,7 @@
 
         // Resolve slot `i` to a lamp record. On the per-chunk path `i` indexes
         // the CHUNK'S slice; the index texture maps it to the track-lamp id.
-        // The idx fetch sits INSIDE the select (an if/else in r186): off the per-chunk
+        // The idx fetch sits INSIDE the select (an if/else in r187): off the per-chunk
         // path no iteration pays it. No .toVar() inside, or it would emit unconditionally.
         const lampRow = PC ? (i, grid) => {
           const k = PC.base.add(float(i)), r = floor(k.div(U.lgIdxW));
@@ -3081,7 +3085,7 @@
      *    crown's foot stays on the trunk; plus a small per-vertex flutter along
      *    the normal. Bare FOLIAGE (fraction 0: hedges, bushes, mountains) and
      *    every other id take the exact static path.
-     * positionLocal is read AFTER three applied the instance matrix (r186
+     * positionLocal is read AFTER three applied the instance matrix (r187
      * NodeMaterial.setupPosition: instance → positionNode), and every world mesh
      * here draws at an identity model matrix, so the sway direction is world
      * xz on baked props and instanced pines alike — the same frame GLX uses. */
@@ -3090,7 +3094,7 @@
     // only flag and leaf vertices use (#4556). A draw's vertices are almost all
     // static, so the branch is coherent.
     // normalLocal and positionLocal are anchored as Fn-BODY statements before
-    // the If. three r186 emits a VarNode's assignment (`normalLocal = normal;`)
+    // the If. three r187 emits a VarNode's assignment (`normalLocal = normal;`)
     // where the node is first built; built only inside the flag/foliage branch,
     // that assignment landed there and every other vertex (the whole garage,
     // the world soup) sent an UNINITIALISED normal varying to the fragment
@@ -3479,16 +3483,12 @@
     function setMaterialMaps(maps) {
       if (matAlbedoNode && maps && maps.albedo) matAlbedoNode.value = maps.albedo;
       if (matNormalNode && maps && maps.normal) matNormalNode.value = maps.normal;
-      // uniformArray exposes its backing store as .array; .value is the
-      // fallback name on older three builds. Guard both — a wrong guess here
-      // would silently leave every scale at 0, i.e. the feature would look
-      // "loaded" and do nothing.
-      const store = U.matTexScale.array || U.matTexScale.value;
+      // uniformArray exposes its backing store as .array (three r187).
+      const store = U.matTexScale.array;
       if (store) {
         for (let i = 0; i < 17; i++)
           store[i] = Assets.matScale(maps && maps.scales && maps.scales[i]);
       }
-      if (U.matTexScale.needsUpdate !== undefined) U.matTexScale.needsUpdate = true;
     }
 
     /* DECAL LIGHT (glsl-fx.js DECAL_FS decalShadow / decalPool): what the car
@@ -3560,7 +3560,7 @@
     });
 
     // Drop a material from the setSsrMrt registry so an evicted cache entry
-    // can actually be released (JS-side; dispose() waits on the r186 upgrade
+    // can actually be released (JS-side; dispose() waits on the r187 upgrade
     // per the eviction comment in tlx.js).
     function releaseMaterial(m) {
       const i = _mats.indexOf(m);
