@@ -120,7 +120,7 @@ const HudRelative = (function () {
     if (!root && !build()) return;
     if (root.hidden) root.hidden = false;
     select(cars, player, track.total, rows);
-    const vFloor = Math.max(player.speed || 0, (G.vTop ? G.vTop() : 80) * 0.26);
+    const vFloor = Math.max(player.speed || 0, (G.vTop ? G.vTop() : PaceMath.V_FALLBACK) * 0.26);
     for (let i = 0; i < ROWS; i++) {
       const r = rows[i], dom = built[i], c = last[i], car = r.car;
       if (!car) { if (!dom.el.hidden) dom.el.hidden = true; c.who = null; smWho[i] = null; continue; }
