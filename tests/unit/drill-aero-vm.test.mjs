@@ -84,8 +84,10 @@ test("__apex.drill*: drillList, then a drillLaunch / drillState / drillEnd round
     assert.deepEqual(plain(g.apex.drillState()), { active: false, state: "menu" });
     assert.deepEqual(plain(g.apex.drillEnd()), { ok: false, error: "no_drill" });
     assert.deepEqual(plain(g.apex.drillRetry()), { ok: false, error: "no_drill" });
-    assert.deepEqual(plain(await g.apex.drillLaunch("nope")), { ok: false, error: "unknown_drill", ids: ["aero"] });
-    assert.deepEqual(plain(g.apex.drillList()), [{ id: "aero", lesson: "aero", track: "monza", flow: "gp", session: "race" }]);
+    const nope = plain(await g.apex.drillLaunch("nope"));   // ids in evaluation order: LAZY_LEARN has no edges
+    assert.deepEqual({ ...nope, ids: nope.ids.sort() }, { ok: false, error: "unknown_drill", ids: ["aero", "wake"] });
+    assert.deepEqual(plain(g.apex.drillList()).sort((a, b) => a.id.localeCompare(b.id)), [{ id: "aero", lesson: "aero", track: "monza", flow: "gp", session: "race" },
+      { id: "wake", lesson: "chassis", track: "monza", flow: "gp", session: "race" }]);
     const launched = await g.apex.drillLaunch("aero");
     assert.equal(launched.ok, true, JSON.stringify(launched));
     assert.equal(launched.id, "aero");
