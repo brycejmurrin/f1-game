@@ -17,3 +17,23 @@ test("the dropped select.css selectors are still covered by race-setup.css", () 
     assert.ok(rs.includes(`body:not(.desktop) ${sel}`) || rs.includes(sel), sel);
   }
 });
+
+// #7143 (#6455 row 6, Bryce's decision A): `light` is unconditional and `system` sits inside
+// @media (prefers-color-scheme: light), so CSS cannot spell the 20 tokens once. Both blocks stay;
+// this guard keeps them identical, and the count pinned so a new token must land in both.
+const tokens = read("tokens.css");
+function declsAfter(open) {
+  const i = tokens.indexOf(open);
+  assert.ok(i >= 0, `${open} not found`);
+  const body = tokens.slice(tokens.indexOf("{", i) + 1, tokens.indexOf("\n  }", i) >= 0 && open.startsWith("  ") ? tokens.indexOf("\n  }", i) : tokens.indexOf("\n}", i));
+  const out = new Map();
+  for (const m of body.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) out.set(m[1], m[2].replace(/\s+/g, " ").trim());
+  return out;
+}
+
+test("the light and system light-token blocks declare the same 20 properties with the same values", () => {
+  const light = declsAfter(':root[data-ui-theme="light"] {');
+  const system = declsAfter('  :root[data-ui-theme="system"] {');
+  assert.equal(light.size, 20, "light block token count");
+  assert.deepEqual([...system].sort(), [...light].sort());
+});
