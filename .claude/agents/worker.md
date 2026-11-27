@@ -77,4 +77,4 @@ not run: <group or check, and why>
 next: <one line for the parent>
 ```
 
-Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); what a card may write is its `tools:` list, not a hook.
+Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/chrome-start, no --wait); what a card may write is its `tools:` list, not a hook.

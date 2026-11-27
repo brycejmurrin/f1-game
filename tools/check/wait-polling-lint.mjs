@@ -32,6 +32,8 @@
 // exceeded` while pointing at a line that claims to wait 30 s. `tlx-probes`'
 // M6 skid spent 344 s inside a 30 s wait that way, and the wrong conclusion
 // drawn from it cost two probes before a third measured the truth.
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/wait-polling-lint.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/wait-polling-lint.mjs [options]\nA declared `waitForFunction` timeout that cannot fire is not a bound — checks every call carries `{ polling }`.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

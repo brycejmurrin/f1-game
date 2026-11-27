@@ -5,6 +5,8 @@
 // live game in Safari, optionally records an Instruments profile (`mobile: startPerfRecord`, the one thing a remote
 // access session cannot do), runs BENCHMARK "paths" for APEX_LEGS legs and writes report.json, the Safari console,
 // the trace and screenshots into $DEVICEFARM_LOG_DIR (collected as Customer Artifacts). No dependencies: Node fetch only.
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/devicefarm-host.mjs") ? process.argv.slice(2) : [], "Usage: node tools/perf/devicefarm-host.mjs [options]\nDevice Farm automated-run body: on the AWS Mac host, Safari bench legs + Instruments trace into $DEVICEFARM_LOG_DIR.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 

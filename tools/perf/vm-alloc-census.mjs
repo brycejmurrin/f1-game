@@ -32,6 +32,8 @@
 //   node tools/perf/vm-alloc-census.mjs              # measure, compare with the baseline, exit 1 over budget
 //   node tools/perf/vm-alloc-census.mjs --update     # rewrite the baseline (say why in the commit)
 //   node tools/perf/vm-alloc-census.mjs --json artifacts/perf/vm-alloc-census.json
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/vm-alloc-census.mjs") ? process.argv.slice(2) : [], "Usage: node tools/perf/vm-alloc-census.mjs [options]\nVM alloc census: object vs boxed-double bytes per race frame in the real game loop vs a baseline (--update).\n--help prints this and exits 0.");
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";

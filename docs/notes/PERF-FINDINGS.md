@@ -317,7 +317,7 @@ operation count did not.
 read that as the change's fault. It was not, and the two steps that established
 that are the whole point of the next section:
 
-1. **`tools/ci/test-solo.mjs`** re-ran it alone on a gated-quiet box (load 1.55) and
+1. **`tools/ci/test-bg.mjs --foreground`** re-ran it alone on a gated-quiet box (load 1.55) and
    returned *"FAIL on a quiet box is REAL. It is not the machine. Bisect it."*
    So it was not contention — three of the four were genuine.
 2. **The same spec was then run at the PREVIOUS DEPLOY SHA**, which had already
@@ -391,7 +391,7 @@ running the same thing at an older commit, or by `md5`-ing the files the failing
 test actually loads. It costs minutes; believing a red run costs hours and can
 end in "fixing" working code.
 
-`tools/ci/test-solo.mjs` exists for the first case and REFUSES to run on a hot box.
+`tools/ci/test-bg.mjs --foreground` exists for the first case and REFUSES to run on a hot box.
 Trust it. Two specs that blew a 120 s budget under load 8-9 came back at 68.9 s
 and 73.2 s solo.
 

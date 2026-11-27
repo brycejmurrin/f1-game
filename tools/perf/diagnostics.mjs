@@ -3,6 +3,8 @@
 // @skill renderer-debug / mcp-probe
 // Interpretation: https://developer.chrome.com/docs/devtools/memory-problems
 // Resource counts: https://threejs.org/docs/#WebGLRenderer.info (counts, not resident bytes).
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/diagnostics.mjs") ? process.argv.slice(2) : [], "Usage: node tools/perf/diagnostics.mjs [options]\nBounded diagnostic plans and saved summaries for heap, GPU allocation and VM lifecycle censuses.\n--help prints this and exits 0.");
 import { existsSync, realpathSync, statSync, readFileSync, mkdirSync, writeFileSync, readdirSync, lstatSync } from 'node:fs';
 import { resolve, dirname, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';

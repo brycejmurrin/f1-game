@@ -4,6 +4,10 @@
 //   node tools/track/centreline-kinks.cjs [id…]      # table: circuit, node, frac, R, hw, nearest turn
 //   node tools/track/centreline-kinks.cjs --gate     # exit 1 when any circuit exceeds tests/data/centreline-kinks.json
 //   node tools/track/centreline-kinks.cjs --update   # lower the pinned counts to the measured ones (never raises)
+if (require.main === module && process.argv.slice(2).some((a) => a === "--help" || a === "-h" || a === "help")) {
+  console.log("Usage: node tools/track/centreline-kinks.cjs [options]\nLists single-node centreline kinks (node radius < half-width) per circuit; `--gate` pins counts, `--update` lowers.\n--help prints this and exits 0.");
+  process.exit(0);
+}
 const fs = require("fs");
 const path = require("path");
 const { buildContext } = require("./verify-track.cjs");

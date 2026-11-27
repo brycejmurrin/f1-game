@@ -2,6 +2,8 @@
 // @doc Read-only YAML/refs/mirrors/browser/deps doctor; --json and optional --catalog FILE. No browser or network.
 // @skill check-changes
 // YAML API: https://eemeli.org/yaml/#parsing-documents
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/doctor.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/doctor.mjs [options]\nRead-only YAML/refs/mirrors/browser/deps doctor; --json and optional --catalog FILE. No browser or network.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";

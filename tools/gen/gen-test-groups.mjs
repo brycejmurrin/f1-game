@@ -28,6 +28,8 @@
  * spot). Since 2026-10-26 it reads tests/groups.json at import time, so there
  * is nothing to regenerate there.
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/gen-test-groups.mjs") ? process.argv.slice(2) : [], "Usage: node tools/gen/gen-test-groups.mjs [options]\nRegenerates package.json's `test:*` scripts from tests/groups.json; `--check`.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

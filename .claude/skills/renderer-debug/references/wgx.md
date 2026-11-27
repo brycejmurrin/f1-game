@@ -98,5 +98,5 @@ Live session: **mcp-probe** with
 defect, e.g. `qatar --tod night`). Multi-track gallery: `node tools/gfx/wgx-shot.mjs --gallery --lite`
 (`npm run wgx:gallery` is exactly that pair — bare `--gallery` is a different,
 full-tier run).
-(`wgx-capture.mjs` aliases `gfx-probe --backend webgpu`; `wgx-lavapipe-probe.mjs`
-aliases `--backend three --tlx-webgpu --lavapipe`, a TLX probe, not WGX.)
+(`wgx-capture.mjs` aliases `gfx-probe --backend webgpu`; `gfx-probe --backend three --tlx-webgpu --lavapipe`
+is a TLX probe on Lavapipe, not WGX.)
