@@ -269,7 +269,12 @@ const TrackLine = (function () {
       s0: wrapS(L, (start + c.entryStep) * ds), sApex: wrapS(L, (start + c.apexStep) * ds), s1: wrapS(L, (start + c.exitStep) * ds),
       k: c.kMax * c.sgn, inside: c.inside, len: (c.i1 - c.i0 + 1) * ds,
     }));
-    if (!corners.length) { track.line = x; track.lineW = w; return track; }
+    if (!corners.length) {
+      // corner-free track: still bake the AI tables (pathK reads lineK)
+      track.line = x; track.lineW = w;
+      bakeAttack(track, ds); bakePathK(track, ds);
+      return track;
+    }
     // 3. knots: entry (outside), apex (inside), exit (outside); overlapping neighbours share a midpoint knot
     const knots = [];
     for (let ci = 0; ci < corners.length; ci++) {
@@ -375,7 +380,7 @@ const TrackLine = (function () {
     const def = track.def, out = [];
     const list = def && def.lineHints, turns = def && def.turns;
     if (!list || !list.length || !turns || !turns.length || !corners.length) return out;
-    const L = track.total;
+    const L = track.total, claimed = new Set();
     for (const h of list) {
       if (!h || !Number.isFinite(h.turn)) continue;
       const ti = ((Math.round(h.turn) - 1) % turns.length + turns.length) % turns.length;
@@ -390,6 +395,12 @@ const TrackLine = (function () {
         try { Log.warn("track", "lineHints: turn " + h.turn + " of " + def.id + " is " + Math.round(bd) + " m from any baked corner — dropped"); } catch (_) { /* no Log in a bare VM */ }
         continue;
       }
+      // one hint per corner, or its apexShift applies twice
+      if (claimed.has(best)) {
+        try { Log.warn("track", "lineHints: turn " + h.turn + " of " + def.id + " shares a corner — dropped"); } catch (_) { /* no Log in a bare VM */ }
+        continue;
+      }
+      claimed.add(best);
       out.push({ corner: best, apexShift: +h.apexShift || 0, apexInside: +h.apexInside || 0 });
     }
     return out;

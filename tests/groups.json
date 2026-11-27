@@ -1454,6 +1454,7 @@
     "// estimate's bit for bit, TURNS bands and their control spans, REPLACE with the",
     "// fitted arc re-stamps seed 7 green, each FIA Grade 1 amber fires on a crafted",
     "// design and never RED, TRACK OF THE DAY per UTC day, START FROM traces. ~2 s.",
+    "tests/unit/track-hardening-7340.test.mjs",
     "tests/unit/track-insight.test.mjs",
     "tests/unit/track-line.test.mjs",
     "tests/unit/track-maps-corners.test.mjs",

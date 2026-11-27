@@ -36,10 +36,6 @@ const TrackSpace = (function () {
     return ((source % n) + n) % n;
   }
 
-  function sampleSource(def, racingFrac, sampler) {
-    return sampler(toSourceFrac(def, racingFrac));
-  }
-
   function scenerySpace(def) {
     const mode = def && def.sceneryCoordinates;
     if (mode === "racing" || mode === "source") return mode;
@@ -174,7 +170,7 @@ const TrackSpace = (function () {
 
   return {
     wrap01, toRacingFrac, toSourceFrac,
-    sourceNodeToRacing, racingNodeToSource, sampleSource,
+    sourceNodeToRacing, racingNodeToSource,
     scenerySpace, sceneryFrac, sceneryNode, sceneryNodeToAuthored, sceneryRange, sceneryOriginDelta, range, bumpWindow,
   };
 })();

@@ -117,6 +117,8 @@ const TrackGeom = (function () {
     const ux = u[0] * hy, uy = u[1] * hy, uz = u[2] * hy;
     const fx = f[0] * hz, fy = f[1] * hz, fz = f[2] * hz;
     const c0 = c[0], c1 = c[1], c2 = c[2];
+    // NaN centre/size/basis guard, once per box (the hottest emitter)
+    if (!__isFinite(c0 + c1 + c2 + rx + ry + rz + ux + uy + uz + fx + fy + fz)) return false;
     // The face table above is wound CCW-outward for a RIGHT-handed [r,u,f] basis
     // (the default axes give r×u = +f). But callers on the track frame pass
     // r = cross(t,up), u = cross(r,t) — a LEFT-handed basis (r×u = -t) — so every
@@ -165,11 +167,18 @@ const TrackGeom = (function () {
       const v = verts[i];
       if (!v || !__isFinite(v[0]) || !__isFinite(v[1]) || !__isFinite(v[2])) return false;
     }
-    const a = verts[0], b = verts[1], c = verts[2];
-    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
-    const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
-    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-    const len = __M.hypot(nx, ny, nz) || 1;
+    // normal: first non-degenerate fan triangle (a cone tip opens with two equal
+    // verts); a face with none is dropped
+    const a = verts[0];
+    let nx = 0, ny = 0, nz = 0, len = 0;
+    for (let i = 1; i < verts.length - 1 && len === 0; i++) {
+      const b = verts[i], c = verts[i + 1];
+      const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
+      const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+      nx = uy * vz - uz * vy; ny = uz * vx - ux * vz; nz = ux * vy - uy * vx;
+      len = __M.hypot(nx, ny, nz);
+    }
+    if (len === 0) return false;
     nx /= len; ny /= len; nz /= len;
     let reverse = false;
     if (ref) {
@@ -258,6 +267,7 @@ const TrackGeom = (function () {
 
   function addMountain(out, c, baseR, h, opts) {
     opts = opts || {};
+    const m0 = out._mat;   // restored at the end
     const seg = opts.seg || 10, seed = opts.seed || 0, rough = opts.rough != null ? opts.rough : 0.34;
     const forest = opts.forest || [0.22, 0.38, 0.22];
     const rock = opts.rock || [0.40, 0.38, 0.36];
@@ -318,7 +328,7 @@ const TrackGeom = (function () {
       out._mat = zoneAt(fy, i);
       emit(out, [a, b, apex], colAt(fy, i), ref);
     }
-    out._mat = 0;
+    out._mat = m0;
   }
 
   // Stamp a BAKED MODEL's geometry into the accumulator: uniform scale, a yaw
