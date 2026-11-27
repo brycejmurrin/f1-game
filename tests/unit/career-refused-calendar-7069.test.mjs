@@ -83,3 +83,13 @@ test("row 11: a refused clear() leaves the career in memory", () => {
   assert.equal(Career.clear().ok, true);
   assert.equal(Career.data(), null);
 });
+
+test("row 10: tally.starts in a save is kept only when a finite non-negative number", () => {
+  const { Career } = boot();
+  for (const [bad, want] of [["5", undefined], [null, undefined], [Infinity, undefined], [-3, undefined], [12, 12]]) {
+    Career.data().tally.starts = bad;
+    Career.save();
+    Career.load();
+    assert.equal(Career.data().tally.starts, want, String(bad));
+  }
+});

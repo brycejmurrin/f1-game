@@ -151,7 +151,7 @@ const SaveMigrate = (function () {
     const out = {};
     for (const k of TALLY_KEYS) out[k] = Math.max(0, finiteNumber(t[k]));
     // Races started in closed seasons, counted under each year's own calendar; absent on an older save.
-    if (t.starts >= 0) out.starts = t.starts;
+    if (Number.isFinite(t.starts) && t.starts >= 0) out.starts = t.starts;
     return out;
   }
 
