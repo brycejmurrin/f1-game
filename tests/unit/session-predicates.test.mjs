@@ -101,7 +101,7 @@ test("garage tyre trolley: STORM racks slicks (recorded disagreement, pinned unt
   const E = read("js/garage/scene-equipment.js");
   const line = E.match(/const wet = ([^\n]+);\n/)[1];
   const M4 = vm.runInContext("M4", context([]));
-  const wet = new Function("M4", "ctx", "return " + line);
+  const wet = vm.compileFunction("return " + line, ["M4", "ctx"]);
   const got = Object.fromEntries(WEATHERS.map((w) => [String(w), wet(M4, { weather: w })]));
   assert.deepEqual(got, { dry: false, overcast: false, fog: false, wet: true, rain: true, storm: false, undefined: false, "": false });
   assert.equal(wet(M4, null), false);
