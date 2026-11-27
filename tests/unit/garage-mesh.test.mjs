@@ -774,9 +774,9 @@ test("equipment props stay grounded, inside their parking envelopes and material
   }
 });
 
-test("parked trolley compound labels still follow dry and wet garage context", () => {
+test("parked trolley compound labels follow dry and wet garage context (storm racks wets, #7148)", () => {
   const { ctx } = harness(), equipment = vm.runInContext("GarageEquipment", ctx);
-  for (const [weather, expected] of [["dry", [3, 3, 2, 0, 0]], ["rain", [0, 2, 0, 3, 3]], ["wet", [0, 2, 0, 3, 3]]]) {
+  for (const [weather, expected] of [["dry", [3, 3, 2, 0, 0]], ["rain", [0, 2, 0, 3, 3]], ["wet", [0, 2, 0, 3, 3]], ["storm", [0, 2, 0, 3, 3]]]) {
     const empty = () => ({ pos: [], nrm: [], col: [], idx: [], mat: [] });
     const groups = { mid: empty(), back: empty(), nx: empty(), px: empty() };
     equipment.build(groups, LIV, { weather });
