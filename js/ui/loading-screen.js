@@ -63,7 +63,7 @@ const LoadingScreen = (function () {
   }
 
   function create(hooks) {
-    const { $, Tracks, TrackMaps, Flags, store } = hooks;
+    const { $, Tracks, TrackMaps, Flags, store, ensureCircuit } = hooks;
     /* The announcer may arrive as a THUNK rather than an instance, and js/game.js
      * passes one. `announcer` there is a `let` that starts at Announcer.inert()
      * and is reassigned at the module wires; today those wires run before this
@@ -196,6 +196,7 @@ const LoadingScreen = (function () {
       if (t.sectors?.length === 2) mapModes.push("sectors");
       if (cornerSpeeds.some(Number.isFinite)) mapModes.push("corners");
       drawMap(t, 0, mapModes[0] || "layout");
+      if (t._metaOnly && ensureCircuit) ensureCircuit(Tracks.LIST.indexOf(t)).then(() => cur?.track === t && paint(cur), () => {});   // cold pick: repaint once hydrated (as whenCircuit)
       const meta = $("ld-meta");
       if (typeof meta.replaceChildren === "function") meta.replaceChildren(); else meta.textContent = "";
       for (const [k, v] of rows) {
