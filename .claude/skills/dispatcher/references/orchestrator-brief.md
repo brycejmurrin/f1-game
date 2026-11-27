@@ -36,8 +36,8 @@ restated rules drifted into three wordings and one contradicted the skill [14].
   PR's own worker add either. A PROTECTED path (merge-gate `PROTECTED_CONFIG_PATH`: the gate's import closure,
   `land.yml`, every host's hooks and settings) needs Bryce's own tap (#5455); `ci.yml`, `pick-tests`, `preflip-probe`
   and the other `tools/ci/` files are routine. The gate cannot tell you from the worker: this half is a rule, not a check.
-- Launch with `create_session` environment_id `env_01T3kL7W7688bnn8RpTx8GsY` (environment "I"), permission_mode
-  `auto`; the orchestrator stays in auto too. A `plan` or `default` child stalls on an unanswered prompt (retro).
+- Launch with `create_session` into the `worker` role's environment (`node tools/ci/brief.mjs role worker` prints its
+  id; roles live in `tests/data/fleet-roles.json`, never as an id in a skill or brief), permission_mode `auto`; the orchestrator stays in auto too. A `plan` or `default` child stalls on an unanswered prompt (retro).
 - One Claude Link window per wave: ONE hands-off bridge `drive` run (#6425) for every pending device check, one ask to
   Bryce (~35 of his 115 prompts on 2026-11-24 were link plumbing; memory `phone-checks-via-claude-link.md`).
 - A TAKEOVER brief states evidence, not a verdict: the lease line, the newest commit trailer and comment time on the
@@ -109,7 +109,11 @@ SUBAGENTS: <the role's row in `.claude/agents/README.md` §Roles, e.g. "prior-ar
 
 Bryce, 2026-11-25 (memory `orchestrator-routines.md`): two `create_trigger` tasks bound to your own session, initiation
 `human_request`; a successor re-creates both and disables the old ones (`update_trigger enabled:false`), never deletes.
-- **FULL `19 * * * *`:** notifications to 0; deploy tip (red: the bulletin above, one `DEPLOY-RED` fixer, pause pushes);
+- **FULL `19 * * * *`:** step 0, the routine reaper: save `list_triggers {enabled:true}`, `list_sessions` and the
+  orchestration issue's comments, run `node tools/ci/brief.mjs reap --triggers <f> --sessions <f> --blocks <f>`, and
+  `update_trigger enabled:false` each `disable trig_…` line it prints (a trigger bound to an archived session, or a
+  recurring one not bound to the newest ```orchestrator block's session; skill `handoff`), one logged line per act; then
+  notifications to 0; deploy tip (red: the bulletin above, one `DEPLOY-RED` fixer, pause pushes);
   ONE subagent surveys open PRs (CI, gate, conflicts, `owner:`) and live sessions into `scratch/`; act reversibly and
   log it (a `CONTINUE PR` per ownerless red or conflict, nudge idle owners, archive the finished, `rerun_failed_jobs`
   only for infra or a designed cancel, diff read before `config-ok`, protected and `needs-decision` items to Bryce by
