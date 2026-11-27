@@ -239,7 +239,7 @@ export function swOptionalFiles() {
     ...MANIFEST.LAZY_CIRCUIT, ...MANIFEST.LAZY_SCENERY, ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
     ...(MANIFEST.LAZY_AUDIO || []),
     ...MANIFEST.LAZY_WORKER, ...MANIFEST.LAZY_EDITOR, ...(MANIFEST.LAZY_XR || []),
-    ...(MANIFEST.LAZY_CAM_EDITOR || []), ...(MANIFEST.LAZY_CAREER_UI || []),
+    ...(MANIFEST.LAZY_CAM_EDITOR || []), ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_CAREER || []),
     ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []),
     ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || []), ...(MANIFEST.LAZY_LEARN || []),
     ...(MANIFEST.LAZY_GFX_HI || []),
@@ -273,6 +273,7 @@ function swOptionalBlock() {
     ["LAZY_XR — WebXR session behind navigator.xr / ENTER VR", MANIFEST.LAZY_XR || []],
     ["LAZY_CAM_EDITOR — camera tuner + flyby shot editor panels", MANIFEST.LAZY_CAM_EDITOR || []],
     ["LAZY_CAREER_UI — CAREER screen behind the title CAREER door", MANIFEST.LAZY_CAREER_UI || []],
+    ["LAZY_CAREER — ai-dev, regulations, experience behind ensureCareerBody", MANIFEST.LAZY_CAREER || []],
     ["LAZY_UI_PRESETS — APPEARANCE LAYOUT PRESET row behind the first APPEARANCE enter", MANIFEST.LAZY_UI_PRESETS || []],
     ["LAZY_SAVES_DATA — SAVES & DATA body (collect / apply / files UI) behind the SettingsExport façade", MANIFEST.LAZY_SAVES_DATA || []],
     ["LAZY_RESULTS_SHEET — results / TT / standings DOM behind startRace", MANIFEST.LAZY_RESULTS_SHEET || []],
@@ -293,7 +294,7 @@ function swOptionalBlock() {
 /** The strict lazy group install must cache whole (CAREER screen files): derived from LAZY_CAREER_UI so a feature PR
  *  that adds a career file no longer hand-edits a regex line in sw.js (it re-conflicted on every sync). */
 function swRequiredLazyBlock() {
-  return `const REQUIRED_LAZY = ${JSON.stringify(MANIFEST.LAZY_CAREER_UI || [])};\n`;
+  return `const REQUIRED_LAZY = ${JSON.stringify([...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_CAREER || [])])};\n`;
 }
 
 function swLazyAgentBlock() {
@@ -321,6 +322,7 @@ function rosterSource() {
     ["LAZY_XR", MANIFEST.LAZY_XR], ["LAZY_XR_EDGES", MANIFEST.LAZY_XR_EDGES],
     ["LAZY_CAM_EDITOR", MANIFEST.LAZY_CAM_EDITOR], ["LAZY_CAM_EDITOR_EDGES", MANIFEST.LAZY_CAM_EDITOR_EDGES],
     ["LAZY_CAREER_UI", MANIFEST.LAZY_CAREER_UI], ["LAZY_CAREER_UI_EDGES", MANIFEST.LAZY_CAREER_UI_EDGES],
+    ["LAZY_CAREER", MANIFEST.LAZY_CAREER], ["LAZY_CAREER_EDGES", MANIFEST.LAZY_CAREER_EDGES],
     ["LAZY_UI_PRESETS", MANIFEST.LAZY_UI_PRESETS], ["LAZY_UI_PRESETS_EDGES", MANIFEST.LAZY_UI_PRESETS_EDGES],
     ["LAZY_SAVES_DATA", MANIFEST.LAZY_SAVES_DATA], ["LAZY_SAVES_DATA_EDGES", MANIFEST.LAZY_SAVES_DATA_EDGES],
     ["LAZY_RESULTS_SHEET", MANIFEST.LAZY_RESULTS_SHEET], ["LAZY_RESULTS_SHEET_EDGES", MANIFEST.LAZY_RESULTS_SHEET_EDGES],

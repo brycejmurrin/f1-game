@@ -909,6 +909,12 @@
       "js/career/career-ui.js"
     ]
   ],
+    LAZY_CAREER: [
+    "js/career/regulations.js",
+    "js/career/ai-dev.js",
+    "js/career/experience.js"
+  ],
+    LAZY_CAREER_EDGES: [],
     LAZY_UI_PRESETS: [
     "js/ui/desktop-graphics.js",
     "js/ui/screen-regions.js",
