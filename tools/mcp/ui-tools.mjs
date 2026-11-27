@@ -28,19 +28,19 @@ export const UI_INSPECT_SCHEMA = { type: 'object', additionalProperties: false, 
   touch: { type: 'boolean' }, boot: size,
   safe: { type: 'array', minItems: 4, maxItems: 4, items: { type: 'integer', minimum: 0, maximum: 200 }, description: 'Safe-area top,right,bottom,left in CSS pixels.' },
   out: { type: 'string', description: 'Output directory inside artifacts/ or scratch/.' },
-  dryRun: { type: 'boolean' }, target: { type: 'string', enum: ['local', 'deploy'] }, url: { type: 'string' },
+  dryRun: { type: 'boolean' }
 } };
 export const UI_DIFF_SCHEMA = { type: 'object', additionalProperties: false, required: ['before', 'after'], properties: {
   before: { type: 'string', description: 'Saved inspection.json under artifacts/ or scratch/; max 5 MiB.' },
   after: { type: 'string', description: 'Saved inspection.json under artifacts/ or scratch/; max 5 MiB.' },
-  dryRun: { type: 'boolean' }, target: { type: 'string', enum: ['local', 'deploy'] }, url: { type: 'string' },
+  dryRun: { type: 'boolean' }
 } };
 export const UI_MISSION_SCHEMA = { type: 'object', additionalProperties: false, required: ['mission'], properties: {
   mission: { type: 'string', enum: MISSIONS.map(m => m.id) },
   out: { type: 'string', description: 'Directory under artifacts/ or scratch/ for a canonical scenario and future evidence.' },
   maxShots: { type: 'integer', minimum: 1, maximum: 5 },
-  timeoutSeconds: { type: 'integer', minimum: 30, maximum: 180 },
-  dryRun: { type: 'boolean' }, target: { type: 'string', enum: ['local', 'deploy'] }, url: { type: 'string' },
+  timeoutSeconds: { type: 'integer', minimum: 30, maximum: 180, description: 'Advisory: reported in limits.timeoutMs; the explorer enforces its own cap.' },
+  dryRun: { type: 'boolean' }
 } };
 
 function inspections(report) {

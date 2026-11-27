@@ -84,9 +84,6 @@ const GLXPost = (function () {
     // not change mid-frame; skip equal re-uploads. Per-frame values (sunUV,
     // flare, exposure, grainTime, haze) still go up every present().
     const _compUf = Object.create(null);
-    // Which FBO soft-present readPixels uses after the last present() — must
-    // match where the composite/FXAA chain actually landed this frame.
-    let _softReadFB = null;   // null = default framebuffer
     // What the LAST present actually did — the pass flags and the buffer a
     // soft-present readback would read. Surfaced through GLX.softPresentState()
     // so a two-capture spec can prove both captures came off the same chain:
@@ -1174,9 +1171,7 @@ const GLXPost = (function () {
       // SwiftShader) and, under upscale, a RENDER-size attachment that softBlit
       // then readPixels at present size — the scene in a corner of undefined
       // pixels, since glx softBlit sizes on the drawing buffer.
-      _softReadFB = null;
-      _lastPath = { on: true, fxaa: useFxaa, upscale: useUpscale, toLdr: !!toLdr, bloom: bloomAmt, ao: aoStr,
-        readFb: "default" };
+      _lastPath = { on: true, fxaa: useFxaa, upscale: useUpscale, toLdr: !!toLdr, bloom: bloomAmt, ao: aoStr };
 
       // THE MIRROR INSET, while the canvas pass is still open (perf hunt 2 G12,
       // TLX D8): it used to be drawn by glx.js AFTER this tail's
@@ -1203,7 +1198,7 @@ const GLXPost = (function () {
       core.gpuTimerEnd();
     }
 
-    // Headless soft-present readback from _softReadFB — the buffer the last
+    // Headless soft-present readback from the default framebuffer — the buffer the last
     // present() resolved into. SwiftShader resolves asynchronously, so without
     // the finish() the read repeats the previous frame and grade captures go stale.
     // `asked`: a caller is waiting to read these pixels (soft.js), so the
@@ -1215,7 +1210,7 @@ const GLXPost = (function () {
       } catch (_) { /* harness */ }
       try {
         gl.finish();
-        gl.bindFramebuffer(gl.FRAMEBUFFER, _softReadFB);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null); /* glx-default-fb: reset only */
         gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
         return true;
       } catch (_) {

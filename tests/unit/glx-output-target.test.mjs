@@ -25,7 +25,7 @@ const FILES = ["glx.js", "post.js", "shadow.js", "chunked.js"];
 const MARKER = "glx-default-fb: reset only";
 // Tripwire: every default-FB unbind in the four files. Bump only when a new
 // class-(C) reset is added WITH the marker (or a site is removed).
-const RESET_ONLY_COUNT = 10;
+const RESET_ONLY_COUNT = 11;
 
 function scanNullBinds() {
   const hits = [];

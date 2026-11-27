@@ -228,7 +228,7 @@ const GLXSoft = (function () {
     // nothing outside this create() reads Soft.softBlit|softBlitNotify.
     // hasWaiters / captureDue were never wired — present() uses blitIfDue().
     return {
-      isEnabled, setEnabled, gen, ensureSoftDisplay,
+      isEnabled, setEnabled, gen,
       softPresentState, invalidateSoftPresent, awaitSoftPresent, blitIfDue, drainFrameWaiters,
     };
   }

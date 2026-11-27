@@ -973,5 +973,81 @@
       "goldClean": true,
       "cleanRequired": true
     }
+  },
+  "harvest": {
+    "how": "node tests/helpers/harvest-drill-vm.mjs --write: the Monza Harvest Stop (20 m past the line at 0.8 vTop, store 0.85, marker 330 m on), one boot, a warm-up run, then RETRY before each run, full throttle, no steering, then the brake held to the stop from one frame; a frame-by-frame sweep finds the stop nearest the marker",
+    "metric": "stop accuracy = 100 x (1 - |metres off the marker| / 50), floored at 0 (js/learn-drills/harvest.js score); harvest shown, not scored",
+    "rule": "each tier is the worse accuracy of the two runs braking SLIP frames early and late of the best brake point: gold 6 (0.1 s), silver 15 (0.25 s), bronze 30 (0.5 s); floored to 0.1 %",
+    "runs": [
+      {
+        "slip": -30,
+        "frame": 305,
+        "value": 46.1,
+        "offM": -26.93,
+        "clean": true,
+        "reason": "",
+        "clipS": 0.9
+      },
+      {
+        "slip": -15,
+        "frame": 320,
+        "value": 73.1,
+        "offM": -13.45,
+        "clean": true,
+        "reason": "",
+        "clipS": 1
+      },
+      {
+        "slip": -6,
+        "frame": 329,
+        "value": 89.3,
+        "offM": -5.36,
+        "clean": true,
+        "reason": "",
+        "clipS": 1
+      },
+      {
+        "slip": 0,
+        "frame": 335,
+        "value": 99.9,
+        "offM": 0.04,
+        "clean": true,
+        "reason": "",
+        "clipS": 1
+      },
+      {
+        "slip": 6,
+        "frame": 341,
+        "value": 89.1,
+        "offM": 5.45,
+        "clean": true,
+        "reason": "",
+        "clipS": 1
+      },
+      {
+        "slip": 15,
+        "frame": 350,
+        "value": 72.8,
+        "offM": 13.58,
+        "clean": true,
+        "reason": "",
+        "clipS": 1
+      },
+      {
+        "slip": 30,
+        "frame": 365,
+        "value": 45.7,
+        "offM": 27.14,
+        "clean": true,
+        "reason": "",
+        "clipS": 1
+      }
+    ],
+    "tiers": {
+      "bronze": 45.7,
+      "silver": 72.8,
+      "gold": 89.1,
+      "goldClean": true
+    }
   }
 }

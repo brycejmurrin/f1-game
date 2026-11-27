@@ -814,6 +814,7 @@
         "tests/unit/drill-charge-vm.test.mjs",
         "tests/unit/drill-fork-vm.test.mjs",
         "tests/unit/drill-grip-vm.test.mjs",
+        "tests/unit/drill-harvest-vm.test.mjs",
         "tests/unit/drill-lines-vm.test.mjs",
         "tests/unit/drill-rain-vm.test.mjs",
         "tests/unit/drill-taper-vm.test.mjs",
@@ -969,6 +970,7 @@
         "tests/unit/drill-charge-vm.test.mjs",
         "tests/unit/drill-fork-vm.test.mjs",
         "tests/unit/drill-grip-vm.test.mjs",
+        "tests/unit/drill-harvest-vm.test.mjs",
         "tests/unit/drill-lines-vm.test.mjs",
         "tests/unit/drill-rain-vm.test.mjs",
         "tests/unit/drill-taper-vm.test.mjs",
@@ -1161,6 +1163,7 @@
         "tests/unit/drill-charge-vm.test.mjs",
         "tests/unit/drill-fork-vm.test.mjs",
         "tests/unit/drill-grip-vm.test.mjs",
+        "tests/unit/drill-harvest-vm.test.mjs",
         "tests/unit/drill-lines-vm.test.mjs",
         "tests/unit/drill-rain-vm.test.mjs",
         "tests/unit/drill-taper-vm.test.mjs",
@@ -3963,6 +3966,11 @@
     {
       "path": "js/learn-drills/grip.js",
       "global": "GripDrill",
+      "roster": "LAZY_LEARN"
+    },
+    {
+      "path": "js/learn-drills/harvest.js",
+      "global": "HarvestDrill",
       "roster": "LAZY_LEARN"
     },
     {

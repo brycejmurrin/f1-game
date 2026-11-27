@@ -165,7 +165,7 @@ for (const id of CIRCUITS) {
   });
 }
 
-test("the recorded comparison matches this measurement (drift is a diagnostic; re-record with APEX_TERRAIN_PIN_WRITE=1)", (t) => {
+test("the recorded comparison matches this measurement (re-record with APEX_TERRAIN_PIN_WRITE=1, never in CI)", (t) => {
   const record = {
     "//": "Written by tests/unit/terrain-sampler-pin.test.mjs (#6484 item 4a). A = build-props.js terrainYAt, "
       + "B = Tracks.terrainY. hugeTri: B's answer came from a triangle over 30 m across that A skips; slackA / "
@@ -175,6 +175,7 @@ test("the recorded comparison matches this measurement (drift is a diagnostic; r
     circuits: results,
   };
   if (process.env.APEX_TERRAIN_PIN_WRITE === "1") {
+    assert.ok(!process.env.CI, "APEX_TERRAIN_PIN_WRITE=1 re-records the golden from its own measurement; refused when CI is set");
     fs.writeFileSync(DATA, JSON.stringify(record, null, 2) + "\n");
     t.diagnostic(`wrote ${path.relative(ROOT, DATA)}`);
     return;
@@ -185,10 +186,12 @@ test("the recorded comparison matches this measurement (drift is a diagnostic; r
   assert.ok(prev.grid && prev.grid.step === STEP && prev.grid.ox === OX && prev.grid.oz === OZ,
     `${path.relative(ROOT, DATA)} was recorded on another grid; re-record`);
   const keys = ["samples", "agree", "aNullBNum", "aNumBNull", "bothNumDiffer", "maxAbsDy"];
+  const drift = [];
   for (const id of CIRCUITS) {
     const was = prev.circuits && prev.circuits[id], now = results[id];
-    if (!now) continue;
+    assert.ok(now, `${id}: no measurement this run (the per-circuit test did not run)`);
     const moved = was ? keys.filter((k) => was[k] !== now[k]).map((k) => `${k} ${was[k]} -> ${now[k]}`) : ["not recorded"];
-    if (moved.length) t.diagnostic(`${id} drifted from the record: ${moved.join(", ")}`);
+    if (moved.length) drift.push(`${id} drifted from the record: ${moved.join(", ")}`);
   }
+  assert.deepEqual(drift, [], "the recorded comparison moved; if intended, re-record with APEX_TERRAIN_PIN_WRITE=1:\n  " + drift.join("\n  "));
 });

@@ -5,8 +5,8 @@
    is a deferred sheet. */
 :root { --tap-floor44: 0px; }
 body:not(.desktop) { --tap-floor44: calc(44.2px / var(--ui-scale)); }
-/* The lesson's instruction card leaves all driving input with the HUD (the Aero Lab's; the Grip drill's, js/learn-drills/grip.js; the Taper Hunt's). */
-#learn-aero-guide, #learn-grip-guide, #learn-taper-guide, #learn-torque-guide, #learn-telemetry-guide, #learn-charge-guide {
+/* The lesson's instruction card leaves all driving input with the HUD (the Aero Lab's; the Grip drill's, js/learn-drills/grip.js; the Taper Hunt's; the Harvest Stop's). */
+#learn-aero-guide, #learn-grip-guide, #learn-taper-guide, #learn-torque-guide, #learn-telemetry-guide, #learn-charge-guide, #learn-harvest-guide {
   position: fixed;
   z-index: 8;
   pointer-events: none;
@@ -22,17 +22,18 @@ body:not(.desktop) { --tap-floor44: calc(44.2px / var(--ui-scale)); }
   text-align: center;
 }
 #learn-aero-guide:not([hidden]), #learn-grip-guide:not([hidden]), #learn-taper-guide:not([hidden]), #learn-torque-guide:not([hidden]), #learn-telemetry-guide:not([hidden]), #learn-charge-guide:not([hidden]) { display: flex; align-items: center; gap: .65rem; text-align: left; }
+#learn-harvest-guide:not([hidden]) { display: flex; align-items: center; gap: .65rem; text-align: left; }
 #learn-aero-guide canvas, #learn-grip-guide canvas {
   width: clamp(5.5rem, 10vw, 8.75rem); height: auto; flex: none;
   background: var(--hud-ink-dark); border-radius: var(--r-md);
 }
-/* The Taper Hunt's scope is a wider 280x148 chart (js/learn-drills/taper.js). */
-#learn-taper-guide canvas, #learn-charge-guide canvas {
+/* The Taper Hunt's and Harvest Stop's scopes are wider 280x148 charts (js/learn-drills/taper.js, harvest.js). */
+#learn-taper-guide canvas, #learn-charge-guide canvas, #learn-harvest-guide canvas {
   width: clamp(8rem, 18vw, 17.5rem); height: auto; flex: none;
   background: var(--hud-ink-dark); border-radius: var(--r-md);
 }
 @media (max-height: 500px) {
-  #learn-aero-guide, #learn-grip-guide, #learn-taper-guide, #learn-torque-guide, #learn-telemetry-guide, #learn-charge-guide { top: max(calc(var(--sat) + 2rem), 13%); padding: .25rem .45rem; }
+  #learn-aero-guide, #learn-grip-guide, #learn-taper-guide, #learn-torque-guide, #learn-telemetry-guide, #learn-charge-guide, #learn-harvest-guide { top: max(calc(var(--sat) + 2rem), 13%); padding: .25rem .45rem; }
 }
 :is(#learn-aero-guide, #learn-grip-guide, #learn-taper-guide, #learn-torque-guide, #learn-telemetry-guide, #learn-charge-guide) :is(strong, span) { display: block; }
 :is(#learn-aero-guide, #learn-grip-guide, #learn-taper-guide, #learn-torque-guide, #learn-telemetry-guide, #learn-charge-guide) strong { font-size: var(--fs-3); }
@@ -40,7 +41,10 @@ body:not(.desktop) { --tap-floor44: calc(44.2px / var(--ui-scale)); }
 /* The guide card's RETRY chip (#6555 A4) is its one tap target; the rest of the card still leaves input to the HUD. */
 #learn-aero-retry { pointer-events: auto; flex: none; min-height: var(--tap); min-width: var(--tap); padding: 0 var(--pad); font: inherit; font-weight: 700; }
 #learn-grip-guide button { pointer-events: auto; min-height: var(--tap); min-width: var(--tap); padding: 0 var(--pad); font: inherit; font-weight: 700; }
-#learn-taper-retry, #learn-torque-retry, #learn-charge-chips button { pointer-events: auto; flex: none; min-height: var(--tap); min-width: var(--tap); padding: 0 var(--pad); font: inherit; font-weight: 700; }
+#learn-taper-retry, #learn-torque-retry, #learn-charge-chips button, #learn-harvest-retry { pointer-events: auto; flex: none; min-height: var(--tap); min-width: var(--tap); padding: 0 var(--pad); font: inherit; font-weight: 700; }
+#learn-harvest-guide strong, #learn-harvest-guide span { display: block; }
+#learn-harvest-guide strong { font-size: var(--fs-3); }
+#learn-harvest-guide span { font-size: var(--fs-2); color: var(--dim); }
 /* The Tyre Thermal Lab's strip chart card (js/learn-drills/tyre-heat.js): the Aero card's place and type. */
 /* The Charge-Sustaining Lap's plan chips and RETRY (js/learn-drills/charge.js): one row of 44 px taps. */
 #learn-charge-chips { display: flex; gap: .35rem; margin-top: .3rem; }
