@@ -119,7 +119,7 @@ function create(G) {
       // A pad cannot walk the menu while it is capturing, so a D-pad press hands
       // the pad back to the walker with focus on CLEAR (#7150): A clears, B cancels.
       const p = parts.get(armed.btn);
-      if (!dev.keys && p && v >= 12 && v <= 15) {
+      if (!dev.keys && p && (v === 14 || v === 15)) {
         Input.padCapture(null);
         p.clear.focus();
         setNote(dev.clearNote);
@@ -159,6 +159,8 @@ function create(G) {
          false mid-composition. The 229 check is what covers that gap, and is
          the pairing MDN recommends. */
       if (e.isComposing || e.keyCode === 229) return;
+      // Enter / Space on a focused CLEAR is its click, not a capture (Esc still cancels).
+      { const p = parts.get(armed.btn); if (p && e.target === p.clear && !esc) return; }
       const erase = e.code === "Backspace" || e.code === "Delete";
       if (dev.keys || erase || esc) { e.preventDefault(); e.stopPropagation(); }
       if (e.repeat) return;
@@ -407,7 +409,7 @@ function create(G) {
     // wheel axes, or a stick rest offset — any of those is a live controller).
     show: () => Input.padPresent() || desktop() || !controllerIsDefault(),
     idle: "Tap a slot, then press a button on the controller. Esc cancels, CLEAR empties the slot. The stick and D‑pad steer.",
-    clearNote: "CLEAR is selected — A empties the slot, B cancels.", armedNote: "Press a controller button… (D‑pad selects CLEAR, B cancels)", resetNote: "Controller reset to the defaults.",
+    clearNote: "CLEAR is selected — A empties the slot, B cancels.", armedNote: "Press a controller button… (D‑pad ◀ ▶ selects CLEAR, B cancels)", resetNote: "Controller reset to the defaults.",
     groups: [
       ["Steer", "left stick / D‑pad"], ["Gas", ["throttle"], gasTail], ["Brake", ["brake"], "(triggers are analog)"],
       ["Boost", ["boost"], "toggle"], ["Overtake", ["overtake"]], ["Active aero", ["aero"]],

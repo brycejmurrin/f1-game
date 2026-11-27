@@ -29,13 +29,21 @@ test("CLEAR on an armed pad slot unbinds it with no keyboard event (touch tap)",
   assert.equal(clearOf($("pm-pad"), "throttle").hidden, true);
 });
 
-test("a D-pad press on an armed pad slot hands the pad to the menu walker with CLEAR focused", () => {
+test("a D-pad left/right press on an armed pad slot hands the pad to the menu walker with CLEAR focused", () => {
   const { Input, $, fire, sb } = bootUi(true, {});
   const pad = fakePad(sb, fire);
   const before = plain(Input.getPadMap().throttle);
   slotOf($("pm-pad"), "throttle", 1).onclick();
-  pad.press(13); Input.poll();
+  pad.press(15); Input.poll();
   assert.equal(sb.document.activeElement, clearOf($("pm-pad"), "throttle"), "focus moved to CLEAR");
   assert.deepEqual(plain(Input.getPadMap().throttle), before, "the D-pad was not bound");
   assert.match($("pm-pad-note").textContent, /CLEAR/);
+});
+
+test("D-pad up (12) is still bindable from an armed slot: only left/right hand off", () => {
+  const { Input, $, fire, sb } = bootUi(true, {});
+  const pad = fakePad(sb, fire);
+  slotOf($("pm-pad"), "throttle", 1).onclick();
+  pad.press(12); Input.poll();
+  assert.equal(Input.getPadMap().throttle[1], 12);
 });
