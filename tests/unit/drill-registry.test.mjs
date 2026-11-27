@@ -89,7 +89,7 @@ test("launch(aero) writes the drill's session in order, then end(quit) restores 
   assert.equal(drills.active(), drill, "active() is a stable reference (read every frame)");
   assert.equal(drills.guide(), drill.guide);
   assert.equal(typeof drills.guide().draw, "function");
-  assert.deepEqual({ ...drills.state() }, { id: "aero", staging: false, attempt: 0, live: false, result: null });
+  assert.deepEqual({ ...drills.state() }, { id: "aero", variant: "classic", staging: false, attempt: 0, live: false, result: null });
 
   log.length = 0;
   assert.equal(drills.end("quit"), true);
@@ -126,7 +126,7 @@ test("the host refuses: not on the menu, netplay, a drill already active, no Mon
   assert.deepEqual(log, []);
 });
 
-test("begin() hands the drill the six-member DrillPort, clears staging and hides the guide", () => {
+test("begin() hands the drill the seven-member DrillPort, clears staging and hides the guide", () => {
   const { ctx, log } = load();
   const G = makeG(log, { goRolling: () => "rolled", announce: (m) => m, store: { tag: "store" } });
   let seen;
@@ -139,7 +139,7 @@ test("begin() hands the drill the six-member DrillPort, clears staging and hides
   assert.equal(drills.begin(), true);
   assert.equal(drills.active().staging, false);
   assert.equal(seen.g, G);
-  assert.deepEqual(Object.keys(seen.port).sort(), ["announce", "goRolling", "physState", "retry", "startRace", "store"]);
+  assert.deepEqual(Object.keys(seen.port).sort(), ["announce", "goRolling", "physState", "rerun", "retry", "startRace", "store"]);
   assert.equal(seen.port.goRolling(), "rolled");
   assert.equal(seen.port.retry(), true, "the port's retry is the host's: card hidden, a fresh run, then the coach's");
   assert.equal(seen.port.announce("hi"), "hi");
