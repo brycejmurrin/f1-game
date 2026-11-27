@@ -787,6 +787,7 @@
         "tests/unit/ai-rescue-retire-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-trail-yield-vm.test.mjs",
+        "tests/unit/ai-vmax-stage-trace-vm.test.mjs",
         "tests/unit/ai-wing-spread-vm.test.mjs",
         "tests/unit/apex-car-placement-pin-vm.test.mjs",
         "tests/unit/apex-surface-pin-vm.test.mjs",
@@ -939,6 +940,7 @@
         "tests/unit/ai-rescue-retire-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-trail-yield-vm.test.mjs",
+        "tests/unit/ai-vmax-stage-trace-vm.test.mjs",
         "tests/unit/ai-wing-spread-vm.test.mjs",
         "tests/unit/apex-car-placement-pin-vm.test.mjs",
         "tests/unit/apex-surface-pin-vm.test.mjs",
@@ -1074,6 +1076,7 @@
         "tests/unit/ai-rescue-retire-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-trail-yield-vm.test.mjs",
+        "tests/unit/ai-vmax-stage-trace-vm.test.mjs",
         "tests/unit/apex-car-placement-pin-vm.test.mjs",
         "tests/unit/apex-surface-pin-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
@@ -4302,6 +4305,11 @@
     {
       "path": "js/physics/ai-drive.js",
       "global": "AiDrive",
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/ai-pace.js",
+      "global": "AiPace",
       "roster": "tag"
     },
     {

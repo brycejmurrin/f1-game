@@ -4867,7 +4867,7 @@ const _ucS = CarFields.warmDoubles({ recordInput: null, tyreGrip: 0.5, vT: 0, in
 // The step's Wind.sync() answer: every car of a step synced with the same (seed, weather, track, raceT), so the
 // first car to reach it pays and the rest share its object — the same one sync's own cache returned (#3109 row 9).
 const _windStep = { st: null };
-const _bandCtx = { leadProg: 0.5, carProg: 0.5, trackTotal: 0.5, raceT: 0.5, launchT0: 0.5, bandAuth: 0.5 }, _bandOut = { vmax: 0.5, bandNow: 0.5 };   // AiBand catch-up scratch (Double fields)
+const _paceP = { safeV: 0.5, vT: 0.5, vmaxK: VMAX, lead: null, total: 0.5, raceT: 0.5, launchT0: 0.5, dd: null, ceil: BAND_CEIL };   // AiPace.pre's bag, reused
 // C10 far-car AI LOD, an OPT-IN lab read once here (`?lab=aiLod`, a comma list): off, aiLod is null and the sim is untouched (AiDrive.lodLab).
 const aiLod = (() => { try { return new URLSearchParams(location.search).get("lab").split(",").includes("aiLod") ? AiDrive.lodLab() : null; } catch (_) { return null; } })();
 const _ttRec = { native: false, initialState: undefined, boost: undefined, overtake: undefined, aeroToggle: undefined, shiftUp: undefined, shiftDown: undefined, steer: undefined, throttle: undefined, brake: undefined, throttleLevel: undefined, brakeLevel: undefined, aero: undefined };
@@ -4962,17 +4962,13 @@ function updateCar(c, dt, ranked) {
 
 
   // --- speed targets ---
-  let vmax = VMAX * driveTune.PACE * (c.human ? mods.speed : Math.min(BAND_CEIL, c.tierV * c.skill * dd.ai * AiDrive.paceTrim(TIER_V[c.tier] * c.skill)));   // #5330 scripted trim
+  // The AI-only stages are AiPace's (js/physics/ai-pace.js: base, pre, stint, post); the shared ones stay here.
+  let vmax = VMAX * driveTune.PACE * (c.human ? mods.speed : AiPace.base(c.tierV, c.skill, dd.ai, TIER_V[c.tier], BAND_CEIL));   // #5330 scripted trim
   // WIND (js/race/wind.js) off the car's OWN heading (an AI's: tangent less its aiHead): head/tail wind moves top speed.
   vmax *= Wind.carInto(_windStep.st || (_windStep.st = Wind.sync(simSeed(), raceWeather, track.def && track.def.id, raceT)), c.human ? (c.head || 0) : Math.atan2(smp.t[0], smp.t[2]) - (c.aiHead || 0), speedStd).vmaxMul;
-  if (!c.human && aq.safeV < Infinity) vmax = Math.min(vmax, aq.safeV * vT / VMAX);   // an AI driver lifts in standing water
-  // Scripted AI pace (default): vmax stays on car/driver/difficulty. Catch-up
-  // restores the reverse-only rubber band via AiBand (start + lapping gates).
-  if (!c.human && _leadHuman) {
-    const bc = _bandCtx; bc.leadProg = _leadHuman.prog; bc.carProg = c.prog; bc.trackTotal = track.total; bc.raceT = raceT; bc.launchT0 = launchT0; bc.bandAuth = dd.band;
-    const applied = AiBand.applyVmax(vmax, AiBand.factor(bc), c.tierV * c.skill * dd.ai, BAND_CEIL, _bandOut);   // reused: no objects per AI car
-    vmax = applied.vmax; c._bandNow = applied.bandNow;
-  } else c._bandNow = 0;
+  // Standing water, then the catch-up band (AiBand; scripted pace by default): AiPace.pre.
+  if (c.human) c._bandNow = 0;
+  else { const P = _paceP; P.safeV = aq.safeV; P.vT = vT; P.lead = _leadHuman; P.total = track.total; P.raceT = raceT; P.launchT0 = launchT0; P.dd = dd; vmax = AiPace.pre(c, vmax, P); }
   // Caution: under VSC / safety car the whole field runs to a delta pace, not
   // racing speed — humans included, not only the AI.
   // Cautions default OFF (store.get("caution", false)); a race with them
@@ -5033,18 +5029,12 @@ function updateCar(c, dt, ranked) {
   let chaser = null, chaserGap = Infinity; // nearest car close BEHIND in our lane (for defending)
   let nearbyN = 0, sep = 0;                // sep-window density + lateral-separation pull (traffic scan)
   const aiT = c.human ? null : AiDrive.traits(c);
-  if (!c.human) vmax *= AiDrive.pacePhase(raceT, aiT.consistency, c.phaseRoll) * AiDrive.trailStep(c, c.rank > 1 ? ranked[c.rank - 2] : null, state === "race" && session === "race" && !isPractice() && pitV < 0 && raceCtl.level < 2, !!track.street, dt);   // a stint drifts; lockstep never passes — and a car held behind a slower one pushes (AiDrive.trailStep)
+  if (!c.human) vmax = AiPace.stint(c, vmax, aiT, raceT, c.rank > 1 ? ranked[c.rank - 2] : null, state === "race" && session === "race" && !isPractice() && pitV < 0 && raceCtl.level < 2, !!track.street, dt);   // a stint drifts; lockstep never passes — and a car held behind a slower one pushes (AiDrive.trailStep)
   if (!c.human && tyres.on() && state === "race") pits.think(c);   // strategy: does this car box?
-  if (!c.human && AiDrive.mistakePhase(c.errT) === 2) vmax *= AiDrive.mistakeGatherMul();   // gathering it up after a mistake
-  // TYRES. With TYRE WEAR off this is the shipped AiDrive fudge, untouched — a
-  // ground-speed scale on an AI-only deg curve. With it on, the AI's pace comes
-  // off the SAME wear model the player is driving (js/physics/tyre-model.js), so
-  // a strategy fight is fought on one curve; the compound's own pace offset
-  // stays separate because the player's already lives in mods.cornering.
-  if (!c.human && c.tyreClass) {
-    vmax *= tyres.on() ? (1 + (c.tyre ? c.tyre.off : 0)) * trMul
-                       : AiDrive.tyrePace(c.tyreClass, Math.max(0, c.lap - 1));   // laps DONE: c.lap counts line crossings (TyreModel lapsDone)
-  } else if (c.human) vmax *= trMul;   // the same curve for the player: perfMul only slows the climb to vmax, never the cap (exactly 1 with wear off)
+  // A mistake's gather-up, then TYRES (AiPace.post): the AI runs the SAME wear model as the player when it is on, so a
+  // strategy fight is fought on one curve; the compound's own pace offset stays apart (the player's is mods.cornering).
+  if (c.human) vmax *= trMul;   // perfMul only slows the climb to vmax, never the cap (exactly 1 with wear off)
+  else vmax = AiPace.post(c, vmax, tyres.on(), trMul);
   // FUEL BURN, the counterweight that gives a stint its shape: the car gets
   // lighter and faster while the tyre goes off and gets slower, and where those
   // two cross is the pit window. Exactly 1 when the setting is off.

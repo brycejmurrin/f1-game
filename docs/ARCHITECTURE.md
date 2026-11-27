@@ -551,6 +551,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `ai-start.js` | `AiStart` | tag | AI START: the lights-out getaway plan and the lap-1 calm/headway policy, split from ai-drive.js (#6920 U4.2). |
 | `ai-drive.js` | `AiDrive` | tag | AI DRIVE: situation-aware decisions for the kinematic AI field. |
 | `ai-band.js` | `AiBand` | tag | AI PACE BAND: gap-to-player catch-up vs race-scripted fixed pace. |
+| `ai-pace.js` | `AiPace` | tag | AI PACE: the AI-only vmax stages of updateCar, as named pure stages (#7258; decision 7244-1 B on #7148). updateCar builds a car's top-speed target (vmax) as a… |
 | `ai-corridor.js` | `AiCorridor` | tag | AI-only reachable passing lanes. |
 | `aero-zones.js` | `AeroZones` | tag | AeroZones: the ACTIVE AERO activation zones for the loaded circuit. |
 | `drive-tune.js` | `DriveTune` | tag | DriveTune: the live driving-feel lets (PACE, wheelbase, steer, grip). |
