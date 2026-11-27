@@ -677,6 +677,9 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const openM = far ? 3.2 : 1.6;
     const openL = far ? 1.15 : 2.6;
     pullBack(eye, tgt, speedOpen(far ? "farOpen" : "chaseOpen", spN, extra.dt, extra.reduceMotion, extra.snap, openM, openL));
+    // ACCELERATION SURGE (CamFx, LAZY_RACE_SESSION, #7095). The player's own solve only (localLook): a TV
+    // director or broadcast solve also carries extra.att, and CamFx keeps one state.
+    if (localLook && typeof CamFx !== "undefined") pullBack(eye, tgt, CamFx.chase(mode, extra, VMAX));
     fov = typeof CamFeel !== "undefined"
       ? CamFeel.modeFov(far ? "far" : "chase", spFov, dep)
       : lerp(57, 63, spFov) + (far ? 4 : 0) + dep * 3;
@@ -831,6 +834,8 @@ function vantage(track, mode, s, x, spd, now, extra) {
     eye[1] = softFloor(eye[1], floorY, CLAMP_BLEND);
   }
   if (onboard || mode === "tcam") onboardAttitude(mode, eye, tgt, extra, s, spN);
+  // IMPACT HOLD (CamFx, #7095): render-only, the player's own solve (localLook) and its external eye only.
+  if (localLook && typeof CamFx !== "undefined") CamFx.hold(eye, onboard || mode === "tcam", extra);
   if (isFinite(eye[0] + eye[1] + eye[2] + tgt[0] + tgt[1] + tgt[2] + fov)) {
     _goodEye[0] = eye[0]; _goodEye[1] = eye[1]; _goodEye[2] = eye[2];
     _goodTgt[0] = tgt[0]; _goodTgt[1] = tgt[1]; _goodTgt[2] = tgt[2]; _goodFov = fov;

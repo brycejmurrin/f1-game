@@ -221,6 +221,7 @@ const SPEC = [
   { k: "cockpitTurnChaseLead", lane: "raw", group: "camera", def: "0.4", src: "js/camera/cockpit-opts.js LEAD_DEFAULT" },
   { k: "lookBackLatch", lane: "json", group: "camera", def: false, src: "js/camera/feel.js LOOK BACK LATCH (hold vs press-to-latch)" },
   { k: "speedVignette", lane: "json", group: "camera", def: false, src: "js/camera/feel.js SPEED VIGNETTE (off by default)" },
+  { k: "impactHold", lane: "json", group: "camera", def: true, src: "js/camera/feel-fx.js IMPACT HOLD (feel.js row; #7095)" },
   // LIGHTING TUNER (js/lighting)
   { k: "lightTune", mergeDepth: 2, lane: "json", group: "lighting", def: {}, src: "js/lighting/knobs.js TUNE_DEFS (the file holds {\"track|tod|weather\":{knob:value}} edits)" },
   // DRIVING / RACE RULES (js/game.js, js/race/race-control.js)
@@ -689,7 +690,7 @@ const row = (name) => () => { const b = made(); if (b) return b[name](); ready()
 const _core = Object.freeze({
   FORMAT, SPEC, isObj, GARAGE_FORMAT, GARAGE_EXCLUDED, isGarageKey, GARAGE_MAX_BYTES, SETTINGS_MAX_BYTES,
   CAREER_BAG_KEYS_MAX, garageValue, CAREER_FORMAT, CAREER_FLAVOURS, CAREER_SLOT_N, CAREER_EXCLUDED,
-  CAREER_SLOT_RE, isCareerKey,
+  CAREER_SLOT_RE, isCareerKey, cleanLivery,
 });
 
 return { FORMAT, GARAGE_FORMAT, CAREER_FORMAT, SPEC, ...api, isGarageKey, isCareerKey, garageValue, create,

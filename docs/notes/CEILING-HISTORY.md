@@ -4154,3 +4154,8 @@ Human step: `ratchet-raise`.
 (`togglePocket`, `paintPocket`) live in the eager race-settings.js; the sheet is built at boot, so there is no lazy home. `(tree) shellNodes`
 2335 → **2337** (+2): the `#rs-pocket` button and its `<small>`. Fragment: `ratchets.d/claude--pocket-weekend-7042.json`.
 Human step: `ratchet-raise`.
+
+## 2026-11-27 — PR #7193 (claude/career-refused-calendar-7069): #7069: career tally.starts keeps Race starts under each season's own calendar (+176 eager code bytes, career.js/save-migrate.js)
+
+`(tree) eagerCodeBytes` 4026247 → **4026423** (+176). Deliberate raise past the absorb: `rolloverApply` stamps `tally.starts` and `cleanTally` keeps it, so "Race starts" no longer re-reads today's calendar; the eager shell had ~0 bytes of headroom.
+Fragment: `ratchets.d/claude--career-refused-calendar-7069.json`.

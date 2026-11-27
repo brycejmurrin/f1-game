@@ -554,6 +554,7 @@
       "files": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/asset-credits.test.mjs",
+        "tests/unit/audio-low-tier.test.mjs",
         "tests/unit/audio-mix-improvements.test.mjs",
         "tests/unit/audio-panel-boot.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
@@ -881,6 +882,7 @@
         "tests/unit/sim-state-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/spoken-lang-offer-vm.test.mjs",
+        "tests/unit/stall-banner-lapped-dnf-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
         "tests/unit/track-from-projection-vm.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
@@ -929,6 +931,7 @@
         "tests/unit/apex-surface-pin-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
+        "tests/unit/cam-surge-hold.test.mjs",
         "tests/unit/camera-mode-scope.test.mjs",
         "tests/unit/car-field-writes.test.mjs",
         "tests/unit/car-fields-lifetimes-vm.test.mjs",
@@ -1018,6 +1021,7 @@
         "tests/unit/sim-state-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/spoken-lang-offer-vm.test.mjs",
+        "tests/unit/stall-banner-lapped-dnf-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
         "tests/unit/track-from-projection-vm.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
@@ -1106,6 +1110,7 @@
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/ai-wing-spread-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
+        "tests/unit/cam-surge-hold.test.mjs",
         "tests/unit/camera-mode-scope.test.mjs",
         "tests/unit/car-field-writes.test.mjs",
         "tests/unit/car-fields-lifetimes-vm.test.mjs",
@@ -1158,6 +1163,7 @@
         "tests/unit/sim-state-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/spoken-lang-offer-vm.test.mjs",
+        "tests/unit/stall-banner-lapped-dnf-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
         "tests/unit/tt-garage-door-flow-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs",
@@ -1453,6 +1459,7 @@
         "tests/unit/lobby-codes.test.mjs",
         "tests/unit/lobby-settings.test.mjs",
         "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-core-dedupe.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-ice-fetch-checks.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
@@ -1662,6 +1669,7 @@
         "tests/unit/career-planning-ui-download.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
+        "tests/unit/career-refused-calendar-7069.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-save-integrity-6744.test.mjs",
         "tests/unit/career-save-kept.test.mjs",
@@ -1763,6 +1771,7 @@
         "tests/unit/key-binds-ui.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/liv-swatch-box-cache.test.mjs",
+        "tests/unit/livery-sanitiser-pin.test.mjs",
         "tests/unit/low-speed-lock.test.mjs",
         "tests/unit/onboard.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
@@ -2468,6 +2477,11 @@
     {
       "path": "js/camera/extra-rigs.js",
       "global": "ExtraRigs",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/camera/feel-fx.js",
+      "global": "CamFx",
       "roster": "LAZY_RACE_SESSION"
     },
     {

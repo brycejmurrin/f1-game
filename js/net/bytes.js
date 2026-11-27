@@ -44,6 +44,8 @@ const NetBytes = (function () {
   }
   const bytesToHex = (bytes, sep) =>
     Array.from(view(bytes), (v) => v.toString(16).toUpperCase().padStart(2, "0")).join(sep || "");
+  // Lowercase, no separator: the rendezvous topic / room id and the ICE-restart code (wire values; never uppercase).
+  const bytesToHexLower = (bytes) => bytesToHex(bytes).toLowerCase();
 
   // ASCII slice — ufrag/pwd are ice-char by spec, so charCode IS the byte.
   function ascii(bytes, off, len) {
@@ -53,6 +55,18 @@ const NetBytes = (function () {
     return s;
   }
 
-  return { bytesToB64, b64ToBytes, bytesToB64url, b64urlToBytes, hexToBytes, bytesToHex, ascii };
+  // fetch() that is ABORTED after `ms`, the timer covering the body read too: read(res) runs inside the window and its result is returned; a stall rejects with an AbortError.
+  async function fetchBounded(url, init, ms, read) {
+    const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = setTimeout(() => { try { if (ctrl) ctrl.abort(); } catch (e) { /* already settled */ } }, ms);
+    try {
+      const res = await fetch(url, Object.assign({}, init, ctrl ? { signal: ctrl.signal } : null));
+      return read ? await read(res) : res;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  return { bytesToB64, b64ToBytes, bytesToB64url, b64urlToBytes, hexToBytes, bytesToHex, bytesToHexLower, ascii, fetchBounded };
 })();
 Object.freeze(NetBytes);
