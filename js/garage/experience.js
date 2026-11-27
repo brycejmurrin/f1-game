@@ -102,6 +102,7 @@ const GarageExperience = (function () {
       if (project(mid)) hi = mid; else lo = mid;
     }
     project(hi);
+    if (!Number.isFinite(x0 + x1 + y0 + y1)) return null;   // every probe failed (#7339)
     return { dist: hi, shiftX: (x0 + x1) / 2 - (pane.left + pane.right - 1),
       shiftY: (y0 + y1) / 2 - (1 - pane.top - pane.bottom), width: x1 - x0, height: y1 - y0 };
   }
