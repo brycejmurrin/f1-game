@@ -243,7 +243,8 @@ var VoicePack = (() => {
       };
       const verified = async (first, f, meta) => {
         try { return await verify(await first, meta); }
-        catch (e) { return verify(await get(f, "arrayBuffer", true), meta); }
+        // Re-ask past the cache only when there is a digest to revalidate against: no metadata fails the same way twice.
+        catch (e) { if (!meta || !/^[0-9a-f]{64}$/.test(meta.sha256)) throw e; return verify(await get(f, "arrayBuffer", true), meta); }
       };
       // The Opus twin only where this browser decodes its container. Any failure
       // of it (fetch, digest, empty) falls back to the MP3 .bin, never to silence.
