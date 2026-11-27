@@ -1250,6 +1250,7 @@
     "tests/unit/suzuka-crossover-span.test.mjs",
     "tests/unit/sw-kill-stamp.test.mjs",
     "tests/unit/sweep-shards.test.mjs",
+    "tests/unit/sync-pr-local-ahead.test.mjs",
     "tests/unit/sync-pr-robust.test.mjs",
     "// Pixel-truth hunt F4: the TEAM tile crest bitmap follows devicePixelRatio (was a fixed 48 px canvas in a 32 CSS px box). Pure, instant.",
     "tests/unit/team-swatch-density.test.mjs",
