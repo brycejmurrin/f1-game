@@ -814,6 +814,7 @@
         "tests/unit/drill-grip-vm.test.mjs",
         "tests/unit/drill-lines-vm.test.mjs",
         "tests/unit/drill-taper-vm.test.mjs",
+        "tests/unit/drill-telemetry-vm.test.mjs",
         "tests/unit/drill-torque-vm.test.mjs",
         "tests/unit/drill-tyre-heat-vm.test.mjs",
         "tests/unit/drill-wake-vm.test.mjs",
@@ -965,6 +966,7 @@
         "tests/unit/drill-grip-vm.test.mjs",
         "tests/unit/drill-lines-vm.test.mjs",
         "tests/unit/drill-taper-vm.test.mjs",
+        "tests/unit/drill-telemetry-vm.test.mjs",
         "tests/unit/drill-torque-vm.test.mjs",
         "tests/unit/drill-tyre-heat-vm.test.mjs",
         "tests/unit/drill-wake-vm.test.mjs",
@@ -1153,6 +1155,7 @@
         "tests/unit/drill-grip-vm.test.mjs",
         "tests/unit/drill-lines-vm.test.mjs",
         "tests/unit/drill-taper-vm.test.mjs",
+        "tests/unit/drill-telemetry-vm.test.mjs",
         "tests/unit/drill-torque-vm.test.mjs",
         "tests/unit/drill-tyre-heat-vm.test.mjs",
         "tests/unit/drill-wake-vm.test.mjs",
@@ -3961,6 +3964,11 @@
     {
       "path": "js/learn-drills/taper.js",
       "global": "TaperDrill",
+      "roster": "LAZY_LEARN"
+    },
+    {
+      "path": "js/learn-drills/telemetry.js",
+      "global": "TelemetryDrill",
       "roster": "LAZY_LEARN"
     },
     {
