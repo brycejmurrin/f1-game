@@ -106,9 +106,7 @@ const NetIce = (function () {
         // become an unbounded wait, because the lobby now awaits this before
         // building a connection. Abort rather than merely ignore, or the socket
         // lingers.
-        const ctl = (typeof AbortController !== "undefined") ? new AbortController() : null;
-        const bail = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) { /* already settled */ } }, FETCH_TIMEOUT_MS);
-        fetchingIce = fetch(url, ctl ? { signal: ctl.signal } : undefined).then((r) => {
+        fetchingIce = NetBytes.fetchBounded(url, undefined, FETCH_TIMEOUT_MS, (r) => {
           // A 4xx/5xx body is not a credential list; the third-party API is https-only.
           if (!r || !r.ok) throw new Error("TURN credential fetch HTTP " + (r && r.status));
           return r.json();
@@ -134,7 +132,6 @@ const NetIce = (function () {
           Log.warn("net", "TURN credential fetch failed, gathering STUN-only:", err && err.message);
           return fetchedIce;
         }).finally(() => {
-          clearTimeout(bail);
           if (version === turnApiVersion) fetchingIce = null;
         });
       }

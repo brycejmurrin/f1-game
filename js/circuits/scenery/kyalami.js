@@ -76,6 +76,13 @@
         // Low wide mound of dry scrub (bush() is a green cone that read as a marker on straw ground).
         const side = h < 0.72 ? -1 : 1, a = anchor(k, side, 7 + h * 6);
         if (onTrack(a.c[0], a.c[2], 3)) return;
+        // A mound at the foot of a cut wall reads the floor (one terrain sampler, #7132)
+        // while the wall rises over its crown: skip it where any crown point is underground.
+        const top = a.c[1] + 0.55;
+        for (let i = 0; i < 4; i++) {
+          const g = terrainYAt(a.c[0] + Math.cos(i * 1.5708) * 0.7, a.c[2] + Math.sin(i * 1.5708) * 0.7);
+          if (g != null && g > top) return;
+        }
         out._mat = MAT.FOLIAGE;
         addFrustum(out, vadd(a.c, a.u, -0.2), 1.5 + h * 0.8, 0.7, 0.75, h < 0.6 ? SCRUB : SCRUB_D, 5, [a.r, a.u, a.t]);
         out._mat = 0;

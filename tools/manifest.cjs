@@ -1166,6 +1166,7 @@ const LAZY_RACE_SESSION = [
   "js/camera/extra-rigs.js",    // ExtraRigs: RIVAL LOCK / PIT WALL / DRONE solvers; vantage.js typeof-guards it (chase fallback), binds M4 at eval
   "js/camera/trackside.js",    // TracksideCams: fixed corner cams; vantage.js typeof-guards it
   "js/camera/cam-avoid.js",    // CamAvoid: open-circuit wall/building step-in; vantage.js typeof-guards it
+  "js/camera/feel-fx.js",      // CamFx: chase surge + render-only impact hold/flash (#7095); vantage.js, game.js, wall-clamp.js typeof-guard it
   "js/ui/podium-beat.js",   // PodiumBeat: ceremony podium overlay (#4070 slice 4); ResultsStory is FULL
   "js/race/podium-beat.js", // RacePodium: podium beat + results handoff (#4070)
   "js/race/parc-ferme.js", // ParcFerme.create(G): ceremony parc fermé beat (#4069); reads ResultsCam at call time
@@ -1935,7 +1936,7 @@ const MOVED = {
 
 // Learn's modal loads only after the title door is used. The iframe requests
 // its standalone page and lesson assets without a ScriptLoader version query.
-const LAZY_LEARN = ["js/learn-drills/registry.js", "js/ui/learn-door.js", "js/ui/thumb-trainer.js", "js/learn-drills/thumb-drill.js"];
+const LAZY_LEARN = ["js/learn-drills/registry.js", "js/learn-drills/drill-card.js", "js/ui/learn-door.js", "js/ui/thumb-trainer.js", "js/learn-drills/thumb-drill.js"];
 const SW_LEARN = [
   "learn/appearance.js", "learn/replay.js", "learn/replay.css", "learn/sandbox.js", "learn/sandbox.css",
   ...["chassis", "suspension", "deployment", "hybrid", "brake-blend", "tyre-heat",

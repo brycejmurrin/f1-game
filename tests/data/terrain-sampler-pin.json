@@ -11,225 +11,87 @@
       "tris": 50592,
       "hugeTris": 22,
       "samples": 47328,
-      "bothNull": 21142,
-      "agree": 25432,
-      "aNullBNum": 40,
-      "aNumBNull": 26,
-      "bothNumDiffer": 688,
-      "maxAbsDy": 9.153,
+      "bothNull": 21168,
+      "agree": 26160,
+      "aNullBNum": 0,
+      "aNumBNull": 0,
+      "bothNumDiffer": 0,
+      "maxAbsDy": 0,
       "causes": {
-        "hugeTri": 69,
-        "slackA": 685,
+        "hugeTri": 0,
+        "slackA": 0,
         "slackB": 0,
         "unexplained": 0
       },
       "maxOutsideM": {
         "hugeTri": 0,
-        "slackA": 0.184,
+        "slackA": 0,
         "slackB": 0
       },
       "maxDyBy": {
-        "hugeTri": 0.252,
-        "slackA": 9.153,
+        "hugeTri": 0,
+        "slackA": 0,
         "slackB": 0
       },
-      "worst": [
-        {
-          "x": -315.3,
-          "z": 85.63,
-          "a": 6.172,
-          "b": -2.981,
-          "dy": 9.153,
-          "cause": "slackA",
-          "triSpanM": 4.8
-        },
-        {
-          "x": 114,
-          "z": 32.63,
-          "a": 4.757,
-          "b": -2.902,
-          "dy": 7.659,
-          "cause": "slackA",
-          "triSpanM": 4.9
-        },
-        {
-          "x": 92.8,
-          "z": 32.63,
-          "a": 3.653,
-          "b": -2.613,
-          "dy": 6.266,
-          "cause": "slackA",
-          "triSpanM": 4.8
-        },
-        {
-          "x": -469,
-          "z": -46.87,
-          "a": 1.151,
-          "b": -3.395,
-          "dy": 4.546,
-          "cause": "slackA",
-          "triSpanM": 5.1
-        },
-        {
-          "x": -394.8,
-          "z": -200.57,
-          "a": -0.05,
-          "b": -3.705,
-          "dy": 3.654,
-          "cause": "slackA",
-          "triSpanM": 6.1
-        }
-      ],
+      "worst": [],
       "unexplained": []
     },
     "monaco": {
       "tris": 23072,
       "hugeTris": 0,
       "samples": 29596,
-      "bothNull": 24794,
-      "agree": 4683,
+      "bothNull": 24806,
+      "agree": 4790,
       "aNullBNum": 0,
-      "aNumBNull": 12,
-      "bothNumDiffer": 107,
-      "maxAbsDy": 0.236,
+      "aNumBNull": 0,
+      "bothNumDiffer": 0,
+      "maxAbsDy": 0,
       "causes": {
         "hugeTri": 0,
-        "slackA": 119,
+        "slackA": 0,
         "slackB": 0,
         "unexplained": 0
       },
       "maxOutsideM": {
         "hugeTri": 0,
-        "slackA": 0.083,
+        "slackA": 0,
         "slackB": 0
       },
       "maxDyBy": {
         "hugeTri": 0,
-        "slackA": 0.236,
+        "slackA": 0,
         "slackB": 0
       },
-      "worst": [
-        {
-          "x": -303.06,
-          "z": 430.6,
-          "a": 10.273,
-          "b": 10.037,
-          "dy": 0.236,
-          "cause": "slackA",
-          "triSpanM": 6.3
-        },
-        {
-          "x": -149.36,
-          "z": 133.8,
-          "a": 26.444,
-          "b": 26.321,
-          "dy": 0.123,
-          "cause": "slackA",
-          "triSpanM": 6.9
-        },
-        {
-          "x": -101.66,
-          "z": 112.6,
-          "a": 18.301,
-          "b": 18.229,
-          "dy": 0.072,
-          "cause": "slackA",
-          "triSpanM": 5.9
-        },
-        {
-          "x": -38.06,
-          "z": 149.7,
-          "a": 28.4,
-          "b": 28.333,
-          "dy": 0.067,
-          "cause": "slackA",
-          "triSpanM": 5
-        },
-        {
-          "x": -159.96,
-          "z": 139.1,
-          "a": 28.241,
-          "b": 28.196,
-          "dy": 0.045,
-          "cause": "slackA",
-          "triSpanM": 5.7
-        }
-      ],
+      "worst": [],
       "unexplained": []
     },
     "suzuka": {
       "tris": 69456,
       "hugeTris": 46,
       "samples": 102655,
-      "bothNull": 65436,
-      "agree": 35857,
-      "aNullBNum": 257,
-      "aNumBNull": 40,
-      "bothNumDiffer": 1065,
-      "maxAbsDy": 24.622,
+      "bothNull": 65476,
+      "agree": 37179,
+      "aNullBNum": 0,
+      "aNumBNull": 0,
+      "bothNumDiffer": 0,
+      "maxAbsDy": 0,
       "causes": {
-        "hugeTri": 303,
-        "slackA": 1053,
-        "slackB": 6,
+        "hugeTri": 0,
+        "slackA": 0,
+        "slackB": 0,
         "unexplained": 0
       },
       "maxOutsideM": {
         "hugeTri": 0,
-        "slackA": 0.257,
-        "slackB": 0.01
+        "slackA": 0,
+        "slackB": 0
       },
       "maxDyBy": {
-        "hugeTri": 24.622,
-        "slackA": 18.969,
-        "slackB": 0.001
+        "hugeTri": 0,
+        "slackA": 0,
+        "slackB": 0
       },
-      "worst": [
-        {
-          "x": -207.01,
-          "z": 342.34,
-          "a": -19.397,
-          "b": 5.225,
-          "dy": 24.622,
-          "cause": "hugeTri",
-          "triSpanM": 37.7
-        },
-        {
-          "x": -201.71,
-          "z": 337.04,
-          "a": -18.45,
-          "b": 5.662,
-          "dy": 24.112,
-          "cause": "hugeTri",
-          "triSpanM": 37.7
-        },
-        {
-          "x": -196.41,
-          "z": 331.74,
-          "a": -17.692,
-          "b": 6.1,
-          "dy": 23.793,
-          "cause": "hugeTri",
-          "triSpanM": 36.5
-        },
-        {
-          "x": -212.31,
-          "z": 342.34,
-          "a": -15.737,
-          "b": 5.268,
-          "dy": 21.004,
-          "cause": "hugeTri",
-          "triSpanM": 37.7
-        },
-        {
-          "x": -217.61,
-          "z": 347.64,
-          "a": -17.014,
-          "b": 3.554,
-          "dy": 20.568,
-          "cause": "hugeTri",
-          "triSpanM": 34.5
-        }
-      ],
+      "worst": [],
       "unexplained": []
     }
   }

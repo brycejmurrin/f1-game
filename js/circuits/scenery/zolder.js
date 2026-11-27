@@ -150,7 +150,7 @@
       const clear = (k, side, gap, w, d, pad) => {
         const dk = Math.max(1, Math.round(d * 0.5 / STEP));
         for (const ks of [k - dk, k, k + dk]) {
-          const kk = ((Math.round(ks) % n) + n) % n;
+          const kk = M4.wrapIndex(ks, n);
           for (const off of [-w * 0.5, 0, w * 0.5]) {
             const g = gap + off;
             if (g < 5) return false;

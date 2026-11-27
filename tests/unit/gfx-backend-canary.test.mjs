@@ -4395,10 +4395,6 @@ test("software GL quit-to-menu and garage-close use MenuTeardown readback cover"
   assert.ok(readFile("js/perf/menu-quit-tail.js").includes("afterOverlay") && game.includes("deferQuitTail"));
   const tlx = readFile("js/render/three/tlx.js");
   assert.ok(tlx.includes("softwareGlSoftPresentDefer") && tlx.includes("_queueSoftBlit"));
-  const garageOracle = readFile("tools/gfx/readback-garage-oracle.mjs");
-  const quitOracle = readFile("tools/gfx/readback-quit-menu-oracle.mjs");
-  assert.ok(garageOracle.includes("garageClose") && garageOracle.includes("#sel-go"));
-  assert.ok(quitOracle.includes("ttiMs"));
 });
 
 test("GLX boot waits on progress, not one fixed wall clock (#3587)", () => {

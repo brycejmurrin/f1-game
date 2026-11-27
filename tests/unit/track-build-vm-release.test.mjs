@@ -233,7 +233,10 @@ const STRIP = {
   //   emission, 34 more enclosed faces stripped: strip-after 255441 → 255407.
   // → merged (#5303 over #5511, 2026-11-11): the deltas add exactly (+36 emitted, +74 strip-after) → 274827 / 255839.
   // Bank-aware terrain and re-seated scenery change which faces survive.
-  monaco: { before: 274734, after: 255754 },
+  // → #7132 one terrain sampler (2026-11-27): terrainYAt is Tracks.terrainY, so props read the
+  //   1 cm-slack edge height instead of the old 0.01-barycentric one. Same emission; 5 more faces
+  //   stripped: strip-after 255754 → 255749.
+  monaco: { before: 274734, after: 255749 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)

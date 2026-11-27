@@ -673,11 +673,12 @@ const TyreModel = (function () {
     return AQUA_ONSET[aquaTread(tread)] + AQUA_RAMP * Math.sqrt(AQUA_AI / full);
   }
   // game.js's per-car read, pooled (it runs for every car every step): the
-  // tread resolves exactly as its gripMult(c) does — a fitted set's own, else
-  // the tread the conditions call for.
+  // tread resolves exactly as its gripMult(c) does (carGrip) — a fitted set's
+  // own, else the tread the LAP MEAN `mean` calls for; `wetness` (the surface
+  // under the car) sets only the water depth (#6611 RW6). No `mean`: wetness.
   const _aq = { mul: 1, safeV: Infinity };
-  function aquaInto(c, speedStd, weather, wetness) {
-    const tread = treadOf(c, weather, wetness);
+  function aquaInto(c, speedStd, weather, wetness, mean) {
+    const tread = treadOf(c, weather, mean ?? wetness);
     _aq.mul = aquaplane(speedStd, wetness, tread);
     _aq.safeV = aquaplaneSafeV(wetness, tread);
     return _aq;
