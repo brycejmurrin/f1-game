@@ -54,6 +54,25 @@ test("a late press earns less; no press earns nothing and the run is still timed
   assert.equal(none.straightS, refs.base);
 });
 
+test("braking or lifting before the taper is not clean and earns no medal", () => {
+  const go = (input, frames) => {
+    assert.ok(run.retry());
+    for (let i = 0; i < 60 * 30; i++) {
+      run.g.apex.act(i < frames ? input : { throttle: true, brake: false, steer: 0 }, 1 / 60, 1);
+      const r = run.host.tick();
+      if (r) return r;
+    }
+    return null;
+  };
+  const braked = go({ throttle: false, brake: true, steer: 0 }, 12);
+  assert.equal(braked.clean, false);
+  assert.equal(braked.reason, "braked before the taper");
+  assert.equal(braked.medal, null);
+  const lifted = go({ throttle: false, brake: false, steer: 0 }, 30);
+  assert.equal(lifted.clean, false);
+  assert.equal(lifted.reason, "lifted before the taper");
+});
+
 test("sample() and score() are read-only on the car (#6559 §1e rule 1)", () => {
   const T = vm.runInContext("TorqueDrill", run.g.ctx);
   const player = Object.freeze({ speed: 30, energy: 0.2, deploying: true, throttleDemand: 1, brakeDemand: 0 });

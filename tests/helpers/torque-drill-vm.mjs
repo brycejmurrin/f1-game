@@ -1,12 +1,12 @@
-/* torque-drill-vm.mjs — LEARN's Taper Hunt (js/learn-drills/torque.js) in the real game VM, through DrillRegistry's own
- * host, as tests/helpers/learn-drill-vm.mjs drives the Aero drill (#6559 step 6, #6550 D1).
+/* torque-drill-vm.mjs — LEARN's Torque Fill Exit (js/learn-drills/torque.js) in the real game VM, through DrillRegistry's own
+ * host, as tests/helpers/taper-drill-vm.mjs drives the Taper Hunt (#6559 step 12, #6550 D3b).
  *
  *   const run = await torqueDrill();   // boot, launch, begin
  *   const r = run.drive(pressAt);     // flat out, BOOST pressed once pressAt s after the start (null: never)
  *   run.retry();                      // RETRY: back to the begin() checkpoint
  *
  * Writer: `node tests/helpers/torque-drill-vm.mjs --write` re-runs the PRESS_AT calibration runs into
- * tests/data/learn-drill-refs.json "taper" (tiers by deriveTorqueTiers below). */
+ * tests/data/learn-drill-refs.json "torque" (tiers by deriveTorqueTiers below). */
 import { readFileSync, writeFileSync } from "node:fs";
 import vm from "node:vm";
 import { createRequire } from "node:module";
