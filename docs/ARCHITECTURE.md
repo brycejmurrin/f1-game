@@ -655,6 +655,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `extra-rigs.js` | `ExtraRigs` | LAZY_RACE_SESSION | EXTRA player camera rigs (RIVAL LOCK, PIT WALL, DRONE FOLLOW): append-only CAM_MODES solvers kept out of vantage.js for file-size headroom. |
 | `trackside.js` | `TracksideCams` | LAZY_RACE_SESSION | TRACKSIDE fixed cameras: one eye per measured corner, outside the fence, auto-switching as the subject car passes. |
 | `cam-avoid.js` | `CamAvoid` | LAZY_RACE_SESSION | broadcast-camera wall / building avoidance for open circuits. |
+| `feel-fx.js` | `CamFx` | LAZY_RACE_SESSION | CamFx: the chase-cam ACCELERATION SURGE and the render-only IMPACT HOLD + FLASH (#7095, #6543 I1 + I3, D-053). |
 | `tuner-panel.js` | `CamTunerEditor` | LAZY_CAM_EDITOR | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), comfort knobs, a global baseline scope, presets,… |
 | `flyby-editor.js` | `FlybyEditor` | LAZY_CAM_EDITOR | FLYBY SHOT EDITOR DOM panel (LAZY_CAM_EDITOR). |
 

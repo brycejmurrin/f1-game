@@ -149,6 +149,7 @@ const WallClamp = (function () {
             c.collideT = WALL_SFX_REARM;
             if (firstStrike && track.street) {
               if (addShake) addShake(0.1 + incidence * 0.3);
+              if (typeof CamFx !== "undefined") CamFx.impact(incidence);   // render-only hold + flash (#7095)
               Input.vibrate(15 + incidence * 35);
               Input.rumble(0.35 + incidence * 0.5, 100, "handles");
             }

@@ -4864,7 +4864,7 @@ function collideFx(a, b, impact) {
   }
   feel.shake = Math.min(1, feel.shake + impact * 0.45);
   feel.hitStop = Math.max(feel.hitStop, impact * 0.015);   // barely any freeze, so contact doesn't feel like a stop
-  pc.collideT = 0.35;
+  pc.collideT = 0.35; if (typeof CamFx !== "undefined") CamFx.impact(impact);   // CamFx: render-only hold + flash (#7095)
   // Career reads these at settlement. Counted HERE because this hook is already
   // player-only and already debounced at 0.35 s, so one shunt is one count
   // rather than one per relaxation pass. Nothing in physics reads them back.
