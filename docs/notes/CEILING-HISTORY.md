@@ -8,6 +8,13 @@ globals, so it is written to run before `ensureRaceSession`; a lazy AiPace would
 stages, the duplicate the module exists to remove. `js/game.js` lines −10 / codeLines −7 in the same fragment; the
 per-stage trace pin (`tests/unit/ai-vmax-stage-trace-vm.test.mjs`) is byte-identical. Option A picked by the orchestrator
 under D-042. Fragment: `ratchets.d/claude--ai-pace-stage-7258.json`. Label: `ratchet-raise`.
+## 2026-11-27 — PR #7284 (claude/ui-shape-7259): one UiShape module for the phone / screen-shape predicates (#7259)
+
+`(tree) eagerScripts` +1 and `(tree) eagerCodeBytes` +195. Deliberate raise, which needs a `ratchet-raise` label (D-042);
+`eagerScripts` has no absorb. `js/ui/ui-shape.js` is eager by design (the issue, decision 7234-P3 B): scale.js,
+hud-layout.js, screen-placement.js and sheet-shape.js read it on the first frame, so there is no lazy home. It replaces the
+per-file copies of the touch / ≤500 px rule; no behaviour change. Fragment: `ratchets.d/claude--ui-shape-7259.json`.
+Human step: `ratchet-raise`.
 
 ## 2026-11-27 — PR #7206 (claude/hot-path-memo-7070): lowGrip once per step, a stable stallSweep callback (#7070 rows 2 + 6)
 

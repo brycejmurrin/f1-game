@@ -5609,6 +5609,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/ui-shape.js",
+      "global": "UiShape",
+      "roster": "tag"
+    },
+    {
       "path": "js/ui/update-check.js",
       "global": "UpdateCheck",
       "roster": "tag"

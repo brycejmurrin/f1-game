@@ -12,6 +12,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { loadDom } from "../helpers/dom-vm.mjs";
+import { loadUiShape } from "../helpers/ui-shape-load.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-arrange.js"), "utf8");
@@ -29,7 +30,7 @@ function visibilityPolicy(elements, stored = {}, rows = {}, environment = {}) {
   loadDom(ctx);
   vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   loadDom(ctx);
-  vm.runInContext(POLICY.replace(/^const\b/gm, 'var'), ctx);
+  loadUiShape(ctx); vm.runInContext(POLICY.replace(/^const\b/gm, 'var'), ctx);
   return ctx.HudLayout;
 }
 
@@ -38,7 +39,8 @@ function load() {
     M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) } };   // the shared clamp the module aliases
   vm.createContext(ctx);
   loadDom(ctx);
-  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx);
+  loadUiShape(ctx);
+  loadUiShape(ctx); vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx);
   return ctx.HudArrange;
 }
 // vm-realm objects fail deepStrictEqual on prototype identity: compare plain copies.
@@ -220,7 +222,8 @@ function editor(pieceId = "piece", options = {}) {
     MutationObserver: class { constructor(fn) { observers.push(fn); } observe() {} } };
   vm.createContext(ctx); vm.runInContext(ROW, ctx); ctx.SettingRow = ctx.window.SettingRow;
   loadDom(ctx);
-  vm.runInContext(SRC.replace(/^const\b/gm, 'var'), ctx);
+  loadUiShape(ctx);
+  loadUiShape(ctx); vm.runInContext(SRC.replace(/^const\b/gm, 'var'), ctx);
   const api = ctx.HudArrange.create({ $: id => ids.get(id) });
   const fire = (name, args = {}) => { const e = { target: ids.get(pieceId), pointerId: 1, clientX: 100, clientY: 100, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {}, ...args }; for (const fn of listeners[name] || []) fn(e); };
   const tick = () => { const todo = [...frames.values()]; frames.clear(); for (const fn of todo) fn(); };

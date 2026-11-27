@@ -240,6 +240,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `survey-hud.js` | `SurveyHud` | tag | APEX_SURVEY_HUD survey fixture. |
 | `scroll-fade.js` | `ScrollFade` | tag | ScrollFade — the "there is more below" affordance for every menu scroll region. |
 | `css-zoom.js` | `CssZoom` | tag | CssZoom — one place for zoom ↔ viewport ↔ local conversions. |
+| `ui-shape.js` | `UiShape` | tag | UI SHAPE — the one home of the phone / screen-shape answers (#7259, decision 7234-P3 B). |
 | `sheet-shape.js` | `SheetShape` | tag | SHEET SHAPE — one place decides whether a panel is TALL or WIDE. |
 | `layers.js` | `UiLayers` | tag | UI LAYERS — which screen is on top, and are we racing? |
 | `modal.js` | `TopModal` | tag | TOP MODAL — mirrors each dialog.screen's `hidden` onto showModal()/close(). |
@@ -2449,3 +2450,7 @@ them. Before trusting either:
 - cockpit and hood views: confirm the wheel and fascia are not clipped,
 - start line: view up close and from ~200 m, in dry and wet,
 - one driven lap through motion-capture to confirm shimmer is reduced, not moved.
+
+## Screen shape (UiShape)
+
+`js/ui/ui-shape.js` (eager, `window.UiShape`) is where the phone / screen-shape answer lives: `phone()` (touch AND short side <= 500), `portraitNarrow()`, `orientation()` and `sheetShape()` (the `body[data-shape]` latch). `UiScale`, HudLayout, ScreenPlacement and SheetShape read it; a new layout reads `UiShape` rather than writing its own check. `tests/unit/ui-shape.test.mjs` pins each answer on a viewport matrix.

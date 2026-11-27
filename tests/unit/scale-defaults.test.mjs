@@ -41,6 +41,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadUiShape } from "../helpers/ui-shape-load.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -84,7 +85,7 @@ test("a phone's first-paint UI SIZE and scale.js's phone default agree (#5358)",
   assert.ok(js, "js/ui/scale.js must declare PHONE_UI_DEFAULT");
   assert.equal(Number(m[3]), Number(js[1]) / 100, "the CSS mirror and the JS default are one number");
   assert.equal(Number(m[4]) * 100, Number(scaleJs.match(/const PHONE_BTN_DEFAULT = ([\d.]+);/)[1]));
-  const side = scaleJs.match(/const phoneUi = \(\) => coarseUi\(\) && shortSide\(\) <= (\d+);/);
+  const side = read("js/ui/ui-shape.js").match(/const phoneUi = \(\) => coarsePointer\(\) && shortSide\(\) <= (\d+);/);
   assert.ok(side, "phoneUi() is touch and a short side");
   assert.deepEqual([Number(m[1]), Number(m[2])], [Number(side[1]), Number(side[1])], "the media query and phoneUi() test the same short side");
 });
@@ -172,6 +173,7 @@ function bootScale(stored = {}, opts = {}) {
       setProperty: (k, v) => rootStyle.set(k, String(v)), removeProperty: (k) => rootStyle.delete(k), getPropertyValue: (k) => rootStyle.get(k) ?? "",
     } } },
   });
+  loadUiShape(ctx);
   vm.runInContext(scaleJs.replace(/^const UiScale\b/m, "var UiScale"), ctx, { filename: absSrc("js/ui/scale.js") });
   const api = vm.runInContext("UiScale", ctx).create({ $: el, els: {}, store, gfx: {}, updateTrackPreview() {} });
   return { api, el, rootStyle, stored };
@@ -313,6 +315,7 @@ function bootRes({ coarse, iphone = false, stored = {}, scale0 = 1 }) {
     window: { matchMedia: (q) => ({ matches: q === "(pointer: coarse)" ? coarse : false }) },
     document: { documentElement: { style: { setProperty() {}, removeProperty() {} } } },
   });
+  loadUiShape(ctx);
   vm.runInContext(scaleJs.replace(/^const UiScale\b/m, "var UiScale"), ctx, { filename: absSrc("js/ui/scale.js") });
   const el = (id) => ({ id, value: "", textContent: "", hidden: true, classList: { toggle() {}, contains: () => false }, closest: () => null });
   // GameStore semantics: set(k, undefined) REMOVES the key (null would be stored as JSON null).
