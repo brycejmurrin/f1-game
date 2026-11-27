@@ -138,11 +138,13 @@ const TrackBuildProps = (function () {
     const def = track.def, theme = def.theme, pal = def.palette, ds = track.total / n;
     // Quantize horizontal layout intervals against the plan-view lap when authored.
     // A height-only update can otherwise move a half-node tie and re-seed whole streets.
+    // Snapped to the cm: the pitch sits a hair either side of 4 m, and `round(6 / step)` flips
+    // 2 -> 1 at 4.000 (vegas #6922: 3.9996 -> 4.0004 doubled every 6 m street item, +13 % drawn).
     const sceneryStepM = def.planarScenerySpacing === true
-      ? px.reduce((sum, x, i) => {
+      ? Math.round(px.reduce((sum, x, i) => {
         const j = (i + 1) % n;
         return sum + Math.hypot(px[j] - x, pz[j] - pz[i]);
-      }, 0) / n : ds;
+      }, 0) / n * 100) / 100 : ds;
     track.sceneryStepM = sceneryStepM;
     const NIGHT = track._night != null ? track._night : !!def.night;
 
