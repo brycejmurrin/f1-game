@@ -1,5 +1,13 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-27 — PR #7206 (claude/hot-path-memo-7070): lowGrip once per step, a stable stallSweep callback (#7070 rows 2 + 6)
+
+`(tree) eagerCodeBytes` 4026701 → **4026952** (+251, measured on the synced tip): `RaceControl.lowGrip` gains a per-step memo (`stepGrip(on)`, the
+`gripWin`/`gripMemo` pair) and game.js brackets its per-car `updateCar` loop with `raceCtl.stepGrip(true)` … `finally
+stepGrip(false)`; both live in eager files that run every step, so there is no lazy home. It buys ~196 fewer road-wetness
+reads per step on a 22-car wet race (200 → 4), bit-identical to base. `js/game.js` lines/codeLines +1 (the named
+`stallRetire`). Fragment: `ratchets.d/claude--hot-path-memo-7070.json`. Human step: `ratchet-raise`.
+
 ## 2026-11-26 — #6911 (claude/boot-lazy-lore-drift-6911) — circuit-lore and thermal-drift leave the boot
 
 `(tree) eagerCodeBytes` −13294, `eagerScripts` −2 (lowers, no `ratchet-raise`). `circuit-lore.js` moves to LAZY_AUDIO (before the
@@ -4155,13 +4163,6 @@ Human step: `ratchet-raise`.
 2335 → **2337** (+2): the `#rs-pocket` button and its `<small>`. Fragment: `ratchets.d/claude--pocket-weekend-7042.json`.
 Human step: `ratchet-raise`.
 
-## 2026-11-27 — PR #7206 (claude/hot-path-memo-7070): lowGrip once per step, a stable stallSweep callback (#7070 rows 2 + 6)
-
-`(tree) eagerCodeBytes` 4026701 → **4026952** (+251, measured on the synced tip): `RaceControl.lowGrip` gains a per-step memo (`stepGrip(on)`, the
-`gripWin`/`gripMemo` pair) and game.js brackets its per-car `updateCar` loop with `raceCtl.stepGrip(true)` … `finally
-stepGrip(false)`; both live in eager files that run every step, so there is no lazy home. It buys ~196 fewer road-wetness
-reads per step on a 22-car wet race (200 → 4), bit-identical to base. `js/game.js` lines/codeLines +1 (the named
-`stallRetire`). Fragment: `ratchets.d/claude--hot-path-memo-7070.json`. Human step: `ratchet-raise`.
 ## 2026-11-27 — PR #7193 (claude/career-refused-calendar-7069): #7069: career tally.starts keeps Race starts under each season's own calendar (+176 eager code bytes, career.js/save-migrate.js)
 
 `(tree) eagerCodeBytes` 4026247 → **4026423** (+176). Deliberate raise past the absorb: `rolloverApply` stamps `tally.starts` and `cleanTally` keeps it, so "Race starts" no longer re-reads today's calendar; the eager shell had ~0 bytes of headroom.
