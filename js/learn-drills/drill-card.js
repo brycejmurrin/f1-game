@@ -4,8 +4,8 @@
    (tests/data/learn-drill-refs.json) and are re-tuned from Bryce's phone runs (#6559 decision 5).
    record(store, key, r) keeps {best, medal, n} per "<drill>|<variant>" under apex26.learnMedals.v1. It is LEARN-only:
    no career currency, and it never writes circuitMastery.
-   show(r, {retry, back}) builds the card over the race. It is one column with at most 6 metric rows, and its buttons
-   are RETRY (focused) and BACK TO LESSON (min-height var(--tap), 44 px or more on a phone: css/overlays.css
+   show(r, {retry, back, next?}) builds the card over the race. It is one column with at most 6 metric rows, and its
+   buttons are RETRY (focused), next.label (the drill's next variant: "RE-RUN IN CFD AIR", #6559 A6) and BACK TO LESSON (min-height var(--tap), 44 px or more on a phone: css/overlays.css
    #drill-card). Like the thumb drill's lap card it is not a modal layer: the race and its pause menu stay as they were.
    R retries, Esc or Enter on BACK goes back. LAZY_LEARN, with registry.js. */
 const DrillCard = (function () {
@@ -103,7 +103,16 @@ const DrillCard = (function () {
     back.textContent = "BACK TO LESSON";
     retry.addEventListener("click", () => { hide(); actions.retry(); });
     back.addEventListener("click", () => { hide(); actions.back(); });
-    buttons.append(retry, back);
+    buttons.append(retry);
+    if (actions.next) {
+      const next = document.createElement("button");
+      next.type = "button";
+      next.id = "drill-card-next";
+      next.textContent = actions.next.label;
+      next.addEventListener("click", () => { hide(); actions.next.run(); });
+      buttons.append(next);
+    }
+    buttons.append(back);
     card.append(title, medal, rows, verdict, buttons);
     document.body.append(card);
     // Desktop keys (#6559 §1e rule 5): R retries, Esc goes back to the lesson. Capture phase, before the race's
