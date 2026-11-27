@@ -125,6 +125,8 @@ test("Paused race photo changes time of day and weather live, resets, and leaves
   await clickLive(page, "ps-close");
   await expect(page.locator("#photo-studio")).toBeHidden();
   expect(await page.evaluate(() => [__apex.setTimeOfDay(), __apex.weather()])).toEqual(["day", "dry"]);
+  await waitDay(page, "DONE restores the day world");
+  await settledLight(page);   // DONE's night->day put-back is a deferred rebuild: physState is empty until the world is back
   expect(await phys(page)).toEqual(before);
   // A second visit must retain the same full lighting panel, with fresh session values.
   await clickLive(page, "pm-photo");
