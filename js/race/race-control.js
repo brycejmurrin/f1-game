@@ -551,8 +551,10 @@ const RaceControl = (function () {
           stopOwned = fromStop && desired > 0;
           flag(prev, desired);
         }
-      } else if (desired === 1 && dsector >= 0) {
-        caution.sector = dsector; caution.frac = dfrac;   // track the worst sector
+      } else {
+        // Ownership follows the source at an equal level too (#7088 F2: a stale yellow).
+        stopOwned = fromStop && desired > 0;
+        if (desired === 1 && dsector >= 0) { caution.sector = dsector; caution.frac = dfrac; }   // track the worst sector
       }
       holdOwned = lifted && caution.level <= held;
       publish();
