@@ -47,7 +47,8 @@ for (const [track, seed] of CASES) {
     assert.ok(f.last >= 25 && f.last <= 60, `P1 to last ${f.last} s outside [25, 60] — ${tag}`);
     assert.ok(s.racePacePct.p10 >= 1.0 && s.racePacePct.p10 <= 3.8, `race pace P10 ${s.racePacePct.p10} % outside [1.0, 3.8] — ${tag}`);
     assert.ok(s.racePacePct.p20 >= 3.0 && s.racePacePct.p20 <= 7.5, `race pace P20 ${s.racePacePct.p20} % outside [3.0, 7.5] — ${tag}`);
-    assert.ok(s.mateGapPct.mean <= 1.4, `teammate gap ${s.mateGapPct.mean} % over 1.4 — ${tag}`);
+    // 1.5 (was 1.4): Bryce, `decision: A` on #7155 (comment 7210067221, 2026-11-27): the PACE-scaled wall/side-rub scrubs put monza seed 1 at 1.47 %.
+    assert.ok(s.mateGapPct.mean <= 1.5, `teammate gap ${s.mateGapPct.mean} % over 1.5 — ${tag}`);
     assert.ok(s.lapCvMedPct >= 0.2 && s.lapCvMedPct <= 1.2, `lap-time CV ${s.lapCvMedPct} % outside [0.2, 1.2] (a metronome is as wrong as a lottery) — ${tag}`);
     assert.ok(s.moved >= 10, `only ${s.moved} cars finished off their grid slot: processional — ${tag}`);
   });
