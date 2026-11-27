@@ -396,7 +396,7 @@ body[data-hl-set="helmet"] #hud-gearbox {
 #hud-tach > b > i.on { background-color: var(--faster); }
 #hud-tach > b > i.on:nth-child(n+4) { background-color: var(--red); }
 #hud-tach > b > i.on:nth-child(n+8), #hud-tach > b[data-flash] > i { background-color: var(--sec-best); }
-#hud-tach > b[data-flash] > i { animation: pulse 0.16s steps(1) infinite; }
+#hud-tach > b[data-flash] > i { animation: pulse 0.4s steps(1) infinite; }   /* 2.5 Hz: under the 3 Hz WCAG 2.3.1 flash line */
 /* GEAR POP: data-pop alternates a/b so each shift restarts it with no reflow; never set under Reduce Motion. */
 @media (prefers-reduced-motion: no-preference) {
   #hud-gear[data-pop="a"] { animation: gear-pop-a 0.18s ease-out; }

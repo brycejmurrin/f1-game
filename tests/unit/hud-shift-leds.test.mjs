@@ -116,6 +116,14 @@ test("the gear digit pops on a shift, not on the first paint, and never under Re
   a.hud.resetRace(); a.player.gear = 1; a.tick();
   assert.equal(a.els.gear.textContent, "1"); assert.equal(popped(a.els), "b", "a new race: its first gear does not pop");
 
+  // A shift while the chip is hidden (cockpit-cam) is not a pop on the way back.
+  const c = boot(); c.tick(); c.player.gear = 4; c.tick();
+  c.els.gear.dataset.pop = "seen";
+  c.sb.document.body.classList.add("cockpit-cam"); c.player.gear = 6; c.tick();
+  c.sb.document.body.classList.remove("cockpit-cam"); c.tick();
+  assert.equal(c.els.gear.textContent, "6");
+  assert.equal(popped(c.els), "seen", "no pop for a shift made while the chip was hidden");
+
   const r = boot({ TitleFx: { mode: () => "reduce" } });
   r.tick(); r.player.gear = 4; r.tick(); r.player.gear = 5; r.tick();
   assert.equal(r.els.gear.textContent, "5", "the digit still changes");

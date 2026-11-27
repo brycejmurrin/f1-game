@@ -1615,7 +1615,7 @@ function paintInstruments(player) {
     const rpmFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
     const g = "" + player.gear;   // GEAR POP on a shift (not the first paint); none under Reduce Motion
     if (g !== _gearShown && _gearShown !== "" && !motionReduced()) hData(els.gear, "pop", (_popOdd = !_popOdd) ? "a" : "b");
-    hText(els.gear, (_gearShown = g));
+    hText(els.gear, g);
     const pct = Math.round(rpmFrac * 100);
     // --rpm (0..1, 1 % steps), not width: the fill spans the whole tach and is
     // clipped, so its colour stops sit on fixed RPM (css/hud.css #hud-rpm-fill).
@@ -1624,6 +1624,7 @@ function paintInstruments(player) {
     const leds = ledEls(), st = shiftLeds(player.rpm, _redline);
     if (leds) { for (let i = 0; i < LED_N; i++) hToggle(leds[i], "on", i < st.lit); hData(leds.strip, "flash", st.flash ? "" : null); }
   }
+  _gearShown = "" + player.gear;   // tracked while hidden too: a gear change under cockpit-cam is no pop on the way out
   if (typeof HudElements !== "undefined" && !HudElements.isOn("speed")) return;
   const kph = Math.max(0, G.dashKph(player.speed));   // SPEED UNITS is display-only (js/ui/appearance-opts.js); >= 0 like the wheel LCD (reverse read "-26")
   // One SPD plate (HudReadouts.spdPlate): same n + MPH|KPH as the wheel LCD.
