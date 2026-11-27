@@ -1591,6 +1591,7 @@ const CONTROLLER = [
   "js/input/phone-pad.js",
   "js/career/save-migrate.js",
   "js/core/store.js",
+  "js/ui/ui-shape.js",   // UiShape: screen-placement reads it at eval (the phone / screen-shape answer)
   "js/ui/screen-regions.js",
   "js/ui/screen-placement.js",
   "js/ui/screen-arranger.js",
