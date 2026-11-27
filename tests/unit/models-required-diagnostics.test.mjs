@@ -54,3 +54,10 @@ test("groundedSegments with fewer than 2 points leaves a diagnostics.invalid row
   assert.equal(models.groundedSegments({ id: "gs2", points: [] }), false);
   assert.equal(diagnostics.invalid.length, 1);
 });
+
+test("groundedSegments with no groundHeight leaves a diagnostics.invalid row", () => {
+  const { models, diagnostics } = mk();
+  assert.equal(models.groundedSegments({ id: "gs3", points: [{ k: 1 }, { k: 2 }] }), false);
+  assert.equal(diagnostics.invalid.length, 1);
+  assert.match(diagnostics.invalid[0].reason, /groundHeight/);
+});

@@ -620,7 +620,7 @@ const TrackModels = (function () {
       spec = spec || {};
       if (!Array.isArray(spec.points) || spec.points.length < 2 || !ctx.groundHeight) {
         diagnostics.invalid.push({ id: spec.id || "grounded-segments", required: !!spec.required,
-          reason: !ctx.groundHeight ? "no groundHeight" : "fewer than 2 points" });
+          reason: !ctx.groundHeight ? "no groundHeight" : "points missing or fewer than 2" });
         return false;
       }
       const posBefore = out.pos.length;
