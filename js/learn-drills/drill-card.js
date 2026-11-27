@@ -33,6 +33,7 @@ const DrillCard = (function () {
   /** Persist one run. Returns the saved row and whether it beat the old best. */
   function record(store, key, r) {
     const all = read(store), old = all[key];
+    if (!Number.isFinite(r.value)) return { row: old || null, improved: false };   // NaN/Infinity would store null and wipe the best
     const hadBest = !!(old && Number.isFinite(old.best));
     const best = hadBest ? Math.max(old.best, r.value) : r.value;
     const oldMedal = old && RANK[old.medal] ? old.medal : null;
@@ -118,6 +119,10 @@ const DrillCard = (function () {
     // Desktop keys (#6559 §1e rule 5): R retries, Esc goes back to the lesson. Capture phase, before the race's
     // Escape-to-pause, only while the card is up.
     onKey = (e) => {
+      const t = e.target;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ""))) return;   // typing, not the card
+      const pm = document.getElementById?.("pausemenu");
+      if (pm && !pm.hidden) return;   // the pause menu owns Escape and R
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); back.click(); }
       else if ((e.key === "r" || e.key === "R") && !e.repeat) { e.preventDefault(); e.stopPropagation(); retry.click(); }
     };

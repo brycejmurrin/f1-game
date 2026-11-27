@@ -121,6 +121,7 @@ const ThumbDrill = (function () {
   /** Stage a Las Vegas Time Trial and drive it with the cues. onFail runs when it cannot start (it reopens LEARN). */
   function launch(G, { onFail } = {}) {
     if (live) return false;   // already driving: onFail would reopen LEARN over it
+    if (typeof DrillRegistry !== "undefined" && G.drills?.()?.active()) return false;   // a registry drill is live: one drill host at a time
     if (G.state !== "menu" || G.netPlay?.active?.() || typeof ThumbTrainer === "undefined") { onFail?.(); return false; }
     const vegas = Tracks.LIST.findIndex(d => d.id === "vegas");
     if (vegas < 0) { onFail?.(); return false; }
@@ -130,7 +131,8 @@ const ThumbDrill = (function () {
     G.flow = "gp";
     G.session = "tt";
     G.trackIdx = vegas;
-    live = run(G, () => {
+    if (typeof DrillRegistry !== "undefined") DrillRegistry.hold(true);
+    const handle = live = run(G, onFail, () => {
       G.flow = previous.flow;   // through the setter, as the aero drill restores it
       G.session = previous.session;
       G.trackIdx = previous.track;
@@ -138,16 +140,19 @@ const ThumbDrill = (function () {
       if (typeof MenuQuitTail !== "undefined") MenuQuitTail.keepFlow(quitFlow.flow, quitFlow.session);
     });
     Log.info("ui", "ThumbDrill launch vegas");
-    try { G.startRace(); } catch (e) {
-      Log.warn("ui", "ThumbDrill could not start: " + e);
-      live?.stop();
-      onFail?.();
+    // startRace is async: a rejection (circuit load, entry refused) never reaches a try/catch, so hook the promise.
+    const failed = (e) => { Log.warn("ui", "ThumbDrill could not start: " + (e && e.message || e)); handle.fail(); };
+    try {
+      const p = G.startRace();
+      if (p && typeof p.then === "function") p.then(undefined, failed);
+    } catch (e) {
+      failed(e);
       return false;
     }
     return true;
   }
 
-  function run(G, restore) {
+  function run(G, onFail, restore) {
     const TT = ThumbTrainer;
     // Bests ride the trainer's own store (ThumbTrainer.readBest/writeBest), in their own `track` field: the on-track
     // numbers never overwrite the off-track ones.
@@ -218,7 +223,8 @@ const ThumbDrill = (function () {
         // at the menu after a race, or 5 s after a load that never became one (a refused or failed start), restore.
         const loading = document.getElementById("loading");
         if (!raced && loading && !loading.hidden) loadSeen = performance.now();
-        if (raced || performance.now() - loadSeen > 5000) stop();
+        if (raced) stop();
+        else if (performance.now() - loadSeen > 5000) fail();
         return;
       }
       raced = true;
@@ -255,6 +261,12 @@ const ThumbDrill = (function () {
         sub.textContent = q.u == null ? "" : C.name + " " + (C.dir < 0 ? "◀ LEFT" : "▶ RIGHT") + " · " + C.label + (best[C.name] ? " · best " + pct(best[C.name]) : "");
       }
     }
+    /** The start never became a race: restore, then reopen LEARN (once; a stop() that already ran owns the exit). */
+    function fail() {
+      if (left) return;
+      stop();
+      onFail?.();
+    }
     function stop() {
       if (left) return;
       left = true;
@@ -263,11 +275,12 @@ const ThumbDrill = (function () {
       window.removeEventListener("keyup", onKey);
       root.remove(); card.remove();
       live = null;
+      if (typeof DrillRegistry !== "undefined") DrillRegistry.hold(false);
       restore();
       Log.info("ui", "ThumbDrill closed");
     }
     raf = requestAnimationFrame(tick);
-    return { stop, state: () => ({ cue: cue.textContent, sub: sub.textContent, lap: !card.hidden, marked, scored: scorer ? scorer.results().size : 0 }) };
+    return { stop, fail, state: () => ({ cue: cue.textContent, sub: sub.textContent, lap: !card.hidden, marked, scored: scorer ? scorer.results().size : 0 }) };
   }
 
   return Object.freeze({ launch, stop: () => live?.stop(), state: () => live?.state() || null, apexes, createScorer, cueAt });
