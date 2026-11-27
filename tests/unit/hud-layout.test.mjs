@@ -125,7 +125,6 @@ function load(stored = {}, opts = {}) {
   vm.createContext(ctx);
   loadDom(ctx);
   if (extra.editor) vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
-  loadDom(ctx);
   vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   return { H: ctx.HudLayout, written, els, ctx };
 }
@@ -647,8 +646,7 @@ test("fit preserves manual geometry across safe-area and visual-viewport changes
     document: {readyState:'loading',documentElement:root,addEventListener(){},getElementById:()=>null,
       querySelector: sel => sel === '#minimap' ? map : null, querySelectorAll:()=>[]},
     GameStore:{store:{get:(k,d)=>k==='hudLayout'?saved:d,set(){throw new Error('fit must not persist');}}} };
-  loadDom(ctx);
-  vm.createContext(ctx);vm.runInContext(SRC+';this.HudLayout=HudLayout;',ctx);
+  vm.createContext(ctx);loadDom(ctx);vm.runInContext(SRC+';this.HudLayout=HudLayout;',ctx);
   ctx.HudLayout.apply();
   const initial = map.getBoundingClientRect();
   for (const vv of [viewport.visualViewport, {width:250,height:200,offsetLeft:50,offsetTop:40}, null]) {
