@@ -4775,7 +4775,7 @@ function update(dt) {
   PerfSpans.begin("audio"); if (soundOn && player && _audioParamStep) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
     _engArg.slip = player.slipFactor ?? 1; _engArg.ax = player.axEstSm ?? 0; _engArg.axStd = aStd(_engArg.ax);   // braking stays absolute; the pull rides driveTune.PACE
-    _engArg.onKerb = !!player.onKerb; _engArg.wet = isWetRoad(); _engArg.tow = player.towing || 0;
+    _engArg.onKerb = !!player.onKerb; _engArg.wet = isWetAt(player); _engArg.tow = player.towing || 0;
     // ERS state for the deploy whine: continuous, charge-scaled, part-flavoured.
     _engArg.deploy = player.deploying ? 1 : 0; _engArg.energy = player.energy ?? 1;
     _engArg.ersDeploy = player.ersDeploy ?? 0.5;
@@ -8141,7 +8141,7 @@ function render(dt) {
         // particle VELOCITY stays real m/s (A16).
         const _sdx = tmpMat[12] - camEye[0], _sdz = tmpMat[14] - camEye[2];
         if (isWetAt(c) && vStd(c.speed) > 15 && Particles.sprayAdmit(_sdx * _sdx + _sdz * _sdz)) {
-          const str = Particles.sprayStr(vStd(c.speed), Storm.sprayK(raceWeather), frame.wetness);   // storm 1.35 / rain 1 / wet 0.6
+          const str = Particles.sprayStr(vStd(c.speed), Storm.sprayK(raceWeather), carWet(c));   // storm 1.35 / rain 1 / wet 0.6
           const sxo = (((Math.random() * 3) | 0) - 1) * 0.6;   // either rear tyre or the diffuser (centre)
           Particles.spray(
             tmpMat[12] + tmpMat[0] * sxo - tmpF[0] * 2.1,
