@@ -899,6 +899,8 @@ export function createExtras(ctx) {
     }
     let survivors;
     reconcileCancellation(j);
+    // A preview (or mock mode) never signals: it reports what a real cancel would act on.
+    if (args.dryRun || mockMode()) return toolResult({ ok: true, dryRun: !!args.dryRun, mock: mockMode() || undefined, jobId: j.id, state: jobView(j).state, wouldCancel: jobActive(j) });
     if (jobActive(j)) {
       // Snapshot before signalling: descendants can be reparented as soon as
       // the root exits. Keep the snapshot durable if this canceller dies.

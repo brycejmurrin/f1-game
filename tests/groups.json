@@ -785,6 +785,7 @@
     "tests/unit/mcp-cli.test.mjs",
     "tests/unit/mcp-debugger-tools-boot.test.mjs",
     "tests/unit/mcp-http-origin.test.mjs",
+    "tests/unit/mcp-schema-handler-agree.test.mjs",
     "tests/unit/mcp-smoke.test.mjs",
     "tests/unit/mechanics-coherence.test.mjs",
     "tests/unit/meeting-picker-labels.test.mjs",
