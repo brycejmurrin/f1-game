@@ -2061,7 +2061,9 @@ const TrackDesigner = (function () {
     if (!c || !tr || !Number.isFinite(c.sApex)) { message("Select a turn under TURNS first", true); return false; }
     const L = tr.total, LIM = CustomTracks.LIMITS, had = design.bankZones || [];
     deg = Math.round(Math.min(LIM.angleDeg, Math.max(-LIM.angleDeg, +deg || 0)));
-    const keep = had.filter((z) => !(lapDist(z.frac * L, c.sApex, L) < c.lenM / 2));
+    // The same reach pickedBank shows the angle with: a zone wider than its
+    // (reshaped) turn is still this turn's, so FLAT clears it and a new angle replaces it.
+    const keep = had.filter((z) => !(lapDist(z.frac * L, c.sApex, L) < Math.max((z.widthM || 0) / 2, c.lenM / 2)));
     if (deg && keep.length >= LIM.zones) { message("A circuit keeps " + LIM.zones + " banked corners at most — flatten one first", true); return false; }
     const next = deg ? keep.concat([{ frac: TrackZones.wrap01(c.sApex / L), angleDeg: deg, widthM: Math.round(Math.min(600, Math.max(20, c.lenM))) }]) : keep;
     if (JSON.stringify(next) === JSON.stringify(had)) return false;
