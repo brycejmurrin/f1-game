@@ -809,6 +809,7 @@
         "tests/unit/drill-aero-golden-vm.test.mjs",
         "tests/unit/drill-aero-medals-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
+        "tests/unit/drill-fork-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/elevation-tracks-vm.test.mjs",
@@ -950,6 +951,7 @@
         "tests/unit/drill-aero-golden-vm.test.mjs",
         "tests/unit/drill-aero-medals-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
+        "tests/unit/drill-fork-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/episode-transients.test.mjs",
@@ -1127,6 +1129,7 @@
         "tests/unit/drill-aero-golden-vm.test.mjs",
         "tests/unit/drill-aero-medals-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
+        "tests/unit/drill-fork-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/lap-retry-vm.test.mjs",
@@ -4356,6 +4359,11 @@
       "path": "js/race/damage.js",
       "global": "Damage",
       "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/drill-fork.js",
+      "global": "DrillFork",
+      "roster": "LAZY_DRILL_FORK"
     },
     {
       "path": "js/race/driving-coach-boot.js",

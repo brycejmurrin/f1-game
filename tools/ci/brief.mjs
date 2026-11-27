@@ -4,6 +4,8 @@
 //   node tools/ci/brief.mjs render --spec <spec.json> [--sessions <list_sessions.json>] [--no-dup]
 //   node tools/ci/brief.mjs lint <brief.txt>
 //   node tools/ci/brief.mjs dup --issue <n> | --pr <n> [--sessions <list_sessions.json>]
+//   node tools/ci/brief.mjs role <role>          (the environment id to pass to create_session; tests/data/fleet-roles.json)
+//   node tools/ci/brief.mjs reap --triggers <list_triggers.json> --blocks <comments.json|txt> [--sessions <list_sessions.json>]
 //
 // WHY (retro 2026-11-25, item 10). Hand-written briefs dropped STOP AT and the tip state, left the human steps a diff
 // would need unpredicted, and PR #6349 was launched twice. This is the template of skill `dispatcher`
@@ -12,7 +14,10 @@
 //
 // Spec (JSON): { kind: "ISSUE"|"CONTINUE PR", number, orchestrator, role, ask, askAt, task, evidence, scope,
 //   owned: [paths], forbidden: [paths], stopAt: "start+150k", humanSteps: [lines], tip: { state: "green"|"red"|"paused",
-//   sha, note }, report: [moments], env: "I", permissionMode: "auto" }.
+//   sha, note }, report: [moments], env: "worker", permissionMode: "auto" }.
+// `env` is a ROLE from tests/data/fleet-roles.json (or its display name); the brief prints the resolved name, never
+// the id. A literal `env_…` id anywhere in a spec or a brief is refused (#7049): `role` prints the id for the launch.
+// `reap` is the FULL routine's step 0 (lib/roles.mjs reapActs): one `disable trig_…` line per stale routine trigger.
 // HUMAN STEPS are predicted from `owned`: a CONFIG_PATH (merge-gate.mjs) needs `config-ok` (routine: the orchestrator
 // adds it after reading the diff; PROTECTED: Bryce's own tap, so propose instead), a ratchet file needs `ratchet-raise`.
 // The prediction is added to `humanSteps`, never replaces it.
@@ -26,9 +31,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { api } from "./github-api.mjs";
+import { findEnvLiterals, resolveRole, loadRoles, parseOrchestratorBlocks, reapActs } from "./lib/roles.mjs";
 import { isConfigPath, isProtectedConfigPath, RATCHET_FILE } from "./merge-gate.mjs";
 
-const USAGE = "usage: node tools/ci/brief.mjs render --spec <spec.json> [--sessions <file>] [--no-dup] | lint <brief.txt> | dup --issue <n>|--pr <n> [--sessions <file>]";
+const USAGE = "usage: node tools/ci/brief.mjs render --spec <spec.json> [--sessions <file>] [--no-dup] | lint <brief.txt> | dup --issue <n>|--pr <n> [--sessions <file>] | role <role> | reap --triggers <file> --blocks <file> [--sessions <file>]";
 export const KINDS = Object.freeze(["ISSUE", "CONTINUE PR"]);
 export const TIP_STATES = Object.freeze(["green", "red", "paused"]);
 export const STOP_AT_RE = /^STOP AT:\s*(start\+\d+k|\d+k)\b/m;
@@ -63,7 +69,7 @@ export function predictSteps(owned = []) {
 }
 
 /** Validate a spec; returns the problems (empty = good). Pure. */
-export function specProblems(s) {
+export function specProblems(s, roles = loadRoles()) {
   const p = [];
   if (!s || typeof s !== "object") return ["spec is not an object"];
   if (!KINDS.includes(s.kind)) p.push(`kind must be one of ${KINDS.join(" | ")}`);
@@ -74,11 +80,15 @@ export function specProblems(s) {
   if (s.tip?.state && s.tip.state !== "green" && !String(s.tip?.note || "").trim()) p.push("tip.note is required when the tip is not green (what to do until it is)");
   if (!Array.isArray(s.owned) || !s.owned.length) p.push("owned must list the paths the worker may edit");
   if (s.forbidden != null && !Array.isArray(s.forbidden)) p.push("forbidden must be a list");
+  const ids = findEnvLiterals(JSON.stringify(s));
+  if (ids.length) p.push(`a literal environment id (${ids.join(", ")}): name the role (env: "worker"); brief.mjs role <role> prints the id`);
+  else if (!resolveRole(s.env || "worker", roles)) p.push(`env "${s.env}" is not a role in tests/data/fleet-roles.json (${Object.keys(roles).join(" | ")})`);
   return p;
 }
 
 /** The brief text. Pure (the spec must be valid). */
-export function renderBrief(s) {
+export function renderBrief(s, roles = loadRoles()) {
+  const env = resolveRole(s.env || "worker", roles);
   const steps = [...(s.humanSteps || []), ...predictSteps(s.owned).filter((x) => !(s.humanSteps || []).some((h) => h.startsWith(x.split(" ")[0])))];
   const tip = s.tip;
   const lines = [
@@ -94,17 +104,19 @@ export function renderBrief(s) {
     `HUMAN STEPS: ${steps.length ? steps.join(" | ") : "none predicted"}`,
     `TIP: ${tip.state}${tip.sha ? ` at ${String(tip.sha).slice(0, 8)}` : ""}${tip.note ? ` — ${tip.note}` : ""}`,
     `STOP AT: ${s.stopAt}`,
-    `ENV: ${s.env || "I"} · permission_mode ${s.permissionMode || "auto"} · tags ["${sessionTag(s.kind, s.number)}"]`,
+    `ENV: ${env.role} ("${env.name}") · permission_mode ${s.permissionMode || env.permissionMode} · tags ["${sessionTag(s.kind, s.number)}"]`,
     `MESSAGE ME ONLY WHEN: ${(s.report || ["blocked", "refused (facts only)", "a decision is needed", "merged", "handing off"]).join(", ")} (send_message session_id ${s.orchestrator})`,
   ];
   return lines.join("\n");
 }
 
-/** Lint a written brief: the missing required lines. Pure. */
+/** Lint a written brief: the missing required lines, and any literal env id. Pure. */
 export function lintBrief(text) {
   const t = String(text || "");
   const missing = REQUIRED.filter(([, re]) => !re.test(t)).map(([label]) => label);
   const tip = TIP_RE.exec(t);
+  const ids = findEnvLiterals(t);
+  if (ids.length) missing.push(`no literal environment id (${ids.join(", ")}): name the role on the ENV: line`);
   if (tip && tip[1] !== "green" && !/^TIP:\s*\S+.*\S\s*[—-]\s*\S/m.test(t)) missing.push("TIP: a red or paused tip names what to do until it is green (`TIP: red — …`)");
   return missing;
 }
@@ -167,6 +179,38 @@ export function main(argv, { log = console.log, read = (f) => fs.readFileSync(f,
     const number = issue || pr;
     if (!/^\d{1,7}$/.test(number || "")) { log(USAGE); return 2; }
     return dupCheck({ kind: issue ? "ISSUE" : "CONTINUE PR", number, sessionsFile: flag(rest, "--sessions"), log, listOpen });
+  }
+  if (cmd === "role") {
+    let r;
+    try { r = resolveRole(rest[0], loadRoles()); } catch (e) { log(`= brief cannot-judge — fleet roles: ${e.message}`); return 3; }
+    if (!r) { log(`= brief role-unknown — "${rest[0] ?? ""}" (name a role from tests/data/fleet-roles.json)`); return rest[0] ? 1 : 2; }
+    log(`${r.id}`);
+    log(`= brief role ${r.role} — environment "${r.name}", permission_mode ${r.permissionMode}`);
+    return 0;
+  }
+  if (cmd === "reap") {
+    const tf = flag(rest, "--triggers"), bf = flag(rest, "--blocks"), sf = flag(rest, "--sessions");
+    if (!tf || !bf) { log(USAGE); return 2; }
+    let triggers, texts, sessions = [];
+    try {
+      const tj = JSON.parse(read(tf));
+      triggers = Array.isArray(tj) ? tj : tj.triggers || tj.data || [];
+      const braw = read(bf);
+      let bj = null;
+      try { bj = JSON.parse(braw); } catch { /* a plain text file of comment bodies */ }
+      texts = bj == null ? [braw] : (Array.isArray(bj) ? bj : bj.comments || bj.data || []).map((c) => (typeof c === "string" ? c : c.body || ""));
+      if (sf) { const sj = JSON.parse(read(sf)); sessions = Array.isArray(sj) ? sj : sj.data || sj.sessions || []; }
+    } catch (e) { log(`= brief cannot-judge — ${e.message}`); return 3; }
+    let roles = null;
+    try { roles = loadRoles(); } catch { /* the block's env-role is then unchecked */ }
+    const { blocks, problems } = parseOrchestratorBlocks(texts, roles);
+    problems.forEach((x) => log(`block: ${x}`));
+    if (!sf) log("warning: no --sessions file: archived sessions NOT detected (save list_sessions and pass it)");
+    if (!blocks.length) log("warning: no ```orchestrator block found: only the archived rule applies");
+    const acts = reapActs({ blocks, triggers, sessions });
+    acts.forEach((a) => log(a.line));
+    log(`= brief reap — ${acts.length} trigger(s) to disable (update_trigger enabled:false; log each act)`);
+    return 0;
   }
   if (cmd === "render") {
     const specFile = flag(rest, "--spec");

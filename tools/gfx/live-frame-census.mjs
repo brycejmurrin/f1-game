@@ -42,6 +42,7 @@ import { gotoGame } from "../shot/probe-page.mjs";
 import { raceGate } from "../lib/census-entry.mjs";
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const BACKENDS = ["tlx-gl", "tlx-gpu"];
 export function parseArgs(argv) {
@@ -391,6 +392,7 @@ async function runRow(browser, server, backend, track) {
 }
 
 async function main() {
+  exitIfHelp(process.argv.slice(2), "Usage: node tools/gfx/live-frame-census.mjs [--tracks=a,b] [--backends=..] [--json=file] [options; see the header comment]\nLaunches Chromium; --help does not.");
   const o = parseArgs(process.argv.slice(2));
   TRACKS = o.tracks; CAM = o.cam; WARM = o.warm; WIN = o.win; TRACE = o.trace; PROF = o.prof; EXTRA = o.ls; DSF = o.dsf; THROTTLE = o.cpuThrottle; SWEEP = o.sweep; STEP = o.step; LAB = o.lab; POKE = o.poke; ALLOC = o.alloc; PROF_OUT = o.profOut || "";
   report = { started: new Date().toISOString(), warm: WARM, win: WIN, trace: TRACE, prof: PROF, cam: CAM, extra: EXTRA, dsf: DSF, cpuThrottle: THROTTLE, sweep: SWEEP, step: STEP, lab: LAB, rows: [] };
