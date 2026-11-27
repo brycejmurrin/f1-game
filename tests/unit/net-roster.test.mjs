@@ -800,3 +800,18 @@ test("another team's AI car races in factory paint, not my custom livery for tha
   assert.equal(cd.paintTeam(me), me.team, "my car keeps my paint");
   if (mate) assert.equal(cd.paintTeam(mate), mate.team, "so does my teammate");
 });
+
+// #7311: cleanHello copied `from`/`rank` with only a != null check, so a
+// string rank failed every seat-clash comparison (the guest never yielded)
+// and an object `from` became a _peers Map key.
+test("cleanHello keeps only a minted gN `from` and an integer `rank` (#7311)", () => {
+  const { ctx } = liveryVm(), R = ctx.LobbyRoster;
+  const bad = R.cleanHello({ team: "alpha", driver: 0, from: {}, rank: "x" });
+  assert.equal("from" in bad, false, "an object from is dropped");
+  assert.equal("rank" in bad, false, "a string rank is dropped");
+  for (const rank of [-1, 1.5, Infinity, NaN, 1e7, "3"]) assert.equal("rank" in R.cleanHello({ team: "a", driver: 0, rank }), false, `rank ${String(rank)}`);
+  for (const from of ["host", "g", "gx", "g1\n", "g1234567", 5]) assert.equal("from" in R.cleanHello({ team: "a", driver: 0, from }), false, `from ${JSON.stringify(from)}`);
+  const ok = R.cleanHello({ team: "alpha", driver: 0, from: "g2", rank: 3 });
+  assert.equal(ok.rank, 3);
+  assert.equal(ok.from, "g2");
+});

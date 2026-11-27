@@ -176,8 +176,11 @@ const LobbyRoster = (function () {
     const out = { team: p.team, driver: p.driver, parts: null };
     const liv = cleanLivery(p.liv);
     if (liv) out.liv = liv;
-    if (p.from != null) out.from = p.from;
-    if (p.rank != null) out.rank = p.rank;
+    // The host's relay tag: `from` is a minted "gN" id (lobby.js mintGuestId),
+    // `rank` its N. Anything else is dropped — a string rank failed every seat
+    // comparison and an object `from` became a _peers key (#7311).
+    if (typeof p.from === "string" && /^g\d{1,6}$/.test(p.from)) out.from = p.from;
+    if (Number.isInteger(p.rank) && p.rank >= 0 && p.rank <= 1e6) out.rank = p.rank;
     if (p.parts && typeof p.parts === "object") {
       out.parts = {};
       for (const k of Object.keys(p.parts).slice(0, 24)) if (["string", "number"].includes(typeof p.parts[k])) out.parts[k] = p.parts[k];

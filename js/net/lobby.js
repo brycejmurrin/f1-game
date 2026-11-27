@@ -866,7 +866,7 @@ const NetLobby = (function () {
         : "The host is picking the race. Choose your car.");
     }
 
-    const { raceRuleRows, roomOnly, RULES, own, normaliseSettings, circuitPayload, installCircuit } = LobbySettings;
+    const { raceRuleRows, roomOnly, RULES, own, normaliseSettings, circuitPayload, installCircuit, releaseEphemeral } = LobbySettings;
     const customPicked = () => LobbySettings.customPicked(G);
 
     function publishSettings() {
@@ -919,17 +919,17 @@ const NetLobby = (function () {
       return broadcast(NetPlay.EV.SETTINGS, Object.assign(snapshot, { revision: settingsRevision }));
     }
 
-    // A GUEST GETS ITS OWN RULES BACK when the room or the race is over: the
-    // host's overwrote them in memory and nothing put them back. RULES lives
-    // on LobbySettings; wxArc restores to "no plan" (its getter would draw one).
+    // A GUEST GETS ITS OWN RULES BACK when the room or the race is over (the host's overwrote them in memory).
+    // RULES lives on LobbySettings; wxArc restores to "no plan" (its getter would draw one).
     let ownRules = null;
     let soloDuel = null;
     let changedRuleNames = [];
     function restoreOwnRules() {
-      const snap = ownRules;
       if (G.netPlay && G.netPlay.active && G.netPlay.active()) return false;   // never mid-race
       if (soloDuel !== null) { G.duel = soloDuel; soloDuel = null; }
-      if (!snap) return false;
+      // The host's circuit leaves Tracks.LIST (#7311); ownRules predates the slot, so trackIdx needs no re-clamp.
+      const snap = ownRules, released = releaseEphemeral();
+      if (!snap) return released;
       ownRules = null;
       for (const [, prop, key] of RULES) {
         if (!own(snap, prop) || snap[prop] === undefined) continue;

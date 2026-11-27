@@ -54,8 +54,11 @@ const LobbySettings = (function () {
     let def;
     try { def = TrackDef.fromRaw(CustomTracks.toRaw(it)); }
     catch (_) { return -1; }
+    // Same id = same content (a content hash): reuse the entry in place, never
+    // overwrite it — a local design of that id would otherwise be lost when
+    // releaseEphemeral() drops the slot.
     let idx = Tracks.LIST.findIndex((t) => t && t.id === it.id);
-    if (idx >= 0) { Tracks.LIST[idx] = def; return idx; }
+    if (idx >= 0) return idx;
     // The id is a content hash, so a hostile host varying `seed` mints a fresh
     // id per SETTINGS: reuse the slot of the circuit WE pushed last time
     // rather than growing Tracks.LIST without bound.
