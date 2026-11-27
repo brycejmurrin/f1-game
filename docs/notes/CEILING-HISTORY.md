@@ -4147,3 +4147,10 @@ one home in the EAGER shell (assets.js, post-common.js); the pasted copies they 
 tsl-lit.js bundles, so the eager total can only grow. `(tree) assertPins` +2 and `assertPinsAll` +5: the new
 `render-shared-rules.test.mjs` pins. glx.js lines 2937 → 2926. Fragment: `ratchets.d/claude--issue-6822-shared-render-rules.json`.
 Human step: `ratchet-raise`.
+
+## 2026-11-27 — claude/pocket-weekend-7042: POCKET WEEKEND preset (#7042, #6884 D4)
+
+`(tree) eagerCodeBytes` 4053762 → **4055240** (+1478): `RaceSettings.pocketApply/pocketRestore/isPocket` and the sheet toggle
+(`togglePocket`, `paintPocket`) live in the eager race-settings.js; the sheet is built at boot, so there is no lazy home. `(tree) shellNodes`
+2335 → **2337** (+2): the `#rs-pocket` button and its `<small>`. Fragment: `ratchets.d/claude--pocket-weekend-7042.json`.
+Human step: `ratchet-raise`.
