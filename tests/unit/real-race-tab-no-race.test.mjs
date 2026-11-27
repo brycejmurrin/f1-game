@@ -138,3 +138,29 @@ test("a WATCH tapped during LOAD POSITIONS starts once the positions land (#5063
   assert.equal(launched[0].startLap, 5);
   assert.equal(launched[0].watch, true);
 });
+
+test("a picker change cancels the abandoned session's queued OpenF1 requests (#7315)", async () => {
+  let cancels = 0, pick = null;
+  const never = () => new Promise(() => {});
+  const { D } = load({ indexedDB: idb(), F1API: { request: never, sessionsForMeeting: never, locationData: never, cancelAll() { cancels++; } } });
+  const ui = dom();
+  const sel = { meta: null };
+  const tab = D.create({
+    el: ui.el, clear: ui.clear, emptyMsg: (t) => ui.el("div", "dh-empty", t), spinner: () => ui.el("div"),
+    sel, ensureSession: () => Promise.resolve(), buildPicker: (cb) => { pick = cb; return ui.el("div"); },
+    teamChip: (c) => ui.el("span", null, c), fmtDateTime: (v) => String(v), isOpen: () => true, close() {},
+  });
+  await tab.loadRealRace();
+  await settle();
+  assert.equal(cancels, 0, "an idle open cancels nothing");
+  // 1. LOAD POSITIONS in flight, then the picker moves to another race.
+  const script = { sessionKey: 7315, t0: 1_000_000, complete: true, laps: 1, drivers: [{ num: 1, code: "A" }, { num: 2, code: "B" }] };
+  assert.equal(tab.loadTraces(script, null, null), true);
+  await settle();
+  pick({ sessionKey: 7316, name: "Race", type: "Race" });
+  assert.equal(cancels, 1, "the abandoned trace download is cancelled");
+  // 2. The new race's script bodies still in flight, and the picker moves again.
+  await settle();
+  pick({ sessionKey: 7317, name: "Race", type: "Race" });
+  assert.equal(cancels, 2, "the abandoned body fetch is cancelled");
+});

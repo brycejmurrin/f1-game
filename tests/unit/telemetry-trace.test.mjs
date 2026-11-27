@@ -940,3 +940,13 @@ test("replay trails are bounded past history, preserve gaps and reset on rewind"
   assert.equal(R.trailAt(lane,0,3,t=>[t,t]).length,0);
   assert.equal(R.trailAt(lane,8,0,t=>[t,t]).length,0);
 });
+
+test("the dot parks at a fix, not NaN, past the last car sample (#7315)", () => {
+  const p = driver(90);
+  p.car = p.car.filter((s) => s.t <= 80);                 // car data ends at 80 s, GPS runs to 90 s
+  const tel = { loc: p.loc, car: p.car, cum: T._cumDist(p.car, 90) };   // as buildTelemetryView: lapDuration 90
+  assert.equal(tel.cum.endCovered, false);
+  const view = { primary: tel, tMax: 90, compare: null };
+  const q = T._locAt(view, tel, 85);
+  assert.ok(q && Number.isFinite(q.x) && Number.isFinite(q.y), `locAt(85) = ${JSON.stringify(q)}`);
+});
