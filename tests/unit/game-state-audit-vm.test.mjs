@@ -108,7 +108,7 @@ test("#4 BOOST pressed on a flat battery does not latch on", async () => {
 test("#6 aquaplaning reads the surface under the car at its x, as grip does", () => {
   const src = gameSource();
   const calls = [...src.matchAll(/wxArc\.wetnessAt\(([^()]*)\)/g)].map((m) => m[1].replace(/\s+/g, ""));
-  assert.ok(calls.length >= 1, `found ${calls.length} wetnessAt reads — the pattern looks broken`);
+  assert.equal(calls.length, 1, `found ${calls.length} wetnessAt reads: carWet(c) is the one car-local sample (#7068)`);
   assert.deepEqual([...new Set(calls)], ["c.s,c.x"], "a per-car wetnessAt read without the car's x: " + calls.join(" | "));
   // One car-local sample, carWet(c) (#7068), feeds grip, aquaplaning, spray and the squeal (its body: wet-grip-ladder). Tread: the lap mean.
   assert.match(src, /surfaceWet = carWet\(c\)/);
