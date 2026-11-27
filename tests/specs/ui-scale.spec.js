@@ -61,7 +61,7 @@ async function waitHudControlsStable(page) {
 // [name, root selector, ids to click in order].
 //
 // YOUR CAR on #select opens #carsetup; NEXT opens #race-settings. There is
-// no `sel-setup` any more. tools/ui/menu-fit.mjs and tools/ui/fit-audit.mjs both
+// no `sel-setup` any more. tools/ui/fit-audit.mjs
 // still carried the old route and had been quietly reporting "root
 // missing/hidden" for those two screens; they are fixed alongside this.
 const SCREENS = [

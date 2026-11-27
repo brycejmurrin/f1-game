@@ -1,7 +1,7 @@
 /* Apex 26 — GarageLive: the garage's LIVE atlas. The timing screen's track map, the telemetry traces, the next-race sign and its flag, the sponsor banners, the contact shadow and the lamp pools — everything that follows the game rather than the team, repainted per circuit or career round. Split out of scene.js. */
 const GarageLive = (function () {
   "use strict";
-  const { HALF_W, Z_DOOR, scale, rgb, css } = GaragePrims;
+  const { HALF_W, scale, rgb, css } = GaragePrims;
   const { SCREEN } = GarageEquipment;
 
 // ── the LIVE atlas ─────────────────────────────────────────────────────────
@@ -167,7 +167,7 @@ function paintTrace(cv, liv, now) {
 function buildLive(FIXTURES) {
   const g = {};
   for (const k of ["mid", "floor", "nx", "px", "door"]) g[k] = { pos: [], nrm: [], uv: [], idx: [] };
-  const zd = Z_DOOR - 0.03, xw = HALF_W - 0.03;
+  const xw = HALF_W - 0.03;
   // The screen face, on the housing's -Z side (see buildEquipment).
   const sx = SCREEN[0], sy = SCREEN[1], sz = SCREEN[2] - 0.051;
   dquadR(g.mid, [[sx + 0.88, sy - 0.68, sz], [sx - 0.88, sy - 0.68, sz], [sx - 0.88, sy + 0.68, sz], [sx + 0.88, sy + 0.68, sz]], [0, 0, -1], L_MAP);

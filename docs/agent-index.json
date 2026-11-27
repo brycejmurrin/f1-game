@@ -4710,6 +4710,11 @@
       "roster": "DEFERRED:three"
     },
     {
+      "path": "js/render/three/tlx-debug.js",
+      "global": "TLXDebug",
+      "roster": "DEFERRED:three"
+    },
+    {
       "path": "js/render/three/tlx-mem.js",
       "global": "TLXShaders",
       "roster": "DEFERRED:three"
@@ -4722,6 +4727,11 @@
     {
       "path": "js/render/three/tlx-shadow.js",
       "global": "TLXShaders",
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tlx-texpool.js",
+      "global": "TLXTexPool",
       "roster": "DEFERRED:three"
     },
     {
@@ -4952,7 +4962,7 @@
     {
       "path": "js/track/scenery/graph.js",
       "global": "TrackGraph",
-      "roster": "tag"
+      "roster": "LAZY_TRACK_BUILD"
     },
     {
       "path": "js/track/scenery/guards.js",

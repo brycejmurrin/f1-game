@@ -161,10 +161,6 @@ const CareerBackup = (function () {
   // sanitized identity in each career; importing legacy blocks adopts them per
   // destination slot and never rewrites the one-off GP garage identity.
   const IDENTITY_KEYS = Object.freeze(["customTeam", "customLogo", "livery.custom.custom", "livery.custom"]);
-  function hasMyTeamData(slots) {
-    for (const row of slots || []) if (row && row.data != null && flavourIn(row.flavour) === "myteam") return true;
-    return false;
-  }
   function collectIdentity() {
     const s = store();
     const out = {};
@@ -174,14 +170,6 @@ const CareerBackup = (function () {
       if (v != null) out[k] = JSON.parse(JSON.stringify(v));
     }
     return out;
-  }
-  // Same per-key shape gate as the GARAGE file (SettingsExport.garageValue:
-  // Teams.sanitizeCustom, data:image logo cap, livery rows needing id/c1/c2).
-  // Without it nothing is written — never an unchecked value.
-  function identityValue(k, v) {
-    if (IDENTITY_KEYS.indexOf(k) === -1 || v == null) return undefined;
-    if (typeof SettingsExport === "undefined" || !SettingsExport.garageValue) return undefined;
-    try { return SettingsExport.garageValue(k, v); } catch (e) { return undefined; }
   }
 
   function build(skipped) {

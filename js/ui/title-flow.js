@@ -104,22 +104,9 @@ async function consumeGhostHash() {
   const shared = await GhostShare.consumeHash({ valid: titleLive,
     notify: (message, result) => G.announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),
   });
-  if (shared && shared.ok) {
-    G.flow = "gp"; G.session = "tt";
-    const today = DailyChallenge.dayKey();
-    if (shared.day && shared.day === today) {
-      G.daily.select(shared.day);
-    } else {
-      G.daily.stop();
-      restoreFreePlaySelection();
-      const idx = Tracks.LIST.findIndex((entry) => entry.id === shared.track);
-      if (idx < 0) return shared;   // decode already guards this; retain a safe no-op
-      G.trackIdx = idx;
-    }
-    G.buildSelect();
-    vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
-    G.scheduleFlybyTrack(true);
-  }
+  // TT challenge: circuit + conditions + ghost + target, staged by DeepLink (#6884 A3).
+  if (shared && shared.ok) DeepLink.stageChallenge(G, shared, { today: DailyChallenge.dayKey(), restoreFreePlay: restoreFreePlaySelection,
+    open: () => { G.buildSelect(); vt(() => { els.overlay.hidden = true; els.select.hidden = false; }); G.scheduleFlybyTrack(true); } });
   // Setup / livery / daily envelopes on #share= — stage only, never startRace.
   if (typeof ShareCode !== "undefined" && titleLive()) {
     const started = { n: 0 };

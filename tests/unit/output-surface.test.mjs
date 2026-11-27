@@ -92,3 +92,18 @@ test("generator help, unknown arguments and a clean --check never write", () => 
     assert.equal(fs.readFileSync(path.join(ROOT, TARGET), "utf8"), before);
   }
 });
+
+test("emit --check on an absent BUILT/ON_DEMAND path is not drift (fresh clone)", async () => {
+  const { emit } = await import("../../tools/gen/gen-lib.mjs");
+  const rel = "docs/agent-output/catalog.json";
+  const abs = new URL("../../" + rel, import.meta.url);
+  const fs = await import("node:fs");
+  const had = fs.existsSync(abs) ? fs.readFileSync(abs) : null;
+  try {
+    if (had) fs.rmSync(abs);
+    const out = process.stdout.write; let captured = "";
+    process.stdout.write = (c) => { captured += c; return true; };
+    let rc; try { rc = emit(rel, "{}", ["--check"]); } finally { process.stdout.write = out; }
+    assert.deepEqual([rc, captured.includes("absent (built path")], [0, true], captured);
+  } finally { if (had) fs.writeFileSync(abs, had); }
+});

@@ -204,7 +204,7 @@ var CooldownLap = (function () {
   }
 
   return {
-    WALL_S, LAP_BUDGET, SKIP_LABEL, TAP_MIN_CSS_PX,
+    SKIP_LABEL, TAP_MIN_CSS_PX,
     sessionEligible, playerCanDrive, exitReason, skipTargetOk, create,
   };
 })();

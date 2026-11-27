@@ -2323,7 +2323,7 @@ test("ensureScenery awaits THIS circuit's models (Assets.modelsReady with the cl
         SCENERY_DIR: "js/circuits/scenery" },
       Tracks: { LIST: [def], circuitPayloadResident: () => true },
       TrackScenery: mode === "resident" ? { monza: scenery } : {},
-      TrackBuildProps: { build() {} }, TrackModels: {}, TrackHiddenFaces: {},
+      TrackBuildProps: { build() {} }, TrackModels: {}, TrackHiddenFaces: {}, TrackGraph: {},
       Assets: { modelsReady(cap, source) {
         calls.push({ cap, source }); enterModelWait(); return modelBarrier;
       } },
@@ -2691,6 +2691,7 @@ test("GLX material ownership preserves reused textures and releases aliases once
   const source = fs.readFileSync(path.join(ROOT, "js/render/glx/glx.js"), "utf8");
   const deleted = [], forgotten = [], alive = new Set();
   const ctx = vm.createContext({
+    Assets: { matScale: (v) => (+v > 0 ? +v : 0) },   // the real rule is pinned in render-shared-rules.test.mjs (#6822)
     _matGen: 0, matAlbedoTex: null, matNormalTex: null, MAT_TEX_LAYERS: 17,
     matTexScales: new Float32Array(17), _texForget: t => forgotten.push(t),
     gl: { deleteTexture(t) { assert.ok(alive.delete(t), "texture cannot be deleted twice"); deleted.push(t); } },

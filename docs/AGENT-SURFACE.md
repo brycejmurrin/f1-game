@@ -761,7 +761,7 @@ unevaluated. Shadow/slot ancestry and optional API failures remain unavailable.
 These records do not establish inheritance, condition truth or cascade winners.
 
 Use `--audit artifacts/fit-audit/audit.json` to attach existing native fit-audit,
-layout-audit or menu-fit evidence (input at most 5 MiB). Producers now capture
+layout-audit or fit-audit evidence (input at most 5 MiB). Producers now capture
 source identity and root, viewport, pointer, scales, insets and appearance.
 Only matching complete provenance is comparable; old reports remain incomparable,
 and setup failures remain skipped. Dirty worktrees require equal content

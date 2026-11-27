@@ -12,7 +12,6 @@
 // tool input twice (`input` + `wire_tool_inputs`). Reading it raw spends a context window on one page. The
 // page only arrives through the claude-code-remote MCP tool, so a script cannot fetch it; it parses the file
 // the harness writes when the result is too big to inline. Procedure: save a list_events page, then digest it here.
-// transcripts.md.
 //
 // What a transcript does NOT carry: thinking text (the blocks arrive empty, signature only).
 //

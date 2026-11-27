@@ -18,6 +18,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isBuilt } from "../lib/generated-paths.mjs";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -80,6 +81,12 @@ export function emit(rel, content, argv = process.argv.slice(2)) {
   if (check) {
     if (current === content) {
       process.stdout.write(`${rel}: up to date (${bytes} bytes)\n`);
+      return 0;
+    }
+    // A built path (gitignored; built where it is served or read) has no committed
+    // copy to drift from: an absent file is not stale (tools/gen/ensure-built.mjs builds it).
+    if (current === null && isBuilt(rel)) {
+      process.stdout.write(`${rel}: absent (built path, not committed; ensure-built.mjs builds it)\n`);
       return 0;
     }
     // The generator's REAL path, relative to the repo — not `tools/` plus its

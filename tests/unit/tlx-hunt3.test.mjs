@@ -31,7 +31,7 @@ installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
 const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.webgpu.min.js")).href);
 const TSL = THREE.TSL;
-for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
+for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js", "js/render/shared/assets.js",
   "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js"])
   vm.runInThisContext(read(f), { filename: absSrc(f) });
 
@@ -1082,10 +1082,12 @@ test("shared bind groups: last-owner eviction, context isolation and robust keys
 });
 
 test("memState reports the renderer's primitive resource counts and byte sizes", () => {
-  const start = TLX.indexOf("const inf = renderer && renderer.info;", TLX.indexOf("memState()"));
-  const end = TLX.indexOf("if (inf.render)", start);
+  const DBG = read("js/render/three/tlx-debug.js");   // __tlx.memState lives in tlx-debug.js (#6821): outer names read through S
+  const start = DBG.indexOf("const inf = S.renderer && S.renderer.info;", DBG.indexOf("memState()"));
+  const end = DBG.indexOf("if (inf.render)", start);
   assert.ok(start >= 0 && end > start);
-  const report = new Function("renderer", "o", TLX.slice(start, end) + "} return o;");
+  const report3 = new Function("S", "o", DBG.slice(start, end) + "} return o;");
+  const report = (renderer, o) => report3({ renderer }, o);
   const memory = { programs: 7, textures: 3, texturesSize: 4097, attributes: 9, attributesSize: 17,
     uniformBuffers: 2, uniformBuffersSize: 1024, total: 5138, unusedObject: {} };
   const result = report({info: {memory, programs: new Array(99)}}, {});

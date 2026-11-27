@@ -1,0 +1,12 @@
+{
+  "files": {
+    "js/render/glx/glx.js": {
+      "lines": -11
+    }
+  },
+  "tree": {
+    "assertPins": 2,
+    "assertPinsAll": 5,
+    "eagerCodeBytes": 319
+  }
+}

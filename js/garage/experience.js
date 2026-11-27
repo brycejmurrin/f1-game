@@ -58,6 +58,8 @@ const GarageExperience = (function () {
     };
   }
 
+  const isNight = (tod, def) => tod === "night" || tod === "dusk" || tod === "dawn" || tod === "default" && !!(def && def.night);
+
   function canOrbit(garage, home, photo, blocked) {
     return !blocked && (!!garage || (!!home && !!photo));
   }
@@ -193,5 +195,5 @@ const GarageExperience = (function () {
     c.fillText(a.wins + " WINS · " + a.podiums + " PODIUMS · " + a.titles + " TITLES", 256, 365, 490);
   }
 
-  return Object.freeze({ clock, homeShot, homeSession, canOrbit, freePane, fitHome, statsOf, compare, partSummary, careerKey, buildFacility, paintCareer });
+  return Object.freeze({ clock, isNight, homeShot, homeSession, canOrbit, freePane, fitHome, statsOf, compare, partSummary, careerKey, buildFacility, paintCareer });
 })();

@@ -225,7 +225,9 @@
     "StoppedCars",
     "RetiredCard",
     "TLXCarSurf",
-    "TLXUtil"
+    "TLXUtil",
+    "TLXTexPool",
+    "TLXDebug"
   ],
   "mutable": [
     "GLX",

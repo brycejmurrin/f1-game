@@ -1026,10 +1026,6 @@ body[data-width="narrow"] .dh-thint { display: none; }
 .dh-export { display: flex; flex-direction: column; gap: 10px; }
 .dh-export-note { font-size: var(--fs-2); line-height: 1.5; color: #b6b6c0; }
 .dh-export-row { display: flex; gap: calc(var(--gap) * 0.5); }
-.dh-card [data-arrange-screen] {
-  min-height: var(--tap-paint);
-  font-size: max(var(--fs-2), var(--dh-text-floor));
-}
 .dh-export .dh-pill {
   min-width: max(var(--tap-min), var(--tap-paint));
   min-height: max(var(--chip-h), var(--tap-paint));
