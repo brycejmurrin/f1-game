@@ -184,7 +184,7 @@ function loadCard() {
   return { ctx, dom };
 }
 
-const TIERS = { bronze: 7.1, silver: 9.2, gold: 15.8, goldClean: true };
+const TIERS = { bronze: 7.1, silver: 9.2, gold: 15.7, goldClean: true };
 
 test("DrillCard.medalOf: tiers in the result's unit, gold needs a clean run", () => {
   const { ctx } = loadCard();
@@ -192,7 +192,7 @@ test("DrillCard.medalOf: tiers in the result's unit, gold needs a clean run", ()
   assert.equal(m(4), null);
   assert.equal(m(7.1), "bronze");
   assert.equal(m(9.2), "silver");
-  assert.equal(m(15.8), "gold");
+  assert.equal(m(15.7), "gold");
   assert.equal(m(17, false), "silver", "an unclean run tops out at silver");
   assert.equal(m(NaN), null);
   assert.equal(ctx.DrillCard.medalOf({ value: 20, clean: true }, null), null);

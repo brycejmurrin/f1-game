@@ -227,7 +227,7 @@ const LearnDoor = (function () {
   // The Aero Lab's medal tiers, in metres closed on the rival (the best approach from the 24 m start). Derived from
   // 20 VM runs (tests/data/learn-drill-refs.json, pinned by tests/unit/drill-aero-medals-vm.test.mjs): bronze is their median,
   // silver the furthest a run got before it dropped out of the wake, gold the shortest clean finish in the wake.
-  const AERO_MEDALS = Object.freeze({ bronze: 7.1, silver: 9.2, gold: 15.8, goldClean: true });
+  const AERO_MEDALS = Object.freeze({ bronze: 7.1, silver: 9.2, gold: 15.7, goldClean: true });
 
   // The Aero Lab's Scenario: a Monza GP, both cars at speed in the tow (js/learn-drills/registry.js hosts it).
   // Defined lazily, never at eval: LAZY_LEARN loads with no edges, so the registry may evaluate after this file.

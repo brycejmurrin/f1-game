@@ -7,61 +7,61 @@
     "runs": [
       {
         "duty": 1,
-        "closed": 15.99,
+        "closed": 16.06,
         "clean": true,
         "reason": ""
       },
       {
         "duty": 0.95,
-        "closed": 15.85,
+        "closed": 15.96,
         "clean": true,
         "reason": ""
       },
       {
         "duty": 0.9,
-        "closed": 16.13,
+        "closed": 16.44,
         "clean": true,
         "reason": ""
       },
       {
         "duty": 0.85,
-        "closed": 17.12,
-        "clean": false,
-        "reason": "left the track"
+        "closed": 15.72,
+        "clean": true,
+        "reason": ""
       },
       {
         "duty": 0.8,
-        "closed": 15.65,
+        "closed": 16.1,
         "clean": false,
         "reason": "left the track"
       },
       {
         "duty": 0.75,
-        "closed": 16.55,
+        "closed": 16.19,
         "clean": false,
         "reason": "left the track"
       },
       {
         "duty": 0.7,
-        "closed": 9.25,
+        "closed": 9.28,
         "clean": false,
         "reason": "dropped out of the wake"
       },
       {
         "duty": 0.65,
-        "closed": 8.52,
+        "closed": 8.53,
         "clean": false,
         "reason": "dropped out of the wake"
       },
       {
         "duty": 0.6,
-        "closed": 7.85,
+        "closed": 7.87,
         "clean": false,
         "reason": "dropped out of the wake"
       },
       {
         "duty": 0.55,
-        "closed": 7.32,
+        "closed": 7.33,
         "clean": false,
         "reason": "dropped out of the wake"
       },
@@ -73,13 +73,13 @@
       },
       {
         "duty": 0.45,
-        "closed": 6.4,
+        "closed": 6.41,
         "clean": false,
         "reason": "dropped out of the wake"
       },
       {
         "duty": 0.4,
-        "closed": 6.04,
+        "closed": 6.05,
         "clean": false,
         "reason": "dropped out of the wake"
       },
@@ -129,7 +129,7 @@
     "tiers": {
       "bronze": 7.1,
       "silver": 9.2,
-      "gold": 15.8,
+      "gold": 15.7,
       "goldClean": true
     }
   }
