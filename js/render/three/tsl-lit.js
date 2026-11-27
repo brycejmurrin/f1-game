@@ -1694,8 +1694,9 @@
     // drawn through drawChunked/castShadowChunked (it is — js/game.js,4810).
     /** One packed slot of U.wetSegs (vec4[6]): slot i = row i/4, lane i%4. */
     const wetSlot = (i) => {
-      const row = i.div(4), r = U.wetSegs.element(row), c = i.sub(row.mul(4));   // int ops: GLSL mod() is float-only
-      return select(c.equal(0), r.x, select(c.equal(1), r.y, select(c.equal(2), r.z, r.w)));
+      // int literals throughout: GLSL mod() is float-only and WGSL refuses an i32 == f32 compare.
+      const row = i.div(int(4)), r = U.wetSegs.element(row), c = i.sub(row.mul(int(4)));
+      return select(c.equal(int(0)), r.x, select(c.equal(int(1)), r.y, select(c.equal(int(2)), r.z, r.w)));
     };
     /** The road's wetness at this fragment (#6909 phase 2): on a mesh with track
      *  coords (trk = s, x, hw; road, kerbs and verges) the per-sector slots,
@@ -1708,9 +1709,9 @@
       const hasTrk = trkA.z.greaterThan(0.5).or(abs(trkA.y).greaterThan(0.0)).or(trkA.x.greaterThan(0.0));
       If(U.wetMax.greaterThan(0.001).and(U.wetLap.greaterThan(0.0)).and(hasTrk), () => {
         const f = fract(trkA.x.div(U.wetLap)).mul(float(WET_SEGS)).sub(0.5);
-        const fl = floor(f), t = f.sub(fl);
-        const i0 = int(mod(fl.add(float(WET_SEGS)), float(WET_SEGS)));
-        const i1 = int(mod(fl.add(float(WET_SEGS + 1)), float(WET_SEGS)));
+        const fl = floor(f).toVar(), t = f.sub(fl);
+        const i0 = int(mod(fl.add(float(WET_SEGS)), float(WET_SEGS))).toVar();
+        const i1 = int(mod(fl.add(float(WET_SEGS + 1)), float(WET_SEGS))).toVar();
         wL.assign(mix(wetSlot(i0), wetSlot(i1), t));
       });
       return wL;
@@ -1763,6 +1764,10 @@
         if (trkA) If(U.wetMax.greaterThan(0.001), () => {
           trkRightXZ.assign(dFdx(wp.xz).mul(dFdx(trkA.y)).add(dFdy(wp.xz).mul(dFdy(trkA.y))));
         });
+        // wL: THIS fragment's road wetness — the per-sector slot at its trk.s on
+        // a mesh with track coords (road, kerbs, verges), else the global value
+        // (#6909). Fn-body level; no derivatives inside, so its If may diverge.
+        const wL = roadWetness(trkA);
         const V = normalize(cameraPosition.sub(wp)).toVar();
 
         // Two-sided lighting: flip N toward the viewer on back fragments
@@ -1776,7 +1781,7 @@
         If(matU.detail.greaterThan(0.001), () => {
           const mnFp = max(fwidth(wp.x), fwidth(wp.z)).toVar();
           const mnFade = clamp(vd.sub(25.0).div(70.0).oneMinus(), 0.0, 1.0)
-            .mul(U.wetness.mul(0.75).oneMinus()).toVar();
+            .mul(wL.mul(0.75).oneMinus()).toVar();   // the sector's water fills the relief (#6909)
           // footprint fade — grazing-angle crawl guard (0.15/0.70 constants)
           mnFade.mulAssign(clamp(mnFp.sub(0.15).div(0.70).oneMinus(), 0.0, 1.0));
           If(mnFade.greaterThan(0.01), () => {
@@ -2214,9 +2219,6 @@
           float(1.0), float(0.0));
         // NOT on a car: the block is world-keyed (noise puddles, ripple cells,
         // the tarmac absorb) and slid across the moving body — glsl-lit.js.
-        // wL: THIS fragment's road wetness — the per-sector slot at its trk.s on
-        // a mesh with track coords (road, kerbs, verges), else the global value.
-        const wL = roadWetness(trkA);
         If(U.wetMax.greaterThan(0.001).and(classifiedCar.not()), () => {
           const upFace = smoothstep(0.50, 0.90, N.y);
           wet.assign(wL.mul(upFace));
