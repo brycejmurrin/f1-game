@@ -656,6 +656,11 @@
       "presentation": "shared-levels",
       "preserve": "Download/parse notes; issue errors even in JSON; no failures inferred from absence"
     },
+    "tools/ci/fleet-cost.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The `= fleet-cost` line ($/merged PR, sessions with pages, hand-back %, re-adoptions), one row per merged PR and the no-page sessions; read-only"
+    },
     "tools/ci/geometry-paths.mjs": {
       "action": "protocol-only",
       "presentation": "native",
@@ -695,6 +700,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Library: labelsOf / getAll / closingIssues / batchMembers / ADOPT_RE over GitHub REST rows; no CLI output"
+    },
+    "tools/ci/lib/lease.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Library: handoffLease / leaseState / ownerEvents / adoptedUnleased over a PR body and its comments; no CLI output"
     },
     "tools/ci/lib/deploy-tip.mjs": {
       "action": "keep-native",

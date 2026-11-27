@@ -1,7 +1,7 @@
 // gh-rows.mjs — the GitHub REST row helpers the CI tools share: label names, paginated lists, closing keywords, a
 // batch issue's members and the steward adoption line. Moved out of the retired dispatch.mjs (#6536), whose
 // Action (.github/workflows/dispatch.yml) was deleted; workers are launched by the orchestrator session now.
-// @doc Shared GitHub row helpers: labelsOf, paginated getAll, closingIssues, batchMembers, ADOPT_RE.
+// @doc Shared GitHub row helpers: labelsOf, paginated getAll, closingIssues, batchMembers, ADOPT_RE, RELEASE_RE.
 // @section runner
 // @skill steward
 //
@@ -15,6 +15,8 @@ export const PAGE_SIZE = 100;
 export const labelsOf = (x) => (x?.labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
 /** An adoption comment (skill steward §Lane 3): `adopts PR #<n> — <host>:<session>`. */
 export const ADOPT_RE = /^adopts PR #(\d+) — (\S+)/m;
+/** A hand-back comment (skill steward §Lane 3): `releases PR #<n> …` at the start of a line. */
+export const RELEASE_RE = /^releases PR #(\d+)\b/m;
 
 /** Closing declarations in prose for this repository; comments and code examples do not reserve work.
  * Syntax: https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue */

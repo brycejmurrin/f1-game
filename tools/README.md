@@ -155,6 +155,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/geometry-paths.mjs** | Single source for "which sweeps does this diff need?": the fleet trigger (from TRACK_VM) and the targeted-suite table. | — |
 | **ci/guards-report.mjs** | Names EVERY failing guard in a `node --test` TAP log with its fix command (efficiency review 2026-10-30, finding 4). | — |
 | **ci/guards-verdict.mjs** | Commit-gate verdict cache for test:guards (#2889 slice 1). | check-changes |
+| **ci/lib/lease.mjs** | The Hand-off `owner:` lease: its parser, the seven lease states and the adopted-unleased check. | — |
 | **ci/live-run-check.mjs** | Prints WARN if this branch has in-progress ci.yml runs (3 s API lookup); exit 0 always. | check-changes |
 | **ci/nightly-group.mjs** | Pick the browser GROUP tonight's scheduled ci.yml run should cover. | — |
 | **ci/pages-rearm.mjs** | Re-arm the Pages train when its queue dropped the deploy tip's own run (#5530). | — |
@@ -724,13 +725,14 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/file-verdict-reporter.mjs** | A `node --test` reporter writing per-file event counts, so a group runner can refuse an exit 0 that verified nothing. |
 | **ci/fixture-consumer-audit.mjs** | RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`. |
 | **ci/flake-tally.mjs** | Nightly flake tally — first-try fails and pass-on-retry by spec+title across recent scheduled CI runs. |
+| **ci/fleet-cost.mjs** | Fleet cost: merged PRs joined to saved session pages: $ per merged PR, hand-back %, re-adoptions. |
 | **ci/github-api.mjs** | The one GitHub REST client: token on curl stdin, 5xx/429 backoff, ETag/304 GETs, JSON bodies; repo constants. |
 | **ci/github-token.mjs** | Resolve a GitHub token for read-only Actions tools: env first, then `gh auth token`. |
 | **ci/inputs-hash.mjs** | Per-job inputs hash for the CI verdict cache (#1712); sha256 of a declared path set + node version. |
 | **ci/issue-labels.mjs** | Issue label audit (reads only): open issues with no type, two types or no area:* label. |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
 | **ci/lib/deploy-tip.mjs** | Is the deploy tip red on code? Newest completed pages.yml run + its jobs; a Pages-side publish failure is not. |
-| **ci/lib/gh-rows.mjs** | Shared GitHub row helpers: labelsOf, paginated getAll, closingIssues, batchMembers, ADOPT_RE. |
+| **ci/lib/gh-rows.mjs** | Shared GitHub row helpers: labelsOf, paginated getAll, closingIssues, batchMembers, ADOPT_RE, RELEASE_RE. |
 | **ci/lib/provenance.mjs** | Provenance of GitHub label events and comments: byOwner (owner, no app), byAgent, decision: comments, label events. |
 | **ci/lib/tip-gate.mjs** | Tip gate: the composition-budget unit tests on the bare deploy tip when no completed pages.yml run covers its sha. |
 | **ci/merge-gate.mjs** | Landing gate (`gate` check): open, hold (Bryce lifts), Plan, CI, config-ok, gen + ratchets + re-test on the merge. |
