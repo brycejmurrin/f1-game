@@ -119,7 +119,7 @@ const SceneryNature = (function () {
       // per-track props) inherits the embed; tops drop by the same 0.3, which
       // is visually negligible on multi-metre props.
       // Inside the road-to-ribbon GAP (the rendered terrain ribbon starts
-      // ~2.2 m out; TrackSurface.heightAt() is a flat cross-section that knows
+      // ~2.2 m out; surface.heightAt() is a flat cross-section that knows
       // nothing about the road it borders) the ground is not terrain — it is
       // the ROAD SURFACE, so terrainYAt() must not be consulted here at all:
       // at a hairpin that doubles back on itself (Zandvoort) its XZ lookup

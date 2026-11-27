@@ -990,14 +990,12 @@ const TrackMesh = (function () {
     const surface = track.surface || TrackSurface.profile(track.def, track);
     const NTV = surface.rails.length;
     const isStreet = !!track.def.street;
-    const flat = !!track.def.flatTerrain;
     // The ground beyond the runoff verge: GRASS unless the def names SAND or
     // SNOW (the designer's desert / alpine themes; no shipped def does, so the
     // 52 keep their bytes — tests/unit/track-foundation* and verify-track).
     const groundMat = groundMatOf(track.def);
     // Explicit pavement stays paved through the inner band; natural terrain keeps gravel runoff.
     const runoffMat = groundMat === MAT.CONCRETE ? groundMat : MAT.ROCK;
-    const outerW = surface.outerW;
     const latsL = surface.rails.map((d) => -d);
     const latsR = surface.rails.slice();
     // flip: the right ribbon needs opposite winding to stay front-facing under BACK culling.
