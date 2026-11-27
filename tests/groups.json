@@ -1623,6 +1623,7 @@
     "// Skips loudly when a binary is absent; the CI `lints` job fails a SKIP. ~3 s.",
     "tests/unit/workflow-lint.test.mjs",
     "tests/unit/workflow-schedule-stagger.test.mjs",
+    "tests/unit/wrap-index-refuse-on-road.test.mjs",
     "// Weather×time grid (tools/shot/lib/wx-grid.mjs): 6×4 layout incl. storm, Rec.709 luminance, lighting ratios. Pure, no browser.",
     "tests/unit/wx-grid.test.mjs",
     "tests/unit/xr-backend-pin.test.mjs",
