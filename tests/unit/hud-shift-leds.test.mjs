@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { cssRules } from "../helpers/css-rules.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadDom } from "../helpers/dom-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -45,6 +46,7 @@ function boot(extra = {}) {
     ...extra,
   };
   sb.window = sb;
+  loadDom(sb);
   for (const f of ["js/ui/live-region.js", "js/ui/hud-skin.js", "js/ui/hud-minimap.js", "js/ui/hud-radio-lane.js", "js/ui/hud-readouts.js", "js/ui/hud.js", "js/race/overtake-mode.js"]) {
     vm.runInNewContext(src(f), sb, { filename: absSrc(f) });
   }

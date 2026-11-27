@@ -2,7 +2,7 @@
   "_doc": "LEARN drill medal references (#6559 §1e rule 4): one block per drill, from VM rollouts, then re-tuned from Bryce's phone runs. Each block names its generator; tests/unit/drill-aero-medals-vm.test.mjs pins the Aero block.",
   "aero": {
     "how": "node tests/helpers/learn-drill-vm.mjs --write: 20 runs of the Monza Aero drill (24 m start, Classic dirty air), one boot, RETRY between runs, throttle duty 1.00 down to 0.05, no steering",
-    "metric": "metres closed = start gap - nearest gap reached (js/ui/learn-door.js scoreAero)",
+    "metric": "metres closed = start gap - nearest gap reached (js/learn-drills/aero.js scoreAero)",
     "rule": "bronze = median of the 20; silver = furthest before dropping out of the wake; gold = shortest clean finish (clean required); floored to 0.1 m",
     "runs": [
       {
@@ -130,6 +130,138 @@
       "bronze": 7.1,
       "silver": 9.2,
       "gold": 15.7,
+      "goldClean": true
+    }
+  },
+  "tyre-heat": {
+    "how": "node tests/helpers/tyre-heat-drill-vm.mjs --write: 12 runs of the Monza Tyre Thermal Lab (fresh medium, real wear), one boot, RETRY between runs, test pursuit driver at pace 1.15 down to 0.60 x vTop",
+    "metric": "% of the run with the surface in optTemp +- T_WINDOW (js/learn-drills/tyre-heat.js score)",
+    "rule": "bronze = median of the runs; silver = upper quartile; gold = best clean run (clean required); floored to 0.1 %",
+    "runs": [
+      {
+        "pace": 1.15,
+        "inWindow": 90.3,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pace": 1.1,
+        "inWindow": 90.3,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pace": 1.05,
+        "inWindow": 88.5,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pace": 1,
+        "inWindow": 84.8,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pace": 0.95,
+        "inWindow": 80.7,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pace": 0.9,
+        "inWindow": 65.6,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pace": 0.85,
+        "inWindow": 46.4,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pace": 0.8,
+        "inWindow": 23,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pace": 0.75,
+        "inWindow": 2.7,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pace": 0.7,
+        "inWindow": 0,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pace": 0.65,
+        "inWindow": 0,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pace": 0.6,
+        "inWindow": 0,
+        "clean": true,
+        "reason": ""
+      }
+    ],
+    "tiers": {
+      "bronze": 56,
+      "silver": 85.7,
+      "gold": 90.3,
+      "goldClean": true
+    }
+  },
+  "lines": {
+    "how": "node tests/helpers/lines-drill-vm.mjs --write: one boot, one run per cone (EARLY, GEOMETRIC, LATE) by the helper's pursuit driver (DRIVER), RETRY between runs",
+    "metric": "per run: cone miss (m), minimum speed and exit speed at +320 m (m/s), time to the +650 m gate (s) (js/learn-drills/lines.js score)",
+    "rule": "the medal is a stage, not a threshold: bronze = all three cones within 1.5 m; silver = plus the right answer (the fastest gate); gold = plus a later run on the winner within 0.5 m that beats its best gate. These runs prove each cone is reachable within 1.5 m and that LATE exits faster than EARLY",
+    "driver": {
+      "entry": 45,
+      "kp": 0.6,
+      "kd": 0.5,
+      "look": 15,
+      "lift": 1.5,
+      "turnIn": 140,
+      "trackOut": 300,
+      "hw": 8
+    },
+    "runs": [
+      {
+        "variant": "early",
+        "counted": true,
+        "miss": 1.36,
+        "vMin": 22.52,
+        "vExit": 44.72,
+        "gateS": 25.68
+      },
+      {
+        "variant": "geometric",
+        "counted": true,
+        "miss": 0.96,
+        "vMin": 24.1,
+        "vExit": 44.62,
+        "gateS": 24.92
+      },
+      {
+        "variant": "late",
+        "counted": true,
+        "miss": 0.82,
+        "vMin": 28.85,
+        "vExit": 45.25,
+        "gateS": 23.69
+      }
+    ],
+    "tiers": {
+      "bronze": 1,
+      "silver": 2,
+      "gold": 3,
       "goldClean": true
     }
   },

@@ -640,7 +640,7 @@ test("Learn opens a named modal and returns focus to the selected lesson after u
   const origin = "https://apex.example";
   const sb = sandbox(dom, {
     Career: { data: () => null },
-    ApexRoster: { LAZY_LEARN: ["js/learn-drills/registry.js", "js/ui/learn-door.js"] },
+    ApexRoster: { LAZY_LEARN: ["js/learn-drills/registry.js", "js/learn-drills/aero.js", "js/ui/learn-door.js"] },
     ScriptLoader: { create: () => ({ load: async (files) => {
       loads++;
       for (const f of files) vm.runInNewContext(src(f), sb, { filename: absSrc(f) });

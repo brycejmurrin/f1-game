@@ -669,7 +669,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 |---|---|---|---|---|---|---|
 | `cloudCover` | CLOUD COVER | -1 … 1 | 0 | — | ✓ | atmosphere.js×3 |
 | `cloudShadowDim` | CLOUD SHADOW DEPTH | 0 … 1 | 0.8 | `uCloudShadowDim` |   | — |
-| `cloudSpeed` | CLOUD SPEED | 0 … 2.5 | 1 | `uCloudSpeed` |   | game.js×4, glx.js×6, post.js |
+| `cloudSpeed` | CLOUD SPEED | 0 … 2.5 | 1 | `uCloudSpeed` |   | game.js×4, glx.js×2, post.js |
 | `starBright` | STAR BRIGHTNESS | 0 … 2.5 | 1 | `uStarBright` | ✓ | game.js×2, glx.js×2 |
 | `starDensity` | STAR DENSITY | 0.2 … 2.2 | 1 | `uStarDensity` |   | game.js×2, glx.js×2 |
 | `skyGrad` | SKY GRADIENT | 0.03 … 0.829 | 0.35 | `uSkyGrad` |   | game.js×2, glx.js×2 |

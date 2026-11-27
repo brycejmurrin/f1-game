@@ -183,7 +183,7 @@ const LoadingScreen = (function () {
       if (!t) return;
       $("ld-flag").innerHTML = Flags.svg(t.country);
       const tod = info.tod || "default";   // lit as the SESSION is, not as the circuit defaults (a day race at Baku)
-      $("ld-name").textContent = t.name + (tod === "night" || (tod === "default" && t.night) ? " ☾" : "");
+      $("ld-name").textContent = t.name + (M4.isNight(tod, t) ? " ☾" : "");
       $("ld-gp").textContent = info.gp || t.gp || t.country || "";
       // The same numbers the select card shows, minus the ones that need the
       // built world — this paints before any build has necessarily happened.

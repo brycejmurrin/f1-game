@@ -107,4 +107,23 @@
       };
     }
   });
+  // TRY IT ON TRACK: the game launches the Tyre Thermal Lab drill (js/learn-drills/tyre-heat.js); BACK TO LESSON
+  // posts the last run's result here (js/ui/learn-door.js reopen()).
+  const launch = typeof document !== 'undefined' ? document.getElementById('launch-tyre-heat-drill') : null;
+  if (launch && window.frameElement?.id === 'learn-lab') {
+    launch.hidden = false;
+    launch.addEventListener('click', () => {
+      window.parent.postMessage({type: 'apex-learn-scenario', id: 'tyre-heat'}, window.location.origin);
+    });
+    const result = document.getElementById('tyre-heat-drill-result');
+    window.addEventListener('message', event => {
+      const data = event.data;
+      if (event.origin !== window.location.origin || event.source !== window.parent || data?.type !== 'apex-learn-result' ||
+          data.id !== 'tyre-heat' || !data.result) return;
+      const r = data.result, medal = r.medal ? r.medal.toUpperCase() : 'No medal';
+      result.textContent = 'Your last drill: ' + medal + ' · ' + Number(r.value).toFixed(0) + ' % in the window'
+        + (Number.isFinite(r.best) ? ' (best ' + r.best.toFixed(0) + ' %)' : '') + '. ' + (r.verdict || '');
+      result.hidden = false;
+    });
+  }
 })();

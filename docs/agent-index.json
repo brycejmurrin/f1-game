@@ -806,10 +806,13 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drill-aero-golden-vm.test.mjs",
         "tests/unit/drill-aero-medals-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drill-fork-vm.test.mjs",
+        "tests/unit/drill-lines-vm.test.mjs",
         "tests/unit/drill-taper-vm.test.mjs",
+        "tests/unit/drill-tyre-heat-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/elevation-tracks-vm.test.mjs",
@@ -822,6 +825,7 @@
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/game-vm.test.mjs",
         "tests/unit/headless-api-vm.test.mjs",
+        "tests/unit/hot-path-memo-vm.test.mjs",
         "tests/unit/hunt-apex-aiplace-reset-vm.test.mjs",
         "tests/unit/hunt-tlx-create-undo.test.mjs",
         "tests/unit/input-ghost-replay-vm.test.mjs",
@@ -949,10 +953,13 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drill-aero-golden-vm.test.mjs",
         "tests/unit/drill-aero-medals-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drill-fork-vm.test.mjs",
+        "tests/unit/drill-lines-vm.test.mjs",
         "tests/unit/drill-taper-vm.test.mjs",
+        "tests/unit/drill-tyre-heat-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/episode-transients.test.mjs",
@@ -964,6 +971,7 @@
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/game-vm.test.mjs",
         "tests/unit/headless-api-vm.test.mjs",
+        "tests/unit/hot-path-memo-vm.test.mjs",
         "tests/unit/hunt-apex-aiplace-reset-vm.test.mjs",
         "tests/unit/hunt-tlx-create-undo.test.mjs",
         "tests/unit/input-ghost-replay-vm.test.mjs",
@@ -1129,12 +1137,16 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drill-aero-golden-vm.test.mjs",
         "tests/unit/drill-aero-medals-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drill-fork-vm.test.mjs",
+        "tests/unit/drill-lines-vm.test.mjs",
         "tests/unit/drill-taper-vm.test.mjs",
+        "tests/unit/drill-tyre-heat-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
+        "tests/unit/hot-path-memo-vm.test.mjs",
         "tests/unit/lap-retry-vm.test.mjs",
         "tests/unit/lockup-bench-vm.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",
@@ -1851,6 +1863,7 @@
         "tests/unit/shared-track-foundation-characterization.test.cjs",
         "tests/unit/spline-project-height.test.mjs",
         "tests/unit/stand-curve-gap-fleet.test.mjs",
+        "tests/unit/terrain-over-road-fleet.test.mjs",
         "tests/unit/track-build-vm-release.test.mjs",
         "tests/unit/track-detail.test.mjs",
         "tests/unit/track-line-circuits.test.mjs",
@@ -3909,8 +3922,18 @@
       "roster": "LAZY_RACE_SESSION"
     },
     {
+      "path": "js/learn-drills/aero.js",
+      "global": "AeroDrill",
+      "roster": "LAZY_LEARN"
+    },
+    {
       "path": "js/learn-drills/drill-card.js",
       "global": "DrillCard",
+      "roster": "LAZY_LEARN"
+    },
+    {
+      "path": "js/learn-drills/lines.js",
+      "global": "LinesDrill",
       "roster": "LAZY_LEARN"
     },
     {
@@ -3926,6 +3949,11 @@
     {
       "path": "js/learn-drills/thumb-drill.js",
       "global": "ThumbDrill",
+      "roster": "LAZY_LEARN"
+    },
+    {
+      "path": "js/learn-drills/tyre-heat.js",
+      "global": "TyreHeatDrill",
       "roster": "LAZY_LEARN"
     },
     {

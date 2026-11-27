@@ -66,7 +66,7 @@
      desktop landscape rule in css/responsive.css reads the same token. */
   background:
     radial-gradient(115% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) var(--menu-wash-pct, 28%), transparent), transparent 58%),
-    rgba(6, 6, 10, 0.36);
+    rgba(6,6,10,0.36);
   overflow-y: auto; overflow-x: hidden;
   overscroll-behavior-y: contain; touch-action: manipulation;
 }

@@ -16,6 +16,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadDom } from "../helpers/dom-vm.mjs";
 import { cssRules } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -62,8 +63,11 @@ function boot() {
   sb.window = sb;
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: absSrc("js/ui/live-region.js") });
   vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
+  loadDom(sb);
   vm.runInNewContext(src("js/ui/hud-radio-lane.js"), sb, { filename: absSrc("js/ui/hud-radio-lane.js") });   // …and its HudRadioLane (#3261)
+  loadDom(sb);
   vm.runInNewContext(src("js/ui/hud-readouts.js"), sb, { filename: absSrc("js/ui/hud-readouts.js") });   // GameHud builds its sector painter from it (#6500)
+  loadDom(sb);
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: absSrc("js/ui/hud.js") });
   const $ = (id) => dom.byId(id);
   const minimap = $("minimap");
@@ -289,6 +293,7 @@ test("landscape radio prefers a readable outer lane and preserves a crowded fall
   const els = { announce: dom.byId("announce"), flag: dom.byId("hud-flag"), hudSectors: dom.byId("hud-sectors"), minimap: dom.byId("minimap") };
   for (const el of [els.flag, els.hudSectors, els.minimap]) el.hidden = true;
   const sb = { document: dom.document, Map, Math, Object, parseFloat, getComputedStyle: () => ({ getPropertyValue: () => "47" }) };
+  loadDom(sb);
   vm.runInNewContext(src("js/ui/hud-radio-lane.js") + ";this.lane=HudRadioLane;", sb, { filename: absSrc("js/ui/hud-radio-lane.js") });
   const lane = sb.lane.create({ els }, { vpW: () => 844, vpH: () => 390, top: () => tower, docks: () => [dock], fitKey: () => "",
     hStyle: (el, key, value) => el.style.setProperty(key, value), hUnstyle: (el, key) => el.style.removeProperty(key), hToggle() {} });

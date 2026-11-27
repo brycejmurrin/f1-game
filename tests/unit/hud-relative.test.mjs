@@ -9,6 +9,7 @@ import vm from "node:vm";
 import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadDom } from "../helpers/dom-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-relative.js"), "utf8");
@@ -16,6 +17,7 @@ const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-relative.js"), "utf8");
 function load(extra = {}) {
   const ctx = { console, ...extra };
   vm.createContext(ctx); withI18n(ctx);
+  loadDom(ctx);
   vm.runInContext(SRC, ctx, { filename: absSrc("js/ui/hud-relative.js") });   // a filename, so V8 coverage attributes the run to the file
   vm.runInContext("this.HudRelative = HudRelative;", ctx);
   return ctx.HudRelative;

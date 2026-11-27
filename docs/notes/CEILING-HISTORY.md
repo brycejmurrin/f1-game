@@ -1,5 +1,13 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-27 — PR #7206 (claude/hot-path-memo-7070): lowGrip once per step, a stable stallSweep callback (#7070 rows 2 + 6)
+
+`(tree) eagerCodeBytes` 4026701 → **4026952** (+251, measured on the synced tip): `RaceControl.lowGrip` gains a per-step memo (`stepGrip(on)`, the
+`gripWin`/`gripMemo` pair) and game.js brackets its per-car `updateCar` loop with `raceCtl.stepGrip(true)` … `finally
+stepGrip(false)`; both live in eager files that run every step, so there is no lazy home. It buys ~196 fewer road-wetness
+reads per step on a 22-car wet race (200 → 4), bit-identical to base. `js/game.js` lines/codeLines +1 (the named
+`stallRetire`). Fragment: `ratchets.d/claude--hot-path-memo-7070.json`. Human step: `ratchet-raise`.
+
 ## 2026-11-26 — #6911 (claude/boot-lazy-lore-drift-6911) — circuit-lore and thermal-drift leave the boot
 
 `(tree) eagerCodeBytes` −13294, `eagerScripts` −2 (lowers, no `ratchet-raise`). `circuit-lore.js` moves to LAZY_AUDIO (before the
@@ -4159,7 +4167,21 @@ Human step: `ratchet-raise`.
 2335 → **2337** (+2): the `#rs-pocket` button and its `<small>`. Fragment: `ratchets.d/claude--pocket-weekend-7042.json`.
 Human step: `ratchet-raise`.
 
+`(tree) eagerCodeBytes` 4039481 → **4039508** (+27): `js/roster.js` is eager and lists every lazy file, so the new LAZY_LEARN file
+`js/learn-drills/aero.js` (the Aero drill moved out of the lazy learn-door.js, #6997 U4.1b) costs one roster line; no eager script is added
+and `eagerScripts` is unchanged. Fragment: `ratchets.d/claude--aero-drill-move-6997.json`.
+Human step: `ratchet-raise`.
+## 2026-11-27 — claude/frame-defaults-classifier-7141: frame defaults + one software-renderer classifier (#7141, #6479 rows 2+4)
+
+`(tree) eagerCodeBytes` 4026247 → **4026864** (+617): `PostCommon.FRAME_DEFAULTS` / `frameDefault` / `isSoftwareRenderer` become the one home in
+the EAGER post-common.js; the pasted defaults and regexes they replace live in the deferred glx.js, tlx.js and tsl-lit.js bundles, so the
+eager total can only grow. `(tree) assertPins` +4 / `assertPinsAll` +6: `render-frame-defaults.test.mjs`. `(tree) rawGameReads` +1: its
+producer scan reads game.js. Fragment: `ratchets.d/claude--frame-defaults-classifier-7141.json`. Human step: `ratchet-raise`.
 ## 2026-11-27 — PR #7193 (claude/career-refused-calendar-7069): #7069: career tally.starts keeps Race starts under each season's own calendar (+176 eager code bytes, career.js/save-migrate.js)
 
 `(tree) eagerCodeBytes` 4026247 → **4026423** (+176). Deliberate raise past the absorb: `rolloverApply` stamps `tally.starts` and `cleanTally` keeps it, so "Race starts" no longer re-reads today's calendar; the eager shell had ~0 bytes of headroom.
 Fragment: `ratchets.d/claude--career-refused-calendar-7069.json`.
+
+## 2026-11-27 — PR #7262 (claude/racing-lines-drill-6559): Racing Lines apex-choice drill (#6559 step 10)
+
+`(tree) typeofGuards` 2324 → **2327** (+3): `LinesDrill` is LAZY_LEARN and loads in bare VMs (learn-curriculum, drill-lines-vm), so its `AppearanceOpts`, `performance` and `DrillRegistry` reads are guarded; `learn-door.js` guards its `LinesDrill.define()` call (bundle order is not evaluation order). `(tree) eagerCodeBytes` +551: the `apex` mode lives in the eager `race-insights.js`. Within the absorbs (10 guards, 5000 B), so no label. Fragment: `ratchets.d/claude--racing-lines-drill-6559.json`.
