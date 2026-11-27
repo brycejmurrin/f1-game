@@ -150,19 +150,22 @@ test(".cursor/mcp.json apex-lsp still uses relative tools/mcp hops (shim-depende
   assert.equal(s.args[6], "serve");
 });
 
-test("CLI --install-cloud-cwd-shim writes under this VM's /agent when layout matches", () => {
-  const layout = cloudAgentLayout(ROOT);
-  if (!layout) {
-    assert.equal(1, 1);
-    return;
-  }
-  const r = spawnSync(process.execPath, [MCP, "--install-cloud-cwd-shim"], { cwd: ROOT, encoding: "utf8" });
+test("CLI --install-cloud-cwd-shim writes the shims under the host of an /agent/repos/<repo> layout", () => {
+  // Every checkout that is not a Cursor Cloud VM has no /agent layout, so build one in a temp dir
+  // and run the real CLI from the copy: ROOT in lsp-mcp.mjs follows the file's own location.
+  const host = tmpDir("apex-lsp-cli-host-");
+  const repo = path.join(host, "repos", "f1-game");
+  fs.mkdirSync(path.join(repo, "tools"), { recursive: true });
+  fs.cpSync(path.join(ROOT, "tools/mcp"), path.join(repo, "tools/mcp"), { recursive: true });
+  const layout = cloudAgentLayout(repo);
+  assert.equal(layout?.host, host, "the fixture is an /agent/repos/<repo> layout");
+  const r = spawnSync(process.execPath, [path.join(repo, "tools/mcp/lsp-mcp.mjs"), "--install-cloud-cwd-shim"], { cwd: repo, encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr + r.stdout);
   const tagged = r.stdout.indexOf("cloud-cwd-shim:");
   assert.notEqual(tagged, -1);
   for (const name of CLOUD_CWD_SHIM_SCRIPTS) {
     const shim = path.join(layout.host, "tools/mcp", name);
-    assert.equal(fs.existsSync(shim), true);
+    assert.equal(fs.existsSync(shim), true, `${name} shim written under the host`);
     const body = fs.readFileSync(shim, "utf8");
     const execAt = body.indexOf("exec bash");
     assert.notEqual(execAt, -1);

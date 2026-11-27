@@ -985,7 +985,7 @@ test("JUMP IN never lands past the seat's own retirement, and the seat's reliabi
   const out = script.drivers.find((d) => d.dnf && !d.dns && (d.lapsDone | 0) > 2 && (d.lapsDone | 0) < script.laps - 3);
   assert.ok(out, "the fixture has a mid-race retirement");
   const team = Teams.LIST.find((t) => t.drivers.some((dr) => dr.code === out.code));
-  if (!team) return;   // a retirement from a team the 2026 roster does not seat: nothing to clamp against
+  assert.ok(team, `the fixture retiree ${out.code} is seated by the 2026 roster`);
   const di = team.drivers.findIndex((dr) => dr.code === out.code);
   const cars = makeCars(Teams, team.id + ":" + di);
   const { G } = makeG(Teams, cars);
