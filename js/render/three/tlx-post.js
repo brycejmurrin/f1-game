@@ -978,9 +978,15 @@
     // hdrOut: a capture (screenshot, soft present) unpacks RGBA8 rows, so a half-float source is first copied
     // through the debug blit (which clamps to 0..1: the SDR view of the HDR frame) into an 8-bit target.
     let cap8RT = null, cap8Idle = 0, fxaaCapIdle = 0;   // idle: presents since the last capture request (shed at SHED_FRAMES)
+    // A readback of a capture RT can stay pending for SOFT_READ_STALE_MS (20 s, tlx.js) on a software GPU, so a
+    // shed also waits CAP_HOLD_MS of wall time since the last request: never dispose a target a read still names.
+    const CAP_HOLD_MS = 30000;
+    const capNow = () => (typeof performance !== "undefined" ? performance.now() : 0);
+    let cap8T = 0, fxaaCapT = 0;
+    const capShed = (idle, t) => idle >= SHED_FRAMES && capNow() - t >= CAP_HOLD_MS;
     function cap8(rt) {
+      cap8Idle = 0; cap8T = capNow();   // every request, 8-bit pass-through included (the soft present asks per frame)
       if (!rt || !rt.texture || rt.texture.type === THREE.UnsignedByteType || !P.blit) return rt;
-      cap8Idle = 0;
       try {
         if (!cap8RT) { cap8RT = makeRT(rt.width, rt.height, THREE.UnsignedByteType); cap8RT.texture.name = "TLXPostCap8"; }
         rtSetSize(cap8RT, rt.width, rt.height);
@@ -1057,7 +1063,7 @@
       const direct = _lastPresentRT && _lastPresentRT === (_last.sgsr ? aaRT : ldrRT);
       if (!direct || !(_last.fxaa || _last.taa)) return cap8(_lastPresentRT || ldrRT);
       const w = renderer.domElement.width, h = renderer.domElement.height;
-      fxaaCapIdle = 0;
+      fxaaCapIdle = 0; fxaaCapT = capNow();
       if (!fxaaCaptureRT) {
         fxaaCaptureRT = makeRT(w, h, THREE.UnsignedByteType);
         fxaaCaptureRT.texture.name = "TLXPostFXAACapture";
@@ -1613,8 +1619,8 @@
         if (HI || photoGi) cineIdle = shedIdle(!!(_last.dof || _last.mblur), cineIdle, releaseCine);
         // Capture RTs: a one-off screenshot must not pin a full-size RGBA8 target. The soft present asks
         // every frame (cap8 resets the count), so it keeps cap8RT.
-        if (cap8RT) cap8Idle = shedIdle(false, cap8Idle, () => { dropRT(cap8RT); cap8RT = null; });
-        if (fxaaCaptureRT) fxaaCapIdle = shedIdle(false, fxaaCapIdle, () => { dropRT(fxaaCaptureRT); fxaaCaptureRT = null; });
+        if (cap8RT) { cap8Idle++; if (capShed(cap8Idle, cap8T)) { dropRT(cap8RT); cap8RT = null; cap8Idle = 0; } }
+        if (fxaaCaptureRT) { fxaaCapIdle++; if (capShed(fxaaCapIdle, fxaaCapT)) { dropRT(fxaaCaptureRT); fxaaCaptureRT = null; fxaaCapIdle = 0; } }
       }
       } finally {
         try { holdFlush(false); } catch (_) { /* a throw mid-chain: tlx.js's catch owns the fallback */ }

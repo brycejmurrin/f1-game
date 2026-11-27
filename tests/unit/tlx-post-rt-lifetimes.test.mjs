@@ -23,26 +23,30 @@ test("R6: cinemaPost's live path allocates no closure", () => {
   assert.equal((fn.match(/cur === cineA \? cineB : cineA/g) || []).length, 2);
 });
 
-test("R5: capture RTs are shed after SHED_FRAMES presents with no capture request", () => {
+test("R5: capture RTs are shed after SHED_FRAMES presents AND CAP_HOLD_MS since the last request", () => {
   assert.match(post, /let cap8RT = null, cap8Idle = 0, fxaaCapIdle = 0/);
-  assert.match(body(post, "function cap8(", "return cap8RT;"), /cap8Idle = 0;/);
-  assert.match(body(post, "function captureTarget()", "rtSetSize(fxaaCaptureRT"), /fxaaCapIdle = 0;/);
-  assert.match(post, /cap8Idle = shedIdle\(false, cap8Idle, \(\) => \{ dropRT\(cap8RT\); cap8RT = null; \}\)/);
-  assert.match(post, /fxaaCapIdle = shedIdle\(false, fxaaCapIdle, \(\) => \{ dropRT\(fxaaCaptureRT\); fxaaCaptureRT = null; \}\)/);
+  assert.match(post, /const CAP_HOLD_MS = 30000/);
+  assert.match(body(post, "function cap8(", "if (!rt || !rt.texture"), /cap8Idle = 0; cap8T = capNow\(\)/, "reset before the 8-bit early return");
+  assert.match(body(post, "function captureTarget()", "rtSetSize(fxaaCaptureRT"), /fxaaCapIdle = 0; fxaaCapT = capNow\(\)/);
+  assert.match(post, /dropRT\(cap8RT\); cap8RT = null/);
+  assert.match(post, /dropRT\(fxaaCaptureRT\); fxaaCaptureRT = null/);
 });
 
-test("R5: shed simulation — one capture then 10 presents holds nothing; a per-frame requester keeps cap8RT", () => {
+test("R5: shed simulation — one capture then 10 presents and the hold holds nothing; a per-frame requester keeps cap8RT", () => {
   const SHED_FRAMES = Number(/const SHED_FRAMES = (\d+)/.exec(post)[1]);
-  const shedIdle = new Function("SHED_FRAMES", "return " + /function shedIdle\([^)]*\) \{[\s\S]*?\n    \}/.exec(post)[0].replace(/^function shedIdle/, "function"))(SHED_FRAMES);
-  const mk = () => ({ rt: null, idle: 0 });
-  const capture = (c) => { c.idle = 0; if (!c.rt) c.rt = {}; };
-  const present = (c) => { if (c.rt) c.idle = shedIdle(false, c.idle, () => { c.rt = null; }); };
+  const HOLD = Number(/const CAP_HOLD_MS = (\d+)/.exec(post)[1]);
+  let now = 0;
+  const mk = () => ({ rt: null, idle: 0, t: 0 });
+  const capture = (c) => { c.idle = 0; c.t = now; if (!c.rt) c.rt = {}; };
+  const present = (c) => { now += 16; if (c.rt && ++c.idle >= SHED_FRAMES && now - c.t >= HOLD) { c.rt = null; c.idle = 0; } };
   const once = mk(); capture(once);
-  assert.ok(once.rt);
+  for (let i = 0; i < 10; i++) present(once);
+  assert.ok(once.rt, "a pending read may still name it: held inside the wall-clock window");
+  now += HOLD;
   for (let i = 0; i < 10; i++) present(once);
   assert.equal(once.rt, null, "one-off capture RT shed");
   const soft = mk();
-  for (let i = 0; i < 30; i++) { capture(soft); present(soft); }
+  for (let i = 0; i < 3000; i++) { capture(soft); present(soft); }
   assert.ok(soft.rt, "soft present keeps the RT");
 });
 
