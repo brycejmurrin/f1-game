@@ -1409,3 +1409,19 @@ test("#7077 K6: a guest ages the host's flag, so taking race control over caps i
   // 80 s aged + 10 s owned = SC_MAX (90 s); a frame of float slack on the 1/60 sum.
   assert.ok(t <= 10 * 60 + 1, "the cap fires within 10 s of the takeover (took " + (t / 60).toFixed(2) + " s)");
 });
+
+test("#7088 F2: a stop matching a debris yellow takes ownership, so the yellow drops once both clear", () => {
+  let debrisOn = true, pic = null;
+  const debris = { active: () => debrisOn, hazards: () => hazards(3, 3) };
+  const stopped = { create: () => ({ picture: () => pic, reset() {} }) };
+  const rc = load(debris, { StoppedCars: stopped }).create(makeCtx({ cars: [], track: { total: 3000 } }));
+  run(rc, 2);
+  assert.equal(rc.level, 1, "debris yellow");
+  debrisOn = false;
+  pic = { level: 1, sector: 1, frac: 0.4, cause: "YELLOW", n: 1 };   // stop on, at the debris level
+  run(rc, 2);
+  assert.equal(rc.level, 1, "the stopped car keeps the yellow");
+  pic = null;                                                     // stop off
+  run(rc, 6);   // MIN_HOLD (6 s) since the yellow was raised has long passed
+  assert.equal(rc.level, 0, "nothing on the road: the yellow drops, not frozen by the quiet early return");
+});
