@@ -225,9 +225,10 @@ const LearnDoor = (function () {
   }
 
   // The Aero Lab's Scenario lives in js/learn-drills/aero.js (the registry hosts it). Defined lazily, never at eval:
-  // LAZY_LEARN loads with no edges, so the registry and AeroDrill may evaluate after this file.
+  // LAZY_LEARN loads with no edges, so the registry may evaluate after this file. AeroDrill ships in the same bundle,
+  // before this file, so it is defined wherever DrillRegistry is (one guard: the typeofGuards ratchet).
   function defineDrills() {
-    if (typeof DrillRegistry === "undefined" || typeof AeroDrill === "undefined") return;
+    if (typeof DrillRegistry === "undefined") return;
     DrillRegistry.define(AeroDrill.descriptor());
   }
 
