@@ -2642,6 +2642,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-hub-spend.test.mjs",
+        "tests/unit/career-lazy.test.mjs",
         "tests/unit/career-legends.test.mjs",
         "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-planning-ui-download.test.mjs",

@@ -461,6 +461,7 @@
   "quali.driven": "DRIVEN",
   "quali.noTime": "NO TIME",
   "quali.title": "QUALIFYING",
+  "quali.you": "YOU",
   "radio.eng.attack": [
     "{gap} TO {ahead}. YOU'RE IN RANGE",
     "WITHIN A SECOND OF {ahead}. GO FOR IT",
