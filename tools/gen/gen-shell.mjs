@@ -241,7 +241,7 @@ export function swOptionalFiles() {
     ...MANIFEST.LAZY_WORKER, ...MANIFEST.LAZY_EDITOR, ...(MANIFEST.LAZY_XR || []),
     ...(MANIFEST.LAZY_CAM_EDITOR || []), ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_CAREER || []),
     ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []),
-    ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || []), ...(MANIFEST.LAZY_LEARN || []),
+    ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || []), ...(MANIFEST.LAZY_LEARN || []), ...(MANIFEST.LAZY_DRILL_FORK || []),
     ...(MANIFEST.LAZY_GFX_HI || []),
   ];
 }
@@ -281,6 +281,7 @@ function swOptionalBlock() {
     ["LAZY_PERF — BENCHMARK / PHONE TEST rig, idle-loaded after boot", MANIFEST.LAZY_PERF || []],
     ["LAZY_REAL_RACE — the Data Hub real-race engine (JUMP IN / WATCH / HIGHLIGHTS)", MANIFEST.LAZY_REAL_RACE || []],
     ["LEARN — the Learn modal and bare lesson assets", [...MANIFEST.LAZY_LEARN, ...MANIFEST.SW_LEARN]],
+    ["LAZY_DRILL_FORK — the strategy drills' what-if service behind a kind:sim drill", MANIFEST.LAZY_DRILL_FORK || []],
     ["LOCALES — manifest only until a non-English language ships", MANIFEST.SW_LOCALES || []],
   ];
   const out = [];
@@ -309,7 +310,7 @@ function rosterSource() {
     ["LAZY_DEV", MANIFEST.LAZY_DEV],
     ["LAZY_PERF", MANIFEST.LAZY_PERF], ["LAZY_PERF_EDGES", MANIFEST.LAZY_PERF_EDGES],
     ["LAZY_REAL_RACE", MANIFEST.LAZY_REAL_RACE], ["LAZY_REAL_RACE_EDGES", MANIFEST.LAZY_REAL_RACE_EDGES],
-    ["LAZY_LEARN", MANIFEST.LAZY_LEARN],
+    ["LAZY_LEARN", MANIFEST.LAZY_LEARN], ["LAZY_DRILL_FORK", MANIFEST.LAZY_DRILL_FORK],
     ["LAZY_RACE", MANIFEST.LAZY_RACE],
     ["LAZY_RACE_SESSION", MANIFEST.LAZY_RACE_SESSION],
     ["LAZY_RACE_SESSION_EDGES", MANIFEST.LAZY_RACE_SESSION_EDGES],

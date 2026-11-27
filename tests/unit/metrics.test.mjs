@@ -178,7 +178,9 @@ test("snapshot uses probe(), never obs()", () => {
 });
 
 test("overlay sits below the zoomed sector stack, not on the minimap", () => {
-  const hud = readFileSync(join(ROOT, "css/hud.css"), "utf8");
+  // The panel block lives in css/fonts-hud.css (#7051, carved out of hud.css); both sheets load
+  // adjacent in @layer hud, so reading them together pins the rules wherever the block sits.
+  const hud = ["css/hud.css", "css/fonts-hud.css"].map((f) => readFileSync(join(ROOT, f), "utf8")).join("\n");
   assert.match(hud, /#game-metrics[\s\S]*--hud-z-top/);
   assert.match(hud, /#game-metrics[\s\S]*--tap/);
   assert.match(hud, /#game-metrics[\s\S]*z-index:\s*11/);
@@ -198,7 +200,7 @@ test("overlay sits below the zoomed sector stack, not on the minimap", () => {
   // step bounded by a vw cap) and the floor that makes it correct: S must hold
   // the narrow layout, L must be able to hold the wide one.
   const step = (sel) => {
-    const at = sel ? hud.indexOf(sel) : hud.indexOf("#game-metrics {");
+    const at = sel ? hud.indexOf(sel) : hud.indexOf("\n#game-metrics {");   // line start: hud.css also holds `body.pc-uihidden #game-metrics {`
     assert.ok(at >= 0, `no rule for ${sel || "#game-metrics"}`);
     // To the rule's own closing brace, not a fixed window: these blocks carry
     // long measurement notes and a fixed slice silently stopped reaching the
