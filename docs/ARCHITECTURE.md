@@ -749,6 +749,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `apex-track.js` | `ApexTrack` | LAZY_AGENT | ApexTrack: track-geometry hooks of window.__apex. |
 | `apex-lobby.js` | `ApexLobby` | LAZY_AGENT | ApexLobby: session and field hooks of window.__apex. |
 | `apex-play.js` | `ApexPlay` | LAZY_AGENT | ApexPlay: the def() registry for NEW __apex hooks (#6962, #6920 U4.4). |
+| `apex-drill.js` | `ApexDrill` | LAZY_AGENT | __apex.drill*: drive a LEARN drill without its dialog (#7067, #6559 step 0). |
 | `apex-gpu-capture.js` | `ApexGpuCapture` | LAZY_AGENT | ApexGpuCapture (#2964): dev-only __apex.gpuCapture toggle that injects vendored Spector.js (captureCanvas) or webgl-lint into the page for GLX / TLX WebGL… |
 | `apex-lifecycle.js` | `ApexLifecycle` | LAZY_AGENT | ApexLifecycle: __apex.lifecycle(), the page/render lifecycle hook (#2572). |
 | `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~220 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |

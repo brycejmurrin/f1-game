@@ -805,6 +805,7 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/elevation-tracks-vm.test.mjs",
@@ -939,6 +940,7 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/episode-transients.test.mjs",
@@ -1108,6 +1110,7 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/lap-retry-vm.test.mjs",
@@ -2251,6 +2254,11 @@
     {
       "path": "js/agent/apex-cam.js",
       "global": "ApexCam",
+      "roster": "LAZY_AGENT"
+    },
+    {
+      "path": "js/agent/apex-drill.js",
+      "global": "ApexDrill",
       "roster": "LAZY_AGENT"
     },
     {

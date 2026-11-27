@@ -3437,6 +3437,7 @@ const G = {
   startWeatherArc: (from, to, dur) => wxArc.startArc(from, to, dur),
   endWeatherSession: () => wxArc.endSession(true),   // the agent's race()/tt(): a start follows, so a plan set for it stays (race-settings-vm)
   startRace, update, wrapS, quitToMenu: (t) => (qThen = t, quitToMenu()),
+  drills: () => (drills ??= DrillRegistry.create(G, { retry: coach.retry, setDirtyAir: v => { raceDirtyAir = v; } })),   // LEARN's drill host (js/learn-drills/registry.js), made on first use (LAZY_LEARN loaded); the LEARN door and __apex.drill* (js/agent/apex-drill.js)
   raceIntro,   // the pre-race screen, for a launch that is not RACE! (js/race/real-race.js: the Data Hub's JUMP IN)
   // OWNER COMMANDS (#6920 U2.4): game.js owns the writes to state / frozen / paused / skyViewOverride; every other module goes through these.
   cmd: { setState: (next, why) => setState(next, why || "cmd"), pause: (v, why) => setPaused(v, why) },
@@ -3490,9 +3491,8 @@ let flyingStart = FlyingStart.create(G, flyingStartDeps());   // LAZY_RACE_SESSI
 var jumpStartPenalty = JumpStartPenalty.create(G, {
   autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,
 });   // LAZY_RACE_SESSION — recreated in onRaceSessionReady
-titleMenu = TitleMenu.create(G, openDataHub, id => { // returning-player, Daily and Learn (js/ui/title-menu.js); a LEARN drill (js/learn-drills/registry.js)
-  (drills ??= DrillRegistry.create(G, { retry: coach.retry, setDirtyAir: v => { raceDirtyAir = v; } })).launch(id || "aero");
-}, show => showTouchControls(show, false, show));   // the race dock previewed under LEARN's thumb trainer
+titleMenu = TitleMenu.create(G, openDataHub, null,   // returning-player, Daily and Learn (js/ui/title-menu.js); its LEARN drill launches through G.drills()
+  show => showTouchControls(show, false, show));   // the race dock previewed under LEARN's thumb trainer
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing(), lazyBundles.ensureReplayBroadcast),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
