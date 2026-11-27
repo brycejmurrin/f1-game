@@ -329,7 +329,7 @@
   overflow: hidden;
   box-sizing: border-box;
 }
-#rs-presets > .preset-btn small {
+#rs-presets > .preset-btn small, #rs-pocket small {
   /* Wraps, never clamps: a 2-line clamp ellipsised "full distance, qualifying,
      real…" at UI SIZE 150/200 (Bryce 2026-10-17); the card grows instead. */
   display: block;
@@ -345,6 +345,7 @@
     --balance-min: calc(50% - var(--gap) * 0.5);
   }
   #rs-presets > .preset-btn small { display: none; }
+  #rs-pocket small { display: none; }
 }
 /* CUSTOM is a display-only sentinel (no data-rs-preset): it lights when the
    live draft matches no named preset (default 3-lap open). Same selected

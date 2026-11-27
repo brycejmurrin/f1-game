@@ -1,0 +1,1 @@
+Improved: In a local rain shower the road now shows each sector's own wetness on the default (three.js) renderer: a soaked stretch ahead looks dark, glossy and puddled before you reach it, instead of the whole track taking on your car's wetness and the puddles popping in as you drive into the shower (#6909).

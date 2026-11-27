@@ -159,6 +159,25 @@ const RaceSettings = (function () {
     return null;
   }
 
+
+  /** POCKET WEEKEND (#6884 D4): the existing quali + sprint toggles, nothing new. A one-lap qualifying shootout
+   *  (every qualifying session here is ONE flying lap), a sprint on every round at a third of the distance
+   *  (SeasonCal.lapsFor), and a Grand Prix at the default distance. `pocketApply` returns the next rules config and
+   *  the four fields it overwrote; `pocketRestore` puts exactly those back (round trip, no other field touched). */
+  const POCKET_FIELDS = ["quali", "sprint", "sprintIds", "laps"];
+  function isPocket(cfg, defLaps) {
+    return !!cfg && cfg.quali === true && cfg.sprint === true && cfg.laps === defLaps;
+  }
+  function pocketApply(cfg, defLaps) {
+    const undo = {};
+    for (const k of POCKET_FIELDS) undo[k] = Array.isArray(cfg[k]) ? cfg[k].slice() : cfg[k];
+    return { next: Object.assign({}, cfg, { quali: true, sprint: true, sprintIds: [], laps: defLaps }), undo };
+  }
+  function pocketRestore(cfg, undo) {
+    const next = Object.assign({}, cfg);
+    for (const k of POCKET_FIELDS) if (undo && k in undo) next[k] = Array.isArray(undo[k]) ? undo[k].slice() : undo[k];
+    return next;
+  }
   /** Which named preset (if any) matches the live sheet values — null is CUSTOM. */
   function matchPreset(now, full) {
     if (!now || full == null) return null;
@@ -325,6 +344,7 @@ const RaceSettings = (function () {
       SettingRow.paint("rs-line", DrivingLine.mode(), RS_LINE);
       paintPlan(tt, raceLaps);
       const matched = paintPresetState(full);
+      paintPocket();
       paintFolds();
       paintHelpDisclosures();
       // Title after preset match: FULL WEEKEND + START QUALIFYING → header
@@ -497,6 +517,7 @@ const RaceSettings = (function () {
           after();
         };
       }
+      if ($("rs-pocket")) $("rs-pocket").onclick = () => { togglePocket(); after(); };
       $("rs-duel-open").onclick = openDuelPicker;
       $("duel-close").onclick = closeDuelPicker;
     }
@@ -665,6 +686,30 @@ const RaceSettings = (function () {
       return matched;
     }
 
+    // POCKET WEEKEND: a season-setup preset on the sheet (a standalone race has no sprint). Only before a ball is
+    // turned: applyConfig on a blank season loses nothing. The overwritten fields are kept to switch it off exactly.
+    const pocketOffered = () => G.flow == "season" && !isTimeTrial() && !netRoom && !!SeasonCal.hasProgress && !SeasonCal.hasProgress(G.season);
+    let pocketUndo = null;   // this session's overwritten fields; after a reload OFF falls back to the defaults
+    function togglePocket() {
+      if (!pocketOffered()) return false;
+      const cfg = SeasonCal.config(), def = SeasonCal.DEFAULT_LAPS;
+      let next;
+      if (isPocket(cfg, def)) next = pocketRestore(cfg, pocketUndo || SeasonCal.fresh());
+      else { const r = pocketApply(cfg, def); pocketUndo = r.undo; next = r.next; }
+      const res = SeasonCal.applyConfig(next);
+      if (res && res.season) G.season = res.season;
+      return true;
+    }
+    function paintPocket() {
+      const b = $("rs-pocket");
+      if (!b) return;
+      b.hidden = !pocketOffered();
+      if (b.hidden) return;
+      const on = isPocket(SeasonCal.config(), SeasonCal.DEFAULT_LAPS);
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+
     function applyPreset(id) {
       const track = Tracks.LIST[G.trackIdx];
       const p = presetValues(id, (track && track.gpLaps) || 57);
@@ -821,6 +866,7 @@ const RaceSettings = (function () {
       resetDraft,
       wireButtons,
       applyPreset,
+      togglePocket,
       repaintPlan: () => paintPlan(isTimeTrial(), G.raceLaps),   // game.js, once the selected circuit's world is built
       get netRoom() { return netRoom; },
       get rsReturn() { return rsReturn; },
@@ -830,6 +876,6 @@ const RaceSettings = (function () {
   /* duelOpts/duelValue are EXPORTED, not private, so the DUEL row's rules can be
    * tested without a DOM: the inert VM DOM does not build SettingRow children,
    * so painting the row asserts nothing (tests/unit/duel-row.test.mjs). */
-  return { create, DEFAULT_DRAFT, duelOpts, duelValue, presetValues, matchPreset, sheetTitle, draftOf, draftFor, weatherOpts };
+  return { create, DEFAULT_DRAFT, duelOpts, duelValue, presetValues, matchPreset, isPocket, pocketApply, pocketRestore, sheetTitle, draftOf, draftFor, weatherOpts };
 })();
 Object.freeze(RaceSettings);

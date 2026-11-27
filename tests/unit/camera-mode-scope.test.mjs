@@ -38,7 +38,7 @@ test("the camera-mode scope lists its registrants in order, all on the 'cut' why
   const g = await createGame({ track: "monza" });
   games.push(g);
   const S = g.sandbox.Scopes;
-  assert.deepEqual(plain(S.ids("camera-mode")), ["extra-rigs", "trackside", "cam-feel", "game-cams"]);
+  assert.deepEqual(plain(S.ids("camera-mode")), ["cam-feel", "game-cams", "extra-rigs", "trackside"]);
   for (const r of plain(S.describe("camera-mode"))) assert.deepEqual([r.on, r.phase], [["cut"], null], r.id);
   assert.deepEqual(plain(S.ids("race")).filter((id) => ["results-cam", "quit-cams"].includes(id)), ["results-cam", "quit-cams"]);
 });
@@ -47,6 +47,8 @@ test("the per-path camera reset golden: setCamMode, snapGameCam, startRace and q
   const g = await createGame({ track: "monza", onEval: spyOnEval });
   games.push(g);
   const ev = (s) => vm.runInContext(s, g.ctx, { filename: "camera-mode-scope:spy" });
+  // The rigs ride LAZY_RACE_SESSION (#6957): they evaluate after createGame's onEval path, so spy them here.
+  for (const f of ["js/camera/extra-rigs.js", "js/camera/trackside.js"]) ev(SPIES[f]);
   const rec = async (fn) => { ev("__spy.log = []; __spy.on = true"); try { await fn(); } finally { ev("__spy.on = false"); } return JSON.parse(ev("JSON.stringify(__spy.log)")); };
   const G = g.G, a = g.apex, seen = {};
   seen.setCamModeSame = await rec(() => G.setCamMode(G.camMode));
@@ -55,10 +57,10 @@ test("the per-path camera reset golden: setCamMode, snapGameCam, startRace and q
   assert.equal((await g.stepUntil(() => a.info().state === "race", { maxSteps: 2000 })).ok, true);
   seen.snapGameCam = await rec(() => G.snapGameCam());
   seen.quit = await rec(() => G.quitToMenu());
-  const full = ["ExtraRigs.reset:chase", "TracksideCams.reset:true", "CamFeel.resetFollow", "CamFeel.resetFreeLook", "CamFeel.resetLatch", "GameCams.resetSmoothing"];
+  const full = ["CamFeel.resetFollow", "CamFeel.resetFreeLook", "CamFeel.resetLatch", "GameCams.resetSmoothing", "ExtraRigs.reset:chase", "TracksideCams.reset:true"];   // the lazy rigs register last (#6957)
   assert.deepEqual(seen, {
     setCamModeSame: [],   // an unchanged mode is not a cut
-    setCamModeChange: ["ExtraRigs.reset:chase", "CamFeel.resetFollow", "GameCams.resetSmoothing"],   // no free-look, latch or trackside on a switch
+    setCamModeChange: ["CamFeel.resetFollow", "GameCams.resetSmoothing", "ExtraRigs.reset:chase"],   // no free-look, latch or trackside on a switch
     startRace: full,      // startRaceBody's snapGameCam (its old second free-look/latch pair was the same clear)
     snapGameCam: full,
     quit: ["ExtraRigs.resetAuto"],   // quit-cams: the auto-cut state is the race's

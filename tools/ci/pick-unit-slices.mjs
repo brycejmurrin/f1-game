@@ -28,7 +28,7 @@ import { GEOMETRY_PATHS } from "./geometry-paths.mjs";
 import { DEPLOY_BRANCH } from "./pick-tests.mjs";
 import { circuitsOf, circuitsTouched, select } from "./select-specs.mjs";
 import { ADAPTED, ADAPTED_RUNNER, TWINNED, adaptedPageGroupFor, isAdapted } from "./twinned-specs.mjs";
-import { changedPaths } from "../lib/changed-files.mjs";
+import { changedPaths, changedWithUntracked, resolveDeployBase, noDeployBaseMessage } from "../lib/changed-files.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -191,21 +191,57 @@ export const RULES = [
   [/^tests\/unit\//, [], "handled in pick()"],
 ];
 
-function changedFiles(argv) {
+/** The changed paths a run is measured over. Explicit paths win; `--since REF` diffs that ref; otherwise the diff is
+ *  against the deploy merge-base INCLUDING untracked files. When no base resolves this THROWS (main() turns it into a
+ *  loud fail-safe → every slice): it used to fall back to `HEAD`, which read the last commit's diff as the branch's
+ *  (hunt #7147 finding 3; tools/lib/changed-files.mjs says callers must refuse). `deps` is injectable for tests. */
+export function changedFiles(argv, deps = {}) {
+  const base = deps.resolveBase || ((b) => resolveDeployBase(b, { cwd: ROOT }));
   const since = argv.indexOf("--since");
   const explicit = argv.filter((a, n) => !a.startsWith("--") && !(since >= 0 && n === since + 1));
   if (explicit.length) return explicit;
-  let ref;
-  if (since >= 0 && argv[since + 1]) ref = argv[since + 1];
-  else {
-    try {
-      ref = execFileSync("git", ["merge-base", "HEAD", `origin/${DEPLOY_BRANCH}`],
-        { cwd: ROOT, encoding: "utf8" }).trim();
-    } catch {
-      ref = "HEAD";
+  if (since >= 0 && argv[since + 1]) return (deps.changedPaths || changedPaths)([argv[since + 1]]);   // rename SOURCES too (ledger M36)
+  const b = base(DEPLOY_BRANCH);
+  if (!b) throw new Error(noDeployBaseMessage(DEPLOY_BRANCH, "pick-unit-slices"));
+  return (deps.changedWithUntracked || changedWithUntracked)(b.sha);
+}
+
+const UNIT_TEST_FILE = /\.test\.(mjs|cjs|js)$/;
+
+/** Every file under tests/unit/ (repo-relative), skipping fixture trees' contents only by extension. */
+function unitSources(root) {
+  const out = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(path.join(root, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${e.name}`;
+      if (e.isDirectory()) walk(rel);
+      else if (/\.(mjs|cjs|js)$/.test(e.name)) out.push(rel);
+    }
+  };
+  walk("tests/unit");
+  return out;
+}
+
+/** The unit TESTS that (transitively) load a non-test file under tests/unit/ (a helper such as fake-audio-vm.cjs),
+ *  found by its basename in their source. Empty when nothing loads it. Hunt #7147 finding 2: a helper fell into
+ *  `unit-new → [guards]`, so the node slices that consume it never ran. */
+export function helperConsumers(helper, root = ROOT) {
+  const files = unitSources(root);
+  const text = new Map(files.map((f) => [f, fs.readFileSync(path.join(root, f), "utf8")]));
+  const seen = new Set([helper]);
+  const queue = [helper];
+  const tests = new Set();
+  while (queue.length) {
+    const cur = queue.pop();
+    const name = path.posix.basename(cur);
+    for (const f of files) {
+      if (seen.has(f) || !text.get(f).includes(name)) continue;
+      seen.add(f);
+      if (UNIT_TEST_FILE.test(f)) tests.add(f);
+      else queue.push(f);
     }
   }
-  return changedPaths([ref]);   // rename SOURCES too (ledger M36)
+  return [...tests];
 }
 
 /** Unit files that live only in tooling-fast / sweeps — not a CI node slice. */
@@ -347,6 +383,14 @@ export function pick(files, opts = {}) {
     let hit = false;
 
     if (/^tests\/unit\//.test(f)) {
+      if (!UNIT_TEST_FILE.test(f) && /\.(mjs|cjs|js)$/.test(f)) {
+        // A helper: the union of its consumers' slices; no consumer found → every slice (fail safe).
+        const users = (opts.helperConsumers || helperConsumers)(f);
+        hit = true;
+        if (!users.length) for (const s of SLICES) add(s, `helper with no consumer found, fail safe: ${f}`);
+        for (const u of users) for (const s of classifyUnitFile(u, owners, groupsJson).slices) add(s, `consumer ${u} of helper ${f}`);
+        continue;
+      }
       const c = classifyUnitFile(f, owners, groupsJson);
       hit = true;
       for (const s of c.slices) add(s, `${c.kind}: ${f}`);
@@ -461,11 +505,12 @@ const USAGE = `usage: node tools/ci/pick-unit-slices.mjs [paths…] [--since REF
 function main(argv = process.argv.slice(2)) {
   if (argv.includes("--help") || argv.includes("-h")) { console.log(USAGE); return; }
   let result;
+  let files = ["--all"];
   try {
     if (argv.includes("--all")) {
       result = pickAll();
     } else {
-      const files = changedFiles(argv);
+      files = changedFiles(argv);
       const si = argv.indexOf("--since");
       result = pick(files, { ref: si >= 0 ? argv[si + 1] : undefined });
     }
@@ -492,9 +537,6 @@ function main(argv = process.argv.slice(2)) {
   }
 
   if (argv.includes("--json")) {
-    const files = argv.includes("--all")
-      ? ["--all"]
-      : changedFiles(argv.filter((a) => a !== "--json" && a !== "--costs" && a !== "--github-output"));
     console.log(JSON.stringify({
       reason: result.reason,
       files,

@@ -510,6 +510,16 @@ test("neither end of the complex lies in a corner: the exit closes before the fi
   for (const id of ["mosport"]) assert.equal(buildOnce(id).pit.exitM, P.EXIT_MIN, id);
   // A long straight keeps the full exit — the rule only bites where a corner does.
   assert.equal(buildOnce("monza").pit.exitM, P.EXIT_M);
+  // An authored `pit.exitM` wins (vegas, #6922): it slides the row past T17, which runs to ~10 m
+  // before the line, so the row, and the bays' fronts, stand on the straight.
+  {
+    const t = buildOnce("vegas"), p = t.pit;
+    assert.equal(p.exitM, 145, "vegas pit.exitM is authored");
+    assert.ok(p.hasBays, "vegas keeps its garage bays");
+    const b0 = p.row.boxes[0];
+    for (let s = b0.s - p.row.pitch / 2; s < b0.s + p.row.pitch / 2; s += 2)
+      assert.ok(Math.abs(T.curvature(t, s)) <= P.PIT_K, `vegas: first bay in a bend at s=${s | 0}`);
+  }
 });
 
 test("the entry road's MOUTH stands on the straight wherever the straight allows: the window leaves the road and a run-out after the corner", () => {

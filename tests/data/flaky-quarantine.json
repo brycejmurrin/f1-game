@@ -51,6 +51,17 @@
       "expires": "2026-12-10",
       "review": "PR #7007. Metal real-GPU job only: monaco heap 131.7 → 133.4 → 151.3 → 134.7 → 152.1 MB (median growth 17.489 > 10), a GC sawtooth, passed on retry 1 (110.5 s). #7007's diff (night/fog exposure floors, WGX-only mieDamp) allocates nothing. Metal ~17 MB per pick is documented in docs/notes/TRACK-SWITCH-METAL-2026-10-17.md. By 2026-12-10 the owner fixes the sawtooth or re-bounds the Metal check and removes this row; an extension needs a fresh failed run and a new deadline.",
       "why": "One red on #7007 20197e3f (job 140123810793): median 17.489 MB, series 17.8/-16.6/17.5 (GC sawtooth); passed on retry; APEX_FAIL_ON_FLAKY=1 turned the retry into exit 1. No same-tier base run found for comparison."
+    },
+    {
+      "spec": "tests/specs/engine-audio-offline.spec.js",
+      "title": "OfflineAudioContext engine pitch tracks rev; screech layer crossfade is audible",
+      "signature": "^rev=[0-9.]+ rendered f0=",
+      "owner": "brycejmurrin",
+      "since": "2026-11-27",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/45917673481/job/140240988216",
+      "expires": "2026-12-10",
+      "review": "Deploy-red on f0584547 (#7063, no audio diff). Fix in the same PR: the spec now waits for the apex:audio:ready mark instead of !GameAudio._stub, so no LAZY_AUDIO file or onAudioReady part can land on the OfflineAudioContext mid-render. Exit: three cold CI passes of this spec without retry after the fix merges, then remove this row; any extension needs fresh failed-run evidence and a new deadline.",
+      "why": "Pages run 45917673481 job 140240988216: rev=0.25 rendered f0=243 scheduled 272.48 (the ±12 % window's low edge, the near-silent-render signature), first test of its leg on a loaded runner (5.8 s Navigate, 5.1 s Evaluate). The gate fired when engine.js landed while the rest of the audio bundle was still evaluating."
     }
   ]
 }

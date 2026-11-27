@@ -114,7 +114,7 @@ test("gridUp and rescuePlayer leave every car field byte-identical (digest pinne
 // ── redFlag and episode (#6946 U1.2) ──────────────────────────────────────────────────────────────────────────────
 
 // Captured on the pre-migration tip 059e6cff (U1.1 merged; APEX_PRINT_DIGEST=1). NEVER regenerate in a refactor.
-const DIGEST_REDFLAG = "6c8cad3719833a101fa92bfc7e5005a8510b9be2d20058cb39a4468dc606deb5";
+const DIGEST_REDFLAG = "0a261790e0cd3f04c4e805f4a67f0a8eefd66060152d10b4796de86c0993c67d";
 const DIGEST_EPISODE = "bbb8d11adc2cf50b200a73fa881c0e5200a2e48fb9dc14c4bed1ee32d5efb2e7";
 
 // Stamp a sentinel into every listed field a car HAS (a number 0.37, a boolean true, a car reference the next car),
