@@ -2,7 +2,7 @@
  * 1. The LEARN door: the title is top, the door opens #learn, the Aero lesson's Scenario message
  *    launches the drill, and quitting puts every setting back. On base this failed at the first line:
  *    each DOM stub read hidden:false, so UiLayers.top() was #trackdesigner and the door refused.
- * 2. __apex.drill*: drillList pins the registry; drillLaunch / drillState / drillEnd round-trip.
+ * 2. __apex.drill*: drillList matches the registry (ids derived, not listed); drillLaunch / drillState / drillEnd round-trip.
  * 3. The stubs' seeds: `hidden` as index.html has it, and a detached element never shadows a shell id.
  *
  * Run: node --test tests/unit/drill-aero-vm.test.mjs
@@ -84,13 +84,17 @@ test("__apex.drill*: drillList, then a drillLaunch / drillState / drillEnd round
     assert.deepEqual(plain(g.apex.drillState()), { active: false, state: "menu" });
     assert.deepEqual(plain(g.apex.drillEnd()), { ok: false, error: "no_drill" });
     assert.deepEqual(plain(g.apex.drillRetry()), { ok: false, error: "no_drill" });
-    // Definition order is evaluation order (grip.js defines at eval when the registry is up; LearnDoor lazily): sorted.
-    const nope = plain(await g.apex.drillLaunch("nope"));
-    assert.deepEqual({ ...nope, ids: nope.ids.sort() }, { ok: false, error: "unknown_drill", ids: ["aero", "grip"] });
-    assert.deepEqual(plain(g.apex.drillList()).sort((a, b) => a.id.localeCompare(b.id)), [
-      { id: "aero", lesson: "aero", track: "monza", flow: "gp", session: "race" },
-      { id: "grip", lesson: "braking", track: "monza", flow: "gp", session: "tt" },
-    ]);
+    // The expected ids and rows come from the registry the VM loaded, not a hand list: every drill PR adds a
+    // descriptor, and this test must not need an edit for it (#7262). The checks stay exact.
+    const refused = plain(await g.apex.drillLaunch("nope"));
+    const ids = plain(ev("DrillRegistry.ids()"));
+    assert.ok(ids.includes("aero"), "the Aero drill is registered: " + JSON.stringify(ids));
+    assert.equal(new Set(ids).size, ids.length, "drill ids are unique");
+    assert.deepEqual(refused, { ok: false, error: "unknown_drill", ids });
+    const rows = ids.map((id) => plain(ev(`(() => { const d = DrillRegistry.get(${JSON.stringify(id)});
+      return { id: d.id, lesson: d.lesson, track: d.setup.track, flow: d.setup.flow, session: d.setup.session }; })()`)));
+    assert.deepEqual(plain(g.apex.drillList()), rows, "drillList is one row per registered drill, in registry order");
+    assert.deepEqual(rows.find((r) => r.id === "aero"), { id: "aero", lesson: "aero", track: "monza", flow: "gp", session: "race" });
     const launched = await g.apex.drillLaunch("aero");
     assert.equal(launched.ok, true, JSON.stringify(launched));
     assert.equal(launched.id, "aero");

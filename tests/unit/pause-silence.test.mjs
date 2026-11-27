@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { withM4 } from "../helpers/mat4-vm.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -80,6 +81,7 @@ function bootAnnouncer() {
   // Minimal radio stub: announcer.create needs G.radio for the recorded path
   // and RadioVoice globals for speakable/SAMPLE — load the real module but do
   // not attach its pause observers to OUR pause/garage (create after we own them).
+  withM4(ctx);
   vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   vm.runInContext(read("js/audio/announcer-recorded.js"), ctx, { filename: absSrc("js/audio/announcer-recorded.js") });
   vm.runInContext(read("js/audio/announcer.js"), ctx, { filename: absSrc("js/audio/announcer.js") });
@@ -178,6 +180,7 @@ test("hidden tab stops the announcer; resume does not restart the stale line", a
     addEventListener: (t, fn) => { listeners[t] = fn; },
   };
   ctx.MutationObserver = function (fn) { this.observe = (el) => observers.push({ el, fn }); };
+  withM4(ctx);
   vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   vm.runInContext(read("js/audio/announcer-recorded.js"), ctx, { filename: absSrc("js/audio/announcer-recorded.js") });
   vm.runInContext(read("js/audio/announcer.js"), ctx, { filename: absSrc("js/audio/announcer.js") });
@@ -241,6 +244,7 @@ test("recorded announcer clips stop on the pause card too", async () => {
     addEventListener: (t, fn) => { listeners[t] = fn; },
   };
   ctx.MutationObserver = function (fn) { this.observe = (el) => observers.push({ el, fn }); };
+  withM4(ctx);
   vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   vm.runInContext(read("js/audio/announcer-recorded.js"), ctx, { filename: absSrc("js/audio/announcer-recorded.js") });
   vm.runInContext(read("js/audio/announcer.js"), ctx, { filename: absSrc("js/audio/announcer.js") });

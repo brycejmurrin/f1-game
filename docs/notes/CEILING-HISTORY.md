@@ -4167,7 +4167,21 @@ Human step: `ratchet-raise`.
 2335 → **2337** (+2): the `#rs-pocket` button and its `<small>`. Fragment: `ratchets.d/claude--pocket-weekend-7042.json`.
 Human step: `ratchet-raise`.
 
+`(tree) eagerCodeBytes` 4039481 → **4039508** (+27): `js/roster.js` is eager and lists every lazy file, so the new LAZY_LEARN file
+`js/learn-drills/aero.js` (the Aero drill moved out of the lazy learn-door.js, #6997 U4.1b) costs one roster line; no eager script is added
+and `eagerScripts` is unchanged. Fragment: `ratchets.d/claude--aero-drill-move-6997.json`.
+Human step: `ratchet-raise`.
+## 2026-11-27 — claude/frame-defaults-classifier-7141: frame defaults + one software-renderer classifier (#7141, #6479 rows 2+4)
+
+`(tree) eagerCodeBytes` 4026247 → **4026864** (+617): `PostCommon.FRAME_DEFAULTS` / `frameDefault` / `isSoftwareRenderer` become the one home in
+the EAGER post-common.js; the pasted defaults and regexes they replace live in the deferred glx.js, tlx.js and tsl-lit.js bundles, so the
+eager total can only grow. `(tree) assertPins` +4 / `assertPinsAll` +6: `render-frame-defaults.test.mjs`. `(tree) rawGameReads` +1: its
+producer scan reads game.js. Fragment: `ratchets.d/claude--frame-defaults-classifier-7141.json`. Human step: `ratchet-raise`.
 ## 2026-11-27 — PR #7193 (claude/career-refused-calendar-7069): #7069: career tally.starts keeps Race starts under each season's own calendar (+176 eager code bytes, career.js/save-migrate.js)
 
 `(tree) eagerCodeBytes` 4026247 → **4026423** (+176). Deliberate raise past the absorb: `rolloverApply` stamps `tally.starts` and `cleanTally` keeps it, so "Race starts" no longer re-reads today's calendar; the eager shell had ~0 bytes of headroom.
 Fragment: `ratchets.d/claude--career-refused-calendar-7069.json`.
+
+## 2026-11-27 — PR #7262 (claude/racing-lines-drill-6559): Racing Lines apex-choice drill (#6559 step 10)
+
+`(tree) typeofGuards` 2324 → **2327** (+3): `LinesDrill` is LAZY_LEARN and loads in bare VMs (learn-curriculum, drill-lines-vm), so its `AppearanceOpts`, `performance` and `DrillRegistry` reads are guarded; `learn-door.js` guards its `LinesDrill.define()` call (bundle order is not evaluation order). `(tree) eagerCodeBytes` +551: the `apex` mode lives in the eager `race-insights.js`. Within the absorbs (10 guards, 5000 B), so no label. Fragment: `ratchets.d/claude--racing-lines-drill-6559.json`.

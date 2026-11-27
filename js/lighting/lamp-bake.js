@@ -76,11 +76,8 @@ const LampBake = (function () {
     return sign | (exp << 10) | (mant >>> 13);
   }
 
-  function smoothstep(e0, e1, x) {
-    const d = e1 - e0;
-    const t = d !== 0 ? Math.min(1, Math.max(0, (x - e0) / d)) : (x >= e1 ? 1 : 0);
-    return t * t * (3 - 2 * t);
-  }
+  // GLSL's smoothstep(cosOuter, cosInner, cd); a zero-width cone edge steps at e1 (M4.smoothEdge).
+  const smoothstep = (e0, e1, x) => M4.smoothEdge(e0, e1, x);
 
   const LO_HEIGHT = 3.0;         // live-only: lens less than this many metres over its baked surface
   const LO_COS = 0.9;           // live-only: cosOuter above this (a cone narrower than ~25 deg)

@@ -16,6 +16,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { withM4 } from "../helpers/mat4-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -25,6 +26,7 @@ function sceneHarness() {
     createTexture: () => ({}), draw() {}, drawDecal() {}, drawGlow() {} };
   const ctx = vm.createContext({ console, Math, Object, Array, Number, String, JSON, Float32Array, Uint16Array,
     Uint32Array, isFinite, parseFloat, parseInt, Date, Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false } });
+  withM4(ctx);
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
                    "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
@@ -127,6 +129,7 @@ function loadingHarness({ chat = "normal", speaking = false } = {}) {
     GameAudio: { radioLeadS: () => 0.2, radioSting: (k, s) => stings.push([k, s]) } };
   sb.window = sb;
   vm.runInNewContext(read("js/ui/loading-card.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/loading-card.js") });
+  withM4(sb);
   vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/loading-screen.js") });
   const radio = { sayPreRace: (text, life, lead) => { said.push({ text, life, lead }); return 1.4; } };
   const screen = sb.LoadingScreen.create({ $, store: { get: (k, d) => (k === "radioChat" ? chat : d), set() {} },

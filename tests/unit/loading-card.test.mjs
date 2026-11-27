@@ -27,6 +27,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { withM4 } from "../helpers/mat4-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -45,6 +46,7 @@ function load() {
   sb.window = sb;
   vm.runInNewContext(read("js/ui/loading-card.js").replace(/^const\b/gm, "var"), sb,
     { filename: absSrc("js/ui/loading-card.js") });
+  withM4(sb);
   vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb,
     { filename: absSrc("js/ui/loading-screen.js") });
   assert.ok(sb.LoadingCard, "js/ui/loading-card.js assigns the LoadingCard global");
@@ -266,6 +268,7 @@ function harness(stored = {}, storeOverride = null, docEl = null, nav = undefine
   sb.window = sb;
   vm.runInNewContext(read("js/ui/loading-card.js").replace(/^const\b/gm, "var"), sb,
     { filename: absSrc("js/ui/loading-card.js") });
+  withM4(sb);
   vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb,
     { filename: absSrc("js/ui/loading-screen.js") });
   const races = [];
@@ -581,6 +584,7 @@ const field = (n, me) => Array.from({ length: n }, (_, i) => ({ code: "D" + Stri
 function modules(files) {
   const sb = { Math, Object, Array, Number, String, JSON, Map, Set, WeakMap, RegExp, isFinite, console, Log: { info() {}, warn() {} } };
   sb.window = sb;
+  withM4(sb);
   for (const f of files) vm.runInNewContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: absSrc(f) });
   return sb;
 }
@@ -692,6 +696,7 @@ function gridHarness({ grid = field(22, 11), speaking = () => false, radioOn = t
     GameAudio: { radioLeadS: () => 0.43, radioSting: (ch, life) => stings.push(life) },
   };
   sb.window = sb;
+  withM4(sb);
   for (const f of ["js/camera/flyby-clear.js", "js/camera/flyby-seq.js", "js/race/radio-lines.js", "js/ui/loading-card.js", "js/ui/loading-screen.js"]) {
     vm.runInNewContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: absSrc(f) });
   }
@@ -1263,6 +1268,7 @@ function fitHarness({ cap, natural, hidden = false }) {
     getComputedStyle: (el) => ({ maxHeight: el === card ? cap + "px" : "" }), document: { createElement: () => ({}) } };
   sb.window = sb;
   vm.runInNewContext(read("js/ui/loading-card.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/loading-card.js") });
+  withM4(sb);
   vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/loading-screen.js") });
   sb.LoadingScreen.fitCard((id) => els[id]);
   return { card, writes };
