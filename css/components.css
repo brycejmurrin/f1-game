@@ -357,19 +357,19 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   --sfade-t: 0px; --sfade-b: 0px; --sfade-l: 0px; --sfade-r: 0px;
   mask-image:
     linear-gradient(to bottom,
-      transparent 0, #000 var(--sfade-t),
-      #000 calc(100% - var(--sfade-b)), transparent 100%),
+      transparent 0, var(--ink-black) var(--sfade-t),
+      var(--ink-black) calc(100% - var(--sfade-b)), transparent 100%),
     linear-gradient(to right,
-      transparent 0, #000 var(--sfade-l),
-      #000 calc(100% - var(--sfade-r)), transparent 100%);
+      transparent 0, var(--ink-black) var(--sfade-l),
+      var(--ink-black) calc(100% - var(--sfade-r)), transparent 100%);
   mask-composite: intersect;
   -webkit-mask-image:
     linear-gradient(to bottom,
-      transparent 0, #000 var(--sfade-t),
-      #000 calc(100% - var(--sfade-b)), transparent 100%),
+      transparent 0, var(--ink-black) var(--sfade-t),
+      var(--ink-black) calc(100% - var(--sfade-b)), transparent 100%),
     linear-gradient(to right,
-      transparent 0, #000 var(--sfade-l),
-      #000 calc(100% - var(--sfade-r)), transparent 100%);
+      transparent 0, var(--ink-black) var(--sfade-l),
+      var(--ink-black) calc(100% - var(--sfade-r)), transparent 100%);
   -webkit-mask-composite: source-in;
 }
 /* 36px, raised from 26 after two judge panels read the fade as "the container
@@ -547,7 +547,7 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
        tight cast    a 2px core directly under it: "this is off the page"
        wide glow     the red bloom it already had: "and it is the hot one" */
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    inset 0 1px 0 rgba(255,255,255,0.3),
     inset 0 -1px 0 rgba(0, 0, 0, 0.32),
     0 2px 4px rgba(0, 0, 0, 0.45),
     0 6px 22px color-mix(in oklab, var(--red) 46%, transparent);
@@ -571,7 +571,7 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   pointer-events: none;
   background: linear-gradient(105deg in oklab,
     transparent calc(var(--sheen) - 14%),
-    rgba(255, 255, 255, 0.30) var(--sheen),
+    rgba(255,255,255,0.3) var(--sheen),
     transparent calc(var(--sheen) + 14%));
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -618,7 +618,7 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   background: var(--grad-primary-hot);
   box-shadow:
     inset 0 2px 5px rgba(0, 0, 0, 0.45),
-    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 1px 2px rgba(0,0,0,0.4),
     0 2px 12px color-mix(in oklab, var(--red) 42%, transparent);
   transform: skewX(-6deg) scale(0.97);
 }
