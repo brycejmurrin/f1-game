@@ -1242,6 +1242,7 @@ test("SIGNING AN OFFER SIGNS WHAT THE BUTTON SHOWED — the kind never redraws",
   // kind is seeded on the year. acceptOffer() used to re-derive the kind at
   // accept time, reading the incremented year: measured at 67% of seasons, the
   // contract signed a different promise from the one displayed.
+  let checked = 0;
   for (const seed of [1, 7, 13, 21, 34, 55, 89]) {
     const Career = loadDriver();
     Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed });
@@ -1252,11 +1253,13 @@ test("SIGNING AN OFFER SIGNS WHAT THE BUTTON SHOWED — the kind never redraws",
     Career.rollover();
     const offers = c.offers || [];
     if (!offers.length) continue;
+    checked++;
     const shown = { type: offers[0].goal.type, value: offers[0].goal.value };
     const deal = Career.acceptOffer(0);
     assert.equal(deal.goal.type, shown.type,
       `seed ${seed}: signed a ${deal.goal.type} contract off a ${shown.type} button`);
   }
+  assert.ok(checked >= 5, `only ${checked} seeds drew offers; the loop proved nothing`);
 });
 
 test("accepting recomputes the TARGET, because a move re-seats you", () => {
