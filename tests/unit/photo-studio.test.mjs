@@ -1874,3 +1874,21 @@ test("#7017: DOCK and HIDE toggle the sheet attributes with accessible state; th
   const full = boot({ storageFull: true }); full.api.open(); full.dom.byId("ps-dock").click();
   assert.equal(full.dom.byId("photo-studio").dataset.dock, "top", "a failed write still moves the sheet for this visit");
 });
+
+test("TIME chips cross day<->night without a synchronous rebuild: deferred, at most one (#7059)", () => {
+  const b = boot(), n = { sync: 0, deferred: 0 };
+  // The engine seam (weather-arc setTimeOfDay): a day<->dark crossing is a sync Tracks.build unless opt.defer.
+  b.G.setTimeOfDay = (v, opt) => {
+    if (v === undefined) return b.G.raceTimeOfDay;
+    const dark = (t) => t === "night";
+    if (dark(v) !== dark(b.G.raceTimeOfDay)) { if (opt && opt.defer) n.deferred++; else n.sync++; }
+    b.G.raceTimeOfDay = v; return v;
+  };
+  b.api.open({ source: "race" });
+  const tod = b.dom.byId("ps-tod"); tod.value = "night"; b.dom.dispatch(tod, { type: "change" });
+  assert.equal(n.sync, 0, "the chip ran no synchronous rebuild");
+  b.dom.byId("ps-cond-reset").click();
+  assert.equal(b.G.raceTimeOfDay, "day");
+  assert.equal(n.sync, 0, "RESET CONDITIONS ran no synchronous rebuild");
+  assert.ok(n.deferred >= 1 && n.deferred <= 2, "each crossing is deferred (the engine coalesces them)");
+});

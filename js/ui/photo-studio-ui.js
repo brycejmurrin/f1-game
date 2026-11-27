@@ -326,7 +326,7 @@ function create(G, deps) {
   // every close put it back, so a photo never leaks into a race, a career or a result.
   const cond = { tod: null, wx: null, arc: null, touched: false };
   const pick = (label, list, read, run, id) => select(label, list, read, (v) => { run(v); paintCond(); paintLight(); }, id);
-  const setTod = (v) => { if (st.busy || st.closing || isGarage() || G.netPlay?.active?.()) return; cond.touched = true; G.setTimeOfDay(v); };
+  const setTod = (v) => { if (st.busy || st.closing || isGarage() || G.netPlay?.active?.()) return; cond.touched = true; G.setTimeOfDay(v, { defer: true }); };   // a day<->dark world: one deferred stepped build, never this frame (#7059, #6896)
   const setWx = (v) => { if (st.busy || st.closing || isGarage() || G.netPlay?.active?.()) return; cond.touched = true; G.weather(v); };
   const todRow = pick("Time of day", TODS, () => G.setTimeOfDay(), setTod, "ps-tod");
   const wxRow = pick("Weather", WXS, () => G.weather(), setWx, "ps-weather");
@@ -347,7 +347,7 @@ function create(G, deps) {
   }
   function resetCond() {
     if (cond.tod == null || G.netPlay?.active?.()) return;
-    if (G.setTimeOfDay() !== cond.tod) G.setTimeOfDay(cond.tod);
+    if (G.setTimeOfDay() !== cond.tod) G.setTimeOfDay(cond.tod, { defer: true });   // a tap back before the build ran builds nothing (#7059)
     if (G.weather() !== cond.wx || cond.touched) { G.weather(cond.wx); }
     if (cond.touched) G.weatherArc = cond.arc;   // a MIXED race's arc, dropped by weather()
     cond.touched = false;
