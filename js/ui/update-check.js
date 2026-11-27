@@ -28,6 +28,7 @@ const UpdateCheck = (function () {
   // this — once per loader call, and never waiting longer than FRESH_WAIT_MS.
   const FRESH_MS = 60 * 1000;
   const FRESH_WAIT_MS = 1500;
+  const NO = Promise.resolve(false);
 
   function bootedBuild() {
     try {
@@ -79,7 +80,8 @@ const UpdateCheck = (function () {
     // the failed-read backoff, not the throttle; read lazily: it may land late.
     const guardOk = o.guardOk || (() => typeof window !== "undefined" && !!window.__apexGuardOk);
     const bootAt = now();
-    let lastCheck = bootAt - THROTTLE_MS + FAIL_BACKOFF_MS;
+    const failAt = () => now() - THROTTLE_MS + FAIL_BACKOFF_MS;
+    let lastCheck = failAt();
     let bootSeed = true;
     let ready = 0;
     let inflight = null;
@@ -148,10 +150,10 @@ const UpdateCheck = (function () {
     }
 
     function check(force) {
-      if (!booted) return Promise.resolve(false);   // an unstamped shell has nothing to compare
+      if (!booted) return NO;   // an unstamped shell has nothing to compare
       const t = now();
       if (inflight) return inflight;
-      if (!force && t - since() < THROTTLE_MS) return Promise.resolve(false);
+      if (!force && t - since() < THROTTLE_MS) return NO;
       lastCheck = t; bootSeed = false;
       const abort = typeof AbortController === "function" ? new AbortController() : null;
       let timer;
@@ -166,7 +168,7 @@ const UpdateCheck = (function () {
         .then((r) => { if (!(r && r.ok)) throw new Error("version.json " + (r && r.status)); return r.json(); });
       inflight = Promise.race([read, deadline])
         .then((v) => { const b = Number(v && v.build); if (booted && b > booted) nudgeWorker(b); return markReady(b); })
-        .catch(() => { lastCheck = now() - THROTTLE_MS + FAIL_BACKOFF_MS; return false; })   // offline / deploy window: ask again soon
+        .catch(() => { lastCheck = failAt(); return false; })   // offline / deploy window: ask again soon
         .finally(() => { clearTimeout(timer); inflight = null; });
       return inflight;
     }
@@ -261,10 +263,9 @@ const UpdateCheck = (function () {
     // A lazy load with no controller: a forced read when the last one is stale.
     function freshen() {
       const read = now() - since() > FRESH_MS ? check(true) : inflight;
-      if (!read) return Promise.resolve(false);
-      let timer = null;
-      const late = new Promise((resolve) => { timer = setTimeout(() => resolve(false), FRESH_WAIT_MS); });
-      return Promise.race([read, late]).then((r) => { clearTimeout(timer); return r; });
+      if (!read) return NO;
+      let t;
+      return Promise.race([read, new Promise((r) => { t = setTimeout(r, FRESH_WAIT_MS, false); })]).then((r) => { clearTimeout(t); return r; });
     }
 
     // The 2 s follow timer hid the chip up to 2 s late: START → #loading → count
@@ -321,6 +322,9 @@ const UpdateCheck = (function () {
   // Foreground polls (#6633 L2): also a bfcache restore and focus; check() coalesces a double fire.
   function listen(api, win, doc) {
     const poll = () => api.onVisible();
+    // FIRST VISIT (#7075): read version.json at idle so `inflight` is settled when the first lazy
+    // load asks; freshen() then rarely waits. Never when a worker controls the tab or the read is fresh.
+    if (win && !controller()) setTimeout(api.freshen, 3000);
     if (doc && doc.addEventListener) doc.addEventListener("visibilitychange", poll);
     if (win && win.addEventListener) {
       win.addEventListener("pageshow", (e) => { if (e && e.persisted) poll(); });

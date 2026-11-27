@@ -324,7 +324,7 @@ body:not(.hud-hidden) #hud-restore { display: none; }
 :root[data-appearance-peek="title"] #overlay { opacity: 1; }
 :root[data-appearance-peek] #pmsettings { background: transparent; }
 :root[data-appearance-peek] #pmsettings::backdrop { background: transparent; }
-:root[data-appearance-peek] #pmsettings > * { opacity: 0.14; transition: opacity 0.12s; }
+:root[data-appearance-peek] #pmsettings > * { opacity: 0.14; transition: opacity var(--dur-1); }
 :root[data-appearance-peek][data-motion="reduce"] #pmsettings > * { transition: none; }
 :root[data-appearance-peek] #pmsettings :focus-visible { outline-color: transparent; }   /* a ring would read through the ghost; it returns with the page */
 /* Title edit: groups drag; #tl-editor stays unzoomed (its handle tracks a corner). */
@@ -339,7 +339,7 @@ body:not(.hud-hidden) #hud-restore { display: none; }
 :root[data-tl-edit] :is(#menu-buttons, #menu-brand) * { pointer-events: none; }
 :root[data-tl-edit] #tl-art { position: absolute; z-index: -1; zoom: normal; pointer-events: auto; }
 :root[data-tl-edit] #tl-editor {
-  position: fixed; z-index: 44;
+  position: fixed; z-index: var(--z-photo-controls);
   left: var(--safe-l); right: var(--safe-r); bottom: var(--safe-b); margin-inline: auto;
   width: max-content; max-width: min(var(--safe-w), calc(100vw - 16px));
   max-height: 45dvh; overflow-y: auto; overscroll-behavior: contain;

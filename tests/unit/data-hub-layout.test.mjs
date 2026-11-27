@@ -95,10 +95,13 @@ test(".dh-content.sf-b paints a bottom more-below cue (CSS only)", () => {
 
 test("modal Data Hub over #nogl uses opaque scrim/card and stacks above recovery", () => {
   const noglZ = decl(overlayRules, "#nogl", "z-index");
-  assert.equal(noglZ, "99", "#nogl recovery layer");
+  assert.equal(noglZ, "var(--z-nogl)", "#nogl recovery layer");
   const hubOverNogl = ruleFor(rules, /body:has\(> #nogl:not\(\[hidden\]\)\) #datahub:modal/);
   assert.ok(hubOverNogl, "graphics-unavailable hub stack rule");
-  assert.equal(hubOverNogl.decls.get("z-index"), "100");
+  assert.equal(hubOverNogl.decls.get("z-index"), "var(--z-nogl-hub)");
+  const TOKENS = fs.readFileSync(path.join(ROOT, "css/tokens.css"), "utf8");
+  const rung = (name) => +new RegExp(`${name}:\\s*(\\d+);`).exec(TOKENS)[1];
+  assert.ok(rung("--z-nogl-hub") > rung("--z-nogl"), "the hub rung sits above the #nogl rung");
   assert.equal(hubOverNogl.decls.get("background"), "var(--scrim-heavy)");
   const card = ruleFor(rules, /body:has\(> #nogl:not\(\[hidden\]\)\) #datahub:modal \.dh-card/);
   assert.ok(card, "opaque hub card over nogl");

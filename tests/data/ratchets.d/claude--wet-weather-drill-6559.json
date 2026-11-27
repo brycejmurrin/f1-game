@@ -1,5 +1,6 @@
 {
   "tree": {
-    "eagerCodeBytes": -110
+    "eagerCodeBytes": -110,
+    "typeofGuards": 2
   }
 }

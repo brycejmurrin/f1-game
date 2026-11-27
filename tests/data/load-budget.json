@@ -152,6 +152,7 @@
     "LAZY_AGENT": "door: __apex / bridge only",
     "LAZY_GFX_HI": "door: desktop detail >= 2 only",
     "LAZY_LEARN": "door: the title's Learn door",
+    "LAZY_DRILL_FORK": "door: a strategy (kind:sim) drill",
     "LAZY_DEV": "door: ?gfxdebug=1 only",
     "LAZY_PERF": "P1: idle after boot (SoakRun / BenchRun)",
     "LAZY_REAL_RACE": "door: real-race / WATCH",

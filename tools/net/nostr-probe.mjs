@@ -32,7 +32,10 @@
 // NOT a dependency of the repo: ws and @noble/curves are installed on demand
 // with --no-save, same as the TURN and Nostr fixtures next door.
 import { createHash } from "node:crypto";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
+const USAGE = "Usage: node tools/net/nostr-probe.mjs [wss://relay ...]\nPublishes an ephemeral event to each relay and reports who accepts it (network); --help does not.";
+exitIfHelp(process.argv.slice(2), USAGE);
 const DEFAULT = [
   "wss://nos.lol",
   "wss://relay.primal.net",

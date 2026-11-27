@@ -294,6 +294,9 @@
     "js/learn-drills/thumb-drill.js",
     "js/learn-drills/rain-groove.js"
   ],
+    LAZY_DRILL_FORK: [
+    "js/race/drill-fork.js"
+  ],
     LAZY_RACE: [
     "js/data/garage-entrance-motion.js",
     "js/garage/entrance-motion.js",

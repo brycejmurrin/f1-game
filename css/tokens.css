@@ -415,20 +415,7 @@
   --ls-3: 0.06em;   /* label — dim uppercase labels, chips */
   --ls-4: 0.08em;   /* caps — uppercase tags, badges, section chrome */
   --ls-5: 0.12em;   /* display — section labels, eyebrows, meters */
-  /* ---- CORNER RADIUS — four steps, plus a pill ----
-     These tokens existed and had three users. Everything else hard-coded its
-     own: fourteen distinct radii across the stylesheets (1, 2, 3, 4, 5, 6, 7,
-     8, 9, 10, 12, 14, 20 and 999), which is why a chip, the input beside it and
-     the button under it could each round differently. The steps below are set
-     to whichever value was already the most common in each band, so adopting
-     them moves most corners by a pixel or none at all.
-       --r-xs  hairline bars, meters, tiny swatches      (was 1/2/3)
-       --r-sm  chips, colour wells, small controls       (was 4/5/6/7)
-       --r-md  buttons, rows, cards                      (was 8/9/10)
-       --r-lg  sheets, panels, the data-hub card         (was 12/14/20)
-       --r-pill  fully round ends — tabs, badges         (999px)
-     `border-radius: 50%` is NOT on this scale: a circle is a shape, not a
-     corner, and the touch pads have to stay circular at any size. */
+  /* Why: docs/notes/TOKENS-RATIONALE.md §R15. */
   --r-xs:   3px;
   --r-sm:   6px;
   --r-md:   8px;
@@ -745,6 +732,33 @@ body:not(.desktop) {
   --ui-compact-scale: min(var(--ui-scale), 1.25);
   --ui-compact-brand-text: calc(var(--ui-scale) / var(--ui-compact-brand-scale));
   --ui-compact-text: calc(var(--ui-scale) / var(--ui-compact-scale));
+}
+
+/* Why: docs/notes/TOKENS-RATIONALE.md §R14. */
+:root { --ink-on-accent: #fff; --ink-black: #000; }
+:root {
+  --z-transport: 24;
+  --z-screen: 25;
+  --z-screen-over: 26;
+  --z-peek: 30;
+  --z-ga-bars: 34;
+  --z-carsetup: 35;
+  --z-loading: 36;
+  --z-podium: 38;
+  --z-dock: 40;
+  --z-tuner-grid: 41;
+  --z-tuner: 42;
+  --z-tuner-stack: 43;
+  --z-photo-controls: 44;
+  --z-photo-studio: 45;
+  --z-hub: 50;
+  --z-popup: 60;
+  --z-nogl: 99;
+  --z-nogl-hub: 100;
+  --z-save-warning: 8500;
+  --z-system: 9000;
+  --z-dock-edit: 9999;
+  --z-arranger: 2147483646;
 }
 /* Roomy desktop menus, mirrored by the UI SIZE row in js/ui/scale.js. */
 @media (pointer: fine) and (min-width: 1600px) and (min-height: 900px) {

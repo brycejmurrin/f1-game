@@ -1,0 +1,1 @@
+Fixed: A yellow flag no longer stays out after the track is clear when a stopped car took over a debris yellow at the same level (#7088), and tyre marbles now shed under a steady slide instead of never appearing for some slip angles.

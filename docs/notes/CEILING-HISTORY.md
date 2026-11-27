@@ -1,5 +1,13 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-27 — PR #7206 (claude/hot-path-memo-7070): lowGrip once per step, a stable stallSweep callback (#7070 rows 2 + 6)
+
+`(tree) eagerCodeBytes` 4026701 → **4026952** (+251, measured on the synced tip): `RaceControl.lowGrip` gains a per-step memo (`stepGrip(on)`, the
+`gripWin`/`gripMemo` pair) and game.js brackets its per-car `updateCar` loop with `raceCtl.stepGrip(true)` … `finally
+stepGrip(false)`; both live in eager files that run every step, so there is no lazy home. It buys ~196 fewer road-wetness
+reads per step on a 22-car wet race (200 → 4), bit-identical to base. `js/game.js` lines/codeLines +1 (the named
+`stallRetire`). Fragment: `ratchets.d/claude--hot-path-memo-7070.json`. Human step: `ratchet-raise`.
+
 ## 2026-11-26 — #6911 (claude/boot-lazy-lore-drift-6911) — circuit-lore and thermal-drift leave the boot
 
 `(tree) eagerCodeBytes` −13294, `eagerScripts` −2 (lowers, no `ratchet-raise`). `circuit-lore.js` moves to LAZY_AUDIO (before the
@@ -4140,6 +4148,10 @@ and `skyViewOverride` become getter-only (a write is a TypeError / TS2540), so g
 +8 and `codeLines` +7 (the two command objects, net of the four dropped setters); `js/agent/apex.js` lines -2 (park is one line).
 `(tree) eagerCodeBytes` +33, inside its absorb. Fragment: `ratchets.d/claude--issue-6953-owner-commands.json`.
 
+## 2026-11-26 — claude/issue-6944-u0r-ratchets: U0 counters registered as tree ratchets (#6920 U0.R, #6944)
+
+`(tree) sourceSliceTests` seeded at **79**, `typeofGuards` at **2296** (with `absorb: 10`, Bryce 2026-11-26) and `gWrites` at **348**,
+all `slack: 0`, shrink-only. Seeded with `--seed=<metric> --slack=0`, not raised: a new key is not a raise.
 ## 2026-11-26 — claude/issue-6822-shared-render-rules: shared render rules (#6822, #6607 rows 2+4, #6479 row 3)
 
 `(tree) eagerCodeBytes` 4061221 → **4061540** (+319): `Assets.matScale` / `Assets.mipCount` and `PostCommon.sunShadowStrength` become the
