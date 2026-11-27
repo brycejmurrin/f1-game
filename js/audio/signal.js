@@ -275,8 +275,20 @@ var GameAudioSignal = (function () {
       },
     };
   }
+  // THE low-tier device test for js/audio (#7111): a phone, or the memory-safe tier.
+  // crowd, engine, radio-voice and rivals each carried this copy. `glx` is a seam
+  // for tests; callers pass nothing and read the live GLX facade lazily
+  // (`mobileTier` is decided at glx init, after this file evaluates).
+  // soundtrack.js and voice-pack.js size DECODED-PCM budgets and follow `isMobile`
+  // alone on purpose: a phone has the memory ceiling whatever GRAPHICS says.
+  function lowTier(glx) {
+    try {
+      if (glx === undefined) glx = typeof GLX !== "undefined" ? GLX : null;
+      return !!(glx && (glx.isMobile || glx.mobileTier));
+    } catch (e) { return false; }
+  }
   return {
-    create, detectPeriod, findStableLoop,
+    create, detectPeriod, findStableLoop, lowTier,
     blipFireTotal() { return blipFireTotal; },
     lastHost() { return lastHostRef; },
   };
