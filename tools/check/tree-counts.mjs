@@ -267,6 +267,7 @@ export const AT_REF = {
   eagerScripts: (ref) => wallAt(ref).scripts,
   eagerBytes: (ref) => wallAt(ref).bytes,
   eagerCodeBytes: (ref) => wallAt(ref).codeBytes,
+  typeofGuards: (ref) => typeofGuardsAt(ref),  
 };
 
 /** Sheets that space themselves entirely in raw px and read neither --pad nor
@@ -404,7 +405,7 @@ export function typeofGuardsReport(files = jsFiles(), globals = moduleGlobals(fi
   return rows.sort((a, b) => b.count - a.count || a.file.localeCompare(b.file));
 }
 export const typeofGuards = () => typeofGuardsReport().reduce((n, r) => n + r.count, 0);
-/** typeofGuards at a git ref. Not in AT_REF yet: U0.R wires AT_REF.typeofGuards with its TREE_METRICS row (#6944). */
+/** typeofGuards at a git ref (AT_REF.typeofGuards backs its absorb, #6944). */
 export const typeofGuardsAt = (ref) => typeofGuardsReport(jsFilesAt(ref)).reduce((n, r) => n + r.count, 0);
 
 /** Owner map for gWrites: {default, owners:{member: ownerFile}}. Only members a module truly owns are listed. */

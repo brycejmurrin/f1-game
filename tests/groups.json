@@ -454,6 +454,7 @@
     "// The flaky policy behind APEX_FAIL_ON_FLAKY=1: quarantine rows are a ledger",
     "// (spec exists, owner, date, why) and the verdict is pure; < 1 s.",
     "tests/unit/flaky-quarantine.test.mjs",
+    "tests/unit/fleet-cost.test.mjs",
     "// The flicker metric and its site table are unit-tested on synthetic frames.",
     "// The rendered CI job was retired in 76c46df1ad after it missed known flicker.",
     "tests/unit/flicker-metric.test.mjs",
@@ -704,6 +705,7 @@
     "tests/unit/lazy-track-build.test.mjs",
     "tests/unit/lazy-track-ensure-menu-prep.test.mjs",
     "tests/unit/learn-curriculum.test.mjs",
+    "tests/unit/lease.test.mjs",
     "tests/unit/legends.test.mjs",
     "tests/unit/lexical-window-guard.test.mjs",
     "tests/unit/light-grid.test.mjs",
@@ -1983,6 +1985,7 @@
         "tests/unit/tt-pit-lane-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
+        "tests/unit/wet-audio-spray-strength-vm.test.mjs",
         "tests/unit/wet-sector-spray-skid-vm.test.mjs",
         "tests/unit/wind-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
@@ -2118,6 +2121,7 @@
         "tests/unit/tt-pit-lane-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
+        "tests/unit/wet-audio-spray-strength-vm.test.mjs",
         "tests/unit/wet-sector-spray-skid-vm.test.mjs",
         "tests/unit/wind-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
@@ -2175,6 +2179,7 @@
         "tests/unit/redbull-orbit-clear.test.mjs",
         "tests/unit/track-from-projection-vm.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
+        "tests/unit/wet-audio-spray-strength-vm.test.mjs",
         "tests/unit/wet-sector-spray-skid-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
       ],

@@ -9,10 +9,14 @@
 // the gate passed: re-run this command.
 // First it runs closing-refs (#5929): a body line like "fix #5800" naming an OPEN pull request would close that PR on
 // merge, so ship refuses until it is reworded (ready-gate is PROTECTED, so the check lives here, a routine path).
+// Then the lease (#6887 phase 4, lib/lease.mjs): when the newest `adopts PR #<n>` comment names a session the Hand-off
+// `owner:` line does not (ADOPTED-UNLEASED: #6849 at 05:52Z, an adoption over `owner: none`), ship refuses until the
+// adopter writes its lease (`owner: <host>:<session> until <ISO>`, skill steward §Lane 3). Unreadable PR: no refusal.
 //
 //   node tools/ci/ship-pr.mjs --pr <n> [--repo owner/name]
 //
-// Exit: ready-gate's own (0 pass, 1 refused, 3 no token / API error); closing-refs refuses with 1, cannot judge with 3.
+// Exit: ready-gate's own (0 pass, 1 refused, 3 no token / API error); closing-refs and the lease refuse with 1,
+// closing-refs cannot judge with 3.
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,6 +25,8 @@ import { MAX_AGE_MIN } from "../lib/gate-receipt.mjs";
 import { checkPr } from "./closing-refs.mjs";
 import { api } from "./github-api.mjs";
 import { planVerdict, planBodySource, LAND_ITEM, NOW_ITEM } from "./ready-gate.mjs";
+import { getAll } from "./lib/gh-rows.mjs";
+import { adoptedUnleased } from "./lib/lease.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const USAGE = "usage: node tools/ci/ship-pr.mjs --pr <n> [--repo owner/name]\n  Runs ready-gate on the draft PR; on exit 0 prints the two calls that land it. Flips and labels nothing itself.";
@@ -62,8 +68,17 @@ export function planEdit(body, sha = "") {
 }
 
 const fetchPr = (n) => api(`pulls/${n}`);
+const fetchComments = (n) => { try { return { json: getAll(api, `issues/${n}/comments`) }; } catch (e) { return { error: e.message }; } };
 
-export function main(argv, { run = (a) => spawnSync(process.execPath, [path.join(ROOT, "tools/ci/ready-gate.mjs"), ...a], { stdio: "inherit" }).status ?? 3, log = console.log, closing = checkPr, getPr = fetchPr } = {}) {
+/** The refusal lines for an adopted-unleased PR, else []. Pure. */
+export function leaseRefusal(pr, body, comments) {
+  const u = adoptedUnleased(body, comments, pr);
+  if (!u) return [];
+  return [`ship refused #${pr}: adopted-unleased — ${u.session} adopted at ${u.at || "?"} but the Hand-off owner: line does not name it.`,
+    `  write the lease first: update_pull_request body with \`owner: ${u.session} until <ISO UTC, at most 4 h ahead>\` in the handoff block (skill steward §Lane 3), then re-run ship-pr`];
+}
+
+export function main(argv, { run = (a) => spawnSync(process.execPath, [path.join(ROOT, "tools/ci/ready-gate.mjs"), ...a], { stdio: "inherit" }).status ?? 3, log = console.log, closing = checkPr, getPr = fetchPr, getComments = fetchComments } = {}) {
   exitIfHelp(argv, USAGE);
   const i = argv.indexOf("--pr"), pr = i >= 0 ? argv[i + 1] : "";
   if (!/^\d{1,7}$/.test(pr || "")) { log(USAGE); return 1; }
@@ -71,6 +86,12 @@ export function main(argv, { run = (a) => spawnSync(process.execPath, [path.join
   const c = closing(Number(pr));
   if (c.error) { log(`closing-refs could not judge #${pr} (${c.error}): re-run ship-pr`); return 3; }
   if (!c.ok) { c.lines.forEach((l) => log(l)); log(`ship refused #${pr}: reword the closing keyword(s) above in the PR body (update_pull_request), then re-run ship-pr`); return 1; }
+  const p0 = getPr(Number(pr));
+  const cs = p0.error ? null : getComments(Number(pr));
+  if (cs && !cs.error) {
+    const refuse = leaseRefusal(Number(pr), p0.json?.body || "", cs.json || []);
+    if (refuse.length) { refuse.forEach((l) => log(l)); return 1; }
+  }
   const code = run(["--pr", pr]);
   if (code === 0) nextCalls(pr, j >= 0 ? argv[j + 1] : undefined).forEach((l) => log(l));
   else if (code === 1) {

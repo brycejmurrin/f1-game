@@ -40,7 +40,7 @@ function create(G) {
       const tm = span("res-pts q-time", r.noTime ? I18n.t("quali.noTime", null, "NO TIME") : r.pos === 1 ? poleClock(r.t) : `+${r.gap.toFixed(3)}`);
       // The row shell is GameResultsSheet.row, shared with the race classification (#7052).
       const row = GameResultsSheet.row({ pos: r.pos, color: G.cssCol(team ? team.color : [0.5, 0.5, 0.5]), name: nm, pts: tm,
-        podium: r.pos, cls: `${r.isPlayer ? " you" : ""}${driven}` });
+        podium: r.pos, cls: `${r.isPlayer ? " you" : ""}${driven}`, swatchHidden: true });
       if (r.isPlayer) row.setAttribute("aria-current", "true");
       body.appendChild(row);
     }
