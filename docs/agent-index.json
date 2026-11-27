@@ -822,6 +822,7 @@
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/game-vm.test.mjs",
         "tests/unit/headless-api-vm.test.mjs",
+        "tests/unit/hot-path-memo-vm.test.mjs",
         "tests/unit/hunt-apex-aiplace-reset-vm.test.mjs",
         "tests/unit/hunt-tlx-create-undo.test.mjs",
         "tests/unit/input-ghost-replay-vm.test.mjs",
@@ -893,6 +894,7 @@
         "tests/unit/tt-pit-lane-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
+        "tests/unit/wet-audio-spray-strength-vm.test.mjs",
         "tests/unit/wet-sector-spray-skid-vm.test.mjs",
         "tests/unit/wind-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
@@ -963,6 +965,7 @@
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/game-vm.test.mjs",
         "tests/unit/headless-api-vm.test.mjs",
+        "tests/unit/hot-path-memo-vm.test.mjs",
         "tests/unit/hunt-apex-aiplace-reset-vm.test.mjs",
         "tests/unit/hunt-tlx-create-undo.test.mjs",
         "tests/unit/input-ghost-replay-vm.test.mjs",
@@ -1034,6 +1037,7 @@
         "tests/unit/tt-pit-lane-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
+        "tests/unit/wet-audio-spray-strength-vm.test.mjs",
         "tests/unit/wet-sector-spray-skid-vm.test.mjs",
         "tests/unit/wind-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
@@ -1094,6 +1098,7 @@
         "tests/unit/redbull-orbit-clear.test.mjs",
         "tests/unit/track-from-projection-vm.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
+        "tests/unit/wet-audio-spray-strength-vm.test.mjs",
         "tests/unit/wet-sector-spray-skid-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
       ],
@@ -1132,6 +1137,7 @@
         "tests/unit/drill-fork-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
+        "tests/unit/hot-path-memo-vm.test.mjs",
         "tests/unit/lap-retry-vm.test.mjs",
         "tests/unit/lockup-bench-vm.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",

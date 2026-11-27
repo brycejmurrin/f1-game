@@ -13,7 +13,7 @@
      screen's buttons drew straight over the card. 36 clears the tallest of
      them; the iOS install banner at 40 stays above on purpose, and the modal
      <dialog> screens are in the top layer where z-index is not consulted. */
-  z-index: 36;
+  z-index: var(--z-loading);
   place-items: end center;
   /* ONE DEFINITE ROW, and the card may overflow it. The card's LAYOUT box can
      stand taller than the screen (its paint scale, --ld-fit, is what brings it
@@ -203,7 +203,7 @@
      engine without svh (same pair as css/data.css .dh-overlay). */
   height: max(0px, calc((100vh - 100vw / 2.35) / 2));
   height: max(0px, calc((100svh - 100vw / 2.35) / 2));
-  background: #000;   /* cinema bars, not a themed surface: the LIGHT theme's --bg made them white */
+  background: var(--ink-black);   /* cinema bars, not a themed surface: the LIGHT theme's --bg made them white */
   pointer-events: none;
 }
 #loading::before { top: 0; }
@@ -371,7 +371,7 @@ body[data-width="narrow"] #ld-text[data-map-label]::after {
   position: fixed;
   right: var(--safe-r);
   bottom: var(--safe-b);
-  z-index: 60;
+  z-index: var(--z-popup);
   pointer-events: auto;
   padding: var(--gap) calc(var(--gap) * 1.5);
   border: 1px solid color-mix(in oklab, var(--text) 55%, transparent);
