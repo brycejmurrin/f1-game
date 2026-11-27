@@ -286,6 +286,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/check/car-field-writes.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c1"
+    },
     "tools/check/check-gctx.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -2949,11 +2954,6 @@
     "tools/ui/menu-capture.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
-      "preserve": "@c2"
-    },
-    "tools/ui/menu-fit.mjs": {
-      "action": "targeted-summary",
-      "presentation": "shared-levels",
       "preserve": "@c2"
     },
     "tools/ui/menu-mock.mjs": {

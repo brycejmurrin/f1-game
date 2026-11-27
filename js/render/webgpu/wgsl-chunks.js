@@ -2612,8 +2612,8 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   let upPos = max(up, 0.0);
   // The night key direction belongs to the moon. Preserve its cloud lighting
   // and disc/halo, but suppress the solar Mie lobe. Keep WGX's existing
-  // daytime strength; its separate overcast-damping difference is unchanged.
-  let mieDamp = 1.0 - nightSky;
+  // daytime strength; overcast damping matches GLX/TLX (#6881 R8).
+  let mieDamp = (1.0 - overcast * 0.85) * (1.0 - nightSky);
   // MIE SCATTER knob (clamp keeps the mix blend valid past 1).
   c = mix(c, sunColor, clamp(pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0) * mieDamp * mieScatter, 0.0, 1.0));
   // SKIP THE WHOLE BLOCK ON A NIGHT FRAME (GLX SKY_FS) — don't mul-to-zero.

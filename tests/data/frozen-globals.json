@@ -106,6 +106,7 @@
     "LampBake",
     "LandmarkKit",
     "LapRecord",
+    "LapRetry",
     "LazyBundles",
     "LightBudget",
     "LightKnobs",
@@ -223,7 +224,10 @@
     "XrUi",
     "StoppedCars",
     "RetiredCard",
-    "TLXCarSurf"
+    "TLXCarSurf",
+    "TLXUtil",
+    "TLXTexPool",
+    "TLXDebug"
   ],
   "mutable": [
     "GLX",

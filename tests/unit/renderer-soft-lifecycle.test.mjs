@@ -685,7 +685,7 @@ test("TLX picks its backend on what three will BIND, not on navigator.gpu existi
     "the webgpu context probe must run on a THROWAWAY canvas, never on #game");
 
   // And the defect must stay diagnosable from a bug report.
-  assert.match(src, /canvasAlpha:/,
+  assert.match(read("js/render/three/tlx-debug.js"), /canvasAlpha:/,   // backendState lives in tlx-debug.js (#6821)
     "backendState must report the LIVE canvas alpha so a report can name this defect");
 });
 
@@ -757,7 +757,7 @@ function captureHarness(opts = {}) {
   const src = read('js/render/three/tlx.js');
   const sb = { _captureReads: new WeakSet(), performance: { now: () => clock },
     setTimeout: (fn) => { jobs.push(fn); }, Uint8ClampedArray, ownGL: gl, renderer: { backend: {} }, W: 2, H: 3, fixedActive: () => false, presentW: 2, presentH: 3 };
-  vm.runInNewContext(`${fnSource(src, 'async function readGlCapture(gl, w, h) {')}
+  vm.runInNewContext(`${fnSource(read('js/render/three/tlx-util.js'), 'async function readGlCapture(gl, w, h) {')}
     const gfx = { ${fnSource(src, 'capturePixels() {')} }; globalThis.capture = () => gfx.capturePixels();`, sb);
   return { opts, gl, sb, frame, state, names, binding, laterBinding, buffers, fences, jobs,
     capture: sb.capture, copied: () => copied, submitted: () => submitted,

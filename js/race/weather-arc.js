@@ -23,6 +23,8 @@ const WeatherArc = (function () {
   const STORM_AT = 1.25;
 
   const TAU_WET = 8, TAU_DRY = 36;   // seconds to wet and dry the road
+  // frame.wetnessSegs length: the RainCells grid (24), fixed so a renderer can size a uniform array to it.
+  const WET_SEGS = 24;
   const hasTM = () => typeof TyreModel !== "undefined" && !!TyreModel && !!TyreModel.treadFor;
   const wetOf = (w) => hasTM() ? TyreModel.wetness(asRain(w), null)
     : asRain(w) === "rain" ? 1 : w === "wet" ? 0.5 : 0;
@@ -126,13 +128,15 @@ const WeatherArc = (function () {
     // Live time-of-day + weather for player UI (lighting tuner) and __apex. The
     // agent surface is absent on GitHub Pages, so anything player-facing must go
     // through G — not window.__apex.
-    function setTimeOfDay(tod) {
+    // opt.defer (the lighting tuner's TIME chips, #6896): a day<->dark world rebuild goes to
+    // game.js rebuildWorldDeferred (one stepped build, never on this frame) instead of a sync build.
+    function setTimeOfDay(tod, opt) {
       if (tod === undefined) return G.raceTimeOfDay;
       const valid = ["default", "dawn", "day", "dusk", "night"];
       const next = valid.includes(tod) ? tod : "default";
       if (next === G.raceTimeOfDay) return next;
       G.raceTimeOfDay = next;
-      G.loadTrack(G.trackIdx);
+      G.loadTrack(G.trackIdx, !!(opt && opt.defer));
       G.applyRaceSettings();
       return G.raceTimeOfDay;
     }
@@ -211,7 +215,7 @@ const WeatherArc = (function () {
     }
     function plannedArc(from, p, len) {
       const a = { from, to: p.to, dur: Math.max(1, p.dur || 60), t: 0, w0: wetOf(from) };
-      if (typeof RainCells !== "undefined" && len > 0) a.cell = RainCells.forPlan(from, a.to, a.dur, len, wetOf);
+      if (hasRC() && len > 0) a.cell = RainCells.forPlan(from, a.to, a.dur, len, wetOf);
       a.wetIn = wetInOf(a);
       return a;
     }
@@ -220,6 +224,7 @@ const WeatherArc = (function () {
       return plannedArc(o.from != null ? o.from : planInputs().from, previewPlan(o), o.len != null ? o.len : G.track && G.track.total);
     }
     function startChangeable(origin) {
+      syncWetness(0, 1);   // snap, at every race start (changeable or not): the grid shows the road grip already has
       if (!changeable || isTimeTrial() || isQuali()) return null;
       const p = plan || planFor();
       base = G.raceWeather;
@@ -536,7 +541,11 @@ const WeatherArc = (function () {
       if (w0s) arc.w0s = w0s;
       if (r0s) arc.r0s = r0s;
       arc.wetIn = wetInOf(arc);
-      if (!live && G.raceWeather !== from) setWeatherLive(from);
+      // A bare arc IN A RACE (the agent's weatherArc, real-race's rain call) has
+      // no chip pick recorded: keep the weather it replaced, so endSession() puts
+      // it back instead of leaving the next race at a mid-arc stage (#6881 R11).
+      // Not in the menu: a chip pick made after it would lose to restoreBase().
+      if (!live) { if (G.state === "race") base ??= G.raceWeather; if (G.raceWeather !== from) setWeatherLive(from); }
       return arc;
     }
     function tick(dt) {
@@ -545,7 +554,7 @@ const WeatherArc = (function () {
       // runs (headless look=drive), else the lag integrated twice per frame and
       // ramped at ~2x the 0.8/s that frame.rain uses.
       if (dt > 0) ownT += dt;
-      if (G.headlessMode) syncWetness(dt);
+      if (G.headlessMode) syncWetness(dt, !dt);   // headless step(0) is the agent's explicit settle
       if (!arc) return;
       if (typeof arc.w0 !== "number") adopt(arc);
       // Progress is READ off the shared clock, never summed. A written arc.t
@@ -568,8 +577,6 @@ const WeatherArc = (function () {
       if (wet !== arc.wet) {
         if (wet) reseedRain(vw);
         Particles.rainShow(wet);
-      }
-      if (wet !== arc.wet) {
         if (G.soundOn) { if (wet) GameAudio.startRain(); else GameAudio.stopRain(); }
       }
       arc.wet = wet; arc.raining = raining;
@@ -589,30 +596,69 @@ const WeatherArc = (function () {
     // Continuous track wetness → frame.wetness for every renderer. LightKnobs.LT
     // wetness ≥ 0 is the LIVE tuner / localStorage diagnostic pin only — shipped
     // LightPresets must leave the knob at AUTO (−0.05) so dry cannot look wet.
-    function syncWetness(dt) {
+    function syncWetness(dt, snap) {
       const frame = G.frame;
       if (!frame) return;
+      syncSegs(frame, dt);
       const knobs = (typeof LightKnobs !== "undefined" && LightKnobs) ? LightKnobs.LT : null;
-      const pin = knobs && typeof knobs.wetness === "number" ? knobs.wetness : -0.05;
-      if (pin >= 0) {
-        frame.wetness = pin;
+      if (knobs && typeof knobs.wetness === "number" && knobs.wetness >= 0) {
+        frame.wetness = knobs.wetness;
         return;
       }
       // The VIEW's road: the lap mean (trackWetness) unless a local shower makes it position-dependent.
       const wetTarget = (local(arc) || (G.player && Number.isFinite(G.player.x))) && hasRC() ? viewWetness() : (G.trackWetness ? G.trackWetness() : 0);
       const cur = frame.wetness || 0;
-      const step = (dt == null || !(dt > 0)) ? 1 : Math.min(1, dt * 0.8);
-      frame.wetness = cur + (wetTarget - cur) * step;
+      // dt 0 (the photo studio's render(0) pump) HOLDS: a paused frame must not
+      // jump the puddles (#6881 R6). Only `snap` (the race start, an agent's
+      // headless step(0)) jumps, so a rain race's first frame is wet instead of
+      // fading in over ~3-4 s under full-wet grip (#6881 R2).
+      frame.wetness = cur + (wetTarget - cur) * (snap ? 1 : dt > 0 ? Math.min(1, dt * 0.8) : 0);
+    }
+
+    // ── Per-segment road wetness (#6909 phase 1: data only) ─────────────────
+    // frame.wetness is ONE value, the view car's road, so a soaked sector ahead
+    // reads dry until the camera drives in. frame.wetnessSegs carries the road
+    // along the whole lap beside it: WET_SEGS equal arc segments, segment i
+    // centred on lap fraction (i + 0.5) / WET_SEGS (RainCells.segFrac), each the
+    // along-lap wetness there — no drying line (that is lateral, per car). Fixed
+    // length, so a renderer can bind it as a uniform array; lap-wide weather
+    // fills every slot with the lap value. No renderer reads it yet (phase 2).
+    const _segT = new Float64Array(WET_SEGS);
+    /** frame.wetnessSegs, from syncWetness: the tuner pin fills every slot; else
+     *  the same 0.8/s ramp as frame.wetness (dt null or <= 0 snaps), so a settle
+     *  or a chip cut eases per segment exactly as the global value does. */
+    function syncSegs(frame, dt) {
+      let out = frame.wetnessSegs;
+      if (!(out instanceof Float32Array) || out.length !== WET_SEGS) out = frame.wetnessSegs = new Float32Array(WET_SEGS);
+      const lt = typeof LightKnobs !== "undefined" && LightKnobs ? LightKnobs.LT : null;
+      if (lt && typeof lt.wetness === "number" && lt.wetness >= 0) { out.fill(lt.wetness); return; }
+      const step = dt > 0 ? Math.min(1, dt * 0.8) : 1, tgt = sectorWetness(_segT);
+      for (let i = 0; i < WET_SEGS; i++) out[i] += (tgt[i] - out[i]) * step;
+    }
+    /** Target wetness per arc segment into `out` (length WET_SEGS), unlagged.
+     *  A local shower resamples the rain-cell grid; otherwise the lap value. */
+    function sectorWetness(out) {
+      out = out || new Float64Array(WET_SEGS);
+      const a = arc;
+      if (local(a) && hasRC()) {
+        if (typeof a.w0 !== "number") adopt(a);
+        const g = segs(a);
+        for (let i = 0; i < WET_SEGS; i++) out[i] = g.length === WET_SEGS ? g[i] : RainCells.sample(g, (i + 0.5) / WET_SEGS);
+      } else {
+        const w = G.trackWetness ? G.trackWetness() : wetness();
+        for (let i = 0; i < WET_SEGS; i++) out[i] = w;
+      }
+      return out;
     }
 
     return {
       setWeatherLive, setTimeOfDay, weather,
-      startArc, tick, syncWetness, wetness, wetnessAt, dryLine, viewWetness, rainfallAt, viewRainfall, sheltered, rainSectors, planFor, previewPlan, previewArc, startChangeable, endChangeable, restoreBase, endSession,
+      startArc, tick, syncWetness, wetness, wetnessAt, sectorWetness, dryLine, viewWetness, rainfallAt, viewRainfall, sheltered, rainSectors, planFor, previewPlan, previewArc, startChangeable, endChangeable, restoreBase, endSession,
       get arc() { return arc; }, set arc(v) { arc = v; grooveEnd = null; if (!arc) setWeatherLive(G.raceWeather); },
       get changeable() { return changeable; }, set changeable(v) { changeable = v; },
       get plan() { return plan; }, set plan(v) { plan = v; },
     };
   }
-  return { create, arcSeq, showerStopPays, LADDER, VALID, TARGETS };
+  return { create, arcSeq, showerStopPays, LADDER, VALID, TARGETS, WET_SEGS };
 })();
 Object.freeze(WeatherArc);

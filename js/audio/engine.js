@@ -1500,6 +1500,7 @@ var GameAudio = (function () {
     harvLevel = 0; harvBrakeLevel = 0; harvCoastLevel = 0;
     shiftDuck = 0;
     shiftDuckT = 0;
+    limSince = null;   // an old ctx-clock stamp reads as a long-held cut and skips the limiter chop on resume
     pullT = 0;
     overrunT = 0;   // an AudioContext stamp: a rebuilt ctx restarts near 0, and a
                     // stale future value both silences the crackle and blocks its re-arm

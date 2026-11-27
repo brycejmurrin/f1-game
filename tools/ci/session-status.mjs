@@ -19,7 +19,7 @@
 //
 // Reads only: local git (no fetch — run `git fetch origin <deploy>` first for a
 // fresh ahead/behind), artifacts/logs/*.log, and test-bg's state file (liveSpecRun).
-// Exit 0 always.
+// Exit 0; exit 2 on an unknown flag (strictFlags).
 //
 //   --pr [<number>]  appends the PR's LIVE state (head sha, draft/ready,
 //   mergeable_state, newest CI conclusion), each line stamped with the UTC time

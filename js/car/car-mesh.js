@@ -950,14 +950,6 @@ function addAeroLamp(out, state) {
             : [0.10, 0.10, 0.13];                   // dark: no zone here, or nothing to do
   CockpitRig.box(out, 0.082, 0.024, -0.031, 0.019, 0.019, 0.003, COL);
 }
-const _aeroLamps = {};
-function getAeroLamp(state) {                       // 0 unavailable, 1 armed, 2 open
-  if (_aeroLamps[state]) return _aeroLamps[state];
-  const out = { pos: [], nrm: [], col: [], idx: [] };
-  addAeroLamp(out, state);
-  _aeroLamps[state] = _gfx.createMesh(out);
-  return _aeroLamps[state];
-}
 let _aeroBarBg = null, _aeroBarFill = null;
 function getAeroBar(fill) {
   if (fill ? _aeroBarFill : _aeroBarBg) return fill ? _aeroBarFill : _aeroBarBg;
@@ -1305,7 +1297,7 @@ function getOtLamp(active) {
 }
 
   // MIRROR_GLASS_V stays module-local (only getMirrorGlass reads it).
-  return { init, releaseIdleFlaps, flapState, getMirrorFallback, getMirrorGlass, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getAeroFlapSet, getCockpitWheel: CockpitRig.getCockpitWheel, cockpitWheelOpts: CockpitRig.cockpitWheelOpts, wheelFinish: CockpitRig.wheelFinish, WHEEL_FINISHES: CockpitRig.WHEEL_FINISHES, WHEEL_DEFAULT: CockpitRig.WHEEL_DEFAULT, wheelFinishPass: CockpitRig.wheelFinishPass, getCockpitDash: CockpitRig.getCockpitDash, getCockpitCabin: CockpitRig.getCockpitCabin, getCockpitGlass: CockpitRig.getCockpitGlass, COCKPIT_WHEELS: CockpitRig.COCKPIT_WHEELS, getLedStrip: CockpitRig.getLedStrip, LED_ROWS: CockpitRig.LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, getWheelStatus, getAeroLamp, getAeroBar, drawWheelExtras, primeWheelExtras, drawRetroTelemetry, primeRetroDigits, drawClassicTelemetry: CockpitRig.drawClassicTelemetry, drawRearLights, REAR_LIGHTS, drawAeroEdge, drawTailGlow, flushTailGlows, drawMirrorLights, ersLightCode, gridStrobe,
+  return { init, releaseIdleFlaps, flapState, getMirrorFallback, getMirrorGlass, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getAeroFlapSet, getCockpitWheel: CockpitRig.getCockpitWheel, cockpitWheelOpts: CockpitRig.cockpitWheelOpts, wheelFinish: CockpitRig.wheelFinish, WHEEL_FINISHES: CockpitRig.WHEEL_FINISHES, WHEEL_DEFAULT: CockpitRig.WHEEL_DEFAULT, wheelFinishPass: CockpitRig.wheelFinishPass, getCockpitDash: CockpitRig.getCockpitDash, getCockpitCabin: CockpitRig.getCockpitCabin, getCockpitGlass: CockpitRig.getCockpitGlass, COCKPIT_WHEELS: CockpitRig.COCKPIT_WHEELS, getLedStrip: CockpitRig.getLedStrip, LED_ROWS: CockpitRig.LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, getWheelStatus, getAeroBar, drawWheelExtras, primeWheelExtras, drawRetroTelemetry, primeRetroDigits, drawClassicTelemetry: CockpitRig.drawClassicTelemetry, drawRearLights, REAR_LIGHTS, drawAeroEdge, drawTailGlow, flushTailGlows, drawMirrorLights, ersLightCode, gridStrobe,
     cockpitWheelRoll: CockpitRig.cockpitWheelRoll, WHEEL_ROLL_LAMBDA: CockpitRig.WHEEL_ROLL_LAMBDA, getForearm: CockpitRig.getForearm, suitColour: CockpitRig.suitColour, forearmEnds: CockpitRig.forearmEnds, forearmMatrix: CockpitRig.forearmMatrix, drawForearms: CockpitRig.drawForearms, ARM_R: CockpitRig.ARM_R, ARM_TAPER: CockpitRig.ARM_TAPER };
 })();
 Object.freeze(CarMesh);

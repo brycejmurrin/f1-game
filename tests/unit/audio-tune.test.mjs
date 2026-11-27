@@ -1933,6 +1933,15 @@ test("recorded radio voice: clips play back to back through the radio band; a li
   assert.equal(GameAudio.radioVoice([clip(0.2)], 0, { volume: 0 }), null, "volume 0 is off");
 });
 
+test("#6903 row 5: with SOUND EFFECTS off no courtesy sting plays, so no lead-in is budgeted", async () => {
+  const { GameAudio: A, release } = boot(); A.init(); await release();
+  A.setSfxEnabled(true);
+  assert.ok(A.radioLeadS("radio") > 0, "baseline: the sting has a lead with effects on");
+  A.setSfxEnabled(false);
+  assert.equal(A.radioLeadS("radio"), 0, "effects off: the words must not wait for a figure that never plays");
+  assert.equal(A.radioLeadS("announcer"), 0);
+});
+
 test("clean and vintage radio presets change the recorded band and cue, but preserve the broadcast", async () => {
   const { GameAudio: A, release } = boot(); A.init(); await release();
   assert.equal(A.radioPreset(), "modern");
@@ -2896,4 +2905,19 @@ test("GRAVEL at full strength under a cylinder cut never takes the engine gain b
   assert.ok(A.gravelDepth() > 0, "precondition: gravel is audible");
   assert.ok(A.gravelDepth() + A.cylCutDepth() <= A.engineLevel() + 1e-9,
     `gravel ${A.gravelDepth()} + cut ${A.cylCutDepth()} exceeds the engine level ${A.engineLevel()} — engGain goes negative`);
+});
+
+test("a pause at the redline does not carry the limiter hold clock across the resume (#6886 row 9)", async () => {
+  const { GameAudio: A, release, ctxTime } = boot();
+  A.init(); await release(); A.startEngine();
+  const at = () => A.setEngine(0.99, 0, false, 0.95, 8, {});
+  at();
+  ctxTime(0.3); at();
+  assert.ok(A.limiterHeld() > 0, "precondition: the top-gear cut is being held");
+  A.stopEngine();
+  ctxTime(30);                 // a long pause on the same ctx clock
+  A.startEngine();
+  at();
+  assert.ok(A.limiterDepth() > 0, "resuming at the redline gets the limiter chop again");
+  assert.equal(A.limiterHeld(), 0, "the hold clock restarts at resume");
 });

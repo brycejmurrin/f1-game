@@ -409,3 +409,28 @@ test("F4 of #3117: the slow guests run on exactly one row whenever slow is sched
     ]);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
+
+// Hunt #7147 findings 2 and 3.
+test("a changed tests/unit helper selects the slices of the tests that load it", async () => {
+  const { pick, helperConsumers } = await import("../../tools/ci/pick-unit-slices.mjs");
+  const users = helperConsumers("tests/unit/fake-audio-vm.cjs");
+  assert.ok(users.length > 0, "fake-audio-vm.cjs has consumers");
+  const got = pick(["tests/unit/fake-audio-vm.cjs"], { dropped: [] }).slices;
+  assert.ok(got.has("vm-a1"), "audio-unit consumers run on vm-a1");
+  assert.ok(got.size > 1, "more than guards alone");
+});
+
+test("a helper nobody loads selects every slice", async () => {
+  const { pick, SLICES } = await import("../../tools/ci/pick-unit-slices.mjs");
+  const got = pick(["tests/unit/" + "orphan-helper.cjs"], { dropped: [], helperConsumers: () => [] }).slices;
+  assert.deepEqual([...got.keys()].sort(), [...SLICES].sort());
+});
+
+test("changedFiles refuses when no deploy merge-base resolves (never HEAD)", async () => {
+  const { changedFiles } = await import("../../tools/ci/pick-unit-slices.mjs");
+  assert.throws(() => changedFiles([], { resolveBase: () => null }), /no deploy base/);
+  const seen = [];
+  const got = changedFiles([], { resolveBase: () => ({ sha: "abc" }), changedWithUntracked: (b) => { seen.push(b); return ["x.js"]; } });
+  assert.deepEqual(got, ["x.js"]);
+  assert.deepEqual(seen, ["abc"]);
+});

@@ -792,6 +792,7 @@
         "tests/unit/boost-hold-restart-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
         "tests/unit/camera-mode-scope.test.mjs",
+        "tests/unit/car-field-writes.test.mjs",
         "tests/unit/car-fields-lifetimes-vm.test.mjs",
         "tests/unit/car-fields-vm.test.mjs",
         "tests/unit/classification-vm.test.mjs",
@@ -821,6 +822,7 @@
         "tests/unit/input-ghost-replay-vm.test.mjs",
         "tests/unit/jump-start-vm.test.mjs",
         "tests/unit/kerb-drive-from-rest-vm.test.mjs",
+        "tests/unit/lap-retry-vm.test.mjs",
         "tests/unit/local-storm-gates-vm.test.mjs",
         "tests/unit/lockup-bench-vm.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",
@@ -879,6 +881,7 @@
         "tests/unit/storm-vm.test.mjs",
         "tests/unit/track-from-projection-vm.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
+        "tests/unit/tt-garage-door-flow-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs",
         "tests/unit/tt-pit-lane-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
@@ -923,6 +926,7 @@
         "tests/unit/boost-hold-restart-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
         "tests/unit/camera-mode-scope.test.mjs",
+        "tests/unit/car-field-writes.test.mjs",
         "tests/unit/car-fields-lifetimes-vm.test.mjs",
         "tests/unit/car-fields-vm.test.mjs",
         "tests/unit/classification-vm.test.mjs",
@@ -951,6 +955,7 @@
         "tests/unit/input-ghost-replay-vm.test.mjs",
         "tests/unit/jump-start-vm.test.mjs",
         "tests/unit/kerb-drive-from-rest-vm.test.mjs",
+        "tests/unit/lap-retry-vm.test.mjs",
         "tests/unit/local-storm-gates-vm.test.mjs",
         "tests/unit/lockup-bench-vm.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",
@@ -1009,6 +1014,7 @@
         "tests/unit/storm-vm.test.mjs",
         "tests/unit/track-from-projection-vm.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
+        "tests/unit/tt-garage-door-flow-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs",
         "tests/unit/tt-pit-lane-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
@@ -1092,6 +1098,7 @@
         "tests/unit/ai-wing-spread-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
         "tests/unit/camera-mode-scope.test.mjs",
+        "tests/unit/car-field-writes.test.mjs",
         "tests/unit/car-fields-lifetimes-vm.test.mjs",
         "tests/unit/car-fields-vm.test.mjs",
         "tests/unit/classification-vm.test.mjs",
@@ -1103,6 +1110,7 @@
         "tests/unit/drift-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
+        "tests/unit/lap-retry-vm.test.mjs",
         "tests/unit/lockup-bench-vm.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",
         "tests/unit/longitudinal-vm.test.mjs",
@@ -1139,6 +1147,7 @@
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/spoken-lang-offer-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
+        "tests/unit/tt-garage-door-flow-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs",
         "tests/unit/tt-pit-lane-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
@@ -1690,6 +1699,7 @@
         "tests/unit/real-race.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/save-file-golden.test.mjs",
+        "tests/unit/save-health-locale.test.mjs",
         "tests/unit/save-integrity-phase2.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/season-cal.test.mjs",
@@ -1727,8 +1737,10 @@
         "tests/unit/hud-arrange.test.mjs",
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/input-clock-rotate.test.mjs",
+        "tests/unit/input-coarse-switch-vm.test.mjs",
         "tests/unit/input-hud-properties.test.mjs",
         "tests/unit/key-binds-calibration.test.mjs",
+        "tests/unit/key-binds-clear-slot.test.mjs",
         "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/key-binds-ownership.test.mjs",
         "tests/unit/key-binds-pad-menu.test.mjs",
@@ -4343,6 +4355,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/race/lap-retry.js",
+      "global": "LapRetry",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
       "path": "js/race/light-tune-edit.js",
       "global": "LightTuneEdit",
       "roster": "tag"
@@ -4693,6 +4710,11 @@
       "roster": "DEFERRED:three"
     },
     {
+      "path": "js/render/three/tlx-debug.js",
+      "global": "TLXDebug",
+      "roster": "DEFERRED:three"
+    },
+    {
       "path": "js/render/three/tlx-mem.js",
       "global": "TLXShaders",
       "roster": "DEFERRED:three"
@@ -4705,6 +4727,16 @@
     {
       "path": "js/render/three/tlx-shadow.js",
       "global": "TLXShaders",
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tlx-texpool.js",
+      "global": "TLXTexPool",
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tlx-util.js",
+      "global": "TLXUtil",
       "roster": "DEFERRED:three"
     },
     {
@@ -4930,7 +4962,7 @@
     {
       "path": "js/track/scenery/graph.js",
       "global": "TrackGraph",
-      "roster": "tag"
+      "roster": "LAZY_TRACK_BUILD"
     },
     {
       "path": "js/track/scenery/guards.js",

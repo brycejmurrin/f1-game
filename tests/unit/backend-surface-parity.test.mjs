@@ -1,5 +1,6 @@
-// backend-surface-parity — every name GLX publishes must be an OWN property of
-// every other renderer backend. `undefined` is a fine value; ABSENT is not.
+// backend-surface-parity — every name in the frozen BACKEND_SURFACE list
+// (docs/backend-surface.txt, D-058) must be an OWN property of every renderer
+// backend (GLX, TLX, WGX), and GLX may not publish a name the list lacks. `undefined` is a fine value; ABSENT is not.
 //
 // WHY ABSENCE IS THE BUG. game.js installs an alternate backend by copying its
 // descriptors onto GLX:
@@ -73,6 +74,8 @@ function surfaceOf(relPath) {
   return out;
 }
 
+const LIST = fs.readFileSync(path.join(ROOT, "docs/backend-surface.txt"), "utf8")
+  .split("\n").filter((l) => l && !l.startsWith("#"));
 const GLX_FILE = "js/render/glx/glx.js";
 const BACKENDS = [
   ["WGX (WebGPU)", "js/render/webgpu/wgx.js"],
@@ -90,13 +93,21 @@ test("the scanner actually finds a surface in each backend", () => {
   }
 });
 
-test("every GLX member is declared by every other backend", () => {
-  const glx = surfaceOf(GLX_FILE);
-  for (const [name, file] of BACKENDS) {
-    const theirs = surfaceOf(file);
-    const missing = [...glx].filter((k) => !theirs.has(k)).sort();
+export function missingFrom(list, surface) {
+  return list.filter((k) => !surface.has(k)).sort();
+}
+
+test("BACKEND_SURFACE is a sorted, unique, non-trivial list", () => {
+  assert.ok(LIST.length >= 80, `list has only ${LIST.length} names`);
+  assert.equal(new Set(LIST).size, LIST.length, "duplicate name in the list");
+  assert.deepEqual([...LIST], [...LIST].sort(), "keep the list sorted");
+});
+
+test("every BACKEND_SURFACE name is declared by GLX, TLX and WGX", () => {
+  for (const [name, file] of [["GLX", GLX_FILE], ...BACKENDS]) {
+    const missing = missingFrom(LIST, surfaceOf(file));
     assert.deepEqual(missing, [],
-      `${name} does not declare ${missing.length} GLX member(s): ${missing.join(", ")}\n\n` +
+      `${name} does not declare ${missing.length} BACKEND_SURFACE name(s): ${missing.join(", ")}\n\n` +
       `Because game.js installs a backend by descriptor-copy onto GLX, an absent\n` +
       `name keeps GLX's OWN function — which runs against a null gl/SHD/CHK\n` +
       `because GLX.init() never ran here. Every feature test for it passes and\n` +
@@ -104,5 +115,21 @@ test("every GLX member is declared by every other backend", () => {
       `Fix it in ${file} by either implementing the member, or declaring it\n` +
       `absent — \`${missing[0] || "name"}: undefined,\` — which is a real fix, not\n` +
       `a silencer: it makes \`if (gfx.${missing[0] || "name"})\` answer honestly.`);
+  }
+});
+
+test("GLX publishes nothing outside BACKEND_SURFACE (the list is frozen; a new name is a recorded edit)", () => {
+  const extra = [...surfaceOf(GLX_FILE)].filter((k) => !LIST.includes(k)).sort();
+  assert.deepEqual(extra, [],
+    `GLX publishes ${extra.length} name(s) not in docs/backend-surface.txt: ${extra.join(", ")}\n` +
+    `A new interface name must be added to the list AND declared by TLX and WGX (undefined is fine).`);
+});
+
+test("the check bites: a TLX or GLX surface with one name removed fails", () => {
+  for (const file of [GLX_FILE, "js/render/three/tlx.js"]) {
+    const s = surfaceOf(file);
+    const victim = LIST[Math.floor(LIST.length / 2)];
+    s.delete(victim);
+    assert.deepEqual(missingFrom(LIST, s), [victim], `${file}: removing ${victim} must be reported`);
   }
 });
