@@ -182,7 +182,7 @@ test("wiring: a LAZY_AGENT file, a runtime SETTINGS hub door, fixed-size CSS, an
   // Two tracks: the whole row two-up, beside PROGRESS three-up (measured 844x390: the hub's scroll height stays 421 px).
   assert.equal(decl["grid-column"], "span 2");
   const lb = read("js/core/lazy-bundles.js");
-  assert.match(lb, /AGENT_FILES\.filter\(\(f\) => \/\\\/bridge-link\\\.js\$\/\.test\(f\)\), \[\], \{ loaded: agentScriptsLoaded \}/);
+  assert.match(lb, /AGENT_FILES\.filter\(\(f\) => \/\\\/bridge-link\\\.js\$\/\.test\(f\)\), \[\], \{ strict: true, loaded: agentScriptsLoaded \}/);
   assert.match(lb, /BridgeLink\.open\(\{ loadAgentSurface \}\)/);
   assert.match(lb, /getElementById\("pm-settings-index"\)[\s\S]{0,400}door\.id = "pm-claude-link"[\s\S]{0,600}hub\.appendChild\(door\)/, "the door is built into the SETTINGS hub at boot");
   // The panel never prints or logs the token, and never builds an address from it.

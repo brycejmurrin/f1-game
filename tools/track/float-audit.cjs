@@ -15,7 +15,7 @@
 //        propMin[cell]   = lowest prop/glass/gate vertex (the model's footing)
 //   2. A cell whose lowest prop geometry sits > THRESH above the ground there is
 //      a FLOAT CANDIDATE. Cells with no rendered ground fall back to the
-//      circuit's own TrackSurface.heightAt() closed form (what groundYAt uses).
+//      circuit's own surface.heightAt() closed form (what groundYAt uses).
 //   3. Flood-fill adjacent candidate cells into CLUSTERS so one hovering object
 //      is reported once, not fifty times.
 //   4. SUPPORT TEST — the false-positive filter. A tree canopy, a grandstand
@@ -148,7 +148,7 @@ function audit(id) {
     if (best < 0) return null;
     const lat = Math.max(0, Math.sqrt(bestD) - hw[best]);
     // WITH the side: the profile is flat under the pit complex on the pit
-    // side only (TrackSurface.heightAt), and the side-less closed form read
+    // side only (surface.heightAt), and the side-less closed form read
     // the slope the mesh no longer draws — Catalunya's hedge on the flattened
     // apron edge read 2 m over ground it was standing on.
     const side = ((wx - px[best]) * track.rx[best] + (wz - pz[best]) * track.rz[best]) < 0 ? -1 : 1;

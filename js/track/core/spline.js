@@ -151,9 +151,9 @@ const TrackSpline = (function () {
   // computation for any track built before the LUT existed. Signature unchanged.
   function curvature(track, s) {
     const cv = track.curv;
-    if (!cv) return curvatureRaw(track, s);
     const n = track.n, L = track.total;
     if (!(n > 0) || !(L > 0) || !isFinite(s)) return 0;
+    if (!cv) return curvatureRaw(track, s);
     s %= L; if (s < 0) s += L;
     const fi = s / L * n;
     const i = Math.floor(fi) % n, j = (i + 1) % n, f = fi - Math.floor(fi);
@@ -315,10 +315,13 @@ const TrackSpline = (function () {
   // side (sideSign >= 0 = right/+x, < 0 = left). Derived from where solid barriers
   // were placed (see buildProps), so the car stops just before a model. Uses the
   // tighter of the two bracketing nodes — conservative, never lets the car past a
-  // barrier at a node transition.
+  // barrier at a node transition. A non-finite `s` or an empty track returns the
+  // finite default hw + 9 (hw[0] when present), never NaN, so the per-car wall
+  // clamp cannot be handed a NaN limit.
   function wallAt(track, s, sideSign) {
     const arr = sideSign >= 0 ? track.barR : track.barL;
     const n = track.n, L = track.total;
+    if (!(n > 0) || !(L > 0) || !isFinite(s)) return ((track.hw && track.hw[0]) || 0) + 9;
     if (!arr) {                                   // pre-build fallback
       const i0 = (((Math.round(s / L * n) % n) + n) % n);
       return track.hw[i0] + (track.def && track.def.street ? -0.8 : 9);

@@ -56,7 +56,7 @@ function load({ mobile = false, vTop = VMAX, particlesStub = null, autoShed = 0,
   const P = ctx.Particles;
   P.init({ mobileTier: mobile, drawParticles: (data, floats, additive) => draws.push({ data: Array.from(data.subarray(0, floats)), floats, additive }) });
   const skids = ctx.SkidMarks.create();
-  const G = { vTop: () => vTop };
+  const G = { vTop: () => vTop, pace: { vStd: (v) => v * VMAX / vTop } };   // G.pace.vStd: PaceMath's v · VMAX / vTop()
   const fx = ctx.CarFx.create(G, { skids, Particles: particlesStub || P });
   return { ctx, P, skids, fx, draws, SkidMarks: ctx.SkidMarks, CarFx: ctx.CarFx };
 }

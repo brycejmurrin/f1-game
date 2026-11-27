@@ -1,8 +1,7 @@
 /* Apex 26 — WGX post-processing subsystem (split out of js/render/webgpu/wgx.js).
  * Owns post pipeline construction (_buildPost / _ensureSpatial). Scene targets +
- * present() stay in wgx.js for this peel (soft-present / begin coupling); a
- * follow-up can move ensureTargets + present() here to fully mirror
- * js/render/glx/post.js. Must load before js/render/webgpu/wgx.js.
+ * present() stay in wgx.js (soft-present / begin coupling; D-049 froze the
+ * follow-up move). Must load before js/render/webgpu/wgx.js.
  */
 "use strict";
 

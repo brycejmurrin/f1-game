@@ -109,7 +109,8 @@ export function idleTimer(ms, fire, { setT = setTimeout, clearT = clearTimeout }
   return { touch: arm, stop: () => { stopped = true; if (t) clearT(t); t = null; } };
 }
 
-export async function startBrowserMcp({ port = 3001, token, root = ROOT, allowQueryToken = false, idleMs = 0, onIdle = null } = {}) {
+export async function startBrowserMcp({ port = 3001, token, root = ROOT, allowQueryToken = false, idleMs = 0, onIdle = null, deps = {}, evalTimeoutMs = 30_000 } = {}) {
+  const d = { startStaticServer, launchChromium, openBrycePhone, gotoGame, installProbeInit, ...deps };
   if (!token) throw new Error("token required");
   let mcp;
   const idle = idleTimer(idleMs, () => { (onIdle || (() => mcp?.close()))(); });
@@ -123,9 +124,9 @@ export async function startBrowserMcp({ port = 3001, token, root = ROOT, allowQu
   }
   const invalid = (code, message) => ({ jsonrpc: "2.0", id: null, error: { code, message } });
 
-  async function ensurePage(orientation) {
+  async function ensurePageOnce(orientation) {
     const orient = orientation === "portrait" ? "portrait" : "landscape";
-    if (!state.game) state.game = await startStaticServer(root);
+    if (!state.game) state.game = await d.startStaticServer(root);
     if (state.page && state.orient !== orient) {
       await state.context.close();
       state.context = null;
@@ -133,18 +134,26 @@ export async function startBrowserMcp({ port = 3001, token, root = ROOT, allowQu
     }
     if (!state.page) {
       if (!state.browser) {
-        state.browser = await launchChromium({
+        state.browser = await d.launchChromium({
           headless: true,
           args: chromiumArgsForBackend("webgl2"),
         });
       }
-      const { context, page } = await openBrycePhone(state.browser, { window: orient === "portrait" ? "portrait" : "standalone", profile: false });
+      const { context, page } = await d.openBrycePhone(state.browser, { window: orient === "portrait" ? "portrait" : "standalone", profile: false });
       state.context = context;
       state.page = page;
       state.orient = orient;
-      await installProbeInit(state.page, { backend: "webgl2" });
+      await d.installProbeInit(state.page, { backend: "webgl2" });
     }
     return state.page;
+  }
+
+  // Serialise: two concurrent opens must not both build a context (the loser leaked).
+  let pageChain = Promise.resolve();
+  function ensurePage(orientation) {
+    const run = pageChain.then(() => ensurePageOnce(orientation));
+    pageChain = run.catch(() => {});
+    return run;
   }
 
   async function callTool(name, args) {
@@ -163,7 +172,7 @@ export async function startBrowserMcp({ port = 3001, token, root = ROOT, allowQu
     }
     if (name === "browser_open") {
       const page = await ensurePage(args.orientation);
-      await gotoGame(page, state.game.url);
+      await d.gotoGame(page, state.game.url);
       const info = await page.evaluate(() => ({
         title: document.title,
         apex: !!(window.__apex && window.__apex.race),
@@ -177,8 +186,13 @@ export async function startBrowserMcp({ port = 3001, token, root = ROOT, allowQu
     }
     if (name === "browser_eval") {
       if (!state.page) throw new Error("call browser_open first");
-      const value = await state.page.evaluate(String(args.expression || ""));
-      return { content: [{ type: "text", text: JSON.stringify(value) }] };
+      let timer;
+      const value = await Promise.race([
+        state.page.evaluate(String(args.expression || "")),
+        new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(`browser_eval timed out after ${evalTimeoutMs} ms`)), evalTimeoutMs); }),
+      ]).finally(() => clearTimeout(timer));
+      // JSON.stringify(undefined) is undefined, which drops `text` from the reply.
+      return { content: [{ type: "text", text: value === undefined ? "undefined" : JSON.stringify(value) }] };
     }
     if (name === "browser_shot") {
       if (!state.page) throw new Error("call browser_open first");

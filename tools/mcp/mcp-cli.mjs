@@ -194,12 +194,14 @@ function probeCalls(o) {
 const argv = process.argv.slice(2);
 let calls;
 let consoleGrep = null;
+let o_json = false;   // probe --json: print results in full (no 2500-char cut)
 if (argv[0] === "probe") {
   let o;
   try { o = parseProbeArgs(argv.slice(1)); }
   catch (e) { console.error(e.message); process.exit(2); }
   calls = probeCalls(o);
   consoleGrep = o.console;
+  o_json = !!o.json;
   // --dry-run prints the call array a real run would send and exits, so the
   // browser is not on the critical path when what you are debugging is the
   // batch (an out-of-order set/reload probes the wrong backend, silently).
@@ -297,7 +299,7 @@ for (const c of calls) {
   let out = (r.result?.content || []).map((x) => x.text ?? `[${x.type}]`).join("\n");
   // A console dump is the one result worth filtering rather than truncating: the
   // interesting line is routinely message 26 of 44, past any slice().
-  let limit = 2500;
+  let limit = o_json ? Infinity : 2500;
   if (c.name === "list_console_messages" && consoleGrep !== null) {
     if (consoleGrep) {
       const re = new RegExp(consoleGrep, "i");

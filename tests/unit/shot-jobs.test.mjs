@@ -14,6 +14,9 @@ import {
   loadBatchFile,
   SHOT_USAGE,
 } from "../../tools/shot/shot-jobs.mjs";
+import { spawnSync } from "node:child_process";
+import { parseCaptureOptions, assertCaptureFlagsSupported, splitTrackAndDir } from "../../tools/shot/capture-options.mjs";
+import { evalVerdict } from "../../tools/shot/apex-eval.mjs";
 import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -215,4 +218,73 @@ test('A/B selectors derive scene metadata and isolate individual lens effects',(
  assert.equal(pairs[1].selection.effect,'refraction');
  assert.equal(selectionFields({race:'Monza GP',position:'0.18'}).position,'0.18');
  for(const invalid of [{timing:'tomorrow'},{weather:'hail'},{position:1},{position:'bad'},{effect:{}}])assert.throws(()=>selectionFields(invalid));
+});
+
+// #7228: tools/shot argv handling (no Chromium)
+
+const run = (tool, args) => spawnSync(process.execPath, [path.join(ROOT, "tools/shot", tool), ...args], { cwd: ROOT, encoding: "utf8", timeout: 60000 });
+
+test("shot.mjs reads --name=value like --name value", () => {
+  const eq = parseShotArgv(["monza", "0.1", "--weather=wet", "--tod=dusk", "--az=90", "--team=ferrari", "--wait=30"], ROOT);
+  const sp = parseShotArgv(["monza", "0.1", "--weather", "wet", "--tod", "dusk", "--az", "90", "--team", "ferrari", "--wait", "30"], ROOT);
+  assert.equal(eq.jobs[0].weather, "wet");
+  assert.equal(eq.jobs[0].tod, "dusk");
+  assert.equal(eq.jobs[0].az, 90);
+  assert.equal(eq.team, "ferrari");
+  assert.equal(eq.waitMs, 30000);
+  assert.deepEqual(eq.jobs[0], sp.jobs[0]);
+  assert.equal(eq.jobs[0].trackId, "monza");
+});
+
+test("shot.mjs rejects non-numeric --wait/--az and never lets a flag be a value", () => {
+  assert.throws(() => parseShotArgv(["monza", "--wait", "abc"], ROOT), /--wait/);
+  assert.throws(() => parseShotArgv(["monza", "--az=abc"], ROOT), /az/);
+  const j = parseShotArgv(["monza", "0.1", "--team", "--hud"], ROOT);
+  assert.equal(j.team, null);
+  assert.equal(j.jobs[0].showHud, true);
+});
+
+test("apex-capture: bogus command exits 2, --ultra exits 2", () => {
+  const bad = run("apex-capture.mjs", ["bogus"]);
+  assert.equal(bad.status, 2);
+  assert.match(bad.stderr, /unknown command/);
+  const ultra = run("apex-capture.mjs", ["cameras", "--ultra"]);
+  assert.equal(ultra.status, 2);
+  assert.match(ultra.stderr, /--ultra/);
+  assert.equal(run("apex-capture.mjs", ["tracks", "--tlx-webgpu"]).status, 2);
+});
+
+test("capture-options helper refuses a flag the tool does not read", () => {
+  const o = parseCaptureOptions(["--ultra"]);
+  assert.throws(() => assertCaptureFlagsSupported(o, "x", ["ultra"]), /--ultra/);
+  assert.doesNotThrow(() => assertCaptureFlagsSupported(parseCaptureOptions([]), "x", ["ultra", "tlxWebgpu"]));
+});
+
+test("apex-eval: unknown flag exits non-zero; undefined result prints null", () => {
+  const r = run("apex-eval.mjs", ["--bogus"]);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /unknown flag --bogus/);
+  assert.equal(run("apex-eval.mjs", ["--seed", "5", "monza", "a.info()"]).status, 2);
+  assert.equal(evalVerdict({ ok: true, val: undefined }).out, null);
+});
+
+test("shot-survey: --help ignores a bad --designs; bad --count/--fracs throw; --save-plan covers every track", () => {
+  const help = run("shot-survey.mjs", ["--help", "--designs", "/nonexistent.json"]);
+  assert.equal(help.status, 0);
+  assert.match(help.stderr, /usage/);
+  assert.notEqual(run("shot-survey.mjs", ["--tracks", "monza", "--count", "abc", "--dry-run"]).status, 0);
+  assert.notEqual(run("shot-survey.mjs", ["--tracks", "monza", "--fracs", "a,b", "--dry-run"]).status, 0);
+  const tmp = mkTmpDir("shot-argv-");
+  try {
+    const plan = path.join(tmp, "plan.json");
+    const r = run("shot-survey.mjs", ["--tracks=monza,spa", "--preset=quick", `--save-plan=${plan}`, "--dry-run"]);
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(fs.existsSync(path.join(tmp, "plan.monza.json")) && fs.existsSync(path.join(tmp, "plan.spa.json")));
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test("cameras: a path argument is the outdir, not the track", () => {
+  assert.deepEqual(splitTrackAndDir(["scratch/x"]), { track: "monza", dir: "scratch/x" });
+  assert.deepEqual(splitTrackAndDir(["spa", "./out"]), { track: "spa", dir: "./out" });
+  assert.deepEqual(splitTrackAndDir([]), { track: "monza", dir: null });
 });

@@ -592,8 +592,9 @@ const CARVIEW = [
 ];
 
 // verify-track.cjs / track-foundation Node-VM subset, in order.
-// "@circuits" expands to every file in CIRCUITS_DIR (readdir, sorted — VM
-// verification is per-id, so LIST order does not matter there).
+// "@circuits" expands to CIRCUITS in page order (gen-shell.mjs), NOT readdir
+// order: build-worker.js matches Tracks.LIST[idx] and throws "worker track list
+// differs" on a mismatch, so the order is load-bearing (pinned by a unit test).
 const TRACK_VM = [
   "js/core/log.js",
   "js/core/dev-flags.js",
@@ -1937,7 +1938,7 @@ const MOVED = {
 
 // Learn's modal loads only after the title door is used. The iframe requests
 // its standalone page and lesson assets without a ScriptLoader version query.
-const LAZY_LEARN = ["js/learn-drills/registry.js", "js/learn-drills/drill-card.js", "js/learn-drills/aero.js", "js/ui/learn-door.js", "js/ui/thumb-trainer.js", "js/learn-drills/thumb-drill.js", "js/learn-drills/lines.js", "js/learn-drills/tyre-heat.js", "js/learn-drills/taper.js", "js/learn-drills/grip.js", "js/learn-drills/torque.js", "js/learn-drills/wake.js", "js/learn-drills/telemetry.js", "js/learn-drills/charge.js", "js/learn-drills/rain-groove.js"];
+const LAZY_LEARN = ["js/learn-drills/registry.js", "js/learn-drills/drill-card.js", "js/learn-drills/aero.js", "js/ui/learn-door.js", "js/ui/thumb-trainer.js", "js/learn-drills/thumb-drill.js", "js/learn-drills/lines.js", "js/learn-drills/tyre-heat.js", "js/learn-drills/taper.js", "js/learn-drills/grip.js", "js/learn-drills/torque.js", "js/learn-drills/wake.js", "js/learn-drills/telemetry.js", "js/learn-drills/harvest.js", "js/learn-drills/charge.js", "js/learn-drills/rain-groove.js"];
 // DrillFork (#6559 B2): the strategy drills' what-if service, its own bundle, loaded only by a kind:"sim" drill.
 // The drill host (LAZY_LEARN, itself lazy) loads it with ScriptLoader as title-menu.js loads LAZY_LEARN, after
 // LazyBundles.ensureRaceSession(): no loader in the eager shell, whose bytes are at budget. It reads the coach and

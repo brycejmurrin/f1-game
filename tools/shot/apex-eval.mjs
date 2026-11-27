@@ -73,7 +73,7 @@ const SHAPE = "window.__shape = (" + shapeOf.toString() + "); window.__shape.sha
  *  browser route used to print it and exit 0). Pure, so a unit test holds it
  *  without a browser. */
 export function evalVerdict(result) {
-  if (result && result.ok) return { out: result.val, code: 0 };
+  if (result && result.ok) return { out: result.val === undefined ? null : result.val, code: 0 };
   return { out: result && result.err != null ? result : { err: "no result from the page" }, code: 1 };
 }
 
@@ -99,6 +99,10 @@ for (let i = 0; i < argv.length; i++) {
   if (a === "--raw" || a === "--vm") continue;
   const m = /^--backend(?:=(.*))?$/.exec(a);
   if (m) { backend = m[1] != null ? m[1] : argv[++i]; backendPinned = true; continue; }
+  if (a.startsWith("--") && a !== "--") {
+    console.error(`apex-eval: unknown flag ${a.split("=")[0]} (accepts --raw --vm --backend)`);
+    process.exit(2);
+  }
   rest.push(a);
 }
 if (!BACKENDS.includes(backend)) {
@@ -132,7 +136,7 @@ async function vmEvalSource(g, expression, rawOut) {
     const shapeOf = (${shapeOf.toString()});
     const v = await (async (a, g, __apex) => (${expression}
     ))(globalThis.__apex, g, globalThis.__apex);
-    return JSON.stringify(${rawOut ? "v" : "shapeOf(v)"}, null, 2);
+    return JSON.stringify(${rawOut ? "(v === undefined ? null : v)" : "shapeOf(v)"}, null, 2);
   })()`;
   return await vm.runInContext(source, g.ctx, { filename: "apex-eval:expr" });
 }

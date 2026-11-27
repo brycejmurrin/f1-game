@@ -53,9 +53,11 @@ test("a pair spans every straight between its two apexes — a kink does not spl
 
 test("every ZONE_COUNT circuit still resolves to exactly its published count", () => {
   const bad = [];
+  let compared = 0;
   for (const id of Object.keys(AeroZones.ZONE_COUNT)) {
     const def = Tracks.LIST.find((d) => d.id === id);
-    if (!def) continue;
+    if (!def) { bad.push(`no such circuit ${id}`); continue; }
+    compared++;
     const track = Tracks.buildCenterline(def);
     const az = AeroZones.create({ track });
     const zones = az.build();
@@ -64,4 +66,5 @@ test("every ZONE_COUNT circuit still resolves to exactly its published count", (
     }
   }
   assert.deepEqual(bad, [], "a circuit did not resolve to its published zone count:\n  " + bad.join("\n  "));
+  assert.ok(compared >= 10, `only ${compared} ZONE_COUNT circuits were compared; the loop ran (almost) zero times`);
 });
