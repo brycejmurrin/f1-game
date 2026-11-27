@@ -47,6 +47,9 @@
       // Final-straight run-in, right (racing ~0.842-0.850): a generated block landed 0.8 m under grade
       // on the #6922 centreline (ground-audit buried).
       { kind: "city", s0: 0.0, s1: 0.008, side: 1 },
+      // Same run-in, left (racing ~0.843): with the planar pitch snapped to the cm, the generic back-row tower
+      // at node 1308 (68 m out, half off the terrain mesh) sat 7.2 m under the bank (ground-audit buried 1).
+      { kind: "city", s0: 0.0, s1: 0.0006, side: -1 },
       // With the pit row restored on the re-surveyed line (#6922), three generated towers fight:
       // a stand on the pit-straight run-in (racing ~0.905) and two tower pairs (racing ~0.429, ~0.466).
       { kind: "city", s0: 0.059, s1: 0.065 },

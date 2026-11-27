@@ -153,14 +153,14 @@ bacinger outline ~4.8 m RMS off the real line, with T5/T7/T17 far too tight).
     `round(6 / step)` in `build-props.js` flipped from 2 to 1, so every 6 m street item doubled (+13 % drawn at
     detail 0). The pitch is now snapped to the cm; fuji and portimao build the same triangles.
   - Eight turn markers re-seated onto the built curvature peaks (corner-frames). T2 stays at its OpenF1 position
-    0.0696, on the exit of T1's single left arc, which has no second peak. Its corner-frames row waits on Bryce
-    (`needs-decision` on PR #7027).
+    0.0696, on the exit of T1's single left arc, which has no second peak. It is a baselined, allow-listed
+    corner-frames row (`vegas|T2`, 112 m; Bryce's decision A, 2026-11-27, relayed on PR #7027).
   - The census was re-measured: Vegas instanced is +0.93 %, from the 37 m longer lap and the restored pit row.
   - The start-line allowlist entry gains `lineK`, because the real T17 ends ~10 m before the line.
   - The coplanar baseline for vegas goes 1 → 0.
   - The odd-node seam test drops vegas.
   - The monza/monaco detail-0 props bytes were re-pinned for the longer pit-entry posts.
-  - Open: with the pitch snapped, the generic city back row (`every(26)`, 26 / 4.00 = 6.5, rounded to 7 nodes as on the tip)
-    stands a tower at node 1296 (racing 0.835, side −1, 44 m out) whose facade detail lies 7.2 m under the bank
-    (ground-audit buried 1). A city exclusion on that node makes the yield cascade worse (buried 3), so it needs a
-    hand-tuned fix.
+  - With the pitch snapped, the generic city back row stood a tower at node 1308 (racing ~0.843, side −1,
+    68 m out, half off the terrain mesh) whose facade rail lay 7.2 m under the bank (ground-audit buried 1). A
+    side −1 city exclusion at authored 0.0–0.0006 drops that one tower: buried 0, no yield cascade. An earlier
+    guess put the tower at node 1296; excluding that node made the cascade worse (buried 3).
