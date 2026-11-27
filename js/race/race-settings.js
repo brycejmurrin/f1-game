@@ -688,7 +688,7 @@ const RaceSettings = (function () {
 
     // POCKET WEEKEND: a season-setup preset on the sheet (a standalone race has no sprint). Only before a ball is
     // turned: applyConfig on a blank season loses nothing. The overwritten fields are kept to switch it off exactly.
-    const pocketOffered = () => isChampionship() && !isTimeTrial() && !netRoom && !!SeasonCal.hasProgress && !SeasonCal.hasProgress(G.season);
+    const pocketOffered = () => G.flow == "season" && !isTimeTrial() && !netRoom && !!SeasonCal.hasProgress && !SeasonCal.hasProgress(G.season);
     let pocketUndo = null;   // this session's overwritten fields; after a reload OFF falls back to the defaults
     function togglePocket() {
       if (!pocketOffered()) return false;

@@ -53,7 +53,9 @@ test("the whole weekend is at most 12 minutes on every circuit at default laps",
   assert.ok(list.length > 10, "circuits listed");
   for (const t of list) {
     const lapS = t.lengthKm * 1000 / 61;   // modelled lap: ~220 km/h average (61 m/s), about 95 s at Silverstone
-    const minutes = (1 + sprint + def) * lapS / 60;   // 1 quali lap + the sprint + the Grand Prix
+    const gp = Cal().roundLaps(def, null, t.gpLaps || 57);   // per circuit: clamped to its FULL, never raised
+    assert.equal(gp, Math.min(def, t.gpLaps || 57), `${t.id} GP laps`);
+    const minutes = (1 + sprint + gp) * lapS / 60;   // 1 quali lap + the sprint + the Grand Prix
     assert.ok(minutes <= 12, `${t.id}: ${minutes.toFixed(1)} min`);
   }
 });
