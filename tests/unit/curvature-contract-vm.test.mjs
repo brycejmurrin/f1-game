@@ -20,6 +20,7 @@
  * are allowed to — so the counterfactual holds the place and changes only
  * the arc. Sanity: a trial differs from its counterfactual when ROAD_FOLLOW is
  * on (the assist is meant to read the arc), so the swap is seen at all.
+ * The last test runs the same guard with LEARN's Racing Lines drill active (#6559 step 10).
  * Run: node --test tests/unit/curvature-contract-vm.test.mjs
  */
 import { test, before, after } from "node:test";
@@ -129,4 +130,44 @@ test("the swap is visible: with ROAD_FOLLOW on (an assist that reads the arc) th
     try { alt = r.trial(INPUTS[0]); } finally { unswap(); }
     assert.notEqual(alt.dHead, real.dHead, "ROAD_FOLLOW reads the arc, so the swap must show — the harness is blind otherwise");
   } finally { r.G.ROAD_FOLLOW = 0; }
+});
+
+// THE RACING LINES DRILL (js/learn-drills/lines.js, #6559 step 10, #6551 §3) shows the racing line's lesson and scores
+// against cones; neither may reach the car. From the drill's own begin() checkpoint, one LATE run by the helper's
+// pursuit driver (no curvature, no racing line in it) is driven three ways: with the drill's host sampling and its
+// widget drawing every frame, with neither run at all, and with the host and widget on while every arc and
+// racing-line table is swapped. The car's trace must be bit-identical all three times, and the swapped run must
+// score exactly what the real one did (the cones come from turn metadata and width, never from the arc).
+test("the Racing Lines drill: its host and widget on or off, and the arc swapped under it, the car does the same", async () => {
+  const { linesDrill } = await import("../helpers/lines-drill-vm.mjs");
+  const run = await linesDrill();
+  try {
+    const G = run.G, tr = G.track;
+    assert.equal(G.ROAD_FOLLOW, 0, "ROAD_FOLLOW ships at 0");
+    assert.equal(G.raceLineAssist, 0, "raceLineAssist ships at 0");
+    const TABLES = ["curv", "lineRoadK", "line", "lineIn", "lineOut", "lineW"].filter((k) => ArrayBuffer.isView(tr[k]));
+    assert.deepEqual(["curv", "line"].filter((t) => !TABLES.includes(t)), [], `tables missing from the track (has ${TABLES})`);
+    const STEPS = 60 * 30;
+    // Every compared run starts from a RETRY: the launch's first run is a warm-up (its drill goal is armed by begin(),
+    // not by the checkpoint restore, so it finishes one frame later with the same trace).
+    run.drive("late", { steps: STEPS });
+    assert.ok(run.retry());
+    const on = run.drive("late", { steps: STEPS });
+    assert.ok(on.result && on.result.clean, "the drill scored a counted LATE run: " + (on.result && on.result.reason));
+    const score = (r) => JSON.parse(JSON.stringify({ value: r.value, gateS: r.gateS, metrics: r.metrics }));
+    assert.ok(run.retry());
+    const off = run.drive("late", { tick: false, guide: false, steps: on.trace.length });
+    assert.deepEqual(off.trace, on.trace, "the drill's host and widget moved the car");
+    assert.ok(run.retry());
+    const saved = TABLES.map((k) => tr[k].slice());
+    for (const k of TABLES) {
+      const a = tr[k];
+      for (let i = 0; i < a.length; i++) a[i] = k === "curv" || k === "lineRoadK" ? -3 * a[i] + 0.02 * Math.sin(i * 0.37) : k === "lineW" ? a[i] * 0.5 + 1 : -a[i] + 1.5 * Math.sin(i * 0.11);
+    }
+    let swapped;
+    try { swapped = run.drive("late", { steps: STEPS }); } finally { TABLES.forEach((k, j) => tr[k].set(saved[j])); }
+    assert.deepEqual(swapped.trace, on.trace, "the arc or the racing line reached the car through the drill");
+    assert.ok(swapped.result, "the swapped run finished");
+    assert.deepEqual(score(swapped.result), score(on.result), "the drill's score moved with the arc");
+  } finally { run.close(); }
 });

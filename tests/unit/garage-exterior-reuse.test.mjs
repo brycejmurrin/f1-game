@@ -9,6 +9,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { withM4 } from "../helpers/mat4-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = "js/garage/exterior.js";
@@ -28,6 +29,7 @@ function rig() {
       },
     },
   });
+  withM4(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, SRC), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: absSrc(SRC) });
   const gfx = {
     createMesh() { const h = { id: nextId++ }; live.add(h); return h; },

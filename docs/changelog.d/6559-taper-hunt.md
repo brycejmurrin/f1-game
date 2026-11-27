@@ -1,0 +1,1 @@
+New: LEARN → Deployment has an on-track drill, Taper Hunt (#6559 step 6): a Monza straight with 1.0 Apex MJ in the store where you choose when to press BOOST; a live chart shows the deploy taper with your car on it, and the card scores the speed BOOST bought, with medals from VM runs.

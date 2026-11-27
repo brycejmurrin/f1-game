@@ -13,6 +13,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadDom } from "../helpers/dom-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
@@ -39,6 +40,7 @@ function boot({ ghostAt = null } = {}) {
   };
   sb.window = sb;
   for (const f of ["js/ui/live-region.js", "js/ui/hud-minimap.js", "js/ui/hud-radio-lane.js", "js/ui/hud-readouts.js", "js/ui/hud.js"]) {
+    loadDom(sb);
     vm.runInNewContext(src(f), sb, { filename: absSrc(f) });
   }
   const $ = (id) => dom.byId(id);

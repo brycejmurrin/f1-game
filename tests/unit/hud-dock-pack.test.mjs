@@ -7,6 +7,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadDom } from "../helpers/dom-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CAMG = fs.readFileSync(path.join(ROOT, "js/camera/cam-groups.js"), "utf8");
@@ -21,6 +22,7 @@ function loadHudLayout() {
   };
   vm.createContext(ctx);
   // IIFE uses `const HudLayout` / `const CamGroups` — promote to context globals.
+  loadDom(ctx);
   vm.runInContext(HL_SRC.replace(/^const\b/gm, "var") + "; this.HudLayout = HudLayout; this.CamGroups = CamGroups;", ctx);
   return ctx.HudLayout;
 }
@@ -88,6 +90,7 @@ test("runtime phone packing respects visible bounds even for an unedited instrum
     document:{readyState:'loading',documentElement:root,addEventListener(){},getElementById:()=>null,
       body:{classList:{contains:()=>false}},querySelector:sel=>sel==='#hud-tyre'?tyre:null,querySelectorAll:()=>[control]},
     GameStore:{store:{get:(k,d)=>k==='hudScale'?150:d,set(){throw new Error('packing must not save');}}}};
+  loadDom(ctx);
   vm.createContext(ctx);vm.runInContext(HL_SRC+';this.HudLayout=HudLayout;',ctx);
   ctx.HudLayout.fit();
   const r=tyre.getBoundingClientRect(),b=ctx.HudLayout.screenBounds();

@@ -1,0 +1,1 @@
+New: LEARN's Grip & Braking lesson has an on-track drill at Monza's Parabolica: a friction circle shows how much of the tyre's grip you use as you brake and turn, and V-LINE, TRAIL and FREE runs earn medals for rim use. The Aero drill now shows the grip the wake costs you ("grip −N %") and can re-run the same start in CFD air (#7040).

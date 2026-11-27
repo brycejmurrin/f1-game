@@ -355,14 +355,14 @@ const HudReadouts = (function () {
       const ghostT = ref && (!ghost || (player.lap | 0) >= 1) ? ref.timeAt(player.s) : null;
       if (ghostT == null || !(player.lapTime >= 0)) {
         hData(box, "pending", "");
-        if (deltaShown && !document.body.classList.contains("desktop")) io.invalidateFit();   // the touch tower just lost a box (TT restart, lap 0, lost ghost)
+        if (deltaShown && !Dom.isDesktop()) io.invalidateFit();   // the touch tower just lost a box (TT restart, lap 0, lost ghost)
         deltaShown = false;
         return;
       }
       deltaShown = true;
       const wasPending = box.dataset ? box.dataset.pending != null : box.hasAttribute && box.hasAttribute("data-pending");
       hData(box, "pending", null);
-      if (wasPending && !document.body.classList.contains("desktop")) io.invalidateFit();   // the touch tower just grew a box
+      if (wasPending && !Dom.isDesktop()) io.invalidateFit();   // the touch tower just grew a box
       const deltaTxt = signedFixed(player.lapTime - ghostT);
       hText(n, deltaTxt);
       hData(box, "sign", deltaTxt[0] === "-" || +deltaTxt === 0 ? "fast" : "slow");   // the ROUNDED sign, like the text

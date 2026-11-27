@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { readDefaults } from "../../tools/gen/settings-defaults.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadDom } from "../helpers/dom-vm.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
@@ -99,11 +100,12 @@ function boot(opts = {}) {
   vm.runInContext(read("js/input/controller-profiles.js"), ctx, { filename: absSrc("js/input/controller-profiles.js") });
   vm.runInContext(read("js/car/custom-liveries.js"), ctx, { filename: absSrc("js/car/custom-liveries.js") });
   vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
+  loadDom(ctx);
   vm.runInContext(read("js/ui/settings-export-body.js"), ctx, { filename: absSrc("js/ui/settings-export-body.js") });   // the LAZY_SAVES_DATA body (#4748)
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: !!opts.mobile }, soundOn: false };
   const plain = (v) => JSON.parse(JSON.stringify(v));
-  return { SettingsExport, GameStore: sb.GameStore, G, disk, sb, pedals,
+  return { SettingsExport, Body: vm.runInContext("SettingsExportBody", ctx), GameStore: sb.GameStore, G, disk, sb, pedals,
     careerVersion: opts.career || opts.careerLazy ? vm.runInContext("SaveMigrate.CAREER_V", ctx) : null,
     collect: (mode) => plain(SettingsExport.collect(mode, G)),
     garage: () => plain(SettingsExport.collectGarage()),
@@ -2959,4 +2961,18 @@ for (const v of ["auto", "off", "on"]) test(`#6907 cbCues ${v} round-trips throu
   const target = boot({ realStore: true, disk: { "apex26.cbCues": JSON.stringify(v === "on" ? "off" : "on") } });
   assert.equal(target.loadSettings(file).ok, true);
   assert.equal(target.collect("all").settings.a11y?.cbCues, v);
+});
+
+// #7053 (#6548 item 11): the DATA / FILE I/O sections sit before create(G) and are test-visible as _data.
+test("SettingsExportBody._data exposes the data internals, frozen, without create(G)", () => {
+  const { Body, G } = boot();
+  const d = Body._data;
+  assert.ok(Object.isFrozen(d), "_data is frozen");
+  assert.ok(Object.isFrozen(d.RESET_INFO), "_data.RESET_INFO is frozen too");
+  for (const k of ["same", "objDiff", "mergeChangedFields", "typeOk", "thisDesktop", "saveCap", "settingsScope", "restoreSummary"])
+    assert.equal(typeof d[k], "function", k);
+  assert.equal(d.same({ a: [1, 2] }, { a: [1, 2] }), true);
+  assert.equal(d.same({ a: 1 }, { a: 2 }), false);
+  assert.equal(d.saveCap("no-such-format"), Infinity);
+  assert.equal(d.restoreSummary({ applied: 2 }), "Restore result: preferences (2 applied).");
 });

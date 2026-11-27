@@ -291,7 +291,7 @@ export function phrases(id = "george", speaker) {
 /** Whole calls first, fragments only for unbounded numbers and names. */
 export function fullPhrases(id, speaker) {
   const spec = specFor(id, speaker);
-  const sb = sandbox(["js/audio/voice-pack.js", "js/audio/radio-voice.js", "js/race/radio-lines.js",
+  const sb = sandbox(["js/core/mat4.js", "js/audio/voice-pack.js", "js/audio/radio-voice.js", "js/race/radio-lines.js",
     "js/data/circuit-lore.js", "js/audio/announcer.js"]);
   const out = new Map();
   const add = (line) => {

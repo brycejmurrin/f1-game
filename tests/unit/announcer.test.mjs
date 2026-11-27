@@ -24,6 +24,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { withM4 } from "../helpers/mat4-vm.mjs";
 // VM timers are UNREF'd: they still fire while a test awaits, but a cue the
 // module schedules seconds ahead no longer holds the process open after the
 // last assertion (measured 2026-09-24: this file sat idle for most of its run).
@@ -57,6 +58,7 @@ function load({ api = true, voices = [], stored = {}, soundOn = true, lore = tru
   if (synth) synth._voices = voices;
   ctx.window = api ? { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } } : {};
   ctx.GameAudio = { setRadioDuck() {} };
+  withM4(ctx);
   vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   // The authored half. Loaded by default because the shipped game always has
   // it; `lore: false` is how a test asks for the derived-only floor, which is
