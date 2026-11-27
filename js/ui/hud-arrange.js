@@ -602,7 +602,7 @@ const HudArrange = (() => {
         document.body.setAttribute("data-hud-arrange", "1");
         ghosts();
         // OVERTAKE / AERO / BRAKE BIAS are carried by the touch buttons: no box to arrange on touch (#5256).
-        const touch = !Dom.isDesktop();
+        const touch = !!document.body.classList && !Dom.isDesktop();
         const rows = ELEMENTS.filter(([id]) => !(touch && TOUCH_CARRIED.includes(id)));
         selected = (rows.find(([id]) => visible(elOf(id))) || rows.find(([id]) => HudLayout.visibility(id)))?.[0] || null;
         colorElement = undefined;
