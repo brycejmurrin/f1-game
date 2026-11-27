@@ -3455,7 +3455,7 @@ test("TLX world-frame Color clear prefers skyZenith over fog (missed TSL sky is 
   assert.match(body, /skyZenith/, "begin() must read frame.skyZenith for the Color fallback");
   assert.match(body, /background\.setRGB/, "begin() still sets scene.background");
   const zAt = body.indexOf("skyZenith");
-  const fogAssign = body.indexOf("fogColor) || [0.04");
+  const fogAssign = body.indexOf('frameDefault(frame, "fogColor")');
   assert.ok(zAt >= 0 && fogAssign > zAt,
     "zenith must be preferred; fogColor is the no-zenith fallback");
   const drawSky = src.indexOf("drawSky(frameSky)");
@@ -3515,7 +3515,7 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   for (const [re, why] of [
     [/navigator\.gpu\.requestAdapter\(\)/, "soft-adapter sniff must use requestAdapter — getContext('webgl2') is null after WebGPU claims the canvas"],
     [/info\.vendor/, "adapter.info fields are not enumerable — read vendor/device/architecture directly"],
-    [/swiftshader\|llvmpipe\|lavapipe\|microsoft basic render\|soft/, "sniff regex must match WGX's software-adapter list"],
+    [/PostCommon\.isSoftwareRenderer\(infoBlob\)/, "the sniff is the shared classifier, the union of the backends' software-adapter lists (#7141)"],
     [/apex26\.wgxCapture/, "sessionStorage apex26.wgxCapture=1 must force the blit (gfx-probe --tlx-webgpu)"],
     [/game-soft/, "#game stays the GPU canvas; visible present is the #game-soft sibling"],
     [/_displayCanvas\.getContext\("2d"/, "soft-present overlay is a 2D sibling — never getContext(2d) on #game"],

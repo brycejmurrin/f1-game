@@ -119,7 +119,10 @@ test("TLX's software-adapter sniff reads GPUAdapterInfo.isFallbackAdapter first 
   const a = TLX.indexOf("            const info = ad.info || null;");
   const b = TLX.indexOf("\n", TLX.indexOf("_softAdapter = !_phoneHw", a));
   assert.ok(a > 0 && b > a, "the adapter sniff moved: re-pin this slice");
-  const soft = (ad, phone = false) => new Function("ad", "_phoneHw", `"use strict"; let _softAdapter = false; ${TLX.slice(a, b)} return _softAdapter;`)(ad, phone);
+  const pcCtx = vm.createContext({ console, Log: { warn() {} } });
+  for (const f of ["js/lighting/knobs.js", "js/render/shared/post-common.js"]) vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), pcCtx, { filename: absSrc(f) });
+  const PostCommon = vm.runInContext("PostCommon", pcCtx);
+  const soft = (ad, phone = false) => new Function("ad", "_phoneHw", "PostCommon", `"use strict"; let _softAdapter = false; ${TLX.slice(a, b)} return _softAdapter;`)(ad, phone, PostCommon);
   const hw = { vendor: "apple", architecture: "metal-3", device: "", description: "" }, big = { maxTextureDimension2D: 16384, maxBufferSize: 4294967296 };
   assert.equal(soft({ info: { ...hw, isFallbackAdapter: true }, limits: big }), true, "Chrome 140 shape: the flag on GPUAdapterInfo");
   assert.equal(soft({ info: hw, isFallbackAdapter: true, limits: big }), true, "pre-140 shape still counts");
