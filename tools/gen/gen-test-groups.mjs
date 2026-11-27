@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @doc Regenerates package.json's `test:*` scripts from tests/groups.json; `--check`.
+// @doc Regenerates package.json's `test:*` scripts (and union groups' files) from tests/groups.json; `--check`.
 // @skill check-changes
 /**
  * gen-test-groups.mjs — tests/groups.json is the ONE definition of a test
@@ -29,7 +29,7 @@
  * is nothing to regenerate there.
  */
 import { exitIfHelp } from "../lib/cli-args.mjs";
-exitIfHelp(process.argv[1]?.endsWith("/gen-test-groups.mjs") ? process.argv.slice(2) : [], "Usage: node tools/gen/gen-test-groups.mjs [options]\nRegenerates package.json's `test:*` scripts from tests/groups.json; `--check`.\n--help prints this and exits 0.");
+exitIfHelp(process.argv[1]?.endsWith("/gen-test-groups.mjs") ? process.argv.slice(2) : [], "Usage: node tools/gen/gen-test-groups.mjs [options]\nRegenerates package.json's `test:*` scripts (and union groups' files) from tests/groups.json; `--check`.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -44,6 +44,40 @@ export function loadGroups(file = GROUPS) {
 
 /** The files in `toolingFast`, without the interleaved note lines. */
 export const filesOnly = (entries) => entries.filter((e) => !e.startsWith("//"));
+
+/** UNION GROUPS (#7253 P2). A group with `"union": ["test:a", "test:b", …]` is the sorted, de-duplicated
+ * union of its members' files; its own `files` is DERIVED here and written back into tests/groups.json, so
+ * the 57 readers that read `groups[x].files` straight from the JSON keep working. test:game-vm
+ * (= a ∪ b1 ∪ b2) and test:game-vm-b (= b1 ∪ b2) are the two: a new VM test is ONE line in b1 or b2.
+ * A member must exist, be of the same kind, carry files, and not itself be a union (one level). */
+export function resolveUnions(doc) {
+  const groups = doc.groups || {};
+  const out = { ...doc, groups: { ...groups } };
+  for (const [name, def] of Object.entries(groups)) {
+    if (!("union" in def)) continue;
+    if (!Array.isArray(def.union) || !def.union.length) throw new Error(`${name}: "union" must be a non-empty list of group names`);
+    const files = new Set();
+    for (const m of def.union) {
+      const md = groups[m];
+      if (!md) throw new Error(`${name}: union member ${m} is not in tests/groups.json`);
+      if ("union" in md) throw new Error(`${name}: union member ${m} is itself a union (one level only)`);
+      if (md.kind !== def.kind) throw new Error(`${name}: union member ${m} is a ${md.kind} group, not ${def.kind}`);
+      if (!(md.files || []).length) throw new Error(`${name}: union member ${m} has no files`);
+      for (const f of md.files) files.add(f);
+    }
+    // Rebuild with the same key order so the JSON text only moves where the list does.
+    const next = {};
+    for (const k of Object.keys(def)) next[k] = k === "files" ? [...files].sort() : def[k];
+    if (!("files" in next)) next.files = [...files].sort();
+    out.groups[name] = next;
+  }
+  return out;
+}
+
+/** tests/groups.json's text with every union group's files derived (resolveUnions); same 2-space shape. */
+export function renderGroupsJson(text) {
+  return JSON.stringify(resolveUnions(JSON.parse(text)), null, 2) + (text.endsWith("\n") ? "\n" : "");
+}
 
 /** Node's own per-test bound for a `node --test` group (ms). A hung test then fails by name instead of
  * the job reporting `cancelled`; a group may carry its own `--test-timeout=` flag, which wins.
@@ -183,8 +217,12 @@ function main() {
     process.exit(2);
   }
   const check = process.argv.includes("--check");
-  const doc = loadGroups();
+  const groupsText = fs.readFileSync(GROUPS, "utf8");
+  const groupsNext = renderGroupsJson(groupsText);
+  const doc = JSON.parse(groupsNext);
+  // groups.json first: its union groups' files are derived (resolveUnions), then package.json from it.
   const targets = [
+    [GROUPS, groupsNext, "tests/groups.json (union groups)"],
     [PKG, renderPkg(doc, fs.readFileSync(PKG, "utf8")), "package.json"],
   ];
   let drift = 0;
@@ -197,7 +235,7 @@ function main() {
   }
   if (check) {
     if (drift) process.exit(1);
-    console.log("gen-test-groups: package.json matches tests/groups.json (tooling-fast reads it at runtime)");
+    console.log("gen-test-groups: union groups derived and package.json matches tests/groups.json (tooling-fast reads it at runtime)");
   }
 }
 

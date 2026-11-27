@@ -15,7 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { nodeGroupPhases } from "../../tools/ci/run-node-group.mjs";
 import { loadGroups, commandFor, expandedCommand, expandScript, expandScripts, filesOnly, groupDef, groupFiles, nodeFlags,
-  renderPkg, resolveGroupArgv, wrapperGroup, NODE_TEST_TIMEOUT_MS } from "../../tools/gen/gen-test-groups.mjs";
+  renderGroupsJson, renderPkg, resolveGroupArgv, resolveUnions, wrapperGroup, NODE_TEST_TIMEOUT_MS } from "../../tools/gen/gen-test-groups.mjs";
 import { parseRunGroupArgs } from "../../tools/ci/run-group.mjs";
 import { TOOLING_FAST_FILES } from "../../tools/ci/tooling-fast.mjs";
 
@@ -260,5 +260,31 @@ test("run-group.mjs: npm-forwarded options reach every phase; the group must com
     const r = spawnSync(process.execPath, ["tools/ci/run-group.mjs", ...args], { cwd: ROOT, encoding: "utf8", timeout: 60000 });
     assert.equal(r.status, 2, `${args.join(" ")}: ${r.stdout}${r.stderr}`);
     assert.equal(r.stderr.split("\n")[0], firstLine);
+  }
+});
+
+test("a union group's files are derived from its members; a member add without regen is drift (#7253 P2)", () => {
+  const mk = (b1) => ({ groups: {
+    "test:u": { files: [], kind: "node", union: ["test:a", "test:b1"] },
+    "test:a": { files: ["fx/a"], kind: "node" },
+    "test:b1": { files: b1, kind: "node" },
+  } });
+  const u = resolveUnions(mk(["fx/z", "fx/a"])).groups["test:u"];
+  assert.deepEqual(u.files, ["fx/a", "fx/z"], "sorted, de-duplicated union");
+  assert.deepEqual(Object.keys(u), ["files", "kind", "union"], "key order kept, so merge-hygiene's sort is unchanged");
+  const text = JSON.stringify(resolveUnions(mk(["fx/z"])), null, 2) + "\n";
+  const added = JSON.parse(text); added.groups["test:b1"].files.push("fx/zz");
+  const stale = JSON.stringify(added, null, 2) + "\n";
+  assert.notEqual(renderGroupsJson(stale), stale, "one line added to a member re-derives the union: --check reads it as drift");
+  assert.ok(JSON.parse(renderGroupsJson(stale)).groups["test:u"].files.includes("fx/zz"));
+  const bad = (over, re) => assert.throws(() => resolveUnions({ groups: { ...mk(["fx/z"]).groups, ...over } }), re);
+  bad({ "test:u": { kind: "node", union: ["test:nope"] } }, /not in tests\/groups\.json/);
+  bad({ "test:u": { kind: "node", union: [] } }, /non-empty/);
+  bad({ "test:a": { files: ["x"], kind: "browser" } }, /browser group, not node/);
+  bad({ "test:b1": { kind: "node", union: ["test:a"] } }, /itself a union|no files/);
+  // The real tree: every union group equals its members' union already (gen --check above pins the text).
+  for (const [name, def] of Object.entries(doc.groups)) {
+    if (!def.union) continue;
+    assert.deepEqual(def.files, [...new Set(def.union.flatMap((m) => doc.groups[m].files))].sort(), `${name} is its members' union`);
   }
 });

@@ -1894,6 +1894,7 @@
         "tests/unit/apex-surface-pin-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
+        "tests/unit/cam-surge-hold.test.mjs",
         "tests/unit/camera-mode-scope.test.mjs",
         "tests/unit/car-field-writes.test.mjs",
         "tests/unit/car-fields-lifetimes-vm.test.mjs",
@@ -2013,7 +2014,12 @@
         "tests/unit/wind-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
       ],
-      "kind": "node"
+      "kind": "node",
+      "union": [
+        "test:game-vm-a",
+        "test:game-vm-b1",
+        "test:game-vm-b2"
+      ]
     },
     "test:game-vm-a": {
       "files": [
@@ -2163,7 +2169,11 @@
         "tests/unit/wind-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
       ],
-      "kind": "node"
+      "kind": "node",
+      "union": [
+        "test:game-vm-b1",
+        "test:game-vm-b2"
+      ]
     },
     "test:game-vm-b1": {
       "files": [
