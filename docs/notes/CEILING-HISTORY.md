@@ -4163,3 +4163,7 @@ Human step: `ratchet-raise`.
 
 `(tree) eagerCodeBytes` 4026247 → **4026423** (+176). Deliberate raise past the absorb: `rolloverApply` stamps `tally.starts` and `cleanTally` keeps it, so "Race starts" no longer re-reads today's calendar; the eager shell had ~0 bytes of headroom.
 Fragment: `ratchets.d/claude--career-refused-calendar-7069.json`.
+
+## 2026-11-27 — PR #7262 (claude/racing-lines-drill-6559): Racing Lines apex-choice drill (#6559 step 10)
+
+`(tree) typeofGuards` 2324 → **2327** (+3): `LinesDrill` is LAZY_LEARN and loads in bare VMs (learn-curriculum, drill-lines-vm), so its `AppearanceOpts`, `performance` and `DrillRegistry` reads are guarded; `learn-door.js` guards its `LinesDrill.define()` call (bundle order is not evaluation order). `(tree) eagerCodeBytes` +551: the `apex` mode lives in the eager `race-insights.js`. Within the absorbs (10 guards, 5000 B), so no label. Fragment: `ratchets.d/claude--racing-lines-drill-6559.json`.
