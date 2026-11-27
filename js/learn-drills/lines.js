@@ -2,8 +2,8 @@
    solo Monza Time Trial placed on the run to the Parabolica (the last curated turn, a right-hander onto the main
    straight). Each run aims at one apex cone on the inside kerb, EARLY, GEOMETRIC or LATE: the cones are offsets in
    arc around the curated turn, at the road's half-width less 1 m (track metadata and width, never the arc). The run
-   is RaceInsights' "apex" goal; this file measures minimum speed through the turn, exit speed 150 m past it and the
-   time to a gate 400 m down the straight. The lesson: the score is the gate, not the minimum speed.
+   is RaceInsights' "apex" goal; this file measures minimum speed through the turn, exit speed 320 m past it and the
+   time to a gate 650 m past it. The lesson: the score is the gate, not the minimum speed.
    A run COUNTS when the car passes its cone within 1.5 m. Medals (stageOf below, per launch): bronze = all three
    apexes counted; silver = plus the right answer to "which apex won to the gate?", asked by the widget from the
    player's own runs; gold = plus a later run on the winning apex, within 0.5 m of its cone, that beats the player's
