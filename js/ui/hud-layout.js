@@ -7,28 +7,29 @@ const HudLayout = (function () {
   // growing away from its corner. The four centred by `left: 50%;
   // transform: translateX(-50%)` scale about their UNtransformed left edge,
   // which is the screen's centre line, so they stay centred as they grow.
-  const ELEMENTS = Object.freeze([
-    ["tower", "TIMING TOWER", ".hud-top", "top left"],
-    ["map", "TRACK MAP", "#minimap", "top left"],
-    ["gaps", "GAPS", ".hud-gaps", "top left"],
-    ["sectors", "SECTORS", "#hud-sectors", "top right"],
-    ["limits", "TRACK LIMITS", "#hud-limits", "top right"],   // "top left" when js/ui/hud.js crosses it to the left column (originOf)
-    ["flag", "FLAGS", "#hud-flag", "top left"],
-    ["mirror", "MIRROR", "#hud-mirror", "top left"],
-    ["announce", "RACE MESSAGES", "#announce", "top left"],
-    ["gearbox", "GEAR", "#hud-gearbox", "bottom center"],
-    ["speed", "SPEED", "#hud-speed", "bottom center"],   // its own piece since the HELMET set (visor HUD) lifts it off the wheel
-    ["energy", "ENERGY", "#hud-energy", "bottom center"],
-    ["tyre", "TYRES", "#hud-tyre", "bottom center"],
-    ["ot", "OVERTAKE", "#hud-ot", "bottom center"],
-    ["aero", "AERO", "#hud-aero", "bottom center"],
-    ["bb", "BRAKE BIAS", "#hud-bb", "bottom center"],
-    ["damage", "DAMAGE", "#hud-damage", "top right"],
-    ["rel", "RELATIVE", "#hud-rel", "top right"],
-    ["strat", "STRATEGY", "#hud-strat", "top left"],
-    ["finish", "FINISH / RETIREMENT CARD", "#retired-card", "center"],
-    ["inputs", "INPUTS", "#hud-inputs", "top right"],   // under the sector column (desktop + touch); was bottom left over SPEED & GEAR at 150%
-  ].map(Object.freeze));
+  const WIDGETS = Object.freeze([   // flags: card, clearCtrl, clearReadout (placement rank), seed, toggle (body[data-hud-hide] token)
+    ["tower", "TIMING TOWER", ".hud-top", "top left", {}],
+    ["map", "TRACK MAP", "#minimap", "top left", { clearReadout: 1 }],
+    ["gaps", "GAPS", ".hud-gaps", "top left", { card: 1 }],
+    ["sectors", "SECTORS", "#hud-sectors", "top right", { card: 1, clearCtrl: 1, toggle: "sectors" }],
+    ["limits", "TRACK LIMITS", "#hud-limits", "top right", { card: 1, clearReadout: 5, seed: 1, toggle: "limits" }],   // "top left" when js/ui/hud.js crosses it to the left column (originOf)
+    ["flag", "FLAGS", "#hud-flag", "top left", { card: 1 }],
+    ["mirror", "MIRROR", "#hud-mirror", "top left", {}],
+    ["announce", "RACE MESSAGES", "#announce", "top left", { clearReadout: 6, seed: 1 }],
+    ["gearbox", "GEAR", "#hud-gearbox", "bottom center", { clearReadout: 3, seed: 1, toggle: "gear" }],
+    ["speed", "SPEED", "#hud-speed", "bottom center", { clearReadout: 4, seed: 1, toggle: "speed" }],   // its own piece since the HELMET set (visor HUD) lifts it off the wheel
+    ["energy", "ENERGY", "#hud-energy", "bottom center", { toggle: "energy" }],
+    ["tyre", "TYRES", "#hud-tyre", "bottom center", { clearReadout: 2, seed: 1, toggle: "tyre" }],
+    ["ot", "OVERTAKE", "#hud-ot", "bottom center", { toggle: "ot" }],
+    ["aero", "AERO", "#hud-aero", "bottom center", { toggle: "aero" }],
+    ["bb", "BRAKE BIAS", "#hud-bb", "bottom center", { toggle: "bb" }],
+    ["damage", "DAMAGE", "#hud-damage", "top right", { clearReadout: 7, seed: 1, toggle: "damage" }],
+    ["rel", "RELATIVE", "#hud-rel", "top right", { card: 1, clearCtrl: 1, clearReadout: 8, seed: 1, toggle: "rel" }],
+    ["strat", "STRATEGY", "#hud-strat", "top left", { card: 1, clearReadout: 9, seed: 1, toggle: "strat" }],
+    ["finish", "FINISH / RETIREMENT CARD", "#retired-card", "center", {}],
+    ["inputs", "INPUTS", "#hud-inputs", "top right", { clearCtrl: 1, clearReadout: 10, seed: 1, toggle: "inputs" }],   // under the sector column (desktop + touch); was bottom left over SPEED & GEAR at 150%
+  ].map((r) => Object.freeze({ id: r[0], label: r[1], selector: r[2], origin: r[3], ...r[4] })));
+  const ELEMENTS = Object.freeze(WIDGETS.map((w) => Object.freeze([w.id, w.label, w.selector, w.origin])));   const byFlag = (k) => WIDGETS.filter((w) => w[k]);
   const IDS = ELEMENTS.map((e) => e[0]);
   const SETS = Object.freeze(["cockpit", "helmet", "other"]);
   const PROFILES = Object.freeze(["standard", "minimal", "broadcast"]);
@@ -174,7 +175,7 @@ const HudLayout = (function () {
   // Panel extents are pre-transform viewport shares. Type scales the widget font.
   const cardFields = { width: [5, 95], minHeight: [2, 60], textSize: [75, 200] };
   const cardKeys = Object.keys(cardFields);
-  const cardWidgets = new Set(["gaps", "sectors", "limits", "flag", "rel", "strat"]);
+  const cardWidgets = new Set(byFlag("card").map((w) => w.id));
   const cardSizing = id => cardWidgets.has(id);
   function normEl(v, fallback = DEF, allowCard = true) {
     const o = v && typeof v === "object" ? v : {};
@@ -742,7 +743,7 @@ const HudLayout = (function () {
     } catch (_) { _packMo = null; }
   }
 
-  const CLEAR_CTRL = Object.freeze({ rel: 1, inputs: 1, sectors: 1 });
+  const CLEAR_CTRL = Object.freeze(Object.fromEntries(byFlag("clearCtrl").map((w) => [w.id, 1])));
   function clearControls(W, H) {
     if (!doc || !doc.querySelectorAll) return;
     const btns = [];
@@ -872,10 +873,10 @@ const HudLayout = (function () {
 
   // Temporary screen-pixel corrections never enter the saved MOVE & SIZE layout.
   // Controls and primary instruments reserve their space before optional panels.
-  const CLEAR_READOUTS = ["map", "tyre", "gearbox", "speed", "limits", "announce", "damage", "rel", "strat", "inputs"];
+  const CLEAR_READOUTS = byFlag("clearReadout").sort((a, b) => a.clearReadout - b.clearReadout).map((w) => w.id);
   // A factory phone readout can yield when the screen or the flag/radio content
   // changes. Saved edits and the Arrange preview keep their exact positions.
-  const seedWidgets = new Set(["announce", "hud-tyre", "hud-gearbox", "hud-speed", "hud-limits", "hud-damage", "hud-rel", "hud-strat", "hud-inputs"]);
+  const seedWidgets = new Set(byFlag("seed").map((w) => w.selector.slice(1)));
   const seedReadout = (el) => !!(el && seedWidgets.has(el.id) && el.hasAttribute("data-hl-seed") && !bodyAttr("data-hud-arrange"));
   const fixedReadout = (el) => manuallyPlaced(el) && !seedReadout(el);
   function resetClearance() {
@@ -1194,8 +1195,7 @@ const HudLayout = (function () {
   /** body[data-*] presence (mode-switch sets data-helmet-cam). */
   const bodyAttr = (n) => !!(doc && doc.body && doc.body.hasAttribute && doc.body.hasAttribute(n));
   // body[data-hud-hide~=…] token for each of our ids (js/ui/hud-elements.js).
-  const TOGGLE = Object.freeze({ gearbox: "gear", speed: "speed", energy: "energy", tyre: "tyre", ot: "ot", aero: "aero", bb: "bb", sectors: "sectors", limits: "limits",
-    damage: "damage", rel: "rel", strat: "strat", inputs: "inputs" });
+  const TOGGLE = Object.freeze(Object.fromEntries(byFlag("toggle").map((w) => [w.id, w.toggle])));
   const VIS_ROWS = Object.freeze({
     map: ["pm-hudmap", "hudMapVis", "on"], gaps: ["pm-hudgaps", "hudGapsVis", "on"], mirror: ["pm-hudmirror", "hudMirror", "auto"],
   });
@@ -1298,7 +1298,7 @@ const HudLayout = (function () {
   // PACK_SCALE_MIN / PACK_FIXED / PACK_MOVE stay module-local (no js/ or test
   // callers). Survey lockstep still parses the LIM const from source.
   return {
-    get colors() { return colorPolicy(); }, ensureEditor, ELEMENTS, SETS, PROFILES, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS, presetFits,
+    get colors() { return colorPolicy(); }, ensureEditor, WIDGETS, ELEMENTS, SETS, PROFILES, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS, presetFits,
     PACK_AIR, cardSizing,
     holdArrangePreview: (on) => { arrangePreview = !!on; },
     get, set, commit, resetEl, resetSet, arrangeSnapshot, restoreSnapshot, endArrangeDraft, isShipped, scaleOf, relativeSize, setCam, apply, fit, clearReadouts, build,
