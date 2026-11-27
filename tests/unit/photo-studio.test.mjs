@@ -958,6 +958,27 @@ test("the menu background goes through GameStore's raw lane and reads back the s
   assert.equal(b.storage.has("apex26.photoBackground"), false);
 });
 
+test("menu background has separate landscape and portrait slots (#7157)", () => {
+  const b = boot(), L = "data:image/jpeg;base64,TEFORA==", P = "data:image/jpeg;base64,UE9SVA==";
+  for (const PS of [b.PS, b.Body]) {
+    b.storage.clear();
+    b.PS.setBackground(L, "landscape"); PS.setBackground(P, "portrait");
+    assert.equal(PS.background("landscape"), L); assert.equal(PS.background("portrait"), P);
+    assert.equal(b.storage.get("apex26.photoBackground"), L, "the old key stays the landscape slot");
+    assert.equal(b.storage.get("apex26.photoBackgroundPortrait"), P);
+    PS.setBackground("", "portrait");
+    assert.equal(PS.background("landscape"), L, "clearing portrait leaves landscape");
+    assert.equal(PS.background("portrait"), "");
+    b.storage.clear(); b.storage.set("apex26.photoBackground", L);
+    assert.equal(PS.background("landscape"), L, "a pre-slot save reads as landscape");
+  }
+  b.storage.clear(); b.PS.setBackground(L, "landscape"); b.PS.setBackground(P, "portrait");
+  b.api.state(); // no-arg read follows orientation, falling back to the other slot
+  assert.equal(b.PS.background(), L);   // no innerHeight in the VM: landscape
+  b.PS.setBackground("", "landscape");
+  assert.equal(b.PS.background(), P, "empty landscape falls back to portrait");
+});
+
 test("a captured or saved photo selects its own Home scene after the image is stored", async () => {
   for (const full of [false, true]) {
     const b = boot({homeScene: "garage", storageFull: full});

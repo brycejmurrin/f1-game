@@ -395,6 +395,7 @@ const UiExperience = (function () {
       failure = false; signature = ""; overlay.removeAttribute("data-home-ready"); stamp();
     });
     window.addEventListener("apex26:photo-background", stamp);
+    window.addEventListener("resize", () => { if (typeof PhotoStudio !== "undefined" && PhotoStudio.background) stamp(); });   // rotate swaps the slot, no rebuild
     stamp();
     // Resize used to sit inside the Home signature (innerWidth/Height + pane),
     // so every narrow rotate tore down beginHome and blacks the canvas for

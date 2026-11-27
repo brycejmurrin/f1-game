@@ -3,7 +3,6 @@
  * game.js still calls PhotoStudio.create(G, …). The capture UI (PhotoStudioBody) is
  * LAZY_UI_PRESETS and loads when a photo action first needs it. */
 const PhotoStudio = (function () {
-  const KEY = "apex26.photoBackground";
   const ASPECTS = { scene: 0, wide: 16 / 9, square: 1, portrait: 4 / 5 };
   let live = null;     // the newest façade's body instance
   let newest = null;   // that façade's guarded creation
@@ -22,15 +21,22 @@ const PhotoStudio = (function () {
   function focalMm(fov, aspect) {
     return 18 / (Math.tan(fov / 2) * aspect);
   }
-  function background() {
-    try { const v = localStorage.getItem(KEY); return v && /^data:image\/(jpeg|png);base64,/.test(v) && v.length < 1.5e6 ? v : ""; } catch (_) { return ""; }
+  const KEYS = { landscape: "apex26.photoBackground", portrait: "apex26.photoBackgroundPortrait" };
+  const orient = () => { try { return window.innerHeight > window.innerWidth ? "portrait" : "landscape"; } catch (_) { return "landscape"; } };
+  const readSlot = (slot) => { try { const v = localStorage.getItem(KEYS[slot]); return v && /^data:image\/(jpeg|png);base64,/.test(v) && v.length < 1.5e6 ? v : ""; } catch (_) { return ""; } };
+  // No slot: the current orientation's image, else the other one. A named slot reads strictly.
+  function background(slot) {
+    if (KEYS[slot]) return readSlot(slot);
+    const o = orient();
+    return readSlot(o) || readSlot(o === "portrait" ? "landscape" : "portrait");
   }
-  function setBackground(value) {
+  function setBackground(value, slot) {
+    slot = KEYS[slot] ? slot : orient();
     if (value && (!/^data:image\/(jpeg|png);base64,/.test(value) || value.length >= 1.5e6)) return false;
     try {
-      const S = GameStore.store;
-      if (!(value ? S.rawSet(KEY, value) : S.rawDel(KEY))) return false;
-      window.dispatchEvent(new CustomEvent("apex26:photo-background", { detail: { available: !!value } }));
+      const S = GameStore.store;   // raw lane: setRoomy's quota sweep, failedKeys (#5023); a failed write leaves the other slot untouched
+      if (!(value ? S.rawSet(KEYS[slot], value) : S.rawDel(KEYS[slot]))) return false;
+      window.dispatchEvent(new CustomEvent("apex26:photo-background", { detail: { available: !!value, slot } }));
       return true;
     } catch (_) { return false; }
   }
